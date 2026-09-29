@@ -125,3 +125,10 @@
 - 실물 반영: 사용자 승인 두 번째 핫픽스(CORE 6 파일 + `lidar_forward_deg: 180`), 백업 `/var/lib/rosy-bench-backup/20260929140539-d349-obstacle/`. 로봇의 옛 관리자에 `config` 속성이 없어 첫 재시작에서 LiDAR 콜백 AttributeError — 즉시 속성 추가 후 재시작, 오류 0.
 - 증거(공개 저장소 밖): `X:\DevTemp\rosy-pilot-evidence\2026-09-29-obstacle-stop\`. 차선 위 물체로 다가가며 앞 거리 2.17→0.75→0.40→0.21 m; 다시 진행을 눌러도 0.198 m 에서 6 s 동안 이동 0.0 cm(`obstacle_ahead`); 물체를 치운 뒤 곧바로 출발해 15 s 연속 추종으로 50.3 cm 주행.
 - 교훈: 핫픽스는 로봇 쪽 파일이 브랜치보다 오래됐을 수 있다 — 새 코드가 부르는 속성(`config`)이 로봇 사본에 있는지까지 확인하고, 재시작 직후 저널에서 Traceback 을 본다.
+
+## 2026-09-29 · uncommitted · feat(core): 차선 추종 IR 이탈 감시(D-349 §12)
+- 변경: CAMERA_LINE 중 `line_follow.ir_guard_enabled` 이면 CORE 가 IR_LINE 관측으로 경계를 감시 — 옆 센서 밑 경계면 반대로 비킴(`lane_edge_left/right`, 속도 절반), 가운데면 정지(`lane_departure`), IR 끊김·미교정이면 정지(`lane_guard_stale`). rosy-io 그래프에 `enable_ir` 로 `ir_adc_node` 추가. pilot HUD 문구 4개.
+- 원인: 실물 녹화에서 경계선을 밟고 넘음 — 실물 `camera_lane_mode: line` 이 밝은 화소 무게중심을 목표로 삼아 한쪽 경계만 보일 때 선 위로 간다. 카메라 쪽 `between` 모드(ffc19a74)는 같은 회차에 병행.
+- 실물 상태: `ir_adc_node` 는 설치돼 있으나 어느 launch 도 띄우지 않아 `/rosy_60/ir_sensor/range` 발행자 0. 교정 전이라 감시는 기본 꺼짐.
+- 증거: `test_line_follow_ir_guard.py` 10 passed(비킴 부호·절반 속도·가운데 정지·LOST 미누적·IR 끊김/미교정/해시 불일치 정지·기본 꺼짐), `test/test_ir_source_exclusivity.py` rosy-io 만 `enable_ir:=true`. 실물 녹화 루프는 핫픽스 승인 뒤.
+- gate 변화: SOURCE 통과. DEVICE 는 IR 발행·교정·녹화 전이라 HOLD.

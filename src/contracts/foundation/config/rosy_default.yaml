@@ -99,6 +99,10 @@ line_follow:                       # D-143 selected-source, fail-closed policy
   obstacle_half_angle_deg: 20.0    # front sector is +-this around the robot's forward
   lidar_forward_deg: 0.0           # LiDAR angle of the robot's forward (Pinky Pro device: 180)
   clearance_stale_s: 0.5           # hold when the LiDAR stops reporting mid-run
+  ir_guard_enabled: false          # D-349 §12 IR lane-departure guard; turn on only after IR calibration
+  ir_guard_edge_error: 0.3         # |IR error| at or above this = boundary under a side sensor
+  ir_guard_turn: 0.5               # rad/s steer away from the boundary (clamped to max_angular)
+  ir_guard_speed_scale: 0.5        # linear scale while steering away
 
 traffic_policy:                    # D-151 semantic road evidence gate
   mode: DISABLED                   # DISABLED | MONITOR_ONLY | ENFORCED

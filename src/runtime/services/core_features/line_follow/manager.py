@@ -67,6 +67,13 @@ class LineFollowConfig:
     obstacle_half_angle_deg: float = 20.0
     lidar_forward_deg: float = 0.0
     clearance_stale_s: float = 0.5
+    # D-349 §12: 카메라 차선 추종 중 IR 이탈 감시. 바닥을 보는 좌·중·우 IR 이 경계선을
+    # 한쪽에서 보면 반대로 비키고(ir_guard_turn, 속도 ir_guard_speed_scale 배), 가운데에서
+    # 보면 선을 밟고 넘는 중이라 멈춘다. 켜져 있는데 IR 이 끊기거나 미교정이면 멈춘다.
+    ir_guard_enabled: bool = False
+    ir_guard_edge_error: float = 0.3
+    ir_guard_turn: float = 0.5
+    ir_guard_speed_scale: float = 0.5
 
     def __post_init__(self) -> None:
         values = (self.cruise_speed, self.max_linear, self.steering_gain,
@@ -90,6 +97,15 @@ class LineFollowConfig:
             raise ValueError("obstacle_stop_m must be positive and below obstacle_resume_m")
         if not 0.0 < self.obstacle_half_angle_deg <= 90.0 or self.clearance_stale_s <= 0:
             raise ValueError("obstacle sector and clearance staleness must be positive")
+        if type(self.ir_guard_enabled) is not bool:
+            raise ValueError("ir_guard_enabled must be a boolean")
+        guard = (self.ir_guard_edge_error, self.ir_guard_turn, self.ir_guard_speed_scale)
+        if not all(_finite(value) for value in guard):
+            raise ValueError("line-follow IR guard config must be finite")
+        if not 0.0 < self.ir_guard_edge_error < 1.0 or self.ir_guard_turn <= 0:
+            raise ValueError("IR guard edge error must be in (0, 1) and turn positive")
+        if not 0.0 <= self.ir_guard_speed_scale <= 1.0:
+            raise ValueError("ir_guard_speed_scale must be in [0, 1]")
         if (self.ir_calibration_revision is not None
                 and (not isinstance(self.ir_calibration_revision, str)
                      or not re.fullmatch(r"[0-9a-f]{64}", self.ir_calibration_revision))):
@@ -358,6 +374,14 @@ class LineFollowManager:
                     return self._stop_decision("HOLD", "obstacle_sensor_stale")
                 if self._obstacle_blocked:
                     return self._stop_decision("HOLD", "obstacle_ahead")
+            guard = None
+            if self._mode is LineFollowMode.CAMERA_LINE and self._config.ir_guard_enabled:
+                # 차선 이탈 감시는 차선 상실이 아니다 — LOST 로 누적하지 않는다(D-349 §12).
+                guard = self._ir_guard(current)
+                if guard == "stale":
+                    return self._stop_decision("HOLD", "lane_guard_stale")
+                if guard == "centre":
+                    return self._stop_decision("HOLD", "lane_departure")
             if self._lost_latched:
                 reason = ("camera_reselection_required"
                           if self._mode is LineFollowMode.CAMERA_LINE
@@ -417,6 +441,13 @@ class LineFollowManager:
             linear *= confidence_scale * curve_scale
             angular = max(-self._config.max_angular,
                           min(self._config.max_angular, -self._config.steering_gain * error))
+            reason = "tracking"
+            if guard in ("left", "right"):
+                # 경계선이 왼쪽 IR 밑이면 오른쪽(음의 각속도, REP-103)으로 비킨다.
+                turn = min(self._config.ir_guard_turn, self._config.max_angular)
+                angular = -turn if guard == "left" else turn
+                linear *= self._config.ir_guard_speed_scale
+                reason = f"lane_edge_{guard}"
             decision = LineFollowDecision(
                 linear=linear, angular=angular,
                 generation=self._generation,
@@ -431,10 +462,31 @@ class LineFollowManager:
                 age_s=round(age, 3),
                 linear=linear,
                 angular=angular,
-                reason="tracking",
+                reason=reason,
                 clearance_m=self._clearance,
             )
             return decision
+
+    def _ir_guard(self, now: float) -> str:
+        """stale | clear | left | right | centre — IR 이 본 경계선 위치."""
+        observation = self._ir_observation
+        received_at = self._ir_received_at
+        if observation is None or received_at is None:
+            return "stale"
+        age = now - received_at
+        if age < 0.0 or age > self._config.stale_after_s:
+            return "stale"
+        expected = self._config.ir_calibration_revision
+        if not observation.ir_calibrated or (
+                expected is not None and observation.calibration_revision != expected):
+            return "stale"
+        if not observation.visible or observation.error is None                 or observation.confidence < self._config.min_confidence:
+            return "clear"
+        if observation.error <= -self._config.ir_guard_edge_error:
+            return "left"
+        if observation.error >= self._config.ir_guard_edge_error:
+            return "right"
+        return "centre"
 
     def _loss_or_stop(self, now: float, state: str, reason: str,
                       age: Optional[float]) -> LineFollowDecision:

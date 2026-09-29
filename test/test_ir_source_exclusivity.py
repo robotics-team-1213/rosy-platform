@@ -72,3 +72,19 @@ def test_calib_operator_messages_name_the_real_package():
     assert "pinky_sensor_adc" not in text, (
         "calib operator messages still point at the pre-rename package")
     assert "sensor_adc" in text
+
+
+def test_rosy_io_graph_starts_ir_but_hardware_graph_does_not_double_it():
+    """D-349 §12: rosy-io (motor/core modes) gets IR from bringup's enable_ir;
+    the navigation hardware graph includes bringup without enable_ir and takes
+    IR from line_follow instead. The two units conflict, so one reader per bus."""
+    bringup = (SRC / "products" / "pinky_pro" / "bringup" / "launch"
+               / "bringup_robot.launch.py").read_text(encoding="utf-8")
+    assert "DeclareLaunchArgument('enable_ir', default_value='false'" in bringup
+    assert "condition=IfCondition(enable_ir)" in bringup
+    assert EXCLUSIVITY_MARKER in bringup
+    assert '"enable_ir"' not in _code_text(HARDWARE.read_text(encoding="utf-8"))
+    native = ROOT / "deploy" / "robot" / "pinky_pro" / "native"
+    io_unit = (native / "rosy-io.service").read_text(encoding="utf-8")
+    assert "enable_ir:=true" in io_unit
+    assert "Conflicts=rosy-navigation.service" in io_unit

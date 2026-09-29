@@ -293,6 +293,8 @@ export function mountDrive(root, {onExit} = {}) {
     camera_low_confidence: "차선 신뢰 낮음", camera_observation_stale: "차선 관측 늦음",
     camera_reselection_required: "차선 놓침 — 다시 누르세요", driver_released: "손 뗌 — 정지",
     obstacle_ahead: "앞 물체 — 정지", obstacle_sensor_stale: "LiDAR 끊김 — 정지",
+    lane_edge_left: "왼쪽 경계선 — 오른쪽으로 비킴", lane_edge_right: "오른쪽 경계선 — 왼쪽으로 비킴",
+    lane_departure: "차선 밟음 — 정지, 수동으로 빼세요", lane_guard_stale: "IR 차선 감시 끊김 — 정지",
   };
   const request = (method, path, body) =>
     method === "GET" ? apiGet(path) : apiGet(path, {method, body: JSON.stringify(body ?? {})});

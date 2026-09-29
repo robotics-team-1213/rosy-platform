@@ -29,6 +29,7 @@ def generate_launch_description():
     namespace = LaunchConfiguration('namespace')
     use_sim_time = LaunchConfiguration('use_sim_time')
     enable_battery = LaunchConfiguration('enable_battery')
+    enable_ir = LaunchConfiguration('enable_ir')
     enable_lidar = LaunchConfiguration('enable_lidar')
 
     # namespace 있으면 'ns/' 프레임 접두, 없으면 '' (upload_robot와 동일 패턴)
@@ -45,6 +46,10 @@ def generate_launch_description():
         DeclareLaunchArgument('use_sim_time', default_value='false'),
         DeclareLaunchArgument('enable_battery', default_value='false',
                               description='Enable the rosylib I2C-1 ADC battery publisher'),
+        DeclareLaunchArgument('enable_ir', default_value='false',
+                              description='Start control ir_adc_node (ir_sensor/range) for the '
+                                          'rosy-io graph. Keep false when line_follow.launch '
+                                          'already starts it (navigation hardware graph).'),
         DeclareLaunchArgument(
             'drive_enabled', default_value='true',
             description='false = no-motion mode: torque off, no cmd_vel '
@@ -129,6 +134,17 @@ def generate_launch_description():
                 output='screen',
                 parameters=[{'use_sim_time': use_sim_time}],
                 condition=IfCondition(enable_battery),
+            ),
+            # ir_sensor/range single-publisher rule: ir_adc_node here is for the
+            # rosy-io graph only (D-349 §12 lane-departure guard). The navigation
+            # hardware graph leaves enable_ir false and starts it via line_follow;
+            # the C++ sensor_adc bench reader never runs beside it.
+            Node(
+                package='control',
+                executable='ir_adc_node',
+                output='screen',
+                parameters=[{'use_sim_time': use_sim_time}],
+                condition=IfCondition(enable_ir),
             ),
         ]),
     ])

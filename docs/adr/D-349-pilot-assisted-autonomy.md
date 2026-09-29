@@ -59,6 +59,27 @@
     (2026-09-29 실측: 정면 2.6 m·오른쪽 벽 0.14 m 가 카메라 화면과 일치). 상태에 `clearance_m` 을 싣고
     pilot HUD 가 보인다. 이것은 "물체 인식"의 첫 단계(거리 기반)이고, 종류를 가리는 학습 검출기는
     D-199 의 교체 가능한 백엔드로 뒤에 붙는다.
+12. **차선 경계는 두 겹으로 지킨다(카메라 + IR).** 2026-09-29 실물 녹화에서 로봇이 흰 경계선을 밟고
+    넘었다. 원인은 실물 `camera_lane_mode: line` 이 하단 밝은 화소 전체의 무게중심을 목표로 삼는
+    것이라, 경계선이 한쪽만 보이면 그 선 위가 목표가 된다. 지면 투영(homography)이 필요한
+    `lane`·`edge_left`·`centre` 는 실물에 교정이 없어 쓸 수 없다.
+    - **카메라(1차)**: 영상 공간에서 중앙 기준 좌·우 가장 가까운 경계를 찾아 그 사이 가운데를
+      목표로 하는 `camera_lane_mode: between` 을 둔다. 한쪽만 보이면 두 쪽이 보일 때 익힌 차로 폭만큼
+      안쪽을 목표로 한다. 관측 계약(`error/confidence/visible`)은 그대로다.
+    - **IR(최후 방어선)**: 바닥을 보는 좌·중·우 IR 은 이미 IR_LINE 관측으로 CORE 에 온다(D-143).
+      CAMERA_LINE 중 `line_follow.ir_guard_enabled` 이면 CORE 가 그 관측을 감시로 쓴다. 경계선이
+      옆 센서 밑(|error| ≥ `ir_guard_edge_error`)이면 카메라 조향을 덮어 반대로 `ir_guard_turn` 만큼
+      돌고 속도를 `ir_guard_speed_scale` 배로 줄인다(`lane_edge_left/right`). 가운데 센서 밑이면 선을
+      밟고 넘는 중이라 멈춘다(`lane_departure`). 셋 다 흰색(정지선·횡단보도)은 대비가 없어 관측이
+      비가시라 감시가 걸리지 않는다. 감시가 켜졌는데 IR 이 끊기거나 미교정·교정 해시 불일치면
+      멈춘다(`lane_guard_stale`). 어느 것도 LOST 로 굳지 않는다.
+    - IR 은 rosy-io 그래프(`motor`)에서 `bringup_robot.launch.py enable_ir:=true` 로 control
+      `ir_adc_node` 를 띄운다. 내비게이션 그래프는 line_follow 가 띄우므로 끄고, 두 유닛은
+      `Conflicts=` 로 동시에 돌지 않는다 — ir_sensor/range 발행자는 버스당 하나다.
+    - 켜는 순서: IR 발행 확인 → 카펫(검정 끝점)·흰 테이프(흰 끝점) 실측으로 `/etc/rosy/line_follow.yaml`
+      교정 → 교정 해시를 `line_follow.ir_calibration_revision` 에 → 좌·우 부호를 손으로 확인 →
+      `ir_guard_enabled: true`. 기본값은 꺼짐이다.
+    - 검증은 녹화 루프로 한다: 자동 주행 녹화 → 프레임 격자 → 경계 안에 있었는지 판정 → 조정 → 반복.
 
 ### Alternatives
 

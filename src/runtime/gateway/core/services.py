@@ -158,6 +158,10 @@ def _line_follow_config(raw: dict[str, Any]) -> LineFollowConfig:
         obstacle_half_angle_deg=float(raw.get("obstacle_half_angle_deg", defaults.obstacle_half_angle_deg)),
         lidar_forward_deg=float(raw.get("lidar_forward_deg", defaults.lidar_forward_deg)),
         clearance_stale_s=float(raw.get("clearance_stale_s", defaults.clearance_stale_s)),
+        ir_guard_enabled=raw.get("ir_guard_enabled", defaults.ir_guard_enabled),
+        ir_guard_edge_error=float(raw.get("ir_guard_edge_error", defaults.ir_guard_edge_error)),
+        ir_guard_turn=float(raw.get("ir_guard_turn", defaults.ir_guard_turn)),
+        ir_guard_speed_scale=float(raw.get("ir_guard_speed_scale", defaults.ir_guard_speed_scale)),
     )
 
 
