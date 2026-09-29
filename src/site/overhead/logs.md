@@ -73,3 +73,10 @@
 - 변경: `ci.yml`이 `src/site/overhead/test`를 따로 돌린다(games와 `test_preview.py` 이름이 겹친다). 새 `.github/workflows/android.yml`이 `src/site/overhead/**` 변경 때만 Temurin 17로 `testDebugUnitTest`를 돈다.
 - 증거: `python -m pytest src/site/overhead/test -q` 86 passed. 로컬 `gradlew testDebugUnitTest --no-daemon`(JDK 21) BUILD SUCCESSFUL. CI 실행 증거는 아직 없다(푸시 안 함).
 - gate 변화: 없음.
+
+## 2026-09-30 · feat/overhead-app-ceiling-ux · 천장 설치용 앱: 다음 행동을 말하는 상태, 화면 꺼짐 송출, 기기 상태
+
+- 변경: 연결 실패를 원인(닿지 않음·거부·이름 못 찾음·TLS·토큰·같은 이름 중복·Wi-Fi 없음)으로 나눠 다음 행동을 한 문장으로 보여 주고, 원문은 `자세히` 뒤에 둔다(`NetworkFailure`, `ProblemGuide`). 배터리·충전·온도를 화면과 상시 알림에 보이고 열 상태 MODERATE 이상이나 충전 없이 20% 미만이면 경고한다(`DeviceHealth`, 휴대폰 안에서만; 선로 변경 없음). 수신기 `status`로 코너 마커 점 4개와 보이는 로봇을 보인다(`CornerGuide`). `버림`을 `건너뜀`으로 바꾸고 뜻을 한 줄로 적었으며, 자동 조정으로 낮아진 JPEG 품질을 보인다. 송출 중에도 연결 설정을 읽기 전용으로 연다. 화면 글자가 검정으로 떨어지던 테마 결함(Column에 Surface가 없음)을 고쳤다.
+- 증거: Android `testDebugUnitTest` 117 passed, `assembleDebug` 성공(JDK 21, Windows). Galaxy S21(Android 15) 실기에서 임시 수신기(`receive --port 8096`)로 확인: 화면 잠금 65초 동안 수신 70표본 최소 2 fps, `age_ms` 최대 178 ms, seq gap 0. 잠금 화면 깨우기·강제 deep idle에서도 3 fps 유지. 카메라는 이미 서비스 수명에 묶여 있어 (b) 현상은 이 빌드에서 재현되지 않았다. 닿지 않음·401·자세히·기기 경고(배터리/열 상태는 `dumpsys battery`·`cmd thermalservice`로 모의)·읽기 전용 설정 화면을 캡처했다(`private/validation/2026-09-30-overhead-app-ceiling-ux/`).
+- 남은 일: 어댑터 `status`의 `corners_seen`·`robots_seen`이 항상 빈 목록(`ingest.py` 자리값)이라 설치 안내가 늘 0/4를 보인다. Vision이 실제 값을 채워야 한다. 프로토콜에 휴대폰→수신기 상태 메시지가 없어 기기 상태는 현장 PC에 가지 않는다. Windows 방화벽이 닫힌 포트의 SYN을 버려 수신기가 꺼진 경우도 `닿지 않음`으로 보인다.
+- gate 변화: 없음. 실기 앱 확인은 임시 수신기 기준이며 Vision/Fleet 종단과 현장 수용은 아니다.

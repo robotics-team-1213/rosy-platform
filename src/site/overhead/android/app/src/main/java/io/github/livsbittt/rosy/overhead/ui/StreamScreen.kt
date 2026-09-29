@@ -186,7 +186,8 @@ private fun StatusPanel(state: StreamState, pairing: PairingUri?, localError: St
         }
         val wifiConnected = rememberWifiConnected()
         val guidance = state.error?.let(ProblemGuide::forStream)
-            ?: link.error?.let { ProblemGuide.forLink(it, link.stopped, wifiConnected) }
+            // A stopped session is not reconnecting, whatever the link's last state said.
+            ?: link.error?.let { ProblemGuide.forLink(it, link.stopped || !state.running, wifiConnected) }
         when {
             localError != null -> CritMessage(localError)
             guidance != null -> ProblemMessage(guidance, pairing, onOpenSettings)
@@ -261,7 +262,7 @@ private fun ProblemMessage(guidance: Guidance, pairing: PairingUri?, onOpenSetti
         Problem.CAMERA -> stringResource(R.string.problem_camera)
         Problem.FOREGROUND_DENIED -> stringResource(R.string.problem_foreground)
     }
-    val retrying = if (guidance.retrying) " " + stringResource(R.string.problem_retrying) else ""
+    val retrying = if (guidance.retrying) "\n" + stringResource(R.string.problem_retrying) else ""
     CritMessage(text + retrying)
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
         if (guidance.step == NextStep.OPEN_SETTINGS) {
