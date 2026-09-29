@@ -3295,3 +3295,9 @@
 - 변경: CI 코어 단계를 막던 3건을 고쳤다. `test_event_catalogue`가 호스트 에이전트 명령 `network.status`/`release.status`를 미등록 이벤트로 오판한 것(`not_events`에 사유와 함께 등록 — 실제 emit 이벤트와 교차 검증되므로 실제 이벤트를 가릴 수 없다), `test_host_cards`가 개조 이전 경로 `deploy/release`를 쓰던 것, `app.py` FastAPI 설명의 API Ref 버전이 `v1.41`에 머물러 있던 것. 이어서 CI가 한 번도 돌리지 못한 루트 `test/`의 빨강 7건 중 6건을 고쳤다: `test_line_follow` 핀 `v1.43`→`v1.47`, `read-card-diagnostics.py`의 사라진 `rosy_diag_redact` import 경로, 램프 패치 잠금 해시, `robot_literal_backlog.txt`에 최근 커밋이 새긴 4개 경로, 팰릿 크기 판정 재심(622→813, 716→1014), 그리고 `17f30137`이 리플래시 피드백을 `.hardware-action-note`로 옮기면서 갱신을 놓친 브라우저 단언.
 - 증거: CI 코어 명령 그대로 `1841 passed, 16 skipped`. `src/runtime/gateway/test` 1402 passed, 16 skipped / api_web 70 passed, 13 skipped / 영향받은 루트 6개 파일 73 passed, 1 skipped. `rosy_harness.py lint` 0 errors. 램프 해시는 증명됐다 — `e3b0c95e`가 패치 주석의 경로 한 줄만 바꿨는데 `inputs.lock.yaml`의 SHA-256은 `b7d7b17a` 시점 옛 값을 그대로 두었다(파이프 LF→CRLF 왜곡 없이 블롭 원본으로 대조).
 - gate 변화: 없음. 계약 필드·경로·이벤트 카탈로그는 그대로다. 남은 것은 `test_no_secrets_in_tracked_files`(13건)이며 의도적으로 손대지 않았다 — `secret_scan.py`가 "Widening an exclusion is how a matcher goes quiet without anyone noticing"라고 명시한 보안 게이트이고, 해법은 정규식 확장과 mutation proof가 필요한 정책 결정이다.
+
+## 2026-09-29 · uncommitted · fix(face): ASSIST REQ warn chip — P4/P5/P6 round close
+
+- 변경: P4 얼굴 LCD(LOCAL 범위) — 웨이크 카드 ASSIST REQ를 warn 채움 칩으로. P5 문서 — README 능력 주장 전수 스캔에서 교정 대상 0건(강한 주장은 전부 증거·게이트 경계와 함께 쓰임). P6 총평 — D-280 후속 크래프트 시퀀스의 LOCAL 분량 완료를 회차 폴더에 기록.
+- 증거: face 시험 162 passed/4 skipped, PIL 렌더 11장 독회(`X:\DevTemp\rosy-uiux-p4-lcd`), README 동사 스캔 기록. 회차 기록 `docs/validation/uiux-surfaces-2026-09-29/README.md` P4·P5·P6 절.
+- gate 변화: face last_verified 47d3e6ec(SOURCE/LOCAL GO 유지). 표면 판정은 전부 HOLD — 남은 조건은 표면별 (a) D-153 G3 사람 평가, (b) 실물 증거(DEVICE/FIELD)다.

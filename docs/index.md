@@ -215,8 +215,8 @@
 
 ## 최근 기록
 
+- 2026-09-29 · uncommitted · fix(face): ASSIST REQ warn chip — P4/P5/P6 round close
 - 2026-09-29 · uncommitted · fix(test): clear the CI core reds and the root test/ reds
 - 2026-09-29 · uncommitted · feat(ai): add ER 2 proposal-only provider adapter
 - 2026-09-29 · uncommitted · fix(games): HOLD alarm is a crit-filled chip (P3 round)
 - 2026-09-29 · uncommitted · fix(test): declare PRODUCT.md at root, budget only tracked web files
-- 2026-09-29 · uncommitted · fix(fleet-ui): E-STOP safety renders as the crit tag (P2 round)

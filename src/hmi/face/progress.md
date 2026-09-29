@@ -2,7 +2,7 @@
 module: emotion
 logical_modules: [M02]
 owner: 장치
-last_verified: { commit: "uncommitted", date: 2026-09-27 }
+last_verified: { commit: "47d3e6ec", date: 2026-09-29 }
 gates:
   SOURCE:
     state: GO
