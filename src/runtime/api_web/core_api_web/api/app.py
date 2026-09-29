@@ -44,6 +44,16 @@ from core_api_web.api.v1.routes import (
 from core_api_web.api.ws import ws_router
 
 
+#: One policy for every operator page CORE renders (/dashboard and the role
+#: surfaces). Assets are same-origin; the live feed is a websocket.
+OPERATOR_PAGE_CSP = (
+    "default-src 'self'; connect-src 'self' ws: wss:; "
+    "img-src 'self' data: blob:; style-src 'self'; script-src 'self'; "
+    "frame-ancestors 'none'; base-uri 'self'"
+)
+OPERATOR_PAGE_HEADERS = {"Cache-Control": "no-cache", "Content-Security-Policy": OPERATOR_PAGE_CSP}
+
+
 def _web_common_root() -> Path:
     """Resolve installed assets first, with a source-tree fallback for host tests."""
     try:
@@ -108,8 +118,6 @@ def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
         "camera-capture.js": "application/javascript",
         "status-summary.js": "application/javascript",
         "surface-navigation.js": "application/javascript",
-        "client.js": "application/javascript",
-        "dom.js": "application/javascript",
         "shell/shell.js": "application/javascript",
         "shell/store.js": "application/javascript",
         "shell/mount.js": "application/javascript",
@@ -156,14 +164,7 @@ def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
         return FileResponse(
             web_root / "index.html",
             media_type="text/html",
-            headers={
-                "Cache-Control": "no-cache",
-                "Content-Security-Policy": (
-                    "default-src 'self'; connect-src 'self' ws: wss:; "
-                    "img-src 'self' data: blob:; style-src 'self'; script-src 'self'; "
-                    "frame-ancestors 'none'; base-uri 'self'"
-                ),
-            },
+            headers=dict(OPERATOR_PAGE_HEADERS),
         )
 
     @app.get("/dashboard/assets/{asset_name:path}", include_in_schema=False)
@@ -261,6 +262,6 @@ def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
         html = (surface_template.replace("{{title}}", definition.title)
                 .replace("{{surface}}", definition.id).replace("{{grammar}}", definition.grammar)
                 .replace("{{slots}}", slots))
-        return HTMLResponse(html, headers={"Cache-Control": "no-cache"})
+        return HTMLResponse(html, headers=dict(OPERATOR_PAGE_HEADERS))
 
     return app

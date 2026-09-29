@@ -137,3 +137,15 @@ def test_each_base_surface_has_its_role_panel_mounts():
     }
     hardware = next(panel for panel in registry.panels if panel.id == "host.hardware")
     assert (hardware.surface, hardware.slot, hardware.min_role) == ("device", "main", "administrator")
+
+
+def test_role_surface_pages_carry_the_dashboard_csp():
+    client = _client()
+    dashboard_csp = client.get("/dashboard").headers["content-security-policy"]
+    assert "script-src 'self'" in dashboard_csp
+    assert "frame-ancestors 'none'" in dashboard_csp
+    for surface in ("/console", "/setup", "/device"):
+        response = client.get(surface)
+        assert response.status_code == 200, surface
+        assert response.headers.get("content-security-policy") == dashboard_csp, surface
+        assert response.headers["cache-control"] == "no-cache", surface
