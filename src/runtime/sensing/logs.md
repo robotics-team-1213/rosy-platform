@@ -542,3 +542,10 @@
 - gate 변화: 없음
 - 결정: D-231
 - 교훈: 없음
+
+## 2026-09-29 · uncommitted · web-surface-hardening: PARKED web_node 루프백·Origin 고정
+
+- 변경: `web_node`는 `bind_host`(기본 127.0.0.1, `config/web.yaml`·docstring에 문서화) 위에서만 듣는다. `Access-Control-Allow-Origin: *`를 지우고 페이지 출처(127.0.0.1·localhost·요청 Host 이름 + page port)에만 CORS를 답한다. 다른 출처 Origin의 POST는 403. `web_common_dir()`의 없는 `core/web_common` 대체 경로를 `src/hmi/web`로 고치고 `/common` 목록은 `manifest.json`에서 읽는다.
+- 증거: `python -m pytest src/runtime/sensing/test -q` 1665 passed 78 skipped(단독 실행). `test_web_http.py` 16 passed.
+- gate 변화: 없음. 진단 전용(D-150/D-253) 경계 그대로.
+- 결정: D-150, D-253.

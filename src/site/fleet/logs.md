@@ -482,3 +482,10 @@
 - Change: Mission draft insertion and ProposalStore `RESOLVED` transition now share a single SQLite transaction. Resolution work no longer durably leaves proposals in `RESOLVING`; a failed write rolls back the Mission and keeps the proposal retryable. Candidate free-text fields now have individual length limits in addition to the total metadata cap.
 - Evidence: Fleet suite 655 passed/5 skipped; fault injection after the Mission insert proved rollback and successful retry.
 - Gate: SOURCE/LOCAL only; resolver remains injected and no device Action submission is connected.
+
+## 2026-09-29 · uncommitted · web-surface-hardening: `/common` 목록은 web_common manifest
+
+- 변경: 서버의 손으로 쓴 `common_assets`를 `manifest.json` 읽기로 바꿨다(설정 디렉터리에 manifest가 없으면 기본 web_common의 것). `default_web_common()`은 manifest가 있는 share만 받는다. 이제 `hold-ticker.js`도 서빙한다. D-1005 인용을 실제 ADR D-157로 고쳤다.
+- 증거: `python -m pytest src/site/fleet/test -q` 656 passed 5 skipped.
+- gate 변화: 없음.
+- 결정: D-157.

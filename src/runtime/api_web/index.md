@@ -28,8 +28,8 @@
 
 ## 최근 기록
 
+- 2026-09-29 · uncommitted · web-surface-hardening: 역할 표면 CSP, manifest allowlist
 - 2026-09-29 · uncommitted · docs(contract): follow API Ref v1.48 in the description
 - 2026-09-29 · uncommitted · point the API description at the live contract version
 - 2026-09-28 · uncommitted · add optional navigation attempt correlation
 - 2026-09-27 · uncommitted · feat(host): judge status age from Host Agent UTC
-- 2026-09-27 · uncommitted · test(ui): verify real CORE role surfaces at desktop and mobile widths

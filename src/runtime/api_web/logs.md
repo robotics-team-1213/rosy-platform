@@ -161,3 +161,10 @@
 - 변경: API Ref v1.48(Site Fleet 정책 적격 증거 계약 추가)에 맞춰 설명 문자열을 `(v1.48)`로 갱신했다.
 - 증거: api_web 70 passed, 13 skipped(버전 정렬 시험 포함).
 - gate 변화: 없음. 로봇 측 계약 필드·경로는 무변경이고 표기만 따라갔다.
+
+## 2026-09-29 · uncommitted · web-surface-hardening: 역할 표면 CSP, manifest allowlist
+
+- 변경: 대시보드 CSP를 `OPERATOR_PAGE_CSP` 상수 하나로 빼고 `/{surface}`(`/console`·`/setup`·`/device`)도 같은 CSP와 `Cache-Control`을 보낸다. `dashboard_assets`의 중복 키(client.js·dom.js)를 지웠다. `/common` 목록은 web_common `manifest.json`을 읽는다(share에 manifest가 있을 때만 share, 아니면 소스 트리).
+- 증거: `python -m pytest src/runtime/api_web/test -q` 71 passed 13 skipped(브라우저 게이트). 새 시험 `test_role_surface_pages_carry_the_dashboard_csp`.
+- gate 변화: 없음. 장치 수용은 주장하지 않는다.
+- 결정: D-23, D-157.
