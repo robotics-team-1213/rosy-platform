@@ -119,3 +119,9 @@
 - gate 변화: DEVICE 진행(보조 자율 실차선 1 구간). 자동 중 각속도가 수동 한도(0.1 rad/s)보다 크다(최대 0.66 rad/s, nav 한도 0.8) — 차선 추종 `max_angular` 도 D-347 계단처럼 다룰지 결정 필요.
 - 결정: D-349 §7~§10.
 - 교훈: 실물 CORE 는 `ros2` CLI 로 볼 때 서비스와 같은 DDS 설정(`/etc/rosy/runtime.env` 의 `CYCLONEDDS_URI`, 루프백 전용)과 `--no-daemon` 이 필요하다 — 없으면 "토픽 없음"으로 보인다.
+
+## 2026-09-29 · 35efb5ba · feat(core): 차선 추종 앞 물체 정지(LiDAR, D-349 §11)
+- 변경: LiDAR 정면 ±20° 최소 거리로 0.20 m 정지·0.28 m 재출발(떨림 방지), LOST 로 굳지 않음, LiDAR 끊기면 정지. 장착 방향 `lidar_forward_deg`(Pinky 실물 180 — 정면 2.6 m·오른쪽 벽 0.14 m 가 카메라와 일치). 상태 `clearance_m`, pilot HUD "앞 N m"·"앞 물체 — 정지".
+- 실물 반영: 사용자 승인 두 번째 핫픽스(CORE 6 파일 + `lidar_forward_deg: 180`), 백업 `/var/lib/rosy-bench-backup/20260929140539-d349-obstacle/`. 로봇의 옛 관리자에 `config` 속성이 없어 첫 재시작에서 LiDAR 콜백 AttributeError — 즉시 속성 추가 후 재시작, 오류 0.
+- 증거(공개 저장소 밖): `X:\DevTemp\rosy-pilot-evidence\2026-09-29-obstacle-stop\`. 차선 위 물체로 다가가며 앞 거리 2.17→0.75→0.40→0.21 m; 다시 진행을 눌러도 0.198 m 에서 6 s 동안 이동 0.0 cm(`obstacle_ahead`); 물체를 치운 뒤 곧바로 출발해 15 s 연속 추종으로 50.3 cm 주행.
+- 교훈: 핫픽스는 로봇 쪽 파일이 브랜치보다 오래됐을 수 있다 — 새 코드가 부르는 속성(`config`)이 로봇 사본에 있는지까지 확인하고, 재시작 직후 저널에서 Traceback 을 본다.
