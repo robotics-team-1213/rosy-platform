@@ -96,6 +96,10 @@ KNOWN_LEGACY_HEADINGS = frozenset({
     "## 2026-09-26 \u00b7 uncommitted \u00b7 docs(adr): propose D-282 per-hardware ROS ownership",
     # Preserve both append-only versions created by the concurrent log merge.
     "## 2026-09-26 \u00b7 uncommitted \u00b7 OMX \ub2e8\uc77c \uc18c\uc720\uc790 ROS-SIM \ud6c4\uc18d\uacfc \uc774\uc804 \uc808\ucc28",
+    # The T2/T3 entry was committed (fbeffae9) with a commit-range token in
+    # the hash slot; the history gate forbids reforming it in place, so the
+    # exact heading is excused and the canonical entry above records the work.
+    "## 2026-09-29 · 5545ce37..uncommitted · feat(fleet): land policy evidence config and store (T2/T3)",
 })
 
 GENERATED_MARK = (

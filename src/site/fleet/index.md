@@ -26,6 +26,7 @@
 | D-116 | 관제 양보는 출발 로봇과 겹친 pose를 길로 보지 않는다 |
 | D-157 | Shared Headless UI Package (Monorepo Web Decoupling) |
 | D-159 | State Summary Visibility: Management by Exception (Law 0) |
+| D-268 | Fleet 자동 작업은 sighting이 아닌 별도 수용된 정책 증거만 사용한다 |
 | D-269 | 장비는 역할별 계약으로 사이트 서버에 접속하고 DDS는 CORE 안에 둔다 |
 | D-288 | Pinky Pro Pi 5 카메라 사용자 공간은 공식 소스를 고정해 네이티브 이미지에서 빌드한다 |
 | D-289 | Role console entry, action groups, and map readout |
@@ -52,6 +53,7 @@
 - [2026-09-28-site-camera-preview-rectification.md](../../../docs/plans/2026-09-28-site-camera-preview-rectification.md)
 - [2026-09-29-er2-semantic-actions-mission-implementation.md](../../../docs/plans/2026-09-29-er2-semantic-actions-mission-implementation.md)
 - [2026-09-29-fleet-mission-control-arbitration-implementation.md](../../../docs/plans/2026-09-29-fleet-mission-control-arbitration-implementation.md)
+- [2026-09-29-policy-evidence-contract.md](../../../docs/plans/2026-09-29-policy-evidence-contract.md)
 
 ## 교훈 (docs/solutions)
 
@@ -63,8 +65,8 @@
 
 ## 최근 기록
 
+- 2026-09-29 · uncommitted · feat(fleet): add policy-evidence config and store (D-268 ladder T2/T3)
 - 2026-09-29 · uncommitted · fix(test): keep the mission helper out of pytest's nose setup slot
 - 2026-09-29 · uncommitted · feat(ai): add ER 2 proposal-only provider adapter
 - 2026-09-29 · uncommitted · review Mission stop-generation recovery
 - 2026-09-29 · uncommitted · add internal Mission admission and goal evidence ledger
-- 2026-09-29 · uncommitted · fix(fleet-ui): E-STOP safety renders as the crit tag (P2 round)
