@@ -3307,3 +3307,9 @@
 - 변경: D-333에 후보 생성→operator Mission 승인→OMX Action 수락→ROS/readback→독립 goal 증거의 계약과 장치 측 stop-generation fence를 결정했다. 단일 `PICK_PLACE` 실행 계획을 추가하고 기존 ER 2 계획의 SOURCE 기준선·정지 설명, API Reference의 전용 E-stop 감사 예외를 현행 코드와 정렬했다.
 - 증거: D-327/D-328/D-330/D-331, ER 2·Mission·OMX 현행 소스와 API Reference를 대조했다. 신규 REST 경로·wire schema·장치 실행은 이번 문서 변경에 없다.
 - gate 변화: 없음. 통합 Mission/OMX 실행, provider live 호출, 물리 정지와 DEVICE/FIELD 수용은 HOLD다.
+
+## 2026-09-29 · uncommitted · docs(er2): separate model tools from running Mission progress
+
+- 변경: Google 공식 표준/streaming function call, Interactions 상태 및 영상 진행 기능을 현행 adapter와 대조해 조사 기록을 남겼다. D-334에 현행 단일 후보 도구, 미래 읽기·관측·재계획 후보, Fleet/OMX/목표/정지의 네 진행 축과 provider 세션 독립성을 결정했다. D-333 실행 계획에 진행 snapshot·재연결 시험 작업을 추가했다.
+- 증거: 공식 Google Robotics/Interactions/Live 문서와 `er2_standard.py`, `mission_store.py`, `action_store.py`, `pick_place_transaction.py`의 SOURCE 계약. live provider, ROS 장치와 실제 영상 진행 시험은 없다.
+- gate 변화: 없음. 새 tool declaration, 진행 API wire, provider 연속 loop, 자동 재계획과 DEVICE/FIELD 수용은 HOLD다.

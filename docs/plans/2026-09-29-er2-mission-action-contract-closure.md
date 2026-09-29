@@ -4,7 +4,7 @@
 
 **Goal:** 운영자 또는 ER 2의 동일한 `PICK_PLACE` 후보를 승인된 Fleet Mission, OMX 로컬 Action, ROS 실행, 독립 목표 증거까지 추적 가능한 경로로 연결한다.
 
-**Architecture:** [D-333](../adr/D-333-er2-mission-device-action-contract-closure.md)의 세 수락 경계를 순서대로 연다. Fleet은 인증·Mission 원장·claim/stop generation을, OMX 로컬 owner는 Action 수락·ROS arm/gripper와 로컬 정지를, 등록된 관측 생산자는 목표 증거를 소유한다. 첫 범위는 고정 OMX 작업대의 operator 승인 `PICK_PLACE` 하나이며 ER 2는 후보 공급자다.
+**Architecture:** [D-333](../adr/D-333-er2-mission-device-action-contract-closure.md)의 세 수락 경계와 [D-334](../adr/D-334-er2-tool-and-progress-read-boundary.md)의 진행 조회 경계를 순서대로 연다. Fleet은 인증·Mission 원장·claim/stop generation을, OMX 로컬 owner는 Action 수락·ROS arm/gripper와 로컬 정지를, 등록된 관측 생산자는 목표 증거를 소유한다. 첫 범위는 고정 OMX 작업대의 operator 승인 `PICK_PLACE` 하나이며 ER 2는 후보 공급자다.
 
 **Tech Stack:** Python 3.12, FastAPI/Pydantic, SQLite WAL, ROS 2 Jazzy, `FollowJointTrajectory`, 실제 장치의 검증된 gripper/driver 인터페이스, pytest. 현재 OMX 설치 단위·전송은 아직 확정되지 않았으므로 로컬 API transport는 작업 1의 출력이다.
 
@@ -14,7 +14,7 @@
 
 - 이미 있는 SOURCE: `src/site/fleet/fleet/ai/{candidate,er2_standard}.py`, `src/site/fleet/fleet/server/{mission_store,mission_service,goal_evidence}.py`, `src/products/omx/adapter/omx_adapter/{target_evidence,action_store,pick_place_transaction,gripper_contract,ros_runtime}.py`. 새 파일로 다시 만들지 않는다. 그 중 생산 route/runner 호출이 없는 부분을 연결한다.
 - 전용 `/api/fleet/estop`은 감사·래치 기록 장애에도 인증된 정지 요청을 fanout하도록 구현돼 있다. `/api/fleet/do`의 `estop`은 일반 감사 gate와 순차 step을 거친다. 두 응답 모두 물리 정지의 영수증이 아니다. Fleet generation의 장치 측 fence, OMX 실제 stop/readback은 미완료다.
-- 첫 범위 밖: 중앙 Fleet `/api/v1/fleet/missions` 구현, 단독 `PICK`/`PLACE`, 다장치 DAG, Pinky+OMX 이동, ER 2 streaming, 모델 자동 admission/replan, 생산용 이미지 전송. 범위 밖 기능을 현재 capability로 광고하지 않는다.
+- 첫 범위 밖: 중앙 Fleet `/api/v1/fleet/missions` 구현, 단독 `PICK`/`PLACE`, 다장치 DAG, Pinky+OMX 이동, ER 2 streaming/연속 tool loop, 모델 자동 admission/replan, 생산용 이미지 전송. 범위 밖 기능을 현재 capability로 광고하지 않는다.
 - 단계별 각 변경 전 `git status --short`, 현재 `main`과의 ancestry/파일 겹침을 확인한다. 다른 작업의 dirty 파일을 stage하지 않는다. `SOURCE/LOCAL`, `ROS-SIM`, `ARTIFACT`, `DEVICE`, `FIELD` 결과를 별도 기록한다.
 
 ## 작업 0. 배포 위치와 최종 writer를 확인한다
@@ -89,16 +89,26 @@
 3. 늦은 이전 attempt 결과·서로 충돌하는 관측·물체 보유 불명은 HOLD와 조정 이벤트로 남긴다. 새 attempt는 이전 물리 효과를 확인한 뒤 운영자가 열게 한다.
 4. Run: `python -m pytest src/site/fleet/test/test_mission_goal_provenance.py src/site/fleet/test/test_goal_evidence.py -q`. Expected: 독립 관측 없는 `completed` 0회. 해당 경로만 stage/commit한다.
 
-## 작업 8. ER 2를 후보 입력으로 연결하고 비모델 경로와 비교한다
+## 작업 8. 작업 중 진행 snapshot과 재연결 읽기를 제공한다
+
+**Files:** Create `src/site/fleet/fleet/server/mission_progress.py`, `src/site/fleet/test/test_mission_progress.py`; Modify `src/site/fleet/fleet/server/{app,mission_service,mission_store}.py`; update `docs/reference/ROSY API & Protocol Reference.md` and `src/contracts/foundation/core_common/protocol/schemas.py` together.
+
+1. failing tests: provider Interaction이 완료돼도 Action `RUNNING`이면 Mission 완료가 아님; Action `SUCCEEDED` 뒤 goal 증거 대기는 별도; stop 요청 뒤 장치/물리 readback 불명은 정지 완료가 아님; stale device 보고·늦은 이전 attempt 이벤트·중복 이벤트·다른 principal 조회는 거절 또는 `UNKNOWN`으로 표시한다.
+2. `GET /api/fleet/missions/{id}`의 진행 snapshot에 Fleet Mission/Step, OMX Action, goal evidence, stop의 네 축을 source·마지막 event ID·observed time·revision·freshness·reason과 함께 투영한다. 현재 저장소에 없는 증거는 추정하지 않는다. 새 wire 필드·HTTP 상태는 schema/API Reference와 함께 확정한다. 숫자 진행률은 물리 근거가 없으면 내지 않는다.
+3. 장기 실행 화면의 재연결이 필요하면 `GET /api/fleet/missions/{id}/events?after_event_id=...` 같은 cursor 경로를 신규 후보로 검토한다. 실제 경로·순서·보존 기간·중복/누락 응답과 접근 권한을 schema·생산자/소비자 시험에서 동시에 고정한다. 구독/WebSocket은 실측 소비 요구가 있을 때만 추가한다.
+4. 모델에 상태를 보여야 할 때 Fleet이 같은 snapshot의 민감정보를 줄인 principal/workcell 범위 버전을 입력으로 만들 수 있게 한다. 이 작업은 `get_mission_status` function declaration을 현행 ER 2 adapter에 추가하거나 provider tool-result loop를 여는 것이 아니다.
+5. Run: `python -m pytest src/site/fleet/test/test_mission_progress.py src/site/fleet/test/test_mission_dispatcher.py src/site/fleet/test/test_mission_goal_provenance.py -q`. Expected: 진행·완료·정지·불명의 네 축과 재연결 순서가 구별된다. 해당 경로만 stage/commit한다.
+
+## 작업 9. ER 2를 후보 입력으로 연결하고 비모델 경로와 비교한다
 
 **Files:** Modify `src/site/fleet/fleet/ai/{candidate,er2_standard}.py`, `src/site/fleet/fleet/server/app.py` or a dedicated proposal service; Test `src/site/fleet/test/{test_er2_standard,test_mission_ai_proposal}.py`; update deployment secret template and ignore rule only when a new secret kind is introduced.
 
-1. operator/규칙 후보와 ER 2 후보가 동일 `CreateProposal` 검증을 통과하는 fixture를 만든다. 모델 `provider_call_id`를 `action_id`로 사용하거나 tool call을 바로 실행하면 실패해야 한다.
+1. operator/규칙 후보와 ER 2 후보가 동일 `CreateProposal` 검증을 통과하는 fixture를 만든다. 모델 `provider_call_id`를 `action_id`로 사용하거나 tool call을 바로 실행하면 실패해야 한다. 현재 provider 요청에는 `propose_pick_place` 하나만 선언되고 `get_mission_status`/`request_observation`/물리 tool이 없음을 고정한다.
 2. 실제 카메라 이미지 전송 전에 provider 서비스 등급·데이터 처리, 허용 장면, 키 제한·주입/교체, traceback/log 마스킹, 호출 budget/rate limit을 문서와 배포 설정으로 검증한다. API key guide의 현재 key 종류/제한 조건을 해당 시점에 공식 문서에서 재확인한다.
 3. provider timeout/다중 호출/형식 불일치 시 Mission/Action 0건. live provider 파일럿은 별도 승인된 데이터와 비용 상한에서만 실행하고 모델 정확도·지연을 고정 fixture와 구분 기록한다. 모델 없이도 동일 Mission이 실행 가능해야 한다.
 4. Run: `python -m pytest src/site/fleet/test/test_er2_standard.py src/site/fleet/test/test_mission_ai_proposal.py -q`. Expected: 무승인 Mission 발행·장치 호출 0회. 해당 경로만 stage/commit한다.
 
-## 작업 9. 실제 설치와 물리 수용을 별도 판정한다
+## 작업 10. 실제 설치와 물리 수용을 별도 판정한다
 
 **Files:** Add evidence only under `docs/validation/<omx-action-acceptance-YYYY-MM-DD>/`; update `src/products/omx/adapter/{progress,logs}.md`, `src/site/fleet/{progress,logs}.md`, `docs/{progress,logs}.md` when corresponding gate changes; run harness generator.
 

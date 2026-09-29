@@ -152,6 +152,7 @@
 | D-330 | Fleet의 단일 발행 권한과 정지·재시작 차단을 Mission과 기존 작업에 공통 적용한다 |
 | D-331 | Gemini Robotics ER 2를 상태 비저장·제안 전용 Fleet provider로 연결한다 |
 | D-333 | ER 2 조작 후보의 Mission 승인, 장치 Action 수락, 정지와 목표 증거를 분리한다 |
+| D-334 | ER 2의 도구 목록과 진행 조회를 Fleet 원장 경계에 둔다 |
 
 ## 계획·결과 문서
 
@@ -204,6 +205,7 @@
 - [2026-09-29-er2-manipulation-official-api-research.md](plans/2026-09-29-er2-manipulation-official-api-research.md)
 - [2026-09-29-er2-mission-action-contract-closure.md](plans/2026-09-29-er2-mission-action-contract-closure.md)
 - [2026-09-29-er2-semantic-actions-mission-implementation.md](plans/2026-09-29-er2-semantic-actions-mission-implementation.md)
+- [2026-09-29-er2-tool-and-progress-official-review.md](plans/2026-09-29-er2-tool-and-progress-official-review.md)
 - [2026-09-29-fleet-mission-control-arbitration-implementation.md](plans/2026-09-29-fleet-mission-control-arbitration-implementation.md)
 - [2026-09-29-pinky-deployment-fast-path.md](plans/2026-09-29-pinky-deployment-fast-path.md)
 
@@ -218,8 +220,8 @@
 
 ## 최근 기록
 
+- 2026-09-29 · uncommitted · docs(er2): separate model tools from running Mission progress
 - 2026-09-29 · uncommitted · docs(er2): decide Mission/Action/stop/evidence closure
 - 2026-09-29 · uncommitted · fix(face): ASSIST REQ warn chip — P4/P5/P6 round close
 - 2026-09-29 · uncommitted · fix(test): clear the CI core reds and the root test/ reds
 - 2026-09-29 · uncommitted · feat(ai): add ER 2 proposal-only provider adapter
-- 2026-09-29 · uncommitted · fix(games): HOLD alarm is a crit-filled chip (P3 round)
