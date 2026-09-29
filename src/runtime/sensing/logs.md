@@ -555,3 +555,11 @@
 - 변경: `tools/sim/simulate_semantic_road.py`의 결정론적 합성 카메라 폐루프에 시나리오 2종을 추가했다 — `stop_and_go`(무신호 선언: 정지+dwell 후 `PROCEED/unsignalized_proceed`, 신호 관측 시 `HOLD/signal_unexpected`)와 D-337 관측 융합(카메라 신호 미관측 + `SignalHeadEvidence` 주입: `signal_unknown` 무한 대기 → `PROCEED/signal_green`(signal_source_kind=fused), 불일치 `HOLD/signal_source_conflict`). 폴러 전송은 가짜 없이 정책 계층에서 주입하고 전송 계약은 기존 `test_observer_source.py`가 담당한다. 상태 타임라인 SVG는 표본 수에 맞춰 높이가 늘어난다.
 - 증거: `docs/validation/semantic-road-stop-and-go-2026-09-29/` — `SEMANTIC_ROAD_HOST_SIM_PASS`, 표 3종·result.json·SVG·montage·preview. `test_semantic_road_simulation.py` 신규 단언(무신호 진입·선언 충돌·융합 3단·fused 표기) 포함 2 passed, flake8 clean.
 - gate 변화: 없음. HOST-SIM 한계 그대로 — 실물 Gazebo 폐루프(WSL), 관측 서비스 실HTTP, DEVICE/FIELD는 T5 벤치 회차가 소유한다.
+
+## 2026-09-30 · uncommitted · feat(perception): D-356 인식 학습 루프 섀도 백엔드·녹화·도구
+
+- 변경: `perception/learned/`(manifest·lane_mask·runner·shadow)와 공유 `image_frame.py`, `learned_lane_node`(+`launch/learned_lane.launch.py`), `recording.py`+`record_session`(콘솔 스크립트 2개) 추가. 개발자 쪽 `tools/perception/{dataset,model,training}`(추출·사전 라벨·데이터셋 빌드·발행·ONNX 내보내기·접수·전달/롤백)과 `tools/perception/test`. 학습 노드는 섀도 전용이라 명령 필드가 없고 `executor_choice.spin`으로 돈다. `hotpath_measure.NODE_NAMES`와 executor 선택 시험 개수를 새 진입점에 맞췄다.
+- 증거: 전체 sensing 스위트 1741 passed 80 skipped(신규 진입점 반영 뒤 실패 2건 수정: executor 선택·hotpath 이름 계약); `tools/perception/test` 94 passed 8 skipped(2026-09-30 Windows).
+- gate 변화: 없음. SOURCE/LOCAL만 다룬다. 노드 그래프·Pi 실행은 HOLD.
+- 결정: D-356 Proposed(섀도 전용; 주행 활성화는 D-205 P3 뒤 별도).
+- 교훈: 새 콘솔 스크립트는 `hotpath_measure.NODE_NAMES`와 `test_executor_choice`의 진입점 개수 계약을 함께 건드린다. 전체 스위트를 돌려야 잡힌다.

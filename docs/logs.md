@@ -3540,3 +3540,11 @@
 - gate 변화: 없음.
 - 결정: 덜어낸 뒤 ESP32 일은 릴레이 구동+전류 계측+/status+폴트 넷뿐. 이 이상 덜면 충전 증명 불가.
 - 교훈: 자석-철 조합에서는 자석 극성 배치로 뒤집힘 방지가 안 된다 — 기계적 키잉(비대칭 배치/가이드 리브)+다이오드/퓨즈 2차가 정답.
+
+## 2026-09-30 · uncommitted · docs(sensing): D-356 학습 루프 기록
+
+- 변경: D-356 인식 학습 루프 착지 기록 — `perception/AGENTS.md`(`learned/`, `image_frame.py`), sensing `AGENTS.md`(노드·CLI·launch), 신규 `tools/perception/AGENTS.md`, `.gitignore`에 `data/perception/`. 편차: 녹화는 raw `camera/front`(압축 front 토픽 없음), 학습 노드는 섀도 전용, onnxruntime은 아직 장치 이미지에 없음, 0930 모델의 클래스 역할은 잠정.
+- 증거: 신규 시험 72 passed 2 skipped, `tools/perception/test` 94 passed 8 skipped, sensing 전체 1741 passed 80 skipped; harness lint 결과는 커밋 메시지·보고에 기록.
+- gate 변화: 없음.
+- 결정: D-356 Proposed.
+- 교훈: 없음.

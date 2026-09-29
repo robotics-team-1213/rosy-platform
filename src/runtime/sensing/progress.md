@@ -23,7 +23,7 @@ gates:
     blocker: "Pi bench Device 설치와 device-readback.sh --json 증거 없음. Control sensor adapter 활성화는 Device 보정 generation에 묶인다(D-47)"
   FIELD:
     state: PARKED
-adrs: [D-37, D-38, D-40, D-42, D-47, D-50, D-57, D-58, D-77, D-118, D-119, D-143, D-151, D-152, D-149, D-155, D-156, D-162, D-168, D-183, D-199, D-205, D-206]
+adrs: [D-37, D-38, D-40, D-42, D-47, D-50, D-57, D-58, D-77, D-118, D-119, D-143, D-151, D-152, D-149, D-155, D-156, D-162, D-168, D-183, D-199, D-205, D-206, D-356]
 plans:
   - docs/plans/2026-09-06-module-split-criteria.md
   - docs/plans/2026-09-12-rosy-control-absorption-plan.md
@@ -74,6 +74,13 @@ plans:
 - **2026-09-22 Gazebo 실렌더링 검증 PASS**: semantic_road_dashboard 헤드리스 실행에서 실제 렌더링 프레임으로 정지선 구간 stop_line 100% 분류, 표식 통과 후 generic 보수 폴백 확인(docs/validation/scene-context-gazebo-2026-09-22). crosswalk 배치 미검출로 crosswalk 컨텍스트는 호스트 시험만 존재.
 - context는 인지 파라미터만 바꾼다. 정지·명령 결정은 여전히 LiDAR/IR 메트릭과 CORE가 소유하며(D-137/D-151), 프로파일 값 튜닝은 DEVICE gate 전까지 제네릭과 동일하게 둔다.
 - LOCAL: `1179 passed, 28 skipped` (2026-09-22).
+
+## 2026-09-30 learned loop status (D-356)
+
+- `perception/learned/`와 `learned_lane_node`가 착지했다. 섀도 전용이다: `perception/learned/shadow`만 발행하고 명령 필드가 없으며 CORE·주행 경로에 소비자가 없다. `record_session`은 raw `camera/front`와 evidence를 harvest 인지 quota로 녹화한다.
+- 가중치는 `src/`에 두지 않는다. `tools/perception/`이 데이터셋 발행, ONNX 접수, 전달/롤백을 맡고 산출물은 `data/perception/`(gitignore)에 둔다.
+- 편차: 압축 front 토픽이 없어 raw로 녹화한다. onnxruntime은 장치 이미지에 아직 없다. 0930 모델의 클래스 역할은 잠정이다.
+- LOCAL: sensing 전체 `1741 passed, 80 skipped`, `tools/perception/test` `94 passed, 8 skipped` (2026-09-30). ROS-SIM/DEVICE는 HOLD, 주행 활성화는 D-205 P3 뒤 별도 결정이다.
 
 ## 현재 유효한 금지사항
 

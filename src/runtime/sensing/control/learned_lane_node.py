@@ -15,6 +15,7 @@ from rclpy.node import Node
 from sensor_msgs.msg import Image
 from std_msgs.msg import String
 
+from . import executor_choice
 from .sensing.perception.image_frame import image_msg_to_frame
 from .sensing.perception.learned.runner import ModelSlot
 from .sensing.perception.learned.shadow import TOPIC, shadow_payload
@@ -97,7 +98,7 @@ def main():
     rclpy.init()
     node = LearnedLaneNode()
     try:
-        rclpy.spin(node)
+        executor_choice.spin(node, rclpy)
     finally:
         node.destroy_node()
         rclpy.shutdown()
