@@ -18,6 +18,9 @@ def generate_launch_description():
     camera_height = DeclareLaunchArgument("camera_height", default_value="720")
     camera_update_rate = DeclareLaunchArgument(
         "camera_update_rate", default_value="10")
+    # Real-profile sims (D-353 5) set the Pinky Pro camera geometry.
+    camera_hfov = DeclareLaunchArgument("camera_hfov", default_value="1.1519")
+    cam_mount_z = DeclareLaunchArgument("cam_mount_z", default_value="0.0495")
 
     namespace = PythonExpression([
         "'", LaunchConfiguration('namespace'), "' + ('/' if '", LaunchConfiguration('namespace'), "' != '' else '')"
@@ -46,7 +49,9 @@ def generate_launch_description():
                     ' camera_width:=', LaunchConfiguration('camera_width'),
                     ' camera_height:=', LaunchConfiguration('camera_height'),
                     ' camera_update_rate:=', LaunchConfiguration(
-                        'camera_update_rate')
+                        'camera_update_rate'),
+                    ' camera_hfov:=', LaunchConfiguration('camera_hfov'),
+                    ' cam_mount_z:=', LaunchConfiguration('cam_mount_z'),
                 ]),
             'frame_prefix': [namespace],
         }]
@@ -74,6 +79,8 @@ def generate_launch_description():
     ld.add_action(camera_width)
     ld.add_action(camera_height)
     ld.add_action(camera_update_rate)
+    ld.add_action(camera_hfov)
+    ld.add_action(cam_mount_z)
     ld.add_action(rsp_node)
     ld.add_action(jsp_node)
 

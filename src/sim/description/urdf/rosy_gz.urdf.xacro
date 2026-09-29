@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro">
-    <xacro:macro name="insert_gz_sim" params="namespace camera_width camera_height camera_update_rate">
+    <xacro:macro name="insert_gz_sim" params="namespace camera_width camera_height camera_update_rate camera_hfov:=1.1519">
         <gazebo>
             <plugin filename="gz-sim-diff-drive-system" name="gz::sim::systems::DiffDrive">
                 <left_joint>${namespace}l_wheel_joint</left_joint>
@@ -123,7 +123,7 @@
         <gazebo reference="front_camera_link">
             <sensor name="camera" type="camera">
                 <camera>
-                    <horizontal_fov>1.1519</horizontal_fov>
+                    <horizontal_fov>${camera_hfov}</horizontal_fov>
                     <image>
                         <width>${camera_width}</width>
                         <height>${camera_height}</height>

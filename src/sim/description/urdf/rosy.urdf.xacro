@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro">
-    <xacro:macro name="insert_robot" params="namespace is_sim:=false cam_tilt_deg screen_tilt_deg camera_width:=1280 camera_height:=720 camera_update_rate:=10">
+    <xacro:macro name="insert_robot" params="namespace is_sim:=false cam_tilt_deg screen_tilt_deg camera_width:=1280 camera_height:=720 camera_update_rate:=10 camera_hfov:=1.1519 cam_mount_z:=0.0495">
         <xacro:include filename="$(find description)/urdf/common/insert_inertia.urdf.xacro"/>
 
         <link name="base_footprint"/>
@@ -280,7 +280,7 @@
         <joint name="${namespace}front_camera_mount_fixed_joint" type="fixed">
             <parent link="base_link"/>
             <child link="front_camera_mount"/>
-            <origin xyz="0.020 0 0.0495" rpy="0 ${cam_tilt_deg/180*pi} 0"/>
+            <origin xyz="0.020 0 ${cam_mount_z}" rpy="0 ${cam_tilt_deg/180*pi} 0"/>
         </joint>
 
         <link name="front_camera_link"/>
@@ -364,7 +364,8 @@
             <xacro:insert_gz_sim namespace="${namespace}"
                                  camera_width="${camera_width}"
                                  camera_height="${camera_height}"
-                                 camera_update_rate="${camera_update_rate}"/>
+                                 camera_update_rate="${camera_update_rate}"
+                                 camera_hfov="${camera_hfov}"/>
         </xacro:if>
     </xacro:macro>
 </robot>
