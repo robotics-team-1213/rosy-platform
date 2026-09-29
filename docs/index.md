@@ -228,8 +228,8 @@
 
 ## 최근 기록
 
+- 2026-09-29 · uncommitted · docs(adr): D-341 천장 카메라 콘솔 승인 페어링 제안과 리뷰 반영
 - 2026-09-29 · uncommitted · test(architecture): D-168 스캐너에 package:// URI와 자산 확장자 추가
 - 2026-09-29 · uncommitted · docs(plans): D-337 T3 착지 — 설정·배선·계약 완료
 - 2026-09-29 · uncommitted · docs(plans): D-337 T2 착지 — 관측 폴러 전송 완료
 - 2026-09-29 · uncommitted · docs(plans): D-337 T1 착지 — 융합 순수 로직 완료 (항목 복원)
-- 2026-09-29 · uncommitted · docs(adr): D-336 표행 인코딩 복구

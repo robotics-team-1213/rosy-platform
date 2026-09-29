@@ -3442,3 +3442,10 @@
 - gate 변화: 없음. 잔여 실패 2건(test_size_verdicts·test_over_budget)은 병행 트랙의 사전 존재 예산 초과(schemas.py 738행·fleet 10,436행·app.py 재성장)로 이 변경과 무관.
 - 결정: mesh/world/map 등 자산 참조도 P3 선언 대상임을 스캐너가 이제 증명한다. 신규 위반은 P5대로 — fix(선언 추가) 또는 KNOWN_UNDECLARED 사유 기록.
 - 교훈: 패턴 추가는 추가만으로 증명되지 않는다 — 물릴 대상을 찔러 빨강을 본 뒤 믿는다(test/AGENTS 변이 증명 규약).
+
+## 2026-09-29 · uncommitted · docs(adr): D-341 천장 카메라 콘솔 승인 페어링 제안과 리뷰 반영
+
+- 변경: docs/adr/D-341-overhead-console-approved-pairing.md(Proposed)와 docs/plans/2026-09-29-overhead-console-pairing-plan.md 신설. mDNS 발견 → 페어링 요청 → 이름 있는 operator가 폰의 6자리 코드를 입력해 승인 → 1회 수령 → 설치자가 폰·콘솔의 사이트 CA 지문과 자격 번호를 맞춰 보는 상호 확인 → 앱 전용 CA 고정 WSS → IP 변경 시 mDNS 재발견. 독립 리뷰(APPROVE-WITH-CHANGES)를 같은 날 반영: 가짜 수신기 대비 상호 확인, 4401(최종)/4503(재시도) 분리와 Vision→`https://fleet:8090` 직접 동기화, 원격 주소별 한도 삭제, source `static|paired`, leaf DER 해시, 메모리 대기, Windows Compose 벤치 절차와 실제 로봇 포함 DEVICE 관문, 되돌림 경로. D-261·발견 규칙(3·4항 보충)·deploy/site/README.md에는 교차 참조만 더했다. tools/harness/harness.yaml의 D-341 예약 gap을 지웠다(이 ADR이 착지).
+- 증거: 2026-09-29 S21(SM-G991N, Android 15) 벤치 — NSD가 시험 `_rosy-overhead._tcp`와 로봇 `_rosy._tcp`를 함께 찾음, 평문 ws 딥링크 60 s 3 fps·178 프레임·seq_gaps 0·age_ms p50 ~110–120. LOCAL/벤치이며 DEVICE 아님.
+- gate 변화: 없음(SOURCE 문서만). 구현·DEVICE·FIELD는 계획 1–5단계와 벤치 절차.
+- 결정: 승인자는 `require_named_operator`, 신뢰는 사이트 CA 고정, 수명 180일·회수 목표 5 s(동기화 2 s). 로봇 FleetAgent 페어링은 옮기지 않는다. 역할 등록표는 방향만 두고 첫 조각은 상수 하나.

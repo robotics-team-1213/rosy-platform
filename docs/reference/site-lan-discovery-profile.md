@@ -37,4 +37,4 @@
 
 Ubuntu Fleet PC에는 안정적인 호스트명을 지정하고 `<hostname>.local`을 사이트 TLS 인증서 SAN에 넣는다. Compose의 HTTPS 포트를 LAN에서 접근 가능한 주소에 바인딩한다. `rosy-fleet-advertise.service`는 Fleet API를, `rosy-overhead-advertise.service`는 같은 HTTPS proxy의 카메라 WSS 경로를 각자 광고한다. Android 앱은 `_rosy._tcp` 로봇과 `_rosy-overhead._tcp` 수신기를 함께 보여 주지만 WSS 프레임은 오버헤드 수신기에만 보낸다. mDNS 결과는 주소 후보이며, TLS 인증서 검증과 source별 token이 계속 필요하다. 서비스 생존 여부는 광고와 별도로 TLS health로 검사한다. 광고만으로 SSH 계정·호스트 키·배포 권한을 찾거나 생성하지 않는다.
 
-천장 카메라의 콘솔 승인 페어링은 [D-341](../adr/D-341-overhead-console-approved-pairing.md)(Proposed)을 본다. 발견은 여전히 자격을 주지 않는다. D-341은 이름 있는 운용자의 승인과 6자리 확인 코드 뒤에만 카메라 토큰과 사이트 CA를 발급하며, 그렇게 승인된 결과가 위 3·4항의 예상 호스트명과 사이트 CA를 대신 공급할 수 있게 한다. TXT 공개 키 `pair=rosy-pair/1`을 더한다.
+천장 카메라의 콘솔 승인 페어링은 [D-341](../adr/D-341-overhead-console-approved-pairing.md)(Proposed)을 본다. 발견은 여전히 자격을 주지 않는다. **3·4항 보충(D-341):** 천장 카메라의 첫 접촉(페어링 요청·조회)은 광고된 `tls_host`를 후보로 쓸 수 있다. 이름 있는 운용자의 코드 입력 승인과 설치자의 지문 상호 확인이 끝난 뒤에는 페어링 결과로 받은 `tls_host`와 사이트 CA가 정본이고, 이후 광고는 주소만 공급한다. 이 보충은 D-341 절차를 거친 `paired` 카메라에만 적용되며, 다른 제품과 수동 경로에는 3·4항이 그대로 적용된다. TXT 공개 키 `pair=rosy-pair/1`을 더한다.
