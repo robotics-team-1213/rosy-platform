@@ -3599,6 +3599,50 @@
 - Evidence: `python tools/harness/rosy_harness.py lint` passed with 0 errors and 20 existing freshness warnings; documentation contract suite passed (80 passed). Index generation completed.
 - Gate: no implementation, provider call, ROS/OMX activation, device install, or physical acceptance.
 
+## 2026-09-30 · uncommitted · docs(adr/plan): D-358 feedback outbox and replan fences
+
+- Change: added D-358 as an append-only implementation-contract refinement to D-357 and updated the plan with an ownership map, trusted turn scope, provider-egress approval, successor-Mission replans, explicit outcome/tool policy, and atomic stop-generation fencing.
+- Boundaries: ambiguous provider POSTs remain `UNKNOWN` and are never automatically replayed; the outbox guarantees at most one client submission attempt, not exactly-once provider execution. Device ROS/driver, goal-verifier, and physical stop ownership remain separate; dispatch stays disabled.
+- Evidence: current pre-existing Mission/progress/ER2/API suite 54 passed; documentation contract suite 80 passed; harness lint 0 errors and 21 freshness warnings.
+- Gate: D-357 implementation tests do not exist yet and are now mandatory in the plan; no ROS-SIM, provider call, device install, or physical acceptance.
+\n## 2026-09-30 · uncommitted · docs(adr): D-352 외부 장비 공통 패턴
+
+- 변경: ADR D-352 상세문서 + 표행. 도크와 신호등의 공통점 6개(ESP32·폴링·필수 필드 누락=오류·페일세이프·NVS·소스 스캔 시험)와 차이 4개(폴링 주체·명령면·페일세이프 방향·안전 역할)를 정리하고, 공통 어휘(폴링 실패 4상태·준비 프레임 wire/instrumented/verified)와 계약 상호 참조를 확정. DOCKING 진입 시 traffic_policy ADVISORY 강등을 명시적 계약으로 승격.
+- 증거: 도크·신호등 계약서 대조, 기존 시험 통과 상태.
+- gate 변화: 없음.
+- 결정: 공통 추상 클래스는 3번째 소비자가 생길 때까지 만들지 않는다 — 패턴 문서로 족하다.
+- 교훈: 두 장비가 우연히 6개 속성이 일치했다는 것은 패턴이 옳다는 증거다 — 의도적 공유로 전환한다.\n
+\n## 2026-09-30 · uncommitted · feat(arch): D-354 mDNS 서비스 발견
+
+- 변경: 도크·신호등 펌웨어에 ESPmDNS 등록 (각 3줄: include + MDNS.begin + addService). 클라이언트 발견 유틸리티 core_common/discover.py (zeroconf → avahi-browse → dns-sd 3단 폴백). 계약 문서에 서비스명 표 추가. 시험 5건 (펌웨어 광고·폴백·서비스명 정합). 기존 IP 설정은 호환 (레거시 벤치).
+- 증거: test_mdns_discovery 5 + test_dock_contract 7 + test_signal_contract 14 = 26 passed.
+- gate 변화: 없음.
+- 결정: 장비를 사이트에 두면 전원만 연결하면 된다 — IP·설정·파일 수정 불필요. DHCP가 바뀌어도 .local 이름은 불변.
+- 교훈: mDNS는 ESP32에 네이티브로 있어서 3줄이면 된다 — 이걸 안 쓸 이유가 없었다.\n
+## 2026-09-30 · uncommitted · docs(plan): 도크·외부 장비 5단계 구현 플랜 + D-355
+
+- 변경: docs/plans/2026-09-30-dock-device-implementation-plan.md 신설 — D-349~D-354의 6개 ADR 결정을 자재(A)→도크 벤치(B)→로봇 실기(C)→활성화(D)→신호등 벤치(E)→통합(F)의 6단계 실행 순서로 정리. 자재 목록 13품목, 게이트 D0–D5·E1–E5·F1–F3, 의존 그래프, 완료 조건 포함. ADR D-355 표행으로 실행 순서 확정 기록.
+- 증거: 기존 ADR 6건·게이트 문서·런북에서 전수 추출. 새 코드 없음.
+- gate 변화: 없음.
+- 결정: Phase B와 C는 병행 가능 (도크 벤치와 로봇 실기가 독립). Phase D는 B6 통과 후에만.
+- 교훈: 6개 ADR이 각기 옳았지만 실행 순서가 없으면 다음 사람이 무엇부터 할지 모른다 — 플랜이 그 갭을 메운다.
+
+## 2026-09-30 · uncommitted · docs: CI 적신 뒤끝 — C6 판정 기록과 isaac_sim 등록 완성
+
+- 변경: (1) 2026-09-06-module-split-criteria.md에 `bridge/display.py` → `battery.charging` reach의 C6 판정을 추가 — "Seam lie — fixed by deletion"(멤버는 BatteryStatus에 선언돼 있고 raw Battery에는 없어 getattr가 항상 False; 직접 접근으로 대체돼 reach 소거, ALLOWED 무변경). (2) isaac_sim의 harness 등록을 완성(functional_kind·functional·tests)하고 AGENTS.md·progress.md의 "no own tests" 오기를 정정, ROS-SIM을 D-322 명시대로 HOLD로. src/AGENTS.md 시험 호출에 sim/isaac_sim/test 추가.
+- 증거: test_module_criteria·test_module_functional_surface·test_module_structure·isaac_sim 자기 시험 47 passed (2026-09-30 Windows). 수정 전 functional surface는 isaac_sim functional_kind 누락으로 1 failed — main CI가 core 단계에서 멈춰 아직 도달하지 못한 두 번째 잠복 실패였다.
+- gate 변화: isaac_sim ROS-SIM N/A→HOLD (blocker 신규 기록, D-322와 일치).
+- 결정: 없음.
+- 교훈: CI가 첫 실패에서 멈추면 그 뒤의 실패는 보이지 않는다 — 로컬에서 전 스위트를 먼저 돌리고 push한다.
+
+## 2026-09-30 · uncommitted · docs(harness): 11개 모듈 last_verified를 bed604ef로 기록
+
+- 변경: core·control·fleet·docs·core_common·core_events·core_features·core_api_web·isaac_sim·games·omx_adapter의 last_verified를 bed604ef(2026-09-30)로 기록. 각 모듈의 LOCAL gate cmd(또는 그 전체 스위트)를 이 트리에서 통과시켰다: gateway 1439·sensing 1665·fleet 746·events/services/web_common/api_web/foundation/dashboard/isaac_sim/games/omx_adapter 1089+9·overhead 122·omx CLI exit 0 (2026-09-30 Windows).
+- 증거: quick tier + functional surface + scorecard 127 passed; harness 계약 시험 통과. 병행 세션의 미푸시 커밋은 docs 트리만 건드려 스윕 대상 코드는 무결.
+- gate 변화: 없음 (기록 갱신만).
+- 결정: web_common(임시 디렉터리 스크립트 cmd)·dashboard(브라우저 매트릭스)·overhead(android gradle·docker)·gz_sim(ROS 의존 skip)·deploy(전체 test/ 실행 중)은 이 호스트에서 완전 검증이 불가해 스윕에서 제외 — 정직한 기록만 남긴다.
+- 교훈: web_common의 LOCAL cmd가 X:\DevTemp 스크립트를 가리킨다 — 재현 불가한 cmd는 검증 기록이 아니므로 소유자가 저장소 내 명령으로 바꿔야 한다.
+
 ## 2026-09-30 · uncommitted · docs(adr): D-354 천장 카메라 경기장 자동 검출 제안 (Proposed)
 
 - 변경: `docs/adr/D-354-overhead-field-auto-detection-proposal.md` 추가, ADR Log·progress `adrs` 목록 등록. 검출은 Vision에서만, `GET /api/vision/sources/{id}/field-proposal`은 frame 경로와 같은 lease·헤더, 제안은 운용자 수락 전 적용 안 함, 설정 W×H 불일치 안내, 브라우저 로컬 W×H 입력, 레이어 토글.

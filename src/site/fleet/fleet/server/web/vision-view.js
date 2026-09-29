@@ -29,7 +29,7 @@ export function createVisionView({ el, call, auth }) {
   let refreshTimer = null;
   let viewMode = "adjusted";
   let draggingPointerId = null;
-  // D-354: 검토 중인 경기장 제안(정규 좌표 네 점). 수락 전에는 조정값에 들어가지 않는다.
+  // D-360: 검토 중인 경기장 제안(정규 좌표 네 점). 수락 전에는 조정값에 들어가지 않는다.
   let proposalCorners = null;
   const proposalPolygon = el("vision-proposal-polygon");
   const frameListeners = [];
@@ -345,7 +345,7 @@ export function createVisionView({ el, call, auth }) {
     lease = null;
     refreshSources().then(refreshFrame);
   });
-  // D-354: Vision 제안은 frame 과 같은 lease 로 same-origin 에서 읽는다. Fleet 은 중계하지 않는다.
+  // D-360: Vision 제안은 frame 과 같은 lease 로 same-origin 에서 읽는다. Fleet 은 중계하지 않는다.
   async function fetchFieldProposal() {
     const source = select.value;
     if (!source || auth.locked || !auth.token) throw new Error("카메라를 먼저 선택하세요.");

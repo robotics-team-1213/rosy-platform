@@ -14,7 +14,7 @@ export function createMapView({ el, view, css, auth, call, onMapChanged, onMapUn
   const GRID = { UNKNOWN: -1, FREE_MAX: 25, OCCUPIED_MIN: 65 };
   // Map tracking visualization only; relay evidence comes from the Fleet server.
   const TRACK_WARN_M = 0.3;     // 기본 간격(0.6 m)의 절반을 넘으면 주의 색을 쓴다.
-  // D-354 레이어 토글(field-view.js 가 view.layers 를 채운다). 값이 없으면 모두 켠다.
+  // D-360 레이어 토글(field-view.js 가 view.layers 를 채운다). 값이 없으면 모두 켠다.
   const layerOn = (key) => view.layers?.[key] !== false;
 
   function paintGrid(grid) {

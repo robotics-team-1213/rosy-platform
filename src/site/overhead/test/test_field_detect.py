@@ -1,4 +1,4 @@
-"""D-354 field proposal on synthetic images only (the repo is public; no lab photos)."""
+"""D-360 field proposal on synthetic images only (the repo is public; no lab photos)."""
 
 from __future__ import annotations
 

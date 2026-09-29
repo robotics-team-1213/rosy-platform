@@ -517,7 +517,7 @@ el("roster-toggle").addEventListener("click", () => {
 // D-262: 신호등 카드는 signals.js 팩토리가 그린다.
 const signals = createSignals({ el, view, log, call, refreshState });
 const visionView = createVisionView({ el, call, auth, authHeaders });
-// D-354: 경기장 제안·보정 뷰·레이어 토글. 레이어가 바뀌면 지도를 다시 그린다.
+// D-360: 경기장 제안·보정 뷰·레이어 토글. 레이어가 바뀌면 지도를 다시 그린다.
 createFieldView({ el, view, visionView, onLayersChanged: () => mapView.draw() });
 
 // --- 신호등 (ROSY-SIGNAL-001) --------------------------------------------------

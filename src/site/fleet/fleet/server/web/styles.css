@@ -46,7 +46,7 @@ input, select { font: inherit; color: inherit; }
   .vision-corner-overlay [data-corner-handle] { stroke-width: 2; }
 }
 
-/* D-354 경기장 제안·보정 뷰·레이어. 색은 토큰만 쓴다. */
+/* D-360 경기장 제안·보정 뷰·레이어. 색은 토큰만 쓴다. */
 .vision-corner-overlay .vision-proposal-polygon { fill: none; stroke: var(--series-goal); stroke-width: 1.6; stroke-dasharray: 3 2; vector-effect: non-scaling-stroke; }
 .vision-corner-overlay .vision-proposal-polygon[hidden] { display: none; }
 .field-tools { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-2); }

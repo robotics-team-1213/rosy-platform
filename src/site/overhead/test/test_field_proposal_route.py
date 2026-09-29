@@ -1,4 +1,4 @@
-"""D-354 field-proposal route: same lease, headers and freshness rules as the frame route."""
+"""D-360 field-proposal route: same lease, headers and freshness rules as the frame route."""
 
 from __future__ import annotations
 

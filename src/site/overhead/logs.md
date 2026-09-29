@@ -111,3 +111,9 @@
 - 변경: `process_request`를 코루틴으로 바꿔(websockets 17.0.1) 경기장 검출을 `asyncio.to_thread`에서 돌린다. 검출은 lease 주체와 상관없이 소스당 1초에 한 번만 돌고, 그 사이 요청은 직전 결과(그 프레임의 seq·age)를 받으며 첫 검출이 도는 중이면 429다. 캐시는 seq 대신 프레임 객체로 가리고(재접속하면 seq가 다시 시작한다) 소스가 빠지거나 교체되면 지운다.
 - 증거: `python -m pytest src/site/overhead/test -q` 111 passed(검출 스레드·소스 공유 예산·프레임 동일성·소스 제거 시험 추가).
 - gate 변화: 없음. SOURCE/LOCAL만.
+
+## 2026-09-30 · uncommitted · docs: 경기장 자동 검출 ADR 번호 D-354 → D-360
+
+- 변경: main에 다른 D-354(mDNS 서비스 발견)가 먼저 착지해, main 병합 때 경기장 자동 검출 제안 ADR을 D-360으로 옮겼다. 코드 주석·시험·API Ref의 D-354 표기를 D-360으로 바꿨고 ADR 본문에 까닭을 적었다. 이 항목보다 앞선 로그의 "D-354"(경기장 제안)는 D-360을 가리킨다(로그는 고치지 않는다).
+- 증거: 병합 커밋의 overhead·Fleet·node 실행.
+- gate 변화: 없음.

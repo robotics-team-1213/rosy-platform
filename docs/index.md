@@ -160,8 +160,13 @@
 | D-340 | 설치형 앱은 웹 표면을 감싸는 셸로 만든다 — PWA가 먼저, Capacitor 셸은 저장소 루트 `apps/`에 둔다 |
 | D-345 | D-280 디자인 철학은 사람이 보는 모든 표면에 같은 방식으로 적용한다 — 웹이 아닌 표면도 레지스트리·토큰 사본 검사·이름 규칙을 받는다 |
 | D-348 | 목표 증거 생산자 등록 계약과 검증기 연결은 Fleet이 소유한다 — 사람 확인은 등록 시점뿐, 종단 Action 뒤 자동 증거 검증으로 `GOAL_CONFIRMED`를 연다 |
-| D-354 | 천장 카메라 경기장 자동 검출은 제안일 뿐이다 — Vision이 네 모서리를 제안하고, 관제는 운용자가 확인한 모서리로 보정·마스킹한 경기장 뷰를 보여 준다 |
+| D-352 | 도크·신호등은 같은 패턴의 외부 장비다 — 폴링 실패 어휘·준비 프레임(wire/instrumented/verified)·계약 상호 참조를 공유한다 |
+| D-353 | 외부 장비 설계는 바뀐다 — 바뀌어도 코드가 아니라 설정·전략이 바뀌게 한다 |
+| D-354 | 외부 장비는 mDNS로 서로를 찾는다 — IP 하드코딩 없이, 전원만 연결하면 발견된다 (_rosy-dock._tcp·_rosy-signal._tcp) |
+| D-355 | 도크·외부 장비 구현은 자재→벤치→실기→활성화→통합의 5단계로 간다 — 각 단계의 게이트·의존성·완료 조건을 확정한다 |
 | D-357 | ER 2 consumes bounded Fleet feedback and returns candidates while Mission/device control remain independent |
+| D-358 | ER 2 feedback turns use trusted scope, fenced candidates, and explicit ambiguity |
+| D-360 | 천장 카메라 경기장 자동 검출은 제안일 뿐이다 — Vision이 네 모서리를 제안하고, 관제는 운용자가 확인한 모서리로 보정·마스킹한 경기장 뷰를 보여 준다 |
 
 ## 계획·결과 문서
 
@@ -220,6 +225,7 @@
 - [2026-09-29-pinky-deployment-fast-path.md](plans/2026-09-29-pinky-deployment-fast-path.md)
 - [2026-09-29-policy-evidence-contract-design.md](plans/2026-09-29-policy-evidence-contract-design.md)
 - [2026-09-29-policy-evidence-contract.md](plans/2026-09-29-policy-evidence-contract.md)
+- [2026-09-30-dock-device-implementation-plan.md](plans/2026-09-30-dock-device-implementation-plan.md)
 - [2026-09-30-er2-mission-feedback-loop.md](plans/2026-09-30-er2-mission-feedback-loop.md)
 - [2026-09-30-goal-evidence-producer-and-verifier-design.md](plans/2026-09-30-goal-evidence-producer-and-verifier-design.md)
 - [2026-09-30-goal-evidence-producer-and-verifier.md](plans/2026-09-30-goal-evidence-producer-and-verifier.md)
@@ -236,7 +242,7 @@
 ## 최근 기록
 
 - 2026-09-30 · uncommitted · docs(adr): D-354 천장 카메라 경기장 자동 검출 제안 (Proposed)
-- 2026-09-30 · uncommitted · docs(adr/plan): D-357 ER 2 Mission feedback loop
-- 2026-09-30 · uncommitted · docs: 붉은 main 정리 — 5건 미등록 실패를 계약 안에서 해소
-- 2026-09-30 · uncommitted · docs(adr): D-351 도킹 재시도 갈래 기록
-- 2026-09-30 · uncommitted · docs(adr): D-350 도크 하드웨어 3단계 계약 + 선구현 6건
+- 2026-09-30 · uncommitted · docs(harness): 11개 모듈 last_verified를 bed604ef로 기록
+- 2026-09-30 · uncommitted · docs: CI 적신 뒤끝 — C6 판정 기록과 isaac_sim 등록 완성
+- 2026-09-30 · uncommitted · docs(plan): 도크·외부 장비 5단계 구현 플랜 + D-355
+- 2026-09-30 · uncommitted · docs(adr/plan): D-358 feedback outbox and replan fences

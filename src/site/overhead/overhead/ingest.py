@@ -60,7 +60,7 @@ _REPLACED_CLOSE_TIMEOUT_S = 2.0
 _STATS_WINDOW_S = 1.0
 # Minimum spacing between one viewer's frame reads of one source.
 _FRAME_INTERVAL_S = 0.2
-# Field proposals (D-354) are operator-requested and CPU-bound: own, slower bucket.
+# Field proposals (D-360) are operator-requested and CPU-bound: own, slower bucket.
 _FIELD_PROPOSAL_INTERVAL_S = 1.0
 # Field detection is ~30 ms of CPU per frame: at most one run per source per this
 # interval, whoever asks; readers in between get the last result.
@@ -283,7 +283,7 @@ class IngestServer:
         return None
 
     async def _field_proposal_response(self, source: str, frame: LatestFrame) -> Response:
-        """D-354: a field-corner proposal for operator review. Never applied to sightings.
+        """D-360: a field-corner proposal for operator review. Never applied to sightings.
 
         Detection runs off the event loop, at most once per source per
         ``_FIELD_DETECT_INTERVAL_S`` across all lease subjects.

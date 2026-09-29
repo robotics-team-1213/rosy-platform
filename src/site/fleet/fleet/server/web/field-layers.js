@@ -1,4 +1,4 @@
-// D-354 경기장 제안·보정 뷰·레이어 토글의 순수 계산. DOM 없음 — field-view.js 가 그린다.
+// D-360 경기장 제안·보정 뷰·레이어 토글의 순수 계산. DOM 없음 — field-view.js 가 그린다.
 // 제안과 보정 뷰는 표시 전용이다. sighting·CameraMap·목표·cmd_vel 로 넘기지 않는다.
 
 export const LAYER_KEYS = Object.freeze(["raw", "rectified", "site", "grid", "sightings", "poses"]);
@@ -7,7 +7,7 @@ export const LAYER_DEFAULTS = Object.freeze({
 });
 export const LAYER_STORAGE_KEY = "rosy-console-layers";
 export const FIELD_SIZE_PREFIX = "rosy-field-size:";
-// 설정 W×H 비와 검출 비가 이만큼(상대) 넘게 다르면 안내한다. 초기값(D-354 5항).
+// 설정 W×H 비와 검출 비가 이만큼(상대) 넘게 다르면 안내한다. 초기값(D-360 5항).
 export const ASPECT_TOLERANCE = 0.1;
 
 const finite = (value) => typeof value === "number" && Number.isFinite(value);

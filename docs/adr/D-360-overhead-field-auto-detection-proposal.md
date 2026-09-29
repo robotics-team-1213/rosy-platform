@@ -1,6 +1,8 @@
-## D-354 천장 카메라 경기장 자동 검출은 제안일 뿐이다 — Vision이 네 모서리를 제안하고, 관제는 운용자가 확인한 모서리로 보정·마스킹한 경기장 뷰를 보여 준다
+## D-360 천장 카메라 경기장 자동 검출은 제안일 뿐이다 — Vision이 네 모서리를 제안하고, 관제는 운용자가 확인한 모서리로 보정·마스킹한 경기장 뷰를 보여 준다
 
 **Status:** Proposed (2026-09-30). 검출 위치(Vision), 제안 API, 설정값과 검출값이 어긋날 때의 표시, 관제 레이어 토글만 정한다. 검출 결과를 사이트 설정(`site-cameras.yaml`)·sighting 좌표·주행에 반영하는 일은 결정하지 않는다. D-257·D-318을 바꾸지 않는다.
+
+**번호:** 처음 D-354로 적었으나 main에 다른 D-354(mDNS 서비스 발견)가 먼저 착지해 2026-09-30 병합 때 D-360으로 옮겼다. 그 전 로그 항목의 "D-354 경기장 제안"은 이 ADR을 가리킨다.
 
 잇는 결정: [D-257](D-257-site-lane-map-and-overhead-sightings.md)(sighting은 표시 전용) · [D-261](D-261-overhead-camera-app-skeleton.md)(폰 → Vision 수신기, Fleet은 영상을 받지 않음) · [D-318](D-318-site-camera-preview-rectification.md)(미리보기 보정, 모서리 직접 조작, 브라우저 로컬 초안) · D-341(천장 카메라 앱 페어링, 브랜치 `docs/d341-overhead-console-pairing`).
 

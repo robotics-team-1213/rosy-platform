@@ -1,4 +1,4 @@
-"""Overhead field boundary proposal (D-354).
+"""Overhead field boundary proposal (D-360).
 
 Finds the white wall/tape outline around the grey carpet in one camera frame
 and proposes its four image corners. The result is a *proposal* for operator

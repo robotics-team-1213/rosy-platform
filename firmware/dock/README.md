@@ -142,6 +142,19 @@ The dock joins the site WLAN as a station. **Credentials are not compiled in** â
 they are provisioned at setup and stored in NVS, and `test_dock_contract.py`
 fails the build if a credential appears in the sources.
 
+**mDNS (D-354):** the dock advertises itself as `_rosy-dock._tcp.local` with
+the NVS `dock_id` as the instance name. Clients connect to
+`<dock_id>.local:80` â€” no IP configuration. `zeroconf`/avahi/Bonjour resolves
+the address automatically. If mDNS is unavailable, a hardcoded IP still works
+(legacy bench compatibility).
+
+Service names:
+
+| Device | Service | Instance | Port |
+|---|---|---|---|
+| Dock | `_rosy-dock._tcp` | `dock_id` | 80 |
+| Signal | `_rosy-signal._tcp` | `signal_id` | 80 |
+
 The endpoint is plain HTTP on the local network. It serves one read-only route
 and takes no commands, so there is nothing for an attacker to actuate; the
 confidentiality of "how many amps is this dock delivering" does not justify
