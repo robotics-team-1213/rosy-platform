@@ -1,6 +1,9 @@
 """Task 9: model delivery to the robot (D-356)."""
+import hashlib
 import json
 import shlex
+import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -185,3 +188,80 @@ def test_ssh_and_scp_end_options_before_targets(tmp_path):
     assert deliver.main(["push", "robot", rev, "--models", str(models)], runner=runner) == 0
     assert runner.calls[0][:3] == ["ssh", "--", "pinky@robot"]
     assert runner.calls[1][:3] == ["scp", "-r", "--"]
+
+
+# --- the generated push script, executed for real -------------------------------------------
+
+def _bash_env():
+    """(bash, to_posix) for a bash with sha256sum, else None. Git Bash needs cygpath for paths."""
+    bash = shutil.which("bash")
+    if not bash:
+        return None
+    probe = subprocess.run([bash, "-c", "command -v sha256sum"], capture_output=True, text=True)
+    if probe.returncode != 0:
+        return None
+    if sys.platform != "win32":
+        return bash, str
+    cyg = shutil.which("cygpath")
+    if not cyg:
+        return None  # e.g. WSL bash: Windows paths do not map; exercised on Linux/WSL instead
+
+    def to_posix(path):
+        return subprocess.run([cyg, "-u", str(path)], capture_output=True, text=True,
+                              check=True).stdout.strip()
+    return bash, to_posix
+
+
+@pytest.fixture
+def remote(tmp_path):
+    env = _bash_env()
+    if env is None:
+        pytest.skip("needs bash with sha256sum (and cygpath on Windows)")
+    bash, to_posix = env
+    root = tmp_path / "models"
+    root.mkdir()
+    good = b"model-bytes"
+    checks = [(hashlib.sha256(good).hexdigest(), "model.onnx")]
+
+    def run(checks=checks):
+        script = deliver.remote_script("push", REV, to_posix(root), checks=checks)
+        return subprocess.run([bash, "-c", script], capture_output=True, text=True)
+
+    def stage(content, folder):
+        (root / folder).mkdir()
+        (root / folder / "model.onnx").write_bytes(content)
+
+    return root, to_posix, run, stage, good
+
+
+def test_remote_script_fresh_install_sets_pointer(remote):
+    root, to_posix, run, stage, good = remote
+    stage(good, f"{REV}.partial")
+    r = run()
+    assert r.returncode == 0, r.stderr
+    assert (root / REV / "model.onnx").read_bytes() == good
+    assert not (root / f"{REV}.partial").exists()
+    assert (root / "shadow").read_text() == f"{to_posix(root)}/{REV}"
+
+
+def test_remote_script_replaces_corrupt_existing_rev(remote):
+    root, to_posix, run, stage, good = remote
+    stage(b"corrupt", REV)
+    stage(good, f"{REV}.partial")
+    r = run()
+    assert r.returncode == 0, r.stderr
+    assert (root / REV / "model.onnx").read_bytes() == good
+    bad = list(root.glob(f"{REV}.bad.*"))
+    assert len(bad) == 1 and (bad[0] / "model.onnx").read_bytes() == b"corrupt"
+    assert (root / "shadow").read_text() == f"{to_posix(root)}/{REV}"
+
+
+def test_remote_script_failing_checksum_leaves_pointer_untouched(remote):
+    root, to_posix, run, stage, good = remote
+    (root / "shadow").write_text("/old/model")
+    stage(b"tampered", f"{REV}.partial")
+    r = run()
+    assert r.returncode != 0
+    assert (root / "shadow").read_text() == "/old/model"
+    assert not (root / "shadow.tmp").exists() and not (root / "shadow.previous").exists()
+    assert not (root / REV).exists()
