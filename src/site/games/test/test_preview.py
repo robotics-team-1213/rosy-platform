@@ -132,3 +132,29 @@ def test_preview_server_serves_the_web_common_manifest_assets():
         assert error.value.code == 404
     finally:
         server.close()
+
+
+def test_board_page_has_csp_and_stop_refuses_foreign_origins():
+    from urllib.error import HTTPError
+    from urllib.request import Request, urlopen
+
+    from games.host.preview import PreviewBoard, PreviewServer
+
+    board = PreviewBoard()
+    server = PreviewServer(board, port=0)
+    url = server.start()
+    try:
+        page = urlopen(url, timeout=2)
+        csp = page.headers["Content-Security-Policy"]
+        assert "script-src 'self'" in csp and "frame-ancestors 'none'" in csp
+        foreign = Request(url + "stop", method="POST", data=b"",
+                          headers={"Origin": "http://evil.example"})
+        with pytest.raises(HTTPError) as error:
+            urlopen(foreign, timeout=2)
+        assert error.value.code == 403
+        assert board.stop is False
+        own = Request(url + "stop", method="POST", data=b"", headers={"Origin": url.rstrip("/")})
+        assert b"ok" in urlopen(own, timeout=2).read()
+        assert board.stop is True
+    finally:
+        server.close()

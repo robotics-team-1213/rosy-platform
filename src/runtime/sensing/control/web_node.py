@@ -11,6 +11,10 @@ by test/test_control_launch_boundary.py. The operator console is CORE
     frontend  http://localhost:28181   (port param — the page)
     backend   http://localhost:28182   (backend_port — the API; see web_http.py)
 
+Both listen on bind_host, 127.0.0.1 by default: the POSTs drive the robot
+and carry no auth. Viewing from another machine is an explicit choice —
+`-p bind_host:=0.0.0.0` (or an SSH tunnel) on a trusted network only.
+
 No decision logic here — a view + relay, like goal_node is thin I/O over
 planning. This module owns ROS wiring only; the ROS-free parts live beside it
 so host pytest can import them (2026-09-06 criteria C1, D-168 P6):
@@ -108,6 +112,8 @@ class WebNode(Node):
         self.web_common_dir = web_common_dir(common_share)
         self.declare_parameter('port', 28181)
         self.declare_parameter('backend_port', 28182)
+        # Loopback unless the operator opts in; see the module docstring.
+        self.declare_parameter('bind_host', '127.0.0.1')
         self.declare_parameter('battery_topic', 'battery_state')
         self.battery_stamp_ns = None
         self.create_subscription(BatteryState, str(self.get_parameter('battery_topic').value), self.on_battery, qos_profile_sensor_data)
@@ -120,6 +126,7 @@ class WebNode(Node):
             self.declare_parameter(name, default)
         port = int(self.get_parameter('port').value)
         backend_port = int(self.get_parameter('backend_port').value)
+        bind_host = str(self.get_parameter('bind_host').value)
         self.scan_step = max(1, int(self.get_parameter('scan_step').value))
         with LOCK:
             STATE[K_SENSORS] = {}
@@ -201,19 +208,19 @@ class WebNode(Node):
             raw = f.read()
         html = raw.replace(b'__BACKEND_PORT__', str(backend_port).encode())
         page = make_page_handler(html)
-        httpd = http.server.ThreadingHTTPServer(('0.0.0.0', port), page)
+        httpd = http.server.ThreadingHTTPServer((bind_host, port), page)
         threading.Thread(target=httpd.serve_forever, daemon=True).start()
         if backend_port != port:
-            api = make_api_handler(self, html)
+            api = make_api_handler(self, html, page_port=port)
             httpd2 = http.server.ThreadingHTTPServer(
-                ('0.0.0.0', backend_port), api)
+                (bind_host, backend_port), api)
             threading.Thread(target=httpd2.serve_forever, daemon=True).start()
         else:
-            api = make_api_handler(self, html)
+            api = make_api_handler(self, html, page_port=port)
             httpd2 = http.server.ThreadingHTTPServer(
-                ('0.0.0.0', port), api)
+                (bind_host, port), api)
         self.get_logger().info(
-            f'web_node page on :{port} api on :{backend_port} '
+            f'web_node page on {bind_host}:{port} api on {bind_host}:{backend_port} '
             f'(teleop -> {self.teleop_target})')
 
     # -- ROS callbacks ----------------------------------------------------

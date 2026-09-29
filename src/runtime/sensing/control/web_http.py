@@ -5,7 +5,13 @@ the backend makes — verb whitelists, the calibration/e-stop/planner gates, the
 teleop clamp, the goal bound — lives here. Publishing is delegated to the node
 (`publish_text`, `publish_teleop`), which owns the ROS message types.
 
-Backend API (all CORS *, JSON contract unchanged since v1):
+Cross-port access: the page (port) and the API (backend_port) are different
+origins. The API answers CORS only for the page origin — http://127.0.0.1,
+http://localhost or the requested host name, on the page port — and refuses a
+POST whose Origin header names any other origin (a foreign page cannot drive
+the robot through the operator's browser). A POST without Origin (curl) passes.
+
+Backend API (JSON contract unchanged since v1):
   GET  /state.json   pose/trail/map/scan/route/options + control labels
   GET  /map.png      occupancy raster (gen counter; browser refetches on change)
   GET  /camera.jpg   latest /camera/front frame, JPEG, ~4 Hz (gen counter)
@@ -26,6 +32,7 @@ import json
 import math
 import os
 import time
+from urllib.parse import urlsplit
 
 from control.control.navigation_session import validate_options
 from control.web_state import (
@@ -61,17 +68,38 @@ def shared_assets(root):
         return {}
 
 
-def _handler(node, html, api):
+def page_origin_allowed(origin, host_header, page_port):
+    """True when ``origin`` is the diagnostic page's own origin.
+
+    The page is served on ``page_port`` and reaches the API by the same host
+    name (``location.hostname``), so the only allowed origins are
+    http://127.0.0.1:<page_port>, http://localhost:<page_port> and
+    http://<host this request named>:<page_port>."""
+    if not origin or page_port is None:
+        return False
+    hostname = urlsplit('//' + (host_header or '')).hostname
+    allowed = {f'http://{name}:{int(page_port)}' for name in ('127.0.0.1', 'localhost', hostname) if name}
+    if hostname and ':' in hostname:                     # IPv6 literal keeps its brackets
+        allowed.add(f'http://[{hostname}]:{int(page_port)}')
+    return origin in allowed
+
+
+def _handler(node, html, api, page_port=None):
     """HTTP handler closing over the node. api=True = backend (state/map/
-    camera/result + POSTs); api=False = frontend (the page only). CORS on
-    every response so the frontend page can fetch the backend."""
+    camera/result + POSTs); api=False = frontend (the page only). CORS answers
+    only the page origin on ``page_port`` so the page can fetch the backend."""
     class Handler(http.server.BaseHTTPRequestHandler):
         def log_message(self, *a):
             pass
 
+        def _origin_allowed(self):
+            return page_origin_allowed(self.headers.get('Origin'), self.headers.get('Host'), page_port)
+
         def send_response(self, code, *a):
             super().send_response(code, *a)
-            self.send_header('Access-Control-Allow-Origin', '*')
+            if self._origin_allowed():
+                self.send_header('Access-Control-Allow-Origin', self.headers.get('Origin'))
+                self.send_header('Vary', 'Origin')
 
         def _html(self):
             self.send_response(200)
@@ -172,6 +200,14 @@ def _handler(node, html, api):
                 return
             ln = int(self.headers.get('Content-Length', 0))
             body = self.rfile.read(ln).decode()
+            if self.headers.get('Origin') is not None and not self._origin_allowed():
+                print(json.dumps({'event': 'operator_rejected', 'path': self.path,
+                                  'reason': 'foreign origin'}), flush=True)
+                self.send_response(403)
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({'ok': False, 'error': 'foreign origin'}).encode())
+                return
             logged_action = self.path in ('/calibration', '/camera/calibration', '/estop', '/wander', '/navigation/start', '/goal', '/map/reset', '/map/resume', '/map/pause')
             if logged_action:
                 print(json.dumps({'event': 'operator_request', 'path': self.path,
@@ -317,8 +353,9 @@ def _handler(node, html, api):
     return Handler
 
 
-def make_api_handler(node, html):
-    return _handler(node, html, api=True)
+def make_api_handler(node, html, page_port=None):
+    """``page_port`` is the page's port; None answers no cross-origin caller."""
+    return _handler(node, html, api=True, page_port=page_port)
 
 
 def make_page_handler(html):
