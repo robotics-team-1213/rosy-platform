@@ -27,7 +27,7 @@ def test_operational_compose_does_not_serve_the_control_console():
     assert "dashboard.html" not in text
     html = (ROOT / "src" / "runtime" / "sensing" / "web" / "diagnostic.html").read_text(encoding="utf-8")
     assert "<title>pinky console</title>" not in html
-    assert "<title>Rosy control diagnostic</title>" in html
+    assert "<title>Rosy 로봇 — 제어 진단</title>" in html
 
 
 def test_hardware_launch_does_not_start_safety_as_final_publisher():
