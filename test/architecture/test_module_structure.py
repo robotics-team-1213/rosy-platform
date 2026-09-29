@@ -72,11 +72,17 @@ SIZE_VERDICTS = {
         "2026-09-29-fleet-mission-control-arbitration-implementation.md)",
     ),
     "fleet": (
-        12_419,
+        12_574,
         "split: server HTTP boundary, console, signals and the mission-control stores are separate owners "
         "today; group them into subpackages rather than one flat server/ tree (B2); owner fleet, unscheduled "
         "(re-judged 2026-09-29 at 11164 after mission_store joined the server tree; re-judged 2026-09-30 at "
-        "12419 after the D-352 enrollment register, roster and service joined as their own modules)",
+        "12419 after the D-352 enrollment register, roster and service joined as their own modules, and "
+        "at 12574 after the D-352 review fixes)",
+    ),
+    "site/fleet/fleet/server/enrollment.py": (
+        610,
+        "accept: one owner (D-352 robot enrollment — exchange, binding, pinned-address gate, unenroll and "
+        "pending logout share one state machine over the register), ROS-free, host-testable (X5)",
     ),
     "site/fleet/fleet/server/mission_store.py": (
         728,
