@@ -221,6 +221,7 @@
 - [2026-09-29-pinky-deployment-fast-path.md](plans/2026-09-29-pinky-deployment-fast-path.md)
 - [2026-09-29-policy-evidence-contract-design.md](plans/2026-09-29-policy-evidence-contract-design.md)
 - [2026-09-29-policy-evidence-contract.md](plans/2026-09-29-policy-evidence-contract.md)
+- [2026-09-30-dock-device-implementation-plan.md](plans/2026-09-30-dock-device-implementation-plan.md)
 - [2026-09-30-er2-mission-feedback-loop.md](plans/2026-09-30-er2-mission-feedback-loop.md)
 - [2026-09-30-goal-evidence-producer-and-verifier-design.md](plans/2026-09-30-goal-evidence-producer-and-verifier-design.md)
 - [2026-09-30-goal-evidence-producer-and-verifier.md](plans/2026-09-30-goal-evidence-producer-and-verifier.md)
@@ -236,8 +237,8 @@
 
 ## 최근 기록
 
+- 2026-09-30 · uncommitted · docs(plan): 도크·외부 장비 5단계 구현 플랜 + D-355
 - 2026-09-30 · uncommitted · docs(adr/plan): D-358 feedback outbox and replan fences
 - 2026-09-30 · uncommitted · docs(adr/plan): D-357 ER 2 Mission feedback loop
 - 2026-09-30 · uncommitted · docs: 붉은 main 정리 — 5건 미등록 실패를 계약 안에서 해소
 - 2026-09-30 · uncommitted · docs(adr): D-351 도킹 재시도 갈래 기록
-- 2026-09-30 · uncommitted · docs(adr): D-350 도크 하드웨어 3단계 계약 + 선구현 6건
