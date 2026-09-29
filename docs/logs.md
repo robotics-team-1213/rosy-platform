@@ -3489,3 +3489,18 @@
 - 변경: 실행 계획 T5에 호스트 폐루프 착지를 기록했다. `tools/sim/simulate_semantic_road.py`가 무신호 stop_and_go(정지+dwell 후 `unsignalized_proceed`, 신호 관측 시 `signal_unexpected`)와 관측 융합(`signal_unknown`→fused `signal_green`, 불일치 `signal_source_conflict`) 시나리오를 production subjects 폐루프로 돌리고 `docs/validation/semantic-road-stop-and-go-2026-09-29/`(PASS)에 증거를 냈다. WSL2 Jazzy+Gazebo+`/opt/rosy` 오버레이 존재를 확인했고, 실렌더링 폐루프와 실물 LAN 벤치는 전용 벤치 회차로 남긴 기록을 계획서에 보탰다.
 - 증거: `src/runtime/sensing` 로그 참조. 커밋 1695b402(호스트 폐루프 + 시험 2 passed).
 - gate 변화: 없음. T5 잔여: WSL Gazebo 실렌더링, 관측 서비스 실HTTP, 실물 LAN.
+
+## 2026-09-30 · uncommitted · docs(plan): ER 2 site deployment priority plan
+
+- Change: added `docs/plans/2026-09-30-er2-runtime-and-site-deployment-plan.md`. The sequence separates contract alignment, Fleet app composition, independent goal/stop evidence, target ownership, ROS-SIM, signed artifact/provider/site readiness, DEVICE, and FIELD gates.
+- Evidence: reflects D-326 through D-336 and the 2026-09-29 SOURCE/LOCAL execution and official ER 2 API research records. No code, physical motion, or provider request was performed.
+- Gate: none. Existing uncommitted research notes and the untracked map archive were preserved.
+- Decision: none. This plan does not authorize model calls, dispatcher activation, device motion, remote transport, or deployment.
+- Lesson: keep source integration, CLI composition, and physical acceptance as separate evidence tiers; separate tool calls, REST, Device Action, and ROS controller authority.
+## 2026-09-30 · uncommitted · feat(hooks): 재생성-미커밋 생성 기록이 push를 막는다
+
+- 변경: tools/hooks/pre-push에 generated_targets 기반 가드를 추가했다 — 모듈 index.md·STATUS.md 가 재생성됐는데 커밋되지 않은 상태면 push 를 거부한다. lint 는 작업 트리만 보기 때문에 이 상태로 push 하면 낡은 커밋 사본이 출하된다(2026-09-29 CI 적신 2건 — ca537a14 가 deploy/index.md 를 재생성 없이 커밋했고 caecbe69 가 그 파일을 물려받은 것, 그리고 그 자신). 가드는 harness 의 정확한 생성 대상 목록만 검사한다(무관한 index.md 는 push 를 막지 않는다). 이 커밋에는 병행 세션의 완결된 docs 저널 항목(2026-09-30 ER2 site deployment priority plan)과 그 plan 문서, 재생성된 docs/index.md 를 함께 실었다 — fee4c78e 선례의 흡수 방식.
+- 증거: test/test_pre_push_hook.py 2건 신설(파싱 + 가드 존재·대상 열거 핀). 실동 증명: 커밋 전 트리에서 가드가 dirty docs/index.md 를 정확히 적발(exit 1), 커밋 후 push 통과.
+- gate 변화: 없음.
+- 결정: 생성 기록이 dirty 인 push 는 전면 거부 — 커밋하거나 되돌리는 것만 허용한다.
+- 교훈: lint 의 녹색은 트리의 녹색이지 커밋의 녹색이 아니다.
