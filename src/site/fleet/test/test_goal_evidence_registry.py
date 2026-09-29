@@ -97,11 +97,11 @@ def test_goal_evidence_registry_rejects_duplicate_scope_and_secret(tmp_path):
             "ROSY_SECOND_TOKEN": "another-fixture-token",
         })
 
-    duplicate_secret = _write_config(tmp_path, [_source(
+    duplicate_token = _write_config(tmp_path, [_source(
         producer_id="first-evaluator", token_env="ROSY_TEST_GOAL_EVIDENCE_TOKEN",
     ), _source(producer_id="second-evaluator", workcell_id="omx_02")])
     with pytest.raises(ValueError, match="tokens must be unique"):
-        load_goal_evidence_registry(duplicate_secret, environ={
+        load_goal_evidence_registry(duplicate_token, environ={
             "ROSY_TEST_GOAL_EVIDENCE_TOKEN": "fixture-source-token",
         })
 

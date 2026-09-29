@@ -192,3 +192,11 @@
 - gate 변화: 없음.
 - 결정: 설계가 바뀌면 새 전략 파일 1개 — manager·ChargingConfirmation 본체 불변.
 - 교훈: Protocol 봉합점의 구현 비용이 0이라는 것을 몸으로 확인했다 (기존 시험 한 건도 안 깨짐).
+
+## 2026-09-30 · uncommitted · fix(docking): D-353 뒤끝 — 도크 계약 시험을 poll_json 경로로 재연결
+
+- 변경: D-353이 DockAgent._parse를 core_common.device_poll.poll_json으로 옮기면서 test/test_dock_contract.py의 "문서 payload가 클라이언트처럼 파싱된다" 시험이 깨졌다( AttributeError: _parse). poll_json을 monkeypatch로 갈아끼워 HTTP 없이 실제 매핑 경로(문서→DockStatus)를 돌리도록 재작성했다. agent.py의 중복 import(같은 줄 2회, 머지 흔적)도 제거.
+- 증거: test_dock_contract 7 passed(전체), services 스위트 265 passed, 경계 수비·target·목표증거 등록부 포함 99 passed (2026-09-30 Windows). poll_json 자체는 test_design_seams가 이미 소유.
+- gate 변화: 없음.
+- 결정: 없음.
+- 교훈: 파싱을 공용 계층으로 옮길 때 그 계층을 소비하는 계약 시험까지가 한 변경 단위다.
