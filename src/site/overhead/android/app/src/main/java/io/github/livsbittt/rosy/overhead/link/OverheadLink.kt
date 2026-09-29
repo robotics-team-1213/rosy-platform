@@ -37,7 +37,8 @@ sealed interface LinkError {
     data object Replaced : LinkError
 
     data class InvalidConfig(val field: String) : LinkError
-    data class Network(val detail: String) : LinkError
+    /** Transport failure before or during the session; [kind] drives the operator guidance. */
+    data class Network(val detail: String, val kind: NetworkFailure = NetworkFailure.OTHER) : LinkError
     data class Closed(val code: Int, val reason: String) : LinkError
 }
 
@@ -275,7 +276,7 @@ class OverheadLink(
             val error = if (response?.code == 401) {
                 LinkError.Unauthorized
             } else {
-                LinkError.Network(t.message ?: t.javaClass.simpleName)
+                LinkError.Network(t.message ?: t.javaClass.simpleName, NetworkFailure.classify(t))
             }
             onLost(gen, error, fatal = false)
         }
