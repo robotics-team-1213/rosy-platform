@@ -134,6 +134,17 @@ def test_error_grows_with_offset():
     assert large.error < small.error < 0.0
 
 
+def test_crosswalk_bars_beside_the_lane_lines_do_not_hide_them():
+    # Bars parallel to travel light ONE flank of each lane line; a blob lights both.
+    image = _render([(HALF, 0.0), (-HALF, 0.0)])
+    bars = np.zeros(X.shape, bool)
+    for centre in (-0.035, 0.035):
+        bars |= np.isfinite(X) & (X > 0.20) & (X < 0.32) & (np.abs(Y - centre) <= 0.015)
+    image[bars] = 195
+    obs, last = _keep(image)
+    assert last["strategy"] == "both" and abs(obs.error) < 0.15
+
+
 def _render_corner(line_x, open_side):
     """An L-corner: the outer boundary of the next lane runs across at
     x = line_x from the closed side's lane line toward the open side; the

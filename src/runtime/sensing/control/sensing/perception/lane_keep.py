@@ -68,8 +68,10 @@ MAX_EXTRAPOLATION_M = 0.15
 CORE_HALF_M = 0.025
 FLANK_INNER_M = 0.035
 FLANK_OUTER_M = 0.08
-#: Lit flank cells per lit core cell above which a line is a blob, not tape.
+#: Lit flank cells per lit core cell above which a line is a blob, not tape:
+#: half of this on each side, or MAX_ONE_FLANK_RATIO in all.
 MAX_FLANK_RATIO = 0.45
+MAX_ONE_FLANK_RATIO = 0.6
 #: Shortest boundary piece and the fewest lit cells on it.
 MIN_LINE_LENGTH_M = 0.06
 MIN_LINE_CELLS = 40
@@ -233,13 +235,18 @@ def extract_lines(points: np.ndarray, rng: np.random.Generator):
         piece[np.flatnonzero(band)[_largest_piece(along[band], MAX_GAP_M)]] = True
         lo, hi = float(along[piece].min()), float(along[piece].max())
         # Flank test on ALL points (earlier lines included): tape has dark
-        # carpet either side, a wall wedge or a blob does not.
+        # carpet on at least one side, a wall wedge or a blob is lit on both
+        # (or very lit on one). Crosswalk bars next to a lane line light one
+        # flank only.
         rel_all = points - centre
         along_all = rel_all @ direction
-        across_all = np.abs(rel_all @ normal_vec)
+        signed_all = rel_all @ normal_vec
+        across_all = np.abs(signed_all)
         span = (along_all >= lo) & (along_all <= hi)
         core = int((span & (across_all <= CORE_HALF_M)).sum())
-        flank = int((span & (across_all > FLANK_INNER_M) & (across_all <= FLANK_OUTER_M)).sum())
+        in_flank = span & (across_all > FLANK_INNER_M) & (across_all <= FLANK_OUTER_M)
+        flank_sides = (int((in_flank & (signed_all > 0)).sum()), int((in_flank & (signed_all < 0)).sum()))
+        flank = sum(flank_sides)
         # Refit on the piece for the final axis.
         fitted_centre, fitted_direction = _fit_axis(remaining[piece])
         fitted_along = (remaining[piece] - fitted_centre) @ fitted_direction
@@ -247,7 +254,8 @@ def extract_lines(points: np.ndarray, rng: np.random.Generator):
                  "along": (float(fitted_along.min()), float(fitted_along.max())),
                  "cells": int(piece.sum()),
                  "flank_ratio": flank / max(1, core)}
-        if flank > MAX_FLANK_RATIO * core:
+        if (min(flank_sides) > 0.5 * MAX_FLANK_RATIO * core
+                or flank > MAX_ONE_FLANK_RATIO * core):
             blobs.append(entry)
             # The whole blob goes, not just the band, so it is not re-found.
             drop = (along >= lo) & (along <= hi) & (across <= FLANK_OUTER_M)
