@@ -204,7 +204,7 @@
 - gate 변화: 없음. 라이브러리 계층이라 ROS-SIM~FIELD는 N/A.
 - 결정: D-157(명시 allowlist) 유지, D-129 정정 2026-09-29.
 
-## 2026-09-30 · feat/d359-theme-ready · D-359 US-001 토큰 세 층과 이름 정리
+## 2026-09-30 · 960a76f2 · D-359 US-001 토큰 세 층과 이름 정리
 
 - 변경: `tokens.css`를 팔레트(원시 색은 여기에만, 닫힌 키 목록) → 파생(`color-mix(in oklab, …)`로 팔레트만 참조) → 역할 층으로 나눴다. 이름 paper→`--ink`, muted→`--ink-quiet`, muted-line→`--line-quiet`을 src 전체(CSS·JS·HTML·LCD/Kotlin 사본 주석·시험)에서 기계적으로 바꿨다. `--ink-on-crit`·`--shadow-base`를 팔레트에 두고, 쓰이지 않는 토큰(sheen 셋, status-good 알파 여섯, crit-a12, warn-a40, series-primary-a08, line-08, status-crit-ground, muted-cool)과 같은 값 별칭(`-2`, status-ok, route-dim → `--series-secondary`)을 지웠다. games의 경기장 잉크는 `--pitch-ink`로 이름을 옮겨 공용 `--ink`와 겹치지 않게 했다. oklch가 아니라 oklab으로 섞는 이유: Chromium이 채도 ~0 색의 oklch 색상각을 none으로 풀어 0°로 그린다(실측 ΔE_OK 최대 0.019).
 - 증거: Chromium 계산 색 비교(옛 main 대 새 파일, 이름 변경 반영) 68개 전부 허용 범위, 최대 ΔE_OK×100 = 0.77(`--brand-rose-wash`, RGB 2.14/255), 나머지 ≤ 0.2. `python -m pytest src/hmi/web_common/test -q` 97 passed.
