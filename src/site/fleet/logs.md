@@ -546,3 +546,11 @@
 - Evidence: test/architecture/test_module_structure.py::test_size_verdicts_are_well_formed_and_current passed (2026-09-30 Windows); growth source docs/plans/2026-09-30-goal-evidence-producer-and-verifier.md.
 - Gate: none moved.
 - Decision: keep "split" — the new evidence stores reinforced the separate-owners-without-subpackages condition the verdict already named.
+
+## 2026-09-30 · uncommitted · fix(web): Node 18에서 console 웹 단위시험이 ESM을 읽게 — 고아 시험도 연결
+
+- 변경: `fleet/server/web/package.json`에 `"type": "module"`을 선언했다. 그 트리의 .js는 전부 브라우저 ES 모듈(별도 package.json이 없어 Node는 .js를 CommonJS로 읽음)이라, CI의 apt Node 18에서 `site-layer.test.mjs`의 named import가 "Named export not found"로 죽었다 — 개발 호스트 Node 24만 통과하는 시험이었다. 아울러 `test_site_layer_node_unit_tests_pass`를 `test_console_web_node_unit_tests_pass`로 바꾸고 `test/web/*.test.mjs` glob으로 실행 대상을 모아, 아무 pytest도 돌리지 않던 `authorization.test.mjs`(고아)도 같은 호출에 들어오게 했다.
+- 증거: Node 18 컨테이너(`docker run node:18 node --test …`)에서 pass 7/fail 0, 로컬 Node 24에서 test_site_map_api 22 passed, fleet 전체 746 passed/5 skipped (2026-09-30).
+- gate 변화: 없음.
+- Decision: 웹 트리의 모듈성 선언은 브라우저와 Node가 같은 해석을 하게 하는 계약이다 — 버전 탓으로 치지 않는다.
+- 교훈: 새 .test.mjs를 만들 때 실행 주체를 확인하라 — authorization.test.mjs는 연결 없이 쌓여 있었다. glob runner가 그 재발을 구조적으로 막는다.
