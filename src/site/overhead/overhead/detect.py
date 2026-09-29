@@ -24,6 +24,16 @@ def _marker_detector(aruco):
 _DETECT_MARKERS = _marker_detector(cv2.aruco)
 
 
+def generate_marker_image(marker_id: int, side_pixels: int):
+    """Synthesize one DICT_4X4_50 marker on any shipped OpenCV: 4.7+
+    `generateImageMarker`, else the 4.6-era `drawMarker` (same version gap
+    as _marker_detector; tests use this to build fixtures)."""
+    generate = getattr(cv2.aruco, "generateImageMarker", None)
+    if generate is not None:
+        return generate(_DICTIONARY, marker_id, side_pixels)
+    return cv2.aruco.drawMarker(_DICTIONARY, marker_id, side_pixels)
+
+
 def detect_markers(jpeg: bytes) -> dict[int, MarkerQuad]:
     """Decode one JPEG and return marker corners; malformed frames are empty."""
 
