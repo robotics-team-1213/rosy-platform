@@ -111,3 +111,11 @@
 - gate 변화: DEVICE 진행(실물 수동 주행 방향·정지 확인, 한도 L0). 영상 fps(2 fps)·좌석·로비는 D-346·D-348 구현 전.
 - 결정: D-346(운전자 MJPEG), D-347(한도 계단), D-348(로비·좌석), D-349(보조 자율), D-350(카메라 비율·설치 앱·배율).
 - 교훈: 태블릿 실측에서만 드러나는 결함이 있었다 — 안드로이드 자동 대문자(토큰 401), 길게 누르기 이미지 메뉴(터치 가로챔), 브라우저 탭 누적(한 로봇 동시 조종), `cover` 로 잘린 신호 띠. 헤드리스 브라우저 통과를 실기 통과로 보지 않는다. ADR 번호는 쓰기 직전에 모든 브랜치·worktree 에서 다시 확인한다(같은 날 두 번 충돌).
+
+## 2026-09-29 · 72802f30·895786cf · feat: 실물 차선 자동 주행(D-349 보조 자율)
+- 변경: CORE line-follow 요구 능력을 `mobility.move` 로(실물 `motor` 런타임에서 늘 거절되던 것), `hold_s`·`POST /line-follow/hold` 운전자 확인 만료(끊기면 CORE 가 스스로 OFF·nav 명령 즉시 삭제), API v1.46. 카메라 서비스가 `line_observer_node`(관측 전용)도 띄움. pilot "차선 자동" 토글 + "진행 ▶ 누르는 동안" 버튼, 스틱·페달·키·탭 이탈 시 즉시 수동 복귀, HUD 에 차선 신뢰도·오차·멈춤 이유와 자동 속도.
+- 실물 반영: rosy-pinky-8kcn(release 2026.09.27-010)에 **현장 핫픽스**(사용자 승인) — 파일 4개 교체, `line_follow.cruise_speed: 0.04`(`/var/lib/rosy/core/.rosy/rosy.yaml`), rosy-core·rosy-camera 재시작. 원본 백업 `/var/lib/rosy-bench-backup/20260929133351-d349-hotfix/`. 정식 릴리스로 덮어야 한다.
+- 증거(공개 저장소 밖): `X:\DevTemp\rosy-pilot-evidence\2026-09-29-lane-auto\`. 실제 차선에서 누르는 동안 TRACKING(신뢰 1.00), 오차 +0.33 → −0.04 로 수렴, 약 0.035 m/s, 4 s 에 12.8 cm. 떼면 0.47 s 안에 속도 0·MANUAL. 링크 끊김 모의(갱신 중단, release 없음): 0.50 s 에 `driver_released`, 0.73 s 에 속도 0, 이후 hold 409.
+- gate 변화: DEVICE 진행(보조 자율 실차선 1 구간). 자동 중 각속도가 수동 한도(0.1 rad/s)보다 크다(최대 0.66 rad/s, nav 한도 0.8) — 차선 추종 `max_angular` 도 D-347 계단처럼 다룰지 결정 필요.
+- 결정: D-349 §7~§10.
+- 교훈: 실물 CORE 는 `ros2` CLI 로 볼 때 서비스와 같은 DDS 설정(`/etc/rosy/runtime.env` 의 `CYCLONEDDS_URI`, 루프백 전용)과 `--no-daemon` 이 필요하다 — 없으면 "토픽 없음"으로 보인다.

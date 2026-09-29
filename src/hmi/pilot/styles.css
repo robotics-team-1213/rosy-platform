@@ -493,3 +493,5 @@ body[data-pilot-screen="drive"] ui-brand small { display: none; }
 [data-drive-auto][aria-pressed="true"] { outline: 2px solid var(--status-good); outline-offset: 1px; }
 [data-drive-motion][data-kind=auto] { color: var(--ground-deep); background: var(--status-good); border-color: var(--status-good); }
 [data-drive-motion][data-kind=warn] { color: var(--ground-deep); background: var(--status-warn); border-color: var(--status-warn); }
+
+[data-drive-left] [data-drive-auto] { width: 100%; min-height: 2.8rem; }

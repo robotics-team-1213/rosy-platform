@@ -301,6 +301,7 @@ export function mountDrive(root, {onExit} = {}) {
     onChange: ({state, reason}) => {
       element.go?.classList.toggle("active", state === "running" || state === "starting");
       if (state === "idle") {
+        renderCap();             // 수동 상한으로 되돌린다
         session.resume();        // 자동이 끝나면 수동 명령 경로를 다시 연다
         lastCommand = {linear: 0, angular: 0, pivot: false};
         const benign = !reason || reason === "released" || reason === "takeover";
@@ -310,6 +311,7 @@ export function mountDrive(root, {onExit} = {}) {
     },
     onStatus: (lf) => {
       const tracking = lf.state === "TRACKING";
+      element.cap.textContent = `자동 ${Number(lf.linear ?? 0).toFixed(2)} m/s · ${Math.round(Number(lf.angular ?? 0) * DEG)}°/s`;
       element.motion.dataset.kind = tracking ? "auto" : "warn";
       element.motion.textContent = tracking
         ? `차선 추종 · 신뢰 ${Number(lf.confidence ?? 0).toFixed(2)} · 오차 ${Number(lf.error ?? 0) >= 0 ? "+" : ""}${Number(lf.error ?? 0).toFixed(2)}`
@@ -631,11 +633,12 @@ function buildControls(profile) {
     el("ui-button", "전진 ▲", {kind: "segment", type: "button", "data-drive-pedal": "forward"}),
     el("ui-button", "후진 ▼", {kind: "segment", type: "button", "data-drive-pedal": "reverse"}),
   );
+  left.append(tune);
   if (profile.autonomy?.includes("line")) {
-    tune.append(el("ui-button", "차선 자동", {kind: "segment", type: "button", "data-drive-auto": "",
+    left.append(el("ui-button", "차선 자동", {kind: "segment", type: "button", "data-drive-auto": "",
                                              "aria-pressed": "false"}));
   }
-  left.append(tune, pedals);
+  left.append(pedals);
   if (profile.autonomy?.includes("line")) {
     left.append(el("ui-button", "진행 ▶ 누르는 동안", {kind: "segment", type: "button", "data-drive-go": "",
                                                     "aria-label": "차선 따라 진행(누르는 동안만)"}));
