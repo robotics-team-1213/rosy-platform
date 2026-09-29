@@ -302,3 +302,48 @@ def test_zoom_cycles_and_always_reports_crop(tablet_page):
     assert seen[4][0] == "전체화면", seen
     assert page.evaluate("JSON.parse(localStorage.getItem('rosy.pilot.input')).zoom") == 1
     assert errors == [], errors
+
+
+@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
+                    reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
+def test_auto_intent_strip_shows_target_and_core_steer(tablet_page):
+    """D-353 §6: 진행을 누르는 동안 영상 아래에 겨누는 점과 CORE 의 실제 조향 방향."""
+    import json
+    import urllib.request
+    base_url, page, errors = tablet_page
+
+    def script(status):
+        req = urllib.request.Request(base_url + "/__test__/line-follow", data=json.dumps(status).encode(),
+                                     headers={"Content-Type": "application/json"}, method="POST")
+        urllib.request.urlopen(req).read()
+
+    _enter_drive(page, base_url)
+    page.wait_for_selector("[data-drive-frame][src]", timeout=10_000)
+    script({"state": "TRACKING", "error": 0.4, "confidence": 0.9, "linear": 0.03,
+            "angular": -0.32, "reason": "tracking"})
+    page.click("[data-drive-auto]")
+    box = page.locator("[data-drive-go]").bounding_box()
+    page.mouse.move(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
+    page.mouse.down()
+    page.wait_for_selector("[data-drive-intent]:not([hidden])", timeout=5_000)
+    page.wait_for_function("document.querySelector('[data-intent-steer]').textContent.includes('▶')")
+    got = page.evaluate("""(() => {
+      const r = (s) => document.querySelector(s).getBoundingClientRect();
+      const track = r('[data-intent-track]'), dot = r('[data-intent-target]'), view = r('[data-drive-view]');
+      const strip = r('[data-drive-intent]'), img = document.querySelector('[data-drive-frame]');
+      const fb = img.getBoundingClientRect(), k = Math.min(fb.width / img.naturalWidth, fb.height / img.naturalHeight);
+      const picL = fb.left + (fb.width - img.naturalWidth * k) / 2, picR = picL + img.naturalWidth * k;
+      return {steer: document.querySelector('[data-intent-steer]').textContent,
+              state: document.querySelector('[data-drive-intent]').dataset.state,
+              at: (dot.left + dot.width / 2 - track.left) / track.width,
+              inside: strip.left >= Math.max(view.left, picL) - 1 && strip.right <= Math.min(view.right, picR) + 1 && strip.bottom <= view.bottom + 1};
+    })()""")
+    page.screenshot(path=str(Path(os.environ.get("ROSY_SHOT_DIR", "X:/DevTemp")) / "pilot-intent-tracking.png"))
+    assert got["steer"] == "오른쪽 18°/s ▶" and got["state"] == "tracking"
+    assert abs(got["at"] - 0.70) < 0.03 and got["inside"], got
+    script({"state": "HOLD", "error": None, "linear": 0.0, "angular": 0.0, "reason": "obstacle_ahead"})
+    page.wait_for_function("document.querySelector('[data-drive-intent]').dataset.state === 'hold'")
+    assert page.inner_text("[data-intent-steer]") == "멈춤"
+    page.mouse.up()
+    page.wait_for_selector("[data-drive-intent][hidden]", state="attached", timeout=5_000)
+    assert errors == [], errors

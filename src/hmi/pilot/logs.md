@@ -132,3 +132,8 @@
 - 실물 상태: `ir_adc_node` 는 설치돼 있으나 어느 launch 도 띄우지 않아 `/rosy_60/ir_sensor/range` 발행자 0. 교정 전이라 감시는 기본 꺼짐.
 - 증거: `test_line_follow_ir_guard.py` 10 passed(비킴 부호·절반 속도·가운데 정지·LOST 미누적·IR 끊김/미교정/해시 불일치 정지·기본 꺼짐), `test/test_ir_source_exclusivity.py` rosy-io 만 `enable_ir:=true`. 실물 녹화 루프는 핫픽스 승인 뒤.
 - gate 변화: SOURCE 통과. DEVICE 는 IR 발행·교정·녹화 전이라 HOLD.
+
+## 2026-09-30 · uncommitted · feat(pilot): 자동 주행 의도 띠(D-353 §6)
+- 변경: 자동 중 영상 아래에 겨누는 점(차선 오차 −1…+1 을 가로 위치로)과 CORE 가 실제로 낸 조향 방향·크기("◀ 왼쪽 N°/s", "오른쪽 N°/s ▶", "▲ 직진", 멈추면 "멈춤") 띠. 이탈 감시(`lane_edge_*`)·멈춤이면 경고색. 띠는 영상 틀이 아니라 실제로 그려진 영상 안에 맞춘다(옆 조작부·검은 띠를 넘지 않음). 표시만 하고 조향을 계산하지 않는다(`autonomy.intentView`). HUD 사유 `nominal_ground_requires_driver`. 가짜 CORE(dev_server)에 차선 추종 흉내 끝점.
+- 증거: `test_autonomy.py::test_intent_view_maps_core_status_to_target_and_steer_direction`, 브라우저 `test_auto_intent_strip_shows_target_and_core_steer`(오차 +0.40 → 띠 70 % 위치, 각속도 −0.32 → "오른쪽 18°/s ▶", 앞 물체 HOLD → "멈춤", 떼면 숨김, 띠가 그려진 영상 안). 스크린샷은 저장소 밖.
+- gate 변화: SOURCE 진행. 실물·가제보 표시 확인은 인식 v2·헤드리스 벤치 뒤.

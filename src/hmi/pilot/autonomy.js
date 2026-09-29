@@ -95,3 +95,29 @@ export function createAutoSession({request, schedule, onChange = () => {}, onSta
     active: () => state === "starting" || state === "running" || state === "stopping",
   };
 }
+
+// 자동의 의도(D-353 §6): CORE 가 낸 차선 상태를 화면 표시로만 바꾼다 — 조향을 계산하지 않는다.
+// target: 로봇이 겨누는 곳(차선 오차, −1 왼쪽 … +1 오른쪽)을 가로 백분율로.
+// steer: CORE 가 실제로 낸 각속도의 방향(REP-103: 양수 = 왼쪽으로 돈다).
+export const STEER_DEADBAND = 0.02;   // rad/s — 이보다 작으면 직진으로 본다
+export function intentView(lf, DEG = 180 / Math.PI) {
+  if (!lf || lf.mode === "OFF" || lf.state === "OFF") return {visible: false};
+  const error = Number(lf.error);
+  const hasTarget = lf.error != null && Number.isFinite(error);
+  const angular = Number(lf.angular ?? 0);
+  const rate = Math.round(Math.abs(angular) * DEG);
+  const dir = !Number.isFinite(angular) || Math.abs(angular) < STEER_DEADBAND ? "straight"
+    : angular > 0 ? "left" : "right";
+  const edge = lf.reason === "lane_edge_left" || lf.reason === "lane_edge_right";
+  return {
+    visible: true,
+    tracking: lf.state === "TRACKING",
+    target: hasTarget ? 50 + Math.max(-1, Math.min(1, error)) * 50 : null,
+    dir,
+    guard: edge,
+    text: lf.state !== "TRACKING" ? "멈춤"
+      : dir === "left" ? `◀ 왼쪽 ${rate}°/s`
+      : dir === "right" ? `오른쪽 ${rate}°/s ▶`
+      : "▲ 직진",
+  };
+}

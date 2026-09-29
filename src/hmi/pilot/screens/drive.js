@@ -15,7 +15,7 @@ import {
 } from "../input-state.js";
 import {mountInputs} from "./inputs.js";
 import {slewCommand} from "../stick.js";
-import {createAutoSession} from "../autonomy.js";
+import {createAutoSession, intentView} from "../autonomy.js";
 import {createCameraCapture, classifyOperation, saveCameraFile} from "/common/evidence.js";
 
 const LOOP_MS = 100;
@@ -50,6 +50,8 @@ export function mountDrive(root, {onExit} = {}) {
     blockedReason: "[data-drive-blocked-reason]", retake: "[data-drive-retake]",
     view: "[data-drive-view]", zoomFact: "[data-drive-fact=zoom]",
     go: "[data-drive-go]", autoToggle: "[data-drive-auto]",
+    intent: "[data-drive-intent]", intentTarget: "[data-intent-target]",
+    intentSteer: "[data-intent-steer]",
   })) element[key] = root.querySelector(selector);
 
   // --- 상태 채널: /ws/state(auth 첫 프레임) + REST teleop -------------------
@@ -311,6 +313,7 @@ export function mountDrive(root, {onExit} = {}) {
         const benign = !reason || reason === "released" || reason === "takeover";
         element.motion.dataset.kind = benign ? "idle" : "warn";
         element.motion.textContent = benign ? "대기" : `자동 멈춤 — ${LF_REASON[reason] ?? reason}`;
+        renderIntent(null);
       }
     },
     onStatus: (lf) => {
@@ -321,8 +324,38 @@ export function mountDrive(root, {onExit} = {}) {
       element.motion.textContent = tracking
         ? `차선 추종 · 신뢰 ${Number(lf.confidence ?? 0).toFixed(2)} · 오차 ${Number(lf.error ?? 0) >= 0 ? "+" : ""}${Number(lf.error ?? 0).toFixed(2)}${ahead}`
         : `${LF_REASON[lf.reason] ?? lf.reason ?? lf.state}${ahead}`;
+      renderIntent(lf);
     },
   });
+  // 자동의 의도(D-353 §6): 겨누는 곳과 CORE 가 실제로 도는 방향. 표시만 한다.
+  function renderIntent(lf) {
+    const view = intentView(lf, DEG);
+    if (!element.intent) return;
+    element.intent.hidden = !view.visible;
+    if (!view.visible) return;
+    element.intent.dataset.state = view.tracking ? (view.guard ? "guard" : "tracking") : "hold";
+    element.intent.dataset.dir = view.dir;
+    element.intentTarget.hidden = view.target == null;
+    if (view.target != null) element.intentTarget.style.left = `${view.target}%`;
+    element.intentSteer.textContent = view.text;
+    placeIntent();
+  }
+  // 영상 틀은 영상보다 넓을 수 있다(contain 의 검은 띠·옆 조작부). 띠는 실제로 그려진 영상 안에만 둔다.
+  function placeIntent() {
+    const frame = element.frame, strip = element.intent;
+    if (!frame?.naturalWidth || !strip) return;
+    const box = frame.getBoundingClientRect(), view = element.view.getBoundingClientRect();
+    const scale = Math.min(box.width / frame.naturalWidth, box.height / frame.naturalHeight);
+    const width = frame.naturalWidth * scale, height = frame.naturalHeight * scale;
+    const left = box.left + (box.width - width) / 2 - view.left;
+    const top = box.top + (box.height - height) / 2 - view.top;
+    const visibleLeft = Math.max(left, 0), visibleRight = Math.min(left + width, view.width);
+    const visibleBottom = Math.min(top + height, view.height);
+    const inset = (visibleRight - visibleLeft) * 0.06;
+    strip.style.left = `${visibleLeft + inset}px`;
+    strip.style.width = `${Math.max(0, visibleRight - visibleLeft - 2 * inset)}px`;
+    strip.style.top = `${Math.max(0, visibleBottom - strip.offsetHeight - 10)}px`;
+  }
   function takeover() {
     if (auto.active()) auto.release("takeover");
   }
@@ -595,7 +628,12 @@ function buildStage() {
   );
   // 영상 틀: 확대(D-350 §5) 때 넘치는 부분을 이 틀 안에서만 자른다.
   const view = el("div", null, {"data-drive-view": ""});
-  view.append(frame, empty);
+  // 자동 의도 띠: 가운데 눈금, 겨누는 점, 실제 조향 방향(D-353 §6)
+  const intent = el("div", null, {"data-drive-intent": "", hidden: "", "aria-live": "polite"});
+  const track = el("span", null, {"data-intent-track": ""});
+  track.append(el("i", null, {"data-intent-centre": ""}), el("i", null, {"data-intent-target": ""}));
+  intent.append(track, el("span", "", {"data-intent-steer": ""}));
+  view.append(frame, empty, intent);
   stage.append(view, buildHud(), blocked);
   return stage;
 }

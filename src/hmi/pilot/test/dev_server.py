@@ -245,3 +245,46 @@ async def ws_state(websocket: WebSocket):
 
 if __name__ == "__main__":
     uvicorn.run(app, host="127.0.0.1", port=8642, log_level="warning")
+
+
+# --- 차선 추종(D-349/D-353) 흉내: 시험이 /__test__/line-follow 로 다음 상태를 정한다 ---
+LINE_FOLLOW = {"mode": "OFF", "state": "OFF", "source": None, "error": None, "confidence": 0.0,
+               "linear": 0.0, "angular": 0.0, "reason": "mode_off", "clearance_m": None}
+LINE_FOLLOW_SCRIPT = {}
+
+
+@app.post("/__test__/line-follow")
+async def line_follow_script(request: Request):
+    LINE_FOLLOW_SCRIPT.clear()
+    LINE_FOLLOW_SCRIPT.update(await request.json())
+    return LINE_FOLLOW_SCRIPT
+
+
+@app.get("/api/v1/line-follow")
+def line_follow_status(request: Request):
+    if _role(request) is None:
+        return JSONResponse({"detail": "unauthorized"}, status_code=401)
+    if LINE_FOLLOW["mode"] != "OFF":
+        LINE_FOLLOW.update(LINE_FOLLOW_SCRIPT)
+    return LINE_FOLLOW
+
+
+@app.put("/api/v1/line-follow/mode")
+async def line_follow_mode(request: Request):
+    if _role(request) is None:
+        return JSONResponse({"detail": "unauthorized"}, status_code=401)
+    mode = (await request.json()).get("mode", "OFF")
+    LINE_FOLLOW.update({"mode": mode, "state": "WAITING" if mode != "OFF" else "OFF",
+                        "reason": "no_observation" if mode != "OFF" else "mode_off",
+                        "error": None, "linear": 0.0, "angular": 0.0})
+    STATE["mode"] = "NAVIGATION" if mode != "OFF" else STATE["mode"]
+    return LINE_FOLLOW
+
+
+@app.post("/api/v1/line-follow/hold")
+def line_follow_hold(request: Request):
+    if _role(request) is None:
+        return JSONResponse({"detail": "unauthorized"}, status_code=401)
+    if LINE_FOLLOW["mode"] == "OFF":
+        return JSONResponse({"detail": {"code": "LINE_FOLLOW_NOT_HELD"}}, status_code=409)
+    return LINE_FOLLOW

@@ -495,3 +495,58 @@ body[data-pilot-screen="drive"] ui-brand small { display: none; }
 [data-drive-motion][data-kind=warn] { color: var(--ground-deep); background: var(--status-warn); border-color: var(--status-warn); }
 
 [data-drive-left] [data-drive-auto] { width: 100%; min-height: 2.8rem; }
+
+/* ---- 자동 의도 띠(D-353 §6): 영상 아래쪽에 겨누는 점과 실제 조향 방향 ---- */
+[data-drive-intent] {
+  position: absolute;          /* left·width·top 은 drive.js 가 그려진 영상에 맞춘다 */
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-flag);
+  background: color-mix(in srgb, var(--ground-deep) 62%, transparent);
+  pointer-events: none;
+  z-index: 2;
+}
+[data-drive-intent][hidden] { display: none; }
+[data-intent-track] {
+  position: relative;
+  flex: 1;
+  height: 6px;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--nominal-quiet) 55%, transparent);
+}
+[data-intent-centre] {
+  position: absolute;
+  left: 50%;
+  top: -7px;
+  width: 2px;
+  height: 18px;
+  transform: translateX(-50%);
+  background: var(--nominal-quiet);
+}
+[data-intent-target] {
+  position: absolute;
+  top: 50%;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  background: var(--status-good);
+  box-shadow: 0 0 0 2px var(--ground-deep);
+  transition: left 180ms ease-out;
+}
+[data-intent-steer] {
+  min-width: 8.5em;
+  text-align: right;
+  font-family: var(--mono);
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--status-good);
+  white-space: nowrap;
+}
+[data-drive-intent][data-state="guard"] [data-intent-target],
+[data-drive-intent][data-state="hold"] [data-intent-target] { background: var(--status-warn); }
+[data-drive-intent][data-state="guard"] [data-intent-steer],
+[data-drive-intent][data-state="hold"] [data-intent-steer] { color: var(--status-warn); }
+@media (prefers-reduced-motion: reduce) { [data-intent-target] { transition: none; } }
