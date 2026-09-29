@@ -83,3 +83,10 @@
 - gate 변화: 없음(ROS-SIM 진행 — DEVICE/FIELD 별도).
 - 결정: D-323.
 - 교훈: pkill 패턴이 내 파이프라인을 죽인다(원시 브리지+republish 동시 사망 2회). 카메라 스택은 한 스크립트로 일괄 기동하고 상태를 CORE status로 확인한다. SW 캐시는 배포 때마다 이름을 올려야 클라이언트가 새 JS를 받는다.
+
+## 2026-09-29 · uncommitted · feat(pilot): fullscreen game-style drive + vision 409 retry + browser tests (구현 개선)
+- 변경: 게임식 풀스크린 주행 레이아웃 — 카메라가 화면 전체를 채우고 HUD·휠·페달이 반투명 오버레이(blur·color-mix), 휠 중심 크로스헤어, 페달 활성 글로우, 속도 대형 계기. vision.js 409(CAMERA_FRAME_ADVANCED)를 오류가 아닌 다음 틱 재시도로 처리(hasFrame 플래그). 브라우저 시험을 새 레이아웃에 맞게 갱신(풀스크린 검증·프리셋 변경·카메라 프레임). width:100% 명시로 headless Chromium 풀스크린 해결.
+- 증거: ROSY_RUN_BROWSER_TESTS=1 pilot+라우트 30 passed — 게이트 2뷰포트 + 차단 + 풀스크린 카메라 + 속도 프리셋 변경.
+- gate 변화: 없음(LOCAL 진행).
+- 결정: D-323.
+- 교훈: headless Chromium에서 grid 요소가 width:0으로 붕괴할 수 있다 — width:100%를 명시한다. color-mix()는 Chrome 111+에서만 지원되므로 폴백을 고려한다.

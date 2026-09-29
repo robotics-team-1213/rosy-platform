@@ -1,14 +1,11 @@
-/* Rosy Pilot 표면 규칙 — dashboard 표면 CSS 의 규율을 그대로 따른다(concept 16,
- * D-72, D-82): tokens.css 외 색 없음, 간격은 스텝 척도, 굵기는 폰트 다계단.
- * 패널은 상자가 아니라 기둥 섹션이다 — 테두리 대신 세로 리듬으로 구성한다.
- * 주행 화면은 게임식 오버레이다 — 카메라가 화면을 채우고 조종 장치가 위에 뜬다.
+/* Rosy Pilot 표면 규칙 — dashboard 규율 준수 + 게임식 오버레이.
+ * 카메라가 화면을 채우고 조종 장치가 반투명 오버레이로 뜬다.
+ * 토큰·척도·컴포넌트는 web_common(D-130.3). 표면은 배치만.
  */
 
 :root { color-scheme: dark; }
 
 * { box-sizing: border-box; }
-
-/* display 를 가진 요소도 [hidden] 은 display:none 이 이겨야 한다(dashboard 규율). */
 [hidden] { display: none !important; }
 
 html { min-width: 320px; background: var(--ground-deep); }
@@ -63,26 +60,41 @@ form[data-pilot-token-form] ui-field { flex: 1 1 14rem; }
   white-space: nowrap;
 }
 
-/* ---- 주행 화면: 게임식 풀스크린 오버레이 ---- */
-/* 카메라가 화면 전체를 채우고, HUD·휠·페달이 오버레이로 뜬다. */
+/* ================================================================
+   주행 화면 — 게임식 풀스크린 오버레이 (NFS 계열)
+   카메라가 화면 전체를 채우고, 모든 조종 장치가 위에 뜬다.
+   ================================================================ */
 
 body[data-pilot-screen="drive"] .pilot-main {
   max-width: none;
+  width: 100%;
   padding: 0;
   gap: 0;
-  height: 100dvh;
+  height: 100vh;
   overflow: hidden;
+}
+
+body[data-pilot-screen="drive"] ui-topbar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 20;
+  background: linear-gradient(to bottom,
+    color-mix(in srgb, var(--ground-deep) 90%, transparent),
+    transparent);
+  border-bottom: none;
 }
 
 .pilot-drive {
   position: relative;
   width: 100%;
-  height: 100dvh;
+  height: 100vh;
   min-width: 0;
   overflow: hidden;
 }
 
-/* 카메라 스테이지 — 화면 전체 */
+/* 카메라 — 화면 전체 */
 [data-drive-stage] {
   position: absolute;
   inset: 0;
@@ -97,7 +109,10 @@ body[data-pilot-screen="drive"] .pilot-main {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  transition: opacity 200ms ease;
 }
+
+[data-drive-frame][src] { opacity: 1; }
 
 [data-drive-stage] ui-empty {
   position: absolute;
@@ -106,24 +121,38 @@ body[data-pilot-screen="drive"] .pilot-main {
   place-items: center;
   pointer-events: none;
   background: var(--ground-deep);
+  z-index: 0;
 }
 
-/* HUD — 좌상단 반투명 칩 (지도 위 칩 규칙: 장막 바탕 + 표면선 테두리) */
+/* ---- HUD (게임식 계기판) ---- */
+
 [data-drive-hud] {
   position: absolute;
-  top: var(--space-3);
-  left: var(--space-3);
+  bottom: calc(var(--space-5) + 13rem);   /* 페달 위 */
+  left: var(--space-5);
   display: grid;
-  gap: var(--space-2);
+  gap: var(--space-1);
   padding: var(--space-2) var(--space-3);
-  background: color-mix(in srgb, var(--ground-raise) 85%, transparent);
-  border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--ground-deep) 75%, transparent);
+  border: 1px solid color-mix(in srgb, var(--line) 60%, transparent);
   border-radius: var(--radius-panel);
-  min-width: 11rem;
-  z-index: 10;
+  min-width: 10rem;
+  z-index: 15;
+  backdrop-filter: blur(4px);
 }
 
-/* 조종 구역 — 하단 오버레이 */
+[data-drive-hud] ui-actions { display: flex; gap: var(--space-1); flex-wrap: wrap; }
+
+/* 속도 — 게임 계기판처럼 큰 숫자 */
+[data-drive-hud] [data-drive-fact=speed] {
+  font-family: var(--mono);
+  font-size: 1.8rem;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+/* ---- 조종 구역 — 하단 오버레이 ---- */
+
 [data-drive-controls] {
   position: absolute;
   bottom: 0;
@@ -133,11 +162,14 @@ body[data-pilot-screen="drive"] .pilot-main {
   justify-content: space-between;
   align-items: flex-end;
   gap: var(--space-4);
-  padding: var(--space-4) var(--space-5);
+  padding: var(--space-4) var(--space-5) calc(var(--space-4) + env(safe-area-inset-bottom, 0));
   z-index: 10;
+  background: linear-gradient(to top,
+    color-mix(in srgb, var(--ground-deep) 80%, transparent),
+    transparent 60%);
 }
 
-/* 속도 프리셋 — 좌하단 (게임식 난이도 선택) */
+/* 속도 프리셋 — 좌하단 */
 [data-drive-presets] {
   display: grid;
   gap: var(--space-1);
@@ -151,23 +183,24 @@ body[data-pilot-screen="drive"] .pilot-main {
   outline-offset: 2px;
 }
 
-/* 원형 휠 — 중앙 하단 (게임식 조향) */
-[data-drive-wheel-wrap] {
-  display: grid;
-  place-items: center;
-}
+/* 원형 휠 — 중앙 하단 */
+[data-drive-wheel-wrap] { display: grid; place-items: center; }
 
 [data-drive-wheel] {
   position: relative;
-  width: min(24vw, 12rem);
+  width: min(22vw, 11rem);
   aspect-ratio: 1;
   border-radius: 50%;
-  border: 2px solid var(--line);
-  background: color-mix(in srgb, var(--ground-raise) 80%, transparent);
+  border: 3px solid color-mix(in srgb, var(--line) 70%, transparent);
+  background: radial-gradient(circle,
+    color-mix(in srgb, var(--ground-raise) 40%, transparent) 0%,
+    color-mix(in srgb, var(--ground-deep) 60%, transparent) 70%,
+    transparent 100%);
   touch-action: none;
   user-select: none;
   -webkit-user-select: none;
   cursor: grab;
+  box-shadow: 0 0 20px color-mix(in srgb, var(--ground-deep) 80%, transparent);
 }
 
 [data-drive-wheel]:active { cursor: grabbing; }
@@ -176,41 +209,76 @@ body[data-pilot-screen="drive"] .pilot-main {
   position: absolute;
   inset: var(--space-2);
   border-radius: 50%;
-  border-top: var(--space-1) solid var(--brand-rose);
-  transition: transform 80ms linear;
+  border-top: 3px solid var(--brand-rose);
+  transition: transform 60ms linear;
 }
 
-/* 페달 — 우하단 (게임식 가속/브레이크) */
+/* 휠 중심 크로스헤어 */
+[data-drive-wheel]::before,
+[data-drive-wheel]::after {
+  content: "";
+  position: absolute;
+  background: color-mix(in srgb, var(--line) 50%, transparent);
+}
+
+[data-drive-wheel]::before {
+  top: 50%;
+  left: 15%;
+  right: 15%;
+  height: 1px;
+}
+
+[data-drive-wheel]::after {
+  left: 50%;
+  top: 15%;
+  bottom: 15%;
+  width: 1px;
+}
+
+/* 페달 — 우하단 */
 [data-drive-pedals] {
   display: grid;
   gap: var(--space-2);
 }
 
-[data-drive-pedals] ui-button { min-height: 5rem; min-width: 5rem; }
+[data-drive-pedals] ui-button {
+  min-height: 5rem;
+  min-width: 5rem;
+  font-size: 0.9rem;
+}
 
 [data-drive-pedals] ui-button.active {
   outline: 3px solid var(--status-warn);
   outline-offset: 2px;
+  box-shadow: 0 0 12px color-mix(in srgb, var(--status-warn) 40%, transparent);
 }
 
-/* 입력 조정 칩 */
+/* 입력 조정 패널 — 우상단 */
 [data-inputs-panel] {
   position: absolute;
-  top: var(--space-3);
+  top: calc(var(--topbar-height) + var(--space-3));
   right: var(--space-3);
   max-width: 20rem;
+  max-height: calc(100vh - var(--topbar-height) - 14rem);
+  overflow-y: auto;
   padding: var(--space-3);
   background: color-mix(in srgb, var(--ground-raise) 92%, transparent);
   border: 1px solid var(--line);
   border-radius: var(--radius-panel);
-  z-index: 20;
+  z-index: 25;
+  backdrop-filter: blur(6px);
 }
 
 /* 모바일 세로 */
 @media (max-width: 30rem) {
   .pilot-main { padding: var(--space-4); }
-  [data-drive-controls] { flex-direction: column; align-items: center; padding: var(--space-3); }
-  [data-drive-wheel] { width: min(60vw, 14rem); }
+  [data-drive-controls] {
+    flex-direction: column;
+    align-items: center;
+    padding: var(--space-3);
+  }
+  [data-drive-wheel] { width: min(55vw, 13rem); }
   [data-drive-pedals] { flex-direction: row; }
   [data-drive-pedals] ui-button { min-height: 4rem; min-width: 4rem; }
+  [data-drive-hud] { bottom: calc(var(--space-4) + 16rem); }
 }

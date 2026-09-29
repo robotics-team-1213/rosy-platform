@@ -37,14 +37,16 @@ def test_registry_returns_registered_driver_and_null_for_unknown():
     """) == {"known": "pinky_core", "unknown": None}
 
 
-def test_registry_rejects_duplicate_and_empty_kind():
+def test_registry_rejects_wrong_duplicate_and_empty_kind():
     assert _run_js("""
-    let duplicateThrew = false;
-    try { registry.registerDriver('pinky_core', pinky.pinkyCore); } catch (e) { duplicateThrew = true; }
+    let sameDriverThrew = false;
+    try { registry.registerDriver('pinky_core', pinky.pinkyCore); } catch (e) { sameDriverThrew = true; }
+    let wrongDriverThrew = false;
+    try { registry.registerDriver('pinky_core', {kind: 'pinky_core'}); } catch (e) { wrongDriverThrew = true; }
     let emptyThrew = false;
     try { registry.registerDriver('', {}); } catch (e) { emptyThrew = true; }
-    console.log(JSON.stringify({duplicateThrew, emptyThrew}));
-    """) == {"duplicateThrew": True, "emptyThrew": True}
+    console.log(JSON.stringify({sameDriverThrew, wrongDriverThrew, emptyThrew}));
+    """) == {"sameDriverThrew": False, "wrongDriverThrew": True, "emptyThrew": True}
 
 
 def test_gate_blocks_viewer_role():

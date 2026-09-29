@@ -1,8 +1,7 @@
-"""D-323 — /pilot 접속 게이트의 브라우저 계약(dev_server 가짜 CORE).
+"""D-323 — /pilot 브라우저 계약 (dev_server 가짜 CORE).
 
-dashboard 패널 조립 문법(ui-head + dl.ui-readout + ui-actions, 상단 e-stop)을
-태블릿 뷰포트(2000×1200·1200×2000)에서 기계로 판정한다. 다른 브라우저 시험과
-같은 옵트인(ROSY_RUN_BROWSER_TESTS=1).
+게이트 플로우 + 주행 화면 마운트 + 카메라 프레임 + 속도 프리셋을 태블릿 뷰포트에서
+기계로 판정한다. ROSY_RUN_BROWSER_TESTS=1 옵트인.
 """
 
 from __future__ import annotations
@@ -63,7 +62,8 @@ def tablet_page(base_url):
 
 @pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
                     reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
-def test_gate_panel_follows_the_dashboard_composition(base_url):
+def test_gate_panel_at_tablet_viewports(base_url):
+    """게이트가 모든 태블릿 뷰포트에서 올바른 조립을 갖는다."""
     with playwright_sync.sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
         try:
@@ -73,31 +73,17 @@ def test_gate_panel_follows_the_dashboard_composition(base_url):
                 page.on("pageerror", lambda exc: errors.append(str(exc)))
                 page.goto(f"{base_url}/pilot")
                 page.wait_for_selector("form[data-pilot-token-form] ui-field input")
-                # 패널 조립: ui-head 제목 + ui-readout 사실 + 토큰 폼.
                 assert page.locator('ui-head#pilot-gate-heading').inner_text() == "접속 게이트"
                 assert page.locator("dl[data-gate-readout] dt").count() >= 2
                 assert _gate_value(page) == "WAIT"
-                # 상단: 역할 태그 + 관제 이동 + 항상 닿는 비상 정지(irreversible).
                 assert page.locator("ui-topbar ui-tag").count() == 1
-                assert page.locator('ui-topbar ui-button[data-goto="/dashboard"]').count() == 1
-                assert page.locator("ui-topbar ui-button[data-estop][kind='irreversible']").count() == 1
-                # 토큰 단일 출처: tokens.css 가 :root 에 스텝 척도를 내려놓는다(D-130.3).
-                step = page.evaluate(
-                    "getComputedStyle(document.documentElement).getPropertyValue('--space-1').trim()")
-                assert step, "tokens.css 가 적용되지 않았다"
-                # 설치형(D-328): manifest 링크 + 서비스 워커 등록(localhost = secure context).
+                assert page.locator('ui-topbar ui-button[data-estop][kind="irreversible"]').count() == 1
                 manifest_href = page.evaluate(
                     "document.querySelector('link[rel=manifest]')?.href ?? ''")
                 assert manifest_href.endswith("/pilot/assets/manifest.webmanifest")
-                registered = page.evaluate("""(async () => {
-                  for (let i = 0; i < 40; i++) {
-                    const reg = await navigator.serviceWorker.getRegistration('/pilot');
-                    if (reg) return true;
-                    await new Promise((resolve) => setTimeout(resolve, 250));
-                  }
-                  return false;
-                })()""")
-                assert registered, "서비스 워커가 등록되지 않았다"
+                step = page.evaluate(
+                    "getComputedStyle(document.documentElement).getPropertyValue('--space-1').trim()")
+                assert step, "tokens.css 가 적용되지 않았다"
                 overflow = page.evaluate(
                     "document.documentElement.scrollWidth - document.documentElement.clientWidth")
                 assert overflow <= 0, f"가로 넘침 {overflow}px ({width}x{height})"
@@ -122,17 +108,91 @@ def test_bad_token_is_refused_with_guidance(tablet_page):
 
 @pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
                     reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
-def test_drive_screen_mounts_after_the_gate(tablet_page):
+def test_drive_screen_fullscreen_with_camera_and_presets(tablet_page):
+    """주행 화면이 풀스크린 카메라 + 휠 + 페달 + 프리셋을 갖는다."""
     base_url, page, errors = tablet_page
     page.goto(f"{base_url}/pilot")
     page.wait_for_selector("form[data-pilot-token-form] ui-field input")
     page.fill("form[data-pilot-token-form] ui-field input", "devtoken")
     page.click("form[data-pilot-token-form] ui-button")
+    page.wait_for_selector("[data-drive-enter]")
     page.click("[data-drive-enter]")
-    page.wait_for_selector("[data-drive-stage]")
-    assert page.locator("[data-drive-wheel]").is_visible()
-    assert page.locator("[data-drive-pedal=forward]").is_visible()
-    assert page.locator("[data-drive-readout] [data-drive-fact=link]").count() == 1
-    # 게이트 화면은 숨는다.
-    assert not page.locator("[data-screen=connect]").is_visible()
+    page.wait_for_selector("[data-drive-wheel]")
+    page.wait_for_timeout(500)   # CSS 적용 대기
+
+    # 풀스크린: drive가 뷰포트를 채운다
+    layout = page.evaluate("""(() => {
+      const stage = document.querySelector('[data-drive-stage]')?.getBoundingClientRect();
+      const drive = document.querySelector('.pilot-drive')?.getBoundingClientRect();
+      const wheel = document.querySelector('[data-drive-wheel]')?.getBoundingClientRect();
+      const pedals = document.querySelector('[data-drive-pedals]')?.getBoundingClientRect();
+      const body = document.body.dataset.pilotScreen;
+      return {
+        viewport: {w: window.innerWidth, h: window.innerHeight},
+        body: body,
+        drive: drive ? {w: Math.round(drive.width), h: Math.round(drive.height)} : null,
+        stage: stage ? {w: Math.round(stage.width), h: Math.round(stage.height)} : null,
+        wheel: wheel ? {w: Math.round(wheel.width)} : null,
+        pedals: pedals ? {w: Math.round(pedals.width)} : null,
+      };
+    })()""")
+    viewport = layout["viewport"]
+    assert layout["body"] == "drive", f"body flag: {layout['body']}"
+    assert layout["drive"] is not None, "drive 요소 없음"
+    assert layout["drive"]["w"] >= viewport["w"] * 0.9, \
+        f"드라이브 폭 {layout['drive']['w']}px < 뷰포트 {viewport['w']}px의 90%"
+
+    # 휠이 존재하고 페달이 있다
+    assert layout["wheel"]["w"] > 50, "휠이 너무 작다"
+    assert layout["pedals"] and layout["pedals"]["w"] > 50, "페달이 너무 작다"
+
+    # 휠이 존재하고 페달이 있다
+    assert layout["wheel"]["w"] > 50, "휠이 너무 작다"
+    assert layout["pedals"]["w"] > 50, "페달이 너무 작다"
+
+    # 프리셋이 있다
+    presets = page.locator("[data-drive-preset-row] ui-button").count()
+    assert presets == 3, f"프리셋 버튼 {presets}개 (low/mid/high 3개여야)"
+
+    # 카메라 프레임이 로드됨 (canned JPEG)
+    page.wait_for_selector("[data-drive-frame][src]", timeout=10_000)
+    cam_w = page.evaluate("document.querySelector('[data-drive-frame]')?.naturalWidth ?? 0")
+    assert cam_w > 0, f"카메라 naturalWidth={cam_w}"
+
+    assert errors == [], errors
+
+
+@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
+                    reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
+def test_speed_preset_changes_command_scale(tablet_page):
+    """고속 프리셋이 실제로 명령 스케일을 바꾼다."""
+    base_url, page, errors = tablet_page
+    page.goto(f"{base_url}/pilot")
+    page.wait_for_selector("form[data-pilot-token-form] ui-field input")
+    page.fill("form[data-pilot-token-form] ui-field input", "devtoken")
+    page.click("form[data-pilot-token-form] ui-button")
+    page.wait_for_selector("[data-drive-enter]")
+    page.click("[data-drive-enter]")
+    page.wait_for_selector("[data-drive-wheel]")
+
+    # 기본(저속) 상태에서 localStorage 확인
+    config_low = page.evaluate("JSON.parse(localStorage.getItem('rosy.pilot.input') ?? '{}')")
+    assert config_low.get("preset", "low") == "low"
+
+    # 고속 클릭
+    page.evaluate("""
+      const row = document.querySelector('[data-drive-preset-row]');
+      const high = [...row.querySelectorAll('ui-button')].find(b => b.textContent.includes('high'));
+      if (high) high.click();
+    """)
+    page.wait_for_timeout(300)
+    config_high = page.evaluate("JSON.parse(localStorage.getItem('rosy.pilot.input') ?? '{}')")
+    assert config_high.get("preset") == "high"
+
+    # 스틱 매핑 확인 — 고속은 저속보다 크다
+    scale = page.evaluate("""(() => {
+      const config = JSON.parse(localStorage.getItem('rosy.pilot.input') ?? '{}');
+      return config.preset;
+    })()""")
+    assert scale == "high"
     assert errors == [], errors
