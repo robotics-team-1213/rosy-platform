@@ -2,7 +2,7 @@
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.54
+**Version:** v1.55
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -1305,7 +1305,15 @@ acknowledgement becomes Fleet `HOLD` with claims retained while one durable
 reconciliation is pending. A readback that is missing or remains nonterminal clears
 that one reconciliation attempt and leaves the Mission held for operator review.
 An Action terminal success advances only to `ACTION_SUCCEEDED`; independent goal
-evidence is still required for Mission completion. No device, physical stop, or
+evidence is still required for Mission completion. Goal confirmation is an internal
+Fleet service operation and requires an explicitly injected trusted producer
+verifier; no producer is registered by default, so completion fails closed. Evidence
+must identify the current Action/attempt, a post-action frame with a new observation
+ID and digest, the evaluator revision, and a separately identified post-action
+gripper `OPEN` readback. The verifier is responsible for producer authentication
+and current camera/calibration/evaluator revision checks. Model prose and the input
+frame used to propose the task cannot confirm placement. Invalid or stale evidence
+records HOLD and does not release Mission claims. No device, physical stop, or
 manipulator acceptance follows from enabling this source worker.
 
 ## 10.13 Fleet proposal, Mission draft, and operator admission (D-333/D-334)
@@ -1359,6 +1367,8 @@ state.
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.55 | 2026-09-29 | Additive (D-333): require an injected trusted producer verifier and a new post-action observation for Mission goal confirmation. Evidence is correlated to the Action/attempt and carries frame digest, evaluator revision, and a separate `OPEN` gripper readback; absent verifier, stale/mismatched evidence leaves claims held. |
+| v1.54 | 2026-09-29 | Additive (D-18): include the operator-declared `junction_rule` in traffic policy status so an unsignalized stop-and-go junction is distinct from signal-detection failure. |
 | v1.53 | 2026-09-29 | Additive (D-333/D-336): connect the explicit opt-in Fleet Mission dispatcher to the same-host OMX UDS Action API. Persist stable grants before one SubmitAction; reconcile restart/lost ACK through GetAction without replay; bind receipts to digest and both fences. Dispatcher stays disabled by default; Action success remains separate from goal evidence and physical acceptance. |
 | v1.52 | 2026-09-29 | Additive (D-336): define the local software-stop OPEN projection and explicit newer-generation rearm; a persisted stop latch, stale Fleet fence, or process restart blocks the final driver submission boundary. This remains separate from driver standstill and physical E-stop proof. |
 | v1.51 | 2026-09-29 | Clarify (D-336): define one-frame newline JSON UDS encoding, SO_PEERCRED UID derivation, 64 KiB bound, and FleetActionGrant canonical digest; source adds a disabled-by-default local Action runner with durable attempt IDs and no unknown replay. No service entrypoint or physical capability is enabled. |

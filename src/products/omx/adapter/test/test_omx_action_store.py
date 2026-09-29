@@ -30,6 +30,15 @@ def test_request_key_is_idempotent_and_payload_changes_conflict(tmp_path):
         create(store, {"source": "block-2", "destination": "tray-1"})
 
 
+def test_omx_action_database_uses_durable_wal_on_new_connections(tmp_path):
+    store = ActionStore(tmp_path / "actions.sqlite3")
+
+    with store._connect() as connection:
+        assert connection.execute("PRAGMA journal_mode").fetchone()[0].lower() == "wal"
+        assert connection.execute("PRAGMA synchronous").fetchone()[0] == 2
+        assert connection.execute("PRAGMA busy_timeout").fetchone()[0] == 5000
+
+
 def test_intent_is_durable_before_submission_and_same_attempt_cannot_submit_twice(tmp_path):
     store = ActionStore(tmp_path / "actions.sqlite3")
     action = create(store)["action"]

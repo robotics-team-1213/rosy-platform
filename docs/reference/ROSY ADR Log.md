@@ -338,5 +338,7 @@
 | D-334 | ER 2의 도구 목록과 진행 조회를 Fleet 원장 경계에 둔다 | Accepted (도구·진행 의미만; 새 provider loop/API·자동 실행·물리 수용 HOLD) |
 | D-335 | 브랜드 홈 링크를 ui-brand 공용 동작으로 넣는다 | Accepted (ui.js href 동작 확장 + components.css가 hover·포커스 소유; 새 토큰·부품·문법 아님, /dashboard 목적지 회차는 별도) |
 | D-336 | Fleet와 OMX 제어 owner 사이 첫 연결은 같은 호스트의 local IPC로 제한한다 | Accepted (co-located SOURCE/LOCAL 경계만; 원격 API·field 호스트 배치는 HOLD) |
+| D-337 | 로봇의 제2 신호 소스는 관측 서비스의 실측(빛)뿐이다 — ESP32 접점 주장(`/status`)과 신호등 명령 경로는 로봇이 소비하지 않고, 소스 불일치·소등은 진입을 허가하지 않는다 | Accepted (경계·융합 규칙 결정만; 폴러 구현·ROS-SIM·DEVICE/FIELD 수용 HOLD — 설계 `2026-09-29-robot-signal-source-integration-design.md`) |
+| D-338 | 브리지 콜백의 판정은 ROS-free 시블리가 소유하고 ros_bridge는 적응만 남는다 | Accepted (2026-09-24 구현·2026-09-29 기록; 소스 구조 원칙만, 실기 콜백 증거 별도) |
 | D-339 | 화면 제목과 폴더 이름은 역할을 드러낸다 — 패키지 이름은 그대로 두고 대응표를 시험으로 고정한다 | Accepted (표시 이름·폴더 경로·대응표; 패키지 이름 불변) |
 | D-340 | 설치형 앱은 웹 표면을 감싸는 셸로 만든다 — PWA가 먼저, Capacitor 셸은 저장소 루트 `apps/`에 둔다 | Proposed (방향·위치만; apps/·npm 프로젝트 미생성) |

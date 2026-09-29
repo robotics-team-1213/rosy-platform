@@ -9,7 +9,6 @@ from __future__ import annotations
 import hashlib
 import json
 import sqlite3
-import uuid
 from contextlib import closing, nullcontext
 from datetime import datetime, timezone
 from pathlib import Path
@@ -18,6 +17,7 @@ from typing import Any, Mapping
 from .dispatch_admission import release as release_dispatch_claims
 from .dispatch_admission import reserve as reserve_dispatch_claims
 from .goal_evidence import GoalEvidence, GoalPredicate
+from .sqlite_policy import configure_connection, enable_wal
 
 
 class MissionConflict(ValueError):
@@ -48,6 +48,7 @@ class MissionStore:
     def __init__(self, path: Path | str) -> None:
         self.path = Path(path)
         with closing(self._connect()) as connection:
+            enable_wal(connection)
             connection.executescript(
                 """
                 CREATE TABLE IF NOT EXISTS fleet_missions (
@@ -113,13 +114,19 @@ class MissionStore:
                     "ALTER TABLE fleet_missions ADD COLUMN reconciliation_pending "
                     "INTEGER NOT NULL DEFAULT 0"
                 )
+            connection.execute(
+                "CREATE INDEX IF NOT EXISTS fleet_missions_ready_queue "
+                "ON fleet_missions(status, created_at, mission_id)"
+            )
+            connection.execute(
+                "CREATE INDEX IF NOT EXISTS fleet_missions_reconcile_queue "
+                "ON fleet_missions(reconciliation_pending, updated_at, mission_id)"
+            )
 
     def _connect(self) -> sqlite3.Connection:
         connection = sqlite3.connect(self.path, timeout=5.0, isolation_level=None)
         connection.row_factory = sqlite3.Row
-        connection.execute("PRAGMA foreign_keys=ON")
-        connection.execute("PRAGMA busy_timeout=5000")
-        return connection
+        return configure_connection(connection)
 
     @staticmethod
     def _row(row: sqlite3.Row | None) -> dict[str, Any] | None:

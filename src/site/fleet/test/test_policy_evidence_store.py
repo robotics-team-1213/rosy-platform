@@ -7,6 +7,8 @@ invariant this suite pins, alongside transit, binding, and replay rules.
 
 from __future__ import annotations
 
+import sqlite3
+
 import pytest
 
 from fleet.server.policy_evidence import PolicyEvidenceError, PolicyEvidenceStore
@@ -55,6 +57,20 @@ def test_unknown_token_is_rejected_before_anything_is_stored(store):
     with pytest.raises(PolicyEvidenceError, match="EVIDENCE_SOURCE_UNKNOWN"):
         store.submit(_payload(), token="not-a-known-token", now=_NOW)
     assert store.latest() == []
+
+
+def test_store_uses_durable_wal_and_indexes_latest_reads(store):
+    with sqlite3.connect(store.path) as connection:
+        assert connection.execute("PRAGMA journal_mode").fetchone()[0].lower() == "wal"
+        assert connection.execute("PRAGMA synchronous").fetchone()[0] == 2
+        assert connection.execute("PRAGMA busy_timeout").fetchone()[0] == 5_000
+        plan = connection.execute(
+            "EXPLAIN QUERY PLAN SELECT evidence_id FROM policy_evidence "
+            "ORDER BY received_at DESC LIMIT ?", (50,)
+        ).fetchall()
+    details = " ".join(row[3] for row in plan)
+    assert "policy_evidence_received_at" in details
+    assert "TEMP B-TREE" not in details
 
 
 def test_revoked_source_is_unknown(tmp_path):

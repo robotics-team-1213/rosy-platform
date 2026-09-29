@@ -12,6 +12,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Mapping
 
+from .sqlite_policy import configure_connection, enable_wal
+
 
 class ProposalConflict(ValueError):
     """A proposal identity was reused or a state transition conflicts."""
@@ -111,6 +113,7 @@ class ProposalStore:
         self.path = Path(path)
         self.retention_days = retention_days
         with closing(self._connect()) as connection:
+            enable_wal(connection)
             connection.executescript(
                 """
                 CREATE TABLE IF NOT EXISTS fleet_proposals (
@@ -139,8 +142,7 @@ class ProposalStore:
     def _connect(self) -> sqlite3.Connection:
         connection = sqlite3.connect(self.path, timeout=5.0, isolation_level=None)
         connection.row_factory = sqlite3.Row
-        connection.execute("PRAGMA busy_timeout=5000")
-        return connection
+        return configure_connection(connection)
 
     @staticmethod
     def _row(row: sqlite3.Row | None) -> dict[str, Any] | None:

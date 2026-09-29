@@ -2,6 +2,7 @@
 
 from core_features.traffic_policy.manager import (
     RoadEvidence,
+    SignalHeadEvidence,
     TrafficDecision,
     TrafficPolicyConfig,
     TrafficPolicyManager,
@@ -10,6 +11,7 @@ from core_features.traffic_policy.manager import (
 
 __all__ = [
     "RoadEvidence",
+    "SignalHeadEvidence",
     "TrafficDecision",
     "TrafficPolicyConfig",
     "TrafficPolicyManager",

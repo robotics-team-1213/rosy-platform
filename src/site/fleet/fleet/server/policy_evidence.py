@@ -19,6 +19,7 @@ from pydantic import ValidationError
 
 from core_common.protocol.policy_evidence import PolicyEvidencePayload
 from fleet.server.policy_evidence_config import PolicyEvidenceSource
+from fleet.server.sqlite_policy import configure_connection, enable_wal
 
 TRANSIT_MAX_S = 0.300  # D-268 Decision 4: capture-to-Fleet receive bound.
 
@@ -50,8 +51,7 @@ class PolicyEvidenceStore:
         self._clock = clock
         self._by_token = {source.token: source for source in sources}
         with closing(self._connect()) as connection:
-            connection.execute("PRAGMA journal_mode=WAL")
-            connection.execute("PRAGMA synchronous=FULL")
+            enable_wal(connection)
             connection.executescript(
                 """
                 CREATE TABLE IF NOT EXISTS policy_evidence (
@@ -69,6 +69,8 @@ class PolicyEvidenceStore:
                     source_id TEXT NOT NULL,
                     received_at REAL NOT NULL
                 );
+                CREATE INDEX IF NOT EXISTS policy_evidence_received_at
+                    ON policy_evidence(received_at DESC, evidence_id);
                 PRAGMA user_version=1;
                 """
             )
@@ -76,7 +78,8 @@ class PolicyEvidenceStore:
             self.path.chmod(0o600)
 
     def _connect(self) -> sqlite3.Connection:
-        return sqlite3.connect(self.path)
+        connection = sqlite3.connect(self.path, timeout=5.0)
+        return configure_connection(connection)
 
     def uses_token(self, token: str) -> bool:
         return token in self._by_token
