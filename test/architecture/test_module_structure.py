@@ -64,11 +64,12 @@ CONTROL_SPLIT = "docs/plans/2026-09-22-control-package-split-design.md"
 #: P6 verdicts: path (relative to src/) or package name -> (lines at verdict, verdict).
 SIZE_VERDICTS = {
     "site/fleet/fleet/server/app.py": (
-        1315,
+        1466,
         "split: the mission/dispatch route groups now carry their own stores and lifecycles (task_store, "
         "mission modules) — the independent-boundary condition the 813-line accept was waiting for arrived "
         "with the arbitration work; owner fleet, unscheduled (docs/plans/"
-        "2026-09-29-fleet-mission-control-arbitration-implementation.md)",
+        "2026-09-29-fleet-mission-control-arbitration-implementation.md; re-judged 2026-09-30 at 1466 after "
+        "goal-evidence, D-361 enrollment routes and the D-360 console assets joined — verdict unchanged)",
     ),
     "fleet": (
         13_187,

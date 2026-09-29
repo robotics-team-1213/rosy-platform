@@ -113,6 +113,8 @@ CONSOLE_ASSETS = {
     "styles.css": "text/css",
     "console.js": "application/javascript",
     "authorization.js": "application/javascript",
+    "field-layers.js": "application/javascript",
+    "field-view.js": "application/javascript",
     "formation.js": "application/javascript",
     "map-view.js": "application/javascript",
     "roster.js": "application/javascript",

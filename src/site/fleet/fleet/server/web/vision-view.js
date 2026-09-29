@@ -29,6 +29,10 @@ export function createVisionView({ el, call, auth }) {
   let refreshTimer = null;
   let viewMode = "adjusted";
   let draggingPointerId = null;
+  // D-360: 검토 중인 경기장 제안(정규 좌표 네 점). 수락 전에는 조정값에 들어가지 않는다.
+  let proposalCorners = null;
+  const proposalPolygon = el("vision-proposal-polygon");
+  const frameListeners = [];
 
   function showState(label, kind = "neutral", detail = label) {
     status.textContent = label;
@@ -79,6 +83,11 @@ export function createVisionView({ el, call, auth }) {
     const radius = stageWidth ? Math.max(3, Math.min(8, 2200 / stageWidth)) : 7;
     const points = readProfile().corners.map(([x, y]) => [x * 100, y * viewHeight]);
     cornerPolygon.setAttribute("points", points.map(([x, y]) => `${x},${y}`).join(" "));
+    proposalPolygon.toggleAttribute("hidden", !proposalCorners);
+    if (proposalCorners) {
+      proposalPolygon.setAttribute("points",
+        proposalCorners.map(([x, y]) => `${x * 100},${y * viewHeight}`).join(" "));
+    }
     const names = ["왼쪽 위", "오른쪽 위", "오른쪽 아래", "왼쪽 아래"];
     cornerHandles.forEach((handle, index) => {
       const [x, y] = points[index];
@@ -226,6 +235,8 @@ export function createVisionView({ el, call, auth }) {
       status.setAttribute("status", "good");
       message.textContent = "";
       el("vision-meta").textContent = `${source} · sequence ${response.headers.get("X-Frame-Seq") || "?"} · age ${response.headers.get("X-Frame-Age-Ms") || "?"} ms · ${rectified ? "화면 보정" : "원본"}`;
+      const seq = response.headers.get("X-Frame-Seq");
+      for (const listener of frameListeners) listener({ image, rectified, source, seq, url: nextUrl });
     } catch (error) {
       lease = null;
       showState("영상 정지", "warn", error.message || "Vision에 연결할 수 없습니다.");
@@ -238,6 +249,7 @@ export function createVisionView({ el, call, auth }) {
     lease = null;
     leaseExpiresAt = 0;
     lastSourcesAt = 0;
+    proposalCorners = null;
     select.replaceChildren();
     select.disabled = true;
     loadProfile("");
@@ -246,6 +258,7 @@ export function createVisionView({ el, call, auth }) {
 
   select.addEventListener("change", () => {
     lease = null;
+    proposalCorners = null;
     loadProfile(select.value);
     showState("카메라 전환", "neutral", "선택한 영상의 최신 프레임을 기다립니다.");
     refreshFrame();
@@ -332,5 +345,53 @@ export function createVisionView({ el, call, auth }) {
     lease = null;
     refreshSources().then(refreshFrame);
   });
-  return { refreshSources, refreshFrame, reset };
+  // D-360: Vision 제안은 frame 과 같은 lease 로 same-origin 에서 읽는다. Fleet 은 중계하지 않는다.
+  async function fetchFieldProposal() {
+    const source = select.value;
+    if (!source || auth.locked || !auth.token) throw new Error("카메라를 먼저 선택하세요.");
+    if (!lease || Date.now() >= leaseExpiresAt) {
+      lease = await call("/api/fleet/vision/lease", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          source_id: source,
+          rectification: viewMode === "raw" ? DEFAULT_RECTIFICATION : readProfile(),
+        }),
+      });
+      leaseExpiresAt = Date.now() + 45000;
+    }
+    const path = lease.frame_path.replace(/\/frame$/, "/field-proposal");
+    const response = await fetch(path, {
+      headers: { Authorization: `Bearer ${lease.lease}` }, cache: "no-store",
+    });
+    if (response.status === 429) throw new Error("잠시 뒤 다시 찾으세요(초당 1회).");
+    if (response.status === 422) throw new Error("프레임을 해석하지 못했습니다. 잠시 뒤 다시 찾으세요.");
+    if (!response.ok) {
+      throw new Error(response.headers.get("X-Frame-State") === "stale"
+        ? "최신 프레임이 없어 찾을 수 없습니다." : `Vision 응답 ${response.status}`);
+    }
+    return { source, body: await response.json() };
+  }
+
+  // 제안을 원본 위 점선 사각형으로 보여 준다. 검토하려면 원본 조정 화면으로 바꾼다.
+  function showProposal(corners) {
+    proposalCorners = corners;
+    if (corners && viewMode !== "raw") selectViewMode("raw");
+    else updateCornerOverlay();
+  }
+
+  // 운용자가 수락한 모서리만 D-318 브라우저 로컬 초안이 된다.
+  function acceptCorners(corners) {
+    corners.forEach(([x, y], index) => setCorner(index, x, y));
+    proposalCorners = null;
+    saveDraft();
+    updateCornerOverlay();
+  }
+
+  return {
+    refreshSources, refreshFrame, reset, fetchFieldProposal, showProposal, acceptCorners,
+    currentSource: () => select.value,
+    currentCorners: () => readProfile().corners,
+    onFrame: (listener) => frameListeners.push(listener),
+  };
 }

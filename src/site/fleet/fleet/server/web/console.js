@@ -5,6 +5,7 @@ import { createMapView } from "./map-view.js";
 import { createRoster } from "./roster.js";
 import { createSignals } from "./signals.js";
 import { createVisionView } from "./vision-view.js";
+import { createFieldView } from "./field-view.js";
 import { applyRoleToControls } from "./authorization.js";
 import { DISCOVERY_LABELS, createEnrollmentPanel } from "./enrollment.js";
 // 좌표계: 로봇 pose 는 CORE 가 TF `map → <ns>base_footprint` 로 읽어 주는 map 프레임
@@ -520,6 +521,8 @@ el("roster-toggle").addEventListener("click", () => {
 // D-262: 신호등 카드는 signals.js 팩토리가 그린다.
 const signals = createSignals({ el, view, log, call, refreshState });
 const visionView = createVisionView({ el, call, auth, authHeaders });
+// D-360: 경기장 제안·보정 뷰·레이어 토글. 레이어가 바뀌면 지도를 다시 그린다.
+createFieldView({ el, view, visionView, onLayersChanged: () => mapView.draw() });
 
 // --- 신호등 (ROSY-SIGNAL-001) --------------------------------------------------
 

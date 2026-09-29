@@ -74,7 +74,6 @@
 - 증거: `python -m pytest src/site/overhead/test -q` 86 passed. 로컬 `gradlew testDebugUnitTest --no-daemon`(JDK 21) BUILD SUCCESSFUL. CI 실행 증거는 아직 없다(푸시 안 함).
 - gate 변화: 없음.
 
-
 ## 2026-09-29 · uncommitted · fix(overhead): pick the ArUco detector API by hasattr
 
 - Change: detect.py built cv2.aruco.ArucoDetector at import time, which exists only on OpenCV 4.7+ — the CI image (and the device precedent) ship 4.6, so every overhead test failed at collection with AttributeError. The module now picks the 4.7+ detector when present and falls back to the 4.6-era cv2.aruco.detectMarkers module function, the same pattern dock_tag.py already ships for the same reason.
@@ -100,3 +99,21 @@
 - 변경: Vision 워커가 최신 프레임에서 검출한 id 가운데 설정된 `corner_marker_ids`·`robot_markers`만 골라 `IngestServer.report_markers`로 넘기고, 휴대폰 `status`는 3초 안의 보고를 `corners_seen`·`robots_seen`으로 싣는다(그 뒤에는 빈 목록). 검출은 이미 도는 워커 결과를 재사용해 추가 CPU가 없고, id만 휴대폰에 가며 영상·좌표는 Fleet에 가지 않는다(D-257). 앱은 이 세션에서 마커 보고를 한 번이라도 받기 전에는 설치 안내 대신 "수신기가 마커 인식을 아직 보고하지 않습니다"를 보인다(`overhead receive`는 여전히 빈 목록). Wi-Fi 판정은 기본 네트워크 대신 인터넷 능력을 뺀 Wi-Fi/Ethernet 요청 콜백을 써서 인터넷 없는 현장 Wi-Fi도 연결로 본다. 송출 중 토큰·이름 문제의 버튼은 "카메라를 끄고 연결 설정 열기"로 카메라를 끈 뒤 설정을 연다. 알림은 온도 정수·배터리·충전·경고가 바뀔 때만 갱신한다. `problem_*` 문장 끝 마침표와 QR 표현("현장 PC의 페어링 QR")을 맞췄다.
 - 증거: `python -m pytest src/site/overhead/test -q` 88 passed(합성 ArUco 영상으로 실제 WebSocket `status`에 `[30, 31, 33]`·`["rosy_01"]` 확인 포함). Android `testDebugUnitTest` 125 passed, `assembleDebug` 성공(JDK 21, Windows). 실기 재확인은 하지 않았다.
 - gate 변화: 없음. 실기·현장 수용은 그대로 열려 있다.
+
+## 2026-09-30 · uncommitted · feat(overhead): D-354 경기장 모서리 제안과 field-proposal 경로
+
+- 변경: `overhead/field_detect.py` 추가 — 흰 영역 마스크 → 가장 큰 볼록 윤곽 → `approxPolyDP` 네 점 → 볼록성·면적·모서리 각·가로세로 비 검사 → 외곽선 직선 맞춤으로 서브픽셀 정밀화. 경기장이 없거나 프레임 밖으로 나가면 제안하지 않는다. `ingest.py`에 `GET /api/vision/sources/{id}/field-proposal`(frame과 같은 lease·`no-store`·`nosniff`·freshness, 제안 전용 초당 1회 칸, seq별 캐시). `_http_response`에 없던 422 사유 문구를 넣었다(기존 보정 실패 경로도 KeyError로 죽을 수 있었다).
+- 증거: `python -m pytest src/site/overhead/test -q` 107 passed(합성 이미지만). 저장된 실제 프레임 6장(1280×720, `private/`)은 모두 "field runs past the frame"로 제안 없음 — 경기장 오른쪽이 프레임 밖이다. 프레임당 검출 중앙값 24–27 ms, 디코드 포함 28–38 ms(Windows, 이 PC).
+- gate 변화: 없음. SOURCE/LOCAL만. DEVICE(설치 폰 실시간)·FIELD(실측 치수 대조) 미실행.
+
+## 2026-09-30 · uncommitted · fix(overhead): D-354 제안 검출을 이벤트 루프 밖에서, 소스당 초당 1회
+
+- 변경: `process_request`를 코루틴으로 바꿔(websockets 17.0.1) 경기장 검출을 `asyncio.to_thread`에서 돌린다. 검출은 lease 주체와 상관없이 소스당 1초에 한 번만 돌고, 그 사이 요청은 직전 결과(그 프레임의 seq·age)를 받으며 첫 검출이 도는 중이면 429다. 캐시는 seq 대신 프레임 객체로 가리고(재접속하면 seq가 다시 시작한다) 소스가 빠지거나 교체되면 지운다.
+- 증거: `python -m pytest src/site/overhead/test -q` 111 passed(검출 스레드·소스 공유 예산·프레임 동일성·소스 제거 시험 추가).
+- gate 변화: 없음. SOURCE/LOCAL만.
+
+## 2026-09-30 · uncommitted · docs: 경기장 자동 검출 ADR 번호 D-354 → D-360
+
+- 변경: main에 다른 D-354(mDNS 서비스 발견)가 먼저 착지해, main 병합 때 경기장 자동 검출 제안 ADR을 D-360으로 옮겼다. 코드 주석·시험·API Ref의 D-354 표기를 D-360으로 바꿨고 ADR 본문에 까닭을 적었다. 이 항목보다 앞선 로그의 "D-354"(경기장 제안)는 D-360을 가리킨다(로그는 고치지 않는다).
+- 증거: 병합 커밋의 overhead·Fleet·node 실행.
+- gate 변화: 없음.

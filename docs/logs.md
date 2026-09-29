@@ -3682,3 +3682,11 @@
 - gate 변화: 없음 (기록 갱신만).
 - 결정: web_common(임시 디렉터리 스크립트 cmd)·dashboard(브라우저 매트릭스)·overhead(android gradle·docker)·gz_sim(ROS 의존 skip)·deploy(전체 test/ 실행 중)은 이 호스트에서 완전 검증이 불가해 스윕에서 제외 — 정직한 기록만 남긴다.
 - 교훈: web_common의 LOCAL cmd가 X:\DevTemp 스크립트를 가리킨다 — 재현 불가한 cmd는 검증 기록이 아니므로 소유자가 저장소 내 명령으로 바꿔야 한다.
+
+## 2026-09-30 · uncommitted · docs(adr): D-354 천장 카메라 경기장 자동 검출 제안 (Proposed)
+
+- 변경: `docs/adr/D-354-overhead-field-auto-detection-proposal.md` 추가, ADR Log·progress `adrs` 목록 등록. 검출은 Vision에서만, `GET /api/vision/sources/{id}/field-proposal`은 frame 경로와 같은 lease·헤더, 제안은 운용자 수락 전 적용 안 함, 설정 W×H 불일치 안내, 브라우저 로컬 W×H 입력, 레이어 토글.
+- 증거: 문서만. 번호 확인 — 로컬 브랜치 전체와 `.worktrees/*/docs/adr`에서 D-341·D-345..D-353 사용 중(D-353은 `feat/pilot-teleop`), D-354 비어 있음.
+- gate 변화: 없음.
+- 결정: D-354 Proposed.
+- 교훈: 없음

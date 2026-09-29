@@ -7,7 +7,6 @@ adr_log: docs/reference/ROSY ADR Log.md
 
 # IDs absent from the ADR log on purpose. Remove an entry once the ADR is written.
 adr_gaps:
-  D-360: "reserved by branch feat/console-field-autodetect (overhead field auto-detection proposal, renumbered from D-354 after main landed another D-354); remove when its ADR lands"
   D-356: "reserved by branch feat/perception-learning-loop (perception model delivery); remove when its ADR lands"
   D-341: "reserved by branch docs/d341-overhead-console-pairing (overhead console-approved pairing, also on feat/pilot-teleop); remove once it lands"
   D-342: "reserved by the uncommitted Pilot draft in .worktrees/pilot-teleop (manual-limit commissioning ladder); remove once it lands"

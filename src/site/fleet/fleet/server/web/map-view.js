@@ -14,6 +14,8 @@ export function createMapView({ el, view, css, auth, call, onMapChanged, onMapUn
   const GRID = { UNKNOWN: -1, FREE_MAX: 25, OCCUPIED_MIN: 65 };
   // Map tracking visualization only; relay evidence comes from the Fleet server.
   const TRACK_WARN_M = 0.3;     // 기본 간격(0.6 m)의 절반을 넘으면 주의 색을 쓴다.
+  // D-360 레이어 토글(field-view.js 가 view.layers 를 채운다). 값이 없으면 모두 켠다.
+  const layerOn = (key) => view.layers?.[key] !== false;
 
   function paintGrid(grid) {
     const canvas = el("map-canvas");
@@ -301,11 +303,12 @@ export function createMapView({ el, view, css, auth, call, onMapChanged, onMapUn
     ctx.lineWidth = 0.5;
     ctx.setLineDash([2, 1.5]);
     ctx.strokeStyle = css("--series-primary");
-    for (const entry of sitePolygons()) {
+    for (const entry of layerOn("site") ? sitePolygons() : []) {
       tracePolygon(ctx, entry.polygon_m, toCell);
       ctx.stroke();
     }
     ctx.restore();
+    if (!layerOn("sightings")) return;
     for (const s of view.sightings) drawSighting(ctx, s, toCell, size, 0.5);
   }
 
@@ -336,12 +339,12 @@ export function createMapView({ el, view, css, auth, call, onMapChanged, onMapUn
     ctx.lineWidth = 1;
     ctx.strokeStyle = css("--muted-line");
     ctx.globalAlpha = 0.5;
-    for (const gx of gridLines(bounds.min_x, bounds.max_x, GRID_STEP_M)) {
+    for (const gx of layerOn("grid") ? gridLines(bounds.min_x, bounds.max_x, GRID_STEP_M) : []) {
       const a = toPx(gx, bounds.min_y);
       const b = toPx(gx, bounds.max_y);
       ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
     }
-    for (const gy of gridLines(bounds.min_y, bounds.max_y, GRID_STEP_M)) {
+    for (const gy of layerOn("grid") ? gridLines(bounds.min_y, bounds.max_y, GRID_STEP_M) : []) {
       const a = toPx(bounds.min_x, gy);
       const b = toPx(bounds.max_x, gy);
       ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
@@ -351,7 +354,7 @@ export function createMapView({ el, view, css, auth, call, onMapChanged, onMapUn
     // 사각형 + 치수 + 출처(source_id)
     ctx.save();
     ctx.font = font;
-    for (const entry of sitePolygons()) {
+    for (const entry of layerOn("site") ? sitePolygons() : []) {
       tracePolygon(ctx, entry.polygon_m, toPx);
       ctx.globalAlpha = 0.08;
       ctx.fillStyle = css("--series-primary");
@@ -410,6 +413,7 @@ export function createMapView({ el, view, css, auth, call, onMapChanged, onMapUn
     }
     ctx.restore();
 
+    if (!layerOn("sightings")) return;
     for (const s of view.sightings) drawSighting(ctx, s, toPx, Math.max(7, t.scale * 0.09), 1.5);
   }
 
@@ -445,7 +449,7 @@ export function createMapView({ el, view, css, auth, call, onMapChanged, onMapUn
     ctx.lineWidth = 0.6;
     view.robots.forEach((robot, index) => {
       const pose = robot.state && robot.state.pose;
-      if (!pose) return;
+      if (!pose || !layerOn("poses")) return;
       const color = view.colors[index % view.colors.length];
       const cell = worldToCell(grid, pose.x, pose.y);
       const cx = cell.col;
@@ -502,9 +506,13 @@ export function createMapView({ el, view, css, auth, call, onMapChanged, onMapUn
   async function refreshSiteMap() {
     try {
       view.siteMap = await call("/api/fleet/site-map");
+      el("map-stage").dataset.siteMap = "configured";
     } catch (err) {
       // NO_SITE_MAP — 카메라 사각형이 설정되지 않은 현장이다. 일시 실패면 직전 사각형을 둔다.
-      if (err.status === 404 && err.code === "NO_SITE_MAP") view.siteMap = null;
+      if (err.status === 404 && err.code === "NO_SITE_MAP") {
+        view.siteMap = null;
+        el("map-stage").dataset.siteMap = "none";
+      }
     }
   }
 
