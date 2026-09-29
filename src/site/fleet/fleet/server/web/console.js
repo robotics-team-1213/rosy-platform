@@ -339,6 +339,7 @@ async function refreshAuthorization() {
       identity.role === "viewer" ? "조회 전용" :
         identity.role === "policy-admin" ? "정책 관리자" : "권한 없음";
     el("user-role").textContent = `${identity.principal_id} · ${roleName}`;
+    el("user-role").title = el("user-role").textContent; // 넓은 머리에서 12rem으로 잘릴 때의 전문
     el("user-role").setAttribute("status", identity.role === "operator" ? "good" : "neutral");
     await refreshState();
     await refreshDispatchControl();

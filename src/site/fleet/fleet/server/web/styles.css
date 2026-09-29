@@ -59,13 +59,15 @@ body {
 .theme-choice { display: flex; align-items: center; gap: var(--space-1); }
 #theme-choice-label { white-space: nowrap; }
 
-/* D-359 §6.4 — 넓은 창(80rem 이상): 접힘 칸은 상자가 없고(display: contents) 항목이 머리 줄에
+/* D-359 §6.4 — 넓은 창(90rem 이상): 접힘 칸은 상자가 없고(display: contents) 항목이 머리 줄에
    선다. 줄이 모자라면 항목이 다음 줄로 내려가고 글자가 접히지 않는다. */
 #topbar-more { display: none; }
 .topbar-extra { display: contents; }
-@media (width >= 80rem) {
+@media (width >= 90rem) {
   ui-topbar { flex-wrap: wrap; row-gap: var(--space-2); }
-}
+  /* 긴 주체 이름이 머리 줄을 넘치게 하지 않도록 역할 표지는 12rem에서 자른다(전문은 title). */
+  #user-role { max-width: 12rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+}}
 
 .dispatch-control {
   display: flex;
@@ -335,10 +337,10 @@ main {
 }
 
 /* 머리 한 줄: 이름 | 연결 | 시계 | 설정 | 정지. 접속·역할·테마는 설정 뒤에 접힌다.
-   80rem은 surfaces.yaml fleet-console breakpoints에 적힌 값이다 — 모든 항목을 편 머리의
-   자연 폭(약 1220px)이 1024–1279px 창에 들어가지 않아, 그 폭에서 비상 정지가 둘째 줄로
-   밀려나지 않도록 접는다. */
-@media (width < 80rem) {
+   90rem은 surfaces.yaml fleet-console breakpoints에 적힌 값이다 — 모든 항목을 편 머리의
+   자연 폭(약 1220–1300px, 주체 이름에 따라)이 1440px 미만 창에서 한 줄에 들지 않아,
+   비상 정지가 둘째 줄로 밀리거나 이름표가 두 줄로 접히지 않도록 접는다. */
+@media (width < 90rem) {
   ui-topbar {
     display: grid;
     grid-template-columns: auto minmax(0, 1fr) auto auto auto;

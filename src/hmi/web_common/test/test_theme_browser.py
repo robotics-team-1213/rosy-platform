@@ -153,6 +153,10 @@ def test_the_fleet_topbar_selector_switches_the_theme_live(browser):
     page = _open(browser, "/console")
     page.wait_for_function("customElements.get('ui-button') !== undefined")
     assert page.locator('[data-theme-choice="dark"]').get_attribute("aria-pressed") == "true"
+    # D-359 §6.4 — 1366px(90rem 미만)에서 테마 선택은 머리의 '설정' 뒤에 접힌다. 이 고정물은
+    # 세션이 없어 잠기므로(토큰 칸이 저절로 열린다) 닫혀 있을 때만 연다.
+    if page.locator("#theme-choice").is_hidden():
+        page.get_by_role("button", name="설정", exact=True).click()
     page.locator("#theme-choice").get_by_text("밝게", exact=True).click()
     page.wait_for_function("document.documentElement.dataset.theme === 'light'")
     state = _state(page)

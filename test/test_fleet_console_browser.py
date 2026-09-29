@@ -1220,8 +1220,6 @@ def test_mobile_console_has_no_horizontal_overflow(console_url, width):
           status: document.querySelector('#online-pill').getBoundingClientRect().toJSON(),
           operator: document.querySelector('#user-role').getBoundingClientRect().toJSON(),
           clock: document.querySelector('#clock').getBoundingClientRect().toJSON(),
-          statusRow: getComputedStyle(document.querySelector('#online-pill')).gridRowStart,
-          clockRow: getComputedStyle(document.querySelector('#clock')).gridRowStart,
           stopScopeHidden: getComputedStyle(document.querySelector('#estop small')).display === 'none',
           stopAccessibleName: document.querySelector('#estop').getAttribute('aria-label'),
         })""")
@@ -1234,9 +1232,89 @@ def test_mobile_console_has_no_horizontal_overflow(console_url, width):
     assert layout["headerRows"] <= 4, layout
     assert layout["headerOverlaps"] == [], layout
     if width <= 384:
-        assert layout["statusRow"] == layout["clockRow"] == "1", layout
+        # D-359 §6.4 — compact 머리는 두 줄이다(이름·설정 / 연결·시계, 정지는 두 줄에 걸친다).
+        # 연결 표지와 시계는 여전히 한 줄을 나눠 쓴다 — 격자 이름 대신 상자로 비교한다.
+        status, clock = layout["status"], layout["clock"]
+        assert min(status["bottom"], clock["bottom"]) - max(status["top"], clock["top"]) > 1, layout
         assert layout["stopScopeHidden"], layout
         assert layout["stopAccessibleName"] == "전체 로봇 정지", layout
+
+
+# --- D-359 §6.4: 세로 예산 — 붙박이 머리 ≤ 창 높이 20%, 비상 정지는 첫 화면에 ---------
+
+@pytest.mark.parametrize("width,height", [(390, 844), (320, 568)])
+def test_compact_header_budget_keeps_the_stop_in_view(console_url, width, height):
+    """접속·역할·테마는 '설정' 뒤에 접히고, 펼치면 보인다. 머리는 창 높이의 20% 이하다.
+
+    변이 증명: components.css `ui-topbar`에 `min-height: 300px`을 넣으면 빨갛다."""
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as playwright:
+        browser, page, errors = _open_console(playwright, API)
+        page.set_viewport_size({"width": width, "height": height})
+        page.goto(console_url, wait_until="networkidle")
+        probe = """() => {
+          const box = (s) => document.querySelector(s).getBoundingClientRect().toJSON();
+          const shown = (s) => { const n = document.querySelector(s); return !!n && n.getClientRects().length > 0; };
+          return {overflow: document.documentElement.scrollWidth - innerWidth,
+            topbar: box('ui-topbar'), sticky: getComputedStyle(document.querySelector('ui-topbar')).position,
+            stop: box('#estop'), more: box('#topbar-more'),
+            expanded: document.querySelector('#topbar-more').getAttribute('aria-expanded'),
+            token: shown('#console-token'), theme: shown('#theme-choice'), role: shown('#user-role'),
+            status: shown('#online-pill'), clock: shown('#clock')};
+        }"""
+        folded = page.evaluate(probe)
+        page.get_by_role("button", name="설정", exact=True).click()
+        opened = page.evaluate(probe)
+        page.get_by_role("button", name="설정", exact=True).click()
+        page.evaluate("window.scrollTo(0, document.documentElement.scrollHeight)")
+        scrolled = page.evaluate(probe)
+        save_temp_screenshot(page, f"fleet_header_budget_{width}.png")
+        browser.close()
+
+    assert errors == []
+    assert folded["overflow"] <= 0, folded
+    assert folded["topbar"]["height"] <= 0.2 * height, folded
+    assert folded["sticky"] == "sticky", folded
+    stop = folded["stop"]
+    assert stop["top"] >= 0 and stop["left"] >= 0 and stop["bottom"] <= height and stop["right"] <= width, folded
+    assert folded["expanded"] == "false" and not folded["token"] and not folded["theme"] and not folded["role"], folded
+    assert folded["status"] and folded["clock"], folded
+    assert opened["expanded"] == "true" and opened["token"] and opened["theme"] and opened["role"], opened
+    assert opened["overflow"] <= 0, opened
+    assert scrolled["expanded"] == "false", scrolled
+    assert 0 <= scrolled["stop"]["top"] and scrolled["stop"]["bottom"] <= height, scrolled
+
+
+def test_wide_header_keeps_every_item_on_one_line(console_url):
+    """1920px은 모든 항목을 편 한 줄, 1366·1280px(90rem 미만)은 '설정'으로 접힌 한 줄이다.
+    어느 쪽이든 머리는 한 줄이고 비상 정지는 오른쪽 위이며 테마 이름표는 두 줄로 접히지 않는다."""
+    from playwright.sync_api import sync_playwright
+
+    results = {}
+    with sync_playwright() as playwright:
+        browser, page, errors = _open_console(playwright, API)
+        for width, height in ((1920, 1080), (1366, 768), (1280, 800)):
+            page.set_viewport_size({"width": width, "height": height})
+            page.goto(console_url, wait_until="networkidle")
+            results[width] = page.evaluate("""() => {
+              const label = document.querySelector('#theme-choice-label');
+              const line = parseFloat(getComputedStyle(label).lineHeight) || 20;
+              const more = document.querySelector('#topbar-more');
+              return {labelLines: label.getClientRects().length ? Math.round(label.getBoundingClientRect().height / line) : 0,
+                moreShown: more.getClientRects().length > 0,
+                topbar: document.querySelector('ui-topbar').getBoundingClientRect().height,
+                stop: document.querySelector('#estop').getBoundingClientRect().toJSON()};
+            }""")
+        browser.close()
+
+    assert errors == []
+    assert results[1920]["labelLines"] == 1 and not results[1920]["moreShown"], results
+    for width in (1366, 1280):
+        assert results[width]["moreShown"] and results[width]["labelLines"] == 0, results
+    for width, result in results.items():
+        assert result["topbar"] <= 100, results
+        assert result["stop"]["top"] <= 30 and width - result["stop"]["right"] <= 32, results
 
 
 # --- D-202: 위험은 채움이다 — 따뜻한 글자는 4.5:1 이상이어야 읽힌다 ----------

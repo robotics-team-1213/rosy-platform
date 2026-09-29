@@ -45,8 +45,8 @@ surfaces:
     grammar: exception
     contracts: [shared_controls, typography_focus, dialog]
     breakpoints:
-      - value: 80rem
-        reason: 토큰·역할·테마·두 줄 비상 정지를 모두 편 머리의 자연 폭(약 1220px)이 1024–1279px에 들어가지 않는다 — 그 폭에서 비상 정지가 둘째 줄로 밀리지 않게 머리를 접는다
+      - value: 90rem
+        reason: 토큰·역할·테마·두 줄 비상 정지를 모두 편 머리의 자연 폭(약 1220–1300px)이 1440px 미만에 한 줄로 들지 않는다 — 비상 정지가 둘째 줄로 밀리거나 테마 이름표가 접히지 않게 그 아래에서 머리를 접는다
     baseline: docs/validation/uiux-surfaces-2026-09-26/captures/fleet-normal-1920x1080.png
 
   - id: game-board
