@@ -1,19 +1,22 @@
 # 로봇 신호 소스 통합 실행 계획 — T1~T5
 
-- **Status:** 계획 (설계 승인 직후, 미착수)
+- **Status:** T1 완료 (2026-09-29, 호스트 시험 383+74 passed) — T2~T5 대기
 - **Date:** 2026-09-29
 - **Design:** `docs/plans/2026-09-29-robot-signal-source-integration-design.md` (ADR D-337)
 
 각 작업은 독립 커밋이고 뒤 작업은 앞 작업의 시험 위에 선다. 모든 순수 로직은
 ROS import 없이(Windows 호스트 pytest 가능), 전송은 가짜 클라이언트로 검증한다.
 
-## T1 — 융합 순수 로직 (`core_features.traffic_policy`)
+## T1 — 융합 순수 로직 (`core_features.traffic_policy`) ✅
 
 - `SignalHeadEvidence` dataclass(설계 §2) — 커플링 검증 포함
 - `TrafficPolicyManager.observe_signal()` 채널과 §3 융합 표 전 행:
   합의 / 불일치(`signal_source_conflict`) / 관측 단독 / 소등(`signal_dark`) /
   stale·frozen·pending 무시 / `stop_and_go`에서 관측 신호도 `signal_unexpected`
 - 시험: `src/runtime/gateway/test/test_traffic_policy.py` 확장 (호스트)
+- 착지(2026-09-29): `observe_signal`은 `observe`와 같은 나이 보정·증거 리비전
+  증가를 가지며, reset·apply_staged가 신호 증거도 지운다. 부정(0·2개 이상 점등)
+  헤드는 카메라 색이 있을 땐 무주장(무시), 카메라 색이 없을 땐 `signal_dark`.
 
 ## T2 — 관측 폴러 전송
 

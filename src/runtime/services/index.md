@@ -34,8 +34,8 @@
 
 ## 최근 기록
 
+- 2026-09-29 · uncommitted · feat(traffic): D-337 T1 — measured-light signal head fusion
 - 2026-09-29 · uncommitted · feat(traffic): unsignalized junction rule `stop_and_go`
 - 2026-09-28 · uncommitted · verify canceled navigation result isolation
 - 2026-09-28 · uncommitted · fix(core): scope task correlation to Nav2 goal generation
 - 2026-09-28 · uncommitted · publish late canceled-attempt result safely
-- 2026-09-28 · uncommitted · echo navigation correlation on CORE result events

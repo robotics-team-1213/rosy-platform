@@ -3396,6 +3396,7 @@
 - 변경: `junction_rule` 커밋(d79d2096)이 남긴 B 갈래(ESP32 연동)의 경계를 ADR D-337로 못 박고 설계·실행 계획을 냈다. 결정: 로봇의 제2 신호 소스는 관측 서비스 `GET /observed`(실측)뿐 — ESP32 `/status`(접점 주장)의 직접 소비 금지(2≠3 교차 검증 철학 준수), 로봇→신호등 명령 경로 부재 유지, 융합은 fail-closed(불일치 `signal_source_conflict` HOLD, 소등은 `signal_dark`로 진입 불허, 관측은 진입을 단독 허가하지 않고 카메라와 함께 쓰인다). 무신호 `stop_and_go`에서는 어떤 소스의 신호 관측이든 `signal_unexpected`. 신규 문서: `docs/plans/2026-09-29-robot-signal-source-integration-design.md` + 실행 계획 `-integration.md`(T1 순수 융합 → T5 실물 벤치).
 - 증거: 문서 회차 — 코드 무변경. 관측 서버 인터페이스(`/observed` lamps·confidence·stable·frozen·age)는 `firmware/signal/observer/observer.py`·D-163 설계에서 그대로 인용했고, ROSY-SIGNAL-001의 "신호등 보고를 안전 근거로 삼지 않는다" 조항과 D-163 §4의 "훗날 로봇이 이 관측 API로 판단한다" 단서의 충돌을 D-337이 정리한다. ADR 표 D-336 뒤 D-337 추가.
 - gate 변화: 없음. 구현(T1~)은 별도 회차, 미설정 사이트는 동작 무변경이 완료 기준이다.
+
 ## 2026-09-29 · uncommitted · docs(adr): D-337 브리지 콜백 판정·적응 분리 기록
 
 - 변경: 24b6d4bb(2026-09-24)로 착지한 ros_bridge 콜백 분리를 ADR로 소급 기록했다 — 판정(파싱·검증·승인/거부·라우팅)은 ROS-free 시블리(bridge/observation.py 판정 함수군 + 기존 시블리 확장 reconcile.led·display.republish_due·goal_tracker.on_response/on_result·save_map.await_call)가 소유하고 브리지는 노드 시계·발행·서비스 호출만 남는다. 행수(757-590)는 결과이지 분리 사유가 아님을 명시. docs/adr/D-337-bridge-callback-decide-act-split.md 신설 + ADR Log 행 추가.
@@ -3403,6 +3404,7 @@
 - gate 변화: 없음. 첫 게이트 호출의 실패 6건은 병행 트랙 잔여(protocol 버전 정합·SIZE_VERDICTS 2건·io closure·line_follow 문서·sd writer)이며 이 변경과 무관.
 - 결정: 구현은 이미 main에 있고 이 회차는 기록 보존이다. D 번호는 저널의 다음 빈 번호 표기(D-337·D-338)를 따랐다.
 - 교훈: ADR Log 마지막 행(D-336)이 리터럴 ? 문자로 깨진 채 커밋되어 있다. 신규 행은 UTF-8로 기록했고, 손상 행 복구는 append-only 원칙 때문에 별도 합의가 필요하다.
+
 ## 2026-09-29 · uncommitted · docs(adr): 브리지 분리 ADR을 D-338로 재부여
 
 - 변경: 병행 세션의 f6416e4d가 이 회차의 working tree(ADR Log 행·저널 항목)를 함께 커밋하면서 표에 같은 번호 D-337이 두 개 생겼다. 신호 소스 ADR(커밋 의도가 D-337)을 유지하고 브리지 판정·적응 분리 행을 D-338로 재부여했다. 상세문서는 docs/adr/D-338-bridge-callback-decide-act-split.md(번호·파일명 갱신). 바로 앞 항목의 D-337 표기·본문은 커밋된 원문 그대로 두고(append-only) 이 항목으로 정정한다.

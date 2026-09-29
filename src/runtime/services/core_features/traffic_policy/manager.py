@@ -85,6 +85,52 @@ class RoadEvidence:
 
 
 @dataclass(frozen=True)
+class SignalHeadEvidence:
+    """Measured-light signal evidence from the read-only observer service.
+
+    D-337: the robot's second signal source is the observed light only —
+    never the ESP32 contact claim (`/status`). `red`/`yellow`/`green` are
+    the operator-mapped lamp booleans; exactly one lit lamp is a colour,
+    zero or plural is indeterminate (a dark head never licenses entry).
+    """
+
+    stamp: float
+    map_id: str
+    scene_revision: str
+    red: bool = False
+    yellow: bool = False
+    green: bool = False
+    confidence: float = 0.0
+    frozen: bool = False
+    stable: bool = True
+
+    def __post_init__(self) -> None:
+        if not _finite(self.stamp):
+            raise ValueError("signal head evidence stamp must be finite")
+        if not self.map_id or not self.scene_revision:
+            raise ValueError(
+                "signal head evidence map and scene are required")
+        if not _finite(self.confidence) \
+                or not 0.0 <= float(self.confidence) <= 1.0:
+            raise ValueError(
+                "signal head confidence must be in [0, 1]")
+
+    @property
+    def colour(self) -> Optional[str]:
+        """Single lit lamp colour; zero or plural lit lamps is no claim."""
+        lit = [
+            colour
+            for colour, on in (
+                ("RED", self.red),
+                ("YELLOW", self.yellow),
+                ("GREEN", self.green),
+            )
+            if on
+        ]
+        return lit[0] if len(lit) == 1 else None
+
+
+@dataclass(frozen=True)
 class TrafficPolicyConfig:
     mode: TrafficPolicyMode = TrafficPolicyMode.DISABLED
     map_id: str = ""
@@ -159,6 +205,8 @@ class TrafficPolicyManager:
         self._evidence_revision = 0
         self._observation: Optional[RoadEvidence] = None
         self._received_at: Optional[float] = None
+        self._signal_observation: Optional[SignalHeadEvidence] = None
+        self._signal_received_at: Optional[float] = None
         self._stopped_at: Optional[float] = None
         self._staged_config: Optional[TrafficPolicyConfig] = None
         self._simulation_signal_control = bool(simulation_signal_control)
@@ -268,6 +316,8 @@ class TrafficPolicyManager:
             self._staged_config = None
             self._observation = None
             self._received_at = None
+            self._signal_observation = None
+            self._signal_received_at = None
             self._stopped_at = None
             self._generation += 1
             self._evidence_revision += 1
@@ -325,10 +375,33 @@ class TrafficPolicyManager:
             if not observation.stop_line_visible:
                 self._stopped_at = None
 
+    def observe_signal(self, observation: SignalHeadEvidence,
+                       received_at: Optional[float] = None,
+                       source_now: Optional[float] = None) -> None:
+        """Ingest measured-light evidence (D-337 §2). Fails closed on form."""
+        now = self._clock() if received_at is None else received_at
+        if not _finite(now):
+            raise ValueError("received_at must be finite")
+        effective_received_at = float(now)
+        if source_now is not None:
+            if not _finite(source_now):
+                raise ValueError("source_now must be finite")
+            source_age = float(source_now) - observation.stamp
+            if source_age < -0.1:
+                raise ValueError(
+                    "signal head evidence timestamp is in the future")
+            effective_received_at -= max(0.0, source_age)
+        with self._lock:
+            self._signal_observation = observation
+            self._signal_received_at = effective_received_at
+            self._evidence_revision += 1
+
     def reset(self, reason: str = "reset") -> TrafficPolicyStatus:
         with self._lock:
             self._observation = None
             self._received_at = None
+            self._signal_observation = None
+            self._signal_received_at = None
             self._stopped_at = None
             self._generation += 1
             self._evidence_revision += 1
@@ -430,31 +503,82 @@ class TrafficPolicyManager:
             return "STOP_REQUIRED", "stop_dwell", age, 0.0
         if now - self._stopped_at < self._config.stop_dwell_s:
             return "STOP_REQUIRED", "stop_dwell", age, 0.0
+        head = self._usable_signal_head(now)
         if self._config.junction_rule == "stop_and_go":
             # Unsignalized junction (operator declaration, never inferred
-            # from camera absence). Any observed signal — including a weak
-            # false positive — contradicts the declaration and holds.
-            if observation.signal_colour is None:
+            # from camera absence). Any observed signal — from either
+            # source, weak false positives and dark heads included —
+            # contradicts the declaration and holds.
+            if observation.signal_colour is None and head is None:
                 return (
                     "PROCEED", "unsignalized_proceed", age,
                     self._config.proceed_speed_scale,
                 )
             return "HOLD", "signal_unexpected", age, 0.0
-        if observation.signal_colour is None:
+        colour = observation.signal_colour
+        if head is not None and head.colour is not None:
+            if colour is None:
+                # Observer-only confirmed colour (D-337 §3): the camera
+                # never saw a signal, the measured light did.
+                if head.confidence < self._config.min_confidence:
+                    return (
+                        "WAIT_SIGNAL", "signal_low_confidence", age, 0.0)
+                if head.colour == "GREEN":
+                    return (
+                        "PROCEED", "signal_green", age,
+                        self._config.proceed_speed_scale,
+                    )
+                return (
+                    "WAIT_SIGNAL",
+                    f"signal_{head.colour.lower()}",
+                    age,
+                    0.0,
+                )
+            if head.colour != colour:
+                return "HOLD", "signal_source_conflict", age, 0.0
+        if colour is None:
+            if head is not None:
+                # A usable head with no single colour claim (dark or
+                # plural lamps) is indeterminate — never "no signal".
+                return "WAIT_SIGNAL", "signal_dark", age, 0.0
             return "WAIT_SIGNAL", "signal_unknown", age, 0.0
-        if observation.signal_confidence < self._config.min_confidence:
+        confidence = observation.signal_confidence
+        if head is not None and head.colour == colour:
+            confidence = min(confidence, head.confidence)
+        if confidence < self._config.min_confidence:
             return "WAIT_SIGNAL", "signal_low_confidence", age, 0.0
-        if observation.signal_colour == "GREEN":
+        if colour == "GREEN":
             return (
                 "PROCEED", "signal_green", age,
                 self._config.proceed_speed_scale,
             )
         return (
             "WAIT_SIGNAL",
-            f"signal_{observation.signal_colour.lower()}",
+            f"signal_{colour.lower()}",
             age,
             0.0,
         )
+
+    def _usable_signal_head(
+            self, now: float) -> Optional[SignalHeadEvidence]:
+        """Fresh, stable, unfrozen, scene-bound measured light — or None.
+
+        An unusable head is silence, not evidence: the verdict falls back
+        to the camera alone, which is never less safe than the camera-only
+        build. Staleness shares the camera's `stale_after_s` budget.
+        """
+        head = self._signal_observation
+        if head is None or self._signal_received_at is None:
+            return None
+        age = now - self._signal_received_at
+        if age < 0.0 or age > self._config.stale_after_s:
+            return None
+        if head.frozen or not head.stable:
+            return None
+        if head.map_id != self._config.map_id \
+                or head.scene_revision != self._config.scene_revision:
+            return None
+        return head
 
     def _set_status(self, state: str, reason: str,
                     age: Optional[float], scale: float) -> None:

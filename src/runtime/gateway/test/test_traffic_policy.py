@@ -5,6 +5,7 @@ import pytest
 from core_events.events.bus import EventBus
 from core_features.traffic_policy import (
     RoadEvidence,
+    SignalHeadEvidence,
     TrafficPolicyConfig,
     TrafficPolicyManager,
     TrafficPolicyMode,
@@ -59,6 +60,20 @@ def evidence(*, stamp=10.0, map_id="map_260905_update_v2",
 
 def observe(manager, now, sample):
     manager.observe(sample, received_at=now[0], source_now=sample.stamp)
+
+
+def head(*, stamp=10.0, map_id="map_260905_update_v2",
+         scene_revision="road-scene-v1", red=False, yellow=False,
+         green=False, confidence=0.9, frozen=False, stable=True):
+    return SignalHeadEvidence(
+        stamp=stamp, map_id=map_id, scene_revision=scene_revision,
+        red=red, yellow=yellow, green=green, confidence=confidence,
+        frozen=frozen, stable=stable)
+
+
+def observe_signal(manager, now, sample):
+    manager.observe_signal(
+        sample, received_at=now[0], source_now=sample.stamp)
 
 
 def test_disabled_policy_preserves_candidate_without_evidence():
@@ -241,6 +256,175 @@ def test_junction_rule_is_validated_and_staged(rig):
     manager.apply_staged(actor="operator:test")
 
     assert manager.status().junction_rule == "stop_and_go"
+
+
+def _dwell_at_stop_line(now, manager, road, light=None):
+    """Reach a dwell-complete stop with fresh evidence on both channels."""
+    observe(manager, now, road)
+    if light is not None:
+        observe_signal(manager, now, light)
+    manager.gate(0.06, 0.0)
+    now[0] += 0.51
+    observe(manager, now, road)
+    if light is not None:
+        observe_signal(manager, now, light)
+
+
+@pytest.mark.parametrize("lamps,reason", [
+    ({"green": True}, "signal_green"),
+    ({"red": True}, "signal_red"),
+])
+def test_observer_colour_alone_drives_verdict_after_stop(rig, lamps, reason):
+    now, manager = rig
+    road = evidence(
+        stop_visible=True, stop_distance_m=0.08, stop_confidence=0.9)
+    light = head(**lamps)
+    _dwell_at_stop_line(now, manager, road, light)
+
+    decision = manager.gate(0.06, 0.0)
+
+    expected = 0.06 * 0.5 if reason == "signal_green" else 0.0
+    assert decision.linear == pytest.approx(expected)
+    assert manager.status().state == (
+        "PROCEED" if reason == "signal_green" else "WAIT_SIGNAL")
+    assert manager.status().reason == reason
+
+
+@pytest.mark.parametrize("lamps", [{}, {"red": True, "green": True}])
+def test_indeterminate_head_is_signal_dark_not_signal_unknown(rig, lamps):
+    now, manager = rig
+    road = evidence(
+        stop_visible=True, stop_distance_m=0.08, stop_confidence=0.9)
+    light = head(**lamps)
+    _dwell_at_stop_line(now, manager, road, light)
+
+    assert manager.gate(0.06, 0.0).linear == 0.0
+    assert manager.status().state == "WAIT_SIGNAL"
+    assert manager.status().reason == "signal_dark"
+
+
+def test_observer_disagreement_with_camera_holds(rig):
+    now, manager = rig
+    road = evidence(
+        stop_visible=True, stop_distance_m=0.08, stop_confidence=0.9,
+        signal_colour="GREEN", signal_confidence=0.9)
+    light = head(red=True)
+    _dwell_at_stop_line(now, manager, road, light)
+
+    assert manager.gate(0.06, 0.0).linear == 0.0
+    assert manager.status().state == "HOLD"
+    assert manager.status().reason == "signal_source_conflict"
+
+
+@pytest.mark.parametrize("head_confidence,expected", [
+    (0.3, "WAIT_SIGNAL"),
+    (0.8, "PROCEED"),
+])
+def test_agreement_blends_confidence_with_camera(rig, head_confidence,
+                                                 expected):
+    now, manager = rig
+    road = evidence(
+        stop_visible=True, stop_distance_m=0.08, stop_confidence=0.9,
+        signal_colour="GREEN", signal_confidence=0.9)
+    light = head(green=True, confidence=head_confidence)
+    _dwell_at_stop_line(now, manager, road, light)
+
+    decision = manager.gate(0.06, 0.0)
+
+    assert manager.status().state == expected
+    if expected == "PROCEED":
+        assert decision.linear == pytest.approx(0.06 * 0.5)
+    else:
+        assert manager.status().reason == "signal_low_confidence"
+
+
+def test_stale_head_falls_back_to_camera_alone(rig):
+    now, manager = rig
+    observe_signal(manager, now, head(green=True))
+    now[0] += 0.41
+    road = evidence(
+        stop_visible=True, stop_distance_m=0.08, stop_confidence=0.9,
+        signal_colour="RED", signal_confidence=0.9)
+    observe(manager, now, road)
+    manager.gate(0.06, 0.0)
+    now[0] += 0.51
+    observe(manager, now, road)
+
+    assert manager.gate(0.06, 0.0).linear == 0.0
+    assert manager.status().state == "WAIT_SIGNAL"
+    assert manager.status().reason == "signal_red"
+
+
+@pytest.mark.parametrize("light", [
+    head(frozen=True),
+    head(stable=False),
+    head(scene_revision="wrong-scene"),
+])
+def test_unusable_head_is_silence(rig, light):
+    now, manager = rig
+    road = evidence(
+        stop_visible=True, stop_distance_m=0.08, stop_confidence=0.9)
+    _dwell_at_stop_line(now, manager, road, light)
+
+    assert manager.gate(0.06, 0.0).linear == 0.0
+    assert manager.status().state == "WAIT_SIGNAL"
+    assert manager.status().reason == "signal_unknown"
+
+
+@pytest.mark.parametrize("lamps", [{"green": True}, {}])
+def test_stop_and_go_holds_on_any_usable_head_evidence(lamps):
+    now, manager = stop_and_go_rig()
+    road = evidence(
+        stop_visible=True, stop_distance_m=0.08, stop_confidence=0.9)
+    light = head(**lamps)
+    _dwell_at_stop_line(now, manager, road, light)
+
+    assert manager.gate(0.06, 0.0).linear == 0.0
+    assert manager.status().state == "HOLD"
+    assert manager.status().reason == "signal_unexpected"
+
+
+def test_signal_head_evidence_form_is_validated():
+    with pytest.raises(ValueError):
+        SignalHeadEvidence(stamp=10.0, map_id="", scene_revision="s")
+    with pytest.raises(ValueError):
+        SignalHeadEvidence(
+            stamp=10.0, map_id="m", scene_revision="s", confidence=1.5)
+    with pytest.raises(ValueError):
+        SignalHeadEvidence(
+            stamp=float("nan"), map_id="m", scene_revision="s")
+
+
+def test_observe_signal_rejects_future_stamp(rig):
+    _now, manager = rig
+    with pytest.raises(ValueError):
+        manager.observe_signal(
+            head(stamp=12.0), received_at=100.0, source_now=10.0)
+
+
+def test_observe_signal_invalidates_prior_decision(rig):
+    now, manager = rig
+    observe(manager, now, evidence())
+    decision = manager.gate(0.08, 0.0)
+
+    observe_signal(manager, now, head(green=True))
+
+    assert manager.apply_if_current(decision, lambda _: None) is False
+
+
+def test_reset_clears_signal_head_evidence(rig):
+    now, manager = rig
+    road = evidence(
+        stop_visible=True, stop_distance_m=0.08, stop_confidence=0.9)
+    _dwell_at_stop_line(now, manager, road, head(green=True))
+    manager.gate(0.06, 0.0)
+    assert manager.status().reason == "signal_green"
+
+    manager.reset("estop")
+
+    _dwell_at_stop_line(now, manager, road)
+    manager.gate(0.06, 0.0)
+    assert manager.status().reason == "signal_unknown"
 
 
 @pytest.mark.parametrize(

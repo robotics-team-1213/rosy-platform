@@ -40,7 +40,7 @@ Fleet ──명령──▶ [ESP32 컨트롤러] ──접점──▶ [신호�
 |---|---|
 | `source="OBSERVER_HTTP"` | 관측 서비스 `/observed` 원 |
 | `stamp` | 관측 서버의 `ts` |
-| `lamps` | 운영자 지도를 적용한 뒤의 `{red, yellow, green}` 점등 불리언 |
+| `red`·`yellow`·`green` | 운영자 지도 적용 뒤의 점등 불리언 — 정확히 한 색만 점등이 색 주장, 0개 또는 2개 이상은 부정(진입 불허) |
 | `confidence` | 관측 `confidence` |
 | `frozen` | 관측 서버의 동결 표기(낡은 프레임의 CONFIRMED 금지) |
 | `stable` | debounce 확정 여부 — `pending`은 침묵으로 취급 |
