@@ -39,11 +39,27 @@ def board_profile(mode: str) -> dict:
 #: Both in-tree naming conventions: `hardware.launch.py` and `bringup_launch.xml`.
 LAUNCH_REFERENCE = re.compile(r"([A-Za-z0-9_]+(?:\.launch|_launch)\.(?:xml|py))")
 
+#: CI runs `colcon build` before the root suite, so `src/build`, `src/install` and
+#: `src/log` exist there and not on a bare checkout. Both trees repeat every
+#: package.xml that already sits in source, and their paths sort *before* the
+#: real ones (`src/build/...` < `src/contracts/...` < `src/products/...`), so an
+#: unfiltered walk over `src/` answers with a build artifact on CI and a source
+#: file on a workstation — the same walk, two different answers.
+COLCON_OUTPUT = frozenset({"build", "install", "log"})
+
+
+def source_manifests() -> list[Path]:
+    """Every package.xml under `src/` that colcon did not generate."""
+    src = ROOT / "src"
+    return sorted(
+        manifest for manifest in src.rglob("package.xml")
+        if not COLCON_OUTPUT & set(manifest.relative_to(src).parts)
+    )
+
 
 def _launch_file(name: str) -> Path | None:
     """Resolve a launch file name to its in-tree path, whichever package owns it."""
-    manifests = sorted((ROOT / "src").rglob("package.xml"))
-    return next((path for manifest in manifests
+    return next((path for manifest in source_manifests()
                  if (path := manifest.parent / "launch" / name).is_file()), None)
 
 

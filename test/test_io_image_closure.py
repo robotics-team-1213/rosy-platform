@@ -7,7 +7,7 @@ import xml.etree.ElementTree as ET
 
 import pytest
 
-from robot_contracts import ROOT
+from robot_contracts import ROOT, source_manifests
 
 
 DOCKERFILE = ROOT / "deploy" / "robot" / "pinky_pro" / "Dockerfile"
@@ -16,7 +16,7 @@ PROBE = ROOT / "deploy" / "robot" / "pinky_pro" / "probe-io-image.py"
 
 def _source_packages() -> dict[str, tuple[Path, set[str]]]:
     packages = {}
-    for manifest in (ROOT / "src").rglob("package.xml"):
+    for manifest in source_manifests():
         xml = ET.parse(manifest).getroot()
         name = xml.findtext("name")
         assert name and name not in packages, manifest

@@ -452,6 +452,40 @@ def test_a_secret_handed_to_a_call_is_still_a_secret(line):
     assert scan_text("sample.py", line), line
 
 
+@pytest.mark.parametrize("line", [
+    "self._api_key = api_key",
+    "vision_lease_secret=vision_preview_secret,",
+    "create_app(console, users, vision_lease_secret=secret)",
+    'preview_secret = os.environ.get("ROSY_VISION_PREVIEW_SECRET")',
+    'bearer = authorization[len("Bearer "):] if authorization else ""',
+    "secret = credential_status.inner_text()",
+])
+def test_handing_a_variable_along_is_not_a_secret(line):
+    """A secret-named identifier in argument position names a variable.
+
+    ``token=sk_live_9182aeb27c4d`` is the shape this must not swallow, so the
+    companion test below pins it on the reporting side.
+    """
+    assert not scan_text("sample.py", line), line
+
+
+@pytest.mark.parametrize("line", [
+    "login(api_token=sk_live_9182aeb27c4d)",
+    "password = supersecretpsk",
+    "secret = supersecretpsk",
+    "create_app(console, vision_lease_secret=deadbeefcafebabe0123456789abcdef01234567)",
+])
+def test_a_literal_in_argument_position_is_still_a_secret(line):
+    """The reference rule excuses variables, never values.
+
+    An unquoted credential with no secret word in it, a statement-level
+    literal that merely shares the vocabulary, and a 40-hex literal handed to
+    a call (caught by the entropy branch even where the assignment stands
+    down) all still report.
+    """
+    assert scan_text("sample.py", line), line
+
+
 def test_a_nested_call_is_reported_rather_than_reasoned_about():
     """A call inside a call does not match the call-head shape.
 
