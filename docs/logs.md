@@ -3359,3 +3359,11 @@
 - 변경: D-281의 미결 원격 OMX API를 넘지 않도록 첫 SOURCE/LOCAL Fleet→workcell 제어 경로를 같은 Linux host의 UID 인증 UDS로 결정했다. native per-workcell owner가 Action journal과 ROS action client를 함께 소유하며 원격 host dispatch는 별도 결정까지 HOLD다. 실행 계획 작업 0·1을 이 선택과 맞췄다.
 - 증거: 비활성 OMX profile, 개발/ROS-SIM OCI shell, `RosArmCommandRuntime`, 독립 `ActionStore`, 배포 host inventory template 및 D-246/D-281/D-282/D-273 대조. 실제 host/serial/gripper/stop inventory는 아직 없다.
 - gate 변화: 없음. UDS contract SOURCE/LOCAL 구현을 시작하며 ROS-SIM/ARTIFACT/DEVICE/FIELD와 물리 capability는 계속 HOLD다.
+
+## 2026-09-29 · uncommitted · docs(plan): land policy evidence T4-T6 and API Ref v1.48
+
+- 변경: 증거 계약 실행 계획 T4~T6 착지 기록. T4 — `task_service`의 policy 발의 `evidence_id` 필수와 admission binding(통과해도 밸브 닫힌 한 HOLD). T5 — `POST /api/fleet/policy-evidence`·`GET .../latest`. T6 — API Ref v1.48(§10.6.2 신설, 변경 로그, policy 발의 서술)과 `test_task_contract_docs.py` 정합 시험, api_web 설명 표기. `docs/progress.md` plans에 갭맵·D-268 처분·증거 계약 설계/실행계획 4건 등재.
+- 증거: Fleet `628 passed, 5 skipped`(신규 API 6·발의 binding 9·계약 문서 1), api_web 70 passed/13 skipped, 변경 파일 flake8 clean. T6이 만든 것은 v1.48이며 현재 헤더 v1.49는 병행 세션의 D-333/D-336 추가다(§10.6.2·v1.48 행 무변경).
+- gate 변화: 없음. `POLICY_DISPATCH_ENABLED=False` 불변, 자동 실행·측정 없음.
+- 결정: 사다리 1단계 완료. 남은 것은 권한·정답 시험·30분 스트림·입회 수용(사다리 2~5단계)이다.
+- 교훈: 병행 세션이 같은 파일을 만질 때는 버전 핀 시험이 충돌을 먼저 잡는다 — API Ref 헤더·핀·변경 로그를 한 변경 단위로 묶어야 한다.
