@@ -115,3 +115,25 @@ def test_verification_uses_pinned_hostname_and_ca_before_returning_endpoint(monk
     assert module.verify_endpoint(candidate, "fleet-a.local", ca_file) == \
         "https://fleet-a.local:8443"
     assert calls == [("192.168.1.20", 8443, "fleet-a.local", ca_file)]
+
+
+# D-358 5.1: the site script copy and FleetAgent are held to the shared TXT vectors.
+import json  # noqa: E402
+
+VECTORS = json.loads((Path(__file__).resolve().parent / "fixtures/protocol/discovery-txt.v1.json")
+                     .read_text(encoding="utf-8"))
+
+
+def avahi_line(case: dict) -> str:
+    family = "IPv6" if ":" in (case["address"] or "") else "IPv4"
+    txt = " ".join(f'"{item}"' for item in case["txt"])
+    return (f'=;eth0;{family};ROSY {case["id"]};{case["service_type"]};local;'
+            f'{case["host"]};{case["address"]};{case["port"]};{txt}')
+
+
+@pytest.mark.parametrize("case", VECTORS["cases"], ids=lambda case: case["id"])
+def test_site_locator_and_agent_accept_exactly_the_fleet_vectors(case):
+    accepted = case["expect"]["accepted"] and case["service_type"] == "_rosy-fleet._tcp"
+    line = avahi_line(case)
+    assert bool(_module().parse_avahi(line)) is accepted
+    assert bool(_robot_module().parse_avahi(line)) is accepted
