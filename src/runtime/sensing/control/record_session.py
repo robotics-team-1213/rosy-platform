@@ -16,9 +16,24 @@ QUOTA_POLL_S = 5.0
 STOP_TIMEOUT_S = 30
 
 
+def _ignore_signals() -> None:
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        try:
+            signal.signal(sig, signal.SIG_IGN)
+        except ValueError:  # not the main thread
+            pass
+
+
 def _stop(proc) -> None:
-    """SIGINT so ros2 bag closes the mcap cleanly; kill only as last resort."""
-    proc.send_signal(signal.SIGINT)
+    """Stop the recorder gracefully; a second signal must not orphan it."""
+    _ignore_signals()
+    try:
+        # A terminal Ctrl-C already reached the whole process group.
+        proc.wait(timeout=2)
+        return
+    except subprocess.TimeoutExpired:
+        pass
+    proc.send_signal(signal.SIGINT)  # ros2 bag closes the mcap cleanly
     try:
         proc.wait(timeout=STOP_TIMEOUT_S)
     except subprocess.TimeoutExpired:
@@ -52,37 +67,48 @@ def main(argv=None) -> int:
         camera_profile_revision=args.camera_profile_revision,
         model_revision=args.model_revision, task_id=args.task_id,
         reason=args.reason, now=datetime.now(timezone.utc))
+    old_term = old_int = None
     try:
-        proc = subprocess.Popen(bag_command(folder))
-    except FileNotFoundError:
-        print("ros2 not found on PATH; source the ROS 2 environment",
-              file=sys.stderr)
-        finish_session(folder, datetime.now(timezone.utc))
-        return 1
-
-    old = None
-    try:
-        old = signal.signal(signal.SIGTERM, _on_sigterm)
+        old_int = signal.getsignal(signal.SIGINT)
+        old_term = signal.signal(signal.SIGTERM, _on_sigterm)
     except ValueError:  # not the main thread
         pass
     code = 0
     try:
-        while True:
-            try:
-                rc = proc.wait(timeout=QUOTA_POLL_S)
-                code = 1 if rc else 0
-                break
-            except subprocess.TimeoutExpired:
-                if not can_record(args.root, quota):
-                    print("recording quota reached; stopping", file=sys.stderr)
-                    _stop(proc)
-                    code = 3
+        try:
+            proc = subprocess.Popen(bag_command(folder))
+        except FileNotFoundError:
+            print("ros2 not found on PATH; source the ROS 2 environment",
+                  file=sys.stderr)
+            return 1
+        try:
+            while True:
+                try:
+                    rc = proc.wait(timeout=QUOTA_POLL_S)
+                    code = 1 if rc else 0
                     break
-    except KeyboardInterrupt:
-        _stop(proc)
+                except subprocess.TimeoutExpired:
+                    try:
+                        full = not can_record(args.root, quota)
+                    except Exception as exc:
+                        print(f"quota check failed ({exc}); stopping",
+                              file=sys.stderr)
+                        _stop(proc)
+                        code = 1
+                        break
+                    if full:
+                        print("recording quota reached; stopping",
+                              file=sys.stderr)
+                        _stop(proc)
+                        code = 3
+                        break
+        except KeyboardInterrupt:
+            _stop(proc)
     finally:
-        if old is not None:
-            signal.signal(signal.SIGTERM, old)
+        if old_term is not None:
+            signal.signal(signal.SIGTERM, old_term)
+        if old_int is not None:
+            signal.signal(signal.SIGINT, old_int)
         finish_session(folder, datetime.now(timezone.utc))
     return code
 

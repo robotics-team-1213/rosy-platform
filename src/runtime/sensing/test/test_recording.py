@@ -203,18 +203,19 @@ def test_main_quota_full_exit_2(monkeypatch, tmp_path):
 
 
 def test_main_interrupt_graceful(monkeypatch, tmp_path):
+    t = subprocess.TimeoutExpired("x", 2)
     code, log, proc = _run(monkeypatch, tmp_path, lambda lg: FakePopen(
-        [KeyboardInterrupt(), 0], lg))
+        [KeyboardInterrupt(), t, 0], lg))
     assert proc.signals == [rs.signal.SIGINT]
     assert not proc.killed
-    assert log == ["wait", "wait", "finish"]
+    assert log == ["wait", "wait", "wait", "finish"]
     assert code == 0
 
 
 def test_main_kills_if_no_exit(monkeypatch, tmp_path):
     t = subprocess.TimeoutExpired("x", 30)
     code, log, proc = _run(monkeypatch, tmp_path, lambda lg: FakePopen(
-        [KeyboardInterrupt(), t, 0], lg))
+        [KeyboardInterrupt(), t, t, 0], lg))
     assert proc.killed and log[-1] == "finish"
 
 
@@ -237,7 +238,71 @@ def test_main_quota_exceeded_while_running(monkeypatch, tmp_path):
     seq = iter([True, False])
     monkeypatch.setattr(rs, "can_record", lambda *a: next(seq))
     code, log, proc = _run(monkeypatch, tmp_path, lambda lg: FakePopen(
-        [t, 0], lg))
+        [t, t, 0], lg))
     assert code == 3
     assert proc.signals == [rs.signal.SIGINT]
     assert log[-1] == "finish"
+
+
+def test_stop_skips_sigint_if_child_exits_on_its_own(monkeypatch, tmp_path):
+    code, log, proc = _run(monkeypatch, tmp_path, lambda lg: FakePopen(
+        [KeyboardInterrupt(), 0], lg))
+    assert proc.signals == [] and log[-1] == "finish"
+
+
+def test_stop_ignores_further_signals_and_restores(monkeypatch, tmp_path):
+    seen = {}
+    t = subprocess.TimeoutExpired("x", 2)
+
+    class P(FakePopen):
+        def send_signal(self, sig):
+            seen["int"] = rs.signal.getsignal(rs.signal.SIGINT)
+            seen["term"] = rs.signal.getsignal(rs.signal.SIGTERM)
+            super().send_signal(sig)
+
+    before = rs.signal.getsignal(rs.signal.SIGINT)
+    _run(monkeypatch, tmp_path, lambda lg: P([KeyboardInterrupt(), t, 0], lg))
+    assert seen == {"int": rs.signal.SIG_IGN, "term": rs.signal.SIG_IGN}
+    assert rs.signal.getsignal(rs.signal.SIGINT) == before
+
+
+def test_sigterm_handler_installed_before_popen(monkeypatch, tmp_path):
+    seen = {}
+
+    def popen(*a, **k):
+        seen["h"] = rs.signal.getsignal(rs.signal.SIGTERM)
+        raise FileNotFoundError
+    monkeypatch.setattr(rs.subprocess, "Popen", popen)
+    rs.main(["--root", str(tmp_path), "--reason", "r"])
+    assert seen["h"] is rs._on_sigterm
+
+
+def test_quota_check_error_stops_recorder_exit_1(monkeypatch, tmp_path):
+    t = subprocess.TimeoutExpired("x", 5)
+    calls = iter([True])
+
+    def cr(*a):
+        try:
+            return next(calls)
+        except StopIteration:
+            raise RuntimeError("boom")
+    monkeypatch.setattr(rs, "can_record", cr)
+    code, log, proc = _run(monkeypatch, tmp_path, lambda lg: FakePopen(
+        [t, t, 0], lg))
+    assert code == 1 and proc.signals == [rs.signal.SIGINT]
+    assert log[-1] == "finish"
+
+
+def test_total_bytes_skips_vanished_files(tmp_path, monkeypatch):
+    from pathlib import Path
+    import control.recording as rec
+    (tmp_path / "a").write_bytes(b"0" * 5)
+    (tmp_path / "b").write_bytes(b"0" * 7)
+    orig = Path.stat
+
+    def stat(self, *a, **k):
+        if self.name == "a":
+            raise FileNotFoundError
+        return orig(self, *a, **k)
+    monkeypatch.setattr(Path, "stat", stat)
+    assert rec._total_bytes(tmp_path) == 7

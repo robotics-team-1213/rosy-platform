@@ -97,7 +97,14 @@ def mark_harvested(folder) -> None:
 
 
 def _total_bytes(root: Path) -> int:
-    return sum(p.stat().st_size for p in root.rglob("*") if p.is_file())
+    total = 0
+    for p in root.rglob("*"):
+        try:
+            if p.is_file():
+                total += p.stat().st_size
+        except OSError:  # vanished mid-scan
+            continue
+    return total
 
 
 def _sessions(root: Path) -> list[tuple[str, Path, dict]]:
