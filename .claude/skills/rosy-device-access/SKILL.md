@@ -11,6 +11,9 @@ Every robot access from an agent is **non-interactive**: key-only SSH as `rosy`,
 key, `sudo -n`. Anything that would prompt (password, host-key question, sudo password) is
 a hang, not a question. Start **read-only**; change the robot only when the task says so.
 
+To attach a robot to a site Fleet, do not SSH: enroll it from the site console
+(**기기 연결 → 로봇 등록**, the robot screen code; D-352, `deploy/site/README.md`).
+
 The address is per site. This repo is public: write `<robot-ip>` in anything tracked and
 take the real value from `private/` (gitignored) or the operator's memory.
 

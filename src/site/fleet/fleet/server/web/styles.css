@@ -467,4 +467,14 @@ main {
 .discovery-state { margin-left: auto; color: var(--muted); }
 .discovery-state.verified_online { color: var(--paper); }
 .discovery-state.conflict { color: var(--status-crit); }
+.discovery-state.enrolled { color: var(--paper); }
+.device-link h4 { margin: 0; }
+.enroll-alarm { color: var(--status-crit); font-weight: 600; }
+.enroll-address { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.enroll-result p { margin: var(--space-1) 0; }
+.enroll-result[data-kind="bad"] { color: var(--status-crit); }
+.enrolled-list { list-style: none; margin: var(--space-3) 0; padding: 0; display: grid; gap: var(--space-2); }
+.enrolled-list li { display: flex; flex-direction: column; gap: var(--space-1); }
+.enrolled-list small { color: var(--muted); }
+.enroll-dialog-actions { display: flex; gap: var(--space-2); margin-top: var(--space-3); }
 

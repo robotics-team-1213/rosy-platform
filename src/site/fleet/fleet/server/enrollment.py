@@ -269,7 +269,8 @@ class EnrollmentService:
                                        and lifetime < SITE_LIFETIME_S - 86400.0),
             })
         return {"available": self.available, "unavailable_reason": self.unavailable_reason,
-                "static_robot_ids": sorted(self._roster.static_ids), "robots": robots}
+                "static_robot_ids": sorted(self._roster.static_ids), "robots": robots,
+                "alarms": self._console().alarms()}
 
     # --- enroll ------------------------------------------------------------
 
