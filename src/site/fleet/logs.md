@@ -452,8 +452,14 @@
 - 증거: 최소 repro 파일로 원인을 두 버전에서 직접 재현했다 — 7.4.4는 `tmp_path = <module 'test_repro'>` + 동일 TypeError, 8.4.2는 passed. 수정 후 pytest 7.4.4로 Fleet 전체 `588 passed, 5 skipped`, 8.4.2로도 동일. 저장소 전체에서 `^def setup(` 은 이 파일 한 곳뿐이었다.
 - gate 변화: 없음. 로직·픽스처·측정은 그대로고 이름만 바꿨다.
 
+## 2026-09-29 · uncommitted · feat(fleet): add policy-evidence config and store (D-268 ladder T2/T3)
+
+- 변경: `fleet/server/policy_evidence_config.py`(출처 설정 로더 — env 바인딩 토큰, asset/task 닫힌 집합, revision 삼종·폐기 플래그, YAML에 비밀 금지)와 `fleet/server/policy_evidence.py`(SQLite 저장·제출 검증 — source token에서 출처 결정, transit 0~300 ms, task/asset/revision binding, **눅 observation 등록부로 전면 거절**, `evidence_id` 멱등·다른 내용 `EVIDENCE_REPLAY`, audit 테이블)을 추가했다. [실행 계획](../../../docs/plans/2026-09-29-policy-evidence-contract.md) T2·T3.
+- 증거: 신규 시험 24 passed(config 11·store 13), Fleet 전체 `612 passed, 5 skipped`. 신규 4 파일 flake8 120 clean(패키지 전체 flake8 경고는 기존 파일 것). v1 불변 단언: 잘formed 제출도 `EVIDENCE_OBSERVATION_KIND_UNKNOWN`으로 거절.
+- gate 변화: 없음. REST 경로(app.py)·발의 binding(task_service)·밸브는 T4/T5이고 자동 실행은 HOLD 유지.
+
 ## 2026-09-29 · uncommitted · feat(ai): resolve ER 2 selectors against source-frame evidence
 
-- Change: added explicit source/crop/resize/quarter-turn image mapping and inverse selector transform. Candidate selectors resolve only against one fresh matching observation and exact image digest, camera/frame, capture time, calibration and TF revisions. Output is typed pixel-level object evidence; Fleet imports the shared schema and has no OMX package dependency. Missing mapping/provenance, out-of-frame coordinates, ambiguity, label mismatch, and same-object pick/place fail closed.
-- Evidence: selector plus OMX target-evidence tests 18 passed; API contract tests 23 passed; full Fleet suite 600 passed/5 skipped (Windows). Changed-file flake8 passed after removing one unused import.
-- Gate: SOURCE/LOCAL only. No Mission production route, UDS listener, ROS arm/gripper execution, physical stop, device or field acceptance.
+- Change: added source/crop/resize/quarter-turn inverse mapping. Selectors require one fresh candidate from the exact observation, image digest, camera/frame, capture time, calibration and transform revisions. Fleet emits typed pixel-level evidence using shared schemas and has no OMX package dependency.
+- Evidence: selector and OMX target-evidence tests 18 passed; contract checks 49 passed after ADR renumbering; full Fleet suite 600 passed/5 skipped before rebasing onto current main. Re-run the full suite on the merged tree before accepting this gate.
+- Gate: SOURCE/LOCAL only. Mission production routes, UDS listener, ROS arm/gripper execution, physical stop, device and field acceptance remain separate.

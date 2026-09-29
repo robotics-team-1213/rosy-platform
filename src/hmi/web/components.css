@@ -492,6 +492,11 @@ ui-brand a {
   text-decoration: none;
 }
 
+ui-brand a:hover b,
+ui-brand a:hover small { text-decoration: underline; text-underline-offset: 0.2em; }
+
+ui-brand a:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
+
 ui-brand b {
   color: var(--brand-rose);
   font: var(--weight-strong) var(--text-title)/var(--leading-dense) var(--body);

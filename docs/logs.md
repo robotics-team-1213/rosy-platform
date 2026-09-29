@@ -3334,6 +3334,14 @@
 - 결정: T1 완료. T2(설정 로더)부터는 `fleet/server` — 시작 전 동시 세션 재확인 필요.
 - 교훈: pydantic lax 모드는 숫자 문자열을 강제 변환한다 — 시험은 계약이 명시한 거부(bool·비유한)만 단언하고, 확신 없는 거부를 시험에 넣으면 계약이 아니라 시험이 거짓을 말하게 된다.
 
+## 2026-09-29 · 5545ce37..uncommitted · feat(fleet): land policy evidence config and store (T2/T3)
+
+- 변경: 커밋 정리 두 건(`de6f8170` 문서 — D-268 처분·D-332·증거 계약 설계/실행계획, `5545ce37` T1 schema) 뒤 T2·T3 착지 — `fleet/server/policy_evidence_config.py`(출처 설정 로더)·`fleet/server/policy_evidence.py`(저장·제출 검증)과 시험 4건 추가. fleet logs/progress 갱신(612 passed).
+- 증거: 신규 24 passed, Fleet 전체 `612 passed, 5 skipped`(회귀 없음), 신규 파일 flake8 clean, harness lint 0 errors, 계약 시험 4종 통과. 도중 버그 2건 수정: `tuple <= frozenset` 비교(TypeError)와 YAML 문서 이어붙이기(마지막 키만 생존) — 둘 다 시험이 잡았다.
+- gate 변화: 없음. T4(task_service)·T5(app.py)·T6(API Ref v1.48) 남음 — 전부 자동 실행 불변.
+- 결정: T2·T3 완료. v1 fail-closed(빈 등록부 전면 거절)가 시험으로 고정됐다.
+- 교훈: 대조 시험 조립은 계약 자료구조에서 만들어야 한다 — 문자열 이어붙인 YAML은 중복 키가 마지막만 살려 '검증됐다'를 거짓으로 만든다.
+
 ## 2026-09-29 · uncommitted · docs(er2): decide Mission/Action/stop/evidence closure
 
 - 변경: D-333에 후보 생성→operator Mission 승인→OMX Action 수락→ROS/readback→독립 goal 증거의 계약과 장치 측 stop-generation fence를 결정했다. 단일 `PICK_PLACE` 실행 계획을 추가하고 기존 ER 2 계획의 SOURCE 기준선·정지 설명, API Reference의 전용 E-stop 감사 예외를 현행 코드와 정렬했다.

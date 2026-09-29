@@ -446,3 +446,16 @@ def test_evidence_states_are_one_closed_set():
             r'data-evidence="([a-z]+)"', path.read_text(encoding="utf-8"),
         ))
     assert painted <= from_logic, sorted(painted - from_logic)
+
+
+def test_the_brand_renders_the_home_link_as_a_shared_behaviour():
+    # D-335: 페이지가 앵커를 따로 적지 않는다 - ui-brand href가 자식을 하나의
+    # 링크로 감싸고, hover와 포커스 링도 components.css가 담당한다.
+    script = UI.read_text(encoding="utf-8")
+    css = COMPONENTS.read_text(encoding="utf-8")
+    brand = script.split("class UiBrand extends HTMLElement", 1)[1].split("\nclass ", 1)[0]
+    assert 'this.getAttribute("href")' in brand
+    assert 'link.setAttribute("href", href)' in brand
+    assert "aria-label" in brand
+    assert "ui-brand a:hover b" in css and "ui-brand a:hover small" in css
+    assert "ui-brand a:focus-visible" in css

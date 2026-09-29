@@ -500,3 +500,9 @@
 - 근거: 변경 직전 `test_web_files_over_budget_have_a_recorded_verdict` 1 failed — 원인은 그 무시된 Android 빌드 산출물. 변경 후 `python -m pytest src/hmi/dashboard/test -q` 14 passed, 32 skipped. 변이 확인: add 안 된 700행 `src/hmi/dashboard/zz_mut_proof.html`을 놓으면 `needs a verdict: ['hmi/dashboard/zz_mut_proof.html']`로 빨갛고, 지우면 다시 14 passed로 복구한다.
 - gate 변화: 없음. dashboard SOURCE/LOCAL GO 유지, ARTIFACT HOLD 유지.
 - 결정: D-329 Decision 3 "tracked files only"를 이 예산 시험에도 적용했다. 판정 기준과 `VERDICTS`는 바꾸지 않는다.
+
+## 2026-09-29 · uncommitted · D-335 역할 화면 브랜드 홈 링크를 공용 선언으로
+
+- 변경: feat/surface-home-link에서 앵커를 직접 적던 `surface.html`을 `<ui-brand href="/dashboard" aria-label="Rosy OS 대시보드 홈">` 선언으로 되돌려 공용 동작(D-335)을 쓰게 했다. `shell.css`의 `ui-brand a:focus-visible`은 공용 `components.css`로 옮겨 표면 복제를 지웠다. `test_surface_home_link.py`는 표면 선언·공용 스타일 소유·Chromium 클릭(공용 ui.js 로드)을 고정한다. `/dashboard` 홈에서 역할 화면으로 가는 가시 경로(비평 P1)는 이번 회차 대상이 아니며 D-204 브리지 회차가 판다.
+- 증거: 정적 97 passed 1 skipped(`src/hmi/web/test` + dashboard 계약 3종). `ROSY_RUN_BROWSER_TESTS=1`에서 `src/hmi/dashboard/test` + `test_role_menu_panels_browser.py` + `test_role_surface_states_browser.py` + `test_web_dialog_contract.py` + `test_d283_console_browser.py` 89 passed(역할 G2 60셀 재생성 포함, overflow 0·pageerror 0). harness lint 0 errors, `test_harness_contracts.py` 54 passed.
+- gate 변화: 없음. dashboard SOURCE/LOCAL GO 유지, ARTIFACT HOLD 유지.
