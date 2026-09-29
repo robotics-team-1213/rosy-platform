@@ -270,8 +270,16 @@ def test_field_view_review_fixes_are_served():
     assert "@media (min-width: 40.0625rem) and (max-width: 70rem)" in styles
     assert 'id="map-layer-hint"' in page and 'id="field-storage-state"' in page
 
-@pytest.mark.parametrize("spec_name", ["site-layer.test.mjs", "field-layers.test.mjs"])
-def test_site_layer_node_unit_tests_pass(spec_name):
+
+def test_console_web_node_unit_tests_pass():
+    """`node --test` on every console web unit spec (site layer, authorization).
+
+    The web tree declares `"type": "module"` (fleet/server/web/package.json)
+    so every Node — including CI's apt Node 18, which otherwise reads a bare
+    .js as CommonJS and loses the named exports — loads the browser ES
+    modules exactly the way the browser does. The glob keeps a future
+    .test.mjs from shipping unwired.
+    """
     import shutil
     import subprocess
     from pathlib import Path
@@ -279,7 +287,8 @@ def test_site_layer_node_unit_tests_pass(spec_name):
     node = shutil.which("node")
     if node is None:
         pytest.skip("node is not installed; run `node --test test/web/` where it is")
-    spec = Path(__file__).resolve().parent / "web" / spec_name
-    result = subprocess.run([node, "--test", str(spec)], capture_output=True, text=True,
+    specs = sorted((Path(__file__).resolve().parent / "web").glob("*.test.mjs"))
+    assert specs, "no .test.mjs specs found under test/web"
+    result = subprocess.run([node, "--test", *map(str, specs)], capture_output=True, text=True,
                             encoding="utf-8", errors="replace", timeout=60, check=False)
     assert result.returncode == 0, result.stdout + result.stderr

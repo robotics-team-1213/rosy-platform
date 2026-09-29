@@ -7,6 +7,7 @@ import { createSignals } from "./signals.js";
 import { createVisionView } from "./vision-view.js";
 import { createFieldView } from "./field-view.js";
 import { applyRoleToControls } from "./authorization.js";
+import { DISCOVERY_LABELS, createEnrollmentPanel } from "./enrollment.js";
 // 좌표계: 로봇 pose 는 CORE 가 TF `map → <ns>base_footprint` 로 읽어 주는 map 프레임
 // 값이다(ros_bridge `_map_frame = "map"`). 그래서 N대를 한 격자 위에 그대로 겹쳐
 // 그릴 수 있다. 격자는 행 0 이 아래쪽(y 최소)이고 캔버스는 위가 0 이라 y 를 뒤집는다.
@@ -269,12 +270,12 @@ function disarmGoal(reason) {
   log(reason, "bad");
 }
 
-const discoveryLabels = {
-  registration_pending: "등록 대기",
-  pairing_pending: "페어링 대기",
-  verified_online: "확인됨",
-  conflict: "신원 충돌",
-};
+const discoveryLabels = DISCOVERY_LABELS;
+const enrollment = createEnrollmentPanel({
+  headers: authHeaders,
+  identity: () => ({ role: auth.role, principal_id: auth.principal }),
+  log,
+});
 
 function showDiscoveryUnavailable(label, message) {
   const status = el("discovery-status");
@@ -292,6 +293,7 @@ function showDiscoveryUnavailable(label, message) {
 
 async function refreshDiscovery() {
   if (auth.locked) return;
+  await enrollment.refresh();
   try {
     const snapshot = await call("/api/fleet/discovery");
     const status = el("discovery-status");
@@ -308,6 +310,7 @@ async function refreshDiscovery() {
       state.textContent = discoveryLabels[device.status] || "확인 필요";
       state.className = `discovery-state ${device.status}`;
       item.append(label, detail, state);
+      enrollment.decorateDiscoveryRow(item, device);
       return item;
     });
     el("discovery-list").replaceChildren(...rows);
@@ -321,6 +324,7 @@ async function refreshAuthorization() {
   try {
     const identity = await call("/api/fleet/session");
     auth.role = identity.role;
+    auth.principal = identity.principal_id;
     const roleName = identity.role === "operator" ? "운영자" :
       identity.role === "viewer" ? "조회 전용" :
         identity.role === "policy-admin" ? "정책 관리자" : "권한 없음";

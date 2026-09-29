@@ -1522,3 +1522,11 @@
 - gate 변화: 없음.
 - 결정: 장기 수정은 KNOWN_DIRECTION 기록대로 — control의 legacy launch가 IMU 드라이버를 시작하는 것을 bringup 조립으로 옮기는 코드 이동이다.
 - 교훈: 없음.
+
+## 2026-09-30 · uncommitted · feat(site): D-352 robot_credential_key secret와 오프라인 rekey
+
+- 변경: `site/compose.yaml`에 secret `robot_credential_key`와 `--robot-credential-key-file`, `site/robot-credential-key.template.txt`(형식만), `site/site_db.py rekey`(`--assume-stopped` 필수), `site/requirements-fleet.txt`에 `cryptography==49.0.0`, `site/README.md` 콘솔 등록 절차.
+- 증거: `python -m pytest test/test_site_db_maintenance.py -q` 녹색. 사이트 호스트 Compose 실행 없음.
+- gate 변화: 없음.
+- 결정: D-352.
+- 교훈: 없음.
