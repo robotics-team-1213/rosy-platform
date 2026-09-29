@@ -24,7 +24,11 @@ export function createFormation({ el, view, log, call, render }) {
       input.type = "checkbox";
       input.value = id;
       input.checked = true;
-      label.append(input, document.createTextNode(id));
+      // 좁은 칸에서는 줄임표로 자르고 전체 id 는 title 로 남긴다.
+      const name = document.createElement("span");
+      name.textContent = id;
+      label.title = id;
+      label.append(input, name);
       return label;
     }));
     syncPendingSummary();

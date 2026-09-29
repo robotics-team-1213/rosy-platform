@@ -139,15 +139,17 @@ main {
     align-items: start;
     min-height: 0;
     height: auto;
-    max-height: calc(100dvh - var(--topbar-height) - 3rem);
   }
+  /* 2026-09-30 태블릿(1333px): 목록 칸이 로봇 목록 아래로 비고 대형·신호등·이벤트가
+     오른쪽 좁은 칸에 쌓여 패널 밖으로 넘쳤다. 왼쪽은 목록 → 대형, 오른쪽은 발견 →
+     신호등 → 이벤트로 나눠 두 칸을 모두 채운다. 패널 max-height 는 넘침만 만들어 뺐다. */
   #roster-heading { grid-column: 1; grid-row: 1; }
   #roster-toggle { grid-column: 2; grid-row: 1; justify-self: start; }
-  #roster { grid-column: 1; grid-row: 2 / 6; min-height: 0; max-height: min(42vh, 30rem); overflow-y: auto; }
+  #roster { grid-column: 1; grid-row: 2; min-height: 0; max-height: min(42vh, 30rem); overflow-y: auto; }
   .discovery { grid-column: 2; grid-row: 2; margin-top: 0; }
-  .formation { grid-column: 2; grid-row: 3; margin-top: var(--space-3); }
-  .signals { grid-column: 2; grid-row: 4; }
-  #log { grid-column: 2; grid-row: 5; }
+  .formation { grid-column: 1; grid-row: 3 / span 2; margin-top: var(--space-3); }
+  .signals { grid-column: 2; grid-row: 3; }
+  #log { grid-column: 2; grid-row: 4; }
 }
 
 
@@ -317,8 +319,9 @@ main {
 .facts span { font-family: var(--mono); font-size: var(--text-micro); letter-spacing: var(--track-label); color: var(--muted); }
 .facts strong { font-family: var(--mono); font-size: var(--text-label); font-weight: var(--weight-medium); }
 
-.robot-actions { display: flex; gap: var(--space-2); }
-.robot-actions ui-button { flex: 1; }
+.robot-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+/* 버튼 글자는 낱자로 끊지 않는다. 좁으면 버튼째 다음 줄로 내린다. */
+.robot-actions ui-button { flex: 1 1 auto; white-space: nowrap; word-break: keep-all; }
 
 /* 신호등 카드(ROSY-SIGNAL-001). 램프 도트는 구동값(lamps)을 그대로 보여 준다 —
    "켜라고 시킨 것"이 아니라 "실제 켜진 것"이 화면의 축이다. */
@@ -496,8 +499,11 @@ main {
 
 
 /* FOR-001 Robot Selection — 대형 폼의 멤버 선택. 간격은 단일 파일의 스케일을 따른다. */
-.member-list { display: flex; flex-wrap: wrap; gap: var(--space-2); }
-.member-list label { display: inline-flex; align-items: center; gap: var(--space-1); font-size: var(--text-micro); color: var(--paper); }
+.member-list { display: flex; flex-wrap: wrap; gap: var(--space-2); min-width: 0; }
+.member-list label { display: inline-flex; align-items: center; gap: var(--space-1); max-width: 100%; min-width: 0; font-size: var(--text-micro); color: var(--paper); }
+/* .formation-form input 의 width:100% 가 체크박스까지 늘려 로봇 id 를 낱자로 접었다. */
+.formation-form .member-list input { width: auto; flex: none; }
+.member-list span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .member-list input:disabled + * { opacity: 0.45; }
 /* ADR-1000: Warning / Critical Queues */
 .queues-container {

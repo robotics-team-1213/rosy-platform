@@ -8,6 +8,7 @@ import { createVisionView } from "./vision-view.js";
 import { createFieldView } from "./field-view.js";
 import { applyRoleToControls } from "./authorization.js";
 import { DISCOVERY_LABELS, createEnrollmentPanel } from "./enrollment.js";
+import { createPollGate } from "./poll-gate.js";
 // 좌표계: 로봇 pose 는 CORE 가 TF `map → <ns>base_footprint` 로 읽어 주는 map 프레임
 // 값이다(ros_bridge `_map_frame = "map"`). 그래서 N대를 한 격자 위에 그대로 겹쳐
 // 그릴 수 있다. 격자는 행 0 이 아래쪽(y 최소)이고 캔버스는 위가 0 이라 y 를 뒤집는다.
@@ -20,6 +21,10 @@ const css = (name) => getComputedStyle(document.documentElement).getPropertyValu
 const STATE_MS = 1000;
 const MAP_MS = 5000;
 const LOG_MAX = 40;
+
+// 꺼진 기능(라우트 없음 404)은 다음 로그인·토큰 저장까지 두드리지 않는다. poll-gate.js 참고.
+const dispatchGate = createPollGate();
+const discoveryGate = createPollGate();
 
 // 관제 토큰 — 서버가 루프백 밖으로 열리면 모든 /api/fleet/* 이 401 로 막힌다
 // (cli.run_console 강제, app.authorize). 토큰은 세션 스토리지에만 둔다 —
@@ -117,8 +122,10 @@ async function refreshDispatchControl() {
   const title = el("dispatch-control-title");
   const detail = el("dispatch-control-detail");
   const rearm = el("dispatch-rearm");
+  if (!dispatchGate.due()) return view.dispatchControl;
   try {
     const state = await call("/api/fleet/dispatch-control");
+    dispatchGate.ok();
     view.dispatchControl = state;
     if (state.dispatch_enabled) {
       title.textContent = "발행 허용";
@@ -133,10 +140,16 @@ async function refreshDispatchControl() {
     rearm.hidden = !(auth.role === "operator" && !state.dispatch_enabled);
     rearm.disabled = auth.locked || !state.rearm_available;
     return state;
-  } catch (_err) {
+  } catch (err) {
     view.dispatchControl = null;
-    title.textContent = "발행 상태를 확인할 수 없음";
-    detail.textContent = "상태 확인에 실패해 재허가를 사용할 수 없습니다.";
+    if (dispatchGate.fail(err.status, err.code) === "absent") {
+      // 작업 대기열이 없는 Fleet — 발행 래치 자체가 없다. 오류가 아니다.
+      title.textContent = "발행 제어 미설정";
+      detail.textContent = "이 Fleet에는 작업 대기열이 설정되지 않았습니다.";
+    } else {
+      title.textContent = "발행 상태를 확인할 수 없음";
+      detail.textContent = "상태 확인에 실패해 재허가를 사용할 수 없습니다.";
+    }
     rearm.hidden = true;
     rearm.disabled = true;
     return null;
@@ -294,8 +307,10 @@ function showDiscoveryUnavailable(label, message) {
 async function refreshDiscovery() {
   if (auth.locked) return;
   await enrollment.refresh();
+  if (!discoveryGate.due()) return;
   try {
     const snapshot = await call("/api/fleet/discovery");
+    discoveryGate.ok();
     const status = el("discovery-status");
     status.textContent = snapshot.scanner_online
       ? `${snapshot.devices.length}대 발견` : "검색기 연결 대기";
@@ -314,13 +329,23 @@ async function refreshDiscovery() {
       return item;
     });
     el("discovery-list").replaceChildren(...rows);
-  } catch (_err) {
-    if (!auth.locked) showDiscoveryUnavailable(
-      "발견 상태 확인 불가", "발견 목록을 확인할 수 없습니다. Fleet 연결을 확인하세요.");
+  } catch (err) {
+    if (auth.locked) return;
+    if (discoveryGate.fail(err.status, err.code) === "absent") {
+      showDiscoveryUnavailable("발견 미설정", "이 Fleet에는 발견 검색기가 설정되지 않았습니다.");
+    } else {
+      showDiscoveryUnavailable(
+        "발견 상태 확인 불가", "발견 목록을 확인할 수 없습니다. Fleet 연결을 확인하세요.");
+    }
   }
 }
 
 async function refreshAuthorization() {
+  // 로그인·토큰 저장마다 꺼진 기능을 한 번씩 다시 묻는다.
+  dispatchGate.reset();
+  discoveryGate.reset();
+  enrollment.resetPolling();
+  mapView.resetPolling();
   try {
     const identity = await call("/api/fleet/session");
     auth.role = identity.role;
