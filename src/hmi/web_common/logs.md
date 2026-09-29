@@ -196,3 +196,10 @@
 - 변경: `ui.js`의 `ui-brand`가 `href`(와 `aria-label`)를 받으면 자식을 하나의 링크로 감싸게 했다. 링크의 hover 밑줄과 포커스 링은 `components.css`가 소유하고, `template.html`에 href 선언 예시를 남겼다. 소비자는 속성 선언만 하고 앵커를 따로 적지 않는다. `test_shared_controls.py`에 동작·스타일 소유를 고정하는 계약을 더했다. 배경과 대안은 [D-335](../../../docs/adr/D-335-brand-home-link-shared-component.md).
 - 증거: `python -X utf8 -m pytest src/hmi/web/test src/hmi/dashboard/test/test_surface_home_link.py src/hmi/dashboard/test/test_dashboard_package.py src/hmi/dashboard/test/test_web_budgets.py -q` 97 passed 1 skipped(브라우저 클릭 1건은 게이트 변수). 게이트 실행에서 `ROSY_RUN_BROWSER_TESTS=1` 클릭 통과를 확인한다.
 - gate 변화: 없음. web_common은 라이브러리 계층이라 ROS-SIM~FIELD는 N/A 유지.
+
+## 2026-09-29 · uncommitted · web-surface-hardening: `/common` allowlist은 `manifest.json` 하나
+
+- 변경: `manifest.json`(공유 자산 이름 → 미디어 타입, JS는 `text/javascript` 하나)을 새로 두고 `CMakeLists.txt`가 share로 설치한다. core_api_web·fleet·games·control 진단 페이지가 각자 적던 목록 넷을 이 파일 읽기로 바꿨고, 네 서버 모두 `hold-ticker.js`를 서빙한다. `test/test_asset_manifest.py`가 목록=설치 파일(manifest 자신 제외)과 파일 존재를 고정한다. `AGENTS.md`·`progress.md`의 토큰 링크 안내를 `/common/tokens.css`로 고쳤다(D-129 정정).
+- 증거: `python -m pytest src/hmi/web/test -q` 92 passed.
+- gate 변화: 없음. 라이브러리 계층이라 ROS-SIM~FIELD는 N/A.
+- 결정: D-157(명시 allowlist) 유지, D-129 정정 2026-09-29.

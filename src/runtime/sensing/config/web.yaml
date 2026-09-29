@@ -2,8 +2,11 @@
 # teleop_topic is accepted for launch compatibility, but web_node always
 # publishes /cmd_vel_raw. Missing safety never grants a path around the
 # gate. Isolated Gazebo uses the same topic and the same /safety/* gauges.
+# bind_host stays loopback: the POSTs drive the robot without auth. Set
+# 0.0.0.0 only on a trusted network to view from another machine.
 /**/web_node:
   ros__parameters:
     port: 28181
     backend_port: 28182
+    bind_host: 127.0.0.1
     teleop_topic: auto

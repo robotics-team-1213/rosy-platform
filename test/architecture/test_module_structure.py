@@ -172,7 +172,7 @@ ROLE_DIR = {
     "core_api_web": ("runtime", "api_web"),
     "core_common": ("contracts", "foundation"),
     "control": ("runtime", "sensing"),
-    "web_common": ("hmi", "web"),
+    "web_common": ("hmi", "web_common"),
     "emotion": ("hmi", "face"),
     "pinky_pro": ("products", "pinky_pro", "profile"),
     "bringup": ("products", "pinky_pro", "bringup"),

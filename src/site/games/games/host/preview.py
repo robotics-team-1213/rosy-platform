@@ -15,14 +15,31 @@ from games.field import Field
 from games.game import MatchState, Observation
 
 WEB = Path(__file__).resolve().parents[1] / "web"
-COMMON = Path(__file__).resolve().parents[4] / "hmi" / "web"
-COMMON_ASSETS = {
-    "tokens.css": ".css",
-    "components.css": ".css",
-    "template.html": ".html",
-    "ui.js": ".js",
-    "core_ui_logic.js": ".js",
-}
+
+
+def web_common_dir() -> Path:
+    """Installed web_common share first, then the source tree (host runs).
+
+    A web_common directory is one that ships ``manifest.json``."""
+    try:
+        from ament_index_python.packages import get_package_share_directory
+
+        share = Path(get_package_share_directory("web_common"))
+        if (share / "manifest.json").is_file():
+            return share
+    except (ImportError, LookupError):
+        pass
+    return Path(__file__).resolve().parents[4] / "hmi" / "web_common"
+
+
+COMMON = web_common_dir()
+#: name -> media type. web_common's manifest is the one /common allowlist.
+COMMON_ASSETS = json.loads((COMMON / "manifest.json").read_text(encoding="utf-8"))["shared_assets"]
+#: The board is same-origin only: its script, sheets, overlay and frame.
+PAGE_CSP = (
+    "default-src 'self'; connect-src 'self'; img-src 'self'; style-src 'self'; "
+    "script-src 'self'; frame-ancestors 'none'; base-uri 'self'"
+)
 MIME = {
     ".html": "text/html; charset=utf-8",
     ".js": "text/javascript; charset=utf-8",
@@ -156,12 +173,12 @@ class _Handler(BaseHTTPRequestHandler):
             return
         if path.startswith("/common/"):
             asset = path.removeprefix("/common/")
-            suffix = COMMON_ASSETS.get(asset)
+            media = COMMON_ASSETS.get(asset)
             file = COMMON / asset
-            if suffix is None or "/" in asset or not file.is_file():
+            if media is None or "/" in asset or not file.is_file():
                 self._send(404, "text/plain; charset=utf-8", b"not found")
                 return
-            self._send(200, MIME[suffix], file.read_bytes())
+            self._send(200, f"{media}; charset=utf-8", file.read_bytes())
             return
         name = "index.html" if path in ("/", "/index.html") else path.lstrip("/")
         if "/" in name or name.startswith("."):
@@ -178,6 +195,12 @@ class _Handler(BaseHTTPRequestHandler):
         if path != "/stop":
             self._send(404, "text/plain; charset=utf-8", b"not found")
             return
+        origin = self.headers.get("Origin")
+        if origin is not None and origin != f"http://{self.headers.get('Host', '')}":
+            # Only the board itself may stop the match; another page open in
+            # the same browser may not (a POST without Origin is not a page).
+            self._send(403, MIME[".json"], b'{"ok":false,"error":"foreign origin"}')
+            return
         self.board.request_stop()
         self._send(200, MIME[".json"], b'{"ok":true}')
 
@@ -185,6 +208,8 @@ class _Handler(BaseHTTPRequestHandler):
         self.send_response(code)
         self.send_header("Content-Type", media)
         self.send_header("Cache-Control", "no-cache")
+        if media.startswith("text/html"):
+            self.send_header("Content-Security-Policy", PAGE_CSP)
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)

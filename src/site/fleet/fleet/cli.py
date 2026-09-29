@@ -27,13 +27,18 @@ from fleet.swarm.transport import HttpRobotClient
 
 
 def default_web_common() -> Path:
-    """Resolve installed assets first, with a source-tree fallback for host tools."""
+    """Resolve installed assets first, with a source-tree fallback for host tools.
+
+    A web_common directory is one that ships ``manifest.json``."""
     try:
         from ament_index_python.packages import get_package_share_directory
 
-        return Path(get_package_share_directory("web_common"))
+        share = Path(get_package_share_directory("web_common"))
+        if (share / "manifest.json").is_file():
+            return share
     except (ImportError, LookupError):
-        return Path(__file__).resolve().parents[3] / "hmi" / "web"
+        pass
+    return Path(__file__).resolve().parents[3] / "hmi" / "web_common"
 
 
 def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
@@ -63,7 +68,7 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     console.add_argument("--host", default="127.0.0.1")
     console.add_argument("--port", type=int, default=8090)
     console.add_argument("--web-common", default=default_web_common(), type=Path,
-                         help="공용 L1 웹 자산 디렉터리 — /common 아래로 서빙한다(D-1005)")
+                         help="공용 L1 웹 자산 디렉터리 — /common 아래로 서빙한다(D-157)")
     console.add_argument("--token", default=None,
                          help="관제 UI 접속 토큰. 루프백 밖으로 열 때는 필수다")
     console.add_argument("--token-env", default=None,

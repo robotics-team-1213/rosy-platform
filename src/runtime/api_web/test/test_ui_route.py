@@ -1,4 +1,4 @@
-"""D-129·D-1005 — 공용 L1 토큰 파일과 호환 경로. D-130.3 — 해시 고정."""
+"""D-129·D-157 — 공용 L1 토큰 파일과 호환 경로. D-130.3 — 해시 고정."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from fastapi.testclient import TestClient
 from core_api_web.api.app import create_app
 
 WEB_ROOT = Path(__file__).resolve().parents[3] / "hmi" / "dashboard"
-TOKENS = Path(__file__).resolve().parents[3] / "hmi" / "web" / "tokens.css"
+TOKENS = Path(__file__).resolve().parents[3] / "hmi" / "web_common" / "tokens.css"
 
 #: D-92 어휘 표의 열 이름 — 갤러리가 이 목록과 어긋나면 표와 갤러리가 두 개의
 #: 사실이 된다(D-129 Consequences).
@@ -40,6 +40,9 @@ def test_common_route_serves_only_the_declared_shared_assets():
     assert client.get("/common/core_ui_logic.js").status_code == 200
     assert client.get("/common/ui.js").status_code == 200
     assert client.get("/common/template.html").status_code == 200
+    ticker = client.get("/common/hold-ticker.js")
+    assert ticker.status_code == 200
+    assert ticker.headers["content-type"].startswith("text/javascript")
     assert "/api/v1/do" in client.get("/openapi.json").json()["paths"]
     assert client.get("/common/../api/app.py").status_code == 404
 
@@ -137,3 +140,15 @@ def test_each_base_surface_has_its_role_panel_mounts():
     }
     hardware = next(panel for panel in registry.panels if panel.id == "host.hardware")
     assert (hardware.surface, hardware.slot, hardware.min_role) == ("device", "main", "administrator")
+
+
+def test_role_surface_pages_carry_the_dashboard_csp():
+    client = _client()
+    dashboard_csp = client.get("/dashboard").headers["content-security-policy"]
+    assert "script-src 'self'" in dashboard_csp
+    assert "frame-ancestors 'none'" in dashboard_csp
+    for surface in ("/console", "/setup", "/device"):
+        response = client.get(surface)
+        assert response.status_code == 200, surface
+        assert response.headers.get("content-security-policy") == dashboard_csp, surface
+        assert response.headers["cache-control"] == "no-cache", surface

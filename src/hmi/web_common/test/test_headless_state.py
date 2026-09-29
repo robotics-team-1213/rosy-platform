@@ -8,7 +8,7 @@ import subprocess
 from pathlib import Path
 
 
-WEB_COMMON = Path(__file__).resolve().parents[2] / "web"
+WEB_COMMON = Path(__file__).resolve().parents[2] / "web_common"
 CI_WORKFLOW = Path(__file__).resolve().parents[4] / ".github" / "workflows" / "ci.yml"
 
 

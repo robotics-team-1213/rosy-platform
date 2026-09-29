@@ -2,7 +2,7 @@
 import numpy as np
 
 # concept 16 §6 — 서버가 굽는 /map.png와 브라우저 캔버스가 같은 색을 써야
-# 오버레이가 섞인다. 계약 상대는 `src/control/web/dashboard.html`의
+# 오버레이가 섞인다. 계약 상대는 `src/runtime/sensing/web/diagnostic.html`의
 # --unk / --free / --wall 이며, `test_map_raster_color_contract.py`가 지킨다.
 #
 # 계약은 RGB로 적는다. cv2.imencode는 3채널 배열을 BGR로 읽으므로 변환은

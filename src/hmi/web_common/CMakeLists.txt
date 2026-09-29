@@ -3,7 +3,9 @@ project(web_common)
 
 find_package(ament_cmake REQUIRED)
 
+# manifest.json lists which of these files servers expose under /common/.
 install(FILES
+  manifest.json
   tokens.css
   components.css
   template.html

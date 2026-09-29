@@ -3,8 +3,8 @@
 # 코드를 담지 않는다: D-92 "어휘만 공유", D-75 무번들러.
 #
 # contracts 이름이 곧 시험 파일:
-#   shared_controls    = src/hmi/web/test/test_shared_controls.py
-#   typography_focus   = src/hmi/web/test/test_surface_typography_focus_contracts.py
+#   shared_controls    = src/hmi/web_common/test/test_shared_controls.py
+#   typography_focus   = src/hmi/web_common/test/test_surface_typography_focus_contracts.py
 #   dialog             = test/test_web_dialog_contract.py
 # 세 계약을 다 받지 않는 항목은 contract_reason, baseline이 없는 항목은
 # baseline_reason을 적는다. 이유 없는 빈 칸은 등록되지 않는다.
@@ -34,7 +34,7 @@ surfaces:
     baseline: docs/validation/uiux-surfaces-2026-09-26/captures/games-play-1280x800.png
 
   - id: control-diagnostic
-    path: src/runtime/sensing/web/dashboard.html
+    path: src/runtime/sensing/web/diagnostic.html
     surface: robot
     audience: 제어 진단 (D-153 §7 — PARKED D-266)
     grammar: procedure
@@ -47,7 +47,7 @@ surfaces:
       해제 회차가 첫 셀을 남기면 이 문장을 baseline 경로로 바꾼다.
 
   - id: web-common
-    path: src/hmi/web
+    path: src/hmi/web_common
     surface: robot
     audience: 라이브러리 — 사람이 여는 화면이 아니다
     grammar: spatial

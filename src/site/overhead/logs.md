@@ -67,3 +67,9 @@
 - Change: ran read-only availability checks for the previously supplied robot address and connected Android devices; no robot commands were sent.
 - Evidence: ping to `192.168.1.202` timed out and `adb devices -l` returned an empty device list. The local Docker Fleet/Vision/proxy stack remains healthy, but the synthetic WebSocket sender has stopped and no live camera frame is available.
 - Gate: synthetic SOURCE/LOCAL evidence remains valid. Measured camera calibration, phone streaming, Ubuntu/site TLS, DEVICE and FIELD remain PARKED.
+
+## 2026-09-29 · uncommitted · web-surface-hardening: CI에 overhead 호스트 시험과 android 단위 시험
+
+- 변경: `ci.yml`이 `src/site/overhead/test`를 따로 돌린다(games와 `test_preview.py` 이름이 겹친다). 새 `.github/workflows/android.yml`이 `src/site/overhead/**` 변경 때만 Temurin 17로 `testDebugUnitTest`를 돈다.
+- 증거: `python -m pytest src/site/overhead/test -q` 86 passed. 로컬 `gradlew testDebugUnitTest --no-daemon`(JDK 21) BUILD SUCCESSFUL. CI 실행 증거는 아직 없다(푸시 안 함).
+- gate 변화: 없음.

@@ -56,7 +56,7 @@ COPY src/contracts/foundation /opt/rosy_ws/src/contracts/foundation
 COPY src/runtime/events /opt/rosy_ws/src/runtime/events
 COPY src/runtime/services /opt/rosy_ws/src/runtime/services
 COPY src/runtime/api_web /opt/rosy_ws/src/runtime/api_web
-COPY src/hmi/web /opt/rosy_ws/src/hmi/web
+COPY src/hmi/web_common /opt/rosy_ws/src/hmi/web_common
 COPY src/hmi/dashboard /opt/rosy_ws/src/hmi/dashboard
 
 WORKDIR /opt/rosy_ws
@@ -131,7 +131,7 @@ COPY src/runtime/navigation ./src/runtime/navigation
 COPY src/products/omx/adapter ./src/products/omx/adapter
 COPY src/products/omx/profile ./src/products/omx/profile
 COPY src/runtime/sensing ./src/runtime/sensing
-COPY src/hmi/web ./src/hmi/web
+COPY src/hmi/web_common ./src/hmi/web_common
 RUN mkdir -p src/sim/description/meshes
 RUN set -eo pipefail \
     && source /opt/ros/jazzy/setup.bash \

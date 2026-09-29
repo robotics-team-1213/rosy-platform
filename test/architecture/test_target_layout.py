@@ -25,7 +25,7 @@ TARGET = {
     "products/pinky_pro": "products/pinky_pro/profile",
     "products/omx": "products/omx/profile",
     "hmi/face": "hmi/face",
-    "hmi/web": "hmi/web",
+    "hmi/web_common": "hmi/web_common",
     "hmi/dashboard": "hmi/dashboard",
     "site/fleet": "site/fleet",
     "site/games": "site/games",

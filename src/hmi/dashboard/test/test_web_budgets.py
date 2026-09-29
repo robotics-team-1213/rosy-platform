@@ -29,7 +29,7 @@ VERDICTS = {
         "accept: markup is a document, not code; ui-shell grammar is guarded "
         "by test_shared_controls.py, not line counts (D-262)",
     ),
-    "runtime/sensing/web/dashboard.html": (
+    "runtime/sensing/web/diagnostic.html": (
         1857,
         "accept: D-150 pins one file and one IIFE with no build step; "
         "PARKED surface (D-153, D-253)",

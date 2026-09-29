@@ -22,10 +22,10 @@ ROOT = Path(__file__).resolve().parents[1]
 def _load_registry():
     """D-329 표면 레지스트리를 경로로 직접 읽는다.
 
-    `test/` 와 `src/hmi/web/test` 는 한 파일 트리에 있으나 서로의 import 경로에
+    `test/` 와 `src/hmi/web_common/test` 는 한 파일 트리에 있으나 서로의 import 경로에
     없다. sys.path 를 넓히면 그쪽 conftest 까지 함께 올라오므로 경로로 로드한다.
     """
-    path = ROOT / "src" / "hmi" / "web" / "test" / "surface_registry.py"
+    path = ROOT / "src" / "hmi" / "web_common" / "test" / "surface_registry.py"
     spec = importlib.util.spec_from_file_location("rosey_surface_registry", path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)

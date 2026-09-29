@@ -19,7 +19,7 @@ import re
 
 import pytest
 
-TOKENS = Path(__file__).parent.parent.parent / "web" / "tokens.css"
+TOKENS = Path(__file__).parent.parent.parent / "web_common" / "tokens.css"
 WEB_COMPONENTS = TOKENS.parent / "components.css"
 DASHBOARD = TOKENS.parent.parent / "dashboard"
 
