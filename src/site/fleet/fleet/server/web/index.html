@@ -136,11 +136,12 @@
         </details>
       </section>
       <div class="legend" id="map-legend" hidden>
-        <span><i class="sw free"></i>자유</span>
-        <span><i class="sw occupied"></i>점유</span>
-        <span><i class="sw unknown"></i>미지</span>
+        <span data-legend="grid"><i class="sw free"></i>자유</span>
+        <span data-legend="grid"><i class="sw occupied"></i>점유</span>
+        <span data-legend="grid"><i class="sw unknown"></i>미지</span>
         <span><i class="sw robot"></i>로봇</span>
         <span><i class="sw goal"></i>목표</span>
+        <span id="legend-sighting" hidden><i class="sw sighting"></i>카메라 관측</span>
       </div>
       <p class="hint" id="hint" aria-live="polite">오른쪽에서 로봇의 <b>목표 지정</b>을 누른 뒤 지도를 찍으면 그 로봇에게만 목표가 갑니다.</p>
       <details class="note">

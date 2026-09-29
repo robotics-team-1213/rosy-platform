@@ -231,8 +231,8 @@
 
 ## 최근 기록
 
-- 2026-09-30 · uncommitted · feat(fleet): D-352 S1–S3 구현 착지(브랜치 feat/fleet-robot-enrollment-s1)
-- 2026-09-29 · uncommitted · docs(adr): D-352 2차 리뷰 반영 — 90일 위협 명시·operator 회수·주소 바뀜 안전 규칙
-- 2026-09-29 · uncommitted · docs(adr): D-352 독립 리뷰·사용자 결정 반영 개정
-- 2026-09-29 · uncommitted · docs(adr): D-352 사이트 콘솔의 로봇 화면 코드 등록 제안과 계획
-- 2026-09-29 · uncommitted · docs(plan): 온디맨드 활성화 후보 측정 기준선
+- 2026-09-30 · uncommitted · docs(adr): D-349 도크 자동 충전 코드 준비 완료 기록
+- 2026-09-30 · uncommitted · docs(dock): 전원 시판품 확정·물리 조립 목록
+- 2026-09-30 · uncommitted · refactor(dock): 리밋스위치 인터록·NTC 보류·최소 구성 확정
+- 2026-09-30 · uncommitted · docs(plan): D-348 실행 계획 T1~T7 작성
+- 2026-09-30 · uncommitted · docs(adr): D-348 목표 증거 생산자 계약과 검증기 연결 수용

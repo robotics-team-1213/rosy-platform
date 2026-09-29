@@ -43,6 +43,7 @@ from core_features.line_follow import (  # noqa: E402
     LineObservation,
 )
 from core_features.traffic_policy import (  # noqa: E402
+    SignalHeadEvidence,
     TrafficPolicyConfig,
     TrafficPolicyManager,
     TrafficPolicyMode,
@@ -124,7 +125,8 @@ def _render_preview_evidence(frames: list[np.ndarray], output_dir: Path) -> None
 
 
 def _svg(scene: dict, samples: list[dict]) -> str:
-    width, height = 1120, 650
+    width = 1120
+    height = max(650, 158 + len(samples) * 66 + 60)
     map_x, map_y, map_w, map_h = 55, 90, 470, 490
     timeline_x = 585
     all_points = [point for lane in scene["lanes"]
@@ -211,9 +213,10 @@ def _svg(scene: dict, samples: list[dict]) -> str:
             f'{sample["command_linear"]:.3f} m/s · {sample["policy_reason"]}</text>',
         ])
     parts.extend([
-        '<text x="55" y="620" fill="#9eacc0" font-family="sans-serif" '
-        'font-size="13">HOST-SIM evidence only · no physical Pinky Pro, camera mount, '
-        'or stopping-distance acceptance</text>',
+        f'<text x="55" y="{height - 30}" fill="#9eacc0" '
+        'font-family="sans-serif" font-size="13">HOST-SIM evidence only · '
+        'no physical Pinky Pro, camera mount, or stopping-distance '
+        'acceptance</text>',
         '</svg>',
     ])
     return "\n".join(parts) + "\n"
@@ -262,8 +265,9 @@ def run_simulation(output_dir: Path | str) -> dict:
     montage = []
     preview_frames = []
 
-    def run_frame(phase, at, frame):
+    def run_frame(phase, at, frame, *, manager=None, head=None):
         now[0] = at
+        policy = traffic if manager is None else manager
         detected, road = _detector_sample(
             frame, stamp=at, map_id=map_id,
             scene_revision=scene_revision)
@@ -275,10 +279,12 @@ def run_simulation(output_dir: Path | str) -> dict:
             error=detected.lane.error,
             confidence=detected.lane.confidence,
         ), received_at=at, source_now=at)
-        traffic.observe(road, received_at=at, source_now=at)
+        policy.observe(road, received_at=at, source_now=at)
+        if head is not None:
+            policy.observe_signal(head, received_at=at, source_now=at)
         traffic_gate.apply_line_candidate(
-            line, traffic, command, line.tick(at), at)
-        status = traffic.status()
+            line, policy, command, line.tick(at), at)
+        status = policy.status()
         twist = command.applied[-1][1]
         samples.append({
             "phase": phase,
@@ -292,6 +298,7 @@ def run_simulation(output_dir: Path | str) -> dict:
             "signal_colour": (
                 None if detected.signal is None else detected.signal.colour),
             "signal_conflict": detected.signal_conflict,
+            "signal_source_kind": status.signal_source_kind,
             "policy_state": status.state,
             "policy_reason": status.reason,
             "command_linear": round(twist.linear, 5),
@@ -328,11 +335,66 @@ def run_simulation(output_dir: Path | str) -> dict:
         "crosswalk_visible": False,
         "signal_colour": None,
         "signal_conflict": False,
+        "signal_source_kind": stale_status.signal_source_kind,
         "policy_state": stale_status.state,
         "policy_reason": stale_status.reason,
         "command_linear": round(stale_twist.linear, 5),
         "command_angular": round(stale_twist.angular, 5),
     })
+
+    # Unsignalized junction (D-337 companion, junction_rule=stop_and_go): the
+    # operator declares this scene signal-free; absence is never inferred from
+    # the camera. A late signal observation contradicts the declaration.
+    def _policy(junction_rule):
+        return TrafficPolicyManager(
+            events,
+            config=TrafficPolicyConfig(
+                mode=TrafficPolicyMode.ENFORCED,
+                map_id=map_id,
+                scene_revision=scene_revision,
+                policy_revision="traffic-policy-v1",
+                approach_distance_m=0.35,
+                stop_distance_m=0.12,
+                stop_dwell_s=0.5,
+                stale_after_s=0.4,
+                min_confidence=0.5,
+                junction_rule=junction_rule,
+            ),
+            clock=lambda: now[0],
+        )
+
+    unsignalized = _policy("stop_and_go")
+    run_frame("unsig_clear", 12.0, _camera_frame(), manager=unsignalized)
+    run_frame("unsig_approach", 12.2, _camera_frame(stop_row=140),
+              manager=unsignalized)
+    run_frame("unsig_stop", 12.4,
+              _camera_frame(stop_row=198, crosswalk=True), manager=unsignalized)
+    run_frame("unsig_dwell", 12.7,
+              _camera_frame(stop_row=198, crosswalk=True), manager=unsignalized)
+    run_frame("unsig_proceed", 13.0,
+              _camera_frame(stop_row=198, crosswalk=True), manager=unsignalized)
+    run_frame("unexpected_signal", 13.2, _camera_frame(
+        stop_row=198, crosswalk=True, signal="RED"), manager=unsignalized)
+
+    # Measured-light fusion (D-337): the camera never sees the head, the
+    # observer service does. A fresh manager restarts the stop dwell.
+    fused = _policy("signal_controlled")
+
+    def _head(at, *, red=False, green=False):
+        return SignalHeadEvidence(
+            stamp=at, map_id=map_id, scene_revision=scene_revision,
+            red=red, green=green, confidence=0.9)
+
+    run_frame("obs_stop", 13.4,
+              _camera_frame(stop_row=198, crosswalk=True), manager=fused)
+    run_frame("obs_unknown", 14.0,
+              _camera_frame(stop_row=198, crosswalk=True), manager=fused)
+    run_frame("obs_green", 14.2,
+              _camera_frame(stop_row=198, crosswalk=True),
+              manager=fused, head=_head(14.2, green=True))
+    run_frame("obs_conflict", 14.4, _camera_frame(
+        stop_row=198, crosswalk=True, signal="RED"),
+        manager=fused, head=_head(14.4, green=True))
 
     expected = {
         "clear": ("FOLLOW", True),
@@ -341,6 +403,16 @@ def run_simulation(output_dir: Path | str) -> dict:
         "red_wait": ("WAIT_SIGNAL", False),
         "green_proceed": ("PROCEED", True),
         "stale": ("HOLD", False),
+        "unsig_clear": ("FOLLOW", True),
+        "unsig_approach": ("APPROACH", True),
+        "unsig_stop": ("STOP_REQUIRED", False),
+        "unsig_dwell": ("STOP_REQUIRED", False),
+        "unsig_proceed": ("PROCEED", True),
+        "unexpected_signal": ("HOLD", False),
+        "obs_stop": ("STOP_REQUIRED", False),
+        "obs_unknown": ("WAIT_SIGNAL", False),
+        "obs_green": ("PROCEED", True),
+        "obs_conflict": ("HOLD", False),
     }
     by_phase = {sample["phase"]: sample for sample in samples}
     passed = all(
@@ -353,6 +425,11 @@ def run_simulation(output_dir: Path | str) -> dict:
             "SEMANTIC_ROAD_HOST_SIM_PASS"
             if passed else "SEMANTIC_ROAD_HOST_SIM_FAIL"),
         "simulation": "synthetic_camera_closed_loop",
+        "scenarios": [
+            "signal_controlled",
+            "stop_and_go_unsignalized",
+            "observer_fusion",
+        ],
         "map_id": map_id,
         "scene_revision": scene_revision,
         "semantic_scene_path": str(SCENE_PATH.relative_to(REPO_ROOT)),

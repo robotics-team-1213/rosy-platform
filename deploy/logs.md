@@ -1501,6 +1501,21 @@
 - 결정: 없음(픽스처 안무만).
 - 교훈: 같은 파일의 부하 민감 시험은 한 번에 하나씩 실패로 드러난다 — 형제 시험 전부를 예방 수술하지 말고 실패한 것만 고친다.
 
+## 2026-09-29 · uncommitted · fix(release): 비밀 스캐너에 저널 인용 산탄 예외
+
+- 변경: secret_scan.py에 KNOWN_PROSE_QUOTES를 추가했다 — src/site/fleet/logs.md 한 경로에서만, 제거된 픽스처 값(fixture-secret)의 인용을 면제한다. 병행 fleet 세션이 api_key 리터럴을 허용 키로 교체하며(c9001aba) 저널에 옛 값을 인용했는데, 모듈 저널은 append-only라 문구를 못 고치고 스캐너가 이를 credential로 적발해 CI(main)가 빨간 상태였다. 같은 값은 그 외 모든 위치(해당 모듈 코드 포함)에서 여전히 적발된다. 코드는 3f0c6636으로 먼저 반영됐고 이 항목은 뒤늦은 저널 보충이다.
+- 증거: test_secret_scan.py 2건 신설(핀 경로 면제 + 다른 경로 여전히 credential 적발 — 산탄 증명), test_release_boundary_guards 72 passed. test_boot_display는 로컬 106 통과 — CI 로그의 FAILED 문자열은 파라미터 ID(FAILED:rosy-core.service 상태명)였다.
+- gate 변화: 없음.
+- 결정: 예외는 (경로, 값) 쌍으로 핀 고정. 목록이 늘어나면 각 항목이 사유와 함께 심사 대상이다.
+- 교훈: 저널에 옛 비밀 형태 문자를 인용하지 않는다 — 문구로 서술한다. append-only라 한번 실으면 못 지운다. (그리고 저널 append는 인라인 명령이 아니라 스크립트 파일로 — 이 항목 자체가 그 교훈의 산물이다.)
+
+## 2026-09-29 · uncommitted · feat(verify): 상주 단위 CPU 측정·A/B 도구 (D-347 B레인 관문)
+
+- 변경: deploy/robot/pinky_pro/verify/measure-resident-cpu.sh 신설 — systemd 단위별 CPU를 cgroup/proc 틱 증분으로 샘플하고(의존 설치 없음), --ab-unit 로 켜짐/꺼짐 A/B 를 잰 다음 단위를 반드시 되살린다. A/B 허용 단위는 rosy-camera·rosy-navigation 뿐(rosy-core=게이트웨이, rosy-io=안전 기본층 금지). 결과는 /var/lib/rosy/resident-cpu-<ts>.md. 기준선 문서 §5에 도구로 등재.
+- 증거: test/test_measure_resident_cpu.py 4건 신설 — bash -n 파싱, 금지 단위 3종 거부(exit 2, 무권한으로 판정 가능=allowlist 가 root 검사보다 선행), stop 뒤 start 복원·기준서 지시 핀. 산탄 증명: 허용 목록을 넓히면 거부 시험이 즉시 적신.
+- gate 변화: 없음(측정 도구·실기 세션用品).
+- 결정: 측정 도구는 상태를 바꾸고 끝내지 않는다 — A/B 후 단위 복원이 도구 계약이다.
+
 ## 2026-09-30 · uncommitted · feat(site): D-352 robot_credential_key secret와 오프라인 rekey
 
 - 변경: `site/compose.yaml`에 secret `robot_credential_key`와 `--robot-credential-key-file`, `site/robot-credential-key.template.txt`(형식만), `site/site_db.py rekey`(`--assume-stopped` 필수), `site/requirements-fleet.txt`에 `cryptography==49.0.0`, `site/README.md` 콘솔 등록 절차.

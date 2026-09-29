@@ -114,6 +114,7 @@ CONSOLE_ASSETS = {
     "map-view.js": "application/javascript",
     "roster.js": "application/javascript",
     "signals.js": "application/javascript",
+    "site-layer.js": "application/javascript",
     "vision-view.js": "application/javascript",
 }
 
@@ -263,10 +264,12 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                omx_action_transport=None,
                enrollment=None,
                robot_credential_key: Optional[str] = None) -> FastAPI:
-    mission_configured = any((mission_service, proposal_store, candidate_resolver))
-    if mission_configured and not all((mission_service, proposal_store, candidate_resolver)):
-        raise ValueError("Mission API requires MissionService, ProposalStore, and candidate resolver")
-    if mission_configured and not callable(candidate_resolver):
+    mission_configured = mission_service is not None or proposal_store is not None
+    if (mission_service is None) != (proposal_store is None):
+        raise ValueError("Mission API requires both MissionService and ProposalStore")
+    if candidate_resolver is not None and not mission_configured:
+        raise ValueError("Mission candidate resolver requires MissionService and ProposalStore")
+    if candidate_resolver is not None and not callable(candidate_resolver):
         raise ValueError("Mission candidate resolver must be callable")
     if mission_configured and task_service is None:
         raise ValueError("Mission API requires persistent API audit and dispatch-control storage")
@@ -291,8 +294,8 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     stop_transport = omx_stop_transport
     if configured_omx and stop_transport is None:
         stop_transport = UnixLocalStopTransport(omx_socket_root)
-    if enable_mission_dispatcher and not mission_configured:
-        raise ValueError("Mission dispatcher requires the complete Mission API configuration")
+    if enable_mission_dispatcher and (not mission_configured or candidate_resolver is None):
+        raise ValueError("Mission dispatcher requires the complete Mission API and candidate resolver")
     if enable_mission_dispatcher and not configured_omx:
         raise ValueError("Mission dispatcher requires configured OMX workcells")
     action_transport = omx_action_transport
@@ -1038,6 +1041,15 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         return {"source_id": body.source_id, "lease": token,
                 "frame_path": f"/api/vision/sources/{body.source_id}/frame",
                 "expires_in_s": 60}
+
+    @app.get("/api/fleet/site-map", dependencies=read_guard, tags=["sightings"])
+    async def fleet_site_map() -> dict:
+        # D-257: the overhead-covered rectangle is display geometry, not a motion input.
+        site_map = sightings.site_map() if sightings is not None and sightings.enabled else None
+        if site_map is None:
+            raise HTTPException(status_code=404, detail={"code": "NO_SITE_MAP",
+                                                         "message": "no site camera geometry configured"})
+        return site_map
 
     @app.get("/api/fleet/map", dependencies=read_guard, tags=["fleet"])
     async def fleet_map() -> dict:
