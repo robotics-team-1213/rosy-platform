@@ -3554,3 +3554,11 @@
 - gate 변화: 없음.
 - 결정: Pinky Pro `docking.supported`는 D5 통과 전까지 false 유지.
 - 교훈: 병행 세션의 D-348 소모를 계약시험 중간에 발견 — D-346의 ADR 중복 검사가 있으므로 즉시 D-349로 재부여. 다음 빈 번호 확인 습관화.
+
+
+## 2026-09-30 · uncommitted · docs: restore D-348 goal-evidence decision and execution record
+
+- Change: record the accepted producer registry/verifier boundary, two-order evidence lifecycle, and completed SOURCE/LOCAL task outcomes in the ADR and paired design/execute plans.
+- Evidence: D-348 registry row and API Reference v1.59 ?10.14 agree with Fleet implementation; source suite is 724 passed, 5 skipped.
+- Gate: ROS-SIM, ARTIFACT, DEVICE, FIELD remain HOLD/PARKED; no real producer, model tool dispatch, actuator operation, or physical acceptance is claimed.
+- Decision: D-348 remains Accepted as a contract and SOURCE/LOCAL implementation decision.
