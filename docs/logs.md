@@ -3442,3 +3442,11 @@
 - gate 변화: 없음. 잔여 실패 2건(test_size_verdicts·test_over_budget)은 병행 트랙의 사전 존재 예산 초과(schemas.py 738행·fleet 10,436행·app.py 재성장)로 이 변경과 무관.
 - 결정: mesh/world/map 등 자산 참조도 P3 선언 대상임을 스캐너가 이제 증명한다. 신규 위반은 P5대로 — fix(선언 추가) 또는 KNOWN_UNDECLARED 사유 기록.
 - 교훈: 패턴 추가는 추가만으로 증명되지 않는다 — 물릴 대상을 찔러 빨강을 본 뒤 믿는다(test/AGENTS 변이 증명 규약).
+
+## 2026-09-29 · uncommitted · docs(adr): D-351 로봇 ↔ 사이트 관제 통신 적합성 제안과 계획
+
+- 변경: `docs/adr/D-351-robot-site-console-protocol-conformance.md`(Proposed), `docs/plans/2026-09-29-robot-fleet-protocol-conformance-plan.md`(S1–S6), ADR Log 행 추가. `tools/harness/harness.yaml`에 `.worktrees/pilot-teleop`의 미커밋 초안 D-346–D-350을 예약했다.
+- 증거: DEVICE(읽기 전용) — 실물 `rosy-pinky-8kcn`(192.168.1.202:8080, 릴리스 `2026.09.27-010`)에 토큰 없이 GET·WS만 보냈다(2026-09-29). 결과: `/api/v1`·`/openapi.json`·`/docs`·`/metrics`는 공개, state·map·events·system/info·whoami는 401, `/ws/state`·`/ws/events`는 close 4401, `/api/v1/health`는 404. mDNS TXT는 프로파일에 적합. 로봇 OpenAPI와 `main` 9b3cfb59 `create_app().openapi()`를 비교하니 경로 93개는 같고, `GoalRequest.correlation_id`(D-316)와 `TrafficPolicyPatch.junction_rule`이 로봇에 없다. 판 표기는 v1.41(로봇)·v1.52(`app.py`)·v1.56(문서)이고 `info.version`은 셋 다 1.20.0. LOCAL — `python -m pytest src/runtime/gateway/test/test_protocol_version_alignment.py -q` 1 failed/2 passed(`main`의 기존 실패). SOURCE — Hub 세션 결속·Agent seq 재시작·mDNS 브리지 TXT 검사 결함을 코드 판독으로 확인.
+- gate 변화: 없음. 관제 DEVICE는 HOLD(토큰·짝 토큰·v1.44 이상 이미지 필요).
+- 결정: D-351 Proposed.
+- 교훈: 계약 문서와 코드가 같은 판을 말하는지 시험이 있어도, 배포된 이미지가 어느 판인지는 런타임에서 알 수 없었다 — 판을 와이어로 노출해야 실물 대조가 된다.
