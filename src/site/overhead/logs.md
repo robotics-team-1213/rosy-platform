@@ -87,3 +87,11 @@
 - 변경: 1280 px·품질 70 JPEG가 `max_bytes`(200 KB)를 조금 넘는 장면에서 모든 프레임이 버려져 0 fps가 되던 문제를 고쳤다. 초과 프레임은 최대 두 번 10씩 낮춰 다시 인코딩하고(하한 30), 다음 프레임은 지금까지 시도한 가장 낮은 화질에서 시작하며, 30회 연속으로 맞으면 5 올려 본다. 올려 본 화질이 넘치면 마지막으로 맞았던 화질로 곧장 돌아간다. 카메라 재바인딩·화질·폭 변경 때 적응 상태를 초기화한다. 설정 `jpeg_quality`는 상한이고 초과 프레임은 여전히 보내지 않는다. 정지 중 스트림 화면은 지난 실행 대상 대신 저장된 대상을 보인다.
 - 증거: Galaxy S21(Android 15) 실기기에서 수정 전 0 fps·버림 누적, 수정 후 3.0 fps·버림 0, 콘솔 미리보기 경로 HTTP 200. 저장 대상을 바꾸면 재시작 없이 표시가 바뀐다. JVM 단위 시험 통과(아래 커밋 참조). 독립 리뷰(2026-09-30) 지적 1·2·4·5 반영.
 - gate 변화: DEVICE(휴대폰 송출 단독) 증거 추가. 현장 보정·Ubuntu/TLS·FIELD는 PARKED 그대로.
+
+## 2026-09-30 · uncommitted · test(overhead-app): D-358 S1 DiscoveryVectorsTest
+
+- 변경: Gradle 단위 시험에 시스템 속성 `rosy.discovery.vectors`(`test/fixtures/protocol/discovery-txt.v1.json`)를 더했다. `OverheadServiceRecord`/`RobotCoreServiceRecord`에 벡터 어휘로 사유를 내는 `rejection()`을 두고 `parse()`가 그것을 쓴다. 받는 집합은 바뀌지 않았다.
+- 증거: `gradlew testDebugUnitTest` 95 tests, 0 failures. 변이 증명: 벡터 기대 사유 하나를 바꾸면 Kotlin도 적신.
+- gate 변화: 없음.
+- 결정: D-358 5.1. 로봇 레코드는 주소·호스트·AP·legacy를 아직 보지 않는다. 앱 동작 변경이라 이번 범위 밖이고, 시험에 `knownRobotDivergence` 8건으로 못 박았다(고치면 시험이 목록 삭제를 요구한다).
+- 교훈: 없음.

@@ -147,3 +147,11 @@
 - gate 변화: 없음.
 - 결정: activating 진입은 후속 ADR(온디맨드 B레인) 없이 금지 — 시험이 핀으로 지킨다.
 - 교훈: 정찰이 설계를 바꿨다 — "상태 계약이 없다"가 아니라 "두 표면이 다른 어휘를 쓰고 있었다"가 진짜 갭이었다.
+
+## 2026-09-30 · uncommitted · feat(discovery): D-358 S1 공유 TXT 벡터와 정본 분류기
+
+- 변경: `core_common/protocol/discovery_txt.py`(표준 라이브러리만)를 새로 두었다. `parse_txt_pairs`, `classify(service_type, host, address, port, txt) -> Accepted|Rejected(reason)`, 옛 로봇 광고의 `legacy` 표시. 기계 원천은 `test/fixtures/protocol/discovery-txt.v1.json`(28 사례, 거절 사유 9종 전부)이다. FleetAgent(`core_features/fleet_agent/discovery.py`)의 복사 `TXT`/판정을 이 모듈 import로 바꿨다.
+- 증거: `test_discovery_txt_vectors.py` 31 passed, 프로필 대조 2 passed. 변이 증명: 벡터 사유 하나(`overhead_tls_host_mismatch`)를 바꾸면 Python·Kotlin이 모두 적신, 프로필 값 하나를 바꾸면 대조 시험 적신.
+- gate 변화: 없음. SOURCE/LOCAL.
+- 결정: D-358 5.1.
+- 교훈: 없음.
