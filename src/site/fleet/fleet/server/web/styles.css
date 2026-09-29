@@ -64,7 +64,11 @@ input, select { font: inherit; color: inherit; }
 .field-size input { width: 6rem; min-height: var(--target-secondary); padding: var(--space-1) var(--space-2); background: var(--ground-soft); border: 1px solid var(--line-14); border-radius: var(--radius-flag); }
 .field-mismatch { margin: 0 0 var(--space-2); padding: var(--space-2) var(--space-3); color: var(--paper); background: var(--ground-soft); border: 1px solid var(--series-goal); border-radius: var(--radius-button); font-size: var(--text-micro); }
 .field-mismatch[hidden] { display: none; }
-.map-stage:has(> .field-mismatch:not([hidden])) > .map-empty { display: none; }
+/* 사이트 설정이 없어서 비어 있을 때만 W×H 안내가 빈 지도 안내를 대신한다. 불러오는 중·연결 실패는 그대로 보인다. */
+.map-stage[data-site-map="none"][data-map-state="unavailable"]:has(> .field-mismatch[data-state="unconfigured"]:not([hidden])) > .map-empty { display: none; }
+.field-storage-state[hidden], .layer-hint[hidden] { display: none; }
+.field-storage-state { color: var(--status-warn); }
+.layer-hint { margin: 0; font-size: var(--text-micro); }
 
 .brand { display: flex; flex-direction: column; line-height: 1.15; }
 .brand b { font-weight: var(--weight-strong); font-size: var(--text-value); letter-spacing: var(--track-wide); }
@@ -175,6 +179,17 @@ main {
     grid-column: 1;
     grid-row: 3;
   }
+  /* D-201: 원본과 보정 경기장을 위아래로 쌓으면 1920×1080에서 문서가 스크롤된다.
+     카메라 칸 안에서 둘을 나란히 둔다(보정 조정을 열면 위 규칙이 한 칸으로 되돌린다). */
+  main > .panel[aria-labelledby="map-heading"]:not(:has(#vision-adjustments[open])) > .vision-preview:has(> #field-rectified:not([hidden])):has(> #vision-frame:not([hidden])) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    column-gap: var(--space-3);
+    align-items: start;
+  }
+  .vision-preview:has(> #field-rectified:not([hidden])):has(> #vision-frame:not([hidden])) > * { grid-column: 1 / -1; }
+  .vision-preview:has(> #field-rectified:not([hidden])):has(> #vision-frame:not([hidden])) > #vision-frame { grid-column: 1; grid-row: 3; }
+  .vision-preview:has(> #field-rectified:not([hidden])):has(> #vision-frame:not([hidden])) > #field-rectified { grid-column: 2; grid-row: 3; margin-top: 0; }
 }
 
 .panel {
@@ -377,6 +392,37 @@ main {
 
 @media (max-width: 62rem) {
   main { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* 태블릿 세로(약 800 CSS px)와 작은 노트북: 헤더를 한 줄에 다 넣으면 토큰 입력이 워드마크를
+   덮고 "접속"·"전체 정지"가 한 글자씩 꺾인다(Lenovo 태블릿 2026-09-30). 세 줄로 나눈다 —
+   상태 한 줄, 토큰 한 줄, 전체 정지는 폭 전체의 가로 한 줄. */
+@media (min-width: 40.0625rem) and (max-width: 70rem) {
+  ui-topbar {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto auto auto;
+    grid-template-areas:
+      "brand . role pill clock"
+      "token token token token save"
+      "estop estop estop estop estop";
+    gap: var(--space-2) var(--space-3);
+    align-items: center;
+    padding: var(--space-3) var(--space-4);
+  }
+  ui-topbar .spacer { display: none; }
+  ui-topbar ui-brand { grid-area: brand; }
+  #user-role { grid-area: role; justify-self: end; }
+  #online-pill { grid-area: pill; }
+  #clock { grid-area: clock; }
+  #console-token { grid-area: token; width: 100%; min-width: 0; }
+  #token-save { grid-area: save; }
+  #estop { grid-area: estop; width: 100%; justify-content: center; gap: var(--space-3); }
+}
+
+/* 터치 폭에서는 토큰 입력·접속·전체 정지가 모두 48 px 이상이고 글자가 꺾이지 않는다. */
+@media (max-width: 70rem) {
+  #console-token, #token-save, #estop { min-height: var(--target-primary); }
+  #token-save, #estop span, #estop small { white-space: nowrap; }
 }
 
 @media (max-width: 40rem) {

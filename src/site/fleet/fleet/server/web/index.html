@@ -45,6 +45,7 @@
           <h2 id="map-heading">현장 지도</h2>
         </div>
         <div class="spacer"></div>
+        <span class="hint layer-hint" id="map-layer-hint" role="status" hidden></span>
         <ui-tag id="map-tag" status="neutral">맵 대기</ui-tag>
       </div>
       <div class="map-stage" id="map-stage" data-map-state="loading">
@@ -92,6 +93,7 @@
           <ui-button kind="quiet" id="field-dismiss" type="button" hidden>제안 버리기</ui-button>
         </div>
         <p class="hint" id="field-proposal-state" role="status">경기장 윤곽을 Vision이 제안합니다. 제안은 확인 전까지 적용되지 않습니다.</p>
+        <p class="hint field-storage-state" id="field-storage-state" role="status" hidden></p>
         <figure class="field-rectified" id="field-rectified" hidden>
           <canvas id="field-canvas" width="640" height="360" role="img" aria-label="위에서 본 경기장"></canvas>
           <figcaption class="hint" id="field-rectified-caption"></figcaption>

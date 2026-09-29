@@ -248,6 +248,28 @@ def test_console_polls_sightings_only_for_a_configured_site_and_stops_on_404():
     assert "error.status = resp.status;" in shell and "error.code = detail.code;" in shell
 
 
+
+def test_field_view_review_fixes_are_served():
+    client = _client([_source()])
+
+    page = client.get("/console").text
+    field_view = client.get("/console/assets/field-view.js").text
+    vision_view = client.get("/console/assets/vision-view.js").text
+    styles = client.get("/console/assets/styles.css").text
+
+    # Re-warp only when the frame, corners or size change; a hidden layer returns before warp.
+    assert "if (warped?.key !== key)" in field_view
+    assert "숨긴 레이어 ${off}개" in field_view
+    # Storage failure has its own status line and never overwrites the proposal state.
+    assert 'el("field-storage-state")' in field_view
+    assert "프레임을 해석하지 못했습니다" in vision_view
+    # The unconfigured notice hides the empty-map card only in the no-site-map state.
+    assert '.map-stage[data-site-map="none"][data-map-state="unavailable"]' in styles
+    assert ".map-stage:has(> .field-mismatch:not([hidden])) > .map-empty" not in styles
+    # Tablet header: three rows between 40rem and 70rem.
+    assert "@media (min-width: 40.0625rem) and (max-width: 70rem)" in styles
+    assert 'id="map-layer-hint"' in page and 'id="field-storage-state"' in page
+
 @pytest.mark.parametrize("spec_name", ["site-layer.test.mjs", "field-layers.test.mjs"])
 def test_site_layer_node_unit_tests_pass(spec_name):
     import shutil

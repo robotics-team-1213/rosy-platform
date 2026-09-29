@@ -506,9 +506,13 @@ export function createMapView({ el, view, css, auth, call, onMapChanged, onMapUn
   async function refreshSiteMap() {
     try {
       view.siteMap = await call("/api/fleet/site-map");
+      el("map-stage").dataset.siteMap = "configured";
     } catch (err) {
       // NO_SITE_MAP — 카메라 사각형이 설정되지 않은 현장이다. 일시 실패면 직전 사각형을 둔다.
-      if (err.status === 404 && err.code === "NO_SITE_MAP") view.siteMap = null;
+      if (err.status === 404 && err.code === "NO_SITE_MAP") {
+        view.siteMap = null;
+        el("map-stage").dataset.siteMap = "none";
+      }
     }
   }
 

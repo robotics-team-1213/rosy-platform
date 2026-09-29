@@ -235,7 +235,8 @@ export function createVisionView({ el, call, auth }) {
       status.setAttribute("status", "good");
       message.textContent = "";
       el("vision-meta").textContent = `${source} · sequence ${response.headers.get("X-Frame-Seq") || "?"} · age ${response.headers.get("X-Frame-Age-Ms") || "?"} ms · ${rectified ? "화면 보정" : "원본"}`;
-      for (const listener of frameListeners) listener({ image, rectified, source });
+      const seq = response.headers.get("X-Frame-Seq");
+      for (const listener of frameListeners) listener({ image, rectified, source, seq, url: nextUrl });
     } catch (error) {
       lease = null;
       showState("영상 정지", "warn", error.message || "Vision에 연결할 수 없습니다.");
@@ -364,6 +365,7 @@ export function createVisionView({ el, call, auth }) {
       headers: { Authorization: `Bearer ${lease.lease}` }, cache: "no-store",
     });
     if (response.status === 429) throw new Error("잠시 뒤 다시 찾으세요(초당 1회).");
+    if (response.status === 422) throw new Error("프레임을 해석하지 못했습니다. 잠시 뒤 다시 찾으세요.");
     if (!response.ok) {
       throw new Error(response.headers.get("X-Frame-State") === "stale"
         ? "최신 프레임이 없어 찾을 수 없습니다." : `Vision 응답 ${response.status}`);

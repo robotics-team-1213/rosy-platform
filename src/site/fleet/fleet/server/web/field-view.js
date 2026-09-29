@@ -30,9 +30,12 @@ export function createFieldView({ el, view, visionView, onLayersChanged }) {
   const notice = el("field-mismatch");
   const widthInput = el("field-width");
   const heightInput = el("field-height");
+  const storageState = el("field-storage-state");
+  const layerHint = el("map-layer-hint");
   const scratch = document.createElement("canvas");
   let proposal = null; // { corners, confidence, aspect, shape, source }
   let lastFrame = null;
+  let warped = null; // { key, data } — 같은 프레임·모서리·크기면 다시 펴지 않는다.
 
   view.layers = parseLayers(storageGet(LAYER_STORAGE_KEY));
   const toggles = [...document.querySelectorAll("[data-layer]")];
@@ -40,6 +43,9 @@ export function createFieldView({ el, view, visionView, onLayersChanged }) {
   function applyLayers() {
     for (const input of toggles) input.checked = view.layers[input.dataset.layer] !== false;
     el("vision-frame").hidden = !view.layers.raw;
+    const off = LAYER_KEYS.filter((key) => view.layers[key] === false).length;
+    layerHint.hidden = off === 0;
+    layerHint.textContent = off ? `숨긴 레이어 ${off}개` : "";
     renderRectified();
     onLayersChanged();
   }
@@ -48,11 +54,15 @@ export function createFieldView({ el, view, visionView, onLayersChanged }) {
     input.addEventListener("change", () => {
       if (!LAYER_KEYS.includes(input.dataset.layer)) return;
       view.layers = { ...view.layers, [input.dataset.layer]: input.checked };
-      if (!storageSet(LAYER_STORAGE_KEY, JSON.stringify(view.layers))) {
-        state.textContent = "브라우저 저장을 쓸 수 없어 레이어 설정은 이 화면에서만 유지됩니다.";
-      }
+      storageNotice(storageSet(LAYER_STORAGE_KEY, JSON.stringify(view.layers)));
       applyLayers();
     });
+  }
+
+  // 저장 실패는 제안 상태 줄과 따로 알린다(제안 안내를 덮지 않는다).
+  function storageNotice(saved) {
+    storageState.hidden = saved;
+    storageState.textContent = saved ? "" : "브라우저 저장을 쓸 수 없어 레이어·크기 설정은 이 화면에서만 유지됩니다.";
   }
 
   function operatorSize() {
@@ -70,7 +80,7 @@ export function createFieldView({ el, view, visionView, onLayersChanged }) {
     input.addEventListener("input", () => {
       const source = visionView.currentSource();
       const size = operatorSize();
-      if (source && size) storageSet(`${FIELD_SIZE_PREFIX}${source}`, JSON.stringify(size));
+      if (source && size) storageNotice(storageSet(`${FIELD_SIZE_PREFIX}${source}`, JSON.stringify(size)));
       renderRectified();
     });
   }
@@ -131,7 +141,9 @@ export function createFieldView({ el, view, visionView, onLayersChanged }) {
       // Vision 이 확인한 모서리로 이미 펴서 보냈다(D-318). 바깥은 없다.
       ctx.drawImage(frame.image, field.x, field.y, field.width, field.height);
     } else {
-      warp(ctx, frame.image, active.corners, layout);
+      const key = JSON.stringify([frame.source, frame.url ?? frame.seq, active.corners, layout.width, layout.height]);
+      if (warped?.key !== key) warped = { key, data: warp(ctx, frame.image, active.corners, layout) };
+      else if (warped.data) ctx.putImageData(warped.data, 0, 0);
       // 경기장 밖을 가린다.
       ctx.save();
       ctx.fillStyle = "rgba(0, 0, 0, 0.72)";
@@ -180,10 +192,11 @@ export function createFieldView({ el, view, visionView, onLayersChanged }) {
   }
 
   // 출력 픽셀마다 역변환으로 원본을 표본한다(최근접). 경기장 둘레 여백도 같은 변환으로 채운다.
+  // 편 결과를 돌려주어 같은 프레임·모서리에서는 다시 계산하지 않는다.
   function warp(ctx, image, corners, layout) {
     const iw = image.naturalWidth;
     const ih = image.naturalHeight;
-    if (!iw || !ih) return;
+    if (!iw || !ih) return null;
     scratch.width = iw;
     scratch.height = ih;
     const sctx = scratch.getContext("2d", { willReadFrequently: true });
@@ -193,7 +206,7 @@ export function createFieldView({ el, view, visionView, onLayersChanged }) {
     const dstQuad = [[field.x, field.y], [field.x + field.width, field.y],
       [field.x + field.width, field.y + field.height], [field.x, field.y + field.height]];
     const h = homography(dstQuad, corners.map(([x, y]) => [x * (iw - 1), y * (ih - 1)]));
-    if (!h) return;
+    if (!h) return null;
     const out = ctx.createImageData(layout.width, layout.height);
     for (let y = 0; y < layout.height; y += 1) {
       for (let x = 0; x < layout.width; x += 1) {
@@ -207,6 +220,7 @@ export function createFieldView({ el, view, visionView, onLayersChanged }) {
       }
     }
     ctx.putImageData(out, 0, 0);
+    return out;
   }
 
   function setProposal(next) {
