@@ -3577,3 +3577,10 @@
 - gate 변화: 없음.
 - 결정: 하드웨어가 어떤 단계로 오든 소프트웨어는 코드 변경 없이 해당 단계 기능 제공.
 - 교훈: 없음.
+## 2026-09-30 · uncommitted · docs(adr): D-358 앱 역할·이름·아이콘·화면 소유와 공유 연결 조각
+
+- 변경: `docs/adr/D-358-site-app-roles-names-and-shared-link.md`(Proposed) 신설, ADR Log 표행, 실행 계획 `docs/plans/2026-09-30-site-app-roles-and-shared-link-plan.md`(S1–S8) 신설, `progress.md`의 adrs·plans 등재, `harness.yaml` `adr_gaps`에 브랜치·워크트리 선점 번호 D-352–D-357 사유 기록. 결정: 여섯 참여자(천장 카메라·Vision·Fleet 관제·CORE·로봇 대시보드/LCD·Pilot) 역할 표, 이름표(D-345 §4·D-339 §4 적용), 아이콘 가족 규칙(공통 바탕·로즈 점·표면별 실루엣과 토큰 색, 상태색 금지), 조작별 단일 소유 화면 표(비상 정지만 예외), 발견 TXT 공유 벡터 + 언어별 파서, 기기 연결 용어·감사·관리 위치 통일(자격 모양은 방향별 유지), 이름 따라가기/주소 고정을 "채널이 서버를 인증하는가"로 판정, `?token=` 퇴출, 공개 상태 모양, 실패 분류 벡터, Android 공유 모듈은 두 번째 Kotlin 소비자까지 보류.
+- 증거: 코드 앵커 대조(읽기 전용) — TXT 파서 다섯 벌(`fleet-mdns.py`, `fleet_agent/discovery.py` 복사본, `mdns-bridge.py`의 공통 키 미검사, `fleet/server/discovery.py`, Kotlin `OverheadServiceRecord`), Fleet CORE WS의 `?token=`(`swarm/robots.py:122-131`), 대시보드 `console.teleop`과 Pilot의 수동 운전 중복, Pilot `short_name` `Pilot`과 "관제 화면" 버튼(브랜치), 폰 런처 아이콘 부재. `python tools/harness/rosy_harness.py lint` 결과는 커밋 메시지에 적는다. 코드 변경 없음.
+- gate 변화: 없음. 문서만.
+- 결정: D-358 Proposed. D-357은 `er2-feedback-loop` 워크트리가 선점해 D-358로 잡았다. main이 D-351을 다른 결정(도킹 재시도)으로 선점해 브랜치 `docs/robot-fleet-protocol-conformance`의 D-351과 충돌한다 — 그 브랜치 착지 때 재번호가 필요하다(이 변경에서 고치지 않음).
+- 교훈: 번호 확인은 main 표만이 아니라 `.worktrees/*/docs/adr`의 미커밋 초안까지 봐야 한다. 같은 날 main이 D-350·D-351을 연달아 선점했다.
