@@ -13,9 +13,12 @@ import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 
-from control.sensing.perception.learned.shadow import TOPIC as SHADOW_TOPIC
 
 SCHEMA = "rosy.recording.session/1"
+
+# Must equal control.sensing.perception.learned.shadow.TOPIC (not imported
+# here: that package pulls numpy/cv2; a test asserts the two stay equal).
+SHADOW_TOPIC = "perception/learned/shadow"
 
 # camera/front is the raw sensor_msgs/Image published by
 # control/camera_detect_node.py (no compressed front-camera topic exists in
@@ -38,7 +41,10 @@ def _iso(now: datetime) -> str:
 
 def _write_meta(folder: Path, meta: dict) -> None:
     tmp = folder / "session.json.tmp"
-    tmp.write_text(json.dumps(meta, indent=2), encoding="utf-8")
+    with open(tmp, "w", encoding="utf-8") as fh:
+        fh.write(json.dumps(meta, indent=2))
+        fh.flush()
+        os.fsync(fh.fileno())
     os.replace(tmp, folder / "session.json")
 
 
@@ -52,8 +58,15 @@ def new_session(root, *, device, camera_profile_revision, model_revision,
         raise ValueError("device and reason must be non-empty")
     safe = re.sub(r"[^A-Za-z0-9_-]", "_", device)
     stamp = now.astimezone(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    folder = Path(root) / f"{stamp}_{safe}"
-    folder.mkdir(parents=True, exist_ok=True)
+    base = Path(root) / f"{stamp}_{safe}"
+    folder, n = base, 1
+    while True:
+        try:
+            folder.mkdir(parents=True)
+            break
+        except FileExistsError:
+            n += 1
+            folder = base.with_name(f"{base.name}_{n}")
     _write_meta(folder, {
         "schema": SCHEMA,
         "device": safe,
@@ -91,18 +104,25 @@ def _sessions(root: Path) -> list[tuple[str, Path, dict]]:
     rows = []
     for folder in root.iterdir() if root.is_dir() else ():
         if (folder / "session.json").is_file():
-            meta = _read_meta(folder)
-            rows.append((meta["started_at"], folder, meta))
+            try:
+                meta = _read_meta(folder)
+            except (OSError, ValueError):
+                continue
+            if isinstance(meta, dict) and isinstance(
+                    meta.get("started_at"), str):
+                rows.append((meta["started_at"], folder, meta))
     return sorted(rows, key=lambda r: (r[0], r[1].name))
 
 
 def enforce_quota(root, quota_bytes) -> list[Path]:
     root = Path(root)
     deleted: list[Path] = []
+    total = _total_bytes(root)
     for _, folder, meta in _sessions(root):
-        if _total_bytes(root) <= quota_bytes:
+        if total <= quota_bytes:
             break
-        if meta.get("harvested") and meta.get("ended_at") is not None:
+        if meta.get("harvested") is True and meta.get("ended_at") is not None:
+            total -= _total_bytes(folder)
             shutil.rmtree(folder)
             deleted.append(folder)
     return deleted

@@ -102,3 +102,142 @@ def test_bag_command(tmp_path):
     assert str(tmp_path / "s" / "bag") in cmd
     for topic in RECORD_TOPICS:
         assert topic in cmd
+
+
+def test_shadow_topic_matches():
+    from control.recording import SHADOW_TOPIC
+    from control.sensing.perception.learned.shadow import TOPIC
+    assert SHADOW_TOPIC == TOPIC
+
+
+def test_sessions_skip_bad_metadata(tmp_path):
+    good = _mk(tmp_path, 0, size=10)
+    finish_session(good, T0)
+    mark_harvested(good)
+    bad = []
+    for name, text in [("a", "{not json"), ("b", "[1]"),
+                       ("c", '{"harvested": true, "ended_at": "x"}'),
+                       ("d", '{"started_at": null, "harvested": true}')]:
+        f = tmp_path / name
+        f.mkdir()
+        (f / "session.json").write_text(text)
+        (f / "big").write_bytes(b"0" * 100)
+        bad.append(f)
+    assert enforce_quota(tmp_path, 1) == [good]
+    assert all(f.exists() for f in bad)
+
+
+def test_harvested_must_be_true(tmp_path):
+    f = _mk(tmp_path, 0, size=10)
+    finish_session(f, T0)
+    meta = _meta(f)
+    meta["harvested"] = "false"
+    (f / "session.json").write_text(json.dumps(meta))
+    assert enforce_quota(tmp_path, 1) == []
+
+
+def test_same_second_sessions_get_suffix(tmp_path):
+    a = _mk(tmp_path, 0)
+    b = _mk(tmp_path, 0)
+    c = _mk(tmp_path, 0)
+    assert a.name.endswith("_pinky-1")
+    assert b.name.endswith("_pinky-1_2")
+    assert c.name.endswith("_pinky-1_3")
+
+
+# ---- main() ----
+import subprocess
+import control.record_session as rs
+
+
+class FakePopen:
+    def __init__(self, waits, log):
+        self.waits = list(waits)
+        self.signals = []
+        self.killed = False
+        self.log = log
+
+    def send_signal(self, sig):
+        self.signals.append(sig)
+
+    def kill(self):
+        self.killed = True
+
+    def poll(self):
+        return None
+
+    def wait(self, timeout=None):
+        self.log.append("wait")
+        w = self.waits.pop(0)
+        if isinstance(w, BaseException):
+            raise w
+        return w
+
+
+def _run(monkeypatch, tmp_path, proc_factory, extra=()):
+    log = []
+    holder = {}
+
+    def popen(cmd, *a, **k):
+        holder["proc"] = proc_factory(log)
+        return holder["proc"]
+
+    orig = rs.finish_session
+
+    def fin(folder, now):
+        log.append("finish")
+        orig(folder, now)
+
+    monkeypatch.setattr(rs.subprocess, "Popen", popen)
+    monkeypatch.setattr(rs, "finish_session", fin)
+    code = rs.main(["--root", str(tmp_path), "--reason", "r", *extra])
+    return code, log, holder.get("proc")
+
+
+def test_main_quota_full_exit_2(monkeypatch, tmp_path):
+    monkeypatch.setattr(rs, "can_record", lambda *a: False)
+    called = []
+    monkeypatch.setattr(rs.subprocess, "Popen", lambda *a, **k: called.append(1))
+    assert rs.main(["--root", str(tmp_path), "--reason", "r"]) == 2
+    assert not called
+
+
+def test_main_interrupt_graceful(monkeypatch, tmp_path):
+    code, log, proc = _run(monkeypatch, tmp_path, lambda lg: FakePopen(
+        [KeyboardInterrupt(), 0], lg))
+    assert proc.signals == [rs.signal.SIGINT]
+    assert not proc.killed
+    assert log == ["wait", "wait", "finish"]
+    assert code == 0
+
+
+def test_main_kills_if_no_exit(monkeypatch, tmp_path):
+    t = subprocess.TimeoutExpired("x", 30)
+    code, log, proc = _run(monkeypatch, tmp_path, lambda lg: FakePopen(
+        [KeyboardInterrupt(), t, 0], lg))
+    assert proc.killed and log[-1] == "finish"
+
+
+def test_main_nonzero_exit(monkeypatch, tmp_path):
+    code, log, _ = _run(monkeypatch, tmp_path, lambda lg: FakePopen([3], lg))
+    assert code == 1 and log[-1] == "finish"
+
+
+def test_main_ros2_missing(monkeypatch, tmp_path):
+    def popen(*a, **k):
+        raise FileNotFoundError("ros2")
+    monkeypatch.setattr(rs.subprocess, "Popen", popen)
+    assert rs.main(["--root", str(tmp_path), "--reason", "r"]) == 1
+    metas = [json.loads(p.read_text()) for p in tmp_path.glob("*/session.json")]
+    assert len(metas) == 1 and metas[0]["ended_at"] is not None
+
+
+def test_main_quota_exceeded_while_running(monkeypatch, tmp_path):
+    t = subprocess.TimeoutExpired("x", 5)
+    seq = iter([True, False])
+    monkeypatch.setattr(rs, "can_record", lambda *a: next(seq))
+    code, log, proc = _run(monkeypatch, tmp_path, lambda lg: FakePopen(
+        [t, 0], lg))
+    assert code == 3
+    assert proc.signals == [rs.signal.SIGINT]
+    assert log[-1] == "finish"
