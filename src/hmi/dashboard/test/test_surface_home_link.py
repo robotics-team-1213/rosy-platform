@@ -1,6 +1,6 @@
 """Role-surface brand returns to the dashboard home — as a shared behaviour.
 
-The home link is not page markup: `ui-brand href` (D-333) makes web_common's
+The home link is not page markup: `ui-brand href` (D-335) makes web_common's
 shared element wrap its children in one link, and components.css owns the hover
 and focus states. These tests pin the declaration on the surface, the shared
 behaviour, and the real click-through.

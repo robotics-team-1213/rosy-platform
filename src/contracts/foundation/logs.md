@@ -116,3 +116,9 @@
 - 변경: 네트워크·릴리스 조회의 증거 상태, 원본 시각, 나이, 임계, 사유를 `HostStatusEvidence`로 추가했다. 기존 Fleet envelope 버전과 필드는 유지한다.
 - 근거: CORE Host API 계약 시험과 API Ref v1.42.
 - Gate: SOURCE/LOCAL 계약 근거이며 장치 상태 판정이 아니다.
+
+## 2026-09-29 · uncommitted · feat(protocol): add PolicyEvidencePayload (D-268 ladder T1)
+
+- 변경: 정책 적격 증거(작업 발의 자격, D-268)의 와이어 계약을 추가했다 — `evidence_id`, `asset_kind`(robot/workcell/object, D-330 자원 어휘), `task_kind`(v1 닫힌 집합 navigate), `captured_at`, revision 삼종(map·calibration·model), 닫힌 `observation` 봉투(kind만, 등록부는 서버 쪽). 클라이언트가 `source`·`source_id`·`token`·`policy`·`satisfied`를 보내면 거부한다(출처는 자격 증명에서 결정, `satisfied`는 D-328 목표 판정 전용 어휘).
+- 근거: [설계](../../../docs/plans/2026-09-29-policy-evidence-contract-design.md)·[실행 계획](../../../docs/plans/2026-09-29-policy-evidence-contract.md) T1. 기존 필드·sighting 무변경, API Ref v1.48 개정은 T6가 한다.
+- Gate: SOURCE/LOCAL 계약 시험 75 passed (2026-09-29 Windows). 서버 등록부·발의 binding·밸브는 fleet 작업(T3/T4)이고 자동 실행은 여전히 HOLD다.

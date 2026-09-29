@@ -175,7 +175,7 @@ class UiShell extends HTMLElement {
 class UiTopbar extends HTMLElement {}
 
 class UiBrand extends HTMLElement {
-  // D-333: href를 주면 자식을 하나의 링크로 감싼다. aria-label은 링크로
+  // D-335: href를 주면 자식을 하나의 링크로 감싼다. aria-label은 링크로
   // 옮겨 접근성 이름이 한 곳에만 붙는다. href가 없으면 평문 브랜드다.
   connectedCallback() {
     const href = this.getAttribute("href");

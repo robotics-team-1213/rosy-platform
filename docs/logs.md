@@ -3301,3 +3301,47 @@
 - 변경: P4 얼굴 LCD(LOCAL 범위) — 웨이크 카드 ASSIST REQ를 warn 채움 칩으로. P5 문서 — README 능력 주장 전수 스캔에서 교정 대상 0건(강한 주장은 전부 증거·게이트 경계와 함께 쓰임). P6 총평 — D-280 후속 크래프트 시퀀스의 LOCAL 분량 완료를 회차 폴더에 기록.
 - 증거: face 시험 162 passed/4 skipped, PIL 렌더 11장 독회(`X:\DevTemp\rosy-uiux-p4-lcd`), README 동사 스캔 기록. 회차 기록 `docs/validation/uiux-surfaces-2026-09-29/README.md` P4·P5·P6 절.
 - gate 변화: face last_verified 47d3e6ec(SOURCE/LOCAL GO 유지). 표면 판정은 전부 HOLD — 남은 조건은 표면별 (a) D-153 G3 사람 평가, (b) 실물 증거(DEVICE/FIELD)다.
+
+## 2026-09-29 · uncommitted · docs(plan): dispose D-268 as Proposed with a readiness ladder
+
+- 변경: `plans/2026-09-29-d268-policy-evidence-disposition.md` 작성 — D-268을 Proposed로 유지하는 처분. 자체 Validation/Transition의 승격 전제 5개(증거 계약 D-18 설계, 자격 증명 기반 권한 검증, 정답 데이터 LOCAL 시험, 30분+ 현장 스트림 age/가용성 측정, 사전 등록 기준의 입회 DEVICE/FIELD 수용)를 현재 소스와 대조해 전부 미충족임을 기록했다. D-268 발의 자격 증거(시작)와 D-328 목표 성공 증거(판정)의 면 구분, 제출·검증 기반 공유에 대한 권고, 승격 준비 사다리 5단계 포함. 갭맵 항목 1을 이 처분으로 갱신하고 `plans/AGENTS.md` 지도에 등재.
+- 증거: `goal_evidence.py`(predicate 사전등록·revision·age·GOAL_EVIDENCE_REJECTED), `task_service.py`의 `POLICY_DISPATCH_ENABLED=False` 재확인, `dispatch_admission.py`/`mission_service.py`/`er2_standard.py` 읽기, ADR 로그의 D-257/D-267/D-269/D-271/D-326~D-331 상태. harness `generate`·`lint` 0 errors, 계약 시험 4종 통과.
+- gate 변화: 없음. D-268 상태·목차 무변경, automatic source·endpoint·밸브는 그대로 닫혀 있다.
+- 결정: 처분 = "Accepted도 기각도 아님 — Proposed가 현재 올바른 상태, 승격을 막는 것은 결정이 아니라 측정". 폐루프 개방(D-326 Decision 3)은 이 문서로 열리지 않는다.
+- 교훈: ADR의 Validation/Transition 절이 승격 조건의 정본이다 — 상태를 바꾸는 검토는 그 조건 목록을 소스에 대조하는 것에서 시작해야 한다.
+
+## 2026-09-29 · uncommitted · docs(adr): record D-332 human confirmation placement
+
+- 변경: `docs/adr/D-332-human-confirmation-placement.md` 작성 — D-326 Decision 3의 밸브 ADR 전제 (c)(사람 확인 위치: 제출 전·실행 전·결과 수용 전)를 확정했다. 결정: 1차 확인은 `policy-admin`의 사전 등록 승인(predicate·증거 출처·기준·유효기간), 세 후보 지점 모두 전수 확인 없음, 사람 개입은 네 예외 조건(증거 불명·충돌 조정 / 등록 범위 밖 회수 / 자율 재발의 승인 / 안전 이벤트 복구)뿐, 확인 행위는 actor·시각·대상·근거를 남기는 감사 이벤트. `ROSY ADR Log.md` 목차에 D-332 행 추가, `docs/progress.md` adrs에 D-331·D-332 보완 등재, 갭맵 항목 4 갱신.
+- 증거: D-326 증보본("모든 정상 성공에 일률적으로 요구하지 않는다")·D-268 Decision 5/6(사전 등록 기준·policy-admin)·D-328 Decision 4(독립 증거 판정)·2026-09-29 정합성 검토와의 정합 확인. 세 전수 확인 후보가 각각 어느 결정과 충돌하는지 Alternatives에 기록. harness `generate`·`lint` 0 errors, 계약 시험 통과.
+- gate 변화: 없음. `POLICY_DISPATCH_ENABLED`·endpoint·UI는 그대로다.
+- 결정: D-332 Accepted (위치·의미 결정만). 밸브 개방 ADR의 남은 전제는 D-268 승격 측정 5종과 Mission/Step 원장 확정이다.
+- 교훈: 확인 단계를 파이프라인에 고정하면 확인이 루틴이 되어 안전의 겉모습만 만든다 — 확인은 조건(불명·범위 밖·재시도·안전)으로 설계해야 한다.
+
+## 2026-09-29 · uncommitted · docs(plan): design the D-268 policy evidence contract
+
+- 변경: 승격 사다리 1단계 산출물 두 건. `plans/2026-09-29-policy-evidence-contract-design.md` — `PolicyEvidencePayload` 필드 표(evidence_id·asset_kind 3종[D-330 어휘]·task_kind·captured_at·revision 삼종·observation), source-token 제출 표면(`POST /api/fleet/policy-evidence` + env 바인딩 자격 증명 + 폐기·재생 거절), 거절 사유 enum 7종, 발의 binding(policy 발의는 evidence_id 필수, 통과해도 HOLD 유지), 제출 기반 공유 확정(출처 identity·어휘·검증 원칙 공유, 소비 분리, GoalEvidence 재설계 아님), 불변식 5조(밸브 False·빈 등록부·미설정 age 거절·수치 비발명·sighting 무변경). `plans/2026-09-29-policy-evidence-contract.md` — T1~T7 TDD 실행 계획. `plans/AGENTS.md` 지도에 등재.
+- 증거: 문서 설계(구현 없음). 근거 파일: `sightings.py`·`sightings_config.py`·`goal_evidence.py`·`dispatch_admission.py`·`task_service.py` 직접 읽기, API Ref 현재 버전 v1.47 확인(다음 v1.48). harness `generate`·`lint` 0 errors, 계약 시험 통과.
+- gate 변화: 없음. schema·경로·코드·API Ref 미변경 — v1.48은 실행 계획 T6이 만든다.
+- 결정: 설계 확정(제출 기반 공유·fail-closed 등록부·밸브 불변). 구현은 실행 계획 대로.
+- 교훈: fail-closed 계약은 "지금 아무 것도 통과하지 않는다"를 명세의 일부로 만들어야 한다 — 빈 등록부·미설정 임계를 단언 시험으로 고정하면 우회 경로가 자란다.
+
+## 2026-09-29 · uncommitted · feat(protocol): land policy evidence schema (T1)
+
+- 변경: 증거 계약 실행 계획 T1 착지 — `core_common/protocol/policy_evidence.py`에 `PolicyEvidencePayload`·`PolicyObservation` 추가(발의 자격 증거 와이어 계약). 클라이언트 identity/목표 판정 어휘 거부, asset/task 닫힌 집합, revision·타임스탬프 규칙. `core_common` logs/progress 갱신(75 passed).
+- 증거: `python -m pytest src/contracts/foundation/test -q` 75 passed(기존 50 + 신규 25), flake8 120 clean, harness lint 0 errors, 계약 시험 4종 통과. 서버 등록부·밸브 단언은 fleet T3/T4 시험 몫.
+- gate 변화: 없음. schema 추가뿐 — 경로·밸브·자동 실행 무변경. API Ref v1.48은 T6.
+- 결정: T1 완료. T2(설정 로더)부터는 `fleet/server` — 시작 전 동시 세션 재확인 필요.
+- 교훈: pydantic lax 모드는 숫자 문자열을 강제 변환한다 — 시험은 계약이 명시한 거부(bool·비유한)만 단언하고, 확신 없는 거부를 시험에 넣으면 계약이 아니라 시험이 거짓을 말하게 된다.
+
+## 2026-09-29 · uncommitted · docs(er2): decide Mission/Action/stop/evidence closure
+
+- 변경: D-333에 후보 생성→operator Mission 승인→OMX Action 수락→ROS/readback→독립 goal 증거의 계약과 장치 측 stop-generation fence를 결정했다. 단일 `PICK_PLACE` 실행 계획을 추가하고 기존 ER 2 계획의 SOURCE 기준선·정지 설명, API Reference의 전용 E-stop 감사 예외를 현행 코드와 정렬했다.
+- 증거: D-327/D-328/D-330/D-331, ER 2·Mission·OMX 현행 소스와 API Reference를 대조했다. 신규 REST 경로·wire schema·장치 실행은 이번 문서 변경에 없다.
+- gate 변화: 없음. 통합 Mission/OMX 실행, provider live 호출, 물리 정지와 DEVICE/FIELD 수용은 HOLD다.
+
+## 2026-09-29 · uncommitted · docs(er2): separate model tools from running Mission progress
+
+- 변경: Google 공식 표준/streaming function call, Interactions 상태 및 영상 진행 기능을 현행 adapter와 대조해 조사 기록을 남겼다. D-334에 현행 단일 후보 도구, 미래 읽기·관측·재계획 후보, Fleet/OMX/목표/정지의 네 진행 축과 provider 세션 독립성을 결정했다. 후속 결정에서 첫 재연결 경로를 Fleet snapshot + Mission별 cursor 조회로 확정하고 D-333 실행 계획을 SOURCE/LOCAL 순차 구현 기준으로 승인했다.
+- 증거: 공식 Google Robotics/Interactions/Live 문서와 `er2_standard.py`, `mission_store.py`, `action_store.py`, `pick_place_transaction.py`의 SOURCE 계약. live provider, ROS 장치와 실제 영상 진행 시험은 없다.
+- gate 변화: 없음. 새 tool declaration, 진행 API wire, provider 연속 loop, 자동 재계획과 DEVICE/FIELD 수용은 HOLD다.

@@ -1013,10 +1013,14 @@ use its own server-side credential.
 
 Authenticated `POST /api/fleet/*` requests other than source-authenticated
 `POST /api/fleet/sightings` and read-only mDNS observation
-`POST /api/fleet/discovery/scan` append an `INTENT` and a `RESULT` row to the durable
+`POST /api/fleet/discovery/scan` attempt to append an `INTENT` and a `RESULT` row to the durable
 API audit. The rows contain principal, role, method, path, and response code,
 not the bearer token or request body. If the intent cannot be persisted, Fleet
-returns `503 AUDIT_STORAGE_UNAVAILABLE` before calling CORE. If the result row
+normally returns `503 AUDIT_STORAGE_UNAVAILABLE` before calling CORE. The
+dedicated `POST /api/fleet/estop` is the D-330 exception: an authenticated
+operator's stop fanout continues on audit-storage failure, as specified in
+§10.11. `POST /api/fleet/do` (including an `estop` step) retains the normal
+audit gate. If the result row
 cannot be written after an action, the intent remains pending and the outcome
 must be reconciled; it is not safe to infer failure or retry.
 
