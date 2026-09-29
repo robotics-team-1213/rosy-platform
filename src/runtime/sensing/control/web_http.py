@@ -28,6 +28,7 @@ Backend API (JSON contract unchanged since v1):
   POST /teleop       {"x":..,"z":..} Twist on /cmd_vel_raw, through safety.
 """
 import http.server
+import ipaddress
 import json
 import math
 import os
@@ -74,10 +75,15 @@ def page_origin_allowed(origin, host_header, page_port):
     The page is served on ``page_port`` and reaches the API by the same host
     name (``location.hostname``), so the only allowed origins are
     http://127.0.0.1:<page_port>, http://localhost:<page_port> and
-    http://<host this request named>:<page_port>."""
+    http://<IP address this request named>:<page_port>. A Host that is a DNS
+    name is not trusted: a rebound attacker domain would name itself."""
     if not origin or page_port is None:
         return False
     hostname = urlsplit('//' + (host_header or '')).hostname
+    try:
+        ipaddress.ip_address(hostname or '')
+    except ValueError:
+        hostname = None
     allowed = {f'http://{name}:{int(page_port)}' for name in ('127.0.0.1', 'localhost', hostname) if name}
     if hostname and ':' in hostname:                     # IPv6 literal keeps its brackets
         allowed.add(f'http://[{hostname}]:{int(page_port)}')

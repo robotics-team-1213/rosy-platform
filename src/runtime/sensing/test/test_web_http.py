@@ -203,3 +203,5 @@ def test_page_origin_follows_the_requested_host_name():
     assert not page_origin_allowed('http://10.0.0.6:28181', '10.0.0.5:28182', 28181)
     assert not page_origin_allowed('http://10.0.0.5:28181', '10.0.0.5:28182', None)
     assert not page_origin_allowed(None, '10.0.0.5:28182', 28181)
+    # DNS rebinding: an attacker domain resolved to this host names itself in both headers
+    assert not page_origin_allowed('http://evil.example:28181', 'evil.example:28182', 28181)
