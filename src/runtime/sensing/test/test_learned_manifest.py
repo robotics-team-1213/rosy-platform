@@ -1,0 +1,109 @@
+"""D-356 model manifest: the only contract between external training and the robot."""
+
+import hashlib
+import json
+
+import pytest
+
+from control.sensing.perception.learned.manifest import (
+    ManifestError,
+    ROLES,
+    load_manifest,
+    verify_files,
+)
+
+
+def _manifest(**over):
+    doc = {
+        "schema": "rosy.perception.model/1",
+        "model_revision": "lane-seg-20260930-abcdef12",
+        "task": "lane_seg",
+        "files": [{"name": "model.onnx", "sha256": "0" * 64, "precision": "fp32"}],
+        "input": {"shape": [1, 3, 240, 320], "color": "rgb", "scale": 1 / 255,
+                  "mean": [0.0, 0.0, 0.0], "std": [1.0, 1.0, 1.0], "layout": "nchw"},
+        "output": {"layout": "nchw_logits", "classes": [
+            {"index": 0, "name": "floor", "role": "background"},
+            {"index": 1, "name": "line", "role": "lane_marking"},
+        ]},
+        "dataset": {"repo": "org/rosy-lane-seg-data", "revision": "a" * 40},
+        "camera_profile_revision": "cam-rev-1",
+        "metrics": {"val_iou": {"line": 0.8}},
+        "trainer": "colab:lane_unet.ipynb@2026-09-30",
+    }
+    doc.update(over)
+    return doc
+
+
+def _write(tmp_path, doc):
+    p = tmp_path / "model_manifest.json"
+    p.write_text(json.dumps(doc), encoding="utf-8")
+    return p
+
+
+def test_valid_manifest_loads(tmp_path):
+    m = load_manifest(_write(tmp_path, _manifest()))
+    assert m.model_revision == "lane-seg-20260930-abcdef12"
+    assert m.input.shape == (1, 3, 240, 320)
+    assert m.role_indices("lane_marking") == (1,)
+    assert m.onnx_file().name == "model.onnx"
+
+
+@pytest.mark.parametrize("patch", [
+    {"schema": "rosy.perception.model/2"},
+    {"task": "detection"},
+    {"model_revision": ""},
+    {"files": []},
+    {"input": {"shape": [1, 3, 240], "color": "rgb", "scale": 1, "mean": [0, 0, 0],
+               "std": [1, 1, 1], "layout": "nchw"}},
+    {"input": {"shape": [1, 3, 240, 320], "color": "hsv", "scale": 1, "mean": [0, 0, 0],
+               "std": [1, 1, 1], "layout": "nchw"}},
+    {"input": {"shape": [1, 3, 240, 320], "color": "rgb", "scale": 1, "mean": [0, 0, 0],
+               "std": [1, 0, 1], "layout": "nchw"}},
+])
+def test_invalid_top_level_rejected(tmp_path, patch):
+    with pytest.raises(ManifestError):
+        load_manifest(_write(tmp_path, _manifest(**patch)))
+
+
+def test_unknown_role_rejected(tmp_path):
+    doc = _manifest()
+    doc["output"]["classes"][1]["role"] = "lane"
+    with pytest.raises(ManifestError, match="role"):
+        load_manifest(_write(tmp_path, doc))
+
+
+def test_missing_lane_marking_rejected(tmp_path):
+    doc = _manifest()
+    doc["output"]["classes"][1]["role"] = "drivable"
+    with pytest.raises(ManifestError, match="lane_marking"):
+        load_manifest(_write(tmp_path, doc))
+
+
+def test_class_indices_must_be_dense(tmp_path):
+    doc = _manifest()
+    doc["output"]["classes"][1]["index"] = 2
+    with pytest.raises(ManifestError, match="index"):
+        load_manifest(_write(tmp_path, doc))
+
+
+def test_roles_are_closed():
+    assert ROLES == ("background", "lane_marking", "drivable", "stop_line", "ignore")
+
+
+def test_verify_files_checks_sha256(tmp_path):
+    data = b"onnx-bytes"
+    (tmp_path / "model.onnx").write_bytes(data)
+    doc = _manifest(files=[{"name": "model.onnx",
+                            "sha256": hashlib.sha256(data).hexdigest(),
+                            "precision": "fp32"}])
+    m = load_manifest(_write(tmp_path, doc))
+    verify_files(m)  # no raise
+    (tmp_path / "model.onnx").write_bytes(b"tampered")
+    with pytest.raises(ManifestError, match="sha256"):
+        verify_files(m)
+
+
+def test_file_names_cannot_escape_the_folder(tmp_path):
+    doc = _manifest(files=[{"name": "../x.onnx", "sha256": "0" * 64, "precision": "fp32"}])
+    with pytest.raises(ManifestError, match="name"):
+        load_manifest(_write(tmp_path, doc))
