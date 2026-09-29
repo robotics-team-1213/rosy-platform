@@ -292,6 +292,7 @@ export function mountDrive(root, {onExit} = {}) {
     tracking: "차선 추종", camera_no_observation: "차선 관측 대기", camera_line_not_visible: "차선 안 보임",
     camera_low_confidence: "차선 신뢰 낮음", camera_observation_stale: "차선 관측 늦음",
     camera_reselection_required: "차선 놓침 — 다시 누르세요", driver_released: "손 뗌 — 정지",
+    obstacle_ahead: "앞 물체 — 정지", obstacle_sensor_stale: "LiDAR 끊김 — 정지",
   };
   const request = (method, path, body) =>
     method === "GET" ? apiGet(path) : apiGet(path, {method, body: JSON.stringify(body ?? {})});
@@ -313,9 +314,10 @@ export function mountDrive(root, {onExit} = {}) {
       const tracking = lf.state === "TRACKING";
       element.cap.textContent = `자동 ${Number(lf.linear ?? 0).toFixed(2)} m/s · ${Math.round(Number(lf.angular ?? 0) * DEG)}°/s`;
       element.motion.dataset.kind = tracking ? "auto" : "warn";
+      const ahead = lf.clearance_m == null ? "" : ` · 앞 ${Number(lf.clearance_m).toFixed(2)} m`;
       element.motion.textContent = tracking
-        ? `차선 추종 · 신뢰 ${Number(lf.confidence ?? 0).toFixed(2)} · 오차 ${Number(lf.error ?? 0) >= 0 ? "+" : ""}${Number(lf.error ?? 0).toFixed(2)}`
-        : `${LF_REASON[lf.reason] ?? lf.reason ?? lf.state}`;
+        ? `차선 추종 · 신뢰 ${Number(lf.confidence ?? 0).toFixed(2)} · 오차 ${Number(lf.error ?? 0) >= 0 ? "+" : ""}${Number(lf.error ?? 0).toFixed(2)}${ahead}`
+        : `${LF_REASON[lf.reason] ?? lf.reason ?? lf.state}${ahead}`;
     },
   });
   function takeover() {

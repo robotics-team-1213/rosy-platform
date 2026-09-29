@@ -20,6 +20,7 @@ from core.bridge import battery_policy, translate
 from core.bridge.hitl import parse_hitl_request
 from core_features.command.manager import Twist as CoreTwist
 from core_features.line_follow import LineFollowMode, LineObservation
+from core_features.line_follow.clearance import front_clearance as _front_clearance
 from core_features.vision import accept_preview
 
 Warn = Callable[[str], None]
@@ -102,6 +103,18 @@ def road_observation(services, raw: str, *, source_now: float,
             "reason": "invalid_observation",
             "detail": str(exc),
         })
+
+
+def front_clearance(services, sample, *, received_at: float) -> None:
+    """D-349 §11: LiDAR 정면 최소 거리를 차선 추종 정지 판정에 넘긴다."""
+    config = services.line_follow.config
+    try:
+        distance = _front_clearance(
+            sample, forward_deg=config.lidar_forward_deg,
+            half_angle_deg=config.obstacle_half_angle_deg)
+    except (KeyError, TypeError, ValueError):
+        return
+    services.line_follow.observe_clearance(distance, received_at=received_at)
 
 
 def detection_evidence(services, raw: str) -> None:

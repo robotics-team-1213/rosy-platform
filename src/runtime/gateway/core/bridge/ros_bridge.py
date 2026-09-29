@@ -371,7 +371,9 @@ class RosBridge:
                                 warn=self._node.get_logger().warning)
 
     def _on_scan(self, msg: LaserScan) -> None:
-        self._svc.state.set_sensor("lidar", translate.lidar_sample(msg, time.time()))
+        sample = translate.lidar_sample(msg, time.time())
+        self._svc.state.set_sensor("lidar", sample)
+        observation.front_clearance(self._svc, sample, received_at=self._line_clock())
 
     def _on_imu(self, msg: Imu) -> None:
         self._svc.state.set_sensor("imu", translate.imu_sample(msg, time.time()))

@@ -60,6 +60,13 @@ class LineFollowConfig:
     stale_after_s: float = 0.3
     lost_after_s: float = 3.0
     ir_calibration_revision: Optional[str] = None
+    # D-349 §11: 앞 물체 정지. LiDAR 정면 부채꼴 최소 거리가 stop 보다 가까우면 멈추고
+    # resume 보다 멀어지면 다시 간다(떨림 방지). lidar_forward_deg 는 장착 방향.
+    obstacle_stop_m: float = 0.20
+    obstacle_resume_m: float = 0.28
+    obstacle_half_angle_deg: float = 20.0
+    lidar_forward_deg: float = 0.0
+    clearance_stale_s: float = 0.5
 
     def __post_init__(self) -> None:
         values = (self.cruise_speed, self.max_linear, self.steering_gain,
@@ -75,6 +82,14 @@ class LineFollowConfig:
             raise ValueError("min_confidence must be in (0, 1]")
         if self.stale_after_s <= 0 or self.lost_after_s <= 0:
             raise ValueError("line-follow timeouts must be positive")
+        obstacle = (self.obstacle_stop_m, self.obstacle_resume_m, self.obstacle_half_angle_deg,
+                    self.lidar_forward_deg, self.clearance_stale_s)
+        if not all(_finite(value) for value in obstacle):
+            raise ValueError("line-follow obstacle config must be finite")
+        if not 0.0 < self.obstacle_stop_m < self.obstacle_resume_m <= 2.0:
+            raise ValueError("obstacle_stop_m must be positive and below obstacle_resume_m")
+        if not 0.0 < self.obstacle_half_angle_deg <= 90.0 or self.clearance_stale_s <= 0:
+            raise ValueError("obstacle sector and clearance staleness must be positive")
         if (self.ir_calibration_revision is not None
                 and (not isinstance(self.ir_calibration_revision, str)
                      or not re.fullmatch(r"[0-9a-f]{64}", self.ir_calibration_revision))):
@@ -116,6 +131,10 @@ class LineFollowManager:
         # D-349 §8: 운전자 확인 만료. hold_s 가 있으면 hold() 가 그 안에 계속 와야 한다.
         self._hold_s: Optional[float] = None
         self._hold_until: Optional[float] = None
+        # D-349 §11: 정면 LiDAR 여유 거리. 한 번도 안 왔으면 판정하지 않는다(LiDAR 없는 벤치).
+        self._clearance: Optional[float] = None
+        self._clearance_at: Optional[float] = None
+        self._obstacle_blocked = False
 
     def bind_clock(self, clock: Callable[[], float]) -> None:
         """Use the bridge's line clock for defaults (mode change, loss start)."""
@@ -267,6 +286,18 @@ class LineFollowManager:
         with self._lock:
             return self._status.model_copy()
 
+    def observe_clearance(self, distance: Optional[float],
+                          received_at: Optional[float] = None) -> None:
+        """정면 최소 거리(None = 부채꼴 안에 유효 표본 없음 = 막힌 것 없음)."""
+        now = self._clock() if received_at is None else received_at
+        with self._lock:
+            self._clearance = None if distance is None or not _finite(distance) else float(distance)
+            self._clearance_at = float(now)
+            if self._clearance is None or self._clearance >= self._config.obstacle_resume_m:
+                self._obstacle_blocked = False
+            elif self._clearance < self._config.obstacle_stop_m:
+                self._obstacle_blocked = True
+
     @property
     def hold_required(self) -> bool:
         with self._lock:
@@ -321,6 +352,12 @@ class LineFollowManager:
                     data={"mode": previous.value},
                 )
                 return self._stop_decision("OFF", "driver_released")
+            if self._clearance_at is not None:
+                # 앞 물체 정지는 차선 상실이 아니다 — LOST 로 누적하지 않고 치워지면 곧바로 간다.
+                if current - self._clearance_at > self._config.clearance_stale_s:
+                    return self._stop_decision("HOLD", "obstacle_sensor_stale")
+                if self._obstacle_blocked:
+                    return self._stop_decision("HOLD", "obstacle_ahead")
             if self._lost_latched:
                 reason = ("camera_reselection_required"
                           if self._mode is LineFollowMode.CAMERA_LINE
@@ -395,6 +432,7 @@ class LineFollowManager:
                 linear=linear,
                 angular=angular,
                 reason="tracking",
+                clearance_m=self._clearance,
             )
             return decision
 
@@ -425,6 +463,7 @@ class LineFollowManager:
             confidence=(observation.confidence if observation else 0.0),
             age_s=None if age is None else round(max(0.0, age), 3),
             reason=reason,
+            clearance_m=self._clearance,
         )
         return LineFollowDecision(
             generation=self._generation,
