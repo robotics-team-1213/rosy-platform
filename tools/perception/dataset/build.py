@@ -61,6 +61,12 @@ def label_to_index(classes) -> dict[str, int]:
     """CVAT label name -> class index (background role is the label "background")."""
     if sum(c["role"] == "background" for c in classes) != 1:
         raise BuildError("classes: exactly one class with role background is required")
+    names = [c["name"] for c in classes]
+    if len(set(names)) != len(names):
+        raise BuildError("classes: duplicate class names")
+    colors = [tuple(c["color"]) for c in classes if c.get("color") is not None]
+    if len(set(colors)) != len(colors):
+        raise BuildError("classes: duplicate colors")
     return {("background" if c["role"] == "background" else c["name"]): c["index"]
             for c in classes}
 
@@ -68,7 +74,7 @@ def label_to_index(classes) -> dict[str, int]:
 def parse_labelmap(path: Path, classes) -> dict[tuple[int, int, int], int]:
     """labelmap.txt -> colour -> class index. Unknown label name -> BuildError."""
     names = label_to_index(classes)
-    lut = {}
+    lut, seen = {}, set()
     for line in Path(path).read_text(encoding="utf-8").splitlines():
         if not line.strip() or line.startswith("#"):
             continue
@@ -81,6 +87,11 @@ def parse_labelmap(path: Path, classes) -> dict[tuple[int, int, int], int]:
             raise BuildError(f"{Path(path).name}: bad line {line!r}")
         if name not in names:
             raise BuildError(f"{Path(path).name}: label {name!r} is not in classes.yaml")
+        if name in seen:
+            raise BuildError(f"{Path(path).name}: duplicate label {name!r}")
+        if color in lut:
+            raise BuildError(f"{Path(path).name}: duplicate colour {color}")
+        seen.add(name)
         lut[color] = names[name]
     return lut
 
@@ -181,7 +192,8 @@ def build_dataset(export, frame_dirs, classes, out, deleted_indexes=()) -> dict:
     entries, sources = [], []
     for (session, index), mask in kept:
         src, meta = frames[(session, index)]
-        img_rel, mask_rel = f"images/{session}/{index}.jpg", f"masks/{session}/{index}.png"
+        img_rel, mask_rel = (f"images/{session}/{session}__{index:06d}.jpg",
+                             f"masks/{session}/{session}__{index:06d}.png")
         (out / img_rel).parent.mkdir(parents=True, exist_ok=True)
         (out / mask_rel).parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(src, out / img_rel)

@@ -102,7 +102,7 @@ def test_recoloured_export_maps_by_label_name(tmp_path):
     exp = _export(tmp_path, _names("s1", "s2", indexes=(0,)),
                   colors={0: (10, 20, 30), 1: (200, 100, 50)})
     build.build_dataset(exp, [a, b], CLASSES, tmp_path / "ds")
-    saved = cv2.imread(str(tmp_path / "ds" / "masks" / "s1" / "0.png"), cv2.IMREAD_UNCHANGED)
+    saved = cv2.imread(str(tmp_path / "ds" / "masks" / "s1" / "s1__000000.png"), cv2.IMREAD_UNCHANGED)
     assert (saved == _mask()).all()
 
 
@@ -147,6 +147,44 @@ def test_prelabel_refuses_classes_disagreeing_with_model():
         prelabel.resolve_classes(bad, model)
 
 
+def test_duplicate_colour_or_label_in_labelmap_rejected(tmp_path):
+    for extra in ("cone:0,0,0::\n", "line:1,1,1::\n"):
+        lm = tmp_path / "labelmap.txt"
+        lm.write_text(_labelmap(CLASSES) + extra)
+        with pytest.raises(build.BuildError, match="labelmap.txt.*duplicate"):
+            build.parse_labelmap(lm, CLASSES + [{"index": 2, "name": "cone",
+                                                 "role": "stop_line", "color": [5, 5, 5]}])
+
+
+def test_duplicate_classes_rejected():
+    dup_color = [CLASSES[0], dict(CLASSES[1], color=[0, 0, 0])]
+    dup_name = [CLASSES[0], dict(CLASSES[1], name="floor")]
+    model = [SimpleNamespace(index=0, name="floor", role="background"),
+             SimpleNamespace(index=1, name="line", role="lane_marking")]
+    with pytest.raises(build.BuildError, match="duplicate colo"):
+        build.label_to_index(dup_color)
+    with pytest.raises(build.BuildError, match="duplicate"):
+        build.label_to_index(dup_name)
+    with pytest.raises(build.BuildError, match="duplicate colo"):
+        prelabel.resolve_classes(dup_color, model)
+
+
+def test_default_palette_colour_clash_rejected():
+    model = [SimpleNamespace(index=0, name="floor", role="background"),
+             SimpleNamespace(index=1, name="line", role="lane_marking")]
+    clash = [dict(CLASSES[0]), dict(CLASSES[1], color=None)]
+    clash[0]["color"] = list(prelabel.DEFAULT_PALETTE[1])
+    with pytest.raises(build.BuildError, match="duplicate colo"):
+        prelabel.resolve_classes(clash, model)
+
+
+def test_upload_image_copies_original_jpeg_bytes(tmp_path):
+    src = tmp_path / "orig.jpg"
+    cv2.imwrite(str(src), np.full((8, 8, 3), 77, np.uint8))
+    dst = prelabel.write_upload_image(tmp_path / "o", "s1__000001", cv2.imread(str(src)), src)
+    assert dst.read_bytes() == src.read_bytes()
+
+
 # --- round trip: prelabel zip -> CVAT recolours -> build ---------------------------
 
 def test_cvat_round_trip_identical_masks(tmp_path):
@@ -174,12 +212,12 @@ def test_cvat_round_trip_identical_masks(tmp_path):
     build.build_dataset(exp, [a, b], CLASSES, out)
     for name, mask in items:
         s, i = name.split("__")
-        got = cv2.imread(str(out / "masks" / s / f"{int(i)}.png"), cv2.IMREAD_UNCHANGED)
+        got = cv2.imread(str(out / "masks" / s / f"{s}__{int(i):06d}.png"), cv2.IMREAD_UNCHANGED)
         assert (got == mask).all(), name
 
 
 def test_upload_images_use_exact_zip_names(tmp_path):
-    prelabel.write_upload_image(tmp_path, "s1__000004", np.zeros((8, 8, 3), np.uint8))
+    prelabel.write_upload_image(tmp_path, "s1__000004", np.zeros((8, 8, 3), np.uint8), None)
     assert (tmp_path / "images" / "s1__000004.jpg").is_file()
     zpath = tmp_path / "c.zip"
     prelabel.write_cvat_zip(zpath, CLASSES, [("s1__000004", _mask())])
@@ -216,7 +254,7 @@ def test_two_sessions_split_without_overlap(tmp_path):
     assert set(by_split) == {"train", "val"}
     assert not by_split["train"] & by_split["val"]
     assert m["sources"] == [{"session": "s1"}, {"session": "s2"}]
-    saved = cv2.imread(str(out / "masks" / "s1" / "0.png"), cv2.IMREAD_UNCHANGED)
+    saved = cv2.imread(str(out / "masks" / "s1" / "s1__000000.png"), cv2.IMREAD_UNCHANGED)
     assert (saved == _mask()).all()
     assert json.loads((out / "manifest.json").read_text()) == m
 
@@ -237,8 +275,9 @@ def test_index_is_not_position(tmp_path):
     exp = _export(tmp_path, {"s1__000009": _mask(), "s2__000007": _mask()})
     out = tmp_path / "ds"
     m = build.build_dataset(exp, [a, b], CLASSES, out)
-    assert {f["image"] for f in m["frames"]} == {"images/s1/9.jpg", "images/s2/7.jpg"}
-    img = cv2.imread(str(out / "images" / "s1" / "9.jpg"))
+    assert {f["image"] for f in m["frames"]} == {"images/s1/s1__000009.jpg",
+                                                "images/s2/s2__000007.jpg"}
+    img = cv2.imread(str(out / "images" / "s1" / "s1__000009.jpg"))
     assert abs(int(img.mean()) - 90) <= 2
 
 
@@ -277,7 +316,8 @@ def test_delete_both_spellings_and_stored_normalised(tmp_path):
     m = build.build_dataset(exp, dirs, CLASSES, tmp_path / "ds",
                             deleted_indexes=["s1/1", "s2__000000", "s1__000001"])
     assert {f["image"] for f in m["frames"]} == {
-        "images/s1/0.jpg", "images/s2/1.jpg", "images/s3/0.jpg", "images/s3/1.jpg"}
+        "images/s1/s1__000000.jpg", "images/s2/s2__000001.jpg",
+        "images/s3/s3__000000.jpg", "images/s3/s3__000001.jpg"}
     assert m["deleted_indexes"] == ["s1__000001", "s2__000000"]
 
 
@@ -329,23 +369,19 @@ MODEL_CLASSES = (SimpleNamespace(index=0, name="floor", role="background"),
                  SimpleNamespace(index=1, name="line", role="lane_marking"))
 
 
-def test_rank_score_recorded():
-    assert prelabel.rank_score(0.9, -0.3) == pytest.approx(0.1 + 0.3)
-    assert prelabel.rank_score(0.9, None) == pytest.approx(0.1)
-
-
-def test_score_uses_recorded_shadow_only_for_same_revision():
+def test_delta_counts_only_for_same_revision_and_formula_is_shared():
     side = {"perception/learned/shadow": {"model_revision": "r1", "confidence": 0.9,
                                           "error_delta": 0.4}}
     lg = _logits(lane_cols=slice(4, 6))
+    base = prelabel.score_frame(lg, MODEL_CLASSES, {}, "r1")
     same = prelabel.score_frame(lg, MODEL_CLASSES, side, "r1")
-    assert same["recorded"] and same["confidence"] == 0.9
-    assert same["score"] == pytest.approx(0.1 + 0.4)
     other = prelabel.score_frame(lg, MODEL_CLASSES, side, "r2")
-    assert not other["recorded"] and other["confidence"] != 0.9
+    assert same["recorded"] and same["error_delta"] == 0.4
+    assert same["score"] == pytest.approx(base["score"] + 0.4)
+    assert same["confidence"] == base["confidence"] != 0.9  # never the recorded confidence
+    assert same["entropy"] == base["entropy"]
+    assert not other["recorded"] and other["score"] == pytest.approx(base["score"])
     assert other["error_delta"] is None
-    missing = prelabel.score_frame(lg, MODEL_CLASSES, {}, "r1")
-    assert not missing["recorded"]
 
 
 def test_recomputed_score_rises_with_entropy_and_lane_shortage():

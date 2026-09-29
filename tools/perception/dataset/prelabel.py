@@ -18,6 +18,7 @@ import argparse
 import csv
 import json
 import math
+import shutil
 import sys
 import zipfile
 from pathlib import Path
@@ -52,24 +53,17 @@ def resolve_classes(yaml_classes, model_classes) -> list[dict]:
         if color is None:
             color = list(DEFAULT_PALETTE[c["index"] % len(DEFAULT_PALETTE)])
         out.append(dict(c, color=color))
+    colors = [tuple(c["color"]) for c in out]
+    if len(set(colors)) != len(colors):
+        raise build.BuildError("classes: duplicate colors (after default-palette fill)")
     return out
 
 
-def rank_score(confidence: float, error_delta: float | None) -> float:
-    """Recorded-shadow score. Higher = more worth a human's time."""
-    return (1.0 - confidence) + (abs(error_delta) if error_delta is not None else 0.0)
-
-
 def score_frame(logits: np.ndarray, classes, side: dict, model_revision: str) -> dict:
-    """Recorded shadow confidence/error_delta count only when produced by this same
-    model revision; otherwise recompute from the current model: (1 - confidence)
-    + mean normalised pixel entropy + lane-pixel shortage."""
+    """One formula for every row, from the current model: (1 - confidence) + mean
+    normalised pixel entropy + lane-pixel shortage. |error_delta| is added only when
+    the recorded shadow payload came from this same model revision."""
     from control.sensing.perception.learned.lane_mask import lane_evidence
-    rec = (side or {}).get(SHADOW_KEY) or {}
-    if rec.get("model_revision") == model_revision and rec.get("confidence") is not None:
-        conf, delta = float(rec["confidence"]), rec.get("error_delta")
-        return {"score": rank_score(conf, delta), "confidence": conf, "error_delta": delta,
-                "entropy": None, "lane_shortage": None, "recorded": True}
     ev = lane_evidence(logits, classes)
     z = logits[0].astype(np.float64)
     z -= z.max(axis=0, keepdims=True)
@@ -79,9 +73,11 @@ def score_frame(logits: np.ndarray, classes, side: dict, model_revision: str) ->
                     / math.log(len(classes)))
     lane = sum(ev.class_fractions[c.name] for c in classes if c.role == "lane_marking")
     shortage = max(0.0, 1.0 - lane / LANE_MIN_FRACTION)
-    return {"score": (1.0 - ev.confidence) + entropy + shortage, "confidence": ev.confidence,
-            "error_delta": None, "entropy": entropy, "lane_shortage": shortage,
-            "recorded": False}
+    rec = (side or {}).get(SHADOW_KEY) or {}
+    delta = rec.get("error_delta") if rec.get("model_revision") == model_revision else None
+    score = (1.0 - ev.confidence) + entropy + shortage + (abs(delta) if delta is not None else 0.0)
+    return {"score": score, "confidence": ev.confidence, "error_delta": delta,
+            "entropy": entropy, "lane_shortage": shortage, "recorded": delta is not None}
 
 
 def frame_name(session: str, index: int) -> str:
@@ -105,10 +101,13 @@ def colorize(mask: np.ndarray, classes) -> np.ndarray:
     return lut[mask]
 
 
-def write_upload_image(out: Path, name: str, bgr: np.ndarray) -> Path:
+def write_upload_image(out: Path, name: str, bgr: np.ndarray, src: Path | None) -> Path:
+    """The JPEG CVAT sees. Copy the original bytes when the source is a .jpg."""
     path = Path(out) / "images" / f"{name}.jpg"
     path.parent.mkdir(parents=True, exist_ok=True)
-    if not cv2.imwrite(str(path), bgr):
+    if src is not None and Path(src).suffix.lower() in (".jpg", ".jpeg"):
+        shutil.copyfile(src, path)
+    elif not cv2.imwrite(str(path), bgr):
         raise RuntimeError(f"cannot write {path}")
     return path
 
@@ -184,7 +183,8 @@ def main(argv=None) -> int:
         name = frame_name(str(row.get("session") or args.frames_dir.name), index)
         cv2.imwrite(str(args.out / "masks" / f"{name}.png"), mask)
         cv2.imwrite(str(args.out / "preview" / f"{name}.png"), colorize(mask, classes))
-        write_upload_image(args.out, name, bgr)
+        write_upload_image(args.out, name, bgr,
+                           args.frames_dir / "frames" / f"{index:06d}.jpg")
         ranking.append((name, score_frame(logits, model.manifest.classes, row.get("side"),
                                           model.model_revision)))
         items.append((name, mask))

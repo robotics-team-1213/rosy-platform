@@ -24,7 +24,7 @@ def _stage(dataset_dir: Path, staging: Path, size: int) -> None:
     """Copy frames listed in manifest.json into shard_NNNN folders and rewrite their paths.
 
     Frame k goes to shard_{k // size:04d}; image and mask share the shard. File names keep the
-    session so equal frame indexes from different sessions stay unique."""
+    session (already-prefixed names are kept as is) so equal frame indexes from different sessions stay unique."""
     dataset_dir = Path(dataset_dir)
     manifest = json.loads((dataset_dir / "manifest.json").read_text(encoding="utf-8"))
     frames = []
@@ -35,7 +35,11 @@ def _stage(dataset_dir: Path, staging: Path, size: int) -> None:
             src = dataset_dir / frame[key]
             if not src.is_file():
                 raise FileNotFoundError(f"frame {k}: {key} missing: {frame[key]}")
-            name = "__".join(Path(frame[key]).parts[1:])
+            base = Path(frame[key]).name
+            if base.startswith(f"{frame['session']}__"):
+                name = base
+            else:
+                name = "__".join(Path(frame[key]).parts[1:])
             rel = f"{kind}/{shard}/{name}"
             (staging / rel).parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(src, staging / rel)

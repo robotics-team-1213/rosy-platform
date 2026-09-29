@@ -168,3 +168,21 @@ def test_stage_fails_on_missing_file(tmp_path):
     (src / "masks" / "sB" / "1.png").unlink()
     with pytest.raises(FileNotFoundError):
         publish._stage(src, dst, 1000)
+
+
+def test_stage_keeps_session_prefixed_names_without_double_prefix(tmp_path):
+    src, dst = tmp_path / "ds", tmp_path / "stage"
+    dst.mkdir()
+    frames = []
+    for s in ("sA", "sB"):
+        for kind, ext in (("images", "jpg"), ("masks", "png")):
+            f = src / kind / s / f"{s}__000004.{ext}"
+            f.parent.mkdir(parents=True, exist_ok=True)
+            f.write_bytes(b"x")
+        frames.append({"image": f"images/{s}/{s}__000004.jpg",
+                       "mask": f"masks/{s}/{s}__000004.png", "session": s, "split": "train"})
+    (src / "manifest.json").write_text(json.dumps({"frames": frames}), encoding="utf-8")
+    publish._stage(src, dst, 1000)
+    m = json.loads((dst / "manifest.json").read_text(encoding="utf-8"))
+    assert [Path(f["image"]).name for f in m["frames"]] == ["sA__000004.jpg", "sB__000004.jpg"]
+    assert all((dst / f["mask"]).is_file() for f in m["frames"])
