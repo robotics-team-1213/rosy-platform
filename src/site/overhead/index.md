@@ -30,8 +30,8 @@
 
 ## 최근 기록
 
+- 2026-09-30 · uncommitted · feat(overhead): D-354 경기장 모서리 제안과 field-proposal 경로
 - 2026-09-29 · uncommitted · web-surface-hardening: CI에 overhead 호스트 시험과 android 단위 시험
 - 2026-09-28 · uncommitted · validation(overhead): recheck physical camera availability
 - 2026-09-28 · uncommitted · apply measured rectification to Fleet preview only
 - 2026-09-28 · uncommitted · serve authorized latest-frame preview
-- 2026-09-27 · 778bbd31 · verify packaged camera-to-Fleet sighting path (LOCAL)

@@ -934,6 +934,7 @@ credential. No browser or Fleet process connects to ROS/DDS.
 | GET | `/api/fleet/vision/sources` | Site console Bearer token | Configured preview source IDs |
 | POST | `/api/fleet/vision/lease` | Viewer Bearer token | 60 s source-scoped lease and direct Vision frame path |
 | GET | `/api/vision/sources/{source_id}/frame` | Vision preview lease Bearer token | One latest fresh JPEG; `Cache-Control: no-store`, sequence/age headers, and `X-Frame-Rectified` |
+| GET | `/api/vision/sources/{source_id}/field-proposal` | Vision preview lease Bearer token | D-354 field-corner proposal JSON for operator review (`proposal` null when no full field is visible); own 1/s bucket, `no-store`, same freshness 404s, 422 on undecodable frame. Display only, never applied to sightings |
 
 Lease request body accepts `{ "source_id": "ceiling-north" }` for the original
 JPEG or an optional `rectification` object:
