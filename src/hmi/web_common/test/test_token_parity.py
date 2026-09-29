@@ -15,20 +15,22 @@ from __future__ import annotations
 import re
 
 import surface_registry as registry
+import token_themes
 
 TOKENS = registry.REPO / "src" / "hmi" / "web_common" / "tokens.css"
 
-_CSS_TOKEN = re.compile(r"^\s*(--[a-z0-9-]+)\s*:\s*(#[0-9a-fA-F]{6})\s*;", re.M)
 _PY_COLOUR = re.compile(r"^_?[A-Z][A-Z0-9_]*\s*=\s*\((\d{1,3}),\s*(\d{1,3}),\s*(\d{1,3})\)(.*)$")
 _KT_COLOUR = re.compile(r"Color\(0x([0-9a-fA-F]{2})([0-9a-fA-F]{6})\)(.*)$")
 _TOKEN_NAME = re.compile(r"(?:#|//)\s*(--[a-z0-9-]+)")
 
 
-def css_tokens(text: str) -> dict[str, str]:
-    found: dict[str, str] = {}
-    for name, value in _CSS_TOKEN.findall(text):
-        found.setdefault(name, value.lower())
-    return found
+def dark_tokens(text: str) -> dict[str, str]:
+    """D-359 §3.4 — 네이티브·LCD 사본은 어두운 팔레트에 고정한다.
+
+    파일 전체를 훑으면 밝게 블록이 섞인다. 사본 형식에 테마 열이 생기기 전까지는
+    `:root, [data-theme="dark"]` 블록 하나와 비교한다.
+    """
+    return {f"--{name}": value for name, value in token_themes.palettes(text)["dark"].items()}
 
 
 def copy_colours(text: str) -> list[tuple[int, str, str | None, str]]:
@@ -68,8 +70,8 @@ def parity_problems(tokens: dict[str, str], label: str, text: str) -> list[str]:
 
 
 def test_every_token_copy_matches_tokens_css():
-    tokens = css_tokens(TOKENS.read_text(encoding="utf-8"))
-    assert tokens, "tokens.css에서 --이름: #hex 선언을 읽지 못했다"
+    tokens = dark_tokens(TOKENS.read_text(encoding="utf-8"))
+    assert tokens, "tokens.css dark 블록에서 --이름: #hex 선언을 읽지 못했다"
     rows = [row for row in registry.load() if "token_parity" in (row.get("contracts") or [])]
     assert rows, "token_parity를 받는 표면이 레지스트리에 없다"
     problems = []

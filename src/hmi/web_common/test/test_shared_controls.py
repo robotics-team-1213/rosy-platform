@@ -10,6 +10,7 @@ import re
 import pytest
 
 import surface_registry as registry
+import token_themes
 
 ROOT = Path(__file__).resolve().parents[3]
 COMMON = Path(__file__).parent.parent
@@ -316,12 +317,15 @@ def test_pitch_colours_live_in_one_block():
     assert not leaked, leaked
 
 
+def _dark_tokens() -> dict[str, str]:
+    """`--이름` → `rrggbb`. LCD·진단 사본은 어두운 팔레트에 고정한다(D-359 §3.3–3.4)."""
+    palette = token_themes.palettes(TOKENS.read_text(encoding="utf-8"))["dark"]
+    return {f"--{name}": value.lstrip("#") for name, value in palette.items()}
+
+
 def test_face_literals_match_the_token_file():
     """LCD는 DOM 부품을 쓰지 않는다. 숫자는 토큰과 같아야 한다."""
-    tokens = dict(re.findall(
-        r"(--[a-z0-9-]+):\s*#([0-9a-fA-F]{6})",
-        TOKENS.read_text(encoding="utf-8"),
-    ))
+    tokens = _dark_tokens()
     source = FACE.read_text(encoding="utf-8")
     mismatch = []
     for token, name in FACE_COLOUR.items():
@@ -382,10 +386,7 @@ def test_measure_comes_from_the_scale():
 
 
 def test_diagnostic_palette_matches_the_token_hex():
-    tokens = dict(re.findall(
-        r"(--[a-z0-9-]+):\s*#([0-9a-fA-F]{6})",
-        TOKENS.read_text(encoding="utf-8"),
-    ))
+    tokens = _dark_tokens()
     page = (ROOT / "runtime" / "sensing" / "web" / "diagnostic.html").read_text(encoding="utf-8")
     declared = dict(re.findall(r"--([a-z0-9-]+):\s*#([0-9a-fA-F]{6})", page))
     mismatch = []

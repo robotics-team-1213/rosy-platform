@@ -46,7 +46,6 @@
   border-radius: var(--radius-control);
   color: var(--ink);
   background: var(--field-bg);
-  color-scheme: dark;
   font: var(--weight-regular) var(--text-label)/var(--leading-label) var(--body);
 }
 .surface-slot input::placeholder,

@@ -75,13 +75,30 @@ def deuteranope(hex_colour: str) -> str:
     )
 
 
-@pytest.fixture(scope="module")
-def palette() -> dict[str, str]:
-    found = dict(
-        re.findall(r"--([a-z0-9-]+):\s*(#[0-9a-fA-F]{6})\s*;", CANON.read_text(encoding="utf-8"))
-    )
+def theme_palettes() -> dict[str, dict[str, str]]:
+    """D-359 — 테마 블록마다 값 사전 하나. 파일 전체를 한 사전으로 읽으면 뒤 블록
+    (밝게)이 앞 블록(어둡게)을 덮어 한 테마만 검사된다."""
+    text = re.sub(r"/\*.*?\*/", "", CANON.read_text(encoding="utf-8"), flags=re.S)
+    found: dict[str, dict[str, str]] = {}
+    for selector, body in re.findall(r"([^{}]+)\{([^{}]*)\}", text):
+        for theme in re.findall(r'\[data-theme="([a-z0-9-]+)"\]', selector):
+            found.setdefault(theme, {}).update(
+                re.findall(r"--([a-z0-9-]+):\s*(#[0-9a-fA-F]{6})\s*;", body))
+    return found
+
+
+THEMES = sorted(theme_palettes())
+
+
+@pytest.fixture(scope="module", params=THEMES)
+def palette(request) -> dict[str, str]:
+    found = theme_palettes()[request.param]
     assert found, "단일 토큰 파일에서 hex 토큰을 읽지 못했다"
     return found
+
+
+def test_the_console_palette_is_read_per_theme():
+    assert {"dark", "light"} <= set(THEMES), THEMES
 
 
 def surfaces() -> list[Path]:
