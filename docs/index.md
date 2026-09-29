@@ -214,8 +214,8 @@
 - [2026-09-29-er2-manipulation-official-api-research.md](plans/2026-09-29-er2-manipulation-official-api-research.md)
 - [2026-09-29-er2-semantic-actions-mission-implementation.md](plans/2026-09-29-er2-semantic-actions-mission-implementation.md)
 - [2026-09-29-fleet-mission-control-arbitration-implementation.md](plans/2026-09-29-fleet-mission-control-arbitration-implementation.md)
-- [2026-09-29-on-demand-activation-measurement-baseline.md](plans/2026-09-29-on-demand-activation-measurement-baseline.md)
 - [2026-09-29-fleet-robot-code-enrollment-plan.md](plans/2026-09-29-fleet-robot-code-enrollment-plan.md)
+- [2026-09-29-on-demand-activation-measurement-baseline.md](plans/2026-09-29-on-demand-activation-measurement-baseline.md)
 - [2026-09-29-pinky-deployment-fast-path.md](plans/2026-09-29-pinky-deployment-fast-path.md)
 - [2026-09-29-policy-evidence-contract-design.md](plans/2026-09-29-policy-evidence-contract-design.md)
 - [2026-09-29-policy-evidence-contract.md](plans/2026-09-29-policy-evidence-contract.md)
@@ -231,11 +231,8 @@
 
 ## 최근 기록
 
-- 2026-09-29 · uncommitted · docs(plan): 온디맨드 활성화 후보 측정 기준선
-- 2026-09-29 · uncommitted · docs(adr): D-347 capability lifecycle 계약 기록 + API Ref v1.58
-- 2026-09-29 · uncommitted · feat(harness): D-346 커밋 시점 방어망 착지
-- 2026-09-29 · uncommitted · test(architecture): D-168 스캐너에 package:// URI와 자산 확장자 추가
-- 2026-09-29 · uncommitted · docs(plans): D-337 T4 착지 — dashboard 신호 원 행
+- 2026-09-30 · uncommitted · feat(fleet): D-352 S1–S3 구현 착지(브랜치 feat/fleet-robot-enrollment-s1)
 - 2026-09-29 · uncommitted · docs(adr): D-352 2차 리뷰 반영 — 90일 위협 명시·operator 회수·주소 바뀜 안전 규칙
 - 2026-09-29 · uncommitted · docs(adr): D-352 독립 리뷰·사용자 결정 반영 개정
 - 2026-09-29 · uncommitted · docs(adr): D-352 사이트 콘솔의 로봇 화면 코드 등록 제안과 계획
+- 2026-09-29 · uncommitted · docs(plan): 온디맨드 활성화 후보 측정 기준선

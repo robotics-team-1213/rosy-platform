@@ -507,3 +507,11 @@
 - 변경: `test_mission_ai_proposal.py`가 MockTransport 옆에 `api_key="fixture-secret"`을 넘겼다 — `secret_scan.KNOWN_FIXTURES`가 면제하지 않는 값이라 CI의 `test_no_secrets_in_tracked_files`가 실패했다(런 36578519798). 시험 세 곳(주입 2·헤더 단언 1)을 `test-secret`로 바꿨다 — KNOWN_FIXTURES 주석이 정확히 이 ER2 어댑터·mock 조합을 위해 문서화한 값이다. 허용목록 자체는 무변경(D-256: 값을 이름 짓지, 목록을 늘리지 않는다).
 - 증거: `python -m pytest test/test_release_boundary_guards.py src/site/fleet/test/test_mission_ai_proposal.py -q` 75 passed.
 - gate 변화: 없음.
+
+## 2026-09-30 · uncommitted · feat(fleet): D-352 S1–S3 사이트 콘솔 로봇 화면 코드 등록
+
+- 변경: `server/enrollment_store.py`(AES-GCM 봉인 등록부·`device_pairing_audit`·`rekey`), `server/roster.py`(`SiteRoster` 단일 로스터 소유자), `server/enrollment.py`·`enrollment_routes.py`(교환·결속·고정 주소·해제), `console.py`(await 전 순서 복사, 고정 주소 보류·경보), `hub.py`(동적 짝 토큰), `transport.py`(`trust_env=False`), `cli.py`(`--robot-credential-key-file`), 콘솔 "기기 연결" 패널(`web/enrollment.js`).
+- 증거: `python -m pytest src/site/fleet/test -q` 녹색, `node --test src/site/fleet/test/web/*.mjs` 녹색, 루트 결합 시험 `test/test_fleet_robot_enrollment_contract.py` 녹색(현재 소스 CORE, 이미지 증거 아님). 실물 로봇 접촉 없음.
+- gate 변화: 없음. LOCAL 증거만; DEVICE는 벤치 D1 대기.
+- 결정: D-352 Proposed(구현 첫 조각).
+- 교훈: 로스터를 바꾸는 쪽이 여럿이면 `await`를 건너는 순회가 어긋난다 — 순회 전 복사와 단일 소유자가 함께 있어야 e-stop이 새 로봇에 닿는다.

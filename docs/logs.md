@@ -3493,3 +3493,11 @@
 - gate 변화: 없음.
 - 결정: D-352 Proposed 유지. D-193 행에 D-352 개정 표시.
 - 교훈: 주소 신뢰를 끊을 때도 정지 경로는 끊지 않는다 — 비밀 노출 방어와 정지 도달은 같은 규칙으로 묶으면 안 된다.
+
+## 2026-09-30 · uncommitted · feat(fleet): D-352 S1–S3 구현 착지(브랜치 feat/fleet-robot-enrollment-s1)
+
+- 변경: D-352 문서 브랜치를 병합하고 첫 조각(S1–S3)을 구현했다. `site-lan-discovery-profile.md`에 D-352 한 줄, 하네스 `adr_gaps`에서 이미 착지한 D-347 예약 줄을 뺐다(병합 잔상).
+- 증거: LOCAL(host pytest·node). 실물 벤치 D1 미실행.
+- gate 변화: 없음.
+- 결정: D-352 Proposed 유지.
+- 교훈: 없음.

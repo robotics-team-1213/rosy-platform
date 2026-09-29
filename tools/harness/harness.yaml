@@ -11,7 +11,6 @@ adr_gaps:
   D-342: "reserved by the uncommitted Pilot draft in .worktrees/pilot-teleop (manual-limit commissioning ladder); remove once it lands"
   D-343: "reserved by the uncommitted Pilot draft in .worktrees/pilot-teleop (pilot rooms and driver seat); remove once it lands"
   D-344: "reserved by the uncommitted Pilot draft in .worktrees/pilot-teleop (pilot assisted autonomy); remove once it lands"
-  D-347: "reserved by another branch or draft (pilot-teleop draft: manual-limit commissioning ladder), seen 2026-09-29 while numbering D-352; remove once it lands"
   D-348: "reserved by another branch or draft (pilot-teleop draft: pilot rooms and driver seat), seen 2026-09-29 while numbering D-352; remove once it lands"
   D-349: "reserved by another branch or draft (pilot-teleop draft: pilot assisted autonomy), seen 2026-09-29 while numbering D-352; remove once it lands"
   D-350: "reserved by another branch or draft (pilot-teleop draft: pilot camera aspect and installed app), seen 2026-09-29 while numbering D-352; remove once it lands"

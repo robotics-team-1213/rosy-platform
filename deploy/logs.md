@@ -1500,3 +1500,11 @@
 - gate 변화: 없음.
 - 결정: 없음(픽스처 안무만).
 - 교훈: 같은 파일의 부하 민감 시험은 한 번에 하나씩 실패로 드러난다 — 형제 시험 전부를 예방 수술하지 말고 실패한 것만 고친다.
+
+## 2026-09-30 · uncommitted · feat(site): D-352 robot_credential_key secret와 오프라인 rekey
+
+- 변경: `site/compose.yaml`에 secret `robot_credential_key`와 `--robot-credential-key-file`, `site/robot-credential-key.template.txt`(형식만), `site/site_db.py rekey`(`--assume-stopped` 필수), `site/requirements-fleet.txt`에 `cryptography==49.0.0`, `site/README.md` 콘솔 등록 절차.
+- 증거: `python -m pytest test/test_site_db_maintenance.py -q` 녹색. 사이트 호스트 Compose 실행 없음.
+- gate 변화: 없음.
+- 결정: D-352.
+- 교훈: 없음.

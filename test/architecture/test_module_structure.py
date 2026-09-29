@@ -72,10 +72,11 @@ SIZE_VERDICTS = {
         "2026-09-29-fleet-mission-control-arbitration-implementation.md)",
     ),
     "fleet": (
-        11_164,
+        12_419,
         "split: server HTTP boundary, console, signals and the mission-control stores are separate owners "
         "today; group them into subpackages rather than one flat server/ tree (B2); owner fleet, unscheduled "
-        "(re-judged 2026-09-29 at 11164 after mission_store joined the server tree)",
+        "(re-judged 2026-09-29 at 11164 after mission_store joined the server tree; re-judged 2026-09-30 at "
+        "12419 after the D-352 enrollment register, roster and service joined as their own modules)",
     ),
     "site/fleet/fleet/server/mission_store.py": (
         728,
@@ -109,8 +110,10 @@ SIZE_VERDICTS = {
         "accept: legacy comparison-graph publisher pinned by test_module_separation; no new work (X3)",
     ),
     "site/fleet/fleet/server/console.py": (
-        767,
-        "accept: one owner (FleetConsole gather/scatter), host-testable (X5)",
+        1013,
+        "accept: one owner (FleetConsole gather/scatter), host-testable (X5). Re-judged 2026-09-30 at 1013: "
+        "D-352 roster mutation and pinned-address holds change the gather/traffic tables in place, so they "
+        "stay with their owner; the roster policy itself lives in roster.py",
     ),
     "runtime/sensing/control/sensing/perception/lane.py": (
         611,
