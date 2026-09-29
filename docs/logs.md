@@ -3463,3 +3463,11 @@
 - gate 변화: 없음.
 - 결정: D-352 Proposed. Fleet이 `auth/pair`를 직접 부르고(`purpose: site`, 출처 `pair-site`, 역할 operator), 결속은 인증된 `system/info` 읽기, 자격은 Fleet SQLite 암호문 + 별도 키, 갱신은 회전 + 90일 계보 상한, FleetAgent 짝 토큰 제공은 D-351 Hub 결속 수정 뒤로 미뤘다.
 - 교훈: 로그인 코드 경로(D-193)는 사람 브라우저를 전제로 수명을 정했다 — 같은 경로를 서버 주체가 쓰면 "새 코드를 얻는 비용"이 수명 설계의 입력이 된다.
+
+## 2026-09-29 · uncommitted · docs(adr): D-352 독립 리뷰·사용자 결정 반영 개정
+
+- 변경: D-352와 계획 개정. 사용자 결정 — 회전 갱신(`auth/renew`·계보·유예·갱신 루프)을 빼고 `pair-site` 긴 수명 토큰 하나(카드 설정, 기본 90일, D-193 168 h 상한의 출처 한정 개정), 관리자 등록 코드는 `min(사이트 수명, 발급자 만료)`로 D-193 M2 유지. AES-GCM 유지하되 AAD 길이 접두 + 슬롯, base64 키만, 키 실패는 실행 상태, 키 별도 백업·`rekey`. 리뷰 반영 — 주소 자동 추종 대신 등록 때 주소 고정·`address_changed`에서 Bearer 0회, 단일 로스터 소유자(`SiteRoster`, `await` 전 순서 복사, 해제 때 클라이언트 닫기·진행 task 409, sighting 설정은 기동 실패 대신 경고), D1 로봇 쪽 확인 방법 A/B, `TOKEN_SOURCES`, 대시보드 경로, 호스트 이름 비교 기준, 수동 주소는 사설 IPv4만, 운용 클라이언트 `trust_env=False`, `pending_logout`, 코드 소모 문구, Fleet 시계 기준 만료 경고, 결합 시험 위치(루트 `test/`), D-341과 패널 이름 "기기 연결"·감사 표 `device_pairing_audit` 공유, 사용성 범위와 재부팅 비용, `fleet/link` `PUT`은 새 코드 요구·인증 없는 `GET` 제거, ADR 항목 ↔ 단계 표와 첫 조각.
+- 증거: SOURCE(문서·코드 판독). 실물 접촉 없음.
+- gate 변화: 없음.
+- 결정: D-352 Proposed 유지.
+- 교훈: 평문 LAN 위협 모델에서는 토큰 회전이 도청자에게도 보이므로 보호보다 상태 기계만 늘린다 — 전송이 바뀌기 전에는 회수 가능한 긴 수명 자격이 더 정직하다.

@@ -230,8 +230,8 @@
 
 ## 최근 기록
 
+- 2026-09-29 · uncommitted · docs(adr): D-352 독립 리뷰·사용자 결정 반영 개정
 - 2026-09-29 · uncommitted · docs(adr): D-352 사이트 콘솔의 로봇 화면 코드 등록 제안과 계획
 - 2026-09-29 · uncommitted · feat(harness): D-346 커밋 시점 방어망 착지
 - 2026-09-29 · uncommitted · test(architecture): D-168 스캐너에 package:// URI와 자산 확장자 추가
 - 2026-09-29 · uncommitted · docs(plans): D-337 T4 착지 — dashboard 신호 원 행
-- 2026-09-29 · uncommitted · docs(plans): D-337 T3 착지 — 설정·배선·계약 완료
