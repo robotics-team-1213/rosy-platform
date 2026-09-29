@@ -232,8 +232,8 @@
 
 ## 최근 기록
 
+- 2026-09-30 · uncommitted · docs: 붉은 main 정리 — 5건 미등록 실패를 계약 안에서 해소
 - 2026-09-30 · uncommitted · docs(adr): D-351 도킹 재시도 갈래 기록
 - 2026-09-30 · uncommitted · docs(adr): D-350 도크 하드웨어 3단계 계약 + 선구현 6건
 - 2026-09-30 · uncommitted · docs: 사소한 결함 정돈 — plans AGENTS mojibake·표 복구와 LOCAL blocker 갱신
 - 2026-09-30 · uncommitted · docs: restore D-348 goal-evidence decision and execution record
-- 2026-09-30 · uncommitted · docs(adr): D-349 도크 자동 충전 코드 준비 완료 기록
