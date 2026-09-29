@@ -2,7 +2,7 @@
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.56
+**Version:** v1.57
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -1376,11 +1376,67 @@ it may later submit one fenced local Action. Neither response proves ROS goal
 completion, software stop, driver standstill, object placement, or physical E-stop
 state.
 
+
+## 10.14 Mission progress snapshots and event cursor
+
+These Site Fleet read routes are scoped to the authenticated proposal owner and
+require the Viewer role. The robot CORE Mission API is a separate interface.
+
+| Method | Path | Role | Meaning |
+|---|---|---|---|
+| GET | `/api/fleet/missions/{mission_id}` | Viewer | Return the owner-scoped Mission, progress axes, and up to 50 most recent journal events from one SQLite read snapshot. |
+| GET | `/api/fleet/missions/{mission_id}/events?after_event_id={id}&limit={n}` | Viewer | Read a bounded Mission event page in Fleet journal ID order; `limit` defaults to 50 and is restricted to 1..200, with each event detail limited to 16 KiB of JSON. |
+
+`progress` contains `snapshot_event_id`, `snapshot_at`, and five independently
+sourced axes: `mission`, `step`, `action`, `goal_evidence`, and `stop`. Each axis
+contains `state`, `source`, nullable `last_event_id`, nullable `observed_at`,
+nullable `revision`, `freshness` (`CURRENT`, `FRESH`, `STALE`, or `UNKNOWN`), and
+nullable `reason`. Action readback without a timestamp is `UNKNOWN`; an Action
+success without a matching goal event leaves `goal_evidence` as `PENDING`.
+`stop.state` is `DISPATCH_ENABLED` or `DISPATCH_BLOCKED` and represents only
+Fleet's dispatch-control latch. `physical_state: UNKNOWN` is returned because
+this API does not receive an independent physical
+stop readback. No percentage is returned because no physical-progress measure
+is available.
+
+The Mission response returns at most 50 recent events and includes
+`history_truncated`. When true, older events were omitted or removed by a
+retention policy; clients use the cursor endpoint to page the retained journal.
+The snapshot still computes its Action and goal axes from the latest events for
+the current `action_id`/`attempt_id`, even when those events are older than the
+recent-history window.
+
+Clients read the snapshot first and continue with
+`after_event_id=progress.snapshot_event_id`. Event IDs describe Fleet journal
+insertion order, not device timestamps or attempt recency. Clients ignore IDs at
+or below their stored cursor and apply Action/goal events to the current view
+only when their action/attempt pair matches the active attempt in the latest
+snapshot. A late report from an older attempt can have a larger Fleet event ID.
+`snapshot_event_id` in an event page is that read's high water mark;
+`next_after_event_id` is the last returned event ID, or the supplied cursor when
+the page is empty.
+
+Mission event rows are retained for the lifetime of the Mission; v1 has no
+automatic pruning. The per-Mission `cursor_floor` starts at zero and advances
+only if a future retention process removes older entries. A cursor below that
+floor returns `410 MISSION_CURSOR_EXPIRED`; a cursor above the current high water
+mark returns `409 MISSION_CURSOR_RESET_REQUIRED`. Both responses include a fresh
+snapshot and `snapshot_restart_required: true`. Missing or non-owned Missions
+return `404` in both routes. WebSocket/subscription delivery is not part of this
+contract.
+
+Fleet can build an internal model context from the same snapshot after matching
+the authenticated principal and workcell. It contains only Mission/step/Action/
+goal/stop states and bounded reasons; it excludes object selectors, raw
+observations, evidence payloads, and credentials. This is not a public
+`get_mission_status` provider tool or a provider tool-result loop.
+
 # 11. 변경 이력
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
 | v1.56 | 2026-09-29 | Additive (D-337): traffic policy status gains `signal_source_kind`/`signal_head_age_s`/`signal_head_frozen`; the optional file-only `traffic_policy.signal_observer` binding fuses the observer service's measured light with camera evidence (mismatch `signal_source_conflict` HOLD, dark/indeterminate `signal_dark`, silence falls back camera-only) and emits `nav.traffic_policy_signal_source_stale` once per lapse |
+| v1.57 | 2026-09-29 | Additive (D-333): add owner-scoped Mission progress axes, a 50-event recent-history window with truncation signal, and bounded snapshot-first event cursor pages. Fleet event IDs are journal order; dispatch latch is distinct from physical stop (UNKNOWN); no percentage or provider status tool is introduced. |
 | v1.55 | 2026-09-29 | Additive (D-333): require an injected trusted producer verifier and a new post-action observation for Mission goal confirmation. Evidence is correlated to the Action/attempt and carries frame digest, evaluator revision, and a separate `OPEN` gripper readback; absent verifier, stale/mismatched evidence leaves claims held. |
 | v1.54 | 2026-09-29 | Additive (D-18): include the operator-declared `junction_rule` in traffic policy status so an unsignalized stop-and-go junction is distinct from signal-detection failure. |
 | v1.53 | 2026-09-29 | Additive (D-333/D-336): connect the explicit opt-in Fleet Mission dispatcher to the same-host OMX UDS Action API. Persist stable grants before one SubmitAction; reconcile restart/lost ACK through GetAction without replay; bind receipts to digest and both fences. Dispatcher stays disabled by default; Action success remains separate from goal evidence and physical acceptance. |

@@ -138,6 +138,13 @@
 - Verification: post-review goal/Mission/policy tests: 38 passed; full Fleet suite after audit-bound changes: 676 passed, 5 skipped. Benchmark reproduction, source-to-device latency, power-loss behavior on target storage, and DEVICE/FIELD evidence remain separate gates.
 - Limits: source only. Software Mission state and SQLite durability do not establish physical grasp, placement, emergency-stop performance, or field acceptance.
 
+### Task 8 execution record (2026-09-29)
+
+- SOURCE: Mission progress snapshot history is capped at the latest 50 events and reports `history_truncated`; full retained history stays available through the bounded cursor endpoint. Each event detail is capped at 16 KiB serialized JSON at storage and response schema boundaries; an oversized Action result leaves the Mission transition uncommitted. Current Action and goal axes use a separate latest-event lookup scoped to the active action/attempt pair, so old current-attempt evidence remains visible without scanning/decoding the full response history.
+- SQLite: added `(mission_id, action_id, attempt_id, event_id)` for active-attempt projection. `EXPLAIN QUERY PLAN` tests verify both descending recent-history and active-attempt reads use ordered indexes without a temporary sort. Fleet DB retains WAL + `synchronous=FULL`, FK enforcement, 5-second busy timeout, and SQLite's default auto-checkpoint. No durability or checkpoint tuning is claimed without representative Linux/device measurements.
+- Contract: stop progress now says `DISPATCH_ENABLED`/`DISPATCH_BLOCKED`; physical stop remains `UNKNOWN`. Cursor 409/410 bodies are in OpenAPI. API Reference v1.57 clarifies the bounded history window and recovery path; D-337 remains v1.56.
+- Verification: Mission/API/schema focused tests: 50 passed; full Fleet suite: 692 passed, 5 skipped; foundation suite: 105 passed. Synthetic Windows SQLite benchmark with 50,000 event rows measured median full-history fetch+JSON materialization at 2,393.01 ms versus 0.36 ms for 50 recent rows plus one current-attempt event (6,680.7x in this microbenchmark; materialized rows 50,000 -> 51). This is a local synthetic comparison, not a device/production latency claim. No device or field performance claim.
+
 ## 완료 기준
 
 운영자 요청 한 건에 대해 `request_key → proposal_id → mission_id/step_id → action_id/attempt_id → driver goal ID → 독립 goal evidence`가 같은 프레임·장치·generation으로 추적되고, 중복·늦은 결과·정지·재시작에서도 물리 작업이 자동 재발행되지 않아야 SOURCE/LOCAL을 완료로 판정한다. ROS-SIM, 설치 산출물, 실물 동작과 물리 정지는 각각의 증거가 생길 때만 승격한다. 모델 후보만 시험한 결과로 OMX capability를 활성화하지 않는다.
