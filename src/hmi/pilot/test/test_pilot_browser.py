@@ -217,3 +217,25 @@ def test_key_released_while_an_input_has_focus_still_stops(tablet_page):
     assert any(c["linear"] > 0 for c in page.request.get(log).json()), "W 로 전진 명령이 나가야 한다"
     assert all(c["linear"] == 0 and c["angular"] == 0 for c in tail), tail
     assert errors == [], errors
+
+
+@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
+                    reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
+def test_login_code_pairs_and_recent_list_keeps_no_token(tablet_page):
+    """로그인 코드로 입장하고(D-193), 최근 접속에는 토큰을 남기지 않는다(D-343)."""
+    base_url, page, errors = tablet_page
+    page.goto(f"{base_url}/pilot")
+    page.evaluate("localStorage.setItem('rosy.pilot.recent', JSON.stringify([{host: 'x', label: 'old', token: 'leak'}]))")
+    page.reload()
+    page.wait_for_selector("form[data-pilot-token-form] ui-field input")
+    assert "leak" not in page.evaluate("localStorage.getItem('rosy.pilot.recent')"), "옛 평문 토큰을 걷어내야 한다"
+    page.fill("form[data-pilot-token-form] ui-field input", "WRNG-CODE")
+    page.click("form[data-pilot-token-form] ui-button")
+    page.wait_for_selector("text=코드가 맞지 않거나 만료됐습니다")
+    page.fill("form[data-pilot-token-form] ui-field input", "test-code")
+    page.click("form[data-pilot-token-form] ui-button")
+    page.wait_for_selector("[data-drive-enter]")
+    assert page.evaluate("sessionStorage.getItem('rosy.pilot.token')") == "devtoken"
+    recent = page.evaluate("localStorage.getItem('rosy.pilot.recent')")
+    assert "devtoken" not in recent and "token" not in recent, recent
+    assert errors == [], errors

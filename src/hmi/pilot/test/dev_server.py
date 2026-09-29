@@ -164,6 +164,19 @@ LIMITS = {"session_linear": None, "max_linear": 0.2, "max_angular": 0.8,
 TELEOP_LOG: list[dict] = []
 
 
+PAIR_CODE = "TEST-CODE"
+
+
+@app.post("/api/v1/auth/pair", status_code=201)
+async def pair(request: Request):
+    body = await request.json()
+    if str(body.get("code", "")).upper() != PAIR_CODE:
+        return JSONResponse({"error": {"code": "UNAUTHORIZED", "message": "invalid or expired login code"}},
+                            status_code=401)
+    return JSONResponse({"id": "pair-1", "token": "devtoken", "role": "operator", "label": body.get("label", ""),
+                         "source": "pair-physical", "expires_at": None}, status_code=201)
+
+
 @app.get("/api/v1/safety/state")
 def safety_state(request: Request):
     if _role(request) is None:

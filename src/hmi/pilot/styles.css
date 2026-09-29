@@ -112,6 +112,14 @@ body[data-pilot-screen="drive"] ui-topbar {
 }
 
 [data-drive-frame][src] { opacity: 1; }
+
+/* 카메라·HUD 를 길게 눌러도 이미지 메뉴·선택·드래그가 뜨지 않게(태블릿 실측) */
+.pilot-drive, .pilot-drive * {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+[data-drive-frame] { pointer-events: none; -webkit-user-drag: none; }
 [data-drive-frame]:not([src]) { opacity: 0; }
 
 [data-drive-stage] ui-empty {

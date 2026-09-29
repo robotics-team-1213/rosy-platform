@@ -131,3 +131,28 @@ def test_radial_deadzone_keeps_direction_and_opposites_cancel():
     }));
     """) == {"directionKept": True, "magnitudeCapped": True, "keysCancel": True,
              "pedalsCancel": True, "idle": True}
+
+
+def test_slew_ramps_up_but_stops_and_reverses_immediately():
+    """게임식 가속 램프. 놓기·감속·방향 전환은 한 틱 안에 반영돼야 한다(안전)."""
+    assert _run_js(PRELUDE + """
+    const full = {linear: 0.15, angular: 0.6, pivot: false};
+    let c = {linear: 0, angular: 0};
+    const ramp = [];
+    for (let i = 0; i < 6; i += 1) { c = stick.slewCommand(c, full, 0.1); ramp.push(c.linear); }
+    const released = stick.slewCommand(c, {linear: 0, angular: 0}, 0.1);
+    const reversed = stick.slewCommand(c, {linear: -0.15, angular: 0}, 0.1);
+    const eased = stick.slewCommand(c, {linear: 0.05, angular: 0}, 0.1);
+    const stalled = stick.slewCommand({linear: 0, angular: 0}, full, 5);
+    console.log(JSON.stringify({
+      firstStep: near(ramp[0], 0.05),
+      reachesTarget: near(ramp.at(-1), 0.15),
+      monotonic: ramp.every((v, i) => i === 0 || v >= ramp[i - 1]),
+      releaseIsImmediate: released.linear === 0 && released.angular === 0,
+      reverseRestartsFromZero: reversed.linear < 0 && reversed.linear >= -0.05 - 1e-9,
+      decelIsImmediate: near(eased.linear, 0.05),
+      dtCapped: stalled.linear <= 0.5 * 0.25 + 1e-9,
+    }));
+    """) == {"firstStep": True, "reachesTarget": True, "monotonic": True,
+             "releaseIsImmediate": True, "reverseRestartsFromZero": True,
+             "decelIsImmediate": True, "dtCapped": True}

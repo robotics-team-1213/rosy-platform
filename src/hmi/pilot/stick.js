@@ -144,3 +144,29 @@ export function mapInput(source = {}, config = DEFAULT_CONFIG, limits = resolveL
     pivot: linear === 0 && angular !== 0,
   };
 }
+
+// 가속 램프 — 게임식 스로틀 감각. 명령 크기를 키울 때만 초당 rate 로 올린다.
+// 줄이기·놓기·방향 전환은 즉시다: 정지가 늦어지는 램프는 안전 규칙(놓으면 바로 0)을 깬다.
+// 방향이 바뀌면 0 에서 다시 오른다.
+export const SLEW_RATES = {linear: 0.5, angular: 3.0};   // m/s², rad/s²
+
+function slewAxis(previous, target, step) {
+  const reversing = previous !== 0 && target !== 0 && Math.sign(previous) !== Math.sign(target);
+  const base = reversing ? 0 : previous;
+  if (!reversing && Math.abs(target) <= Math.abs(previous)) return target;
+  const delta = target - base;
+  return base + Math.sign(delta) * Math.min(Math.abs(delta), step);
+}
+
+// previous·target: {linear, angular}. dtSeconds 는 지난 틱 이후 시간(상한 0.25 s —
+// 탭이 멈췄다 돌아와도 한 번에 뛰지 않게).
+export function slewCommand(previous, target, dtSeconds, rates = SLEW_RATES) {
+  const dt = Math.min(0.25, Math.max(0, Number(dtSeconds) || 0));
+  const linear = slewAxis(previous?.linear ?? 0, target.linear, rates.linear * dt);
+  const angular = slewAxis(previous?.angular ?? 0, target.angular, rates.angular * dt);
+  return {
+    ...target,
+    linear: linear === 0 ? 0 : linear,
+    angular: angular === 0 ? 0 : angular,
+  };
+}

@@ -55,3 +55,19 @@ export function whoami() {
 export function fetchCapabilities() {
   return api("/api/v1/system/capabilities");
 }
+
+// 로그인 코드(ABCD-EFGH, D-193) → 이 기기 전용 만료 토큰. 코드는 로봇 화면·운영자가 발급한다.
+// 로봇은 코드를 늘 하이픈과 함께 보여 준다. 하이픈 없는 8 글자는 토큰일 수 있어 코드로 보지 않는다.
+export const LOGIN_CODE = /^[A-Z0-9]{4}-[A-Z0-9]{4}$/i;
+
+export async function pairWithCode(code, label = "Rosy Pilot") {
+  const response = await fetch("/api/v1/auth/pair", {
+    method: "POST",
+    cache: "no-store",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({code: code.trim().toUpperCase(), label}),
+  });
+  const body = await response.json().catch(() => ({}));
+  if (response.status === 201 && body.token) setToken(body.token);
+  return {status: response.status, body};
+}

@@ -1,22 +1,31 @@
 // 접속 게이트(D-323): 게임식 "계속하기" UX.
 // 최근 접속 관리는 인라인(모듈 404 방지 — allowlist 동기화 이슈).
+// 최근 접속은 호스트·이름만 기억한다. 토큰은 영구 저장하지 않는다(D-193) — 이전 판은
+// 토큰을 localStorage 에 평문으로 남겼다.
 
 const RECENT_KEY = "rosy.pilot.recent";
 
 function getRecent() {
-  try { return JSON.parse(localStorage.getItem(RECENT_KEY) ?? "[]"); }
+  let list = [];
+  try { list = JSON.parse(localStorage.getItem(RECENT_KEY) ?? "[]"); }
   catch { return []; }
+  if (list.some((entry) => "token" in entry)) {
+    // 이전 판이 남긴 평문 토큰을 걷어낸다.
+    list = list.map(({host, label}) => ({host, label}));
+    try { localStorage.setItem(RECENT_KEY, JSON.stringify(list)); } catch { /* 저장 불가 */ }
+  }
+  return list;
 }
-function addRecentEntry(entry) {
-  const list = getRecent().filter((r) => r.host !== entry.host);
-  list.unshift(entry);
+function addRecentEntry({host, label}) {
+  const list = getRecent().filter((r) => r.host !== host).map(({host: h, label: l}) => ({host: h, label: l}));
+  list.unshift({host, label});
   localStorage.setItem(RECENT_KEY, JSON.stringify(list.slice(0, 5)));
 }
 function removeRecentEntry(host) {
   localStorage.setItem(RECENT_KEY, JSON.stringify(getRecent().filter((r) => r.host !== host)));
 }
 
-import {token, setToken, clearToken, whoami, fetchCapabilities} from "../client.js";
+import {token, setToken, clearToken, whoami, fetchCapabilities, LOGIN_CODE, pairWithCode} from "../client.js";
 import {driverFor} from "../drivers/registry.js";
 
 const DRIVER_KIND = "pinky_core";
@@ -63,8 +72,9 @@ function renderRecentList(root, onConnect) {
     button.style.width = "100%";
     button.style.minHeight = "3rem";
     button.addEventListener("click", () => {
-      if (entry.token) setToken(entry.token);
-      onConnect();
+      // 이 탭에 토큰이 있으면 바로 확인, 없으면 코드·토큰 입력으로.
+      if (token()) onConnect();
+      else renderTokenForm(root, onConnect, `${entry.label || entry.host} — 로그인 코드를 입력하세요.`);
     });
     const remove = el("ui-button", "✕", {
       kind: "quiet", type: "button", "data-recent-remove": entry.host,
@@ -86,7 +96,10 @@ function renderRecentList(root, onConnect) {
 function tokenForm() {
   const form = el("form", null, {"data-pilot-token-form": ""});
   const field = el("ui-field", null, {
-    placeholder: "운전 토큰 입력", "aria-label": "운전 토큰", autocomplete: "off", name: "token",
+    placeholder: "로그인 코드(ABCD-EFGH) 또는 토큰", "aria-label": "로그인 코드 또는 운전 토큰",
+    autocomplete: "off", name: "token",
+    // 태블릿 실측: 안드로이드 키보드가 첫 글자를 대문자로 바꿔 유효한 토큰이 401 이 됐다.
+    autocapitalize: "off", autocorrect: "off", spellcheck: "false", inputmode: "text",
   });
   const submit = el("ui-button", "연결", {kind: "primary", type: "button"});
   form.append(field, submit);
@@ -104,14 +117,29 @@ function renderTokenForm(root, onConnect, message) {
   // 새 연결
   const divider = el("ui-text", "새 연결", {scale: "label"});
   const {form, field, submit} = tokenForm();
-  const connect = () => {
-    if (!field.value.trim()) {
-      notice("토큰을 입력하세요");
+  const connect = async () => {
+    const value = field.value.trim();
+    if (!value) {
+      notice("로그인 코드나 토큰을 입력하세요");
       return;
     }
-    setToken(field.value.trim());
-    // 최근에 추가 (호스트는 same-origin이므로 location.host)
-    addRecentEntry({host: location.host, label: "Pinky", token: field.value.trim()});
+    if (LOGIN_CODE.test(value)) {
+      notice("로그인 코드 확인 중…");
+      const paired = await pairWithCode(value).catch(() => null);
+      if (!paired || paired.status !== 201) {
+        const burned = paired?.body?.error?.detail?.burned;
+        const message = !paired ? "로봇에 연결할 수 없습니다."
+          : paired.status === 429 ? "시도가 너무 많습니다. 잠시 뒤 다시 입력하세요."
+          : burned ? "이 코드는 더 쓸 수 없습니다. 로봇에서 새 코드를 받으세요."
+          : "코드가 맞지 않거나 만료됐습니다.";
+        renderTokenForm(root, onConnect, message);
+        return;
+      }
+    } else {
+      setToken(value);
+    }
+    // 최근에 추가 (호스트는 same-origin이므로 location.host). 토큰은 넣지 않는다.
+    addRecentEntry({host: location.host, label: location.hostname.replace(/\.local$/, "")});
     onConnect();
   };
   submit.addEventListener("click", connect);

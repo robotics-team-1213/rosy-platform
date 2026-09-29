@@ -14,6 +14,7 @@ import {
   inputConfig, saveInputConfig, setServerLimits, currentLimits,
 } from "../input-state.js";
 import {mountInputs} from "./inputs.js";
+import {slewCommand} from "../stick.js";
 import {createCameraCapture, classifyOperation, saveCameraFile} from "/common/evidence.js";
 
 const LOOP_MS = 100;
@@ -121,6 +122,11 @@ export function mountDrive(root, {onExit} = {}) {
     },
   });
   vision.start();
+
+  // 태블릿 실측: 누른 지 ~0.5 s 에 Android 길게 누르기 메뉴(카메라 이미지면 "이미지 복사·
+  // 다운로드")가 떠서 누르고 있던 터치를 가로챘다. 주행 화면에서는 어디서도 띄우지 않는다.
+  const blockContextMenu = (event) => event.preventDefault();
+  root.addEventListener("contextmenu", blockContextMenu);
 
   // --- 입력: 2축 스틱(노브가 손가락을 따라간다) -------------------------------
   const stick = element.stick;
@@ -231,10 +237,15 @@ export function mountDrive(root, {onExit} = {}) {
 
   // --- hold-to-drive 루프(100ms) — 조종 사실은 녹화 타임라인에 기록 ----------
   let lastCommand = {linear: 0, angular: 0, pivot: false};
+  let lastTickAt = performance.now();
   const loop = setInterval(async () => {
+    const tickAt = performance.now();
+    const dt = (tickAt - lastTickAt) / 1000;
+    lastTickAt = tickAt;
     if (!engaged) return;
     const source = currentCommandSource() ?? keySource() ?? gamepadSource();
-    const command = stickMap(source);
+    // 가속은 램프로, 감속·정지는 즉시(stick.slewCommand).
+    const command = slewCommand(lastCommand, stickMap(source), dt);
     lastCommand = command;
     renderMotion(command);
     const response = await session.command({linear: command.linear, angular: command.angular});
@@ -392,6 +403,7 @@ export function mountDrive(root, {onExit} = {}) {
     window.removeEventListener("keyup", onKey);
     window.removeEventListener("blur", onBlur);
     window.removeEventListener("focusin", onFocusIn);
+    root.removeEventListener("contextmenu", blockContextMenu);
     document.removeEventListener("visibilitychange", onVisibility);
     wakeLock?.release().catch(() => {});
     wakeLock = null;
