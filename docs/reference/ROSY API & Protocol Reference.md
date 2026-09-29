@@ -658,6 +658,7 @@ close code: `4401` 은 토큰이 없거나 틀린 것(`/ws/state` 와 동일), `
 | `docking.started` | info | 로봇 | `{dock_id}` (DNC-003) |
 | `docking.docked` | info | 로봇 | `{dock_id}` |
 | `docking.charging` / `docking.charge_lost` | info | 로봇 | `{dock_id}` — 독립된 두 소스로 확인한 충전 상태 (D-28) |
+| `docking.full` | info | 로봇 | `{dock_id, source, voltage_v}` — 만춫 감지, 1회 방출. `source: instrumented` 또는 `voltage_only` (D-350) |
 | `docking.undock_started` | info | 로봇 | `{dock_id}` |
 | `docking.undocked` | info | 로봇 | `{}` |
 | `docking.canceled` | info | 로봇 | `{dock_id}` |

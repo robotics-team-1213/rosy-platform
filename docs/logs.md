@@ -3570,3 +3570,10 @@
 - gate 변화: docs LOCAL HOLD 유지, blocker 사유 교체(해소된 헤딩 → 병행 isaac_sim/fleet 2건).
 - 결정: 없음.
 - 교훈: git diff/show 출력은 콘솔 인코딩(cp949)에서 한글이 깨져 보여도 파일 내용이 깨진 것은 아니다 — 바이트 수준(`?`/U+FFFD 개수)으로 판별한 뒤 손대자.
+## 2026-09-30 · uncommitted · docs(adr): D-350 도크 하드웨어 3단계 계약 + 선구현 6건
+
+- 변경: ADR D-350 상세문서 + 표행. Phase 1(선만·계측 없음)·Phase 2(ESP32 2소스)·Phase 3(온도·카메라) 정의와 각 단계에서 소프트웨어가 하는 일 표. 선구현: ChargingConfirmation degrade, CHARGED_HOLD phase, 만춫 히스테리시스, docking.full 이벤트, deploy 오버레이. Phase 1에서 D-27 억제 안 함이 핵심 안전 결정.
+- 증거: test_docking_phases 6 passed, 도킹 전체 226 passed, API Ref §8 갱신.
+- gate 변화: 없음.
+- 결정: 하드웨어가 어떤 단계로 오든 소프트웨어는 코드 변경 없이 해당 단계 기능 제공.
+- 교훈: 없음.

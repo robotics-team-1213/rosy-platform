@@ -34,8 +34,8 @@
 
 ## 최근 기록
 
+- 2026-09-30 · uncommitted · feat(docking): D-350 하드웨어 단계·degrade·만춫·히스테리시스
 - 2026-09-29 · uncommitted · feat(traffic): D-337 T3 — observer wiring, config gate, status contract
 - 2026-09-29 · uncommitted · feat(traffic): D-337 T2 — observer source transport
 - 2026-09-29 · uncommitted · feat(traffic): D-337 T1 — measured-light signal head fusion
 - 2026-09-29 · uncommitted · feat(traffic): unsignalized junction rule `stop_and_go`
-- 2026-09-28 · uncommitted · verify canceled navigation result isolation

@@ -1,0 +1,8 @@
+# D-350: 도크 활성화 오버레이 — D5 통과 후 이 파일을 capabilities.hardware.yaml로 교체
+# 사용법: deploy/robot/pinky_pro/config/capabilities.hardware.yaml 의 docking 항목을
+# 이 값으로 바꾼다 (또는 이 파일을 symlink 한다).
+#
+# 전제: D0–D5 게이트 전부 통과. ESP32 플래시 완료, /status 응답 확인,
+# 리밋 인터록 검증, 3/3 CHARGING 왕복 확인.
+docking:
+  supported: true
