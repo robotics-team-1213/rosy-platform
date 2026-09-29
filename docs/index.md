@@ -229,8 +229,8 @@
 
 ## 최근 기록
 
+- 2026-09-30 · uncommitted · docs(dock): 전원 시판품 확정·물리 조립 목록
 - 2026-09-30 · uncommitted · refactor(dock): 리밋스위치 인터록·NTC 보류·최소 구성 확정
 - 2026-09-30 · uncommitted · docs(plan): D-348 실행 계획 T1~T7 작성
 - 2026-09-30 · uncommitted · docs(adr): D-348 목표 증거 생산자 계약과 검증기 연결 수용
 - 2026-09-30 · uncommitted · feat(fleet): opt-in ER 2 Mission proposal API
-- 2026-09-30 · uncommitted · docs(deployment): 입회 세션 원커맨드 런북
