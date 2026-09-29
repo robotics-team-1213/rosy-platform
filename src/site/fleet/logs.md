@@ -501,3 +501,11 @@
 - 증거: `python -m pytest src/site/fleet/test -q` 656 passed 5 skipped.
 - gate 변화: 없음.
 - 결정: D-157.
+
+## 2026-09-29 · uncommitted · feat(fleet-console): 천장 카메라 사이트 사각형과 관측 표시 (D-257)
+
+- 변경: `GET /api/fleet/site-map`(viewer 이상, 토큰 미포함, 없으면 404 `NO_SITE_MAP`) 추가. `sightings_config.py`가 `corner_world_m`·`robot_markers`를 표시용으로 검증·보존하고 `SightingSource`에 선택 필드로 싣는다. 콘솔은 새 `web/site-layer.js`(순수 기하·관측 분류)로 점유 격자가 없을 때 미터 축척 사이트 뷰(0.5 m 격자·축·치수·source), 격자가 있을 때 사각형 윤곽을 겹치고, `/api/fleet/sightings`를 1 s마다 읽어 로봇별 최신 관측을 점선 고리+방향선으로 그린다(서버 lease stale 또는 3 s 초과 흐림, 30 s 초과 숨김). CORE TF pose 삼각형과 합치지 않고, 사이트 전용 뷰는 목표 클릭을 받지 않는다.
+- 증거: `python -m pytest src/site/fleet/test -q` 691 passed/5 skipped, 2 failed(`test_task_contract_docs.py` — API Ref v1.56 대 기대 v1.55, 기반 9ecad1b1에서도 동일 실패); `node --test src/site/fleet/test/web/site-layer.test.mjs src/site/fleet/test/web/authorization.test.mjs` 7 passed; `test_no_video_relay.py` 통과. Windows 로컬 합성만.
+- gate 변화: 없음. 실제 폰·survey calibration·현장 인증서는 DEVICE/FIELD 수용 gate로 남는다.
+- 결정: D-257(표시·대조 전용 유지)
+- 교훈: 없음

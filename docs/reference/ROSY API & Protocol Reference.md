@@ -892,6 +892,7 @@ Compose/Caddy 구성이 담당한다. 로컬 합성 카메라의 Docker end-to-e
 |---|---|---|---|
 | POST | `/api/fleet/sightings` | source 전용 Bearer token | vision worker가 `SiteSightingPayload`를 제출. 토큰 설정이 허용한 source/robot/map/calibration만 수용 |
 | GET | `/api/fleet/sightings` | console Bearer token | 로봇별 최신 sighting, server-derived source, capture/receive age 및 1 s lease stale 상태 |
+| GET | `/api/fleet/site-map` | console Bearer token 또는 viewer 이상 | 설정된 `corner_world_m` 사각형을 `map_id`별로 묶어 반환(`frame: map`, m 단위 `polygon_m`·`bounds_m`, source별 `source_id`·`calibration_revision`·`corner_marker_ids`·`robot_ids`·`robot_markers`). 토큰은 싣지 않는다. 설정·기하가 없으면 404 `NO_SITE_MAP`. 표시 전용 |
 
 `POST` body `SiteSightingPayload`:
 
