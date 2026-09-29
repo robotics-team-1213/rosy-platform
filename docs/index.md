@@ -213,6 +213,7 @@
 - [2026-09-29-er2-manipulation-official-api-research.md](plans/2026-09-29-er2-manipulation-official-api-research.md)
 - [2026-09-29-er2-semantic-actions-mission-implementation.md](plans/2026-09-29-er2-semantic-actions-mission-implementation.md)
 - [2026-09-29-fleet-mission-control-arbitration-implementation.md](plans/2026-09-29-fleet-mission-control-arbitration-implementation.md)
+- [2026-09-29-on-demand-activation-measurement-baseline.md](plans/2026-09-29-on-demand-activation-measurement-baseline.md)
 - [2026-09-29-pinky-deployment-fast-path.md](plans/2026-09-29-pinky-deployment-fast-path.md)
 - [2026-09-29-policy-evidence-contract-design.md](plans/2026-09-29-policy-evidence-contract-design.md)
 - [2026-09-29-policy-evidence-contract.md](plans/2026-09-29-policy-evidence-contract.md)
@@ -228,8 +229,8 @@
 
 ## 최근 기록
 
+- 2026-09-29 · uncommitted · docs(plan): 온디맨드 활성화 후보 측정 기준선
 - 2026-09-29 · uncommitted · docs(adr): D-347 capability lifecycle 계약 기록 + API Ref v1.58
 - 2026-09-29 · uncommitted · feat(harness): D-346 커밋 시점 방어망 착지
 - 2026-09-29 · uncommitted · test(architecture): D-168 스캐너에 package:// URI와 자산 확장자 추가
 - 2026-09-29 · uncommitted · docs(plans): D-337 T4 착지 — dashboard 신호 원 행
-- 2026-09-29 · uncommitted · docs(plans): D-337 T3 착지 — 설정·배선·계약 완료

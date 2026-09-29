@@ -3462,3 +3462,10 @@
 - gate 변화: 없음.
 - 결정: 없음(토론 합의의 문서화).
 - 교훈: 백그라운드 풀게이트의 D-347 본문 부재 적신은 선점 커밋(행만)의 예상된 잔상이다 — 본문이 같은 변경 단위에 따라오면 녹색이 된다.
+## 2026-09-29 · uncommitted · docs(plan): 온디맨드 활성화 후보 측정 기준선
+
+- 변경: docs/plans/2026-09-29-on-demand-activation-measurement-baseline.md 신설 — D-347 토론 B레인의 착수 관문("실측 입증 낭비") 증거 상태를 한 장으로 정리했다. 하드웨어 상주 세트 인벤토리(systemd 단위 4종 + 라인 센싱 부팅 옵트인 + OMX 보류), 기존 실측 재정리(D-185 본체 x86 2.16코어·격리 실험·R1, R8 Pi 5 코어 22%·match_motion 73 ms), 그리고 온디맨드 판정에 필요한 갭 3개(카메라 파이프라인 Pi 비용, SLAM 백엔드 상주 비용, R3 EventsExecutor 실기 A/B). progress.md plans에 등재.
+- 증거: 전부 원본에서 읽은 값 — D-185 ADR(본체·R7·R8 메모), deploy/robot/pinky_pro/native 단위 정의(rosy-navigation의 부팅 승인 ConditionPathExists 포함), hardware.launch.py 인자 목록, io 클로저 시험. 새 숫자 추정 없음.
+- gate 변화: 없음.
+- 결정: 후보 순위 ①카메라 프리뷰(세션=대시보드 요청) ②SLAM 백엔드(세션=매핑, D-321 승인 이미 존재) ③OMX(ER2 진행 중 보류). 낭비 입증 전 코드 변경 없음 — 입증된 후보 하나당 후속 ADR로 D-347의 activating 무생산 핀을 연다.
+- 교훈: 이미 절반이 서 있었다 — navigation은 부팅 승인제 조건부 상주고 line_follow는 부팅 옵트인이다. B레인은 새 발명이 아니라 이 두 형태를 "세션" 경계로 일반화하는 일다.
