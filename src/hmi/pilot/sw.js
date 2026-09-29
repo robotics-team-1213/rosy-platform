@@ -8,6 +8,7 @@ const SHELL = [
   "/pilot/assets/styles.css",
   "/pilot/assets/app.js",
   "/pilot/assets/client.js",
+  "/pilot/assets/recent.js",
   "/pilot/assets/stick.js",
   "/pilot/assets/link.js",
   "/pilot/assets/input-state.js",

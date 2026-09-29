@@ -30,6 +30,7 @@ def test_pilot_assets_allowlist_blocks_the_rest():
     assert client.get("/pilot/assets/drivers/pinky_core.js").status_code == 200
     assert client.get("/pilot/assets/app.js").status_code == 200
     assert client.get("/pilot/assets/client.js").status_code == 200
+    assert client.get("/pilot/assets/recent.js").status_code == 200
     assert client.get("/pilot/assets/screens/connect.js").status_code == 200
     assert client.get("/pilot/assets/screens/drive.js").status_code == 200
     assert client.get("/pilot/assets/screens/inputs.js").status_code == 200

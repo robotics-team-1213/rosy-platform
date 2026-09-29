@@ -10,6 +10,7 @@ install(FILES
   link.js
   app.js
   client.js
+  recent.js
   input-state.js
   vision.js
   manifest.webmanifest

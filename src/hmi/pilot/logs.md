@@ -90,3 +90,10 @@
 - gate 변화: 없음(LOCAL 진행).
 - 결정: D-323.
 - 교훈: headless Chromium에서 grid 요소가 width:0으로 붕괴할 수 있다 — width:100%를 명시한다. color-mix()는 Chrome 111+에서만 지원되므로 폴백을 고려한다.
+
+## 2026-09-29 · uncommitted · feat(pilot): game-style "Continue" UX with recent connections (D-323)
+- 변경: recent.js(localStorage 최근 접속 관리) + connect.js 재구성 — 최근 접속한 로봇을 원터치로 재접속(게임 "계속하기" 패턴), 새 연결은 접기 폼. 삭제 버튼(✕)으로 목록 정리. 서빙 4곳에 recent.js 등록.
+- 증거: ROSY_RUN_BROWSER_TESTS=1 pilot+라우트 30 passed.
+- gate 변화: 없음.
+- 결정: D-323.
+- 교훈: 없음

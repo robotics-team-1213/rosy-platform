@@ -1,9 +1,10 @@
-// 접속 게이트 패널(D-323 T6 재구성). dashboard 패널 조립 문법을 따른다:
-// ui-head(패널 제목) + dl.ui-readout(사실 dt/dd) + ui-actions(행동).
-// 동적 문자열은 textContent 로만 넣는다.
+// 접속 게이트(D-323): 게임식 "계속하기" UX.
+// 최근 접속한 로봇을 원터치로 재접속하고, 새 연결은 접기 가능한 폼으로.
+// mDNS 발견(D-323 §3.1)은 후속 — 현재는 최근 목록 + 수동 토큰.
 
 import {token, setToken, clearToken, whoami, fetchCapabilities} from "../client.js";
 import {driverFor} from "../drivers/registry.js";
+import {getRecent, addRecent, removeRecent} from "../recent.js";
 
 const DRIVER_KIND = "pinky_core";
 
@@ -26,112 +27,138 @@ function notice(text) {
 
 function readoutPair(pairs) {
   const list = el("dl", null, {"class": "ui-readout", "data-gate-readout": ""});
-  for (const [label, value, evidence] of pairs) {
-    const dt = el("dt", label);
-    const dd = el("dd", value);
-    if (evidence) dd.dataset.evidence = evidence;
-    list.append(dt, dd);
+  for (const [label, value] of pairs) {
+    list.append(el("dt", label), el("dd", value));
   }
   return list;
 }
 
+// --- 최근 접속 목록 (게임 "계속하기") ---
+function renderRecentList(root, onConnect) {
+  const recent = getRecent();
+  if (recent.length === 0) return null;
+
+  const section = el("div", null, {"data-recent-list": ""});
+  const heading = el("ui-text", "최근 접속", {scale: "label"});
+  section.append(heading);
+
+  for (const entry of recent.slice(0, 3)) {
+    const row = el("div", null, {"data-recent-item": ""});
+    const button = el("ui-button", entry.label || entry.host, {
+      kind: "primary", type: "button", "data-recent-connect": entry.host,
+    });
+    button.style.width = "100%";
+    button.style.minHeight = "3rem";
+    button.addEventListener("click", () => {
+      if (entry.token) setToken(entry.token);
+      onConnect();
+    });
+    const remove = el("ui-button", "✕", {
+      kind: "quiet", type: "button", "data-recent-remove": entry.host,
+    });
+    remove.style.minWidth = "2.5rem";
+    remove.style.minHeight = "2.5rem";
+    remove.addEventListener("click", (e) => {
+      e.stopPropagation();
+      removeRecent(entry.host);
+      renderTokenForm(root, onConnect);
+    });
+    row.append(button, remove);
+    section.append(row);
+  }
+  return section;
+}
+
+// --- 새 연결 폼 (접기 가능) ---
 function tokenForm() {
   const form = el("form", null, {"data-pilot-token-form": ""});
   const field = el("ui-field", null, {
-    placeholder: "운전 토큰", "aria-label": "운전 토큰", autocomplete: "off", name: "token",
+    placeholder: "운전 토큰 입력", "aria-label": "운전 토큰", autocomplete: "off", name: "token",
   });
   const submit = el("ui-button", "연결", {kind: "primary", type: "button"});
   form.append(field, submit);
   return {form, field, submit};
 }
 
-function renderTokenForm(root, message, gate = "WAIT", tokenFact = "필요") {
-  const head = el("ui-head", "접속 게이트", {id: "pilot-gate-heading"});
+function renderTokenForm(root, onConnect, message) {
+  const head = el("ui-head", "접속", {id: "pilot-gate-heading"});
+  root.replaceChildren(head);
+
+  // 최근 접속 목록
+  const recent = renderRecentList(root, onConnect);
+  if (recent) root.append(recent);
+
+  // 새 연결
+  const divider = el("ui-text", "새 연결", {scale: "label"});
   const {form, field, submit} = tokenForm();
   const connect = () => {
-    setToken(field.value);
-    root.__pilotRunCheck();
+    if (!field.value.trim()) {
+      notice("토큰을 입력하세요");
+      return;
+    }
+    setToken(field.value.trim());
+    // 최근에 추가 (호스트는 same-origin이므로 location.host)
+    addRecent({host: location.host, label: "Pinky", token: field.value.trim()});
+    onConnect();
   };
-  // ui-button 은 커스텀 요소라 네이티브 submit 을 유발하지 않는다 — 클릭과
-  // Enter(내부 input 의 폼 제출) 둘 다 같은 경로로 묶는다.
   submit.addEventListener("click", connect);
-  form.addEventListener("submit", (event) => {
-    event.preventDefault();
-    connect();
-  });
-  root.replaceChildren(head, readoutPair([["게이트", gate], ["운전 토큰", tokenFact]]), form);
+  form.addEventListener("submit", (e) => { e.preventDefault(); connect(); });
+
+  root.append(divider, form);
   if (message) root.append(el("ui-status", message, {role: "status"}));
 }
 
-function renderOffline(root, onReady) {
+function renderOffline(root, onConnect) {
   setTag("오프라인");
   notice("CORE 에 연결할 수 없습니다");
-  const offline = el("ui-status", "CORE 에 연결할 수 없습니다. 네트워크와 로봇 전원을 확인하세요.",
-    {role: "status", "data-pilot-offline": ""});
-  const actions = el("ui-actions");
-  const retry = el("ui-button", "다시 시도", {kind: "quiet", type: "button"});
-  retry.addEventListener("click", () => root.__pilotRunCheck());
-  actions.append(retry);
   root.replaceChildren(
-    el("ui-head", "접속 게이트", {id: "pilot-gate-heading"}),
-    readoutPair([["게이트", "WAIT"], ["연결", "끊김"]]),
-    offline, actions,
+    el("ui-head", "접속", {id: "pilot-gate-heading"}),
+    el("ui-status", "네트워크와 로봇 전원을 확인하세요.", {role: "status"}),
   );
+  const retry = el("ui-button", "다시 시도", {kind: "quiet", type: "button"});
+  retry.addEventListener("click", () => onConnect());
+  root.append(retry);
 }
 
 async function check(root, onReady, onEnter) {
   const gate = driverFor(DRIVER_KIND);
   setTag("확인 중");
   notice("");
-  const facts = [["게이트", "WAIT"]];
   root.replaceChildren(
-    el("ui-head", "접속 게이트", {id: "pilot-gate-heading"}),
-    readoutPair(facts),
-    el("ui-empty", "연결을 확인하고 있습니다…"),
+    el("ui-head", "접속", {id: "pilot-gate-heading"}),
+    el("ui-empty", "연결 확인 중…"),
   );
 
-  // 오프라인/서버 부재: 조종 경로를 열지 않고 사실을 말한다(D-328 — sw 는 /api 를 캐시하지 않는다).
   let me;
-  try {
-    me = await whoami();
-  } catch (error) {
-    return renderOffline(root, onReady);
-  }
+  try { me = await whoami(); } catch { return renderOffline(root, () => check(root, onReady, onEnter)); }
   if (me.status === 401) {
     clearToken();
     setTag("차단");
     notice("토큰이 유효하지 않습니다");
-    renderTokenForm(root, "토큰이 유효하지 않습니다. 다시 입력해 주세요.", "BLOCK", "거부됨");
+    renderTokenForm(root, () => check(root, onReady, onEnter), "토큰이 유효하지 않습니다. 다시 입력해 주세요.");
     return;
   }
-  facts.push(["운전 역할", me.body?.role ?? "—"]);
 
-  let caps;
-  try {
-    caps = await fetchCapabilities();
-  } catch (error) {
-    return renderOffline(root, onReady);
-  }
+  const caps = await fetchCapabilities();
   const verdict = gate.assessGate({role: me.body?.role, capabilities: caps.body ?? {}});
   if (!verdict.allowed) {
     setTag("차단");
     notice("진입이 차단되었습니다");
-    const pairs = [["게이트", "BLOCK"], ...facts.slice(1),
+    const pairs = [["게이트", "BLOCK"], ["운전 역할", me.body?.role ?? "—"],
                    ["수동 운전", caps.body?.teleop === true ? "보류" : "보류됨"],
                    ["구동", caps.body?.runtime?.drive === true ? "켜짐" : "꺼짐"]];
-    const statuses = verdict.reasons.map((reason) =>
-      el("ui-status", gate.describeReason(reason), {role: "status"}));
+    const statuses = verdict.reasons.map((r) => el("ui-status", gate.describeReason(r), {role: "status"}));
     const actions = el("ui-actions");
     const retry = el("ui-button", "다시 시도", {kind: "quiet", type: "button"});
-    retry.addEventListener("click", () => root.__pilotRunCheck());
+    retry.addEventListener("click", () => check(root, onReady, onEnter));
     const reset = el("ui-button", "토큰 초기화", {kind: "segment", type: "button"});
     reset.addEventListener("click", () => {
       clearToken();
-      renderTokenForm(root);
+      renderTokenForm(root, () => check(root, onReady, onEnter));
     });
     actions.append(retry, reset);
     root.replaceChildren(
-      el("ui-head", "접속 게이트", {id: "pilot-gate-heading"}),
+      el("ui-head", "접속", {id: "pilot-gate-heading"}),
       readoutPair(pairs), ...statuses, actions,
     );
     return;
@@ -139,27 +166,23 @@ async function check(root, onReady, onEnter) {
 
   setTag("준비");
   notice("조종 준비 완료");
-  const pairs = [["게이트", "READY"], ...facts.slice(1),
-                 ["수동 운전", "허용"], ["구동", "켜짐"]];
   const enter = el("ui-button", "주행 시작", {kind: "primary", type: "button", "data-drive-enter": ""});
   enter.addEventListener("click", () => onEnter?.({role: me.body?.role}));
   root.replaceChildren(
-    el("ui-head", "접속 게이트", {id: "pilot-gate-heading"}),
-    readoutPair(pairs),
-    el("ui-empty", "조종 준비 완료"),
+    el("ui-head", "접속", {id: "pilot-gate-heading"}),
+    readoutPair([["게이트", "READY"], ["역할", me.body?.role ?? "operator"]]),
     enter,
   );
   onReady?.({role: me.body?.role});
 }
 
 export function mountConnect(root, {onReady, onEnter} = {}) {
-  const runCheck = () => check(root, onReady, onEnter);
-  const form = () => renderTokenForm(root);
-  root.__pilotRunCheck = runCheck;
-  root.__pilotForm = form;
+  const run = () => check(root, onReady, onEnter);
+  root.__pilotRunCheck = run;
+  root.__pilotForm = () => renderTokenForm(root, run);
   if (!token()) {
-    root.__pilotForm();
+    renderTokenForm(root, run);
     return;
   }
-  runCheck();
+  run();
 }

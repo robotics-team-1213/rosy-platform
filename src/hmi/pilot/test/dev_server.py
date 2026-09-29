@@ -36,6 +36,7 @@ PILOT_MIME = {
     "link.js": "application/javascript",
     "drivers/registry.js": "application/javascript",
     "drivers/pinky_core.js": "application/javascript",
+    "recent.js": "application/javascript",
     "screens/connect.js": "application/javascript",
     "screens/drive.js": "application/javascript",
     "screens/inputs.js": "application/javascript",

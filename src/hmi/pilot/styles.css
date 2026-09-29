@@ -51,6 +51,20 @@ form[data-pilot-token-form] {
 
 form[data-pilot-token-form] ui-field { flex: 1 1 14rem; }
 
+/* 최근 접속 목록 — 게임 "계속하기" */
+[data-recent-list] {
+  display: grid;
+  gap: var(--space-2);
+}
+
+[data-recent-item] {
+  display: flex;
+  gap: var(--space-1);
+  align-items: center;
+}
+
+[data-recent-item] ui-button[data-recent-connect] { flex: 1; }
+
 .sr-only {
   position: absolute;
   width: 1px;
