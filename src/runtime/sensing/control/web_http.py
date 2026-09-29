@@ -49,14 +49,14 @@ GOAL_BOUND = 50.0   # metres; a dashboard goal beyond this is a typo
 
 def web_common_dir(share=None):
     """The installed web_common share when it ships manifest.json, else the
-    source tree (src/hmi/web). The node resolves ``share``; this module stays
+    source tree (src/hmi/web_common). The node resolves ``share``; this module stays
     ROS-free (D-171)."""
     if share and os.path.isfile(os.path.join(share, "manifest.json")):
         return share
     return os.path.join(
         os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(
             os.path.abspath(__file__))))),
-        "hmi", "web")
+        "hmi", "web_common")
 
 
 def shared_assets(root):

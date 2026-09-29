@@ -17,11 +17,11 @@ from pathlib import Path
 
 import yaml
 
-REGISTRY = "src/hmi/web/surfaces.yaml"
+REGISTRY = "src/hmi/web_common/surfaces.yaml"
 CONTRACTS = ("shared_controls", "typography_focus", "dialog")
 KINDS = ("robot", "site", "sim", "dev")
 
-#: 이 파일은 `src/hmi/web/test/surface_registry.py` — parents[4]가 저장소 루트다.
+#: 이 파일은 `src/hmi/web_common/test/surface_registry.py` — parents[4]가 저장소 루트다.
 REPO = Path(__file__).resolve().parents[4]
 
 _GRAMMARS_DECL = re.compile(r"GRAMMARS\s*=\s*\[([^\]]*)\]")
@@ -45,7 +45,7 @@ def grammars(root=None) -> tuple[str, ...]:
     """`web_common/ui.js`의 GRAMMARS — 구문이 바뀌면 빈 튜플로 떨어져 실패한다."""
     base = REPO if root is None else Path(root)
     try:
-        text = (base / "src" / "hmi" / "web" / "ui.js").read_text(encoding="utf-8")
+        text = (base / "src" / "hmi" / "web_common" / "ui.js").read_text(encoding="utf-8")
     except OSError:
         return ()
     match = _GRAMMARS_DECL.search(text)

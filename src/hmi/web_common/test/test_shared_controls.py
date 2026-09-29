@@ -19,7 +19,7 @@ TOKENS = COMMON / "tokens.css"
 FACE = ROOT / "hmi" / "face" / "emotion" / "info_screen.py"
 PITCH = ROOT / "site" / "games" / "games" / "web" / "styles.css"
 
-# 표면 목록은 src/hmi/web/surfaces.yaml 한 곳에서만 읽는다 (D-329 Decision 1).
+# 표면 목록은 src/hmi/web_common/surfaces.yaml 한 곳에서만 읽는다 (D-329 Decision 1).
 STYLE_SUFFIXES = {".css", ".html", ".js"}
 
 RAW_SIZE = re.compile(r"font-size:\s*[0-9.]+(?:px|rem)")

@@ -75,7 +75,7 @@ jobs:
       - name: Test (core domain suites, protocol schemas P1-19)
         run: |
           cd src
-          python3 -m pytest runtime/gateway/test runtime/events/test runtime/services/test hmi/web/test contracts/foundation/test products/pinky_pro/profile/test products/omx/profile/test -v
+          python3 -m pytest runtime/gateway/test runtime/events/test runtime/services/test hmi/web_common/test contracts/foundation/test products/pinky_pro/profile/test products/omx/profile/test -v
 
       # fleet 은 ROS 를 import 하지 않는다. conftest 가 src/contracts/foundation 과
       # src/runtime/services 를 sys.path 에 얹으므로 colcon 오버레이 없이도

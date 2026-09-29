@@ -7,7 +7,7 @@ import surface_registry as registry
 
 ROOT = Path(__file__).resolve().parents[4]
 
-# 표면 목록은 src/hmi/web/surfaces.yaml 한 곳에서만 읽는다 (D-329 Decision 1).
+# 표면 목록은 src/hmi/web_common/surfaces.yaml 한 곳에서만 읽는다 (D-329 Decision 1).
 
 
 def surface_styles():
@@ -68,7 +68,7 @@ def test_standard_keyboard_focus_rings_use_shared_dimensions():
 
 
 def test_skip_link_focus_border_uses_the_shared_focus_width_token():
-    css = (ROOT / "src/hmi/web/components.css").read_text(encoding="utf-8")
+    css = (ROOT / "src/hmi/web_common/components.css").read_text(encoding="utf-8")
     block = re.search(r"\.skip-link\s*\{([^{}]*)\}", css, re.DOTALL)
     assert block, "skip-link style should exist"
     assert "border: var(--focus-ring-width) solid var(--focus-ring)" in block.group(1), (

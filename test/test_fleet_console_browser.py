@@ -25,7 +25,7 @@ pytestmark = pytest.mark.skipif(
 ROOT = Path(__file__).resolve().parents[1]
 WEB = ROOT / "src" / "site" / "fleet" / "fleet" / "server" / "web"
 #: D-129·D-157 — 공용 자산의 단일 파일. Fleet 사본은 없다.
-WEB_COMMON = ROOT / "src" / "hmi" / "web"
+WEB_COMMON = ROOT / "src" / "hmi" / "web_common"
 
 from browser_harness import (  # noqa: E402
     DECLINE_CONFIRM,

@@ -38,9 +38,9 @@
 
 ## 시험
 
-- `src/hmi/web/test/test_ui_token_contracts.py`
-- `src/hmi/web/test/test_palette_gates.py`
-- `src/hmi/web/test/test_headless_state.py`
+- `src/hmi/web_common/test/test_ui_token_contracts.py`
+- `src/hmi/web_common/test/test_palette_gates.py`
+- `src/hmi/web_common/test/test_headless_state.py`
 
 ## 최근 기록
 

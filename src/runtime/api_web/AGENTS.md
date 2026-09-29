@@ -17,7 +17,7 @@ Library/contract tier (D-168 P2): no process of its own. ROS-SIM/ARTIFACT/DEVICE
 | `progress.md` | Current gate snapshot (SOURCE…FIELD). Overwrite; state of record over this file |
 | `logs.md` | Append-only work journal, one entry per change |
 | `index.md` | Generated: ADRs, plans, solutions, tests, recent logs. Do not edit |
-| `core_api_web/api/` | `app.py`, `deps.py` facade (v1 routers import features only through it), `v1/`. Screens are `src/hmi/dashboard`; tokens are `src/hmi/web` |
+| `core_api_web/api/` | `app.py`, `deps.py` facade (v1 routers import features only through it), `v1/`. Screens are `src/hmi/dashboard`; tokens are `src/hmi/web_common` |
 
 ## For AI Agents
 

@@ -37,7 +37,7 @@ plans:
 - 2026-09-28 후속: 보드 장치 점검 결과와 측정 상태를 분리했다. 현재 FastAPI/Chromium 상호작용 확인에서 refresh 후 여러 주기 GET이 와도 접수 상태가 유지됨을 desktop/mobile에서 확인했다. 실제 Host Agent readback은 미확인.
 - 2026-09-28 후속: 시스템 화면의 로봇 표시 이름 폼을 한 번만 만들고 편집 초안을 폴링 동안 보존한다. FastAPI/Chromium 확인에서 두 번 이상 신원 폴링 후 폼 1개와 입력 초안을 확인하고, 저장 응답과 다음 조회 상태를 분리했다. 실제 기기 신원 readback은 미확인.
 - 2026-09-28 후속: registry에서 보드 장치 패널이 관리자 전용(`min_role: administrator`)임을 확인했다. 비관리자용 버튼 안내는 접근할 수 없는 경로라 제거했다. 권한 거부는 `/device` 표면 진입에서 처리하며, 역할 G2 매트릭스는 비관리자 진입 차단을 포함한다.
-- 공용 토큰은 `src/hmi/web`이다. 얼굴 LCD는 `src/hmi/face`다.
+- 공용 토큰은 `src/hmi/web_common`이다. 얼굴 LCD는 `src/hmi/face`다.
 
 ## 다음 gate
 

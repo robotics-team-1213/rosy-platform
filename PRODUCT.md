@@ -31,7 +31,7 @@ ROSY는 ROS 2 Jazzy 기반 로봇 미들웨어·플릿 관제 플랫폼이고 �
 
 ## Capabilities and Constraints
 
-- 닫힌 토큰 집합(`src/hmi/web/tokens.css` 단일 출처), 공유 컴포넌트 13종(`ui.js`), 표면 문법 4종(spatial/exception/focal/procedure).
+- 닫힌 토큰 집합(`src/hmi/web_common/tokens.css` 단일 출처), 공유 컴포넌트 13종(`ui.js`), 표면 문법 4종(spatial/exception/focal/procedure).
 - D-220 정지 계약(장식 애니메이션 금지), D-202 색 대비, D-214 텍스트 대비 바닥 4.5:1.
 - 토큰·부품·문법의 추가는 ADR 동반만 허용된다(사용자 확인 2026-09-29: 이번 개선 계획에서 ADR 확장 허용).
 - UI/UX 판정은 D-153 G1/G2/G3이고 판정 단위는 표면이다. 현재 제품 전체 판정은 HOLD다.

@@ -89,7 +89,7 @@ runtime/sensing의 ROS 패키지 이름은 control이며, 현재 센싱·보정�
         ├── gz_sim/
         └── isaac_sim/          # Isaac Sim 6.1 standalone integration; GPU runtime validation pending
 
-폴더명과 ROS 패키지 이름은 항상 같지 않다. 예를 들어 hmi/web은 web_common,
+폴더명과 ROS 패키지 이름은 항상 같지 않다. 예를 들어 runtime/gateway는 core,
 site/overhead는 overhead다. products/omx/adapter는 소스 위치를 말할 뿐,
 OMX 장치의 운영 writer 수용 완료를 뜻하지 않는다. Fleet console은 site/fleet 서버가
 제공하고, 브라우저 관제 PC는 별도 배치가 가능하다. 영상 경계는 [D-275](docs/adr/D-275-web-surface-and-video-runtime-ownership.md)를 따른다.

@@ -6,7 +6,7 @@ gates:
   SOURCE:
     state: GO
     evidence: "HMI web + dashboard 100 passed with browser tests; dashboard API route/manifest 29 passed (2026-09-27 Windows)"
-    cmd: "powershell -NoProfile -Command \"$env:ROSY_RUN_BROWSER_TESTS='1'; python -X utf8 -m pytest src/hmi/web/test src/hmi/dashboard/test -q\""
+    cmd: "powershell -NoProfile -Command \"$env:ROSY_RUN_BROWSER_TESTS='1'; python -X utf8 -m pytest src/hmi/web_common/test src/hmi/dashboard/test -q\""
   LOCAL:
     state: GO
     evidence: "실 CORE TestClient API + visible Chromium: styleguide, operator /console·/setup, administrator /console·/setup·/device at 1366x768 and 390x844; blue focus ring, disabled opacity 0.45, 0 missing kinds, 0 page errors, no positive horizontal overflow"

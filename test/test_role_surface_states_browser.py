@@ -40,7 +40,7 @@ def test_shared_components_apply_button_size_palette_and_status_contracts():
     pytest.importorskip("playwright.sync_api")
     from playwright.sync_api import sync_playwright
 
-    shared = ROOT / "src" / "hmi" / "web"
+    shared = ROOT / "src" / "hmi" / "web_common"
     with sync_playwright() as playwright:
         try:
             browser, page, errors = _module_page(playwright, {
@@ -163,7 +163,7 @@ def test_console_map_distinguishes_empty_forbidden_error_and_ready_by_role():
             browser, page, errors = _module_page(playwright, {
                 "/assets/panels/console/map.js": WEB / "panels" / "console" / "map.js",
                 "/assets/map.js": WEB / "map.js",
-                "/assets/ui.js": ROOT / "src" / "hmi" / "web" / "ui.js",
+                "/assets/ui.js": ROOT / "src" / "hmi" / "web_common" / "ui.js",
             })
         except Exception as error:
             pytest.skip(f"Playwright Chromium unavailable: {error}")
@@ -235,7 +235,7 @@ def test_operator_sees_setup_recovery_only_when_manifest_allows_it():
             browser, page, errors = _module_page(playwright, {
                 "/assets/panels/console/map.js": WEB / "panels" / "console" / "map.js",
                 "/assets/map.js": WEB / "map.js",
-                "/assets/ui.js": ROOT / "src" / "hmi" / "web" / "ui.js",
+                "/assets/ui.js": ROOT / "src" / "hmi" / "web_common" / "ui.js",
             })
         except Exception as error:
             pytest.skip(f"Playwright Chromium unavailable: {error}")
@@ -275,7 +275,7 @@ def test_host_agent_recovery_is_text_only_and_unavailable_controls_stay_blocked(
         try:
             browser, page, errors = _module_page(playwright, {
                 "/assets/panels/host/operations.js": WEB / "panels" / "host" / "operations.js",
-                "/assets/ui.js": ROOT / "src" / "hmi" / "web" / "ui.js",
+                "/assets/ui.js": ROOT / "src" / "hmi" / "web_common" / "ui.js",
             })
         except Exception as error:
             pytest.skip(f"Playwright Chromium unavailable: {error}")

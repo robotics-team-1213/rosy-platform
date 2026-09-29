@@ -67,7 +67,7 @@ def _web_common_root() -> Path:
             return share
     except (ImportError, LookupError):
         pass
-    return Path(__file__).resolve().parents[4] / "hmi" / "web"
+    return Path(__file__).resolve().parents[4] / "hmi" / "web_common"
 
 
 def _shared_assets(web_common: Path) -> dict[str, str]:

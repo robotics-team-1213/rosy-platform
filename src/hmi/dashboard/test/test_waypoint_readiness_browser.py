@@ -24,7 +24,7 @@ class _Handler(SimpleHTTPRequestHandler):
 
     def translate_path(self, path):
         if path.startswith("/common/"):
-            return str(REPO / "src/hmi/web" / path.removeprefix("/common/"))
+            return str(REPO / "src/hmi/web_common" / path.removeprefix("/common/"))
         return super().translate_path(path)
 
     def log_message(self, _format, *_args):

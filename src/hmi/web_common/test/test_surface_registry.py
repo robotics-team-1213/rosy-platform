@@ -17,8 +17,8 @@ REPO = registry.REPO
 
 #: D-329 계약 시험은 이 셋에서 표면 목록을 읽는다. 여기가 손으로 적힌 자리다.
 CONSUMERS = {
-    "shared_controls": Path("src/hmi/web/test/test_shared_controls.py"),
-    "typography_focus": Path("src/hmi/web/test/test_surface_typography_focus_contracts.py"),
+    "shared_controls": Path("src/hmi/web_common/test/test_shared_controls.py"),
+    "typography_focus": Path("src/hmi/web_common/test/test_surface_typography_focus_contracts.py"),
     "dialog": Path("test/test_web_dialog_contract.py"),
 }
 
