@@ -26,7 +26,7 @@ html, body {
 
 .kicker {
   margin: 0;
-  letter-spacing: 0.14em;
+  letter-spacing: var(--track-label);
   text-transform: uppercase;
   font-size: var(--text-label);
   color: var(--mute);
@@ -140,7 +140,7 @@ h1 {
 }
 
 .pitch-wrap[data-evidence] #pitch,
-#frame[data-evidence] { opacity: 0.48; }
+#frame[data-evidence] { opacity: var(--disabled-opacity); }
 
 #field-evidence:not([hidden]) {
   position: absolute;
@@ -187,10 +187,13 @@ h1 {
   padding: 0;
 }
 
+/* 경기장 어휘(D-359 §5.2) — 공용 태그가 아니라 마커 칩이다. 글자는 토큰 척도를 쓴다.
+   자간은 0이다: 320px 네 칸 격자에서 추적 자간이 칩을 넓히지 않게 한다. */
 .chips li {
   background: var(--chip);
   padding: var(--space-1) var(--space-2);
-  font-size: var(--text-label);
+  font: var(--weight-label) var(--text-label)/var(--leading-label) var(--body);
+  letter-spacing: 0;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
