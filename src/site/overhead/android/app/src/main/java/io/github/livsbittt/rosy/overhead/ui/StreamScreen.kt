@@ -130,7 +130,10 @@ private fun StatusPanel(state: StreamState, pairing: PairingUri?, localError: St
             style = MaterialTheme.typography.headlineSmall,
             color = if (stateText == R.string.state_disconnected) RosyColors.StatusWarn else Color.Unspecified,
         )
-        val target = state.target ?: pairing?.let { "${it.host}:${it.port} · ${it.source}" }
+        // While stopped, show the saved pairing: state.target still holds the last run's target,
+        // which is stale once the operator saves a new address.
+        val saved = pairing?.let { "${it.host}:${it.port} · ${it.source}" }
+        val target = if (state.running) state.target ?: saved else saved
         Text(
             when {
                 state.previewOnly -> stringResource(R.string.target_preview_only)
