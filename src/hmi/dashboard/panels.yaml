@@ -115,7 +115,7 @@ panels:
     title: 화면 테마
     surface: device
     slot: main
-    order: 10
+    order: 110
     module: panels/system/display.js
     css: [panels/surface-panels.css]
   - id: system.events
