@@ -6,8 +6,11 @@ Usage: extract.py <source> --out data/perception/frames/<name>
 import argparse
 import json
 import os
+import math
+import re
 import shutil
 import sys
+from types import SimpleNamespace
 from pathlib import Path
 
 import cv2
@@ -18,6 +21,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "src" / "runtime" /
 
 from frames import FrameSelector  # noqa: E402
 from control.recording import RECORD_TOPICS  # noqa: E402
+from control.sensing.perception.image_frame import image_msg_to_frame  # noqa: E402
 
 CAMERA_TOPIC = RECORD_TOPICS[0]
 SIDE_TOPICS = {"cmd_vel": "cmd_vel", "line/observation": "line_observation",
@@ -26,14 +30,11 @@ JPEG_Q = 95
 
 
 def image_to_bgr(encoding: str, width: int, height: int, step: int, data: bytes) -> np.ndarray:
-    raw = np.frombuffer(data, np.uint8)
-    if encoding in ("bgr8", "rgb8"):
-        img = raw[: height * step].reshape(height, step)[:, : width * 3].reshape(height, width, 3)
-        return img.copy() if encoding == "bgr8" else img[:, :, ::-1].copy()
-    if encoding == "mono8":
-        gray = raw[: height * step].reshape(height, step)[:, :width]
-        return cv2.cvtColor(np.ascontiguousarray(gray), cv2.COLOR_GRAY2BGR)
-    raise ValueError(f"unsupported image encoding: {encoding}")
+    # Shared with the camera observers so extraction sees what perception saw.
+    # It requires tightly packed rows (step == width * channels).
+    msg = SimpleNamespace(encoding=encoding, width=width, height=height, data=data)
+    frame = image_msg_to_frame(msg)
+    return cv2.cvtColor(frame, cv2.COLOR_GRAY2BGR) if frame.ndim == 2 else np.ascontiguousarray(frame)
 
 
 def _jpeg(bgr) -> bytes:
@@ -52,7 +53,7 @@ def _video_frames(path: Path):
             ok, bgr = cap.read()
             if not ok:
                 break
-            yield cap.get(cv2.CAP_PROP_POS_MSEC) / 1000.0, bgr, {}
+            yield cap.get(cv2.CAP_PROP_POS_MSEC) / 1000.0, bgr, {}, "jpg"
     finally:
         cap.release()
 
@@ -68,28 +69,50 @@ def _jsonable(value):
     return value if isinstance(value, (int, float, str, bool, type(None))) else str(value)
 
 
-def _mcap_frames(session: Path):
+def _mcap_files(session: Path):
+    def key(p):
+        m = re.search(r"(\d+)(?=\.mcap$)", p.name)
+        return (int(m.group(1)) if m else -1, p.name)
+    return sorted((session / "bag").glob("*.mcap"), key=key)
+
+
+def _clean(value):
+    if isinstance(value, float) and not math.isfinite(value):
+        return None
+    if isinstance(value, dict):
+        return {k: _clean(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_clean(v) for v in value]
+    return value
+
+
+def _dumps(row) -> str:
+    return json.dumps(_clean(row), allow_nan=False)
+
+
+def _mcap_frames(files):
     try:
         from mcap.reader import make_reader
         from mcap_ros2.decoder import DecoderFactory
     except ImportError:
         raise SystemExit("MCAP extraction needs: pip install mcap mcap-ros2-support")
     side = {}
-    topics = [CAMERA_TOPIC, CAMERA_TOPIC + "/compressed", *SIDE_TOPICS]
-    for f in sorted((session / "bag").glob("*.mcap")):
+    for f in files:
         with open(f, "rb") as fh:
             reader = make_reader(fh, decoder_factories=[DecoderFactory()])
-            for _, ch, message, msg in reader.iter_decoded_messages(topics=topics):
+            for _, ch, message, msg in reader.iter_decoded_messages():
+                # Channels carry absolute topics ("/camera/front").
                 name = ch.topic.lstrip("/")
                 if name in SIDE_TOPICS:
                     side[SIDE_TOPICS[name]] = _jsonable(msg)
                     continue
                 t = message.log_time / 1e9
-                if name.endswith("/compressed"):
-                    yield t, bytes(msg.data), dict(side)
-                else:
+                if name == CAMERA_TOPIC + "/compressed":
+                    ext = "png" if "png" in str(msg.format).lower() else "jpg"
+                    yield t, bytes(msg.data), dict(side), ext
+                elif name == CAMERA_TOPIC:
                     bgr = image_to_bgr(msg.encoding, msg.width, msg.height, msg.step, bytes(msg.data))
-                    yield t, bgr, dict(side)
+                    yield t, bgr, dict(side), "jpg"
 
 
 def main(argv=None) -> int:
@@ -101,13 +124,24 @@ def main(argv=None) -> int:
     args = ap.parse_args(argv)
     src, out = Path(args.source), Path(args.out)
     is_session = src.is_dir()
-    it = _mcap_frames(src) if is_session else _video_frames(src)
+    if is_session:
+        files = _mcap_files(src)
+        if not files:
+            print(f"no .mcap files under {src / 'bag'}", file=sys.stderr)
+            return 1
+        it = _mcap_frames(files)
+    else:
+        it = _video_frames(src)
     session = src.name if is_session else None
     (out / "frames").mkdir(parents=True, exist_ok=True)
     sel = FrameSelector(args.min_interval, args.max_hamming)
     n = 0
     with open(out / "frames.jsonl", "w", encoding="utf-8") as rows:
-        for t, item, side in it:
+        last_t = None
+        for t, item, side, ext in it:
+            if last_t is not None and t < last_t:
+                continue  # never let time run backwards
+            last_t = t
             if isinstance(item, bytes):  # already-compressed JPEG: keep bytes
                 bgr = cv2.imdecode(np.frombuffer(item, np.uint8), cv2.IMREAD_COLOR)
                 if bgr is None or not sel.accept(t, bgr):
@@ -117,8 +151,8 @@ def main(argv=None) -> int:
                 if not sel.accept(t, item):
                     continue
                 data = _jpeg(item)
-            (out / "frames" / f"{n:06d}.jpg").write_bytes(data)
-            rows.write(json.dumps({"index": n, "t": t, "source": str(src),
+            (out / "frames" / f"{n:06d}.{ext}").write_bytes(data)
+            rows.write(_dumps({"index": n, "t": t, "source": str(src),
                                    "session": session, "side": side}) + "\n")
             n += 1
     if is_session and (src / "session.json").is_file():

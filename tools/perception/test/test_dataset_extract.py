@@ -44,8 +44,83 @@ def test_image_to_bgr_encodings():
     assert got[0, 0].tolist() == [30, 20, 10]
     got = extract.image_to_bgr("bgr8", 1, 1, 3, rgb.tobytes())
     assert got[0, 0].tolist() == [10, 20, 30]
-    # mono8 with row padding (step 4, width 2)
-    got = extract.image_to_bgr("mono8", 2, 2, 4, bytes([1, 2, 0, 0, 3, 4, 0, 0]))
+    got = extract.image_to_bgr("mono8", 2, 2, 2, bytes([1, 2, 3, 4]))
     assert got.shape == (2, 2, 3) and got[1, 1].tolist() == [4, 4, 4]
     with pytest.raises(ValueError):
-        extract.image_to_bgr("16UC1", 1, 1, 2, b"\0\0")
+        extract.image_to_bgr("16UC1", 1, 1, 2, b"\x00\x00")
+
+
+def test_mcap_file_order_is_numeric(tmp_path):
+    for n in ("bag_0.mcap", "bag_10.mcap", "bag_2.mcap"):
+        (tmp_path / "bag").mkdir(exist_ok=True)
+        (tmp_path / "bag" / n).write_bytes(b"")
+    names = [p.name for p in extract._mcap_files(tmp_path)]
+    assert names == ["bag_0.mcap", "bag_2.mcap", "bag_10.mcap"]
+
+
+def test_jsonl_nan_becomes_null():
+    assert json.loads(extract._dumps({"a": float("nan"), "b": [float("inf")]})) == {"a": None, "b": [None]}
+
+
+def test_empty_session_errors(tmp_path):
+    (tmp_path / "bag").mkdir()
+    assert extract.main([str(tmp_path), "--out", str(tmp_path / "o")]) == 1
+
+
+IMAGE_DEF = """std_msgs/Header header
+uint32 height
+uint32 width
+string encoding
+uint8 is_bigendian
+uint32 step
+uint8[] data
+================================================================================
+MSG: std_msgs/Header
+builtin_interfaces/Time stamp
+string frame_id
+================================================================================
+MSG: builtin_interfaces/Time
+int32 sec
+uint32 nanosec
+"""
+TWIST_DEF = """Vector3 linear
+Vector3 angular
+================================================================================
+MSG: geometry_msgs/Vector3
+float64 x
+float64 y
+float64 z
+"""
+
+
+def test_mcap_session(tmp_path):
+    pytest.importorskip("mcap_ros2")
+    from mcap_ros2.writer import Writer
+
+    bag = tmp_path / "sess" / "bag"
+    bag.mkdir(parents=True)
+    # (file, time_s, x) : frames spread over files, numeric suffix order
+    plan = {"bag_0.mcap": [1.0, 2.0], "bag_2.mcap": [3.0], "bag_10.mcap": [4.0]}
+    for name, times in plan.items():
+        with open(bag / name, "wb") as fh:
+            w = Writer(fh)
+            img_s = w.register_msgdef("sensor_msgs/msg/Image", IMAGE_DEF)
+            tw_s = w.register_msgdef("geometry_msgs/msg/Twist", TWIST_DEF)
+            for t in times:
+                ns = int(t * 1e9)
+                w.write_message("/cmd_vel", tw_s, {"linear": {"x": t, "y": 0.0, "z": 0.0},
+                                "angular": {"x": 0.0, "y": 0.0, "z": 0.0}}, ns - 1, ns - 1)
+                px = np.full((4, 6, 3), int(t) * 50, np.uint8)
+                px[:, int(t):int(t) + 2] = 255
+                w.write_message("/camera/front", img_s, {
+                    "header": {"stamp": {"sec": int(t), "nanosec": 0}, "frame_id": "c"},
+                    "height": 4, "width": 6, "encoding": "bgr8", "is_bigendian": 0,
+                    "step": 18, "data": list(px.tobytes())}, ns, ns)
+            w.finish()
+    out = tmp_path / "out"
+    assert extract.main([str(tmp_path / "sess"), "--out", str(out),
+                         "--min-interval", "0.5", "--max-hamming", "0"]) == 0
+    rows = [json.loads(l) for l in (out / "frames.jsonl").read_text().splitlines()]
+    assert [r["t"] for r in rows] == [1.0, 2.0, 3.0, 4.0]
+    assert [r["side"]["cmd_vel"]["linear"]["x"] for r in rows] == [1.0, 2.0, 3.0, 4.0]
+    assert (out / "frames" / "000003.jpg").is_file()
