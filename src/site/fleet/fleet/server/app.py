@@ -25,12 +25,14 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.responses import FileResponse, RedirectResponse
 from pydantic import BaseModel, ConfigDict, field_validator
 
+from core_common.protocol.policy_evidence import PolicyEvidencePayload
 from core_common.protocol.sightings import SiteSightingPayload
 from core_common.protocol.vision_preview import VisionLeaseSigner
 from core_common.protocol.schemas import DiscoveryScanPayload
 from core_common.intent import IntentError, interpret, request_schema
 from fleet.hub.hub import HubError
 from fleet.server.console import FleetConsole
+from fleet.server.policy_evidence import PolicyEvidenceError, PolicyEvidenceStore, status_code_for
 from fleet.server.sightings import SightingError
 from fleet.server.signals import SignalApiError
 from fleet.server.task_service import FleetTaskService
@@ -194,6 +196,7 @@ def _http_error(exc: BaseException) -> HTTPException:
 def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                web_common: Optional[Path] = None, hub=None, sightings=None,
                task_service: Optional[FleetTaskService] = None,
+               policy_evidence: Optional[PolicyEvidenceStore] = None,
                start_task_dispatcher: bool = True,
                site_users: Optional[Mapping[str, Mapping[str, str]]] = None,
                discovery=None, discovery_token: Optional[str] = None,
@@ -339,7 +342,8 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         request.state.site_principal = principal
         if (task_service is not None and request.method == "POST"
                 and request.url.path.startswith("/api/fleet/")
-                and request.url.path != "/api/fleet/sightings"):
+                and request.url.path != "/api/fleet/sightings"
+                and request.url.path != "/api/fleet/policy-evidence"):
             try:
                 request.state.site_api_audit_id = task_service.store.begin_api_audit(
                     principal_id=principal.principal_id, role=principal.role,
@@ -428,6 +432,35 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         @app.get("/api/fleet/sightings", dependencies=read_guard, tags=["sightings"])
         async def sighting_readback() -> dict:
             return sightings.snapshot()
+
+    if policy_evidence is not None:
+        if console_token is not None and policy_evidence.uses_token(console_token):
+            raise ValueError("policy evidence credentials must differ from the console token")
+        if principals and policy_evidence.reuses_any(
+                lambda candidate: any(
+                    hmac.compare_digest(sha256(candidate.encode("utf-8")).hexdigest(), digest)
+                    for digest in principals)):
+            raise ValueError("site user and policy evidence credentials must differ")
+        if policy_evidence.reuses_any(console.uses_rest_token):
+            raise ValueError("policy evidence credentials must differ from robot REST tokens")
+        if policy_evidence.reuses_any(console.uses_agent_pairing_token):
+            raise ValueError("policy evidence credentials must differ from CORE Agent pairing tokens")
+
+        @app.post("/api/fleet/policy-evidence", tags=["policy-evidence"])
+        async def submit_policy_evidence(body: PolicyEvidencePayload,
+                                         authorization: Optional[str] = Header(default=None)) -> dict:
+            try:
+                return policy_evidence.accept(authorization, body)
+            except PolicyEvidenceError as exc:
+                reason = str(exc).split(":", 1)[0].strip()
+                raise HTTPException(status_code=status_code_for(reason),
+                                    detail={"code": reason,
+                                            "message": "policy evidence was not accepted"}) from exc
+
+        @app.get("/api/fleet/policy-evidence/latest", dependencies=read_guard,
+                 tags=["policy-evidence"])
+        async def policy_evidence_readback() -> dict:
+            return {"evidence": policy_evidence.latest()}
 
     if hub is not None and hub.event_store is not None:
         @app.get("/api/fleet/events", dependencies=read_guard, tags=["fleet-events"])

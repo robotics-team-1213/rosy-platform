@@ -196,12 +196,12 @@ def test_policy_navigation_uses_same_validation_but_holds_before_dispatch(tmp_pa
     task = run(service.submit_navigation(
         robot_id="rosy_01", x=1.25, y=-0.5, yaw=0.2,
         source="policy", actor_id="policy:ceiling-north", request_key="e-7",
-        evidence={"event_id": "e-7"},
+        evidence={"evidence_id": "ev-7"},
     ))
 
     assert task["status"] == "HOLD"
-    assert task["reason"] == "POLICY_NOT_ACCEPTED"
-    assert task["evidence"] == {"event_id": "e-7"}
+    assert task["reason"] == "EVIDENCE_NOT_CONFIGURED"
+    assert task["evidence"] == {"evidence_id": "ev-7"}
     assert [row["status"] for row in store.history(task["task_id"])] == [
         "REQUESTED", "HOLD",
     ]
@@ -288,7 +288,7 @@ def test_policy_task_rejects_invalid_or_unknown_robot_before_policy_hold(tmp_pat
         run(service.submit_navigation(
             robot_id="rosy_99", x=1.0, y=2.0, yaw=0,
             source="policy", actor_id="policy:test", request_key="e-1",
-            evidence={"event_id": "e-1"},
+            evidence={"evidence_id": "ev-1"},
         ))
     except ValueError as exc:
         assert "UNKNOWN_ROBOT" in str(exc)

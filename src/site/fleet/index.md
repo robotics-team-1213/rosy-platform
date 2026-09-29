@@ -38,6 +38,9 @@
 | D-316 | Pinky Fleet task의 dispatch attempt ID를 CORE navigation 결과까지 연결한다 |
 | D-318 | Site Fleet 관제 카메라 미리보기에 실측 렌즈·평면 보정을 지원한다 |
 | D-331 | Gemini Robotics ER 2를 상태 비저장·제안 전용 Fleet provider로 연결한다 |
+| D-333 | ER 2 조작 후보의 Mission 승인, 장치 Action 수락, 정지와 목표 증거를 분리한다 |
+| D-334 | ER 2의 도구 목록과 진행 조회를 Fleet 원장 경계에 둔다 |
+| D-336 | Fleet? OMX ?? owner ?? ? ??? ?? ???? local IPC? ???? |
 
 ## 계획·결과 문서
 
@@ -67,7 +70,7 @@
 ## 최근 기록
 
 - 2026-09-29 · uncommitted · feat(ai): resolve ER 2 selectors against source-frame evidence
+- 2026-09-29 · uncommitted · feat(fleet): wire policy evidence admission, routes, and API Ref v1.49 (T4-T6)
 - 2026-09-29 · uncommitted · feat(fleet): add policy-evidence config and store (D-268 ladder T2/T3)
 - 2026-09-29 · uncommitted · fix(test): keep the mission helper out of pytest's nose setup slot
 - 2026-09-29 · uncommitted · feat(ai): add ER 2 proposal-only provider adapter
-- 2026-09-29 · uncommitted · review Mission stop-generation recovery

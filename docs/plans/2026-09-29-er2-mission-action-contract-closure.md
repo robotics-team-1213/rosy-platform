@@ -131,5 +131,5 @@
 - Task 0: complete. D-336 selects same-host per-instance UDS; remote host transport remains HOLD. Commit `463ccf12`.
 - Task 1: complete. Added typed Device Action and Local Stop schemas plus API Reference v1.48 and failing-first contract tests. Commit `0e632b6f`; full foundation suite: 101 passed.
 - Task 2: complete. Added normalized selector inverse mapping including crop, resize, and quarter-turn transforms. The bridge checks source frame provenance and emits pixel-level evidence using shared contract types; Fleet has no OMX package dependency. Full Fleet suite: 600 passed, 5 skipped.
-- Version sequencing: D-268 API Reference work that had been planned as v1.48 moves to v1.49 because this contract closure now occupies v1.48.
+- Version sequencing: D-268 occupies API Reference v1.48; this ER2 contract is v1.49.
 - Next checkpoint: Task 3, operator Mission API and proposal store. UDS listener, ROS-SIM, artifact, DEVICE, and FIELD remain separate and are not activated by SOURCE/LOCAL completion.

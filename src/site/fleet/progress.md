@@ -2,7 +2,7 @@
 module: fleet
 logical_modules: [M07, M11]
 owner: FLEET
-last_verified: { commit: "c5e87977", date: 2026-09-28 }
+last_verified: { commit: "uncommitted", date: 2026-09-29 }
 gates:
   SOURCE:
     state: GO
@@ -10,7 +10,7 @@ gates:
     cmd: "python3 -m pytest src/fleet/test/test_boundaries.py -q"
   LOCAL:
     state: GO
-    evidence: "Fleet suite 612 passed/5 skipped: ER 2 proposal adapter mock contract, Mission single-step ledger/stop-generation admission, and policy-evidence source config + store fail-closed contracts (D-268 ladder T2/T3 — empty observation registry rejects every submission; transit/revision/replay rules; evidence_id idempotency). Browser/dialog and synthetic camera evidence remains as recorded in logs. SOURCE/LOCAL only; policy evidence has no REST route yet, no admission wiring, and physical/site/calibrated acceptance remains open"
+    evidence: "Fleet suite 628 passed/5 skipped: ER 2 proposal adapter mock contract, Mission single-step ledger/stop-generation admission, policy-evidence source config/store fail-closed contracts, HTTP surface (source token, idempotent evidence_id, replay 409), and task admission binding with the valve invariant (D-268 ladder T2-T6 — policy submissions require an evidence_id; admissible evidence still holds POLICY_NOT_ACCEPTED). Browser/dialog and synthetic camera evidence remains as recorded in logs. SOURCE/LOCAL only; no field measurements, and physical/site/calibrated acceptance remains open"
     cmd: "python3 -m pytest src/site/fleet/test -q"
   ROS-SIM:
     state: HOLD
@@ -22,7 +22,7 @@ gates:
     state: PARKED
   FIELD:
     state: PARKED
-adrs: [D-5, D-10, D-12, D-18, D-20, D-21, D-30, D-31, D-59, D-60, D-90, D-93, D-106, D-114, D-116, D-157, D-159, D-269, D-288, D-289, D-290, D-291, D-293, D-300, D-306, D-316, D-318, D-331, D-268]
+adrs: [D-5, D-10, D-12, D-18, D-20, D-21, D-30, D-31, D-59, D-60, D-90, D-93, D-106, D-114, D-116, D-157, D-159, D-269, D-288, D-289, D-290, D-291, D-293, D-300, D-306, D-316, D-318, D-331, D-333, D-334, D-336, D-268]
 plans:
   - docs/plans/2026-09-29-er2-mission-action-contract-closure.md
   - docs/plans/2026-09-29-fleet-mission-control-arbitration-implementation.md
