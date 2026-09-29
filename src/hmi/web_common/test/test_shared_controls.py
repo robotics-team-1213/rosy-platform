@@ -573,7 +573,7 @@ def test_every_button_kind_has_shared_interaction_states():
     assert any('[kind="toggle"][aria-pressed="true"]' in selector for selector, _ in rules), (
         "눌림(aria-pressed)의 공용 표현이 없다")
     body = dict(rules).get("body", "")
-    assert "word-break: keep-all" in body and "overflow-wrap: anywhere" in body
+    assert "word-break: keep-all" in body and "overflow-wrap: break-word" in body
     focus = [decl for selector, decl in rules if selector.startswith(":where(") and ":focus-visible" in selector]
     assert focus and "var(--focus-ring-width)" in focus[0]
 

@@ -367,19 +367,20 @@ main {
   background: var(--ground-card);
   padding: var(--space-3) var(--space-4);
 }
-/* 필드가 44px 바닥(D-359 §5.1)을 받으면서 세 줄이 두 줄이 된다 — 리더·모양을 한 줄에,
-   간격을 다음 줄에 두어 명렬 패널이 뷰포트 안에 머문다(D-201). 좁은 폭은 한 쌍씩이다. */
+/* 필드가 44px 바닥(D-359 §5.1)을 받는다. 대형 칸이 넓으면(1920px 관제 모니터) 리더·모양을
+   한 줄에, 간격을 다음 줄에 두어 명렬 패널이 뷰포트 안에 머문다(D-201). 좁은 칸은 한 쌍씩이다.
+   뷰포트가 아니라 제 칸에 반응한다(D-359 §6.3). */
+.formation { container-type: inline-size; }
 .formation-form {
   display: grid;
-  grid-template-columns: 4.5rem minmax(0, 1fr) 4.5rem minmax(0, 1fr);
+  grid-template-columns: 4.5rem minmax(0, 1fr);
   gap: var(--space-1) var(--space-2);
   align-items: center;
   margin: var(--space-2) 0 var(--space-3);
 }
-.formation-form .member-list { grid-column: 2 / -1; }
-@media (max-width: 30rem) {
-  .formation-form { grid-template-columns: 4.5rem minmax(0, 1fr); }
-  .formation-form .member-list { grid-column: 2; }
+@container (min-width: 30rem) {
+  .formation-form { grid-template-columns: 4.5rem minmax(0, 1fr) 4.5rem minmax(0, 1fr); }
+  .formation-form .member-list { grid-column: 2 / -1; }
 }
 .formation-form label {
   font-family: var(--mono);
