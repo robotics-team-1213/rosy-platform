@@ -1663,8 +1663,13 @@ def test_a_hung_readback_is_stopped_and_points_to_resume(writer_case, tmp_path):
     card = PipeCard(raw, ["full", "full", "hang"])
     try:
         started = time.monotonic()
+        # 30 s, not 3: under full-suite load the verifier child can take longer
+        # than a 3 s window to spawn and connect, and the watchdog then judges
+        # a client that never reached the card (2026-09-29 full-suite failure;
+        # standalone passed). The hang itself is infinite, so the widened
+        # window changes when the stall is judged, never what it sees.
         completed, boot = _write(writer_case, tmp_path, "-ReadbackDevice", card.path,
-                                 "-ReadbackStallMinutes", "0.05", "-HeartbeatSeconds", "0")
+                                 "-ReadbackStallMinutes", "0.5", "-HeartbeatSeconds", "0")
         elapsed = time.monotonic() - started
     finally:
         card.close()
