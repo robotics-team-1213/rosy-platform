@@ -554,3 +554,10 @@
 - 변경: `config/camera_nominal_pinky_pro.yaml`(실물 녹화 4981 프레임으로 추정한 OV5647 기하 — fx 281.6, 피치 8°, 높이 0.067 m, 지평선 80.3 행). `camera_ground.nominal_ground_plane`(NOMINAL 출처 + 허용 플래그 두 겹, 프레임 크기로 비례, 종횡비 다르면 거부). `line_observer_node` 에 `allow_nominal_ground`·`nominal_camera_profile_path`(읽기 전용), 지면 모드 관측에 `ground: NOMINAL` 표시 — CORE 는 운전자 확인(hold) 없이는 멈춘다(`nominal_ground_requires_driver`). `tools/lane_replay.py` 녹화 재생 벤치.
 - 증거: 벤치 기준값(목표가 흰 선 위인 비율) — pilot 녹화 307 프레임: line 0.512, between 0.135, centre(공칭 지면·기억 없음) 비가시 0.99. 원본 teleop 576 프레임: line 0.247, between 0.109, centre 비가시 0.865. `test_nominal_ground.py` 10 passed.
 - gate 변화: SOURCE 진행(실물 카메라 지면 모델·벤치). centre 가 실물 영상에서 거의 늘 비가시 — 인식 v2 가 벤치에서 먼저 통과해야 한다.
+
+## 2026-09-30 · uncommitted · feat(control): 지면 기하 차로 유지기 'keep' 모드(D-353 §2)
+- 변경: `perception/lane_keep.py` 의 `LaneKeeper`. 매 프레임(오도메트리 없음) 바닥 전용 흰색 마스크(지평선 아래, 벽 밑변 아래, 행별 카펫 기준 대비 적응 임계, 채색·오버레이 제외) → lane_bev 조감 격자 → RANSAC 직선. 옆이 같이 밝은 선(벽 쐐기·덩어리)과 진행 방향과 65° 넘게 어긋난 가로 표시(정지선·횡단보도)는 경계에서 뺀다. 좌·우는 영상 행이 아니라 앞 0.22 m 에서 지면 선의 횡오프셋 부호(base_link y, 왼쪽 +)로 가른다. 목표는 차로 폭(0.6-1.6배)만큼 떨어진 가장 가까운 좌·우 경계의 가운데 선을 앞보기 0.25 m 에서, 한쪽만이면 그 선을 반폭 안쪽으로 옮긴 선, 없으면 None(HOLD). error = -목표 y / 반폭(양수 = 오른쪽 조향). `last` 에 경계·가로 표시·목표(m, 화소)·전략(both/left_only/right_only)을 담는다. `line_observer_node` 에 `camera_lane_mode: keep`(지면 `self._ground`, `ground: NOMINAL` 표시). `tools/lane_replay.py` 에 `keep` 검출기와 `on_paint_rate`(검출기 자신의 목표점이 바닥 칠 위인 비율) 추가 — 기존 `on_line_rate` 는 하단을 가로지르는 정지선이면 어느 열이든 걸리고 벽 화소를 센다.
+- 증거: 벤치(공칭 지면) pilot 307 프레임 on_line/on_paint/none — line 0.512/0.399/0.16, between 0.135/0.118/0.202, centre -/-/0.99, keep 0.102/0.015/0.332(비가시 증가분은 대부분 장애물 상자·벽 정면 프레임). teleop 576 프레임 — line 0.247/0.218/0.03, between 0.109/0.126/0.158, centre 0.038/0.026/0.865, keep 0.042/0.071/0.094. 새 `test_lane_keep.py` 11 passed, `pytest src/runtime/sensing/test/ -k "lane or ground or observer"` 293 passed, 12 skipped (2026-09-30 Windows).
+- gate 변화: SOURCE 진행(녹화 재생 벤치에서 keep 이 line·between 보다 목표-선 위 비율이 낮다). 실물 주행·가제보 확인 전이다.
+- 결정: D-353
+- 교훈: 공칭 지면에서는 좌·우 경계가 ±20° 까지 벌어져 보여(주행 중 피치) 원점까지의 수직 거리는 믿을 수 없고, 보이는 범위 안의 한 거리에서 잰 횡오프셋이 안정적이다.
