@@ -37,7 +37,7 @@ class SiteRoster:
     def source_of(self, robot_id: str) -> str:
         return "file" if robot_id in self.static_ids else "enrolled"
 
-    def _sync(self) -> None:
+    def sync(self) -> None:
         ids = frozenset(self._console.robot_ids)
         if self._task_service is not None:
             self._task_service.robot_ids = ids
@@ -50,7 +50,7 @@ class SiteRoster:
         if endpoint.robot_id in self.static_ids or endpoint.robot_id in self._console.robot_ids:
             raise HubError("ROBOT_ID_CONFLICT", f"{endpoint.robot_id} is already on the roster")
         self._console._add_robot(endpoint, client)
-        self._sync()
+        self.sync()
 
     def removal_blockers(self, robot_id: str) -> RosterConflict | None:
         if robot_id in self._console._formation_members() or (
@@ -75,7 +75,7 @@ class SiteRoster:
         if blocker is not None:
             raise blocker
         client = self._console._remove_robot(robot_id)
-        self._sync()
+        self.sync()
         closer: Any = getattr(client, "aclose", None)
         if closer is not None:
             await closer()

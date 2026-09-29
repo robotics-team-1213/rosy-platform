@@ -309,3 +309,83 @@ def test_a_session_that_stopped_on_its_own_ends_the_console_at_once(capsys):
     run(main())
     assert printed == []                     # 통계 줄 하나 없이, 1 s 를 기다리지도 않고 나온다
     assert "session stopped: nav.stuck (rosy_02)" in capsys.readouterr().out
+
+
+# --- D-352 robot enrollment wiring ---------------------------------------------------
+
+def _key_file(tmp_path):
+    import base64
+
+    path = tmp_path / "robot_credential_key"
+    path.write_bytes(base64.b64encode(bytes(range(32))) + b"\n")
+    return path
+
+
+def _sighting_config(tmp_path, robot_ids):
+    config = tmp_path / "sightings.yaml"
+    config.write_text(yaml.safe_dump({"sources": [{
+        "source_id": "ceiling_north", "token_env": "ROSY_TEST_SIGHTING_TOKEN",
+        "robot_ids": robot_ids, "map_id": "site-v1", "calibration_revision": "cal-v3",
+        "corner_marker_ids": [30, 31, 32, 33],
+    }]}), encoding="utf-8")
+    return config
+
+
+def test_console_without_robots_file_needs_the_enrollment_key(tmp_path):
+    args = cli.parse_args(["console", "--tasks-db", str(tmp_path / "fleet.sqlite3")])
+    with pytest.raises(SystemExit, match="--robots is required"):
+        cli.run_console(args)
+    args = cli.parse_args(["console", "--robot-credential-key-file", str(_key_file(tmp_path))])
+    with pytest.raises(SystemExit, match="--tasks-db is required"):
+        cli.run_console(args)
+
+
+def test_console_with_enrollment_key_starts_without_robots_file(tmp_path, monkeypatch):
+    captured = {}
+    monkeypatch.setattr("uvicorn.run", lambda app, **kwargs: captured.update(app=app))
+    args = cli.parse_args(["console", "--tasks-db", str(tmp_path / "fleet.sqlite3"),
+                           "--robot-credential-key-file", str(_key_file(tmp_path)),
+                           "--token", "operator-test"])
+    cli.run_console(args)
+    client = TestClient(captured["app"])
+    listed = client.get("/api/fleet/enrollment/robots",
+                        headers={"Authorization": "Bearer operator-test"})
+    assert listed.status_code == 200 and listed.json()["available"] is True
+
+
+def test_console_with_a_broken_key_still_starts(tmp_path, monkeypatch, capsys):
+    captured = {}
+    monkeypatch.setattr("uvicorn.run", lambda app, **kwargs: captured.update(app=app))
+    broken = tmp_path / "robot_credential_key"
+    broken.write_bytes(bytes(range(32)))
+    args = cli.parse_args(["console", "--robots", str(_write(tmp_path)),
+                           "--tasks-db", str(tmp_path / "fleet.sqlite3"),
+                           "--robot-credential-key-file", str(broken), "--token", "operator-test"])
+    cli.run_console(args)
+    client = TestClient(captured["app"])
+    headers = {"Authorization": "Bearer operator-test"}
+    assert client.get("/api/fleet/enrollment/robots", headers=headers).json()["available"] is False
+    assert len(client.get("/api/fleet/state", headers=headers).json()["robots"]) == 3
+    assert "robot enrollment unavailable" in capsys.readouterr().err
+
+
+def test_sighting_mapping_to_an_unenrolled_robot_warns_instead_of_refusing(tmp_path, monkeypatch,
+                                                                           capsys):
+    from fleet.server.enrollment_store import EnrollmentStore
+
+    database = tmp_path / "fleet.sqlite3"
+    EnrollmentStore(database).audit(action="unenroll", outcome="removed", principal_id="alice",
+                                    target="rosy_09")
+    monkeypatch.setenv("ROSY_TEST_SIGHTING_TOKEN", "source-secret")
+    monkeypatch.setattr("uvicorn.run", lambda app, **kwargs: None)
+    args = cli.parse_args(["console", "--robots", str(_write(tmp_path)), "--tasks-db", str(database),
+                           "--robot-credential-key-file", str(_key_file(tmp_path)),
+                           "--token", "operator-test",
+                           "--sightings-config", str(_sighting_config(tmp_path,
+                                                                      ["rosy_01", "rosy_09"]))])
+    cli.run_console(args)
+    assert "rosy_09" in capsys.readouterr().err
+
+    args.sightings_config = _sighting_config(tmp_path, ["rosy_01", "rosy_77"])
+    with pytest.raises(SystemExit, match="unknown robot target"):
+        cli.run_console(args)

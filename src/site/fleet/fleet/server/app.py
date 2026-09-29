@@ -260,7 +260,9 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                omx_socket_root: Path | str = "/run/rosy/omx",
                omx_stop_transport=None,
                enable_mission_dispatcher: bool = False,
-               omx_action_transport=None) -> FastAPI:
+               omx_action_transport=None,
+               enrollment=None,
+               robot_credential_key: Optional[str] = None) -> FastAPI:
     mission_configured = any((mission_service, proposal_store, candidate_resolver))
     if mission_configured and not all((mission_service, proposal_store, candidate_resolver)):
         raise ValueError("Mission API requires MissionService, ProposalStore, and candidate resolver")
@@ -452,6 +454,18 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                 and any(hmac.compare_digest(registry_digest, digest) for digest in principals)):
             raise ValueError("site user credentials must differ from the CORE registry credential")
 
+    if robot_credential_key is not None:
+        # D-352 4: the register key is its own secret, never another site credential.
+        key = robot_credential_key.strip()
+        key_digest = sha256(key.encode("utf-8")).hexdigest()
+        same = lambda other: other is not None and hmac.compare_digest(key, other.strip())  # noqa: E731
+        if (same(console_token) or same(discovery_token) or same(vision_lease_secret)
+                or console.uses_rest_token(key) or console.uses_agent_pairing_token(key)
+                or (sightings is not None and sightings.uses_token(key))
+                or (policy_evidence is not None and policy_evidence.uses_token(key))
+                or any(hmac.compare_digest(key_digest, digest) for digest in principals)):
+            raise ValueError("robot credential key must differ from every other site secret")
+
     def authorize(request: Request,
                   authorization: Optional[str] = Header(default=None)) -> SitePrincipal:
         if principals:
@@ -525,8 +539,8 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
             raise ValueError("discovery credential must differ from site user credentials")
 
         @app.post("/api/fleet/discovery/scan", tags=["fleet-discovery"])
-        def discovery_scan(body: DiscoveryScanPayload,
-                           authorization: Optional[str] = Header(default=None)) -> dict:
+        async def discovery_scan(body: DiscoveryScanPayload,
+                                 authorization: Optional[str] = Header(default=None)) -> dict:
             expected = f"Bearer {discovery_token}"
             if not authorization or not hmac.compare_digest(authorization, expected):
                 raise HTTPException(status_code=401, detail={"code": "UNAUTHORIZED"})
@@ -535,13 +549,24 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
             except ValueError as exc:
                 raise HTTPException(status_code=400, detail={"code": "INVALID_SCAN",
                                                              "message": str(exc)}) from exc
+            if enrollment is not None and enrollment.available:
+                await enrollment.on_discovery(discovery.rows())
+                await enrollment.settle_holds()
             return {"accepted": True}
 
         @app.get("/api/fleet/discovery", dependencies=read_guard,
                  tags=["fleet-discovery"])
         def discovery_readback() -> dict:
             identities = hub.registry.identity_snapshot() if hub is not None else {}
-            return discovery.snapshot(console.registered_endpoints, identities)
+            enrolled = enrollment.enrolled_names() if enrollment is not None else {}
+            return discovery.snapshot(console.registered_endpoints, identities, enrolled)
+
+    if enrollment is not None:
+        from fleet.server.enrollment_routes import install_enrollment_routes
+
+        install_enrollment_routes(app, enrollment, require_viewer=require_viewer,
+                                  require_operator=require_operator,
+                                  named_identity=bool(principals))
 
     def cancel_pending_task_queue(robot_id: Optional[str] = None, *,
                                   actor_id: str = "site-console") -> None:
