@@ -501,7 +501,14 @@ class DockingManager:
             self._mark_docked()
             return
         if now - self._phase_since > self._cfg.settle_timeout_s:
-            # 접점에 닿지 못했다. 스테이징까지 돌아갈 일은 아니고 재착좌면 된다.
+            # D-351: 갈래를 가린다.
+            if status is not None and status.answered and status.load_present \
+                    and not status.charging:
+                # 도달했는데 전류가 없다 — 산화·만춫·보호보드 래치.
+                # 재시도해도 소용없다. 접점을 확인해야 한다.
+                self._fail("contact_no_current")
+                return
+            # 접점에 닿지 못했다. 재착좌로 충분하다.
             self._reseat("no contact after approach")
 
     def _tick_docked(self, now: float) -> None:

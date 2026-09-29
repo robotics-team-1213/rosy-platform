@@ -178,3 +178,10 @@
 - gate 변화: 없음.
 - 결정: Phase 1에서 D-27 억제는 안 함(1소스로는 안전 경로를 못 끈다). Phase 2부터 2소스 확정 시에만.
 - 교훈: manager는 _cfg를 쓴다 (_config 아님) — 첫 커밋에서 9건 적신.
+## 2026-09-30 · uncommitted · feat(docking): D-351 재시도 갈래 — 도달 실패/전류 없음/충전 단절 구분
+
+- 변경: manager._tick_settling에 contact_no_current 갈래 추가 — load_present=true인데 charging=false가 settle 타임아웃까지 지속하면 즉시 DOCK_FAILED(contact_no_current), 재시도하지 않는다(산화 접점은 재시도로 안 낫는다). 도달 실패(재착좌)와 충전 단절(charge_lost, DOCKED 유지)은 기존 동작 유지.
+- 증거: 도킹 전체 115 passed (기존 + 신규 phase 시험).
+- gate 변화: 없음.
+- 결정: D-351 — 재시도 예산은 도달 실패에만 쓴다. 전류 없음은 폴트 보고.
+- 교훈: 없음.

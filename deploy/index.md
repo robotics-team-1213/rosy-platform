@@ -65,8 +65,8 @@
 
 ## 최근 기록
 
+- 2026-09-30 · uncommitted · fix(image): io closure 계약에 D-84 지연 패키지 예외를 명시
 - 2026-09-29 · uncommitted · feat(verify): 상주 단위 CPU 측정·A/B 도구 (D-347 B레인 관문)
 - 2026-09-29 · uncommitted · fix(release): 비밀 스캐너에 저널 인용 산탄 예외
 - 2026-09-29 · uncommitted · test(sd): hung readback 계약의 냉각시작 레이스 제거
 - 2026-09-29 · uncommitted · test(sd): 999% 스톨 시험의 폴 레이스 제거
-- 2026-09-29 · uncommitted · fix(image): io-build 클로저에 core_common 추가

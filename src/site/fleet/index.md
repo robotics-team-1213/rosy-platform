@@ -69,8 +69,8 @@
 
 ## 최근 기록
 
+- 2026-09-30 · uncommitted · chore(structure): fleet size verdict re-judged at 11912 lines
 - 2026-09-30 · uncommitted · feat(fleet): registered Mission goal-evidence ingress
 - 2026-09-30 · uncommitted · fix(fleet-console): 사이트 지도 리뷰 반영 (D-257)
 - 2026-09-30 · uncommitted · feat(fleet): add opt-in Mission proposal API composition
 - 2026-09-29 · uncommitted · feat(fleet-console): 천장 카메라 사이트 사각형과 관측 표시 (D-257)
-- 2026-09-29 · uncommitted · fix(fleet): ER2 시험은 허용목록된 fixture 키를 쓴다

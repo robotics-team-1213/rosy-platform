@@ -71,10 +71,11 @@ SIZE_VERDICTS = {
         "2026-09-29-fleet-mission-control-arbitration-implementation.md)",
     ),
     "fleet": (
-        11_164,
+        11_912,
         "split: server HTTP boundary, console, signals and the mission-control stores are separate owners "
         "today; group them into subpackages rather than one flat server/ tree (B2); owner fleet, unscheduled "
-        "(re-judged 2026-09-29 at 11164 after mission_store joined the server tree)",
+        "(re-judged 2026-09-30 at 11912 after the policy/goal-evidence contracts and their stores joined "
+        "the same flat server tree, docs/plans/2026-09-30-goal-evidence-producer-and-verifier.md)",
     ),
     "site/fleet/fleet/server/mission_store.py": (
         728,
