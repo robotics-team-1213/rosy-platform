@@ -232,8 +232,8 @@
 
 ## 최근 기록
 
+- 2026-09-30 · uncommitted · docs: 사소한 결함 정돈 — plans AGENTS mojibake·표 복구와 LOCAL blocker 갱신
 - 2026-09-30 · uncommitted · docs: restore D-348 goal-evidence decision and execution record
 - 2026-09-30 · uncommitted · docs(adr): D-349 도크 자동 충전 코드 준비 완료 기록
 - 2026-09-30 · uncommitted · docs(dock): 전원 시판품 확정·물리 조립 목록
 - 2026-09-30 · uncommitted · refactor(dock): 리밋스위치 인터록·NTC 보류·최소 구성 확정
-- 2026-09-30 · uncommitted · docs(plan): D-348 실행 계획 T1~T7 작성

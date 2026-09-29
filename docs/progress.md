@@ -2,7 +2,7 @@
 module: docs
 logical_modules: []
 owner: 거버넌스
-last_verified: { commit: "uncommitted", date: 2026-09-28 }
+last_verified: { commit: "uncommitted", date: 2026-09-30 }
 gates:
   SOURCE:
     state: GO
@@ -10,8 +10,8 @@ gates:
     cmd: "python tools/harness/rosy_harness.py lint"
   LOCAL:
     state: HOLD
-    blocker: "Global harness checks still report 2 malformed headings in pre-existing src/hmi/dashboard/logs.md; D-316 ADR index and source contract pass"
-    evidence: "D-316 Pinky Fleet/CORE result-correlation contract recorded; ADR-specific harness contract passes, global docs/harness gate is held on unrelated dashboard log headings (2026-09-28 Windows)"
+    blocker: "이전 blocker(dashboard logs.md malformed heading 2건)는 해소 — 2026-09-30 현재 validate_log 0 errors. 남은 실패는 병행 세션 진행 중인 isaac_sim 스코어카드 기준 누락과 fleet 크기 재판정(11912줄) 2건"
+    evidence: "dashboard/logs.md validate_log 0 errors, test_every_module_log_is_valid 통과; plans/AGENTS.md mojibake 3행·잘못 낀 D-73 행·분할 표 복구; D-348 본문 1d6281bd 복구로 adr_gaps 정리 (2026-09-30 Windows)"
     cmd: "python -m pytest test/test_network_topology_contracts.py test/test_harness_contracts.py test/test_module_scorecard.py test/architecture/test_module_structure.py -q"
   ROS-SIM:
     state: N/A
@@ -71,8 +71,6 @@ plans:
   - docs/plans/2026-09-29-d268-policy-evidence-disposition.md
   - docs/plans/2026-09-29-policy-evidence-contract-design.md
   - docs/plans/2026-09-29-policy-evidence-contract.md
-  - docs/plans/2026-09-30-goal-evidence-producer-and-verifier-design.md
-  - docs/plans/2026-09-30-goal-evidence-producer-and-verifier.md
   - docs/plans/2026-09-30-goal-evidence-producer-and-verifier-design.md
   - docs/plans/2026-09-30-goal-evidence-producer-and-verifier.md
 ---

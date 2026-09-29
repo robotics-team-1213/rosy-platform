@@ -3562,3 +3562,11 @@
 - Evidence: D-348 registry row and API Reference v1.59 ?10.14 agree with Fleet implementation; source suite is 724 passed, 5 skipped.
 - Gate: ROS-SIM, ARTIFACT, DEVICE, FIELD remain HOLD/PARKED; no real producer, model tool dispatch, actuator operation, or physical acceptance is claimed.
 - Decision: D-348 remains Accepted as a contract and SOURCE/LOCAL implementation decision.
+
+## 2026-09-30 · uncommitted · docs: 사소한 결함 정돈 — plans AGENTS mojibake·표 복구와 LOCAL blocker 갱신
+
+- 변경: docs/plans/AGENTS.md의 mojibake 3행(2026-09-20 카메라 배치·도크 조립·Pi 벤치 설계)을 원문 문서에서 복구하고, 잘못 끼워든 D-73 행과 표를 가르던 빈 줄을 제거해 2026-09-28 이후 행이 본표에 합류하도록 했다. docs/progress.md plans의 중복 2쌍을 제거하고 LOCAL blocker를 현재 사실로 갱신 — dashboard malformed heading은 해소, 남은 실패는 병행 세션의 isaac_sim 스코어카드·fleet 크기 재판정이다.
+- 증거: harness validate_log 전 모듈 0 errors, test_every_module_log_is_valid 통과; LOCAL gate cmd 115 passed/2 failed(양쪽 모두 병행 세션 진행 항목, 이번 변경과 무관) (2026-09-30 Windows). D-348 adr_gaps 정리는 병행 세션이 완료했다.
+- gate 변화: docs LOCAL HOLD 유지, blocker 사유 교체(해소된 헤딩 → 병행 isaac_sim/fleet 2건).
+- 결정: 없음.
+- 교훈: git diff/show 출력은 콘솔 인코딩(cp949)에서 한글이 깨져 보여도 파일 내용이 깨진 것은 아니다 — 바이트 수준(`?`/U+FFFD 개수)으로 판별한 뒤 손대자.
