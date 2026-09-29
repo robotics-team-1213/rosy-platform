@@ -58,6 +58,8 @@ function operatorControls() {
 
 const view = {
   map: null,
+  siteMap: null,   // D-257 천장 카메라 사각형 (GET /api/fleet/site-map)
+  sightings: [],   // 카메라 관측 — 표시 전용, CORE pose 와 섞지 않는다
   robots: [],
   showAllRobots: false,
   selected: null, // 목표 지정을 기다리는 robot_id
@@ -213,7 +215,9 @@ function render() {
     ? `${view.selected} 목표 (${point.x.toFixed(2)}, ${point.y.toFixed(2)}) m · 방향키로 이동, Enter로 확인, Escape로 취소`
     : view.map
       ? "오른쪽에서 로봇의 목표 지정을 누른 뒤 지도를 찍으면 그 로봇에게만 목표가 갑니다."
-      : "지도가 수신되면 로봇의 목표 지정을 사용할 수 있습니다.";
+      : view.siteMap
+        ? "천장 카메라 관측 전용 지도입니다. 목표 지정은 로봇 지도가 수신되면 사용할 수 있습니다."
+        : "지도가 수신되면 로봇의 목표 지정을 사용할 수 있습니다.";
   if (hint.textContent !== nextHint) hint.textContent = nextHint;
 }
 
@@ -550,4 +554,5 @@ setInterval(refreshState, STATE_MS);
 setInterval(() => { if (!auth.locked) refreshDispatchControl(); }, STATE_MS);
 setInterval(refreshDiscovery, MAP_MS);
 setInterval(() => mapView.refresh(), MAP_MS);
+setInterval(() => mapView.refreshSightings(), STATE_MS);
 setInterval(() => visionView.refreshFrame(), 1500);

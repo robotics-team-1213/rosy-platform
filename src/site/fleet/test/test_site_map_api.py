@@ -178,3 +178,34 @@ def test_hyphenated_site_robot_ids_pass_sighting_validation():
         corner_marker_ids=(30, 31, 32, 33),
     )
     assert payload.robot_id == "rosy-pinky-8kcn"
+
+
+def test_console_serves_the_site_layer_and_draws_sightings_apart_from_core_pose():
+    client = _client([_source()])
+
+    layer = client.get("/console/assets/site-layer.js")
+    map_view = client.get("/console/assets/map-view.js").text
+    shell = client.get("/console/assets/console.js").text
+    page = client.get("/console").text
+
+    assert layer.status_code == 200
+    assert "classifySightings" in layer.text
+    assert 'from "./site-layer.js"' in map_view
+    assert '"/api/fleet/site-map"' in map_view and '"/api/fleet/sightings"' in map_view
+    assert "mapView.refreshSightings()" in shell
+    assert 'id="legend-sighting"' in page
+    assert "<script>" not in page  # CSP: script-src 'self' only
+
+
+def test_site_layer_node_unit_tests_pass():
+    import shutil
+    import subprocess
+    from pathlib import Path
+
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("node is not installed; run `node --test test/web/` where it is")
+    spec = Path(__file__).resolve().parent / "web" / "site-layer.test.mjs"
+    result = subprocess.run([node, "--test", str(spec)], capture_output=True, text=True,
+                            timeout=60, check=False)
+    assert result.returncode == 0, result.stdout + result.stderr

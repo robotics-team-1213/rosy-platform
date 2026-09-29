@@ -217,6 +217,9 @@ main {
 .sw.unknown { background: var(--ground-soft); }
 .sw.robot { background: var(--robot-2); }
 .sw.goal { background: var(--series-goal); }
+/* D-257 카메라 관측은 CORE pose(채운 색)와 달리 점선 고리다. */
+.sw.sighting { background: transparent; border: 1px dashed var(--paper); border-radius: 50%; }
+.legend [hidden] { display: none; }
 
 .roster { display: flex; flex-direction: column; gap: var(--space-3); }
 
