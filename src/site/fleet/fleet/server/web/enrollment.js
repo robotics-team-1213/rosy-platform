@@ -48,6 +48,14 @@ export const MESSAGES = {
   conflict: "같은 이름이 여러 주소에 보입니다(신원 충돌) — 코드를 보내지 않습니다.",
   not_discovered: "발견 목록에서 사라졌습니다. 다시 검색되거나 주소로 추가하세요.",
   robot_error: "로봇이 예상하지 못한 답을 했습니다.",
+  not_enrollable: "이 행은 등록 대기 상태가 아닙니다(이미 등록됐거나 파일 로봇).",
+  not_enrolled: "등록된 로봇이 아닙니다.",
+  address_unchanged: "주소가 바뀐 로봇이 아닙니다.",
+  no_new_address: "새 주소가 하나로 보이지 않습니다 — 발견 목록을 확인하세요.",
+  identity_mismatch: "새 주소의 기기가 등록된 로봇과 다릅니다 — 토큰이 다른 기기에 갔을 수 있습니다. 로봇 대시보드에서 사이트 토큰을 회수하고 새로 등록하세요.",
+  ROBOT_BUSY: "진행 중인 목표나 교통 대기가 있습니다 — 먼저 취소하세요.",
+  ACTIVE_TASKS: "끝나지 않은 작업이 있습니다 — 먼저 취소하세요.",
+  FORMATION_ACTIVE: "대형에 들어 있습니다 — 대형을 먼저 해제하세요.",
   OPERATOR_IDENTITY_REQUIRED: "이름 있는 운영자 계정으로만 등록·해제할 수 있습니다.",
 };
 
@@ -143,7 +151,7 @@ export const HELP = [
 
 export function createEnrollmentPanel({ headers, identity, log }) {
   const el = (id) => document.getElementById(id);
-  const state = { listing: null, blockedUntil: 0, target: null };
+  const state = { listing: null, blockedUntil: 0, target: null, busy: false };
 
   // 분류(detail.code/reason)를 잃지 않으려고 셸의 call() 대신 쓴다.
   async function call(path, { method = "GET", body } = {}) {
@@ -188,9 +196,12 @@ export function createEnrollmentPanel({ headers, identity, log }) {
   }
 
   async function submit(target) {
+    if (state.busy || Date.now() < state.blockedUntil) return;
     const input = el("enroll-code");
     const error = codeError(input.value);
     if (error) return showResult([error], true);
+    state.busy = true;
+    el("enroll-submit").disabled = true;
     try {
       const row = await call("/api/fleet/enrollment/robots", {
         method: "POST", body: { ...target, code: input.value },
@@ -203,6 +214,13 @@ export function createEnrollmentPanel({ headers, identity, log }) {
       const detail = err?.detail || {};
       state.blockedUntil = retryUntil(detail, Date.now());
       showResult(messageFor(detail), true);
+    } finally {
+      state.busy = false;
+      el("enroll-submit").disabled = Date.now() < state.blockedUntil;
+      if (state.blockedUntil) {
+        setTimeout(() => { el("enroll-submit").disabled = false; render(); },
+          Math.max(0, state.blockedUntil - Date.now()));
+      }
     }
     await refresh();
   }
@@ -216,6 +234,10 @@ export function createEnrollmentPanel({ headers, identity, log }) {
   }
 
   async function act(action, row) {
+    const question = action === "move"
+      ? `${row.robot_id}을(를) 새 주소로 옮길까요? 옮긴 뒤 Fleet이 새 주소에서 신원을 다시 확인합니다.`
+      : `${row.robot_id} 등록을 해제할까요? 로봇의 사이트 토큰을 회수합니다.`;
+    if (!window.confirm(question)) return;
     const path = `/api/fleet/enrollment/robots/${encodeURIComponent(row.robot_id)}`;
     try {
       if (action === "unenroll") {
@@ -228,7 +250,7 @@ export function createEnrollmentPanel({ headers, identity, log }) {
       }
     } catch (err) {
       const detail = err?.detail || {};
-      showResult([detail.message || messageFor(detail)[0]], true);
+      showResult(messageFor(detail), true);
     }
     await refresh();
   }

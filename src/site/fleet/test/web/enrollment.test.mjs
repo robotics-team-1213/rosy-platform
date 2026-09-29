@@ -78,3 +78,13 @@ test("discovery labels include enrolled and the renamed event-link state", () =>
   assert.equal(DISCOVERY_LABELS.enrolled, "등록됨");
   assert.equal(DISCOVERY_LABELS.pairing_pending, "이벤트 연결 대기");
 });
+
+test("review codes have operator sentences, and the address rule is RFC 1918 only", () => {
+  for (const code of ["not_enrollable", "identity_mismatch", "no_new_address", "ROBOT_BUSY",
+    "ACTIVE_TASKS", "FORMATION_ACTIVE"]) {
+    assert.equal(messageFor({ code })[0], MESSAGES[code], code);
+  }
+  for (const bad of ["192.0.2.5", "100.64.0.1", "169.254.1.1"]) {
+    assert.equal(parseAddress(bad), null, bad);
+  }
+});

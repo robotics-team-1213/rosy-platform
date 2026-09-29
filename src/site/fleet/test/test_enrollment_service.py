@@ -112,7 +112,8 @@ def test_bad_format_never_reaches_the_robot(tmp_path, code):
 
 
 @pytest.mark.parametrize("address", ["rosy-pinky-8kcn.local", "8.8.8.8", "127.0.0.1:8080",
-                                     "192.168.1.9:0", "example.com:8080"])
+                                     "192.168.1.9:0", "example.com:8080", "192.0.2.5",
+                                     "100.64.0.1", "169.254.1.1"])
 def test_manual_address_must_be_private_ipv4(tmp_path, address):
     service, network, *_ = _ready(tmp_path)
     assert _refused(service, address=address).code == "bad_address"

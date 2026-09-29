@@ -41,6 +41,9 @@ SITE_WARN_S = 14 * 86400.0
 LEGACY_WARN_S = 48 * 3600.0
 SITE_LIFETIME_S = 90 * 86400.0
 _AVAHI_SUFFIX = re.compile(r"^(?P<base>.+)-\d+$")
+#: The console applies the same RFC 1918 rule before sending (web/enrollment.js).
+_RFC1918 = tuple(ipaddress.ip_network(net) for net in
+                 ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"))
 
 
 class EnrollmentError(Exception):
@@ -86,8 +89,8 @@ def parse_manual_address(text: object) -> str:
     except ValueError:
         raise EnrollmentError("bad_address", 400,
                               "enter a private IPv4 address like 192.168.1.20") from None
-    if (ip.version != 4 or not ip.is_private or ip.is_loopback or ip.is_link_local
-            or ip.is_multicast or ip.is_unspecified or not 1 <= port <= 65535):
+    if (ip.version != 4 or not any(ip in net for net in _RFC1918)
+            or not 1 <= port <= 65535):
         raise EnrollmentError("bad_address", 400, "only private LAN IPv4 addresses are accepted")
     return f"{ip}:{port}"
 
@@ -351,6 +354,8 @@ class EnrollmentService:
                     raise ValueError
                 return paired
             except (ValueError, AttributeError):
+                self._store.audit(action="enroll", outcome="robot_error",
+                                  principal_id=principal_id, target=target)
                 raise EnrollmentError("robot_error", 502, "the robot answered without a token") from None
         outcome = {401: "code_rejected", 429: "rate_limited", 403: "lan_forbidden",
                    400: "bad_format"}.get(status, "robot_error")
