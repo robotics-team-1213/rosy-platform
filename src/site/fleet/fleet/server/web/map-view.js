@@ -314,15 +314,22 @@ export function createMapView({ el, view, css, auth, call, onMapChanged, onMapUn
     const bounds = siteBounds(view.siteMap);
     if (!bounds) return;
     const canvas = el("map-canvas");
-    const { width, height } = canvasSizeFor(bounds);
-    canvas.width = width;
-    canvas.height = height;
+    // 비트맵을 화면에 보이는 박스 크기(× DPR)에 맞춘다 — 글자와 선이 CSS px 로 읽히게.
+    // 박스를 아직 모르면(숨김 등) 사각형 종횡비로 대신한다.
+    const rect = canvas.getBoundingClientRect();
+    const fallback = canvasSizeFor(bounds, 800);
+    const width = rect.width > 0 ? rect.width : fallback.width;
+    const height = rect.height > 0 ? rect.height : fallback.height;
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = Math.round(width * dpr);
+    canvas.height = Math.round(height * dpr);
     const ctx = canvas.getContext("2d");
-    const t = fitTransform(bounds, width, height);
+    ctx.scale(dpr, dpr);
+    const t = fitTransform(bounds, width, height, 32);
     const toPx = (x, y) => { const p = project(t, x, y); return { x: p.px, y: p.py }; };
     ctx.fillStyle = css("--ground-deep");
     ctx.fillRect(0, 0, width, height);
-    const font = `${Math.round(width / 70)}px ${css("--mono") || "monospace"}`;
+    const font = `12px ${css("--mono") || "monospace"}`;
 
     // 0.5 m 격자
     ctx.save();
@@ -364,6 +371,7 @@ export function createMapView({ el, view, css, auth, call, onMapChanged, onMapUn
       ctx.save();
       ctx.translate(right.x + 6, right.y);
       ctx.rotate(Math.PI / 2);
+      ctx.textBaseline = "bottom"; // 회전 뒤 "bottom" 이 사각형 바깥쪽이다
       ctx.fillText(`${(b.max_y - b.min_y).toFixed(2)} m`, 0, 0);
       ctx.restore();
       ctx.textAlign = "left";
@@ -402,7 +410,7 @@ export function createMapView({ el, view, css, auth, call, onMapChanged, onMapUn
     }
     ctx.restore();
 
-    for (const s of view.sightings) drawSighting(ctx, s, toPx, Math.max(8, t.scale * 0.09), 2);
+    for (const s of view.sightings) drawSighting(ctx, s, toPx, Math.max(7, t.scale * 0.09), 1.5);
   }
 
   function describeSightings() {
