@@ -185,3 +185,26 @@ snapshot 녹화와 불일치 트리거, Fleet 자동 수거, CVAT 자동 연동,
 
 - 클래스 4개의 이름·role, 정규화, 채널 순서 — 학습 노트북에서 받는다.
 - HF 조직과 저장소 이름, 사이트 PC의 토큰 보관 위치.
+
+## 첫 실행 증거 (호스트, 2026-09-30)
+
+- 호스트: AMD Ryzen AI 7 PRO 350 w/ Radeon 860M, Windows 11. 다른 세션과 공유 중이라 부하가 높았고 지연 수치는 상한 쪽으로 읽어야 한다.
+- 소프트웨어: Python 3.12.14, torch 2.14.0+cpu, onnxruntime 1.30.0, onnx 1.23.1 (venv는 `X:\DevTemp\rosy-ml-venv`).
+- 대상: Colab 산출 `0930_best_model.torchscript.pt` (LaneUNet, 입력 1x3x240x320, 4 클래스). 전처리는 rgb, scale 1/255, mean 0, std 1.
+- `export_onnx.py` parity `max_abs_diff=3.58e-06` (허용 1e-3). model_revision `lane-seg-20260930-05ac31c0`.
+- `check_manifest.py`: OK.
+- `intake.py` (`--max-frames 100`, 소스 7개, 700 프레임, ORT threads=2): verdict **pass**, reasons 없음. nan_frames 0, error_frames 0.
+- intake 지연: p50 91.2 ms, p95 173.3 ms (게이트 p50 <= 400 ms).
+- visible_fraction 0.973 (게이트 >= 0.30).
+- error_delta vs rule baseline: median 0.201, p95 0.793 (n=621).
+- 평균 클래스 비율: floor 0.817, line_a 0.080, line_b 0.071, wall 0.032.
+- 순수 onnxruntime 지연 (50 프레임, 첫 소스): 아래 표.
+
+| threads | p50 ms | p95 ms |
+|---|---|---|
+| 1 | 113.4 | 181.2 |
+| 2 | 66.2 | 108.2 |
+| 4 | 54.1 | 115.7 |
+
+- 주의: 클래스 역할(floor/line_a/line_b/wall -> background/lane_marking/lane_marking/ignore)은 시각 추정에 따른 **잠정값**이며 실제 클래스 목록은 학습 노트북에서 받아야 한다. dataset revision(0x40)과 camera profile revision(`unknown-provisional`)도 자리표시자다.
+- 이것은 개발 호스트 증거이며 Pi 5 / 실기 증거가 아니다. 잠정 manifest는 커밋하지 않았고 로봇에 전달하지 않았다.
