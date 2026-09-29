@@ -1,6 +1,12 @@
 /* 브라우저 표면이 같이 쓰는 조작 부품. 색·크기·간격은 tokens.css만 읽는다.
  * 레이아웃(어디 놓을지)은 각 표면 시트에 남긴다.
  * 요소: ui-button, ui-field, ui-tag, ui-text, ui-status, ui-actions.
+ *
+ * 필드(D-359 §5.1): 제품 화면의 입력·선택·체크는 네이티브 요소에 class="ui-field"를
+ * 단다. <ui-field> 감싸개도 같은 얼굴을 그리지만, 화면의 폼 제출·<label> 연결·
+ * JS가 이미 네이티브 요소를 직접 쥐고 있어 감싸개로 바꾸면 마크업과 핸들러가 크게
+ * 흔들린다. 체크·라디오는 상자를 그리지 않고, 감싸는 <label class="ui-check">가
+ * 44px 누름 면이 된다.
  */
 
 .sr-only {
@@ -28,6 +34,19 @@
   transform: translateY(-150%);
 }
 .skip-link:focus-visible { transform: none; }
+
+/* D-359 §5.4·§5.5 — 모든 표면이 받는 기본. 한국어는 어절에서 끊고 긴 기계 값은
+   어디서든 접는다. 키보드 포커스 링은 네이티브 조작(링크·입력·요약)에도 같다.
+   :where()는 명시도가 0이라 표면이 제 포커스 자리를 정하면 그쪽이 이긴다. */
+body {
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+
+:where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
 
 ui-button {
   display: inline-flex;
@@ -73,7 +92,6 @@ a.docs-link {
 
 a.docs-link { min-height: var(--target-secondary); }
 
-ui-button[kind="quiet"]:hover,
 a.docs-link:hover {
   color: var(--ink);
   border-color: var(--ink);
@@ -113,6 +131,7 @@ ui-button[kind="quiet"].arming {
 }
 
 ui-button[kind="toggle"].active,
+ui-button[kind="toggle"][aria-pressed="true"],
 ui-button[kind="toggle"][data-active="true"] {
   color: var(--button-primary-ink);
   background: var(--series-primary);
@@ -137,6 +156,7 @@ ui-button small {
 }
 
 ui-button[kind="toggle"].active small,
+ui-button[kind="toggle"][aria-pressed="true"] small,
 ui-button[kind="toggle"][data-active="true"] small {
   color: var(--button-primary-ink);
 }
@@ -149,14 +169,65 @@ ui-button[data-size-missing] {
   outline: var(--contract-mark-width) solid var(--status-crit);
 }
 
-ui-button[disabled] {
-  cursor: not-allowed;
-  opacity: var(--disabled-opacity);
+ui-button[disabled] { cursor: not-allowed; }
+
+ui-button[disabled]:is(:not([reason]), [reason=""]) { opacity: var(--disabled-opacity); }
+
+/* D-359 §5.4 — 상태는 종류마다 여기서 그린다. 움직임 없이(D-220) 선과 면만 바뀐다.
+   비활성은 hover·active를 받지 않는다. 채움 종류(주 명령·불가역·눌림)는 누르는
+   동안 바탕색 안쪽 테를 얻는다. 표면은 눌림을 outline이나 status 색으로 덧칠하지
+   않고 aria-pressed="true"를 단다. */
+ui-button:is([kind="quiet"], [kind="segment"], [kind="toggle"]):not([disabled], [aria-pressed="true"], [aria-selected="true"], [data-active="true"], .active, .arming):hover {
+  color: var(--ink);
+  border-color: var(--ink);
+}
+
+ui-button:is([kind="quiet"], [kind="segment"], [kind="toggle"]):not([disabled], [aria-pressed="true"], [aria-selected="true"], [data-active="true"], .active, .arming):active {
+  color: var(--ink);
+  background: var(--ground-card-2);
+}
+
+ui-button[kind="primary"]:not([disabled]):hover {
+  background: color-mix(in oklab, var(--button-primary-bg) 88%, var(--ground));
+}
+
+ui-button[kind="irreversible"]:not([disabled]):hover {
+  border-color: var(--ink);
+}
+
+ui-button:is([kind="primary"], [kind="irreversible"], [aria-pressed="true"], [aria-selected="true"], [data-active="true"], .active, .arming):not([disabled]):active {
+  box-shadow: inset 0 0 0 var(--focus-ring-width) var(--ground);
+}
+
+/* 비활성 사유(D-359 §5.3). ui.js가 reason 속성을 버튼 안의 <small data-reason>으로
+   그리고 aria-describedby로 잇는다. 사유가 있는 비활성은 흐리지 않는다 — 흐리면
+   사유 글자까지 읽히지 않는다. 대신 채움을 빼고 점선 테와 조용한 글자로 말한다. */
+ui-button[reason]:not([reason=""]) {
+  flex-direction: column;
+  gap: 0;
+}
+
+ui-button[disabled][reason]:not([reason=""]) {
+  color: var(--ink-quiet);
+  background: transparent;
+  border-color: var(--surface-line);
+  border-style: dashed;
+}
+
+ui-button > small[data-reason] {
+  display: block;
+  max-width: 100%;
+  color: var(--ink-quiet);
+  font: var(--weight-medium) var(--text-micro)/var(--leading-label) var(--body);
+  white-space: normal;
 }
 
 ui-button:focus-visible,
 ui-field:focus-visible,
-ui-field input:focus-visible {
+ui-field input:focus-visible,
+input.ui-field:focus-visible,
+select.ui-field:focus-visible,
+textarea.ui-field:focus-visible {
   outline: var(--focus-ring-width) solid var(--focus-ring);
   outline-offset: var(--focus-ring-offset);
 }
@@ -188,10 +259,54 @@ textarea.ui-field {
   border-radius: var(--radius-control);
   color: var(--ink);
   background: var(--field-bg);
-  font: var(--weight-medium) var(--text-body)/var(--leading-control) var(--mono);
+  font: var(--weight-regular) var(--text-body)/var(--leading-control) var(--body);
+  font-variant-numeric: tabular-nums;
 }
 
 ui-field { width: 100%; }
+
+input.ui-field,
+select.ui-field,
+textarea.ui-field {
+  min-width: 0;
+  max-width: 100%;
+}
+
+input.ui-field:disabled,
+select.ui-field:disabled,
+textarea.ui-field:disabled {
+  cursor: not-allowed;
+  opacity: var(--disabled-opacity);
+}
+
+input.ui-field[readonly] {
+  color: var(--nominal-quiet);
+  border-style: dashed;
+}
+
+input.ui-field:user-invalid,
+input.ui-field[aria-invalid="true"] {
+  border-color: var(--field-invalid);
+}
+
+input.ui-field:is([type="checkbox"], [type="radio"]) {
+  flex: none;
+  width: var(--space-5);
+  height: var(--space-5);
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  accent-color: var(--focus-ring);
+}
+
+.ui-check {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--gap-button-content);
+  min-height: var(--target-secondary);
+  cursor: pointer;
+}
 
 ui-field input,
 ui-field select,
@@ -213,6 +328,7 @@ ui-field[invalid] {
 ui-tag {
   display: inline-flex;
   align-items: center;
+  gap: var(--gap-field-label);
   min-height: var(--space-6);
   padding: var(--inset-tag);
   border: 1px solid var(--surface-line);
@@ -222,6 +338,16 @@ ui-tag {
   font: var(--weight-label) var(--text-label)/var(--leading-flat) var(--mono);
   letter-spacing: var(--track-state);
   white-space: nowrap;
+}
+
+ui-tag[hidden] { display: none; }
+
+/* 상태 어휘: neutral(조용한 글자) · active(정상 진행 — 색이 아니라 ink, D-82) ·
+   warn(글자) · crit(채움). active는 D-359 §5.2에서 Fleet `.tag.nav/.ok`와
+   dashboard `[data-status="OK"]` 사본을 받으려고 더했다. */
+ui-tag[status="active"] {
+  color: var(--nominal);
+  border-color: currentColor;
 }
 
 ui-tag[status="warn"] {

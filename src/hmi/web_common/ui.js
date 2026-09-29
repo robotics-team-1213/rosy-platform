@@ -4,12 +4,13 @@
 const KINDS = ["primary", "quiet", "irreversible", "segment", "toggle"];
 const BUTTON_SIZES = ["secondary", "primary", "irreversible"];
 const KIND_SIZES = { primary: "primary", irreversible: "irreversible" };
+let reasonSerial = 0;
 
 class UiButton extends HTMLElement {
   static formAssociated = true;
 
   static get observedAttributes() {
-    return ["disabled", "kind", "size"];
+    return ["disabled", "kind", "size", "reason"];
   }
 
   constructor() {
@@ -70,6 +71,17 @@ class UiButton extends HTMLElement {
     this.setAttribute("type", value || "button");
   }
 
+  /** D-359 §5.3 — 왜 누를 수 없는지. 빈 값은 속성을 지운다. title은 사유가 아니다
+   *  (터치에서 보이지 않는다). */
+  get reason() {
+    return this.getAttribute("reason") || "";
+  }
+
+  set reason(value) {
+    if (value) this.setAttribute("reason", String(value));
+    else this.removeAttribute("reason");
+  }
+
   _sync() {
     const kind = this.getAttribute("kind");
     const size = this.getAttribute("size") || KIND_SIZES[kind] || "secondary";
@@ -79,6 +91,46 @@ class UiButton extends HTMLElement {
     const off = this.disabled;
     this.tabIndex = off ? -1 : 0;
     this.setAttribute("aria-disabled", off ? "true" : "false");
+    this._syncReason();
+  }
+
+  // 사유는 버튼 안의 <small data-reason>이다(toggle·irreversible의 small 세부와 같은
+  // 자리). 이름에서 빠지도록 aria-hidden이고, aria-describedby가 설명으로 읽는다.
+  // 화면이 textContent로 글자를 갈아도 사유가 따라 붙도록 자식 목록을 지켜본다.
+  _syncReason() {
+    const text = (this.getAttribute("reason") || "").trim();
+    const node = this._reasonNode;
+    if (!text) {
+      this._reasonWatch?.disconnect();
+      if (node) {
+        node.remove();
+        this._describe(node.id, false);
+      }
+      return;
+    }
+    if (!node) {
+      this._reasonNode = document.createElement("small");
+      this._reasonNode.dataset.reason = "";
+      this._reasonNode.id = `ui-reason-${++reasonSerial}`;
+      this._reasonNode.setAttribute("aria-hidden", "true");
+    }
+    const reason = this._reasonNode;
+    if (reason.textContent !== text) reason.textContent = text;
+    if (reason.parentNode !== this) this.append(reason);
+    this._describe(reason.id, true);
+    if (!this._reasonWatch) {
+      this._reasonWatch = new MutationObserver(() => {
+        if (this.getAttribute("reason") && reason.parentNode !== this) this.append(reason);
+      });
+    }
+    this._reasonWatch.observe(this, { childList: true });
+  }
+
+  _describe(id, on) {
+    const ids = (this.getAttribute("aria-describedby") || "").split(/\s+/).filter((item) => item && item !== id);
+    if (on) ids.push(id);
+    if (ids.length) this.setAttribute("aria-describedby", ids.join(" "));
+    else this.removeAttribute("aria-describedby");
   }
 }
 
