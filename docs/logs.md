@@ -3372,3 +3372,21 @@
 - 변경: 계획의 ADR 후보 두 건을 조사하고 기록으로 종결했다. A-1(표정 어휘): `set_emotion` GIF 경로의 face 밖 호출자가 0곳이라 정식화할 상태→표정 계약이 없고, 카드 어휘는 D-221이 이미 계약한다 — 신규 ADR 없음. 만료 복귀 GIF가 상태와 무관하다는 관찰 1건은 BENCH 트리거로 남겼다. A-2(온기 문구): 세 웹 표면 빈 상태·로딩·오류 50행 스캔에서 문법이 이미 닫혀 있고 D-280.4/D-277/D-278/D-254가 경계를 쥐고 있어 닫을 간극이 없다 — 신규 ADR 없음.
 - 증거: 호출자 스캔(`set_emotion` face 외 0건), 문구 스캔 50행, D-221 본문 대조. 회차 기록 `docs/validation/uiux-surfaces-2026-09-29/README.md` P7 절.
 - gate 변화: 없음. D 번호를 소모하지 않았다(다음 빈 번호 D-337·D-338 유지).
+
+## 2026-09-29 · uncommitted · feat(omx/fleet): fence local Device Actions with stop generations
+
+- 변경: Added typed `RearmLocal`, durable OMX stop latch, authority epoch and generation checks, local stop fanout, and final driver-submit serialization. Re-arm requires an authenticated named operator at Site Fleet, the current Fleet fence, zero unresolved local Actions, and instance readback; failure restores the Fleet latch. The outer UDS dispatcher now routes re-arm and rejects foreign workcell/instance identities; Fleet snapshot generation values are type-checked. Updated API Reference v1.52, D-336 implementation evidence, and the ER2 execution plan.
+- 증거: Focused suite 80 passed; OMX 85 passed/3 skipped; API web 70 passed/13 skipped; contract/harness 78 passed. Fleet full suite 658 passed/5 skipped; one existing WebSocket integration test timed out waiting for `uvicorn.Server.started`, while the updated re-arm response test passed. Its isolated retry stalled and was interrupted. Harness lint: 0 errors/17 freshness warnings. `git diff --check` passed.
+- gate 변화: None. The Fleet OMX inventory remains empty by default; device UID/socket wiring, ROS/gripper selection, physical E-stop/readback, ROS-SIM, DEVICE, and FIELD remain unproven and disabled.
+
+## 2026-09-29 · uncommitted · docs(plans): /dashboard 브리지 퇴역 기준 명시
+
+- 변경: 비평 P1(2026-09-26)의 남은 절반. 목적지는 브리지 회차(31e08eea)로 열렸으므로, 이번에는 홈 조작 화면의 퇴역 조건 C1~C5를 검증 가능하게 못 박았다 — 패널 동등성 대조표(2026-09-29 기준, 남음 3행: API 토큰 관리·로봇 신원 폼·ROS 반응성 표), 새 패널 단일 규칙(역할 화면에만 등록), G2+G3 수용, E-stop 가시 보존, 인증 복귀 경로 유지. 새 계획서: `docs/plans/2026-09-29-dashboard-bridge-retirement-criteria.md`.
+- 증거: 문서 회차 — 코드 무변경. 대조표는 `src/hmi/dashboard/panels.yaml`(17패널)과 홈 `index.html`·`settings.js` 구역 대조로 작성했다. D-204 ADR은 아직 `feat/role-surfaces-s1`에 있어 이행 일정은 정하지 않았다.
+- gate 변화: 없음.
+
+## 2026-09-29 · uncommitted · docs(plans): 무신호 교차로 정지 후 진입 설계 + API Ref v1.54
+
+- 변경: `docs/plans/2026-09-29-traffic-policy-unsignalized-junction-design.md` 신설 — "신호 없음"의 두 뜻(무신호 교차로 vs 인식 실패)을 구분하기 위해 부재를 카메라 판정이 아니라 운영자 선언(`junction_rule: stop_and_go`)으로 다루는 결정, 판정 분기·불변식(정지+dwell 선행, 관측 신호와 선언 충돌 시 `signal_unexpected` HOLD, `signal_conflict` 우선, 새 상태 문자 없음), 표면 변화, 비목표(보행자 인식·다중 교차로·적신호 우회전 특례·ESP32/observer 제2 신호 소스)를 기록했다. API 계약서는 v1.53→v1.54로 `TrafficPolicyStatus.junction_rule` 필드·예시·문단을 같은 변경에 실었다(D-18).
+- 증거: 같은 변경의 호스트 시험 — traffic policy·API·runtime config·foundation·services 380 passed, protocol schemas·api_web·dashboard 105 passed 47 skipped, semantic road 시뮬·이벤트 카탈로그 74 passed(2026-09-29 Windows).
+- gate 변화: 없음.

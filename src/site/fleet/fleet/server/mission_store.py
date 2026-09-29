@@ -1,7 +1,7 @@
 """Single-step Mission journal sharing Fleet's SQLite resource claims.
 
-This is an internal SOURCE store. It defines no public REST route and contains
-no Mission dispatcher; device-side stop-generation enforcement is still absent.
+This is an internal SOURCE store. REST routes and device transport are owned by
+the Site Fleet application and mission dispatcher.
 """
 
 from __future__ import annotations
@@ -62,11 +62,14 @@ class MissionStore:
                     plan_json TEXT NOT NULL,
                     goal_predicate_json TEXT NOT NULL,
                     resources_json TEXT,
+                    action_grant_json TEXT,
+                    reconciliation_pending INTEGER NOT NULL DEFAULT 0,
                     status TEXT NOT NULL CHECK(status IN (
                         'PROPOSED', 'READY', 'RUNNING', 'ACTION_SUCCEEDED',
                         'GOAL_CONFIRMED', 'HOLD', 'CANCELED'
                     )),
                     dispatch_generation INTEGER,
+                    authority_epoch INTEGER,
                     action_id TEXT,
                     attempt_id TEXT,
                     reason TEXT,
@@ -95,6 +98,21 @@ class MissionStore:
                     ON fleet_mission_events(mission_id, event_id);
                 """
             )
+            columns = {row[1] for row in connection.execute(
+                "PRAGMA table_info(fleet_missions)").fetchall()}
+            if "authority_epoch" not in columns:
+                connection.execute(
+                    "ALTER TABLE fleet_missions ADD COLUMN authority_epoch INTEGER"
+                )
+            if "action_grant_json" not in columns:
+                connection.execute(
+                    "ALTER TABLE fleet_missions ADD COLUMN action_grant_json TEXT"
+                )
+            if "reconciliation_pending" not in columns:
+                connection.execute(
+                    "ALTER TABLE fleet_missions ADD COLUMN reconciliation_pending "
+                    "INTEGER NOT NULL DEFAULT 0"
+                )
 
     def _connect(self) -> sqlite3.Connection:
         connection = sqlite3.connect(self.path, timeout=5.0, isolation_level=None)
@@ -108,7 +126,8 @@ class MissionStore:
         if row is None:
             return None
         result = dict(row)
-        for field in ("plan_json", "goal_predicate_json", "resources_json"):
+        for field in ("plan_json", "goal_predicate_json", "resources_json",
+                      "action_grant_json"):
             if result[field] is not None:
                 result[field.removesuffix("_json")] = json.loads(result[field])
                 del result[field]
@@ -223,7 +242,8 @@ class MissionStore:
             if row["status"] != "PROPOSED":
                 raise MissionConflict("only a PROPOSED Mission can be admitted")
             control = connection.execute(
-                "SELECT generation, dispatch_enabled FROM fleet_dispatch_control WHERE control_id=1"
+                "SELECT authority_epoch, generation, dispatch_enabled "
+                "FROM fleet_dispatch_control WHERE control_id=1"
             ).fetchone()
             if not control["dispatch_enabled"] or control["generation"] != expected_generation:
                 raise MissionConflict("stop generation is closed or changed")
@@ -232,15 +252,16 @@ class MissionStore:
                     generation=expected_generation, resources=resources, phase="CLAIMED"):
                 raise MissionConflict("Mission resource claim conflicts with another action")
             connection.execute(
-                """UPDATE fleet_missions SET status='READY', dispatch_generation=?,
-                   resources_json=?, updated_at=? WHERE mission_id=?""",
-                (expected_generation, resources_json, now, mission_id),
+                """UPDATE fleet_missions SET status='READY', authority_epoch=?,
+                   dispatch_generation=?, resources_json=?, updated_at=? WHERE mission_id=?""",
+                (control["authority_epoch"], expected_generation, resources_json, now, mission_id),
             )
             self._event(
                 connection, event_source="fleet_mission", source_event_id=f"admit:{mission_id}:{expected_generation}",
                 mission=row, event_type="MISSION_ADMITTED", state="READY",
                 actor_id=actor_id,
-                detail={"dispatch_generation": expected_generation,
+                detail={"authority_epoch": control["authority_epoch"],
+                        "dispatch_generation": expected_generation,
                         "resources": json.loads(resources_json)},
             )
             updated = connection.execute("SELECT * FROM fleet_missions WHERE mission_id=?",
@@ -249,11 +270,26 @@ class MissionStore:
         return self._row(updated)
 
     def start_step(self, mission_id: str, *, action_id: str, attempt_id: str,
-                   expected_generation: int) -> dict[str, Any]:
+                   expected_authority_epoch: int,
+                   expected_generation: int,
+                   action_grant: Mapping[str, Any] | None = None) -> dict[str, Any]:
         action_id = _nonempty("action_id", action_id)
         attempt_id = _nonempty("attempt_id", attempt_id)
-        if type(expected_generation) is not int or expected_generation < 0:
-            raise ValueError("expected_generation must be a non-negative integer")
+        if (type(expected_authority_epoch) is not int or expected_authority_epoch < 0
+                or type(expected_generation) is not int or expected_generation < 0):
+            raise ValueError("authority epoch and generation must be non-negative integers")
+        action_grant_json = None
+        if action_grant is not None:
+            if not isinstance(action_grant, Mapping):
+                raise ValueError("Action grant must be a JSON object")
+            grant = dict(action_grant)
+            if (grant.get("mission_id") != mission_id
+                    or grant.get("action_id") != action_id
+                    or grant.get("attempt_id") != attempt_id
+                    or grant.get("authority_epoch") != expected_authority_epoch
+                    or grant.get("dispatch_generation") != expected_generation):
+                raise ValueError("Action grant identity or fence does not match Mission start")
+            action_grant_json = _json(grant)
         now = _now()
         rejected_reason = None
         with closing(self._connect()) as connection:
@@ -263,13 +299,17 @@ class MissionStore:
             if row is None:
                 raise KeyError(mission_id)
             control = connection.execute(
-                "SELECT generation, dispatch_enabled FROM fleet_dispatch_control WHERE control_id=1"
+                "SELECT authority_epoch, generation, dispatch_enabled "
+                "FROM fleet_dispatch_control WHERE control_id=1"
             ).fetchone()
             if row["status"] != "READY":
                 raise MissionConflict("only a READY Mission step may start")
-            if (not control["dispatch_enabled"] or control["generation"] != expected_generation
+            if (not control["dispatch_enabled"]
+                    or control["authority_epoch"] != expected_authority_epoch
+                    or control["generation"] != expected_generation
+                    or row["authority_epoch"] != expected_authority_epoch
                     or row["dispatch_generation"] != expected_generation):
-                rejected_reason = "stop generation changed before Mission step submission"
+                rejected_reason = "Fleet authority or stop generation changed before Mission step submission"
             else:
                 resources = json.loads(row["resources_json"] or "[]")
                 expected_keys = {f"{kind}:{resource}" for kind, resource in resources}
@@ -281,8 +321,8 @@ class MissionStore:
                 if {claim["resource_key"] for claim in claims} != expected_keys:
                     rejected_reason = "Mission resource claim is no longer complete"
             if rejected_reason:
-                reason_code = ("STOP_GENERATION_CHANGED_BEFORE_SUBMISSION"
-                               if "stop generation" in rejected_reason
+                reason_code = ("FLEET_FENCE_CHANGED_BEFORE_SUBMISSION"
+                               if "generation" in rejected_reason
                                else "MISSION_RESOURCE_CLAIM_LOST")
                 connection.execute(
                     "UPDATE fleet_missions SET status='HOLD', reason=?, updated_at=? WHERE mission_id=?",
@@ -293,7 +333,10 @@ class MissionStore:
                     source_event_id=f"hold-before-submit:{mission_id}:{row['dispatch_generation']}",
                     mission=row, event_type="STEP_HELD_BEFORE_SUBMISSION", state="HOLD",
                     actor_id=row["principal_id"], action_id=action_id, attempt_id=attempt_id,
-                    detail={"reason": reason_code, "expected_generation": expected_generation,
+                    detail={"reason": reason_code,
+                            "expected_authority_epoch": expected_authority_epoch,
+                            "current_authority_epoch": control["authority_epoch"],
+                            "expected_generation": expected_generation,
                             "current_generation": control["generation"],
                             "dispatch_enabled": bool(control["dispatch_enabled"])},
                 )
@@ -309,14 +352,17 @@ class MissionStore:
                 )
                 connection.execute(
                     """UPDATE fleet_missions SET status='RUNNING', action_id=?, attempt_id=?,
-                       updated_at=? WHERE mission_id=?""",
-                    (action_id, attempt_id, now, mission_id),
+                       action_grant_json=?, updated_at=? WHERE mission_id=?""",
+                    (action_id, attempt_id, action_grant_json, now, mission_id),
                 )
                 self._event(
                     connection, event_source="fleet_mission", source_event_id=f"submit:{attempt_id}",
                     mission=row, event_type="STEP_SUBMITTED", state="RUNNING", actor_id=row["principal_id"],
                     action_id=action_id, attempt_id=attempt_id,
-                    detail={"dispatch_generation": expected_generation},
+                    detail={"authority_epoch": expected_authority_epoch,
+                            "dispatch_generation": expected_generation,
+                            "request_digest": (grant.get("request_digest")
+                                               if action_grant is not None else None)},
                 )
             updated = connection.execute("SELECT * FROM fleet_missions WHERE mission_id=?",
                                          (mission_id,)).fetchone()
@@ -353,13 +399,20 @@ class MissionStore:
                     raise MissionConflict("device Action event ID was reused with different evidence")
                 connection.commit()
                 return self._row(row)
-            if (row["status"] != "RUNNING" or row["action_id"] != action_id
-                    or row["attempt_id"] != attempt_id):
+            reconciling_hold = (row["status"] == "HOLD" and row["reconciliation_pending"])
+            if ((row["status"] != "RUNNING" and not reconciling_hold)
+                    or row["action_id"] != action_id or row["attempt_id"] != attempt_id):
                 raise MissionConflict("Action result does not match the active Mission attempt")
             target_state = "ACTION_SUCCEEDED" if outcome == "SUCCEEDED" else "HOLD"
             connection.execute(
                 "UPDATE fleet_missions SET status=?, reason=?, updated_at=? WHERE mission_id=?",
                 (target_state, None if outcome == "SUCCEEDED" else f"ACTION_{outcome}", now, mission_id),
+            )
+            connection.execute(
+                "UPDATE fleet_missions SET reconciliation_pending=? WHERE mission_id=?",
+                (1 if outcome == "UNKNOWN" and result.get("reason") in {
+                    "LOCAL_ACTION_SUBMIT_OUTCOME_UNKNOWN", "LOCAL_ACTION_READBACK_UNKNOWN"
+                } else 0, mission_id),
             )
             self._event(
                 connection, event_source="device_action", source_event_id=event_id,
@@ -369,6 +422,39 @@ class MissionStore:
             )
             updated = connection.execute("SELECT * FROM fleet_missions WHERE mission_id=?",
                                          (mission_id,)).fetchone()
+            connection.commit()
+        return self._row(updated)
+
+    def hold_ready(self, mission_id: str, *, actor_id: str, reason: str) -> dict[str, Any]:
+        actor_id = _nonempty("actor_id", actor_id, limit=96)
+        reason = _nonempty("reason", reason, limit=96)
+        with closing(self._connect()) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            row = connection.execute(
+                "SELECT * FROM fleet_missions WHERE mission_id=?", (mission_id,),
+            ).fetchone()
+            if row is None:
+                raise KeyError(mission_id)
+            if row["status"] != "READY":
+                raise MissionConflict("only a READY Mission may be held before dispatch")
+            connection.execute(
+                "UPDATE fleet_missions SET status='HOLD', reason=?, updated_at=? "
+                "WHERE mission_id=?",
+                (reason, _now(), mission_id),
+            )
+            self._event(
+                connection, event_source="fleet_mission",
+                source_event_id=f"pre-dispatch-hold:{mission_id}:{reason}",
+                mission=row, event_type="MISSION_HELD_BEFORE_DISPATCH", state="HOLD",
+                actor_id=actor_id, detail={"reason": reason},
+            )
+            release_dispatch_claims(
+                connection, owner_kind="mission", owner_id=mission_id,
+                generation=row["dispatch_generation"],
+            )
+            updated = connection.execute(
+                "SELECT * FROM fleet_missions WHERE mission_id=?", (mission_id,),
+            ).fetchone()
             connection.commit()
         return self._row(updated)
 
@@ -437,6 +523,52 @@ class MissionStore:
             row = connection.execute("SELECT * FROM fleet_missions WHERE mission_id=?",
                                      (mission_id,)).fetchone()
         return self._row(row)
+
+    def next_ready_mission(self) -> dict[str, Any] | None:
+        with closing(self._connect()) as connection:
+            row = connection.execute(
+                "SELECT * FROM fleet_missions WHERE status='READY' "
+                "ORDER BY created_at, mission_id LIMIT 1",
+            ).fetchone()
+        return self._row(row)
+
+    def next_running_mission(self) -> dict[str, Any] | None:
+        with closing(self._connect()) as connection:
+            row = connection.execute(
+                "SELECT * FROM fleet_missions WHERE status='RUNNING' "
+                "ORDER BY updated_at, mission_id LIMIT 1",
+            ).fetchone()
+        return self._row(row)
+
+    def next_reconciliation_mission(self) -> dict[str, Any] | None:
+        with closing(self._connect()) as connection:
+            row = connection.execute(
+                "SELECT * FROM fleet_missions WHERE reconciliation_pending=1 "
+                "ORDER BY updated_at, mission_id LIMIT 1",
+            ).fetchone()
+        return self._row(row)
+
+    def finish_reconciliation(self, mission_id: str, *, action_id: str,
+                              attempt_id: str) -> dict[str, Any]:
+        with closing(self._connect()) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            row = connection.execute(
+                "SELECT * FROM fleet_missions WHERE mission_id=?", (mission_id,),
+            ).fetchone()
+            if row is None:
+                raise KeyError(mission_id)
+            if (row["action_id"] != action_id or row["attempt_id"] != attempt_id
+                    or not row["reconciliation_pending"]):
+                raise MissionConflict("reconciliation does not match a pending Action attempt")
+            connection.execute(
+                "UPDATE fleet_missions SET reconciliation_pending=0, updated_at=? "
+                "WHERE mission_id=?", (_now(), mission_id),
+            )
+            updated = connection.execute(
+                "SELECT * FROM fleet_missions WHERE mission_id=?", (mission_id,),
+            ).fetchone()
+            connection.commit()
+        return self._row(updated)
 
     def history(self, mission_id: str) -> list[dict[str, Any]]:
         with closing(self._connect()) as connection:

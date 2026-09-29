@@ -74,7 +74,8 @@ def test_step_start_requires_generation_and_a_live_claim(tmp_path):
 
     with pytest.raises(MissionConflict, match="stop generation"):
         store.start_step(mission["mission_id"], action_id="action-1",
-                         attempt_id="attempt-1", expected_generation=generation)
+                         attempt_id="attempt-1", expected_authority_epoch=admitted["authority_epoch"],
+                         expected_generation=generation)
     assert store.get_mission(mission["mission_id"])["status"] == "HOLD"
     assert tasks.resource_claims(resource_kind="object", resource_id="block-1") == []
     assert store.history(mission["mission_id"])[-1]["event_type"] == "STEP_HELD_BEFORE_SUBMISSION"
@@ -83,20 +84,26 @@ def test_step_start_requires_generation_and_a_live_claim(tmp_path):
 def test_step_start_rejects_boolean_generation_even_when_it_compares_equal(tmp_path):
     _, store, generation = _stores(tmp_path)
     mission = proposal(store)["mission"]
-    store.admit(mission["mission_id"], actor_id="operator-1", expected_generation=generation,
-                resources=[("workcell", "omx_01"), ("object", "block-1")])
+    admitted = store.admit(mission["mission_id"], actor_id="operator-1",
+                           expected_generation=generation,
+                           resources=[("workcell", "omx_01"), ("object", "block-1")])
     with pytest.raises(ValueError, match="non-negative integer"):
         store.start_step(mission["mission_id"], action_id="action-1",
-                         attempt_id="attempt-1", expected_generation=True)
+                         attempt_id="attempt-1",
+                         expected_authority_epoch=admitted["authority_epoch"],
+                         expected_generation=True)
 
 
 def test_driver_action_success_does_not_confirm_goal_and_goal_evidence_releases_claim(tmp_path):
     tasks, store, generation = _stores(tmp_path)
     mission = proposal(store)["mission"]
-    store.admit(mission["mission_id"], actor_id="operator-1", expected_generation=generation,
-                resources=[("workcell", "omx_01"), ("object", "block-1")])
+    admitted = store.admit(mission["mission_id"], actor_id="operator-1",
+                           expected_generation=generation,
+                           resources=[("workcell", "omx_01"), ("object", "block-1")])
     store.start_step(mission["mission_id"], action_id="action-1",
-                     attempt_id="attempt-1", expected_generation=generation)
+                     attempt_id="attempt-1",
+                     expected_authority_epoch=admitted["authority_epoch"],
+                     expected_generation=generation)
 
     action_succeeded = store.record_action_result(
         mission["mission_id"], event_id="event-action-final", action_id="action-1",
@@ -126,10 +133,13 @@ def test_unknown_action_and_stale_goal_keep_claim_held_across_restart(tmp_path):
     path = tmp_path / "fleet.sqlite3"
     tasks, store, generation = _stores(tmp_path)
     mission = proposal(store)["mission"]
-    store.admit(mission["mission_id"], actor_id="operator-1", expected_generation=generation,
-                resources=[("workcell", "omx_01"), ("object", "block-1")])
+    admitted = store.admit(mission["mission_id"], actor_id="operator-1",
+                           expected_generation=generation,
+                           resources=[("workcell", "omx_01"), ("object", "block-1")])
     store.start_step(mission["mission_id"], action_id="action-1",
-                     attempt_id="attempt-1", expected_generation=generation)
+                     attempt_id="attempt-1",
+                     expected_authority_epoch=admitted["authority_epoch"],
+                     expected_generation=generation)
     held = store.record_action_result(
         mission["mission_id"], event_id="event-action-unknown", action_id="action-1",
         attempt_id="attempt-1", outcome="UNKNOWN", result={"reason": "result_missing"},

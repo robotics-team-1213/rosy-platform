@@ -6,6 +6,7 @@ from core_common.protocol.schemas import FleetActionGrant
 from omx_adapter.action_api import ActionApi, action_grant_digest
 from omx_adapter.action_runner import ActionRunner, DriverSubmission
 from omx_adapter.action_store import ActionStore, InvalidActionTransition
+from omx_adapter.local_stop import LocalStopController
 
 
 def _grant(**changes):
@@ -52,15 +53,21 @@ class FakeDriver:
 
 
 def _runner(tmp_path, driver=None):
-    store = ActionStore(tmp_path / "actions.sqlite3")
+    db = tmp_path / "actions.sqlite3"
+    store = ActionStore(db)
     driver = driver or FakeDriver()
+    stop = LocalStopController(db, workcell_id="omx-1", instance_id="omx-1-control")
+    stop.rearm(authority_epoch=2, dispatch_generation=8, operator_confirmed=True,
+               fleet_fence_current=lambda epoch, generation: (epoch, generation) == (2, 8))
     runner = ActionRunner(
         store, driver, workcell_id="omx-1", instance_id="omx-1-control",
         principal_for_peer=lambda uid: f"fleet-uid-{uid}", allowed_peer_uids={1001},
         current_fence=lambda epoch, generation: (epoch, generation) == (2, 8),
         capability_current=lambda grant: grant.config_revision == "cfg-1",
+        submission_fence=stop,
         enabled=True,
     )
+    runner.local_stop = stop
     return store, driver, runner
 
 
@@ -74,6 +81,12 @@ def test_submit_persists_fleet_ids_and_duplicate_never_replays(tmp_path):
     assert first["state"] == "ACCEPTED"
     assert first["action_id"] == grant.action_id
     assert first["attempt_id"] == grant.attempt_id
+    assert first["mission_id"] == grant.mission_id
+    assert first["step_id"] == grant.step_id
+    assert first["request_digest"] == grant.request_digest
+    assert first["authority_epoch"] == grant.authority_epoch
+    assert first["dispatch_generation"] == grant.dispatch_generation
+    assert first["journal_event_id"] >= 1
     assert duplicate["action_id"] == grant.action_id
     assert duplicate["created"] is False
     assert driver.submissions == [grant.action_id]

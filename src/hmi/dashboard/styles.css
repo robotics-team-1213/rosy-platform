@@ -254,6 +254,24 @@ ui-button, a { -webkit-tap-highlight-color: transparent; }
 
 .topbar-status { display: flex; align-items: center; gap: var(--space-3); }
 .clock { color: var(--muted); font: var(--weight-regular) var(--text-label)/var(--leading-flat) var(--mono); letter-spacing: 0.1em; font-variant-numeric: tabular-nums; }
+/* 인증 브리지의 목적지 — 역할 화면의 스위치와 같은 문법, 이 페이지의 배치다.
+   목록은 서버 매니페스트가 역할로 걸러 준다(D-335 뒤의 비평 P1 회차). */
+.surface-bridge { display: flex; align-items: center; gap: var(--space-1); }
+.surface-bridge[hidden] { display: none; }
+.surface-bridge a {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--target-secondary);
+  padding: 0 var(--space-3);
+  border: 1px solid transparent;
+  border-radius: var(--radius-button);
+  color: var(--muted);
+  font: var(--weight-label) var(--text-label)/var(--leading-control) var(--body);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.surface-bridge a:hover { color: var(--paper); background: var(--ground-soft); }
+.surface-bridge a:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
 
 .view-switch { display: inline-flex; border: 1px solid var(--surface-line); border-radius: var(--radius-button); overflow: hidden; }
 .view-tab {
@@ -1047,6 +1065,9 @@ body[data-view="operate"] .page-footer { display: none; }
   .region-act { border-top: 1px solid var(--surface-line); }
   body[data-view="operate"] .page-footer { display: flex; }
   .topbar { min-height: 66px; padding: 0 var(--space-4); }
+  /* console은 이 폭에서 height:auto다 — 상단 바가 늘어나도 뷰 계약은 깨지지
+     않는다. 좁은 폭에서는 목적지 줄이 아래로 내려온다. */
+  .topbar-status { flex-wrap: wrap; justify-content: flex-end; }
   .clock, .status-badge span, .whoami-badge span { display: none; }
   .status-badge { justify-content: center; }
   .hero-strip { flex-wrap: wrap; padding: 0 var(--space-4); }

@@ -3,7 +3,7 @@ import { createHostCards } from "./host-cards.js";
 import { createRosNetwork } from "./ros-network.js";
 import { createVisionPreview } from "./vision.js";
 import { createStatusSummary } from "./status-summary.js";
-import { completeDashboardAuthentication } from "./surface-navigation.js";
+import { completeDashboardAuthentication, dashboardSurfaceBridge } from "./surface-navigation.js";
 import {
   CONFIGURED_REASONS,
   CORE_ONLY_TEXT,
@@ -157,6 +157,7 @@ function renderTrafficStatus(status = {}) {
       ? `${number(status.stop_line_distance_m, 3)} m`
       : "—",
   );
+  setText("traffic-policy-rule", status.junction_rule || "signal_controlled");
   setText("traffic-policy-scene", status.scene_revision || "—");
   setText("traffic-policy-revision", status.policy_revision || "—");
 }
@@ -639,6 +640,22 @@ async function detectRole() {
   }
   renderIdentity();
   updateAdminControls();
+  await refreshSurfaceBridge();
+}
+
+async function refreshSurfaceBridge() {
+  const nav = elements["surface-bridge"];
+  if (!nav) return;
+  if (!session.identity) {
+    dashboardSurfaceBridge(nav, []);
+    return;
+  }
+  try {
+    const manifest = await api("/api/v1/ui/surfaces/console");
+    dashboardSurfaceBridge(nav, manifest?.surfaces);
+  } catch (_error) {
+    dashboardSurfaceBridge(nav, []);
+  }
 }
 
 function renderIdentity() {
@@ -648,6 +665,8 @@ function renderIdentity() {
   if (!me) {
     if (badge) badge.hidden = true;
     if (button) button.hidden = true;
+    
+    dashboardSurfaceBridge(elements["surface-bridge"], []);
     return;
   }
   setText("whoami-role", me.role || "—");

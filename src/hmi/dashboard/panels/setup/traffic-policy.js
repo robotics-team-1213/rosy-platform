@@ -9,13 +9,16 @@ export function mount(root, ctx) {
   const head = el("ui-head", "", "교통 정책 준비");
   const state = el("dl", "traffic-policy-facts"); state.setAttribute("aria-label", "교통 정책 상태");
   const facts = {};
-  for (const [key, title] of [["state", "판정"], ["reason", "판정 사유"], ["signal", "신호"], ["stop", "정지선"], ["scene", "scene"], ["revision", "policy"]]) {
+  for (const [key, title] of [["state", "판정"], ["reason", "판정 사유"], ["signal", "신호"], ["stop", "정지선"], ["rule", "정지선 규칙"], ["scene", "scene"], ["revision", "policy"]]) {
     const row = el("div", ""); row.append(el("dt", "", title)); facts[key] = el("dd", "", "—"); row.append(facts[key]); state.append(row);
   }
   const form = el("form", "ui-form");
   const modeLabel = el("label", "ui-field-label", "정책 모드"); const mode = el("select"); mode.name = "mode";
   for (const value of ["DISABLED", "ADVISORY", "ENFORCED"]) { const option = el("option", "", value); option.value = value; mode.append(option); }
   modeLabel.append(mode);
+  const ruleLabel = el("label", "ui-field-label", "정지선 규칙"); const rule = el("select"); rule.name = "junction_rule";
+  for (const [value, title] of [["signal_controlled", "신호 제어"], ["stop_and_go", "무신호: 정지 후 진입"]]) { const option = el("option", "", title); option.value = value; rule.append(option); }
+  ruleLabel.append(rule);
   const revision = field("정책 revision", "policy_revision", "text"); revision.control.maxLength = 80;
   const approach = field("접근 거리 (m)", "approach_distance_m"); approach.control.min = "0.13"; approach.control.max = "3"; approach.control.step = "0.01";
   const stop = field("정지 거리 (m)", "stop_distance_m"); stop.control.min = "0.01"; stop.control.max = "2.9"; stop.control.step = "0.01";
@@ -26,7 +29,7 @@ export function mount(root, ctx) {
   const signals = el("div", "traffic-policy-actions"); signals.setAttribute("role", "group"); signals.setAttribute("aria-label", "시뮬레이션 신호등 제어");
   const signalButtons = ["RED", "YELLOW", "GREEN"].map((colour) => { const button = el("ui-button", "", colour); button.setAttribute("kind", "quiet"); button.type = "button"; button.dataset.signal = colour; button.disabled = true; signals.append(button); return button; });
   const message = el("ui-status", "", "정책 readback 대기");
-  form.append(modeLabel, revision.label, approach.label, stop.label, dwell.label, confidence.label, stage, apply);
+  form.append(modeLabel, ruleLabel, revision.label, approach.label, stop.label, dwell.label, confidence.label, stage, apply);
   root.append(head, state, form, signals, message);
 
   let current = null; let pending = false; let dirty = false;
@@ -36,10 +39,11 @@ export function mount(root, ctx) {
     facts.state.textContent = status.state || "DISABLED"; facts.reason.textContent = status.reason || "policy_disabled";
     facts.signal.textContent = status.signal_conflict ? "CONFLICT" : (status.signal_colour || "—");
     facts.stop.textContent = Number.isFinite(Number(status.stop_line_distance_m)) ? `${Number(status.stop_line_distance_m).toFixed(3)} m` : "—";
+    facts.rule.textContent = status.junction_rule || "signal_controlled";
     facts.scene.textContent = status.scene_revision || "—"; facts.revision.textContent = status.policy_revision || "—";
     const draft = readback.staged || readback.active || {};
     if (!dirty) {
-      mode.value = draft.mode || "DISABLED"; revision.control.value = draft.policy_revision || "";
+      mode.value = draft.mode || "DISABLED"; rule.value = draft.junction_rule || "signal_controlled"; revision.control.value = draft.policy_revision || "";
       approach.control.value = draft.approach_distance_m ?? ""; stop.control.value = draft.stop_distance_m ?? "";
       dwell.control.value = draft.stop_dwell_s ?? ""; confidence.control.value = draft.min_confidence ?? "";
     }
@@ -51,7 +55,7 @@ export function mount(root, ctx) {
   form.addEventListener("input", () => { dirty = true; });
   stage.addEventListener("click", async () => {
     if (pending) return;
-    const body = {mode: mode.value, policy_revision: revision.control.value.trim(),
+    const body = {mode: mode.value, junction_rule: rule.value, policy_revision: revision.control.value.trim(),
       approach_distance_m: Number(approach.control.value), stop_distance_m: Number(stop.control.value),
       stop_dwell_s: Number(dwell.control.value), min_confidence: Number(confidence.control.value)};
     pending = true; stage.disabled = true;

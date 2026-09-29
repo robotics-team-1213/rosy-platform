@@ -124,6 +124,7 @@ class DeviceActionState(str, enum.Enum):
 class LocalStopState(str, enum.Enum):
     """Software latch facts only. No value means physical standstill is proven."""
 
+    OPEN = "OPEN"
     REQUESTED = "REQUESTED"
     LOCAL_LATCHED = "LOCAL_LATCHED"
     UNKNOWN = "UNKNOWN"
@@ -250,11 +251,15 @@ class DeviceActionReceipt(BaseModel):
     attempt_id: str = Field(min_length=1, max_length=192)
     workcell_id: str = Field(min_length=1, max_length=96)
     instance_id: str = Field(min_length=1, max_length=96)
+    request_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    authority_epoch: int = Field(strict=True, ge=0)
+    dispatch_generation: int = Field(strict=True, ge=0)
     state: DeviceActionState
     journal_event_id: int = Field(strict=True, ge=1)
     observed_at: datetime
     driver_goal_id: str | None = Field(default=None, max_length=192)
     reason: str | None = Field(default=None, max_length=256)
+    created: bool = False
 
     @field_validator("mission_id", "step_id", "action_id", "attempt_id", "workcell_id", "instance_id")
     @classmethod
@@ -333,6 +338,31 @@ class LocalStopQuery(BaseModel):
 
     workcell_id: str = Field(min_length=1, max_length=96)
     instance_id: str = Field(min_length=1, max_length=96)
+
+    @field_validator("workcell_id", "instance_id")
+    @classmethod
+    def _query_stop_identity(cls, value: str) -> str:
+        if not _ACTION_ID.fullmatch(value):
+            raise ValueError("stop query identity must be a trimmed identifier")
+        return value
+
+
+class LocalStopRearmRequest(BaseModel):
+    """Fleet-only signal to reopen local dispatch after operator reconciliation."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    workcell_id: str = Field(min_length=1, max_length=96)
+    instance_id: str = Field(min_length=1, max_length=96)
+    authority_epoch: int = Field(strict=True, ge=0)
+    dispatch_generation: int = Field(strict=True, ge=0)
+
+    @field_validator("workcell_id", "instance_id")
+    @classmethod
+    def _rearm_stop_identity(cls, value: str) -> str:
+        if not _ACTION_ID.fullmatch(value):
+            raise ValueError("stop rearm identity must be a trimmed identifier")
+        return value
 
 
 
@@ -580,6 +610,7 @@ class TrafficPolicyStatus(BaseModel):
     map_id: Optional[str] = None
     scene_revision: Optional[str] = None
     policy_revision: str = "traffic-policy-v1"
+    junction_rule: str = "signal_controlled"
     evidence_revision: int = 0
     age_s: Optional[float] = None
     stop_line_visible: bool = False

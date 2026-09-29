@@ -23,16 +23,35 @@ class MissionService:
     def history(self, mission_id: str) -> list[dict[str, Any]]:
         return self.store.history(mission_id)
 
+    def next_ready(self) -> dict[str, Any] | None:
+        return self.store.next_ready_mission()
+
+    def next_running(self) -> dict[str, Any] | None:
+        return self.store.next_running_mission()
+
+    def next_reconciliation(self) -> dict[str, Any] | None:
+        return self.store.next_reconciliation_mission()
+
+    def finish_reconciliation(self, mission_id: str, *, action_id: str,
+                              attempt_id: str) -> dict[str, Any]:
+        return self.store.finish_reconciliation(
+            mission_id, action_id=action_id, attempt_id=attempt_id,
+        )
+
     def admit(self, mission_id: str, *, actor_id: str, expected_generation: int,
               resources: list[tuple[str, str]]) -> dict[str, Any]:
         return self.store.admit(mission_id, actor_id=actor_id,
                                 expected_generation=expected_generation, resources=resources)
 
     def start_step(self, mission_id: str, *, action_id: str, attempt_id: str,
-                   expected_generation: int) -> dict[str, Any]:
+                   expected_authority_epoch: int,
+                   expected_generation: int,
+                   action_grant: Mapping[str, Any] | None = None) -> dict[str, Any]:
         return self.store.start_step(mission_id, action_id=action_id,
                                      attempt_id=attempt_id,
-                                     expected_generation=expected_generation)
+                                     expected_authority_epoch=expected_authority_epoch,
+                                     expected_generation=expected_generation,
+                                     action_grant=action_grant)
 
     def record_action_result(self, mission_id: str, *, event_id: str, action_id: str,
                              attempt_id: str, outcome: str,

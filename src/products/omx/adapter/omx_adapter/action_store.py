@@ -436,7 +436,22 @@ class ActionStore:
         with closing(self._connect()) as connection:
             row = connection.execute("SELECT * FROM omx_actions WHERE action_id=?",
                                      (action_id,)).fetchone()
-        return self._dict(row)
+            latest_event = connection.execute(
+                "SELECT MAX(event_id) FROM omx_action_events WHERE action_id=?",
+                (action_id,),
+            ).fetchone()
+        result = self._dict(row)
+        if result is not None:
+            result["journal_event_id"] = latest_event[0]
+        return result
+
+    def latest_event_id(self, action_id: str) -> int | None:
+        with closing(self._connect()) as connection:
+            row = connection.execute(
+                "SELECT MAX(event_id) FROM omx_action_events WHERE action_id=?",
+                (action_id,),
+            ).fetchone()
+        return int(row[0]) if row is not None and row[0] is not None else None
 
     def get_by_request(self, *, workcell_id: str, principal_id: str,
                        request_key: str) -> dict[str, Any] | None:

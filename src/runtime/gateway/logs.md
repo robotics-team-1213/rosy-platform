@@ -522,3 +522,9 @@
 - Change: register `network.status` and `release.status` in the event-catalogue `not_events` table — both are host agent commands from `host_agent.ALLOWLIST`, never emitted by core — and retarget the CORE-to-agent allowlist check to `deploy/robot/pinky_pro/release` after the role-dir regroup.
 - Evidence: gateway suite 1402 passed, 16 skipped; CI core step 1841 passed, 16 skipped. The `not_events` cross-check against `emitted()` keeps the new entries from ever hiding a real event.
 - Gate: SOURCE/LOCAL only; no ROS-SIM, image, device, stop readback, or FIELD acceptance.
+
+## 2026-09-29 · uncommitted · feat(traffic): wire unsignalized junction rule through CORE
+
+- Change: `_traffic_policy_config` now maps `traffic_policy.junction_rule` from config into the policy (validated `signal_controlled` | `stop_and_go`), `TrafficPolicyPatch` accepts it on `/api/v1/traffic/policy/stage`, and `test_traffic_policy.py` covers the stop-and-go verdicts — proceed after complete stop+dwell with no observed signal (`unsignalized_proceed`), hold on any observed signal including weak false positives (`signal_unexpected`), conflict precedence, unchanged `signal_controlled` waiting, staging/validation, and CORE config wiring. Korean dashboard `/console` facts gain a 규칙 row.
+- Evidence: focused host runs (Windows): traffic policy+API+runtime config + foundation + services 380 passed; protocol schemas + api_web + dashboard 105 passed 47 skipped; semantic road simulation + event catalogue 74 passed. API Reference v1.54 in the same change.
+- Gate: SOURCE/LOCAL only; no ROS-SIM loop over an authored unsignalized scene, device stop-and-go readback, or FIELD acceptance.

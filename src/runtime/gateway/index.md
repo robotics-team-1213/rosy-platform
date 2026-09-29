@@ -70,8 +70,8 @@
 
 ## 최근 기록
 
+- 2026-09-29 · uncommitted · feat(traffic): wire unsignalized junction rule through CORE
 - 2026-09-29 · uncommitted · classify host agent status commands as non-events
 - 2026-09-28 · uncommitted · close canceled-generation result recovery
 - 2026-09-28 · uncommitted · retain correlated result after cancel
 - 2026-09-28 · uncommitted · fix(core): isolate navigation result correlation
-- 2026-09-28 · uncommitted · test correlated navigation event lifecycle

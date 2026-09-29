@@ -127,6 +127,9 @@ def test_durable_action_receipt_is_not_goal_or_physical_stop_evidence():
         attempt_id="attempt-01",
         workcell_id="omx-cell-01",
         instance_id="omx-cell-01-control",
+        request_digest="a" * 64,
+        authority_epoch=3,
+        dispatch_generation=20,
         state=DeviceActionState.PREPARED,
         journal_event_id=1,
         observed_at=datetime.now(timezone.utc),
@@ -152,6 +155,16 @@ def test_local_stop_snapshot_cannot_claim_driver_or_physical_completion():
     assert dumped["state"] == "LOCAL_LATCHED"
     assert "physical_stopped" not in dumped
     assert "driver_goal_canceled" not in dumped
+
+
+def test_local_stop_open_state_is_software_gate_only():
+    snapshot = LocalStopSnapshot(
+        workcell_id="omx-cell-01", instance_id="omx-cell-01-control",
+        authority_epoch=3, dispatch_generation=21, state=LocalStopState.OPEN,
+        source="fleet", observed_at=datetime.now(timezone.utc), reason="operator_rearm",
+    )
+    assert snapshot.model_dump()["state"] == "OPEN"
+    assert "physical_stopped" not in snapshot.model_dump()
 
 
 def test_local_stop_request_cannot_claim_its_own_principal():

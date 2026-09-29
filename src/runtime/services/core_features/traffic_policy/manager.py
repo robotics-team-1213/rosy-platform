@@ -90,6 +90,10 @@ class TrafficPolicyConfig:
     map_id: str = ""
     scene_revision: str = ""
     policy_revision: str = "traffic-policy-v1"
+    #: Operator declaration, not a camera absence verdict: `stop_and_go`
+    #: means this scene's stop line is an unsignalized junction where a
+    #: complete stop plus dwell licenses entry (reason unsignalized_proceed).
+    junction_rule: str = "signal_controlled"
     approach_distance_m: float = 0.35
     stop_distance_m: float = 0.12
     stop_dwell_s: float = 0.5
@@ -125,6 +129,8 @@ class TrafficPolicyConfig:
             raise ValueError("proceed_speed_scale must be in (0, 1]")
         if not self.policy_revision:
             raise ValueError("traffic policy revision is required")
+        if self.junction_rule not in ("signal_controlled", "stop_and_go"):
+            raise ValueError("unsupported junction rule")
         if mode is not TrafficPolicyMode.DISABLED:
             if not self.map_id or not self.scene_revision:
                 raise ValueError(
@@ -203,6 +209,7 @@ class TrafficPolicyManager:
             "map_id": config.map_id,
             "scene_revision": config.scene_revision,
             "policy_revision": config.policy_revision,
+            "junction_rule": config.junction_rule,
             "approach_distance_m": config.approach_distance_m,
             "stop_distance_m": config.stop_distance_m,
             "stop_dwell_s": config.stop_dwell_s,
@@ -423,6 +430,16 @@ class TrafficPolicyManager:
             return "STOP_REQUIRED", "stop_dwell", age, 0.0
         if now - self._stopped_at < self._config.stop_dwell_s:
             return "STOP_REQUIRED", "stop_dwell", age, 0.0
+        if self._config.junction_rule == "stop_and_go":
+            # Unsignalized junction (operator declaration, never inferred
+            # from camera absence). Any observed signal — including a weak
+            # false positive — contradicts the declaration and holds.
+            if observation.signal_colour is None:
+                return (
+                    "PROCEED", "unsignalized_proceed", age,
+                    self._config.proceed_speed_scale,
+                )
+            return "HOLD", "signal_unexpected", age, 0.0
         if observation.signal_colour is None:
             return "WAIT_SIGNAL", "signal_unknown", age, 0.0
         if observation.signal_confidence < self._config.min_confidence:
@@ -450,6 +467,7 @@ class TrafficPolicyManager:
             map_id=self._config.map_id or None,
             scene_revision=self._config.scene_revision or None,
             policy_revision=self._config.policy_revision,
+            junction_rule=self._config.junction_rule,
             evidence_revision=self._evidence_revision,
             age_s=None if age is None else round(max(0.0, age), 3),
             stop_line_visible=bool(

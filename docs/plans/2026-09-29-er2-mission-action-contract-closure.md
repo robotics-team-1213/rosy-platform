@@ -67,7 +67,7 @@
 
 ## 작업 5. 정지 generation을 장치 최종 owner까지 전달한다
 
-**Files:** Modify `src/site/fleet/fleet/server/{app,mission_service,mission_store,task_service}.py`, `src/products/omx/adapter/omx_adapter/{action_api,action_runner,action_store}.py`; update schema/API Reference together; Test `src/site/fleet/test/test_mission_stop_fence.py`, `src/products/omx/adapter/test/test_omx_stop_fence.py`.
+**Files:** Modify `src/site/fleet/fleet/server/{app,task_store,task_service}.py`, add `src/site/fleet/fleet/server/local_stop_transport.py`, modify `src/products/omx/adapter/omx_adapter/{action_api,action_runner}.py`, add `src/products/omx/adapter/omx_adapter/local_stop.py`; update schema/API Reference together; Test `src/site/fleet/test/{test_local_stop_transport,test_dispatch_stop_latch}.py`, `src/products/omx/adapter/test/test_omx_stop_fence.py`.
 
 1. 교차 순서 실패 시험: stop이 grant보다 먼저 장치에 도착하면 이전 generation은 거절; goal 접수 뒤 stop이면 새 goal 차단과 진행 중 goal local stop; Fleet/장치 재시작, 단절, grant 만료, clock 신뢰도 상실, 구 Fleet epoch, rearm 전 미확인 Action이 있으면 발행·자동 재개 0회.
 2. 장치가 인증된 Fleet generation과 유효 기한을 영속 검증하고 local latch를 최종 ROS submit 바로 앞에서도 검사한다. 통신/lease 신선도가 없으면 새 goal을 거절한다. site stop 전송 미도달은 `UNKNOWN`으로 남기며 remote stop만으로 물리 정지 성공을 표시하지 않는다.
@@ -121,6 +121,12 @@
 4. 실패 시 rollback은 조작 capability와 Mission dispatcher를 다시 닫고, 이미 제출된 Action의 결과·보유 상태를 장치에서 조정하는 것이다. Fleet 원장 삭제나 같은 요청 재발행으로 rollback하지 않는다.
 5. Run: `python -m pytest test/test_network_topology_contracts.py test/test_harness_contracts.py -q`; `python tools/harness/rosy_harness.py lint`. Expected: 문서 계약 통과. `generate` 후 생성 index와 git diff를 확인한다. 해당 검증 범위만 stage/commit한다.
 
+### Task 6 execution record (2026-09-29)
+
+- SOURCE implementation: one Site Fleet background dispatcher is disabled by default and requires explicit OMX workcell mapping, complete Mission API configuration, shared persistent storage, and a local Action transport. REST admission and ER 2 proposal routes do not call UDS. Fleet durably stores the exact action/attempt IDs and grant during the fenced READY-to-RUNNING transition before one SubmitAction. After restart or uncertain acknowledgement it calls GetAction with the stored grant; it never regenerates identifiers or replays SubmitAction. Unresolved outcomes keep claims held and durable reconciliation state; missing/nonterminal readback ends in operator HOLD. Device receipts bind Mission/step/action/attempt, digest, authority epoch, generation, journal event, and observed time. API Reference v1.53 separates admission, optional dispatch, Action result, independent goal evidence, and physical acceptance.
+- Evidence: focused dispatcher/store/service/API, stop fence, OMX Action API/store, shared schema, and API contract docs bundle: 83 passed. Full Fleet suite: 665 passed, 5 skipped; API web: 70 passed, 13 skipped; OMX adapter: 85 passed, 3 skipped; foundation contracts: 102 passed. Harness `generate` completed and `lint` reported 0 errors/17 existing freshness warnings. `git diff --check` passed. The optional combined network-topology/harness test run reached 92% but stalled without a summary and was interrupted; no pass is claimed for that command.
+- Limits: source implementation only. The dispatcher remains opt-in. Device service installation, selected ROS/gripper driver, ROS-SIM, physical stop proof, and FIELD acceptance remain HOLD/PARKED.
+
 ## 완료 기준
 
 운영자 요청 한 건에 대해 `request_key → proposal_id → mission_id/step_id → action_id/attempt_id → driver goal ID → 독립 goal evidence`가 같은 프레임·장치·generation으로 추적되고, 중복·늦은 결과·정지·재시작에서도 물리 작업이 자동 재발행되지 않아야 SOURCE/LOCAL을 완료로 판정한다. ROS-SIM, 설치 산출물, 실물 동작과 물리 정지는 각각의 증거가 생길 때만 승격한다. 모델 후보만 시험한 결과로 OMX capability를 활성화하지 않는다.
@@ -142,3 +148,11 @@
 - Retry boundary: PREPARED may continue because no driver attempt began. Once SUBMITTING is durable, timeout/restart is UNKNOWN and retries do not call the driver. Cancel ACK remains nonterminal. Runner is disabled by default.
 - Evidence: OMX adapter/profile/vendor-boundary tests 140 passed, 3 skipped. No device service entrypoint, selected ROS/gripper ActionPort, independent stop, or physical placement proof was enabled.
 - Next: Task 5 local stop/generation fencing must run at the final driver submit boundary before any profile can be enabled.
+
+### Task 5 execution record (2026-09-29)
+
+- SOURCE complete: Fleet persists a per-process authority epoch separately from its stop/rearm generation. E-stop fans out the exact current fence over configured same-host OMX UDS instances alongside the existing mobile-robot stop path. Missing instances and transport timeouts are reported as `NOT_CONFIGURED`/`UNKNOWN`.
+- OMX persists a startup-closed software latch, trips it even for a stale stop request without lowering the stored fence, serializes the latch check with the final driver submit call, and best-effort cancels unresolved driver actions. Restart returns the latch to `UNKNOWN` and requires a new named-operator rearm path. Re-arm is Fleet-UID-only, instance-bound, checks the live Fleet fence and zero unresolved local journal entries; failed multi-instance rearm recloses Fleet and sends stop rollback.
+- Closure fixes from review: route `RearmLocal` through the top-level UDS dispatcher, reject a request naming another workcell/instance, and require integer generation readbacks from the Fleet UDS client.
+- Verification: focused contracts/Fleet/OMX tests 80 passed; full OMX adapter suite 85 passed, 3 skipped; API web 70 passed, 13 skipped; contract/harness tests 78 passed; harness lint 0 errors, 17 freshness warnings; `git diff --check` passed. Fleet full suite: 658 passed, 5 skipped, 1 failed because the existing `test_core_agent_hello_heartbeat_and_event_reach_console_app` timed out waiting for `uvicorn.Server.started`. Its isolated retry stalled without output and was interrupted; the re-arm contract test passed alone. Repository-wide flake8 on edited legacy modules reports broad E501 style violations, so no clean flake8 claim is made.
+- Limit: Fleet OMX instance inventory defaults empty and there is no deployment UID/socket/fence-current wiring, selected ROS/gripper driver, safety-rated stop, physical standstill proof, or device acceptance. This is source/software fencing only.

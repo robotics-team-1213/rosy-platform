@@ -18,9 +18,12 @@ def test_duplicate_and_late_action_events_are_idempotent_and_preserve_one_attemp
                         "evidence_source": "camera_observation"},
     )
     mission_id = mission["mission"]["mission_id"]
-    service.admit(mission_id, actor_id="operator-1", expected_generation=generation,
-                  resources=[("workcell", "omx_01"), ("object", "block-1")])
+    admitted = service.admit(
+        mission_id, actor_id="operator-1", expected_generation=generation,
+        resources=[("workcell", "omx_01"), ("object", "block-1")],
+    )
     service.start_step(mission_id, action_id="action-1", attempt_id="attempt-1",
+                       expected_authority_epoch=admitted["authority_epoch"],
                        expected_generation=generation)
     first = service.record_action_result(
         mission_id, event_id="device-event-1", action_id="action-1",
@@ -58,9 +61,12 @@ def test_model_completion_text_cannot_confirm_a_mission_goal(tmp_path):
                         "evidence_source": "camera_observation"},
     )
     mission_id = mission["mission"]["mission_id"]
-    service.admit(mission_id, actor_id="operator-1", expected_generation=generation,
-                  resources=[("workcell", "omx_01"), ("object", "block-1")])
+    admitted = service.admit(
+        mission_id, actor_id="operator-1", expected_generation=generation,
+        resources=[("workcell", "omx_01"), ("object", "block-1")],
+    )
     service.start_step(mission_id, action_id="action-1", attempt_id="attempt-1",
+                       expected_authority_epoch=admitted["authority_epoch"],
                        expected_generation=generation)
     service.record_action_result(
         mission_id, event_id="device-event-1", action_id="action-1",

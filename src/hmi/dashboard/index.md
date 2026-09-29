@@ -37,8 +37,8 @@
 
 ## 최근 기록
 
+- 2026-09-29 · uncommitted · feat(dashboard): 교통 정책 패어널에 정지선 규칙 편집·표시
+- 2026-09-29 · uncommitted · feat(dashboard): 홈 브리지가 목적지 역할 화면을 매니페스트로 말한다
 - 2026-09-29 · uncommitted · D-335 역할 화면 브랜드 홈 링크를 공용 선언으로
 - 2026-09-29 · uncommitted · fix(dashboard): 예산 후보는 추적 파일만 훑는다
 - 2026-09-29 · uncommitted · fix(dashboard): 역할 화면 브랜드를 대시보드 홈 링크로
-- 2026-09-29 · uncommitted · fix(dashboard): restore shared-control contracts and P1 craft round
-- 2026-09-28 · uncommitted · fix(dashboard): restore module harness validation

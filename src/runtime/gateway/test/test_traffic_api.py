@@ -32,6 +32,7 @@ def test_operator_stages_then_applies_policy_only_while_stopped(core_client):
         json={
             "mode": "ENFORCED",
             "policy_revision": "traffic-policy-v2",
+            "junction_rule": "stop_and_go",
             "approach_distance_m": 0.40,
         },
         headers=OPERATOR,
@@ -41,6 +42,7 @@ def test_operator_stages_then_applies_policy_only_while_stopped(core_client):
 
     assert staged.status_code == 200
     assert staged.json()["staged"]["mode"] == "ENFORCED"
+    assert staged.json()["staged"]["junction_rule"] == "stop_and_go"
     assert services.traffic_policy.mode.value == "DISABLED"
     assert moving.status_code == 409
     assert moving.json()["error"]["code"] == "ROBOT_MUST_BE_STOPPED"
@@ -96,6 +98,20 @@ def test_invalid_policy_values_fail_without_replacing_active_config(
             "stop_distance_m": 0.50,
             "approach_distance_m": 0.20,
         },
+        headers=OPERATOR,
+    )
+
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "VALIDATION_ERROR"
+    assert services.traffic_policy.configuration()["staged"] is None
+
+
+def test_stage_rejects_unknown_junction_rule(core_client):
+    client, services = core_client()
+
+    response = client.post(
+        "/api/v1/traffic/policy/stage",
+        json={"junction_rule": "right_on_red"},
         headers=OPERATOR,
     )
 
