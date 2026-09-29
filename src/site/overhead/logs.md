@@ -73,3 +73,9 @@
 - 변경: `ci.yml`이 `src/site/overhead/test`를 따로 돌린다(games와 `test_preview.py` 이름이 겹친다). 새 `.github/workflows/android.yml`이 `src/site/overhead/**` 변경 때만 Temurin 17로 `testDebugUnitTest`를 돈다.
 - 증거: `python -m pytest src/site/overhead/test -q` 86 passed. 로컬 `gradlew testDebugUnitTest --no-daemon`(JDK 21) BUILD SUCCESSFUL. CI 실행 증거는 아직 없다(푸시 안 함).
 - gate 변화: 없음.
+
+## 2026-09-30 · uncommitted · fix(overhead-app): 적응형 JPEG 화질과 정지 중 대상 표시
+
+- 변경: 1280 px·품질 70 JPEG가 `max_bytes`(200 KB)를 조금 넘는 장면에서 모든 프레임이 버려져 0 fps가 되던 문제를 고쳤다. 초과 프레임은 최대 두 번 10씩 낮춰 다시 인코딩하고(하한 30), 다음 프레임은 지금까지 시도한 가장 낮은 화질에서 시작하며, 30회 연속으로 맞으면 5 올려 본다. 올려 본 화질이 넘치면 마지막으로 맞았던 화질로 곧장 돌아간다. 카메라 재바인딩·화질·폭 변경 때 적응 상태를 초기화한다. 설정 `jpeg_quality`는 상한이고 초과 프레임은 여전히 보내지 않는다. 정지 중 스트림 화면은 지난 실행 대상 대신 저장된 대상을 보인다.
+- 증거: Galaxy S21(Android 15) 실기기에서 수정 전 0 fps·버림 누적, 수정 후 3.0 fps·버림 0, 콘솔 미리보기 경로 HTTP 200. 저장 대상을 바꾸면 재시작 없이 표시가 바뀐다. JVM 단위 시험 통과(아래 커밋 참조). 독립 리뷰(2026-09-30) 지적 1·2·4·5 반영.
+- gate 변화: DEVICE(휴대폰 송출 단독) 증거 추가. 현장 보정·Ubuntu/TLS·FIELD는 PARKED 그대로.
