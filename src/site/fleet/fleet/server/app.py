@@ -960,6 +960,15 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                 "frame_path": f"/api/vision/sources/{body.source_id}/frame",
                 "expires_in_s": 60}
 
+    @app.get("/api/fleet/site-map", dependencies=read_guard, tags=["sightings"])
+    async def fleet_site_map() -> dict:
+        # D-257: the overhead-covered rectangle is display geometry, not a motion input.
+        site_map = sightings.site_map() if sightings is not None and sightings.enabled else None
+        if site_map is None:
+            raise HTTPException(status_code=404, detail={"code": "NO_SITE_MAP",
+                                                         "message": "no site camera geometry configured"})
+        return site_map
+
     @app.get("/api/fleet/map", dependencies=read_guard, tags=["fleet"])
     async def fleet_map() -> dict:
         grid = await console.map()

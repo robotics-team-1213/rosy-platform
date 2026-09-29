@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import os
 import re
 from pathlib import Path
@@ -61,6 +62,24 @@ def load_sighting_sources(path: Path | str, *, environ: Mapping[str, str] | None
         if (not isinstance(corner_ids, list) or len(corner_ids) != 4
                 or any(type(marker_id) is not int or marker_id < 0 for marker_id in corner_ids)):
             raise ValueError(f"sources[{index}].corner_marker_ids must contain four integer ids")
+        corner_world_m = None
+        if "corner_world_m" in row:
+            corners = row["corner_world_m"]
+            if (not isinstance(corners, list) or len(corners) != 4
+                    or any(not isinstance(point, list) or len(point) != 2
+                           or any(isinstance(v, bool) or not isinstance(v, (int, float))
+                                  or not math.isfinite(v) for v in point)
+                           for point in corners)):
+                raise ValueError(f"sources[{index}].corner_world_m must contain four finite x/y pairs")
+            corner_world_m = tuple((float(x), float(y)) for x, y in corners)
+            if len(set(corner_world_m)) != 4:
+                raise ValueError(f"sources[{index}].corner_world_m points must be distinct")
+        markers = row.get("robot_markers", {})
+        if (not isinstance(markers, dict)
+                or any(not isinstance(robot_id, str) or not robot_id
+                       or type(marker_id) is not int or marker_id < 0
+                       for robot_id, marker_id in markers.items())):
+            raise ValueError(f"sources[{index}].robot_markers must map robot ids to marker ids")
         sources.append(SightingSource(
             source_id=row["source_id"],
             token=token,
@@ -68,6 +87,8 @@ def load_sighting_sources(path: Path | str, *, environ: Mapping[str, str] | None
             map_id=row["map_id"],
             calibration_revision=row["calibration_revision"],
             corner_marker_ids=tuple(corner_ids),
+            corner_world_m=corner_world_m,
+            robot_markers=tuple(markers.items()),
         ))
     if len({source.source_id for source in sources}) != len(sources):
         raise ValueError("sighting source ids must be unique")

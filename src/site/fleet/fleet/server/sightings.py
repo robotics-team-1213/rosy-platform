@@ -32,6 +32,9 @@ class SightingSource:
     map_id: str
     calibration_revision: str
     corner_marker_ids: tuple[int, int, int, int]
+    # Display geometry only (the surveyed rectangle in the map frame); never motion input.
+    corner_world_m: tuple[tuple[float, float], ...] | None = None
+    robot_markers: tuple[tuple[str, int], ...] = ()
 
 
 class SightingService:
@@ -130,6 +133,34 @@ class SightingService:
             "ts": now,
             "lease_s": self.lease_s,
         }
+
+    def site_map(self) -> dict | None:
+        """Group configured site rectangles by map id; tokens are never included."""
+        maps: dict[str, dict] = {}
+        for source in self._sources:
+            if source.corner_world_m is None:
+                continue
+            entry = maps.get(source.map_id)
+            if entry is None:
+                xs = [point[0] for point in source.corner_world_m]
+                ys = [point[1] for point in source.corner_world_m]
+                entry = maps[source.map_id] = {
+                    "map_id": source.map_id,
+                    "frame": "map",
+                    "units": "m",
+                    "polygon_m": [list(point) for point in source.corner_world_m],
+                    "bounds_m": {"min_x": min(xs), "min_y": min(ys),
+                                 "max_x": max(xs), "max_y": max(ys)},
+                    "sources": [],
+                }
+            entry["sources"].append({
+                "source_id": source.source_id,
+                "calibration_revision": source.calibration_revision,
+                "corner_marker_ids": list(source.corner_marker_ids),
+                "robot_ids": list(source.robot_ids),
+                "robot_markers": dict(source.robot_markers),
+            })
+        return {"maps": list(maps.values())} if maps else None
 
     def _authenticate(self, authorization: str | None) -> SightingSource:
         candidate = authorization or ""
