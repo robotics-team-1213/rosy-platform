@@ -3518,3 +3518,25 @@
 - Safety boundary: this mode does not start the automatic queued-task dispatcher, so persisted navigation tasks are not sent to CORE on startup. Existing authenticated Fleet operator command routes remain available; this is not a global read-only mode.
 - Evidence: Fleet 702 passed, 5 skipped, including a regression for a preexisting queued task; contract suite 95 passed; flake8 passed; harness lint 0 errors and 20 freshness warnings; diff check passed.
 - Gate: SOURCE/LOCAL integration only. Provider, target, OMX Action/ROS, physical stop/readback, signed ARM64 artifact, DEVICE, and FIELD evidence are absent; deployment and physical operation remain HOLD.
+
+## 2026-09-30 · uncommitted · docs(adr): D-348 목표 증거 생산자 계약과 검증기 연결 수용
+
+- 변경: `docs/adr/D-348-goal-evidence-producer-and-verifier-wiring.md` 신설 및 ADR Log 목차 행 추가, 근거 설계 `docs/plans/2026-09-30-goal-evidence-producer-and-verifier-design.md` 신설. 사람 확인은 등록 시점(`policy-admin`)뿐이고, 등록 evaluator의 source-token 증거 제출면(D-268 정책 증거와 분리)과 마지막 Action 종단 상태 뒤 자동 `verify_goal()` 호출로 `GOAL_CONFIRMED` 전이를 계약화했다. 유예 창 경과 뒤에도 증거 부재·불충족이면 HOLD(D-332 예외 (i) 운영자 조정 대상).
+- 증거: D-328 §4(독립 증거 판정), D-332 §1·§2·§3(등록 시점 확인·전수 확인 금지·예외 4종), D-334 §3(축 분리), fleet progress.md(2026-09-29 "verifier not yet wired"), `fleet/server/goal_evidence.py` 현행 스키마 재사용 검토. 코드 변경·실물 관측·도구 개방 없음.
+- gate 변화: 없음. SOURCE/LOCAL 게이트 미변동 — 실행 계획과 시험은 별도 커밋로 나간다.
+- 결정: 첫 실물 생산자는 이 ADR이 지정하지 않는다(P4 ROS-SIM에서 별도 지정). `request_observation`·`get_mission_status` 도구화와 `POLICY_DISPATCH_ENABLED`는 불변.
+- 교훈: 없음.
+## 2026-09-30 · uncommitted · docs(plan): D-348 실행 계획 T1~T7 작성
+
+- 변경: `docs/plans/2026-09-30-goal-evidence-producer-and-verifier.md` 신설 및 plans 목차 행 추가. 등록부(T1)→제출 보관(T2)→자동 검증 트리거(T3, 기존 `MissionService.confirm_goal()` 재사용)→REST(T4)→검증자 연결(T5)→API Ref v1.59(T6)→harness(T7). TDD, SOURCE/LOCAL 한정, 가짜 생산자·가짜 시계. 불변 단언 6종(verifier 미설정 거절·빈 등록부 거절·증거 없는 종단 성공 금지·호출자 max_age 무시·밸브 False·정책 증거 무변경).
+- 증거: 코드 앵커 대조 — `MissionService.confirm_goal`·`MissionStore.confirm_goal`/`hold_mission` 존재, `app.py` 목표 증거 경로 없음, 생산자 등록부 없음, dispatcher는 기록만 하고 확인 호출 없음, API Ref 현행 v1.58. 코드 변경 없음.
+- gate 변화: 없음. 실행 계획 문서만이며 구현·시험은 후속 커밋다.
+- 결정: `confirm_goal` 기존 검증을 건드리지 않고 호출 경로만 추가한다(T3). 정책 증거와 저장소·경로·토큰을 공유하지 않는다.
+- 교훈: 없음.
+## 2026-09-30 · uncommitted · refactor(dock): 리밋스위치 인터록·NTC 보류·최소 구성 확정
+
+- 변경: 도크 최소 구성 확정 3건 — ①리밋스위치(접촉식) 채택, 리드스위치 기각(자기 도크의 자석에 자기 반응). ②하중 감지 ADC 프로브 삭제 → 리밋 직결 인터록(디바운스·단일 개폐점 유지, 전류/전압 4샘플 평균 추가). ③NTC 전면 보류(GPIO33/36 풋프린트만; 접점 NTC는 팩 열 경로가 없어 과장 인정·철회, 충전기 NTC는 IC TS핀 요구 확인 전까지 보류). 만충 HOLD·재시도 정책은 실물 이후로 보류. 도크 무모터(홀딩은 자석만) 확정.
+- 증거: test_dock_contract 7 passed(페이로드·필수 필드·안전 문구·loadDetected/setOutput 식별자 유지), services docking 372 passed(전회).
+- gate 변화: 없음.
+- 결정: 덜어낸 뒤 ESP32 일은 릴레이 구동+전류 계측+/status+폴트 넷뿐. 이 이상 덜면 충전 증명 불가.
+- 교훈: 자석-철 조합에서는 자석 극성 배치로 뒤집힘 방지가 안 된다 — 기계적 키잉(비대칭 배치/가이드 리브)+다이오드/퓨즈 2차가 정답.

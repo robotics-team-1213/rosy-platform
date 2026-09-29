@@ -229,8 +229,8 @@
 
 ## 최근 기록
 
+- 2026-09-30 · uncommitted · refactor(dock): 리밋스위치 인터록·NTC 보류·최소 구성 확정
+- 2026-09-30 · uncommitted · docs(plan): D-348 실행 계획 T1~T7 작성
+- 2026-09-30 · uncommitted · docs(adr): D-348 목표 증거 생산자 계약과 검증기 연결 수용
+- 2026-09-30 · uncommitted · feat(fleet): opt-in ER 2 Mission proposal API
 - 2026-09-30 · uncommitted · docs(deployment): 입회 세션 원커맨드 런북
-- 2026-09-30 · uncommitted · feat(hooks): 재생성-미커밋 생성 기록이 push를 막는다
-- 2026-09-30 · uncommitted · docs(plan): ER 2 site deployment priority plan
-- 2026-09-29 · uncommitted · docs(plans): D-337 T5 호스트 폐루프 착지
-- 2026-09-29 · uncommitted · docs(adr): D-319 승인 — 입회 모터 커미션 도우미
