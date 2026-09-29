@@ -88,6 +88,7 @@ class ModelSlot:
         self._poll_s = poll_s
         self._next_poll = float("-inf")
         self._key: tuple | None = None
+        self._failed: tuple[tuple, float] | None = None  # (key, retry not before)
         self.current: LaneSegModel | None = None
         self.last_error: str | None = None
 
@@ -111,12 +112,18 @@ class ModelSlot:
             mtime = None
         key = (target, mtime)
         if key == self._key:
+            if self.last_error and self.last_error.startswith("pointer:"):
+                self.last_error = None  # the pointer reads fine again
             return self.current
+        if self._failed and self._failed[0] == key and now < self._failed[1]:
+            return self.current  # same target still backing off
         self._key = key
         try:
             self.current = self._opener(Path(target))
             self.last_error = None
+            self._failed = None
         except Exception as exc:  # keep the previous model on any failure
             self.last_error = str(exc)
-            self._key = None  # retry on the next poll
+            self._key = None  # retry, but not before the back-off
+            self._failed = (key, now + self._poll_s * 5)
         return self.current

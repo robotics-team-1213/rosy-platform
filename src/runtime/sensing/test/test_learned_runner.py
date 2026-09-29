@@ -140,7 +140,47 @@ def test_slot_retries_same_path_after_failure(tmp_path):
     assert slot.poll() is None and slot.last_error
     ok[0] = True
     now[0] = 1.0
+    assert slot.poll() is None                                 # backing off (poll_s * 5)
+    now[0] = 5.0
     assert slot.poll() is not None and slot.last_error is None
+
+
+def test_slot_backs_off_on_repeated_open_failure(tmp_path):
+    d = _model_dir(tmp_path)
+    pointer = tmp_path / "shadow"
+    pointer.write_text(str(d), encoding="utf-8")
+    now = [0.0]
+    calls = []
+
+    def opener(p):
+        calls.append(now[0])
+        raise ManifestError("broken")
+
+    slot = ModelSlot(pointer, opener=opener, clock=lambda: now[0], poll_s=1.0)
+    for t in (0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 9.0, 10.0):
+        now[0] = t
+        slot.poll()
+    assert calls == [0.0, 5.0, 10.0]
+    # a different target is not held back by the failed one
+    d2 = _model_dir(tmp_path, "m2", "lane-seg-20260930-00000002")
+    pointer.write_text(str(d2), encoding="utf-8")
+    now[0] = 11.0
+    slot.poll()
+    assert calls[-1] == 11.0
+
+
+def test_slot_clears_stale_pointer_error_when_read_recovers(tmp_path):
+    d = _model_dir(tmp_path)
+    pointer = tmp_path / "shadow"
+    pointer.write_text(str(d), encoding="utf-8")
+    now = [0.0]
+    slot = ModelSlot(pointer, opener=lambda p: LaneSegModel.open(p, session_factory=_factory()),
+                     clock=lambda: now[0], poll_s=1.0)
+    assert slot.poll() is not None
+    slot.last_error = "pointer: transient read error"
+    now[0] = 1.0
+    assert slot.poll() is not None
+    assert slot.last_error is None
 
 
 def test_slot_reopens_when_manifest_mtime_changes(tmp_path):
