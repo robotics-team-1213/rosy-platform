@@ -46,6 +46,26 @@ input, select { font: inherit; color: inherit; }
   .vision-corner-overlay [data-corner-handle] { stroke-width: 2; }
 }
 
+/* D-354 경기장 제안·보정 뷰·레이어. 색은 토큰만 쓴다. */
+.vision-corner-overlay .vision-proposal-polygon { fill: none; stroke: var(--series-goal); stroke-width: 1.6; stroke-dasharray: 3 2; vector-effect: non-scaling-stroke; }
+.vision-corner-overlay .vision-proposal-polygon[hidden] { display: none; }
+.field-tools { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-2); }
+#field-accept[hidden], #field-dismiss[hidden], #vision-frame[hidden] { display: none; }
+.field-rectified { margin: var(--space-2) 0 0; }
+.field-rectified[hidden] { display: none; }
+.field-rectified canvas { display: block; width: 100%; height: auto; max-height: 50vh; object-fit: contain; background: var(--ground-deep); border: 1px solid var(--line-14); border-radius: var(--radius-panel); }
+.field-rectified figcaption { margin-top: var(--space-1); }
+.field-options { margin-top: var(--space-2); }
+.field-options summary { min-height: var(--target-secondary); display: list-item; padding: var(--space-2) 0; cursor: pointer; }
+.field-options summary:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
+.field-options fieldset { min-width: 0; margin: 0 0 var(--space-2); padding: var(--space-2) var(--space-3); border: 1px solid var(--line-10); border-radius: var(--radius-button); display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-3); }
+.field-options legend { padding-inline: var(--space-1); font-size: var(--text-label); }
+.field-options label { display: inline-flex; align-items: center; gap: var(--space-1); min-height: var(--target-secondary); color: var(--muted); font-size: var(--text-micro); }
+.field-size input { width: 6rem; min-height: var(--target-secondary); padding: var(--space-1) var(--space-2); background: var(--ground-soft); border: 1px solid var(--line-14); border-radius: var(--radius-flag); }
+.field-mismatch { margin: 0 0 var(--space-2); padding: var(--space-2) var(--space-3); color: var(--paper); background: var(--ground-soft); border: 1px solid var(--series-goal); border-radius: var(--radius-button); font-size: var(--text-micro); }
+.field-mismatch[hidden] { display: none; }
+.map-stage:has(> .field-mismatch:not([hidden])) > .map-empty { display: none; }
+
 .brand { display: flex; flex-direction: column; line-height: 1.15; }
 .brand b { font-weight: var(--weight-strong); font-size: var(--text-value); letter-spacing: var(--track-wide); }
 .brand small { font-family: var(--mono); font-size: var(--text-micro); color: var(--muted); letter-spacing: 0.16em; }

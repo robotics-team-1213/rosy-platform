@@ -48,6 +48,7 @@
         <ui-tag id="map-tag" status="neutral">맵 대기</ui-tag>
       </div>
       <div class="map-stage" id="map-stage" data-map-state="loading">
+        <p class="field-mismatch" id="field-mismatch" role="status" hidden></p>
         <canvas id="map-canvas" class="idle" width="800" height="600" tabindex="-1"
                 role="button" aria-label="지도에서 로봇 목표 위치 선택" aria-describedby="hint"></canvas>
         <div class="map-empty" id="map-empty" role="status">
@@ -74,6 +75,7 @@
                  preserveAspectRatio="none" role="group" aria-label="원본 영상 바닥 사각 영역 모서리 조정"
                  aria-describedby="vision-corner-hint" hidden>
               <polygon id="vision-corner-polygon" points="0,0 100,0 100,100 0,100" aria-hidden="true"></polygon>
+              <polygon id="vision-proposal-polygon" class="vision-proposal-polygon" points="0,0 0,0 0,0 0,0" aria-hidden="true" hidden></polygon>
               <circle data-corner-handle="0" cx="0" cy="0" r="7" tabindex="0" role="button" aria-label="왼쪽 위 모서리, X 0%, Y 0%"></circle>
               <circle data-corner-handle="1" cx="100" cy="0" r="7" tabindex="0" role="button" aria-label="오른쪽 위 모서리, X 100%, Y 0%"></circle>
               <circle data-corner-handle="2" cx="100" cy="100" r="7" tabindex="0" role="button" aria-label="오른쪽 아래 모서리, X 100%, Y 100%"></circle>
@@ -83,6 +85,34 @@
           <p id="vision-message" role="status">관제 사용자 인증 후 카메라를 선택하세요.</p>
         </div>
         <p class="hint" id="vision-meta">화면에 보이는 카메라의 최신 프레임입니다. 실제 시야 범위는 현장 설치에서 확인해야 합니다.</p>
+        <!-- D-354: 경기장 제안은 운용자가 수락해야 조정값이 된다. 관측·주행에는 쓰지 않는다. -->
+        <div class="field-tools">
+          <ui-button kind="quiet" id="field-detect" type="button">경기장 자동 찾기</ui-button>
+          <ui-button kind="quiet" id="field-accept" type="button" hidden>제안 수락</ui-button>
+          <ui-button kind="quiet" id="field-dismiss" type="button" hidden>제안 버리기</ui-button>
+        </div>
+        <p class="hint" id="field-proposal-state" role="status">경기장 윤곽을 Vision이 제안합니다. 제안은 확인 전까지 적용되지 않습니다.</p>
+        <figure class="field-rectified" id="field-rectified" hidden>
+          <canvas id="field-canvas" width="640" height="360" role="img" aria-label="위에서 본 경기장"></canvas>
+          <figcaption class="hint" id="field-rectified-caption"></figcaption>
+        </figure>
+        <details class="field-options" id="field-options">
+          <summary>경기장 크기·레이어</summary>
+          <fieldset class="field-size">
+            <legend>경기장 크기(표시 축척, 이 브라우저만)</legend>
+            <label for="field-width">가로 m <input id="field-width" type="number" inputmode="decimal" min="0.05" max="100" step="0.01"></label>
+            <label for="field-height">세로 m <input id="field-height" type="number" inputmode="decimal" min="0.05" max="100" step="0.01"></label>
+          </fieldset>
+          <fieldset class="layer-toggles">
+            <legend>레이어</legend>
+            <label><input type="checkbox" data-layer="raw" checked> 원본 카메라</label>
+            <label><input type="checkbox" data-layer="rectified" checked> 보정 경기장</label>
+            <label><input type="checkbox" data-layer="site" checked> 사이트 사각형</label>
+            <label><input type="checkbox" data-layer="grid" checked> 격자</label>
+            <label><input type="checkbox" data-layer="sightings" checked> 카메라 관측</label>
+            <label><input type="checkbox" data-layer="poses" checked> CORE 로봇 위치</label>
+          </fieldset>
+        </details>
         <details id="vision-adjustments" class="vision-adjustments">
           <summary>왜곡 및 사각 보정</summary>
           <p class="hint">화면 미리보기만 보정합니다. 원본과 로봇 위치 인식은 그대로 유지됩니다. 현장 실측 전에는 보정된 위치 증거로 사용할 수 없습니다.</p>
