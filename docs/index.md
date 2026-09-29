@@ -150,6 +150,8 @@
 | D-327 | 의미 기반 조작 Action과 장치별 ROS 실행 어댑터를 분리한다 |
 | D-328 | 모델 제안 Mission과 독립 목표 증거를 분리한다 |
 | D-330 | Fleet의 단일 발행 권한과 정지·재시작 차단을 Mission과 기존 작업에 공통 적용한다 |
+| D-331 | Gemini Robotics ER 2를 상태 비저장·제안 전용 Fleet provider로 연결한다 |
+| D-332 | 사람 확인은 고정 단계가 아니라 조건이다 — 사전 등록 승인, 예외 조정, 자율 재발의 승인에만 둔다 |
 
 ## 계획·결과 문서
 
@@ -215,8 +217,8 @@
 
 ## 최근 기록
 
+- 2026-09-29 · uncommitted · feat(protocol): land policy evidence schema (T1)
+- 2026-09-29 · uncommitted · docs(plan): design the D-268 policy evidence contract
+- 2026-09-29 · uncommitted · docs(adr): record D-332 human confirmation placement
+- 2026-09-29 · uncommitted · docs(plan): dispose D-268 as Proposed with a readiness ladder
 - 2026-09-29 · uncommitted · fix(face): ASSIST REQ warn chip — P4/P5/P6 round close
-- 2026-09-29 · uncommitted · fix(test): clear the CI core reds and the root test/ reds
-- 2026-09-29 · uncommitted · feat(ai): add ER 2 proposal-only provider adapter
-- 2026-09-29 · uncommitted · fix(games): HOLD alarm is a crit-filled chip (P3 round)
-- 2026-09-29 · uncommitted · fix(test): declare PRODUCT.md at root, budget only tracked web files

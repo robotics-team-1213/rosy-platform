@@ -40,10 +40,10 @@
 
 | # | 간극 | 막힌 결정 | 비고 |
 |---|---|---|---|
-| 1 | 증거 → 판단 자격 | D-268(Policy-eligible vision evidence)의 Accepted/기각 여부 | Accepted로 두지 않으면 상위 에이전트는 영구히 "제안만 하는 상자"로 남음 |
+| 1 | 증거 → 판단 자격 | [처분 기록](2026-09-29-d268-policy-evidence-disposition.md): Proposed 유지 — 승격은 측정 전제 5개가 막는 중 | 승격 전까지 상위 에이전트는 "제안만 하는 상자"로 남음(의도된 상태) |
 | 2 | 작업 분해 | Mission/Step 스키마 + MSN-001 DSL, Fleet 확장 vs Operations 단일 이행 | 2026-09-26 갭맵 순서 3(첫 이종 미션 전 결정)과 동일 결정 |
 | 3 | 역량 기반 선택 | capabilities YAML을 읽는 매칭기 계약 | 지금은 availability뿐. 로봇 수가 늘기 전엔 급하지 않음 |
-| 4 | 재판단 루프 | `POLICY_DISPATCH_ENABLED`를 여는 정책+ADR. 사람 확인 단계를 어디에 둘지(제출 전/실행 전/결과 수용 전) 포함 | 1·2 없이 열 수 없는 밸브 |
+| 4 | 재판단 루프 | `POLICY_DISPATCH_ENABLED`를 여는 정책+ADR — 전제 (c) 사람 확인 위치는 [D-332](../adr/D-332-human-confirmation-placement.md)로 확정 | 밸브 ADR은 D-268 승격 전제(측정 5종)와 Mission/Step 확정을 여전히 요구 |
 | 5 | VLA | Episode 수집 → 평가 → 고정 모델 산출물 → 제한 추론 파이프라인 | D-71 후속. 2026-09-26 갭맵 Data/AI/VLA 행과 동일 |
 
 ## 근거와 제한

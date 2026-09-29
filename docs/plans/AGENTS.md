@@ -95,6 +95,9 @@ Flask parity checklist가 추적용으로 여기에 합류했다. 둘은 실행 
 | `2026-09-29-er2-adr-consistency-review.md` | D-326/D-327/D-328과 실행 계획의 모델 권한·사람 확인·Fleet 예약·정지·장애 복구 경계 검토 |
 | `2026-09-29-fleet-mission-control-arbitration-implementation.md` | D-330 실행 순서: Fleet 단일 claim, stop generation, 감사 장애 중 전용 정지, OMX 접수 후 장애 조정 |
 | `2026-09-29-d329-surface-registry.md` | D-329 실행 계획 — `src/hmi/web/surfaces.yaml` 스키마, 등록 누락 시험(변이 확인 5건), 세 `SURFACES` 상수를 로더로 바꾸기, 셸 점검 추적 파일 한정. `matrix.json`·픽셀 게이트는 범위 밖 |
+| `2026-09-29-d268-policy-evidence-disposition.md` | D-268 처분 — Proposed 유지(승격 전제 5개 대조표: 증거 계약/권한/정답 시험/30분 스트림/입회 수용 전부 미충족), D-268 발의 자격 증거와 D-328 목표 성공 증거의 면 구분, 승격 준비 사다리 5단계 |
+| `2026-09-29-policy-evidence-contract-design.md` | 승격 사다리 1단계 설계 — `PolicyEvidencePayload` 필드·source-token 제출·거절 사유 enum·발의 binding, 제출 기반 공유 확정(어휘 공유·소비 분리), 밸브·fail-closed 불변식 |
+| `2026-09-29-policy-evidence-contract.md` | 실행 계획 T1~T7 — schema→설정 로더→저장·제출 검증→발의 binding→경로·인증→API Ref v1.48→harness. 밸브 False·빈 등록부·미설정 age 거절 불변 단언 포함 |
 ## Subdirectories
 
 None.

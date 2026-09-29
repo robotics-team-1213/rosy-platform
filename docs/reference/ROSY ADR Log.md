@@ -333,3 +333,4 @@
 | D-329 | 표면은 등록으로 계약을 받고, 육안 기준은 저장소에 남는다 | Proposed (표면 계약 적용 범위 단일 출처·G2 기준선 저장소 보존만; 번들러·공유 컴포넌트 코드·자동 픽셀 판정·D-153 체계 변경·DEVICE/FIELD 수용 아님) |
 | D-330 | Fleet의 단일 발행 권한과 정지·재시작 차단을 Mission과 기존 작업에 공통 적용한다 | Accepted (구조 결정; D-276 전용 정지 감사 규칙 부분 대체; 구현·물리 정지 수용 HOLD) |
 | D-331 | Gemini Robotics ER 2를 상태 비저장·제안 전용 Fleet provider로 연결한다 | Accepted (provider boundary/source adapter만; runtime/actuation/pilot HOLD) |
+| D-332 | 사람 확인은 고정 단계가 아니라 조건이다 — 사전 등록 승인, 예외 조정, 자율 재발의 승인에만 둔다 | Accepted (위치·의미 결정만; 밸브 개방·자동 실행·구현 없음) |
