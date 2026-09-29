@@ -225,8 +225,8 @@
 
 ## 최근 기록
 
+- 2026-09-29 · uncommitted · docs(adr): D-337 브리지 콜백 판정·적응 분리 기록
+- 2026-09-29 · uncommitted · docs(adr): D-337 로봇 신호 소스는 실측된 빛만 읽는다
 - 2026-09-29 · uncommitted · docs(plans): 무신호 교차로 정지 후 진입 설계 + API Ref v1.54
 - 2026-09-29 · uncommitted · docs(plans): /dashboard 브리지 퇴역 기준 명시
 - 2026-09-29 · uncommitted · feat(omx/fleet): fence local Device Actions with stop generations
-- 2026-09-29 · uncommitted · docs(uiux): close ADR candidates A-1 and A-2 without new ADRs
-- 2026-09-29 · uncommitted · docs(plan): land policy evidence T4-T6 and API Ref v1.48

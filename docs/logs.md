@@ -3390,3 +3390,16 @@
 - 변경: `docs/plans/2026-09-29-traffic-policy-unsignalized-junction-design.md` 신설 — "신호 없음"의 두 뜻(무신호 교차로 vs 인식 실패)을 구분하기 위해 부재를 카메라 판정이 아니라 운영자 선언(`junction_rule: stop_and_go`)으로 다루는 결정, 판정 분기·불변식(정지+dwell 선행, 관측 신호와 선언 충돌 시 `signal_unexpected` HOLD, `signal_conflict` 우선, 새 상태 문자 없음), 표면 변화, 비목표(보행자 인식·다중 교차로·적신호 우회전 특례·ESP32/observer 제2 신호 소스)를 기록했다. API 계약서는 v1.53→v1.54로 `TrafficPolicyStatus.junction_rule` 필드·예시·문단을 같은 변경에 실었다(D-18).
 - 증거: 같은 변경의 호스트 시험 — traffic policy·API·runtime config·foundation·services 380 passed, protocol schemas·api_web·dashboard 105 passed 47 skipped, semantic road 시뮬·이벤트 카탈로그 74 passed(2026-09-29 Windows).
 - gate 변화: 없음.
+
+## 2026-09-29 · uncommitted · docs(adr): D-337 로봇 신호 소스는 실측된 빛만 읽는다
+
+- 변경: `junction_rule` 커밋(d79d2096)이 남긴 B 갈래(ESP32 연동)의 경계를 ADR D-337로 못 박고 설계·실행 계획을 냈다. 결정: 로봇의 제2 신호 소스는 관측 서비스 `GET /observed`(실측)뿐 — ESP32 `/status`(접점 주장)의 직접 소비 금지(2≠3 교차 검증 철학 준수), 로봇→신호등 명령 경로 부재 유지, 융합은 fail-closed(불일치 `signal_source_conflict` HOLD, 소등은 `signal_dark`로 진입 불허, 관측은 진입을 단독 허가하지 않고 카메라와 함께 쓰인다). 무신호 `stop_and_go`에서는 어떤 소스의 신호 관측이든 `signal_unexpected`. 신규 문서: `docs/plans/2026-09-29-robot-signal-source-integration-design.md` + 실행 계획 `-integration.md`(T1 순수 융합 → T5 실물 벤치).
+- 증거: 문서 회차 — 코드 무변경. 관측 서버 인터페이스(`/observed` lamps·confidence·stable·frozen·age)는 `firmware/signal/observer/observer.py`·D-163 설계에서 그대로 인용했고, ROSY-SIGNAL-001의 "신호등 보고를 안전 근거로 삼지 않는다" 조항과 D-163 §4의 "훗날 로봇이 이 관측 API로 판단한다" 단서의 충돌을 D-337이 정리한다. ADR 표 D-336 뒤 D-337 추가.
+- gate 변화: 없음. 구현(T1~)은 별도 회차, 미설정 사이트는 동작 무변경이 완료 기준이다.
+## 2026-09-29 · uncommitted · docs(adr): D-337 브리지 콜백 판정·적응 분리 기록
+
+- 변경: 24b6d4bb(2026-09-24)로 착지한 ros_bridge 콜백 분리를 ADR로 소급 기록했다 — 판정(파싱·검증·승인/거부·라우팅)은 ROS-free 시블리(bridge/observation.py 판정 함수군 + 기존 시블리 확장 reconcile.led·display.republish_due·goal_tracker.on_response/on_result·save_map.await_call)가 소유하고 브리지는 노드 시계·발행·서비스 호출만 남는다. 행수(757-590)는 결과이지 분리 사유가 아님을 명시. docs/adr/D-337-bridge-callback-decide-act-split.md 신설 + ADR Log 행 추가.
+- 증거: 구현 커밋 24b6d4bb(13 files +1047/-237; test_bridge_observation.py +445행 신설, 시블리 시험 4종 확장, SIZE_VERDICTS ros_bridge 항목 제거). 이후 c33f51a6(감독 카메라 결함 폴백)와 DockingExecutor 추출이 같은 구조 위에서 확장 — 현재 observation.py 203행, ros_bridge.py 582행. sensing 전체 1660 passed(2026-09-29 Windows).
+- gate 변화: 없음. 첫 게이트 호출의 실패 6건은 병행 트랙 잔여(protocol 버전 정합·SIZE_VERDICTS 2건·io closure·line_follow 문서·sd writer)이며 이 변경과 무관.
+- 결정: 구현은 이미 main에 있고 이 회차는 기록 보존이다. D 번호는 저널의 다음 빈 번호 표기(D-337·D-338)를 따랐다.
+- 교훈: ADR Log 마지막 행(D-336)이 리터럴 ? 문자로 깨진 채 커밋되어 있다. 신규 행은 UTF-8로 기록했고, 손상 행 복구는 append-only 원칙 때문에 별도 합의가 필요하다.
