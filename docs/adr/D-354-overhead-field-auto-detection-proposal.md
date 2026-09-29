@@ -2,7 +2,7 @@
 
 **Status:** Proposed (2026-09-30). 검출 위치(Vision), 제안 API, 설정값과 검출값이 어긋날 때의 표시, 관제 레이어 토글만 정한다. 검출 결과를 사이트 설정(`site-cameras.yaml`)·sighting 좌표·주행에 반영하는 일은 결정하지 않는다. D-257·D-318을 바꾸지 않는다.
 
-잇는 결정: [D-257](D-257-site-lane-map-and-overhead-sightings.md)(sighting은 표시 전용) · [D-261](D-261-overhead-camera-app-skeleton.md)(폰 → Vision 수신기, Fleet은 영상을 받지 않음) · [D-318](D-318-site-camera-preview-rectification.md)(미리보기 보정, 모서리 직접 조작, 브라우저 로컬 초안) · D-341(천장 카메라 앱 페어링, 브랜치 `docs/d341-overhead-console-pairing`) · D-351(로봇 ↔ 사이트 관제 계약 판정과 증거 등급, 브랜치 `docs/robot-fleet-protocol-conformance`).
+잇는 결정: [D-257](D-257-site-lane-map-and-overhead-sightings.md)(sighting은 표시 전용) · [D-261](D-261-overhead-camera-app-skeleton.md)(폰 → Vision 수신기, Fleet은 영상을 받지 않음) · [D-318](D-318-site-camera-preview-rectification.md)(미리보기 보정, 모서리 직접 조작, 브라우저 로컬 초안) · D-341(천장 카메라 앱 페어링, 브랜치 `docs/d341-overhead-console-pairing`).
 
 ### Context
 
@@ -26,7 +26,7 @@
 
 ### Evidence levels
 
-D-351의 등급을 따른다.
+등급은 이 ADR 안에서 정한다. 다른 브랜치의 ADR을 인용하지 않는다.
 
 | 등급 | 이 ADR에서 뜻하는 것 |
 |------|----------------------|
@@ -67,4 +67,4 @@ D-351의 등급을 따른다.
 
 ### References
 
-[D-257](D-257-site-lane-map-and-overhead-sightings.md), [D-261](D-261-overhead-camera-app-skeleton.md), [D-275](D-275-web-surface-and-video-runtime-ownership.md), [D-293](D-293-site-fleet-intent-api-contracts.md), [D-318](D-318-site-camera-preview-rectification.md), D-341, D-351.
+[D-257](D-257-site-lane-map-and-overhead-sightings.md), [D-261](D-261-overhead-camera-app-skeleton.md), [D-275](D-275-web-surface-and-video-runtime-ownership.md), [D-293](D-293-site-fleet-intent-api-contracts.md), [D-318](D-318-site-camera-preview-rectification.md), D-341.

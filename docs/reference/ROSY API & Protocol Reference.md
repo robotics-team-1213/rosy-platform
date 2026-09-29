@@ -2,7 +2,7 @@
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.59
+**Version:** v1.60
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -956,7 +956,7 @@ credential. No browser or Fleet process connects to ROS/DDS.
 | GET | `/api/fleet/vision/sources` | Site console Bearer token | Configured preview source IDs |
 | POST | `/api/fleet/vision/lease` | Viewer Bearer token | 60 s source-scoped lease and direct Vision frame path |
 | GET | `/api/vision/sources/{source_id}/frame` | Vision preview lease Bearer token | One latest fresh JPEG; `Cache-Control: no-store`, sequence/age headers, and `X-Frame-Rectified` |
-| GET | `/api/vision/sources/{source_id}/field-proposal` | Vision preview lease Bearer token | D-354 field-corner proposal JSON for operator review (`proposal` null when no full field is visible); own 1/s bucket, `no-store`, same freshness 404s, 422 on undecodable frame. Display only, never applied to sightings |
+| GET | `/api/vision/sources/{source_id}/field-proposal` | Vision preview lease Bearer token | D-354 field-corner proposal JSON for operator review (`proposal` null when no full field is visible); own 1/s bucket per lease subject; detection runs at most once per source per second, off the event loop (readers in between get the last result, 429 while the first run is busy); `no-store`, same freshness 404s, 422 on undecodable frame. Display only, never applied to sightings |
 
 Lease request body accepts `{ "source_id": "ceiling-north" }` for the original
 JPEG or an optional `rectification` object:
@@ -1502,6 +1502,7 @@ fake credentials and clocks; device and field acceptance remain separate gates.
 |---|---|---|
 | v1.56 | 2026-09-29 | Additive (D-337): traffic policy status gains `signal_source_kind`/`signal_head_age_s`/`signal_head_frozen`; the optional file-only `traffic_policy.signal_observer` binding fuses the observer service's measured light with camera evidence (mismatch `signal_source_conflict` HOLD, dark/indeterminate `signal_dark`, silence falls back camera-only) and emits `nav.traffic_policy_signal_source_stale` once per lapse |
 | v1.57 | 2026-09-29 | Additive (D-333): add owner-scoped Mission progress axes, a 50-event recent-history window with truncation signal, and bounded snapshot-first event cursor pages. Fleet event IDs are journal order; dispatch latch is distinct from physical stop (UNKNOWN); no percentage or provider status tool is introduced. |
+| v1.60 | 2026-09-30 | Additive (D-354): Vision `GET /api/vision/sources/{source_id}/field-proposal` returns an operator-review field-corner proposal under the frame preview lease (own 1/s bucket per subject, detection at most once per source per second off the event loop, `no-store`, same freshness 404s, 422 on an undecodable frame). Display only; never applied to sightings, site config or driving. |
 | v1.59 | 2026-09-30 | Additive (D-348): opt-in registered goal-evidence producer route, environment-only source tokens, SQLite evidence-ID idempotency, evaluator/freshness scope, terminal-action verification and grace-timeout HOLD. No model/action dispatch or ROS enablement. |
 | v1.58 | 2026-09-29 | Additive (D-347): `GET /api/v1/system/capabilities` gains the per-flag `lifecycle` block — one vocabulary (`ready`/`unavailable`+reasons, `activating` reserved with no producer yet) derived from the existing `withheld` judgment; `withheld.flags` always equals the `unavailable` set. Presentation states on inventory descriptors are unchanged; the mapping lives in D-347. |
 | v1.55 | 2026-09-29 | Additive (D-333): require an injected trusted producer verifier and a new post-action observation for Mission goal confirmation. Evidence is correlated to the Action/attempt and carries frame digest, evaluator revision, and a separate `OPEN` gripper readback; absent verifier, stale/mismatched evidence leaves claims held. |
