@@ -123,11 +123,12 @@ export function mountDrive(root, {onExit} = {}) {
     });
   }
 
-  // --- 입력: 홀드 페달 --------------------------------------------------------
+  // --- 입력: 홀드 페달 (햅틱 + 즉각 피드백) -------------------------------
   for (const [node, key] of [[element.forward, "forward"], [element.reverse, "reverse"]]) {
     const set = (value) => {
       setPedal(key, value);
       node.classList.toggle("active", value);
+      if (value && navigator.vibrate) navigator.vibrate(10);   // 햅틱 피드백
     };
     node.addEventListener("pointerdown", () => set(true));
     for (const name of ["pointerup", "pointercancel", "pointerleave"]) {

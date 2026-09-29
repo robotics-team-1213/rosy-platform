@@ -5,7 +5,7 @@
 export function createVisionPreview({
   apiGet,               // (path) => Promise<{status, body}> — JSON
   fetchFrame,           // (path) => Promise<Blob>
-  intervalMs = 200,
+  intervalMs = 150,
   onFrame,              // (blobUrl, meta) => void
   onUnavailable,        // (message) => void
   now = () => Date.now(),
