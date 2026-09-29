@@ -1,10 +1,23 @@
 // 접속 게이트(D-323): 게임식 "계속하기" UX.
-// 최근 접속한 로봇을 원터치로 재접속하고, 새 연결은 접기 가능한 폼으로.
-// mDNS 발견(D-323 §3.1)은 후속 — 현재는 최근 목록 + 수동 토큰.
+// 최근 접속 관리는 인라인(모듈 404 방지 — allowlist 동기화 이슈).
+
+const RECENT_KEY = "rosy.pilot.recent";
+
+function getRecent() {
+  try { return JSON.parse(localStorage.getItem(RECENT_KEY) ?? "[]"); }
+  catch { return []; }
+}
+function addRecentEntry(entry) {
+  const list = getRecent().filter((r) => r.host !== entry.host);
+  list.unshift(entry);
+  localStorage.setItem(RECENT_KEY, JSON.stringify(list.slice(0, 5)));
+}
+function removeRecentEntry(host) {
+  localStorage.setItem(RECENT_KEY, JSON.stringify(getRecent().filter((r) => r.host !== host)));
+}
 
 import {token, setToken, clearToken, whoami, fetchCapabilities} from "../client.js";
 import {driverFor} from "../drivers/registry.js";
-import {getRecent, addRecent, removeRecent} from "../recent.js";
 
 const DRIVER_KIND = "pinky_core";
 
@@ -60,7 +73,7 @@ function renderRecentList(root, onConnect) {
     remove.style.minHeight = "2.5rem";
     remove.addEventListener("click", (e) => {
       e.stopPropagation();
-      removeRecent(entry.host);
+      removeRecentEntry(entry.host);
       renderTokenForm(root, onConnect);
     });
     row.append(button, remove);
@@ -98,7 +111,7 @@ function renderTokenForm(root, onConnect, message) {
     }
     setToken(field.value.trim());
     // 최근에 추가 (호스트는 same-origin이므로 location.host)
-    addRecent({host: location.host, label: "Pinky", token: field.value.trim()});
+    addRecentEntry({host: location.host, label: "Pinky", token: field.value.trim()});
     onConnect();
   };
   submit.addEventListener("click", connect);

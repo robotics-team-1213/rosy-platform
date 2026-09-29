@@ -28,8 +28,8 @@
 
 ## 최근 기록
 
-- 2026-09-29 · uncommitted · feat(pilot): multi-device roadmap and T8 inputs screen
-- 2026-09-29 · uncommitted · feat(pilot): drive screen with round wheel, pedals and camera stage (실행 계획 T7)
-- 2026-09-29 · uncommitted · feat(pilot): PWA installation first — D-328 (실행 계획 T10)
-- 2026-09-29 · uncommitted · fix(pilot): recompose the gate screen with the dashboard panel grammar
-- 2026-09-29 · uncommitted · feat(pilot): record the served-path contract and add dashboard navigation
+- 2026-09-29 · uncommitted · fix(pilot): 가제보 실조종으로 입력 부호·송신 타이밍·제자리 회전·카메라 교정
+- 2026-09-29 · uncommitted · feat(pilot): game-style "Continue" UX with recent connections (D-323)
+- 2026-09-29 · uncommitted · feat(pilot): fullscreen game-style drive + vision 409 retry + browser tests (구현 개선)
+- 2026-09-29 · uncommitted · feat(pilot): sim camera live, drive fullscreen, in-screen speed presets (T7 시뮬 루프)
+- 2026-09-29 · uncommitted · feat(pilot): camera evidence promotion and drive capture (실행 계획 T9)

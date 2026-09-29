@@ -3,7 +3,7 @@
 
 import {inputConfig, saveInputConfig, stickMap} from "../input-state.js";
 
-export function mountInputs(root, {onClose} = {}) {
+export function mountInputs(root, {onClose, onChange} = {}) {
   let config = inputConfig();
 
   function field(labelText, value) {
@@ -19,30 +19,32 @@ export function mountInputs(root, {onClose} = {}) {
     const presetCell = el("div");
     presetCell.append(el("ui-text", "속도 프리셋", {scale: "label"}));
     const presets = el("ui-actions");
-    for (const name of ["low", "mid", "high"]) {
-      const button = el("ui-button", name, {kind: config.preset === name ? "primary" : "quiet", type: "button"});
+    for (const [name, label] of [["low", "저"], ["mid", "중"], ["high", "고"]]) {
+      const button = el("ui-button", label, {kind: config.preset === name ? "primary" : "quiet", type: "button"});
       button.addEventListener("click", () => {
         config = saveInputConfig({preset: name});
+        onChange?.();
         render();
       });
       presets.append(button);
     }
     presetCell.append(presets);
 
+    const deadLabel = el("ui-text", `데드존 ${Number(config.deadzone ?? 0.12).toFixed(2)}`, {scale: "label"});
     const dead = el("input", null, {type: "range", min: "0", max: "0.6", step: "0.02",
-                                    "aria-label": "데드존", value: String(config.deadzone ?? 0.18)});
+                                    "aria-label": "데드존", value: String(config.deadzone ?? 0.12)});
     dead.addEventListener("input", () => {
       config = saveInputConfig({deadzone: Number(dead.value)});
-      refreshFacts();
+      deadLabel.textContent = `데드존 ${Number(config.deadzone).toFixed(2)}`;
     });
     const deadCell = el("div");
-    deadCell.append(el("ui-text", `데드존 ${Number(config.deadzone ?? 0.18).toFixed(2)}`, {scale: "label"}), dead);
+    deadCell.append(deadLabel, dead);
 
     const curveCell = el("div");
     curveCell.append(el("ui-text", "감도 곡선", {scale: "label"}));
     const curves = el("ui-actions");
-    for (const name of ["linear", "expo"]) {
-      const button = el("ui-button", name, {kind: config.curve === name ? "primary" : "quiet", type: "button"});
+    for (const [name, label] of [["linear", "직선"], ["expo", "중앙 섬세"]]) {
+      const button = el("ui-button", label, {kind: config.curve === name ? "primary" : "quiet", type: "button"});
       button.addEventListener("click", () => {
         config = saveInputConfig({curve: name});
         render();
@@ -86,8 +88,13 @@ export function mountInputs(root, {onClose} = {}) {
     const raw = {x: pad.axes[0] ?? 0, y: -(pad.axes[1] ?? 0)};
     const mapped = stickMap({kind: "pad", ...raw});
     previewNode.textContent =
-      `raw(${raw.x.toFixed(2)}, ${raw.y.toFixed(2)}) → linear ${mapped.linear.toFixed(2)}, angular ${mapped.angular.toFixed(2)}`;
+      `raw(${raw.x.toFixed(2)}, ${raw.y.toFixed(2)}) → linear ${mapped.linear.toFixed(3)} m/s, angular ${mapped.angular.toFixed(3)} rad/s${mapped.pivot ? " (제자리)" : ""}`;
   }, 250);
+  // 부모(주행 화면)가 나갈 때 미리보기 타이머까지 거둘 수 있게 닫기 함수를 돌려준다.
+  return () => {
+    clearInterval(previewTimer);
+    onClose?.();
+  };
 }
 
 function el(tag, text, attrs = {}) {

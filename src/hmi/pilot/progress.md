@@ -13,7 +13,8 @@ gates:
     blocker: "화면(connect·drive·inputs)과 Playwright 종단 시험은 실행 계획 T6~T11 이후"
     cmd: "python -m pytest src/hmi/pilot/test/test_pilot_browser.py -q -p no:cacheprovider"
   ROS-SIM:
-    state: N/A
+    state: HOLD
+    blocker: "가제보 실조종으로 방향·제자리 회전·놓으면 0 을 확인(2026-09-29). 녹화된 증거 폴더와 호스트 포화 없는 재측정 전"
   ARTIFACT:
     state: HOLD
     blocker: "share/pilot 설치를 이미지에서 본 기록이 없다"
@@ -33,6 +34,8 @@ plans:
 - 골격 착지: `/pilot` 라우트·web_common ui-shell 표면·`stick.js` 순수 입력 매핑.
 - 앱은 같은 출처의 `/api/v1`·`/ws/*` 만 말한다(D-323, CORE SRS §1.3).
 - 1차 기기는 현장 태블릿(Lenovo 1200×2000) — 가로 모드 기준 레이아웃.
+
+- 2026-09-29 가제보 실조종 교정: 부호 규약(REP-103)·2 축 스틱·제자리 회전·CORE 한도 비율 프리셋·송신 타이밍. 팔은 조작 프로필 `arm` 설계만(계약 대기).
 
 ## 다음 gate
 

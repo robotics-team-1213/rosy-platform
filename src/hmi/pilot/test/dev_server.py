@@ -158,11 +158,35 @@ async def set_mode(request: Request):
     return {"mode": STATE["mode"]}
 
 
+# CORE 와 같은 수동 한도(rosy_default.yaml safety.manual_*·navigation.max_*).
+LIMITS = {"session_linear": None, "max_linear": 0.2, "max_angular": 0.8,
+          "manual_linear": 0.15, "manual_angular": 0.6}
+TELEOP_LOG: list[dict] = []
+
+
+@app.get("/api/v1/safety/state")
+def safety_state(request: Request):
+    if _role(request) is None:
+        return JSONResponse({"detail": "unauthorized"}, status_code=401)
+    return {"estop": False, "source": "", "fleet_loss_policy": "STOP", "limits": LIMITS}
+
+
+@app.get("/__test__/teleop")
+def teleop_log():
+    return TELEOP_LOG
+
+
 @app.post("/api/v1/teleop")
 async def teleop(request: Request):
     if _role(request) is None:
         return JSONResponse({"detail": "unauthorized"}, status_code=401)
     body = await request.json()
+    TELEOP_LOG.append({"linear": float(body.get("linear", 0.0)),
+                       "angular": float(body.get("angular", 0.0)), "mode": STATE.get("mode")})
+    if STATE.get("mode") != "MANUAL":
+        # CORE 와 같다: 수동 모드가 아니면 409 MODE_CONFLICT.
+        return JSONResponse({"detail": {"code": "MODE_CONFLICT", "message": "not MANUAL"}},
+                            status_code=409)
     STATE["velocity"] = {"linear": float(body.get("linear", 0.0)),
                          "angular": float(body.get("angular", 0.0))}
     return STATE["velocity"]

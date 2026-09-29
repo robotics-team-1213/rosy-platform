@@ -43,8 +43,19 @@ export function describeReason(code) {
   return `진입할 수 없습니다 — ${code}`;
 }
 
+// 조작 프로필: 화면이 어떤 조작부를 그릴지 정한다. 주행 기기(base)는 2 축 속도
+// 명령(REST teleop, hold-to-drive)이고 제자리 회전·정밀 배율을 지원한다.
+// 팔(arm) 프로필의 모양은 설계 문서 §10 — 그 기기의 조그 계약이 열릴 때 등록한다.
+export const PROFILE = Object.freeze({
+  kind: "base",
+  command: "velocity",
+  pivot: true,
+  fine: true,
+});
+
 export const pinkyCore = {
   kind: KIND,
+  profile: PROFILE,
   assessGate,
   // engage/disengage: 조속 화면 진입·이탈의 모드 전환. 실패(409 MODE_CONFLICT 등)는
   // 호출자(link/app)가 이유를 표시한다.

@@ -97,3 +97,10 @@
 - gate 변화: 없음.
 - 결정: D-323.
 - 교훈: 없음
+
+## 2026-09-29 · uncommitted · fix(pilot): 가제보 실조종으로 입력 부호·송신 타이밍·제자리 회전·카메라 교정
+- 변경: `stick.js` 를 REP-103 부호 규약(오른쪽 입력 = angular 음수)·원형 데드존·제자리 스냅(±12°)·CORE 한도 비율 프리셋(저 0.4/중 0.7/고 1.0)·정밀(×0.3)로 재작성. `input-state.js` 2 축 스틱·제자리 회전 상태. `link.js` 발행 시작 기준 100 ms 주기·단일 비행·최신 명령 합치기·400 ms 시한·놓을 때 0 재덮기·유휴 0 3 회 후 정지·409 뒤 `resume()`. `screens/drive.js` 원형 휠(x 한 축)을 2 축 스틱으로, 제자리 회전 홀드 버튼(↺/↻, Q/E, LB/RB), 정밀 토글, HUD 실측 속도·회전율·동작 배지·상한·지연, 수동 모드 200 뒤에만 명령, 409 "수동 모드 다시 잡기", visible() 재개·키 리스너 해제 누수 수정. `vision.js` 주기를 CORE 하한 0.4 s 이상으로, 실패 프레임(409/429 JSON)을 이미지로 띄우지 않음. `screens/inputs.js` 데드존 슬라이더의 미정의 `refreshFacts()` 예외 수정. `screens/connect.js` 미정의 `addRecent`/`removeRecent` 호출 수정(연결 버튼이 죽어 있었다). `tools/sim_jpeg_relay.py` reliable·depth 1·640 폭 축소. 설계 §10.1(입력 모델·조작 프로필·팔 정밀 조작 원칙)·§10.2(송신 타이밍).
+- 증거: 가제보(WSL, gz headless + CORE, Nav2 없음)에 실제 브라우저로 붙어 조작 — 스틱 오른쪽 yaw −16.9~−25.4°(시계), 왼쪽 +17.0~+21.0°, 제자리 회전 버튼·키보드 E 이동 0.000 m, 두 손가락(전진 페달+스틱 우) yaw −15.2°·+0.075 m, 놓은 뒤 마지막 명령 0. 명령 공백 최대 2.16 s → 0.5 s 안팎(스크린샷 캡처 구간 제외). 옛 매핑은 angular +0.5 가 yaw +18°(반시계)인데 휠 오른쪽에 angular + 를 보내 반대로 돌았다. `python -m pytest src/hmi/pilot/test src/runtime/api_web/test/test_pilot_route.py`(ROSY_RUN_BROWSER_TESTS=1) 33 passed.
+- gate 변화: ROS-SIM 진행(가제보 조종 방향·제자리 회전 실측 확보). DEVICE 는 여전히 HOLD.
+- 결정: D-323(§10.1·§10.2 보강), D-331(팔 조작 프로필은 계약 대기).
+- 교훈: 조종 부호는 시험 이름이 아니라 시뮬 yaw 로 확인한다 — 옛 시험은 "pad x+ → angular+" 를 정답으로 고정하고 있었다. 호스트가 포화(Windows CPU 100%, gz RTF 0.3~1.2)면 teleop 이 200 인데 로봇이 안 움직이는 것처럼 보인다 — cmd_vel·odom 을 rclpy 로 직접 재서 체인과 환경을 가른다.

@@ -106,93 +106,114 @@ def test_bad_token_is_refused_with_guidance(tablet_page):
     assert errors == [], errors
 
 
-@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
-                    reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
-def test_drive_screen_fullscreen_with_camera_and_presets(tablet_page):
-    """주행 화면이 풀스크린 카메라 + 휠 + 페달 + 프리셋을 갖는다."""
-    base_url, page, errors = tablet_page
+def _enter_drive(page, base_url):
     page.goto(f"{base_url}/pilot")
     page.wait_for_selector("form[data-pilot-token-form] ui-field input")
     page.fill("form[data-pilot-token-form] ui-field input", "devtoken")
     page.click("form[data-pilot-token-form] ui-button")
     page.wait_for_selector("[data-drive-enter]")
     page.click("[data-drive-enter]")
-    page.wait_for_selector("[data-drive-wheel]")
-    page.wait_for_timeout(500)   # CSS 적용 대기
+    page.wait_for_selector("[data-drive-stick]")
+    page.wait_for_function("document.querySelector('[data-drive-fact=cap]')?.textContent.includes('0.10')")
 
-    # 풀스크린: drive가 뷰포트를 채운다
+
+@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
+                    reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
+def test_drive_screen_fullscreen_with_camera_and_controls(tablet_page):
+    """주행 화면이 풀스크린 카메라 + 2 축 스틱 + 페달 + 제자리 회전 + 프리셋을 갖는다."""
+    base_url, page, errors = tablet_page
+    _enter_drive(page, base_url)
     layout = page.evaluate("""(() => {
-      const stage = document.querySelector('[data-drive-stage]')?.getBoundingClientRect();
-      const drive = document.querySelector('.pilot-drive')?.getBoundingClientRect();
-      const wheel = document.querySelector('[data-drive-wheel]')?.getBoundingClientRect();
-      const pedals = document.querySelector('[data-drive-pedals]')?.getBoundingClientRect();
-      const body = document.body.dataset.pilotScreen;
-      return {
-        viewport: {w: window.innerWidth, h: window.innerHeight},
-        body: body,
-        drive: drive ? {w: Math.round(drive.width), h: Math.round(drive.height)} : null,
-        stage: stage ? {w: Math.round(stage.width), h: Math.round(stage.height)} : null,
-        wheel: wheel ? {w: Math.round(wheel.width)} : null,
-        pedals: pedals ? {w: Math.round(pedals.width)} : null,
-      };
+      const box = (s) => { const r = document.querySelector(s)?.getBoundingClientRect(); return r ? {w: Math.round(r.width), h: Math.round(r.height)} : null; };
+      return {viewport: {w: innerWidth, h: innerHeight}, body: document.body.dataset.pilotScreen,
+              drive: box('.pilot-drive'), stick: box('[data-drive-stick]'), pedals: box('[data-drive-pedals]'),
+              pivots: box('[data-drive-pivots]'), hscroll: document.documentElement.scrollWidth > innerWidth};
     })()""")
-    viewport = layout["viewport"]
-    assert layout["body"] == "drive", f"body flag: {layout['body']}"
-    assert layout["drive"] is not None, "drive 요소 없음"
-    assert layout["drive"]["w"] >= viewport["w"] * 0.9, \
-        f"드라이브 폭 {layout['drive']['w']}px < 뷰포트 {viewport['w']}px의 90%"
-
-    # 휠이 존재하고 페달이 있다
-    assert layout["wheel"]["w"] > 50, "휠이 너무 작다"
-    assert layout["pedals"] and layout["pedals"]["w"] > 50, "페달이 너무 작다"
-
-    # 휠이 존재하고 페달이 있다
-    assert layout["wheel"]["w"] > 50, "휠이 너무 작다"
-    assert layout["pedals"]["w"] > 50, "페달이 너무 작다"
-
-    # 프리셋이 있다
-    presets = page.locator("[data-drive-preset-row] ui-button").count()
-    assert presets == 3, f"프리셋 버튼 {presets}개 (low/mid/high 3개여야)"
-
-    # 카메라 프레임이 로드됨 (canned JPEG)
+    assert layout["body"] == "drive"
+    assert layout["drive"]["w"] >= layout["viewport"]["w"] * 0.9
+    assert layout["stick"]["w"] > 100, "스틱이 너무 작다"
+    assert layout["pedals"]["w"] > 50 and layout["pivots"]["w"] > 50
+    assert layout["hscroll"] is False
+    assert page.locator("[data-drive-preset-row] ui-button").count() == 3
+    # 상한은 CORE 한도(0.15 m/s) × 기본 프리셋 중(0.7)
+    assert "0.10 m/s" in page.inner_text("[data-drive-fact=cap]")
     page.wait_for_selector("[data-drive-frame][src]", timeout=10_000)
-    cam_w = page.evaluate("document.querySelector('[data-drive-frame]')?.naturalWidth ?? 0")
-    assert cam_w > 0, f"카메라 naturalWidth={cam_w}"
-
+    assert page.evaluate("document.querySelector('[data-drive-frame]')?.naturalWidth ?? 0") > 0
     assert errors == [], errors
 
 
 @pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
                     reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
-def test_speed_preset_changes_command_scale(tablet_page):
-    """고속 프리셋이 실제로 명령 스케일을 바꾼다."""
+def test_stick_right_turns_clockwise_pivot_holds_position_and_release_zeroes(tablet_page):
+    """가제보 실측 규약(REP-103)을 브라우저 종단으로 고정: 오른쪽 = angular 음수."""
     base_url, page, errors = tablet_page
-    page.goto(f"{base_url}/pilot")
-    page.wait_for_selector("form[data-pilot-token-form] ui-field input")
-    page.fill("form[data-pilot-token-form] ui-field input", "devtoken")
-    page.click("form[data-pilot-token-form] ui-button")
-    page.wait_for_selector("[data-drive-enter]")
-    page.click("[data-drive-enter]")
-    page.wait_for_selector("[data-drive-wheel]")
+    _enter_drive(page, base_url)
+    log = f"{base_url}/__test__/teleop"
+    box = page.locator("[data-drive-stick]").bounding_box()
+    cx, cy, r = box["x"] + box["width"] / 2, box["y"] + box["height"] / 2, box["width"] / 2
 
-    # 기본(저속) 상태에서 localStorage 확인
-    config_low = page.evaluate("JSON.parse(localStorage.getItem('rosy.pilot.input') ?? '{}')")
-    assert config_low.get("preset", "low") == "low"
+    def during(action):
+        before = len(page.request.get(log).json())
+        action()
+        page.wait_for_timeout(600)
+        return page.request.get(log).json()[before:]
 
-    # 고속 클릭
-    page.evaluate("""
-      const row = document.querySelector('[data-drive-preset-row]');
-      const high = [...row.querySelectorAll('ui-button')].find(b => b.textContent.includes('high'));
-      if (high) high.click();
-    """)
-    page.wait_for_timeout(300)
-    config_high = page.evaluate("JSON.parse(localStorage.getItem('rosy.pilot.input') ?? '{}')")
-    assert config_high.get("preset") == "high"
+    def drag(fx, fy):
+        page.mouse.move(cx, cy)
+        page.mouse.down()
+        page.mouse.move(cx + fx * r, cy - fy * r, steps=3)
 
-    # 스틱 매핑 확인 — 고속은 저속보다 크다
-    scale = page.evaluate("""(() => {
-      const config = JSON.parse(localStorage.getItem('rosy.pilot.input') ?? '{}');
-      return config.preset;
-    })()""")
-    assert scale == "high"
+    right = during(lambda: drag(1, 0))
+    page.mouse.up()
+    page.wait_for_timeout(500)
+    after_release = page.request.get(log).json()
+    moving = [c for c in right if c["angular"] or c["linear"]]
+    assert moving and all(c["angular"] < 0 and c["linear"] == 0 for c in moving), moving
+    assert after_release[-1]["linear"] == 0 and after_release[-1]["angular"] == 0
+    assert all(c["mode"] == "MANUAL" for c in after_release), "수동 모드 전에 명령을 보냈다"
+
+    pivot = page.locator("[data-drive-pivot=left]").bounding_box()
+    page.mouse.move(pivot["x"] + 10, pivot["y"] + 10)
+    left = during(lambda: page.mouse.down())
+    badge = page.inner_text("[data-drive-motion]")
+    page.mouse.up()
+    moving = [c for c in left if c["angular"] or c["linear"]]
+    assert moving and all(c["angular"] > 0 and c["linear"] == 0 for c in moving), moving
+    assert "제자리" in badge
+    assert all(abs(c["angular"]) <= 0.6 + 1e-9 and abs(c["linear"]) <= 0.15 + 1e-9
+               for c in page.request.get(log).json()), "CORE 수동 한도를 넘겼다"
+    assert errors == [], errors
+
+
+@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
+                    reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
+def test_speed_preset_and_fine_change_the_cap(tablet_page):
+    base_url, page, errors = tablet_page
+    _enter_drive(page, base_url)
+    page.click("[data-drive-preset-row] [data-preset=high]")
+    assert "0.15 m/s" in page.inner_text("[data-drive-fact=cap]")
+    page.click("[data-drive-fine]")
+    assert "0.04 m/s" in page.inner_text("[data-drive-fact=cap]")   # 0.15 × 0.3
+    config = page.evaluate("JSON.parse(localStorage.getItem('rosy.pilot.input') ?? '{}')")
+    assert config.get("preset") == "high" and config.get("fine") is True
+    assert errors == [], errors
+
+
+@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
+                    reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
+def test_key_released_while_an_input_has_focus_still_stops(tablet_page):
+    """W 를 누른 채 입력 조정 슬라이더를 누르고 W 를 떼도 키가 눌린 채 남지 않는다(리뷰 지적)."""
+    base_url, page, errors = tablet_page
+    _enter_drive(page, base_url)
+    log = f"{base_url}/__test__/teleop"
+    page.click("[data-drive-inputs]")
+    page.wait_for_selector("[data-inputs-panel] input[type=range]")
+    page.keyboard.down("KeyW")
+    page.wait_for_timeout(400)
+    page.focus("[data-inputs-panel] input[type=range]")
+    page.keyboard.up("KeyW")
+    page.wait_for_timeout(700)
+    tail = page.request.get(log).json()[-3:]
+    assert any(c["linear"] > 0 for c in page.request.get(log).json()), "W 로 전진 명령이 나가야 한다"
+    assert all(c["linear"] == 0 and c["angular"] == 0 for c in tail), tail
     assert errors == [], errors

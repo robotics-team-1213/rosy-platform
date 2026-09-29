@@ -22,21 +22,30 @@ export function authHeaders() {
 }
 
 export async function api(path, options = {}) {
-  const headers = {...(options.headers ?? {})};
-  if (options.body && !headers["Content-Type"]) {
+  const {timeoutMs, ...init} = options;
+  const headers = {...(init.headers ?? {})};
+  if (init.body && !headers["Content-Type"]) {
     headers["Content-Type"] = "application/json";
   }
-  const response = await fetch(path, {
-    cache: "no-store",
-    ...options,
-    headers: {...headers, ...authHeaders()},
-  });
-  const body = await response.json().catch(() => ({}));
-  return {status: response.status, ok: response.ok, body};
+  // 시한이 있으면 그 안에 못 끝난 요청을 끊는다(AbortError 로 거부된다).
+  const controller = timeoutMs ? new AbortController() : null;
+  const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
+  try {
+    const response = await fetch(path, {
+      cache: "no-store",
+      ...init,
+      ...(controller ? {signal: controller.signal} : {}),
+      headers: {...headers, ...authHeaders()},
+    });
+    const body = await response.json().catch(() => ({}));
+    return {status: response.status, ok: response.ok, body};
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
 }
 
-export async function postJson(path, body) {
-  return api(path, {method: "POST", body: JSON.stringify(body ?? {})});
+export async function postJson(path, body, {timeoutMs} = {}) {
+  return api(path, {method: "POST", body: JSON.stringify(body ?? {}), timeoutMs});
 }
 
 export function whoami() {
