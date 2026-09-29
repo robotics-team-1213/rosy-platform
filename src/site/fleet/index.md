@@ -69,8 +69,8 @@
 
 ## 최근 기록
 
+- 2026-09-30 · uncommitted · docs(fleet): 로봇 등록 ADR 번호 D-352 → D-361
+- 2026-09-30 · uncommitted · fix(fleet): D-352 독립 리뷰 반영(MERGE-AFTER-FIXES)
 - 2026-09-30 · uncommitted · fix(web): Node 18에서 console 웹 단위시험이 ESM을 읽게 — 고아 시험도 연결
 - 2026-09-30 · uncommitted · chore(structure): fleet size verdict re-judged at 11912 lines
 - 2026-09-30 · uncommitted · feat(fleet): registered Mission goal-evidence ingress
-- 2026-09-30 · uncommitted · fix(fleet-console): 사이트 지도 리뷰 반영 (D-257)
-- 2026-09-30 · uncommitted · feat(fleet): add opt-in Mission proposal API composition

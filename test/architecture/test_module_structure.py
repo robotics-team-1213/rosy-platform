@@ -71,11 +71,18 @@ SIZE_VERDICTS = {
         "2026-09-29-fleet-mission-control-arbitration-implementation.md)",
     ),
     "fleet": (
-        11_912,
+        13_187,
         "split: server HTTP boundary, console, signals and the mission-control stores are separate owners "
         "today; group them into subpackages rather than one flat server/ tree (B2); owner fleet, unscheduled "
-        "(re-judged 2026-09-30 at 11912 after the policy/goal-evidence contracts and their stores joined "
-        "the same flat server tree, docs/plans/2026-09-30-goal-evidence-producer-and-verifier.md)",
+        "(re-judged 2026-09-29 at 11164 after mission_store joined the server tree; re-judged 2026-09-30 at "
+        "12419 after the D-361 enrollment register, roster and service joined as their own modules, and "
+        "at 12574 after the D-361 review fixes; re-judged 2026-09-30 at 13187 after main's goal-evidence "
+        "contracts and stores merged in, docs/plans/2026-09-30-goal-evidence-producer-and-verifier.md)",
+    ),
+    "site/fleet/fleet/server/enrollment.py": (
+        610,
+        "accept: one owner (D-361 robot enrollment — exchange, binding, pinned-address gate, unenroll and "
+        "pending logout share one state machine over the register), ROS-free, host-testable (X5)",
     ),
     "site/fleet/fleet/server/mission_store.py": (
         728,
@@ -109,8 +116,10 @@ SIZE_VERDICTS = {
         "accept: legacy comparison-graph publisher pinned by test_module_separation; no new work (X3)",
     ),
     "site/fleet/fleet/server/console.py": (
-        767,
-        "accept: one owner (FleetConsole gather/scatter), host-testable (X5)",
+        1013,
+        "accept: one owner (FleetConsole gather/scatter), host-testable (X5). Re-judged 2026-09-30 at 1013: "
+        "D-361 roster mutation and pinned-address holds change the gather/traffic tables in place, so they "
+        "stay with their owner; the roster policy itself lives in roster.py",
     ),
     "runtime/sensing/control/sensing/perception/lane.py": (
         611,

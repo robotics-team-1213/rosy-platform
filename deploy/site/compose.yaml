@@ -34,6 +34,8 @@ services:
       - /var/lib/rosy/fleet.sqlite3
       - --tasks-db
       - /var/lib/rosy/fleet.sqlite3
+      - --robot-credential-key-file
+      - /run/secrets/robot_credential_key
       - --tls-cert
       - /run/secrets/site_cert
       - --tls-key
@@ -49,6 +51,7 @@ services:
       - fleet_sighting_token
       - discovery_token
       - vision_preview_secret
+      - robot_credential_key
       - site_cert
       - site_key
       - site_ca
@@ -182,6 +185,8 @@ secrets:
     file: ${ROSY_SITE_SECRETS_DIR:?set ROSY_SITE_SECRETS_DIR}/discovery_token
   vision_preview_secret:
     file: ${ROSY_SITE_SECRETS_DIR:?set ROSY_SITE_SECRETS_DIR}/vision_preview_secret
+  robot_credential_key:
+    file: ${ROSY_SITE_SECRETS_DIR:?set ROSY_SITE_SECRETS_DIR}/robot_credential_key
   site_cert:
     file: ${ROSY_SITE_SECRETS_DIR:?set ROSY_SITE_SECRETS_DIR}/site.crt
   site_key:
