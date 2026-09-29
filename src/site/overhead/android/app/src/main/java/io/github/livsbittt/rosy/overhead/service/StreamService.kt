@@ -21,6 +21,9 @@ import io.github.livsbittt.rosy.overhead.BuildConfig
 import io.github.livsbittt.rosy.overhead.MainActivity
 import io.github.livsbittt.rosy.overhead.R
 import io.github.livsbittt.rosy.overhead.camera.CameraController
+import io.github.livsbittt.rosy.overhead.health.DeviceHealth
+import io.github.livsbittt.rosy.overhead.health.DeviceHealthMonitor
+import io.github.livsbittt.rosy.overhead.health.HealthText
 import io.github.livsbittt.rosy.overhead.link.LinkState
 import io.github.livsbittt.rosy.overhead.link.LinkStatus
 import io.github.livsbittt.rosy.overhead.link.OverheadConfig
@@ -29,7 +32,9 @@ import io.github.livsbittt.rosy.overhead.settings.SettingsStore
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.distinctUntilChangedBy
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
@@ -49,10 +54,15 @@ data class StreamState(
     val target: String? = null,
     val link: LinkStatus = LinkStatus(),
     val error: StreamError? = null,
+    /** Battery and heat while a session runs; null when stopped. */
+    val health: DeviceHealth? = null,
 )
 
 /**
  * Foreground camera service (design section 5) that owns the camera and link for one session.
+ * CameraX is bound to this service's lifecycle, not the activity's, so capture continues with
+ * the screen off or locked; only the preview surface follows the activity (verified on a
+ * Galaxy S21, Android 15, 2026-09-30: locked, dozing and forced deep idle kept 3 fps).
  * It must be started while the activity is visible (Android 14 while-in-use rule for camera
  * foreground services). Holds a partial wake lock and a Wi-Fi lock so power saving does not
  * add latency spikes. Close 4400/4409 or a camera failure end the session.
@@ -62,6 +72,7 @@ class StreamService : LifecycleService() {
     private var camera: CameraController? = null
     private var wakeLock: PowerManager.WakeLock? = null
     private var wifiLock: WifiManager.WifiLock? = null
+    private var healthMonitor: DeviceHealthMonitor? = null
     private var sessionActive = false
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -109,6 +120,11 @@ class StreamService : LifecycleService() {
             val plan = CameraSessionPlan.from(pairing)
             if (!sessionActive) return@launch
             acquireLocks()
+            val monitor = DeviceHealthMonitor(this@StreamService).also { it.start() }
+            healthMonitor = monitor
+            // Battery temperature moves in tenths; the notification only follows whole degrees.
+            val notificationHealth = monitor.health.distinctUntilChangedBy { it?.notificationKey }
+            launch { monitor.health.collect { h -> _state.update { it.copy(health = h) } } }
             val newLink = if (plan.sendFrames && pairing != null) {
                 OverheadLink(pairing, BuildConfig.VERSION_NAME, "${Build.MANUFACTURER} ${Build.MODEL}")
             } else null
@@ -124,7 +140,9 @@ class StreamService : LifecycleService() {
                     previewOnly = !plan.sendFrames,
                 )
             }
-            if (!plan.sendFrames) updateNotification(LinkState.DISCONNECTED, previewOnly = true)
+            if (!plan.sendFrames) {
+                launch { notificationHealth.collect { updateNotification(LinkState.DISCONNECTED, previewOnly = true, health = it) } }
+            }
             newLink?.start()
             newCamera.start(OverheadConfig.DEFAULT)
 
@@ -134,7 +152,9 @@ class StreamService : LifecycleService() {
                     activeLink.status.map { it.config }.distinctUntilChanged().collect { newCamera.applyConfig(it) }
                 }
                 launch {
-                    activeLink.status.map { it.state }.distinctUntilChanged().collect { updateNotification(it) }
+                    activeLink.status.map { it.state }.distinctUntilChanged()
+                        .combine(notificationHealth) { linkState, health -> linkState to health }
+                        .collect { (linkState, health) -> updateNotification(linkState, health = health) }
                 }
                 launch {
                     activeLink.status.collect { status ->
@@ -165,8 +185,10 @@ class StreamService : LifecycleService() {
         wakeLock = null
         wifiLock?.takeIf { it.isHeld }?.release()
         wifiLock = null
+        healthMonitor?.stop()
+        healthMonitor = null
         _state.update { current ->
-            current.copy(running = false, previewOnly = false, link = lastLink?.status?.value ?: current.link)
+            current.copy(running = false, previewOnly = false, health = null, link = lastLink?.status?.value ?: current.link)
         }
     }
 
@@ -196,7 +218,7 @@ class StreamService : LifecycleService() {
         manager.createNotificationChannel(channel)
     }
 
-    private fun buildNotification(linkState: LinkState, previewOnly: Boolean = false): Notification {
+    private fun buildNotification(linkState: LinkState, previewOnly: Boolean = false, health: DeviceHealth? = null): Notification {
         val openApp = PendingIntent.getActivity(
             this,
             0,
@@ -214,10 +236,17 @@ class StreamService : LifecycleService() {
             LinkState.CONNECTING -> R.string.state_connecting
             LinkState.DISCONNECTED -> R.string.state_disconnected
         }
+        // Warnings first: the collapsed notification shows one line.
+        val lines = buildList {
+            health?.let { h -> h.warnings.forEach { add(HealthText.warning(resources, it, h)) } }
+            add(getString(text))
+            health?.let { add(HealthText.line(resources, it)) }
+        }
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_stat_camera)
             .setContentTitle(getString(R.string.notif_title))
-            .setContentText(getString(text))
+            .setContentText(lines.first())
+            .setStyle(NotificationCompat.BigTextStyle().bigText(lines.joinToString("\n")))
             .setContentIntent(openApp)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
@@ -227,10 +256,10 @@ class StreamService : LifecycleService() {
             .build()
     }
 
-    private fun updateNotification(linkState: LinkState, previewOnly: Boolean = false) {
+    private fun updateNotification(linkState: LinkState, previewOnly: Boolean = false, health: DeviceHealth? = null) {
         if (!sessionActive) return
         val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        manager.notify(NOTIFICATION_ID, buildNotification(linkState, previewOnly))
+        manager.notify(NOTIFICATION_ID, buildNotification(linkState, previewOnly, health))
     }
 
     companion object {

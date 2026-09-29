@@ -30,8 +30,8 @@
 
 ## 최근 기록
 
+- 2026-09-30 · uncommitted · 리뷰 반영: 실제 마커 보고, 무인터넷 Wi-Fi, 카메라 끄고 설정 열기
+- 2026-09-30 · uncommitted · 천장 설치용 앱: 다음 행동을 말하는 상태, 화면 꺼짐 송출, 기기 상태
 - 2026-09-30 · uncommitted · fix(overhead-app): 적응형 JPEG 화질과 정지 중 대상 표시
 - 2026-09-29 · uncommitted · fix(overhead): pick the ArUco detector API by hasattr
 - 2026-09-29 · uncommitted · web-surface-hardening: CI에 overhead 호스트 시험과 android 단위 시험
-- 2026-09-28 · uncommitted · validation(overhead): recheck physical camera availability
-- 2026-09-28 · uncommitted · apply measured rectification to Fleet preview only
