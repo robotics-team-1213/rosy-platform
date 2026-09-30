@@ -263,8 +263,8 @@
 
 ## 최근 기록
 
+- 2026-10-01 · uncommitted · docs(deployment): 현장 천장 카메라·관제 운영 가이드
 - 2026-10-01 · uncommitted · D-390 Pilot OMX simulation implementation and evidence
 - 2026-10-01 · uncommitted · docs(adr): D-390 Pilot OMX-AI Gazebo 연습 경계와 실행 계획
 - 2026-10-01 · uncommitted · docs(adr): D-385 Rosy가 스스로 표현한다
 - 2026-10-01 · uncommitted · docs(adr): D-341·D-382 Accepted — 병행 세션 결정 회차
-- 2026-10-01 · uncommitted · docs(adr): D-341·D-382 교차 세션 검토 반영
