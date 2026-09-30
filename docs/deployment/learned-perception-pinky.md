@@ -259,3 +259,25 @@ sudo -n bash deploy/robot/pinky_pro/dev/install-learned-perception.sh
 - 녹화가 로봇 밖으로 나가는 일. `rosy_ml harvest`를 사람이(또는 사람이 켠 도구가) 서 있는 로봇에서
   돌릴 때만 나간다.
 - 수거 전 세션이 지워지는 일.
+
+## 부록. 첫 Pi 5 실측 (2026-09-30, `rosy-pinky-8kcn`)
+
+시스템을 바꾸지 않은 측정이다. onnxruntime과 의존 휠을 `/tmp`에만 풀고, 서비스(core·io·camera)가 도는 상태에서 쟀다.
+
+- **장치:** Pi 5, aarch64, 4코어, 메모리 8 GB, Ubuntu 24.04.5, Python 3.12.3
+- **런타임:** apt numpy 1.26.4 + onnxruntime 1.30.0(이미지 블록과 같은 휠 해시). import와 추론 모두 정상, 출력은 유한값이다.
+- **모델:** 0930 LaneUNet, 입력 1×3×240×320. 프레임 30장의 지연(ms)이다.
+
+| 형식 | 1 스레드 | 2 스레드 | 3 스레드 | 4 스레드 |
+|---|---|---|---|---|
+| FP32 p50 | 332 | 215 | **198** | 247 |
+| INT8 QDQ p50 | 157 | **136** | 140 | 166 |
+
+- **INT8 산출 방식:** 개발 PC에서 `onnxruntime.quantization.quantize_static`으로 만들었다. QDQ, per-channel, teleop 프레임 200장으로 보정했다.
+- **INT8 정확도:** teleop 프레임에서 FP32와 픽셀 argmax 일치율이 평균 0.990, 최소 0.982였다.
+- **해석:** FP32는 8 fps 예산(125 ms)을 넘어 약 5 fps다. INT8 2 스레드는 약 7.4 fps로 예산에 가깝다.
+  - 4 스레드가 느린 것은 다른 서비스와 CPU를 다투기 때문으로 본다.
+  - 섀도 배포의 첫 후보는 INT8, 2 스레드다.
+- **남은 조건:**
+  - INT8 파일도 별도 산출물로 intake를 통과해야 한다(D-356).
+  - 이 측정은 노드 없이 추론만 잰 값이다. 섀도 노드를 실제로 켠 상태의 `skip_ratio`, 지연, CPU는 E절 절차로 다시 기록한다.
