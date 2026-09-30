@@ -1100,6 +1100,10 @@ def test_ready_and_held_ready_share_one_sound(tmp_path):
     ("CORE_READY", {"runtime_mode": "hardware", "robot_mode": "EMERGENCY"}, "emergency"),
     ("CORE_READY", {"runtime_mode": "hardware", "robot_mode": "IDLE"}, "ready"),
     ("CORE_READY", {"runtime_mode": "hardware", "robot_mode": "DRIVE"}, "ready"),
+    # D-381: a stuck goal blinks inside NAVIGATION; transient nav states do not.
+    ("CORE_READY", {"runtime_mode": "hardware", "robot_mode": "NAVIGATION", "nav_state": "BLOCKED"}, "blocked"),
+    ("CORE_READY", {"runtime_mode": "hardware", "robot_mode": "NAVIGATION", "nav_state": "FAILED"}, "blocked"),
+    ("CORE_READY", {"runtime_mode": "hardware", "robot_mode": "NAVIGATION", "nav_state": "ARRIVED"}, "navigating"),
     # The lamp priority, live: a failure and a caution outrank the mode.
     ("FAILED:rosy-core", {"robot_mode": "NAVIGATION"}, "failed"),
     ("CORE_READY", {"runtime_mode": "hardware", "robot_mode": "MANUAL",
@@ -1158,6 +1162,34 @@ def test_a_mode_change_switches_the_pattern_without_a_sound(tmp_path):
     assert len(_starts(gpio)) == 1  # ready sounded once; the mode change stays silent
 
 
+def test_entering_emergency_sounds_even_with_a_healthy_state(tmp_path):
+    module = _display()
+    _lamp_tree(tmp_path)
+    _status(tmp_path, "CORE_READY", runtime_mode="hardware")
+    gpio = FakeGPIO()
+    spawn = FakeSpawn()
+    display, _lamp, clock, _rendered, _lines = _state_loop(module, tmp_path, gpio=gpio, spawn=spawn)
+    display.step()
+
+    _status(tmp_path, "CORE_READY", runtime_mode="hardware", robot_mode="EMERGENCY")
+    clock.now += 1
+    display.step()
+    clock.now += 1
+    display.step()  # staying in EMERGENCY announces nothing further
+
+    assert spawn.patterns == ["ready", "emergency"]
+    assert len(_starts(gpio)) == 5  # ready once, the e-stop entry four times
+    # One frequency change to 2500 Hz carries the four beeps — failed stays at 2 kHz.
+    assert [event for event in gpio.events if event[0] == "change"] == [("change", 2500)]
+
+    _status(tmp_path, "CORE_READY", runtime_mode="hardware", robot_mode="IDLE")
+    clock.now += 1
+    display.step()  # leaving EMERGENCY is the ready chirp again, once
+
+    assert spawn.patterns == ["ready", "emergency", "ready"]
+    assert len(_starts(gpio)) == 6
+
+
 def test_the_lcd_state_line_names_the_operating_mode_in_ascii(tmp_path):
     module = _display()
     _status(tmp_path, "CORE_READY", runtime_mode="hardware", robot_mode="NAVIGATION")
@@ -1182,9 +1214,10 @@ def test_the_helper_knows_every_pattern_the_table_can_ask_for():
     names_block = source.split("static const char *names[]")[1].split("};")[0]
     known = set(re.findall(r'"([a-z]+)"', names_block))
 
-    askable = {module.robot_state.lamp_pattern(state, mode)
+    askable = {module.robot_state.lamp_pattern(state, mode, nav)
                for state in module.robot_state.STATES
-               for mode in [*module.robot_state.ROBOT_MODES, None]}
+               for mode in [*module.robot_state.ROBOT_MODES, None]
+               for nav in [*module.robot_state.NAV_STATES, None]}
 
     assert askable <= known, sorted(askable - known)
 

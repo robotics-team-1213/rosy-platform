@@ -22,6 +22,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
+import io.github.livsbittt.rosy.cam.camera.LensChoice
 import io.github.livsbittt.rosy.cam.service.StreamService
 import io.github.livsbittt.rosy.cam.settings.PairingUri
 import io.github.livsbittt.rosy.cam.settings.SettingsStore
@@ -99,6 +100,7 @@ class MainActivity : ComponentActivity() {
     private fun OverheadApp() {
         val state by StreamService.state.collectAsStateWithLifecycle()
         val pairing by settings.pairing.collectAsStateWithLifecycle(initialValue = null)
+        val lens by settings.lens.collectAsStateWithLifecycle(initialValue = null)
         var showSettings by remember { mutableStateOf(false) }
         var localError by remember { mutableStateOf<String?>(null) }
         val scope = rememberCoroutineScope()
@@ -132,6 +134,8 @@ class MainActivity : ComponentActivity() {
             SettingsScreen(
                 current = pairing,
                 locked = state.running,
+                lens = LensChoice.orDefault(lens),
+                onLens = { choice -> scope.launch { settings.saveLens(choice) } },
                 onSave = { p -> scope.launch { settings.save(p) } },
                 onBack = { showSettings = false },
             )

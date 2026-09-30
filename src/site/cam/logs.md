@@ -15,3 +15,28 @@
 - 증거: `gradlew testDebugUnitTest --rerun assembleDebug` BUILD SUCCESSFUL, JVM 시험 130 passed, 0 failed (2026-09-30 Windows, JDK 21). APK `src/site/cam/app/build/outputs/apk/debug/app-debug.apk`.
 - gate 변화: 없음. SOURCE/LOCAL GO, DEVICE/FIELD PARKED(새 APK 설치·재페어링 전). `…rosy.ceilingcamera`는 현장에 설치된 적이 없어 재페어링은 여전히 한 번(`…rosy.overhead` → `…rosy.cam`).
 - 결정: D-377. `Overhead*` 클래스와 와이어 이름은 그대로.
+
+## 2026-09-30 · 5358ce49 · feat(cam): ultra-wide lens (화각 넓게/기본)
+- 변경: `LensSelector`(순수, JVM 시험 12개)가 후면 카메라 중 가로 화각이 가장 넓은 것(초점거리 `LENS_INFO_AVAILABLE_FOCAL_LENGTHS` 최솟값과 `SENSOR_INFO_PHYSICAL_SIZE` 긴 변으로 계산, 물리 카메라 우선)을 WIDE로, CameraX 첫 후면 카메라를 STANDARD로 고른다. 3° 이상 넓지 않으면 WIDE는 STANDARD로 물러나고 화면이 그렇게 말한다. `LensProbe`가 `Camera2CameraInfo`로 특성을 읽고, `CameraController`는 카메라 필터로 그 id를 바인딩한다. 설정 `lens`(DataStore `cam_settings`, `wide`|`standard`, 미설정이면 wide)를 연결 설정 화면의 "화각"에서 고른다. 촬영 중 바꾸면 다시 바인딩(적응 JPEG 품질 초기화, 타임스탬프 소스·센서 크기 다시 읽기)하고 링크를 즉시 다시 연결해 새 hello를 보낸다. 송출 화면·알림에 "렌즈: 초광각 2.2 mm · 화각 104°". hello에 선택 필드 `lens {kind, focal_mm, hfov_deg}`(벡터 `hello_with_lens`, `hello_lens`).
+- 근거: S21(Android 15)의 기본 카메라 zoomRatioRange는 [1.0, 8.0]이라 `setZoomRatio(0.5)`는 불가능하고, 초광각은 별도 camera id 2(2.2 mm, 가로 104.1°; 기본 5.4 mm, 67.8°)로 노출된다(`dumpsys media.camera`).
+- 증거: `gradlew testDebugUnitTest --rerun assembleDebug` BUILD SUCCESSFUL, JVM 시험 146 passed, 0 failed; `lintDebug` 0 errors, 42 warnings(모두 기존 항목) (2026-09-30 Windows, JDK 21).
+- gate 변화: 없음. DEVICE PARKED: S21이 다른 세션(rosy-84, 옛 `…ceilingcamera` 앱, `:18448`)에 물려 있어 설치·실기 비교를 미뤘다.
+- 교훈: 0.5×는 줌 비율이 아니라 다른 카메라 id일 수 있다. 카메라 id를 고를 때는 `DEFAULT_BACK_CAMERA`가 아니라 특성으로 고른다.
+
+## 2026-09-30 · 877a6fb4 · test(cam): S21 ultra-wide device check
+- 변경: 코드 변경 없음. 벤치 Vision(이 브랜치, 8095)에 S21을 `s21`로 페어링하고 같은 자리에서 STANDARD·WIDE를 비교했다.
+- 증거: CameraX 후면 카메라는 id 0(5.4 mm, 67.8°)과 id 2(2.2 mm, 104.1°) 둘이고, WIDE는 id 2, STANDARD는 id 0에 1280x720으로 바인딩됐다. 두 경우 모두 3.0 fps, 건너뜀 0. 촬영 중 넓게로 바꾸자 약 30 ms 안에 다시 바인딩됐고, 새 hello로 Vision `X-Source-Lens`가 `kind=wide;focal_mm=2.2;hfov_deg=104.1`로 바뀌었다. WIDE 프레임에는 트랙 전체가 여유 있게 들어오고, STANDARD는 울타리 가장자리가 잘린다. field_detect는 두 프레임 모두 오류 없이 "field runs past the frame"으로 제안하지 않았다. 증거는 `private/validation/2026-09-30-cam-ultrawide/`(git 밖).
+- gate 변화: 없음(DEVICE는 벤치 한 대, 한 장면. 현장 FIELD 전).
+- 교훈: 초광각은 옆 트랙까지 담아 흰 외곽선 제안이 프레임 끝까지 번질 수 있다. 제안을 받으려면 D-318 모서리 수동 지정이 필요하다.
+
+## 2026-09-30 · a4d9fa7c · feat(cam): STANDARD default, wide on suggestion only
+- 변경: 기본 화각은 STANDARD(`LensChoice.DEFAULT`), 저장된 `lens`가 없는 설치(새 설치, 이 설정 이전 설치)도 기본 렌즈. 설정의 넓게는 "넓게 (초광각 0.5×) — 필드가 화면에 다 안 들어올 때"이고, 넓게는 1 m당 화소가 절반쯤이라는 안내를 붙였다. 설치 안내는 수신기가 마커를 보고하는데 모서리가 다 보이지 않고, 지금 렌즈가 기본이며, 더 넓은 카메라가 있을 때만 "연결 설정 › 화각에서 넓게"를 권한다(`LensAdvice`). 렌즈를 저절로 바꾸지는 않는다. 폰은 수신기의 모서리 보고만 받으므로 "필드 잘림"은 모서리 누락으로 본다. Vision/Fleet의 차선 정합 결과는 폰에 오지 않는다.
+- 근거: 사용자 결정 2026-09-30. rosy-84가 S21 두 프레임을 차선 정합한 결과, 벤치의 기울어진 설치에서 STANDARD는 점수 0.865, 커버리지 0.992, 약 420 px/m였고 WIDE는 0.896, 1.0, 약 196 px/m였다.
+- 증거: `gradlew testDebugUnitTest --rerun assembleDebug lintDebug` BUILD SUCCESSFUL, JVM 시험 151 passed, 0 failed, lint 0 errors·42 warnings(기존); `python -m pytest src/site/vision/test -q` 127 passed (2026-09-30 Windows, JDK 21).
+- gate 변화: 없음.
+- 결정: 기본 STANDARD, WIDE는 운용자 선택(자동 전환 없음).
+
+## 2026-10-01 · 9c69e38f · fix(cam): review fixes for the ultra-wide lens
+- 변경: 촬영 중 렌즈 전환이 실패하면 이전 카메라를 다시 바인딩하고 송출을 이어 간다(`LensSwitch`, 순수·JVM 시험). 화면에 "렌즈를 바꾸지 못해 이전 렌즈로 계속 송출합니다". 상태와 hello의 lens는 전환이 성공한 뒤에만 바뀐다. 초점거리를 여럿 알리는 논리 멀티카메라는 렌즈 정보가 불확실하므로 hello.lens를 보내지 않고 "렌즈 정보 불확실"로 표시한다. 세션 수집기는 하나의 Job 아래에서 돌고 `releaseSession()`이 취소한다. 기기 점검 항목의 커밋 표기를 877a6fb4로 바로잡았다.
+- 증거: `gradlew testDebugUnitTest --rerun assembleDebug lintDebug --no-daemon` BUILD SUCCESSFUL, JVM 시험 156 passed, 0 failed, lint 0 errors·42 warnings(기존) (2026-10-01 Windows, JDK 21).
+- gate 변화: 없음.

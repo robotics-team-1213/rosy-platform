@@ -430,6 +430,13 @@ def _robot_mode(svc: CoreServicesLike) -> Optional[str]:
     return robot_state.valid_robot_mode(getattr(mode, "value", mode))
 
 
+def _nav_state(svc: CoreServicesLike) -> Optional[str]:
+    """D-381: CORE's live NavigationState, same duck-typing and same absence rule."""
+    snapshot = getattr(getattr(svc, "state", None), "snapshot", None)
+    nav = getattr(snapshot() if callable(snapshot) else None, "navigation", None)
+    return robot_state.valid_nav_state(getattr(nav, "value", nav))
+
+
 def status_inputs(svc: CoreServicesLike) -> dict[str, Any]:
     """What the root side cannot know: the live warning threshold, the overlaid device states and the live robot mode."""
     hardware = host_hardware(None, svc)
@@ -437,7 +444,7 @@ def status_inputs(svc: CoreServicesLike) -> dict[str, Any]:
                for row in (hardware["devices"] if hardware.get("available") else [])]
     return {"schema": 1, "written_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
             "battery_warning_percent": _warning_percent(svc), "devices": devices,
-            "robot_mode": _robot_mode(svc)}
+            "robot_mode": _robot_mode(svc), "nav_state": _nav_state(svc)}
 
 
 def write_status_inputs(svc: CoreServicesLike) -> None:
