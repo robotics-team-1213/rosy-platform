@@ -10,7 +10,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Mapping
+from typing import Any, Callable, Mapping
 
 from .gripper_contract import (
     GripperObservation,
@@ -20,6 +20,7 @@ from .gripper_contract import (
     verify_released_object,
 )
 from .target_evidence import TargetEvidence
+from .phase_recorder import ActionPhaseRecorder
 
 
 class TransactionError(ValueError):
@@ -33,8 +34,7 @@ class PickPlaceState(str, Enum):
     TRANSFER = "TRANSFER"
     RELEASE = "RELEASE"
     VERIFY_RELEASE = "VERIFY_RELEASE"
-    VERIFY_PLACEMENT = "VERIFY_PLACEMENT"
-    COMPLETED = "COMPLETED"
+    ACTION_SUCCEEDED = "ACTION_SUCCEEDED"
     HOLD = "HOLD"
 
 
@@ -52,20 +52,6 @@ class ArmActionResult:
     observed_at: float
 
 
-@dataclass(frozen=True)
-class PlacementEvidence:
-    action_id: str
-    attempt_id: str
-    object_id: str
-    destination_id: str
-    observation_id: str
-    evaluator_id: str
-    evaluator_revision: str
-    predicate: str
-    satisfied: bool
-    observed_at: float
-
-
 class PickPlaceTransaction:
     """Consume independent evidence in order; never perform a driver operation."""
 
@@ -74,6 +60,12 @@ class PickPlaceTransaction:
         PickPlaceState.GRASP: "grasp",
         PickPlaceState.TRANSFER: "transfer",
         PickPlaceState.RELEASE: "release",
+    }
+    _STATE_REQUIRED_FOR_PHASE = {
+        "approach": PickPlaceState.APPROACH,
+        "grasp": PickPlaceState.GRASP,
+        "transfer": PickPlaceState.TRANSFER,
+        "release": PickPlaceState.RELEASE,
     }
 
     def __init__(self, *, action_id: str, attempt_id: str, workcell_id: str,
@@ -109,16 +101,45 @@ class PickPlaceTransaction:
         self._recovered_object_may_be_held = False
         self.last_result_id: str | None = None
 
+    def workflow_evidence(self) -> dict[str, Any]:
+        """Return a bounded journal projection with no raw sensor/image payloads."""
+        refs: dict[str, object] = {}
+        if self.last_result_id is not None:
+            refs["phase_result_id"] = self.last_result_id
+        if self.hold_receipt is not None:
+            refs["gripper_hold_sequence"] = self.hold_receipt.sequence
+        if self.release_receipt is not None:
+            refs["gripper_release_sequence"] = self.release_receipt.sequence
+        if self.hold_reason is not None:
+            refs["hold_reason"] = self.hold_reason
+        return {
+            "workflow_state": self.state.value,
+            "object_may_be_held": self.object_held,
+            "evidence_refs": refs,
+        }
+
+    def may_submit_phase(self, phase_id: str) -> bool:
+        """Authorize only the motion stage reached by verified workflow evidence."""
+        expected_state = self._STATE_REQUIRED_FOR_PHASE.get(phase_id)
+        return expected_state is not None and self.state is expected_state
+
     @property
     def object_held(self) -> bool:
         return (self._recovered_object_may_be_held
+                or self.state in {
+                    PickPlaceState.VERIFY_HOLD, PickPlaceState.TRANSFER,
+                    PickPlaceState.RELEASE, PickPlaceState.VERIFY_RELEASE,
+                }
                 or (self.hold_receipt is not None and self.release_receipt is None))
 
     def _hold(self, reason: str) -> None:
+        self._recovered_object_may_be_held = self.object_held
         self.state = PickPlaceState.HOLD
         self.hold_reason = reason
 
     def record_arm_result(self, result: ArmActionResult) -> PickPlaceState:
+        if self.state is PickPlaceState.ACTION_SUCCEEDED:
+            raise TransactionError("local Action is terminal; late arm results cannot change it")
         if self.state is PickPlaceState.HOLD:
             raise TransactionError("transaction is in HOLD")
         if self.state not in self._STAGE_BY_STATE:
@@ -204,38 +225,11 @@ class PickPlaceTransaction:
             raise TransactionError("gripper readback cannot prove the object was released") from exc
         self.release_receipt = receipt
         self._recovered_object_may_be_held = False
-        self.state = PickPlaceState.VERIFY_PLACEMENT
+        self.state = PickPlaceState.ACTION_SUCCEEDED
         return receipt
 
-    def verify_placement(self, evidence: PlacementEvidence, *, now: float,
-                         max_age_s: float) -> PickPlaceState:
-        if self.state is not PickPlaceState.VERIFY_PLACEMENT:
-            raise TransactionError("transaction is not awaiting destination evidence")
-        identity_matches = (
-            evidence.action_id == self.action_id and evidence.attempt_id == self.attempt_id
-            and evidence.object_id == self.source.object_id
-            and evidence.destination_id == self.destination.object_id
-            and evidence.predicate == "inside_destination"
-            and bool(evidence.observation_id) and bool(evidence.evaluator_id)
-            and bool(evidence.evaluator_revision)
-        )
-        try:
-            observed_at = float(evidence.observed_at)
-            current, limit = float(now), float(max_age_s)
-        except (TypeError, ValueError) as exc:
-            self._hold("placement_evidence_invalid")
-            raise TransactionError("placement evidence time is invalid") from exc
-        if (not identity_matches or isinstance(now, bool) or isinstance(max_age_s, bool)
-                or not math.isfinite(observed_at) or not math.isfinite(current)
-                or not math.isfinite(limit) or limit <= 0 or current < observed_at
-                or current - observed_at > limit or evidence.satisfied is not True):
-            self._hold("placement_unconfirmed")
-            raise TransactionError("independent placement predicate is not confirmed")
-        self.state = PickPlaceState.COMPLETED
-        return self.state
-
     def cancel(self, *, reason: str) -> PickPlaceState:
-        if self.state is PickPlaceState.COMPLETED:
+        if self.state is PickPlaceState.ACTION_SUCCEEDED:
             raise TransactionError("completed transaction cannot be canceled")
         _ = reason
         self._hold("cancel_while_object_held" if self.object_held else "cancel_during_action_unknown")
@@ -289,5 +283,108 @@ class PickPlaceTransaction:
                          PickPlaceState.VERIFY_RELEASE}
         )
         recovered.last_result_id = snapshot.get("last_result_id")
-        recovered._hold("restart_reconciliation_required")
+        if state is PickPlaceState.ACTION_SUCCEEDED and snapshot.get("object_held") is False:
+            recovered.hold_reason = None
+        else:
+            recovered._hold("restart_reconciliation_required")
         return recovered
+
+
+class PickPlaceWorkflowJournal:
+    """Persist semantic and gripper evidence separately from ROS goal phases.
+
+    This journal does not submit gripper commands or verify Fleet placement
+    evidence. The local Action completes only after all four ROS phases and a
+    fresh open/no-object readback; Fleet remains responsible for GOAL_CONFIRMED.
+    """
+
+    def __init__(self, transaction: PickPlaceTransaction,
+                 recorder: ActionPhaseRecorder) -> None:
+        if (transaction.action_id != recorder.action_id
+                or transaction.attempt_id != recorder.attempt_id):
+            raise ValueError("workflow transaction and phase recorder identity mismatch")
+        self.transaction = transaction
+        self.recorder = recorder
+        self._persist_current()
+
+    def phase_gate(self, phase_id: str) -> bool:
+        """Pass directly to PickPlaceRunner; stale/unpersisted state fails closed."""
+        snapshot = self.transaction.workflow_evidence()
+        return (
+            self.transaction.may_submit_phase(phase_id)
+            and self.recorder.latest_workflow_state() == snapshot["workflow_state"]
+        )
+
+    def record_arm_result(self, result: ArmActionResult) -> PickPlaceState:
+        return self._apply(lambda: self.transaction.record_arm_result(result))
+
+    def verify_gripper_held(self, observation: GripperObservation, *, now: float,
+                            max_age_s: float) -> HoldReceipt:
+        return self._apply(lambda: self.transaction.verify_gripper_held(
+            observation, now=now, max_age_s=max_age_s,
+        ))
+
+    def verify_gripper_released(self, observation: GripperObservation, *, now: float,
+                                max_age_s: float,
+                                result_observed_at: str) -> ReleaseReceipt:
+        receipt = self._apply(lambda: self.transaction.verify_gripper_released(
+            observation, now=now, max_age_s=max_age_s,
+        ))
+        evidence = self.transaction.workflow_evidence()
+        try:
+            self.recorder.complete_pick_place(
+                result_observed_at=result_observed_at,
+                result={"workflow_state": evidence["workflow_state"],
+                        "object_may_be_held": evidence["object_may_be_held"],
+                        "evidence_refs": evidence["evidence_refs"]},
+            )
+        except Exception:
+            parent = self.recorder.parent()
+            if parent is not None and parent["state"] in {
+                "SUBMITTING", "ACCEPTED", "RUNNING", "CANCEL_REQUESTED", "UNKNOWN",
+            }:
+                self._force_hold("ACTION_COMPLETION_UNCERTAIN")
+            raise
+        return receipt
+
+    def cancel(self, *, reason: str) -> PickPlaceState:
+        state = self._apply(lambda: self.transaction.cancel(reason=reason))
+        if state is PickPlaceState.HOLD:
+            self._hold_action()
+        return state
+
+    def _apply(self, operation: Callable[[], Any]) -> Any:
+        try:
+            result = operation()
+        except TransactionError:
+            if self.transaction.state is PickPlaceState.HOLD:
+                self._force_hold(self.transaction.hold_reason or "WORKFLOW_EVIDENCE_REJECTED")
+            raise
+        try:
+            self._persist_current()
+        except Exception as exc:
+            self._force_hold("WORKFLOW_JOURNAL_FAILED")
+            raise TransactionError("workflow state could not be durably recorded") from exc
+        return result
+
+    def _persist_current(self) -> None:
+        evidence = self.transaction.workflow_evidence()
+        if evidence["workflow_state"] == PickPlaceState.HOLD.value:
+            self._hold_action()
+            evidence = self.transaction.workflow_evidence()
+        self.recorder.record_workflow_state(**evidence)
+
+    def _hold_action(self) -> None:
+        reason = self.transaction.hold_reason or "WORKFLOW_HOLD"
+        parent = self.recorder.parent()
+        if parent is not None and parent["state"] in {
+            "SUBMITTING", "ACCEPTED", "RUNNING", "CANCEL_REQUESTED", "UNKNOWN",
+        }:
+            self.recorder.hold(reason=reason)
+
+    def _force_hold(self, reason: str) -> None:
+        self.transaction._hold(reason)
+        try:
+            self._persist_current()
+        except Exception:
+            self._hold_action()

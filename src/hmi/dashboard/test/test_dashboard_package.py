@@ -11,6 +11,44 @@ def test_the_shell_and_modules_are_here():
         assert (ROOT / name).is_file(), name
 
 
+# --- 편대 역할 칸 (D-280 문법: 대형에 속한 로봇만 말한다) --------------------------
+
+
+def test_the_hero_strip_has_a_formation_cell_that_starts_hidden():
+    html = (ROOT / "index.html").read_text(encoding="utf-8")
+    assert 'class="hero-formation" id="hero-formation" hidden' in html
+    assert 'id="robot-role"' in html and 'id="robot-formation"' in html
+
+
+def test_the_formation_cell_hides_when_the_robot_has_no_role():
+    # hidden must win over the flex layout, or an empty cell takes map height.
+    css = (ROOT / "console-detail.css").read_text(encoding="utf-8")
+    assert ".hero-formation[hidden] { display: none; }" in css
+
+
+def test_the_state_render_feeds_swarm_to_the_formation_cell():
+    shell = (ROOT / "app.js").read_text(encoding="utf-8")
+    telemetry = (ROOT / "telemetry.js").read_text(encoding="utf-8")
+    assert "renderFormationHero(state.swarm);" in shell
+    assert 'role === "leader" || role === "follower"' in telemetry
+    assert 'role === "leader" ? "리더" : "팔로워"' in telemetry
+    # none (and anything unknown) keeps the cell hidden — no guessed role.
+    assert "cell.hidden = !known;" in telemetry
+
+
+def test_the_identity_line_carries_the_software_version():
+    telemetry = (ROOT / "telemetry.js").read_text(encoding="utf-8")
+    assert "info.software_version" in telemetry
+
+
+def test_the_fast_state_render_does_not_clobber_the_identity_line():
+    # robot-id is the lineage line; renderRobotInfo (slow cycle) is its one writer.
+    # The 10 Hz state render used to overwrite it with the bare robot_id, so the
+    # model/version/runtime flashed and vanished every tick (found on the device).
+    shell = (ROOT / "app.js").read_text(encoding="utf-8")
+    assert 'setText("robot-id"' not in shell
+
+
 def test_the_shell_has_no_inline_script():
     html = (ROOT / "index.html").read_text(encoding="utf-8")
     assert "<script>" not in html

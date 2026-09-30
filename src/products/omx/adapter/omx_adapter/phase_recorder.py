@@ -75,6 +75,24 @@ class ActionPhaseRecorder:
             self.action_id, self.attempt_id, reason=reason,
         )
 
+    def record_workflow_state(self, *, workflow_state: str,
+                              object_may_be_held: bool,
+                              evidence_refs: Mapping[str, object]) -> dict[str, Any]:
+        return self._store.record_workflow_state(
+            self.action_id, self.attempt_id, workflow_state=workflow_state,
+            object_may_be_held=object_may_be_held, evidence_refs=evidence_refs,
+        )
+
+    def complete_pick_place(self, *, result_observed_at: str,
+                            result: Mapping[str, object]) -> dict[str, Any]:
+        return self._store.complete_pick_place(
+            self.action_id, self.attempt_id,
+            result_observed_at=result_observed_at, result=result,
+        )
+
+    def latest_workflow_state(self) -> str | None:
+        return self._store.latest_workflow_state(self.action_id, self.attempt_id)
+
     def parent(self) -> dict[str, Any] | None:
         return self._store.get_action(self.action_id)
 
