@@ -37,6 +37,9 @@
     <string name="problem_not_discovered_other">지금 Wi-Fi는 %1$s인데 페어링 때는 %2$s였습니다. 이름은 같아도 다른 공유기(AP)나 핫스팟입니다. 현장 PC와 같은 공유기에 연결하세요.</string>
     <string name="problem_not_discovered_same">지금 Wi-Fi(%1$s)는 페어링 때와 같은 네트워크입니다. 현장 PC와 수신기의 자동 찾기(mDNS)가 켜져 있는지 확인하세요.</string>
     <string name="problem_not_discovered_unknown">지금 Wi-Fi: %1$s. 현장 PC와 같은 공유기(AP)에 연결됐는지 확인하세요.</string>
+    <string name="problem_manual_unreachable">수동 주소(%1$s)에도 닿지 않습니다.</string>
+    <string name="problem_manual_refused">수동 주소(%1$s)는 응답하지만 수신기가 꺼져 있습니다.</string>
+    <string name="problem_manual_other">수동 주소(%1$s)로도 연결하지 못했습니다.</string>
     <string name="network_with_gateway">%1$s (게이트웨이 %2$s)</string>
     <string name="network_unknown">주소 모름</string>
     <string name="problem_site_conflict">사이트 이름(%1$s)이 여러 주소에서 광고되어 자동으로 고르지 않습니다 — 현장 PC 관리자에게 알리세요.</string>

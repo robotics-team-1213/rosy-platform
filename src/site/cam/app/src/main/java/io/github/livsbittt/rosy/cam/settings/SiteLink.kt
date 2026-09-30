@@ -49,8 +49,9 @@ data class SiteLink(
         /**
          * A pairing entered in settings or from a `rosyov://` link, and the migration of a pairing saved before
          * D-391 (keys `host`/`port`/`token`/`source`/`secure`/`pin`): an IP host becomes [manualHost], a DNS name
-         * becomes [tlsHost]. [previous] keeps what the new input cannot carry: the other host kind when it
-         * belongs to the same site (same pin), the site name, and the pairing-time subnet.
+         * becomes [tlsHost]. [previous] keeps what the new input cannot carry when it belongs to the same site
+         * (same pin): the learned [tlsHost] under an IP link, the site name, and the pairing-time subnet.
+         * [manualHost] never carries over: it is the saved link's own IP or nothing.
          */
         fun from(
             pairing: PairingUri,
@@ -69,7 +70,8 @@ data class SiteLink(
                 token = pairing.token,
                 source = pairing.source,
                 secure = pairing.secure,
-                manualHost = if (ip) host else previous?.manualHost?.takeIf { sameSite },
+                // Only the link being saved supplies manual_host: a name link clears a stale IP (2026-10-01 tablet).
+                manualHost = if (ip) host else null,
                 pairingSubnet = pairingSubnet ?: previous?.pairingSubnet?.takeIf { sameSite },
             )
         }

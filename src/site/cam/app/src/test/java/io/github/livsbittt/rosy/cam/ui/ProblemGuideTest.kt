@@ -2,6 +2,8 @@ package io.github.livsbittt.rosy.cam.ui
 
 import io.github.livsbittt.rosy.cam.link.LinkError
 import io.github.livsbittt.rosy.cam.link.NetworkFailure
+import io.github.livsbittt.rosy.cam.link.SiteRoute
+import io.github.livsbittt.rosy.cam.link.SiteSighting
 import io.github.livsbittt.rosy.cam.service.StreamError
 import java.net.InetAddress
 import org.junit.Assert.assertEquals
@@ -139,6 +141,40 @@ class ProblemGuideTest {
         val conflict = ProblemGuide.forLink(network(NetworkFailure.CONFLICT), stopped = false, wifiConnected = true)
         assertEquals(Problem.SITE_CONFLICT, conflict.problem)
         assertEquals(NextStep.NONE, conflict.step)
+    }
+
+    @Test
+    fun manualFallbackFailureAfterAnEmptyBrowseIsNotDiscoveredFirst() {
+        // 2026-10-01 tablet: advertiser off, manual address unreachable -> not the generic "닿지 않습니다".
+        val afterBrowse = SiteRoute.Manual(InetAddress.getByName("192.168.1.102"))
+        for ((kind, manual) in listOf(
+            NetworkFailure.UNREACHABLE to Problem.UNREACHABLE,
+            NetworkFailure.REFUSED to Problem.REFUSED,
+            NetworkFailure.OTHER to Problem.NETWORK_OTHER,
+        )) {
+            val g = ProblemGuide.forLink(network(kind), stopped = false, wifiConnected = true, route = afterBrowse)
+            assertEquals(Problem.NOT_DISCOVERED, g.problem)
+            assertEquals(manual, g.manualFailure)
+            assertEquals(NextStep.OPEN_SETTINGS, g.step)
+            assertEquals("raw detail", g.detail)
+        }
+    }
+
+    @Test
+    fun manualFallbackKeepsItsOwnProblemWhenNotDiscoveryRelated() {
+        val afterBrowse = SiteRoute.Manual(InetAddress.getByName("192.168.1.102"))
+        // TLS or pin failures mean something answered at the manual address; say that, not "not found".
+        assertEquals(Problem.TLS_PIN, ProblemGuide.forLink(network(NetworkFailure.TLS_PIN), true, true, afterBrowse).problem)
+        // An IP-only link never browsed, so "not seen on this Wi-Fi" would be a guess.
+        val ipOnly = SiteRoute.Manual(InetAddress.getByName("192.168.1.102"), afterBrowse = false)
+        val g = ProblemGuide.forLink(network(NetworkFailure.UNREACHABLE), false, true, ipOnly)
+        assertEquals(Problem.UNREACHABLE, g.problem)
+        assertNull(g.manualFailure)
+        // mDNS found the site: an unreachable address is the plain problem.
+        val found = SiteRoute.Discovered(SiteSighting("s", "rosy-site.local", 443, listOf(InetAddress.getByName("192.168.1.5"))))
+        assertEquals(Problem.UNREACHABLE, ProblemGuide.forLink(network(NetworkFailure.UNREACHABLE), false, true, found).problem)
+        // No Wi-Fi still wins.
+        assertEquals(Problem.NO_WIFI, ProblemGuide.forLink(network(NetworkFailure.UNREACHABLE), false, false, afterBrowse).problem)
     }
 
     @Test

@@ -26,8 +26,11 @@ sealed interface SiteRoute {
     /** mDNS showed [SiteSighting.tlsHost]; dial its addresses, verify TLS against `tls_host`. */
     data class Discovered(val sighting: SiteSighting) : SiteRoute
 
-    /** mDNS showed nothing; dial the pairing link's IP ("수동 주소"). */
-    data class Manual(val address: InetAddress) : SiteRoute
+    /**
+     * Dial the pairing link's IP ("수동 주소"). [afterBrowse]: mDNS was searched for `tls_host` and showed
+     * nothing (so a failure here is also `not_discovered`); false for a link that knows only its IP.
+     */
+    data class Manual(val address: InetAddress, val afterBrowse: Boolean = true) : SiteRoute
 
     /** Neither mDNS nor a manual address: D-391 `not_discovered`. */
     data class NotDiscovered(val tlsHost: String) : SiteRoute
@@ -99,7 +102,7 @@ class SiteResolver(
     }
 
     private fun lookup(): SiteRoute {
-        val tlsHost = link.tlsHost ?: return link.manualHost?.let { SiteRoute.Manual(literal(it)) }
+        val tlsHost = link.tlsHost ?: return link.manualHost?.let { SiteRoute.Manual(literal(it), afterBrowse = false) }
             ?: SiteRoute.NotDiscovered("")
         if (!isMdnsName(tlsHost)) return SiteRoute.SystemDns
         cached?.let { if (nowMs() - cachedAtMs < cacheMs) return it }

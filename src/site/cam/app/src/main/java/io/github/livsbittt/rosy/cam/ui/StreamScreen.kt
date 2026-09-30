@@ -229,7 +229,7 @@ private fun StatusPanel(
         }
         val guidance = state.error?.let(ProblemGuide::forStream)
             // A stopped session is not reconnecting, whatever the link's last state said.
-            ?: link.error?.let { ProblemGuide.forLink(it, link.stopped || !state.running, wifiConnected = lan != null) }
+            ?: link.error?.let { ProblemGuide.forLink(it, link.stopped || !state.running, wifiConnected = lan != null, route = state.route) }
         when {
             localError != null -> CritMessage(localError)
             guidance != null -> ProblemMessage(guidance, siteLink, lan, state.running, onStop, onOpenSettings)
@@ -319,8 +319,16 @@ private fun ProblemMessage(
         Problem.CAMERA -> stringResource(R.string.problem_camera)
         Problem.FOREGROUND_DENIED -> stringResource(R.string.problem_foreground)
     }
+    // mDNS found nothing and the "수동 주소" fallback failed as well: say both, not-found first.
+    val manual = siteLink?.manualHost.orEmpty()
+    val manualLine = when (guidance.manualFailure) {
+        Problem.UNREACHABLE -> "\n" + stringResource(R.string.problem_manual_unreachable, manual)
+        Problem.REFUSED -> "\n" + stringResource(R.string.problem_manual_refused, manual)
+        Problem.NETWORK_OTHER -> "\n" + stringResource(R.string.problem_manual_other, manual)
+        else -> ""
+    }
     val retrying = if (guidance.retrying) "\n" + stringResource(R.string.problem_retrying) else ""
-    CritMessage(text + retrying)
+    CritMessage(text + manualLine + retrying)
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
         if (guidance.step == NextStep.OPEN_SETTINGS) {
             if (ProblemGuide.stopsCameraFirst(guidance.problem, running)) {

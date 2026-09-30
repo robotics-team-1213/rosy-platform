@@ -53,6 +53,17 @@ class SiteLinkTest {
     }
 
     @Test
+    fun nameLinkClearsTheMigratedManualHost() {
+        // 2026-10-01 tablet: a migrated IP pairing, then re-pairing by name with the same CA pin. The old IP
+        // must not survive as manual_host, or a missing advertisement dials it instead of saying not_discovered.
+        val migrated = SiteLink.from(PairingUri("192.168.1.102", 18448, "tok", "overhead-1", true, pin))
+        val renamed = SiteLink.from(PairingUri("perpros.local", 18448, "tok", "overhead-1", true, pin), previous = migrated)
+        assertEquals("perpros.local", renamed.tlsHost)
+        assertNull(renamed.manualHost)
+        assertNull(SiteLink.validate(renamed))
+    }
+
+    @Test
     fun anotherSiteInheritsNothing() {
         val saved = SiteLink(
             siteName = "Rosy site", tlsHost = "rosy-site.local", port = 443, caPin = pin, token = "old",

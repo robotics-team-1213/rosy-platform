@@ -61,7 +61,7 @@ class SiteResolverTest {
     fun manualOnlyLinkDialsItsIpWithoutBrowsing() {
         val browser = FakeBrowser(listOf(seen("rosy-site.local", "192.168.1.5")))
         val link = site.copy(tlsHost = null, manualHost = "192.168.1.10")
-        assertEquals(SiteRoute.Manual(ip("192.168.1.10")), SiteResolver(link, browser).resolve())
+        assertEquals(SiteRoute.Manual(ip("192.168.1.10"), afterBrowse = false), SiteResolver(link, browser).resolve())
         assertEquals(0, browser.browses)
     }
 

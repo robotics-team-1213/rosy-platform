@@ -2,6 +2,7 @@ package io.github.livsbittt.rosy.cam.ui
 
 import io.github.livsbittt.rosy.cam.link.LinkError
 import io.github.livsbittt.rosy.cam.link.NetworkFailure
+import io.github.livsbittt.rosy.cam.link.SiteRoute
 import io.github.livsbittt.rosy.cam.service.StreamError
 
 /** Operator-facing problem; each maps to one Korean sentence that names the next step. */
@@ -35,19 +36,38 @@ enum class NextStep { OPEN_SETTINGS, NONE }
 /**
  * @property detail raw text for the "자세히" disclosure; never shown by default.
  * @property retrying the link keeps reconnecting on its own, so the operator may also just wait.
+ * @property manualFailure with [Problem.NOT_DISCOVERED]: mDNS found nothing and the "수동 주소" fallback then
+ *   failed this way too ([Problem.UNREACHABLE], [Problem.REFUSED] or [Problem.NETWORK_OTHER]); null otherwise.
  */
-data class Guidance(val problem: Problem, val step: NextStep, val detail: String?, val retrying: Boolean)
+data class Guidance(
+    val problem: Problem,
+    val step: NextStep,
+    val detail: String?,
+    val retrying: Boolean,
+    val manualFailure: Problem? = null,
+)
 
 /** Pure mapping from link and session errors to guidance. Wording lives in strings.xml. */
 object ProblemGuide {
     /**
      * @param stopped the link gave up (4400/4409 or a fatal 4401) and waits for the operator.
      * @param wifiConnected false when the phone has no Wi-Fi; any transport failure is then blamed on that.
+     * @param route how the failed attempt reached the site. After an empty mDNS browse a transport failure
+     *   on the manual address is reported as `not_discovered` first (D-391 1), with that failure attached.
      */
-    fun forLink(error: LinkError, stopped: Boolean, wifiConnected: Boolean): Guidance {
+    fun forLink(error: LinkError, stopped: Boolean, wifiConnected: Boolean, route: SiteRoute? = null): Guidance {
         val retrying = !stopped
         return when (error) {
             is LinkError.Network -> {
+                val manualFailure = when (error.kind) {
+                    NetworkFailure.UNREACHABLE -> Problem.UNREACHABLE
+                    NetworkFailure.REFUSED -> Problem.REFUSED
+                    NetworkFailure.OTHER -> Problem.NETWORK_OTHER
+                    else -> null
+                }
+                if (wifiConnected && manualFailure != null && route is SiteRoute.Manual && route.afterBrowse) {
+                    return Guidance(Problem.NOT_DISCOVERED, NextStep.OPEN_SETTINGS, error.detail, retrying, manualFailure)
+                }
                 val problem = if (!wifiConnected) {
                     Problem.NO_WIFI
                 } else {
