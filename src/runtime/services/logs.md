@@ -232,3 +232,8 @@
 - 변경: release_emergency() 가 잠금 해제 후 change_listeners 를 transition() 과 같은 계약으로 돌린다(EMERGENCY→IDLE). 여태 리스너를 건너뛰어 모드 미러·도킹 정리가 해제를 못 봤다.
 - 증거: test_core_logic.py 두 시험(해제 리스너 호출, 실패하는 리스너는 자기만 건너뜀).
 - gate 변화: 없음.
+
+## 2026-10-01 · a527920a · feat(core): D-321 부록 보정 세션 lease
+- 변경: `core_features/calibration/session.py` 추가 — 로봇당 한 개의 보정 lease(start/heartbeat/end, ttl 만료), 상태 스냅샷용 `activity()`, API 차단용 `blocking(token_id)`, 이벤트 `calibration.session_started/ended/expired`. `StateManager.set_activity_provider()` 가 lease 를 스냅샷 `activity` 로 실시간으로 싣는다(remaining_s 가 줄어든다). 모드·cmd_vel 은 만지지 않는다(D-2).
+- 증거: src/runtime/gateway/test/test_calibration_session.py 13 passed; gateway·api_web·services 전체 1850 passed, 새 실패 0(test_core_node_teardown 1건은 main f16123eb 에서도 실패) (2026-10-01 Windows).
+- gate 변화: 없음.

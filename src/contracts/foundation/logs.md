@@ -187,3 +187,8 @@
 - 변경: `NAV_STATES`·`NAV_STUCK`·`valid_nav_state()` 추가. `lamp_pattern()`이 세 번째 인자 `nav_state`를 받아 NAVIGATION 안에서 BLOCKED/FAILED를 `blocked`로 구분한다(다른 우선순위는 불변).
 - 증거: test_robot_state.py 90 passed (변이 증명: blocked 규칙을 빼면 해당 2행이 빨개진다).
 - gate 변화: 없음.
+
+## 2026-10-01 · a527920a · feat(protocol): StateSnapshot.activity (v1.67 additive)
+- 변경: `RobotActivity`·`ActivityOwner` 모델과 `StateSnapshot.activity: Optional[RobotActivity] = None`. 보정 lease 가 살아 있을 때만 객체, 아니면 null.
+- 증거: test_calibration_session.py 의 robot/state·/ws/state 시험, test_protocol_version_alignment 통과.
+- gate 변화: 없음.

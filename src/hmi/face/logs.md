@@ -160,3 +160,8 @@
 - gate 변화: 없음 (HOLD 유지, blocker 사유만 정확화).
 - 결정: 없음.
 - 교훈: led의 rosylib 경우와 같은 모양이다 — "컨테이너에서 돌려라"가 유효한 지시인지는 노드의 import 그래프가 결정한다. blocker를 쓸 때 import 경로를 먼저 본다.
+
+## 2026-10-01 · 15770a9c · feat(face): 정보 카드 MODE 행 CALIBRATING
+- 변경: `display/info` 의 `activity == "CALIBRATING"` 이면 MODE 값을 주의 칩 `CALIBRATING` 으로. LCD 글꼴은 ASCII 뿐(D-221)이라 "보정 중" 대신 기계어. E-STOP HEALTH 행은 그대로 우선.
+- 증거: face 시험·test_bridge_display 177 passed; 렌더 X:\DevTemp\calibration-mode\face-info-calibrating.png.
+- gate 변화: 없음.

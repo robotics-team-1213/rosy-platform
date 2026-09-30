@@ -34,8 +34,8 @@
 
 ## 최근 기록
 
+- 2026-10-01 · a527920a · feat(core): D-321 부록 보정 세션 lease
 - 2026-10-01 · uncommitted · fix(command): release_emergency 도 리스너 계약을 지킨다
 - 2026-09-30 · uncommitted · refactor(line_follow): 데이터 모델을 model.py 로 분리(파일 예산)
 - 2026-09-30 · 61c25393 · fix(line-follow): 재검토 R1·R2 — 풀림 지연은 연속 측정만, 모드 선택마다 새 앞 물체 세션
 - 2026-09-30 · 794e75bb · fix(line-follow): 검토 반영 — sector 기본, 급회전 창·near-field, 풀림 지연, L1 문턱
-- 2026-09-30 · e3eb2561 · feat(line-follow): 조향을 아는 앞 물체 정지(path)와 수동 한도 계단 각속도 상한

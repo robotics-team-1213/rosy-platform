@@ -28,8 +28,8 @@
 
 ## 최근 기록
 
+- 2026-10-01 · 5db3391d · feat(pilot): 보정 중 판과 비소유자 주행 잠금
 - 2026-09-30 · 7711cb84 · fix(pilot): 리뷰 수정 — 세로 전체화면·오프라인 셸·자동 모드 상태
 - 2026-09-30 · bf0fab99 · feat(pilot): 세로 조작부가 영상 아래 공간을 채운다
 - 2026-09-30 · uncommitted · feat(pilot): 공용 컨트롤·타이포 계약과 D-370 PWA 아이콘
 - 2026-09-30 · 47f814a6 · refactor(pilot): drive.js 를 drive-auto·drive-view 로 나눔
-- 2026-09-30 · uncommitted · refactor(pilot): D-377 page title is the display name

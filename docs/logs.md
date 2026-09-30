@@ -4008,3 +4008,8 @@
 - 증거: 세션 답 7/8(rosy-84·75·63·bc·0d·d3·70 동의, 반대 없음; rosy-c8 무응답 = 동의 처리). 사용자가 결정을 뒤집을 수 있다.
 - gate 변화: 없음. Accepted는 설계 수용이며 LOCAL·DEVICE·FIELD 증거가 아니다.
 - 결정: 위 D1–D3.
+
+## 2026-10-01 · e8028fb0 · docs(adr): D-321 부록 — 보정 세션 표시와 차단
+- 변경: D-321 에 부록(보정 lease, activity 표시, CALIBRATION_ACTIVE, E-Stop 예외, 재시작 guard). 새 ADR 번호를 쓰지 않았다. API Ref v1.67(1a1a2c3a): 엔드포인트·activity·에러·이벤트 3종, 변경 이력 행. 참고: main 변경 이력에 v1.65 행이 없다(다른 브랜치 몫으로 보임).
+- 증거: rosy_harness lint 0 errors, test_event_catalogue 통과.
+- gate 변화: 없음.

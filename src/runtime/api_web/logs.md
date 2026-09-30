@@ -221,3 +221,13 @@
 - 증거: 복구 전 gateway 21 실패(event_catalogue 13, host_cards 2, host_hardware 1, triage_contract 2, console_layout 3) → 0. core 도메인 전체 2014 passed, 29 skipped (2026-10-01 Windows).
 - gate 변화: 없음.
 - 교훈: 인코딩 사고를 "옛 판본으로 되돌리기"로 고칠 때는 그 판본 이후의 정당 커밋이 사라지는지 diff 전체를 읽어야 한다 — 이번 복원은 고장(hunk 없음)을 다른 고장(기능 상실)으로 바꿨다.
+
+## 2026-10-01 · a527920a · feat(api): /api/v1/calibration/session 과 CALIBRATION_ACTIVE 차단
+- 변경: `v1/calibration.py`(GET/POST session, POST heartbeat, DELETE). `common.require_calibration_owner()` 를 `/mode`·`/teleop`·`/line-follow/mode`(OFF 제외)·`/line-follow/hold` 에 걸었다 — 다른 토큰은 409 `CALIBRATION_ACTIVE`, E-Stop 은 보지 않는다. `deps` 재수출에 `CalibrationSessionError`, `CoreServicesLike.calibration`.
+- 증거: test_calibration_session.py 13 passed(수명, 만료, 비소유자 409, owner teleop D-342 한도, E-Stop, robot/state·ws activity).
+- gate 변화: 없음.
+
+## 2026-10-01 · 1a1a2c3a · docs(api): API Ref v1.67 과 버전 핀
+- 변경: app.py 가 calibration 라우터를 포함하고, docstring·description 핀을 v1.64(낡음) → v1.67 로. pilot 자산 allowlist 에 `calibration.js`(5db3391d).
+- 증거: test_protocol_version_alignment, test_line_follow_contract_docs, test_task_contract_docs, test_pilot_route 통과.
+- gate 변화: 없음.

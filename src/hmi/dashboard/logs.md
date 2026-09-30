@@ -552,3 +552,8 @@
 - 변경: 계기 셋에 FORMATION ROLE 칸(leader/follower 한국어, 대형 이름, 기본 hidden), 식별줄에 software_version 추가. telemetry.js renderFormationHero + app.js 배선, console-detail.css 계기 문법. 새 파일·새 엔드포인트 없음.
 - 증거: dashboard 패키지 시험 9 passed·suite 21 passed 34 skipped, 게이트웨이 dashboard/웹공통 139 passed. 변이 증명 2종(배선·hidden 규칙 제거 시 빨강).
 - gate 변화: 없음.
+
+## 2026-10-01 · c302529d · feat(dashboard): 보정 중 칩
+- 변경: 콘솔 로봇 카드(`panels/console/overview.js`) 맨 위와 /dashboard 모드 옆(`#calibration-chip`)에 `ui-tag status=warn` "보정 중 — <label>".
+- 증거: ROSY_RUN_BROWSER_TESTS=1 test_calibration_chip_browser.py 1 passed(실제 CoreServices 로 lease 를 열고 닫는다). 스크린샷 X:\DevTemp\calibration-mode\dashboard-*-calibration-chip.png.
+- gate 변화: 없음.

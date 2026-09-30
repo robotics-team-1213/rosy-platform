@@ -1563,3 +1563,8 @@
 - 증거: 해당 다섯 시험 파일 82 passed (2026-10-01 Windows). 루트 `test/` 전체 회귀는 별도 확인.
 - gate 변화: 없음.
 - 교훈: 고정 목록 계약은 선행 단계가 붉으면 통째로 건너뛴다 — 그 단계의 빚은 다음 초록 커밋으로 이월되므로, 큰 적색을 고친 커밋은 곧바로 다음 단계까지 돌아갔는지 봐야 한다.
+
+## 2026-10-01 · d5953646 · feat(deploy): 릴리스 push·dev sync 보정 guard
+- 변경: `pinky_pro/rosy-calibration-guard.ps1`(읽기 전용 GET, 세션 있으면 exit 3). `rosy-release-push.ps1`·`dev/sync-core-dev.ps1` 가 원격 단계 전에 부르고 `-Force` 없으면 거부. 토큰 없음·CORE 무응답은 경고만. rosy-release-push SKILL 에 절차 추가(cfacfcd9 경로 수정).
+- 증거: test/test_calibration_guard.py 10 passed(localhost 가짜 CORE), test_release_push_entrypoint·test_core_dev_sync 통과. 로봇에는 닿지 않았다.
+- gate 변화: 없음.

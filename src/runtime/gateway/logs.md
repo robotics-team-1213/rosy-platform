@@ -582,3 +582,8 @@
 - 증거: 해당 8건 복구. core 도메인 전체(gateway·events·services·web_common·api_web) 2014 passed, 29 skipped (2026-10-01 Windows). 단 `test_core_node_teardown::test_run_drains_executor_workers_before_returning` 은 이 변경과 무관하게 Windows에서 간헐 실패한다(재실행 통과, CI Linux 통과).
 - gate 변화: 없음.
 - 교훈: 파일을 나누는 리팩터는 그 파일을 텍스트로 읽는 계약 시험의 소유자도 함께 옮겨야 한다 — 분할 커밋이 시험을 안 고치면 CI가 다음 커밋에서 대신 말한다.
+
+## 2026-10-01 · a527920a · feat(core): 보정 lease 배선과 만료 타이머
+- 변경: `CoreServices.calibration` 을 만들고 상태 스냅샷 provider 로 건다. `ros_bridge._tick_power` 가 `calibration.expire_due()` 를 불러 아무도 상태를 읽지 않아도 만료 이벤트가 난다. 새 시험 `test/test_calibration_session.py`. 15770a9c: `display.info_payload` 가 `activity` 를 싣는다(LCD).
+- 증거: test_calibration_session.py 13 passed, test_bridge_display 통과, test_event_catalogue·test_module_criteria 통과(릴레이 함수·getattr 도달을 만들지 않도록 고침).
+- gate 변화: 없음.

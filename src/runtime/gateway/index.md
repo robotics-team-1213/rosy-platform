@@ -70,8 +70,8 @@
 
 ## 최근 기록
 
+- 2026-10-01 · a527920a · feat(core): 보정 lease 배선과 만료 타이머
 - 2026-10-01 · uncommitted · fix(test): 대시보드 계약 시험이 D-362 P1 소유자 파일을 읽게
 - 2026-10-01 · uncommitted · fix(core): D-380 실기 검증이 잡은 모드 미러 결함
 - 2026-09-30 · e3eb2561 · feat(line-follow): LiDAR 점을 path 판정에 넘기고 수동 한도를 차선 추종에 연결
 - 2026-09-30 · uncommitted · fix(bridge): display charging이 실제로 켜지게 — 죽은 getattr 제거 (C6)
-- 2026-09-30 · uncommitted · feat(display): display/info에 charging 상태 추가 (D-350·D-351)
