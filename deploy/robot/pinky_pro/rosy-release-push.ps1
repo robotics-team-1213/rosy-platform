@@ -416,6 +416,11 @@ foreach ($step in $plan) {
             foreach ($unit in @($imageLayer.active_targets_affected)) {
                 if ($unit) { Write-Warning "$unit changed; its new dependencies apply at the next boot." }
             }
+            if ($imageLayer.PSObject.Properties["next_boot_units"]) {
+                foreach ($unit in @($imageLayer.next_boot_units)) {
+                    if ($unit) { Write-Host "takes effect next boot (not restarted): $unit" }
+                }
+            }
         }
     }
     if ($step.role -eq "image-layer-restart") {

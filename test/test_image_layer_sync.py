@@ -275,6 +275,22 @@ def test_apply_backs_up_installs_reloads_and_enables_like_the_image(device):
     assert result["restart_units"] == ["rosy-io.service"]
 
 
+def test_boot_oneshots_and_network_units_are_never_offered_for_a_live_restart(device):
+    for unit in ("rosy-network.service", "rosy-config.service", "rosy-release-recover.service",
+                 "rosy-sd-provision.service"):
+        (device / "etc/systemd/system" / unit).write_text("[Service]\n# old\n", encoding="utf-8")
+    runner = Runner(active={"rosy-io.service", "rosy-network.service", "rosy-config.service",
+                            "rosy-release-recover.service", "rosy-sd-provision.service"})
+
+    result = _sync(device, NEW_ID, runner, dry_run=True)
+
+    assert result["restart_units"] == ["rosy-io.service"]
+    assert result["next_boot_units"] == [
+        "rosy-config.service", "rosy-network.service",
+        "rosy-release-recover.service", "rosy-sd-provision.service",
+    ]
+
+
 def test_a_second_run_is_a_no_op(device):
     _sync(device, NEW_ID, Runner(), dry_run=False)
     backups = sorted((device / sync_mod.BACKUP_ROOT).iterdir())

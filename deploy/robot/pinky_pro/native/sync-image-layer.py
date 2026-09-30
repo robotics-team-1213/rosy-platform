@@ -101,6 +101,26 @@ ENABLED_UNITS = frozenset({
     "rosy-hw-test.path",
 })
 
+# Never offered for a live restart, even when active and changed: the boot
+# oneshots are Required by rosy-core (restarting them restarts CORE), and
+# restarting network/config can drop the SSH session that runs the push.
+# Their new definition takes effect at the next boot.
+NEXT_BOOT_ONLY = frozenset({
+    "rosy-release-recover.service",
+    "rosy-sd-provision.service",
+    "rosy-network.service",
+    "rosy-config.service",
+})
+
+
+def _restartable(unit: str) -> bool:
+    return (
+        not unit.endswith(".target")
+        and unit not in NEXT_BOOT_ONLY
+        and not unit.startswith("rosy-first-boot")
+    )
+
+
 Runner = Callable[[list[str]], "subprocess.CompletedProcess[str]"]
 
 
@@ -391,8 +411,10 @@ def sync(
             dry_run=dry_run,
             release_id=release_id,
             units_affected=units,
-            restart_units=[unit for unit in active if not unit.endswith(".target")],
+            restart_units=[unit for unit in active if _restartable(unit)],
             active_targets_affected=[unit for unit in active if unit.endswith(".target")],
+            next_boot_units=[unit for unit in active
+                             if not _restartable(unit) and not unit.endswith(".target")],
             modprobe_changed=[
                 "/" + item["destination"] for item in work if item["kind"] == "modprobe"
             ],

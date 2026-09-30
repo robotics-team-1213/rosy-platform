@@ -329,7 +329,7 @@ if ($all -match '--dry-run') {
     exit 0
 }
 if ($all -match 'sync-image-layer') {
-    '{"ok": true, "release_id": "R", "changed": ["/etc/systemd/system/rosy-io.service"], "new": [], "unchanged": [], "skipped": [], "restart_units": ["rosy-io.service", "evil;reboot"], "backup_dir": "/var/lib/rosy/image-layer-backup/x", "modprobe_changed": [], "active_targets_affected": []}'
+    '{"ok": true, "release_id": "R", "changed": ["/etc/systemd/system/rosy-io.service"], "new": [], "unchanged": [], "skipped": [], "restart_units": ["rosy-io.service", "evil;reboot"], "backup_dir": "/var/lib/rosy/image-layer-backup/x", "modprobe_changed": [], "active_targets_affected": [], "next_boot_units": ["rosy-network.service"]}'
     exit 0
 }
 if ($all -match 'release.sh') { '{"ok": true, "release_id": "R", "previous": "P"}' }
@@ -363,6 +363,8 @@ def test_a_push_restarts_only_the_active_rosy_units_the_apply_changed(release, t
     assert sum("wait-core-ready.py" in line for line in calls) == 2
     assert "restarted: rosy-io.service" in completed.stdout
     assert "image-layer backup: /var/lib/rosy/image-layer-backup/x" in completed.stdout
+    assert "takes effect next boot (not restarted): rosy-network.service" in completed.stdout
+    assert not any("rosy-network" in line for line in restarts)
 
 
 @pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
