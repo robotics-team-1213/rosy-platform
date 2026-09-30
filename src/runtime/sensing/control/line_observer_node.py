@@ -160,6 +160,10 @@ class LineObserverNode(Node):
             self._ir_calibration_revision = self._ir_calibration.revision
 
         self.observation_pub = self.create_publisher(String, 'line/observation', 10)
+        # D-364: the keep lane keeper's decision bundle (strategy, boundaries,
+        # target) per frame, for the pilot overlay and exact closed-loop replay.
+        # Observation only; CORE does not read it.
+        self._keep_debug_pub = self.create_publisher(String, 'line/keep_debug', 10)
         self.create_subscription(
             UInt16MultiArray, 'ir_sensor/range', self._on_ir, qos_profile_sensor_data)
         self.create_subscription(
@@ -332,6 +336,10 @@ class LineObserverNode(Node):
                 observation = self._lane_keeper.update(
                     frame, self._ground(frame.shape[1], frame.shape[0]),
                     lane_half_width_m=float(self.get_parameter('lane_half_width_m').value))
+                bundle = dict(self._lane_keeper.last,
+                              stamp=float(msg.header.stamp.sec)
+                              + float(msg.header.stamp.nanosec) * 1e-9)
+                self._keep_debug_pub.publish(String(data=json.dumps(bundle, default=float)))
             elif mode in ('lane', 'edge_left', 'centre', 'route_a', 'route_b', 'route_ab'):
                 ground = self._ground(frame.shape[1], frame.shape[0])
                 lane_kwargs = dict(

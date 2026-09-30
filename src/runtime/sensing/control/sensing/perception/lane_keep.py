@@ -55,6 +55,7 @@ bench. Short temporal smoothing uses previous targets only (no pose).
 from __future__ import annotations
 
 import math
+from collections import deque
 
 import cv2
 import numpy as np
@@ -103,6 +104,19 @@ AMBIGUOUS_LATERAL_M = 0.03
 TRACK_LATERAL_M = 0.06
 TRACK_HEADING_RAD = math.radians(20.0)
 SIDE_FLIP_M = 0.08
+#: Junctions fail closed (HOLD): a lone boundary with a line across the path
+#: within JUNCTION_AHEAD_M that is not a latched corner, or two boundaries on
+#: the followed side splitting by more than FORK_MIN_ANGLE_RAD. Steering of at
+#: least FLIP_MIN_ERROR that reverses FLIP_MAX_REVERSALS times within
+#: FLIP_WINDOW_FRAMES frames holds too. A corner's open side must have no
+#: boundary running past the corner line (less CORNER_PAST_MARGIN_M).
+JUNCTION_AHEAD_M = 0.45
+FORK_MIN_ANGLE_RAD = math.radians(30.0)
+DIVERGE_MIN_RAD = math.radians(15.0)
+FLIP_MIN_ERROR = 0.5
+FLIP_MAX_REVERSALS = 2
+FLIP_WINDOW_FRAMES = 16
+CORNER_PAST_MARGIN_M = 0.03
 #: Confidence: both boundaries / one boundary (CORE drives slower on one).
 BOTH_CONFIDENCE = 0.9
 ONE_CONFIDENCE = 0.6
@@ -154,6 +168,8 @@ CORNER_REACH_M = 0.04
 #: While a corner is latched, a line this steep to the heading is still the
 #: corner line (the next lane's outer boundary seen mid-turn).
 CORNER_MIN_HEADING_RAD = math.radians(35.0)
+#: |error| cap while turning a corner (CORE angular = 0.8 * error).
+CORNER_MAX_ERROR = 0.6
 
 
 def _validate_positive(name, value):
@@ -329,6 +345,7 @@ class LaneKeeper:
         self._view_key = None
         self._previous_target = None
         self._tracked = []
+        self._steer_history = deque(maxlen=FLIP_WINDOW_FRAMES)
         self._corner_side = None
         self._corner_frames = 0
         self._corner_engaged = False
@@ -337,6 +354,7 @@ class LaneKeeper:
     def reset(self) -> None:
         self._previous_target = None
         self._tracked = []
+        self._steer_history.clear()
         self._corner_side = None
         self._corner_frames = 0
         self._corner_engaged = False
@@ -439,9 +457,18 @@ class LaneKeeper:
                           centre=centre, direction=direction)
             (left if side == "left" else right).append(record)
         target, strategy = self._choose(left, right, half)
-        corner = self._corner(transverse, half) if self._corner_turning else None
+        # A lane seen on both sides is followed; a corner is only looked for
+        # when it is not (a line across between two lane lines is a stop
+        # line, a crosswalk or a junction mouth, not an L-corner).
+        corner = None
+        if self._corner_turning and strategy != "both":
+            corner = self._corner(transverse, half, left + right)
         if corner is not None and (target is None or corner[1] != "corner_ahead"):
             target, strategy = corner
+        junction = (None if corner is not None
+                    else _junction(strategy, transverse, left, right, half, self._corner_turning))
+        if junction is not None:
+            target = None
         self._tracked = [(r["y_at_side_x_m"], math.radians(r["heading_deg"]), r["side"])
                          for r in left + right]
         for record in left + right:
@@ -449,8 +476,9 @@ class LaneKeeper:
             record.pop("centre")
             self.last["boundaries"].append(record)
         if target is None:
-            self.last["reason"] = "no_boundary"
+            self.last["reason"] = junction or "no_boundary"
             self._previous_target = None
+            self._steer_history.append(0)
             return None
         if previous is not None and self._smoothing > 0.0 and not strategy.startswith("corner"):
             target = self._smoothing * np.asarray(previous) + (1.0 - self._smoothing) * target
@@ -460,12 +488,28 @@ class LaneKeeper:
         if strategy == "both":
             self._corner_side, self._corner_frames, self._corner_engaged = None, 0, False
         error = max(-1.0, min(1.0, -ty / half))
+        if strategy.startswith("corner_") and strategy != "corner_ahead":
+            # CORE saturates at |error| ~ 0.9 (0.7 rad/s): a full-scale corner
+            # command spins the robot on the inner corner. Capped, it arcs.
+            error = max(-CORNER_MAX_ERROR, min(CORNER_MAX_ERROR, error))
+        # With corner turning, hard steering that keeps reversing is two
+        # readings fighting (a junction taken for a corner, a bend whose side
+        # keeps flipping): hold instead of weaving out of the lane. Without it
+        # (device default) the rule held 5-8 % more real replay frames
+        # (teleop none 0.08 -> 0.13), so it stays off there.
+        self._steer_history.append(0 if abs(error) < FLIP_MIN_ERROR else (1 if error > 0 else -1))
+        signs = [v for v in self._steer_history if v]
+        if (self._corner_turning
+                and sum(1 for a, b in zip(signs, signs[1:]) if a != b) >= FLIP_MAX_REVERSALS):
+            self.last.update(strategy="none", reason="flipping")
+            self._previous_target = None
+            return None
         self.last.update(strategy=strategy, target_m=[round(tx, 3), round(ty, 3)],
                          target_px=self.to_pixel(ground, tx, ty),
                          error=round(error, 3), confidence=confidence)
         return LaneObservation(error=error, confidence=confidence)
 
-    def _corner(self, transverse, half):
+    def _corner(self, transverse, half, boundaries=()):
         """(target, strategy) from the nearest L-corner line ahead, or None.
         Updates the latched corner side."""
         best = None
@@ -490,7 +534,8 @@ class LaneKeeper:
         # A latched side is kept: mid-turn the corner line's ends swing and can
         # mimic the opposite corner.
         if (self._corner_side is None and not steep
-                and max(left_reach, right_reach) > half + CORNER_OPEN_M):
+                and max(left_reach, right_reach) > half + CORNER_OPEN_M
+                and not _runs_past(boundaries, left_reach > right_reach, ahead)):
             # The closed end is where the corner line meets the outer lane line.
             if (left_reach - right_reach > CORNER_ASYMMETRY_M
                     and abs(right_reach - half) <= CORNER_CLOSED_TOLERANCE_M):
@@ -571,6 +616,50 @@ class LaneKeeper:
         record = min(candidates, key=lambda r: (not r["tracked"], round(abs(r["y_at_side_x_m"]), 2),
                                                 -r["length_m"]))
         return np.asarray(record["pursuit_m"], float), f"{record['side']}_only"
+
+
+def _across_path(ends, half):
+    """Ahead distance where a (transverse) line crosses the path, or None."""
+    ys = sorted(float(p[1]) for p in ends)
+    if ys[0] > half or ys[1] < -half:
+        return None
+    (x0, y0), (x1, y1) = ((float(p[0]), float(p[1])) for p in ends)
+    ahead = x0 if y1 == y0 else x0 + (x1 - x0) * (0.0 - y0) / (y1 - y0)
+    return ahead if 0.0 < ahead <= JUNCTION_AHEAD_M else None
+
+
+def _junction(strategy, transverse, left, right, half, corner_turning):
+    """Reason to HOLD at a junction, or None. Only with corner turning: there
+    the corner reading can pull the robot out of the lane at a junction mouth.
+    Without it (the device default) both rules held 5-10 % more of the real
+    replay frames (pilot none 0.32 -> 0.36-0.43), so the plain keeper goes on
+    along its lone boundary as the bench measures."""
+    if not corner_turning or strategy not in ("left_only", "right_only"):
+        return None
+    side = left if strategy == "left_only" else right
+    # The lone boundary bends away out of the lane (a mouth opening on its
+    # side) while a line crosses the path ahead: which lane goes on is unknown.
+    outward = 1.0 if strategy == "left_only" else -1.0
+    diverging = any(outward * math.radians(r["heading_deg"]) > DIVERGE_MIN_RAD for r in side)
+    if diverging and any(not steep and _across_path(ends, half) is not None
+                         for _, _, ends, steep in transverse):
+        return "junction_transverse"
+    headings = [math.radians(r["heading_deg"]) for r in side
+                if abs(r["y_at_side_x_m"]) <= ONE_MAX_DISTANCE_FRACTION * 2.0 * half]
+    if headings and max(headings) - min(headings) > FORK_MIN_ANGLE_RAD:
+        return "junction_fork"
+    return None
+
+
+def _runs_past(boundaries, open_left, ahead):
+    """True when a boundary on the open side runs on past the corner line."""
+    for record in boundaries:
+        if (record["side"] == "left") != open_left:
+            continue
+        far = max(float(p[0]) for p in record["ends_m"])
+        if far >= ahead - CORNER_PAST_MARGIN_M:
+            return True
+    return False
 
 
 def _lateral_at(centre, direction, x) -> float:

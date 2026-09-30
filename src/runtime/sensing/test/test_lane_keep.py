@@ -281,3 +281,60 @@ def test_tape_at_the_base_of_a_wall_filling_the_view_is_kept(gap):
     obs, last = _keep(image)
     assert obs is not None and last["blobs"] == 0
     assert any(abs(b["heading_deg"] + 31.0) < 5.0 for b in last["boundaries"])
+
+
+def _corner_keeper():
+    return _keeper(corner_turning=True)
+
+
+def test_junction_mouth_holds_with_corner_turning():
+    # A lone left boundary bending out of the lane (+25 deg) and a line across
+    # ahead: a junction mouth, not a lane to follow. With corner turning the
+    # keeper holds; the plain keeper (device default) keeps its boundary.
+    slope = np.tan(np.radians(25.0))
+    image = _render([(HALF - slope * 0.22, slope)], transverse_x=0.30)
+    keeper = _corner_keeper()
+    assert keeper.update(image, GROUND, lane_half_width_m=HALF) is None
+    assert keeper.last["reason"] == "junction_transverse"
+    obs, last = _keep(image)
+    assert obs is not None and last["strategy"] == "left_only"
+
+
+def test_fork_on_the_followed_side_holds_with_corner_turning():
+    # Two left boundaries splitting by 45 deg: which one bounds the lane is unknown.
+    slope = np.tan(np.radians(45.0))
+    image = _render([(HALF, 0.0), (0.05 - slope * 0.22, slope)])
+    keeper = _corner_keeper()
+    assert keeper.update(image, GROUND, lane_half_width_m=HALF) is None
+    assert keeper.last["reason"] == "junction_fork"
+
+
+def test_reversing_hard_steering_holds_with_corner_turning():
+    # The lone boundary jumps from one side to the other every frame: hard
+    # left, hard right, hard left... After two reversals the keeper holds.
+    frames = [_render([(0.035, 0.0)]), _render([(-0.035, 0.0)])] * 2
+    keeper = _corner_keeper()
+    results = [keeper.update(f, GROUND, lane_half_width_m=HALF) for f in frames]
+    assert all(r is not None for r in results[:2])
+    assert results[-1] is None and keeper.last["reason"] == "flipping"
+    plain = _keeper()
+    assert all(plain.update(f, GROUND, lane_half_width_m=HALF) is not None for f in frames)
+
+
+def test_line_across_between_two_lane_lines_is_not_a_corner():
+    # Both lane lines in view and a line across ahead (a stop line, or the
+    # far edge of a junction): the lane is followed and no corner is latched,
+    # so the next frame without the lane lines is not a corner either.
+    keeper = _corner_keeper()
+    obs = keeper.update(_render([(HALF, 0.0), (-HALF, 0.0)], transverse_x=0.30), GROUND,
+                        lane_half_width_m=HALF)
+    assert keeper.last["strategy"] == "both" and abs(obs.error) < 0.15
+    assert keeper.update(_render([], transverse_x=0.19), GROUND, lane_half_width_m=HALF) is None
+
+
+def test_corner_turn_command_is_capped():
+    keeper = _corner_keeper()
+    keeper.update(_render_corner(0.40, "left"), GROUND, lane_half_width_m=HALF)
+    obs = keeper.update(_render_corner(0.19, "left"), GROUND, lane_half_width_m=HALF)
+    assert keeper.last["strategy"] == "corner_left"
+    assert -0.6 - 1e-9 <= obs.error < -0.3
