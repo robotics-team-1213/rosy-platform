@@ -75,5 +75,6 @@ def test_pairing_uri_from_cli_args_round_trips():
         "token": "tok123",
         "source": "overhead-1",
         "secure": False,
+        "pin": None,
         "ws_url": f"ws://site-pc.local:8095{protocol.WS_PATH}",
     }
