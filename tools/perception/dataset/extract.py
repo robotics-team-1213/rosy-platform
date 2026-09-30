@@ -10,9 +10,10 @@ log time (ns), side = side data, dt = side log time - frame log time (s) per top
 One two-class clock rule for both inputs (D-356 addendum, D-373 decision 9):
 
 (a) Side topics that carry the stamp of the image they judged (STAMPED_SIDE_TOPICS:
-    the shadow result, line/observation; payload `stamp` in s from MCAP, the
-    entry's `stamp_ns` in a sidecar) attach to the frame whose header stamp
-    equals it (within STAMP_TOL_S) if logged after that frame's capture (its
+    the shadow result, line/observation with source CAMERA_LINE only; payload
+    `stamp` in s from MCAP, the entry's `stamp_ns` in a sidecar) attach to the
+    frame whose header stamp equals it (within STAMP_TOL_S, 1 us) if logged
+    after that frame's capture (its
     header stamp) and at most SIDE_LOOKAHEAD_S after the frame's log time;
     otherwise to no frame. The lower bound is the capture, not the frame's log
     time: a camera observation can reach the recorder tens of microseconds
@@ -20,6 +21,8 @@ One two-class clock rule for both inputs (D-356 addendum, D-373 decision 9):
     `stamp_ns` (written before that field) attaches no stamped evidence: null.
 (b) Every other side topic (cmd_vel, odom, scan, ...) is the latest message
     logged at or before the frame's log time; a later one is never used.
+    From MCAP odom is {stamp_ns, log_ns, x, y, yaw, linear, angular} (pose and
+    twist of nav_msgs/Odometry).
     From MCAP the LiDAR scan (sensor_msgs/LaserScan) is attached as {stamp,
     angle_min, angle_increment, range_min, range_max, ranges} (non-finite
     ranges -> null); a sidecar carries {stamp_ns}, the ranges are in
@@ -28,9 +31,11 @@ One two-class clock rule for both inputs (D-356 addendum, D-373 decision 9):
 camera/front/compressed is preferred: when a session has it, raw camera/front
 frames are not extracted.
 
-Known limits of the matching: line/observation from sources other than the
-camera (IR_LINE, stamped with odometry time) never equals an image stamp and
-does not attach. The shadow node compares its frame with the nearest rule
+Known limits of the matching: line/observation from IR_LINE is stamped with
+odometry time, which can land within a millisecond of an image stamp (9dfk,
+2026-10-01: 5 of 2387 within 0.05-0.78 ms), so only CAMERA_LINE counts as
+evidence of an image; real CAMERA_LINE stamps equal the image stamp within
+256 ns. The shadow node compares its frame with the nearest rule
 answer within 0.2 s when the exact one is missing, so its rule_error can
 belong to a neighbouring frame (control.sensing.perception.learned.shadow).
 
@@ -56,7 +61,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "src" / "runtime" /
 
 from frames import FrameSelector  # noqa: E402
 from control.recording import (  # noqa: E402
-    CAMERA_TOPIC, COMPRESSED_CAMERA_TOPIC, SCAN_TOPIC, SHADOW_TOPIC, SIDE_TOPICS)
+    CAMERA_TOPIC, COMPRESSED_CAMERA_TOPIC, ODOM_TOPIC, SCAN_TOPIC, SHADOW_TOPIC, SIDE_TOPICS)
 from control.sensing.perception.image_frame import image_msg_to_frame  # noqa: E402
 
 STRING_SCHEMA = "std_msgs/msg/String"
@@ -64,7 +69,13 @@ JPEG_Q = 95
 # Class (a) of the clock rule: payloads carrying the stamp of the image they judged.
 STAMPED_SIDE_TOPICS = (SHADOW_TOPIC, "line/observation")
 SIDE_LOOKAHEAD_S = 0.5  # a stamped side message may be logged this long after its frame
-STAMP_TOL_S = 1e-3  # equal stamps: within 1 ms (they round-trip through JSON floats)
+STAMP_TOL_S = 1e-6  # equal stamps: within 1 us (JSON float seconds keep ~0.2 us at epoch scale)
+CAMERA_LINE = "CAMERA_LINE"  # the only line/observation source that judged an image
+
+
+def _is_image_evidence(name, value) -> bool:
+    return name != "line/observation" or (isinstance(value, dict)
+                                          and value.get("source") == CAMERA_LINE)
 
 
 def image_to_bgr(encoding: str, width: int, height: int, step: int, data: bytes) -> np.ndarray:
@@ -134,7 +145,8 @@ def sidecar_side(rows):
         for name in STAMPED_SIDE_TOPICS:
             value = side.get(name)
             stamp_ns = _evidence_stamp_ns(value)
-            if stamp_ns is None or r.get("log_ns") is None or dts.get(name) is None:
+            if (stamp_ns is None or r.get("log_ns") is None or dts.get(name) is None
+                    or not _is_image_evidence(name, value)):
                 continue
             e_log = r["log_ns"] + round(dts[name] * 1e9)
             if (name, stamp_ns, e_log) not in seen:
@@ -260,6 +272,16 @@ def _scan_value(msg, stamp: float) -> dict:
             "range_max": num(msg.range_max), "ranges": [num(r) for r in msg.ranges]}
 
 
+def _odom_value(msg, log_ns: int) -> dict:
+    p, q = msg.pose.pose.position, msg.pose.pose.orientation
+    yaw = math.atan2(2.0 * (q.w * q.z + q.x * q.y), 1.0 - 2.0 * (q.y * q.y + q.z * q.z))
+    tw = getattr(getattr(msg, "twist", None), "twist", None)  # absent in a pose-only schema
+    return {"stamp_ns": _header_stamp_ns(msg), "log_ns": int(log_ns), "x": float(p.x),
+            "y": float(p.y), "yaw": yaw,
+            "linear": None if tw is None else float(tw.linear.x),
+            "angular": None if tw is None else float(tw.angular.z)}
+
+
 def _has_compressed(files, make_reader) -> bool:
     for f in files:
         with open(f, "rb") as fh:
@@ -323,14 +345,16 @@ def _mcap_frames(files, skipped=None, truncated=None):
             if name is not None:
                 if name == SCAN_TOPIC:
                     value = _scan_value(msg, _header_stamp(msg))
+                elif name == ODOM_TOPIC:
+                    value = _odom_value(msg, message.log_time)
                 else:
                     value = _side_value(schema.name, msg)
                 if name not in STAMPED_SIDE_TOPICS:
                     latest[name] = (message.log_time, value)
                     continue
                 stamp = _payload_stamp(value)
-                if stamp is None:
-                    continue  # no image stamp: it belongs to no frame
+                if stamp is None or not _is_image_evidence(name, value):
+                    continue  # no image stamp, or not about an image: no frame
                 # Every pending frame was logged at most SIDE_LOOKAHEAD_S before now.
                 frame = next((p for p in pending if p["stamp"] is not None
                               and abs(p["stamp"] - stamp) <= STAMP_TOL_S
@@ -338,7 +362,8 @@ def _mcap_frames(files, skipped=None, truncated=None):
                 if frame is not None:
                     if name not in frame["side"]:
                         frame["side"][name] = value
-                        frame["extra"]["dt"][name] = round(t - frame["log_t"], 4)
+                        frame["extra"]["dt"][name] = round(
+                            (message.log_time - frame["extra"]["log_ns"]) / 1e9, 4)
                 else:
                     early.append((message.log_time, stamp, name, value))
                 continue

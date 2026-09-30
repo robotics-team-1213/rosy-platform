@@ -43,9 +43,10 @@ COMPRESSED_CAMERA_TOPIC = CAMERA_TOPIC + "/compressed"
 # input of LiDAR-projected wall labels (D-373 decision 9, D-379): the LiDAR
 # sees walls, never floor paint.
 SCAN_TOPIC = "scan"
+ODOM_TOPIC = "odom"
 # Topics tools/perception/dataset/extract.py attaches to each frame as side
 # data, keyed by these relative names (prelabel.py reads SHADOW_TOPIC).
-SIDE_TOPICS = ("cmd_vel", "line/observation", SHADOW_TOPIC, SCAN_TOPIC)
+SIDE_TOPICS = ("cmd_vel", "line/observation", SHADOW_TOPIC, SCAN_TOPIC, ODOM_TOPIC)
 
 # The camera unit's StateDirectory (D-373 decision 1): no new write path.
 DEFAULT_ROOT = "/var/lib/rosy/camera/recordings"
@@ -77,7 +78,7 @@ def snapshot_node_name(namespace: str = "") -> str:
 
 
 def record_topics(camera_topic: str = CAMERA_TOPIC) -> tuple:
-    return (camera_topic, *SIDE_TOPICS, "odom")
+    return (camera_topic, *SIDE_TOPICS)
 
 
 # The one topic list: raw camera by default; snapshot capture passes the

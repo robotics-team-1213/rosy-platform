@@ -51,7 +51,8 @@ def test_cache_size_is_sixty_seconds_of_the_compressed_stream():
 
 def test_record_topics_choose_the_camera_stream():
     assert record_topics(COMPRESSED_CAMERA_TOPIC) == (
-        COMPRESSED_CAMERA_TOPIC, *SIDE_TOPICS, "odom")
+        COMPRESSED_CAMERA_TOPIC, *SIDE_TOPICS)
+    assert "odom" in SIDE_TOPICS
     assert COMPRESSED_CAMERA_TOPIC == "camera/front/compressed"
 
 

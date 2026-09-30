@@ -371,8 +371,10 @@ def test_extract_session_uses_header_stamps_and_the_two_class_clock_rule(tmp_pat
         assert [r["t"] for r in rows] == pytest.approx(FRAME_S, abs=1e-9)
         assert [r["log_ns"] for r in rows] == [_ns(t + 0.001) for t in FRAME_S]
         for i, r in enumerate(rows):
-            for topic, key in (("line/observation", "error"),
-                               ("perception/learned/shadow", "error_delta")):
+            # this fixture's line/observation has no source: not CAMERA_LINE, never
+            # evidence of an image (audit 2026-10-01); the shadow result is
+            assert r["side"].get("line/observation") is None
+            for topic, key in (("perception/learned/shadow", "error_delta"),):
                 value = r["side"].get(topic)
                 if i in (2, 3):
                     assert value is None, (i, topic)
@@ -381,8 +383,8 @@ def test_extract_session_uses_header_stamps_and_the_two_class_clock_rule(tmp_pat
             cmd = r["side"]["cmd_vel"]["linear"]  # MCAP: the Twist; sidecar: m/s
             assert (cmd["x"] if isinstance(cmd, dict) else cmd) <= FRAME_S[i] + 0.001
             assert r["dt"]["cmd_vel"] <= 0
-        assert rows[0]["dt"]["line/observation"] > 0
-        assert -0.001 < rows[1]["dt"]["line/observation"] < 0
+        assert rows[0]["dt"]["perception/learned/shadow"] > 0
+        assert -0.001 < rows[1]["dt"]["perception/learned/shadow"] < 0
     strip = ("line/observation", "perception/learned/shadow")
     for m, v in zip(got["mcap"], got["video"]):
         for topic in strip:

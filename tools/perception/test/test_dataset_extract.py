@@ -186,7 +186,7 @@ def _write_side_session(tmp_path, shadow_text, camera="/camera/front", shadow_to
 def test_side_topics_share_the_recording_constants():
     from control.recording import RECORD_TOPICS, SHADOW_TOPIC, SIDE_TOPICS
     assert set(SIDE_TOPICS) <= set(RECORD_TOPICS)
-    assert {"cmd_vel", "line/observation", SHADOW_TOPIC, "scan"} == set(SIDE_TOPICS)
+    assert {"cmd_vel", "line/observation", SHADOW_TOPIC, "scan", "odom"} == set(SIDE_TOPICS)
 
 
 def test_string_side_data_round_trips_into_prelabel_score(tmp_path):
@@ -287,9 +287,10 @@ def _write_stamped(tmp_path, events):
             elif kind == "shadow":
                 w.write_message("/" + SHADOW_TOPIC, str_s, {"data": json.dumps(
                     {"stamp": stamp, "error_delta": stamp})}, ns, ns)
-            elif kind == "line":
+            elif kind in ("line", "irline"):
+                source = "CAMERA_LINE" if kind == "line" else "IR_LINE"
                 w.write_message("/line/observation", str_s, {"data": json.dumps(
-                    {"source": "CAMERA_LINE", "stamp": stamp, "error": stamp})}, ns, ns)
+                    {"source": source, "stamp": stamp, "error": stamp})}, ns, ns)
             elif kind == "cmd":
                 w.write_message("/cmd_vel", tw_s, {"linear": {"x": stamp, "y": 0.0, "z": 0.0},
                                 "angular": {"x": 0.0, "y": 0.0, "z": 0.0}}, ns, ns)
@@ -374,7 +375,7 @@ def test_shadow_logged_after_its_frame_attaches_to_that_frame(tmp_path):
         (3.2, "shadow", 99.0),  # stamp of no frame in the bag: attaches nowhere
     ])
     rows = _rows(sess, tmp_path)
-    assert extract.STAMP_TOL_S == 1e-3
+    assert extract.STAMP_TOL_S == 1e-6
     assert [r["t"] for r in rows] == [1.0, 2.0, 3.0]
     assert [r["side"].get(SHADOW_TOPIC, {}).get("stamp") for r in rows] == [1.0, 2.0, None]
     assert rows[0]["dt"][SHADOW_TOPIC] == pytest.approx(0.1)  # logged after its frame
@@ -463,7 +464,8 @@ def test_sidecar_rows_follow_the_same_two_class_clock_rule():
         # frame 0's log time; line/observation of frame 1 logged 50 us before its image
         _sidecar_row(1, 1.125, {
             SHADOW_TOPIC: {"stamp": 1.0, "error_delta": 0.1, "stamp_ns": 1_000_000_000},
-            "line/observation": {"stamp": 1.125, "error": 0.2, "stamp_ns": 1_125_000_000},
+            "line/observation": {"source": "CAMERA_LINE", "stamp": 1.125, "error": 0.2,
+                                 "stamp_ns": 1_125_000_000},
             "cmd_vel": cmd},
             {SHADOW_TOPIC: -0.025, "line/observation": -0.00005, "cmd_vel": -0.02}),
         # frame 2's shadow logged 0.6 s after frame 2's log time: beyond the window
@@ -492,3 +494,130 @@ def test_old_sidecar_without_stamp_ns_attaches_no_stamped_evidence():
     for side, dt in extract.sidecar_side(rows):
         assert side[SHADOW_TOPIC] is None and side["line/observation"] is None
         assert dt[SHADOW_TOPIC] is None
+
+
+def test_ir_line_near_an_image_stamp_is_not_camera_evidence(tmp_path):
+    """Audit 2026-10-01 (9dfk): an IR_LINE observation 0.05-0.78 ms from an image
+    stamp won over the real CAMERA_LINE. Only CAMERA_LINE counts, within 1 us."""
+    pytest.importorskip("mcap_ros2")
+    sess = _write_stamped(tmp_path, [
+        (1.0001, "raw", 1.0),
+        (1.001, "irline", 1.0004),   # IR_LINE 0.4 ms from the image stamp, logged first
+        (1.02, "line", 1.0),         # the camera's own answer
+        (2.0001, "raw", 2.0),
+        (2.001, "irline", 2.0004),   # IR only: nothing attaches
+        (2.02, "line", 2.0005),      # CAMERA_LINE 0.5 ms off: not this image
+    ])
+    rows = _rows(sess, tmp_path)
+    assert rows[0]["side"]["line/observation"]["source"] == "CAMERA_LINE"
+    assert rows[0]["side"]["line/observation"]["stamp"] == 1.0
+    assert "line/observation" not in rows[1]["side"]
+
+
+def test_sidecar_ignores_ir_line_evidence():
+    rows = [_sidecar_row(0, 1.0, {"line/observation": None}, {}),
+            _sidecar_row(1, 1.125, {"line/observation": {
+                "source": "IR_LINE", "error": 0.2, "stamp_ns": 1_000_000_000}},
+                {"line/observation": -0.02})]
+    assert all(side["line/observation"] is None for side, _ in extract.sidecar_side(rows))
+
+
+ODOM_FULL_DEF = """std_msgs/Header header
+string child_frame_id
+geometry_msgs/PoseWithCovariance pose
+geometry_msgs/TwistWithCovariance twist
+================================================================================
+MSG: std_msgs/Header
+builtin_interfaces/Time stamp
+string frame_id
+================================================================================
+MSG: builtin_interfaces/Time
+int32 sec
+uint32 nanosec
+================================================================================
+MSG: geometry_msgs/PoseWithCovariance
+Pose pose
+float64[36] covariance
+================================================================================
+MSG: geometry_msgs/Pose
+Point position
+Quaternion orientation
+================================================================================
+MSG: geometry_msgs/Point
+float64 x
+float64 y
+float64 z
+================================================================================
+MSG: geometry_msgs/Quaternion
+float64 x
+float64 y
+float64 z
+float64 w
+================================================================================
+MSG: geometry_msgs/TwistWithCovariance
+Twist twist
+float64[36] covariance
+================================================================================
+MSG: geometry_msgs/Twist
+Vector3 linear
+Vector3 angular
+================================================================================
+MSG: geometry_msgs/Vector3
+float64 x
+float64 y
+float64 z
+"""
+
+
+def test_odom_is_attached_as_latest_before_with_pose_twist_and_stamps(tmp_path):
+    pytest.importorskip("mcap_ros2")
+    import math as _m
+
+    from mcap_ros2.writer import Writer
+
+    from control.recording import SIDE_TOPICS
+
+    assert "odom" in SIDE_TOPICS and "odom" not in extract.STAMPED_SIDE_TOPICS
+    bag = tmp_path / "sess" / "bag"
+    bag.mkdir(parents=True)
+    with open(bag / "bag_0.mcap", "wb") as fh:
+        w = Writer(fh)
+        img_s = w.register_msgdef("sensor_msgs/msg/Image", IMAGE_DEF)
+        od_s = w.register_msgdef("nav_msgs/msg/Odometry", ODOM_FULL_DEF)
+        for k, t in enumerate((0.95, 1.05)):  # the second is logged after the frame
+            yaw = 0.2 * (k + 1)
+            w.write_message("/pinky1/odom", od_s, {
+                "header": {"stamp": {"sec": 0, "nanosec": int(t * 1e9) - 1000}, "frame_id": "odom"},
+                "child_frame_id": "base",
+                "pose": {"pose": {"position": {"x": 1.0 + k, "y": -2.0, "z": 0.0},
+                                  "orientation": {"x": 0.0, "y": 0.0, "z": _m.sin(yaw / 2),
+                                                  "w": _m.cos(yaw / 2)}},
+                         "covariance": [0.0] * 36},
+                "twist": {"twist": {"linear": {"x": 0.03, "y": 0.0, "z": 0.0},
+                                    "angular": {"x": 0.0, "y": 0.0, "z": 0.1}},
+                          "covariance": [0.0] * 36}}, int(t * 1e9), int(t * 1e9))
+            if k == 0:
+                px = np.zeros((4, 6, 3), np.uint8)
+                w.write_message("/pinky1/camera/front", img_s, {
+                    "header": {"stamp": {"sec": 0, "nanosec": 990_000_000}, "frame_id": "c"},
+                    "height": 4, "width": 6, "encoding": "bgr8", "is_bigendian": 0,
+                    "step": 18, "data": list(px.tobytes())}, 1_000_000_000, 1_000_000_000)
+        w.finish()
+    rows = _rows(tmp_path / "sess", tmp_path)
+    odom = rows[0]["side"]["odom"]
+    assert odom == {"stamp_ns": 949_999_000, "log_ns": 950_000_000, "x": 1.0, "y": -2.0,
+                    "yaw": pytest.approx(0.2), "linear": 0.03, "angular": 0.1}
+    assert rows[0]["dt"]["odom"] == pytest.approx(-0.05)
+
+
+def test_late_evidence_dt_is_exact_from_integer_nanoseconds(tmp_path):
+    """At epoch magnitude, float seconds lose ~0.1 ms in round(t - log_t, 4)."""
+    pytest.importorskip("mcap_ros2")
+    from control.recording import SHADOW_TOPIC
+
+    base = 1_759_300_000.0  # 2025-10-01 epoch seconds
+    sess = _write_stamped(tmp_path, [(base + 0.00015, "raw", base),
+                                     (base + 0.10035, "shadow", base)])
+    rows = _rows(sess, tmp_path)
+    log_frame = rows[0]["log_ns"]
+    assert rows[0]["dt"][SHADOW_TOPIC] == round((int(round((base + 0.10035) * 1e9)) - log_frame) / 1e9, 4)
