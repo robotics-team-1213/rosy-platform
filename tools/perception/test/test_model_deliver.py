@@ -100,48 +100,83 @@ def test_remote_push_existing_final_is_judged_on_model_files_only():
     assert f"{'e' * 64}  {root}/{REV}/intake_report.json" in last
 
 
+LOCKED = f"{S} flock -E 75 -w 30 {ROOT_M}/.lock sh -c "
+AUDIT = {"operator": "ana", "host_of_operator": "op-pc", "tool_commit": "c" * 40}
+
+
 def test_remote_push_script_installs_partial_then_pointer_swap():
     s = _push_script()
     root = ROOT_M
     staged_check = s.index(f"{'f' * 64}  {STAGE}/{REV}/model.onnx")
-    mkdir = s.index(f"{S} install -d -o root -g rosy-camera -m 0750 {root}/{REV}.partial")
-    put = s.index(f"{S} install -o root -g rosy-camera -m 0640 {STAGE}/{REV}/model.onnx "
+    locked = s.index(LOCKED)
+    mkdir = s.index(f"install -d -o root -g rosy-camera -m 0750 {root}/{REV}.partial")
+    put = s.index(f"install -o root -g rosy-camera -m 0640 {STAGE}/{REV}/model.onnx "
                   f"{root}/{REV}.partial/model.onnx")
     partial_check = s.index(f"{'f' * 64}  {root}/{REV}.partial/model.onnx")
-    mv_final = s.index(f"{S} mv {root}/{REV}.partial {root}/{REV}")
-    ptr_put = s.index(f"{S} install -o root -g rosy-camera -m 0640 {STAGE}/shadow "
+    mv_final = s.index(f"mv {root}/{REV}.partial {root}/{REV}")
+    ptr_put = s.index(f"install -o root -g rosy-camera -m 0640 {STAGE}/shadow "
                       f"{root}/shadow.tmp")
-    swap = s.index(f"{S} mv {root}/shadow.tmp {root}/shadow")
-    assert staged_check < mkdir < put < partial_check < mv_final < ptr_put < swap
-    prev = s.index(f"{S} install -o root -g rosy-camera -m 0640 {root}/shadow "
+    swap = s.index(f"mv {root}/shadow.tmp {root}/shadow")
+    history = s.index(f"tee -a {root}/history.jsonl")
+    assert staged_check < locked < mkdir < put < partial_check < mv_final < ptr_put < swap
+    assert swap < history
+    prev = s.index(f"install -o root -g rosy-camera -m 0640 {root}/shadow "
                    f"{root}/shadow.previous.tmp")
-    assert prev < s.index(f"{S} mv {root}/shadow.previous.tmp {root}/shadow.previous") < swap
+    assert prev < s.index(f"mv {root}/shadow.previous.tmp {root}/shadow.previous") < swap
     assert s.index("sync", swap) > swap
     assert f"trap 'rm -rf -- {STAGE}' EXIT" in s
 
 
-def test_remote_push_every_root_write_goes_through_sudo():
+def test_remote_push_root_work_runs_as_root_under_the_lock():
     s = _push_script()
-    for line in s.splitlines():
-        for verb in ("install ", "mv ", "rm -rf ", "cat "):
-            if verb in line and ROOT_M in line and "trap" not in line:
-                assert f"{S} {verb}" in line, line
-        if "sha256sum -c" in line and ROOT_M in line:
-            assert f"{S} sha256sum -c" in line, line
+    outer = s[:s.index(LOCKED)]
+    for line in outer.splitlines():
+        if ROOT_M in line and "trap" not in line:
+            assert line.startswith(S), line
+    assert f"{S} test -f {ROOT_M}/.lock || {S} install -o root -g rosy-camera -m 0640 " \
+           f"/dev/null {ROOT_M}/.lock" in outer
+    assert "busy for 30 s" in s and "exit $rc" in s
     local = _push_script(privileged=False)
     assert "sudo" not in local and " -o root" not in local and " -m 07" not in local
+    assert "flock -E 75 -w 30 " in local
+
+
+def test_remote_push_existing_final_is_judged_on_model_files_only():
+    s = _push_script()
+    root = ROOT_M
+    guard = s[s.index(f"if test -d {root}/{REV}; then"):s.index(f"else mv {root}/{REV}.partial")]
+    first_if = guard.splitlines()[1]
+    assert f"  {root}/{REV}/model.onnx" in first_if
+    assert "intake_report.json" not in first_if  # a new report never quarantines a folder
+    put = guard.index(f"install -o root -g rosy-camera -m 0640 {STAGE}/{REV}/intake_report.json "
+                      f"{root}/{REV}/intake_report.json.tmp")
+    assert put < guard.index(f"mv {root}/{REV}/intake_report.json.tmp "
+                             f"{root}/{REV}/intake_report.json")
+    last_check = s.rindex("sha256sum -c")
+    last = s[s.rindex("printf", 0, last_check):last_check]
+    assert f"{'e' * 64}  {root}/{REV}/intake_report.json" in last
 
 
 def test_remote_push_reverifies_existing_final_and_quarantines_bad():
     s = _push_script()
     root = ROOT_M
-    assert f"{S} mv {root}/{REV} {root}/{REV}.bad.$$" in s
-    # staged, partial, existing final and installed final are all checked
+    assert f"mv {root}/{REV} {root}/{REV}.bad.$$" in s
     assert s.count("sha256sum -c") >= 4
     last_check = s.rindex("sha256sum -c")
-    assert s.index(f"{S} mv {root}/{REV}.partial") < last_check
+    assert s.index(f"mv {root}/{REV}.partial") < last_check
     assert f"  {root}/{REV}/model.onnx" in s[s.rindex("printf", 0, last_check):last_check]
-    assert last_check < s.index(f"{S} mv {root}/shadow.tmp {root}/shadow")
+    assert last_check < s.index(f"mv {root}/shadow.tmp {root}/shadow")
+
+
+def test_history_line_quotes_the_audit_fields():
+    evil = {"operator": "o'x $(reboot) \"q\"", "host_of_operator": "h;rm", "tool_commit": None}
+    s = _push_script(audit=evil)
+    body = shlex.split(s[s.index(LOCKED):].split(" || {")[0])[-1]  # the sh -c script
+    (printf,) = [ln for ln in body.splitlines() if "tee -a" in ln]
+    words = shlex.split(printf)
+    # each audit field is exactly one single-quoted word: no expansion on the robot
+    assert json.dumps(evil["operator"]) in words
+    assert json.dumps(evil["host_of_operator"]) in words and "null" in words
 
 
 def test_remote_push_same_rev_keeps_previous():
@@ -165,10 +200,17 @@ def test_remote_prepare_is_user_temp_only():
     assert "sudo" not in s and ROOT_M not in s
 
 
-def test_remote_rollback_refuses_without_previous():
-    s = deliver.remote_script("rollback", None)
+def test_remote_rollback_refuses_without_previous_and_is_audited():
+    s = deliver.remote_script("rollback", None, audit=AUDIT)
+    assert LOCKED in s
     assert "shadow.previous" in s and "exit 1" in s
-    assert f"{S} mv {ROOT_M}/shadow.previous {ROOT_M}/shadow" in s
+    assert f"mv {ROOT_M}/shadow.previous {ROOT_M}/shadow" in s
+    assert f"tee -a {ROOT_M}/history.jsonl" in s and '"rollback"' in s
+
+
+def test_remote_status_tails_history():
+    s = deliver.remote_script("status", None, history=3)
+    assert f"{S} tail -n 3 {ROOT_M}/history.jsonl" in s
 
 
 def test_remote_script_unknown_action():
@@ -317,6 +359,23 @@ def test_rollback_and_status_run_ssh():
     assert f"{S} cat" in runner.calls[0][-1]
 
 
+def test_operator_is_recorded_and_status_history_flag(tmp_path, monkeypatch):
+    models = tmp_path / "models"
+    rev = _model(models, "pass")
+    monkeypatch.setattr(deliver.getpass, "getuser", lambda: "osuser")
+    runner = FakeRunner()
+    assert deliver.main(["push", "robot", rev, "--models", str(models), *SSH],
+                        runner=runner) == 0
+    assert shlex.quote(json.dumps("osuser")) in runner.calls[2][-1]
+    runner = FakeRunner()
+    assert deliver.main(["rollback", "robot", "--operator", "site:fleet-1", *SSH],
+                        runner=runner) == 0
+    assert shlex.quote(json.dumps("site:fleet-1")) in runner.calls[0][-1]
+    runner = FakeRunner()
+    assert deliver.main(["status", "robot", "--history", "2", *SSH], runner=runner) == 0
+    assert "tail -n 2 " in runner.calls[0][-1]
+
+
 def test_missing_identity_on_linux_is_refused(monkeypatch):
     monkeypatch.setattr(deliver.operator_ssh.sys, "platform", "linux")
     monkeypatch.delenv("ROSY_OPERATOR_KEY", raising=False)
@@ -367,6 +426,18 @@ def test_ssh_and_scp_are_batch_pinned_and_end_options(tmp_path):
 # Locally there is no root and no rosy-camera group: privileged=False. Production
 # (deliver.main) always uses sudo -n root:rosy-camera, asserted above.
 
+# Git Bash has no flock: the shim runs the command without locking. Only the
+# concurrency tests need the real one and skip without it.
+FLOCK_SHIM = (
+    'command -v flock >/dev/null 2>&1 || flock() { '
+    'while [ $# -gt 0 ]; do case "$1" in -E|-w) shift 2;; -*) shift;; *) break;; esac; done; '
+    'shift; "$@"; }\n')
+
+
+def _has_flock(bash) -> bool:
+    return subprocess.run([bash, "-c", "command -v flock"], capture_output=True).returncode == 0
+
+
 def _bash_env():
     """(bash, to_posix) for a bash with sha256sum, else None. Git Bash needs cygpath for paths."""
     bash = shutil.which("bash")
@@ -401,11 +472,12 @@ def remote(tmp_path):
     checks = [(hashlib.sha256(good).hexdigest(), "model.onnx")]
     report = {"text": b"report-1"}
 
-    def run(checks=checks):
+    def run(checks=checks, audit=None):
         rep = (hashlib.sha256(report["text"]).hexdigest(), "intake_report.json")
         script = deliver.remote_script("push", REV, to_posix(root), checks=checks, report=rep,
-                                       stage=to_posix(stage_dir / REV), privileged=False)
-        return subprocess.run([bash, "-c", script], capture_output=True, text=True)
+                                       stage=to_posix(stage_dir / REV), audit=audit,
+                                       privileged=False)
+        return subprocess.run([bash, "-c", FLOCK_SHIM + script], capture_output=True, text=True)
 
     def stage(content, folder=None, report_text=None):
         where = stage_dir / REV if folder is None else root / folder
@@ -489,3 +561,76 @@ def test_remote_script_repush_with_new_report_keeps_folder(remote):
     assert (root / REV / "model.onnx").read_bytes() == good
     assert not (root / f"{REV}.partial").exists()
     assert not (root / REV / "intake_report.json.tmp").exists()
+
+
+def test_remote_script_appends_a_parseable_history_line(remote):
+    root, to_posix, run, stage, good, _ = remote
+    (root / "shadow").write_text("/old/lane-seg-20260901-00000000")
+    stage(good)
+    who = {"operator": "o'x $(echo pwned) \"q\"", "host_of_operator": "pc", "tool_commit": None}
+    r = run(audit=who)
+    assert r.returncode == 0, r.stderr
+    (line,) = (root / "history.jsonl").read_text().splitlines()
+    rec = json.loads(line)
+    assert rec["action"] == "push" and rec["revision"] == REV
+    assert rec["previous"] == "lane-seg-20260901-00000000"
+    assert rec["operator"] == who["operator"] and rec["tool_commit"] is None
+    assert rec["ts"].endswith("Z")
+
+
+def _two_pushes(tmp_path, bash, to_posix, revs):
+    root = tmp_path / "models"
+    root.mkdir()
+    good = b"model-bytes"
+    checks = [(hashlib.sha256(good).hexdigest(), "model.onnx")]
+    rep = (hashlib.sha256(b"r").hexdigest(), "intake_report.json")
+    procs = []
+    for i, rev in enumerate(revs):
+        stage = tmp_path / f"stage{i}" / rev
+        stage.mkdir(parents=True)
+        (stage / "model.onnx").write_bytes(good)
+        (stage / "intake_report.json").write_bytes(b"r")
+        script = deliver.remote_script("push", rev, to_posix(root), checks=checks, report=rep,
+                                       stage=to_posix(stage), privileged=False,
+                                       audit={"operator": f"op{i}"})
+        procs.append(subprocess.Popen([bash, "-c", script], stdout=subprocess.PIPE,
+                                      stderr=subprocess.PIPE, text=True))
+    return root, [(p.wait(timeout=120), p.stderr.read()) for p in procs]
+
+
+def test_concurrent_pushes_serialise_under_the_lock(tmp_path):
+    env = _bash_env()
+    if env is None or not _has_flock(env[0]):
+        pytest.skip("needs bash with flock (not in Git Bash on win32)")
+    bash, to_posix = env
+    revs = ["lane-seg-20260930-aaaaaaaa", "lane-seg-20260930-bbbbbbbb"]
+    root, results = _two_pushes(tmp_path, bash, to_posix, revs)
+    assert all(rc == 0 for rc, _ in results), results
+    lines = [json.loads(x) for x in (root / "history.jsonl").read_text().splitlines()]
+    assert len(lines) == 2
+    first, second = lines
+    assert first["previous"] == "" and second["previous"] == first["revision"]
+    assert (root / "shadow").read_text().endswith(second["revision"])
+    assert (root / "shadow.previous").read_text().endswith(first["revision"])
+
+
+def test_busy_lock_fails_clearly(tmp_path):
+    env = _bash_env()
+    if env is None or not _has_flock(env[0]):
+        pytest.skip("needs bash with flock (not in Git Bash on win32)")
+    bash, to_posix = env
+    root = tmp_path / "models"
+    root.mkdir()
+    (root / ".lock").write_text("")
+    (root / "shadow.previous").write_text("/x/lane-seg-20260930-aaaaaaaa")
+    holder = subprocess.Popen(["flock", str(root / ".lock"), "sleep", "5"])
+    try:
+        import time
+        time.sleep(0.5)
+        script = deliver.remote_script("rollback", None, to_posix(root), privileged=False,
+                                       lock_wait=1, audit={"operator": "op"})
+        r = subprocess.run([bash, "-c", script], capture_output=True, text=True, timeout=60)
+    finally:
+        holder.kill()
+    assert r.returncode == 75 and "busy" in r.stderr
+    assert (root / "shadow.previous").exists()  # nothing changed

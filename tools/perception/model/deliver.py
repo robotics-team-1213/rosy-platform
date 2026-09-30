@@ -5,6 +5,13 @@ deliver.py rollback <host>
 deliver.py status <host>
 common: [--user rosy] [--identity KEY] [--known-hosts FILE] [--root /var/lib/rosy/models]
         [--timeout S]  (per ssh/scp step; 600 for push, 60 for rollback/status)
+push/rollback: [--operator NAME] (default: the OS user; recorded in history.jsonl)
+status: [--history N] (last N history.jsonl lines, default 5)
+
+Every pointer change (push, rollback) runs on the robot as root under flock on
+/var/lib/rosy/models/.lock (30 s wait, then a clear "busy" failure) and appends
+one JSON line {ts, action, revision, previous, operator, host_of_operator,
+tool_commit} to /var/lib/rosy/models/history.jsonl (root:rosy-camera 0640).
 
 SSH is key-only and pinned (BatchMode, IdentitiesOnly, StrictHostKeyChecking=yes;
 see operator_ssh.py). /var/lib/rosy/models is root:rosy-camera 0750, so every
@@ -26,10 +33,12 @@ a release payload."""
 from __future__ import annotations
 
 import argparse
+import getpass
 import hashlib
 import json
 import re
 import shlex
+import socket
 import subprocess
 import sys
 from pathlib import Path
@@ -51,14 +60,30 @@ _SAFE_ROOT = re.compile(r"/[A-Za-z0-9._/-]+")
 _STAGE = re.compile(r"/tmp/rosy-model\.[A-Za-z0-9]{8,}")
 
 
+LOCK_WAIT_S = 30
+LOCK_BUSY_EXIT = 75  # flock -E: the lock stayed held for LOCK_WAIT_S
+LOCK_NAME, HISTORY_NAME = ".lock", "history.jsonl"
+_HISTORY_LINE = ('{"ts":"%s","action":%s,"revision":"%s","previous":"%s",'
+                 '"operator":%s,"host_of_operator":%s,"tool_commit":%s}\\n')
+
+
+def _safe_word(expr: str) -> str:
+    """Shell text: the value of expr reduced to revision characters (JSON-safe)."""
+    return f"$(printf %s {expr} | tr -cd 'A-Za-z0-9._-')"
+
+
 def remote_script(action: str, rev: str | None, root: str = REMOTE_ROOT, *,
-                  checks=(), report=None, stage: str | None = None,
+                  checks=(), report=None, stage: str | None = None, audit=None,
+                  history: int = 5, lock_wait: int = LOCK_WAIT_S,
                   privileged: bool = True) -> str:
     """Shell text for one remote step. Every path is shlex.quote'd.
 
     checks: [(sha256, file name), ...] of the model: manifest-listed files and
     the manifest. report: (sha256, name) of the intake report, installed too.
     stage: the scp'd copy, <mktemp dir>/<rev>; the mktemp dir is removed on exit.
+    audit: {operator, host_of_operator, tool_commit} for the history line (push,
+    rollback). Pointer changes run as root under flock on <root>/.lock (wait
+    lock_wait s, exit 75 if busy) and append one JSON line to history.jsonl.
     privileged=False drops sudo -n and the -o/-g/-m of install so the script runs
     as an ordinary user in tests (Git Bash cannot set directory modes either);
     main() never passes it."""
@@ -67,13 +92,35 @@ def remote_script(action: str, rev: str | None, root: str = REMOTE_ROOT, *,
     own = f" -o {OWNER} -g {GROUP}" if privileged else ""
     dmode, fmode = (" -m 0750", " -m 0640") if privileged else ("", "")
     ptr, prev, tmp = q(f"{root}/shadow"), q(f"{root}/shadow.previous"), q(f"{root}/shadow.tmp")
+    lock, hist = q(f"{root}/{LOCK_NAME}"), q(f"{root}/{HISTORY_NAME}")
 
-    def check(folder: str, *, privileged: bool = True, quiet: bool = False,
-              files=None) -> str:
+    def check(folder: str, *, quiet: bool = False, files=None) -> str:
         files = everything if files is None else files
         sums = " ".join(q(f"{sha}  {folder}/{name}") for sha, name in files)
-        return (f"printf '%s\\n' {sums} | {s if privileged else ''}sha256sum -c -"
+        return (f"printf '%s\\n' {sums} | sha256sum -c -"
                 + (" >/dev/null 2>&1" if quiet else ""))
+
+    def history_line(act: str, revision_expr: str, previous_expr: str) -> list[str]:
+        a = audit or {}
+        return [
+            f"test -f {hist} || install{own}{fmode} /dev/null {hist}",
+            f"printf {q(_HISTORY_LINE)} \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\" "
+            f"{q(json.dumps(act))} \"{_safe_word(revision_expr)}\" "
+            f"\"{_safe_word(previous_expr)}\" {q(json.dumps(a.get('operator')))} "
+            f"{q(json.dumps(a.get('host_of_operator')))} {q(json.dumps(a.get('tool_commit')))}"
+            f" | tee -a {hist} >/dev/null",
+        ]
+
+    def locked(inner: list[str]) -> list[str]:
+        """Run inner (as root via sudo -n) while holding the models lock."""
+        body = "\n".join(["set -e", *inner])
+        return [
+            f"{s}test -d {q(root)} || {s}install -d{own}{dmode} {q(root)}",
+            f"{s}test -f {lock} || {s}install{own}{fmode} /dev/null {lock}",
+            f"{s}flock -E {LOCK_BUSY_EXIT} -w {lock_wait} {lock} sh -c {q(body)} || {{ rc=$?;",
+            f"  [ $rc -ne {LOCK_BUSY_EXIT} ] || echo {q(f'models lock {root}/{LOCK_NAME} busy for {lock_wait} s: another push or rollback is running; retry later')} >&2;",
+            "  exit $rc; }",
+        ]
 
     everything = [*checks, *([report] if report else [])]
     if action == "prepare":
@@ -85,53 +132,63 @@ def remote_script(action: str, rev: str | None, root: str = REMOTE_ROOT, *,
         partial_path, final_path = f"{root}/{rev}.partial", f"{root}/{rev}"
         partial, final = q(partial_path), q(final_path)
         pointer_src = q(f"{stage_dir}/shadow")
-        installs = [f"{s}install{own}{fmode} {q(f'{stage}/{name}')} "
+        installs = [f"install{own}{fmode} {q(f'{stage}/{name}')} "
                     f"{q(f'{partial_path}/{name}')}" for _, name in everything]
         report_dst = f"{final_path}/{report[1]}"
         return "\n".join([
             "set -e",
             # first: nothing after mktemp may fail before the temp dir is cleaned up
             f"trap {q(f'rm -rf -- {q(stage_dir)}')} EXIT",
-            check(stage, privileged=False),
-            f"{s}test -d {q(root)} || {s}install -d{own}{dmode} {q(root)}",
-            f"{s}rm -rf {partial}",
-            f"{s}install -d{own}{dmode} {partial}",
-            *installs,
-            check(partial_path),
-            # an installed <rev> is judged on its model files only: a re-run intake
-            # writes a new report, which replaces the old one and never quarantines
-            f"if {s}test -d {final}; then",
-            f"  if {check(final_path, quiet=True, files=checks)}; then",
-            f"    {s}install{own}{fmode} {q(f'{stage}/{report[1]}')} {q(report_dst + '.tmp')}",
-            f"    {s}mv {q(report_dst + '.tmp')} {q(report_dst)}",
-            f"    {s}rm -rf {partial}",
-            f"  else {s}mv {final} {final}.bad.$$; {s}mv {partial} {final}; fi",
-            f"else {s}mv {partial} {final}; fi",
-            check(final_path),
-            f"cur=$({s}cat {ptr} 2>/dev/null || true)",
-            f'if [ "$cur" != {final} ]; then',
-            f"  if {s}test -f {ptr}; then",
-            f"    {s}install{own}{fmode} {ptr} {prev}.tmp",
-            f"    {s}mv {prev}.tmp {prev}",
-            "  fi",
-            # separate statements: set -e ignores a failure inside an && list
-            f"  printf %s {final} > {pointer_src}",
-            f"  {s}install{own}{fmode} {pointer_src} {tmp}",
-            f"  {s}mv {tmp} {ptr}",
-            "  sync",
-            "fi",
+            check(stage),
+            *locked([
+                f"rm -rf {partial}",
+                f"install -d{own}{dmode} {partial}",
+                *installs,
+                check(partial_path),
+                # an installed <rev> is judged on its model files only: a re-run
+                # intake writes a new report, which replaces the old one
+                f"if test -d {final}; then",
+                f"  if {check(final_path, quiet=True, files=checks)}; then",
+                f"    install{own}{fmode} {q(f'{stage}/{report[1]}')} {q(report_dst + '.tmp')}",
+                f"    mv {q(report_dst + '.tmp')} {q(report_dst)}",
+                f"    rm -rf {partial}",
+                f"  else mv {final} {final}.bad.$$; mv {partial} {final}; fi",
+                f"else mv {partial} {final}; fi",
+                check(final_path),
+                f"cur=$(cat {ptr} 2>/dev/null || true)",
+                f'if [ "$cur" != {final} ]; then',
+                f"  if test -f {ptr}; then",
+                f"    install{own}{fmode} {ptr} {prev}.tmp",
+                f"    mv {prev}.tmp {prev}",
+                "  fi",
+                # separate statements: set -e ignores a failure inside an && list
+                f"  printf %s {final} > {pointer_src}",
+                f"  install{own}{fmode} {pointer_src} {tmp}",
+                f"  mv {tmp} {ptr}",
+                "  sync",
+                "fi",
+                *history_line("push", q(rev), '"${cur##*/}"'),
+            ]),
         ])
     if action == "rollback":
         return "\n".join([
             "set -e",
-            f"{s}test -f {prev} || {{ echo 'no shadow.previous to roll back to' >&2; exit 1; }}",
-            f"{s}mv {prev} {ptr}",
+            *locked([
+                f"test -f {prev} || {{ echo 'no shadow.previous to roll back to' >&2; exit 1; }}",
+                f"cur=$(cat {ptr} 2>/dev/null || true)",
+                f"new=$(cat {prev})",
+                f"mv {prev} {ptr}",
+                "sync",
+                *history_line("rollback", '"${new##*/}"', '"${cur##*/}"'),
+            ]),
         ])
     if action == "status":
         return "\n".join([
             f"echo \"shadow: $({s}cat {ptr} 2>/dev/null)\"",
             f"echo \"previous: $({s}cat {prev} 2>/dev/null)\"",
             f"{s}ls -1 {q(root)} 2>/dev/null || true",
+            f"echo 'history (last {int(history)}):'",
+            f"{s}tail -n {int(history)} {hist} 2>/dev/null || true",
         ])
     raise ValueError(f"unknown action {action!r}")
 
@@ -199,13 +256,27 @@ def _push(args, ssh, scp, runner) -> int:
         _run(runner, [*ssh, target, f"rm -rf -- {shlex.quote(stage_dir)}"], t)
         return 1
     r = _run(runner, [*ssh, target, remote_script("push", rev, args.root, checks=checks,
-                                                  report=report_check,
+                                                  report=report_check, audit=_audit(args),
                                                   stage=f"{stage_dir}/{rev}")], t)
     if r is None:
         return 1
     print(r.stdout or "", end="")
     print(f"shadow -> {args.root}/{rev} on {args.host}")
     return 0
+
+
+def _tool_commit() -> str | None:
+    try:
+        r = subprocess.run(["git", "rev-parse", "HEAD"], cwd=Path(__file__).parent,
+                           capture_output=True, text=True, timeout=10, check=False)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return (r.stdout.strip() or None) if r.returncode == 0 else None
+
+
+def _audit(args) -> dict:
+    return {"operator": args.operator, "host_of_operator": socket.gethostname(),
+            "tool_commit": _tool_commit()}
 
 
 def main(argv=None, runner=subprocess.run) -> int:
@@ -220,6 +291,11 @@ def main(argv=None, runner=subprocess.run) -> int:
         p.add_argument("--user", default=operator_ssh.USER)
         p.add_argument("--root", default=REMOTE_ROOT)
         operator_ssh.add_arguments(p)
+        if name in ("push", "rollback"):
+            p.add_argument("--operator", default=getpass.getuser(),
+                           help="who is recorded in the robot's history.jsonl")
+        else:
+            p.add_argument("--history", type=int, default=5, help="history lines to show")
         p.add_argument("--timeout", type=float,
                        default=PUSH_TIMEOUT_S if name == "push" else STATUS_TIMEOUT_S,
                        help="seconds per ssh/scp step")
@@ -240,8 +316,10 @@ def main(argv=None, runner=subprocess.run) -> int:
     ssh, scp = ["ssh", *opts, "--"], ["scp", "-r", *opts, "--"]
     if args.action == "push":
         return _push(args, ssh, scp, runner)
+    extra = ({"audit": _audit(args)} if args.action == "rollback"
+             else {"history": max(args.history, 0)})
     r = _run(runner, [*ssh, f"{args.user}@{args.host}",
-                      remote_script(args.action, None, args.root)], args.timeout)
+                      remote_script(args.action, None, args.root, **extra)], args.timeout)
     if r is None:
         return 1
     print(r.stdout or "", end="")
