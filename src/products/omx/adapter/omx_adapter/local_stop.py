@@ -100,6 +100,26 @@ class LocalStopController:
             raise RuntimeError("local stop state is unavailable")
         return self._snapshot(row)
 
+    def is_open(self, *, authority_epoch: int, dispatch_generation: int) -> bool:
+        """Read the local dispatch fence without waiting for a ROS response."""
+        if (type(authority_epoch) is not int or authority_epoch < 0
+                or type(dispatch_generation) is not int or dispatch_generation < 0):
+            return False
+        with self._lock, closing(self._connect()) as connection:
+            if self._forced_closed:
+                return False
+            row = connection.execute(
+                "SELECT * FROM omx_local_stop WHERE workcell_id=? AND instance_id=?",
+                (self.workcell_id, self.instance_id),
+            ).fetchone()
+        return bool(
+            row is not None
+            and row["state"] == LocalStopState.OPEN.value
+            and row["dispatch_enabled"]
+            and (row["authority_epoch"], row["dispatch_generation"])
+            == (authority_epoch, dispatch_generation)
+        )
+
     def trip(self, request: LocalStopRequest, *, source: StopRequestSource,
              cancel_active: Callable[[], object] | None = None) -> LocalStopSnapshot:
         if (request.workcell_id, request.instance_id) != (self.workcell_id, self.instance_id):

@@ -56,6 +56,8 @@ class StopFence(Protocol):
                     fleet_fence_current: Callable[[], bool],
                     operation: Callable[[], DriverSubmission]) -> DriverSubmission: ...
 
+    def is_open(self, *, authority_epoch: int, dispatch_generation: int) -> bool: ...
+
 
 class PhaseExecution(Protocol):
     """One grant-bound coordinator for exact phase submission and cancellation."""
