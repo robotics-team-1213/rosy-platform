@@ -1,6 +1,6 @@
 from setuptools import find_packages, setup
 
-package_name = "site_vision"
+package_name = "rosy_vision"
 
 setup(
     name=package_name,
@@ -22,9 +22,10 @@ setup(
     license="Apache-2.0",
     entry_points={
         "console_scripts": [
-            "site_vision=site_vision.cli:main",
-            # D-374 3: alias for one site candidate release; removed in stage 5.
-            "overhead=site_vision.cli:main",
+            "rosy-vision=rosy_vision.cli:main",
+            # D-377 3: old names kept for one site candidate release; both removed in stage 5.
+            "site_vision=rosy_vision.cli:main",
+            "overhead=rosy_vision.cli:main",
         ],
     },
 )

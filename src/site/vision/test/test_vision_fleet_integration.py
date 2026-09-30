@@ -13,12 +13,12 @@ import uvicorn
 import websockets
 import yaml
 
-from site_vision import protocol
-from site_vision.detect import generate_marker_image
-from site_vision.ingest import IngestServer
-from site_vision.publish import SightingPublisher
-from site_vision.vision_config import load_vision_sources
-from site_vision.worker import VisionWorker
+from rosy_vision import protocol
+from rosy_vision.detect import generate_marker_image
+from rosy_vision.ingest import IngestServer
+from rosy_vision.publish import SightingPublisher
+from rosy_vision.vision_config import load_vision_sources
+from rosy_vision.worker import VisionWorker
 from fleet.server.app import create_app
 from fleet.server.console import FleetConsole
 from fleet.server.sightings import SightingService

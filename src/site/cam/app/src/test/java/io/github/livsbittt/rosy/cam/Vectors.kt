@@ -1,4 +1,4 @@
-package io.github.livsbittt.rosy.ceilingcamera
+package io.github.livsbittt.rosy.cam
 
 import java.io.File
 import org.json.JSONObject

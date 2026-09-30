@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Rosy 천장 카메라</string>
+    <string name="app_name">Rosy Cam</string>
 
     <string name="notif_channel">천장 카메라 송출</string>
     <string name="notif_title">천장 카메라 송출</string>

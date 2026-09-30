@@ -1,6 +1,6 @@
-package io.github.livsbittt.rosy.ceilingcamera.link
+package io.github.livsbittt.rosy.cam.link
 
-import io.github.livsbittt.rosy.ceilingcamera.settings.PairingUri
+import io.github.livsbittt.rosy.cam.settings.PairingUri
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.flow.first

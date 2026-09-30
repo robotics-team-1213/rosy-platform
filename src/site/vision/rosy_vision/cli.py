@@ -1,6 +1,6 @@
-"""``site_vision`` — CLI front end for the receive-only ingest server.
+"""``rosy-vision`` — CLI front end for the receive-only ingest server.
 
-``site_vision receive`` starts :class:`site_vision.ingest.IngestServer`,
+``rosy-vision receive`` starts :class:`rosy_vision.ingest.IngestServer`,
 prints a ``rosyov://`` pairing URI (and an ASCII QR code when the optional
 ``qrcode`` package is installed), and prints per-source stats once a
 second. See docs/adr/D-261-overhead-camera-app-skeleton.md.
@@ -22,14 +22,14 @@ import time
 from pathlib import Path
 from typing import Sequence
 
-from site_vision import protocol
-from site_vision.ingest import STATUS_INTERVAL_S, IngestServer
-from site_vision.publish import SightingPublishError, SightingPublisher
-from site_vision.vision_config import load_vision_sources
-from site_vision.worker import VisionWorker
+from rosy_vision import protocol
+from rosy_vision.ingest import STATUS_INTERVAL_S, IngestServer
+from rosy_vision.publish import SightingPublishError, SightingPublisher
+from rosy_vision.vision_config import load_vision_sources
+from rosy_vision.worker import VisionWorker
 from core_common.protocol.vision_preview import VisionLeaseSigner
 
-logger = logging.getLogger("site_vision")
+logger = logging.getLogger("rosy_vision")
 
 
 def _detect_advertise_host(host: str) -> str:
@@ -175,7 +175,7 @@ async def _run_vision(args: argparse.Namespace) -> int:
 
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(prog="site_vision")
+    parser = argparse.ArgumentParser(prog="rosy-vision")
     sub = parser.add_subparsers(dest="command", required=True)
 
     receive = sub.add_parser("receive", help="run the receive-only ingest server")

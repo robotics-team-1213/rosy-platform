@@ -7,8 +7,8 @@ import time
 import asyncio
 from typing import Callable
 
-from site_vision.detect import detect_markers
-from site_vision.project import CameraMap, project_frame
+from rosy_vision.detect import detect_markers
+from rosy_vision.project import CameraMap, project_frame
 
 MAX_FUTURE_S = 0.05
 

@@ -1,6 +1,6 @@
-package io.github.livsbittt.rosy.ceilingcamera.service
+package io.github.livsbittt.rosy.cam.service
 
-import io.github.livsbittt.rosy.ceilingcamera.settings.PairingUri
+import io.github.livsbittt.rosy.cam.settings.PairingUri
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test

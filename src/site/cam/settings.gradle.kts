@@ -14,5 +14,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "rosy-ceiling-camera"
+rootProject.name = "rosy-cam"
 include(":app")

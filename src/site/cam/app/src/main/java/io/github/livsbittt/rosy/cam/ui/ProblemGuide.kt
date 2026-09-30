@@ -1,8 +1,8 @@
-package io.github.livsbittt.rosy.ceilingcamera.ui
+package io.github.livsbittt.rosy.cam.ui
 
-import io.github.livsbittt.rosy.ceilingcamera.link.LinkError
-import io.github.livsbittt.rosy.ceilingcamera.link.NetworkFailure
-import io.github.livsbittt.rosy.ceilingcamera.service.StreamError
+import io.github.livsbittt.rosy.cam.link.LinkError
+import io.github.livsbittt.rosy.cam.link.NetworkFailure
+import io.github.livsbittt.rosy.cam.service.StreamError
 
 /** Operator-facing problem; each maps to one Korean sentence that names the next step. */
 enum class Problem {

@@ -1,4 +1,4 @@
-"""Drive test/fixtures/protocol/overhead-ingest.v1.json against site_vision.protocol.
+"""Drive test/fixtures/protocol/overhead-ingest.v1.json against rosy_vision.protocol.
 
 The vectors file is shared with the Kotlin side; do not edit it here (see
 the module AGENTS.md). If a vector looks wrong, that is a design question,
@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from site_vision import protocol
+from rosy_vision import protocol
 
 VECTORS = json.loads(
     (Path(__file__).resolve().parents[4] / "test" / "fixtures" / "protocol" / "overhead-ingest.v1.json").read_text(encoding="utf-8")

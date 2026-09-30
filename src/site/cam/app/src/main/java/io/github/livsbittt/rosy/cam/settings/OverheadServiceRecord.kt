@@ -1,9 +1,9 @@
-package io.github.livsbittt.rosy.ceilingcamera.settings
+package io.github.livsbittt.rosy.cam.settings
 
 import android.net.nsd.NsdServiceInfo
 import java.nio.charset.StandardCharsets
 
-/** Public, non-secret mDNS data for the camera's Site Vision receiver. */
+/** Public, non-secret mDNS data for the camera's Rosy Vision receiver. */
 data class OverheadServiceRecord(val serviceName: String, val tlsHost: String, val port: Int) {
     val name: String get() = serviceName
     companion object {

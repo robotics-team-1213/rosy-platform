@@ -1,7 +1,7 @@
-package io.github.livsbittt.rosy.ceilingcamera.health
+package io.github.livsbittt.rosy.cam.health
 
 import android.content.res.Resources
-import io.github.livsbittt.rosy.ceilingcamera.R
+import io.github.livsbittt.rosy.cam.R
 import java.util.Locale
 
 /** Korean health text shared by the stream screen and the foreground notification. */

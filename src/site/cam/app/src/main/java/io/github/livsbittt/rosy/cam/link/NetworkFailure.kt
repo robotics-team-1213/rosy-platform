@@ -1,4 +1,4 @@
-package io.github.livsbittt.rosy.ceilingcamera.link
+package io.github.livsbittt.rosy.cam.link
 
 import java.net.ConnectException
 import java.net.NoRouteToHostException

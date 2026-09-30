@@ -1,4 +1,4 @@
-package io.github.livsbittt.rosy.ceilingcamera.ui
+package io.github.livsbittt.rosy.cam.ui
 
 import android.net.ConnectivityManager
 import android.net.Network
@@ -14,8 +14,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.draw.clip
-import io.github.livsbittt.rosy.ceilingcamera.health.DeviceHealth
-import io.github.livsbittt.rosy.ceilingcamera.health.HealthText
+import io.github.livsbittt.rosy.cam.health.DeviceHealth
+import io.github.livsbittt.rosy.cam.health.HealthText
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -47,12 +47,12 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
-import io.github.livsbittt.rosy.ceilingcamera.R
-import io.github.livsbittt.rosy.ceilingcamera.link.LinkState
-import io.github.livsbittt.rosy.ceilingcamera.service.CameraSessionPlan
-import io.github.livsbittt.rosy.ceilingcamera.service.StreamService
-import io.github.livsbittt.rosy.ceilingcamera.service.StreamState
-import io.github.livsbittt.rosy.ceilingcamera.settings.PairingUri
+import io.github.livsbittt.rosy.cam.R
+import io.github.livsbittt.rosy.cam.link.LinkState
+import io.github.livsbittt.rosy.cam.service.CameraSessionPlan
+import io.github.livsbittt.rosy.cam.service.StreamService
+import io.github.livsbittt.rosy.cam.service.StreamState
+import io.github.livsbittt.rosy.cam.settings.PairingUri
 
 @Composable
 fun StreamScreen(

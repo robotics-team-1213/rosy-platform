@@ -1,6 +1,6 @@
 """Receive-only WebSocket ingest server for ``rosy-overhead/1`` (D-261 A2).
 
-Accepts one connection per ``source`` at :data:`site_vision.protocol.WS_PATH`,
+Accepts one connection per ``source`` at :data:`rosy_vision.protocol.WS_PATH`,
 keeps only the latest JPEG frame per source (never queues), and reports
 per-source stats. No marker detection, no Fleet sightings — that is D-257
 scope, not this ADR's. The Vision worker may hand back the marker ids it saw
@@ -35,12 +35,12 @@ except ImportError as exc:  # apt python3-websockets on Ubuntu 24.04 is 10.x
         "install it with pip in the site-PC venv"
     ) from exc
 
-from site_vision import protocol
+from rosy_vision import protocol
 from core_common.protocol.vision_preview import (
     PreviewRectification, VisionLeaseError, VisionLeaseSigner,
 )
-from site_vision.field_detect import DETECTOR_VERSION, FieldDetection, detect_field_jpeg
-from site_vision.rectify import rectify_jpeg
+from rosy_vision.field_detect import DETECTOR_VERSION, FieldDetection, detect_field_jpeg
+from rosy_vision.rectify import rectify_jpeg
 
 STATUS_INTERVAL_S = 1.0
 # A marker report older than this is not repeated in ``status`` (worker stopped

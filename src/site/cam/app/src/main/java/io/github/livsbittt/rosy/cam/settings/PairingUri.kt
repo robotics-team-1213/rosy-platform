@@ -1,6 +1,6 @@
-package io.github.livsbittt.rosy.ceilingcamera.settings
+package io.github.livsbittt.rosy.cam.settings
 
-import io.github.livsbittt.rosy.ceilingcamera.link.Protocol
+import io.github.livsbittt.rosy.cam.link.Protocol
 import java.net.URLDecoder
 import java.net.URLEncoder
 

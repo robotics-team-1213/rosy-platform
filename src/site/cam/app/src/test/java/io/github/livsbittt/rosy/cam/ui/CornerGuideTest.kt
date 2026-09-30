@@ -1,6 +1,6 @@
-package io.github.livsbittt.rosy.ceilingcamera.ui
+package io.github.livsbittt.rosy.cam.ui
 
-import io.github.livsbittt.rosy.ceilingcamera.link.ServerMessage
+import io.github.livsbittt.rosy.cam.link.ServerMessage
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -44,7 +44,7 @@ class CornerGuideTest {
 
     @Test
     fun placeholderEmptyStatusIsNotAMarkerReport() {
-        // `site_vision receive` always sends empty lists; that must not render as "0/4 seen".
+        // `rosy-vision receive` always sends empty lists; that must not render as "0/4 seen".
         assertEquals(false, CornerGuide.reportsMarkers(status(emptyList())))
         assertEquals(true, CornerGuide.reportsMarkers(status(listOf(30))))
         assertEquals(true, CornerGuide.reportsMarkers(status(emptyList(), robots = listOf("rosy_01"))))

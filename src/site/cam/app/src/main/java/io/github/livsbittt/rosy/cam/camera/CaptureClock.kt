@@ -1,4 +1,4 @@
-package io.github.livsbittt.rosy.ceilingcamera.camera
+package io.github.livsbittt.rosy.cam.camera
 
 /**
  * Maps a camera sensor timestamp onto the System.nanoTime clock so age_ms includes the

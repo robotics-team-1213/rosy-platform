@@ -1,7 +1,7 @@
 import yaml
 import pytest
 
-from site_vision.vision_config import load_vision_sources
+from rosy_vision.vision_config import load_vision_sources
 
 
 def _source(**changes):

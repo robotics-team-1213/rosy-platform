@@ -9,7 +9,7 @@ SITE = Path(__file__).resolve().parents[2]
 SRC = Path(__file__).resolve().parents[3]
 TEST = Path(__file__).resolve().parent
 for path in (
-    SITE / "site_vision",
+    SITE / "vision",
     SITE / "fleet",
     SRC / "runtime" / "services",
     SRC / "contracts" / "foundation",

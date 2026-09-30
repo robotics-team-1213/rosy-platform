@@ -1,4 +1,4 @@
-package io.github.livsbittt.rosy.ceilingcamera.camera
+package io.github.livsbittt.rosy.cam.camera
 
 import android.graphics.ImageFormat
 import android.graphics.Rect

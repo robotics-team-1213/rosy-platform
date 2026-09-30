@@ -1,4 +1,4 @@
-"""``site_vision`` CLI (and its ``overhead`` alias, D-374) — argument parsing and the parts that don't need a live server."""
+"""``rosy-vision`` CLI (and its ``site_vision``/``overhead`` aliases, D-377) — argument parsing and the parts that don't need a live server."""
 
 from __future__ import annotations
 
@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from site_vision import protocol
-from site_vision.cli import _detect_advertise_host, _server_ssl_context, parse_args
+from rosy_vision import protocol
+from rosy_vision.cli import _detect_advertise_host, _server_ssl_context, parse_args
 
 
 def test_receive_defaults_match_the_design_doc():
@@ -81,8 +81,8 @@ def test_pairing_uri_from_cli_args_round_trips():
     }
 
 
-def test_overhead_console_script_is_an_alias_of_site_vision(monkeypatch):
-    """D-374 3: `overhead` stays for one site candidate release, then stage 5 removes it."""
+def test_old_console_scripts_are_aliases_of_rosy_vision(monkeypatch):
+    """D-377 3: `site_vision` and `overhead` stay for one site candidate release, then stage 5 removes both."""
     import runpy
 
     import setuptools
@@ -97,5 +97,6 @@ def test_overhead_console_script_is_an_alias_of_site_vision(monkeypatch):
     for spec in captured["entry_points"]["console_scripts"]:
         name, target = (part.strip() for part in spec.split("=", 1))
         scripts[name] = target
-    assert captured["name"] == "site_vision"
-    assert scripts == {"site_vision": "site_vision.cli:main", "overhead": "site_vision.cli:main"}
+    assert captured["name"] == "rosy_vision"
+    assert scripts == {"rosy-vision": "rosy_vision.cli:main", "site_vision": "rosy_vision.cli:main",
+                       "overhead": "rosy_vision.cli:main"}

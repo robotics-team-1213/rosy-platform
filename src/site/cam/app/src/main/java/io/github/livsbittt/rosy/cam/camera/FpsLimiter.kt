@@ -1,4 +1,4 @@
-package io.github.livsbittt.rosy.ceilingcamera.camera
+package io.github.livsbittt.rosy.cam.camera
 
 /**
  * Admits a frame only when at least 1/[fps] seconds have passed since the last admitted frame.

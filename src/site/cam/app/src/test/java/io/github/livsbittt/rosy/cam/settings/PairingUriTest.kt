@@ -1,6 +1,6 @@
-package io.github.livsbittt.rosy.ceilingcamera.settings
+package io.github.livsbittt.rosy.cam.settings
 
-import io.github.livsbittt.rosy.ceilingcamera.Vectors
+import io.github.livsbittt.rosy.cam.Vectors
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue

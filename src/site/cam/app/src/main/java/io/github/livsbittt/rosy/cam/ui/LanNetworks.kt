@@ -1,4 +1,4 @@
-package io.github.livsbittt.rosy.ceilingcamera.ui
+package io.github.livsbittt.rosy.cam.ui
 
 /** Wi-Fi/Ethernet networks currently up, keyed by network id. Pure JVM. */
 class LanNetworks {

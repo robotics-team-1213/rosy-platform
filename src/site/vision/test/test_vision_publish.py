@@ -5,7 +5,7 @@ import httpx
 import pytest
 
 from core_common.protocol.sightings import SiteSightingPayload
-from site_vision.publish import SightingPublisher, SightingPublishError
+from rosy_vision.publish import SightingPublisher, SightingPublishError
 
 
 def _sighting():

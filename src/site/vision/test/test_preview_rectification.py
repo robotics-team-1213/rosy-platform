@@ -4,7 +4,7 @@ import cv2
 import numpy as np
 import pytest
 
-from site_vision.rectify import PreviewRectification, rectify_jpeg
+from rosy_vision.rectify import PreviewRectification, rectify_jpeg
 
 
 def _jpeg(width=320, height=240):

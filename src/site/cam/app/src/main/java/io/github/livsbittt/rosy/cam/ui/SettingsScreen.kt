@@ -1,4 +1,4 @@
-package io.github.livsbittt.rosy.ceilingcamera.ui
+package io.github.livsbittt.rosy.cam.ui
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -30,11 +30,11 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
-import io.github.livsbittt.rosy.ceilingcamera.R
-import io.github.livsbittt.rosy.ceilingcamera.settings.PairingUri
-import io.github.livsbittt.rosy.ceilingcamera.settings.OverheadServerDiscovery
-import io.github.livsbittt.rosy.ceilingcamera.settings.OverheadServiceRecord
-import io.github.livsbittt.rosy.ceilingcamera.settings.RobotCoreServiceRecord
+import io.github.livsbittt.rosy.cam.R
+import io.github.livsbittt.rosy.cam.settings.PairingUri
+import io.github.livsbittt.rosy.cam.settings.OverheadServerDiscovery
+import io.github.livsbittt.rosy.cam.settings.OverheadServiceRecord
+import io.github.livsbittt.rosy.cam.settings.RobotCoreServiceRecord
 
 /** Manual pairing entry, validated with the same rules as the rosyov:// deep link. */
 @Composable

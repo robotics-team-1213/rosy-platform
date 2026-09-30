@@ -12,8 +12,8 @@ import httpx
 import numpy as np
 
 from core_common.protocol.vision_preview import VisionLeaseSigner
-from site_vision.ingest import IngestServer, LatestFrame
-from site_vision.protocol import FrameHeader
+from rosy_vision.ingest import IngestServer, LatestFrame
+from rosy_vision.protocol import FrameHeader
 
 PATH = "/api/vision/sources/ceiling-north/field-proposal"
 
@@ -114,7 +114,7 @@ def test_proposal_has_its_own_rate_bucket_and_does_not_starve_frames():
 
 
 def test_detection_is_cached_per_frame_seq(monkeypatch):
-    import site_vision.ingest as ingest
+    import rosy_vision.ingest as ingest
 
     calls = []
     real = ingest.detect_field_jpeg
@@ -161,7 +161,7 @@ def test_proposal_http_route_from_running_vision_server():
 def _counting_detector(monkeypatch):
     import threading
 
-    import site_vision.ingest as ingest
+    import rosy_vision.ingest as ingest
 
     calls = []
     real = ingest.detect_field_jpeg
@@ -183,7 +183,7 @@ def _replace_frame(server, seq):
 
 
 def test_detection_runs_off_the_event_loop_at_most_once_per_second_per_source(monkeypatch):
-    import site_vision.ingest as ingest
+    import rosy_vision.ingest as ingest
 
     calls = _counting_detector(monkeypatch)
     clock = [1000.0]
@@ -204,7 +204,7 @@ def test_detection_runs_off_the_event_loop_at_most_once_per_second_per_source(mo
 
 
 def test_cache_is_keyed_by_frame_identity_and_dropped_with_the_source(monkeypatch):
-    import site_vision.ingest as ingest
+    import rosy_vision.ingest as ingest
 
     calls = _counting_detector(monkeypatch)
     clock = [1000.0]

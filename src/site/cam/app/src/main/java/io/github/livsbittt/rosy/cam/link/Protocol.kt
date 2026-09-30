@@ -1,4 +1,4 @@
-package io.github.livsbittt.rosy.ceilingcamera.link
+package io.github.livsbittt.rosy.cam.link
 
 import org.json.JSONArray
 import org.json.JSONException

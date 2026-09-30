@@ -5,11 +5,11 @@ plugins {
 }
 
 android {
-    namespace = "io.github.livsbittt.rosy.ceilingcamera"
+    namespace = "io.github.livsbittt.rosy.cam"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "io.github.livsbittt.rosy.ceilingcamera"
+        applicationId = "io.github.livsbittt.rosy.cam"
         minSdk = 26
         targetSdk = 35
         versionCode = 1

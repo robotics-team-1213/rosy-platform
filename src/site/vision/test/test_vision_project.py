@@ -1,6 +1,6 @@
 import math
 
-from site_vision.project import CameraMap, project_frame
+from rosy_vision.project import CameraMap, project_frame
 
 
 def _quad(cx, cy, half=2):

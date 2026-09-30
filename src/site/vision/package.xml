@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
-  <name>site_vision</name>
+  <name>rosy_vision</name>
   <version>0.1.0</version>
   <description>ROS-free overhead camera ingest and display-only sighting worker.</description>
   <maintainer email="kyung133851@pinklab.art">ROSY</maintainer>
