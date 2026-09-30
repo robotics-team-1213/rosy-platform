@@ -6,6 +6,24 @@ function el(tag, cls, text) {
   return node;
 }
 
+// D-359 US-009 — CORE가 이름 붙인 빠진 원천(core/system/runtime.py)을 운용자 말로 옮긴다.
+// 원래 키는 title에만 둔다. 모르는 키는 받은 그대로 보인다.
+const RUNTIME_SOURCE_LABEL = {
+  os_release: "운영체제", hostname: "호스트 이름", uptime: "가동 시간", load: "부하",
+  cpu: "CPU", memory: "메모리", temperature: "온도", storage: "저장소",
+  network_counters: "네트워크 통계", ros_graph: "ROS 그래프",
+};
+
+/** {text, title} for the runtime status line when some sources are missing, else null. */
+export function runtimeGap(unavailable) {
+  const keys = (unavailable || []).map(String);
+  if (!keys.length) return null;
+  const title = keys.join(", ");
+  const hostKeys = Object.keys(RUNTIME_SOURCE_LABEL).filter((key) => key !== "ros_graph");
+  if (hostKeys.every((key) => keys.includes(key))) return {text: "호스트 런타임 정보를 받지 못했습니다", title};
+  return {text: `호스트 런타임 일부 확인 불가: ${keys.map((key) => RUNTIME_SOURCE_LABEL[key] || key).join(", ")}`, title};
+}
+
 function section(title) {
   const wrap = el("section", "ui-readback");
   wrap.append(el("h3", "", title));
@@ -94,13 +112,14 @@ export function mount(root, ctx) {
       ["RMW", data.ros?.rmw], ["노드 / 토픽", data.ros ? `${data.ros.node_count ?? "—"} / ${data.ros.topic_count ?? "—"}` : null],
       ["DDS 격리", data.ros?.isolation?.mode],
       ["ROS 위험", (data.ros?.risks || []).map((risk) => `${risk.code || "UNKNOWN"}: ${risk.message || "상세 정보 없음"}`).join(" · ")]]);
-    runtimeStatus.textContent = data.unavailable?.length
-      ? `호스트 런타임 일부 확인 불가: ${data.unavailable.join(", ")}`
-      : `호스트 ${data.hostname || "이름 미확인"} · 런타임 확인됨`;
-    runtimeStatus.setAttribute("state", data.unavailable?.length ? "warning" : "ready");
+    const gap = runtimeGap(data.unavailable);
+    runtimeStatus.textContent = gap ? gap.text : `호스트 ${data.hostname || "이름 미확인"} · 런타임 확인됨`;
+    if (gap) runtimeStatus.title = gap.title; else runtimeStatus.removeAttribute("title");
+    runtimeStatus.setAttribute("state", gap ? "warning" : "ready");
   }, (error) => {
     fields(runtime.body, []);
     runtimeStatus.textContent = `호스트 런타임 확인 불가: ${error.message}`;
+    runtimeStatus.removeAttribute("title");
     runtimeStatus.setAttribute("state", "error");
   });
 
