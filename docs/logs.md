@@ -3633,6 +3633,14 @@
 - 결정: isaac_sim 잠정 채점은 다음 회차 재채점 대상이다(omx·pinky_pro·overhead와 같은 절차).
 - 교훈: isaac_sim AGENTS.md·progress.md의 "no own tests" 문구는 실제(test/ 3건)와 어긋난다 — 다음 isaac_sim 회차에서 바로잡을 것.
 
+## 2026-09-30 · uncommitted · docs(sensing): D-356 학습 루프 기록
+
+- 변경: D-356 인식 학습 루프 착지 기록 — `perception/AGENTS.md`(`learned/`, `image_frame.py`), sensing `AGENTS.md`(노드·CLI·launch), 신규 `tools/perception/AGENTS.md`, `.gitignore`에 `data/perception/`. 편차: 녹화는 raw `camera/front`(압축 front 토픽 없음), 학습 노드는 섀도 전용, onnxruntime은 아직 장치 이미지에 없음, 0930 모델의 클래스 역할은 잠정.
+- 증거: 신규 시험 72 passed 2 skipped, `tools/perception/test` 94 passed 8 skipped, sensing 전체 1741 passed 80 skipped; harness lint 결과는 커밋 메시지·보고에 기록.
+- gate 변화: 없음.
+- 결정: D-356 Proposed.
+- 교훈: 없음.
+
 ## 2026-09-30 · uncommitted · docs(adr/plan): D-357 ER 2 Mission feedback loop
 
 - Change: accepted D-357 to return scoped Fleet progress to ER 2 through bounded middleware-executed tools and durable event-triggered turns; added the task-by-task SOURCE/LOCAL implementation plan.
@@ -3736,3 +3744,11 @@
 - Change: aligned CORE FastAPI contract labels with API reference v1.62; re-judged Fleet's measured 15,000-line size against the existing unscheduled B2 split verdict after the bounded ER2 consumer, trusted Vision reader, and fence coverage landed.
 - Evidence: pre-push fast contract suite reproduced both failures (`test_app_description_names_the_live_contract_version`, Fleet `SIZE_VERDICTS` regrowth); targeted rerun and generated harness checks pending.
 - Gate: no runtime/provider enablement or deployment authorization is implied; ER2 remains disabled by default.
+
+## 2026-09-30 · uncommitted · docs(sensing): D-356 학습 루프 기록 정정·리뷰 수정
+
+- 변경: 바로 위 D-356 기록의 정정(append-only라 원문은 그대로 둔다). "harness lint 결과는 커밋 메시지·보고에 기록"은 틀렸다 — 어느 커밋 메시지에도 lint 결과는 없다. 수치의 인터프리터: sensing 전체 1741 passed 80 skipped와 `tools/perception/test` 94 passed 8 skipped는 시스템 Python 3.14.5 실측. 리뷰 수정: 섀도 부가 데이터 계약(extract가 String JSON을 풀고 상대 토픽 이름 키로 저장, prelabel이 같은 키를 읽음), `hotpath_measure.NODE_NAMES`에서 `record_session` 제외, `learned_lane_node` 종료 패턴, intake 보고의 `files`와 deliver의 일치 검사, 토픽 네임스페이스 처리.
+- 증거: 수정 뒤 `tools/perception/test` — venv Python 3.12.14에서 107 passed 1 skipped, 시스템 Python 3.14.5에서 98 passed 10 skipped(2026-09-30 Windows). 병합 뒤 lint·sensing 스위트는 병합 커밋 보고에 둔다.
+- gate 변화: 없음.
+- 결정: D-356 Proposed 유지.
+- 교훈: 증거 칸에는 결과를 적거나 "미기록"이라고 적는다. 커밋 메시지를 증거 위치로 가리키지 않는다.

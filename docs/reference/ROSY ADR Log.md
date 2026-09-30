@@ -353,6 +353,7 @@
 | D-353 | 외부 장비 설계는 바뀐다 — 바뀌어도 코드가 아니라 설정·전략이 바뀌게 한다 | Accepted (2026-09-30, 구조 결정 + 봉합점 3개 구현) |
 | D-354 | 외부 장비는 mDNS로 서로를 찾는다 — IP 하드코딩 없이, 전원만 연결하면 발견된다 (_rosy-dock._tcp·_rosy-signal._tcp) | Accepted (2026-09-30, 구조 결정 + 펌웨어·유틸리티 구현) |
 | D-355 | 도크·외부 장비 구현은 자재→벤치→실기→활성화→통합의 5단계로 간다 — 각 단계의 게이트·의존성·완료 조건을 확정한다 | Accepted (2026-09-30, 실행 순서 확정; 구현은 플랜 참조) |
+| D-356 | 인식 학습 루프 — 학습은 저장소 밖, manifest 약속·접수·데이터 세대 전달·섀도 추론은 안 | Proposed (2026-09-30, 섀도 전용; 주행 활성화는 D-205 P3 뒤 별도) |
 | D-357 | ER 2 consumes bounded Fleet feedback and returns candidates while Mission/device control remain independent | Accepted (2026-09-30, standard provider feedback/tool-result boundary only; autonomous dispatch and physical acceptance remain HOLD) |
 | D-358 | ER 2 feedback turns use trusted scope, fenced candidates, and explicit ambiguity | Accepted (2026-09-30, D-357 implementation contract refinement only; provider, policy dispatch, ROS/OMX, and physical acceptance remain HOLD) |
 | D-359 | 테마는 팔레트 한 블록만 바꾼다 — 토큰을 팔레트·파생·역할로 나누고, 공용 부품이 표면별 사본을 대체하며, 반응형은 세 단 어휘를 쓴다 | Accepted (2026-09-30, 웹 토큰 구조·공용 부품·반응형·계약 시험; D-345의 라이트 팔레트 금지 문장 대체; 네이티브·LCD는 dark 고정) |

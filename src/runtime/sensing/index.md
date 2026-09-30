@@ -32,6 +32,7 @@
 | D-199 | 카메라 인식은 두 층의 고정 계약과 교체 가능한 백엔드로 나눈다 — 규칙 기반으로 시작하고 학습 모델은 같은 자리에 끼운다 |
 | D-205 | 실물 차선 미션으로의 전환: 시뮬레이션 현실화, 인식 재작업, 재합격 순서 |
 | D-206 | P0 실측은 기록지가 표준이고 확정 카메라 프로필은 revision으로 보관한다 — 게이트 판정은 프로토타입 `camcal`로 잇고 `src/robots/pinky_pro/config/`은 D-196 머지 뒤 만든다 |
+| D-356 | 인식 학습 루프 — 학습은 저장소 밖, manifest 약속·접수·데이터 세대 전달·섀도 추론은 안 |
 
 ## 계획·결과 문서
 
@@ -66,4 +67,4 @@
 - 2026-09-30 · uncommitted · docs(adr): pilot ADR 번호를 main 과 겹치지 않게 다시 매김
 - 2026-09-30 · uncommitted · feat(control): 지면 기하 차로 유지기 'keep' 모드(D-353 §2)
 - 2026-09-30 · uncommitted · feat(control): 공칭(NOMINAL) 지면과 차선 녹화 재생 벤치(D-353)
-- 2026-09-30 · uncommitted · fix(structure): declare imu_bno055 exec_depend
+- 2026-09-30 · uncommitted · fix(perception): D-356 리뷰 수정·수치 인터프리터 명기

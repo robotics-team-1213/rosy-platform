@@ -13,6 +13,7 @@ ROS 2 Jazzy package absorbed into the **Rosy OS** workspace for the Pinky Pro de
 | `STEPS.txt` | Korean operator runbook: bringup order, tuning log, LCD/web notes |
 | `package.xml` / `setup.py` | ament_python package manifest and entry points |
 | `resource/control` | ament resource marker (generated, do not edit) |
+| `learned_lane_node` / `record_session` | Console scripts (D-356). `learned_lane_node` runs a delivered ONNX model on `camera/front` and publishes shadow-only `perception/learned/shadow` (launch: `launch/learned_lane.launch.py`); `record_session` records raw `camera/front` plus evidence topics into a harvest-aware session (`control/recording.py`) |
 | `progress.md` | Current gate snapshot (SOURCE…FIELD). Overwrite; state of record over this file |
 | `logs.md` | Append-only work journal, one entry per change |
 | `index.md` | Generated: ADRs, plans, solutions, tests, recent logs. Do not edit |
@@ -39,6 +40,7 @@ ROS 2 Jazzy package absorbed into the **Rosy OS** workspace for the Pinky Pro de
 - `config/robot.yaml` is the single shared parameter source; per-node yamls override after it.
 - The lidar is mounted rotated: **scan 0° = rear, nose ≈ 190°**. Every heading goes through `robot_yaw()` / `wrap_pi()`.
 - Docs/STEPS.txt are Korean; code comments and logs are English. Comments explain *why* against measured hardware limits (lidar 5 cm min, US 2 cm blind zone, IR 4095 = ADC saturation, never a cliff).
+- Learned loop (D-356): `learned_lane_node` is shadow-only and never publishes a command. Weights never live in `src/`; dataset, training and delivery tooling is in `tools/perception/`.
 - Commits: short imperative behavioral summaries.
 
 ### Testing Requirements

@@ -556,6 +556,8 @@
 - 증거: `docs/validation/semantic-road-stop-and-go-2026-09-29/` — `SEMANTIC_ROAD_HOST_SIM_PASS`, 표 3종·result.json·SVG·montage·preview. `test_semantic_road_simulation.py` 신규 단언(무신호 진입·선언 충돌·융합 3단·fused 표기) 포함 2 passed, flake8 clean.
 - gate 변화: 없음. HOST-SIM 한계 그대로 — 실물 Gazebo 폐루프(WSL), 관측 서비스 실HTTP, DEVICE/FIELD는 T5 벤치 회차가 소유한다.
 
+
+
 ## 2026-09-29 · uncommitted · feat(control): image-space two-boundary lane keeper ('between' mode)
 - 변경: `lane.py`에 `LaneBetweenKeeper`·`detect_lane_between` 추가. 아래쪽 띠의 여러 행에서 기준 열 왼쪽·오른쪽의 가장 가까운 밝은 런을 찾아 두 안쪽 가장자리의 중점을 목표로 삼는다. 한쪽만 보이면 그 가장자리에서 학습한 차선 폭(행별 EMA, 기본은 화면 폭의 0.6)의 절반만큼 안쪽을 목표로 삼는다. 기준 열은 직전 목표를 따라간다. 지면 평면이 필요 없다. `line_observer_node`에 `camera_lane_mode: between`과 파라미터 `camera_between_roi_top_fraction`(0.6), `camera_between_lane_width_fraction`(0.6, 읽기 전용)을 추가했다. 기본값 `line`은 그대로다.
 - 증거: `python -m pytest src/runtime/sensing/test/ -q` 1670 passed, 78 skipped (2026-09-29 Windows). 새 `test_lane_between.py` 10건이 한쪽 선만 보일 때 `detect_lane_error`는 선 위를 가리키고 `between`은 차선 안쪽을 가리키는 것을 확인한다.
@@ -569,6 +571,22 @@
 - 증거: test_module_structure 33 passed.
 - gate 변화: 없음.
 - 결정: 선언은 정직한 절반 — 전체 해소는 bringup 조립로 이전(별도 과제).
+- 교훈: 없음.
+
+## 2026-09-30 · uncommitted · feat(perception): D-356 인식 학습 루프 섀도 백엔드·녹화·도구
+
+- 변경: `perception/learned/`(manifest·lane_mask·runner·shadow)와 공유 `image_frame.py`, `learned_lane_node`(+`launch/learned_lane.launch.py`), `recording.py`+`record_session`(콘솔 스크립트 2개) 추가. 개발자 쪽 `tools/perception/{dataset,model,training}`(추출·사전 라벨·데이터셋 빌드·발행·ONNX 내보내기·접수·전달/롤백)과 `tools/perception/test`. 학습 노드는 섀도 전용이라 명령 필드가 없고 `executor_choice.spin`으로 돈다. `hotpath_measure.NODE_NAMES`와 executor 선택 시험 개수를 새 진입점에 맞췄다.
+- 증거: 전체 sensing 스위트 1741 passed 80 skipped(신규 진입점 반영 뒤 실패 2건 수정: executor 선택·hotpath 이름 계약); `tools/perception/test` 94 passed 8 skipped(2026-09-30 Windows).
+- gate 변화: 없음. SOURCE/LOCAL만 다룬다. 노드 그래프·Pi 실행은 HOLD.
+- 결정: D-356 Proposed(섀도 전용; 주행 활성화는 D-205 P3 뒤 별도).
+- 교훈: 새 콘솔 스크립트는 `hotpath_measure.NODE_NAMES`와 `test_executor_choice`의 진입점 개수 계약을 함께 건드린다. 전체 스위트를 돌려야 잡힌다.
+
+## 2026-09-30 · uncommitted · fix(perception): D-356 리뷰 수정·수치 인터프리터 명기
+
+- 변경: 바로 위 D-356 기록의 수치 인터프리터 명기 — sensing 전체 1741 passed 80 skipped와 `tools/perception/test` 94 passed 8 skipped는 시스템 Python 3.14.5 실측. 리뷰 수정: `recording.py`에 `CAMERA_TOPIC`·`SIDE_TOPICS` 공유 상수와 `bag_command(namespace=)`, `record_session --namespace`, `hotpath_measure.NODE_NAMES`에서 `record_session` 제외(노드가 아닌 `ros2 bag record` 래퍼; 시험은 `NON_NODE_SCRIPTS`를 뺀다), `learned_lane_node.main`이 `line_observer_node.main`과 같은 종료 패턴.
+- 증거: venv Python 3.12.14에서 learned·image_frame·recording·executor_choice·hotpath 시험과 `tools/perception/test` 204 passed 2 skipped; 시스템 Python 3.14.5에서 `tools/perception/test`+hotpath+recording 133 passed 10 skipped(2026-09-30 Windows).
+- gate 변화: 없음. SOURCE/LOCAL만.
+- 결정: D-356 Proposed 유지.
 - 교훈: 없음.
 
 ## 2026-09-30 · uncommitted · feat(control): 공칭(NOMINAL) 지면과 차선 녹화 재생 벤치(D-353)

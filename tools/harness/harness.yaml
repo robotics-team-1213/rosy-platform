@@ -7,7 +7,6 @@ adr_log: docs/reference/ROSY ADR Log.md
 
 # IDs absent from the ADR log on purpose. Remove an entry once the ADR is written.
 adr_gaps:
-  D-356: "reserved by branch feat/perception-learning-loop (perception model delivery); remove when its ADR lands"
   D-341: "reserved by branch docs/d341-overhead-console-pairing (overhead console-approved pairing, also on feat/pilot-teleop); remove once it lands"
   D-29: "unused; the vision accelerator shield design only proposed the number"
   D-324: "unused; the Pinky artifact-selection ADR was first written as D-324 and renumbered to D-325 to avoid a same-day collision (commit 45f9470b, 2026-09-29). Remove if another session lands an ADR as D-324"

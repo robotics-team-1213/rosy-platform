@@ -81,7 +81,12 @@ def test_process_matching_by_entry_point_and_module(tmp_path):
 def test_node_names_match_the_installed_entry_points():
     setup = (hm.PKG / 'setup.py').read_text(encoding='utf-8')
     # Both ways: a node added to setup.py without NODE_NAMES would silently go unwatched.
-    assert set(re.findall(r"'(\w+) = control\.\w+:main'", setup)) == set(hm.NODE_NAMES)
+    entry_points = set(re.findall(r"'(\w+) = control\.\w+:main'", setup))
+    assert set(entry_points) - NON_NODE_SCRIPTS == set(hm.NODE_NAMES)
+
+
+# record_session is a CLI wrapper around `ros2 bag record`, not a node: nothing to watch.
+NON_NODE_SCRIPTS = {'record_session'}
 
 
 def test_watch_samples_fake_proc(tmp_path):
