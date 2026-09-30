@@ -708,6 +708,11 @@ ui-section {
   min-width: 0;
 }
 
+/* D-359 US-008 — 빈 상태 줄은 칸을 차지하지 않는다. 0px 높이여도 flex 항목이라 gap이
+   붙었고, /setup 웨이포인트는 빈 저장·목록 상태 줄 둘이 짧은 목록 위에 빈 칸을 만들었다.
+   display: contents는 상자만 없애고 요소는 접근성 트리에 남겨 aria-live가 계속 알린다. */
+ui-section > [role="status"]:empty { display: contents; }
+
 ui-empty {
   margin: 0;
   color: var(--nominal-quiet);
