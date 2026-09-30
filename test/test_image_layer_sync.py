@@ -347,6 +347,19 @@ def test_refuses_when_current_leaves_the_release_store(device, target):
     assert _tree(device) == before
 
 
+def test_refuses_a_release_shaped_directory_outside_the_release_store(device):
+    # Named like a release and complete, but not under /opt/rosy/releases.
+    outside = device / "opt" / NEW_ID
+    shutil.copytree(device / "opt/rosy/releases" / NEW_ID, outside)
+    before = _tree(device)
+    link = device / "opt/rosy/current"
+
+    with pytest.raises(sync_mod.SyncError, match="does not point into"):
+        sync_mod.sync(device, dry_run=False, verify=lambda _: None, runner=Runner(),
+                      is_link=lambda path: Path(path) == link, readlink=lambda _: f"../{NEW_ID}")
+    assert _tree(device) == before
+
+
 def test_refuses_a_release_that_does_not_verify(device):
     before = _tree(device)
 

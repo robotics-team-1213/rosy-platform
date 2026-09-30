@@ -149,9 +149,9 @@ def resolve_current(
     if not (is_link or os.path.islink)(link):
         raise SyncError(f"IMAGE_LAYER_CURRENT: {link} is not a symlink")
     target = Path(os.path.normpath(os.path.join(str(link.parent), (readlink or os.readlink)(link))))
-    if target.parent != Path(os.path.normpath(str(releases))) or not RELEASE_ID.fullmatch(target.name):
+    if not RELEASE_ID.fullmatch(target.name) or target.resolve().parent != releases.resolve():
         raise SyncError(f"IMAGE_LAYER_CURRENT: {link} does not point into {releases}")
-    if target.is_symlink() or not target.is_dir() or target.resolve().parent != releases.resolve():
+    if target.is_symlink() or not target.is_dir():
         raise SyncError(f"IMAGE_LAYER_CURRENT: {target} is not a release directory")
     return target.name, target
 
