@@ -28,7 +28,7 @@ def install_hub_routes(app: FastAPI, hub: SiteHub,
     @router.websocket("/ws/robots")
     async def ws_robots(websocket: WebSocket):
         await websocket.accept()
-        robot_id: Optional[str] = None
+        session = hub.open_session()
         try:
             while True:
                 text = await websocket.receive_text()
@@ -40,7 +40,7 @@ def install_hub_routes(app: FastAPI, hub: SiteHub,
                     await websocket.close(code=1008)
                     break
                 
-                reply = hub.handle(env)
+                reply = hub.handle(env, session)
                 if reply.type is EnvelopeType.ERROR:
                     code = reply.payload.get("code")
                     logger.warning("hub rejected %s: %s", env.type.value, code)
@@ -50,18 +50,13 @@ def install_hub_routes(app: FastAPI, hub: SiteHub,
                         break
                     continue
                 
-                if reply.type is EnvelopeType.WELCOME:
-                    robot_id = reply.payload.get("robot_id")
-                    
                 await websocket.send_json(reply.model_dump(exclude_none=True))
         except WebSocketDisconnect:
             pass
         except Exception as exc:
             logger.error("ws error: %s", exc)
         finally:
-            if robot_id:
-                row = hub.registry.record(robot_id)
-                row.online = False
+            hub.close_session(session)
 
     app.include_router(router)
     return app

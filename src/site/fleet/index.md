@@ -69,8 +69,8 @@
 
 ## 최근 기록
 
+- 2026-10-01 · uncommitted · fix(hub): D-382 F6 — 소켓을 로봇 하나에 묶고 짝 토큰을 상수 시간으로 비교
 - 2026-10-01 · 952d5d80 · fix(fleet): lens profile review fixes
 - 2026-09-30 · f21364e6 · feat(fleet): D-318 rectification profile per source and lens
 - 2026-09-30 · uncommitted · refactor(fleet): D-377 console title and favicon
 - 2026-09-30 · uncommitted · fix(fleet): D-370 리뷰 — 발견 행은 분류기가 정규화한 호스트를 저장
-- 2026-09-30 · uncommitted · docs(adr): D-358 앱 역할 ADR을 D-370으로 재번호

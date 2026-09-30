@@ -47,3 +47,86 @@ def test_hub_websocket_rejects_bad_token():
             assert data["type"] == "error"
             websocket.receive_json()
 
+
+
+def _hello_env(robot_id: str, token: str) -> dict:
+    hello = HelloPayload(robot_id=robot_id, pairing_token=token)
+    return Envelope(type=EnvelopeType.HELLO, payload=hello.model_dump()).model_dump()
+
+
+def _event_env(robot_id: str, seq: int = 1) -> dict:
+    from core_common.protocol.schemas import EventMessage
+    event = EventMessage(seq=seq, robot_id=robot_id, type="nav.completed")
+    return Envelope(type=EnvelopeType.EVENT,
+                    payload=event.model_dump(mode="json")).model_dump(mode="json")
+
+
+def _heartbeat_env(robot_id: str) -> dict:
+    from core_common.protocol.schemas import HeartbeatPayload, StateSnapshot
+    hb = HeartbeatPayload(state_snapshot=StateSnapshot(robot_id=robot_id, seq=1))
+    return Envelope(type=EnvelopeType.HEARTBEAT,
+                    payload=hb.model_dump(mode="json")).model_dump(mode="json")
+
+
+def _two_robot_hub() -> SiteHub:
+    return SiteHub([_ep("rosy_01"), RobotEndpoint("rosy_02", "http://127.0.0.1:8081", "rest-02",
+                                                  fleet_pairing_token="pair-02")])
+
+
+def test_socket_cannot_speak_for_another_paired_robot():
+    # D-382 F6: pairing binds the socket, not a global set of robot ids.
+    hub = _two_robot_hub()
+    client = TestClient(create_hub_app(hub))
+    with client.websocket_connect("/ws/robots") as ws1, \
+            client.websocket_connect("/ws/robots") as ws2:
+        ws1.send_json(_hello_env("rosy_01", "pair-01"))
+        assert ws1.receive_json()["type"] == "welcome"
+        ws2.send_json(_hello_env("rosy_02", "pair-02"))
+        assert ws2.receive_json()["type"] == "welcome"
+
+        ws1.send_json(_event_env("rosy_02"))
+        reply = ws1.receive_json()
+        assert reply["type"] == "error" and reply["payload"]["code"] == "PAIRING_INVALID"
+        ws1.send_json(_heartbeat_env("rosy_02"))
+        reply = ws1.receive_json()
+        assert reply["type"] == "error" and reply["payload"]["code"] == "PAIRING_INVALID"
+        assert hub.registry.record("rosy_02").events == []
+
+        ws1.send_json(_event_env("rosy_01"))
+        assert ws1.receive_json()["payload"] == {"accepted": True}
+
+
+def test_socket_cannot_rebind_to_a_second_robot():
+    hub = _two_robot_hub()
+    client = TestClient(create_hub_app(hub))
+    with client.websocket_connect("/ws/robots") as ws:
+        ws.send_json(_hello_env("rosy_01", "pair-01"))
+        assert ws.receive_json()["type"] == "welcome"
+        ws.send_json(_hello_env("rosy_02", "pair-02"))
+        reply = ws.receive_json()
+        assert reply["type"] == "error" and reply["payload"]["code"] == "PAIRING_INVALID"
+
+
+def test_disconnect_unpairs_the_robot():
+    hub = SiteHub([_ep("rosy_01")])
+    client = TestClient(create_hub_app(hub))
+    with client.websocket_connect("/ws/robots") as ws:
+        ws.send_json(_hello_env("rosy_01", "pair-01"))
+        assert ws.receive_json()["type"] == "welcome"
+    assert hub.registry.online_ids() == []
+    # In-process callers without a session see the robot as unpaired too.
+    reply = hub.handle(Envelope.model_validate(_event_env("rosy_01")))
+    assert reply.type is EnvelopeType.ERROR
+
+
+def test_old_socket_closing_after_reconnect_keeps_the_new_pairing():
+    hub = SiteHub([_ep("rosy_01")])
+    old, new = hub.open_session(), hub.open_session()
+    hello = Envelope.model_validate(_hello_env("rosy_01", "pair-01"))
+    assert hub.handle(hello, old).type is EnvelopeType.WELCOME
+    assert hub.handle(hello, new).type is EnvelopeType.WELCOME
+    hub.close_session(old)
+    assert hub.registry.online_ids() == ["rosy_01"]
+    event = Envelope.model_validate(_event_env("rosy_01"))
+    assert hub.handle(event, new).payload == {"accepted": True}
+    assert hub.handle(event, old).type is EnvelopeType.ERROR
