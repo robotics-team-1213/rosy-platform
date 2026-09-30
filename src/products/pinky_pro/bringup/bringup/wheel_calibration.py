@@ -2,8 +2,10 @@
 
 The operator-accepted ``wheel_odometry`` record wins over the bringup
 parameters (rosy_params.yaml: 0.027 / 0.0961, the seed); without one, or
-without core_common in the image, the parameters stand. Returns the values
-and the source line bringup logs. ROS-free.
+without core_common in the image, the parameters stand. An accepted record
+outside 0.027 m / 0.0961 m +-10 %, or holding a bool or non-number, is
+refused by the store's check_values and the parameters stand; the returned
+source line (which bringup logs) says so. ROS-free.
 """
 
 

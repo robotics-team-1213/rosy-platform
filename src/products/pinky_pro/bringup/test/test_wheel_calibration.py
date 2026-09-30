@@ -19,6 +19,25 @@ def test_parameters_stand_without_an_accepted_record(tmp_path):
     assert source.startswith('bringup parameters')
 
 
+import pytest  # noqa: E402
+
+
+@pytest.mark.parametrize('values', [
+    {'wheel_radius': 0.031, 'wheel_separation': 0.0968},     # radius +15 %
+    {'wheel_radius': 0.0271, 'wheel_separation': 0.080},     # separation -17 %
+    {'wheel_radius': True, 'wheel_separation': 0.0968},
+    {'wheel_radius': '0.027', 'wheel_separation': 0.0968},
+    {'wheel_separation': 0.0968},
+])
+def test_implausible_accepted_record_falls_back_with_a_reason(tmp_path, values):
+    store = CalibrationStore(tmp_path)
+    rid = store.add(ROBOT, 'wheel_odometry', values, method='t/1')
+    store.set_status(ROBOT, 'wheel_odometry', rid, 'accepted', actor='operator')
+    got, source = calibrated_wheels(0.027, 0.0961, root=tmp_path, robot=ROBOT)
+    assert got == {'wheel_radius': 0.027, 'wheel_separation': 0.0961}
+    assert 'rejected' in source and rid in source
+
+
 def test_latest_accepted_record_wins(tmp_path):
     store = CalibrationStore(tmp_path)
     old = store.add(ROBOT, 'wheel_odometry', {'wheel_radius': 0.0270, 'wheel_separation': 0.0965},
