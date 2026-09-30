@@ -109,3 +109,18 @@ def test_shared_layout_parts_answer_their_slot_not_the_viewport():
     shell = SHELL.read_text(encoding="utf-8")
     slots = re.search(r"([^{}]+)\{\s*container-type:\s*inline-size;\s*\}", shell)
     assert slots and ".surface-slot" in slots.group(1) and ".surface-main" in slots.group(1)
+
+
+def test_surface_style_braces_balance():
+    """반응형 블록을 옮기다 남은 `}` 하나가 다음 규칙(예: Fleet .dispatch-control)을 조용히 지운다.
+    2026-09-30 US-005 캡처에서 실제로 잡힌 결함이다 — 괄호 짝을 표면 CSS·<style>마다 본다."""
+    broken = []
+    for row in _web_rows():
+        for page, css in registry._style_sources(REPO, row["path"]):
+            depth = lowest = 0
+            for char in re.sub(r'"[^"\n]*"|\'[^\'\n]*\'', "", css):
+                depth += (char == "{") - (char == "}")
+                lowest = min(lowest, depth)
+            if depth or lowest < 0:
+                broken.append(f"{page.relative_to(REPO).as_posix()} depth={depth} lowest={lowest}")
+    assert broken == [], broken

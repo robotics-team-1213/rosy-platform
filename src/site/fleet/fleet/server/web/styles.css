@@ -67,7 +67,7 @@ body {
   ui-topbar { flex-wrap: wrap; row-gap: var(--space-2); }
   /* 긴 주체 이름이 머리 줄을 넘치게 하지 않도록 역할 표지는 12rem에서 자른다(전문은 title). */
   #user-role { max-width: 12rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-}}
+}
 
 .dispatch-control {
   display: flex;
