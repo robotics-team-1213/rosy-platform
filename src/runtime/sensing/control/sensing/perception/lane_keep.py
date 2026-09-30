@@ -9,8 +9,11 @@ robot is in, never the tape. Per frame, no odometry:
                 tape, the pilot overlay and yellow/black signs drop out); only
                 below the horizon and below the base of the white walls. A
                 wall is a bright run that starts above the horizon; per image
-                column its base is where that run ends, median-filtered across
-                columns so a far tape line touching the wall is not eaten.
+                column its base is where that run ends (turns dark, or drops a
+                step: tape laid along the base is bright but darker than the
+                wall), median-filtered across columns so a far tape line
+                touching the wall is not eaten. Its brightness bound comes from
+                the darkest floor too, so a wall filling most rows is found.
   bird's-eye    the mask sampled on the lane_bev robot-frame floor grid
                 (base_link, x ahead, y LEFT positive, REP 103), so width and
                 heading are metres and radians, not pixels
@@ -22,7 +25,9 @@ robot is in, never the tape. Per frame, no odometry:
   side          each boundary's lateral offset at the lookahead decides left
                 (y > 0) or right (y < 0) -- ground geometry, not image row
                 position; a line almost under the robot takes its side from the
-                previous target
+                previous target, and a line continuing one seen last frame
+                (close in offset and heading) keeps that side until it lies
+                clearly on the other side
   target        midpoint of the nearest left and right boundary that are a
                 lane width apart; one side only: that boundary moved a
                 half-width inward; none: no output (HOLD)
@@ -50,12 +55,40 @@ bench. Short temporal smoothing uses previous targets only (no pose).
 from __future__ import annotations
 
 import math
+from collections import deque
 
-import cv2
 import numpy as np
 
 from .lane import LaneObservation
 from .lane_bev import BirdsEye
+from .lane_keep_lines import (  # noqa: F401 — re-exported for callers and tests
+    CORE_HALF_M,
+    FLANK_INNER_M,
+    FLANK_OUTER_M,
+    MAX_FLANK_RATIO,
+    MAX_ONE_FLANK_RATIO,
+    MIN_LINE_LENGTH_M,
+    MIN_LINE_CELLS,
+    MAX_GAP_M,
+    RANSAC_HYPOTHESES,
+    MAX_LINES,
+    HORIZON_MARGIN_PX,
+    CARPET_PERCENTILE,
+    CARPET_ROW_WINDOW,
+    CARPET_ROW_EXCESS,
+    MIN_CONTRAST,
+    CONTRAST_HEADROOM,
+    MAX_SATURATION,
+    WALL_START_ABOVE_HORIZON_PX,
+    WALL_MEDIAN_COLUMNS,
+    WALL_BASE_MARGIN_PX,
+    WALL_TAPE_STEP,
+    WALL_CARPET_PERCENTILE,
+    WALL_STEP_ROWS,
+    _validate_positive,
+    extract_lines,
+    floor_white_mask,
+)
 
 #: Lookahead from base_link where the lane centre is read.
 LOOKAHEAD_M = 0.25
@@ -64,21 +97,8 @@ LOOKAHEAD_M = 0.25
 SIDE_X_M = 0.22
 #: A boundary line may be extrapolated this far past its seen paint.
 MAX_EXTRAPOLATION_M = 0.15
-#: Tape is 2-4 cm: RANSAC inlier half-band and the flank band that must stay dark.
-CORE_HALF_M = 0.025
-FLANK_INNER_M = 0.035
-FLANK_OUTER_M = 0.08
-#: Lit flank cells per lit core cell above which a line is a blob, not tape:
-#: half of this on each side, or MAX_ONE_FLANK_RATIO in all.
-MAX_FLANK_RATIO = 0.45
-MAX_ONE_FLANK_RATIO = 0.6
-#: Shortest boundary piece and the fewest lit cells on it.
-MIN_LINE_LENGTH_M = 0.06
-MIN_LINE_CELLS = 40
 #: Lines are fitted on the bird's-eye grid thinned to this cell (2 lane_bev cells).
 FIT_STRIDE = 2
-#: Collinear paint separated by more than this is two pieces.
-MAX_GAP_M = 0.06
 #: A line this far off the robot's heading is a transverse mark.
 TRANSVERSE_MIN_ANGLE_RAD = math.radians(65.0)
 #: Two boundaries of one lane run within this angle of each other.
@@ -90,28 +110,33 @@ PAIR_MIN_FRACTION = 0.6
 PAIR_MAX_FRACTION = 1.6
 #: A boundary nearer the robot than this takes its side from the last target.
 AMBIGUOUS_LATERAL_M = 0.03
+#: Temporal consistency (no odometry): a boundary within TRACK_LATERAL_M and
+#: TRACK_HEADING_RAD of one seen last frame is the same boundary and keeps its
+#: side until it lies more than SIDE_FLIP_M on the other side. (A per-frame
+#: rate limit on the target was tried: it drags the target across the tape
+#: when the side does flip, raising on_paint on the replay bench.)
+TRACK_LATERAL_M = 0.06
+TRACK_HEADING_RAD = math.radians(20.0)
+SIDE_FLIP_M = 0.08
+#: Junctions fail closed (HOLD): a lone boundary with a line across the path
+#: within JUNCTION_AHEAD_M that is not a latched corner, or two boundaries on
+#: the followed side splitting by more than FORK_MIN_ANGLE_RAD. Steering of at
+#: least FLIP_MIN_ERROR that reverses FLIP_MAX_REVERSALS times within
+#: FLIP_WINDOW_FRAMES frames holds too. A corner's open side must have no
+#: boundary running past the corner line (less CORNER_PAST_MARGIN_M).
+JUNCTION_AHEAD_M = 0.45
+FORK_MIN_ANGLE_RAD = math.radians(30.0)
+DIVERGE_MIN_RAD = math.radians(15.0)
+#: Both branches of a fork are real paint, not a far fragment.
+FORK_MIN_LENGTH_M = 0.12
+FLIP_MIN_ERROR = 0.5
+FLIP_MAX_REVERSALS = 2
+FLIP_WINDOW_FRAMES = 16
+CORNER_PAST_MARGIN_M = 0.03
 #: Confidence: both boundaries / one boundary (CORE drives slower on one).
 BOTH_CONFIDENCE = 0.9
 ONE_CONFIDENCE = 0.6
-#: RANSAC budget.
-RANSAC_HYPOTHESES = 120
-MAX_LINES = 8
 MAX_POINTS = 6000
-#: Floor mask: rows start this far below the horizon; the carpet reference is
-#: this percentile of the row; white is this much brighter (absolute, or this
-#: fraction of the headroom to 255, whichever is larger).
-HORIZON_MARGIN_PX = 3
-CARPET_PERCENTILE = 30
-CARPET_ROW_WINDOW = 41
-CARPET_ROW_EXCESS = 20
-MIN_CONTRAST = 40
-CONTRAST_HEADROOM = 0.35
-MAX_SATURATION = 80
-#: Walls: runs brighter than this (V channel, blue tape included) that start
-#: this many rows above the horizon; bases median-filtered over this many columns.
-WALL_START_ABOVE_HORIZON_PX = 4
-WALL_MEDIAN_COLUMNS = 31
-WALL_BASE_MARGIN_PX = 3
 #: Lit fraction of the floor above which the frame is washed out.
 WASHED_FRACTION = 0.5
 #: Corners: the lookahead on the corner path (shorter than LOOKAHEAD_M, or the
@@ -134,149 +159,13 @@ CORNER_REACH_M = 0.04
 #: While a corner is latched, a line this steep to the heading is still the
 #: corner line (the next lane's outer boundary seen mid-turn).
 CORNER_MIN_HEADING_RAD = math.radians(35.0)
-
-
-def _validate_positive(name, value):
-    if (isinstance(value, bool) or not isinstance(value, (int, float))
-            or not math.isfinite(value) or not value > 0.0):
-        raise ValueError(f"{name} must be a positive finite number")
-
-
-def floor_white_mask(bgr: np.ndarray, horizon_row: float) -> np.ndarray:
-    """uint8 0/1 mask of white floor paint below the horizon and wall bases."""
-    if bgr.ndim == 2:
-        value = bgr
-        saturation = np.zeros_like(bgr)
-    else:
-        hsv = cv2.cvtColor(bgr, cv2.COLOR_BGR2HSV)
-        value, saturation = hsv[..., 2], hsv[..., 1]
-    height, width = value.shape
-    top = max(0, min(height, int(math.ceil(horizon_row)) + HORIZON_MARGIN_PX))
-    mask = np.zeros((height, width), np.uint8)
-    if top >= height:
-        return mask
-    floor = value[top:].astype(np.float32)
-    reference = np.percentile(floor, CARPET_PERCENTILE, axis=1)
-    # Smooth the carpet reference over rows and cap it near the whole floor's
-    # median: rows full of tape (a stop line seen across, near) must not lift
-    # their own threshold.
-    reference = _median_filter_1d(reference, CARPET_ROW_WINDOW)
-    reference = np.minimum(reference, float(np.median(floor)) + CARPET_ROW_EXCESS)
-    threshold = reference + np.maximum(MIN_CONTRAST, CONTRAST_HEADROOM * (255.0 - reference))
-    # Coloured paint and overlays (and their blended, paler edges) are not tape.
-    coloured = cv2.dilate((saturation[top:] > MAX_SATURATION).astype(np.uint8),
-                          np.ones((5, 5), np.uint8))
-    lit = (floor >= threshold[:, None]) & (coloured == 0)
-    mask[top:] = lit
-    # Walls: a bright run through the row just above the horizon, followed down.
-    start = max(0, int(math.floor(horizon_row)) - WALL_START_ABOVE_HORIZON_PX)
-    if start < height:
-        wall_threshold = float(np.median(threshold[:max(1, len(threshold) // 4)]))
-        bright = value[start:] >= wall_threshold
-        run = np.cumprod(bright, axis=0).sum(axis=0)
-        base = start + run
-        base = _median_filter_1d(base, WALL_MEDIAN_COLUMNS)
-        rows = np.arange(height)[:, None]
-        mask[rows < (base[None, :] + WALL_BASE_MARGIN_PX)] = 0
-    return mask
-
-
-def _median_filter_1d(values: np.ndarray, size: int) -> np.ndarray:
-    pad = size // 2
-    padded = np.pad(values.astype(np.float64), pad, mode="edge")
-    windows = np.lib.stride_tricks.sliding_window_view(padded, size)
-    return np.median(windows, axis=1)
-
-
-def _fit_axis(points: np.ndarray):
-    centre = points.mean(axis=0)
-    _, _, vt = np.linalg.svd(points - centre, full_matrices=False)
-    direction = vt[0]
-    if direction[0] < 0:
-        direction = -direction
-    return centre, direction
-
-
-def _largest_piece(along: np.ndarray, max_gap: float) -> np.ndarray:
-    """Boolean selector of the longest gap-free run of `along` values."""
-    order = np.argsort(along)
-    sorted_along = along[order]
-    breaks = np.flatnonzero(np.diff(sorted_along) > max_gap)
-    starts = np.concatenate(([0], breaks + 1))
-    stops = np.concatenate((breaks + 1, [len(along)]))
-    best = max(range(len(starts)),
-               key=lambda k: sorted_along[stops[k] - 1] - sorted_along[starts[k]])
-    keep = np.zeros(len(along), bool)
-    keep[order[starts[best]:stops[best]]] = True
-    return keep
-
-
-def extract_lines(points: np.ndarray, rng: np.random.Generator):
-    """Thin straight paint lines in `points` (N x 2, metres). Returns
-    (lines, blobs): each a dict with centre, direction, along range, cells."""
-    lines, blobs = [], []
-    remaining = points
-    for _ in range(MAX_LINES):
-        if len(remaining) < MIN_LINE_CELLS:
-            break
-        first = rng.integers(0, len(remaining), RANSAC_HYPOTHESES)
-        second = rng.integers(0, len(remaining), RANSAC_HYPOTHESES)
-        delta = remaining[second] - remaining[first]
-        norm = np.hypot(delta[:, 0], delta[:, 1])
-        good = norm > 0.03
-        if not good.any():
-            break
-        normal = np.stack([-delta[good, 1], delta[good, 0]], axis=1) / norm[good, None]
-        offsets = np.einsum("ij,ij->i", normal, remaining[first[good]])
-        distance = np.abs(remaining @ normal.T - offsets[None, :])
-        best = int(np.argmax((distance <= CORE_HALF_M).sum(axis=0)))
-        inliers = remaining[distance[:, best] <= CORE_HALF_M]
-        if len(inliers) < MIN_LINE_CELLS:
-            break
-        centre, direction = _fit_axis(inliers)
-        normal_vec = np.array([-direction[1], direction[0]])
-        rel = remaining - centre
-        along = rel @ direction
-        across = np.abs(rel @ normal_vec)
-        band = across <= CORE_HALF_M
-        piece = np.zeros(len(remaining), bool)
-        piece[np.flatnonzero(band)[_largest_piece(along[band], MAX_GAP_M)]] = True
-        lo, hi = float(along[piece].min()), float(along[piece].max())
-        # Flank test on ALL points (earlier lines included): tape has dark
-        # carpet on at least one side, a wall wedge or a blob is lit on both
-        # (or very lit on one). Crosswalk bars next to a lane line light one
-        # flank only.
-        rel_all = points - centre
-        along_all = rel_all @ direction
-        signed_all = rel_all @ normal_vec
-        across_all = np.abs(signed_all)
-        span = (along_all >= lo) & (along_all <= hi)
-        core = int((span & (across_all <= CORE_HALF_M)).sum())
-        in_flank = span & (across_all > FLANK_INNER_M) & (across_all <= FLANK_OUTER_M)
-        flank_sides = (int((in_flank & (signed_all > 0)).sum()), int((in_flank & (signed_all < 0)).sum()))
-        flank = sum(flank_sides)
-        # Refit on the piece for the final axis.
-        fitted_centre, fitted_direction = _fit_axis(remaining[piece])
-        fitted_along = (remaining[piece] - fitted_centre) @ fitted_direction
-        entry = {"centre": fitted_centre, "direction": fitted_direction,
-                 "along": (float(fitted_along.min()), float(fitted_along.max())),
-                 "cells": int(piece.sum()),
-                 "flank_ratio": flank / max(1, core)}
-        if (min(flank_sides) > 0.5 * MAX_FLANK_RATIO * core
-                or flank > MAX_ONE_FLANK_RATIO * core):
-            blobs.append(entry)
-            # The whole blob goes, not just the band, so it is not re-found.
-            drop = (along >= lo) & (along <= hi) & (across <= FLANK_OUTER_M)
-        else:
-            if hi - lo >= MIN_LINE_LENGTH_M and piece.sum() >= MIN_LINE_CELLS:
-                lines.append(entry)
-            drop = piece | ((along >= lo) & (along <= hi) & (across <= FLANK_INNER_M))
-        remaining = remaining[~drop]
-    return lines, blobs
+#: |error| cap while turning a corner (CORE angular = 0.8 * error).
+CORNER_MAX_ERROR = 0.6
 
 
 class LaneKeeper:
-    """Keep the middle of the lane on a real camera, memoryless ('keep' mode)."""
+    """Keep the middle of the lane on a real camera ('keep' mode). No odometry;
+    the only memory is the last frame's target and boundaries."""
 
     def __init__(self, *, camera_x_offset_m: float = 0.0,
                  lookahead_m: float = LOOKAHEAD_M,
@@ -298,13 +187,26 @@ class LaneKeeper:
         self._view = None
         self._view_key = None
         self._previous_target = None
+        self._tracked = []
+        self._steer_history = deque(maxlen=FLIP_WINDOW_FRAMES)
+        self._flip_hold = False
         self._corner_side = None
         self._corner_frames = 0
         self._corner_engaged = False
         self.last: dict = {}
 
+    def _forget(self) -> None:
+        """No usable view: the next frame is judged afresh (no inherited
+        target, sides or steering history); a latched corner keeps counting."""
+        self._previous_target = None
+        self._tracked = []
+        self._steer_history.clear()
+
     def reset(self) -> None:
         self._previous_target = None
+        self._tracked = []
+        self._steer_history.clear()
+        self._flip_hold = False
         self._corner_side = None
         self._corner_frames = 0
         self._corner_engaged = False
@@ -339,7 +241,7 @@ class LaneKeeper:
                      "lookahead_m": self._lookahead, "target_m": None, "target_px": None}
         if ground is None:
             self.last["reason"] = "no_ground"
-            self._previous_target = None
+            self._forget()
             return None
         half = float(lane_half_width_m)
         height, width = bgr.shape[:2]
@@ -350,7 +252,7 @@ class LaneKeeper:
         lit = int(grid.sum())
         if observable == 0 or lit > WASHED_FRACTION * observable:
             self.last["reason"] = "washed"
-            self._previous_target = None
+            self._forget()
             return None
         coarse = grid[::FIT_STRIDE, ::FIT_STRIDE]
         cells = np.flatnonzero(coarse.ravel())
@@ -390,27 +292,49 @@ class LaneKeeper:
             if abs(lateral) < AMBIGUOUS_LATERAL_M and previous is not None:
                 reference = previous[1]
             side = "left" if lateral > reference else "right"
+            # The same boundary as last frame keeps its side while it stays
+            # near the robot: a line drifting across under the camera is still
+            # the boundary it was, not the next lane's.
+            tracked = self._track(lateral, heading)
+            if tracked is not None and abs(lateral) < SIDE_FLIP_M:
+                side = tracked
             inward = (np.array([direction[1], -direction[0]]) if side == "left"
                       else np.array([-direction[1], direction[0]]))
             point, along = _pursuit_point(centre + inward * half, direction, self._lookahead)
             if not (line["along"][0] - MAX_EXTRAPOLATION_M <= along
                     <= line["along"][1] + MAX_EXTRAPOLATION_M):
                 continue
-            record.update(side=side, y_at_side_x_m=round(lateral, 3),
+            record.update(side=side, y_at_side_x_m=round(lateral, 3), tracked=tracked == side,
                           pursuit_m=[round(float(point[0]), 3), round(float(point[1]), 3)],
                           centre=centre, direction=direction)
             (left if side == "left" else right).append(record)
         target, strategy = self._choose(left, right, half)
-        corner = self._corner(transverse, half) if self._corner_turning else None
+        # A lane seen on both sides is followed; a corner is only looked for
+        # when it is not (a line across between two lane lines is a stop
+        # line, a crosswalk or a junction mouth, not an L-corner).
+        corner = None
+        if self._corner_turning and strategy != "both":
+            corner = self._corner(transverse, half, left + right)
         if corner is not None and (target is None or corner[1] != "corner_ahead"):
             target, strategy = corner
+        junction = (None if corner is not None
+                    else _junction(strategy, transverse, left, right, half, self._corner_turning))
+        if junction is not None:
+            target = None
+        self._tracked = [(r["y_at_side_x_m"], math.radians(r["heading_deg"]), r["side"])
+                         for r in left + right]
         for record in left + right:
             record.pop("direction")
             record.pop("centre")
             self.last["boundaries"].append(record)
         if target is None:
-            self.last["reason"] = "no_boundary"
+            self.last["reason"] = junction or "no_boundary"
+            # Nothing is pursued: the next frame sides its lines afresh (a
+            # held robot sees the same frame again, and a side inherited
+            # into a hold would otherwise hold it forever).
             self._previous_target = None
+            self._tracked = []
+            self._steer_history.append(0)
             return None
         if previous is not None and self._smoothing > 0.0 and not strategy.startswith("corner"):
             target = self._smoothing * np.asarray(previous) + (1.0 - self._smoothing) * target
@@ -420,12 +344,34 @@ class LaneKeeper:
         if strategy == "both":
             self._corner_side, self._corner_frames, self._corner_engaged = None, 0, False
         error = max(-1.0, min(1.0, -ty / half))
+        if strategy.startswith("corner_") and strategy != "corner_ahead":
+            # CORE saturates at |error| ~ 0.9 (0.7 rad/s): a full-scale corner
+            # command spins the robot on the inner corner. Capped, it arcs.
+            error = max(-CORNER_MAX_ERROR, min(CORNER_MAX_ERROR, error))
+        # With corner turning, hard steering that keeps reversing is two
+        # readings fighting (a junction taken for a corner, a bend whose side
+        # keeps flipping): hold instead of weaving out of the lane. Without it
+        # (device default) the rule held 5-8 % more real replay frames
+        # (teleop none 0.08 -> 0.13), so it stays off there.
+        self._steer_history.append(0 if abs(error) < FLIP_MIN_ERROR else (1 if error > 0 else -1))
+        signs = [v for v in self._steer_history if v]
+        if (self._corner_turning
+                and sum(1 for a, b in zip(signs, signs[1:]) if a != b) >= FLIP_MAX_REVERSALS):
+            # Sticky: resuming after the window only weaves again. Only a
+            # lane seen on both sides releases it.
+            self._flip_hold = True
+        if strategy == "both":
+            self._flip_hold = False
+        if self._flip_hold:
+            self.last.update(strategy="none", reason="flipping")
+            self._previous_target = None
+            return None
         self.last.update(strategy=strategy, target_m=[round(tx, 3), round(ty, 3)],
                          target_px=self.to_pixel(ground, tx, ty),
                          error=round(error, 3), confidence=confidence)
         return LaneObservation(error=error, confidence=confidence)
 
-    def _corner(self, transverse, half):
+    def _corner(self, transverse, half, boundaries=()):
         """(target, strategy) from the nearest L-corner line ahead, or None.
         Updates the latched corner side."""
         best = None
@@ -450,7 +396,8 @@ class LaneKeeper:
         # A latched side is kept: mid-turn the corner line's ends swing and can
         # mimic the opposite corner.
         if (self._corner_side is None and not steep
-                and max(left_reach, right_reach) > half + CORNER_OPEN_M):
+                and max(left_reach, right_reach) > half + CORNER_OPEN_M
+                and not _runs_past(boundaries, left_reach > right_reach, ahead)):
             # The closed end is where the corner line meets the outer lane line.
             if (left_reach - right_reach > CORNER_ASYMMETRY_M
                     and abs(right_reach - half) <= CORNER_CLOSED_TOLERANCE_M):
@@ -493,6 +440,16 @@ class LaneKeeper:
         self._corner_engaged = True
         return point, f"corner_{side}"
 
+    def _track(self, lateral, heading):
+        """Side of the last frame's boundary this line continues, or None."""
+        best = None
+        for previous_lateral, previous_heading, side in self._tracked:
+            gap = abs(lateral - previous_lateral)
+            if (gap <= TRACK_LATERAL_M and abs(heading - previous_heading) <= TRACK_HEADING_RAD
+                    and (best is None or gap < best[0])):
+                best = (gap, side)
+        return None if best is None else best[1]
+
     def _choose(self, left, right, half):
         """Target (x, y) and strategy from the side-classified boundaries."""
         lane = 2.0 * half
@@ -517,8 +474,55 @@ class LaneKeeper:
                       if abs(r["y_at_side_x_m"]) <= ONE_MAX_DISTANCE_FRACTION * lane]
         if not candidates:
             return None, "none"
-        record = min(candidates, key=lambda r: (round(abs(r["y_at_side_x_m"]), 2), -r["length_m"]))
+        # The boundary continuous with last frame's first, then the nearest.
+        record = min(candidates, key=lambda r: (not r["tracked"], round(abs(r["y_at_side_x_m"]), 2),
+                                                -r["length_m"]))
         return np.asarray(record["pursuit_m"], float), f"{record['side']}_only"
+
+
+def _across_path(ends, half):
+    """Ahead distance where a (transverse) line crosses the path, or None."""
+    ys = sorted(float(p[1]) for p in ends)
+    if ys[0] > half or ys[1] < -half:
+        return None
+    (x0, y0), (x1, y1) = ((float(p[0]), float(p[1])) for p in ends)
+    ahead = x0 if y1 == y0 else x0 + (x1 - x0) * (0.0 - y0) / (y1 - y0)
+    return ahead if 0.0 < ahead <= JUNCTION_AHEAD_M else None
+
+
+def _junction(strategy, transverse, left, right, half, corner_turning):
+    """Reason to HOLD at a junction, or None. Only with corner turning: there
+    the corner reading can pull the robot out of the lane at a junction mouth.
+    Without it (the device default) both rules held 5-10 % more of the real
+    replay frames (pilot none 0.32 -> 0.36-0.43), so the plain keeper goes on
+    along its lone boundary as the bench measures."""
+    if not corner_turning or strategy not in ("left_only", "right_only"):
+        return None
+    side = left if strategy == "left_only" else right
+    # The lone boundary bends away out of the lane (a mouth opening on its
+    # side) while a line crosses the path ahead: which lane goes on is unknown.
+    outward = 1.0 if strategy == "left_only" else -1.0
+    diverging = any(outward * math.radians(r["heading_deg"]) > DIVERGE_MIN_RAD for r in side)
+    if diverging and any(not steep and _across_path(ends, half) is not None
+                         for _, _, ends, steep in transverse):
+        return "junction_transverse"
+    headings = [math.radians(r["heading_deg"]) for r in side
+                if abs(r["y_at_side_x_m"]) <= ONE_MAX_DISTANCE_FRACTION * 2.0 * half
+                and r["length_m"] >= FORK_MIN_LENGTH_M]
+    if headings and max(headings) - min(headings) > FORK_MIN_ANGLE_RAD:
+        return "junction_fork"
+    return None
+
+
+def _runs_past(boundaries, open_left, ahead):
+    """True when a boundary on the open side runs on past the corner line."""
+    for record in boundaries:
+        if (record["side"] == "left") != open_left:
+            continue
+        far = max(float(p[0]) for p in record["ends_m"])
+        if far >= ahead - CORNER_PAST_MARGIN_M:
+            return True
+    return False
 
 
 def _lateral_at(centre, direction, x) -> float:

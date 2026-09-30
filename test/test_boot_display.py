@@ -1093,6 +1093,21 @@ def test_ready_and_held_ready_share_one_sound(tmp_path):
     ("CORE_READY", {"runtime_mode": "core"}, "ready"),
     ("FAILED:rosy-core", {}, "failed"),
     ("CORE_READY", {"devices": [{"id": "adc.ir0", "state": "no_response", "product": True}]}, "caution"),
+    # D-380: CORE's mode rides boot-status.json; the rule table picks the pattern.
+    ("CORE_READY", {"runtime_mode": "hardware", "robot_mode": "MANUAL"}, "manual"),
+    ("CORE_READY", {"runtime_mode": "hardware", "robot_mode": "NAVIGATION"}, "navigating"),
+    ("CORE_READY", {"runtime_mode": "hardware", "robot_mode": "DOCKING"}, "docking"),
+    ("CORE_READY", {"runtime_mode": "hardware", "robot_mode": "EMERGENCY"}, "emergency"),
+    ("CORE_READY", {"runtime_mode": "hardware", "robot_mode": "IDLE"}, "ready"),
+    ("CORE_READY", {"runtime_mode": "hardware", "robot_mode": "DRIVE"}, "ready"),
+    # D-381: a stuck goal blinks inside NAVIGATION; transient nav states do not.
+    ("CORE_READY", {"runtime_mode": "hardware", "robot_mode": "NAVIGATION", "nav_state": "BLOCKED"}, "blocked"),
+    ("CORE_READY", {"runtime_mode": "hardware", "robot_mode": "NAVIGATION", "nav_state": "FAILED"}, "blocked"),
+    ("CORE_READY", {"runtime_mode": "hardware", "robot_mode": "NAVIGATION", "nav_state": "ARRIVED"}, "navigating"),
+    # The lamp priority, live: a failure and a caution outrank the mode.
+    ("FAILED:rosy-core", {"robot_mode": "NAVIGATION"}, "failed"),
+    ("CORE_READY", {"runtime_mode": "hardware", "robot_mode": "MANUAL",
+                    "devices": [{"id": "adc.ir0", "state": "no_response", "product": True}]}, "caution"),
 ])
 def test_each_state_starts_its_lamp_pattern(tmp_path, stage, extra, pattern):
     module = _display()
@@ -1125,6 +1140,86 @@ def test_a_new_state_stops_the_old_pattern_first_and_an_unchanged_state_keeps_it
 
     assert spawn.patterns == ["booting", "failed"]
     assert spawn.processes[0].terminated == 1
+
+
+# --- D-380: the operating mode on the lamp and the LCD line ----------------------
+
+
+def test_a_mode_change_switches_the_pattern_without_a_sound(tmp_path):
+    module = _display()
+    _lamp_tree(tmp_path)
+    _status(tmp_path, "CORE_READY", runtime_mode="hardware")
+    gpio = FakeGPIO()
+    spawn = FakeSpawn()
+    display, _lamp, clock, _rendered, _lines = _state_loop(module, tmp_path, gpio=gpio, spawn=spawn)
+    display.step()
+
+    _status(tmp_path, "CORE_READY", runtime_mode="hardware", robot_mode="MANUAL")
+    clock.now += 1
+    display.step()
+
+    assert spawn.patterns == ["ready", "manual"]
+    assert len(_starts(gpio)) == 1  # ready sounded once; the mode change stays silent
+
+
+def test_entering_emergency_sounds_even_with_a_healthy_state(tmp_path):
+    module = _display()
+    _lamp_tree(tmp_path)
+    _status(tmp_path, "CORE_READY", runtime_mode="hardware")
+    gpio = FakeGPIO()
+    spawn = FakeSpawn()
+    display, _lamp, clock, _rendered, _lines = _state_loop(module, tmp_path, gpio=gpio, spawn=spawn)
+    display.step()
+
+    _status(tmp_path, "CORE_READY", runtime_mode="hardware", robot_mode="EMERGENCY")
+    clock.now += 1
+    display.step()
+    clock.now += 1
+    display.step()  # staying in EMERGENCY announces nothing further
+
+    assert spawn.patterns == ["ready", "emergency"]
+    assert len(_starts(gpio)) == 5  # ready once, the e-stop entry four times
+    # One frequency change to 2500 Hz carries the four beeps — failed stays at 2 kHz.
+    assert [event for event in gpio.events if event[0] == "change"] == [("change", 2500)]
+
+    _status(tmp_path, "CORE_READY", runtime_mode="hardware", robot_mode="IDLE")
+    clock.now += 1
+    display.step()  # leaving EMERGENCY is the ready chirp again, once
+
+    assert spawn.patterns == ["ready", "emergency", "ready"]
+    assert len(_starts(gpio)) == 6
+
+
+def test_the_lcd_state_line_names_the_operating_mode_in_ascii(tmp_path):
+    module = _display()
+    _status(tmp_path, "CORE_READY", runtime_mode="hardware", robot_mode="NAVIGATION")
+
+    view = module.read_view(tmp_path, None)
+
+    assert view["state_line"] == "Ready - NAVIGATION"
+    # IDLE and an unknown mode keep the plain line.
+    _status(tmp_path, "CORE_READY", runtime_mode="hardware", robot_mode="IDLE")
+    assert module.read_view(tmp_path, None)["state_line"] == "Ready"
+    _status(tmp_path, "CORE_READY", runtime_mode="hardware", robot_mode="DRIVE")
+    assert module.read_view(tmp_path, None)["state_line"] == "Ready"
+
+
+def test_the_helper_knows_every_pattern_the_table_can_ask_for():
+    # Cross-language sync: robot_state.lamp_pattern names patterns that only
+    # lamp_pattern.c can show. A rename on either side must fail here.
+    import re
+
+    module = _display()
+    source = (ROOT / "src/products/pinky_pro/lamp/src/lamp_pattern.c").read_text(encoding="utf-8")
+    names_block = source.split("static const char *names[]")[1].split("};")[0]
+    known = set(re.findall(r'"([a-z]+)"', names_block))
+
+    askable = {module.robot_state.lamp_pattern(state, mode, nav)
+               for state in module.robot_state.STATES
+               for mode in [*module.robot_state.ROBOT_MODES, None]
+               for nav in [*module.robot_state.NAV_STATES, None]}
+
+    assert askable <= known, sorted(askable - known)
 
 
 @pytest.mark.parametrize("tree,message", [

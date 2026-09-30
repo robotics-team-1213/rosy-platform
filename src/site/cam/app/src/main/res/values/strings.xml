@@ -1,0 +1,111 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Rosy Cam</string>
+
+    <string name="notif_channel">천장 카메라 송출</string>
+    <string name="notif_title">천장 카메라 송출</string>
+    <string name="action_stop">정지</string>
+
+    <string name="state_stopped">정지됨</string>
+    <string name="state_connecting">연결 중…</string>
+    <string name="state_streaming">송출 중</string>
+    <string name="state_disconnected">연결 끊김 — 다시 연결 중</string>
+    <string name="state_preview_only">카메라 미리보기 중</string>
+
+    <string name="button_start">카메라 켜기</string>
+    <string name="button_stop">카메라 끄기</string>
+    <string name="button_settings">연결 설정</string>
+    <string name="preview_idle">카메라를 켜면 미리보기가 보입니다</string>
+    <string name="target_label">대상: %1$s</string>
+    <string name="target_none">연결 정보가 없습니다. 연결 설정에서 입력하거나 현장 PC의 페어링 QR을 기본 카메라 앱으로 찍으세요.</string>
+    <string name="target_preview_only">서버 연결 정보가 없습니다. 연결 설정을 저장하면 WebSocket 송출을 시작할 수 있습니다.</string>
+    <string name="stat_fps">송출 %1$.1f fps</string>
+    <string name="stat_kbps">%1$.0f kbps</string>
+    <string name="stat_skipped">건너뜀 %1$d</string>
+    <string name="stat_skipped_hint">건너뜀: 전송이 밀릴 때 최신 장면만 보내려고 넘긴 프레임입니다.</string>
+    <string name="stat_config">요청: %1$.1f fps · 폭 %2$d · 품질 %3$d</string>
+    <string name="stat_quality_auto">화질 자동 조정 중: 지금 품질 %1$d (요청 %2$d). 장면이 복잡해 크기 한도에 맞추는 중입니다.</string>
+
+    <string name="problem_no_wifi">Wi-Fi에 연결되어 있지 않습니다 — 현장 PC와 같은 Wi-Fi에 연결하세요.</string>
+    <string name="problem_unreachable">현장 PC(%1$s)에 닿지 않습니다 — 같은 Wi-Fi인지, 주소가 바뀌었는지 확인하세요.</string>
+    <string name="problem_refused">현장 PC(%1$s)는 응답하지만 수신기가 꺼져 있습니다 — 현장 PC에서 수신기를 켜세요.</string>
+    <string name="problem_unknown_host">현장 PC 이름(%1$s)을 찾지 못했습니다 — 연결 설정에서 수신기를 다시 찾으세요.</string>
+    <string name="problem_tls">보안 연결(TLS)에 실패했습니다 — 현장 PC의 페어링 QR로 다시 연결하세요.</string>
+    <string name="problem_unauthorized">토큰이 맞지 않습니다 — 현장 PC의 페어링 QR로 다시 연결하세요.</string>
+    <string name="problem_replaced">다른 카메라가 같은 이름(%1$s)으로 연결해 이 연결을 멈췄습니다 — 다른 폰을 끄거나 연결 설정에서 이름을 바꾸세요.</string>
+    <string name="problem_protocol_mismatch">앱과 수신기의 버전이 맞지 않아 연결을 멈췄습니다 — 둘을 같은 버전으로 맞추세요.</string>
+    <string name="problem_invalid_config">수신기가 보낸 설정 값이 잘못되었습니다 — 현장 PC 수신기의 버전을 확인하세요.</string>
+    <string name="problem_closed">수신기가 연결을 닫았습니다 — 현장 PC 수신기가 다시 켜지는지 확인하세요.</string>
+    <string name="problem_network_other">네트워크 오류가 났습니다 — 계속되면 Wi-Fi와 현장 PC를 확인하세요.</string>
+    <string name="problem_not_paired">연결 정보가 없습니다 — 연결 설정에서 입력하거나 현장 PC의 페어링 QR을 찍으세요.</string>
+    <string name="problem_camera">카메라를 열 수 없습니다 — 다른 앱이 카메라를 쓰고 있으면 닫고 다시 켜세요.</string>
+    <string name="problem_foreground">송출 서비스를 시작하지 못했습니다 — 앱을 화면에 띄운 채로 다시 켜세요.</string>
+    <string name="problem_retrying">자동으로 다시 연결하는 중입니다.</string>
+    <string name="button_details">자세히</string>
+    <string name="button_details_hide">간단히</string>
+    <string name="button_open_settings">연결 설정 열기</string>
+    <string name="button_stop_and_open_settings">카메라를 끄고 연결 설정 열기</string>
+    <string name="error_camera_permission">카메라 권한이 없어 송출할 수 없습니다.</string>
+
+    <string name="lens_wide">렌즈: 초광각 %1$s mm · 화각 %2$s°</string>
+    <string name="lens_standard">렌즈: 기본 %1$s mm · 화각 %2$s°</string>
+    <string name="lens_uncertain">렌즈: 렌즈 정보 불확실</string>
+    <string name="lens_switch_failed">렌즈를 바꾸지 못해 이전 렌즈로 계속 송출합니다.</string>
+    <string name="lens_no_wide">이 폰에는 더 넓은 후면 카메라가 없어 기본 렌즈를 씁니다</string>
+    <string name="settings_lens_heading">화각</string>
+    <string name="settings_lens_wide">넓게 (초광각 0.5×) — 필드가 화면에 다 안 들어올 때</string>
+    <string name="settings_lens_standard">기본 (1×)</string>
+    <string name="settings_lens_intro">기본을 권합니다. 넓게는 더 넓게 담지만 1 m에 담기는 화소가 절반쯤으로 줄고 가장자리가 휘어 보입니다. 바로 아래를 보거나 낮게 달아 필드가 다 안 들어올 때만 고르고, 바꾼 뒤에는 Vision에서 화면 보정을 다시 맞추세요.</string>
+    <string name="guide_lens_wide">모서리 마커가 다 보이지 않습니다. 필드가 화면 밖으로 나갔다면 연결 설정 › 화각에서 넓게(초광각)를 고르세요.</string>
+    <string name="settings_lens_running">촬영 중에 바꾸면 카메라를 다시 연결합니다. 영상이 잠깐 끊깁니다.</string>
+    <string name="health_battery">배터리 %1$d%%</string>
+    <string name="health_charging">충전 중</string>
+    <string name="health_on_battery">충전 안 함</string>
+    <string name="health_temperature">%1$s °C</string>
+    <string name="health_hot">휴대폰 온도가 높습니다 — 조명·햇빛 열을 피해 통풍되게 설치하세요. 더 뜨거워지면 카메라가 멈출 수 있습니다</string>
+    <string name="health_battery_low">배터리 %1$d%% — 충전기를 연결하세요. 방전되면 송출이 멈춥니다</string>
+
+    <string name="guide_markers_unreported">수신기가 마커 인식을 아직 보고하지 않습니다</string>
+    <string name="guide_corners_none">코너 마커 0/%1$d 보임 — 네 모서리 마커가 화면에 들어오게 휴대폰 방향을 맞추세요</string>
+    <string name="guide_corners_partial">코너 마커 %1$d/%2$d 보임 (%3$s) — 나머지 마커가 화면에 들어오게 방향을 맞추세요</string>
+    <string name="guide_corners_complete">코너 마커 %1$d/%2$d 보임 — 설치 위치가 맞습니다</string>
+    <string name="guide_robots">로봇 보임: %1$s</string>
+    <string name="guide_robots_none">보이는 로봇 없음</string>
+
+    <string name="settings_title">연결 설정</string>
+    <string name="settings_link">rosyov:// 링크 붙여넣기</string>
+    <string name="settings_link_apply">링크 적용</string>
+    <string name="settings_host">현장 PC 주소</string>
+    <string name="settings_port">포트</string>
+    <string name="settings_token">토큰</string>
+    <string name="settings_source">카메라 이름 (source)</string>
+    <string name="settings_tls">TLS 사용 (wss://, 현장 네트워크)</string>
+    <string name="settings_save">저장</string>
+    <string name="settings_back">돌아가기</string>
+    <string name="settings_saved">저장했습니다</string>
+    <string name="settings_locked">카메라를 끄면 연결 설정을 바꿀 수 있습니다. 지금은 보기만 됩니다.</string>
+
+    <string name="invalid_scheme">rosyov:// 링크가 아닙니다</string>
+    <string name="invalid_host">주소 형식이 올바르지 않습니다</string>
+    <string name="invalid_port">포트는 1–65535 사이 숫자여야 합니다</string>
+    <string name="invalid_token">토큰을 입력하세요</string>
+    <string name="invalid_source">이름은 영문·숫자·_·- 1–32자여야 합니다</string>
+    <string name="invalid_tls">TLS 값은 0 또는 1이어야 합니다</string>
+
+    <string name="pair_title">연결 정보를 바꿀까요?</string>
+    <string name="pair_body">현장 PC %1$s:%2$d 에 카메라 이름 %3$s(으)로 연결합니다. 링크를 연 사람을 믿을 수 있을 때만 저장하세요.</string>
+    <string name="pair_save">저장</string>
+    <string name="pair_cancel">취소</string>
+    <string name="pair_invalid">페어링 링크가 올바르지 않습니다: %1$s</string>
+    <string name="settings_mdns_intro">같은 Wi-Fi에서 천장 카메라 수신기와 로봇 CORE를 검색합니다. 발견 정보에는 인증 토큰이 포함되지 않습니다.</string>
+    <string name="settings_mdns_scan">수신기 자동 찾기</string>
+    <string name="settings_mdns_rescan">다시 검색</string>
+    <string name="settings_mdns_scanning">같은 Wi-Fi의 수신기를 찾고 있습니다. 최대 18초 걸릴 수 있습니다.</string>
+    <string name="settings_mdns_wifi_required">이 기기의 Wi-Fi가 연결되어 있지 않습니다. 천장 카메라 수신기 및 로봇 CORE와 같은 LAN에 먼저 연결하세요.</string>
+    <string name="settings_mdns_overhead_heading">천장 카메라 수신기</string>
+    <string name="settings_mdns_overhead_empty">발견된 천장 카메라 수신기가 없습니다. 수신기가 같은 Wi-Fi에서 자동 찾기(mDNS)를 켰는지 확인하거나 QR/수동 주소로 연결하세요.</string>
+    <string name="settings_mdns_overhead">천장 카메라 수신기 · %1$s\nTLS 주소 %2$s:%3$d · 카메라 수신기</string>
+    <string name="settings_mdns_robot_heading">로봇 CORE (참고용)</string>
+    <string name="settings_mdns_robot_empty">발견된 로봇 CORE가 없습니다.</string>
+    <string name="settings_mdns_robot">로봇 CORE · %1$s\nAPI 주소 %2$s:%3$d · 카메라 영상 대상이 아닙니다</string>
+</resources>

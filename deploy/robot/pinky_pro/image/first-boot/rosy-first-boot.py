@@ -223,7 +223,9 @@ def _default_operator_account(name: str) -> None:
 # the offline signature over its SHA256SUMS.
 TRUSTED_RELEASE_KEY = "etc/rosy/trusted-release-keys/rosy-release-2026-01.pem"
 _NATIVE_RELEASE_CANDIDATES = (
-    Path(__file__).resolve().parents[5] / "deploy/robot/pinky_pro/native/native_release.py",  # checkout
+    # image/first-boot -> pinky_pro/native. Relative, so the installed copy at
+    # /opt/rosy/first-boot (four parents) still imports; parents[5] raised there.
+    Path(__file__).resolve().parents[2] / "native/native_release.py",  # checkout
     Path("/opt/rosy/native-runtime/native_release.py"),  # installed image
 )
 
