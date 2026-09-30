@@ -14,7 +14,7 @@ gates:
     cmd: "cd src/runtime/sensing && python -m pytest test -q"
   ROS-SIM:
     state: HOLD
-    blocker: "정확한 v2 mapping/CORE/Fleet 슬라이스는 2026-09-21 GO(52/52, 접근 가능 unknown 0%, 충돌 없음). 그러나 Control 전체 gate에는 sensing/camera/calibration/planning/safety-policy 노드 그래프 재실행과 물리 센서가 남아 있다. 레거시 전체 스택은 CORE와 병행 기동하지 않는다(D-38). 단, D-162 슬라이스(road_observer_node+scene context)는 2026-09-22 노드 그래프 검증을 통과했다(docs/validation/scene-context-control-node-2026-09-22)."
+    blocker: "정확한 v2 mapping/CORE/Fleet 슬라이스는 2026-09-21 GO(52/52). 그러나 Control 전체 gate에는 calibration/planning/safety-policy 노드 그래프 재실행과 물리 센서가 남아 있다. 레거시 전체 스택은 CORE와 병행 기동하지 않는다(D-38). 통과한 슬라이스: D-162 road_observer+scene context(2026-09-22), camera 슬라이스 — camera_detect_node 무장치 부팅 그래프 + line_observer_node camera 모드 5단계 레인 관측(2026-09-30 PASS, docs/validation/control-camera-line-ros-sim-2026-09-30; 이 회차에서 _OpenCVCamera GStreamer 무장치 부팅 결함 발견·수리 27def3de)."
   ARTIFACT:
     state: HOLD
     blocker: "서명된 ARM64 manifest·immutable digest 발행 전. 흡수된 코드는 deploy가 소유하는 OS 이미지에 번들된다"

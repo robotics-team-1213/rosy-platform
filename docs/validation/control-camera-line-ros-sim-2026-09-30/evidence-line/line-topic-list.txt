@@ -1,0 +1,6 @@
+/camera/controls
+/camera/front
+/ir_sensor/range
+/line/observation
+/parameter_events
+/rosout
