@@ -803,3 +803,11 @@ def test_a_held_robot_does_not_refit_the_same_view_as_new_evidence():
     assert est.level == TRACK                 # the view still holds the track
     clock.frame(view, v=0.08)                # moved 1 cm: new evidence again
     assert est.last_frame["deduplicated"] is False
+
+
+def test_associated_candidates_carry_their_innovation():
+    est, clock = tracking()
+    clock.frame(pair(d=0.01))
+    for c in est.last_frame["candidates"]:
+        assert set(c["nu"]) == {"y", "psi_deg"}
+        assert c["nu"]["y"] == pytest.approx(-0.01, abs=0.004)

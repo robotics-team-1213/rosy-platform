@@ -443,6 +443,9 @@ class RoadStateEstimator:
         if winner is not None:
             for i, lab in enumerate(winner.labels):
                 records[i]["label"] = lab
+                if lab != NOISE:   # the innovation, for the extrinsic-residual record
+                    nu = evals[i][lab].nu
+                    records[i]["nu"] = {"y": _r(nu[0]), "psi_deg": _r(math.degrees(nu[1]), 3)}
             margin = None if len(hyps) < 2 else _r(best.score - hyps[1].score, 4)
             frame["hypothesis"] = {"id": winner.labels, "labels": winner.labels,
                                    "score": _r(winner.score, 4), "margin": margin}
