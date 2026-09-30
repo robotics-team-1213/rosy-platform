@@ -32,4 +32,4 @@
 - 2026-09-30 · uncommitted · docs(adr): pilot ADR 번호를 main 과 겹치지 않게 다시 매김
 - 2026-09-30 · uncommitted · feat(pilot): 자동 주행 의도 띠(D-353 §6)
 - 2026-09-29 · uncommitted · feat(core): 차선 추종 IR 이탈 감시(D-349 §12)
-- 2026-09-29 · 35efb5ba · feat(core): 차선 추종 앞 물체 정지(LiDAR, D-349 §11)
+- 2026-09-29 · uncommitted · feat(pilot): 실물 로봇 실주행·카메라 비율·배율 확대·ADR D-346~D-350

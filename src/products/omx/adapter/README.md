@@ -49,6 +49,33 @@ Identity and calibration digest are operator-supplied admission data; these
 modules do not discover a physical camera or prove that it produced the
 messages.
 
+`omx_adapter.target_evidence` resolves an operator selector against candidates
+that name the same observation. It returns one object identity plus frame,
+camera, calibration and transform provenance, or refuses stale, missing,
+cross-observation, or ambiguous selectors. Points and boxes remain image-pixel
+evidence; this module does not produce a 3D pose, grasp, trajectory, or pick
+success claim. Coordinate selectors must already be in source-observation
+pixels; cropped coordinates without a verified inverse transform are refused.
+
+`omx_adapter.pick_place_transaction` is an evidence-only transition model for
+approach, grasp, hold verification, transfer, release, and independent placement
+predicate verification. `gripper_contract` requires fresh, advancing,
+workcell/session-bound gripper readback for hold and release receipts. An
+ambiguous driver result, cancel, readback, or restart leaves the transaction in
+HOLD; it never resubmits a stage or releases a possibly held object. These
+ROS-free types are tested with fakes only and are not connected to
+`RosArmCommandRuntime`, a gripper, an HTTP endpoint, or an enabled product
+profile.
+
+`omx_adapter.action_store` records a semantic request and its content digest
+before a caller may mark driver submission. Request-key retries return the
+existing Action or conflict; they never create a second attempt implicitly.
+After restart, an in-flight submission becomes `UNKNOWN` and remains unresolved
+until a matching driver result is reconciled. A cancel acknowledgement remains
+`CANCEL_REQUESTED`, separate from a final driver result. This store is not yet
+connected to Fleet stop generations, a driver goal query, or a local Action API,
+so it does not authorize or submit physical commands.
+
 The ROS modules are optional imports. The checked-in profile remains disabled
 and has no measured joint map, serial identity, camera model, calibration, or
 enabled capability. Keep ARTIFACT, DEVICE, and FIELD gates closed until

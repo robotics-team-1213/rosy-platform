@@ -28,7 +28,7 @@ from starlette.websockets import WebSocket, WebSocketDisconnect
 
 ROOT = Path(__file__).resolve().parents[1]
 PILOT = ROOT / "src" / "hmi" / "pilot"
-COMMON = ROOT / "src" / "hmi" / "web"
+COMMON = ROOT / "src" / "hmi" / "web_common"
 TYPES = {".js": "application/javascript", ".css": "text/css", ".html": "text/html",
          ".webmanifest": "application/manifest+json", ".png": "image/png", ".json": "application/json"}
 # 요청·응답에서 다리가 다시 계산해야 하는 홉 단위 헤더.

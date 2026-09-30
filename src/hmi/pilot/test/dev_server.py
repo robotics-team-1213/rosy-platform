@@ -24,7 +24,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from PIL import Image, ImageDraw
 
 PILOT = Path(__file__).resolve().parents[1]          # .../src/hmi/pilot
-WEB_COMMON = PILOT.parent / "web"                    # .../src/hmi/web
+WEB_COMMON = PILOT.parent / "web_common"             # .../src/hmi/web_common
 
 DEV_TOKEN = "devtoken"
 

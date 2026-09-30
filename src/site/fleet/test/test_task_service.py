@@ -5,9 +5,17 @@ from fleet.server.task_store import FleetTaskStore
 from fleet.swarm.transport import RobotApiError
 
 
+def _service(database, robot_ids=("rosy_01",)):
+    service = FleetTaskService(FleetTaskStore(database), robot_ids=set(robot_ids))
+    state = service.store.dispatch_control()
+    service.store.rearm_dispatch(expected_generation=state["generation"],
+                                 actor_id="test-operator")
+    return service
+
+
 def test_manual_navigation_is_durably_queued_before_any_robot_command(tmp_path):
     store = FleetTaskStore(tmp_path / "fleet.sqlite3")
-    service = FleetTaskService(store, robot_ids={"rosy_01"})
+    service = _service(store.path)
     dispatched = []
 
     task = run(service.submit_navigation(
@@ -28,8 +36,7 @@ def test_manual_navigation_is_durably_queued_before_any_robot_command(tmp_path):
 
 
 def test_dispatcher_records_attempt_before_core_receipt_and_dispatches_once(tmp_path):
-    service = FleetTaskService(FleetTaskStore(tmp_path / "fleet.sqlite3"),
-                               robot_ids={"rosy_01"})
+    service = _service(tmp_path / "fleet.sqlite3")
     queued = run(service.submit_navigation(
         robot_id="rosy_01", x=1.0, y=2.0, source="operator",
         actor_id="site-console", request_key="dispatch-1",
@@ -52,8 +59,7 @@ def test_dispatcher_records_attempt_before_core_receipt_and_dispatches_once(tmp_
 
 
 def test_correlated_core_events_project_only_the_current_attempt_result(tmp_path):
-    service = FleetTaskService(FleetTaskStore(tmp_path / "fleet.sqlite3"),
-                               robot_ids={"rosy_01"})
+    service = _service(tmp_path / "fleet.sqlite3")
     queued = run(service.submit_navigation(
         robot_id="rosy_01", x=1.0, y=2.0, source="operator",
         actor_id="site-console", request_key="correlated-1",
@@ -97,8 +103,7 @@ def test_correlated_core_events_project_only_the_current_attempt_result(tmp_path
 
 
 def test_cancel_request_event_does_not_claim_a_final_action_result(tmp_path):
-    service = FleetTaskService(FleetTaskStore(tmp_path / "fleet.sqlite3"),
-                               robot_ids={"rosy_01"})
+    service = _service(tmp_path / "fleet.sqlite3")
     run(service.submit_navigation(
         robot_id="rosy_01", x=1.0, y=2.0, source="operator",
         actor_id="site-console", request_key="cancel-not-final-1",
@@ -126,8 +131,7 @@ def test_cancel_request_event_does_not_claim_a_final_action_result(tmp_path):
 
 
 def test_task_waits_on_traffic_queue_and_only_retries_after_release_callback(tmp_path):
-    service = FleetTaskService(FleetTaskStore(tmp_path / "fleet.sqlite3"),
-                               robot_ids={"rosy_01", "rosy_02"})
+    service = _service(tmp_path / "fleet.sqlite3", ("rosy_01", "rosy_02"))
     run(service.submit_navigation(
         robot_id="rosy_01", x=1.0, y=2.0, source="operator",
         actor_id="site-console", request_key="traffic-1",
@@ -159,8 +163,7 @@ def test_task_waits_on_traffic_queue_and_only_retries_after_release_callback(tmp
 
 
 def test_traffic_queue_without_confirmed_cancel_becomes_unknown_and_is_not_retried(tmp_path):
-    service = FleetTaskService(FleetTaskStore(tmp_path / "fleet.sqlite3"),
-                               robot_ids={"rosy_01"})
+    service = _service(tmp_path / "fleet.sqlite3")
     run(service.submit_navigation(
         robot_id="rosy_01", x=1.0, y=2.0, source="operator",
         actor_id="site-console", request_key="traffic-uncertain-1",
@@ -183,7 +186,7 @@ def test_traffic_queue_without_confirmed_cancel_becomes_unknown_and_is_not_retri
 
 def test_policy_navigation_uses_same_validation_but_holds_before_dispatch(tmp_path):
     store = FleetTaskStore(tmp_path / "fleet.sqlite3")
-    service = FleetTaskService(store, robot_ids={"rosy_01"})
+    service = _service(store.path)
     dispatched = []
 
     async def dispatch():
@@ -193,12 +196,12 @@ def test_policy_navigation_uses_same_validation_but_holds_before_dispatch(tmp_pa
     task = run(service.submit_navigation(
         robot_id="rosy_01", x=1.25, y=-0.5, yaw=0.2,
         source="policy", actor_id="policy:ceiling-north", request_key="e-7",
-        evidence={"event_id": "e-7"},
+        evidence={"evidence_id": "ev-7"},
     ))
 
     assert task["status"] == "HOLD"
-    assert task["reason"] == "POLICY_NOT_ACCEPTED"
-    assert task["evidence"] == {"event_id": "e-7"}
+    assert task["reason"] == "EVIDENCE_NOT_CONFIGURED"
+    assert task["evidence"] == {"evidence_id": "ev-7"}
     assert [row["status"] for row in store.history(task["task_id"])] == [
         "REQUESTED", "HOLD",
     ]
@@ -206,8 +209,7 @@ def test_policy_navigation_uses_same_validation_but_holds_before_dispatch(tmp_pa
 
 
 def test_ambiguous_robot_timeout_records_unknown_and_never_retries(tmp_path):
-    service = FleetTaskService(FleetTaskStore(tmp_path / "fleet.sqlite3"),
-                               robot_ids={"rosy_01"})
+    service = _service(tmp_path / "fleet.sqlite3")
     attempts = []
 
     async def dispatch():
@@ -229,8 +231,7 @@ def test_ambiguous_robot_timeout_records_unknown_and_never_retries(tmp_path):
 
 
 def test_definite_command_rejection_records_failed_without_storing_raw_error(tmp_path):
-    service = FleetTaskService(FleetTaskStore(tmp_path / "fleet.sqlite3"),
-                               robot_ids={"rosy_01"})
+    service = _service(tmp_path / "fleet.sqlite3")
 
     async def dispatch():
         raise RobotApiError("rosy_01", 409, "FORMATION_ACTIVE", "private detail")
@@ -247,8 +248,7 @@ def test_definite_command_rejection_records_failed_without_storing_raw_error(tmp
 
 
 def test_local_hub_rejection_is_failed_without_claiming_unknown_dispatch(tmp_path):
-    service = FleetTaskService(FleetTaskStore(tmp_path / "fleet.sqlite3"),
-                               robot_ids={"rosy_01"})
+    service = _service(tmp_path / "fleet.sqlite3")
 
     async def dispatch():
         raise HubError("FORMATION_ACTIVE", "formation is active")
@@ -271,7 +271,7 @@ def test_service_startup_recovers_interrupted_requested_task_as_unknown(tmp_path
         request={"goal": {"x": 1.0, "y": 2.0, "yaw": 0.0}}, evidence=None,
     )
 
-    FleetTaskService(store, robot_ids={"rosy_01"})
+    _service(store.path)
     task = store.get_task("interrupted-task")
 
     assert task["status"] == "UNKNOWN"
@@ -282,14 +282,13 @@ def test_service_startup_recovers_interrupted_requested_task_as_unknown(tmp_path
 
 
 def test_policy_task_rejects_invalid_or_unknown_robot_before_policy_hold(tmp_path):
-    service = FleetTaskService(FleetTaskStore(tmp_path / "fleet.sqlite3"),
-                               robot_ids={"rosy_01"})
+    service = _service(tmp_path / "fleet.sqlite3")
 
     try:
         run(service.submit_navigation(
             robot_id="rosy_99", x=1.0, y=2.0, yaw=0,
             source="policy", actor_id="policy:test", request_key="e-1",
-            evidence={"event_id": "e-1"},
+            evidence={"evidence_id": "ev-1"},
         ))
     except ValueError as exc:
         assert "UNKNOWN_ROBOT" in str(exc)
@@ -298,8 +297,7 @@ def test_policy_task_rejects_invalid_or_unknown_robot_before_policy_hold(tmp_pat
 
 
 def test_same_idempotency_key_returns_existing_task_without_second_dispatch(tmp_path):
-    service = FleetTaskService(FleetTaskStore(tmp_path / "fleet.sqlite3"),
-                               robot_ids={"rosy_01"})
+    service = _service(tmp_path / "fleet.sqlite3")
     attempts = []
 
     async def dispatch():

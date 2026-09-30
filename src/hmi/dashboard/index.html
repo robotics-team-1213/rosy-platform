@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#101214">
-  <title>Rosy OS — Field Runtime</title>
+  <title>Rosy 로봇 — 대시보드</title>
   <link rel="stylesheet" href="/common/tokens.css">
   <link rel="stylesheet" href="/common/components.css">
   <link rel="stylesheet" href="/dashboard/assets/styles.css">
@@ -30,6 +30,7 @@
         <ui-button kind="segment" id="view-operate" class="view-tab" type="button" aria-pressed="true">운용</ui-button>
         <ui-button kind="segment" id="view-inspect" class="view-tab" type="button" aria-pressed="false">점검</ui-button>
       </div>
+      <nav id="surface-bridge" class="surface-bridge" aria-label="역할 화면" hidden></nav>
       <!-- D-193 6: who this browser is, from GET /api/v1/auth/whoami. -->
       <span id="whoami-badge" class="machine-tag whoami-badge" hidden>
         <b id="whoami-role"></b><span id="whoami-detail"></span>
@@ -185,6 +186,8 @@
             <div><dt>판정</dt><dd id="traffic-policy-state">DISABLED</dd></div>
             <div><dt>신호</dt><dd id="traffic-policy-signal">미수신</dd></div>
             <div><dt>정지선</dt><dd id="traffic-policy-stop-distance">미수신</dd></div>
+            <div><dt>규칙</dt><dd id="traffic-policy-rule">signal_controlled</dd></div>
+            <div><dt>신호 원</dt><dd id="traffic-policy-source">camera</dd></div>
             <div><dt>scene</dt><dd id="traffic-policy-scene">미확정</dd></div>
             <div><dt>policy</dt><dd id="traffic-policy-revision">미확정</dd></div>
             <div><dt>판정 사유</dt><dd id="traffic-policy-reason">policy_disabled</dd></div>

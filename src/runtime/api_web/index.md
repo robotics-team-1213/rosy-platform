@@ -20,7 +20,7 @@
 
 ## 교훈 (docs/solutions)
 
-- 없음
+- [A contract-version bump is three pins, not one](../../../docs/solutions/workflow-issues/a-contract-version-bump-is-three-pins-not-one.md)
 
 ## 시험
 
@@ -28,8 +28,8 @@
 
 ## 최근 기록
 
-- 2026-09-28 · uncommitted · add optional navigation attempt correlation
-- 2026-09-27 · uncommitted · feat(host): judge status age from Host Agent UTC
-- 2026-09-27 · uncommitted · test(ui): verify real CORE role surfaces at desktop and mobile widths
-- 2026-09-26 · uncommitted · feat(core_api_web): add D-283 action group manifest metadata
-- 2026-09-26 · uncommitted · feat(core_api_web): bounded operator camera evidence storage
+- 2026-09-30 · uncommitted · fix(api): 계약 문구 v1.60 — 세 번째 연속 핀 누락 마무리
+- 2026-09-30 · uncommitted · fix(api): 계약 문구 v1.59 — D-348 회차가 놓친 버전 핀 마무리
+- 2026-09-29 · uncommitted · fix(api): 계약 문구를 v1.57로 재정렬
+- 2026-09-29 · uncommitted · fix(api): FastAPI 설명 문구를 계약 v1.56으로 맞춘다
+- 2026-09-29 · uncommitted · web-surface-hardening: 역할 표면 CSP, manifest allowlist

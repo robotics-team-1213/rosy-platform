@@ -29,7 +29,7 @@ def test_the_summary_line_builds_no_markup_from_server_text():
 def test_map_interaction_controls_explain_and_enforce_the_operator_boundary():
     script = (ROOT / "panels" / "console" / "map.js").read_text(encoding="utf-8")
     shell = (ROOT / "shell" / "shell.css").read_text(encoding="utf-8")
-    shared_controls = (ROOT.parents[2] / "src" / "hmi" / "web" / "components.css").read_text(encoding="utf-8")
+    shared_controls = (ROOT.parents[2] / "src" / "hmi" / "web_common" / "components.css").read_text(encoding="utf-8")
     assert 'ctx.role === "operator" || ctx.role === "administrator"' in script
     assert 'button.disabled = !enabled' in script
     assert 'button.setAttribute("aria-describedby", clickReason.id)' in script

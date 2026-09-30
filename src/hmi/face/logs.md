@@ -146,3 +146,17 @@
 - 증거: 상단 경보와 저전압/결측 배터리 줄의 적색→녹색 회귀; ROS-free 관련 시험 162 passed. `X:\DevTemp\rosy-lcd-visual-g3\`의 before/after 정상·E-STOP·E-STOP 저전압 PNG를 320×240에서 대조했고 정상 카드는 픽셀 동일했다.
 - gate 변화: SOURCE/LOCAL 검증 근거 추가. 실제 Pi LCD의 거리·각도·조명 판독은 DEVICE/BENCH HOLD.
 - 결정: D-280, D-306, D-309.
+
+## 2026-09-29 · uncommitted · fix(face): ASSIST REQ renders as a warn-filled chip (P4 round)
+
+- 변경: 웨이크 카드 HEALTH 행의 ASSIST REQ(사람 개입 요청)가 평문이어서 OK와 같은 무게로 읽혔다. `_draw_caution`(warn 채움 + ground 잉크)을 추가해 crit 칩과 형태가 같고 색만 다른 어휘로 정리했다(8항 위계).
+- 증거: face 시험 162 passed / 4 skipped. PIL 렌더 11장(웨이크 7 + 부팅 4) 0.5초 판독 독회 — `X:\DevTemp\rosy-uiux-p4-lcd`. 회차 기록은 `docs/validation/uiux-surfaces-2026-09-29/README.md` P4 절.
+- gate 변화: 없음. SOURCE/LOCAL GO 유지. Pi 실물 폰트·거리·각도·조도·만료 복귀는 미측정이며 표면은 BENCH/DEVICE HOLD다.
+
+## 2026-09-30 · uncommitted · docs(harness): ROS-SIM blocker를 실제 조건으로 정정
+
+- 변경: ROS-SIM blocker가 "Jazzy 컨테이너 재실행 필요"라고만 적혀 있었다. 실제 조건을 적었다: emotion.py는 모듈 최상위에서 `from .rosy_lcd import LCD`를 부르고 rosy_lcd는 spidev·RPi.GPIO를 최상위 import한다 — Pi가 아닌 컨테이너에서는 노드 import 자체가 죽는다. 컨테이너 smoke는 하드웨어 import 지연/가드 리팩터가 선행 조건이며, 그것 없이 Pi에서만 가능한 검증은 DEVICE 계층이다.
+- 증거: 소스 대조 — emotion.py:8 `from .rosy_lcd import LCD`, rosy_lcd.py:1-3 `import spidev`·`import RPi.GPIO as GPIO` (모듈 최상위).
+- gate 변화: 없음 (HOLD 유지, blocker 사유만 정확화).
+- 결정: 없음.
+- 교훈: led의 rosylib 경우와 같은 모양이다 — "컨테이너에서 돌려라"가 유효한 지시인지는 노드의 import 그래프가 결정한다. blocker를 쓸 때 import 경로를 먼저 본다.

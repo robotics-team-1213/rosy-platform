@@ -15,6 +15,7 @@ ROSY is a robot middleware and fleet-control platform (ROS 2 Jazzy, first hardwa
 | `LICENSE` | Apache License 2.0 |
 | `env.sh` | Dev env: source ROS 2 Jazzy then workspace `install/setup.bash` |
 | `CONCEPTS.md` | Shared domain vocabulary — entities, named processes, status concepts with project-specific meaning |
+| `PRODUCT.md` | Product schema (`impeccable:product-schema`): platform, users, purpose, positioning — the top-level "who is this for" the UI lanes read |
 | `STATUS.md` | Generated: per-module gate snapshot (SOURCE…FIELD) linking each module's `progress.md`. Edit progress/logs/ADRs, not this file |
 | `tools/fix_ament_resource.sh` | Recreate ament `resource/<pkg>` markers for Python packages under the domain groups |
 | `tools/run_fleet_sim.sh` | One-click multi-robot Gazebo + fleet orchestration launcher |
@@ -56,12 +57,21 @@ ROSY is a robot middleware and fleet-control platform (ROS 2 Jazzy, first hardwa
 ### Testing Requirements
 
 ```bash
+# Quick tier (D-346): the <2-minute gate to run right before a commit/push.
+# Same suite as the pre-push hook (tools/hooks/install.sh).
+python3 -m pytest test/test_harness_contracts.py test/architecture/test_module_structure.py \
+  test/test_io_image_closure.py test/test_line_follow_contract_docs.py \
+  src/runtime/gateway/test/test_protocol_version_alignment.py -q
+python3 tools/harness/rosy_harness.py lint   # ADR duplicates, mojibake, append-only
+
+# Full tier: before a release, a field push, or when the touched suite is not
+# in the quick tier above.
 # ROS 2 overlay (Linux / Pi). On Windows, run Python tests that do not need rclpy.
 source env.sh
 cd src && colcon build --symlink-install
 
 # core unit tests (no live ROS required for most)
-python3 -m pytest src/runtime/gateway/test/ src/runtime/events/test/ src/runtime/services/test/ src/hmi/web/test/ -v
+python3 -m pytest src/runtime/gateway/test/ src/runtime/events/test/ src/runtime/services/test/ src/hmi/web_common/test/ -v
 
 # Fleet formation/relay/session/console (no ROS)
 python3 -m pytest src/site/fleet/test/ -v

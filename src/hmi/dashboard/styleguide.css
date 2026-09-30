@@ -1,7 +1,7 @@
 /* 스타일 갤러리 — D-92 어휘 표의 렌더링(D-129).
  *
  * 이 시트는 토큰을 선언하지 않는다(D-92 제4항). 색은 전부 단일 파일
- * /ui/tokens.css 에서 오고, 간격은 --space-*, 글자 크기는 --text-* 뿐이다.
+ * /common/tokens.css 에서 오고, 간격은 --space-*, 글자 크기는 --text-* 뿐이다.
  */
 
 * { box-sizing: border-box; }

@@ -25,7 +25,7 @@ TARGET = {
     "products/pinky_pro": "products/pinky_pro/profile",
     "products/omx": "products/omx/profile",
     "hmi/face": "hmi/face",
-    "hmi/web": "hmi/web",
+    "hmi/web_common": "hmi/web_common",
     "hmi/dashboard": "hmi/dashboard",
     "hmi/pilot": "hmi/pilot",
     "site/fleet": "site/fleet",
@@ -33,6 +33,7 @@ TARGET = {
     "site/overhead": "site/overhead",
     "sim/description": "sim/description",
     "sim/gz_sim": "sim/gz_sim",
+    "sim/isaac_sim": "sim/isaac_sim",
 }
 
 TARGET_DOMAINS = {"contracts", "runtime", "drivers", "products", "hmi", "site", "sim"}

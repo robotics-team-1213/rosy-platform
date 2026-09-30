@@ -1,0 +1,130 @@
+# D-329 표면 레지스트리 — 표면 계약 적용 범위의 단일 출처.
+# 표면을 더하거나 빠는 커밋은 이 파일을 같은 커밋에서 고친다.
+# 코드를 담지 않는다: D-92 "어휘만 공유", D-75 무번들러.
+#
+# contracts 이름이 곧 시험 파일:
+#   shared_controls    = src/hmi/web_common/test/test_shared_controls.py
+#   typography_focus   = src/hmi/web_common/test/test_surface_typography_focus_contracts.py
+#   dialog             = test/test_web_dialog_contract.py
+#   token_parity       = src/hmi/web_common/test/test_token_parity.py (D-345)
+# medium은 web·native·lcd 중 하나다. 웹은 위 세 계약을, 웹이 아닌 표면은
+# token_parity를 받는다 — token_copy 파일의 `# --이름 #hex` / `// --이름` 사본이 tokens.css와 같아야 한다.
+# 세 계약을 다 받지 않는 항목은 contract_reason, baseline이 없는 항목은
+# baseline_reason을 적는다.
+# ports는 표면을 서빙하거나(웹) 표면이 접속하는(네이티브) 기본 포트다. source 파일에 그 숫자가
+# 있어야 하고 두 표면이 같은 포트를 쓰면 안 된다 — 새 표면은 빈 포트를 여기서 고른다. 이유 없는 빈 칸은 등록되지 않는다.
+surfaces:
+  - id: robot-dashboard
+    path: src/hmi/dashboard
+    surface: robot
+    medium: web
+    ports:
+      - {port: 8080, source: src/contracts/foundation/config/rosy_default.yaml}
+    audience: 운용자·장비 운용 (D-153 §7 — /dashboard·/console·/setup·/device)
+    grammar: spatial
+    contracts: [shared_controls, typography_focus, dialog]
+    baseline: docs/validation/uiux-surfaces-2026-09-26/captures/console-operate-fresh-1366x768.png
+
+  - id: fleet-console
+    path: src/site/fleet/fleet/server/web
+    surface: site
+    medium: web
+    ports:
+      - {port: 8090, source: src/site/fleet/fleet/cli.py}
+    audience: 사이트 관제자 (D-153 §7 — Fleet /console)
+    grammar: exception
+    contracts: [shared_controls, typography_focus, dialog]
+    baseline: docs/validation/uiux-surfaces-2026-09-26/captures/fleet-normal-1920x1080.png
+
+  - id: game-board
+    path: src/site/games/games/web
+    surface: site
+    medium: web
+    ports:
+      - {port: 8765, source: src/site/games/games/cli.py}
+    audience: 게임 호스트 노트북 (D-153 §7 — /board)
+    grammar: focal
+    contracts: [shared_controls, typography_focus, dialog]
+    baseline: docs/validation/uiux-surfaces-2026-09-26/captures/games-play-1280x800.png
+
+  - id: control-diagnostic
+    path: src/runtime/sensing/web/diagnostic.html
+    surface: robot
+    medium: web
+    ports:
+      - {port: 28181, source: src/runtime/sensing/config/web.yaml}
+      - {port: 28182, source: src/runtime/sensing/config/web.yaml}
+    audience: 제어 진단 (D-153 §7 — PARKED D-266)
+    grammar: procedure
+    contracts: [shared_controls]
+    contract_reason: >
+      타이포·확인 계약은 이 표면에 도입된 적이 없다 — D-150이 한 파일 고정으로 두고
+      PARKED(D-266)라 새로 적용할 회차가 없었다. 두 계약을 받게 되는 날 이 문장을 지운다.
+    baseline_reason: >
+      저장소에 추적된 캡처가 없다. 진단 표면은 PARKED라 회차 G2 대상에서 빠져 있고,
+      해제 회차가 첫 셀을 남기면 이 문장을 baseline 경로로 바꾼다.
+
+  - id: rosy-pilot
+    path: src/hmi/pilot
+    surface: robot
+    medium: web
+    audience: 현장 운전자 한 사람 (D-323 원격 조종 PWA — CORE 가 /pilot 으로 서빙, 포트는 robot-dashboard 와 같은 CORE 포트)
+    grammar: focal
+    contracts: []
+    contract_reason: >
+      주행 화면은 게임형 HUD(원형 스틱·홀드 페달·큰 터치 표적)라 공용 버튼 크기·글꼴 굵기를
+      표면 CSS 에서 다시 칠한다 — 공용 컨트롤·타이포 계약 시험이 이 재도색을 막는다. 확인 대화상자는
+      없다(비상 정지·진행은 누르는 즉시, D-344). main 병합(2026-09-30) 때 등록만 하고 계약 적용은
+      별도 회차로 둔다 — 그 회차가 contracts 를 채우면 이 문장을 지운다.
+    baseline_reason: >
+      G2 기준선 셀이 아직 없다. 주행 화면 캡처는 실물·가제보 증거라 공개 저장소 밖(D-226)에 있고,
+      저장소용 합성 캡처를 남기는 회차에 이 문장을 baseline 경로로 바꾼다.
+
+  - id: web-common
+    path: src/hmi/web_common
+    surface: robot
+    medium: web
+    audience: 라이브러리 — 사람이 여는 화면이 아니다
+    grammar: spatial
+    contracts: [typography_focus]
+    contract_reason: >
+      tokens.css·components.css·ui.js가 계약의 원본이라 소비자 재도색·복제 검사의 대상이 아니다.
+      test_shared_controls는 COMMON 파일을 직접 읽으므로 이 폴더를 목록에 넣지 않는다.
+    baseline_reason: 렌더링되는 화면이 아니므로 기준선 셀이 없다.
+
+  - id: lane-live-view
+    path: src/sim/gz_sim/scripts/lane_live_view.html
+    surface: sim
+    medium: web
+    ports:
+      - {port: 28183, source: src/sim/gz_sim/scripts/lane_live_view.py}
+    audience: Gazebo 레인 뷰어 — 제품 브라우저 표면이 아니다
+    contracts: []
+    contract_reason: >
+      제품 셸·토큰·확인 문법의 대상이 아니다. 라인 예산과 판정은
+      test_web_budgets의 D-262 VERDICTS가 맡는다.
+    baseline_reason: 제품 표면이 아니므로 G2 기준선이 없다.
+
+  - id: robot-face
+    path: src/hmi/face
+    surface: robot
+    medium: lcd
+    audience: 로봇 주변 사람 — 얼굴 LCD와 정보 화면 (D-190)
+    contracts: [token_parity]
+    token_copy: src/hmi/face/emotion/info_screen.py
+    baseline_reason: >
+      LCD 화면은 브라우저 캡처 회차(G2) 대상이 아니다. 정보 화면 캡처는
+      test_info_screen_capture가 호스트에서 만들고 저장소에 기준선을 두지 않는다.
+
+  - id: overhead-camera-app
+    path: src/site/overhead/android
+    surface: site
+    medium: native
+    ports:
+      - {port: 8095, source: src/site/overhead/overhead/cli.py}
+    audience: 천장 카메라 설치자 — 사이트 휴대폰·태블릿 앱 (D-261)
+    contracts: [token_parity]
+    token_copy: src/site/overhead/android/app/src/main/java/io/github/livsbittt/rosy/overhead/ui/RosyTheme.kt
+    baseline_reason: >
+      네이티브 앱 화면은 브라우저 캡처 회차(G2) 대상이 아니다. 실제 폰 화면 확인은
+      D-261의 A3 실기기 회차에서 첫 캡처를 남긴다.

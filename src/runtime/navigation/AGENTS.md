@@ -1,5 +1,5 @@
 <!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-02 | Updated: 2026-09-21 -->
+<!-- Generated: 2026-09-02 | Updated: 2026-09-29 -->
 
 # navigation
 
@@ -22,7 +22,7 @@ Nav2 and SLAM Toolbox launch/config/maps for real robot and Gazebo. ament_cmake.
 | Directory | Purpose |
 |-----------|---------|
 | `navigation/` | Importable D-4 helpers (`frame_prefix`, `params_rewrite`, `profile_limits`) |
-| `launch/` | `hardware.launch.py` plus XML launches: bringup, localization, slam, gz_*, web_* (see `launch/AGENTS.md`) |
+| `launch/` | `hardware.launch.py` plus XML launches: bringup, localization, slam, gz_* (see `launch/AGENTS.md`) |
 | `params/` | `nav2_params.yaml`, `mapper_params.yaml` (see `params/AGENTS.md`) |
 | `map/` | Occupancy maps (`my_map`, `pinklab`) (see `map/AGENTS.md`) |
 | `rviz/` | map_building / nav2_view configs (see `rviz/AGENTS.md`) |

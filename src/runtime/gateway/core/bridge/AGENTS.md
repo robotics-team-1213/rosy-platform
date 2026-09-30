@@ -1,5 +1,5 @@
 <!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-02 | Updated: 2026-09-24 -->
+<!-- Generated: 2026-09-02 | Updated: 2026-09-29 -->
 
 # bridge
 
@@ -13,6 +13,7 @@ ROS-101: the only module allowed to import rclpy message types and talk to the R
 |------|-------------|
 | `__init__.py` | Package marker |
 | `ros_bridge.py` | 24 subs, 5 pubs, 4 service clients, 7 timers, the Nav2 action client and TF. Exact list pinned in `test/test_bridge_timers.py` — update both together |
+| `observation.py` | ROS-free decide half of every sensor/evidence callback (D-338): parse, validate, admit/reject, route, mirror. The bridge keeps the node clock, `warn` and the act. Pinned by `core/test/test_bridge_observation.py` |
 | `translate.py` | ROS-free message → domain dict conversion. Imports no ROS type, so host pytest runs it |
 | `goal_tracker.py` | ROS-free Nav2 goal generations: which result is current, what to cancel |
 | `display.py` | ROS-free `display/info` decisions: address resolution and payload rounding (PWR-003) |
@@ -52,21 +53,18 @@ None.
   (live maps, no late-join replay) — that split is intentional, not drift. A
   RELIABLE-only subscriber must never be pointed at a BEST_EFFORT publisher: that
   pair never matches and reads as silence.
-- Message → dict conversion belongs in `translate.py`, not in a callback. A callback should read one line: translate, then hand the result to a service. Anything computed inline in `ros_bridge.py` cannot be tested on the host, and the source-grep tests that stand in for it pass on wrong values.
+- Message → dict conversion belongs in `translate.py`, not in a callback. A decision (parse, validate, admit/reject, route) belongs in `observation.py` or the owning sibling (D-338) — a callback should read: take the clock, call the sibling, pass `warn`/publish through. Anything computed inline in `ros_bridge.py` cannot be tested on the host, and the source-grep tests that stand in for it pass on wrong values.
 
 ### Testing Requirements
 
-Host pytest does not import `ros_bridge.py` (optional ROS). CI boot smoke + the SaveMap guard are what
-*should* cover it — **but note they have not run on this branch**: `ci.yml` triggers on `push: [main]` and
-`pull_request`, and this repository has no remote, so neither event can fire. Treat construction-time
-correctness in this file as unverified until CI actually runs.
+Host pytest does not import `ros_bridge.py` (optional ROS). CI boot smoke + the SaveMap guard are what *should* cover it — **and `origin` exists (`github.com/livsbittt/rosy-os.git`) with CI firing on `push: [main]` and pull requests, so check the latest run (`gh run list`)**. A local `main` ahead of `origin/main` has no CI evidence at all; until a branch is pushed, construction-time correctness in this file stays unverified.
 One exception, deliberately narrow — `test/test_bridge_timers.py` stubs `rclpy` in `sys.modules` to build
 the bridge against a recording node and assert **what it registers**: seven timers at fixed periods, twenty-four
 subscriptions with their callbacks and QoS, five publishers with QoS, four service clients, the action
 client, the TF listener and both executor wirings. Structural only. It exists so the 3b adapter reshape
 is gradable without a robot. Do not add semantic tests there and do not move the stub into `conftest.py` —
 a stub asserts stub semantics, and its blast radius is meant to stay one file.
-The ROS-free siblings are host-testable and carry real value assertions — `translate.py` (`test_bridge_translate.py`), `goal_tracker.py` (`test_goal_tracker.py`), `display.py` (`test_bridge_display.py`), `reconcile.py` (`test_bridge_reconcile.py`), `odometry.py` (`test_bridge_odometry.py`), `save_map.py` (`test_bridge_save_map.py`), `battery_policy.py` (`test_bridge_battery_policy.py`), `docking_executor.py` (`test_bridge_docking_executor.py`), `cmd_vel.py` (`test_cmd_vel_cycle.py` — the 50 Hz cycle order: wheels before the SAF-002 announcement). Duck-typed `SimpleNamespace` inputs, no rclpy. Extract a decision here rather than leaving it inline: this file is the one place host pytest cannot reach.
+The ROS-free siblings are host-testable and carry real value assertions — `observation.py` (`test_bridge_observation.py` — the sensor/evidence admission decisions, D-338), `translate.py` (`test_bridge_translate.py`), `goal_tracker.py` (`test_goal_tracker.py`), `display.py` (`test_bridge_display.py`), `reconcile.py` (`test_bridge_reconcile.py`), `odometry.py` (`test_bridge_odometry.py`), `save_map.py` (`test_bridge_save_map.py`), `battery_policy.py` (`test_bridge_battery_policy.py`), `docking_executor.py` (`test_bridge_docking_executor.py`), `cmd_vel.py` (`test_cmd_vel_cycle.py` — the 50 Hz cycle order: wheels before the SAF-002 announcement). Duck-typed `SimpleNamespace` inputs, no rclpy. Extract a decision here rather than leaving it inline: this file is the one place host pytest cannot reach.
 
 ### Common Patterns
 

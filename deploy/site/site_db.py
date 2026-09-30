@@ -174,6 +174,25 @@ def restore_database(
         temporary.unlink(missing_ok=True)
 
 
+def _rekey(parser: argparse.ArgumentParser, args: argparse.Namespace) -> int:
+    """D-361 4: reseal every enrolled robot token in one transaction, Fleet stopped."""
+    if not args.assume_stopped:
+        parser.error("stop the Fleet service first, then pass --assume-stopped")
+    from fleet.server.enrollment_store import CredentialKeyError, SealError, load_key_file, rekey
+
+    if not Path(args.path).is_file():
+        parser.error(f"database {args.path} does not exist")
+    try:
+        old_key, new_key = load_key_file(args.old_key_file), load_key_file(args.new_key_file)
+        if old_key == new_key:
+            parser.error("the new key must differ from the old key")
+        count = rekey(args.path, old_key, new_key)
+    except (CredentialKeyError, SealError, OSError, sqlite3.Error) as exc:
+        parser.error(str(exc))
+    print(json.dumps({"path": str(args.path), "resealed": count}))
+    return 0
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
@@ -187,7 +206,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     restore.add_argument("--destination", type=Path, default=DEFAULT_DATABASE)
     restore.add_argument("--replace", action="store_true")
     restore.add_argument("--assume-stopped", action="store_true")
+    rekey = commands.add_parser("rekey", help="reseal enrolled robot credentials (Fleet stopped)")
+    rekey.add_argument("--path", type=Path, default=DEFAULT_DATABASE)
+    rekey.add_argument("--old-key-file", type=Path, required=True)
+    rekey.add_argument("--new-key-file", type=Path, required=True)
+    rekey.add_argument("--assume-stopped", action="store_true")
     args = parser.parse_args(argv)
+    if args.command == "rekey":
+        return _rekey(parser, args)
     try:
         if args.command == "backup":
             result = backup_database(args.source, args.destination)

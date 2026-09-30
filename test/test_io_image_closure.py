@@ -7,7 +7,7 @@ import xml.etree.ElementTree as ET
 
 import pytest
 
-from robot_contracts import ROOT
+from robot_contracts import ROOT, hardware_packages, source_manifests
 
 
 DOCKERFILE = ROOT / "deploy" / "robot" / "pinky_pro" / "Dockerfile"
@@ -16,7 +16,7 @@ PROBE = ROOT / "deploy" / "robot" / "pinky_pro" / "probe-io-image.py"
 
 def _source_packages() -> dict[str, tuple[Path, set[str]]]:
     packages = {}
-    for manifest in (ROOT / "src").rglob("package.xml"):
+    for manifest in source_manifests():
         xml = ET.parse(manifest).getroot()
         name = xml.findtext("name")
         assert name and name not in packages, manifest
@@ -40,11 +40,18 @@ def test_io_build_copies_and_selects_its_internal_dependency_closure():
     assert selected_line
     selected = set(selected_line.group(1).split()) & packages.keys()
 
+    # D-84 (board.yaml `hardware_packages`): aux driver packages stay out of the
+    # CORE/io images until the Device hardware profile opens, and
+    # test_nav2_hardware_slice bans them from the Dockerfile text. A selected
+    # package may still DECLARE such a dependency (control's legacy launches
+    # start the IMU driver); the deferred package is not an image-closure
+    # member yet, and neither are its own workspace dependencies.
+    deferred = set(hardware_packages())
     required = set()
     pending = list(selected)
     while pending:
         name = pending.pop()
-        if name in required:
+        if name in required or name in deferred:
             continue
         required.add(name)
         pending.extend(packages[name][1] & packages.keys() - required)

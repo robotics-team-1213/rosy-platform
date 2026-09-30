@@ -481,3 +481,46 @@
 - First attempt on `757fb38f` stopped at administrator `/device` `confirm_cancel`: the test checked rollback enabled after panel mount, before the release readback poll completed. The fixture returns a fresh release record with previous version `r1`; rollback becomes enabled after that readback. Updated the test to wait for the actual release readiness instead of panel count.
 - Rerun: `ROSY_RUN_BROWSER_TESTS=1 python -X utf8 -m pytest src/hmi/dashboard/test/test_role_g2_browser.py::test_role_procedure_g2_local_matrix -q` passed **1 test, 60 cells** in 274.59s. Matrix: overflow 0, pageerrors 0, E-stop visible 60/60. Artifact: `X:\DevTemp\rosy-uiux-d306-roles-g2\matrix.json`.
 - Gate: only test synchronization changed. Local FastAPI/Chromium does not prove physical stop or Host Agent result. G3, DEVICE/FIELD, D-153 remain HOLD.
+
+## 2026-09-29 · uncommitted · fix(dashboard): restore shared-control contracts and P1 craft round
+
+- 변경: main에 커밋된 공유 계약 위반 3건을 복원했다 — host identity 버튼의 kind 선언 패턴(system.js), `/setup`·`/device` 패널 모듈 import 중 `ui-empty` 로딩 문구(mount.js), `/setup`·`/device` 데스크톱 main 슬롯을 row-pairing grid에서 multicol로(shell.css), action-group 탭의 균등 전폭 스트레치를 콘텐츠 폭 flex로, 접근 토큰 행의 58px 삭제 버튼이 텍스트·인접 행을 침범하지 않게 flex 배치(surface-panels.css). G2 harness가 첫 패널이 아니라 조립 완료(`#surface-status` hidden)를 기다리고 캡처한다.
+- 증거: `src/hmi/dashboard/test` 43 passed, `src/hmi/web/test` 22 passed, D-283·surface 레이아웃 23 passed, `test/test_role_menu_panels_browser.py test/test_role_surface_states_browser.py` 29 passed. 역할 G2 60셀 재생성(overflow 0, pageerror 0). Impeccable detect `[]`. 회차 기록은 `docs/validation/uiux-surfaces-2026-09-29/README.md`.
+- gate 변화: dashboard SOURCE/LOCAL HOLD -> GO(브라우저 회귀 + 신흘 캡처 블로커 해소). ARTIFACT은 이미지 설치 증가 없이 HOLD. D-153 표면 G3 사람 평가·DEVICE/FIELD는 별도다.
+
+## 2026-09-29 · uncommitted · fix(dashboard): 역할 화면 브랜드를 대시보드 홈 링크로
+
+- 변경: `surface.html` 상단 바 `ui-brand`가 일반 텍스트여서 `/console`·`/setup`·`/device`에서 ROSY 브랜드를 클릭해도 홈으로 갈 수 없었다. 대시보드 `index.html`의 홈 링크와 같은 `<a href="/dashboard" aria-label="Rosy OS 대시보드 홈">`로 감쌌고, `shell.css`에 `ui-brand a:focus-visible` 포커스 링을 더했다. 같은 텍스트와 토큰이라 화면 픽셀 변화는 없고 링크 동작만 추가된다. `/dashboard` 자신의 브랜드 링크와 Fleet·경기 보드(별도 호스트, D-275)는 대상이 아니다.
+- 근거: 정적 계약 `src/hmi/dashboard/test/test_surface_home_link.py` 신설(링크·포커스 링 고정, 브라우저 클릭 1건은 게이트 변수). `python -X utf8 -m pytest src/hmi/dashboard/test/test_surface_home_link.py src/hmi/dashboard/test/test_dashboard_package.py src/hmi/dashboard/test/test_web_budgets.py src/hmi/web/test/test_palette_gates.py -q` 23 passed 1 skipped. `ROSY_RUN_BROWSER_TESTS=1`에서 `test_surface_home_link.py test_surface_entry_browser.py test_surface_layout_browser.py` 11 passed, `test/test_role_menu_panels_browser.py test/test_role_surface_states_browser.py test/test_web_dialog_contract.py src/runtime/api_web/test/test_d283_console_browser.py` 43 passed.
+- gate 변화: 없음. dashboard SOURCE/LOCAL GO 유지, ARTIFACT HOLD 유지.
+
+## 2026-09-29 · uncommitted · fix(dashboard): 예산 후보는 추적 파일만 훑는다
+
+- 변경: `test_web_budgets.py`의 두 시험이 파일시스템 `SRC.rglob("*.js")` + `SRC.rglob("*.html")`로 후보를 모아 `.gitignore`된 `site/overhead/android/build/reports/problems/problems-report.html`(600행 초과)을 예산 초과 후보로 잡았다. `_web_files()`로 바꿔 `git ls-files -c -o --exclude-standard -- src`로 후보를 얻는다 — 추적 파일과 아직 add하지 않은 새 파일은 잡고, ignore된 빌드 산출물은 잡지 않는다. git이 없으면 skip하고 파일시스템 훑기로 대체하지 않는다. `.js`까지 보는 것이 이 스캔만의 일이므로(레지스트리 발견 스캔은 `.html` 한정) 여기에 둔다. 예산값 600/150과 `VERDICTS`는 그대로다.
+- 근거: 변경 직전 `test_web_files_over_budget_have_a_recorded_verdict` 1 failed — 원인은 그 무시된 Android 빌드 산출물. 변경 후 `python -m pytest src/hmi/dashboard/test -q` 14 passed, 32 skipped. 변이 확인: add 안 된 700행 `src/hmi/dashboard/zz_mut_proof.html`을 놓으면 `needs a verdict: ['hmi/dashboard/zz_mut_proof.html']`로 빨갛고, 지우면 다시 14 passed로 복구한다.
+- gate 변화: 없음. dashboard SOURCE/LOCAL GO 유지, ARTIFACT HOLD 유지.
+- 결정: D-329 Decision 3 "tracked files only"를 이 예산 시험에도 적용했다. 판정 기준과 `VERDICTS`는 바꾸지 않는다.
+
+## 2026-09-29 · uncommitted · D-335 역할 화면 브랜드 홈 링크를 공용 선언으로
+
+- 변경: feat/surface-home-link에서 앵커를 직접 적던 `surface.html`을 `<ui-brand href="/dashboard" aria-label="Rosy OS 대시보드 홈">` 선언으로 되돌려 공용 동작(D-335)을 쓰게 했다. `shell.css`의 `ui-brand a:focus-visible`은 공용 `components.css`로 옮겨 표면 복제를 지웠다. `test_surface_home_link.py`는 표면 선언·공용 스타일 소유·Chromium 클릭(공용 ui.js 로드)을 고정한다. `/dashboard` 홈에서 역할 화면으로 가는 가시 경로(비평 P1)는 이번 회차 대상이 아니며 D-204 브리지 회차가 판다.
+- 증거: 정적 97 passed 1 skipped(`src/hmi/web/test` + dashboard 계약 3종). `ROSY_RUN_BROWSER_TESTS=1`에서 `src/hmi/dashboard/test` + `test_role_menu_panels_browser.py` + `test_role_surface_states_browser.py` + `test_web_dialog_contract.py` + `test_d283_console_browser.py` 89 passed(역할 G2 60셀 재생성 포함, overflow 0·pageerror 0). harness lint 0 errors, `test_harness_contracts.py` 54 passed.
+- gate 변화: 없음. dashboard SOURCE/LOCAL GO 유지, ARTIFACT HOLD 유지.
+
+## 2026-09-29 · uncommitted · feat(dashboard): 홈 브리지가 목적지 역할 화면을 매니페스트로 말한다
+
+- 변경: 비평 P1(2026-09-26) 회차. `/dashboard` 상단 바에 `#surface-bridge`를 두고, 인증된 호출자의 목적지를 console 매니페스트의 `surfaces` 메타데이터로 그린다 — 역할 화면 스위치와 같은 단일 출처고 서버가 역할으로 걸러 준다(viewer는 /console 1개). `surface-navigation.js`의 `dashboardSurfaceBridge(nav, surfaces)`가 등록된 역할 표면만 남겨 그리고, 목록이 비면 숨긴다. `app.js`는 whoami 뒤에 목록을 채우고 신원이 없으면(로그아웃·만료) 비운다. 모바일(≤720px, console height:auto 구간)에서만 상단 바 묶음 줄바꿈을 허용해 데스크톱 뷰 계약(D-201, .console 토큰 높이)은 그대로다. 새 토큰·ui-* 부품·문법 없음 — D-335의 다음 회차로서 ADR 없이 진행했다.
+- 증거: 정적 `src/hmi/dashboard/test/test_surface_bridge.py` 신설(선언·빌더·배선·스타일 고정, 뮤테이션 3종 붉게 확인 후 복원) + `src/hmi/web/test` 99 passed 2 skipped. `ROSY_RUN_BROWSER_TESTS=1`로 `src/hmi/dashboard/test` + `test_dashboard_browser.py`(통합 신설 2건: 관리자 3링크/뷰어 1링크 + 클릭 이동) + 역할 메뉴/표면 + 다이얼로그 + D-283 165 passed. UI/UX 실측(X:\DevTemp\bridge-destination\uiux\, probe.json): 1366×768·390×844 가로 overflow 0, 링크 높이 44px = 터치 바닥, 상단 바 위 대비 6.95:1, Tab 5번에 브리지 도달 + 2px 포커스 링, hover 색·배경 변화, E-stop 양 폭 보임.
+- gate 변화: 없음. dashboard SOURCE/LOCAL GO 유지, ARTIFACT HOLD 유지. 역할 화면으로의 가시 경로는 이제 홈에서 열렸고, /dashboard 조작 중복의 퇴역 기준은 D-204 이행 회차가 판다.
+
+## 2026-09-29 · uncommitted · feat(dashboard): 교통 정책 팩트에 신호 원 행
+
+- 변경: `/setup` 교통 정책 패어널과 `/console` 교통 팩트에 "신호 원" 행을 추가했다 — `TrafficPolicyStatus.signal_source_kind`(v1.56, D-337)를 그대로 보여 주고 관측 프레임 동결(`signal_head_frozen`) 시 `frozen`으로 표기한다. 운영자가 관측 소스 바인딩을 켠 사이트에서 fused 강등·동결이 화면에 드러난다. 새 토큰·ui-* 부품·문법 없음.
+- 증거: `src/hmi/dashboard/test` + `src/runtime/api_web/test` + `test_dashboard.py` 116 passed 47 skipped(2026-09-29 Windows). D-283 배치 시험(facts 2열·폼 위치) 행 추가 후에도 통과.
+- gate 변화: 없음. 실화면 확인은 T5 벤치 회차가 함께 한다.
+
+## 2026-09-29 · uncommitted · feat(dashboard): 교통 정책 패어널에 정지선 규칙 편집·표시
+
+- 변경: `/setup` 교통 정책 패어널에 `junction_rule` select(신호 제어 / 무신호: 정지 후 진입)를 스테이징 폼에 추가하고 상태 facts에 "정지선 규칙" 행을, `/console` 교통 facts에 "규칙" 행을 각각 추가했다. 새 토큰·ui-* 부품 없음 — 기존 `select`·facts 문법 재사용. 기본값 `signal_controlled` 표기로 규칙 미선언 상태가 지금과 같음을 화면에서 읽을 수 있다.
+- 증거: 정적 스캔 `src/hmi/dashboard/test` + `src/hmi/web/test` + api_web 105 passed 47 skipped(2026-09-29 Windows, 브라우저 게이트 시험은 스킵 — ROSY_RUN_BROWSER_TESTS 미설정). 패어널 배치 시험(D-283 facts 2열·폼 위치)은 행 추가 후에도 그대로 통과했다.
+- gate 변화: 없음. 무신호 `stop_and_go`의 실화면 확인은 브라우저 회차가 남아 있다.

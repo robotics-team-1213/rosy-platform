@@ -8,8 +8,8 @@
 !src/contracts/foundation/core_common
 !src/contracts/foundation/core_common/**
 !src/hmi
-!src/hmi/web
-!src/hmi/web/**
+!src/hmi/web_common
+!src/hmi/web_common/**
 !deploy
 !deploy/site
 !deploy/site/requirements-fleet.txt

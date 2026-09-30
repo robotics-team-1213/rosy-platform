@@ -2,7 +2,7 @@
 module: deploy
 logical_modules: [M01, M13, M14]
 owner: 릴리스·플랫폼
-last_verified: { commit: "uncommitted", date: 2026-09-22 }
+last_verified: { commit: "c8050390", date: 2026-09-30 }
 gates:
   SOURCE:
     state: GO
@@ -22,11 +22,12 @@ gates:
     blocker: "Ubuntu native product image의 SD write/readback, Pi 5 boot, ROS graph, 장치 ACL, deadman 실기 증거 없음"
   FIELD:
     state: N/A
-adrs: [D-22, D-26, D-30, D-33, D-36, D-46, D-53, D-124, D-144, D-145, D-146, D-161, D-164, D-165, D-179, D-291, D-311, D-312, D-314, D-319, D-321]
+adrs: [D-22, D-26, D-30, D-33, D-36, D-46, D-53, D-124, D-144, D-145, D-146, D-161, D-164, D-165, D-179, D-291, D-311, D-312, D-314, D-319, D-321, D-325]
 plans:
   - docs/plans/2026-09-01-rosy-os-v1-image-release-design.md
   - docs/plans/2026-09-08-release-delivery-design.md
   - docs/plans/2026-09-13-rosy-os-device-validation-implementation-plan.md
+  - docs/plans/2026-09-29-pinky-deployment-fast-path.md
   - docs/plans/2026-09-15-module-harness-design.md
   - docs/plans/2026-09-21-pinky-device-commissioning-design.md
   - docs/plans/2026-09-21-native-arm64-release-builder-design.md

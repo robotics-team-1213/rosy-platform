@@ -9,9 +9,9 @@ rm -rf /rosy/src/hmi/pilot
 tar -C "$SRC" -cf - src/hmi/pilot | tar -C /rosy -xf -
 
 echo "== web_common =="
-mkdir -p /rosy/src/hmi/web
-cp "$SRC/src/hmi/web/evidence.js" /rosy/src/hmi/web/evidence.js 2>/dev/null || \
-  tar -C "$SRC" -cf - src/hmi/web/evidence.js | tar -C /rosy -xf -
+mkdir -p /rosy/src/hmi/web_common
+cp "$SRC/src/hmi/web_common/evidence.js" /rosy/src/hmi/web_common/evidence.js 2>/dev/null || \
+  tar -C "$SRC" -cf - src/hmi/web_common/evidence.js | tar -C /rosy -xf -
 
 echo "== 검증 =="
 head -1 /rosy/src/hmi/pilot/vision.js

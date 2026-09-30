@@ -68,7 +68,7 @@ def test_console_defaults_to_the_installable_web_common_assets(tmp_path):
     p = _write(tmp_path)
     args = cli.parse_args(["console", "--robots", str(p)])
 
-    assert args.web_common.name == "web"
+    assert args.web_common.name == "web_common"
     assert (args.web_common / "tokens.css").is_file()
     assert (args.web_common / "core_ui_logic.js").is_file()
 
@@ -96,6 +96,121 @@ def test_console_wires_configured_task_database_into_authenticated_app(tmp_path,
     assert captured["app"].state.task_service.robot_ids == {
         "rosy_01", "rosy_02", "rosy_03",
     }
+
+
+def test_console_mission_api_requires_shared_database_and_named_users(tmp_path):
+    robots = _write(tmp_path)
+    no_database = cli.parse_args([
+        "console", "--robots", str(robots), "--mission-api",
+    ])
+    with pytest.raises(SystemExit, match="--tasks-db is required with --mission-api"):
+        cli.run_console(no_database)
+
+    no_named_users = cli.parse_args([
+        "console", "--robots", str(robots), "--tasks-db", str(tmp_path / "fleet.sqlite3"),
+        "--mission-api",
+    ])
+    with pytest.raises(SystemExit, match="--users-file is required with --mission-api"):
+        cli.run_console(no_named_users)
+
+
+def test_console_mission_api_persists_candidates_without_enabling_dispatch(
+        tmp_path, monkeypatch):
+    robots = _write(tmp_path)
+    task_db = tmp_path / "fleet.sqlite3"
+    users = tmp_path / "site-users.yaml"
+    users.write_text(yaml.safe_dump({"users": [{
+        "principal_id": "operator-1", "role": "operator",
+        "token_sha256": sha256(b"operator-secret").hexdigest(),
+    }]}), encoding="utf-8")
+    captured = {}
+    monkeypatch.setattr("uvicorn.run", lambda app, **kwargs: captured.update(app=app))
+    args = cli.parse_args([
+        "console", "--robots", str(robots), "--users-file", str(users),
+        "--tasks-db", str(task_db), "--mission-api",
+    ])
+
+    cli.run_console(args)
+
+    app = captured["app"]
+    assert app.state.task_service.store.path == task_db
+    assert app.state.mission_service.store.path == task_db
+    assert app.state.proposal_store.path == task_db
+    assert app.state.mission_dispatcher is None
+
+    client = TestClient(app)
+    headers = {"Authorization": "Bearer operator-secret"}
+    candidate = {
+        "source": "gemini_robotics_er2", "model_id": "gemini-robotics-er2",
+        "provider_interaction_id": "interaction-1", "provider_call_id": "call-1",
+        "instruction": "Move the red block to the green tray",
+        "source_observation": {
+            "observation_id": "obs-1", "image_sha256": "a" * 64,
+            "camera_id": "camera-top", "frame_id": "camera_top_optical",
+            "observed_at": "2026-09-29T09:00:00+00:00",
+            "calibration_revision": "cal-4", "transform_revision": "tf-9",
+        },
+        "target_selector": {"label": "red block", "point_yx_1000": [575, 664]},
+        "destination_selector": {"label": "green tray", "point_yx_1000": [475, 305]},
+    }
+    created = client.post("/api/fleet/proposals", headers=headers, json={
+        "request_key": "er2-request-1", "workcell_id": "omx_01",
+        "instance_id": "omx_01_control", "candidate": candidate,
+    })
+
+    assert created.status_code == 200, created.text
+    proposal_id = created.json()["proposal"]["proposal_id"]
+    assert created.json()["proposal"]["state"] == "PROPOSED"
+    assert created.json()["physical_submission"] == "NOT_CONNECTED"
+    readback = client.get(f"/api/fleet/proposals/{proposal_id}", headers=headers)
+    assert readback.status_code == 200, readback.text
+    assert readback.json()["proposal"]["candidate"] == candidate
+    unresolved = client.post(f"/api/fleet/proposals/{proposal_id}/resolve", headers=headers)
+    assert unresolved.status_code == 503
+    assert unresolved.json()["detail"]["code"] == "MISSION_RESOLVER_UNAVAILABLE"
+
+
+def test_mission_api_does_not_start_task_dispatcher_for_existing_queued_tasks(
+        tmp_path, monkeypatch):
+    from fleet.server.task_store import FleetTaskStore
+
+    robots = _write(tmp_path)
+    task_db = tmp_path / "fleet.sqlite3"
+    users = tmp_path / "site-users.yaml"
+    users.write_text(yaml.safe_dump({"users": [{
+        "principal_id": "operator-1", "role": "operator",
+        "token_sha256": sha256(b"operator-secret").hexdigest(),
+    }]}), encoding="utf-8")
+    store = FleetTaskStore(task_db)
+    task_id = "preexisting-queued-task"
+    store.create_task(
+        task_id=task_id, robot_id="rosy_01", task_type="navigate",
+        source="operator", actor_id="operator-1", request_key="preexisting-request",
+        request={"x": 1.0, "y": 2.0, "yaw": 0.0}, evidence=None,
+    )
+    store.enqueue(task_id, priority_class=0, actor_id="operator-1", source="operator")
+    captured = {}
+    monkeypatch.setattr("uvicorn.run", lambda app, **kwargs: captured.update(app=app))
+    dispatcher_started = []
+
+    async def observe_dispatcher(*_args):
+        dispatcher_started.append(True)
+        await asyncio.Future()
+
+    monkeypatch.setattr("fleet.server.app._task_dispatch_loop", observe_dispatcher)
+    args = cli.parse_args([
+        "console", "--robots", str(robots), "--users-file", str(users),
+        "--tasks-db", str(task_db), "--mission-api",
+    ])
+    cli.run_console(args)
+
+    with TestClient(captured["app"]) as client:
+        assert client.get("/api/fleet/state", headers={
+            "Authorization": "Bearer operator-secret",
+        }).status_code == 200
+
+    assert dispatcher_started == []
+    assert store.get_task(task_id)["status"] == "QUEUED"
 
 
 def test_console_loads_individual_site_users_for_the_api(tmp_path, monkeypatch):
@@ -309,3 +424,83 @@ def test_a_session_that_stopped_on_its_own_ends_the_console_at_once(capsys):
     run(main())
     assert printed == []                     # 통계 줄 하나 없이, 1 s 를 기다리지도 않고 나온다
     assert "session stopped: nav.stuck (rosy_02)" in capsys.readouterr().out
+
+
+# --- D-361 robot enrollment wiring ---------------------------------------------------
+
+def _key_file(tmp_path):
+    import base64
+
+    path = tmp_path / "robot_credential_key"
+    path.write_bytes(base64.b64encode(bytes(range(32))) + b"\n")
+    return path
+
+
+def _sighting_config(tmp_path, robot_ids):
+    config = tmp_path / "sightings.yaml"
+    config.write_text(yaml.safe_dump({"sources": [{
+        "source_id": "ceiling_north", "token_env": "ROSY_TEST_SIGHTING_TOKEN",
+        "robot_ids": robot_ids, "map_id": "site-v1", "calibration_revision": "cal-v3",
+        "corner_marker_ids": [30, 31, 32, 33],
+    }]}), encoding="utf-8")
+    return config
+
+
+def test_console_without_robots_file_needs_the_enrollment_key(tmp_path):
+    args = cli.parse_args(["console", "--tasks-db", str(tmp_path / "fleet.sqlite3")])
+    with pytest.raises(SystemExit, match="--robots is required"):
+        cli.run_console(args)
+    args = cli.parse_args(["console", "--robot-credential-key-file", str(_key_file(tmp_path))])
+    with pytest.raises(SystemExit, match="--tasks-db is required"):
+        cli.run_console(args)
+
+
+def test_console_with_enrollment_key_starts_without_robots_file(tmp_path, monkeypatch):
+    captured = {}
+    monkeypatch.setattr("uvicorn.run", lambda app, **kwargs: captured.update(app=app))
+    args = cli.parse_args(["console", "--tasks-db", str(tmp_path / "fleet.sqlite3"),
+                           "--robot-credential-key-file", str(_key_file(tmp_path)),
+                           "--token", "operator-test"])
+    cli.run_console(args)
+    client = TestClient(captured["app"])
+    listed = client.get("/api/fleet/enrollment/robots",
+                        headers={"Authorization": "Bearer operator-test"})
+    assert listed.status_code == 200 and listed.json()["available"] is True
+
+
+def test_console_with_a_broken_key_still_starts(tmp_path, monkeypatch, capsys):
+    captured = {}
+    monkeypatch.setattr("uvicorn.run", lambda app, **kwargs: captured.update(app=app))
+    broken = tmp_path / "robot_credential_key"
+    broken.write_bytes(bytes(range(32)))
+    args = cli.parse_args(["console", "--robots", str(_write(tmp_path)),
+                           "--tasks-db", str(tmp_path / "fleet.sqlite3"),
+                           "--robot-credential-key-file", str(broken), "--token", "operator-test"])
+    cli.run_console(args)
+    client = TestClient(captured["app"])
+    headers = {"Authorization": "Bearer operator-test"}
+    assert client.get("/api/fleet/enrollment/robots", headers=headers).json()["available"] is False
+    assert len(client.get("/api/fleet/state", headers=headers).json()["robots"]) == 3
+    assert "robot enrollment unavailable" in capsys.readouterr().err
+
+
+def test_sighting_mapping_to_an_unenrolled_robot_warns_instead_of_refusing(tmp_path, monkeypatch,
+                                                                           capsys):
+    from fleet.server.enrollment_store import EnrollmentStore
+
+    database = tmp_path / "fleet.sqlite3"
+    EnrollmentStore(database).audit(action="unenroll", outcome="removed", principal_id="alice",
+                                    target="rosy_09")
+    monkeypatch.setenv("ROSY_TEST_SIGHTING_TOKEN", "source-secret")
+    monkeypatch.setattr("uvicorn.run", lambda app, **kwargs: None)
+    args = cli.parse_args(["console", "--robots", str(_write(tmp_path)), "--tasks-db", str(database),
+                           "--robot-credential-key-file", str(_key_file(tmp_path)),
+                           "--token", "operator-test",
+                           "--sightings-config", str(_sighting_config(tmp_path,
+                                                                      ["rosy_01", "rosy_09"]))])
+    cli.run_console(args)
+    assert "rosy_09" in capsys.readouterr().err
+
+    args.sightings_config = _sighting_config(tmp_path, ["rosy_01", "rosy_77"])
+    with pytest.raises(SystemExit, match="unknown robot target"):
+        cli.run_console(args)

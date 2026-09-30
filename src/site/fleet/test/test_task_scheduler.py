@@ -6,6 +6,9 @@ from fleet.server.task_store import FleetTaskStore
 
 
 def _queue(store, task_id="task-1", robot_id="rosy_01", priority=0):
+    control = store.dispatch_control()
+    if not control["dispatch_enabled"]:
+        store.rearm_dispatch(expected_generation=control["generation"], actor_id="test-operator")
     store.create_task(
         task_id=task_id, robot_id=robot_id, task_type="navigate",
         source="operator", actor_id="site-console", request_key=task_id,

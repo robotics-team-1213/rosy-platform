@@ -1,8 +1,9 @@
-"""core_api_web.api.app — FastAPI 팩토리 (P1-9, API-101). 계약: ROSY-API-REF-001."""
+"""core_api_web.api.app — FastAPI 팩토리 (P1-9, API-101). 계약: ROSY-API-REF-001 v1.62."""
 
 from __future__ import annotations
 
 import hashlib
+import json
 import logging
 from pathlib import Path
 from typing import Any
@@ -41,16 +42,38 @@ from core_api_web.api.v1.routes import (
     docking_router,
     ui_router,
 )
+from core_api_web.api.ws import ws_router
+
+
+#: One policy for every operator page CORE renders (/dashboard and the role
+#: surfaces). Assets are same-origin; the live feed is a websocket.
+OPERATOR_PAGE_CSP = (
+    "default-src 'self'; connect-src 'self' ws: wss:; "
+    "img-src 'self' data: blob:; style-src 'self'; script-src 'self'; "
+    "frame-ancestors 'none'; base-uri 'self'"
+)
+OPERATOR_PAGE_HEADERS = {"Cache-Control": "no-cache", "Content-Security-Policy": OPERATOR_PAGE_CSP}
 
 
 def _web_common_root() -> Path:
-    """Resolve installed assets first, with a source-tree fallback for host tests."""
+    """Resolve installed assets first, with a source-tree fallback for host tests.
+
+    A web_common directory is one that ships ``manifest.json``."""
     try:
         from ament_index_python.packages import get_package_share_directory
 
-        return Path(get_package_share_directory("web_common"))
+        share = Path(get_package_share_directory("web_common"))
+        if (share / "manifest.json").is_file():
+            return share
     except (ImportError, LookupError):
-        return Path(__file__).resolve().parents[4] / "hmi" / "web"
+        pass
+    return Path(__file__).resolve().parents[4] / "hmi" / "web_common"
+
+
+def _shared_assets(web_common: Path) -> dict[str, str]:
+    """name -> media type, from web_common's manifest (the one /common allowlist)."""
+    manifest = json.loads((web_common / "manifest.json").read_text(encoding="utf-8"))
+    return dict(manifest["shared_assets"])
 
 
 def _dashboard_root() -> Path:
@@ -79,14 +102,11 @@ def _pilot_root() -> Path:
     return Path(__file__).resolve().parents[4] / "hmi" / "pilot"
 
 
-from core_api_web.api.ws import ws_router
-
-
 def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
     app = FastAPI(
         title="ROSY CORE API",
         version="1.20.0",
-        description="로봇 미들웨어 API — 계약: ROSY-API-REF-001 (v1.46)",
+        description="로봇 미들웨어 API — 계약: ROSY-API-REF-001 (v1.63)",
     )
     app.state.core = services
     app.state.pairing = PairingState()
@@ -123,8 +143,6 @@ def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
         "camera-capture.js": "application/javascript",
         "status-summary.js": "application/javascript",
         "surface-navigation.js": "application/javascript",
-        "client.js": "application/javascript",
-        "dom.js": "application/javascript",
         "shell/shell.js": "application/javascript",
         "shell/store.js": "application/javascript",
         "shell/mount.js": "application/javascript",
@@ -171,14 +189,7 @@ def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
         return FileResponse(
             web_root / "index.html",
             media_type="text/html",
-            headers={
-                "Cache-Control": "no-cache",
-                "Content-Security-Policy": (
-                    "default-src 'self'; connect-src 'self' ws: wss:; "
-                    "img-src 'self' data: blob:; style-src 'self'; script-src 'self'; "
-                    "frame-ancestors 'none'; base-uri 'self'"
-                ),
-            },
+            headers=dict(OPERATOR_PAGE_HEADERS),
         )
 
     @app.get("/dashboard/assets/{asset_name:path}", include_in_schema=False)
@@ -261,18 +272,11 @@ def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
             pinned_sha, ui_tokens_sha, ui_tokens,
         )
 
+    common_assets = _shared_assets(web_common)
+
     @app.get("/common/{asset_name:path}", include_in_schema=False)
     def common_asset(asset_name: str):
-        valid_assets = {
-            "tokens.css": "text/css",
-            "components.css": "text/css",
-            "template.html": "text/html",
-            "core_ui_logic.js": "application/javascript",
-            "hold-ticker.js": "application/javascript",
-            "ui.js": "application/javascript",
-            "evidence.js": "application/javascript",
-        }
-        media_type = valid_assets.get(asset_name)
+        media_type = common_assets.get(asset_name)
         if not media_type:
             raise HTTPException(status_code=404, detail="common asset not found")
         return FileResponse(web_common / asset_name, media_type=media_type, headers={"Cache-Control": "no-cache"})
@@ -321,7 +325,63 @@ def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
             raise HTTPException(status_code=404, detail="UI asset not found")
         return FileResponse(web_root / asset_name, media_type=media_type, headers={"Cache-Control": "no-cache"})
 
+    # /pilot 은 아래 /{surface} 캐치올보다 먼저 등록돼야 한다(FastAPI 는 등록 순서로 맞춘다).
+    pilot_root = _pilot_root()
+    pilot_assets = {
+        # 이 allowlist도 {asset_name:path}의 경로 순회 방어다. 모듈이 늘 때마다 여기에 등록.
+        "styles.css": "text/css",
+        "stick.js": "application/javascript",
+        "link.js": "application/javascript",
+        "app.js": "application/javascript",
+        "client.js": "application/javascript",
+        "drivers/registry.js": "application/javascript",
+        "drivers/pinky_core.js": "application/javascript",
+        "recent.js": "application/javascript",
+        "autonomy.js": "application/javascript",
+        "screens/connect.js": "application/javascript",
+        "screens/drive.js": "application/javascript",
+        "screens/inputs.js": "application/javascript",
+        "input-state.js": "application/javascript",
+        "vision.js": "application/javascript",
+        "manifest.webmanifest": "application/manifest+json",
+        "sw.js": "application/javascript",
+        "icons/icon-192.png": "image/png",
+        "icons/icon-192-maskable.png": "image/png",
+        "icons/icon-512.png": "image/png",
+    }
+
+    @app.get("/pilot", include_in_schema=False)
+    def pilot():
+        return FileResponse(
+            pilot_root / "index.html",
+            media_type="text/html",
+            headers={
+                "Cache-Control": "no-cache",
+                "Content-Security-Policy": (
+                    "default-src 'self'; connect-src 'self' ws: wss:; "
+                    "img-src 'self' data: blob:; style-src 'self'; script-src 'self'; "
+                    "frame-ancestors 'none'; base-uri 'self'"
+                ),
+            },
+        )
+
+    @app.get("/pilot/assets/{asset_name:path}", include_in_schema=False)
+    def pilot_asset(asset_name: str):
+        media_type = pilot_assets.get(asset_name)
+        if media_type is None:
+            raise HTTPException(status_code=404, detail="pilot asset not found")
+        headers = {"Cache-Control": "no-cache"}
+        if asset_name == "sw.js":
+            # scope /pilot 은 스크립트 디렉터리(/pilot/assets)보다 넓다 — 허용 헤더 필수(D-365).
+            headers["Service-Worker-Allowed"] = "/pilot"
+        return FileResponse(
+            pilot_root / asset_name,
+            media_type=media_type,
+            headers=headers,
+        )
+
     surface_template = (web_root / "surface.html").read_text(encoding="utf-8")
+
     @app.get("/{surface}", include_in_schema=False)
     def surface_page(surface: str):
         definition = registry.surfaces.get(surface)
@@ -331,6 +391,6 @@ def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
         html = (surface_template.replace("{{title}}", definition.title)
                 .replace("{{surface}}", definition.id).replace("{{grammar}}", definition.grammar)
                 .replace("{{slots}}", slots))
-        return HTMLResponse(html, headers={"Cache-Control": "no-cache"})
+        return HTMLResponse(html, headers=dict(OPERATOR_PAGE_HEADERS))
 
     return app

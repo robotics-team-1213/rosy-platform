@@ -6,7 +6,6 @@
   --away: #b6c1cf;
   --ink: #f4f1ea;
   --mute: #9aa894;
-  --lost: #e24a4a;
   --chip: #24422c;
   --field: #0c160f;
   --score-gap: #1c2c1f;
@@ -210,9 +209,16 @@ h1 {
 }
 
 .lost {
+  display: inline-block;
+  width: fit-content;
   margin: 0 0 var(--space-2);
-  color: var(--lost);
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-button);
+  background: var(--status-crit);
+  color: var(--paper);
+  font-weight: var(--weight-label);
 }
+.lost[hidden] { display: none; }
 
 .halt-row {
   display: flex;

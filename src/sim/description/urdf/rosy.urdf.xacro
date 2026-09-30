@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro">
-    <xacro:macro name="insert_robot" params="namespace is_sim:=false cam_tilt_deg screen_tilt_deg camera_width:=1280 camera_height:=720 camera_update_rate:=10 camera_hfov:=1.1519 cam_mount_z:=0.0495">
+    <xacro:macro name="insert_robot" params="namespace is_sim:=false sim_backend:=gz cam_tilt_deg screen_tilt_deg camera_width:=1280 camera_height:=720 camera_update_rate:=10 camera_hfov:=1.1519 cam_mount_z:=0.0495">
         <xacro:include filename="$(find description)/urdf/common/insert_inertia.urdf.xacro"/>
 
         <link name="base_footprint"/>
@@ -360,12 +360,14 @@
         </joint>
 
         <xacro:if value="${is_sim}">
-            <xacro:include filename="$(find description)/urdf/rosy_gz.urdf.xacro"/>
-            <xacro:insert_gz_sim namespace="${namespace}"
-                                 camera_width="${camera_width}"
-                                 camera_height="${camera_height}"
-                                 camera_update_rate="${camera_update_rate}"
-                                 camera_hfov="${camera_hfov}"/>
+            <xacro:if value="${sim_backend == 'gz'}">
+                <xacro:include filename="$(find description)/urdf/rosy_gz.urdf.xacro"/>
+                <xacro:insert_gz_sim namespace="${namespace}"
+                                     camera_width="${camera_width}"
+                                     camera_height="${camera_height}"
+                                     camera_update_rate="${camera_update_rate}"
+                                     camera_hfov="${camera_hfov}"/>
+            </xacro:if>
         </xacro:if>
     </xacro:macro>
 </robot>

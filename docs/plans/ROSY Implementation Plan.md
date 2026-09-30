@@ -133,7 +133,7 @@ EMERGENCY: 모든 이동 명령 무시, zero-twist 유지
 |---|---|
 | Robot/ROS | ROS 2 Jazzy, rclpy, Nav2, slam_toolbox |
 | Middleware | Python 3.12, FastAPI, uvicorn, Pydantic v2 |
-| Frontend | React 18 + TypeScript + Vite (정적 서빙, D-7) |
+| Frontend | 손으로 쓴 정적 ES module + CSS, FastAPI 직접 서빙 (D-75 — 이 표의 `React 18 + TypeScript + Vite (D-7)`는 Superseded) |
 | Fleet Server | FastAPI + **SQLAlchemy + Alembic** + SQLite(초기)→PostgreSQL, Docker |
 | 배포 | systemd(`rosy-core.service`), `ros2 launch` |
 

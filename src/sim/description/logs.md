@@ -43,6 +43,11 @@
 
 추가만 한다. 형식: [module harness 설계](../../docs/plans/2026-09-15-module-harness-design.md) §4.2.
 2026-09-15 이전 이력은 `git log -- src/description`를 본다.
+## 2026-09-29 · uncommitted · feat(sim): select Isaac xacro backend
+
+- 변경: 공통 `robot.urdf.xacro`에 기본 `gz` backend를 유지하면서 Isaac 렌더에서 Gazebo 플러그인만 제외하는 인자를 추가했다.
+- 증거: 호스트 Isaac 준비 계약 pytest 통과. Jazzy xacro 렌더는 이 Windows 세션에서 미실행이다.
+- gate 변화: 기존 Gazebo ROS-SIM 판정은 과거 증거로 유지한다. 새 Isaac 렌더는 ROS-SIM HOLD다.
 
 ## 2026-09-30 · uncommitted · feat(sim): camera_hfov and cam_mount_z xacro args (D-353 5)
 

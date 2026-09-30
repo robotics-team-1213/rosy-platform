@@ -242,3 +242,16 @@
 - 디자인 검사: `impeccable detect --json --scope layout` 경고 2건. 점수 wrapper는 자식 셀마다 12px padding이고, 정지 행도 위쪽 12px padding이다. 검사기가 `/common/tokens.css`를 로컬 파일로 해석하지 못해 토큰 값(`--space-3: 12px`)을 반영하지 못한 정적 오판으로 판정했다.
 - gate 변화: SOURCE/LOCAL 유지. DEVICE/FIELD·실제 정지 수용은 별도 HOLD.
 - 결정: D-280, D-309.
+
+## 2026-09-29 · uncommitted · fix(games): HOLD alarm is a crit-filled chip (P3 round)
+
+- 변경: `#lost` 경보("공을 잃음 · HOLD")를 `--lost` 빨간 글자에서 공용 `--status-crit` 채움 칩으로 바꿨다(D-202 — 위험은 채움이다). `.lost[hidden]` 가드를 함께 넣어 명시적 display가 hidden 속성을 덮는 이 리포의 정전 패턴을 막았다. `--lost` 토큰은 남는 참조가 없어 제거했다.
+- 증거: `src/site/games/test test/test_games_board_browser.py` 117 passed. 초기·play·HOLD·지연·stale × 1280/390/600 재촬영 — 가로 넘침 0, 페이지 오류 0(`X:\DevTemp\rosy-uiux-p3-games`). 지연·stale은 "마지막 수신 단계"·필드 증거 칩으로 정직 표시 확인. `impeccable detect` []. 회차 기록은 `docs/validation/uiux-surfaces-2026-09-29/README.md`.
+- gate 변화: 없음. SOURCE/LOCAL GO 유지, 실물 카메라·양측 로봇 정지 readback과 사람 G3는 별도다.
+
+## 2026-09-29 · uncommitted · web-surface-hardening: 보드 CSP·/stop Origin·web_common share 해석
+
+- 변경: `preview.py`가 web_common을 ament share(manifest 있을 때) 다음 소스 트리 순으로 찾고, `/common` 목록은 `manifest.json`에서 읽는다. `package.xml`에 `exec_depend web_common`. HTML 응답에 CSP를 싣고, `POST /stop`은 Origin 헤더가 있는데 보드 자신이 아니면 403으로 거절한다(Origin 없는 호출은 통과).
+- 증거: `python -m pytest src/site/games/test -q` 104 passed.
+- gate 변화: 없음.
+- 결정: D-157.

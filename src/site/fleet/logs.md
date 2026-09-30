@@ -1,4 +1,4 @@
-﻿# fleet logs
+# fleet logs
 
 추가만 한다. 형식: [module harness 설계](../../docs/plans/2026-09-15-module-harness-design.md) §4.2.
 2026-09-15 이전 이력은 [사이트 패브릭 계획](../../docs/plans/2026-09-14-site-middleware-role-fabric.md), [군집 대형 슬라이스 결과](../../docs/plans/2026-09-08-swarm-formation-slice-results.md)와 `git log -- src/fleet`를 본다.
@@ -417,3 +417,234 @@
 - 변경: D-318 사각형 조정에서 모서리 핸들이 소비한 위·아래 방향키를 문서 전역 로스터 탐색이 다시 처리해 포커스를 빼앗던 충돌을 막았다. Shift+방향키 0.1% 이동이 계속 모서리에 적용된다. 드래그 중 텍스트 선택도 억제한다.
 - 증거: 원인 재현 테스트는 수정 전 실패, 수정 뒤 통과했다. 직접 카메라 조정·로스터 방향키·지도 키보드 목표 브라우저 시험 3 passed. Fleet 호스트 545 passed/5 skipped, 팔레트 계약 9 passed. Harness 계약 78 passed/17 freshness warnings, lint 0 errors/17 warnings, `git diff --check` 통과.
 - gate 변화: SOURCE/LOCAL 입력 접근성만 보강했다. 운영자 G3, 실제 Fleet/카메라/로봇 readback, 물리 E-stop, DEVICE/FIELD는 계속 HOLD다.
+
+## 2026-09-29 · uncommitted · fix(fleet-ui): restore segment toggle paint and focus ring contracts
+
+- 변경: `web/index.html`의 영역 조정·미리보기 토글을 `kind=quiet`에서 `kind=segment`로 바꾸고 표면의 `ui-button[aria-pressed]` 재도색 규칙을 삭제했다. 모서리 핸들 포커스 링을 stroke 3px에서 공용 focus 치수 outline으로 바꿨다(styles.css).
+- 증거: `src/hmi/web/test` 22 passed, `test/test_fleet_console_browser.py src/site/fleet/test` 576 passed / 5 skipped.
+- gate 변화: 없음. 기존 GO 유지(위반은 main에 커밋된 상태였고 이 변경으로 G1을 회복했다).
+
+## 2026-09-29 · uncommitted · fix(fleet-ui): E-STOP safety renders as the crit tag (P2 round)
+
+- 변경: 로스터 카드의 SAFETY 값이 E-STOP일 때 평문 strong 대신 공용 `tag crit` 채움으로 렌더한다(D-202 — 위험은 채움이다). 정지 사실이 배터리 같은 측정값과 같은 무게로 읽히던 8항 위계 결함이다. 계약 시험은 요소 타입 대신 행의 값으로 단정하도록 정렬했다.
+- 증거: `test/test_fleet_console_browser.py test/test_web_dialog_contract.py` 34 passed. 8상태×3뷰포트 24셀 재촬영 — 가로 넘침 0, 페이지 오류 0(`X:\DevTemp\rosy-uiux-p2-fleet`). `impeccable detect` []. 회차 기록은 `docs/validation/uiux-surfaces-2026-09-29/README.md`.
+- gate 변화: 없음. SOURCE/LOCAL GO 유지, 실물 페어링·E-STOP readback·사람 G3는 별도다.
+
+## 2026-09-29 · uncommitted · add internal Mission admission and goal evidence ledger
+
+- Change: Mission proposals, shared robot/workcell/object claims, stop-generation admission, a single Step Action attempt, and independent goal evidence now share the Fleet SQLite transaction. Driver Action success does not complete the Mission; fresh matching camera evidence is required before claims are released.
+- Evidence: Mission-focused tests 15 passed; full Fleet suite 578 passed/5 skipped; network topology and harness contract tests passed. Harness lint reports 0 errors/18 freshness warnings. `flake8` is unavailable in this host environment.
+- Gate: SOURCE/LOCAL only. The Mission ledger has no public REST route, executor, or ROS submission. Device-side generation enforcement, independent physical stop, ROS-SIM, DEVICE and FIELD remain open; Mission/OMX physical dispatch stays disabled.
+
+## 2026-09-29 · uncommitted · review Mission stop-generation recovery
+
+- 변경: 검토 중 stop이 pre-dispatch claim을 회수해도 Mission row가 `READY`로 남는 상태를 발견했다. `start_step`은 generation 또는 resource claim이 stale이면 같은 transaction에서 Mission을 `HOLD`로 바꾸고 `STEP_HELD_BEFORE_SUBMISSION`을 기록한 뒤 남은 claim을 회수한다.
+- 증거: 회귀 시험은 수정 전 실패했다. 수정 후 Mission 집중 시험 15 passed, Fleet 전체 578 passed/5 skipped, network topology/harness 계약 시험 통과.
+- gate 변화: 발행 기능은 계속 비활성이다. Isaac ROS-SIM과 장치 stop-generation 강제는 미검증이다.
+## 2026-09-29 · uncommitted · feat(ai): add ER 2 proposal-only provider adapter
+
+- 변경: Fleet AI boundary에 표준 ER 2 Interactions REST adapter를 추가했다. `propose_pick_place`만 model tool로 노출하고 함수 호출을 실행하지 않으며, 결과에 caller/provider ID와 image observation/hash를 보존한다.
+- 증거: `python -m pytest src/site/fleet/test/test_er2_standard.py -q` 10 passed. HTTPX mock transport, normalized image selector 검증, 20 MB provider request limit을 위한 14 MiB frame cap 포함. 실 API/credential은 사용하지 않았다.
+- gate 변화: SOURCE/LOCAL test만 추가. API/runtime wiring, auto admission, ROS/OMX action, non-safety-critical production use, DEVICE/FIELD acceptance는 HOLD.
+## 2026-09-29 · uncommitted · fix(test): keep the mission helper out of pytest's nose setup slot
+
+- 변경: `test_mission_store.py`의 모듈 수준 `setup(tmp_path)`가 pytest 7의 nose 호환에 잡혀 **테스트 모듈 자체**를 인자로 받아 호출됐다. `tmp_path`가 path가 아니라 module이 되어 `module / "fleet.sqlite3"` TypeError로 6개 전부 setup 단계 ERROR. CI가 쓰는 pytest 7.4.4에서만 깨지고 로컬 pytest 8.4.2는 nose 지원을 제거해 통과해 환경 차이로만 보였다. 헬퍼를 `_stores`로 개명해 충돌을 없앴다.
+- 증거: 최소 repro 파일로 원인을 두 버전에서 직접 재현했다 — 7.4.4는 `tmp_path = <module 'test_repro'>` + 동일 TypeError, 8.4.2는 passed. 수정 후 pytest 7.4.4로 Fleet 전체 `588 passed, 5 skipped`, 8.4.2로도 동일. 저장소 전체에서 `^def setup(` 은 이 파일 한 곳뿐이었다.
+- gate 변화: 없음. 로직·픽스처·측정은 그대로고 이름만 바꿨다.
+
+## 2026-09-29 · uncommitted · feat(fleet): add policy-evidence config and store (D-268 ladder T2/T3)
+
+- 변경: `fleet/server/policy_evidence_config.py`(출처 설정 로더 — env 바인딩 토큰, asset/task 닫힌 집합, revision 삼종·폐기 플래그, YAML에 비밀 금지)와 `fleet/server/policy_evidence.py`(SQLite 저장·제출 검증 — source token에서 출처 결정, transit 0~300 ms, task/asset/revision binding, **눅 observation 등록부로 전면 거절**, `evidence_id` 멱등·다른 내용 `EVIDENCE_REPLAY`, audit 테이블)을 추가했다. [실행 계획](../../../docs/plans/2026-09-29-policy-evidence-contract.md) T2·T3.
+- 증거: 신규 시험 24 passed(config 11·store 13), Fleet 전체 `612 passed, 5 skipped`. 신규 4 파일 flake8 120 clean(패키지 전체 flake8 경고는 기존 파일 것). v1 불변 단언: 잘formed 제출도 `EVIDENCE_OBSERVATION_KIND_UNKNOWN`으로 거절.
+- gate 변화: 없음. REST 경로(app.py)·발의 binding(task_service)·밸브는 T4/T5이고 자동 실행은 HOLD 유지.
+
+## 2026-09-29 · uncommitted · feat(fleet): wire policy evidence admission, routes, and API Ref v1.49 (T4-T6)
+
+- 변경: T4 — `task_service`가 policy 발의에 `{"evidence_id": ...}` 참조를 필수로 하고(다른 모양 400 `INVALID_EVIDENCE_REFERENCE`) admission(`EVIDENCE_NOT_CONFIGURED`·`NOT_FOUND`·`ASSET_MISMATCH`·`STALE`·제출 사유 전달)을 통과해도 밸브가 닫힌 한 `HOLD(POLICY_NOT_ACCEPTED)`. T5 — `POST /api/fleet/policy-evidence`(source token, 감사 예외 경로 추가)와 `GET .../latest`(viewer), 콘솔/사용자/로봇 토큰 충돌 거부. T6 — API Ref v1.49(§10.6.2 신설, 변경 로그, policy 발의 서술 갱신)과 `test_task_contract_docs.py` 정합 시험, api_web 설명 버전 표기.
+- 증거: Fleet 전체 `628 passed, 5 skipped`(신규: API 6·발의 binding 9·계약 문서 1), api_web 70 passed/13 skipped(버전 핀), 변경 파일 flake8 clean. 핵심 단언: 밸브 False, v1 빈 등록부로 모든 제출 거절, 멱등·재생 409, 승인된 증거라도 HOLD.
+- gate 변화: 없음. `POLICY_DISPATCH_ENABLED=False` 불변, 자동 실행·측정 없음. 사다리 2~5단계(권한·정답 시험·30분 스트림·입회 수용)는 별도 작업이다.
+
+## 2026-09-29 · uncommitted · feat(ai): resolve ER 2 selectors against source-frame evidence
+
+- Change: added source/crop/resize/quarter-turn inverse mapping. Selectors require one fresh candidate from the exact observation, image digest, camera/frame, capture time, calibration and transform revisions. Fleet emits typed pixel-level evidence using shared schemas and has no OMX package dependency.
+- Evidence: selector and OMX target-evidence tests 18 passed; contract checks 49 passed after ADR renumbering; full Fleet suite 600 passed/5 skipped before rebasing onto current main. Re-run the full suite on the merged tree before accepting this gate.
+- Gate: SOURCE/LOCAL only. Mission production routes, UDS listener, ROS arm/gripper execution, physical stop, device and field acceptance remain separate.
+
+## 2026-09-29 · uncommitted · feat(fleet): separate ER 2 proposal, Mission draft, and operator admission (D-333 Task 3)
+
+- Change: added an idempotent SQLite ProposalStore for allowlisted selector/provenance metadata only (32 KiB maximum, 30-day retention and hourly cleanup). The new authenticated routes separate `POST /api/fleet/proposals`, proposal read, trusted current-evidence resolution to an immutable Mission draft, Mission readback, and named-operator admission. Proposal and Mission ownership derive from the authenticated principal; supplied actor/principal, credentials and image payloads are rejected. Mission, proposal, API audit, dispatch generation, and shared resource claims must use the same SQLite database.
+- Admission: the server-injected resolver rechecks current observation, target resolution, workcell/instance capability and revisions at both draft resolution and admission. A stale/changed result, generation mismatch, missing workcell/object claim, competing action, unnamed development principal, or audit failure fails closed. Admission only acquires Fleet claims; `physical_submission` stays `NOT_CONNECTED` and no OMX Action or ROS call is made.
+- Evidence: Fleet full suite `653 passed, 5 skipped`; API web `70 passed, 13 skipped`; changed-path flake8 and `git diff --check` clean. Candidate resolver behavior was tested with injected hardware-free fixtures; live camera producer, device identity, UDS, ROS-SIM, physical stop and field acceptance remain unverified.
+- Gate: SOURCE/LOCAL only. API Reference v1.50 documents the Site Fleet contract; this does not authorize live provider wiring, device Action dispatch, motion capability, or deployment.
+
+## 2026-09-29 · uncommitted · make ER 2 resolution commit and retry atomically
+
+- Change: Mission draft insertion and ProposalStore `RESOLVED` transition now share a single SQLite transaction. Resolution work no longer durably leaves proposals in `RESOLVING`; a failed write rolls back the Mission and keeps the proposal retryable. Candidate free-text fields now have individual length limits in addition to the total metadata cap.
+- Evidence: Fleet suite 655 passed/5 skipped; fault injection after the Mission insert proved rollback and successful retry.
+- Gate: SOURCE/LOCAL only; resolver remains injected and no device Action submission is connected.
+
+## 2026-09-29 · uncommitted · feat(fleet): dispatch admitted Mission through fenced OMX UDS Action
+
+- 변경: 단일 Site Fleet background dispatcher 추가. 기본 비활성이고 완전한 Mission API, 공용 DB, workcell-instance map과 local Action transport를 명시해야 생성된다. operator admission/ER 2 proposal handler는 UDS를 직접 호출하지 않는다. Fleet은 action/attempt ID와 grant 전체를 READY→RUNNING 원자 전이에 저장한 뒤 단 한 번 SubmitAction을 보낸다. 프로세스 재시작/불명 ACK는 저장 grant 그대로 GetAction으로 조정하며 재생하지 않는다. 불명 상태 claim은 유지하고 한 번의 durable reconciliation 뒤에도 확인되지 않으면 operator HOLD로 남긴다. DeviceActionReceipt는 Mission/step/action/attempt, digest, authority epoch, generation, journal event와 관측 시각에 결속된다. API Ref v1.53과 계약 고정 시험을 갱신했다.
+- 증거: focused dispatcher/store/service/API, stop fence, OMX Action API/store, shared schema와 contract-doc bundle 83 passed; 전체 Fleet 665 passed/5 skipped; API web 70 passed/13 skipped; OMX adapter 85 passed/3 skipped; foundation contracts 102 passed. Harness `generate` 완료, `lint` 0 errors/17 freshness warnings, `git diff --check` 통과. 별도 network-topology+harness 계약 명령은 92%에서 요약 없이 정체되어 중단했고 pass로 집계하지 않는다.
+- gate 변화: SOURCE 구현만. 자동 dispatcher 기본 비활성; OMX runtime, UDS 서비스 설치, 선택 ROS/gripper driver, 물리 stop/readback와 FIELD는 승인·증거 전까지 비활성/HOLD.
+
+## 2026-09-29 · uncommitted · Mission provenance and SQLite query-path improvement
+
+- 변경: Mission 완료를 독립적인 신뢰 증거 검증기에 묶고, 동일 action/attempt의 사후 카메라 관찰 및 신선한 OPEN 그리퍼 readback 없이는 GOAL_CONFIRMED가 되지 않도록 했다. 거부된 증거는 필드별 크기 제한 후 원문 없이 bounded field metadata/hash만 저장한다. Fleet/OMX SQLite 연결은 WAL, `synchronous=FULL`, foreign keys, 5초 busy timeout을 공통 적용한다. Mission ready/reconciliation 및 policy-evidence 최신 조회에 composite index를 추가하고 EXPLAIN QUERY PLAN에서 임시 정렬이 없음을 고정했다. 기본 WAL autocheckpoint는 변경하지 않았다.
+- 증거: post-review goal/Mission/policy evidence 대상 38 passed; 전체 Fleet suite 676 passed/5 skipped. 합성 50,000행 DB에서 250회 READY 조회 1,325.6 ms→3.7 ms, reconciliation 6,642.8 ms→3.4 ms. Windows 합성 로컬 측정이며 장치/운영 부하 성능을 보장하지 않는다. 대상 장치 저장장치의 지연/전원 장애 시험은 미실행.
+- gate 변화: SOURCE 테스트와 로컬 합성 측정만. 현재 composition에는 trusted goal verifier가 없어 Mission completion은 의도적으로 HOLD다. `FULL` 동기화 유지; WAL이 SQLite 단일 writer를 병렬화하지 않는다. ROS-SIM, DEVICE, FIELD 및 물리 grasp/place/E-stop 증거는 변하지 않는다.
+
+## 2026-09-29 · uncommitted · web-surface-hardening: `/common` 목록은 web_common manifest
+
+- 변경: 서버의 손으로 쓴 `common_assets`를 `manifest.json` 읽기로 바꿨다(설정 디렉터리에 manifest가 없으면 기본 web_common의 것). `default_web_common()`은 manifest가 있는 share만 받는다. 이제 `hold-ticker.js`도 서빙한다. D-1005 인용을 실제 ADR D-157로 고쳤다.
+- 증거: `python -m pytest src/site/fleet/test -q` 656 passed 5 skipped.
+- gate 변화: 없음.
+- 결정: D-157.
+
+## 2026-09-29 · uncommitted · fix(fleet): ER2 시험은 허용목록된 fixture 키를 쓴다
+
+- 변경: `test_mission_ai_proposal.py`가 MockTransport 옆에 `api_key="fixture-secret"`을 넘겼다 — `secret_scan.KNOWN_FIXTURES`가 면제하지 않는 값이라 CI의 `test_no_secrets_in_tracked_files`가 실패했다(런 36578519798). 시험 세 곳(주입 2·헤더 단언 1)을 `test-secret`로 바꿨다 — KNOWN_FIXTURES 주석이 정확히 이 ER2 어댑터·mock 조합을 위해 문서화한 값이다. 허용목록 자체는 무변경(D-256: 값을 이름 짓지, 목록을 늘리지 않는다).
+- 증거: `python -m pytest test/test_release_boundary_guards.py src/site/fleet/test/test_mission_ai_proposal.py -q` 75 passed.
+- gate 변화: 없음.
+
+
+## 2026-09-29 · uncommitted · feat(fleet-console): 천장 카메라 사이트 사각형과 관측 표시 (D-257)
+
+- 변경: `GET /api/fleet/site-map`(viewer 이상, 토큰 미포함, 없으면 404 `NO_SITE_MAP`) 추가. `sightings_config.py`가 `corner_world_m`·`robot_markers`를 표시용으로 검증·보존하고 `SightingSource`에 선택 필드로 싣는다. 콘솔은 새 `web/site-layer.js`(순수 기하·관측 분류)로 점유 격자가 없을 때 미터 축척 사이트 뷰(0.5 m 격자·축·치수·source), 격자가 있을 때 사각형 윤곽을 겹치고, `/api/fleet/sightings`를 1 s마다 읽어 로봇별 최신 관측을 점선 고리+방향선으로 그린다(서버 lease stale 또는 3 s 초과 흐림, 30 s 초과 숨김). CORE TF pose 삼각형과 합치지 않고, 사이트 전용 뷰는 목표 클릭을 받지 않는다.
+- 증거: `python -m pytest src/site/fleet/test -q` 691 passed/5 skipped, 2 failed(`test_task_contract_docs.py` — API Ref v1.56 대 기대 v1.55, 기반 9ecad1b1에서도 동일 실패); `node --test src/site/fleet/test/web/site-layer.test.mjs src/site/fleet/test/web/authorization.test.mjs` 7 passed; `test_no_video_relay.py` 통과. Windows 로컬 합성만.
+- gate 변화: 없음. 실제 폰·survey calibration·현장 인증서는 DEVICE/FIELD 수용 gate로 남는다.
+- 결정: D-257(표시·대조 전용 유지)
+- 교훈: 없음
+
+## 2026-09-30 · uncommitted · feat(fleet): D-352 S1–S3 사이트 콘솔 로봇 화면 코드 등록
+
+- 변경: `server/enrollment_store.py`(AES-GCM 봉인 등록부·`device_pairing_audit`·`rekey`), `server/roster.py`(`SiteRoster` 단일 로스터 소유자), `server/enrollment.py`·`enrollment_routes.py`(교환·결속·고정 주소·해제), `console.py`(await 전 순서 복사, 고정 주소 보류·경보), `hub.py`(동적 짝 토큰), `transport.py`(`trust_env=False`), `cli.py`(`--robot-credential-key-file`), 콘솔 "기기 연결" 패널(`web/enrollment.js`).
+- 증거: `python -m pytest src/site/fleet/test -q` 녹색, `node --test src/site/fleet/test/web/*.mjs` 녹색, 루트 결합 시험 `test/test_fleet_robot_enrollment_contract.py` 녹색(현재 소스 CORE, 이미지 증거 아님). 실물 로봇 접촉 없음.
+- gate 변화: 없음. LOCAL 증거만; DEVICE는 벤치 D1 대기.
+- 결정: D-352 Proposed(구현 첫 조각).
+- 교훈: 로스터를 바꾸는 쪽이 여럿이면 `await`를 건너는 순회가 어긋난다 — 순회 전 복사와 단일 소유자가 함께 있어야 e-stop이 새 로봇에 닿는다.
+
+## 2026-09-30 · uncommitted · feat(fleet): add opt-in Mission proposal API composition
+
+- Change: `fleet console --mission-api` now composes MissionService and ProposalStore on the same persistent DB as task/audit storage. It requires per-user authorization; resolving stays unavailable without a trusted candidate resolver.
+- Evidence: CLI composition tests verify owner-authenticated proposal persistence/readback, resolver 503, no Mission dispatcher, and shared DB paths. A regression test seeds a preexisting queued navigation task and verifies the opt-in Mission API does not start the Task dispatcher or consume it. Fleet suite: 702 passed, 5 skipped. Existing authenticated Fleet operator command routes remain available; this is not a global read-only mode.
+- Gate: SOURCE/LOCAL integration only. No ER 2 provider request, Device Action, ROS goal, hardware stop, or field acceptance.
+- Decision: none. The Mission API CLI mode disables Mission and automatic queued-task dispatchers; existing Fleet operator commands remain available.
+
+## 2026-09-30 · uncommitted · fix(fleet-console): 사이트 지도 리뷰 반영 (D-257)
+
+- 변경: 관측 폴링은 사이트 사각형(`view.siteMap`)이 있을 때만 하고, 404(관측 설정 없음 → 라우트 없음)면 다음 `refresh()`까지 멈추며, 빈 관측이 그대로면 격자를 다시 그리지 않는다. 사이트 사각형은 404 `NO_SITE_MAP`에서만 지우고 일시 실패에는 둔다(`call()` 오류가 `status`·`code`를 싣는다). 캔버스는 사이트 뷰에서 `role="img"`, 격자 뷰에서 `role="button"`. 로더는 같은 `map_id`인데 `corner_world_m`이 다른 source, `robot_ids` 밖 로봇, 로봇 간 중복 marker, 모서리 marker 재사용을 거부한다. node 하위 프로세스는 UTF-8(errors=replace)로 읽는다.
+- 증거: main 병합 후 `python -m pytest src/site/fleet/test -q` 724 passed/5 skipped; `node --test src/site/fleet/test/web/site-layer.test.mjs src/site/fleet/test/web/authorization.test.mjs` 7 passed; `python -m pytest test/ -q -k "fleet or site or video or architecture"` 182 passed/33 skipped; harness lint 0 errors. Windows 로컬 합성만.
+- gate 변화: 없음.
+- 결정: D-257(표시·대조 전용 유지)
+- 교훈: 없음
+
+## 2026-09-30 · uncommitted · feat(fleet): registered Mission goal-evidence ingress
+
+- Change: added opt-in producer registry with environment-only credentials, strict workcell/predicate/object/destination and evaluator-revision scopes, finite freshness/grace policy, and expiry. Added same-database SQLite idempotent evidence storage and `POST /api/fleet/goal-evidence` with a separate source token.
+- Lifecycle: evidence and Action terminal readback can arrive in either order; the matching second input triggers independent confirmation. Missing evidence reaches `HOLD` after registered grace. Rejected payloads are not stored. The Mission/automatic policy dispatch valve remains closed; the registry is deployment-configured and read-only at runtime.
+- Evidence: full Fleet suite 724 passed, 5 skipped; changed-file flake8 passed.
+- Gate: SOURCE/LOCAL only; physical producers, ROS-SIM, device and field acceptance remain unproven.
+- Decision: D-348.
+
+## 2026-09-30 · uncommitted · chore(structure): fleet size verdict re-judged at 11912 lines
+
+- Change: SIZE_VERDICTS["fleet"] moved 11164 -> 11912 after the policy/goal-evidence contracts and their stores joined the flat server tree; the split verdict (B2 subpackage regrouping) stands, owner fleet, unscheduled.
+- Evidence: test/architecture/test_module_structure.py::test_size_verdicts_are_well_formed_and_current passed (2026-09-30 Windows); growth source docs/plans/2026-09-30-goal-evidence-producer-and-verifier.md.
+- Gate: none moved.
+- Decision: keep "split" — the new evidence stores reinforced the separate-owners-without-subpackages condition the verdict already named.
+
+## 2026-09-30 · uncommitted · fix(web): Node 18에서 console 웹 단위시험이 ESM을 읽게 — 고아 시험도 연결
+
+- 변경: `fleet/server/web/package.json`에 `"type": "module"`을 선언했다. 그 트리의 .js는 전부 브라우저 ES 모듈(별도 package.json이 없어 Node는 .js를 CommonJS로 읽음)이라, CI의 apt Node 18에서 `site-layer.test.mjs`의 named import가 "Named export not found"로 죽었다 — 개발 호스트 Node 24만 통과하는 시험이었다. 아울러 `test_site_layer_node_unit_tests_pass`를 `test_console_web_node_unit_tests_pass`로 바꾸고 `test/web/*.test.mjs` glob으로 실행 대상을 모아, 아무 pytest도 돌리지 않던 `authorization.test.mjs`(고아)도 같은 호출에 들어오게 했다.
+- 증거: Node 18 컨테이너(`docker run node:18 node --test …`)에서 pass 7/fail 0, 로컬 Node 24에서 test_site_map_api 22 passed, fleet 전체 746 passed/5 skipped (2026-09-30).
+- gate 변화: 없음.
+- Decision: 웹 트리의 모듈성 선언은 브라우저와 Node가 같은 해석을 하게 하는 계약이다 — 버전 탓으로 치지 않는다.
+- 교훈: 새 .test.mjs를 만들 때 실행 주체를 확인하라 — authorization.test.mjs는 연결 없이 쌓여 있었다. glob runner가 그 재발을 구조적으로 막는다.
+
+## 2026-09-30 · uncommitted · fix(fleet): D-352 독립 리뷰 반영(MERGE-AFTER-FIXES)
+
+- 변경: `enrollment.js` 자산 허용목록 누락(콘솔 전체 불능) 수정과 import 전수 시험, 바쁜 로봇(목표·대기·점유·양보)과 UNKNOWN task 해제 409, 죽은 토큰(401·Fleet 시계 만료·적재)은 정지 전용 보류, 옛 대형 플래그가 새 대형을 끊지 않음, 충돌 중 옮기기 409, 서버 측 enrollable 확인, WS `proxy=None`, rekey 입력 검사·Compose 절차, RFC 1918 단일 규칙, 콘솔 이중 제출·확인 대화상자.
+- 증거: `python -m pytest src/site/fleet/test -q` 녹색, node 10건 녹색, 선택 브라우저 시험 녹색. 실물 접촉 없음.
+- gate 변화: 없음.
+- 결정: 없음.
+- 교훈: 정적 자산 허용목록이 생기면 새 ES 모듈 하나가 콘솔 전체와 e-stop을 끈다 — import 그래프를 시험으로 전수 확인한다.
+
+## 2026-09-30 · uncommitted · docs(fleet): 로봇 등록 ADR 번호 D-352 → D-361
+
+- 변경: main에 다른 D-352(외부 장비 공통 패턴)가 먼저 착지해, main 병합 때 로봇 화면 코드 등록 ADR을 D-361로 옮겼다. 코드 주석·시험·계약 문서·배포 문서의 D-352 표기를 D-361로 바꿨고 ADR 본문에 옮긴 까닭을 적었다. 이 항목보다 앞선 로그의 "D-352 등록"은 D-361을 가리킨다(로그는 고치지 않는다). fleet 크기 판정은 main의 목표 증거 저장소가 합쳐진 13187줄로 다시 판정했다.
+- 증거: 아래 병합 커밋의 Fleet·node·`test/` 실행.
+- gate 변화: 없음.
+
+## 2026-09-30 · uncommitted · fix(test): 목표 증거 등록부 시험의 변수명이 시크릿 스캐너에 걸리지 않게
+
+- 변경: test_goal_evidence_registry.py의 지역변수 duplicate_secret을 duplicate_token으로 개명. secret_scan의 자격증명 패턴이 "secret" 이름에 리터럴을 대입하는 줄을 잡는 설계라, src/ 아래 시험 파일은 test/ 예외 없이 전부 검사 대상이다 — 값은 설정 파일 경로일 뿐이지만 이름이 스캐너 어휘와 겹쳤다.
+- 증거: test_release_boundary_guards 전체 통과(시크릿 0건), test_goal_evidence_registry 통과 (2026-09-30 Windows).
+- gate 변화: 없음.
+- 결정: 없음.
+- 교훈: 시트/피스처 이름에 secret·api_token·psk 계열 단어를 쓰지 않는다 — 스캐너는 의도가 아니라 모양을 본다.
+
+## 2026-09-30 · uncommitted · fix(console): 로봇 등록 S1의 공용 컨트롤 계약 준수 — kind·타이포 토큰·confirm 핀
+
+- 변경: enrollment 머지가 남긴 web_common 계약 위반 3건을 바로잡았다. (1) `enroll-submit` 버튼에 `kind="primary"` 선언(D-194 — 종류는 표시에 적는다), (2) `.enroll-alarm`의 `font-weight: 600` 리터럴을 `var(--weight-label)` 토큰으로(D-300), (3) enrollment.js의 로봇 제거 confirm(토큰 회수 — 불가역)을 D-218 PINNED_CONFIRMS에 핀과 함께 등록.
+- 증거: web_common + dialog 계약 100 passed, fleet 전체 849 passed/6 skipped (2026-09-30 Windows). 수정 전 각 1건씩 적색이었다.
+- gate 변화: 없음.
+- 결정: 등록 제거는 불가역이므로 confirm 문법을 유지한다 — 핀 갱신이 그 리뷰의 자리다(D-218 설계 그대로).
+- 교훈: 표면을 고치는 회차는 `python -m pytest src/hmi/web_common/test -q`를 같은 커밋에 돌린다 — 공용 컨트롤 계약은 소유 모듈 시험만으로는 안 보인다.
+
+## 2026-09-30 · uncommitted · fleet-console: 카메라 칸 배치 고침과 D-354 경기장 제안 검토
+- 변경: ① 62rem 이상에서 지도 칸(main 폭 43%)을 다시 1.15:0.85로 나누던 규칙 때문에 1440px에서 관제 카메라가 약 240px로 좁아져 제목이 "관제 카 / 메라"로 줄바꿈되고 영상이 작았다. 이 분할은 main의 778bbd31·016df3ab부터 있었고 9825b2f7은 사이트 캔버스 크기만 바꿨다. 이제 110rem 미만에서는 카메라를 지도 아래에 쌓고, 110rem 이상에서만 1:1로 옆에 둔다(1920×1080 D-201 무스크롤 유지). ② 새 `web/field-layers.js`(순수 계산)·`web/field-view.js`: "경기장 자동 찾기"가 frame과 같은 lease로 Vision `field-proposal`을 읽어 D-318 겹침에 점선 제안으로 보이고, "제안 수락"을 눌러야 브라우저 로컬 모서리 초안이 된다. 캔버스가 제안·확인 모서리로 원본을 위에서 본 모양으로 펴고 경기장 밖을 가린다. `/api/fleet/site-map` 설정 W×H 비와 검출 비가 10% 넘게 다르거나 설정이 없으면 빈 지도 대신 안내를 띄운다(설정은 고치지 않음). 운용자 W×H(m)는 source별 localStorage에만 두고 축척·격자에 쓴다. 레이어 토글 6개(원본 카메라·보정 경기장·사이트 사각형·격자·카메라 관측·CORE 로봇 위치)는 localStorage에 try/catch로 저장한다. `CONSOLE_ASSETS`에 두 모듈 추가. 인라인 스크립트 없음. Fleet은 영상·제안을 중계하지 않는다.
+- 증거: `python -m pytest src/site/fleet/test -q` 692 passed/5 skipped, 2 failed(`test_task_contract_docs.py` 기존 실패); `node --test src/site/fleet/test/web/*.test.mjs` 15 passed. 브라우저 회귀(`ROSY_RUN_BROWSER_TESTS=1`) 29 passed + 시간 초과 2건 재실행 통과. LOCAL 벤치(저장된 실제 프레임·합성 경기장 프레임 재생) 스크린샷은 `private/validation/2026-09-30-console-field-autodetect/`.
+- gate 변화: 없음. SOURCE/LOCAL만. DEVICE(설치 폰 실시간)·FIELD 미실행.
+
+## 2026-09-30 · uncommitted · fix(fleet-console): 태블릿 헤더 세 줄, 보정 뷰 재계산 줄이기, 숨긴 레이어 안내 (D-354 리뷰)
+
+- 변경: 40–70rem에서 헤더를 상태 / 토큰·접속 / 폭 전체 전체 정지 세 줄로 나눴다(실제 Lenovo 태블릿 세로 약 800×1333 CSS px에서 토큰 입력이 워드마크를 덮고 "접속"·"전체 정지"가 한 글자씩 꺾였다). 토큰·접속·전체 정지는 70rem 이하에서 48 px 이상이고 꺾이지 않는다. 1920×1080(110rem 이상)에서는 원본과 보정 경기장을 카메라 칸 안에 나란히 두어 D-201 무스크롤을 지킨다. 보정 뷰는 프레임·모서리·크기가 바뀔 때만 다시 펴고, 레이어를 끄면 계산하지 않는다. 레이어가 하나라도 꺼지면 지도 머리에 "숨긴 레이어 n개"를 보인다. 저장 실패는 제안 상태 줄 대신 별도 줄에 알린다. 제안 422는 "프레임을 해석하지 못했습니다"로 보인다. W×H 미설정 안내가 빈 지도 안내를 가리는 규칙은 사이트 설정이 없는(`NO_SITE_MAP`) 상태로 좁혔다. API Ref v1.60에 제안 경로를 올렸다.
+- 증거: `python -m pytest src/site/fleet/test -q` 748 passed/5 skipped. `node --test` 명세별 2·8·5 passed. Playwright(모의 API, 보정 뷰 보임)로 800×1333·1024×768·1280·1440·1920·390·320에서 워드마크·토큰·접속·역할·연결·시계·전체 정지 상자 겹침 없음, 가로 넘침 0, 전체 정지 한 줄. 1920×1080 문서 넘침 0(보정 뷰 보임·숨김 둘 다). 스크린샷은 `private/validation/2026-09-30-console-field-autodetect/`. 실제 태블릿 재확인은 하지 않았다.
+- gate 변화: 없음. SOURCE/LOCAL만.
+
+## 2026-09-30 · uncommitted · docs: 경기장 자동 검출 ADR 번호 D-354 → D-360
+
+- 변경: main에 다른 D-354(mDNS 서비스 발견)가 먼저 착지해, main 병합 때 경기장 자동 검출 제안 ADR을 D-360으로 옮겼다. 코드 주석·시험·API Ref의 D-354 표기를 D-360으로 바꿨고 ADR 본문에 까닭을 적었다. 이 항목보다 앞선 로그의 "D-354"(경기장 제안)는 D-360을 가리킨다(로그는 고치지 않는다).
+- 증거: 병합 커밋의 overhead·Fleet·node 실행.
+- gate 변화: 없음.
+
+## 2026-09-30 · uncommitted · fix(console): 실제 태블릿 점검 — 꺼진 기능 404 폴링, 카메라 배지, 태블릿 폭 줄바꿈
+
+- 변경: ① 새 `web/poll-gate.js`(순수). 라우트가 없는 404(`detail.code` 없음)를 "이 Fleet에 기능 미설정"으로 보고 `dispatch-control`(1 s)·`discovery`(5 s)·`enrollment/robots`(5 s) 폴링을 다음 로그인·토큰 저장까지 멈춘다. 발행 제어는 "발행 제어 미설정", 발견은 "발견 미설정"으로 오류가 아닌 상태를 보인다. `/api/fleet/map`의 `NO_MAP`은 기능 미설정이 아니라 "지도를 내는 로봇이 아직 없음"이라 멈추지 않고 30 s 간격으로만 다시 묻는다(로봇이 나중에 지도를 낼 수 있다). 5xx·네트워크·다른 코드의 404는 일시 실패로 다음 주기에 다시 묻는다. `CONSOLE_ASSETS`에 추가. ② `vision-view.js`의 `frameBadge()`(순수): 프레임 응답을 live / 지연(age > 3 s) / 정지(stale 헤더) / 권한 없음(401·403, lease 버림) / 수신 대기로 나눈다. 배지를 decode 뒤가 아니라 영상과 같은 순간에 바꾸고, 진행 중 요청이 있을 때 `refreshSources()`가 "인증 대기"를 그려 보이던 영상을 지우던 경로를 없앴다. ③ `.formation-form input { width: 100% }`가 체크박스까지 늘려 `rosy-pinky-8kcn`을 낱자로 접었다 — 체크박스는 auto, id는 줄임표 + `title`. 대형 버튼은 글자째 꺾지 않고 버튼째 다음 줄로 내린다. ④ 62–110rem에서 등록 로봇 패널 왼쪽 칸이 목록 아래로 비고 대형·신호등·이벤트가 오른쪽 좁은 칸에 쌓여 패널 밖으로 넘쳤다 — 왼쪽 목록 → 대형, 오른쪽 발견 → 신호등 → 이벤트로 나누고 넘침만 만들던 패널 `max-height`를 뺐다. `index.html`은 고치지 않았다.
+- 증거: `python -m pytest src/site/fleet/test -q` 852 passed/6 skipped; `node --test` poll-gate 6·vision-badge 5 포함 34 passed. 실제 Lenovo 태블릿(CDP, 1333×760 CSS px, 벤치 Fleet를 이 브랜치로 기동): 로그인 10 s 뒤 1분 동안 Fleet 404가 87회/분(dispatch-control 61·enrollment 12·discovery 12·map 12) → 2회/분(map만). Vision `sources/s21/frame` 404 41회/분은 폰 카메라가 꺼져 프레임이 없는 상태로 범위 밖이다. 포함 로봇 줄 높이 42 → 22 px(한 줄). headless 1333×680·800×1333·1920×1080·390·320에서 가로 넘침 0, 1920×1080 문서 넘침 0(D-201). 브라우저 회귀 29 passed; `test_the_console_renders_what_swarm_control_says`는 main(de4504e8)에서도 같은 시간 초과로 실패한다. 캡처·네트워크 로그는 `private/validation/2026-09-30-device-check/`. 폰 카메라는 과열로 켜지 않아 배지의 live 상태는 실기에서 보지 못했다(node 시험만).
+- gate 변화: 없음. SOURCE/LOCAL + 실제 태블릿 화면 확인. FIELD 미실행.
+- 교훈: 폴러는 "기능 없음(라우트 없음 404)"과 "아직 없음(코드 있는 404)"과 "일시 실패"를 나눠야 한다 — 셋을 같은 catch로 받으면 꺼진 기능이 매 초 404를 쌓는다.
+## 2026-09-30 · uncommitted · feat(fleet): fence ER2 feedback successor candidates
+- Change: added one-transaction stop/generation/Mission/action/attempt/event/observation fencing before ER2 candidate visibility; candidates are idempotent by feedback turn, carry source correlation, and resolve only into a separately linked successor Mission. Stop or event drift before resolution rejects the candidate. The async tool dispatcher uses an injected post-action observation source and returns unavailable if it is not configured.
+- Evidence: Fleet plus foundation host suites 995 passed, 6 skipped; ER2 focused contract/doc checks 71 passed; changed-file flake8 clean. Full Fleet flake8 still reports unrelated existing findings in hub, console, and older tests.
+- Gate: SOURCE/LOCAL only. No production trusted Vision reader, provider worker, credentials, policy dispatch, ROS, device, or field enablement.
+## 2026-09-30 · uncommitted · fix(fleet): let Fleet choose the fresh post-action frame
+- Change: removed the model-supplied observation ID from the `propose_replan` tool schema. Fleet now requests a trusted frame after the terminal Action timestamp, binds its concrete ID/digest to the typed ER 2 selector response, and retains the same atomic visibility fence. Camera image egress still requires a separate explicit data-class approval.
+- Evidence: Fleet plus foundation host suites 995 passed, 6 skipped; ER2 path suites 74 passed; changed-file flake8 clean.
+- Gate: no trusted production Vision reader or app worker is configured; replan stays unavailable unless both are injected and approved.
+## 2026-09-30 · uncommitted · chore(structure): re-judge Fleet size after ER2 candidate fencing
+- Change: updated the repository Fleet package size verdict from 14,260 to 14,616 lines; the existing split decision and unscheduled B2 plan remain in force.
+- Evidence: atomic candidate fencing and linked-successor tests are included in the re-judged package line count; `src/site/fleet/test` plus repository `test` passed 3,675 tests with 188 skipped, and the Fleet feedback/API-focused set passed 65 tests.
+- Gate: SOURCE/LOCAL only; the production post-action Vision reader and provider worker remain unconfigured.
+## 2026-09-30 · uncommitted · feat(fleet): wire optional ER2 outbox consumer
+- Change: added atomic oldest-pending outbox claims and `MissionModelTurnWorker.consume_next()`. `create_app` starts its consumer only for an explicitly injected worker sharing the Fleet SQLite database.
+- Evidence: tests cover event→outbox→worker consumption, oldest-first unique claims, default-disabled worker state, and database-path mismatch rejection.
+- Gate: the default CLI still has no provider worker, credentials, egress approval, or trusted post-action Vision reader.
+## 2026-09-30 · uncommitted · feat(fleet): add bounded trusted ER2 post-action Vision reader
+- Change: implemented an optional scoped Vision frame source with fixed workcell/source/camera/frame/calibration mapping, short-lived lease, bounded no-store JPEG validation, and post-Action freshness check. `create_app` wires and closes it only alongside an explicitly injected shared-database model-turn worker.
+- Evidence: focused contracts and Fleet suites passed 119 tests, including malformed JPEG rejection and app lifecycle wiring. Default app/CLI has no worker, provider credentials, or camera/Mission egress approval.
+- Gate: SOURCE/LOCAL only. Runtime activation, provider data policy, ROS/device operation, and physical acceptance remain open.
+## 2026-09-30 · uncommitted · fix(fleet): enforce the ER2 feedback deadline across tool dispatch
+- Change: enforce the named absolute turn deadline during both provider posts and Fleet tool dispatch; offload synchronous read tools and cancel async replan dispatch at the remaining turn budget. Add exact numeric-boundary tests for context, tool results, replay/response/image sizes, post-action freshness, cost, step count, and function-call count.
+- Evidence: feedback contracts, dispatcher, outbox, atomic candidate fence, API, Vision, and overhead suites passed 136 tests. A new deadline regression failed before the fix and passed after it.
+- Gate: SOURCE/LOCAL only; provider credentials, Mission policy dispatch, ROS, device operation, and deployment remain disabled.
+## 2026-09-30 · uncommitted · fix(fleet): recheck ER2 egress fence after Vision capture
+- Change: validate full workcell/task/data-class egress policy before acquiring camera data. After capture, reread Mission/stop/event eligibility and compare the observation envelope to the trusted turn before sending the image to ER 2.
+- Evidence: regression test changes Mission eligibility during frame acquisition and proves no selector-provider call or candidate write occurs; the allowlisted replan path still succeeds with valid scope and approval.
+- Gate: SOURCE/LOCAL only; credentials, policy dispatch, ROS, devices, physical actuation, and deployment remain disabled.
+## 2026-09-30 · uncommitted · docs(validation): record final ER2 feedback audit gates
+- Change: recorded final regression evidence after numeric-boundary, total-turn deadline, and post-frame egress-fence hardening.
+- Evidence: focused ER2/Mission/Vision/API/Overhead host suites 137 passed; documentation gate 80 passed; changed-file flake8 clean; harness lint 0 errors/12 pre-existing freshness warnings.
+- Gate: SOURCE/LOCAL only. Provider, Mission dispatch, ROS/device, physical actuation, and deployment remain disabled.

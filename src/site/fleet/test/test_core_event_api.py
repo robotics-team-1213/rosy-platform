@@ -14,6 +14,12 @@ from fleet.swarm.robots import RobotEndpoint
 from fakes import run
 
 
+def _operator_rearm(task_service):
+    state = task_service.store.dispatch_control()
+    task_service.store.rearm_dispatch(
+        expected_generation=state["generation"], actor_id="test-operator")
+
+
 def test_authenticated_event_history_survives_fleet_app_restart(tmp_path):
     endpoint = RobotEndpoint("rosy_01", "http://robot.local", "rest-token",
                              fleet_pairing_token="agent-token")
@@ -85,6 +91,7 @@ def test_paired_core_result_event_projects_into_its_fleet_task(tmp_path):
                              fleet_pairing_token="agent-token")
     task_service = FleetTaskService(FleetTaskStore(tmp_path / "tasks.sqlite3"),
                                     robot_ids={"rosy_01"})
+    _operator_rearm(task_service)
     queued = run(task_service.submit_navigation(
         robot_id="rosy_01", x=1.0, y=2.0, source="operator",
         actor_id="site-console", request_key="project-result-1",
@@ -126,6 +133,7 @@ def test_paired_core_result_event_projects_into_its_fleet_task(tmp_path):
 def test_durable_event_projection_failure_recovers_after_hub_restart(tmp_path):
     database = tmp_path / "fleet.sqlite3"
     task_service = FleetTaskService(FleetTaskStore(database), robot_ids={"rosy_01"})
+    _operator_rearm(task_service)
     queued = run(task_service.submit_navigation(
         robot_id="rosy_01", x=1.0, y=2.0, source="operator",
         actor_id="site-console", request_key="recover-result-1",

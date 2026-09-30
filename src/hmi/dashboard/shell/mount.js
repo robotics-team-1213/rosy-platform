@@ -51,6 +51,11 @@ export async function mountPanels(root, panels, contextFor, actionGroups = []) {
     heading.className = "sr-only";
     heading.textContent = panel.title;
     section.append(heading);
+    // 모듈 import 동안 빈 카드 대신 로딩 상태를 보인다 — 느린 네트워크에서
+    // "테두리만 있는 빈 상자"는 정상으로 그리지 않는다는 Law 0의 로딩 번역이다.
+    const loading = document.createElement("ui-empty");
+    loading.textContent = `${panel.title} 패널을 불러오는 중입니다.`;
+    section.append(loading);
     const container = panel.slot === "main" ? document.createElement("div") : section;
     if (container !== section) {
       container.className = "procedure-panel";
@@ -62,6 +67,7 @@ export async function mountPanels(root, panels, contextFor, actionGroups = []) {
     handles.push(handle);
     try {
       const module = await import(panel.module);
+      loading.remove();
       const mounted = module.mount(section, ctx);
       handle.beforeHide = typeof mounted?.beforeHide === "function" ? mounted.beforeHide : null;
       handle.unmount = typeof mounted === "function" ? mounted

@@ -96,6 +96,15 @@ KNOWN_LEGACY_HEADINGS = frozenset({
     "## 2026-09-26 \u00b7 uncommitted \u00b7 docs(adr): propose D-282 per-hardware ROS ownership",
     # Preserve both append-only versions created by the concurrent log merge.
     "## 2026-09-26 \u00b7 uncommitted \u00b7 OMX \ub2e8\uc77c \uc18c\uc720\uc790 ROS-SIM \ud6c4\uc18d\uacfc \uc774\uc804 \uc808\ucc28",
+    # The T2/T3 entry was committed (fbeffae9) with a commit-range token in
+    # the hash slot; the history gate forbids reforming it in place, so the
+    # exact heading is excused and the canonical entry above records the work.
+    "## 2026-09-29 · 5545ce37..uncommitted · feat(fleet): land policy evidence config and store (T2/T3)",
+    # Two pilot entries were committed (72802f30, 35efb5ba) with two hashes in the
+    # hash slot and without the evidence/gate labels; the history gate forbids
+    # reforming them, and their evidence and gate lines live in the entries' prose.
+    "## 2026-09-29 · 72802f30·895786cf · feat: 실물 차선 자동 주행(D-349 보조 자율)",
+    "## 2026-09-29 · 35efb5ba · feat(core): 차선 추종 앞 물체 정지(LiDAR, D-349 §11)",
 })
 
 GENERATED_MARK = (
@@ -311,6 +320,8 @@ class AdrLog:
     index: dict[str, tuple[str, str]]
     bodies: dict[str, str]
     duplicates: tuple[str, ...] = ()
+    #: D-n appearing in more than one index row (D-346: dict collapse hid these).
+    index_duplicates: tuple[str, ...] = ()
 
 
 def parse_adr_log(text: str, adr_dir: Path | None = None) -> AdrLog:
@@ -320,18 +331,25 @@ def parse_adr_log(text: str, adr_dir: Path | None = None) -> AdrLog:
             text += "\n\n" + _normalize(p.read_text(encoding="utf-8"))
     first_body = ADR_BODY_HEADING.search(text)
     index_text = text[: first_body.start()] if first_body else text
-    index = {m.group(1): (m.group(2).strip(), m.group(3).strip()) for m in ADR_INDEX_ROW.finditer(index_text)}
+    index: dict[str, tuple[str, str]] = {}
+    index_duplicates: list[str] = []
+    for m in ADR_INDEX_ROW.finditer(index_text):
+        if m.group(1) in index:
+            index_duplicates.append(m.group(1))
+        index[m.group(1)] = (m.group(2).strip(), m.group(3).strip())
     bodies: dict[str, str] = {}
     duplicates: list[str] = []
     for match in ADR_BODY_HEADING.finditer(text):
         if match.group(1) in bodies:
             duplicates.append(match.group(1))
         bodies[match.group(1)] = match.group(2).strip()
-    return AdrLog(index=index, bodies=bodies, duplicates=tuple(duplicates))
+    return AdrLog(index=index, bodies=bodies, duplicates=tuple(duplicates),
+                  index_duplicates=tuple(index_duplicates))
 
 
 def validate_adr_log(adr: AdrLog, gaps: dict[str, str]) -> list[str]:
     errors = [f"{adr_id}: duplicate body section" for adr_id in adr.duplicates]
+    errors += [f"{adr_id}: duplicate index row" for adr_id in adr.index_duplicates]
     for adr_id in sorted(set(adr.bodies) - set(adr.index), key=_adr_number):
         errors.append(f"{adr_id}: body section missing from index")
     for adr_id in sorted(set(adr.index) - set(adr.bodies), key=_adr_number):
@@ -546,6 +564,17 @@ def find_conflict_markers(text: str) -> list[int]:
     return [number for number, line in enumerate(_normalize(text).split("\n"), start=1) if CONFLICT_MARKER.match(line)]
 
 
+def find_mojibake(text: str) -> list[int]:
+    """1-based line numbers with '??' runs — a codepage ate the Korean (D-346).
+
+    PowerShell redirects write the active console codepage, so a Korean title
+    committed through ``>`` lands as literal question marks. Calibrated on the
+    D-336 and D-140 ADR index rows this exact failure produced.
+    """
+    return [number for number, line in enumerate(text.split("\n"), start=1)
+            if "??" in line]
+
+
 def _history_refs(repo: Path) -> tuple[list[str], str | None]:
     """Refs whose committed logs must survive: the CI base, the merge base, and HEAD.
 
@@ -591,6 +620,11 @@ def lint(repo: Path) -> tuple[list[str], list[str]]:
         lines = find_conflict_markers(text)
         if lines:
             errors.append(f"{rel}: conflict marker at line {', '.join(map(str, lines))}")
+        mojibake = find_mojibake(text)
+        if mojibake:
+            errors.append(
+                f"{rel}: suspicious encoding ('??' runs) at line "
+                f"{', '.join(map(str, mojibake[:5]))}")
 
     refs, note = _history_refs(repo)
     if note:

@@ -36,6 +36,13 @@ def test_site_compose_uses_a_distinct_core_registry_credential():
     assert '"--token-env", "ROSY_SITE_REGISTRY_TOKEN"' in fleet_dockerfile
 
 
+def test_vision_container_uses_python_handled_signal_for_clean_shutdown():
+    compose = (ROOT / "deploy/site/compose.yaml").read_text(encoding="utf-8")
+    vision = compose.split("  vision:\n", 1)[1].split("  proxy:\n", 1)[0]
+
+    assert "\n    stop_signal: SIGINT\n" in vision
+
+
 def test_site_image_bundles_guarded_sqlite_backup_and_restore_tool():
     fleet_dockerfile = (ROOT / "deploy/site/Dockerfile.fleet").read_text(encoding="utf-8")
     utility = (ROOT / "deploy/site/site_db.py").read_text(encoding="utf-8")

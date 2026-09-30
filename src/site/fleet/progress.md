@@ -2,7 +2,7 @@
 module: fleet
 logical_modules: [M07, M11]
 owner: FLEET
-last_verified: { commit: "c5e87977", date: 2026-09-28 }
+last_verified: { commit: "bed604ef", date: 2026-09-30 }
 gates:
   SOURCE:
     state: GO
@@ -10,8 +10,8 @@ gates:
     cmd: "python3 -m pytest src/fleet/test/test_boundaries.py -q"
   LOCAL:
     state: GO
-    evidence: "Fleet suite 544 passed/5 skipped; browser/dialog suite 33 passed. Docker WSS synthetic frame -> signed lease -> Vision OpenCV preview returned sequence/age with X-Frame-Rectified=true; 1920/390/320 px captures have zero page errors/horizontal overflow. SOURCE/LOCAL only; physical/site/calibrated acceptance remains open"
-    cmd: "python3 -m pytest src/fleet/test -q"
+    evidence: "Fleet suite 676 passed/5 skipped including ER2 proposal/admission, durable Mission Action dispatcher with persisted stable grant and restart GetAction reconciliation, independent goal evidence provenance, and SQLite WAL/index contracts. API web 70 passed/13 skipped, OMX adapter 85 passed/3 skipped, foundation 102 passed. Synthetic indexed Mission queries improved by three orders of magnitude locally; this is not target-device evidence. D-348 producer registry, token-scoped evidence ingress, SQLite idempotency, terminal-action verification, and grace-timeout HOLD are implemented and covered by host tests. Dispatcher remains explicit opt-in and automatic policy dispatch remains disabled; no live observation producer, configured OMX service/driver, ROS-SIM, or physical stop/goal proof. SOURCE/LOCAL only."
+    cmd: "python3 -m pytest src/site/fleet/test -q"
   ROS-SIM:
     state: HOLD
     blocker: "D-87: 현재 트리의 colcon install/setup.bash가 없다. 2026-09-17 WSL Task 14 로그는 설계 입력이며 GO가 아니다 (D-89)"
@@ -22,8 +22,11 @@ gates:
     state: PARKED
   FIELD:
     state: PARKED
-adrs: [D-5, D-10, D-12, D-18, D-20, D-21, D-30, D-31, D-59, D-60, D-90, D-93, D-106, D-114, D-116, D-157, D-159, D-269, D-288, D-289, D-290, D-291, D-293, D-300, D-306, D-316, D-318]
+adrs: [D-5, D-10, D-12, D-18, D-20, D-21, D-30, D-31, D-59, D-60, D-90, D-93, D-106, D-114, D-116, D-157, D-159, D-269, D-288, D-289, D-290, D-291, D-293, D-300, D-306, D-316, D-318, D-331, D-333, D-334, D-336, D-268]
 plans:
+  - docs/plans/2026-09-29-er2-mission-action-contract-closure.md
+  - docs/plans/2026-09-29-fleet-mission-control-arbitration-implementation.md
+  - docs/plans/2026-09-29-policy-evidence-contract.md
   - docs/plans/2026-09-14-site-middleware-role-fabric-design.md
   - docs/plans/2026-09-14-site-middleware-role-fabric.md
   - docs/plans/2026-09-08-swarm-formation-slice-design.md
@@ -34,6 +37,7 @@ plans:
   - docs/plans/2026-09-22-fleet-signals-integration.md
   - docs/plans/2026-09-27-uiux-surface-closure.md
   - docs/plans/2026-09-28-site-camera-preview-rectification.md
+  - docs/plans/2026-09-29-er2-semantic-actions-mission-implementation.md
 ---
 ## 현재 상태 (2026-09-27)
 

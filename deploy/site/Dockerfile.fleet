@@ -19,7 +19,7 @@ COPY deploy/site/secret_exec.py /opt/rosy/secret_exec.py
 COPY deploy/site/site_db.py /opt/rosy/site_db.py
 COPY src/site/fleet/ /opt/rosy/src/site/fleet/
 COPY src/contracts/foundation/core_common/ /opt/rosy/src/contracts/foundation/core_common/
-COPY src/hmi/web/ /opt/rosy/web-common/
+COPY src/hmi/web_common/ /opt/rosy/web-common/
 
 RUN python3 -m venv /opt/rosy-venv \
     && /opt/rosy-venv/bin/pip install --no-cache-dir -r /opt/rosy/requirements.txt \

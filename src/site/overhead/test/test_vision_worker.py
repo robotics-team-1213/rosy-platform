@@ -17,10 +17,14 @@ def _camera():
 class _Ingest:
     def __init__(self, frame):
         self.frame = frame
+        self.reports = []
 
     def latest_frame(self, source_id):
         assert source_id == "ceiling_north"
         return self.frame
+
+    def report_markers(self, source_id, corners_seen, robots_seen):
+        self.reports.append((source_id, list(corners_seen), list(robots_seen)))
 
 
 class _Publisher:
@@ -99,3 +103,17 @@ def test_worker_run_loop_stops_after_signal_and_publishes_latest_frame():
         return publisher.sent
 
     assert [row.seq for row in asyncio.run(run())] == [1]
+
+
+def test_worker_reports_only_configured_marker_ids_for_installer_status():
+    ingest = _Ingest(_frame())
+    seen = {k: v for k, v in _markers().items() if k != 32}
+    seen[45] = seen[30]  # an unconfigured marker is never reported
+    worker = VisionWorker(
+        source_id="ceiling_north", ingest=ingest, camera=_camera(),
+        publisher=_Publisher(), detector=lambda _jpeg: seen, clock=lambda: 100.0,
+    )
+
+    asyncio.run(worker.process_latest())
+
+    assert ingest.reports == [("ceiling_north", [30, 31, 33], ["rosy_01"])]

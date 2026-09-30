@@ -26,6 +26,7 @@
 | D-116 | 관제 양보는 출발 로봇과 겹친 pose를 길로 보지 않는다 |
 | D-157 | Shared Headless UI Package (Monorepo Web Decoupling) |
 | D-159 | State Summary Visibility: Management by Exception (Law 0) |
+| D-268 | Fleet 자동 작업은 sighting이 아닌 별도 수용된 정책 증거만 사용한다 |
 | D-269 | 장비는 역할별 계약으로 사이트 서버에 접속하고 DDS는 CORE 안에 둔다 |
 | D-288 | Pinky Pro Pi 5 카메라 사용자 공간은 공식 소스를 고정해 네이티브 이미지에서 빌드한다 |
 | D-289 | Role console entry, action groups, and map readout |
@@ -36,6 +37,10 @@
 | D-306 | 화면별 책임과 UI/UX 개선 완료 기준 |
 | D-316 | Pinky Fleet task의 dispatch attempt ID를 CORE navigation 결과까지 연결한다 |
 | D-318 | Site Fleet 관제 카메라 미리보기에 실측 렌즈·평면 보정을 지원한다 |
+| D-331 | Gemini Robotics ER 2를 상태 비저장·제안 전용 Fleet provider로 연결한다 |
+| D-333 | ER 2 조작 후보의 Mission 승인, 장치 Action 수락, 정지와 목표 증거를 분리한다 |
+| D-334 | ER 2의 도구 목록과 진행 조회를 Fleet 원장 경계에 둔다 |
+| D-336 | Fleet와 OMX 제어 owner 사이 첫 연결은 같은 호스트의 local IPC로 제한한다 |
 
 ## 계획·결과 문서
 
@@ -49,6 +54,10 @@
 - [2026-09-22-fleet-signals-integration.md](../../../docs/plans/2026-09-22-fleet-signals-integration.md)
 - [2026-09-27-uiux-surface-closure.md](../../../docs/plans/2026-09-27-uiux-surface-closure.md)
 - [2026-09-28-site-camera-preview-rectification.md](../../../docs/plans/2026-09-28-site-camera-preview-rectification.md)
+- [2026-09-29-er2-mission-action-contract-closure.md](../../../docs/plans/2026-09-29-er2-mission-action-contract-closure.md)
+- [2026-09-29-er2-semantic-actions-mission-implementation.md](../../../docs/plans/2026-09-29-er2-semantic-actions-mission-implementation.md)
+- [2026-09-29-fleet-mission-control-arbitration-implementation.md](../../../docs/plans/2026-09-29-fleet-mission-control-arbitration-implementation.md)
+- [2026-09-29-policy-evidence-contract.md](../../../docs/plans/2026-09-29-policy-evidence-contract.md)
 
 ## 교훈 (docs/solutions)
 
@@ -60,8 +69,8 @@
 
 ## 최근 기록
 
-- 2026-09-28 · 2ec41b9a · fix(fleet-ui): preserve camera corner keyboard focus
-- 2026-09-28 · 9825da0b · feat(fleet-ui): adjust camera floor corners directly
-- 2026-09-28 · uncommitted · add per-camera preview rectification controls
-- 2026-09-28 · 016df3ab · fix(fleet-ui): fit camera preview and clarify sections
-- 2026-09-28 · uncommitted · verify final canceled-attempt projection
+- 2026-09-30 · uncommitted · docs(validation): record final ER2 feedback audit gates
+- 2026-09-30 · uncommitted · fix(fleet): recheck ER2 egress fence after Vision capture
+- 2026-09-30 · uncommitted · fix(fleet): enforce the ER2 feedback deadline across tool dispatch
+- 2026-09-30 · uncommitted · feat(fleet): add bounded trusted ER2 post-action Vision reader
+- 2026-09-30 · uncommitted · feat(fleet): wire optional ER2 outbox consumer

@@ -30,6 +30,6 @@
 
 - 2026-09-30 · uncommitted · docs(adr): pilot ADR 번호를 main 과 겹치지 않게 다시 매김
 - 2026-09-30 · uncommitted · feat(sim): camera_hfov and cam_mount_z xacro args (D-353 5)
+- 2026-09-29 · uncommitted · feat(sim): select Isaac xacro backend
 - 2026-09-22 · uncommitted · chore: update ARTIFACT blocker to Native Image Builder (D-164)
 - 2026-09-21 · uncommitted · fix(sim): use stable primitive drive collisions
-- 2026-09-16 · uncommitted · docs(harness): stop counting the meshes dockerignore check as source evidence

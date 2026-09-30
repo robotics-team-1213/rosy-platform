@@ -7,6 +7,8 @@ from contextlib import closing
 from datetime import datetime, timezone
 from typing import Protocol
 
+from fleet.server.dispatch_admission import release as release_dispatch_claims
+
 
 class _TaskStore(Protocol):
     def _connect(self) -> sqlite3.Connection: ...
@@ -91,6 +93,8 @@ def project_core_event(store: _TaskStore, *, robot_id: str, event_id: str, seq: 
             if terminal:
                 connection.execute("DELETE FROM fleet_robot_reservations WHERE task_id=?",
                                    (task["task_id"],))
+                release_dispatch_claims(connection, owner_kind="task",
+                                         owner_id=task["task_id"])
             task = connection.execute("SELECT * FROM fleet_tasks WHERE task_id=?",
                                       (task["task_id"],)).fetchone()
         connection.commit()

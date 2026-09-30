@@ -5,7 +5,7 @@
 
 ## Purpose
 
-Simulation assets and launches: URDF/xacro description and Gazebo worlds with multi-robot launch (`gz_multi.launch.py`). `gz_sim` CMake no-ops on aarch64.
+Simulation assets and launches: shared URDF/xacro description, Gazebo worlds with multi-robot launch (`gz_multi.launch.py`), and an Isaac Sim integration area. `gz_sim` CMake no-ops on aarch64.
 
 ## Key Files
 
@@ -17,12 +17,15 @@ None at this level. Each package directory has its own `AGENTS.md`.
 |-----------|---------|
 | `description/` | URDF/xacro, meshes, RViz view (see `description/AGENTS.md`) |
 | `gz_sim/` | Gazebo worlds, multi-robot launch, lamp plugin, launch tests (see `gz_sim/AGENTS.md`) |
+| `isaac_sim/` | Isaac Sim 6.1 URDF import and single-robot ROS 2 graph (see `isaac_sim/AGENTS.md`) |
 
 ## For AI Agents
 
 ### Working In This Directory
 
 - `gz_sim` includes `description` and `navigation` launches.
+- Keep Isaac Sim scenes and adapters under `isaac_sim/`; reuse `description/` as the robot model source where practical. Do not copy Gazebo-specific plugins into Isaac Sim.
+- D-98's deferred `src/site/games/games/isaac/` soccer training environment is a separate scope. This directory does not enable that environment.
 - Multi-instance launch tests self-skip when `ros_gz_sim` share is absent (CI shows them as skip).
 
 ### Testing Requirements

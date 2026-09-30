@@ -6,6 +6,7 @@ live inside the rclpy node, where host pytest could only grep for it.
 """
 import http.server
 import json
+import os
 import threading
 import time
 import urllib.error
@@ -14,7 +15,11 @@ import urllib.request
 import pytest
 
 from control import web_state
-from control.web_http import GOAL_BOUND, _parse_xy, make_api_handler, make_page_handler
+from control.web_http import (
+    GOAL_BOUND, _parse_xy, make_api_handler, make_page_handler, page_origin_allowed, shared_assets,
+    web_common_dir)
+
+PAGE_PORT = 28181
 
 
 class FakeNode:
@@ -38,15 +43,17 @@ def backend():
     with web_state.LOCK:
         web_state.STATE.clear()
     node = FakeNode()
-    server = http.server.ThreadingHTTPServer(('127.0.0.1', 0), make_api_handler(node, b'<html/>'))
+    server = http.server.ThreadingHTTPServer(
+        ('127.0.0.1', 0), make_api_handler(node, b'<html/>', page_port=PAGE_PORT))
     threading.Thread(target=server.serve_forever, daemon=True).start()
     yield node, f'http://127.0.0.1:{server.server_address[1]}'
     server.shutdown()
     server.server_close()
 
 
-def post(base, path, body):
-    request = urllib.request.Request(base + path, data=body.encode(), method='POST')
+def post(base, path, body, origin=None):
+    headers = {} if origin is None else {'Origin': origin}
+    request = urllib.request.Request(base + path, data=body.encode(), method='POST', headers=headers)
     try:
         with urllib.request.urlopen(request, timeout=5) as response:
             return response.status
@@ -141,3 +148,60 @@ def test_page_handler_serves_no_api():
 ])
 def test_parse_xy(text, expected):
     assert _parse_xy(text) == expected
+
+
+def test_page_handler_serves_web_common_manifest_assets():
+    server = http.server.ThreadingHTTPServer(('127.0.0.1', 0), make_page_handler(b'<html/>'))
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    base = f'http://127.0.0.1:{server.server_address[1]}'
+    try:
+        with urllib.request.urlopen(base + '/common/hold-ticker.js', timeout=5) as response:
+            assert response.headers['Content-Type'] == 'text/javascript'
+            assert b'createHoldTicker' in response.read()
+        with pytest.raises(urllib.error.HTTPError) as error:
+            urllib.request.urlopen(base + '/common/manifest.json', timeout=5)
+        assert error.value.code == 404
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_web_common_dir_falls_back_to_the_source_tree(tmp_path):
+    root = web_common_dir(str(tmp_path))                 # no manifest.json: not a web_common share
+    assert os.path.isfile(os.path.join(root, 'manifest.json'))
+    assert 'hold-ticker.js' in shared_assets(root)
+
+
+def test_post_from_a_foreign_origin_is_refused_without_effect(backend):
+    node, base = backend
+    assert post(base, '/wander', 'stop', origin='http://evil.example') == 403
+    assert post(base, '/estop', 'stop', origin=f'http://127.0.0.1:{PAGE_PORT + 1}') == 403
+    assert post(base, '/estop', 'stop', origin='null') == 403
+    assert node.sent == []
+    assert post(base, '/estop', 'stop', origin=f'http://localhost:{PAGE_PORT}') == 200
+    assert post(base, '/estop', 'stop', origin=f'http://127.0.0.1:{PAGE_PORT}') == 200
+    assert post(base, '/estop', 'stop') == 200                  # no Origin: not a browser page
+    assert node.sent == [('estop_pub', 'stop')] * 3
+
+
+def test_cors_answers_only_the_page_origin(backend):
+    _, base = backend
+    page = f'http://127.0.0.1:{PAGE_PORT}'
+    request = urllib.request.Request(base + '/state.json', headers={'Origin': page})
+    with urllib.request.urlopen(request, timeout=5) as response:
+        assert response.headers['Access-Control-Allow-Origin'] == page
+    request = urllib.request.Request(base + '/state.json', headers={'Origin': 'http://evil.example'})
+    with urllib.request.urlopen(request, timeout=5) as response:
+        assert response.headers['Access-Control-Allow-Origin'] is None
+    with urllib.request.urlopen(base + '/state.json', timeout=5) as response:
+        assert response.headers['Access-Control-Allow-Origin'] is None
+
+
+def test_page_origin_follows_the_requested_host_name():
+    assert page_origin_allowed('http://10.0.0.5:28181', '10.0.0.5:28182', 28181)
+    assert page_origin_allowed('http://[::1]:28181', '[::1]:28182', 28181)
+    assert not page_origin_allowed('http://10.0.0.6:28181', '10.0.0.5:28182', 28181)
+    assert not page_origin_allowed('http://10.0.0.5:28181', '10.0.0.5:28182', None)
+    assert not page_origin_allowed(None, '10.0.0.5:28182', 28181)
+    # DNS rebinding: an attacker domain resolved to this host names itself in both headers
+    assert not page_origin_allowed('http://evil.example:28181', 'evil.example:28182', 28181)

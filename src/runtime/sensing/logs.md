@@ -543,12 +543,33 @@
 - 결정: D-231
 - 교훈: 없음
 
+## 2026-09-29 · uncommitted · web-surface-hardening: PARKED web_node 루프백·Origin 고정
+
+- 변경: `web_node`는 `bind_host`(기본 127.0.0.1, `config/web.yaml`·docstring에 문서화) 위에서만 듣는다. `Access-Control-Allow-Origin: *`를 지우고 페이지 출처(127.0.0.1·localhost·요청 Host 이름 + page port)에만 CORS를 답한다. 다른 출처 Origin의 POST는 403. `web_common_dir()`의 없는 `core/web_common` 대체 경로를 `src/hmi/web`로 고치고 `/common` 목록은 `manifest.json`에서 읽는다.
+- 증거: `python -m pytest src/runtime/sensing/test -q` 1665 passed 78 skipped(단독 실행). `test_web_http.py` 16 passed.
+- gate 변화: 없음. 진단 전용(D-150/D-253) 경계 그대로.
+- 결정: D-150, D-253.
+
+## 2026-09-29 · uncommitted · feat(traffic): 무신호·관측 융합 폐루크 호스트 시뮬레이션
+
+- 변경: `tools/sim/simulate_semantic_road.py`의 결정론적 합성 카메라 폐루프에 시나리오 2종을 추가했다 — `stop_and_go`(무신호 선언: 정지+dwell 후 `PROCEED/unsignalized_proceed`, 신호 관측 시 `HOLD/signal_unexpected`)와 D-337 관측 융합(카메라 신호 미관측 + `SignalHeadEvidence` 주입: `signal_unknown` 무한 대기 → `PROCEED/signal_green`(signal_source_kind=fused), 불일치 `HOLD/signal_source_conflict`). 폴러 전송은 가짜 없이 정책 계층에서 주입하고 전송 계약은 기존 `test_observer_source.py`가 담당한다. 상태 타임라인 SVG는 표본 수에 맞춰 높이가 늘어난다.
+- 증거: `docs/validation/semantic-road-stop-and-go-2026-09-29/` — `SEMANTIC_ROAD_HOST_SIM_PASS`, 표 3종·result.json·SVG·montage·preview. `test_semantic_road_simulation.py` 신규 단언(무신호 진입·선언 충돌·융합 3단·fused 표기) 포함 2 passed, flake8 clean.
+- gate 변화: 없음. HOST-SIM 한계 그대로 — 실물 Gazebo 폐루프(WSL), 관측 서비스 실HTTP, DEVICE/FIELD는 T5 벤치 회차가 소유한다.
+
 ## 2026-09-29 · uncommitted · feat(control): image-space two-boundary lane keeper ('between' mode)
 - 변경: `lane.py`에 `LaneBetweenKeeper`·`detect_lane_between` 추가. 아래쪽 띠의 여러 행에서 기준 열 왼쪽·오른쪽의 가장 가까운 밝은 런을 찾아 두 안쪽 가장자리의 중점을 목표로 삼는다. 한쪽만 보이면 그 가장자리에서 학습한 차선 폭(행별 EMA, 기본은 화면 폭의 0.6)의 절반만큼 안쪽을 목표로 삼는다. 기준 열은 직전 목표를 따라간다. 지면 평면이 필요 없다. `line_observer_node`에 `camera_lane_mode: between`과 파라미터 `camera_between_roi_top_fraction`(0.6), `camera_between_lane_width_fraction`(0.6, 읽기 전용)을 추가했다. 기본값 `line`은 그대로다.
 - 증거: `python -m pytest src/runtime/sensing/test/ -q` 1670 passed, 78 skipped (2026-09-29 Windows). 새 `test_lane_between.py` 10건이 한쪽 선만 보일 때 `detect_lane_error`는 선 위를 가리키고 `between`은 차선 안쪽을 가리키는 것을 확인한다.
 - gate 변화: 없음. 실물 주행 확인 전이다.
 - 결정: 없음.
 - 교훈: 실물 로봇은 homography가 꺼져 있어 지면 평면이 필요한 차선 모드를 못 쓰고, `line` 모드의 밝은 화소 중심은 경계선이 하나만 보이면 그 선 위로 조향한다.
+
+## 2026-09-30 · uncommitted · fix(structure): declare imu_bno055 exec_depend
+
+- 변경: package.xml에 `<exec_depend>imu_bno055</exec_depend>` 추가 — KNOWN_UNDECLARED에서 (control, imu_bno055) 제거. KNOWN_DIRECTION에는 유지(방향 위반은 코드 이동이 필요하므로).
+- 증거: test_module_structure 33 passed.
+- gate 변화: 없음.
+- 결정: 선언은 정직한 절반 — 전체 해소는 bringup 조립로 이전(별도 과제).
+- 교훈: 없음.
 
 ## 2026-09-30 · uncommitted · feat(control): 공칭(NOMINAL) 지면과 차선 녹화 재생 벤치(D-353)
 - 변경: `config/camera_nominal_pinky_pro.yaml`(실물 녹화 4981 프레임으로 추정한 OV5647 기하 — fx 281.6, 피치 8°, 높이 0.067 m, 지평선 80.3 행). `camera_ground.nominal_ground_plane`(NOMINAL 출처 + 허용 플래그 두 겹, 프레임 크기로 비례, 종횡비 다르면 거부). `line_observer_node` 에 `allow_nominal_ground`·`nominal_camera_profile_path`(읽기 전용), 지면 모드 관측에 `ground: NOMINAL` 표시 — CORE 는 운전자 확인(hold) 없이는 멈춘다(`nominal_ground_requires_driver`). `tools/lane_replay.py` 녹화 재생 벤치.

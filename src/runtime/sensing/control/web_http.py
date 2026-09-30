@@ -5,7 +5,13 @@ the backend makes — verb whitelists, the calibration/e-stop/planner gates, the
 teleop clamp, the goal bound — lives here. Publishing is delegated to the node
 (`publish_text`, `publish_teleop`), which owns the ROS message types.
 
-Backend API (all CORS *, JSON contract unchanged since v1):
+Cross-port access: the page (port) and the API (backend_port) are different
+origins. The API answers CORS only for the page origin — http://127.0.0.1,
+http://localhost or the requested host name, on the page port — and refuses a
+POST whose Origin header names any other origin (a foreign page cannot drive
+the robot through the operator's browser). A POST without Origin (curl) passes.
+
+Backend API (JSON contract unchanged since v1):
   GET  /state.json   pose/trail/map/scan/route/options + control labels
   GET  /map.png      occupancy raster (gen counter; browser refetches on change)
   GET  /camera.jpg   latest /camera/front frame, JPEG, ~4 Hz (gen counter)
@@ -22,10 +28,12 @@ Backend API (all CORS *, JSON contract unchanged since v1):
   POST /teleop       {"x":..,"z":..} Twist on /cmd_vel_raw, through safety.
 """
 import http.server
+import ipaddress
 import json
 import math
 import os
 import time
+from urllib.parse import urlsplit
 
 from control.control.navigation_session import validate_options
 from control.web_state import (
@@ -40,37 +48,64 @@ POST_VERBS = {
 GOAL_BOUND = 50.0   # metres; a dashboard goal beyond this is a typo
 
 
-_COMMON_MEDIA = {
-    "tokens.css": "text/css",
-    "components.css": "text/css",
-    "template.html": "text/html",
-    "ui.js": "text/javascript",
-    "core_ui_logic.js": "text/javascript",
-}
-
-
 def web_common_dir(share=None):
-    """The installed web_common share when it carries the controls, else the
-    source tree. The node resolves ``share``; this module stays ROS-free (D-171)."""
-    if share and os.path.isfile(os.path.join(share, "components.css")):
+    """The installed web_common share when it ships manifest.json, else the
+    source tree (src/hmi/web_common). The node resolves ``share``; this module stays
+    ROS-free (D-171)."""
+    if share and os.path.isfile(os.path.join(share, "manifest.json")):
         return share
     return os.path.join(
         os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(
             os.path.abspath(__file__))))),
-        "core", "web_common")
+        "hmi", "web_common")
 
 
-def _handler(node, html, api):
+def shared_assets(root):
+    """name -> media type from web_common's manifest: the one /common allowlist."""
+    try:
+        with open(os.path.join(root, "manifest.json"), encoding="utf-8") as handle:
+            return dict(json.load(handle)["shared_assets"])
+    except (OSError, ValueError, KeyError):
+        return {}
+
+
+def page_origin_allowed(origin, host_header, page_port):
+    """True when ``origin`` is the diagnostic page's own origin.
+
+    The page is served on ``page_port`` and reaches the API by the same host
+    name (``location.hostname``), so the only allowed origins are
+    http://127.0.0.1:<page_port>, http://localhost:<page_port> and
+    http://<IP address this request named>:<page_port>. A Host that is a DNS
+    name is not trusted: a rebound attacker domain would name itself."""
+    if not origin or page_port is None:
+        return False
+    hostname = urlsplit('//' + (host_header or '')).hostname
+    try:
+        ipaddress.ip_address(hostname or '')
+    except ValueError:
+        hostname = None
+    allowed = {f'http://{name}:{int(page_port)}' for name in ('127.0.0.1', 'localhost', hostname) if name}
+    if hostname and ':' in hostname:                     # IPv6 literal keeps its brackets
+        allowed.add(f'http://[{hostname}]:{int(page_port)}')
+    return origin in allowed
+
+
+def _handler(node, html, api, page_port=None):
     """HTTP handler closing over the node. api=True = backend (state/map/
-    camera/result + POSTs); api=False = frontend (the page only). CORS on
-    every response so the frontend page can fetch the backend."""
+    camera/result + POSTs); api=False = frontend (the page only). CORS answers
+    only the page origin on ``page_port`` so the page can fetch the backend."""
     class Handler(http.server.BaseHTTPRequestHandler):
         def log_message(self, *a):
             pass
 
+        def _origin_allowed(self):
+            return page_origin_allowed(self.headers.get('Origin'), self.headers.get('Host'), page_port)
+
         def send_response(self, code, *a):
             super().send_response(code, *a)
-            self.send_header('Access-Control-Allow-Origin', '*')
+            if self._origin_allowed():
+                self.send_header('Access-Control-Allow-Origin', self.headers.get('Origin'))
+                self.send_header('Vary', 'Origin')
 
         def _html(self):
             self.send_response(200)
@@ -90,8 +125,8 @@ def _handler(node, html, api):
             self.wfile.write(data)
 
         def _common(self, name):
-            media = _COMMON_MEDIA.get(name)
             root = getattr(node, 'web_common_dir', None) or web_common_dir()
+            media = shared_assets(root).get(name)
             file = os.path.join(root, name)
             if media is None or not os.path.isfile(file):
                 self.send_response(404)
@@ -171,6 +206,14 @@ def _handler(node, html, api):
                 return
             ln = int(self.headers.get('Content-Length', 0))
             body = self.rfile.read(ln).decode()
+            if self.headers.get('Origin') is not None and not self._origin_allowed():
+                print(json.dumps({'event': 'operator_rejected', 'path': self.path,
+                                  'reason': 'foreign origin'}), flush=True)
+                self.send_response(403)
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({'ok': False, 'error': 'foreign origin'}).encode())
+                return
             logged_action = self.path in ('/calibration', '/camera/calibration', '/estop', '/wander', '/navigation/start', '/goal', '/map/reset', '/map/resume', '/map/pause')
             if logged_action:
                 print(json.dumps({'event': 'operator_request', 'path': self.path,
@@ -316,8 +359,9 @@ def _handler(node, html, api):
     return Handler
 
 
-def make_api_handler(node, html):
-    return _handler(node, html, api=True)
+def make_api_handler(node, html, page_port=None):
+    """``page_port`` is the page's port; None answers no cross-origin caller."""
+    return _handler(node, html, api=True, page_port=page_port)
 
 
 def make_page_handler(html):

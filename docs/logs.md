@@ -3129,3 +3129,610 @@
 - 변경: D-321의 첫 단계에 Linux 카드 복구 도구와 사용 절차를 연결하고 카드 readback과 첫 부팅 실측을 구분했다.
 - 증거: 현재 변경은 소스와 절차만이다. 장치 전원은 차단된 상태이며 카드 복구 영수증은 없다.
 - gate 변화: 설계는 Accepted, 실제 복구와 G4/G5는 HOLD다.
+## 2026-09-29 · uncommitted · feat(sim): add Isaac Sim 6.1 integration decision
+
+- 변경: D-322와 공식 자료 조사, 공통 xacro backend 선택, Isaac URDF/USD 변환 및 단일 로봇 ROS 2 그래프 경로를 추가했다.
+- 증거: Isaac 전용 호스트 pytest 6 passed, 1 skipped (Windows; xacro 부재). Isaac GPU runtime, 실제 ROS graph·정지 시험은 미실행이다.
+- gate 변화: 소스·호스트 계약만 확인했다. Isaac ROS-SIM, DEVICE, FIELD는 HOLD다.
+
+## 2026-09-29 · uncommitted · docs(adr): record D-323 Rosy Pilot teleop app design
+
+- 변경: `ROSY ADR Log.md`에 D-323(Rosy Pilot 원격 조종 PWA, src/hmi/pilot)을 추가하고, 이 세션 logs가 먼저 쓴 Isaac Sim 연동 결정을 D-322로 같이 등재해 번호 충돌을 정리했다. `plans/2026-09-29-rosy-pilot-teleop-app-design.md` 작성, `plans/AGENTS.md` 지도에 등재.
+- 증거: ADR 로그 3열 행 형식 유지(D-321 → D-322 Isaac → D-323 pilot). 구현 전 설계 문서이므로 모듈 게이트 변화 없음.
+- gate 변화: 없음.
+- 결정: D-323 Accepted (설계·소스 배치 결정; 구현·장치·현장 수용 별도 HOLD). D-322 목차 행은 Isaac 세션 본문 `docs/adr/D-322-isaac-sim-rosy-integration.md` 제목·상태와 맞췄다.
+- 교훈: 같은 날 다른 세션과 ADR 번호가 겹칠 수 있다 — 번호를 잡기 전에 `docs/logs.md` 끝의 미커밋 항목부터 확인한다.
+
+## 2026-09-29 · uncommitted · docs(plan): write D-323 Rosy Pilot execution plan
+
+- 변경: `plans/2026-09-29-rosy-pilot-teleop-app.md` 작성(TDD 태스크 T1~T11: /pilot 라우트·harness 등록·stick/link 순수 시험·드라이버 레지스트리·게이트·주행 화면·입력 조정·카메라 증거 web_common 승격·PWA·Playwright 종단·게이트 기록), `plans/AGENTS.md` 지도에 등재.
+- 증거: 태스크 검증 방식은 기존 패턴에 맞췄다 — JS 순수함수는 Node 서브프로세스(dashboard `_run_js`), 브라우저는 가짜 CORE Playwright(`test_dashboard_browser.py` 패턴), 자산 라우트는 `api/app.py` `_dashboard_root()` 미러. 구현 전 계획 문서.
+- gate 변화: 없음.
+- 결정: D-323 후속 실행 계획.
+- 교훈: 없음
+
+## 2026-09-29 · uncommitted · docs(release): select the smallest Pinky artifact
+
+- 변경: D-325와 변경 경로 판정기를 추가해 no-artifact, native-payload, flashable-image, review/HOLD를 분리했다. existing-device runbook은 compatible payload 경로를 먼저 판정한다.
+- 증거: GitHub run 36415015940은 약 30분(이미지 build 1,619초), 36319224327은 약 5분(payload tree build 201초)이었다. selector 계약 시험 6개 통과; 서명·설치·DEVICE acceptance는 건드리지 않았다.
+- gate 변화: SOURCE 절차 개선만. ARTIFACT/DEVICE/FIELD는 기존 HOLD를 유지한다.
+
+## 2026-09-29 · uncommitted · docs(omx): propose embodied reasoning to Device Action boundary
+
+- 변경: ER 2의 시각 좌표를 실행 명령으로 취급하지 않고, Fleet의 Mission/Step과 OMX의 증거 결합 Device Action, 로컬 middleware, ROS Action 및 driver readback의 권한과 정지 경계를 제안 문서에 기록했다. 첫 대상은 고정 OMX 작업대의 단일 `PICK_PLACE`이다.
+- 검증: network/harness 문서 계약 78 passed, harness lint 0 error/기존 메타데이터 warning 18건, `git diff --check` 통과(Windows LOCAL). 실제 API·capability·모터 제어는 이번 변경에 포함되지 않는다.
+- gate 변화: 없음. OMX capability는 disabled이고 DEVICE/FIELD 검증은 미실행이다.
+
+## 2026-09-29 · uncommitted · docs(omx): define semantic pick and place ADR
+
+- 변경: 공식 ER 2·MoveIt·Franka·ROS 2 자료를 조사하고 D-326 Proposed에 `PICK`/`PLACE`/`PICK_PLACE`, 다중 대상 지정 방식, 장치별 실행 adapter, 보유 상태와 정지 증거 경계를 기록했다. 앞선 복합 `PICK_PLACE` 설계는 첫 OMX 검증 범위로 한정했다.
+- 검증: network/harness 문서 계약 78 passed, harness lint 0 error/기존 메타데이터 warning 18건, ADR 상대 링크 누락 0건(Windows LOCAL). D-322~D-324의 진행 중 ADR 번호는 검증된 worktree 상태에 맞춰 임시 reservation을 명시했다. 실제 Action API·모터 실행·DEVICE/FIELD 수용은 미실행이다.
+- gate 변화: 없음. OMX 운영 capability는 disabled다.
+
+## 2026-09-29 · uncommitted · docs(er2): preserve user Isaac Sim analysis and separate mission outcome evidence
+
+- 변경: 사용자가 제공한 ER 2·Isaac Sim 분석 원문을 SHA-256과 영상 출처와 함께 보관했다. 공식 모델 자료와 현재 Fleet/OMX 소스를 대조한 구조 평가 및 D-327 Proposed에 모델 제안, Fleet Mission 원장, 장치 Action, 독립 목표 판정, 로컬 정지의 역할을 기록했다.
+- 검증: network/harness 문서 계약 78 passed, harness lint 0 error/기존 메타데이터 warning 18건, 상대 링크 누락 0건, 원문 12,330 byte/SHA-256 일치, `git diff --check` 통과(Windows LOCAL). 원본 영상의 세부 실험 수치는 자막 응답이 비어 있어 사용자 제공 문서의 보고값으로 남긴다.
+- gate 변화: 없음. Isaac Sim 조작 ROS-SIM, OMX DEVICE/FIELD, 다장치 Mission 실행은 미수용이다.
+
+## 2026-09-29 · uncommitted · plan(er2): stage semantic Action and Mission implementation
+
+- 변경: D-326/D-327을 모델 없는 관측/OMX 로컬 transaction, Device Action 계약, Fleet 목표 원장·의존 작업, ER 2 후보 adapter, ROS-SIM/장치 출구 순서의 실행 계획으로 전환했다. 경로·시험·중단 조건과 기존 disabled capability를 명시했다.
+- 검증: network/harness 문서 계약 78 passed, harness lint 0 error/기존 메타데이터 warning 18건, 상대 링크 누락 0건, `git diff --check` 통과(Windows LOCAL). 계획은 구현·시뮬레이션·실물 동작을 수행하지 않는다.
+- gate 변화: 없음. 기존 OMX·정책 자동 dispatch는 disabled/HOLD다.
+
+## 2026-09-29 · uncommitted · docs(er2): renumber proposed ADRs after D-326 collision
+
+- 변경: 다른 작업이 main에서 D-326을 자율 판단 루프 경계로 배정한 사실을 확인했다. 이 브랜치의 의미적 조작 ADR D-326을 D-327로, 목표 증거 ADR D-327을 D-328로 재번호화하고 후속 계획·상대 링크·ADR 목록을 갱신했다. 위의 과거 로그 항목은 당시 브랜치 번호의 기록으로 보존한다.
+- 검증: 번호·상대 링크·문서 계약을 새 main 기준으로 다시 검증한다.
+- gate 변화: 없음. ADR 상태는 Proposed이고 실제 API·장치 수용은 HOLD다.
+## 2026-09-29 · uncommitted · docs(plan): map the ER2-style agent loop against current source
+
+- 변경: `plans/2026-09-29-er2-agent-loop-gap-map.md` 작성 — 외부 개념 그림(사용자 목표→상위 판단 에이전트→Skill/VLA→Controller/Robot→센서·결과→재판단)을 마디별로 현행 소스와 대조했다. `plans/AGENTS.md` 지도에 재기재.
+- 증거: `task_service.py`의 `POLICY_DISPATCH_ENABLED=False`(정책 발의 즉시 HOLD), `task_scheduler.py` 가용성 기반 claim, `decision/router.py`의 no-network/no-actuator 제약, `games/catalog.py` 플러그인 카탈로그, sensing/overhead 관측 경로를 직접 읽었고 FLEET SRS §14 AIV-001·11_AI 문서·D-268/D-209/D-290과 대조했다. 결론: 루프 아래 절반은 실재, 위 절반은 계약만 있고 구현 0%.
+- gate 변화: 없음.
+- 결정: 없음. 문서는 대조 기록이며 어떤 마디의 승인·밸브 개방도 아니다. "ER2"는 외부 어휘로만 다루고 `CONCEPTS.md`에 채택하지 않았다.
+- 교훈: 폐루프의 마지막 마디(재판단)는 결함이 아니라 코드화된 의도적 밸브다 — 개념 그림 대조 시 "없음"과 "닫혀 있음"을 구분해 기록해야 한다.
+
+## 2026-09-29 · uncommitted · docs(adr): record D-326 agent loop boundary
+
+- 변경: 갭맵의 결론을 `docs/adr/D-326-agent-loop-boundary.md`로 결정 기록했다. 네 인지 역할의 자리 고정(장면 이해=증거 생산자, 작업 분해=Fleet Mission Planner, 선택=스케줄러, 재판단=원장+사람 확인), 상위 에이전트는 Fleet API 소비자로만 존재, 재판단 밸브는 D-268 처분·Mission/Step 원장·사람 확인 위치를 정하는 별도 ADR 없이 열지 않음, "ER2"는 프로젝트 어휘 미채택. `ROSY ADR Log.md` 목차에 D-326 행 추가, 갭맵·`plans/AGENTS.md`에서 링크.
+- 증거: harness `generate`·`lint` 통과(ADR 목차↔본문 정합), 계약 시험 `test_network_topology_contracts.py`·`test_harness_contracts.py`·`test_module_scorecard.py`·`test/architecture/test_module_structure.py` 통과.
+- gate 변화: 없음.
+- 결정: D-326 Accepted (경계·자리 결정만; 구현·폐루프 개방·AI 승격 별도 HOLD).
+- 교훈: 외부 개념을 ADR로 옮길 때 개념 명칭이 아니라 역할의 자리와 개방 조건을 결정 문장으로 만들어야 추적 가능해진다.
+
+## 2026-09-29 · uncommitted · docs(spec): 로봇 로컬 화면 근거를 D-75·D-23으로 고친다
+
+- 변경: `spec/ROSY CORE SRS.md` §17이 인용한 `ADR-D-7`을 D-75·D-23으로 교체하고 D-7은 Superseded임을 본문에 명시했다. 같은 날 발견한 두 번째 참조 `plans/ROSY Implementation Plan.md` §4.5 기술 스택 표의 `React 18 + TypeScript + Vite (정적 서빙, D-7)` 행에도 D-75 승계 주석을 붙였다(파일 헤더의 Historical 지시는 그대로다).
+- 증거: `python -m pytest test/test_network_topology_contracts.py test/test_harness_contracts.py -q` 78 passed; `python tools/harness/rosy_harness.py lint` 0 errors(2026-09-29 Windows, 미커밋 트리).
+- gate 변화: 없음. SOURCE/LOCAL GO 유지. ROS-SIM/ARTIFACT/DEVICE/FIELD N/A(문서 모듈, 실행 대상 없음).
+- 결정: 없음. ADR 신규·Superseded 표시 없음 — D-75(2026-09-17)가 이미 D-7을 대체했고 이번은 누락된 참조 정정이다.
+- 교훈: ADR을 Superseded 처리할 때 그 ADR을 **인용하는 문서**(계약 SRS·역사 WBS)까지 따라가지 않으면, 계약 문서가 최신 결정과 정반대인 채 남는다. D-75의 `Validation / Transition`은 `test_dashboard_no_bundler.py`만 걸었고 참조 역추적은 걸지 않았다. 또한 `logs.md`는 오름차순이라 새 항목은 파일 **끝**에 붙인다 — 앞에 붙이면 lint가 전 행을 order 오류로 잡는다.
+
+## 2026-09-29 · uncommitted · docs(plan): open the all-surface UI/UX craft improvement plan
+
+- 변경: `docs/plans/2026-09-29-uiux-craft-improvement-plan.md` 작성 — D-280 순서(역할 웹→Fleet→게임→얼굴→문서)로 크래프트 패스와 D-153 게이트 마감을 표면별 한 회차로 묶고, G3 사람 평가 프로토콄(8항 시트·청중 2인·근거 셀 지적)과 G2 보존형 증거 규칙을 정의했다. 루트 `PRODUCT.md`(Impeccable 제품 기록)를 처음 작성했다.
+- 증거: `docs/validation/uiux-surfaces-2026-09-27/` 표면별 카드와 블로커, STATUS.md dashboard 게이트, D-280/D-153/D-254 계약을 대조했다. 코드·화면 변경은 없다.
+- gate 변화: 없음. 계획 문서이며 모든 표면 판정은 현행 HOLD를 유지한다.
+- 결정: 없음. ADR 후보(A-1 표정 어휘, A-2 온기 문구)는 해당 회차 도달 시 제안한다.
+
+## 2026-09-29 · uncommitted · docs(er2): integrate D-326 body and close cross-ADR ambiguities
+
+- 변경: 색인에만 있던 D-326 본문을 추적하고, D-327/D-328과의 모델→Fleet→장치 권한, 사람 확인, 벤더 명칭 경계를 명시했다. 별도 정합성 검토와 실행 계획에 기존 Fleet 예약·Mission 대기 Step 정지 래치·감사 DB 장애 중 사이트 정지 제한·driver 접수/원장 기록 사이 crash window를 기록했다.
+- 증거: D-308 및 현행 Fleet task/stop/예약·OMX runtime 계약을 대조했다. 문서 계약 시험과 harness lint를 통합 뒤 실행한다.
+- gate 변화: 없음. 자동 정책 재발행, OMX 운영 Action, 사이트 전체 정지 가용성 및 ARTIFACT/DEVICE/FIELD는 HOLD다.
+- 결정: D-326 Accepted 경계를 명확히 기록한다. D-327/D-328은 계속 Proposed이며 새 API·capability 승격은 없다.
+
+## 2026-09-29 · uncommitted · docs(fleet): decide unified Mission admission and stop boundary
+
+- 변경: D-329를 추가해 기존 navigation task와 미래 Mission의 단일 발행 claim, stop generation·재시작 차단, 감사 DB 장애 중 인증된 전용 정지 요청 전송, 장치 Action의 발행 전 기록/불명 결과 HOLD를 결정했다. 통합 구현 계획과 기존 ER 2 계획의 선행 관계를 기록했다.
+- 근거: 현행 `fleet_robot_reservations`의 `fleet_tasks` FK, `cancel_pending_task_queue()`의 navigation 전용 처리, D-276 감사 선행 `503`, OMX 단일 trajectory submitter와 미구현 원격 Action을 대조했다.
+- 검증: Windows 문서 계약 시험 78 passed, harness lint 0 errors/기존 메타데이터 warning 18건, 신규 문서 상대 링크 누락 0건. 코드·ROS-SIM·ARTIFACT·DEVICE·FIELD는 이번 문서 변경에서 미실행이다.
+- gate 변화: 없음. D-329는 구조 Accepted이나 Mission/OMX 운영, 사이트 전체 정지 가용성, 정책 자동 재발의는 HOLD다.
+
+## 2026-09-29 · uncommitted · docs(fleet): renumber Fleet control ADR after concurrent D-329
+
+- 변경: 동시에 진행된 표면 계약 ADR이 main에서 D-329를 배정한 사실을 확인했다. 이 브랜치의 Fleet 발행·정지 ADR을 D-330으로 재번호화하고 색인·선행 계획·D-276 부분 대체 참조를 맞췄다. 바로 위 로그는 당시 브랜치 번호의 기록으로 남긴다.
+- 검증: 번호·상대 링크·문서 계약과 현재 main 통합 상태를 다시 확인한다.
+- gate 변화: 없음. D-330은 구조 Accepted이며 구현·실물 수용은 HOLD다.
+
+## 2026-09-29 · uncommitted · docs(adr): propose D-329 surface registry and visual baseline
+
+- 변경: `docs/adr/D-329-surface-registry-and-visual-baseline.md` 작성 — 표면 범위 계약의 적용 목록을 `src/hmi/web/surfaces.yaml` 단일 출처로 옮기고, `src/`의 HTML 전부를 레지스트리와 대조해 등록 누락을 빨갛게 만들며, 육안 기준선이 회차 폴더에 실제로 추적돼 있는지와 신규 회차의 `matrix.json` 선언-보존 일치를 시험으로 판정한다. `ROSY ADR Log.md` 목차에 D-329 행을 추가하고 `src/hmi/web/progress.md`의 `adrs`에 연결했다.
+- 증거: 표면 목록 하드코딩 3곳(`src/hmi/web/test/test_shared_controls.py`, `src/hmi/web/test/test_surface_typography_focus_contracts.py`, `test/test_web_dialog_contract.py`)의 멤버십이 서로 다른 것을 대조하고, 추적된 `src/` HTML 8개 중 `sim/gz_sim/scripts/lane_live_view.html`이 어느 목록에도 없는 것을 확인했다. `docs/validation/uiux-surfaces-*` 추적 파일을 집계해 PNG 64장·5회차를 확인하되 최신 회차(2026-09-27)에는 PNG가 0장이고 파일명 규칙이 회차마다 셋 갈리는 것을 확인했다. `test_web_budgets.VERDICTS`(전부를 훑되 예외는 이유로 적는 방식)와 `web_common/ui.js`의 `GRAMMARS` 집합을 결정의 근거로 삼았다. 실행: harness `generate`·`lint` 0 errors(18 warnings, 전부 기존 freshness), `test/test_network_topology_contracts.py`·`test/test_harness_contracts.py` 78 passed.
+- 검증 중 발견한 기존 실패(이 변경과 무관, 미수정): `test/architecture/test_document_placement.py`는 커밋된 루트 `PRODUCT.md`(`ROOT_FILES` 미등록)로 1 fail. `src/hmi/web/test`는 4 fail — `test_a_browser_page_starts_from_the_shell`이 `.gitignore`된 Android 빌드 산출물 `src/site/overhead/android/app/build/**/index.html`을 파일시스템으로 훑어 빨갛고, 나머지 셋은 `src/site/fleet/fleet/server/web/styles.css`의 `.vision-corner-overlay`/`.vision-corner-modes`(공용 포커스 토큰 미사용·`ui-button` 재도색)와 `system.js:50` 버튼 변수 비명시다. 셋 다 워킹 트리에서 `src/site/`·`src/hmi/dashboard` 변경이 없어 HEAD에도 존재한다.
+- gate 변화: 없음. Proposed이며 표면 판정과 DEVICE/FIELD 수용은 바꾸지 않는다.
+- 결정: D-329 Proposed. 표면 계약 적용 범위 단일 출처와 G2 보존 셀 규칙만 정한다. 번들러·공유 컴포넌트 코드·자동 픽셀 판정·D-153 세 계층 변경은 승인하지 않는다.
+- 교훈: "기준선이 없다"는 말은 저장소를 훑기 전에 쓰면 틀리기 쉽다 — 실제로는 64장이 쌓여 있었고 문제는 *최신 회차 0장*과 *회차마다 갈리는 파일명*이었다. 진단 문장을 측정으로 갈아 끼운 뒤에 ADR을 썼다.
+
+## 2026-09-29 · uncommitted · feat(web): land the D-329 surface registry (T1–T4)
+
+- 변경: D-329 실행 계획 `docs/plans/2026-09-29-d329-surface-registry.md`의 T1–T4를 실행했다. `src/hmi/web/surfaces.yaml`(표면 6항목)를 적용 범위의 단일 출처로 두고, `src/hmi/web/test/surface_registry.py` 로더와 `test_surface_registry.py` 검사를 새로 넣었다. 하드코딩된 `SURFACES` 상수 세 곳(`test_shared_controls.py`, `test_surface_typography_focus_contracts.py`, 루트 `test/test_web_dialog_contract.py`)을 지우고 `for_contract` 호출로 바꿨으며, 셸 점검의 파일시스템 `rglob`을 `git ls-files -c -o --exclude-standard` 발견 스캔으로 바꿨다. 계획의 완료 판정표는 실행 시점의 실제 측정값으로 고쳤다.
+- 증거: 멤버십 불변 — 레지스트리가 기존 하드코딩 셋을 정확히 재현함을 대조(`shared_controls` 4, `typography_focus` 4, `dialog` 3; 추적 HTML 8개, `lane_live_view.html` 포함). 판정 변화: `src/hmi/web/test` 1 failed/77 passed → **0 failed/87 passed** (T4로 로컬 전용 Android 산출물 실패 소멸). 회귀: `test/test_web_dialog_contract.py` 3 passed, `src/site/fleet/test`·`src/site/games/test` 647 passed, `test/architecture/test_module_structure.py` 33 passed, harness `lint` 0 errors(18 warnings, 전부 기존), 계약 시험 78 passed. **변이 확인 5건 전부 수행**: M1 항목 제거→`test_every_html_under_src_is_registered`, M2 add 안 된 `src/hmi/pilot/index.html`→같은 이유, M3 존재하지 않는 path→`path:`, M4 `dialog` 제거에 `contract_reason` 삭제→`reason:`, M5 `git add` 후에도 항목이 없으면 여전히 빨강 — 각각 복구 후 초록까지 확인했다. M2는 `-o`가, M5는 `-c`가 각각 없으면 시험이 통과한다는 것을 증명한다.
+- gate 변화: 없음. D-329는 여전히 Proposed이며 표면 판정과 DEVICE/FIELD 수용은 바꾸지 않는다.
+- 결정: D-329 Decision 1–3을 실행했고, Decision 4(`matrix.json`·회차 파일명 규칙)와 자동 픽셀 게이트, `src/hmi/pilot` 등록은 범위 밖으로 남겼다. 새 표면 등록 없는 HTML이 빨갛게 되는 자리만 남겼다.
+- 교훈: 계획을 쓴 시점의 측정값이 실행 시점에는 이미 바뀌어 있었다 — 계획의 "4 failed"는 동시 세션 `e155371e`로 1 failed가 되어 있었고, 남은 1건만 이 계획의 T4 대상이었다. 실행 계획의 판정표는 *작성 시점 측정*과 *실행 시점 측정*을 분리해 적어야 오래간다. 병렬로 고쳐지는 숫자는 같은 표에 섞이지 않는다.
+- 교훈: `git rm --cached`는 디렉터리 경로에 `-r`이 없으면 조용히 실패한다 — 변이 확인의 복구 단계에서 잠시 `AD`(인덱스에 추가·워크트리에서 삭제) 상태가 남았고, 그 상태가 오히려 `discover_html`이 `-c`를 읽고 있다는 것을 눈으로 보여줬다. 복구는 `git reset --`가 확실하다.
+
+## 2026-09-29 · uncommitted · docs(plan): add D-329 surface registry execution plan
+
+- 변경: `docs/plans/2026-09-29-d329-surface-registry.md` 추가 — D-329의 Decision 1–3만 실행하는 계획이다. `src/hmi/web/surfaces.yaml` 스키마(`id`/`path`/`surface`/`audience`/`grammar`/`contracts`/`contract_reason`/`baseline`/`baseline_reason`)를 정하고, 등록 누락을 빨갛게 만드는 신규 시험과 변이 확인 5건, 세 곳의 `SURFACES` 상수를 로더로 바꾸는 T3, 셸 점검을 추적 파일 한정으로 바꾸는 T4를 배치한다. D-329가 미룬 `matrix.json` 스키마·회차 파일명 규칙·자동 픽셀 게이트·`src/hmi/pilot` 등록은 범위 밖으로 못박았다. `docs/plans/AGENTS.md` 목록에 한 행을 더했다.
+- 증거: 계획의 판정선을 재실행으로 확인했다 — `python -m pytest src/hmi/web/test -q`는 4 failed/74 passed이고(지금도 4 failed, 계획 전 기준과 일치), `test/architecture/test_document_placement.py`는 `PRODUCT.md`로 1 failed, harness `lint`는 0 errors/18 warnings, `test/test_network_topology_contracts.py`·`test/test_harness_contracts.py`는 78 passed. 표면 사실도 다시 모았다: 추적 HTML 8개와 각 `grammar` 속성(`dashboard` spatial, `sensing` procedure, `fleet` exception, `games` focal, `surface/styleguide/lane` 없음), 추적 캡처는 2026-09-26 회차의 `console-operate-fresh-1366x768.png`·`fleet-normal-1920x1080.png`·`games-play-1280x800.png`로 채우고 진단·라이브러리·시뮬 뷰어는 `baseline_reason`으로 등록하게 했다.
+- gate 변화: 없음. 계획 문서이며 D-329는 여전히 Proposed다.
+## 2026-09-29 · uncommitted · fix(dashboard): settled G2 captures, loading state, balanced columns
+
+- 변경: P1 역할 운용 웹 크래프트 회차 — 패널 로딩 상태 표시, `/setup`·`/device` 데스크톱 2열 multicol 전환, action-group 탭 콘텐츠 폭, 접근 토큰 행 침범 수정, G2 harness 조립 완료 대기. main 커밋 상태의 공유 계약 위반 3건(Fleet 토글 재도색·SVG 포커스 링·helper 버튼 kind)도 같은 브랜치에서 복원했다.
+- 증거: `src/hmi/dashboard/test` 43 passed, `src/hmi/web/test` 22 passed, D-283·surface 레이아웃 23 passed, 역할 메뉴·표면 상태 29 passed, 역할 G2 60셀 overflow 0·pageerror 0, `impeccable detect` []. 회차 기록 `docs/validation/uiux-surfaces-2026-09-29/README.md`.
+- gate 변화: dashboard SOURCE HOLD→GO, LOCAL HOLD→GO(last_verified d41e8bd5). D-153 표면 판정은 G3 사람 평가가 없어 HOLD 유지. ARTIFACT·DEVICE/FIELD 불변.
+
+## 2026-09-29 · uncommitted · fix(fleet-ui): E-STOP safety renders as the crit tag (P2 round)
+
+- 변경: P2 Fleet 크래프트 회차 — 로스터 카드 SAFETY E-STOP을 평문 대신 공용 `tag crit` 채움으로 렌더하고, 목표 가용성 계약 시험이 요소 타입 대신 행의 값으로 단정하게 정렬했다. critique는 예외 우선 로스터·지연 나이·빈 상태·320px 정지 우선 스택을 계약 준수로 확인했고 카메라 16:9 예약 축소는 기각했다.
+- 증거: Fleet 브라우저·대화 계약 34 passed, 8상태×3뷰포트 24셀 재촬영 넘침 0·페이지 오류 0, `impeccable detect` []. 회차 기록 `docs/validation/uiux-surfaces-2026-09-29/README.md` P2 절.
+- gate 변화: 없음. fleet SOURCE/LOCAL GO 유지(last_verified c6ae4334). 실물 readback과 사람 G3는 별도다.
+
+## 2026-09-29 · uncommitted · fix(test): declare PRODUCT.md at root, budget only tracked web files
+
+- 변경: D-329 T1–T4를 끝내고 남은 로컬 빨강 두 건을 고쳤다. (1) `27e6da33`가 `PRODUCT.md`를 저장소 루트에 추가하면서 `test/architecture/test_document_placement.py`의 `ROOT_FILES` 선언을 갱신하지 않아 `test_repo_root_carries_only_the_listed_files`가 빨갰다 — `PRODUCT.md`를 목록에 넣고 `Rosy OS/AGENTS.md` Key Files에 한 줄을 남겼다. (2) `src/hmi/dashboard/test/test_web_budgets.py`의 예산 후보 스캔을 파일시스템 `rglob`에서 `git ls-files -c -o --exclude-standard`로 바꿨다(D-329 Decision 3 "tracked files only").
+- 증거: 변경 직전 `src/hmi/dashboard/test` 1 failed(`test_web_files_over_budget_have_a_recorded_verdict` — 원인은 `.gitignore`된 `src/site/overhead/android/build/reports/problems/problems-report.html`)와 `test/architecture/test_document_placement.py` 1 failed(`PRODUCT.md`)였다. 변경 후 각각 14 passed/32 skipped, 6 passed. 변이 확인 2건: 루트에 `ZZ_MUTATION_PROOF.md`를 `git add`하면 `['ZZ_MUTATION_PROOF.md'] == []`로 빨갛다(추적 파일만 본다는 D-226 발행 경계 설계를 그대로 확인 — untracked는 대상이 아니었다), `src/hmi/dashboard/zz_mut_proof.html`(add 안 된 700행)을 놓으면 `needs a verdict: ['hmi/dashboard/zz_mut_proof.html']`로 빨갛다. 둘 다 복구 후 초록. 회귀로 `src/hmi/web/test` 87 passed, `test/architecture/test_module_structure.py` 33 passed 유지.
+- gate 변화: 없음. 두 시험 모두 기존 판정 기준(루트 선언 목록, 600/150행 예산)을 바꾸지 않았다. DEVICE/FIELD 수용은 주장하지 않는다.
+- 결정: D-329가 미룬 `matrix.json` 스키마·회차 파일명 규칙·자동 픽셀 게이트·`src/hmi/pilot` 등록은 여전히 범위 밖이다.
+
+## 2026-09-29 · uncommitted · fix(games): HOLD alarm is a crit-filled chip (P3 round)
+
+- 변경: P3 게임 보드 크래프트 회차 — HOLD 경보를 `--lost` 빨간 글자에서 공용 `--status-crit` 채움 칩으로 바꾸고 `.lost[hidden]` 가드를 추가했다. critique는 초기 `—` 점수·지연/stale 마지막 수신 표시·390/600 스택을 준수로 확인했다.
+- 증거: 게임 스위트 117 passed, 7셀 재촬영 넘침 0·페이지 오류 0, `impeccable detect` []. 회차 기록 `docs/validation/uiux-surfaces-2026-09-29/README.md` P3 절.
+- gate 변화: 없음. games SOURCE/LOCAL GO 유지(last_verified 6277a009). 실물 카메라·양측 정지 readback과 사람 G3는 별도다.
+## 2026-09-29 · uncommitted · feat(ai): add ER 2 proposal-only provider adapter
+
+- 변경: Google 공식 ER 2 표준 Interactions REST에 1회 요청하고 `propose_pick_place` function call을 추적 가능한 후보로 변환하는 Fleet adapter를 추가했다. 응답 tool call을 실행하지 않으며 image point/box는 image 좌표로 유지한다. D-331, 공식 API 조사 보완을 추가했다.
+- 증거: mock transport 계약에서 multimodal request, `store=false`, API key header, allowlist, yx/box 범위, caller idempotency key, HTTP/JSON/function 응답 오류를 시험한다. 실 API credential 또는 로봇은 사용하지 않았다.
+- gate 변화: SOURCE adapter만 구현. Fleet REST/runtime wiring, policy valve, ROS/OMX 제출, 안전 중요 사용, DEVICE/FIELD는 계속 HOLD다.
+
+## 2026-09-29 · uncommitted · fix(test): clear the CI core reds and the root test/ reds
+
+- 변경: CI 코어 단계를 막던 3건을 고쳤다. `test_event_catalogue`가 호스트 에이전트 명령 `network.status`/`release.status`를 미등록 이벤트로 오판한 것(`not_events`에 사유와 함께 등록 — 실제 emit 이벤트와 교차 검증되므로 실제 이벤트를 가릴 수 없다), `test_host_cards`가 개조 이전 경로 `deploy/release`를 쓰던 것, `app.py` FastAPI 설명의 API Ref 버전이 `v1.41`에 머물러 있던 것. 이어서 CI가 한 번도 돌리지 못한 루트 `test/`의 빨강 7건 중 6건을 고쳤다: `test_line_follow` 핀 `v1.43`→`v1.47`, `read-card-diagnostics.py`의 사라진 `rosy_diag_redact` import 경로, 램프 패치 잠금 해시, `robot_literal_backlog.txt`에 최근 커밋이 새긴 4개 경로, 팰릿 크기 판정 재심(622→813, 716→1014), 그리고 `17f30137`이 리플래시 피드백을 `.hardware-action-note`로 옮기면서 갱신을 놓친 브라우저 단언.
+- 증거: CI 코어 명령 그대로 `1841 passed, 16 skipped`. `src/runtime/gateway/test` 1402 passed, 16 skipped / api_web 70 passed, 13 skipped / 영향받은 루트 6개 파일 73 passed, 1 skipped. `rosy_harness.py lint` 0 errors. 램프 해시는 증명됐다 — `e3b0c95e`가 패치 주석의 경로 한 줄만 바꿨는데 `inputs.lock.yaml`의 SHA-256은 `b7d7b17a` 시점 옛 값을 그대로 두었다(파이프 LF→CRLF 왜곡 없이 블롭 원본으로 대조).
+- gate 변화: 없음. 계약 필드·경로·이벤트 카탈로그는 그대로다. 남은 것은 `test_no_secrets_in_tracked_files`(13건)이며 의도적으로 손대지 않았다 — `secret_scan.py`가 "Widening an exclusion is how a matcher goes quiet without anyone noticing"라고 명시한 보안 게이트이고, 해법은 정규식 확장과 mutation proof가 필요한 정책 결정이다.
+
+## 2026-09-29 · uncommitted · fix(face): ASSIST REQ warn chip — P4/P5/P6 round close
+
+- 변경: P4 얼굴 LCD(LOCAL 범위) — 웨이크 카드 ASSIST REQ를 warn 채움 칩으로. P5 문서 — README 능력 주장 전수 스캔에서 교정 대상 0건(강한 주장은 전부 증거·게이트 경계와 함께 쓰임). P6 총평 — D-280 후속 크래프트 시퀀스의 LOCAL 분량 완료를 회차 폴더에 기록.
+- 증거: face 시험 162 passed/4 skipped, PIL 렌더 11장 독회(`X:\DevTemp\rosy-uiux-p4-lcd`), README 동사 스캔 기록. 회차 기록 `docs/validation/uiux-surfaces-2026-09-29/README.md` P4·P5·P6 절.
+- gate 변화: face last_verified 47d3e6ec(SOURCE/LOCAL GO 유지). 표면 판정은 전부 HOLD — 남은 조건은 표면별 (a) D-153 G3 사람 평가, (b) 실물 증거(DEVICE/FIELD)다.
+
+## 2026-09-29 · uncommitted · docs(plan): dispose D-268 as Proposed with a readiness ladder
+
+- 변경: `plans/2026-09-29-d268-policy-evidence-disposition.md` 작성 — D-268을 Proposed로 유지하는 처분. 자체 Validation/Transition의 승격 전제 5개(증거 계약 D-18 설계, 자격 증명 기반 권한 검증, 정답 데이터 LOCAL 시험, 30분+ 현장 스트림 age/가용성 측정, 사전 등록 기준의 입회 DEVICE/FIELD 수용)를 현재 소스와 대조해 전부 미충족임을 기록했다. D-268 발의 자격 증거(시작)와 D-328 목표 성공 증거(판정)의 면 구분, 제출·검증 기반 공유에 대한 권고, 승격 준비 사다리 5단계 포함. 갭맵 항목 1을 이 처분으로 갱신하고 `plans/AGENTS.md` 지도에 등재.
+- 증거: `goal_evidence.py`(predicate 사전등록·revision·age·GOAL_EVIDENCE_REJECTED), `task_service.py`의 `POLICY_DISPATCH_ENABLED=False` 재확인, `dispatch_admission.py`/`mission_service.py`/`er2_standard.py` 읽기, ADR 로그의 D-257/D-267/D-269/D-271/D-326~D-331 상태. harness `generate`·`lint` 0 errors, 계약 시험 4종 통과.
+- gate 변화: 없음. D-268 상태·목차 무변경, automatic source·endpoint·밸브는 그대로 닫혀 있다.
+- 결정: 처분 = "Accepted도 기각도 아님 — Proposed가 현재 올바른 상태, 승격을 막는 것은 결정이 아니라 측정". 폐루프 개방(D-326 Decision 3)은 이 문서로 열리지 않는다.
+- 교훈: ADR의 Validation/Transition 절이 승격 조건의 정본이다 — 상태를 바꾸는 검토는 그 조건 목록을 소스에 대조하는 것에서 시작해야 한다.
+
+## 2026-09-29 · uncommitted · docs(adr): record D-332 human confirmation placement
+
+- 변경: `docs/adr/D-332-human-confirmation-placement.md` 작성 — D-326 Decision 3의 밸브 ADR 전제 (c)(사람 확인 위치: 제출 전·실행 전·결과 수용 전)를 확정했다. 결정: 1차 확인은 `policy-admin`의 사전 등록 승인(predicate·증거 출처·기준·유효기간), 세 후보 지점 모두 전수 확인 없음, 사람 개입은 네 예외 조건(증거 불명·충돌 조정 / 등록 범위 밖 회수 / 자율 재발의 승인 / 안전 이벤트 복구)뿐, 확인 행위는 actor·시각·대상·근거를 남기는 감사 이벤트. `ROSY ADR Log.md` 목차에 D-332 행 추가, `docs/progress.md` adrs에 D-331·D-332 보완 등재, 갭맵 항목 4 갱신.
+- 증거: D-326 증보본("모든 정상 성공에 일률적으로 요구하지 않는다")·D-268 Decision 5/6(사전 등록 기준·policy-admin)·D-328 Decision 4(독립 증거 판정)·2026-09-29 정합성 검토와의 정합 확인. 세 전수 확인 후보가 각각 어느 결정과 충돌하는지 Alternatives에 기록. harness `generate`·`lint` 0 errors, 계약 시험 통과.
+- gate 변화: 없음. `POLICY_DISPATCH_ENABLED`·endpoint·UI는 그대로다.
+- 결정: D-332 Accepted (위치·의미 결정만). 밸브 개방 ADR의 남은 전제는 D-268 승격 측정 5종과 Mission/Step 원장 확정이다.
+- 교훈: 확인 단계를 파이프라인에 고정하면 확인이 루틴이 되어 안전의 겉모습만 만든다 — 확인은 조건(불명·범위 밖·재시도·안전)으로 설계해야 한다.
+
+## 2026-09-29 · uncommitted · docs(plan): design the D-268 policy evidence contract
+
+- 변경: 승격 사다리 1단계 산출물 두 건. `plans/2026-09-29-policy-evidence-contract-design.md` — `PolicyEvidencePayload` 필드 표(evidence_id·asset_kind 3종[D-330 어휘]·task_kind·captured_at·revision 삼종·observation), source-token 제출 표면(`POST /api/fleet/policy-evidence` + env 바인딩 자격 증명 + 폐기·재생 거절), 거절 사유 enum 7종, 발의 binding(policy 발의는 evidence_id 필수, 통과해도 HOLD 유지), 제출 기반 공유 확정(출처 identity·어휘·검증 원칙 공유, 소비 분리, GoalEvidence 재설계 아님), 불변식 5조(밸브 False·빈 등록부·미설정 age 거절·수치 비발명·sighting 무변경). `plans/2026-09-29-policy-evidence-contract.md` — T1~T7 TDD 실행 계획. `plans/AGENTS.md` 지도에 등재.
+- 증거: 문서 설계(구현 없음). 근거 파일: `sightings.py`·`sightings_config.py`·`goal_evidence.py`·`dispatch_admission.py`·`task_service.py` 직접 읽기, API Ref 현재 버전 v1.47 확인(다음 v1.48). harness `generate`·`lint` 0 errors, 계약 시험 통과.
+- gate 변화: 없음. schema·경로·코드·API Ref 미변경 — v1.48은 실행 계획 T6이 만든다.
+- 결정: 설계 확정(제출 기반 공유·fail-closed 등록부·밸브 불변). 구현은 실행 계획 대로.
+- 교훈: fail-closed 계약은 "지금 아무 것도 통과하지 않는다"를 명세의 일부로 만들어야 한다 — 빈 등록부·미설정 임계를 단언 시험으로 고정하면 우회 경로가 자란다.
+
+## 2026-09-29 · uncommitted · feat(protocol): land policy evidence schema (T1)
+
+- 변경: 증거 계약 실행 계획 T1 착지 — `core_common/protocol/policy_evidence.py`에 `PolicyEvidencePayload`·`PolicyObservation` 추가(발의 자격 증거 와이어 계약). 클라이언트 identity/목표 판정 어휘 거부, asset/task 닫힌 집합, revision·타임스탬프 규칙. `core_common` logs/progress 갱신(75 passed).
+- 증거: `python -m pytest src/contracts/foundation/test -q` 75 passed(기존 50 + 신규 25), flake8 120 clean, harness lint 0 errors, 계약 시험 4종 통과. 서버 등록부·밸브 단언은 fleet T3/T4 시험 몫.
+- gate 변화: 없음. schema 추가뿐 — 경로·밸브·자동 실행 무변경. API Ref v1.48은 T6.
+- 결정: T1 완료. T2(설정 로더)부터는 `fleet/server` — 시작 전 동시 세션 재확인 필요.
+- 교훈: pydantic lax 모드는 숫자 문자열을 강제 변환한다 — 시험은 계약이 명시한 거부(bool·비유한)만 단언하고, 확신 없는 거부를 시험에 넣으면 계약이 아니라 시험이 거짓을 말하게 된다.
+
+## 2026-09-29 · 5545ce37..uncommitted · feat(fleet): land policy evidence config and store (T2/T3)
+
+- 변경: 커밋 정리 두 건(`de6f8170` 문서 — D-268 처분·D-332·증거 계약 설계/실행계획, `5545ce37` T1 schema) 뒤 T2·T3 착지 — `fleet/server/policy_evidence_config.py`(출처 설정 로더)·`fleet/server/policy_evidence.py`(저장·제출 검증)과 시험 4건 추가. fleet logs/progress 갱신(612 passed).
+- 증거: 신규 24 passed, Fleet 전체 `612 passed, 5 skipped`(회귀 없음), 신규 파일 flake8 clean, harness lint 0 errors, 계약 시험 4종 통과. 도중 버그 2건 수정: `tuple <= frozenset` 비교(TypeError)와 YAML 문서 이어붙이기(마지막 키만 생존) — 둘 다 시험이 잡았다.
+- gate 변화: 없음. T4(task_service)·T5(app.py)·T6(API Ref v1.48) 남음 — 전부 자동 실행 불변.
+- 결정: T2·T3 완료. v1 fail-closed(빈 등록부 전면 거절)가 시험으로 고정됐다.
+- 교훈: 대조 시험 조립은 계약 자료구조에서 만들어야 한다 — 문자열 이어붙인 YAML은 중복 키가 마지막만 살려 '검증됐다'를 거짓으로 만든다.
+
+## 2026-09-29 · uncommitted · docs(er2): decide Mission/Action/stop/evidence closure
+
+- 변경: D-333에 후보 생성→operator Mission 승인→OMX Action 수락→ROS/readback→독립 goal 증거의 계약과 장치 측 stop-generation fence를 결정했다. 단일 `PICK_PLACE` 실행 계획을 추가하고 기존 ER 2 계획의 SOURCE 기준선·정지 설명, API Reference의 전용 E-stop 감사 예외를 현행 코드와 정렬했다.
+- 증거: D-327/D-328/D-330/D-331, ER 2·Mission·OMX 현행 소스와 API Reference를 대조했다. 신규 REST 경로·wire schema·장치 실행은 이번 문서 변경에 없다.
+- gate 변화: 없음. 통합 Mission/OMX 실행, provider live 호출, 물리 정지와 DEVICE/FIELD 수용은 HOLD다.
+
+## 2026-09-29 · uncommitted · docs(er2): separate model tools from running Mission progress
+
+- 변경: Google 공식 표준/streaming function call, Interactions 상태 및 영상 진행 기능을 현행 adapter와 대조해 조사 기록을 남겼다. D-334에 현행 단일 후보 도구, 미래 읽기·관측·재계획 후보, Fleet/OMX/목표/정지의 네 진행 축과 provider 세션 독립성을 결정했다. 후속 결정에서 첫 재연결 경로를 Fleet snapshot + Mission별 cursor 조회로 확정하고 D-333 실행 계획을 SOURCE/LOCAL 순차 구현 기준으로 승인했다.
+- 증거: 공식 Google Robotics/Interactions/Live 문서와 `er2_standard.py`, `mission_store.py`, `action_store.py`, `pick_place_transaction.py`의 SOURCE 계약. live provider, ROS 장치와 실제 영상 진행 시험은 없다.
+- gate 변화: 없음. 새 tool declaration, 진행 API wire, provider 연속 loop, 자동 재계획과 DEVICE/FIELD 수용은 HOLD다.
+
+## 2026-09-29 · uncommitted · docs(er2): bound first Fleet OMX transport
+
+- 변경: D-281의 미결 원격 OMX API를 넘지 않도록 첫 SOURCE/LOCAL Fleet→workcell 제어 경로를 같은 Linux host의 UID 인증 UDS로 결정했다. native per-workcell owner가 Action journal과 ROS action client를 함께 소유하며 원격 host dispatch는 별도 결정까지 HOLD다. 실행 계획 작업 0·1을 이 선택과 맞췄다.
+- 증거: 비활성 OMX profile, 개발/ROS-SIM OCI shell, `RosArmCommandRuntime`, 독립 `ActionStore`, 배포 host inventory template 및 D-246/D-281/D-282/D-273 대조. 실제 host/serial/gripper/stop inventory는 아직 없다.
+- gate 변화: 없음. UDS contract SOURCE/LOCAL 구현을 시작하며 ROS-SIM/ARTIFACT/DEVICE/FIELD와 물리 capability는 계속 HOLD다.
+
+## 2026-09-29 · uncommitted · docs(plan): land policy evidence T4-T6 and API Ref v1.48
+
+- 변경: 증거 계약 실행 계획 T4~T6 착지 기록. T4 — `task_service`의 policy 발의 `evidence_id` 필수와 admission binding(통과해도 밸브 닫힌 한 HOLD). T5 — `POST /api/fleet/policy-evidence`·`GET .../latest`. T6 — API Ref v1.48(§10.6.2 신설, 변경 로그, policy 발의 서술)과 `test_task_contract_docs.py` 정합 시험, api_web 설명 표기. `docs/progress.md` plans에 갭맵·D-268 처분·증거 계약 설계/실행계획 4건 등재.
+- 증거: Fleet `628 passed, 5 skipped`(신규 API 6·발의 binding 9·계약 문서 1), api_web 70 passed/13 skipped, 변경 파일 flake8 clean. T6이 만든 것은 v1.48이며 현재 헤더 v1.49는 병행 세션의 D-333/D-336 추가다(§10.6.2·v1.48 행 무변경).
+- gate 변화: 없음. `POLICY_DISPATCH_ENABLED=False` 불변, 자동 실행·측정 없음.
+- 결정: 사다리 1단계 완료. 남은 것은 권한·정답 시험·30분 스트림·입회 수용(사다리 2~5단계)이다.
+- 교훈: 병행 세션이 같은 파일을 만질 때는 버전 핀 시험이 충돌을 먼저 잡는다 — API Ref 헤더·핀·변경 로그를 한 변경 단위로 묶어야 한다.
+## 2026-09-29 · uncommitted · docs(uiux): close ADR candidates A-1 and A-2 without new ADRs
+
+- 변경: 계획의 ADR 후보 두 건을 조사하고 기록으로 종결했다. A-1(표정 어휘): `set_emotion` GIF 경로의 face 밖 호출자가 0곳이라 정식화할 상태→표정 계약이 없고, 카드 어휘는 D-221이 이미 계약한다 — 신규 ADR 없음. 만료 복귀 GIF가 상태와 무관하다는 관찰 1건은 BENCH 트리거로 남겼다. A-2(온기 문구): 세 웹 표면 빈 상태·로딩·오류 50행 스캔에서 문법이 이미 닫혀 있고 D-280.4/D-277/D-278/D-254가 경계를 쥐고 있어 닫을 간극이 없다 — 신규 ADR 없음.
+- 증거: 호출자 스캔(`set_emotion` face 외 0건), 문구 스캔 50행, D-221 본문 대조. 회차 기록 `docs/validation/uiux-surfaces-2026-09-29/README.md` P7 절.
+- gate 변화: 없음. D 번호를 소모하지 않았다(다음 빈 번호 D-337·D-338 유지).
+
+## 2026-09-29 · uncommitted · feat(omx/fleet): fence local Device Actions with stop generations
+
+- 변경: Added typed `RearmLocal`, durable OMX stop latch, authority epoch and generation checks, local stop fanout, and final driver-submit serialization. Re-arm requires an authenticated named operator at Site Fleet, the current Fleet fence, zero unresolved local Actions, and instance readback; failure restores the Fleet latch. The outer UDS dispatcher now routes re-arm and rejects foreign workcell/instance identities; Fleet snapshot generation values are type-checked. Updated API Reference v1.52, D-336 implementation evidence, and the ER2 execution plan.
+- 증거: Focused suite 80 passed; OMX 85 passed/3 skipped; API web 70 passed/13 skipped; contract/harness 78 passed. Fleet full suite 658 passed/5 skipped; one existing WebSocket integration test timed out waiting for `uvicorn.Server.started`, while the updated re-arm response test passed. Its isolated retry stalled and was interrupted. Harness lint: 0 errors/17 freshness warnings. `git diff --check` passed.
+- gate 변화: None. The Fleet OMX inventory remains empty by default; device UID/socket wiring, ROS/gripper selection, physical E-stop/readback, ROS-SIM, DEVICE, and FIELD remain unproven and disabled.
+
+## 2026-09-29 · uncommitted · docs(plans): /dashboard 브리지 퇴역 기준 명시
+
+- 변경: 비평 P1(2026-09-26)의 남은 절반. 목적지는 브리지 회차(31e08eea)로 열렸으므로, 이번에는 홈 조작 화면의 퇴역 조건 C1~C5를 검증 가능하게 못 박았다 — 패널 동등성 대조표(2026-09-29 기준, 남음 3행: API 토큰 관리·로봇 신원 폼·ROS 반응성 표), 새 패널 단일 규칙(역할 화면에만 등록), G2+G3 수용, E-stop 가시 보존, 인증 복귀 경로 유지. 새 계획서: `docs/plans/2026-09-29-dashboard-bridge-retirement-criteria.md`.
+- 증거: 문서 회차 — 코드 무변경. 대조표는 `src/hmi/dashboard/panels.yaml`(17패널)과 홈 `index.html`·`settings.js` 구역 대조로 작성했다. D-204 ADR은 아직 `feat/role-surfaces-s1`에 있어 이행 일정은 정하지 않았다.
+- gate 변화: 없음.
+
+## 2026-09-29 · uncommitted · docs(plans): 무신호 교차로 정지 후 진입 설계 + API Ref v1.54
+
+- 변경: `docs/plans/2026-09-29-traffic-policy-unsignalized-junction-design.md` 신설 — "신호 없음"의 두 뜻(무신호 교차로 vs 인식 실패)을 구분하기 위해 부재를 카메라 판정이 아니라 운영자 선언(`junction_rule: stop_and_go`)으로 다루는 결정, 판정 분기·불변식(정지+dwell 선행, 관측 신호와 선언 충돌 시 `signal_unexpected` HOLD, `signal_conflict` 우선, 새 상태 문자 없음), 표면 변화, 비목표(보행자 인식·다중 교차로·적신호 우회전 특례·ESP32/observer 제2 신호 소스)를 기록했다. API 계약서는 v1.53→v1.54로 `TrafficPolicyStatus.junction_rule` 필드·예시·문단을 같은 변경에 실었다(D-18).
+- 증거: 같은 변경의 호스트 시험 — traffic policy·API·runtime config·foundation·services 380 passed, protocol schemas·api_web·dashboard 105 passed 47 skipped, semantic road 시뮬·이벤트 카탈로그 74 passed(2026-09-29 Windows).
+- gate 변화: 없음.
+
+## 2026-09-29 · uncommitted · docs(adr): D-337 로봇 신호 소스는 실측된 빛만 읽는다
+
+- 변경: `junction_rule` 커밋(d79d2096)이 남긴 B 갈래(ESP32 연동)의 경계를 ADR D-337로 못 박고 설계·실행 계획을 냈다. 결정: 로봇의 제2 신호 소스는 관측 서비스 `GET /observed`(실측)뿐 — ESP32 `/status`(접점 주장)의 직접 소비 금지(2≠3 교차 검증 철학 준수), 로봇→신호등 명령 경로 부재 유지, 융합은 fail-closed(불일치 `signal_source_conflict` HOLD, 소등은 `signal_dark`로 진입 불허, 관측은 진입을 단독 허가하지 않고 카메라와 함께 쓰인다). 무신호 `stop_and_go`에서는 어떤 소스의 신호 관측이든 `signal_unexpected`. 신규 문서: `docs/plans/2026-09-29-robot-signal-source-integration-design.md` + 실행 계획 `-integration.md`(T1 순수 융합 → T5 실물 벤치).
+- 증거: 문서 회차 — 코드 무변경. 관측 서버 인터페이스(`/observed` lamps·confidence·stable·frozen·age)는 `firmware/signal/observer/observer.py`·D-163 설계에서 그대로 인용했고, ROSY-SIGNAL-001의 "신호등 보고를 안전 근거로 삼지 않는다" 조항과 D-163 §4의 "훗날 로봇이 이 관측 API로 판단한다" 단서의 충돌을 D-337이 정리한다. ADR 표 D-336 뒤 D-337 추가.
+- gate 변화: 없음. 구현(T1~)은 별도 회차, 미설정 사이트는 동작 무변경이 완료 기준이다.
+
+## 2026-09-29 · uncommitted · docs(adr): D-337 브리지 콜백 판정·적응 분리 기록
+
+- 변경: 24b6d4bb(2026-09-24)로 착지한 ros_bridge 콜백 분리를 ADR로 소급 기록했다 — 판정(파싱·검증·승인/거부·라우팅)은 ROS-free 시블리(bridge/observation.py 판정 함수군 + 기존 시블리 확장 reconcile.led·display.republish_due·goal_tracker.on_response/on_result·save_map.await_call)가 소유하고 브리지는 노드 시계·발행·서비스 호출만 남는다. 행수(757-590)는 결과이지 분리 사유가 아님을 명시. docs/adr/D-337-bridge-callback-decide-act-split.md 신설 + ADR Log 행 추가.
+- 증거: 구현 커밋 24b6d4bb(13 files +1047/-237; test_bridge_observation.py +445행 신설, 시블리 시험 4종 확장, SIZE_VERDICTS ros_bridge 항목 제거). 이후 c33f51a6(감독 카메라 결함 폴백)와 DockingExecutor 추출이 같은 구조 위에서 확장 — 현재 observation.py 203행, ros_bridge.py 582행. sensing 전체 1660 passed(2026-09-29 Windows).
+- gate 변화: 없음. 첫 게이트 호출의 실패 6건은 병행 트랙 잔여(protocol 버전 정합·SIZE_VERDICTS 2건·io closure·line_follow 문서·sd writer)이며 이 변경과 무관.
+- 결정: 구현은 이미 main에 있고 이 회차는 기록 보존이다. D 번호는 저널의 다음 빈 번호 표기(D-337·D-338)를 따랐다.
+- 교훈: ADR Log 마지막 행(D-336)이 리터럴 ? 문자로 깨진 채 커밋되어 있다. 신규 행은 UTF-8로 기록했고, 손상 행 복구는 append-only 원칙 때문에 별도 합의가 필요하다.
+
+## 2026-09-29 · uncommitted · docs(adr): 브리지 분리 ADR을 D-338로 재부여
+
+- 변경: 병행 세션의 f6416e4d가 이 회차의 working tree(ADR Log 행·저널 항목)를 함께 커밋하면서 표에 같은 번호 D-337이 두 개 생겼다. 신호 소스 ADR(커밋 의도가 D-337)을 유지하고 브리지 판정·적응 분리 행을 D-338로 재부여했다. 상세문서는 docs/adr/D-338-bridge-callback-decide-act-split.md(번호·파일명 갱신). 바로 앞 항목의 D-337 표기·본문은 커밋된 원문 그대로 두고(append-only) 이 항목으로 정정한다.
+- 증거: git show f6416e4d -- docs/reference/ROSY ADR Log.md(+2행 — D-337 두 개). 재부여 뒤 D-337=측정된 빛 신호 소스, D-338=브리지 판정·적응 분리로 유일하다. test_module_log/ADR log 계약은 이 변경 뒤 회복(잔여 1건 D-337 본문 부재는 f6416e4d 자체의 결함이므로 병행 세션 소관).
+- gate 변화: 없음.
+- 교훈: 병행 세션과 같은 창에서 문서를 쓰면 번호 선점이 커밋 순서로 갈린다 — ADR 번호는 표에 행을 넣는 즉시 내 커밋으로 선점한다.
+## 2026-09-29 · uncommitted · docs(adr): D-336 표행 인코딩 복구
+
+- 변경: ADR Log의 D-336 행이 리터럴 ? 문자로 깨진 채 f12eaeb6에서 커밋되어 있었다(제목·Status 전체). 상세문서 docs/adr/D-336-fleet-omx-local-ipc-boundary.md의 제목에서 원문을 그대로 옮겨 표행을 복구했다 — 결정 내용은 한 글자도 바꾸지 않았고, 읽을 수 없던 기록을 복원한 것뿐이다(append-only는 결정 재작성 금지이지 손상 복구 거부가 아니다).
+- 증거: 복구 diff는 해당 행 1개, 문구는 상세문서 제목과 동일. test_harness_contracts 재확인.
+- gate 변화: 없음.
+- 교훈: 한글을 PowerShell 리다이렉트로 파일에 쓰면 코드페이지가 글자를 ?로 먹는다 — 문서 기록은 UTF-8 쓰기를 보장하는 도구로 한다.
+
+## 2026-09-29 · uncommitted · docs(plans): D-337 T1 착지 — 융합 순수 로직 완료 (항목 복원)
+
+- 변경: 실행 계획 `2026-09-29-robot-signal-source-integration.md`의 T1을 완료 표시하고 착지 내용(나이 보정·증거 리비전·reset/apply_staged 청소, 부정 헤드의 무주장 처리)을 계획서에 보탰다. 설계 §2의 `lamps` 필드 표기를 구현과 같은 `red`·`yellow`·`green` 불리언으로 바로잡았다. — 이 항목은 병행 세션의 05572024 커밋이 미커밋 상태를 덮어써서 사라졌던 것을 복원한 것이다(구현 자체는 10a386a2에 있다).
+- 증거: 10a386a2 — `src/runtime/services` 로그 참조. 호스트 383+74 passed, 관측 미설정 동작은 사전과 동일.
+- gate 변화: 없음.
+
+## 2026-09-29 · uncommitted · docs(plans): D-337 T2 착지 — 관측 폴러 전송 완료
+
+- 변경: 실행 계획 T2를 완료 표시하고 착지 내용(확정·비동결 프레임만 증거화, 위치 지도 기반 색 해석, `last_outcome`·`last_age_s` 관측성 룩, 스케줄링은 T3 소관)을 보탰다.
+- 증거: 같은 회차 코드 변경 — `src/runtime/services` 로그 참조. 신규 17시험 포함 services 251 passed, traffic·foundation 156 passed. SIZE_VERDICTS에 manager.py 609행 accept 판정 추가(잔여 2건은 병행 트랙 부채).
+- gate 변화: 없음. T3(설정 게이트·배선·상태 필드·API Ref MINOR) 대기.
+
+## 2026-09-29 · uncommitted · docs(plans): D-337 T3 착지 — 설정·배선·계약 완료
+
+- 변경: 실행 계획 T3을 완료 표시하고 착지 내용(파일 설정 전용 바인딩과 map/scene 없으면 빌드 실패, 데몬 스레드 모니터의 나이 보정 주입, `fused` 표기 조건, 침묵 경보 1회)을 보탰다. API 계약서 v1.55→v1.56 — 상태 필드 3종·예시·문단·§8 이벤트 행·역사 항목 동시 갱신(D-18).
+- 증거: 같은 회차 코드 변경 — `src/runtime/services`·`src/runtime/gateway`·`src/contracts/foundation` 로그 참조. 통합 호스트 실행 501 passed, 시맨틱 로드 시뮬 2 passed.
+- gate 변화: 없음. T4(dashboard 신호 원 행)·T5(벤치) 대기.
+
+## 2026-09-29 · uncommitted · docs(plans): D-337 T4 착지 — dashboard 신호 원 행
+
+- 변경: 실행 계획 T4를 완료 표시했다(코드 트랙 종결). `/setup` 교통 정책 팩트와 `/console` 교통 팩트에 "신호 원" 행 추가 — `signal_source_kind`(camera|fused) 표기, 관측 프레임 동결 시 `frozen`. 같은 회차에 원격 반영: 로컬 main 36+커밋(병행 세션 분 포함)을 검증 워크트리(HEAD 기준 전체 번들 3065+1665+65 passed, 기존 결함 4건은 병행 트랙 부채) 후 push — origin/main 동기화.
+- 증거: dashboard·api_web·dashboard 게이트웨이 시험 116 passed 47 skipped.
+- gate 변화: 없음. T5(WSL/Gazebo 폐루프·실물 벤치)만 남았다.
+## 2026-09-29 · uncommitted · test(architecture): D-168 스캐너에 package:// URI와 자산 확장자 추가
+
+- 변경: test/architecture/test_module_structure.py의 WORKSPACE_REF_PATTERNS에 package://x/ URI 패턴을 추가하고 텍스트 스캔 확장자를 .yaml·.urdf·.xacro·.sdf·.world·.rviz까지 넓혔다(스코어카드 §6 과제 6). 정직한 구멍 목록 갱신 — 런타임 조립 이름은 여전히 못 보고, isaac_sim이 package.xml 없는 에셋 폴더라 이 스캔의 영역 밖임을 명시.
+- 증거: 신규 위반 0건(gz_sim worlds.yaml의 package://control 참조는 이미 선언된 의존, description 자기 참조는 필터 제외). 변이 증명 2단 — ① gz_sim package.xml에서 control 선언 제거 시 test_every_cross_package_use_is_declared 적신, ② worlds.yaml에 package://emotion 프로브 삽입 시 'worlds.yaml references emotion' 정확히 적발. 복구 후 원상 복귀(31 passed).
+- gate 변화: 없음. 잔여 실패 2건(test_size_verdicts·test_over_budget)은 병행 트랙의 사전 존재 예산 초과(schemas.py 738행·fleet 10,436행·app.py 재성장)로 이 변경과 무관.
+- 결정: mesh/world/map 등 자산 참조도 P3 선언 대상임을 스캐너가 이제 증명한다. 신규 위반은 P5대로 — fix(선언 추가) 또는 KNOWN_UNDECLARED 사유 기록.
+- 교훈: 패턴 추가는 추가만으로 증명되지 않는다 — 물릴 대상을 찔러 빨강을 본 뒤 믿는다(test/AGENTS 변이 증명 규약).
+## 2026-09-29 · uncommitted · feat(harness): D-346 커밋 시점 방어망 착지
+
+- 변경: ADR D-346의 구현 — ①parse_adr_log가 표 행 중복을 duplicate index row 에러로 보고(dict 축소로 묻히던 경로 제거), ②harness lint가 governed 파일의 물음표 두 개 연속(코드페이지 부식 흔적)을 suspicious encoding 에러로 보고, ③tools/hooks/pre-push 패스트 게이트(2분 티어)와 install.sh, ④AGENTS Testing에 quick/full 2티어 문서화, ⑤솔루션 문서 2건(병행 세션 스윕·PowerShell 인코딩). 레거시 정리 — D-140 표행 인코딩 복구(본문문서 제목에서), D-218/219/220 잠복 중복 행 중 첫 변형 제거(후행 행이 본문문서와 일치, dict last-wins라 실효 변경 없음).
+- 증거: 변이 증명 — 새 검사를 복구 전 상태(710a8a86)에 적용해 D-218/219/220 중복 3건과 D-140 부식(150행)을 모두 적발, 현재 상태 녹색. test_harness_contracts 56 passed(신규 단위시험 2건 포함). install.sh로 훅 설치 확인.
+- gate 변화: 없음.
+- 결정: D-346 Decision 1·2·3·6은 도구로, 4·5(번호 선점·짧은 커밋 창)는 규칙으로 솔루션 문서에 보존. sd_writer 부하 민감 시험은 이 변경 범위 밖 별도 결함으로 기록했다.
+- 교훈: 검사는 실제 부식 데이터로 증명한다 — 합성 입력만으로는 D-140 같은 잠복 부식을 믿을 수 없다.
+## 2026-09-29 · uncommitted · docs(adr): D-347 capability lifecycle 계약 기록 + API Ref v1.58
+
+- 변경: ADR D-347(상세문서 + 표행 — 행은 2e0787b4로 선점)과 API Ref v1.58(§9.1 lifecycle 절, 변경 이력 행, 헤더)을 같은 변경에 실었다. 온디맨드 구조 토론(A/B/C 레인)의 C레인 착지 — B레인(세션 경계 그래프 기동)은 실측 관문 뒤 후속 ADR로.
+- 증거: 계약 시험 56 passed, test_line_follow_contract_docs v1.58 핀 통과, lint 0 에러.
+- gate 변화: 없음.
+- 결정: 없음(토론 합의의 문서화).
+- 교훈: 백그라운드 풀게이트의 D-347 본문 부재 적신은 선점 커밋(행만)의 예상된 잔상이다 — 본문이 같은 변경 단위에 따라오면 녹색이 된다.
+## 2026-09-29 · uncommitted · docs(plan): 온디맨드 활성화 후보 측정 기준선
+
+- 변경: docs/plans/2026-09-29-on-demand-activation-measurement-baseline.md 신설 — D-347 토론 B레인의 착수 관문("실측 입증 낭비") 증거 상태를 한 장으로 정리했다. 하드웨어 상주 세트 인벤토리(systemd 단위 4종 + 라인 센싱 부팅 옵트인 + OMX 보류), 기존 실측 재정리(D-185 본체 x86 2.16코어·격리 실험·R1, R8 Pi 5 코어 22%·match_motion 73 ms), 그리고 온디맨드 판정에 필요한 갭 3개(카메라 파이프라인 Pi 비용, SLAM 백엔드 상주 비용, R3 EventsExecutor 실기 A/B). progress.md plans에 등재.
+- 증거: 전부 원본에서 읽은 값 — D-185 ADR(본체·R7·R8 메모), deploy/robot/pinky_pro/native 단위 정의(rosy-navigation의 부팅 승인 ConditionPathExists 포함), hardware.launch.py 인자 목록, io 클로저 시험. 새 숫자 추정 없음.
+- gate 변화: 없음.
+- 결정: 후보 순위 ①카메라 프리뷰(세션=대시보드 요청) ②SLAM 백엔드(세션=매핑, D-321 승인 이미 존재) ③OMX(ER2 진행 중 보류). 낭비 입증 전 코드 변경 없음 — 입증된 후보 하나당 후속 ADR로 D-347의 activating 무생산 핀을 연다.
+- 교훈: 이미 절반이 서 있었다 — navigation은 부팅 승인제 조건부 상주고 line_follow는 부팅 옵트인이다. B레인은 새 발명이 아니라 이 두 형태를 "세션" 경계로 일반화하는 일다.
+
+## 2026-09-29 · uncommitted · docs(adr): D-352 사이트 콘솔의 로봇 화면 코드 등록 제안과 계획
+
+- 변경: `docs/adr/D-352-site-console-enrolls-robot-by-screen-code.md`(Proposed), `docs/plans/2026-09-29-fleet-robot-code-enrollment-plan.md`(S1–S6 + 벤치 D1–D3), ADR Log 행 추가. `tools/harness/harness.yaml`에 다른 브랜치·초안의 D-347–D-351을 예약했다.
+- 증거: SOURCE(코드 판독만, 실물 접촉 없음) — `FleetConsole`·`SiteHub`가 기동 때 로스터를 고정, `load_robots`가 빈 목록 거절, CORE `config.py`가 `ROSY_DEVICE_UID`를 읽지 않아 HELLO·`system/info`에 장치 UID가 없음, 페어링 토큰 상한 168 h와 부팅당 LCD 코드 1개가 맞물려 갱신 없이는 매주 재부팅이 필요함을 확인했다. 벤치 로봇 `rosy-pinky-8kcn`의 이미지 판(v1.41)은 D-351 실측을 인용했다.
+- gate 변화: 없음.
+- 결정: D-352 Proposed. Fleet이 `auth/pair`를 직접 부르고(`purpose: site`, 출처 `pair-site`, 역할 operator), 결속은 인증된 `system/info` 읽기, 자격은 Fleet SQLite 암호문 + 별도 키, 갱신은 회전 + 90일 계보 상한, FleetAgent 짝 토큰 제공은 D-351 Hub 결속 수정 뒤로 미뤘다.
+- 교훈: 로그인 코드 경로(D-193)는 사람 브라우저를 전제로 수명을 정했다 — 같은 경로를 서버 주체가 쓰면 "새 코드를 얻는 비용"이 수명 설계의 입력이 된다.
+
+## 2026-09-29 · uncommitted · docs(adr): D-352 독립 리뷰·사용자 결정 반영 개정
+
+- 변경: D-352와 계획 개정. 사용자 결정 — 회전 갱신(`auth/renew`·계보·유예·갱신 루프)을 빼고 `pair-site` 긴 수명 토큰 하나(카드 설정, 기본 90일, D-193 168 h 상한의 출처 한정 개정), 관리자 등록 코드는 `min(사이트 수명, 발급자 만료)`로 D-193 M2 유지. AES-GCM 유지하되 AAD 길이 접두 + 슬롯, base64 키만, 키 실패는 실행 상태, 키 별도 백업·`rekey`. 리뷰 반영 — 주소 자동 추종 대신 등록 때 주소 고정·`address_changed`에서 Bearer 0회, 단일 로스터 소유자(`SiteRoster`, `await` 전 순서 복사, 해제 때 클라이언트 닫기·진행 task 409, sighting 설정은 기동 실패 대신 경고), D1 로봇 쪽 확인 방법 A/B, `TOKEN_SOURCES`, 대시보드 경로, 호스트 이름 비교 기준, 수동 주소는 사설 IPv4만, 운용 클라이언트 `trust_env=False`, `pending_logout`, 코드 소모 문구, Fleet 시계 기준 만료 경고, 결합 시험 위치(루트 `test/`), D-341과 패널 이름 "기기 연결"·감사 표 `device_pairing_audit` 공유, 사용성 범위와 재부팅 비용, `fleet/link` `PUT`은 새 코드 요구·인증 없는 `GET` 제거, ADR 항목 ↔ 단계 표와 첫 조각.
+- 증거: SOURCE(문서·코드 판독). 실물 접촉 없음.
+- gate 변화: 없음.
+- 결정: D-352 Proposed 유지.
+- 교훈: 평문 LAN 위협 모델에서는 토큰 회전이 도청자에게도 보이므로 보호보다 상태 기계만 늘린다 — 전송이 바뀌기 전에는 회수 가능한 긴 수명 자격이 더 정직하다.
+
+## 2026-09-29 · uncommitted · docs(adr): D-352 2차 리뷰 반영 — 90일 위협 명시·operator 회수·주소 바뀜 안전 규칙
+
+- 변경: D-352·계획 개정과 D-193 본문·ADR Log 행의 개정 표시. 사용자 결정 — 90일 기본값 유지, operator가 `pair-site` 토큰을 목록·회수(`auth/site-tokens`, S4 대시보드). 인증 없는 `auth/pair`에서 `purpose`를 호출자가 고르므로 LCD 코드를 본 누구나 90일 operator 토큰을 얻는다는 위협 변화를 명시. `address_changed`에서도 정지는 고정 주소로, 주행·대형 로봇은 경보와 교통 보류, 한 이름 다중 주소는 `conflict` 우선. `pending_logout`은 한 번만·사전 읽기 없음, `map()`·`_make_room` 순서 복사, D-341 감사 표 `device_kind` 이전 단계, sighting 완화는 해제·대기 id만, S6 재부팅 비용·코드 역할, D2 Bearer 부재 증거 수집법, Avahi `-2.local` 안내.
+- 증거: SOURCE(문서·코드 판독). 실물 접촉 없음.
+- gate 변화: 없음.
+- 결정: D-352 Proposed 유지. D-193 행에 D-352 개정 표시.
+- 교훈: 주소 신뢰를 끊을 때도 정지 경로는 끊지 않는다 — 비밀 노출 방어와 정지 도달은 같은 규칙으로 묶으면 안 된다.
+
+## 2026-09-29 · uncommitted · docs(plan): 측정 기준선에 도구 등재
+
+- 변경: docs/plans/2026-09-29-on-demand-activation-measurement-baseline.md §5에 측정 도구(measure-resident-cpu.sh)와 안전 경계 시험을 연결하는 한 단락을 추가했다. 입회 실기 세션이 이제 문서와 도구를 왕복 없이 바로 실행한다.
+- 증거: test/test_measure_resident_cpu.py 4 passed(스크립트가 기준선 문서를 지시하는 핀 포함).
+- gate 변화: 없음.
+- 결정: 없음.
+- 교훈: 없음.
+
+## 2026-09-29 · uncommitted · docs(adr): D-319 승인 — 입회 모터 커미션 도우미
+
+- 변경: D-319(SETUP 뒤 현장 입회 하에 모터 구동 준비 자동화)를 Proposed에서 Accepted로 올렸다(사용자 승인). 승인 범위는 도우미 방침 그대로 — 무인 토크 활성화 배제, G4 수용·자동 이미지 부팅·현장 운영은 별도 게이트로 남는다. 표행과 본문 Status를 같이 고쳤다(상태 전이는 허용된 ADR 수명주기 편집).
+- 증거: 도우미(deploy/robot/pinky_pro/sd/enable-motor-commissioning.ps1)와 그 계약시험(test/test_new_device_setup.py)이 이미 main에 있고, 본문 Verification에는 1대 실기 실행 기록(토크 오프 ID 탐색, motor 전환, drive=ready 판독, 복원)이 있다. 승인은 새 코드 없이 결정 상태만 바꾼다.
+- gate 변화: 없음.
+- 결정: 입회 실기 세션의 스코프가 확정됐다 — ①상주 CPU 측정(measure-resident-cpu.sh) ②G4 계단(D-311/312/314) ③커미션 도우미(D-319). 이 세 가지를 한 세션에 묶는 게 다음 실기 회차의 기본 순서다.
+- 교훈: 없음.
+
+## 2026-09-29 · uncommitted · docs(plans): D-337 T5 호스트 폐루프 착지
+
+- 변경: 실행 계획 T5에 호스트 폐루프 착지를 기록했다. `tools/sim/simulate_semantic_road.py`가 무신호 stop_and_go(정지+dwell 후 `unsignalized_proceed`, 신호 관측 시 `signal_unexpected`)와 관측 융합(`signal_unknown`→fused `signal_green`, 불일치 `signal_source_conflict`) 시나리오를 production subjects 폐루프로 돌리고 `docs/validation/semantic-road-stop-and-go-2026-09-29/`(PASS)에 증거를 냈다. WSL2 Jazzy+Gazebo+`/opt/rosy` 오버레이 존재를 확인했고, 실렌더링 폐루프와 실물 LAN 벤치는 전용 벤치 회차로 남긴 기록을 계획서에 보탰다.
+- 증거: `src/runtime/sensing` 로그 참조. 커밋 1695b402(호스트 폐루프 + 시험 2 passed).
+- gate 변화: 없음. T5 잔여: WSL Gazebo 실렌더링, 관측 서비스 실HTTP, 실물 LAN.
+
+## 2026-09-30 · uncommitted · feat(fleet): D-352 S1–S3 구현 착지(브랜치 feat/fleet-robot-enrollment-s1)
+
+- 변경: D-352 문서 브랜치를 병합하고 첫 조각(S1–S3)을 구현했다. `site-lan-discovery-profile.md`에 D-352 한 줄, 하네스 `adr_gaps`에서 이미 착지한 D-347 예약 줄을 뺐다(병합 잔상).
+- 증거: LOCAL(host pytest·node). 실물 벤치 D1 미실행.
+- gate 변화: 없음.
+- 결정: D-352 Proposed 유지.
+- 교훈: 없음.
+
+## 2026-09-30 · uncommitted · docs(plan): ER 2 site deployment priority plan
+
+- Change: added `docs/plans/2026-09-30-er2-runtime-and-site-deployment-plan.md`. The sequence separates contract alignment, Fleet app composition, independent goal/stop evidence, target ownership, ROS-SIM, signed artifact/provider/site readiness, DEVICE, and FIELD gates.
+- Evidence: reflects D-326 through D-336 and the 2026-09-29 SOURCE/LOCAL execution and official ER 2 API research records. No code, physical motion, or provider request was performed.
+- Gate: none. Existing uncommitted research notes and the untracked map archive were preserved.
+- Decision: none. This plan does not authorize model calls, dispatcher activation, device motion, remote transport, or deployment.
+- Lesson: keep source integration, CLI composition, and physical acceptance as separate evidence tiers; separate tool calls, REST, Device Action, and ROS controller authority.
+
+## 2026-09-30 · uncommitted · feat(hooks): 재생성-미커밋 생성 기록이 push를 막는다
+
+- 변경: tools/hooks/pre-push에 generated_targets 기반 가드를 추가했다 — 모듈 index.md·STATUS.md 가 재생성됐는데 커밋되지 않은 상태면 push 를 거부한다. lint 는 작업 트리만 보기 때문에 이 상태로 push 하면 낡은 커밋 사본이 출하된다(2026-09-29 CI 적신 2건 — ca537a14 가 deploy/index.md 를 재생성 없이 커밋했고 caecbe69 가 그 파일을 물려받은 것, 그리고 그 자신). 가드는 harness 의 정확한 생성 대상 목록만 검사한다(무관한 index.md 는 push 를 막지 않는다). 이 커밋에는 병행 세션의 완결된 docs 저널 항목(2026-09-30 ER2 site deployment priority plan)과 그 plan 문서, 재생성된 docs/index.md 를 함께 실었다 — fee4c78e 선례의 흡수 방식.
+- 증거: test/test_pre_push_hook.py 2건 신설(파싱 + 가드 존재·대상 열거 핀). 실동 증명: 커밋 전 트리에서 가드가 dirty docs/index.md 를 정확히 적발(exit 1), 커밋 후 push 통과.
+- gate 변화: 없음.
+- 결정: 생성 기록이 dirty 인 push 는 전면 거부 — 커밋하거나 되돌리는 것만 허용한다.
+- 교훈: lint 의 녹색은 트리의 녹색이지 커밋의 녹색이 아니다.
+
+## 2026-09-30 · uncommitted · docs(deployment): 입회 세션 원커맨드 런북
+
+- 변경: docs/deployment/pinky-pro-attended-session-runbook.md 신설 — 흩어져 있던 입회 세션 조각(상주 CPU 측정 도구, D-347 기준선 §5, D-319 커미션 도우미와 복구 절차, D-311/312/314 G4 계단, D-321 승인 흐름)을 전제 확인→측정→커미션→G4→마감의 하나의 순서로 묶고, 전 구간 중단 조건과 증거 회수처를 명시했다. 모든 명령은 복붙 가능해야 하고 판정 기준은 기준선 문서를 지시한다.
+- 증거: 원본 근거 전수 대조 — measure-resident-cpu.sh(이 회차), D-319 본문(도우미 행위 경계·복구·G4 오남용 금지), D-314/D-321 조항, R4 부하 무효 조건. 원격 측정 가능성도 확인했다: ssh 대상 3종(rosy-pinky-e4us=10.160.175.16, pinky-pro, rosy-202) 모두 불통 — 로봇이 꺼져 있어 물리 세션이 유일한 경로임을 기록으로 남긴다.
+- gate 변화: 없음.
+- 결정: 세션 순서는 측정 먼저(커미션이 모드를 바꾸기 전의 as-is 상태) — 커미션 뒤 motor 모드 재측정은 보너스 데이터로.
+- 교훈: "남은 것"의 절반은 물리적 전제다 — 전제가 꺼져 있으면 최선의 해결은 그 전제를 켜는 사람을 위한 지침을 완성하는 것.
+
+## 2026-09-30 · uncommitted · feat(fleet): opt-in ER 2 Mission proposal API
+
+- Change: `fleet console --mission-api` composes Mission/Proposal persistence and read APIs using named-user auth and the shared SQLite database. Resolve fails closed with 503 when no trusted candidate resolver is configured. No ER 2 provider or Mission dispatcher is connected.
+- Safety boundary: this mode does not start the automatic queued-task dispatcher, so persisted navigation tasks are not sent to CORE on startup. Existing authenticated Fleet operator command routes remain available; this is not a global read-only mode.
+- Evidence: Fleet 702 passed, 5 skipped, including a regression for a preexisting queued task; contract suite 95 passed; flake8 passed; harness lint 0 errors and 20 freshness warnings; diff check passed.
+- Gate: SOURCE/LOCAL integration only. Provider, target, OMX Action/ROS, physical stop/readback, signed ARM64 artifact, DEVICE, and FIELD evidence are absent; deployment and physical operation remain HOLD.
+
+## 2026-09-30 · uncommitted · docs(adr): D-348 목표 증거 생산자 계약과 검증기 연결 수용
+
+- 변경: `docs/adr/D-348-goal-evidence-producer-and-verifier-wiring.md` 신설 및 ADR Log 목차 행 추가, 근거 설계 `docs/plans/2026-09-30-goal-evidence-producer-and-verifier-design.md` 신설. 사람 확인은 등록 시점(`policy-admin`)뿐이고, 등록 evaluator의 source-token 증거 제출면(D-268 정책 증거와 분리)과 마지막 Action 종단 상태 뒤 자동 `verify_goal()` 호출로 `GOAL_CONFIRMED` 전이를 계약화했다. 유예 창 경과 뒤에도 증거 부재·불충족이면 HOLD(D-332 예외 (i) 운영자 조정 대상).
+- 증거: D-328 §4(독립 증거 판정), D-332 §1·§2·§3(등록 시점 확인·전수 확인 금지·예외 4종), D-334 §3(축 분리), fleet progress.md(2026-09-29 "verifier not yet wired"), `fleet/server/goal_evidence.py` 현행 스키마 재사용 검토. 코드 변경·실물 관측·도구 개방 없음.
+- gate 변화: 없음. SOURCE/LOCAL 게이트 미변동 — 실행 계획과 시험은 별도 커밋로 나간다.
+- 결정: 첫 실물 생산자는 이 ADR이 지정하지 않는다(P4 ROS-SIM에서 별도 지정). `request_observation`·`get_mission_status` 도구화와 `POLICY_DISPATCH_ENABLED`는 불변.
+- 교훈: 없음.
+
+## 2026-09-30 · uncommitted · docs(plan): D-348 실행 계획 T1~T7 작성
+
+- 변경: `docs/plans/2026-09-30-goal-evidence-producer-and-verifier.md` 신설 및 plans 목차 행 추가. 등록부(T1)→제출 보관(T2)→자동 검증 트리거(T3, 기존 `MissionService.confirm_goal()` 재사용)→REST(T4)→검증자 연결(T5)→API Ref v1.59(T6)→harness(T7). TDD, SOURCE/LOCAL 한정, 가짜 생산자·가짜 시계. 불변 단언 6종(verifier 미설정 거절·빈 등록부 거절·증거 없는 종단 성공 금지·호출자 max_age 무시·밸브 False·정책 증거 무변경).
+- 증거: 코드 앵커 대조 — `MissionService.confirm_goal`·`MissionStore.confirm_goal`/`hold_mission` 존재, `app.py` 목표 증거 경로 없음, 생산자 등록부 없음, dispatcher는 기록만 하고 확인 호출 없음, API Ref 현행 v1.58. 코드 변경 없음.
+- gate 변화: 없음. 실행 계획 문서만이며 구현·시험은 후속 커밋다.
+- 결정: `confirm_goal` 기존 검증을 건드리지 않고 호출 경로만 추가한다(T3). 정책 증거와 저장소·경로·토큰을 공유하지 않는다.
+- 교훈: 없음.
+
+## 2026-09-30 · uncommitted · refactor(dock): 리밋스위치 인터록·NTC 보류·최소 구성 확정
+
+- 변경: 도크 최소 구성 확정 3건 — ①리밋스위치(접촉식) 채택, 리드스위치 기각(자기 도크의 자석에 자기 반응). ②하중 감지 ADC 프로브 삭제 → 리밋 직결 인터록(디바운스·단일 개폐점 유지, 전류/전압 4샘플 평균 추가). ③NTC 전면 보류(GPIO33/36 풋프린트만; 접점 NTC는 팩 열 경로가 없어 과장 인정·철회, 충전기 NTC는 IC TS핀 요구 확인 전까지 보류). 만충 HOLD·재시도 정책은 실물 이후로 보류. 도크 무모터(홀딩은 자석만) 확정.
+- 증거: test_dock_contract 7 passed(페이로드·필수 필드·안전 문구·loadDetected/setOutput 식별자 유지), services docking 372 passed(전회).
+- gate 변화: 없음.
+- 결정: 덜어낸 뒤 ESP32 일은 릴레이 구동+전류 계측+/status+폴트 넷뿐. 이 이상 덜면 충전 증명 불가.
+- 교훈: 자석-철 조합에서는 자석 극성 배치로 뒤집힘 방지가 안 된다 — 기계적 키잉(비대칭 배치/가이드 리브)+다이오드/퓨즈 2차가 정답.
+
+## 2026-09-30 · uncommitted · docs(dock): 전원 시판품 확정·물리 조립 목록
+
+- 변경: 도크 조립 설계의 자재란을 확정 — 전원은 전부 시판품(일반 USB-C PD 충전기 + PD 트리거 고정 PDO + 2S 밸런싱 충전기 모듈 + 릴레이), 설계 없음. PD 무협상은 5V만 나와 2S를 충전 못 하므로 트리거 생략 불가(유일한 전기적 필수 조건). 물리 조립 목록 추가: 포고핀·철판+패드·자석(리세스)·리밋스위치·퍼널·태그·케이블 정리·바닥 고정, 로봇 측은 철판·패드·다이오드+퓨즈만. 자동 충전 소프트웨어 체인(도크 오퍼→DOCKING→2소스 확정)은 이미 존재하므로 새로 만들 것 없음.
+- 증거: 자재·게이트 문구만. test_dock_contract 7 passed(전회).
+- gate 변화: 없음.
+- 결정: 충전기 자작 없음. 자석 분리력 예산 ≤2N 잠정은 스프링 스케일 실측으로 확정(D5).
+- 교훈: 없음.
+
+## 2026-09-30 · uncommitted · docs(adr): D-349 도크 자동 충전 코드 준비 완료 기록
+
+- 변경: D-349 상세문서 + 표행 (D-348은 병행 세션이 소모 — 목표 증거 생산자). 오늘 확정한 6가지 하드웨어 결정(자석·리밋스위치·PD 시판품·NTC 보류·만충 HOLD·무모터)과 그에 대응하는 코드 12계층의 준비 상태, 남은 실물 과제(자재·D0–D5·분리력·capabilities 전환)를 한 장으로 정리했다. 안전 경계 4조(맨접점 통전 금지·도크 단독 불신·무충전 즉시 폴백·언도킹 blind)가 코드에 박혀 있음을 명시.
+- 증거: 도킹·배터리·전력 호스트 시험 372 passed(2026-09-30), 도크 계약 7 passed, `firmware/dock` 최신 커밋 `2f3c56ab`.
+- gate 변화: 없음.
+- 결정: Pinky Pro `docking.supported`는 D5 통과 전까지 false 유지.
+- 교훈: 병행 세션의 D-348 소모를 계약시험 중간에 발견 — D-346의 ADR 중복 검사가 있으므로 즉시 D-349로 재부여. 다음 빈 번호 확인 습관화.
+
+
+## 2026-09-30 · uncommitted · docs: restore D-348 goal-evidence decision and execution record
+
+- Change: record the accepted producer registry/verifier boundary, two-order evidence lifecycle, and completed SOURCE/LOCAL task outcomes in the ADR and paired design/execute plans.
+- Evidence: D-348 registry row and API Reference v1.59 ?10.14 agree with Fleet implementation; source suite is 724 passed, 5 skipped.
+- Gate: ROS-SIM, ARTIFACT, DEVICE, FIELD remain HOLD/PARKED; no real producer, model tool dispatch, actuator operation, or physical acceptance is claimed.
+- Decision: D-348 remains Accepted as a contract and SOURCE/LOCAL implementation decision.
+
+## 2026-09-30 · uncommitted · docs: 사소한 결함 정돈 — plans AGENTS mojibake·표 복구와 LOCAL blocker 갱신
+
+- 변경: docs/plans/AGENTS.md의 mojibake 3행(2026-09-20 카메라 배치·도크 조립·Pi 벤치 설계)을 원문 문서에서 복구하고, 잘못 끼워든 D-73 행과 표를 가르던 빈 줄을 제거해 2026-09-28 이후 행이 본표에 합류하도록 했다. docs/progress.md plans의 중복 2쌍을 제거하고 LOCAL blocker를 현재 사실로 갱신 — dashboard malformed heading은 해소, 남은 실패는 병행 세션의 isaac_sim 스코어카드·fleet 크기 재판정이다.
+- 증거: harness validate_log 전 모듈 0 errors, test_every_module_log_is_valid 통과; LOCAL gate cmd 115 passed/2 failed(양쪽 모두 병행 세션 진행 항목, 이번 변경과 무관) (2026-09-30 Windows). D-348 adr_gaps 정리는 병행 세션이 완료했다.
+- gate 변화: docs LOCAL HOLD 유지, blocker 사유 교체(해소된 헤딩 → 병행 isaac_sim/fleet 2건).
+- 결정: 없음.
+- 교훈: git diff/show 출력은 콘솔 인코딩(cp949)에서 한글이 깨져 보여도 파일 내용이 깨진 것은 아니다 — 바이트 수준(`?`/U+FFFD 개수)으로 판별한 뒤 손대자.
+## 2026-09-30 · uncommitted · docs(adr): D-350 도크 하드웨어 3단계 계약 + 선구현 6건
+
+- 변경: ADR D-350 상세문서 + 표행. Phase 1(선만·계측 없음)·Phase 2(ESP32 2소스)·Phase 3(온도·카메라) 정의와 각 단계에서 소프트웨어가 하는 일 표. 선구현: ChargingConfirmation degrade, CHARGED_HOLD phase, 만춫 히스테리시스, docking.full 이벤트, deploy 오버레이. Phase 1에서 D-27 억제 안 함이 핵심 안전 결정.
+- 증거: test_docking_phases 6 passed, 도킹 전체 226 passed, API Ref §8 갱신.
+- gate 변화: 없음.
+- 결정: 하드웨어가 어떤 단계로 오든 소프트웨어는 코드 변경 없이 해당 단계 기능 제공.
+- 교훈: 없음.
+## 2026-09-30 · uncommitted · docs(adr): D-351 도킹 재시도 갈래 기록
+
+- 변경: ADR D-351 상세문서 + 표행 — 도달 실패(재시도)/전류 없음(즉시 폴트)/충전 단절(DOCKED 유지)의 세 갈래. display/info charging 필드 추가.
+- 증거: 도킹 115 passed, 표시 12 passed, 계약 통과.
+- gate 변화: 없음.
+- 결정: 접점 산화가 로봇을 죽이는 경로 제거 — contact_no_current 폴트로 운영자 알림.
+- 교훈: 없음.
+
+## 2026-09-30 · uncommitted · docs: 붉은 main 정리 — 5건 미등록 실패를 계약 안에서 해소
+
+- 변경: 병행 세션이 남긴 5건의 미등록 실패를 해소했다. (1) 버전 핀 v1.59(app.py 2곳·line-follow 핀 — D-347의 3곳 한 변경 단위 준수), (2) D-178 기준선에 isaac_sim 잠정 행(4·5·4·4·5=88 A) 추가와 회차 문서 동일 행, (3) SIZE_VERDICTS fleet 11164→11912 재판정(split 유지), (4) io closure 계약에 D-84 지연 패키지 예외 명시, (5) 문서 모듈 LOCAL blocker를 해소 사실로 갱신하고 GO로 승격.
+- 증거: quick tier + docs 게이트 cmd 123 passed, 변이 증명 1건(io closure), harness lint 0 에러 (2026-09-30 Windows).
+- gate 변화: docs LOCAL HOLD→GO (blocker였던 isaac_sim 스코어카드·fleet 크기 재판정을 같은 회차에 해소).
+- 결정: isaac_sim 잠정 채점은 다음 회차 재채점 대상이다(omx·pinky_pro·overhead와 같은 절차).
+- 교훈: isaac_sim AGENTS.md·progress.md의 "no own tests" 문구는 실제(test/ 3건)와 어긋난다 — 다음 isaac_sim 회차에서 바로잡을 것.
+
+## 2026-09-30 · uncommitted · docs(adr/plan): D-357 ER 2 Mission feedback loop
+
+- Change: accepted D-357 to return scoped Fleet progress to ER 2 through bounded middleware-executed tools and durable event-triggered turns; added the task-by-task SOURCE/LOCAL implementation plan.
+- Boundaries: Mission journal stays authoritative; provider replay stays ephemeral with `store=false`; replan remains a candidate; stop, device action, goal evidence, and physical readback remain separate. `POLICY_DISPATCH_ENABLED` stays false.
+- Evidence: `python tools/harness/rosy_harness.py lint` passed with 0 errors and 20 existing freshness warnings; documentation contract suite passed (80 passed). Index generation completed.
+- Gate: no implementation, provider call, ROS/OMX activation, device install, or physical acceptance.
+
+## 2026-09-30 · uncommitted · docs(adr/plan): D-358 feedback outbox and replan fences
+
+- Change: added D-358 as an append-only implementation-contract refinement to D-357 and updated the plan with an ownership map, trusted turn scope, provider-egress approval, successor-Mission replans, explicit outcome/tool policy, and atomic stop-generation fencing.
+- Boundaries: ambiguous provider POSTs remain `UNKNOWN` and are never automatically replayed; the outbox guarantees at most one client submission attempt, not exactly-once provider execution. Device ROS/driver, goal-verifier, and physical stop ownership remain separate; dispatch stays disabled.
+- Evidence: current pre-existing Mission/progress/ER2/API suite 54 passed; documentation contract suite 80 passed; harness lint 0 errors and 21 freshness warnings.
+- Gate: D-357 implementation tests do not exist yet and are now mandatory in the plan; no ROS-SIM, provider call, device install, or physical acceptance.
+\n## 2026-09-30 · uncommitted · docs(adr): D-352 외부 장비 공통 패턴
+
+- 변경: ADR D-352 상세문서 + 표행. 도크와 신호등의 공통점 6개(ESP32·폴링·필수 필드 누락=오류·페일세이프·NVS·소스 스캔 시험)와 차이 4개(폴링 주체·명령면·페일세이프 방향·안전 역할)를 정리하고, 공통 어휘(폴링 실패 4상태·준비 프레임 wire/instrumented/verified)와 계약 상호 참조를 확정. DOCKING 진입 시 traffic_policy ADVISORY 강등을 명시적 계약으로 승격.
+- 증거: 도크·신호등 계약서 대조, 기존 시험 통과 상태.
+- gate 변화: 없음.
+- 결정: 공통 추상 클래스는 3번째 소비자가 생길 때까지 만들지 않는다 — 패턴 문서로 족하다.
+- 교훈: 두 장비가 우연히 6개 속성이 일치했다는 것은 패턴이 옳다는 증거다 — 의도적 공유로 전환한다.\n
+\n## 2026-09-30 · uncommitted · feat(arch): D-354 mDNS 서비스 발견
+
+- 변경: 도크·신호등 펌웨어에 ESPmDNS 등록 (각 3줄: include + MDNS.begin + addService). 클라이언트 발견 유틸리티 core_common/discover.py (zeroconf → avahi-browse → dns-sd 3단 폴백). 계약 문서에 서비스명 표 추가. 시험 5건 (펌웨어 광고·폴백·서비스명 정합). 기존 IP 설정은 호환 (레거시 벤치).
+- 증거: test_mdns_discovery 5 + test_dock_contract 7 + test_signal_contract 14 = 26 passed.
+- gate 변화: 없음.
+- 결정: 장비를 사이트에 두면 전원만 연결하면 된다 — IP·설정·파일 수정 불필요. DHCP가 바뀌어도 .local 이름은 불변.
+- 교훈: mDNS는 ESP32에 네이티브로 있어서 3줄이면 된다 — 이걸 안 쓸 이유가 없었다.\n
+## 2026-09-30 · uncommitted · docs(plan): 도크·외부 장비 5단계 구현 플랜 + D-355
+
+- 변경: docs/plans/2026-09-30-dock-device-implementation-plan.md 신설 — D-349~D-354의 6개 ADR 결정을 자재(A)→도크 벤치(B)→로봇 실기(C)→활성화(D)→신호등 벤치(E)→통합(F)의 6단계 실행 순서로 정리. 자재 목록 13품목, 게이트 D0–D5·E1–E5·F1–F3, 의존 그래프, 완료 조건 포함. ADR D-355 표행으로 실행 순서 확정 기록.
+- 증거: 기존 ADR 6건·게이트 문서·런북에서 전수 추출. 새 코드 없음.
+- gate 변화: 없음.
+- 결정: Phase B와 C는 병행 가능 (도크 벤치와 로봇 실기가 독립). Phase D는 B6 통과 후에만.
+- 교훈: 6개 ADR이 각기 옳았지만 실행 순서가 없으면 다음 사람이 무엇부터 할지 모른다 — 플랜이 그 갭을 메운다.
+
+## 2026-09-30 · uncommitted · docs: CI 적신 뒤끝 — C6 판정 기록과 isaac_sim 등록 완성
+
+- 변경: (1) 2026-09-06-module-split-criteria.md에 `bridge/display.py` → `battery.charging` reach의 C6 판정을 추가 — "Seam lie — fixed by deletion"(멤버는 BatteryStatus에 선언돼 있고 raw Battery에는 없어 getattr가 항상 False; 직접 접근으로 대체돼 reach 소거, ALLOWED 무변경). (2) isaac_sim의 harness 등록을 완성(functional_kind·functional·tests)하고 AGENTS.md·progress.md의 "no own tests" 오기를 정정, ROS-SIM을 D-322 명시대로 HOLD로. src/AGENTS.md 시험 호출에 sim/isaac_sim/test 추가.
+- 증거: test_module_criteria·test_module_functional_surface·test_module_structure·isaac_sim 자기 시험 47 passed (2026-09-30 Windows). 수정 전 functional surface는 isaac_sim functional_kind 누락으로 1 failed — main CI가 core 단계에서 멈춰 아직 도달하지 못한 두 번째 잠복 실패였다.
+- gate 변화: isaac_sim ROS-SIM N/A→HOLD (blocker 신규 기록, D-322와 일치).
+- 결정: 없음.
+- 교훈: CI가 첫 실패에서 멈추면 그 뒤의 실패는 보이지 않는다 — 로컬에서 전 스위트를 먼저 돌리고 push한다.
+
+## 2026-09-30 · uncommitted · docs(harness): 11개 모듈 last_verified를 bed604ef로 기록
+
+- 변경: core·control·fleet·docs·core_common·core_events·core_features·core_api_web·isaac_sim·games·omx_adapter의 last_verified를 bed604ef(2026-09-30)로 기록. 각 모듈의 LOCAL gate cmd(또는 그 전체 스위트)를 이 트리에서 통과시켰다: gateway 1439·sensing 1665·fleet 746·events/services/web_common/api_web/foundation/dashboard/isaac_sim/games/omx_adapter 1089+9·overhead 122·omx CLI exit 0 (2026-09-30 Windows).
+- 증거: quick tier + functional surface + scorecard 127 passed; harness 계약 시험 통과. 병행 세션의 미푸시 커밋은 docs 트리만 건드려 스윕 대상 코드는 무결.
+- gate 변화: 없음 (기록 갱신만).
+- 결정: web_common(임시 디렉터리 스크립트 cmd)·dashboard(브라우저 매트릭스)·overhead(android gradle·docker)·gz_sim(ROS 의존 skip)·deploy(전체 test/ 실행 중)은 이 호스트에서 완전 검증이 불가해 스윕에서 제외 — 정직한 기록만 남긴다.
+- 교훈: web_common의 LOCAL cmd가 X:\DevTemp 스크립트를 가리킨다 — 재현 불가한 cmd는 검증 기록이 아니므로 소유자가 저장소 내 명령으로 바꿔야 한다.
+
+## 2026-09-30 · uncommitted · docs(adr): D-354 천장 카메라 경기장 자동 검출 제안 (Proposed)
+
+- 변경: `docs/adr/D-354-overhead-field-auto-detection-proposal.md` 추가, ADR Log·progress `adrs` 목록 등록. 검출은 Vision에서만, `GET /api/vision/sources/{id}/field-proposal`은 frame 경로와 같은 lease·헤더, 제안은 운용자 수락 전 적용 안 함, 설정 W×H 불일치 안내, 브라우저 로컬 W×H 입력, 레이어 토글.
+- 증거: 문서만. 번호 확인 — 로컬 브랜치 전체와 `.worktrees/*/docs/adr`에서 D-341·D-345..D-353 사용 중(D-353은 `feat/pilot-teleop`), D-354 비어 있음.
+- gate 변화: 없음.
+- 결정: D-354 Proposed.
+- 교훈: 없음
+
+## 2026-09-30 · uncommitted · docs: main CI 초록 회복 — 6연속 적신 수리 완료
+
+- 변경: 세션 전체에 걸쳐 41b3a704부터 이어진 main CI 적신 6연속을 수리했다. 층별: (1) C6 죽은 charging reach[bed604ef], (2) isaac_sim functional·target 등록[bed604ef·d4e9fcff], (3) Node 18 ESM + 고아 시험 연결[1ce3c40a], (4) D-353 도크 파싱 재연결·시크릿 스캐너 변수명[d4e9fcff], (5) enrollment 공용 컨트롤 계약 3건[c8050390]. deploy last_verified를 초록 커밋으로 기록했다.
+- 증거: CI run 36628331442 conclusion=success at c8050390 (2026-09-30). 로컬: web_common+dialog 100·fleet 849·services 265·gateway 1439·sensing 1665 passed, Node 18 컨테이너 검증 1건, 변이 증명 1건.
+- gate 변화: deploy last_verified 기록(경고 해소). docs LOCAL GO 유지.
+- 결정: 없음.
+- 교훈: CI가 한 단계에서 멈추면 그 아래 층은 안 보인다 — 층마다 로컬 전수 검증이 push보다 먼저다. 병행 세션의 랜딩은 그 세션의 게이트만 통과한다; 공용 계약(web_common·D-218·시크릿 스캔)은 소유 모듈 밖에서 검사된다.
+## 2026-09-30 · uncommitted · feat(fleet): fence ER2 feedback successor candidates
+- Change: added one-transaction stop/generation/Mission/action/attempt/event/observation fencing before ER2 candidate visibility; candidates are idempotent by feedback turn, carry source correlation, and resolve only into a separately linked successor Mission. Stop or event drift before resolution rejects the candidate. The async tool dispatcher uses an injected post-action observation source and returns unavailable if it is not configured.
+- Evidence: Fleet plus foundation host suites 995 passed, 6 skipped; ER2 focused contract/doc checks 71 passed; changed-file flake8 clean. Full Fleet flake8 still reports unrelated existing findings in hub, console, and older tests.
+- Gate: SOURCE/LOCAL only. No production trusted Vision reader, provider worker, credentials, policy dispatch, ROS, device, or field enablement.
+## 2026-09-30 · uncommitted · fix(fleet): let Fleet choose the fresh post-action frame
+- Change: removed the model-supplied observation ID from the `propose_replan` tool schema. Fleet now requests a trusted frame after the terminal Action timestamp, binds its concrete ID/digest to the typed ER 2 selector response, and retains the same atomic visibility fence. Camera image egress still requires a separate explicit data-class approval.
+- Evidence: Fleet plus foundation host suites 995 passed, 6 skipped; ER2 path suites 74 passed; changed-file flake8 clean.
+- Gate: no trusted production Vision reader or app worker is configured; replan stays unavailable unless both are injected and approved.
+## 2026-09-30 · uncommitted · chore(structure): re-judge Fleet size after ER2 candidate fencing
+- Change: updated `SIZE_VERDICTS["fleet"]` from 14,260 to 14,616 lines after atomic candidate fencing and linked-successor regression coverage. The split verdict and unscheduled B2 plan remain unchanged.
+- Evidence: `python -m pytest src/site/fleet/test/ test/ -q` = 3,675 passed/188 skipped after the re-judgment; the focused ER2/API/docs set passed 65 tests, and the documentation gate passed 80 tests. Changed-file flake8 and `git diff --check` passed.
+- Gate: SOURCE/LOCAL only; no trusted Vision reader, provider worker, policy dispatch, ROS, device, or field enablement.
+## 2026-09-30 · uncommitted · feat(fleet): wire optional ER2 outbox consumer
+- Change: added atomic oldest-pending outbox claims and `MissionModelTurnWorker.consume_next()`. `create_app` runs a worker loop only when an explicitly injected worker uses the configured shared SQLite database; default/CLI composition remains provider-disabled.
+- Evidence: RED reproduced missing `claim_next`, `consume_next`, and app injection. The outbox-store, feedback-loop, and Mission API suites passed after implementation; final batch verification is in progress.
+- Gate: SOURCE/LOCAL only. No provider credentials, egress approvals, trusted Vision reader, policy dispatch, ROS, device, or deployment were enabled.
+## 2026-09-30 · uncommitted · feat(fleet): add bounded trusted ER2 post-action Vision reader
+- Change: added an optional reader using fixed workcell/source/camera mappings and the existing source-scoped Vision lease endpoint. It bounds no-store JPEG response bytes, checks JPEG signature and freshness metadata, requires a frame captured after terminal Action time, and is injected/closed only with an explicitly configured worker. Updated D-358, implementation plan, and API reference v1.62. Default CLI/provider path remains disabled; no egress approval or credentials were added.
+- Evidence: ER2/Mission/Vision/API focused suite 119 passed. Documentation gate initially found stale generated indexes; regenerated both indexes before rerun. ROS/device/provider egress and runtime activation remain unverified and disabled.
+- Gate: SOURCE/LOCAL only. No camera/Mission provider egress approval, ROS, device, physical motion, or deployment.
+## 2026-09-30 · uncommitted · fix(fleet): enforce the ER2 feedback deadline across tool dispatch
+- Change: replaced the adapter's duplicated 45-second literal with `ER2_PROVIDER_DEADLINE_SECONDS`; the same absolute turn deadline now bounds async replan dispatch and off-loop synchronous status reads. Added exact byte-limit tests for feedback context, tool results, replay, and provider response; exact freshness/cost/image boundaries; and call/step cap and malformed-step checks.
+- Evidence: D-357/D-358 host suites passed 136 tests. The new async-tool timeout test failed against the previous code and passed after deadline enforcement. Final documentation gate and harness lint rerun pending after index generation.
+- Gate: SOURCE/LOCAL only. No provider credential, policy dispatch, ROS/device, physical actuation, or deployment enabled.
+## 2026-09-30 · uncommitted · fix(fleet): recheck ER2 egress fence after Vision capture
+- Change: ER 2 replan now revalidates the complete server egress policy before capture and rechecks current Mission eligibility, stop generation, and event watermark after capture immediately before the image selector request. The captured image envelope must exactly match the trusted turn scope; stale or revoked workcell state cannot send the frame to Gemini.
+- Evidence: a regression test reproduced the stale-frame egress path when Mission eligibility changed during capture; it passes with zero selector-provider calls. Final ER2 host batch and docs gate are rerunning.
+- Gate: SOURCE/LOCAL only. No provider credentials, provider enablement, policy dispatch, ROS/device, or deployment.
+## 2026-09-30 · uncommitted · docs(validation): record final ER2 feedback audit gates
+- Change: recorded the final boundary/deadline and post-capture egress-fence verification in the implementation plan and module/repository logs.
+- Evidence: ER2/D-357/D-358 contracts, stateless adapter, allowlisted tools, outbox, candidate fencing, Vision reader, app lifecycle, and Overhead preview suites: 137 passed. Documentation gate: 80 passed. Changed-file flake8 clean. Harness lint: 0 errors, 12 existing freshness warnings.
+- Gate: SOURCE/LOCAL only. No provider credentials or egress approval configured; no policy dispatch, ROS, device, actuation, or deployment.
+
+## 2026-09-30 · uncommitted · fix(contracts): reconcile ER2 API version and Fleet size ratchet
+- Change: aligned CORE FastAPI contract labels with API reference v1.62; re-judged Fleet's measured 15,000-line size against the existing unscheduled B2 split verdict after the bounded ER2 consumer, trusted Vision reader, and fence coverage landed.
+- Evidence: pre-push fast contract suite reproduced both failures (`test_app_description_names_the_live_contract_version`, Fleet `SIZE_VERDICTS` regrowth); targeted rerun and generated harness checks pending.
+- Gate: no runtime/provider enablement or deployment authorization is implied; ER2 remains disabled by default.

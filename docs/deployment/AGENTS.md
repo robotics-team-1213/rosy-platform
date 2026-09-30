@@ -27,6 +27,7 @@ safety plan (D-246).
 | `release-signing-key.md` | Ed25519 signing key handling |
 | `release-retention.md` | How many signed releases to keep |
 | `pinky-pro-first-device-runbook.md` | Fail-closed G0-G5 first physical Pinky Pro commissioning, including the hardware SLAM/MCAP map run |
+| `pinky-release-artifact-selection.md` | D-325 path selector: none, native payload, flashable image, or fail-closed review |
 | `pinky-pro-commissioning-body-templates.md` | Exact operator-attested G3-G5 JSON bodies; G5 binds MCAP and generated YAML/PGM hashes; invalid until physically measured |
 
 ## Subdirectories
@@ -43,6 +44,7 @@ None.
 - Do not enable `lidar.standby_stop` until `power-bench-verification.md` passes. `pi5-acceptance-checklist.md` gates are HOLD until field sign-off.
 - A simulated or host-built map never satisfies G5. The device session must retain bounded MCAP telemetry, the generated YAML/PGM pair, their hashes, navigation evidence, and the final stopped/E-stop state.
 - D-145's native GitHub workflow produces an unsigned payload only. Offline Ed25519 signing and publication verification remain separate mandatory gates.
+- Use `pinky-release-artifact-selection.md` before a Pinky build. `artifact_impact.py` is advisory and fails closed; it never grants signing, install, motion, or acceptance approval.
 
 ### Testing Requirements
 

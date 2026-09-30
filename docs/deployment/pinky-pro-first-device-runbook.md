@@ -17,6 +17,11 @@ certificate.
 > apply; a missing approval or trial record is a HOLD, not an instruction to
 > create an empty marker.
 
+> Before building, use the [Pinky release artifact selector](pinky-release-artifact-selection.md).
+> First install or an unknown device baseline still requires a flashable image;
+> an existing compatible installation may use the shorter native-payload path.
+> The selector does not replace signing or device acceptance.
+
 ## 0. Build and sign the G0 release
 
 Do this before powering the target robot. The image build host must be a native

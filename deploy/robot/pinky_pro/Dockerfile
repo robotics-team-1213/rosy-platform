@@ -56,7 +56,7 @@ COPY src/contracts/foundation /opt/rosy_ws/src/contracts/foundation
 COPY src/runtime/events /opt/rosy_ws/src/runtime/events
 COPY src/runtime/services /opt/rosy_ws/src/runtime/services
 COPY src/runtime/api_web /opt/rosy_ws/src/runtime/api_web
-COPY src/hmi/web /opt/rosy_ws/src/hmi/web
+COPY src/hmi/web_common /opt/rosy_ws/src/hmi/web_common
 COPY src/hmi/dashboard /opt/rosy_ws/src/hmi/dashboard
 
 WORKDIR /opt/rosy_ws
@@ -125,18 +125,19 @@ RUN git clone https://github.com/Slamtec/sllidar_ros2.git src/sllidar_ros2 \
     && git checkout --detach ${SLLIDAR_COMMIT} \
     && rm -rf .git
 COPY src/contracts/interfaces ./src/contracts/interfaces
+COPY src/contracts/foundation ./src/contracts/foundation
 COPY src/sim/description ./src/sim/description
 COPY src/products/pinky_pro/bringup ./src/products/pinky_pro/bringup
 COPY src/runtime/navigation ./src/runtime/navigation
 COPY src/products/omx/adapter ./src/products/omx/adapter
 COPY src/products/omx/profile ./src/products/omx/profile
 COPY src/runtime/sensing ./src/runtime/sensing
-COPY src/hmi/web ./src/hmi/web
+COPY src/hmi/web_common ./src/hmi/web_common
 RUN mkdir -p src/sim/description/meshes
 RUN set -eo pipefail \
     && source /opt/ros/jazzy/setup.bash \
     && colcon build --merge-install \
-        --packages-select sllidar_ros2 interfaces description bringup navigation omx_adapter omx control web_common \
+        --packages-select sllidar_ros2 interfaces core_common description bringup navigation omx_adapter omx control web_common \
     && test -d /opt/rosy_ws/install
 
 FROM io-runtime AS io

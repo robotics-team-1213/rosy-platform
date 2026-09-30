@@ -17,7 +17,7 @@ WEB = ROOT / "src" / "hmi" / "dashboard"
 #: mount — app.js imports `/common/core_ui_logic.js` absolutely, and a request
 #: with no route escapes to real DNS (rosy.test does not resolve) and kills the
 #: boot before the first assertion.
-WEB_COMMON = ROOT / "src" / "hmi" / "web"
+WEB_COMMON = ROOT / "src" / "hmi" / "web_common"
 
 from browser_harness import DECLINE_CONFIRM, accept_confirm, open_page  # noqa: E402
 
@@ -2334,3 +2334,54 @@ def test_a_held_robot_s_long_reason_keeps_the_console_inside_the_screen(viewport
 
     assert fit["docOverflow"] <= 0 and fit["actOverflow"] <= 1 and fit["estopInside"], f"{viewport}: {fit}"
     assert line["page"] == 0 and line["inside"], f"{viewport}: {line}"
+
+
+BRIDGE_INIT = """
+(() => {
+  const native = window.fetch.bind(window);
+  window.fetch = async (input, options = {}) => {
+    const path = new URL(typeof input === 'string' ? input : input.url, location.href).pathname;
+    if (path === '/api/v1/ui/surfaces/console') {
+      const surfaces = (window.__callerRole === 'viewer')
+        ? [{id: 'console', title: '운용'}]
+        : [{id: 'console', title: '운용'}, {id: 'setup', title: '작업 준비'}, {id: 'device', title: '설치·정비'}];
+      return new Response(JSON.stringify({surface: 'console', role: window.__callerRole || 'administrator',
+        revision: 'bridge-test', panels: [], surfaces}), {
+        status: 200, headers: {'Content-Type': 'application/json'}});
+    }
+    return native(input, options);
+  };
+})()
+"""
+
+
+@pytest.mark.parametrize("role, expected", [
+    ("administrator", ["/console", "/setup", "/device"]),
+    ("viewer", ["/console"]),
+])
+def test_the_home_bridge_offers_the_caller_role_surfaces(role, expected):
+    # 비평 P1: /dashboard는 브리지다 — 목적지는 매니페스트 surfaces가 말하고
+    # 서버가 역할로 걸러 준다. 클라이언트는 그릴 뿐이다.
+    pytest.importorskip("playwright.sync_api")
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as playwright:
+        try:
+            browser, page = _launch_page(
+                playwright, extra_init=BRIDGE_INIT + f"window.__callerRole = {role!r};")
+        except Exception as error:
+            pytest.skip(f"Playwright Chromium unavailable: {error}")
+        page.route("http://rosy.test/console", lambda route: route.fulfill(
+            status=200, content_type="text/html",
+            body="<!doctype html><html lang=ko><body data-console=1></body></html>"))
+        page.goto("http://rosy.test/dashboard", wait_until="domcontentloaded", timeout=5000)
+        page.wait_for_function(
+            "() => document.querySelectorAll('#surface-bridge a').length === " + str(len(expected)))
+        drawn = page.evaluate(
+            "() => [...document.querySelectorAll('#surface-bridge a')].map((a) => a.getAttribute('href'))")
+        assert page.locator("#surface-bridge").get_attribute("aria-label") == "역할 화면"
+        page.click("#surface-bridge a[href='/console']")
+        page.wait_for_function("() => document.body.dataset.console === '1'")
+        browser.close()
+
+    assert drawn == expected

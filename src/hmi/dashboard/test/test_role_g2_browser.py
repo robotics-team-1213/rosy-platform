@@ -146,7 +146,16 @@ def test_role_procedure_g2_local_matrix(tmp_path):
                     if role == "operator" and surface == "device":
                         page.wait_for_function("document.querySelector('#surface-status')?.textContent.includes('역할')")
                     else:
-                        page.wait_for_function("document.querySelectorAll('ui-section[data-panel]').length > 0")
+                        # 첫 패널이 아니라 조립 완료를 기다린다 — showStatus("")는
+                        # 모든 패널 마운트 뒤에만 불린다. 조립 중 캡처는 빈 카드와
+                        # 로딩 문구를 남겨 G2 셀을 불성실하게 만든다(D-153.3).
+                        page.wait_for_function("""() => {
+                          const status = document.querySelector('#surface-status');
+                          if (!status) return false;
+                          if (status.hidden) return true;
+                          const text = (status.textContent || '').trim();
+                          return text !== '' && text !== '화면을 불러오는 중입니다.';
+                        }""")
                     page.wait_for_timeout(500)
                     if scenario == "safe_stop":
                         page.wait_for_function("document.querySelector('#safety-mode-status')?.textContent.includes('안전 정지')")

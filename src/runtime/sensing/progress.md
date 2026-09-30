@@ -2,7 +2,7 @@
 module: control
 logical_modules: [M05, M06, M07, M11]
 owner: CONTROL
-last_verified: { commit: "uncommitted", date: 2026-09-22 }
+last_verified: { commit: "bed604ef", date: 2026-09-30 }
 gates:
   SOURCE:
     state: GO
@@ -46,7 +46,7 @@ plans:
 - 흡수된 ROS 2 Jazzy 패키지로 sensing/camera·OpenCV/calibration/planning/safety-policy/navigation-session 순수 로직을 제공한다(AGENTS.md).
 - 최종 `cmd_vel` 발행과 이동 명령 중재는 CORE 소유다(D-38). 이 패키지의 레거시 전체 스택은 CORE와 병행 기동하지 않는다.
 - 흡수된 Control sensor adapter는 기본 비활성이며, 켜면 Device 보정 generation에 묶인다(D-47; `core/progress.md` 참조).
-- `web_node`+`dashboard.html`은 레거시 런치 진단 화면이다. 운용자 콘솔이 아니며 compose에 없다(D-77).
+- `web_node`+`diagnostic.html`은 레거시 런치 진단 화면이다. 운용자 콘솔이 아니며 compose에 없다(D-77).
 - LOCAL 증거는 `8fdd8d2` 기준이다. Windows에서는 `PYTHONPATH`를 `;`로 구분한다.
 - `map_260905_update_v2` 단일 로봇 mapping 슬라이스는 Gazebo Harmonic에서 완주했다. 접근 가능한 본체 구성공간의 unknown/occupied는 모두 0%이고 CORE가 최종 `cmd_vel`을 단독 발행했다.
 - D-143 차선 추종은 IR 또는 카메라 한 소스만 관제에서 선택하며, Control은 evidence만 내고 CORE가 제한된 Navigation 후보 명령을 만든다. hardware mode의 IO 이미지에는 V4L2 카메라와 Pinky I²C ADC 센싱 경로가 포함된다.

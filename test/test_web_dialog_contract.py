@@ -12,28 +12,45 @@
    (Fleet 전체 정지·콘솔 모드 전환·정책 적용의 거부 경로).
 """
 
+import importlib.util
 from pathlib import Path
 import re
 
 ROOT = Path(__file__).resolve().parents[1]
-SURFACES = [
-    ROOT / "src" / "hmi" / "dashboard",
-    ROOT / "src" / "site" / "fleet" / "fleet" / "server" / "web",
-    ROOT / "src" / "site" / "games" / "games" / "web",
-]
+
+
+def _load_registry():
+    """D-329 표면 레지스트리를 경로로 직접 읽는다.
+
+    `test/` 와 `src/hmi/web_common/test` 는 한 파일 트리에 있으나 서로의 import 경로에
+    없다. sys.path 를 넓히면 그쪽 conftest 까지 함께 올라오므로 경로로 로드한다.
+    """
+    path = ROOT / "src" / "hmi" / "web_common" / "test" / "surface_registry.py"
+    spec = importlib.util.spec_from_file_location("rosey_surface_registry", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+registry = _load_registry()
 
 #: 파일별 window.confirm 허용 수. 늘릴 때는 이 표와 함께 커밋한다.
 PINNED_CONFIRMS = {
     "app.js": 9,
     "settings.js": 11,
     "map.js": 1,
-    "console.js": 2,   # Fleet 목표 지정과 전체 정지
+    "console.js": 3,   # Fleet 목표 지정, 전체 정지, 정지 래치 재허가
     "roster.js": 1,    # 카메라 고장 뒤 IR 추적 선택 확인
+    "enrollment.js": 1,  # 등록된 로봇 제거 — 등록 토큰 회수 확인 (S1)
 }
 
 
 def surface_scripts():
-    for base in SURFACES:
+    for base in registry.for_contract(ROOT, "dialog"):
+        if base.is_file():
+            if base.suffix == ".js":
+                yield base
+            continue
         for path in sorted(base.glob("*.js")):
             yield path
 

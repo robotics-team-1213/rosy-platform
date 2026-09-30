@@ -25,6 +25,7 @@ class TrafficPolicyPatch(BaseModel):
     map_id: Optional[str] = None
     scene_revision: Optional[str] = None
     policy_revision: Optional[str] = None
+    junction_rule: Optional[str] = None
     approach_distance_m: Optional[float] = None
     stop_distance_m: Optional[float] = None
     stop_dwell_s: Optional[float] = None

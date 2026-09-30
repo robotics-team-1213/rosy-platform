@@ -31,6 +31,9 @@ from core_features.navigation.manager import NavigationManager
 from core_features.navigation.readiness import NavigationReadinessGate
 from core_features.line_follow import LineFollowConfig, LineFollowManager
 from core_features.traffic_policy import (
+    SignalObserverMonitor,
+    SignalObserverPoller,
+    SignalObserverSourceConfig,
     TrafficPolicyConfig,
     TrafficPolicyManager,
     TrafficPolicyMode,
@@ -175,6 +178,8 @@ def _traffic_policy_config(raw: dict[str, Any]) -> TrafficPolicyConfig:
             "scene_revision", defaults.scene_revision)),
         policy_revision=str(raw.get(
             "policy_revision", defaults.policy_revision)),
+        junction_rule=str(raw.get(
+            "junction_rule", defaults.junction_rule)),
         approach_distance_m=float(raw.get(
             "approach_distance_m", defaults.approach_distance_m)),
         stop_distance_m=float(raw.get(
@@ -187,6 +192,21 @@ def _traffic_policy_config(raw: dict[str, Any]) -> TrafficPolicyConfig:
             "min_confidence", defaults.min_confidence)),
         proceed_speed_scale=float(raw.get(
             "proceed_speed_scale", defaults.proceed_speed_scale)),
+    )
+
+
+def _signal_observer_binding(
+        raw: dict[str, Any]) -> Optional[SignalObserverSourceConfig]:
+    """D-337 measured-light binding; an absent or empty block is feature-off."""
+    block = raw.get("signal_observer") or {}
+    if not isinstance(block, dict) or not block:
+        return None
+    roi_map = block.get("roi_map") or {}
+    return SignalObserverSourceConfig(
+        url=str(block.get("url", "")),
+        roi_map={str(name): str(target) for name, target in roi_map.items()},
+        timeout_s=float(block.get("timeout_s", 1.0)),
+        poll_interval_s=float(block.get("poll_interval_s", 0.5)),
     )
 
 
@@ -236,6 +256,8 @@ class CoreServices:
     nav: NavigationManager
     line_follow: LineFollowManager
     traffic_policy: TrafficPolicyManager
+    # D-337 measured-light observer monitor; None while no observer is bound.
+    signal_observer: Optional[SignalObserverMonitor]
     vision: VisionFrameStore
     readiness: NavigationReadinessGate
     power: PowerManager
@@ -336,16 +358,39 @@ class CoreServices:
                                 readiness=readiness)
         line_follow = LineFollowManager(
             events, config=_line_follow_config(config.get("line_follow", {}) or {}))
+        traffic_policy_config = _traffic_policy_config(
+            config.get("traffic_policy", {}) or {})
         traffic_policy = TrafficPolicyManager(
             events,
-            config=_traffic_policy_config(
-                config.get("traffic_policy", {}) or {}),
+            config=traffic_policy_config,
             simulation_signal_control=bool(
                 (config.get("runtime") or {}).get("mode") == "simulation"
                 and (config.get("traffic_policy") or {}).get(
                     "simulation_signal_control", False)
             ),
         )
+        # D-337 T3: the measured-light poller exists only when the operator
+        # binds an observer; a binding without the policy's map/scene would
+        # have every frame rejected, so it fails the build instead.
+        observer_binding = _signal_observer_binding(
+            config.get("traffic_policy", {}) or {})
+        signal_observer: Optional[SignalObserverMonitor] = None
+        if observer_binding is not None:
+            if not traffic_policy_config.map_id \
+                    or not traffic_policy_config.scene_revision:
+                raise ValueError(
+                    "traffic_policy.signal_observer requires the policy's "
+                    "map_id and scene_revision")
+            signal_observer = SignalObserverMonitor(
+                SignalObserverPoller(
+                    observer_binding,
+                    map_id=traffic_policy_config.map_id,
+                    scene_revision=traffic_policy_config.scene_revision),
+                traffic_policy,
+                stale_after_s=traffic_policy_config.stale_after_s,
+                events=events,
+            )
+            signal_observer.start()
         vision_cfg = config.get("vision", {}) or {}
         vision = VisionFrameStore(
             max_bytes=int(vision_cfg.get("preview_max_bytes", 512_000)),
@@ -487,6 +532,7 @@ class CoreServices:
                    waypoints=waypoints, nav=nav,
                    line_follow=line_follow,
                    traffic_policy=traffic_policy,
+                   signal_observer=signal_observer,
                    vision=vision,
                    readiness=readiness,
                    power=power, battery=battery, docking=docking, swarm=swarm,

@@ -32,8 +32,8 @@
 
 ## 최근 기록
 
+- 2026-09-30 · uncommitted · docs(harness): ROS-SIM blocker를 실제 조건으로 정정
+- 2026-09-29 · uncommitted · fix(face): ASSIST REQ renders as a warn-filled chip (P4 round)
 - 2026-09-27 · uncommitted · fix(face): E-STOP 정보 카드의 우선순위와 배터리 줄
 - 2026-09-27 · uncommitted · fix(face): 웨이크 카드 중 power/mode 전환 유예 (D-309)
 - 2026-09-27 · uncommitted · fix(emotion): D-306 정보 카드 긴 문자열 경계
-- 2026-09-26 · uncommitted · feat(emotion): D-260 boot card state line and top todo
-- 2026-09-25 · uncommitted · refactor(hmi): move emotion under src/hmi (D-231)

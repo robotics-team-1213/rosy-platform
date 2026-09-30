@@ -30,8 +30,8 @@
 
 ## 최근 기록
 
-- 2026-09-28 · uncommitted · validation(overhead): recheck physical camera availability
-- 2026-09-28 · uncommitted · apply measured rectification to Fleet preview only
-- 2026-09-28 · uncommitted · serve authorized latest-frame preview
-- 2026-09-27 · 778bbd31 · verify packaged camera-to-Fleet sighting path (LOCAL)
-- 2026-09-26 · uncommitted · feat(site): TLS Docker path and durable sighting readback
+- 2026-09-30 · uncommitted · docs: 경기장 자동 검출 ADR 번호 D-354 → D-360
+- 2026-09-30 · uncommitted · fix(overhead): D-354 제안 검출을 이벤트 루프 밖에서, 소스당 초당 1회
+- 2026-09-30 · uncommitted · feat(overhead): D-354 경기장 모서리 제안과 field-proposal 경로
+- 2026-09-30 · uncommitted · 리뷰 반영: 실제 마커 보고, 무인터넷 Wi-Fi, 카메라 끄고 설정 열기
+- 2026-09-30 · uncommitted · 천장 설치용 앱: 다음 행동을 말하는 상태, 화면 꺼짐 송출, 기기 상태

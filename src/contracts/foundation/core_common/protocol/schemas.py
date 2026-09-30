@@ -14,11 +14,14 @@ additive 는 문서(API Ref)의 MINOR 로 기록한다(PRT-006, API Ref v1.8 노
 from __future__ import annotations
 
 import enum
+import json
+import math
+import re
 from datetime import datetime, timezone
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 from uuid import uuid4
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from core_common.protocol.evidence import EvidenceState, ValueEvidence
 
@@ -105,7 +108,547 @@ class FleetTaskStatus(str, enum.Enum):
     EXPIRED = "EXPIRED"
 
 
+class DeviceActionState(str, enum.Enum):
+    """Durable local Action journal state; independent of Mission goal evidence."""
+
+    PREPARED = "PREPARED"
+    SUBMITTING = "SUBMITTING"
+    ACCEPTED = "ACCEPTED"
+    RUNNING = "RUNNING"
+    CANCEL_REQUESTED = "CANCEL_REQUESTED"
+    UNKNOWN = "UNKNOWN"
+    SUCCEEDED = "SUCCEEDED"
+    FAILED = "FAILED"
+    HOLD = "HOLD"
+
+
+class LocalStopState(str, enum.Enum):
+    """Software latch facts only. No value means physical standstill is proven."""
+
+    OPEN = "OPEN"
+    REQUESTED = "REQUESTED"
+    LOCAL_LATCHED = "LOCAL_LATCHED"
+    UNKNOWN = "UNKNOWN"
+
+
+class StopRequestSource(str, enum.Enum):
+    FLEET = "fleet"
+    OPERATOR_LOCAL = "operator_local"
+
+
+_ACTION_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,191}$")
+
+
+class ResolvedTargetEvidence(BaseModel):
+    """Pixel-level object identity evidence tied to one camera observation."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    object_id: str = Field(min_length=1, max_length=128)
+    observation_id: str = Field(min_length=1, max_length=160)
+    frame_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    camera_identity: str = Field(min_length=1, max_length=160)
+    optical_frame_id: str = Field(min_length=1, max_length=160)
+    calibration_revision: str = Field(min_length=1, max_length=128)
+    transform_revision: str = Field(min_length=1, max_length=128)
+    capture_time_ns: int = Field(strict=True, gt=0)
+    selector_kind: str = Field(pattern=r"^(object_id|inventory_id|label|relation|point|bbox)$")
+    image_bbox_xyxy: tuple[float, float, float, float]
+
+    @field_validator("object_id", "observation_id", "camera_identity", "optical_frame_id",
+                     "calibration_revision", "transform_revision")
+    @classmethod
+    def _trimmed_evidence_id(cls, value: str) -> str:
+        if value != value.strip() or not value:
+            raise ValueError("evidence identities and revisions must be non-empty and trimmed")
+        return value
+
+    @field_validator("image_bbox_xyxy", mode="before")
+    @classmethod
+    def _bbox_numbers(cls, value):
+        if (not isinstance(value, (list, tuple)) or len(value) != 4
+                or any(isinstance(item, bool) for item in value)):
+            raise ValueError("image_bbox_xyxy must contain four finite pixel coordinates")
+        try:
+            result = tuple(float(item) for item in value)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("image_bbox_xyxy must contain four finite pixel coordinates") from exc
+        if not all(math.isfinite(item) for item in result):
+            raise ValueError("image_bbox_xyxy must contain four finite pixel coordinates")
+        return result
+
+    @field_validator("image_bbox_xyxy")
+    @classmethod
+    def _bbox_increasing(cls, value: tuple[float, float, float, float]):
+        if value[0] < 0 or value[1] < 0 or value[0] >= value[2] or value[1] >= value[3]:
+            raise ValueError("image_bbox_xyxy must be non-negative and increasing")
+        return value
+
+
+class FleetActionGrant(BaseModel):
+    """Short-lived Fleet authority to prepare one local, fixed-workcell Action."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    mission_id: str = Field(min_length=1, max_length=192)
+    step_id: str = Field(min_length=1, max_length=192)
+    action_id: str = Field(min_length=1, max_length=192)
+    attempt_id: str = Field(min_length=1, max_length=192)
+    request_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    workcell_id: str = Field(min_length=1, max_length=96)
+    instance_id: str = Field(min_length=1, max_length=96)
+    action_kind: str = Field(pattern=r"^PICK_PLACE$")
+    source_evidence: ResolvedTargetEvidence
+    destination_evidence: ResolvedTargetEvidence
+    capability_revision: str = Field(min_length=1, max_length=128)
+    config_revision: str = Field(min_length=1, max_length=128)
+    observation_revision: str = Field(min_length=1, max_length=128)
+    authority_epoch: int = Field(strict=True, ge=0)
+    dispatch_generation: int = Field(strict=True, ge=0)
+    issued_at: datetime
+    expires_at: datetime
+
+    @field_validator("mission_id", "step_id", "action_id", "attempt_id", "workcell_id",
+                     "instance_id", "capability_revision", "config_revision", "observation_revision")
+    @classmethod
+    def _identifier(cls, value: str) -> str:
+        if not _ACTION_ID.fullmatch(value):
+            raise ValueError("identity must be a trimmed identifier")
+        return value
+
+    @model_validator(mode="after")
+    def _grant_consistency(self):
+        identities = (self.mission_id, self.step_id, self.action_id, self.attempt_id)
+        if len(set(identities)) != len(identities):
+            raise ValueError("mission, step, action and attempt identifiers must be distinct")
+        source, destination = self.source_evidence, self.destination_evidence
+        same_observation = (
+            source.observation_id == destination.observation_id
+            and source.frame_sha256 == destination.frame_sha256
+            and source.camera_identity == destination.camera_identity
+            and source.optical_frame_id == destination.optical_frame_id
+            and source.calibration_revision == destination.calibration_revision
+            and source.transform_revision == destination.transform_revision
+            and source.capture_time_ns == destination.capture_time_ns
+        )
+        if not same_observation:
+            raise ValueError("source and destination must cite the same observation")
+        if source.object_id == destination.object_id:
+            raise ValueError("source and destination must identify distinct objects")
+        if (self.issued_at.tzinfo is None or self.expires_at.tzinfo is None
+                or self.expires_at <= self.issued_at):
+            raise ValueError("grant expiry must follow an aware issuance timestamp")
+        return self
+
+
+class DeviceActionReceipt(BaseModel):
+    """Local journal receipt; driver success and Mission goal are separate facts."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    mission_id: str = Field(min_length=1, max_length=192)
+    step_id: str = Field(min_length=1, max_length=192)
+    action_id: str = Field(min_length=1, max_length=192)
+    attempt_id: str = Field(min_length=1, max_length=192)
+    workcell_id: str = Field(min_length=1, max_length=96)
+    instance_id: str = Field(min_length=1, max_length=96)
+    request_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    authority_epoch: int = Field(strict=True, ge=0)
+    dispatch_generation: int = Field(strict=True, ge=0)
+    state: DeviceActionState
+    journal_event_id: int = Field(strict=True, ge=1)
+    observed_at: datetime
+    driver_goal_id: str | None = Field(default=None, max_length=192)
+    reason: str | None = Field(default=None, max_length=256)
+    created: bool = False
+
+    @field_validator("mission_id", "step_id", "action_id", "attempt_id", "workcell_id", "instance_id")
+    @classmethod
+    def _receipt_identifier(cls, value: str) -> str:
+        if not _ACTION_ID.fullmatch(value):
+            raise ValueError("receipt identity must be a trimmed identifier")
+        return value
+
+    @field_validator("observed_at")
+    @classmethod
+    def _receipt_time_aware(cls, value: datetime) -> datetime:
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("observed_at must include a timezone")
+        return value
+
+
+class DeviceActionLookup(BaseModel):
+    """Read one local Action using its Fleet-issued identity pair."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    action_id: str = Field(min_length=1, max_length=192)
+    attempt_id: str = Field(min_length=1, max_length=192)
+
+    @field_validator("action_id", "attempt_id")
+    @classmethod
+    def _lookup_identifier(cls, value: str) -> str:
+        if not _ACTION_ID.fullmatch(value):
+            raise ValueError("lookup identity must be a trimmed identifier")
+        return value
+
+
+class DeviceActionCancelRequest(DeviceActionLookup):
+    """Request cancellation of the matching driver goal; ACK is not stop proof."""
+
+    reason: str = Field(min_length=1, max_length=256)
+    requested_at: datetime
+
+    @field_validator("requested_at")
+    @classmethod
+    def _cancel_time_aware(cls, value: datetime) -> datetime:
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("requested_at must include a timezone")
+        return value
+
+class LocalStopRequest(BaseModel):
+    """A software stop request fenced to one workcell and dispatch generation."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    workcell_id: str = Field(min_length=1, max_length=96)
+    instance_id: str = Field(min_length=1, max_length=96)
+    authority_epoch: int = Field(strict=True, ge=0)
+    dispatch_generation: int = Field(strict=True, ge=0)
+    requested_at: datetime
+    reason: str = Field(min_length=1, max_length=256)
+
+    @field_validator("workcell_id", "instance_id")
+    @classmethod
+    def _request_stop_identity(cls, value: str) -> str:
+        if not _ACTION_ID.fullmatch(value):
+            raise ValueError("stop identity must be a trimmed identifier")
+        return value
+
+    @field_validator("requested_at")
+    @classmethod
+    def _stop_time_aware(cls, value: datetime) -> datetime:
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("requested_at must include a timezone")
+        return value
+
+class LocalStopQuery(BaseModel):
+    """Read the latched software stop state for exactly one workcell instance."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    workcell_id: str = Field(min_length=1, max_length=96)
+    instance_id: str = Field(min_length=1, max_length=96)
+
+    @field_validator("workcell_id", "instance_id")
+    @classmethod
+    def _query_stop_identity(cls, value: str) -> str:
+        if not _ACTION_ID.fullmatch(value):
+            raise ValueError("stop query identity must be a trimmed identifier")
+        return value
+
+
+class LocalStopRearmRequest(BaseModel):
+    """Fleet-only signal to reopen local dispatch after operator reconciliation."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    workcell_id: str = Field(min_length=1, max_length=96)
+    instance_id: str = Field(min_length=1, max_length=96)
+    authority_epoch: int = Field(strict=True, ge=0)
+    dispatch_generation: int = Field(strict=True, ge=0)
+
+    @field_validator("workcell_id", "instance_id")
+    @classmethod
+    def _rearm_stop_identity(cls, value: str) -> str:
+        if not _ACTION_ID.fullmatch(value):
+            raise ValueError("stop rearm identity must be a trimmed identifier")
+        return value
+
+
+
+class LocalStopSnapshot(BaseModel):
+    """Stop request/latch projection without driver or physical completion claims."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    workcell_id: str = Field(min_length=1, max_length=96)
+    instance_id: str = Field(min_length=1, max_length=96)
+    authority_epoch: int = Field(strict=True, ge=0)
+    dispatch_generation: int = Field(strict=True, ge=0)
+    state: LocalStopState
+    source: StopRequestSource
+    observed_at: datetime
+    reason: str = Field(min_length=1, max_length=256)
+
+    @field_validator("workcell_id", "instance_id")
+    @classmethod
+    def _stop_identity(cls, value: str) -> str:
+        if not _ACTION_ID.fullmatch(value):
+            raise ValueError("stop identity must be a trimmed identifier")
+        return value
+
+
+
 # --- Envelope (API Ref §7.1, PRT-001) ------------------------------------
+
+MISSION_EVENT_DETAIL_MAX_BYTES = 16 * 1024
+ER2_FEEDBACK_CONTEXT_MAX_BYTES = 8 * 1024
+ER2_TOOL_ARGUMENT_MAX_BYTES = 4 * 1024
+ER2_TOOL_RESULT_MAX_BYTES = 4 * 1024
+ER2_MAX_FUNCTION_CALLS_PER_TURN = 4
+ER2_PROVIDER_DEADLINE_SECONDS = 45
+ER2_REPLAY_MAX_STEPS = 8
+ER2_REPLAY_MAX_BYTES = 64 * 1024
+ER2_RESPONSE_MAX_BYTES = 64 * 1024
+ER2_IMAGE_MAX_BYTES = 14 * 1024 * 1024
+ER2_MAX_ESTIMATED_TURN_COST_USD = 0.10
+ER2_POST_ACTION_OBSERVATION_MAX_AGE_SECONDS = 30
+
+
+def _bounded_finite_json_size(value: Any) -> int:
+    try:
+        return len(json.dumps(
+            value, sort_keys=True, separators=(",", ":"),
+            ensure_ascii=False, allow_nan=False,
+        ).encode("utf-8"))
+    except (TypeError, ValueError) as exc:
+        raise ValueError("value must be finite JSON") from exc
+
+class MissionProgressAxis(BaseModel):
+    """One Fleet Mission progress source; this is not physical-state proof."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    state: str = Field(min_length=1, max_length=64)
+    source: str = Field(min_length=1, max_length=96)
+    last_event_id: int | None = Field(default=None, strict=True, ge=0)
+    observed_at: datetime | None = None
+    revision: str | None = Field(default=None, max_length=192)
+    freshness: Literal["CURRENT", "FRESH", "STALE", "UNKNOWN"]
+    reason: str | None = Field(default=None, max_length=256)
+    physical_state: str | None = Field(default=None, max_length=32)
+
+
+class MissionProgressSnapshot(BaseModel):
+    """Snapshot-first Site Fleet status for one Mission and its evidence."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    snapshot_event_id: int = Field(strict=True, ge=0)
+    snapshot_at: datetime
+    mission: MissionProgressAxis
+    step: MissionProgressAxis
+    action: MissionProgressAxis
+    goal_evidence: MissionProgressAxis
+    stop: MissionProgressAxis
+
+
+class MissionProgressEvent(BaseModel):
+    """One Mission journal entry ordered by Fleet event ID."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    event_id: int = Field(strict=True, ge=1)
+    event_source: str = Field(min_length=1, max_length=48)
+    source_event_id: str = Field(min_length=1, max_length=192)
+    mission_id: str = Field(min_length=1, max_length=192)
+    step_id: str = Field(min_length=1, max_length=192)
+    action_id: str | None = Field(default=None, max_length=192)
+    attempt_id: str | None = Field(default=None, max_length=192)
+    state: str = Field(min_length=1, max_length=64)
+    event_type: str = Field(min_length=1, max_length=64)
+    actor_id: str = Field(min_length=1, max_length=96)
+    detail: dict[str, Any] = Field(
+        description="Finite JSON object up to 16 KiB when serialized as UTF-8",
+    )
+    created_at: datetime
+
+    @field_validator("detail")
+    @classmethod
+    def detail_is_bounded_json(cls, value: dict[str, Any]) -> dict[str, Any]:
+        try:
+            encoded = json.dumps(
+                value, sort_keys=True, separators=(",", ":"),
+                ensure_ascii=False, allow_nan=False,
+            ).encode("utf-8")
+        except (TypeError, ValueError) as exc:
+            raise ValueError("Mission event detail must be finite JSON") from exc
+        if len(encoded) > MISSION_EVENT_DETAIL_MAX_BYTES:
+            raise ValueError("Mission event detail exceeds the 16 KiB limit")
+        return value
+
+
+class MissionProgressEventPage(BaseModel):
+    """A bounded cursor page and the snapshot watermark observed by its query."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    snapshot_event_id: int = Field(strict=True, ge=0)
+    cursor_floor: int = Field(strict=True, ge=0)
+    next_after_event_id: int = Field(strict=True, ge=0)
+    has_more: bool
+    events: list[MissionProgressEvent] = Field(max_length=200)
+
+
+class MissionProgressReadResponse(BaseModel):
+    """Owner-scoped Mission record, bounded recent history, and snapshot."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    proposal: dict[str, Any]
+    mission: dict[str, Any]
+    history: list[MissionProgressEvent] = Field(max_length=50)
+    history_truncated: bool
+    progress: MissionProgressSnapshot
+
+
+class MissionCursorResetDetail(BaseModel):
+    """Cursor recovery detail when the client cursor is ahead of Fleet."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    code: Literal["MISSION_CURSOR_RESET_REQUIRED"]
+    snapshot_restart_required: Literal[True]
+    cursor_floor: int = Field(strict=True, ge=0)
+    snapshot: MissionProgressReadResponse
+
+
+class MissionCursorExpiredDetail(BaseModel):
+    """Cursor recovery detail when requested history was pruned."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    code: Literal["MISSION_CURSOR_EXPIRED"]
+    snapshot_restart_required: Literal[True]
+    cursor_floor: int = Field(strict=True, ge=0)
+    snapshot: MissionProgressReadResponse
+
+
+class MissionCursorResetError(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    detail: MissionCursorResetDetail
+
+
+class MissionCursorExpiredError(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    detail: MissionCursorExpiredDetail
+
+
+class MissionModelContext(BaseModel):
+    """Allowlisted status input scoped to one principal and workcell."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    mission_id: str = Field(min_length=1, max_length=192)
+    workcell_id: str = Field(min_length=1, max_length=96)
+    snapshot_event_id: int = Field(strict=True, ge=0)
+    mission_state: str = Field(min_length=1, max_length=64)
+    step_state: str = Field(min_length=1, max_length=64)
+    action_state: str = Field(min_length=1, max_length=64)
+    action_reason: str | None = Field(default=None, max_length=256)
+    goal_evidence_state: str = Field(min_length=1, max_length=64)
+    goal_evidence_reason: str | None = Field(default=None, max_length=256)
+    stop_state: str = Field(min_length=1, max_length=64)
+    stop_reason: str | None = Field(default=None, max_length=256)
+
+
+class MissionFeedbackTurnScope(BaseModel):
+    """Trusted server-side identity captured when an ER 2 turn is enqueued."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    principal_id: str = Field(min_length=1, max_length=96)
+    workcell_id: str = Field(min_length=1, max_length=96)
+    mission_id: str = Field(min_length=1, max_length=192)
+    action_id: str = Field(min_length=1, max_length=192)
+    attempt_id: str = Field(min_length=1, max_length=192)
+    dispatch_generation: int = Field(strict=True, ge=0)
+    event_watermark: int = Field(strict=True, ge=0)
+    model_policy_revision: str = Field(min_length=1, max_length=96)
+    outcome_policy: Literal["STATUS_ONLY", "STATUS_AND_REPLAN"]
+
+    @field_validator("principal_id", "workcell_id", "mission_id", "action_id",
+                     "attempt_id", "model_policy_revision")
+    @classmethod
+    def _trusted_identity_is_trimmed(cls, value: str) -> str:
+        if value != value.strip() or any(ord(char) < 32 for char in value):
+            raise ValueError("trusted identity must be trimmed and contain no controls")
+        return value
+
+
+class MissionFeedbackContext(BaseModel):
+    """Bounded model-facing progress. It describes evidence, never device authority."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    mission_id: str = Field(min_length=1, max_length=192)
+    workcell_id: str = Field(min_length=1, max_length=96)
+    action_id: str = Field(min_length=1, max_length=192)
+    attempt_id: str = Field(min_length=1, max_length=192)
+    dispatch_generation: int = Field(strict=True, ge=0)
+    stop_generation: int = Field(strict=True, ge=0)
+    authority_epoch: int = Field(strict=True, ge=0)
+    snapshot_event_id: int = Field(strict=True, ge=0)
+    snapshot_at: datetime
+    policy_revision: str = Field(min_length=1, max_length=96)
+    outcome_policy: Literal["STATUS_ONLY", "STATUS_AND_REPLAN"]
+    task_summary: str = Field(min_length=1, max_length=10_000)
+    mission_source: str = Field(min_length=1, max_length=96)
+    step_source: str = Field(min_length=1, max_length=96)
+    action_source: str = Field(min_length=1, max_length=96)
+    action_freshness: Literal["CURRENT", "FRESH", "STALE", "UNKNOWN"]
+    action_observed_at: datetime | None = None
+    goal_evidence_source: str = Field(min_length=1, max_length=96)
+    goal_evidence_freshness: Literal["CURRENT", "FRESH", "STALE", "UNKNOWN"]
+    goal_evidence_observed_at: datetime | None = None
+    stop_source: str = Field(min_length=1, max_length=96)
+    stop_freshness: Literal["CURRENT", "FRESH", "STALE", "UNKNOWN"]
+    stop_observed_at: datetime | None = None
+    mission_state: str = Field(min_length=1, max_length=64)
+    step_state: str = Field(min_length=1, max_length=64)
+    action_state: str = Field(min_length=1, max_length=64)
+    action_reason: str | None = Field(default=None, max_length=256)
+    goal_evidence_state: str = Field(min_length=1, max_length=64)
+    goal_evidence_reason: str | None = Field(default=None, max_length=256)
+    stop_state: str = Field(min_length=1, max_length=64)
+    stop_reason: str | None = Field(default=None, max_length=256)
+
+    @model_validator(mode="after")
+    def _bounded_and_replan_is_not_stopped(self) -> "MissionFeedbackContext":
+        if _bounded_finite_json_size(self.model_dump(mode="json")) > ER2_FEEDBACK_CONTEXT_MAX_BYTES:
+            raise ValueError("ER 2 feedback context exceeds the 8 KiB limit")
+        if self.outcome_policy == "STATUS_AND_REPLAN" and (
+                self.stop_state != "DISPATCH_ENABLED"
+                or self.stop_generation != self.dispatch_generation):
+            raise ValueError("replan feedback requires a matching enabled stop generation")
+        for observed in (self.snapshot_at, self.action_observed_at,
+                         self.goal_evidence_observed_at, self.stop_observed_at):
+            if observed is not None and (observed.tzinfo is None or observed.utcoffset() is None):
+                raise ValueError("feedback observation times must be timezone-aware")
+        return self
+
+
+class ER2ToolResult(BaseModel):
+    """Small allowlisted result returned to the provider; never a command receipt."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    tool_name: Literal["get_mission_status", "propose_replan", "unsupported"]
+    status: Literal["accepted", "rejected", "unavailable"]
+    reason_code: str = Field(min_length=1, max_length=64, pattern=r"^[A-Z0-9_]+$")
+    event_id: int | None = Field(default=None, strict=True, ge=0)
+    proposal_id: str | None = Field(default=None, min_length=1, max_length=128)
+    payload: dict[str, Any] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def _bounded_tool_result(self) -> "ER2ToolResult":
+        if _bounded_finite_json_size(self.model_dump(mode="json")) > ER2_TOOL_RESULT_MAX_BYTES:
+            raise ValueError("ER 2 tool result exceeds the 4 KiB limit")
+        return self
+
 
 class EnvelopeType(str, enum.Enum):
     HELLO = "hello"
@@ -327,6 +870,7 @@ class TrafficPolicyStatus(BaseModel):
     map_id: Optional[str] = None
     scene_revision: Optional[str] = None
     policy_revision: str = "traffic-policy-v1"
+    junction_rule: str = "signal_controlled"
     evidence_revision: int = 0
     age_s: Optional[float] = None
     stop_line_visible: bool = False
@@ -335,6 +879,9 @@ class TrafficPolicyStatus(BaseModel):
     signal_colour: Optional[str] = None
     signal_confidence: float = 0.0
     signal_conflict: bool = False
+    signal_source_kind: str = "camera"
+    signal_head_age_s: Optional[float] = None
+    signal_head_frozen: bool = False
     linear_scale: float = 0.0
 
 

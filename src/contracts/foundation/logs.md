@@ -116,3 +116,34 @@
 - 변경: 네트워크·릴리스 조회의 증거 상태, 원본 시각, 나이, 임계, 사유를 `HostStatusEvidence`로 추가했다. 기존 Fleet envelope 버전과 필드는 유지한다.
 - 근거: CORE Host API 계약 시험과 API Ref v1.42.
 - Gate: SOURCE/LOCAL 계약 근거이며 장치 상태 판정이 아니다.
+
+## 2026-09-29 · uncommitted · feat(protocol): add PolicyEvidencePayload (D-268 ladder T1)
+
+- 변경: 정책 적격 증거(작업 발의 자격, D-268)의 와이어 계약을 추가했다 — `evidence_id`, `asset_kind`(robot/workcell/object, D-330 자원 어휘), `task_kind`(v1 닫힌 집합 navigate), `captured_at`, revision 삼종(map·calibration·model), 닫힌 `observation` 봉투(kind만, 등록부는 서버 쪽). 클라이언트가 `source`·`source_id`·`token`·`policy`·`satisfied`를 보내면 거부한다(출처는 자격 증명에서 결정, `satisfied`는 D-328 목표 판정 전용 어휘).
+- 근거: [설계](../../../docs/plans/2026-09-29-policy-evidence-contract-design.md)·[실행 계획](../../../docs/plans/2026-09-29-policy-evidence-contract.md) T1. 기존 필드·sighting 무변경, API Ref v1.48 개정은 T6가 한다.
+- Gate: SOURCE/LOCAL 계약 시험 75 passed (2026-09-29 Windows). 서버 등록부·발의 binding·밸브는 fleet 작업(T3/T4)이고 자동 실행은 여전히 HOLD다.
+
+## 2026-09-29 · uncommitted · feat(protocol): define OMX Device Action and software-stop schemas (D-333/D-336)
+
+- Change: added immutable typed contracts for pixel-level target evidence, Fleet grants, local Action journal receipts/read/cancel, and software-stop request/query/snapshot. Distinct IDs, observation consistency, digest, revisions, generation, expiry, and aware timestamps are validated; no receipt can claim independent goal or physical stop proof.
+- Evidence: full `src/contracts/foundation/test` suite: 101 passed on Windows; includes `test_device_action_contracts.py` and existing protocol schema tests. API Reference v1.48 describes the same-host UDS contract and explicitly says no endpoint/runtime is implied.
+- Gate: SOURCE/LOCAL contract only. No UDS listener, physical stop, action runtime, ROS-SIM, DEVICE, or FIELD acceptance.
+
+## 2026-09-29 · uncommitted · feat(protocol): TrafficPolicyStatus.junction_rule (API Ref v1.54)
+
+- Change: additive `junction_rule: str = "signal_controlled"` on `TrafficPolicyStatus` — surfaces the operator-declared stop-line rule (`signal_controlled` | `stop_and_go`, unsignalized stop-and-go) alongside the existing policy revision. Existing fields untouched.
+- Evidence: foundation suite green within the traffic-policy change run (2026-09-29 Windows, 101 passed); API Reference bumped to v1.54 with the field, example, and semantics in the same change (D-18).
+- Gate: SOURCE/LOCAL contract only; no device or FIELD acceptance.
+
+## 2026-09-29 · uncommitted · feat(protocol): traffic policy signal-source status fields (API Ref v1.56)
+
+- Change: additive `signal_source_kind: str = "camera"`, `signal_head_age_s: Optional[float]`, `signal_head_frozen: bool = False` on `TrafficPolicyStatus` — the D-337 measured-light fusion's observability (fused only while the observed head is usable). `rosy_default.yaml` documents the empty `traffic_policy.signal_observer` binding (overlay-only). API Reference v1.56 with example, prose, the `nav.traffic_policy_signal_source_stale` §8 row, and history entry in the same change (D-18).
+- Evidence: foundation suite green within the T3 combined run (501 passed); event catalogue green against the new emit site.
+- Gate: SOURCE/LOCAL contract only; no live observer, device, or FIELD acceptance.
+## 2026-09-29 · uncommitted · feat(domain): capability lifecycle 단일 어휘 (D-347)
+
+- 변경: core_common/domain/capabilities.py에 CapabilityLifecycle(ready/unavailable/activating[예약]) enum과 lifecycle_from(advertised, runtime_reasons)을 추가했다. 판정은 새로 만들지 않는다 — 모드 마스킹의 withheld 사유(선과 같은 값이므로 우선)와 runtime_truth 사유, 플래그 참/거짓을 한 어휘로 합칠 뿐. §7 위반 없음: 프로파일과 런타임 어느 쪽도 true로 말하지 않는 플래그는 결과에 없다.
+- 증거: gateway/test/test_capability_lifecycle.py 6 passed(유도 3·일관성 2·wire 1 — withheld.flags == unavailable 집합 핀 포함). 이웃 185 passed(truth·truthful_core_only·api·foundation).
+- gate 변화: 없음.
+- 결정: activating 진입은 후속 ADR(온디맨드 B레인) 없이 금지 — 시험이 핀으로 지킨다.
+- 교훈: 정찰이 설계를 바꿨다 — "상태 계약이 없다"가 아니라 "두 표면이 다른 어휘를 쓰고 있었다"가 진짜 갭이었다.

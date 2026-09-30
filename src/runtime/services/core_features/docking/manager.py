@@ -28,6 +28,7 @@ import time
 from typing import Any, Callable, Optional
 
 from core_features.docking.charging import ChargingConfirmation
+from core_features.docking.strategies import FullChargeStrategy, VoltageFullCharge
 from core_features.docking.database import DockDatabase, DockError, DockInstance
 from core_features.docking.detector import DockDetector
 from core_features.docking.model import DockingConfig, DockingExecutor, DockPhase
@@ -97,7 +98,11 @@ class DockingManager:
         self._detector: Optional[DockDetector] = None
         self._agent: Any = None
         self._charging = ChargingConfirmation(
-            clock=clock, window_s=self._cfg.charge_confirm_s)
+            clock=clock, window_s=self._cfg.charge_confirm_s,
+            instrumented=self._cfg.instrumented)
+        self._full_charge = VoltageFullCharge(
+            enter_v=self._cfg.full_enter_v, exit_v=self._cfg.full_exit_v)
+        self._full_announced = False  # D-350: docking.full 1회 방출 플래그
 
         self._phase_since = 0.0
         self._last_seen_at: Optional[float] = None
@@ -498,7 +503,14 @@ class DockingManager:
             self._mark_docked()
             return
         if now - self._phase_since > self._cfg.settle_timeout_s:
-            # 접점에 닿지 못했다. 스테이징까지 돌아갈 일은 아니고 재착좌면 된다.
+            # D-351: 갈래를 가린다.
+            if status is not None and status.answered and status.load_present \
+                    and not status.charging:
+                # 도달했는데 전류가 없다 — 산화·만춫·보호보드 래치.
+                # 재시도해도 소용없다. 접점을 확인해야 한다.
+                self._fail("contact_no_current")
+                return
+            # 접점에 닿지 못했다. 재착좌로 충분하다.
             self._reseat("no contact after approach")
 
     def _tick_docked(self, now: float) -> None:
@@ -517,6 +529,9 @@ class DockingManager:
             self._state = target
             self._emit("docking.charging" if confirmed else "docking.charge_lost",
                        "info", {"dock_id": self._dock.id if self._dock else None})
+
+        # D-350: 만춫 검출 — CHARGING→DOCKED 전이(전류 종단) 또는 전압 유지.
+        self._check_full(self._charging)
 
     def _tick_undocking(self, now: float) -> None:
         if self.executor is None:
@@ -637,7 +652,28 @@ class DockingManager:
     def _mark_docked(self) -> None:
         self._state = DockState.DOCKED
         self._phase = None
+        self._full_announced = False
         self._emit("docking.docked", "info", {"dock_id": self._dock.id})
+
+    def _check_full(self, charging: 'ChargingConfirmation') -> None:
+        """D-350: DOCKED 상태에서 만춫을 감지하면 `docking.full` 이벤트를 1회 낸다.
+
+        판정 자체는 `FullChargeStrategy`에 위임한다 (D-353 봉합점) —
+        기본은 전압 임계, 온도·전류 종단 등으로 교체 가능.
+        """
+        if self._state is not DockState.DOCKED:
+            return
+        voltage = charging.peak_v
+        full = self._full_charge.check(voltage, docked=True)
+        self._full_announced = self._full_charge.announced
+
+        if full:
+            self._phase = DockPhase.CHARGED_HOLD
+            self._emit("docking.full", "info", {
+                "dock_id": self._dock.id,
+                "source": charging.source,
+                "voltage_v": round(voltage, 2) if voltage is not None else None,
+            })
 
     def _enter(self, phase: DockPhase) -> None:
         self._phase = phase

@@ -6,7 +6,7 @@ from pathlib import Path
 
 class CalibrationButtonTests(unittest.TestCase):
     def markup(self):
-        return Path(__file__).parents[1].joinpath('web/dashboard.html').read_text(encoding='utf-8')
+        return Path(__file__).parents[1].joinpath('web/diagnostic.html').read_text(encoding='utf-8')
 
     def commands(self):
         return re.findall(r'data-calibration="([^"]+)"', self.markup())

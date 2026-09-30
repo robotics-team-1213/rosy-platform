@@ -13,7 +13,7 @@ from playwright.sync_api import sync_playwright
 
 ROOT = Path(__file__).resolve().parents[1]
 REPO_ROOT = ROOT.parents[2]
-WEB_COMMON = ROOT.parent / "web"
+WEB_COMMON = ROOT.parent / "web_common"
 
 pytestmark = pytest.mark.skipif(
     os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",

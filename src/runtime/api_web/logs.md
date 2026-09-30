@@ -149,3 +149,50 @@
 - 변경: CORE `/api/v1/navigation/goal`이 선택적 `correlation_id` metadata를 받으며 기존 x/y/yaw/waypoint 요청은 유지한다. NavigationManager는 같은 attempt ID를 started/canceled/final result event data에 싣는다.
 - 증거: api_web 70 passed, 13 skipped; gateway navigation/API/event focused coverage 통과. Fleet task API 자체의 공개 intent 필드는 바뀌지 않는다.
 - Gate: SOURCE/LOCAL only; ROS-SIM, artifact, device, field acceptance 없음.
+
+## 2026-09-29 · uncommitted · point the API description at the live contract version
+
+- 변경: `app.py` FastAPI `description`의 `(v1.41)`을 API Ref 헤더가 선언하는 `v1.47`로 맞췄다. `test_app_description_names_the_live_contract_version`이 요구하는 값이다.
+- 증거: `test_protocol_version_alignment` 포함 api_web 70 passed, 13 skipped. 문서 참조 표기만 바뀌었다.
+- gate 변화: 없음. 계약 필드·경로·버전 정책은 그대로이고 FastAPI 문서에 보이는 설명 문자열만 갱신했다.
+
+## 2026-09-29 · uncommitted · docs(contract): follow API Ref v1.48 in the description
+
+- 변경: API Ref v1.48(Site Fleet 정책 적격 증거 계약 추가)에 맞춰 설명 문자열을 `(v1.48)`로 갱신했다.
+- 증거: api_web 70 passed, 13 skipped(버전 정렬 시험 포함).
+- gate 변화: 없음. 로봇 측 계약 필드·경로는 무변경이고 표기만 따라갔다.
+
+## 2026-09-29 · uncommitted · web-surface-hardening: 역할 표면 CSP, manifest allowlist
+
+- 변경: 대시보드 CSP를 `OPERATOR_PAGE_CSP` 상수 하나로 빼고 `/{surface}`(`/console`·`/setup`·`/device`)도 같은 CSP와 `Cache-Control`을 보낸다. `dashboard_assets`의 중복 키(client.js·dom.js)를 지웠다. `/common` 목록은 web_common `manifest.json`을 읽는다(share에 manifest가 있을 때만 share, 아니면 소스 트리).
+- 증거: `python -m pytest src/runtime/api_web/test -q` 71 passed 13 skipped(브라우저 게이트). 새 시험 `test_role_surface_pages_carry_the_dashboard_csp`.
+- gate 변화: 없음. 장치 수용은 주장하지 않는다.
+- 결정: D-23, D-157.
+## 2026-09-29 · uncommitted · fix(api): FastAPI 설명 문구를 계약 v1.56으로 맞춘다
+
+- 변경: core_api_web/api/app.py의 description에 적힌 ROSY-API-REF-001 버전 표기를 v1.52에서 v1.56으로 올렸다. API Reference 헤더는 병행 traffic 회차에서 이미 v1.56까지 올라와 있고 test_protocol_version_alignment가 설명 문구의 버전 정합을 검사한다.
+- 증거: src/runtime/gateway/test/test_protocol_version_alignment.py 3 passed. test_line_follow_contract_docs 핀도 v1.56으로 같이 정렬(문서 계약 트리).
+- gate 변화: 없음.
+- 교훈: 없음.
+
+## 2026-09-29 · uncommitted · fix(api): 계약 문구를 v1.57로 재정렬
+
+- 변경: 병행 회차들이 API Reference를 v1.57까지 올린 뒤 설명 문구가 다시 뒤처졌으므로 `ROSY-API-REF-001 v1.57`로 맞췄다. 버전을 올리는 회차는 문구와 계약서 헤더를 같은 변경에 담아야 정합 시험이 붉지 않는다.
+- 증거: `python -m pytest src/runtime/gateway/test/test_protocol_version_alignment.py src/runtime/api_web/test/ -q` 통과(omx 경주 수정 회차와 같은 실행, 160 passed 16 skipped).
+- gate 변화: 없음.
+- 교훈: 버전 정합은 게이트가 아니라 습관이다 — 다음 범프 회차가 또 깨뜨린다.
+
+## 2026-09-30 · uncommitted · fix(api): 계약 문구 v1.59 — D-348 회차가 놓친 버전 핀 마무리
+
+- 변경: app.py docstring과 FastAPI description의 ROSY-API-REF-001 표기를 v1.58 → v1.59로. D-347이 정한 "버전 핀 3곳 한 변경 단위"(ref 헤더·app.py·line-follow 핀)에서 D-348 회차가 ref 헤더만 올리고 나머지를 놓쳤다. line-follow 핀도 같은 회차에 갱신했다.
+- 증거: test_protocol_version_alignment 3 passed, test_line_follow_contract_docs 1 passed (2026-09-30 Windows).
+- gate 변화: 없음.
+- 교훈: v1.57 정렬 때와 같은 누락이 재발했다 — 범프 회차 체크리스트에 핀 3곳이 들어가야 한다.
+
+## 2026-09-30 · uncommitted · fix(api): 계약 문구 v1.60 — 세 번째 연속 핀 누락 마무리
+
+- 변경: D-354 필드 제안 회차가 API Ref을 v1.60으로 올리면서 핀 3곳(app.py docstring·FastAPI description·line-follow 핀)을 다시 놓쳤다. D-347의 같은 변경 단위 규칙대로 세 곳을 맞췄다.
+- 증거: test_protocol_version_alignment 3 passed, test_line_follow_contract_docs 1 passed (2026-09-30 Windows).
+- gate 변화: 없음.
+- 결정: 없음.
+- 교훈: v1.57→v1.59→v1.60 세 번 연속 같은 누락이다 — 이제 습관이 아니라 구멍이다. 범프 회차가 핀을 스스로 갱신하지 못한다면, 버전 핀 시험이 실패를 push 이전(pre-push)에 잡는 지금 구조가 유일한 안전망이다.

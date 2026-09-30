@@ -34,8 +34,8 @@
 
 ## 최근 기록
 
-- 2026-09-28 · uncommitted · verify canceled navigation result isolation
-- 2026-09-28 · uncommitted · fix(core): scope task correlation to Nav2 goal generation
-- 2026-09-28 · uncommitted · publish late canceled-attempt result safely
-- 2026-09-28 · uncommitted · echo navigation correlation on CORE result events
-- 2026-09-28 · uncommitted · add camera-fault eligibility policy
+- 2026-09-30 · uncommitted · fix(docking): D-353 뒤끝 — 도크 계약 시험을 poll_json 경로로 재연결
+- 2026-09-30 · uncommitted · refactor(docking): D-353 봉합점 구현 착지
+- 2026-09-30 · uncommitted · feat(docking): D-351 재시도 갈래 — 도달 실패/전류 없음/충전 단절 구분
+- 2026-09-30 · uncommitted · feat(docking): D-350 하드웨어 단계·degrade·만춫·히스테리시스
+- 2026-09-29 · uncommitted · feat(traffic): D-337 T3 — observer wiring, config gate, status contract

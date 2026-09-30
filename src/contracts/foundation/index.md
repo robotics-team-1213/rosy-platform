@@ -13,11 +13,15 @@
 | D-61 | 모듈 상태는 progress·logs·생성 index로 기록하고 계약 시험으로 지킨다 |
 | D-147 | src 패키지를 6개 도메인 그룹으로 재편한다 — 소급 공식화 |
 | D-168 | ROS 패키지 구조 기준 — 인정 조건, 필수 구성, 도메인 방향표를 시험으로 고정한다 |
+| D-268 | Fleet 자동 작업은 sighting이 아닌 별도 수용된 정책 증거만 사용한다 |
 | D-283 | 운용 콘솔은 고정 3영역을 유지하고 조작 그룹을 선택한다 |
 
 ## 계획·결과 문서
 
 - [2026-09-15-module-harness-design.md](../../../docs/plans/2026-09-15-module-harness-design.md)
+- [2026-09-29-er2-mission-action-contract-closure.md](../../../docs/plans/2026-09-29-er2-mission-action-contract-closure.md)
+- [2026-09-29-policy-evidence-contract-design.md](../../../docs/plans/2026-09-29-policy-evidence-contract-design.md)
+- [2026-09-29-policy-evidence-contract.md](../../../docs/plans/2026-09-29-policy-evidence-contract.md)
 
 ## 교훈 (docs/solutions)
 
@@ -29,8 +33,8 @@
 
 ## 최근 기록
 
-- 2026-09-27 · uncommitted · feat(protocol): type Host Agent status evidence
-- 2026-09-27 · uncommitted · own default configuration
-- 2026-09-26 · uncommitted · feat(core_common): publish and validate Fleet intent grammar
-- 2026-09-26 · uncommitted · feat(core_common): add optional UI action group descriptor
-- 2026-09-26 · uncommitted · feat(core_common): camera evidence response schemas
+- 2026-09-29 · uncommitted · feat(domain): capability lifecycle 단일 어휘 (D-347)
+- 2026-09-29 · uncommitted · feat(protocol): traffic policy signal-source status fields (API Ref v1.56)
+- 2026-09-29 · uncommitted · feat(protocol): TrafficPolicyStatus.junction_rule (API Ref v1.54)
+- 2026-09-29 · uncommitted · feat(protocol): define OMX Device Action and software-stop schemas (D-333/D-336)
+- 2026-09-29 · uncommitted · feat(protocol): add PolicyEvidencePayload (D-268 ladder T1)

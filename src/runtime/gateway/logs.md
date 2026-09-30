@@ -516,3 +516,49 @@
 - Change: retain at most 128 canceled correlations; publish late terminal results without changing a newer navigation state. Unreadable action results leave the attempt unresolved.
 - Evidence: GoalTracker + navigation manager tests 67 passed; relevant API, services, and Fleet suites passed separately.
 - Gate: SOURCE/LOCAL only; no ROS-SIM, artifact, device, physical-stop, site, or FIELD acceptance.
+
+## 2026-09-29 · uncommitted · classify host agent status commands as non-events
+
+- Change: register `network.status` and `release.status` in the event-catalogue `not_events` table — both are host agent commands from `host_agent.ALLOWLIST`, never emitted by core — and retarget the CORE-to-agent allowlist check to `deploy/robot/pinky_pro/release` after the role-dir regroup.
+- Evidence: gateway suite 1402 passed, 16 skipped; CI core step 1841 passed, 16 skipped. The `not_events` cross-check against `emitted()` keeps the new entries from ever hiding a real event.
+- Gate: SOURCE/LOCAL only; no ROS-SIM, image, device, stop readback, or FIELD acceptance.
+
+## 2026-09-29 · uncommitted · feat(traffic): wire unsignalized junction rule through CORE
+
+- Change: `_traffic_policy_config` now maps `traffic_policy.junction_rule` from config into the policy (validated `signal_controlled` | `stop_and_go`), `TrafficPolicyPatch` accepts it on `/api/v1/traffic/policy/stage`, and `test_traffic_policy.py` covers the stop-and-go verdicts — proceed after complete stop+dwell with no observed signal (`unsignalized_proceed`), hold on any observed signal including weak false positives (`signal_unexpected`), conflict precedence, unchanged `signal_controlled` waiting, staging/validation, and CORE config wiring. Korean dashboard `/console` facts gain a 규칙 row.
+- Evidence: focused host runs (Windows): traffic policy+API+runtime config + foundation + services 380 passed; protocol schemas + api_web + dashboard 105 passed 47 skipped; semantic road simulation + event catalogue 74 passed. API Reference v1.54 in the same change.
+- Gate: SOURCE/LOCAL only; no ROS-SIM loop over an authored unsignalized scene, device stop-and-go readback, or FIELD acceptance.
+
+## 2026-09-29 · uncommitted · feat(traffic): D-337 T3 — bind the measured-light observer in CORE
+
+- Change: `_signal_observer_binding` parses the file-only `traffic_policy.signal_observer` block (empty/absent = feature off; malformed values fail the build; a binding without the policy's map/scene fails the build too — every frame would be rejected otherwise). CoreServices carries `signal_observer` and starts the daemon-thread monitor next to the manager it feeds; status fields `signal_source_kind`/`signal_head_age_s`/`signal_head_frozen` flow to snapshots and `/api/v1/traffic` unchanged routes.
+- Evidence: test_traffic_policy +4 (absent by default, binds+starts with url captured, missing map/scene ValueError, status view). Combined host run 501 passed (traffic, services, API, event catalogue, foundation, runtime config); flake8 clean on changed lines — the reported services.py F401/E306/W293 sit outside this diff (parallel track's lines).
+- Gate: SOURCE/LOCAL only; no live observer, ROS-SIM, device, or FIELD acceptance. Dashboard readback (T4) remains.
+## 2026-09-29 · uncommitted · docs(core): 24b6d4bb 브리지 판정 추출의 모듈 기록 보수
+
+- 변경: 24b6d4bb(2026-09-24)가 bridge/observation.py 신설, 시블리 4종 확장(reconcile.led·display.republish_due·goal_tracker.on_response/on_result·save_map.await_call), ros_bridge 757-590행(D-168 예산 복귀)을 반영하면서 이 모듈의 저널과 bridge/AGENTS.md 갱신이 빠졌다. bridge/AGENTS.md에 observation.py 행(Key Files·시험 sibling 목록)과 D-338 원칙 서술을 추가하고, 낡은 no-remote 주장을 origin/CI 현황으로 정정했으며 이 항목으로 모듈 저널을 소급 기록한다. 결정 원칙의 정본은 docs/adr/D-338.
+- 증거: 24b6d4bb stat 13 files +1047/-237. 현재 observation.py 203행(c33f51a6 카메라 폴트 폴백 확장 포함), ros_bridge.py 582행. bridge 시블리 시험(test_bridge_observation·timers·goal_tracker·reconcile·display·save_map) 전체 통과(2026-09-29 Windows).
+- gate 변화: 없음.
+- 교훈: 병행 세션에 작업이 흡수 커밋되면 저널 의무까지 사라지지는 않는다 — 구현이 이미 main에 있으면 기록만 별도 커밋으로 보수한다.
+## 2026-09-29 · uncommitted · feat(api): /system/capabilities에 lifecycle 블록 (D-347, v1.58)
+
+- 변경: api/v1/system.py의 capabilities 끝점에 lifecycle_from(svc.capability.to_dict(), truth.reasons)를 실었다 — 광고된 플래그별 단일 생애 어휘(additive). 기존 flags·withheld·runtime·501 게이트·409 CAPABILITY_WITHHELT 불변. 신규 시험 test_capability_lifecycle.py(wire 1건 포함 6건).
+- 증거: test_capability_lifecycle 6 passed; test_api·test_runtime_capability_truth·test_truthful_core_only·foundation 185 passed. 앱 설명 문구·line-follow 핀 v1.58 동시 갱신(버전 핀 3곳 한 변경 단위).
+- gate 변화: 없음.
+- 결정: inventory PresentationState는 그대로 — D-347 본문 표가 대응을 정의한다(unavailable≈blocked 등).
+- 교훈: core_client은 팩토리 픽스처다( (TestClient, services) 반환) — 첫 사용에 401·function 오류가 나면 소비 방식부터 확인한다.
+## 2026-09-30 · uncommitted · feat(display): display/info에 charging 상태 추가 (D-350·D-351)
+
+- 변경: bridge/display.py info_payload에 "charging" 필드 추가 (additive, false 기본). 화면이 CHARGING/CHARGED_HOLD 상태를 표시할 수 있게 한다.
+- 증거: test_bridge_display 전체 통과 (필드 목록 갱신 포함).
+- gate 변화: 없음.
+- 결정: 없음.
+- 교훈: 없음.
+
+## 2026-09-30 · uncommitted · fix(bridge): display charging이 실제로 켜지게 — 죽은 getattr 제거 (C6)
+
+- 변경: display.py의 `getattr(battery, "charging", False)`를 `snapshot.battery_status.charging` 직접 접근으로 교체. `Battery`(생 percent/voltage)에는 charging이 없고 D-27 확인된 충전 판정은 `BatteryStatus`에 있으므로, 이전 reach는 항상 False를 돌려주는 죽은 코드였다 — D-351의 충전 표시가 화면에 절대 켜지지 않았다. C6 판정을 기준 문서에 "Seam lie — fixed by deletion"으로 기록(safety/profile 판례와 같은 형식). test_bridge_display의 `_snapshot` fixture에 battery_status를 추가하고 charging=True 종단 시험을 신설.
+- 증거: test_module_criteria 1 passed (reach 소거로 집합 동일성 회복), test_bridge_display 15 passed, gateway 전체 1439 passed/16 skipped (2026-09-30 Windows). 이것이 main CI 적신의 첫 원인이었다(41b3a704부터 5연속 실패 중 유일하게 CI 로그에 잡힌 core 도메인 실패).
+- gate 변화: 없음.
+- 결정: 없음.
+- 교훈: getattr 기본값은 "있으면 읽는다"가 아니라 "이름이 바뀌어도 침묵한다"다 — D-351 회차가 시험에 기본값(False)만 적어 통과시킨 것이 이 결함을 통과시킨 길이었다. 참(True) 종단을 같이 적었으면 즉시 잡혔다.

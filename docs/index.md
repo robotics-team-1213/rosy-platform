@@ -143,6 +143,31 @@
 | D-319 | SETUP 뒤 현장 입회 하에 모터 구동 준비를 자동화한다 |
 | D-320 | 로봇 배포 소스는 제품별로 묶고 사이트 배포는 분리한다 |
 | D-321 | 현장 보정과 G4 실측을 한 세션으로 모으고 지도 생성은 승인 뒤에 시작한다 |
+| D-322 | Isaac Sim은 Gazebo와 별개 시뮬레이터로 연결한다 |
+| D-323 | 원격 조종 표면은 CORE가 same-origin으로 서빙하는 정적 PWA Rosy Pilot(src/hmi/pilot)이며 기기 종류별 드라이버 확장점을 v1 Pinky 주행과 함께 선행한다 |
+| D-325 | 기존 Pinky 배포는 변경에 맞는 가장 작은 산출물을 선택한다 |
+| D-326 | 자율 판단 루프는 네 역할로 분리 배치하고 재판단 밸브는 별도 승격으로만 연다 |
+| D-327 | 의미 기반 조작 Action과 장치별 ROS 실행 어댑터를 분리한다 |
+| D-328 | 모델 제안 Mission과 독립 목표 증거를 분리한다 |
+| D-330 | Fleet의 단일 발행 권한과 정지·재시작 차단을 Mission과 기존 작업에 공통 적용한다 |
+| D-331 | Gemini Robotics ER 2를 상태 비저장·제안 전용 Fleet provider로 연결한다 |
+| D-332 | 사람 확인은 고정 단계가 아니라 조건이다 — 사전 등록 승인, 예외 조정, 자율 재발의 승인에만 둔다 |
+| D-333 | ER 2 조작 후보의 Mission 승인, 장치 Action 수락, 정지와 목표 증거를 분리한다 |
+| D-334 | ER 2의 도구 목록과 진행 조회를 Fleet 원장 경계에 둔다 |
+| D-335 | 브랜드 홈 링크를 ui-brand 공용 동작으로 넣는다 |
+| D-336 | Fleet와 OMX 제어 owner 사이 첫 연결은 같은 호스트의 local IPC로 제한한다 |
+| D-339 | 화면 제목과 폴더 이름은 역할을 드러낸다 — 패키지 이름은 그대로 두고 대응표를 시험으로 고정한다 |
+| D-340 | 설치형 앱은 웹 표면을 감싸는 셸로 만든다 — PWA가 먼저, Capacitor 셸은 저장소 루트 `apps/`에 둔다 |
+| D-345 | D-280 디자인 철학은 사람이 보는 모든 표면에 같은 방식으로 적용한다 — 웹이 아닌 표면도 레지스트리·토큰 사본 검사·이름 규칙을 받는다 |
+| D-348 | 목표 증거 생산자 등록 계약과 검증기 연결은 Fleet이 소유한다 — 사람 확인은 등록 시점뿐, 종단 Action 뒤 자동 증거 검증으로 `GOAL_CONFIRMED`를 연다 |
+| D-352 | 도크·신호등은 같은 패턴의 외부 장비다 — 폴링 실패 어휘·준비 프레임(wire/instrumented/verified)·계약 상호 참조를 공유한다 |
+| D-353 | 외부 장비 설계는 바뀐다 — 바뀌어도 코드가 아니라 설정·전략이 바뀌게 한다 |
+| D-354 | 외부 장비는 mDNS로 서로를 찾는다 — IP 하드코딩 없이, 전원만 연결하면 발견된다 (_rosy-dock._tcp·_rosy-signal._tcp) |
+| D-355 | 도크·외부 장비 구현은 자재→벤치→실기→활성화→통합의 5단계로 간다 — 각 단계의 게이트·의존성·완료 조건을 확정한다 |
+| D-357 | ER 2 consumes bounded Fleet feedback and returns candidates while Mission/device control remain independent |
+| D-358 | ER 2 feedback turns use trusted scope, fenced candidates, and explicit ambiguity |
+| D-360 | 천장 카메라 경기장 자동 검출은 제안일 뿐이다 — Vision이 네 모서리를 제안하고, 관제는 운용자가 확인한 모서리로 보정·마스킹한 경기장 뷰를 보여 준다 |
+| D-361 | 사이트 콘솔이 로봇 화면 코드로 로봇을 등록한다 — Fleet이 코드를 로봇에서 직접 교환하고, 자격은 Fleet 소유 저장소에 둔다 |
 
 ## 계획·결과 문서
 
@@ -189,6 +214,23 @@
 - [2026-09-28-camera-fault-supervised-demo.md](plans/2026-09-28-camera-fault-supervised-demo.md)
 - [2026-09-28-control-and-contract-boundary-audit.md](plans/2026-09-28-control-and-contract-boundary-audit.md)
 - [2026-09-28-site-camera-preview-rectification.md](plans/2026-09-28-site-camera-preview-rectification.md)
+- [2026-09-29-d268-policy-evidence-disposition.md](plans/2026-09-29-d268-policy-evidence-disposition.md)
+- [2026-09-29-embodied-reasoning-device-action-design.md](plans/2026-09-29-embodied-reasoning-device-action-design.md)
+- [2026-09-29-er2-adr-consistency-review.md](plans/2026-09-29-er2-adr-consistency-review.md)
+- [2026-09-29-er2-agent-loop-gap-map.md](plans/2026-09-29-er2-agent-loop-gap-map.md)
+- [2026-09-29-er2-isaac-sim-architecture-assessment.md](plans/2026-09-29-er2-isaac-sim-architecture-assessment.md)
+- [2026-09-29-er2-manipulation-official-api-research.md](plans/2026-09-29-er2-manipulation-official-api-research.md)
+- [2026-09-29-er2-semantic-actions-mission-implementation.md](plans/2026-09-29-er2-semantic-actions-mission-implementation.md)
+- [2026-09-29-fleet-mission-control-arbitration-implementation.md](plans/2026-09-29-fleet-mission-control-arbitration-implementation.md)
+- [2026-09-29-fleet-robot-code-enrollment-plan.md](plans/2026-09-29-fleet-robot-code-enrollment-plan.md)
+- [2026-09-29-on-demand-activation-measurement-baseline.md](plans/2026-09-29-on-demand-activation-measurement-baseline.md)
+- [2026-09-29-pinky-deployment-fast-path.md](plans/2026-09-29-pinky-deployment-fast-path.md)
+- [2026-09-29-policy-evidence-contract-design.md](plans/2026-09-29-policy-evidence-contract-design.md)
+- [2026-09-29-policy-evidence-contract.md](plans/2026-09-29-policy-evidence-contract.md)
+- [2026-09-30-dock-device-implementation-plan.md](plans/2026-09-30-dock-device-implementation-plan.md)
+- [2026-09-30-er2-mission-feedback-loop.md](plans/2026-09-30-er2-mission-feedback-loop.md)
+- [2026-09-30-goal-evidence-producer-and-verifier-design.md](plans/2026-09-30-goal-evidence-producer-and-verifier-design.md)
+- [2026-09-30-goal-evidence-producer-and-verifier.md](plans/2026-09-30-goal-evidence-producer-and-verifier.md)
 
 ## 교훈 (docs/solutions)
 
@@ -201,8 +243,8 @@
 
 ## 최근 기록
 
-- 2026-09-29 · uncommitted · docs(sd): document powered-off no-drive recovery
-- 2026-09-29 · uncommitted · docs(g4): record link-loss lesson and D-321 calibration decision
-- 2026-09-28 · uncommitted · docs(sd): define attended post-setup motor commissioning
-- 2026-09-28 · 2ec41b9a · fix(fleet-ui): preserve camera corner keyboard focus
-- 2026-09-28 · 9825da0b · feat(fleet-ui): adjust camera floor corners directly
+- 2026-09-30 · uncommitted · fix(contracts): reconcile ER2 API version and Fleet size ratchet
+- 2026-09-30 · uncommitted · docs(validation): record final ER2 feedback audit gates
+- 2026-09-30 · uncommitted · fix(fleet): recheck ER2 egress fence after Vision capture
+- 2026-09-30 · uncommitted · fix(fleet): enforce the ER2 feedback deadline across tool dispatch
+- 2026-09-30 · uncommitted · feat(fleet): add bounded trusted ER2 post-action Vision reader

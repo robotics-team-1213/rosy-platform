@@ -1,0 +1,1857 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rosy 로봇 — 제어 진단</title>
+<link rel="stylesheet" href="/common/tokens.css">
+<link rel="stylesheet" href="/common/components.css">
+<script type="module" src="/common/ui.js"></script>
+<style>
+:root {
+  color-scheme: dark;
+  /* grounds — the page is split by surface, not by card outlines:
+     observe/sense sit flat on the page, act is raised. */
+  --bg: #08090b;  --observe: #101214;  --act: #2b2d30;  --act-2: #35383c;
+  --unk: #161615; --grid: #2c2c2a;     --border: var(--line-10);
+  --rule: var(--line-06);
+  --ink: #eeeeef; --ink-2: #9499a0;    --muted: #9499a0;
+  /* map raster — must match render_png in rosy_control/web_node.py */
+  --free: #232322; --wall: #e1e0d9;
+  /* categorical overlays (validated trio) + pin */
+  --route: #49affd; --alt: #d95926; --goal: #12bb81; --pin: #d55181;
+  --hist: #9499a0; /* de-emphasis, not a series */
+  /* status — same hex as tokens.css. serious is warn; there is no fourth status. */
+  --good: #12bb81; --warn: #feb432; --serious: var(--status-warn); --crit: #c40921;
+  --gauge: var(--gauge-fill); --track: var(--gauge-track);
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body { margin: 0; background:var(--bg); color:var(--ink-2);
+       font: 400 var(--text-body)/1.5 var(--body);
+       display:flex; flex-direction:column;
+       -webkit-font-smoothing:antialiased; }
+b, strong { font-weight:600; }
+
+/* ---- status bar --------------------------------------------------------- */
+header { flex:none; display:flex; align-items:center; gap: var(--space-4);
+         padding: var(--space-2) var(--space-4) var(--space-2); background:var(--observe);
+         border-bottom:1px solid var(--border); }
+.brand { font-size: var(--text-label); font-weight:600; color:var(--ink);
+         display:flex; align-items:center; gap: var(--space-2); letter-spacing:0.01em; }
+.dot { width:8px; height:8px; border-radius: var(--radius-flag); background:var(--muted);
+       flex:none; }
+.dot.live { background:var(--good); }
+.chips { margin-left: auto; display:flex; gap: var(--space-2); flex-wrap:wrap;
+         align-items:center; }
+.chip { display:inline-flex; align-items:baseline; gap: var(--space-1); font-size: var(--text-micro);
+        color:var(--muted); background:var(--bg);
+        border:1px solid var(--border); border-radius: var(--radius-flag); padding: var(--space-1) var(--space-3); }
+.chip b { color:var(--ink); font-weight:600; }
+.chip.crit { border-color:rgba(208,59,59,0.6); background:rgba(208,59,59,0.10); }
+.chip.crit b { color:var(--crit); }
+
+/* ---- three regions: 감지 | 관측 | 조작 ----------------------------------- */
+main { flex:1; min-height:0; display:grid; gap: 0;
+       grid-template-columns:296px minmax(0,1fr) 322px;
+       grid-template-areas:"sense observe act"; }
+.region { min-height:0; min-width:0; display:flex; flex-direction:column; }
+.sense  { grid-area:sense;  background:var(--observe);
+          border-right:1px solid var(--rule); overflow-y:auto; }
+.observe{ grid-area:observe; background:var(--bg); }
+.act    { grid-area:act; background:var(--act);
+          border-left:1px solid var(--border); overflow-y:auto;
+          box-shadow:inset 1px 0 0 rgba(255,255,255,0.04); }
+/* region caption: a heading plus a rule that runs to the edge — the rule is
+   the divider, so no boxes are needed to tell the regions apart. */
+.rhead { flex:none; display:flex; align-items:center; gap: var(--space-2);
+         padding: var(--space-3) var(--space-3) var(--space-2); }
+.rhead h2 { margin: 0; font-size: var(--text-micro); font-weight:600; color:var(--ink-2); }
+.rhead .gloss { font-size: var(--text-micro); color:var(--muted); }
+.rhead::after { content:""; flex:1; height:1px; background:var(--rule); }
+.rbody { flex:1; min-height:0; display:flex; flex-direction:column;
+         gap: var(--space-3); padding: 0 var(--space-3) var(--space-4); }
+.act .rbody { gap: var(--space-3); }
+
+/* ---- block (a grouped set inside a region) ------------------------------ */
+.block > h3 { margin: 0 0 var(--space-2); font-size: var(--text-micro); font-weight:600;
+              color:var(--ink-2); }
+.hint { margin: 0 0 var(--space-2); font-size: var(--text-micro); line-height:1.45; color:var(--muted); }
+.hint:empty { display:none; }
+
+/* ---- 감지: dial --------------------------------------------------------- */
+.dialwrap { display:flex; flex-direction:column; align-items:center; }
+#scan { display:block; width:100%; max-width:262px; height:auto; }
+.dialnote { margin-top: 0; text-align:center; font-size: var(--text-micro);
+            color:var(--muted); }
+/* ---- 감지: clearance gauges --------------------------------------------- */
+.gauge { display:grid; grid-template-columns:66px minmax(0,1fr) 58px;
+         align-items:center; gap: var(--space-2); padding: var(--space-1) 0; }
+.gauge .g-k { font-size: var(--text-micro); color:var(--muted); overflow:hidden;
+              text-overflow:ellipsis; white-space:nowrap; }
+.gauge .g-t { position:relative; height:9px; border-radius: var(--radius-control);
+              background:var(--track); overflow:hidden; }
+.gauge .g-f { position:absolute; inset:0 auto 0 0; width:0;
+              background:var(--gauge); border-radius: var(--radius-control);
+              transition:width .18s linear, background-color .18s linear; }
+.gauge .g-x { position:absolute; top:-2px; bottom:-2px; width:2px;
+              background:rgba(255,255,255,0.42); }
+.gauge .g-v { text-align:right; font-size: var(--text-micro); font-weight:600;
+              color:var(--ink); font-variant-numeric:tabular-nums; }
+.gauge.lead .g-v { font-size: var(--text-body); }
+.gauge.lead .g-k { color:var(--ink-2); }
+.gauge.lead .g-t { height:12px; }
+.gauge.miss .g-v, .gauge.miss .g-k { color:var(--muted); font-weight:400; }
+.g-f.warn { background:var(--warn); }
+.g-f.crit { background:var(--crit); }
+.g-v.warn { color:var(--warn); }
+.g-v.crit { color:var(--crit); }
+/* ---- 감지: flags -------------------------------------------------------- */
+.flags { display:flex; flex-wrap:wrap; gap: var(--space-1); }
+.flag { font-size: var(--text-micro); color:var(--muted); background:rgba(255,255,255,0.02);
+        border:1px solid var(--rule); border-radius: var(--radius-flag); padding: 0 var(--space-2);
+        white-space:nowrap; }
+.flag.hit { color:var(--crit); border-color:rgba(208,59,59,0.6);
+            background:rgba(208,59,59,0.12); font-weight:600; }
+.flag.ok  { color:var(--ink-2); border-color:var(--border); }
+.flag.lost{ color:var(--warn); border-color:rgba(250,178,25,0.45); }
+/* ---- 감지: camera ------------------------------------------------------- */
+.camframe { position:relative; max-width:340px; border-radius: var(--radius-button); overflow:hidden;
+            background:var(--unk); border:1px solid var(--rule); }
+#camimg { width:100%; display:block; }
+#camimg.old { opacity:0.42; filter:saturate(0.4); }
+.camveil { position:absolute; inset:auto 0 0 0; padding: var(--space-1) var(--space-2);
+           font-size: var(--text-micro); color:var(--warn);
+           background:linear-gradient(transparent, rgba(13,13,13,0.85)); }
+.camveil:empty { display:none; }
+#camnone { color:var(--muted); font-size: var(--text-micro); padding: var(--space-5) 0;
+           text-align:center; }
+.camcap { font-size: var(--text-micro); color:var(--muted); margin-top: var(--space-1);
+          overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.camcap:empty { display:none; }
+
+/* ---- 관측: map ---------------------------------------------------------- */
+.observe .rbody { gap: var(--space-2); padding: 0 var(--space-3) var(--space-3); }
+.maphead { flex:none; display:flex; align-items:center; gap: var(--space-3);
+           flex-wrap:wrap; }
+.legend { display:flex; gap: var(--space-3); flex-wrap:wrap; font-size: var(--text-micro);
+          color:var(--muted); }
+.key { display:inline-flex; align-items:center; gap: var(--space-1); }
+.sw { width:14px; height:3px; border-radius: var(--radius-control); flex:none; }
+.sw.route { background:var(--route); }
+.sw.alt { background:var(--alt); }
+.sw.hist { background:var(--hist); }
+.sw.goal { width:9px; height:9px; border-radius: var(--radius-control); background:var(--goal); }
+.pin { font-size: var(--text-micro); color:var(--pin); margin-left: auto;
+       font-variant-numeric:tabular-nums; }
+.mapwrap { position:relative; flex:1; min-height:180px;
+           background:var(--unk); border:1px solid var(--rule);
+           border-radius: var(--radius-button); overflow:hidden; cursor:crosshair; }
+.mapwrap.grabbing { cursor:grabbing; }
+#map { position:absolute; inset:0; width:100%; height:100%; display:block; }
+.coords:empty { display:none; }
+.coords { position:absolute; left:10px; bottom:8px; font-size: var(--text-micro);
+          color:var(--ink-2); background:rgba(13,13,13,0.78);
+          border:1px solid var(--border); border-radius: var(--radius-control);
+          padding: 0 var(--space-2); pointer-events:none;
+          font-variant-numeric:tabular-nums; }
+.viewbar { position:absolute; top:8px; right:8px; display:flex; gap: var(--space-1);
+           align-items:center; }
+.viewbar ui-button { flex: none; }
+#zoompct { font-size: var(--text-micro); color:var(--ink-2); background:rgba(13,13,13,0.78);
+           border:1px solid var(--border); border-radius: var(--radius-control); padding: 0 var(--space-2);
+           font-variant-numeric:tabular-nums; }
+.stale { position:absolute; inset:0; display:none; align-items:center;
+         justify-content:center; background:rgba(13,13,13,0.55);
+         color:var(--warn); font-size: var(--text-label); pointer-events:none; }
+.empty-note { position:absolute; inset:0; display:flex; align-items:center;
+              justify-content:center; color:var(--muted); font-size: var(--text-label);
+              pointer-events:none; }
+.goal-state { flex:none; font-size: var(--text-micro); color:var(--ink-2);
+              overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+/* metrics strip: the map's own numbers, under the map, not in a far card */
+.strip { flex:none; display:grid; gap: 1px; background:var(--rule);
+         border:1px solid var(--rule); border-radius: var(--radius-button); overflow:hidden;
+         grid-template-columns:repeat(6, minmax(0,1fr)); }
+.cell { background:var(--observe); padding: var(--space-1) var(--space-2) var(--space-2); min-width:0; }
+.cell .lbl { font-size: var(--text-micro); color:var(--muted); overflow:hidden;
+             text-overflow:ellipsis; white-space:nowrap; }
+.cell .val { font-size: var(--text-label); font-weight:600; color:var(--ink); margin-top: 1px;
+             font-variant-numeric:tabular-nums; overflow:hidden;
+             text-overflow:ellipsis; white-space:nowrap; }
+.cell.warnval .val { color:var(--warn); font-size: var(--text-micro); font-weight:500; }
+
+/* ---- 조작: raised controls ---------------------------------------------- */
+.act .block { background:rgba(255,255,255,0.025);
+              border:1px solid var(--border); border-radius: var(--radius-button);
+              padding: var(--space-3) var(--space-3) var(--space-3); }
+.act .block.estop { border-color:rgba(208,59,59,0.45);
+                    background:rgba(208,59,59,0.07); }
+.btnrow { display:flex; gap: var(--space-1); }
+.btnrow ui-button { flex:1; }
+.act label { display:block; margin: var(--space-2) 0 var(--space-1); }
+.act select, .act input[type="number"] { width:100%; box-sizing:border-box;
+  background:var(--act-2); color:var(--ink); border:1px solid var(--border);
+  border-radius: var(--radius-control); padding: var(--space-2); font:inherit; }
+#navsessionstart { margin-top: var(--space-2); width:100%; }
+.btnrow + .btnrow { margin-top: var(--space-1); }
+.sub { margin-top: var(--space-2); padding-top: var(--space-2); border-top:1px solid var(--rule); }
+.sub.first { margin-top: 0; padding-top: 0; border-top:0; }
+.sub > h4 { margin: 0 0 var(--space-1); font-size: var(--text-micro); font-weight:600;
+            color:var(--ink-2); }
+.mapping-error { color:var(--serious); font-size: var(--text-micro); margin-top: var(--space-2); }
+.mapping-error:empty { display:none; }
+.pad { display:grid; grid-template-columns:repeat(3,1fr); gap: var(--space-1); }
+
+.keys { display:grid; grid-template-columns:repeat(3,1fr); gap: var(--space-1);
+        margin-top: var(--space-1); }
+.keys span { display:flex; align-items:center; justify-content:center;
+             background:rgba(255,255,255,0.03); border:1px solid var(--rule);
+             border-radius: var(--radius-control); padding: var(--space-1) 0; font-size: var(--text-micro);
+             color:var(--muted); user-select:none; }
+.keys span.on { border-color:var(--route); color:var(--ink);
+                background:rgba(57,135,229,0.16); }
+.srow { display:flex; justify-content:space-between; gap: var(--space-2);
+        font-size: var(--text-micro); padding: 0 0; }
+.srow .k { color:var(--muted); }
+.srow .v { color:var(--ink); font-weight:500;
+           font-variant-numeric:tabular-nums; overflow:hidden;
+           text-overflow:ellipsis; white-space:nowrap; }
+
+@media (max-width: 1279px) {
+  main { grid-template-columns:minmax(0,1fr) 322px;
+         grid-template-areas:"observe act" "sense act";
+         grid-template-rows:minmax(54vh,1fr) auto; }
+  .sense { border-right:0; border-top:1px solid var(--rule); overflow:visible; }
+  .sense .rbody { flex-direction:row; flex-wrap:wrap; align-items:flex-start; }
+  .sense .block { flex:1 1 240px; }
+}
+@media (max-width: 900px) {
+  main { grid-template-columns:minmax(0,1fr);
+         grid-template-areas:"observe" "sense" "act";
+         grid-template-rows:auto; }
+  body { height:auto; }
+  .observe .mapwrap { flex:none; height:58vh; }
+  .act { border-left:0; border-top:1px solid var(--border); }
+  .strip { grid-template-columns:repeat(3, minmax(0,1fr)); }
+}
+@media (prefers-reduced-motion: reduce) {
+  * { transition:none !important; }
+}
+</style>
+<style>
+/* Operations hierarchy: status first, map central, commands in the act region. */
+header { padding: var(--space-3) var(--space-4); gap: var(--space-4); }
+body { word-break:keep-all; overflow-wrap:anywhere; }
+.brand { font-size: var(--text-body); letter-spacing:-.03em; }
+.brand small { font-size: var(--text-micro); color:var(--muted); letter-spacing:.12em; margin-left: var(--space-1); }
+.statusline { display:grid; grid-template-columns:1.1fr 1fr 1fr 1.4fr; background:var(--observe); border-bottom:1px solid var(--border); flex:none; }
+.statusitem { padding: var(--space-3) var(--space-4); border-right:1px solid var(--rule); min-width:0; }
+.statusitem label { display:block; color:var(--muted); font-size: var(--text-micro); margin-bottom: var(--space-1); }
+.statusitem strong { display:block; color:var(--ink); font-size: var(--text-value); letter-spacing:-.025em; }
+.statusitem small { display:block; margin-top: var(--space-1); font-size: var(--text-micro); color:var(--muted); }
+.battery-track { width:72px; height:4px; background:var(--track); margin-top: var(--space-2); border-radius: var(--radius-control); overflow:hidden; }
+#batteryfill { height:100%; background:var(--ink-2); width:0; }
+main { grid-template-columns:250px minmax(0,1fr) 350px; }
+.rhead { padding-top: var(--space-4); padding-bottom: var(--space-3); }
+.rhead h2 { font-size: var(--text-label); }
+.rbody { gap: var(--space-4); }
+.act .block { border-radius: var(--radius-button); padding: var(--space-3); }
+.block > h3 { font-size: var(--text-label); color:var(--ink); }
+input:focus-visible, summary:focus-visible { outline:2px solid var(--focus-ring); outline-offset:3px; }
+.hint { line-height:1.6; }
+.estop .btnrow { display:inline-flex; width:calc(50% - 3px); margin-top: 0; vertical-align:top; }
+
+#mappingcard .btnrow { display:grid; grid-template-columns:1fr 1fr; }
+#mapsave { grid-column:1/-1; }
+.switchrow { display:flex; align-items:center; justify-content:space-between; gap: var(--space-4); padding: var(--space-2) 0; border-top:1px solid var(--rule); }
+.switchrow span { display:block; font-size: var(--text-micro); color:var(--ink); }
+.switchrow small { display:block; color:var(--muted); font-size: var(--text-micro); margin-top: var(--space-1); }
+.switchrow input { appearance:none; width:38px; height:22px; flex:none; border-radius: var(--radius-panel); border:1px solid var(--border); background:var(--act-2); position:relative; cursor:pointer; }
+.switchrow input::after { content:''; position:absolute; width:14px; height:14px; left:3px; top:3px; border-radius: var(--radius-flag); background:var(--muted); transition:transform .15s; }
+.switchrow input:checked { background:var(--route); }
+.switchrow input:checked::after { transform:translateX(16px); background:white; }
+.switchrow input:disabled { opacity:.35; cursor:not-allowed; }
+.command-status { padding: var(--space-2) var(--space-3); margin: 0; border-left:2px solid var(--route); background:var(--observe); font-size: var(--text-micro); }
+.procedure { margin: var(--space-2) 0; font-size: var(--text-micro); color:var(--muted); }
+.procedure summary { cursor:pointer; padding: var(--space-1) 0; }
+[hidden] { display:none !important; }
+@media(max-width:1279px) { main { grid-template-columns:minmax(0,1fr) 350px; } }
+@media(max-width:900px) {
+ header { padding: var(--space-3); flex-wrap:wrap; gap: var(--space-2); }
+ .chips { margin-left: 0; gap: var(--space-1); }
+ .chip { font-size: var(--text-micro); padding: 0 var(--space-2); }
+ .statusline { grid-template-columns:1fr 1fr; }
+ .statusitem { padding: var(--space-2) var(--space-3); border-bottom:1px solid var(--rule); }
+ .statusitem strong { font-size: var(--text-body); }
+ main { grid-template-columns:minmax(0,1fr); grid-template-areas:'observe' 'act' 'sense'; }
+ .observe .mapwrap { height:42vh; min-height:260px; }
+ .act { overflow:visible; }
+ .act .rbody { padding-bottom: var(--space-5); }
+}
+</style>
+</head>
+<body>
+<ui-shell grammar="procedure">
+<ui-topbar>
+  <ui-brand><span class="dot" id="live"></span> pinky <small>ROBOT CONSOLE</small></ui-brand>
+  <div class="chips">
+    <span class="chip" id="modeChip">모드 <b id="mode">-</b></span>
+    <span class="chip">주행 <b id="wander">-</b></span>
+    <span class="chip" id="estopChip">비상정지 <b id="estop">-</b></span>
+    <span class="chip" id="okChip">노드 <b id="ok">-</b></span>
+    <span class="chip" title="watch_node /robot/health">진단 <b id="health">-</b></span>
+  </div>
+</ui-topbar>
+<div class="statusline" aria-label="로봇 상태 요약">
+  <div class="statusitem"><label>배터리</label><strong id="batteryvalue">정보 없음</strong><small id="batterydetail">배터리 측정 대기</small><div class="battery-track"><div id="batteryfill"></div></div></div>
+  <div class="statusitem"><label>자동 보정</label><strong id="overviewcal">확인 중</strong><small id="overviewcaldetail">실제 적용 상태 확인</small></div>
+  <div class="statusitem"><label>현재 위치</label><strong id="overviewpose">확인 중</strong><small>지도 기준 위치 추정</small></div>
+  <div class="statusitem"><label>현재 동작</label><strong id="overviewmotion">연결 대기</strong><small id="overviewreason">로봇 상태 수신 대기</small></div>
+</div>
+<main>
+
+  <!-- ==================== 감지 ==================== -->
+  <section class="region sense" aria-labelledby="h-sense">
+    <div class="rhead"><h2 id="h-sense">감지</h2>
+      <span class="gloss" id="evidencescope">로봇이 재는 값</span></div>
+    <div class="rbody">
+      <div class="block">
+        <h3>라이다</h3>
+        <div class="dialwrap">
+          <canvas id="scan" width="416" height="416" role="img"
+                  aria-label="라이다 극좌표 뷰, 위쪽이 로봇 정면"></canvas>
+          <div class="dialnote" id="dialnote">라이다 대기</div>
+        </div>
+      </div>
+      <div class="block">
+        <h3>여유 거리</h3>
+        <p class="hint" id="clearhint">정지선을 넘으면 safety가 모터를 잡습니다.</p>
+        <div id="gauges"></div>
+      </div>
+      <div class="block">
+        <h3>안전 판정</h3>
+        <div class="flags" id="bools"></div>
+      </div>
+      <div class="block" id="camcard" style="display:none">
+        <h3>카메라</h3>
+        <p>영상은 물체 관찰용입니다. 거리는 LiDAR로 판단하며 영상만으로 주행을 차단하지 않습니다.</p>
+        <div class="camframe">
+          <img id="camimg" alt="전방 카메라 영상">
+          <div class="camveil" id="camveil"></div>
+        </div>
+        <div id="camnone" style="display:none">영상 없음</div>
+        <div class="camcap" id="camcap"></div>
+        <div class="flags" id="camverdict" style="margin-top: var(--space-2)"></div>
+      </div>
+      <div class="block" id="rescard" style="display:none">
+        <h3>저장된 지도 검증</h3>
+        <p class="hint">지정한 검증 보고서 · 실시간 상태와 별개</p>
+        <div id="resrows"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== 관측 ==================== -->
+  <section class="region observe" aria-labelledby="h-observe">
+    <div class="rhead"><h2 id="h-observe">관측</h2>
+      <span class="gloss">지도 위 현재 위치와 경로</span>
+      <span class="pin" id="pin"></span>
+      <ui-button kind="quiet" type="button" class="mini" id="pinsend" style="display:none"
+              aria-label="찍은 지점으로 로봇 보내기">이 지점으로</ui-button>
+      <ui-button kind="quiet" type="button" class="mini" id="pinclear" style="display:none"
+              aria-label="지점 지우기">지우기</ui-button>
+    </div>
+    <div class="rbody">
+      <div class="maphead">
+        <div class="legend">
+          <span class="key"><i class="sw route"></i>남은 경로</span>
+          <span class="key"><i class="sw alt"></i>후보 경로</span>
+          <span class="key"><i class="sw hist"></i>지나온 길</span>
+          <span class="key"><i class="sw goal"></i>목표</span>
+        </div>
+      </div>
+      <div class="mapwrap" id="mapwrap">
+        <canvas id="map" role="img" aria-label="점유 격자 지도와 경로 오버레이"></canvas>
+        <div class="viewbar">
+          <ui-button kind="quiet" type="button" data-view="in" aria-label="확대">+</ui-button>
+          <ui-button kind="quiet" type="button" data-view="out" aria-label="축소">&minus;</ui-button>
+          <ui-button kind="quiet" type="button" data-view="fit" aria-label="화면 맞춤">맞춤</ui-button>
+          <ui-button kind="quiet" type="button" data-view="align" title="현재 로봇 방향을 화면 오른쪽으로 정렬">방향 정렬</ui-button>
+          <ui-button kind="quiet" type="button" data-view="left" aria-label="지도 왼쪽으로 5도 회전">↶</ui-button>
+          <ui-button kind="quiet" type="button" data-view="right" aria-label="지도 오른쪽으로 5도 회전">↷</ui-button>
+          <ui-button kind="quiet" type="button" data-view="north" title="원래 지도 방향">0°</ui-button>
+          <span id="viewangle">0.0°</span>
+          <span id="zoompct">100%</span>
+        </div>
+        <div class="stale" id="stale"></div>
+        <div class="empty-note" id="mapnote" style="display:none">지도 수신 대기</div>
+        <div class="coords" id="coords"></div>
+      </div>
+      <div class="goal-state" id="gstate">-</div>
+      <div class="strip">
+        <div class="cell" id="poseCell"><div class="lbl">지도 좌표 x, y</div>
+          <div class="val" id="pose">-</div></div>
+        <div class="cell"><div class="lbl">도착 예상</div>
+          <div class="val" id="eta">-</div></div>
+        <div class="cell"><div class="lbl">명령 속도</div>
+          <div class="val" id="vel">-</div></div>
+        <div class="cell"><div class="lbl">남은 경로</div>
+          <div class="val" id="rinfo">-</div></div>
+        <div class="cell"><div class="lbl">지도 크기</div>
+          <div class="val" id="msize">-</div></div>
+        <div class="cell"><div class="lbl">주행 거리</div>
+          <div class="val" id="pathm">-</div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== 조작 ==================== -->
+  <section class="region act" aria-labelledby="h-act">
+    <div class="rhead"><h2 id="h-act">조작</h2>
+      <span class="gloss">로봇을 움직이는 버튼</span></div>
+    <div class="rbody">
+
+      <div class="block estop">
+        <h3>비상정지</h3>
+        <p class="hint">모터 출력을 정지합니다. 해제해도 자동 출발하지 않습니다.</p>
+        <div class="btnrow">
+          <ui-button kind="irreversible" type="button" class="danger halt" data-post="/estop"
+                  data-val="stop">정지</ui-button>
+        </div>
+        <div class="btnrow">
+          <ui-button kind="quiet" type="button" data-post="/estop" data-val="release">해제</ui-button>
+        </div>
+      </div>
+      <p id="commandstatus" class="command-status" role="status" aria-live="polite">명령 대기 · 시작은 직접 선택합니다</p>
+
+    <div class="block" id="calibrationcard">
+      <h3>자동 시작 보정</h3>
+      <p class="hint" id="calibrationstatus" role="status">교정 노드 연결 대기</p>
+      <p class="command-status" id="calibrationpartial" role="status" aria-live="polite" hidden>부분 센싱 · IMU 제외 · 미교정 · 주행 불가. 정지 상태에서 나머지 센서만 확인합니다.</p>
+      <p class="command-status" id="calibrationexistingstatus" role="status" aria-live="polite" hidden></p>
+      <p class="command-status" id="calibrationlimitedstatus" role="status" aria-live="polite" hidden></p>
+      <progress id="calibrationprogress" value="0" max="9" aria-label="정상 검사 수"></progress>
+      <p class="hint" id="calibrationsummary" aria-live="polite">센서 검사 대기</p>
+      <p class="hint" id="calibrationenvironment" aria-live="polite">환경 여유 측정 대기</p>
+      <fieldset>
+        <legend>카메라 지면 거리 보정</legend>
+        <label class="switchrow"><div><span>카메라 지면 거리 보정 사용</span><small>검증된 호모그래피만 · 세션 동안만 적용</small></div><input id="camera_ground_toggle" type="checkbox" role="switch" aria-label="카메라 지면 거리 보정 사용" disabled></label>
+        <p class="hint" id="camera_ground_status" role="status">카메라 보정 상태 대기</p>
+        <label><input id="camera_ground_check_profile_loaded" type="checkbox" disabled> 프로필 로드</label>
+        <label><input id="camera_ground_check_image_contract" type="checkbox" disabled> 해상도·회전·카메라 프로필 일치</label>
+        <label><input id="camera_ground_check_intrinsic_calibration" type="checkbox" disabled> 내부 보정·왜곡 제거점 계약</label>
+        <label><input id="camera_ground_check_reference_fit" type="checkbox" disabled> 행렬·참조점 오차</label>
+        <label><input id="camera_ground_check_independent_validation" type="checkbox" disabled> 독립 검증점 오차</label>
+        <label><input id="camera_ground_check_physical_validation" type="checkbox" disabled> 보드·바닥·마운트·로봇축 물리 확인</label>
+        <details><summary>보정값과 튜닝 기준</summary><pre class="hint" id="camera_ground_detail" style="white-space:pre-wrap;overflow-wrap:anywhere">보정 프로필 대기</pre></details>
+      </fieldset>
+      <details><summary>센서별 상세값</summary><pre class="hint" id="calibrationsensors" style="white-space:pre-wrap;overflow-wrap:anywhere">센서 데이터 대기</pre></details>
+      <details class="procedure"><summary>검증 절차와 주의사항</summary><p>센서 확인 → 공간에 맞춘 전후 왕복 → 좌우 회전 검증 → 보정값 적용 확인 순서로 진행합니다. 이동과 회전 공간을 확보하세요. 실패·중단 시 정지하며 재시작은 직접 선택합니다.</p></details>
+      <label for="calibrationscope">보정 범위</label>
+      <select id="calibrationscope"><option value="full">전체 측정</option><option value="skip_motion">이동·회전 생략 · 기존 설정값</option></select>
+      <label for="calibrationafter">공간 이동 후 보정이 끝나면</label>
+      <select id="calibrationafter"><option value="stay">확보한 위치에 머물기</option><option value="return_origin">원래 위치로 복귀</option></select>
+      <p class="hint">공간 확보·복귀는 지원되는 실행 환경에서만 수행합니다. 복귀 경로가 막히면 정지합니다.</p>
+      <div class="btnrow">
+        <ui-button kind="quiet" type="button" id="calibrationretry" data-calibration="retry">전체 보정</ui-button>
+        <ui-button kind="quiet" type="button" id="calibrationpartialaction" data-calibration="partial_calibration">부분 보정 · 실패 센서 제외</ui-button>
+        <ui-button kind="quiet" type="button" id="calibrationmotion" data-calibration="validate_motion" disabled>4초 저속 이동 검증</ui-button>
+        <ui-button kind="quiet" type="button" data-calibration="abort">검증 중단</ui-button>
+      </div>
+      <p class="command-status" id="calibrationpartialreason" role="status" aria-live="polite" hidden></p>
+      <div id="calibrationerror" role="alert"></div>
+    </div>
+
+      <div class="block">
+        <h3>주행</h3>
+        <div class="sub first">
+          <h4>지도 기반</h4>
+          <p class="hint" id="navready" role="status">지도와 위치 확인 중…</p>
+          <p class="hint" id="navmotion" role="status">실시간 안전 판단 수신 대기</p>
+          <label for="navstrategy">탐색 방법</label>
+          <select id="navstrategy">
+            <option value="gain">정보량 우선 · 새 영역 / 이동 거리</option>
+            <option value="nearest">가까운 곳 우선 · 짧은 경로</option>
+            <option value="coverage">영역 순회 · 지그재그</option>
+          </select>
+          <p class="hint">선택한 목표까지는 A*로 경로를 계산합니다. 좁은 통로의 안전 검사와 회복 동작은 공통으로 적용합니다.</p>
+          <label for="navduration">전체 제한 시간 (초, 10–3600)</label>
+          <input id="navduration" type="number" min="10" max="3600" value="600" step="1">
+          <label for="navstall">이동 정체 제한 (초, 10–600)</label>
+          <input id="navstall" type="number" min="10" max="600" value="90" step="1">
+          <p class="hint">대기·회복을 포함한 실제 시간입니다. 정체 제한 동안 2cm 이상 이동하지 못하면 정지합니다. 브라우저를 닫아도 제한은 유지됩니다.</p>
+          <ui-button kind="quiet" type="button" id="navsessionstart" disabled>선택한 방법으로 시작</ui-button>
+          <p class="hint" id="navsessionstatus" role="status">실행 상태 확인 중…</p>
+          <p class="hint" id="navsessionerror" role="alert"></p>
+          <details><summary>시간 제한 없는 기존 실행</summary>
+          <div class="btnrow">
+            <ui-button kind="quiet" type="button" id="navexplore" data-post="/wander"
+                    data-val="explore" disabled>자동 탐색</ui-button>
+            <ui-button kind="quiet" type="button" id="navcoverage" data-post="/wander"
+                    data-val="coverage" disabled>영역 순회</ui-button>
+          </div>
+          </details>
+        </div>
+        <div class="sub">
+          <h4>센서 회피</h4>
+          <p class="hint">라이다로 벽을 따라갑니다. 같은 자리 반복 복구는 제한됩니다.</p>
+          <div class="btnrow">
+            <ui-button kind="quiet" type="button" id="wanderstart" data-post="/wander" data-val="start" disabled>센서 회피 시작</ui-button>
+          </div>
+        </div>
+        <div class="sub">
+          <div class="btnrow">
+            <ui-button kind="irreversible" type="button" class="danger" data-post="/wander"
+                    data-val="stop">주행 정지</ui-button>
+          </div>
+        </div>
+      </div>
+
+      <div class="block" id="mappingcard">
+        <h3>매핑</h3>
+        <p class="hint" id="mappingstatus" role="status">매핑 상태 확인 중…</p>
+        <label class="switchrow"><div><span>지도 수집</span><small>끄면 자동 주행 정지 · 지도는 유지</small></div><input id="mappingtoggle" type="checkbox" role="switch" aria-label="지도 수집" disabled></label>
+        <div class="btnrow">
+          <ui-button kind="quiet" type="button" id="mapsave" disabled>지도 PNG 저장</ui-button>
+          <ui-button kind="irreversible" type="button" class="danger" id="mapreset" disabled>지도 초기화</ui-button>
+          <ui-button kind="quiet" type="button" id="mapresume" disabled>매핑 재개</ui-button>
+        </div>
+        <p class="hint" style="margin: var(--space-2) 0 0">초기화하면 주행을 정지하고 지도
+          수집을 일시정지합니다. 다시 배치한 뒤 재개하세요.</p>
+        <div class="mapping-error" id="mappingerror" role="alert"></div>
+      </div>
+
+      <div class="block" id="displaycard">
+        <h3>화면 설정</h3>
+        <label class="switchrow"><div><span>카메라 영상 표시</span><small>이 화면의 영상 수신 · 카메라 전원과 별개</small></div><input id="cameratoggle" type="checkbox" role="switch" aria-label="카메라 영상 표시" checked></label>
+        <p id="previewstatus" class="hint" role="status">영상 수신 대기</p>
+      </div>
+
+      <div class="block">
+        <h3>수동 조종</h3>
+        <p class="hint">버튼이나 키를 누르고 있는 동안만 움직입니다. i와 j는
+          같이 눌러 조합, k는 정지, +/&minus;로 속도 단계.</p>
+        <div class="pad">
+          <span></span>
+          <ui-button kind="toggle" type="button" data-hold="up" aria-label="전진">&#8593;</ui-button>
+          <span></span>
+          <ui-button kind="toggle" type="button" data-hold="left" aria-label="좌회전">&#8592;</ui-button>
+          <ui-button kind="irreversible" type="button" data-hold="stop" aria-label="정지">정지</ui-button>
+          <ui-button kind="toggle" type="button" data-hold="right" aria-label="우회전">&#8594;</ui-button>
+          <span></span>
+          <ui-button kind="toggle" type="button" data-hold="down" aria-label="후진">&#8595;</ui-button>
+          <span></span>
+        </div>
+        <div class="keys" id="keys">
+          <span data-a="ul">u</span><span data-a="up">i</span><span data-a="ur">o</span>
+          <span data-a="left">j</span><span data-a="stop">k</span><span data-a="right">l</span>
+          <span data-a="dl">m</span><span data-a="down">,</span><span data-a="dr">.</span>
+        </div>
+        <div class="srow" style="margin-top: var(--space-2)">
+          <span class="k">속도 단계</span><span class="v" id="speed">-</span>
+        </div>
+        <div class="srow">
+          <span class="k">보내는 중</span><span class="v" id="sending">정지</span>
+        </div>
+        <div class="srow">
+          <span class="k">토픽</span><span class="v" id="ttopic">-</span>
+        </div>
+      </div>
+
+    </div>
+  </section>
+</main>
+<script>
+(() => {
+'use strict';
+// ---- config (all timings/sizes/limits in one place) -----------------------
+const CFG = {
+  poll_ms: 333, result_ms: 5000, map_recheck_ms: 120, stale_ms: 1500,
+  teleop_period_ms: 100, cam_stale_ms: 3000,
+  // clamps must match the /teleop handler in rosy_control/web_node.py
+  lin_max: 0.2, ang_max: 1.0,
+  lin_steps: [0.02, 0.05, 0.10, 0.20],
+  ang_steps: [0.25, 0.50, 0.75, 1.00],
+  fit_margin: 0.98, zoom_min: 1, zoom_max: 8, zoom_step: 1.15,
+  click_slop_px: 4,
+  // Fallbacks only. web_node publishes state.limits from config/robot.yaml —
+  // the numbers that actually stop the robot. These keep the gauges honest
+  // when the page is opened against a rig that runs no safety node.
+  lim: { stop: 0.12, clear: 0.14, warn: 0.18, us_stop: 0.020,
+         us_clear: 0.028, radius: 0.076, open_max: 0.40 },
+};
+// ---- canvas tokens (mirror the :root CSS custom properties) --------------
+const T = { unk: '#161615', grid: '#2c2c2a', ink: '#eeeeef',
+            route: '#49affd', alt: '#d95926', goal: '#12bb81',
+            hist: '#9499a0', crit: '#c40921', warn: '#feb432',
+            pin: '#d55181', muted: '#9499a0', ink2: '#9499a0' };
+// ---- state ----------------------------------------------------------------
+const S = {
+  previewEnabled: true, pendingCommand: null,
+  data: {},
+  img: { gen: -1, im: null, t: 0 },
+  cam: { gen: -1, t: 0 },
+  view: { angle: 0, aligned: false, z: 1, A: { x: 0, y: 0 }, ok: false,
+          k: 1, w: 0, h: 1, res: 0.05, ox: 0, oy: 0, wc: null },
+  split: { key: '', bi: 0 },
+  pin: null, lastOk: 0, raf: 0,
+  tele: { lin: 1, ang: 1, x: 0, z: 0 },
+  held: new Set(), kt: null,
+  mappingBusy: false, mapEpoch: null,
+  gaugeKey: '',
+};
+// ---- helpers + api ---------------------------------------------------------
+const $ = id => document.getElementById(id);
+const API = (location.port === '__BACKEND_PORT__') ? '' :
+  location.protocol + '//' + location.hostname + ':__BACKEND_PORT__';
+async function getJson(path) {
+  try { const r = await fetch(API + path); return await r.json(); }
+  catch (e) { return null; }
+}
+async function post(path, body) {
+  if (path === '/wander' && body !== 'stop' && !calibrationReady(S.data)) return;
+  try {
+    if (path === '/wander' || path === '/estop') {
+      S.pendingCommand = {path, body, until:Date.now()+5000, sequence:S.data[path === '/estop' ? 'estop_sequence' : 'wander_sequence'] || 0};
+      setTxt('commandstatus', '명령 전송 중 · 로봇 응답 확인');
+    }
+    const response = await fetch(API + path, { method: 'POST', body: body });
+    if (!response.ok) {
+      const result = await response.json();
+      setTxt('calibrationerror', result.error || '명령을 실행할 수 없습니다.');
+      S.pendingCommand = null;
+      setTxt('commandstatus', '명령 실패 · ' + (result.error || '로봇이 요청을 거부했습니다'));
+      return false;
+    }
+    return true;
+  } catch (e) {
+    S.pendingCommand = null;
+    setTxt('commandstatus', '명령 실패 · 로봇 연결을 확인해 주세요');
+    setTxt('calibrationerror', '로봇 연결을 확인해 주세요.');
+  }
+  return false;
+}
+function calibrationReady(s) {
+  return !!s && s.calibration_ready === true && !!s.calibration && s.calibration.ready === true;
+}
+function existingSettings(s) {
+  return !!(s && s.calibration && s.calibration.mode === 'existing_settings');
+}
+function limitedSensors(s) {
+  return !!(s && s.calibration && s.calibration.mode === 'limited_sensors');
+}
+function renderOverview(s) {
+  const battery = s && s.battery;
+  const live = battery && battery.available === true;
+  setTxt('batteryvalue', live && Number.isFinite(battery.percent) ? Math.round(battery.percent) + '%' : '정보 없음');
+  const batteryStates = {charging:'충전 중',discharging:'사용 중',not_charging:'충전 안 함',full:'충전 완료',unknown:'충전 상태 미확인'};
+  const missing = {missing:'배터리 측정 대기',stale:'배터리 수신 지연',not_present:'배터리 연결 미확인',invalid:'유효한 측정값 없음'};
+  setTxt('batterydetail', live ? (Number.isFinite(battery.voltage) ? battery.voltage.toFixed(2)+' V · ' : '') + batteryStates[battery.status] : missing[battery && battery.reason] || '배터리 측정 대기');
+  $('batteryfill').style.width = live && Number.isFinite(battery.percent) ? Math.max(0,Math.min(100,battery.percent))+'%' : '0%';
+  setTxt('overviewcal', calibrationReady(s) ? '적용 완료' : s && s.calibration && (s.calibration.phase === 'sensor_hold' || s.calibration.runtime_state === 'sensor_hold') ? '센서 재확인' : '준비 필요');
+  setTxt('overviewcaldetail', calibrationReady(s) ? '보정값 적용 확인됨' : '상세 원인은 조작 영역에서 확인');
+  if (existingSettings(s)) {
+    setTxt('overviewcal', '기존 설정값 · 미보정');
+    setTxt('overviewcaldetail', calibrationReady(s) ? '실시간 안전 조건 확인됨 · 주행은 직접 선택' : '실시간 안전 조건 대기 · 주행 불가');
+  }
+  if (limitedSensors(s)) {
+    setTxt('overviewcal', '보정 완료(일부 센서 모드)');
+    setTxt('overviewcaldetail', '수동 완료 · IMU 제외 · 저속 제한 · ' + (calibrationReady(s) ? '주행은 직접 선택' : '안전 조건 대기'));
+  }
+  setTxt('overviewpose', s && s.pose_available ? '위치 확인됨' : '위치 확인 대기');
+  const stopped = !s || !s.wander || s.wander.startsWith('stop') || s.wander === 'wait';
+  setTxt('overviewmotion', !s ? '연결 끊김' : s.estop ? '비상정지' : stopped ? '대기 중' : '주행 중');
+  setTxt('overviewreason', !s ? '로봇 연결을 확인하세요' : s.estop ? '해제 후 주행 모드를 선택하세요' : stopped ? '자동으로 출발하지 않습니다' : s.wander);
+  const pending = S.pendingCommand;
+  if (pending) {
+    const state = s && s.wander || '';
+    const fresh = s && s[pending.path === '/estop' ? 'estop_sequence' : 'wander_sequence'] > pending.sequence;
+    const applied = fresh && (pending.path === '/estop' ? s.estop === (pending.body === 'stop') :
+      pending.body === 'stop' ? state.startsWith('stop') :
+      pending.body === 'start' ? state === 'forward' || state === 'look' : state.startsWith('route_'+pending.body+':'));
+    if (applied) { S.pendingCommand = null; setTxt('commandstatus', '로봇 상태 반영 확인 · ' + (pending.path === '/estop' ? '비상정지 ' + (s.estop ? '설정' : '해제') : pending.body === 'stop' ? '주행 정지' : '주행 시작')); }
+    else if (Date.now() > pending.until) { S.pendingCommand = null; setTxt('commandstatus', '적용 확인 시간 초과 · 현재 로봇 상태를 확인하세요'); }
+  }
+  setTxt('previewstatus', !S.previewEnabled ? '영상 표시 꺼짐 · 영상 요청 중지됨' : S.cam.t && Date.now()-S.cam.t < CFG.cam_stale_ms ? '영상 수신 중' : '영상 수신 대기');
+}
+function togglePreview() {
+  S.previewEnabled = $('cameratoggle').checked;
+  try { localStorage.setItem('pinky.preview', S.previewEnabled ? 'on' : 'off'); } catch (_) {}
+  $('camcard').hidden = !S.previewEnabled;
+  if (!S.previewEnabled) { $('camimg').removeAttribute('src'); S.cam.t = 0; }
+  S.cam.gen = -1;
+  renderOverview(S.data);
+}
+function renderCalibration(s) {
+  cameraGroundCalibration(s && s.camera_calibration);
+  const calibration = s && s.calibration;
+  const phase = calibration && calibration.phase;
+  const limited = limitedSensors(s);
+  const partial = phase === 'sensing_only' || !!(calibration && calibration.partial && !limited);
+  const existing = existingSettings(s);
+  $('calibrationexistingstatus').hidden = !existing;
+  setTxt('calibrationexistingstatus', '기존 설정값 모드 · 미보정 · 이동·회전 보정 검증 생략. ' +
+    (calibrationReady(s) ? '실시간 안전 조건 확인됨 · 주행은 직접 선택합니다.' : '실시간 안전 조건 대기 · 주행 불가.') +
+    (existing && Array.isArray(calibration.waiting_reasons) && calibration.waiting_reasons.length ? ' · ' + calibration.waiting_reasons.map(reason => reason === 'estop' ? '비상정지 해제 대기' : reason).join(' · ') : ''));
+  $('calibrationpartial').hidden = !partial;
+  setTxt('calibrationpartial', '부분 센싱 · IMU 제외 · 미교정 · 주행 불가. 정지 상태에서 나머지 센서만 확인합니다.');
+  $('calibrationlimitedstatus').hidden = !limited;
+  if (limited) {
+    const excluded = Array.isArray(calibration.excluded_sensors) ? calibration.excluded_sensors.map(name => String(name).toUpperCase()).join(', ') : 'IMU';
+    const caps = calibration.speed_limits;
+    const speed = caps && Number.isFinite(caps.linear_mps) && Number.isFinite(caps.angular_rad_s)
+      ? ' · 최대 ' + (caps.linear_mps * 100).toFixed(1) + 'cm/s · ' + caps.angular_rad_s + 'rad/s' : '';
+    const waiting = Array.isArray(calibration.waiting_reasons) ? calibration.waiting_reasons.map(reason => reason === 'estop' ? '비상정지 해제 대기' : reason).join(' · ') : '';
+    setTxt('calibrationlimitedstatus', '보정 완료(일부 센서 모드) · 수동 완료 · ' + excluded + ' 제외 · 저속 제한' + speed + ' · ' +
+      (calibrationReady(s) ? '나머지 안전 조건 확인됨 · 주행은 직접 선택합니다.' : '나머지 안전 조건 대기 · 주행 불가.') + (waiting ? ' · ' + waiting : ''));
+  }
+  const names = {lidar:'LiDAR', odom:'이동 거리', ir:'바닥 IR', imu:'자세 IMU', us:'초음파', camera:'카메라', tf:'센서 위치', map:'지도', map_tf:'지도 내 위치'};
+  const states = {collecting:'수집 중', ok:'정상', stale:'수신 지연', unstable:'불안정', invalid:'확인 필요'};
+  const phases = {collecting:'정지 센서 확인 중', waiting_motion:'정지 확인 완료 · 이동 검증 대기', validating_motion:'저속 이동 검증 중', ready:'교정 완료 · 주행 가능', sensor_hold:'보정 유지 · 센서 재확인 중', failed:'교정 실패', aborted:'교정 중단'};
+  const sensors = calibration && calibration.sensors || {};
+  phases.sensing_only = '부분 센싱 · IMU 제외 · 미교정 · 주행 불가';
+  phases.existing_settings = '기존 설정값 모드 · 미보정 · ' + (calibrationReady(s) ? '운행 조건 확인됨' : '안전 조건 대기');
+  phases.limited_sensors = '보정 완료(일부 센서 모드) · ' + (calibrationReady(s) ? '운행 조건 확인됨' : '안전 조건 대기');
+  phases.validating_rotation = '좌우 회전 반복 검증 중';
+  phases.relocating_calibration = '교정 공간 확보 중 · 제한 직선 이동';
+  phases.returning_calibration = '보정 측정 완료 · 원위치 복귀 중';
+  phases.waiting_space = '교정 공간 부족 · 안전 정지';
+  phases.return_blocked = '보정 측정 완료 · 복귀 불가로 정지';
+  if (phase === 'ready' && !calibrationReady(s)) phases.ready = calibration.recalibration_required === true
+    ? '보정 대상 변경 · 재보정 필요' : calibration.runtime_state === 'sensor_hold'
+    ? '보정 완료 유지 · 실시간 안전 조건 대기' : '안전 노드 적용 확인 대기';
+  let count = 0;
+  const lines = Object.keys(names).map(key => {
+    const sensor = sensors[key];
+    if (sensor && sensor.excluded === true) return names[key] + ': 제외 · 정상 판정 및 교정에 사용하지 않음';
+    if (sensor && sensor.ok === true) count++;
+    return names[key] + ': ' + (sensor ? (states[sensor.status] || sensor.status) +
+      ' · ' + (sensor.samples || 0) + '개 · ' + (sensor.detail || '') : '데이터 대기');
+  });
+  $('calibrationprogress').value = count;
+  const clearance = calibration && calibration.motion_clearance;
+  if (clearance) {
+    const cm = value => Number.isFinite(value) ? (value * 100).toFixed(1) + 'cm' : '미수신';
+    if (clearance.translation_mode) {
+      lines.push('차체 외곽·정지 여유 제외 후 이동 가능: 전방 ' + cm(clearance.available_travel_m) + ' / 필요 ' + cm(clearance.required_travel_m) + ' · 후방 ' + cm(clearance.reverse_travel_m) + ' / 필요 ' + cm(clearance.required_reverse_travel_m));
+      lines.push('직선 저속 보정 · 차체 밖 1cm 정지 여유 · 회전은 별도 검사');
+    } else {
+      lines.push('왕복 공간 확인 (LiDAR 기준): 전방 ' + cm(clearance.available_front_m) + ' / 필요 ' + cm(clearance.required_front_m) + ' · 후방 ' + cm(clearance.available_rear_m) + ' / 필요 ' + cm(clearance.required_rear_m));
+    }
+    lines.push('이번 보정 이동 목표 ' + cm(clearance.target_m) + ' · 정지 기준: 전방 ' + cm(clearance.front_stop_m) + ' / 후방 ' + cm(clearance.rear_stop_m));
+    if (clearance.reason) lines.push('공간 확인: ' + clearance.reason);
+  }
+  const env = calibration && calibration.navigation_profile;
+  setTxt('calibrationenvironment', env ? '환경 보정 ' + (phase === 'ready' ? '적용' : '측정') + ' · 통로 ' + (env.corridor_width_m*100).toFixed(1) + 'cm · 몸체 바깥 최소 여유 ' + (env.uncertainty_margin_m*100).toFixed(1) + 'cm' + (env.map_lidar_mismatch ? ' · 지도/센서 거리 차이 확인 필요' : '') : '환경 여유 측정 대기 · 미측정 시 기본 여유 적용');
+  if (env) {
+    lines.push('환경 보정: 통로 ' + (env.corridor_width_m*100).toFixed(1) + 'cm · 거리 흔들림 ' + (env.range_noise_m*1000).toFixed(1) + 'mm');
+    lines.push('로봇 반경 ' + (env.body_radius_m*100).toFixed(1) + 'cm · 최소 중심 여유 ' + (env.minimum_clearance_m*100).toFixed(1) + 'cm · 선호 여유 ' + (env.preferred_clearance_m*100).toFixed(1) + 'cm');
+    if (env.map_lidar_mismatch) lines.push('지도와 LiDAR 벽 거리 차이 있음 · 환경 여유를 줄여 차이를 보상하지 않습니다');
+  }
+  setTxt('calibrationsummary', '센서 검사 ' + count + '/9 · ' + (calibration && calibration.recalibration_required === true ? '\uBCF4\uC815 \uB300\uC0C1 \uBCC0\uACBD \u00b7 \uC7AC\uBCF4\uC815 \uD544\uC694' : phase === 'sensor_hold' || calibration && calibration.runtime_state === 'sensor_hold' ? '저장된 보정 유지 · 해당 센서 정상 수신 후 자동 복구' : phase === 'ready' ? '왕복 검증 및 저장 완료' : phase === 'validating_motion' ? '왕복 검증 중 — 앞뒤 공간을 비워 주세요' : phase === 'waiting_motion' ? '비상정지 해제 및 안전 조건 대기' : phase === 'failed' || phase === 'aborted' ? '정지됨 · 원인 확인 후 재시작하세요' : '검사 중'));
+  if (partial) setTxt('calibrationsummary', '부분 센싱 · IMU 제외 · ' + (calibration.partial_baseline_ready ? '나머지 센서 기준값 수집 완료' : '나머지 센서 기준값 수집 중') + ' · 전체 교정 미완료');
+  if (existing) setTxt('calibrationsummary', '기존 설정값 사용 · 미보정 · 실시간 센서 검사 ' + count + '/9 · 비상정지와 센서 안전 조건 유지');
+  if (limited) setTxt('calibrationsummary', '수동 완료 · IMU 제외 · 저속 제한 · 나머지 센서와 비상정지 안전 조건 유지');
+  if (calibration && calibration.motion && calibration.motion.stage) {
+    const m = calibration.motion;
+    lines.push('왕복 ' + m.cycle + '/2 · 목표 ' + (m.target_m * 100).toFixed(1) + 'cm · ' + ({outbound:'전진 중',settle_out:'전진 거리 확인',returning:'출발점으로 복귀 중',settle_home:m.done ? '복귀 확인 완료' : '복귀 오차 확인'}[m.stage] || m.stage));
+    lines.push('속도 보정: 전진 ×' + m.forward_scale.toFixed(3) + ' / 후진 ×' + m.reverse_scale.toFixed(3));
+    if (m.legs && m.legs.length) {
+      const last = m.legs[m.legs.length - 1];
+      lines.push('최근 이동 ' + (last.measured_m * 100).toFixed(2) + 'cm · 원점 차이 ' + (last.home_error_m * 100).toFixed(2) + 'cm');
+    }
+  }
+  const rotation = calibration && calibration.rotation;
+  if (calibration && calibration.after_relocation)
+    lines.push('보정 후 위치: ' + (calibration.after_relocation === 'return_origin' ? '원위치 복귀' : '확보한 위치 유지'));
+  if (calibration && calibration.relocation) {
+    const relocation = calibration.relocation;
+    lines.push('공간 확보 이동 ' + (relocation.travel_m*100).toFixed(1) + 'cm · ' +
+      (relocation.error || (relocation.done ? '확보 완료' : '진행 중')));
+  }
+  if (calibration && calibration.return_motion)
+    lines.push('원위치 복귀: ' + (calibration.return_motion.error || (calibration.return_motion.done ? '완료' : '진행 중')));
+  if (rotation) lines.push('회전 검증 ' + (rotation.legs || []).length + '/8 · ' + (rotation.done ? '완료' : '진행 중'));
+  const activeMotion = s && s.motion_limits_fresh && s.motion_limits;
+  const envelope = activeMotion && activeMotion.rotation_estimate || rotation && rotation.envelope;
+  const cm = value => (value*100).toFixed(1);
+  if (envelope && envelope.valid && Array.isArray(envelope.center_m) &&
+      envelope.center_m.length === 2 && [...envelope.center_m, envelope.pivot_radius_m,
+        envelope.center_uncertainty_m].every(Number.isFinite)) {
+    lines.push('센서 회전 추정 · 중심 x ' + cm(envelope.center_m[0]) + ' / y ' + cm(envelope.center_m[1]) + 'cm');
+    lines.push('중심 기준 회전 반경 ' + cm(envelope.pivot_radius_m) + 'cm · 중심 불확실성 ' + cm(envelope.center_uncertainty_m) + 'cm');
+  }
+  if (activeMotion && Number.isFinite(activeMotion.body_radius_m))
+    lines.push('설정 형상 기준 차체 반경 ' + cm(activeMotion.body_radius_m) + 'cm');
+  lines.push('현재 회전 · ' + (activeMotion
+    ? (activeMotion.can_rotate === true ? '허용' : '보류') + ' · 전방위 스캔 ' +
+      (activeMotion.rotation_scan_observed === true ? '관측 완료' : '관측 대기')
+    : '보류 · 최신 안전 정보 대기'));
+  const effective = s && s.safety_profile && s.safety_profile.valid && s.safety_profile.effective;
+  if (effective) lines.push('현재 안전 기준 · 정지 ' + (effective.stop*100).toFixed(1) + 'cm · 반경 ' + (effective.radius*100).toFixed(1) + 'cm');
+  if (s && s.safety_decision && s.safety_decision.reason) lines.push('안전 판단: ' + s.safety_decision.reason);
+  setTxt('calibrationsensors', lines.join('\n'));
+  setTxt('calibrationstatus', (phases[phase] || '교정 노드 연결 대기') +
+    (calibration && calibration.message ? ' · ' + calibration.message : ''));
+  if (s && s.estop === true) {
+    const pending = phase === 'collecting' ? '센서 검사도 진행 중입니다' : '해제 전에는 이동하지 않습니다';
+    setTxt('calibrationstatus', $('calibrationstatus').textContent + ' · 비상정지 걸림: ' + pending);
+  }
+  $('calibrationmotion').hidden = !!(calibration && calibration.auto_motion);
+  $('calibrationmotion').disabled = !!(calibration && calibration.auto_motion) || phase !== 'waiting_motion' || !s || s.estop !== false ||
+    !s.map_control || s.map_control.paused !== false;
+  const busy = phase === 'validating_motion' || phase === 'validating_rotation';
+  $('calibrationretry').disabled = busy;
+  setTxt('calibrationretry', '전체 보정');
+  // The node owns the verdict; the page only renders which route it left open.
+  const option = calibration && calibration.partial_option || {available: false, reason: 'unknown'};
+  const blocking = Array.isArray(option.blocking_sensors) ? option.blocking_sensors : [];
+  const dropped = Array.isArray(option.excluded_sensors) ? option.excluded_sensors : [];
+  const label = list => list.map(name => names[name] || String(name).toUpperCase()).join(', ');
+  $('calibrationpartialaction').disabled = !option.available || busy;
+  const partialReasons = {
+    required_sensor_failed: label(blocking) + ' 실패 — 제외 불가(주행 필수). 전체 보정 재시도 또는 중단.',
+    no_failed_sensor: '제외할 실패 센서 없음 — 전체 보정을 사용하세요',
+    rotation_unavailable: label(dropped) + ' 제외 가능 — 회전 검증 없이 기존 설정값 · 저속 제한 주행',
+    calibration_continues: label(dropped) + ' 제외 가능 — 나머지 센서로 보정을 완주합니다',
+  };
+  $('calibrationpartialreason').hidden = !partialReasons[option.reason];
+  setTxt('calibrationpartialreason', partialReasons[option.reason] || '');
+  $('wanderstart').disabled = !calibrationReady(s) || s.estop !== false;
+  document.querySelectorAll('[data-hold]').forEach(button => {
+    button.disabled = button.dataset.hold !== 'stop' && (!calibrationReady(s) || s.estop !== false);
+  });
+  if (!calibrationReady(s) && S.held.size) { S.held.clear(); ksync(); }
+}
+function cameraGroundCalibration(calibration) {
+  const value = calibration || {eligible:false, active:false, reason:'waiting_for_camera_node', checks:{}};
+  const checks = value.checks || {};
+  const toggle = $('camera_ground_toggle');
+  toggle.disabled = value.mode !== 'homography' || value.eligible !== true;
+  toggle.checked = value.active === true;
+  const labels = {
+    waiting_for_camera_node:'카메라 노드 연결 대기', profile_missing:'보정 프로필 없음',
+    validation_failed:'후보 로드됨 · 검증 미통과', disabled:'검증 통과 · 사용 안 함',
+    active:'검증 통과 · 거리 보정 사용 중', mode_pinhole:'기존 핀홀 모델 선택',
+    mode_off:'카메라 거리 보정 꺼짐', unsupported_mode:'지원하지 않는 모드'
+  };
+  setTxt('camera_ground_status', labels[value.reason] || value.reason || '상태 미확인');
+  ['profile_loaded', 'image_contract', 'intrinsic_calibration', 'reference_fit', 'independent_validation',
+   'physical_validation'].forEach(name => {
+    const input = $('camera_ground_check_' + name);
+    input.checked = !!(checks[name] && checks[name].passed === true);
+  });
+  const metric = value.metrics || {};
+  const threshold = value.thresholds || {};
+  const range = Array.isArray(value.validated_range_m) && value.validated_range_m.length === 2
+    ? (value.validated_range_m[0] * 100).toFixed(1) + '–' + (value.validated_range_m[1] * 100).toFixed(1) + 'cm' : '미검증';
+  const number = (v, unit) => Number.isFinite(v) ? v.toFixed(3) + unit : '없음';
+  setTxt('camera_ground_detail',
+    '모드: ' + (value.mode || '미수신') + '\n' +
+    '프로필: ' + (value.source || '없음') + '\n' +
+    '상태: ' + (value.profile_status || '없음') + '\n' +
+    '참조 RMSE: ' + number(metric.fit_rmse_cm, 'cm') + ' / 기준 ' + number(threshold.max_fit_rmse_cm, 'cm') + '\n' +
+    '독립 RMSE: ' + number(metric.validation_rmse_cm, 'cm') + ' / 기준 ' + number(threshold.max_validation_rmse_cm, 'cm') + '\n' +
+    '독립 최대 오차: ' + number(metric.validation_max_error_cm, 'cm') + ' / 기준 ' + number(threshold.max_validation_error_cm, 'cm') + '\n' +
+    '독립 사진/점: ' + (metric.validation_frames || 0) + '/' + (metric.validation_points || 0) +
+      ' / 기준 ' + (threshold.min_validation_frames || '-') + '/' + (threshold.min_validation_points || '-') + '\n' +
+    '검증 거리 폭: ' + number(metric.validation_span_cm, 'cm') + ' / 기준 ' + number(threshold.min_validation_span_cm, 'cm') + '\n' +
+    '검증 거리: ' + range + '\n' +
+    '좌우 거리: ' + (value.lateral_available ? 'robot frame 사용 가능' : '사용 안 함') + '\n' +
+    '적용: 세션 전용');
+}
+async function calibrationAction(action) {
+  if (action === 'validate_motion' && $('calibrationmotion').disabled) return;
+  setTxt('calibrationerror', '');
+  if (action === 'retry') action += ':' + ($('calibrationafter').value || 'stay') + ':' + ($('calibrationscope').value || 'full');
+  await post('/calibration', action);
+}
+const api = {
+  cmd: v => post('/cmd', v),
+  wander: v => post('/wander', v),
+  estop: v => post('/estop', v),
+  goal: xy => post('/goal', xy),
+  tw: (x, z) => post('/teleop', JSON.stringify({ x: x, z: z })),
+};
+function setTxt(id, t) {
+  const el = $(id);
+  if (el && el.textContent !== t) el.textContent = t;
+}
+function setCls(id, cls, on) {
+  const el = $(id);
+  if (el) el.classList.toggle(cls, !!on);
+}
+const esc = t => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;');
+// Limits the robot is actually running on; CFG.lim is the offline fallback.
+const LIM = () => {
+  const limits = Object.assign({}, CFG.lim, S.data.limits || {});
+  const active = S.data.motion_limits;
+  if (S.data.motion_limits_fresh && active) {
+    const keys = {front_stop_m:'stop',front_clear_m:'clear',rear_stop_m:'rear_stop',rear_clear_m:'rear_clear',us_stop_m:'us_stop',body_radius_m:'radius'};
+    Object.entries(keys).forEach(([source,key]) => { if (Number.isFinite(active[source])) limits[key]=active[source]; });
+    limits.live = true;
+    limits.translation = active.translation_mode === true;
+    limits.bounded = active.bounded_motion_enabled === true;
+    limits.halfWidth = active.footprint_half_width_m;
+  }
+  return limits;
+};
+
+function renderMapping(control) {
+  const ready = !!control && control.available;
+  const busy = S.mappingBusy || !!(control && control.busy);
+  $('mapreset').disabled = !ready || busy;
+  $('mapsave').disabled = !ready || busy || !S.data.map || !S.img.im || S.img.gen !== S.data.map[5];
+  $('mapresume').disabled = !ready || busy || control.paused !== true;
+  $('mappingtoggle').checked = !!control && control.paused === false;
+  $('mappingtoggle').disabled = !ready || busy || typeof control.paused !== 'boolean';
+  setTxt('mappingstatus', busy ? '처리 중…' : !ready ? 'SLAM 연결 대기' :
+    control.paused === true ? '지도 수집 일시정지' :
+    control.paused === false ? '지도 수집 중' : '매핑 상태 확인 중…');
+}
+function plannerStatus(s) {
+  const raw = s && s.gstate || '';
+  if (raw.startsWith('planning blocked:')) return '지도 경로 계산 대기 · ' + raw.split(/\s+eta=/)[0].replace('planning blocked:', '').trim();
+  return raw ? '경로 계획: ' + raw.replace(/\beta=/g, '계획 ETA=').replace(/\bv=/g, '계획 속도=') : '-';
+}
+function renderNavigation(s) {
+  renderNavigationSession(s);
+  renderNavigationMotion(s);
+  const planningBlocked = s && (s.gstate || '').startsWith('planning blocked:');
+  const reason = !s ? '로봇 연결 대기' : s.estop !== false ? '비상정지 상태' :
+    !s.map || !s.map_control || s.map_control.paused !== false ? '매핑을 재개해 주세요' :
+    !s.pose_available ? '지도 내 로봇 위치 확인 대기' : s.planner_fresh !== true ? '경로 계획 노드 연결 대기 · 매핑 기능을 다시 시작해 주세요' : '';
+  $('navexplore').disabled = !!reason || !calibrationReady(s);
+  $('navcoverage').disabled = !!reason || !calibrationReady(s);
+  const recovery = s && s.wander || '';
+  const executionStates = {
+    gate_rotation_blocked:'회전 조건 미충족 · 대체 경로 탐색',
+    execution_escape_reverse:'관측된 후방 공간으로 이동 · 회전 여유 재확인',
+    execution_escape_forward:'관측된 전방 공간으로 이동 · 회전 여유 재확인',
+    execution_escape_complete:'공간 확보 이동 완료 · 재탐색',
+    execution_escape_stopped:'공간 확보 이동 중단',
+  };
+  const executionState = Object.keys(executionStates).find(key => recovery.includes(key));
+  if (!reason && calibrationReady(s) && executionState) {
+    setTxt('navready', executionStates[executionState]);
+    return;
+  }
+  if (!reason && calibrationReady(s) && recovery.includes('stalled_restart_required')) {
+    setTxt('navready', '이동 정체 감지 · 자동 재계획 전 대기 중 · 실제 출력과 안전 판단을 확인하세요');
+    return;
+  }
+  if (!reason && calibrationReady(s) && /replanning_|recovery_|alternative_accepted/.test(recovery)) {
+    setTxt('navready', recovery.includes('exhausted') ? '자동 복구 중단 · 실행 상태와 정지 사유를 확인하세요' :
+      recovery.includes('alternative_accepted') ? '대체 경로 확인 · 주행 재개' : '정체 감지 · 실패한 목표를 제외하고 다른 경로를 찾는 중');
+    return;
+  }
+  if (!reason && calibrationReady(s) && planningBlocked) {
+    const startClearance = /robot inside obstacle clearance|map start clearance/.test(s.gstate || '');
+    setTxt('navready', '지도 경로 계산 대기 · ' + (startClearance ? '지도 격자의 시작 위치 여유가 부족합니다. ' : '') + '실제 센서 차단 여부는 안전 상태에서 확인하세요');
+    return;
+  }
+  if (!reason && calibrationReady(s) && /^(escape:|verified start connection:)/.test(s.gstate || '')) {
+    setTxt('navready', '지도 시작 연결 경로 선택 · 실제 이동 여부와 차단은 모터 출력 및 안전 상태에서 확인하세요');
+    return;
+  }
+  if (!reason && calibrationReady(s) && (s.gstate || '').startsWith('narrow passage:')) {
+    setTxt('navready', '좁은 통로 경로 선택 · 계획 ETA와 속도는 실제 이동이 아닙니다. 아래 안전 판단과 최종 출력을 확인하세요');
+    return;
+  }
+  const calibrationWait = limitedSensors(s) ? '보정 완료(일부 센서 모드) · 안전 조건 대기' + (s.calibration.message ? ' · ' + s.calibration.message : '') : existingSettings(s) ? '기존 설정값 · 미보정 · 실시간 안전 조건 대기' + (s.calibration.message ? ' · ' + s.calibration.message : '') : s && s.calibration && s.calibration.calibration_verified === true
+    ? '보정 유지 · 센서 재확인 중' + (s.calibration.message ? ' · ' + s.calibration.message : '')
+    : '자동 보정을 완료해 주세요';
+  setTxt('navready', reason || (!calibrationReady(s) ? calibrationWait : '') || '준비됨 · 모드를 고르면 주행합니다');
+}
+function renderNavigationMotion(s) {
+  const decision = s && s.safety_decision;
+  const speed = (v, w) => Number.isFinite(v) && Number.isFinite(w)
+    ? (v*100).toFixed(1) + 'cm/s · ' + w.toFixed(3) + 'rad/s' : '수신 대기';
+  const lines = [];
+  if (decision) {
+    lines.push('주행 요청 ' + speed(decision.requested_v, decision.requested_omega));
+    lines.push('안전 게이트 최종 출력 ' + speed(decision.safe_v, decision.safe_omega));
+    const reasons = {allow:'허용', command_stale:'주행 명령 수신 지연', trajectory_changed:'안전 제한으로 요청 궤적 변경',
+      bounded_sweep_unavailable:'이동 궤적 관측 부족', bounded_sweep_blocked:'이동 궤적 여유 부족',
+      localization_unavailable:'위치 정보 대기', pickup:'들림 감지'};
+    lines.push('안전 판단 ' + ({stop:'정지',limit:'제한',allow:'허용'}[decision.action] || '확인 중') +
+      ' · ' + (reasons[decision.reason] || decision.reason || '사유 수신 대기'));
+  } else lines.push('최신 안전 판단 수신 대기 · 출력과 정지 사유 확인 불가');
+  const limits = s && s.motion_limits_fresh && s.motion_limits;
+  if (!limits) lines.push('회전 판단: 최신 안전 정보 대기');
+  else if (limits.can_rotate === false) lines.push('회전 보류 · ' +
+    (limits.rotation_scan_observed !== true ? '전방위 스캔 관측 미완료' : '관측 완료 · 회전 여유 또는 다른 안전 조건 미충족') +
+    (Number.isFinite(limits.rotation_pivot_clearance_m) ? ' · 측정 여유 ' + (limits.rotation_pivot_clearance_m*100).toFixed(1) + 'cm' : ''));
+  else if (limits.can_rotate === true) lines.push('회전 조건 허용 · 실제 회전 여부는 최종 출력으로 확인');
+  const escape = limits && limits.execution_escape;
+  if (escape && Array.isArray(escape.candidates)) {
+    const candidates = escape.candidates.filter(item => item && (item.direction === 1 || item.direction === -1) &&
+      Number.isFinite(item.target_m) && item.target_m > 0);
+    if (candidates.length) lines.push('형상 기반 필요 이동 추정 (이동한 거리 아님): ' + candidates.map(item =>
+      (item.direction === 1 ? '전방 ' : '후방 ') + (item.target_m*100).toFixed(1) + 'cm · ' +
+      (item.objective === 'restore_rotation' ? '회전 여유 확보 후보' : '여유 개선 후보')).join(' / '));
+    else lines.push('형상 기반 이동 후보 없음' + (escape.reason ? ' · ' + escape.reason : ''));
+  }
+  if (s && s.wander) lines.push('제어 상태 ' + s.wander);
+  const execution = s && s.navigation_session_fresh && s.navigation_session && s.navigation_session.execution_escape;
+  if (execution && execution.reason) {
+    const why = {motion:'공간 확보 이동 요청 중',safety_hold:'실시간 안전 조건 재확인',
+      waiting_for_route:'경로 상태 대기',waiting_for_candidate:'최신 이동 후보 대기',
+      rotation_restored:'회전 조건 회복',pose_or_geometry_changed:'위치 또는 형상 변경으로 중단',
+      budget:'이동 또는 시간 한도 도달',no_progress:'이동 진전 없음',idle:'대기'};
+    lines.push('공간 확보 판단: ' + (why[execution.reason] || execution.reason));
+    if (Number.isFinite(execution.episode_elapsed_s)) lines.push('현재 복구 경과 ' + execution.episode_elapsed_s.toFixed(1) + '초');
+    if (Number.isFinite(execution.remaining_s)) lines.push('복구에 사용 가능한 남은 시간 ' + Math.max(0,execution.remaining_s).toFixed(1) + '초');
+    if (Number.isFinite(execution.target_remaining_m)) lines.push('현재 후보 잔여 이동 추정 ' + (execution.target_remaining_m*100).toFixed(1) + 'cm');
+  }
+  setTxt('navmotion', lines.join(' / '));
+}
+function renderNavigationSession(s) {
+  const session = s && s.navigation_session;
+  const fresh = !!(s && s.navigation_session_fresh && session);
+  const active = fresh && session.active;
+  if (active) setTxt('navsessionerror', '');
+  $('navsessionstart').disabled = !fresh || s.planner_fresh !== true || active || !calibrationReady(s) ||
+    s.estop !== false || !String(s.wander || '').startsWith('stop') ||
+    !s.pose_available || !s.map || !s.map_control || s.map_control.paused !== false;
+  ['navstrategy', 'navduration', 'navstall'].forEach(id => { $(id).disabled = !!active; });
+  if (!fresh) { setTxt('navsessionstatus', '실행 상태 수신 불가 · 로봇 노드 연결 확인'); return; }
+  if (s.planner_fresh !== true) { setTxt('navsessionstatus', '경로 계획 노드 연결 대기 · 지도 수집과 경로 계획 상태를 확인해 주세요'); return; }
+  const labels = {gain:'정보량 우선', nearest:'가까운 곳 우선', coverage:'영역 순회'};
+  const reasons = {idle:'대기', running:'실행 중', stopped:'사용자 또는 제어 정지',
+    interrupted:'안전 조건 변경으로 중단', time_limit:'전체 시간 제한으로 정지',
+    no_translation:'이동 정체 제한으로 정지', clock_invalid:'시간 정보 오류로 정지'};
+  const options = session.options;
+  setTxt('navsessionstatus', (reasons[session.reason] || session.reason) + (options ?
+    ` · 적용: ${labels[options.strategy]} · 경과 ${Math.floor(session.elapsed_s)}초 / ${options.duration_s}초 · 남은 ${Math.ceil(session.remaining_s)}초` : ''));
+}
+async function startNavigationSession() {
+  if ($('navsessionstart').disabled) return;
+  const options = {strategy:$('navstrategy').value,
+    duration_s:Number($('navduration').value), stall_s:Number($('navstall').value)};
+  if (!Number.isFinite(options.duration_s) || options.duration_s < 10 || options.duration_s > 3600 ||
+      !Number.isFinite(options.stall_s) || options.stall_s < 10 || options.stall_s > 600 || options.stall_s > options.duration_s) {
+    setTxt('navsessionerror', '시간 범위를 확인하세요. 정체 제한은 전체 제한 이하여야 합니다.'); return;
+  }
+  $('navsessionstart').disabled = true;
+  setTxt('navsessionerror', '시작 요청 전송 중 · 적용 상태를 확인합니다.');
+  try {
+    const response = await fetch(API + '/navigation/start', {method:'POST', body:JSON.stringify(options)});
+    if (!response.ok) { const result = await response.json(); throw new Error(result.error || '시작 요청 실패'); }
+    setTxt('navsessionerror', '요청 전송됨 · 아래 실행 상태가 바뀌는지 확인하세요.');
+    await poll();
+  } catch (error) { setTxt('navsessionerror', error.message); }
+}
+async function mappingAction(action) {
+  if (S.mappingBusy || $(action === 'reset' ? 'mapreset' : action === 'pause' ? 'mappingtoggle' : 'mapresume').disabled) return;
+  if (action === 'reset' && !window.confirm('현재 지도를 초기화하고 주행을 정지합니다. 계속할까요?')) return;
+  S.mappingBusy = true;
+  if (action === 'reset') { S.held.clear(); ksync(); }
+  setTxt('mappingerror', '');
+  renderMapping(S.data.map_control);
+  try {
+    const r = await fetch(API + '/map/' + action, { method: 'POST' });
+    const result = await r.json();
+    if (!r.ok || result.ok === false) throw new Error(result.message || '매핑 요청에 실패했습니다.');
+    if (action === 'reset') {
+      S.pin = null;
+      S.img.gen = -1;
+      S.view.ok = false;
+      updatePin();
+    }
+    await poll();
+  } catch (e) {
+    setTxt('mappingerror', e.message || '로봇과 연결할 수 없습니다.');
+  } finally {
+    S.mappingBusy = false;
+    renderMapping(S.data.map_control);
+  }
+}
+async function saveMapImage() {
+  if ($('mapsave').disabled || S.mappingBusy) return;
+  const epoch = S.mapEpoch, gen = S.data.map[5], session = S.runtimeId;
+  const current = () => !S.mappingBusy && S.runtimeId === session && S.mapEpoch === epoch && S.data.map && S.data.map[5] === gen;
+  setTxt('mappingerror', '');
+  try {
+    // Download the native occupancy raster, not the zoomed canvas (which
+    // contains overlays and may be tainted by the separate backend port).
+    const response = await fetch(API + '/map.png?g=' + gen + (session ? '&session=' + session : ''), {cache:'no-store'});
+    if (!response.ok) throw new Error('지도 PNG를 가져오지 못했습니다.');
+    const blob = await response.blob();
+    if (!current()) throw new Error('지도가 변경되었습니다. 새 지도에서 다시 저장해 주세요.');
+    if (blob.type !== 'image/png' || !blob.size) throw new Error('유효한 지도 PNG가 없습니다.');
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'pinky-map-' + new Date().toISOString().replace(/[:.]/g, '-') + '.png';
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  } catch (error) { setTxt('mappingerror', error.message || '지도 저장에 실패했습니다.'); }
+}
+// ---- map view --------------------------------------------------------------
+// world metres -> cells: u = (x-ox)/res, v = h-(y-oy)/res (row 0 = top)
+// cells -> device px:    X = A.x + u*S, S = k*z (k = base fit, z = user zoom)
+// A is the screen position of cell (0,0); pan/zoom move A, meta changes are
+// absorbed by re-anchoring the world point at the canvas center.
+const cv = $('map'), c = cv.getContext('2d'), wrap = $('mapwrap');
+const Sc = () => S.view.k * S.view.z;
+function rotateVector(x, y, angle) {
+  const co = Math.cos(angle), si = Math.sin(angle);
+  return [co*x-si*y, si*x+co*y];
+}
+function screenPoint(x, y, inverse = false) {
+  const q = rotateVector(x-cv.width/2, y-cv.height/2,
+                        (inverse ? -1 : 1) * S.view.angle);
+  return [q[0]+cv.width/2, q[1]+cv.height/2];
+}
+function setViewAngle(angle) {
+  if (!Number.isFinite(angle)) return;
+  S.view.angle = Math.atan2(Math.sin(angle), Math.cos(angle));
+  S.view.aligned = true;
+  setTxt('viewangle', (S.view.angle*180/Math.PI).toFixed(1) + '°');
+  fitReset();
+}
+function fitView() {
+  const W = cv.width, H = cv.height;
+  if (!W || !H || !S.data.map) return;
+  const m = S.data.map;
+  S.view.w = m[0]; S.view.h = m[1]; S.view.res = m[2];
+  S.view.ox = m[3]; S.view.oy = m[4];
+  const co = Math.abs(Math.cos(S.view.angle)), si = Math.abs(Math.sin(S.view.angle));
+  S.view.k = Math.min(W / (S.view.w*co + S.view.h*si),
+                     H / (S.view.w*si + S.view.h*co)) * CFG.fit_margin;
+  S.view.A.x = (W - S.view.w * Sc()) / 2;
+  S.view.A.y = (H - S.view.h * Sc()) / 2;
+  S.view.ok = true;
+}
+function clampPan() {
+  const V = S.view, W = cv.width, H = cv.height, s = Sc();
+  const fix = (ext, C, a) =>
+    (ext * s >= C) ? Math.min(0, Math.max(C - ext * s, a)) : (C - ext * s) / 2;
+  V.A.x = fix(V.w, W, V.A.x);
+  V.A.y = fix(V.h, H, V.A.y);
+}
+function zoomAt(cx, cy, f) {
+  if (!S.view.ok) return;
+  [cx, cy] = screenPoint(cx, cy, true);
+  const V = S.view, s = Sc();
+  const u0 = (cx - V.A.x) / s, v0 = (cy - V.A.y) / s;
+  V.z = Math.min(CFG.zoom_max, Math.max(CFG.zoom_min, V.z * f));
+  const s2 = Sc();
+  V.A.x = cx - u0 * s2; V.A.y = cy - v0 * s2;
+  clampPan(); showZoom(); requestDraw();
+}
+function viewMetaChanged(m) {
+  return !S.view.ok || S.view.w !== m[0] || S.view.h !== m[1] ||
+         S.view.res !== m[2] || S.view.ox !== m[3] || S.view.oy !== m[4];
+}
+function syncView() {
+  const m = S.data.map, W = cv.width, H = cv.height;
+  if (!m || !W || !H) { S.view.ok = false; return; }
+  if (viewMetaChanged(m)) {
+    const world = S.view.ok && S.view.z > 1 && S.view.wc ?
+      S.view.wc : null;                    // keep the center world point
+    const z = S.view.z;
+    S.view.ok = false;                     // force fresh base fit
+    fitView();
+    S.view.z = z;
+    if (world && z > 1) {                  // re-anchor the center point
+      const u = (world[0] - S.view.ox) / S.view.res;
+      const v = S.view.h - (world[1] - S.view.oy) / S.view.res;
+      S.view.A.x = W / 2 - u * Sc();
+      S.view.A.y = H / 2 - v * Sc();
+    }
+    clampPan();
+  }
+  const V = S.view;
+  V.wc = [ V.ox + (W / 2 - V.A.x) / Sc() * V.res,
+           V.oy + (V.h - (H / 2 - V.A.y) / Sc()) * V.res ];
+}
+function w2c(x, y) {
+  const V = S.view;
+  return [ V.A.x + ((x - V.ox) / V.res) * Sc(),
+           V.A.y + (V.h - (y - V.oy) / V.res) * Sc() ];
+}
+function c2w(X, Y) {
+  [X, Y] = screenPoint(X, Y, true);
+  const V = S.view;
+  return [ V.ox + ((X - V.A.x) / Sc()) * V.res,
+           V.oy + (V.h - (Y - V.A.y) / Sc()) * V.res ];
+}
+function requestDraw() {
+  if (!S.raf) S.raf = requestAnimationFrame(() => { S.raf = 0; draw(S.data); });
+}
+// ---- draw: raster + overlays ----------------------------------------------
+function draw(s) {
+  const W = cv.width, H = cv.height;
+  if (!W || !H) return;
+  const dpr = window.devicePixelRatio || 1;
+  c.fillStyle = T.unk;
+  c.fillRect(0, 0, W, H);
+  if (!s.map) {
+    S.view.ok = false;
+    $('mapnote').style.display = '';
+    return;
+  }
+  $('mapnote').style.display = 'none';
+  // Lock the first valid heading; subsequent robot turns never spin the map.
+  // Map orientation changes only through explicit operator controls.
+  syncView();
+  c.save();
+  c.translate(W/2, H/2); c.rotate(S.view.angle); c.translate(-W/2, -H/2);
+  if (S.img.im && S.img.meta && S.img.meta.slice(0, 5).every((v, i) => v === s.map[i])) {
+    // stale-while-revalidate: the previous raster stays until the next one
+    // has decoded — a fresh gen must never blank the map (the blink).
+    c.imageSmoothingEnabled = false;
+    const V = S.view;
+    c.drawImage(S.img.im, V.A.x, V.A.y, V.w * Sc(), V.h * Sc());
+  }
+  const W2C = w2c;
+  function line(pts, color, width) {
+    if (!pts || pts.length < 2) return;
+    c.strokeStyle = color; c.lineWidth = width;
+    c.lineJoin = 'round'; c.lineCap = 'round';
+    c.beginPath();
+    pts.forEach((p, i) => {
+      const q = W2C(p[0], p[1]);
+      if (i === 0) c.moveTo(q[0], q[1]); else c.lineTo(q[0], q[1]);
+    });
+    c.stroke();
+  }
+  line(s.trail, T.hist, 1.5 * dpr);
+  const haveRoute = s.route && s.route.length > 1;
+  (s.options || []).forEach((o, i) => {
+    if (i === 0 && haveRoute) return;   // chosen option == the route
+    line(o, T.alt, (i === 0 ? 3 : 1.5) * dpr);
+  });
+  if (haveRoute && s.pose) {
+    let bi = 0, bd = Infinity;
+    s.route.forEach((p, i) => {
+      const d = (p[0] - s.pose[0]) ** 2 + (p[1] - s.pose[1]) ** 2;
+      if (d < bd) { bd = d; bi = i; }
+    });
+    const rkey = s.route.length + '@' + s.route[0][0].toFixed(2) + ',' +
+      s.route[0][1].toFixed(2) + '-' + s.route[s.route.length - 1][0].toFixed(2) +
+      ',' + s.route[s.route.length - 1][1].toFixed(2);
+    if (S.split.key !== rkey) S.split = { key: rkey, bi: bi };
+    else {
+      const po = s.pose, ps = s.route[S.split.bi];
+      const dOld = (ps[0] - po[0]) ** 2 + (ps[1] - po[1]) ** 2;
+      if (bd * 2.5 < dOld) S.split.bi = bi;
+    }
+    bi = S.split.bi;    line(s.route.slice(0, bi + 1), T.hist, 1.5 * dpr);  // traveled
+    line(s.route.slice(bi), T.route, 2 * dpr);          // to-go
+    const step = s.route.length > 40 ? 3 : 1;
+    for (let i = bi + 1; i < s.route.length; i += step) {
+      const q = w2c(s.route[i][0], s.route[i][1]);
+      c.fillStyle = T.route;
+      c.beginPath(); c.arc(q[0], q[1], 2.5 * dpr, 0, 7); c.fill();
+      c.strokeStyle = T.unk; c.lineWidth = 2;           // surface ring
+      c.beginPath(); c.arc(q[0], q[1], 2.5 * dpr + 2, 0, 7); c.stroke();
+    }
+  } else {
+    line(s.route, T.route, 2 * dpr);
+  }
+  if (s.goal_pt) {
+    const g = w2c(s.goal_pt[0], s.goal_pt[1]);
+    const a = 5 * dpr;
+    c.strokeStyle = T.goal; c.lineWidth = 2.5 * dpr; c.lineCap = 'round';
+    c.beginPath();
+    c.moveTo(g[0] - a, g[1] - a); c.lineTo(g[0] + a, g[1] + a);
+    c.moveTo(g[0] + a, g[1] - a); c.lineTo(g[0] - a, g[1] + a);
+    c.stroke();
+  }
+  if (s.pose) {
+    const p = w2c(s.pose[0], s.pose[1]);
+    const yaw = s.pose[2] || 0;
+    // True-scale body circle: at desk scale the 7.6 cm chassis is the unit
+    // the operator judges gaps in, so draw the body, not a generic marker.
+    const rpx = (LIM().radius / S.view.res) * Sc();
+    if (rpx > 3) {
+      c.fillStyle = 'rgba(57,135,229,0.14)';
+      c.strokeStyle = 'rgba(57,135,229,0.55)'; c.lineWidth = 1 * dpr;
+      c.beginPath(); c.arc(p[0], p[1], rpx, 0, 7); c.fill(); c.stroke();
+    }
+    const arm = Math.max(14 * dpr, rpx + 4 * dpr);
+    c.strokeStyle = T.route; c.lineWidth = 2 * dpr;
+    c.beginPath(); c.moveTo(p[0], p[1]);
+    c.lineTo(p[0] + arm * Math.cos(yaw), p[1] - arm * Math.sin(yaw));
+    c.stroke();
+    c.fillStyle = T.route;
+    c.beginPath(); c.arc(p[0], p[1], 5 * dpr, 0, 7); c.fill();
+    c.strokeStyle = T.unk; c.lineWidth = 2 * dpr;
+    c.beginPath(); c.arc(p[0], p[1], 5 * dpr + 2 * dpr, 0, 7); c.stroke();
+  }
+  if (S.pin) {
+    const q = w2c(S.pin.x, S.pin.y);
+    c.strokeStyle = T.pin; c.lineWidth = 2 * dpr;
+    c.beginPath(); c.arc(q[0], q[1], 6 * dpr, 0, 7); c.stroke();
+    c.fillStyle = T.pin;
+    c.beginPath(); c.arc(q[0], q[1], 2 * dpr, 0, 7); c.fill();
+  }
+  c.restore();
+}
+// ---- lidar dial ------------------------------------------------------------
+// Nose up. Rings every 10 cm, safety's stop distance drawn as a no-go annulus,
+// and the chassis drawn at true scale inside it — so the picture and the
+// gauges below are visibly the same measurement.
+function wrapPi(a) { return Math.atan2(Math.sin(a), Math.cos(a)); }
+// The nose bearing comes from the base<-scan TF that web_node resolves, the
+// same one safety uses. Without it the scan frame is unknown, so refuse to
+// guess a mount angle: every bearing would be wrong by the same amount.
+function noseYaw(sc) {
+  const n = sc && sc.nose_yaw;
+  return (typeof n === 'number' && isFinite(n)) ? n : null;
+}
+function bucket(sc, lo, hi) {
+  const nose = noseYaw(sc);
+  if (nose == null) return null;
+  let m = null;
+  for (let i = 0; i < sc.rs.length; i++) {
+    const deg = wrapPi(sc.amin + i * sc.inc - nose) * 180 / Math.PI;
+    if (deg < lo || deg > hi) continue;
+    const r = sc.rs[i];
+    if (r > sc.rmin && r < sc.rmax && (m == null || r < m)) m = r;
+  }
+  return m;
+}
+const dialCv = $('scan'), scv = dialCv.getContext('2d');
+// [from deg, to deg] in robot frame (nose = 0, left = +): the beams that feed
+// the 정면 / 왼쪽 / 오른쪽 gauge rows.
+const WEDGES = [[-10, 10], [45, 135], [-135, -45]];
+function drawScan(s) {
+  const W = dialCv.width, H = dialCv.height;
+  if (!W || !H) return;
+  const sc = s.scan;
+  const nose = noseYaw(sc);
+  const cx = W / 2, cy = H / 2, R = W / 2 - 14;
+  const lim = LIM();
+  const view = Math.max(0.25, Math.min(sc ? sc.rmax : lim.open_max,
+                                       lim.open_max));
+  const k = R / view;
+  scv.clearRect(0, 0, W, H);
+  scv.fillStyle = 'rgba(255,255,255,0.028)';
+  WEDGES.forEach(([lo, hi]) => {
+    scv.beginPath(); scv.moveTo(cx, cy);
+    for (let d = lo; d <= hi; d += 2) {
+      const th = d * Math.PI / 180;
+      scv.lineTo(cx - view * k * Math.sin(th), cy - view * k * Math.cos(th));
+    }
+    scv.closePath(); scv.fill();
+  });
+  scv.strokeStyle = T.grid; scv.lineWidth = 1;
+  for (let d = 0.1; d < view - 0.001; d += 0.1) {
+    scv.beginPath(); scv.arc(cx, cy, d * k, 0, 7); scv.stroke();
+  }
+  if (nose != null && sc.rs && sc.rs.length) {
+    // One closed silhouette of the space the robot is standing in, then the
+    // hits on top. A fan of per-beam rays just fills the middle with haze.
+    const pts = [];
+    for (let i = 0; i < sc.rs.length; i++) {
+      const r = sc.rs[i];
+      const ok = r > sc.rmin && r < sc.rmax;
+      const th = wrapPi(sc.amin + i * sc.inc - nose);
+      const d = ok ? Math.min(r, view) : view;   // no return = open, not near
+      pts.push([cx - d * k * Math.sin(th), cy - d * k * Math.cos(th), ok, r]);
+    }
+    scv.beginPath();
+    pts.forEach((p, i) => i ? scv.lineTo(p[0], p[1]) : scv.moveTo(p[0], p[1]));
+    scv.closePath();
+    scv.fillStyle = 'rgba(57,135,229,0.10)';
+    scv.strokeStyle = 'rgba(57,135,229,0.30)'; scv.lineWidth = 1;
+    scv.fill(); scv.stroke();
+    pts.forEach(([px, py, ok, r]) => {
+      if (!ok) return;
+      scv.fillStyle = lim.translation || lim.bounded ? T.route : r < lim.stop ? T.crit : (r < lim.clear ? T.warn : T.route);
+      scv.beginPath(); scv.arc(px, py, 2.6, 0, 7); scv.fill();
+    });
+  }
+  // the line safety halts at — a boundary, so a ring rather than a disc
+  scv.strokeStyle = 'rgba(208,59,59,0.75)'; scv.lineWidth = 1.2;
+  scv.setLineDash([4, 4]);
+  scv.beginPath();
+  if (lim.translation && Number.isFinite(lim.halfWidth)) {
+    const half = (lim.halfWidth + .010) * k;
+    scv.rect(cx-half, cy-lim.stop*k, 2*half, (lim.stop+lim.rear_stop)*k);
+  } else scv.arc(cx, cy, lim.stop * k, 0, 7);
+  if (!lim.bounded) scv.stroke();
+  scv.setLineDash([]);
+  // chassis at true scale, nose marker on its rim
+  const body = lim.radius * k;
+  scv.fillStyle = 'rgba(255,255,255,0.07)';
+  scv.strokeStyle = 'rgba(195,194,183,0.55)'; scv.lineWidth = 1.2;
+  scv.beginPath(); scv.arc(cx, cy, body, 0, 7);
+  scv.fill(); scv.stroke();
+  scv.fillStyle = T.ink;
+  scv.beginPath();
+  scv.moveTo(cx, cy - body - 9);
+  scv.lineTo(cx - 5.5, cy - body + 2);
+  scv.lineTo(cx + 5.5, cy - body + 2);
+  scv.closePath(); scv.fill();
+  scv.fillStyle = T.muted; scv.font = '11px system-ui, sans-serif';
+  scv.textAlign = 'right';
+  scv.fillText(Math.round(view * 100) + ' cm', W - 4, cy - 5);
+  setTxt('dialnote',
+    s.scan_reason === 'missing_mount_tf' ? '라이다 장착 TF 없음 — 방향 계산 불가' :
+    (nose != null && sc.rs && sc.rs.length) ?
+      (lim.bounded ? '정면 위 · 차체 크기 표시 · 이동 궤적 별도 검사' : lim.translation ? '정면 위 · 점선은 차체 외곽과 정지 여유' : '정면 위 · 참고 정면 거리 ' + Math.round(lim.stop * 100) + ' cm') :
+      '라이다 대기');
+}
+// ---- 감지: clearance gauges -------------------------------------------------
+// Every channel is a distance the robot is about to run out of, so each gets
+// the same shape: a bar, a fixed threshold tick, a value in centimetres.
+// more:true = bigger is better, so no threshold and no alarm colour.
+const CH = [
+  { k: 'F',        ko: '정면',        topic: '/safety/min_range', lead: true },
+  { k: 'L',        ko: '왼쪽',        topic: '/safety/left_range' },
+  { k: 'R',        ko: '오른쪽',      topic: '/safety/right_range' },
+  { k: 'US',       ko: '초음파',      topic: '/safety/us_range',  us: true },
+  { k: 'rear',     ko: '뒤',          topic: '/safety/rear_range' },
+  { k: 'rear L',   ko: '뒤 왼쪽',     topic: '/safety/rear_left',  opt: true },
+  { k: 'rear R',   ko: '뒤 오른쪽',   topic: '/safety/rear_right', opt: true },
+  { k: 'open',     ko: '최대 개방',   topic: '/safety/open_range', more: true },
+  { k: 'corridor', ko: '통로 폭',     topic: '/safety/corridor',   corridor: true },
+  { k: 'cam side', ko: '카메라 측면', topic: '/camera/side', more: true, opt: true },
+];
+const gid = k => 'g' + k.replace(/[^A-Za-z]/g, '');
+function chLimits(ch) {
+  const L = LIM();
+  if (ch.us) return { scale: 0.10, stop: L.us_stop, clear: L.us_clear };
+  if (L.bounded) return {scale:ch.corridor ? .80 : L.open_max,stop:null,clear:null};
+  // below two body widths the robot cannot turn around in the corridor
+  if (ch.corridor) return { scale: 0.80, stop: 2 * L.radius,
+                            clear: 2 * L.radius + 0.04 };
+  if (ch.more) return { scale: L.open_max, stop: null, clear: null };
+  if (ch.k === 'rear' && L.live) return {scale:L.open_max,stop:L.rear_stop,clear:L.rear_clear};
+  if (L.live && ch.k !== 'F') return {scale:L.open_max,stop:L.radius+.010,clear:L.radius+.020};
+  return { scale: L.open_max, stop: L.stop, clear: L.clear };
+}
+function buildGauges(shown) {
+  const key = shown.join('|') + '#' + JSON.stringify(LIM());
+  if (S.gaugeKey === key) return;
+  S.gaugeKey = key;
+  $('gauges').innerHTML = CH.filter(ch => shown.indexOf(ch.k) >= 0).map(ch => {
+    const L = chLimits(ch);
+    const tick = L.stop == null ? '' :
+      '<i class="g-x" style="left:' +
+      (100 * Math.min(1, L.stop / L.scale)).toFixed(1) + '%"></i>';
+    return '<div class="gauge' + (ch.lead ? ' lead' : '') + '" id="' +
+      gid(ch.k) + '" title="' + ch.topic + '">' +
+      '<span class="g-k">' + ch.ko + '</span>' +
+      '<span class="g-t"><i class="g-f" id="' + gid(ch.k) + 'f"></i>' + tick +
+      '</span><span class="g-v" id="' + gid(ch.k) + 'v">-</span></div>';
+  }).join('');
+}
+function paintGauge(ch, v) {
+  const L = chLimits(ch), row = $(gid(ch.k));
+  const fill = $(gid(ch.k) + 'f'), val = $(gid(ch.k) + 'v');
+  if (!row || !fill || !val) return;
+  const has = v != null && isFinite(v);
+  row.classList.toggle('miss', !has);
+  fill.style.width = has ?
+    (100 * Math.min(1, Math.max(0, v / L.scale))).toFixed(1) + '%' : '0%';
+  const lvl = (!has || L.stop == null) ? '' :
+    (v < L.stop ? 'crit' : (v < L.clear ? 'warn' : ''));
+  fill.classList.toggle('crit', lvl === 'crit');
+  fill.classList.toggle('warn', lvl === 'warn');
+  val.classList.toggle('crit', lvl === 'crit');
+  val.classList.toggle('warn', lvl === 'warn');
+  val.textContent = has ? (v * 100).toFixed(v < 0.1 ? 1 : 0) + ' cm' : '—';
+}
+// ---- 감지: safety flags -----------------------------------------------------
+// Polarity matters: 'rear clear' true is good, 'cliff' true is bad. Off-states
+// stay on screen so "no cliff" is visible rather than merely absent.
+const FLAGS = [
+  { k: 'blocked',     ko: '전방 차단',       topic: '/safety/blocked',   bad: true },
+  { k: 'cliff',       ko: '낭떠러지',        topic: '/safety/cliff',     bad: true },
+  { k: 'tilt',        ko: '기울어짐',        topic: '/safety/tilt',      bad: true },
+  { k: 'pickup',      ko: '들림',            topic: '/safety/pickup',    bad: true },
+  { k: 'cam blocked', ko: '영상 물체 후보', topic: '/camera/blocked', observation: true },
+  { k: 'cam cliff',   ko: '영상 바닥 변화', topic: '/camera/cliff', observation: true },
+  { k: 'rear clear',  ko: '후방 여유',       topic: '/safety/rear_clear' },
+  { k: 'can reverse', ko: '후진 가능',       topic: '/safety/can_reverse' },
+];
+function flagHtml(f, v) {
+  const cls = f.observation ? 'flag' : f.bad ? (v ? 'flag hit' : 'flag ok')
+                    : (v ? 'flag ok' : 'flag lost');
+  return '<span class="' + cls + '" title="' + f.topic + '">' +
+         (f.bad && v ? '⚠ ' : '') + f.ko + '</span>';
+}
+function renderEvidenceScope(s) {
+  const el = $('evidencescope');
+  if (!el) return;
+  const scope = s && s.evidence_scope;
+  if (!scope) {
+    el.textContent = '로봇이 재는 값';
+    return;
+  }
+  const bits = ['시뮬 증거', 'safety 융합값'];
+  if (scope.ir === 'synthetic') bits.push('IR 가상');
+  if (scope.us === 'lidar_derived') bits.push('US 라이다 복제');
+  if (scope.imu === 'gt_pose') bits.push('IMU GT');
+  if (scope.camera === 'synthetic') bits.push('카메라 가상');
+  if (scope.camera === 'rendered_pixels') bits.push('카메라 렌더');
+  el.textContent = bits.join(' · ');
+}
+function renderSensors(s) {
+  renderEvidenceScope(s);
+  const v = Object.assign({}, s.sensors || {});
+  const shown = CH.filter(ch => !ch.opt || v[ch.k] != null).map(ch => ch.k);
+  buildGauges(shown);
+  CH.forEach(ch => { if (shown.indexOf(ch.k) >= 0) paintGauge(ch, v[ch.k]); });
+  const lim = LIM();
+  const travel = s.motion_limits && s.motion_limits.bounded_translation_limits_m;
+  const travelText = Array.isArray(travel) && travel.length === 2 && travel.every(x => Number.isFinite(x) && x >= 0) ?
+    '확인된 직진 구간: 전진 ' + (travel[0]*100).toFixed(1) + 'cm / 후진 ' + (travel[1]*100).toFixed(1) + 'cm' : '이동 여유 확인 불가';
+  setTxt('clearhint', !lim.live ? '설정 기준 표시 · 실시간 안전 기준 수신 대기' :
+    (v.blocked ? '실제 전방 차단 · ' : '실제 전방 차단 없음 · ') +
+    (lim.bounded ? '이동 궤적 기준 · ' + travelText + ' · 제자리 회전 별도 판정' :
+    (lim.translation ? '차체 외곽 기준 · ' : '회전/일반 기준 · ') +
+    '정면 기준 ' + (lim.stop*100).toFixed(1) + 'cm · 후방 기준 ' + (lim.rear_stop*100).toFixed(1) + 'cm'));
+  const have = FLAGS.filter(f => v[f.k] != null);
+  $('bools').innerHTML = have.length ?
+    have.map(f => flagHtml(f, v[f.k])).join('') :
+    '<span class="flag">safety 노드 대기</span>';
+  renderCamVerdicts(v);
+}
+// ---- camera -----------------------------------------------------------------
+function loadCam(gen) {
+  if (!S.previewEnabled) return;
+  S.cam.gen = gen;
+  const im = $('camimg');
+  im.onload = () => {
+    if (!S.previewEnabled) return;
+    S.cam.t = Date.now();
+    im.style.display = '';
+    $('camnone').style.display = 'none';
+    $('camcard').style.display = '';
+  };
+  im.onerror = () => {
+    im.style.display = 'none';
+    $('camnone').style.display = '';
+  };
+  im.src = API + '/camera.jpg?g=' + gen;
+}
+function renderCamVerdicts(v) {
+  const chips = FLAGS.filter(f => f.k.indexOf('cam') === 0 && v[f.k] != null);
+  $('camverdict').innerHTML = chips.map(f => flagHtml(f, v[f.k])).join('');
+  setTxt('camcap', v['cam dbg'] ? String(v['cam dbg']) : '');
+}
+// ---- inputs: teleop keys + pad (one held-set, one ticker) ------------------
+const ACT = {   // action -> [linear, angular] components
+  up: [1, 0], down: [-1, 0], left: [0, 1], right: [0, -1],
+  ul: [1, 1], ur: [1, -1], dl: [-1, 1], dr: [-1, -1],
+};
+const KEYMAP = { u: ['ul'], i: ['up'], o: ['ur'], j: ['left'], k: ['stop'],
+                 l: ['right'], m: ['dl'], n: ['down'], ',': ['down'],
+                 '.': ['dr'], ArrowUp: ['up'], ArrowDown: ['down'],
+                 ArrowLeft: ['left'], ArrowRight: ['right'] };
+const lin = () => CFG.lin_steps[S.tele.lin];
+const ang = () => CFG.ang_steps[S.tele.ang];
+function showSpeed() {
+  const cms = Math.round(lin() * 100);
+  const dps = Math.round(ang() * 180 / Math.PI);
+  setTxt('speed', (S.tele.lin + 1) + '/' + CFG.lin_steps.length + ' · ' +
+    cms + ' cm/s, ' + dps + '°/s');
+}
+function showSending() {
+  const x = S.tele.x, z = S.tele.z;
+  setTxt('sending', (x || z) ?
+    (x * 100).toFixed(0) + ' cm/s, ' +
+    (z * 180 / Math.PI).toFixed(0) + '°/s' : '정지');
+}
+function ktick() {
+  if (!calibrationReady(S.data)) { S.held.clear(); api.tw(0, 0); return; }
+  let x = 0, z = 0;
+  S.held.forEach(a => {
+    const d = ACT[a];
+    if (d) { x += d[0] * lin(); z += d[1] * ang(); }
+  });
+  S.tele.x = x; S.tele.z = z;
+  showSending();
+  api.tw(x, z);
+}
+function ksync() {
+  if (S.held.has('stop')) S.held.clear();
+  if (S.held.size === 0) {
+    if (S.kt) { clearInterval(S.kt); S.kt = null; api.tw(0, 0); }
+    S.tele.x = 0; S.tele.z = 0;
+    showSending();
+  } else if (!S.kt) {
+    S.kt = setInterval(ktick, CFG.teleop_period_ms);
+    ktick();
+  }
+  document.querySelectorAll('#keys span').forEach(el =>
+    el.classList.toggle('on', S.held.has(el.dataset.a)));
+}
+function hold(a) {
+  if (a === 'stop') { S.held.clear(); ksync(); return; }
+  const comp = ACT[a];
+  if (!comp) return;
+  S.held.add(a);
+  ksync();
+}
+function release(a) {
+  const comp = ACT[a];
+  if (!comp) return;
+  S.held.delete(a);
+  ksync();
+}
+window.addEventListener('keydown', e => {
+  if (e.target instanceof HTMLInputElement) return;
+  const k = e.key;
+  if (k === '-' || k === '_') { stepSpeed(-1); return; }
+  if (k === '+' || k === '=' || k === 'ArrowUp' && e.shiftKey) { stepSpeed(1); return; }
+  if (k === 'f') { fitReset(); return; }
+  const a = KEYMAP[k];
+  if (!a || e.repeat) return;
+  e.preventDefault();
+  a.forEach(hold);
+});
+window.addEventListener('keyup', e => {
+  const a = KEYMAP[e.key];
+  if (a) a.forEach(release);
+});
+window.addEventListener('blur', () => { S.held.clear(); ksync(); });
+function stepSpeed(d) {
+  const cl = CFG.lin_steps.length - 1;
+  S.tele.lin = Math.min(cl, Math.max(0, S.tele.lin + d));
+  S.tele.ang = Math.min(cl, Math.max(0, S.tele.ang + d));
+  showSpeed();
+}
+// ---- map interactions: wheel zoom, drag pan, click pin, hover coords -------
+let drag = null;
+cv.addEventListener('wheel', e => {
+  e.preventDefault();
+  const r = cv.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+  zoomAt((e.clientX - r.left) * dpr, (e.clientY - r.top) * dpr,
+         e.deltaY < 0 ? CFG.zoom_step : 1 / CFG.zoom_step);
+}, { passive: false });
+cv.addEventListener('pointerdown', e => {
+  drag = { x: e.clientX, y: e.clientY, moved: false };
+  cv.setPointerCapture(e.pointerId);
+});
+cv.addEventListener('pointermove', e => {
+  const r = cv.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+  const cx = (e.clientX - r.left) * dpr, cy = (e.clientY - r.top) * dpr;
+  if (S.view.ok) {
+    const w = c2w(cx, cy);
+    setTxt('coords', w[0].toFixed(2) + ', ' + w[1].toFixed(2) + ' m');
+  }
+  if (!drag) return;
+  const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+  if (!drag.moved && Math.hypot(dx, dy) > CFG.click_slop_px) drag.moved = true;
+  if (drag.moved && S.view.ok && S.view.z > 1) {
+    const delta = rotateVector(dx*dpr, dy*dpr, -S.view.angle);
+    S.view.A.x += delta[0];
+    S.view.A.y += delta[1];
+    drag.x = e.clientX; drag.y = e.clientY;
+    clampPan(); requestDraw();
+    wrap.classList.add('grabbing');
+  }
+});
+cv.addEventListener('pointerup', e => {
+  if (drag && !drag.moved && S.view.ok) {
+    const r = cv.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+    const w = c2w((e.clientX - r.left) * dpr, (e.clientY - r.top) * dpr);
+    S.pin = { x: w[0], y: w[1] };
+    updatePin();
+  }
+  drag = null;
+  wrap.classList.remove('grabbing');
+});
+cv.addEventListener('pointerleave', () => setTxt('coords', ''));
+function fitReset() {
+  S.view.z = 1;
+  if (S.data.map) fitView();
+  clampPan(); showZoom(); requestDraw();
+}
+function showZoom() { setTxt('zoompct', Math.round(S.view.z * 100) + '%'); }
+// ---- pin: click to pin, send relays to /goal/cmd ----------------------------
+function updatePin() {
+  const has = !!S.pin;
+  $('pin').textContent = has ?
+    '지점 ' + S.pin.x.toFixed(2) + ', ' + S.pin.y.toFixed(2) + ' m' : '';
+  $('pinsend').style.display = has ? '' : 'none';
+  $('pinclear').style.display = has ? '' : 'none';
+  draw(S.data);
+}
+async function sendPin() {
+  if (!S.pin) return;
+  if (!calibrationReady(S.data) || S.data.estop !== false) {
+    setTxt('calibrationerror', '보정 완료와 비상정지 해제 후 지점 이동을 시작할 수 있습니다.');
+    return;
+  }
+  const b = $('pinsend');
+  b.disabled = true;
+  const ok = await api.goal(S.pin.x.toFixed(3) + ',' + S.pin.y.toFixed(3));
+  b.textContent = ok ? '목표 전송됨' : '전송 실패';
+  b.disabled = false;
+  setTimeout(() => { b.textContent = '이 지점으로'; }, 1200);
+}
+function clearPin() { S.pin = null; updatePin(); }
+// ---- poll: status + bind table ----------------------------------------------
+const POSE_WHY = {
+  stale_odom: '오도메트리 끊김', missing_map_tf: '지도 TF 없음',
+  stale_map_tf: '지도 TF 지연', invalid_map_tf: '지도 TF 오류',
+  mapping_paused: '매핑 일시정지',
+};
+const BIND = [
+  ['mode', s => s.mode || '-'],
+  ['wander', s => s.wander || '-'],
+  ['estop', s => s.estop === true ? '걸림' : (s.estop === false ? '해제' : '-')],
+  ['ok', s => (s.ok == null) ? '-' : (s.ok ? '정상' : '이상')],
+  ['gstate', s => plannerStatus(s)],
+  ['ttopic', s => s.teleop_topic || '-'],
+  ['health', s => s.health || '-'],
+  ['eta', s => (s.gstate || '').startsWith('planning blocked:') ? '-' : (s.eta != null && s.eta > 0) ? '계획 ' + s.eta.toFixed(0) + ' s' : '-'],
+  ['vel', s => s.vel ?
+    (s.vel[0] * 100).toFixed(1) + ' cm/s, ' +
+    (s.vel[1] * 180 / Math.PI).toFixed(0) + '°/s' : '-'],
+  ['pose', s => s.pose ?
+    s.pose[0].toFixed(2) + ', ' + s.pose[1].toFixed(2) :
+    (POSE_WHY[s.pose_reason] || '위치 없음')],
+  ['msize', s => s.map ? s.map[0] + '×' + s.map[1] : '-'],
+  ['pathm', s => (s.path_m != null) ? s.path_m.toFixed(1) + ' m' : '-'],
+  ['rinfo', s => {
+    const rp = s.route || [];
+    if (rp.length < 2) return '-';
+    let m = 0;
+    for (let i = 1; i < rp.length; i++)
+      m += Math.hypot(rp[i][0] - rp[i - 1][0], rp[i][1] - rp[i - 1][1]);
+    return m.toFixed(2) + ' m';
+  }],
+];
+async function poll() {
+  const s = await getJson('/state.json');
+  if (!s) { $('live').classList.remove('live'); renderMapping(null); renderNavigation(null); renderCalibration(null); renderOverview(null); return; }
+  $('live').classList.add('live');
+  S.lastOk = Date.now();
+  S.data = s;
+  if (S.runtimeId !== s.runtime_id || (s.map_control && S.mapEpoch !== s.map_control.epoch)) {
+    if (S.mapEpoch !== null) S.view.aligned = false;
+    S.runtimeId = s.runtime_id;
+    S.mapEpoch = s.map_control ? s.map_control.epoch : null;
+    S.img = {gen: -1, im: null, t: 0};
+    S.pin = null;
+    S.view.ok = false;
+    updatePin();
+  }
+  renderMapping(s.map_control);
+  renderNavigation(s);
+  renderCalibration(s);
+  renderOverview(s);
+  BIND.forEach(([id, fn]) => setTxt(id, fn(s)));
+  setCls('estopChip', 'crit', s.estop === true);
+  setCls('modeChip', 'crit', s.mode === 'ESTOP');
+  setCls('okChip', 'crit', s.ok === false);
+  setCls('poseCell', 'warnval', !s.pose);
+  if (s.map && s.map[5] !== S.img.gen && Date.now() - S.img.t > CFG.map_recheck_ms)
+    loadMap(s.map[5]);
+  if (s.cam != null && s.cam !== S.cam.gen) loadCam(s.cam);
+  renderSensors(s);
+  drawScan(s);
+  draw(s);
+}
+// ---- result ------------------------------------------------------------------
+const RES_KO = [['ok', '판정'], ['wall_recall', '벽 재현율'],
+                ['corridor_purity', '통로 순도'], ['phantom_frac', '허상 비율'],
+                ['interior_unknown', '내부 미지']];
+async function pollResult() {
+  const s = await getJson('/result.json');
+  if (!s) return;
+  setTxt('pathm', (s.path_m != null) ? s.path_m.toFixed(1) + ' m' : '-');
+  const m = s.metrics;
+  const card = $('rescard');
+  if (!m) { card.style.display = 'none'; return; }
+  card.style.display = '';
+  $('resrows').innerHTML = RES_KO.filter(([k]) => m[k] != null)
+    .map(([k, ko]) => '<div class="srow"><span class="k">' + ko +
+      '</span><span class="v">' + esc(m[k]) + '</span></div>').join('');
+}
+// ---- freshness veils ---------------------------------------------------------
+setInterval(() => {
+  const stale = S.lastOk && (Date.now() - S.lastOk > CFG.stale_ms);
+  const el = $('stale');
+  el.style.display = stale ? 'flex' : 'none';
+  if (stale) setTxt('stale', '수신 끊김 ' +
+    Math.round((Date.now() - S.lastOk) / 1000) + '초');
+  const camOld = S.cam.t && (Date.now() - S.cam.t > CFG.cam_stale_ms);
+  setCls('camimg', 'old', camOld);
+  setTxt('camveil', camOld ? '정지된 프레임 ' +
+    Math.round((Date.now() - S.cam.t) / 1000) + '초' : '');
+}, 500);
+// ---- boot: bindings replace the old inline handlers ---------------------------
+document.querySelectorAll('[data-post]').forEach(b =>
+  b.addEventListener('click', () => post(b.dataset.post, b.dataset.val)));
+$('navsessionstart').addEventListener('click', startNavigationSession);
+document.querySelectorAll('[data-calibration]').forEach(button =>
+  button.addEventListener('click', () => calibrationAction(button.dataset.calibration)));
+document.querySelectorAll('[data-hold]').forEach(b => {
+  const a = b.dataset.hold;
+  b.addEventListener('pointerdown', () => hold(a));
+  b.addEventListener('pointerup', () => release(a));
+  b.addEventListener('pointerleave', () => release(a));
+});
+document.querySelectorAll('[data-view]').forEach(b =>
+  b.addEventListener('click', () => {
+    if (b.dataset.view === 'in') zoomAt(cv.width / 2, cv.height / 2, CFG.zoom_step);
+    if (b.dataset.view === 'out') zoomAt(cv.width / 2, cv.height / 2, 1 / CFG.zoom_step);
+    if (b.dataset.view === 'fit') fitReset();
+    if (b.dataset.view === 'align' && S.data.pose) setViewAngle(S.data.pose[2]);
+    if (b.dataset.view === 'left') setViewAngle(S.view.angle - Math.PI/36);
+    if (b.dataset.view === 'right') setViewAngle(S.view.angle + Math.PI/36);
+    if (b.dataset.view === 'north') setViewAngle(0);
+  }));
+$('pinsend').addEventListener('click', sendPin);
+$('pinclear').addEventListener('click', clearPin);
+$('mapreset').addEventListener('click', () => mappingAction('reset'));
+$('mapsave').addEventListener('click', saveMapImage);
+$('mapresume').addEventListener('click', () => mappingAction('resume'));
+$('mappingtoggle').addEventListener('change', () => mappingAction($('mappingtoggle').checked ? 'resume' : 'pause'));
+$('cameratoggle').addEventListener('change', togglePreview);
+$('camera_ground_toggle').addEventListener('change', async () => {
+  const toggle = $('camera_ground_toggle');
+  const requested = toggle.checked;
+  toggle.disabled = true;
+  const ok = await post('/camera/calibration', requested ? 'enable' : 'disable');
+  if (!ok) toggle.checked = !requested;
+});
+try { S.previewEnabled = localStorage.getItem('pinky.preview') !== 'off'; } catch (_) {}
+$('cameratoggle').checked = S.previewEnabled;
+$('camcard').hidden = !S.previewEnabled;
+function fit() {
+  const dpr = window.devicePixelRatio || 1;
+  const r = wrap.getBoundingClientRect();
+  if (r.width < 2 || r.height < 2) return;
+  cv.width = Math.round(r.width * dpr);
+  cv.height = Math.round(r.height * dpr);
+  draw(S.data);
+}
+new ResizeObserver(fit).observe(wrap);
+function loadMap(gen) {
+  const epoch = S.mapEpoch;
+  const session = S.runtimeId;
+  const meta = S.data.map && S.data.map.slice();
+  S.img.t = Date.now();
+  const image = new Image();
+  image.onload = () => {
+    if (session !== S.runtimeId || epoch !== S.mapEpoch || !S.data.map || S.data.map[5] !== gen) return;
+    S.img.gen = gen; S.img.im = image; S.img.meta = meta; draw(S.data); renderMapping(S.data.map_control);
+  };
+  image.src = API + '/map.png?g=' + gen + (session ? '&session=' + session : '');
+}
+setInterval(poll, CFG.poll_ms);
+poll();
+pollResult();
+setInterval(pollResult, CFG.result_ms);
+fit();
+showZoom();
+showSpeed();
+showSending();
+})();
+</script>
+</ui-shell>
+</body>
+</html>

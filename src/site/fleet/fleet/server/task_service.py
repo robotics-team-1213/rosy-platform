@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import math
+import time
 from collections.abc import Awaitable, Callable, Mapping
 from uuid import uuid4
 
 from fleet.hub.hub import HubError
+from fleet.server.policy_evidence import PolicyEvidenceStore
 from fleet.server.task_scheduler import FleetTaskScheduler
 from fleet.server.task_store import FleetTaskStore
 from fleet.swarm.transport import RobotApiError
@@ -16,11 +18,18 @@ class FleetTaskService:
     POLICY_DISPATCH_ENABLED = False
 
     def __init__(self, store: FleetTaskStore, *, robot_ids: set[str],
-                 worker_id: str | None = None) -> None:
+                 worker_id: str | None = None,
+                 policy_evidence: PolicyEvidenceStore | None = None,
+                 max_evidence_age_s: float | None = None,
+                 clock: Callable[[], float] = time.time) -> None:
         self.store = store
         self.robot_ids = frozenset(robot_ids)
         self.scheduler = FleetTaskScheduler(store, worker_id=worker_id or f"fleet-{uuid4()}")
+        self.store.close_dispatch_for_startup()
         self.scheduler.recover()
+        self._policy_evidence = policy_evidence
+        self._max_evidence_age_s = max_evidence_age_s
+        self._clock = clock
 
     async def submit_navigation(
         self, *, robot_id: str, x: float, y: float, yaw: float = 0.0,
@@ -41,6 +50,13 @@ class FleetTaskService:
             raise ValueError("INVALID_GOAL")
         if evidence is not None and not isinstance(evidence, Mapping):
             raise ValueError("INVALID_EVIDENCE")
+        policy_evidence_id: str | None = None
+        if source == "policy":
+            if (not isinstance(evidence, Mapping) or set(evidence) != {"evidence_id"}
+                    or not isinstance(evidence.get("evidence_id"), str)
+                    or not evidence["evidence_id"].strip()):
+                raise ValueError("INVALID_EVIDENCE_REFERENCE")
+            policy_evidence_id = evidence["evidence_id"]
 
         created = self.store.create_task(
             task_id=str(uuid4()), robot_id=robot_id, task_type="navigate",
@@ -52,15 +68,39 @@ class FleetTaskService:
         if not created["created"]:
             return self.store.get_task(task["task_id"]) or task
 
-        if source == "policy" and not self.POLICY_DISPATCH_ENABLED:
-            return self.store.transition(task["task_id"], "HOLD", actor_id=actor_id,
-                                         source=source, reason="POLICY_NOT_ACCEPTED")
+        if source == "policy":
+            admission = self._policy_admission_reason(policy_evidence_id, robot_id=robot_id)
+            if admission is not None or not self.POLICY_DISPATCH_ENABLED:
+                return self.store.transition(task["task_id"], "HOLD", actor_id=actor_id,
+                                             source=source,
+                                             reason=admission or "POLICY_NOT_ACCEPTED")
 
         priority_class = 0 if source == "operator" else 1
         queued = self.scheduler.enqueue(
             task["task_id"], priority_class=priority_class, actor_id=actor_id, source=source
         )
         return self.store.get_task(task["task_id"]) or queued
+
+    def _policy_admission_reason(self, evidence_id: str, *, robot_id: str) -> str | None:
+        """Binding check for policy submissions; None means admissible."""
+        if self._policy_evidence is None:
+            return "EVIDENCE_NOT_CONFIGURED"
+        record = self._policy_evidence.get(evidence_id)
+        if record is None:
+            return "EVIDENCE_NOT_FOUND"
+        if record["outcome"] != "accepted":
+            return record["reason"] or "EVIDENCE_OBSERVATION_KIND_UNKNOWN"
+        payload = record["payload"]
+        if payload.get("asset_kind") != "robot" or payload.get("asset_id") != robot_id:
+            return "EVIDENCE_ASSET_MISMATCH"
+        if payload.get("task_kind") != "navigate":
+            return "EVIDENCE_TASK_KIND_NOT_REGISTERED"
+        if self._max_evidence_age_s is None:
+            return "EVIDENCE_STALE"
+        age = self._clock() - float(record["received_at"])
+        if age < 0 or age > self._max_evidence_age_s:
+            return "EVIDENCE_STALE"
+        return None
 
     async def dispatch_next(
         self, available_robot_ids: set[str], *,
@@ -72,6 +112,10 @@ class FleetTaskService:
         attempt = self.scheduler.begin_dispatch(task["task_id"])
 
         try:
+            if not self.store.dispatch_generation_is_current(attempt["dispatch_generation"]):
+                return self.store.abort_dispatch_before_send(
+                    task["task_id"], attempt_id=attempt["attempt_id"],
+                )
             raw_receipt = await dispatch(attempt)
             if not isinstance(raw_receipt, Mapping):
                 raise RuntimeError("invalid robot receipt")

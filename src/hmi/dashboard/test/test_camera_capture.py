@@ -8,7 +8,7 @@ import subprocess
 import pytest
 
 
-MODULE = Path(__file__).resolve().parents[3] / "hmi" / "web" / "evidence.js"  # D-323 T9 승격
+MODULE = Path(__file__).resolve().parents[3] / "hmi" / "web_common" / "evidence.js"  # D-323 T9 승격
 
 
 def _run_js(body):

@@ -72,19 +72,26 @@ _PLACEHOLDER = re.compile(
 # key usually contains the variable's name without equalling it. Recognise the
 # shape rather than loosening the argument rule for it — the rule is what keeps
 # a secret handed to a call visible.
+#: The words that make a name worth reporting, in one place so the name
+#: matcher and the "is this value itself secret-named" rule below cannot
+#: drift apart and quietly disagree about what a secret is called.
+_SECRET_NAME_WORDS = (
+    r"passwo?rd | passwd | psk | passphrase | secret | api[_-]?key"
+    r" | api[_-]?token | auth[_-]?token | access[_-]?token | bearer"
+)
+
 _ASSIGNMENT = re.compile(
-    r"""
+    rf"""
     (?P<name>
         [A-Za-z0-9_.\-]*
-        (?: passwo?rd | passwd | psk | passphrase | secret | api[_-]?key
-          | api[_-]?token | auth[_-]?token | access[_-]?token | bearer )
+        (?: {_SECRET_NAME_WORDS} )
         [A-Za-z0-9_.\-]*
     )
     \s* [:=] \s*
     (?:
-        " (?P<quoted>[^"\n]{6,}) "     # "correct horse battery staple"
-      | ' (?P<squoted>[^'\n]{6,}) '
-      | (?P<value>[^"'\s#,;]{6,})     # bare, no spaces
+        " (?P<quoted>[^"\n]{{6,}}) "     # "correct horse battery staple"
+      | ' (?P<squoted>[^'\n]{{6,}}) '
+      | (?P<value>[^"'\s#,;]{{6,}})     # bare, no spaces
       | (?P<call>[A-Za-z_][A-Za-z0-9_.]*[\(\[])   # wrap( , data[
     )
     """,
@@ -157,9 +164,19 @@ _SHA256 = re.compile(r"^[A-Fa-f0-9]{64}$")
 # leaked token. These boundaries still keep "oid" out of avoid/void/android.
 # "hash" is deliberately absent — it turns up in ordinary prose, where it
 # would disable this matcher for the whole line.
+# `source` is admitted only when it introduces a code span. A journal entry
+# cites the tree it was built from as "merged source `<40-hex>`", but the bare
+# word would also excuse `source_token = <hex>`, and a word that dismisses a
+# line by itself is how a matcher goes quiet without anyone noticing.
 _INTEGRITY_CONTEXT = re.compile(
-    r"(?<![A-Za-z])(?:sha[-_]?256|sha[-_]?512|digest|revision|checksum|commit|oid|fingerprint)(?![A-Za-z])",
+    r"(?<![A-Za-z])(?:sha[-_]?256|sha[-_]?512|digest|revision|checksum|commit|oid"
+    r"|fingerprint|source(?=\s*`))(?![A-Za-z])",
     re.IGNORECASE,
+)
+
+#: The words _ASSIGNMENT keys on, matched on their own.
+_SECRET_WORD = re.compile(
+    rf"(?: {_SECRET_NAME_WORDS} )", re.IGNORECASE | re.VERBOSE
 )
 
 # A type annotation, not an assignment of a literal. "bearer: Optional[str]" in
@@ -178,7 +195,11 @@ _TYPE_EXPRESSION = re.compile(
 # how a matcher goes quiet without anyone noticing.
 _CODE_REFERENCE = re.compile(
     r"^(?:"
-    r"[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)+"
+    # The trailing () covers credential_status.inner_text(): a method call is
+    # the same thing psk=self.setup_psk is — a read, not a value — and the
+    # alternation below already grants a bare generate_setup_psk() that, so
+    # leaving it off a dotted name was an omission, not a decision.
+    r"[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)+(?:\(\))?"
     r"|[A-Za-z_][A-Za-z0-9_]*\(\)"
     r")$"
 )
@@ -186,17 +207,33 @@ _CODE_REFERENCE = re.compile(
 
 # The head of a call or subscript expression, not a literal: prefs.getString(,
 # created.json()[. The bare-value branch of _ASSIGNMENT stops at the first
-# quote, so a value ending in an opener means code started, never a secret.
+# quote, a space or a comma, so a captured value that still owes a bracket was
+# cut out of the middle of code and cannot be a finished literal —
+# `getattr(args` is what a call looks like once its comma is gone, and
+# `sha256(digest.encode(` is where a quote stopped it.
 #
 # Excusing the shape alone would hide password = wrap("hunter2swordfish"), so
 # _call_holds_no_literal checks what the call was handed. Widening an exclusion
 # is how a matcher goes quiet; this one stays narrow by asking that question.
-_CODE_EXPRESSION = re.compile(
-    r"^[A-Za-z_][A-Za-z0-9_]*"
-    r"(?:\.[A-Za-z_][A-Za-z0-9_]*)*"
-    r"(?:\(\))*"
-    r"[\(\[]$"
-)
+def _is_unclosed_fragment(value: str) -> bool:
+    """True when ``value`` opens a bracket it never closes on its own."""
+    depth = 0
+    for char in value:
+        if char in "([":
+            depth += 1
+        elif char in ")]":
+            depth -= 1
+    return depth > 0
+
+
+#: An environment-variable name as it is written in source: ROSY_VISION_SECRET.
+#: ALL-CAPS with underscores and digits, which a credential is not shaped like.
+_ENV_NAME = re.compile(r"[A-Z][A-Z0-9_]{2,}")
+
+#: Reading the process environment. The argument to these is the *name* of a
+#: variable to look up, never the secret itself — that is the whole reason the
+#: product reads credentials from the environment instead of the repository.
+_ENV_LOOKUP = re.compile(r"(?:os\.)?(?:environ\.get|getenv)\(|(?:os\.)?environ\[")
 
 #: A quoted argument long enough to be a secret rather than a slot name.
 #:
@@ -205,7 +242,12 @@ _CODE_EXPRESSION = re.compile(
 #: release gate that reports response.headers.get("x-token") teaches everyone
 #: to skim past it, which costs more than the six- and seven-character secrets
 #: it would catch one bracket deep. Directly assigned, those are still caught.
+#: Candidates holding brackets are not string contents at all: see
+#: _call_holds_no_literal, which pairs quotes across code.
 _ARGUMENT_LITERAL = re.compile(r"""["']([^"'\n]{8,})["']""")
+
+#: Expression text, never a credential handed to a call.
+_EXPRESSION_TEXT = re.compile(r"[()\[\]]")
 
 
 def _closes_on_this_line(rest: str) -> bool:
@@ -244,6 +286,12 @@ def _call_holds_no_literal(line: str, start: int, name: str) -> bool:
     lowered = name.lower()
     return not any(
         not _is_placeholder(m.group(1)) and m.group(1).lower() != lowered
+        # A "literal" holding brackets is expression text the quote pairing
+        # bridged across, not a credential: in `authorization[len("Bearer "):]
+        # ... startswith("Bearer ")` the regex pairs the first string's closing
+        # quote with the next string's opening one, spanning `):] if ... (`.
+        # A credential handed to a call never holds ()[].
+        and not _EXPRESSION_TEXT.search(m.group(1))
         for m in _ARGUMENT_LITERAL.finditer(rest)
     )
 
@@ -285,10 +333,23 @@ KNOWN_FIXTURES = frozenset({
     "fixture-one-time-credential",
     "fixture-reusable-token",
     "must-never-ship",
+    # The ER 2 adapter tests pass an obviously invented key next to a mock
+    # transport. Deliberately invented; never a value a real deployment holds.
+    "test-secret",
 })
 
 #: Fixture values are only excused here. Anywhere else they are secrets.
 FIXTURE_ROOT = "test/"
+
+#: Journal prose that quotes an invented fixture value while describing its
+#: own removal (src/site/fleet/logs.md, 2026-09-29: the entry that replaced
+#: an ``api_key="fixture-secret"`` literal with the allowlisted key quotes the
+#: old value). The code literal is gone; module logs are append-only, so the
+#: quote cannot be reworded. Pinned to one exact path per entry — the same
+#: value anywhere else, including that module's code, is still a finding.
+KNOWN_PROSE_QUOTES: dict[str, frozenset[str]] = {
+    "src/site/fleet/logs.md": frozenset({"fixture-secret"}),
+}
 
 DEFAULT_EXCLUDED_SUFFIXES = frozenset(
     {
@@ -311,6 +372,72 @@ def _is_placeholder(value: str) -> bool:
     ``liveEXAMPLEkey9182aeb27c4d``, which is a credential with a word in it.
     """
     return bool(_PLACEHOLDER.fullmatch(value.strip()))
+
+
+#: A bare identifier: the shape of a variable name. Used to tell a reference
+#: (`vision_lease_secret=secret`) from a literal that merely looks like one.
+_BARE_IDENTIFIER = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+
+#: 40+ hex with nothing else in it, i.e. a revision or a digest written with
+#: only the letters a-f. Those must stay reportable even though a run of
+#: letters alone is never base64.
+_HEX_ONLY = re.compile(r"[A-Fa-f0-9]{40,}")
+
+
+def _reads_the_environment(value: str, line: str, start: int) -> bool:
+    """True when every literal this line holds is an environment variable *name*.
+
+    ``preview_secret = os.environ.get("ROSY_VISION_PREVIEW_SECRET")`` carries
+    only the name of a variable to read: the credential lives in the process
+    environment, never in source, so there is nothing here to leak.
+
+    The literals have to be env-shaped for that to hold. The same call handed a
+    credential as a default — ``api_key = os.environ.get("K", "sk_live_...")``
+    — puts a real secret on the line and must still report, which is why a
+    short or mixed-case argument keeps this from excusing the line.
+
+    Only the text after the call head is read: the assignment head's own
+    quotes — a test file's Python string delimiters around a sample, for
+    instance — are not arguments and must not vote.
+    """
+    if not _ENV_LOOKUP.search(value):
+        return False
+    return all(
+        _ENV_NAME.fullmatch(match.group(1))
+        for match in _ARGUMENT_LITERAL.finditer(line[start:])
+    )
+
+
+def _is_a_passed_reference(line: str, match: re.Match[str], value: str) -> bool:
+    """A secret-named bare identifier handed to a call, rather than a literal.
+
+    ``create_app(console, ..., vision_lease_secret=secret)`` and a wrapped
+    argument line ``vision_lease_secret=vision_preview_secret,`` both pass a
+    variable along. Code that hands a secret around is what the scanner
+    protects, not what it is looking for.
+
+    Three conditions keep it narrow, plus one containment fallback. The value
+    must be a bare identifier, so ``token=sk_live_9182aeb27c4d`` still reports
+    — an unquoted credential in argument position is exactly the leak this rule
+    must not swallow. It must be secret-named, so ``password = mypassword`` at
+    statement level still reports. And it must sit in argument position, or be
+    part of the name it is assigned to (``self._api_key = api_key``), which is
+    where handing a variable happens.
+    """
+    reference = value.rstrip(")]},")
+    if not _BARE_IDENTIFIER.fullmatch(reference):
+        return False
+    if not _SECRET_WORD.search(reference):
+        return False
+    head = line[: match.start()]
+    depth = head.count("(") + head.count("[") - head.count(")") - head.count("]")
+    if depth > 0 or line.rstrip().endswith(","):
+        return True
+    # `self._api_key = api_key`: the value is part of the name it is being
+    # assigned to, so the line names a variable rather than supplying a
+    # literal. Direction matters — `password = mysecret` still reports, since
+    # `mysecret` is not inside `password`.
+    return reference.lower() in match.group("name").lower()
 
 
 def scan_text(path: str, text: str) -> list[Finding]:
@@ -356,8 +483,10 @@ def scan_text(path: str, text: str) -> list[Finding]:
                 _is_placeholder(value)
                 or _TYPE_EXPRESSION.match(value)
                 or _CODE_REFERENCE.match(value.rstrip(",}"))
-                or (_CODE_EXPRESSION.match(value)
+                or (_is_unclosed_fragment(value)
                     and _call_holds_no_literal(assignment_line, match.end(), match.group("name")))
+                or _reads_the_environment(value, assignment_line, match.end())
+                or _is_a_passed_reference(assignment_line, match, value)
             ):
                 continue
             # A reference to another variable or a path is not a literal secret.
@@ -391,6 +520,20 @@ def scan_text(path: str, text: str) -> list[Finding]:
             if _PUBLIC_PATH_TOKEN.fullmatch(value):
                 continue
             if _is_ed25519_public_key_body(value):
+                continue
+            # A run of letters that long is an identifier, not base64: base64
+            # of any real payload lands on a digit or a "+/" well inside fifty
+            # characters (P ~ 3e-5 for a letters-only run that long), while
+            # missingPairingStillStartsCameraPreviewWithoutSendingFrames is a
+            # Kotlin test name that needs no such luck. Hex is exempt — a
+            # revision or digest written only with a-f is still integrity data.
+            if value.isalpha() and not _HEX_ONLY.fullmatch(value):
+                continue
+            # A value this line also links to. URL bodies are outside this loop
+            # entirely (_URL removes them), so a dependency pinned as
+            # `https://host/o/r/tree/<sha>/path | <sha>` left the bare copy
+            # looking unattributed. A secret is not its own link target.
+            if any(value in url.group(0) for url in _URL.finditer(line)):
                 continue
             # sha256 digests and git revisions are public integrity data, not
             # secrets, and the release manifest is full of them. Word-bounded:
@@ -496,9 +639,11 @@ def scan_files(
         # repo-root test/ and the per-package test/ directories of the
         # domain-grouped workspace. Anywhere else they are secrets.
         in_fixtures = relative.startswith(FIXTURE_ROOT) or "/test/" in f"/{relative}"
+        prose_quotes = KNOWN_PROSE_QUOTES.get(relative, frozenset())
         findings.extend(
             f for f in scan_text(relative, text)
             if not (in_fixtures and any(fixture in f.excerpt for fixture in KNOWN_FIXTURES))
+            and not any(quote in f.excerpt for quote in prose_quotes)
         )
 
     return findings

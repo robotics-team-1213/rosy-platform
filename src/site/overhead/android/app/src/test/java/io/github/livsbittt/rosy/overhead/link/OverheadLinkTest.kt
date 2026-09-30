@@ -124,6 +124,37 @@ class OverheadLinkTest {
     }
 
     @Test
+    fun publishesAdapterStatusAndClearsItWhenTheLinkDrops() {
+        val side = ServerSide()
+        server.enqueue(MockResponse().withWebSocketUpgrade(side))
+        server.enqueue(MockResponse().setResponseCode(503))
+        val l = newLink()
+        l.start()
+        val serverSocket = side.opened.poll(5, TimeUnit.SECONDS)!!
+        awaitStatus(l) { it.state == LinkState.STREAMING }
+
+        serverSocket.send("""{"type":"status","corners_seen":[30,31],"corners_needed":4,"robots_seen":["rosy_01"],"rx_fps":3.0,"dropped":0}""")
+        val withSite = awaitStatus(l) { it.site != null }
+        assertEquals(listOf(30, 31), withSite.site!!.cornersSeen)
+
+        serverSocket.close(1011, "restart")
+        val dropped = awaitStatus(l) { it.state == LinkState.DISCONNECTED }
+        assertEquals("stale marker counts must not outlive the connection", null, dropped.site)
+    }
+
+    @Test
+    fun connectFailureCarriesItsKind() {
+        val port = server.port
+        server.shutdown()
+        val pairing = PairingUri("127.0.0.1", port, "secret-token", "overhead-1")
+        val l = OverheadLink(pairing, appVersion = "0.1.0", device = "jvm-test").also { link = it }
+        l.start()
+        val failed = awaitStatus(l) { it.error is LinkError.Network }
+        assertEquals(NetworkFailure.REFUSED, (failed.error as LinkError.Network).kind)
+        server = MockWebServer().also { it.start() }
+    }
+
+    @Test
     fun protocolMismatchCloseStopsRetrying() {
         val side = ServerSide()
         server.enqueue(MockResponse().withWebSocketUpgrade(side))

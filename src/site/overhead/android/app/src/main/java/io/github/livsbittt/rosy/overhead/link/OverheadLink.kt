@@ -37,7 +37,8 @@ sealed interface LinkError {
     data object Replaced : LinkError
 
     data class InvalidConfig(val field: String) : LinkError
-    data class Network(val detail: String) : LinkError
+    /** Transport failure before or during the session; [kind] drives the operator guidance. */
+    data class Network(val detail: String, val kind: NetworkFailure = NetworkFailure.OTHER) : LinkError
     data class Closed(val code: Int, val reason: String) : LinkError
 }
 
@@ -51,6 +52,10 @@ data class LinkStatus(
     val sent: Long = 0,
     val dropped: Long = 0,
     val config: OverheadConfig = OverheadConfig.DEFAULT,
+    /** JPEG quality of the last frame sent; below [OverheadConfig.jpegQuality] while adapting. */
+    val sentQuality: Int? = null,
+    /** Last adapter `status` of the current connection; null until one arrives or after a drop. */
+    val site: ServerMessage.Status? = null,
 )
 
 /** Sensor facts reported in `hello`. Updated by the camera once it knows the real resolution. */
@@ -90,6 +95,10 @@ class OverheadLink(
 
     private val _status = MutableStateFlow(LinkStatus())
     val status: StateFlow<LinkStatus> = _status.asStateFlow()
+
+    /** Set by the camera after each encode; published with the 1 s counters. */
+    @Volatile
+    var sentQuality: Int? = null
 
     @Volatile
     var sensor: SensorInfo = OverheadConfig.DEFAULT.let { SensorInfo(it.width, it.height, 0) }
@@ -218,14 +227,14 @@ class OverheadLink(
             }
         }
         Log.w(TAG, "link lost: $error fatal=$fatal")
-        _status.update { it.copy(state = LinkState.DISCONNECTED, error = error, stopped = fatal) }
+        _status.update { it.copy(state = LinkState.DISCONNECTED, error = error, stopped = fatal, site = null) }
     }
 
     private fun refreshCounters() {
         val now = System.nanoTime()
         val sent = synchronized(lock) { sentCount }
         _status.update {
-            it.copy(sentFps = meter.fps(now), kbps = meter.kbps(now), sent = sent, dropped = policy.dropped)
+            it.copy(sentFps = meter.fps(now), kbps = meter.kbps(now), sent = sent, dropped = policy.dropped, sentQuality = sentQuality)
         }
     }
 
@@ -249,7 +258,10 @@ class OverheadLink(
                     Log.i(TAG, "config ${msg.config}")
                     _status.update { it.copy(config = msg.config) }
                 }
-                is ServerMessage.Status -> Log.d(TAG, "status $msg")
+                is ServerMessage.Status -> {
+                    Log.d(TAG, "status $msg")
+                    _status.update { it.copy(site = msg) }
+                }
                 is ServerMessage.Invalid -> {
                     Log.w(TAG, "invalid server message (${msg.reason}): $text")
                     _status.update { it.copy(error = LinkError.InvalidConfig(msg.reason)) }
@@ -275,7 +287,7 @@ class OverheadLink(
             val error = if (response?.code == 401) {
                 LinkError.Unauthorized
             } else {
-                LinkError.Network(t.message ?: t.javaClass.simpleName)
+                LinkError.Network(t.message ?: t.javaClass.simpleName, NetworkFailure.classify(t))
             }
             onLost(gen, error, fatal = false)
         }

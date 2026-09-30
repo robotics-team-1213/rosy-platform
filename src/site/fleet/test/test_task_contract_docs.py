@@ -20,7 +20,20 @@ def test_task_contract_is_versioned_documented_and_wired_to_the_site_stack():
     web_contract = web + roster
     compose = (ROOT / "deploy/site/compose.yaml").read_text(encoding="utf-8")
 
-    assert "**Version:** v1.45" in reference
+    assert "**Version:** v1.62" in reference
+    assert "## 10.16 Fleet goal-evidence producer contract (D-348)" in reference
+    assert "`/api/fleet/goal-evidence`" in reference
+    assert "X-Goal-Evidence-Token" in reference
+    assert "GOAL_EVIDENCE_TIMEOUT" in reference
+    assert "## 10.12 Site Fleet to OMX local Device Action contract (D-333, D-336)" in reference
+    assert "## 10.13 Fleet proposal, Mission draft, and operator admission (D-333/D-334)" in reference
+    assert "`/api/fleet/proposals/{proposal_id}/resolve`" in reference
+    assert "`/api/fleet/missions/{mission_id}/admit`" in reference
+    assert "`physical_submission: NOT_CONNECTED`" in reference
+    assert "GetStopState(LocalStopQuery)" in reference
+    assert "trusted producer" in reference
+    assert "post-action frame" in reference
+    assert "gripper `OPEN` readback" in reference
     assert "`/api/fleet/robots/{robot_id}/goal`" in reference
     assert "Idempotency-Key" in reference
     assert "`/api/fleet/tasks/{task_id}`" in reference
@@ -68,7 +81,9 @@ def test_site_fleet_intent_and_message_boundaries_are_governed_together():
     adr = (ROOT / "docs/adr/D-293-site-fleet-intent-api-contracts.md").read_text(
         encoding="utf-8")
 
-    assert "**Version:** v1.45" in reference
+    assert "**Version:** v1.62" in reference
+    assert "X-Frame-Width" in reference and "X-Frame-Height" in reference
+    assert "X-Frame-Rotation-Deg" in reference
     assert (
         "## 10.10 Site Fleet intent interpretation and message boundaries "
         "(D-293 Accepted, D-316 Accepted)" in reference
@@ -87,7 +102,6 @@ def test_site_fleet_intent_and_message_boundaries_are_governed_together():
     assert "priority_class" in adr
     assert "`protocol_version`은 `1.0`으로 유지" in adr
     assert "RabbitMQ" in adr
-
     # Public request schemas carry only domain intent. Fleet derives identity,
     # priority and dispatch state from authenticated server-side context.
     assert set(GoalRequest.model_fields) == {"x", "y", "yaw"}
@@ -102,6 +116,17 @@ def test_site_fleet_intent_and_message_boundaries_are_governed_together():
     assert not {"source_id", "source", "jpeg", "image", "image_url", "policy"}.intersection(
         SiteSightingPayload.model_fields)
     assert schemas.PROTOCOL_VERSION == "1.0"
+
+
+def test_site_estop_audit_failure_boundary_is_documented():
+    reference = (ROOT / "docs/reference/ROSY API & Protocol Reference.md").read_text(
+        encoding="utf-8")
+    app = (ROOT / "src/site/fleet/fleet/server/app.py").read_text(encoding="utf-8")
+
+    assert "still sends the stop fanout if the audit store" in reference
+    assert "POST /api/fleet/do` continues to use the normal audit gate" in reference
+    assert "emergency stop audit unavailable" in app
+    assert "emergency stop dispatch latch unavailable" in app
 
 
 def test_site_camera_rectification_contract_keeps_preview_and_sightings_separate():
@@ -120,3 +145,27 @@ def test_site_camera_rectification_contract_keeps_preview_and_sightings_separate
     assert "sightings" in adr and "cmd_vel" in adr
     assert 'id="vision-adjustments"' in ui
     assert "calibrated site evidence" in reference
+
+
+def test_policy_evidence_contract_is_governed_together():
+    reference = (ROOT / "docs/reference/ROSY API & Protocol Reference.md").read_text(
+        encoding="utf-8")
+    schema = (ROOT / "src/contracts/foundation/core_common/protocol/policy_evidence.py").read_text(
+        encoding="utf-8")
+    task_service = (ROOT / "src/site/fleet/fleet/server/task_service.py").read_text(
+        encoding="utf-8")
+    store = (ROOT / "src/site/fleet/fleet/server/policy_evidence.py").read_text(
+        encoding="utf-8")
+
+    assert "### 10.6.2 Site Fleet policy-eligible evidence" in reference or (
+        "## 10.6.2 Site Fleet policy-eligible evidence" in reference)
+    assert "/api/fleet/policy-evidence" in reference
+    assert "INVALID_EVIDENCE_REFERENCE" in reference
+    assert "EVIDENCE_OBSERVATION_KIND_UNKNOWN" in reference
+    assert "POLICY_DISPATCH_ENABLED" in reference and "fail-closed" in reference
+    # The payload refuses client identity and D-328 goal vocabulary.
+    assert "satisfied" in schema and "source_id" in schema
+    # The admission path keeps the valve closed and speaks the audit vocabulary.
+    assert "POLICY_DISPATCH_ENABLED = False" in task_service
+    assert "EVIDENCE_NOT_CONFIGURED" in task_service
+    assert "EVIDENCE_REPLAY" in store and "TRANSIT_MAX_S = 0.300" in store

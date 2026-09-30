@@ -1,11 +1,11 @@
 <!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-02 | Updated: 2026-09-21 -->
+<!-- Generated: 2026-09-02 | Updated: 2026-09-29 -->
 
 # launch
 
 ## Purpose
 
-XML launches for Nav2, SLAM, localization, and Gazebo/web variants.
+XML launches for Nav2, SLAM, localization, and Gazebo variants.
 
 ## Key Files
 
@@ -19,8 +19,7 @@ XML launches for Nav2, SLAM, localization, and Gazebo/web variants.
 | `map_building.launch.xml` / `map_view.launch.xml` | SLAM mapping |
 | `nav2_view.launch.xml` | RViz nav view |
 | `gz_bringup_launch.xml` | Includes `bringup_launch.xml` with `use_sim_time:=true` |
-| `gz_map_building.launch.xml` / `gz_map_view.launch.xml` / `gz_nav2_view.launch.xml` / `gz_web_nav2.launch.xml` / `gz_web_slam.launch.xml` | Gazebo counterparts |
-| `web_nav2.launch.xml` / `web_slam.launch.xml` | Nav2/SLAM + `core` FastAPI (Flask node removed, D-3) |
+| `gz_map_building.launch.xml` / `gz_map_view.launch.xml` / `gz_nav2_view.launch.xml` | Gazebo counterparts |
 
 ## Subdirectories
 
@@ -30,7 +29,7 @@ None.
 
 ### Working In This Directory
 
-- Prefer `core` + `gz_multi.launch.py` over `web_*.xml` for new work (D-3).
+- The Flask-era `web_*.launch.xml` entry points are deleted (2026-09-29, scorecard §6): `core` starts from its own launch/deploy, never from navigation XML (D-3).
 - When including from `gz_multi`, preserve namespace.
 - Hardware defaults require a mounted Device profile and a loadable site map.
   `allow_demo_map:=true` is an explicit simulation/bench override. A measured

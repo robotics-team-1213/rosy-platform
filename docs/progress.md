@@ -2,16 +2,15 @@
 module: docs
 logical_modules: []
 owner: 거버넌스
-last_verified: { commit: "uncommitted", date: 2026-09-28 }
+last_verified: { commit: "bed604ef", date: 2026-09-30 }
 gates:
   SOURCE:
     state: GO
     evidence: "D-61 Accepted, D-72/D-77/D-153/D-154 본문·색인 일치. SD 개인화 설계/실행 계획 정렬; focused ADR/network 계약 검증 (2026-09-21 Windows); D-169/D-170 추가 (2026-09-22); D-177/D-181 Proposed 추가 (2026-09-23, 구 D-176은 origin과 번호 충돌로 이명 — D-180은 perf/sd-single-verify 브랜치 선점); D-178 Accepted 승격 — 2차 회차 완료+기준선 갱신 (2026-09-23)"
     cmd: "python tools/harness/rosy_harness.py lint"
   LOCAL:
-    state: HOLD
-    blocker: "Global harness checks still report 2 malformed headings in pre-existing src/hmi/dashboard/logs.md; D-316 ADR index and source contract pass"
-    evidence: "D-316 Pinky Fleet/CORE result-correlation contract recorded; ADR-specific harness contract passes, global docs/harness gate is held on unrelated dashboard log headings (2026-09-28 Windows)"
+    state: GO
+    evidence: "게이트 cmd 123 passed (2026-09-30 Windows): isaac_sim 스코어카드 잠정 행·fleet 크기 재판정·io closure D-84 예외·버전 핀 v1.59를 같은 회차에 정리. 이전 blocker(dashboard malformed heading)는 상류 커밋에서 이미 해소됐고, isaac_sim/fleet 2건도 이번 회차에 해소"
     cmd: "python -m pytest test/test_network_topology_contracts.py test/test_harness_contracts.py test/test_module_scorecard.py test/architecture/test_module_structure.py -q"
   ROS-SIM:
     state: N/A
@@ -21,8 +20,11 @@ gates:
     state: N/A
   FIELD:
     state: N/A
-adrs: [D-17, D-18, D-45, D-61, D-72, D-75, D-77, D-78, D-79, D-80, D-81, D-82, D-83, D-84, D-85, D-86, D-87, D-88, D-89, D-90, D-91, D-92, D-93, D-94, D-95, D-96, D-97, D-98, D-99, D-100, D-101, D-102, D-103, D-104, D-105, D-106, D-107, D-108, D-109, D-110, D-111, D-112, D-113, D-114, D-115, D-116, D-117, D-118, D-119, D-120, D-121, D-122, D-123, D-124, D-129, D-130, D-131, D-132, D-133, D-141, D-144, D-145, D-151, D-152, D-153, D-154, D-155, D-156, D-157, D-158, D-159, D-163, D-164, D-165, D-166, D-167, D-169, D-170, D-172, D-177, D-178, D-181, D-182, D-183, D-184, D-186, D-246, D-256, D-263, D-265, D-271, D-272, D-273, D-274, D-275, D-276, D-281, D-282, D-283, D-284, D-285, D-286, D-287, D-288, D-291, D-292, D-293, D-294, D-295, D-296, D-297, D-298, D-299, D-300, D-301, D-302, D-304, D-305, D-306, D-307, D-308, D-309, D-310, D-311, D-312, D-313, D-314, D-315, D-316, D-317, D-318, D-319, D-320, D-321]
+adrs: [D-17, D-18, D-45, D-61, D-72, D-75, D-77, D-78, D-79, D-80, D-81, D-82, D-83, D-84, D-85, D-86, D-87, D-88, D-89, D-90, D-91, D-92, D-93, D-94, D-95, D-96, D-97, D-98, D-99, D-100, D-101, D-102, D-103, D-104, D-105, D-106, D-107, D-108, D-109, D-110, D-111, D-112, D-113, D-114, D-115, D-116, D-117, D-118, D-119, D-120, D-121, D-122, D-123, D-124, D-129, D-130, D-131, D-132, D-133, D-141, D-144, D-145, D-151, D-152, D-153, D-154, D-155, D-156, D-157, D-158, D-159, D-163, D-164, D-165, D-166, D-167, D-169, D-170, D-172, D-177, D-178, D-181, D-182, D-183, D-184, D-186, D-246, D-256, D-263, D-265, D-271, D-272, D-273, D-274, D-275, D-276, D-281, D-282, D-283, D-284, D-285, D-286, D-287, D-288, D-291, D-292, D-293, D-294, D-295, D-296, D-297, D-298, D-299, D-300, D-301, D-302, D-304, D-305, D-306, D-307, D-308, D-309, D-310, D-311, D-312, D-313, D-314, D-315, D-316, D-317, D-318, D-319, D-320, D-321, D-322, D-323, D-325, D-326, D-327, D-328, D-330, D-331, D-332, D-333, D-334, D-335, D-336, D-339, D-340, D-345, D-348, D-352, D-353, D-354, D-355, D-357, D-358, D-360, D-361]
 plans:
+  - docs/plans/2026-09-30-dock-device-implementation-plan.md
+  - docs/plans/2026-09-29-on-demand-activation-measurement-baseline.md
+  - docs/plans/2026-09-29-fleet-robot-code-enrollment-plan.md
   - docs/plans/2026-09-15-module-harness-design.md
   - docs/plans/2026-09-17-interface-design-implementation-design.md
   - docs/plans/2026-09-17-remaining-gates-adr-plan.md
@@ -59,6 +61,20 @@ plans:
   - docs/plans/2026-09-28-site-camera-preview-rectification.md
   - docs/plans/2026-09-28-camera-fault-supervised-demo-design.md
   - docs/plans/2026-09-28-camera-fault-supervised-demo.md
+  - docs/plans/2026-09-29-pinky-deployment-fast-path.md
+  - docs/plans/2026-09-29-embodied-reasoning-device-action-design.md
+  - docs/plans/2026-09-29-er2-manipulation-official-api-research.md
+  - docs/plans/2026-09-29-er2-isaac-sim-architecture-assessment.md
+  - docs/plans/2026-09-29-er2-semantic-actions-mission-implementation.md
+  - docs/plans/2026-09-29-er2-adr-consistency-review.md
+  - docs/plans/2026-09-29-fleet-mission-control-arbitration-implementation.md
+  - docs/plans/2026-09-29-er2-agent-loop-gap-map.md
+  - docs/plans/2026-09-29-d268-policy-evidence-disposition.md
+  - docs/plans/2026-09-29-policy-evidence-contract-design.md
+  - docs/plans/2026-09-29-policy-evidence-contract.md
+  - docs/plans/2026-09-30-goal-evidence-producer-and-verifier-design.md
+  - docs/plans/2026-09-30-goal-evidence-producer-and-verifier.md
+  - docs/plans/2026-09-30-er2-mission-feedback-loop.md
 ---
 ## 지금 상태
 
@@ -113,3 +129,9 @@ plans:
 - Commit candidate `9aa985e96eee981b876990b3a57a0db64b803054` was clean-built, signed with an X:-only throwaway key, verified before image load, loaded, and verified against all three image IDs/platforms. The exact candidate's full Compose stack reached healthy Fleet/Vision/proxy; 401/403 role checks, idempotent task/readback/cancel, and named-volume task persistence passed.
 - A synthetic TLS/WebSocket ceiling-phone stream produced a Fleet sighting at the calibrated `(2.0, 1.0)` map position. Missing calibration-corner and 1600 ms stale frames were rejected, and raw frames were not returned by the sighting API. Ubuntu, NVIDIA/RTX, production credentials, physical phone/CORE, and FIELD remain unverified.
 - A synthetic CORE Agent also paired over TLS WebSocket and delivered a PRT event through the candidate's hub. Separate registry-token authorization, viewer-only event history, event-ID deduplication, and event readback after Fleet restart passed. This is simulator evidence, not a live CORE/device acceptance.
+
+## ER2 Fleet/OMX stop-generation fence (2026-09-29)
+
+- D-336 SOURCE implementation adds persisted Fleet authority epochs, configured local OMX StopLocal fanout, an OMX persistent startup-closed software latch, final-submit serialization, and named-operator/Fleet-generation/action-reconciliation re-arm checks. Failed local re-arm recloses Fleet dispatch and requests local stop rollback.
+- Verification: OMX adapter 85 passed/3 skipped; API web 70 passed/13 skipped; contract/harness tests 78 passed; harness lint 0 errors/17 freshness warnings. Fleet suite 658 passed/5 skipped with one unrelated WebSocket integration timeout at `uvicorn.Server.started`; the re-arm contract test passed alone. The isolated WebSocket retry stalled without output and was interrupted; see the execution plan for the exact boundary.
+- The Fleet OMX inventory defaults empty. Deployment UID/socket permissions, injected current-fence provider, ROS/gripper driver selection, safety-rated E-stop, physical stop readback, ROS-SIM, DEVICE, and FIELD remain unverified and disabled.

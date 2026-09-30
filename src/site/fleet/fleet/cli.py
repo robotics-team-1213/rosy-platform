@@ -27,13 +27,18 @@ from fleet.swarm.transport import HttpRobotClient
 
 
 def default_web_common() -> Path:
-    """Resolve installed assets first, with a source-tree fallback for host tools."""
+    """Resolve installed assets first, with a source-tree fallback for host tools.
+
+    A web_common directory is one that ships ``manifest.json``."""
     try:
         from ament_index_python.packages import get_package_share_directory
 
-        return Path(get_package_share_directory("web_common"))
+        share = Path(get_package_share_directory("web_common"))
+        if (share / "manifest.json").is_file():
+            return share
     except (ImportError, LookupError):
-        return Path(__file__).resolve().parents[3] / "hmi" / "web"
+        pass
+    return Path(__file__).resolve().parents[3] / "hmi" / "web_common"
 
 
 def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
@@ -57,13 +62,14 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     formation.add_argument("--policy", default="HOLD", choices=[p.value for p in HoldPolicy])
 
     console = sub.add_parser("console", help="사이트 관제 서버 (웹 UI + 로봇별 미션 하달)")
-    console.add_argument("--robots", required=True, type=Path, help="robots.yaml")
+    console.add_argument("--robots", default=None, type=Path,
+                         help="robots.yaml — optional with --robot-credential-key-file")
     console.add_argument("--signals", default=None, type=Path,
                          help="signals.yaml — 없으면 신호등 기능은 비어 있는 채로 뜬다")
     console.add_argument("--host", default="127.0.0.1")
     console.add_argument("--port", type=int, default=8090)
     console.add_argument("--web-common", default=default_web_common(), type=Path,
-                         help="공용 L1 웹 자산 디렉터리 — /common 아래로 서빙한다(D-1005)")
+                         help="공용 L1 웹 자산 디렉터리 — /common 아래로 서빙한다(D-157)")
     console.add_argument("--token", default=None,
                          help="관제 UI 접속 토큰. 루프백 밖으로 열 때는 필수다")
     console.add_argument("--token-env", default=None,
@@ -86,6 +92,13 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
                          help="SQLite path for durable CORE Agent event history")
     console.add_argument("--tasks-db", default=None, type=Path,
                          help="SQLite path for durable operator and policy task history")
+    console.add_argument("--robot-credential-key-file", default=None, type=Path,
+                         help="base64 AES key sealing enrolled robot tokens (D-361); needs --tasks-db")
+    console.add_argument("--mission-api", action="store_true",
+                         help=("enable persistent Mission proposal/read APIs without ER 2 or Mission "
+                               "dispatch; existing Fleet operator commands remain available"))
+    console.add_argument("--goal-evidence-config", default=None, type=Path,
+                         help="optional scoped goal-evidence producer registry YAML")
     return parser.parse_args(argv)
 
 
@@ -304,12 +317,41 @@ def run_console(args: argparse.Namespace) -> None:
     tasks_db = getattr(args, "tasks_db", None)
     if site_users is not None and tasks_db is None:
         sys.exit("--tasks-db is required with --users-file for persistent audit")
+    mission_api = bool(getattr(args, "mission_api", False))
+    goal_evidence_config = getattr(args, "goal_evidence_config", None)
+    if goal_evidence_config is not None and not mission_api:
+        sys.exit("--goal-evidence-config requires --mission-api")
+    if mission_api and tasks_db is None:
+        sys.exit("--tasks-db is required with --mission-api")
+    if mission_api and site_users is None:
+        sys.exit("--users-file is required with --mission-api for named operator authorization")
     if args.host not in LOOPBACK_HOSTS and not (console_token or site_users):
         sys.exit("--token or --users-file 없이 루프백 밖으로 열 수 없다")
     if args.host not in LOOPBACK_HOSTS and tasks_db is None:
         sys.exit("--tasks-db is required when the Fleet control surface is externally reachable")
-    endpoints = load_robots(args.robots)
-    _warn_if_world_readable(args.robots)
+    key_file = getattr(args, "robot_credential_key_file", None)
+    if key_file is not None and tasks_db is None:
+        sys.exit("--tasks-db is required with --robot-credential-key-file")
+    if args.robots is None and key_file is None:
+        sys.exit("--robots is required unless --robot-credential-key-file is set")
+    endpoints = []
+    if args.robots is not None:
+        endpoints = load_robots(args.robots, allow_empty=key_file is not None)
+        _warn_if_world_readable(args.robots)
+    enrollment_store = robot_key = robot_key_text = robot_key_error = None
+    if key_file is not None:
+        from fleet.server.enrollment_store import (
+            CredentialKeyError, EnrollmentStore, load_key_file,
+        )
+
+        enrollment_store = EnrollmentStore(tasks_db)
+        try:
+            robot_key = load_key_file(key_file)
+            robot_key_text = Path(key_file).read_text(encoding="ascii").strip()
+        except (CredentialKeyError, OSError, UnicodeDecodeError) as exc:
+            # A runtime state only: enrollment answers 503, robots.yaml keeps working.
+            robot_key_error = str(exc)
+            print(f"warning: robot enrollment unavailable: {exc}", file=sys.stderr)
     signal_console = None
     if args.signals is not None:
         from fleet.server.signals import HttpSignalClient, SignalConsole, load_signals
@@ -342,10 +384,17 @@ def run_console(args: argparse.Namespace) -> None:
         from fleet.server.sightings_config import load_sighting_sources
 
         sources = load_sighting_sources(sightings_config)
+        if enrollment_store is not None:
+            sources = _relax_retired_sighting_targets(
+                sources, known={*console.robot_ids, *(
+                    row["robot_id"] for row in enrollment_store.rows()
+                    if row["state"] != "pending_logout")},
+                retired=enrollment_store.retired_robot_ids())
         vision_sources = tuple(source.source_id for source in sources)
         store = SightingStore(sightings_db) if sightings_db is not None else None
         sighting_service = SightingService(
-            sources, known_robot_ids=console.robot_ids, store=store,
+            sources, known_robot_ids=[rid for source in sources for rid in source.robot_ids]
+            if enrollment_store is not None else console.robot_ids, store=store,
         )
     # The outbound CORE Agent route is enabled only for robots with a separate
     # pairing credential. REST-only console configurations remain unchanged.
@@ -357,9 +406,39 @@ def run_console(args: argparse.Namespace) -> None:
 
         task_service = FleetTaskService(FleetTaskStore(tasks_db),
                                         robot_ids=console.robot_ids)
+    mission_service = None
+    proposal_store = None
+    goal_evidence_service = None
+    if mission_api:
+        from fleet.server.mission_service import MissionService
+        from fleet.server.mission_store import MissionStore
+        from fleet.server.proposal_store import ProposalStore
+
+        mission_service = MissionService(MissionStore(tasks_db))
+        proposal_store = ProposalStore(tasks_db)
+        if goal_evidence_config is not None:
+            from fleet.server.goal_evidence_registry import load_goal_evidence_registry
+            from fleet.server.goal_evidence_service import GoalEvidenceService
+            from fleet.server.goal_evidence_store import GoalEvidenceStore
+
+            registry = load_goal_evidence_registry(goal_evidence_config)
+            goal_evidence_service = GoalEvidenceService(
+                mission_service, registry, GoalEvidenceStore(tasks_db),
+            )
     from fleet.server.discovery import DiscoveryStore
 
     discovery = DiscoveryStore() if discovery_token is not None else None
+    enrollment = None
+    if enrollment_store is not None:
+        from fleet.server.enrollment import EnrollmentService
+        from fleet.server.roster import SiteRoster
+
+        roster = SiteRoster(console, task_service=task_service, sightings=sighting_service)
+        enrollment = EnrollmentService(enrollment_store, roster, key=robot_key,
+                                       key_error=robot_key_error,
+                                       fleet_name=console.fleet_name, discovery=discovery)
+        enrollment.load()
+        roster.sync()
     vision_preview_secret_env = getattr(args, "vision_preview_secret_env", None)
     vision_preview_secret = (os.environ.get(vision_preview_secret_env)
                              if vision_preview_secret_env else None)
@@ -367,17 +446,43 @@ def run_console(args: argparse.Namespace) -> None:
         sys.exit("vision preview secret environment variable is required")
     app = create_app(console, console_token=console_token, web_common=args.web_common,
                      hub=hub, sightings=sighting_service, task_service=task_service,
+                     mission_service=mission_service, proposal_store=proposal_store,
+                     goal_evidence_service=goal_evidence_service,
                      site_users=site_users, discovery=discovery,
                      discovery_token=discovery_token,
+                     start_task_dispatcher=not mission_api,
                      vision_lease_secret=vision_preview_secret,
-                     vision_sources=vision_sources)
+                     vision_sources=vision_sources, enrollment=enrollment,
+                     robot_credential_key=robot_key_text)
     signals_note = f", {len(signal_eps)} signals" if signal_console is not None else ""
     print(f"fleet console: http://{args.host}:{args.port}/console  "
-          f"({len(endpoints)} robots{signals_note})",
+          f"({len(console.robot_ids)} robots{signals_note})",
           flush=True)
     tls_options = ({"ssl_certfile": str(tls_cert), "ssl_keyfile": str(tls_key)}
                    if tls_cert is not None else {})
     uvicorn.run(app, host=args.host, port=args.port, log_level="warning", **tls_options)
+
+
+def _relax_retired_sighting_targets(sources, *, known: set, retired: set):
+    """D-361 5: a mapping to an unenrolled/pending-logout robot is disabled with a warning;
+    an id never seen in robots.yaml or the register still refuses start (a typo)."""
+    from dataclasses import replace
+
+    kept = []
+    for source in sources:
+        unknown = set(source.robot_ids) - known
+        if unknown - retired:
+            sys.exit(f"sighting source {source.source_id!r} has an unknown robot target")
+        if unknown:
+            print(f"warning: sighting source {source.source_id!r}: mapping disabled for "
+                  f"unenrolled robots {sorted(unknown)}", file=sys.stderr)
+        robot_ids = tuple(rid for rid in source.robot_ids if rid not in unknown)
+        if robot_ids:
+            kept.append(replace(source, robot_ids=robot_ids))
+        else:
+            print(f"warning: sighting source {source.source_id!r} disabled: no enrolled targets",
+                  file=sys.stderr)
+    return kept
 
 
 def main(argv: Optional[Sequence[str]] = None) -> None:

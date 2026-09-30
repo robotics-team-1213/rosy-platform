@@ -17,12 +17,16 @@ class CameraStreamConfig:
     calibration_revision: str
     camera_info_sha256: str
     max_frame_age_s: float = 0.5
+    transform_revision: str = ""
 
     def __post_init__(self) -> None:
         for name in ("camera_identity", "optical_frame_id", "calibration_revision"):
             value = getattr(self, name)
             if not isinstance(value, str) or not value.strip() or value != value.strip():
                 raise ValueError(f"{name} must be a non-empty string")
+        if (not isinstance(self.transform_revision, str)
+                or (self.transform_revision and self.transform_revision != self.transform_revision.strip())):
+            raise ValueError("transform_revision must be empty or a trimmed string")
         if not re.fullmatch(r"[0-9a-f]{64}", self.camera_info_sha256):
             raise ValueError("camera_info_sha256 must be a lowercase SHA-256 digest")
         if isinstance(self.max_frame_age_s, bool):
@@ -46,6 +50,9 @@ class CameraFrameMetadata:
     height: int
     sequence: int
     received_at: float
+    frame_sha256: str
+    observation_id: str
+    transform_revision: str
 
 
 class CameraFrameGate:
@@ -139,6 +146,11 @@ class CameraFrameGate:
         fingerprint = self.camera_info_fingerprint(camera_info)
         if not hmac.compare_digest(fingerprint, self.config.camera_info_sha256):
             raise ValueError("CameraInfo does not match configured calibration digest")
+        try:
+            frame_bytes = bytes(image.data)
+        except (AttributeError, TypeError, ValueError) as exc:
+            raise ValueError("image payload must be bytes-like") from exc
+        frame_digest = hashlib.sha256(frame_bytes).hexdigest()
         self._sequence += 1
         self._last_capture_time_ns = image_ns
         metadata = CameraFrameMetadata(
@@ -150,6 +162,9 @@ class CameraFrameGate:
             height=image.height,
             sequence=self._sequence,
             received_at=received_at,
+            frame_sha256=frame_digest,
+            observation_id=(f"{self.config.camera_identity}:{image_ns}:{frame_digest}"),
+            transform_revision=self.config.transform_revision,
         )
         self.latest = metadata
         return metadata

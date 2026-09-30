@@ -143,13 +143,13 @@ Gauges read as margin: neutral until a threshold is crossed. A metric is not
 assigned a colour because it is a different metric.
 
 Map rasters are a shared contract **inside one pipeline**: the free and occupied
-values `control/web/dashboard.html` draws must equal
+values `runtime/sensing/web/diagnostic.html` draws must equal
 `sensing/map_raster.py` (BGR in the PNG, RGB in the CSS tokens). This is
 checked in `control` (`test_map_raster_color_contract.py`), not commented.
 
 `src/hmi/dashboard/map.js` is a different pipeline. It paints `/api/v1/map` in the
 browser (four occupancy buckets, different thresholds) and is bound by the
-colour-set law only. A `tokens.css` ↔ `dashboard.html` assertion has no legal
+colour-set law only. A `tokens.css` ↔ `diagnostic.html` assertion has no legal
 home under D-73: no harness module owns both packages. That limit is recorded
 here, not treated as a pass.
 
@@ -278,7 +278,7 @@ These are contract tests, in the style the repository already uses, not review
 guidance:
 
 - surface stylesheets contain no raw colour outside the token file
-  (`src/hmi/web/test/test_ui_token_contracts.py`)
+  (`src/hmi/web_common/test/test_ui_token_contracts.py`)
 - a status colour never appears in a categorical position (same)
 - client map raster values equal the server renderer's values
   (`src/runtime/sensing/test/test_map_raster_color_contract.py` — control
@@ -288,13 +288,13 @@ guidance:
 - evidence state is present on every rendered telemetry binding
   (`src/runtime/gateway/test/test_dashboard.py`, `test_evidence.py`)
 - a surface stylesheet declares no tokens of its own — no alias vocabulary
-  beside the token file (`src/hmi/web/test/test_ui_token_contracts.py`, D-92)
+  beside the token file (`src/hmi/web_common/test/test_ui_token_contracts.py`, D-92)
 - spacing comes from `--space-*` and type size from `--text-*` (same)
 - the operate view does not scroll and the map keeps the observe region
   (`src/runtime/gateway/test/test_console_layout.py`)
 
 D-73: a test that opened both `web_common/tokens.css` and
-`control/web/dashboard.html` would have no owning module. Do not add one.
+`runtime/sensing/web/diagnostic.html` would have no owning module. Do not add one.
 
 ## 11. v1 Mapping
 

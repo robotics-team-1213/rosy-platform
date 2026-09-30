@@ -28,6 +28,7 @@
 
 ## 최근 기록
 
+- 2026-09-30 · uncommitted · refactor(firmware): 하중 감지를 ADC 프로브에서 리밋스위치로 (자석 간섭 회피)
 - 2026-09-25 · uncommitted · refactor(firmware): move dock under firmware/ (D-231)
 - 2026-09-15 · uncommitted · docs(harness): hold unverified dock firmware instead of N/A
 - 2026-09-15 · uncommitted · docs(harness): start the dock harness pilot
