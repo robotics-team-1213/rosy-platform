@@ -1,4 +1,4 @@
-## D-385: OMX phase execution binds asynchronous ROS acceptance and fresh state
+## D-386: OMX phase execution binds asynchronous ROS acceptance and fresh state
 
 **Status:** Accepted (2026-10-01; SOURCE contract only. Runtime wiring, ROS-SIM,
 profile activation, ARTIFACT, DEVICE, and FIELD remain gated.)
