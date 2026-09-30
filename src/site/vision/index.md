@@ -33,9 +33,8 @@
 
 ## 최근 기록
 
+- 2026-09-30 · 1f769d4a · feat(vision): pair-link이 사이트 CA 고정을 먼저 쓴다 (`--pin-ca`)
 - 2026-09-30 · uncommitted · refactor(vision): D-377 site_vision becomes rosy_vision in src/site/vision
 - 2026-09-30 · uncommitted · feat(site-vision): D-374 overhead console-script alias
 - 2026-09-30 · uncommitted · refactor(site-vision): D-374 stage 1 — overhead becomes site_vision
 - 2026-09-30 · 3c263ff0 · feat(overhead): 페어링 링크 인증서 고정 — `&pin=sha256/<b64url>` (D-341 9 첫 조각)
-- 2026-09-30 · uncommitted · fix(overhead-app): D-370 리뷰 — Kotlin tls_host 규칙을 Python 분류기와 맞춤
-- 2026-09-30 · uncommitted · docs(adr): D-358 앱 역할 ADR을 D-370으로 재번호

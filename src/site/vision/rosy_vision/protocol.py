@@ -147,6 +147,16 @@ def cert_pin(der: bytes) -> str:
     return PIN_PREFIX + base64.urlsafe_b64encode(digest).rstrip(b"=").decode("ascii")
 
 
+def pem_cert_pins(pem_text: str) -> list[str]:
+    """Pins of every certificate in a PEM bundle, in file order (leaf first for a served chain)."""
+    blocks = re.findall(
+        r"-----BEGIN CERTIFICATE-----.+?-----END CERTIFICATE-----", pem_text, flags=re.DOTALL
+    )
+    if not blocks:
+        raise ValueError("no PEM certificate found")
+    return [cert_pin(ssl.PEM_cert_to_DER_cert(block)) for block in blocks]
+
+
 def pem_last_cert_pin(pem_text: str) -> str:
     """Pin the **last** certificate of a PEM bundle.
 
@@ -154,12 +164,7 @@ def pem_last_cert_pin(pem_text: str) -> str:
     carries leaf + CA, and the leaf itself otherwise. Either works with the phone's check;
     a CA pin survives leaf re-issue, a leaf pin does not.
     """
-    blocks = re.findall(
-        r"-----BEGIN CERTIFICATE-----.+?-----END CERTIFICATE-----", pem_text, flags=re.DOTALL
-    )
-    if not blocks:
-        raise ValueError("no PEM certificate found")
-    return cert_pin(ssl.PEM_cert_to_DER_cert(blocks[-1]))
+    return pem_cert_pins(pem_text)[-1]
 
 
 def pairing_uri(

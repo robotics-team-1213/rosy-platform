@@ -81,6 +81,7 @@ class PinnedTrustTest {
 
     @Test
     fun caPinAcceptsALeafTheCaSigned() {
+        // The `rosy-vision pair-link --pin-ca` path: the proxy serves leaf + CA (site-fullchain.crt), the link pins the CA.
         val server = serve(leaf(siteCa), siteCa)
         assertEquals(200, get(OverheadLink.defaultClient(certPin(siteCa.certificate.encoded)), server))
     }

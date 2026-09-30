@@ -176,3 +176,11 @@
 - 증거: `python -m pytest src/site/vision/test -q` 112 passed (2026-09-30 Windows).
 - gate 변화: 없음. SOURCE/LOCAL GO 유지. vision 이미지 재빌드·mDNS 인스턴스 확인은 DEVICE 절차.
 - 결정: D-377. 와이어 이름(`rosy-overhead/1`, `/overhead/v1/frames`, `_rosy-overhead._tcp`, `/api/vision/*`, compose 서비스 `vision`, 이미지 `rosy-site-vision`)은 그대로.
+
+## 2026-09-30 · 1f769d4a · feat(vision): pair-link이 사이트 CA 고정을 먼저 쓴다 (`--pin-ca`)
+
+- 변경: `rosy-vision pair-link`에 `--pin-ca site-ca.crt`를 더했다. CA 고정이 기본 권장이다. `--pin-cert`(프록시가 서비스하는 PEM)와 함께 주면 그 파일에 CA가 들어 있는지 확인하고, 없으면 `site-fullchain.crt`를 만드는 법을 알리고 거절한다(exit 2). `--pin-cert`만 주면 마지막 인증서를 고정하고, leaf 하나뿐이면 재발급 때마다 새 링크가 필요하다는 경고를 stderr에 찍는다. `protocol.pem_cert_pins` 추가. README는 CA 고정 + leaf+CA 서비스(`cat site.crt site-ca.crt > site-fullchain.crt`, Caddy는 파일 전체를 보낸다)로 고쳤다.
+- 증거: `python -m pytest src/site/vision/test -q` 132 passed. 앱 쪽 `PinnedTrustTest.caPinAcceptsALeafTheCaSigned`가 leaf+CA 서비스 + CA pin 경로를 이미 시험한다.
+- gate 변화: 없음. 실제 사이트의 `site.crt`는 leaf 하나라 CA 고정 전에 `site_cert`를 fullchain으로 바꿔야 한다(DEVICE 회차).
+- 결정: 서비스 파일에 없는 CA는 고정하지 않는다 — 폰은 서버가 보낸 체인에서만 pin을 찾는다(D-341 9).
+- 교훈: 없음.

@@ -129,3 +129,57 @@ def test_pair_link_refuses_to_run_without_the_token(tmp_path, monkeypatch):
     monkeypatch.delenv("CAM_TOKEN", raising=False)
     assert main(["pair-link", "--host", "h", "--port", "1", "--source", "s",
                  "--token-env", "CAM_TOKEN", "--pin-cert", str(tmp_path / "missing.crt")]) == 2
+
+
+def _pem(tmp_path, name, *ders):
+    path = tmp_path / name
+    path.write_text("".join(ssl.DER_cert_to_PEM_cert(der) for der in ders), encoding="ascii")
+    return path
+
+
+def _run_pair_link(monkeypatch, capsys, *extra):
+    monkeypatch.setenv("CAM_TOKEN", "tok123")
+    code = main(["pair-link", "--host", "192.168.1.102", "--port", "18447", "--source", "ceiling_north",
+                 "--token-env", "CAM_TOKEN", *extra])
+    out = capsys.readouterr()
+    lines = [l for l in out.out.splitlines() if l.startswith("pairing: ")]
+    pin = protocol.parse_pairing_uri(lines[0].removeprefix("pairing: "))["pin"] if lines else None
+    return code, pin, out.err
+
+
+def test_pair_link_pins_the_ca_when_the_served_file_carries_it(tmp_path, monkeypatch, capsys):
+    ca_der = VECTORS["cert_pins"]["vectors"][0]["der_utf8"].encode("utf-8")
+    served = _pem(tmp_path, "site-fullchain.crt", b"leaf-stand-in", ca_der)
+    ca = _pem(tmp_path, "site-ca.crt", ca_der)
+    code, pin, err = _run_pair_link(monkeypatch, capsys, "--pin-ca", str(ca), "--pin-cert", str(served))
+    assert code == 0
+    assert pin == VECTORS["cert_pins"]["vectors"][0]["pin"]
+    assert "WARNING" not in err
+
+
+def test_pair_link_refuses_a_ca_pin_the_proxy_does_not_serve(tmp_path, monkeypatch, capsys):
+    served = _pem(tmp_path, "site.crt", b"leaf-stand-in")
+    ca = _pem(tmp_path, "site-ca.crt", b"ca-stand-in")
+    code, pin, err = _run_pair_link(monkeypatch, capsys, "--pin-ca", str(ca), "--pin-cert", str(served))
+    assert code == 2 and pin is None
+    assert "site-fullchain.crt" in err
+
+
+def test_pair_link_warns_when_it_can_only_pin_the_leaf(tmp_path, monkeypatch, capsys):
+    served = _pem(tmp_path, "site.crt", b"leaf-stand-in")
+    code, pin, err = _run_pair_link(monkeypatch, capsys, "--pin-cert", str(served))
+    assert code == 0
+    assert pin == protocol.cert_pin(b"leaf-stand-in")
+    assert "WARNING" in err and "--pin-ca" in err
+
+
+def test_pair_link_with_only_the_ca_notes_the_fullchain_requirement(tmp_path, monkeypatch, capsys):
+    ca = _pem(tmp_path, "site-ca.crt", b"ca-stand-in")
+    code, pin, err = _run_pair_link(monkeypatch, capsys, "--pin-ca", str(ca))
+    assert code == 0 and pin == protocol.cert_pin(b"ca-stand-in")
+    assert "leaf + CA" in err
+
+
+def test_pair_link_needs_a_pin_source(monkeypatch, capsys):
+    code, pin, err = _run_pair_link(monkeypatch, capsys)
+    assert code == 2 and pin is None
