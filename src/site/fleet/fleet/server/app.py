@@ -101,7 +101,8 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                robot_credential_key: Optional[str] = None,
                mission_model_turn_max_rows: int = 10_000,
                mission_model_turn_worker=None,
-               post_action_observation_source=None) -> FastAPI:
+               post_action_observation_source=None,
+               site_lanes: Optional[Mapping] = None) -> FastAPI:
     mission_configured = mission_service is not None or proposal_store is not None
     if (mission_service is None) != (proposal_store is None):
         raise ValueError("Mission API requires both MissionService and ProposalStore")
@@ -333,7 +334,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
 
     install_console_routes(app, console=console, sightings=sightings,
                            require_viewer=require_viewer, read_guard=read_guard,
-                           operator_guard=operator_guard)
+                           operator_guard=operator_guard, site_lanes=site_lanes)
 
     install_task_dispatch_routes(app, console=console, task_service=task_service,
                                  configured_omx=configured_omx,

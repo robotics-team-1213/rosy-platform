@@ -14,6 +14,7 @@ from pydantic import BaseModel
 from fleet.hub.hub import HubError
 from fleet.server.http_errors import http_error
 from fleet.server.site_auth import SitePrincipal
+from fleet.server.site_lanes import site_lanes_payload
 from fleet.server.signals import SignalApiError
 from fleet.swarm.transport import RobotApiError
 
@@ -41,7 +42,7 @@ class SignalCommandRequest(BaseModel):
 
 
 def install_console_routes(app, *, console, sightings, require_viewer,
-                           read_guard, operator_guard) -> None:
+                           read_guard, operator_guard, site_lanes=None) -> None:
     @app.get("/api/fleet/state", dependencies=read_guard, tags=["fleet"])
     async def fleet_state() -> dict:
         return await console.snapshot()
@@ -59,6 +60,16 @@ def install_console_routes(app, *, console, sightings, require_viewer,
             raise HTTPException(status_code=404, detail={"code": "NO_SITE_MAP",
                                                          "message": "no site camera geometry configured"})
         return site_map
+
+    @app.get("/api/fleet/site-lanes", dependencies=read_guard, tags=["sightings"])
+    async def fleet_site_lanes() -> dict:
+        # D-375: lane centrelines for the console map-fit overlay. Drawn only, never driven.
+        sources = sightings.sources if sightings is not None else ()
+        payload = site_lanes_payload(site_lanes or {}, sources)
+        if payload is None:
+            raise HTTPException(status_code=404, detail={"code": "NO_SITE_LANES",
+                                                         "message": "no site lane graph configured"})
+        return payload
 
     @app.get("/api/fleet/map", dependencies=read_guard, tags=["fleet"])
     async def fleet_map() -> dict:
