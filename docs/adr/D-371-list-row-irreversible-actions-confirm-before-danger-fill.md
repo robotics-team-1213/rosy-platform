@@ -30,3 +30,8 @@
 - 계약 시험: 목록 행 안의 `ui-button`은 `kind="irreversible"`가 아니다. 확인 대화상자의 실행 버튼만 irreversible이다.
 - 브라우저: 토큰 목록 `삭제…` → 대화상자에 대상 이름 → 실행 버튼 위험 채움. 첫 화면의 위험 채움 수(비상정지 제외) ≤ 1.
 - SOURCE/LOCAL 증거다. 사람 G3 평가는 별도다.
+
+### Refinement (2026-09-30)
+
+- **확인 대화상자는 비모달로 열고 정지 조작은 살아 있다** (2026-09-30 US-010 측정: showModal이 비상정지를 inert로 만듦). `confirmIrreversible`은 `dialog.show()`로 열고, 대화상자와 `[data-always-live]`(각 표면 마크업이 정지 컨트롤에 단다) 밖만 `inert`로 만든다. `--scrim` 막은 정지 자리에 구멍을 내고, Tab 순환은 취소 → 실행 → 정지다. 정지를 누르면 정지가 실행되고 대화상자는 취소로 닫힌다(삭제 없음). 지키는 시험: `test_stop_always_live.py`(호스트, 변이 증명), `test_list_row_confirm_browser.py`·`test_dashboard_browser.py -k waypoint_delete`(브라우저).
+- **D-218 §1과의 관계:** D-218 §1은 확인을 네이티브 `window.confirm`으로 하고 커스텀 확인 대화상자를 만들지 않는다고 정했다. 목록 행의 되돌릴 수 없는 확인은 공유 `confirmIrreversible` 대화상자를 쓴다 — `window.confirm`은 위험 채움 실행 버튼과 행동 이름(`토큰 삭제`)을 보일 수 없기 때문이다. 이 좁힘은 D-371 경우(목록 행 삭제)에만 적용되고, 나머지 확인은 D-218 §1대로 `window.confirm`이다.

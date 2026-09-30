@@ -66,6 +66,8 @@ h2 {
 .demo-wide { display: flex; width: 100%; }
 .demo-row { flex-wrap: wrap; }
 .type-demo { align-items: baseline; flex-wrap: wrap; }
+/* 확인 대화상자 고정 그림 — 제품의 고정 가운데 배치를 풀어 칸 안에 둔다. */
+.dialog-demo dialog.ui-confirm { position: static; z-index: auto; margin: 0; }
 
 .gate {
   color: var(--nominal-quiet);

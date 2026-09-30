@@ -77,6 +77,24 @@
     </section>
 
     <section class="entry">
+      <h2>확인 대화상자</h2>
+      <p class="rule">목록 행의 <code>삭제…</code>가 여는 <code>confirmIrreversible</code>. 대상을 이름으로 묻고,
+      위험 채움은 실행 버튼 하나다. 비모달이라 비상 정지(<code>data-always-live</code>)는 열려 있는 동안에도
+      막 위에서 보이고 눌린다(D-371). 아래는 고정 그림이다.</p>
+      <div class="demo demo-wide dialog-demo">
+        <dialog class="ui-confirm" open aria-labelledby="dialog-demo-text">
+          <p id="dialog-demo-text">"operator-tablet" 토큰을 삭제할까요? 되돌릴 수 없습니다.</p>
+          <ui-actions>
+            <ui-button kind="quiet" type="button">취소</ui-button>
+            <ui-button kind="irreversible" type="button">토큰 삭제</ui-button>
+          </ui-actions>
+        </dialog>
+      </div>
+      <p class="gate">게이트: <code>test_stop_always_live</code>,
+      <code>test_device_estop_stays_live_over_the_delete_dialog</code></p>
+    </section>
+
+    <section class="entry">
       <h2>필드</h2>
       <p class="rule">파인 면. 바닥은 터치 바닥 이상, 포커스는 상태색 아닌 링.
       제품 화면은 네이티브 <code>input</code>·<code>select</code>에 <code>class="ui-field"</code>를 단다(D-359 §5.1).
