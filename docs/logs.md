@@ -3975,6 +3975,11 @@
 - 증거: `test_bag_to_video.py` 에 직전값·미래 배제·extract 헤더 stamp 시험 추가, `test_bag_to_video.py test_dataset_extract.py` 25 passed (2026-10-01 Windows, ML venv). 두 실세션 재변환: moving 653/2258, 772/6940.
 - gate 변화: 없음(개발 PC 도구·문서).
 
+## 2026-10-01 · uncommitted · fix(perception): bag_to_video sidecar 가 stamp 달린 증거를 제 프레임에 붙인다
+
+- 변경: `tools/perception/dataset/bag_to_video.py` sidecar 에 두 갈래 규칙(D-356/D-373 소유자 합의). `line/observation`·`perception/learned/shadow` 는 JSON 페이로드 `stamp` 가 프레임 헤더 stamp 와 ±1 ms 로 같고, 그 프레임 촬영(헤더 stamp) 뒤·프레임 log time 뒤 0.5 s 안에 기록된 첫 메시지를 붙이고 항목에 `stamp_ns`(int ns)를 넣는다. 아니면 null. 나머지(cmd_vel·odom·scan)는 프레임 log time 이하의 최신값 그대로. 하한을 프레임 log time 이 아니라 촬영 시각으로 둔 이유: 8kcn 에서 관측 45/2258 개가 제 영상보다 37–61 µs 먼저 녹화기에 닿았다. 행 형식(필드·단위·시계)은 모듈 docstring 에 적었다. `extract.py` 와 D-356 보강 문구는 학습 루프 소유자 브랜치가 고친다.
+- 증거: `test_bag_to_video.py` 16 passed — 프레임 N 관측이 N+1 영상 뒤(0.199 s)에 기록돼도 N 에 붙음, stamp 5 ms 어긋남·0.599 s 지연·촬영 전 기록은 null, 비-stamp 토픽 dt ≤ 0. `tools/perception/test` 159 passed, 1 skipped (2026-10-01 Windows, ML venv). 두 실세션 재변환: 관측 부착 2258/2258, 6940/6940(이전 규칙에서는 한 프레임 밀림), dt 중앙값 3.0 ms·2.6 ms, 최대 10.9 ms.
+- gate 변화: 없음(개발 PC 도구).
 ## 2026-10-01 · uncommitted · docs(adr): D-341·D-382 착지 — 천장 카메라 콘솔 승인·로봇 ↔ 관제 통신 적합성
 
 - 변경: 브랜치 `docs/d341-overhead-console-pairing`(D-341)과 `docs/robot-fleet-protocol-conformance`를 main에 머지. 뒤 브랜치의 D-351은 main이 2026-09-30 도킹 재시도 결정으로 선점해(2e0b699a) D-346 4항대로 D-382로 재부여. D-360·D-361·D-370과 계획 두 개(`2026-09-29-fleet-robot-code-enrollment-plan.md`, `2026-09-30-site-app-roles-and-shared-link-plan.md`)의 "브랜치" 인용을 D-341·D-382 링크로 고침. D-370의 번호 충돌 서술 두 줄은 기록으로 두고 착지 번호만 덧붙임. `adr_gaps`의 D-341 예약과 낡은 D-346–D-350 예약 제거.

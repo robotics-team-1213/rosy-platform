@@ -492,7 +492,9 @@ def test_an_unavailable_card_hides_its_fields_rather_than_dashing_them():
     That is the opposite of what an unreachable agent means, so the fields are
     hidden and the note explains, rather than every row showing a dash.
     """
-    css = (WEB / "styles.css").read_text(encoding="utf-8")
+    # D-362 P1: the device-card rules live in console-detail.css, linked after styles.css.
+    css = "\n".join((WEB / name).read_text(encoding="utf-8")
+                    for name in ("styles.css", "console-detail.css"))
 
     assert '.host-card[data-available="false"]' in css
     hidden = css.split('.host-card[data-available="false"] .host-facts', 1)[1].split("}", 1)[0]
