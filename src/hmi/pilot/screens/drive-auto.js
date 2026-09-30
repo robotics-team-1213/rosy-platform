@@ -20,13 +20,22 @@ const LF_REASON = {
 export function mountAutoMode({drive, element, apiGet, releaseAll, onIdle}) {
   // 같은 section 에 다시 마운트된다 — 지난 주행의 자동 모드 표시를 물려받지 않는다.
   drive.dataset.autoMode = "off";
-  const request = (method, path, body) =>
-    method === "GET" ? apiGet(path) : apiGet(path, {method, body: JSON.stringify(body ?? {})});
+  // 시한: 켜기(CAMERA_LINE) 요청이 매달리면 손을 뗀 뒤에도 "누르는 중"으로 보인다. 끊기면 idle 로 떨어진다.
+  const REQUEST_TIMEOUT_MS = 1500;
+  const request = (method, path, body) => method === "GET"
+    ? apiGet(path, {timeoutMs: REQUEST_TIMEOUT_MS})
+    : apiGet(path, {method, body: JSON.stringify(body ?? {}), timeoutMs: REQUEST_TIMEOUT_MS});
+  // 진행 버튼은 실제로 도는 동안, 또는 켜는 중이면서 아직 누르고 있을 때만 채운다.
+  let goHeld = false;
+  let autoState = "idle";
+  const paintGo = () => element.go?.classList.toggle(
+    "active", autoState === "running" || (autoState === "starting" && goHeld));
   const auto = createAutoSession({
     request,
     schedule: (fn, ms) => { const id = setTimeout(fn, ms); return () => clearTimeout(id); },
     onChange: ({state, reason}) => {
-      element.go?.classList.toggle("active", state === "running" || state === "starting");
+      autoState = state;
+      paintGo();
       if (state === "idle") {
         onIdle();
         const benign = !reason || reason === "released" || reason === "takeover";
@@ -83,10 +92,15 @@ export function mountAutoMode({drive, element, apiGet, releaseAll, onIdle}) {
       event.preventDefault();
       if (navigator.vibrate) navigator.vibrate(10);
       releaseAll();
+      goHeld = true;
       auto.press();
     });
     for (const name of ["pointerup", "pointercancel", "pointerleave"]) {
-      element.go.addEventListener(name, () => auto.release("released"));
+      element.go.addEventListener(name, () => {
+        goHeld = false;
+        paintGo();
+        auto.release("released");
+      });
     }
     element.go.addEventListener("contextmenu", (event) => event.preventDefault());
   }
