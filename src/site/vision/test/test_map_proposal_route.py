@@ -143,6 +143,34 @@ def test_a_read_during_a_run_gets_the_last_successful_result_not_busy(track_jpeg
     assert busy.status_code == 429 and busy.headers["Retry-After"] == "1"
 
 
+def test_a_run_from_before_a_reconnect_is_never_served_as_previous(track_jpeg, paint):
+    import threading
+    from concurrent.futures import ThreadPoolExecutor
+
+    gate = threading.Event()
+
+    def blocking(jpeg):
+        gate.wait(5.0)
+        return RegistrationResult(None, False, "old connection", 1.0, (1280, 720))
+
+    server = _server(track_jpeg, paint)
+    server._map_executor = ThreadPoolExecutor(max_workers=1)
+    server._map_job = blocking
+    old = server._sources["ceiling-north"].latest
+
+    async def scenario():
+        task = asyncio.create_task(server._map_proposal_response("ceiling-north", old))
+        await asyncio.sleep(0.1)
+        # The phone reconnects mid-run: the handler drops the source's caches.
+        server._map_cache.pop("ceiling-north", None)
+        server._map_done.pop("ceiling-north", None)
+        gate.set()
+        return await task
+
+    asyncio.run(scenario())
+    assert "ceiling-north" not in server._map_done
+
+
 def test_corrupt_jpeg_is_a_consistent_422(paint):
     server = _server(b"\xff\xd8\xff" + bytes(range(256)) * 8, paint)
     first = _get(server, PATH, _lease(server, principal="a"))

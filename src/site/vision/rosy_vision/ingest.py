@@ -399,7 +399,9 @@ class IngestServer:
                     self.close_map_worker()
             finally:
                 run.finished = time.monotonic()
-            if not run.failed:
+            # Only a run that is still this source's current one: a reconnect mid-run cleared
+            # the caches, and the old connection's fit must not come back as "previous".
+            if not run.failed and self._map_cache.get(source) is run:
                 self._map_done[source] = run
         if run.failed:
             return _http_response(422, b"map registration failed\n",
