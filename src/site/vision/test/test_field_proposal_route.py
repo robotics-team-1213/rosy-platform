@@ -221,3 +221,24 @@ def test_cache_is_keyed_by_frame_identity_and_dropped_with_the_source(monkeypatc
 
     server._drop_if_current("ceiling-north", connection)
     assert "ceiling-north" not in server._field_cache
+
+
+def test_proposal_and_frame_report_the_source_lens_when_known():
+    server = _server(_field_jpeg())
+    lens = {"kind": "wide", "focal_mm": 2.2, "hfov_deg": 104.1}
+    server._sources["ceiling-north"].lens = lens
+
+    body = json.loads(_get(server, PATH, _lease(server)).body)
+    frame = _get(server, "/api/vision/sources/ceiling-north/frame", _lease(server, principal="other"))
+
+    assert body["lens"] == lens
+    assert frame.headers["X-Source-Lens"] == "kind=wide;focal_mm=2.2;hfov_deg=104.1"
+
+
+def test_frame_has_no_lens_header_for_an_older_app():
+    server = _server(_field_jpeg())
+    frame = _get(server, "/api/vision/sources/ceiling-north/frame", _lease(server))
+    body = json.loads(_get(server, PATH, _lease(server)).body)
+
+    assert "X-Source-Lens" not in frame.headers
+    assert body["lens"] is None
