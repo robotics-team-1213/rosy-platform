@@ -290,7 +290,7 @@ D-280 다섯 원칙은 시각에서 이렇게 묶인다.
 ### 필드 — `class="ui-field"`
 - 네이티브 `input`/`select`/`textarea`에 `class="ui-field"`를 단다(폼 제출·`<label>` 연결·기존 핸들러 유지). 44px, `--radius-control`, `--field-bg`, `--field-line`, 등폭 숫자.
 - `readonly`는 점선 테·조용한 글자, `:user-invalid`·`aria-invalid="true"`는 `--field-invalid` 테, 비활성은 `--disabled-opacity`.
-- 체크·라디오는 필드 상자를 따로 그리지 않는다. 감싸는 `<label class="ui-check">`가 44px 누름 면이다. 체크 상자는 토큰으로 그린다(`appearance: none`): 테 `--ink-quiet`, 켜짐 `--focus-ring`, 비활성은 흐리지 않고 `--ink-quiet` — 네이티브 비활성 체크는 accent를 버리고 1.2–1.8:1 회색이 된다. 테와 체크는 두 테마에서 3:1 이상이다.
+- 체크·라디오는 필드 상자를 따로 그리지 않는다. 감싸는 `<label class="ui-check">`가 44px 누름 면이다. 체크 상자는 토큰으로 그린다(`appearance: none`): 테 `--ink-quiet`, 켜짐 `--focus-ring`, 비활성은 흐리지 않고 `--ink-quiet` **점선** 테 — 네이티브 비활성 체크는 accent를 버리고 1.2–1.8:1 회색이 되고, 실선이면 꺼진 빈 상자가 켜진 빈 상자와 같아 보인다. 테와 체크는 두 테마에서 3:1 이상이다.
 - `<ui-field>` 감싸개도 같은 얼굴이지만 제품 화면은 클래스 방식을 쓴다.
 
 ### 태그 — `<ui-tag status="…">`
@@ -313,6 +313,14 @@ D-280 다섯 원칙은 시각에서 이렇게 묶인다.
 
 ### 테마 선택
 - `role="group"` 안에 `ui-button kind="segment" data-theme-choice="dark|light|system"` 세 개(어둡게·밝게·시스템). `theme.js`가 누름을 받아 `aria-pressed`를 맞춘다. 로봇은 `/device` 화면 설정 패널, Fleet은 `설정` 안이다.
+
+## 운용자 말 (Copy)
+
+- **운용자가 읽는 글은 한국어 평문이다.** 용어는 [`CONCEPTS.md`](CONCEPTS.md)를 따른다: 실행 모드(profile 아님), 기능·도킹 기능(capability 아님), 하드웨어 실행 모드, 내비게이션, 호스트 에이전트. `test_operator_copy.py`가 대시보드·Fleet·games의 한글 문자열에서 `profile|capability|hardware 모드|Navigation|프로필`과 맨 열거값(`IDLE`·`MANUAL`·`RUNNING`·`HOLDING`·`UNDOCKED`·`WAITING`·`STALE` 등)을 막는다.
+- **열거값은 `title`에만 둔다.** 보이는 글은 공용 표의 한국어이고 원래 값은 `title`·`data-*`에 남는다. 공용 표는 [`core_ui_logic.js`](src/hmi/web_common/core_ui_logic.js)의 `MODE_LABEL`(대기·수동·내비게이션·도킹·비상 정지), `NAVIGATION_LABEL`, `DOCK_STATE_LABEL`과 `enumLabel()`이다 — 로봇 대시보드와 Fleet이 `/common/`에서 같은 파일을 싣는다. 모르는 값은 받은 그대로 보인다.
+- **증거가 있는 값은 증거와 함께 말한다.** 지연은 `지연 · N초 전`, 끊김은 `연결 끊김`, 모름은 `정보 없음`이고 `data-evidence`를 단다. 카드에 홀로 붙는 알약은 무엇의 증거인지 말한다(`릴레이 끊김`).
+- **한 원인은 한 번 말한다.** 같은 원인이 여러 버튼을 막으면 원인과 다음 할 일은 묶음 상태 한 줄에 두고, 버튼 사유는 짧은 `위 사유`로 `aria-describedby`가 그 줄을 가리킨다.
+- **빈 목록·읽기 실패는 `ui-empty`다.** 목록 밖 한 줄로 두고(목록은 숨김), 지도 같은 무대에서는 무대 위에 얹고 다시 시도를 곁에 둔다.
 
 ## Do's and Don'ts
 
