@@ -583,17 +583,14 @@
 - gate 변화: 없음.
 - 교훈: 파일을 나누는 리팩터는 그 파일을 텍스트로 읽는 계약 시험의 소유자도 함께 옮겨야 한다 — 분할 커밋이 시험을 안 고치면 CI가 다음 커밋에서 대신 말한다.
 
-<<<<<<< HEAD
 ## 2026-10-01 · uncommitted · feat(bridge): D-385 set_emotion 클라이언트와 표정 래치
 
 - 변경: ros_bridge 가 5 Hz 상태 틱에서 reconcile.emotion(LiDAR 문법 — latch 없이 재시도)으로 표정을 바꾼다. 서비스 클라이언트 5개로 늘어 test_bridge_timers 핀을 같이 갱신했다.
 - 증거: test_bridge_reconcile.py 표정 3건·test_bridge_timers.py. 433 passed.
 - gate 변화: 없음.
-=======
 ## 2026-10-01 · uncommitted · fix(test): status-inputs 키 집합에 swarm_role 추가 (D-383 뒤치움)
 
 - 변경: d0f2b7f5(D-383)가 `api/v1/host.py` 의 `status_inputs` 에 `swarm_role`(대형 역할 leader/follower, 없으면 absent)을 더하며 루트 host 시험만 갱신했다. 게이트웨이의 키 집합 동일성 시험이 그 키를 몰라 main CI core 단계가 붉었다. 기대 키 집합에 `swarm_role` 을 넣고, 상태 없음(None)도 absent로 기록됨을 함께 단언한다.
 - 증거: test_host_status_summary.py 전체 passed(키 집합·absent·핸드오버). 로컬 core 도메인 전체 회귀 결과는 별도 기록.
 - gate 변화: 없음.
 - 교훈: 핸드오버에 필드를 더하는 커밋은 그 필드의 소비자 시험이 사는 *모든* 시험실을 찾아 갱신해야 한다 — 이번에도 한쪽(루트 test/)만 녹색이어서 다른 쪽(gateway)이 다음 push 에서 붉었다.
->>>>>>> origin/main
