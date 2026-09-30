@@ -1,7 +1,9 @@
 """Extract training frames from an MP4 or a robot recording session (MCAP).
 
 Usage: extract.py <source> --out data/perception/frames/<name>
-<source> is a video file (cv2-readable) or a session folder with bag/*.mcap.
+<source> is a video file (cv2-readable) or a session folder with bag/*.mcap. A video made
+by bag_to_video.py is read with its <stem>.jsonl sidecar (stamps, side data) and
+<stem>.json metadata (session name, session.json).
 """
 import argparse
 import json
@@ -42,18 +44,37 @@ def _jpeg(bgr) -> bytes:
     return buf.tobytes()
 
 
-def _video_frames(path: Path):
+def _sidecar(path: Path):
+    """bag_to_video.py rows (<stem>.jsonl) and metadata (<stem>.json), or (None, None)."""
+    rows_path = path.with_suffix(".jsonl")
+    if not rows_path.is_file():
+        return None, None
+    rows = [json.loads(line) for line in rows_path.read_text(encoding="utf-8").splitlines() if line]
+    meta_path = path.with_suffix(".json")
+    meta = json.loads(meta_path.read_text(encoding="utf-8")) if meta_path.is_file() else None
+    return rows, meta
+
+
+def _video_frames(path: Path, rows=None):
+    """rows (sidecar) give frame i its recorded stamp and side data instead of POS_MSEC."""
     cap = cv2.VideoCapture(str(path))
     if not cap.isOpened():
         raise SystemExit(f"cannot open video: {path}")
+    n = 0
     try:
         while True:
             ok, bgr = cap.read()
             if not ok:
                 break
-            yield cap.get(cv2.CAP_PROP_POS_MSEC) / 1000.0, bgr, {}, "jpg"
+            if rows is None:
+                yield cap.get(cv2.CAP_PROP_POS_MSEC) / 1000.0, bgr, {}, "jpg"
+            elif n < len(rows):
+                yield rows[n]["t"], bgr, rows[n].get("side") or {}, "jpg"
+            n += 1
     finally:
         cap.release()
+    if rows is not None and n != len(rows):
+        raise SystemExit(f"{path} decodes {n} frames but its sidecar has {len(rows)} rows")
 
 
 def _jsonable(value):
@@ -145,15 +166,19 @@ def main(argv=None) -> int:
     src, out = Path(args.source), Path(args.out)
     is_session = src.is_dir()
     skipped = [0]
+    video_meta = None
     if is_session:
         files = _mcap_files(src)
         if not files:
             print(f"no .mcap files under {src / 'bag'}", file=sys.stderr)
             return 1
         it = _mcap_frames(files, skipped)
+        session = src.name
     else:
-        it = _video_frames(src)
-    session = src.name if is_session else None
+        rows, video_meta = _sidecar(src)
+        it = _video_frames(src, rows)
+        # A converted session keeps its session name, so build.py splits it with its bag.
+        session = ((video_meta or {}).get("source") or {}).get("session")
     (out / "frames").mkdir(parents=True, exist_ok=True)
     sel = FrameSelector(args.min_interval, args.max_hamming)
     n = 0
@@ -178,6 +203,9 @@ def main(argv=None) -> int:
             n += 1
     if is_session and (src / "session.json").is_file():
         shutil.copy2(src / "session.json", out / "session.json")
+    elif video_meta and video_meta.get("session"):
+        (out / "session.json").write_text(json.dumps(video_meta["session"], indent=2),
+                                          encoding="utf-8")
     note = f" (skipped {skipped[0]} malformed)" if skipped[0] else ""
     print(f"extracted {n} frames{note} -> {out}")
     return 0

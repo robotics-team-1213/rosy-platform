@@ -1,0 +1,356 @@
+"""Turn a recording session's camera topic into a lossy video plus a per-frame sidecar.
+
+Usage: bag_to_video.py <session> [--out data/teleop/learning] [--codec hevc|h264] [--crf N]
+
+<session> is a folder with session.json and bag/*.mcap (D-356 recording). Writes
+    <out>/teleop_<device>_<UTC stamp>.mp4       every camera frame, native size, CFR
+    <out>/teleop_<device>_<UTC stamp>.jsonl     one row per video frame, same order
+    <out>/teleop_<device>_<UTC stamp>.json      session.json + conversion metadata
+    <out>/teleop_<device>_<UTC stamp>.scan.npz  nearest LiDAR scan per frame (if recorded)
+The video is CFR at the mean camera rate; the sidecar holds each frame's exact stamps
+(header stamp and bag log time, in ns), the side topics nearest in bag log time and a
+moving/idle flag, so row i describes decoded frame i. extract.py reads this set like a
+session. The camera may be raw (camera/front) or JPEG (camera/front/compressed).
+"""
+import argparse
+import bisect
+import json
+import math
+import re
+import shutil
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+import cv2
+import numpy as np
+
+import extract
+from control.recording import CAMERA_TOPIC, SIDE_TOPICS
+
+SCHEMA = "rosy.teleop.video/1"
+ODOM_TOPIC = "odom"
+SCAN_TOPIC = "scan"
+PIX_FMT = "yuv420p"
+# Chosen by the D-356 codec study (2026-09-30 addendum): H.265 for archive, H.264 when a
+# player or decoder without HEVC must read it. accurate_rnd halves the BGR->YUV rounding
+# bias of the default swscale path at no size cost.
+SWS = "scale=flags=accurate_rnd+full_chroma_int"
+CODECS = {
+    "hevc": {"encoder": "libx265", "crf": 24, "preset": "slow",
+             "extra": ["-tag:v", "hvc1", "-x265-params", "log-level=error"]},
+    "h264": {"encoder": "libx264", "crf": 23, "preset": "slow", "extra": []},
+}
+DEFAULT_OUT = Path(__file__).resolve().parents[3] / "data" / "teleop" / "learning"
+# Moving vs idle: odom displacement over MOTION_WINDOW_S around the frame, or a command.
+MOTION_WINDOW_S = 0.5
+MOVING_V = 0.02    # m/s
+MOVING_W = 0.10    # rad/s
+CMD_V = 0.01       # m/s
+CMD_W = 0.05       # rad/s
+
+
+def _twist(msg):
+    return {"linear": msg.linear.x, "angular": msg.angular.z}
+
+
+def _pose(msg):
+    p, q = msg.pose.pose.position, msg.pose.pose.orientation
+    yaw = math.atan2(2.0 * (q.w * q.z + q.x * q.y), 1.0 - 2.0 * (q.y * q.y + q.z * q.z))
+    return {"x": p.x, "y": p.y, "yaw": yaw}
+
+
+def _stamp_ns(msg) -> int:
+    return msg.header.stamp.sec * 1_000_000_000 + msg.header.stamp.nanosec
+
+
+def _side_name(topic: str):
+    return next((n for n in (*SIDE_TOPICS, ODOM_TOPIC, SCAN_TOPIC)
+                 if extract._topic_is(topic, n)), None)
+
+
+def _is_camera(topic: str) -> bool:
+    return extract._topic_is(topic, CAMERA_TOPIC) or \
+        extract._topic_is(topic, CAMERA_TOPIC + "/compressed")
+
+
+def _messages(files, camera_only: bool):
+    """Yields (relative topic, log ns, schema name, decoded msg) in bag order."""
+    from mcap.reader import make_reader
+    from mcap_ros2.decoder import DecoderFactory
+    for f in files:
+        with open(f, "rb") as fh:
+            reader = make_reader(fh, decoder_factories=[DecoderFactory()])
+            for schema, ch, message, msg in reader.iter_decoded_messages():
+                if _is_camera(ch.topic):
+                    yield CAMERA_TOPIC, message.log_time, schema.name, msg
+                elif not camera_only:
+                    name = _side_name(ch.topic)
+                    if name is not None:
+                        yield name, message.log_time, schema.name, msg
+
+
+def _frame(schema: str, msg):
+    """bgr ndarray from an Image or CompressedImage, or None when the payload is malformed."""
+    if schema.endswith("CompressedImage"):
+        return cv2.imdecode(np.frombuffer(bytes(msg.data), np.uint8), cv2.IMREAD_COLOR)
+    try:
+        return extract.image_to_bgr(msg.encoding, msg.width, msg.height, msg.step, bytes(msg.data))
+    except ValueError:
+        return None
+
+
+def _camera_frames(files, camera_only: bool):
+    """Valid, log-time-monotonic frames as (log ns, schema, msg, bgr); others as bgr None."""
+    last = None
+    for name, log_ns, schema, msg in _messages(files, camera_only):
+        if name != CAMERA_TOPIC:
+            yield name, log_ns, schema, msg, None
+            continue
+        bgr = _frame(schema, msg)
+        if bgr is None or (last is not None and log_ns < last):
+            yield CAMERA_TOPIC, log_ns, schema, msg, None
+            continue
+        last = log_ns
+        yield CAMERA_TOPIC, log_ns, schema, msg, bgr
+
+
+def first_pass(files):
+    """Frame stamps (kept frames only), side-topic series and LiDAR scans."""
+    frames, side, skipped, size = [], {}, 0, None
+    scans = {"log_ns": [], "stamp_ns": [], "ranges": [], "meta": None}
+    for name, log_ns, schema, msg, bgr in _camera_frames(files, camera_only=False):
+        if name == SCAN_TOPIC:
+            scans["log_ns"].append(log_ns)
+            scans["stamp_ns"].append(_stamp_ns(msg))
+            scans["ranges"].append(np.asarray(msg.ranges, np.float16))
+            if scans["meta"] is None:
+                scans["meta"] = {k: float(getattr(msg, k)) for k in
+                                 ("angle_min", "angle_max", "angle_increment",
+                                  "range_min", "range_max")}
+            continue
+        if name != CAMERA_TOPIC:
+            if name == "cmd_vel":
+                value = _twist(msg)
+            elif name == ODOM_TOPIC:
+                value = _pose(msg)
+            else:
+                value = extract._side_value(schema, msg)
+            series = side.setdefault(name, ([], []))
+            series[0].append(log_ns)
+            series[1].append(value)
+            continue
+        if bgr is None:
+            skipped += 1
+            continue
+        if size is None:
+            size = bgr.shape[1], bgr.shape[0]
+        elif (bgr.shape[1], bgr.shape[0]) != size:
+            raise SystemExit(f"camera size changed mid-session: {size} -> {bgr.shape[1::-1]}")
+        frames.append({"log_ns": log_ns, "stamp_ns": _stamp_ns(msg)})
+    return frames, side, skipped, size, (scans if scans["log_ns"] else None)
+
+
+def nearest(times, t, max_gap_ns):
+    """Index of the element of sorted `times` nearest to t, or None if further than max_gap_ns."""
+    i = bisect.bisect_left(times, t)
+    best = min((j for j in (i - 1, i) if 0 <= j < len(times)), key=lambda j: abs(times[j] - t),
+               default=None)
+    if best is None or abs(times[best] - t) > max_gap_ns:
+        return None
+    return best
+
+
+def motion(t_ns, odom, cmd):
+    """{"moving", "commanded", "v", "w"} around t_ns; odom speeds null without two samples."""
+    v = w = None
+    if odom is not None:
+        times, poses = odom
+        half = int(MOTION_WINDOW_S / 2 * 1e9)
+        a = bisect.bisect_left(times, t_ns - half)
+        b = bisect.bisect_right(times, t_ns + half) - 1
+        if b > a and times[b] > times[a]:
+            dt = (times[b] - times[a]) / 1e9
+            p, q = poses[a], poses[b]
+            v = math.hypot(q["x"] - p["x"], q["y"] - p["y"]) / dt
+            dyaw = (q["yaw"] - p["yaw"] + math.pi) % (2 * math.pi) - math.pi
+            w = abs(dyaw) / dt
+    commanded = cmd is not None and (abs(cmd["linear"]) > CMD_V or abs(cmd["angular"]) > CMD_W)
+    moving = commanded or (v is not None and (v > MOVING_V or w > MOVING_W))
+    return {"moving": moving, "commanded": commanded,
+            "v": None if v is None else round(v, 4), "w": None if w is None else round(w, 4)}
+
+
+def sidecar_rows(frames, side, max_gap_s: float, scans=None):
+    gap = int(max_gap_s * 1e9)
+    for i, f in enumerate(frames):
+        values, dts = {}, {}
+        for name, (times, series) in side.items():
+            j = nearest(times, f["log_ns"], gap)
+            values[name] = None if j is None else series[j]
+            dts[name] = None if j is None else round((times[j] - f["log_ns"]) / 1e9, 4)
+        if scans is not None:
+            # the ranges live in the .scan.npz at row i; the row only says which scan
+            j = nearest(scans["log_ns"], f["log_ns"], gap)
+            values[SCAN_TOPIC] = None if j is None else {"stamp_ns": scans["stamp_ns"][j]}
+            dts[SCAN_TOPIC] = None if j is None else round((scans["log_ns"][j] - f["log_ns"]) / 1e9, 4)
+        yield {"index": i, "t": f["stamp_ns"] / 1e9, "stamp_ns": f["stamp_ns"],
+               "log_ns": f["log_ns"], "side": values, "dt": dts,
+               "motion": motion(f["log_ns"], side.get(ODOM_TOPIC), values.get("cmd_vel"))}
+
+
+def scan_arrays(frames, scans, max_gap_s: float) -> dict:
+    """npz payload: ranges[i] is the scan nearest to frame i (NaN row when none is near)."""
+    gap = int(max_gap_s * 1e9)
+    beams = max(len(r) for r in scans["ranges"])
+    ranges = np.full((len(frames), beams), np.nan, np.float16)
+    stamp = np.zeros(len(frames), np.int64)
+    dt = np.full(len(frames), np.nan, np.float32)
+    for i, f in enumerate(frames):
+        j = nearest(scans["log_ns"], f["log_ns"], gap)
+        if j is None:
+            continue
+        r = scans["ranges"][j]
+        ranges[i, :len(r)] = r
+        stamp[i] = scans["stamp_ns"][j]
+        dt[i] = (scans["log_ns"][j] - f["log_ns"]) / 1e9
+    return {"ranges": ranges, "scan_stamp_ns": stamp, "dt": dt,
+            **{k: np.float32(v) for k, v in scans["meta"].items()}}
+
+
+def mean_fps(frames) -> float:
+    if len(frames) < 2:
+        return 1.0
+    span = (frames[-1]["stamp_ns"] - frames[0]["stamp_ns"]) / 1e9
+    return round((len(frames) - 1) / span, 3) if span > 0 else 1.0
+
+
+def ffmpeg_cmd(out: Path, size, fps: float, codec: str, crf: int, preset: str) -> list:
+    spec = CODECS[codec]
+    return ["ffmpeg", "-v", "error", "-y", "-f", "rawvideo", "-pix_fmt", "bgr24",
+            "-s", f"{size[0]}x{size[1]}", "-r", str(fps), "-i", "-", "-vf", SWS,
+            "-c:v", spec["encoder"], "-preset", preset, "-crf", str(crf), "-pix_fmt", PIX_FMT,
+            *spec["extra"], "-fps_mode", "passthrough", "-movflags", "+faststart", str(out)]
+
+
+def encode(files, cmd, expected: int) -> int:
+    """Second pass: pipe the same frames first_pass() kept into ffmpeg."""
+    proc = subprocess.Popen(cmd, stdin=subprocess.PIPE)
+    n = 0
+    try:
+        for _name, _log_ns, _schema, _msg, bgr in _camera_frames(files, camera_only=True):
+            if bgr is None:
+                continue
+            proc.stdin.write(bgr.tobytes())
+            n += 1
+    finally:
+        proc.stdin.close()
+        code = proc.wait()
+    if code != 0:
+        raise SystemExit(f"ffmpeg failed ({code}): {' '.join(cmd)}")
+    if n != expected:
+        raise SystemExit(f"second pass saw {n} frames, first pass {expected}")
+    return n
+
+
+def count_frames(video: Path) -> int:
+    out = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-count_packets",
+                          "-show_entries", "stream=nb_read_packets", "-of", "csv=p=0", str(video)],
+                         capture_output=True, text=True, check=True).stdout
+    return int(out.strip().split(",")[0])
+
+
+def output_stem(session: Path, meta: dict) -> str:
+    device = re.sub(r"[^A-Za-z0-9_.-]", "-", str(meta.get("device") or "unknown"))
+    m = re.match(r"(\d{8}T\d{6}Z)", session.name)
+    stamp = m.group(1) if m else re.sub(r"[^0-9TZ]", "", str(meta.get("started_at", "")))[:15] + "Z"
+    return f"teleop_{device}_{stamp}"
+
+
+def main(argv=None) -> int:
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("session")
+    ap.add_argument("--out", default=str(DEFAULT_OUT))
+    ap.add_argument("--codec", choices=sorted(CODECS), default="hevc")
+    ap.add_argument("--crf", type=int)
+    ap.add_argument("--preset")
+    ap.add_argument("--max-gap", type=float, default=0.5,
+                    help="side values further than this (s) from a frame are null")
+    ap.add_argument("--force", action="store_true", help="overwrite existing outputs")
+    args = ap.parse_args(argv)
+    session, out = Path(args.session), Path(args.out)
+    files = extract._mcap_files(session)
+    if not files:
+        print(f"no .mcap files under {session / 'bag'}", file=sys.stderr)
+        return 1
+    if shutil.which("ffmpeg") is None:
+        raise SystemExit("ffmpeg not on PATH")
+    meta = json.loads((session / "session.json").read_text(encoding="utf-8")) \
+        if (session / "session.json").is_file() else {}
+    stem = output_stem(session, meta)
+    video, rows_path, meta_path, scan_path = (
+        out / f"{stem}{ext}" for ext in (".mp4", ".jsonl", ".json", ".scan.npz"))
+    if not args.force and any(p.exists() for p in (video, rows_path, meta_path, scan_path)):
+        print(f"{stem}.* already in {out} (use --force)", file=sys.stderr)
+        return 1
+    spec = CODECS[args.codec]
+    crf = spec["crf"] if args.crf is None else args.crf
+    preset = args.preset or spec["preset"]
+
+    frames, side, skipped, size, scans = first_pass(files)
+    if not frames:
+        print("no camera frames in the session", file=sys.stderr)
+        return 1
+    fps = mean_fps(frames)
+    out.mkdir(parents=True, exist_ok=True)
+    started = time.perf_counter()
+    encode(files, ffmpeg_cmd(video, size, fps, args.codec, crf, preset), len(frames))
+    encode_s = time.perf_counter() - started
+    decoded = count_frames(video)
+    if decoded != len(frames):
+        raise SystemExit(f"{video} holds {decoded} frames, sidecar would hold {len(frames)}")
+    moving = 0
+    with open(rows_path, "w", encoding="utf-8") as fh:
+        for row in sidecar_rows(frames, side, args.max_gap, scans):
+            moving += row["motion"]["moving"]
+            fh.write(extract._dumps(row) + "\n")
+    if scans is not None:
+        np.savez_compressed(scan_path, **scan_arrays(frames, scans, args.max_gap))
+    elif scan_path.exists():
+        scan_path.unlink()  # --force over an older conversion that had one
+    raw_bytes = sum(f.stat().st_size for f in files)
+    duration = (frames[-1]["stamp_ns"] - frames[0]["stamp_ns"]) / 1e9
+    topics = {k: len(v[0]) for k, v in side.items()} | {CAMERA_TOPIC: len(frames)}
+    if scans is not None:
+        topics[SCAN_TOPIC] = len(scans["log_ns"])
+    doc = {
+        "schema": SCHEMA,
+        "session": meta,
+        "source": {"session": session.name, "bag_bytes": raw_bytes, "topics": topics,
+                   "skipped_frames": skipped},
+        "video": {"file": video.name, "codec": args.codec, "encoder": spec["encoder"],
+                  "crf": crf, "preset": preset, "pix_fmt": PIX_FMT, "width": size[0],
+                  "height": size[1], "frames": len(frames), "fps": fps,
+                  "duration_s": round(duration, 3), "bytes": video.stat().st_size,
+                  "encode_s": round(encode_s, 2)},
+        "sidecar": {"file": rows_path.name, "match": "nearest bag log time",
+                    "max_gap_s": args.max_gap, "dt": "side log time minus frame log time (s)",
+                    "moving_frames": moving,
+                    "motion": {"window_s": MOTION_WINDOW_S, "odom_v": MOVING_V,
+                               "odom_w": MOVING_W, "cmd_v": CMD_V, "cmd_w": CMD_W}},
+        "scan": None if scans is None else {
+            "file": scan_path.name, "rows": "frame index", "dtype": "float16",
+            "beams": int(max(len(r) for r in scans["ranges"])), **scans["meta"]},
+    }
+    meta_path.write_text(json.dumps(extract._clean(doc), indent=1, allow_nan=False) + "\n",
+                         encoding="utf-8")
+    mb = video.stat().st_size / 1e6
+    print(f"{len(frames)} frames ({skipped} skipped, {moving} moving) {fps} fps -> {video} "
+          f"{mb:.1f} MB ({raw_bytes / 1e6 / max(mb, 1e-9):.0f}x smaller than the bag)")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
