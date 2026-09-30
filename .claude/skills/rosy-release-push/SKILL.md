@@ -1,6 +1,6 @@
 ---
 name: rosy-release-push
-description: Use when current main (CORE, dashboard, ROS nodes) must run on an existing Rosy robot without re-flashing the SD card — build a native payload release on the GitHub ARM64 runner, sign it on the operator PC, push and activate it with rosy-release-push.ps1, then hand-install the image-only native-runtime units the payload does not carry. Also when a dev overlay of newer main crashed CORE on an older release.
+description: Use when current main (CORE, dashboard, ROS nodes) must run on an existing Rosy robot without re-flashing the SD card — build a native payload release on the GitHub ARM64 runner, sign it on the operator PC, push and activate it with rosy-release-push.ps1, which then syncs the image layer (native-runtime scripts, rosy units, udev, modprobe) from the new release. Also when a dev overlay of newer main crashed CORE on an older release.
 ---
 
 # Shipping main to a robot as a payload release (D-225)
@@ -8,10 +8,11 @@ description: Use when current main (CORE, dashboard, ROS nodes) must run on an e
 ## Overview
 
 A payload release replaces everything under `/opt/rosy/releases/<id>` (`install/`, the
-release's copy of `deploy/robot/pinky_pro/native`). It does **not** replace the image layer:
-`/opt/rosy/native-runtime/*`, `/etc/systemd/system/*` units, udev rules, `/etc/modprobe.d`,
-`/etc/rosy/*`, `config.txt`, kernel modules. Those need a new image, or a bench hand-install
-(step 6).
+release's copy of `deploy/robot/pinky_pro/native`). Activation alone does **not** replace the
+image layer. Since D-383 the push script then runs the new release's `sync-image-layer.py`,
+which brings `/opt/rosy/native-runtime/*`, the rosy units in `/etc/systemd/system`, udev
+rules and `/etc/modprobe.d` up to the release's copy (step 6). `/etc/rosy/*`, `config.txt`,
+kernel modules, `/usr/local` Python and the first-boot units still need a new image.
 
 Never use the CORE dev overlay (`deploy/robot/pinky_pro/dev`) to put newer main on an older release.
 After the D-241..D-243 moves CORE looks up the `pinky_pro` robot package, which an older
@@ -63,16 +64,35 @@ Verified twice on 2026-09-26: releases 013 and 014 on a Pinky Pro running image 
    - **Automatic rollback:** a CORE that fails its 45 s readiness check is rolled back by
      `activate-release.sh`.
    - **Manual rollback:** `-Rollback`.
-6. **Hand-install the image-only pieces** (bench only; record it). Take them from the
-   release's own copy, `/opt/rosy/current/deploy/robot/native/`. udev and modprobe files are
-   not in the payload, so copy them from the repo's `deploy/robot/pinky_pro/udev/` and
-   `deploy/robot/pinky_pro/modprobe/`.
+6. **Image-layer sync (automatic, D-383).** After `CORE readiness: PASS` the push runs
+   `/opt/rosy/releases/<id>/deploy/robot/native/sync-image-layer.py` twice under `sudo -n`.
+   `--dry-run` prints the JSON plan (`changed`, `new`, `unchanged`, `skipped`), then the
+   apply runs.
+   - The apply backs up every replaced file to `/var/lib/rosy/image-layer-backup/<UTC>-<id>/`
+     with a `backup-manifest.json`, and installs atomically. It then runs `daemon-reload` and
+     `udevadm control --reload`, and enables new units the image enables.
+   - The push restarts the active units the apply lists in `restart_units`, prints
+     `restarted: ...`, and checks CORE readiness again. Restarting `rosy-io` briefly stops
+     the motors.
+   - Changed modprobe options print a warning. They apply at the next module load or reboot.
+   - `-Rollback` re-syncs from the release that becomes current. `-SkipImageLayerSync` turns
+     the step off. `-PrintCommands` shows the steps without running them.
+   - Only a release that carries the script can sync. A robot syncs on its first push of
+     such a release.
+
+   **Manual fallback.** Use it when the sync failed or the file is outside its allowlist.
+   Bench only; record it.
+   - Take files from `/opt/rosy/current/deploy/robot/native/`. udev and modprobe files are in
+     its `image-layer/udev/` and `image-layer/modprobe/`. A release older than D-383 lacks
+     them, so copy them from the repo's `deploy/robot/pinky_pro/udev/` and `modprobe/`.
    - First back up every file you replace, for example into
      `/var/lib/rosy-bench-backup/<timestamp>/`.
    - Scripts go to `/opt/rosy/native-runtime/`, units to `/etc/systemd/system/`.
    - Then run `systemctl daemon-reload`, `udevadm control --reload`, and enable any new
      `.path` or `.service` units.
    - Reload a module whose options changed (`modprobe -r` then `modprobe`).
+   - To undo an automatic sync, copy the files back from its backup directory and run the
+     same reloads.
 7. **Verify on the live dashboard.** Use `rosy-dashboard-drive` and an administrator code
    from `rosy-device-access`. Check the changed surfaces, log the session out, and delete
    any local token file.
@@ -91,4 +111,4 @@ Verified twice on 2026-09-26: releases 013 and 014 on a Pinky Pro running image 
 ## Related
 
 `rosy-device-access`, `rosy-hw-bringup`, `rosy-land-on-main`, `rosy-dashboard-drive`;
-ADR D-225, D-247, D-260.
+ADR D-225, D-247, D-260, D-383.
