@@ -267,12 +267,127 @@ def test_apply_backs_up_installs_reloads_and_enables_like_the_image(device):
     assert recorded["/opt/rosy/native-runtime/mapping_approval.py"]["state"] == "new"
     assert runner.mutating() == [
         ["systemctl", "daemon-reload"],
-        ["systemctl", "enable", "rosy-hw-test.path"],
+        # A new .path starts now, not at the next boot.
+        ["systemctl", "enable", "--now", "rosy-hw-test.path"],
         ["udevadm", "control", "--reload"],
     ]
     # rosy-camera.service is shipped but not enabled by the image.
     assert result["enabled"] == ["rosy-hw-test.path"]
     assert result["restart_units"] == ["rosy-io.service"]
+
+
+def test_a_new_enabled_service_is_enabled_but_not_started(device):
+    (device / "etc/systemd/system/rosy-login-code.service").unlink()
+    runner = Runner()
+
+    _sync(device, NEW_ID, runner, dry_run=False)
+
+    assert ["systemctl", "enable", "rosy-login-code.service"] in runner.calls
+    assert ["systemctl", "enable", "--now", "rosy-login-code.service"] not in runner.calls
+
+
+class FailingRunner(Runner):
+    def __init__(self, fail_prefix: list[str], **kwargs) -> None:
+        super().__init__(**kwargs)
+        self.fail_prefix = fail_prefix
+
+    def __call__(self, argv):
+        completed = super().__call__(argv)
+        if argv[:len(self.fail_prefix)] == self.fail_prefix:
+            return subprocess.CompletedProcess(argv, 1, "", "boom")
+        return completed
+
+
+def test_a_failed_reload_command_is_retried_by_the_next_run(device):
+    with pytest.raises(sync_mod.SyncError, match="IMAGE_LAYER_COMMAND"):
+        _sync(device, NEW_ID, FailingRunner(["systemctl", "enable"]), dry_run=False)
+    assert (device / sync_mod.PENDING_FILE).is_file()
+    # Every file is already in place, so only pending.json says work is left.
+    dry = _sync(device, NEW_ID, Runner(active={"rosy-io.service"}), dry_run=True)
+    assert dry["changed"] == [] and dry["new"] == [] and dry["pending"]
+    runner = Runner(active={"rosy-io.service", "rosy-navigation.service"})
+
+    again = _sync(device, NEW_ID, runner, dry_run=False)
+
+    assert runner.mutating() == [
+        ["systemctl", "daemon-reload"],
+        ["systemctl", "enable", "--now", "rosy-hw-test.path"],
+        ["udevadm", "control", "--reload"],
+    ]
+    assert again["restart_units"] == ["rosy-io.service", "rosy-navigation.service"]
+    assert not (device / sync_mod.PENDING_FILE).exists()
+    third = Runner(active={"rosy-io.service"})
+    assert _sync(device, NEW_ID, third, dry_run=False)["restart_units"] == []
+    assert third.mutating() == []
+
+
+def _older_release(device: Path) -> Path:
+    """OLD_ID as a pre-D-383 release: no image-layer/, no mapping_approval.py,
+    no rosy-hw-test.path, no rosy_blackbox.py, and the old rosy-io.service."""
+    new = device / "opt/rosy/releases" / NEW_ID / "deploy/robot/native"
+    old = device / "opt/rosy/releases" / OLD_ID / "deploy/robot/native"
+    shutil.copytree(new, old)
+    shutil.rmtree(old / "image-layer")
+    for name in ("mapping_approval.py", "rosy-hw-test.path", "rosy_blackbox.py", "sync-image-layer.py"):
+        (old / name).unlink()
+    (old / "rosy-io.service").write_text("[Service]\nExecStart=/bin/old\n", encoding="utf-8")
+    return old
+
+
+def test_a_rollback_undoes_what_the_newer_sync_added_and_replaced(device):
+    _older_release(device)
+    blackbox = device / "opt/rosy/native-runtime/rosy_blackbox.py"
+    blackbox.write_text("# image copy\n", encoding="utf-8")
+    image_copy = blackbox.read_bytes()
+    _sync(device, NEW_ID, Runner(), dry_run=False)
+    assert blackbox.read_bytes() != image_copy
+    runner = Runner(active={"rosy-io.service", "rosy-hw-test.path"})
+
+    result = _sync(device, OLD_ID, runner, dry_run=False)
+
+    assert set(result["removed"]) == {
+        "/opt/rosy/native-runtime/mapping_approval.py",
+        "/etc/systemd/system/rosy-hw-test.path",
+        "/etc/udev/rules.d/99-rosy-lamp.rules",
+    }
+    for shown in result["removed"]:
+        assert not (device / shown.lstrip("/")).exists()
+    assert result["restored"] == ["/opt/rosy/native-runtime/rosy_blackbox.py"]
+    assert blackbox.read_bytes() == image_copy
+    assert (device / "etc/systemd/system/rosy-io.service").read_text(encoding="utf-8") == "[Service]\nExecStart=/bin/old\n"
+    calls = runner.mutating()
+    assert calls[0] == ["systemctl", "disable", "--now", "rosy-hw-test.path"]
+    assert ["systemctl", "daemon-reload"] in calls and ["udevadm", "control", "--reload"] in calls
+    assert "rosy-io.service" in result["restart_units"]
+    # The removed files are in this run's backup, and a second run is a no-op.
+    backup = device / result["backup_dir"].lstrip("/")
+    assert (backup / "etc/systemd/system/rosy-hw-test.path").is_file()
+    again = Runner()
+    assert _sync(device, OLD_ID, again, dry_run=False)["removed"] == []
+    assert again.mutating() == []
+
+
+def test_a_rollback_leaves_a_file_someone_changed_after_the_sync(device):
+    _older_release(device)
+    _sync(device, NEW_ID, Runner(), dry_run=False)
+    edited = device / "opt/rosy/native-runtime/mapping_approval.py"
+    edited.write_text("# hand fix\n", encoding="utf-8")
+
+    result = _sync(device, OLD_ID, Runner(), dry_run=False)
+
+    assert edited.read_text(encoding="utf-8") == "# hand fix\n"
+    assert {"path": "/opt/rosy/native-runtime/mapping_approval.py",
+            "reason": "changed since the sync that installed it"} in result["skipped"]
+
+
+def test_a_rollback_never_removes_what_no_sync_recorded(device):
+    _older_release(device)
+    # Image-installed, absent from OLD_ID, never touched by a sync.
+    stray = device / "opt/rosy/native-runtime/sync-image-layer.py"
+
+    result = _sync(device, OLD_ID, Runner(), dry_run=False)
+
+    assert stray.is_file() and result["removed"] == []
 
 
 def test_boot_oneshots_and_network_units_are_never_offered_for_a_live_restart(device):

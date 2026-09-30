@@ -58,6 +58,8 @@ FORBIDDEN_PREFIXES = (
 )
 BACKUP_ROOT = "var/lib/rosy/image-layer-backup"
 BACKUP_MANIFEST = "backup-manifest.json"
+# Written before the reload/enable commands, removed once they all succeed.
+PENDING_FILE = BACKUP_ROOT + "/pending.json"
 LOCK_FILE = "var/lib/rosy/releases/native-release.lock"
 DEFAULT_PUBLIC_KEY = "etc/rosy/trusted-release-keys/rosy-release-2026-01.pem"
 
@@ -320,70 +322,199 @@ def _check(runner: Runner, argv: list[str]) -> None:
         raise SyncError(f"IMAGE_LAYER_COMMAND: {' '.join(argv)} failed: {completed.stderr.strip()}")
 
 
-def apply(root: Path, release_id: str, work: list[dict], runner: Runner,
-          *, now: Callable[[], _dt.datetime] | None = None) -> dict:
-    """Back up, install, reload. Undo every install if one of them fails."""
-    if not work:
-        return {"backup_dir": None, "commands": [], "enabled": []}
-    stamp = (now or (lambda: _dt.datetime.now(_dt.timezone.utc)))().strftime("%Y%m%dT%H%M%SZ")
-    backup = root / BACKUP_ROOT / f"{stamp}-{release_id}"
-    backup.mkdir(parents=True, exist_ok=False)
-    os.chmod(backup, 0o700)
-    records = []
-    for item in work:
-        destination = root / item["destination"]
-        record = {
-            "path": "/" + item["destination"],
-            "state": item["state"],
-            "mode": oct(item["mode"]),
-            "sha256": _sha256(item["source"]),
-            "backup": None,
-            "previous_sha256": None,
-        }
-        if item["state"] == "changed":
-            saved = backup / item["destination"]
-            saved.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(destination, saved)
-            record["backup"] = item["destination"]
-            record["previous_sha256"] = _sha256(saved)
-        records.append(record)
-    manifest = {"release_id": release_id, "created": stamp, "complete": False, "files": records}
-    _write_json(backup / BACKUP_MANIFEST, manifest)
+def _unit_name(item: dict) -> str:
+    return Path(item["destination"]).name
 
-    installed: list[dict] = []
+
+def _records(root: Path) -> dict[str, tuple[dict, Path]]:
+    """The last backup-manifest record for every path, oldest manifest first."""
+    last: dict[str, tuple[dict, Path]] = {}
+    backups = root / BACKUP_ROOT
+    if not backups.is_dir():
+        return last
+    for folder in sorted(path for path in backups.iterdir() if path.is_dir()):
+        manifest = folder / BACKUP_MANIFEST
+        if not manifest.is_file():
+            continue
+        try:
+            files = json.loads(manifest.read_text(encoding="utf-8")).get("files", [])
+        except (OSError, ValueError):
+            continue
+        for record in files:
+            if isinstance(record, dict) and isinstance(record.get("path"), str):
+                last[record["path"]] = (record, folder)
+    return last
+
+
+def _kind(relative: str) -> str:
+    if relative.startswith(UNIT_DIR + "/"):
+        return "unit"
+    if relative.startswith(UDEV_DIR + "/"):
+        return "udev"
+    if relative.startswith(MODPROBE_DIR + "/"):
+        return "modprobe"
+    return "runtime"
+
+
+def plan_cleanup(root: Path, native: Path, skipped: list[dict]) -> list[dict]:
+    """Undo what an earlier sync did to paths the current release no longer carries.
+
+    Only paths a backup manifest says a sync added ("new") or replaced
+    ("changed"), only while the file still holds what that sync installed, and
+    only inside the allowlisted directories. Anything else stays.
+    """
+    carried = {"/" + entry["destination"] for entry in allowlist(native)[0]}
+    cleanup: list[dict] = []
+    for shown, (record, folder) in sorted(_records(root).items()):
+        if shown in carried or record.get("state") not in {"new", "changed"}:
+            continue
+        relative = shown.lstrip("/")
+        check_destination(relative)
+        destination = root / relative
+        if destination.is_symlink() or not destination.is_file():
+            continue
+        if _sha256(destination) != record.get("sha256"):
+            skipped.append({"path": shown, "reason": "changed since the sync that installed it"})
+            continue
+        item = {"destination": relative, "kind": _kind(relative)}
+        if record["state"] == "new":
+            cleanup.append({**item, "state": "removed"})
+            continue
+        saved = folder / str(record.get("backup") or "")
+        if not record.get("backup") or saved.is_symlink() or not saved.is_file():
+            skipped.append({"path": shown, "reason": "its backup is missing"})
+            continue
+        cleanup.append({**item, "state": "restored", "source": saved, "mode": _mode(saved)})
+    return cleanup
+
+
+def _load_pending(root: Path) -> dict:
+    path = root / PENDING_FILE
+    if not path.is_file():
+        return {}
     try:
-        for item in work:
-            _install(item["source"], root / item["destination"], item["mode"])
-            installed.append(item)
-    except BaseException:
-        for item in reversed(installed):
-            destination = root / item["destination"]
-            if item["state"] == "new":
-                destination.unlink(missing_ok=True)
-            else:
-                saved = backup / item["destination"]
-                _install(saved, destination, _mode(saved))
-        raise
+        pending = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise SyncError(f"IMAGE_LAYER_PENDING: {path} is unreadable") from exc
+    return pending if isinstance(pending, dict) else {}
 
+
+def _post_commands(steps: dict) -> list[list[str]]:
+    """daemon-reload, then enables, then the udev reload; in that order."""
     commands: list[list[str]] = []
-    kinds = {item["kind"] for item in work}
-    if "unit" in kinds:
+    if steps.get("daemon_reload"):
         commands.append(["systemctl", "daemon-reload"])
-    enabled = sorted(
-        Path(item["destination"]).name for item in work
-        if item["kind"] == "unit" and item["state"] == "new"
-        and Path(item["destination"]).name in ENABLED_UNITS
-    )
-    for unit in enabled:
-        commands.append(["systemctl", "enable", unit])
-    if "udev" in kinds:
+    for unit in sorted(set(steps.get("enable", []))):
+        if unit not in ENABLED_UNITS:
+            continue
+        # A new .path or .timer would otherwise sit idle until the next boot.
+        if unit.endswith((".path", ".timer")):
+            commands.append(["systemctl", "enable", "--now", unit])
+        else:
+            commands.append(["systemctl", "enable", unit])
+    if steps.get("udev_reload"):
         commands.append(["udevadm", "control", "--reload"])
+    return commands
+
+
+def _steps(work: list[dict], cleanup: list[dict], pending: dict) -> dict:
+    kinds = {item["kind"] for item in work + cleanup}
+    added = {
+        _unit_name(item) for item in work
+        if item["kind"] == "unit" and item["state"] == "new" and _unit_name(item) in ENABLED_UNITS
+    }
+    return {
+        "daemon_reload": "unit" in kinds or bool(pending.get("daemon_reload")),
+        "enable": sorted(added | set(pending.get("enable", []))),
+        "udev_reload": "udev" in kinds or bool(pending.get("udev_reload")),
+    }
+
+
+def apply(root: Path, release_id: str, work: list[dict], runner: Runner,
+          *, cleanup: list[dict] | None = None, units: list[str] | None = None,
+          pending: dict | None = None,
+          now: Callable[[], _dt.datetime] | None = None) -> dict:
+    """Back up, install, clean up, reload. Undo every file change if one fails.
+
+    The reload/enable commands run after the files are in place. Until all of
+    them succeed, pending.json names them and the units they affect, so the
+    next run finishes the job even when every file is already unchanged.
+    """
+    cleanup = cleanup or []
+    pending = pending or {}
+    steps = _steps(work, cleanup, pending)
+    backup_dir = None
+    manifest: dict | None = None
+    backup: Path | None = None
+    if work or cleanup:
+        stamp = (now or (lambda: _dt.datetime.now(_dt.timezone.utc)))().strftime("%Y%m%dT%H%M%SZ")
+        backup = root / BACKUP_ROOT / f"{stamp}-{release_id}"
+        backup.mkdir(parents=True, exist_ok=False)
+        os.chmod(backup, 0o700)
+        backup_dir = "/" + backup.relative_to(root).as_posix()
+        records = []
+        for item in work + cleanup:
+            destination = root / item["destination"]
+            record = {
+                "path": "/" + item["destination"],
+                "state": item["state"],
+                "mode": oct(item["mode"]) if "mode" in item else None,
+                "sha256": _sha256(item["source"]) if "source" in item else None,
+                "backup": None,
+                "previous_sha256": None,
+            }
+            if item["state"] != "new":
+                saved = backup / item["destination"]
+                saved.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(destination, saved)
+                record["backup"] = item["destination"]
+                record["previous_sha256"] = _sha256(saved)
+            records.append(record)
+        manifest = {"release_id": release_id, "created": stamp, "complete": False, "files": records}
+        _write_json(backup / BACKUP_MANIFEST, manifest)
+
+        # A unit the sync removes is disabled and stopped while its file, with
+        # its [Install] section, still exists.
+        for item in cleanup:
+            if item["kind"] == "unit" and item["state"] == "removed":
+                _check(runner, ["systemctl", "disable", "--now", _unit_name(item)])
+
+        done: list[dict] = []
+        try:
+            for item in work + cleanup:
+                destination = root / item["destination"]
+                if item["state"] == "removed":
+                    destination.unlink()
+                else:
+                    _install(item["source"], destination, item["mode"])
+                done.append(item)
+        except BaseException:
+            for item in reversed(done):
+                destination = root / item["destination"]
+                if item["state"] == "new":
+                    destination.unlink(missing_ok=True)
+                else:
+                    saved = backup / item["destination"]
+                    _install(saved, destination, _mode(saved))
+            raise
+
+    commands = _post_commands(steps)
+    if not commands and not pending:
+        return {"backup_dir": backup_dir, "commands": [], "enabled": []}
+    _write_json(root / PENDING_FILE, {
+        **steps,
+        "units": sorted(set(units or []) | set(pending.get("units", []))),
+        "backup_dir": backup_dir,
+        "release_id": release_id,
+    })
     for argv in commands:
         _check(runner, argv)
-    manifest.update(complete=True, commands=[" ".join(argv) for argv in commands])
-    _write_json(backup / BACKUP_MANIFEST, manifest)
-    return {"backup_dir": "/" + backup.relative_to(root).as_posix(),
-            "commands": manifest["commands"], "enabled": enabled}
+    (root / PENDING_FILE).unlink()
+    if manifest is not None and backup is not None:
+        manifest.update(complete=True, commands=[" ".join(argv) for argv in commands])
+        _write_json(backup / BACKUP_MANIFEST, manifest)
+    return {"backup_dir": backup_dir, "commands": [" ".join(argv) for argv in commands],
+            "enabled": [argv[-1] for argv in commands if argv[1] == "enable"]}
 
 
 def sync(
@@ -402,27 +533,37 @@ def sync(
         native = release / RELEASE_NATIVE
         if not native.is_dir():
             raise SyncError(f"IMAGE_LAYER_SOURCE: release {release_id} has no {RELEASE_NATIVE}")
+        pending = _load_pending(root)
         result = plan(root, native)
         work = result.pop("_work")
-        units = affected_units(root, work)
+        cleanup = plan_cleanup(root, native, result["skipped"])
+        restored_units = {
+            _unit_name(item) for item in cleanup if item["kind"] == "unit" and item["state"] == "restored"
+        }
+        units = sorted(set(affected_units(root, work)) | restored_units | set(pending.get("units", [])))
         active = active_units(units, runner)
         result.update(
             ok=True,
             dry_run=dry_run,
             release_id=release_id,
+            removed=["/" + item["destination"] for item in cleanup if item["state"] == "removed"],
+            restored=["/" + item["destination"] for item in cleanup if item["state"] == "restored"],
+            pending=pending or None,
             units_affected=units,
             restart_units=[unit for unit in active if _restartable(unit)],
             active_targets_affected=[unit for unit in active if unit.endswith(".target")],
             next_boot_units=[unit for unit in active
                              if not _restartable(unit) and not unit.endswith(".target")],
             modprobe_changed=[
-                "/" + item["destination"] for item in work if item["kind"] == "modprobe"
+                "/" + item["destination"] for item in work + cleanup if item["kind"] == "modprobe"
             ],
         )
         if dry_run:
-            result.update(backup_dir=None, commands=[], enabled=[])
+            result.update(backup_dir=None, enabled=[], commands=[
+                " ".join(argv) for argv in _post_commands(_steps(work, cleanup, pending))])
         else:
-            result.update(apply(root, release_id, work, runner))
+            result.update(apply(root, release_id, work, runner, cleanup=cleanup,
+                                units=units, pending=pending))
         return result
 
 
