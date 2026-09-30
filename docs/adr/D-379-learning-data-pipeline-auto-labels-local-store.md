@@ -54,3 +54,63 @@
 
 **Related:** [D-337](D-337-robot-signal-source-measured-light.md), [D-356](D-356-perception-learning-loop-and-model-delivery.md),
 [D-364](D-364-lane-keeping-perception-and-replay-bench.md), [D-378](D-378-real-drive-errors-and-autonomy-gates.md).
+
+### 부록 (2026-09-30) — v1 구현: LiDAR 벽 라벨, 궤적 라벨, 카탈로그, store 빌드
+
+사용자 우선순위: 흰 폼 벽과 회색 카펫 위 흰 테이프를 모델이 최대한 가르게 한다. 라벨은 자동만.
+
+1. **범위 조정(D-356/D-373 과 맞춤).** 데이터셋은 기존 스키마 `rosy.perception.dataset/1`(`build.py`)로 만들고,
+   `build.py --auto-labels` 가 D-373 결정 8 의 store 배치 `<store>/datasets/<name>/<content_sha>/` 에 넣는다.
+   `content_sha` 는 폴더 안 파일의 `상대경로\0sha256\n` 줄을 정렬해 해시한 값이다(`tools/perception/store.py` 가 main 에
+   들어오면 그것으로 바꾼다). **게시(로컬·Drive)와 모델 인수는 D-356/D-373 과 공유**하므로 D-379 는 별도 Drive 복사·HF 대체
+   경로와 COLAB.md 수정을 하지 않는다(4항의 게시 백엔드는 D-373 결정 8 로 넘긴다).
+2. **클래스(공유 계약, 닫힌 role).** 0 floor=background, 1 lane_line=lane_marking, 2 wall=ignore(전용 `wall` role 이 생길 때까지;
+   클래스는 따로 둔다), 3 drivable=drivable, 4 stop_line=stop_line, 5 crosswalk=ignore, 6 unknown=ignore. 손실의 ignore_index 는
+   6(unknown)이고 매니페스트에 `ignore_index` 로 적는다. 픽셀마다 신뢰도(0–255) 마스크 `conf/` 를 함께 둔다.
+3. **LiDAR 벽 라벨(최우선 출처).** `/scan` 반사점을 영상에 투영한다. 장착은 sim URDF(`src/sim/description/urdf/rosy.urdf.xacro`):
+   바닥 위 0.125 m(0.028+0.067+0.030), base 뒤 0.017 m, yaw π(스캔 각 0 이 뒤, 실물 `lidar_forward_deg 180` 과 같음) — 실측이
+   아니다. 벽 높이 0.155 m(`map_260905.world`, P0 측정지). 열마다 가장 가까운 반사의 바닥 접점 행 위(벽 높이까지)는 wall,
+   아래는 바닥이고, 그 바닥 안의 밝은 무채색 화소(같은 행 카펫 대비)는 lane_line 이다 — LiDAR 는 칠을 못 본다. 접점 행 ±(4 px
+   + 거리 오차 0.03 m 에 해당하는 행) 은 unknown. 반사점은 반사마다 시각(time_increment)의 오도메트리 자세로 옮겨 프레임
+   시각의 base 좌표로 바꾼다(스캔은 프레임에 가장 가까운 것, 0.2 s 넘으면 쓰지 않음). 16 px 이하의 열 틈은 가까운 쪽 접점으로
+   바닥만 채운다.
+4. **카메라 pitch 는 세션마다 LiDAR 벽으로 맞춘다.** 공칭 프로필(D-364 §3, 2026-09-19 장착) 8° 로 투영하면 벽 밑선이
+   15–20 행 아래로 어긋났다. 벽 밑·위 가장자리 응답으로 pitch 를 찾으면 `20260930T133221Z` 에서 **11.7°**(80 프레임, 점수
+   23.2 대 8° 에서 −0.2; 같은 세션의 압축 영상+sidecar 로도 11.7°). 오늘 카메라 장착이 공칭과 다르다는 뜻이고, 공칭 지면을
+   쓰는 keep(D-364 §3)의 거리도 같은 만큼 틀릴 수 있다 — 프로필 교체는 실측·승인 사안이라 여기서 바꾸지 않는다.
+   `scan` 이 없는 세션은 같은 장착의 LiDAR 세션 값을 `--pitch-deg` 로 준다.
+5. **궤적 라벨.** 요청한 "다음 1.5 s" 는 실물 속도(사람 운전, 움직일 때 약 0.03 m/s)에서 4.5 cm 라 화면 아래(가장 가까운 보이는 바닥
+   ≈0.15 m)에 머문다. 그래서 거리로 자른다: 앞으로 0.8 m 까지, 방향 변화 35° 까지(모퉁이 뒤는 벽에 가려진다), 0.15 m 이상
+   움직인 프레임만, 폭 0.10 m. 띠 안의 밝은 칠은 lane_line, 나머지는 drivable. 띠가 LiDAR 벽에 150 px 이상 걸치면 그 프레임은
+   "불일치"로 데이터셋에서 빼고 `deleted_indexes`·`excluded` 에 남긴다.
+6. **규칙은 비교만.** 실물 `line` 모드 마스크(V≥180, S≤60), keep(main `floor_white_mask`), keep v2(`feat/lane-keep-v2`
+   fd4fad93) 를 프레임마다 라벨과 비교해 기록한다. LiDAR 와 어긋나면 LiDAR 를 믿는다.
+7. **녹화기.** `control/recording.py` `RECORD_TOPICS` 에 `scan` 을 더했다(장치 미배포). `feat/d373-learning-loop-lap2` 의
+   `record_topics()` 로 병합할 때 옮긴다. `autolabel.py` 는 MCAP 을 직접 읽거나 `bag_to_video.py` 의 영상+sidecar+`.scan.npz`
+   를 읽으므로 `SIDE_TOPICS` 에 `scan` 을 넣을 필요는 없다.
+8. **카탈로그.** `data/perception/catalog.jsonl`(`catalog.py scan/add/update-tags/list`): 운전 주체, 장면 태그, 길이, 토픽과
+   메시지 수, 원본 파일 sha256, 파생물(압축 영상·sidecar·scan.npz, 추출 프레임, 라벨 버전·pitch, 데이터셋 이름·버전·split),
+   D-378 오류 참조. 사람이 적은 항목은 다시 scan 해도 유지된다.
+
+**결과(2026-09-30, 호스트, 공개 저장소 밖):**
+
+| 세션 | 출처 | 라벨 프레임 | 비고 |
+|---|---|---|---|
+| `20260930T124745Z`(사람, `scan` 없음) | 궤적 | 149 중 128 | pitch 11.7° 인자, 띠는 카펫 위·건넌 정지선/횡단보도 칠은 lane_line |
+| `20260930T133221Z`(Claude 스크립트 교차로, `scan` 있음) | LiDAR 285, 궤적 5 | 285 | 불일치 0, 화소 비율 floor 0.50·wall 0.30·lane 0.054·unknown 0.15 |
+
+벽/차선 혼동(`20260930T133221Z`, 285 프레임, LiDAR 벽 기준; "깊은 벽" = 벽 밑선에서 8 px 이상 위):
+
+| 규칙 | 규칙 칠 중 벽 위 비율 | 깊은 벽 위 비율 | 깊은 벽에 200 px↑ 칠한 프레임 | 벽 화소를 칠로 본 비율 | LiDAR 칠 재현율 |
+|---|---|---|---|---|---|
+| 실물 `line`(V≥180) | 22.0 % | 8.9 % | 37/285 | 3.5 % | 63 % |
+| keep main | 15.3 % | 4.1 % | 114/285 | 3.3 % | 91 % |
+| keep v2 | 14.8 % | 3.9 % | 110/285 | 3.1 % | 91 % |
+
+트랙 안 프레임(처음 60장)만 보면 규칙 칠 중 벽 위 비율은 line 30 %, keep main 4.2 %, keep v2 0.5 % 다. 세션 뒷부분은
+트랙 밖 방 벽(어두운 벽 밑의 금속 걸레받이, 흰 상자)을 keep 이 칠로 읽은 것이 대부분이다. 데이터셋
+`d379-auto-lanes/370641d0…`(413 프레임, 21 은 라벨 5 % 미만으로 제외; split 규칙상 `124745Z`=val, `133221Z`=train).
+
+**남은 일:** 지도 투영(정지선·횡단보도, D-379 5(c))은 지도 자세(오도메트리+천장 카메라 D-257) 정합이 먼저다. 지금은 띠 안의
+정지선·횡단보도 칠도 lane_line 으로 들어간다. LiDAR 높이·카메라 높이의 실측, 사람 운전 + `scan` 세션 추가, 궤적 라벨에
+LiDAR 바닥 대조, keep 의 공칭 pitch 재확인(4항).
