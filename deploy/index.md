@@ -66,7 +66,7 @@
 ## 최근 기록
 
 - 2026-10-01 · 7d0f3f89 · fix(deploy): 사이트 빌드 컨텍스트는 이미지가 복사하는 것만
+- 2026-10-01 · uncommitted · feat(native): D-383 LCD 상태줄에 편대 역할
+- 2026-10-01 · uncommitted · fix(release,test): main CI deployment 단계 적색 5건 — 핀·등록부·스캐너 면제 정리
+- 2026-10-01 · uncommitted · feat(native): D-381 blocked 패턴과 비상정지 진입음
 - 2026-09-30 · c261839d · build(site): 지도 맞춤용 트랙 파일을 이미지에 넣음
-- 2026-09-30 · uncommitted · deploy(harness): last_verified를 CI 초록 커밋으로 기록
-- 2026-09-30 · uncommitted · feat(site): D-352 robot_credential_key secret와 오프라인 rekey
-- 2026-09-30 · uncommitted · fix(image): io closure 계약에 D-84 지연 패키지 예외를 명시

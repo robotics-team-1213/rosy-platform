@@ -66,21 +66,15 @@ function renderRecentList(root, onConnect) {
 
   for (const entry of recent.slice(0, 3)) {
     const row = el("div", null, {"data-recent-item": ""});
-    const button = el("ui-button", entry.label || entry.host, {
-      kind: "primary", type: "button", "data-recent-connect": entry.host,
-    });
-    button.style.width = "100%";
-    button.style.minHeight = "3rem";
+    const button = el("ui-button", entry.label || entry.host, {type: "button", "data-recent-connect": entry.host});
+    button.setAttribute("kind", "primary");
     button.addEventListener("click", () => {
       // 이 탭에 토큰이 있으면 바로 확인, 없으면 코드·토큰 입력으로.
       if (token()) onConnect();
       else renderTokenForm(root, onConnect, `${entry.label || entry.host} — 로그인 코드를 입력하세요.`);
     });
-    const remove = el("ui-button", "✕", {
-      kind: "quiet", type: "button", "data-recent-remove": entry.host,
-    });
-    remove.style.minWidth = "2.5rem";
-    remove.style.minHeight = "2.5rem";
+    const remove = el("ui-button", "✕", {type: "button", "data-recent-remove": entry.host, "aria-label": "최근 접속에서 지우기"});
+    remove.setAttribute("kind", "quiet");
     remove.addEventListener("click", (e) => {
       e.stopPropagation();
       removeRecentEntry(entry.host);
@@ -101,7 +95,8 @@ function tokenForm() {
     // 태블릿 실측: 안드로이드 키보드가 첫 글자를 대문자로 바꿔 유효한 토큰이 401 이 됐다.
     autocapitalize: "off", autocorrect: "off", spellcheck: "false", inputmode: "text",
   });
-  const submit = el("ui-button", "연결", {kind: "primary", type: "button"});
+  const submit = el("ui-button", "연결", {type: "button"});
+  submit.setAttribute("kind", "primary");
   form.append(field, submit);
   return {form, field, submit};
 }
@@ -156,7 +151,8 @@ function renderOffline(root, onConnect) {
     el("ui-head", "접속", {id: "pilot-gate-heading"}),
     el("ui-status", "네트워크와 로봇 전원을 확인하세요.", {role: "status"}),
   );
-  const retry = el("ui-button", "다시 시도", {kind: "quiet", type: "button"});
+  const retry = el("ui-button", "다시 시도", {type: "button"});
+  retry.setAttribute("kind", "quiet");
   retry.addEventListener("click", () => onConnect());
   root.append(retry);
 }
@@ -190,9 +186,11 @@ async function check(root, onReady, onEnter) {
                    ["구동", caps.body?.runtime?.drive === true ? "켜짐" : "꺼짐"]];
     const statuses = verdict.reasons.map((r) => el("ui-status", gate.describeReason(r), {role: "status"}));
     const actions = el("ui-actions");
-    const retry = el("ui-button", "다시 시도", {kind: "quiet", type: "button"});
+    const retry = el("ui-button", "다시 시도", {type: "button"});
+    retry.setAttribute("kind", "quiet");
     retry.addEventListener("click", () => check(root, onReady, onEnter));
-    const reset = el("ui-button", "토큰 초기화", {kind: "segment", type: "button"});
+    const reset = el("ui-button", "토큰 초기화", {type: "button"});
+    reset.setAttribute("kind", "segment");
     reset.addEventListener("click", () => {
       clearToken();
       renderTokenForm(root, () => check(root, onReady, onEnter));
@@ -207,7 +205,8 @@ async function check(root, onReady, onEnter) {
 
   setTag("준비");
   notice("조종 준비 완료");
-  const enter = el("ui-button", "주행 시작", {kind: "primary", type: "button", "data-drive-enter": ""});
+  const enter = el("ui-button", "주행 시작", {type: "button", "data-drive-enter": ""});
+  enter.setAttribute("kind", "primary");
   enter.addEventListener("click", () => onEnter?.({role: me.body?.role}));
   root.replaceChildren(
     el("ui-head", "접속", {id: "pilot-gate-heading"}),

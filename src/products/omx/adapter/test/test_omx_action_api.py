@@ -59,6 +59,25 @@ class FakeDriver:
         return True
 
 
+class FakePhaseExecution:
+    def __init__(self, recorder):
+        self.recorder = recorder
+        self.active_phase_id = None
+
+    def start(self):
+        self.active_phase_id = "approach"
+        self.recorder.begin_phase(
+            phase_id="approach", ordinal=0, command_digest="a" * 64,
+        )
+        self.recorder.record_first_submission(
+            phase_id="approach", accepted=True, driver_goal_id="ros-goal-approach",
+        )
+
+    def cancel_current(self):
+        self.recorder.request_cancel(phase_id=self.active_phase_id)
+        return {"phase_id": self.active_phase_id, "state": "CANCEL_REQUESTED"}
+
+
 def _runner(tmp_path, driver=None):
     db = tmp_path / "actions.sqlite3"
     store = ActionStore(db)
@@ -248,6 +267,33 @@ def test_action_runner_exposes_owner_scoped_phase_lifecycle(tmp_path):
     assert driver.submissions == [grant.action_id]
 
 
+def test_validated_phase_recorder_is_attempt_scoped_and_needs_no_peer_impersonation(tmp_path):
+    store, driver, runner = _runner(tmp_path)
+    grant = FleetActionGrant.model_validate(_grant())
+    runner.submit(grant, peer_uid=1001)
+
+    recorder = runner._phase_recorder_for_validated_grant(grant, peer_uid=1001)
+    intent = recorder.begin_phase(
+        phase_id="approach", ordinal=0, command_digest="a" * 64,
+    )
+    first_response = recorder.record_submission(
+        phase_id="approach", accepted=True, driver_goal_id="ros-goal-approach",
+    )
+
+    assert recorder.action_id == grant.action_id
+    assert recorder.attempt_id == grant.attempt_id
+    assert intent["state"] == "SUBMITTING"
+    assert first_response["driver_goal_id"] == "ros-goal-approach"
+    assert store.action_phases(grant.action_id)[0]["phase_id"] == "approach"
+    assert driver.submissions == [grant.action_id]
+
+    with pytest.raises(PermissionError, match="peer"):
+        runner._phase_recorder_for_validated_grant(grant, peer_uid=9)
+    changed_attempt = FleetActionGrant.model_validate(_grant(attempt_id="attempt-2"))
+    with pytest.raises(PermissionError, match="stored Action identity"):
+        runner._phase_recorder_for_validated_grant(changed_attempt, peer_uid=1001)
+
+
 def test_phase_cancel_ack_requires_terminal_goal_result_before_next_phase(tmp_path):
     store, driver, runner = _runner(tmp_path)
     grant = FleetActionGrant.model_validate(_grant())
@@ -284,6 +330,85 @@ def test_phase_cancel_ack_requires_terminal_goal_result_before_next_phase(tmp_pa
     )
     assert terminal["state"] == "CANCELED"
     assert store.get_action(grant.action_id)["state"] == "ACCEPTED"
+
+
+def test_action_cancel_routes_active_ros_phase_and_never_uses_broad_driver_cancel(tmp_path):
+    store, driver, runner = _runner(tmp_path)
+    grant = FleetActionGrant.model_validate(_grant())
+    runner.submit(grant, peer_uid=1001)
+    runner.begin_phase(
+        grant.action_id, grant.attempt_id, phase_id="approach", ordinal=0,
+        command_digest="a" * 64, peer_uid=1001,
+    )
+    runner.record_phase_submission(
+        grant.action_id, grant.attempt_id, phase_id="approach", accepted=True,
+        driver_goal_id="ros-goal-approach", peer_uid=1001,
+    )
+
+    receipt = runner.cancel(grant.action_id, grant.attempt_id, peer_uid=1001)
+
+    assert receipt["state"] == "ACCEPTED"
+    assert driver.cancellations == []
+    assert driver.phase_cancellations == [
+        (grant.attempt_id, "approach", "ros-goal-approach")
+    ]
+    assert store.action_phases(grant.action_id, attempt_id=grant.attempt_id)[0]["state"] == "CANCEL_REQUESTED"
+
+
+def test_pick_place_submission_uses_validated_phase_runner_and_phase_cancel(tmp_path):
+    store, driver, base_runner = _runner(tmp_path)
+    phase_instances = []
+    runner = ActionRunner(
+        store, driver, workcell_id="omx-1", instance_id="omx-1-control",
+        principal_for_peer=lambda uid: f"fleet-uid-{uid}", allowed_peer_uids={1001},
+        current_fence=lambda epoch, generation: (epoch, generation) == (2, 8),
+        capability_current=lambda grant: grant.config_revision == "cfg-1",
+        submission_fence=base_runner.submission_fence, enabled=True,
+        phase_runner_factory=lambda grant, recorder: phase_instances.append(
+            FakePhaseExecution(recorder)
+        ) or phase_instances[-1],
+    )
+    grant = FleetActionGrant.model_validate(_grant())
+
+    receipt = runner.submit(grant, peer_uid=1001)
+    canceled = runner.cancel(grant.action_id, grant.attempt_id, peer_uid=1001)
+
+    assert receipt["state"] == "ACCEPTED"
+    assert canceled["state"] == "ACCEPTED"
+    assert driver.submissions == []
+    assert driver.cancellations == []
+    assert driver.phase_cancellations == []
+    assert store.action_phases(grant.action_id, attempt_id=grant.attempt_id)[0]["state"] == "CANCEL_REQUESTED"
+
+
+def test_cancel_during_phase_submission_holds_unknown_without_ambiguous_driver_cancel(tmp_path):
+    store, driver, runner = _runner(tmp_path)
+    grant = FleetActionGrant.model_validate(_grant())
+    store.create_action(
+        workcell_id=grant.workcell_id, instance_id=grant.instance_id,
+        principal_id="fleet-uid-1001", request_key=grant.action_id,
+        action_id=grant.action_id, action_kind=grant.action_kind,
+        configuration_revision=grant.config_revision,
+        observation_id=grant.observation_revision,
+        owner_generation=grant.dispatch_generation,
+        payload=grant.model_dump(mode="json"),
+    )
+    store.begin_submission(
+        grant.action_id, expected_generation=grant.dispatch_generation,
+        attempt_id=grant.attempt_id,
+    )
+    store.begin_phase(
+        grant.action_id, grant.attempt_id, phase_id="approach", ordinal=0,
+        command_digest="a" * 64,
+    )
+
+    receipt = runner.cancel(grant.action_id, grant.attempt_id, peer_uid=1001)
+
+    assert receipt["state"] == "HOLD"
+    assert receipt["reason"] == "PHASE_CANCEL_DURING_SUBMISSION"
+    assert store.action_phases(grant.action_id, attempt_id=grant.attempt_id)[0]["state"] == "UNKNOWN"
+    assert driver.cancellations == []
+    assert driver.phase_cancellations == []
 
 
 def test_phase_cancel_without_goal_specific_driver_stays_unacknowledged(tmp_path):
@@ -344,3 +469,21 @@ def test_uds_dispatch_checks_peer_and_bounds_frame(tmp_path):
     assert oversized["error"]["code"] == "FRAME_TOO_LARGE"
     assert api.dispatch({"version": 1, "operation": "StopLocal"},
                         peer_uid=1001)["error"]["code"] == "STOP_API_NOT_CONFIGURED"
+
+
+def test_uds_v2_adds_bounded_phase_summary_while_v1_remains_compatible(tmp_path):
+    _, _, runner = _runner(tmp_path)
+    api = ActionApi(runner)
+    grant = FleetActionGrant.model_validate(_grant()).model_dump(mode="json")
+    submitted = api.dispatch(
+        {"version": 1, "operation": "SubmitAction", "grant": grant}, peer_uid=1001,
+    )
+    action_id = submitted["receipt"]["action_id"]
+
+    v1 = api.dispatch({"version": 1, "operation": "GetAction", "action_id": action_id},
+                      peer_uid=1001)
+    v2 = api.dispatch({"version": 2, "operation": "GetAction", "action_id": action_id},
+                      peer_uid=1001)
+
+    assert v1["version"] == 1 and "phase_summaries" not in v1["receipt"]
+    assert v2["version"] == 2 and v2["receipt"]["phase_summaries"] == []

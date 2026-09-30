@@ -4,7 +4,7 @@
   <name>bringup</name>
   <version>0.0.0</version>
   <description>ROSY physical motor, odometry, lidar, and optional battery bringup.</description>
-  <maintainer email="kyung133851@pinklab.art">pl3</maintainer>
+  <maintainer email="56295815+livsbittt@users.noreply.github.com">pl3</maintainer>
   <license>Apache-2.0</license>
 
   <exec_depend>ament_index_python</exec_depend>

@@ -14,7 +14,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Mapping
 
-from core_common.protocol.schemas import MISSION_EVENT_DETAIL_MAX_BYTES
+from core_common.protocol.schemas import (
+    DeviceActionPhaseReceipt, MISSION_EVENT_DETAIL_MAX_BYTES,
+)
 
 from .dispatch_admission import release as release_dispatch_claims
 from .dispatch_admission import reserve as reserve_dispatch_claims
@@ -24,6 +26,12 @@ from .sqlite_policy import configure_connection, enable_wal
 
 class MissionConflict(ValueError):
     """Mission request, admission, or event conflicts with durable state."""
+
+
+def _phase_event_key(mission_id: str, action_id: str, attempt_id: str,
+                     ordinal: int, local_event_id: int) -> str:
+    identity = f"{mission_id}:{action_id}:{attempt_id}:{ordinal}:{local_event_id}"
+    return "phase:" + hashlib.sha256(identity.encode("utf-8")).hexdigest()
 
 
 def _now() -> str:
@@ -467,6 +475,100 @@ class MissionStore:
             connection.commit()
         return self._row(updated)
 
+    def record_action_phase_summaries(self, mission_id: str, *, action_id: str,
+                                      attempt_id: str, authority_epoch: int,
+                                      dispatch_generation: int,
+                                      phases: list[Mapping[str, Any]]) -> dict[str, Any]:
+        """Atomically append idempotent, attempt-fenced local phase snapshots."""
+        if type(authority_epoch) is not int or type(dispatch_generation) is not int:
+            raise ValueError("phase receipt fence must be integer-valued")
+        if not isinstance(phases, list) or len(phases) > 4:
+            raise ValueError("phase summaries must be a bounded list")
+        phases = [DeviceActionPhaseReceipt.model_validate(phase).model_dump(mode="json")
+                  for phase in phases]
+        with closing(self._connect()) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            row = connection.execute(
+                "SELECT * FROM fleet_missions WHERE mission_id=?", (mission_id,),
+            ).fetchone()
+            if row is None:
+                raise KeyError(mission_id)
+            if (row["action_id"] != action_id or row["attempt_id"] != attempt_id
+                    or row["authority_epoch"] != authority_epoch
+                    or row["dispatch_generation"] != dispatch_generation
+                    or row["status"] not in {
+                        "RUNNING", "ACTION_SUCCEEDED", "HOLD", "GOAL_CONFIRMED",
+                    }):
+                raise MissionConflict("phase receipt does not match the active Mission attempt")
+
+            prior_rows = connection.execute(
+                "SELECT * FROM fleet_mission_events WHERE mission_id=? AND action_id=? "
+                "AND attempt_id=? AND event_source='device_action_phase' ORDER BY event_id",
+                (mission_id, action_id, attempt_id),
+            ).fetchall()
+            latest: dict[int, dict[str, Any]] = {}
+            for prior in prior_rows:
+                detail = json.loads(prior["detail_json"])
+                ordinal = detail["ordinal"]
+                if (ordinal not in latest or detail["source_journal_event_id"]
+                        > latest[ordinal]["detail"]["source_journal_event_id"]):
+                    latest[ordinal] = {"detail": detail}
+
+            for phase in phases:
+                if not isinstance(phase, Mapping):
+                    raise ValueError("phase snapshot must be an object")
+                ordinal = phase.get("ordinal")
+                source_event_id = phase.get("journal_event_id")
+                if (type(ordinal) is not int or not 0 <= ordinal < 4
+                        or type(source_event_id) is not int or source_event_id < 1):
+                    raise ValueError("phase snapshot identity is invalid")
+                detail = {
+                    "phase_id": phase["phase_id"], "ordinal": ordinal,
+                    "state": phase["state"], "observed_at": phase["observed_at"],
+                    "source_journal_event_id": source_event_id,
+                }
+                event_key = _phase_event_key(
+                    mission_id, action_id, attempt_id, ordinal, source_event_id,
+                )
+                self._event(
+                    connection, event_source="device_action_phase",
+                    source_event_id=event_key, mission=row,
+                    event_type="ACTION_PHASE_SNAPSHOT", state=phase["state"],
+                    actor_id="device-action", action_id=action_id,
+                    attempt_id=attempt_id, detail=detail,
+                )
+                previous = latest.get(ordinal)
+                if previous is not None:
+                    previous_id = previous["detail"]["source_journal_event_id"]
+                    if source_event_id < previous_id:
+                        continue
+                    if source_event_id == previous_id:
+                        continue
+                    allowed_next = {
+                        "SUBMITTING": {"ACCEPTED", "RUNNING", "CANCEL_REQUESTED",
+                                       "UNKNOWN", "SUCCEEDED", "FAILED", "CANCELED"},
+                        "ACCEPTED": {"RUNNING", "CANCEL_REQUESTED", "UNKNOWN",
+                                     "SUCCEEDED", "FAILED", "CANCELED"},
+                        "RUNNING": {"CANCEL_REQUESTED", "UNKNOWN", "SUCCEEDED",
+                                    "FAILED", "CANCELED"},
+                        "CANCEL_REQUESTED": {"UNKNOWN", "SUCCEEDED", "FAILED", "CANCELED"},
+                    }
+                    prior_state = previous["detail"]["state"]
+                    if (prior_state not in allowed_next
+                            or phase["state"] not in allowed_next[prior_state]
+                            and phase["state"] != prior_state):
+                        raise MissionConflict("phase receipt regresses or changes a terminal phase")
+                if ordinal > 0:
+                    previous_phase = latest.get(ordinal - 1)
+                    if previous_phase is None or previous_phase["detail"]["state"] != "SUCCEEDED":
+                        raise MissionConflict("phase receipt skips an unconfirmed prior phase")
+                latest[ordinal] = {"detail": detail}
+            updated = connection.execute(
+                "SELECT * FROM fleet_missions WHERE mission_id=?", (mission_id,),
+            ).fetchone()
+            connection.commit()
+        return self._row(updated)
+
     def hold_ready(self, mission_id: str, *, actor_id: str, reason: str) -> dict[str, Any]:
         actor_id = _nonempty("actor_id", actor_id, limit=96)
         reason = _nonempty("reason", reason, limit=96)
@@ -660,6 +762,7 @@ class MissionStore:
             events = list(reversed(recent_events[:50]))
             active_action_events = []
             active_goal_events = []
+            active_phase_events = []
             if row["action_id"] and row["attempt_id"]:
                 active_action_events = connection.execute(
                     "SELECT * FROM fleet_mission_events WHERE mission_id=? "
@@ -676,6 +779,12 @@ class MissionStore:
                     "ORDER BY event_id DESC LIMIT 1",
                     (mission_id, row["action_id"], row["attempt_id"]),
                 ).fetchall()
+                active_phase_events = connection.execute(
+                    "SELECT * FROM fleet_mission_events WHERE mission_id=? AND action_id=? "
+                    "AND attempt_id=? AND event_source='device_action_phase' "
+                    "ORDER BY event_id",
+                    (mission_id, row["action_id"], row["attempt_id"]),
+                ).fetchall()
             control = connection.execute(
                 "SELECT authority_epoch, generation, dispatch_enabled, reason, updated_at "
                 "FROM fleet_dispatch_control WHERE control_id=1"
@@ -687,7 +796,7 @@ class MissionStore:
             connection.commit()
         history = [dict(event) for event in events]
         progress_events = [dict(event) for event in (
-            *active_action_events, *active_goal_events,
+            *active_action_events, *active_goal_events, *active_phase_events,
         )]
         for event in [*history, *progress_events]:
             event["detail"] = json.loads(event.pop("detail_json"))

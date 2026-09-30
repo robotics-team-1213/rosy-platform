@@ -1539,6 +1539,18 @@
 - 결정: 없음.
 - 교훈: 없음.
 
+## 2026-09-30 · uncommitted · feat(native): D-375 부팅 표시가 운용 모드를 램프와 LCD에 표시
+
+- 변경: `rosy-boot-status.py`가 핸드오버의 `robot_mode`를 검증(모르는 값은 나머지를 버리지 않고 없음)해 boot-status.json에 옮긴다. `rosy-boot-display.py`는 `robot_state.lamp_pattern()`으로 패턴을 고르고, 모드 전환은 소리 없이 패턴만 바꾸며, LCD 상태줄에 ` - MODE` 접미를 붙인다.
+- 증거: test_boot_status_indicator.py 37 passed, 2 skipped · test_boot_display.py 117 passed, 1 skipped (패턴 선택 변이 증명: 표시가 모드를 무시하면 모드 행이 빨개진다).
+- gate 변화: 없음.
+
+## 2026-09-30 · uncommitted · docs(adr): D-375 에서 D-380 으로 개명
+
+- 변경: 병합 시점에 main 이 D-375 를 feat/overhead-map-auto-register 예약으로 adr_gaps 에 넣은 것이 확인됐다(선례 D-324→D-325). 이 작업의 결정 번호를 다음 빈 번호 D-380 으로 개명하고 코드 주석·시험·설계 문서의 D-375 표기를 함께 바꿨다. 앞선 항목의 D-375 표기는 역사 기록으로 그대로 둔다.
+- 증거: rosy_harness lint 오류 0. 본문 참조는 docs/adr/D-380-lamp-mode-patterns-from-core-status-inputs.md.
+- gate 변화: 없음.
+
 ## 2026-09-30 · c261839d · build(site): 지도 맞춤용 트랙 파일을 이미지에 넣음
 
 - 변경: Vision 이미지에 `road_lines.stl`, Fleet 이미지에 `lane_graph.yaml`·`road_lines.stl`(`/opt/rosy/maps/map_v2_fleet/`, 읽기 전용). compose: vision `--map-paint`, fleet `--site-lane-graph`/`--site-lane-paint`. dockerignore는 두 파일만 연다. README "Map auto-fit overlay (D-375)".
@@ -1547,6 +1559,25 @@
 - 결정: D-375.
 - 교훈: 없음.
 
+## 2026-10-01 · uncommitted · feat(native): D-381 blocked 패턴과 비상정지 진입음
+
+- 변경: `rosy-boot-status.py`가 `nav_state`를 같은 규칙으로 검증·복사. `rosy-boot-display.py`는 `lamp_pattern()`에 nav를 넘기고, `_announce`가 패턴 기반으로 EMERGENCY 진입음(2.5 kHz×4, 유지 무음, 해제 시 ready 차임)을 낸다.
+- 증거: test_boot_display.py (blocked 행·진입/유지/해제 소리). 변이 증명: 진입음 제거 시 빨강.
+- gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · fix(release,test): main CI deployment 단계 적색 5건 — 핀·등록부·스캐너 면제 정리
+
+- 변경: core 단계 적색이 이 단계를 건너뛰게 해왔다 — core가 초록이 되자 가려져 있던 5건이 드러났다(전부 최근 병합들이 같은 커밋에 함께 갱신했어야 할 고정 목록). (1) D-184 예외 목록에 `test_line_follow_obstacle_path.py` 추가(e3eb2561의 신규 시험, `core_features.line_follow.clearance` 구동). (2) D-218 `PINNED_CONFIRMS`에 교통 정책 적용 확인의 app.js→telemetry.js 이동 반영(13803932, D-362 P1). (3) D-196 로봇 리터럴 백로그에 `runtime/services/core_features/line_follow/clearance.py`·`runtime/sensing/tools/device/ir_line_calibrate.py` 추가. (4) `secret_scan.py` `KNOWN_FIXTURES`에 D-189 런타임 id 핀 등록 — 그 hex는 저장소가 추적하는 `device-python-requirements.txt`의 sha256이며 시험이 저장소에서 재계산하는 공개 다이제스트다. (5) D-178 기준선 행 교체는 docs 모듈 로그에 기록.
+- 증거: 해당 다섯 시험 파일 82 passed (2026-10-01 Windows). 루트 `test/` 전체 회귀는 별도 확인.
+- gate 변화: 없음.
+- 교훈: 고정 목록 계약은 선행 단계가 붉으면 통째로 건너뛴다 — 그 단계의 빚은 다음 초록 커밋으로 이월되므로, 큰 적색을 고친 커밋은 곧바로 다음 단계까지 돌아갔는지 봐야 한다.
+
+## 2026-10-01 · uncommitted · feat(native): D-383 LCD 상태줄에 편대 역할
+
+- 변경: rosy-boot-status.py 가 swarm_role 를 같은 규칙으로 검증·복사, rosy-boot-display.py 상태줄이 role_suffix 를 끝에 붙인다("Ready - NAVIGATION - LEADER").
+- 증거: test_boot_display.py·test_boot_status_indicator.py. 실기 확인은 다음 릴리스 때.
+- gate 변화: 없음.
+
 ## 2026-10-01 · 7d0f3f89 · fix(deploy): 사이트 빌드 컨텍스트는 이미지가 복사하는 것만
 
 - 변경: `Dockerfile.{vision,fleet}.dockerignore` — 맨 `!src`·`!deploy`는 BuildKit의 상위 디렉터리 일치로 트리 전체를 다시 넣었다(vision 컨텍스트 2330개 파일). 잎 glob만 남기고 `__pycache__`·`.pytest_cache`를 뺐다.
@@ -1554,3 +1585,4 @@
 - gate 변화: 없음.
 - 결정: 없음.
 - 교훈: dockerignore의 `!dir`은 그 아래 전부다 — 허용 목록은 잎 glob으로만 쓴다.
+

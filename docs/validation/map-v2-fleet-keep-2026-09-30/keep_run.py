@@ -119,6 +119,26 @@ def run(args) -> dict:
         latest["t"] = m.header.stamp.sec + m.header.stamp.nanosec * 1e-9
 
     node.create_subscription(Image, "camera/front", on_image, 1)
+    # Every keep decision the node made (line/keep_debug, stamp = camera frame
+    # stamp) and, with --all-frames, every camera frame under that stamp, so a
+    # run replays offline in the node's own order (tools/lane_replay.py --frames).
+    from std_msgs.msg import String
+    keep_log = open(os.path.join(args.out, "keep.jsonl"), "w")
+    all_dir = os.path.join(args.out, "frames_all")
+    if args.all_frames:
+        os.makedirs(all_dir, exist_ok=True)
+
+    def on_keep(m):
+        keep_log.write(m.data + "\n")
+        keep_log.flush()
+
+    def on_all(m):
+        on_image(m)
+        cv2.imwrite(os.path.join(all_dir, f"{latest['t']:012.3f}.png"), latest["img"])
+
+    node.create_subscription(String, "line/keep_debug", on_keep, 50)
+    if args.all_frames:
+        node.create_subscription(Image, "camera/front", on_all, 10)
     spin = threading.Thread(target=rclpy.spin, args=(node,), daemon=True)
     spin.start()
 
@@ -203,6 +223,7 @@ def run(args) -> dict:
     log.close()
     frames.close()
     events.close()
+    keep_log.close()
     node.destroy_node()
     rclpy.shutdown()
     return {"end": end_reason}
@@ -301,6 +322,8 @@ def main():
     p.add_argument("--wall-max", type=float, default=3600.0, help="wall-clock cap, s")
     p.add_argument("--hold-s", type=float, default=0.5)
     p.add_argument("--fps", type=float, default=2.0)
+    p.add_argument("--all-frames", action="store_true",
+                   help="also save every camera frame (frames_all/<stamp>.png)")
     p.add_argument("--analyze-only", action="store_true")
     args = p.parse_args()
     end = ""

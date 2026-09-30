@@ -25,12 +25,13 @@ SHADOW_TOPIC = "perception/learned/shadow"
 # src/; camera/preview/compressed in road_observer_node.py is a 2 fps
 # dashboard preview, not training data). cmd_vel is the CORE final command;
 # line/observation comes from line_observer_node.py; odom from the product
-# bringup package (ODOM_PUB_TOPIC_NAME).
+# bringup package (ODOM_PUB_TOPIC_NAME). scan is the LiDAR: D-379 projects it
+# into the camera frames to label walls, which it sees and floor paint it never does.
 CAMERA_TOPIC = "camera/front"
 # Topics tools/perception/dataset/extract.py attaches to each frame as side
 # data, keyed by these relative names (prelabel.py reads SHADOW_TOPIC).
 SIDE_TOPICS = ("cmd_vel", "line/observation", SHADOW_TOPIC)
-RECORD_TOPICS = (CAMERA_TOPIC, *SIDE_TOPICS, "odom")
+RECORD_TOPICS = (CAMERA_TOPIC, *SIDE_TOPICS, "odom", "scan")
 
 
 def _iso(now: datetime) -> str:

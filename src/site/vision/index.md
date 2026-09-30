@@ -35,7 +35,7 @@
 ## 최근 기록
 
 - 2026-10-01 · 2d6d268b · fix(vision): 재연결 전 계산을 이전 결과로 남기지 않는다
+- 2026-10-01 · 4ae81b6e · fix(vision): 사이트 CA pin만 발급(D-341 9), 패턴 fullmatch
+- 2026-10-01 · 14253f8e · fix(vision): bound hello.lens numbers, safe connect log
 - 2026-10-01 · uncommitted · fix(vision): D-375 review fixes and worker process
 - 2026-09-30 · 646fe8e6 · feat(vision): 계산 중인 map-proposal 읽기는 마지막 완료 결과를 받는다
-- 2026-09-30 · uncommitted · feat(vision): D-375 tilt hypotheses for the paint fit
-- 2026-09-30 · uncommitted · refactor(vision): D-377 site_vision becomes rosy_vision in src/site/vision

@@ -18,7 +18,7 @@ setup(
     install_requires=['setuptools'],
     zip_safe=True,
     maintainer='pl3',
-    maintainer_email='kyung133851@pinklab.art',
+    maintainer_email='56295815+livsbittt@users.noreply.github.com',
     description='ROSY bringup: motor/odometry/battery drivers for Pinky Pro',
     license='Apache-2.0',
     tests_require=['pytest'],

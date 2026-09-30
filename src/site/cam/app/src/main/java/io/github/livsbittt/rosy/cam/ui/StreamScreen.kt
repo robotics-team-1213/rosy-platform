@@ -162,6 +162,13 @@ private fun StatusPanel(
             },
             style = MaterialTheme.typography.bodyMedium,
         )
+        if (state.running) {
+            val res = LocalContext.current.resources
+            state.lens?.let { LensText.line(res, it) }?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
+            if (state.lensSwitchFailed) {
+                Text(stringResource(R.string.lens_switch_failed), color = RosyColors.StatusWarn, style = MaterialTheme.typography.bodyMedium)
+            }
+        }
         state.health?.let { HealthPanel(it) }
         val site = link.site
         // Per camera session: once the receiver has reported a marker, an empty report is a real 0/4.
@@ -171,7 +178,11 @@ private fun StatusPanel(
         }
         if (state.running && link.state == LinkState.STREAMING && site != null) {
             if (markersReported || CornerGuide.reportsMarkers(site)) {
-                InstallGuide(CornerGuide.from(site))
+                val guide = CornerGuide.from(site)
+                InstallGuide(guide)
+                if (LensAdvice.suggestWide(state.lens, state.wideAvailable, guide, markersReported = true)) {
+                    Text(stringResource(R.string.guide_lens_wide), style = MaterialTheme.typography.bodyMedium)
+                }
             } else {
                 Text(
                     stringResource(R.string.guide_markers_unreported),
@@ -278,10 +289,15 @@ private fun ProblemMessage(
         Problem.UNREACHABLE -> stringResource(R.string.problem_unreachable, address)
         Problem.REFUSED -> stringResource(R.string.problem_refused, address)
         Problem.UNKNOWN_HOST -> stringResource(R.string.problem_unknown_host, pairing?.host ?: "")
-        Problem.TLS -> stringResource(R.string.problem_tls)
+        Problem.TLS -> stringResource(
+            if (pairing?.secure == true && pairing.pin == null) R.string.problem_tls_unpinned else R.string.problem_tls,
+        )
+        Problem.TLS_PIN -> stringResource(R.string.problem_tls_pin)
         Problem.UNAUTHORIZED -> stringResource(R.string.problem_unauthorized)
         Problem.REPLACED -> stringResource(R.string.problem_replaced, pairing?.source ?: "")
         Problem.PROTOCOL_MISMATCH -> stringResource(R.string.problem_protocol_mismatch)
+        Problem.BUSY -> stringResource(R.string.problem_busy)
+        Problem.SITE_CHECKING -> stringResource(R.string.problem_site_checking)
         Problem.INVALID_CONFIG -> stringResource(R.string.problem_invalid_config)
         Problem.CLOSED -> stringResource(R.string.problem_closed)
         Problem.NETWORK_OTHER -> stringResource(R.string.problem_network_other)

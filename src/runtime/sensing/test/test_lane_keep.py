@@ -6,7 +6,7 @@ import pytest
 import yaml
 
 from control.sensing.perception.camera_ground import nominal_ground_plane
-from control.sensing.perception.lane_keep import LaneKeeper
+from control.sensing.perception.lane_keep import CORNER_MAX_ERROR as CORNER_CAP, FLIP_WINDOW_FRAMES as FLIP_WINDOW, LaneKeeper
 
 PKG = Path(__file__).resolve().parents[1]
 PROFILE = yaml.safe_load((Path(__file__).resolve().parents[3] / "products" / "pinky_pro" / "profile" / "config" / "camera_nominal.yaml").read_text(encoding="utf-8"))
@@ -99,6 +99,19 @@ def test_transverse_stop_line_is_ignored():
     assert last["transverse"], "the stop line should be reported as transverse"
     obs, last = _keep(_render([], transverse_x=0.25))
     assert obs is None and last["strategy"] == "none"
+
+
+def test_candidates_list_every_line_with_its_reject_reason():
+    # D-384 replay reads all fitted lines: accepted boundaries and rejects alike.
+    obs, last = _keep(_render([(HALF, 0.0), (-HALF, 0.0)], transverse_x=0.25))
+    accepted = [c for c in last["candidates"] if not c["rejected"]]
+    rejected = [c for c in last["candidates"] if c["rejected"]]
+    assert len(accepted) == len(last["boundaries"]) >= 2
+    assert {c["side"] for c in accepted} == {"left", "right"}
+    assert all(c["reason"] is None for c in accepted)
+    assert any(c["reason"] == "transverse" for c in rejected)
+    assert all("centre" not in c and "direction" not in c for c in last["candidates"])
+    assert _keep(_render([]))[1]["candidates"] == []
 
 
 def test_white_wall_is_not_a_boundary():
@@ -222,3 +235,155 @@ def test_node_wires_keep_mode_on_the_labelled_ground():
     assert "self._lane_keeper.update(" in text
     assert "frame, self._ground(frame.shape[1], frame.shape[0])" in text
     assert "corner_turning=bool(self.get_parameter('lane_corner_turning').value)" in text
+
+
+def _keeper(**kw):
+    return LaneKeeper(camera_x_offset_m=X_OFFSET, smoothing=0.0, **kw)
+
+
+def test_a_line_drifting_across_keeps_its_side():
+    # Last frame the lone line was the LEFT boundary; now it has drifted 3.5 cm
+    # right of base_link. A fresh keeper calls it right; the tracked one keeps
+    # it left and keeps steering right, back into the lane.
+    assert _keep(_render([(-0.035, 0.0)]))[1]["strategy"] == "right_only"
+    keeper = _keeper()
+    keeper.update(_render([(0.02, 0.0)]), GROUND, lane_half_width_m=HALF)
+    assert keeper.last["strategy"] == "left_only"
+    obs = keeper.update(_render([(-0.035, 0.0)]), GROUND, lane_half_width_m=HALF)
+    assert keeper.last["strategy"] == "left_only" and obs.error > 0.9
+    assert keeper.last["boundaries"][0]["tracked"] is True
+
+
+def test_tracked_side_flips_on_clear_evidence():
+    keeper = _keeper()
+    keeper.update(_render([(0.02, 0.0)]), GROUND, lane_half_width_m=HALF)
+    keeper.update(_render([(-0.035, 0.0)]), GROUND, lane_half_width_m=HALF)
+    assert keeper.last["strategy"] == "left_only"
+    # Now 9 cm right of the robot: past SIDE_FLIP_M, it is the right boundary.
+    keeper.update(_render([(-0.09, 0.0)]), GROUND, lane_half_width_m=HALF)
+    assert keeper.last["strategy"] == "right_only"
+    # A line that turned 31 deg (not continuous) is sided by geometry alone.
+    keeper = _keeper()
+    keeper.update(_render([(0.02, 0.0)]), GROUND, lane_half_width_m=HALF)
+    keeper.update(_render([(-0.035 - 0.6 * 0.22, 0.6)]), GROUND, lane_half_width_m=HALF)
+    assert keeper.last["strategy"] == "right_only"
+
+
+def test_one_sided_choice_prefers_the_boundary_seen_last_frame():
+    # Two lone lines, closer than a lane width: the left one a bit nearer.
+    # After the right one was the boundary, it stays the boundary.
+    keeper = _keeper()
+    keeper.update(_render([(-0.06, 0.0)]), GROUND, lane_half_width_m=HALF)
+    obs = keeper.update(_render([(0.045, 0.0), (-0.06, 0.0)]), GROUND, lane_half_width_m=HALF)
+    assert keeper.last["strategy"] == "right_only" and obs.error < 0.0
+    fresh = _keep(_render([(0.045, 0.0), (-0.06, 0.0)]))[1]
+    assert fresh["strategy"] == "left_only"
+
+
+@pytest.mark.parametrize("gap", [0.02, 0.0])
+def test_tape_at_the_base_of_a_wall_filling_the_view_is_kept(gap):
+    # Heading ~31 deg into a white wall on the left that fills most of the
+    # floor view; the outer tape runs along its base (with or without a strip
+    # of carpet between). The wall must not become floor (a blob swallowing
+    # the tape) and the tape must not be masked with the wall.
+    slope, wall_y = -0.6, 0.12
+    image = _render([(wall_y - gap - TAPE_HALF, slope)])
+    floor = np.isfinite(X)
+    image[floor & (Y > wall_y + slope * X)] = 215
+    image[~floor] = 215
+    obs, last = _keep(image)
+    assert obs is not None and last["blobs"] == 0
+    assert any(abs(b["heading_deg"] + 31.0) < 5.0 for b in last["boundaries"])
+
+
+def _corner_keeper():
+    return _keeper(corner_turning=True)
+
+
+def test_junction_mouth_holds_with_corner_turning():
+    # A lone left boundary bending out of the lane (+25 deg) and a line across
+    # ahead: a junction mouth, not a lane to follow. With corner turning the
+    # keeper holds; the plain keeper (device default) keeps its boundary.
+    slope = np.tan(np.radians(25.0))
+    image = _render([(HALF - slope * 0.22, slope)], transverse_x=0.30)
+    keeper = _corner_keeper()
+    assert keeper.update(image, GROUND, lane_half_width_m=HALF) is None
+    assert keeper.last["reason"] == "junction_transverse"
+    obs, last = _keep(image)
+    assert obs is not None and last["strategy"] == "left_only"
+
+
+def test_fork_on_the_followed_side_holds_with_corner_turning():
+    # Two left boundaries splitting by 45 deg: which one bounds the lane is unknown.
+    slope = np.tan(np.radians(45.0))
+    image = _render([(HALF, 0.0), (0.05 - slope * 0.22, slope)])
+    keeper = _corner_keeper()
+    assert keeper.update(image, GROUND, lane_half_width_m=HALF) is None
+    assert keeper.last["reason"] == "junction_fork"
+
+
+def test_reversing_hard_steering_holds_with_corner_turning():
+    # The lone boundary jumps from one side to the other every frame: hard
+    # left, hard right, hard left... After two reversals the keeper holds.
+    frames = [_render([(0.035, 0.0)]), _render([(-0.035, 0.0)])] * 2
+    keeper = _corner_keeper()
+    results = [keeper.update(f, GROUND, lane_half_width_m=HALF) for f in frames]
+    assert all(r is not None for r in results[:2])
+    assert results[-1] is None and keeper.last["reason"] == "flipping"
+    plain = _keeper()
+    assert all(plain.update(f, GROUND, lane_half_width_m=HALF) is not None for f in frames)
+
+
+def test_line_across_between_two_lane_lines_is_not_a_corner():
+    # Both lane lines in view and a line across ahead (a stop line, or the
+    # far edge of a junction): the lane is followed and no corner is latched,
+    # so the next frame without the lane lines is not a corner either.
+    keeper = _corner_keeper()
+    obs = keeper.update(_render([(HALF, 0.0), (-HALF, 0.0)], transverse_x=0.30), GROUND,
+                        lane_half_width_m=HALF)
+    assert keeper.last["strategy"] == "both" and abs(obs.error) < 0.15
+    assert keeper.update(_render([], transverse_x=0.19), GROUND, lane_half_width_m=HALF) is None
+
+
+def test_corner_turn_command_is_capped():
+    keeper = _corner_keeper()
+    keeper.update(_render_corner(0.40, "left"), GROUND, lane_half_width_m=HALF)
+    obs = keeper.update(_render_corner(0.19, "left"), GROUND, lane_half_width_m=HALF)
+    assert keeper.last["strategy"] == "corner_left"
+    assert -CORNER_CAP - 1e-9 <= obs.error < -0.3
+
+
+def test_flipping_hold_is_sticky_until_both_lane_lines_are_seen():
+    keeper = _corner_keeper()
+    for f in [_render([(0.035, 0.0)]), _render([(-0.035, 0.0)])] * 2:
+        keeper.update(f, GROUND, lane_half_width_m=HALF)
+    assert keeper.last["reason"] == "flipping"
+    # A calm lone boundary does not release the hold ...
+    for _ in range(FLIP_WINDOW + 2):
+        assert keeper.update(_render([(HALF, 0.0)]), GROUND, lane_half_width_m=HALF) is None
+    # ... the lane seen on both sides does.
+    assert keeper.update(_render([(HALF, 0.0), (-HALF, 0.0)]), GROUND,
+                         lane_half_width_m=HALF) is not None
+
+
+@pytest.mark.parametrize("y", [0.05, -0.05])
+def test_a_washed_frame_forgets_the_tracked_sides(y):
+    # A line tracked on the other side, then a washed-out frame: the next line
+    # is sided afresh by its own geometry, not inherited across the gap.
+    keeper = _keeper()
+    keeper.update(_render([(-y * 0.1, 0.0)]), GROUND, lane_half_width_m=HALF)
+    assert keeper.last["strategy"] == ("right_only" if y > 0 else "left_only")
+    washed = np.full((240, 320, 3), 100, np.uint8)   # glare over most of the floor
+    washed[:, 110:] = 240
+    washed[:80] = 60
+    assert keeper.update(washed, GROUND, lane_half_width_m=HALF) is None
+    assert keeper.last["reason"] == "washed"
+    keeper.update(_render([(y, 0.0)]), GROUND, lane_half_width_m=HALF)
+    assert keeper.last["strategy"] == ("left_only" if y > 0 else "right_only")
+    assert keeper.last["boundaries"][0]["tracked"] is False
+
+
+def test_node_resets_the_keeper_after_a_camera_gap():
+    text = (PKG / "control" / "line_observer_node.py").read_text(encoding="utf-8")
+    keep = text.split("elif mode == 'keep':", 1)[1].split("elif mode in", 1)[0]
+    assert "KEEP_MAX_FRAME_GAP_S" in keep and "self._lane_keeper.reset()" in keep

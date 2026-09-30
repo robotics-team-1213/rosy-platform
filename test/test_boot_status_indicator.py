@@ -461,6 +461,9 @@ def test_the_record_carries_the_runtime_mode_and_the_device_states(tmp_path):
 
     assert errors == [] and record["api_port"] == 8081
     assert record["runtime_mode"] == "motor"
+    assert record["robot_mode"] is None  # D-380: no CORE hand-over on this board, no mode
+    assert record["nav_state"] is None  # D-381: the navigation state rides the same rule
+    assert record["swarm_role"] is None  # D-383: and so does the formation role
     # Evidence and labels stay in the 0640 hardware.json.
     assert record["devices"] == [{"id": "camera", "state": "no_response", "product": True},
                                  {"id": "imu", "state": "bus_missing", "product": False}]

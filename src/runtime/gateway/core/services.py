@@ -516,6 +516,17 @@ class CoreServices:
             except Exception:
                 logging.getLogger(__name__).exception("docking stop on mode exit failed")
             command.clear_docking()
+        def mirror_mode(old: Mode, new: Mode) -> None:
+            """D-380 fix: the snapshot's mode is every reader's mode.
+
+            The e-stop path (SAF-001) transitions the machine without going
+            through POST /mode, and before this listener the StateManager kept
+            the previous mode through a stop and a release — the dashboard chip,
+            /robot/state and the boot display's hand-over all said MANUAL while
+            the machine held EMERGENCY. One listener, every path.
+            """
+            state.set_mode(RobotMode(new.value))
+        modes.change_listeners.append(mirror_mode)
         modes.change_listeners.append(leave_docking)
         def reflect_stop():
             state.set_estop(True)

@@ -1,11 +1,11 @@
 ---
 module: omx_adapter
 owner: OMX workcell
-last_verified: { commit: "bed604ef", date: 2026-09-30 }
+last_verified: { commit: "979c0785", date: 2026-10-01 }
 gates:
   SOURCE:
     state: GO
-    evidence: "140 OMX adapter/profile/vendor-boundary tests passed, 3 skipped. SOURCE adds peer-UID-checked bounded UDS request handling, a disabled-by-default local Action runner, Fleet-issued action/attempt IDs, durable UNKNOWN behavior, and no replay after submission intent. Driver remains an injected port; disabled OMX-AI profile stays empty-contract."
+    evidence: "213 OMX adapter/profile/vendor-boundary tests passed, 3 skipped on main at 979c0785. SOURCE includes typed 3D RGB-D plan contracts, bounded timed trajectories, typed ROS goal events, atomic phase acceptance, a stop-fenced PickPlaceRunner, semantic transaction/journal phase gates, conservative possible-held-object semantics, restart-to-UNKNOWN/HOLD recovery, fresh gripper release before local Action success, exact-phase cancel routing, and Fleet's versioned phase receipt/progress projection. Fleet placement verification remains separate. The production plan/ROS/gripper factory and ROS-to-Fleet runtime wiring are absent."
     cmd: "python -B -X utf8 -m pytest src/products/omx/adapter/test src/products/omx/profile/test test/test_omx_vendor_stack_lock.py test/test_omx_host_inventory.py test/test_omx_multi_preflight.py test/test_dds_identity_contracts.py -q -p no:cacheprovider"
   LOCAL:
     state: GO
@@ -13,8 +13,8 @@ gates:
     cmd: "PYTHONPATH=src/products/omx/adapter python -m omx_adapter.cli src/products/omx/profile/config/omx.disabled.yaml"
   ROS-SIM:
     state: HOLD
-    evidence: "ROS ArmCommandRuntime uses a steady-clock timer, actual FollowJointTrajectory action client, filtered vendor joint feedback, cancel acknowledgement/final status, and readback in an isolated vendor Gazebo instance; synthetic ROS Image/CameraInfo topics verify exact-stamp pairing and calibration digest admission. Prior two-instance evidence: docs/validation/omx-two-instance-ros-sim-2026-09-26/README.md"
-    blocker: "Simulation evidence is Docker Desktop amd64 only. Target Linux workstation timing and fault behavior are unmeasured; no physical arm/independent stop or selected camera exists, so camera source, format/FPS/drop/latency, and device calibration remain unverified."
+    evidence: "Prior isolated vendor Gazebo and synthetic image/camera evidence is recorded at docs/validation/omx-two-instance-ros-sim-2026-09-26/README.md. The 2026-10-01 phase coordinator-to-RosArmCommandRuntime simulation was not run: Docker info timed out after 12 seconds on this Windows host, and Ubuntu WSL reported getpwuid(0) failures before ROS availability could be verified. No new simulation result is claimed."
+    blocker: "The pinned simulation profile and full phase fault scenario have not run on the intended Linux workstation. Current Windows Docker engine did not answer the availability probe; WSL did not provide a usable ROS shell. Target-host timing and fault behavior are unmeasured; no physical arm/independent stop or selected camera exists, so camera source, format/FPS/drop/latency, and device calibration remain unverified."
   ARTIFACT:
     state: HOLD
     blocker: "A local workstation image ID exists, but no immutable published artifact digest or dependency inventory exists; source lock is not an artifact"
@@ -23,7 +23,7 @@ gates:
     blocker: "No OMX-AI, leader/follower OpenRB, or workcell camera is connected for physical acceptance"
   FIELD:
     state: PARKED
-adrs: [D-61, D-147, D-168, D-273, D-282]
+adrs: [D-61, D-147, D-168, D-273, D-282, D-336, D-369, D-376]
 plans:
   - docs/plans/2026-09-15-module-harness-design.md
   - docs/plans/2026-09-26-omx-ai-workstation-runtime.md

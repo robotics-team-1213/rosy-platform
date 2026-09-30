@@ -76,3 +76,64 @@
 - gate 변화: 없음. SOURCE/LOCAL — 실기 드라이버 직렬화는 DEVICE 회차가 증명한다.
 - 결정: D-333/D-336 정지 경계의 시험 의도(제출과 정지 취소가 driver 호출로 직렬화)를 구현에 맞춘 수정이다.
 - 교훈: 저널은 파일 끝에 붙인다 — 머리글 앵커는 그 항목이 마지막인지 확인하고.
+
+## 2026-09-30 · uncommitted · OMX pick-and-place plan, trajectory, and ROS goal contracts (D-376)
+
+- Change: Added D-376, typed 3D RGB-D planning contracts, validation for complete timed trajectories, preservation of all waypoints in FollowJointTrajectory, and command/phase-bound ROS goal event contracts. No production planner or pixel-to-pose resolver was added.
+- Evidence: The OMX adapter/profile/vendor-boundary host suite passed (190 passed, 3 skipped). Changed Python files passed flake8 with max line length 120. The ROS integration test did not complete because the Docker Python process entered uninterruptible I/O wait. Harness lint reported 0 errors and 18 freshness warnings before this log entry; git diff --check passed.
+- Gate: SOURCE contract evidence only. ROS callback integration is unverified in this run; Fleet phase receipt wiring, the full phase coordinator, production planning, gripper I/O, ROS-SIM, artifact, device, and field evidence remain open. OMX stays disabled.
+
+## 2026-09-30 · uncommitted · persist first phase intent and atomic response
+
+- Change: ActionStore permits only ordinal-zero phase intent while the parent is SUBMITTING and records the parent's first acceptance/rejection/unknown response with the phase state and ROS goal identity in one SQLite transaction.
+- Evidence: ActionStore tests cover accepted, rejected, unknown, database rollback on the second event write, process restart after first intent, and rejection of a goal ID when acceptance is not positive. The focused ActionStore suite passes.
+- Gate: SOURCE persistence contract only. No ActionRunner phase coordinator, ROS submission callback wiring, Fleet phase receipt, physical stop, or capability activation is claimed.
+
+## 2026-09-30 · uncommitted · mint validated attempt-scoped phase recorder
+
+- Change: Added a private ActionRunner factory for an in-process phase recorder after authenticated peer, grant freshness/digest, principal, stored request, workcell, instance, generation, and attempt checks. The recorder is bound to one action/attempt and takes no peer UID for callback writes; ActionApi exposes no new operation.
+- Evidence: Action API plus ActionStore tests passed (33 passed). Changed ActionRunner, recorder, ActionStore, and tests passed flake8 with max line length 120.
+- Gate: SOURCE trust-boundary contract only. The ROS phase coordinator and per-phase stop-fenced submission path remain open.
+
+## 2026-09-30 · uncommitted · hold unresolved phase state under local stop
+
+- Change: ActionStore now moves every in-flight phase to UNKNOWN in the same transaction that holds its parent Action. The existing goal UUID remains attached for later matching terminal readback, and no next phase can begin.
+- Evidence: The ActionStore suite passed (22 passed), including an accepted first phase followed by HOLD, retained goal identity, UNKNOWN phase state, and rejected continuation. Changed files passed flake8 with max line length 120.
+- Gate: SOURCE stop-state persistence only. This does not prove driver cancellation, standstill, or physical E-stop behavior; per-phase ROS submit/cancel wiring remains open.
+
+## 2026-10-01 · uncommitted · add fenced pick-place phase coordinator
+
+- Change: Added a ROS-free coordinator that journals and submits one validated motion phase at a time, correlates events by command/phase/UUID, requires explicit advancement after terminal success, and holds on unknown acceptance, event overflow, or a closed stop fence. ActionRunner now offers an authenticated phase-runner injection seam, and Action/stop cancellation uses the exact active phase goal or remains unresolved when no goal-specific cancel path exists.
+- Evidence: Focused action API and coordinator tests passed (20 passed). Full OMX adapter/profile/vendor-boundary suite passed (208 passed, 3 skipped). D-346 quick gate passed (95 passed, 18 warnings); changed Python files passed flake8 with max line length 120; harness lint reported 0 errors and 18 freshness warnings; git diff --check passed.
+- Gate: SOURCE only. The workcell production factory, real ArmCommandOwner/RosArmCommandRuntime binding, callback integration, Fleet phase projection, ROS-SIM, device, and field acceptance remain open; the OMX capability remains disabled.
+
+## 2026-10-01 · uncommitted · gate semantic phases on durable gripper evidence
+
+- Change: Added an attempt-scoped append-only workflow journal and local Action terminal gate. The coordinator now requires a semantic phase gate; the workflow recorder opens the next motion phase only when transaction state and durable journal state agree. Local Action success requires all four ROS phases plus fresh held-object and later open/no-object gripper readbacks. Removed the duplicate local placement predicate; Fleet's registered goal-evidence service remains authoritative for Mission `GOAL_CONFIRMED`.
+- Evidence: Focused ActionStore/transaction/gripper/coordinator suites passed (42 passed). Task 5 transaction/gripper/Fleet goal-evidence suites passed (49 passed). Full OMX adapter/profile/vendor-boundary suite passed (211 passed, 3 skipped). Changed Python files passed flake8 with max line length 120; harness lint and D-346 were green on the latest merged main tree.
+- Gate: SOURCE only. No measured gripper actuation profile, production sensor/driver, camera producer/device binding, Fleet phase receipt, ROS-SIM, or physical acceptance is present. The OMX capability remains disabled.
+
+## 2026-10-01 · uncommitted · project durable OMX phases into Fleet status
+
+- Change: Added strict four-phase receipt summaries and UDS v2 for phased `PICK_PLACE` while retaining v1 for non-phased operations and all existing operation names. Fleet now requires v2 without fallback, persists attempt/fence-bound phase snapshots idempotently, rejects reused event identities with changed evidence and state regression, and exposes only bounded active/ordered phase progress through Mission status and the existing read-only ER 2 status tool. Phase summaries contain no ROS goal UUID or motion payload; Action success still waits for independent Fleet goal evidence.
+- Evidence: Task 6 contract/UDS/dispatcher/progress/ER 2 status suites passed (92 passed). Full OMX adapter/profile/vendor-boundary suite passed (212 passed, 3 skipped). Full Fleet suite passed (951 passed, 6 skipped). D-346 quick gate passed (95 passed, 22 freshness warnings); harness lint reported 0 errors and 22 freshness warnings. Changed implementation Python files passed flake8 with max line length 120; `git diff --check` passed. The module-size ratchet was re-judged for the single-store phase transaction and bounded shared schemas; zero-growth applies from the new measured baselines.
+- Gate: SOURCE contract only. No production plan/ROS/gripper factory, ROS-to-Fleet runtime wiring, ROS-SIM phase run, device or physical stop evidence exists. OMX capability remains disabled.
+
+## 2026-10-01 · uncommitted · fail closed on restart and possible held object
+
+- Change: Grasp completion now marks the object possibly held until fresh gripper readback. Restart recovery atomically changes unresolved local Actions and phases to UNKNOWN and appends an ACTION_WORKFLOW_STATE HOLD event with preserved evidence references and conservative held-object state. An UNKNOWN, HOLD, or canceling Action can no longer record semantic progress. Fleet retains successful four-phase snapshots across store reopen while keeping Mission goal evidence PENDING; exact cancel ACK remains separate from terminal result.
+- Evidence: Focused restart/stop/runner/transaction/gripper/Fleet progress suites passed (64 passed). Full OMX adapter/profile/vendor-boundary suite passed (213 passed, 3 skipped). Changed implementation Python files passed flake8 with max line length 120; `git diff --check` passed. The action-store size verdict was re-judged at 1109 lines because recovery updates must share its SQLite transaction.
+- Gate: SOURCE only. No ROS runtime callback, controller behavior, independent physical E-stop, standstill, or device acceptance was demonstrated. OMX capability remains disabled.
+
+## 2026-10-01 · uncommitted · fix(api): error responses echo the request's protocol version
+
+- Change: `ActionApi._error` hard-coded `"version": 1`, so a v2 `SubmitAction` refused by the stale authority/generation fence answered v1 and the Fleet client read a valid 403 `GRANT_REJECTED` as `LocalActionUnavailable` before ever reaching the rejection branch; a v2 `GetAction` 404 failed the same way. `_error` now carries the version of the request it answers — default 1 only for frames rejected before version validation (bad JSON, framing, unsupported version) — threaded through every post-validation path: operation errors and all four exception handlers. API Ref v1.66 pins the envelope rule (D-382 conformance).
+- Evidence: `test/test_fleet_omx_action_identity_contract.py` 10 passed — the stale-fence case was red before this change and is the mutation proof. OMX adapter + Fleet suites 1112 passed (`test_console_hub_integration` uvicorn-startup timing flaked once on this loaded Windows host; passes alone and green on CI). flake8 max 120 clean; harness lint 0 errors.
+- Gate: SOURCE only. Same-host UDS contract semantics; no device, capability, or wire-format change.
+- Lesson: the cross-contract identity test lives in the root `test/` tree, outside both module suites — module-green is not seam-green, and the seam is exactly where this defect sat.
+
+## 2026-10-01 · uncommitted · merge phase recovery and record readiness gates
+
+- Change: Merged the Task 7 restart recovery and conservative held-object changes, then integrated the current main API Ref v1.66 contract updates. Main now contains merge commit `979c0785`. Updated the pick-and-place plan and OMX readiness record: SOURCE is GO; ROS-SIM/ARTIFACT are HOLD; DEVICE/FIELD are PARKED; the OMX profile remains disabled.
+- Evidence: OMX adapter/profile/vendor-boundary suite 213 passed, 3 skipped; Fleet phase/API identity seam 45 passed; Fleet progress/API doc-pin suites 23 passed; generated-current 1 passed; harness lint 0 errors, 22 freshness warnings. D-346 first run had 93 passed and 2 generated STATUS staleness failures; after `rosy_harness.py generate`, the two affected tests passed. `git diff --check` passed.
+- Gate: Task 8 ROS-SIM remains HOLD. Docker engine availability timed out after 12 seconds on this Windows host; Ubuntu WSL failed with `getpwuid(0)` before ROS could be checked. No new simulation evidence or report is claimed. Hardware, independent E-stop, ARTIFACT, DEVICE, and FIELD remain unverified; OMX capability remains disabled.

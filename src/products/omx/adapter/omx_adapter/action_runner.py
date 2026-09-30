@@ -12,6 +12,7 @@ from core_common.protocol.schemas import FleetActionGrant
 
 from .action_store import ActionStore, InvalidActionTransition
 from .local_stop import LocalStopBlocked
+from .phase_recorder import ActionPhaseRecorder
 
 
 def action_grant_digest(value: FleetActionGrant | Mapping[str, object]) -> str:
@@ -56,6 +57,17 @@ class StopFence(Protocol):
                     operation: Callable[[], DriverSubmission]) -> DriverSubmission: ...
 
 
+class PhaseExecution(Protocol):
+    """One grant-bound coordinator for exact phase submission and cancellation."""
+
+    @property
+    def active_phase_id(self) -> str | None: ...
+
+    def start(self) -> object: ...
+
+    def cancel_current(self) -> Mapping[str, object]: ...
+
+
 class ActionRunner:
     """Journal before driver I/O; never retries an existing Fleet Action."""
 
@@ -66,6 +78,9 @@ class ActionRunner:
                  current_fence: Callable[[int, int], bool],
                  capability_current: Callable[[FleetActionGrant], bool],
                  submission_fence: StopFence | None = None,
+                 phase_runner_factory: Callable[
+                     [FleetActionGrant, ActionPhaseRecorder], PhaseExecution
+                 ] | None = None,
                  enabled: bool = False,
                  now: Callable[[], datetime] | None = None) -> None:
         self.store = store
@@ -77,6 +92,8 @@ class ActionRunner:
         self.current_fence = current_fence
         self.capability_current = capability_current
         self.submission_fence = submission_fence
+        self.phase_runner_factory = phase_runner_factory
+        self._phase_runners: dict[tuple[str, str], object] = {}
         if not isinstance(enabled, bool):
             raise ValueError("enabled must be boolean")
         if enabled and submission_fence is None:
@@ -130,6 +147,9 @@ class ActionRunner:
             or self.store.latest_event_id(str(action["action_id"])),
             "observed_at": action["updated_at"],
             "reason": reason or action.get("reason"), "created": created,
+            "phase_summaries": self.store.action_phase_receipts(
+                str(action["action_id"]), str(action.get("attempt_id")),
+            ) if action.get("attempt_id") else [],
         }
 
     def submit(self, grant: FleetActionGrant, *, peer_uid: int) -> dict[str, object]:
@@ -159,6 +179,38 @@ class ActionRunner:
             if current is None:
                 raise
             return self._receipt(current, created=False)
+
+        if grant.action_kind == "PICK_PLACE" and self.phase_runner_factory is not None:
+            identity = (grant.action_id, grant.attempt_id)
+            try:
+                recorder = self._phase_recorder_for_validated_grant(
+                    grant, peer_uid=peer_uid,
+                )
+                phase_runner = self.phase_runner_factory(grant, recorder)
+                start = getattr(phase_runner, "start", None)
+                cancel_current = getattr(phase_runner, "cancel_current", None)
+                if not callable(start) or not callable(cancel_current):
+                    raise TypeError("phase runner must support start and exact-goal cancel")
+                self._phase_runners[identity] = phase_runner
+                start()
+            except Exception:
+                current = self.store.get_action(grant.action_id)
+                if current is not None and current["state"] in {
+                    "SUBMITTING", "ACCEPTED", "RUNNING", "CANCEL_REQUESTED", "UNKNOWN",
+                }:
+                    self.store.hold_action(
+                        grant.action_id, grant.attempt_id,
+                        reason="PHASE_RUNNER_START_UNKNOWN",
+                    )
+                current = self.store.get_action(grant.action_id)
+                if current is None:
+                    raise
+                return self._receipt(current, created=created,
+                                     reason="PHASE_RUNNER_START_UNKNOWN")
+            current = self.store.get_action(grant.action_id)
+            if current is None:
+                raise RuntimeError("phase runner removed its Action journal")
+            return self._receipt(current, created=created)
 
         def _fenced_submission() -> dict[str, object]:
             # The driver call AND its ACCEPTED recording stay inside the
@@ -213,6 +265,29 @@ class ActionRunner:
             raise KeyError(action_id)
         if action["attempt_id"] != attempt_id:
             raise PermissionError("cancel attempt does not match current Action")
+        phases = self.store.action_phases(action_id, attempt_id=attempt_id)
+        if phases:
+            if action["state"] == "SUBMITTING":
+                held = self.store.hold_action(
+                    action_id, attempt_id, reason="PHASE_CANCEL_DURING_SUBMISSION",
+                )
+                return self._receipt(held, created=False,
+                                     reason="PHASE_CANCEL_DURING_SUBMISSION")
+            active = next((phase for phase in reversed(phases)
+                           if phase["state"] in {"ACCEPTED", "RUNNING"}), None)
+            if active is not None:
+                self.cancel_phase(
+                    action_id, attempt_id, phase_id=active["phase_id"], peer_uid=peer_uid,
+                )
+                current = self.store.get_action(action_id)
+                return self._receipt(current or action, created=False)
+            if action["state"] in {"ACCEPTED", "RUNNING", "CANCEL_REQUESTED"}:
+                held = self.store.hold_action(
+                    action_id, attempt_id, reason="PHASE_CANCEL_TARGET_UNAVAILABLE",
+                )
+                return self._receipt(held, created=False,
+                                     reason="PHASE_CANCEL_TARGET_UNAVAILABLE")
+            return self._receipt(action, created=False)
         requested = self.store.request_cancel(action_id, attempt_id)
         try:
             acknowledged = self.driver.cancel(requested)
@@ -278,6 +353,20 @@ class ActionRunner:
                      phase_id: str, peer_uid: int) -> dict[str, object]:
         """Request cancel for one phase; an ACK remains separate from its result."""
         action = self._require_attempt_owner(action_id, attempt_id, peer_uid)
+        phase_runner = self._phase_runners.get((action_id, attempt_id))
+        if phase_runner is not None:
+            active_phase_id = getattr(phase_runner, "active_phase_id", None)
+            cancel_current = getattr(phase_runner, "cancel_current", None)
+            if (active_phase_id != phase_id
+                    or not callable(cancel_current)):
+                raise InvalidActionTransition("phase is not the coordinator's active ROS goal")
+            cancel_current()
+            phase = next((row for row in self.store.action_phases(
+                action_id, attempt_id=attempt_id,
+            ) if row["phase_id"] == phase_id), None)
+            if phase is None:
+                raise RuntimeError("coordinator phase journal disappeared")
+            return phase
         phase = self.store.request_phase_cancel(
             action_id, attempt_id, phase_id=phase_id,
         )
@@ -322,6 +411,32 @@ class ActionRunner:
         if action["attempt_id"] != attempt_id:
             raise PermissionError("phase attempt does not match current Action")
         return action
+
+    def _phase_recorder_for_validated_grant(
+        self, grant: FleetActionGrant, *, peer_uid: int,
+    ) -> ActionPhaseRecorder:
+        """Mint an in-process, attempt-scoped phase journal after grant checks."""
+        principal_id = self._principal(peer_uid)
+        self._validate(grant)
+        action = self.store.get_action(grant.action_id)
+        if action is None or action["principal_id"] != principal_id:
+            raise PermissionError("Fleet peer does not own this Action")
+        request = action.get("request", {})
+        payload = request.get("payload", {}) if isinstance(request, Mapping) else {}
+        stored_grant_digest = payload.get("request_digest") if isinstance(payload, Mapping) else None
+        if (action["attempt_id"] != grant.attempt_id
+                or stored_grant_digest != grant.request_digest
+                or action["workcell_id"] != grant.workcell_id
+                or action["instance_id"] != grant.instance_id
+                or action["owner_generation"] != grant.dispatch_generation):
+            raise PermissionError("stored Action identity does not match the validated grant")
+        if action["state"] not in {
+            "SUBMITTING", "ACCEPTED", "RUNNING", "CANCEL_REQUESTED", "UNKNOWN", "HOLD",
+        }:
+            raise InvalidActionTransition("terminal Action cannot mint a phase recorder")
+        return ActionPhaseRecorder(
+            self.store, action_id=grant.action_id, attempt_id=grant.attempt_id,
+        )
 
     def cancel_unresolved(self, *, peer_uid: int) -> list[dict[str, object]]:
         """Best-effort cancel fanout after the persistent local stop latch is set."""

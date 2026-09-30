@@ -16,6 +16,7 @@ import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -25,12 +26,21 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import io.github.livsbittt.rosy.cam.PIN_PREVIEW
 import io.github.livsbittt.rosy.cam.R
+import io.github.livsbittt.rosy.cam.camera.LensCandidate
+import io.github.livsbittt.rosy.cam.camera.LensChoice
+import io.github.livsbittt.rosy.cam.camera.LensProbe
+import io.github.livsbittt.rosy.cam.camera.LensSelector
 import io.github.livsbittt.rosy.cam.settings.PairingUri
 import io.github.livsbittt.rosy.cam.settings.OverheadServerDiscovery
 import io.github.livsbittt.rosy.cam.settings.OverheadServiceRecord
@@ -41,6 +51,8 @@ import io.github.livsbittt.rosy.cam.settings.RobotCoreServiceRecord
 fun SettingsScreen(
     current: PairingUri?,
     locked: Boolean,
+    lens: LensChoice,
+    onLens: (LensChoice) -> Unit,
     onSave: (PairingUri) -> Unit,
     onBack: () -> Unit,
 ) {
@@ -50,6 +62,9 @@ fun SettingsScreen(
     var token by remember(current) { mutableStateOf(current?.token ?: "") }
     var source by remember(current) { mutableStateOf(current?.source ?: "overhead-1") }
     var secure by remember(current) { mutableStateOf(current?.secure ?: false) }
+    // Only a rosyov:// link sets the pin; it is not typed by hand and is dropped when TLS is unchecked.
+    var pin by remember(current) { mutableStateOf(current?.pin) }
+    var pinDropped by remember(current) { mutableStateOf(false) }
     var invalid by remember { mutableStateOf<String?>(null) }
     var saved by remember { mutableStateOf(false) }
     var overheadServices by remember { mutableStateOf(emptyList<OverheadServiceRecord>()) }
@@ -67,6 +82,14 @@ fun SettingsScreen(
         }
     }
     LaunchedEffect(discovery) { discovery.start() }
+    var backCameras by remember { mutableStateOf<List<LensCandidate>?>(null) }
+    LaunchedEffect(Unit) {
+        backCameras = try {
+            LensProbe.backCameras(context)
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
     DisposableEffect(discovery) { onDispose { discovery.stop() } }
 
     Column(
@@ -83,6 +106,7 @@ fun SettingsScreen(
         if (locked) {
             Text(stringResource(R.string.settings_locked), style = MaterialTheme.typography.bodyLarge)
         }
+        LensSection(lens, backCameras, running = locked, onLens = onLens)
         Text(stringResource(R.string.settings_mdns_intro), style = MaterialTheme.typography.bodyMedium)
         OutlinedButton(
             onClick = {
@@ -159,6 +183,8 @@ fun SettingsScreen(
                         token = parsed.pairing.token
                         source = parsed.pairing.source
                         secure = parsed.pairing.secure
+                        pin = parsed.pairing.pin
+                        pinDropped = false
                         invalid = null
                     }
                     is PairingUri.Parsed.Invalid -> invalid = parsed.reason
@@ -184,8 +210,28 @@ fun SettingsScreen(
         )
         Field(source, { source = it; saved = false }, R.string.settings_source, invalid == "source")
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Checkbox(checked = secure, onCheckedChange = { secure = it; saved = false })
+            Checkbox(
+                checked = secure,
+                onCheckedChange = {
+                    secure = it
+                    if (!it && pin != null) {
+                        pin = null
+                        pinDropped = true
+                    }
+                    saved = false
+                },
+            )
             Text(stringResource(R.string.settings_tls))
+        }
+        if (secure) {
+            Text(
+                pin?.let { stringResource(R.string.settings_pin, it.take(PIN_PREVIEW)) }
+                    ?: stringResource(R.string.settings_pin_none),
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
+        if (pinDropped && pin == null) {
+            Text(stringResource(R.string.settings_pin_dropped), color = RosyColors.StatusWarn)
         }
 
         invalid?.let { CritMessage(invalidText(it)) }
@@ -198,10 +244,10 @@ fun SettingsScreen(
                 onClick = {
                     val trimmedHost = host.trim()
                     val portNumber = port.trim().toIntOrNull() ?: -1
-                    val reason = PairingUri.validate(trimmedHost, portNumber, token, source.trim())
+                    val reason = PairingUri.validate(trimmedHost, portNumber, token, source.trim(), secure, pin)
                     invalid = reason
                     if (reason == null) {
-                        onSave(PairingUri(trimmedHost, portNumber, token, source.trim(), secure))
+                        onSave(PairingUri(trimmedHost, portNumber, token, source.trim(), secure, pin))
                         saved = true
                     }
                 },
@@ -210,6 +256,43 @@ fun SettingsScreen(
             }
         }
     }
+}
+
+/** 화각: wide/standard radio, the lens each one binds, and the no-ultra-wide fallback note. */
+@Composable
+private fun LensSection(
+    lens: LensChoice,
+    backCameras: List<LensCandidate>?,
+    running: Boolean,
+    onLens: (LensChoice) -> Unit,
+) {
+    val res = LocalContext.current.resources
+    Text(stringResource(R.string.settings_lens_heading), style = MaterialTheme.typography.titleSmall)
+    Column(Modifier.selectableGroup()) {
+        for (choice in LensChoice.entries) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .selectable(selected = lens == choice, role = Role.RadioButton, onClick = { onLens(choice) })
+                    .padding(vertical = 4.dp),
+            ) {
+                RadioButton(selected = lens == choice, onClick = null)
+                Text(
+                    stringResource(if (choice == LensChoice.WIDE) R.string.settings_lens_wide else R.string.settings_lens_standard),
+                    modifier = Modifier.padding(start = 8.dp),
+                )
+            }
+        }
+    }
+    backCameras?.let { LensSelector.pick(it, lens) }?.let { pick ->
+        LensText.line(res, pick)?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
+    }
+    Text(
+        stringResource(if (running) R.string.settings_lens_running else R.string.settings_lens_intro),
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
 }
 
 @Composable
@@ -240,6 +323,7 @@ fun invalidText(reason: String): String = stringResource(
         "port" -> R.string.invalid_port
         "token" -> R.string.invalid_token
         "tls" -> R.string.invalid_tls
+        "pin" -> R.string.invalid_pin
         else -> R.string.invalid_source
     },
 )

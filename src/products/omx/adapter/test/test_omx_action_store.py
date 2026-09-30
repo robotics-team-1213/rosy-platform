@@ -134,6 +134,35 @@ def test_fault_hold_stays_unresolved_until_matching_terminal_readback(tmp_path):
     assert store.unresolved_actions() == []
 
 
+def test_holding_action_marks_active_phase_unknown_and_blocks_continuation(tmp_path):
+    store = ActionStore(tmp_path / "actions.sqlite3")
+    action = create(store)["action"]
+    attempt = store.begin_submission(action["action_id"], expected_generation=8)
+    store.begin_phase(
+        action["action_id"], attempt["attempt_id"], phase_id="approach",
+        ordinal=0, command_digest="a" * 64,
+    )
+    store.record_first_phase_submission(
+        action["action_id"], attempt["attempt_id"], phase_id="approach",
+        accepted=True, driver_goal_id="ros-goal-approach",
+    )
+
+    held = store.hold_action(
+        action["action_id"], attempt["attempt_id"], reason="STOP_GENERATION_FENCED",
+    )
+
+    phase = store.action_phases(action["action_id"])[0]
+    assert held["state"] == "HOLD"
+    assert phase["state"] == "UNKNOWN"
+    assert phase["driver_goal_id"] == "ros-goal-approach"
+    assert phase["reason"] == "STOP_GENERATION_FENCED"
+    with pytest.raises(InvalidActionTransition):
+        store.begin_phase(
+            action["action_id"], attempt["attempt_id"], phase_id="grasp",
+            ordinal=1, command_digest="b" * 64,
+        )
+
+
 def test_prepared_but_never_submitted_intent_is_not_called_unknown(tmp_path):
     path = tmp_path / "actions.sqlite3"
     action = create(ActionStore(path))["action"]
@@ -194,6 +223,154 @@ def test_action_attempt_persists_multiple_ordered_ros_goal_phases(tmp_path):
         ("approach", 0, "SUCCEEDED", "ros-goal-approach"),
         ("grasp", 1, "ACCEPTED", "ros-goal-grasp"),
     ]
+
+
+def test_first_phase_intent_is_allowed_while_parent_is_submitting(tmp_path):
+    store = ActionStore(tmp_path / "actions.sqlite3")
+    action = create(store)["action"]
+    attempt = store.begin_submission(action["action_id"], expected_generation=8)
+
+    phase = store.begin_phase(
+        action["action_id"], attempt["attempt_id"], phase_id="approach",
+        ordinal=0, command_digest="a" * 64,
+    )
+
+    assert phase["state"] == "SUBMITTING"
+    with pytest.raises(InvalidActionTransition):
+        store.begin_phase(
+            action["action_id"], attempt["attempt_id"], phase_id="grasp",
+            ordinal=1, command_digest="b" * 64,
+        )
+
+
+@pytest.mark.parametrize(("accepted", "goal_id", "expected"), [
+    (True, "ros-goal-1", "ACCEPTED"),
+    (False, None, "FAILED"),
+    (None, None, "UNKNOWN"),
+])
+def test_first_phase_response_updates_parent_and_phase_together(
+    tmp_path, accepted, goal_id, expected,
+):
+    store = ActionStore(tmp_path / "actions.sqlite3")
+    action = create(store)["action"]
+    attempt = store.begin_submission(action["action_id"], expected_generation=8)
+    store.begin_phase(
+        action["action_id"], attempt["attempt_id"], phase_id="approach",
+        ordinal=0, command_digest="a" * 64,
+    )
+
+    recorded = store.record_first_phase_submission(
+        action["action_id"], attempt["attempt_id"], phase_id="approach",
+        accepted=accepted, driver_goal_id=goal_id,
+    )
+
+    assert recorded["action"]["state"] == expected
+    assert recorded["phase"]["state"] == expected
+    assert recorded["action"]["driver_goal_id"] == goal_id
+    assert recorded["phase"]["driver_goal_id"] == goal_id
+
+
+def test_first_phase_acceptance_event_failure_rolls_back_both_records(tmp_path, monkeypatch):
+    store = ActionStore(tmp_path / "actions.sqlite3")
+    action = create(store)["action"]
+    attempt = store.begin_submission(action["action_id"], expected_generation=8)
+    store.begin_phase(
+        action["action_id"], attempt["attempt_id"], phase_id="approach",
+        ordinal=0, command_digest="a" * 64,
+    )
+    append_event = store._append_event
+
+    def fail_on_phase_acceptance(connection, **kwargs):
+        if kwargs.get("event_type") == "ACTION_PHASE_ACCEPTANCE_RECORDED":
+            raise RuntimeError("injected phase event write failure")
+        return append_event(connection, **kwargs)
+
+    monkeypatch.setattr(store, "_append_event", fail_on_phase_acceptance)
+    with pytest.raises(RuntimeError, match="injected"):
+        store.record_first_phase_submission(
+            action["action_id"], attempt["attempt_id"], phase_id="approach",
+            accepted=True, driver_goal_id="ros-goal-1",
+        )
+
+    assert store.get_action(action["action_id"])["state"] == "SUBMITTING"
+    assert store.action_phases(action["action_id"])[0]["state"] == "SUBMITTING"
+
+
+def test_restart_after_first_phase_intent_is_unknown_and_never_replayable(tmp_path):
+    path = tmp_path / "actions.sqlite3"
+    store = ActionStore(path)
+    action = create(store)["action"]
+    attempt = store.begin_submission(action["action_id"], expected_generation=8)
+    store.begin_phase(
+        action["action_id"], attempt["attempt_id"], phase_id="approach",
+        ordinal=0, command_digest="a" * 64,
+    )
+
+    recovered = ActionStore(path)
+    assert recovered.recover_after_restart() == [action["action_id"]]
+    assert recovered.get_action(action["action_id"])["state"] == "UNKNOWN"
+    phase = recovered.action_phases(action["action_id"])[0]
+    assert phase["state"] == "UNKNOWN"
+    assert phase["driver_goal_id"] is None
+    with pytest.raises(InvalidActionTransition):
+        recovered.record_first_phase_submission(
+            action["action_id"], attempt["attempt_id"], phase_id="approach",
+            accepted=True, driver_goal_id="late-goal",
+        )
+    with pytest.raises(InvalidActionTransition):
+        recovered.begin_phase(
+            action["action_id"], attempt["attempt_id"], phase_id="approach",
+            ordinal=0, command_digest="a" * 64,
+        )
+
+
+def test_restart_appends_workflow_hold_and_preserves_possible_held_object(tmp_path):
+    path = tmp_path / "actions.sqlite3"
+    store = ActionStore(path)
+    action = create(store)["action"]
+    attempt = store.begin_submission(action["action_id"], expected_generation=8)
+    store.record_workflow_state(
+        action["action_id"], attempt["attempt_id"],
+        workflow_state="VERIFY_HOLD", object_may_be_held=True,
+        evidence_refs={"phase_result_id": "grasp-result"},
+    )
+
+    recovered = ActionStore(path)
+    assert recovered.recover_after_restart() == [action["action_id"]]
+    reopened = ActionStore(path)
+    history = reopened.history(action["action_id"])
+    workflow_events = [event for event in history
+                       if event["event_type"] == "ACTION_WORKFLOW_STATE"]
+
+    assert reopened.get_action(action["action_id"])["state"] == "UNKNOWN"
+    assert workflow_events[-1]["detail"]["workflow_state"] == "HOLD"
+    assert workflow_events[-1]["detail"]["object_may_be_held"] is True
+    assert workflow_events[-1]["detail"]["evidence_refs"]["hold_reason"] == (
+        "PROCESS_RESTARTED_WITH_UNRESOLVED_ACTION"
+    )
+    with pytest.raises(InvalidActionTransition):
+        reopened.record_workflow_state(
+            action["action_id"], attempt["attempt_id"],
+            workflow_state="TRANSFER", object_may_be_held=True,
+            evidence_refs={"phase_result_id": "late-result"},
+        )
+
+
+@pytest.mark.parametrize("accepted", [False, None])
+def test_unaccepted_first_phase_cannot_claim_a_ros_goal_id(tmp_path, accepted):
+    store = ActionStore(tmp_path / "actions.sqlite3")
+    action = create(store)["action"]
+    attempt = store.begin_submission(action["action_id"], expected_generation=8)
+    store.begin_phase(
+        action["action_id"], attempt["attempt_id"], phase_id="approach",
+        ordinal=0, command_digest="a" * 64,
+    )
+
+    with pytest.raises(ValueError, match="cannot have a driver_goal_id"):
+        store.record_first_phase_submission(
+            action["action_id"], attempt["attempt_id"], phase_id="approach",
+            accepted=accepted, driver_goal_id="unverified-goal",
+        )
 
 
 def test_phase_goal_identity_and_order_are_fenced(tmp_path):

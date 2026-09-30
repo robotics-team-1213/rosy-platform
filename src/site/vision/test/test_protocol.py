@@ -8,6 +8,7 @@ not a local fixup.
 from __future__ import annotations
 
 import json
+import ssl
 from pathlib import Path
 
 import pytest
@@ -56,6 +57,40 @@ def test_hello_valid_passes():
     protocol.validate_hello(VECTORS["messages"]["hello_valid"])
 
 
+def test_hello_with_lens_passes_and_old_hello_has_no_lens():
+    protocol.validate_hello(VECTORS["messages"]["hello_with_lens"])
+    assert protocol.parse_hello_lens(VECTORS["messages"]["hello_valid"]) is None
+    assert protocol.parse_hello_lens(VECTORS["messages"]["hello_with_lens"]) == {
+        "kind": "wide", "focal_mm": 2.2, "hfov_deg": 104.1,
+    }
+
+
+@pytest.mark.parametrize("vector", VECTORS["hello_lens"]["valid"], ids=lambda v: v["lens"]["kind"])
+def test_valid_hello_lens_parses(vector):
+    hello = {**VECTORS["messages"]["hello_valid"], "lens": vector["lens"]}
+    protocol.validate_hello(hello)
+    assert protocol.parse_hello_lens(hello) == vector["parsed"]
+
+
+@pytest.mark.parametrize("vector", VECTORS["hello_lens"]["ignored"], ids=lambda v: v["name"])
+def test_malformed_hello_lens_is_ignored_not_rejected(vector):
+    hello = {**VECTORS["messages"]["hello_valid"], "lens": vector["lens"]}
+    protocol.validate_hello(hello)
+    assert protocol.parse_hello_lens(hello) is None
+
+
+@pytest.mark.parametrize("text", [
+    '{"kind": "wide", "focal_mm": Infinity, "hfov_deg": 104.1}',
+    '{"kind": "wide", "focal_mm": 2.2, "hfov_deg": NaN}',
+    '{"kind": "wide", "focal_mm": 1e400, "hfov_deg": 104.1}',
+])
+def test_non_finite_hello_lens_is_ignored(text):
+    # Python's json accepts these; a stored inf would make json.dumps emit invalid JSON.
+    hello = {**VECTORS["messages"]["hello_valid"], "lens": json.loads(text)}
+    protocol.validate_hello(hello)
+    assert protocol.parse_hello_lens(hello) is None
+
+
 def test_hello_bad_proto_is_rejected():
     with pytest.raises(protocol.HelloError) as excinfo:
         protocol.validate_hello(VECTORS["messages"]["hello_bad_proto"])
@@ -98,10 +133,59 @@ def test_source_pattern_matches_the_vector():
 def test_generated_pairing_uri_round_trips(vector):
     generated = protocol.pairing_uri(
         vector["host"], vector["port"], vector["token"], vector["source"],
-        secure=vector.get("secure", False),
+        secure=vector.get("secure", False), pin=vector.get("pin"),
     )
     parsed = protocol.parse_pairing_uri(generated)
     assert parsed["host"] == vector["host"]
     assert parsed["port"] == vector["port"]
     assert parsed["token"] == vector["token"]
     assert parsed["source"] == vector["source"]
+    assert parsed["pin"] == vector.get("pin")
+
+
+@pytest.mark.parametrize("vector", VECTORS["pairing_uris"]["valid"], ids=lambda v: v["uri"])
+def test_valid_pairing_uri_carries_its_pin(vector):
+    assert protocol.parse_pairing_uri(vector["uri"])["pin"] == vector.get("pin")
+
+
+def test_pin_pattern_matches_the_vector():
+    assert protocol.PIN_PATTERN.pattern == VECTORS["pairing_uris"]["pin_pattern"]
+
+
+@pytest.mark.parametrize("vector", VECTORS["cert_pins"]["vectors"], ids=lambda v: v["der_utf8"])
+def test_cert_pin_matches_the_shared_vector(vector):
+    der = vector["der_utf8"].encode("utf-8")
+    assert protocol.cert_pin(der) == vector["pin"]
+    # PEM_cert_to_DER_cert only strips the armour, so any bytes stand in for a certificate.
+    bundle = ssl.DER_cert_to_PEM_cert(b"leaf-stand-in") + ssl.DER_cert_to_PEM_cert(der)
+    assert protocol.pem_last_cert_pin(bundle) == vector["pin"]
+
+
+def test_pem_without_a_certificate_is_rejected():
+    with pytest.raises(ValueError, match="no PEM certificate"):
+        protocol.pem_last_cert_pin("not a pem")
+
+
+def test_generator_refuses_a_pin_without_tls():
+    pin = VECTORS["cert_pins"]["vectors"][0]["pin"]
+    with pytest.raises(protocol.PairingError) as excinfo:
+        protocol.pairing_uri("h", 1, "t", "s", secure=False, pin=pin)
+    assert excinfo.value.reason == "pin"
+
+
+def test_receiver_hello_timeout_closes_with_try_again_later():
+    """D-341 §11: the hello timer closes with 1013, which the phone always retries.
+
+    Pre-1013 receivers closed it with 4400 "no hello"; that reason stays in the retry
+    list for one release so older site PCs do not stop the camera for good."""
+    source = (Path(protocol.__file__).parent / "ingest.py").read_text(encoding="utf-8")
+    assert "protocol.CLOSE_HELLO_TIMEOUT," in source
+    assert 'protocol.CLOSE_BAD_PROTO, "no hello"' not in source
+    assert protocol.CLOSE_HELLO_TIMEOUT == VECTORS["close_codes"]["try_again_later"] == 1013
+    assert "no hello" in VECTORS["close_4400_reasons"]["retry"]
+
+
+def test_huge_integer_focal_length_is_ignored_not_raised():
+    # Built at runtime: a 400-digit literal in the shared fixture trips the tracked-file secret scan.
+    hello = json.loads('{"lens": {"kind": "wide", "focal_mm": 1%s, "hfov_deg": 104.1}}' % ("0" * 400))
+    assert protocol.parse_hello_lens(hello) is None

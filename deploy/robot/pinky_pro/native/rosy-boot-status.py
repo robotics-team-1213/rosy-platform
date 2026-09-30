@@ -53,6 +53,13 @@ def _read_json(path: Path) -> dict | None:
 
 
 RUNTIME_MODES = frozenset({"core", "motor", "hardware"})
+#: D-380: CORE's RobotMode names the boot display may copy. protocol.schemas is not
+#: importable here (stdlib only); this mirrors core_common.robot_state.ROBOT_MODES.
+ROBOT_MODES = frozenset({"IDLE", "MANUAL", "NAVIGATION", "DOCKING", "EMERGENCY"})
+#: D-381: CORE's NavigationState names; mirrors core_common.robot_state.NAV_STATES.
+NAV_STATES = frozenset({"IDLE", "PLANNING", "NAVIGATING", "ARRIVED", "CANCELED", "FAILED", "BLOCKED"})
+#: D-383: the swarm roles the boot display may copy; mirrors robot_state.SWARM_ROLES.
+SWARM_ROLES = frozenset({"leader", "follower"})
 #: hardware.json rows copied for the boot display (D-260): id, state and product flag only.
 HARDWARE_FILE = f"{STATUS_DIR}/hardware.json"
 DEVICE_STATES = frozenset({"ok", "no_response", "bus_missing", "driver_missing", "needs_human", "not_measured"})
@@ -131,7 +138,16 @@ def _core_inputs(root: Path, now: datetime) -> dict | None:
     devices = _valid_rows(data.get("devices"))
     if devices is None:
         return None
-    return {"battery_warning_percent": float(warning), "devices": devices}
+    # D-380: the mode is additive — an unknown name is absent (None), it does not
+    # drop the good warning and device rows the way a malformed one of those does.
+    # D-381: the navigation state rides the same rule. D-383: the swarm role too.
+    mode = data.get("robot_mode")
+    nav = data.get("nav_state")
+    role = data.get("swarm_role")
+    return {"battery_warning_percent": float(warning), "devices": devices,
+            "robot_mode": mode if mode in ROBOT_MODES else None,
+            "nav_state": nav if nav in NAV_STATES else None,
+            "swarm_role": role if role in SWARM_ROLES else None}
 
 
 def _device_states(root: Path) -> list[dict]:
@@ -199,7 +215,8 @@ def gather(root: Path, run: Runner) -> dict:
         # D-260 M1: CORE's inputs win while it keeps them fresh; otherwise the probe's rows
         # and the SAF-005 default (the display's), e.g. when CORE is down.
         **(_core_inputs(root, datetime.now(timezone.utc))
-           or {"battery_warning_percent": None, "devices": _device_states(root)}),
+           or {"battery_warning_percent": None, "devices": _device_states(root),
+               "robot_mode": None, "nav_state": None, "swarm_role": None}),
         # D-176: written by rosy-network.py; mode/ssid/address only, never a secret.
         "network": {key: value for key, value in (_read_json(root / STATUS_DIR / "network.json") or {}).items()
                     if key in {"mode", "ssid", "address"}},
@@ -220,6 +237,12 @@ def status_record(facts: dict, stage: Stage, now: datetime) -> dict:
         "network": facts.get("network") or {},
         # D-260: the boot display's other two inputs, which it cannot read itself.
         "runtime_mode": facts.get("runtime_mode"),
+        # D-380: CORE's live RobotMode, for the lamp's mode patterns (None without CORE).
+        "robot_mode": facts.get("robot_mode"),
+        # D-381: CORE's live NavigationState, for the lamp's blocked refinement.
+        "nav_state": facts.get("nav_state"),
+        # D-383: the swarm role, for the LCD's line beside the mode.
+        "swarm_role": facts.get("swarm_role"),
         "devices": facts.get("devices") or [],
         "battery_warning_percent": facts.get("battery_warning_percent"),
         "units": facts.get("units") or {},

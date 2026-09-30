@@ -4,7 +4,7 @@
   <name>sensor_adc</name>
   <version>0.0.0</version>
   <description>I2C ADC driver for IR, ultrasonic and battery sensing (aarch64).</description>
-  <maintainer email="byeongkyu@gmail.com">robot</maintainer>
+  <maintainer email="56295815+livsbittt@users.noreply.github.com">robot</maintainer>
   <license>Apache-2.0</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>

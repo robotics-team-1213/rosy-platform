@@ -16,6 +16,8 @@ from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Callable, Mapping, Protocol
 
+from .manipulation_plan import JointTrajectoryPoint
+
 
 KNOWN_OWNERS = frozenset({"leader_teleop", "moveit", "rule_based", "learned_policy"})
 
@@ -47,6 +49,8 @@ class ArmCommandConfig:
     instance_id: str = ""
     joint_names: tuple[str, ...] = ()
     position_limits: Mapping[str, tuple[float, float]] | None = None
+    velocity_limits: Mapping[str, float] | None = None
+    acceleration_limits: Mapping[str, float] | None = None
     allowed_owners: tuple[str, ...] = ()
     calibration_revision: str = ""
     max_joint_state_age_s: float = 0.5
@@ -83,6 +87,18 @@ class ArmCommandConfig:
             normalized[name] = values
         object.__setattr__(self, "joint_names", names)
         object.__setattr__(self, "position_limits", MappingProxyType(normalized))
+        for field_name in ("velocity_limits", "acceleration_limits"):
+            configured = getattr(self, field_name)
+            if configured is None:
+                continue
+            limits = dict(configured)
+            if set(limits) != set(names):
+                raise ValueError(f"{field_name} must exactly match joint_names")
+            checked = {
+                name: _positive_finite(f"{field_name}[{name}]", limits[name])
+                for name in names
+            }
+            object.__setattr__(self, field_name, MappingProxyType(checked))
         owners = tuple(self.allowed_owners)
         if not owners or len(set(owners)) != len(owners) or not set(owners) <= KNOWN_OWNERS:
             raise ValueError("allowed_owners must be a non-empty unique subset of known owners")
@@ -143,12 +159,17 @@ class TrajectoryCommand:
     duration_s: float
     source_state_sequence: int
     calibration_revision: str
+    joint_names: tuple[str, ...] | None = None
+    trajectory_points: tuple[JointTrajectoryPoint, ...] | None = None
+    phase_id: str | None = None
 
     def __post_init__(self) -> None:
         for field_name in (
             "workcell_id", "instance_id", "command_id", "session_id", "owner", "calibration_revision"
         ):
             _nonempty(field_name, getattr(self, field_name))
+        if self.phase_id is not None:
+            _nonempty("phase_id", self.phase_id)
         if type(self.source_state_sequence) is not int or self.source_state_sequence < 0:
             raise ValueError("source_state_sequence must be a non-negative integer")
         normalized = dict(self.positions)
@@ -163,7 +184,39 @@ class TrajectoryCommand:
                 raise ValueError("command positions must be named finite numbers")
             normalized[name] = number
         object.__setattr__(self, "positions", MappingProxyType(normalized))
-        object.__setattr__(self, "duration_s", _positive_finite("duration_s", self.duration_s))
+        duration = _positive_finite("duration_s", self.duration_s)
+        object.__setattr__(self, "duration_s", duration)
+        names = tuple(normalized) if self.joint_names is None else tuple(self.joint_names)
+        if (not names or any(not isinstance(name, str) or not name or name != name.strip()
+                             for name in names) or len(set(names)) != len(names)):
+            raise ValueError("joint_names must be non-empty, trimmed, and unique")
+        if set(names) != set(normalized):
+            raise ValueError("joint_names must exactly match command positions")
+        object.__setattr__(self, "joint_names", names)
+        points = self.trajectory_points
+        if points is None:
+            points = (JointTrajectoryPoint(
+                time_from_start_s=duration,
+                positions=tuple(normalized[name] for name in names),
+            ),)
+        else:
+            points = tuple(points)
+        if not points or any(not isinstance(point, JointTrajectoryPoint) for point in points):
+            raise ValueError("trajectory_points must contain timed joint trajectory points")
+        if any(len(point.positions) != len(names)
+               or (point.velocities is not None and len(point.velocities) != len(names))
+               or (point.accelerations is not None and len(point.accelerations) != len(names))
+               for point in points):
+            raise ValueError("trajectory point dimensions must match joint_names")
+        if any(left.time_from_start_s >= right.time_from_start_s
+               for left, right in zip(points, points[1:])):
+            raise ValueError("trajectory point times must be strictly increasing")
+        if not math.isclose(points[-1].time_from_start_s, duration, rel_tol=0.0, abs_tol=1e-9):
+            raise ValueError("duration_s must equal the final trajectory point time")
+        final_positions = dict(zip(names, points[-1].positions))
+        if final_positions != dict(normalized):
+            raise ValueError("command positions must match the final trajectory point")
+        object.__setattr__(self, "trajectory_points", points)
 
 
 class ActionHandle(Protocol):
@@ -223,7 +276,11 @@ class ArmCommandOwner:
             command.instance_id,
             command.owner,
             command.session_id,
+            command.phase_id,
             tuple(sorted(command.positions.items())),
+            command.joint_names,
+            tuple((point.time_from_start_s, point.positions, point.velocities, point.accelerations)
+                  for point in command.trajectory_points),
             command.duration_s,
             command.source_state_sequence,
             command.calibration_revision,
@@ -335,10 +392,31 @@ class ArmCommandOwner:
                 return self._decision(False, "duration_limit", command_id)
             if set(command.positions) != set(self.config.joint_names):
                 return self._decision(False, "joint_map_mismatch", command_id)
-            for name, position in command.positions.items():
-                lower, upper = self.config.position_limits[name]
-                if position < lower or position > upper:
-                    return self._decision(False, "joint_limit", command_id)
+            points = command.trajectory_points
+            if len(points) > 1 and (
+                self.config.velocity_limits is None or self.config.acceleration_limits is None
+            ):
+                return self._decision(False, "trajectory_rate_limits_missing", command_id)
+            if len(points) > 1 and any(
+                point.velocities is None or point.accelerations is None for point in points
+            ):
+                return self._decision(False, "trajectory_derivatives_missing", command_id)
+            for point in points:
+                for name, position in zip(command.joint_names, point.positions):
+                    lower, upper = self.config.position_limits[name]
+                    if position < lower or position > upper:
+                        return self._decision(False, "joint_limit", command_id)
+                for values, limits, reason in (
+                    (point.velocities, self.config.velocity_limits, "velocity_limit"),
+                    (point.accelerations, self.config.acceleration_limits, "acceleration_limit"),
+                ):
+                    if values is None:
+                        continue
+                    if limits is None:
+                        return self._decision(False, "trajectory_rate_limits_missing", command_id)
+                    if any(abs(value) > limits[name]
+                           for name, value in zip(command.joint_names, values)):
+                        return self._decision(False, reason, command_id)
             self._seen_commands[command_id] = fingerprint
             try:
                 handle = self._action_port.send_goal(command)

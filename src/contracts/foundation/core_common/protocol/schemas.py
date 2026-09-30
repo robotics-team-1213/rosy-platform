@@ -122,6 +122,50 @@ class DeviceActionState(str, enum.Enum):
     HOLD = "HOLD"
 
 
+class DeviceActionPhaseReceipt(BaseModel):
+    """Allowlisted ROS phase snapshot; excludes goal IDs and motion data."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    phase_id: Literal["approach", "grasp", "transfer", "release"]
+    ordinal: int = Field(strict=True, ge=0, le=3)
+    state: Literal[
+        "SUBMITTING", "ACCEPTED", "RUNNING", "CANCEL_REQUESTED",
+        "UNKNOWN", "SUCCEEDED", "FAILED", "CANCELED",
+    ]
+    journal_event_id: int = Field(strict=True, ge=1)
+    observed_at: datetime
+
+    @field_validator("observed_at")
+    @classmethod
+    def _phase_time_aware(cls, value: datetime) -> datetime:
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("phase observed_at must include a timezone")
+        return value
+
+    @model_validator(mode="after")
+    def _phase_identity_matches_ordinal(self):
+        expected = ("approach", "grasp", "transfer", "release")[self.ordinal]
+        if self.phase_id != expected:
+            raise ValueError("phase ID does not match its fixed ordinal")
+        return self
+
+
+class MissionPhaseProgress(BaseModel):
+    """Read-only Mission projection of one device phase."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    phase_id: Literal["approach", "grasp", "transfer", "release"]
+    ordinal: int = Field(strict=True, ge=0, le=3)
+    state: Literal[
+        "SUBMITTING", "ACCEPTED", "RUNNING", "CANCEL_REQUESTED",
+        "UNKNOWN", "SUCCEEDED", "FAILED", "CANCELED",
+    ]
+    last_event_id: int = Field(strict=True, ge=1)
+    observed_at: datetime
+
+
 class LocalStopState(str, enum.Enum):
     """Software latch facts only. No value means physical standstill is proven."""
 
@@ -261,6 +305,9 @@ class DeviceActionReceipt(BaseModel):
     driver_goal_id: str | None = Field(default=None, max_length=192)
     reason: str | None = Field(default=None, max_length=256)
     created: bool = False
+    phase_summaries: tuple[DeviceActionPhaseReceipt, ...] | None = Field(
+        default=None, max_length=4,
+    )
 
     @field_validator("mission_id", "step_id", "action_id", "attempt_id", "workcell_id", "instance_id")
     @classmethod
@@ -275,6 +322,17 @@ class DeviceActionReceipt(BaseModel):
         if value.tzinfo is None or value.utcoffset() is None:
             raise ValueError("observed_at must include a timezone")
         return value
+
+    @model_validator(mode="after")
+    def _phase_summaries_are_ordered(self):
+        if self.phase_summaries is not None:
+            ordinals = [phase.ordinal for phase in self.phase_summaries]
+            if ordinals != list(range(len(ordinals))):
+                raise ValueError("phase summaries must be contiguous and ordered")
+            if any(phase.journal_event_id > self.journal_event_id
+                   for phase in self.phase_summaries):
+                raise ValueError("phase event cannot follow the receipt journal watermark")
+        return self
 
 
 class DeviceActionLookup(BaseModel):
@@ -306,6 +364,7 @@ class DeviceActionCancelRequest(DeviceActionLookup):
             raise ValueError("requested_at must include a timezone")
         return value
 
+
 class LocalStopRequest(BaseModel):
     """A software stop request fenced to one workcell and dispatch generation."""
 
@@ -331,6 +390,7 @@ class LocalStopRequest(BaseModel):
         if value.tzinfo is None or value.utcoffset() is None:
             raise ValueError("requested_at must include a timezone")
         return value
+
 
 class LocalStopQuery(BaseModel):
     """Read the latched software stop state for exactly one workcell instance."""
@@ -366,7 +426,6 @@ class LocalStopRearmRequest(BaseModel):
         return value
 
 
-
 class LocalStopSnapshot(BaseModel):
     """Stop request/latch projection without driver or physical completion claims."""
 
@@ -387,7 +446,6 @@ class LocalStopSnapshot(BaseModel):
         if not _ACTION_ID.fullmatch(value):
             raise ValueError("stop identity must be a trimmed identifier")
         return value
-
 
 
 # --- Envelope (API Ref §7.1, PRT-001) ------------------------------------
@@ -414,6 +472,7 @@ def _bounded_finite_json_size(value: Any) -> int:
         ).encode("utf-8"))
     except (TypeError, ValueError) as exc:
         raise ValueError("value must be finite JSON") from exc
+
 
 class MissionProgressAxis(BaseModel):
     """One Fleet Mission progress source; this is not physical-state proof."""
@@ -442,6 +501,8 @@ class MissionProgressSnapshot(BaseModel):
     action: MissionProgressAxis
     goal_evidence: MissionProgressAxis
     stop: MissionProgressAxis
+    active_phase: Literal["approach", "grasp", "transfer", "release"] | None = None
+    phases: tuple[MissionPhaseProgress, ...] = Field(default=(), max_length=4)
 
 
 class MissionProgressEvent(BaseModel):
@@ -553,6 +614,8 @@ class MissionModelContext(BaseModel):
     goal_evidence_reason: str | None = Field(default=None, max_length=256)
     stop_state: str = Field(min_length=1, max_length=64)
     stop_reason: str | None = Field(default=None, max_length=256)
+    active_phase: Literal["approach", "grasp", "transfer", "release"] | None = None
+    phases: tuple[MissionPhaseProgress, ...] = Field(default=(), max_length=4)
 
 
 class MissionFeedbackTurnScope(BaseModel):
@@ -615,6 +678,8 @@ class MissionFeedbackContext(BaseModel):
     goal_evidence_reason: str | None = Field(default=None, max_length=256)
     stop_state: str = Field(min_length=1, max_length=64)
     stop_reason: str | None = Field(default=None, max_length=256)
+    active_phase: Literal["approach", "grasp", "transfer", "release"] | None = None
+    phases: tuple[MissionPhaseProgress, ...] = Field(default=(), max_length=4)
 
     @model_validator(mode="after")
     def _bounded_and_replan_is_not_stopped(self) -> "MissionFeedbackContext":
