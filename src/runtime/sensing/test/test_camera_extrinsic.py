@@ -201,6 +201,24 @@ class Node(CalibrationCamera):
         path.write_text(json.dumps(value, allow_nan=False))
 
 
+class DeclaredParameterTest(unittest.TestCase):
+    """Every parameter the camera step reads is declared by the real node (review M4):
+    an undeclared get_parameter raises in rclpy and would kill the step at its end."""
+
+    def test_mixin_parameters_are_declared_by_startup_calibration_node(self):
+        import ast
+        import inspect
+        node_source = (Path(step.__file__).parent / 'startup_calibration_node.py').read_text(encoding='utf-8')
+        declared = {node.args[0].value for node in ast.walk(ast.parse(node_source))
+                    if isinstance(node, ast.Call) and getattr(node.func, 'attr', '') == 'declare_parameter'
+                    and node.args and isinstance(node.args[0], ast.Constant)}
+        used = {node.args[0].value for node in ast.walk(ast.parse(inspect.getsource(step)))
+                if isinstance(node, ast.Call) and getattr(node.func, 'attr', '') == 'get_parameter'
+                and node.args and isinstance(node.args[0], ast.Constant)}
+        self.assertTrue(used)
+        self.assertLessEqual(used, declared, used - declared)
+
+
 class StepTest(unittest.TestCase):
     ODOM = (1.0, 2.0, 0.3, 0.0)
 

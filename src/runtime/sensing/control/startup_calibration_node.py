@@ -71,6 +71,8 @@ class StartupCalibrationNode(Node, CalibrationSequence, CalibrationRotation, Cal
         self.declare_parameter('result_path', str(Path.home() / '.local/state/control/calibration.json'))
         # Base intrinsics for the stationary camera step (calibration_camera.py); '' refuses the step.
         self.declare_parameter('camera_extrinsic_profile_path', '')
+        # Calibration store root for candidate records; '' = core_common default (/var/lib/rosy/calibration).
+        self.declare_parameter('calibration_store_root', '')
         self.camera_capture = self.camera_extrinsic = None
         latched = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL,
                              reliability=ReliabilityPolicy.RELIABLE)
