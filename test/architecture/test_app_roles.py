@@ -106,9 +106,14 @@ def test_fleet_vision_routes_only_issue_leases_without_bytes():
     assert not body["frame_path"].startswith("/api/fleet/")
 
 
-def test_pilot_is_not_on_main_yet():
-    """When Pilot lands, add its role check here (no /api/fleet in src/hmi/pilot)."""
-    assert not (ROOT / "src/hmi/pilot").exists()
+def test_pilot_stays_a_one_robot_surface():
+    """D-370 1항: Pilot never calls Fleet — it drives one robot through that robot's CORE."""
+    pilot = ROOT / "src/hmi/pilot"
+    assert pilot.is_dir()
+    calls = [path.relative_to(ROOT).as_posix() for path in pilot.rglob("*")
+             if path.suffix in {".js", ".html"} and "test" not in path.parts
+             and "/api/fleet" in path.read_text(encoding="utf-8")]
+    assert calls == []
 
 
 def test_each_operation_has_one_owner():

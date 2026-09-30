@@ -91,10 +91,16 @@ surfaces:
       해제 회차가 첫 셀을 남기면 이 문장을 baseline 경로로 바꾼다.
 
   - id: rosy-pilot
+    app_name: Rosy Pilot
+    app_name_en: Rosy Pilot
+    short_name: Rosy Pilot
+    icon: src/hmi/web_common/icons/pilot.svg
     path: src/hmi/pilot
     surface: robot
     medium: web
     audience: 현장 운전자 한 사람 (D-323 원격 조종 PWA — CORE 가 /pilot 으로 서빙, 포트는 robot-dashboard 와 같은 CORE 포트)
+    role: 한 로봇 직접 수동 운전·운전석 영상·누르는 동안만 가는 운전 보조 (D-370 1항, D-323·D-344)
+    owns: [manual-drive, driver-video, drive-assist, estop]
     grammar: focal
     contracts: []
     contract_reason: >

@@ -1,6 +1,6 @@
 {
   "name": "Rosy Pilot",
-  "short_name": "Pilot",
+  "short_name": "Rosy Pilot",
   "description": "ROSY 로봇 직접 조종 표면 (D-323)",
   "start_url": "/pilot",
   "scope": "/pilot",
