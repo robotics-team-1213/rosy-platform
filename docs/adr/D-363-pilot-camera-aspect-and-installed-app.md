@@ -40,4 +40,21 @@
 - SOURCE: 브라우저 시험이 영상 비율과 조작부 비겹침을 잰다(가로 2000×1200, 세로 1200×2000).
 - DEVICE: 태블릿 설치 앱 가로·세로 스크린샷.
 
+### 부록 (2026-09-30): 공용 컨트롤 계약 아래의 조작부
+
+Pilot 이 `shared_controls`·`typography_focus` 계약을 받는다(`surfaces.yaml`). 조작부가 영상과 겹치지 않는
+이 결정의 배치는 그대로이고, 게임형 큰 표적은 다음처럼 계약 안에서 만든다.
+
+- 버튼의 면·글자·테두리는 `components.css` 만 그린다. 누르는 동안 움직이는 페달·제자리·진행은
+  `kind="toggle"` + `size="primary"`(누르는 동안 `.active` 로 채워짐), 차선 자동은 `toggle`(`data-active`),
+  속도·정밀은 한 판 안의 `segment`(`aria-pressed`).
+- 표적 크기(`min-height`·폭)는 표면 CSS 의 배치 규칙이다. 계약의 재도색 목록(면·글자·테두리·투명도·
+  모서리)에 들지 않는다.
+- 확대·전체화면에서 조작부가 영상 위에 올라올 때의 대비는 버튼이 아니라 조작부 판(`[data-drive-left]`)이
+  반투명 바탕으로 준다.
+- HUD 글자는 여섯 단계 크기 토큰만 쓴다: 실측 속도 `--text-display`, 회전율·의도 `--text-value`,
+  동작·상한·링크 사실 `--text-label`. 태블릿(1200 CSS px 폭)에서 이전의 12–13px 글자보다 크다.
+- 주행 화면 코드는 `screens/drive.js`(입력·명령 루프), `drive-view.js`(마크업·배치·배율),
+  `drive-auto.js`(D-344 보조 자율·D-364 의도 띠)로 나뉜다.
+
 **Related:** [D-323](D-323-rosy-pilot-teleop-app.md), [D-365](D-365-pilot-pwa-first.md), [D-368](D-368-pilot-live-driver-video.md), [D-343](D-343-pilot-rooms-and-driver-seat.md).

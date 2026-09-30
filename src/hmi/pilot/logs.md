@@ -157,3 +157,13 @@
 - 변경: main 병합(2026-09-30)과 함께 pilot 을 D-329 표면 레지스트리에 등록(`rosy-pilot`, 역할·소유 `manual-drive`·`driver-video`·`drive-assist`·`estop`, 아이콘 `web_common/icons/pilot.svg`). D-370 이름표대로 제목 `Rosy 로봇 — 조종`, PWA `short_name` `Rosy Pilot`, 상단 버튼 "관제 화면" → "로봇 대시보드". CORE 이미지가 pilot 을 빌드한다. 공용 컨트롤·타이포 계약은 주행 HUD 재도색 때문에 아직 받지 않는다(surfaces.yaml 사유). PWA 아이콘 PNG 교체는 D-370 이행 회차.
 - 증거: `test/architecture/test_app_roles.py`(pilot 이 `/api/fleet` 을 부르지 않음), `src/hmi/web_common/test` 114 passed, `test/test_core_image_closure.py`.
 - gate 변화: 없음(등록·이름만).
+
+## 2026-09-30 · 47f814a6 · refactor(pilot): drive.js 를 drive-auto·drive-view 로 나눔
+- 변경: `screens/drive.js`(708줄)를 입력·명령 루프만 남기고 `drive-view.js`(마크업·D-363 배치·배율)와 `drive-auto.js`(D-344 보조 자율·D-364 의도 띠)로 나눴다. 동작은 같다. 새 파일을 CORE `pilot_assets`·`dev_server`·`sw.js` 사전 캐시(이름 `-3`, 빠져 있던 `inputs.js` 도 더함)·`test_pilot_route`·동기화 스크립트에 등록. drive.js 예산 판정(`test_web_budgets.py`)은 예산 아래라 지웠다.
+- 증거: `src/hmi/pilot/test` + `test_pilot_route.py` 51 passed(브라우저 포함).
+- gate 변화: 없음.
+
+## 2026-09-30 · uncommitted · feat(pilot): 공용 컨트롤·타이포 계약과 D-370 PWA 아이콘
+- 변경: `surfaces.yaml` 의 pilot 이 `contracts: [shared_controls, typography_focus]` 를 받는다. 버튼 종류는 JS 에서 `setAttribute("kind", …)` 로 명시(페달·제자리·진행 `toggle`+`size="primary"`, 차선 자동 `toggle`, 속도·정밀·입력 조정 `segment`+`aria-pressed`). `styles.css` 는 공용 컨트롤의 면·글자·테두리를 다시 칠하지 않고, 영상 위 대비는 조작부 판이 가진다. HUD 글자는 크기 토큰(`--text-display`·`--text-value`·`--text-label`)만 쓴다. PWA 아이콘 192·512·192-maskable 을 `web_common/icons/pilot.svg` 에서 `tools/icons/render_png.py` 로 다시 그렸다(maskable 은 `--ground` 판에 합성). D-363 에 부록.
+- 증거: `src/hmi/web_common/test` 계약 시험 통과, `test_pwa_icons.py`(PNG = 렌더 결과), 스크린샷 `X:\DevTemp\pilot-polish\after2-*.png`(가로 2000×1200·세로 1200×2000, 수동·자동).
+- gate 변화: 없음(SOURCE 범위 안).
