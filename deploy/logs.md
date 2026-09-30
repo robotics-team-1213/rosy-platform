@@ -1538,3 +1538,11 @@
 - gate 변화: 없음 (ARTIFACT/DEVICE는 여전히 HOLD — native ARM64·실기 증거는 그대로 남는다).
 - 결정: 없음.
 - 교훈: 없음.
+
+## 2026-09-30 · feat/console-lane-map-overlay · build(site): 지도 맞춤용 트랙 파일을 이미지에 넣음
+
+- 변경: Vision 이미지에 `road_lines.stl`, Fleet 이미지에 `lane_graph.yaml`·`road_lines.stl`(`/opt/rosy/maps/map_v2_fleet/`, 읽기 전용). compose: vision `--map-paint`, fleet `--site-lane-graph`/`--site-lane-paint`. dockerignore는 두 파일만 연다. README "Map auto-fit overlay (D-375)".
+- 증거: `test/test_site_map_fit_deploy.py`; `docker compose config` 통과; scratch COPY 빌드로 dockerignore 통과 확인. 전체 이미지 빌드·배포는 하지 않음.
+- gate 변화: 없음.
+- 결정: D-375.
+- 교훈: 없음.

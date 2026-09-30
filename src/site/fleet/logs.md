@@ -686,3 +686,11 @@
 - 변경: 관제 화면 `<title>` `Rosy Console`, 파비콘 `/common/icons/console.svg`. `test_common_icons.py`, `test_task_contract_docs.py`의 Vision 경로(`src/site/vision/rosy_vision/ingest.py`).
 - 증거: `python -m pytest src/site/fleet/test -q` 938 passed, 6 skipped; node 명세 6파일 34 passed (2026-09-30 Windows).
 - gate 변화: 없음. 자산 폴더 이동(`src/site/console`, `rosy_console`)은 D-374 단계 4 게이트 그대로.
+
+## 2026-09-30 · feat/console-lane-map-overlay · feat(console): D-375 지도 자동 맞춤 겹침·평면 뷰
+
+- 변경: `GET /api/fleet/site-lanes`(읽기 가드, `server/site_lanes.py`) — `lane_graph.yaml` 중심선·주차 진입·회전교차로 원과 `road_lines.stl` 페인트 삼각형을 지도 좌표로 준다. `fleet console --site-lane-graph/--site-lane-paint [MAP_ID=]PATH`. 콘솔 `map-fit.js`(순수)·`map-fit-view.js`(DOM): "맵 자동 맞춤" → Vision map-proposal(같은 preview lease, Fleet 중계 없음) → 원본 위 차선 겹침 + 지도 평면으로 편 영상(field-view `warpImage` 공용). 수락은 source별 브라우저 표시 초안(`rosy-map-fit:<source>`)일 뿐이다. 레이어 `lanes`, `maptop` 추가.
+- 증거: `test_site_lanes_api.py`, node `map-fit.test.mjs` 9개; 헤드리스 콘솔 자체 시험(합성 프레임 수락, 실제 설치 프레임 + 손 맞춤 H 겹침, 실제 Vision 거부 적합 표시). 스크린샷은 비공개 scratchpad.
+- gate 변화: 없음 (SOURCE). 제안·초안은 sighting·CameraMap·주행에 쓰지 않는다(D-375 4항).
+- 결정: D-375 "관제 화면 표시·확인 UI"의 첫 구현. 중심선은 페인트에서 약 8 cm(차로 가운데)라 겹침 확인은 페인트 삼각형으로 한다.
+- 교훈: 네 모서리 조정값은 0–100%로 잘리므로 지도 맞춤은 전체 homography만 쓴다(모서리가 프레임 밖이어도 된다).
