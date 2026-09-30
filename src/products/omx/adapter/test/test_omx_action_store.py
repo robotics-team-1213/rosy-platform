@@ -134,6 +134,35 @@ def test_fault_hold_stays_unresolved_until_matching_terminal_readback(tmp_path):
     assert store.unresolved_actions() == []
 
 
+def test_holding_action_marks_active_phase_unknown_and_blocks_continuation(tmp_path):
+    store = ActionStore(tmp_path / "actions.sqlite3")
+    action = create(store)["action"]
+    attempt = store.begin_submission(action["action_id"], expected_generation=8)
+    store.begin_phase(
+        action["action_id"], attempt["attempt_id"], phase_id="approach",
+        ordinal=0, command_digest="a" * 64,
+    )
+    store.record_first_phase_submission(
+        action["action_id"], attempt["attempt_id"], phase_id="approach",
+        accepted=True, driver_goal_id="ros-goal-approach",
+    )
+
+    held = store.hold_action(
+        action["action_id"], attempt["attempt_id"], reason="STOP_GENERATION_FENCED",
+    )
+
+    phase = store.action_phases(action["action_id"])[0]
+    assert held["state"] == "HOLD"
+    assert phase["state"] == "UNKNOWN"
+    assert phase["driver_goal_id"] == "ros-goal-approach"
+    assert phase["reason"] == "STOP_GENERATION_FENCED"
+    with pytest.raises(InvalidActionTransition):
+        store.begin_phase(
+            action["action_id"], attempt["attempt_id"], phase_id="grasp",
+            ordinal=1, command_digest="b" * 64,
+        )
+
+
 def test_prepared_but_never_submitted_intent_is_not_called_unknown(tmp_path):
     path = tmp_path / "actions.sqlite3"
     action = create(ActionStore(path))["action"]

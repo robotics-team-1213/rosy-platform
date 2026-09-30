@@ -35,8 +35,8 @@
 
 ## 최근 기록
 
+- 2026-09-30 · uncommitted · hold unresolved phase state under local stop
 - 2026-09-30 · uncommitted · mint validated attempt-scoped phase recorder
 - 2026-09-30 · uncommitted · persist first phase intent and atomic response
 - 2026-09-30 · uncommitted · OMX pick-and-place plan, trajectory, and ROS goal contracts (D-376)
 - 2026-09-29 · uncommitted · fix(omx): 제출 기록을 정지 펜스 잠금 안으로
-- 2026-09-29 · uncommitted · add bounded local Device Action API and runner (D-336)

@@ -1,11 +1,11 @@
 ---
 module: omx_adapter
 owner: OMX workcell
-last_verified: { commit: "98a99638", date: 2026-09-30 }
+last_verified: { commit: "0dcccd0a", date: 2026-09-30 }
 gates:
   SOURCE:
     state: GO
-    evidence: "199 OMX adapter/profile/vendor-boundary tests passed, 3 skipped. SOURCE includes typed 3D RGB-D plan contracts, complete timed multi-waypoint validation, typed ROS goal events, and atomic first phase intent/parent acceptance persistence with restart-to-UNKNOWN behavior. The ActionRunner/ROS phase coordinator remains unwired; no production planner or Fleet phase receipt integration exists."
+    evidence: "200 OMX adapter/profile/vendor-boundary tests passed, 3 skipped. SOURCE includes typed 3D RGB-D plan contracts, complete timed multi-waypoint validation, typed ROS goal events, and atomic first phase intent/parent acceptance persistence with restart-to-UNKNOWN behavior. The ActionRunner/ROS phase coordinator remains unwired; no production planner or Fleet phase receipt integration exists."
     cmd: "python -B -X utf8 -m pytest src/products/omx/adapter/test src/products/omx/profile/test test/test_omx_vendor_stack_lock.py test/test_omx_host_inventory.py test/test_omx_multi_preflight.py test/test_dds_identity_contracts.py -q -p no:cacheprovider"
   LOCAL:
     state: GO

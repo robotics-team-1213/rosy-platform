@@ -720,9 +720,10 @@ class ActionStore:
         now = _utc_now()
         with closing(self._connect()) as connection:
             connection.execute("BEGIN IMMEDIATE")
-            self._require_attempt(connection, action_id, attempt_id,
-                                  {"SUBMITTING", "ACCEPTED", "RUNNING",
-                                   "CANCEL_REQUESTED", "UNKNOWN"})
+            action = self._require_attempt(
+                connection, action_id, attempt_id,
+                {"SUBMITTING", "ACCEPTED", "RUNNING", "CANCEL_REQUESTED", "UNKNOWN"},
+            )
             connection.execute(
                 "UPDATE omx_actions SET state='HOLD', reason=?, updated_at=? WHERE action_id=?",
                 (reason, now, action_id),
@@ -732,6 +733,25 @@ class ActionStore:
                 event_type="ACTION_HELD", actor_id="system", detail={"reason": reason},
                 created_at=now,
             )
+            phases = connection.execute(
+                """SELECT * FROM omx_action_phases WHERE action_id=? AND attempt_id=?
+                   AND state IN ('SUBMITTING', 'ACCEPTED', 'RUNNING', 'CANCEL_REQUESTED')""",
+                (action_id, attempt_id),
+            ).fetchall()
+            for phase in phases:
+                connection.execute(
+                    """UPDATE omx_action_phases SET state='UNKNOWN', reason=?, updated_at=?
+                       WHERE action_id=? AND attempt_id=? AND phase_id=?""",
+                    (reason, now, action_id, attempt_id, phase["phase_id"]),
+                )
+                self._append_event(
+                    connection, action_id=action_id, attempt_id=attempt_id,
+                    state="UNKNOWN", event_type="ACTION_PHASE_HELD_UNKNOWN",
+                    actor_id=action["principal_id"],
+                    detail={"phase_id": phase["phase_id"], "ordinal": phase["ordinal"],
+                            "driver_goal_id": phase["driver_goal_id"], "reason": reason},
+                    created_at=now,
+                )
             updated = connection.execute("SELECT * FROM omx_actions WHERE action_id=?",
                                          (action_id,)).fetchone()
             connection.commit()
