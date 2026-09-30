@@ -117,6 +117,18 @@ object ProblemGuide {
         UNKNOWN,
     }
 
+    /** First line of the not-found message; it must agree with the [NotDiscoveredHint] line under it. */
+    enum class NotDiscoveredHeadline {
+        /** "사이트가 이 Wi-Fi에서 보이지 않습니다 — 같은 이름의 다른 Wi-Fi일 수 있습니다" */
+        OTHER_WIFI,
+
+        /** "사이트가 자동 찾기(mDNS)에 보이지 않습니다": same network as at pairing, so not an SSID mix-up. */
+        MDNS_SILENT,
+    }
+
+    fun notDiscoveredHeadline(hint: NotDiscoveredHint): NotDiscoveredHeadline =
+        if (hint == NotDiscoveredHint.SAME_NETWORK) NotDiscoveredHeadline.MDNS_SILENT else NotDiscoveredHeadline.OTHER_WIFI
+
     /**
      * @param current the Wi-Fi now (null or no subnet: unknown).
      * @param pairingSubnet the subnet saved at pairing time, diagnostic only.

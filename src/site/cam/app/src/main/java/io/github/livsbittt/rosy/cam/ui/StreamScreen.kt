@@ -359,12 +359,17 @@ private fun notDiscoveredText(lan: LanSnapshot?, pairingSubnet: String?): String
     val now = lan?.subnet?.let { subnet ->
         lan.gateway?.let { stringResource(R.string.network_with_gateway, subnet, it) } ?: subnet
     } ?: stringResource(R.string.network_unknown)
-    val hint = when (ProblemGuide.notDiscoveredHint(lan, pairingSubnet)) {
+    val kind = ProblemGuide.notDiscoveredHint(lan, pairingSubnet)
+    val hint = when (kind) {
         ProblemGuide.NotDiscoveredHint.OTHER_NETWORK -> stringResource(R.string.problem_not_discovered_other, now, pairingSubnet ?: "")
         ProblemGuide.NotDiscoveredHint.SAME_NETWORK -> stringResource(R.string.problem_not_discovered_same, now)
         ProblemGuide.NotDiscoveredHint.UNKNOWN -> stringResource(R.string.problem_not_discovered_unknown, now)
     }
-    return stringResource(R.string.problem_not_discovered) + "\n" + hint
+    val headline = when (ProblemGuide.notDiscoveredHeadline(kind)) {
+        ProblemGuide.NotDiscoveredHeadline.OTHER_WIFI -> stringResource(R.string.problem_not_discovered)
+        ProblemGuide.NotDiscoveredHeadline.MDNS_SILENT -> stringResource(R.string.problem_not_discovered_mdns)
+    }
+    return headline + "\n" + hint
 }
 
 /** Binds a PreviewView to the running session, and detaches it while the activity is stopped. */

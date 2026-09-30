@@ -178,6 +178,23 @@ class ProblemGuideTest {
     }
 
     @Test
+    fun notDiscoveredHeadlineAgreesWithTheSubnetComparison() {
+        // Tablet 2026-10-01: same subnet must not say "같은 이름의 다른 Wi-Fi일 수 있습니다".
+        assertEquals(
+            ProblemGuide.NotDiscoveredHeadline.MDNS_SILENT,
+            ProblemGuide.notDiscoveredHeadline(ProblemGuide.NotDiscoveredHint.SAME_NETWORK),
+        )
+        assertEquals(
+            ProblemGuide.NotDiscoveredHeadline.OTHER_WIFI,
+            ProblemGuide.notDiscoveredHeadline(ProblemGuide.NotDiscoveredHint.OTHER_NETWORK),
+        )
+        assertEquals(
+            ProblemGuide.NotDiscoveredHeadline.OTHER_WIFI,
+            ProblemGuide.notDiscoveredHeadline(ProblemGuide.NotDiscoveredHint.UNKNOWN),
+        )
+    }
+
+    @Test
     fun notDiscoveredHintComparesTheSubnetWithPairingTime() {
         val other = lanAt("10.16.36.7", 24, "10.16.36.1")
         val site = lanAt("192.168.1.37", 24, "192.168.1.1")
