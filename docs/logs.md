@@ -3523,6 +3523,14 @@
 - gate 변화: 없음(SOURCE 문서만). 구현·DEVICE·FIELD는 계획 1–5단계와 벤치 절차.
 - 결정: 승인자는 `require_named_operator`, 신뢰는 사이트 CA 고정, 수명 180일·회수 목표 5 s(동기화 2 s). 로봇 FleetAgent 페어링은 옮기지 않는다. 역할 등록표는 방향만 두고 첫 조각은 상수 하나.
 
+## 2026-09-29 · uncommitted · docs(adr): D-382 로봇 ↔ 사이트 관제 통신 적합성 제안과 계획
+
+- 변경: `docs/adr/D-382-robot-site-console-protocol-conformance.md`(Proposed), `docs/plans/2026-09-29-robot-fleet-protocol-conformance-plan.md`(S1–S6), ADR Log 행 추가. `tools/harness/harness.yaml`에 `.worktrees/pilot-teleop`의 미커밋 초안 D-346–D-350을 예약했다.
+- 증거: DEVICE(읽기 전용) — 실물 `rosy-pinky-8kcn`(192.168.1.202:8080, 릴리스 `2026.09.27-010`)에 토큰 없이 GET·WS만 보냈다(2026-09-29). 결과: `/api/v1`·`/openapi.json`·`/docs`·`/metrics`는 공개, state·map·events·system/info·whoami는 401, `/ws/state`·`/ws/events`는 close 4401, `/api/v1/health`는 404. mDNS TXT는 프로파일에 적합. 로봇 OpenAPI와 `main` 9b3cfb59 `create_app().openapi()`를 비교하니 경로 93개는 같고, `GoalRequest.correlation_id`(D-316)와 `TrafficPolicyPatch.junction_rule`이 로봇에 없다. 판 표기는 v1.41(로봇)·v1.52(`app.py`)·v1.56(문서)이고 `info.version`은 셋 다 1.20.0. LOCAL — `python -m pytest src/runtime/gateway/test/test_protocol_version_alignment.py -q` 1 failed/2 passed(`main`의 기존 실패). SOURCE — Hub 세션 결속·Agent seq 재시작·mDNS 브리지 TXT 검사 결함을 코드 판독으로 확인.
+- gate 변화: 없음. 관제 DEVICE는 HOLD(토큰·짝 토큰·v1.44 이상 이미지 필요).
+- 결정: D-382 Proposed(브랜치 초안 번호 D-351은 main의 도킹 재시도 결정과 겹쳐 착지 때 D-382로 바꿈, D-346 4항).
+- 교훈: 계약 문서와 코드가 같은 판을 말하는지 시험이 있어도, 배포된 이미지가 어느 판인지는 런타임에서 알 수 없었다 — 판을 와이어로 노출해야 실물 대조가 된다.
+
 ## 2026-09-30 · uncommitted · feat(fleet): D-352 S1–S3 구현 착지(브랜치 feat/fleet-robot-enrollment-s1)
 
 - 변경: D-352 문서 브랜치를 병합하고 첫 조각(S1–S3)을 구현했다. `site-lan-discovery-profile.md`에 D-352 한 줄, 하네스 `adr_gaps`에서 이미 착지한 D-347 예약 줄을 뺐다(병합 잔상).

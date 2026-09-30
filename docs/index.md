@@ -179,6 +179,7 @@
 | D-374 | 앱의 폴더·패키지·식별자·표시 이름은 역할 이름 하나에서 나온다 — 역할 id(kebab)·snake·compact·표시 네 표기; 와이어 계약 이름(mDNS 종류, `rosy-overhead/1`, `/api/fleet`·`/api/vision`, `rosyov://`, 웹 경로, 설정·저장소 키, compose 서비스)은 바꾸지 않는다 |
 | D-376 | OMX PICK_PLACE planning stays local and trajectory execution stays with the Action owner |
 | D-377 | 앱 이름 규칙: Rosy + 영어 한 단어 — 표시 이름 `Rosy <Word>`, id·폴더 끝 `<word>`, 패키지 `rosy_<word>`, Android `io.github.livsbittt.rosy.<word>`, Gradle `rosy-<word>`, 아이콘 `<word>.svg`; Rosy Cam·Vision·Console·Robot·Pilot |
+| D-382 | 로봇 ↔ 사이트 관제 통신은 계약 스냅샷 하나로 판정하고, 실물 확인은 읽기 전용 적합성 탐침으로 시작한다 |
 
 ## 계획·결과 문서
 
@@ -238,6 +239,7 @@
 - [2026-09-29-pinky-deployment-fast-path.md](plans/2026-09-29-pinky-deployment-fast-path.md)
 - [2026-09-29-policy-evidence-contract-design.md](plans/2026-09-29-policy-evidence-contract-design.md)
 - [2026-09-29-policy-evidence-contract.md](plans/2026-09-29-policy-evidence-contract.md)
+- [2026-09-29-robot-fleet-protocol-conformance-plan.md](plans/2026-09-29-robot-fleet-protocol-conformance-plan.md)
 - [2026-09-30-action-message-identity-design.md](plans/2026-09-30-action-message-identity-design.md)
 - [2026-09-30-action-message-identity.md](plans/2026-09-30-action-message-identity.md)
 - [2026-09-30-app-identity-rename-plan.md](plans/2026-09-30-app-identity-rename-plan.md)
