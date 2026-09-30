@@ -6,15 +6,15 @@ last_verified: { commit: "dc89264", date: 2026-09-17 }
 gates:
   SOURCE:
     state: GO
-    evidence: "test_led_package_contract 2 passed (2026-09-17 Windows). exec_depend interfaces"
-    cmd: "python -m pytest src/led/test/test_led_package_contract.py -q"
+    evidence: "test_led_package_contract 2 passed (2026-09-17 Windows; 2026-09-30 현재 경로 재확인 2 passed 3 skipped). exec_depend interfaces"
+    cmd: "python -m pytest src/products/pinky_pro/led/test -q"
   LOCAL:
     state: GO
     evidence: "동일. ament linter는 이 호스트에 없어 증거로 세지 않는다"
-    cmd: "python -m pytest src/led/test/test_led_package_contract.py -q"
+    cmd: "python -m pytest src/products/pinky_pro/led/test -q"
   ROS-SIM:
     state: HOLD
-    blocker: "rclpy 서비스 서버(set_led/set_brightness) 노드가 있음. ROS 2 Jazzy 컨테이너 재실행 필요, 미실행"
+    blocker: "노드의 `from rosylib import LED`는 공개 트리에서 의도적으로 실패한다(rosylib는 repo 밖 bench-only 헬퍼 — bringup/test/test_rosylib_battery.py:140이 그 실패를 고정). 컨테이너 smoke는 사유 LED 구현 반입 또는 stub 계약 결정이 있기 전까지 불가능하다"
   ARTIFACT:
     state: HOLD
     blocker: "hardware 프로필이 이미지에 배선되지 않았다. core/io 이미지 제외는 test/test_nav2_hardware_slice.py::test_io_image_packages_nav2_without_slam_or_aux_drivers가 고정한다"
@@ -37,7 +37,7 @@ plans:
 ## 다음 gate
 
 1. ROS 환경(colcon)에서 ament lint 3종을 재실행해 LOCAL을 채운다.
-2. ROS 2 Jazzy 컨테이너에서 서비스 노드 graph/parameter smoke를 실행해 ROS-SIM을 되돌린다.
+2. ROS 2 Jazzy 컨테이너에서 서비스 노드 graph/parameter smoke를 실행해 ROS-SIM을 되돌린다 — 단 `rosylib.LED`는 공개 트리에 없어(아래 금지사항) 노드 import가 설계상 실패한다. 사유 구현 반입 또는 stub 계약 결정이 선행 조건이다.
 3. 패키지 소스를 검사하는 host 계약 시험을 추가해 SOURCE를 채운다.
 4. hardware 프로필이 `deploy/robot/pinky_pro/image/ 빌더`에 배선되면 ARTIFACT blocker를 서명 artifact 발행으로 바꾸고 DEVICE/FIELD를 PARKED에서 HOLD로 올린다.
 
