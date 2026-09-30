@@ -1,10 +1,10 @@
 import json
 
 import numpy as np
-import yaml
 import pytest
 
 pytest.importorskip("mcap_ros2")
+import yaml
 from mcap.reader import make_reader
 from mcap_ros2.decoder import DecoderFactory
 from mcap_ros2.writer import Writer
@@ -187,7 +187,8 @@ def test_writes_rosbag2_metadata(tmp_path):
     assert set(topics) == {"/r/camera/front/compressed", "/r/line/observation"}
     cam = topics["/r/camera/front/compressed"]
     assert cam["topic_metadata"]["type"] == "sensor_msgs/msg/CompressedImage"
-    assert "type_description_hash" not in cam["topic_metadata"] and cam["message_count"] == 12
+    assert cam["topic_metadata"]["type_description_hash"] == ss.COMPRESSED_IMAGE_HASH
+    assert ss.COMPRESSED_IMAGE_HASH.startswith("RIHS01_") and cam["message_count"] == 12
     assert topics["/r/line/observation"]["topic_metadata"]["type_description_hash"] == "RIHS01_y"
     assert info["message_count"] == 24 and info["storage_identifier"] == "mcap"
     assert info["relative_file_paths"] == ["bag_0.mcap", "bag_1.mcap"]

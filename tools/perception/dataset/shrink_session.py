@@ -41,6 +41,9 @@ MSG: builtin_interfaces/Time
 int32 sec
 uint32 nanosec
 """
+# Jazzy sensor_msgs/msg/CompressedImage, from
+# /opt/ros/jazzy/share/sensor_msgs/msg/CompressedImage.json type_hashes.
+COMPRESSED_IMAGE_HASH = "RIHS01_15640771531571185e2efc8a100baf923961a4d15d5569652e6cb6691e8e371a"
 CHANNELS = {"bgr8": 3, "rgb8": 3, "mono8": 1}
 
 
@@ -193,7 +196,7 @@ def _write_bag_metadata(src: Path, tmp: Path, totals: dict) -> None:
     """bag/metadata.yaml for the new bag: the source's, with the camera topic renamed.
 
     Message counts, file list and times are unchanged (same messages, same log times).
-    The CompressedImage type_description_hash is omitted (we do not compute it).
+    The compressed topic carries COMPRESSED_IMAGE_HASH (rosbag2 requires the key).
     """
     mp = src / "bag" / "metadata.yaml"
     if not mp.is_file():
@@ -210,7 +213,7 @@ def _write_bag_metadata(src: Path, tmp: Path, totals: dict) -> None:
         if name != origin:
             entry["topic_metadata"]["name"] = name
             entry["topic_metadata"]["type"] = COMPRESSED
-            entry["topic_metadata"].pop("type_description_hash", None)
+            entry["topic_metadata"]["type_description_hash"] = COMPRESSED_IMAGE_HASH
         entry["message_count"] = n
         topics.append(entry)
     info["topics_with_message_count"] = topics
