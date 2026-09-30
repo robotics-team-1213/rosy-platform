@@ -37,6 +37,14 @@ TRACKING_PAGE = """<!doctype html><html lang="ko"><head><meta charset="utf-8">
 <ui-tag id="latin" status="neutral">RUNNING</ui-tag>
 <ui-tag id="ko" status="neutral">대기</ui-tag>
 <ui-brand><b>ROSY</b><small id="sub">작업 준비</small></ui-brand></body></html>"""
+CHECK_PAGE = """<!doctype html><html lang="ko"><head><meta charset="utf-8">
+<link rel="stylesheet" href="/common/tokens.css">
+<link rel="stylesheet" href="/common/components.css"></head>
+<body style="background: var(--ground); padding: 16px">
+<label class="ui-check"><input id="on" class="ui-field" type="checkbox" checked>rosy_01</label>
+<label class="ui-check"><input id="held" class="ui-field" type="checkbox" checked disabled>rosy_02</label>
+<label class="ui-check"><input id="off" class="ui-field" type="checkbox" disabled>rosy_03</label>
+</body></html>"""
 TRACKING_PROBE = """(ids) => Object.fromEntries(ids.map((id) => {
   const el = document.getElementById(id);
   const style = getComputedStyle(el);
@@ -73,6 +81,8 @@ def _serve(route):
         target = DASHBOARD / "index.html"
     elif path == "/button":
         return route.fulfill(status=200, content_type="text/html", body=BUTTON_PAGE)
+    elif path == "/check":
+        return route.fulfill(status=200, content_type="text/html", body=CHECK_PAGE)
     elif path == "/tracking":
         return route.fulfill(status=200, content_type="text/html", body=TRACKING_PAGE)
     else:
@@ -231,3 +241,31 @@ def test_no_hangul_text_on_a_surface_is_tracked(page, path):
       return bad;
     }""")
     assert tracked == []
+
+
+def _luminance(rgb):
+    def channel(value):
+        value /= 255
+        return value / 12.92 if value <= 0.03928 else ((value + 0.055) / 1.055) ** 2.4
+    return 0.2126 * channel(rgb[0]) + 0.7152 * channel(rgb[1]) + 0.0722 * channel(rgb[2])
+
+
+@pytest.mark.parametrize("theme", ["dark", "light"])
+def test_checked_checkboxes_hold_three_to_one_even_when_disabled(page, theme):
+    """US-008 light Fleet capture: formation members (checked, disabled while RUNNING) drew
+    Chromium's fixed grey disabled checkbox at --disabled-opacity: 1.2:1 on light, 1.8:1 on dark.
+    The drawn pixels of every checkbox reach 3:1 against the ground (WCAG 1.4.11)."""
+    image = pytest.importorskip("PIL.Image")
+    import io
+
+    page.goto(f"{HOST}/check")
+    page.evaluate("(theme) => document.documentElement.setAttribute('data-theme', theme)", theme)
+    ground = image.open(io.BytesIO(page.screenshot(clip={"x": 0, "y": 0, "width": 4, "height": 4}))
+                        ).convert("RGB").getpixel((1, 1))
+    lg = _luminance(ground)
+    ratios = {}
+    for box in ("on", "held", "off"):
+        pixels = image.open(io.BytesIO(page.locator(f"#{box}").screenshot())).convert("RGB")
+        ratios[box] = round(max((max(_luminance(p), lg) + 0.05) / (min(_luminance(p), lg) + 0.05)
+                                for _, p in pixels.getcolors(1 << 16)), 2)
+    assert {box: ratio for box, ratio in ratios.items() if ratio < 3.0} == {}, (ground, ratios)

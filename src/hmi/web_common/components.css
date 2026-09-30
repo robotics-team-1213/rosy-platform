@@ -289,7 +289,7 @@ textarea.ui-field {
   max-width: 100%;
 }
 
-input.ui-field:disabled,
+input.ui-field:disabled:not([type="checkbox"]),
 select.ui-field:disabled,
 textarea.ui-field:disabled {
   cursor: not-allowed;
@@ -318,6 +318,35 @@ input.ui-field:is([type="checkbox"], [type="radio"]) {
   border: 0;
   background: none;
   accent-color: var(--focus-ring);
+}
+
+/* D-359 US-008 — 체크 상자는 토큰으로 그린다. Chromium의 네이티브 비활성 체크는
+   accent-color를 버리고 고정 회색으로 그려 light 바닥 위 1.2:1, dark 1.8:1이었다
+   (Fleet 대형 포함 로봇, RUNNING 중). 테와 체크는 늘 3:1 이상인 잉크다: 켜짐
+   `--focus-ring`, 비활성은 흐리게 하지 않고 `--ink-quiet`로 바꾼다. */
+input.ui-field[type="checkbox"] {
+  appearance: none;
+  display: inline-grid;
+  place-content: center;
+  margin: 0;
+  color: var(--focus-ring);
+  border: var(--focus-ring-width) solid var(--ink-quiet);
+  border-radius: var(--radius-control);
+  cursor: pointer;
+}
+input.ui-field[type="checkbox"]::before {
+  content: "";
+  width: var(--space-3);
+  height: var(--space-3);
+  background: currentColor;
+  clip-path: polygon(14% 44%, 0 65%, 50% 100%, 100% 16%, 80% 0%, 43% 62%);
+  visibility: hidden;
+}
+input.ui-field[type="checkbox"]:checked { border-color: currentColor; }
+input.ui-field[type="checkbox"]:checked::before { visibility: visible; }
+input.ui-field[type="checkbox"]:disabled {
+  color: var(--ink-quiet);
+  cursor: not-allowed;
 }
 
 .ui-check {

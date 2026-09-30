@@ -290,7 +290,7 @@ D-280 다섯 원칙은 시각에서 이렇게 묶인다.
 ### 필드 — `class="ui-field"`
 - 네이티브 `input`/`select`/`textarea`에 `class="ui-field"`를 단다(폼 제출·`<label>` 연결·기존 핸들러 유지). 44px, `--radius-control`, `--field-bg`, `--field-line`, 등폭 숫자.
 - `readonly`는 점선 테·조용한 글자, `:user-invalid`·`aria-invalid="true"`는 `--field-invalid` 테, 비활성은 `--disabled-opacity`.
-- 체크·라디오는 상자를 따로 그리지 않는다. 감싸는 `<label class="ui-check">`가 44px 누름 면이다.
+- 체크·라디오는 필드 상자를 따로 그리지 않는다. 감싸는 `<label class="ui-check">`가 44px 누름 면이다. 체크 상자는 토큰으로 그린다(`appearance: none`): 테 `--ink-quiet`, 켜짐 `--focus-ring`, 비활성은 흐리지 않고 `--ink-quiet` — 네이티브 비활성 체크는 accent를 버리고 1.2–1.8:1 회색이 된다. 테와 체크는 두 테마에서 3:1 이상이다.
 - `<ui-field>` 감싸개도 같은 얼굴이지만 제품 화면은 클래스 방식을 쓴다.
 
 ### 태그 — `<ui-tag status="…">`
