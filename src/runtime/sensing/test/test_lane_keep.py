@@ -290,6 +290,69 @@ def test_a_tied_conflict_drops_the_line_further_from_the_robot():
     assert pair_conflicts([left], [right], HALF, SIDE_X_M) == [left]
 
 
+def test_conflicts_settle_strongest_line_first():
+    # L1 loses to R1; R2 would lose to L1 alone. Whatever the list order, the
+    # dropped L1 must not drop R2 too.
+    l1, r1 = _record(0.09, 35.0, 0.25, "left"), _record(-0.09, 0.0, 0.30, "right")
+    r2 = _record(-0.05, -20.0, 0.10, "right")
+    assert pair_conflicts([l1], [r2, r1], HALF, SIDE_X_M) == [l1]
+    assert pair_conflicts([l1], [r1, r2], HALF, SIDE_X_M) == [l1]
+
+
+def test_a_short_true_left_boundary_is_kept_by_its_partner():
+    # Mirror of the right-side exemption: a stronger skew stray on the right
+    # does not drop a short left line that pairs with the right lane line.
+    left = _record(0.09, 0.0, 0.08, "left")
+    stray, right = _record(-0.06, -35.0, 0.20, "right"), _record(-0.09, 0.0, 0.30, "right")
+    assert pair_conflicts([left], [stray, right], HALF, SIDE_X_M) == []
+    assert pair_conflicts([left], [stray], HALF, SIDE_X_M) == [left]
+
+
+def test_paint_along_the_heading_outweighs_length():
+    # cos^2 weight: a longer line at 35 deg loses to a shorter straight one.
+    longer, straight = _record(0.09, 35.0, 0.25, "left"), _record(-0.09, 0.0, 0.20, "right")
+    assert pair_conflicts([longer], [straight], HALF, SIDE_X_M) == [longer]
+
+
+def _drop_steep_left(monkeypatch, min_heading_deg):
+    import control.sensing.perception.lane_keep as lk
+    real = lk.pair_conflicts
+    monkeypatch.setattr(lk, "pair_conflicts", lambda left, right, half, side_x: real(left, right, half, side_x)
+                        + [b for b in left if b["heading_deg"] > min_heading_deg])
+
+
+def test_a_dropped_branch_still_holds_the_fork(monkeypatch):
+    _drop_steep_left(monkeypatch, 30.0)
+    slope = np.tan(np.radians(45.0))
+    image = _render([(HALF, 0.0), (0.05 - slope * 0.22, slope)])
+    keeper = _corner_keeper()
+    assert keeper.update(image, GROUND, lane_half_width_m=HALF) is None
+    assert keeper.last["reason"] == "junction_fork"
+    assert [c["side"] for c in keeper.last["candidates"] if c["reason"] == "pair_conflict"] == ["left"]
+    assert [b["side"] for b in keeper.last["boundaries"]] == ["left"]
+
+
+def test_a_dropped_diverging_boundary_still_holds_the_junction_mouth(monkeypatch):
+    # The junction-mouth scene with its diverging line dropped: still a hold.
+    _drop_steep_left(monkeypatch, 15.0)
+    slope = np.tan(np.radians(25.0))
+    image = _render([(HALF - slope * 0.22, slope), (HALF + 0.06, 0.0)], transverse_x=0.30)
+    keeper = _corner_keeper()
+    assert keeper.update(image, GROUND, lane_half_width_m=HALF) is None
+    assert keeper.last["reason"] == "junction_transverse"
+    assert [c["side"] for c in keeper.last["candidates"] if c["reason"] == "pair_conflict"] == ["left"]
+
+
+def test_a_dropped_line_past_the_corner_still_vetoes_it(monkeypatch):
+    # A left line running on past an L-corner line open to the left: no corner,
+    # even when that line was dropped from the pairing.
+    _drop_steep_left(monkeypatch, -90.0)
+    image = np.maximum(_render_corner(0.25, "left"), _render([(HALF, 0.0)]))
+    keeper = _corner_keeper()
+    keeper.update(image, GROUND, lane_half_width_m=HALF)
+    assert _conflicts(keeper.last) and not keeper.last["strategy"].startswith("corner")
+
+
 def test_lane_lines_splayed_by_the_nominal_ground_still_pair():
     # NOMINAL pitch errors splay the two lines of one lane by several degrees.
     obs, last = _keep(_render([(HALF, 0.09), (-HALF, -0.09)]))

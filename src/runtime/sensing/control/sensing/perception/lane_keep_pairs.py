@@ -15,11 +15,12 @@ PAIR_MIN_FRACTION = 0.6
 PAIR_MAX_FRACTION = 1.6
 #: A left/right couple within PAIR_MAX_FRACTION at SIDE_X_M, more than
 #: CONFLICT_MIN_ANGLE_RAD apart, both within CONFLICT_MAX_HEADING_RAD of the heading
-#: and no pair cannot both bound the lane: the one with less paint along the heading
-#: (length x cos^2 heading; on a tie the one further out) is dropped as
+#: and no pair cannot both bound the lane: the weaker line, with less paint along the
+#: heading (length x cos^2 heading; on a tie the one further out), is dropped as
 #: 'pair_conflict' unless it pairs with a line not dropped (124745Z chords across
-#: crosswalk bars and junction corners, frames 58-252 and 800-1017). Parallel lines
-#: too close to pair, and steep junction crossings, are left to the other rules.
+#: crosswalk bars and junction corners, frames 58-252 and 800-1017); a dropped line
+#: drops no other. Parallel lines too close to pair, and steep junction crossings,
+#: are left to the other rules.
 CONFLICT_MIN_ANGLE_RAD = math.radians(10.0)
 CONFLICT_MAX_HEADING_RAD = math.radians(45.0)
 
@@ -39,29 +40,26 @@ def is_pair(left, right, lane, side_x):
                for x in ((side_x, lo, hi) if lo < hi else (side_x,)))
 
 
-def _loser(left, right, lane, side_x, live_left, live_right):
-    """The line of a conflicting couple to drop, or None."""
-    if (left["y_at_side_x_m"] - right["y_at_side_x_m"] > PAIR_MAX_FRACTION * lane
-            or float(np.dot(left["direction"], right["direction"])) > math.cos(CONFLICT_MIN_ANGLE_RAD)
-            or max(abs(left["heading_deg"]), abs(right["heading_deg"]))
-            > math.degrees(CONFLICT_MAX_HEADING_RAD) or is_pair(left, right, lane, side_x)):
-        return None
-    loser = min((left, right), key=lambda r: (
-        round(r["length_m"] * math.cos(math.radians(r["heading_deg"])) ** 2, 3), -abs(r["y_at_side_x_m"])))
-    if loser is left:
-        return None if any(is_pair(left, o, lane, side_x) for o in live_right) else left
-    return None if any(is_pair(o, right, lane, side_x) for o in live_left) else right
+def _strength(record):
+    return (round(record["length_m"] * math.cos(math.radians(record["heading_deg"])) ** 2, 3),
+            -abs(record["y_at_side_x_m"]))
+
+
+def _conflict(left, right, lane, side_x):
+    return not (left["y_at_side_x_m"] - right["y_at_side_x_m"] > PAIR_MAX_FRACTION * lane
+                or float(np.dot(left["direction"], right["direction"])) > math.cos(CONFLICT_MIN_ANGLE_RAD)
+                or max(abs(left["heading_deg"]), abs(right["heading_deg"]))
+                > math.degrees(CONFLICT_MAX_HEADING_RAD) or is_pair(left, right, lane, side_x))
 
 
 def pair_conflicts(left, right, half, side_x):
-    """Boundaries to drop as 'pair_conflict', re-judged after every drop (a
-    partner that is dropped itself saves no line)."""
-    dropped = []
-    while True:
-        live_left = [r for r in left if not any(r is d for d in dropped)]
-        live_right = [r for r in right if not any(r is d for d in dropped)]
-        loser = next((x for lf in live_left for rt in live_right
-                      if (x := _loser(lf, rt, 2.0 * half, side_x, live_left, live_right)) is not None), None)
-        if loser is None:
-            return dropped
-        dropped.append(loser)
+    """Boundaries to drop as 'pair_conflict', settled strongest line first."""
+    dropped, live = [], lambda records: [r for r in records if not any(r is d for d in dropped)]
+    for winner in sorted(left + right, key=_strength, reverse=True):
+        mine, others = (left, right) if any(winner is r for r in left) else (right, left)
+        for weak in live(others) if live([winner]) else ():
+            couple = (winner, weak) if mine is left else (weak, winner)
+            if _strength(weak) < _strength(winner) and _conflict(*couple, 2.0 * half, side_x) and not any(
+                    is_pair(*((weak, o) if others is left else (o, weak)), 2.0 * half, side_x) for o in live(mine)):
+                dropped.append(weak)
+    return dropped

@@ -30,7 +30,7 @@ robot is in, never the tape. Per frame, no odometry:
                 clearly on the other side
   pairs         lane_keep_pairs: near-parallel and a lane width apart along
                 their common stretch; a close skew couple that is no pair
-                drops its chord ('pair_conflict')
+                drops the weaker line ('pair_conflict')
   target        midpoint of the nearest pair; one side only: that boundary
                 moved a half-width inward; none: no output (HOLD)
   corner        an L-corner shows a transverse line ahead that runs past the
@@ -93,15 +93,15 @@ from .lane_keep_lines import (  # noqa: F401 — re-exported for callers and tes
     extract_lines,
     floor_white_mask,
 )
-from .lane_keep_pairs import (  # noqa: F401 — re-exported for callers and tests
+from .lane_keep_pairs import (  # noqa: F401 — re-exported; patch constants on lane_keep_pairs
     CONFLICT_MAX_HEADING_RAD,
     CONFLICT_MIN_ANGLE_RAD,
     PAIR_MAX_ANGLE_RAD,
     PAIR_MAX_FRACTION,
     PAIR_MIN_FRACTION,
     _lateral_at,
-    pair_conflicts,
     is_pair,
+    pair_conflicts,
 )
 
 #: Lookahead from base_link where the lane centre is read.
@@ -361,10 +361,9 @@ class LaneKeeper:
             corner = self._corner(transverse, half, left + right + conflicts)
         if corner is not None and (target is None or corner[1] != "corner_ahead"):
             target, strategy = corner
+        seen_left, seen_right = ([b for b in left + right + conflicts if b["side"] == s] for s in ("left", "right"))
         junction = (None if corner is not None
-                    else _junction(strategy, transverse, *([b for b in left + right + conflicts if b["side"] == s]
-                                                           for s in ("left", "right")),
-                                   half, self._corner_turning))
+                    else _junction(strategy, transverse, seen_left, seen_right, half, self._corner_turning))
         if junction is not None:
             target = None
         self._tracked = [(r["y_at_side_x_m"], math.radians(r["heading_deg"]), r["side"])
