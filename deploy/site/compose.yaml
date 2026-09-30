@@ -82,7 +82,7 @@ services:
       - --
       - python3
       - -m
-      - overhead.cli
+      - site_vision.cli
       - vision
       - --config
       - /run/rosy-config/site-cameras.yaml

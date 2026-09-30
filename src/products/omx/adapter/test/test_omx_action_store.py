@@ -140,3 +140,154 @@ def test_prepared_but_never_submitted_intent_is_not_called_unknown(tmp_path):
 
     assert ActionStore(path).recover_after_restart() == []
     assert ActionStore(path).get_action(action["action_id"])["state"] == "PREPARED"
+
+
+def start_running(store):
+    action = create(store)["action"]
+    attempt = store.begin_submission(action["action_id"], expected_generation=8)
+    accepted = store.record_submission(
+        action["action_id"], attempt["attempt_id"], accepted=True,
+        driver_goal_id="legacy-action-goal",
+    )
+    store.mark_running(
+        action["action_id"], attempt["attempt_id"],
+        driver_goal_id="legacy-action-goal",
+    )
+    return accepted["action_id"], attempt["attempt_id"]
+
+
+def test_action_attempt_persists_multiple_ordered_ros_goal_phases(tmp_path):
+    store = ActionStore(tmp_path / "actions.sqlite3")
+    action_id, attempt_id = start_running(store)
+
+    store.begin_phase(
+        action_id, attempt_id, phase_id="approach", ordinal=0,
+        command_digest="a" * 64,
+    )
+    store.record_phase_submission(
+        action_id, attempt_id, phase_id="approach", accepted=True,
+        driver_goal_id="ros-goal-approach",
+    )
+    store.record_phase_terminal(
+        action_id, attempt_id, phase_id="approach",
+        driver_goal_id="ros-goal-approach", outcome="SUCCEEDED",
+        result_source="ros-action-result",
+        result_observed_at="2026-09-30T10:00:00Z", result={"status": 4},
+    )
+    with pytest.raises(InvalidActionTransition):
+        store.begin_phase(
+            action_id, attempt_id, phase_id="approach", ordinal=1,
+            command_digest="b" * 64,
+        )
+    store.begin_phase(
+        action_id, attempt_id, phase_id="grasp", ordinal=1,
+        command_digest="b" * 64,
+    )
+    store.record_phase_submission(
+        action_id, attempt_id, phase_id="grasp", accepted=True,
+        driver_goal_id="ros-goal-grasp",
+    )
+
+    phases = store.action_phases(action_id)
+    assert [(phase["phase_id"], phase["ordinal"], phase["state"],
+             phase["driver_goal_id"]) for phase in phases] == [
+        ("approach", 0, "SUCCEEDED", "ros-goal-approach"),
+        ("grasp", 1, "ACCEPTED", "ros-goal-grasp"),
+    ]
+
+
+def test_phase_goal_identity_and_order_are_fenced(tmp_path):
+    store = ActionStore(tmp_path / "actions.sqlite3")
+    action_id, attempt_id = start_running(store)
+    store.begin_phase(action_id, attempt_id, phase_id="approach", ordinal=0,
+                      command_digest="a" * 64)
+    store.record_phase_submission(action_id, attempt_id, phase_id="approach",
+                                  accepted=True, driver_goal_id="ros-goal-1")
+
+    with pytest.raises(InvalidActionTransition):
+        store.begin_phase(action_id, attempt_id, phase_id="grasp", ordinal=1,
+                          command_digest="b" * 64)
+    with pytest.raises(InvalidActionTransition):
+        store.record_phase_terminal(
+            action_id, attempt_id, phase_id="approach", driver_goal_id="other-goal",
+            outcome="SUCCEEDED", result_source="ros-action-result",
+            result_observed_at="2026-09-30T10:00:00Z", result={"status": 4},
+        )
+    with pytest.raises(InvalidActionTransition):
+        store.begin_phase(action_id, attempt_id, phase_id="approach", ordinal=1,
+                          command_digest="b" * 64)
+
+
+def test_restart_marks_inflight_phase_unknown_without_replaying_it(tmp_path):
+    path = tmp_path / "actions.sqlite3"
+    store = ActionStore(path)
+    action_id, attempt_id = start_running(store)
+    store.begin_phase(action_id, attempt_id, phase_id="approach", ordinal=0,
+                      command_digest="a" * 64)
+    store.record_phase_submission(action_id, attempt_id, phase_id="approach",
+                                  accepted=True, driver_goal_id="ros-goal-1")
+    store.request_phase_cancel(action_id, attempt_id, phase_id="approach")
+
+    recovered = ActionStore(path)
+    assert recovered.recover_after_restart() == [action_id]
+    phase = recovered.action_phases(action_id)[0]
+    assert phase["state"] == "UNKNOWN"
+    assert phase["driver_goal_id"] == "ros-goal-1"
+    late_ack = recovered.record_phase_cancel_ack(
+        action_id, attempt_id, phase_id="approach", acknowledged=True,
+    )
+    assert late_ack["state"] == "UNKNOWN"
+    assert late_ack["cancel_acknowledged"] is True
+    with pytest.raises(InvalidActionTransition):
+        recovered.begin_phase(action_id, attempt_id, phase_id="approach", ordinal=0,
+                              command_digest="a" * 64)
+
+
+def test_phase_cancel_ack_is_not_terminal_and_requires_matching_goal_result(tmp_path):
+    store = ActionStore(tmp_path / "actions.sqlite3")
+    action_id, attempt_id = start_running(store)
+    store.begin_phase(action_id, attempt_id, phase_id="transfer", ordinal=0,
+                      command_digest="c" * 64)
+    store.record_phase_submission(action_id, attempt_id, phase_id="transfer",
+                                  accepted=True, driver_goal_id="ros-goal-transfer")
+    store.mark_phase_running(action_id, attempt_id, phase_id="transfer",
+                             driver_goal_id="ros-goal-transfer")
+    store.request_phase_cancel(action_id, attempt_id, phase_id="transfer")
+    acknowledged = store.record_phase_cancel_ack(
+        action_id, attempt_id, phase_id="transfer", acknowledged=True,
+    )
+
+    assert acknowledged["state"] == "CANCEL_REQUESTED"
+    assert acknowledged["cancel_acknowledged"] is True
+    with pytest.raises(InvalidActionTransition):
+        store.record_phase_terminal(
+            action_id, attempt_id, phase_id="transfer", driver_goal_id="another-goal",
+            outcome="CANCELED", result_source="ros-action-result",
+            result_observed_at="2026-09-30T10:00:00Z", result={"status": 5},
+        )
+    canceled = store.record_phase_terminal(
+        action_id, attempt_id, phase_id="transfer", driver_goal_id="ros-goal-transfer",
+        outcome="CANCELED", result_source="ros-action-result",
+        result_observed_at="2026-09-30T10:00:01Z", result={"status": 5},
+    )
+    assert canceled["state"] == "CANCELED"
+
+
+def test_action_schema_v1_database_upgrades_additively_to_phase_ledger_v2(tmp_path):
+    path = tmp_path / "actions.sqlite3"
+    store = ActionStore(path)
+    action = create(store)["action"]
+    with store._connect() as connection:
+        connection.execute("DROP TABLE omx_action_phases")
+        connection.execute("PRAGMA user_version=1")
+
+    upgraded = ActionStore(path)
+    with upgraded._connect() as connection:
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == 2
+        tables = {row[0] for row in connection.execute(
+            "SELECT name FROM sqlite_master WHERE type='table'",
+        )}
+    assert "omx_actions" in tables
+    assert "omx_action_events" in tables
+    assert "omx_action_phases" in tables
+    assert upgraded.get_action(action["action_id"])["state"] == "PREPARED"
