@@ -172,7 +172,8 @@ class StreamService : LifecycleService() {
                 launch { resolver.route.collect { r -> _state.update { it.copy(route = r) } } }
                 // A link that only knows its manual IP learns the site's tls_host once, for the next session.
                 if (siteLink.tlsHost == null) {
-                    resolver.resolve() // "수동 주소" at once; no browse without a tls_host
+                    // "수동 주소" at once; no browse without a tls_host. Never crash the Main dispatcher (review M1).
+                    runCatching { resolver.resolve() }.onFailure { Log.w(TAG, "manual route lookup failed", it) }
                     launch(Dispatchers.IO) {
                         resolver.learnTlsHost()?.let { seen ->
                             Log.i(TAG, "learned tls_host ${seen.tlsHost} at ${siteLink.manualHost}")

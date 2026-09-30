@@ -97,13 +97,16 @@ class SiteResolver(
      */
     fun learnTlsHost(): SiteSighting? {
         if (link.tlsHost != null || link.caPin == null) return null
-        val manual = link.manualHost?.let(::literal) ?: return null
+        val manual = manualAddress() ?: return null
         return browser.browse(browseTimeoutMs) { manual in it.addresses }.firstOrNull()
     }
 
+    /** `manual_host` as an address, or null when absent or not a literal (never throws, review M1). */
+    private fun manualAddress(): InetAddress? = link.manualHost?.let(::literal)
+
     private fun lookup(): SiteRoute {
-        val tlsHost = link.tlsHost ?: return link.manualHost?.let { SiteRoute.Manual(literal(it), afterBrowse = false) }
-            ?: SiteRoute.NotDiscovered("")
+        val tlsHost = link.tlsHost ?: return manualAddress()?.let { SiteRoute.Manual(it, afterBrowse = false) }
+            ?: SiteRoute.NotDiscovered(link.manualHost.orEmpty())
         if (!isMdnsName(tlsHost)) return SiteRoute.SystemDns
         cached?.let { if (nowMs() - cachedAtMs < cacheMs) return it }
         cached = null
@@ -118,7 +121,7 @@ class SiteResolver(
                 cachedAtMs = nowMs()
             }
         }
-        link.manualHost?.let { return SiteRoute.Manual(literal(it)) }
+        manualAddress()?.let { return SiteRoute.Manual(it) }
         return SiteRoute.NotDiscovered(tlsHost)
     }
 
@@ -132,8 +135,9 @@ class SiteResolver(
         private fun sameHost(a: String, b: String): Boolean =
             a.trim().trimEnd('.').equals(b.trim().trimEnd('.'), ignoreCase = true)
 
-        /** An IP literal to an address without any lookup ([SiteLink.validate] guarantees the literal). */
-        private fun literal(ip: String): InetAddress = InetAddress.getByName(ip)
+        /** A strict IP literal to an address without any lookup; null for anything else. */
+        private fun literal(ip: String): InetAddress? =
+            if (SiteLink.isIpLiteral(ip)) runCatching { InetAddress.getByName(ip) }.getOrNull() else null
     }
 }
 
@@ -149,7 +153,13 @@ class SiteDns(
 ) : Dns {
     override fun lookup(hostname: String): List<InetAddress> {
         if (!hostname.trimEnd('.').equals(tlsHost.trimEnd('.'), ignoreCase = true)) return fallback.lookup(hostname)
-        return when (val route = resolver.resolve()) {
+        // Never let a resolver bug escape as a RuntimeException on OkHttp's thread; it becomes a lookup failure.
+        val route = try {
+            resolver.resolve()
+        } catch (e: RuntimeException) {
+            throw UnknownHostException("site lookup failed for $tlsHost: $e")
+        }
+        return when (route) {
             is SiteRoute.Discovered -> route.sighting.addresses
             is SiteRoute.Manual -> listOf(route.address)
             is SiteRoute.NotDiscovered -> throw SiteNotDiscoveredException(tlsHost)

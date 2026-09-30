@@ -95,6 +95,24 @@ class SiteLinkTest {
     }
 
     @Test
+    fun hostsCarryingAPortOrJunkAreNotLiteralsAndAreRejected() {
+        // Review M1: these passed the old IPv6 regex and crashed InetAddress.getByName on Start.
+        for (bad in listOf("192.168.1.5:8443", "1.2.3.4.5:1", "abc:def", "::::", "host:port", "fe80::1%wlan0", "1:2:3:4:5:6:7:8:9")) {
+            assertFalse(bad, SiteLink.isIpLiteral(bad))
+            assertEquals(bad, "host", PairingUri.validate(bad, 443, "t", "overhead-1"))
+        }
+        assertEquals(PairingUri.Parsed.Invalid("host"), PairingUri.parse("rosyov://1.2.3.4:5:1/?t=a&s=b"))
+    }
+
+    @Test
+    fun ipv6LiteralsStillPass() {
+        for (good in listOf("::", "::1", "fe80::1", "1:2:3:4:5:6:7:8", "::ffff:192.168.1.5", "2001:db8::8:800:200c:417a")) {
+            assertTrue(good, SiteLink.isIpLiteral(good))
+            assertNull(good, PairingUri.validate(good, 443, "t", "overhead-1"))
+        }
+    }
+
+    @Test
     fun ipLiteralDetection() {
         assertTrue(SiteLink.isIpLiteral("10.16.36.7"))
         assertTrue(SiteLink.isIpLiteral("::1"))

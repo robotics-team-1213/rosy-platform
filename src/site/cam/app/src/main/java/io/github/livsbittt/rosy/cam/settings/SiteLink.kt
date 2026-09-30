@@ -41,10 +41,28 @@ data class SiteLink(
         const val ROLE = "overhead-camera"
 
         private val IPV4 = Regex("^(25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)(\\.(25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)){3}$")
-        private val IPV6 = Regex("^[0-9A-Fa-f:.]+$")
+        private val HEX_GROUP = Regex("^[0-9A-Fa-f]{1,4}$")
 
-        /** True for an IPv4 or IPv6 literal; never resolves anything. */
-        fun isIpLiteral(host: String): Boolean = IPV4.matches(host) || (host.contains(':') && IPV6.matches(host))
+        /**
+         * True only for a well-formed IPv4 or IPv6 literal (no zone id); never resolves anything. A host that
+         * carries a port ("192.168.1.5:8443") is not a literal: it would reach InetAddress.getByName as a bad
+         * address (review M1).
+         */
+        fun isIpLiteral(host: String): Boolean = IPV4.matches(host) || isIpv6Literal(host)
+
+        private fun isIpv6Literal(host: String): Boolean {
+            if (!host.contains(':')) return false
+            val halves = host.split("::")
+            if (halves.size > 2) return false
+            fun groups(part: String): List<String> = if (part.isEmpty()) emptyList() else part.split(':')
+            val all = groups(halves[0]) + (if (halves.size == 2) groups(halves[1]) else emptyList())
+            // An embedded IPv4 tail counts as two groups and must come last.
+            val v4Tail = all.lastOrNull()?.let { IPV4.matches(it) } == true
+            val hexGroups = if (v4Tail) all.dropLast(1) else all
+            if (!hexGroups.all { HEX_GROUP.matches(it) }) return false
+            val count = hexGroups.size + if (v4Tail) 2 else 0
+            return if (halves.size == 2) count <= 7 else count == 8
+        }
 
         /**
          * A pairing entered in settings or from a `rosyov://` link, and the migration of a pairing saved before

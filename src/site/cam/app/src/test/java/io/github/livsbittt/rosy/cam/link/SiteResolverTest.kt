@@ -66,6 +66,26 @@ class SiteResolverTest {
     }
 
     @Test
+    fun anUnparseableManualAddressNeverThrows() {
+        // Review M1: a record saved before the strict literal check must not crash Start.
+        val stale = site.copy(tlsHost = null, manualHost = "192.168.1.5:8443")
+        assertEquals(SiteRoute.NotDiscovered("192.168.1.5:8443"), SiteResolver(stale, FakeBrowser(emptyList())).resolve())
+        val named = site.copy(manualHost = "abc:def")
+        assertEquals(SiteRoute.NotDiscovered("rosy-site.local"), SiteResolver(named, FakeBrowser(emptyList())).resolve())
+    }
+
+    @Test
+    fun siteDnsTurnsAResolverCrashIntoALookupFailure() {
+        val boom = SiteBrowser { _, _ -> throw IllegalStateException("nsd died") }
+        try {
+            SiteDns("rosy-site.local", SiteResolver(site, boom)).lookup("rosy-site.local")
+            fail("expected UnknownHostException")
+        } catch (e: java.net.UnknownHostException) {
+            assertTrue(e.message.orEmpty().contains("nsd died"))
+        }
+    }
+
+    @Test
     fun nonMdnsNamesGoToTheSystemResolver() {
         val browser = FakeBrowser(emptyList())
         assertEquals(SiteRoute.SystemDns, SiteResolver(site.copy(tlsHost = "site.example.org"), browser).resolve())
