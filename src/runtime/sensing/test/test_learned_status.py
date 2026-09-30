@@ -152,3 +152,21 @@ def test_status_without_stamps_falls_back_to_arrivals():
     s.frame_inferred(1.0)
     p = s.payload(model_revision="r", last_error=None)
     assert p["frames_expected"] == 2 and p["skip_ratio"] == pytest.approx(0.5)
+
+
+def test_status_is_latched_and_published_at_start():
+    """A late subscriber (dashboard, `ros2 topic echo` under load) still gets the last status."""
+    import ast
+    from pathlib import Path
+
+    src = (Path(__file__).resolve().parents[1] / "control" / "learned_lane_node.py").read_text(
+        encoding="utf-8")
+    tree = ast.parse(src)
+    pub = next(n for n in ast.walk(tree) if isinstance(n, ast.Call)
+               and getattr(n.func, "attr", "") == "create_publisher"
+               and ast.unparse(n.args[1]) == "STATUS_TOPIC")
+    assert ast.unparse(pub.args[2]) == ("QoSProfile(depth=1, durability=DurabilityPolicy."
+                                        "TRANSIENT_LOCAL, reliability=ReliabilityPolicy.RELIABLE)")
+    init = next(n for n in ast.walk(tree)
+                if isinstance(n, ast.FunctionDef) and n.name == "__init__")
+    assert ast.unparse(init.body[-1]) == "self._publish_status()"

@@ -13,7 +13,7 @@ import cv2
 import numpy as np
 import rclpy
 from rclpy.node import Node
-from rclpy.qos import QoSProfile, ReliabilityPolicy
+from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from sensor_msgs.msg import Image
 from std_msgs.msg import String
 
@@ -43,7 +43,11 @@ class LearnedLaneNode(Node):
         self._pub = self.create_publisher(String, TOPIC, 10)
         fps = float(self.declare_parameter('camera_fps', 8.0).value)  # camera.yaml fps
         self._status = LearnedStatus(period_s=1.0 / max(fps, 0.1))
-        self._status_pub = self.create_publisher(String, STATUS_TOPIC, 1)
+        # Latched: a subscriber that joins late (dashboard, an echo on a loaded
+        # host) gets the current status instead of waiting for the next tick.
+        self._status_pub = self.create_publisher(String, STATUS_TOPIC, QoSProfile(
+            depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL,
+            reliability=ReliabilityPolicy.RELIABLE))
         self.create_timer(1.0, self._publish_status)
         # camera_detect_node publishes best effort (sensor data); a reliable
         # subscriber is QoS-incompatible and never receives a frame (seen in the
@@ -51,6 +55,7 @@ class LearnedLaneNode(Node):
         self.create_subscription(Image, 'camera/front', self._on_camera,
                                  QoSProfile(depth=1, reliability=ReliabilityPolicy.BEST_EFFORT))
         self.create_subscription(String, 'line/observation', self._on_rule, 10)
+        self._publish_status()
 
     def _on_rule(self, msg: String) -> None:
         try:
