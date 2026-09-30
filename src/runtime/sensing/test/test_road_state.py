@@ -702,3 +702,54 @@ def test_node_documents_that_r1_needs_keep_mode():
 def test_node_is_an_installed_entry_point():
     setup = (NODE.parents[1] / "setup.py").read_text(encoding="utf-8")
     assert "'road_state_node = control.road_state_node:main'" in setup
+
+
+def test_heading_is_predicted_at_the_chord_midpoint_of_the_seen_line():
+    """A straight fit through an arc runs parallel to the tangent at the arc's midpoint,
+    not at SIDE_X_M: psi = -phi + kappa * x_psi."""
+    est, clock = tracking()
+    est.x[:] = [0.0, 0.0, 2.0, W]
+    est.P[:] = np.diag([1e-6, 1e-6, 1e-6, 1e-8])
+    y_r = -HALF + 2.0 * X * X / 2
+    chord = BoundaryMeas(y=y_r, psi=2.0 * 0.40, x=X, x_psi=0.40)
+    est.update([chord], clock.t)
+    assert est.last_frame["candidates"][0]["nis"]["R"] < 0.5
+    assert boundaries_from_keep({"boundaries": [
+        {"side": "right", "y_at_side_x_m": -0.09, "heading_deg": 0.0, "ends_m": [[0.10, -0.09], [0.50, -0.09]]}
+    ]})[0].x_psi == pytest.approx(0.30)
+
+
+def test_a_line_without_seen_extent_predicts_heading_at_its_x():
+    assert BoundaryMeas(y=0.0, psi=0.0).x_psi is None
+
+
+def test_a_lost_track_restarts_from_the_prior():
+    """Replay 2026-10-01: while STOP the odometry kept turning phi (|phi| up to 290 deg in the
+    roundabout), so no later line could pass the gate. Without an acquisition under way the
+    lane state starts again from the prior."""
+    est, clock = tracking()
+    for _ in range(int(3.0 / DT)):
+        clock.frame([], v=0.0)
+    assert est.level == STOP
+    est.x[:3] = [0.05, 5.0, 3.0]
+    clock.frame([])
+    assert list(est.x[:3]) == [0.0, 0.0, 0.0]
+    assert est.P[1, 1] >= RoadStateParams().sigma_phi0_rad ** 2
+    assert est.P[0, 1] == 0.0
+
+
+def test_heading_error_is_wrapped():
+    est = RoadStateEstimator()
+    est.predict(0.0, 7.0, dt=1.0)
+    assert -math.pi < est.x[1] <= math.pi
+    assert est.x[1] == pytest.approx(7.0 - 2 * math.pi)
+
+
+def test_a_yawed_robot_on_a_straight_lane_reads_mostly_as_heading_not_curvature():
+    """psi = -phi + kappa x cannot split phi from kappa in one frame; the curvature prior
+    decides. A robot yawed 10 deg on a straight lane must come out as phi ~ 10 deg."""
+    est = RoadStateEstimator()
+    clock = Clock(est)
+    for _ in range(3):
+        clock.frame(pair(phi=math.radians(10)))
+    assert math.degrees(est.x[1]) == pytest.approx(10.0, abs=1.5)

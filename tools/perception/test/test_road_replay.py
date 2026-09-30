@@ -35,14 +35,16 @@ def _floor_xy():
 FX, FY = _floor_xy()
 
 
-def render(d=0.0, lines=True):
-    """Grey carpet with the two tape lines of a straight lane, robot at offset d (left +)."""
+def render(d=0.0, lines=True, yaw_deg=0.0):
+    """Grey carpet with the two tape lines of a straight lane, robot at offset d (left +)
+    and yawed yaw_deg CCW against the lane (the lines then run at -yaw_deg in base_link)."""
     rng = np.random.default_rng(7)
     image = 100 + rng.normal(0, 8, FX.shape)
     floor = np.isfinite(FX)
+    slope = math.tan(math.radians(-yaw_deg))
     if lines:
         for y0 in (-HALF - d, HALF - d):
-            image[floor & (np.abs(FY - y0) <= 0.015)] = 195.0
+            image[floor & (np.abs(FY - (y0 + slope * FX)) <= 0.015 / math.cos(math.atan(slope)))] = 195.0
     image[~floor] = 60.0
     return np.dstack([np.clip(image, 0, 255).astype(np.uint8)] * 3)
 
@@ -190,3 +192,19 @@ def test_report_carries_heading_pairs_reacquisition_and_setup():
     assert set(metrics["reacq_counts"]) == {"pair", "side+ir", "side+learned"}
     assert metrics["setup"] == {"pitch_deg": 8.0, "lidar_forward_deg": 181.0, "lidar_wall_veto": False,
                                 "ir_geometry_measured": False, "mode": "shadow"}
+
+
+def test_heading_sign_convention_matches_the_keeper():
+    """Robot yawed +10 deg CCW against a straight lane: the keeper reads the lines at
+    -10 deg (heading_deg = atan2(dir_y, dir_x), base_link) and the estimator's
+    psi = -phi + kappa x is the same quantity, so phi converges to +10 deg."""
+    img = render(yaw_deg=10.0)
+    # held still: a static image with forward odometry would say the robot runs along the lane
+    frames = [rr.Frame(100.0 + i / FPS, img, (0.0, 0.0, 0.0)) for i in range(6)]
+    metrics, rows = rr.replay(iter(frames), dropouts=())
+    assert metrics["keeper"]["median_heading_deg"] == pytest.approx(-10.0, abs=1.5)
+    assert rows[-1]["hypothesis"] == "RL"
+    # Same sign: phi comes out positive. One frame cannot split phi from kappa (psi =
+    # -phi + kappa x_psi); the curvature prior takes part of the 10 deg, so only the sign
+    # and the magnitude range are asserted here.
+    assert 4.0 < math.degrees(rows[-1]["phi"]) <= 10.5

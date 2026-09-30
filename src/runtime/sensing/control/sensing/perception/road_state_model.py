@@ -30,6 +30,9 @@ class BoundaryMeas:
     side_hint: str | None = None
     source: str = "rule"
     rejected: str | None = None
+    #: x where the whole-line heading is predicted: the chord midpoint of the seen
+    #: paint (a straight fit through an arc runs along the tangent there).
+    x_psi: float | None = None
 
 
 @dataclass(frozen=True)
@@ -128,7 +131,9 @@ class RoadStateParams:
     # priors
     sigma_d0_m: float = 0.10
     sigma_phi0_rad: float = math.radians(20.0)
-    sigma_kappa0: float = 2.0
+    # phi and kappa share one heading measurement (psi = -phi + kappa x_psi): this
+    # prior decides the split, so a yawed robot on a straight lane reads as phi.
+    sigma_kappa0: float = 0.5
     sigma_w0_m: float = 0.005
     calib_ratio_tol: float = 0.10
     calib_suspect_s: float = 2.0
@@ -181,6 +186,7 @@ def boundaries_from_keep(last: dict, *, near_x_m: float = 0.33) -> list[Boundary
             continue
         ends = r.get("ends_m") or []
         nearest = min((float(e[0]) for e in ends), default=SIDE_X_M)
+        mid = sum(float(e[0]) for e in ends) / len(ends) if ends else None
         x = SIDE_X_M if nearest <= near_x_m else nearest
         flag = r.get("rejected")
         # LaneKeeper candidates (feat/lane-keep-candidates, 7218c6b5): rejected is
@@ -190,7 +196,7 @@ def boundaries_from_keep(last: dict, *, near_x_m: float = 0.33) -> list[Boundary
         reason = (str(r.get("reason") or "keeper") if flag is True
                   else flag if isinstance(flag, str) and flag else None)
         out.append(BoundaryMeas(y=y, psi=psi, x=x, side_hint=r.get("side"),
-                                rejected=reason))
+                                rejected=reason, x_psi=mid))
     return out
 
 

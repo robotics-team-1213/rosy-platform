@@ -1,28 +1,26 @@
 """Subject: road-state estimator (D-384 decisions 1-3). ROS-free, numpy only.
 
 Keeps the expected road when the tape drops out, and says how far it can be
-trusted. Shadow evidence only: nothing here commands motion (D-369); the
-snapshot carries a CORE-facing *suggestion* (visible, confidence) and no
-command field.
+trusted. Shadow evidence only (D-369): the snapshot carries a CORE-facing
+suggestion (visible, confidence) and no command field.
 
 State x = [d, phi, kappa, w] with covariance P (base_link, y LEFT positive):
   d      lateral offset of the robot from its lane centre (left +)
   phi    heading error of the robot against the lane (CCW +)
   kappa  road curvature (left bend +)
-  w      apparent lane width; a tight prior at the map width (sigma 0.005 m).
-         The ground is assumed calibrated (a profile id comes with the
-         measurements); w does not absorb pitch bias. |w/w_map - 1| > 10 %
-         for 2 s raises `calibration_suspect`.
+  w      apparent lane width, tight prior at the map width (sigma 0.005 m); the
+         ground is assumed calibrated. |w/w_map - 1| > 10 % for 2 s raises
+         `calibration_suspect`.
 
 Prediction per odometry step (ds = v dt, dtheta = omega dt):
-  d <- d + ds sin(phi);  phi <- phi + dtheta - kappa ds
-  kappa pulled toward the map curvature when one is set, else a random walk.
-  Q_d = (0.08 ds)^2 + (0.002 m)^2 dt,
-  Q_phi = (0.03 |dtheta|)^2 + (0.02 ds)^2 + floor^2 dt  (the floors keep a held
-  robot's filter from collapsing at ds = 0).
+  d <- d + ds sin(phi);  phi <- wrap(phi + dtheta - kappa ds); kappa is pulled
+  toward the map curvature when set, else a random walk. Q_d = (0.08 ds)^2 +
+  (0.002 m)^2 dt, Q_phi = (0.03 |dtheta|)^2 + (0.02 ds)^2 + floor^2 dt.
+  While STOP with no acquisition under way, d/phi/kappa restart from the prior.
 
 Measurements (near field only, x <= 0.33 m):
-  boundary  y = +-w/2 - d - x phi + kappa x^2 / 2 (L +, R -), psi = -phi + kappa x
+  boundary  y = +-w/2 - d - x phi + kappa x^2 / 2 (L +, R -), psi = -phi +
+            kappa x_psi (x_psi: chord midpoint of the seen paint)
             from LaneKeeper.last; which side it is, is decided here by the
             gates and the association, not by the keeper's side label.
   learned   1-D d, sigma = 0.03 / max(confidence, 0.2); skipped when the
@@ -176,8 +174,6 @@ class RoadStateEstimator:
         self._calib_suspect = False
         self._level = STOP
 
-    # ------------------------------------------------------------ public
-
     @property
     def level(self) -> str:
         return self._level
@@ -191,7 +187,8 @@ class RoadStateEstimator:
         pull = 0.0
         if self.map_kappa is not None:
             pull = min(1.0, abs(ds) / p.kappa_pull_m)
-        self.x = np.array([d + ds * math.sin(phi), phi + dtheta - kappa * ds,
+        turned = phi + dtheta - kappa * ds
+        self.x = np.array([d + ds * math.sin(phi), math.atan2(math.sin(turned), math.cos(turned)),
                            kappa + pull * ((self.map_kappa or 0.0) - kappa), w])
         F = np.array([[1.0, ds * math.cos(phi), 0.0, 0.0],
                       [0.0, 1.0, -ds, 0.0],
@@ -235,6 +232,8 @@ class RoadStateEstimator:
         if profile is not None:
             self.profile = profile
         fresh = self._stopped
+        if fresh and self._consistent == 0:
+            self._restart_from_prior()
         scale = p.reacq_gate if fresh else (p.slow_gate if self._level == SLOW else 1.0)
         bounds = [m for m in measurements if isinstance(m, BoundaryMeas)]
         offsets = [m for m in measurements if isinstance(m, OffsetMeas)]
@@ -343,12 +342,9 @@ class RoadStateEstimator:
             "calibration_suspect": self._calib_suspect,
             "w_ratio": _r(self.x[3] / self.w_map, 4),
             "profile": self.profile,
-            "route_hint": self.route_hint,
-            "map_kappa": self.map_kappa,
+            "route_hint": self.route_hint, "map_kappa": self.map_kappa,
             "core_suggestion": {"visible": visible, "confidence": confidence},
         }
-
-    # ------------------------------------------------------------ internals
 
     def _tick(self, now: float) -> None:
         self._now = now
@@ -365,8 +361,9 @@ class RoadStateEstimator:
         d, phi, kappa, w = self.x
         s = -1.0 if label == RIGHT else 1.0
         x = b.x
-        h = np.array([s * w / 2 - d - x * phi + kappa * x * x / 2, -phi + kappa * x])
-        H = np.array([[-1.0, -x, x * x / 2, s / 2], [0.0, -1.0, x, 0.0]])
+        xp = x if b.x_psi is None else b.x_psi
+        h = np.array([s * w / 2 - d - x * phi + kappa * x * x / 2, -phi + kappa * xp])
+        H = np.array([[-1.0, -x, x * x / 2, s / 2], [0.0, -1.0, xp, 0.0]])
         R = np.diag([p.sigma_y_m ** 2, p.sigma_psi_rad ** 2])
         z = np.array([b.y, b.psi])
         nu = np.array([z[0] - h[0], _wrap_line(z[1] - h[1])])
@@ -381,9 +378,8 @@ class RoadStateEstimator:
         return _Eval(label, z, h, H, R, nu, nis, logl, reason)
 
     def _consistent_reason(self, labels, ir_labels, side_d):
-        """Why this frame counts toward re-acquisition, or None. side+learned:
-        shadow mode only, IR uncalibrated, a confident learned offset within
-        2 sigma of the one side's lane offset; learned alone never counts."""
+        """Why this frame counts toward re-acquisition, or None. side+learned: shadow
+        only, IR uncalibrated, confident learned d within 2 sigma of the side's d."""
         p = self.p
         if set(labels) == {RIGHT, LEFT}:
             return "pair"
@@ -559,6 +555,13 @@ class RoadStateEstimator:
             return False
         since = max(t for t in (self._stop_t, self._t_candidate, -math.inf) if t is not None)
         return self._now - since > self.p.reacq_timeout_s
+
+    def _restart_from_prior(self) -> None:
+        """Lost d/phi/kappa (still integrating odometry) say nothing of the next lane."""
+        self.x[:3] = 0.0
+        variances = np.maximum(np.diag(self.P)[:3], np.diag(self._P0)[:3])
+        self.P[:3, :], self.P[:, :3] = 0.0, 0.0
+        self.P[:3, :3] = np.diag(variances)
 
     def _enter_stop(self, reason: str) -> None:
         if not self._stopped:
