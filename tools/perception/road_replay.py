@@ -31,6 +31,7 @@ from __future__ import annotations
 import argparse
 import bisect
 import copy
+import dataclasses
 import hashlib
 import json
 import math
@@ -66,6 +67,7 @@ from control.sensing.perception.road_state import (  # noqa: E402
 HALF = lane_replay.LANE_HALF_WIDTH_M
 LOOKAHEAD_M = 0.25
 STRAIGHT_MAX_RATE = 0.1        # rad/s
+CURVE_MIN_RATE = 0.1           # rad/s, moving: a curved segment for the residual check
 IR_HALF_SPAN_M = 0.012
 IR_MAX_AGE_S = 0.2
 KEEP_MAX_FRAME_GAP_S = 0.5     # as line_observer_node: a camera gap restarts the keeper
@@ -271,10 +273,29 @@ def _dropouts(inputs, rows, checkpoints, dropouts):
 
 
 def _motion(ds, dth, dt):
-    """stationary / straight / turning from odometry (|omega| < 0.05 rad/s is straight)."""
+    """stationary / straight (|omega| < 0.05 rad/s) / curve (moving, |omega| > 0.1) /
+    turning (the rest: pivots and mild turns) from odometry."""
     if dt <= 0 or (abs(ds / dt) < 0.005 and abs(dth / dt) < 0.05):
         return "stationary"
-    return "straight" if abs(dth / dt) < 0.05 else "turning"
+    if abs(dth / dt) < 0.05:
+        return "straight"
+    return "curve" if abs(ds / dt) >= 0.005 and abs(dth / dt) > CURVE_MIN_RATE else "turning"
+
+
+def _curve_residuals(nis_state):
+    """NIS on curved segments against straights. sigma_kappa0 = 0.5 is accepted only
+    until validated on curves (lane owner, 2026-10-01): a blow-up is flagged."""
+    curve, straight = nis_state["curve"], nis_state["straight"]
+    out = {"frames": len(curve), "nis_mean": None, "nis_p95": None, "above_9_21": None,
+           "straight_nis_mean": round(float(np.mean(straight)), 3) if straight else None,
+           "blow_up": None, "validated_on_curves": False}
+    if curve:
+        c = np.asarray(curve, float)
+        out.update(nis_mean=round(float(c.mean()), 3), nis_p95=round(float(np.percentile(c, 95)), 3),
+                   above_9_21=round(float((c > 9.21).mean()), 4))
+        out["blow_up"] = bool(out["above_9_21"] > 0.10 or (
+            out["straight_nis_mean"] is not None and out["nis_mean"] > 2 * out["straight_nis_mean"]))
+    return out
 
 
 def _detector_metrics(rows, key):
@@ -303,7 +324,7 @@ def replay(frames, *, labels: dict | None = None, dropouts=DROPOUTS_M,
     est = RoadStateEstimator(params)
     labels = labels or {}
     rows, inputs, checkpoints, nis = [], [], {}, []
-    nis_state = {"straight": [], "turning": [], "stationary": []}
+    nis_state = {"straight": [], "curve": [], "turning": [], "stationary": []}
     prev_pose = prev_t = None
     wall_accepted = wall_hits = labelled = 0
     keeper_digest = hashlib.sha256()
@@ -429,6 +450,8 @@ def replay(frames, *, labels: dict | None = None, dropouts=DROPOUTS_M,
         "keeper_sha256": keeper_digest.hexdigest(),
     }
     metrics["calibration_suspect_run"] = metrics["calibration_suspect_frames"] > 0
+    metrics["params"] = dataclasses.asdict(params)
+    metrics["curve_residuals"] = _curve_residuals(nis_state)
 
     def worse(key):
         a, b = road_m[key], keep_m[key]

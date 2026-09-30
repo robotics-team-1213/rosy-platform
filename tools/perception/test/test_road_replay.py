@@ -214,8 +214,27 @@ def test_nis_is_reported_by_motion_state():
     frames = list(synthetic(24)) + [rr.Frame(103.0 + i / FPS, LANE, (0.15, 0.0, 0.0)) for i in range(8)]
     metrics, rows = rr.replay(iter(frames), dropouts=())
     by = metrics["nis"]["by_state"]
-    assert set(by) == {"straight", "turning", "stationary"}
+    assert set(by) == {"straight", "curve", "turning", "stationary"}
     assert by["straight"]["n"] > 0 and by["stationary"]["n"] > 0
     assert rows[-1]["motion"] == "stationary" and rows[10]["motion"] == "straight"
     sides = metrics["keeper"]["straight_heading_deg"]
     assert sides["left"]["n"] > 0 and abs(sides["left"]["median"]) < 2.0 and abs(sides["right"]["median"]) < 2.0
+
+
+def test_report_records_every_estimator_parameter():
+    params = rr.RoadStateParams(lane_width_m=2 * HALF, sigma_kappa0=0.5)
+    metrics, _ = rr.replay(synthetic(8), dropouts=(), params=params)
+    assert metrics["params"]["sigma_kappa0"] == 0.5
+    assert set(metrics["params"]) == set(rr.dataclasses.asdict(params))
+    json.dumps(metrics, allow_nan=False)
+
+
+def test_curve_residuals_section_and_flag():
+    # moving on a 0.2 rad/s arc while the camera sees a straight lane: curve frames exist
+    metrics, rows = rr.replay(synthetic(48, yaw_rate=0.2), dropouts=())
+    curve = metrics["curve_residuals"]
+    assert curve["frames"] > 0 and any(r["motion"] == "curve" for r in rows)
+    assert {"nis_mean", "nis_p95", "above_9_21", "straight_nis_mean", "blow_up", "validated_on_curves"} <= set(curve)
+    assert curve["validated_on_curves"] is False
+    straight, _ = rr.replay(synthetic(24), dropouts=())
+    assert straight["curve_residuals"]["frames"] == 0 and straight["curve_residuals"]["blow_up"] is None
