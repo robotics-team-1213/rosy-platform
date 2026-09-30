@@ -687,3 +687,11 @@
 - gate 변화: 없음.
 - 결정: D-359 US-009.
 - 교훈: 문구를 바꾸면 루트 `test/`의 브라우저 시험도 grep한다.
+
+## 2026-10-01 · uncommitted · revert(dashboard): D-359 정리의 setOff 통합을 되돌림
+
+- 변경: 034fa28f(패널 10개가 `/assets/dom.js`의 `setOff`를 import)를 되돌렸다. 패널은 각자 한 줄 `setOff`를 다시 든다.
+- 증거: 7.6 회귀에서 `test/test_role_menu_panels_browser.py` 12건·`src/hmi/dashboard/test` 6건·`test_role_surface_states_browser.py` 1건이 실패했다. 패널 시험 하네스는 패널 파일만 라우팅하고 `/assets/dom.js`를 제공하지 않는다.
+- gate 변화: 없음.
+- 결정: D-359 §5.3. 정리 패스는 동작·시험 하네스를 바꾸지 않는다.
+- 교훈: 패널 모듈의 import 그래프는 운영 서버뿐 아니라 패널 단위 하네스가 제공하는 경로 안에 있어야 한다.
