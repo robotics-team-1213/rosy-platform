@@ -14,7 +14,7 @@ class LensSelectorTest {
     private val s21 = listOf(main, ultraWide, logicalMain)
 
     @Test
-    fun hfovOfS21LensesFollowsSensorLongEdgeAndFocalLength() {
+    fun hfovFollowsSensorEdgeAndFocal() {
         assertEquals(67.8, main.hfovDeg!!, 0.1)
         assertEquals(104.1, ultraWide.hfovDeg!!, 0.1)
     }

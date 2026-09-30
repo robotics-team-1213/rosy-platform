@@ -138,3 +138,9 @@ def test_generated_pairing_uri_round_trips(vector):
     assert parsed["port"] == vector["port"]
     assert parsed["token"] == vector["token"]
     assert parsed["source"] == vector["source"]
+
+
+def test_huge_integer_focal_length_is_ignored_not_raised():
+    # Built at runtime: a 400-digit literal in the shared fixture trips the tracked-file secret scan.
+    hello = json.loads('{"lens": {"kind": "wide", "focal_mm": 1%s, "hfov_deg": 104.1}}' % ("0" * 400))
+    assert protocol.parse_hello_lens(hello) is None
