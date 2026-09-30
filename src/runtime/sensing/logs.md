@@ -661,3 +661,29 @@
 - 증거: `test_ir_overlay.py` 에 import 실패 시험 추가, `test_ir_overlay.py test_ir_calibration.py` 24 passed (2026-09-30 Windows).
 - gate 변화: SOURCE.
 - 결정: D-344 §12 보강.
+
+## 2026-09-30 · uncommitted · fix(control): keep v2 — 경계 추적과 벽 밑 테이프(D-364 addendum)
+- 변경: `perception/lane_keep.py` — (1) 직전 프레임 경계를 기억해(오도메트리 없음) 이어지는 경계(6 cm·20° 안)는 반대쪽으로 8 cm 넘게 넘어가기 전까지 좌·우를 이어받고, 한쪽만 보이면 이어지는 경계를 먼저 고른다(fc2a81dc). 목표 이동 제한은 시도 후 뺐다. (2) 벽 줄기가 밝기 계단(3×3 평균, 3 행 사이 V 16)에서도 끝나 벽 밑 테이프가 남고, 벽 판정 밝기를 바닥 10 백분위 기준으로도 묶어 화면을 채운 벽도 찾는다(2d947c18). `test_lane_keep.py` 18 → 23.
+- 증거: 녹화 재생 벤치(공칭 지면, keep 기본) on_line/on_paint/none/jump — pilot 0.083/0.015/0.332/0.016 → 0.019/0.014/0.319/0.007, teleop 0.043/0.070/0.080/0.047 → 0.040/0.066/0.078/0.024. real-profile sim 폐루프: edge_left 출발 1.531 m → 3.496 m(V1A, 다만 SW 진입로 뒤 회전교차로 남쪽을 가로질러 off-lane 2, 동쪽 고리 안쪽으로 흐름), B1 0.509 → 1.326 m(off-lane 1), C1 0.509 m LOST → 2.001 m 이지만 x 0.20 분기에서 ±1 진동 후 둘레 벽에 붙음(off-lane 1). `pytest src/runtime/sensing/test -k "lane or ground or observer or keep"` 364 passed, 18 skipped (2d947c18, 2026-09-30 Windows). 영상·궤적 `X:\DevTemp\rosy-pilot-evidence\2026-09-30-sim-keep-v2\`. DEVICE: NOT RUN.
+- gate 변화: SOURCE 진행(실물 녹화 벤치 전 지표 개선). ROS-SIM 한 바퀴 미달 유지 — 분기에서 fail-closed 가 깨졌다(C1), 모서리 자르기·원호 미해결.
+- 결정: D-364 addendum(새 번호 없음). 모서리 회전은 실물에서 계속 끈다.
+- 교훈: 같은 저장 프레임의 4 fps 오프라인 재생과 8 fps 라이브가 모서리 잠금에서 다른 답을 냈다(V1C). 폐루프 로그에 전략(`strategy`)이 없으면 라이브를 재현할 수 없다.
+
+## 2026-09-30 · uncommitted · fix(control): keep 2차 — 모서리 모드 분기 fail-closed, 라이브 재생, 끊김 뒤 초기화(D-364 addendum 2)
+- 변경: `perception/lane_keep.py` — 모서리 회전이 켜진 경우만: 양쪽 차로선이 보이면 모서리를 찾지 않음, 열린 쪽 경계가 모서리 선 너머로 이어지면 잠그지 않음, 분기 보류(`junction_transverse`·`junction_fork`·`flipping`, 뒤집힘은 양쪽이 보일 때까지 유지), 모서리 명령 |error| ≤ 0.6(b92ea954, fd4fad93). 공통: 보류·`washed`·`no_ground` 에서 추적 경계·조향 기록을 버리고, `line_observer_node` 가 첫 keep 프레임·스탬프 간격 0.5 s 초과·역행·카메라 제어 게이트 뒤 `reset()`(6bda7d0f). 노드가 `line/keep_debug`(판단 묶음, 관측 전용)를 내고 `keep_run.py` 가 `keep.jsonl`·`--all-frames` 를 남긴다. 시험 23 → 32.
+- 증거: V1C 원인 — 8 fps 라이브 프레임을 1차 코드로 재생하면 라이브와 같은 프레임에서 `both` 위에 `corner_left` 잠금이 재현됨. 폐루프 off-lane: V1A 2 → R3A 0, V1B 1 → R3B 0, V1C 1 → R3C 0(대신 거리 3.50/1.33/2.00 → 0.70/0.29/0.67 m, 분기·굽이 앞 HOLD→LOST, R3A 는 모서리 뒤 벽 `obstacle_ahead`). 벤치(keep 기본) pilot 0.019/0.014/0.319/0.007, teleop 0.040/0.066/0.078/0.024 — 1차 HEAD 와 같음. 규칙을 실물 기본에도 넣으면 pilot none 0.537, teleop 0.288 이라 넣지 않음. `pytest src/runtime/sensing/test -k "lane or keep"` 302 passed, 17 skipped (2026-09-30 Windows). DEVICE: NOT RUN.
+- gate 변화: ROS-SIM — 모서리 모드가 분기에서 fail-closed(off-lane 0). 한 바퀴 미달 유지, 셰브런 거짓 보류(R3B).
+- 결정: D-364 addendum 2(새 번호 없음). 실물 모서리 회전은 계속 끔.
+- 교훈: 폐루프 원인은 라이브와 같은 프레임 순서로 재생해야 보인다 — 4 fps 표본은 모서리 잠금이 걸린 몇 프레임을 빼먹어 반대 답을 냈다. 순간이동 벤치에서는 노드 상태가 이전 위치를 기억한다.
+
+## 2026-09-30 · uncommitted · feat(recording): 녹화기가 LiDAR `scan` 도 기록한다(D-379)
+
+- 변경: `control/recording.py` `RECORD_TOPICS` 에 `scan` 을 더했다. D-379 자동 라벨(`tools/perception/dataset/autolabel.py`)이 LiDAR 반사점을 카메라 영상에 투영해 벽을 라벨하는데, LiDAR 는 벽은 보고 바닥 테이프는 못 보므로 벽/차선 구분의 기준이 된다. `session.json` 의 `topics` 와 `bag_command` 에 그대로 반영된다. 이 기록기는 아직 장치에 배포되지 않았다.
+- 증거: `test/test_recording.py` 에 `test_record_topics_include_the_lidar_for_wall_labels` 추가, `test_recording.py` 25 passed (2026-09-30 Windows). `feat/d373-learning-loop-lap2` 가 같은 줄을 `record_topics()` 로 바꿨으므로 병합 때 `scan` 을 그 함수에 옮겨야 한다.
+- gate 변화: SOURCE. 장치 반영 없음.
+- 결정: D-379 부록(2026-09-30).
+
+## 2026-10-01 · uncommitted · refactor(control): keep 앞단을 lane_keep_lines.py 로 분리(파일 예산)
+- 변경: `perception/lane_keep.py`(698 행, 예산 600)에서 바닥 흰색 마스크·조감도 선 맞춤(`floor_white_mask`·`extract_lines` 와 그 상수)을 `lane_keep_lines.py` 로 옮겼다. `LaneKeeper` 는 상태(쪽 추적·짝짓기·모서리·HOLD)만 남는다(541 행). 옛 이름은 lane_keep 에서 다시 내보내 호출·시험은 그대로다. control 크기 판정 36861 로 재판정.
+- 증거: `pytest src/runtime/sensing/test -k "lane or keep or observer"` 336 passed; 실물 세션 재생 keep 수치가 분리 전과 같다(on_line 0.149 / on_paint 0.052 / none 0.095 / jump 0.007).
+- gate 변화: 없음(동작 불변).

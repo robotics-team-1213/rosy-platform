@@ -77,9 +77,10 @@ def test_the_headline_is_a_fill_for_hazard_and_blocked():
 
 def test_no_fault_means_no_headline_and_no_colour():
     """정상에는 색도 자리도 쓰지 않는다 — '이상 없음'을 초록으로 칠하지 않는다."""
-    app = (WEB_ROOT / "app.js").read_text(encoding="utf-8")
-    assert "node.hidden = !headline;" in app, "고장이 없을 때 머리를 숨기지 않는다"
-    assert "status-good" not in app
+    # D-362 P1: telemetry.js renders the headline; the shell only calls it.
+    renderer = (WEB_ROOT / "telemetry.js").read_text(encoding="utf-8")
+    assert "node.hidden = !headline;" in renderer, "고장이 없을 때 머리를 숨기지 않는다"
+    assert "status-good" not in renderer
 
 
 def test_triage_consumes_only_fields_the_server_already_sends():
@@ -94,6 +95,8 @@ def test_the_module_is_served_and_imported():
     """allowlist에 없으면 404다. import만으로는 배포되지 않는다."""
     api = (API_PKG / "api" / "app.py").read_text(encoding="utf-8")
     assert '"triage.js": "application/javascript"' in api
+    # D-362 P1: the renderer module imports triage; the shell still calls the render.
+    renderer = (WEB_ROOT / "telemetry.js").read_text(encoding="utf-8")
+    assert 'from "./triage.js"' in renderer
     app = (WEB_ROOT / "app.js").read_text(encoding="utf-8")
-    assert 'from "./triage.js"' in app
     assert app.count("renderTriage()") >= 2, "상태와 inventory 양쪽에서 다시 분류해야 한다"

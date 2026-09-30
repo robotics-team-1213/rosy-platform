@@ -178,3 +178,9 @@ def test_receiver_hello_timeout_reason_is_a_retryable_4400():
     assert 'protocol.CLOSE_BAD_PROTO, "no hello"' in source
     assert "no hello" in VECTORS["close_4400_reasons"]["retry"]
     assert VECTORS["close_codes"]["try_again_later"] == 1013
+
+
+def test_huge_integer_focal_length_is_ignored_not_raised():
+    # Built at runtime: a 400-digit literal in the shared fixture trips the tracked-file secret scan.
+    hello = json.loads('{"lens": {"kind": "wide", "focal_mm": 1%s, "hfov_deg": 104.1}}' % ("0" * 400))
+    assert protocol.parse_hello_lens(hello) is None

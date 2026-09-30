@@ -294,6 +294,42 @@ def test_the_lamp_priority_is_the_adr_s(state, mode, pattern, why):
     assert rs.lamp_pattern(state, mode) == pattern, why
 
 
+# --- D-381: the navigation refinement inside NAVIGATION --------------------------
+
+
+@pytest.mark.parametrize("value,expected", [
+    ("NAVIGATING", "NAVIGATING"), ("BLOCKED", "BLOCKED"), ("FAILED", "FAILED"), ("IDLE", "IDLE"),
+    (None, None), ("blocked", None), ("LOST", None), (4, None),
+])
+def test_only_a_known_nav_state_is_kept(value, expected):
+    assert rs.valid_nav_state(value) == expected
+
+
+@pytest.mark.parametrize("nav,pattern,why", [
+    ("BLOCKED", "blocked", "a blocked goal blinks the navigating cyan"),
+    ("FAILED", "blocked", "a failed goal is just as stuck"),
+    ("NAVIGATING", "navigating", "under way, breathing"),
+    ("PLANNING", "navigating", "transient: not worth its own pattern"),
+    ("ARRIVED", "navigating", "the mode is still NAVIGATION; the next goal may come"),
+    ("CANCELED", "navigating", "transient end of one goal"),
+    (None, "navigating", "no nav state, no refinement"),
+    ("WARP", "navigating", "an unknown nav state is absent"),
+])
+def test_a_stuck_goal_blinks_inside_navigation(nav, pattern, why):
+    assert rs.lamp_pattern(rs.READY, "NAVIGATION", nav) == pattern, why
+
+
+@pytest.mark.parametrize("state,mode,nav,pattern", [
+    ("failed", "NAVIGATION", "BLOCKED", "failed"),
+    ("caution", "NAVIGATION", "BLOCKED", "caution"),
+    ("ready", "EMERGENCY", "BLOCKED", "emergency"),
+    ("ready", "DOCKING", "BLOCKED", "docking"),
+    ("ready", "MANUAL", "BLOCKED", "manual"),
+])
+def test_the_stuck_refinement_never_outranks_anything(state, mode, nav, pattern):
+    assert rs.lamp_pattern(state, mode, nav) == pattern
+
+
 def test_the_mode_lamp_names_are_the_helper_s_vocabulary():
     # lamp_pattern.c must know every name the table can ask for; the reverse
     # (helper names the table never asks for, e.g. test/off) is its own business.
@@ -301,3 +337,6 @@ def test_the_mode_lamp_names_are_the_helper_s_vocabulary():
                             "DOCKING": "docking", "EMERGENCY": "emergency"}
     assert set(rs.MODE_LAMP) == rs.OPERATING_MODES
     assert rs.ROBOT_MODES == rs.OPERATING_MODES | {"IDLE"}
+    # D-381: MODE_LAMP stays the truth for the plain mode patterns even though
+    # lamp_pattern() spells the priority out — pin the two together.
+    assert all(rs.lamp_pattern(rs.READY, mode) == pattern for mode, pattern in rs.MODE_LAMP.items())

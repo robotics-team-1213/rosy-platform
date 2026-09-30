@@ -71,3 +71,9 @@
 - 변경: 병합 시점에 main 이 D-375 를 feat/overhead-map-auto-register 예약으로 adr_gaps 에 넣은 것이 확인됐다(선례 D-324→D-325). 이 작업의 결정 번호를 다음 빈 번호 D-380 으로 개명하고 코드 주석·시험·설계 문서의 D-375 표기를 함께 바꿨다. 앞선 항목의 D-375 표기는 역사 기록으로 그대로 둔다.
 - 증거: rosy_harness lint 오류 0. 본문 참조는 docs/adr/D-380-lamp-mode-patterns-from-core-status-inputs.md.
 - gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · feat(lamp): D-381 패턴 blocked
+
+- 변경: `lamp_pattern.c`에 blocked(청록 2 Hz 점멸) 추가, `known()`·usage 갱신.
+- 증거: C↔파이썬 이름 동기 시험 (변이 증명: known()에서 빼면 빨강). 실기 점등은 DEVICE 단계.
+- gate 변화: 없음.

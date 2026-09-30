@@ -42,7 +42,7 @@
 1. 벡터를 쓴다. 서비스 종류 셋에 대해 받는 사례와 거절 사례를 담는다: `duplicate_key`, `value_mismatch`, `missing_key`, `tls_host_mismatch`, `bad_address`(링크 로컬·공인·IPv6), `ap_mode`, 알 수 없는 키 무시, 옛 로봇 광고 `legacy`. 각 사례의 기대 사유를 적는다.
 2. 프로필 대조 시험을 적신으로 본다(파일이 없는 상태). 벡터를 추가해 녹색으로 만든다.
 3. `test_discovery_txt_vectors.py`를 적신으로 본다(모듈이 없는 상태). `discovery_txt.py`를 구현한다.
-4. 브리지·광고 스크립트 시험에 벡터 루프를 더한다. `mdns-bridge.py`는 `value_mismatch` 사례에서 적신이 나야 한다(D-351 발견 8). 그 뒤 고친다.
+4. 브리지·광고 스크립트 시험에 벡터 루프를 더한다. `mdns-bridge.py`는 `value_mismatch` 사례에서 적신이 나야 한다(D-382 발견 8). 그 뒤 고친다.
 5. FleetAgent·Fleet 서버를 `core_common`으로 옮긴다. 기존 시험(`test_fleet_agent_mdns.py`, `src/site/fleet/test/test_discovery.py`)은 녹색이어야 한다.
 6. Kotlin `DiscoveryVectorsTest`를 적신으로 본 뒤 파서 사유를 맞춘다.
 
@@ -148,7 +148,7 @@
 - 4401 → `auth_final`(재시도 멈춤), 4503 → `auth_retry`(자격 유지·백오프)를 Kotlin·JS가 같게 낸다.
 - 벡터 한 줄을 바꿔 두 언어가 모두 적신이 되는지 본다.
 
-## S7 — 전송·공개 상태 정리 (D-351 스냅샷 회차와 함께)
+## S7 — 전송·공개 상태 정리 (D-382 스냅샷 회차와 함께)
 
 **파일**
 - 고친다: `src/site/fleet/fleet/swarm/robots.py`(`ws_url`)와 `transport.py:222-228`. 토큰을 URL에서 빼고 첫 메시지 `{type:"auth", token}`으로 보낸다.
@@ -159,7 +159,7 @@
 
 **수용 기준**
 - Fleet 시험 전체가 녹색이고, `git grep -n "token=" src/site/fleet/fleet/swarm`에 URL 조립이 없다.
-- 이미지 버전 호환: 옛 CORE 이미지(첫 메시지 인증 이전 판)가 있으면 제거 커밋을 미룬다. 판정은 D-351 `contract_version`으로 한다.
+- 이미지 버전 호환: 옛 CORE 이미지(첫 메시지 인증 이전 판)가 있으면 제거 커밋을 미룬다. 판정은 D-382 `contract_version`으로 한다.
 
 ## S8 (조건부) — Android 공유 모듈
 
