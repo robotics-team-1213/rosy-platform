@@ -1589,3 +1589,9 @@
 - 증거: `test/test_bench_learned_perception.py`(별도 잠금 항목, 같은 prefix·플래그, `/usr/local`·런타임 기록 미사용, dry-run 출력), `test/test_python_runtime_id.py`, `src/runtime/sensing/test/test_learned_runner.py`(prefix는 끝에 붙고 시스템 패키지가 우선). 2026-10-01 Windows.
 - gate 변화: 없음. ARTIFACT/DEVICE HOLD — 이미지 빌드 미실행.
 - 결정: D-373 결정 1 개정.
+
+## 2026-10-01 · uncommitted · docs(site): D-373 모델 watcher와 store 기록
+- 변경: 이 브랜치 커밋 기준. 사이트 PC의 `deploy/site/rosy-model-watch.service`·`.timer`가 `tools/perception/model/watch.py`를 돌린다(067d4119). 기본 백엔드는 store inbox(`models/inbox/<폴더>/` + READY)이고 HF는 `backend: hf`일 때만 쓴다(68ad0405, f6820e6e). 통과한 모델은 `models/accepted/<revision>/`, 떨어진 것은 `models/rejected/`로 옮기고 설정된 로봇에 섀도로만 전달한다. `deploy/site/install-model-watch.sh`가 설치하고 사이트 전용 SSH 키를 쓴다(b0cf35c6, aaad6da7). 설정 예시는 `deploy/site/model-watch.yaml.example`. store 구조와 `content_sha`는 `tools/perception/store.py`(b50b1118).
+- 증거: `tools/perception/test/test_model_watch.py`, `test_model_watch_inbox.py`, `test_site_install_model_watch.py`, `test_site_model_watch_units.py`, `test_store.py`(호스트 pytest). 사이트 PC 설치 실행 증거는 없다.
+- gate 변화: 없음. 사이트 설치·첫 자동 섀도 전달은 미실행.
+- 결정: D-373 결정 5·7·8.

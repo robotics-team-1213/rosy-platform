@@ -687,3 +687,18 @@
 - 변경: `perception/lane_keep.py`(698 행, 예산 600)에서 바닥 흰색 마스크·조감도 선 맞춤(`floor_white_mask`·`extract_lines` 와 그 상수)을 `lane_keep_lines.py` 로 옮겼다. `LaneKeeper` 는 상태(쪽 추적·짝짓기·모서리·HOLD)만 남는다(541 행). 옛 이름은 lane_keep 에서 다시 내보내 호출·시험은 그대로다. control 크기 판정 36861 로 재판정.
 - 증거: `pytest src/runtime/sensing/test -k "lane or keep or observer"` 336 passed; 실물 세션 재생 keep 수치가 분리 전과 같다(on_line 0.149 / on_paint 0.052 / none 0.095 / jump 0.007).
 - gate 변화: 없음(동작 불변).
+
+## 2026-10-01 · uncommitted · feat(sensing): D-373 두 번째 바퀴 — 캡처·스냅샷·상태·압축 카메라·launch 스위치·wall·scan
+- 변경: 이 브랜치 커밋 기준, main 병합 5e76dbe7·a4454366 뒤 상태.
+  - 압축 카메라: `camera_detect_node`가 `publish_compressed`일 때 같은 프레임을 JPEG으로 `camera/front/compressed`에 낸다(5681cca7). 로봇 밖으로 나가지 않는다(D-136).
+  - 상태 토픽: `learned_lane_node`가 `perception/learned/status`(latched, 1 Hz)에 모델·`last_error`·프레임 수·`skip_ratio`·`latency_ms_p50`을 낸다(5681cca7, 73e8b1b0). 2cedf136: 추론 빈도 상한 `max_rate_hz`(기본 3.0)·`threads`(기본 2), 상한으로 건너뛴 프레임은 `frames_rate_limited`로 따로 세고 `skip_ratio`는 과부하만.
+  - 캡처 트리거: `capture_trigger.py`(ROS 없음)·`capture_trigger_node` — |error_delta| ≥ 0.35 또는 한쪽만 차선을 보는 상태가 3프레임 연속이면, 또는 `capture/request`면 스냅샷을 요청한다. 자동 쿨다운 30 s, 운영자 5 s(53a4f94a, dcc479e3).
+  - 스냅샷 녹화: `recording.py` snapshot 모드와 `record_session --snapshot` — 압축 카메라·부수 토픽 60 s를 메모리 링버퍼(15,360,000 B)에 두고 호출마다 세션 폴더와 `session.json`(사유·두 판단값)을 남긴다(53a4f94a).
+  - launch 스위치: `camera_preview.launch.py`의 `learned_shadow`·`capture`(기본 꺼짐, `ROSY_LEARNED_SHADOW`·`ROSY_CAPTURE`에서 `true`/`false`만)와 `learned_max_rate_hz`(`ROSY_LEARNED_MAX_HZ`)(1df022b6, 20d80b3c, 2cedf136). 병합에서 main의 IR 교정 overlay·`LogInfo`와 합쳤다.
+  - wall role: `wall` 화소는 차선 목표에서 빠지고 섀도 결과에 `wall_fraction`(가까운 띠 비율)으로 나간다(28b905fa).
+  - scan 부수 데이터: `SIDE_TOPICS`에 `scan`(693d5d33). 병합에서 main의 `RECORD_TOPICS`(scan 추가)와 한 정의로 합쳤다: `RECORD_TOPICS = record_topics()`.
+  - 학습 런타임 prefix: `learned/runner.py`가 `onnxruntime` import 직전에 `/opt/rosy/learned-perception/site-packages`(`ROSY_LEARNED_SITE`)를 `sys.path` 끝에 붙인다(d2d6ac1f).
+- 증거: `src/runtime/sensing/test` 호스트 pytest(Windows), WSL Jazzy `test_camera_preview_launch.py` 25 passed(2026-10-01). 장치 증거는 없다.
+- gate 변화: SOURCE. ROS-SIM·DEVICE HOLD 유지 — 섀도·스냅샷·수거의 장치 실행과 상한 뒤 CPU는 미측정.
+- 결정: D-373 결정 2·3·4·9, 결정 1 개정(d2d6ac1f).
+- 교훈: 병합이 dict 리터럴에 같은 키 둘을 남기면 뒤의 것이 앞을 조용히 덮는다(`test_native_systemd_contract` `DECLARED_READS`). 충돌 없는 자동 병합도 자료 구조 키를 다시 본다.

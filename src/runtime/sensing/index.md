@@ -33,6 +33,7 @@
 | D-205 | 실물 차선 미션으로의 전환: 시뮬레이션 현실화, 인식 재작업, 재합격 순서 |
 | D-206 | P0 실측은 기록지가 표준이고 확정 카메라 프로필은 revision으로 보관한다 — 게이트 판정은 프로토타입 `camcal`로 잇고 `src/robots/pinky_pro/config/`은 D-196 머지 뒤 만든다 |
 | D-356 | 인식 학습 루프 — 학습은 저장소 밖, manifest 약속·접수·데이터 세대 전달·섀도 추론은 안 |
+| D-373 | 학습 인식 두 번째 바퀴 — onnxruntime·모델 디렉터리는 Pinky 이미지 계층, 섀도·캡처는 기본 꺼진 페이로드, 불일치 60 s 스냅샷, 사이트 PC가 새 모델을 섀도까지 자동 반영; 정본은 store 폴더(로컬→NAS·Drive), HF는 선택 |
 
 ## 계획·결과 문서
 
@@ -63,8 +64,8 @@
 
 ## 최근 기록
 
+- 2026-10-01 · uncommitted · feat(sensing): D-373 두 번째 바퀴 — 캡처·스냅샷·상태·압축 카메라·launch 스위치·wall·scan
 - 2026-10-01 · uncommitted · refactor(control): keep 앞단을 lane_keep_lines.py 로 분리(파일 예산)
 - 2026-09-30 · uncommitted · feat(recording): 녹화기가 LiDAR `scan` 도 기록한다(D-379)
 - 2026-09-30 · uncommitted · fix(control): keep 2차 — 모서리 모드 분기 fail-closed, 라이브 재생, 끊김 뒤 초기화(D-364 addendum 2)
 - 2026-09-30 · uncommitted · fix(control): keep v2 — 경계 추적과 벽 밑 테이프(D-364 addendum)
-- 2026-09-30 · 40757d69 · fix(camera): 교정 검사기를 import 못 해도 덮어쓰기만 건너뛴다(재검토 R4)

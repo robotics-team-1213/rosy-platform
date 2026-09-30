@@ -260,13 +260,8 @@
 
 ## 최근 기록
 
-- 2026-09-30 · uncommitted · docs(deployment): D-373 Pinky first-deploy and SD runbook for learned perception
-- 2026-09-30 · uncommitted · docs(plan): identify PICK_PLACE coordinate resolution gap
-- 2026-09-30 · uncommitted · test(omx): rerun vendor owner policy ROS-SIM
-- 2026-09-30 · uncommitted · docs(plan): classify prior OMX ROS-SIM evidence for Action mapping
-- 2026-09-30 · uncommitted · docs(plan): hold ROS Action mapping for selected hardware profile
+- 2026-10-01 · uncommitted · merge(perception): main 을 feat/d373-learning-loop-lap2 에 병합하고 D-373 후속 정리
 - 2026-10-01 · uncommitted · docs(adr): D-341·D-382 착지 — 천장 카메라 콘솔 승인·로봇 ↔ 관제 통신 적합성
 - 2026-10-01 · uncommitted · fix(perception): bag_to_video sidecar 가 stamp 달린 증거를 제 프레임에 붙인다
 - 2026-10-01 · uncommitted · fix(perception): 텔레옵 sidecar·extract 시계 통일 — t=헤더 stamp, 부수값=직전 메시지
 - 2026-10-01 · uncommitted · docs(adr): D-381 막힌 내비게이션·비상정지 진입음 결정
-- 2026-09-30 · uncommitted · docs(adr): D-356 보강 — 텔레옵 학습 영상 H.265/H.264 압축과 로봇 JPEG 기록 제안

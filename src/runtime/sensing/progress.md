@@ -23,7 +23,7 @@ gates:
     blocker: "Pi bench Device 설치와 device-readback.sh --json 증거 없음. Control sensor adapter 활성화는 Device 보정 generation에 묶인다(D-47)"
   FIELD:
     state: PARKED
-adrs: [D-37, D-38, D-40, D-42, D-47, D-50, D-57, D-58, D-77, D-118, D-119, D-143, D-151, D-152, D-149, D-155, D-156, D-162, D-168, D-183, D-199, D-205, D-206, D-356]
+adrs: [D-37, D-38, D-40, D-42, D-47, D-50, D-57, D-58, D-77, D-118, D-119, D-143, D-151, D-152, D-149, D-155, D-156, D-162, D-168, D-183, D-199, D-205, D-206, D-356, D-373]
 plans:
   - docs/plans/2026-09-06-module-split-criteria.md
   - docs/plans/2026-09-12-rosy-control-absorption-plan.md
@@ -74,6 +74,13 @@ plans:
 - **2026-09-22 Gazebo 실렌더링 검증 PASS**: semantic_road_dashboard 헤드리스 실행에서 실제 렌더링 프레임으로 정지선 구간 stop_line 100% 분류, 표식 통과 후 generic 보수 폴백 확인(docs/validation/scene-context-gazebo-2026-09-22). crosswalk 배치 미검출로 crosswalk 컨텍스트는 호스트 시험만 존재.
 - context는 인지 파라미터만 바꾼다. 정지·명령 결정은 여전히 LiDAR/IR 메트릭과 CORE가 소유하며(D-137/D-151), 프로파일 값 튜닝은 DEVICE gate 전까지 제네릭과 동일하게 둔다.
 - LOCAL: `1179 passed, 28 skipped` (2026-09-22).
+
+## 2026-10-01 learned loop lap 2 status (D-373)
+
+- 섀도·캡처는 `camera_preview.launch.py` 스위치 뒤에 있고 기본 꺼짐이다(`/etc/rosy/learned-perception.env`). 켜면 `learned_lane_node`(최대 3 Hz, 2 스레드)와 `capture_trigger_node`, 스냅샷 녹화기가 돈다. 둘 다 명령을 내지 않는다(배치 closure 시험의 evidence producer 목록에 등록).
+- `perception/learned/status`가 모델·오류·`skip_ratio`·`frames_rate_limited`를 알린다. 런타임이 없으면 `last_error`에 이유가 나온다(D-62).
+- 녹화 토픽은 `record_topics()` 한 정의다: 카메라(스냅샷은 압축), `cmd_vel`, `line/observation`, 섀도, `scan`, `odom`.
+- 남은 gate: WSL/장치에서 섀도·스냅샷·수거 실행, 상한 뒤 Pi 5 CPU·지연 재측정(D-373 Validation).
 
 ## 2026-09-30 learned loop status (D-356)
 

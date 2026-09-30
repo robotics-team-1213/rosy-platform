@@ -3994,3 +3994,9 @@
 - 증거: harness generate·lint 0 error.
 - gate 변화: 없음(SOURCE 문서만). 두 ADR 모두 Proposed 그대로.
 - 결정: 없음(착지·번호 정리만). D-341 본문의 옛 이름(`src/site/overhead`, `overhead` CLI)은 D-374·D-377 표로 읽는다.
+
+## 2026-10-01 · uncommitted · merge(perception): main 을 feat/d373-learning-loop-lap2 에 병합하고 D-373 후속 정리
+- 변경: main 병합 둘(5e76dbe7, a4454366). `extract.py` 는 main 의 mp4+sidecar 입력과 브랜치의 MCAP 기능(압축 카메라 우선, 잘린 MCAP 생존, namespace 접미 일치)을 함께 두고 두 부류 시계 규칙 하나를 쓴다(stamp 달린 증거는 같은 stamp ±1 ms·촬영 이후·log+0.5 s 이내, 나머지는 log time 이하 최신; D-356 보강 문구 갱신, rosy-bc 세션과 합의). 학습 런타임은 별도 잠금 파일과 전용 prefix 로 옮겨 페이로드 런타임 id 를 main 의 a66f224a 로 되돌렸다(d2d6ac1f). 배치 closure 에 두 노드 등록, D-356·D-373 ADR 문장 정정(c703a559). 학습·CVAT 빌드의 `ignore_index`(7277b7fd). 섀도 추론 빈도 상한·스레드·띠 전용 softmax(2cedf136).
+- 증거: 각 커밋의 시험과 최종 검증 실행(루트·sensing·perception pytest, WSL launch). 루트 `test/test_web_dialog_contract.py::test_confirm_lives_only_in_the_pinned_files_and_counts` 는 main 에서도 실패한다.
+- gate 변화: 없음(SOURCE). 장치 실행은 D-373 Validation 그대로 남는다.
+- 결정: D-373 결정 1 개정·9 문장 정정, D-356 보강 시계 규칙.
