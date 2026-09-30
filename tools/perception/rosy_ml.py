@@ -1,17 +1,21 @@
 """rosy_ml: the operator CLI for the learned-perception loop (D-373 decision 7).
 
   rosy_ml init --robot NAME=HOST [...]   write your per-user config (paths only)
-  rosy_ml doctor [ROBOT]                 check key, known_hosts, robot, sudo, runtime
+  rosy_ml doctor [ROBOT]                 check key, known_hosts, robot, sudo, runtime, store
+  rosy_ml store-status [--init]          datasets and model inbox/accepted/rejected counts
   rosy_ml status [ROBOT]                 shadow pointer, installed revisions, history
   rosy_ml deliver ROBOT REVISION         push an intake-passed model to the shadow slot (holds the robot)
   rosy_ml rollback ROBOT                 back to shadow.previous (holds the robot)
   rosy_ml release-hold ROBOT             remove the hold: site auto delivery resumes
   rosy_ml harvest ROBOT                  pull finished recordings (only while idle)
-  rosy_ml intake SOURCE                  check a model folder or hf:org/repo@<sha>
+  rosy_ml intake SOURCE                  check a model folder, store-inbox:<folder>
+                                         or (optional HF) hf:org/repo@<sha>
 
 Config: ROSY_ML_CONFIG, else %APPDATA%\\Rosy\\ml.yaml (Windows) or
 $XDG_CONFIG_HOME/rosy/ml.yaml, ~/.config/rosy/ml.yaml. It names robots, key
-and known_hosts paths, the HF repo, and token *files*; never a token itself.
+and known_hosts paths, the store folder (D-373 decision 8: a local path, a NAS
+mount or a Google Drive folder, same layout), optionally an HF repo, and token
+*files*; never a token itself.
 Robots are addressed by name; the host lives only in your config.
 
 The commands wrap model/deliver.py, dataset/harvest.py and model/intake.py;
@@ -40,6 +44,7 @@ for _p in (HERE, HERE / "model", HERE / "dataset"):
         sys.path.insert(0, str(_p))
 
 import operator_ssh  # noqa: E402
+import store  # noqa: E402
 
 SITE_TOKEN_FILE = "/etc/rosy/site/secrets/hf_token"
 STALE_HOLD_H = 24
@@ -102,6 +107,9 @@ def _check(cfg: dict) -> dict:
     ssh = cfg.get("ssh") or {}
     if not ssh.get("identity") or not ssh.get("known_hosts"):
         raise ValueError("ssh.identity and ssh.known_hosts are required")
+    if cfg.get("store") is not None and (not isinstance(cfg["store"], str)
+                                         or not cfg["store"].strip()):
+        raise ValueError("store: a folder path")
     cfg.setdefault("operator", getpass.getuser())
     cfg.setdefault("intake_out", str(ROOT / "data" / "perception" / "models"))
     return cfg
@@ -116,11 +124,13 @@ def config_from_watch(watch_cfg: dict, hostname: str | None = None) -> dict:
     """The site watcher's config seen as an operator config (doctor on the site PC)."""
     cfg = {"operator": f"site:{hostname or socket.gethostname()}",
            "robots": {r["name"]: r["host"] for r in watch_cfg["robots"]},
-           "ssh": dict(watch_cfg["ssh"]), "hf_repo": watch_cfg["repo"],
-           "hf_token_file": watch_cfg.get("hf_token_file") or SITE_TOKEN_FILE,
-           "intake_out": watch_cfg["intake_out"]}
-    if watch_cfg.get("replay_root"):
-        cfg["replay_root"] = watch_cfg["replay_root"]
+           "ssh": dict(watch_cfg["ssh"]), "intake_out": watch_cfg["intake_out"]}
+    if watch_cfg.get("backend", "inbox") == "hf":
+        cfg["hf_repo"] = watch_cfg["repo"]
+        cfg["hf_token_file"] = watch_cfg.get("hf_token_file") or SITE_TOKEN_FILE
+    for key in ("store", "replay_root", "gate"):
+        if watch_cfg.get(key):
+            cfg[key] = watch_cfg[key]
     return _check(cfg)
 
 
@@ -157,7 +167,8 @@ def _init(args) -> int:
         return 2
     cfg = {"operator": args.operator or getpass.getuser(), "robots": robots,
            "ssh": {"identity": identity, "known_hosts": known_hosts}}
-    for key in ("hf_repo", "hf_token_file", "intake_out", "core_token_file", "replay_root"):
+    for key in ("store", "hf_repo", "hf_token_file", "intake_out", "core_token_file",
+                "replay_root"):
         if getattr(args, key):
             cfg[key] = getattr(args, key)
     try:
@@ -278,6 +289,12 @@ def _doctor(cfg, robots, runner, connect, find_spec) -> int:
                 rep.line(False, f"{name}: held by {who}{since} (site auto delivery paused){stale}",
                          f"when done testing: rosy_ml release-hold {name}", required=False)
 
+    if cfg.get("store"):
+        _doctor_store(rep, store.Store(cfg["store"]))
+    else:
+        rep.line(False, "no store configured (datasets and model hand-over live there)",
+                 "rosy_ml init --store <path> --force, or add `store: <path>` to your config",
+                 required=False)
     if cfg.get("hf_repo"):
         tok = cfg.get("hf_token_file")
         if tok:
@@ -287,6 +304,7 @@ def _doctor(cfg, robots, runner, connect, find_spec) -> int:
             rep.line(False, f"no hf_token_file for {cfg['hf_repo']}",
                      "fine for a public repo; a private one needs hf_token_file",
                      required=False)
+    if cfg.get("store") or cfg.get("hf_repo"):
         rep.check("replay clips for intake", lambda: _replay_clip_count(cfg),
                   "copy data/teleop/learning/*.mp4 under replay_root (or the repo root); "
                   "without clips every intake stops as a setup error")
@@ -294,6 +312,58 @@ def _doctor(cfg, robots, runner, connect, find_spec) -> int:
               "needed for rosy_ml intake only: pip install onnxruntime in your venv",
               required=False)
     return 1 if rep.failed else 0
+
+
+def _writable(folder: Path) -> bool:
+    probe = folder / f".rosy_ml-probe-{os.getpid()}"
+    probe.write_text("", encoding="utf-8")
+    probe.unlink()
+    return True
+
+
+def _doctor_store(rep: _Report, st) -> None:
+    root = st.root
+    if not rep.check(f"store {root} exists", root.is_dir,
+                     "create the folder, or mount the NAS / start Google Drive for desktop; "
+                     "the path in your config must be the mounted path"):
+        return
+    rep.check(f"store {root} is writable", lambda: _writable(root),
+              "give your user (or rosy-model-watch on the site PC) write access")
+    missing = [str(d.relative_to(root)) for d in st.layout() if not d.is_dir()]
+    if missing:
+        rep.line(False, f"store layout: missing {', '.join(missing)}",
+                 "rosy_ml store-status --init creates them")
+        return
+    s = st.status()
+    rep.line(True, f"store layout; {s['inbox_ready']} ready in the inbox, "
+                   f"{s['inbox_waiting']} incomplete (no matching READY)")
+
+
+def _store_status(cfg: dict, init: bool) -> int:
+    if not cfg.get("store"):
+        print("✗ no store configured — fix: rosy_ml init --store <path> --force "
+              "(or add `store: <path>` to your config)")
+        return 2
+    st = store.Store(cfg["store"])
+    if not st.root.is_dir():
+        print(f"✗ store {st.root} does not exist — fix: create or mount it")
+        return 1
+    if init:
+        st.ensure_layout()
+    s = st.status()
+    print(f"store: {s['root']}")
+    print("datasets:" if s["datasets"] else "datasets: none")
+    for name, shas in s["datasets"].items():
+        for sha in shas:
+            print(f"  store:{name}@{sha}")
+    print(f"inbox: {s['inbox_ready']} ready, {s['inbox_waiting']} waiting (no matching READY)")
+    print(f"accepted: {s['accepted']}")
+    print(f"rejected: {s['rejected']}")
+    missing = [str(d.relative_to(st.root)) for d in st.layout() if not d.is_dir()]
+    if missing:
+        print(f"✗ missing {', '.join(missing)} — fix: rosy_ml store-status --init")
+        return 1
+    return 0
 
 
 # --- main -----------------------------------------------------------------------------------
@@ -311,6 +381,7 @@ def main(argv=None, *, runner=subprocess.run, connect=socket.create_connection,
     p.add_argument("--robot", action="append", metavar="NAME=HOST")
     p.add_argument("--identity")
     p.add_argument("--known-hosts")
+    p.add_argument("--store", help="store folder: local path, NAS mount or Drive folder")
     p.add_argument("--hf-repo")
     p.add_argument("--hf-token-file")
     p.add_argument("--intake-out")
@@ -333,6 +404,8 @@ def main(argv=None, *, runner=subprocess.run, connect=socket.create_connection,
     p.add_argument("--dest")
     p.add_argument("--assume-idle", action="store_true")
     sub.add_parser("intake").add_argument("source")
+    sub.add_parser("store-status").add_argument("--init", action="store_true",
+                                                help="create the layout folders")
     args = ap.parse_args(argv)
 
     if args.cmd == "init":
@@ -354,6 +427,8 @@ def main(argv=None, *, runner=subprocess.run, connect=socket.create_connection,
         return 2
     if args.cmd == "doctor":
         return _doctor(cfg, robots, runner, connect, find_spec)
+    if args.cmd == "store-status":
+        return _store_status(cfg, args.init)
     ssh = _ssh_argv(cfg)
     if args.cmd in ("status", "deliver", "rollback", "release-hold"):
         import deliver
@@ -388,7 +463,8 @@ def main(argv=None, *, runner=subprocess.run, connect=socket.create_connection,
             downloader = functools.partial(snapshot_download, token=token)
         rc, _ = intake.run(args.source, out=str(cfg["intake_out"]),
                            gate_path=cfg.get("gate") or intake.DEFAULT_GATE,
-                           root=cfg.get("replay_root") or intake.ROOT, downloader=downloader)
+                           root=cfg.get("replay_root") or intake.ROOT, downloader=downloader,
+                           store=cfg.get("store"))
         return rc
     return 2
 

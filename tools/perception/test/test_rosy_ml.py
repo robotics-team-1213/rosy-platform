@@ -83,7 +83,7 @@ def test_load_config_refuses_inline_secrets(tmp_path):
 
 
 def test_config_from_watch():
-    watch_cfg = {"repo": "org/m", "robots": [{"name": "a", "host": "h"}],
+    watch_cfg = {"backend": "hf", "repo": "org/m", "robots": [{"name": "a", "host": "h"}],
                  "ssh": {"identity": "/k", "known_hosts": "/kh"}, "intake_out": "/o",
                  "replay_root": "/r"}
     cfg = rosy_ml.config_from_watch(watch_cfg, hostname="fleet-1")
@@ -254,7 +254,8 @@ def test_doctor_watch_config(tmp_path, monkeypatch, capsys):
     if os.name != "nt":
         key.chmod(0o600)
     wc = tmp_path / "model-watch.yaml"
-    wc.write_text(json.dumps({"repo": "org/m", "robots": [{"name": "pinky-a", "host": "h"}],
+    wc.write_text(json.dumps({"backend": "hf", "repo": "org/m",
+                              "robots": [{"name": "pinky-a", "host": "h"}],
                               "ssh": {"identity": str(key), "known_hosts": str(tmp_path / "kh")},
                               "intake_out": str(tmp_path), "state_file": str(tmp_path / "s"),
                               "hf_token_file": str(key)}))
@@ -326,3 +327,107 @@ def test_robot_names_are_positional(tmp_path, monkeypatch):
     monkeypatch.setitem(sys.modules, "deliver", fake)
     assert rosy_ml.main(["release-hold", "pinky-a"]) == 0
     assert seen[0][:2] == ["release-hold", "10.0.0.11"]
+
+
+# --- store (D-373 decision 8) ---------------------------------------------------------------
+
+def _store_with(tmp_path):
+    import store
+    st = store.Store(tmp_path / "store")
+    st.ensure_layout()
+    src = tmp_path / "ds"
+    src.mkdir()
+    (src / "manifest.json").write_text("{}")
+    _, sha = st.put_dataset(src, "lane")
+    ready = st.inbox / "m1"
+    ready.mkdir()
+    (ready / "model.onnx").write_text("w")
+    (ready / "READY").write_text(store.content_sha(ready))
+    (st.inbox / "half").mkdir()
+    return st, sha
+
+
+def test_init_records_the_store_path(tmp_path, monkeypatch):
+    cfg, rc = _init(tmp_path, "--store", str(tmp_path / "store"), monkeypatch=monkeypatch)
+    assert rc == 0
+    assert yaml.safe_load(cfg.read_text(encoding="utf-8"))["store"] == str(tmp_path / "store")
+
+
+def test_config_from_an_inbox_watch_config_has_the_store_and_no_hf():
+    cfg = rosy_ml.config_from_watch({"store": "/srv/rosy/store", "backend": "inbox",
+                                     "robots": [{"name": "a", "host": "h"}],
+                                     "ssh": {"identity": "/k", "known_hosts": "/kh"},
+                                     "intake_out": "/o"}, hostname="site")
+    assert cfg["store"] == "/srv/rosy/store"
+    assert "hf_repo" not in cfg and "hf_token_file" not in cfg
+
+
+def test_doctor_checks_the_store(tmp_path, monkeypatch, capsys):
+    _store_with(tmp_path)
+    assert _doctor(tmp_path, monkeypatch, Robot(), "--store", str(tmp_path / "store")) == 0
+    out = capsys.readouterr().out
+    assert "✓ store" in out and "1 ready in the inbox" in out
+    assert "HF" not in out  # no HF anywhere without hf_repo
+
+
+def test_doctor_missing_store_is_a_cross_with_a_fix(tmp_path, monkeypatch, capsys):
+    rc = _doctor(tmp_path, monkeypatch, Robot(), "--store", str(tmp_path / "nowhere"))
+    assert rc == 1
+    bad = [ln for ln in capsys.readouterr().out.splitlines() if ln.startswith("✗")]
+    assert bad and "store" in bad[0] and "mount" in bad[0]
+
+
+def test_doctor_store_without_layout_names_store_status_init(tmp_path, monkeypatch, capsys):
+    (tmp_path / "store").mkdir()
+    rc = _doctor(tmp_path, monkeypatch, Robot(), "--store", str(tmp_path / "store"))
+    assert rc == 1
+    assert "rosy_ml store-status --init" in capsys.readouterr().out
+
+
+def test_doctor_without_store_or_hf_says_so(tmp_path, monkeypatch, capsys):
+    assert _doctor(tmp_path, monkeypatch, Robot()) == 0
+    assert "! no store" in capsys.readouterr().out
+
+
+def test_doctor_replay_clips_are_required_with_a_store(tmp_path, monkeypatch, capsys):
+    _store_with(tmp_path)
+    assert _doctor(tmp_path, monkeypatch, Robot(), "--store", str(tmp_path / "store"),
+                   clips=0) == 1
+    assert "replay" in capsys.readouterr().out
+
+
+def test_store_status_lists_datasets_and_counts(tmp_path, monkeypatch, capsys):
+    _, sha = _store_with(tmp_path)
+    _init(tmp_path, "--store", str(tmp_path / "store"), monkeypatch=monkeypatch)
+    assert rosy_ml.main(["store-status"]) == 0
+    out = capsys.readouterr().out
+    assert f"store:lane@{sha}" in out
+    assert "inbox: 1 ready, 1 waiting" in out and "accepted: 0" in out and "rejected: 0" in out
+
+
+def test_store_status_init_creates_the_layout(tmp_path, monkeypatch, capsys):
+    _init(tmp_path, "--store", str(tmp_path / "store"), monkeypatch=monkeypatch)
+    assert rosy_ml.main(["store-status"]) == 1          # missing: not created silently
+    (tmp_path / "store").mkdir()
+    assert rosy_ml.main(["store-status", "--init"]) == 0
+    assert (tmp_path / "store" / "models" / "inbox").is_dir()
+    assert (tmp_path / "store" / "datasets").is_dir()
+
+
+def test_store_status_without_a_store_is_refused(tmp_path, monkeypatch, capsys):
+    _init(tmp_path, monkeypatch=monkeypatch)
+    assert rosy_ml.main(["store-status"]) == 2
+    assert "rosy_ml init --store" in capsys.readouterr().out
+
+
+def test_intake_passes_the_store_for_inbox_refs(tmp_path, monkeypatch):
+    _init(tmp_path, "--store", str(tmp_path / "store"), monkeypatch=monkeypatch)
+    got = {}
+    fake = types.ModuleType("intake")
+    fake.DEFAULT_GATE, fake.ROOT = "g", "/repo"
+    fake.run = lambda source, **kw: (got.update(kw, source=source), (0, {}))[1]
+    monkeypatch.setitem(sys.modules, "intake", fake)
+    monkeypatch.setitem(sys.modules, "huggingface_hub", None)  # never needed here
+    assert rosy_ml.main(["intake", "store-inbox:m1"]) == 0
+    assert got["source"] == "store-inbox:m1" and got["store"] == str(tmp_path / "store")
+    assert got["downloader"] is None
