@@ -259,7 +259,7 @@
 ## 최근 기록
 
 - 2026-09-30 · uncommitted · persist first phase intent and atomic response
+- 2026-09-30 · uncommitted · docs(adr): D-375 에서 D-380 으로 개명
 - 2026-09-30 · uncommitted · docs(adr): set OMX local planning and owner execution boundary
 - 2026-09-30 · uncommitted · docs(adr): D-377 앱 이름 규칙 — Rosy + 영어 한 단어
-- 2026-09-30 · uncommitted · docs(api): nav.line_obstacle_hold 이벤트와 차선 추종 정지 사유 두 개를 카탈로그에
-- 2026-09-30 · uncommitted · docs(adr): D-344 보강 검토 반영 — sector 기본, L1 문턱, IR 전용 덮어쓰기 경로
+- 2026-09-30 · uncommitted · docs(adr): D-375 램프 운용 모드 표시 결정
