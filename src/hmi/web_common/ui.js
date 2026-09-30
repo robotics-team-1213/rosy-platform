@@ -395,3 +395,42 @@ export function clearPalette() {
 
 document.addEventListener("rosy:theme", clearPalette);
 window.RosyPalette = { readColour, readPalette, cssColor, canvasFont, clear: clearPalette };
+
+// D-359 US-008 — 자간 토큰은 라틴 대문자 라벨용이다. 한글은 음절 하나가 이미 한
+// 글자 칸이라 0.06–0.12em을 더하면 "점유  지도"처럼 띄어 읽힌다. 페이지가 모두
+// lang="ko"라 :lang()으로는 가를 수 없고 글자는 실행 중에 바뀐다. 그래서 자기
+// 글자(직계 텍스트 노드)에 한글이 있는 요소에 `data-hangul`을 달고,
+// components.css가 그 요소의 자간 토큰과 letter-spacing을 0으로 둔다.
+// 섞인 글("COLUMN 종대")도 0이다 — 한 요소 안에서 글자별 자간은 CSS로 못 준다.
+const HANGUL = /[ᄀ-ᇿ㄰-㆏가-힯]/;
+
+function markHangul(element) {
+  if (!(element instanceof Element)) return;
+  let hangul = false;
+  for (const node of element.childNodes) {
+    if (node.nodeType === Node.TEXT_NODE && HANGUL.test(node.data)) {
+      hangul = true;
+      break;
+    }
+  }
+  if (element.hasAttribute("data-hangul") !== hangul) element.toggleAttribute("data-hangul", hangul);
+}
+
+function markHangulTree(root) {
+  if (!(root instanceof Element)) return;
+  markHangul(root);
+  for (const element of root.querySelectorAll("*")) markHangul(element);
+}
+
+const hangulObserver = new MutationObserver((records) => {
+  for (const record of records) {
+    if (record.type === "characterData") {
+      markHangul(record.target.parentElement);
+      continue;
+    }
+    markHangul(record.target);
+    for (const node of record.addedNodes) markHangulTree(node);
+  }
+});
+hangulObserver.observe(document.documentElement, { childList: true, characterData: true, subtree: true });
+markHangulTree(document.documentElement);

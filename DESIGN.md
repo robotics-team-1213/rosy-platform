@@ -223,10 +223,12 @@ D-280 다섯 원칙은 시각에서 이렇게 묶인다.
 - **Title** (700, 1.25rem, 1.2): 화면 하나의 이름, 워드마크.
 - **Value** (650, 1.125rem, 1.1, mono): 계기 값.
 - **Body** (500, 1rem, 1.4): 읽는 글. 긴 안내는 `--leading-copy` 1.5.
-- **Label** (600, 0.875rem, 자간 0.12em, 대문자): 이름·짧은 라벨.
+- **Label** (600, 0.875rem, 자간 0.12em — 한글은 0, 대문자): 이름·짧은 라벨.
 - **Micro** (500, 0.75rem): 단위·각주·비활성 사유. **12px가 바닥이다.**
 
 굵기는 `--weight-regular/medium/label/emphasis/strong`(400/500/600/650/700), 행간은 `--leading-flat … --leading-copy`(1–1.5), 자간은 `--track-label`(0.12em)·`--track-wide`(0.04em)·`--track-state`(0.06em) 또는 0만 쓴다([D-294](docs/adr/D-294-shared-typography-and-interaction-tokens.md)).
+
+**The Latin Tracking Rule.** 자간 토큰은 라틴 대문자 라벨용이다. 자기 글자에 한글이 있는 요소(섞인 글 포함)는 자간 0이다: `ui.js`가 그런 요소에 `data-hangul`을 달고(글자가 바뀌면 따라간다) `components.css`가 그 요소의 `--track-*`를 0으로 둔다. 모든 페이지가 `lang="ko"`라 `:lang()`으로는 가를 수 없고, 한 요소 안에서 글자별 자간은 CSS로 줄 수 없어 섞인 글은 한글 쪽을 따른다.
 
 **The Six Steps Rule.** 글자 크기는 여섯 단계로 닫혀 있다. 캔버스 글꼴도 `RosyPalette.canvasFont`로 토큰 가족·12px 이상이다.
 

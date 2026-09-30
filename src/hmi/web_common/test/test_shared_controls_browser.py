@@ -29,6 +29,19 @@ BUTTON_PAGE = """<!doctype html><html lang="ko"><head><meta charset="utf-8">
 <body><ui-button id="go" kind="primary" type="button" disabled
   reason="운용자 권한이 필요합니다">목표 보내기</ui-button>
 <span id="other">다른 설명</span></body></html>"""
+TRACKING_PAGE = """<!doctype html><html lang="ko"><head><meta charset="utf-8">
+<link rel="stylesheet" href="/common/tokens.css">
+<link rel="stylesheet" href="/common/components.css">
+<script type="module" src="/common/ui.js"></script></head>
+<body><ui-button id="seg" kind="segment" type="button">점유 지도</ui-button>
+<ui-tag id="latin" status="neutral">RUNNING</ui-tag>
+<ui-tag id="ko" status="neutral">대기</ui-tag>
+<ui-brand><b>ROSY</b><small id="sub">작업 준비</small></ui-brand></body></html>"""
+TRACKING_PROBE = """(ids) => Object.fromEntries(ids.map((id) => {
+  const el = document.getElementById(id);
+  const style = getComputedStyle(el);
+  return [id, {spacing: style.letterSpacing, size: parseFloat(style.fontSize)}];
+}))"""
 
 FIELD_PROBE = """() => {
   const floor = parseFloat(getComputedStyle(document.documentElement)
@@ -60,6 +73,8 @@ def _serve(route):
         target = DASHBOARD / "index.html"
     elif path == "/button":
         return route.fulfill(status=200, content_type="text/html", body=BUTTON_PAGE)
+    elif path == "/tracking":
+        return route.fulfill(status=200, content_type="text/html", body=TRACKING_PAGE)
     else:
         return route.fulfill(status=404, body="")
     if not target.is_file():
@@ -168,3 +183,51 @@ def test_every_product_field_clears_the_secondary_target(page, path):
     assert probe["floor"] == 44
     assert probe["count"] > 0
     assert not probe["bad"], probe["bad"]
+
+
+def _spacing_px(value):
+    return 0.0 if value == "normal" else float(value.removesuffix("px"))
+
+
+def test_hangul_labels_drop_the_latin_tracking(page):
+    """US-008: the tracking tokens are for Latin uppercase labels. Hangul in a tracked label read
+    as "점유  지도"; an element whose own text has Hangul renders with 0 tracking, a Latin tag keeps
+    the token, and the rule follows text that changes at run time."""
+    page.goto(f"{HOST}/tracking")
+    page.wait_for_function("() => customElements.get('ui-tag') && document.getElementById('seg').hasAttribute('data-hangul')")
+    probe = page.evaluate(TRACKING_PROBE, ["seg", "latin", "ko", "sub"])
+    track_state = float(page.evaluate(
+        "() => getComputedStyle(document.documentElement).getPropertyValue('--track-state')").removesuffix("em"))
+    assert track_state > 0
+    assert _spacing_px(probe["latin"]["spacing"]) == pytest.approx(track_state * probe["latin"]["size"], abs=0.05)
+    for key in ("seg", "ko", "sub"):
+        assert _spacing_px(probe[key]["spacing"]) == 0, (key, probe[key])
+
+    page.evaluate("""() => {
+      document.getElementById('latin').textContent = '정지';
+      document.getElementById('ko').firstChild.data = 'IDLE';
+    }""")
+    page.wait_for_function("() => document.getElementById('latin').hasAttribute('data-hangul')"
+                           " && !document.getElementById('ko').hasAttribute('data-hangul')")
+    swapped = page.evaluate(TRACKING_PROBE, ["latin", "ko"])
+    assert _spacing_px(swapped["latin"]["spacing"]) == 0
+    assert _spacing_px(swapped["ko"]["spacing"]) > 0
+
+
+@pytest.mark.parametrize("path", ["/console", "/dashboard"])
+def test_no_hangul_text_on_a_surface_is_tracked(page, path):
+    page.goto(f"{HOST}{path}")
+    page.wait_for_function("() => customElements.get('ui-button')")
+    page.wait_for_timeout(300)
+    tracked = page.evaluate("""() => {
+      const hangul = /[㄰-㆏가-힯]/;
+      const bad = [];
+      for (const el of document.body.querySelectorAll('*')) {
+        const own = [...el.childNodes].filter((n) => n.nodeType === 3).map((n) => n.data).join('');
+        if (!hangul.test(own)) continue;
+        const spacing = getComputedStyle(el).letterSpacing;
+        if (spacing !== 'normal' && parseFloat(spacing) !== 0) bad.push(`${own.trim().slice(0, 20)}: ${spacing}`);
+      }
+      return bad;
+    }""")
+    assert tracked == []

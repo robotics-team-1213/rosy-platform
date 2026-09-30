@@ -35,6 +35,17 @@
 }
 .skip-link:focus-visible { transform: none; }
 
+/* D-359 US-008 — 자간 토큰은 라틴 대문자용이다. 자기 글자에 한글이 있는 요소는
+   ui.js가 data-hangul을 달고, 여기서 자간을 0으로 둔다. 토큰을 0으로 다시 정의하므로
+   더 구체적인 선택자의 `letter-spacing: var(--track-*)`도 0으로 풀린다. 아래
+   letter-spacing은 자간을 선언하지 않고 부모 값을 물려받는 요소용이다(여기서 0). */
+[data-hangul] {
+  --track-label: 0;
+  --track-wide: 0;
+  --track-state: 0;
+  letter-spacing: var(--track-state);
+}
+
 /* D-359 §5.4·§5.5 — 모든 표면이 받는 기본. 한국어는 어절에서 끊고, 칸을 넘치는
    긴 기계 값만 접는다. `anywhere`가 아니라 `break-word`다: anywhere는 최소 내용 폭을
    글자 하나로 줄여 좁은 flex 줄의 짧은 라벨(접속·어둡게·시계)을 음절 사이에서 꺾었다
