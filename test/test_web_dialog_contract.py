@@ -37,7 +37,7 @@ registry = _load_registry()
 #: 파일별 window.confirm 허용 수. 늘릴 때는 이 표와 함께 커밋한다.
 PINNED_CONFIRMS = {
     "app.js": 9,
-    "settings.js": 11,
+    "settings.js": 8,  # D-371: 목록 행 삭제 셋(토큰·도크·웨이포인트)은 confirmIrreversible
     "map.js": 1,
     "console.js": 3,   # Fleet 목표 지정, 전체 정지, 정지 래치 재허가
     "roster.js": 1,    # 카메라 고장 뒤 IR 추적 선택 확인

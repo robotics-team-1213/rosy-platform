@@ -1,3 +1,4 @@
+import { confirmIrreversible } from "/common/ui.js";
 // D-359 §5.3 — 끌 때 이유를 같이 준다. 켜거나 짧은 요청 중 잠금이면 이유를 지운다.
 function setOff(control, off, reason = "") { control.disabled = Boolean(off); if (off && reason) control.setAttribute("reason", reason); else control.removeAttribute("reason"); }
 // Admin-only credential and safety policy controls. Generated credentials are
@@ -68,9 +69,13 @@ export function mount(root, ctx) {
     for (const token of tokens) {
       const row = el("li", ""); row.dataset.tokenId = token.id;
       row.append(el("span", "", [token.label || token.id, token.role, token.source, token.current ? "이 기기" : ""].filter(Boolean).join(" · ")));
-      const remove = el("ui-button", "", "삭제"); remove.setAttribute("kind", "irreversible"); remove.type = "button"; setOff(remove, token.current === true, "지금 쓰는 토큰");
+      // D-371 — 목록 행은 조용한 `삭제…`다. 위험 채움은 확인 대화상자의 실행 버튼에만 있다.
+      const remove = el("ui-button", "", "삭제…"); remove.setAttribute("kind", "quiet"); remove.type = "button"; setOff(remove, token.current === true, "지금 쓰는 토큰");
       remove.addEventListener("click", async () => {
-        if (remove.disabled || tokenMutationPending || !window.confirm("이 토큰을 삭제할까요? 되돌릴 수 없습니다.")) return;
+        if (remove.disabled || tokenMutationPending) return;
+        const confirmed = await confirmIrreversible({message: `"${token.label || token.id}" 토큰을 삭제할까요? 되돌릴 수 없습니다.`, action: "토큰 삭제",
+          opener: () => (remove.isConnected ? remove : tokenList.querySelector(`li[data-token-id="${CSS.escape(String(token.id))}"] ui-button`))});
+        if (!confirmed || tokenMutationPending) return;
         tokenMutationPending = true; syncTokenControls();
         setStatus(tokenActionStatus, `${token.label || token.id} 토큰을 삭제하는 중입니다.`);
         try {

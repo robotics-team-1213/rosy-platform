@@ -1,4 +1,5 @@
 import { HeadlessState } from "/common/core_ui_logic.js";
+import { confirmIrreversible } from "/common/ui.js";
 import { poseUnavailableReason } from "./pose-evidence.js";
 
 function el(tag, cls, text) { const node = document.createElement(tag); if (cls) node.className = cls; if (text !== undefined) node.textContent = text; return node; }
@@ -111,10 +112,14 @@ export function mount(root, ctx) {
       const row = el("li", ""); row.dataset.dockId = item.id;
       row.append(el("span", "", `${item.id} · ${item.type} · ${item.map_id || "맵 없음"}`));
       const deleting = pendingDeletes.has(item.id);
-      const remove = el("ui-button", "", deleting ? "삭제 중…" : "삭제"); remove.setAttribute("kind", "irreversible"); remove.type = "button";
+      // D-371 — 목록 행은 조용한 `삭제…`다. 위험 채움은 확인 대화상자의 실행 버튼에만 있다.
+      const remove = el("ui-button", "", deleting ? "삭제 중…" : "삭제…"); remove.setAttribute("kind", "quiet"); remove.type = "button";
       remove.disabled = deleting;
       remove.addEventListener("click", async () => {
-        if (pendingDeletes.has(item.id) || !docksLoaded || !window.confirm(`${item.id} 도크를 삭제할까요? 되돌릴 수 없습니다.`)) return;
+        if (pendingDeletes.has(item.id) || !docksLoaded) return;
+        const confirmed = await confirmIrreversible({message: `"${item.id}" 도크를 삭제할까요? 되돌릴 수 없습니다.`, action: "도크 삭제",
+          opener: () => (remove.isConnected ? remove : list.querySelector(`li[data-dock-id="${CSS.escape(String(item.id))}"] ui-button`))});
+        if (!confirmed || pendingDeletes.has(item.id) || !docksLoaded) return;
         pendingDeletes.add(item.id);
         listNotice = ""; updateListStatus();
         renderDocks();

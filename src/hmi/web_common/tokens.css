@@ -211,6 +211,8 @@
   --inset-button-primary: var(--space-5);
   --inset-button-irreversible: var(--space-2) var(--space-4);
   --inset-field: var(--space-3);
+  --inset-dialog: var(--space-5);
+  --gap-dialog: var(--space-4);
   --inset-tag: 0 var(--space-2);
   --inset-grid-cell: var(--space-2) var(--space-3);
   --inset-chip: var(--space-1) var(--space-3);

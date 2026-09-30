@@ -308,6 +308,43 @@ for (const [name, ctor] of [
   if (!customElements.get(name)) customElements.define(name, ctor);
 }
 
+// D-371 — 목록 행의 되돌릴 수 없는 행동은 조용한 `삭제…`로 시작해 여기로 온다.
+// 대화상자가 대상을 이름으로 묻고(D-218 어휘), 위험 채움은 실행 버튼 하나뿐이다.
+// 네이티브 <dialog>라 모달·포커스 가둠·Esc 탈출은 브라우저가 한다(D-218 §1의 근거).
+// 취소·Esc는 false, 실행은 true. 닫히면 포커스는 누른 행 버튼으로 돌아간다. 목록은
+// 대화상자가 열린 동안 폴링으로 다시 그려질 수 있어 opener는 함수로도 받는다
+// (닫힐 때 불러 지금 화면에 있는 그 행의 버튼을 찾는다).
+export function confirmIrreversible({ message, action, opener = document.activeElement }) {
+  const dialog = document.createElement("dialog");
+  dialog.className = "ui-confirm";
+  const text = document.createElement("p");
+  text.id = `ui-confirm-${++reasonSerial}`;
+  text.textContent = message;
+  dialog.setAttribute("aria-labelledby", text.id);
+  const actions = document.createElement("ui-actions");
+  const cancel = document.createElement("ui-button");
+  cancel.setAttribute("kind", "quiet");
+  cancel.textContent = "취소";
+  cancel.addEventListener("click", () => dialog.close("cancel"));
+  const run = document.createElement("ui-button");
+  run.setAttribute("kind", "irreversible");
+  run.textContent = action;
+  run.addEventListener("click", () => dialog.close("confirm"));
+  actions.append(cancel, run);
+  dialog.append(text, actions);
+  return new Promise((resolve) => {
+    dialog.addEventListener("close", () => {
+      dialog.remove();
+      const back = typeof opener === "function" ? opener() : opener;
+      if (back?.isConnected && typeof back.focus === "function") back.focus();
+      resolve(dialog.returnValue === "confirm");
+    }, { once: true });
+    document.body.append(dialog);
+    dialog.showModal();
+    cancel.focus();
+  });
+}
+
 // D-359 §4 — 캔버스 색·글꼴. 캔버스는 CSS 변수를 못 쓰므로 여기서 한 번 풀어
 // 캐시한다. 토큰은 hex·oklch·color-mix 무엇이든 될 수 있어서 글자로 파싱하지
 // 않는다: 숨은 탐침 요소의 계산된 color(Chromium은 color-mix를 `color(srgb …)`나
