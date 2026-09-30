@@ -69,70 +69,23 @@ class SettingsStore(context: Context) {
         }
     }
 
+    /** Applies [SiteLinkPrefs.encode]: typed keys for values, removal for nulls (DataStore keys match by name). */
     private fun write(prefs: MutablePreferences, link: SiteLink) {
-        prefs.remove(LEGACY_HOST)
-        prefs.remove(LEGACY_PIN)
-        prefs.putOrRemove(TLS_HOST, link.tlsHost)
-        prefs.putOrRemove(MANUAL_HOST, link.manualHost)
-        prefs.putOrRemove(SITE_NAME, link.siteName)
-        // A new pairing without a pin must not inherit the previous site's pin.
-        prefs.putOrRemove(CA_PIN, link.caPin)
-        prefs.putOrRemove(EXPIRES_AT, link.expiresAt)
-        prefs.putOrRemove(PAIRING_SUBNET, link.pairingSubnet)
-        prefs[ROLE] = link.role
-        prefs[PORT] = link.port
-        prefs[TOKEN] = link.token
-        prefs[SOURCE] = link.source
-        prefs[SECURE] = link.secure
-    }
-
-    private fun MutablePreferences.putOrRemove(key: Preferences.Key<String>, value: String?) {
-        if (value == null) remove(key) else this[key] = value
-    }
-
-    private fun decode(prefs: Preferences): SiteLink? {
-        val port = prefs[PORT] ?: return null
-        val token = prefs[TOKEN] ?: return null
-        val source = prefs[SOURCE] ?: return null
-        val secure = prefs[SECURE] ?: false
-        val legacyHost = prefs[LEGACY_HOST]
-        val link = if (legacyHost != null) {
-            SiteLink.from(PairingUri(legacyHost, port, token, source, secure, prefs[LEGACY_PIN]))
-        } else {
-            SiteLink(
-                siteName = prefs[SITE_NAME],
-                tlsHost = prefs[TLS_HOST],
-                port = port,
-                caPin = prefs[CA_PIN],
-                token = token,
-                source = source,
-                secure = secure,
-                manualHost = prefs[MANUAL_HOST],
-                role = prefs[ROLE] ?: SiteLink.ROLE,
-                expiresAt = prefs[EXPIRES_AT],
-                pairingSubnet = prefs[PAIRING_SUBNET],
-            )
+        SiteLinkPrefs.encode(link).forEach { (name, value) ->
+            when (value) {
+                null -> prefs.remove(stringPreferencesKey(name))
+                is String -> prefs[stringPreferencesKey(name)] = value
+                is Int -> prefs[intPreferencesKey(name)] = value
+                is Boolean -> prefs[booleanPreferencesKey(name)] = value
+                else -> error("unsupported site-link value type for $name")
+            }
         }
-        return link.takeIf { SiteLink.validate(it) == null }
     }
+
+    private fun decode(prefs: Preferences): SiteLink? =
+        SiteLinkPrefs.decode(prefs.asMap().mapKeys { (key, _) -> key.name })
 
     private companion object {
-        // Before D-391: one dialled host (IP or name) and the pin.
-        val LEGACY_HOST = stringPreferencesKey("host")
-        val LEGACY_PIN = stringPreferencesKey("pin")
-
-        // D-391 1 site-link fields.
-        val SITE_NAME = stringPreferencesKey("site_name")
-        val TLS_HOST = stringPreferencesKey("tls_host")
-        val MANUAL_HOST = stringPreferencesKey("manual_host")
-        val CA_PIN = stringPreferencesKey("ca_pin")
-        val ROLE = stringPreferencesKey("role")
-        val EXPIRES_AT = stringPreferencesKey("expires_at")
-        val PAIRING_SUBNET = stringPreferencesKey("pairing_subnet")
-        val PORT = intPreferencesKey("port")
-        val TOKEN = stringPreferencesKey("token")
-        val SOURCE = stringPreferencesKey("source")
-        val SECURE = booleanPreferencesKey("secure")
         val LENS = stringPreferencesKey("lens")
     }
 }
