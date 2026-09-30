@@ -3595,7 +3595,6 @@
 - 결정: Pinky Pro `docking.supported`는 D5 통과 전까지 false 유지.
 - 교훈: 병행 세션의 D-348 소모를 계약시험 중간에 발견 — D-346의 ADR 중복 검사가 있으므로 즉시 D-349로 재부여. 다음 빈 번호 확인 습관화.
 
-
 ## 2026-09-30 · uncommitted · docs: restore D-348 goal-evidence decision and execution record
 
 - Change: record the accepted producer registry/verifier boundary, two-order evidence lifecycle, and completed SOURCE/LOCAL task outcomes in the ADR and paired design/execute plans.
@@ -3610,6 +3609,7 @@
 - gate 변화: docs LOCAL HOLD 유지, blocker 사유 교체(해소된 헤딩 → 병행 isaac_sim/fleet 2건).
 - 결정: 없음.
 - 교훈: git diff/show 출력은 콘솔 인코딩(cp949)에서 한글이 깨져 보여도 파일 내용이 깨진 것은 아니다 — 바이트 수준(`?`/U+FFFD 개수)으로 판별한 뒤 손대자.
+
 ## 2026-09-30 · uncommitted · docs(adr): D-350 도크 하드웨어 3단계 계약 + 선구현 6건
 
 - 변경: ADR D-350 상세문서 + 표행. Phase 1(선만·계측 없음)·Phase 2(ESP32 2소스)·Phase 3(온도·카메라) 정의와 각 단계에서 소프트웨어가 하는 일 표. 선구현: ChargingConfirmation degrade, CHARGED_HOLD phase, 만춫 히스테리시스, docking.full 이벤트, deploy 오버레이. Phase 1에서 D-27 억제 안 함이 핵심 안전 결정.
@@ -3617,6 +3617,7 @@
 - gate 변화: 없음.
 - 결정: 하드웨어가 어떤 단계로 오든 소프트웨어는 코드 변경 없이 해당 단계 기능 제공.
 - 교훈: 없음.
+
 ## 2026-09-30 · uncommitted · docs(adr): D-351 도킹 재시도 갈래 기록
 
 - 변경: ADR D-351 상세문서 + 표행 — 도달 실패(재시도)/전류 없음(즉시 폴트)/충전 단절(DOCKED 유지)의 세 갈래. display/info charging 필드 추가.
@@ -3668,6 +3669,7 @@
 - gate 변화: 없음.
 - 결정: 장비를 사이트에 두면 전원만 연결하면 된다 — IP·설정·파일 수정 불필요. DHCP가 바뀌어도 .local 이름은 불변.
 - 교훈: mDNS는 ESP32에 네이티브로 있어서 3줄이면 된다 — 이걸 안 쓸 이유가 없었다.\n
+
 ## 2026-09-30 · uncommitted · docs(plan): 도크·외부 장비 5단계 구현 플랜 + D-355
 
 - 변경: docs/plans/2026-09-30-dock-device-implementation-plan.md 신설 — D-349~D-354의 6개 ADR 결정을 자재(A)→도크 벤치(B)→로봇 실기(C)→활성화(D)→신호등 벤치(E)→통합(F)의 6단계 실행 순서로 정리. 자재 목록 13품목, 게이트 D0–D5·E1–E5·F1–F3, 의존 그래프, 완료 조건 포함. ADR D-355 표행으로 실행 순서 확정 기록.
@@ -3707,34 +3709,42 @@
 - gate 변화: deploy last_verified 기록(경고 해소). docs LOCAL GO 유지.
 - 결정: 없음.
 - 교훈: CI가 한 단계에서 멈추면 그 아래 층은 안 보인다 — 층마다 로컬 전수 검증이 push보다 먼저다. 병행 세션의 랜딩은 그 세션의 게이트만 통과한다; 공용 계약(web_common·D-218·시크릿 스캔)은 소유 모듈 밖에서 검사된다.
+
 ## 2026-09-30 · uncommitted · feat(fleet): fence ER2 feedback successor candidates
 - Change: added one-transaction stop/generation/Mission/action/attempt/event/observation fencing before ER2 candidate visibility; candidates are idempotent by feedback turn, carry source correlation, and resolve only into a separately linked successor Mission. Stop or event drift before resolution rejects the candidate. The async tool dispatcher uses an injected post-action observation source and returns unavailable if it is not configured.
 - Evidence: Fleet plus foundation host suites 995 passed, 6 skipped; ER2 focused contract/doc checks 71 passed; changed-file flake8 clean. Full Fleet flake8 still reports unrelated existing findings in hub, console, and older tests.
 - Gate: SOURCE/LOCAL only. No production trusted Vision reader, provider worker, credentials, policy dispatch, ROS, device, or field enablement.
+
 ## 2026-09-30 · uncommitted · fix(fleet): let Fleet choose the fresh post-action frame
 - Change: removed the model-supplied observation ID from the `propose_replan` tool schema. Fleet now requests a trusted frame after the terminal Action timestamp, binds its concrete ID/digest to the typed ER 2 selector response, and retains the same atomic visibility fence. Camera image egress still requires a separate explicit data-class approval.
 - Evidence: Fleet plus foundation host suites 995 passed, 6 skipped; ER2 path suites 74 passed; changed-file flake8 clean.
 - Gate: no trusted production Vision reader or app worker is configured; replan stays unavailable unless both are injected and approved.
+
 ## 2026-09-30 · uncommitted · chore(structure): re-judge Fleet size after ER2 candidate fencing
 - Change: updated `SIZE_VERDICTS["fleet"]` from 14,260 to 14,616 lines after atomic candidate fencing and linked-successor regression coverage. The split verdict and unscheduled B2 plan remain unchanged.
 - Evidence: `python -m pytest src/site/fleet/test/ test/ -q` = 3,675 passed/188 skipped after the re-judgment; the focused ER2/API/docs set passed 65 tests, and the documentation gate passed 80 tests. Changed-file flake8 and `git diff --check` passed.
 - Gate: SOURCE/LOCAL only; no trusted Vision reader, provider worker, policy dispatch, ROS, device, or field enablement.
+
 ## 2026-09-30 · uncommitted · feat(fleet): wire optional ER2 outbox consumer
 - Change: added atomic oldest-pending outbox claims and `MissionModelTurnWorker.consume_next()`. `create_app` runs a worker loop only when an explicitly injected worker uses the configured shared SQLite database; default/CLI composition remains provider-disabled.
 - Evidence: RED reproduced missing `claim_next`, `consume_next`, and app injection. The outbox-store, feedback-loop, and Mission API suites passed after implementation; final batch verification is in progress.
 - Gate: SOURCE/LOCAL only. No provider credentials, egress approvals, trusted Vision reader, policy dispatch, ROS, device, or deployment were enabled.
+
 ## 2026-09-30 · uncommitted · feat(fleet): add bounded trusted ER2 post-action Vision reader
 - Change: added an optional reader using fixed workcell/source/camera mappings and the existing source-scoped Vision lease endpoint. It bounds no-store JPEG response bytes, checks JPEG signature and freshness metadata, requires a frame captured after terminal Action time, and is injected/closed only with an explicitly configured worker. Updated D-358, implementation plan, and API reference v1.62. Default CLI/provider path remains disabled; no egress approval or credentials were added.
 - Evidence: ER2/Mission/Vision/API focused suite 119 passed. Documentation gate initially found stale generated indexes; regenerated both indexes before rerun. ROS/device/provider egress and runtime activation remain unverified and disabled.
 - Gate: SOURCE/LOCAL only. No camera/Mission provider egress approval, ROS, device, physical motion, or deployment.
+
 ## 2026-09-30 · uncommitted · fix(fleet): enforce the ER2 feedback deadline across tool dispatch
 - Change: replaced the adapter's duplicated 45-second literal with `ER2_PROVIDER_DEADLINE_SECONDS`; the same absolute turn deadline now bounds async replan dispatch and off-loop synchronous status reads. Added exact byte-limit tests for feedback context, tool results, replay, and provider response; exact freshness/cost/image boundaries; and call/step cap and malformed-step checks.
 - Evidence: D-357/D-358 host suites passed 136 tests. The new async-tool timeout test failed against the previous code and passed after deadline enforcement. Final documentation gate and harness lint rerun pending after index generation.
 - Gate: SOURCE/LOCAL only. No provider credential, policy dispatch, ROS/device, physical actuation, or deployment enabled.
+
 ## 2026-09-30 · uncommitted · fix(fleet): recheck ER2 egress fence after Vision capture
 - Change: ER 2 replan now revalidates the complete server egress policy before capture and rechecks current Mission eligibility, stop generation, and event watermark after capture immediately before the image selector request. The captured image envelope must exactly match the trusted turn scope; stale or revoked workcell state cannot send the frame to Gemini.
 - Evidence: a regression test reproduced the stale-frame egress path when Mission eligibility changed during capture; it passes with zero selector-provider calls. Final ER2 host batch and docs gate are rerunning.
 - Gate: SOURCE/LOCAL only. No provider credentials, provider enablement, policy dispatch, ROS/device, or deployment.
+
 ## 2026-09-30 · uncommitted · docs(validation): record final ER2 feedback audit gates
 - Change: recorded the final boundary/deadline and post-capture egress-fence verification in the implementation plan and module/repository logs.
 - Evidence: ER2/D-357/D-358 contracts, stateless adapter, allowlisted tools, outbox, candidate fencing, Vision reader, app lifecycle, and Overhead preview suites: 137 passed. Documentation gate: 80 passed. Changed-file flake8 clean. Harness lint: 0 errors, 12 existing freshness warnings.
@@ -3896,6 +3906,7 @@
 - 변경: ADR D-375(파일+로그 행)와 설계 문서 `docs/plans/2026-09-30-lamp-mode-display-design.md`를 추가했다.
 - 증거: rosy_harness lint·generate 통과.
 - gate 변화: 없음.
+
 ## 2026-09-30 · uncommitted · docs(adr): D-377 앱 이름 규칙 — Rosy + 영어 한 단어
 - 변경: D-377(Accepted, 사용자 결정) 추가. 표시 이름 `Rosy <Word>`(한국어는 부제에만), id·폴더 끝 `<word>`, 패키지 `rosy_<word>`, Android `io.github.livsbittt.rosy.<word>`, Gradle `rosy-<word>`, 아이콘 `<word>.svg`. 대응: Rosy Cam(`src/site/cam`, `…rosy.cam`), Rosy Vision(`src/site/vision`, `rosy_vision`, 실행 파일 `rosy-vision`), Rosy Console(계획 `src/site/console`·`rosy_console`, 단계 4 게이트), Rosy Robot(계획 `src/hmi/robot`·`rosy_robot`, 단계 3 게이트), Rosy Pilot(그대로). D-370 2항 이름표와 D-374 1·2항을 대체한다고 두 ADR 머리에 적었다. D-374 계획의 2.4·2.5와 단계 3·4·5 목표를 새 이름으로 고쳤다.
 - 증거: 문서만. 번호는 로컬 브랜치 전부·`.worktrees/*/docs/adr`·main 체크아웃 미추적 파일을 확인해 D-375(`feat/overhead-map-auto-register`)·D-376(`omx-pick-place-execution` 워크트리) 다음 빈 번호로 잡았다.
@@ -3912,6 +3923,7 @@
 - 변경: 병합 시점에 main 이 D-375 를 feat/overhead-map-auto-register 예약으로 adr_gaps 에 넣은 것이 확인됐다(선례 D-324→D-325). 이 작업의 결정 번호를 다음 빈 번호 D-380 으로 개명하고 코드 주석·시험·설계 문서의 D-375 표기를 함께 바꿨다. 앞선 항목의 D-375 표기는 역사 기록으로 그대로 둔다.
 - 증거: rosy_harness lint 오류 0. 본문 참조는 docs/adr/D-380-lamp-mode-patterns-from-core-status-inputs.md.
 - gate 변화: 없음.
+
 ## 2026-09-30 · uncommitted · persist first phase intent and atomic response
 
 - Change: ActionStore permits only ordinal-zero phase intent while the parent is SUBMITTING and records the parent's first acceptance/rejection/unknown response with the phase state and ROS goal identity in one SQLite transaction.
@@ -3930,17 +3942,17 @@
 - Evidence: The ActionStore suite passed (22 passed), including an accepted first phase followed by HOLD, retained goal identity, UNKNOWN phase state, and rejected continuation. Changed files passed flake8 with max line length 120.
 - Gate: SOURCE stop-state persistence only. This does not prove driver cancellation, standstill, or physical E-stop behavior; per-phase ROS submit/cancel wiring remains open.
 
-## 2026-10-01 · uncommitted · docs(adr): D-381 막힌 내비게이션·비상정지 진입음 결정
-
-- 변경: ADR D-381(파일+로그 행) 추가, D-380 설계 문서의 뒤따를 일 두 항목을 구현됨으로 표시.
-- 증거: rosy_harness lint 오류 0.
-- gate 변화: 없음.
-
 ## 2026-09-30 · uncommitted · docs(adr): D-356 보강 — 텔레옵 학습 영상 H.265/H.264 압축과 로봇 JPEG 기록 제안
 
 - 변경: D-356 에 2026-09-30 보강을 붙였다. `tools/perception/dataset/bag_to_video.py`(세션 카메라 → CFR mp4 + 프레임별 jsonl sidecar·scan.npz·메타)의 형식, 기본값(보관 libx265 CRF 24 slow, 호환 libx264 CRF 23 slow, `accurate_rnd`), `data/teleop/learning/*` gitignore, 그리고 로봇 `camera/front/compressed` JPEG q85 기록 제안(승인 전 미반영)과 Pi 5 CPU·저장량 추정을 적었다.
 - 증거: 세션 20260930T124745Z 2258 프레임에서 22개 설정의 크기·PSNR·SSIM·흰/바닥 마스크 IoU·`lane_replay` line/between/keep 차이 표. 기본값은 bag 대비 156배(0.66 MB/min), PSNR 37.24 dB, line 목표 차 평균 0.0027. `tools/perception/test` 전체 통과(ML venv, 2026-09-30 Windows). 두 실세션 변환: 3.12 MB, 3.89 MB(+ scan.npz 3.6 MB).
 - gate 변화: 없음(문서·개발 PC 도구). 로봇 압축 기록은 사용자 승인과 Pi 실측 전까지 SOURCE 이전 단계.
+
+## 2026-10-01 · uncommitted · docs(adr): D-381 막힌 내비게이션·비상정지 진입음 결정
+
+- 변경: ADR D-381(파일+로그 행) 추가, D-380 설계 문서의 뒤따를 일 두 항목을 구현됨으로 표시.
+- 증거: rosy_harness lint 오류 0.
+- gate 변화: 없음.
 
 ## 2026-10-01 · uncommitted · fix(perception): 텔레옵 sidecar·extract 시계 통일 — t=헤더 stamp, 부수값=직전 메시지
 
