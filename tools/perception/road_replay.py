@@ -51,6 +51,20 @@ import lane_replay  # noqa: E402
 from control.recording import CAMERA_TOPIC, SHADOW_TOPIC  # noqa: E402
 from control.sensing.perception.camera_ground import nominal_ground_plane  # noqa: E402
 from control.sensing.perception.lane_keep import LaneKeeper, floor_white_mask  # noqa: E402
+from road_replay_metrics import (  # noqa: E402, F401 — re-exported for tests and tools
+    _coast_stats,
+    _curve_residuals,
+    _detector_metrics,
+    _gate,
+    _keeper_pair_mid,
+    _motion,
+    _nis_mean_gate,
+    _parallel_pair_width,
+    _tail_samples,
+    _unassociated,
+    _unassociated_summary,
+    _unassociated_ys,
+)
 from control.sensing.perception.road_state import (  # noqa: E402
     STOP,
     TRACK,
@@ -64,7 +78,7 @@ from control.sensing.perception.road_state import (  # noqa: E402
 
 HALF = lane_replay.LANE_HALF_WIDTH_M
 LOOKAHEAD_M = 0.25
-STRAIGHT_MAX_RATE = CURVE_MIN_RATE = 0.1   # rad/s; moving above CURVE_MIN_RATE is a curve
+STRAIGHT_MAX_RATE = 0.1        # rad/s
 IR_HALF_SPAN_M, IR_MAX_AGE_S = 0.012, 0.2
 KEEP_MAX_FRAME_GAP_S = 0.5     # as line_observer_node: a camera gap restarts the keeper
 DROPOUTS_M = (0.05, 0.10)
@@ -284,92 +298,6 @@ def _dropouts(inputs, rows, checkpoints, dropouts):
     return out
 
 
-def _motion(ds, dth, dt):
-    """stationary / straight (|omega| < 0.05 rad/s) / curve (moving, |omega| > 0.1) /
-    turning (the rest: pivots and mild turns) from odometry."""
-    if dt <= 0 or (abs(ds / dt) < 0.005 and abs(dth / dt) < 0.05):
-        return "stationary"
-    if abs(dth / dt) < 0.05:
-        return "straight"
-    return "curve" if abs(ds / dt) >= 0.005 and abs(dth / dt) > CURVE_MIN_RATE else "turning"
-
-
-def _keeper_pair_mid(boundaries):
-    """Midpoint (y at SIDE_X_M) of the keeper's nearest left and right boundary, or None."""
-    near = {}
-    for b in boundaries:
-        side = b.get("side")
-        if side in ("left", "right") and (side not in near or abs(b["y_at_side_x_m"]) < abs(near[side])):
-            near[side] = b["y_at_side_x_m"]
-    return (near["left"] + near["right"]) / 2 if len(near) == 2 else None
-
-
-def _parallel_pair_width(last):
-    """[y_L - y_R] of the nearest left and right boundary when within 5 deg of parallel."""
-    sides = {s: [b for b in last.get("boundaries", []) if b.get("side") == s] for s in ("left", "right")}
-    if not sides["left"] or not sides["right"]:
-        return []
-    l, r = (min(sides[s], key=lambda b: abs(b["y_at_side_x_m"])) for s in ("left", "right"))
-    width = l["y_at_side_x_m"] - r["y_at_side_x_m"]
-    return [width] if abs(l["heading_deg"] - r["heading_deg"]) <= 5.0 and 0.10 <= width <= 0.30 else []
-
-
-def _tail_samples(candidates):
-    """([(side, pre-gate NIS, gated)], sides missing): per side the best association among
-    the lines the keeper itself put on that side (lane owner, 2026-10-01). A side with no
-    keeper line gives no sample, only a missing count."""
-    samples, missing = [], 0
-    for lab, side in (("R", "right"), ("L", "left")):
-        own = [c for c in candidates if c.get("side_hint") == side]
-        if not own:
-            missing += 1
-            continue
-        best = min(own, key=lambda c: c["nis"][lab])
-        samples.append((lab, best["nis"][lab], (best.get("gate") or {}).get(lab) is not None))
-    return samples, missing
-
-
-def _nis_mean_gate(by_state):
-    """D-384 R0 (lane owner, 2026-10-01): each regime's applied-association NIS mean in
-    [0.5, 4.0], two-sided and not pooled; stationary is not a regime."""
-    value = {k: by_state[k]["mean"] for k in ("straight", "curve", "turning")}
-    present = [v for v in value.values() if v is not None]
-    return {"value": value, "pass": None if not present else all(0.5 <= v <= 4.0 for v in present)}
-
-
-def _curve_residuals(nis_state):
-    """NIS on curved segments against straights. sigma_kappa0 = 0.5 is accepted only
-    until validated on curves (lane owner, 2026-10-01): a blow-up is flagged."""
-    curve, straight = nis_state["curve"], nis_state["straight"]
-    out = {"frames": len(curve), "nis_mean": None, "nis_p95": None, "above_9_21": None,
-           "straight_nis_mean": round(float(np.mean(straight)), 3) if straight else None,
-           "blow_up": None, "validated_on_curves": False}
-    if curve:
-        c = np.asarray(curve, float)
-        out.update(nis_mean=round(float(c.mean()), 3), nis_p95=round(float(np.percentile(c, 95)), 3),
-                   above_9_21=round(float((c > 9.21).mean()), 4))
-        out["blow_up"] = bool(out["above_9_21"] > 0.10 or (
-            out["straight_nis_mean"] is not None and out["nis_mean"] > 2 * out["straight_nis_mean"]))
-    return out
-
-
-def _detector_metrics(rows, key):
-    seen = [r[key] for r in rows if r[key] is not None]
-    jumps = sum(1 for a, b in zip(rows, rows[1:]) if a[key] is not None and b[key] is not None
-                and abs(a[key]["err"] - b[key]["err"]) > 2 * lane_replay.JUMP_FRACTION)
-    straight = [abs(r[key]["err"]) for r in rows if r[key] is not None and r["straight"]]
-    n = max(1, len(seen))
-    return {"none_rate": round(1 - len(seen) / max(1, len(rows)), 3),
-            "on_line_rate": round(sum(s["on_line"] for s in seen) / n, 3),
-            "on_paint_rate": round(sum(s["on_paint"] for s in seen) / n, 3),
-            "jump_rate": round(jumps / max(1, len(rows) - 1), 3),
-            "straight_mean_abs_err": round(float(np.mean(straight)), 3) if straight else None}
-
-
-def _gate(value, ok):
-    return {"value": value, "pass": None if value is None else bool(ok(value))}
-
-
 def replay(frames, *, labels: dict | None = None, dropouts=DROPOUTS_M,
            params: RoadStateParams | None = None, pitch_deg: float | None = None,
            lidar_forward_deg: float = 180.0, height_m: float | None = None,
@@ -382,6 +310,7 @@ def replay(frames, *, labels: dict | None = None, dropouts=DROPOUTS_M,
     rows, inputs, checkpoints, nis = [], [], {}, []
     nis_candidates, nis_tail, tail_frames, tail_gated, side_missing, side_slots = [], [], 0, 0, 0, 0
     residual = {"left": [], "right": []}
+    unassociated = []
     nis_state = {"straight": [], "curve": [], "turning": [], "stationary": []}
     prev_pose = prev_t = None
     wall_accepted = wall_hits = labelled = 0
@@ -441,15 +370,21 @@ def replay(frames, *, labels: dict | None = None, dropouts=DROPOUTS_M,
             row["road"] = {"err": round(target[1], 4),
                            "on_line": lane_replay.target_on_line(mask, target[1]),
                            "on_paint": px is not None and lane_replay.target_on_paint(floor, px)}
+        accepted = snap["accepted"]
+        row["applied_update"] = bool((accepted["boundaries"] and not snap["deduplicated"])
+                                     or accepted["ir"] or accepted["learned"])
+        unassociated += _unassociated_ys(snap["level"], snap["candidates"])
         if snap["level"] != STOP:
             scored = [c for c in snap["candidates"] if isinstance(c.get("nis"), dict)]
             nis_candidates += [min(c["nis"].values()) for c in scored]
+        if row["applied_update"] and snap["level"] not in (STOP, "COAST"):
+            # tail: only where an update was applied (NIS is undefined in COAST)
             samples, missing = _tail_samples(scored)
             nis_tail += [nis_value for _, nis_value, _ in samples]
             side_missing += missing
             side_slots += 2
+            tail_frames += 1
             if samples:
-                tail_frames += 1
                 tail_gated += min(samples, key=lambda x: x[1])[2]
             for c in scored:
                 if c.get("label") in ("R", "L") and not snap["deduplicated"]:   # applied innovations
@@ -531,7 +466,10 @@ def replay(frames, *, labels: dict | None = None, dropouts=DROPOUTS_M,
     metrics["params"] = dataclasses.asdict(params)
     metrics["curve_residuals"] = _curve_residuals(nis_state)
     tail = np.asarray(nis_tail, float)
+    metrics["coast"] = _coast_stats(rows)
+    metrics["unassociated_keeper_lines"] = _unassociated_summary(unassociated)
     metrics["nis"]["tail"] = {"basis": "pre_gate_best_association_keeper_side", "n": len(nis_tail),
+                              "frames": tail_frames, "scope": "applied-update frames, COAST excluded",
                               "side_missing_rate": round(side_missing / side_slots, 4) if side_slots else None,
                               "above_9_21": round(float((tail > 9.21).mean()), 4) if len(tail) else None,
                               "gated_out_rate": round(tail_gated / tail_frames, 4) if tail_frames else None}

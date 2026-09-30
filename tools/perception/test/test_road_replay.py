@@ -351,3 +351,25 @@ def test_report_carries_the_side_missing_rate():
     metrics, _ = rr.replay(synthetic(16), dropouts=())
     assert metrics["nis"]["tail"]["basis"] == "pre_gate_best_association_keeper_side"
     assert metrics["nis"]["tail"]["side_missing_rate"] == 0.0
+
+
+def test_tail_only_on_applied_update_frames_and_coast_reported_apart():
+    frames = list(synthetic(96, blank=range(40, 50)))
+    metrics, rows = rr.replay(iter(frames), dropouts=())
+    tail = metrics["nis"]["tail"]
+    applied = sum(1 for r in rows if r["applied_update"] and r["level"] not in ("STOP", "COAST"))
+    assert tail["frames"] == applied and applied < len(rows)
+    coast = metrics["coast"]
+    assert coast["episodes"] >= 1 and coast["rate"] == metrics["levels"]["COAST"]
+    assert coast["max_s"] >= coast["mean_s"] > 0.0
+
+
+def test_unassociated_keeper_lines_are_their_own_metric():
+    rows = [{"level": "TRACK", "candidates": [
+        {"side_hint": "right", "y": -0.30, "nis": {"R": 99.0, "L": 400.0}, "label": "N"},
+        {"side_hint": "right", "y": -0.09, "nis": {"R": 1.0, "L": 400.0}, "label": "R"},
+        {"side_hint": "left", "y": 0.10, "nis": {"R": 300.0, "L": 30.0}, "label": None},
+        {"side_hint": "right", "y": -0.2, "rejected": "steep_crossing", "nis": None, "label": None}]},
+        {"level": "STOP", "candidates": [{"side_hint": "left", "y": 0.5, "nis": {"R": 1, "L": 1}, "label": "N"}]}]
+    out = rr._unassociated(rows)
+    assert out["count"] == 2 and out["abs_y_m"]["median"] == pytest.approx(0.2)
