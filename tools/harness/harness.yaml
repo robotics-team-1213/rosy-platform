@@ -7,6 +7,8 @@ adr_log: docs/reference/ROSY ADR Log.md
 
 # IDs absent from the ADR log on purpose. Remove an entry once the ADR is written.
 adr_gaps:
+  D-375: "reserved by branch feat/overhead-map-auto-register (overhead map registration from lane paint); remove once it lands"
+  D-376: "reserved in the harness of branches docs/app-naming-rule and refactor/app-naming-cam-vision; remove once it lands"
   D-377: "reserved by branches docs/app-naming-rule and refactor/app-naming-cam-vision (app names Rosy + one English word); remove once it lands"
   D-378: "reserved by branch docs/d378-real-drive-lane-traffic (real-drive errors and autonomy gates); remove once it lands"
   D-373: "reserved by branch feat/d373-learning-loop-lap2 (learned perception on the Pinky image, snapshot capture, auto shadow delivery); remove when its ADR lands"
