@@ -56,6 +56,28 @@ def test_hello_valid_passes():
     protocol.validate_hello(VECTORS["messages"]["hello_valid"])
 
 
+def test_hello_with_lens_passes_and_old_hello_has_no_lens():
+    protocol.validate_hello(VECTORS["messages"]["hello_with_lens"])
+    assert protocol.parse_hello_lens(VECTORS["messages"]["hello_valid"]) is None
+    assert protocol.parse_hello_lens(VECTORS["messages"]["hello_with_lens"]) == {
+        "kind": "wide", "focal_mm": 2.2, "hfov_deg": 104.1,
+    }
+
+
+@pytest.mark.parametrize("vector", VECTORS["hello_lens"]["valid"], ids=lambda v: v["lens"]["kind"])
+def test_valid_hello_lens_parses(vector):
+    hello = {**VECTORS["messages"]["hello_valid"], "lens": vector["lens"]}
+    protocol.validate_hello(hello)
+    assert protocol.parse_hello_lens(hello) == vector["parsed"]
+
+
+@pytest.mark.parametrize("vector", VECTORS["hello_lens"]["ignored"], ids=lambda v: v["name"])
+def test_malformed_hello_lens_is_ignored_not_rejected(vector):
+    hello = {**VECTORS["messages"]["hello_valid"], "lens": vector["lens"]}
+    protocol.validate_hello(hello)
+    assert protocol.parse_hello_lens(hello) is None
+
+
 def test_hello_bad_proto_is_rejected():
     with pytest.raises(protocol.HelloError) as excinfo:
         protocol.validate_hello(VECTORS["messages"]["hello_bad_proto"])

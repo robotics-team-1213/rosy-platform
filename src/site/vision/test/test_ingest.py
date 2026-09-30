@@ -365,3 +365,29 @@ def test_marker_report_expires_so_status_falls_back_to_empty(monkeypatch):
     assert server._marker_status(src) == ([30, 31], ["rosy_01"])
     now[0] += ingest_module.MARKER_REPORT_TTL_S + 0.1
     assert server._marker_status(src) == ([], [])
+
+
+@run_async
+async def test_hello_lens_is_recorded_per_source_and_older_hellos_report_none():
+    async with _Harness(tokens={"overhead-1": TOKEN, "overhead-2": "token-2"}) as h:
+        wide = await h.connect()
+        await wide.send(json.dumps({**_hello(), "lens": {"kind": "wide", "focal_mm": 2.2, "hfov_deg": 104.1}}))
+        await wide.recv()
+        old = await h.connect("token-2")
+        await old.send(json.dumps(_hello("overhead-2")))
+        await old.recv()
+        assert h.server.source_lens("overhead-1") == {"kind": "wide", "focal_mm": 2.2, "hfov_deg": 104.1}
+        assert h.server.source_lens("overhead-2") is None
+        assert h.server.source_lens("overhead-3") is None
+        await wide.close()
+        await old.close()
+
+
+@run_async
+async def test_malformed_hello_lens_is_ignored_not_closed():
+    async with _Harness() as h:
+        conn = await h.connect()
+        await conn.send(json.dumps({**_hello(), "lens": {"kind": "fisheye", "focal_mm": 1.0, "hfov_deg": 170}}))
+        assert json.loads(await conn.recv()) == protocol.make_config()
+        assert h.server.source_lens("overhead-1") is None
+        await conn.close()

@@ -119,6 +119,33 @@ def validate_hello(message: dict) -> None:
         raise HelloError("sensor", f"sensor.rotation_deg must be in {VALID_ROTATIONS}")
 
 
+LENS_KINDS = ("wide", "standard")
+
+
+def _positive_number(value: object) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool) and value > 0
+
+
+def parse_hello_lens(message: dict) -> dict | None:
+    """Return the optional ``hello.lens`` as ``{"kind", "focal_mm", "hfov_deg"}``, or None.
+
+    The field is additive and informational (camera lens, for a later calibration
+    choice): a missing or malformed lens never rejects the hello, so it is not
+    part of :func:`validate_hello`. Extra keys inside ``lens`` are ignored.
+    """
+    lens = message.get("lens") if isinstance(message, dict) else None
+    if not isinstance(lens, dict):
+        return None
+    kind = lens.get("kind")
+    focal_mm = lens.get("focal_mm")
+    hfov_deg = lens.get("hfov_deg")
+    if kind not in LENS_KINDS or not _positive_number(focal_mm) or not _positive_number(hfov_deg):
+        return None
+    if hfov_deg >= 180:
+        return None
+    return {"kind": kind, "focal_mm": float(focal_mm), "hfov_deg": float(hfov_deg)}
+
+
 def make_config(
     *, fps: int = 3, width: int = 1280, jpeg_quality: int = 70, max_bytes: int = 200000
 ) -> dict:
