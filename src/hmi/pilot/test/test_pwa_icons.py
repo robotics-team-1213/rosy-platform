@@ -12,9 +12,7 @@ import json
 from pathlib import Path
 
 import pytest
-
-Image = pytest.importorskip("PIL.Image")
-ImageChops = pytest.importorskip("PIL.ImageChops")
+from PIL import Image, ImageChops
 
 PILOT = Path(__file__).resolve().parents[1]
 REPO = PILOT.parents[2]
