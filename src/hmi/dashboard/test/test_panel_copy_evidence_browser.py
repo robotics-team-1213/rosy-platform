@@ -253,3 +253,26 @@ def test_robot_map_read_failure_is_an_overlay_with_retry_and_no_target_row(panel
     failure.wait_for(state="hidden")
     assert retry.is_hidden()
     assert page.locator(".surface-map-readout").is_visible()
+
+
+@pytest.mark.parametrize(("module", "path", "payload", "text"), [
+    ("setup/docking.js", "/api/v1/docking/docks", {"docks": []}, "등록된 도크가 없습니다."),
+    ("setup/dock-admin.js", "/api/v1/docking/docks", {"docks": []}, "등록된 도크가 없습니다."),
+    ("setup/waypoints.js", "/api/v1/waypoints", {"waypoints": []}, "저장된 웨이포인트가 없습니다."),
+])
+def test_setup_empty_lists_are_one_ui_empty_outside_the_list(panel, module, path, payload, text):
+    page = panel(module, role="administrator")
+    page.evaluate("([path, payload]) => __callbacks[path].onData(payload)", [path, payload])
+    empty = page.locator("#root > ui-empty")
+    assert empty.count() == 1 and empty.is_visible() and empty.inner_text() == text
+    assert page.locator("#root ul ui-empty, #root ul li").count() == 0
+    assert page.locator("#root ul").evaluate_all("lists => lists.every((list) => list.hidden)")
+
+
+@pytest.mark.parametrize("module", ["setup/docking.js", "console/docking.js"])
+def test_dock_state_reads_korean_with_the_enum_in_title(panel, module):
+    page = panel(module, role="administrator")
+    page.evaluate("() => __callbacks['/api/v1/docking/status'].onData({supported: true, state: 'UNDOCKED'})")
+    value = page.locator("dl dd").filter(has_text="도크 밖")
+    assert value.count() == 1 and value.get_attribute("title") == "UNDOCKED"
+    assert "UNDOCKED" not in page.inner_text("#root")

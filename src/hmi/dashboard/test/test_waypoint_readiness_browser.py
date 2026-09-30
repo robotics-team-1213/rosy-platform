@@ -125,7 +125,8 @@ def test_short_waypoint_list_sits_under_the_status_line():
               callbacks['/api/v1/waypoints']({waypoints: []});
               await new Promise(requestAnimationFrame);
               const visible = [...root.children].filter((n) => n.getClientRects().length && n.tagName !== 'H2');
-              const list = root.querySelector('.waypoint-list');
+              // US-009: an empty list is the ui-empty line outside the (hidden) list.
+              const list = root.querySelector(':scope > ui-empty:not([hidden])');
               const above = visible[visible.indexOf(list) - 1];
               const margins = parseFloat(getComputedStyle(above).marginBottom) + parseFloat(getComputedStyle(list).marginTop);
               return {gap: parseFloat(getComputedStyle(root).rowGap) + margins,

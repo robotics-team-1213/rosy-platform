@@ -1,4 +1,4 @@
-import { HeadlessState } from "/common/core_ui_logic.js";
+import { DOCK_STATE_LABEL, HeadlessState, enumLabel } from "/common/core_ui_logic.js";
 import { poseUnavailableReason } from "./pose-evidence.js";
 // D-359 §5.3 — 끌 때 이유를 같이 준다. 켜거나 짧은 요청 중 잠금이면 이유를 지운다.
 function setOff(control, off, reason = "") { control.disabled = Boolean(off); if (off && reason) control.setAttribute("reason", reason); else control.removeAttribute("reason"); }
@@ -14,9 +14,11 @@ export function mount(root, ctx) {
   const listStatus = el("ui-status", "", "");
   listStatus.setAttribute("role", "status"); listStatus.setAttribute("aria-live", "polite");
   const list = el("ul", "waypoint-list"); list.setAttribute("aria-label", "등록된 도크 위치");
+  // D-359 US-009 — 빈 목록은 목록 밖의 ui-empty 한 줄이다(웨이포인트·도크 관리와 같은 모양).
+  const emptyNote = el("ui-empty", "", "등록된 도크가 없습니다."); emptyNote.hidden = true;
   const actionStatus = el("ui-status", "", "");
   actionStatus.setAttribute("role", "status"); actionStatus.setAttribute("aria-live", "polite");
-  root.append(head, status, facts, listStatus, list, actionStatus);
+  root.append(head, status, facts, listStatus, list, emptyNote, actionStatus);
 
   let poseFresh = false;
   let docks = [];
@@ -25,9 +27,9 @@ export function mount(root, ctx) {
   let dockingSupported = null;
   function renderDocks() {
     list.replaceChildren();
-    list.hidden = !docksLoaded;
+    list.hidden = !docksLoaded || !docks.length;
+    emptyNote.hidden = !docksLoaded || docks.length > 0;
     if (!docksLoaded) return;
-    if (!docks.length) { list.append(el("li", "", "등록된 도크가 없습니다.")); return; }
     for (const dock of docks) {
       const row = el("li", ""); row.dataset.dockId = dock.id;
       const detail = el("span", "", `${dock.id} · ${dock.type || "유형 없음"} · 맵 ${dock.map_id || "미지정"}`);
@@ -57,7 +59,7 @@ export function mount(root, ctx) {
   const stopStatus = ctx.store.poll("/api/v1/docking/status", 5_000, (data) => {
     dockingSupported = data.supported === true;
     facts.replaceChildren(el("dt", "", "도킹 기능"), el("dd", "", dockingSupported ? "사용 가능" : "미지원 또는 제한"),
-      el("dt", "", "현재 상태"), el("dd", "", data.state || "—"),
+      el("dt", "", "현재 상태"), Object.assign(el("dd", "", enumLabel(DOCK_STATE_LABEL, data.state)), {title: data.state || ""}),
       el("dt", "", "대상 도크"), el("dd", "", data.dock_id || "—"),
       el("dt", "", "오류"), el("dd", "", data.error || "없음"));
   }, (error) => { dockingSupported = false; facts.replaceChildren(el("dd", "", `도킹 상태를 읽지 못했습니다: ${error.message}`)); });

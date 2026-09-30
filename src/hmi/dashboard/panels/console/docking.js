@@ -1,5 +1,6 @@
 // D-359 §5.3 — 끌 때 이유를 같이 준다. 켜거나 짧은 요청 중 잠금이면 이유를 지운다.
 function setOff(control, off, reason = "") { control.disabled = Boolean(off); if (off && reason) control.setAttribute("reason", reason); else control.removeAttribute("reason"); }
+import { DOCK_STATE_LABEL, enumLabel } from "/common/core_ui_logic.js";
 // Console owns motion commands; setup owns teaching and dock inventory.
 function el(tag, cls, text) { const node = document.createElement(tag); if (cls) node.className = cls; if (text !== undefined) node.textContent = text; return node; }
 
@@ -41,7 +42,7 @@ export function mount(root, ctx) {
     statusKnown = true;
     currentState = data.state;
     facts.replaceChildren(el("dt", "", "기능 지원"), el("dd", "", supported ? "사용 가능" : "제한 또는 미지원"),
-      el("dt", "", "상태"), el("dd", "", data.state || "—"),
+      el("dt", "", "상태"), Object.assign(el("dd", "", enumLabel(DOCK_STATE_LABEL, data.state)), {title: data.state || ""}),
       el("dt", "", "현재 도크"), el("dd", "", data.dock_id || "—"),
       el("dt", "", "단계"), el("dd", "", data.phase || "—"),
       el("dt", "", "오류"), el("dd", "", data.error || "없음"));

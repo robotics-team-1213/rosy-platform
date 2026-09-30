@@ -33,6 +33,9 @@ export function mount(el, ctx) {
   const list = document.createElement("ul");
   list.className = "waypoint-list";
   list.hidden = true;
+  const emptyNote = document.createElement("ui-empty");
+  emptyNote.textContent = "저장된 웨이포인트가 없습니다.";
+  emptyNote.hidden = true;
   let latestState = null;
   let pending = false;
 
@@ -62,14 +65,10 @@ export function mount(el, ctx) {
   });
   const stopWaypoints = ctx.store.poll("/api/v1/waypoints", 5_000, ({waypoints = []}) => {
     list.replaceChildren();
-    list.hidden = false;
+    list.hidden = !waypoints.length;
+    emptyNote.hidden = waypoints.length > 0;
     setStatus(listStatus, "");
-    if (!waypoints.length) {
-      const empty = document.createElement("ui-empty");
-      empty.textContent = "저장된 웨이포인트가 없습니다.";
-      list.append(empty);
-      return;
-    }
+    if (!waypoints.length) return;
     for (const waypoint of waypoints) {
       const row = document.createElement("li");
       row.textContent = `${waypoint.name}: ${Number(waypoint.x).toFixed(2)}, ${Number(waypoint.y).toFixed(2)}`;
@@ -78,6 +77,7 @@ export function mount(el, ctx) {
   }, (error) => {
     list.replaceChildren();
     list.hidden = true;
+    emptyNote.hidden = true;
     setStatus(listStatus, `웨이포인트 목록을 읽지 못했습니다: ${error.message}. 다시 확인 중입니다.`);
   });
 
@@ -107,6 +107,6 @@ export function mount(el, ctx) {
     } finally { pending = false; syncSave(); }
   });
   form.append(input, save);
-  el.append(head, help, form, message, saveStatus, listStatus, list);
+  el.append(head, help, form, message, saveStatus, listStatus, list, emptyNote);
   return () => { stopState(); stopWaypoints(); };
 }

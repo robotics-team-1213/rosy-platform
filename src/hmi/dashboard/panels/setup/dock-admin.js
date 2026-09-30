@@ -41,7 +41,8 @@ export function mount(root, ctx) {
   listStatus.setAttribute("role", "status");
   listStatus.setAttribute("aria-live", "polite");
   const list = el("ul", "waypoint-list"); list.setAttribute("aria-label", "도크 유형과 등록 위치");
-  root.append(head, status, form, gate, registrationNotice, knownTypes, listStatus, list);
+  const emptyNote = el("ui-empty", "", "등록된 도크가 없습니다."); emptyNote.hidden = true;
+  root.append(head, status, form, gate, registrationNotice, knownTypes, listStatus, list, emptyNote);
 
   let pose = null;
   let poseFresh = false;
@@ -103,9 +104,9 @@ export function mount(root, ctx) {
   }
   function renderDocks() {
     list.replaceChildren();
-    list.hidden = !docksLoaded;
+    list.hidden = !docksLoaded || !docks.length;
+    emptyNote.hidden = !docksLoaded || docks.length > 0;
     if (!docksLoaded) return;
-    if (!docks.length) list.append(el("li", "", "등록된 도크가 없습니다."));
     for (const item of docks) {
       const row = el("li", ""); row.dataset.dockId = item.id;
       row.append(el("span", "", `${item.id} · ${item.type} · ${item.map_id || "맵 없음"}`));
