@@ -3731,3 +3731,8 @@
 - Change: recorded the final boundary/deadline and post-capture egress-fence verification in the implementation plan and module/repository logs.
 - Evidence: ER2/D-357/D-358 contracts, stateless adapter, allowlisted tools, outbox, candidate fencing, Vision reader, app lifecycle, and Overhead preview suites: 137 passed. Documentation gate: 80 passed. Changed-file flake8 clean. Harness lint: 0 errors, 12 existing freshness warnings.
 - Gate: SOURCE/LOCAL only. No provider credentials or egress approval configured; no policy dispatch, ROS, device, actuation, or deployment.
+
+## 2026-09-30 · uncommitted · fix(contracts): reconcile ER2 API version and Fleet size ratchet
+- Change: aligned CORE FastAPI contract labels with API reference v1.62; re-judged Fleet's measured 15,000-line size against the existing unscheduled B2 split verdict after the bounded ER2 consumer, trusted Vision reader, and fence coverage landed.
+- Evidence: pre-push fast contract suite reproduced both failures (`test_app_description_names_the_live_contract_version`, Fleet `SIZE_VERDICTS` regrowth); targeted rerun and generated harness checks pending.
+- Gate: no runtime/provider enablement or deployment authorization is implied; ER2 remains disabled by default.

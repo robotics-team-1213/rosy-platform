@@ -72,7 +72,7 @@ SIZE_VERDICTS = {
         "goal-evidence, D-361 enrollment routes and the D-360 console assets joined — verdict unchanged)",
     ),
     "fleet": (
-        14_616,
+        15_000,
         "split: server HTTP boundary, console, signals and the mission-control stores are separate owners "
         "today; group them into subpackages rather than one flat server/ tree (B2); owner fleet, unscheduled "
         "(re-judged 2026-09-29 at 11164 after mission_store joined the server tree; re-judged 2026-09-30 at "
@@ -80,7 +80,9 @@ SIZE_VERDICTS = {
         "at 12574 after the D-361 review fixes; re-judged 2026-09-30 at 13187 after main's goal-evidence "
         "contracts and stores merged in; re-judged 2026-09-30 at 14260 after D-357/D-358 feedback "
         "contracts, dispatcher, stateless adapter and bounded outbox modules/tests were added; re-judged "
-        "at 14616 after atomic candidate fencing and linked-successor regression tests. Split remains "
+        "at 14616 after atomic candidate fencing and linked-successor regression tests; re-judged at 15000 "
+        "after the injected outbox consumer, trusted post-action Vision reader, and deadline/egress fence "
+        "coverage joined. Split remains "
         "unscheduled (docs/plans/2026-09-30-er2-mission-feedback-loop.md)",
     ),
     "site/fleet/fleet/server/enrollment.py": (
