@@ -34,8 +34,8 @@
 
 ## 최근 기록
 
+- 2026-10-01 · uncommitted · fix(vision): D-375 review fixes and worker process
 - 2026-09-30 · uncommitted · feat(vision): D-375 tilt hypotheses for the paint fit
 - 2026-09-30 · uncommitted · refactor(vision): D-377 site_vision becomes rosy_vision in src/site/vision
 - 2026-09-30 · uncommitted · feat(site-vision): D-375 map-proposal from the lane paint
 - 2026-09-30 · uncommitted · feat(site-vision): D-374 overhead console-script alias
-- 2026-09-30 · uncommitted · refactor(site-vision): D-374 stage 1 — overhead becomes site_vision
