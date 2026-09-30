@@ -35,25 +35,107 @@ def test_straight_guard_looks_in_the_direction_of_travel_with_the_given_yaw():
     fwd = rc.Step("f", linear=0.03, seconds=1)
     back = rc.Step("b", linear=-0.03, seconds=1)
     s = sample({182: 0.15})                      # 0.15 m at the nose of a 182-deg mount
-    assert "clearance" in rc.clearance_reason(s, fwd, 182.0, 100.1)
-    assert rc.clearance_reason(s, back, 182.0, 100.1) is None
+    assert "clearance" in rc.clearance_reason(s, fwd, 182.0)
+    assert rc.clearance_reason(s, back, 182.0) is None
     # The same return is 8 deg off the nose, still inside the +-25 sector, for a 190 mount;
     # at 40 deg off it is outside.
-    assert "clearance" in rc.clearance_reason(s, fwd, 190.0, 100.1)
-    assert rc.clearance_reason(sample({222: 0.15}), fwd, 182.0, 100.1) is None
+    assert "clearance" in rc.clearance_reason(s, fwd, 190.0)
+    assert rc.clearance_reason(sample({222: 0.15}), fwd, 182.0) is None
 
 
 def test_pivot_guard_is_all_around_and_self_returns_are_ignored():
     pivot = rc.Step("p", angular=0.1, seconds=1)
-    assert rc.clearance_reason(sample({90: 0.12}), pivot, 182.0, 100.1) is not None
-    assert rc.clearance_reason(sample({90: 0.05}), pivot, 182.0, 100.1) is None   # chassis
-    assert rc.clearance_reason(sample({90: 0.30}), pivot, 182.0, 100.1) is None
+    assert rc.clearance_reason(sample({90: 0.12}), pivot, 182.0) is not None
+    assert rc.clearance_reason(sample({90: 0.05}), pivot, 182.0) is None   # chassis
+    assert rc.clearance_reason(sample({90: 0.30}), pivot, 182.0) is None
 
 
 def test_stale_or_missing_scan_aborts():
     fwd = rc.Step("f", linear=0.03, seconds=1)
-    assert rc.clearance_reason(None, fwd, 182.0, 100.0) == "no LiDAR sample"
-    assert rc.clearance_reason(sample({}, received_at=90.0), fwd, 182.0, 100.0) == "LiDAR sample stale"
+    assert rc.clearance_reason(None, fwd, 182.0) == "no LiDAR sample"
+    assert rc.clearance_reason(sample({}), fwd, 182.0, fresh=False) == "LiDAR sample stale"
+
+
+def test_freshness_uses_the_pc_monotonic_clock_not_the_robot_clock():
+    # H4: a robot clock days off must not matter; only whether received_at moves.
+    f = rc.ScanFreshness()
+    assert f.fresh(sample({}, received_at=1.0e6), 10.0)          # first sight: fresh
+    assert f.fresh(sample({}, received_at=1.0e6), 10.4)          # unchanged 0.4 s
+    assert not f.fresh(sample({}, received_at=1.0e6), 10.6)      # unchanged 0.6 s: stale
+    assert f.fresh(sample({}, received_at=1.0e6 + 0.1), 10.7)    # moved again: fresh
+    for bad in (None, "12.0", True, float("nan")):
+        assert not rc.ScanFreshness().fresh(sample({}, received_at=bad), 0.0)
+    assert not rc.ScanFreshness().fresh(None, 0.0)
+
+
+class FakeCore:
+    def __init__(self, stop_event=None, fail_on_teleop=False):
+        self.sent, self.stops, self.stop_event, self.fail = [], 0, stop_event, fail_on_teleop
+        self.t = 0.0
+
+    def lidar(self):
+        self.t += 0.1
+        return sample({}, received_at=self.t)
+
+    def teleop(self, linear, angular):
+        if self.fail:
+            raise OSError("link down")
+        self.sent.append((linear, angular))
+        if self.stop_event is not None and len(self.sent) == 3:
+            self.stop_event.set()
+
+    def stop(self):
+        self.stops += 1
+
+
+def test_drive_stops_on_the_shared_event_and_always_sends_zero():
+    # H5: the operator's Ctrl-C sets the event; every drive loop checks it each tick.
+    import threading
+    event = threading.Event()
+    core = FakeCore(event)
+    reason = rc.drive(core, [rc.Step("s", linear=0.03, seconds=5.0)], 182.0, lambda m: None, event)
+    assert reason == "stopped by the operator" and len(core.sent) == 3 and core.stops == 1
+
+
+def test_stop_all_zeroes_every_robot_and_stops_recorders(monkeypatch):
+    import threading
+    calls = []
+    monkeypatch.setattr(rc, "ssh", lambda host, cmd, timeout=60: calls.append((host, cmd)))
+    cores = {"a": (FakeCore(), "h1"), "b": (FakeCore(), "h2")}
+    event = threading.Event()
+    rc.stop_all(event, cores, [])
+    assert event.is_set() and all(c.stops == 1 for c, _ in cores.values())
+    assert sorted(calls) == [("h1", "~/rosy_rec.sh stop"), ("h2", "~/rosy_rec.sh stop")]
+
+
+def test_run_robot_records_an_error_and_stops_the_recorder_it_started(monkeypatch):
+    # M5: an exception mid-protocol still stops the recorder and leaves a result.
+    import types
+    calls = []
+
+    def fake_ssh(host, cmd, timeout=60):
+        calls.append(cmd)
+        return types.SimpleNamespace(returncode=0, stdout="recording: /home/rosy/recordings/x\n", stderr="")
+
+    class Core(FakeCore):
+        def __init__(self, host):
+            super().__init__(fail_on_teleop=True)
+
+        def pair(self, code):
+            pass
+
+        def call(self, *a, **k):
+            return 200, {}
+
+    monkeypatch.setattr(rc, "ssh", fake_ssh)
+    monkeypatch.setattr(rc, "Core", Core)
+    monkeypatch.setattr(rc, "drive", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("boom")))
+    args = types.SimpleNamespace(max_angular={}, max_linear={}, lidar_yaw_deg=181.9, dry_run=False,
+                                 session_api=False, session_api_path="")
+    results = {}
+    rc.run_robot("t", "h", "CODE", args, results)
+    assert "boom" in results["t"]["error"]
+    assert calls[-1] == "~/rosy_rec.sh stop"
 
 
 def rec(kind, ds=0.0, dth=0.0, phi_l=0.0, phi_r=0.0):

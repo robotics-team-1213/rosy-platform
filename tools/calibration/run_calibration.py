@@ -12,7 +12,8 @@ Per robot, in parallel (one thread each):
   4. drive PROTOCOL through CORE teleop at 10 Hz, clipped to the robot's limits,
      with a LiDAR clearance guard: a straight aborts when a return in its
      direction of travel is closer than 0.20 m, a pivot when anything is within
-     0.15 m; a stale scan (> 0.5 s) aborts too; every abort sends zero;
+     0.20 m; a scan whose received_at has not changed for 0.5 s (PC monotonic
+     clock) aborts too; every abort sends zero;
   5. stop the recorder, pull the session (scp) to data/perception/raw/;
   6. analyse (analyze_session.py): wheel radius/separation, per-wheel scale,
      gains per speed, LiDAR yaw from motion, rotation sign (odom vs LiDAR vs
@@ -52,7 +53,7 @@ RAW = REPO / "data" / "perception" / "raw"
 STORE = REPO / "data" / "calibration"
 RATE_HZ = 10.0
 STRAIGHT_STOP_M = 0.20
-PIVOT_STOP_M = 0.15
+PIVOT_STOP_M = 0.20
 SELF_RETURN_M = 0.08
 SECTOR_HALF_DEG = 25.0
 SCAN_STALE_S = 0.5
@@ -106,12 +107,30 @@ def duration_s(steps):
 
 # --- clearance guard ----------------------------------------------------------
 
-def clearance_reason(sample, step: Step, lidar_yaw_deg, now_unix):
-    """Why this step may not continue (None = clear). sample: GET /api/v1/sensors/lidar."""
+class ScanFreshness:
+    """Staleness judged on the PC's monotonic clock: when did received_at last change?
+
+    The robot's clock is never compared with the PC's (8kcn ran days off). A
+    missing or non-numeric received_at counts as stale."""
+
+    def __init__(self):
+        self.value, self.changed_at = None, None
+
+    def fresh(self, sample, now_mono):
+        received = sample.get("received_at") if isinstance(sample, dict) else None
+        if not isinstance(received, (int, float)) or isinstance(received, bool) or not math.isfinite(received):
+            return False
+        if received != self.value:
+            self.value, self.changed_at = received, now_mono
+        return now_mono - self.changed_at <= SCAN_STALE_S
+
+
+def clearance_reason(sample, step: Step, lidar_yaw_deg, fresh=True):
+    """Why this step may not continue (None = clear). sample: GET /api/v1/sensors/lidar;
+    fresh: ScanFreshness.fresh() for this sample."""
     if sample is None:
         return "no LiDAR sample"
-    received = sample.get("received_at")
-    if isinstance(received, (int, float)) and now_unix - float(received) > SCAN_STALE_S:
+    if not fresh:
         return "LiDAR sample stale"
     ranges = sample.get("ranges") or []
     n = len(ranges)
@@ -203,15 +222,19 @@ def pull(host, remote_folder, dest_root=RAW):
     return dest_root / Path(remote_folder).name
 
 
-def drive(core: Core, steps, lidar_yaw_deg, log):
+def drive(core: Core, steps, lidar_yaw_deg, log, stop_event=None):
     """Run the steps; returns None or the abort reason (zero is always sent last)."""
+    freshness = ScanFreshness()
     try:
         for step in steps:
             log(f"{step.name}: v={step.linear:+.3f} w={step.angular:+.2f} {step.seconds:.1f}s")
             end = time.monotonic() + step.seconds
             while time.monotonic() < end:
                 tick = time.monotonic()
-                reason = clearance_reason(core.lidar(), step, lidar_yaw_deg, time.time())
+                if stop_event is not None and stop_event.is_set():
+                    return "stopped by the operator"
+                sample = core.lidar()
+                reason = clearance_reason(sample, step, lidar_yaw_deg, freshness.fresh(sample, tick))
                 if reason and (step.linear or step.angular):
                     return f"{step.name}: {reason}"
                 core.teleop(step.linear, step.angular)   # zero during rests keeps the deadman fed
@@ -254,8 +277,23 @@ def lidar_yaw_for(robot_name, explicit):
     return robot_lidar_yaw_deg(), "robot.yaml (SUSPECT: motion/camera say ~181-182 deg; pass --lidar-yaw-deg)"
 
 
-def run_robot(name, host, code, args, results):
+def run_robot(name, host, code, args, results, stop_event=None, live=None):
+    """One robot, end to end. Always records a result; always stops the recorder it started."""
     log = lambda msg: print(f"[{name}] {msg}", flush=True)  # noqa: E731
+    state = {"recording": False}
+    try:
+        _run_robot(name, host, code, args, results, stop_event, live, state, log)
+    except Exception as exc:  # noqa: BLE001 - one robot's failure must not hide the others
+        log(f"FAILED: {exc!r}")
+        results[name] = {**results.get(name, {}), "error": repr(exc)}
+    finally:
+        if state["recording"]:
+            stopped = ssh(host, "~/rosy_rec.sh stop")
+            log(f"recorder stopped: {stopped.stdout.strip().splitlines()[:1]}")
+        results.setdefault(name, {"error": "no result recorded"})
+
+
+def _run_robot(name, host, code, args, results, stop_event, live, state, log):
     max_w = args.max_angular.get(name, 0.1)
     steps = protocol(max_linear=args.max_linear.get(name, 0.03), max_angular=max_w)
     yaw, yaw_source = lidar_yaw_for(f"rosy-pinky-{name}", args.lidar_yaw_deg)
@@ -266,6 +304,8 @@ def run_robot(name, host, code, args, results):
         results[name] = {"dry_run": True}
         return
     core = Core(host)
+    if live is not None:
+        live[name] = (core, host)
     core.pair(code)
     core.call("POST", "/api/v1/mode", {"mode": "MANUAL"})
     sessions = []
@@ -277,9 +317,11 @@ def run_robot(name, host, code, args, results):
             log(f"recorder did not start: {started.stdout.strip()} {started.stderr.strip()}")
             results[name] = {"error": "recorder did not start"}
             return
+        state["recording"] = True
         folder = started.stdout.split("recording:", 1)[1].strip().splitlines()[0]
-        abort = drive(core, steps, yaw, log)
+        abort = drive(core, steps, yaw, log, stop_event)
         stopped = ssh(host, "~/rosy_rec.sh stop")
+        state["recording"] = False
         if args.session_api:
             log(f"session stop: {core.session_api('stop', args.session_api_path)}")
         log(f"recorder: {stopped.stdout.strip().splitlines()[:1]}")
@@ -296,6 +338,18 @@ def run_robot(name, host, code, args, results):
         if why is None:
             break
     results[name] = {"sessions": [str(s) for s in sessions]}
+
+
+def stop_all(stop_event, live, threads):
+    """Ctrl-C: every drive loop stops, and the main thread also sends zero and
+    stops each recorder itself (a worker may be blocked in I/O)."""
+    stop_event.set()
+    for name, (core, host) in list(live.items()):
+        print(f"[{name}] operator stop: zero + recorder stop", flush=True)
+        core.stop()
+        ssh(host, "~/rosy_rec.sh stop")
+    for t in threads:
+        t.join(5.0)
 
 
 def main(argv=None) -> int:
@@ -324,13 +378,21 @@ def main(argv=None) -> int:
     if not args.dry_run:
         for name in robots:
             codes.setdefault(name, input(f"login code for {name}: ").strip())
-    results, threads = {}, []
+    results, threads, live, stop_event = {}, [], {}, threading.Event()
     for name, host in robots.items():
-        t = threading.Thread(target=run_robot, args=(name, host, codes.get(name), args, results), daemon=True)
+        t = threading.Thread(target=run_robot, name=f"calib-{name}",
+                             args=(name, host, codes.get(name), args, results, stop_event, live))
         t.start()
         threads.append(t)
-    for t in threads:
-        t.join()
+    try:
+        while any(t.is_alive() for t in threads):
+            for t in threads:
+                t.join(0.2)
+    except KeyboardInterrupt:
+        stop_all(stop_event, live, threads)
+    missing = [name for name in robots if name not in results]
+    for name in missing:
+        results[name] = {"error": "no result recorded"}
     runs = [Path(s) for r in results.values() for s in r.get("sessions", [])]
     if runs:
         import analyze_session as AS
@@ -338,7 +400,7 @@ def main(argv=None) -> int:
         AS.main([str(p) for p in runs] + extra)
     print(json.dumps({"finished_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
                       "results": results}, indent=1))
-    return 0 if all("error" not in r for r in results.values()) else 1
+    return 0 if results and all("error" not in r for r in results.values()) else 1
 
 
 if __name__ == "__main__":
