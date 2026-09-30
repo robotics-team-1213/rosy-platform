@@ -627,3 +627,10 @@
 - 증거: `test_setup_empty_lists_are_one_ui_empty_outside_the_list[3]`, `test_dock_state_reads_korean_with_the_enum_in_title[2]`; 웨이포인트 간격 시험은 빈 줄을 잰다.
 - gate 변화: 없음.
 - 결정: D-359 (US-009).
+
+## 2026-09-30 · 5bcd9617 · D-371 US-010 목록 행 삭제는 조용한 `삭제…` + 확인 대화상자
+
+- 변경: `/device` 토큰 목록(`panels/system/security.js`)과 도크 관리(`panels/setup/dock-admin.js`)의 행 `삭제`가 위험 채움 → quiet `삭제…`, 누르면 `confirmIrreversible`(대상 이름, `토큰 삭제`/`도크 삭제`). "지금 쓰는 토큰" 사유 유지. 옛 `/dashboard` `settings.js` 토큰·도크·웨이포인트 삭제도 같은 대화상자(이미 quiet였음, `삭제…`로), D-218 핀 settings.js 11→8. 새 브라우저 시험 `src/hmi/dashboard/test/test_list_row_confirm_browser.py`(e20078de): 실제 /device 첫 화면 위험 채움 ≤1(비상정지 제외, dark/light × 1366/390), 삭제 흐름(Esc·취소 → 요청 0·포커스 복귀, 실행 → DELETE 1회). 패널 시험은 대화상자 실행 버튼을 누른다.
+- 증거: 브라우저 변이(행 kind=irreversible) → 빨강 2개 채움; 캡처 `X:\DevTemp\rosy-d359-captures\us010-*` 채움 0·넘침 0·오류 0.
+- gate 변화: 없음.
+- 결정: D-371.

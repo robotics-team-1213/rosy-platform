@@ -312,3 +312,11 @@
 - 증거: 수정 전 빨강(둘 다 solid).
 - gate 변화: 없음.
 - 결정: D-359 §5 (US-008 잔여).
+
+## 2026-09-30 · 5bcd9617 · D-371 US-010 공용 확인 대화상자 confirmIrreversible
+
+- 변경: `ui.js` `confirmIrreversible({message, action, opener})` — 네이티브 `<dialog class="ui-confirm">`(showModal), 대상 문장 + quiet `취소` + irreversible 실행 버튼 하나. Esc·취소는 false, 닫히면 포커스를 행 버튼으로(목록이 다시 그려졌으면 opener 함수로 다시 찾는다). `components.css` `dialog.ui-confirm`, `tokens.css` `--inset-dialog`·`--gap-dialog`. 계약 시험 `test_list_row_irreversible.py`(HTML li/tr/ul/ol/table/role=row 안 irreversible 금지, 스크립트는 ui.js 대화상자만 irreversible을 만든다, 행 삭제는 `삭제…`, 메시지는 대상을 따옴표로 부르고 묻는다).
+- 증거: 변이 5/5 빨강(`X:\DevTemp\rosy-d359\us010\mutations.log`); `python -m pytest src/hmi/web_common/test -q` 167 passed, 24 skipped.
+- gate 변화: 없음.
+- 결정: D-371 (D-218 §1 "커스텀 확인 다이얼로그를 만들지 않는다"를 목록 행에 한해 좁힘 — 실행 버튼의 위험 채움은 window.confirm으로 그릴 수 없다).
+- 교훈: 모달 `<dialog>`는 window.confirm처럼 뒤 화면(비상 정지 포함)을 막는다. 퇴행은 아니지만 열린 동안 비상 정지를 누를 수 없다.
