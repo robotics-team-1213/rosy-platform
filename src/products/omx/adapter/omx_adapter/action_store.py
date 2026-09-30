@@ -565,6 +565,73 @@ class ActionStore:
             connection.commit()
         return {"action": self._dict(updated_action), "phase": self._phase_dict(updated_phase)}
 
+    def record_late_phase_acceptance(
+        self, action_id: str, attempt_id: str, *, phase_id: str,
+        driver_goal_id: str,
+    ) -> dict[str, Any]:
+        """Attach a late ROS UUID to an already held UNKNOWN phase without reopening it."""
+        action_id = _nonempty("action_id", action_id)
+        attempt_id = _nonempty("attempt_id", attempt_id)
+        phase_id = _nonempty("phase_id", phase_id, maximum=96)
+        driver_goal_id = _nonempty("driver_goal_id", driver_goal_id, maximum=192)
+        now = _utc_now()
+        with closing(self._connect()) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            action = self._require_attempt(connection, action_id, attempt_id, {"UNKNOWN", "HOLD"})
+            phase = self._require_phase(connection, action_id, attempt_id, phase_id, {"UNKNOWN"})
+            if phase["driver_goal_id"] not in {None, driver_goal_id}:
+                raise InvalidActionTransition("late ROS acceptance UUID conflicts with the phase journal")
+            connection.execute(
+                """UPDATE omx_action_phases SET driver_goal_id=?, updated_at=?
+                   WHERE action_id=? AND attempt_id=? AND phase_id=? AND state='UNKNOWN'""",
+                (driver_goal_id, now, action_id, attempt_id, phase_id),
+            )
+            self._append_event(
+                connection, action_id=action_id, attempt_id=attempt_id,
+                state=action["state"], event_type="ACTION_PHASE_LATE_GOAL_ACCEPTANCE_RECORDED",
+                actor_id=action["principal_id"],
+                detail={"phase_id": phase_id, "driver_goal_id": driver_goal_id,
+                        "action_state_remains_held": True},
+                created_at=now,
+            )
+            updated = connection.execute(
+                "SELECT * FROM omx_action_phases WHERE action_id=? AND attempt_id=? AND phase_id=?",
+                (action_id, attempt_id, phase_id),
+            ).fetchone()
+            connection.commit()
+        return self._phase_dict(updated)
+
+    def record_late_phase_cancel_request(
+        self, action_id: str, attempt_id: str, *, phase_id: str,
+        driver_goal_id: str,
+    ) -> dict[str, Any]:
+        """Journal exact-goal cancellation while preserving an UNKNOWN/HOLD phase."""
+        action_id = _nonempty("action_id", action_id)
+        attempt_id = _nonempty("attempt_id", attempt_id)
+        phase_id = _nonempty("phase_id", phase_id, maximum=96)
+        driver_goal_id = _nonempty("driver_goal_id", driver_goal_id, maximum=192)
+        now = _utc_now()
+        with closing(self._connect()) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            action = self._require_attempt(connection, action_id, attempt_id, {"UNKNOWN", "HOLD"})
+            phase = self._require_phase(connection, action_id, attempt_id, phase_id, {"UNKNOWN"})
+            if phase["driver_goal_id"] != driver_goal_id:
+                raise InvalidActionTransition("late cancel UUID does not match the held phase")
+            self._append_event(
+                connection, action_id=action_id, attempt_id=attempt_id,
+                state=action["state"], event_type="ACTION_PHASE_LATE_CANCEL_REQUESTED",
+                actor_id=action["principal_id"],
+                detail={"phase_id": phase_id, "driver_goal_id": driver_goal_id,
+                        "phase_state_remains_unknown": True},
+                created_at=now,
+            )
+            updated = connection.execute(
+                "SELECT * FROM omx_action_phases WHERE action_id=? AND attempt_id=? AND phase_id=?",
+                (action_id, attempt_id, phase_id),
+            ).fetchone()
+            connection.commit()
+        return self._phase_dict(updated)
+
     def mark_phase_running(self, action_id: str, attempt_id: str, *, phase_id: str,
                            driver_goal_id: str) -> dict[str, Any]:
         return self._transition_phase(

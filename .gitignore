@@ -97,6 +97,8 @@ data/teleop/learning/*
 
 # Perception learning-loop artifacts (recordings, datasets, models) stay untracked (D-356).
 data/perception/
+# Calibration store PC mirror and reports (D-47 addendum 2026-10-01): per-robot runs stay untracked.
+data/calibration/
 
 # One-off helper scripts at the repository root. Durable root helpers
 # (env.sh) is tracked explicitly; new throwaway
