@@ -27,9 +27,17 @@
 4. **후속 검증.** 첫 부팅 전이면 `verify-emergency-card.ps1`이 같은 카드를 읽기 전용으로 다시 읽는다. boot 파티션에서
    쓰기가 더한 `rosy-provision/`·`rosy-config.yaml`만 이름을 남기고 허용한다(`verify-media-readback.py --allow-boot-extra`).
    성공하면 원 receipt 옆에 `<receipt>.readback.json`(원 receipt sha256 포함)을 쓰고, 원 receipt는 바꾸지 않는다.
-   부팅한 카드는 이미지와 같을 수 없으므로 장치에서 `CORE_READY`와 G2를 보고, 표준 쓰기로 다시 쓴다.
+   부팅한 카드는 이미지와 같을 수 없으므로 readback 대신 **장치 위 검증**을 한다: 활성 릴리스 파일을 서명된 릴리스의
+   `SHA256SUMS`로 다시 해시하고(`sha256sum -c`), OS 패키지는 `dpkg --verify`로 설치 파일과 패키지 해시를 대조한다
+   (2026-10-01 rosy-pinky-9dfk에서 이렇게 했다). 설정 파일처럼 첫 부팅이 바꾸는 항목의 차이는 목록으로 남기고 판단한다.
+   이것은 부팅 뒤의 파일 무결성 증거이지 카드 바이트 전체의 MEDIA 증거가 아니므로, 기회가 되면 표준 쓰기로 다시 쓴다.
 5. **재공급.** `-ReprovisionReceipt`는 긴급 receipt를 표준 쓰기에서만 받는다(새 receipt `supersedes.emergency: true`).
    긴급 receipt로 또 긴급 쓰기를 하면 거부한다. `emergency` 기록 없는 미검증 receipt는 예전처럼 거부한다.
+6. **같은 날의 SSH 갭(모터 커미셔닝).** `enable-motor-commissioning.ps1`은 기본 `~/.ssh` 별칭만 써서 새 카드에서
+   `No ED25519 host key is known`으로 실패했다(운영자가 로컬 사본을 고쳐 돌렸다). `rosy-release-push.ps1`과 같이
+   `-KeyPath`(기본 `%LOCALAPPDATA%\Rosy\ssh\rosy-operator-ed25519`), `-KnownHosts`(기본 `%LOCALAPPDATA%\Rosy\known_hosts`),
+   `-RosyUser`(기본 `rosy`)를 받아 `-i`·`IdentitiesOnly=yes`·`UserKnownHostsFile`·`-l`로 넘긴다. 호스트 키 확인
+   (`StrictHostKeyChecking=yes`)과 `BatchMode`는 그대로이고, 키나 known_hosts 파일이 없으면 로봇에 닿기 전에 멈춘다.
 
 **Consequences:**
 
@@ -37,7 +45,8 @@
   손상으로 드러난다.
 - 느린 readback의 첫 조치는 CPU를 비우거나 verifier 우선순위를 올리는 것이다(런북). 긴급 절차는 그래도 기다릴 수
   없을 때만 쓴다.
-- 운영자의 로컬 stub(`.worktrees/card-emergency`)은 이 결정으로 대체된다.
+- 운영자의 로컬 stub과 커미셔닝 사본(`.worktrees/card-emergency`)은 이 결정으로 대체된다.
+- 순서 기록: 결정 1–5의 코드는 이 ADR보다 먼저 커밋됐다(같은 브랜치). 이 ADR이 그 결정을 모두 적고, 결정 6은 코드보다 먼저 적었다.
 
 **Validation:**
 
@@ -47,3 +56,4 @@
 - `test/test_sd_write_card_entrypoint.py`: 인자 전달, UAC 전 거부, 상태 명령 `NOT VERIFIED`.
 - `test/test_media_readback.py`: `--allow-boot-extra`가 쓰기 파일만 허용하고 다른 추가 항목·바뀐 파일은 여전히 실패.
 - 각 게이트를 끈 변이 13종이 모두 해당 테스트를 실패시킨다.
+- 결정 6: `enable-motor-commissioning.ps1 -PrintSshArguments`로 해석된 ssh 인자를 호스트에서 확인한다(로봇 접속 없음).
