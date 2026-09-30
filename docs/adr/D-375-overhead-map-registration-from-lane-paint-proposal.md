@@ -12,7 +12,7 @@
 
 ### Decision
 
-1. **Vision이 페인트를 맞춘다.** `src/site/vision/rosy_vision/map_register.py`(ROS 없음, OpenCV CPU): 흰 가는 선 마스크 → 주 선 방향 → 고정 해상도(2.5 cm/px) 지도 템플릿에 대해 영상을 배율마다 다시 뽑는 거친 탐색(90° 네 방향 × 거울 × 배율) → 지도 래스터를 템플릿으로 한 ECC homography 정밀화 → 바닥 거리(2.5 cm 허용) 기준 recall·precision 점수. 결정적이고, 요청 시 한 번 약 0.7–1.1 s(Windows 개발 PC)다.
+1. **Vision이 페인트를 맞춘다.** `src/site/vision/rosy_vision/map_register.py`(ROS 없음, OpenCV CPU): 흰 가는 선 마스크 → 카메라 기울기 가설(pitch·roll 0, ±20°, ±35°, 9개)마다 선 영상을 펴고 주 선 방향을 구한 뒤, 고정 해상도(약 3.3 cm/px) 지도 템플릿에 대해 영상을 배율마다 다시 뽑는 거친 탐색(90° 네 방향 × 배율, 거울은 기울기 0에서만) → 지도 래스터를 템플릿으로 한 ECC homography 정밀화 → 바닥 거리 기준 recall·precision 점수. 결정적이고, 요청 시 한 번 약 1.2–2 s(Windows 개발 PC)다.
 2. **API.** `GET /api/vision/sources/{id}/map-proposal`. D-360 field-proposal과 같은 lease·속도 제한(lease 주체·source마다 초당 1회)·`Cache-Control: no-store`·`nosniff`, 같은 404(프레임 없음·오래됨)/401/422 규칙. source마다 초당 최대 1회만 계산하고 같은 프레임은 재계산하지 않는다. Vision을 `--map-paint <road_lines.stl>`로 띄우지 않으면 404 `site map paint not configured`.
    - `200` 본문: `{"source", "frame_seq", "frame_age_ms", "image", "map_frame": "map", "accepted", "proposal", "rejected_fit", "reason", "registrar": {"version", "elapsed_ms"}}`.
    - `proposal`(통과했을 때만)과 `rejected_fit`(거부됐을 때의 최선 적합)은 같은 모양: `image_to_map`·`map_to_image`(3×3, 전체 해상도 픽셀↔지도 미터), `score`(시야 안 페인트 중 선과 맞은 비율), `precision`(지도 안 흰 선 중 페인트와 맞은 비율), `coverage`(페인트 면적 중 프레임 안 비율), `cut_sides`(`+x`/`-x`/`+y`/`-y`), `cut_directions`(east/west/north/south), `side_outside`, `rotation_deg`(화면에서 지도 +x 방향, 반시계), `mirrored`, `orientation_margin`.
@@ -23,12 +23,12 @@
 
 | 등급 | 이 ADR에서 뜻하는 것 |
 |------|----------------------|
-| SOURCE | CAD 페인트로 그린 합성 프레임(180° 회전·서쪽 잘림, 20° 회전+12° 기울기+약한 통모양 왜곡, 거울상, 빈 바닥): 자세 오차·coverage·잘린 쪽 단언. 경로 lease·헤더 시험 |
+| SOURCE | CAD 페인트로 그린 합성 프레임(180° 회전·서쪽 잘림, pitch·roll 최대 30° 기울기와 회전·약한 통모양 왜곡, 거울상, 빈 바닥): 자세 오차·coverage·잘린 쪽 단언. 경로 lease·헤더 시험 |
 | LOCAL | 저장한 실제 프레임(`private/`에만, 공개 저장소에 커밋하지 않음)과 손으로 맞춘 기준 homography의 재투영 오차 |
 | DEVICE | 설치된 폰 실시간 프레임에서 제안의 프레임 간 흔들림 |
 | FIELD | 제안 → 운용자 수락 → 실측 점 대비 지도 오차 |
 
-첫 구현은 SOURCE와 LOCAL 한 장면까지만 주장한다. 2026-09-30 실험실 프레임 4장 중 1장(180° 회전, 서쪽 잘림)은 수락, 기준 대비 중앙 재투영 오차 5.7 px(1280×720), coverage 0.76, 잘린 쪽 `-x`(서쪽). 나머지 3장(옆 트랙이 보이는 넓은 시야 2장, 약 30° 기울기 1장)은 잘못된 적합을 내지 않고 거부됐다. 수락률을 높이는 일은 다음 단계다.
+이 ADR은 SOURCE와 LOCAL까지만 주장한다. 2026-09-30 실험실 프레임 6장(180° 회전·서쪽 잘림, 옆 트랙이 보이는 넓은 시야, 약 30° 기울기, 현재 설치 위치 약 2.0 m·23° 기울기 2장)은 모두 수락됐고, 손으로 맞춘 기준 homography 대비 중앙 재투영 오차는 3.6–6.6 px(1280×720, p90 5.9–15.7 px)다. 옆 트랙만 보이는 자른 영상, 로터리만 보이는 영상, 좌우 반전 영상은 모두 거부됐다(잘못된 수락 없음).
 
 ### Alternatives
 
@@ -40,7 +40,7 @@
 ### Not decided
 
 - 제안을 버전 있는 사이트 보정 프로필로 올리는 절차·권한, `CameraMap` 반영.
-- 옆 트랙이 보이는 넓은 시야와 30° 이상 기울기에서의 수락(탐색에 기울기 가설 추가 여부).
+- 35°를 넘는 기울기, 트랙 일부(예: 동쪽 루프만)만 보이는 시야에서의 수락. 지금은 방향 차 부족으로 거부한다.
 - 렌즈 왜곡 보정 모델. 지금은 homography가 흡수할 수 있는 약한 왜곡만 다룬다.
 - 실제 트랙과 CAD의 국소 차이(루프 모양 등 수 cm)를 지도 쪽에서 고칠지.
 - 관제 화면 표시·확인 UI.
