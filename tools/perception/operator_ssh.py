@@ -8,11 +8,18 @@ ROSY_KNOWN_HOSTS (no guessed default)."""
 from __future__ import annotations
 
 import os
+import re
 import sys
 from pathlib import Path
 
 USER = "rosy"
 KEY_ENV, KH_ENV = "ROSY_OPERATOR_KEY", "ROSY_KNOWN_HOSTS"
+_SAFE_NAME = re.compile(r"[A-Za-z0-9._][A-Za-z0-9._-]*")
+
+
+def safe_name(value) -> bool:
+    """A host or user that ssh cannot read as an option or a shell word."""
+    return isinstance(value, str) and _SAFE_NAME.fullmatch(value) is not None
 
 
 class SshConfigError(ValueError):
@@ -47,4 +54,7 @@ def resolve(identity, known_hosts, *, env=None, platform=None) -> tuple[str, str
 def options(identity: str, known_hosts: str) -> list[str]:
     """Arguments shared by ssh and scp, placed before '--'."""
     return ["-i", identity, "-o", "BatchMode=yes", "-o", "IdentitiesOnly=yes",
-            "-o", f"UserKnownHostsFile={known_hosts}", "-o", "StrictHostKeyChecking=yes"]
+            "-o", f"UserKnownHostsFile={known_hosts}", "-o", "StrictHostKeyChecking=yes",
+            # a dead link fails in bounded time instead of hanging the caller
+            "-o", "ConnectTimeout=10", "-o", "ServerAliveInterval=15",
+            "-o", "ServerAliveCountMax=3"]

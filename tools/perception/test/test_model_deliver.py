@@ -35,6 +35,7 @@ class FakeRunner:
 
     def __call__(self, cmd, **kw):
         self.calls.append(cmd)
+        self.kwargs = getattr(self, "kwargs", []) + [kw]
 
         class R:
             pass
@@ -68,9 +69,35 @@ def _model(models: Path, verdict: str, files=None) -> str:
     return rev
 
 
+REPORT = ("e" * 64, "intake_report.json")
+
+
 def _push_script(**kw):
     return deliver.remote_script("push", REV, checks=[("f" * 64, "model.onnx")],
-                                 stage=f"{STAGE}/{REV}", **kw)
+                                 report=REPORT, stage=f"{STAGE}/{REV}", **kw)
+
+
+def test_remote_push_trap_is_set_before_anything_can_fail():
+    lines = _push_script().splitlines()
+    assert lines[0] == "set -e" and lines[1].startswith("trap ")
+
+
+def test_remote_push_existing_final_is_judged_on_model_files_only():
+    s = _push_script()
+    root = ROOT_M
+    guard = s[s.index(f"if {S} test -d {root}/{REV}; then"):s.index(f"else {S} mv {root}/{REV}.partial")]
+    first_if = guard.splitlines()[1]
+    assert f"  {root}/{REV}/model.onnx" in first_if
+    assert "intake_report.json" not in first_if  # a new report never quarantines a folder
+    # matching model: only the report is replaced, atomically
+    put = guard.index(f"{S} install -o root -g rosy-camera -m 0640 {STAGE}/{REV}/intake_report.json "
+                      f"{root}/{REV}/intake_report.json.tmp")
+    assert put < guard.index(f"{S} mv {root}/{REV}/intake_report.json.tmp "
+                             f"{root}/{REV}/intake_report.json")
+    # the installed folder is then checked in full, report included
+    last_check = s.rindex("sha256sum -c")
+    last = s[s.rindex("printf", 0, last_check):last_check]
+    assert f"{'e' * 64}  {root}/{REV}/intake_report.json" in last
 
 
 def test_remote_push_script_installs_partial_then_pointer_swap():
@@ -125,7 +152,7 @@ def test_remote_push_same_rev_keeps_previous():
 
 def test_remote_script_quotes_revision_with_space():
     s = deliver.remote_script("push", "bad rev", checks=[("f" * 64, "model.onnx")],
-                              stage=f"{STAGE}/bad rev")
+                              report=REPORT, stage=f"{STAGE}/bad rev")
     assert shlex.quote("/var/lib/rosy/models/bad rev.partial") in s
     assert shlex.quote("/var/lib/rosy/models/bad rev") in s
     # outside the quoted sha256sum lines, the path only appears quoted
@@ -153,7 +180,10 @@ def test_push_script_needs_checks_and_stage():
     with pytest.raises(ValueError):
         deliver.remote_script("push", REV, stage=f"{STAGE}/{REV}")
     with pytest.raises(ValueError):
-        deliver.remote_script("push", REV, checks=[("f" * 64, "model.onnx")])
+        deliver.remote_script("push", REV, checks=[("f" * 64, "model.onnx")], report=REPORT)
+    with pytest.raises(ValueError):
+        deliver.remote_script("push", REV, checks=[("f" * 64, "model.onnx")],
+                              stage=f"{STAGE}/{REV}")
 
 
 def test_push_refuses_failed_intake(tmp_path):
@@ -248,6 +278,35 @@ def test_push_stops_on_failed_step(tmp_path):
     assert len(runner.calls) == 1
 
 
+def test_timeouts_default_600_push_60_status_and_override(tmp_path):
+    models = tmp_path / "models"
+    rev = _model(models, "pass")
+    runner = FakeRunner()
+    assert deliver.main(["push", "robot", rev, "--models", str(models), *SSH],
+                        runner=runner) == 0
+    assert [kw["timeout"] for kw in runner.kwargs] == [600, 600, 600]
+    runner = FakeRunner()
+    assert deliver.main(["status", "robot", *SSH], runner=runner) == 0
+    assert runner.kwargs[0]["timeout"] == 60
+    runner = FakeRunner()
+    assert deliver.main(["status", "robot", "--timeout", "5", *SSH], runner=runner) == 0
+    assert runner.kwargs[0]["timeout"] == 5
+
+
+def test_timeout_is_a_failed_step(tmp_path):
+    models = tmp_path / "models"
+    rev = _model(models, "pass")
+    calls = []
+
+    def hang(cmd, **kw):
+        calls.append(cmd)
+        raise subprocess.TimeoutExpired(cmd, kw["timeout"])
+
+    assert deliver.main(["push", "robot", rev, "--models", str(models), *SSH],
+                        runner=hang) == 1
+    assert len(calls) == 1
+
+
 def test_rollback_and_status_run_ssh():
     runner = FakeRunner()
     assert deliver.main(["rollback", "robot", *SSH], runner=runner) == 0
@@ -340,16 +399,21 @@ def remote(tmp_path):
     stage_dir = tmp_path / "stage"
     good = b"model-bytes"
     checks = [(hashlib.sha256(good).hexdigest(), "model.onnx")]
+    report = {"text": b"report-1"}
 
     def run(checks=checks):
-        script = deliver.remote_script("push", REV, to_posix(root), checks=checks,
+        rep = (hashlib.sha256(report["text"]).hexdigest(), "intake_report.json")
+        script = deliver.remote_script("push", REV, to_posix(root), checks=checks, report=rep,
                                        stage=to_posix(stage_dir / REV), privileged=False)
         return subprocess.run([bash, "-c", script], capture_output=True, text=True)
 
-    def stage(content, folder=None):
+    def stage(content, folder=None, report_text=None):
         where = stage_dir / REV if folder is None else root / folder
         where.mkdir(parents=True)
         (where / "model.onnx").write_bytes(content)
+        (where / "intake_report.json").write_bytes(report_text or report["text"])
+
+    run.report = report
 
     return root, to_posix, run, stage, good, stage_dir
 
@@ -410,3 +474,18 @@ def test_remote_script_repush_live_rev_keeps_previous(remote):
     assert r.returncode == 0, r.stderr
     assert (root / "shadow.previous").read_text() == "/older/model"
     assert not (root / f"{REV}.partial").exists()
+
+
+def test_remote_script_repush_with_new_report_keeps_folder(remote):
+    root, to_posix, run, stage, good, _ = remote
+    stage(good, REV, report_text=b"report-old")
+    (root / "shadow").write_text(f"{to_posix(root)}/{REV}")
+    run.report["text"] = b"report-new"
+    stage(good)
+    r = run()
+    assert r.returncode == 0, r.stderr
+    assert not list(root.glob(f"{REV}.bad.*"))
+    assert (root / REV / "intake_report.json").read_bytes() == b"report-new"
+    assert (root / REV / "model.onnx").read_bytes() == good
+    assert not (root / f"{REV}.partial").exists()
+    assert not (root / REV / "intake_report.json.tmp").exists()

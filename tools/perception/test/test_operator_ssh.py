@@ -45,4 +45,12 @@ def test_options_are_batch_pinned_and_key_only():
     assert opts[:2] == ["-i", "/k/id"]
     pairs = {opts[i + 1] for i, o in enumerate(opts) if o == "-o"}
     assert pairs == {"BatchMode=yes", "IdentitiesOnly=yes", "UserKnownHostsFile=/k/kh",
-                     "StrictHostKeyChecking=yes"}
+                     "StrictHostKeyChecking=yes", "ConnectTimeout=10",
+                     "ServerAliveInterval=15", "ServerAliveCountMax=3"}
+
+
+def test_safe_name_for_host_and_user():
+    for ok in ("rosy", "10.0.0.5", "pinky-005.local", "_x"):
+        assert operator_ssh.safe_name(ok)
+    for bad in ("", "-oProxyCommand=x", "a b", "a;b", "a/b", "$(x)", None):
+        assert not operator_ssh.safe_name(bad)

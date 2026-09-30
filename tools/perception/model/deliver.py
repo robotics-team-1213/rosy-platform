@@ -4,6 +4,7 @@ deliver.py push <host> <model_revision> [--models data/perception/models]
 deliver.py rollback <host>
 deliver.py status <host>
 common: [--user rosy] [--identity KEY] [--known-hosts FILE] [--root /var/lib/rosy/models]
+        [--timeout S]  (per ssh/scp step; 600 for push, 60 for rollback/status)
 
 SSH is key-only and pinned (BatchMode, IdentitiesOnly, StrictHostKeyChecking=yes;
 see operator_ssh.py). /var/lib/rosy/models is root:rosy-camera 0750, so every
@@ -16,7 +17,8 @@ pinned by sha256) into <rev>.partial, checked again, and moved to <rev>. The
 pointer is written in the temp dir, installed as shadow.tmp and moved over
 shadow (atomic); the old value is installed as shadow.previous the same way.
 Re-pushing the live revision keeps shadow.previous. An already installed <rev>
-is re-verified and quarantined as <rev>.bad.<pid> if it fails. host, user and
+is re-verified on its model files: if they match, only intake_report.json is
+replaced (atomically); if not, it is quarantined as <rev>.bad.<pid>. host, user and
 --root are validated; ssh/scp get "--" before targets. The pointer holds the
 model folder path that ModelSlot reads. Model files are a data generation, not
 a release payload."""
@@ -44,16 +46,18 @@ from control.sensing.perception.learned.manifest import (  # noqa: E402
 REMOTE_ROOT = "/var/lib/rosy/models"
 REPORT_NAME = "intake_report.json"
 SUDO, OWNER, GROUP = "sudo -n", "root", "rosy-camera"  # D-373 decision 1
-_SAFE_NAME = re.compile(r"[A-Za-z0-9._][A-Za-z0-9._-]*")
+PUSH_TIMEOUT_S, STATUS_TIMEOUT_S = 600, 60
 _SAFE_ROOT = re.compile(r"/[A-Za-z0-9._/-]+")
 _STAGE = re.compile(r"/tmp/rosy-model\.[A-Za-z0-9]{8,}")
 
 
 def remote_script(action: str, rev: str | None, root: str = REMOTE_ROOT, *,
-                  checks=(), stage: str | None = None, privileged: bool = True) -> str:
+                  checks=(), report=None, stage: str | None = None,
+                  privileged: bool = True) -> str:
     """Shell text for one remote step. Every path is shlex.quote'd.
 
-    checks: [(sha256, file name), ...], every file that is installed.
+    checks: [(sha256, file name), ...] of the model: manifest-listed files and
+    the manifest. report: (sha256, name) of the intake report, installed too.
     stage: the scp'd copy, <mktemp dir>/<rev>; the mktemp dir is removed on exit.
     privileged=False drops sudo -n and the -o/-g/-m of install so the script runs
     as an ordinary user in tests (Git Bash cannot set directory modes either);
@@ -64,24 +68,29 @@ def remote_script(action: str, rev: str | None, root: str = REMOTE_ROOT, *,
     dmode, fmode = (" -m 0750", " -m 0640") if privileged else ("", "")
     ptr, prev, tmp = q(f"{root}/shadow"), q(f"{root}/shadow.previous"), q(f"{root}/shadow.tmp")
 
-    def check(folder: str, *, privileged: bool = True, quiet: bool = False) -> str:
-        sums = " ".join(q(f"{sha}  {folder}/{name}") for sha, name in checks)
+    def check(folder: str, *, privileged: bool = True, quiet: bool = False,
+              files=None) -> str:
+        files = everything if files is None else files
+        sums = " ".join(q(f"{sha}  {folder}/{name}") for sha, name in files)
         return (f"printf '%s\\n' {sums} | {s if privileged else ''}sha256sum -c -"
                 + (" >/dev/null 2>&1" if quiet else ""))
 
+    everything = [*checks, *([report] if report else [])]
     if action == "prepare":
         return "set -e; umask 077; mktemp -d /tmp/rosy-model.XXXXXXXX"
     if action == "push":
-        if not checks or not stage:
-            raise ValueError("push needs manifest checks and a stage path")
+        if not checks or not report or not stage:
+            raise ValueError("push needs manifest checks, the report check and a stage path")
         stage_dir = stage.rsplit("/", 1)[0]
         partial_path, final_path = f"{root}/{rev}.partial", f"{root}/{rev}"
         partial, final = q(partial_path), q(final_path)
         pointer_src = q(f"{stage_dir}/shadow")
         installs = [f"{s}install{own}{fmode} {q(f'{stage}/{name}')} "
-                    f"{q(f'{partial_path}/{name}')}" for _, name in checks]
+                    f"{q(f'{partial_path}/{name}')}" for _, name in everything]
+        report_dst = f"{final_path}/{report[1]}"
         return "\n".join([
             "set -e",
+            # first: nothing after mktemp may fail before the temp dir is cleaned up
             f"trap {q(f'rm -rf -- {q(stage_dir)}')} EXIT",
             check(stage, privileged=False),
             f"{s}test -d {q(root)} || {s}install -d{own}{dmode} {q(root)}",
@@ -89,8 +98,13 @@ def remote_script(action: str, rev: str | None, root: str = REMOTE_ROOT, *,
             f"{s}install -d{own}{dmode} {partial}",
             *installs,
             check(partial_path),
+            # an installed <rev> is judged on its model files only: a re-run intake
+            # writes a new report, which replaces the old one and never quarantines
             f"if {s}test -d {final}; then",
-            f"  if {check(final_path, quiet=True)}; then {s}rm -rf {partial};",
+            f"  if {check(final_path, quiet=True, files=checks)}; then",
+            f"    {s}install{own}{fmode} {q(f'{stage}/{report[1]}')} {q(report_dst + '.tmp')}",
+            f"    {s}mv {q(report_dst + '.tmp')} {q(report_dst)}",
+            f"    {s}rm -rf {partial}",
             f"  else {s}mv {final} {final}.bad.$$; {s}mv {partial} {final}; fi",
             f"else {s}mv {partial} {final}; fi",
             check(final_path),
@@ -122,9 +136,15 @@ def remote_script(action: str, rev: str | None, root: str = REMOTE_ROOT, *,
     raise ValueError(f"unknown action {action!r}")
 
 
-def _run(runner, cmd):
-    """The completed process on success, else None (reported on stderr)."""
-    r = runner(cmd, check=False, capture_output=True, text=True)
+def _run(runner, cmd, timeout: float):
+    """The completed process on success, else None (reported on stderr).
+
+    A timeout is a failed step (the watcher retries it on a later run)."""
+    try:
+        r = runner(cmd, check=False, capture_output=True, text=True, timeout=timeout)
+    except subprocess.TimeoutExpired:
+        print(f"failed (timeout {timeout:g} s): {cmd[0]}", file=sys.stderr)
+        return None
     if r.returncode != 0:
         print(f"failed ({r.returncode}): {cmd[0]} {getattr(r, 'stderr', '')}", file=sys.stderr)
         return None
@@ -165,19 +185,22 @@ def _push(args, ssh, scp, runner) -> int:
         return 2
     target = f"{args.user}@{args.host}"
     checks = [(f.sha256, f.name) for f in manifest.files]
-    checks += [(_sha256(folder / n), n) for n in (MANIFEST_NAME, REPORT_NAME)]
-    r = _run(runner, [*ssh, target, remote_script("prepare", rev)])
+    checks.append((_sha256(folder / MANIFEST_NAME), MANIFEST_NAME))
+    report_check = (_sha256(folder / REPORT_NAME), REPORT_NAME)
+    t = args.timeout
+    r = _run(runner, [*ssh, target, remote_script("prepare", rev)], t)
     if r is None:
         return 1
     stage_dir = (r.stdout or "").strip()
     if not _STAGE.fullmatch(stage_dir):
         print(f"refused: unexpected remote temp dir {stage_dir!r}", file=sys.stderr)
         return 1
-    if _run(runner, [*scp, str(folder), f"{target}:{stage_dir}/{rev}"]) is None:
-        _run(runner, [*ssh, target, f"rm -rf -- {shlex.quote(stage_dir)}"])
+    if _run(runner, [*scp, str(folder), f"{target}:{stage_dir}/{rev}"], t) is None:
+        _run(runner, [*ssh, target, f"rm -rf -- {shlex.quote(stage_dir)}"], t)
         return 1
     r = _run(runner, [*ssh, target, remote_script("push", rev, args.root, checks=checks,
-                                                  stage=f"{stage_dir}/{rev}")])
+                                                  report=report_check,
+                                                  stage=f"{stage_dir}/{rev}")], t)
     if r is None:
         return 1
     print(r.stdout or "", end="")
@@ -197,9 +220,12 @@ def main(argv=None, runner=subprocess.run) -> int:
         p.add_argument("--user", default=operator_ssh.USER)
         p.add_argument("--root", default=REMOTE_ROOT)
         operator_ssh.add_arguments(p)
+        p.add_argument("--timeout", type=float,
+                       default=PUSH_TIMEOUT_S if name == "push" else STATUS_TIMEOUT_S,
+                       help="seconds per ssh/scp step")
     args = ap.parse_args(argv)
     for label, value in (("host", args.host), ("user", args.user)):
-        if not _SAFE_NAME.fullmatch(value):
+        if not operator_ssh.safe_name(value):
             print(f"refused: unsafe {label} {value!r}", file=sys.stderr)
             return 2
     if not _SAFE_ROOT.fullmatch(args.root) or ".." in args.root.split("/"):
@@ -215,7 +241,7 @@ def main(argv=None, runner=subprocess.run) -> int:
     if args.action == "push":
         return _push(args, ssh, scp, runner)
     r = _run(runner, [*ssh, f"{args.user}@{args.host}",
-                      remote_script(args.action, None, args.root)])
+                      remote_script(args.action, None, args.root)], args.timeout)
     if r is None:
         return 1
     print(r.stdout or "", end="")
