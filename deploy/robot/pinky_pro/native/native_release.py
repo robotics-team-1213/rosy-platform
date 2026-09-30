@@ -47,6 +47,12 @@ METADATA = {"manifest.json", "SHA256SUMS", "SHA256SUMS.sig"}
 # file; the image records the one it installed. They must match.
 PYTHON_RUNTIME_RELEASE_FILE = "python-runtime.sha256"
 PYTHON_RUNTIME_IMAGE_FILE = Path("usr/local/share/rosy/python-runtime.sha256")
+# D-373: runtimes whose requirements are a strict subset of the card's (the lock's
+# python_runtime.compatible_predecessors, written by the image or the bench
+# install). A release built for one still runs here: an old release may run on a
+# newer superset runtime, never the reverse. Only the card's own record is
+# trusted; nothing inside a release can widen what the card accepts.
+PYTHON_RUNTIME_COMPATIBLE_FILE = Path("usr/local/share/rosy/python-runtime-compatible.sha256")
 RUNTIME_ID = re.compile(r"^[0-9a-f]{64}$")
 
 
@@ -58,6 +64,17 @@ def _runtime_id(path: Path) -> str | None:
     except (OSError, UnicodeDecodeError):
         return None
     return value if RUNTIME_ID.fullmatch(value) else None
+
+
+def _compatible_runtimes(path: Path) -> set[str]:
+    """The card's predecessor runtimes. Any malformed line voids the whole record."""
+    if path.is_symlink() or not path.is_file():
+        return set()
+    try:
+        values = path.read_text(encoding="utf-8").split()
+    except (OSError, UnicodeDecodeError):
+        return set()
+    return set(values) if all(RUNTIME_ID.fullmatch(value) for value in values) else set()
 
 
 def _write_json_atomic(path: Path, payload: dict) -> None:
@@ -252,7 +269,8 @@ class NativeReleaseManager:
         return manifest
 
     def check_python_runtime(self, release_id: str) -> str:
-        """Refuse a verified release whose Python runtime is not the image's.
+        """Refuse a verified release whose Python runtime is not the image's
+        nor one the image records as a compatible (subset) predecessor.
 
         Only activate and rollback call this. Recovery restores the release that
         was already running and must never hold on it.
@@ -264,7 +282,8 @@ class NativeReleaseManager:
             raise ValueError(
                 f"NATIVE_PYTHON_RUNTIME: release {release_id} does not declare its Python runtime "
                 f"({PYTHON_RUNTIME_RELEASE_FILE}); reflash with a matching image")
-        if present != wanted:
+        accepted = {present} | _compatible_runtimes(self.root / PYTHON_RUNTIME_COMPATIBLE_FILE) if present else set()
+        if wanted not in accepted:
             raise ValueError(
                 f"NATIVE_PYTHON_RUNTIME: this release needs Python runtime {wanted}; "
                 f"this image has {present or 'none recorded'}; reflash with a matching image")

@@ -300,3 +300,55 @@ def test_recovery_never_holds_on_the_python_runtime(native_case):
 
     assert manager.recover()["recovered"] is True
     assert links.values["current"] == first.name
+
+
+# --- D-373: an old release may run on a newer superset runtime, never the reverse ---
+
+NEWER_RUNTIME = "3" * 64
+COMPATIBLE = "usr/local/share/rosy/python-runtime-compatible.sha256"
+
+
+def _card_runtime(root: Path, runtime: str, compatible: list[str] | None) -> None:
+    (root / "usr/local/share/rosy/python-runtime.sha256").write_text(runtime + "\n", encoding="utf-8")
+    if compatible is not None:
+        (root / COMPATIBLE).write_text("".join(f"{sha}\n" for sha in compatible), encoding="utf-8")
+
+
+def test_old_release_activates_and_rolls_back_on_a_card_listing_its_runtime(native_case):
+    manager_type, root, key, private, first, _second, links = native_case
+    newer = _release(root, private, "2026.09.30-001", python_runtime=NEWER_RUNTIME)
+    _card_runtime(root, NEWER_RUNTIME, [IMAGE_RUNTIME])
+    manager = manager_type(root=root, public_key=key, runtime=RuntimeRecorder(), links=links)
+
+    manager.activate(first.name)
+    manager.activate(newer.name)
+    manager.rollback()
+
+    assert links.values["current"] == first.name
+
+
+def test_new_release_is_refused_on_its_predecessor_runtime(native_case):
+    # The card is the authority; nothing a release carries widens what it accepts.
+    manager_type, root, key, private, _first, _second, links = native_case
+    newer = _release(root, private, "2026.09.30-001", python_runtime=NEWER_RUNTIME)
+    _card_runtime(root, IMAGE_RUNTIME, [])
+
+    with pytest.raises(ValueError, match="needs Python runtime 3{64}"):
+        manager_type(root=root, public_key=key, runtime=RuntimeRecorder(), links=links).activate(newer.name)
+
+
+def test_a_runtime_the_card_does_not_list_is_refused(native_case):
+    manager_type, root, key, private, _first, _second, links = native_case
+    other = _release(root, private, "2026.09.22-003", python_runtime=OTHER_RUNTIME)
+    _card_runtime(root, NEWER_RUNTIME, [IMAGE_RUNTIME])
+
+    with pytest.raises(ValueError, match="needs Python runtime 2{64}"):
+        manager_type(root=root, public_key=key, runtime=RuntimeRecorder(), links=links).activate(other.name)
+
+
+def test_a_malformed_compatibility_record_accepts_only_the_exact_runtime(native_case):
+    manager_type, root, key, _private, first, _second, links = native_case
+    _card_runtime(root, NEWER_RUNTIME, [IMAGE_RUNTIME, "not-a-sha"])
+
+    with pytest.raises(ValueError, match="needs Python runtime 1{64}"):
+        manager_type(root=root, public_key=key, runtime=RuntimeRecorder(), links=links).activate(first.name)

@@ -54,6 +54,8 @@ WS281X_SHA="$(lock_value hardware_dependencies rpi_ws281x_sha256)"
 LAMP_OVERLAY_SOURCE="$(dirname "$0")/overlays/rosy-ws281x.dts"
 PYTHON_REQUIREMENTS="$(dirname "$0")/$(lock_value python_runtime requirements)"
 PYTHON_REQUIREMENTS_SHA="$(lock_value python_runtime requirements_sha256)"
+# D-373: subset runtimes whose releases native_release.py still accepts here.
+PYTHON_COMPATIBLE_SHAS="$(lock_value python_runtime compatible_predecessors | tr -d '[] ' | tr ',' '\n')"
 CAMERA_SOURCES="$(dirname "$0")/$(lock_value camera_runtime sources)"
 CAMERA_SOURCES_SHA="$(lock_value camera_runtime sources_sha256)"
 CAMERA_PYTHON_REQUIREMENTS="$(dirname "$0")/$(lock_value camera_runtime python_requirements)"
@@ -75,6 +77,9 @@ BOOT_OVERLAY="$(dirname "$0")/../robot/configure-boot-overlay-pi5.sh"
 [[ -f "$LAMP_OVERLAY_SOURCE" ]] || fail "WS2812 lamp overlay source is missing"
 [[ -f "$PYTHON_REQUIREMENTS" ]] || fail "CORE Python requirements lock is missing"
 [[ "$PYTHON_REQUIREMENTS_SHA" =~ ^[0-9a-f]{64}$ ]] || fail "CORE Python requirements SHA-256 is invalid"
+while read -r compatible; do
+    [[ -z "$compatible" || "$compatible" =~ ^[0-9a-f]{64}$ ]] || fail "compatible Python runtime SHA-256 is invalid"
+done <<< "$PYTHON_COMPATIBLE_SHAS"
 [[ "$(sha256sum "$PYTHON_REQUIREMENTS" | awk '{print $1}')" == "$PYTHON_REQUIREMENTS_SHA" ]] \
     || fail "CORE Python requirements do not match inputs.lock.yaml"
 for pair in "$CAMERA_SOURCES:$CAMERA_SOURCES_SHA" "$CAMERA_PYTHON_REQUIREMENTS:$CAMERA_PYTHON_SHA"; do
@@ -223,6 +228,8 @@ chmod -R a+rX "$ROOT/tmp/rosy-core-probe"  # the probe runs as rosy-core
 install -d -m 0755 "$ROOT/usr/local/share/rosy"
 printf '%s\n' "$PYTHON_REQUIREMENTS_SHA" > "$ROOT/usr/local/share/rosy/python-runtime.sha256"
 chmod 0644 "$ROOT/usr/local/share/rosy/python-runtime.sha256"
+printf '%s\n' "$PYTHON_COMPATIBLE_SHAS" | sed '/^$/d' > "$ROOT/usr/local/share/rosy/python-runtime-compatible.sha256"
+chmod 0644 "$ROOT/usr/local/share/rosy/python-runtime-compatible.sha256"
 
 # D-288: install the pinned official PiSP userspace before taking the final
 # package inventory. This requires an ARM64 build and never touches a device SD.

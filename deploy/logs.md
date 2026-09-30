@@ -1546,3 +1546,12 @@
 - gate 변화: 없음. ARTIFACT/DEVICE HOLD — aarch64 이미지 빌드와 Pi 5에서의 import·지연·CPU는 미실측.
 - 결정: D-373 결정 1.
 - 교훈: 이 블록 이후로 빌드한 릴리스는 이전 카드에서 `NATIVE_PYTHON_RUNTIME`으로 거절된다. 재굽기 전 벤치 카드는 벤치 설치가 먼저다.
+
+## 2026-09-30 · uncommitted · fix(native): D-373 old releases stay activatable on the superset runtime
+
+- 변경: `inputs.lock.yaml` `python_runtime.compatible_predecessors: [2b003fd4…]`(이 파일의 엄격한 부분집합인 런타임 기록). 이미지(`customize-rootfs.sh`)와 벤치 설치가 카드에 `python-runtime-compatible.sha256`로 쓴다. `native_release.check_python_runtime`은 릴리스 런타임이 카드 기록과 같거나 카드가 적은 선행 런타임일 때 받는다 — 옛 릴리스는 새 상위집합 런타임에서 돈다, 반대는 없다. 릴리스 안의 어떤 파일도 허용 범위를 넓히지 못한다(카드가 권위). 요구사항 블록에 packaging 26.3이 apt python3-packaging을 가리는 이유를 적었다(`requirements_sha256` 재고정).
+- 운영: D-373 이후 빌드한 릴리스를 활성화하기 전에 기존 카드는 `pinky_pro/dev/install-learned-perception.sh`를 돌리거나 재굽기한다. 그 뒤 D-373 이전 릴리스로의 활성화·롤백은 허용된다. 벤치 설치 전 카드에서 새 릴리스는 여전히 `NATIVE_PYTHON_RUNTIME`으로 거절된다.
+- 증거: `test_native_release_activation.py`(옛→새 카드 수락, 새→옛 거절, 미등록 거절, 형식 오류 기록은 정확 일치만), `test_bench_learned_perception.py`(pre-block sha 고정). 2026-09-30 Windows.
+- gate 변화: 없음. DEVICE HOLD.
+- 결정: D-373 결정 1 리뷰 후속.
+- 교훈: 이미지 런타임 sha 한 값 일치 규칙은 상위집합 런타임 추가 때 롤백을 막는다. 부분집합 관계는 카드 쪽 기록으로만 선언한다.

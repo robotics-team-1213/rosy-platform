@@ -11,11 +11,13 @@ SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 PINKY=$(dirname -- "$SCRIPT_DIR")
 REQUIREMENTS="$PINKY/image/device-python-requirements.txt"
 STATE_RULES="$PINKY/native/tmpfiles-rosy-state.conf"
+LOCK="$PINKY/image/inputs.lock.yaml"
 BEGIN='# BEGIN D-373 learned-perception runtime'
 END='# END D-373 learned-perception runtime'
 # Directories this layer adds; mode and owner are read from STATE_RULES.
 DIRECTORIES=(/var/lib/rosy/models)
 RUNTIME_RECORD=/usr/local/share/rosy/python-runtime.sha256
+COMPATIBLE_RECORD=/usr/local/share/rosy/python-runtime-compatible.sha256
 BENCH_LOG=/var/log/rosy/bench-installs.log
 
 fail() { echo "install-learned-perception: $*" >&2; exit 1; }
@@ -46,6 +48,12 @@ full_sha=$(sha256sum "$WORK/requirements.txt" | cut -d' ' -f1)
 before_sha=$(sha256sum "$WORK/before.txt" | cut -d' ' -f1)
 wanted=$(sed -n 's/^onnxruntime==\([^ ]*\).*/\1/p' "$WORK/block.txt")
 [ -n "$wanted" ] || fail "the block pins no onnxruntime"
+# The lock's python_runtime.compatible_predecessors, as customize-rootfs.sh reads it.
+compatible=$(tr -d '\r' < "$LOCK" | sed -n 's/^  compatible_predecessors: *\[\(.*\)\]$/\1/p' | tr -d ' ' | tr ',' ' ')
+case " $compatible " in
+    *" $before_sha "*) ;;
+    *) fail "inputs.lock.yaml compatible_predecessors does not list the pre-block runtime $before_sha" ;;
+esac
 
 rules=()
 for path in "${DIRECTORIES[@]}"; do
@@ -57,6 +65,7 @@ done
 if [ "$DRY_RUN" -eq 1 ]; then
     echo "requirements_sha256=$full_sha"
     echo "image_runtime_before=$before_sha"
+    echo "compatible_predecessors=$compatible"
     for rule in "${rules[@]}"; do echo "dir $rule"; done
     echo "--- block"
     cat "$WORK/block.txt"
@@ -92,6 +101,9 @@ done
 install -d -m 0755 "$(dirname -- "$RUNTIME_RECORD")"
 printf '%s\n' "$full_sha" > "$RUNTIME_RECORD"
 chmod 0644 "$RUNTIME_RECORD"
+# native_release.py then still activates and rolls back to pre-D-373 releases.
+printf '%s\n' $compatible > "$COMPATIBLE_RECORD"
+chmod 0644 "$COMPATIBLE_RECORD"
 
 install -d -m 0755 -o root -g root "$(dirname -- "$BENCH_LOG")"
 record="$(date -u +%Y-%m-%dT%H:%M:%SZ) d373-learned-perception requirements_sha256=$full_sha onnxruntime=$installed from=${present:-unrecorded}"

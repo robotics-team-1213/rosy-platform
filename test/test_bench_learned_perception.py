@@ -24,6 +24,9 @@ BEGIN = "# BEGIN D-373 learned-perception runtime"
 END = "# END D-373 learned-perception runtime"
 LEARNED = {"onnxruntime": "1.30.0", "flatbuffers": "25.12.19", "packaging": "26.3", "protobuf": "7.36.2"}
 MODELS_RULE = "d /var/lib/rosy/models 0750 root rosy-camera -"
+# What every card baked before D-373 records (inputs.lock.yaml before 9f33aa64).
+PRE_D373_RUNTIME = "2b003fd4f94d89e3735f6225323df731c45aae0d35132e781f7680676d20bf00"
+LOCK = PINKY / "image" / "inputs.lock.yaml"
 
 
 def _find_bash():
@@ -96,6 +99,8 @@ def test_dry_run_prints_exactly_the_pinned_block_and_the_models_rule():
     # The runtime an image baked before D-373 records: the file without the block.
     base = data[:data.index(BEGIN.encode())].removesuffix(b"\n")
     assert f"image_runtime_before={hashlib.sha256(base).hexdigest()}" in lines
+    assert f"image_runtime_before={PRE_D373_RUNTIME}" in lines
+    assert f"compatible_predecessors={PRE_D373_RUNTIME}" in lines
     assert f"dir {MODELS_RULE.removesuffix(' -')}" in lines
     block = completed.stdout[completed.stdout.index("--- block\n") + len("--- block\n"):]
     assert block == _block_text()
@@ -111,3 +116,23 @@ def test_real_run_refuses_a_non_root_user():
                                capture_output=True, text=True, encoding="utf-8", timeout=60)
     assert completed.returncode != 0
     assert "root" in completed.stderr
+
+
+def test_the_lock_lists_the_pre_block_runtime_as_the_only_compatible_predecessor():
+    import yaml
+
+    runtime = yaml.safe_load(LOCK.read_text(encoding="utf-8"))["python_runtime"]
+    assert runtime["compatible_predecessors"] == [PRE_D373_RUNTIME]
+    data = REQUIREMENTS.read_bytes()
+    assert hashlib.sha256(data[:data.index(BEGIN.encode())].removesuffix(b"\n")).hexdigest() == PRE_D373_RUNTIME
+
+
+def test_image_and_bench_record_the_card_side_compatibility_list():
+    customizer = (PINKY / "image" / "customize-rootfs.sh").read_text(encoding="utf-8")
+    assert "lock_value python_runtime compatible_predecessors" in customizer
+    assert '"$ROOT/usr/local/share/rosy/python-runtime-compatible.sha256"' in customizer
+    source = _source()
+    assert "/usr/local/share/rosy/python-runtime-compatible.sha256" in source
+    assert "compatible_predecessors" in source
+    native = (PINKY / "native" / "native_release.py").read_text(encoding="utf-8")
+    assert 'Path("usr/local/share/rosy/python-runtime-compatible.sha256")' in native

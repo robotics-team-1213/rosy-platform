@@ -71,6 +71,10 @@ pyserial==3.5 \
 # Resolved 2026-09-30 with the dry-run above for onnxruntime==1.30.0 on cp312
 # aarch64 and x86_64 (aarch64 hash first). deploy/robot/pinky_pro/dev/
 # install-learned-perception.sh installs exactly this block on bench devices.
+# packaging 26.3 in /usr/local shadows apt python3-packaging (noble 24.0) for
+# every Python process, as pydantic here already shadows apt's. Accepted:
+# packaging keeps its public API across majors (LegacyVersion went in 22) and
+# the apt users (colcon, setuptools, ros2cli) only parse versions/markers.
 onnxruntime==1.30.0 \
     --hash=sha256:6c32a000d5139a38ba9349030b0032e3331acb559d596b22738d9d2b343a2b83 \
     --hash=sha256:fa688e7891a6aa206636fe7372e27ee75fd17713289f6b4fc7b190e0a7de9328

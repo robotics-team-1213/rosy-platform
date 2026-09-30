@@ -30,6 +30,7 @@ None.
 - Do not call `install-pi.sh` from here.
 - A device with this overlay stays HOLD until `clear-core-dev.sh`.
 - `install-learned-perception.sh` reads pins and directory rules from `../image` and `../native`; never copy a pin, mode, or owner into it.
+- A card baked before D-373 must run `install-learned-perception.sh` (or be reflashed) before it activates a release built after D-373; `native_release.py` refuses it otherwise. After the install the card still activates and rolls back to pre-D-373 releases (`python-runtime-compatible.sha256`).
 
 ### Testing Requirements
 

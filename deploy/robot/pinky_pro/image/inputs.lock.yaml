@@ -129,7 +129,13 @@ hardware_dependencies:
 
 python_runtime:
   requirements: device-python-requirements.txt
-  requirements_sha256: e475bee0a136971076373edfc09cbce0467cdc32df1b9d21b65c6426f29fcde6
+  requirements_sha256: 4c320f54011a8843b749deb40694662a7499d11ce2758ac3bcffdd352cd2cd06
+  # D-373: runtime records whose requirements are a strict subset of this file.
+  # The image and the bench install write them to the card
+  # (python-runtime-compatible.sha256) so a release built for one still
+  # activates and rolls back here. Never list a runtime that pins a different
+  # version of anything this file pins.
+  compatible_predecessors: [2b003fd4f94d89e3735f6225323df731c45aae0d35132e781f7680676d20bf00]
   python_version: "3.12"
   install_prefix: /usr/local
   pydantic_major: 2
