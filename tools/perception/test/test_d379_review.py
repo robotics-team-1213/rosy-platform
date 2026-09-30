@@ -80,6 +80,23 @@ def test_pitch_fit_must_beat_the_profile_by_the_margin():
     assert pitch == CAM.pitch_rad and info["pitch_source"] == "profile"
 
 
+# --- 3. the content sha does not depend on input order -------------------------
+
+def test_shuffled_inputs_give_the_same_dataset_version(tmp_path):
+    a = _labels_dir(tmp_path, "s1", [(L.FLOOR, False), (L.DRIVABLE, False), (L.FLOOR, False)])
+    b = _labels_dir(tmp_path, "s2", [(L.DRIVABLE, False), (L.FLOOR, False)])
+    _, first = build.build_auto_dataset([a, b], tmp_path / "st1", "n")
+    # same folders, other argument order, labels.jsonl rows reversed
+    for d in (a, b):
+        jl = d / "labels.jsonl"
+        rows = jl.read_text(encoding="utf-8").splitlines()
+        jl.write_text("\n".join(reversed(rows)) + "\n", encoding="utf-8")
+    manifest, second = build.build_auto_dataset([b, a], tmp_path / "st2", "n")
+    assert second.name == first.name
+    assert [f["image"].rsplit("/", 1)[1] for f in manifest["frames"]] == [
+        "s1__000000.jpg", "s1__000001.jpg", "s1__000002.jpg", "s2__000000.jpg", "s2__000001.jpg"]
+
+
 def test_auto_build_refuses_one_session_in_two_label_folders(tmp_path):
     a = _labels_dir(tmp_path / "a", "s1", [(L.FLOOR, False)])
     b = _labels_dir(tmp_path / "b", "s1", [(L.FLOOR, False)])

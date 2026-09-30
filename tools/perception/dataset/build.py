@@ -259,6 +259,8 @@ def build_auto_dataset(label_dirs, store, name, min_labelled: float = 0.05) -> t
                              "one label folder per session")
         seen[meta["session"]] = d
     ignore = metas[0][1].get("ignore_index")
+    # Argument order must not change the manifest, hence the content sha.
+    metas.sort(key=lambda dm: dm[1]["session"])
     splits = assign_splits(m["session"] for _, m in metas)
     tmp = Path(store) / "datasets" / name / f".staging-{os.getpid()}"
     if tmp.exists():
@@ -267,14 +269,16 @@ def build_auto_dataset(label_dirs, store, name, min_labelled: float = 0.05) -> t
         for d, meta in metas:
             session = meta["session"]
             jl = d / "labels.jsonl"
+            recs = sorted((json.loads(line) for line in jl.read_text(encoding="utf-8").splitlines()
+                           if line.strip()), key=lambda r: int(r["index"]))
+            # digest of the rows in index order, so row order in the file does not matter
+            digest = hashlib.sha256("".join(json.dumps(r, sort_keys=True) + "\n"
+                                            for r in recs).encode("utf-8")).hexdigest()
             versions.append({"session": session, "version": meta.get("version"),
-                             "camera": meta.get("camera"), "labels_sha256": _file_sha(jl)})
+                             "camera": meta.get("camera"), "labels_digest": digest})
             if meta.get("session_json") and meta["session_json"] not in sources:
                 sources.append(meta["session_json"])
-            for line in jl.read_text(encoding="utf-8").splitlines():
-                if not line.strip():
-                    continue
-                rec = json.loads(line)
+            for rec in recs:
                 idx = int(rec["index"])
                 key = f"{session}__{idx:06d}"
                 mask = cv2.imread(str(d / "masks" / f"{idx:06d}.png"), cv2.IMREAD_UNCHANGED)
@@ -309,10 +313,6 @@ def build_auto_dataset(label_dirs, store, name, min_labelled: float = 0.05) -> t
         shutil.rmtree(tmp, ignore_errors=True)
         raise
     return manifest, final
-
-
-def _file_sha(path: Path) -> str:
-    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
 def main(argv=None) -> int:
