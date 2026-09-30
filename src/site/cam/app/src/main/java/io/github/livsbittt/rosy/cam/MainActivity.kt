@@ -134,7 +134,7 @@ class MainActivity : ComponentActivity() {
             SettingsScreen(
                 current = pairing,
                 locked = state.running,
-                lens = lens ?: LensChoice.WIDE,
+                lens = LensChoice.orDefault(lens),
                 onLens = { choice -> scope.launch { settings.saveLens(choice) } },
                 onSave = { p -> scope.launch { settings.save(p) } },
                 onBack = { showSettings = false },

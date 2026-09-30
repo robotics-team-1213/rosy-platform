@@ -3,14 +3,23 @@ package io.github.livsbittt.rosy.cam.camera
 import kotlin.math.atan
 import kotlin.math.max
 
-/** Lens setting: the widest back camera, or the default back camera. */
+/**
+ * Lens setting: the default back camera, or the widest one. STANDARD is the default (2026-09-30
+ * bench, tilted ceiling mount: STANDARD covered 99% of the track at ~420 px/m, WIDE 100% at only
+ * ~196 px/m); WIDE is opt-in for mounts where the field does not fit.
+ */
 enum class LensChoice(val wire: String) {
-    WIDE("wide"),
     STANDARD("standard"),
+    WIDE("wide"),
     ;
 
     companion object {
+        val DEFAULT = STANDARD
+
         fun fromWire(value: String?): LensChoice? = entries.firstOrNull { it.wire == value }
+
+        /** The saved setting, or [DEFAULT] when nothing is saved (fresh or pre-lens installs). */
+        fun orDefault(saved: LensChoice?): LensChoice = saved ?: DEFAULT
     }
 }
 

@@ -137,7 +137,7 @@ class StreamService : LifecycleService() {
                 Log.w(TAG, "lens probe failed; binding the default back camera", e)
                 emptyList()
             }
-            val lensSetting = store.lens.first() ?: LensChoice.WIDE
+            val lensSetting = LensChoice.orDefault(store.lens.first())
             val pick = LensSelector.pick(backCameras, lensSetting)
             pick?.let { Log.i(TAG, "lens ${lensSetting.wire} -> ${it.kind.wire} ${LensProbe.describe(it.camera)} fellBack=${it.fellBack}") }
             if (!sessionActive) return@launch
@@ -172,7 +172,7 @@ class StreamService : LifecycleService() {
 
             // Lens changes from the settings screen apply live: rebind, then a fresh hello.
             launch {
-                store.lens.map { it ?: LensChoice.WIDE }.distinctUntilChanged().collect { choice ->
+                store.lens.map(LensChoice::orDefault).distinctUntilChanged().collect { choice ->
                     val next = LensSelector.pick(backCameras, choice) ?: return@collect
                     val current = _state.value.lens
                     if (current == next) return@collect

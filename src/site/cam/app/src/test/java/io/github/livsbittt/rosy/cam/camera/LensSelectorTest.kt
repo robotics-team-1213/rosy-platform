@@ -92,6 +92,16 @@ class LensSelectorTest {
     }
 
     @Test
+    fun defaultIsStandardAndAppliesOnlyWhenNothingIsSaved() {
+        assertEquals(LensChoice.STANDARD, LensChoice.DEFAULT)
+        assertEquals(LensChoice.STANDARD, LensChoice.orDefault(null))
+        assertEquals(LensChoice.WIDE, LensChoice.orDefault(LensChoice.WIDE))
+        assertEquals(LensChoice.STANDARD, LensChoice.orDefault(LensChoice.fromWire("unknown")))
+        // Default on S21: the main camera, even though an ultra-wide exists.
+        assertEquals("0", LensSelector.pick(s21, LensChoice.orDefault(null))!!.camera.id)
+    }
+
+    @Test
     fun choiceRoundTripsThroughItsWireName() {
         for (choice in LensChoice.entries) assertEquals(choice, LensChoice.fromWire(choice.wire))
         assertNull(LensChoice.fromWire("tele"))

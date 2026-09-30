@@ -36,7 +36,7 @@ class SettingsStore(context: Context) {
             else PairingUri(host, port, token, source, prefs[SECURE] ?: false)
         }
 
-    /** Saved lens setting; null until the operator picks one (then WIDE applies, ceiling install). */
+    /** Saved lens setting; null until the operator picks one (then [LensChoice.DEFAULT] applies). */
     val lens: Flow<LensChoice?> = store.data
         .catch { e -> if (e is IOException) emit(emptyPreferences()) else throw e }
         .map { prefs -> LensChoice.fromWire(prefs[LENS]) }
