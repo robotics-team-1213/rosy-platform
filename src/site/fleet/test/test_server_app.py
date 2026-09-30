@@ -518,7 +518,7 @@ def test_common_allowlist_is_the_web_common_manifest():
     ticker = client.get("/common/hold-ticker.js")
     assert ticker.status_code == 200
     assert ticker.headers["content-type"].startswith("text/javascript")
-    assert client.get("/common/manifest.json").status_code == 404
+    assert client.get("/common/shared-assets.json").status_code == 404
     assert client.get("/common/CMakeLists.txt").status_code == 404
 
 

@@ -3,9 +3,9 @@ project(web_common)
 
 find_package(ament_cmake REQUIRED)
 
-# manifest.json lists which of these files servers expose under /common/.
+# shared-assets.json lists which of these files servers expose under /common/.
 install(FILES
-  manifest.json
+  shared-assets.json
   tokens.css
   components.css
   template.html
@@ -16,7 +16,7 @@ install(FILES
   DESTINATION share/${PROJECT_NAME}
 )
 
-# D-370 3항 surface icons, listed one by one in manifest.json (never the folder).
+# D-370 3항 surface icons, listed one by one in shared-assets.json (never the folder).
 install(FILES
   icons/overhead-camera-app.svg
   icons/pilot.svg
