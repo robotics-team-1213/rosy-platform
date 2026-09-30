@@ -35,7 +35,7 @@ sys.path.insert(0, str(HERE.parents[2] / "src" / "runtime" / "sensing"))
 
 import labels as L  # noqa: E402
 from frames import FrameSelector  # noqa: E402
-from geometry import Camera, Lidar, PoseSeries, to_frame  # noqa: E402
+from geometry import Camera, Lidar, PoseSeries, robot_lidar_yaw_deg, to_frame  # noqa: E402
 
 DATA = HERE.parents[2] / "data" / "perception"
 MAX_SCAN_DT_S = 0.2
@@ -390,6 +390,8 @@ def main(argv=None) -> int:
     ap.add_argument("--keep-v2", type=Path, help="folder with keep v2 lane_keep.py, lane.py, lane_bev.py")
     ap.add_argument("--min-interval", type=float, default=0.5)
     ap.add_argument("--lidar-mirrored", action="store_true")
+    ap.add_argument("--lidar-yaw-deg", type=float, default=None,
+                    help="LiDAR mount yaw (scan angle of the nose); default: robot.yaml lidar_yaw_offset")
     ap.add_argument("--max-frames", type=int)
     ap.add_argument("--pitch-deg", type=float,
                     help="camera pitch; default: fit to the session's LiDAR walls, else the profile")
@@ -417,7 +419,10 @@ def main(argv=None) -> int:
         odom, make_frames, scans = read_sidecar(args.video, sidecar)
         source = {"kind": "video+sidecar", "video": str(args.video), "sidecar": str(sidecar),
                   "sha256": {"video": _sha(args.video), "sidecar": _sha(sidecar)}}
-    lidar = Lidar(mirrored=args.lidar_mirrored)
+    yaw_source = "argument" if args.lidar_yaw_deg is not None else "robot.yaml lidar_yaw_offset"
+    lidar = Lidar(mirrored=args.lidar_mirrored,
+                  forward_deg=args.lidar_yaw_deg if args.lidar_yaw_deg is not None else robot_lidar_yaw_deg())
+    print(f"LiDAR mount yaw {lidar.forward_deg:.2f} deg ({yaw_source})")
     pitch, camera = None, {"pitch_source": "profile"}
     if args.pitch_deg is not None:
         pitch, camera = math.radians(args.pitch_deg), {"pitch_source": "argument",
@@ -441,7 +446,8 @@ def main(argv=None) -> int:
                 "CONTACT_MARGIN_PX", "RANGE_SIGMA_M", "MAX_MARGIN_PX", "GAP_FILL_PX", "SEGMENT_GAP_M", "SEGMENT_GAP_PER_M", "PAINT_MIN_CONTRAST",
                 "PAINT_HEADROOM", "PAINT_MAX_SATURATION", "FOOTPRINT_HALF_WIDTH_M",
                 "TRAJ_MAX_DISTANCE_M", "TRAJ_MAX_TURN_RAD", "TRAJ_MIN_TRAVEL_M", "CONFLICT_PX")}
-            | {"lidar_mirrored": args.lidar_mirrored, "max_scan_dt_s": MAX_SCAN_DT_S,
+            | {"lidar_mirrored": args.lidar_mirrored, "lidar_yaw_deg": lidar.forward_deg,
+               "lidar_yaw_source": yaw_source, "max_scan_dt_s": MAX_SCAN_DT_S,
                "rules": sorted(rules)},
             "totals": totals}
     sj = args.session / "session.json" if args.session else None

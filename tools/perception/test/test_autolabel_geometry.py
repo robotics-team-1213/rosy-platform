@@ -8,7 +8,7 @@ import pytest
 cv2 = pytest.importorskip("cv2")
 
 import labels as L  # noqa: E402
-from geometry import Camera, Lidar, PoseSeries, to_frame  # noqa: E402
+from geometry import Camera, Lidar, PoseSeries, robot_lidar_yaw_deg, to_frame  # noqa: E402
 
 CAM = Camera(width=320, height=240, fx=281.6, cx=160.0, cy=120.0, pitch_rad=math.radians(8.0),
              height_m=0.067, x_offset_m=0.034)
@@ -78,8 +78,26 @@ def test_small_column_gap_is_filled_as_floor_only():
     assert floor[int(CAM.ground_row(1.0)) + 10, 160]
 
 
+def test_lidar_mount_yaw_defaults_to_robot_yaml():
+    # One source for the mount (D-47 addendum): robot.yaml lidar_yaw_offset, not the URDF pi.
+    assert Lidar().forward_deg == pytest.approx(robot_lidar_yaw_deg())
+    assert robot_lidar_yaw_deg() == pytest.approx(math.degrees(3.31612558))
+
+
+def test_configured_yaw_rotates_the_returns():
+    # With a 190-deg mount a return at scan angle 190 deg is dead ahead and one
+    # at 180 deg is 10 deg to the right.
+    lidar = Lidar(forward_deg=190.0, x_offset_m=0.0)
+    ranges = np.full(36, np.inf)
+    ranges[19], ranges[18] = 1.0, 1.0
+    xy, _, idx = lidar.points(ranges, 0.0, math.radians(10.0), 0.05, 40.0)
+    by_idx = dict(zip(idx.tolist(), xy.tolist()))
+    assert by_idx[19] == pytest.approx([1.0, 0.0], abs=1e-9)
+    assert by_idx[18] == pytest.approx([math.cos(math.radians(10)), -math.sin(math.radians(10))], abs=1e-9)
+
+
 def test_lidar_mount_faces_backwards():
-    lidar = Lidar()
+    lidar = Lidar(forward_deg=180.0)
     # scan angle +-pi is the robot's front, angle 0 its rear
     ranges = np.full(4, np.inf)
     ranges[0] = 1.0  # angle -pi: the front
@@ -93,7 +111,7 @@ def test_lidar_mount_faces_backwards():
 
 
 def test_invalid_ranges_dropped():
-    xy, r, _ = Lidar().points([np.nan, 0.01, np.inf, 50.0, 1.0], 0.0, 0.1, 0.05, 40.0)
+    xy, r, _ = Lidar(forward_deg=180.0).points([np.nan, 0.01, np.inf, 50.0, 1.0], 0.0, 0.1, 0.05, 40.0)
     assert r.tolist() == [1.0]
 
 
