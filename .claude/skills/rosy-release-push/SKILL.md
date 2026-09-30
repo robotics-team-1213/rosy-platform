@@ -79,7 +79,7 @@ Verified twice on 2026-09-26: releases 013 and 014 on a Pinky Pro running image 
    - Then run `systemctl daemon-reload`, `udevadm control --reload`, and enable any new
      `.path` or `.service` units.
    - Any `systemctl restart` of `rosy-core`/`rosy-runtime.target` ends a calibration drive:
-     run `deployobot\pinky_proosy-calibration-guard.ps1 -Robot <robot-ip>` first
+     run `deploy/robot/pinky_pro/rosy-calibration-guard.ps1 -Robot <robot-ip>` first
      (exit 3 = a session is active).
    - Reload a module whose options changed (`modprobe -r` then `modprobe`).
 7. **Verify on the live dashboard.** Use `rosy-dashboard-drive` and an administrator code
