@@ -1563,3 +1563,9 @@
 - 증거: 해당 다섯 시험 파일 82 passed (2026-10-01 Windows). 루트 `test/` 전체 회귀는 별도 확인.
 - gate 변화: 없음.
 - 교훈: 고정 목록 계약은 선행 단계가 붉으면 통째로 건너뛴다 — 그 단계의 빚은 다음 초록 커밋으로 이월되므로, 큰 적색을 고친 커밋은 곧바로 다음 단계까지 돌아갔는지 봐야 한다.
+
+## 2026-10-01 · uncommitted · feat(native): D-383 LCD 상태줄에 편대 역할
+
+- 변경: rosy-boot-status.py 가 swarm_role 를 같은 규칙으로 검증·복사, rosy-boot-display.py 상태줄이 role_suffix 를 끝에 붙인다("Ready - NAVIGATION - LEADER").
+- 증거: test_boot_display.py·test_boot_status_indicator.py. 실기 확인은 다음 릴리스 때.
+- gate 변화: 없음.
