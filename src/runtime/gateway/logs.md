@@ -582,3 +582,9 @@
 - 증거: 해당 8건 복구. core 도메인 전체(gateway·events·services·web_common·api_web) 2014 passed, 29 skipped (2026-10-01 Windows). 단 `test_core_node_teardown::test_run_drains_executor_workers_before_returning` 은 이 변경과 무관하게 Windows에서 간헐 실패한다(재실행 통과, CI Linux 통과).
 - gate 변화: 없음.
 - 교훈: 파일을 나누는 리팩터는 그 파일을 텍스트로 읽는 계약 시험의 소유자도 함께 옮겨야 한다 — 분할 커밋이 시험을 안 고치면 CI가 다음 커밋에서 대신 말한다.
+
+## 2026-10-01 · uncommitted · feat(bridge): D-385 set_emotion 클라이언트와 표정 래치
+
+- 변경: ros_bridge 가 5 Hz 상태 틱에서 reconcile.emotion(LiDAR 문법 — latch 없이 재시도)으로 표정을 바꾼다. 서비스 클라이언트 5개로 늘어 test_bridge_timers 핀을 같이 갱신했다.
+- 증거: test_bridge_reconcile.py 표정 3건·test_bridge_timers.py. 433 passed.
+- gate 변화: 없음.
