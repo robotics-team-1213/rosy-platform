@@ -4,18 +4,19 @@ from uuid import uuid4
 import pytest
 
 from core_common.protocol.schemas import FleetActionGrant
-from omx_adapter.action_runner import DriverSubmission, action_grant_digest
+from omx_adapter.action_runner import action_grant_digest
 from omx_adapter.action_store import ActionStore
 from omx_adapter.command_owner import TrajectoryCommand
 from omx_adapter.local_stop import LocalStopBlocked
 from omx_adapter.manipulation_plan import (
     JointTrajectoryPoint,
+    ExecutionStateSnapshot,
     PlannedMotionPhase,
     ResolvedObjectPose,
     ResolvedPickPlacePlan,
 )
 from omx_adapter.phase_recorder import ActionPhaseRecorder
-from omx_adapter.pick_place_runner import PickPlaceRunner
+from omx_adapter.pick_place_runner import PhaseDispatch, PickPlaceRunner
 from omx_adapter.ros_goal_contract import RosGoalEvent
 
 
@@ -67,6 +68,7 @@ def _plan():
     )
     phases = tuple(PlannedMotionPhase(
         phase_id=name, ordinal=index, joint_names=JOINTS, points=(point,),
+        start_state_positions=(0.0, 0.0, 0.0, 0.0, 0.0) if index == 0 else point.positions,
         source_state_sequence=9, calibration_revision="cal-1",
         transform_revision="tf-1", planning_scene_revision="scene-1",
     ) for index, name in enumerate(PHASE_NAMES))
@@ -88,6 +90,9 @@ class _Fence:
             raise LocalStopBlocked("closed")
         return operation()
 
+    def is_open(self, **_kwargs):
+        return self.open
+
 
 class _GoalPort:
     def __init__(self):
@@ -101,14 +106,16 @@ class _GoalPort:
         self.submissions.append((command, goal_id))
         if self.on_submit is not None:
             self.on_submit(command, goal_id, on_goal_event)
-        return DriverSubmission(accepted=True, driver_goal_id=goal_id)
+        else:
+            on_goal_event(_event("GOAL_ACCEPTED", command, command.phase_id, goal_id, 1))
+        return PhaseDispatch(dispatched=True)
 
     def cancel_goal(self, driver_goal_id):
         self.cancelled.append(driver_goal_id)
         return self.cancel_response
 
 
-def _harness(tmp_path, *, fence=None, phase_gate=None):
+def _harness(tmp_path, *, fence=None, phase_gate=None, current_execution_state=None):
     grant = _grant()
     store = ActionStore(tmp_path / "phase-runner.sqlite3")
     store.create_action(
@@ -128,8 +135,24 @@ def _harness(tmp_path, *, fence=None, phase_gate=None):
         store, action_id=grant.action_id, attempt_id=grant.attempt_id,
     )
     port = _GoalPort()
+    plan = _plan()
+    state_calls = {"count": 0}
+
+    def default_execution_state():
+        index = min(state_calls["count"], len(plan.phases) - 1)
+        state_calls["count"] += 1
+        phase = plan.phases[index]
+        return ExecutionStateSnapshot(
+            sequence=plan.source_state_sequence + index,
+            joint_positions=dict(zip(JOINTS, phase.start_state_positions)),
+            calibration_revision=phase.calibration_revision,
+            transform_revision=phase.transform_revision,
+            planning_scene_revision=phase.planning_scene_revision,
+            observed_at_monotonic_s=12.4 + (index * 0.01),
+        )
+
     runner = PickPlaceRunner(
-        recorder, grant, _plan(), command_for_phase=lambda phase: TrajectoryCommand(
+        recorder, grant, plan, command_for_phase=lambda phase: TrajectoryCommand(
             workcell_id=grant.workcell_id, instance_id=grant.instance_id,
             command_id=f"command-{phase.phase_id}", session_id="session-1",
             owner="moveit", positions=dict(zip(JOINTS, phase.points[-1].positions)),
@@ -142,6 +165,10 @@ def _harness(tmp_path, *, fence=None, phase_gate=None):
         goal_port=port, submission_fence=fence or _Fence(),
         phase_gate=phase_gate or (lambda _phase_id: True),
         current_fence=lambda epoch, generation: (epoch, generation) == (2, 8),
+        current_execution_state=current_execution_state or default_execution_state,
+        start_state_tolerances={name: 0.01 for name in JOINTS},
+        max_joint_state_age_s=0.5,
+        monotonic=lambda: 12.5,
     )
     return store, recorder, port, runner
 
@@ -166,11 +193,14 @@ def test_first_phase_journals_acceptance_then_correlated_terminal_without_autoad
     port.on_submit = events
     result = runner.start()
 
-    assert result["action"]["state"] == "ACCEPTED"
+    assert result["action"]["state"] == "RUNNING"
     assert recorder.phases()[0]["state"] == "SUCCEEDED"
     assert len(port.submissions) == 1
+    port.on_submit = None
     runner.advance()
     assert len(port.submissions) == 2
+    assert port.submissions[0][0].source_state_sequence == 9
+    assert port.submissions[1][0].source_state_sequence == 10
     assert recorder.phases()[1]["state"] == "ACCEPTED"
     assert store.get_action("action-1")["state"] == "RUNNING"
 
@@ -183,7 +213,7 @@ def test_next_motion_goal_waits_for_semantic_transaction_gate(tmp_path):
     runner.start()
     command, goal = port.submissions[0]
     assert runner.on_ros_goal_event(_event(
-        "TERMINAL_RESULT", command, "approach", goal, 1,
+        "TERMINAL_RESULT", command, "approach", goal, 2,
         status=4, result_code=0,
     ))
 
@@ -201,9 +231,10 @@ def test_wrong_goal_uuid_high_sequence_cannot_suppress_real_feedback(tmp_path):
     _, recorder, port, runner = _harness(tmp_path)
 
     def events(command, goal, callback):
+        callback(_event("GOAL_ACCEPTED", command, "approach", goal, 1))
         callback(_event("RUNNING_FEEDBACK", command, "approach", str(uuid4()), 90,
                         feedback_sequence=1))
-        callback(_event("RUNNING_FEEDBACK", command, "approach", goal, 1,
+        callback(_event("RUNNING_FEEDBACK", command, "approach", goal, 2,
                         feedback_sequence=1))
 
     port.on_submit = events
@@ -224,7 +255,7 @@ def test_cancel_targets_exact_goal_and_ack_is_not_terminal_result(tmp_path):
     assert recorder.phases()[0]["state"] == "CANCEL_REQUESTED"
     assert recorder.phases()[0]["cancel_acknowledged"] is None
     assert runner.on_ros_goal_event(_event(
-        "CANCEL_ACK", command, "approach", goal, 1, cancel_acknowledged=True,
+        "CANCEL_ACK", command, "approach", goal, 2, cancel_acknowledged=True,
     ))
     assert recorder.phases()[0]["state"] == "CANCEL_REQUESTED"
     assert recorder.phases()[0]["cancel_acknowledged"] is True
@@ -243,12 +274,174 @@ def test_stop_fence_failure_holds_attempt_without_sending_goal(tmp_path):
 
 def test_unknown_acceptance_is_held_and_never_retried(tmp_path):
     _, recorder, port, runner = _harness(tmp_path)
-    port.submit = lambda *_args, **_kwargs: DriverSubmission(accepted=None)
+    port.submit = lambda *_args, **_kwargs: PhaseDispatch(dispatched=None)
 
     first = runner.start()
     with pytest.raises(RuntimeError, match="phase journal is not empty"):
         runner.start()
 
-    assert first["action"]["state"] == "UNKNOWN"
+    assert first["action"]["state"] == "HOLD"
     assert recorder.parent()["state"] == "HOLD"
     assert recorder.phases()[0]["state"] == "UNKNOWN"
+
+
+def test_ros_goal_acceptance_is_recorded_only_after_async_callback(tmp_path):
+    store, recorder, port, runner = _harness(tmp_path)
+    pending = {}
+
+    def dispatch(command, *, on_goal_event):
+        pending.update(command=command, callback=on_goal_event)
+        pending["goal"] = str(uuid4())
+        return PhaseDispatch(dispatched=True)
+
+    port.submit = dispatch
+    receipt = runner.start()
+
+    assert receipt["action"]["state"] == "SUBMITTING"
+    assert recorder.phases()[0]["state"] == "SUBMITTING"
+    assert recorder.phases()[0]["driver_goal_id"] is None
+
+    assert pending["callback"](_event(
+        "GOAL_ACCEPTED", pending["command"], "approach", pending["goal"], 1,
+    ))
+
+    assert store.get_action("action-1")["state"] == "ACCEPTED"
+    assert recorder.phases()[0]["state"] == "ACCEPTED"
+    assert recorder.phases()[0]["driver_goal_id"] == pending["goal"]
+
+
+@pytest.mark.parametrize(
+    ("event_kind", "action_state", "phase_state"),
+    [("GOAL_REJECTED", "FAILED", "FAILED"),
+     ("GOAL_ACCEPTANCE_UNKNOWN", "HOLD", "UNKNOWN")],
+)
+def test_async_rejection_or_unknown_is_durable_and_never_retried(
+    tmp_path, event_kind, action_state, phase_state,
+):
+    store, recorder, port, runner = _harness(tmp_path)
+    pending = {}
+
+    def dispatch(command, *, on_goal_event):
+        pending.update(command=command, callback=on_goal_event)
+        return PhaseDispatch(dispatched=True)
+
+    port.submit = dispatch
+    runner.start()
+    assert pending["callback"](_event(
+        event_kind, pending["command"], "approach", None, 1,
+    ))
+
+    assert store.get_action("action-1")["state"] == action_state
+    assert recorder.phases()[0]["state"] == phase_state
+    with pytest.raises(RuntimeError, match="phase journal is not empty"):
+        runner.start()
+
+
+def test_late_async_acceptance_after_local_stop_cancels_exact_goal_and_holds(tmp_path):
+    store, recorder, port, runner = _harness(tmp_path)
+    pending = {}
+
+    def dispatch(command, *, on_goal_event):
+        pending.update(command=command, callback=on_goal_event)
+        pending["goal"] = str(uuid4())
+        return PhaseDispatch(dispatched=True)
+
+    port.submit = dispatch
+    runner.start()
+    runner.submission_fence.open = False
+
+    assert pending["callback"](_event(
+        "GOAL_ACCEPTED", pending["command"], "approach", pending["goal"], 1,
+    ))
+
+    assert port.cancelled == [pending["goal"]]
+    assert store.get_action("action-1")["state"] == "HOLD"
+    assert recorder.phases()[0]["driver_goal_id"] == pending["goal"]
+
+
+def test_ros_acceptance_arriving_after_unknown_is_bound_and_exact_cancelled(tmp_path):
+    store, recorder, port, runner = _harness(tmp_path)
+    pending = {}
+
+    def dispatch(command, *, on_goal_event):
+        pending.update(command=command, callback=on_goal_event)
+        pending["goal"] = str(uuid4())
+        return PhaseDispatch(dispatched=True)
+
+    port.submit = dispatch
+    runner.start()
+    assert pending["callback"](_event(
+        "GOAL_ACCEPTANCE_UNKNOWN", pending["command"], "approach", None, 1,
+    ))
+    assert store.get_action("action-1")["state"] == "HOLD"
+    assert recorder.phases()[0]["driver_goal_id"] is None
+
+    assert pending["callback"](_event(
+        "GOAL_ACCEPTED", pending["command"], "approach", pending["goal"], 2,
+    ))
+
+    assert port.cancelled == [pending["goal"]]
+    assert recorder.parent()["state"] == "HOLD"
+    assert recorder.phases()[0]["state"] == "UNKNOWN"
+    assert recorder.phases()[0]["driver_goal_id"] == pending["goal"]
+
+
+def test_changed_phase_start_state_holds_before_persisting_intent(tmp_path):
+    state = ExecutionStateSnapshot(
+        sequence=9,
+        joint_positions=dict(zip(JOINTS, (0.5, 0.5, 0.5, 0.5, 0.5))),
+        calibration_revision="cal-1", transform_revision="tf-1",
+        planning_scene_revision="scene-1", observed_at_monotonic_s=12.4,
+    )
+    store, recorder, port, runner = _harness(
+        tmp_path, current_execution_state=lambda: state,
+    )
+
+    with pytest.raises(RuntimeError, match="phase start state"):
+        runner.start()
+
+    assert recorder.phases() == []
+    assert port.submissions == []
+    assert store.get_action("action-1")["state"] == "HOLD"
+
+
+def test_changed_planning_scene_holds_before_phase_intent(tmp_path):
+    state = ExecutionStateSnapshot(
+        sequence=9, joint_positions=dict(zip(JOINTS, (0.0,) * len(JOINTS))),
+        calibration_revision="cal-1", transform_revision="tf-1",
+        planning_scene_revision="scene-changed", observed_at_monotonic_s=12.4,
+    )
+    store, recorder, port, runner = _harness(
+        tmp_path, current_execution_state=lambda: state,
+    )
+
+    with pytest.raises(RuntimeError, match="phase start state"):
+        runner.start()
+
+    assert recorder.phases() == []
+    assert port.submissions == []
+    assert store.get_action("action-1")["state"] == "HOLD"
+
+
+def test_nonadvancing_joint_sequence_holds_before_next_phase_intent(tmp_path):
+    state = ExecutionStateSnapshot(
+        sequence=9, joint_positions=dict(zip(JOINTS, (0.0,) * len(JOINTS))),
+        calibration_revision="cal-1", transform_revision="tf-1",
+        planning_scene_revision="scene-1", observed_at_monotonic_s=12.4,
+    )
+    store, recorder, port, runner = _harness(
+        tmp_path, current_execution_state=lambda: state,
+    )
+    runner.start()
+    command, goal = port.submissions[0]
+    assert runner.on_ros_goal_event(_event(
+        "TERMINAL_RESULT", command, "approach", goal, 2,
+        status=4, result_code=0,
+    ))
+
+    with pytest.raises(RuntimeError, match="phase start state"):
+        runner.advance()
+
+    assert len(port.submissions) == 1
+    assert len(recorder.phases()) == 1
+    assert store.get_action("action-1")["state"] == "HOLD"
