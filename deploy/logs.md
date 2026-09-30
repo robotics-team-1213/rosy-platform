@@ -1599,3 +1599,9 @@
 - 변경: main에 D-385(feat/expressive-rosy)가 들어와, main 532b9813이 adr_gaps에 예약한 D-389로 개명하고 그 예약을 지웠다. 코드 주석·시험·문서도 바꿨다. 앞 항목의 D-383/D-385 표기는 역사 기록으로 둔다.
 - 증거: rosy_harness lint 오류 0. 본문은 docs/adr/D-389-emergency-card-write-skips-only-readback.md.
 - gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · fix(sd,release): D-389 독립 리뷰 반영 — 긴급 resume 이력 검사, 다운로더 점검
+
+- 변경: `-Emergency -ResumeAfterWrite`는 `-PlanPath`를 요구하고 같은 plan의 진행 파일 이력이 깨끗할 때만 된다(마지막 전체 쓰기가 Imager 정상 종료, 그 뒤 쓰기 실패·readback 불일치·이미지 오류 없음). 긴급 receipt 단계는 `complete-unverified`, 이유에 백슬래시 금지, 끊긴 쓰기 안내에 `unverified-no-bundle` 추가. 후속 readback 허용을 fixture FAT 파티션 안의 bundle로 증명. 다운로더는 `IncompleteRead`를 재시도하고, 기존 출력도 새 다운로드처럼 크기·zip CRC로 점검하며, symlink 항목을 거부한다.
+- 증거: 새 시험 전부 통과, 게이트별 변이 16종 모두 실패로 잡힘(호스트 fixture만, 카드·로봇 접근 없음).
+- gate 변화: 없음.
