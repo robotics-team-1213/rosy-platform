@@ -10,8 +10,8 @@
 | [control](src/runtime/sensing/progress.md) | CONTROL | bed604ef (2026-09-30) | GO | GO | HOLD | HOLD | HOLD | PARKED |
 | [fleet](src/site/fleet/progress.md) | FLEET | bed604ef (2026-09-30) | GO | GO | HOLD | PARKED | PARKED | PARKED |
 | [games](src/site/games/progress.md) | GAMES | bed604ef (2026-09-30) | GO | GO | N/A | N/A | PARKED | PARKED |
-| [rosy_vision](src/site/vision/progress.md) | SITE | c8dfa0dd (2026-09-30) | GO | GO | N/A | N/A | PARKED | PARKED |
-| [cam](src/site/cam/progress.md) | SITE | c8dfa0dd (2026-09-30) | GO | GO | N/A | N/A | PARKED | PARKED |
+| [rosy_vision](src/site/vision/progress.md) | SITE | a8199fd9 (2026-09-30) | GO | GO | N/A | N/A | PARKED | PARKED |
+| [cam](src/site/cam/progress.md) | SITE | a8199fd9 (2026-09-30) | GO | GO | N/A | N/A | PARKED | PARKED |
 | [gz_sim](src/sim/gz_sim/progress.md) | SIM | uncommitted (2026-09-21) | GO | GO | GO | N/A | N/A | N/A |
 | [navigation](src/runtime/navigation/progress.md) | NAV | dc89264 (2026-09-17) | GO | GO | HOLD | HOLD | HOLD | PARKED |
 | [bringup](src/products/pinky_pro/bringup/progress.md) | BRINGUP | dc89264 (2026-09-17) | GO | GO | HOLD | HOLD | HOLD | PARKED |
