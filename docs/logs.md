@@ -3896,3 +3896,13 @@
 - 변경: ADR D-375(파일+로그 행)와 설계 문서 `docs/plans/2026-09-30-lamp-mode-display-design.md`를 추가했다.
 - 증거: rosy_harness lint·generate 통과.
 - gate 변화: 없음.
+## 2026-09-30 · uncommitted · docs(adr): D-377 앱 이름 규칙 — Rosy + 영어 한 단어
+- 변경: D-377(Accepted, 사용자 결정) 추가. 표시 이름 `Rosy <Word>`(한국어는 부제에만), id·폴더 끝 `<word>`, 패키지 `rosy_<word>`, Android `io.github.livsbittt.rosy.<word>`, Gradle `rosy-<word>`, 아이콘 `<word>.svg`. 대응: Rosy Cam(`src/site/cam`, `…rosy.cam`), Rosy Vision(`src/site/vision`, `rosy_vision`, 실행 파일 `rosy-vision`), Rosy Console(계획 `src/site/console`·`rosy_console`, 단계 4 게이트), Rosy Robot(계획 `src/hmi/robot`·`rosy_robot`, 단계 3 게이트), Rosy Pilot(그대로). D-370 2항 이름표와 D-374 1·2항을 대체한다고 두 ADR 머리에 적었다. D-374 계획의 2.4·2.5와 단계 3·4·5 목표를 새 이름으로 고쳤다.
+- 증거: 문서만. 번호는 로컬 브랜치 전부·`.worktrees/*/docs/adr`·main 체크아웃 미추적 파일을 확인해 D-375(`feat/overhead-map-auto-register`)·D-376(`omx-pick-place-execution` 워크트리) 다음 빈 번호로 잡았다.
+- gate 변화: 없음(문서만). 실행은 `refactor/app-naming-cam-vision`.
+- 결정: 와이어 이름은 D-374 3항 그대로. Vision 옛 실행 파일 `site_vision`·`overhead`는 한 사이트 후보 릴리스 동안 별칭.
+
+## 2026-09-30 · uncommitted · docs(adr): set OMX local planning and owner execution boundary
+- 변경: D-376을 Accepted로 기록했다. MTC는 plan-only 평가 후보로 두고 OMX Action owner를 유일한 ROS trajectory writer로 고정했다. phased Fleet receipt는 UDS v2로 명시하되 v1 호출과 기존 operation은 유지한다.
+- 증거: baseline OMX suite 154 passed / 3 skipped. 잠금 이미지 `sha256:b47034e436119cea97c2922a1b4af9bd6596975ac8acbb4cece3a19d2fe1e9f0`에 Jazzy와 OMX-F URDF/ros2_control은 있으나 MoveIt/MTC 및 OMX SRDF/kinematics/planning config는 없다. 임시 apt metadata probe에서 MTC Core `0.1.8-1noble.20260904.024044`, MoveIt Core `2.12.4-1noble.20260903.075716` 후보를 확인했지만 설치·빌드·모델 통합은 하지 않았다.
+- gate 변화: 계약/SOURCE 구현은 진행 가능. 검증된 OMX MoveIt config, scene/IK, trajectory export 통합 전 production planner와 ROS-SIM pick/place는 HOLD; profile 비활성, DEVICE/FIELD PARKED 유지.

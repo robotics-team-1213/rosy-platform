@@ -55,7 +55,7 @@ KNOWN_CHAIN_BACK_EDGES = {
 }
 KNOWN_DIRECTION = {
     ("control", "imu_bno055"): "runtime/sensing -> drivers/imu_bno055; declared exec_depend. Legacy launches start the IMU driver; the long-term fix is bringup assembly, not a sensing launch",
-    ("site_vision", "games"): "Site Vision reuses the ROS-free four-point homography helper for camera calibration",
+    ("rosy_vision", "games"): "Rosy Vision reuses the ROS-free four-point homography helper for camera calibration",
     ("bringup", "control"): "products/bringup -> runtime/sensing: bringup_robot.launch.py starts control's ir_adc_node for the rosy-io graph (enable_ir, D-344 §12) — bringup assembling the robot graph is the direction the imu_bno055 row names",
 }
 
@@ -311,7 +311,8 @@ def layout_ok(rel: tuple, name: str) -> bool:
         return rel == ROLE_DIR[name]
     if rel[0] == "products":
         return False  # Product packages require an explicit family/role declaration.
-    return len(rel) == 2 and rel[1] == name
+    # D-377: an app package is `rosy_<word>` in folder `<domain>/<word>`.
+    return len(rel) == 2 and name in (rel[1], f"rosy_{rel[1]}")
 
 
 def _declared(name: str) -> set:

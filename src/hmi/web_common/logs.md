@@ -244,3 +244,9 @@
 - gate 변화: 없음.
 - 결정: D-370 3항, D-359(테마 블록이 생기면 정규식 사전이 뒤 값을 고르는 위험).
 - 교훈: 없음.
+
+## 2026-09-30 · uncommitted · refactor(web_common): D-377 icon files and registry ids follow one word
+- 변경: 아이콘 `ceiling-camera.svg` → `cam.svg`, `fleet-console.svg` → `console.svg`, `robot-dashboard.svg` → `robot.svg`(`git mv`), SVG `<title>`을 `Rosy <Word>`로. `surfaces.yaml` id `cam`·`console`·`robot`과 표시 이름 `Rosy Cam`·`Rosy Console`·`Rosy Robot`, 경로 `src/site/cam`. `manifest.json` 허용 목록·`CMakeLists.txt`. `test_surface_icons.py` 표를 D-377로, `test_surface_titles.py`는 앱 행이면 제목이 표시 이름(`Rosy <Word>` 또는 `Rosy <Word> — <화면>`)인지 본다.
+- 증거: `python -m pytest src/hmi/web_common/test -q` 111 passed (2026-09-30 Windows).
+- gate 변화: 없음.
+- 결정: D-377. 경로 `/common/icons/<id>.svg`는 D-374 3항 예외대로 링크하는 HTML과 같은 커밋에서 바뀐다.
