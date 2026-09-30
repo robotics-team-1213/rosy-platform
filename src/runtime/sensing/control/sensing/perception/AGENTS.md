@@ -15,10 +15,13 @@ Camera and lane evidence (D-209, D-228). This folder answers what is visible. It
 | `lane.py` | Line centre and error |
 | `road.py` | Road observation |
 | `scene_context.py` | Closed scene profiles |
+| `image_frame.py` | Shared `sensor_msgs/Image` to ndarray decode, used by `line_observer_node` and the learned node |
 
 ## Subdirectories
 
-None.
+| Directory | Purpose |
+|-----------|---------|
+| `learned/` | D-356 learned lane backend, shadow only: `manifest.py` (model manifest contract, sha256 and shape checks), `lane_mask.py` (segmentation logits to lane evidence), `runner.py` (ONNX runner, keep-previous hot swap), `shadow.py` (`perception/learned/shadow` payload, no command fields). `onnxruntime` is imported lazily; it is not in the device image yet |
 
 ## For AI Agents
 
@@ -26,11 +29,11 @@ None.
 
 - Do not import ROS. Observation nodes live above this folder and publish facts.
 - Do not import `core` or emit a twist.
-- A learned backend, when added, returns `perception/evidence` and stays behind `perception.backend=rule` until the D-205 replay gate passes.
+- The learned backend (`learned/`) is shadow-only (D-356): it publishes `perception/learned/shadow` and never feeds control. Model weights never live in `src/`; they arrive through `tools/perception/model/deliver.py`. It returns `perception/evidence` and stays behind `perception.backend=rule` until the D-205 replay gate passes.
 
 ### Testing Requirements
 
-`src/runtime/sensing/test/test_lane.py`, `test_camera.py`, `test_road_perception.py`, `test_perception_folder.py`
+`src/runtime/sensing/test/test_lane.py`, `test_camera.py`, `test_road_perception.py`, `test_perception_folder.py`, `test_learned_manifest.py`, `test_learned_lane_mask.py`, `test_learned_runner.py`, `test_learned_shadow.py`
 
 ## Dependencies
 

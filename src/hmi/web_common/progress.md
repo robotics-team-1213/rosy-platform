@@ -1,7 +1,7 @@
 ---
 module: web_common
 owner: CORE
-last_verified: { commit: "9049bd37", date: 2026-09-27 }
+last_verified: { commit: "0409c371", date: 2026-09-30 }
 gates:
   SOURCE:
     state: GO
@@ -9,8 +9,8 @@ gates:
     cmd: "powershell -NoProfile -Command \"$env:ROSY_RUN_BROWSER_TESTS='1'; python -X utf8 -m pytest src/hmi/web_common/test src/hmi/dashboard/test -q\""
   LOCAL:
     state: GO
-    evidence: "실 CORE TestClient API + visible Chromium: styleguide, operator /console·/setup, administrator /console·/setup·/device at 1366x768 and 390x844; blue focus ring, disabled opacity 0.45, 0 missing kinds, 0 page errors, no positive horizontal overflow"
-    cmd: "X:\\DevTemp\\rosy-design-system-polish\\visible_roles.py"
+    evidence: "tools/web_visible_roles.py(실 CORE TestClient + headless Chromium): operator /console·/setup, administrator /console·/setup·/device at 1366x768·390x844 — 0 missing kinds, 0 page errors, no horizontal overflow, first responses all 200 (2026-09-30 Windows)"
+    cmd: "python -X utf8 tools/web_visible_roles.py"
   ROS-SIM:
     state: N/A
   ARTIFACT:

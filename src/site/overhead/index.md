@@ -33,5 +33,5 @@
 - 2026-09-30 · uncommitted · docs(adr): D-358 앱 역할 ADR을 D-370으로 재번호
 - 2026-09-30 · uncommitted · feat(overhead-app): D-358 S3 적응형 런처 아이콘
 - 2026-09-30 · uncommitted · test(overhead-app): D-358 S1 DiscoveryVectorsTest
-- 2026-09-30 · uncommitted · fix(overhead-app): 적응형 JPEG 화질과 정지 중 대상 표시
-- 2026-09-29 · uncommitted · fix(overhead): pick the ArUco detector API by hasattr
+- 2026-09-30 · uncommitted · docs: 경기장 자동 검출 ADR 번호 D-354 → D-360
+- 2026-09-30 · uncommitted · fix(overhead): D-354 제안 검출을 이벤트 루프 밖에서, 소스당 초당 1회

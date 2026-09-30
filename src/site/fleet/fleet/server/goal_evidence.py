@@ -166,8 +166,6 @@ def verify_goal(predicate: GoalPredicate, evidence: GoalEvidence, *,
         raise GoalEvidenceError("goal evidence destination does not match the accepted predicate")
     if not evidence.evidence_revision.strip():
         raise GoalEvidenceError("goal evidence revision is missing")
-    if evidence.satisfied is not True:
-        raise GoalEvidenceError("goal predicate was not satisfied")
     if (isinstance(now, bool) or not isinstance(now, (int, float))
             or isinstance(max_age_s, bool) or not isinstance(max_age_s, (int, float))):
         raise GoalEvidenceError("goal evidence freshness parameters are invalid")
@@ -180,4 +178,4 @@ def verify_goal(predicate: GoalPredicate, evidence: GoalEvidence, *,
     if (not math.isfinite(current) or not math.isfinite(max_age) or max_age <= 0
             or age < 0 or age > max_age or gripper_age < 0 or gripper_age > max_age):
         raise GoalEvidenceError("goal evidence is stale or from the future")
-    return True
+    return evidence.satisfied

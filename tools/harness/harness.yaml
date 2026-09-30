@@ -11,16 +11,6 @@ adr_gaps:
   D-342: "reserved by the uncommitted Pilot draft in .worktrees/pilot-teleop (manual-limit commissioning ladder); remove once it lands"
   D-343: "reserved by the uncommitted Pilot draft in .worktrees/pilot-teleop (pilot rooms and driver seat); remove once it lands"
   D-344: "reserved by the uncommitted Pilot draft in .worktrees/pilot-teleop (pilot assisted autonomy); remove once it lands"
-  D-352: "reserved by branch docs/fleet-robot-code-enrollment (site console enrolls robot by screen code; also in .worktrees/fleet-robot-enrollment-s1); remove once it lands"
-  D-353: "reserved by branch feat/pilot-teleop (lane-keeping perception and replay bench); remove once it lands"
-  D-354: "reserved by branch feat/console-field-autodetect (overhead field auto-detection proposal); remove once it lands"
-  D-355: "reserved by branch feat/d355-goal-evidence-verifier (goal evidence producer and verifier wiring); remove once it lands"
-  D-356: "reserved by branch feat/perception-learning-loop (perception learning loop and model delivery); remove once it lands"
-  D-357: "reserved by the uncommitted draft in .worktrees/er2-feedback-loop (ER2 mission feedback loop); remove once it lands"
-  D-358: "taken on main by the ER2 feedback outbox and replan fencing ADR; the site app roles ADR first used D-358 and moved to D-370 (2026-09-30); remove once main lands"
-  D-359: "taken on main by the theme-ready tokens ADR; remove once main lands"
-  D-360: "taken on main by the overhead field auto-detection proposal; remove once main lands"
-  D-361: "taken on main by the site console robot enrollment ADR; remove once main lands"
   D-362: "reserved by the uncommitted draft in the main checkout (per-code-type file size budget); remove once it lands"
   D-363: "reserved by branch feat/pilot-teleop (pilot camera aspect and installed app); remove once it lands"
   D-364: "reserved by branch feat/pilot-teleop (lane-keeping perception and replay bench); remove once it lands"
@@ -193,3 +183,6 @@ modules:
 
   - name: isaac_sim
     path: src/sim/isaac_sim
+    tests: [src/sim/isaac_sim/test]
+    functional_kind: pytest
+    functional: [src/sim/isaac_sim/test/test_graph_contract.py, src/sim/isaac_sim/test/test_model_checks.py, src/sim/isaac_sim/test/test_prepare_urdf.py]

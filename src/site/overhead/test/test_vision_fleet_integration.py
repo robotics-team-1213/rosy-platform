@@ -118,6 +118,10 @@ async def _run_pipeline(config_path):
             await _wait_for(lambda: ingest.latest_frame(SOURCE_ID)
                             and ingest.latest_frame(SOURCE_ID).header.seq == 1)
             assert await worker.process_latest() == ()
+            # The phone's next status names the corner/robot ids the worker really saw.
+            status = json.loads(await asyncio.wait_for(phone.recv(), timeout=3.0))
+            assert status["type"] == "status"
+            assert (status["corners_seen"], status["robots_seen"]) == ([30, 31, 33], ["rosy_01"])
 
             await phone.send(_frame(2, 0, _jpeg()))
             await _wait_for(lambda: ingest.latest_frame(SOURCE_ID)

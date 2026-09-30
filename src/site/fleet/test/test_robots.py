@@ -140,3 +140,19 @@ def test_ws_url_upper_case_https_is_still_secure_and_unknown_schemes_are_refused
         ws_url("ftp://rosy.local", "/ws/events", "t")
     with pytest.raises(ValueError):
         ws_url("10.0.0.11:8080", "/ws/events", "t")
+
+
+@pytest.mark.parametrize("body", ["", "robots: []\n"])
+def test_an_empty_list_is_allowed_only_when_enrollment_supplies_robots(tmp_path, body):
+    p = tmp_path / "robots.yaml"
+    p.write_text(body, encoding="utf-8")
+    assert load_robots(p, allow_empty=True) == []
+    with pytest.raises(RobotsFileError):
+        load_robots(p)
+
+
+def test_allow_empty_still_refuses_malformed_rows(tmp_path):
+    p = tmp_path / "robots.yaml"
+    p.write_text("robots:\n  - robot_id: rosy_01\n    token: t\n", encoding="utf-8")
+    with pytest.raises(RobotsFileError):
+        load_robots(p, allow_empty=True)

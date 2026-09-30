@@ -24,15 +24,20 @@ def _documented_example() -> dict:
     return json.loads(match.group(1))
 
 
-def test_the_documented_payload_parses_as_the_client_expects():
+def test_the_documented_payload_parses_as_the_client_expects(monkeypatch):
     import sys
     sys.path.insert(0, str(ROOT / "src" / "runtime" / "services"))
     sys.path.insert(0, str(ROOT / "src" / "runtime" / "gateway"))
+    from core_features.docking import agent
     from core_features.docking.agent import DockAgent, DockReachability
 
     document = _documented_example()
-    status = DockAgent("http://example")._parse(
-        json.dumps(document).encode("utf-8"))
+    # D-353: 파싱은 core_common.device_poll.poll_json 안으로 들었다. HTTP 없이
+    # 실제 매핑 경로(문서 → DockStatus)를 돌리기 위해 poll_json만 갈아끼운다.
+    monkeypatch.setattr(
+        agent, "poll_json",
+        lambda url, **kwargs: (agent.PollReachability.OK, document, None))
+    status = DockAgent("http://example").poll()
 
     assert status.reachability is DockReachability.OK, status.error
     assert status.load_present == document["load_present"]

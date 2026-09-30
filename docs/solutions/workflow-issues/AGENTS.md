@@ -13,6 +13,7 @@ Compound lessons about verification process: a gate that cannot actually check i
 |------|-------------|
 | `inability-to-check-recorded-as-clean-result.md` | An inability to check is not a clean result: mutation-test gates, check subprocess exit status, do not treat skip as pass |
 | `a-fixture-from-the-same-model-is-one-belief-not-two.md` | A fixture generated from the same mental model as the code is one belief, not two: seed tests with scenes the author did not design (evidence lives on the archived dock-rig tag) |
+| `a-contract-version-bump-is-three-pins-not-one.md` | A contract-version bump is three pins, not one: the reference header, app.py docstring + description, and the line-follow literal move in the same commit (D-347); run the two tripwire tests before pushing a MINOR bump |
 
 ## Subdirectories
 

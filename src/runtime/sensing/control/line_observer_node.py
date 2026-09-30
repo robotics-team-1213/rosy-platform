@@ -10,7 +10,6 @@ import math
 import os
 
 import cv2
-import numpy as np
 import rclpy
 import yaml
 from rclpy.node import Node
@@ -23,6 +22,7 @@ from std_msgs.msg import String, UInt16MultiArray
 
 from . import executor_choice
 from .sensing.perception.camera_ground import simulation_ground_plane
+from .sensing.perception.image_frame import image_msg_to_frame
 from .sensing.perception.lane import (
     IRLineCalibration,
     LaneCornerTracker,
@@ -255,18 +255,7 @@ class LineObserverNode(Node):
                 float(msg.header.stamp.sec) + float(msg.header.stamp.nanosec) * 1e-9))
             return
         try:
-            channels = 1 if msg.encoding == 'mono8' else 3
-            if msg.encoding not in ('mono8', 'bgr8', 'rgb8'):
-                raise ValueError(f'unsupported camera encoding {msg.encoding!r}')
-            expected = int(msg.height) * int(msg.width) * channels
-            pixels = np.frombuffer(msg.data, dtype=np.uint8)
-            if pixels.size != expected:
-                raise ValueError('camera payload size does not match dimensions')
-            frame = pixels.reshape((int(msg.height), int(msg.width), channels))
-            if channels == 1:
-                frame = frame[:, :, 0]
-            elif msg.encoding == 'rgb8':
-                frame = frame[:, :, ::-1]
+            frame = image_msg_to_frame(msg)
             mode = str(self.get_parameter('camera_lane_mode').value)
             if mode == 'line':
                 observation = detect_lane_error(

@@ -204,6 +204,14 @@
 - gate 변화: 없음. 라이브러리 계층이라 ROS-SIM~FIELD는 N/A.
 - 결정: D-157(명시 allowlist) 유지, D-129 정정 2026-09-29.
 
+## 2026-09-30 · uncommitted · fix(harness): 역할 표면 검증을 저장소 안 도구로 — LOCAL cmd 재현 가능화
+
+- 변경: design-system-polish worktree의 평가 스크립트(visible_roles.py)가 X:\DevTemp 임시 경로에만 있어 LOCAL gate cmd가 다른 호스트에서 재현 불가능했다. 같은 측정(실 CORE TestClient + Chromium, 역할×표면×뷰포트, kind 누락·페이지 오류·수평 오버플로·첫 응답 실패 검사)을 `tools/web_visible_roles.py`로 저장소 안에 들였다 — headless, 루트 자체 위치 계산, 위반 시 exit 1. LOCAL cmd를 이 도구로 교체했다.
+- 증거: 도구 실행 10 표면 방문 exit 0 (2026-09-30 Windows, 리포트: 0 missing kinds·0 page errors·오버플로 없음·첫 응답 전부 200). 계약 시험 test_web_visible_roles 9 passed(판정 함수 변이 3종·실 CORE /console·/setup·/device 200 포함).
+- gate 변화: 없음 (LOCAL GO 유지, cmd만 재현 가능해짐).
+- 결정: 스크린샷·리포트는 기본 임시 디렉터리, --out-dir로 증거 디렉터리 지정 — 검증 게이트와 증거 보관을 분리한다.
+- 교훈: 검증 cmd가 임시 디렉터리를 가리키는 순간 그 gate 기록은 그 호스트에서만 유효하다 — 도구가 저장소에 없으면 gate가 아니다.
+
 ## 2026-09-30 · uncommitted · test(roles): D-358 S2 역할 경계 시험과 표면 소유 목록
 
 - 변경: `surfaces.yaml` 모든 표면에 `role`(D-358 1항 한 줄 요약)과 `owns`(4항 소유 조작) 목록을 더했다. 레지스트리 로더가 빈 `role`, 없는 `owns`, 중복 소유, 사유 없는 표 항목을 거절한다. 대시보드 `manual-drive`는 `transitional: "D-358 4항 1"`로 표시했다. 새 `test/architecture/test_app_roles.py`가 천장 카메라 앱(`/api/v1/`·`/api/fleet/`(pairing/v1 제외)·`cmd_vel`·`estop` 없음), Vision(`/api/v1/`·`cmd_vel` 없음, Fleet에는 sightings만), Fleet vision 라우트(lease만 발급, 바이트 없음), 소유 겹침(estop·transitional만 허용)을 검사한다.

@@ -63,9 +63,18 @@ class DiscoveryStore:
                            for row in rows}.values())
         self._seen_at = self._clock()
 
-    def snapshot(self, registered: dict[str, str], paired: dict[str, dict]) -> dict:
+    def rows(self) -> list[dict]:
+        """Current unexpired scan rows (copies); empty when the scanner is offline."""
+        if self._seen_at is None or self._clock() - self._seen_at > self._ttl_s:
+            return []
+        return [dict(row) for row in self._rows]
+
+    def snapshot(self, registered: dict[str, str], paired: dict[str, dict],
+                 enrolled: dict[str, str] | None = None) -> dict:
+        """`enrolled` maps a lowercase discovery name to its enrolled robot_id (D-361 8)."""
         if self._seen_at is None or self._clock() - self._seen_at > self._ttl_s:
             return {"devices": [], "scanner_online": False}
+        enrolled = enrolled or {}
         counts = {}
         for row in self._rows:
             counts[row["name"]] = counts.get(row["name"], 0) + 1
@@ -83,8 +92,15 @@ class DiscoveryStore:
                     matching.append(robot_id)
             status = "registration_pending"
             robot_id = matching[0] if len(matching) == 1 else None
+            enrolled_id = enrolled.get(row["name"].lower())
             if counts[row["name"]] > 1 or len(matching) > 1:
                 status = "conflict"
+            elif enrolled_id is not None:
+                # Matched by name; an address difference is the register's own state.
+                robot_id = enrolled_id
+                agent = paired.get(robot_id) or {}
+                status = ("verified_online" if agent.get("online") and agent.get("device_uid")
+                          and agent.get("device_name") == row["name"] else "enrolled")
             elif robot_id is not None:
                 agent = paired.get(robot_id) or {}
                 if agent.get("online") and agent.get("device_uid"):
@@ -92,6 +108,7 @@ class DiscoveryStore:
                               and row["stage"] == "CORE_READY" else "conflict")
                 else:
                     status = "pairing_pending"
-            devices.append({**row, "robot_id": robot_id, "status": status})
+            devices.append({**row, "robot_id": robot_id, "status": status,
+                            "enrollable": status == "registration_pending"})
         return {"devices": sorted(devices, key=lambda item: (item["name"], item["address"])),
                 "scanner_online": True}

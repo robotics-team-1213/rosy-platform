@@ -16,16 +16,18 @@
 from __future__ import annotations
 
 import enum
-import json
-import socket
-import urllib.error
-import urllib.request
 from dataclasses import dataclass, field
-from typing import Any, Optional
+from typing import Optional
+
+from core_common.device_poll import PollReachability, poll_json
+
 
 #: 이 두 필드가 없으면 도크가 답한 것으로 치지 않는다. 빠진 값을 False 로
 #: 채우면 "충전 안 됨"과 "말을 안 함"이 한 값으로 뭉개진다.
 _REQUIRED = ("load_present", "charging")
+
+#: D-352: 도크의 4상태와 공통 폴링 유틸리티의 4상태가 1:1 대응한다.
+
 
 
 class DockReachability(str, enum.Enum):
@@ -83,61 +85,36 @@ class DockAgent:
         """도크에 한 번 묻는다. 절대 예외를 올리지 않고 절대 timeout 보다 오래
         막지 않는다 — 이 호출은 틱 안에서 돌고, 멎은 도크가 틱을 멈춰 세우면
         안 된다.
+
+        D-353: 폴링 자체는 `core_common.device_poll.poll_json`에 위임한다 —
+        새 외부 장비가 같은 패턴을 자동으로 공유한다.
         """
         if self._base_url is None:
             return _failure(DockReachability.UNREACHABLE, "no agent url configured")
 
         url = f"{self._base_url}{self._path}"
-        try:
-            with urllib.request.urlopen(url, timeout=self._timeout_s) as response:
-                if response.status != 200:
-                    return _failure(DockReachability.BAD_RESPONSE,
-                                    f"http {response.status}")
-                raw = response.read()
-        except socket.timeout as error:
-            return _failure(DockReachability.TIMEOUT, str(error) or "timed out")
-        except urllib.error.HTTPError as error:
-            return _failure(DockReachability.BAD_RESPONSE, f"http {error.code}")
-        except urllib.error.URLError as error:
-            # URLError 는 연결 거부도 읽기 타임아웃도 감싼다. 안쪽을 봐야
-            # 네트워크 문제와 느린 도크를 구분할 수 있다.
-            if isinstance(error.reason, socket.timeout):
-                return _failure(DockReachability.TIMEOUT, "timed out")
-            return _failure(DockReachability.UNREACHABLE, str(error.reason))
-        except OSError as error:
-            return _failure(DockReachability.UNREACHABLE, str(error))
+        reachability, document, error = poll_json(
+            url, timeout_s=self._timeout_s, required_fields=_REQUIRED)
 
-        return self._parse(raw)
-
-    def _parse(self, raw: bytes) -> DockStatus:
-        try:
-            document: Any = json.loads(raw.decode("utf-8"))
-        except (ValueError, UnicodeDecodeError) as error:
-            return _failure(DockReachability.BAD_RESPONSE, f"unparseable: {error}")
-
-        if not isinstance(document, dict):
-            return _failure(DockReachability.BAD_RESPONSE, "body is not an object")
-
-        missing = [key for key in _REQUIRED if key not in document]
-        if missing:
-            return _failure(DockReachability.BAD_RESPONSE,
-                            f"missing field(s): {', '.join(missing)}")
-
-        faults = document.get("faults") or []
-        if not isinstance(faults, list):
-            return _failure(DockReachability.BAD_RESPONSE, "faults is not a list")
-
-        return DockStatus(
-            reachability=DockReachability.OK,
-            load_present=bool(document["load_present"]),
-            charging=bool(document["charging"]),
-            current_a=_optional_float(document.get("current_a")),
-            output_voltage_v=_optional_float(document.get("output_voltage_v")),
-            output_enabled=_optional_bool(document.get("output_enabled")),
-            faults=tuple(str(fault) for fault in faults),
-            dock_id=_optional_str(document.get("dock_id")),
-            firmware=_optional_str(document.get("firmware")),
-        )
+        if reachability is PollReachability.OK:
+            faults = document.get("faults") or []
+            return DockStatus(
+                reachability=DockReachability.OK,
+                load_present=bool(document["load_present"]),
+                charging=bool(document["charging"]),
+                current_a=_optional_float(document.get("current_a")),
+                output_voltage_v=_optional_float(document.get("output_voltage_v")),
+                output_enabled=_optional_bool(document.get("output_enabled")),
+                faults=tuple(str(f) for f in faults),
+                dock_id=_optional_str(document.get("dock_id")),
+                firmware=_optional_str(document.get("firmware")),
+            )
+        dock_reachability = {
+            PollReachability.UNREACHABLE: DockReachability.UNREACHABLE,
+            PollReachability.TIMEOUT: DockReachability.TIMEOUT,
+            PollReachability.BAD_RESPONSE: DockReachability.BAD_RESPONSE,
+        }[reachability]
+        return _failure(dock_reachability, error or "unknown")
 
 
 def _optional_float(value: Any) -> Optional[float]:

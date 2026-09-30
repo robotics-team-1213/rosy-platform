@@ -5,11 +5,11 @@
 
 | 모듈 | owner | last verified | SOURCE | LOCAL | ROS-SIM | ARTIFACT | DEVICE | FIELD |
 |---|---|---|---|---|---|---|---|---|
-| [core](src/runtime/gateway/progress.md) | CORE | uncommitted (2026-09-22) | GO | GO | GO | HOLD | HOLD | PARKED |
-| [deploy](deploy/progress.md) | 릴리스·플랫폼 | uncommitted (2026-09-22) | GO | GO | N/A | HOLD | HOLD | N/A |
-| [control](src/runtime/sensing/progress.md) | CONTROL | uncommitted (2026-09-22) | GO | GO | HOLD | HOLD | HOLD | PARKED |
-| [fleet](src/site/fleet/progress.md) | FLEET | uncommitted (2026-09-29) | GO | GO | HOLD | PARKED | PARKED | PARKED |
-| [games](src/site/games/progress.md) | GAMES | 6277a009 (2026-09-29) | GO | GO | N/A | N/A | PARKED | PARKED |
+| [core](src/runtime/gateway/progress.md) | CORE | bed604ef (2026-09-30) | GO | GO | GO | HOLD | HOLD | PARKED |
+| [deploy](deploy/progress.md) | 릴리스·플랫폼 | c8050390 (2026-09-30) | GO | GO | N/A | HOLD | HOLD | N/A |
+| [control](src/runtime/sensing/progress.md) | CONTROL | bed604ef (2026-09-30) | GO | GO | HOLD | HOLD | HOLD | PARKED |
+| [fleet](src/site/fleet/progress.md) | FLEET | bed604ef (2026-09-30) | GO | GO | HOLD | PARKED | PARKED | PARKED |
+| [games](src/site/games/progress.md) | GAMES | bed604ef (2026-09-30) | GO | GO | N/A | N/A | PARKED | PARKED |
 | [overhead](src/site/overhead/progress.md) | SITE | c5e87977 (2026-09-28) | GO | GO | N/A | N/A | PARKED | PARKED |
 | [gz_sim](src/sim/gz_sim/progress.md) | SIM | uncommitted (2026-09-21) | GO | GO | GO | N/A | N/A | N/A |
 | [navigation](src/runtime/navigation/progress.md) | NAV | dc89264 (2026-09-17) | GO | GO | HOLD | HOLD | HOLD | PARKED |
@@ -19,21 +19,21 @@
 | [imu_bno055](src/drivers/imu_bno055/progress.md) | 장치 | dc89264 (2026-09-17) | GO | GO | HOLD | HOLD | PARKED | PARKED |
 | [sensor_adc](src/products/pinky_pro/adc/progress.md) | 장치 | dc89264 (2026-09-17) | GO | GO | HOLD | HOLD | PARKED | PARKED |
 | [lamp_control](src/products/pinky_pro/lamp/progress.md) | 장치 | dc89264 (2026-09-17) | GO | GO | HOLD | HOLD | PARKED | PARKED |
-| [core_common](src/contracts/foundation/progress.md) | CORE | uncommitted (2026-09-29) | GO | GO | N/A | N/A | N/A | N/A |
-| [core_events](src/runtime/events/progress.md) | CORE | uncommitted (2026-09-24) | GO | GO | N/A | N/A | N/A | N/A |
-| [core_features](src/runtime/services/progress.md) | CORE | uncommitted (2026-09-25) | GO | GO | N/A | N/A | N/A | N/A |
-| [core_api_web](src/runtime/api_web/progress.md) | CORE | uncommitted (2026-09-26) | GO | GO | N/A | N/A | N/A | N/A |
-| [web_common](src/hmi/web_common/progress.md) | CORE | 9049bd37 (2026-09-27) | GO | GO | N/A | N/A | N/A | N/A |
+| [core_common](src/contracts/foundation/progress.md) | CORE | bed604ef (2026-09-30) | GO | GO | N/A | N/A | N/A | N/A |
+| [core_events](src/runtime/events/progress.md) | CORE | bed604ef (2026-09-30) | GO | GO | N/A | N/A | N/A | N/A |
+| [core_features](src/runtime/services/progress.md) | CORE | bed604ef (2026-09-30) | GO | GO | N/A | N/A | N/A | N/A |
+| [core_api_web](src/runtime/api_web/progress.md) | CORE | bed604ef (2026-09-30) | GO | GO | N/A | N/A | N/A | N/A |
+| [web_common](src/hmi/web_common/progress.md) | CORE | 0409c371 (2026-09-30) | GO | GO | N/A | N/A | N/A | N/A |
 | [dashboard](src/hmi/dashboard/progress.md) | 화면 | e7cdf490 (2026-09-29) | GO | GO | N/A | HOLD | N/A | N/A |
-| [omx_adapter](src/products/omx/adapter/progress.md) | OMX workcell | uncommitted (2026-09-26) | GO | GO | HOLD | HOLD | PARKED | PARKED |
+| [omx_adapter](src/products/omx/adapter/progress.md) | OMX workcell | bed604ef (2026-09-30) | GO | GO | HOLD | HOLD | PARKED | PARKED |
 | [interfaces](src/contracts/interfaces/progress.md) | 장치 | dc89264 (2026-09-17) | GO | GO | N/A | HOLD | HOLD | PARKED |
 | [pinky_pro](src/products/pinky_pro/profile/progress.md) | 로봇 통합 | uncommitted (2026-09-24) | GO | GO | GO | HOLD | HOLD | PARKED |
 | [omx](src/products/omx/profile/progress.md) | OMX workcell | uncommitted (2026-09-26) | GO | GO | HOLD | HOLD | PARKED | PARKED |
 | [description](src/sim/description/progress.md) | 로봇 통합 | uncommitted (2026-09-21) | GO | GO | GO | HOLD | HOLD | PARKED |
 | [dock](firmware/dock/progress.md) | 도킹 | dc89264 (2026-09-17) | GO | GO | HOLD | HOLD | HOLD | PARKED |
 | [signal](firmware/signal/progress.md) | 사이트 인프라 | uncommitted (2026-09-22) | GO | GO | PARKED | HOLD | HOLD | PARKED |
-| [docs](docs/progress.md) | 거버넌스 | uncommitted (2026-09-30) | GO | HOLD | N/A | N/A | N/A | N/A |
-| [isaac_sim](src/sim/isaac_sim/progress.md) | sim | uncommitted (2026-09-30) | GO | GO | N/A | N/A | N/A | N/A |
+| [docs](docs/progress.md) | 거버넌스 | bed604ef (2026-09-30) | GO | GO | N/A | N/A | N/A | N/A |
+| [isaac_sim](src/sim/isaac_sim/progress.md) | sim | bed604ef (2026-09-30) | GO | GO | HOLD | N/A | N/A | N/A |
 
 ## HOLD blockers
 
@@ -41,7 +41,7 @@
 - core DEVICE: Pi bench Device 설치와 device-readback.sh --json 증거 없음. G4 viewport·보정 상태기계 미실행
 - deploy ARTIFACT: Ubuntu 24.04.5 raspi base URL/SHA는 고정했으나 native ARM64 host 다운로드 검증, native Jazzy/ROSY payload 실행, 완성 이미지·SBOM·서명 전
 - deploy DEVICE: Ubuntu native product image의 SD write/readback, Pi 5 boot, ROS graph, 장치 ACL, deadman 실기 증거 없음
-- control ROS-SIM: 정확한 v2 mapping/CORE/Fleet 슬라이스는 2026-09-21 GO(52/52, 접근 가능 unknown 0%, 충돌 없음). 그러나 Control 전체 gate에는 sensing/camera/calibration/planning/safety-policy 노드 그래프 재실행과 물리 센서가 남아 있다. 레거시 전체 스택은 CORE와 병행 기동하지 않는다(D-38). 단, D-162 슬라이스(road_observer_node+scene context)는 2026-09-22 노드 그래프 검증을 통과했다(docs/validation/scene-context-control-node-2026-09-22).
+- control ROS-SIM: 정확한 v2 mapping/CORE/Fleet 슬라이스는 2026-09-21 GO(52/52). 그러나 Control 전체 gate에는 calibration/planning/safety-policy 노드 그래프 재실행과 물리 센서가 남아 있다. 레거시 전체 스택은 CORE와 병행 기동하지 않는다(D-38). 통과한 슬라이스: D-162 road_observer+scene context(2026-09-22), camera 슬라이스 — camera_detect_node 무장치 부팅 그래프 + line_observer_node camera 모드 5단계 레인 관측(2026-09-30 PASS, docs/validation/control-camera-line-ros-sim-2026-09-30; 이 회차에서 _OpenCVCamera GStreamer 무장치 부팅 결함 발견·수리 27def3de).
 - control ARTIFACT: 서명된 ARM64 manifest·immutable digest 발행 전. 흡수된 코드는 deploy가 소유하는 OS 이미지에 번들된다
 - control DEVICE: Pi bench Device 설치와 device-readback.sh --json 증거 없음. Control sensor adapter 활성화는 Device 보정 generation에 묶인다(D-47)
 - fleet ROS-SIM: D-87: 현재 트리의 colcon install/setup.bash가 없다. 2026-09-17 WSL Task 14 로그는 설계 입력이며 GO가 아니다 (D-89)
@@ -51,9 +51,9 @@
 - bringup ROS-SIM: Dynamixel/LiDAR/battery publisher 노드의 ROS 2 Jazzy 실물 또는 컨테이너 재실행 증거 없음
 - bringup ARTIFACT: ARM64 로봇 이미지에 포함되나(Dockerfile/compose) 서명 manifest와 immutable digest 발행 전
 - bringup DEVICE: Pi bench Device 설치와 device-readback.sh --json 증거 없음. PinkyProAdapter의 실장치 SDK 구동 확인도 미실행
-- emotion ROS-SIM: rclpy set_emotion 서비스 노드가 있음. ROS 2 Jazzy 컨테이너 재실행 필요, 미실행
+- emotion ROS-SIM: emotion.py가 모듈 최상위에서 `from .rosy_lcd import LCD`를 부르고 rosy_lcd는 spidev·RPi.GPIO를 최상위에서 import한다 — Pi가 아닌 Jazzy 컨테이너에서 노드 import가 죽는다. 컨테이너 smoke는 하드웨어 import 지연/가드 리팩터가 선행 조건이다(없으면 Pi 벤치는 DEVICE 계층이다)
 - emotion ARTIFACT: hardware 프로필이 이미지에 배선되지 않았다. core/io 이미지 제외는 test/test_nav2_hardware_slice.py::test_io_image_packages_nav2_without_slam_or_aux_drivers가 고정한다
-- led ROS-SIM: rclpy 서비스 서버(set_led/set_brightness) 노드가 있음. ROS 2 Jazzy 컨테이너 재실행 필요, 미실행
+- led ROS-SIM: 노드의 `from rosylib import LED`는 공개 트리에서 의도적으로 실패한다(rosylib는 repo 밖 bench-only 헬퍼 — bringup/test/test_rosylib_battery.py:140이 그 실패를 고정). 컨테이너 smoke는 사유 LED 구현 반입 또는 stub 계약 결정이 있기 전까지 불가능하다
 - led ARTIFACT: hardware 프로필이 이미지에 배선되지 않았다. core/io 이미지 제외는 test/test_nav2_hardware_slice.py::test_io_image_packages_nav2_without_slam_or_aux_drivers가 고정한다
 - imu_bno055 ROS-SIM: C++ 드라이버 노드(rclcpp)가 있음. ROS 2 Jazzy 컨테이너 재실행 필요, 미실행
 - imu_bno055 ARTIFACT: hardware 프로필이 이미지에 배선되지 않았다(core/io 이미지 제외는 test/test_nav2_hardware_slice.py::test_io_image_packages_nav2_without_slam_or_aux_drivers가 고정). 실물 드라이버 빌드·주입 버스 실행 시험도 Linux ARM64 ROS 환경 필요
@@ -77,4 +77,4 @@
 - dock DEVICE: 물리 도크 벤치 설치와 device-readback류 증거 없음. `dock/firmware/rosy_dock/rosy_dock.ino` 참조 구현만 존재하고 실기 조립·통전 시험 기록이 없다
 - signal ARTIFACT: ESP32 Arduino 펌웨어 빌드·플래시 증거 없음. 이 호스트에는 ESP32 toolchain이 없어 실행하지 않았다
 - signal DEVICE: 물리 벤치(G-S1) 미실행 — 수용 기준·절차는 docs/plans/2026-09-22-signals-acceptance-plan.md 로 고정했다. 최초 관문은 B0 신호등 입고 특성화(전압/배선/색당 전류), 이후 B2 부팅 글리치 10회(AC-02), B3 침묵→점멸 12 s(AC-11), B4 공유기 재시작 자기 복귀(AC-12, W1 위험)
-- docs LOCAL: 이전 blocker(dashboard logs.md malformed heading 2건)는 해소 — 2026-09-30 현재 validate_log 0 errors. 남은 실패는 병행 세션 진행 중인 isaac_sim 스코어카드 기준 누락과 fleet 크기 재판정(11912줄) 2건
+- isaac_sim ROS-SIM: Isaac Sim 6.1 실행·USD import·ROS graph는 GPU 호스트에서 미실행. 명령 신선도 watchdog 부재로 장시간 주행·Nav2 수용 전 (D-322)

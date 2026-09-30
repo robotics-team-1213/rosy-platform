@@ -47,5 +47,5 @@
 - 2026-09-30 · uncommitted · docs(adr): D-358 앱 역할 ADR을 D-370으로 재번호
 - 2026-09-30 · uncommitted · feat(icons): D-358 S3 이름·아이콘·파비콘
 - 2026-09-30 · uncommitted · test(roles): D-358 S2 역할 경계 시험과 표면 소유 목록
+- 2026-09-30 · uncommitted · fix(harness): 역할 표면 검증을 저장소 안 도구로 — LOCAL cmd 재현 가능화
 - 2026-09-29 · uncommitted · web-surface-hardening: `/common` allowlist은 `manifest.json` 하나
-- 2026-09-29 · uncommitted · D-335 ui-brand 홈 링크 공용 동작
