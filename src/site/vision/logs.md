@@ -168,3 +168,9 @@
 - 증거: `python -m pytest src/site/vision/test -q` 112 passed (2026-09-30 Windows).
 - gate 변화: 없음. SOURCE/LOCAL GO 유지. vision 이미지 재빌드·mDNS 인스턴스 확인은 DEVICE 절차.
 - 결정: D-377. 와이어 이름(`rosy-overhead/1`, `/overhead/v1/frames`, `_rosy-overhead._tcp`, `/api/vision/*`, compose 서비스 `vision`, 이미지 `rosy-site-vision`)은 그대로.
+
+## 2026-09-30 · 80096516 · feat(vision): optional hello.lens logged and exposed
+- 변경: `protocol.parse_hello_lens()`가 hello의 선택 필드 `lens {kind: wide|standard, focal_mm, hfov_deg}`를 읽는다. 없거나 잘못된 lens는 무시하고 hello를 거절하지 않는다(`validate_hello`는 그대로). ingest가 연결 시 lens를 로그로 남기고, 미리보기 프레임 헤더 `X-Source-Lens: kind=…;focal_mm=…;hfov_deg=…`와 field-proposal 본문 `lens`로 알린다(보정 선택용).
+- 근거: 배포된 수신기(main의 `site_vision/protocol.py` 포함)는 모르는 hello 필드를 무시한다. 그래서 와이어 추가만으로 충분하고 `rosy-overhead/1`은 바꾸지 않는다.
+- 증거: `python -m pytest src/site/vision/test -q` 127 passed (2026-09-30 Windows). 공유 벡터 `test/fixtures/protocol/overhead-ingest.v1.json`에 `hello_with_lens`, `hello_lens.{valid,ignored}` 추가(Kotlin `ProtocolTest`도 읽음).
+- gate 변화: 없음. 초광각 프레임의 field_detect 결과는 DEVICE 단계에서 기록(폰 대기).
