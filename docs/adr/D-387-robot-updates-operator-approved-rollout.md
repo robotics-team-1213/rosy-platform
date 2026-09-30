@@ -3,9 +3,9 @@
 **Status:** Proposed (2026-10-01). 문서만 있다. 구현 GO, DEVICE·FIELD 승격, 로봇 조작이 아니다. 사용자가 고른 운용 방식은 "승인 후 자동"이다.
 
 - [D-225](D-225-update-without-reflash-and-faster-card-writes.md)의 세 계층 모델을 네 계층으로 넓힌다. D-225가 "보류"로 둔 Pi 펌웨어 A/B와, 기각한 RAUC 계열은 **4계층(전체 이미지)에서만** 다시 연다.
-- D-385 이미지 계층 동기화(`feat/release-image-layer-sync`의 `docs/adr/D-385-payload-push-syncs-image-layer.md`, 미병합, 실기 2026-10-02)를 2계층의 전제로 둔다.
+- D-388 이미지 계층 동기화(`feat/release-image-layer-sync`, 미병합, 실기 2026-10-02)를 2계층의 전제로 둔다.
 
-**번호:** 2026-10-01 기준으로 D-385는 세 브랜치(`feat/release-image-layer-sync`, `fix/card-write-confirm-and-artifact-download`, `feat/expressive-rosy`)가 함께 쓰고 있고, D-386은 `omx-sim-phases` 작업 트리가 잡았다. 그래서 D-387을 쓴다. 이 문서의 "D-385"는 이미지 계층 동기화 ADR을 가리킨다. 그 ADR 번호가 바뀌면 이 문서의 참조도 함께 고친다.
+**번호:** 2026-10-01에 D-385가 세 브랜치에서 충돌해 다시 매겼다. main의 D-385는 `feat/expressive-rosy`, D-386은 `omx-sim-phases`, 이미지 계층 동기화는 D-388(`feat/release-image-layer-sync`), 긴급 카드 쓰기는 D-389(`fix/card-write-confirm-and-artifact-download`)다. 이 ADR은 D-387이다.
 
 ### Context
 
@@ -16,7 +16,7 @@
 | 계층 | 내용 | 지금의 갱신 경로 | 되돌림 |
 |---|---|---|---|
 | 1 앱 payload | `/opt/rosy/releases/<id>`(`install/`, 릴리스 사본 `deploy/robot/native/`) | PC `rosy-release-push.ps1`이 ssh/scp로 보내고 `activate-release.sh` → `native/native_release.py activate`를 부른다 | `current`/`previous` 링크와 journal을 쓴다. `rosy-runtime.target` 시작이 실패하면 자동으로 되돌린다. 이 실패는 `rosy-core.service` `ExecStartPost=wait-core-ready.py`가 45 s 안에 준비되지 못할 때 생긴다. 부팅 때는 `recover()`가 복구한다 |
-| 2 이미지 계층 | 유닛, `/opt/rosy/native-runtime`, udev, modprobe | 지금은 손으로 깐다(`rosy-release-push` 스킬 6단계). D-385는 릴리스 안의 `sync-image-layer.py`를 PC가 부르게 한다 | D-385의 백업 매니페스트, 롤백 때 복원, `pending.json` |
+| 2 이미지 계층 | 유닛, `/opt/rosy/native-runtime`, udev, modprobe | 지금은 손으로 깐다(`rosy-release-push` 스킬 6단계). D-388는 릴리스 안의 `sync-image-layer.py`를 PC가 부르게 한다 | D-388의 백업 매니페스트, 롤백 때 복원, `pending.json` |
 | 3 기반 시스템 | apt 집합·핀, `/usr/local` 파이썬, `config.txt`/`cmdline.txt`, 커널·모듈 | 카드를 다시 굽는 것뿐이다 | 없다 |
 | 4 전체 이미지 | 파티션, 루트 파일시스템 전체 | 카드를 다시 굽는다(D-164, D-291, D-180/D-187 readback) | 옛 카드 |
 
@@ -39,7 +39,7 @@
 
 **2. 2026-10-01 사고.** 에이전트 세션 셋이 조율 없이 같은 로봇에 푸시하거나 재시작했고, 그 가운데 하나가 교정 주행을 끊었다. 막을 장치가 없었다.
 - `native-release.lock`은 전환 몇 초 동안만 잡힌다.
-- ssh 재시작과 D-385의 유닛 재시작은 그 잠금을 아예 거치지 않는다.
+- ssh 재시작과 D-388의 유닛 재시작은 그 잠금을 아예 거치지 않는다.
 
 **3. 2026-10-01 교훈 네 건.** 설계가 각각을 어떻게 막는지는 결정 12에 적는다.
 - `payload-runtime-id-hashes-comments-too`: 주석을 고친 것만으로 모든 로봇이 payload를 받지 못하게 됐다.
@@ -68,7 +68,7 @@
 
 - 릴리스 id(`YYYY.MM.DD-NNN`)는 하나다. 매니페스트에 다음 필드를 둔다.
   - `layers`: 이번 릴리스가 바꾸는 계층. `release/artifact_impact.py`의 판정을 쓴다.
-  - `image_layer`: D-385 허용 목록 사본.
+  - `image_layer`: D-388 허용 목록 사본.
   - `migrations`: 결정 6.
   - `requires`: 최소 migration 수준, 허용하는 런타임 id 집합, 최소 이미지 세대.
 - 로봇은 `requires`를 만족하지 못하는 릴리스를 스테이징 단계에서 **거절하고 이유를 보고**한다. 활성화 도중에 거절하지 않는다.
@@ -93,7 +93,7 @@
   2. 적격성을 다시 검사한다.
   3. 3계층 migration(userspace)을 적용한다.
   4. 1계층을 활성화한다.
-  5. 2계층을 동기화한다(D-385).
+  5. 2계층을 동기화한다(D-388).
   6. 바뀐 유닛을 재시작한다.
   7. 건강 판정을 한다.
   8. boot migration이 있으면 tryboot 재부팅으로 넘어간다.
@@ -113,7 +113,7 @@
   - 강제 해제는 administrator가 이유를 적어야 하고, 기록이 남는다.
 - **리스가 살아 있는 동안.** CORE 스냅샷은 `activity: MAINTENANCE`를 싣는다. 움직임을 시작하는 요청(teleop, mode, goal, line-follow, dock)은 모두 409 `MAINTENANCE_ACTIVE`를 받는다. 비상정지와 정지 경로는 늘 열려 있다. 교정 세션 리스와 같은 모양을 쓰고, 두 리스는 서로 배타다.
 - **리스를 반드시 잡아야 하는 도구.**
-  - `rosy-release-push.ps1`과 D-385 동기화
+  - `rosy-release-push.ps1`과 D-388 동기화
   - `rollback-release.sh`
   - 유닛을 재시작하는 모든 스킬과 스크립트: `rosy-hw-bringup`, `rosy-device-access`의 재시작 단계, `rosy-release-push`
   - 콘솔의 Apply
@@ -180,7 +180,7 @@
 | 계층 | 되돌림 | 부팅할 수 없을 때 |
 |---|---|---|
 | 1 | `native_release.py` `previous`, 부팅 때 `recover()` | 옛 릴리스로 recover |
-| 2 | D-385 백업 매니페스트 복원 | 다음 부팅에서 `pending.json`을 이어서 처리 |
+| 2 | D-388 백업 매니페스트 복원 | 다음 부팅에서 `pending.json`을 이어서 처리 |
 | 3 userspace | migration `revert`와 .deb 캐시 | 1·2계층을 되돌린 뒤 revert, 실패하면 RECOVERY HOLD |
 | 3 boot | tryboot 플래그가 리셋으로 지워진다(firmware) | watchdog 리셋 → 옛 `config.txt`와 커널 |
 | 4 | A/B 슬롯(`autoboot.txt` `tryboot_a_b`) | watchdog 리셋 → 옛 슬롯 |
@@ -235,8 +235,8 @@
 |---|---|
 | 런타임 id가 주석 바이트까지 해시한다 | `requires.runtime_ids`를 스테이징에서 먼저 검사한다. 불일치는 적용 전 `refused`로 드러나고, 활성화 실패로 나타나지 않는다. 런타임을 바꾸는 일은 결정 6의 나란히 설치와 기록 전환 migration으로만 한다. id 정의와 `test_python_runtime_id.py` 핀은 그대로 둔다 |
 | 일괄 경로 치환이 기기 릴리스 경로를 건드렸다 | 기기 경로(`/opt/rosy/releases/<id>/deploy/robot/native/…`, migration 경로, `/boot/firmware/rosy-try/`)는 기기 계약이다. 스키마와 생산자(payload 빌더)에서 경로를 만들고, `test_release_layout_paths.py` 방식의 존재 검사가 지킨다. migration 디렉터리 이름과 허용 경로도 같은 시험에 넣는다 |
-| payload 푸시가 이미지 계층을 옛것으로 남긴다 | 2계층 동기화(D-385)를 적용 트랜잭션의 필수 단계로 둔다. 건강 판정에 "이미지 계층 드라이런 결과가 비어 있음"을 넣는다. 드리프트가 남으면 커밋하지 않는다 |
-| readback이 CPU를 빼앗긴다 | 네트워크 경로는 카드 기록을 대체한다. 기기 쪽 검증은 스테이징 단계에서 `Nice`와 idle IO로 돌고, 시간 상한이 아니라 진행률로 판정한다. 카드 경로가 남는 경우(결정 14)의 규칙은 D-385 긴급 카드 쓰기 ADR과 해당 교훈을 따른다 |
+| payload 푸시가 이미지 계층을 옛것으로 남긴다 | 2계층 동기화(D-388)를 적용 트랜잭션의 필수 단계로 둔다. 건강 판정에 "이미지 계층 드라이런 결과가 비어 있음"을 넣는다. 드리프트가 남으면 커밋하지 않는다 |
+| readback이 CPU를 빼앗긴다 | 네트워크 경로는 카드 기록을 대체한다. 기기 쪽 검증은 스테이징 단계에서 `Nice`와 idle IO로 돌고, 시간 상한이 아니라 진행률로 판정한다. 카드 경로가 남는 경우(결정 14)의 규칙은 D-389 긴급 카드 쓰기 ADR과 해당 교훈을 따른다 |
 
 **13. 안전 불변식.** 모든 단계의 시험이 이것을 고정한다.
 
@@ -274,14 +274,14 @@
 **P1 — PC가 여러 로봇에 1·2계층을 민다**
 
 - **범위**
-  - `rosy-release-push.ps1`이 로봇 목록을 받아 한 대씩 돈다: claim 확인과 획득 → 적격성(CORE 상태 읽기) → 푸시 → 활성화 → D-385 동기화 → 건강 판정 → claim 해제.
+  - `rosy-release-push.ps1`이 로봇 목록을 받아 한 대씩 돈다: claim 확인과 획득 → 적격성(CORE 상태 읽기) → 푸시 → 활성화 → D-388 동기화 → 건강 판정 → claim 해제.
   - 로봇 하나라도 실패하면 멈춘다.
   - 결정 4의 잠정 claim 규칙을 모든 스킬에 넣는다.
 - **증거와 게이트**
   - HOST: 순서와 중단을 가짜 ssh로 시험하고, claim 충돌 시 멈추는지, 이동 중이면 거절하는지 시험한다.
   - DEVICE: 벤치 두 대에 연속 적용하고 롤백한다. 한 대를 이동시킨 채 두어 거절되는지 본다.
   - FIELD: 해당 없음.
-- **선행 조건:** D-385 실기(2026-10-02)와 D-225 `UPDATE_GO`.
+- **선행 조건:** D-388 실기(2026-10-02)와 D-225 `UPDATE_GO`.
 - **수동으로 남는 것:** 서명, 릴리스 선택, 푸시 시작, 3·4계층.
 - **열린 질문:** claim 파일 위치와 에이전트 세션 식별자 규약.
 
@@ -342,6 +342,31 @@
   - adaptive 갱신의 실제 절감량
 - **수동으로 남는 것:** 변환 카드 기록과 첫 설치.
 
+### 사용자 결정 필요
+
+각 항목의 권장 기본값은 사용자가 달리 정하지 않으면 해당 단계 계획서가 따르는 값이다.
+
+1. **Fleet 업데이트 전용 자격(결정 5, P3).**
+   - 권장: 새 자격 유형을 둔다. D-361 등록 흐름으로 로봇마다 하나를 발급하고, 권한은 `release.stage|apply|rollback|status`와 정비 리스 획득만 준다. 운전 권한과 administrator 전체 권한은 주지 않는다.
+   - 기각한 안: Fleet에 administrator 토큰을 보관하는 것.
+2. **배터리 문턱과 canary 대기(결정 10).**
+   - 권장: 배터리 40% 이상이거나 충전 중이어야 한다. 재부팅이 있는 적용은 60% 이상이어야 한다.
+   - 권장: 첫 로봇이 커밋한 뒤 10분 동안 되돌림이 없어야 다음 로봇으로 간다. 운영자는 대기를 줄일 수 있지만 0으로 건너뛸 수는 없다.
+3. **정비 리스 소유 프로세스(결정 4, P3).**
+   - 권장: `host_agent.py` 계약(허용 목록, confirm, 감사)을 네이티브 이미지용 root 서비스로 옮겨 리스를 소유하게 한다. CORE는 이 리스를 읽어 `activity: MAINTENANCE`와 409만 낸다.
+   - 대안: 적용 때만 도는 새 root oneshot. 이 경우 수명과 heartbeat를 따로 설계해야 한다.
+4. **A/B 카드 크기와 파티션 표(결정 15, P4).**
+   - 권장: 카드는 32 GB 이상, 파티션 표는 GPT다. 지금 이미지의 raw 크기가 약 8.6 GB라서, root 슬롯 두 개(각 약 10 GB)와 boot 두 개, data가 들어간다. MBR 4개 주 파티션 한계를 extended로 피하지 않아도 된다.
+   - P4 스파이크에서 Pi 5 부트로더의 GPT 부팅을 실측으로 확인한 뒤 확정한다.
+5. **Ubuntu 24.04 tryboot 기기 확인(Context 4, 결정 7, P2 첫 게이트).**
+   - 권장: P2 착수 전에 벤치 로봇 한 대에서 읽기 전용으로 확인한다. 확인할 것:
+     - `apt policy flash-kernel`로 noble에 `piboot-try`가 없는지
+     - 커널 갱신 때 `flash-kernel`이 `/boot/firmware`에 무엇을 쓰는지
+     - `/boot/firmware` 여유 용량
+     - `vcgencmd bootloader_version`(EEPROM이 tryboot와 `boot_partition` 조건을 지원하는지)
+     - `unattended-upgrades` 상태
+   - 결과가 가정과 다르면 결정 7을 고친 뒤에 P2를 연다.
+
 ### Alternatives
 
 - **완전 자동 적용(승인 없음).** 사용자가 고른 방식이 아니다. 또 쓰는 중인 로봇의 판정은 오판할 수 있어, 사람이 마지막으로 시점을 보는 편이 싸다. 기각.
@@ -388,7 +413,7 @@
 
 ### References
 
-- 결정: D-22(호스트 권한 분리), D-145/D-146(오프라인 서명), D-154(개인화), D-161(네이티브 런타임), D-164(서명 이미지), D-174, D-180/D-187/D-188(카드 쓰기와 readback), D-189(런타임 id), D-197/D-198(Docker updater 퇴역), D-225, D-291, D-341(감사 표), D-361(등록과 토큰), D-382, D-385(이미지 계층 동기화), D-385(긴급 카드 쓰기, `fix/card-write-confirm-and-artifact-download`, 번호 재부여 예정)
+- 결정: D-22(호스트 권한 분리), D-145/D-146(오프라인 서명), D-154(개인화), D-161(네이티브 런타임), D-164(서명 이미지), D-174, D-180/D-187/D-188(카드 쓰기와 readback), D-189(런타임 id), D-197/D-198(Docker updater 퇴역), D-225, D-291, D-341(감사 표), D-361(등록과 토큰), D-382, D-388(이미지 계층 동기화, `feat/release-image-layer-sync`), D-389(긴급 카드 쓰기, `fix/card-write-confirm-and-artifact-download`)
 - 코드: `deploy/robot/pinky_pro/native/native_release.py`, `native/activate-release.sh`, `native/rosy-core.service`, `native/wait-core-ready.py`, `rosy-release-push.ps1`, `release/{updater,delivery,host_agent,host_agent_server,cli,github_release,artifact_impact,storage,signing}.py`, `rosy-update-check.{service,timer}`, `install-update-tools.sh`, `src/site/fleet/fleet/server/{app,roster,dispatch_admission,enrollment,enrollment_store,discovery}.py`, `docs/reference/rosy-host-agent-contract.md`
 - 교훈: `docs/solutions/workflow-issues/payload-runtime-id-hashes-comments-too-2026-10-01.md`, `blanket-path-rewrite-hits-on-device-release-paths-2026-10-01.md`, `payload-push-leaves-the-image-layer-stale-2026-10-01.md`, `card-readback-slows-under-parallel-cpu-load-2026-09-25.md`(2026-10-01 재발 절)
 - 브랜치: `feat/release-image-layer-sync`, `fix/card-write-confirm-and-artifact-download`, `feat/calibration-session-mode`
