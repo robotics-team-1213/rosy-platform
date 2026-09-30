@@ -108,7 +108,7 @@ class _GoalPort:
         return self.cancel_response
 
 
-def _harness(tmp_path, *, fence=None):
+def _harness(tmp_path, *, fence=None, phase_gate=None):
     grant = _grant()
     store = ActionStore(tmp_path / "phase-runner.sqlite3")
     store.create_action(
@@ -140,6 +140,7 @@ def _harness(tmp_path, *, fence=None):
             phase_id=phase.phase_id,
         ),
         goal_port=port, submission_fence=fence or _Fence(),
+        phase_gate=phase_gate or (lambda _phase_id: True),
         current_fence=lambda epoch, generation: (epoch, generation) == (2, 8),
     )
     return store, recorder, port, runner
@@ -172,6 +173,28 @@ def test_first_phase_journals_acceptance_then_correlated_terminal_without_autoad
     assert len(port.submissions) == 2
     assert recorder.phases()[1]["state"] == "ACCEPTED"
     assert store.get_action("action-1")["state"] == "RUNNING"
+
+
+def test_next_motion_goal_waits_for_semantic_transaction_gate(tmp_path):
+    gate = {"approach": True, "grasp": False}
+    _, recorder, port, runner = _harness(
+        tmp_path, phase_gate=lambda phase_id: gate.get(phase_id, False),
+    )
+    runner.start()
+    command, goal = port.submissions[0]
+    assert runner.on_ros_goal_event(_event(
+        "TERMINAL_RESULT", command, "approach", goal, 1,
+        status=4, result_code=0,
+    ))
+
+    with pytest.raises(RuntimeError, match="semantic workflow gate"):
+        runner.advance()
+    assert len(port.submissions) == 1
+    assert recorder.phases()[0]["state"] == "SUCCEEDED"
+
+    gate["grasp"] = True
+    runner.advance()
+    assert len(port.submissions) == 2
 
 
 def test_wrong_goal_uuid_high_sequence_cannot_suppress_real_feedback(tmp_path):

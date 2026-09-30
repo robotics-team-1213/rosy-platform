@@ -50,6 +50,7 @@ import {
   lineFollow,
   renderCapabilityPanels,
   renderEvents,
+  renderFormationHero,
   renderInventory,
   renderLineFollow,
   renderRobotInfo,
@@ -100,6 +101,7 @@ function renderRobotState(state) {
   elements["hitl-escalation"].hidden = state.hitl_requested !== true;
   setText("robot-id", state.robot_id || "—");
   setText("robot-mode", state.mode);
+  renderFormationHero(state.swarm);
   setText("state-sequence", `SEQ ${state.seq ?? "—"}`);
   setText("pose-x", number(state.pose?.x, 3), "—", state.evidence?.pose);
   setText("pose-y", number(state.pose?.y, 3), "—", state.evidence?.pose);

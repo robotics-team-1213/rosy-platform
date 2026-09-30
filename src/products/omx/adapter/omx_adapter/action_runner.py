@@ -147,6 +147,9 @@ class ActionRunner:
             or self.store.latest_event_id(str(action["action_id"])),
             "observed_at": action["updated_at"],
             "reason": reason or action.get("reason"), "created": created,
+            "phase_summaries": self.store.action_phase_receipts(
+                str(action["action_id"]), str(action.get("attempt_id")),
+            ) if action.get("attempt_id") else [],
         }
 
     def submit(self, grant: FleetActionGrant, *, peer_uid: int) -> dict[str, object]:

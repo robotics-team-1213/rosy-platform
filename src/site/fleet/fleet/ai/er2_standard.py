@@ -75,7 +75,10 @@ _TOOL = {
 
 _FEEDBACK_TOOLS = [
     {"type": "function", "name": "get_mission_status",
-     "description": "Read current Fleet evidence for the already scoped Mission.",
+     "description": (
+         "Read current Fleet evidence and bounded manipulation phase progress for the already scoped "
+         "Mission. This tool cannot issue device commands."
+     ),
      "parameters": {"type": "object", "properties": {}, "additionalProperties": False}},
     {"type": "function", "name": "propose_replan",
      "description": "Submit a non-executable replan candidate for Fleet review.",

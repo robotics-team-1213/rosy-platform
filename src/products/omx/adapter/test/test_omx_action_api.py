@@ -469,3 +469,21 @@ def test_uds_dispatch_checks_peer_and_bounds_frame(tmp_path):
     assert oversized["error"]["code"] == "FRAME_TOO_LARGE"
     assert api.dispatch({"version": 1, "operation": "StopLocal"},
                         peer_uid=1001)["error"]["code"] == "STOP_API_NOT_CONFIGURED"
+
+
+def test_uds_v2_adds_bounded_phase_summary_while_v1_remains_compatible(tmp_path):
+    _, _, runner = _runner(tmp_path)
+    api = ActionApi(runner)
+    grant = FleetActionGrant.model_validate(_grant()).model_dump(mode="json")
+    submitted = api.dispatch(
+        {"version": 1, "operation": "SubmitAction", "grant": grant}, peer_uid=1001,
+    )
+    action_id = submitted["receipt"]["action_id"]
+
+    v1 = api.dispatch({"version": 1, "operation": "GetAction", "action_id": action_id},
+                      peer_uid=1001)
+    v2 = api.dispatch({"version": 2, "operation": "GetAction", "action_id": action_id},
+                      peer_uid=1001)
+
+    assert v1["version"] == 1 and "phase_summaries" not in v1["receipt"]
+    assert v2["version"] == 2 and v2["receipt"]["phase_summaries"] == []
