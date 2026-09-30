@@ -181,6 +181,7 @@
 | D-376 | OMX PICK_PLACE planning stays local and trajectory execution stays with the Action owner |
 | D-377 | 앱 이름 규칙: Rosy + 영어 한 단어 — 표시 이름 `Rosy <Word>`, id·폴더 끝 `<word>`, 패키지 `rosy_<word>`, Android `io.github.livsbittt.rosy.<word>`, Gradle `rosy-<word>`, 아이콘 `<word>.svg`; Rosy Cam·Vision·Console·Robot·Pilot |
 | D-382 | 로봇 ↔ 사이트 관제 통신은 계약 스냅샷 하나로 판정하고, 실물 확인은 읽기 전용 적합성 탐침으로 시작한다 |
+| D-390 | Pilot의 OMX-AI 연습은 시뮬레이션 전용 장치 API를 거쳐 로컬 팔 명령 소유자에 연결한다 |
 
 ## 계획·결과 문서
 
@@ -249,6 +250,7 @@
 - [2026-09-30-goal-evidence-producer-and-verifier-design.md](plans/2026-09-30-goal-evidence-producer-and-verifier-design.md)
 - [2026-09-30-goal-evidence-producer-and-verifier.md](plans/2026-09-30-goal-evidence-producer-and-verifier.md)
 - [2026-09-30-site-app-roles-and-shared-link-plan.md](plans/2026-09-30-site-app-roles-and-shared-link-plan.md)
+- [2026-10-01-pilot-omx-gazebo-practice.md](plans/2026-10-01-pilot-omx-gazebo-practice.md)
 
 ## 교훈 (docs/solutions)
 
@@ -263,6 +265,6 @@
 
 - 2026-10-01 · 4483e7a8 · docs(api,adr): 보정 lease 소유·회수·배터리 복귀
 - 2026-10-01 · e8028fb0 · docs(adr): D-321 부록 — 보정 세션 표시와 차단
+- 2026-10-01 · uncommitted · D-390 Pilot OMX simulation implementation and evidence
+- 2026-10-01 · uncommitted · docs(adr): D-390 Pilot OMX-AI Gazebo 연습 경계와 실행 계획
 - 2026-10-01 · uncommitted · docs(adr): D-385 Rosy가 스스로 표현한다
-- 2026-10-01 · uncommitted · docs(adr): D-341·D-382 Accepted — 병행 세션 결정 회차
-- 2026-10-01 · uncommitted · docs(adr): D-341·D-382 교차 세션 검토 반영

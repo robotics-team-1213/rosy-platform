@@ -38,4 +38,4 @@
 - 2026-10-01 · a527920a · feat(core): D-321 부록 보정 세션 lease
 - 2026-10-01 · uncommitted · feat(command): D-385 모드→표정 정책 emotion_map
 - 2026-10-01 · uncommitted · fix(fleet_agent): D-382 F10·I4 — 구독 해제와 이벤트 seq 사본
-- 2026-10-01 · uncommitted · fix(command): release_emergency 도 리스너 계약을 지킨다
+- 2026-10-01 · f34781ae · feat(line_follow): 시작 때 정한 LiDAR 장착 yaw 를 받는다

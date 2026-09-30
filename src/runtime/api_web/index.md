@@ -32,4 +32,4 @@
 - 2026-10-01 · 1ae6b239 · fix(core): 보정 차단을 navigation·docking·swarm 까지, IDLE 은 열어 둔다
 - 2026-10-01 · 1a1a2c3a · docs(api): API Ref v1.67 과 버전 핀
 - 2026-10-01 · a527920a · feat(api): /api/v1/calibration/session 과 CALIBRATION_ACTIVE 차단
-- 2026-10-01 · uncommitted · feat(host): D-383 status-inputs에 swarm_role 추가
+- 2026-10-01 · uncommitted · D-390 Pilot asset and API version alignment

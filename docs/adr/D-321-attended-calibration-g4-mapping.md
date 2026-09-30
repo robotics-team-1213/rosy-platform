@@ -68,6 +68,18 @@ PC 반복 질문과 수동 파일 편집은 한 번의 세션 안내와 자동 �
 복귀 readback이 불가능하면 장치를 `POWER_OFF_RECOVERY_REQUIRED`로
 표시하고 재전원을 보류한다.
 
+### Addendum 2026-10-01 — 보정 결과는 버전으로 남고 운영자가 승인한다
+
+현장 보정 세션에서 나오는 카메라 외부 파라미터·바퀴 반지름/간격·LiDAR
+장착 yaw 는 [D-47 addendum 2026-10-01](D-47-core-sensor-adapter-calibration-binding.md)
+의 버전 저장소(`/var/lib/rosy/calibration/`, PC 미러 `data/calibration/`)에
+실행마다 새 후보 레코드로 쌓인다. 덮어쓰지 않고, 운영자가 승인한 최신
+레코드가 런타임에서 이긴다(고정·롤백 가능). 고정 프로토콜 v1
+(`tools/calibration/run_calibration.py`)은 이 세션 안에서 사람이 지켜보며
+돌린다. `robot.yaml` 의 `lidar_yaw_offset` 190° 는 측정(≈181–182°)과 맞지
+않아 의심값으로 표시한다. [D-364](D-364-lane-keeping-perception-and-replay-bench.md),
+[D-379](D-379-learning-data-pipeline-auto-labels-local-store.md) 참조.
+
 **Related:** [D-192](D-192-hardware-runtime-in-the-image.md),
 [D-311](D-311-native-g4-evidence-gates-navigation.md),
 [D-314](D-314-measured-g4-and-direct-teleop.md),
@@ -90,7 +102,7 @@ PC 반복 질문과 수동 파일 편집은 한 번의 세션 안내와 자동 �
    owner 는 `ttl_s`(기본 30 s, 5–300) 안에 `POST …/{id}/heartbeat` 로 갱신한다.
    갱신이 끊기면 세션은 만료된다 — 보정 도구가 죽거나 링크가 끊겨도 로봇이
    영원히 잠기지 않는다. `DELETE …/{id}` 는 owner 또는 Administrator(걸린
-   lease 강제 해제). 로봇당 세션 하나. 모양은 API Ref v1.67 이 고정한다.
+   lease 강제 해제). 로봇당 세션 하나. 모양은 API Ref v1.68 이 고정한다.
 2. 살아 있는 동안 상태 스냅샷(`/robot/state`, `/ws/state`)이
    `activity: {kind: CALIBRATING, session_id, calibration_kind, label, owner,
    started_at, remaining_s}` 를 싣는다. Pilot 은 "보정 중 — <label>" 판과 HUD

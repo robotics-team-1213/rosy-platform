@@ -1,4 +1,4 @@
-"""core_api_web.api.app — FastAPI 팩토리 (P1-9, API-101). 계약: ROSY-API-REF-001 v1.67."""
+"""core_api_web.api.app — FastAPI 팩토리 (P1-9, API-101). 계약: ROSY-API-REF-001 v1.68."""
 
 from __future__ import annotations
 
@@ -107,7 +107,7 @@ def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
     app = FastAPI(
         title="ROSY CORE API",
         version="1.20.0",
-        description="로봇 미들웨어 API — 계약: ROSY-API-REF-001 (v1.67)",
+        description="로봇 미들웨어 API — 계약: ROSY-API-REF-001 (v1.68)",
     )
     app.state.core = services
     app.state.pairing = PairingState()
@@ -220,6 +220,7 @@ def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
         "client.js": "application/javascript",
         "drivers/registry.js": "application/javascript",
         "drivers/pinky_core.js": "application/javascript",
+        "drivers/omx_sim.js": "application/javascript",
         "autonomy.js": "application/javascript",
         "calibration.js": "application/javascript",
         "screens/connect.js": "application/javascript",
@@ -227,6 +228,7 @@ def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
         "screens/drive-auto.js": "application/javascript",
         "screens/drive-view.js": "application/javascript",
         "screens/inputs.js": "application/javascript",
+        "screens/arm.js": "application/javascript",
         "input-state.js": "application/javascript",
         "vision.js": "application/javascript",
         "manifest.webmanifest": "application/manifest+json",

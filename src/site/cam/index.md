@@ -30,8 +30,8 @@
 
 ## 최근 기록
 
+- 2026-10-01 · uncommitted · fix(cam): 4400 재시도 범위를 합의한 전환 예외로 좁힘
 - 2026-10-01 · 35140f13 · fix(cam): 보안 리뷰 반영(인증서 고정) + 바쁜 수신기에서 멈추지 않음
 - 2026-10-01 · 9c69e38f · fix(cam): review fixes for the ultra-wide lens
 - 2026-09-30 · a4d9fa7c · feat(cam): STANDARD default, wide on suggestion only
 - 2026-09-30 · 877a6fb4 · test(cam): S21 ultra-wide device check
-- 2026-09-30 · 5358ce49 · feat(cam): ultra-wide lens (화각 넓게/기본)

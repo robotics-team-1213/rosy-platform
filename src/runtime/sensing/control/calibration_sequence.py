@@ -434,6 +434,8 @@ class CalibrationSequence:
                                        self.sensors,
                                        bool(self.get_parameter('localization_required').value)).items()},
                 'calibration_scope': getattr(self, 'calibration_scope', 'full'),
+                # Stationary camera step (calibration_camera.py): a candidate, never applied here.
+                'camera_extrinsic': getattr(self, 'camera_extrinsic', None),
                 **(configured_status(self.phase in ('existing_settings', 'limited_sensors') and self.runtime_ready and self.settings_applied(),
                     self.configured_waiting + ([] if self.settings_applied() else ['settings_acknowledgement']),
                     limited_sensors=self.limited_sensors)

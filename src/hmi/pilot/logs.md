@@ -196,6 +196,11 @@
 - 증거: 새 시험 `test_shell_assets.py`(모든 pilot 모듈의 import 를 /common 까지 따라가 SHELL·pilot_assets 대조), 브라우저 `test_go_releases_on_cancel_and_leave`·`test_stick_takes_over_auto`·`test_reenter_resets_auto_mode`, `test_zoom_cycles_and_always_reports_crop` 에 1200×2000(옛 CSS 에서 스틱 4px 로 실패 확인). 스크린샷 `X:\DevTemp\pilot-polish\after4-*.png`(세로 전체화면 `after4-drive-fullzoom-*`).
 - gate 변화: 없음.
 
+## 2026-10-01 · uncommitted · D-390 Pilot OMX Gazebo practice
+- Change: Select the OMX simulation driver from same-origin identity; render bounded arm and gripper jog, seat renewal, goal readback and cancellation. Keep Pinky routing behind a 404 target response.
+- Evidence: rendered OMX pairing-to-jog 1 passed, Pinky gate browser 1 passed, driver/link/route 26 passed; Gazebo action evidence in docs/validation/pilot-omx-gazebo-2026-10-01/.
+- Gate: sim control path observed; video, recording and physical OMX remain HOLD.
+
 ## 2026-10-01 · 5db3391d · feat(pilot): 보정 중 판과 비소유자 주행 잠금
 - 변경: `calibration.js`(순수 판정) 추가. 상태의 `activity` 가 CALIBRATING 이면 영상 위 "보정 중 — <label>" 판과 HUD 칩. whoami id 가 owner 가 아니면 조작부 전체 disabled + 사유, 명령 루프는 아무것도 보내지 않는다. 상단 E-Stop 은 그대로. SW 셸 키 `2026-10-01-1`.
 - 증거: test_calibration_view.py 5 passed; ROSY_RUN_BROWSER_TESTS=1 test_pilot_browser 전체 18 passed(새 `test_calibration_banner_locks_drive_for_other_tokens_and_keeps_estop` 포함, 배치 시험 유지). 스크린샷 X:\DevTemp\calibration-mode\pilot-calibration-locked.png·pilot-calibration-owner.png.

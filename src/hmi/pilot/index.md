@@ -12,11 +12,13 @@
 | D-323 | 원격 조종 표면은 CORE가 same-origin으로 서빙하는 정적 PWA Rosy Pilot(src/hmi/pilot)이며 기기 종류별 드라이버 확장점을 v1 Pinky 주행과 함께 선행한다 |
 | D-365 | Rosy Pilot 설치형은 PWA로 우선하고 Capacitor 래퍼는 네이티브 전용 수요가 실측될 때까지 보류한다 |
 | D-366 | Rosy Pilot 조종 대상 확장은 기기 종류별 드라이버 레지스트리로 수용하며, 장치별 조종 컨트롤(그리퍼·팔 위치 등)은 그 장치의 계약이 열 때 프런트에 반영한다 |
+| D-390 | Pilot의 OMX-AI 연습은 시뮬레이션 전용 장치 API를 거쳐 로컬 팔 명령 소유자에 연결한다 |
 
 ## 계획·결과 문서
 
 - [2026-09-29-rosy-pilot-teleop-app-design.md](../../../docs/plans/2026-09-29-rosy-pilot-teleop-app-design.md)
 - [2026-09-29-rosy-pilot-teleop-app.md](../../../docs/plans/2026-09-29-rosy-pilot-teleop-app.md)
+- [2026-10-01-pilot-omx-gazebo-practice.md](../../../docs/plans/2026-10-01-pilot-omx-gazebo-practice.md)
 
 ## 교훈 (docs/solutions)
 
@@ -30,6 +32,6 @@
 
 - 2026-10-01 · c04de23a · fix(pilot): 보정 주인의 모드를 끊지 않는다; whoami 재시도
 - 2026-10-01 · 5db3391d · feat(pilot): 보정 중 판과 비소유자 주행 잠금
+- 2026-10-01 · uncommitted · D-390 Pilot OMX Gazebo practice
 - 2026-09-30 · 7711cb84 · fix(pilot): 리뷰 수정 — 세로 전체화면·오프라인 셸·자동 모드 상태
 - 2026-09-30 · bf0fab99 · feat(pilot): 세로 조작부가 영상 아래 공간을 채운다
-- 2026-09-30 · uncommitted · feat(pilot): 공용 컨트롤·타이포 계약과 D-370 PWA 아이콘

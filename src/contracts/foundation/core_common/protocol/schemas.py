@@ -990,7 +990,7 @@ class ActivityOwner(BaseModel):
 
 
 class RobotActivity(BaseModel):
-    """An attended activity every screen must show (D-321 addendum, v1.67 additive).
+    """An attended activity every screen must show (D-321 addendum, v1.68 additive).
 
     Present only while a calibration session lease is alive; `null` otherwise.
     """
@@ -1031,7 +1031,7 @@ class StateSnapshot(BaseModel):
     evidence: dict[str, ValueEvidence] = Field(default_factory=dict)
     hitl_requested: bool = False  # ADR-1000: HITL intervention request flag
     capabilities_degraded: list[str] = Field(default_factory=list)  # ADR-1000: Modules in degraded fallback
-    #: v1.67 additive (D-321 addendum): attended calibration lease, else null.
+    #: v1.68 additive (D-321 addendum): attended calibration lease, else null.
     activity: Optional[RobotActivity] = None
 
 

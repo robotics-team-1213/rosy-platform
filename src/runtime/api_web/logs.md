@@ -228,6 +228,11 @@
 - 증거: test_host_status_summary.py 40 passed (키 셋·none 부재 포함).
 - gate 변화: 없음.
 
+## 2026-10-01 · uncommitted · D-390 Pilot asset and API version alignment
+- Change: Serve the new OMX driver and arm screen modules through the existing Pilot asset allowlist; update API description to v1.67.
+- Evidence: Pilot driver/link/route tests 26 passed and API version alignment tests 4 passed.
+- Gate: CORE command ownership unchanged.
+
 ## 2026-10-01 · a527920a · feat(api): /api/v1/calibration/session 과 CALIBRATION_ACTIVE 차단
 - 변경: `v1/calibration.py`(GET/POST session, POST heartbeat, DELETE). `common.require_calibration_owner()` 를 `/mode`·`/teleop`·`/line-follow/mode`(OFF 제외)·`/line-follow/hold` 에 걸었다 — 다른 토큰은 409 `CALIBRATION_ACTIVE`, E-Stop 은 보지 않는다. `deps` 재수출에 `CalibrationSessionError`, `CoreServicesLike.calibration`.
 - 증거: test_calibration_session.py 13 passed(수명, 만료, 비소유자 409, owner teleop D-342 한도, E-Stop, robot/state·ws activity).

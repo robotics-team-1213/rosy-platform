@@ -233,6 +233,11 @@
 - 증거: test_core_logic.py 두 시험(해제 리스너 호출, 실패하는 리스너는 자기만 건너뜀).
 - gate 변화: 없음.
 
+## 2026-10-01 · f34781ae · feat(line_follow): 시작 때 정한 LiDAR 장착 yaw 를 받는다
+- 변경: `LineFollowManager.use_lidar_forward(deg, source)` 와 `lidar_forward_source` — CORE 가 정한 장착 yaw(D-47 부록)를 설정에 넣고 출처를 기억한다.
+- 증거: gateway `test_lidar_mount_source.py`, services 265 passed (2026-10-01 Windows).
+- gate 변화: 없음(값 주입 경로만).
+
 ## 2026-10-01 · uncommitted · fix(fleet_agent): D-382 F10·I4 — 구독 해제와 이벤트 seq 사본
 
 - 변경: FleetAgent가 `EventBus.subscribe`가 돌려준 해제 함수를 쥐고 종료 때 부른다(없는 `events.unsubscribe`를 부르던 결함, F10). 버스가 모든 구독자에게 넘기는 링 버퍼 속 같은 `EventMessage`의 `seq`를 덮어쓰지 않고 사본에 Agent seq를 매긴다(`/api/v1/events`·`/ws/events`·감사의 seq가 바뀌던 문제, F7의 일부). F7의 재시작 뒤 누락(부팅 세대)은 다음 이미지 회차(L2).

@@ -70,7 +70,7 @@ try {
                     "calibrating before $Action.")
     } elseif ($null -ne $status) {
         Write-Loud ("CALIBRATION CHECK FAILED for ${Robot}: HTTP $status. CORE may be older than " +
-                    "API Ref v1.67. Make sure nobody is calibrating before $Action.")
+                    "API Ref v1.68. Make sure nobody is calibrating before $Action.")
     } else {
         Write-Loud ("CALIBRATION CHECK UNREACHABLE for ${Robot} ($($_.Exception.Message)). CORE may " +
                     "be down. Make sure nobody is calibrating before $Action.")

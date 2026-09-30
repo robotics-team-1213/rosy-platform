@@ -1576,6 +1576,11 @@
 - 증거: test_boot_display.py (대기 중 재그림·ready 정지). 실기는 다음 릴리스.
 - gate 변화: 없음.
 
+## 2026-10-01 · uncommitted · D-390 OMX Pilot development container
+- Change: Add a development-only Pilot layer over the locked OMX Gazebo image and a local probe. Publish HTTP only to 127.0.0.1, deny serial/video grants, keep the one-time code in a 0600 container file.
+- Evidence: local image sha256:e94662607c72a7cea83c9449178099c4c9476afab0519275ce0da82a88f3da9a; Gazebo action and readback report in docs/validation/pilot-omx-gazebo-2026-10-01/.
+- Gate: local x86_64 ROS-SIM only; ARTIFACT/DEVICE/FIELD unchanged.
+
 ## 2026-10-01 · d5953646 · feat(deploy): 릴리스 push·dev sync 보정 guard
 - 변경: `pinky_pro/rosy-calibration-guard.ps1`(읽기 전용 GET, 세션 있으면 exit 3). `rosy-release-push.ps1`·`dev/sync-core-dev.ps1` 가 원격 단계 전에 부르고 `-Force` 없으면 거부. 토큰 없음·CORE 무응답은 경고만. rosy-release-push SKILL 에 절차 추가(cfacfcd9 경로 수정).
 - 증거: test/test_calibration_guard.py 10 passed(localhost 가짜 CORE), test_release_push_entrypoint·test_core_dev_sync 통과. 로봇에는 닿지 않았다.
