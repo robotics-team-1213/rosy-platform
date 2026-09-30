@@ -1642,3 +1642,44 @@ def test_single_column_tier_puts_exceptions_before_the_map_and_formation_last(co
         assert not errors
         browser.close()
 
+PAINT_LOG = """
+(() => {
+  const log = [];
+  window.__paintLog = log;
+  const proto = CanvasRenderingContext2D.prototype;
+  for (const name of ["drawImage", "stroke", "fillText"]) {
+    const original = proto[name];
+    proto[name] = function (...args) {
+      if (this.canvas.id === "map-canvas") log.push(name === "fillText" ? `text:${args[0]}` : name);
+      return original.apply(this, args);
+    };
+  }
+})();
+"""
+
+
+def test_map_chips_paint_after_lines_and_clear_robot_markers(console_url):
+    """D-359 US-008 leftovers — chips are painted after formation/mediation lines, so no line
+    crosses chip text, and chips are placed off the robot marker boxes."""
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as p:
+        browser, page, errors = _open_console(p, API, init_script=PAINT_LOG)
+        page.goto(console_url, wait_until="networkidle")
+        page.wait_for_function("() => (window.__swarmOverlay?.slots || 0) === 2", timeout=8000)
+        page.wait_for_function("() => (window.__swarmOverlay?.mediation || 0) > 0")
+        log = page.evaluate("window.__paintLog")
+        last = log[max(i for i, op in enumerate(log) if op == "drawImage"):]  # the latest full draw
+        texts = [i for i, op in enumerate(last) if op.startswith("text:")]
+        strokes = [i for i, op in enumerate(last) if op == "stroke"]
+        assert texts and strokes, last
+        assert max(strokes) < min(texts), last
+        chips = page.evaluate("window.__mapChips")
+        markers = page.evaluate("window.__mapMarkers")
+        assert len(markers) == 3
+        overlap = [(c["text"], m["robot"]) for c in chips for m in markers
+                   if c["x"] < m["x"] + m["w"] and m["x"] < c["x"] + c["w"]
+                   and c["y"] < m["y"] + m["h"] and m["y"] < c["y"] + c["h"]]
+        assert overlap == [], (overlap, chips, markers)
+        assert not errors
+        browser.close()

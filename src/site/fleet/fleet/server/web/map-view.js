@@ -90,8 +90,8 @@ export function createMapView({ el, view, auth, call, onMapChanged, onMapUnavail
 
   // D-359 US-008 — 이번 그리기에 놓인 칩(캔버스 픽셀, 시험은 window.__mapChips). 추적 오차와
   // 중재 칩이 겹쳐 못 읽었다: 새 칩은 빈 자리가 날 때까지 아래·위로 한 칸씩 번갈아 비킨다.
-  let placedChips = [];
-  const CHIP_GAP = 2, CHIP_TRIES = 12;
+  // US-009 — 칩은 자리만 먼저 정하고(로봇 표식 상자도 피한다) 선을 다 그린 뒤 flushChips가 칠한다.
+  let placedChips = [], pendingChips = [], markerBoxes = []; const CHIP_GAP = 2, CHIP_TRIES = 12;
   const chipsOverlap = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
 
   function drawChip(ctx, grid, cx, cy, text, tone) {
@@ -113,23 +113,34 @@ export function createMapView({ el, view, auth, call, onMapChanged, onMapUnavail
     const rectAt = (centreY) => ({ x: x - width / 2, y: centreY - height / 2, w: width, h: height, text });
     const anchorY = clampY(point.y);
     let y = anchorY;
-    for (let step = 1; step <= CHIP_TRIES && placedChips.some((r) => chipsOverlap(rectAt(y), r)); step += 1) {
+    const taken = (r) => [...placedChips, ...markerBoxes].some((o) => chipsOverlap(r, o));
+    for (let step = 1; step <= CHIP_TRIES && taken(rectAt(y)); step += 1) {
       const rows = Math.ceil(step / 2);
       y = clampY(anchorY + (step % 2 ? 1 : -1) * rows * (height + CHIP_GAP));
     }
     placedChips.push(rectAt(y));
-    ctx.globalAlpha = 0.92;
-    ctx.fillStyle = css("--scrim");
-    ctx.fillRect(x - width / 2, y - height / 2, width, height);
-    ctx.globalAlpha = 1;
-    ctx.strokeStyle = css("--surface-line");
-    ctx.lineWidth = 0.4;
-    ctx.strokeRect(x - width / 2, y - height / 2, width, height);
-    ctx.fillStyle = tone === "crit" ? css("--status-crit")
-      : tone === "warn" ? css("--status-warn") : css("--ink");
+    ctx.restore();
+    pendingChips.push({ x, y, width, height, fontSize, text, tone });
+  }
+
+  function flushChips(ctx) {
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText(text, x, y);
+    ctx.lineWidth = 0.4;
+    for (const { x, y, width, height, fontSize, text, tone } of pendingChips) {
+      ctx.font = font(fontSize);
+      ctx.globalAlpha = 0.92;
+      ctx.fillStyle = css("--scrim");
+      ctx.fillRect(x - width / 2, y - height / 2, width, height);
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = css("--surface-line");
+      ctx.strokeRect(x - width / 2, y - height / 2, width, height);
+      ctx.fillStyle = tone === "crit" ? css("--status-crit") : tone === "warn" ? css("--status-warn") : css("--ink");
+      ctx.fillText(text, x, y);
+    }
+    pendingChips = [];
     ctx.restore();
   }
 
@@ -194,7 +205,7 @@ export function createMapView({ el, view, auth, call, onMapChanged, onMapUnavail
     // HOLD 중이면 왜 멈췄는지 맵 위에서 말한다 — 이유 없는 HOLD 는 고장으로 읽힌다.
     if (formation.state === "HOLDING" && formation.reason && formation.reason.length) {
       drawChip(ctx, grid, leaderCell.cx, leaderCell.cy - Math.min(grid.width, grid.height) * 0.08,
-        `HOLD · ${formation.reason.join(" / ")}`, "warn");
+        `대형 유지 · ${formation.reason.join(" / ")}`, "warn");
     }
     ctx.restore();
   }
@@ -410,6 +421,7 @@ export function createMapView({ el, view, auth, call, onMapChanged, onMapUnavail
     ctx.restore();
 
     for (const s of view.sightings) drawSighting(ctx, s, toPx, Math.max(7, t.scale * 0.09), 1.5);
+    flushChips(ctx);
   }
 
   function describeSightings() {
@@ -419,8 +431,9 @@ export function createMapView({ el, view, auth, call, onMapChanged, onMapUnavail
 
   function draw() {
     const grid = view.map;
-    placedChips = [];
+    placedChips = []; pendingChips = []; markerBoxes = [];
     window.__mapChips = placedChips;
+    window.__mapMarkers = markerBoxes;
     if (!grid) {
       if (view.siteMap) {
         drawSiteView();
@@ -464,6 +477,8 @@ export function createMapView({ el, view, auth, call, onMapChanged, onMapUnavail
       ctx.globalAlpha = robot.online ? 1 : 0.35;
       ctx.fill();
       ctx.restore();
+      const [a, b] = [-size, size].map((d) => ctx.getTransform().transformPoint({ x: cx + d, y: cy + d }));
+      markerBoxes.push({ x: a.x, y: a.y, w: b.x - a.x, h: b.y - a.y, robot: robot.robot_id });
 
       // 목표는 Fleet 이 기억하는 값이다(로봇 상태에는 없다) — "내가 무엇을 시켰는가".
       // 대기 중인 미션도 그린다 — 어디로 갈 예정인지가 보여야 순서를 판단한다.
@@ -480,6 +495,7 @@ export function createMapView({ el, view, auth, call, onMapChanged, onMapUnavail
     drawFormationOverlay(ctx, grid);
     drawMediation(ctx, grid);
     drawSiteOverlay(ctx, grid);
+    flushChips(ctx);
     if (view.selected && view.cursor) {
       const { col, row } = view.cursor;
       ctx.save();
