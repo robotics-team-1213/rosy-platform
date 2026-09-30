@@ -30,8 +30,8 @@
 
 ## 최근 기록
 
+- 2026-10-01 · 9c69e38f · fix(cam): review fixes for the ultra-wide lens
 - 2026-09-30 · a4d9fa7c · feat(cam): STANDARD default, wide on suggestion only
-- 2026-09-30 · 282bca6e · test(cam): S21 ultra-wide device check
+- 2026-09-30 · 877a6fb4 · test(cam): S21 ultra-wide device check
 - 2026-09-30 · 5358ce49 · feat(cam): ultra-wide lens (화각 넓게/기본)
 - 2026-09-30 · uncommitted · refactor(cam): D-377 ceiling_camera becomes Rosy Cam in src/site/cam
-- 2026-09-30 · uncommitted · refactor(ceiling-camera): D-374 stage 1 — split the phone app out of overhead

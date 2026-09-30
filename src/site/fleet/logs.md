@@ -691,3 +691,8 @@
 - 변경: `vision-view.js`가 Vision의 `X-Source-Lens`로 브라우저 보정값 키를 `rosy-camera-rectification:<source>@<wide|standard>`로 나눈다. 예전 키(source만)는 기본 렌즈로 만든 값이라 lens가 standard일 때 `@standard`로 옮긴다. lens를 알리지 않는 옛 앱은 예전 키를 그대로 쓴다. 지금 렌즈의 값이 없고 다른 렌즈 값만 있으면 적용하지 않고 "저장한 화면 보정은 기본 렌즈용입니다…" 경고를 띄운다. 메타 줄에 렌즈 표시.
 - 증거: `node --test src/site/fleet/test/web/*.test.mjs` 40 passed; `test_server_app.py`·`test_site_map_api.py` 61 passed; `ROSY_RUN_BROWSER_TESTS=1 pytest test/test_fleet_console_browser.py -k "vision or rectif or camera"` 3 passed (2026-09-30 Windows).
 - gate 변화: 없음.
+
+## 2026-10-01 · 952d5d80 · fix(fleet): lens profile review fixes
+- 변경: 렌즈 종류 검사를 `in`에서 `Object.hasOwn`으로 바꿨다(`kind=toString`은 렌즈가 아니다). 렌즈 이전의 보정값은 `@standard`로 옮기지 않고 복사한다. 예전 키를 남겨 옛 앱으로 되돌려도 그 값을 쓴다.
+- 증거: `node --test src/site/fleet/test/web/vision-lens-profile.test.mjs` 7 passed (2026-10-01 Windows).
+- gate 변화: 없음.

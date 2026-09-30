@@ -174,3 +174,8 @@
 - 근거: 배포된 수신기(main의 `site_vision/protocol.py` 포함)는 모르는 hello 필드를 무시한다. 그래서 와이어 추가만으로 충분하고 `rosy-overhead/1`은 바꾸지 않는다.
 - 증거: `python -m pytest src/site/vision/test -q` 127 passed (2026-09-30 Windows). 공유 벡터 `test/fixtures/protocol/overhead-ingest.v1.json`에 `hello_with_lens`, `hello_lens.{valid,ignored}` 추가(Kotlin `ProtocolTest`도 읽음).
 - gate 변화: 없음. 초광각 프레임의 field_detect 결과는 DEVICE 단계에서 기록(폰 대기).
+
+## 2026-10-01 · 14253f8e · fix(vision): bound hello.lens numbers, safe connect log
+- 변경: `parse_hello_lens`는 `0 < v < upper`(focal_mm 1000, hfov_deg 180)로 검사한다. 400자리 정수는 `float()` OverflowError로 연결 처리기를 죽였고, `Infinity`/`1e400`은 `> 0`을 통과해 나중에 `json.dumps`가 JSON이 아닌 `Infinity`를 내보냈다. 이제 둘 다 무시한다(공유 벡터 `huge_int_focal`, Python 전용 Infinity/NaN/1e400 시험). 연결 로그의 `app_version`·`device`는 폰이 보낸 글이라 64자로 자르고 `%r`로 남긴다.
+- 증거: `python -m pytest src/site/vision/test -q` 132 passed (2026-10-01 Windows).
+- gate 변화: 없음.
