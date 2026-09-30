@@ -90,5 +90,6 @@ Expected: 모두 통과. socket 인증·ROS·실물 수용은 별도다.
 - Task 3은 Mission/Action/goal/stop projection 및 별도 provider-turn 수명을 검증했다. stop latch/cancel ACK/Action success를 물리 정지 또는 목표 완료로 승격하지 않았다.
 - Task 4 사전 조사에서 기존 vendor ROS-SIM 증거와 현재 시험 환경을 대조했다. 시뮬레이터 동작은 재사용할 수 있지만 Fleet grant 통합과 실제 gripper profile은 별도다.
 - 2026-09-30 재실행: 통합된 `deploy/robot/omx/probe_vendor_owner_sim.sh`를 `rosy-omx-workstation:native-action-only-local` 이미지(`sha256:b47034e436119cea97c2922a1b4af9bd6596975ac8acbb4cece3a19d2fe1e9f0`)에서 실행했다. 컨테이너는 `--network none`, 저장소 read-only bind mount, device grant 없이 구동했고 결과는 1 passed (2.53s)였다. 기존 policy-owner/경쟁 요청/cancel 경로의 재실행 증거이며, FleetActionGrant→LocalActionPort 생산 결선이나 실물 수용 증거는 아니다.
+- Grant 좌표 조사: `FleetActionGrant.source_evidence`와 `destination_evidence`는 `ResolvedTargetEvidence`로, pixel bbox·optical frame·camera identity·calibration/transform revision을 담지만 ROS workspace pose나 joint target은 담지 않는다. 따라서 `PICK_PLACE`를 joint trajectory로 바꾸려면 승인된 camera-to-workcell pose resolver, arm/gripper phase 명령 계약, 독립 goal/placement verifier가 먼저 필요하다. revision ID만으로 변환값을 추정하거나 image pixel을 관절값으로 직접 쓰지 않는다.
 - 제어권 ADR 초안 D-362는 충돌을 피하여 D-369로 변경했다. D-362–D-368은 다른 작업의 번호다.
 - 최종 quick gate + network 문서 계약 119 passed; harness lint 0 errors/기존 freshness warnings 12; 새 시험 flake8 및 diff check 통과. 자세한 기록은 docs/logs.md의 action/message 항목에 둔다.

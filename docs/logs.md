@@ -3847,3 +3847,10 @@
 - 변경: D-369 구현 계획의 Task 4 증거를 갱신했다. `deploy/robot/omx/probe_vendor_owner_sim.sh`를 기존 `rosy-omx-workstation:native-action-only-local` 이미지에서 재실행했다.
 - 증거: image `sha256:b47034e436119cea97c2922a1b4af9bd6596975ac8acbb4cece3a19d2fe1e9f0`; `--network none`, 저장소 read-only bind mount, device grant 없음; 1 passed (2.53s). 이 검증은 vendor 시뮬레이터의 정책 owner/경쟁 요청/cancel 동작 재현이다.
 - gate 변화: ROS-SIM 재현만 확인. Fleet grant의 production driver 결선, 실제 arm/gripper profile, 물리 E-stop, DEVICE/FIELD 수용은 여전히 확인하지 않았다.
+
+## 2026-09-30 · uncommitted · docs(plan): identify PICK_PLACE coordinate resolution gap
+
+- 변경: D-369 Task 4 계획에 FleetActionGrant→ROS 좌표 변환의 선결 조건을 적고, 2026-09-26 검증 기록의 현재 probe 경로를 `deploy/robot/omx/`로 정정했다.
+- 근거: `ResolvedTargetEvidence`는 pixel bbox와 camera/optical-frame/calibration/transform revision을 전달하지만 workspace pose/joint target은 전달하지 않는다. 픽/플레이스 연결에는 승인된 camera-to-workcell pose resolver, arm/gripper phase 계약, 독립 goal/placement verifier가 필요하다.
+- 결정: revision ID에서 변환값을 추정하거나 pixel 좌표를 joint 값으로 쓰지 않는다. profile-specific ROS mapping은 해당 pose/phase 계약이 선택될 때까지 대기한다.
+- gate 변화: 없음. ROS-SIM 경로 증거와 물리/production profile 수용은 분리한다.

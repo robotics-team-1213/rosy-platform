@@ -66,7 +66,7 @@ in-process policy and ROS-SIM evidence only. There is still no deployed
 single-writer process, DDS admission boundary, independent physical stop, or
 target Ubuntu workstation timing record.
 
-The repeatable entry point is now `deploy/omx/probe_vendor_owner_sim.sh`.
+The repeatable entry point is now `deploy/robot/omx/probe_vendor_owner_sim.sh`.
 Running it in the same image with a read-only checkout, `--network none`, and
 no device grants passed the extended vendor test. A separate diagnostic run
 with a fake `/dev/serial/by-id` bind mount exited with status 2 before launch,
