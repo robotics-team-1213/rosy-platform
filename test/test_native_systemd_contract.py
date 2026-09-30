@@ -415,6 +415,8 @@ DECLARED_READS = {
     "rosy-navigation.service": {
         "/var/lib/rosy/maps/site.yaml", "/etc/rosy/line_follow.yaml", "/etc/rosy/profile.yaml",
     },
+    # D-344 §12: the optional per-robot IR calibration overlay for line_observer.
+    "rosy-camera.service": {"/etc/rosy/line_follow.yaml"},
     # boot-status.json, network.json and ap-display.txt (root-written; D-190).
     "rosy-boot-display.service": {"/run/rosy-boot"},
     # D-193: boot-status.json; CORE's used/burned signal (read strictly, never
