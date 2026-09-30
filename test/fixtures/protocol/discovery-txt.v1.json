@@ -19,7 +19,7 @@
       "legacy_without_common_keys": false
     },
     "_rosy-overhead._tcp": {
-      "role_column": "Site Vision",
+      "role_column": "Rosy Vision",
       "required": {"product": "rosy", "role": "overhead-camera", "proto": "rosy-overhead/1", "tls": "required"},
       "required_tls_host": true,
       "optional": ["pair"],

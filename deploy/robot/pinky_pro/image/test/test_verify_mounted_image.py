@@ -38,8 +38,8 @@ def test_inspect_passes_with_valid_image(tmp_path):
         "opt/rosy/native-runtime/native_release.py",
         "opt/rosy/native-runtime/recover-release.sh",
         "opt/rosy/native-runtime/signing.py",
-        f"opt/rosy/releases/{release_id}/deploy/robot/pinky_pro/native/native_release.py",
-        f"opt/rosy/releases/{release_id}/deploy/robot/pinky_pro/native/signing.py",
+        f"opt/rosy/releases/{release_id}/deploy/robot/native/native_release.py",
+        f"opt/rosy/releases/{release_id}/deploy/robot/native/signing.py",
     ]
     for p in paths:
         path = root / p
@@ -121,8 +121,8 @@ def test_inspect_fails_if_docker_present(tmp_path):
         "opt/rosy/native-runtime/native_release.py",
         "opt/rosy/native-runtime/recover-release.sh",
         "opt/rosy/native-runtime/signing.py",
-        f"opt/rosy/releases/{release_id}/deploy/robot/pinky_pro/native/native_release.py",
-        f"opt/rosy/releases/{release_id}/deploy/robot/pinky_pro/native/signing.py",
+        f"opt/rosy/releases/{release_id}/deploy/robot/native/native_release.py",
+        f"opt/rosy/releases/{release_id}/deploy/robot/native/signing.py",
     ]
     for p in paths:
         path = root / p
@@ -161,21 +161,21 @@ def test_inspect_requires_both_installed_native_runtime_copies(tmp_path):
         "opt/rosy/native-runtime/native_release.py",
         "opt/rosy/native-runtime/recover-release.sh",
         "opt/rosy/native-runtime/signing.py",
-        f"opt/rosy/releases/{release_id}/deploy/robot/pinky_pro/native/native_release.py",
-        f"opt/rosy/releases/{release_id}/deploy/robot/pinky_pro/native/signing.py",
+        f"opt/rosy/releases/{release_id}/deploy/robot/native/native_release.py",
+        f"opt/rosy/releases/{release_id}/deploy/robot/native/signing.py",
     } <= missing
 
 
 def test_inspect_rejects_bytecode_inside_the_signed_release(tmp_path):
     root = tmp_path / "root"
     release_id = "2026.01.01-001"
-    cache = root / "opt/rosy/releases" / release_id / "deploy/robot/pinky_pro/native/__pycache__"
+    cache = root / "opt/rosy/releases" / release_id / "deploy/robot/native/__pycache__"
     cache.mkdir(parents=True)
 
     findings = verify_mounted_image.inspect(root, release_id)
 
     assert (f"bytecode cache in native runtime: opt/rosy/releases/{release_id}"
-            "/deploy/robot/pinky_pro/native/__pycache__") in findings
+            "/deploy/robot/native/__pycache__") in findings
 
 
 def test_colcon_install_bytecode_is_part_of_the_payload(tmp_path):

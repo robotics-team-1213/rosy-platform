@@ -1,10 +1,10 @@
 **
 !src
 !src/site
-!src/site/site_vision
-!src/site/site_vision/site_vision
-!src/site/site_vision/site_vision/**
-!src/site/site_vision/setup.py
+!src/site/vision
+!src/site/vision/rosy_vision
+!src/site/vision/rosy_vision/**
+!src/site/vision/setup.py
 !src/site/games
 !src/site/games/games
 !src/site/games/games/**

@@ -178,6 +178,7 @@
 | D-370 | 앱과 표면은 한 역할씩 맡는다 — 역할·이름·아이콘·화면 소유를 한 표로 고정하고, 발견·기기 연결·실패 어휘는 공유 벡터로 하나로 맞춘다 |
 | D-374 | 앱의 폴더·패키지·식별자·표시 이름은 역할 이름 하나에서 나온다 — 역할 id(kebab)·snake·compact·표시 네 표기; 와이어 계약 이름(mDNS 종류, `rosy-overhead/1`, `/api/fleet`·`/api/vision`, `rosyov://`, 웹 경로, 설정·저장소 키, compose 서비스)은 바꾸지 않는다 |
 | D-375 | 천장 카메라→지도 보정도 제안일 뿐이다 — Vision이 알려진 차선 페인트를 영상에 맞춰 homography·coverage·가려진 쪽을 제안하고, 운용자가 확인하기 전에는 어디에도 쓰지 않는다 |
+| D-377 | 앱 이름 규칙: Rosy + 영어 한 단어 — 표시 이름 `Rosy <Word>`, id·폴더 끝 `<word>`, 패키지 `rosy_<word>`, Android `io.github.livsbittt.rosy.<word>`, Gradle `rosy-<word>`, 아이콘 `<word>.svg`; Rosy Cam·Vision·Console·Robot·Pilot |
 
 ## 계획·결과 문서
 
@@ -257,8 +258,8 @@
 
 ## 최근 기록
 
+- 2026-09-30 · uncommitted · docs(adr): D-377 앱 이름 규칙 — Rosy + 영어 한 단어
+- 2026-09-30 · uncommitted · docs(api): nav.line_obstacle_hold 이벤트와 차선 추종 정지 사유 두 개를 카탈로그에
+- 2026-09-30 · uncommitted · docs(adr): D-344 보강 검토 반영 — sector 기본, L1 문턱, IR 전용 덮어쓰기 경로
+- 2026-09-30 · uncommitted · docs(adr): D-344 보강 — path 앞 물체 정지, IR 교정 절차, 각속도 계단 §13
 - 2026-09-30 · uncommitted · docs(plan): specify local OMX pick-and-place execution
-- 2026-09-30 · uncommitted · docs(adr): accept D-374 app identity rename
-- 2026-09-30 · uncommitted · docs(adr): D-374 앱 이름 규칙 — 폴더·패키지·식별자를 역할 이름 하나에서
-- 2026-09-30 · uncommitted · docs(plan): identify PICK_PLACE coordinate resolution gap
-- 2026-09-30 · uncommitted · test(omx): rerun vendor owner policy ROS-SIM

@@ -3872,3 +3872,27 @@
 - 변경: D-369 제어권 경계를 지키는 OMX `PICK_PLACE` 구현 계획을 추가하고, 기존 Action/message 계획 및 OMX progress에서 연결했다.
 - 증거: 새 계획 및 기존 `docs/plans/2026-09-30-action-message-identity.md`와 `src/products/omx/adapter/progress.md`의 교차 링크. 계획에는 RGB-D 기반 pose 검증, 로컬 planning, phase별 ROS goal/취소/저널, Fleet 진행 투영을 순차 작업으로 둔다.
 - gate 변화: 없음. 모델은 후보/읽기 전용이고 Fleet은 Mission/grant/status를 소유한다. 첫 phase 의도는 ROS 제출 전에 기록하며 첫 ROS 응답의 부모 Action/phase 결과는 단일 SQLite 트랜잭션으로 기록한다. 응답 전 crash는 UNKNOWN/HOLD이며 재전송하지 않는다. MTC/Jazzy 적합성은 probe gate이며, profile 비활성 및 DEVICE/FIELD PARKED 상태를 유지한다.
+
+## 2026-09-30 · uncommitted · docs(adr): D-344 보강 — path 앞 물체 정지, IR 교정 절차, 각속도 계단 §13
+
+- 변경: `docs/adr/D-344-pilot-assisted-autonomy.md` 에 2026-09-30 보강(§11 path 판정, §12 교정 도구·rosy-camera 덮어쓰기, §13 수동 한도 계단 각속도). 운영 절차 `docs/deployment/pinky-pro-ir-line-calibration-runbook.md` 신설(한국어).
+- 증거: 코드 커밋 e3eb2561, 7e467a4b, 6f00a74d 와 그 시험.
+- gate 변화: 없음(문서). DEVICE 절차는 로봇 복귀 뒤 사용자와 실행.
+
+## 2026-09-30 · uncommitted · docs(adr): D-344 보강 검토 반영 — sector 기본, L1 문턱, IR 전용 덮어쓰기 경로
+
+- 변경: D-344 2026-09-30 보강의 §11(path 는 선택·기본 sector, 급회전 창·near-field·풀림 지연·WAITING·장기 정지 사건), §12(`/etc/rosy/ir_calibration.yaml`, launch 검증), §13(차선 자동은 L1 이상, `limit_level_too_low`)을 사용자 결정과 독립 검토대로 고쳤다. 이 보강은 아직 main 에 없는 같은 날 초안이라 제자리에서 고쳤다. 런북도 새 경로·첫 블록만 붙이기·loaded/skipped 로그 확인·L1 문턱으로 갱신.
+- 증거: 코드 커밋 794e75bb(CORE), 04213a43(pilot) 과 이 회차의 덮어쓰기 커밋.
+- gate 변화: 없음(문서).
+
+## 2026-09-30 · uncommitted · docs(api): nav.line_obstacle_hold 이벤트와 차선 추종 정지 사유 두 개를 카탈로그에
+
+- 변경: `docs/reference/ROSY API & Protocol Reference.md` §8 에 `nav.line_obstacle_hold`(warning, `{mode, clearance_m, held_s}`), line-follow 행에 `limit_level_too_low`·`angular_limit_zero`. 버전 머리글·핀(app.py 등)은 올리지 않았다 — "다음 버전 표기 전" 으로 적고 병합 때 한 번에 올린다.
+- 증거: `test_event_catalogue.py` 72 passed(추가 전 `test_nothing_is_emitted_behind_the_contract` 빨강) (2026-09-30 Windows).
+- gate 변화: 없음. 병합 전에 API 버전 올림이 필요하다.
+
+## 2026-09-30 · uncommitted · docs(adr): D-377 앱 이름 규칙 — Rosy + 영어 한 단어
+- 변경: D-377(Accepted, 사용자 결정) 추가. 표시 이름 `Rosy <Word>`(한국어는 부제에만), id·폴더 끝 `<word>`, 패키지 `rosy_<word>`, Android `io.github.livsbittt.rosy.<word>`, Gradle `rosy-<word>`, 아이콘 `<word>.svg`. 대응: Rosy Cam(`src/site/cam`, `…rosy.cam`), Rosy Vision(`src/site/vision`, `rosy_vision`, 실행 파일 `rosy-vision`), Rosy Console(계획 `src/site/console`·`rosy_console`, 단계 4 게이트), Rosy Robot(계획 `src/hmi/robot`·`rosy_robot`, 단계 3 게이트), Rosy Pilot(그대로). D-370 2항 이름표와 D-374 1·2항을 대체한다고 두 ADR 머리에 적었다. D-374 계획의 2.4·2.5와 단계 3·4·5 목표를 새 이름으로 고쳤다.
+- 증거: 문서만. 번호는 로컬 브랜치 전부·`.worktrees/*/docs/adr`·main 체크아웃 미추적 파일을 확인해 D-375(`feat/overhead-map-auto-register`)·D-376(`omx-pick-place-execution` 워크트리) 다음 빈 번호로 잡았다.
+- gate 변화: 없음(문서만). 실행은 `refactor/app-naming-cam-vision`.
+- 결정: 와이어 이름은 D-374 3항 그대로. Vision 옛 실행 파일 `site_vision`·`overhead`는 한 사이트 후보 릴리스 동안 별칭.

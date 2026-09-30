@@ -161,6 +161,17 @@ def _line_follow_config(raw: dict[str, Any]) -> LineFollowConfig:
         obstacle_half_angle_deg=float(raw.get("obstacle_half_angle_deg", defaults.obstacle_half_angle_deg)),
         lidar_forward_deg=float(raw.get("lidar_forward_deg", defaults.lidar_forward_deg)),
         clearance_stale_s=float(raw.get("clearance_stale_s", defaults.clearance_stale_s)),
+        obstacle_mode=str(raw.get("obstacle_mode", defaults.obstacle_mode)),
+        obstacle_corridor_half_width_m=float(raw.get(
+            "obstacle_corridor_half_width_m", defaults.obstacle_corridor_half_width_m)),
+        obstacle_path_horizon_m=float(raw.get(
+            "obstacle_path_horizon_m", defaults.obstacle_path_horizon_m)),
+        obstacle_release_s=float(raw.get("obstacle_release_s", defaults.obstacle_release_s)),
+        obstacle_escalate_s=float(raw.get("obstacle_escalate_s", defaults.obstacle_escalate_s)),
+        max_angular_follows_manual=raw.get(
+            "max_angular_follows_manual", defaults.max_angular_follows_manual),
+        lane_auto_min_manual_angular=float(raw.get(
+            "lane_auto_min_manual_angular", defaults.lane_auto_min_manual_angular)),
         ir_guard_enabled=raw.get("ir_guard_enabled", defaults.ir_guard_enabled),
         ir_guard_edge_error=float(raw.get("ir_guard_edge_error", defaults.ir_guard_edge_error)),
         ir_guard_turn=float(raw.get("ir_guard_turn", defaults.ir_guard_turn)),
@@ -357,7 +368,8 @@ class CoreServices:
                                 stuck_timeout_s=float(safety_cfg.get("stuck_timeout_s", 30.0)),
                                 readiness=readiness)
         line_follow = LineFollowManager(
-            events, config=_line_follow_config(config.get("line_follow", {}) or {}))
+            events, config=_line_follow_config(config.get("line_follow", {}) or {}),
+            angular_ceiling=lambda: safety.limits.manual_angular)
         traffic_policy_config = _traffic_policy_config(
             config.get("traffic_policy", {}) or {})
         traffic_policy = TrafficPolicyManager(

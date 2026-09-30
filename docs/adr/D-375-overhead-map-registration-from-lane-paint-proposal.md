@@ -2,7 +2,7 @@
 
 **Status:** Proposed (2026-09-30). D-360의 부록이다. 제안 위치(Vision), 제안 API, 품질·거부 기준, 가려진 쪽 보고만 정한다. 제안을 `site-cameras.yaml`·`CameraMap`·sighting 좌표에 반영하는 절차는 정하지 않는다. D-257·D-360을 바꾸지 않는다.
 
-잇는 결정: [D-257](D-257-site-lane-map-and-overhead-sightings.md)(sighting은 표시 전용) · [D-261](D-261-overhead-camera-app-skeleton.md) · [D-360](D-360-overhead-field-auto-detection-proposal.md)(경기장 자동 검출은 제안) · [D-374](D-374-app-identity-follows-one-role-name.md)(패키지 `site_vision`, 와이어 이름 유지).
+잇는 결정: [D-257](D-257-site-lane-map-and-overhead-sightings.md)(sighting은 표시 전용) · [D-261](D-261-overhead-camera-app-skeleton.md) · [D-360](D-360-overhead-field-auto-detection-proposal.md)(경기장 자동 검출은 제안) · [D-374](D-374-app-identity-follows-one-role-name.md)·D-377(패키지 `rosy_vision`, 와이어 이름 유지).
 
 ### Context
 
@@ -12,7 +12,7 @@
 
 ### Decision
 
-1. **Vision이 페인트를 맞춘다.** `site_vision/map_register.py`(ROS 없음, OpenCV CPU): 흰 가는 선 마스크 → 주 선 방향 → 고정 해상도(2.5 cm/px) 지도 템플릿에 대해 영상을 배율마다 다시 뽑는 거친 탐색(90° 네 방향 × 거울 × 배율) → 지도 래스터를 템플릿으로 한 ECC homography 정밀화 → 바닥 거리(2.5 cm 허용) 기준 recall·precision 점수. 결정적이고, 요청 시 한 번 약 0.7–1.1 s(Windows 개발 PC)다.
+1. **Vision이 페인트를 맞춘다.** `src/site/vision/rosy_vision/map_register.py`(ROS 없음, OpenCV CPU): 흰 가는 선 마스크 → 주 선 방향 → 고정 해상도(2.5 cm/px) 지도 템플릿에 대해 영상을 배율마다 다시 뽑는 거친 탐색(90° 네 방향 × 거울 × 배율) → 지도 래스터를 템플릿으로 한 ECC homography 정밀화 → 바닥 거리(2.5 cm 허용) 기준 recall·precision 점수. 결정적이고, 요청 시 한 번 약 0.7–1.1 s(Windows 개발 PC)다.
 2. **API.** `GET /api/vision/sources/{id}/map-proposal`. D-360 field-proposal과 같은 lease·속도 제한(lease 주체·source마다 초당 1회)·`Cache-Control: no-store`·`nosniff`, 같은 404(프레임 없음·오래됨)/401/422 규칙. source마다 초당 최대 1회만 계산하고 같은 프레임은 재계산하지 않는다. Vision을 `--map-paint <road_lines.stl>`로 띄우지 않으면 404 `site map paint not configured`.
    - `200` 본문: `{"source", "frame_seq", "frame_age_ms", "image", "map_frame": "map", "accepted", "proposal", "rejected_fit", "reason", "registrar": {"version", "elapsed_ms"}}`.
    - `proposal`(통과했을 때만)과 `rejected_fit`(거부됐을 때의 최선 적합)은 같은 모양: `image_to_map`·`map_to_image`(3×3, 전체 해상도 픽셀↔지도 미터), `score`(시야 안 페인트 중 선과 맞은 비율), `precision`(지도 안 흰 선 중 페인트와 맞은 비율), `coverage`(페인트 면적 중 프레임 안 비율), `cut_sides`(`+x`/`-x`/`+y`/`-y`), `cut_directions`(east/west/north/south), `side_outside`, `rotation_deg`(화면에서 지도 +x 방향, 반시계), `mirrored`, `orientation_margin`.
@@ -47,7 +47,7 @@
 
 ### Validation
 
-- `python -m pytest src/site/site_vision/test -q`: `test_map_register.py`, `test_map_proposal_route.py`.
+- `python -m pytest src/site/vision/test -q`: `test_map_register.py`, `test_map_proposal_route.py`.
 - LOCAL: 실제 프레임과 기준 homography 비교 결과는 `private/validation/`에 둔다.
 
 ### References

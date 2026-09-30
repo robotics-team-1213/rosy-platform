@@ -2,7 +2,7 @@
 
 경로 순회를 막는 유일한 방어는 allowlist 다 — 디렉터리 스캔으로 바꾸지 않는다
 (core 와 같은 규칙). 공용 L1 자산은 서버가 설정받은 web_common 디렉터리의
-manifest.json 이 명시한 파일만 /common 아래로 서빙한다.
+shared-assets.json 이 명시한 파일만 /common 아래로 서빙한다.
 """
 
 from __future__ import annotations
@@ -41,13 +41,13 @@ CONSOLE_CSP = (
 
 
 def shared_assets(root: Optional[Path]) -> dict[str, str]:
-    """The /common allowlist is web_common's manifest.json. A configured
+    """The /common allowlist is web_common's shared-assets.json. A configured
     directory without one (a trimmed copy) uses the default web_common's."""
-    manifest = root / "manifest.json" if root is not None else None
+    manifest = root / "shared-assets.json" if root is not None else None
     if manifest is None or not manifest.is_file():
         from fleet.cli import default_web_common
 
-        manifest = default_web_common() / "manifest.json"
+        manifest = default_web_common() / "shared-assets.json"
     return dict(json.loads(manifest.read_text(encoding="utf-8"))["shared_assets"])
 
 

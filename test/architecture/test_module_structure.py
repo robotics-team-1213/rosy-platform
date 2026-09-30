@@ -55,7 +55,7 @@ KNOWN_CHAIN_BACK_EDGES = {
 }
 KNOWN_DIRECTION = {
     ("control", "imu_bno055"): "runtime/sensing -> drivers/imu_bno055; declared exec_depend. Legacy launches start the IMU driver; the long-term fix is bringup assembly, not a sensing launch",
-    ("site_vision", "games"): "Site Vision reuses the ROS-free four-point homography helper for camera calibration",
+    ("rosy_vision", "games"): "Rosy Vision reuses the ROS-free four-point homography helper for camera calibration",
     ("bringup", "control"): "products/bringup -> runtime/sensing: bringup_robot.launch.py starts control's ir_adc_node for the rosy-io graph (enable_ir, D-344 §12) — bringup assembling the robot graph is the direction the imu_bno055 row names",
 }
 
@@ -166,14 +166,16 @@ SIZE_VERDICTS = {
         "accept: sim-only read-only viewer server (HTTP handler + ROS subscriptions); the pure logic already lives in live_view_model.py and the page in lane_live_view.html, covered by test_lane_live_view*.py and test_live_view_model.py (X5)",
     ),
     "control": (
-        36_091,
+        36_677,
         f"split: deploy closure needs only sensing + safety provider (P1a); {CONTROL_SPLIT} "
         "(re-judged 2026-09-30 at 33090 after D-356 added the ROS-free learned perception backend "
         "(sensing/perception/learned), the shadow node and the recording CLI; the learned backend sits "
         "inside sensing/perception and moves with it — verdict unchanged; re-judged 2026-09-30 at 35197 "
         "under D-362 — web/diagnostic.html and the sensing web assets now count toward the package total; "
         "re-judged 2026-09-30 at 36091 when the pilot branch merged the ROS-free lane keepers "
-        "(lane_keep.py 'keep', lane.py 'between') and the NOMINAL ground inside sensing/perception — verdict unchanged)",
+        "(lane_keep.py 'keep', lane.py 'between') and the NOMINAL ground inside sensing/perception — verdict unchanged; "
+        "re-judged again at 36677 with the ROS-free IR line calibration (perception/ir_calibration.py), its read-only "
+        "device CLI and the camera-launch overlay validator (control/ir_overlay.py) — verdict unchanged)",
     ),
     # --- D-362 newly-covered files (web assets in src/ packages, ops roots). ---
     "runtime/sensing/web/diagnostic.html": (
@@ -309,7 +311,8 @@ def layout_ok(rel: tuple, name: str) -> bool:
         return rel == ROLE_DIR[name]
     if rel[0] == "products":
         return False  # Product packages require an explicit family/role declaration.
-    return len(rel) == 2 and rel[1] == name
+    # D-377: an app package is `rosy_<word>` in folder `<domain>/<word>`.
+    return len(rel) == 2 and name in (rel[1], f"rosy_{rel[1]}")
 
 
 def _declared(name: str) -> set:

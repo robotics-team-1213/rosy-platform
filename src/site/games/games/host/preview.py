@@ -20,12 +20,12 @@ WEB = Path(__file__).resolve().parents[1] / "web"
 def web_common_dir() -> Path:
     """Installed web_common share first, then the source tree (host runs).
 
-    A web_common directory is one that ships ``manifest.json``."""
+    A web_common directory is one that ships ``shared-assets.json``."""
     try:
         from ament_index_python.packages import get_package_share_directory
 
         share = Path(get_package_share_directory("web_common"))
-        if (share / "manifest.json").is_file():
+        if (share / "shared-assets.json").is_file():
             return share
     except (ImportError, LookupError):
         pass
@@ -34,7 +34,7 @@ def web_common_dir() -> Path:
 
 COMMON = web_common_dir()
 #: name -> media type. web_common's manifest is the one /common allowlist.
-COMMON_ASSETS = json.loads((COMMON / "manifest.json").read_text(encoding="utf-8"))["shared_assets"]
+COMMON_ASSETS = json.loads((COMMON / "shared-assets.json").read_text(encoding="utf-8"))["shared_assets"]
 #: The board is same-origin only: its script, sheets, overlay and frame.
 PAGE_CSP = (
     "default-src 'self'; connect-src 'self'; img-src 'self'; style-src 'self'; "

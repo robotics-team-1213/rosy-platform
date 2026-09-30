@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108" width="108" height="108">
+  <title>Rosy Robot</title>
+  <!-- D-370 3항: 108 grid, safe zone = centre circle of diameter 66. Glyph token robot-1, dot brand-rose. -->
+  <path id="background" d="M24,0H84A24,24 0 0,1 108,24V84A24,24 0 0,1 84,108H24A24,24 0 0,1 0,84V24A24,24 0 0,1 24,0Z" fill="#101214"/>
+  <g id="glyph">
+    <path id="face" d="M38,46H70A8,8 0 0,1 78,54V68A8,8 0 0,1 70,76H38A8,8 0 0,1 30,68V54A8,8 0 0,1 38,46Z" fill="none" stroke="#b6ddfe" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+    <path id="eye-left" d="M39.5,60A4.5,4.5 0 1,1 48.5,60A4.5,4.5 0 1,1 39.5,60Z" fill="#b6ddfe"/>
+    <path id="eye-right" d="M59.5,60A4.5,4.5 0 1,1 68.5,60A4.5,4.5 0 1,1 59.5,60Z" fill="#b6ddfe"/>
+  </g>
+  <path id="brand-dot" d="M70,34A4,4 0 1,1 78,34A4,4 0 1,1 70,34Z" fill="#f697e7"/>
+</svg>
