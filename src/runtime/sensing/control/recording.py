@@ -24,8 +24,8 @@ SHADOW_TOPIC = "perception/learned/shadow"
 # control/camera_detect_node.py (no compressed front-camera topic exists in
 # src/; camera/preview/compressed in road_observer_node.py is a 2 fps
 # dashboard preview, not training data). cmd_vel is the CORE final command;
-# line/observation comes from line_observer_node.py; odom from
-# products/pinky_pro/bringup/bringup/bringup.py (ODOM_PUB_TOPIC_NAME).
+# line/observation comes from line_observer_node.py; odom from the product
+# bringup package (ODOM_PUB_TOPIC_NAME).
 CAMERA_TOPIC = "camera/front"
 # Topics tools/perception/dataset/extract.py attaches to each frame as side
 # data, keyed by these relative names (prelabel.py reads SHADOW_TOPIC).
