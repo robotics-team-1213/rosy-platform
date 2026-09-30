@@ -88,8 +88,60 @@ class SiteResolverTest {
     @Test
     fun nonMdnsNamesGoToTheSystemResolver() {
         val browser = FakeBrowser(emptyList())
-        assertEquals(SiteRoute.SystemDns, SiteResolver(site.copy(tlsHost = "site.example.org"), browser).resolve())
+        assertEquals(SiteRoute.SystemDns(), SiteResolver(site.copy(tlsHost = "site.example.org"), browser).resolve())
         assertEquals(0, browser.browses)
+    }
+
+    @Test
+    fun aNonMdnsNameThatDnsCannotAnswerFallsBackToTheManualAddress() {
+        // Review m4.
+        val failing = object : okhttp3.Dns {
+            override fun lookup(hostname: String): List<InetAddress> = throw java.net.UnknownHostException(hostname)
+        }
+        val link = site.copy(tlsHost = "site.example.org", manualHost = "192.168.1.10")
+        val dns = SiteDns("site.example.org", SiteResolver(link, FakeBrowser(emptyList())), failing)
+        assertEquals(listOf(ip("192.168.1.10")), dns.lookup("site.example.org"))
+        try {
+            SiteDns("site.example.org", SiteResolver(site.copy(tlsHost = "site.example.org"), FakeBrowser(emptyList())), failing)
+                .lookup("site.example.org")
+            fail("expected UnknownHostException without a manual address")
+        } catch (e: java.net.UnknownHostException) {
+            assertEquals("site.example.org", e.message)
+        }
+    }
+
+    @Test
+    fun anUnpinnedLinkNeverDialsAnAdvertisedAddress() {
+        // Review m3: without a pinned CA nothing authenticates an mDNS responder.
+        val browser = FakeBrowser(listOf(seen("rosy-site.local", "192.168.1.5")))
+        val unpinned = site.copy(caPin = null, secure = false)
+        assertEquals(SiteRoute.NotDiscovered("rosy-site.local"), SiteResolver(unpinned, browser).resolve())
+        val withManual = unpinned.copy(manualHost = "192.168.1.10")
+        assertEquals(SiteRoute.Manual(ip("192.168.1.10"), afterBrowse = false), SiteResolver(withManual, browser).resolve())
+        assertEquals(0, browser.browses)
+    }
+
+    @Test
+    fun invalidateNeverWaitsForABrowseInProgress() {
+        // Review m2: invalidate() runs on OkHttp's callback thread and must not block behind a 5 s browse.
+        val entered = java.util.concurrent.CountDownLatch(1)
+        val release = java.util.concurrent.CountDownLatch(1)
+        val slow = SiteBrowser { _, _ ->
+            entered.countDown()
+            release.await(10, java.util.concurrent.TimeUnit.SECONDS)
+            emptyList()
+        }
+        val resolver = SiteResolver(site, slow)
+        val lookup = Thread { resolver.resolve() }.apply { start() }
+        try {
+            assertTrue(entered.await(5, java.util.concurrent.TimeUnit.SECONDS))
+            val done = java.util.concurrent.CountDownLatch(1)
+            Thread { resolver.invalidate(); done.countDown() }.start()
+            assertTrue("invalidate blocked behind the browse", done.await(1, java.util.concurrent.TimeUnit.SECONDS))
+        } finally {
+            release.countDown()
+            lookup.join(5_000)
+        }
     }
 
     @Test
@@ -127,7 +179,21 @@ class SiteResolverTest {
     fun sameNameFromTwoAddressesIsAConflict() {
         val browser = FakeBrowser(listOf(seen("rosy-site.local", "192.168.1.5"), seen("rosy-site.local", "192.168.1.6", name = "impostor")))
         val route = SiteResolver(site, browser).resolve()
-        assertEquals(SiteRoute.Conflict("rosy-site.local", listOf(ip("192.168.1.5"), ip("192.168.1.6"))), route)
+        assertEquals(
+            SiteRoute.Conflict("rosy-site.local", listOf(ip("192.168.1.5"), ip("192.168.1.6")), listOf("Rosy site", "impostor")),
+            route,
+        )
+    }
+
+    @Test
+    fun overlappingAddressSetsAreTheSameHostNotAConflict() {
+        // Review m5: one instance seen with IPv4 only and again with IPv4 + IPv6.
+        val browser = FakeBrowser(
+            listOf(seen("rosy-site.local", "192.168.1.5"), seen("rosy-site.local", "192.168.1.5", "fd00::5", name = "Rosy site v6")),
+        )
+        val route = SiteResolver(site, browser).resolve()
+        assertTrue(route.toString(), route is SiteRoute.Discovered)
+        assertEquals("Rosy site", (route as SiteRoute.Discovered).sighting.serviceName)
     }
 
     @Test

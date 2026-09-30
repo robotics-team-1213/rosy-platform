@@ -190,7 +190,9 @@ class OverheadLinkTest {
             browses++
             listOf(SiteSighting("Rosy site", "rosy-site.local", port, listOf(java.net.InetAddress.getByName("127.0.0.1")))).filter(match)
         }
-        val site = io.github.livsbittt.rosy.cam.settings.SiteLink(null, "rosy-site.local", port, null, "t", "overhead-1", secure = false)
+        // Pinned: mDNS is only used for a pinned link (review m3). The port is closed, so no TLS happens.
+        val pin = "sha256/" + "A".repeat(43)
+        val site = io.github.livsbittt.rosy.cam.settings.SiteLink(null, "rosy-site.local", port, pin, "t", "overhead-1", secure = true)
         val resolver = SiteResolver(site, browser)
         val l = OverheadLink(site.toPairing(), appVersion = "0.1.0", device = "jvm-test", resolver = resolver).also { link = it }
         l.start()

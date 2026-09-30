@@ -1,9 +1,11 @@
 package io.github.livsbittt.rosy.cam.link
 
+import android.util.Log
 import io.github.livsbittt.rosy.cam.settings.SiteLink
 import java.net.InetAddress
 import java.net.UnknownHostException
 import java.security.cert.X509Certificate
+import java.util.concurrent.atomic.AtomicReference
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -37,11 +39,18 @@ sealed interface SiteRoute {
     /** Neither mDNS nor a manual address: D-391 `not_discovered`. */
     data class NotDiscovered(val tlsHost: String) : SiteRoute
 
-    /** The same `tls_host` answered from different addresses (D-370 5.3): no automatic choice. */
-    data class Conflict(val tlsHost: String, val addresses: List<InetAddress>) : SiteRoute
+    /**
+     * The same `tls_host` answered from disjoint address sets (D-370 5.3): no automatic choice.
+     * [serviceNames] are the advertising instances, for the log.
+     */
+    data class Conflict(
+        val tlsHost: String,
+        val addresses: List<InetAddress>,
+        val serviceNames: List<String> = emptyList(),
+    ) : SiteRoute
 
-    /** `tls_host` is not an mDNS name; the system resolver handles it. */
-    data object SystemDns : SiteRoute
+    /** `tls_host` is not an mDNS name; the system resolver handles it, then [manual] if it cannot (review m4). */
+    data class SystemDns(val manual: InetAddress? = null) : SiteRoute
 }
 
 /** mDNS did not show the site's `tls_host` on this network within the browse timeout (D-391 1). */
@@ -64,6 +73,9 @@ class SiteConflictException(val tlsHost: String, val addresses: List<InetAddress
  * Finds the site of [link] on every (re)connect (D-341 13, D-391 1). Order: mDNS for `tls_host`, then the
  * link's `manual_host`, then `not_discovered`. A discovery is reused for [cacheMs] and dropped by [invalidate]
  * after a failed attempt. Nothing here is persisted: the address is never the saved dial target.
+ *
+ * mDNS is used only for a pinned link (review m3): the pinned CA is what makes an advertised address safe to
+ * dial, so an unpinned `.local` link goes straight to its manual address or `not_discovered`.
  */
 class SiteResolver(
     private val link: SiteLink,
@@ -72,9 +84,13 @@ class SiteResolver(
     private val browseTimeoutMs: Long = BROWSE_TIMEOUT_MS,
     private val cacheMs: Long = CACHE_MS,
 ) {
-    private val lock = Any()
-    private var cached: SiteRoute.Discovered? = null
-    private var cachedAtMs = 0L
+    private class Cached(val route: SiteRoute.Discovered, val atMs: Long)
+
+    /** Lock-free, so [invalidate] on OkHttp's callback thread never waits for a browse (review m2). */
+    private val cached = AtomicReference<Cached?>(null)
+
+    /** Serializes lookups only (one NSD browse at a time); [invalidate] never takes it. */
+    private val lookupLock = Any()
 
     private val _route = MutableStateFlow<SiteRoute?>(null)
 
@@ -82,7 +98,7 @@ class SiteResolver(
     val route: StateFlow<SiteRoute?> = _route.asStateFlow()
 
     /** Route for the next connection. Blocks for up to the browse timeout. */
-    fun resolve(): SiteRoute = synchronized(lock) {
+    fun resolve(): SiteRoute = synchronized(lookupLock) {
         val result = lookup()
         _route.value = result
         result
@@ -90,7 +106,7 @@ class SiteResolver(
 
     /** Forget the cached discovery; the next [resolve] browses again. Call after a failed connection. */
     fun invalidate() {
-        synchronized(lock) { cached = null }
+        cached.set(null)
     }
 
     /**
@@ -108,30 +124,43 @@ class SiteResolver(
     private fun manualAddress(): InetAddress? = link.manualHost?.let(::literal)
 
     private fun lookup(): SiteRoute {
-        val tlsHost = link.tlsHost ?: return manualAddress()?.let { SiteRoute.Manual(it, afterBrowse = false) }
+        val manual = manualAddress()
+        val tlsHost = link.tlsHost ?: return manual?.let { SiteRoute.Manual(it, afterBrowse = false) }
             ?: SiteRoute.NotDiscovered(link.manualHost.orEmpty())
-        if (!isMdnsName(tlsHost)) return SiteRoute.SystemDns
-        cached?.let { if (nowMs() - cachedAtMs < cacheMs) return it }
-        cached = null
+        if (!isMdnsName(tlsHost)) return SiteRoute.SystemDns(manual)
+        // Unpinned: nothing would authenticate an advertised address (review m3).
+        if (link.caPin == null) {
+            return manual?.let { SiteRoute.Manual(it, afterBrowse = false) } ?: SiteRoute.NotDiscovered(tlsHost)
+        }
+        cached.get()?.let { if (nowMs() - it.atMs < cacheMs) return it.route }
         val sightings = browser.browse(browseTimeoutMs) { sameHost(it.tlsHost, tlsHost) }
             .filter { it.addresses.isNotEmpty() }
         if (sightings.isNotEmpty()) {
-            val addressSets = sightings.map { it.addresses.toSet() }.distinct()
-            if (addressSets.size > 1) return SiteRoute.Conflict(tlsHost, addressSets.flatten().distinct())
+            conflict(tlsHost, sightings)?.let { return it }
             val preferred = sightings.firstOrNull { it.serviceName == link.siteName } ?: sightings.first()
-            return SiteRoute.Discovered(preferred).also {
-                cached = it
-                cachedAtMs = nowMs()
-            }
+            return SiteRoute.Discovered(preferred).also { cached.set(Cached(it, nowMs())) }
         }
-        manualAddress()?.let { return SiteRoute.Manual(it) }
+        manual?.let { return SiteRoute.Manual(it) }
         return SiteRoute.NotDiscovered(tlsHost)
+    }
+
+    /**
+     * A conflict needs two advertisements with no address in common (review m5). Overlapping sets, such as one
+     * instance seen with IPv4 only and again with IPv4 + IPv6, are the same host.
+     */
+    private fun conflict(tlsHost: String, sightings: List<SiteSighting>): SiteRoute.Conflict? {
+        val disjoint = sightings.any { a -> sightings.any { b -> a.addresses.none { it in b.addresses } } }
+        if (!disjoint) return null
+        val names = sightings.map { it.serviceName }.distinct()
+        Log.w(TAG, "conflict: $tlsHost advertised by $names at ${sightings.map { s -> s.addresses.map { it.hostAddress } }}")
+        return SiteRoute.Conflict(tlsHost, sightings.flatMap { it.addresses }.distinct(), names)
     }
 
     companion object {
         /** D-391 1 "정해진 시간": how long a browse may look for the site before `not_discovered`. */
         const val BROWSE_TIMEOUT_MS = 5_000L
         const val CACHE_MS = 30_000L
+        private const val TAG = "SiteResolver"
 
         fun isMdnsName(host: String): Boolean = host.trimEnd('.').lowercase().endsWith(".local")
 
@@ -174,7 +203,12 @@ class SiteDns(
             is SiteRoute.Manual -> listOf(route.address)
             is SiteRoute.NotDiscovered -> throw SiteNotDiscoveredException(tlsHost)
             is SiteRoute.Conflict -> throw SiteConflictException(tlsHost, route.addresses)
-            SiteRoute.SystemDns -> fallback.lookup(hostname)
+            is SiteRoute.SystemDns -> try {
+                fallback.lookup(hostname)
+            } catch (e: UnknownHostException) {
+                // A non-.local name that DNS cannot answer here: the manual address, if any (review m4).
+                route.manual?.let { listOf(it) } ?: throw e
+            }
         }
     }
 }
