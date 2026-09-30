@@ -245,8 +245,8 @@
 
 ## 최근 기록
 
+- 2026-09-30 · uncommitted · docs(adr): D-372 브랜치 이름과 공유 체크아웃의 남의 작업 보존 규칙
 - 2026-09-30 · uncommitted · refactor(dashboard): D-362 P1 app.js 분할 실행 및 웹 예산 게이트 통합
 - 2026-09-30 · uncommitted · refactor(dashboard): D-362 P1 styles.css 분할 + diagnostic 판정 정정
 - 2026-09-30 · uncommitted · refactor(sensing): D-362 P0-2 캘리브레이션 상태기계 추출 실행
 - 2026-09-30 · uncommitted · refactor(fleet): D-362 P0-1 app.py 라우터 분리 실행
-- 2026-09-30 · uncommitted · governance(structure): D-362 파일 크기 예산 채택 및 P6 게이트 확장

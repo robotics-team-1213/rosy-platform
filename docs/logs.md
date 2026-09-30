@@ -3801,3 +3801,11 @@
 - Change: `hmi/dashboard/app.js` 1338 → 745. 상태 렌터는 `telemetry.js`(419 — 텔레메트리 채널·로봇 정보·트리이지·안전 히어로·인벤토리·런타임·이벤트 + 교통 정책 패널 상태·렌더·바인딩), 수동 조종은 `teleop.js`(128 — 홀드 티커 내재화, D-250 절차 보존), 상태 소켓은 `state-socket.js`(111 — 재접속 후퇴 팩토리, 4401/4403 분기 보존). 임포트 방향은 dom←client←settings←셸 한 방향 유지, 빌드 단계 없음(D-23). allowlist·CMake·AGENTS 갱신. D-262의 로컬 웹 예산 스캔(test_web_budgets, 600줄)은 map-view.js 612 커밋(e89e09e1)으로 이미 main에서 빨간 상태였다 — D-362 아키텍처 게이트(웹 800·set-equality·>1000 허용량 0)가 상위 집합이므로 통합하고, 이 파일은 인수 시험(아키텍처 게이트가 .js/.html/.css를 실제로 커버하는지)으로 대체.
 - Evidence: node --check 4파일 통과(UTF-8 직접 읽기 — 첫 시도는 cp949 오독으로 미변경 파일까지 거짓 실패), gateway dashboard+ui_route+web_common 142 passed, dashboard 패키지 17 passed 34 skipped, 구조 게이트 33 passed(app.js 판정 제거 set-equality 확인). 시험 재지정 5건은 app.js 단독 텍스트 고정이 새 모듈로 이동한 것 — 파일 자신의 교리(16-18줄, "모듈 간 이동 시 app.js만 읽으면 잘못된 이유로 통과/실패한다")대로 bundle/state-socket.js로 재지정.
 - Gate: 동작 불변(함수 이동·엣지 치환만, renderCapabilities 래퍼·teleopActive·lineFollow.pending 적응 3곳). 브라우저 회귀(ROSY_RUN_BROWSER_TESTS=1)는 Playwright 환경에서 별도 확인 필요 — 정적 검사+문법+번들 계약 시험이 이 변경의 증거 한계다.
+
+## 2026-09-30 · uncommitted · docs(adr): D-372 브랜치 이름과 공유 체크아웃의 남의 작업 보존 규칙
+- 변경: D-372 추가. 브랜치·worktree는 처음부터 접두어+주제(+ADR 항목)로 짓고 한 브랜치에 한 주제만 둔다. 공유 main 체크아웃의 소유 주장 없는 미커밋 작업은 임시 인덱스로 주제별 브랜치에 보존하고 해시로 검증하며, 작업 트리 되돌리기는 사용자 승인과 24시간 무수정일 때만 한다.
+- 증거: 같은 날 `wip/orphaned-main-checkout-20260930`(다섯 주제 한 커밋)을 주제별 다섯 브랜치로 나눔 — 37파일 바이트 일치·로그 항목 5개 배정 확인 후 원래 브랜치 삭제. 한 시간 뒤 같은 경로가 1~7분 전 수정 시각으로 다시 나타나 주인이 ListAgents 밖에서 살아 있었음을 확인.
+- gate 변화: 없음(작업 규칙).
+- 결정: 보존한 D-362 브랜치 넷과 ER2 문서 브랜치는 주인 확인 전 머지하지 않고 백업으로 둔다.
+- 교훈: "아무도 소유를 주장하지 않음"은 "버려짐"이 아니다. 수정 시각이 최근이면 살아 있는 작업이다.
+
