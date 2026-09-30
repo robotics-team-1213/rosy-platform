@@ -136,6 +136,27 @@ trap {
     break
 }
 
+# 2026-09-30 (release 009, -Detach): the elevated window answered the ERASE
+# prompt with an empty line 0.9 s after it appeared. Read-Host takes whatever is
+# already in the console input buffer, so a key pressed while the earlier stages
+# ran (they took 3 min that time) answered it. Drop that type-ahead first.
+function Clear-TypeAhead {
+    try { $Host.UI.RawUI.FlushInputBuffer() }
+    catch { Write-Warning "could not clear keys typed before the prompt; type the answer only after the prompt appears" }
+}
+
+# Returns only what the operator typed after the prompt. An empty line or the end
+# of console input is no answer: it fails as "no console input", not as a
+# mismatch, and the card stays untouched.
+function Read-EraseConfirmation([string]$Expected) {
+    Clear-TypeAhead
+    $typed = Read-Host "Type exactly: $Expected"
+    if ([string]::IsNullOrWhiteSpace([string]$typed)) {
+        Fail "no console input: nothing was typed at the ERASE prompt (an empty line or the end of input is not a confirmation)" "re-run and type exactly: $Expected"
+    }
+    return [string]$typed
+}
+
 function Get-CredentialPath([string]$Profile) {
     if ($Profile -notmatch '^[A-Za-z0-9_.-]{1,64}$') {
         Fail "Wi-Fi profile name is invalid"
@@ -917,6 +938,7 @@ if ($null -ne $readMBps -and $readMBps -lt $MinReadMBps) {
         # A non-interactive run (confirmation passed in, -NonInteractive, or no
         # console) cannot be asked: fail closed instead of hanging on Read-Host.
         if ($NonInteractive -or $Confirmation -or [Console]::IsInputRedirected) { Fail $slowFailure $slowNext }
+        Clear-TypeAhead
         if ((Read-Host "Type SLOW to write this card anyway, anything else to stop") -cne "SLOW") { Fail $slowFailure $slowNext }
     }
 }
@@ -924,12 +946,13 @@ if ($null -ne $readMBps -and $readMBps -lt $MinReadMBps) {
 Set-Stage "confirm" "untouched" ""
 $expectedConfirmation = "ERASE SERIAL $($firstDisk.SerialNumber) $DeviceName"
 if (-not $Confirmation) {
-    # D-231: never block on Read-Host without a console to answer it. Agent,
-    # -Detach and CI runs must pass -Confirmation or fail here with a next step.
+    # D-231: never block on Read-Host without a console to answer it. Agent and
+    # CI runs must pass -Confirmation or fail here with a next step; a -Detach
+    # window has its own console, and the operator types the phrase there.
     if ($NonInteractive -or [Console]::IsInputRedirected) {
         Fail "no confirmation was supplied for the destructive write" "re-run with -Confirmation 'ERASE SERIAL <disk_serial> $DeviceName'"
     }
-    $Confirmation = Read-Host "Type exactly: $expectedConfirmation"
+    $Confirmation = Read-EraseConfirmation $expectedConfirmation
 }
 if ($Confirmation -cne $expectedConfirmation) {
     Fail "confirmation did not match the selected physical disk and device`ntyped: '$Confirmation'" "re-run and type exactly: $expectedConfirmation"

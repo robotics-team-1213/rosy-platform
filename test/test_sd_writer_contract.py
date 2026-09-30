@@ -2135,3 +2135,70 @@ def test_an_unread_first_sector_does_not_confirm_a_signature_1_card(writer_case,
     assert "first sector could not be read right before the erase" in _err(completed)
     assert "confirm" not in [line["stage"] for line in _progress(writer_case)]
     assert not writer_case["marker"].exists()
+
+
+# 2026-09-30 (release 009): a -Detach window failed the ERASE prompt with
+# "typed: ''" 0.9 s after it appeared; Read-Host took a key already sitting in the
+# console input buffer. The prompt needs a real console, so the harness lifts
+# Read-EraseConfirmation out of the script and drives it with a fake input
+# buffer: keys typed before the prompt, then what the operator types after it.
+_CONFIRM_HARNESS = r"""
+$ErrorActionPreference = 'Stop'
+$ast = [System.Management.Automation.Language.Parser]::ParseFile($env:ROSY_SCRIPT, [ref]$null, [ref]$null)
+$found = $ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+    $n.Name -eq 'Read-EraseConfirmation' }, $true)
+foreach ($definition in $found) { . ([scriptblock]::Create($definition.Extent.Text)) }
+$script:typeAhead = New-Object System.Collections.Queue
+$script:typed = New-Object System.Collections.Queue
+foreach ($key in @($env:ROSY_TYPE_AHEAD | ConvertFrom-Json)) { $script:typeAhead.Enqueue($key) }
+foreach ($key in @($env:ROSY_TYPED | ConvertFrom-Json)) { $script:typed.Enqueue($key) }
+function Clear-TypeAhead { $script:typeAhead.Clear() }
+function Read-Host([string]$Prompt) {
+    if ($script:typeAhead.Count) { return $script:typeAhead.Dequeue() }
+    if ($script:typed.Count) { return $script:typed.Dequeue() }
+    return $null
+}
+function Fail([string]$Message, [string]$Next) { throw "$Message`nnext: $Next" }
+try { 'RESULT=' + (Read-EraseConfirmation 'ERASE SERIAL 0123456789AB rosy-pinky-9dfk') }
+catch { 'FAILED=' + $_.Exception.Message }
+"""
+_PHRASE = "ERASE SERIAL 0123456789AB rosy-pinky-9dfk"
+
+
+def _read_confirmation(type_ahead, typed):
+    env = {**os.environ, "ROSY_SCRIPT": str(SCRIPT),
+           "ROSY_TYPE_AHEAD": json.dumps(type_ahead), "ROSY_TYPED": json.dumps(typed)}
+    completed = subprocess.run(
+        [POWERSHELL, "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", _CONFIRM_HARNESS],
+        capture_output=True, text=True, env=env,
+    )
+    assert completed.returncode == 0, completed.stderr
+    return " ".join(completed.stdout.split())
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+def test_the_erase_prompt_drops_keys_typed_before_it_and_waits_for_the_phrase():
+    assert _read_confirmation(["", "x"], [_PHRASE]) == f"RESULT={_PHRASE}"
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+@pytest.mark.parametrize("typed", [[""], ["   "], [None], []], ids=["enter", "blank", "null", "end-of-input"])
+def test_an_empty_answer_is_no_console_input_not_a_mismatch(typed):
+    out = _read_confirmation([], typed)
+    assert out.startswith("FAILED=no console input")
+    assert f"next: re-run and type exactly: {_PHRASE}" in out
+    assert "did not match" not in out
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+def test_a_wrong_answer_still_reaches_the_exact_match_check():
+    wrong = "ERASE SERIAL 0123456789AB rosy-pinky-zzzz"
+    assert _read_confirmation([], [wrong]) == f"RESULT={wrong}"
+    text = SCRIPT.read_text(encoding="utf-8")
+    confirm = text[text.index('Set-Stage "confirm"'):text.index("# Probe a third time")]
+    assert "$Confirmation = Read-EraseConfirmation $expectedConfirmation" in confirm
+    assert "if ($Confirmation -cne $expectedConfirmation)" in confirm
+    assert "= Read-Host" not in confirm
+    # The slow-media prompt reads the same console, so it drops type-ahead too.
+    slow = text[text.index("if (-not $AcceptSlowMedia)"):text.index('Set-Stage "confirm"')]
+    assert slow.index("Clear-TypeAhead") < slow.index("(Read-Host")
