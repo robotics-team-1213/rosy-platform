@@ -254,8 +254,8 @@
 
 ## 최근 기록
 
+- 2026-09-30 · uncommitted · docs(api): nav.line_obstacle_hold 이벤트와 차선 추종 정지 사유 두 개를 카탈로그에
 - 2026-09-30 · uncommitted · docs(adr): D-344 보강 검토 반영 — sector 기본, L1 문턱, IR 전용 덮어쓰기 경로
 - 2026-09-30 · uncommitted · docs(adr): D-344 보강 — path 앞 물체 정지, IR 교정 절차, 각속도 계단 §13
 - 2026-09-30 · uncommitted · test(omx): rerun vendor owner policy ROS-SIM
 - 2026-09-30 · uncommitted · docs(plan): classify prior OMX ROS-SIM evidence for Action mapping
-- 2026-09-30 · uncommitted · docs(plan): hold ROS Action mapping for selected hardware profile

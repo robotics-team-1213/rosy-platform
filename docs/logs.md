@@ -3859,3 +3859,9 @@
 - 변경: D-344 2026-09-30 보강의 §11(path 는 선택·기본 sector, 급회전 창·near-field·풀림 지연·WAITING·장기 정지 사건), §12(`/etc/rosy/ir_calibration.yaml`, launch 검증), §13(차선 자동은 L1 이상, `limit_level_too_low`)을 사용자 결정과 독립 검토대로 고쳤다. 이 보강은 아직 main 에 없는 같은 날 초안이라 제자리에서 고쳤다. 런북도 새 경로·첫 블록만 붙이기·loaded/skipped 로그 확인·L1 문턱으로 갱신.
 - 증거: 코드 커밋 794e75bb(CORE), 04213a43(pilot) 과 이 회차의 덮어쓰기 커밋.
 - gate 변화: 없음(문서).
+
+## 2026-09-30 · uncommitted · docs(api): nav.line_obstacle_hold 이벤트와 차선 추종 정지 사유 두 개를 카탈로그에
+
+- 변경: `docs/reference/ROSY API & Protocol Reference.md` §8 에 `nav.line_obstacle_hold`(warning, `{mode, clearance_m, held_s}`), line-follow 행에 `limit_level_too_low`·`angular_limit_zero`. 버전 머리글·핀(app.py 등)은 올리지 않았다 — "다음 버전 표기 전" 으로 적고 병합 때 한 번에 올린다.
+- 증거: `test_event_catalogue.py` 72 passed(추가 전 `test_nothing_is_emitted_behind_the_contract` 빨강) (2026-09-30 Windows).
+- gate 변화: 없음. 병합 전에 API 버전 올림이 필요하다.
