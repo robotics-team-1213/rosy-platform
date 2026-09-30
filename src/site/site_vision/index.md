@@ -14,6 +14,7 @@
 | D-269 | 장비는 역할별 계약으로 사이트 서버에 접속하고 DDS는 CORE 안에 둔다 |
 | D-318 | Site Fleet 관제 카메라 미리보기에 실측 렌즈·평면 보정을 지원한다 |
 | D-374 | 앱의 폴더·패키지·식별자·표시 이름은 역할 이름 하나에서 나온다 — 역할 id(kebab)·snake·compact·표시 네 표기; 와이어 계약 이름(mDNS 종류, `rosy-overhead/1`, `/api/fleet`·`/api/vision`, `rosyov://`, 웹 경로, 설정·저장소 키, compose 서비스)은 바꾸지 않는다 |
+| D-375 | 천장 카메라→지도 보정도 제안일 뿐이다 — Vision이 알려진 차선 페인트를 영상에 맞춰 homography·coverage·가려진 쪽을 제안하고, 운용자가 확인하기 전에는 어디에도 쓰지 않는다 |
 
 ## 계획·결과 문서
 
@@ -32,8 +33,8 @@
 
 ## 최근 기록
 
+- 2026-09-30 · uncommitted · feat(site-vision): D-375 map-proposal from the lane paint
 - 2026-09-30 · uncommitted · feat(site-vision): D-374 overhead console-script alias
 - 2026-09-30 · uncommitted · refactor(site-vision): D-374 stage 1 — overhead becomes site_vision
 - 2026-09-30 · uncommitted · fix(overhead-app): D-370 리뷰 — Kotlin tls_host 규칙을 Python 분류기와 맞춤
 - 2026-09-30 · uncommitted · docs(adr): D-358 앱 역할 ADR을 D-370으로 재번호
-- 2026-09-30 · uncommitted · feat(overhead-app): D-358 S3 적응형 런처 아이콘

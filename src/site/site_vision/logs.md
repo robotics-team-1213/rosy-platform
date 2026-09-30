@@ -162,3 +162,9 @@
 - 변경: `setup.py`에 `overhead=site_vision.cli:main`을 함께 둔다. 운용 문서와 손에 익은 `overhead receive`·`overhead vision`이 한 사이트 후보 릴리스 동안 돈다. compose·Dockerfile은 이미 `python3 -m site_vision.cli`다. `test_overhead_cli.py`가 두 줄을 고정한다.
 - 증거: `python -m pytest src/site/site_vision/test -q` 112 passed (2026-09-30 Windows).
 - gate 변화: 없음. 별칭 제거는 계획 단계 5(단계 1을 담은 사이트 후보가 한 번 나간 뒤).
+
+## 2026-09-30 · uncommitted · feat(site-vision): D-375 map-proposal from the lane paint
+
+- 변경: `site_vision/map_register.py` 추가. 마커 없이 `map_v2_fleet` `road_lines.stl` 페인트를 영상에 맞춰 image→map homography(지도 미터)를 제안한다: 가는 흰 선 마스크 → 주 선 방향 → 고정 2.5 cm/px 템플릿 대 배율별 재표본 영상의 거친 탐색(90°×4, 거울) → 지도 템플릿 ECC → 바닥 거리 기준 recall·precision. coverage, 가려진 쪽(`cut_sides`·`cut_directions`), `rotation_deg`, `mirrored`, 방향 차(`orientation_margin`)를 준다. `ingest.py`에 lease 보호 `GET /api/vision/sources/{id}/map-proposal`(D-360 규칙, source당 초당 1회 계산), `cli.py vision --map-paint`. 제안은 sighting·`CameraMap`에 쓰지 않는다.
+- 증거: `python -m pytest src/site/site_vision/test -q` 122 passed (2026-09-30 Windows). LOCAL 실제 프레임 4장(공개 저장소 밖): 1장 수락, 손 기준 대비 중앙 오차 5.7 px, coverage 0.76, 잘린 쪽 서쪽; 3장(넓은 시야 2, 30° 기울기 1)은 거부(잘못된 수락 없음).
+- gate 변화: 없음. DEVICE/FIELD PARKED 유지.

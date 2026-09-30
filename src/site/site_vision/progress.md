@@ -20,7 +20,7 @@ gates:
     state: PARKED
   FIELD:
     state: PARKED
-adrs: [D-257, D-261, D-269, D-318, D-374]
+adrs: [D-257, D-261, D-269, D-318, D-374, D-375]
 plans:
   - docs/plans/2026-09-30-app-identity-rename-plan.md
   - docs/plans/2026-09-26-overhead-camera-android-app-design.md
