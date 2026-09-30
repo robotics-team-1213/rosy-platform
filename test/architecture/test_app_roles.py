@@ -14,11 +14,11 @@ from pathlib import Path
 import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
-CAMERA_APP = ROOT / "src/site/ceiling_camera/app/src/main/java"
-VISION = ROOT / "src/site/site_vision/site_vision"
+CAMERA_APP = ROOT / "src/site/cam/app/src/main/java"
+VISION = ROOT / "src/site/vision/rosy_vision"
 REGISTRY = ROOT / "src/hmi/web_common/surfaces.yaml"
 
-# 1. Ceiling camera app: no CORE API, no Fleet user API (D-341 pairing/v1 excepted),
+# 1. Rosy Cam (ceiling camera app): no CORE API, no Fleet user API (D-341 pairing/v1 excepted),
 #    no robot motion or stop (the user decided on 2026-09-30: no stop credential).
 CAMERA_FORBIDDEN = {
     "CORE API": re.compile(r"/api/v1/"),
@@ -26,7 +26,7 @@ CAMERA_FORBIDDEN = {
     "cmd_vel": re.compile(r"cmd_vel"),
     "estop": re.compile(r"estop", re.IGNORECASE),
 }
-# 2. Site Vision: no CORE API, no robot command, and to Fleet only the sighting write.
+# 2. Rosy Vision: no CORE API, no robot command, and to Fleet only the sighting write.
 VISION_FORBIDDEN = {
     "CORE API": re.compile(r"/api/v1/"),
     "cmd_vel": re.compile(r"cmd_vel"),
@@ -122,7 +122,7 @@ def test_each_operation_has_one_owner():
     owners = {entry if isinstance(entry, str) else entry["id"]
               for row in rows for entry in row.get("owns") or []}
     assert {"estop", "manual-drive", "site-monitoring", "robot-detail"} <= owners
-    camera = next(row for row in rows if row["id"] == "ceiling-camera")
+    camera = next(row for row in rows if row["id"] == "cam")
     camera_owns = {entry if isinstance(entry, str) else entry["id"] for entry in camera["owns"]}
     assert "estop" not in camera_owns
     notes = [entry["transitional"] for row in rows for entry in row.get("owns") or []

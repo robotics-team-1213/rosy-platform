@@ -82,7 +82,7 @@ services:
       - --
       - python3
       - -m
-      - site_vision.cli
+      - rosy_vision.cli
       - vision
       - --config
       - /run/rosy-config/site-cameras.yaml

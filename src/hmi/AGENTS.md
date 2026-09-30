@@ -41,7 +41,7 @@ Every screen a person sees is registered in `web_common/surfaces.yaml`. Walk thi
    - Native and LCD code copies token values one per line, `Color(0xFFRRGGBB) // --name` or `(r, g, b)  # --name #hex`, and points `token_copy` at that file.
    - Use no platform default theme. The rose colour is for the ROSY name only.
 5. **Transport:**
-   - Serve shared files from `web_common/manifest.json`; never add a per-server allowlist.
+   - Serve shared files from `web_common/shared-assets.json`; never add a per-server allowlist.
    - Robot screens use same-origin `/api/v1` and `/ws/*`. The WS token goes in the first frame, never the URL (D-193).
    - Send a CSP on every HTML response.
 6. **Verify:** `python -m pytest src/hmi/web_common/test -q` checks the registry, titles, ports and token copies.

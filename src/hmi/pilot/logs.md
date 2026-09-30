@@ -171,6 +171,11 @@
 - gate 변화: SOURCE. 태블릿 실화면 확인 전.
 - 결정: D-344 §13(사용자 결정: 차선 자동은 L1 이상).
 
+## 2026-09-30 · uncommitted · refactor(pilot): D-377 page title is the display name
+- 변경: `index.html` `<title>` `Rosy 로봇 — 조종` → `Rosy Pilot`(D-377: 앱 제목은 표시 이름).
+- 증거: `src/hmi/web_common/test/test_surface_titles.py` 통과(web_common 111 passed, 2026-09-30 Windows).
+- gate 변화: 없음.
+
 ## 2026-09-30 · 47f814a6 · refactor(pilot): drive.js 를 drive-auto·drive-view 로 나눔
 - 변경: `screens/drive.js`(708줄)를 입력·명령 루프만 남기고 `drive-view.js`(마크업·D-363 배치·배율)와 `drive-auto.js`(D-344 보조 자율·D-364 의도 띠)로 나눴다. 동작은 같다. 새 파일을 CORE `pilot_assets`·`dev_server`·`sw.js` 사전 캐시(이름 `-3`, 빠져 있던 `inputs.js` 도 더함)·`test_pilot_route`·동기화 스크립트에 등록. drive.js 예산 판정(`test_web_budgets.py`)은 예산 아래라 지웠다.
 - 증거: `src/hmi/pilot/test` + `test_pilot_route.py` 51 passed(브라우저 포함).

@@ -2,6 +2,8 @@
 
 **Status:** Accepted (2026-09-30, 사용자 결정 아래 참조). 이름 규칙, 앱별 옛→새 대응표, 바꾸지 않는 와이어 식별자 목록, 단계 순서만 정한다. 이 ADR 자체는 코드·리소스를 바꾸지 않는다. 실행은 [2026-09-30 app identity rename plan](../plans/2026-09-30-app-identity-rename-plan.md)이 단계별로 한다. 단계 3·4·5는 계획의 게이트를 그대로 따른다.
 
+**부분 대체됨 (2026-09-30):** [D-377](D-377-app-names-rosy-plus-one-english-word.md)이 1항 규칙과 2항 대응표를 "Rosy + 영어 한 단어"로 대체한다(`ceiling-camera`·`site-vision`·`site-console`·`robot-dashboard` → `cam`·`vision`·`console`·`robot`, 패키지 `rosy_<word>`). 3·4·5항은 그대로다.
+
 **사용자 결정 — Accepted (2026-09-30):**
 1. 1항 규칙과 2항 대응표를 제안대로 적용한다.
 2. Fleet 관제 화면은 **안 B**다. 화면 자산만 `site_console` 패키지로 떼어 내고, 서비스 패키지 `fleet`은 그대로 둔다(열린 질문 2 닫힘).
