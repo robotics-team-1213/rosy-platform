@@ -389,20 +389,48 @@ def main(argv=None) -> int:
     for device in sorted({r["device"] for r in runs}):
         mine = [r for r in runs if r["device"] == device]
         cand = combine(device, mine, yaw_cfg, profile)
-        cand["store_records"] = store_candidates(store, device, cand)
+        # Report first: a store failure must never lose the analysis.
         out = args.out / device / "reports" / datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
         out.mkdir(parents=True, exist_ok=True)
-        (out / "candidate.json").write_text(json.dumps(cand, indent=1, default=float), encoding="utf-8")
         (out / "runs.json").write_text(json.dumps(mine, indent=1, default=float), encoding="utf-8")
         (out / "report.md").write_text(report(cand, mine), encoding="utf-8")
+        try:
+            cand["store_records"] = store_candidates(store, device, cand)
+        except (OSError, ValueError, TypeError) as exc:
+            cand["store_records"] = {"error": str(exc)}
+        (out / "candidate.json").write_text(json.dumps(cand, indent=1, default=float), encoding="utf-8")
         print(report(cand, mine))
         print(f"written {out}; store records {cand['store_records']}")
     return 0
 
 
+class _SafeStore:
+    """store.add with every payload passed through json_safe."""
+
+    def __init__(self, store):
+        self.store = store
+
+    def add(self, robot, kind, values, **kw):
+        return self.store.add(robot, kind, json_safe(values), **{k: json_safe(v) for k, v in kw.items()})
+
+
+def json_safe(value):
+    """Non-finite floats (a one-run ci95, a failed fit) become None: the store writes strict JSON."""
+    if isinstance(value, float):
+        return value if math.isfinite(value) else None
+    if isinstance(value, dict):
+        return {k: json_safe(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [json_safe(v) for v in value]
+    if isinstance(value, np.generic):
+        return json_safe(value.item())
+    return value
+
+
 def store_candidates(store, device, cand):
     """One new candidate record per kind (never accepted here; D-47 addendum)."""
     ids = {}
+    store = _SafeStore(store)
     sessions = cand["sessions"]
     o = cand["odometry"]
     if o["wheel_radius"] and o["wheel_separation"]:
