@@ -374,8 +374,8 @@ def replay(frames, *, labels: dict | None = None, dropouts=DROPOUTS_M,
         row["applied_update"] = bool((accepted["boundaries"] and not snap["deduplicated"])
                                      or accepted["ir"] or accepted["learned"])
         unassociated += _unassociated_ys(snap["level"], snap["candidates"])
+        scored = [c for c in snap["candidates"] if isinstance(c.get("nis"), dict)]
         if snap["level"] != STOP:
-            scored = [c for c in snap["candidates"] if isinstance(c.get("nis"), dict)]
             nis_candidates += [min(c["nis"].values()) for c in scored]
         if row["applied_update"] and snap["level"] not in (STOP, "COAST"):
             # tail: only where an update was applied (NIS is undefined in COAST)
@@ -462,6 +462,9 @@ def replay(frames, *, labels: dict | None = None, dropouts=DROPOUTS_M,
         "deterministic": baseline == again, "estimator_sha256": baseline,
         "keeper_sha256": keeper_digest.hexdigest(),
     }
+    metrics["determinism"] = {"scope": "estimator re-run over the cached keeper outputs in one run; "
+                                        "compare keeper_sha256 across two runs for the full pipeline",
+                               "estimator_sha256": baseline, "keeper_sha256": metrics["keeper_sha256"]}
     metrics["calibration_suspect_run"] = metrics["calibration_suspect_frames"] > 0
     metrics["params"] = dataclasses.asdict(params)
     metrics["curve_residuals"] = _curve_residuals(nis_state)
@@ -495,7 +498,7 @@ def replay(frames, *, labels: dict | None = None, dropouts=DROPOUTS_M,
         "wall_false_accept": _gate(wall_rate, lambda v: v <= 0.01),
         "hypothesis_switches": _gate(switch_rate, lambda v: v <= 1.0),
         "wrong_side_lock": _gate(wrong, lambda v: v == 0),
-        "deterministic": _gate(metrics["deterministic"], bool),
+        "deterministic_estimator": _gate(metrics["deterministic"], bool),
     }
     return metrics, rows
 

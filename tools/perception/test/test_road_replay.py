@@ -72,7 +72,7 @@ def test_replay_reports_keep_and_road_metrics_and_gates():
     assert set(metrics["gates"]) == {
         "on_line_le_keep", "on_paint_le_keep", "jump", "straight_mean_abs_err", "nis_mean_by_regime",
         "nis_above_9_21", "coast_survival", "wall_false_accept", "hypothesis_switches",
-        "wrong_side_lock", "deterministic"}
+        "wrong_side_lock", "deterministic_estimator"}
     assert metrics["gates"]["jump"]["pass"] is True
     assert metrics["gates"]["straight_mean_abs_err"]["pass"] is True
     assert metrics["gates"]["wrong_side_lock"]["pass"] is True
@@ -373,3 +373,12 @@ def test_unassociated_keeper_lines_are_their_own_metric():
         {"level": "STOP", "candidates": [{"side_hint": "left", "y": 0.5, "nis": {"R": 1, "L": 1}, "label": "N"}]}]
     out = rr._unassociated(rows)
     assert out["count"] == 2 and out["abs_y_m"]["median"] == pytest.approx(0.2)
+
+
+def test_the_determinism_gate_states_its_scope():
+    """In one run the estimator is re-run over the cached keeper outputs; a full-pipeline
+    check compares two runs' keeper_sha256 and estimator_sha256 (as the test above does)."""
+    metrics, _ = rr.replay(synthetic(8), dropouts=())
+    assert metrics["gates"]["deterministic_estimator"]["pass"] is True
+    assert "cached keeper outputs" in metrics["determinism"]["scope"]
+    assert metrics["determinism"]["keeper_sha256"] == metrics["keeper_sha256"]
