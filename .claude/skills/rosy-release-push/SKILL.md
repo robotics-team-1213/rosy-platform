@@ -64,8 +64,10 @@ Verified twice on 2026-09-26: releases 013 and 014 on a Pinky Pro running image 
      `activate-release.sh`.
    - **Manual rollback:** `-Rollback`.
    - **Calibration guard (D-321 addendum):** before the first remote step the script asks
-     CORE `GET /api/v1/calibration/session` (token from `-ApiToken`, `ROSY_API_TOKEN`, or the
-     stored device credential). An active session **refuses** the push (`REFUSED ... would
+     CORE `GET /api/v1/calibration/session`. Give it a token through `ROSY_API_TOKEN` or the
+     DPAPI device credential (`%LOCALAPPDATA%\Rosy\api\<robot>.credential.xml`); use
+     `-ApiToken` only as a last resort, because a command-line token lands in shell history
+     and the process list. HTTP 401/403 means the token is wrong, not that CORE is down. An active session **refuses** the push (`REFUSED ... would
      interrupt a running calibration`) — wait for it, ask its owner to end it, or pass
      `-Force` only when you know the calibration is abandoned. No token or no answer only
      warns. `-PrintCommands` skips the check.

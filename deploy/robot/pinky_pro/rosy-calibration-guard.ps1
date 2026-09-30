@@ -61,24 +61,47 @@ try {
     $reply = Invoke-RestMethod -Uri $url -Headers @{ Authorization = "Bearer $token" } `
         -TimeoutSec $TimeoutSec -UseBasicParsing -ErrorAction Stop
 } catch {
-    Write-Loud ("CALIBRATION CHECK FAILED for ${Robot} ($($_.Exception.Message)). CORE may be down " +
-                "or older than API Ref v1.67. Make sure nobody is calibrating before $Action.")
+    $status = $null
+    try { $status = [int]$_.Exception.Response.StatusCode } catch { $status = $null }
+    if ($status -eq 401 -or $status -eq 403) {
+        # The robot answered: this is a credential problem, not a dead CORE.
+        Write-Loud ("CALIBRATION CHECK REJECTED by ${Robot}: HTTP $status - the API token was not " +
+                    "accepted (revoked, expired or wrong robot). Fix the token; make sure nobody is " +
+                    "calibrating before $Action.")
+    } elseif ($null -ne $status) {
+        Write-Loud ("CALIBRATION CHECK FAILED for ${Robot}: HTTP $status. CORE may be older than " +
+                    "API Ref v1.67. Make sure nobody is calibrating before $Action.")
+    } else {
+        Write-Loud ("CALIBRATION CHECK UNREACHABLE for ${Robot} ($($_.Exception.Message)). CORE may " +
+                    "be down. Make sure nobody is calibrating before $Action.")
+    }
     exit 0
 }
 
-$session = $null
-if ($null -ne $reply -and $reply.PSObject.Properties.Name -contains "session") {
-    $session = $reply.session
+# Read the reply defensively: StrictMode throws on a missing property, and an
+# unexpected shape must warn, not abort the calling tool.
+function Get-Field($Object, [string]$Name) {
+    if ($null -eq $Object -or -not ($Object.PSObject.Properties.Name -contains $Name)) { return $null }
+    return $Object.$Name
 }
+if ($null -eq $reply -or -not ($reply.PSObject.Properties.Name -contains "session")) {
+    Write-Loud ("CALIBRATION CHECK GOT AN UNEXPECTED REPLY from ${Robot} (no 'session' field). " +
+                "Make sure nobody is calibrating before $Action.")
+    exit 0
+}
+$session = $reply.session
 if ($null -eq $session) {
     Write-Host "calibration check: no active calibration session on $Robot"
     exit 0
 }
 
-$owner = $session.owner.label
-if (-not $owner) { $owner = $session.owner.role }
+$ownerInfo = Get-Field $session "owner"
+$owner = Get-Field $ownerInfo "label"
+if (-not $owner) { $owner = Get-Field $ownerInfo "role" }
+if (-not $owner) { $owner = "unknown" }
 $summary = ("calibration session '{0}' (kind {1}, owner {2}, {3}s left of lease) is ACTIVE on {4}" -f `
-    $session.label, $session.kind, $owner, $session.remaining_s, $Robot)
+    (Get-Field $session "label"), (Get-Field $session "kind"), $owner,
+    (Get-Field $session "remaining_s"), $Robot)
 if ($Force) {
     Write-Loud "-Force: proceeding with $Action although a $summary. The calibration will be interrupted."
     exit 0

@@ -49,7 +49,7 @@ def fake_core():
                 self.end_headers()
                 return
             body = json.dumps(state["reply"]).encode("utf-8")
-            self.send_response(200)
+            self.send_response(state.get("status", 200))
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
@@ -114,7 +114,7 @@ def test_explicit_token_wins_over_the_environment(fake_core, tmp_path):
 def test_unreachable_core_warns_but_does_not_block(tmp_path):
     done = _guard(1, _env(tmp_path, TOKEN), "-TimeoutSec", "2")
     assert done.returncode == 0, done.stdout + done.stderr
-    assert "CALIBRATION CHECK FAILED" in done.stdout + done.stderr
+    assert "CALIBRATION CHECK UNREACHABLE" in done.stdout + done.stderr
 
 
 def test_missing_token_warns_but_does_not_block(fake_core, tmp_path):
@@ -158,3 +158,35 @@ def test_dev_overlay_sync_runs_the_guard_before_uploading():
     guard_at = text.index("rosy-calibration-guard.ps1")
     assert guard_at < text.index("& scp") and guard_at < text.index("& ssh $remote")
     assert "[switch]$Force" in text
+
+
+@pytest.mark.parametrize("status", [401, 403])
+def test_rejected_token_is_reported_apart_from_unreachable(fake_core, tmp_path, status):
+    fake_core["status"] = status
+    fake_core["reply"] = {"error": {"code": "UNAUTHORIZED"}}
+    done = _guard(fake_core["port"], _env(tmp_path, TOKEN))
+    out = done.stdout + done.stderr
+    assert done.returncode == 0, out
+    assert "CALIBRATION CHECK REJECTED" in out and f"HTTP {status}" in out
+    assert "UNREACHABLE" not in out
+
+
+def test_unexpected_reply_shape_warns_instead_of_aborting(fake_core, tmp_path):
+    fake_core["reply"] = {"something": "else"}
+    done = _guard(fake_core["port"], _env(tmp_path, TOKEN))
+    out = done.stdout + done.stderr
+    assert done.returncode == 0, out
+    assert "UNEXPECTED REPLY" in out
+
+
+def test_session_without_owner_fields_is_still_refused(fake_core, tmp_path):
+    fake_core["reply"] = {"session": {"id": "cal-2", "kind": "camera"}}
+    done = _guard(fake_core["port"], _env(tmp_path, TOKEN))
+    assert done.returncode == 3, done.stdout + done.stderr
+    assert "REFUSED" in done.stderr and "owner unknown" in done.stderr
+
+
+def test_skill_prefers_environment_or_dpapi_over_a_command_line_token():
+    text = (ROOT / ".claude" / "skills" / "rosy-release-push" / "SKILL.md").read_text(encoding="utf-8")
+    assert "ROSY_API_TOKEN" in text and "DPAPI" in text
+    assert "last resort" in text
