@@ -1546,3 +1546,11 @@
 - gate 변화: 없음.
 - 결정: D-375.
 - 교훈: 없음.
+
+## 2026-10-01 · 7d0f3f89 · fix(deploy): 사이트 빌드 컨텍스트는 이미지가 복사하는 것만
+
+- 변경: `Dockerfile.{vision,fleet}.dockerignore` — 맨 `!src`·`!deploy`는 BuildKit의 상위 디렉터리 일치로 트리 전체를 다시 넣었다(vision 컨텍스트 2330개 파일). 잎 glob만 남기고 `__pycache__`·`.pytest_cache`를 뺐다.
+- 증거: scratch `COPY .` 빌드로 vision 73개·fleet 251개 확인; `test_site_map_fit_deploy.py`가 COPY 원본 포함·다른 트리 제외·맨 디렉터리 금지를 동작으로 검사.
+- gate 변화: 없음.
+- 결정: 없음.
+- 교훈: dockerignore의 `!dir`은 그 아래 전부다 — 허용 목록은 잎 glob으로만 쓴다.

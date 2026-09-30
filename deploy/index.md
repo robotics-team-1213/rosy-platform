@@ -65,8 +65,8 @@
 
 ## 최근 기록
 
+- 2026-10-01 · 7d0f3f89 · fix(deploy): 사이트 빌드 컨텍스트는 이미지가 복사하는 것만
 - 2026-09-30 · c261839d · build(site): 지도 맞춤용 트랙 파일을 이미지에 넣음
 - 2026-09-30 · uncommitted · deploy(harness): last_verified를 CI 초록 커밋으로 기록
 - 2026-09-30 · uncommitted · feat(site): D-352 robot_credential_key secret와 오프라인 rekey
 - 2026-09-30 · uncommitted · fix(image): io closure 계약에 D-84 지연 패키지 예외를 명시
-- 2026-09-29 · uncommitted · feat(verify): 상주 단위 CPU 측정·A/B 도구 (D-347 B레인 관문)
