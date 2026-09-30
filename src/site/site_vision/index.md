@@ -32,8 +32,8 @@
 
 ## 최근 기록
 
+- 2026-09-30 · uncommitted · feat(site-vision): D-374 overhead console-script alias
 - 2026-09-30 · uncommitted · refactor(site-vision): D-374 stage 1 — overhead becomes site_vision
 - 2026-09-30 · uncommitted · fix(overhead-app): D-370 리뷰 — Kotlin tls_host 규칙을 Python 분류기와 맞춤
 - 2026-09-30 · uncommitted · docs(adr): D-358 앱 역할 ADR을 D-370으로 재번호
 - 2026-09-30 · uncommitted · feat(overhead-app): D-358 S3 적응형 런처 아이콘
-- 2026-09-30 · uncommitted · test(overhead-app): D-358 S1 DiscoveryVectorsTest

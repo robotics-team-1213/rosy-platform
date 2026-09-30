@@ -23,6 +23,8 @@ setup(
     entry_points={
         "console_scripts": [
             "site_vision=site_vision.cli:main",
+            # D-374 3: alias for one site candidate release; removed in stage 5.
+            "overhead=site_vision.cli:main",
         ],
     },
 )

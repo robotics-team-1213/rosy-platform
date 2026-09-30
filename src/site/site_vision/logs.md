@@ -156,3 +156,9 @@
 - 변경: `src/site/overhead` → `src/site/site_vision`(`git mv`), ROS·Python 패키지 `overhead` → `site_vision`, console script `site_vision=site_vision.cli:main`, `argparse` prog `site_vision`, logger `site_vision`, `setup.cfg` `lib/site_vision`. `protocol/vectors.json` → `test/fixtures/protocol/overhead-ingest.v1.json`(Kotlin과 같이 읽는 공유 자리). 폰 앱은 새 모듈 `src/site/ceiling_camera`로 갈라졌다. `Dockerfile.vision`·`.dockerignore`·`compose.yaml` 명령은 `python3 -m site_vision.cli`, mDNS 인스턴스 이름은 `ROSY Site Vision %h`. 하네스 모듈 `overhead` → `site_vision`. 와이어 이름(`rosy-overhead/1`, `/overhead/v1/frames`, `_rosy-overhead._tcp`, TXT, `/api/vision/*`, `rosyov://`, compose 서비스 `vision`, 이미지 `rosy-site-vision`, `ROSY_OVERHEAD_TOKEN`)은 그대로(D-374 3항).
 - 증거: `python -m pytest src/site/site_vision/test -q` 111 passed; `src/site/fleet/test` 938 passed, 6 skipped; `src/hmi/web_common/test` + discovery 벡터 144 passed; 루트 architecture·site·discovery 185 passed, 1 skipped (2026-09-30 Windows).
 - gate 변화: 없음. SOURCE/LOCAL GO 유지. 사이트 호스트 vision 이미지 재빌드·mDNS 인스턴스 확인은 DEVICE 절차(계획 단계 1).
+
+## 2026-09-30 · uncommitted · feat(site-vision): D-374 overhead console-script alias
+
+- 변경: `setup.py`에 `overhead=site_vision.cli:main`을 함께 둔다. 운용 문서와 손에 익은 `overhead receive`·`overhead vision`이 한 사이트 후보 릴리스 동안 돈다. compose·Dockerfile은 이미 `python3 -m site_vision.cli`다. `test_overhead_cli.py`가 두 줄을 고정한다.
+- 증거: `python -m pytest src/site/site_vision/test -q` 112 passed (2026-09-30 Windows).
+- gate 변화: 없음. 별칭 제거는 계획 단계 5(단계 1을 담은 사이트 후보가 한 번 나간 뒤).

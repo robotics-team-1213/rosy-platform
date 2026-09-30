@@ -1,6 +1,8 @@
-"""``overhead`` CLI — argument parsing and the parts that don't need a live server."""
+"""``site_vision`` CLI (and its ``overhead`` alias, D-374) — argument parsing and the parts that don't need a live server."""
 
 from __future__ import annotations
+
+from pathlib import Path
 
 import pytest
 
@@ -77,3 +79,10 @@ def test_pairing_uri_from_cli_args_round_trips():
         "secure": False,
         "ws_url": f"ws://site-pc.local:8095{protocol.WS_PATH}",
     }
+
+
+def test_overhead_console_script_is_an_alias_of_site_vision():
+    """D-374 3: `overhead` stays for one site candidate release, then stage 5 removes it."""
+    setup = (Path(__file__).resolve().parents[1] / "setup.py").read_text(encoding="utf-8")
+    assert '"site_vision=site_vision.cli:main"' in setup
+    assert '"overhead=site_vision.cli:main"' in setup
