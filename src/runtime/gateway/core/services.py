@@ -166,8 +166,12 @@ def _line_follow_config(raw: dict[str, Any]) -> LineFollowConfig:
             "obstacle_corridor_half_width_m", defaults.obstacle_corridor_half_width_m)),
         obstacle_path_horizon_m=float(raw.get(
             "obstacle_path_horizon_m", defaults.obstacle_path_horizon_m)),
+        obstacle_release_s=float(raw.get("obstacle_release_s", defaults.obstacle_release_s)),
+        obstacle_escalate_s=float(raw.get("obstacle_escalate_s", defaults.obstacle_escalate_s)),
         max_angular_follows_manual=raw.get(
             "max_angular_follows_manual", defaults.max_angular_follows_manual),
+        lane_auto_min_manual_angular=float(raw.get(
+            "lane_auto_min_manual_angular", defaults.lane_auto_min_manual_angular)),
         ir_guard_enabled=raw.get("ir_guard_enabled", defaults.ir_guard_enabled),
         ir_guard_edge_error=float(raw.get("ir_guard_edge_error", defaults.ir_guard_edge_error)),
         ir_guard_turn=float(raw.get("ir_guard_turn", defaults.ir_guard_turn)),

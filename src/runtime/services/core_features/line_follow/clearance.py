@@ -62,11 +62,17 @@ def scan_points(sample: Mapping[str, Any], *, forward_deg: float = 0.0,
 
 def path_clearance(points: Sequence[Point], *, linear: float, angular: float,
                    half_width_m: float, horizon_m: float,
-                   max_turn_rad: float = math.pi / 2) -> Optional[float]:
-    """지금 (linear, angular) 로 갈 호 둘레 ±half_width_m 띠 안 가장 가까운 점까지의 호 길이.
+                   window_m: float = 0.0, near_m: float = 0.0) -> Optional[float]:
+    """지금 (linear, angular) 로 갈 호 둘레 ±half_width_m 띠 안 가장 가까운 점까지의 거리.
 
-    호는 horizon_m 와 max_turn_rad(짧은 호만 믿는다) 중 짧은 쪽까지다. 띠 안에 점이 없으면
-    None. linear 가 0 이면 제자리 회전이라 로봇 둘레 half_width_m 안 점이 곧 0 거리다.
+    호 길이로 잰다. 호는 horizon_m 까지이되, 회전각 창은 max(90°, window_m/R) 이고 180° 를
+    넘지 않는다 — 급회전(작은 R)에서 90° 호는 정지 거리보다 짧아 앞 물체를 못 본다.
+    near-field: 창 밖이어도 0..180° 띠 안이고 LiDAR 에서 near_m 안인 점은 그 직선 거리로 센다.
+    linear 가 0 이면 제자리 회전이라 max(half_width_m, near_m) 안 점이 곧 0 거리다.
+
+    LiDAR `range_min`(Pinky C1 약 0.15 m) 안은 아무것도 보이지 않는다. half_width_m 가 그보다
+    작으면 제자리 회전 판정은 near_m 없이는 늘 비어 있다 — near_m 를 정지 거리로 준다.
+    띠 안에 점이 없으면 None.
     """
     speed = max(0.0, float(linear))
     turn = float(angular)
@@ -78,22 +84,30 @@ def path_clearance(points: Sequence[Point], *, linear: float, angular: float,
         return best
     radius = speed / abs(turn)
     if radius < 1e-9:
+        reach = max(half_width_m, near_m)
         for x, y in points:
-            if math.hypot(x, y) <= half_width_m:
+            if math.hypot(x, y) <= reach:
                 return 0.0
         return None
     side = 1.0 if turn > 0 else -1.0                 # 왼쪽(+) 회전이면 중심이 +y 에 있다
     centre_y = side * radius
     start = math.atan2(-centre_y, 0.0)               # 중심에서 본 로봇 위치의 각
-    limit = min(horizon_m / radius, max_turn_rad)
+    window = min(math.pi, max(math.pi / 2, window_m / radius))
+    limit = min(horizon_m / radius, window)
     for x, y in points:
         dy = y - centre_y
         if abs(math.hypot(x, dy) - radius) > half_width_m:
             continue
         travel = side * (math.atan2(dy, x) - start)
         travel = math.atan2(math.sin(travel), math.cos(travel))
-        if 0.0 < travel <= limit:
-            arc = radius * travel
-            if best is None or arc < best:
-                best = arc
+        if travel <= 0.0:
+            continue
+        if travel <= limit:
+            candidate = radius * travel
+        elif math.hypot(x, y) <= near_m:
+            candidate = math.hypot(x, y)
+        else:
+            continue
+        if best is None or candidate < best:
+            best = candidate
     return best

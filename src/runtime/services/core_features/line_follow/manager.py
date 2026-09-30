@@ -75,12 +75,20 @@ class LineFollowConfig:
     clearance_stale_s: float = 0.5
     # D-344 §11 보강: path 는 지금 조향으로 곧 지나갈 짧은 호 둘레 띠(±half_width)만 센다 —
     # L 모서리에서 돌아 나가는 쪽이 아닌 앞 벽에는 서지 않는다. sector 는 정면 부채꼴(옛 판정).
-    obstacle_mode: str = "path"
+    # 기본은 sector 다 — path 는 가제보 한 바퀴와 실물 LiDAR 좌·우 확인 뒤에 기본이 된다.
+    obstacle_mode: str = "sector"
     obstacle_corridor_half_width_m: float = 0.09
     obstacle_path_horizon_m: float = 0.40
+    # path: 막힘이 풀리려면 이만큼 계속 비어 있어야 한다(의도 호가 바뀌며 서다 가다 떨지 않게).
+    obstacle_release_s: float = 0.2
+    # 앞 물체 정지가 이만큼 이어지면 nav.line_obstacle_hold 사건을 한 번 낸다(운전자가 풀어야 함).
+    obstacle_escalate_s: float = 5.0
     # D-344 §13: 각속도 상한이 D-342 수동 한도 계단(safety.manual_angular)을 따른다.
     # false 면 max_angular 만 쓴다(명시적 덮어쓰기).
     max_angular_follows_manual: bool = True
+    # D-344 §13(사용자 결정 2026-09-30): 차선 자동은 수동 한도 L1(0.30 rad/s) 이상에서만.
+    # 살아 있는 manual_angular 가 이보다 작으면 limit_level_too_low 로 멈춘다. 0 이면 끈다.
+    lane_auto_min_manual_angular: float = 0.30
     # D-344 §12: 카메라 차선 추종 중 IR 이탈 감시. 바닥을 보는 좌·중·우 IR 이 경계선을
     # 한쪽에서 보면 반대로 비키고(ir_guard_turn, 속도 ir_guard_speed_scale 배), 가운데에서
     # 보면 선을 밟고 넘는 중이라 멈춘다. 켜져 있는데 IR 이 끊기거나 미교정이면 멈춘다.
@@ -120,6 +128,14 @@ class LineFollowConfig:
             raise ValueError("obstacle_corridor_half_width_m must be in (0, 0.5]")
         if not self.obstacle_resume_m <= self.obstacle_path_horizon_m <= 2.0:
             raise ValueError("obstacle_path_horizon_m must cover obstacle_resume_m and stay <= 2 m")
+        timing = (self.obstacle_release_s, self.obstacle_escalate_s,
+                  self.lane_auto_min_manual_angular)
+        if not all(_finite(value) for value in timing):
+            raise ValueError("line-follow obstacle timing and ladder floor must be finite")
+        if not 0.0 <= self.obstacle_release_s <= 2.0 or self.obstacle_escalate_s <= 0:
+            raise ValueError("obstacle_release_s must be in [0, 2] and obstacle_escalate_s positive")
+        if self.lane_auto_min_manual_angular < 0:
+            raise ValueError("lane_auto_min_manual_angular must be nonnegative")
         if type(self.max_angular_follows_manual) is not bool:
             raise ValueError("max_angular_follows_manual must be a boolean")
         if type(self.ir_guard_enabled) is not bool:
@@ -182,6 +198,9 @@ class LineFollowManager:
         # path 판정용 로봇 좌표 점. 있으면 틱마다 의도 조향의 호로 여유 거리를 다시 잰다.
         self._scan_points: Optional[tuple[Point, ...]] = None
         self._intended: tuple[float, float] = (self._config.cruise_speed, 0.0)
+        self._clear_since: Optional[float] = None
+        self._blocked_since: Optional[float] = None
+        self._escalated = False
 
     def bind_clock(self, clock: Callable[[], float]) -> None:
         """Use the bridge's line clock for defaults (mode change, loss start)."""
@@ -350,13 +369,42 @@ class LineFollowManager:
             self._scan_points = tuple((float(x), float(y)) for x, y in points)
             self._clearance_at = float(now)
 
-    def _set_clearance(self, distance: Optional[float]) -> None:
-        """여유 거리와 떨림 방지(stop < resume) 판정. 잠금 안에서 부른다."""
+    def _set_clearance(self, distance: Optional[float], now: Optional[float] = None) -> None:
+        """여유 거리와 떨림 방지(stop < resume) 판정. 잠금 안에서 부른다.
+
+        now 가 있으면(path) 막힘은 obstacle_release_s 동안 계속 비어 있어야 풀린다.
+        """
         self._clearance = None if distance is None or not _finite(distance) else float(distance)
-        if self._clearance is None or self._clearance >= self._config.obstacle_resume_m:
+        clear = self._clearance is None or self._clearance >= self._config.obstacle_resume_m
+        if not clear:
+            self._clear_since = None
+            if self._clearance < self._config.obstacle_stop_m:
+                self._obstacle_blocked = True
+            return
+        if not self._obstacle_blocked:
+            return
+        if now is None or self._config.obstacle_release_s <= 0.0:
             self._obstacle_blocked = False
-        elif self._clearance < self._config.obstacle_stop_m:
-            self._obstacle_blocked = True
+            return
+        if self._clear_since is None:
+            self._clear_since = now
+        if now - self._clear_since >= self._config.obstacle_release_s:
+            self._obstacle_blocked = False
+            self._clear_since = None
+
+    def _obstacle_hold(self, now: float) -> LineFollowDecision:
+        """앞 물체 정지. 오래 이어지면 한 번 알린다(모서리 벽이 띠 안이면 스스로 풀리지 않는다)."""
+        if self._blocked_since is None:
+            self._blocked_since = now
+        elif (not self._escalated
+              and now - self._blocked_since >= self._config.obstacle_escalate_s):
+            self._escalated = True
+            self._events.publish(
+                "nav.line_obstacle_hold", severity="warning", source="line_follow_manager",
+                data={"mode": self._mode.value, "clearance_m": self._clearance,
+                      "held_s": round(now - self._blocked_since, 2)},
+            )
+        return self._stop_decision("HOLD", "obstacle_ahead")
 
     def _angular_cap(self) -> float:
         """유효 각속도 상한 = min(max_angular, 살아 있는 수동 한도). 읽을 수 없으면 0(정지)."""
@@ -456,6 +504,9 @@ class LineFollowManager:
             if cap <= 0.0:
                 # 조향할 수 없는데 선속도만 내면 차선을 벗어난다(D-344 §13).
                 return self._stop_decision("HOLD", "angular_limit_zero")
+            if self._below_lane_auto_level():
+                # 차선 자동은 수동 한도 L1 이상에서만(D-344 §13, 사용자 결정).
+                return self._stop_decision("HOLD", "limit_level_too_low")
             guard = None
             if self._mode is LineFollowMode.CAMERA_LINE and self._config.ir_guard_enabled:
                 guard = self._ir_guard(current)
@@ -463,10 +514,13 @@ class LineFollowManager:
                 # 앞 물체 정지는 차선 상실이 아니다 — LOST 로 누적하지 않고 치워지면 곧바로 간다.
                 if current - self._clearance_at > self._config.clearance_stale_s:
                     return self._stop_decision("HOLD", "obstacle_sensor_stale")
-                if self._scan_points is not None:
-                    self._set_clearance(self._path_clearance(guard, cap))
+                if self._scan_points is not None and self._observation is not None:
+                    # 관측이 하나도 없으면 의도가 없다 — 재지 않고 WAITING 으로 둔다.
+                    self._set_clearance(self._path_clearance(guard, cap), current)
                 if self._obstacle_blocked:
-                    return self._stop_decision("HOLD", "obstacle_ahead")
+                    return self._obstacle_hold(current)
+            self._blocked_since = None
+            self._escalated = False
             if guard is not None:
                 # 차선 이탈 감시는 차선 상실이 아니다 — LOST 로 누적하지 않는다(D-344 §12).
                 if guard == "stale":
@@ -561,7 +615,19 @@ class LineFollowManager:
         return path_clearance(
             self._scan_points or (), linear=linear, angular=angular,
             half_width_m=self._config.obstacle_corridor_half_width_m,
-            horizon_m=self._config.obstacle_path_horizon_m)
+            horizon_m=self._config.obstacle_path_horizon_m,
+            window_m=self._config.obstacle_resume_m,
+            near_m=self._config.obstacle_stop_m)
+
+    def _below_lane_auto_level(self) -> bool:
+        floor = self._config.lane_auto_min_manual_angular
+        if floor <= 0.0 or self._angular_ceiling is None:
+            return False
+        try:
+            ceiling = self._angular_ceiling()
+        except Exception:  # noqa: BLE001 — 읽을 수 없으면 계단을 모른다: 멈춘다
+            return True
+        return not _finite(ceiling) or float(ceiling) < floor - 1e-9
 
     def _ir_guard(self, now: float) -> str:
         """stale | clear | left | right | centre — IR 이 본 경계선 위치."""
