@@ -143,6 +143,13 @@ SIZE_VERDICTS = {
         "accept: one concern (lane/IR line detection), ROS-free pure functions and trackers, host-testable (X5); "
         "the ground-geometry lane keeper already lives apart in lane_keep.py (D-364)",
     ),
+    "runtime/gateway/core/bridge/ros_bridge.py": (
+        606,
+        "accept: one CORE ROS executor integration point for publishers, subscriptions, lifecycle wiring, and "
+        "service/action clients; extracted policy and callback logic lives in core/bridge modules, and "
+        "timer/bridge behavior is covered by test_bridge_timers.py and test_bridge_reconcile.py. Re-judged "
+        "2026-10-01 at 606 after D-385 mode-to-emotion handoff wiring",
+    ),
     "runtime/sensing/control/sensing/perception/lane_bev.py": (
         611,
         "accept: one owner (LaneEdgeFollower + its bird's-eye helpers), ROS-free, host-testable (X5)",
@@ -239,12 +246,14 @@ SIZE_VERDICTS = {
         "splitting probe sequence from reporting would sever one diagnostic narrative (X5)",
     ),
     "products/omx/adapter/omx_adapter/action_store.py": (
-        1_109,
+        1_176,
         "accept: one owner for the durable local Action, per-attempt ROS phase journal, and semantic "
         "workflow terminal gate; they share SQLite transactions, identity fences, and restart-to-UNKNOWN "
         "recovery. ROS-free and host-testable. Re-judged 2026-10-01 at 1109 after the durable gripper "
         "evidence gate and restart-to-HOLD journal recovery; recovery updates share the same SQLite "
-        "transaction so the Action, phase, and possible-held-object state cannot split. The hard-tier "
+        "transaction so the Action, phase, and possible-held-object state cannot split. Re-judged "
+        "2026-10-01 at 1176 for late ROS UUID and exact-cancel intent journaling after UNKNOWN/HOLD "
+        "without reopening phase state (D-386). The hard-tier "
         "zero-growth rule prevents silent expansion",
     ),
 }

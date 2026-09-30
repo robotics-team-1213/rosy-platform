@@ -80,6 +80,7 @@ def phase(phase_id, ordinal, **changes):
         "points": (JointTrajectoryPoint(
             time_from_start_s=0.5, positions=(0.1, 0.2, 0.3, 0.4, 0.5),
         ),),
+        "start_state_positions": (0.0, 0.0, 0.0, 0.0, 0.0),
         "source_state_sequence": 9, "calibration_revision": "cal-1",
         "transform_revision": "tf-1", "planning_scene_revision": "scene-1",
     }

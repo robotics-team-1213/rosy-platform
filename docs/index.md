@@ -261,7 +261,7 @@
 
 ## 최근 기록
 
-- 2026-10-01 · uncommitted · docs(adr): D-390 사이트 연결 기록 모양과 기기 연결 서버 자리 제안
+- 2026-10-01 · uncommitted · docs(adr): D-391 사이트 연결 기록 모양과 기기 연결 서버 자리 제안
 - 2026-10-01 · uncommitted · docs(adr): D-385 Rosy가 스스로 표현한다
 - 2026-10-01 · uncommitted · docs(adr): D-341·D-382 Accepted — 병행 세션 결정 회차
 - 2026-10-01 · uncommitted · docs(adr): D-341·D-382 교차 세션 검토 반영
