@@ -91,10 +91,14 @@ class Scans:
         self.t, self.msgs = [], []
 
     def add(self, t, msg):
-        self.t.append(t)
-        self.msgs.append((np.asarray(msg.ranges, dtype=np.float32), float(msg.angle_min),
-                          float(msg.angle_increment), float(msg.time_increment),
-                          float(msg.range_min), float(msg.range_max)))
+        self.add_raw(t, msg.ranges, msg.angle_min, msg.angle_increment, msg.time_increment,
+                     msg.range_min, msg.range_max)
+
+    def add_raw(self, t, ranges, angle_min, angle_increment, time_increment, range_min, range_max):
+        self.t.append(float(t))
+        self.msgs.append((np.asarray(ranges, dtype=np.float32), float(angle_min),
+                          float(angle_increment), float(time_increment),
+                          float(range_min), float(range_max)))
 
     def nearest(self, t):
         if not self.t:
@@ -132,7 +136,12 @@ def mcap_frames(files):
 
 
 def read_sidecar(video: Path, sidecar: Path):
-    """bag_to_video.py pair -> (PoseSeries, frame iterator)."""
+    """bag_to_video.py output -> (PoseSeries, frame iterator factory, Scans or None).
+
+    Odometry is the sidecar's per-frame "odom" side value; scans come from the
+    sibling <stem>.scan.npz (row i = scan nearest frame i) when it exists. The npz
+    has no time_increment, so scans are motion-compensated at their stamp only.
+    """
     rows = [json.loads(line) for line in sidecar.read_text(encoding="utf-8").splitlines() if line.strip()]
     t, x, y, a = [], [], [], []
     for r in rows:
@@ -150,7 +159,20 @@ def read_sidecar(video: Path, sidecar: Path):
                 yield r["t"], bgr
         finally:
             cap.release()
-    return PoseSeries(t, x, y, a), frames()
+    scans = None
+    npz = sidecar.with_name(sidecar.name[: -len(".jsonl")] + ".scan.npz")
+    if npz.is_file():
+        with np.load(npz) as z:  # NpzFile re-reads a key on every access
+            d = {k: z[k] for k in z.files}
+        scans, seen = Scans(), set()
+        for i in np.argsort(d["scan_stamp_ns"]):
+            s = int(d["scan_stamp_ns"][i])
+            if s == 0 or s in seen or np.isnan(d["ranges"][i].astype(np.float32)).all():
+                continue
+            seen.add(s)
+            scans.add_raw(s / 1e9, d["ranges"][i], d["angle_min"], d["angle_increment"], 0.0,
+                          d["range_min"], d["range_max"])
+    return PoseSeries(t, x, y, a), frames, scans
 
 
 def scan_points_at(lidar: Lidar, odom: PoseSeries, scan, frame_pose, max_range):
@@ -314,6 +336,7 @@ def main(argv=None) -> int:
     ap.add_argument("session", nargs="?", type=Path)
     ap.add_argument("--video", type=Path)
     ap.add_argument("--sidecar", type=Path)
+    ap.add_argument("--session-name", help="session id for a --video input (default: video stem)")
     ap.add_argument("--out", type=Path)
     ap.add_argument("--overlays", type=Path)
     ap.add_argument("--overlay-every", type=int, default=5)
@@ -334,13 +357,12 @@ def main(argv=None) -> int:
             return 1
         session = args.session.name
         odom, scans = read_mcap_side(files)
-        frames = mcap_frames(files)
+        make_frames = lambda: mcap_frames(files)  # noqa: E731
         source = {"kind": "mcap", "files": [str(f) for f in files]}
     else:
         sidecar = args.sidecar or args.video.with_suffix(".jsonl")
-        session = args.video.stem
-        odom, frames = read_sidecar(args.video, sidecar)
-        scans = None
+        session = args.session_name or args.video.stem
+        odom, make_frames, scans = read_sidecar(args.video, sidecar)
         source = {"kind": "video+sidecar", "video": str(args.video), "sidecar": str(sidecar),
                   "sha256": {"video": _sha(args.video), "sidecar": _sha(sidecar)}}
     lidar = Lidar(mirrored=args.lidar_mirrored)
@@ -349,11 +371,11 @@ def main(argv=None) -> int:
         pitch, camera = math.radians(args.pitch_deg), {"pitch_source": "argument",
                                                        "pitch_deg": args.pitch_deg}
     elif scans is not None and scans.t:
-        pitch, camera = calibrate_pitch(mcap_frames(files), odom, scans, lidar)
+        pitch, camera = calibrate_pitch(make_frames(), odom, scans, lidar)
         camera["pitch_source"] = "lidar-fit"
         print(f"pitch fitted to LiDAR walls: {camera}")
     out = args.out or DATA / "labels" / session
-    totals = label_session(frames, odom, scans, out, session=session, pitch_rad=pitch,
+    totals = label_session(make_frames(), odom, scans, out, session=session, pitch_rad=pitch,
                            lidar=lidar, rules=rules,
                            overlays=args.overlays, overlay_every=args.overlay_every,
                            min_interval=args.min_interval, max_frames=args.max_frames)

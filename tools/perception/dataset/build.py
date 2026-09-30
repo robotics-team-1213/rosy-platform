@@ -12,11 +12,18 @@ one required) is matched by that label; every other label is matched by class na
 Mask PNGs (any depth under SegmentationClass/) are named "<session>__<index:06d>"
 (prelabel.py) or by bare frame index when that is unambiguous. Frames without a
 mask, or listed with --delete (SESSION__NNNNNN or SESSION/N), are left out.
-Split is by session so neighbouring frames never straddle it."""
+Split is by session so neighbouring frames never straddle it.
+
+    build.py --auto-labels <labels_dir>... --store <store> --name <name>
+
+builds the same schema from autolabel.py outputs (D-379) into the D-373 store
+layout <store>/datasets/<name>/<content_sha>/; classes come from the labels."""
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
+import os
 import re
 import shutil
 import sys
@@ -209,14 +216,125 @@ def build_dataset(export, frame_dirs, classes, out, deleted_indexes=()) -> dict:
     return manifest
 
 
+def content_sha(folder) -> str:
+    """D-373 decision 8 store version: sha256 over sorted "relpath\\0filesha256\\n" lines.
+
+    Minimal stand-in until tools/perception/store.py (feat/d373-learning-loop-lap2)
+    lands on main; switch to it then and keep this layout."""
+    folder = Path(folder)
+    lines = []
+    for p in folder.rglob("*"):
+        if p.is_file():
+            h = hashlib.sha256()
+            with open(p, "rb") as fh:
+                for chunk in iter(lambda: fh.read(1 << 20), b""):
+                    h.update(chunk)
+            lines.append(f"{p.relative_to(folder).as_posix()}\0{h.hexdigest()}\n")
+    return hashlib.sha256("".join(sorted(lines)).encode("utf-8")).hexdigest()
+
+
+def build_auto_dataset(label_dirs, store, name, min_labelled: float = 0.05) -> tuple[dict, Path]:
+    """D-379: dataset from autolabel.py outputs, in the same schema, into
+    <store>/datasets/<name>/<content_sha>/ (a version folder is never rewritten).
+
+    Frames whose sources disagree (label record "conflict") are left out and listed in
+    deleted_indexes and excluded[]; frames with less than min_labelled of their
+    pixels labelled (not the ignore class) are left out too."""
+    metas, entries, sources, excluded, versions = [], [], [], [], []
+    classes = None
+    for d in map(Path, label_dirs):
+        meta = json.loads((d / "meta.json").read_text(encoding="utf-8"))
+        if classes is None:
+            classes = meta["classes"]
+            label_to_index(classes)
+        elif meta["classes"] != classes:
+            raise BuildError(f"{d}: classes differ from {label_dirs[0]}")
+        metas.append((d, meta))
+    if classes is None:
+        raise BuildError("no label folders")
+    ignore = metas[0][1].get("ignore_index")
+    splits = assign_splits(m["session"] for _, m in metas)
+    tmp = Path(store) / "datasets" / name / f".staging-{os.getpid()}"
+    if tmp.exists():
+        shutil.rmtree(tmp)
+    try:
+        for d, meta in metas:
+            session = meta["session"]
+            jl = d / "labels.jsonl"
+            versions.append({"session": session, "version": meta.get("version"),
+                             "camera": meta.get("camera"), "labels_sha256": _file_sha(jl)})
+            if meta.get("session_json") and meta["session_json"] not in sources:
+                sources.append(meta["session_json"])
+            for line in jl.read_text(encoding="utf-8").splitlines():
+                if not line.strip():
+                    continue
+                rec = json.loads(line)
+                idx = int(rec["index"])
+                key = f"{session}__{idx:06d}"
+                mask = cv2.imread(str(d / "masks" / f"{idx:06d}.png"), cv2.IMREAD_UNCHANGED)
+                labelled = float((mask != ignore).mean()) if mask is not None else 0.0
+                if rec.get("conflict"):
+                    excluded.append({"frame": key, "reason": "sources disagree",
+                                     "disagreement": rec.get("disagreement")})
+                    continue
+                if labelled < min_labelled:
+                    excluded.append({"frame": key, "reason": f"labelled {labelled:.3f} < {min_labelled}"})
+                    continue
+                rel = {"image": f"images/{session}/{key}.jpg", "mask": f"masks/{session}/{key}.png",
+                       "conf": f"conf/{session}/{key}.png"}
+                for kind, src in (("image", d / "frames" / f"{idx:06d}.jpg"),
+                                  ("mask", d / "masks" / f"{idx:06d}.png"),
+                                  ("conf", d / "conf" / f"{idx:06d}.png")):
+                    (tmp / rel[kind]).parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copyfile(src, tmp / rel[kind])
+                entries.append({**rel, "session": session, "split": splits[session],
+                                "sources": rec.get("sources", []), "version": rec.get("version")})
+        manifest = {"schema": SCHEMA, "classes": classes, "frames": entries,
+                    "deleted_indexes": sorted(e["frame"] for e in excluded if e["reason"] == "sources disagree"),
+                    "sources": sources, "ignore_index": ignore, "labels": versions,
+                    "excluded": excluded, "builder": "build.py --auto-labels (D-379)"}
+        (tmp / "manifest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+        final = tmp.parent / content_sha(tmp)
+        if final.exists():
+            shutil.rmtree(tmp)
+        else:
+            os.replace(tmp, final)
+    except BaseException:
+        shutil.rmtree(tmp, ignore_errors=True)
+        raise
+    return manifest, final
+
+
+def _file_sha(path: Path) -> str:
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("export", type=Path)
-    ap.add_argument("--frames", type=Path, nargs="+", required=True)
-    ap.add_argument("--classes", type=Path, required=True)
-    ap.add_argument("--out", type=Path, required=True)
+    ap.add_argument("export", type=Path, nargs="?")
+    ap.add_argument("--frames", type=Path, nargs="+")
+    ap.add_argument("--classes", type=Path)
+    ap.add_argument("--out", type=Path)
     ap.add_argument("--delete", nargs="*", default=[])
+    ap.add_argument("--auto-labels", type=Path, nargs="+",
+                    help="D-379: autolabel.py output folders instead of a CVAT export")
+    ap.add_argument("--store", type=Path, help="with --auto-labels: store root (D-373 decision 8)")
+    ap.add_argument("--name", help="with --auto-labels: dataset name")
+    ap.add_argument("--min-labelled", type=float, default=0.05)
     args = ap.parse_args(argv)
+    if args.auto_labels:
+        if not (args.store and args.name):
+            ap.error("--auto-labels needs --store and --name")
+        try:
+            manifest, final = build_auto_dataset(args.auto_labels, args.store, args.name,
+                                                 args.min_labelled)
+        except BuildError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 1
+        print(f"{len(manifest['frames'])} frames ({len(manifest['excluded'])} left out) -> {final}")
+        return 0
+    if not (args.export and args.frames and args.classes and args.out):
+        ap.error("a CVAT build needs export, --frames, --classes and --out")
     try:
         classes = load_classes(args.classes)
         if args.export.is_file():
