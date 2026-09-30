@@ -2,6 +2,7 @@
 
 - 날짜: 2026-09-29 (같은 날 독립 리뷰 반영 개정)
 - 결정: [D-341](../adr/D-341-overhead-console-approved-pairing.md) (Proposed)
+- 경로 읽기(2026-10-01): 이 계획의 `src/site/overhead/overhead/…`(Python)는 `src/site/vision/rosy_vision/…`, `src/site/overhead/android/…`는 `src/site/cam/…`, CLI `overhead`는 `rosy-vision`이다(D-374·D-377). 닫힘 코드는 D-341 11항 분류표를 따른다.
 - 잇는 문서: [D-261](../adr/D-261-overhead-camera-app-skeleton.md), [발견 규칙](../reference/site-lan-discovery-profile.md), [`deploy/site/README.md`](../../deploy/site/README.md)
 - 의존: 콘솔의 사이트 사각형 지도 + sighting 겹침은 진행 중인 `feat/console-site-map-layer`(`GET /api/fleet/site-map`)가 맡는다. 이 계획은 그것을 다시 계획하지 않는다.
 - 등급 목표: 1–5단계 LOCAL, 벤치 절차로 DEVICE(S21), FIELD는 사이트 호스트에서 별도
@@ -52,7 +53,7 @@
 
 **파일**
 
-- 새로 만든다: `src/site/overhead/protocol/pairing_vectors.json` — 코드 계산 3건 이상(leaf만 다른 쌍 포함), 지문 표기, 요청·결과 JSON 정상·거절 사례(역할 `robot`, `proto` 불일치, `tls` 없음, 필드 누락, 알 수 없는 필드, 4 KiB 초과).
+- 새로 만든다: `test/fixtures/protocol/pairing.v1.json`(D-341 19항, 2026-10-01 개정) — 코드 계산 3건 이상(leaf만 다른 쌍 포함), 지문 표기, 요청·결과 JSON 정상·거절 사례(역할 `robot`, `proto` 불일치, `tls` 없음, 필드 누락, 알 수 없는 필드, 4 KiB 초과).
 - 새로 만든다: `src/site/overhead/overhead/pairing_code.py`(표준 라이브러리만), `src/site/overhead/test/test_pairing_vectors.py`.
 - 새로 만든다: `android/app/src/main/java/.../settings/PairingCode.kt`, `android/app/src/test/java/.../settings/PairingCodeTest.kt`.
 - 고친다: `android/app/build.gradle.kts` — 시스템 속성 `rosy.pairing.vectors`(기존 `rosy.overhead.vectors`와 같은 방식). `Vectors.kt`에 로더 추가.

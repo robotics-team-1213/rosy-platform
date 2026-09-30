@@ -47,6 +47,18 @@
 .hero-safety.safe strong { color: var(--nominal); }
 .hero-safety.danger strong { color: var(--status-crit); }
 .hero-safety.unverified strong { color: var(--muted); }
+/* 편대 역할 — 계기 셋의 네 번째 칸. 대형에 속해 있을 때만 나타난다(D-280:
+   빈 상태는 말하지 않는다). 색은 쓰지 않는다 — 역할은 경보가 아니고,
+   리더·팔로워는 단어로 충분히 다르다(D-82 예산 안 씀). */
+.hero-formation {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  border-left: 1px solid var(--surface-line);
+}
+.hero-formation[hidden] { display: none; }
+.hero-formation strong { font-size: var(--text-value); font-weight: var(--weight-label); letter-spacing: 0.02em; }
+.hero-formation > span:last-child { color: var(--muted); font: var(--weight-regular) var(--text-micro)/var(--leading-label) var(--mono); }
 
 /* ---- 영역 셋 --------------------------------------------------------------
    폭은 역할이 정한다. 감지는 숫자 세 칸이 들어갈 만큼, 조작은 되돌릴 수 없는
