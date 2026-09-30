@@ -96,6 +96,13 @@ class RosyCoreNode(Node):
         self.core.control_adapter = self.control_adapter
         if self.control_adapter.enabled:
             self.control_adapter.bind_safety(self.core.safety)
+        # D-47 addendum: one LiDAR mount for line_follow (store record > adapter binding > hand value).
+        from core.lidar_mount import resolve_lidar_forward_deg
+        forward_deg, forward_source = resolve_lidar_forward_deg(
+            config.get("line_follow", {}) or {}, hand_default=self.core.line_follow.config.lidar_forward_deg,
+            adapter_parameters=self.control_adapter.bound_parameters)
+        self.core.line_follow.use_lidar_forward(forward_deg, forward_source)
+        self.get_logger().info(f"line_follow LiDAR forward {forward_deg:.2f} deg from {forward_source}")
 
         from core.system.ros_graph import RosGraphMonitor
         self.ros_graph_monitor = RosGraphMonitor(self)
