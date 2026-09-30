@@ -33,6 +33,7 @@ class BoundaryMeas:
     #: x where the whole-line heading is predicted: the chord midpoint of the seen
     #: paint (a straight fit through an arc runs along the tangent there).
     x_psi: float | None = None
+    length_m: float | None = None
 
 
 @dataclass(frozen=True)
@@ -78,9 +79,23 @@ class RoadStateParams:
     q_kappa_floor: float = 0.05              # 1/m / sqrt(s)
     q_w_floor: float = 0.0002                # m / sqrt(s)
     kappa_pull_m: float = 0.3
-    # measurement noise
-    sigma_y_m: float = 0.015
-    sigma_psi_rad: float = math.radians(4.0)
+    # measurement noise, fitted 2026-10-01 on 20260930T124745Z (first half; calibrated
+    # extrinsics pitch 11.2 deg, height 0.0575 m, roll -1.5 deg). Keeper jitter on
+    # stationary / detrended straight frames is small (y ~0.6 mm, psi 0.25 deg long lines
+    # to 0.6 deg short ones); the floors are the rest of the innovation spread
+    # (robust sigma minus H P H'): unmodelled per-side bias and ground-model error.
+    sigma_y_m: float = 0.007
+    sigma_psi_rad: float = math.radians(1.73)
+    jitter_y_m: float = 0.0006               # at x_psi <= jitter_y_ref_x_m
+    jitter_y_per_m: float = 0.008            # growth with range beyond it
+    jitter_y_ref_x_m: float = 0.25
+    jitter_psi_rad_m: float = math.radians(0.1)   # sigma_psi = this / length
+    jitter_ref_length_m: float = 0.2         # when the seen length is unknown
+    jitter_min_length_m: float = 0.05
+    # Boundary views closer than this in travel and turn to the last applied one are
+    # the same view (time-correlated error at zero motion): accepted, not re-applied.
+    dedup_min_travel_m: float = 0.005
+    dedup_min_turn_rad: float = math.radians(1.0)
     sigma_ir_m: float = 0.005
     learned_sigma_m: float = 0.03
     learned_min_confidence: float = 0.2
@@ -196,8 +211,34 @@ def boundaries_from_keep(last: dict, *, near_x_m: float = 0.33) -> list[Boundary
         reason = (str(r.get("reason") or "keeper") if flag is True
                   else flag if isinstance(flag, str) and flag else None)
         out.append(BoundaryMeas(y=y, psi=psi, x=x, side_hint=r.get("side"),
-                                rejected=reason, x_psi=mid))
+                                rejected=reason, x_psi=mid,
+                                length_m=float(r["length_m"]) if isinstance(r.get("length_m"), (int, float)) else None))
     return out
+
+
+def boundary_noise(b: BoundaryMeas, p: RoadStateParams) -> np.ndarray:
+    """R: fitted floors plus keeper jitter growing with range (y) and for short lines (psi)."""
+    reach = max(0.0, (b.x if b.x_psi is None else b.x_psi) - p.jitter_y_ref_x_m)
+    length = max(p.jitter_min_length_m, p.jitter_ref_length_m if b.length_m is None else b.length_m)
+    return np.diag([p.sigma_y_m ** 2 + (p.jitter_y_m + p.jitter_y_per_m * reach) ** 2,
+                    p.sigma_psi_rad ** 2 + (p.jitter_psi_rad_m / length) ** 2])
+
+
+def consistent_reason(p: RoadStateParams, labels, ir_labels, side_d, learned_accepted):
+    """Why a frame counts toward re-acquisition, or None. side+learned: shadow only, IR
+    uncalibrated, a confident learned d within 2 sigma of the one side's d."""
+    if set(labels) == {RIGHT, LEFT}:
+        return "pair"
+    if len(labels) != 1:
+        return None
+    if labels[0] in ir_labels:
+        return "side+ir"
+    if p.mode == "shadow" and not p.ir_calibrated and side_d is not None:
+        for d, sigma, confidence in learned_accepted:
+            if (confidence >= p.learned_reacq_min_confidence
+                    and abs(d - side_d) <= p.learned_reacq_sigmas * sigma):
+                return "side+learned"
+    return None
 
 
 def decision_point_from_keep(last: dict) -> bool:

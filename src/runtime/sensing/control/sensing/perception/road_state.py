@@ -95,6 +95,8 @@ from .road_state_model import (  # noqa: F401 — re-exported: callers import fr
     _route_key,
     _wrap_line,
     boundaries_from_keep,
+    boundary_noise,
+    consistent_reason,
     decision_point_from_keep,
     offset_from_shadow,
     wall_segments_from_scan,
@@ -169,6 +171,7 @@ class RoadStateEstimator:
         self._run_reasons: list = []
         self.reacq_reason = None
         self.reacq_counts = {"pair": 0, "side+ir": 0, "side+learned": 0}
+        self._applied = None   # (travel, turn) at the last applied boundary update
         self._learned_accepted: list = []
         self._calib_since = None
         self._calib_suspect = False
@@ -242,7 +245,7 @@ class RoadStateEstimator:
         walls = ([m for m in measurements if isinstance(m, WallSeg)]
                  if p.lidar_wall_veto else [])
         frame = {"candidates": [], "hypotheses": [], "hypothesis": None, "tie": False,
-                 "tie_rule": None, "accepted": {"boundaries": 0, "ir": 0, "learned": 0}}
+                 "tie_rule": None, "accepted": {"boundaries": 0, "ir": 0, "learned": 0}, "deduplicated": False}
         near = [b for b in bounds if b.x <= p.near_x_m]
         cands, wall_rejected = [], 0
         for b in near:
@@ -267,8 +270,14 @@ class RoadStateEstimator:
             used = [e for e in winner.evals if e.label != NOISE]
             if len(used) == 1:   # the lane offset this one side implies
                 side_d = float(self.x[0] - used[0].nu[0])
-            self._apply([e for e in winner.evals if e.label != NOISE])
-            accepted_labels = [e.label for e in winner.evals if e.label != NOISE]
+            # A held robot sees the same view again: its error is not new evidence.
+            frame["deduplicated"] = self._applied is not None and (
+                self._s_total - self._applied[0] < p.dedup_min_travel_m
+                and abs(self._cum_th - self._applied[1]) < p.dedup_min_turn_rad)
+            if used and not frame["deduplicated"]:
+                self._apply(used)
+                self._applied = (self._s_total, self._cum_th)
+            accepted_labels = [e.label for e in used]
         frame["accepted"]["boundaries"] = len(accepted_labels)
         ir_labels = []
         self._learned_accepted = []
@@ -292,7 +301,7 @@ class RoadStateEstimator:
             self._enter_stop("ambiguous")
             self._consistent = 0
         elif self._stopped:
-            reason = self._consistent_reason(accepted_labels, ir_labels, side_d)
+            reason = consistent_reason(p, accepted_labels, ir_labels, side_d, self._learned_accepted)
             frame["consistent_reason"] = reason
             if reason is not None:
                 if self._consistent == 0:
@@ -336,7 +345,7 @@ class RoadStateEstimator:
             "rejects": dict(self.rejects),
             "reacq_reason": self.reacq_reason,
             "reacq_counts": dict(self.reacq_counts),
-            "consistent_reason": frame.get("consistent_reason"),
+            "consistent_reason": frame.get("consistent_reason"), "deduplicated": frame["deduplicated"],
             "reacquire": {"consistent_frames": self._consistent,
                           "timed_out": self._reacquire_timed_out()},
             "calibration_suspect": self._calib_suspect,
@@ -364,7 +373,7 @@ class RoadStateEstimator:
         xp = x if b.x_psi is None else b.x_psi
         h = np.array([s * w / 2 - d - x * phi + kappa * x * x / 2, -phi + kappa * xp])
         H = np.array([[-1.0, -x, x * x / 2, s / 2], [0.0, -1.0, xp, 0.0]])
-        R = np.diag([p.sigma_y_m ** 2, p.sigma_psi_rad ** 2])
+        R = boundary_noise(b, p)
         z = np.array([b.y, b.psi])
         nu = np.array([z[0] - h[0], _wrap_line(z[1] - h[1])])
         S = H @ self.P @ H.T + R
@@ -376,23 +385,6 @@ class RoadStateEstimator:
         elif locked and abs(nu[0]) > p.jump_m * scale:
             reason = "jump"
         return _Eval(label, z, h, H, R, nu, nis, logl, reason)
-
-    def _consistent_reason(self, labels, ir_labels, side_d):
-        """Why this frame counts toward re-acquisition, or None. side+learned: shadow
-        only, IR uncalibrated, confident learned d within 2 sigma of the side's d."""
-        p = self.p
-        if set(labels) == {RIGHT, LEFT}:
-            return "pair"
-        if len(labels) != 1:
-            return None
-        if labels[0] in ir_labels:
-            return "side+ir"
-        if p.mode == "shadow" and not p.ir_calibrated and side_d is not None:
-            for d, sigma, confidence in self._learned_accepted:
-                if (confidence >= p.learned_reacq_min_confidence
-                        and abs(d - side_d) <= p.learned_reacq_sigmas * sigma):
-                    return "side+learned"
-        return None
 
     def _associate(self, cands, irs, scale, fresh, frame, decision_point=False):
         """(winner hypothesis or None, hold) and fills frame's debug fields."""
@@ -559,6 +551,7 @@ class RoadStateEstimator:
     def _restart_from_prior(self) -> None:
         """Lost d/phi/kappa (still integrating odometry) say nothing of the next lane."""
         self.x[:3] = 0.0
+        self._applied = None
         variances = np.maximum(np.diag(self.P)[:3], np.diag(self._P0)[:3])
         self.P[:3, :], self.P[:, :3] = 0.0, 0.0
         self.P[:3, :3] = np.diag(variances)

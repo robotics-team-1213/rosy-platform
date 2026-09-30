@@ -157,6 +157,7 @@ def test_five_centimetre_jump_is_rejected_even_when_nis_passes():
 
 def test_bad_pair_width_is_rejected():
     est, clock = tracking()
+    est.P[0, 0] = 0.02 ** 2        # each line alone passes NIS; only the pair width fails
     clock.frame([BoundaryMeas(y=-HALF - 0.025, psi=0.0, x=X),
                  BoundaryMeas(y=HALF + 0.025, psi=0.0, x=X)])
     assert est.rejects["width"] == 1
@@ -753,3 +754,52 @@ def test_a_yawed_robot_on_a_straight_lane_reads_mostly_as_heading_not_curvature(
     for _ in range(3):
         clock.frame(pair(phi=math.radians(10)))
     assert math.degrees(est.x[1]) == pytest.approx(10.0, abs=1.5)
+
+
+def _R(est, b):
+    return est._boundary_eval(b, "R", 1.0, True).R
+
+
+def test_heading_noise_grows_for_short_lines_and_lateral_noise_with_range():
+    est = RoadStateEstimator()
+    short, long_ = BoundaryMeas(y=-HALF, psi=0.0, length_m=0.05), BoundaryMeas(y=-HALF, psi=0.0, length_m=0.40)
+    assert _R(est, short)[1, 1] > _R(est, long_)[1, 1]
+    near, far = BoundaryMeas(y=-HALF, psi=0.0, x_psi=0.22), BoundaryMeas(y=-HALF, psi=0.0, x_psi=0.40)
+    assert _R(est, far)[0, 0] > _R(est, near)[0, 0]
+    p = RoadStateParams()
+    # no length or range known: the fitted floors plus the jitter at the reference
+    plain = _R(est, BoundaryMeas(y=-HALF, psi=0.0))
+    assert plain[0, 0] == pytest.approx(p.sigma_y_m ** 2 + p.jitter_y_m ** 2)
+    assert plain[1, 1] == pytest.approx(p.sigma_psi_rad ** 2 + (p.jitter_psi_rad_m / p.jitter_ref_length_m) ** 2)
+
+
+def test_measurement_noise_constants_are_the_124745z_fit():
+    p = RoadStateParams()
+    assert p.sigma_y_m == pytest.approx(0.007)
+    assert math.degrees(p.sigma_psi_rad) == pytest.approx(1.73)
+    assert p.jitter_y_m == pytest.approx(0.0006) and p.jitter_y_per_m == pytest.approx(0.008)
+    assert math.degrees(p.jitter_psi_rad_m) == pytest.approx(0.1)
+
+
+def test_boundaries_carry_the_seen_length():
+    out = boundaries_from_keep({"boundaries": [{"side": "right", "y_at_side_x_m": -0.09, "heading_deg": 0.0,
+                                                "length_m": 0.12, "ends_m": [[0.1, -0.09], [0.22, -0.09]]}]})
+    assert out[0].length_m == pytest.approx(0.12)
+
+
+def test_a_held_robot_does_not_refit_the_same_view_as_new_evidence():
+    """Replay 2026-10-01: at zero motion the keeper returns the same lines each frame; their
+    errors are one error, not many. Fitting a slightly non-parallel pair 40 times drove kappa
+    and then phi away (a +10 deg yaw read as -1.7 deg). Only a moved view is new evidence."""
+    est, clock = tracking()
+    view = [BoundaryMeas(y=-HALF, psi=math.radians(-1.5), x=X, x_psi=0.34, length_m=0.2),
+            BoundaryMeas(y=HALF, psi=math.radians(1.5), x=X, x_psi=0.29, length_m=0.29)]
+    clock.frame(view, v=0.0)
+    after_first = est.x.copy()
+    for _ in range(40):
+        clock.frame(view, v=0.0)
+    assert est.x == pytest.approx(after_first, abs=1e-9)
+    assert est.last_frame["deduplicated"] is True
+    assert est.level == TRACK                 # the view still holds the track
+    clock.frame(view, v=0.08)                # moved 1 cm: new evidence again
+    assert est.last_frame["deduplicated"] is False
