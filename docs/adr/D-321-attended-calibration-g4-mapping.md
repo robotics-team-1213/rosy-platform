@@ -72,3 +72,54 @@ PC 반복 질문과 수동 파일 편집은 한 번의 세션 안내와 자동 �
 [D-311](D-311-native-g4-evidence-gates-navigation.md),
 [D-314](D-314-measured-g4-and-direct-teleop.md),
 [D-319](D-319-post-setup-motor-commissioning.md).
+
+## Addendum (2026-10-01): 보정 세션은 모든 화면에 보이고 다른 행위자를 막는다
+
+**Status:** Accepted (2026-10-01, `feat/calibration-session-mode`). 소스·호스트
+시험까지. 장치 위 확인은 별도 HOLD.
+
+**Context.** 결정 1은 "릴리스 전환·PC 링크 상실은 세션을 중단한다"고 적었지만,
+세션이 어디에도 보이지 않았다. 2026-10-01 한 세션의 보정 주행이 다른 세션의
+릴리스 push(`rosy-release-push.ps1`)와 CORE 재시작에 끊겼다. Pilot 을 든
+사람도 대시보드를 보는 사람도 보정 중인 줄 몰랐고, 막을 방법도 없었다.
+
+**Decision.**
+
+1. CORE 가 보정 세션 **lease** 를 가진다: `POST /api/v1/calibration/session`
+   `{kind, label, ttl_s}`(Operator) → 세션 id 와 owner(호출 토큰 id).
+   owner 는 `ttl_s`(기본 30 s, 5–300) 안에 `POST …/{id}/heartbeat` 로 갱신한다.
+   갱신이 끊기면 세션은 만료된다 — 보정 도구가 죽거나 링크가 끊겨도 로봇이
+   영원히 잠기지 않는다. `DELETE …/{id}` 는 owner 또는 Administrator(걸린
+   lease 강제 해제). 로봇당 세션 하나. 모양은 API Ref v1.67 이 고정한다.
+2. 살아 있는 동안 상태 스냅샷(`/robot/state`, `/ws/state`)이
+   `activity: {kind: CALIBRATING, session_id, calibration_kind, label, owner,
+   started_at, remaining_s}` 를 싣는다. Pilot 은 "보정 중 — <label>" 판과 HUD
+   칩, 대시보드는 로봇 카드·모드 옆 칩, 로봇 LCD 는 MODE 행에 `CALIBRATING`
+   (LCD 글꼴이 ASCII 뿐이라 D-221 대로 기계어)을 보인다.
+3. 다른 토큰의 `POST /teleop`, `POST /mode`, `PUT /line-follow/mode`(OFF 제외),
+   `POST /line-follow/hold` 는 409 `CALIBRATION_ACTIVE`. owner 의 teleop 은
+   D-342 수동 한도 안에서 그대로 동작한다. **E-Stop 은 누구에게나 열려 있다**
+   (`POST /safety/stop` 은 이 lease 를 보지 않는다). 멈추기만 하는 line-follow
+   OFF 도 막지 않는다. Pilot 은 owner 가 아니면 주행 조작을 사유와 함께 끄고
+   명령을 보내지 않지만, 최종 판정은 CORE 의 409 다.
+4. 이 lease 는 아무것도 구동하지 않는다. 모드 전이도 `cmd_vel` 도 만들지 않는다
+   — [D-2](D-2-cmd-vel.md) 그대로 CORE 가 유일한 최종 발행자이고, 보정
+   구동은 결정 2 대로 CORE 의 기존 인증·안전 경로를 탄다.
+5. CORE 를 재시작하는 운영 도구(`rosy-release-push.ps1`, `dev/sync-core-dev.ps1`)는
+   원격 단계 전에 `rosy-calibration-guard.ps1` 로 세션을 묻고, 살아 있으면
+   거부한다(`-Force` 로만 넘김). 토큰이 없거나 CORE 가 답하지 않으면 크게
+   경고만 한다 — 고장 난 CORE 를 고치는 push 를 이 검사가 막으면 안 된다.
+6. 이벤트 `calibration.session_started` / `_ended` / `_expired`(warning)를
+   낸다. 만료 이벤트는 읽기마다와 CORE 전원 정책 타이머에서 한 번 난다.
+
+**Consequences.** 보정 도구(`tools/calibration/run_calibration.py`,
+`feat/camera-extrinsic-autocalib`)는 플래그 뒤에서 세션을 열고 heartbeat 한다.
+재부팅·CORE 재시작은 메모리의 lease 를 지운다 — 결정 1 대로 세션은 자동 재개되지
+않고, 도구의 다음 heartbeat 가 404 를 받아 중단을 알게 된다. Fleet 명령·Nav2
+목표·도킹은 이번 차단 목록에 없다(후속). 장치의 systemd 수동 재시작은 막지 못하며
+SKILL 절차가 guard 실행을 요구한다.
+
+**Related:** [D-2](D-2-cmd-vel.md),
+[D-342](D-342-manual-limit-commissioning-ladder.md),
+[D-344](D-344-pilot-assisted-autonomy.md),
+[D-378](D-378-real-drive-errors-and-autonomy-gates.md).
