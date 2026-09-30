@@ -364,8 +364,9 @@ class IngestServer:
         replaced = self._sources.get(source_name)
         src = _Source(name=source_name, connection=connection, lens=protocol.parse_hello_lens(hello))
         sensor = hello["sensor"]
-        logger.info("source %s connected app=%s device=%s sensor=%sx%s rot=%s lens=%s",
-                    source_name, hello.get("app_version"), hello.get("device"),
+        # app_version/device are free text from the phone: repr and cap them in the log.
+        logger.info("source %s connected app=%r device=%r sensor=%sx%s rot=%s lens=%s",
+                    source_name, str(hello.get("app_version"))[:64], str(hello.get("device"))[:64],
                     sensor["width"], sensor["height"], sensor["rotation_deg"],
                     _lens_text(src.lens) if src.lens else "unreported")
         self._sources[source_name] = src

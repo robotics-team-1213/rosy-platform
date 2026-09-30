@@ -391,3 +391,17 @@ async def test_malformed_hello_lens_is_ignored_not_closed():
         assert json.loads(await conn.recv()) == protocol.make_config()
         assert h.server.source_lens("overhead-1") is None
         await conn.close()
+
+
+@run_async
+async def test_connect_log_reprs_and_caps_phone_supplied_text(caplog):
+    caplog.set_level("INFO", logger="rosy_vision.ingest")
+    async with _Harness() as h:
+        conn = await h.connect()
+        await conn.send(json.dumps({**_hello(), "device": "evil\nFAKE LOG LINE " + "x" * 200}))
+        await conn.recv()
+        await conn.close()
+    line = next(r.getMessage() for r in caplog.records if "connected" in r.getMessage())
+    assert "\n" not in line
+    assert r"evil\nFAKE" in line
+    assert "x" * 60 in line and "x" * 60 + "x" * 10 not in line
