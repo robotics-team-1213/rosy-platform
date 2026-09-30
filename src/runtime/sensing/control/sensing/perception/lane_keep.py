@@ -126,6 +126,11 @@ CORNER_ASYMMETRY_M = 0.02
 #: The closed end sits on the outer lane line: within this of the half-width.
 CORNER_CLOSED_TOLERANCE_M = 0.03
 CORNER_LATCH_FRAMES = 12
+#: A corner line within this of square to the heading means the turn has not
+#: started (go straight until the corner); past it the robot is mid-turn and
+#: pursues the new centre line at no less than its distance + CORNER_REACH_M.
+CORNER_SQUARE_RAD = math.radians(10.0)
+CORNER_REACH_M = 0.04
 
 
 def _validate_positive(name, value):
@@ -451,9 +456,14 @@ class LaneKeeper:
         origin = centre + normal * half
         along = direction if (direction[1] > 0.0) == (side == "left") else -direction
         meet = float(origin[0] - origin[1] * along[0] / along[1])
-        if meet > CORNER_LOOKAHEAD_M:
+        square = abs(math.atan2(direction[1], direction[0])) >= math.pi / 2 - CORNER_SQUARE_RAD
+        if square and meet > CORNER_LOOKAHEAD_M:
             return np.array([CORNER_LOOKAHEAD_M, 0.0]), "corner_ahead"
-        point, _ = _pursuit_point(origin, along, CORNER_LOOKAHEAD_M)
+        # Mid-turn the robot is already rotated toward the open side, so the
+        # meeting point runs away along its heading: keep pursuing the new
+        # centre line, never further than just past it.
+        reach = abs(float(np.dot(normal, origin))) + CORNER_REACH_M
+        point, _ = _pursuit_point(origin, along, max(CORNER_LOOKAHEAD_M, reach))
         return point, f"corner_{side}"
 
     def _choose(self, left, right, half):

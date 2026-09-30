@@ -186,6 +186,17 @@ def test_corner_side_needs_an_open_end_or_a_latch():
     assert keeper.update(_render([], transverse_x=0.19), GROUND, lane_half_width_m=HALF) is None
 
 
+def test_mid_turn_keeps_turning_toward_the_new_lane():
+    # Latched left, then the robot has turned ~15 deg left: the corner line now
+    # runs at 75 deg and its meeting point with the heading has moved away.
+    keeper = LaneKeeper(camera_x_offset_m=X_OFFSET, smoothing=0.0, corner_turning=True)
+    keeper.update(_render_corner(0.40, "left"), GROUND, lane_half_width_m=HALF)
+    slope = np.tan(np.radians(75.0))
+    obs = keeper.update(_render([(-slope * 0.30, slope)]), GROUND, lane_half_width_m=HALF)
+    assert keeper.last["strategy"] == "corner_left"
+    assert obs is not None and obs.error < -0.3
+
+
 def test_corner_turning_is_opt_in():
     keeper = LaneKeeper(camera_x_offset_m=X_OFFSET, smoothing=0.0)
     keeper.update(_render_corner(0.40, "left"), GROUND, lane_half_width_m=HALF)

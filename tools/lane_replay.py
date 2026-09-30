@@ -145,7 +145,7 @@ def extract(video: str, crop, fps: float, dst: Path) -> list[Path]:
     return sorted(dst.glob("f_*.png"))
 
 
-def run(frames: list[Path], names: list[str], out: Path) -> dict:
+def run(frames: list[Path], names: list[str], out: Path, skip_blank: bool = True) -> dict:
     detectors = make_detectors(names)
     _, ground = _nominal_ground()
     rows, tiles = [], []
@@ -156,7 +156,7 @@ def run(frames: list[Path], names: list[str], out: Path) -> dict:
         h, w = img.shape[:2]
         mask = white_mask(img)
         floor_mask = floor_white_mask(img, ground.horizon_row)
-        if mask.mean() > 0.6:           # 빈 화면(연결 전 흰 화면 등)은 건너뛴다
+        if skip_blank and mask.mean() > 0.6:   # 빈 화면(연결 전 흰 화면 등)은 건너뛴다
             continue
         row = {"frame": path.name}
         vis = img.copy()
@@ -222,6 +222,8 @@ def main(argv=None) -> int:
     parser.add_argument("--fps", type=float, default=4.0)
     parser.add_argument("--detectors", default="line,between")
     parser.add_argument("--out", required=True)
+    parser.add_argument("--keep-bright", action="store_true",
+                        help="흰 화면 건너뛰기를 끈다(가제보 흰 벽 프레임은 빈 화면이 아니다)")
     args = parser.parse_args(argv)
     out = Path(args.out).resolve()
     if REPO in out.parents or out == REPO:
@@ -229,7 +231,7 @@ def main(argv=None) -> int:
     names = [n.strip() for n in args.detectors.split(",") if n.strip()]
     if args.frames:
         frames = sorted(p for p in Path(args.frames).iterdir() if p.suffix.lower() in (".png", ".jpg"))
-        metrics = run(frames, names, out)
+        metrics = run(frames, names, out, skip_blank=not args.keep_bright)
     else:
         frames = []
         tmp = Path(tempfile.mkdtemp(dir=str(out.parent) if out.parent.exists() else None))
