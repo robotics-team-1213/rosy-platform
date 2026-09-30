@@ -8,6 +8,8 @@ adr_log: docs/reference/ROSY ADR Log.md
 # IDs absent from the ADR log on purpose. Remove an entry once the ADR is written.
 adr_gaps:
   D-384: "reserved by branch docs/d384-road-state-and-behaviour (road-state estimator with prediction, right-priority tie-breaker, road behaviour state machine); remove when its ADR lands"
+  D-385: "reserved by branches feat/release-image-layer-sync (payload push syncs image layer) and fix/card-write-confirm-and-artifact-download (emergency card write) — both use D-385, one must renumber at landing; seen 2026-10-01 while numbering D-387"
+  D-386: "reserved by branch feat/omx-sim-phases (OMX async goal acceptance and phase state); remove when its ADR lands"
   D-373: "reserved by branch feat/d373-learning-loop-lap2 (learned perception on the Pinky image, snapshot capture, auto shadow delivery); remove when its ADR lands"
   D-29: "unused; the vision accelerator shield design only proposed the number"
   D-324: "unused; the Pinky artifact-selection ADR was first written as D-324 and renumbered to D-325 to avoid a same-day collision (commit 45f9470b, 2026-09-29). Remove if another session lands an ADR as D-324"
