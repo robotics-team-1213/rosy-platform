@@ -214,3 +214,35 @@ def test_slot_poll_never_raises_on_bad_pointer(tmp_path):
     slot = ModelSlot(pointer, opener=lambda p: None, clock=lambda: 0.0)
     assert slot.poll() is None
     assert slot.last_error
+
+
+def test_learned_site_is_appended_after_the_system_paths(tmp_path, monkeypatch):
+    """D-373 decision 1: the prefix goes last, so system numpy/protobuf/packaging
+    win and only what the system lacks (onnxruntime) comes from the prefix."""
+    import importlib.machinery
+    import sys
+
+    from control.sensing.perception.learned import runner
+
+    assert runner.LEARNED_SITE == "/opt/rosy/learned-perception/site-packages"
+    site = tmp_path / "site-packages"
+    (site / "numpy").mkdir(parents=True)
+    (site / "numpy" / "__init__.py").write_text("SHADOW = True\n")
+    (site / "only_in_prefix.py").write_text("X = 1\n")
+    monkeypatch.setenv("ROSY_LEARNED_SITE", str(site))
+    path = list(sys.path)
+    assert runner.add_learned_site(path) == str(site)
+    assert path[:-1] == sys.path and path[-1] == str(site)
+    assert runner.add_learned_site(path) == str(site) and path.count(str(site)) == 1
+    numpy_spec = importlib.machinery.PathFinder.find_spec("numpy", path)
+    assert str(site) not in numpy_spec.origin  # the system copy keeps precedence
+    assert str(site) in importlib.machinery.PathFinder.find_spec("only_in_prefix", path).origin
+
+
+def test_missing_learned_site_leaves_the_path_alone(tmp_path, monkeypatch):
+    from control.sensing.perception.learned import runner
+
+    monkeypatch.setenv("ROSY_LEARNED_SITE", str(tmp_path / "absent"))
+    path = ["/usr/lib/python3/dist-packages"]
+    assert runner.add_learned_site(path) is None
+    assert path == ["/usr/lib/python3/dist-packages"]

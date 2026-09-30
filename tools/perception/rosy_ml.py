@@ -60,6 +60,7 @@ def _hold_age_h(hold: dict) -> float | None:
     except (KeyError, TypeError, ValueError):
         return None
     return (_utcnow() - ts).total_seconds() / 3600
+LEARNED_SITE = "/opt/rosy/learned-perception/site-packages"  # == learned/runner.py
 MODELS_DIR, MODELS_OWNER = "/var/lib/rosy/models", "root:rosy-camera 750"
 
 
@@ -264,8 +265,11 @@ def _doctor(cfg, robots, runner, connect, find_spec) -> int:
              lambda r: r.returncode == 0 and r.stdout.strip() == MODELS_OWNER,
              "run deploy/robot/pinky_pro/dev/install-learned-perception.sh on a bench "
              "robot, or use an image with D-373"),
+            # The learned backend appends its own prefix (learned/runner.py
+            # LEARNED_SITE, D-373 decision 1); a plain import would miss it.
             ("robot python3 imports onnxruntime",
-             "cd / && PYTHONNOUSERSITE=1 python3 -c 'import onnxruntime'",
+             "cd / && PYTHONNOUSERSITE=1 python3 -c 'import sys; "
+             f"sys.path.append(\"{LEARNED_SITE}\"); import onnxruntime'",
              lambda r: r.returncode == 0,
              "install the pinned onnxruntime (install-learned-perception.sh) or reflash"),
         ]

@@ -129,13 +129,7 @@ hardware_dependencies:
 
 python_runtime:
   requirements: device-python-requirements.txt
-  requirements_sha256: 6f3353ea301de18f87843d1f729158fe342ee1b4bbd0365892093f2a23949876
-  # D-373: runtime records whose requirements are a strict subset of this file.
-  # The image and the bench install write them to the card
-  # (python-runtime-compatible.sha256) so a release built for one still
-  # activates and rolls back here. Never list a runtime that pins a different
-  # version of anything this file pins.
-  compatible_predecessors: [a66f224ab570cb08d1c474bdbb1f93899692625cd167a7f6f907fc99690f4176]
+  requirements_sha256: a66f224ab570cb08d1c474bdbb1f93899692625cd167a7f6f907fc99690f4176
   python_version: "3.12"
   install_prefix: /usr/local
   pydantic_major: 2
@@ -148,12 +142,6 @@ python_runtime:
     2026-09-24 by a --require-hashes download for both platforms.
     D-192 added the rosy-io set (dynamixel-sdk 3.8.4, pyserial 3.5) to the
     same file, so native_release.py's runtime check covers it too.
-    D-373 appended the learned-perception block (onnxruntime 1.30.0,
-    flatbuffers 25.12.19, packaging 26.3, protobuf 7.36.2; numpy stays apt's
-    1.26.4) as the file's last block; hashes were checked on 2026-09-30 by a
-    --require-hashes download for both platforms. The sha is sha256 of the
-    file's LF bytes; without that block it is a66f224a..., the runtime
-    every image flashed since D-192 carries (main 3afb64a6).
 
 camera_runtime:
   sources: camera-sources.lock.json
@@ -165,6 +153,20 @@ camera_runtime:
     D-288. Official Raspberry Pi source archives and CPython 3.12 aarch64
     Python packages are independently SHA-256 pinned. This verifies source
     identity, not an ARM64 image build or device capture.
+
+learned_perception_runtime:
+  requirements: learned-perception-requirements.txt
+  requirements_sha256: dfee19470266b21ef19603f5fae3c2d46e3e2c7e7c15492d59916a7f3d74f256
+  target: /opt/rosy/learned-perception/site-packages
+  verified: true
+  note: >-
+    D-373 decision 1. onnxruntime 1.30.0 with flatbuffers 25.12.19,
+    packaging 26.3 and protobuf 7.36.2 (cp312 aarch64 and x86_64), hash-locked;
+    hashes were checked on 2026-09-30 by a --require-hashes download for both
+    platforms. Installed with pip --target into its own prefix, which only the
+    learned backend appends to sys.path, so apt numpy/protobuf/packaging keep
+    precedence. Not part of python_runtime: the payload runtime id (D-189)
+    stays the flashed a66f224a..., and payloads keep activating on old cards.
 
 containers:
   role: development-and-ci-only

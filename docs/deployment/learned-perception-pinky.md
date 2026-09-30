@@ -27,7 +27,7 @@ NS="${ROSY_NAMESPACE:+/$ROSY_NAMESPACE}"   # 네임스페이스가 비어 있으
 
 | 계층 (D-225) | D-373에서 바뀐 것 | 어디서 오나 | 기존 카드에 넣는 법 |
 |---|---|---|---|
-| 이미지 (SD 재굽기) | `onnxruntime`과 의존 wheel(해시 고정), `/var/lib/rosy/models` `root:rosy-camera 0750` | `deploy/robot/pinky_pro/image/device-python-requirements.txt`, `deploy/robot/pinky_pro/image/customize-rootfs.sh`, `deploy/robot/pinky_pro/native/tmpfiles-rosy-state.conf` | 벤치 설치 스크립트 (C절) |
+| 이미지 (SD 재굽기) | `onnxruntime`과 의존 wheel(해시 고정)을 전용 prefix `/opt/rosy/learned-perception/site-packages`에, `/var/lib/rosy/models` `root:rosy-camera 0750` | `deploy/robot/pinky_pro/image/learned-perception-requirements.txt`, `deploy/robot/pinky_pro/image/customize-rootfs.sh`, `deploy/robot/pinky_pro/native/tmpfiles-rosy-state.conf` | 벤치 설치 스크립트 (C절) |
 | 부트·호스트 (유닛) | `rosy-camera.service`의 `EnvironmentFile=-/etc/rosy/learned-perception.env` | `deploy/robot/pinky_pro/native/rosy-camera.service` | 릴리스 사본에서 유닛 손 설치 (D절 2) |
 | 페이로드 (서명 릴리스) | `learned_lane_node`, `capture_trigger_node`, 스냅샷 녹화, `camera_preview.launch.py`의 두 스위치 | `src/runtime/sensing/` | 페이로드 푸시 (D절 1) |
 | 운영자 설정 (로봇 한 대) | `/etc/rosy/learned-perception.env`의 `ROSY_LEARNED_SHADOW`, `ROSY_CAPTURE` | 예시: `deploy/robot/pinky_pro/native/learned-perception.env.example` | `sudo install` (D절 3) |
@@ -73,14 +73,17 @@ D-373 이후 커밋으로 구운 이미지는 A절의 이미지·유닛 계층�
 ## C. 지금 쓰는 카드에 올리는 경우 (벤치)
 
 재굽기 전 카드에 이미지 계층만 같은 파일·같은 규칙으로 넣는다. 스크립트는
-`deploy/robot/pinky_pro/dev/install-learned-perception.sh`다. 릴리스 페이로드에는 `dev/`가 없으므로
+`deploy/robot/pinky_pro/dev/install-learned-perception.sh`다. 설치 위치는 전용 prefix
+`/opt/rosy/learned-perception/site-packages`(`root:root 0755`, `pip --target`)이고, 학습 백엔드만
+그 경로를 `sys.path` 끝에 붙인다. 그래서 apt의 numpy·protobuf·packaging이 모든 서비스에서 그대로
+우선한다. `/usr/local`과 카드의 Python 런타임 기록(`python-runtime.sha256`)은 건드리지 않는다. 릴리스 페이로드에는 `dev/`가 없으므로
 운영 PC에서 필요한 파일만 묶어 보낸다(경로 구조를 유지해야 스크립트가 파일을 찾는다).
 
 ```bash
 # 운영 PC, 저장소 루트. git archive는 .gitattributes의 LF 규칙을 지킨다.
 git archive -o d373-bench.tar HEAD \
   deploy/robot/pinky_pro/dev/install-learned-perception.sh \
-  deploy/robot/pinky_pro/image/device-python-requirements.txt \
+  deploy/robot/pinky_pro/image/learned-perception-requirements.txt \
   deploy/robot/pinky_pro/image/inputs.lock.yaml \
   deploy/robot/pinky_pro/native/tmpfiles-rosy-state.conf \
   deploy/robot/pinky_pro/verify/measure-resident-cpu.sh
@@ -95,21 +98,19 @@ bash deploy/robot/pinky_pro/dev/install-learned-perception.sh --dry-run       # 
 sudo -n bash deploy/robot/pinky_pro/dev/install-learned-perception.sh
 ```
 
-- `--dry-run`은 `requirements_sha256=`, `image_runtime_before=`, `compatible_predecessors=`,
-  `dir d /var/lib/rosy/models 0750 root rosy-camera`, 설치할 블록을 출력한다. 블록에 `onnxruntime==`
+- `--dry-run`은 `requirements_sha256=`(`inputs.lock.yaml`의 `learned_perception_runtime`과 같아야
+  실행된다), `target=/opt/rosy/learned-perception/site-packages`,
+  `dir d /var/lib/rosy/models 0750 root rosy-camera`, 설치할 파일 내용을 출력한다. `onnxruntime==`
   줄이 있는지 본다.
-- 실제 실행은 root가 아니면 거절한다. 카드의 런타임 기록이 D-373 이전 값도 새 값도 아니면
-  "reflash with a matching image"로 멈춘다. 그 카드는 B절로 간다.
+- 실제 실행은 root가 아니면 거절한다. 설치 뒤 prefix를 붙여 `onnxruntime`을 import하고, 버전이 잠금과
+  다르면 멈춘다.
 - 성공하면 마지막 줄에 기록 한 줄이 나오고 `/var/log/rosy/bench-installs.log`에도 남는다:
-  `<UTC> d373-learned-perception requirements_sha256=<sha> onnxruntime=<ver> from=<이전 sha>`.
+  `<UTC> d373-learned-perception requirements_sha256=<sha> onnxruntime=<ver> target=<prefix>`.
   이 줄을 E절의 증거 기록에 옮겨 적는다. 여러 번 실행해도 된다.
 
-> **중요.** D-373 요구사항 변경(`device-python-requirements.txt` 블록) 이후에 빌드한 릴리스는, 이
-> 벤치 설치를 하지 않은 카드에서 활성화가 `NATIVE_PYTHON_RUNTIME`으로 **거절**된다. 새 릴리스를
-> 푸시하기 전에 C절을 먼저 한다. 설치 뒤에는 카드가
-> `/usr/local/share/rosy/python-runtime-compatible.sha256`에 D-373 이전 런타임을 기록하므로
-> (`inputs.lock.yaml`의 `compatible_predecessors`), D-373 이전 릴리스로의 활성화와 롤백도 계속 된다.
-> 반대 방향(설치 안 한 카드에 새 릴리스)은 없다.
+페이로드 Python 런타임 id(D-189, `device-python-requirements.txt`의 sha256)는 D-373으로 바뀌지 않는다.
+그래서 이 설치를 했든 안 했든 새 릴리스는 모든 카드에서 활성화된다. 설치하지 않은 카드에서
+`learned_shadow`를 켜면 노드는 멈추지 않고 `perception/learned/status`에 런타임이 없다는 이유를 낸다.
 
 ## D. 페이로드 반영과 스위치 켜기
 

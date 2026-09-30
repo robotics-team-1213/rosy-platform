@@ -3887,6 +3887,7 @@
 - gate 변화: 없음. 런북 절차 자체는 장치에서 한 번도 돌지 않았다.
 - 결정: 없음(D-373 이행 문서).
 - 교훈: 없음.
+
 ## 2026-09-30 · uncommitted · docs(adr): D-374 앱 이름 규칙 — 폴더·패키지·식별자를 역할 이름 하나에서
 - 변경: D-374(Proposed)와 단계 계획 `docs/plans/2026-09-30-app-identity-rename-plan.md` 추가. 사용자 결정("모든 앱을 규칙대로, 식별자까지")으로 D-370 2항의 "식별자 그대로"를 대체한다. 역할 id = D-370 영어 이름 − `Rosy`(kebab), snake는 폴더·패키지·실행 파일, compact는 Android id. 새 이름: `ceiling-camera`(`src/site/ceiling_camera`, `io.github.livsbittt.rosy.ceilingcamera`), `site-vision`(`src/site/site_vision`), `site-console`(`src/site/site_console` 자산 패키지, Fleet 서비스 `fleet`은 유지), `robot-dashboard`(`src/hmi/robot_dashboard`), `pilot`(레지스트리 id만).
 - 증거: main `15a4302f` 읽기 전용 조사(계획 부록 A, 파일:줄 인용). 앱 폴더를 고치는 열린 브랜치 13개(부록 B). D-362 P0-1·P1이 조사 도중 main에 착지(`b67c9dfc`, `13803932`).

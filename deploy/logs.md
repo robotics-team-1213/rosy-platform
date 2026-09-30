@@ -1563,6 +1563,7 @@
 - gate 변화: 없음. DEVICE HOLD — 유닛 손 설치, 스위치 재시작, 섀도 지연·CPU, 첫 캡처 수거는 실물 미확인.
 - 결정: D-373 결정 2(페이로드 스위치)의 장치 쪽 켜는 수단.
 - 교훈: 이미지 계층 유닛에 새 지시어를 넣으면 기존 카드는 페이로드만으로 받지 못한다. 런북에 손 설치와 확인 명령(`systemctl cat`)을 같이 적는다.
+
 ## 2026-09-30 · uncommitted · feat(native): D-375 부팅 표시가 운용 모드를 램프와 LCD에 표시
 
 - 변경: `rosy-boot-status.py`가 핸드오버의 `robot_mode`를 검증(모르는 값은 나머지를 버리지 않고 없음)해 boot-status.json에 옮긴다. `rosy-boot-display.py`는 `robot_state.lamp_pattern()`으로 패턴을 고르고, 모드 전환은 소리 없이 패턴만 바꾸며, LCD 상태줄에 ` - MODE` 접미를 붙인다.
@@ -1580,3 +1581,11 @@
 - 변경: `rosy-boot-status.py`가 `nav_state`를 같은 규칙으로 검증·복사. `rosy-boot-display.py`는 `lamp_pattern()`에 nav를 넘기고, `_announce`가 패턴 기반으로 EMERGENCY 진입음(2.5 kHz×4, 유지 무음, 해제 시 ready 차임)을 낸다.
 - 증거: test_boot_display.py (blocked 행·진입/유지/해제 소리). 변이 증명: 진입음 제거 시 빨강.
 - gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · fix(image): D-373 learned-perception runtime in its own file and prefix; payload runtime id unchanged
+
+- 변경: 위 2026-09-30 D-373 항목 둘(`device-python-requirements.txt` 끝 블록, `compatible_predecessors`)을 바로잡는다. 블록을 `image/learned-perception-requirements.txt`로 옮기고 `inputs.lock.yaml`에 `learned_perception_runtime`(sha256, `target`)을 따로 두었다. `device-python-requirements.txt`와 `python_runtime`은 main 바이트 그대로(a66f224a…, `test_python_runtime_id.py`), `native_release.py`의 호환 목록과 카드의 `python-runtime-compatible.sha256`는 되돌렸다. `customize-rootfs.sh`와 `dev/install-learned-perception.sh`는 `pip --require-hashes --no-deps --only-binary=:all: --target /opt/rosy/learned-perception/site-packages`로 설치하고, `learned/runner.py`가 import 직전에 그 경로를 `sys.path` 끝에 붙인다. 벤치 스크립트는 `/usr/local`과 런타임 기록을 쓰지 않는다.
+- 이유: 페이로드 런타임 id는 요구사항 파일 전체의 sha256이라 블록을 붙이면 구운 카드 전부가 재플래시 전까지 페이로드를 못 받는다. `/usr/local` 설치는 apt python3-protobuf 4.21.12·python3-packaging 24.0(8kcn 실측)을 모든 서비스에서 가린다.
+- 증거: `test/test_bench_learned_perception.py`(별도 잠금 항목, 같은 prefix·플래그, `/usr/local`·런타임 기록 미사용, dry-run 출력), `test/test_python_runtime_id.py`, `src/runtime/sensing/test/test_learned_runner.py`(prefix는 끝에 붙고 시스템 패키지가 우선). 2026-10-01 Windows.
+- gate 변화: 없음. ARTIFACT/DEVICE HOLD — 이미지 빌드 미실행.
+- 결정: D-373 결정 1 개정.

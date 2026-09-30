@@ -17,7 +17,7 @@ Bench-only CORE overlay (D-179). These files restart `rosy-core` with an allowli
 | `sync-core-dev.ps1` | Windows upload of that allowlist |
 | `apply-core-dev.sh` | On-robot apply |
 | `clear-core-dev.sh` | Remove the marker, drop-in, and dev compose file |
-| `install-learned-perception.sh` | D-373 bench install: the requirements file's marked onnxruntime block, the `tmpfiles-rosy-state.conf` models rule, `python-runtime.sha256`, a line in `/var/log/rosy/bench-installs.log` |
+| `install-learned-perception.sh` | D-373 bench install: `../image/learned-perception-requirements.txt` (hash from `inputs.lock.yaml` `learned_perception_runtime`) with `pip --target /opt/rosy/learned-perception/site-packages`, the `tmpfiles-rosy-state.conf` models rule, a line in `/var/log/rosy/bench-installs.log` |
 
 ## Subdirectories
 
@@ -30,7 +30,7 @@ None.
 - Do not call `install-pi.sh` from here.
 - A device with this overlay stays HOLD until `clear-core-dev.sh`.
 - `install-learned-perception.sh` reads pins and directory rules from `../image` and `../native`; never copy a pin, mode, or owner into it.
-- A card baked before D-373 must run `install-learned-perception.sh` (or be reflashed) before it activates a release built after D-373; `native_release.py` refuses it otherwise. After the install the card still activates and rolls back to pre-D-373 releases (`python-runtime-compatible.sha256`).
+- `install-learned-perception.sh` never writes `/usr/local` and never touches `python-runtime.sha256`: the payload runtime id stays the flashed one, so every card keeps taking payloads with or without it.
 
 ### Testing Requirements
 

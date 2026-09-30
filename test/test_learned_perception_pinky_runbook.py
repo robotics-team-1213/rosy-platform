@@ -77,6 +77,9 @@ def test_topics_and_commands_match_the_code():
     for cmd in ("doctor", "deliver", "rollback", "release-hold", "harvest", "intake", "status"):
         assert f"rosy_ml {cmd}" in text, cmd
         assert f'"{cmd}"' in rosy_ml, cmd
-    # the three-layer rule and the one thing never automated
-    assert "NATIVE_PYTHON_RUNTIME" in text and "compatible_predecessors" in text
+    # the learned runtime has its own prefix and never changes the payload runtime id
+    assert "/opt/rosy/learned-perception/site-packages" in text
+    assert "learned-perception-requirements.txt" in text
+    assert "NATIVE_PYTHON_RUNTIME" not in text and "compatible_predecessors" not in text
+    # the one thing never automated
     assert "D-205" in text

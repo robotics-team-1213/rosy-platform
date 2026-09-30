@@ -21,10 +21,12 @@
 **Decision:**
 
 1. **이미지 계층(SD 재굽기)에 학습 인식 런타임을 넣는다.**
-   - `onnxruntime`을 `device-python-requirements.txt`에 해시 고정으로 넣는다(cp312, aarch64와 x86_64). `inputs.lock.yaml`의 `requirements_sha256`을 같은 커밋에서 바꾼다.
+   - `onnxruntime`과 의존 wheel은 따로 된 해시 고정 파일 `learned-perception-requirements.txt`에 둔다(cp312, aarch64와 x86_64). `inputs.lock.yaml`에 `learned_perception_runtime` 항목(파일 sha256, 설치 위치)을 따로 둔다. 카메라 런타임(D-288)과 같은 방식이다.
+   - **페이로드 런타임 id(D-189)는 바꾸지 않는다.** id는 `device-python-requirements.txt` 전체의 sha256이고, 이 파일은 그대로다. 그래서 이미 구운 카드도 새 페이로드를 계속 받는다. 런타임 기록이나 호환 목록도 새로 만들지 않는다.
+   - 설치 위치는 전용 prefix `/opt/rosy/learned-perception/site-packages`(`pip --target`, `root:root 0755`)다. 학습 백엔드(`learned/runner.py`)만 `onnxruntime` import 직전에 이 경로를 `sys.path` **끝에** 붙인다. apt의 numpy·protobuf·packaging이 모든 서비스에서 계속 우선한다(8kcn 확인: apt protobuf 4.21.12, packaging 24.0).
    - `/var/lib/rosy/models`는 `root:rosy-camera 0750`이다. 카메라 유닛은 읽기만 한다. 쓰기는 운영자 전달(`rosy` + `sudo -n`)만 한다. `customize-rootfs.sh`와 `tmpfiles-rosy-state.conf` 두 곳에서 같은 규칙으로 만든다.
    - 녹화는 카메라 유닛의 `StateDirectory` 아래 `/var/lib/rosy/camera/recordings`에 둔다. 새 쓰기 경로를 열지 않는다.
-   - 재굽기 전 벤치 장치에는 같은 해시 파일과 같은 디렉터리 규칙을 적용하는 스크립트 하나로 설치하고, 설치를 기록한다.
+   - 재굽기 전 벤치 장치에는 같은 해시 파일, 같은 prefix, 같은 디렉터리 규칙을 적용하는 스크립트 하나로 설치하고, 설치를 기록한다. 스크립트는 `/usr/local`과 카드의 런타임 기록을 건드리지 않는다.
 2. **페이로드 계층에서 섀도 노드와 캡처를 켠다.** `camera_preview.launch.py`에 `learned_shadow`와 `capture` 인자를 둔다. 기본값은 둘 다 꺼짐이다. 켜졌는데 런타임이나 모델이 없으면 노드는 `perception/learned/status`에 이유를 1 Hz로 알린다(D-62). 주행 경로는 여전히 이 결과를 읽지 않는다.
 3. **앞 카메라 압축 토픽은 캡처용이다.** `camera_detect_node`가 이미 가진 프레임을 JPEG으로 `camera/front/compressed`에 낸다. 기본 꺼짐이고 `capture`가 켤 때만 낸다. 로봇 밖으로 나가지 않는다(D-136). 녹화는 원본 대신 이 토픽을 기록한다.
 4. **캡처는 불일치 스냅샷이다.**
@@ -72,7 +74,7 @@
      - 4 stop_line/`stop_line`
      - 5 crosswalk/`ignore`
 
-**Consequences:** 섀도 결과와 불일치 스냅샷이 쌓이면 D-356 데이터셋 도구의 입력이 되고, 나중에 D-205 P3 재생 게이트의 재료가 된다. onnxruntime과 디렉터리 규칙은 다음 이미지 릴리스부터 SD에 들어간다. 그 전의 벤치 장치는 기록된 수동 설치다. Pi 5에서의 지연과 CPU는 첫 장치 실측 전까지 모른다. 지연 예산(8 fps의 한 주기 125 ms)을 넘으면 노드는 프레임을 건너뛰고, 그 비율을 `status`에 낸다.
+**Consequences:** 섀도 결과와 불일치 스냅샷이 쌓이면 D-356 데이터셋 도구의 입력이 되고, 나중에 D-205 P3 재생 게이트의 재료가 된다. onnxruntime과 디렉터리 규칙은 다음 이미지 릴리스부터 SD에 들어간다. 그 전의 벤치 장치는 기록된 수동 설치다. 페이로드 런타임 id가 그대로이므로 어느 카드도 페이로드 갱신에서 끊기지 않는다. 런타임이 없는 카드에서 섀도를 켜면 노드는 돌지 않고 `status`에 이유를 낸다. Pi 5에서의 지연과 CPU는 첫 장치 실측 전까지 모른다. 지연 예산(8 fps의 한 주기 125 ms)을 넘으면 노드는 프레임을 건너뛰고, 그 비율을 `status`에 낸다.
 
 **Validation:**
 
