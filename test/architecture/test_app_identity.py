@@ -28,7 +28,6 @@ KEBAB = re.compile(r"^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$")
 
 #: Rows not yet renamed, keyed by current registry id (plan 2026-09-30-app-identity-rename-plan.md §3).
 PENDING = {
-    "rosy-pilot": "D-374 stage 2: registry id rosy-pilot -> pilot",
     "robot-dashboard": "D-374 stage 3: src/hmi/dashboard -> src/hmi/robot_dashboard (D-362 gate)",
     "fleet-console": "D-374 stage 4: fleet/server/web -> src/site/site_console, id site-console (D-362 gate)",
 }
