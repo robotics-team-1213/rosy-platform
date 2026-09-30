@@ -126,9 +126,14 @@ class PickPlaceTransaction:
     @property
     def object_held(self) -> bool:
         return (self._recovered_object_may_be_held
+                or self.state in {
+                    PickPlaceState.VERIFY_HOLD, PickPlaceState.TRANSFER,
+                    PickPlaceState.RELEASE, PickPlaceState.VERIFY_RELEASE,
+                }
                 or (self.hold_receipt is not None and self.release_receipt is None))
 
     def _hold(self, reason: str) -> None:
+        self._recovered_object_may_be_held = self.object_held
         self.state = PickPlaceState.HOLD
         self.hold_reason = reason
 

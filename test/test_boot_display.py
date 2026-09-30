@@ -1204,6 +1204,26 @@ def test_the_lcd_state_line_names_the_operating_mode_in_ascii(tmp_path):
     assert module.read_view(tmp_path, None)["state_line"] == "Ready"
 
 
+def test_the_lcd_state_line_names_the_formation_role_at_the_end(tmp_path):
+    module = _display()
+    _status(tmp_path, "CORE_READY", runtime_mode="hardware", robot_mode="NAVIGATION",
+            swarm_role="leader")
+
+    view = module.read_view(tmp_path, None)
+
+    assert view["state_line"] == "Ready - NAVIGATION - LEADER"
+    # A follower says so too; "none" and unknown roles keep the mode line.
+    _status(tmp_path, "CORE_READY", runtime_mode="hardware", robot_mode="NAVIGATION",
+            swarm_role="follower")
+    assert module.read_view(tmp_path, None)["state_line"] == "Ready - NAVIGATION - FOLLOWER"
+    _status(tmp_path, "CORE_READY", runtime_mode="hardware", robot_mode="NAVIGATION",
+            swarm_role="none")
+    assert module.read_view(tmp_path, None)["state_line"] == "Ready - NAVIGATION"
+    _status(tmp_path, "CORE_READY", runtime_mode="hardware", robot_mode="NAVIGATION",
+            swarm_role="captain")
+    assert module.read_view(tmp_path, None)["state_line"] == "Ready - NAVIGATION"
+
+
 def test_the_helper_knows_every_pattern_the_table_can_ask_for():
     # Cross-language sync: robot_state.lamp_pattern names patterns that only
     # lamp_pattern.c can show. A rename on either side must fail here.

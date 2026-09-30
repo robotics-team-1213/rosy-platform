@@ -187,3 +187,9 @@
 - 변경: `NAV_STATES`·`NAV_STUCK`·`valid_nav_state()` 추가. `lamp_pattern()`이 세 번째 인자 `nav_state`를 받아 NAVIGATION 안에서 BLOCKED/FAILED를 `blocked`로 구분한다(다른 우선순위는 불변).
 - 증거: test_robot_state.py 90 passed (변이 증명: blocked 규칙을 빼면 해당 2행이 빨개진다).
 - gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · feat(robot_state): D-383 swarm_role 축 — LCD 역할 접미
+
+- 변경: SWARM_ROLES·valid_swarm_role()·role_suffix()(ASCII " - LEADER") 추가. mode/nav 와 같은 부재 규칙, evaluate 판정은 그대로.
+- 증거: test_robot_state.py (변이 증명: 접미를 없애면 해당 2행 빨강).
+- gate 변화: 없음.

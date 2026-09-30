@@ -115,10 +115,7 @@ def test_agent_reaches_verified_mdns_url_with_site_ca(tmp_path, monkeypatch):
 
     class Events:
         def subscribe(self, _cb):
-            pass
-
-        def unsubscribe(self, _cb):
-            pass
+            return lambda: None
 
     monkeypatch.setattr(agent_module, "locate_fleet", locate)
     monkeypatch.setattr(agent_module.ssl, "create_default_context", lambda **_kw: tls_context)

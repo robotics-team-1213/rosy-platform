@@ -696,3 +696,15 @@
 - 변경: 렌즈 종류 검사를 `in`에서 `Object.hasOwn`으로 바꿨다(`kind=toString`은 렌즈가 아니다). 렌즈 이전의 보정값은 `@standard`로 옮기지 않고 복사한다. 예전 키를 남겨 옛 앱으로 되돌려도 그 값을 쓴다.
 - 증거: `node --test src/site/fleet/test/web/vision-lens-profile.test.mjs` 7 passed (2026-10-01 Windows).
 - gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · fix(hub): D-382 F6 — 소켓을 로봇 하나에 묶고 짝 토큰을 상수 시간으로 비교
+
+- 변경: `SiteHub`에 소켓 단위 `HubSession`을 두었다. HELLO가 성공하면 그 소켓을 그 로봇에 묶고, HEARTBEAT·EVENT는 자기 소켓의 로봇 것만 받는다(다른 로봇이면 `PAIRING_INVALID`). 같은 소켓의 두 번째 로봇 HELLO는 거절한다. 소켓이 닫히면 그 로봇을 짝 집합에서 빼되, 재접속한 새 소켓이 이미 이어받았으면 건드리지 않는다. 짝 토큰 비교는 `hmac.compare_digest`. 세션 없이 부르는 프로세스 내 호출은 예전 짝 집합 규칙 그대로다.
+- 증거: `test_hub_server.py` 신규 4건(남의 로봇 이벤트·하트비트 거절, 재결속 거절, 끊기면 해제, 재접속 경합) — 수정 전 코드에서 4건 모두 실패, 수정 후 통과. `src/site/fleet/test/` 전체는 아래 커밋 기록 참조.
+- gate 변화: 없음(LOCAL). 실행 중인 Fleet은 재시작해야 적용된다.
+
+## 2026-10-01 · uncommitted · fix(hub): D-382 F6 독립 리뷰 반영 — 밀려난 소켓 닫기, 세션 인자 키워드 전용
+
+- 변경: 코드 리뷰(APPROVE WITH FIXES) 1·2번. 다른 로봇 것을 보내거나 새 소켓에 밀려나 `PAIRING_INVALID`를 받은 소켓은 4401로 닫아 Agent가 백오프 재접속하게 한다(남은 좀비 연결 방지). `SiteHub.handle`의 `session`을 키워드 전용으로 바꾸고 네트워크 코드는 반드시 넘긴다고 적었다. 3번(빈 토큰)은 `set_pairing_token`이 이미 거절해 해당 없음, 4번(Agent 재시작 뒤 seq)은 F7 부팅 세대로 다음 이미지 회차(L2).
+- 증거: `src/site/fleet/test/` 956 passed, 6 skipped; `test_fleet_agent.py`·`test_fleet_agent_mdns.py` 15 passed (2026-10-01 Windows). `test_console_hub_integration.py`의 간헐 실패는 uvicorn 기동 4 s 대기 초과(Hub 코드 이전 단계)로, 같은 부하 교차 실행에서 main 1/8·이 브랜치 0/8 — 기존 부하 의존 flake.
+- gate 변화: 없음.

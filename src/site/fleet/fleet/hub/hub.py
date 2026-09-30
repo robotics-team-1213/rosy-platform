@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hmac
 import logging
 import sqlite3
 from typing import Optional, Sequence
@@ -40,6 +41,15 @@ class HubError(Exception):
         self.code = code
 
 
+class HubSession:
+    """One `/ws/robots` socket. HELLO binds it to exactly one robot (D-382 F6)."""
+
+    __slots__ = ("robot_id",)
+
+    def __init__(self) -> None:
+        self.robot_id: str | None = None
+
+
 def _error(code: str, message: str) -> Envelope:
     return Envelope(type=EnvelopeType.ERROR, payload={"code": code, "message": message})
 
@@ -60,6 +70,8 @@ class SiteHub:
                         if e.fleet_pairing_token is not None}
         self._clients = clients if clients is not None else {}
         self._paired: set[str] = set()
+        # robot_id -> the socket session that last completed HELLO for it.
+        self._sessions: dict[str, HubSession] = {}
         self.registry = RobotRegistry()
         self._fleet_name = fleet_name
         self.event_store = event_store
@@ -84,22 +96,40 @@ class SiteHub:
         self._clients.pop(robot_id, None)
         self._tokens.pop(robot_id, None)
         self._paired.discard(robot_id)
+        self._sessions.pop(robot_id, None)
         self.registry.record(robot_id).online = False
 
-    def handle(self, envelope: Envelope) -> Envelope:
+    def open_session(self) -> HubSession:
+        return HubSession()
+
+    def close_session(self, session: HubSession) -> None:
+        """Socket closed: unpair its robot unless a newer socket already took over."""
+        robot_id = session.robot_id
+        if robot_id is None or self._sessions.get(robot_id) is not session:
+            return
+        del self._sessions[robot_id]
+        self._paired.discard(robot_id)
+        self.registry.record(robot_id).online = False
+
+    def handle(self, envelope: Envelope, *, session: HubSession | None = None) -> Envelope:
+        """Route one envelope.
+
+        Network code must pass the socket's session. Without one, HEARTBEAT/EVENT
+        fall back to the global paired set, which is only safe in-process (D-382 F6).
+        """
         if _protocol_major(envelope.protocol_version) != _protocol_major(PROTOCOL_VERSION):
             return _error("PROTOCOL_UNSUPPORTED", "protocol major is not supported")
         if envelope.type is EnvelopeType.HELLO:
-            return self._hello(envelope)
+            return self._hello(envelope, session)
         if envelope.type is EnvelopeType.COMMAND:
             return _error("ROLE_VIOLATION", "robots do not command the hub")
         keys = {str(k).lower() for k in envelope.payload}
         if keys & _FORBIDDEN_PAYLOAD_KEYS:
             return _error("ROLE_VIOLATION", "hub does not accept cmd_vel, image, or twist")
         if envelope.type is EnvelopeType.HEARTBEAT:
-            return self._heartbeat(envelope)
+            return self._heartbeat(envelope, session)
         if envelope.type is EnvelopeType.EVENT:
-            return self._event(envelope)
+            return self._event(envelope, session)
         return _error("SESSION_NOT_PAIRED", "hello first")
 
     def assert_scatterable(self, params: SwarmFollowParams) -> None:
@@ -112,15 +142,23 @@ class SiteHub:
             raise HubError("UNKNOWN_ROBOT", robot_id)
         return await client.estop()
 
-    def _hello(self, envelope: Envelope) -> Envelope:
+    def _bound(self, robot_id: str, session: HubSession | None) -> bool:
+        if session is None:
+            return robot_id in self._paired
+        return session.robot_id == robot_id and self._sessions.get(robot_id) is session
+
+    def _hello(self, envelope: Envelope, session: HubSession | None) -> Envelope:
         try:
             hello = HelloPayload.model_validate(envelope.payload)
         except Exception:
             return _error("PAIRING_INVALID", "bad hello")
         if _protocol_major(hello.protocol_version) != _protocol_major(PROTOCOL_VERSION):
             return _error("PROTOCOL_UNSUPPORTED", "hello protocol major is not supported")
+        if session is not None and session.robot_id not in (None, hello.robot_id):
+            return _error("PAIRING_INVALID", "session is bound to another robot")
         expected = self._tokens.get(hello.robot_id)
-        if expected is None or expected != hello.pairing_token:
+        if expected is None or not hmac.compare_digest(
+                expected.encode(), hello.pairing_token.encode()):
             return _error("PAIRING_INVALID", "unknown robot or token")
             
         # Check UUID duplicates
@@ -144,6 +182,9 @@ class SiteHub:
         
         row.online = True
         self._paired.add(hello.robot_id)
+        if session is not None:
+            session.robot_id = hello.robot_id
+            self._sessions[hello.robot_id] = session
         welcome = WelcomePayload(
             robot_id=hello.robot_id,
             fleet_name=self._fleet_name,
@@ -151,28 +192,32 @@ class SiteHub:
         )
         return Envelope(type=EnvelopeType.WELCOME, payload=welcome.model_dump())
 
-    def _heartbeat(self, envelope: Envelope) -> Envelope:
+    def _heartbeat(self, envelope: Envelope, session: HubSession | None) -> Envelope:
         try:
             payload = HeartbeatPayload.model_validate(envelope.payload)
         except Exception:
             return _error("SESSION_NOT_PAIRED", "hello first")
         robot_id = payload.state_snapshot.robot_id
-        if robot_id not in self._paired:
+        if session is not None and session.robot_id is None:
             return _error("SESSION_NOT_PAIRED", "hello first")
+        if not self._bound(robot_id, session):
+            if session is None:
+                return _error("SESSION_NOT_PAIRED", "hello first")
+            return _error("PAIRING_INVALID", "robot mismatch")
         if not self._recover_event_projections():
             return _error("TASK_PROJECTION_UNAVAILABLE", "durable event projection is pending")
         row = self.registry.record(robot_id)
         row.snapshot = payload.state_snapshot
         return Envelope(type=EnvelopeType.HEARTBEAT, payload={})
 
-    def _event(self, envelope: Envelope) -> Envelope:
+    def _event(self, envelope: Envelope, session: HubSession | None) -> Envelope:
         try:
             event = EventMessage.model_validate(envelope.payload)
         except Exception:
             return _error("SESSION_NOT_PAIRED", "hello first")
-        if not self._paired:
+        if not self._paired or (session is not None and session.robot_id is None):
             return _error("SESSION_NOT_PAIRED", "hello first")
-        if event.robot_id not in self._paired:
+        if not self._bound(event.robot_id, session):
             return _error("PAIRING_INVALID", "robot mismatch")
         is_new = True
         if self.event_store is not None:

@@ -99,7 +99,9 @@ const startVisionPreview = () => visionPreview.start();
 function renderRobotState(state) {
   session.robotState = state;
   elements["hitl-escalation"].hidden = state.hitl_requested !== true;
-  setText("robot-id", state.robot_id || "—");
+  // robot-id는 계보줄이다 — 식별 렌더(renderRobotInfo, 느린 주기)가 유일한
+  // 작성자다. 여기 10Hz 가 매 틱 덮어쓰면 "모델/버전/모드"가 state.robot_id
+  // 하나로 지워진다(D-383 계보가 깜빡이다 사라지던 원인).
   setText("robot-mode", state.mode);
   renderFormationHero(state.swarm);
   setText("state-sequence", `SEQ ${state.seq ?? "—"}`);
