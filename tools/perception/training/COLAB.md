@@ -1,5 +1,17 @@
 # Colab에서 학습하고 로봇 쪽으로 넘기기 (D-356)
 
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/livsbittt/rosy-os/blob/main/tools/perception/training/rosy_lane_training.ipynb)
+
+**바로 실행하는 노트북(D-373):** 위 배지로 [`rosy_lane_training.ipynb`](rosy_lane_training.ipynb)를 연다. 입력 칸만 채우면 기준 모델(LaneUNet)로 학습, export, 검사, HF 업로드까지 끝난다. 5b 셀에서 자기 모델로 바꿔 끼울 수 있다. 아래 절차는 자기 노트북을 쓰는 사람을 위한 것이다.
+
+## 여러 사람이 학습할 때
+
+- 데이터셋·모델 저장소는 **팀 HF 조직** 소유다. 개인 계정 저장소에 올리면 사이트 PC가 보지 않는다.
+- 학습자마다 **자기 HF 토큰**을 쓴다. 모델 저장소에 쓰기 권한이 있어야 한다. 토큰은 Colab Secret `HF_TOKEN`에만 두고 노트북에 적지 않는다.
+- manifest의 `trainer`에는 로그인한 HF 사용자 이름과 노트북 commit(`colab:rosy_lane_training.ipynb@<commit>`)이 자동으로 들어간다. HF commit 메시지에도 `<revision> by <사용자>`가 남는다.
+- 같은 모델 저장소에 여러 사람이 올리면, **intake를 통과한 가장 새 commit**이 로봇의 섀도가 된다(마지막에 올린 사람). 주행 활성화는 자동이 아니다.
+- 데이터셋 SHA는 고정해서 쓴다. 비교할 모델끼리는 같은 SHA로 학습해야 IoU를 비교할 수 있다.
+
 이 문서는 노트북(Colab 또는 GPU PC)에서 차선 분할 모델을 학습하는 사람을 위한 절차서다.
 셀을 위에서부터 차례로 복사해 실행하면 된다. 약속의 전체 정의는 같은 폴더의
 [README.md](README.md)에 있다.

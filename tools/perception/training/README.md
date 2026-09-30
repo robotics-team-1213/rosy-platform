@@ -3,6 +3,7 @@
 학습은 Colab이든 GPU PC든 어디서 돌려도 된다. 로봇 쪽과의 약속은 **입력과 출력**뿐이다.
 이 폴더의 `export_cell.py`와 `check_manifest.py`가 그 약속의 실물이다.
 Colab에서 셀 단위로 따라 하는 절차는 [COLAB.md](COLAB.md)에 있다.
+바로 실행하는 Colab 노트북(기준 모델 학습부터 업로드까지)은 [rosy_lane_training.ipynb](rosy_lane_training.ipynb)다(D-373).
 
 ## 입력
 
