@@ -102,12 +102,12 @@ surfaces:
     role: 한 로봇 직접 수동 운전·운전석 영상·누르는 동안만 가는 운전 보조 (D-370 1항, D-323·D-344)
     owns: [manual-drive, driver-video, drive-assist, estop]
     grammar: focal
-    contracts: []
+    contracts: [shared_controls, typography_focus]
     contract_reason: >
-      주행 화면은 게임형 HUD(원형 스틱·홀드 페달·큰 터치 표적)라 공용 버튼 크기·글꼴 굵기를
-      표면 CSS 에서 다시 칠한다 — 공용 컨트롤·타이포 계약 시험이 이 재도색을 막는다. 확인 대화상자는
-      없다(비상 정지·진행은 누르는 즉시, D-344). main 병합(2026-09-30) 때 등록만 하고 계약 적용은
-      별도 회차로 둔다 — 그 회차가 contracts 를 채우면 이 문장을 지운다.
+      dialog 계약만 받지 않는다 — 확인 대화상자가 없다(비상 정지·진행은 누르는 즉시, D-344).
+      게임형 HUD 의 큰 표적은 공용 종류(누르는 동안 채워지는 toggle·고르는 segment)와 size 속성,
+      표면 CSS 의 배치 규칙(min-height·폭)으로만 만들고, 영상 위 대비는 버튼이 아니라 조작부 판이
+      바탕을 가진다(D-363 부록 참조).
     baseline_reason: >
       G2 기준선 셀이 아직 없다. 주행 화면 캡처는 실물·가제보 증거라 공개 저장소 밖(D-226)에 있고,
       저장소용 합성 캡처를 남기는 회차에 이 문장을 baseline 경로로 바꾼다.

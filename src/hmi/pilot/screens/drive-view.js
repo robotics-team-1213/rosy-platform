@@ -126,10 +126,9 @@ export function buildStage() {
   const frame = el("img", null, {alt: "전방 카메라", "data-drive-frame": "", hidden: ""});
   const empty = el("ui-empty", "카메라 프레임 수신 대기", {"data-drive-empty": ""});
   const blocked = el("div", null, {"data-drive-blocked": "", role: "alert", hidden: ""});
-  blocked.append(
-    el("ui-text", "", {scale: "value", "data-drive-blocked-reason": ""}),
-    el("ui-button", "수동 모드 다시 잡기", {kind: "primary", type: "button", "data-drive-retake": ""}),
-  );
+  const retake = el("ui-button", "수동 모드 다시 잡기", {type: "button", "data-drive-retake": ""});
+  retake.setAttribute("kind", "primary");
+  blocked.append(el("ui-text", "", {scale: "value", "data-drive-blocked-reason": ""}), retake);
   // 영상 틀: 확대(D-363 §5) 때 넘치는 부분을 이 틀 안에서만 자른다.
   const view = el("div", null, {"data-drive-view": ""});
   // 자동 의도 띠: 가운데 눈금, 겨누는 점, 실제 조향 방향(D-364 §6)
@@ -148,7 +147,7 @@ function buildHud() {
   const gauge = el("div", null, {"data-drive-gauge": ""});
   gauge.append(
     el("span", "0.00", {"data-drive-fact": "speed"}),
-    el("span", "m/s", {class: "speed-unit"}),
+    el("ui-text", "m/s", {scale: "unit"}),
     el("span", "· 0°/s", {"data-drive-fact": "turn"}),
   );
   const motion = el("span", "대기", {"data-drive-motion": "", "data-kind": "idle"});
@@ -165,39 +164,51 @@ function buildHud() {
   return hud;
 }
 
+// 조작 버튼의 종류(D-345 공용 컨트롤): 속도·정밀은 한 판 안의 segment(aria-pressed), 차선 자동은
+// 켜고 끄는 toggle(data-active), 누르는 동안만 움직이는 페달·제자리·진행은 toggle(누르는 동안
+// .active 로 채워진다) + size primary.
+// 게임형 큰 표적은 styles.css 의 배치 규칙(min-height·폭)이 정한다 — 면·글자·테두리는 components.css.
 export function buildControls(profile) {
   const controls = el("div", null, {"data-drive-controls": ""});
   // 좌: 속도·정밀 / 페달 / 제자리 회전   우: 2축 주행 스틱
   const left = el("div", null, {"data-drive-left": ""});
   const tune = el("div", null, {"data-drive-presets": ""});
+  const fine = el("ui-button", "정밀", {type: "button", "data-drive-fine": "", "aria-pressed": "false"});
+  fine.setAttribute("kind", "segment");
   tune.append(
     el("ui-text", "속도", {scale: "label"}),
     el("ui-actions", null, {"data-drive-preset-row": ""}),
-    el("ui-button", "정밀", {kind: "segment", type: "button", "data-drive-fine": "", "aria-pressed": "false"}),
+    fine,
   );
   const pedals = el("div", null, {"data-drive-pedals": ""});
-  pedals.append(
-    el("ui-button", "전진 ▲", {kind: "segment", type: "button", "data-drive-pedal": "forward"}),
-    el("ui-button", "후진 ▼", {kind: "segment", type: "button", "data-drive-pedal": "reverse"}),
-  );
+  const forward = el("ui-button", "전진 ▲", {type: "button", size: "primary", "data-drive-pedal": "forward"});
+  forward.setAttribute("kind", "toggle");
+  const reverse = el("ui-button", "후진 ▼", {type: "button", size: "primary", "data-drive-pedal": "reverse"});
+  reverse.setAttribute("kind", "toggle");
+  pedals.append(forward, reverse);
   left.append(tune);
   if (profile.autonomy?.includes("line")) {
-    left.append(el("ui-button", "차선 자동", {kind: "segment", type: "button", "data-drive-auto": "",
-                                             "aria-pressed": "false"}));
+    const autoToggle = el("ui-button", "차선 자동", {type: "button", "data-drive-auto": "", "aria-pressed": "false",
+                                                    "data-active": "false"});
+    autoToggle.setAttribute("kind", "toggle");
+    left.append(autoToggle);
   }
   left.append(pedals);
   if (profile.autonomy?.includes("line")) {
-    left.append(el("ui-button", "진행 ▶ 누르는 동안", {kind: "segment", type: "button", "data-drive-go": "",
-                                                    "aria-label": "차선 따라 진행(누르는 동안만)"}));
+    const go = el("ui-button", "진행 ▶ 누르는 동안", {type: "button", size: "primary", "data-drive-go": "",
+                                                     "aria-label": "차선 따라 진행(누르는 동안만)"});
+    go.setAttribute("kind", "toggle");
+    left.append(go);
   }
   if (profile.pivot !== false) {
     const pivots = el("div", null, {"data-drive-pivots": ""});
-    pivots.append(
-      el("ui-button", "↺ 제자리", {kind: "segment", type: "button", "data-drive-pivot": "left",
-                                    "aria-label": "제자리 좌회전(누르는 동안)"}),
-      el("ui-button", "제자리 ↻", {kind: "segment", type: "button", "data-drive-pivot": "right",
-                                    "aria-label": "제자리 우회전(누르는 동안)"}),
-    );
+    const pivotLeft = el("ui-button", "↺ 제자리", {type: "button", size: "primary", "data-drive-pivot": "left",
+                                                  "aria-label": "제자리 좌회전(누르는 동안)"});
+    pivotLeft.setAttribute("kind", "toggle");
+    const pivotRight = el("ui-button", "제자리 ↻", {type: "button", size: "primary", "data-drive-pivot": "right",
+                                                   "aria-label": "제자리 우회전(누르는 동안)"});
+    pivotRight.setAttribute("kind", "toggle");
+    pivots.append(pivotLeft, pivotRight);
     left.append(pivots);
   }
 

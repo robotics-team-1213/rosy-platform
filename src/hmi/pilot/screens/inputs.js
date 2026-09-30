@@ -20,7 +20,8 @@ export function mountInputs(root, {onClose, onChange} = {}) {
     presetCell.append(el("ui-text", "속도 프리셋", {scale: "label"}));
     const presets = el("ui-actions");
     for (const [name, label] of [["low", "저"], ["mid", "중"], ["high", "고"]]) {
-      const button = el("ui-button", label, {kind: config.preset === name ? "primary" : "quiet", type: "button"});
+      const button = el("ui-button", label, {type: "button", "aria-pressed": String(config.preset === name)});
+      button.setAttribute("kind", "segment");
       button.addEventListener("click", () => {
         config = saveInputConfig({preset: name});
         onChange?.();
@@ -44,7 +45,8 @@ export function mountInputs(root, {onClose, onChange} = {}) {
     curveCell.append(el("ui-text", "감도 곡선", {scale: "label"}));
     const curves = el("ui-actions");
     for (const [name, label] of [["linear", "직선"], ["expo", "중앙 섬세"]]) {
-      const button = el("ui-button", label, {kind: config.curve === name ? "primary" : "quiet", type: "button"});
+      const button = el("ui-button", label, {type: "button", "aria-pressed": String(config.curve === name)});
+      button.setAttribute("kind", "segment");
       button.addEventListener("click", () => {
         config = saveInputConfig({curve: name});
         render();
@@ -54,7 +56,8 @@ export function mountInputs(root, {onClose, onChange} = {}) {
     curveCell.append(curves);
 
     const invertButton = el("ui-button", config.invertAngular ? "반전 켜짐" : "반전 꺼짐",
-      {kind: config.invertAngular ? "primary" : "quiet", type: "button"});
+      {type: "button", "aria-pressed": String(Boolean(config.invertAngular))});
+    invertButton.setAttribute("kind", "segment");
     invertButton.addEventListener("click", () => {
       config = saveInputConfig({invertAngular: !config.invertAngular});
       render();
@@ -67,7 +70,9 @@ export function mountInputs(root, {onClose, onChange} = {}) {
     const previewLabel = el("ui-text", "미리보기 — 게임패드 축", {scale: "label"});
     const preview = el("ui-text", "—", {scale: "value", "data-input-preview": ""});
 
-    const close = el("ui-button", "닫기", {kind: "quiet", type: "button"});
+    const close = el("ui-button", "닫기", {type: "button"});
+
+    close.setAttribute("kind", "quiet");
     const closePanel = () => {
       clearInterval(previewTimer);
       onClose?.();

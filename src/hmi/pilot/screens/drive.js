@@ -328,19 +328,23 @@ export function mountDrive(root, {onExit} = {}) {
 
   // --- HUD 액션 --------------------------------------------------------------
   const actions = el("ui-actions");
-  const shotButton = el("ui-button", "촬영", {kind: "quiet", type: "button", "data-evidence-shot": ""});
+  const shotButton = el("ui-button", "촬영", {type: "button", "data-evidence-shot": ""});
+  shotButton.setAttribute("kind", "quiet");
   shotButton.addEventListener("click", () => capture.screenshot("pc"));
-  const recordButton = el("ui-button", "녹화", {kind: "quiet", type: "button", "data-evidence-record": ""});
+  const recordButton = el("ui-button", "녹화", {type: "button", "data-evidence-record": ""});
+  recordButton.setAttribute("kind", "quiet");
   recordButton.addEventListener("click", () => {
     if (capture.state().recording) capture.stop();
     else capture.start();
   });
   element.shotButton = shotButton;
   element.recordButton = recordButton;
-  const zoomButton = el("ui-button", "확대 맞춤", {kind: "quiet", type: "button", "data-drive-zoom": ""});
+  const zoomButton = el("ui-button", "확대 맞춤", {type: "button", "data-drive-zoom": ""});
+  zoomButton.setAttribute("kind", "quiet");
   zoomButton.addEventListener("click", () => view.cycleZoom());
   element.zoomButton = zoomButton;
-  const inputsButton = el("ui-button", "입력", {kind: "quiet", type: "button", "data-drive-inputs": ""});
+  const inputsButton = el("ui-button", "입력", {type: "button", "data-drive-inputs": ""});
+  inputsButton.setAttribute("kind", "quiet");
   let inputsPanel = null;
   let closeInputs = null;
   inputsButton.addEventListener("click", () => {
@@ -357,7 +361,8 @@ export function mountDrive(root, {onExit} = {}) {
       renderInputs();
     }, onChange: renderInputs});
   });
-  const exit = el("ui-button", "나가기", {kind: "quiet", type: "button", "data-drive-exit": ""});
+  const exit = el("ui-button", "나가기", {type: "button", "data-drive-exit": ""});
+  exit.setAttribute("kind", "quiet");
   exit.addEventListener("click", () => teardown());
   actions.append(zoomButton, shotButton, recordButton, inputsButton, exit);
   element.hud.append(actions);
@@ -369,7 +374,8 @@ export function mountDrive(root, {onExit} = {}) {
     const row = root.querySelector("[data-drive-preset-row]");
     row.replaceChildren();
     for (const name of ["low", "mid", "high"]) {
-      const button = el("ui-button", PRESET_LABEL[name], {kind: "segment", type: "button", "data-preset": name});
+      const button = el("ui-button", PRESET_LABEL[name], {type: "button", "data-preset": name});
+      button.setAttribute("kind", "segment");
       button.setAttribute("aria-pressed", String(config.preset === name));
       button.addEventListener("click", () => {
         saveInputConfig({preset: name});
