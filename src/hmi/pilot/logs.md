@@ -157,3 +157,10 @@
 - 변경: main 병합(2026-09-30)과 함께 pilot 을 D-329 표면 레지스트리에 등록(`rosy-pilot`, 역할·소유 `manual-drive`·`driver-video`·`drive-assist`·`estop`, 아이콘 `web_common/icons/pilot.svg`). D-370 이름표대로 제목 `Rosy 로봇 — 조종`, PWA `short_name` `Rosy Pilot`, 상단 버튼 "관제 화면" → "로봇 대시보드". CORE 이미지가 pilot 을 빌드한다. 공용 컨트롤·타이포 계약은 주행 HUD 재도색 때문에 아직 받지 않는다(surfaces.yaml 사유). PWA 아이콘 PNG 교체는 D-370 이행 회차.
 - 증거: `test/architecture/test_app_roles.py`(pilot 이 `/api/fleet` 을 부르지 않음), `src/hmi/web_common/test` 114 passed, `test/test_core_image_closure.py`.
 - gate 변화: 없음(등록·이름만).
+
+## 2026-09-30 · uncommitted · feat(pilot): 차선 자동 계단 거절 이유를 한국어로
+
+- 변경: `screens/drive.js LF_REASON` 에 `limit_level_too_low`("수동 한도 L1 이상에서만 차선 자동")와 `angular_limit_zero`("조향 한도 없음 — 정지") 추가. 캐시 키 `sw.js` 를 `rosy-pilot-shell-2026-09-30-3` 으로 올렸다.
+- 증거: `node --check`, `pytest src/hmi/pilot/test` 35 passed, 13 skipped (2026-09-30 Windows, 브라우저 시험은 opt-in 이라 skip).
+- gate 변화: SOURCE. 태블릿 실화면 확인 전.
+- 결정: D-344 §13(사용자 결정: 차선 자동은 L1 이상).
