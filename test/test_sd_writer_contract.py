@@ -2202,3 +2202,235 @@ def test_a_wrong_answer_still_reaches_the_exact_match_check():
     # The slow-media prompt reads the same console, so it drops type-ahead too.
     slow = text[text.index("if (-not $AcceptSlowMedia)"):text.index('Set-Stage "confirm"')]
     assert slow.index("Clear-TypeAhead") < slow.index("(Read-Host")
+
+
+# D-382 (2026-10-01): the full readback ran at 1-3 MB/s on a CPU-starved PC
+# (1.5 h ETA) while the robot was needed at once. -Emergency skips only that
+# readback, with a stated reason, and says so everywhere.
+EMERGENCY = ("-EmergencyReason", "robot needed on the floor now; readback CPU-starved")
+EMERGENCY_STAGES = [
+    ("verify-signature", "untouched"), ("select-disk", "untouched"), ("preflight", "untouched"),
+    ("confirm", "untouched"), ("write", "writing"), ("readback", "written-unverified"),
+    ("bundle", "unverified-no-bundle"), ("bundle-writing", "bundle-partial"), ("receipt", "complete"),
+    ("done", "complete-unverified"),
+]
+
+
+def _emergency_card(case):
+    # A card that holds the image's partition table but differs later: the full
+    # readback fails it, the emergency sanity check (MBR signature) passes it.
+    raw = _mbr_raw(0x1A2B3C4D)
+    _rerelease(case, raw)
+    case["readback"].write_bytes(_flip_one_byte(raw))
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+def test_an_emergency_write_skips_only_the_full_readback_and_says_so(writer_case, tmp_path):
+    _emergency_card(writer_case)
+
+    completed, boot = _write(writer_case, tmp_path, *EMERGENCY, switches=("-Emergency",))
+
+    assert completed.returncode == 0, completed.stderr
+    assert writer_case["marker"].exists()
+    warnings = " ".join(completed.stdout.split())  # Write-Warning reaches stdout under -File
+    assert "EMERGENCY CARD WRITE" in warnings and "this card was NOT read back" in warnings
+    lines = _progress(writer_case)
+    assert _stages(lines) == EMERGENCY_STAGES
+    assert _stage_line(lines, "readback")["detail"] == "EMERGENCY: full readback skipped"
+    assert not [line for line in lines if line["stage"] == "readback" and "bytes" in line]
+    receipt = json.loads(writer_case["receipt"].read_text(encoding="utf-8-sig"))
+    assert receipt["media_readback"]["verified"] is False
+    assert receipt["media_readback"]["skipped"] == "emergency"
+    assert receipt["media_readback"]["bytes_verified"] == 0
+    assert receipt["media_readback"]["sanity"]["mbr_signature_match"] is True
+    emergency = receipt["emergency"]
+    assert emergency["reason"] == EMERGENCY[1]
+    assert emergency["at"] == receipt["created_at"] and emergency["readback"] == "skipped"
+    assert "stay reserved" in emergency["registry"] and "verify-emergency-card.ps1" in emergency["follow_up"]
+    registry = json.loads(writer_case["registry"].read_text(encoding="utf-8-sig"))
+    assert registry["robot_numbers"] == [1]  # the number is still reserved
+    assert (boot / "rosy-provision" / "provision.json").exists()
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+def test_the_standard_write_still_reads_back_the_same_card(writer_case, tmp_path):
+    _emergency_card(writer_case)
+
+    completed, boot = _write(writer_case, tmp_path)
+
+    assert completed.returncode != 0
+    assert "full media readback verification failed" in _err(completed)
+    assert "emergency" not in completed.stdout.lower()
+    _nothing_recorded(writer_case, boot)
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+def test_an_emergency_write_still_checks_the_cards_partition_table(writer_case, tmp_path):
+    _rerelease(writer_case, _mbr_raw(0x1A2B3C4D))
+    writer_case["readback"].write_bytes(bytes(MIB))  # the write never reached sector 0
+
+    completed, boot = _write(writer_case, tmp_path, *EMERGENCY, switches=("-Emergency",))
+
+    assert completed.returncode != 0
+    assert "emergency sanity check failed" in _err(completed)
+    _nothing_recorded(writer_case, boot)
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+@pytest.mark.parametrize("case_name", ["wrong-confirmation", "bad-signature", "existing-receipt"])
+def test_an_emergency_write_keeps_every_pre_write_check(writer_case, tmp_path, case_name):
+    _emergency_card(writer_case)
+    extra = ()
+    if case_name == "wrong-confirmation":
+        extra = ("-Confirmation", "ERASE SERIAL FIXTURE-SD-0007 rosy-pinky-zzzz")
+        message = "confirmation did not match"
+    elif case_name == "bad-signature":
+        writer_case["signature"].write_text("tampered\n", encoding="utf-8")
+        message = "signature"
+    else:
+        writer_case["receipt"].write_text("existing evidence\n", encoding="utf-8")
+        message = "receipt already exists"
+
+    completed, _boot = _write(writer_case, tmp_path, *extra, *EMERGENCY, switches=("-Emergency",))
+
+    assert completed.returncode != 0
+    assert message in _err(completed)
+    assert not writer_case["marker"].exists()
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+@pytest.mark.parametrize("extra,switches,message", [
+    ((), ("-Emergency",), "-Emergency needs -EmergencyReason"),
+    (("-EmergencyReason", "  hurry   "), ("-Emergency",), "-Emergency needs -EmergencyReason"),
+    (("-EmergencyReason", 'robot "needed" now please'), ("-Emergency",), "printable ASCII without double quotes"),
+    (EMERGENCY, (), "-EmergencyReason is only valid with -Emergency"),
+], ids=["missing", "too-short", "quotes", "reason-without-switch"])
+def test_an_emergency_write_needs_a_stated_reason(writer_case, tmp_path, extra, switches, message):
+    _emergency_card(writer_case)
+
+    completed, boot = _write(writer_case, tmp_path, *extra, switches=switches)
+
+    assert completed.returncode != 0
+    assert message in _err(completed)
+    assert not writer_case["marker"].exists()
+    _nothing_recorded(writer_case, boot)
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+def test_a_plan_is_never_an_emergency(writer_case):
+    completed = _run(writer_case, *EMERGENCY, switches=("-Emergency",))
+
+    assert completed.returncode != 0
+    assert "-Emergency is for a write, not a plan" in _err(completed)
+
+
+def _emergency_prior(tmp_path):
+    return _prior_receipt(tmp_path, media_readback={"verified": False, "skipped": "emergency", "bytes_verified": 0},
+                          emergency={"reason": EMERGENCY[1], "at": "2026-10-01T00:43:18+00:00"})
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+def test_a_standard_write_supersedes_an_emergency_receipt(writer_case, tmp_path):
+    _registered(writer_case)
+    prior = _emergency_prior(tmp_path)
+    boot = tmp_path / "boot"
+    boot.mkdir()
+
+    completed = _run(writer_case, "-ReprovisionReceipt", prior, *WRITE_CONFIRMATION, "-BootMountPath", boot,
+                     plan_only=False)
+
+    assert completed.returncode == 0, completed.stderr
+    receipt = json.loads(writer_case["receipt"].read_text(encoding="utf-8-sig"))
+    assert receipt["supersedes"]["emergency"] is True
+    assert receipt["media_readback"]["verified"] is True
+    assert "emergency" not in receipt
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+def test_an_emergency_receipt_cannot_seed_another_emergency_write(writer_case, tmp_path):
+    _registered(writer_case)
+    _emergency_card(writer_case)
+    prior = _emergency_prior(tmp_path)
+
+    completed, _boot = _write(writer_case, tmp_path, "-ReprovisionReceipt", prior, *EMERGENCY,
+                              switches=("-Emergency",))
+
+    assert completed.returncode != 0
+    assert "another emergency write would chain two unverified cards" in _err(completed)
+    assert not writer_case["marker"].exists()
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+def test_an_unverified_receipt_without_an_emergency_record_is_still_refused(writer_case, tmp_path):
+    _registered(writer_case)
+    prior = _prior_receipt(tmp_path, media_readback={"verified": False})
+
+    completed = _run(writer_case, "-ReprovisionReceipt", prior)
+
+    assert completed.returncode != 0
+    assert "does not prove a verified earlier write" in _err(completed)
+
+
+FOLLOW_UP = ROOT / "deploy" / "robot" / "pinky_pro" / "sd" / "verify-emergency-card.ps1"
+
+
+def _follow_up(case, receipt, *extra):
+    return subprocess.run([
+        POWERSHELL, "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(FOLLOW_UP),
+        "-Receipt", str(receipt), "-ReleaseDir", str(case["image"].parent),
+        "-DiskInventoryJson", str(case["inventory"]), "-ReadbackDevice", str(case["readback"]), *map(str, extra),
+    ], capture_output=True, text=True, env=case["env"])
+
+
+def _receipt_for_follow_up(case, tmp_path):
+    # The writer names the image by release id; the follow-up finds it the same way.
+    image = case["image"].parent / "rosy-os-pinky-pro-2026.09.21-001-arm64.img.xz"
+    assert image == case["image"]
+    completed, _boot = _write(case, tmp_path, *EMERGENCY, switches=("-Emergency",))
+    assert completed.returncode == 0, completed.stderr
+    return case["receipt"]
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+def test_the_follow_up_readback_verifies_an_emergency_card_in_a_supplementary_receipt(writer_case, tmp_path):
+    _rerelease(writer_case, _mbr_raw(0x1A2B3C4D))
+    receipt = _receipt_for_follow_up(writer_case, tmp_path)
+    original = receipt.read_bytes()
+
+    completed = _follow_up(writer_case, receipt)
+
+    assert completed.returncode == 0, completed.stderr
+    assert "VERIFIED" in completed.stdout
+    supplement = json.loads(receipt.with_suffix(".readback.json").read_text(encoding="utf-8-sig"))
+    assert supplement["media_readback"]["verified"] is True
+    assert supplement["receipt_sha256"] == hashlib.sha256(original).hexdigest()
+    assert supplement["device_name"] == "rosy-pinky-k7m4"
+    assert receipt.read_bytes() == original  # the original receipt is never changed
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+def test_the_follow_up_readback_fails_a_bad_card_and_records_nothing(writer_case, tmp_path):
+    _emergency_card(writer_case)
+    receipt = _receipt_for_follow_up(writer_case, tmp_path)
+
+    completed = _follow_up(writer_case, receipt)
+
+    assert completed.returncode != 0
+    assert "did NOT verify" in _err(completed) and "standard write" in _err(completed)
+    assert not receipt.with_suffix(".readback.json").exists()
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+def test_the_follow_up_readback_is_only_for_emergency_receipts_and_fixtures_stay_fixtures(writer_case, tmp_path):
+    completed, _boot = _write(writer_case, tmp_path)
+    assert completed.returncode == 0, completed.stderr
+
+    refused = _follow_up(writer_case, writer_case["receipt"])
+    assert refused.returncode != 0 and "not from an emergency write" in _err(refused)
+
+    real = subprocess.run([
+        POWERSHELL, "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(FOLLOW_UP),
+        "-Receipt", str(writer_case["receipt"]), "-ReleaseDir", str(writer_case["image"].parent),
+        "-ReadbackDevice", str(writer_case["readback"]),
+    ], capture_output=True, text=True, env=writer_case["env"])
+    assert real.returncode != 0 and "refused for a real disk" in _err(real)

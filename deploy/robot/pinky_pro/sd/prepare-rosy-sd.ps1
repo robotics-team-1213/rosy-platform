@@ -41,6 +41,8 @@ param(
     [double]$AssumedWriteMBps = 0,
     [switch]$AcceptSlowMedia,
     [switch]$NonInteractive,
+    [switch]$Emergency,
+    [string]$EmergencyReason,
     [int64]$ProbeBytes = 134217728,
     [double]$ProbeSeconds = 120
 )
@@ -104,6 +106,7 @@ function Get-NextStep {
         "writing" { return "the card is partially written: $fullWriteNext" }
         "written-unverified" { return $resumeNext }
         "verified-no-bundle" { return $resumeNext }
+        "unverified-no-bundle" { return $resumeNext }
         # D-188 (D-187 review): a bundle half-copied to the card makes the readback
         # see an extra file, so resume cannot finish it.
         "bundle-partial" { return "a partial provisioning bundle may be on the card and cannot be resumed: $fullWriteNext" }
@@ -505,6 +508,7 @@ $robotNumberSource = $(if ($PSBoundParameters.ContainsKey("RobotNumber")) { "ope
 # D-174 F7: rewriting a card for an already registered robot is allowed only with
 # the receipt of a verified earlier write of exactly that identity.
 $reprovision = $null
+$emergencyReceipt = $false
 if ($ReprovisionReceipt) {
     if (-not (Test-Path -LiteralPath $ReprovisionReceipt -PathType Leaf)) { Fail "reprovision receipt is missing" }
     try {
@@ -524,7 +528,16 @@ if ($ReprovisionReceipt) {
     $resumed = $receiptKeys -ccontains "resumed_after_write" -and $reprovision.resumed_after_write -is [bool] -and $reprovision.resumed_after_write
     $writerProven = ($exitCode -is [int] -or $exitCode -is [long]) -and $exitCode -eq 0
     if ($resumed -and $null -eq $exitCode) { $writerProven = $true }
-    if (-not $writerProven -or -not ($verified -is [bool]) -or -not $verified) {
+    # D-382: an emergency receipt proves the identity was issued here, not that
+    # its card was read back. It may be superseded only by a standard write
+    # (that is how an emergency card is made whole); never by another emergency.
+    $emergencyReceipt = $receiptKeys -ccontains "emergency" -and $null -ne $reprovision.emergency -and
+        $reprovision.emergency.PSObject.Properties["reason"] -and -not [string]::IsNullOrWhiteSpace([string]$reprovision.emergency.reason) -and
+        $verified -is [bool] -and -not $verified
+    if ($emergencyReceipt -and $Emergency) {
+        Fail "the reprovision receipt is from an emergency write whose readback was skipped; another emergency write would chain two unverified cards" "rewrite this robot with a standard write (without -Emergency) using the same -ReprovisionReceipt"
+    }
+    if (-not $writerProven -or (-not $emergencyReceipt -and (-not ($verified -is [bool]) -or -not $verified))) {
         Fail "reprovision receipt does not prove a verified earlier write"
     }
     $fromReceipt = [ordered]@{ RobotNumber = "robot_number"; DeviceName = "device_name"; DeviceUid = "device_uid" }
@@ -633,6 +646,16 @@ if (-not $DiskInventoryJson -and -not $ResumeAfterWrite -and [IO.Path]::GetExten
     Fail "-RpiImager must be the Raspberry Pi Imager .exe; a wrapper would hide the real writer from the stall watchdog"
 }
 if ($ReadbackStallMinutes -le 0 -or $WriterStallMinutes -le 0) { Fail "stall limits must be positive" }
+# D-382: the emergency write skips only the full readback, and only with a
+# stated reason (printable ASCII: it goes into the log, receipt and command line).
+if ($Emergency -and $PlanOnly) { Fail "-Emergency is for a write, not a plan: review the plan as usual, then write with -Emergency" }
+if ($Emergency -and ([string]::IsNullOrWhiteSpace($EmergencyReason) -or $EmergencyReason.Trim().Length -lt 10)) {
+    Fail "-Emergency needs -EmergencyReason '<why the card cannot wait for the readback>' (at least 10 characters)"
+}
+if ($EmergencyReason -and -not $Emergency) { Fail "-EmergencyReason is only valid with -Emergency" }
+if ($EmergencyReason -and $EmergencyReason -cnotmatch '^[\x20-\x21\x23-\x7E]{1,200}$') {
+    Fail "-EmergencyReason must be printable ASCII without double quotes, at most 200 characters"
+}
 if ($WriterSoftStallMinutes -le 0) { Fail "stall limits must be positive" }
 # The soft limit only warns; it never kills. Clamp it at half the hard limit
 # so short test timeouts (and small operator values) keep working unchanged.
@@ -943,6 +966,9 @@ if ($null -ne $readMBps -and $readMBps -lt $MinReadMBps) {
     }
 }
 
+if ($Emergency) {
+    Write-Warning ("EMERGENCY CARD WRITE (D-382): the full media readback will be SKIPPED. The card is written and provisioned but NOT verified; the receipt says so. Reason: {0}. Follow up: verify-emergency-card.ps1 before the card boots, or rewrite it with a standard write later." -f $EmergencyReason)
+}
 Set-Stage "confirm" "untouched" ""
 $expectedConfirmation = "ERASE SERIAL $($firstDisk.SerialNumber) $DeviceName"
 if (-not $Confirmation) {
@@ -1184,145 +1210,171 @@ else {
     }
 }
 
-Set-Stage "readback" "written-unverified" "" ([ordered]@{ total = $imageRawSize })
-# D-188: the readback runs as a watched process. Its heartbeats land in the
-# progress file; if the verified byte count stops rising for
-# -ReadbackStallMinutes, the verifier is stopped and the failure is an I/O one
-# (release 005: the reader dropped out and the readback sat for an hour).
-# A slow card that keeps moving is never stopped. The verifier's own stall
-# timeout (twice this limit) is the backstop when this script is gone.
-$readbackStallSeconds = $ReadbackStallMinutes * 60
-$beatSeconds = [Math]::Min($HeartbeatSeconds, $readbackStallSeconds / 4)
-$readbackOptions = @("--progress-seconds", $beatSeconds.ToString($invariant),
-    "--stall-seconds", (2 * $readbackStallSeconds).ToString($invariant))
-if ($ProgressPath) { $readbackOptions += @("--progress", $ProgressPath) }
-# Windows auto-mounts the freshly written FAT32 partition and rewrites a few
-# spec-defined fields; removable media cannot be set offline. The verifier
-# tolerates exactly those fields and reports them (release 004, offset 1049576).
-# The verifier's reason goes to a file: a PowerShell 5.1 transcript does not
-# capture a native program's stderr, and 2>&1 under ErrorAction Stop would throw
-# (release 005 rewrite: the log said only "readback verification failed").
-$readbackStem = Join-Path ([IO.Path]::GetTempPath()) ("rosy-readback-" + [guid]::NewGuid().ToString("N"))
-$readbackErrorPath = "$readbackStem.json"
-$readbackOutputPath = "$readbackStem.out"
-$readbackStderrPath = "$readbackStem.err"
-$readbackOptions += @("--error-json", $readbackErrorPath)
-$verifierArguments = @(@($readbackVerifier, "--image", $ImagePath, "--device", $readbackTarget) + $readbackOptions |
-    ForEach-Object { ConvertTo-ProcessArgument ([string]$_) })
+# D-382: an emergency write skips only this full readback. A cheap sanity check
+# stays: the card's first sector must carry the image's MBR disk signature (a
+# write that never reached the partition table stops here). The evidence says
+# plainly that the media is unverified.
+if ($Emergency) {
+    Set-Stage "readback" "written-unverified" "EMERGENCY: full readback skipped" ([ordered]@{ total = $imageRawSize })
+    $emergencySector = Get-DeviceSector (Invoke-Probe 512 30)
+    $sanity = [ordered]@{
+        image_mbr_signature = $imageSignature
+        device_mbr_signature = $emergencySector.Signature
+        mbr_signature_match = [bool]($imageSignature -and $emergencySector.Read -and $emergencySector.Signature -ceq $imageSignature)
+    }
+    if (-not $sanity.mbr_signature_match) {
+        Fail ("emergency sanity check failed: the card's MBR disk signature is {0}, the image's is {1}" -f $(if ($emergencySector.Signature) { $emergencySector.Signature } else { "unreadable" }), $(if ($imageSignature) { $imageSignature } else { "none" })) $fullWriteNext
+    }
+    $mediaReadback = [pscustomobject][ordered]@{
+        verified = $false
+        skipped = "emergency"
+        bytes_verified = 0
+        sanity = [pscustomobject]$sanity
+    }
+    Write-Warning "EMERGENCY: the full media readback was skipped; this card is NOT verified."
+    Set-Stage "bundle" "unverified-no-bundle" ""
+}
+else {
+    Set-Stage "readback" "written-unverified" "" ([ordered]@{ total = $imageRawSize })
+    # D-188: the readback runs as a watched process. Its heartbeats land in the
+    # progress file; if the verified byte count stops rising for
+    # -ReadbackStallMinutes, the verifier is stopped and the failure is an I/O one
+    # (release 005: the reader dropped out and the readback sat for an hour).
+    # A slow card that keeps moving is never stopped. The verifier's own stall
+    # timeout (twice this limit) is the backstop when this script is gone.
+    $readbackStallSeconds = $ReadbackStallMinutes * 60
+    $beatSeconds = [Math]::Min($HeartbeatSeconds, $readbackStallSeconds / 4)
+    $readbackOptions = @("--progress-seconds", $beatSeconds.ToString($invariant),
+        "--stall-seconds", (2 * $readbackStallSeconds).ToString($invariant))
+    if ($ProgressPath) { $readbackOptions += @("--progress", $ProgressPath) }
+    # Windows auto-mounts the freshly written FAT32 partition and rewrites a few
+    # spec-defined fields; removable media cannot be set offline. The verifier
+    # tolerates exactly those fields and reports them (release 004, offset 1049576).
+    # The verifier's reason goes to a file: a PowerShell 5.1 transcript does not
+    # capture a native program's stderr, and 2>&1 under ErrorAction Stop would throw
+    # (release 005 rewrite: the log said only "readback verification failed").
+    $readbackStem = Join-Path ([IO.Path]::GetTempPath()) ("rosy-readback-" + [guid]::NewGuid().ToString("N"))
+    $readbackErrorPath = "$readbackStem.json"
+    $readbackOutputPath = "$readbackStem.out"
+    $readbackStderrPath = "$readbackStem.err"
+    $readbackOptions += @("--error-json", $readbackErrorPath)
+    $verifierArguments = @(@($readbackVerifier, "--image", $ImagePath, "--device", $readbackTarget) + $readbackOptions |
+        ForEach-Object { ConvertTo-ProcessArgument ([string]$_) })
 
-function Read-NewReadbackBytes {
-    # Heartbeat lines appended since the last call; the partial last line waits.
-    if (-not $ProgressPath -or -not (Test-Path -LiteralPath $ProgressPath -PathType Leaf)) { return [int64]-1 }
-    $stream = New-Object IO.FileStream($ProgressPath, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::ReadWrite)
+    function Read-NewReadbackBytes {
+        # Heartbeat lines appended since the last call; the partial last line waits.
+        if (-not $ProgressPath -or -not (Test-Path -LiteralPath $ProgressPath -PathType Leaf)) { return [int64]-1 }
+        $stream = New-Object IO.FileStream($ProgressPath, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::ReadWrite)
+        try {
+            if ($stream.Length -le $script:progressOffset) { return [int64]-1 }
+            $null = $stream.Seek($script:progressOffset, [IO.SeekOrigin]::Begin)
+            $buffer = New-Object byte[] ($stream.Length - $script:progressOffset)
+            $count = $stream.Read($buffer, 0, $buffer.Length)
+        }
+        finally {
+            $stream.Dispose()
+        }
+        if ($count -le 0) { return [int64]-1 }
+        $end = [Array]::LastIndexOf($buffer, [byte]10, $count - 1)
+        if ($end -lt 0) { return [int64]-1 }
+        $script:progressOffset += $end + 1
+        $best = [int64]-1
+        foreach ($text in [Text.Encoding]::UTF8.GetString($buffer, 0, $end + 1).Split("`n")) {
+            if (-not $text.Trim()) { continue }
+            try { $line = $text | ConvertFrom-Json } catch { continue }
+            if ($line.PSObject.Properties["stage"] -and $line.stage -eq "readback" -and $line.PSObject.Properties["bytes"]) {
+                $best = [Math]::Max($best, [int64]$line.bytes)
+            }
+        }
+        return $best
+    }
+
+    $script:progressOffset = $(if ($ProgressPath -and (Test-Path -LiteralPath $ProgressPath -PathType Leaf)) { (Get-Item -LiteralPath $ProgressPath).Length } else { [int64]0 })
     try {
-        if ($stream.Length -le $script:progressOffset) { return [int64]-1 }
-        $null = $stream.Seek($script:progressOffset, [IO.SeekOrigin]::Begin)
-        $buffer = New-Object byte[] ($stream.Length - $script:progressOffset)
-        $count = $stream.Read($buffer, 0, $buffer.Length)
+        $readbackProcess = Start-Process -FilePath $PythonExe -ArgumentList $verifierArguments -NoNewWindow -PassThru `
+            -RedirectStandardOutput $readbackOutputPath -RedirectStandardError $readbackStderrPath
+        $null = $readbackProcess.Handle  # keeps ExitCode readable after exit (PowerShell 5.1)
+        $readbackLimit = [TimeSpan]::FromSeconds($readbackStallSeconds)
+        $readbackPoll = [int][Math]::Max(200, [Math]::Min(5000, $readbackLimit.TotalMilliseconds / 4))
+        $verifiedBytes = [int64]0
+        $readBytes = [int64]-1
+        $lastAdvance = [DateTime]::UtcNow
+        while (-not $readbackProcess.WaitForExit($readbackPoll)) {
+            $seen = Read-NewReadbackBytes
+            # D-188 review: the heartbeat is advisory and can fail to land (antivirus
+            # lock, full disk); bytes the verifier reads also count as progress.
+            $sample = $(if ($seen -gt $verifiedBytes) { $null } else { Get-WriterSample $readbackProcess.Id })
+            if ($seen -gt $verifiedBytes) {
+                $verifiedBytes = $seen
+                $lastAdvance = [DateTime]::UtcNow
+            }
+            elseif ($null -ne $sample -and $sample.Read -gt $readBytes) {
+                if ($readBytes -ge 0) { $lastAdvance = [DateTime]::UtcNow }
+                $readBytes = $sample.Read
+            }
+            elseif ([DateTime]::UtcNow - $lastAdvance -ge $readbackLimit) {
+                $stopped = Stop-ProcessTree $readbackProcess
+                $script:failureKind = "io"
+                Fail ("the card could not be read during readback (stalled, kind io): no heartbeat and no reads for {0} minutes after verifying {1} of {2} bytes; the verifier was {3}" -f
+                    $ReadbackStallMinutes, $verifiedBytes, $imageRawSize, $(if ($stopped) { "stopped" } else { "told to stop but is still running" })) "reinsert the card (or use another reader), then $resumeNext"
+            }
+        }
+        $readbackProcess.WaitForExit()
+        $readbackExitCode = $readbackProcess.ExitCode
+        $mediaReadbackOutput = $(if (Test-Path -LiteralPath $readbackOutputPath -PathType Leaf) { Get-Content -LiteralPath $readbackOutputPath -Raw } else { "" })
+        $readbackError = $null
+        if (Test-Path -LiteralPath $readbackErrorPath -PathType Leaf) {
+            try { $readbackError = Get-Content -LiteralPath $readbackErrorPath -Raw | ConvertFrom-Json } catch { $readbackError = $null }
+        }
     }
     finally {
-        $stream.Dispose()
-    }
-    if ($count -le 0) { return [int64]-1 }
-    $end = [Array]::LastIndexOf($buffer, [byte]10, $count - 1)
-    if ($end -lt 0) { return [int64]-1 }
-    $script:progressOffset += $end + 1
-    $best = [int64]-1
-    foreach ($text in [Text.Encoding]::UTF8.GetString($buffer, 0, $end + 1).Split("`n")) {
-        if (-not $text.Trim()) { continue }
-        try { $line = $text | ConvertFrom-Json } catch { continue }
-        if ($line.PSObject.Properties["stage"] -and $line.stage -eq "readback" -and $line.PSObject.Properties["bytes"]) {
-            $best = [Math]::Max($best, [int64]$line.bytes)
+        foreach ($readbackFile in @($readbackErrorPath, $readbackOutputPath, $readbackStderrPath)) {
+            if (Test-Path -LiteralPath $readbackFile) { Remove-Item -LiteralPath $readbackFile -Force -ErrorAction SilentlyContinue }
         }
     }
-    return $best
-}
-
-$script:progressOffset = $(if ($ProgressPath -and (Test-Path -LiteralPath $ProgressPath -PathType Leaf)) { (Get-Item -LiteralPath $ProgressPath).Length } else { [int64]0 })
-try {
-    $readbackProcess = Start-Process -FilePath $PythonExe -ArgumentList $verifierArguments -NoNewWindow -PassThru `
-        -RedirectStandardOutput $readbackOutputPath -RedirectStandardError $readbackStderrPath
-    $null = $readbackProcess.Handle  # keeps ExitCode readable after exit (PowerShell 5.1)
-    $readbackLimit = [TimeSpan]::FromSeconds($readbackStallSeconds)
-    $readbackPoll = [int][Math]::Max(200, [Math]::Min(5000, $readbackLimit.TotalMilliseconds / 4))
-    $verifiedBytes = [int64]0
-    $readBytes = [int64]-1
-    $lastAdvance = [DateTime]::UtcNow
-    while (-not $readbackProcess.WaitForExit($readbackPoll)) {
-        $seen = Read-NewReadbackBytes
-        # D-188 review: the heartbeat is advisory and can fail to land (antivirus
-        # lock, full disk); bytes the verifier reads also count as progress.
-        $sample = $(if ($seen -gt $verifiedBytes) { $null } else { Get-WriterSample $readbackProcess.Id })
-        if ($seen -gt $verifiedBytes) {
-            $verifiedBytes = $seen
-            $lastAdvance = [DateTime]::UtcNow
+    if ($readbackExitCode -ne 0) {
+        $reason = "no reason reported (verifier exit code $readbackExitCode)"
+        $kind = "mismatch"
+        if ($readbackError) {
+            $reason = "{0} (verified {1} bytes before it stopped)" -f $readbackError.error, $readbackError.bytes_verified
+            $kind = [string]$readbackError.kind
         }
-        elseif ($null -ne $sample -and $sample.Read -gt $readBytes) {
-            if ($readBytes -ge 0) { $lastAdvance = [DateTime]::UtcNow }
-            $readBytes = $sample.Read
+        elseif ($readbackExitCode -eq 3) {
+            $kind = "io"
         }
-        elseif ([DateTime]::UtcNow - $lastAdvance -ge $readbackLimit) {
-            $stopped = Stop-ProcessTree $readbackProcess
-            $script:failureKind = "io"
-            Fail ("the card could not be read during readback (stalled, kind io): no heartbeat and no reads for {0} minutes after verifying {1} of {2} bytes; the verifier was {3}" -f
-                $ReadbackStallMinutes, $verifiedBytes, $imageRawSize, $(if ($stopped) { "stopped" } else { "told to stop but is still running" })) "reinsert the card (or use another reader), then $resumeNext"
+        $script:failureKind = $kind
+        # A read error or a card that ends early is the reader or the connection,
+        # not the data: the written bytes may be fine, so resume. A mismatch is bad data.
+        if ($kind -eq "io") {
+            Fail "the card could not be read during readback (removed, disconnected or I/O error): $reason" "reinsert the card (or use another reader), then $resumeNext"
         }
+        if ($kind -eq "image") {
+            $script:cardState = "unknown"
+            Fail "the image file could not be decompressed during readback: $reason" "download the release again, then $fullWriteNext"
+        }
+        Fail "full media readback verification failed: $reason" "$fullWriteNext; if it fails again, replace the card"
     }
-    $readbackProcess.WaitForExit()
-    $readbackExitCode = $readbackProcess.ExitCode
-    $mediaReadbackOutput = $(if (Test-Path -LiteralPath $readbackOutputPath -PathType Leaf) { Get-Content -LiteralPath $readbackOutputPath -Raw } else { "" })
-    $readbackError = $null
-    if (Test-Path -LiteralPath $readbackErrorPath -PathType Leaf) {
-        try { $readbackError = Get-Content -LiteralPath $readbackErrorPath -Raw | ConvertFrom-Json } catch { $readbackError = $null }
+    try {
+        $mediaReadback = $mediaReadbackOutput | ConvertFrom-Json
     }
-}
-finally {
-    foreach ($readbackFile in @($readbackErrorPath, $readbackOutputPath, $readbackStderrPath)) {
-        if (Test-Path -LiteralPath $readbackFile) { Remove-Item -LiteralPath $readbackFile -Force -ErrorAction SilentlyContinue }
-    }
-}
-if ($readbackExitCode -ne 0) {
-    $reason = "no reason reported (verifier exit code $readbackExitCode)"
-    $kind = "mismatch"
-    if ($readbackError) {
-        $reason = "{0} (verified {1} bytes before it stopped)" -f $readbackError.error, $readbackError.bytes_verified
-        $kind = [string]$readbackError.kind
-    }
-    elseif ($readbackExitCode -eq 3) {
-        $kind = "io"
-    }
-    $script:failureKind = $kind
-    # A read error or a card that ends early is the reader or the connection,
-    # not the data: the written bytes may be fine, so resume. A mismatch is bad data.
-    if ($kind -eq "io") {
-        Fail "the card could not be read during readback (removed, disconnected or I/O error): $reason" "reinsert the card (or use another reader), then $resumeNext"
-    }
-    if ($kind -eq "image") {
-        $script:cardState = "unknown"
-        Fail "the image file could not be decompressed during readback: $reason" "download the release again, then $fullWriteNext"
-    }
-    Fail "full media readback verification failed: $reason" "$fullWriteNext; if it fails again, replace the card"
-}
-try {
-    $mediaReadback = $mediaReadbackOutput | ConvertFrom-Json
-}
-catch {
-    Fail "media readback evidence is invalid"
-}
-if (-not [bool]$mediaReadback.verified) { Fail "full media readback was not verified" }
-foreach ($digestField in @("image_raw_sha256", "device_sha256", "image_sha256")) {
-    if (-not $mediaReadback.PSObject.Properties[$digestField] -or [string]$mediaReadback.$digestField -notmatch '^[0-9a-f]{64}$') {
+    catch {
         Fail "media readback evidence is invalid"
     }
+    if (-not [bool]$mediaReadback.verified) { Fail "full media readback was not verified" }
+    foreach ($digestField in @("image_raw_sha256", "device_sha256", "image_sha256")) {
+        if (-not $mediaReadback.PSObject.Properties[$digestField] -or [string]$mediaReadback.$digestField -notmatch '^[0-9a-f]{64}$') {
+            Fail "media readback evidence is invalid"
+        }
+    }
+    if ([int64]$mediaReadback.bytes_verified -le 0) { Fail "media readback evidence is invalid" }
+    # Review MEDIUM-1: the readback hashed the compressed file it decompressed; it
+    # must be the file whose hash the signed SHA256SUMS vouched for.
+    if ([string]$mediaReadback.image_sha256 -cne $actualHash) {
+        $script:cardState = "unknown"
+        Fail "the image read back is not the signed image (image_sha256 $($mediaReadback.image_sha256), signed $actualHash)" "download the release again, then $fullWriteNext"
+    }
+    Set-Stage "bundle" "verified-no-bundle" ""
 }
-if ([int64]$mediaReadback.bytes_verified -le 0) { Fail "media readback evidence is invalid" }
-# Review MEDIUM-1: the readback hashed the compressed file it decompressed; it
-# must be the file whose hash the signed SHA256SUMS vouched for.
-if ([string]$mediaReadback.image_sha256 -cne $actualHash) {
-    $script:cardState = "unknown"
-    Fail "the image read back is not the signed image (image_sha256 $($mediaReadback.image_sha256), signed $actualHash)" "download the release again, then $fullWriteNext"
-}
-Set-Stage "bundle" "verified-no-bundle" ""
 
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..\..\..")).Path
 $bundleTool = Join-Path $PSScriptRoot "create-provision-bundle.py"
@@ -1441,11 +1493,27 @@ if ($reprovision) {
         image_sha256 = [string]$reprovision.image_sha256
         created_at = [string]$reprovision.created_at
     }
+    if ($emergencyReceipt) { $receipt["supersedes"]["emergency"] = $true }
+}
+if ($Emergency) {
+    $receipt["emergency"] = [ordered]@{
+        reason = $EmergencyReason.Trim()
+        at = $receipt.created_at
+        readback = "skipped"
+        registry = "robot number $RobotNumber, $DeviceName and its device_uid are registered and stay reserved although the media is unverified"
+        follow_up = "before the card boots: verify-emergency-card.ps1 -Receipt <this receipt> (records a supplementary readback receipt); after it boots: rewrite it with a standard write using -ReprovisionReceipt <this receipt>"
+    }
 }
 # -Depth: the default (2) flattens nested receipt evidence such as fingerprint lists.
 $receipt | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $ReceiptPath -Encoding UTF8
 $receipt | ConvertTo-Json -Depth 10 -Compress
-Set-Stage "done" "complete" "" ([ordered]@{ next = "the card is ready: put it in the Pinky and power on; the receipt is $ReceiptPath; the CORE API credential is in `$env:LOCALAPPDATA\Rosy\api\$DeviceName.credential.xml (runbook: CORE API administrator credential)" })
+if ($Emergency) {
+    Set-Stage "done" "complete-unverified" "EMERGENCY: readback skipped" ([ordered]@{ next = "the card is written but NOT verified: verify it now with verify-emergency-card.ps1 -Receipt $ReceiptPath, or put it in the Pinky and rewrite it later with a standard write (-ReprovisionReceipt $ReceiptPath)" })
+    Write-Warning "EMERGENCY: this card was NOT read back. Receipt: $ReceiptPath (emergency, media_readback.verified=false)."
+}
+else {
+    Set-Stage "done" "complete" "" ([ordered]@{ next = "the card is ready: put it in the Pinky and power on; the receipt is $ReceiptPath; the CORE API credential is in `$env:LOCALAPPDATA\Rosy\api\$DeviceName.credential.xml (runbook: CORE API administrator credential)" })
+}
 # Shown once for the operator; not part of the JSON evidence on stdout.
 [Console]::Error.WriteLine("Fallback AP for ${DeviceName}: SSID $DeviceName password $apLogin (stored in your Rosy AP store)")
 [Console]::Error.WriteLine("CORE API administrator for ${DeviceName}: id $($coreApiLogin.Id) value $($coreApiLogin.Value) (stored in your Rosy API store)")

@@ -55,6 +55,7 @@ function Get-NextByCardState([string]$CardState) {
         # (re-verifies every byte); say so, and name the fallback if it fails.
         "written-unverified" { return "re-run the same command with -ResumeAfterWrite; the readback re-verifies every byte, so a short card still fails there before the bundle or receipt are written; if the readback fails, re-run the full write (without -ResumeAfterWrite)" }
         "verified-no-bundle" { return "re-run the same command with -ResumeAfterWrite; the readback re-verifies every byte, so a short card still fails there before the bundle or receipt are written; if the readback fails, re-run the full write (without -ResumeAfterWrite)" }
+        "unverified-no-bundle" { return "re-run the same command with -ResumeAfterWrite (keep -Emergency and its reason, or drop both for the full readback)" }
         "bundle-partial" { return "re-run the full write (a partial bundle cannot be resumed)" }
         "complete" { return "check the registry for this device, then re-run the full write" }
         default { return "re-run the full write (without -ResumeAfterWrite)" }
@@ -220,7 +221,8 @@ else {
     }
 
     if ($last.stage -eq "done") {
-        $status.result = "complete"
+        # D-382: an emergency write ends written and provisioned but not read back.
+        $status.result = $(if ($status.card_state -eq "complete-unverified") { "complete-unverified" } else { "complete" })
         $status.next = $(if (Get-Field $last "next") { [string]$last.next } else { "the card is ready" })
     }
     elseif ($last.stage -eq "failed") {
@@ -349,6 +351,7 @@ if ($status.warning) { Write-Output "WARNING: $($status.warning)" }
 if ($status.stalled) { Write-Output "STALLED: $($status.stall_reason)" }
 switch ($status.result) {
     "complete" { Write-Output "Result: COMPLETE" }
+    "complete-unverified" { Write-Output "Result: COMPLETE, NOT VERIFIED (emergency write: the full readback was skipped)" }
     "failed" { Write-Output "Result: FAILED - $($status.detail)" }
     "ended-without-result" { Write-Output "Result: ENDED WITHOUT RESULT - $($status.detail)" }
 }
