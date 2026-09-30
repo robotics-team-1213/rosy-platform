@@ -1,8 +1,10 @@
 """Site lane geometry for the console map-fit overlay (D-375, display only).
 
-Reads a generated ``lane_graph.yaml`` (map frame, metres) into plain polylines
-the browser can project onto the ceiling camera image with a Vision map
-proposal. Nothing here feeds sightings, ``CameraMap``, task acceptance or
+Reads a generated ``lane_graph.yaml`` (map frame, metres) into plain polylines,
+and optionally the lane paint mesh (``road_lines.stl``, the file Vision fits
+with ``--map-paint``) into flat triangles, so the browser can project both onto
+the ceiling camera image with a Vision map proposal. The centrelines run between
+the paint lines; the paint triangles are what must sit on the white paint. Nothing here feeds sightings, ``CameraMap``, task acceptance or
 motion — the lanes are drawn, never driven.
 """
 
@@ -10,13 +12,16 @@ from __future__ import annotations
 
 import hashlib
 import math
+import struct
 from pathlib import Path
 from typing import Iterable, Mapping, Sequence
 
 import yaml
 
-# A generated lane graph has ~900 points; this caps what one browser read carries.
+# A generated lane graph has ~900 points and road_lines.stl ~1.7k triangles; these cap
+# what one browser read carries.
 MAX_POINTS = 20_000
+MAX_TRIANGLES = 20_000
 _ROUNDABOUT_STEPS = 72
 
 
@@ -85,17 +90,54 @@ def load_lane_graph(path: Path | str) -> dict:
     }
 
 
-def parse_lane_graph_flags(values: Iterable[str] | None) -> dict[str | None, dict]:
-    """``--site-lane-graph [MAP_ID=]PATH`` values → lanes per map id (None: every map)."""
+def load_lane_paint(path: Path | str) -> dict:
+    """Binary STL of floor paint in map metres (Z up) → ``{"paint_triangles", "paint_sha256"}``.
+
+    Each triangle is ``[x1, y1, x2, y2, x3, y3]`` rounded to 0.1 mm. Same file and
+    frame as Vision's ``--map-paint``; parsed without numpy (Fleet does not ship it).
+    """
+    paint_path = Path(path)
+    try:
+        data = paint_path.read_bytes()
+    except OSError as exc:
+        raise ValueError(f"cannot read lane paint {paint_path}: {exc}") from exc
+    count = struct.unpack_from("<I", data, 80)[0] if len(data) >= 84 else 0
+    if count == 0 or len(data) != 84 + 50 * count:
+        raise ValueError(f"lane paint {paint_path} is not a binary STL")
+    if count > MAX_TRIANGLES:
+        raise ValueError(f"lane paint {paint_path} has {count} triangles; the console reads at most "
+                         f"{MAX_TRIANGLES}")
+    triangles = []
+    for index in range(count):
+        v = struct.unpack_from("<9f", data, 84 + 50 * index + 12)
+        if not all(math.isfinite(value) for value in v):
+            raise ValueError(f"lane paint {paint_path} has non-finite vertices")
+        triangles.append([round(v[0], 4), round(v[1], 4), round(v[3], 4), round(v[4], 4),
+                          round(v[6], 4), round(v[7], 4)])
+    return {"paint_triangles": triangles, "paint_sha256": hashlib.sha256(data).hexdigest()}
+
+
+def _flag_value(flag: str, value: str) -> tuple[str | None, str]:
+    map_id, sep, path = value.partition("=")
+    key = map_id.strip() if sep else None
+    if sep and (not key or not path):
+        raise ValueError(f"{flag} {value!r}: expected MAP_ID=PATH or PATH")
+    return key, (path if sep else value)
+
+
+def parse_lane_graph_flags(values: Iterable[str] | None, paints: Iterable[str] | None = None
+                           ) -> dict[str | None, dict]:
+    """``--site-lane-graph``/``--site-lane-paint [MAP_ID=]PATH`` → lanes per map id (None: every map)."""
     lanes: dict[str | None, dict] = {}
-    for value in values or ():
-        map_id, sep, path = value.partition("=")
-        key = map_id.strip() if sep else None
-        if sep and (not key or not path):
-            raise ValueError(f"--site-lane-graph {value!r}: expected MAP_ID=PATH or PATH")
-        if key in lanes:
-            raise ValueError(f"--site-lane-graph given twice for {key or 'every map'}")
-        lanes[key] = load_lane_graph(path if sep else value)
+    for flag, loader, items in (("--site-lane-graph", load_lane_graph, values),
+                                ("--site-lane-paint", load_lane_paint, paints)):
+        seen: set[str | None] = set()
+        for value in items or ():
+            key, path = _flag_value(flag, value)
+            if key in seen:
+                raise ValueError(f"{flag} given twice for {key or 'every map'}")
+            seen.add(key)
+            lanes.setdefault(key, {}).update(loader(path))
     return lanes
 
 
@@ -107,6 +149,13 @@ def site_lanes_payload(lanes: Mapping[str | None, dict], sources: Sequence) -> d
     for map_id, graph in lanes.items():
         source_ids = [source.source_id for source in sources
                       if map_id is None or source.map_id == map_id]
-        maps.append({"map_id": map_id, "frame": "map", "units": "m", "source_ids": source_ids,
-                     **graph})
+        entry = {"map_id": map_id, "frame": "map", "units": "m", "source_ids": source_ids,
+                 "polylines": [], "paint_triangles": [], **graph}
+        xs = [v for tri in entry["paint_triangles"] for v in tri[0::2]]
+        ys = [v for tri in entry["paint_triangles"] for v in tri[1::2]]
+        if xs:  # the paint reaches past the centrelines; the view frames both
+            bounds = entry.get("bounds_m") or {"min_x": xs[0], "min_y": ys[0], "max_x": xs[0], "max_y": ys[0]}
+            entry["bounds_m"] = {"min_x": min(bounds["min_x"], *xs), "min_y": min(bounds["min_y"], *ys),
+                                 "max_x": max(bounds["max_x"], *xs), "max_y": max(bounds["max_y"], *ys)}
+        maps.append(entry)
     return {"maps": maps}

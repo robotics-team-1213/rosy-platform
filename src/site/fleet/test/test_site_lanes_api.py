@@ -11,11 +11,12 @@ from fleet.cli import parse_args
 from fleet.server.app import create_app
 from fleet.server.console import FleetConsole
 from fleet.server.sightings import SightingService, SightingSource
-from fleet.server.site_lanes import load_lane_graph, parse_lane_graph_flags
+from fleet.server.site_lanes import load_lane_graph, load_lane_paint, parse_lane_graph_flags
 from fleet.swarm.robots import RobotEndpoint
 
 REPO = Path(__file__).resolve().parents[4]
 LANE_GRAPH = REPO / "src/runtime/sensing/map/map_v2_fleet/lane_graph.yaml"
+ROAD_LINES = REPO / "src/runtime/sensing/map/map_v2_fleet/meshes/road_lines.stl"
 OPERATOR_TOKEN = "operator-secret"
 SOURCE_TOKEN = "source-camera-secret"
 
@@ -120,6 +121,31 @@ def test_lane_graph_flags_reject_a_missing_file_and_duplicates(tmp_path):
         parse_lane_graph_flags([f"={LANE_GRAPH}"])
 
 
-def test_console_cli_accepts_repeatable_site_lane_graph():
-    args = parse_args(["console", "--site-lane-graph", "a=x.yaml", "--site-lane-graph", "y.yaml"])
+def test_console_cli_accepts_repeatable_site_lane_graph_and_paint():
+    args = parse_args(["console", "--site-lane-graph", "a=x.yaml", "--site-lane-graph", "y.yaml",
+                       "--site-lane-paint", "road_lines.stl"])
     assert args.site_lane_graph == ["a=x.yaml", "y.yaml"]
+    assert args.site_lane_paint == ["road_lines.stl"]
+
+
+def test_lane_paint_stl_is_served_as_flat_triangles_with_the_centrelines():
+    paint = load_lane_paint(ROAD_LINES)
+    assert len(paint["paint_triangles"]) == (ROAD_LINES.stat().st_size - 84) // 50
+    assert all(len(tri) == 6 for tri in paint["paint_triangles"])
+
+    client = _client(parse_lane_graph_flags([str(LANE_GRAPH)], [str(ROAD_LINES)]))
+    entry = client.get("/api/fleet/site-lanes", headers=_auth()).json()["maps"][0]
+
+    assert entry["polylines"] and len(entry["paint_triangles"]) == len(paint["paint_triangles"])
+    # 2.81 x 1.26 m: the paint frames the view, not the centrelines inside it.
+    assert entry["bounds_m"]["max_x"] == pytest.approx(1.405, abs=1e-3)
+    assert entry["bounds_m"]["min_y"] == pytest.approx(-0.63, abs=1e-3)
+
+
+def test_paint_only_entry_has_empty_polylines(tmp_path):
+    client = _client(parse_lane_graph_flags(None, [str(ROAD_LINES)]))
+    entry = client.get("/api/fleet/site-lanes", headers=_auth()).json()["maps"][0]
+    assert entry["polylines"] == [] and entry["paint_triangles"]
+    (tmp_path / "bad.stl").write_bytes(b"solid ascii\n")
+    with pytest.raises(ValueError, match="binary STL"):
+        load_lane_paint(tmp_path / "bad.stl")
