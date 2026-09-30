@@ -15,7 +15,8 @@ import {
 } from "../input-state.js";
 import {mountInputs} from "./inputs.js";
 import {slewCommand} from "../stick.js";
-import {createAutoSession, intentView} from "../autonomy.js";
+import {mountAutoMode} from "./drive-auto.js";
+import {el, mountDriveView, buildStage, buildControls} from "./drive-view.js";
 import {createCameraCapture, classifyOperation, saveCameraFile} from "/common/evidence.js";
 
 const LOOP_MS = 100;
@@ -23,19 +24,13 @@ const STATE_POLL_MS = 500;
 const DEG = 180 / Math.PI;
 const PRESET_LABEL = {low: "저", mid: "중", high: "고"};
 
-function el(tag, text, attrs = {}) {
-  const node = document.createElement(tag);
-  if (text !== undefined && text !== null) node.textContent = text;
-  for (const [name, value] of Object.entries(attrs)) node.setAttribute(name, value);
-  return node;
-}
-
 export function mountDrive(root, {onExit} = {}) {
   const gate = driverFor("pinky_core");
   const profile = gate.profile ?? {};
   const element = {};
   let engaged = false;
 
+  const drive = root;
   root.replaceChildren(buildStage(), buildControls(profile));
   for (const [key, selector] of Object.entries({
     stage: "[data-drive-stage]", frame: "[data-drive-frame]", empty: "[data-drive-empty]",
@@ -133,103 +128,8 @@ export function mountDrive(root, {onExit} = {}) {
   const blockContextMenu = (event) => event.preventDefault();
   root.addEventListener("contextmenu", blockContextMenu);
 
-  // --- 배치(D-363): 영상은 원본 비율 그대로, 조작부는 영상 밖 --------------------
-  // 영상이 실제로 그려지는 폭을 계산해 좌우 띠가 조작부를 담을 만큼 넓으면 "side",
-  // 아니면 영상 아래에 조작부를 두는 "below" 로 바꾼다.
-  const SIDE_MIN_BAND_PX = 200;
-  const drive = root;
-  function applyLayout() {
-    const width = drive.clientWidth;
-    const height = drive.clientHeight;
-    if (!width || !height) return;
-    const ratio = (element.frame.naturalWidth && element.frame.naturalHeight)
-      ? element.frame.naturalWidth / element.frame.naturalHeight : 4 / 3;
-    const hudHeight = element.hud.getBoundingClientRect().height + 8;
-    const videoHeight = height - hudHeight;
-    const band = (width - videoHeight * ratio) / 2;
-    const side = band >= SIDE_MIN_BAND_PX;
-    drive.dataset.driveLayout = side ? "side" : "below";
-    drive.style.setProperty("--band", `${Math.max(0, Math.floor(band))}px`);
-    drive.style.setProperty("--video-ratio", String(ratio));
-  }
-  // --- 배율(D-363 §5): 맞춤 1.0× → 1.2× → 1.4× → 가득(화면 폭) → 전체화면 → 맞춤 ------
-  const ZOOM_STEPS = [1, 1.2, 1.4, "fill", "full"];
-  function zoomValue(step) {
-    const box = element.view.getBoundingClientRect();
-    const ratio = (element.frame.naturalWidth && element.frame.naturalHeight)
-      ? element.frame.naturalWidth / element.frame.naturalHeight : 4 / 3;
-    if (!box.width || !box.height) return 1;
-    // 맞춤일 때 영상이 차지하는 폭 → 화면 폭을 채우는 배율
-    const fitWidth = Math.min(box.width, box.height * ratio);
-    const fill = Math.max(1, box.width / fitWidth);
-    return step === "fill" ? fill : Math.min(Number(step) || 1, fill);
-  }
-  function coverCrop() {
-    // 전체화면(cover): 화면 비와 영상 비 중 어느 쪽이 잘리는가
-    const box = element.view.getBoundingClientRect();
-    const ratio = (element.frame.naturalWidth && element.frame.naturalHeight)
-      ? element.frame.naturalWidth / element.frame.naturalHeight : 4 / 3;
-    if (!box.width || !box.height) return {axis: "위아래", percent: 0};
-    const boxRatio = box.width / box.height;
-    return boxRatio >= ratio
-      ? {axis: "위아래", percent: Math.round((1 - ratio / boxRatio) * 100)}
-      : {axis: "좌우", percent: Math.round((1 - boxRatio / ratio) * 100)};
-  }
-  function applyZoom() {
-    const step = inputConfig().zoom ?? 1;
-    const full = step === "full";
-    const below = drive.dataset.driveLayout === "below";
-    drive.dataset.viewMode = full ? "full" : "fit";
-    element.view.style.height = "";
-    let crop;
-    if (below) {
-      // 세로 화면: 영상이 이미 폭을 채운다. 확대는 영상 높이를 늘리고 좌우를 자른다(cover).
-      const width = element.view.getBoundingClientRect().width;
-      const ratio = (element.frame.naturalWidth && element.frame.naturalHeight)
-        ? element.frame.naturalWidth / element.frame.naturalHeight : 4 / 3;
-      const maxHeight = drive.clientHeight * (full ? 1 : 0.72);
-      const fitHeight = width / ratio;
-      const fill = Math.max(1, maxHeight / fitHeight);
-      const z = full || step === "fill" ? fill : Math.min(Number(step) || 1, fill);
-      element.frame.style.transform = "";
-      element.frame.style.objectFit = z > 1.001 ? "cover" : "";
-      if (z > 1.001) element.view.style.height = `${Math.round(fitHeight * z)}px`;
-      drive.dataset.zoomed = String(z > 1.001);
-      crop = {axis: "좌우", percent: Math.round((1 - 1 / z) * 100), z};
-    } else {
-      element.frame.style.objectFit = "";
-      const z = full ? 1 : zoomValue(step);
-      element.frame.style.transform = z > 1.001 ? `scale(${z.toFixed(3)})` : "";
-      drive.dataset.zoomed = String(full || z > 1.001);
-      crop = full ? {...coverCrop(), z: 1} : {axis: "위아래", percent: Math.round((1 - 1 / z) * 100), z};
-    }
-    element.zoomFact.hidden = crop.percent <= 0;
-    element.zoomFact.textContent = crop.percent > 0 ? `${crop.axis} ${crop.percent}% 잘림` : "";
-    if (element.zoomButton) {
-      element.zoomButton.textContent = full ? "전체화면"
-        : step === "fill" ? "확대 가득" : crop.z > 1.001 ? `확대 ${crop.z.toFixed(1)}×` : "확대 맞춤";
-    }
-  }
-  // 설치 앱에서는 전체화면 API 로 상태 표시줄까지 숨긴다. 지원이 없으면 화면 안에서만 채운다.
-  function syncFullscreen(full) {
-    try {
-      if (full && !document.fullscreenElement) document.documentElement.requestFullscreen?.().catch(() => {});
-      if (!full && document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
-    } catch (error) { /* 지원 없음 */ }
-  }
-  function cycleZoom() {
-    const current = inputConfig().zoom ?? 1;
-    const index = ZOOM_STEPS.findIndex((stepValue) => stepValue === current);
-    const next = ZOOM_STEPS[(index + 1) % ZOOM_STEPS.length];
-    saveInputConfig({zoom: next});
-    syncFullscreen(next === "full");
-    applyZoom();
-  }
-
-  const layoutObserver = new ResizeObserver(() => { applyLayout(); applyZoom(); });
-  layoutObserver.observe(drive);
-  element.frame.addEventListener("load", () => { applyLayout(); applyZoom(); });
-  applyLayout();
+  // --- 배치·배율(D-363): drive-view.js ------------------------------------
+  const view = mountDriveView(drive, element);
 
   // --- 입력: 2축 스틱(노브가 손가락을 따라간다) -------------------------------
   const stick = element.stick;
@@ -289,96 +189,14 @@ export function mountDrive(root, {onExit} = {}) {
   if (element.pivotLeft) holdButton(element.pivotLeft, (value) => setPivot("left", value));
   if (element.pivotRight) holdButton(element.pivotRight, (value) => setPivot("right", value));
 
-  // --- 보조 자율(D-344): "진행"을 누르는 동안만 CORE 차선 추종 -------------------
-  const LF_REASON = {
-    tracking: "차선 추종", camera_no_observation: "차선 관측 대기", camera_line_not_visible: "차선 안 보임",
-    camera_low_confidence: "차선 신뢰 낮음", camera_observation_stale: "차선 관측 늦음",
-    camera_reselection_required: "차선 놓침 — 다시 누르세요", driver_released: "손 뗌 — 정지",
-    obstacle_ahead: "앞 물체 — 정지", obstacle_sensor_stale: "LiDAR 끊김 — 정지",
-    lane_edge_left: "왼쪽 경계선 — 오른쪽으로 비킴", lane_edge_right: "오른쪽 경계선 — 왼쪽으로 비킴",
-    lane_departure: "차선 밟음 — 정지, 수동으로 빼세요", lane_guard_stale: "IR 차선 감시 끊김 — 정지",
-    nominal_ground_requires_driver: "공칭 지면 — 진행을 누르고 있어야 함",
-    limit_level_too_low: "수동 한도 L1 이상에서만 차선 자동", angular_limit_zero: "조향 한도 없음 — 정지",
-  };
-  const request = (method, path, body) =>
-    method === "GET" ? apiGet(path) : apiGet(path, {method, body: JSON.stringify(body ?? {})});
-  const auto = createAutoSession({
-    request,
-    schedule: (fn, ms) => { const id = setTimeout(fn, ms); return () => clearTimeout(id); },
-    onChange: ({state, reason}) => {
-      element.go?.classList.toggle("active", state === "running" || state === "starting");
-      if (state === "idle") {
-        renderCap();             // 수동 상한으로 되돌린다
-        session.resume();        // 자동이 끝나면 수동 명령 경로를 다시 연다
-        lastCommand = {linear: 0, angular: 0, pivot: false};
-        const benign = !reason || reason === "released" || reason === "takeover";
-        element.motion.dataset.kind = benign ? "idle" : "warn";
-        element.motion.textContent = benign ? "대기" : `자동 멈춤 — ${LF_REASON[reason] ?? reason}`;
-        renderIntent(null);
-      }
-    },
-    onStatus: (lf) => {
-      const tracking = lf.state === "TRACKING";
-      element.cap.textContent = `자동 ${Number(lf.linear ?? 0).toFixed(2)} m/s · ${Math.round(Number(lf.angular ?? 0) * DEG)}°/s`;
-      element.motion.dataset.kind = tracking ? "auto" : "warn";
-      const ahead = lf.clearance_m == null ? "" : ` · 앞 ${Number(lf.clearance_m).toFixed(2)} m`;
-      element.motion.textContent = tracking
-        ? `차선 추종 · 신뢰 ${Number(lf.confidence ?? 0).toFixed(2)} · 오차 ${Number(lf.error ?? 0) >= 0 ? "+" : ""}${Number(lf.error ?? 0).toFixed(2)}${ahead}`
-        : `${LF_REASON[lf.reason] ?? lf.reason ?? lf.state}${ahead}`;
-      renderIntent(lf);
-    },
-  });
-  // 자동의 의도(D-364 §6): 겨누는 곳과 CORE 가 실제로 도는 방향. 표시만 한다.
-  function renderIntent(lf) {
-    const view = intentView(lf, DEG);
-    if (!element.intent) return;
-    element.intent.hidden = !view.visible;
-    if (!view.visible) return;
-    element.intent.dataset.state = view.tracking ? (view.guard ? "guard" : "tracking") : "hold";
-    element.intent.dataset.dir = view.dir;
-    element.intentTarget.hidden = view.target == null;
-    if (view.target != null) element.intentTarget.style.left = `${view.target}%`;
-    element.intentSteer.textContent = view.text;
-    placeIntent();
-  }
-  // 영상 틀은 영상보다 넓을 수 있다(contain 의 검은 띠·옆 조작부). 띠는 실제로 그려진 영상 안에만 둔다.
-  function placeIntent() {
-    const frame = element.frame, strip = element.intent;
-    if (!frame?.naturalWidth || !strip) return;
-    const box = frame.getBoundingClientRect(), view = element.view.getBoundingClientRect();
-    const scale = Math.min(box.width / frame.naturalWidth, box.height / frame.naturalHeight);
-    const width = frame.naturalWidth * scale, height = frame.naturalHeight * scale;
-    const left = box.left + (box.width - width) / 2 - view.left;
-    const top = box.top + (box.height - height) / 2 - view.top;
-    const visibleLeft = Math.max(left, 0), visibleRight = Math.min(left + width, view.width);
-    const visibleBottom = Math.min(top + height, view.height);
-    const inset = (visibleRight - visibleLeft) * 0.06;
-    strip.style.left = `${visibleLeft + inset}px`;
-    strip.style.width = `${Math.max(0, visibleRight - visibleLeft - 2 * inset)}px`;
-    strip.style.top = `${Math.max(0, visibleBottom - strip.offsetHeight - 10)}px`;
-  }
+  // --- 보조 자율(D-344)·의도 띠(D-364 §6): drive-auto.js ---------------------
+  const auto = mountAutoMode({drive, element, apiGet, releaseAll, onIdle: () => {
+    renderCap();             // 수동 상한으로 되돌린다
+    session.resume();        // 자동이 끝나면 수동 명령 경로를 다시 연다
+    lastCommand = {linear: 0, angular: 0, pivot: false};
+  }});
   function takeover() {
-    if (auto.active()) auto.release("takeover");
-  }
-  if (element.go) {
-    element.go.addEventListener("pointerdown", (event) => {
-      event.preventDefault();
-      if (navigator.vibrate) navigator.vibrate(10);
-      releaseAll();
-      auto.press();
-    });
-    for (const name of ["pointerup", "pointercancel", "pointerleave"]) {
-      element.go.addEventListener(name, () => auto.release("released"));
-    }
-    element.go.addEventListener("contextmenu", (event) => event.preventDefault());
-  }
-  if (element.autoToggle) {
-    element.autoToggle.addEventListener("click", () => {
-      const on = drive.dataset.autoMode !== "on";
-      if (!on) takeover();
-      drive.dataset.autoMode = on ? "on" : "off";
-      element.autoToggle.setAttribute("aria-pressed", String(on));
-    });
+    auto.takeover();
   }
 
   // --- 입력: 키보드(데스크톱 검증용). Q/E 는 제자리 회전 --------------------
@@ -510,19 +328,23 @@ export function mountDrive(root, {onExit} = {}) {
 
   // --- HUD 액션 --------------------------------------------------------------
   const actions = el("ui-actions");
-  const shotButton = el("ui-button", "촬영", {kind: "quiet", type: "button", "data-evidence-shot": ""});
+  const shotButton = el("ui-button", "촬영", {type: "button", "data-evidence-shot": ""});
+  shotButton.setAttribute("kind", "quiet");
   shotButton.addEventListener("click", () => capture.screenshot("pc"));
-  const recordButton = el("ui-button", "녹화", {kind: "quiet", type: "button", "data-evidence-record": ""});
+  const recordButton = el("ui-button", "녹화", {type: "button", "data-evidence-record": ""});
+  recordButton.setAttribute("kind", "quiet");
   recordButton.addEventListener("click", () => {
     if (capture.state().recording) capture.stop();
     else capture.start();
   });
   element.shotButton = shotButton;
   element.recordButton = recordButton;
-  const zoomButton = el("ui-button", "확대 맞춤", {kind: "quiet", type: "button", "data-drive-zoom": ""});
-  zoomButton.addEventListener("click", cycleZoom);
+  const zoomButton = el("ui-button", "확대 맞춤", {type: "button", "data-drive-zoom": ""});
+  zoomButton.setAttribute("kind", "quiet");
+  zoomButton.addEventListener("click", () => view.cycleZoom());
   element.zoomButton = zoomButton;
-  const inputsButton = el("ui-button", "입력", {kind: "quiet", type: "button", "data-drive-inputs": ""});
+  const inputsButton = el("ui-button", "입력", {type: "button", "data-drive-inputs": ""});
+  inputsButton.setAttribute("kind", "quiet");
   let inputsPanel = null;
   let closeInputs = null;
   inputsButton.addEventListener("click", () => {
@@ -539,11 +361,12 @@ export function mountDrive(root, {onExit} = {}) {
       renderInputs();
     }, onChange: renderInputs});
   });
-  const exit = el("ui-button", "나가기", {kind: "quiet", type: "button", "data-drive-exit": ""});
+  const exit = el("ui-button", "나가기", {type: "button", "data-drive-exit": ""});
+  exit.setAttribute("kind", "quiet");
   exit.addEventListener("click", () => teardown());
   actions.append(zoomButton, shotButton, recordButton, inputsButton, exit);
   element.hud.append(actions);
-  applyZoom();
+  view.applyZoom();
 
   // --- 프리셋·정밀 --------------------------------------------------------
   function renderInputs() {
@@ -551,7 +374,8 @@ export function mountDrive(root, {onExit} = {}) {
     const row = root.querySelector("[data-drive-preset-row]");
     row.replaceChildren();
     for (const name of ["low", "mid", "high"]) {
-      const button = el("ui-button", PRESET_LABEL[name], {kind: "segment", type: "button", "data-preset": name});
+      const button = el("ui-button", PRESET_LABEL[name], {type: "button", "data-preset": name});
+      button.setAttribute("kind", "segment");
       button.setAttribute("aria-pressed", String(config.preset === name));
       button.addEventListener("click", () => {
         saveInputConfig({preset: name});
@@ -609,101 +433,10 @@ export function mountDrive(root, {onExit} = {}) {
     window.removeEventListener("blur", onBlur);
     window.removeEventListener("focusin", onFocusIn);
     root.removeEventListener("contextmenu", blockContextMenu);
-    layoutObserver.disconnect();
-    syncFullscreen(false);
+    view.close();
     document.removeEventListener("visibilitychange", onVisibility);
     wakeLock?.release().catch(() => {});
     wakeLock = null;
     onExit?.();
   }
-}
-
-function buildStage() {
-  const stage = el("div", null, {"data-drive-stage": ""});
-  const frame = el("img", null, {alt: "전방 카메라", "data-drive-frame": "", hidden: ""});
-  const empty = el("ui-empty", "카메라 프레임 수신 대기", {"data-drive-empty": ""});
-  const blocked = el("div", null, {"data-drive-blocked": "", role: "alert", hidden: ""});
-  blocked.append(
-    el("ui-text", "", {scale: "value", "data-drive-blocked-reason": ""}),
-    el("ui-button", "수동 모드 다시 잡기", {kind: "primary", type: "button", "data-drive-retake": ""}),
-  );
-  // 영상 틀: 확대(D-363 §5) 때 넘치는 부분을 이 틀 안에서만 자른다.
-  const view = el("div", null, {"data-drive-view": ""});
-  // 자동 의도 띠: 가운데 눈금, 겨누는 점, 실제 조향 방향(D-364 §6)
-  const intent = el("div", null, {"data-drive-intent": "", hidden: "", "aria-live": "polite"});
-  const track = el("span", null, {"data-intent-track": ""});
-  track.append(el("i", null, {"data-intent-centre": ""}), el("i", null, {"data-intent-target": ""}));
-  intent.append(track, el("span", "", {"data-intent-steer": ""}));
-  view.append(frame, empty, intent);
-  stage.append(view, buildHud(), blocked);
-  return stage;
-}
-
-function buildHud() {
-  // 한 줄 스트립: 실측 속도(주인공) · 회전율 · 동작 · 상한 | 링크·지연·모드·배터리 | 액션
-  const hud = el("div", null, {"data-drive-hud": ""});
-  const gauge = el("div", null, {"data-drive-gauge": ""});
-  gauge.append(
-    el("span", "0.00", {"data-drive-fact": "speed"}),
-    el("span", "m/s", {class: "speed-unit"}),
-    el("span", "· 0°/s", {"data-drive-fact": "turn"}),
-  );
-  const motion = el("span", "대기", {"data-drive-motion": "", "data-kind": "idle"});
-  const cap = el("span", "", {"data-drive-fact": "cap"});
-  const zoom = el("span", "", {"data-drive-fact": "zoom", hidden: ""});
-  const facts = el("div", null, {"data-drive-facts": ""});
-  facts.append(
-    el("span", "…", {"data-drive-fact": "link"}),
-    el("span", "—", {"data-drive-fact": "latency"}),
-    el("span", "—", {"data-drive-fact": "mode"}),
-    el("span", "—", {"data-drive-fact": "battery"}),
-  );
-  hud.append(gauge, motion, cap, zoom, facts);
-  return hud;
-}
-
-function buildControls(profile) {
-  const controls = el("div", null, {"data-drive-controls": ""});
-  // 좌: 속도·정밀 / 페달 / 제자리 회전   우: 2축 주행 스틱
-  const left = el("div", null, {"data-drive-left": ""});
-  const tune = el("div", null, {"data-drive-presets": ""});
-  tune.append(
-    el("ui-text", "속도", {scale: "label"}),
-    el("ui-actions", null, {"data-drive-preset-row": ""}),
-    el("ui-button", "정밀", {kind: "segment", type: "button", "data-drive-fine": "", "aria-pressed": "false"}),
-  );
-  const pedals = el("div", null, {"data-drive-pedals": ""});
-  pedals.append(
-    el("ui-button", "전진 ▲", {kind: "segment", type: "button", "data-drive-pedal": "forward"}),
-    el("ui-button", "후진 ▼", {kind: "segment", type: "button", "data-drive-pedal": "reverse"}),
-  );
-  left.append(tune);
-  if (profile.autonomy?.includes("line")) {
-    left.append(el("ui-button", "차선 자동", {kind: "segment", type: "button", "data-drive-auto": "",
-                                             "aria-pressed": "false"}));
-  }
-  left.append(pedals);
-  if (profile.autonomy?.includes("line")) {
-    left.append(el("ui-button", "진행 ▶ 누르는 동안", {kind: "segment", type: "button", "data-drive-go": "",
-                                                    "aria-label": "차선 따라 진행(누르는 동안만)"}));
-  }
-  if (profile.pivot !== false) {
-    const pivots = el("div", null, {"data-drive-pivots": ""});
-    pivots.append(
-      el("ui-button", "↺ 제자리", {kind: "segment", type: "button", "data-drive-pivot": "left",
-                                    "aria-label": "제자리 좌회전(누르는 동안)"}),
-      el("ui-button", "제자리 ↻", {kind: "segment", type: "button", "data-drive-pivot": "right",
-                                    "aria-label": "제자리 우회전(누르는 동안)"}),
-    );
-    left.append(pivots);
-  }
-
-  const right = el("div", null, {"data-drive-right": ""});
-  const stick = el("div", null, {"data-drive-stick": "", role: "application",
-                                 "aria-label": "주행 스틱 — 위 전진, 아래 후진, 좌우 조향, 옆으로만 밀면 제자리 회전"});
-  stick.append(el("div", null, {"data-drive-stick-knob": ""}));
-  right.append(stick);
-
-  controls.append(left, right);
-  return controls;
 }

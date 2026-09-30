@@ -4,7 +4,7 @@
   <name>emotion</name>
   <version>0.0.0</version>
   <description>LCD emotion GIF player and info screen for the ROSY robot.</description>
-  <maintainer email="kyung133851@pinklab.art">pinklab</maintainer>
+  <maintainer email="56295815+livsbittt@users.noreply.github.com">pinklab</maintainer>
   <license>Apache-2.0</license>
 
   <exec_depend>rclpy</exec_depend>

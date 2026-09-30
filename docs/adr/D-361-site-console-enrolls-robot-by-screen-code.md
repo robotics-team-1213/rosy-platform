@@ -4,7 +4,7 @@
 
 **번호:** 처음 D-352로 적었으나 main에 다른 D-352(외부 장비 공통 패턴)가 먼저 착지해 2026-09-30 병합 때 D-361로 옮겼다. 그 전 로그 항목의 "D-352 등록"은 이 ADR을 가리킨다.
 
-잇는 결정: [D-193](D-193-login-code-and-credential-lifecycle.md)(로봇 화면 일회용 코드·`POST /api/v1/auth/pair`·§10 전송) · [D-5](D-5-outbound-ws-fleet-rest.md)(FleetAgent 바깥 연결) · [D-30](D-30-.md)·[D-31](D-31-fleet.md)(장치 로컬 토큰, Fleet 제어는 operator 이상) · [D-276](D-276-site-fleet-per-principal-api-authorization.md)(`require_named_operator`) · [D-302](D-302-site-registry-credential-separation.md)(사이트 자격 분리) · D-341(천장 카메라 콘솔 승인, 브랜치 `docs/d341-overhead-console-pairing`) · D-351(로봇 ↔ 관제 통신 적합성, 브랜치 `docs/robot-fleet-protocol-conformance`).
+잇는 결정: [D-193](D-193-login-code-and-credential-lifecycle.md)(로봇 화면 일회용 코드·`POST /api/v1/auth/pair`·§10 전송) · [D-5](D-5-outbound-ws-fleet-rest.md)(FleetAgent 바깥 연결) · [D-30](D-30-.md)·[D-31](D-31-fleet.md)(장치 로컬 토큰, Fleet 제어는 operator 이상) · [D-276](D-276-site-fleet-per-principal-api-authorization.md)(`require_named_operator`) · [D-302](D-302-site-registry-credential-separation.md)(사이트 자격 분리) · [D-341](D-341-overhead-console-approved-pairing.md)(천장 카메라 콘솔 승인) · [D-382](D-382-robot-site-console-protocol-conformance.md)(로봇 ↔ 관제 통신 적합성).
 발견 규칙: [`site-lan-discovery-profile.md`](../reference/site-lan-discovery-profile.md). SRS: ROSY FLEET SRS REG-001(①mDNS ②수동 주소), REG-001a, SEC-203. 실행 계획: [`2026-09-29-fleet-robot-code-enrollment-plan.md`](../plans/2026-09-29-fleet-robot-code-enrollment-plan.md).
 
 ### Context
@@ -12,14 +12,14 @@
 1. **오늘의 연결 절차.** 사이트 Fleet이 로봇 CORE에 닿으려면 누군가 `robots.yaml`(root 소유, 0600, 컨테이너에는 읽기 전용 `/run/rosy-config/robots.yaml`)에 `robot_id`·`base_url`·CORE operator `token`을 손으로 적고 Fleet을 다시 띄워야 한다. 그 토큰을 얻는 길은 SSH `sudo rosy-login-code` 또는 로봇 대시보드 세션뿐이다. FleetAgent 이벤트까지 받으려면 `fleet_pairing_token`을 로봇 `/var/lib/rosy/core/.rosy/rosy.yaml`과 사이트 `robots.yaml` 양쪽에 넣고 CORE를 통제된 재시작으로 돌려야 한다(`deploy/site/README.md` "Advertise and locate").
 2. **2026-09-29 벤치.** 로봇 `rosy-pinky-8kcn`(192.168.1.202:8080, 릴리스 `2026.09.27-010`)이 Fleet 콘솔에 OFFLINE/UNAUTHORIZED로 보였다. 에이전트 세션은 SSH 없이 토큰을 얻을 수 없었다. 사용자 요청: "로봇을 사이트 콘솔에 붙이는 일을 간단하게."
 3. **이미 있는 조각.**
-   - D-193 S1/S3 착지: LCD 일회용 코드(8자, 약 39.6 bit, 10분, 부팅 첫 `CORE_READY`에 발급, 카드 `login.boot_code` 기본 `operator`), `POST /api/v1/auth/pair`(인증 없음, 사설 대역만, IP당 60 s 5회·전체 30회, 코드당 5회 틀리면 폐기) → 역할·이름표·만료가 있는 토큰. 페어링 토큰 수명 상한은 168 h(`MAX_LIFETIME_HOURS`), 관리자 등록 코드로 받은 토큰은 발급자 토큰의 만료를 넘지 않는다(D-193 보안 리뷰 M2). `auth/logout`으로 스스로 지울 수 있다. 벤치 이미지(API Ref v1.41)에도 이 경로가 있다(D-351 실측에서 `whoami` 401 확인).
+   - D-193 S1/S3 착지: LCD 일회용 코드(8자, 약 39.6 bit, 10분, 부팅 첫 `CORE_READY`에 발급, 카드 `login.boot_code` 기본 `operator`), `POST /api/v1/auth/pair`(인증 없음, 사설 대역만, IP당 60 s 5회·전체 30회, 코드당 5회 틀리면 폐기) → 역할·이름표·만료가 있는 토큰. 페어링 토큰 수명 상한은 168 h(`MAX_LIFETIME_HOURS`), 관리자 등록 코드로 받은 토큰은 발급자 토큰의 만료를 넘지 않는다(D-193 보안 리뷰 M2). `auth/logout`으로 스스로 지울 수 있다. 벤치 이미지(API Ref v1.41)에도 이 경로가 있다(D-382 실측에서 `whoami` 401 확인).
    - Fleet 발견: `mdns-bridge.py`가 `_rosy._tcp` 해석 결과(TXT `name`, avahi 호스트 이름 `<host>.local`, IPv4)를 45 s 임대로 올리고 콘솔이 **등록 대기 / 페어링 대기 / 신원 충돌 / 확인됨**을 보인다(`server/discovery.py`, `web/console.js`). 발견은 자격을 주지 않는다.
    - Fleet 사용자: D-276 이름 있는 principal, 감사, `require_named_operator`.
 4. **드러난 공백(코드 판독).**
    - **로스터가 기동 때 고정이고 여러 곳에 복사된다.** `FleetConsole`의 클라이언트·순서, `SiteHub`의 클라이언트·짝 토큰, `FleetTaskService.robot_ids`, sighting 설정의 `known_robot_ids`가 모두 기동 때 `robots.yaml` 목록에서 따로 만들어진다(`cli.py:353`, `:364`). `load_robots`는 빈 목록을 거절한다. `snapshot`·`_observe`·`estop_all`은 `await` 사이에서 순서 목록을 그대로 순회한다(`console.py:168-173`, `:466-469`, `:695-700`).
    - **CORE가 장치 UID를 모른다.** first boot가 `ROSY_DEVICE_UID`를 `runtime.env`에 쓰지만(`rosy-first-boot.py:620`) `core_common/config.py`는 `ROSY_DEVICE_NAME`만 읽는다. FleetAgent HELLO의 `device_uid`는 비고, 발견 상태 `verified_online`은 실물에서 나올 수 없다. `GET /api/v1/system/info`에도 UID가 없다(`hostname`·`serial_number`·`robot_id`는 있다).
    - **7일 만료와 코드 재발급 비용이 맞지 않는다.** 새 LCD 코드는 부팅마다 한 번(전원 재투입), SSH, 또는 관리자 등록 코드로만 생긴다. Fleet이 7일마다 새 코드를 받아야 한다면 10대 사이트는 매주 10번 재부팅한다.
-   - **Hub 세션 결속 결함**(D-351 발견 6): 짝지은 소켓이 다른 `robot_id`의 HEARTBEAT·EVENT를 넣을 수 있고, 짝 토큰 비교가 상수 시간이 아니다.
+   - **Hub 세션 결속 결함**(D-382 발견 6): 짝지은 소켓이 다른 `robot_id`의 HEARTBEAT·EVENT를 넣을 수 있고, 짝 토큰 비교가 상수 시간이 아니다.
 5. **전송.** 로봇 CORE는 LAN 평문 HTTP다(TXT `tls=none`). 사이트 Fleet은 사용자 쪽으로 TLS(8443, 사이트 CA)지만 로봇 쪽 호출은 평문이다. D-193 §10은 "중앙 Fleet 서버가 생길 때" TLS ADR을 열라고 했다.
 
 ### Decision
@@ -64,10 +64,10 @@
    - 로봇에 닿지 않으면 로스터에서는 바로 빼되 행을 `pending_logout`으로 남기고 암호문을 지우지 않는다. Fleet은 고정 주소가 다시 응답하고 **그 이름이 다른 주소에 보이지 않을 때** `logout`을 **한 번** 부른다(`system/info` 사전 읽기 없음 — 결속 확인을 위해 Bearer를 한 번 더 보낼 이유가 없다). 성공하면 행을 지우고, 실패하면 행과 수동 회수 안내를 남기고 더 시도하지 않는다. 패널은 "로봇에 토큰이 남아 있음(만료 `expires_at`) — 로봇 대시보드에서 회수 가능"을 보인다.
    - 로봇 쪽 회수(대시보드 토큰 삭제) → Fleet은 401을 보고 `needs_new_code`로 바꾸고 자동 재시도하지 않는다.
    - 권한: 등록·해제·새 주소로 옮기기는 `require_named_operator`(D-276·D-341 5항과 같음). 단일 console 토큰 구성에서는 403이고, 403 문구는 라우트별로 매개변수화한다. `viewer`는 패널을 읽기만 한다.
-7. **FleetAgent 이벤트 경로: 같은 등록 흐름이 짝 토큰까지 넣는다 — 단, D-351 Hub 결속 수정 뒤에 연다.**
+7. **FleetAgent 이벤트 경로: 같은 등록 흐름이 짝 토큰까지 넣는다 — 단, D-382 Hub 결속 수정 뒤에 연다.**
    - CORE 새 경로 `PUT /api/v1/fleet/link`·`DELETE /api/v1/fleet/link`(S6). 긴 수명의 사이트 토큰 하나로 로봇의 이벤트 목적지를 바꿀 수 없게, **`PUT`은 사이트 토큰에 더해 새 로봇 화면 코드를 요구한다**(본문 `code`; CORE가 D-193 교환과 같은 검증·시도 횟수·폐기 규칙으로 소모). 그 코드의 역할은 operator 이상이어야 한다. 관리자 등록 코드도 받는다(역할이 operator 이상이고 코드 자체가 일회용·5분이므로 LCD 코드와 같은 성질이다). viewer 코드는 403. 그래서 이벤트 연결은 "등록할 때 같은 코드로 한 번에"(교환과 연결을 한 요청 흐름으로 묶는 CORE 경로는 S6에서 정한다) 또는 "나중에 새 코드로" 한다. `DELETE`는 사이트 토큰만으로 된다(끊는 쪽은 권한을 좁힌다). 본문은 `hub_url`(`wss://`만), 사이트 CA PEM, Fleet이 만든 256 bit `pairing_token`. CORE는 `patch_local_config`로 오버레이 `fleet.*`에 쓰고 FleetAgent를 프로세스 안에서 `stop()`→`start()`한다. **CORE 재시작이 없다.** 설정 여부 조회는 인증된 `GET`(viewer 이상)만 두고, 인증 없는 조회는 만들지 않는다.
    - Fleet은 같은 짝 토큰을 등록부(슬롯 `agent` 암호문)와 로스터를 통해 Hub 토큰 표에 넣는다. REST 토큰과 짝 토큰이 같으면 거절하는 기존 규칙은 유지한다.
-   - **여는 조건(모두 필요):** (a) D-351 S2의 Hub 세션-로봇 결속과 상수 시간 비교가 `main`에 있다, (b) Fleet이 로봇에서 닿는 `wss://` 주소와 그 SAN을 가진 사이트 인증서를 가진다(D-351 발견 5), (c) S4의 `device_uid`가 HELLO에 실린다. 그 전까지 등록된 로봇은 발견 상태 **등록됨**(REST 확인, 이벤트 연결 전)에 머문다.
+   - **여는 조건(모두 필요):** (a) D-382 S2의 Hub 세션-로봇 결속과 상수 시간 비교가 `main`에 있다, (b) Fleet이 로봇에서 닿는 `wss://` 주소와 그 SAN을 가진 사이트 인증서를 가진다(D-382 발견 5), (c) S4의 `device_uid`가 HELLO에 실린다. 그 전까지 등록된 로봇은 발견 상태 **등록됨**(REST 확인, 이벤트 연결 전)에 머문다.
    - 평문 `ws://` 짝 연결은 이 경로로 만들지 않는다. CA PEM이 평문 HTTP로 가는 위험은 3항 한계와 같고 9항 조건이 풀 때 함께 풀린다.
 8. **발견 상태와 용어.** 발견 상태는 `registration_pending` "등록 대기" → `enrolled` "등록됨"(새, REST 결속 확인) → `verified_online` "확인됨"(FleetAgent HELLO가 같은 이름·UID로 온라인)이고, `pairing_pending`은 "이벤트 연결 대기"로 문구를 바꾼다(`robots.yaml` 로봇용). `conflict` "신원 충돌"은 그대로다. 등록부 상태(2·3·6항)는 로스터 행에 따로 보인다. 로스터 행은 출처 **파일**/**등록**을 보인다.
 9. **전송 위험과 TLS 조건.** 코드·토큰·(7항의) 짝 토큰·CA가 로봇 LAN 평문 HTTP로 간다. 받아들이는 조건: 로봇 LAN이 운영자 전용 SSID/VLAN이다(사이트 검증 기록에 적는다). 다음 중 하나면 **로봇 CORE TLS ADR이 먼저**이고 이 등록은 FIELD 판정을 받을 수 없다: 로봇 LAN을 운영자 밖 사람·장치와 공유한다, Fleet과 로봇이 라우팅된 다른 망에 있다, 한 Fleet이 여러 사이트의 로봇을 관리한다(중앙 Fleet), 사이트 로봇이 10대를 넘는다. Fleet이 로봇에 보내는 **모든** HTTP — 등록 교환과 운용 `HttpRobotClient`(`swarm/transport.py:140`) 둘 다 — 는 `trust_env=False`(환경 프록시가 Bearer를 가로채지 않게)로 만들고, 등록 교환은 추가로 리다이렉트 금지, 연결 3 s·전체 10 s 제한이다.
@@ -107,7 +107,7 @@
 | SOURCE | 이 ADR, 계획, ADR Log 행, 하네스 lint(이 변경이 만든 오류 없음). README·발견 규칙 교차 참조는 구현 단계에서 |
 | LOCAL | 계획 S1–S3 pytest·node 녹색: 가짜 CORE(`httpx.MockTransport`)에 대한 등록·잘못된 로봇·관리자 코드 거절·옛 이미지 모양 응답·주소 바뀜에서 Bearer 0회·해제·`pending_logout` 재시도, 로스터 추가 뒤 e-stop 도달·진행 중 수집과 추가의 정렬·등록 로봇의 task 생성, 등록부 DB 사본만으로 토큰이 안 나오는 시험. 저장소 루트 `test/`의 결합 시험 하나가 **현재 CORE 코드**로 교환→`whoami`→`system/info`→`logout`을 돈다 — 이것은 코드 수준 증거이고 배포 이미지의 증거가 아니다. S4 이후 같은 결합 시험이 `pair-site`로 돈다 |
 | DEVICE | 벤치 로봇 `rosy-pinky-8kcn`, 같은 Wi-Fi의 벤치 Fleet, 이동·정지 명령 없음, SSH 없음. **(D1, 현 이미지 `2026.09.27-010`)** 전원 재투입 → LCD 코드 → 콘솔 **등록** → 로스터에 온라인·상태 신선 → 로봇 쪽 토큰 존재 확인 → Fleet 재시작 뒤 온라인 → **등록 해제** 뒤 로봇 쪽 토큰 부재 확인. "로봇 쪽 확인"에 쓴 자격은 계획 벤치 절차의 두 방법 중 하나로 정하고 기록한다. 옛 이미지 동작의 증거는 D1뿐이다. **(D2, S4 이미지)** `pair-site` 출처·90일 만료·`device_uid` 결속, 공유기에서 DHCP 주소를 바꿨을 때 `address_changed`로 멈추고 정지 외 Bearer를 보내지 않음 — 증거는 벤치 Fleet의 httpx 요청 로그(`httpx` 로거 INFO, 요청 줄만, 헤더 없음)에서 옛·새 주소로의 요청 목록이며, 가능하면 벤치 PC 패킷 캡처(`tcp port 8080`, `Authorization` 문자열 검색 수만 기록)로 교차 확인한다. **(D3, S6)** 같은 등록 흐름으로 FleetAgent HELLO가 `verified_online`, CORE 재시작 없이 이벤트가 Fleet SQLite에 쌓임 |
-| FIELD | 실제 Ubuntu 사이트 호스트(Avahi 브리지, Compose, 사이트 CA)에서 4대 이상 등록, 재부팅·DHCP 예약 포함, 9항 운영자 전용 망 기록. D-351 Decision 5의 관제 DEVICE 다섯 항목이 별도로 필요 |
+| FIELD | 실제 Ubuntu 사이트 호스트(Avahi 브리지, Compose, 사이트 CA)에서 4대 이상 등록, 재부팅·DHCP 예약 포함, 9항 운영자 전용 망 기록. D-382 Decision 5의 관제 DEVICE 다섯 항목이 별도로 필요 |
 
 host pytest 통과는 DEVICE가 아니고(D-91), 벤치 1대는 FIELD가 아니다(D-95).
 
@@ -139,9 +139,9 @@ host pytest 통과는 DEVICE가 아니고(D-91), 벤치 1대는 FIELD가 아니�
 
 ### Consequences
 
-- CORE(S4): `pair`에 `purpose` 필드, 출처 `pair-site`(`TOKEN_SOURCES`·`PAIRED_SOURCES`), 사이트 수명 설정(D-193 168 h 상한의 출처 한정 개정), `system/info.device_uid`·`device_name`, 대시보드 보안 패널의 출처 표시, (S6) `fleet/link`. operator용 `auth/site-tokens` 목록·회수. D-193을 개정한다(`pair-site` 수명, operator 회수) — D-193 본문과 ADR Log 행에 그 표시를 둔다. 모두 additive이며 API Ref MINOR를 올리고 D-351 계약 스냅샷이 있으면 재생성한다. 이미지 재빌드가 필요하다.
+- CORE(S4): `pair`에 `purpose` 필드, 출처 `pair-site`(`TOKEN_SOURCES`·`PAIRED_SOURCES`), 사이트 수명 설정(D-193 168 h 상한의 출처 한정 개정), `system/info.device_uid`·`device_name`, 대시보드 보안 패널의 출처 표시, (S6) `fleet/link`. operator용 `auth/site-tokens` 목록·회수. D-193을 개정한다(`pair-site` 수명, operator 회수) — D-193 본문과 ADR Log 행에 그 표시를 둔다. 모두 additive이며 API Ref MINOR를 올리고 D-382 계약 스냅샷이 있으면 재생성한다. 이미지 재빌드가 필요하다.
 - Fleet: 로스터가 동적이 되고 소유자가 하나가 된다. 자격 없는 라우트는 늘지 않는다 — 등록 라우트는 모두 이름 있는 operator 뒤다. `cryptography`가 Fleet 이미지 의존성이 되고 새 Compose secret과 오프라인 `rekey` 명령이 생긴다. 운용 `HttpRobotClient`가 환경 프록시를 무시한다.
 - 운영: 로봇마다 SSH가 필요했던 등록이 콘솔 한 곳으로 모인다. 대신 Fleet 호스트와 그 키가 사이트 전체 로봇의 operator 자격을 모은 곳이 되므로, Fleet 호스트 보호와 `robot_credential_key`의 별도 보관이 사이트 검증 기록 항목이 된다. 사이트 토큰이 도난되면 로봇 쪽에서 회수할 때까지 최대 90일 유효하다 — 회수 절차를 README에 둔다.
 - 현 벤치 이미지로 D1이 가능하다 — 등록 자체는 이미지 교체를 기다리지 않는다. 다만 7일 한계가 있다.
 
-**References:** D-5, D-30, D-31, D-91, D-95, D-190, D-193, D-276, D-302, D-341(브랜치), D-351(브랜치), ROSY FLEET SRS REG-001/REG-001a/SEC-201/SEC-203, `site-lan-discovery-profile.md`, `deploy/site/README.md`.
+**References:** D-5, D-30, D-31, D-91, D-95, D-190, D-193, D-276, D-302, D-341, D-382, ROSY FLEET SRS REG-001/REG-001a/SEC-201/SEC-203, `site-lan-discovery-profile.md`, `deploy/site/README.md`.

@@ -46,7 +46,7 @@ from rosy_vision import map_worker
 from rosy_vision.map_register import REGISTER_VERSION, MapPaint, RegistrationResult
 from rosy_vision.rectify import rectify_jpeg
 
-logger = logging.getLogger("rosy_vision")
+logger = logging.getLogger(__name__)
 
 STATUS_INTERVAL_S = 1.0
 # A marker report older than this is not repeated in ``status`` (worker stopped
@@ -160,6 +160,8 @@ class _Source:
     latest: LatestFrame | None = None
     # (corner ids, robot ids, monotonic report time) from the Vision worker.
     markers: tuple[tuple[int, ...], tuple[str, ...], float] | None = None
+    # Optional hello.lens ({"kind", "focal_mm", "hfov_deg"}); None for older apps.
+    lens: dict | None = None
 
 
 class IngestServer:
@@ -224,6 +226,10 @@ class IngestServer:
     def latest_frame(self, source: str) -> LatestFrame | None:
         src = self._sources.get(source)
         return src.latest if src is not None else None
+
+    def source_lens(self, source: str) -> dict | None:
+        """The lens ``source`` reported in its hello, or None (older app, or not connected)."""
+        return getattr(self._sources.get(source), "lens", None)
 
     def report_markers(self, source: str, corners_seen, robots_seen) -> None:
         """Record which configured marker ids the worker saw on ``source``'s latest frame."""
@@ -307,6 +313,7 @@ class IngestServer:
             "X-Frame-Height": str(frame.header.height),
             "X-Frame-Rotation-Deg": str(frame.header.rotation_deg),
             "X-Frame-Rectified": "true" if rectification_active else "false",
+            **_lens_header(self.source_lens(source)),
         })
 
     def _rate_limited(self, key: tuple[str, ...], interval_s: float) -> Response | None:
@@ -356,6 +363,7 @@ class IngestServer:
             "proposal": detection.proposal.to_dict() if detection.proposal else None,
             "reason": detection.reason,
             "detector": {"version": DETECTOR_VERSION, "elapsed_ms": round(detection.elapsed_ms, 1)},
+            "lens": self.source_lens(source),
         }
         return _http_response(200, (json.dumps(body, separators=(",", ":")) + "\n").encode(), extra={
             "Content-Type": "application/json", "Cache-Control": "no-store",
@@ -449,7 +457,13 @@ class IngestServer:
             await connection.close(protocol.CLOSE_UNAUTHORIZED, "token is not authorized for source")
             return
         replaced = self._sources.get(source_name)
-        src = _Source(name=source_name, connection=connection)
+        src = _Source(name=source_name, connection=connection, lens=protocol.parse_hello_lens(hello))
+        sensor = hello["sensor"]
+        # app_version/device are free text from the phone: repr and cap them in the log.
+        logger.info("source %s connected app=%r device=%r sensor=%sx%s rot=%s lens=%s",
+                    source_name, str(hello.get("app_version"))[:64], str(hello.get("device"))[:64],
+                    sensor["width"], sensor["height"], sensor["rotation_deg"],
+                    _lens_text(src.lens) if src.lens else "unreported")
         self._sources[source_name] = src
         self._field_cache.pop(source_name, None)
         self._map_cache.pop(source_name, None)
@@ -550,6 +564,14 @@ async def _receive_hello(connection: ServerConnection):
     finally:
         if not receive.done():
             receive.cancel()
+
+def _lens_text(lens: dict) -> str:
+    return f"kind={lens['kind']};focal_mm={lens['focal_mm']:g};hfov_deg={lens['hfov_deg']:g}"
+
+
+def _lens_header(lens: dict | None) -> dict[str, str]:
+    """``X-Source-Lens`` for preview readers; absent when the app did not report a lens."""
+    return {"X-Source-Lens": _lens_text(lens)} if lens else {}
 
 
 def _http_response(status: int, body: bytes, *, extra: Mapping[str, str] | None = None) -> Response:

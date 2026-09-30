@@ -38,6 +38,38 @@ class ProtocolTest {
     }
 
     @Test
+    fun helloWithLensMatchesLensVector() {
+        val hello = JSONObject(
+            Protocol.hello("overhead-1", "0.1.0", "test-device", 1280, 720, 90, HelloLens("wide", 2.2000000476837, 104.0843)),
+        )
+        val expected = messages.getJSONObject("hello_with_lens")
+        assertEquals(expected.keySet(), hello.keySet())
+        for (key in listOf("type", "proto", "source", "app_version", "device")) {
+            assertEquals(key, expected.getString(key), hello.getString(key))
+        }
+        assertTrue(expected.getJSONObject("sensor").similar(hello.getJSONObject("sensor")))
+        val want = expected.getJSONObject("lens")
+        val got = hello.getJSONObject("lens")
+        assertEquals(want.keySet(), got.keySet())
+        assertEquals(want.getString("kind"), got.getString("kind"))
+        assertEquals(want.getDouble("focal_mm"), got.getDouble("focal_mm"), 0.0)
+        assertEquals(want.getDouble("hfov_deg"), got.getDouble("hfov_deg"), 0.0)
+    }
+
+    @Test
+    fun helloLensVectorsUseKindsTheAppSends() {
+        val valid = Vectors.root.getJSONObject("hello_lens").getJSONArray("valid")
+        val kinds = (0 until valid.length()).map { valid.getJSONObject(it).getJSONObject("lens").getString("kind") }.toSet()
+        assertEquals(io.github.livsbittt.rosy.cam.camera.LensChoice.entries.map { it.wire }.toSet(), kinds)
+    }
+
+    @Test
+    fun helloWithoutLensHasNoLensField() {
+        val hello = JSONObject(Protocol.hello("overhead-1", "0.1.0", "test-device", 1280, 720, 90))
+        assertTrue(!hello.has("lens"))
+    }
+
+    @Test
     fun helloDoesNotMatchBadProtoVector() {
         val hello = Protocol.hello("overhead-1", "0.1.0", "test-device", 1280, 720, 90)
         val badProto = messages.getJSONObject("hello_bad_proto")

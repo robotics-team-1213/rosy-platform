@@ -50,6 +50,7 @@
 - 변경: Android 소스 변경 없이 immutable Site candidate를 재빌드하고 synthetic ceiling-phone JPEG를 packaged WSS → Vision CPU ArUco → Fleet HTTPS/SQLite로 전송했다.
 - 근거: overhead `70 passed`; source `ceiling_north`, sequence 78, pose `[2.0, 1.0]`; Fleet 재시작 후 sighting readback 통과. `quality: null`이며 physical phone/freshness/calibration 수용은 아니다.
 - gate 변화: SOURCE/LOCAL 유지. Android phone, Ubuntu/RTX GPU, DEVICE/FIELD는 PARKED; D-268 automatic movement/picking은 HOLD.
+
 ## 2026-09-28 · uncommitted · serve authorized latest-frame preview
 
 - Change: Vision validates Fleet HMAC leases, serves only the latest fresh JPEG directly to the browser, caps each principal/source at 5 requests/second, and returns explicit missing/stale/rate-limit responses. Compose mounts a dedicated read-only secret and Caddy routes preview traffic directly to Vision.
@@ -168,6 +169,7 @@
 - 변경: `site_vision/map_register.py` 추가. 마커 없이 `map_v2_fleet` `road_lines.stl` 페인트를 영상에 맞춰 image→map homography(지도 미터)를 제안한다: 가는 흰 선 마스크 → 주 선 방향 → 고정 2.5 cm/px 템플릿 대 배율별 재표본 영상의 거친 탐색(90°×4, 거울) → 지도 템플릿 ECC → 바닥 거리 기준 recall·precision. coverage, 가려진 쪽(`cut_sides`·`cut_directions`), `rotation_deg`, `mirrored`, 방향 차(`orientation_margin`)를 준다. `ingest.py`에 lease 보호 `GET /api/vision/sources/{id}/map-proposal`(D-360 규칙, source당 초당 1회 계산), `cli.py vision --map-paint`. 제안은 sighting·`CameraMap`에 쓰지 않는다.
 - 증거: `python -m pytest src/site/site_vision/test -q` 122 passed (2026-09-30 Windows). LOCAL 실제 프레임 4장(공개 저장소 밖): 1장 수락, 손 기준 대비 중앙 오차 5.7 px, coverage 0.76, 잘린 쪽 서쪽; 3장(넓은 시야 2, 30° 기울기 1)은 거부(잘못된 수락 없음).
 - gate 변화: 없음. DEVICE/FIELD PARKED 유지.
+
 ## 2026-09-30 · uncommitted · refactor(vision): D-377 site_vision becomes rosy_vision in src/site/vision
 - 변경: `src/site/site_vision` → `src/site/vision`, Python·ROS 패키지 `site_vision` → `rosy_vision`(`git mv`, 이동 커밋 분리). console script 정본 `rosy-vision`, 옛 `site_vision`·`overhead`는 한 사이트 후보 릴리스 동안 별칭(단계 5에서 삭제). logger `rosy_vision`, argparse `prog` `rosy-vision`. Dockerfile·`.dockerignore`·compose `python3 -m rosy_vision.cli`, mDNS 인스턴스 표시 `ROSY Vision %h`. 하네스 모듈 `site_vision` → `rosy_vision`.
 - 증거: `python -m pytest src/site/vision/test -q` 112 passed (2026-09-30 Windows).
@@ -180,8 +182,19 @@
 - 증거: `python -m pytest src/site/vision/test -q` 126 passed (2026-09-30 Windows). LOCAL 실제 프레임 6장(현재 설치 약 2.0 m·23° 2장, 약 30° 1장 포함, 공개 저장소 밖) 모두 수락, 손 기준 대비 중앙 오차 3.6–6.6 px, 한 번 1.2–2 s. 옆 트랙만·로터리만 자른 영상과 좌우 반전 영상은 거부.
 - gate 변화: 없음. DEVICE/FIELD PARKED 유지.
 
+## 2026-09-30 · 80096516 · feat(vision): optional hello.lens logged and exposed
+- 변경: `protocol.parse_hello_lens()`가 hello의 선택 필드 `lens {kind: wide|standard, focal_mm, hfov_deg}`를 읽는다. 없거나 잘못된 lens는 무시하고 hello를 거절하지 않는다(`validate_hello`는 그대로). ingest가 연결 시 lens를 로그로 남기고, 미리보기 프레임 헤더 `X-Source-Lens: kind=…;focal_mm=…;hfov_deg=…`와 field-proposal 본문 `lens`로 알린다(보정 선택용).
+- 근거: 배포된 수신기(main의 `site_vision/protocol.py` 포함)는 모르는 hello 필드를 무시한다. 그래서 와이어 추가만으로 충분하고 `rosy-overhead/1`은 바꾸지 않는다.
+- 증거: `python -m pytest src/site/vision/test -q` 127 passed (2026-09-30 Windows). 공유 벡터 `test/fixtures/protocol/overhead-ingest.v1.json`에 `hello_with_lens`, `hello_lens.{valid,ignored}` 추가(Kotlin `ProtocolTest`도 읽음).
+- gate 변화: 없음. 초광각 프레임의 field_detect 결과는 DEVICE 단계에서 기록(폰 대기).
+
 ## 2026-10-01 · uncommitted · fix(vision): D-375 review fixes and worker process
 
 - 변경: 독립 리뷰(APPROVE WITH FIXES)와 실기 시험 결함 반영. 방향 차는 다른 방향(적어도 180°) 후보를 늘 정밀화해서 구하고, 경쟁자가 없으면 1.0이 아니라 미정(거부). recall×precision ≥ 0.75 추가, 거울상은 잘 맞고 방향이 분명할 때만. 픽셀 중심 변환은 실제 축별 배율, 세로 프레임은 긴 변 기준. 정합은 별도 작업 프로세스 하나(`map_worker.py`)에서 돌고 source마다 한 번에 하나, 실패는 다음 계산까지 422, `rejected_fit`에는 homography를 넣지 않는다. hello 대기는 루프가 응답하던 시간만 세고, 시간 초과는 1013(재시도)으로 닫는다(4400은 틀린 hello만).
 - 증거: `python -m pytest src/site/vision/test -q` 143 passed (2026-10-01 Windows). 각 거부 기준을 끄면 해당 합성 시험이 실패함을 확인. 3 s CPU 정합 중에도 새 폰 hello·프레임 읽기가 0.5 s 안에 끝나는 시험(스레드로 바꾸면 실패). LOCAL 실제 프레임 6장·렌즈 2장·실기 프레임 1장(JPEG 품질 20–40 포함) 수락, 리뷰 부분 시야 45장 중 잘못된 수락 0.
 - gate 변화: 없음. DEVICE/FIELD PARKED 유지. 실기 컨테이너에서 작업 프로세스 시간 재측정은 남았다.
+
+## 2026-10-01 · 14253f8e · fix(vision): bound hello.lens numbers, safe connect log
+- 변경: `parse_hello_lens`는 `0 < v < upper`(focal_mm 1000, hfov_deg 180)로 검사한다. 400자리 정수는 `float()` OverflowError로 연결 처리기를 죽였고, `Infinity`/`1e400`은 `> 0`을 통과해 나중에 `json.dumps`가 JSON이 아닌 `Infinity`를 내보냈다. 이제 둘 다 무시한다(공유 벡터 `huge_int_focal`, Python 전용 Infinity/NaN/1e400 시험). 연결 로그의 `app_version`·`device`는 폰이 보낸 글이라 64자로 자르고 `%r`로 남긴다.
+- 증거: `python -m pytest src/site/vision/test -q` 132 passed (2026-10-01 Windows).
+- gate 변화: 없음.

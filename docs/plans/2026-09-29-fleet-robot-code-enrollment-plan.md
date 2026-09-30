@@ -20,7 +20,7 @@
 
 - 로봇 CORE TLS(ADR 9항 조건만), 이미지 재빌드·서명·배포 시점.
 - 천장 카메라 연결 승인(D-341). S3의 "기기 연결" 패널 틀과 `device_pairing_audit` 표는 먼저 착지하는 쪽이 만든다(ADR 11항).
-- D-351 계약 스냅샷·적합성 탐침 자체. S4가 API를 바꿀 때 스냅샷이 `main`에 있으면 같은 변경에서 재생성한다.
+- D-382 계약 스냅샷·적합성 탐침 자체. S4가 API를 바꿀 때 스냅샷이 `main`에 있으면 같은 변경에서 재생성한다.
 - 이동·정지 명령의 실물 시험.
 
 ## 규칙
@@ -129,7 +129,7 @@
 - `deploy/robot/pinky_pro/native/rosy-config-apply.py`: 카드 `login.site_token_days` → `auth.pairing.site_token_days`.
 - 로봇 대시보드: `src/hmi/dashboard/panels/system/security.js`(토큰 목록)와 `src/hmi/dashboard/settings.js`에서 출처 `pair-site`를 "사이트"로 표시. operator 세션에는 관리자 토큰 목록 대신 `auth/site-tokens` 기반 "사이트 연결" 목록과 회수 버튼(확인 대화상자)을 보인다.
 - `docs/adr/D-193-login-code-and-credential-lifecycle.md`와 ADR Log D-193 행: "D-361가 개정(`pair-site` 수명, operator 회수)" 표시(이 계획 커밋에서 이미 넣었다 — S4는 착지 때 확인만).
-- `docs/reference/ROSY API & Protocol Reference.md`: MINOR, 변경 이력, §5 auth·system/info. `src/runtime/api_web/core_api_web/api/app.py` description 판. D-351 스냅샷이 있으면 재생성.
+- `docs/reference/ROSY API & Protocol Reference.md`: MINOR, 변경 이력, §5 auth·system/info. `src/runtime/api_web/core_api_web/api/app.py` description 판. D-382 스냅샷이 있으면 재생성.
 
 **시험 (먼저 실패)**
 - `src/runtime/gateway/test/test_auth_pairing.py`: `purpose=site` 발급 모양(출처가 `manual`이 아닌 `pair-site`), 관리자 부팅 코드 → operator로 낮춤, viewer 코드 403, 옛 본문(`purpose` 없음) 동작 불변, 사이트 수명 기본·자름, 브라우저 출처 168 h 상한 불변, 만료 있는 관리자가 발급한 등록 코드 → `min()`, 카드(만료 없음) 관리자 발급 → 90일, `pair-site` logout 204.
@@ -142,7 +142,7 @@
 
 ## S6 — FleetAgent 이벤트 연결 (조건부)
 
-**여는 조건(ADR 7항, 모두):** D-351 S2의 Hub 세션-로봇 결속·상수 시간 비교가 `main`에 있다. Fleet에 로봇이 닿는 `wss://` 주소와 맞는 SAN의 사이트 인증서가 있다. S4가 착지했다. 안 되면 시작하지 않고 `docs/logs.md`에 HOLD로 적는다.
+**여는 조건(ADR 7항, 모두):** D-382 S2의 Hub 세션-로봇 결속·상수 시간 비교가 `main`에 있다. Fleet에 로봇이 닿는 `wss://` 주소와 맞는 SAN의 사이트 인증서가 있다. S4가 착지했다. 안 되면 시작하지 않고 `docs/logs.md`에 HOLD로 적는다.
 
 **파일**
 - 새 `src/runtime/api_web/core_api_web/api/v1/fleet_link.py`: `PUT`(`pair-site` 토큰 **+ 새 로봇 화면 코드**, 코드는 D-193 규칙으로 소모, 코드 역할 operator 이상 — LCD 코드와 관리자 등록 코드 모두 받음, viewer 코드 403), `DELETE`(`pair-site` 토큰만), `GET`(viewer 이상, 설정 여부·hub 호스트만; 인증 없는 조회 없음). `hub_url`은 `wss://`만, CA PEM 크기·형식 검사, `pairing_token` 43자 이상. `patch_local_config({"fleet": ...})`, CA는 오버레이 옆 0600 파일. FleetAgent `stop()`→`start()`.

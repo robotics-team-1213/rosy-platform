@@ -419,13 +419,32 @@ def _warning_percent(svc: CoreServicesLike) -> float:
         return robot_state.BATTERY_WARNING_PERCENT
 
 
+def _robot_mode(svc: CoreServicesLike) -> Optional[str]:
+    """D-380: CORE's live RobotMode for the boot display; absent rather than wrong.
+
+    Duck-typed like ``_warning_percent``: a test double (or a CORE without a state
+    manager) reports no mode, and the lamp falls back to the health patterns.
+    """
+    snapshot = getattr(getattr(svc, "state", None), "snapshot", None)
+    mode = getattr(snapshot() if callable(snapshot) else None, "mode", None)
+    return robot_state.valid_robot_mode(getattr(mode, "value", mode))
+
+
+def _nav_state(svc: CoreServicesLike) -> Optional[str]:
+    """D-381: CORE's live NavigationState, same duck-typing and same absence rule."""
+    snapshot = getattr(getattr(svc, "state", None), "snapshot", None)
+    nav = getattr(snapshot() if callable(snapshot) else None, "navigation", None)
+    return robot_state.valid_nav_state(getattr(nav, "value", nav))
+
+
 def status_inputs(svc: CoreServicesLike) -> dict[str, Any]:
-    """What the root side cannot know: the live warning threshold and the overlaid device states."""
+    """What the root side cannot know: the live warning threshold, the overlaid device states and the live robot mode."""
     hardware = host_hardware(None, svc)
     devices = [{"id": row["id"], "state": row["state"], "product": row["product"]}
                for row in (hardware["devices"] if hardware.get("available") else [])]
     return {"schema": 1, "written_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-            "battery_warning_percent": _warning_percent(svc), "devices": devices}
+            "battery_warning_percent": _warning_percent(svc), "devices": devices,
+            "robot_mode": _robot_mode(svc), "nav_state": _nav_state(svc)}
 
 
 def write_status_inputs(svc: CoreServicesLike) -> None:
