@@ -108,6 +108,90 @@ def test_stop_all_zeroes_every_robot_and_stops_recorders(monkeypatch):
     assert sorted(calls) == [("h1", "~/rosy_rec.sh stop"), ("h2", "~/rosy_rec.sh stop")]
 
 
+def test_stop_all_zeroes_everyone_first_even_when_one_robot_raises(monkeypatch):
+    # F3: pass 1 zero to every robot, pass 2 every recorder; a raising core skips nobody.
+    import threading
+    order = []
+
+    class Boom(FakeCore):
+        def stop(self):
+            order.append("zero-a")
+            raise RuntimeError("socket gone")
+
+    class Ok(FakeCore):
+        def stop(self):
+            order.append("zero-b")
+
+    def fake_ssh(host, cmd, timeout=60):
+        order.append(f"rec-{host}")
+        if host == "h1":
+            raise OSError("ssh down")
+
+    monkeypatch.setattr(rc, "ssh", fake_ssh)
+    rc.stop_all(threading.Event(), {"a": (Boom(), "h1"), "b": (Ok(), "h2")}, [])
+    assert order == ["zero-a", "zero-b", "rec-h1", "rec-h2"]
+
+
+def test_core_stop_swallows_value_errors():
+    # F3: a garbled HTTP reply (JSON ValueError) must not break the zero loop.
+    core = rc.Core("192.0.2.1")
+    calls = []
+
+    def bad(*a, **k):
+        calls.append(1)
+        raise ValueError("not json")
+    core.teleop = bad
+    core.stop()
+    assert len(calls) == 3
+
+
+def test_run_robot_checks_the_stop_event_before_each_attempt(monkeypatch):
+    # F5
+    import threading
+    import types
+
+    class Core(FakeCore):
+        def __init__(self, host):
+            super().__init__()
+
+        def pair(self, code):
+            pass
+
+        def call(self, *a, **k):
+            return 200, {}
+
+    calls = []
+    monkeypatch.setattr(rc, "Core", Core)
+    monkeypatch.setattr(rc, "ssh", lambda host, cmd, timeout=60: calls.append(cmd))
+    event = threading.Event()
+    event.set()
+    args = types.SimpleNamespace(max_angular={}, max_linear={}, lidar_yaw_deg=181.9, dry_run=False,
+                                 session_api=False, session_api_path="")
+    results = {}
+    rc.run_robot("t", "h", "CODE", args, results, stop_event=event)
+    assert results["t"]["error"] == "stopped by the operator" and calls == []
+
+
+def test_join_all_is_bounded():
+    import threading
+    gate = threading.Event()
+    t = threading.Thread(target=gate.wait, name="calib-slow")
+    t.start()
+    try:
+        assert rc.join_all([t], 0.2) == ["calib-slow"]
+    finally:
+        gate.set()
+        t.join()
+
+
+def test_device_name_matches_rosy_rec_sh():
+    # rosy_rec.sh: device = hostname with [^A-Za-z0-9_-] -> '_'
+    assert rc.device_name("9dfk") == "rosy-pinky-9dfk"
+    assert rc.device_name("8kcn") == "rosy-pinky-8kcn"
+    assert rc.rec_device("rosy-pinky-9dfk") == "rosy-pinky-9dfk"
+    assert rc.rec_device("rosy.pinky 9dfk") == "rosy_pinky_9dfk"
+
+
 def test_run_robot_records_an_error_and_stops_the_recorder_it_started(monkeypatch):
     # M5: an exception mid-protocol still stops the recorder and leaves a result.
     import types

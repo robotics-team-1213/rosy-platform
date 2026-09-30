@@ -192,7 +192,7 @@ class Core:
         for _ in range(3):
             try:
                 self.teleop(0.0, 0.0)
-            except (urllib.error.URLError, OSError):
+            except (urllib.error.URLError, OSError, ValueError):
                 pass
             time.sleep(0.1)
 
@@ -296,7 +296,7 @@ def run_robot(name, host, code, args, results, stop_event=None, live=None):
 def _run_robot(name, host, code, args, results, stop_event, live, state, log):
     max_w = args.max_angular.get(name, 0.1)
     steps = protocol(max_linear=args.max_linear.get(name, 0.03), max_angular=max_w)
-    yaw, yaw_source = lidar_yaw_for(f"rosy-pinky-{name}", args.lidar_yaw_deg)
+    yaw, yaw_source = lidar_yaw_for(device_name(name), args.lidar_yaw_deg)
     log(f"protocol {len(steps)} steps, {duration_s(steps) / 60:.1f} min; LiDAR yaw {yaw:.2f} deg from {yaw_source}")
     if args.dry_run:
         for s in steps:
@@ -310,6 +310,9 @@ def _run_robot(name, host, code, args, results, stop_event, live, state, log):
     core.call("POST", "/api/v1/mode", {"mode": "MANUAL"})
     sessions = []
     for attempt in range(1 + MAX_REPEATS):
+        if stop_event is not None and stop_event.is_set():
+            results[name] = {"error": "stopped by the operator", "sessions": [str(s) for s in sessions]}
+            return
         if args.session_api:
             log(f"session start: {core.session_api('start', args.session_api_path)}")
         started = ssh(host, f"~/rosy_rec.sh start calib-protocol-v1-{name}-{attempt}")
@@ -342,14 +345,43 @@ def _run_robot(name, host, code, args, results, stop_event, live, state, log):
 
 def stop_all(stop_event, live, threads):
     """Ctrl-C: every drive loop stops, and the main thread also sends zero and
-    stops each recorder itself (a worker may be blocked in I/O)."""
+    stops each recorder itself (a worker may be blocked in I/O). Two passes -
+    zero to every robot first, recorders second - and one robot's failure
+    never skips another's stop."""
     stop_event.set()
-    for name, (core, host) in list(live.items()):
-        print(f"[{name}] operator stop: zero + recorder stop", flush=True)
-        core.stop()
-        ssh(host, "~/rosy_rec.sh stop")
+    robots = list(live.items())
+    for name, (core, _host) in robots:
+        print(f"[{name}] operator stop: zero", flush=True)
+        try:
+            core.stop()
+        except Exception as exc:  # noqa: BLE001 - keep stopping the others
+            print(f"[{name}] zero failed: {exc!r}", flush=True)
+    for name, (_core, host) in robots:
+        try:
+            ssh(host, "~/rosy_rec.sh stop")
+        except Exception as exc:  # noqa: BLE001
+            print(f"[{name}] recorder stop failed: {exc!r}", flush=True)
+    join_all(threads, 5.0)
+
+
+def join_all(threads, timeout_s):
+    """Join workers for at most timeout_s in total (bounded, so main can report)."""
+    deadline = time.monotonic() + timeout_s
     for t in threads:
-        t.join(5.0)
+        t.join(max(0.0, deadline - time.monotonic()))
+    return [t.name for t in threads if t.is_alive()]
+
+
+def device_name(name):
+    """The store/session device for --robots name: rosy_rec.sh writes session.json
+    "device" as the hostname with [^A-Za-z0-9_-] replaced by '_', and the Pinky Pro
+    hostnames are rosy-pinky-<name>."""
+    return rec_device(f"rosy-pinky-{name}")
+
+
+def rec_device(hostname):
+    import re
+    return re.sub(r"[^A-Za-z0-9_-]", "_", hostname)
 
 
 def main(argv=None) -> int:
@@ -390,6 +422,9 @@ def main(argv=None) -> int:
                 t.join(0.2)
     except KeyboardInterrupt:
         stop_all(stop_event, live, threads)
+    still = join_all(threads, 30.0)
+    for name in still:
+        print(f"[{name}] worker still running after the bounded join", flush=True)
     missing = [name for name in robots if name not in results]
     for name in missing:
         results[name] = {"error": "no result recorded"}
