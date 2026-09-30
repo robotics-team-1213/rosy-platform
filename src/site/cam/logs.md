@@ -50,6 +50,11 @@
 - 교훈: PowerShell 5.1은 네이티브 인자로 넘긴 here-string 안의 큰따옴표를 깨뜨린다. 커밋 메시지는 `git commit -F <파일>`로 넘긴다.
 - 열린 후속: NSC에 user 인증서가 없어 D-341 16항 되돌림 경로가 이 앱에서 동작하지 않는다(progress 4항).
 
+## 2026-10-01 · uncommitted · fix(cam): 4400 재시도 범위를 합의한 전환 예외로 좁힘
+- 변경: 4400은 사유가 정확히 빈 문자열이거나 "no hello"(공백 제거, 대소문자 무시, 1013 이전 수신기)일 때만 재접속한다. 그 밖의 사유는 "busy"나 "timeout"이 들어 있어도 비호환으로 보고 멈춘다(`ingest.py`의 `str(exc)` 검증 메시지가 재시도 대상이 되면 안 된다). 공유 벡터 `close_4400_reasons.retry`는 `["", "no hello"]`. `OverheadLink`의 KDoc은 4400이 비호환일 때만, 4401·4409는 멈춘다고 바로잡았다. 예외 자리에 제거 시점 표식(1013 수신기 전환 후 한 릴리스, D-341 11항).
+- 증거: `gradlew testDebugUnitTest --rerun-tasks` BUILD SUCCESSFUL (2026-10-01 Windows, JDK 21). `ProtocolTest`는 공유 벡터의 retry·fatal 목록과 "receiver busy"·"timeout" 같은 fatal 사유를 함께 확인한다.
+- gate 변화: 없음.
+
 ## 2026-10-01 · f908c2d5 · feat(cam): D-391 사이트 연결 기록 + 접속마다 mDNS로 tls_host 찾기
 
 - 변경: (기록은 2aa00ca3, 재발견·진단은 f908c2d5) 저장 모양을 D-391 1항 사이트 연결 기록(`SiteLink`: `site_name`·`tls_host`·`port`·`ca_pin`·`role`·토큰·`source`·`secure`·`expires_at`, 되돌림 `manual_host`, 진단용 `pairing_subnet`)으로 바꿨다. 옛 저장값(`host`/`pin`)은 읽을 때 옮긴다: IP면 `manual_host`, 이름이면 `tls_host`. 해석된 IP는 저장하지 않는다. 링크 URL은 `tls_host`를 유지하고 OkHttp `Dns`(`SiteDns`)가 접속마다 `SiteResolver`로 주소를 찾는다: `_rosy-overhead._tcp` 탐색(`NsdSiteBrowser`, D-370 TXT 규칙으로 `tls_host` 일치) → 없으면 `manual_host`("수동 주소") → 없으면 `not_discovered`. 찾은 주소는 30 s 캐시하고 접속 실패 때 버린다. 같은 `tls_host`가 두 주소에서 보이면 `conflict`로 자동 선택하지 않는다(D-370 5.3). pin이 있는 IP 전용 기록은 그 IP의 광고에서 `tls_host`를 배워 다음 세션부터 이름으로 붙는다. NSD 제약: API 34 미만은 resolve를 하나씩, 34 이상은 `registerServiceInfoCallback`. 진단: 5 s 안에 못 찾으면 "사이트가 이 Wi-Fi에서 보이지 않습니다 — 같은 이름의 다른 Wi-Fi일 수 있습니다"와 지금 Wi-Fi 서브넷·게이트웨이, 페어링 때 서브넷을 보여 준다. "Wi-Fi 연결 안 됨"은 주소를 가진 LAN 네트워크(LinkProperties) 기준이다(설정 화면 검색도 `activeNetwork` 대신 같은 기준). 실패 분류 이름은 `link/FailureClass.kt` 한 곳에 두었다.
@@ -65,3 +70,4 @@
 - gate 변화: 없음. DEVICE는 태블릿 부분 확인만 했고 progress 5항이 남았다.
 - 교훈: `PinnedTrustManager.getAcceptedIssuers()`가 비어 있으면 OkHttp 체인 정리기가 실패해 `Handshake.peerCertificates`가 조용히 빈 목록이 된다. 검증된 leaf가 필요하면 신뢰 관리자에서 받는다. Android NSD 캐시는 goodbye 없이 꺼진 광고도 몇 분 동안 계속 풀어 준다. 앱 캐시 무효화는 새 탐색을 강제하지만, NSD가 같은 옛 주소를 돌려줄 수 있다.
 - 열린 후속: 공유 벡터 `failure-classes.v1.json`·`site-link.v1.json`(rosy-00, `feat/d391-shared-link-vectors`)이 main에 오면 `FailureClassTest`·`SiteLinkTest`·`SiteLinkPrefsTest`가 그 벡터를 읽게 바꾼다.
+
