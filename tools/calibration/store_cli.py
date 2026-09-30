@@ -16,9 +16,11 @@ copy and put that back. sync copies only record files that are missing
 (identical ids must be byte-identical) and appends only missing events.
 
 accept refuses implausible values with the same check the runtime applies
-(lidar_mount within 150-210 deg or 15 deg of --hand-deg; wheels within 10 %
+(lidar_mount within 150-210 deg, or within 15 deg of --hand-deg when given; wheels within 10 %
 of 0.027 m / 0.0961 m; camera pitch/height in range). Accepting is the
-operator's decision; nothing else accepts a record.
+operator's decision; nothing else accepts a record. accept, reject and pin
+happen on the PC mirror only; the robot store receives them through sync
+(a sync that finds decisions on both sides refuses).
 """
 from __future__ import annotations
 
@@ -43,9 +45,18 @@ def main(argv=None) -> int:
     ap.add_argument("--from", dest="other", type=Path, help="sync: the other store root")
     ap.add_argument("--actor", default="")
     ap.add_argument("--note", default="")
-    ap.add_argument("--hand-deg", type=float, default=180.0,
-                    help="accept lidar_mount: the robot's line_follow hand value")
+    ap.add_argument("--hand-deg", type=float, default=None,
+                    help="accept lidar_mount: the robot's line_follow hand value; needed only when it "
+                         "lies outside 165-195 deg (default: the 150-210 deg window alone)")
     args = ap.parse_args(argv)
+    try:
+        return _run(ap, args)
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        print(f"refused: {exc}", file=sys.stderr)
+        return 2
+
+
+def _run(ap, args) -> int:
     store = CalibrationStore(args.root)
     if args.action == "list":
         for kind in [args.kind] if args.kind else KINDS:
@@ -65,7 +76,7 @@ def main(argv=None) -> int:
         print(json.dumps(store.load(args.robot, args.kind, args.record), indent=1))
     elif args.action == "accept":
         rec = store.load(args.robot, args.kind, args.record)
-        why = check_values(args.kind, rec["values"], nominal={"lidar_forward_deg": args.hand_deg})
+        why = check_values(args.kind, rec["values"], nominal={} if args.hand_deg is None else {"lidar_forward_deg": args.hand_deg})
         if why:
             print(f"refused: {why}", file=sys.stderr)
             return 2

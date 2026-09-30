@@ -43,6 +43,29 @@ def test_sync_merges_missing_records_and_events_both_ways(tmp_path):
     assert pc.merge_from(tmp_path / "robot", ROBOT) == {"records": 1, "events": 0}
 
 
+def test_hand_deg_is_optional_and_only_widens_the_window(tmp_path):
+    # F6: without --hand-deg only 150-210 deg; with it, +-15 deg around it too.
+    store = CalibrationStore(tmp_path)
+    rid = store.add(ROBOT, "lidar_mount", {"lidar_yaw_offset": math.radians(20.0)}, method="t/1")
+    assert store_cli.main(["accept", ROBOT, "lidar_mount", rid, "--actor", "op", "--root", str(tmp_path)]) == 2
+    assert store_cli.main(["accept", ROBOT, "lidar_mount", rid, "--actor", "op", "--root", str(tmp_path),
+                           "--hand-deg", "10"]) == 0
+
+
+def test_errors_print_refused_instead_of_a_traceback(tmp_path, capsys):
+    # F8: a missing record or a sync conflict is a one-line refusal, exit 2.
+    assert store_cli.main(["accept", ROBOT, "lidar_mount", "20261001T000000_000000000000", "--actor", "op",
+                           "--root", str(tmp_path)]) == 2
+    assert capsys.readouterr().err.startswith("refused: ")
+    pc, robot = CalibrationStore(tmp_path / "pc"), CalibrationStore(tmp_path / "robot")
+    rid = pc.add(ROBOT, "lidar_mount", {"lidar_yaw_offset": 3.17}, method="t/1")
+    robot.merge_from(tmp_path / "pc", ROBOT)
+    pc.set_status(ROBOT, "lidar_mount", rid, "accepted", actor="op")
+    robot.set_status(ROBOT, "lidar_mount", rid, "rejected", actor="x")
+    assert store_cli.main(["sync", ROBOT, "--from", str(tmp_path / "pc"), "--root", str(tmp_path / "robot")]) == 2
+    assert "refused: " in capsys.readouterr().err
+
+
 def test_sync_never_overwrites_a_conflicting_record(tmp_path):
     a, b = CalibrationStore(tmp_path / "a"), CalibrationStore(tmp_path / "b")
     rid = a.add(ROBOT, "lidar_mount", {"lidar_yaw_offset": 3.17}, method="t/1")
