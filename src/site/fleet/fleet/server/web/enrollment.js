@@ -220,9 +220,12 @@ export function createEnrollmentPanel({ headers, identity, log }) {
       showResult(messageFor(detail), true);
     } finally {
       state.busy = false;
-      el("enroll-submit").disabled = Date.now() < state.blockedUntil;
+      const blocked = Date.now() < state.blockedUntil;
+      el("enroll-submit").disabled = blocked;
+      if (blocked) el("enroll-submit").setAttribute("reason", "잠시 뒤 다시 시도");
+      else el("enroll-submit").removeAttribute("reason");
       if (state.blockedUntil) {
-        setTimeout(() => { el("enroll-submit").disabled = false; render(); },
+        setTimeout(() => { el("enroll-submit").disabled = false; el("enroll-submit").removeAttribute("reason"); render(); },
           Math.max(0, state.blockedUntil - Date.now()));
       }
     }
@@ -291,7 +294,10 @@ export function createEnrollmentPanel({ headers, identity, log }) {
     const banner = el("enroll-alarm");
     banner.hidden = alarms.length === 0;
     banner.textContent = alarms.map((a) => `${a.robot_id}: 주행 중 로봇의 주소가 바뀜 — 상태를 모름`).join(" · ");
-    el("enroll-address-add").disabled = !manage || Date.now() < state.blockedUntil;
+    const addBlocked = !manage || Date.now() < state.blockedUntil;
+    el("enroll-address-add").disabled = addBlocked;
+    if (addBlocked) el("enroll-address-add").setAttribute("reason", !manage ? "운용자 권한이 필요합니다" : "잠시 뒤 다시 시도");
+    else el("enroll-address-add").removeAttribute("reason");
   }
 
   function decorateDiscoveryRow(item, device) {

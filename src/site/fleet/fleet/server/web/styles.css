@@ -58,9 +58,9 @@ body {
 .field-options summary:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
 .field-options fieldset { min-width: 0; margin: 0 0 var(--space-2); padding: var(--space-2) var(--space-3); border: 1px solid var(--line-10); border-radius: var(--radius-button); display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-3); }
 .field-options legend { padding-inline: var(--space-1); font-size: var(--text-label); }
-.field-options label { display: inline-flex; align-items: center; gap: var(--space-1); min-height: var(--target-secondary); color: var(--muted); font-size: var(--text-micro); }
+.field-options label { display: inline-flex; align-items: center; gap: var(--space-1); min-height: var(--target-secondary); color: var(--ink-quiet); font-size: var(--text-micro); }
 .field-size input { width: 6rem; min-height: var(--target-secondary); padding: var(--space-1) var(--space-2); background: var(--ground-soft); border: 1px solid var(--line-14); border-radius: var(--radius-flag); }
-.field-mismatch { margin: 0 0 var(--space-2); padding: var(--space-2) var(--space-3); color: var(--paper); background: var(--ground-soft); border: 1px solid var(--series-goal); border-radius: var(--radius-button); font-size: var(--text-micro); }
+.field-mismatch { margin: 0 0 var(--space-2); padding: var(--space-2) var(--space-3); color: var(--ink); background: var(--ground-soft); border: 1px solid var(--series-goal); border-radius: var(--radius-button); font-size: var(--text-micro); }
 .field-mismatch[hidden] { display: none; }
 /* 사이트 설정이 없어서 비어 있을 때만 W×H 안내가 빈 지도 안내를 대신한다. 불러오는 중·연결 실패는 그대로 보인다. */
 .map-stage[data-site-map="none"][data-map-state="unavailable"]:has(> .field-mismatch[data-state="unconfigured"]:not([hidden])) > .map-empty { display: none; }
@@ -406,7 +406,7 @@ main {
 }
 
 /* 머리 한 줄: 이름 | 연결 | 시계 | 설정 | 정지. 접속·역할·테마는 설정 뒤에 접힌다.
-   90rem은 surfaces.yaml fleet-console breakpoints에 적힌 값이다 — 모든 항목을 편 머리의
+   90rem은 surfaces.yaml console breakpoints에 적힌 값이다 — 모든 항목을 편 머리의
    자연 폭(약 1220–1300px, 주체 이름에 따라)이 1440px 미만 창에서 한 줄에 들지 않아,
    비상 정지가 둘째 줄로 밀리거나 이름표가 두 줄로 접히지 않도록 접는다. */
 @media (width < 90rem) {
@@ -518,7 +518,7 @@ main {
 /* .formation-form input 의 width:100% 가 체크박스까지 늘려 로봇 id 를 낱자로 접었다. */
 .formation-form .member-list input { width: auto; flex: none; }
 .member-list span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.member-list input:disabled + * { opacity: 0.45; }
+.member-list input:disabled + * { opacity: var(--disabled-opacity); }
 /* ADR-1000: Warning / Critical Queues */
 .queues-container {
   display: flex;
@@ -568,15 +568,15 @@ main {
 .discovery-state { margin-left: auto; color: var(--ink-quiet); }
 .discovery-state.verified_online { color: var(--ink); }
 .discovery-state.conflict { color: var(--status-crit); }
-.discovery-state.enrolled { color: var(--paper); }
+.discovery-state.enrolled { color: var(--ink); }
 .device-link h4 { margin: 0; }
 .enroll-alarm { color: var(--status-crit); font-weight: var(--weight-label); }
 .enroll-address { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
-.enroll-address input, #enroll-code { min-height: var(--target-secondary); padding: var(--space-1) var(--space-2); color: var(--paper); background: var(--ground-soft); border: 1px solid var(--line-14); border-radius: var(--radius-flag); }
+.enroll-address input, #enroll-code { min-height: var(--target-secondary); padding: var(--space-1) var(--space-2); color: var(--ink); background: var(--ground-soft); border: 1px solid var(--line-14); border-radius: var(--radius-flag); }
 .enroll-result p { margin: var(--space-1) 0; }
 .enroll-result[data-kind="bad"] { color: var(--status-crit); }
 .enrolled-list { list-style: none; margin: var(--space-3) 0; padding: 0; display: grid; gap: var(--space-2); }
 .enrolled-list li { display: flex; flex-direction: column; gap: var(--space-1); }
-.enrolled-list small { color: var(--muted); }
+.enrolled-list small { color: var(--ink-quiet); }
 .enroll-dialog-actions { display: flex; gap: var(--space-2); margin-top: var(--space-3); }
 

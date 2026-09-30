@@ -74,6 +74,8 @@ surfaces:
     breakpoints:
       - value: 90rem
         reason: 토큰·역할·테마·두 줄 비상 정지를 모두 편 머리의 자연 폭(약 1220–1300px)이 1440px 미만에 한 줄로 들지 않는다 — 비상 정지가 둘째 줄로 밀리거나 테마 이름표가 접히지 않게 그 아래에서 머리를 접는다
+      - value: 110rem
+        reason: 지도 칸은 main 폭의 43%라 그 안을 둘로 나누면 관제 카메라가 좁아진다(1440px에서 약 240px) — 지도 칸이 충분히 넓은 이 폭 이상에서만 카메라를 지도 옆에 둔다
     baseline: docs/validation/uiux-surfaces-2026-09-26/captures/fleet-normal-1920x1080.png
 
   - id: game-board
@@ -128,6 +130,7 @@ surfaces:
     short_name: Rosy Pilot
     icon: src/hmi/web_common/icons/pilot.svg
     path: src/hmi/pilot
+    themes: [dark]
     surface: robot
     medium: web
     audience: 현장 운전자 한 사람 (D-323 원격 조종 PWA — CORE 가 /pilot 으로 서빙, 포트는 robot(로봇 대시보드) 과 같은 CORE 포트)
@@ -135,6 +138,13 @@ surfaces:
     owns: [manual-drive, driver-video, drive-assist, estop]
     grammar: focal
     contracts: []
+    breakpoints:
+      - value: 48rem
+        reason: 태블릿 세로·휴대폰에서 스틱·페달·HUD 글자를 줄이는 주행 조작부 폭(D-363) — 세 단 값으로 옮기면 64rem 아래 태블릿 가로에서도 조작부가 작아진다
+    raw_colours:
+      - file: styles.css
+        block: "[data-drive-stage]"
+        reason: 운전석 영상 무대의 검은 띠(D-363) — 영상 비율 밖은 테마 바탕이 아니라 화면 밖 검정이다
     contract_reason: >
       주행 화면은 게임형 HUD(원형 스틱·홀드 페달·큰 터치 표적)라 공용 버튼 크기·글꼴 굵기를
       표면 CSS 에서 다시 칠한다 — 공용 컨트롤·타이포 계약 시험이 이 재도색을 막는다. 확인 대화상자는

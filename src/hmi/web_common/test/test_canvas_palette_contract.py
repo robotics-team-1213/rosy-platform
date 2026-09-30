@@ -23,8 +23,10 @@ GAMES = SRC / "site" / "games" / "games" / "web"
 
 CANVAS_FILES = [
     DASHBOARD / "map.js",
-    DASHBOARD / "camera-capture.js",
+    # camera-capture.js는 재수출만 한다 — 본체는 web_common evidence.js(D-323 T9).
+    COMMON / "evidence.js",
     FLEET / "map-view.js",
+    FLEET / "field-view.js",
     FLEET / "console.js",
     GAMES / "board.js",
 ]

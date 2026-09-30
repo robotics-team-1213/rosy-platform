@@ -33,7 +33,7 @@ def test_every_media_query_uses_the_three_tiers_or_a_listed_value():
 def test_the_scan_reads_css_files_and_inline_styles():
     """스캔이 공허하지 않다 — 제품 표면의 CSS와 HTML 안 <style>에서 조건을 읽는다."""
     seen = {row["id"]: registry.media_conditions(REPO, row) for row in _web_rows()}
-    for ident in ("robot-dashboard", "fleet-console", "game-board"):
+    for ident in ("robot", "console", "game-board"):
         assert seen[ident], f"{ident}에서 @media 크기 조건을 하나도 읽지 못했다"
     inline = [here for here, _, _ in seen["lane-live-view"] + seen["control-diagnostic"]]
     assert inline and all(here.endswith(".html") for here in inline)
@@ -106,7 +106,7 @@ def test_the_container_scan_reads_the_shared_parts_and_fleet():
     seen = {row["id"]: registry.container_conditions(REPO, row) for row in _web_rows()}
     assert ("src/hmi/web_common/components.css", "(width < 22rem)") in {
         (here, condition) for here, _, condition in seen["web-common"]}
-    assert seen["fleet-console"], "Fleet 대형 폼의 @container를 읽지 못했다"
+    assert seen["console"], "Fleet 대형 폼의 @container를 읽지 못했다"
 
 
 def test_a_container_drift_is_caught(tmp_path):

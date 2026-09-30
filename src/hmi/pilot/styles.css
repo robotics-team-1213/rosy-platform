@@ -13,7 +13,7 @@ body {
   margin: 0;
   min-height: 100vh;
   overflow-x: hidden;
-  color: var(--paper);
+  color: var(--ink);
   background: var(--ground);
   font-family: var(--body);
   font-size: var(--text-body);
@@ -347,7 +347,7 @@ body[data-pilot-screen="drive"] ui-topbar ui-button { white-space: nowrap; }
 [data-drive-presets] { flex-wrap: nowrap; }
 
 /* 휴대폰 세로: 게이트 안내문·속도 라벨은 뺀다(상태는 HUD 가 말한다) */
-@media (max-width: 30rem) {
+@media (width < 30rem) {
   body[data-pilot-screen="drive"] #pilot-notice,
   body[data-pilot-screen="drive"] [data-gate-state],
   body[data-pilot-screen="drive"] ui-brand small,
@@ -358,7 +358,7 @@ body[data-pilot-screen="drive"] ui-topbar ui-button { white-space: nowrap; }
 }
 
 /* 태블릿 세로·휴대폰 */
-@media (max-width: 48rem) {
+@media (width <= 48rem) {
   [data-drive-stick] { width: min(40vw, 11rem); }
   [data-drive-pedals] ui-button { min-height: 4.2rem; min-width: 4.6rem; }
   [data-drive-pivots] ui-button { min-width: 4.6rem; }

@@ -594,7 +594,7 @@ NOTE = "공용 보이는 안내(ui-status/p)가 aria-describedby로 이 버튼�
 DISABLED_WITHOUT_REASON = {
     ("app.js", 'elements["code-submit"].disabled = true;'): TRANSIENT,
     ("app.js", 'elements["code-submit"].disabled = false;'): TRANSIENT,
-    ("app.js", 'setEnabled("traffic-policy-stage", !trafficPolicyPending);'): TRANSIENT,
+    ("telemetry.js", 'setEnabled("traffic-policy-stage", !trafficPolicyPending);'): TRANSIENT,
     ("app.js", 'setEnabled("hardware-refresh", false);'): TRANSIENT + " (장치 점검 요청)",
     ("app.js", "button.disabled = true;"): TRANSIENT + " (장치 시험 요청)",
     ("app.js", "button.disabled = false;"): TRANSIENT + " (장치 시험 실패 뒤 복구)",
@@ -629,6 +629,7 @@ DISABLED_WITHOUT_REASON = {
     ("mount.js", "tab.disabled = true;"): TRANSIENT + " (조작 묶음 전환 중)",
     ("mount.js", "tab.disabled = false;"): TRANSIENT + " (전환 끝 복구)",
     ("status-summary.js", "toggle.disabled = items.length === 0;"): "버튼 글자가 이미 '할 일 0'이라고 말한다",
+    ("enrollment.js", 'el("enroll-submit").disabled = true;'): TRANSIENT + " (등록 요청)",
     ("formation.js", 'querySelectorAll("input").forEach((i) => { i.disabled = status.active; });'):
         NATIVE + " (대형 상태 태그 RUNNING/HOLDING — 해제 뒤 바꾼다)",
     ("vision-view.js", "fieldset.disabled = !source;"): NATIVE + " (vision-state 태그)",

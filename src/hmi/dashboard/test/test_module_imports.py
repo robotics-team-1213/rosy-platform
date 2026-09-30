@@ -82,7 +82,7 @@ def test_the_scan_sees_the_shared_helpers():
 
 
 @pytest.mark.parametrize(("rel", "name"), [
-    ("app.js", "setTagState"),
+    ("telemetry.js", "setTagState"),  # D-362 P1: the SLAM chip moved out of app.js
     ("ros-network.js", "setTagState"),
     ("settings.js", "setTagState"),
     ("panels/console/overview.js", "enumLabel"),
