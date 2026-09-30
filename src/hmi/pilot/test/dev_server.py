@@ -253,6 +253,8 @@ if __name__ == "__main__":
 LINE_FOLLOW = {"mode": "OFF", "state": "OFF", "source": None, "error": None, "confidence": 0.0,
                "linear": 0.0, "angular": 0.0, "reason": "mode_off", "clearance_m": None}
 LINE_FOLLOW_SCRIPT = {}
+#: 시험이 읽는다: PUT /line-follow/mode 로 들어온 mode 값의 순서(같은 프로세스의 uvicorn 스레드).
+LINE_FOLLOW_MODE_LOG: list[str] = []
 
 
 @app.post("/__test__/line-follow")
@@ -276,6 +278,7 @@ async def line_follow_mode(request: Request):
     if _role(request) is None:
         return JSONResponse({"detail": "unauthorized"}, status_code=401)
     mode = (await request.json()).get("mode", "OFF")
+    LINE_FOLLOW_MODE_LOG.append(mode)
     LINE_FOLLOW.update({"mode": mode, "state": "WAITING" if mode != "OFF" else "OFF",
                         "reason": "no_observation" if mode != "OFF" else "mode_off",
                         "error": None, "linear": 0.0, "angular": 0.0})

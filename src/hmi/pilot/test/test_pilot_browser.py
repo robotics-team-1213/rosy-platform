@@ -375,3 +375,100 @@ def test_auto_intent_strip_shows_target_and_core_steer(tablet_page):
     page.mouse.up()
     page.wait_for_selector("[data-drive-intent][hidden]", state="attached", timeout=5_000)
     assert errors == [], errors
+
+
+def _arm_auto(page, base_url):
+    """주행 진입 → 차선 추종 흉내(TRACKING) → 차선 자동 켜기. 모드 기록을 비운다."""
+    import json
+    import urllib.request
+    _enter_drive(page, base_url)
+    req = urllib.request.Request(
+        base_url + "/__test__/line-follow",
+        data=json.dumps({"state": "TRACKING", "error": 0.1, "confidence": 0.9, "linear": 0.03,
+                         "angular": 0.0, "reason": "tracking"}).encode(),
+        headers={"Content-Type": "application/json"}, method="POST")
+    urllib.request.urlopen(req).read()
+    page.click("[data-drive-auto]")
+    page.wait_for_selector("[data-drive-go]", state="visible")
+    dev_server.LINE_FOLLOW_MODE_LOG.clear()
+
+
+def _wait_for_modes(page, *expected):
+    for _ in range(50):
+        if dev_server.LINE_FOLLOW_MODE_LOG[-len(expected):] == list(expected):
+            return
+        page.wait_for_timeout(100)
+    raise AssertionError(f"line-follow mode log {dev_server.LINE_FOLLOW_MODE_LOG}, expected tail {expected}")
+
+
+GO_ACTIVE = "document.querySelector('[data-drive-go]').classList.contains('active')"
+
+
+@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
+                    reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
+def test_go_releases_on_cancel_and_leave(tablet_page):
+    """D-344: 진행은 누르는 동안만 — 손가락이 버튼을 벗어나거나 시스템이 터치를 취소하면 CORE 에 OFF."""
+    base_url, page, errors = tablet_page
+    _arm_auto(page, base_url)
+    go = page.locator("[data-drive-go]").bounding_box()
+    stick = page.locator("[data-drive-stick]").bounding_box()
+
+    # 벗어남(pointerleave)
+    page.mouse.move(go["x"] + go["width"] / 2, go["y"] + go["height"] / 2)
+    page.mouse.down()
+    page.wait_for_function(GO_ACTIVE)
+    page.mouse.move(stick["x"] - 40, stick["y"] - 40)
+    _wait_for_modes(page, "CAMERA_LINE", "OFF")
+    page.mouse.up()
+    page.wait_for_function(f"!({GO_ACTIVE})")
+    page.wait_for_timeout(300)
+
+    # 취소(pointercancel)
+    dev_server.LINE_FOLLOW_MODE_LOG.clear()
+    page.mouse.move(go["x"] + go["width"] / 2, go["y"] + go["height"] / 2)
+    page.mouse.down()
+    page.wait_for_function(GO_ACTIVE)
+    page.dispatch_event("[data-drive-go]", "pointercancel")
+    _wait_for_modes(page, "CAMERA_LINE", "OFF")
+    page.wait_for_function(f"!({GO_ACTIVE})")
+    page.mouse.up()
+    assert errors == [], errors
+
+
+@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
+                    reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
+def test_stick_takes_over_auto(tablet_page):
+    """자동 진행 중 스틱을 잡으면 자동이 즉시 풀린다(CORE 에 PUT mode OFF) — 손이 우선이다."""
+    base_url, page, errors = tablet_page
+    _arm_auto(page, base_url)
+    page.dispatch_event("[data-drive-go]", "pointerdown")        # 진행을 누른 채(실제 포인터는 스틱에)
+    page.wait_for_function(GO_ACTIVE)
+    stick = page.locator("[data-drive-stick]").bounding_box()
+    page.mouse.move(stick["x"] + stick["width"] / 2, stick["y"] + stick["height"] / 2)
+    page.mouse.down()
+    _wait_for_modes(page, "CAMERA_LINE", "OFF")
+    page.wait_for_function(f"!({GO_ACTIVE})")
+    page.mouse.up()
+    assert page.inner_text("[data-drive-motion]") == "대기"
+    assert errors == [], errors
+
+
+@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
+                    reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
+def test_reenter_resets_auto_mode(tablet_page):
+    """주행 화면은 같은 section 에 다시 마운트된다 — 나갔다 들어오면 수동(페달)으로 시작한다."""
+    base_url, page, errors = tablet_page
+    _arm_auto(page, base_url)
+    assert page.get_attribute("[data-drive-auto]", "aria-pressed") == "true"
+    page.click("[data-drive-exit]")
+    page.wait_for_selector("[data-drive-enter]")
+    page.click("[data-drive-enter]")
+    page.wait_for_selector("[data-drive-stick]")
+    state = page.evaluate("""(() => {
+      const drive = document.querySelector('[data-screen=drive]');
+      return {auto: drive.dataset.autoMode, pressed: document.querySelector('[data-drive-auto]').getAttribute('aria-pressed')};
+    })()""")
+    assert state == {"auto": "off", "pressed": "false"}, state
+    assert page.locator("[data-drive-pedal=forward]").is_visible()
+    assert not page.locator("[data-drive-go]").is_visible()
+    assert errors == [], errors
