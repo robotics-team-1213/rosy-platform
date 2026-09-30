@@ -383,7 +383,8 @@ def compare_boot_non_file_areas(expected: bytes, actual: bytes, base: int = 0) -
     }
 
 
-def compare_boot_partition(expected: bytes, actual: bytes, base: int = 0) -> dict[str, object]:
+def compare_boot_partition(expected: bytes, actual: bytes, base: int = 0,
+                           allowed_extras: frozenset[str] = frozenset()) -> dict[str, object]:
     non_file = compare_boot_non_file_areas(expected, actual, base)
     want = Fat32(expected).tree()
     have = Fat32(actual).tree()
@@ -391,11 +392,21 @@ def compare_boot_partition(expected: bytes, actual: bytes, base: int = 0) -> dic
         if have.get(path) != value:
             raise ValueError(f"boot partition file differs or is missing: {path}")
     extras = sorted(path for path in have if path not in want)
+    provisioning = []
     for path in extras:
-        if path.split("/", 1)[0].lower() not in WINDOWS_EXTRA_TREES:
+        top = path.split("/", 1)[0].lower()
+        if top in allowed_extras:
+            provisioning.append(path)
+        elif top not in WINDOWS_EXTRA_TREES:
             raise ValueError(f"boot partition has an unexpected entry: {path}")
-    return {"mode": "files", "entries_verified": len(want), "windows_extras": extras,
-            "non_file_areas": non_file}
+    evidence: dict[str, object] = {"mode": "files", "entries_verified": len(want),
+                                   "windows_extras": [path for path in extras if path not in provisioning],
+                                   "non_file_areas": non_file}
+    if allowed_extras:
+        # D-382: a provisioned card (the emergency follow-up) also carries the
+        # bundle and settings file the writer added; they are named, not hidden.
+        evidence["provisioning_extras"] = provisioning
+    return evidence
 
 
 def _read_device(actual, size: int) -> bytes:
@@ -501,7 +512,8 @@ class _DeviceStream:
 
 
 def verify(image: Path, device: str, progress: Progress | None = None,
-           stall_seconds: float | None = None) -> dict[str, object]:
+           stall_seconds: float | None = None,
+           allowed_extras: frozenset[str] = frozenset()) -> dict[str, object]:
     if image.suffix != ".xz":
         raise ValueError("image must be an xz-compressed raw disk image")
 
@@ -521,7 +533,8 @@ def verify(image: Path, device: str, progress: Progress | None = None,
         raise DeviceReadError(f"device cannot be opened: {exc}") from exc
     stalled = False
     try:
-        return _verify_open(image, actual_file, progress, stall_seconds, device_stalled, image_stalled)
+        return _verify_open(image, actual_file, progress, stall_seconds, device_stalled, image_stalled,
+                            allowed_extras)
     except DeviceStallError:
         stalled = True
         raise
@@ -532,7 +545,7 @@ def verify(image: Path, device: str, progress: Progress | None = None,
 
 
 def _verify_open(image: Path, actual, progress: Progress, stall_seconds, device_stalled,
-                 image_stalled) -> dict[str, object]:
+                 image_stalled, allowed_extras: frozenset[str] = frozenset()) -> dict[str, object]:
     image_hash = hashlib.sha256()
     device_hash = hashlib.sha256()
     verified = 0
@@ -609,7 +622,8 @@ def _verify_open(image: Path, actual, progress: Progress, stall_seconds, device_
         if expected_boot == actual_boot:
             evidence["boot_partition"] = {"mode": "bytes"}
         else:
-            evidence["boot_partition"] = compare_boot_partition(bytes(expected_boot), bytes(actual_boot), boot[0])
+            evidence["boot_partition"] = compare_boot_partition(bytes(expected_boot), bytes(actual_boot), boot[0],
+                                                                allowed_extras)
     elif evidence["device_sha256"] != evidence["image_raw_sha256"]:
         raise ValueError("media readback digest mismatch")
     return evidence
@@ -730,6 +744,9 @@ def main() -> int:
                         help="print raw size, MBR signatures and a timed read of the device start")
     parser.add_argument("--probe-bytes", type=int, default=PROBE_BYTES)
     parser.add_argument("--probe-seconds", type=float, default=120.0)
+    parser.add_argument("--allow-boot-extra", action="append", default=[], metavar="NAME",
+                        help="a top-level boot-partition entry the writer added after the image "
+                             "(rosy-provision, rosy-config.yaml); D-382 emergency follow-up only")
     args = parser.parse_args()
     progress = Progress(args.progress, args.progress_seconds)
     if args.probe:
@@ -748,7 +765,8 @@ def main() -> int:
         else:
             if not args.device:
                 raise ValueError("--device is required unless --image-only is used")
-            evidence = verify(args.image, args.device, progress, args.stall_seconds)
+            evidence = verify(args.image, args.device, progress, args.stall_seconds,
+                              frozenset(name.lower() for name in args.allow_boot_extra))
     except DeviceStallError as exc:
         print(f"MEDIA_READBACK_DEVICE_UNREADABLE: {exc}", file=sys.stderr, flush=True)
         _write_error(args.error_json, exc, "io", progress.done)
