@@ -1,6 +1,6 @@
 ## D-341 천장 카메라 앱은 mDNS로 사이트를 찾고, 관제 콘솔 승인으로 연결 자격을 받는다 — 발견은 여전히 자격을 주지 않는다
 
-**Status:** Proposed (2026-09-29, 2026-09-29 독립 리뷰 반영 개정). 신뢰 모델과 첫 구현 조각(천장 카메라)의 계약을 정한다. 구현 GO, DEVICE·FIELD 승격, 로봇 FleetAgent 페어링 변경이 아니다.
+**Status:** Proposed (2026-09-29, 2026-09-29 독립 리뷰 반영 개정, 2026-10-01 교차 세션 검토 반영 — 닫힘 코드 분류, fullchain·IP SAN, 감사 표 재사용, D-377 이름). 신뢰 모델과 첫 구현 조각(천장 카메라)의 계약을 정한다. 구현 GO, DEVICE·FIELD 승격, 로봇 FleetAgent 페어링 변경이 아니다.
 
 잇는 결정: [D-257](D-257-site-lane-map-and-overhead-sightings.md) 2·4항 · [D-261](D-261-overhead-camera-app-skeleton.md) 5·6항 · [D-193](D-193-login-code-and-credential-lifecycle.md) 1항(일회용 코드 선례) · [D-269](D-269-device-server-contracts-and-ros-boundary.md) 4항 · [D-276](D-276-site-fleet-per-principal-api-authorization.md) · [D-302](D-302-site-registry-credential-separation.md) · [D-136](D-136-.md) 3항 · [D-95](D-95-device-observer-hold.md) · [D-345](D-345-design-philosophy-reaches-every-surface.md)(설치자 문구, 실행 파일 이름 `overhead`).
 발견 규칙: [`docs/reference/site-lan-discovery-profile.md`](../reference/site-lan-discovery-profile.md). 실행 계획: [`docs/plans/2026-09-29-overhead-console-pairing-plan.md`](../plans/2026-09-29-overhead-console-pairing-plan.md).
@@ -34,7 +34,7 @@
    - 결과를 받은 폰은 자격을 **아직 저장하지 않고** 받은 사이트 CA 인증서의 짧은 지문(DER SHA-256 앞 16 hex, 4자씩 묶음)과 `credential_id`를 띄운다. 진짜 콘솔의 승인 완료 화면도 같은 두 값을 띄운다.
    - 설치자가 폰에서 "일치"를 누르면 폰이 저장하고 `confirm`을 보낸다. 서버는 이때 비로소 자격을 활성으로 바꾸고 Vision 동기화 목록에 넣는다. 가짜 수신기에 승인받은 폰은 진짜 콘솔에 같은 값이 없으므로 설치자가 확인할 수 없다.
    - 수령·확인 기한은 승인 후 120 s다. 기한을 넘긴 승인은 자동 회수된다.
-5. **승인자는 이름 있는 `operator`다.** `require_named_operator`(D-276) 뒤에 둔다. `site-users.yaml`이 없는 단일 console 토큰 구성에서는 승인 라우트가 403을 낸다(403 문구는 라우트별로 매개변수화해 "mission admission" 문구를 재사용하지 않는다). `viewer`는 대기 요청을 볼 수만 있다. `policy-admin`은 D-276 표대로 정책 조건 전용이므로 승인 권한이 없다. 근거: 카메라 source 추가는 표시·대조용 관측 입력의 추가이며 sighting은 위치 추정·정책·`cmd_vel`에 들어가지 않는다(D-257 5항). 승인·거절·회수·확인은 principal_id와 함께 감사 표에 남는다.
+5. **승인자는 이름 있는 `operator`다.** `require_named_operator`(D-276) 뒤에 둔다. `site-users.yaml`이 없는 단일 console 토큰 구성에서는 승인 라우트가 403을 낸다(403 문구는 라우트별로 매개변수화해 "mission admission" 문구를 재사용하지 않는다). `viewer`는 대기 요청을 볼 수만 있다. `policy-admin`은 D-276 표대로 정책 조건 전용이므로 승인 권한이 없다. 근거: 카메라 source 추가는 표시·대조용 관측 입력의 추가이며 sighting은 위치 추정·정책·`cmd_vel`에 들어가지 않는다(D-257 5항). 승인·거절·회수·확인은 principal_id와 함께 감사 표에 남는다. 벤치도 같다: `site-users.yaml` 없이 console 토큰 하나로 도는 벤치에서는 카메라를 승인할 수 없다. 그래서 403 본문은 "forbidden"이 아니라 "named operator required (site-users.yaml)"처럼 원인을 말하고, 벤치 절차에 `site-users.yaml` 단계를 둔다.
 6. **source는 `static` 또는 `paired` 하나다.** `site-cameras.yaml`의 source마다 자격 방식을 둔다. `static`은 지금처럼 `phone_token_env`가 필수이고 페어링 대상이 아니다. `paired`는 `phone_token_env`를 가질 수 없고 페어링으로만 자격을 받는다. Fleet과 Vision이 기동 때 이 규칙을 검사하고 어기면 기동을 거절한다. 운용자는 승인할 때 `paired` source 중 하나를 고른다. 폰이 보낸 기기 이름표는 표시용일 뿐 source를 정하지 않는다. `paired` source마다 활성 자격은 하나다. 폰 교체는 **먼저 회수, 그 다음 새 승인**이다. 활성 자격이 있는 source로의 승인은 409로 거절한다.
 7. **대기 요청의 한도(사이트 전체 기준).** 원격 주소별 한도는 두지 않는다 — Caddy·uvicorn의 전달 주소 설정과 Docker Desktop NAT가 주소를 하나로 뭉개 공정하지도 믿을 만하지도 않다. 대신 대기 수명 300 s, 사이트 전체 동시 대기 16건, 사이트 전체 요청 30건/분, 요청별 조회 간격 ≥ 2 s, 요청 본문 4 KiB 상한, 알 수 없는 필드 거절(`extra=forbid`), 감사 행 보존 상한(최근 10,000행)을 둔다. 한도를 넘으면 429를 내고 기존 대기를 밀어내지 않는다.
 8. **자격 수령은 1회, 서버 보관은 최소.**
@@ -42,18 +42,32 @@
    - 폰은 요청 때 `poll_secret`의 SHA-256만 보낸다. 결과 조회는 `poll_secret` bearer로만 되고, 조회 연결도 첫 요청 때 기록한 leaf로만 신뢰한다.
    - 응답: 카메라 토큰 원문(256 bit, 이때 한 번만), `source_id`, `tls_host`, 사이트 CA 인증서(PEM), `credential_id`, `expires_at`. 한 번 내려 준 뒤 서버는 원문을 버린다. 다시 조회하면 410이다. 폰이 확인 전에 죽으면 기한 만료 뒤 다시 페어링한다.
    - Fleet SQLite(기존 `/var/lib/rosy/fleet.sqlite3`)에는 자격 digest·메타데이터와 감사만 둔다. 원문 토큰, nonce, 코드, 폰 사진·영상은 저장하지 않는다.
+   - 감사 표는 새로 만들지 않는다. 로봇 등록(D-361 S1, a25e32c8)이 이미 `device_pairing_audit`를 만들고 빠진 `device_kind` 열을 이전한다(`src/site/fleet/fleet/server/enrollment_store.py`). 카메라 저장소는 그 표와 생성·이전 코드를 재사용하고, 모든 쓰기가 `device_kind`를 명시한다(`overhead-camera`) — 열 기본값에 기대지 않는다.
 9. **Android 신뢰: 사이트 CA 하나에만 고정.**
    - 수령 직후 폰은 (a) 기록한 leaf가 받은 CA로 체인 검증되고 (b) leaf SAN에 `tls_host`가 있는지 확인한다. 하나라도 틀리면 버린다.
    - 이후 모든 WSS 연결은 **받은 CA 하나만 든 전용 TrustManager**와 `tls_host` 호스트명 검사로 한다. 시스템·사용자 CA 저장소를 쓰지 않고, 사이트 CA를 Android 설정에 설치하지 않는다. 이 TrustManager는 오버헤드 링크의 OkHttp 클라이언트에만 붙고 앱 전역 신뢰를 바꾸지 않는다.
    - leaf 단독 고정은 쓰지 않는다. 사이트 leaf 교체마다 모든 폰을 다시 붙여야 하기 때문이다.
+   - **사이트 프록시는 leaf + CA를 내보낸다**(`site_cert` = `cat site.crt site-ca.crt` fullchain). 이 절차의 신뢰는 결과로 받은 CA로 서지만, 16항 되돌림의 pin 링크는 폰이 받은 인증서 목록 안에서 CA를 찾아야 하므로 leaf만 내보내는 프록시에서는 실패한다(2026-09-30 실측: 실제 `site.crt`가 leaf 단독).
+   - **IP로 붙는 경로는 IP SAN이 필요하다.** S21은 사이트 Wi-Fi에서 `.local` 이름을 풀지 못했다(2026-09-30). 13항 재발견은 NSD가 준 IP로 붙고 SNI·검사는 `tls_host`로 하므로 이름 해석이 필요 없지만, IP를 호스트로 적은 수동·pin 링크는 그 IP가 인증서 SAN에 있어야 한다.
 10. **인증서 교체.** 같은 CA로 leaf를 다시 발급하면(SAN 유지) 폰은 그대로 붙는다. CA가 바뀌면 고정 검증이 실패한다. 앱은 "사이트 인증서가 바뀌었습니다 — 다시 연결 요청이 필요합니다"를 띄우고 멈춘다. 다른 신뢰 저장소로 자동 전환하거나 새 인증서를 받아들이지 않는다.
 11. **토큰 수명·회수·일시 장애.**
     - 기본 수명 180일. 콘솔은 자격 목록에 `expires_at`을 보여 준다. 만료 뒤에는 다시 페어링한다. 이 조각에는 자격 자체로 수명을 늘리는 경로가 없다.
-    - 회수: 콘솔의 운용자가 즉시 회수한다. Vision은 Fleet에서 digest 목록을 **2 s마다** 동기화하고, 회수된 자격으로 붙어 있는 연결을 닫는다. 목표는 회수 후 5 s 안의 송신 중단이다.
+    - 회수: 콘솔의 운용자가 즉시 회수한다. Vision은 Fleet에서 digest 목록을 **2 s마다** 동기화하고, 회수된 자격으로 붙어 있는 연결을 닫는다. 목표는 회수 후 5 s 안의 송신 중단이다. 이 목표는 Vision이 한가할 때가 아니라 경기장 검출·지도 제안 계산이 도는 중에도 지켜야 한다. 그래서 digest 동기화와 회수된 연결 닫기는 프레임 처리·무거운 계산과 같은 이벤트 루프를 굶기지 않는 곳에서 돈다(2026-10-01 실측: 계산이 수신 루프를 프레임당 10–15 s 막았다).
     - **닫힘 코드를 둘로 나눈다.** `4401`은 "회수됐거나 모르는 자격"이며 최종이다 — 폰은 재시도를 멈추고 재페어링을 요구한다. 새 코드 `4503`은 "자격 상태를 지금 확인할 수 없음"(Vision이 아직 한 번도 동기화하지 못했거나, 마지막 정상 목록이 10분을 넘김)이며 재시도 대상이다 — 폰은 자격을 지우지 않고 백오프한다. WebSocket 업그레이드 단계도 같은 구분을 따른다(`401` 최종, `503`+`Retry-After` 재시도). 그래서 Fleet이 꺼진 채 Vision이 먼저 뜨더라도 폰은 멈추지 않고 기다린다.
+    - **닫힘 코드 분류표(2026-10-01 교차 세션 검토).** 한 코드가 두 뜻을 갖지 않는다.
+
+      | 분류 | 코드 | 뜻 | 폰 |
+      |---|---|---|---|
+      | 최종 | `4401` | 모르는·회수된 자격 | 멈추고 재페어링 요구 |
+      | 최종 | `4400` | hello가 틀렸거나 프로토콜 판이 맞지 않음 | 멈추고 "버전 불일치" |
+      | 재시도 | `4503` | 자격 상태를 지금 확인할 수 없음 | 자격 유지, 백오프 |
+      | 재시도 | `1013` | hello 제한 시간(5 s) 초과 — Vision은 이벤트 루프가 응답한 시간만 센다 | 자격 유지, 백오프 |
+
+      근거: 2026-10-01 S21 실측에서 무거운 지도 제안 계산이 Vision 이벤트 루프를 막아 재접속의 hello가 늦었고, Vision이 이를 `4400 no hello`로 닫아 앱이 "버전 불일치"로 영구 정지했다. 그래서 hello 제한 시간은 `4400`에서 떼어 `1013`으로 닫는다(브랜치 `feat/overhead-map-auto-register`; 기계가 읽는 원천은 `test/fixtures/protocol/overhead-ingest.v1.json` `close_codes.hello_timeout`). **전환 규칙:** 1013 이전 수신기는 hello 제한 시간에도 사유 `no hello`(또는 빈 사유)의 `4400`을 보낸다. 앱은 그 경우에 한해 재시도하고(브랜치 `feat/overhead-app-site-ca-pin`), 모든 사이트가 1013 수신기로 바뀐 뒤 한 릴리스 지나 이 예외를 지운다. `4409`(같은 source를 다른 연결이 대체)는 이 ADR이 바꾸지 않는다.
     - 카메라 자격은 frames ingress 한 source 전용이다. Fleet 사용자 API, sighting 제출, preview, CORE에는 쓸 수 없다. 기존 자격 분리 규칙(D-302, `create_app`의 중복 거절)에 페어링 digest와 새 동기화 비밀을 더한다.
 12. **Vision은 발급 자격을 동적으로 받는다.**
     - Vision은 새 전용 서비스 자격(`pairing_sync_token`, 다른 모든 비밀과 달라야 함)으로 Fleet의 `GET /api/fleet/pairing/v1/credentials?role=overhead-camera`를 **백엔드 주소 `https://fleet:8090`로 직접** 읽는다(Compose에서 프록시는 Vision보다 늦게 뜬다). 이 라우트는 사용자 `authorize`가 아닌 전용 인증 의존성을 쓴다 — `authorize`는 사용자 digest가 설정되면 다른 bearer를 모두 401로 막기 때문이다.
+    - 페어링은 hello를 바꾸지 않는다. hello의 선택 필드(예: `lens{kind,focal_mm,hfov_deg}`, 63eccd8b)는 지금처럼 모르는 수신기가 무시하고, 페어링 시험 벡터도 이를 거절 사례로 두지 않는다.
     - 응답은 `source_id`, token SHA-256, `credential_id`, `expires_at`뿐이다. 원문은 Vision에도 가지 않는다. Vision은 제시된 bearer의 SHA-256을 hello의 source에 묶인 digest와 상수 시간 비교한다. `static` source의 환경 변수 토큰은 지금처럼 동작한다.
 13. **IP가 바뀌면 mDNS로 다시 찾는다.**
     - 폰은 페어링 결과로 `tls_host`, 포트, CA, source, 토큰을 저장한다. IP는 저장하지 않는다.
@@ -61,10 +75,10 @@
     - 같은 `tls_host`에 서로 다른 주소가 보이면 자동 선택을 멈추고 충돌을 표시한다(발견 규칙 2항). 광고가 없으면 백오프로 계속 찾는다. 광고 내용이 자격이나 CA를 바꾸는 일은 없다. 페어링 연결은 평문 ws로 낮추지 않는다.
 14. **광고 TXT.** `_rosy-overhead._tcp`에 공개 키 `pair=rosy-pair/1`을 더한다. 이 키가 없는 수신기는 수동·딥링크 페어링만 지원하는 것으로 본다. 알 수 없는 키 무시 규칙 때문에 기존 앱과 호환된다. TXT에는 여전히 토큰·CA·사이트 식별 비밀을 넣지 않는다.
 15. **발견 규칙 3·4항과의 관계.** 첫 접촉(요청·조회)은 광고된 `tls_host`를 후보로 쓸 수 있다. 상호 확인이 끝난 뒤에는 **페어링 결과로 받은 `tls_host`와 사이트 CA가 정본**이며 이후 광고는 주소만 공급한다. 이것이 규칙 3항("설치자가 예상 호스트명을 지정")과 4항("별도로 배포된 사이트 CA")을 대신하는 유일한 경로다.
-16. **평문 ws LAN 모드(D-261 5)와 되돌림 경로.** 평문 모드는 바뀌지 않는다. `overhead receive`(D-345 보충으로 바뀐 실행 파일 이름)의 평문 ws + 수동/딥링크 토큰은 신뢰된 로컬 벤치 전용이다. `rosy-pair/1`은 평문 자격을 발급하지 않는다. 사이트에서 페어링이 고장 나면 **되돌림 경로는 `static` source + `rosyov://...&tls=1` 수동 입력**이며, 이 경로는 지금처럼 사이트 CA를 Android 사용자 인증서 저장소에 손으로 설치해야 한다. 멀티캐스트가 막힌 VLAN·격리 Wi-Fi도 같은 경로를 쓴다.
+16. **평문 ws LAN 모드(D-261 5)와 되돌림 경로.** 평문 모드는 바뀌지 않는다. `rosy-vision receive`(D-377 이름. 옛 `overhead` 별칭은 D-374 5단계까지 유지)의 평문 ws + 수동/딥링크 토큰은 신뢰된 로컬 벤치 전용이다. `rosy-pair/1`은 평문 자격을 발급하지 않는다. 사이트에서 페어링이 고장 나면 **되돌림 경로는 `static` source + `rosyov://...&tls=1` 수동 입력**이다. 이 경로는 지금 사이트 CA를 Android 사용자 인증서 저장소에 손으로 설치해야 하지만, CA pin 링크(`&pin=sha256/<사이트 CA>`, `rosy-vision pair-link --pin-ca`, 브랜치 `feat/overhead-app-site-ca-pin`)가 착지하면 설치 없이 된다. pin은 언제나 사이트 CA이며 9항의 fullchain이 전제다. 멀티캐스트가 막힌 VLAN·격리 Wi-Fi도 같은 경로를 쓴다.
 17. **로봇 `_rosy._tcp` 결과는 정보용으로 남는다.** 앱은 로봇 CORE 레코드를 계속 보여 줄 수 있지만 페어링 요청·프레임 송신 대상으로 쓰지 않는다. 페어링 클라이언트는 `role=overhead-camera`가 아닌 레코드를 거절한다(시험으로 고정). 로봇 FleetAgent 페어링(D-269 4항, `robots.yaml` `fleet_pairing_token`)은 이 절차로 옮기지 않는다.
 18. **다른 관제 구성 요소로의 재사용(방향만).** 첫 조각은 역할을 상수 하나(`overhead-camera`)로 구현한다. 앞으로 다른 역할(예: 벽걸이 관제 표시기, 다른 관측 장치)이 필요하면 그 ADR이 역할별로 광고 서비스 종류, 승인 역할, 자격 범위, 묶을 대상, 수명을 정하고, 그때 상수를 역할 등록표로 넓힌다. 요청·확인 코드·상호 확인·1회 수령·CA 고정·회수·감사는 공유한다. 사람의 관제 로그인(D-276 개인 credential)은 기기 자격과 다르며 이 절차로 발급하지 않는다.
-19. **시험 벡터 공유.** 확인 코드 계산, 지문 표기, 요청·결과 JSON, 거절 사례를 `src/site/overhead/protocol/pairing_vectors.json`에 두고 Python(Fleet·Vision)과 Kotlin 시험이 같은 파일을 읽는다(D-261 1항과 같은 방식). 두 번째 역할이 생기면 공용 위치로 옮긴다.
+19. **시험 벡터 공유.** 확인 코드 계산, 지문 표기, 요청·결과 JSON, 거절 사례를 `test/fixtures/protocol/pairing.v1.json`(D-370이 정한 공유 벡터 자리)에 두고 Python(Fleet·Vision)과 Kotlin 시험이 같은 파일을 읽는다(D-261 1항과 같은 방식).
 
 ### 판정 등급 (Acceptance gates)
 
@@ -72,17 +86,17 @@
 |---|---|
 | SOURCE | 이 ADR, 계획, 발견 규칙·README·D-261 교차 참조. ADR Log 연속성 시험 녹색 |
 | LOCAL | Fleet·overhead pytest, Kotlin JVM 시험이 같은 `pairing_vectors.json`으로 녹색. 페어링을 켠 구성에서도 `test_no_video_relay.py` 녹색. Compose 스택 + 합성 Python 클라이언트로 요청→승인→수령→상호 확인→WSS 고정 CA 송신→회수 후 `4401`, Fleet 정지 중 `4503` 후 재접속까지 재현. 중계형 중간자·가짜 수신기·CA 변경은 JVM/종단 시험으로 LOCAL에서 판정한다. Windows 벤치 PC에서 `compose up` + `https://<pc>.local:8443/healthz` 성공이 폰 작업 전 관문이다 |
-| DEVICE | 실물 Android 폰(첫 기록은 S21)과 벤치 LAN, 사이트 CA를 Android 설정에 설치하지 않은 상태: 발견→요청→콘솔 코드 입력 승인→상호 확인→TLS 고정 송신 60 s 이상, 사이트 IP 변경 후 폰을 만지지 않고 재연결(옛/새 IP·재연결 시간 기록), 회수 후 5 s 안에 송신 중단, CA 변경 확인 1회. 같은 벤치 Fleet의 `robots.yaml`에 실제 로봇 `rosy-pinky-8kcn`(`http://192.168.1.202:8080`)을 두고 preview 비밀을 켜서, 콘솔 "관제 카메라"에 페어링된 카메라의 실시간 프레임과 로스터의 로봇이 함께 보이는 화면 캡처. 절차는 계획의 벤치 절차 |
+| DEVICE | 실물 Android 폰(첫 기록은 S21)과 벤치 LAN, 사이트 CA를 Android 설정에 설치하지 않은 상태: 발견→요청→콘솔 코드 입력 승인→상호 확인→TLS 고정 송신 60 s 이상, 사이트 IP 변경 후 폰을 만지지 않고 재연결(옛/새 IP·재연결 시간 기록), 검출·제안 계산 부하 중 회수 후 5 s 안에 송신 중단, CA 변경 확인 1회. 같은 벤치 Fleet의 `robots.yaml`에 실제 로봇 `rosy-pinky-8kcn`(`http://192.168.1.202:8080`)을 두고 preview 비밀을 켜서, 콘솔 "관제 카메라"에 페어링된 카메라의 실시간 프레임과 로스터의 로봇이 함께 보이는 화면 캡처. 절차는 계획의 벤치 절차 |
 | FIELD | 실제 Ubuntu 사이트 호스트(Avahi, Compose, 사이트 CA)와 천장 거치 폰 30분 이상, 사이트 DHCP 변경·재부팅 포함. D-210 범위 판단은 별도 |
 
-로컬 시험 통과는 DEVICE가 아니고, 벤치 폰 통과는 FIELD가 아니다(D-95). 차선 지도 위 sighting 표시는 이 ADR의 판정 대상이 아니며 진행 중인 `feat/console-site-map-layer`(사이트 사각형 지도 + sighting 겹침)에 의존한다.
+로컬 시험 통과는 DEVICE가 아니고, 벤치 폰 통과는 FIELD가 아니다(D-95). 차선 지도 위 sighting 표시는 이 ADR의 판정 대상이 아니며 사이트 지도 레이어(사각형 지도 + sighting 겹침, main 착지)에 의존한다.
 
 ### 이 ADR이 정하지 않는 것
 
 - CA 교체를 미리 알리는 "다음 CA" 사전 배포(지금은 CA가 바뀌면 재페어링).
 - 자격으로 수명을 늘리는 in-band 갱신 경로, 180일 기본값의 현장별 조정, 만료 임박 경고 UI.
 - 대기 한도(300 s, 16건, 30건/분, 120 s 수령 기한)의 현장 튜닝.
-- 카메라 외 역할과 역할 등록표, 공용 벡터 위치 이전, `_rosy-fleet._tcp`에 `pair` 키를 광고할지.
+- 카메라 외 역할과 역할 등록표, `_rosy-fleet._tcp`에 `pair` 키를 광고할지.
 - 페어링 승인을 `operator`보다 좁은 별도 역할(예: 사이트 관리자)로 옮길지.
 - 릴리스 빌드에서 `cleartextTrafficPermitted`를 끄는 빌드 분리(평문 벤치 모드 유지 여부와 연결됨).
 - 로봇 FleetAgent 페어링의 통합, 사람 관제 로그인의 기기 페어링화.
