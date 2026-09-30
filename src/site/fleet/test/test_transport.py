@@ -267,3 +267,45 @@ def test_a_websockets_without_invalid_status_degrades_to_a_quiet_end(monkeypatch
         assert _rejection("rosy_09", OSError("connection refused")) is None
     # 경고는 처음 한 번뿐이다 — 소켓마다 찍으면 재연결 로그가 그것뿐이 된다.
     assert caplog.text.count("InvalidStatus") == 1
+
+
+def test_operational_client_ignores_proxy_environment(monkeypatch):
+    """D-361 9: an environment proxy must never receive a robot Bearer token."""
+    monkeypatch.setenv("HTTP_PROXY", "http://proxy.invalid:3128")
+    monkeypatch.setenv("HTTPS_PROXY", "http://proxy.invalid:3128")
+    monkeypatch.setenv("ALL_PROXY", "http://proxy.invalid:3128")
+    client = HttpRobotClient(EP)
+    try:
+        assert client._http._trust_env is False
+        assert client._http._mounts == {}
+    finally:
+        run(client.aclose())
+
+
+def test_robot_sockets_ignore_proxy_environment(monkeypatch):
+    """D-361 9: the token-bearing WS URLs must not go through an environment proxy."""
+    import websockets
+
+    seen = []
+
+    class Refused(OSError):
+        pass
+
+    def connect(url, **kwargs):
+        seen.append(kwargs)
+        raise Refused("no robot here")
+
+    monkeypatch.setattr(websockets, "connect", connect)
+    client = HttpRobotClient(EP)
+
+    async def drive():
+        async for _ in client.pose_stream():
+            pass
+        async for _ in client.events(["x"]):
+            pass
+        with pytest.raises(OSError):
+            await client.open_reference_sink()
+        await client.aclose()
+
+    run(drive())
+    assert len(seen) == 3 and all("proxy" in kw and kw["proxy"] is None for kw in seen)

@@ -46,7 +46,12 @@ from fleet.server.policy_evidence import PolicyEvidenceError, PolicyEvidenceStor
 from fleet.server.mission_service import MissionService
 from fleet.server.mission_dispatcher import MissionDispatcher
 from fleet.server.mission_progress import MissionProgressService
+from fleet.server.mission_model_turn_store import MissionModelTurnStore
+from fleet.server.mission_model_turn_scheduler import MissionModelTurnScheduler
 from fleet.server.mission_store import MissionConflict
+from fleet.server.goal_evidence_service import (
+    GoalEvidenceService, GoalEvidenceSubmissionError,
+)
 from fleet.server.proposal_store import ProposalConflict, ProposalRejected, ProposalStore
 from fleet.server.local_stop_transport import UnixLocalStopTransport
 from fleet.server.local_action_transport import UnixLocalActionTransport
@@ -110,10 +115,15 @@ CONSOLE_ASSETS = {
     "styles.css": "text/css",
     "console.js": "application/javascript",
     "authorization.js": "application/javascript",
+    "field-layers.js": "application/javascript",
+    "field-view.js": "application/javascript",
     "formation.js": "application/javascript",
     "map-view.js": "application/javascript",
+    "poll-gate.js": "application/javascript",
     "roster.js": "application/javascript",
+    "enrollment.js": "application/javascript",
     "signals.js": "application/javascript",
+    "site-layer.js": "application/javascript",
     "vision-view.js": "application/javascript",
 }
 
@@ -249,6 +259,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                task_service: Optional[FleetTaskService] = None,
                mission_service: Optional[MissionService] = None,
                proposal_store: Optional[ProposalStore] = None,
+               goal_evidence_service: Optional[GoalEvidenceService] = None,
                candidate_resolver=None,
                policy_evidence: Optional[PolicyEvidenceStore] = None,
                start_task_dispatcher: bool = True,
@@ -260,7 +271,12 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                omx_socket_root: Path | str = "/run/rosy/omx",
                omx_stop_transport=None,
                enable_mission_dispatcher: bool = False,
-               omx_action_transport=None) -> FastAPI:
+               omx_action_transport=None,
+               enrollment=None,
+               robot_credential_key: Optional[str] = None,
+               mission_model_turn_max_rows: int = 10_000,
+               mission_model_turn_worker=None,
+               post_action_observation_source=None) -> FastAPI:
     mission_configured = mission_service is not None or proposal_store is not None
     if (mission_service is None) != (proposal_store is None):
         raise ValueError("Mission API requires both MissionService and ProposalStore")
@@ -268,6 +284,10 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         raise ValueError("Mission candidate resolver requires MissionService and ProposalStore")
     if candidate_resolver is not None and not callable(candidate_resolver):
         raise ValueError("Mission candidate resolver must be callable")
+    if goal_evidence_service is not None and not mission_configured:
+        raise ValueError("goal evidence requires the persistent Mission API")
+    if goal_evidence_service is not None and goal_evidence_service.missions is not mission_service:
+        raise ValueError("goal evidence service must use the configured MissionService")
     if mission_configured and task_service is None:
         raise ValueError("Mission API requires persistent API audit and dispatch-control storage")
     if mission_configured:
@@ -275,6 +295,8 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
             task_service.store.path.resolve(), mission_service.store.path.resolve(),
             proposal_store.path.resolve(),
         }
+        if goal_evidence_service is not None:
+            database_paths.add(goal_evidence_service.store.path.resolve())
         if len(database_paths) != 1:
             raise ValueError("Mission, proposal, audit, and resource claims must share one SQLite database")
     if site_users is not None and task_service is None:
@@ -299,12 +321,45 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     if enable_mission_dispatcher and action_transport is None:
         action_transport = UnixLocalActionTransport(omx_socket_root)
     mission_dispatcher = (
-        MissionDispatcher(mission_service, task_service.store, action_transport, configured_omx)
+        MissionDispatcher(
+            mission_service, task_service.store, action_transport, configured_omx,
+            on_action_terminal=(goal_evidence_service.on_action_terminal
+                                if goal_evidence_service is not None else None),
+        )
         if enable_mission_dispatcher else None
     )
     mission_progress = (
         MissionProgressService(mission_service.store) if mission_configured else None
     )
+    mission_model_turn_store = (
+        MissionModelTurnStore(
+            mission_service.store.path, max_rows=mission_model_turn_max_rows,
+        ) if mission_configured else None
+    )
+    mission_model_turn_scheduler = (
+        MissionModelTurnScheduler(
+            mission_service=mission_service, progress_service=mission_progress,
+            turn_store=mission_model_turn_store, policy_revision="er2-feedback-v1",
+        ) if mission_configured else None
+    )
+    if mission_model_turn_worker is not None:
+        worker_store = getattr(mission_model_turn_worker, "store", None)
+        consume_next = getattr(mission_model_turn_worker, "consume_next", None)
+        if mission_model_turn_scheduler is None:
+            raise ValueError("Mission model-turn worker requires persistent Mission services")
+        if (worker_store is None or not callable(consume_next)
+                or Path(worker_store.path).resolve() != Path(mission_model_turn_store.path).resolve()):
+            raise ValueError("Mission model-turn worker must consume the configured shared SQLite outbox")
+    if post_action_observation_source is not None:
+        if mission_model_turn_worker is None:
+            raise ValueError("post-action observation source requires an injected Mission model-turn worker")
+        tool_dispatcher = getattr(mission_model_turn_worker, "dispatcher", None)
+        if not hasattr(tool_dispatcher, "post_action_observation_source"):
+            raise ValueError("Mission model-turn worker must use the Fleet feedback tool dispatcher")
+        configured_source = tool_dispatcher.post_action_observation_source
+        if configured_source is not None and configured_source is not post_action_observation_source:
+            raise ValueError("Mission worker and app must share one post-action observation source")
+        tool_dispatcher.post_action_observation_source = post_action_observation_source
     vision_signer = VisionLeaseSigner(vision_lease_secret) if vision_lease_secret else None
     if vision_signer is not None:
         if console_token is not None and hmac.compare_digest(vision_lease_secret, console_token):
@@ -329,22 +384,42 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         dispatcher = None
         mission_worker = None
         proposal_expiry = None
+        goal_evidence_worker = None
+        mission_feedback_scheduler = None
+        mission_model_turn_worker_task = None
         if task_service is not None and start_task_dispatcher:
             dispatcher = asyncio.create_task(_task_dispatch_loop(console, task_service))
         if proposal_store is not None:
             proposal_expiry = asyncio.create_task(_proposal_expiry_loop(proposal_store))
         if mission_dispatcher is not None:
             mission_worker = asyncio.create_task(_mission_dispatch_loop(mission_dispatcher))
+        if goal_evidence_service is not None:
+            goal_evidence_worker = asyncio.create_task(
+                _goal_evidence_expiry_loop(goal_evidence_service)
+            )
+        if mission_model_turn_scheduler is not None:
+            mission_feedback_scheduler = asyncio.create_task(
+                _mission_feedback_schedule_loop(mission_model_turn_scheduler)
+            )
+        if mission_model_turn_worker is not None:
+            mission_model_turn_worker_task = asyncio.create_task(
+                _mission_model_turn_worker_loop(mission_model_turn_worker)
+            )
         try:
             yield
         finally:
-            for background in (dispatcher, mission_worker, proposal_expiry):
+            for background in (dispatcher, mission_worker, proposal_expiry,
+                               goal_evidence_worker, mission_feedback_scheduler,
+                               mission_model_turn_worker_task):
                 if background is not None:
                     background.cancel()
                     try:
                         await background
                     except asyncio.CancelledError:
                         pass
+            close_observation_source = getattr(post_action_observation_source, "aclose", None)
+            if callable(close_observation_source):
+                await close_observation_source()
 
     app = FastAPI(
         title="ROSY Fleet",
@@ -356,7 +431,12 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     app.state.web_common = Path(web_common) if web_common is not None else None
     app.state.task_service = task_service
     app.state.mission_service = mission_service
+    app.state.goal_evidence_service = goal_evidence_service
     app.state.mission_progress = mission_progress
+    app.state.mission_model_turn_store = mission_model_turn_store
+    app.state.mission_model_turn_scheduler = mission_model_turn_scheduler
+    app.state.mission_model_turn_worker = mission_model_turn_worker
+    app.state.post_action_observation_source = post_action_observation_source
     app.state.mission_dispatcher = mission_dispatcher
     app.state.proposal_store = proposal_store
     app.state.omx_instances = configured_omx
@@ -454,6 +534,18 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                 and any(hmac.compare_digest(registry_digest, digest) for digest in principals)):
             raise ValueError("site user credentials must differ from the CORE registry credential")
 
+    if robot_credential_key is not None:
+        # D-361 4: the register key is its own secret, never another site credential.
+        key = robot_credential_key.strip()
+        key_digest = sha256(key.encode("utf-8")).hexdigest()
+        same = lambda other: other is not None and hmac.compare_digest(key, other.strip())  # noqa: E731
+        if (same(console_token) or same(discovery_token) or same(vision_lease_secret)
+                or console.uses_rest_token(key) or console.uses_agent_pairing_token(key)
+                or (sightings is not None and sightings.uses_token(key))
+                or (policy_evidence is not None and policy_evidence.uses_token(key))
+                or any(hmac.compare_digest(key_digest, digest) for digest in principals)):
+            raise ValueError("robot credential key must differ from every other site secret")
+
     def authorize(request: Request,
                   authorization: Optional[str] = Header(default=None)) -> SitePrincipal:
         if principals:
@@ -527,8 +619,8 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
             raise ValueError("discovery credential must differ from site user credentials")
 
         @app.post("/api/fleet/discovery/scan", tags=["fleet-discovery"])
-        def discovery_scan(body: DiscoveryScanPayload,
-                           authorization: Optional[str] = Header(default=None)) -> dict:
+        async def discovery_scan(body: DiscoveryScanPayload,
+                                 authorization: Optional[str] = Header(default=None)) -> dict:
             expected = f"Bearer {discovery_token}"
             if not authorization or not hmac.compare_digest(authorization, expected):
                 raise HTTPException(status_code=401, detail={"code": "UNAUTHORIZED"})
@@ -537,13 +629,24 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
             except ValueError as exc:
                 raise HTTPException(status_code=400, detail={"code": "INVALID_SCAN",
                                                              "message": str(exc)}) from exc
+            if enrollment is not None and enrollment.available:
+                await enrollment.on_discovery(discovery.rows())
+                await enrollment.settle_holds()
             return {"accepted": True}
 
         @app.get("/api/fleet/discovery", dependencies=read_guard,
                  tags=["fleet-discovery"])
         def discovery_readback() -> dict:
             identities = hub.registry.identity_snapshot() if hub is not None else {}
-            return discovery.snapshot(console.registered_endpoints, identities)
+            enrolled = enrollment.enrolled_names() if enrollment is not None else {}
+            return discovery.snapshot(console.registered_endpoints, identities, enrolled)
+
+    if enrollment is not None:
+        from fleet.server.enrollment_routes import install_enrollment_routes
+
+        install_enrollment_routes(app, enrollment, require_viewer=require_viewer,
+                                  require_operator=require_operator,
+                                  named_identity=bool(principals))
 
     def cancel_pending_task_queue(robot_id: Optional[str] = None, *,
                                   actor_id: str = "site-console") -> None:
@@ -695,6 +798,33 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
             return control
 
     if mission_service is not None:
+        if goal_evidence_service is not None:
+            @app.post("/api/fleet/goal-evidence", tags=["fleet-goal-evidence"])
+            def fleet_goal_evidence(
+                body: dict,
+                x_goal_evidence_token: Optional[str] = Header(default=None),
+            ) -> dict:
+                if not isinstance(body, dict) or set(body) != {"mission_id", "evidence"}:
+                    raise HTTPException(status_code=422, detail={
+                        "code": "INVALID_GOAL_EVIDENCE_ENVELOPE",
+                        "message": "body requires mission_id and evidence",
+                    })
+                if not isinstance(body["mission_id"], str) or not isinstance(body["evidence"], dict):
+                    raise HTTPException(status_code=422, detail={
+                        "code": "INVALID_GOAL_EVIDENCE_ENVELOPE",
+                    })
+                if not x_goal_evidence_token:
+                    raise HTTPException(status_code=401, detail={"code": "PRODUCER_UNAUTHORIZED"})
+                try:
+                    return goal_evidence_service.submit(
+                        token=x_goal_evidence_token, mission_id=body["mission_id"],
+                        raw_evidence=body["evidence"],
+                    )
+                except GoalEvidenceSubmissionError as exc:
+                    raise HTTPException(status_code=exc.status_code, detail={
+                        "code": exc.code, "message": str(exc),
+                    }) from exc
+
         def _mission_candidate_result(proposal: dict, mission: dict | None) -> dict:
             return {
                 "proposal": {
@@ -702,6 +832,13 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                     "request_key": proposal["request_key"],
                     "state": proposal["state"],
                     "candidate": proposal["candidate"],
+                    "source_mission_id": proposal.get("source_mission_id"),
+                    "source_action_id": proposal.get("source_action_id"),
+                    "source_attempt_id": proposal.get("source_attempt_id"),
+                    "source_dispatch_generation": proposal.get("source_dispatch_generation"),
+                    "source_event_watermark": proposal.get("source_event_watermark"),
+                    "source_observation_id": proposal.get("source_observation_id"),
+                    "supersedes_mission_id": proposal.get("supersedes_mission_id"),
                     "reason": proposal["reason"],
                     "expires_at": proposal["expires_at"],
                 },
@@ -1015,6 +1152,15 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         return {"source_id": body.source_id, "lease": token,
                 "frame_path": f"/api/vision/sources/{body.source_id}/frame",
                 "expires_in_s": 60}
+
+    @app.get("/api/fleet/site-map", dependencies=read_guard, tags=["sightings"])
+    async def fleet_site_map() -> dict:
+        # D-257: the overhead-covered rectangle is display geometry, not a motion input.
+        site_map = sightings.site_map() if sightings is not None and sightings.enabled else None
+        if site_map is None:
+            raise HTTPException(status_code=404, detail={"code": "NO_SITE_MAP",
+                                                         "message": "no site camera geometry configured"})
+        return site_map
 
     @app.get("/api/fleet/map", dependencies=read_guard, tags=["fleet"])
     async def fleet_map() -> dict:
@@ -1357,6 +1503,45 @@ async def _proposal_expiry_loop(proposal_store: ProposalStore) -> None:
         except (OSError, sqlite3.Error):
             _LOG.exception("expired Fleet proposal cleanup failed")
         await asyncio.sleep(3600)
+
+
+async def _goal_evidence_expiry_loop(service: GoalEvidenceService) -> None:
+    """Apply registered grace deadlines without enabling Action dispatch."""
+    while True:
+        try:
+            service.hold_expired_without_evidence()
+        except (OSError, sqlite3.Error, ValueError):
+            _LOG.exception("goal evidence grace reconciliation failed")
+        await asyncio.sleep(1.0)
+
+
+async def _mission_feedback_schedule_loop(scheduler: MissionModelTurnScheduler) -> None:
+    """Populate the durable outbox only; this loop never invokes a provider."""
+    while True:
+        try:
+            before = scheduler.turn_store.capacity_dropped_count()
+            await asyncio.to_thread(scheduler.poll_once)
+            dropped = scheduler.turn_store.capacity_dropped_count()
+            if dropped > before:
+                _LOG.error(
+                    "Mission feedback outbox is at capacity; dropped enqueue attempts=%d",
+                    dropped,
+                )
+        except Exception:
+            _LOG.exception("Mission feedback outbox scan failed")
+        await asyncio.sleep(1.0)
+
+
+async def _mission_model_turn_worker_loop(worker) -> None:
+    """Consume durable ER 2 turns only when an approved worker is injected."""
+    while True:
+        try:
+            await worker.consume_next(worker_id="fleet-feedback")
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            _LOG.exception("Fleet Mission model-turn worker cycle failed")
+        await asyncio.sleep(0.25)
 
 
 async def _mission_dispatch_loop(dispatcher: MissionDispatcher) -> None:

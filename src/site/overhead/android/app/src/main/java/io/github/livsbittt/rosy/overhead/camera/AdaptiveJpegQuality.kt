@@ -11,7 +11,10 @@ package io.github.livsbittt.rosy.overhead.camera
  */
 class AdaptiveJpegQuality {
     private var effective: Int? = null
-    private var lastFit: Int? = null
+    /** Last quality that fit under `max_bytes`, for display; written on the analysis thread. */
+    @Volatile
+    var lastFit: Int? = null
+        private set
     private var current = 0
     private var retries = 0
     private var fitRun = 0

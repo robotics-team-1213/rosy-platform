@@ -44,6 +44,12 @@ class VisionWorker:
             return ()
 
         markers = self.detector(frame.jpeg)
+        # Installer guidance only (phone status); ids, never pixels, leave this process.
+        self.ingest.report_markers(
+            self.source_id,
+            [marker_id for marker_id in self.camera.corner_marker_ids if marker_id in markers],
+            [robot for robot, marker_id in self.camera.robot_markers.items() if marker_id in markers],
+        )
         sightings = project_frame(
             self.camera,
             source_id=self.source_id,

@@ -1,7 +1,9 @@
 from hashlib import sha256
 import sqlite3
 from datetime import datetime, timezone
+from threading import Event
 
+import pytest
 from fastapi.testclient import TestClient
 
 from fakes import FakeRobot
@@ -78,7 +80,9 @@ def _resolution(candidate, *, workcell_id, instance_id, now):
 
 
 def _client(tmp_path, *, resolver=_resolution, named_users=True,
-            enable_mission_dispatcher=False, action_transport=None):
+            enable_mission_dispatcher=False, action_transport=None,
+            goal_evidence_enabled=False, mission_model_turn_worker_factory=None,
+            post_action_observation_source=None):
     tmp_path.mkdir(parents=True, exist_ok=True)
     db = tmp_path / "fleet.sqlite3"
     robot = FakeRobot("rosy_01")
@@ -89,16 +93,64 @@ def _client(tmp_path, *, resolver=_resolution, named_users=True,
                    "viewer-secret": {"principal_id": "viewer-1", "role": "viewer"}}
     site_users = ({sha256(token.encode()).hexdigest(): value
                    for token, value in credentials.items()} if named_users else None)
+    mission_service = MissionService(MissionStore(db))
+    mission_model_turn_worker = None
+    if mission_model_turn_worker_factory is not None:
+        from fleet.server.mission_model_turn_store import MissionModelTurnStore
+
+        mission_model_turn_worker = mission_model_turn_worker_factory(
+            MissionModelTurnStore(db),
+        )
+    goal_evidence_service = None
+    if goal_evidence_enabled:
+        import yaml
+        from fleet.server.goal_evidence_registry import load_goal_evidence_registry
+        from fleet.server.goal_evidence_service import GoalEvidenceService
+        from fleet.server.goal_evidence_store import GoalEvidenceStore
+
+        config = tmp_path / "goal-evidence.yaml"
+        config.write_text(yaml.safe_dump({"producers": [{
+            "producer_id": "top-camera-evaluator", "token_env": "GOAL_TOKEN",
+            "workcell_id": "omx_01", "predicate_id": "block-in-tray",
+            "object_id": "block-1", "destination_id": "tray-1",
+            "evidence_source": "camera_observation", "max_age_s": 5,
+            "grace_s": 10, "evaluator_revisions": ["placement-v1"],
+            "valid_until": "2026-10-01T00:00:00+00:00",
+        }]}), encoding="utf-8")
+        registry = load_goal_evidence_registry(config, environ={"GOAL_TOKEN": "source-secret"})
+        goal_evidence_service = GoalEvidenceService(
+            mission_service, registry, GoalEvidenceStore(db),
+        )
     app = create_app(
         console, task_service=tasks, site_users=site_users,
-        mission_service=MissionService(MissionStore(db)),
+        mission_service=mission_service,
         proposal_store=ProposalStore(db), candidate_resolver=resolver,
+        goal_evidence_service=goal_evidence_service,
+        mission_model_turn_worker=mission_model_turn_worker,
+        post_action_observation_source=post_action_observation_source,
         enable_mission_dispatcher=enable_mission_dispatcher,
         omx_instances=({"omx_01": "omx_01_control"}
                        if enable_mission_dispatcher else None),
         omx_action_transport=action_transport,
     )
     return TestClient(app), tasks, credentials
+
+
+def test_goal_evidence_endpoint_uses_separate_producer_token(tmp_path):
+    client, _, _ = _client(tmp_path, goal_evidence_enabled=True)
+    path = "/api/fleet/goal-evidence"
+
+    missing = client.post(path, json={"mission_id": "mission-1", "evidence": {}})
+    rejected = client.post(path, headers={"X-Goal-Evidence-Token": "wrong"},
+                           json={"mission_id": "mission-1", "evidence": {}})
+    disabled = _client(tmp_path / "without-registry")[0].post(
+        path, headers={"X-Goal-Evidence-Token": "source-secret"},
+        json={"mission_id": "mission-1", "evidence": {}},
+    )
+
+    assert missing.status_code == 401
+    assert rejected.status_code == 401
+    assert disabled.status_code == 404
 
 
 def _create(client, token="operator-secret", candidate=None, request_key="req-1"):
@@ -122,6 +174,9 @@ def test_operator_mission_api_persists_candidate_and_get_does_not_call_provider(
 
     client, _, _ = _client(tmp_path, resolver=resolver)
     assert client.app.state.mission_dispatcher is None
+    assert client.app.state.mission_model_turn_store.path == client.app.state.mission_service.store.path
+    assert client.app.state.mission_model_turn_scheduler is not None
+    assert client.app.state.mission_model_turn_worker is None
     created = _create(client)
     duplicate = _create(client)
     proposal_id = created.json()["proposal"]["proposal_id"]
@@ -132,6 +187,8 @@ def test_operator_mission_api_persists_candidate_and_get_does_not_call_provider(
     assert duplicate.json()["created"] is False
     assert calls == []
     assert readback.json()["proposal"]["candidate"]["provider_call_id"] == "call-1"
+    assert readback.json()["proposal"]["source_mission_id"] is None
+    assert readback.json()["proposal"]["supersedes_mission_id"] is None
     assert "image_bytes" not in readback.text and "api_key" not in readback.text
     resolved = _resolve(client, proposal_id)
     resolved_duplicate = _resolve(client, proposal_id)
@@ -142,6 +199,80 @@ def test_operator_mission_api_persists_candidate_and_get_does_not_call_provider(
     mission_readback = client.get(f"/api/fleet/missions/{mission_id}",
                                   headers={"Authorization": "Bearer operator-secret"})
     assert mission_readback.status_code == 200
+    assert mission_readback.json()["mission"]["supersedes_mission_id"] is None
+
+
+def test_app_consumes_feedback_outbox_only_when_worker_is_injected(tmp_path):
+    ready = Event()
+
+    class Worker:
+        def __init__(self, store):
+            self.store = store
+
+        async def consume_next(self, *, worker_id):
+            assert worker_id == "fleet-feedback"
+            ready.set()
+            return None
+
+    client, _, _ = _client(
+        tmp_path, mission_model_turn_worker_factory=Worker,
+    )
+
+    with client:
+        assert client.app.state.mission_model_turn_worker is not None
+        assert ready.wait(timeout=2)
+
+
+def test_app_rejects_feedback_worker_on_a_different_database(tmp_path):
+    from fleet.server.mission_model_turn_store import MissionModelTurnStore
+
+    class Worker:
+        def __init__(self, store):
+            self.store = store
+
+        async def consume_next(self, *, worker_id):
+            return None
+
+    def wrong_database(_store):
+        return Worker(MissionModelTurnStore(tmp_path / "other.sqlite3"))
+
+    with pytest.raises(ValueError, match="shared SQLite outbox"):
+        _client(tmp_path, mission_model_turn_worker_factory=wrong_database)
+
+
+def test_app_wires_configured_vision_reader_into_injected_worker(tmp_path):
+    closed = Event()
+
+    class Dispatcher:
+        post_action_observation_source = None
+
+    class Source:
+        async def aclose(self):
+            closed.set()
+
+    class Worker:
+        def __init__(self, store):
+            self.store = store
+            self.dispatcher = Dispatcher()
+
+        async def consume_next(self, *, worker_id):
+            return None
+
+    source = Source()
+    client, _, _ = _client(
+        tmp_path, mission_model_turn_worker_factory=Worker,
+        post_action_observation_source=source,
+    )
+
+    with client:
+        assert client.app.state.post_action_observation_source is source
+        assert client.app.state.mission_model_turn_worker.dispatcher.post_action_observation_source is source
+    assert closed.is_set()
+
+
+def test_app_rejects_vision_reader_without_feedback_worker(tmp_path):
+    with pytest.raises(ValueError, match="requires an injected Mission model-turn worker"):
+        _client(tmp_path, post_action_observation_source=object())
 
 
 def test_resolution_storage_failure_rolls_back_mission_and_remains_retryable(tmp_path, monkeypatch):

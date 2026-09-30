@@ -63,8 +63,8 @@
 
 ## 최근 기록
 
+- 2026-09-30 · uncommitted · fix(perception): D-356 리뷰 수정·수치 인터프리터 명기
 - 2026-09-30 · uncommitted · feat(perception): D-356 인식 학습 루프 섀도 백엔드·녹화·도구
+- 2026-09-30 · uncommitted · fix(structure): declare imu_bno055 exec_depend
 - 2026-09-29 · uncommitted · feat(traffic): 무신호·관측 융합 폐루크 호스트 시뮬레이션
 - 2026-09-29 · uncommitted · web-surface-hardening: PARKED web_node 루프백·Origin 고정
-- 2026-09-25 · uncommitted · refactor(runtime): move control under src/runtime (D-231)
-- 2026-09-25 · uncommitted · refactor(control): camera and lane evidence under sensing/perception

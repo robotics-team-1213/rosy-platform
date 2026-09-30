@@ -70,8 +70,8 @@
 
 ## 최근 기록
 
+- 2026-09-30 · uncommitted · fix(bridge): display charging이 실제로 켜지게 — 죽은 getattr 제거 (C6)
+- 2026-09-30 · uncommitted · feat(display): display/info에 charging 상태 추가 (D-350·D-351)
 - 2026-09-29 · uncommitted · feat(api): /system/capabilities에 lifecycle 블록 (D-347, v1.58)
 - 2026-09-29 · uncommitted · docs(core): 24b6d4bb 브리지 판정 추출의 모듈 기록 보수
 - 2026-09-29 · uncommitted · feat(traffic): D-337 T3 — bind the measured-light observer in CORE
-- 2026-09-29 · uncommitted · feat(traffic): wire unsignalized junction rule through CORE
-- 2026-09-29 · uncommitted · classify host agent status commands as non-events

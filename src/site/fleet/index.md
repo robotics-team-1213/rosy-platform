@@ -69,8 +69,8 @@
 
 ## 최근 기록
 
-- 2026-09-30 · uncommitted · feat(fleet): add opt-in Mission proposal API composition
-- 2026-09-29 · uncommitted · fix(fleet): ER2 시험은 허용목록된 fixture 키를 쓴다
-- 2026-09-29 · uncommitted · web-surface-hardening: `/common` 목록은 web_common manifest
-- 2026-09-29 · uncommitted · Mission provenance and SQLite query-path improvement
-- 2026-09-29 · uncommitted · feat(fleet): dispatch admitted Mission through fenced OMX UDS Action
+- 2026-09-30 · uncommitted · docs(validation): record final ER2 feedback audit gates
+- 2026-09-30 · uncommitted · fix(fleet): recheck ER2 egress fence after Vision capture
+- 2026-09-30 · uncommitted · fix(fleet): enforce the ER2 feedback deadline across tool dispatch
+- 2026-09-30 · uncommitted · feat(fleet): add bounded trusted ER2 post-action Vision reader
+- 2026-09-30 · uncommitted · feat(fleet): wire optional ER2 outbox consumer

@@ -44,14 +44,13 @@ KNOWN_WITHOUT_OWN_TESTS = {
 #: P3/P4 exceptions as (source package, target package).
 KNOWN_UNDECLARED = {
     ("navigation", "control"): "hardware.launch.py includes control/line_follow.launch.py",
-    ("control", "imu_bno055"): "legacy robot/wander launches start the IMU driver",
 }
 
 #: P4 core-row exceptions: back-edges against the one-way core chain.
 KNOWN_CHAIN_BACK_EDGES = {
 }
 KNOWN_DIRECTION = {
-    ("control", "imu_bno055"): "runtime/sensing -> drivers/imu_bno055; the IMU belongs in bringup/deploy assembly, not a sensing launch",
+    ("control", "imu_bno055"): "runtime/sensing -> drivers/imu_bno055; declared exec_depend. Legacy launches start the IMU driver; the long-term fix is bringup assembly, not a sensing launch",
     ("overhead", "games"): "site overhead reuses the ROS-free four-point homography helper for camera calibration",
 }
 
@@ -65,17 +64,31 @@ CONTROL_SPLIT = "docs/plans/2026-09-22-control-package-split-design.md"
 #: P6 verdicts: path (relative to src/) or package name -> (lines at verdict, verdict).
 SIZE_VERDICTS = {
     "site/fleet/fleet/server/app.py": (
-        1315,
+        1466,
         "split: the mission/dispatch route groups now carry their own stores and lifecycles (task_store, "
         "mission modules) — the independent-boundary condition the 813-line accept was waiting for arrived "
         "with the arbitration work; owner fleet, unscheduled (docs/plans/"
-        "2026-09-29-fleet-mission-control-arbitration-implementation.md)",
+        "2026-09-29-fleet-mission-control-arbitration-implementation.md; re-judged 2026-09-30 at 1466 after "
+        "goal-evidence, D-361 enrollment routes and the D-360 console assets joined — verdict unchanged)",
     ),
     "fleet": (
-        11_164,
+        15_000,
         "split: server HTTP boundary, console, signals and the mission-control stores are separate owners "
         "today; group them into subpackages rather than one flat server/ tree (B2); owner fleet, unscheduled "
-        "(re-judged 2026-09-29 at 11164 after mission_store joined the server tree)",
+        "(re-judged 2026-09-29 at 11164 after mission_store joined the server tree; re-judged 2026-09-30 at "
+        "12419 after the D-361 enrollment register, roster and service joined as their own modules, and "
+        "at 12574 after the D-361 review fixes; re-judged 2026-09-30 at 13187 after main's goal-evidence "
+        "contracts and stores merged in; re-judged 2026-09-30 at 14260 after D-357/D-358 feedback "
+        "contracts, dispatcher, stateless adapter and bounded outbox modules/tests were added; re-judged "
+        "at 14616 after atomic candidate fencing and linked-successor regression tests; re-judged at 15000 "
+        "after the injected outbox consumer, trusted post-action Vision reader, and deadline/egress fence "
+        "coverage joined. Split remains "
+        "unscheduled (docs/plans/2026-09-30-er2-mission-feedback-loop.md)",
+    ),
+    "site/fleet/fleet/server/enrollment.py": (
+        610,
+        "accept: one owner (D-361 robot enrollment — exchange, binding, pinned-address gate, unenroll and "
+        "pending logout share one state machine over the register), ROS-free, host-testable (X5)",
     ),
     "site/fleet/fleet/server/mission_store.py": (
         728,
@@ -84,10 +97,11 @@ SIZE_VERDICTS = {
         "stays in task_store/task_results (X5)",
     ),
     "contracts/foundation/core_common/protocol/schemas.py": (
-        742,
+        1000,
         "accept: the D-18 single contract source — every envelope, event and capability model in one "
         "importable place; per-domain schema files would fork the version pin that "
-        "test_protocol_version_alignment guards. ROS-free, host-testable (X5)",
+        "test_protocol_version_alignment guards. Re-judged 2026-09-30 at 1000 lines after the bounded "
+        "Mission feedback scope/context/tool-result contracts were added. ROS-free, host-testable (X5)",
     ),
     "site/fleet/fleet/server/task_store.py": (
         1014,
@@ -109,8 +123,10 @@ SIZE_VERDICTS = {
         "accept: legacy comparison-graph publisher pinned by test_module_separation; no new work (X3)",
     ),
     "site/fleet/fleet/server/console.py": (
-        767,
-        "accept: one owner (FleetConsole gather/scatter), host-testable (X5)",
+        1013,
+        "accept: one owner (FleetConsole gather/scatter), host-testable (X5). Re-judged 2026-09-30 at 1013: "
+        "D-361 roster mutation and pinned-address holds change the gather/traffic tables in place, so they "
+        "stay with their owner; the roster policy itself lives in roster.py",
     ),
     "runtime/sensing/control/sensing/perception/lane.py": (
         611,

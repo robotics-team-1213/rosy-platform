@@ -3,11 +3,20 @@
 // 좌표계: 로봇 pose 는 CORE 가 TF `map → <ns>base_footprint` 로 읽어 주는 map 프레임
 // 값이다(ros_bridge `_map_frame = "map"`). 그래서 N대를 한 격자 위에 그대로 겹쳐
 // 그릴 수 있다. 격자는 행 0 이 아래쪽(y 최소)이고 캔버스는 위가 0 이라 y 를 뒤집는다.
+// D-257 사이트 층: 천장 카메라가 덮는 사각형과 카메라 관측(sighting)을 같은 map 프레임에
+// 그린다. 관측은 속이 빈 점선 고리로, CORE TF pose(채운 삼각형)와 섞지 않는다.
+
+import {
+  classifySightings, siteBounds, canvasSizeFor, fitTransform, project, gridLines, GRID_STEP_M,
+} from "./site-layer.js";
+import { NO_MAP_RETRY_MS, createPollGate } from "./poll-gate.js";
 
 export function createMapView({ el, view, css, auth, call, onMapChanged, onMapUnavailable }) {
   const GRID = { UNKNOWN: -1, FREE_MAX: 25, OCCUPIED_MIN: 65 };
   // Map tracking visualization only; relay evidence comes from the Fleet server.
   const TRACK_WARN_M = 0.3;     // 기본 간격(0.6 m)의 절반을 넘으면 주의 색을 쓴다.
+  // D-360 레이어 토글(field-view.js 가 view.layers 를 채운다). 값이 없으면 모두 켠다.
+  const layerOn = (key) => view.layers?.[key] !== false;
 
   function paintGrid(grid) {
     const canvas = el("map-canvas");
@@ -243,9 +252,190 @@ export function createMapView({ el, view, css, auth, call, onMapChanged, onMapUn
     window.__swarmOverlay = { ...(window.__swarmOverlay || {}), mediation: lines };
   }
 
+  function colorOfSighting(robotId) {
+    const index = view.robots.findIndex((r) => r.robot_id === robotId);
+    return index >= 0 ? view.colors[index % view.colors.length] : css("--paper");
+  }
+
+  function sightingLabel(s) {
+    const age = s.state === "stale" ? ` · ${(s.age_ms / 1000).toFixed(1)}초 전` : "";
+    return `${s.robot_id} · 카메라${age}`;
+  }
+
+  // 카메라 관측 1건: 점선 고리 + 방향 선. toPoint 는 map m → 현재 ctx 좌표, size 는 같은 단위.
+  function drawSighting(ctx, s, toPoint, size, lineWidth) {
+    const { x: cx, y: cy } = toPoint(s.x, s.y);
+    ctx.save();
+    ctx.globalAlpha = s.state === "stale" ? 0.4 : 1;
+    ctx.strokeStyle = colorOfSighting(s.robot_id);
+    ctx.lineWidth = lineWidth;
+    ctx.setLineDash([lineWidth * 2, lineWidth * 1.5]);
+    ctx.beginPath();
+    ctx.arc(cx, cy, size * 0.8, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    // 캔버스 y 가 아래로 자라므로 sin 은 뒤집는다.
+    ctx.lineTo(cx + Math.cos(s.yaw) * size * 1.4, cy - Math.sin(s.yaw) * size * 1.4);
+    ctx.stroke();
+    ctx.restore();
+    drawChip(ctx, null, cx, cy + size * 1.9, sightingLabel(s), s.state === "stale" ? "warn" : undefined);
+  }
+
+  function sitePolygons() {
+    return (view.siteMap?.maps || []).filter((m) => (m.polygon_m || []).length >= 3);
+  }
+
+  function tracePolygon(ctx, points, toPoint) {
+    ctx.beginPath();
+    points.forEach(([x, y], i) => {
+      const { x: px, y: py } = toPoint(x, y);
+      if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    });
+    ctx.closePath();
+  }
+
+  // 점유 격자 위에 사이트 사각형 윤곽과 카메라 관측을 겹친다(같은 map 프레임).
+  function drawSiteOverlay(ctx, grid) {
+    const toCell = (x, y) => { const c = cellOf(grid, x, y); return { x: c.cx, y: c.cy }; };
+    const size = Math.max(3, Math.min(grid.width, grid.height) * 0.045);
+    ctx.save();
+    ctx.lineWidth = 0.5;
+    ctx.setLineDash([2, 1.5]);
+    ctx.strokeStyle = css("--series-primary");
+    for (const entry of layerOn("site") ? sitePolygons() : []) {
+      tracePolygon(ctx, entry.polygon_m, toCell);
+      ctx.stroke();
+    }
+    ctx.restore();
+    if (!layerOn("sightings")) return;
+    for (const s of view.sightings) drawSighting(ctx, s, toCell, size, 0.5);
+  }
+
+  // 점유 격자가 없을 때: 사이트 사각형에 맞춘 미터 축척 뷰. 목표 지정은 받지 않는다.
+  function drawSiteView() {
+    const bounds = siteBounds(view.siteMap);
+    if (!bounds) return;
+    const canvas = el("map-canvas");
+    // 비트맵을 화면에 보이는 박스 크기(× DPR)에 맞춘다 — 글자와 선이 CSS px 로 읽히게.
+    // 박스를 아직 모르면(숨김 등) 사각형 종횡비로 대신한다.
+    const rect = canvas.getBoundingClientRect();
+    const fallback = canvasSizeFor(bounds, 800);
+    const width = rect.width > 0 ? rect.width : fallback.width;
+    const height = rect.height > 0 ? rect.height : fallback.height;
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = Math.round(width * dpr);
+    canvas.height = Math.round(height * dpr);
+    const ctx = canvas.getContext("2d");
+    ctx.scale(dpr, dpr);
+    const t = fitTransform(bounds, width, height, 32);
+    const toPx = (x, y) => { const p = project(t, x, y); return { x: p.px, y: p.py }; };
+    ctx.fillStyle = css("--ground-deep");
+    ctx.fillRect(0, 0, width, height);
+    const font = `12px ${css("--mono") || "monospace"}`;
+
+    // 0.5 m 격자
+    ctx.save();
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = css("--muted-line");
+    ctx.globalAlpha = 0.5;
+    for (const gx of layerOn("grid") ? gridLines(bounds.min_x, bounds.max_x, GRID_STEP_M) : []) {
+      const a = toPx(gx, bounds.min_y);
+      const b = toPx(gx, bounds.max_y);
+      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+    }
+    for (const gy of layerOn("grid") ? gridLines(bounds.min_y, bounds.max_y, GRID_STEP_M) : []) {
+      const a = toPx(bounds.min_x, gy);
+      const b = toPx(bounds.max_x, gy);
+      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+    }
+    ctx.restore();
+
+    // 사각형 + 치수 + 출처(source_id)
+    ctx.save();
+    ctx.font = font;
+    for (const entry of layerOn("site") ? sitePolygons() : []) {
+      tracePolygon(ctx, entry.polygon_m, toPx);
+      ctx.globalAlpha = 0.08;
+      ctx.fillStyle = css("--series-primary");
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = css("--series-primary");
+      ctx.stroke();
+      const b = entry.bounds_m;
+      const bottom = toPx((b.min_x + b.max_x) / 2, b.min_y);
+      const right = toPx(b.max_x, (b.min_y + b.max_y) / 2);
+      const top = toPx(b.min_x, b.max_y);
+      ctx.fillStyle = css("--muted");
+      ctx.textAlign = "center";
+      ctx.textBaseline = "top";
+      ctx.fillText(`${(b.max_x - b.min_x).toFixed(2)} m`, bottom.x, bottom.y + 6);
+      ctx.save();
+      ctx.translate(right.x + 6, right.y);
+      ctx.rotate(Math.PI / 2);
+      ctx.textBaseline = "bottom"; // 회전 뒤 "bottom" 이 사각형 바깥쪽이다
+      ctx.fillText(`${(b.max_y - b.min_y).toFixed(2)} m`, 0, 0);
+      ctx.restore();
+      ctx.textAlign = "left";
+      ctx.textBaseline = "bottom";
+      const sources = (entry.sources || []).map((src) => src.source_id).join(", ");
+      ctx.fillText(`${entry.map_id} · 카메라 ${sources}`, top.x, top.y - 6);
+    }
+    ctx.restore();
+
+    // 축과 원점: 원점이 보이면 그 자리에, 아니면 범위 왼쪽 아래에 x/y 방향만 그린다.
+    const originVisible = bounds.min_x <= 0 && bounds.max_x >= 0
+      && bounds.min_y <= 0 && bounds.max_y >= 0;
+    const axisAt = originVisible ? toPx(0, 0) : toPx(bounds.min_x + 0.1, bounds.min_y + 0.1);
+    const axisLen = Math.min(t.scale * 0.4, width / 8);
+    ctx.save();
+    ctx.lineWidth = 2;
+    ctx.font = font;
+    ctx.textBaseline = "middle";
+    ctx.strokeStyle = css("--paper");
+    ctx.fillStyle = css("--paper");
+    ctx.beginPath();
+    ctx.moveTo(axisAt.x, axisAt.y);
+    ctx.lineTo(axisAt.x + axisLen, axisAt.y);
+    ctx.moveTo(axisAt.x, axisAt.y);
+    ctx.lineTo(axisAt.x, axisAt.y - axisLen);
+    ctx.stroke();
+    ctx.fillText("x", axisAt.x + axisLen + 4, axisAt.y);
+    ctx.textAlign = "center";
+    ctx.fillText("y", axisAt.x, axisAt.y - axisLen - 10);
+    if (originVisible) {
+      ctx.beginPath();
+      ctx.arc(axisAt.x, axisAt.y, 4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.textAlign = "right";
+      ctx.fillText("0,0", axisAt.x - 6, axisAt.y + 12);
+    }
+    ctx.restore();
+
+    if (!layerOn("sightings")) return;
+    for (const s of view.sightings) drawSighting(ctx, s, toPx, Math.max(7, t.scale * 0.09), 1.5);
+  }
+
+  function describeSightings() {
+    const fresh = view.sightings.filter((s) => s.state === "fresh").length;
+    return `카메라 관측 ${fresh}/${view.sightings.length}대`;
+  }
+
   function draw() {
     const grid = view.map;
-    if (!grid) return;
+    if (!grid) {
+      if (view.siteMap) {
+        drawSiteView();
+        const b = siteBounds(view.siteMap, 0);
+        el("map-tag").textContent =
+          `사이트 ${(b.max_x - b.min_x).toFixed(1)}×${(b.max_y - b.min_y).toFixed(1)} m · ${describeSightings()}`;
+        el("map-canvas").setAttribute("aria-label",
+          `천장 카메라 사이트 지도 — ${describeSightings()}. 이 지도에서는 목표를 지정할 수 없습니다.`);
+      }
+      return;
+    }
     const canvas = el("map-canvas");
     const ctx = canvas.getContext("2d");
     paintGrid(grid);
@@ -260,7 +450,7 @@ export function createMapView({ el, view, css, auth, call, onMapChanged, onMapUn
     ctx.lineWidth = 0.6;
     view.robots.forEach((robot, index) => {
       const pose = robot.state && robot.state.pose;
-      if (!pose) return;
+      if (!pose || !layerOn("poses")) return;
       const color = view.colors[index % view.colors.length];
       const cell = worldToCell(grid, pose.x, pose.y);
       const cx = cell.col;
@@ -293,6 +483,7 @@ export function createMapView({ el, view, css, auth, call, onMapChanged, onMapUn
     });
     drawFormationOverlay(ctx, grid);
     drawMediation(ctx, grid);
+    drawSiteOverlay(ctx, grid);
     if (view.selected && view.cursor) {
       const { col, row } = view.cursor;
       ctx.save();
@@ -305,33 +496,117 @@ export function createMapView({ el, view, css, auth, call, onMapChanged, onMapUn
     }
   }
 
+  function syncLegend(mode) {
+    el("map-legend").hidden = mode === "none";
+    for (const item of el("map-legend").querySelectorAll("[data-legend=grid]")) {
+      item.hidden = mode !== "grid";
+    }
+    el("legend-sighting").hidden = !view.siteMap && !view.sightings.length;
+  }
+
+  async function refreshSiteMap() {
+    try {
+      view.siteMap = await call("/api/fleet/site-map");
+      el("map-stage").dataset.siteMap = "configured";
+    } catch (err) {
+      // NO_SITE_MAP — 카메라 사각형이 설정되지 않은 현장이다. 일시 실패면 직전 사각형을 둔다.
+      if (err.status === 404 && err.code === "NO_SITE_MAP") {
+        view.siteMap = null;
+        el("map-stage").dataset.siteMap = "none";
+      }
+    }
+  }
+
+  // NO_MAP(지도를 내는 로봇 없음)은 기능 미설정이 아니라 "아직 없음"이다. 로봇이 나중에
+  // 지도를 낼 수 있으니 멈추지 않고 30 s 간격으로만 다시 묻는다. 라우트 없음 404 는
+  // resetPolling()(로그인) 전까지 멈춘다. 일시 실패는 다음 5 s 주기에 다시 묻는다.
+  const mapGate = createPollGate({ slowCodes: { NO_MAP: NO_MAP_RETRY_MS } });
+
+  function resetPolling() {
+    mapGate.reset();
+    sightingsUnavailable = false;
+  }
+
   async function refresh() {
     if (auth.locked) return;
+    sightingsUnavailable = false;
+    await refreshSiteMap();
+    if (auth.locked || !mapGate.due()) return;
+    let mapFailure = "retry";
     try {
       const grid = await call("/api/fleet/map");
+      mapGate.ok();
       view.map = grid;
       el("map-stage").dataset.mapState = "ready";
       el("map-empty").hidden = true;
       el("map-canvas").removeAttribute("aria-hidden");
-      el("map-legend").hidden = false;
+      el("map-canvas").setAttribute("role", "button");
+      syncLegend("grid");
       draw();
       onMapChanged();
     } catch (err) {
       view.map = null;
+      if (!auth.locked) mapFailure = mapGate.fail(err.status, err.code);
+      if (view.siteMap && !auth.locked) {
+        // 점유 격자 없이 카메라 사각형만 있다 — 관측 전용 뷰. 목표 지정은 계속 막힌다.
+        const canvas = el("map-canvas");
+        canvas.removeAttribute("aria-hidden");
+        canvas.setAttribute("role", "img"); // 관측 전용 — 누를 수 있는 버튼이 아니다
+        canvas.tabIndex = -1;
+        canvas.classList.add("idle");
+        el("map-stage").dataset.mapState = "site";
+        el("map-empty").hidden = true;
+        syncLegend("site");
+        draw();
+        onMapUnavailable();
+        return;
+      }
       const canvas = el("map-canvas");
       canvas.getContext("2d").clearRect(0, 0, canvas.width, canvas.height);
       canvas.setAttribute("aria-hidden", "true");
       canvas.tabIndex = -1;
       canvas.classList.add("idle");
       el("map-stage").dataset.mapState = "unavailable";
-      el("map-empty-title").textContent = "지도를 확인할 수 없습니다";
-      el("map-empty-detail").textContent = "Fleet 지도 연결과 등록 로봇 상태를 확인하세요.";
+      if (mapFailure === "slow") {
+        el("map-empty-title").textContent = "지도를 보내는 로봇이 없습니다";
+        el("map-empty-detail").textContent = "로봇이 지도를 내면 30초 안에 표시합니다.";
+      } else if (mapFailure === "absent") {
+        el("map-empty-title").textContent = "지도 미설정";
+        el("map-empty-detail").textContent = "이 Fleet에는 현장 지도 기능이 없습니다.";
+      } else {
+        el("map-empty-title").textContent = "지도를 확인할 수 없습니다";
+        el("map-empty-detail").textContent = "Fleet 지도 연결과 등록 로봇 상태를 확인하세요.";
+      }
       el("map-empty").hidden = false;
-      el("map-legend").hidden = true;
+      syncLegend("none");
       el("map-tag").textContent = "맵 없음";
       onMapUnavailable();
     }
   }
 
-  return { draw, refresh, toWorld, streamEvidence };
+  // 카메라 관측 폴링(≈1 s). 관측은 표시 전용이다 — 목표·판단 입력으로 넘기지 않는다.
+  // 사이트 사각형이 있을 때만 두드린다. 관측 설정이 없으면 라우트가 없어 404 이므로,
+  // 404 를 받으면 다음 refresh() 까지 멈춘다.
+  let sightingsInFlight = false;
+  let sightingsUnavailable = false;
+  async function refreshSightings() {
+    if (auth.locked || sightingsInFlight || sightingsUnavailable || !view.siteMap) return;
+    sightingsInFlight = true;
+    let next = [];
+    try {
+      next = classifySightings(await call("/api/fleet/sightings"));
+    } catch (err) {
+      // 일시 실패도 옛 관측을 남기지 않는다.
+      if (err.status === 404) sightingsUnavailable = true;
+    } finally {
+      sightingsInFlight = false;
+    }
+    const unchanged = JSON.stringify(next) === JSON.stringify(view.sightings);
+    view.sightings = next;
+    if (unchanged && !next.length) return; // 빈 채로 그대로면 격자를 다시 칠하지 않는다
+    el("legend-sighting").hidden = !view.siteMap && !view.sightings.length;
+    draw();
+  }
+
+  return { draw, refresh, refreshSightings, resetPolling, toWorld, streamEvidence };
 }

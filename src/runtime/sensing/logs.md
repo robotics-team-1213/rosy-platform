@@ -556,6 +556,14 @@
 - 증거: `docs/validation/semantic-road-stop-and-go-2026-09-29/` — `SEMANTIC_ROAD_HOST_SIM_PASS`, 표 3종·result.json·SVG·montage·preview. `test_semantic_road_simulation.py` 신규 단언(무신호 진입·선언 충돌·융합 3단·fused 표기) 포함 2 passed, flake8 clean.
 - gate 변화: 없음. HOST-SIM 한계 그대로 — 실물 Gazebo 폐루프(WSL), 관측 서비스 실HTTP, DEVICE/FIELD는 T5 벤치 회차가 소유한다.
 
+## 2026-09-30 · uncommitted · fix(structure): declare imu_bno055 exec_depend
+
+- 변경: package.xml에 `<exec_depend>imu_bno055</exec_depend>` 추가 — KNOWN_UNDECLARED에서 (control, imu_bno055) 제거. KNOWN_DIRECTION에는 유지(방향 위반은 코드 이동이 필요하므로).
+- 증거: test_module_structure 33 passed.
+- gate 변화: 없음.
+- 결정: 선언은 정직한 절반 — 전체 해소는 bringup 조립로 이전(별도 과제).
+- 교훈: 없음.
+
 ## 2026-09-30 · uncommitted · feat(perception): D-356 인식 학습 루프 섀도 백엔드·녹화·도구
 
 - 변경: `perception/learned/`(manifest·lane_mask·runner·shadow)와 공유 `image_frame.py`, `learned_lane_node`(+`launch/learned_lane.launch.py`), `recording.py`+`record_session`(콘솔 스크립트 2개) 추가. 개발자 쪽 `tools/perception/{dataset,model,training}`(추출·사전 라벨·데이터셋 빌드·발행·ONNX 내보내기·접수·전달/롤백)과 `tools/perception/test`. 학습 노드는 섀도 전용이라 명령 필드가 없고 `executor_choice.spin`으로 돈다. `hotpath_measure.NODE_NAMES`와 executor 선택 시험 개수를 새 진입점에 맞췄다.

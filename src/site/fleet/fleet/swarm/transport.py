@@ -137,7 +137,9 @@ class HttpRobotClient:
         self.robot_id = endpoint.robot_id
         self._ep = endpoint
         self._owns_http = http is None
-        self._http = http or httpx.AsyncClient(base_url=endpoint.base_url, timeout=timeout_s)
+        # trust_env=False: an environment proxy must never see the Bearer (D-361 9).
+        self._http = http or httpx.AsyncClient(base_url=endpoint.base_url, timeout=timeout_s,
+                                               trust_env=False)
 
     # --- REST -----------------------------------------------------------------
 
@@ -234,7 +236,7 @@ class HttpRobotClient:
         from websockets.exceptions import WebSocketException
 
         try:
-            async with websockets.connect(self.pose_url()) as ws:
+            async with websockets.connect(self.pose_url(), proxy=None) as ws:
                 async for frame in ws:
                     text = _as_text(frame)
                     if text is not None:
@@ -252,7 +254,7 @@ class HttpRobotClient:
         from websockets.exceptions import WebSocketException
 
         try:
-            ws = await websockets.connect(self.reference_url())
+            ws = await websockets.connect(self.reference_url(), proxy=None)
         except (OSError, WebSocketException) as exc:
             rejected = _rejection(self.robot_id, exc)
             if rejected is not None:
@@ -265,7 +267,7 @@ class HttpRobotClient:
         from websockets.exceptions import WebSocketException
 
         try:
-            async with websockets.connect(self.events_url(types)) as ws:
+            async with websockets.connect(self.events_url(types), proxy=None) as ws:
                 async for frame in ws:
                     event = _as_event(frame)
                     if event is not None:

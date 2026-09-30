@@ -83,6 +83,7 @@ class MissionStore:
                     authority_epoch INTEGER,
                     action_id TEXT,
                     attempt_id TEXT,
+                    supersedes_mission_id TEXT,
                     reason TEXT,
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL,
@@ -131,6 +132,10 @@ class MissionStore:
                 connection.execute(
                     "ALTER TABLE fleet_missions ADD COLUMN reconciliation_pending "
                     "INTEGER NOT NULL DEFAULT 0"
+                )
+            if "supersedes_mission_id" not in columns:
+                connection.execute(
+                    "ALTER TABLE fleet_missions ADD COLUMN supersedes_mission_id TEXT"
                 )
             connection.execute(
                 "CREATE INDEX IF NOT EXISTS fleet_missions_ready_queue "
@@ -195,12 +200,19 @@ class MissionStore:
     def create_proposal(self, *, mission_id: str, principal_id: str, request_key: str,
                         action_kind: str, workcell_id: str, instance_id: str,
                         plan: Mapping[str, Any], goal_predicate: Mapping[str, Any],
+                        supersedes_mission_id: str | None = None,
                         connection: sqlite3.Connection | None = None) -> dict[str, Any]:
         mission_id = _nonempty("mission_id", mission_id)
         principal_id = _nonempty("principal_id", principal_id, limit=96)
         request_key = _nonempty("request_key", request_key, limit=160)
         workcell_id = _nonempty("workcell_id", workcell_id, limit=96)
         instance_id = _nonempty("instance_id", instance_id, limit=96)
+        if supersedes_mission_id is not None:
+            supersedes_mission_id = _nonempty(
+                "supersedes_mission_id", supersedes_mission_id,
+            )
+            if supersedes_mission_id == mission_id:
+                raise ValueError("a Mission cannot supersede itself")
         if action_kind != "PICK_PLACE":
             raise ValueError("only the fixed-workcell PICK_PLACE proposal is supported")
         if not isinstance(plan, Mapping):
@@ -213,6 +225,8 @@ class MissionStore:
             "instance_id": instance_id, "plan": json.loads(plan_json),
             "goal_predicate": predicate.to_dict(),
         }
+        if supersedes_mission_id is not None:
+            request_document["supersedes_mission_id"] = supersedes_mission_id
         digest = hashlib.sha256(_json(request_document).encode("utf-8")).hexdigest()
         now = _now()
         owns_transaction = connection is None
@@ -235,20 +249,21 @@ class MissionStore:
                 """INSERT INTO fleet_missions
                    (mission_id, step_id, principal_id, request_key, request_digest,
                     action_kind, workcell_id, instance_id, plan_json, goal_predicate_json,
-                    status, created_at, updated_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PROPOSED', ?, ?)""",
+                    supersedes_mission_id, status, created_at, updated_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PROPOSED', ?, ?)""",
                 (mission_id, step_id, principal_id, request_key, digest, action_kind,
-                 workcell_id, instance_id, plan_json, predicate_json, now, now),
+                 workcell_id, instance_id, plan_json, predicate_json,
+                 supersedes_mission_id, now, now),
             )
             row = db.execute("SELECT * FROM fleet_missions WHERE mission_id=?",
-                                     (mission_id,)).fetchone()
+                             (mission_id,)).fetchone()
             self._event(
                 db, event_source="fleet_mission", source_event_id=f"proposal:{mission_id}",
                 mission=row, event_type="MISSION_PROPOSED", state="PROPOSED",
                 actor_id=principal_id, detail={"request_digest": digest},
             )
             row = db.execute("SELECT * FROM fleet_missions WHERE mission_id=?",
-                                     (mission_id,)).fetchone()
+                             (mission_id,)).fetchone()
             if owns_transaction:
                 db.commit()
         return {"mission": self._row(row), "created": True}
@@ -486,8 +501,11 @@ class MissionStore:
         return self._row(updated)
 
     def hold_mission(self, mission_id: str, *, actor_id: str, event_id: str,
-                     reason: str, evidence: Mapping[str, Any]) -> dict[str, Any]:
+                     reason: str, evidence: Mapping[str, Any],
+                     event_type: str = "GOAL_EVIDENCE_REJECTED") -> dict[str, Any]:
         reason = _nonempty("reason", reason, limit=96)
+        if event_type not in {"GOAL_EVIDENCE_REJECTED", "GOAL_PREDICATE_UNSATISFIED"}:
+            raise ValueError("invalid goal evidence hold event type")
         now = _now()
         with closing(self._connect()) as connection:
             connection.execute("BEGIN IMMEDIATE")
@@ -503,7 +521,7 @@ class MissionStore:
             )
             self._event(
                 connection, event_source="goal_evidence", source_event_id=event_id,
-                mission=row, event_type="GOAL_EVIDENCE_REJECTED", state="HOLD",
+                mission=row, event_type=event_type, state="HOLD",
                 actor_id=actor_id, action_id=row["action_id"], attempt_id=row["attempt_id"],
                 detail={"reason": reason, "evidence": dict(evidence)},
             )
@@ -575,6 +593,22 @@ class MissionStore:
             ).fetchone()
         return self._row(row)
 
+    def missions_awaiting_goal_evidence(self) -> list[dict[str, Any]]:
+        """Return successful terminal Actions that have not confirmed their goal."""
+        with closing(self._connect()) as connection:
+            rows = connection.execute(
+                """SELECT m.*, e.created_at AS action_terminal_at
+                   FROM fleet_missions AS m
+                   JOIN fleet_mission_events AS e
+                     ON e.mission_id=m.mission_id
+                    AND e.action_id=m.action_id AND e.attempt_id=m.attempt_id
+                    AND e.event_type='ACTION_TERMINAL_RESULT' AND e.state='ACTION_SUCCEEDED'
+                   WHERE m.status='ACTION_SUCCEEDED'
+                   ORDER BY e.event_id""",
+            ).fetchall()
+        return [self._row(row) | {"action_terminal_at": row["action_terminal_at"]}
+                for row in rows]
+
     def finish_reconciliation(self, mission_id: str, *, action_id: str,
                               attempt_id: str) -> dict[str, Any]:
         with closing(self._connect()) as connection:
@@ -637,7 +671,8 @@ class MissionStore:
                 active_goal_events = connection.execute(
                     "SELECT * FROM fleet_mission_events WHERE mission_id=? "
                     "AND action_id=? AND attempt_id=? AND event_type IN "
-                    "('GOAL_PREDICATE_CONFIRMED', 'GOAL_EVIDENCE_REJECTED') "
+                    "('GOAL_PREDICATE_CONFIRMED', 'GOAL_EVIDENCE_REJECTED', "
+                    "'GOAL_PREDICATE_UNSATISFIED') "
                     "ORDER BY event_id DESC LIMIT 1",
                     (mission_id, row["action_id"], row["attempt_id"]),
                 ).fetchall()
@@ -726,3 +761,18 @@ class MissionStore:
             "next_after_event_id": int(next_cursor),
             "has_more": has_more,
         }
+
+    def feedback_events_after(self, *, after_event_id: int,
+                              limit: int = 100) -> list[dict[str, Any]]:
+        """Read a bounded global journal page for the feedback outbox scanner."""
+        if type(after_event_id) is not int or after_event_id < 0:
+            raise ValueError("after_event_id must be a non-negative integer")
+        if type(limit) is not int or not 1 <= limit <= 500:
+            raise ValueError("feedback event page limit must be from 1 to 500")
+        with closing(self._connect()) as connection:
+            rows = connection.execute(
+                """SELECT event_id, mission_id, action_id, attempt_id, event_type
+                   FROM fleet_mission_events WHERE event_id>? ORDER BY event_id LIMIT ?""",
+                (after_event_id, limit),
+            ).fetchall()
+        return [dict(row) for row in rows]

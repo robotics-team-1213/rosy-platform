@@ -5,7 +5,10 @@ import { createMapView } from "./map-view.js";
 import { createRoster } from "./roster.js";
 import { createSignals } from "./signals.js";
 import { createVisionView } from "./vision-view.js";
+import { createFieldView } from "./field-view.js";
 import { applyRoleToControls } from "./authorization.js";
+import { DISCOVERY_LABELS, createEnrollmentPanel } from "./enrollment.js";
+import { createPollGate } from "./poll-gate.js";
 // 좌표계: 로봇 pose 는 CORE 가 TF `map → <ns>base_footprint` 로 읽어 주는 map 프레임
 // 값이다(ros_bridge `_map_frame = "map"`). 그래서 N대를 한 격자 위에 그대로 겹쳐
 // 그릴 수 있다. 격자는 행 0 이 아래쪽(y 최소)이고 캔버스는 위가 0 이라 y 를 뒤집는다.
@@ -18,6 +21,10 @@ const css = (name) => getComputedStyle(document.documentElement).getPropertyValu
 const STATE_MS = 1000;
 const MAP_MS = 5000;
 const LOG_MAX = 40;
+
+// 꺼진 기능(라우트 없음 404)은 다음 로그인·토큰 저장까지 두드리지 않는다. poll-gate.js 참고.
+const dispatchGate = createPollGate();
+const discoveryGate = createPollGate();
 
 // 관제 토큰 — 서버가 루프백 밖으로 열리면 모든 /api/fleet/* 이 401 로 막힌다
 // (cli.run_console 강제, app.authorize). 토큰은 세션 스토리지에만 둔다 —
@@ -58,6 +65,8 @@ function operatorControls() {
 
 const view = {
   map: null,
+  siteMap: null,   // D-257 천장 카메라 사각형 (GET /api/fleet/site-map)
+  sightings: [],   // 카메라 관측 — 표시 전용, CORE pose 와 섞지 않는다
   robots: [],
   showAllRobots: false,
   selected: null, // 목표 지정을 기다리는 robot_id
@@ -100,7 +109,10 @@ async function call(path, options = {}) {
   }
   if (!resp.ok) {
     const detail = body && body.detail ? body.detail : {};
-    throw new Error(detail.message || detail.code || `HTTP ${resp.status}`);
+    const error = new Error(detail.message || detail.code || `HTTP ${resp.status}`);
+    error.status = resp.status;
+    error.code = detail.code;
+    throw error;
   }
   markUnlocked();
   return body;
@@ -110,8 +122,10 @@ async function refreshDispatchControl() {
   const title = el("dispatch-control-title");
   const detail = el("dispatch-control-detail");
   const rearm = el("dispatch-rearm");
+  if (!dispatchGate.due()) return view.dispatchControl;
   try {
     const state = await call("/api/fleet/dispatch-control");
+    dispatchGate.ok();
     view.dispatchControl = state;
     if (state.dispatch_enabled) {
       title.textContent = "발행 허용";
@@ -126,10 +140,16 @@ async function refreshDispatchControl() {
     rearm.hidden = !(auth.role === "operator" && !state.dispatch_enabled);
     rearm.disabled = auth.locked || !state.rearm_available;
     return state;
-  } catch (_err) {
+  } catch (err) {
     view.dispatchControl = null;
-    title.textContent = "발행 상태를 확인할 수 없음";
-    detail.textContent = "상태 확인에 실패해 재허가를 사용할 수 없습니다.";
+    if (dispatchGate.fail(err.status, err.code) === "absent") {
+      // 작업 대기열이 없는 Fleet — 발행 래치 자체가 없다. 오류가 아니다.
+      title.textContent = "발행 제어 미설정";
+      detail.textContent = "이 Fleet에는 작업 대기열이 설정되지 않았습니다.";
+    } else {
+      title.textContent = "발행 상태를 확인할 수 없음";
+      detail.textContent = "상태 확인에 실패해 재허가를 사용할 수 없습니다.";
+    }
     rearm.hidden = true;
     rearm.disabled = true;
     return null;
@@ -213,7 +233,9 @@ function render() {
     ? `${view.selected} 목표 (${point.x.toFixed(2)}, ${point.y.toFixed(2)}) m · 방향키로 이동, Enter로 확인, Escape로 취소`
     : view.map
       ? "오른쪽에서 로봇의 목표 지정을 누른 뒤 지도를 찍으면 그 로봇에게만 목표가 갑니다."
-      : "지도가 수신되면 로봇의 목표 지정을 사용할 수 있습니다.";
+      : view.siteMap
+        ? "천장 카메라 관측 전용 지도입니다. 목표 지정은 로봇 지도가 수신되면 사용할 수 있습니다."
+        : "지도가 수신되면 로봇의 목표 지정을 사용할 수 있습니다.";
   if (hint.textContent !== nextHint) hint.textContent = nextHint;
 }
 
@@ -261,12 +283,12 @@ function disarmGoal(reason) {
   log(reason, "bad");
 }
 
-const discoveryLabels = {
-  registration_pending: "등록 대기",
-  pairing_pending: "페어링 대기",
-  verified_online: "확인됨",
-  conflict: "신원 충돌",
-};
+const discoveryLabels = DISCOVERY_LABELS;
+const enrollment = createEnrollmentPanel({
+  headers: authHeaders,
+  identity: () => ({ role: auth.role, principal_id: auth.principal }),
+  log,
+});
 
 function showDiscoveryUnavailable(label, message) {
   const status = el("discovery-status");
@@ -284,8 +306,11 @@ function showDiscoveryUnavailable(label, message) {
 
 async function refreshDiscovery() {
   if (auth.locked) return;
+  await enrollment.refresh();
+  if (!discoveryGate.due()) return;
   try {
     const snapshot = await call("/api/fleet/discovery");
+    discoveryGate.ok();
     const status = el("discovery-status");
     status.textContent = snapshot.scanner_online
       ? `${snapshot.devices.length}대 발견` : "검색기 연결 대기";
@@ -300,19 +325,31 @@ async function refreshDiscovery() {
       state.textContent = discoveryLabels[device.status] || "확인 필요";
       state.className = `discovery-state ${device.status}`;
       item.append(label, detail, state);
+      enrollment.decorateDiscoveryRow(item, device);
       return item;
     });
     el("discovery-list").replaceChildren(...rows);
-  } catch (_err) {
-    if (!auth.locked) showDiscoveryUnavailable(
-      "발견 상태 확인 불가", "발견 목록을 확인할 수 없습니다. Fleet 연결을 확인하세요.");
+  } catch (err) {
+    if (auth.locked) return;
+    if (discoveryGate.fail(err.status, err.code) === "absent") {
+      showDiscoveryUnavailable("발견 미설정", "이 Fleet에는 발견 검색기가 설정되지 않았습니다.");
+    } else {
+      showDiscoveryUnavailable(
+        "발견 상태 확인 불가", "발견 목록을 확인할 수 없습니다. Fleet 연결을 확인하세요.");
+    }
   }
 }
 
 async function refreshAuthorization() {
+  // 로그인·토큰 저장마다 꺼진 기능을 한 번씩 다시 묻는다.
+  dispatchGate.reset();
+  discoveryGate.reset();
+  enrollment.resetPolling();
+  mapView.resetPolling();
   try {
     const identity = await call("/api/fleet/session");
     auth.role = identity.role;
+    auth.principal = identity.principal_id;
     const roleName = identity.role === "operator" ? "운영자" :
       identity.role === "viewer" ? "조회 전용" :
         identity.role === "policy-admin" ? "정책 관리자" : "권한 없음";
@@ -509,6 +546,8 @@ el("roster-toggle").addEventListener("click", () => {
 // D-262: 신호등 카드는 signals.js 팩토리가 그린다.
 const signals = createSignals({ el, view, log, call, refreshState });
 const visionView = createVisionView({ el, call, auth, authHeaders });
+// D-360: 경기장 제안·보정 뷰·레이어 토글. 레이어가 바뀌면 지도를 다시 그린다.
+createFieldView({ el, view, visionView, onLayersChanged: () => mapView.draw() });
 
 // --- 신호등 (ROSY-SIGNAL-001) --------------------------------------------------
 
@@ -550,4 +589,5 @@ setInterval(refreshState, STATE_MS);
 setInterval(() => { if (!auth.locked) refreshDispatchControl(); }, STATE_MS);
 setInterval(refreshDiscovery, MAP_MS);
 setInterval(() => mapView.refresh(), MAP_MS);
+setInterval(() => mapView.refreshSightings(), STATE_MS);
 setInterval(() => visionView.refreshFrame(), 1500);

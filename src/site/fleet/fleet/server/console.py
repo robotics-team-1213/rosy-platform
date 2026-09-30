@@ -72,9 +72,9 @@ class FleetConsole:
         self._clients: dict[str, RobotClient] = {
             ep.robot_id: client for ep, client in zip(endpoints, clients)
         }
-        self._rest_tokens = tuple(ep.token for ep in endpoints)
-        self._agent_pairing_tokens = tuple(ep.fleet_pairing_token for ep in endpoints
-                                           if ep.fleet_pairing_token is not None)
+        self._rest_tokens = {ep.robot_id: ep.token for ep in endpoints}
+        self._agent_pairing_tokens = {ep.robot_id: ep.fleet_pairing_token for ep in endpoints
+                                      if ep.fleet_pairing_token is not None}
         self._order = [ep.robot_id for ep in endpoints]
         self._registered_endpoints = {ep.robot_id: ep.base_url for ep in endpoints}
         self._clock = clock
@@ -105,6 +105,9 @@ class FleetConsole:
         #: 마지막으로 본 로봇의 pose 와 주행 상태. 길을 막고 선 로봇을 찾으려면 좌표가
         #: 있어야 하는데, 로봇 상태는 스냅샷으로 들어온다.
         self._seen: dict[str, dict] = {}
+        #: Robots whose pinned address is unverified (D-361 3): stop-only, kept as a
+        #: blocked obstacle in traffic, alarmed when they were moving.
+        self._held: dict[str, dict] = {}
         #: 열려 있는 대형 세션. 한 사이트에 하나다 - 같은 로봇이 두 대형에 들어가면
         #: 어느 리더를 따라야 하는지 로봇 쪽에서 정할 방법이 없다.
         self._formation = None
@@ -130,21 +133,21 @@ class FleetConsole:
     def uses_rest_token(self, candidate: str) -> bool:
         """Check credential separation without exposing configured robot tokens."""
         matched = False
-        for token in self._rest_tokens:
+        for token in self._rest_tokens.values():
             matched |= hmac.compare_digest(candidate, token)
         return matched
 
     def uses_agent_pairing_token(self, candidate: str) -> bool:
         """Check credential separation without exposing CORE FleetAgent secrets."""
         matched = False
-        for token in self._agent_pairing_tokens:
+        for token in self._agent_pairing_tokens.values():
             matched |= hmac.compare_digest(candidate, token)
         return matched
 
     def user_credential_overlaps_robot_secret(self, user_token_digests: Sequence[str]) -> bool:
         """Reject user tokens reused for CORE REST or Agent pairing credentials."""
         matched = False
-        for token in (*self._rest_tokens, *self._agent_pairing_tokens):
+        for token in (*self._rest_tokens.values(), *self._agent_pairing_tokens.values()):
             digest = sha256(token.encode("utf-8")).hexdigest()
             for user_digest in user_token_digests:
                 matched |= hmac.compare_digest(digest, user_digest)
@@ -154,6 +157,43 @@ class FleetConsole:
     def hub(self) -> SiteHub:
         """CORE Agent link owned by this console; transport routes are installed by app.py."""
         return self._hub
+
+    def _add_robot(self, endpoint: RobotEndpoint, client: RobotClient) -> None:
+        """SiteRoster only (D-361 5). Synchronous, so no gather sees half a robot."""
+        robot_id = endpoint.robot_id
+        if robot_id in self._clients:
+            raise HubError("ROBOT_ID_CONFLICT", f"{robot_id} is already on the roster")
+        self._clients[robot_id] = client
+        self._order.append(robot_id)
+        self._registered_endpoints[robot_id] = endpoint.base_url
+        self._rest_tokens[robot_id] = endpoint.token
+        self._hub.set_client(robot_id, client)
+        if endpoint.fleet_pairing_token is not None:
+            self._agent_pairing_tokens[robot_id] = endpoint.fleet_pairing_token
+            self._hub.set_pairing_token(robot_id, endpoint.fleet_pairing_token)
+
+    def _remove_robot(self, robot_id: str) -> RobotClient:
+        """SiteRoster only. Returns the client so the caller can close it."""
+        client = self._clients.pop(robot_id)
+        self._order.remove(robot_id)
+        self._registered_endpoints.pop(robot_id, None)
+        self._rest_tokens.pop(robot_id, None)
+        self._agent_pairing_tokens.pop(robot_id, None)
+        self._hub.drop(robot_id)
+        for table in (self._goals, self._claims, self._queued, self._yielding, self._seen,
+                      self._held):
+            table.pop(robot_id, None)
+        return client
+
+    def _replace_client(self, endpoint: RobotEndpoint, client: RobotClient) -> RobotClient:
+        """SiteRoster only: the same robot moved to a confirmed new address."""
+        robot_id = endpoint.robot_id
+        old = self._clients[robot_id]
+        self._clients[robot_id] = client
+        self._registered_endpoints[robot_id] = endpoint.base_url
+        self._rest_tokens[robot_id] = endpoint.token
+        self._hub.set_client(robot_id, client)
+        return old
 
     def _client(self, robot_id: str) -> RobotClient:
         client = self._clients.get(robot_id)
@@ -165,12 +205,13 @@ class FleetConsole:
 
     async def snapshot(self) -> dict:
         """N대 상태를 한 번에 모은다. 한 대가 죽어도 나머지는 그대로 온다."""
+        order = list(self._order)
         results = await asyncio.gather(
-            *(self._client(rid).state() for rid in self._order),
+            *(self._client(rid).state() for rid in order),
             return_exceptions=True,
         )
         robots = []
-        for robot_id, result in zip(self._order, results):
+        for robot_id, result in zip(order, results):
             goal = self._goals.get(robot_id)
             queued = self._queued.get(robot_id)
             if isinstance(result, BaseException):
@@ -190,6 +231,8 @@ class FleetConsole:
             row["queued"] = _shown(self._queued.get(row["robot_id"]))
             row["goal"] = self._goals.get(row["robot_id"])
             row["yielding"] = self._yielding.get(row["robot_id"])
+            hold = self._held.get(row["robot_id"])
+            row["held"] = hold["reason"] if hold is not None else None
         online = sum(1 for r in robots if r["online"])
         if self._signals is not None:
             # 신호등 갱신은 로봇 gather 뒤에서, 그리고 실패해도 로봇 상태를 흔들지 않는다.
@@ -201,6 +244,7 @@ class FleetConsole:
             "fleet": {"name": self.fleet_name, "online": online, "total": len(robots)},
             "robots": robots,
             "signals": self._signals.snapshot() if self._signals is not None else {},
+            "alarms": self.alarms(),
             "ts": self._clock(),
         }
 
@@ -213,7 +257,9 @@ class FleetConsole:
         now = self._clock()
         if self._map is not None and now - self._map_at < self._map_ttl_s:
             return self._map
-        for robot_id in self._order:
+        for robot_id in list(self._order):
+            if robot_id not in self._clients:
+                continue
             try:
                 grid = await self._client(robot_id).map()
             except Exception:
@@ -418,6 +464,7 @@ class FleetConsole:
         비켜설 자리가 없을 때도 마찬가지로 세워 둔다 - 다만 이유를 `NO_YIELD_SPACE` 로
         적어, 사람이 손을 대야 풀린다는 것을 화면이 말하게 한다.
         """
+        standing = list(standing)
         grid = bays.Grid.from_payload(await self.map())
         yielded, no_space = [], []
         for robot_id in standing:
@@ -462,14 +509,17 @@ class FleetConsole:
 
     async def _observe(self) -> None:
         """로봇 좌표를 새로 읽는다. 미션을 내리는 순간에만 부른다 - 폴링은 스냅샷이 한다."""
+        order = list(self._order)
         results = await asyncio.gather(
-            *(self._client(rid).state() for rid in self._order), return_exceptions=True)
+            *(self._client(rid).state() for rid in order), return_exceptions=True)
         self._remember([
             {"robot_id": rid, "state": None if isinstance(r, BaseException) else r}
-            for rid, r in zip(self._order, results)])
+            for rid, r in zip(order, results) if rid in self._clients])
 
     def _remember(self, robots: Sequence[dict]) -> None:
         for row in robots:
+            if row["robot_id"] not in self._clients:
+                continue
             state = row.get("state") or {}
             if state:
                 self._seen[row["robot_id"]] = state
@@ -550,7 +600,7 @@ class FleetConsole:
 
         for row in robots:
             state = row.get("state") or {}
-            if state.get("navigation") != "NAVIGATING":
+            if state.get("navigation") != "NAVIGATING" and row["robot_id"] not in self._held:
                 self._claims.pop(row["robot_id"], None)
         for robot_id in sorted(self._yielding):
             # 비켜설 이유가 사라졌으면 표시도 지운다. 남겨 두면 그 로봇은 다음 미션을
@@ -570,8 +620,10 @@ class FleetConsole:
         # 남는다(달리는 로봇은 이 순서와 무관하게 이긴다. 여기서 고르는 것은 대기자
         # 사이의 순서다).
         for robot_id in self._release_order(release_candidates):
-            mission = self._queued[robot_id]
-            self._queued.pop(robot_id, None)
+            # A roster removal may land between the awaits below (D-361 5).
+            mission = self._queued.pop(robot_id, None)
+            if mission is None or robot_id not in self._clients:
+                continue
             if mission.get("task_id") is not None:
                 if self._task_queue_release_callback is None:
                     self._queued[robot_id] = mission
@@ -673,6 +725,58 @@ class FleetConsole:
         self._yielding.pop(robot_id, None)
         return result
 
+    # --- pinned-address holds (D-361 3) ------------------------------------------
+
+    def hold_robot(self, robot_id: str, reason: str) -> None:
+        """The pinned address is unverified: the client sends stop requests only.
+
+        Traffic keeps the robot as a blocked obstacle at its last pose/claimed route,
+        so overlapping dispatches queue behind it; a moving robot raises an alarm.
+        """
+        if robot_id not in self._clients:
+            return
+        members = self._formation_members()
+        in_formation = bool(members) and (robot_id in members
+                                          or robot_id == self._formation_leader)
+        moving = (robot_id in self._goals or robot_id in self._claims
+                  or robot_id in self._queued or in_formation)
+        previous = self._held.get(robot_id) or {}
+        if robot_id not in self._claims:
+            pose = self._pose_of(robot_id)
+            if pose is not None:
+                self._claims[robot_id] = [pose]
+        self._held[robot_id] = {
+            "reason": reason, "alarm": bool(previous.get("alarm")) or moving,
+            "formation": bool(previous.get("formation")) or in_formation,
+        }
+
+    def release_robot(self, robot_id: str) -> None:
+        if self._held.pop(robot_id, None) is not None:
+            self._claims.pop(robot_id, None)
+
+    async def stop_held_formation(self) -> None:
+        """A held formation member gets a stop request at its pinned address, then the
+        formation is dissolved (D-361 3)."""
+        members = self._formation_members()
+        if not members:
+            return
+        held = [rid for rid, hold in list(self._held.items()) if hold.get("formation")
+                and (rid in members or rid == self._formation_leader)]
+        for hold in self._held.values():
+            hold["formation"] = False  # a flag from an older formation must not end a new one
+        if not held:
+            return
+        for robot_id in held:
+            try:
+                await self._client(robot_id).estop()
+            except Exception as exc:
+                logger.warning("stop request to held robot %s failed: %s", robot_id, exc)
+        await self.formation_stop()
+
+    def alarms(self) -> list[dict]:
+        return [{"robot_id": rid, "code": "ROBOT_ADDRESS_UNVERIFIED", "reason": hold["reason"]}
+                for rid, hold in sorted(self._held.items()) if hold.get("alarm")]
+
     async def estop_all(self) -> dict:
         """전 대상 정지 요청. 한 대가 거절해도 나머지에 계속 내린다.
 
@@ -692,12 +796,13 @@ class FleetConsole:
         # 간다. 어느 쪽이 실패했는지는 본문이 대신 말한다.
         signals_task = (asyncio.ensure_future(self._signals.all_red())
                         if self._signals is not None else None)
+        order = list(self._order)
         results = await asyncio.gather(
-            *(self._hub.scatter_estop(rid) for rid in self._order),
+            *(self._hub.scatter_estop(rid) for rid in order),
             return_exceptions=True,
         )
         rows = []
-        for robot_id, result in zip(self._order, results):
+        for robot_id, result in zip(order, results):
             if isinstance(result, BaseException):
                 # 응답을 받지 못했다. 실제로는 아직 가고 있을 수 있으므로 목표를 남긴다.
                 rows.append({"robot_id": robot_id, "stopped": False, "error": _error_of(result)})
@@ -908,7 +1013,7 @@ class FleetConsole:
         return status
 
     async def aclose(self) -> None:
-        for client in self._clients.values():
+        for client in list(self._clients.values()):
             closer: Any = getattr(client, "aclose", None)
             if closer is not None:
                 await closer()

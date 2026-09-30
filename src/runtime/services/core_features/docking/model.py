@@ -26,6 +26,7 @@ class DockPhase(str, enum.Enum):
     ACQUIRING = "acquiring"      # 검출기가 도크를 찾는다
     APPROACHING = "approaching"  # 관측 상대 포즈에 서보
     SETTLING = "settling"        # 전류가 흐르기를 기다린다
+    CHARGED_HOLD = "charged_hold"  # D-350: 만춫 확인, Fleet/운영자 지시 대기
     BACKOFF = "backoff"          # 실패 후 뒤로 빠져 재시도 준비
     TURNING = "turning"          # 주차형: 제자리 회전 (진입, 언도킹 뒤)
     ALIGNING = "aligning"        # 주차형: 주차점에서 방위만 맞춘다
@@ -56,6 +57,11 @@ class DockingConfig:
     backoff_s: float = 2.0
     backoff_distance_m: float = 0.25
     reseat_distance_m: float = 0.06     # 접점 재착좌 — 스테이징까지 가지 않는다
+    #: D-350: 만춫 HOLD 진입/해제·재충전 히스테리시스. 팩 실측 후 조정.
+    full_enter_v: float = 8.2           # 이 이상 유지 → 만춫 판정
+    full_exit_v: float = 8.0            # 이 이하로 떨어지면 재충전 (CC/CV가 알아서 재개)
+    #: D-350 Phase 1 (계측 없는 도크) — true 면 도크 전류 보고 없이 판정.
+    instrumented: bool = True
 
     approach_speed: float = 0.06        # m/s — 접근은 느려야 한다
     approach_gain_yaw: float = 1.2
