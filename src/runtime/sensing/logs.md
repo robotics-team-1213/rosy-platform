@@ -625,3 +625,11 @@
 - 변경: 다른 세션이 main 작업 트리에서 D-362(코드 유형별 파일 크기 예산)를 쓰고 있어, 이 모듈 기록의 D-362(운전자 실시간 영상, 옛 D-346)는 D-368 로 읽는다. 위 기록은 덧붙이기 전용이라 고치지 않는다.
 - 증거: `docs/adr/D-368-pilot-live-driver-video.md`, ADR Log 행·코드·시험이 새 번호를 쓴다.
 - gate 변화: 없음(번호만).
+
+## 2026-09-30 · uncommitted · feat(ros-sim): planning 슬라이스 통과 — goal_node 합성 지도·TF 그래프 검증
+
+- 변경: goal_node를 WSL2 Jazzy 살아있는 그래프에서 검증했다. 합성 2×2 m 점유 격자(미지 사분면으로 프론티어 형성) + TF map→odom→base_link + explore→stop 명령. 프론티어 골 발견(1.19,1.59, route 0.65m), 실경로 9건 + 문서화된 빈-Path 취소 11건, 스톨 감지·탈출 기계 작동, 정지 확인, 그래프 twist 토픽 0개(advisory-only). VERDICT: PASS (0 problems).
+- 증거: docs/validation/control-goal-planning-ros-sim-2026-09-30/ (JSONL·콘솔·토픽 목록·검증 출력). 초기 검증기가 취소 Path를 위반으로 오판했으나 이는 "침묵은 정지 명령이 아니다"의 문서화된 메커니즘 — 검증기를 계약에 맞게 수정한 뒤 판정했다.
+- gate 변화: ROS-SIM HOLD 유지 — blocker에 planning 슬라이스 통과 기록. 남은 것: calibration(병행 세션 진행 중)·safety-policy 그래프, Gazebo 폐루프, 물리 센서.
+- 결정: 없음.
+- 교훈: 검증기의 오판은 노드 소스의 의도 주석(_clear_route "Revoke old routes immediately; silence is not a stop command")과 대조해야 한다 — 계약 문서가 검증기보다 위다.

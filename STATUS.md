@@ -42,7 +42,7 @@
 - core DEVICE: Pi bench Device 설치와 device-readback.sh --json 증거 없음. G4 viewport·보정 상태기계 미실행
 - deploy ARTIFACT: Ubuntu 24.04.5 raspi base URL/SHA는 고정했으나 native ARM64 host 다운로드 검증, native Jazzy/ROSY payload 실행, 완성 이미지·SBOM·서명 전
 - deploy DEVICE: Ubuntu native product image의 SD write/readback, Pi 5 boot, ROS graph, 장치 ACL, deadman 실기 증거 없음
-- control ROS-SIM: 정확한 v2 mapping/CORE/Fleet 슬라이스는 2026-09-21 GO(52/52). 그러나 Control 전체 gate에는 calibration/planning/safety-policy 노드 그래프 재실행과 물리 센서가 남아 있다. 레거시 전체 스택은 CORE와 병행 기동하지 않는다(D-38). 통과한 슬라이스: D-162 road_observer+scene context(2026-09-22), camera 슬라이스 — camera_detect_node 무장치 부팅 그래프 + line_observer_node camera 모드 5단계 레인 관측(2026-09-30 PASS, docs/validation/control-camera-line-ros-sim-2026-09-30; 이 회차에서 _OpenCVCamera GStreamer 무장치 부팅 결함 발견·수리 27def3de).
+- control ROS-SIM: 정확한 v2 mapping/CORE/Fleet 슬라이스는 2026-09-21 GO(52/52). 그러나 Control 전체 gate에는 calibration/safety-policy 노드 그래프 재실행과 물리 센서가 남아 있다. 레거시 전체 스택은 CORE와 병행 기동하지 않는다(D-38). 통과한 슬라이스: D-162 road_observer+scene context(2026-09-22), camera 슬라이스 — camera_detect_node 무장치 부팅 그래프 + line_observer_node camera 모드 5단계 레인 관측(2026-09-30 PASS, docs/validation/control-camera-line-ros-sim-2026-09-30; _OpenCVCamera GStreamer 무장치 부팅 결함 수리 27def3de), planning 슬라이스 — goal_node 합성 지도·TF 프론티어 탐색·경로 발행·취소(2026-09-30 PASS, docs/validation/control-goal-planning-ros-sim-2026-09-30).
 - control ARTIFACT: 서명된 ARM64 manifest·immutable digest 발행 전. 흡수된 코드는 deploy가 소유하는 OS 이미지에 번들된다
 - control DEVICE: Pi bench Device 설치와 device-readback.sh --json 증거 없음. Control sensor adapter 활성화는 Device 보정 generation에 묶인다(D-47)
 - fleet ROS-SIM: D-87: 현재 트리의 colcon install/setup.bash가 없다. 2026-09-17 WSL Task 14 로그는 설계 입력이며 GO가 아니다 (D-89)
