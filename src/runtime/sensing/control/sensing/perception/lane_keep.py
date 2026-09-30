@@ -300,12 +300,14 @@ class LaneKeeper:
         self._previous_target = None
         self._corner_side = None
         self._corner_frames = 0
+        self._corner_engaged = False
         self.last: dict = {}
 
     def reset(self) -> None:
         self._previous_target = None
         self._corner_side = None
         self._corner_frames = 0
+        self._corner_engaged = False
         self.last = {}
 
     def _birds_eye(self, ground, width: int, height: int) -> BirdsEye:
@@ -416,7 +418,7 @@ class LaneKeeper:
         self._previous_target = (tx, ty)
         confidence = BOTH_CONFIDENCE if strategy == "both" else ONE_CONFIDENCE
         if strategy == "both":
-            self._corner_side, self._corner_frames = None, 0
+            self._corner_side, self._corner_frames, self._corner_engaged = None, 0, False
         error = max(-1.0, min(1.0, -ty / half))
         self.last.update(strategy=strategy, target_m=[round(tx, 3), round(ty, 3)],
                          target_px=self.to_pixel(ground, tx, ty),
@@ -440,12 +442,15 @@ class LaneKeeper:
             if self._corner_frames > 0:
                 self._corner_frames -= 1
             if self._corner_frames == 0:
-                self._corner_side = None
+                self._corner_side, self._corner_engaged = None, False
             return None
         ahead, centre, direction, ys, steep = best
         left_reach, right_reach = ys[1], -ys[0]
         side = None
-        if not steep and max(left_reach, right_reach) > half + CORNER_OPEN_M:
+        # A latched side is kept: mid-turn the corner line's ends swing and can
+        # mimic the opposite corner.
+        if (self._corner_side is None and not steep
+                and max(left_reach, right_reach) > half + CORNER_OPEN_M):
             # The closed end is where the corner line meets the outer lane line.
             if (left_reach - right_reach > CORNER_ASYMMETRY_M
                     and abs(right_reach - half) <= CORNER_CLOSED_TOLERANCE_M):
@@ -454,7 +459,9 @@ class LaneKeeper:
                     and abs(left_reach - half) <= CORNER_CLOSED_TOLERANCE_M):
                 side = "right"
         if side is not None:
-            self._corner_side, self._corner_frames = side, CORNER_LATCH_FRAMES
+            self._corner_side = side
+        if self._corner_side is not None:
+            self._corner_frames = CORNER_LATCH_FRAMES
         side = self._corner_side
         if side is None:
             return None  # a stop line or a T: not a corner
@@ -467,13 +474,15 @@ class LaneKeeper:
         along = direction if (direction[1] > 0.0) == (side == "left") else -direction
         meet = float(origin[0] - origin[1] * along[0] / along[1])
         square = abs(math.atan2(direction[1], direction[0])) >= math.pi / 2 - CORNER_SQUARE_RAD
-        if square and meet > CORNER_LOOKAHEAD_M:
+        if square and meet > CORNER_LOOKAHEAD_M and not self._corner_engaged:
             return np.array([CORNER_LOOKAHEAD_M, 0.0]), "corner_ahead"
         # Mid-turn the robot is already rotated toward the open side, so the
         # meeting point runs away along its heading: keep pursuing the new
         # centre line, never further than just past it.
         reach = abs(float(np.dot(normal, origin))) + CORNER_REACH_M
         point, _ = _pursuit_point(origin, along, max(CORNER_LOOKAHEAD_M, reach))
+        # Once turning, never back to straight-on for this corner.
+        self._corner_engaged = True
         return point, f"corner_{side}"
 
     def _choose(self, left, right, half):
