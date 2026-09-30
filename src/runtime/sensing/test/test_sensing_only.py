@@ -6,6 +6,7 @@ import unittest
 
 from control.control.calibration import SENSORS
 from control.control.sensing_only import partial_sensing_report
+from control import calibration_sequence
 
 
 class PartialSensingTests(unittest.TestCase):
@@ -106,7 +107,7 @@ class SensingAdapterTests(unittest.TestCase):
         node = SimpleNamespace(sensing_only=True, zero=lambda: calls.append('zero'),
             round_trip=SimpleNamespace(done=True), persist=lambda: calls.append('persist'),
             publish=lambda: calls.append('publish'))
-        node_method('finish')(node, True, 'Unexpected success callback')
+        calibration_sequence.CalibrationSequence.finish(node, True, 'Unexpected success callback')
         self.assertEqual(node.phase, 'failed')
         self.assertFalse(node.runtime_ready)
         self.assertEqual(calls, ['zero', 'persist', 'publish'])

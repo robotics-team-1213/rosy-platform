@@ -126,9 +126,10 @@ def test_rotation_scan_gets_raw_validity_and_the_quarter_second_window_separatel
 
 
 def test_live_health_accepts_motion_without_stationary_variance_rechecks():
+    from control.calibration_sequence import CalibrationSequence
     samples={name:[(10.,(0.,0.,0.,.5),True)] for name in health()}
     node=SimpleNamespace(baseline=SimpleNamespace(samples=samples),us_source_valid=True,
         get_parameter=lambda name:SimpleNamespace(value=False),map_tf_diagnostic={})
-    report=node_method('runtime_health')(node,10.)
+    report=CalibrationSequence.runtime_health(node,10.)
     assert all(item['eligible'] for item in report.values())
     assert 'stationary limits do not apply' in report['odom']['detail']

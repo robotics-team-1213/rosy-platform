@@ -5,7 +5,7 @@ from types import SimpleNamespace
 from unittest import mock
 
 from control import calibration_atomic
-
+from control import calibration_sequence
 from control.control.configured_operation import configured_waiting_reasons, configured_status
 
 
@@ -122,7 +122,7 @@ class ConfiguredAdapterTests(unittest.TestCase):
         node = SimpleNamespace(sensing_only=False, existing_settings=True,
             zero=lambda: calls.append('zero'), round_trip=SimpleNamespace(done=True),
             persist=lambda: calls.append('persist'), publish=lambda: calls.append('publish'))
-        node_method('finish')(node, True, 'Unexpected callback')
+        calibration_sequence.CalibrationSequence.finish(node, True, 'Unexpected callback')
         self.assertFalse(node.runtime_ready)
         self.assertEqual(node.phase, 'failed')
         self.assertEqual(calls, ['zero', 'persist', 'publish'])
