@@ -101,7 +101,14 @@ All HTTPS hops verify the configured site CA. The same site certificate must
 contain these DNS SANs: the operator-facing FQDN, the stable Ubuntu host's
 `<hostname>.local`, `proxy`, `fleet`, and
 `vision`. The phone pairing link uses that FQDN and explicit TLS:
-`rosyov://<site-fqdn>:8443/?t=<phone-token>&s=ceiling_north&tls=1`.
+`rosyov://<site-fqdn>:8443/?t=<phone-token>&s=ceiling_north&tls=1&pin=sha256/<b64url>`.
+The `pin` makes the app trust only this site's certificate, so the site CA is
+not installed on the phone (D-341 9). Print the link and QR on the site host
+with `ROSY_OVERHEAD_TOKEN=<phone-token> overhead pair-link --host <fqdn-or-ip>
+--port <published-8443> --source ceiling_north --pin-cert <secrets>/site.crt`.
+The last certificate in `site.crt` is pinned: if the file is leaf + CA, the
+pin is the CA and survives leaf re-issue; if it is the leaf only, re-issuing
+the leaf needs a new link. An IP host needs that IP in the certificate SAN.
 Treat the URI as a credential: do not paste it into tickets, logs, or shell
 history. Use the QR/pairing screen over a trusted local channel.
 

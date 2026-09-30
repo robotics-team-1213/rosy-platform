@@ -150,3 +150,11 @@
 - gate 변화: 없음. 실제 폰 발견은 DEVICE 회차.
 - 결정: D-370 5.1.
 - 교훈: 없음.
+
+## 2026-09-30 · 3c263ff0 · feat(overhead): 페어링 링크 인증서 고정 — `&pin=sha256/<b64url>` (D-341 9 첫 조각)
+
+- 변경: `rosyov://`에 선택 키 `pin`(서버가 보내는 체인 안 인증서 하나의 DER SHA-256, base64url 무패딩; SPKI 아님)을 더했다. `tls=1` 없이 오면 `pin` 거절. 앱은 pin을 페어링과 함께 저장하고 그 링크의 OkHttp 클라이언트에만 `PinnedTrustManager`를 붙인다: 고정 인증서가 체인에 있어야 하고, CA 고정이면 leaf가 그 CA 하나를 앵커로 PKIX 검증을 통과해야 하며, 호스트명 검사(IP SAN 포함)는 OkHttp가 그대로 한다. pin 없음 + tls=1은 시스템 신뢰 그대로, 평문 ws는 그대로. 불일치는 재시도하지 않고 멈추며(D-341 10) 전용 한국어 안내를 띄운다. 사이트 쪽은 `overhead pair-link --pin-cert site.crt`(PEM 마지막 인증서 고정)와 `overhead receive --tls-cert`가 pin 든 링크를 찍는다.
+- 증거: `python -m pytest src/site/overhead/test -q` 126 passed. `gradlew testDebugUnitTest assembleDebug` 녹색 142 tests(새 `PinnedTrustTest` 8개: MockWebServer TLS + 임시 CA로 CA pin 통과, leaf pin 통과, 다른 CA 거절 TLS_PIN, 위조 leaf + 진짜 CA 거절, SAN 불일치 거절, pin 없음은 시스템 신뢰로 거절, wss 링크 STREAMING 및 불일치 시 stopped). 공유 벡터 `pairing_uris`(pin 링크 1, 거절 3, `pin_pattern`)·`cert_pins`.
+- gate 변화: 없음. S21 실기 TLS 송출은 DEVICE 회차(부모 세션).
+- 결정: D-341의 "DER 해시, SPKI 기각"을 따른다. 콘솔 승인·1회 수령·CA PEM 전달·mDNS 재발견은 이 조각 밖이다. 링크에 CA 해시만 실리므로 CA 고정에는 프록시가 leaf+CA 체인을 보내야 한다. leaf만 보내면 leaf 고정이 되고 leaf 재발급 때 새 링크가 필요하다.
+- 교훈: JDK는 서명이 안 맞는 체인을 서버 키로 싣지 못하므로 위조 체인 시험은 TrustManager를 직접 부른다.

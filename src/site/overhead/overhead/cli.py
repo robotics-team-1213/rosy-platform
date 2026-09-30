@@ -59,6 +59,24 @@ def _print_pairing(uri: str) -> None:
     qr.print_ascii(invert=True)
 
 
+def _pin_from(cert_file: Path) -> str:
+    """Pin of the last certificate in the PEM file the TLS server serves (see ``pem_last_cert_pin``)."""
+    return protocol.pem_last_cert_pin(cert_file.read_text(encoding="ascii"))
+
+
+def _pair_link(args: argparse.Namespace) -> int:
+    """Print a pinned ``rosyov://...&tls=1&pin=`` link for a site whose TLS proxy serves ``--pin-cert``."""
+    token = os.environ.get(args.token_env)
+    if not token:
+        print(f"${args.token_env} must hold the phone token for source {args.source!r}", file=sys.stderr)
+        return 2
+    pin = _pin_from(args.pin_cert)
+    uri = protocol.pairing_uri(args.host, args.port, token, args.source, secure=True, pin=pin)
+    print(f"pin: {pin}  (the phone shows the first 19 characters when it saves the link)")
+    _print_pairing(uri)
+    return 0
+
+
 def _server_ssl_context(cert: Path | None, key: Path | None) -> ssl.SSLContext | None:
     if bool(cert) != bool(key):
         raise ValueError("--tls-cert and --tls-key must be provided together")
@@ -97,8 +115,9 @@ async def _run_receive(args: argparse.Namespace) -> int:
     server = IngestServer({args.source_name: token})
     ws_server = await server.start(args.host, args.port, ssl_context=_server_ssl_context(args.tls_cert, args.tls_key))
     advertise_host = args.advertise_host or _detect_advertise_host(args.host)
+    pin = _pin_from(args.tls_cert) if args.tls_cert else None
     uri = protocol.pairing_uri(advertise_host, args.port, token, args.source_name,
-                               secure=bool(args.tls_cert))
+                               secure=bool(args.tls_cert), pin=pin)
     print(f"listening on {args.host}:{args.port}{protocol.WS_PATH}")
     _print_pairing(uri)
 
@@ -198,6 +217,20 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     vision.add_argument("--tls-cert", type=Path, default=None)
     vision.add_argument("--tls-key", type=Path, default=None)
 
+    link = sub.add_parser(
+        "pair-link",
+        help="print a pinned wss pairing link (and QR) for a site TLS proxy; the token comes from --token-env",
+    )
+    link.add_argument("--host", required=True, help="address the phone dials: site FQDN or IP in the cert SAN")
+    link.add_argument("--port", type=int, required=True, help="published TLS port, e.g. the proxy's 8443")
+    link.add_argument("--source", required=True, help="camera source id from site-cameras.yaml")
+    link.add_argument("--token-env", default="ROSY_OVERHEAD_TOKEN")
+    link.add_argument(
+        "--pin-cert", required=True, type=Path,
+        help="PEM the proxy serves (site.crt); its last certificate is pinned: the CA when the file "
+             "is leaf+CA, else the leaf",
+    )
+
     return parser.parse_args(argv)
 
 
@@ -215,6 +248,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         except KeyboardInterrupt:
             pass
         return 0
+    if args.command == "pair-link":
+        return _pair_link(args)
     print(f"unknown command {args.command!r}", file=sys.stderr)
     return 2
 

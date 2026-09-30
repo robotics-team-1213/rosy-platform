@@ -2,10 +2,18 @@
 
 from __future__ import annotations
 
+import json
+import ssl
+from pathlib import Path
+
 import pytest
 
 from overhead import protocol
-from overhead.cli import _detect_advertise_host, _server_ssl_context, parse_args
+from overhead.cli import _detect_advertise_host, _server_ssl_context, main, parse_args
+
+VECTORS = json.loads(
+    (Path(__file__).resolve().parents[1] / "protocol" / "vectors.json").read_text(encoding="utf-8")
+)
 
 
 def test_receive_defaults_match_the_design_doc():
@@ -78,3 +86,23 @@ def test_pairing_uri_from_cli_args_round_trips():
         "pin": None,
         "ws_url": f"ws://site-pc.local:8095{protocol.WS_PATH}",
     }
+
+def test_pair_link_prints_a_pinned_wss_link_from_the_served_pem(tmp_path, monkeypatch, capsys):
+    vector = VECTORS["cert_pins"]["vectors"][0]
+    served = tmp_path / "site.crt"
+    served.write_text(ssl.DER_cert_to_PEM_cert(b"leaf-stand-in")
+                      + ssl.DER_cert_to_PEM_cert(vector["der_utf8"].encode("utf-8")), encoding="ascii")
+    monkeypatch.setenv("CAM_TOKEN", "tok123")
+    assert main(["pair-link", "--host", "192.168.1.102", "--port", "18447", "--source", "ceiling_north",
+                 "--token-env", "CAM_TOKEN", "--pin-cert", str(served)]) == 0
+    line = next(l for l in capsys.readouterr().out.splitlines() if l.startswith("pairing: "))
+    parsed = protocol.parse_pairing_uri(line.removeprefix("pairing: "))
+    assert parsed["secure"] is True
+    assert parsed["pin"] == vector["pin"]
+    assert parsed["ws_url"] == f"wss://192.168.1.102:18447{protocol.WS_PATH}"
+
+
+def test_pair_link_refuses_to_run_without_the_token(tmp_path, monkeypatch):
+    monkeypatch.delenv("CAM_TOKEN", raising=False)
+    assert main(["pair-link", "--host", "h", "--port", "1", "--source", "s",
+                 "--token-env", "CAM_TOKEN", "--pin-cert", str(tmp_path / "missing.crt")]) == 2
