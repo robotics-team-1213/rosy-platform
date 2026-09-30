@@ -44,8 +44,8 @@
 
 ## 최근 기록
 
+- 2026-09-30 · uncommitted · refactor(web_common): D-377 icon files and registry ids follow one word
 - 2026-09-30 · uncommitted · fix(ci): D-370 리뷰 — 아이콘 시험이 Pillow 없이도 수집되고, 토큰 이름 중복을 막음
 - 2026-09-30 · uncommitted · docs(adr): D-358 앱 역할 ADR을 D-370으로 재번호
 - 2026-09-30 · uncommitted · feat(icons): D-358 S3 이름·아이콘·파비콘
 - 2026-09-30 · uncommitted · test(roles): D-358 S2 역할 경계 시험과 표면 소유 목록
-- 2026-09-30 · uncommitted · fix(harness): 역할 표면 검증을 저장소 안 도구로 — LOCAL cmd 재현 가능화

@@ -170,3 +170,8 @@
 - 증거: `node --check`, `pytest src/hmi/pilot/test` 35 passed, 13 skipped (2026-09-30 Windows, 브라우저 시험은 opt-in 이라 skip).
 - gate 변화: SOURCE. 태블릿 실화면 확인 전.
 - 결정: D-344 §13(사용자 결정: 차선 자동은 L1 이상).
+
+## 2026-09-30 · uncommitted · refactor(pilot): D-377 page title is the display name
+- 변경: `index.html` `<title>` `Rosy 로봇 — 조종` → `Rosy Pilot`(D-377: 앱 제목은 표시 이름).
+- 증거: `src/hmi/web_common/test/test_surface_titles.py` 통과(web_common 111 passed, 2026-09-30 Windows).
+- gate 변화: 없음.
