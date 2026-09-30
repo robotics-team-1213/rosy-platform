@@ -10,9 +10,9 @@ try:
     from rclpy.parameter import Parameter
     from sensor_msgs.msg import CompressedImage, Image
     from std_msgs.msg import Bool, Float32, String
-    # camera_detect_node's module globals the exec'd class body needs.
-    from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy, qos_profile_sensor_data
-    from control.sensing.perception.jpeg_frame import DEFAULT_QUALITY, encode_jpeg
+    from rclpy.qos import ReliabilityPolicy
+    # The class body is exec'd against the node module's own globals.
+    import control.camera_detect_node as camera_module
 except ImportError:
     rclpy = None
 
@@ -23,15 +23,13 @@ class CameraGraphTests(unittest.TestCase):
         path = Path(__file__).parents[1] / 'control/camera_detect_node.py'
         tree = ast.parse(path.read_text(encoding='utf-8'))
         cls = next(n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == 'CameraDetectNode')
-        cls.body = [n for n in cls.body if isinstance(n, ast.FunctionDef)
-                    and n.name in ('__init__', '_publish_front')]
         for namespace in ('rosy_01', 'rosy_02'):
             class NamespacedNode(Node):
                 def __init__(self, name):
                     super().__init__(name, namespace=namespace, parameter_overrides=[
                         Parameter('camera_frame', value=namespace + '/camera_link')])
 
-            bindings = dict(globals(), Node=NamespacedNode,
+            bindings = dict(vars(camera_module), Node=NamespacedNode,
                             ground_plane=lambda **kwargs: None, CameraPolicy=lambda **kwargs: None)
             exec(compile(ast.Module(body=[cls], type_ignores=[]), str(path), 'exec'), bindings)
             constructor = bindings['CameraDetectNode']
@@ -42,7 +40,9 @@ class CameraGraphTests(unittest.TestCase):
             try:
                 node = constructor()
                 topics = {p.topic_name for p in node.publishers} - {'/rosout', '/parameter_events'}
-                self.assertEqual(len(topics), 7)
+                # + camera/controls and camera/calibration/status; compressed stays off
+                self.assertEqual(len(topics), 9, topics)
+                self.assertNotIn('/' + namespace + '/camera/front/compressed', topics)
                 self.assertTrue(all(t.startswith('/' + namespace + '/camera/') for t in topics), topics)
                 recorded = []
                 node.img_pub = type('Capture', (), {'publish': lambda self, msg: recorded.append(msg)})()
@@ -60,15 +60,13 @@ class CameraGraphTests(unittest.TestCase):
         path = Path(__file__).parents[1] / 'control/camera_detect_node.py'
         tree = ast.parse(path.read_text(encoding='utf-8'))
         cls = next(n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == 'CameraDetectNode')
-        cls.body = [n for n in cls.body if isinstance(n, ast.FunctionDef)
-                    and n.name in ('__init__', '_publish_front')]
 
         class CaptureNode(Node):
             def __init__(self, name):
                 super().__init__(name, namespace='rosy_01', parameter_overrides=[
                     Parameter('publish_compressed', value=True)])
 
-        bindings = dict(globals(), Node=CaptureNode,
+        bindings = dict(vars(camera_module), Node=CaptureNode,
                         ground_plane=lambda **kwargs: None, CameraPolicy=lambda **kwargs: None)
         exec(compile(ast.Module(body=[cls], type_ignores=[]), str(path), 'exec'), bindings)
         constructor = bindings['CameraDetectNode']
