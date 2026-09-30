@@ -8,7 +8,7 @@ import pytest
 cv2 = pytest.importorskip("cv2")
 
 import labels as L  # noqa: E402
-from geometry import Camera, Lidar, PoseSeries, robot_lidar_yaw_deg, to_frame  # noqa: E402
+from geometry import Camera, Lidar, PoseSeries, labeller_lidar_yaw_deg, robot_lidar_yaw_deg, to_frame  # noqa: E402
 
 CAM = Camera(width=320, height=240, fx=281.6, cx=160.0, cy=120.0, pitch_rad=math.radians(8.0),
              height_m=0.067, x_offset_m=0.034)
@@ -78,10 +78,25 @@ def test_small_column_gap_is_filled_as_floor_only():
     assert floor[int(CAM.ground_row(1.0)) + 10, 160]
 
 
-def test_lidar_mount_yaw_defaults_to_robot_yaml():
-    # One source for the mount (D-47 addendum): robot.yaml lidar_yaw_offset, not the URDF pi.
-    assert Lidar().forward_deg == pytest.approx(robot_lidar_yaw_deg())
-    assert robot_lidar_yaw_deg() == pytest.approx(math.degrees(3.31612558))
+def test_labeller_yaw_is_the_accepted_record_else_180_not_robot_yaml(tmp_path):
+    # Review M6: robot.yaml's 190 deg is contradicted by measurement; never the default.
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "src" / "contracts" / "foundation"))
+    from core_common.calibration_store import CalibrationStore
+    assert Lidar().forward_deg == 180.0
+    assert labeller_lidar_yaw_deg(None)[0] == 180.0
+    assert labeller_lidar_yaw_deg("rosy-x", str(tmp_path))[0] == 180.0          # no record
+    store = CalibrationStore(tmp_path / "s")
+    rid = store.add("rosy-x", "lidar_mount", {"lidar_yaw_offset": math.radians(181.9)}, method="t/1")
+    store.set_status("rosy-x", "lidar_mount", rid, "accepted", actor="op")
+    yaw, source = labeller_lidar_yaw_deg("rosy-x", str(tmp_path / "s"))
+    assert yaw == pytest.approx(181.9) and rid in source
+    # Cached: a later accept in the same process is not re-read.
+    rid2 = store.add("rosy-x", "lidar_mount", {"lidar_yaw_offset": math.radians(183.0)}, method="t/1")
+    store.set_status("rosy-x", "lidar_mount", rid2, "accepted", actor="op")
+    assert labeller_lidar_yaw_deg("rosy-x", str(tmp_path / "s"))[0] == pytest.approx(181.9)
+    assert robot_lidar_yaw_deg() == pytest.approx(math.degrees(3.31612558))   # still readable, unused here
 
 
 def test_configured_yaw_rotates_the_returns():

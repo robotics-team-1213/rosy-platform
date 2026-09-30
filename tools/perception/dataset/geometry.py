@@ -12,15 +12,17 @@ from the sim URDF (src/sim/description/urdf/rosy.urdf.xacro): base_footprint ->
 base_link z 0.028, base_link -> rplidar_mount xyz (-0.017, 0, 0.067),
 rplidar_mount -> rplidar_link z 0.030, so the scan plane is 0.125 m above the
 floor and 0.017 m behind base. The height is the URDF value, not a tape
-measurement of the real robot. The mount yaw is NOT the URDF pi: it is the
-robot's lidar_yaw_offset (src/runtime/sensing/config/robot.yaml), the one
-value safety, calibration and CORE line_follow share (D-47 addendum
-2026-10-01); autolabel.py --lidar-yaw-deg overrides it.
+measurement of the real robot. The mount yaw is the robot's accepted
+lidar_mount record in the PC calibration store (data/calibration/<device>/,
+D-47 addendum 2026-10-01), else 180 deg (the URDF pi and the device's
+line_follow hand value). robot.yaml's 190 deg is not used: motion and camera
+measure ~181-182 deg. autolabel.py --lidar-yaw-deg overrides both.
 """
 from __future__ import annotations
 
+import functools
 import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
@@ -28,6 +30,8 @@ import numpy as np
 REPO = Path(__file__).resolve().parents[3]
 PROFILE_PATH = REPO / "src" / "products" / "pinky_pro" / "profile" / "config" / "camera_nominal.yaml"
 ROBOT_YAML = REPO / "src" / "runtime" / "sensing" / "config" / "robot.yaml"
+CALIBRATION_STORE = REPO / "data" / "calibration"
+LIDAR_FORWARD_DEG = 180.0
 
 # rosy.urdf.xacro: 0.028 + 0.067 + 0.030; x of rplidar_mount in base_link.
 LIDAR_HEIGHT_M = 0.125
@@ -39,6 +43,22 @@ def robot_lidar_yaw_deg(path=ROBOT_YAML) -> float:
     import yaml
     doc = yaml.safe_load(Path(path).read_text(encoding="utf-8"))
     return math.degrees(float(doc["/**"]["ros__parameters"]["lidar_yaw_offset"]))
+
+
+@functools.lru_cache(maxsize=None)
+def labeller_lidar_yaw_deg(device=None, store_root=str(CALIBRATION_STORE)):
+    """(yaw degrees, source) for the labeller: the device's accepted lidar_mount
+    record in the PC store when it passes the plausibility check, else 180 deg.
+    Cached: one store read per device per process."""
+    if device:
+        import sys
+        sys.path.insert(0, str(REPO / "src" / "contracts" / "foundation"))
+        from core_common.calibration_store import resolve
+        values, source = resolve("lidar_mount", {"lidar_yaw_offset": math.radians(LIDAR_FORWARD_DEG)},
+                                 fallback_source="180 deg default", robot=device, root=store_root,
+                                 nominal={"lidar_forward_deg": LIDAR_FORWARD_DEG})
+        return math.degrees(values["lidar_yaw_offset"]) % 360.0, source
+    return LIDAR_FORWARD_DEG, "180 deg default (no device)"
 # Track perimeter and inner walls: 0.155 m (map_260905.world, and the video
 # estimate in docs/validation/perception-real-video/2026-09-24/p0_track_measurements.md).
 WALL_HEIGHT_M = 0.155
@@ -94,7 +114,7 @@ class Camera:
 class Lidar:
     height_m: float = LIDAR_HEIGHT_M
     x_offset_m: float = LIDAR_X_OFFSET_M
-    forward_deg: float = field(default_factory=robot_lidar_yaw_deg)
+    forward_deg: float = LIDAR_FORWARD_DEG
     mirrored: bool = False  # True if the driver reports angles clockwise
 
     def points(self, ranges, angle_min: float, angle_increment: float,

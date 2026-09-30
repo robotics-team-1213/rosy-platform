@@ -35,7 +35,7 @@ sys.path.insert(0, str(HERE.parents[2] / "src" / "runtime" / "sensing"))
 
 import labels as L  # noqa: E402
 from frames import FrameSelector  # noqa: E402
-from geometry import Camera, Lidar, PoseSeries, robot_lidar_yaw_deg, to_frame  # noqa: E402
+from geometry import Camera, Lidar, PoseSeries, labeller_lidar_yaw_deg, to_frame  # noqa: E402
 
 DATA = HERE.parents[2] / "data" / "perception"
 MAX_SCAN_DT_S = 0.2
@@ -391,7 +391,7 @@ def main(argv=None) -> int:
     ap.add_argument("--min-interval", type=float, default=0.5)
     ap.add_argument("--lidar-mirrored", action="store_true")
     ap.add_argument("--lidar-yaw-deg", type=float, default=None,
-                    help="LiDAR mount yaw (scan angle of the nose); default: robot.yaml lidar_yaw_offset")
+                    help="LiDAR mount yaw (scan angle of the nose); default: the device's accepted lidar_mount record in data/calibration/, else 180")
     ap.add_argument("--max-frames", type=int)
     ap.add_argument("--pitch-deg", type=float,
                     help="camera pitch; default: fit to the session's LiDAR walls, else the profile")
@@ -419,9 +419,14 @@ def main(argv=None) -> int:
         odom, make_frames, scans = read_sidecar(args.video, sidecar)
         source = {"kind": "video+sidecar", "video": str(args.video), "sidecar": str(sidecar),
                   "sha256": {"video": _sha(args.video), "sidecar": _sha(sidecar)}}
-    yaw_source = "argument" if args.lidar_yaw_deg is not None else "robot.yaml lidar_yaw_offset"
-    lidar = Lidar(mirrored=args.lidar_mirrored,
-                  forward_deg=args.lidar_yaw_deg if args.lidar_yaw_deg is not None else robot_lidar_yaw_deg())
+    if args.lidar_yaw_deg is not None:
+        yaw, yaw_source = args.lidar_yaw_deg, "argument"
+    else:
+        sj = args.session / "session.json" if args.session else None
+        device = (json.loads(sj.read_text(encoding="utf-8")).get("device") if sj is not None and sj.is_file()
+                  else (session_json or {}).get("device") if args.video is not None else None)
+        yaw, yaw_source = labeller_lidar_yaw_deg(device)
+    lidar = Lidar(mirrored=args.lidar_mirrored, forward_deg=yaw)
     print(f"LiDAR mount yaw {lidar.forward_deg:.2f} deg ({yaw_source})")
     pitch, camera = None, {"pitch_source": "profile"}
     if args.pitch_deg is not None:
