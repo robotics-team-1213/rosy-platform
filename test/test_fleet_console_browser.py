@@ -1510,3 +1510,30 @@ def test_visible_text_meets_the_contrast_floor(console_url):
         "바닥 아래 텍스트가 있다 — 선택도 읽기를 희생하지 않는다(D-214): "
         + "; ".join(offenders[:6])
     )
+
+
+@pytest.mark.parametrize("width,height", [(1366, 768), (390, 844), (320, 568)])
+def test_map_label_chips_never_cover_each_other(console_url, width, height):
+    """D-359 US-008 capture: near rosy_03 the tracking-error chip ("0.88m") and the mediation
+    chip ("경로 충돌") were drawn on the same spot and neither read. Chips step aside."""
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as p:
+        browser, page, errors = _open_console(p, dict(API))
+        page.set_viewport_size({"width": width, "height": height})
+        page.goto(console_url, wait_until="networkidle")
+        page.wait_for_function("() => (window.__swarmOverlay?.mediation || 0) >= 1"
+                               " && (window.__mapChips || []).length >= 3", timeout=8000)
+        chips = page.evaluate("() => window.__mapChips.map((r) => ({...r}))")
+        assert not errors
+        browser.close()
+
+    texts = [chip["text"] for chip in chips]
+    assert "경로 충돌" in texts and "0.88m" in texts, texts
+    hits = [
+        (a["text"], b["text"])
+        for i, a in enumerate(chips) for b in chips[i + 1:]
+        if a["x"] < b["x"] + b["w"] and b["x"] < a["x"] + a["w"]
+        and a["y"] < b["y"] + b["h"] and b["y"] < a["y"] + a["h"]
+    ]
+    assert hits == [], hits

@@ -102,6 +102,18 @@ export function createMapView({ el, view, auth, call, onMapChanged, onMapUnavail
     return { text: "\uC1A1\uC2E0 \uC2DC\uAC01 \uC5C6\uC74C", cls: "warn" };
   }
 
+  // D-359 US-008 — 한 번 그릴 때 놓인 칩 사각형(캔버스 픽셀). 가까운 로봇의 추적
+  // 오차("0.88m")와 중재("경로 충돌")가 같은 자리에 겹쳐 둘 다 못 읽었다. 새 칩은
+  // 놓인 칩과 겹치지 않을 때까지 아래·위로 한 칸씩 번갈아 비킨다. 시험은
+  // window.__mapChips로 사각형을 읽는다.
+  let placedChips = [];
+  const CHIP_GAP = 2;
+  const CHIP_TRIES = 12;
+
+  function chipsOverlap(a, b) {
+    return a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+  }
+
   function drawChip(ctx, grid, cx, cy, text, tone) {
     const point = ctx.getTransform().transformPoint({ x: cx, y: cy });
     const displayedWidth = ctx.canvas.getBoundingClientRect().width || ctx.canvas.width;
@@ -117,7 +129,15 @@ export function createMapView({ el, view, auth, call, onMapChanged, onMapUnavail
     const width = ctx.measureText(text).width + padding * 2;
     const height = fontSize + padding * 2;
     const x = Math.max(width / 2 + 4, Math.min(ctx.canvas.width - width / 2 - 4, point.x));
-    const y = Math.max(height / 2 + 4, Math.min(ctx.canvas.height - height / 2 - 4, point.y));
+    const clampY = (value) => Math.max(height / 2 + 4, Math.min(ctx.canvas.height - height / 2 - 4, value));
+    const rectAt = (centreY) => ({ x: x - width / 2, y: centreY - height / 2, w: width, h: height, text });
+    const anchorY = clampY(point.y);
+    let y = anchorY;
+    for (let step = 1; step <= CHIP_TRIES && placedChips.some((r) => chipsOverlap(rectAt(y), r)); step += 1) {
+      const rows = Math.ceil(step / 2);
+      y = clampY(anchorY + (step % 2 ? 1 : -1) * rows * (height + CHIP_GAP));
+    }
+    placedChips.push(rectAt(y));
     ctx.globalAlpha = 0.92;
     ctx.fillStyle = css("--scrim");
     ctx.fillRect(x - width / 2, y - height / 2, width, height);
@@ -419,6 +439,8 @@ export function createMapView({ el, view, auth, call, onMapChanged, onMapUnavail
 
   function draw() {
     const grid = view.map;
+    placedChips = [];
+    window.__mapChips = placedChips;
     if (!grid) {
       if (view.siteMap) {
         drawSiteView();
