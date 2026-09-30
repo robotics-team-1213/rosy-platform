@@ -640,3 +640,10 @@
 - gate 변화: SOURCE 진행(실물 녹화 벤치 전 지표 개선). ROS-SIM 한 바퀴 미달 유지 — 분기에서 fail-closed 가 깨졌다(C1), 모서리 자르기·원호 미해결.
 - 결정: D-364 addendum(새 번호 없음). 모서리 회전은 실물에서 계속 끈다.
 - 교훈: 같은 저장 프레임의 4 fps 오프라인 재생과 8 fps 라이브가 모서리 잠금에서 다른 답을 냈다(V1C). 폐루프 로그에 전략(`strategy`)이 없으면 라이브를 재현할 수 없다.
+
+## 2026-09-30 · uncommitted · fix(control): keep 2차 — 모서리 모드 분기 fail-closed, 라이브 재생, 끊김 뒤 초기화(D-364 addendum 2)
+- 변경: `perception/lane_keep.py` — 모서리 회전이 켜진 경우만: 양쪽 차로선이 보이면 모서리를 찾지 않음, 열린 쪽 경계가 모서리 선 너머로 이어지면 잠그지 않음, 분기 보류(`junction_transverse`·`junction_fork`·`flipping`, 뒤집힘은 양쪽이 보일 때까지 유지), 모서리 명령 |error| ≤ 0.6(b92ea954, fd4fad93). 공통: 보류·`washed`·`no_ground` 에서 추적 경계·조향 기록을 버리고, `line_observer_node` 가 첫 keep 프레임·스탬프 간격 0.5 s 초과·역행·카메라 제어 게이트 뒤 `reset()`(6bda7d0f). 노드가 `line/keep_debug`(판단 묶음, 관측 전용)를 내고 `keep_run.py` 가 `keep.jsonl`·`--all-frames` 를 남긴다. 시험 23 → 32.
+- 증거: V1C 원인 — 8 fps 라이브 프레임을 1차 코드로 재생하면 라이브와 같은 프레임에서 `both` 위에 `corner_left` 잠금이 재현됨. 폐루프 off-lane: V1A 2 → R3A 0, V1B 1 → R3B 0, V1C 1 → R3C 0(대신 거리 3.50/1.33/2.00 → 0.70/0.29/0.67 m, 분기·굽이 앞 HOLD→LOST, R3A 는 모서리 뒤 벽 `obstacle_ahead`). 벤치(keep 기본) pilot 0.019/0.014/0.319/0.007, teleop 0.040/0.066/0.078/0.024 — 1차 HEAD 와 같음. 규칙을 실물 기본에도 넣으면 pilot none 0.537, teleop 0.288 이라 넣지 않음. `pytest src/runtime/sensing/test -k "lane or keep"` 302 passed, 17 skipped (2026-09-30 Windows). DEVICE: NOT RUN.
+- gate 변화: ROS-SIM — 모서리 모드가 분기에서 fail-closed(off-lane 0). 한 바퀴 미달 유지, 셰브런 거짓 보류(R3B).
+- 결정: D-364 addendum 2(새 번호 없음). 실물 모서리 회전은 계속 끔.
+- 교훈: 폐루프 원인은 라이브와 같은 프레임 순서로 재생해야 보인다 — 4 fps 표본은 모서리 잠금이 걸린 몇 프레임을 빼먹어 반대 답을 냈다. 순간이동 벤치에서는 노드 상태가 이전 위치를 기억한다.
