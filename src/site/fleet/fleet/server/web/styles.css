@@ -380,14 +380,18 @@ main {
   .dispatch-control { margin: var(--space-2) var(--space-3) 0; }
 }
 
-/* compact: 두 줄 — 이름·설정 / 연결·시계, 비상 정지는 두 줄을 차지한다. 머리는 창 높이의 20% 이하다. */
+/* compact: 두 줄 — 이름·설정 / 연결·시계, 비상 정지는 두 줄을 차지한다. 머리는 창 높이의 20% 이하다.
+   D-359 US-008: 320px에서 "ROSY FLEET"가 두 줄로 접혔다(이름 칸 83px, 글자 119px). 시계와
+   설정이 한 열을 나눠 쓰던 것을 풀어 이름이 시계 열 위까지 쓴다. 이름 칸을 크기
+   컨테이너로 두면 components.css의 워드마크가 칸에 맞게 줄어든다(title 크기가 상한). */
 @media (width < 30rem) {
   ui-topbar {
-    grid-template-columns: minmax(0, 1fr) auto auto;
-    grid-template-areas: "brand more estop" "pill clock estop";
+    grid-template-columns: minmax(0, 1fr) auto auto auto;
+    grid-template-areas: "brand brand more estop" "pill clock clock estop";
     gap: var(--space-1) var(--space-2);
     padding: var(--space-2);
   }
+  ui-topbar ui-brand { container-type: inline-size; }
   #estop { align-self: stretch; }
   .topbar-extra { grid-row: 3; }
   main { gap: var(--space-3); padding: var(--space-3); }

@@ -1537,3 +1537,32 @@ def test_map_label_chips_never_cover_each_other(console_url, width, height):
         and a["y"] < b["y"] + b["h"] and b["y"] < a["y"] + a["h"]
     ]
     assert hits == [], hits
+
+
+@pytest.mark.parametrize("width,height", [(320, 568), (390, 844), (1366, 768)])
+def test_wordmark_stays_on_one_line(console_url, width, height):
+    """D-359 US-008 capture: at 320px "ROSY FLEET" broke into two lines (brand column 83px,
+    text 119px). The wordmark is one line, not clipped, and does not run under the next item."""
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as p:
+        browser, page, errors = _open_console(p, API)
+        page.set_viewport_size({"width": width, "height": height})
+        page.goto(console_url, wait_until="networkidle")
+        mark = page.evaluate("""() => {
+          const b = document.querySelector('ui-brand b');
+          const range = document.createRange(); range.selectNodeContents(b);
+          const lines = new Set([...range.getClientRects()].map((r) => Math.round(r.top))).size;
+          const text = range.getBoundingClientRect();
+          const more = document.getElementById('topbar-more');
+          const next = more.getClientRects().length ? more.getBoundingClientRect() : null;
+          return {lines, textRight: text.right, boxRight: b.getBoundingClientRect().right,
+                  nextLeft: next && Math.abs(next.top - text.top) < text.height ? next.left : null};
+        }""")
+        browser.close()
+
+    assert errors == []
+    assert mark["lines"] == 1, mark
+    assert mark["textRight"] <= mark["boxRight"] + 0.5, mark
+    if mark["nextLeft"] is not None:
+        assert mark["textRight"] <= mark["nextLeft"], mark
