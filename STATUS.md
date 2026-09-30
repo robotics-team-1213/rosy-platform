@@ -23,7 +23,7 @@
 | [core_events](src/runtime/events/progress.md) | CORE | bed604ef (2026-09-30) | GO | GO | N/A | N/A | N/A | N/A |
 | [core_features](src/runtime/services/progress.md) | CORE | bed604ef (2026-09-30) | GO | GO | N/A | N/A | N/A | N/A |
 | [core_api_web](src/runtime/api_web/progress.md) | CORE | bed604ef (2026-09-30) | GO | GO | N/A | N/A | N/A | N/A |
-| [web_common](src/hmi/web_common/progress.md) | CORE | 9049bd37 (2026-09-27) | GO | GO | N/A | N/A | N/A | N/A |
+| [web_common](src/hmi/web_common/progress.md) | CORE | 0409c371 (2026-09-30) | GO | GO | N/A | N/A | N/A | N/A |
 | [dashboard](src/hmi/dashboard/progress.md) | 화면 | e7cdf490 (2026-09-29) | GO | GO | N/A | HOLD | N/A | N/A |
 | [omx_adapter](src/products/omx/adapter/progress.md) | OMX workcell | bed604ef (2026-09-30) | GO | GO | HOLD | HOLD | PARKED | PARKED |
 | [interfaces](src/contracts/interfaces/progress.md) | 장치 | dc89264 (2026-09-17) | GO | GO | N/A | HOLD | HOLD | PARKED |
@@ -51,9 +51,9 @@
 - bringup ROS-SIM: Dynamixel/LiDAR/battery publisher 노드의 ROS 2 Jazzy 실물 또는 컨테이너 재실행 증거 없음
 - bringup ARTIFACT: ARM64 로봇 이미지에 포함되나(Dockerfile/compose) 서명 manifest와 immutable digest 발행 전
 - bringup DEVICE: Pi bench Device 설치와 device-readback.sh --json 증거 없음. PinkyProAdapter의 실장치 SDK 구동 확인도 미실행
-- emotion ROS-SIM: rclpy set_emotion 서비스 노드가 있음. ROS 2 Jazzy 컨테이너 재실행 필요, 미실행
+- emotion ROS-SIM: emotion.py가 모듈 최상위에서 `from .rosy_lcd import LCD`를 부르고 rosy_lcd는 spidev·RPi.GPIO를 최상위에서 import한다 — Pi가 아닌 Jazzy 컨테이너에서 노드 import가 죽는다. 컨테이너 smoke는 하드웨어 import 지연/가드 리팩터가 선행 조건이다(없으면 Pi 벤치는 DEVICE 계층이다)
 - emotion ARTIFACT: hardware 프로필이 이미지에 배선되지 않았다. core/io 이미지 제외는 test/test_nav2_hardware_slice.py::test_io_image_packages_nav2_without_slam_or_aux_drivers가 고정한다
-- led ROS-SIM: rclpy 서비스 서버(set_led/set_brightness) 노드가 있음. ROS 2 Jazzy 컨테이너 재실행 필요, 미실행
+- led ROS-SIM: 노드의 `from rosylib import LED`는 공개 트리에서 의도적으로 실패한다(rosylib는 repo 밖 bench-only 헬퍼 — bringup/test/test_rosylib_battery.py:140이 그 실패를 고정). 컨테이너 smoke는 사유 LED 구현 반입 또는 stub 계약 결정이 있기 전까지 불가능하다
 - led ARTIFACT: hardware 프로필이 이미지에 배선되지 않았다. core/io 이미지 제외는 test/test_nav2_hardware_slice.py::test_io_image_packages_nav2_without_slam_or_aux_drivers가 고정한다
 - imu_bno055 ROS-SIM: C++ 드라이버 노드(rclcpp)가 있음. ROS 2 Jazzy 컨테이너 재실행 필요, 미실행
 - imu_bno055 ARTIFACT: hardware 프로필이 이미지에 배선되지 않았다(core/io 이미지 제외는 test/test_nav2_hardware_slice.py::test_io_image_packages_nav2_without_slam_or_aux_drivers가 고정). 실물 드라이버 빌드·주입 버스 실행 시험도 Linux ARM64 ROS 환경 필요

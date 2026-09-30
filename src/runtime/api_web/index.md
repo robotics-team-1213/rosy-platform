@@ -20,7 +20,7 @@
 
 ## 교훈 (docs/solutions)
 
-- 없음
+- [A contract-version bump is three pins, not one](../../../docs/solutions/workflow-issues/a-contract-version-bump-is-three-pins-not-one.md)
 
 ## 시험
 
