@@ -1,4 +1,4 @@
-"""D-358 2·3항: product names and one icon family with distinct silhouettes.
+"""D-370 2·3항: product names and one icon family with distinct silhouettes.
 
 Icons are ``icons/<surface-id>.svg`` on a 108 grid (safe zone = centre circle of
 diameter 66). Every colour is a ``tokens.css`` value: ``--ground`` plate, one
@@ -21,14 +21,14 @@ ICONS = WEB / "icons"
 TOKENS = dict(re.findall(r"(--[a-z0-9-]+)\s*:\s*(#[0-9a-fA-F]{6})\s*;",
                          (WEB / "tokens.css").read_text(encoding="utf-8")))
 
-#: D-358 3항 table: icon file -> glyph colour token.
+#: D-370 3항 table: icon file -> glyph colour token.
 GLYPH_TOKEN = {
     "overhead-camera-app": "--series-primary",
     "pilot": "--brand-rose",
     "fleet-console": "--paper",
     "robot-dashboard": "--robot-1",
 }
-#: D-358 2항 table, for the surfaces registered on main (Pilot lands with its branch).
+#: D-370 2항 table, for the surfaces registered on main (Pilot lands with its branch).
 NAMES = {
     "overhead-camera-app": ("Rosy 천장 카메라", "Rosy Ceiling Camera", "Rosy 카메라"),
     "fleet-console": ("Rosy 관제", "Rosy Site Console", "Rosy 관제"),

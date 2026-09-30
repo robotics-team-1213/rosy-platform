@@ -41,7 +41,7 @@ def test_non_rosy_and_non_local_records_are_ignored():
     assert _module().parse_avahi(output) == []
 
 
-# D-358 5.1: this standalone copy is held to the shared TXT vectors.
+# D-370 5.1: this standalone copy is held to the shared TXT vectors.
 import json  # noqa: E402
 
 import pytest  # noqa: E402

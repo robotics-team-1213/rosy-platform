@@ -1,4 +1,4 @@
-"""D-358 3항: the console favicon is served from the /common allowlist, nothing else in icons/."""
+"""D-370 3항: the console favicon is served from the /common allowlist, nothing else in icons/."""
 
 from pathlib import Path
 

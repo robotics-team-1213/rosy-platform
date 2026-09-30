@@ -108,7 +108,7 @@ def test_registered_ports_match_their_source_and_do_not_collide():
 
 
 def test_a_surface_without_role_or_owns_is_not_registered(tmp_path):
-    """D-358 1·4항: 역할 한 줄과 소유 목록이 빈 칸이면 레지스트리가 빨개진다."""
+    """D-370 1·4항: 역할 한 줄과 소유 목록이 빈 칸이면 레지스트리가 빨개진다."""
     (tmp_path / "src" / "hmi" / "web_common").mkdir(parents=True)
     (tmp_path / "src" / "hmi" / "web_common" / "ui.js").write_text(
         "const GRAMMARS = ['spatial'];", encoding="utf-8")

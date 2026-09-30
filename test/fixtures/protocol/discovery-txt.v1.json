@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "doc": "D-358 5.1 shared DNS-SD TXT vectors. Machine source for every discovery parser (core_common discovery_txt, deploy/site copies, Fleet server row check, Android OverheadServiceRecord). docs/reference/site-lan-discovery-profile.md is the human description; test/test_discovery_txt_profile_parity.py keeps them equal. Inputs: service_type, host (resolved .local name or null when the caller has none), address (resolved IP or null), port, txt (ordered key=value items; duplicates are meaningful). Expect: accepted + legacy, or a rejection reason from `reasons`. Unknown keys are ignored.",
+  "doc": "D-370 5.1 shared DNS-SD TXT vectors. Machine source for every discovery parser (core_common discovery_txt, deploy/site copies, Fleet server row check, Android OverheadServiceRecord). docs/reference/site-lan-discovery-profile.md is the human description; test/test_discovery_txt_profile_parity.py keeps them equal. Inputs: service_type, host (resolved .local name or null when the caller has none), address (resolved IP or null), port, txt (ordered key=value items; duplicates are meaningful). Expect: accepted + legacy, or a rejection reason from `reasons`. Unknown keys are ignored.",
   "reasons": [
     "wrong_type", "missing_key", "duplicate_key", "value_mismatch", "bad_host",
     "bad_address", "bad_port", "tls_host_mismatch", "ap_mode"

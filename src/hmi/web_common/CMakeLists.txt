@@ -15,7 +15,7 @@ install(FILES
   DESTINATION share/${PROJECT_NAME}
 )
 
-# D-358 3항 surface icons, listed one by one in manifest.json (never the folder).
+# D-370 3항 surface icons, listed one by one in manifest.json (never the folder).
 install(FILES
   icons/overhead-camera-app.svg
   icons/pilot.svg

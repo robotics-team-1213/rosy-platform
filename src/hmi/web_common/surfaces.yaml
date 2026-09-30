@@ -11,8 +11,8 @@
 # token_parity를 받는다 — token_copy 파일의 `# --이름 #hex` / `// --이름` 사본이 tokens.css와 같아야 한다.
 # 세 계약을 다 받지 않는 항목은 contract_reason, baseline이 없는 항목은
 # baseline_reason을 적는다.
-# app_name·app_name_en·short_name·icon은 D-358 2·3항 이름표와 아이콘이다(test_surface_icons.py).
-# role은 D-358 1항 역할 표의 한 줄 요약, owns는 그 표면이 소유하는 조작(D-358 4항)이다. 한 조작은
+# app_name·app_name_en·short_name·icon은 D-370 2·3항 이름표와 아이콘이다(test_surface_icons.py).
+# role은 D-370 1항 역할 표의 한 줄 요약, owns는 그 표면이 소유하는 조작(D-370 4항)이다. 한 조작은
 # 한 표면만 소유한다 — 겹침은 estop(모든 운용 표면)과 transitional 사유가 붙은 이행기 항목만
 # 허용한다(test/architecture/test_app_roles.py). 소유가 없으면 owns: []로 적는다.
 # ports는 표면을 서빙하거나(웹) 표면이 접속하는(네이티브) 기본 포트다. source 파일에 그 숫자가
@@ -29,14 +29,14 @@ surfaces:
     ports:
       - {port: 8080, source: src/contracts/foundation/config/rosy_default.yaml}
     audience: 운용자·장비 운용 (D-153 §7 — /dashboard·/console·/setup·/device)
-    role: 한 로봇의 상세 상태·작업 준비·설치·정비와 로봇 쪽 자격 관리 (D-358 1항)
+    role: 한 로봇의 상세 상태·작업 준비·설치·정비와 로봇 쪽 자격 관리 (D-370 1항)
     owns:
       - robot-detail
       - robot-basic-ops
       - robot-settings
       - device-link-robot
       - estop
-      - {id: manual-drive, transitional: "D-358 4항 1 — console.teleop, Pilot DEVICE 수용 뒤 링크 패널로"}
+      - {id: manual-drive, transitional: "D-370 4항 1 — console.teleop, Pilot DEVICE 수용 뒤 링크 패널로"}
     grammar: spatial
     contracts: [shared_controls, typography_focus, dialog]
     baseline: docs/validation/uiux-surfaces-2026-09-26/captures/console-operate-fresh-1366x768.png
@@ -52,7 +52,7 @@ surfaces:
     ports:
       - {port: 8090, source: src/site/fleet/fleet/cli.py}
     audience: 사이트 관제자 (D-153 §7 — Fleet /console)
-    role: 사이트 로스터·여러 로봇 모니터링·Mission·사이트 정지 요청·기기 연결 승인 (D-358 1항)
+    role: 사이트 로스터·여러 로봇 모니터링·Mission·사이트 정지 요청·기기 연결 승인 (D-370 1항)
     owns: [site-monitoring, mission, overhead-camera-view, device-link-site, estop]
     grammar: exception
     contracts: [shared_controls, typography_focus, dialog]
@@ -65,7 +65,7 @@ surfaces:
     ports:
       - {port: 8765, source: src/site/games/games/cli.py}
     audience: 게임 호스트 노트북 (D-153 §7 — /board)
-    role: 게임 호스트 보드 — D-358 역할 표 밖이다(8항)
+    role: 게임 호스트 보드 — D-370 역할 표 밖이다(8항)
     owns: []
     grammar: focal
     contracts: [shared_controls, typography_focus, dialog]
@@ -79,7 +79,7 @@ surfaces:
       - {port: 28181, source: src/runtime/sensing/config/web.yaml}
       - {port: 28182, source: src/runtime/sensing/config/web.yaml}
     audience: 제어 진단 (D-153 §7 — PARKED D-266)
-    role: 제어 진단 — PARKED(D-266), D-358 역할 표 밖이다
+    role: 제어 진단 — PARKED(D-266), D-370 역할 표 밖이다
     owns: []
     grammar: procedure
     contracts: [shared_controls]
@@ -111,7 +111,7 @@ surfaces:
     ports:
       - {port: 28183, source: src/sim/gz_sim/scripts/lane_live_view.py}
     audience: Gazebo 레인 뷰어 — 제품 브라우저 표면이 아니다
-    role: 시뮬 레인 뷰어 — 제품 표면이 아니다(D-358 8항)
+    role: 시뮬 레인 뷰어 — 제품 표면이 아니다(D-370 8항)
     owns: []
     contracts: []
     contract_reason: >
@@ -124,7 +124,7 @@ surfaces:
     surface: robot
     medium: lcd
     audience: 로봇 주변 사람 — 얼굴 LCD와 정보 화면 (D-190)
-    role: 로봇 LCD — 부팅 단계·이름·로그인 코드 표시만, 입력과 명령이 없다 (D-358 1항)
+    role: 로봇 LCD — 부팅 단계·이름·로그인 코드 표시만, 입력과 명령이 없다 (D-370 1항)
     owns: []
     contracts: [token_parity]
     token_copy: src/hmi/face/emotion/info_screen.py
@@ -143,7 +143,7 @@ surfaces:
     ports:
       - {port: 8095, source: src/site/overhead/overhead/cli.py}
     audience: 천장 카메라 설치자 — 사이트 휴대폰·태블릿 앱 (D-261)
-    role: 카메라 캡처·프레임 송신·설치 위치 안내만 — 로봇 명령·정지·CORE 연결이 없다 (D-358 1항)
+    role: 카메라 캡처·프레임 송신·설치 위치 안내만 — 로봇 명령·정지·CORE 연결이 없다 (D-370 1항)
     owns: [camera-physical-install]
     contracts: [token_parity]
     token_copy: src/site/overhead/android/app/src/main/java/io/github/livsbittt/rosy/overhead/ui/RosyTheme.kt

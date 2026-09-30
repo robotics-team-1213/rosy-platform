@@ -1,4 +1,4 @@
-"""Canonical DNS-SD TXT classifier for ROSY site discovery (D-358 5.1).
+"""Canonical DNS-SD TXT classifier for ROSY site discovery (D-370 5.1).
 
 The machine source is ``test/fixtures/protocol/discovery-txt.v1.json``; every
 parser (this module, the ``deploy/site`` script copies, the Fleet server row

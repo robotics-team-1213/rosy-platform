@@ -25,7 +25,7 @@ data class OverheadServiceRecord(val serviceName: String, val tlsHost: String, v
         }
 
         /**
-         * Rejection reason in the D-358 discovery vocabulary, or null when accepted
+         * Rejection reason in the D-370 discovery vocabulary, or null when accepted
          * (test/fixtures/protocol/discovery-txt.v1.json). [resolvedHost] is null when unknown.
          */
         internal fun rejection(serviceType: String, resolvedHost: String?, port: Int, attributes: Map<String, ByteArray?>): String? {
@@ -56,7 +56,7 @@ data class RobotCoreServiceRecord(val name: String, val host: String, val port: 
             return RobotCoreServiceRecord(serviceName, resolvedHost ?: return null, port)
         }
 
-        /** Rejection reason in the D-358 discovery vocabulary, or null when accepted. */
+        /** Rejection reason in the D-370 discovery vocabulary, or null when accepted. */
         internal fun rejection(serviceType: String, resolvedHost: String?, port: Int, attributes: Map<String, ByteArray?>): String? {
             if (normalizeServiceType(serviceType) != normalizeServiceType(SERVICE_TYPE)) return "wrong_type"
             if (resolvedHost == null) return "bad_address"

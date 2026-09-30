@@ -1,4 +1,4 @@
-"""D-358 1·4항: each app keeps one role, and each operation has one owning surface.
+"""D-370 1·4항: each app keeps one role, and each operation has one owning surface.
 
 The role table lives in the ADR; these checks pin the parts code can break.
 Rosy Pilot (`src/hmi/pilot`) is not on main yet. Its check (no `/api/fleet` in Pilot
@@ -36,7 +36,7 @@ VISION_FORBIDDEN = {
 #    only issue a lease; the browser fetches frames from Vision directly (D-318).
 FLEET_VISION_ROUTES = {"/api/fleet/vision/sources", "/api/fleet/vision/lease"}
 LEASE_KEYS = {"source_id", "lease", "frame_path", "expires_in_s"}
-# 5. Only e-stop may be owned by several surfaces (D-358 4항).
+# 5. Only e-stop may be owned by several surfaces (D-370 4항).
 SHARED_OWNERSHIP = {"estop"}
 
 
@@ -118,7 +118,7 @@ def test_each_operation_has_one_owner():
 
 def test_overlap_check_allows_only_estop_and_transitional():
     rows = [
-        {"id": "dashboard", "owns": ["estop", {"id": "manual-drive", "transitional": "D-358 4항 1"}]},
+        {"id": "dashboard", "owns": ["estop", {"id": "manual-drive", "transitional": "D-370 4항 1"}]},
         {"id": "pilot", "owns": ["estop", "manual-drive"]},
         {"id": "fleet", "owns": ["estop", "mission"]},
     ]

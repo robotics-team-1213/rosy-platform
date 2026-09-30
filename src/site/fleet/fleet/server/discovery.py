@@ -44,7 +44,7 @@ class DiscoveryStore:
             if network not in ("sta", "ap"):
                 raise ValueError("invalid discovery network")
             # The bridge already classified the TXT; re-check the row with the same
-            # classifier (D-358 5.1). Rows carry no common keys, so they classify as legacy.
+            # classifier (D-370 5.1). Rows carry no common keys, so they classify as legacy.
             result = classify(ROBOT, hostname or None, address, port, [("network", network)])
             if isinstance(result, Rejected):
                 if result.reason == "ap_mode":

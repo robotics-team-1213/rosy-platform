@@ -3584,3 +3584,11 @@
 - gate 변화: 없음. 문서만.
 - 결정: D-358 Proposed. D-357은 `er2-feedback-loop` 워크트리가 선점해 D-358로 잡았다. main이 D-351을 다른 결정(도킹 재시도)으로 선점해 브랜치 `docs/robot-fleet-protocol-conformance`의 D-351과 충돌한다 — 그 브랜치 착지 때 재번호가 필요하다(이 변경에서 고치지 않음).
 - 교훈: 번호 확인은 main 표만이 아니라 `.worktrees/*/docs/adr`의 미커밋 초안까지 봐야 한다. 같은 날 main이 D-350·D-351을 연달아 선점했다.
+
+## 2026-09-30 · uncommitted · docs(adr): D-358 앱 역할 ADR을 D-370으로 재번호
+
+- 변경: `docs/adr/D-358-site-app-roles-names-and-shared-link.md`를 `D-370-site-app-roles-names-and-shared-link.md`로 옮기고 ADR Log 표행, `progress.md` adrs, 실행 계획, 코드·시험·아이콘 주석, `surfaces.yaml`의 번호를 D-370으로 바꿨다. ADR에 **번호:** 줄을 더했다. `harness.yaml` `adr_gaps`에 D-358–D-369의 사유를 적었다.
+- 증거: 번호 조사 — main에 D-358(ER2 피드백 outbox)·D-359–D-361, main 체크아웃 미커밋 D-362, `feat/pilot-teleop` D-363–D-368, `docs/control-authority` D-369. 모든 로컬 브랜치·`.worktrees/*/docs/adr`에 D-370 이상 없음.
+- gate 변화: 없음. 문서·주석만.
+- 결정: 이 항목 앞의 로그 항목에 적힌 "D-358 앱 역할…", "D-358 S1/S2/S3", "D-358 N항"은 모두 D-370을 가리킨다. main의 D-358(ER2 피드백 outbox와 재계획 펜싱)과 다르다. 옛 항목은 고치지 않는다.
+- 교훈: 번호 확인은 커밋된 브랜치만이 아니라 main 체크아웃의 미커밋 초안까지 봐야 한다.

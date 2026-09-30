@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Draw a D-358 surface icon SVG to PNG with Pillow (store listings, docs, silhouette checks).
+"""Draw a D-370 surface icon SVG to PNG with Pillow (store listings, docs, silhouette checks).
 
 The icons in ``src/hmi/web_common/icons/`` use ``<path>`` elements only, with absolute
 M/L/H/V/A/Z commands, and either a fill or a round-capped stroke. That subset is what

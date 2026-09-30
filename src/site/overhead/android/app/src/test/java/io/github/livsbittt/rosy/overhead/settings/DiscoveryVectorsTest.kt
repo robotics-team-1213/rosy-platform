@@ -9,7 +9,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * D-358 5.1: the Android discovery records follow test/fixtures/protocol/discovery-txt.v1.json,
+ * D-370 5.1: the Android discovery records follow test/fixtures/protocol/discovery-txt.v1.json,
  * the same vectors the Python parsers read.
  */
 class DiscoveryVectorsTest {

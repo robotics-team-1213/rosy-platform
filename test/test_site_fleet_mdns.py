@@ -117,7 +117,7 @@ def test_verification_uses_pinned_hostname_and_ca_before_returning_endpoint(monk
     assert calls == [("192.168.1.20", 8443, "fleet-a.local", ca_file)]
 
 
-# D-358 5.1: the site script copy and FleetAgent are held to the shared TXT vectors.
+# D-370 5.1: the site script copy and FleetAgent are held to the shared TXT vectors.
 import json  # noqa: E402
 
 VECTORS = json.loads((Path(__file__).resolve().parent / "fixtures/protocol/discovery-txt.v1.json")

@@ -1,4 +1,4 @@
-"""D-358 5.1: the canonical Python TXT classifier follows the shared vectors."""
+"""D-370 5.1: the canonical Python TXT classifier follows the shared vectors."""
 
 from __future__ import annotations
 

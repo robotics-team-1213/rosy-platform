@@ -1,6 +1,6 @@
 # 앱 역할·이름·아이콘·화면 소유와 공유 연결 조각 실행 계획
 
-**결정:** [D-358](../adr/D-358-site-app-roles-names-and-shared-link.md) Proposed.
+**결정:** [D-370](../adr/D-370-site-app-roles-names-and-shared-link.md) Proposed.
 
 **현재 상태:** 문서만 있다(2026-09-30). 각 단계는 따로 커밋할 수 있다. 단계마다 **실패하는 시험을 먼저** 쓰고, 적신을 확인한 뒤 구현한다(TDD). 새 검사는 변이 증명으로 믿는다(test/AGENTS 규약). 한 번 일부러 어기고 적신을 본 뒤 되돌린다.
 
@@ -58,7 +58,7 @@
 
 **파일**
 - 새로 만든다: `test/architecture/test_app_roles.py`
-- 고친다: `src/hmi/web_common/surfaces.yaml`. 표면마다 `role:` 한 줄(D-358 1항 요약)과 `owns:` 목록을 둔다. D-339 레지스트리 시험이 빈 칸을 거절한다.
+- 고친다: `src/hmi/web_common/surfaces.yaml`. 표면마다 `role:` 한 줄(D-370 1항 요약)과 `owns:` 목록을 둔다. D-339 레지스트리 시험이 빈 칸을 거절한다.
 - 고친다: `src/hmi/web_common/test/` 레지스트리 시험(기존 파일에 `role`·`owns` 필수 검사를 추가한다).
 
 **검사**
@@ -66,12 +66,12 @@
 2. Vision `src/site/overhead/overhead`에 CORE URL(`/api/v1/`), `cmd_vel`, Fleet 명령 라우트 호출이 없다. Fleet에는 `/api/fleet/sightings`만 쓴다.
 3. Fleet은 기존 `test_no_video_relay.py`를 유지한다. 라우트 정규식을 통과하는 `vision/lease`·`vision/sources`는 **lease만 발급한다**는 사실을 허용 목록으로 명시한다(응답에 바이트가 없음을 검사).
 4. Pilot 시험(`src/hmi/pilot`의 `/api/fleet` 부재)은 Pilot이 main에 착지하는 커밋에서 활성화한다. 그 전에는 경로가 없을 때 `pytest.skip`이 아니라 **대상 목록에서 빠진 것으로** 둔다(가짜 녹색 금지).
-5. `surfaces.yaml`의 `owns` 항목이 두 표면에 겹치면 실패한다. 예외는 `estop` 하나다(D-358 4항).
+5. `surfaces.yaml`의 `owns` 항목이 두 표면에 겹치면 실패한다. 예외는 `estop` 하나다(D-370 4항).
 
 **수용 기준**
 - 각 검사에서 금지 문자열을 임시로 넣어 적신을 확인한다(변이 증명).
 - `python -m pytest test/architecture/test_app_roles.py src/hmi/web_common/test -q`가 녹색이다.
-- 적신이 되는 첫 결과는 **현재 겹침**이어야 한다. 대시보드 `teleop` ↔ Pilot(착지 전이면 없음)이다. 이행기 겹침은 `transitional: D-358 4항 1`로 표시해 허용한다.
+- 적신이 되는 첫 결과는 **현재 겹침**이어야 한다. 대시보드 `teleop` ↔ Pilot(착지 전이면 없음)이다. 이행기 겹침은 `transitional: D-370 4항 1`로 표시해 허용한다.
 
 ## S3 — 이름과 아이콘
 
@@ -82,13 +82,13 @@
   - 네 SVG의 흑백 실루엣이 서로 다르다. 도형 목록 비교로 한다.
   - `status-*` 색을 쓰지 않는다.
   - `surfaces.yaml`의 `icon:` 경로가 있다.
-- 고친다: `surfaces.yaml`. `app_name`, `app_name_en`, `short_name`, `icon`을 추가한다(D-358 2항 표).
+- 고친다: `surfaces.yaml`. `app_name`, `app_name_en`, `short_name`, `icon`을 추가한다(D-370 2항 표).
 - Android(`src/site/overhead/android/app/src/main/res/`):
   - `mipmap-anydpi-v26/ic_launcher.xml`, `ic_launcher_round.xml`
   - `drawable/ic_launcher_foreground.xml`, `drawable/ic_launcher_monochrome.xml`
   - `values/ic_launcher_background.xml`
   - `AndroidManifest.xml`의 `android:icon`·`android:roundIcon`
-  - `values/strings.xml`: `app_name` 유지. 영어 이름은 `values-en/strings.xml`을 둘지 D-358 8항을 따른다.
+  - `values/strings.xml`: `app_name` 유지. 영어 이름은 `values-en/strings.xml`을 둘지 D-370 8항을 따른다.
 - 새로 만든다: `src/site/overhead/android/app/src/test/.../ui/LauncherIconParityTest.kt`. 벡터 드로어블 경로와 색이 SVG 원본과 같다(`rosy.icons.dir` 시스템 속성).
 - 웹:
   - `src/site/fleet/fleet/server/web/index.html`, `src/hmi/dashboard/index.html`, `src/hmi/dashboard/surface.html`에 `<link rel="icon" type="image/svg+xml" href="/common/icons/<id>.svg">`를 넣는다.
@@ -110,7 +110,7 @@
 ## S4 — 화면 소유 정리
 
 **파일**
-- 고친다: `src/hmi/dashboard/panels.yaml`. `console.teleop`에 `transitional: "D-358 4항 1 — Pilot DEVICE 수용 뒤 링크 패널로"`를 둔다.
+- 고친다: `src/hmi/dashboard/panels.yaml`. `console.teleop`에 `transitional: "D-370 4항 1 — Pilot DEVICE 수용 뒤 링크 패널로"`를 둔다.
 - 새로 만든다(전환 회차): `src/hmi/dashboard/panels/console/pilot-link.js`. "Rosy Pilot으로 조종" 링크만 있고 명령 호출이 없다.
 - 천장 카메라 앱: 설정 화면에 "로봇 정지는 관제에서" 안내 한 줄과 관제 주소 링크를 넣는다(`res/values/strings.xml`, 설정 화면 Composable). 명령 호출은 넣지 않는다.
 - 로봇 대시보드: 사이트에 등록된 로봇이면 개요 패널에 "사이트 관제" 링크를 둔다. 주소는 D-352 등록부에서 오지 않으므로 이번 범위에서는 수동 설정값만 쓴다. 없으면 표시하지 않는다.
@@ -163,7 +163,7 @@
 
 ## S8 (조건부) — Android 공유 모듈
 
-두 번째 Kotlin 앱이 기록된 요구로 생길 때만 한다(D-358 5.6).
+두 번째 Kotlin 앱이 기록된 요구로 생길 때만 한다(D-370 5.6).
 - `apps/android-link/`에 Gradle included build를 둔다. 폴더에 `COLCON_IGNORE`를 둔다.
 - 내용: NSD 발견, CA 고정 OkHttp, 설정 저장, 실패 분류.
 - 두 앱의 `settings.gradle.kts`에 `includeBuild`를 넣는다.
@@ -171,6 +171,6 @@
 
 ## 완료 판정
 
-- S1–S3이 main에서 녹색이고, 사용자가 역할 표와 D-358 8항 질문을 확인하면 D-358을 Accepted로 올린다.
+- S1–S3이 main에서 녹색이고, 사용자가 역할 표와 D-370 8항 질문을 확인하면 D-370을 Accepted로 올린다.
 - S4–S7은 각각 연관 브랜치 착지에 묶인다. 이 계획의 진행표에 착지 커밋을 적는다.
 - 모든 단계 증거는 SOURCE/LOCAL이다. DEVICE(실제 폰 런처, 실제 사이트 LAN 발견)는 별도 회차다.

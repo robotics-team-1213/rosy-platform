@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108" width="108" height="108">
   <title>Rosy 로봇 대시보드</title>
-  <!-- D-358 3항: 108 grid, safe zone = centre circle of diameter 66. Glyph token robot-1, dot brand-rose. -->
+  <!-- D-370 3항: 108 grid, safe zone = centre circle of diameter 66. Glyph token robot-1, dot brand-rose. -->
   <path id="background" d="M24,0H84A24,24 0 0,1 108,24V84A24,24 0 0,1 84,108H24A24,24 0 0,1 0,84V24A24,24 0 0,1 24,0Z" fill="#101214"/>
   <g id="glyph">
     <path id="face" d="M38,46H70A8,8 0 0,1 78,54V68A8,8 0 0,1 70,76H38A8,8 0 0,1 30,68V54A8,8 0 0,1 38,46Z" fill="none" stroke="#b6ddfe" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>

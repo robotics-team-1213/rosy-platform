@@ -69,7 +69,7 @@ def test_external_addresses_and_invalid_ports_are_rejected():
             raise AssertionError(f"accepted {address}:{port}")
 
 
-# D-358 5.1: the scan-row check uses the shared classifier and the shared vectors.
+# D-370 5.1: the scan-row check uses the shared classifier and the shared vectors.
 import json  # noqa: E402
 from pathlib import Path  # noqa: E402
 
