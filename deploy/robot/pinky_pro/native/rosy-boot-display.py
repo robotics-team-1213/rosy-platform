@@ -43,7 +43,8 @@ the stage and the battery into one state:
 
 * the buzzer sounds on state changes only: once when ready, three times on
   failure, two low tones on caution; caution is not repeated within
-  BUZZER_REPEAT_S;
+  BUZZER_REPEAT_S. D-381: entering the emergency pattern (an e-stop) adds
+  four higher beeps, once per entry, whatever the health state says;
 * the WS2812 lamp shows the state's pattern through ``lamp_pattern`` (one
   helper process per pattern, /dev/ws281x_pwm granted to this unit alone),
   and only when the driver runs on PWM0 channel 3 (GPIO19; channel 2 is the
@@ -103,8 +104,10 @@ BUZZER_DUTY = 10  # percent; a passive piezo is quiet at a low duty cycle
 BUZZER_ON_S = 0.08
 BUZZER_OFF_S = 0.12
 #: D-260 2, per sound: (beeps, frequency). Ready and held ready share one sound.
+#: D-381: an e-stop entry is four higher beeps — failed is three at 2 kHz, so the
+#: two alarms never read alike.
 BUZZER_PATTERNS = {"ready": (1, BUZZER_FREQUENCY_HZ), "failed": (3, BUZZER_FREQUENCY_HZ),
-                   "caution": (2, BUZZER_LOW_HZ)}
+                   "caution": (2, BUZZER_LOW_HZ), "emergency": (4, 2500)}
 #: Caution again inside this window stays silent (a battery near the threshold). Ready and
 #: failed always sound on a real transition (review L2): they are the news a person waits for.
 BUZZER_REPEAT_S = 300.0
@@ -170,6 +173,7 @@ def read_view(root: Path, battery: tuple[float, float] | None) -> dict:
         "api_port": status.get("api_port") or 8080,
         "network": network,
         "robot_mode": status.get("robot_mode"),
+        "nav_state": status.get("nav_state"),
         "battery_percent": None if battery is None else round(battery[0]),
         "battery_voltage": None if battery is None else round(battery[1], 2),
     }
@@ -507,14 +511,21 @@ class BootDisplay:
 
     @staticmethod
     def lamp_pattern_for(view: dict, state: str) -> str | None:
-        """D-380: the table's pattern for the state and CORE's mode; the stage-only
-        mapping only on a release too old to carry core_common.robot_state."""
+        """D-380/D-381: the table's pattern for the state, CORE's mode and its
+        navigation; the stage-only mapping only on a release too old to carry
+        core_common.robot_state."""
         if robot_state is None:
             return LAMP_PATTERNS.get(state)
-        return robot_state.lamp_pattern(state, view.get("robot_mode"))
+        return robot_state.lamp_pattern(state, view.get("robot_mode"), view.get("nav_state"))
 
-    def _announce(self, state: str, now: float) -> None:
+    def _announce(self, state: str, pattern: str | None, now: float) -> None:
         sound = SOUNDS.get(state)
+        # D-381: while the emergency pattern holds, the sound is the e-stop alarm —
+        # entry is a real transition (the previous sound differs) so it sounds once,
+        # staying is silent (same sound), and leaving is the ready chirp again.
+        # Not repeat-limited: an e-stop is rare, and it is news a person waits for.
+        if pattern == "emergency":
+            sound = "emergency"
         # Ready and held ready are one sound: moving between them is not a new sound.
         previous, self._sound = self._sound, sound
         if sound is None or sound == previous:
@@ -553,11 +564,12 @@ class BootDisplay:
         state = self.robot_state_of(view)
         if state != self._state:
             self._state = state
-            self._announce(state, now)
+        pattern = self.lamp_pattern_for(view, state)
+        self._announce(state, pattern, now)
         if self._lamp is not None:
             # D-380: a mode change switches the pattern without a sound; show() is
             # idempotent, so an unchanged pattern costs nothing.
-            self._lamp.show(self.lamp_pattern_for(view, state))
+            self._lamp.show(pattern)
             self._lamp.poll()
         self.handle_test()
         key = json.dumps(view, sort_keys=True)

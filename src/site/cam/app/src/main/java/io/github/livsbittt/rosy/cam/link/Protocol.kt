@@ -20,6 +20,13 @@ data class OverheadConfig(
     }
 }
 
+/**
+ * Optional additive `hello.lens` (2026-09-30): which lens the frames come from, for a later
+ * calibration choice. Receivers ignore unknown hello fields, so older ones just skip it.
+ * [focalMm] and [hfovDeg] go on the wire rounded to 0.1.
+ */
+data class HelloLens(val kind: String, val focalMm: Double, val hfovDeg: Double)
+
 /** Text messages from the adapter. */
 sealed interface ServerMessage {
     data class Config(val config: OverheadConfig) : ServerMessage
@@ -49,6 +56,7 @@ object Protocol {
         sensorWidth: Int,
         sensorHeight: Int,
         rotationDeg: Int,
+        lens: HelloLens? = null,
     ): String = JSONObject()
         .put("type", "hello")
         .put("proto", PROTO)
@@ -62,7 +70,20 @@ object Protocol {
                 .put("height", sensorHeight)
                 .put("rotation_deg", rotationDeg),
         )
+        .apply {
+            if (lens != null) {
+                put(
+                    "lens",
+                    JSONObject()
+                        .put("kind", lens.kind)
+                        .put("focal_mm", round1(lens.focalMm))
+                        .put("hfov_deg", round1(lens.hfovDeg)),
+                )
+            }
+        }
         .toString()
+
+    private fun round1(value: Double): Double = Math.round(value * 10.0) / 10.0
 
     fun parseServerMessage(text: String): ServerMessage {
         val obj = try {

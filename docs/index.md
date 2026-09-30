@@ -258,8 +258,8 @@
 
 ## 최근 기록
 
+- 2026-10-01 · uncommitted · docs(adr): D-381 막힌 내비게이션·비상정지 진입음 결정
+- 2026-09-30 · uncommitted · hold unresolved phase state under local stop
+- 2026-09-30 · uncommitted · mint validated attempt-scoped phase recorder
 - 2026-09-30 · uncommitted · persist first phase intent and atomic response
 - 2026-09-30 · uncommitted · docs(adr): D-375 에서 D-380 으로 개명
-- 2026-09-30 · uncommitted · docs(adr): set OMX local planning and owner execution boundary
-- 2026-09-30 · uncommitted · docs(adr): D-377 앱 이름 규칙 — Rosy + 영어 한 단어
-- 2026-09-30 · uncommitted · docs(adr): D-375 램프 운용 모드 표시 결정
