@@ -425,6 +425,7 @@ export function createFieldMap(options) {
   return {
     refresh,
     setPose,
+    get mapState() { return state.mapState; },
     destroy() {
       listenerController.abort();
       resizeObserver?.disconnect();

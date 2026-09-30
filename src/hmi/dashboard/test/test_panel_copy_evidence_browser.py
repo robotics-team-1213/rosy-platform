@@ -221,3 +221,35 @@ def test_camera_status_speaks_korean_with_evidence_and_waits_on_one_line(panel):
     assert status.get_attribute("data-evidence") == "delayed"
     assert status.get_attribute("title") == "STALE"
     assert "STALE" not in page.inner_text("#root") and "WAITING" not in page.inner_text("#root")
+
+
+def test_robot_map_read_failure_is_an_overlay_with_retry_and_no_target_row(panel):
+    page = panel("console/map.js", role="operator")
+    page.evaluate("""() => { window.__api = async (path) => {
+      if (path === '/api/v1/map') { const error = new Error('HTTP 500'); error.status = 500; throw error; }
+      if (path === '/api/v1/navigation/path') return {poses: []};
+      return null;
+    }; }""")
+    # Remount so the first map read already sees the 500 (the fixture mount read before __api existed).
+    page.evaluate("""async () => { const {mount} = await import('/assets/panels/console/map.js');
+      document.getElementById('root').replaceChildren(); window.__unmount?.();
+      const store = {poll() { return () => {}; }};
+      window.__unmount = mount(document.getElementById('root'), {role: 'operator', store, surfaces: [],
+        api: (path, options) => window.__api(path, options)}); }""")
+    failure = page.locator(".surface-map-overlay ui-empty")
+    failure.wait_for(state="visible")
+    assert "지도를 불러오지 못했습니다" in failure.inner_text()
+    retry = page.locator(".surface-map-overlay ui-button")
+    assert retry.inner_text() == "다시 시도"
+    assert page.locator(".surface-map-readout").is_hidden()
+    assert page.locator("#map-status").is_hidden()
+    box, stage = failure.bounding_box(), page.locator(".surface-map-frame").bounding_box()
+    assert stage["y"] <= box["y"] and box["y"] + box["height"] <= stage["y"] + stage["height"]
+
+    page.evaluate("""() => { window.__api = async (path) => path === '/api/v1/map'
+      ? {width: 4, height: 4, resolution: 0.1, origin: {x: 0, y: 0}, data: Array(16).fill(0)}
+      : path === '/api/v1/navigation/path' ? {poses: []} : null; }""")
+    retry.click()
+    failure.wait_for(state="hidden")
+    assert retry.is_hidden()
+    assert page.locator(".surface-map-readout").is_visible()

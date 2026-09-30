@@ -38,7 +38,11 @@ export function mount(root, ctx) {
   setupLink.hidden = true;
   const action = el("ui-status", "", ""); action.setAttribute("state", "ready");
   action.setAttribute("role", "status"); action.setAttribute("aria-live", "polite");
-  const mapFrame = el("div", "surface-map-frame"); mapFrame.append(empty, canvas, targetReadout);
+  // D-359 US-009 — 읽기 실패는 무대 위 같은 ui-empty가 말하고, 그 곁에 다시 시도가 선다.
+  const overlay = el("div", "surface-map-overlay");
+  const retry = el("ui-button", "", "다시 시도"); retry.setAttribute("kind", "quiet"); retry.type = "button"; retry.hidden = true;
+  overlay.append(empty, retry);
+  const mapFrame = el("div", "surface-map-frame"); mapFrame.append(overlay, canvas, targetReadout);
   root.append(head, status, readinessStatus, layers, clickReason, clicks, mapFrame, setupLink, mapStatus, action);
 
   let state = null;
@@ -125,8 +129,22 @@ export function mount(root, ctx) {
     loading = true;
     try { await map.refresh(); }
     catch (error) { mapStatus.setAttribute("state", error.status === 403 ? "forbidden" : "error"); mapStatus.textContent = `지도 데이터를 받지 못했습니다: ${error.message}`; }
-    finally { status.hidden = true; loading = false; }
+    finally {
+      status.hidden = true; loading = false;
+      const failed = ["error", "forbidden"].includes(map.mapState) || mapStatus.getAttribute("state") === "error";
+      mapStatus.hidden = failed; // 같은 원인을 무대 밖에서 한 번 더 말하지 않는다.
+      if (failed) {
+        empty.hidden = false;
+        empty.setAttribute("role", "alert");
+        empty.textContent = map.mapState === "forbidden"
+          ? "지도 데이터를 볼 권한이 없습니다." : "지도를 불러오지 못했습니다. 연결을 확인한 뒤 다시 시도하세요.";
+      } else empty.removeAttribute("role");
+      retry.hidden = !failed || map.mapState === "forbidden";
+      // 선택 좌표는 지도가 쓸 수 있을 때만 뜻이 있다.
+      targetReadout.hidden = map.mapState !== "ready";
+    }
   };
+  retry.addEventListener("click", () => { refresh(); });
   refresh();
   const timer = setInterval(refresh, 10_000);
   return () => { clearInterval(timer); stopState(); stopCapabilities(); stopCommissioning(); map.destroy(); };
