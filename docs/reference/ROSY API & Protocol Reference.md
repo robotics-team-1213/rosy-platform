@@ -261,7 +261,7 @@ Corrective 는 Additive 의 종류가 아니다. 문서대로 짜놓은 소비�
 | POST | `/api/v1/swarm/cancel` | Operator | SWM-002 |
 | GET | `/api/v1/swarm/state` | Viewer | SWM-006 — `{role, formation, active, holding, target_robot_id, source, max_speed, map_mismatch, stream_age_s}`. `map_mismatch` 는 거부 중인 리더의 `map_id` 다. 상태 스냅샷의 `swarm` 필드는 그중 `role`·`formation`·`active` 다 |
 | GET | `/api/v1/calibration/session` | Viewer | D-321 부록 (v1.67) — `{session: Session\|null}`. `Session` = `{id, kind, label, owner: {id, role, label}, started_at, ttl_s, elapsed_s, remaining_s}`. `owner.id` 는 `GET /auth/whoami` 의 `id` 와 같은 불투명 토큰 id |
-| POST | `/api/v1/calibration/session` | Operator | `{kind, label?, ttl_s?}` → 201 `{session}`. `kind` 는 `^[a-z][a-z0-9_]{0,31}$`(알려진 값 `drive`·`camera`·`imu`·`ir`·`lidar`·`odometry`), `label` ≤ 80자(비면 `kind`), `ttl_s` 5–300(기본 30). 호출 토큰이 owner 가 된다. 세션은 로봇당 하나 — 이미 있으면(같은 토큰이어도) 409 `CALIBRATION_ACTIVE` + `detail.session` |
+| POST | `/api/v1/calibration/session` | Operator | `{kind, label?, ttl_s?}` → 201 `{session}`. 모드가 IDLE·MANUAL 이 아니거나 navigation·도킹·line-follow·swarm 이 돌고 있으면 409 `MODE_CONFLICT`. `kind` 는 `^[a-z][a-z0-9_]{0,31}$`(알려진 값 `drive`·`camera`·`imu`·`ir`·`lidar`·`odometry`), `label` ≤ 80자(비면 `kind`), `ttl_s` 5–300(기본 30). 호출 토큰이 owner 가 된다. 세션은 로봇당 하나 — 이미 있으면(같은 토큰이어도) 409 `CALIBRATION_ACTIVE` + `detail.session` |
 | POST | `/api/v1/calibration/session/{id}/heartbeat` | Operator | owner 만. `ttl_s` 를 다시 채운 `{session}`. 다른 토큰 403 `FORBIDDEN`, 없거나 만료된 id 404 `NOT_FOUND`. `ttl_s` 안에 heartbeat 가 없으면 세션은 만료되고 `calibration.session_expired` 가 한 번 발행된다 |
 | DELETE | `/api/v1/calibration/session/{id}` | Operator | owner 또는 Admin(걸린 lease 강제 해제). 끝난 `{session}`. 그 밖의 토큰 403, 없는 id 404 |
 | POST | `/api/v1/safety/stop` | Viewer↑ | SAF-001 (누구나). 보정 세션 중에도 막지 않는다 |
@@ -410,6 +410,28 @@ v1.42: `GET /api/v1/host/network`와 `/release`는 기존 `{available,ok?,code,d
 한다. `owner.id` 가 자기 토큰(`/auth/whoami` 의 `id`)이 아니면 주행 조작을
 사유와 함께 끄고, E-Stop 은 켜 둔다. `remaining_s` 는 마지막 heartbeat 로부터
 남은 lease 시간이다.
+
+보정 lease 규칙 (D-321 부록, v1.67):
+
+- **소유는 토큰 단위다.** 같은 사람이라도 다른 토큰(다른 기기·재발급)은 owner 가
+  아니다. 회수·만료·로그아웃된 토큰의 lease 는 즉시 풀리지 않고 `ttl_s` 가 지나야
+  만료된다 — 더 기다릴 수 없으면 Administrator 가 `DELETE` 한다.
+- **시작 조건:** 모드가 IDLE 또는 MANUAL 이고 navigation·mapping·도킹·line-follow·
+  swarm follow 가 돌고 있지 않을 때만 연다. 아니면 409 `MODE_CONFLICT`.
+- **비소유자에게 막히는 쓰기(409 `CALIBRATION_ACTIVE`):** teleop, `/mode`(IDLE 제외),
+  line-follow 모드(OFF 제외)·hold, navigation goal·home, `/api/v1/do` 의 같은 동사,
+  docking dock·undock, swarm follow, `PUT /safety/limits`(Admin 포함),
+  `POST /localization/initialpose`, `/slam/start`·`stop`·`reset`, `POST /power/mode`,
+  그리고 `POST /host/release/install`·`/release/rollback`·`/reboot`(Admin 이
+  `override_calibration: true` 를 보내면 통과 — CORE 가 재시작되어 보정이 끝난다).
+  `/ws/swarm/reference` 는 비소유자 프레임을 조용히 버린다.
+- **열려 있는 것:** `POST /safety/stop`(Viewer 포함), `/mode` IDLE, line-follow OFF,
+  navigation·swarm·docking cancel, `/do` stop, `/power/wake`, `/slam/save`.
+- **배터리 복귀는 lease 를 보지 않는다.** SAF-005 `battery_critical_policy:
+  RETURN_HOME` 은 CORE 내부 경로(`nav.home(source="battery_policy")`)로 가며 일부러
+  막지 않는다 — 방전 보호가 보정보다 앞선다.
+- Pilot 은 자기가 MANUAL 을 잡은 적이 있고 남의 보정으로 잠겨 있지 않을 때만 나가면서
+  `/mode` IDLE 을 보낸다.
 
 `line_follow` 는 v1.10 additive 다. `state` 는 `OFF | WAITING | TRACKING |
 HOLD | LOST` 이며 `LOST` 는 모드를 `OFF` 로 바꾼 뒤 다시 선택하기 전까지

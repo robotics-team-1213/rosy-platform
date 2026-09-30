@@ -104,7 +104,15 @@ PC 반복 질문과 수동 파일 편집은 한 번의 세션 안내와 자동 �
    D-342 수동 한도 안에서 그대로 동작한다. **E-Stop 은 누구에게나 열려 있다**
    (`POST /safety/stop` 은 이 lease 를 보지 않는다). 멈추기만 하는 `/mode` IDLE,
    line-follow OFF, 각종 cancel 도 막지 않는다. Pilot 은 owner 가 아니면 주행 조작을 사유와 함께 끄고
-   명령을 보내지 않지만, 최종 판정은 CORE 의 409 다.
+   주행 명령을 보내지 않으며, 나갈 때도 자기가 MANUAL 을 잡은 적이 없거나 잠겨 있으면
+   `/mode` IDLE 을 보내지 않는다(IDLE 은 누구에게나 열려 있어 주인의 주행을 끊는다).
+   whoami 가 답하기 전에는 "보정 확인 중"으로 잠근다. 최종 판정은 CORE 의 409 다.
+   같은 규칙으로 비소유자의 `PUT /safety/limits`, initialpose, SLAM start/stop/reset,
+   `/power/mode`, `/api/v1/do` 의 구동 동사를 막고, `/ws/swarm/reference` 프레임은
+   버린다. Host 의 release install·rollback·reboot 는 Admin 이
+   `override_calibration: true` 를 보낼 때만 통과한다.
+   세션은 모드가 IDLE·MANUAL 이고 다른 구동(navigation·도킹·line-follow·swarm)이
+   없을 때만 연다(409 `MODE_CONFLICT`) — 남이 시작한 움직임을 lease 가 떠안지 않게.
 4. 이 lease 는 아무것도 구동하지 않는다. 모드 전이도 `cmd_vel` 도 만들지 않는다
    — [D-2](D-2-cmd-vel.md) 그대로 CORE 가 유일한 최종 발행자이고, 보정
    구동은 결정 2 대로 CORE 의 기존 인증·안전 경로를 탄다.
@@ -120,6 +128,10 @@ PC 반복 질문과 수동 파일 편집은 한 번의 세션 안내와 자동 �
 재부팅·CORE 재시작은 메모리의 lease 를 지운다 — 결정 1 대로 세션은 자동 재개되지
 않고, 도구의 다음 heartbeat 가 404 를 받아 중단을 알게 된다. 장치의 systemd 수동
 재시작은 막지 못하며 SKILL 절차가 guard 실행을 요구한다.
+소유는 토큰 단위라서, 회수·만료된 토큰의 lease 도 `ttl_s` 가 지날 때까지 남는다 —
+기다릴 수 없으면 Administrator 가 `DELETE` 한다. SAF-005 배터리 복귀
+(`RETURN_HOME`)는 CORE 내부 경로라 lease 를 일부러 보지 않는다: 방전 보호가
+보정보다 앞선다.
 
 **Related:** [D-2](D-2-cmd-vel.md),
 [D-342](D-342-manual-limit-commissioning-ladder.md),

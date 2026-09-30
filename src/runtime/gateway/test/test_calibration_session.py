@@ -444,3 +444,17 @@ def test_concurrent_starts_open_exactly_one_lease(lease):
         thread.join(timeout=5)
     assert set(errors) == {"FORBIDDEN"} and len(errors) == 50
     assert services.calibration.current()["owner"]["id"] == owner
+
+
+def test_contract_documents_ownership_revocation_and_battery_return():
+    """Review item 8: the API Ref and the D-321 addendum state the lease edge cases."""
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[4]
+    reference = (root / "docs/reference/ROSY API & Protocol Reference.md").read_text(encoding="utf-8")
+    adr = (root / "docs/adr/D-321-attended-calibration-g4-mapping.md").read_text(encoding="utf-8")
+    for text in (reference, adr):
+        assert "토큰 단위" in text                     # ownership is per token
+        assert "`ttl_s` 가 지" in text and "DELETE" in text   # revoked token keeps it until TTL
+        assert "RETURN_HOME" in text                   # battery return ignores the lease
+        assert "override_calibration" in text
