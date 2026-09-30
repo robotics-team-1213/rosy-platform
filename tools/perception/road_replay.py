@@ -299,6 +299,16 @@ def _motion(ds, dth, dt):
     return "curve" if abs(ds / dt) >= 0.005 and abs(dth / dt) > CURVE_MIN_RATE else "turning"
 
 
+def _keeper_pair_mid(boundaries):
+    """Midpoint (y at SIDE_X_M) of the keeper's nearest left and right boundary, or None."""
+    near = {}
+    for b in boundaries:
+        side = b.get("side")
+        if side in ("left", "right") and (side not in near or abs(b["y_at_side_x_m"]) < abs(near[side])):
+            near[side] = b["y_at_side_x_m"]
+    return (near["left"] + near["right"]) / 2 if len(near) == 2 else None
+
+
 def _parallel_pair_width(last):
     """[y_L - y_R] of the nearest left and right boundary when within 5 deg of parallel."""
     sides = {s: [b for b in last.get("boundaries", []) if b.get("side") == s] for s in ("left", "right")}
@@ -420,9 +430,8 @@ def replay(frames, *, labels: dict | None = None, dropouts=DROPOUTS_M,
                 if c.get("label") in ("R", "L"):   # the filter's own innovations
                     nis.append(c["nis"][c["label"]])
                     nis_state[row["motion"]].append(nis[-1])
-        if row["strategy"] == "both" and snap["level"] == TRACK:
-            ys = sorted(b["y_at_side_x_m"] for b in keeper.last.get("boundaries", []))
-            mid_keep = (ys[0] + ys[-1]) / 2
+        mid_keep = _keeper_pair_mid(keeper.last.get("boundaries", []))
+        if row["strategy"] == "both" and snap["level"] == TRACK and mid_keep is not None:
             mid_est = -snap["d"] - 0.22 * snap["phi"] + snap["kappa"] * 0.22 ** 2 / 2
             row["wrong_side"] = abs(mid_keep - mid_est) > HALF
         path = labels.get(round(t, 3))

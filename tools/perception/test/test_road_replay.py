@@ -288,3 +288,12 @@ def test_nis_consistency_uses_associated_measurements_only():
     assert metrics["nis"]["n"] == 2 * tracked            # a pair per frame
     assert metrics["nis"]["basis"] == "associated"
     assert metrics["nis_candidates"]["n"] >= metrics["nis"]["n"]
+
+
+def test_wrong_side_reference_is_the_keepers_nearest_pair_not_the_extremes():
+    """124745Z frame 754: a steep far line (64 deg, y -0.42 at SIDE_X_M) labelled right
+    pulled (min + max) / 2 to -0.18 while the lane pair's midpoint was -0.03."""
+    boundaries = [{"side": "left", "y_at_side_x_m": 0.061}, {"side": "right", "y_at_side_x_m": -0.117},
+                  {"side": "right", "y_at_side_x_m": -0.422}]
+    assert rr._keeper_pair_mid(boundaries) == pytest.approx(-0.028)
+    assert rr._keeper_pair_mid([{"side": "left", "y_at_side_x_m": 0.06}]) is None
