@@ -154,7 +154,18 @@ class MainActivity : ComponentActivity() {
             AlertDialog(
                 onDismissRequest = { pendingPairing.value = null },
                 title = { Text(stringResource(R.string.pair_title)) },
-                text = { Text(stringResource(R.string.pair_body, p.host, p.port, p.source)) },
+                text = {
+                    val body = stringResource(R.string.pair_body, p.host, p.port, p.source)
+                    val pin = p.pin?.let { "\n" + stringResource(R.string.pair_body_pin, it.take(PIN_PREVIEW)) }.orEmpty()
+                    // Warn when the new link is weaker than what is saved: it drops the pin or TLS.
+                    val lost = when {
+                        pairing?.secure == true && !p.secure -> R.string.pair_downgrade_tls
+                        pairing?.pin != null && p.pin == null -> R.string.pair_downgrade_pin
+                        else -> null
+                    }
+                    val downgrade = lost?.let { "\n\n" + stringResource(R.string.pair_downgrade, stringResource(it)) }.orEmpty()
+                    Text(body + pin + downgrade)
+                },
                 confirmButton = {
                     TextButton(
                         enabled = !state.running,
@@ -184,3 +195,6 @@ class MainActivity : ComponentActivity() {
 
 private const val KEY_PENDING_PAIRING = "pending_pairing"
 private const val KEY_DEEP_LINK_INVALID = "deep_link_invalid"
+
+/** `sha256/` plus 12 base64url characters: enough to compare by eye with the site's printout. */
+internal const val PIN_PREVIEW = 19

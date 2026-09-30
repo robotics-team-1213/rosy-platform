@@ -5,7 +5,7 @@ import pytest
 from PIL import ImageChops
 from pathlib import Path
 
-from emotion.info_screen import DEFAULT_SIZE, _BG, _CRIT, _FG, _WARN, battery_color, hold_duration, render
+from emotion.info_screen import DEFAULT_SIZE, _BG, _CRIT, _FG, _WARN, battery_color, hold_duration, render, render_boot
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -214,3 +214,25 @@ class TestRender:
         assert image.crop(strip).getcolors(maxcolors=1 << 16) == [
             ((strip[2] - strip[0]) * (strip[3] - strip[1]), _BG),
         ]
+
+
+class TestBootCardBreathesWhileWaiting:
+    """D-385: 기다리는 동안 무대 제목이 두 밝기로 숨쉬고, 끝난 상태는 고요하다."""
+
+    def _card(self, stage, frame):
+        return render_boot({"stage": stage, "device_name": "rosy"}, frame=frame)
+
+    def test_the_waiting_title_alternates_two_brightness_steps(self):
+        from PIL import ImageChops
+
+        bright = self._card("BOOTING", frame=0)
+        dark = self._card("BOOTING", frame=1)
+
+        assert ImageChops.difference(bright, dark).getbbox() is not None
+
+    def test_an_arrived_or_failed_card_holds_still(self):
+        from PIL import ImageChops
+
+        for stage in ("CORE_READY", "FAILED:rosy-core", "SETUP"):
+            steady = ImageChops.difference(self._card(stage, frame=0), self._card(stage, frame=1))
+            assert steady.getbbox() is None, stage

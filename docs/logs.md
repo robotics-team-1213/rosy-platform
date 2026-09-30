@@ -4009,6 +4009,12 @@
 - gate 변화: 없음. Accepted는 설계 수용이며 LOCAL·DEVICE·FIELD 증거가 아니다.
 - 결정: 위 D1–D3.
 
+## 2026-10-01 · uncommitted · docs(adr): D-385 Rosy가 스스로 표현한다
+
+- 변경: ADR D-385(파일+로그 행). 절전 "꼭 필요한 것만"이 기존 WAKE_BATTERY 체계임을 확인·기록.
+- 증거: rosy_harness lint 오류 0.
+- gate 변화: 없음.
+
 ## 2026-10-01 · e8028fb0 · docs(adr): D-321 부록 — 보정 세션 표시와 차단
 - 변경: D-321 에 부록(보정 lease, activity 표시, CALIBRATION_ACTIVE, E-Stop 예외, 재시작 guard). 새 ADR 번호를 쓰지 않았다. API Ref v1.67(1a1a2c3a): 엔드포인트·activity·에러·이벤트 3종, 변경 이력 행. 참고: main 변경 이력에 v1.65 행이 없다(다른 브랜치 몫으로 보임).
 - 증거: rosy_harness lint 0 errors, test_event_catalogue 통과.

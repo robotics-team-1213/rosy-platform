@@ -34,7 +34,7 @@
 ## 최근 기록
 
 - 2026-10-01 · a527920a · feat(protocol): StateSnapshot.activity (v1.67 additive)
+- 2026-10-01 · uncommitted · feat(robot_state): D-383 swarm_role 축 — LCD 역할 접미
 - 2026-10-01 · uncommitted · feat(robot_state): D-381 nav_state 축 — blocked 세부 패턴
 - 2026-09-30 · uncommitted · docs(adr): D-375 에서 D-380 으로 개명
 - 2026-09-30 · uncommitted · feat(robot_state): D-375 운용 모드 축 — 램프 패턴 중재와 LCD 접미
-- 2026-09-30 · uncommitted · docs(protocol): DeviceActionLookup 의미를 실제 사용에 맞춤

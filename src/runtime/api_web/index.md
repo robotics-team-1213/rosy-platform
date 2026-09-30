@@ -30,6 +30,6 @@
 
 - 2026-10-01 · 1a1a2c3a · docs(api): API Ref v1.67 과 버전 핀
 - 2026-10-01 · a527920a · feat(api): /api/v1/calibration/session 과 CALIBRATION_ACTIVE 차단
+- 2026-10-01 · uncommitted · feat(host): D-383 status-inputs에 swarm_role 추가
 - 2026-10-01 · uncommitted · fix(host): D-380/D-381 hunk 복원 — 인코딩 복구가 떨어뜨린 status_inputs 확장
 - 2026-10-01 · uncommitted · feat(host): D-381 status-inputs에 nav_state 추가
-- 2026-09-30 · uncommitted · docs(adr): D-375 에서 D-380 으로 개명

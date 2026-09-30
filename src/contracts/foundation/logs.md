@@ -188,6 +188,12 @@
 - 증거: test_robot_state.py 90 passed (변이 증명: blocked 규칙을 빼면 해당 2행이 빨개진다).
 - gate 변화: 없음.
 
+## 2026-10-01 · uncommitted · feat(robot_state): D-383 swarm_role 축 — LCD 역할 접미
+
+- 변경: SWARM_ROLES·valid_swarm_role()·role_suffix()(ASCII " - LEADER") 추가. mode/nav 와 같은 부재 규칙, evaluate 판정은 그대로.
+- 증거: test_robot_state.py (변이 증명: 접미를 없애면 해당 2행 빨강).
+- gate 변화: 없음.
+
 ## 2026-10-01 · a527920a · feat(protocol): StateSnapshot.activity (v1.67 additive)
 - 변경: `RobotActivity`·`ActivityOwner` 모델과 `StateSnapshot.activity: Optional[RobotActivity] = None`. 보정 lease 가 살아 있을 때만 객체, 아니면 null.
 - 증거: test_calibration_session.py 의 robot/state·/ws/state 시험, test_protocol_version_alignment 통과.

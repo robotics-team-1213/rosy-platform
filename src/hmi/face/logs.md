@@ -161,6 +161,12 @@
 - 결정: 없음.
 - 교훈: led의 rosylib 경우와 같은 모양이다 — "컨테이너에서 돌려라"가 유효한 지시인지는 노드의 import 그래프가 결정한다. blocker를 쓸 때 import 경로를 먼저 본다.
 
+## 2026-10-01 · uncommitted · feat(emotion): D-385 부팅 카드 숨쉼
+
+- 변경: info_screen.render_boot 이 frame 인자를 받아 BOOTING·PROVISIONED 중 무대 제목을 두 밝기로 갈아 그린다(45 % 단계). 끝난 상태는 프레임과 무관하게 동일 픽셀.
+- 증거: test_info_screen.py TestBootCardBreathesWhileWaiting (변이: 밝기 단계 제거 시 빨강).
+- gate 변화: 없음.
+
 ## 2026-10-01 · 15770a9c · feat(face): 정보 카드 MODE 행 CALIBRATING
 - 변경: `display/info` 의 `activity == "CALIBRATING"` 이면 MODE 값을 주의 칩 `CALIBRATING` 으로. LCD 글꼴은 ASCII 뿐(D-221)이라 "보정 중" 대신 기계어. E-STOP HEALTH 행은 그대로 우선.
 - 증거: face 시험·test_bridge_display 177 passed; 렌더 X:\DevTemp\calibration-mode\face-info-calibrating.png.

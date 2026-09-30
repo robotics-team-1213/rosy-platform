@@ -698,6 +698,11 @@ class ActionStore:
                 connection, action_id, attempt_id,
                 {"SUBMITTING", "ACCEPTED", "RUNNING", "CANCEL_REQUESTED", "UNKNOWN", "HOLD"},
             )
+            if action["state"] in {"UNKNOWN", "HOLD", "CANCEL_REQUESTED"} \
+                    and workflow_state != "HOLD":
+                raise InvalidActionTransition(
+                    "unresolved or canceling Action can record HOLD only",
+                )
             if workflow_state == "ACTION_SUCCEEDED":
                 if action["state"] not in {"ACCEPTED", "RUNNING"}:
                     raise InvalidActionTransition("held or unresolved Action cannot complete")
@@ -984,6 +989,11 @@ class ActionStore:
                     actor_id="system", detail={"previous_state": row["state"]},
                     created_at=now,
                 )
+                all_phases = connection.execute(
+                    "SELECT phase_id, ordinal, state, driver_goal_id FROM omx_action_phases "
+                    "WHERE action_id=? AND attempt_id=? ORDER BY ordinal",
+                    (row["action_id"], row["attempt_id"]),
+                ).fetchall()
                 phases = connection.execute(
                     """SELECT * FROM omx_action_phases WHERE action_id=? AND attempt_id=?
                        AND state IN ('SUBMITTING', 'ACCEPTED', 'RUNNING', 'CANCEL_REQUESTED')""",
@@ -1005,6 +1015,35 @@ class ActionStore:
                                 "driver_goal_id": phase["driver_goal_id"]},
                         created_at=now,
                     )
+                latest_workflow = connection.execute(
+                    "SELECT detail_json FROM omx_action_events WHERE action_id=? "
+                    "AND attempt_id=? AND event_type='ACTION_WORKFLOW_STATE' "
+                    "ORDER BY event_id DESC LIMIT 1",
+                    (row["action_id"], row["attempt_id"]),
+                ).fetchone()
+                workflow = (json.loads(latest_workflow["detail_json"])
+                            if latest_workflow is not None else {})
+                workflow_state = workflow.get("workflow_state")
+                refs = workflow.get("evidence_refs", {})
+                if not isinstance(refs, Mapping):
+                    refs = {}
+                held_states = {"VERIFY_HOLD", "TRANSFER", "RELEASE", "VERIFY_RELEASE", "HOLD"}
+                object_may_be_held = (
+                    workflow.get("object_may_be_held") is True
+                    or workflow_state in held_states
+                    or any(phase["ordinal"] > 0 and phase["state"] not in {"FAILED", "CANCELED"}
+                           for phase in all_phases)
+                )
+                hold_refs = dict(refs)
+                hold_refs["hold_reason"] = "PROCESS_RESTARTED_WITH_UNRESOLVED_ACTION"
+                self._append_event(
+                    connection, action_id=row["action_id"], attempt_id=row["attempt_id"],
+                    state="HOLD", event_type="ACTION_WORKFLOW_STATE", actor_id="system",
+                    detail={"workflow_state": "HOLD",
+                            "object_may_be_held": object_may_be_held,
+                            "evidence_refs": hold_refs},
+                    created_at=now,
+                )
                 recovered.append(row["action_id"])
             connection.commit()
         return recovered

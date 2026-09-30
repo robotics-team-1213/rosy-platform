@@ -222,6 +222,12 @@
 - gate 변화: 없음.
 - 교훈: 인코딩 사고를 "옛 판본으로 되돌리기"로 고칠 때는 그 판본 이후의 정당 커밋이 사라지는지 diff 전체를 읽어야 한다 — 이번 복원은 고장(hunk 없음)을 다른 고장(기능 상실)으로 바꿨다.
 
+## 2026-10-01 · uncommitted · feat(host): D-383 status-inputs에 swarm_role 추가
+
+- 변경: _swarm_role()가 snapshot().swarm.role 를 검색·검증해 핸드오버에 실었다. none·모르는 값은 없음.
+- 증거: test_host_status_summary.py 40 passed (키 셋·none 부재 포함).
+- gate 변화: 없음.
+
 ## 2026-10-01 · a527920a · feat(api): /api/v1/calibration/session 과 CALIBRATION_ACTIVE 차단
 - 변경: `v1/calibration.py`(GET/POST session, POST heartbeat, DELETE). `common.require_calibration_owner()` 를 `/mode`·`/teleop`·`/line-follow/mode`(OFF 제외)·`/line-follow/hold` 에 걸었다 — 다른 토큰은 409 `CALIBRATION_ACTIVE`, E-Stop 은 보지 않는다. `deps` 재수출에 `CalibrationSessionError`, `CoreServicesLike.calibration`.
 - 증거: test_calibration_session.py 13 passed(수명, 만료, 비소유자 409, owner teleop D-342 한도, E-Stop, robot/state·ws activity).

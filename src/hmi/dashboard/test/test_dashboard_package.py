@@ -41,6 +41,14 @@ def test_the_identity_line_carries_the_software_version():
     assert "info.software_version" in telemetry
 
 
+def test_the_fast_state_render_does_not_clobber_the_identity_line():
+    # robot-id is the lineage line; renderRobotInfo (slow cycle) is its one writer.
+    # The 10 Hz state render used to overwrite it with the bare robot_id, so the
+    # model/version/runtime flashed and vanished every tick (found on the device).
+    shell = (ROOT / "app.js").read_text(encoding="utf-8")
+    assert 'setText("robot-id"' not in shell
+
+
 def test_the_shell_has_no_inline_script():
     html = (ROOT / "index.html").read_text(encoding="utf-8")
     assert "<script>" not in html

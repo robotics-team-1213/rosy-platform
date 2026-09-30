@@ -23,6 +23,7 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
+from core_features.command.emotion_map import emotion_for
 from core_features.power.battery import resolve_led
 
 
@@ -57,3 +58,16 @@ def led(alert: Any, applied: Any, *, info_visible: bool, gauge_percent: float,
     _acted, applied = reconcile(
         command, applied, lambda: act(command), latch_on_skip=True)
     return applied
+
+
+def emotion(mode: Any, nav_state: Any, shown: Any,
+            act: Callable[[str], bool]) -> Any:
+    """D-385: 모드가 정한 표정 — LiDAR 문법으로 latch 없이 다음 틱에 다시 시도한다.
+
+    감정 노드는 늦게 뜰 수 있다(부팅 순서). 표정은 살아 있는 표시라 늦게라도
+    도달해야 한다. `desired`가 None(모르는 모드)이면 지금 표정을 유지한다.
+    """
+    desired = emotion_for(mode, nav_state)
+    if desired is None or desired == shown:
+        return shown
+    return desired if act(desired) else shown
