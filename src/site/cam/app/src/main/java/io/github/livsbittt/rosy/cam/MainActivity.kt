@@ -140,7 +140,11 @@ class MainActivity : ComponentActivity() {
                 locked = state.running,
                 lens = LensChoice.orDefault(lens),
                 onLens = { choice -> scope.launch { settings.saveLens(choice) } },
-                onSave = { p, siteName -> scope.launch { settings.save(p, siteName, lan?.subnet) } },
+                onSave = { p, siteName, fresh ->
+                    // A settings edit keeps the pairing-time subnet; only a fresh pairing records the current one.
+                    val subnet = if (fresh) lan?.subnet else null
+                    scope.launch { settings.save(p, siteName, subnet) }
+                },
                 onBack = { showSettings = false },
             )
         } else {

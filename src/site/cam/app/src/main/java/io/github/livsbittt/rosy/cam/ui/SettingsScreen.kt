@@ -54,12 +54,17 @@ fun SettingsScreen(
     locked: Boolean,
     lens: LensChoice,
     onLens: (LensChoice) -> Unit,
-    /** The pairing and, when it came from the mDNS list, that service's name (`site_name`). */
-    onSave: (PairingUri, String?) -> Unit,
+    /**
+     * The pairing; when it came from the mDNS list, that service's name (`site_name`); and whether it is a fresh
+     * pairing (a link applied or a receiver picked) rather than an edit of the saved one. Only a fresh pairing
+     * records the Wi-Fi subnet for diagnosis (review m6).
+     */
+    onSave: (PairingUri, String?, Boolean) -> Unit,
     onBack: () -> Unit,
 ) {
     val current = remember(currentLink) { currentLink?.toPairing() }
     var siteName by remember(currentLink) { mutableStateOf(currentLink?.siteName) }
+    var freshPairing by remember(currentLink) { mutableStateOf(false) }
     var link by remember { mutableStateOf("") }
     var host by remember(current) { mutableStateOf(current?.host ?: "") }
     var port by remember(current) { mutableStateOf(current?.port?.toString() ?: "") }
@@ -147,6 +152,7 @@ fun SettingsScreen(
                             port = service.port.toString()
                             secure = true
                             siteName = service.name
+                            freshPairing = true
                             invalid = null
                             saved = false
                         },
@@ -191,6 +197,7 @@ fun SettingsScreen(
                         secure = parsed.pairing.secure
                         pin = parsed.pairing.pin
                         pinDropped = false
+                        freshPairing = true
                         invalid = null
                     }
                     is PairingUri.Parsed.Invalid -> invalid = parsed.reason
@@ -261,7 +268,7 @@ fun SettingsScreen(
                     val reason = PairingUri.validate(trimmedHost, portNumber, token, source.trim(), secure, pin)
                     invalid = reason
                     if (reason == null) {
-                        onSave(PairingUri(trimmedHost, portNumber, token, source.trim(), secure, pin), siteName)
+                        onSave(PairingUri(trimmedHost, portNumber, token, source.trim(), secure, pin), siteName, freshPairing)
                         saved = true
                     }
                 },

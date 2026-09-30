@@ -361,8 +361,8 @@ private fun notDiscoveredText(lan: LanSnapshot?, pairingSubnet: String?): String
     } ?: stringResource(R.string.network_unknown)
     val kind = ProblemGuide.notDiscoveredHint(lan, pairingSubnet)
     val hint = when (kind) {
-        ProblemGuide.NotDiscoveredHint.OTHER_NETWORK -> stringResource(R.string.problem_not_discovered_other, now, pairingSubnet ?: "")
-        ProblemGuide.NotDiscoveredHint.SAME_NETWORK -> stringResource(R.string.problem_not_discovered_same, now)
+        ProblemGuide.NotDiscoveredHint.OTHER_SUBNET -> stringResource(R.string.problem_not_discovered_other, now, pairingSubnet ?: "")
+        ProblemGuide.NotDiscoveredHint.SAME_SUBNET -> stringResource(R.string.problem_not_discovered_same, now)
         ProblemGuide.NotDiscoveredHint.UNKNOWN -> stringResource(R.string.problem_not_discovered_unknown, now)
     }
     val headline = when (ProblemGuide.notDiscoveredHeadline(kind)) {

@@ -64,6 +64,16 @@ class SiteLinkTest {
     }
 
     @Test
+    fun onlyAFreshPairingReplacesThePairingSubnet() {
+        // Review m6: a settings edit passes no subnet and keeps the pairing-time one; a fresh pairing records its own.
+        val saved = SiteLink(null, "rosy-site.local", 443, pin, "t", "overhead-1", secure = true, pairingSubnet = "192.168.1.0/24")
+        val edit = SiteLink.from(PairingUri("rosy-site.local", 443, "t", "cam-2", true, pin), pairingSubnet = null, previous = saved)
+        assertEquals("192.168.1.0/24", edit.pairingSubnet)
+        val fresh = SiteLink.from(PairingUri("rosy-site.local", 443, "t", "overhead-1", true, pin), pairingSubnet = "10.16.36.0/24", previous = saved)
+        assertEquals("10.16.36.0/24", fresh.pairingSubnet)
+    }
+
+    @Test
     fun anotherSiteInheritsNothing() {
         val saved = SiteLink(
             siteName = "Rosy site", tlsHost = "rosy-site.local", port = 443, caPin = pin, token = "old",

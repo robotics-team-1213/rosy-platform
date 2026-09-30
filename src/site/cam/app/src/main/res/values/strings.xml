@@ -35,8 +35,8 @@
     <string name="problem_tls_pin">현장 PC의 인증서가 페어링 때 받은 지문과 다릅니다 — 인증서가 바뀌었거나 다른 PC입니다. 연결을 멈췄습니다. 현장 PC에서 새 페어링 QR을 받아 다시 연결하세요.</string>
     <string name="problem_not_discovered">사이트가 이 Wi-Fi에서 보이지 않습니다 — 같은 이름의 다른 Wi-Fi일 수 있습니다.</string>
     <string name="problem_not_discovered_mdns">사이트가 자동 찾기(mDNS)에 보이지 않습니다.</string>
-    <string name="problem_not_discovered_other">지금 Wi-Fi는 %1$s인데 페어링 때는 %2$s였습니다. 이름은 같아도 다른 공유기(AP)나 핫스팟입니다. 현장 PC와 같은 공유기에 연결하세요.</string>
-    <string name="problem_not_discovered_same">지금 Wi-Fi(%1$s)는 페어링 때와 같은 네트워크입니다. 현장 PC와 수신기의 자동 찾기(mDNS)가 켜져 있는지 확인하세요.</string>
+    <string name="problem_not_discovered_other">지금 Wi-Fi는 %1$s인데 페어링 때는 %2$s였습니다. 이름은 같아도 다른 공유기(AP)나 핫스팟일 수 있습니다. 현장 PC와 같은 공유기에 연결하세요.</string>
+    <string name="problem_not_discovered_same">지금 Wi-Fi(%1$s)는 주소 범위가 페어링 때와 같습니다. 현장 PC와 수신기의 자동 찾기(mDNS)가 켜져 있는지 확인하세요.</string>
     <string name="problem_not_discovered_unknown">지금 Wi-Fi: %1$s. 현장 PC와 같은 공유기(AP)에 연결됐는지 확인하세요.</string>
     <string name="problem_manual_unreachable">수동 주소(%1$s)에도 닿지 않습니다.</string>
     <string name="problem_manual_refused">수동 주소(%1$s)는 응답하지만 수신기가 꺼져 있습니다.</string>

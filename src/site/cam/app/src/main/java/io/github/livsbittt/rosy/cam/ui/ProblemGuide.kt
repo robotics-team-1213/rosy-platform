@@ -108,10 +108,10 @@ object ProblemGuide {
     /** Which second sentence follows "사이트가 이 Wi-Fi에서 보이지 않습니다". */
     enum class NotDiscoveredHint {
         /** The Wi-Fi subnet differs from the one at pairing time: same SSID, another AP or hotspot. */
-        OTHER_NETWORK,
+        OTHER_SUBNET,
 
         /** Same subnet as at pairing time: the site PC or its mDNS advertisement is off, or multicast is blocked. */
-        SAME_NETWORK,
+        SAME_SUBNET,
 
         /** The subnet at pairing time or now is unknown. */
         UNKNOWN,
@@ -127,7 +127,7 @@ object ProblemGuide {
     }
 
     fun notDiscoveredHeadline(hint: NotDiscoveredHint): NotDiscoveredHeadline =
-        if (hint == NotDiscoveredHint.SAME_NETWORK) NotDiscoveredHeadline.MDNS_SILENT else NotDiscoveredHeadline.OTHER_WIFI
+        if (hint == NotDiscoveredHint.SAME_SUBNET) NotDiscoveredHeadline.MDNS_SILENT else NotDiscoveredHeadline.OTHER_WIFI
 
     /**
      * @param current the Wi-Fi now (null or no subnet: unknown).
@@ -136,7 +136,7 @@ object ProblemGuide {
     fun notDiscoveredHint(current: LanSnapshot?, pairingSubnet: String?): NotDiscoveredHint {
         val now = current?.subnet ?: return NotDiscoveredHint.UNKNOWN
         val then = pairingSubnet ?: return NotDiscoveredHint.UNKNOWN
-        return if (now == then) NotDiscoveredHint.SAME_NETWORK else NotDiscoveredHint.OTHER_NETWORK
+        return if (now == then) NotDiscoveredHint.SAME_SUBNET else NotDiscoveredHint.OTHER_SUBNET
     }
 
     fun forStream(error: StreamError): Guidance = when (error) {
