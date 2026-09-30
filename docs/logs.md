@@ -3853,3 +3853,9 @@
 - 변경: `docs/adr/D-344-pilot-assisted-autonomy.md` 에 2026-09-30 보강(§11 path 판정, §12 교정 도구·rosy-camera 덮어쓰기, §13 수동 한도 계단 각속도). 운영 절차 `docs/deployment/pinky-pro-ir-line-calibration-runbook.md` 신설(한국어).
 - 증거: 코드 커밋 e3eb2561, 7e467a4b, 6f00a74d 와 그 시험.
 - gate 변화: 없음(문서). DEVICE 절차는 로봇 복귀 뒤 사용자와 실행.
+
+## 2026-09-30 · uncommitted · docs(adr): D-344 보강 검토 반영 — sector 기본, L1 문턱, IR 전용 덮어쓰기 경로
+
+- 변경: D-344 2026-09-30 보강의 §11(path 는 선택·기본 sector, 급회전 창·near-field·풀림 지연·WAITING·장기 정지 사건), §12(`/etc/rosy/ir_calibration.yaml`, launch 검증), §13(차선 자동은 L1 이상, `limit_level_too_low`)을 사용자 결정과 독립 검토대로 고쳤다. 이 보강은 아직 main 에 없는 같은 날 초안이라 제자리에서 고쳤다. 런북도 새 경로·첫 블록만 붙이기·loaded/skipped 로그 확인·L1 문턱으로 갱신.
+- 증거: 코드 커밋 794e75bb(CORE), 04213a43(pilot) 과 이 회차의 덮어쓰기 커밋.
+- gate 변화: 없음(문서).

@@ -70,7 +70,7 @@ python3 tools/device/ir_line_calibrate.py check --session ~/rosy-ir/session.json
 
 도구가 찍은 두 블록을 쓴다. `revision` 은 두 곳에 같은 값이어야 한다.
 
-1. `/etc/rosy/line_follow.yaml` — `rosy-camera` 의 `line_observer_node` 가 읽는 기기 덮어쓰기 파일이다(없으면 만든다, root 소유 0644).
+1. `/etc/rosy/ir_calibration.yaml` — `rosy-camera` 의 `line_observer_node` 가 읽는 IR 교정 전용 덮어쓰기 파일이다(없으면 만든다, root 소유 0644). **도구가 찍은 첫 블록(`/**/line_observer_node`)만** 붙인다 — 다른 노드 블록이나 IR 교정 밖의 키가 있으면 launch 가 파일 전체를 건너뛰고 로그에 이유를 남긴다(IR_LINE 은 fail-closed 로 남는다). `/etc/rosy/line_follow.yaml` 은 내비게이션 그래프용 전체 설정이라 여기에 쓰지 않는다.
    ```yaml
    /**/line_observer_node:
      ros__parameters:
@@ -82,6 +82,7 @@ python3 tools/device/ir_line_calibrate.py check --session ~/rosy-ir/session.json
    값은 반드시 소수점이 있는 실수로 둔다(정수면 ROS 파라미터 형이 달라 노드가 뜨지 않는다).
 2. CORE 설정 `line_follow.ir_calibration_revision: <64자리 해시>` — 네이티브 CORE 의 로컬 설정은 `/var/lib/rosy/core/.rosy/rosy.yaml`(`HOME=/var/lib/rosy/core`)이다. 기존 `line_follow:` 블록이 있으면 그 안에 한 줄만 넣는다.
 3. `sudo systemctl restart rosy-camera rosy-core`.
+4. `journalctl -u rosy-camera -b | grep "IR calibration overlay"` 가 `... loaded` 여야 한다. `skipped: <이유>` 면 파일을 고치고 다시 시작한다.
 
 ## 6. 적용 확인 (읽기 전용)
 
@@ -91,6 +92,7 @@ python3 tools/device/ir_line_calibrate.py check --session ~/rosy-ir/session.json
 
 ## 7. 감시 켜기 (별도 결정)
 
+차선 자동 자체가 수동 한도 L1(`safety.manual_angular` ≥ 0.30) 이상에서만 돈다(D-344 §13) — L0 에서는 `limit_level_too_low` 로 멈춘다.
 `line_follow.ir_guard_enabled: true` 는 4 단계 손 확인과 6 단계 확인을 모두 녹화로 남긴 뒤, 자동 주행 녹화 루프(D-344 §12)에서 켠다. 기본값은 꺼짐이다.
 
 ## 기록

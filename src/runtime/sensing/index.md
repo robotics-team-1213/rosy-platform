@@ -63,8 +63,8 @@
 
 ## 최근 기록
 
+- 2026-09-30 · uncommitted · fix(camera,control): IR 교정 덮어쓰기를 전용 경로·검증으로, 도구 문턱 인자(검토 반영)
 - 2026-09-30 · 6f00a74d · fix(camera): 기기 IR 교정 덮어쓰기 파일을 line_observer 에 싣는다
 - 2026-09-30 · 7e467a4b · feat(control): 읽기 전용 IR 차선 교정 도구와 좌·우 부호 확인
 - 2026-09-30 · uncommitted · feat(ros-sim): planning 슬라이스 통과 — goal_node 합성 지도·TF 그래프 검증
 - 2026-09-30 · uncommitted · docs(adr): 운전자 실시간 영상 ADR 을 D-362 에서 D-368 로
-- 2026-09-30 · uncommitted · feat(control): 'keep' 폐루프 가제보 주행 — L 모서리 회전(선택)과 한쪽 flank 시험(D-353 §5)

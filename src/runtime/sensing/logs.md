@@ -647,3 +647,10 @@
 - 증거: 선언 전 `test_declared_paths_account_for_every_write_root_in_the_program[rosy-camera.service]` 빨강, 선언 뒤 `test_camera_image_stack.py test_native_systemd_contract.py` 129 passed, 1 skipped (2026-09-30 Windows).
 - gate 변화: SOURCE. 실물 재시작 확인 전.
 - 결정: D-344 §12 보강.
+
+## 2026-09-30 · uncommitted · fix(camera,control): IR 교정 덮어쓰기를 전용 경로·검증으로, 도구 문턱 인자(검토 반영)
+
+- 변경: 덮어쓰기 경로를 `/etc/rosy/ir_calibration.yaml` 로 분리(`/etc/rosy/line_follow.yaml` 은 내비게이션 그래프용 전체 설정). 새 `control/ir_overlay.py` 가 모양(관측 노드 블록 하나, IR 교정 키만, 실수형, 켜면 `IRLineCalibration` 통과)을 검사하고 `camera_preview.launch.py` 는 통과할 때만 싣고 `LogInfo` 로 loaded/skipped 이유를 남긴다 — 잘못된 파일이 관측 노드를 재시작 반복에 빠뜨리지 않는다. `compute_ir_calibration` 은 `min_span` 을 0.1 로 반올림해 찍힌 값과 해시가 같다. CLI 에 `--min-white/--min-contrast/--edge-error`, `check` 는 `--black/--white` 한쪽만이면 거절하고 둘 다 있으면 `--session` 이 필요 없다. 시스템 계약 `rosy-camera` 프로그램 목록에 `ir_overlay.py` 를 넣어 선언한 읽기 경로가 실제로 검사된다.
+- 증거: 새 `test/test_ir_overlay.py`(없음·정상·잘못된 7종·도구 출력이 곧 유효 덮어쓰기·launch 문자열) + `test_ir_calibration.py` 추가 3개 → 23 passed. `test/test_native_systemd_contract.py` 는 선언을 비우면 빨강, 되돌리면 초록 (2026-09-30 Windows).
+- gate 변화: SOURCE. 새 모듈이 설치 이미지에 들어가야 실물에서 쓰인다(릴리스 필요).
+- 결정: D-344 §12 보강.

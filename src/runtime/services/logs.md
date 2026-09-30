@@ -207,3 +207,10 @@
 - 증거: 새 `src/runtime/gateway/test/test_line_follow_obstacle_path.py` 18 passed — 모서리 벽 0.2 m 앞에서 왼쪽으로 크게 돌면 정지 없음, 같은 장면 sector·직진은 정지, 호 위 상자는 정지·떨림 방지·재출발, LiDAR 끊김 HOLD, 계단 L0 0.10→L1 0.30 즉시 추종, 덮어쓰기, IR 비킴 상한. `pytest src/runtime/gateway/test -k "line_follow or clearance or ir"` 247 passed, 5 skipped (2026-09-30 Windows).
 - gate 변화: SOURCE 진행. ROS-SIM(가제보 L 모서리 0.20 m 기본값으로 한 바퀴)·DEVICE 미실행.
 - 결정: D-344 §11 보강, §13.
+
+## 2026-09-30 · 794e75bb · fix(line-follow): 검토 반영 — sector 기본, 급회전 창·near-field, 풀림 지연, L1 문턱
+
+- 변경: `obstacle_mode` 기본 `sector`(사용자 결정 — path 는 가제보 한 바퀴·실물 LiDAR 좌우 확인 뒤). `path_clearance` 회전각 창 max(90°, resume/R)·최대 180°, 0..180° 띠 안이고 `obstacle_stop_m` 안인 점은 직선 거리로 센다, 제자리 회전은 정지 거리 안 점. 막힘은 `obstacle_release_s`(0.2) 동안 계속 비어야 풀린다(path). 관측 전에는 호를 재지 않는다(WAITING). `obstacle_ahead` 가 `obstacle_escalate_s`(5) 이어지면 `nav.line_obstacle_hold` 한 번. 살아 있는 `manual_angular` < `lane_auto_min_manual_angular`(0.30 = L1)면 `limit_level_too_low` HOLD.
+- 증거: `test_line_follow_obstacle_path.py` 21 passed — 0.18 m 벽(직진 정지·돌기 추종 한 시험), range_min 0.15 m 급회전 상자(옛 창은 못 봄), 제자리 회전, 풀림 지연, 의도 교대 떨림 없음(지연을 0 으로 두면 20 틱 중 10 번 출발 — 변이 확인), 띠 안 벽 LOST 없이 HOLD + 사건 한 번, 관측 전 WAITING, 잃은 시야에서 마지막 의도, L0 거절·L1 출발. (2026-09-30 Windows)
+- gate 변화: SOURCE. ROS-SIM·DEVICE 미실행.
+- 결정: D-344 §11 보강, §13.
