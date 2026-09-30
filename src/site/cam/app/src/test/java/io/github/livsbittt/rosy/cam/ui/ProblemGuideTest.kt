@@ -121,6 +121,16 @@ class ProblemGuideTest {
     }
 
     @Test
+    fun aRepeatedOnAvailableKeepsTheKnownAddress() {
+        // Review m7: callbacks may repeat onAvailable; the seeded snapshot must not be wiped back to "no Wi-Fi".
+        val lan = LanNetworks()
+        lan.onAvailable("wifi-site")
+        lan.onLinkProperties("wifi-site", lanAt("192.168.1.37", 24, "192.168.1.1"))
+        lan.onAvailable("wifi-site")
+        assertEquals("192.168.1.0/24", lan.current()?.subnet)
+    }
+
+    @Test
     fun lanSnapshotNamesSubnetAndGateway() {
         val lan = lanAt("10.16.36.7", 24, "10.16.36.1")
         assertEquals("10.16.36.0/24", lan.subnet)

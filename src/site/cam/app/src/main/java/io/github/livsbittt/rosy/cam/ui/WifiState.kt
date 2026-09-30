@@ -52,6 +52,9 @@ fun rememberLan(): LanSnapshot? {
         val callback = object : ConnectivityManager.NetworkCallback() {
             override fun onAvailable(network: Network) {
                 lan.onAvailable(network.toString())
+                // Seed from what the network already has, so the state never flips to "no Wi-Fi" while
+                // waiting for onLinkPropertiesChanged (review m7).
+                connectivity.getLinkProperties(network)?.let { lan.onLinkProperties(network.toString(), lanSnapshot(it)) }
                 current = lan.current()
             }
 
