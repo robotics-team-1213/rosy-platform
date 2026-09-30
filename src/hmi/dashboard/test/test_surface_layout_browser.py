@@ -127,6 +127,34 @@ def test_desktop_console_keeps_three_regions_and_active_controls_inside_viewport
     assert result["estop"]["bottom"] <= result["topbar"]["bottom"]
 
 
+def test_wide_but_short_console_keeps_its_columns_and_scrolls_the_page():
+    """D-359 US-008: 1366x600 (wide, height < 40rem) stacked the console into one column because
+    the columns rule and the fixed-frame rule shared one media condition. The frame lets go and
+    the page scrolls; the three columns stay."""
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        page = _page(browser, 1366, 600)
+        result = page.evaluate("""() => {
+          const rect = (selector) => document.querySelector(selector).getBoundingClientRect().toJSON();
+          return {
+            overflow: document.documentElement.scrollWidth - innerWidth,
+            documentHeight: document.documentElement.scrollHeight,
+            bodyOverflow: getComputedStyle(document.body).overflowY,
+            sense: rect('[data-slot=sense]'), observe: rect('[data-slot=observe]'),
+            act: rect('[data-slot=act]'), estop: rect('#shell-estop'),
+          };
+        }""")
+        browser.close()
+
+    assert result["overflow"] <= 0, result
+    assert result["sense"]["right"] <= result["observe"]["x"], result
+    assert result["observe"]["right"] <= result["act"]["x"], result
+    assert result["sense"]["y"] == result["observe"]["y"] == result["act"]["y"], result
+    assert result["documentHeight"] > 600 and result["bodyOverflow"] != "hidden", result
+    estop = result["estop"]
+    assert estop["y"] >= 0 and estop["bottom"] <= 600 and estop["right"] <= 1366, result
+
+
 def test_map_uses_remaining_desktop_observe_height_and_stays_within_mobile_width():
     with sync_playwright() as playwright:
         visible = os.environ.get("ROSY_VISIBLE_BROWSER") == "1"

@@ -988,14 +988,18 @@ body[data-view="operate"] .page-footer { display: none; }
    ======================================================================== */
 
 /* D-359 §6 — 세 단. 3분할 고정 프레임은 wide이면서 높이가 40rem 이상인 창의 약속이다.
-   그 밖(medium·compact, 또는 낮은 wide)은 영역을 세로로 쌓고 흐르며 스크롤한다. */
+   낮은 창은 프레임을 풀고 흐르며 스크롤한다. 열은 폭만 따른다: 낮은 wide(1366×600)는
+   세 열을 지키고, medium·compact만 영역을 세로로 쌓는다(US-008 — 전에는 한 조건이었다). */
 @media (width < 64rem), (height < 40rem) {
   .console { height: auto; overflow: visible; }
-  .regions { grid-template-columns: 1fr; grid-template-rows: none; }
-  .region { grid-column: auto; grid-row: auto; overflow: visible; }
+  .region { overflow: visible; }
   .region-observe { min-height: 60vh; }
-  .region-act { border-top: 1px solid var(--surface-line); }
   body[data-view="operate"] .page-footer { display: flex; }
+}
+@media (width < 64rem) {
+  .regions { grid-template-columns: 1fr; grid-template-rows: none; }
+  .region { grid-column: auto; grid-row: auto; }
+  .region-act { border-top: 1px solid var(--surface-line); }
 }
 
 @media (width < 64rem) {

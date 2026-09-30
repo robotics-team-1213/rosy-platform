@@ -247,7 +247,7 @@ D-280 다섯 원칙은 시각에서 이렇게 묶인다.
 
 **The E-stop First Rule.** 비상 정지는 compact를 포함한 모든 폭에서 첫 화면에 보인다. 상단바 격자에서 늘 오른쪽 위에 두 줄을 차지한다.
 
-**The Tall Enough Rule.** 고정 높이 프레임은 `(width >= 64rem) and (height >= 40rem)`에서만 쓴다. 그 밖은 흐르며 스크롤한다. 높이는 `vh`가 아니라 `dvh`다.
+**The Tall Enough Rule.** 고정 높이 프레임은 `(width >= 64rem) and (height >= 40rem)`에서만 쓴다. 그 밖은 흐르며 스크롤한다. 높이는 `vh`가 아니라 `dvh`다. 열 수는 폭만 따른다: 낮은 wide 창(1366×600)은 프레임만 풀고 열을 지킨다 — 프레임 규칙과 열 규칙을 한 미디어 조건에 묶지 않는다.
 
 ## Elevation & Depth
 

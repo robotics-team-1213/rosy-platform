@@ -1368,6 +1368,33 @@ def test_operate_view_fits_and_does_not_crush(viewport, state):
     assert fit["estopInside"], f"{viewport}: 즉시 정지가 뷰포트 밖이다: {fit}"
 
 
+def test_wide_but_short_operate_view_keeps_three_columns():
+    """D-359 US-008: at 1366x600 (height < 40rem) the frame lets go and the page scrolls, but the
+    three regions stay side by side — the columns follow width only."""
+    pytest.importorskip("playwright.sync_api")
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as playwright:
+        browser, page = _launch_page(playwright, width=1366, height=600)
+        page.goto("http://rosy.test/dashboard", wait_until="domcontentloaded", timeout=5_000)
+        page.wait_for_function("document.getElementById('robot-mode')?.textContent !== undefined")
+        page.wait_for_timeout(700)
+        probe = page.evaluate("""() => {
+          const rect = (s) => document.querySelector(s).getBoundingClientRect().toJSON();
+          const stop = document.getElementById('emergency-stop').getBoundingClientRect();
+          return {overflow: document.documentElement.scrollWidth - innerWidth,
+                  sense: rect('.region-sense'), observe: rect('.region-observe'), act: rect('.region-act'),
+                  estop: stop.top >= 0 && stop.bottom <= innerHeight && stop.right <= innerWidth};
+        }""")
+        browser.close()
+
+    assert probe["overflow"] <= 0, probe
+    assert probe["sense"]["right"] <= probe["observe"]["x"] + 1, probe
+    assert probe["observe"]["right"] <= probe["act"]["x"] + 1, probe
+    assert probe["sense"]["y"] == probe["observe"]["y"] == probe["act"]["y"], probe
+    assert probe["estop"], probe
+
+
 # --- D-203: 계산 척급 폐쇄 — 보이는 계산 크기는 토큰 단계뿐이다 ---------------
 
 TYPE_STEPS = "new Set(['12px', '14px', '16px', '18px', '20px', '32px'])"

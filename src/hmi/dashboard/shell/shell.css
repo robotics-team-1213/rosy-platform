@@ -80,7 +80,27 @@ body:is([data-surface="setup"], [data-surface="device"]) .procedure-panel {
   background: var(--surface-flat);
 }
 
-/* D-359 §6.5 — 고정 높이 운용 프레임은 넓고 충분히 높은 창에서만 쓴다. 그 밖은 흐르며 스크롤한다. */
+/* D-359 §6.5 — 운용 열은 wide(64rem 이상)면 높이와 무관하게 셋이다. 고정 높이 프레임은
+   넓고 충분히 높은 창(40rem 이상)에서만 쓴다. 낮은 wide(1366×600 같은 창)는 열을 지키고
+   프레임만 풀어 페이지가 스크롤한다 — US-008 전에는 두 규칙이 한 조건에 묶여 열까지 접혔다. */
+@media (width >= 64rem) {
+  body[data-surface="console"] .surface-main {
+    grid-template-columns: minmax(15rem, 0.9fr) minmax(0, 1.35fr) minmax(20rem, 1fr);
+    grid-template-areas:
+      "status status status"
+      "banner banner banner"
+      "sense observe act";
+    align-items: start;
+    gap: var(--space-3);
+    padding: var(--space-3);
+  }
+  body[data-surface="console"] #surface-status { grid-area: status; }
+  body[data-surface="console"] .surface-slot[data-slot="banner"] { grid-area: banner; }
+  body[data-surface="console"] .surface-slot[data-slot="sense"] { grid-area: sense; }
+  body[data-surface="console"] .surface-slot[data-slot="observe"] { grid-area: observe; }
+  body[data-surface="console"] .surface-slot[data-slot="act"] { grid-area: act; }
+}
+
 @media (width >= 64rem) and (height >= 40rem) {
   body[data-surface="console"] {
     height: 100dvh;
@@ -95,29 +115,18 @@ body:is([data-surface="setup"], [data-surface="device"]) .procedure-panel {
   body[data-surface="console"] ui-topbar { flex: none; }
   body[data-surface="console"] .surface-main {
     flex: 1;
-    grid-template-columns: minmax(15rem, 0.9fr) minmax(0, 1.35fr) minmax(20rem, 1fr);
     grid-template-rows: auto auto minmax(0, 1fr);
-    grid-template-areas:
-      "status status status"
-      "banner banner banner"
-      "sense observe act";
     align-items: stretch;
-    gap: var(--space-3);
     min-height: 0;
     overflow: hidden;
-    padding: var(--space-3);
   }
-  body[data-surface="console"] #surface-status { grid-area: status; }
-  body[data-surface="console"] .surface-slot[data-slot="banner"] { grid-area: banner; }
   body[data-surface="console"] .surface-slot[data-slot="sense"] {
-    grid-area: sense;
     min-height: 0;
     overflow-y: auto;
     overscroll-behavior: contain;
     scrollbar-gutter: stable;
   }
   body[data-surface="console"] .surface-slot[data-slot="observe"] {
-    grid-area: observe;
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: minmax(0, 1fr);
     align-content: stretch;
@@ -125,7 +134,6 @@ body:is([data-surface="setup"], [data-surface="device"]) .procedure-panel {
     overflow: hidden;
   }
   body[data-surface="console"] .surface-slot[data-slot="act"] {
-    grid-area: act;
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto minmax(0, 1fr);
     align-content: start;
