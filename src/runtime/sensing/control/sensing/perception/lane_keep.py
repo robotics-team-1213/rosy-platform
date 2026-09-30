@@ -101,6 +101,12 @@ MAX_EXTRAPOLATION_M = 0.15
 FIT_STRIDE = 2
 #: A line this far off the robot's heading is a transverse mark.
 TRANSVERSE_MIN_ANGLE_RAD = math.radians(65.0)
+#: A line steeper than this whose extrapolated offset at SIDE_X_M lies beyond
+#: STEEP_MAX_LATERAL_FRACTION of the lane width is a diagonal mark (a junction
+#: mouth, a crosswalk edge) read far outside the lane, not a boundary. Real
+#: 124745Z frames sided 60-64 deg lines at y -0.30..-0.42 m.
+STEEP_MIN_ANGLE_RAD = math.radians(45.0)
+STEEP_MAX_LATERAL_FRACTION = 1.0
 #: Two boundaries of one lane run within this angle of each other.
 PAIR_MAX_ANGLE_RAD = math.radians(30.0)
 #: A lone boundary further than this fraction of the lane width is not ours.
@@ -289,6 +295,11 @@ class LaneKeeper:
             # left +) where the lane is read. Almost under the robot, the last
             # target decides instead.
             lateral = _lateral_at(centre, direction, SIDE_X_M)
+            if (abs(heading) > STEEP_MIN_ANGLE_RAD and self._corner_side is None
+                    and abs(lateral) > STEEP_MAX_LATERAL_FRACTION * 2.0 * half):
+                self.last["candidates"].append(dict(record, y_at_side_x_m=round(lateral, 3),
+                                                    rejected=True, reason="steep_far"))
+                continue
             reference = 0.0
             if abs(lateral) < AMBIGUOUS_LATERAL_M and previous is not None:
                 reference = previous[1]

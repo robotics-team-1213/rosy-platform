@@ -114,6 +114,19 @@ def test_candidates_list_every_line_with_its_reject_reason():
     assert _keep(_render([]))[1]["candidates"] == []
 
 
+def test_steep_line_far_outside_the_lane_is_not_sided():
+    # Real 124745Z: 60-64 deg diagonals sided at y -0.30..-0.42 m (beyond the lane).
+    image = _render([(HALF, 0.0), (-HALF, 0.0)])
+    # A ~60 deg tape segment right of the lane only (x = 0.40 + (y + 0.13) / 1.73).
+    segment = np.isfinite(X) & (np.abs(X - (0.40 + (Y + 0.13) / 1.73)) <= 0.015) & (Y < -0.12) & (Y > -0.3)
+    image[segment] = 195
+    obs, last = _keep(image)
+    assert obs is not None and last["strategy"] == "both" and abs(obs.error) < 0.15
+    assert all(abs(b["y_at_side_x_m"]) < 0.2 for b in last["boundaries"])
+    steep = [c for c in last["candidates"] if c["reason"] == "steep_far"]
+    assert steep and all(c["rejected"] and abs(c["heading_deg"]) > 45 for c in steep)
+
+
 def test_white_wall_is_not_a_boundary():
     obs, last = _keep(_render([(HALF, 0.0), (-HALF, 0.0)], wall_y=-0.16))
     assert obs is not None and last["strategy"] == "both" and abs(obs.error) < 0.15
