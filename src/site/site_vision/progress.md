@@ -2,11 +2,11 @@
 module: site_vision
 logical_modules: []
 owner: SITE
-last_verified: { commit: "c5e87977", date: 2026-09-28 }
+last_verified: { commit: "c8dfa0dd", date: 2026-09-30 }
 gates:
   SOURCE:
     state: GO
-    evidence: "D-318 adds bounded, signed Vision-only OpenCV lens and plane transform for direct preview. Raw latest frame for ArUco/sightings remains unchanged; ROS-free and no cmd_vel. Local overhead suite 86 passed (2026-09-28 Windows)"
+    evidence: "D-318 adds bounded, signed Vision-only OpenCV lens and plane transform for direct preview. Raw latest frame for ArUco/sightings remains unchanged; ROS-free and no cmd_vel. Local suite 86 passed (2026-09-28 Windows). D-374 stage 1 rename overhead -> site_vision: 112 passed at c8dfa0dd (2026-09-30 Windows)"
     cmd: "python -m pytest src/site/site_vision/test -q"
   LOCAL:
     state: GO
