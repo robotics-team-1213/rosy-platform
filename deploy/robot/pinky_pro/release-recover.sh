@@ -6,7 +6,7 @@
 # unit has no Restart= — either would convert a hold into a boot.
 set -euo pipefail
 
-RELEASE_TOOLS="${ROSY_RELEASE_TOOLS:-/opt/rosy/deploy/robot/release}"
+RELEASE_TOOLS="${ROSY_RELEASE_TOOLS:-/opt/rosy/deploy/release}"
 PYTHON="${ROSY_PYTHON:-python3}"
 
 if [[ ! -d "$RELEASE_TOOLS" ]]; then

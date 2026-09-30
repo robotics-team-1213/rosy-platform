@@ -64,7 +64,7 @@ Verified twice on 2026-09-26: releases 013 and 014 on a Pinky Pro running image 
      `activate-release.sh`.
    - **Manual rollback:** `-Rollback`.
 6. **Hand-install the image-only pieces** (bench only; record it). Take them from the
-   release's own copy, `/opt/rosy/current/deploy/robot/pinky_pro/native/`. udev and modprobe files are
+   release's own copy, `/opt/rosy/current/deploy/robot/native/`. udev and modprobe files are
    not in the payload, so copy them from the repo's `deploy/robot/pinky_pro/udev/` and
    `deploy/robot/pinky_pro/modprobe/`.
    - First back up every file you replace, for example into

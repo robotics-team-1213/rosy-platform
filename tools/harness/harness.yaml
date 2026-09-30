@@ -7,7 +7,7 @@ adr_log: docs/reference/ROSY ADR Log.md
 
 # IDs absent from the ADR log on purpose. Remove an entry once the ADR is written.
 adr_gaps:
-  D-375: "reserved by committed branch feat/device-prep at 65ede871 (lane-paint map registration proposal); remove when that ADR lands"
+  D-375: "reserved by branch feat/overhead-map-auto-register (overhead map registration from lane paint, proposal); remove when its ADR lands"
   D-373: "reserved by branch feat/d373-learning-loop-lap2 (learned perception on the Pinky image, snapshot capture, auto shadow delivery); remove when its ADR lands"
   D-341: "reserved by branch docs/d341-overhead-console-pairing (overhead console-approved pairing, also on feat/pilot-teleop); remove once it lands"
   D-29: "unused; the vision accelerator shield design only proposed the number"
@@ -55,15 +55,15 @@ modules:
     tests: [src/site/games/test, test/test_rosy_games_surface.py]
     functional_kind: pytest
     functional: [src/site/games/test]
-  - name: site_vision
-    path: src/site/site_vision
-    tests: [src/site/site_vision/test]
+  - name: rosy_vision
+    path: src/site/vision
+    tests: [src/site/vision/test]
     functional_kind: pytest
-    functional: [src/site/site_vision/test]
+    functional: [src/site/vision/test]
   # D-374: Android JVM tests need a JDK/Gradle, so the host functional surface is the
   # registry/icon/role contract tests; `gradlew testDebugUnitTest` runs in android.yml.
-  - name: ceiling_camera
-    path: src/site/ceiling_camera
+  - name: cam
+    path: src/site/cam
     tests: [test/architecture/test_app_roles.py, src/hmi/web_common/test/test_surface_icons.py]
     functional_kind: host-contract
     functional: [test/architecture/test_app_roles.py, src/hmi/web_common/test/test_surface_icons.py]
