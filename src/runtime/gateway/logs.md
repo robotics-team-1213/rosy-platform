@@ -575,3 +575,10 @@
 - 변경: services.py 가 ModeMachine change_listener 로 전이를 StateManager 에 미러한다(mirror_mode). 그동안 POST /mode 는 set_mode 를 직접 불렀지만 SAF-001 e-stop 경로는 transition 만 불러, 정지·해제 내내 스냅샷 모드(대시보드 칩·/robot/state·부팅 표시 핸드오버)가 이전 모드를 말했다.
 - 증거: test_api.py test_the_snapshot_mode_follows_the_e_stop_cycle (변이 증명: 리스너 제거 시 빨강).
 - gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · fix(test): 대시보드 계약 시험이 D-362 P1 소유자 파일을 읽게
+
+- 변경: 13803932(D-362 P1)가 `styles.css`·`app.js`를 `console-detail.css`·`telemetry.js` 소유 모듈로 나눴지만 게이트웨이 시험 네 개는 옛 파일을 계속 읽어 main CI에서 8건이 붉었다. `test_console_layout` 의 `css()`가 두 css를 캐스케이드 순서(styles.css → console-detail.css, 그 파일 스스로가 밝힌 연결 순서)로 읽고, 뷰 상태 기록(`document.body.dataset.view`)·머리 숨김(`node.hidden = !headline;`)·`from "./triage.js"` import는 새 소유자 `telemetry.js`에서 단언한다. `test_host_cards`·`test_host_hardware`의 장치 카드 규칙(`.host-card[data-available="false"]`, "D-247 장치 카드" 절)도 두 css를 함께 읽는다. 단언 내용은 그대로 — 읽는 파일만 실제 소유자로 옮겼다.
+- 증거: 해당 8건 복구. core 도메인 전체(gateway·events·services·web_common·api_web) 2014 passed, 29 skipped (2026-10-01 Windows). 단 `test_core_node_teardown::test_run_drains_executor_workers_before_returning` 은 이 변경과 무관하게 Windows에서 간헐 실패한다(재실행 통과, CI Linux 통과).
+- gate 변화: 없음.
+- 교훈: 파일을 나누는 리팩터는 그 파일을 텍스트로 읽는 계약 시험의 소유자도 함께 옮겨야 한다 — 분할 커밋이 시험을 안 고치면 CI가 다음 커밋에서 대신 말한다.
