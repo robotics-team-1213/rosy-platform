@@ -671,3 +671,11 @@
 - gate 변화: web_common `enum_text_problems` 린트가 이 파일들을 본다.
 - 결정: D-359 US-009.
 - 교훈: 없음.
+
+## 2026-10-01 · uncommitted · fix(dashboard): D-359 리뷰 P2-5 — 화면 테마 패널은 RosyTheme.choices로 그린다
+
+- 변경: `panels/system/display.js`의 따로 적은 선택지 표를 지우고 `window.RosyTheme?.choices`로 버튼을 그린다.
+- 증거: `src/hmi/web_common/test/test_theme_browser.py -k device_display` 통과, `test_theme_choices.py` 4 passed.
+- gate 변화: web_common `test_theme_choices.py`가 이 파일에 이름 사본이 없는지 본다.
+- 결정: D-359 §2.5.
+- 교훈: 없음.

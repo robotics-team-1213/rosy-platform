@@ -20,7 +20,8 @@
 # 있어야 하고 두 표면이 같은 포트를 쓰면 안 된다 — 새 표면은 빈 포트를 여기서 고른다. 이유 없는 빈 칸은 등록되지 않는다.
 # themes는 그 표면이 따르는 테마다(D-359 §2·§3.3). 첫 값은 dark다. [dark, light] 웹 표면의
 # 모든 HTML은 tokens.css 바로 뒤에 /common/theme.js를 싣고, [dark] 웹 표면의 HTML은
-# <html data-theme-pin="dark">로 고정한다. 웹이 아닌 사본(native·lcd)은 [dark]다(§3.4).
+# <html data-theme-pin="dark">로 고정한다. [dark] 웹 표면은 theme_reason(한 줄)에 왜 테마를
+# 따르지 않는지 적는다. 웹이 아닌 사본(native·lcd)은 [dark]다(§3.4).
 # breakpoints는 D-359 §6.2의 허용 목록이다. 웹 표면의 @media 크기 조건은 범위 문법으로
 # 세 단 — compact (width < 30rem), medium (30rem <= width < 64rem), wide (width >= 64rem) —
 # 과 §6.5 높이 조건 (height >= 40rem)/(height < 40rem)만 쓴다. 그 밖의 값은 여기에
@@ -81,6 +82,7 @@ surfaces:
   - id: game-board
     path: src/site/games/games/web
     themes: [dark]
+    theme_reason: 경기장 녹색이 곧 바탕이다(D-359 §3.3)
     surface: site
     medium: web
     ports:
@@ -99,6 +101,7 @@ surfaces:
   - id: control-diagnostic
     path: src/runtime/sensing/web/diagnostic.html
     themes: [dark]
+    theme_reason: PARKED(D-266) 진단 한 파일 — 해제 회차 전까지 테마 도입 대상이 아니다(D-359 §3.3)
     surface: robot
     medium: web
     ports:
@@ -131,6 +134,9 @@ surfaces:
     icon: src/hmi/web_common/icons/pilot.svg
     path: src/hmi/pilot
     themes: [dark]
+    theme_reason: >
+      운전석 영상 위에 조종을 겹치는 PWA라 바탕이 곧 영상이다 — 영상 대비와 현장 눈부심을 지키려
+      어둡게 고정한다. 밝게는 DEVICE 수용 뒤 사람 관측(G3)으로 다시 판단한다.
     surface: robot
     medium: web
     audience: 현장 운전자 한 사람 (D-323 원격 조종 PWA — CORE 가 /pilot 으로 서빙, 포트는 robot(로봇 대시보드) 과 같은 CORE 포트)
@@ -175,6 +181,7 @@ surfaces:
   - id: lane-live-view
     path: src/sim/gz_sim/scripts/lane_live_view.html
     themes: [dark]
+    theme_reason: 개발 도구(제품 표면 아님, D-359 §3.3) — 바탕이 곧 시뮬 영상이다
     surface: sim
     medium: web
     ports:

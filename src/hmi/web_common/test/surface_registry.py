@@ -167,6 +167,10 @@ def _theme_problems(base: Path, row: dict, label: str, medium) -> list[str]:
     if not isinstance(path, str):
         return found
     pinned = themes == ["dark"]
+    if pinned and not str(row.get("theme_reason") or "").strip():
+        found.append(f"theme: {label}는 [dark] 고정 웹 표면인데 theme_reason이 없다")
+    if not pinned and row.get("theme_reason"):
+        found.append(f"theme: {label}는 테마를 따르는데 theme_reason이 남아 있다")
     ground = _dark_ground(base)
     for page in _pages(base, path):
         here = page.relative_to(base).as_posix()

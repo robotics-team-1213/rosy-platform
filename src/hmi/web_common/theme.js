@@ -7,15 +7,24 @@
 // `prefers-color-scheme`을 따르고 바뀌면 따라간다.
 // `<html data-theme-pin="dark">` 표면은 선호와 무관하게 그 테마로 고정된다.
 //
-// API: window.RosyTheme = { get(), set(pref), resolved() }. 바뀌면 document에
-// `rosy:theme` 이벤트({theme, preference})를 낸다.
+// API: window.RosyTheme = { get(), set(pref), resolved(), choices }. 바뀌면 document에
+// `rosy:theme` 이벤트({theme, preference})를 낸다. choices는 선택지의 단일 출처다
+// ([{value, label}], 얼린 배열) — /device 화면 패널이 이것으로 버튼을 그리고, Fleet의
+// 정적 버튼은 시험(test_theme_choices.py)이 이것과 대조한다.
 // `[data-theme-choice]` 버튼(공용 segment)은 여기서 한 번에 이어진다 — 누르면
 // set, 바뀌면 aria-pressed가 따라간다.
 (function () {
   "use strict";
 
   var KEY = "rosy.theme";
-  var PREFERENCES = ["dark", "light", "system"];
+  // 새 테마 = tokens.css의 팔레트 블록 하나 + 여기 한 줄(system 앞). system은 테마가 아니라
+  // 기기 설정을 따르라는 선호다.
+  var CHOICES = [
+    { value: "dark", label: "어둡게" },
+    { value: "light", label: "밝게" },
+    { value: "system", label: "시스템" },
+  ];
+  var PREFERENCES = CHOICES.map(function (choice) { return choice.value; });
   var FALLBACK = "dark";
   var root = document.documentElement;
   var media = window.matchMedia ? window.matchMedia("(prefers-color-scheme: light)") : null;
@@ -103,6 +112,7 @@
     get: function () { return preference; },
     set: set,
     resolved: function () { return resolve(preference); },
+    choices: Object.freeze(CHOICES.map(function (choice) { return Object.freeze(choice); })),
   };
 
   apply(false);

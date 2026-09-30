@@ -398,3 +398,11 @@
 - gate 변화: 새 시험 `test_a_copied_disabled_line_needs_its_own_entry`, 기존 시험에 자리 수 검사.
 - 결정: D-359 §5.3.
 - 교훈: 없음.
+
+## 2026-10-01 · uncommitted · fix(web_common): D-359 리뷰 P2-5 — 테마 선택지 단일 출처, 고정 표면은 사유를 적는다
+
+- 변경: `theme.js` `CHOICES`([{value, label}])가 선호 검증과 `RosyTheme.choices`(얼린 배열)의 단일 출처다. `surfaces.yaml`의 [dark] 웹 표면 넷(games·diagnostic·pilot·lane_live_view)에 `theme_reason`, `surface_registry.py`가 고정 웹 표면의 사유 누락과 테마 표면의 남은 사유를 막는다. 새 `test_theme_choices.py`: Fleet 정적 버튼 = `CHOICES`(순서·값·이름), `/device` display.js는 `RosyTheme.choices`로만 그린다. `DESIGN.md` 새 테마 절차(팔레트 블록 + `CHOICES` 한 줄, Fleet 마크업은 시험이 알려 줌)와 고정 표면 목록에 Pilot.
+- 증거: `test_surface_registry.py` 14 passed, `test_theme_choices.py` 4 passed, `test_theme_browser.py -k "device_display or fleet_topbar"` 2 passed (2026-10-01 Windows).
+- gate 변화: 새 시험 파일 `test_theme_choices.py`(변이: Fleet 이름 바꿈·theme.js에 테마 추가가 실패), 레지스트리 `theme_reason` 검사(변이: `test_a_theme_drift_is_caught`).
+- 결정: D-359 §2.5·§3.3.
+- 교훈: 없음.

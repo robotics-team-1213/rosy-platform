@@ -186,3 +186,6 @@ def test_a_theme_drift_is_caught(tmp_path):
     assert "themed/styles.css가 color-scheme을 선언한다" in found
     assert "(lcd)는 웹이 아닌 사본이라 [dark]에 고정한다" in found
     assert "(odd) themes가" in found and "(odd) themes의 첫 값(기본)이 dark가 아니다" in found
+    # P2-5 review: a pinned web surface says why it does not follow the theme
+    assert "(pin)는 [dark] 고정 웹 표면인데 theme_reason이 없다" in found
+    assert "(themed)는 [dark] 고정" not in found and "(lcd)는 [dark] 고정 웹 표면" not in found
