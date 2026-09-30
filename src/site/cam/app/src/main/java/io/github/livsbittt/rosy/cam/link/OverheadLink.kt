@@ -4,6 +4,7 @@ import android.util.Log
 import io.github.livsbittt.rosy.cam.settings.PairingUri
 import java.security.cert.X509Certificate
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -106,6 +107,9 @@ class OverheadLink(
 
     private val _status = MutableStateFlow(LinkStatus())
     val status: StateFlow<LinkStatus> = _status.asStateFlow()
+
+    /** One non-fatal pin mismatch per discovered route between successful opens (review M3). */
+    private val pinRetryAvailable = AtomicBoolean(true)
 
     private val _peerLeaf = MutableStateFlow<X509Certificate?>(null)
 
@@ -289,6 +293,7 @@ class OverheadLink(
             val leaf = (response.handshake?.peerCertificates?.firstOrNull() as? X509Certificate)
                 ?: (client.x509TrustManager as? PinnedTrustManager)?.lastTrustedLeaf
             if (response.handshake != null && leaf != null) _peerLeaf.value = leaf
+            pinRetryAvailable.set(true)
             val s = sensor
             webSocket.send(Protocol.hello(pairing.source, appVersion, device, s.width, s.height, s.rotationDeg, lens))
             backoff.reset()
@@ -336,7 +341,11 @@ class OverheadLink(
             }
             // A pin mismatch cannot heal by retrying: the site certificate changed or this is not the site
             // (D-341 10). It can only happen before any HTTP response, so a response rules it out.
-            val fatal = response == null && error is LinkError.Network && error.kind == NetworkFailure.TLS_PIN
+            val pinFailed = response == null && error is LinkError.Network && error.kind == NetworkFailure.TLS_PIN
+            // A pin mismatch on an address that mDNS supplied may be one spoofed advert, not the site: browse
+            // again once, and stop only if the fresh route fails the pin too (review M3).
+            val viaDiscovery = resolver?.route?.value is SiteRoute.Discovered
+            val fatal = pinFailed && !(viaDiscovery && pinRetryAvailable.getAndSet(false))
             // The site may have moved: the next attempt browses again instead of reusing the cached address.
             if (response == null) resolver?.invalidate()
             onLost(gen, error, fatal = fatal)

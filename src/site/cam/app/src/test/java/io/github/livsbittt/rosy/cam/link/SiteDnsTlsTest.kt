@@ -161,6 +161,38 @@ class SiteDnsTlsTest {
     }
 
     @Test
+    fun aPinMismatchOnADiscoveredAddressBrowsesAgainBeforeStopping() {
+        // Review M3: one spoofed advert must not stop the camera for good. The impostor serves a chain from
+        // another CA at the advertised address, every time.
+        val otherCa = HeldCertificate.Builder().commonName("impostor CA").certificateAuthority(0).build()
+        val impostorLeaf = HeldCertificate.Builder().commonName("x").addSubjectAlternativeName(TLS_HOST).signedBy(otherCa).build()
+        val certs = HandshakeCertificates.Builder().heldCertificate(impostorLeaf, otherCa.certificate).build()
+        val server = MockWebServer().also {
+            it.useHttps(certs.sslSocketFactory(), false)
+            it.start(InetAddress.getByName(LOOPBACK), 0)
+            servers += it
+        }
+        var browses = 0
+        val spoofed = SiteBrowser { _, match ->
+            browses++
+            listOf(SiteSighting("Rosy site", TLS_HOST, 443, listOf(InetAddress.getByName(LOOPBACK)))).filter(match)
+        }
+        val site = link(server.port)
+        val link = OverheadLink(site.toPairing(), "0.1.0", "jvm-test", SiteResolver(site, spoofed))
+        try {
+            link.start()
+            val first = runBlocking { withTimeout(10_000) { link.status.first { it.error != null } } }
+            assertEquals(NetworkFailure.TLS_PIN, (first.error as LinkError.Network).kind)
+            assertFalse("first pin mismatch via discovery must retry", first.stopped)
+            val last = runBlocking { withTimeout(10_000) { link.status.first { it.stopped } } }
+            assertEquals(NetworkFailure.TLS_PIN, (last.error as LinkError.Network).kind)
+            assertEquals("the retry must come from a fresh browse", 2, browses)
+        } finally {
+            link.stop()
+        }
+    }
+
+    @Test
     fun notDiscoveredFailsBeforeAnySocket() {
         val server = serve(TLS_HOST)
         try {
