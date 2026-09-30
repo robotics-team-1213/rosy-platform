@@ -561,3 +561,10 @@
 - gate 변화: SOURCE 진행(녹화 재생 벤치에서 keep 이 line·between 보다 목표-선 위 비율이 낮다). 실물 주행·가제보 확인 전이다.
 - 결정: D-353
 - 교훈: 공칭 지면에서는 좌·우 경계가 ±20° 까지 벌어져 보여(주행 중 피치) 원점까지의 수직 거리는 믿을 수 없고, 보이는 범위 안의 한 거리에서 잰 횡오프셋이 안정적이다.
+
+## 2026-09-30 · uncommitted · feat(control): 'keep' 폐루프 가제보 주행 — L 모서리 회전(선택)과 한쪽 flank 시험(D-353 §5)
+- 변경: `perception/lane_keep.py` — (1) 모서리 회전 `corner_turning`(노드 `lane_corner_turning`, 실물 기본 false, real-profile sim launch 는 true): 앞을 가로지르는 선이 한쪽은 바깥 차로선에서 끝나고 다른 쪽으로 차로 밖까지 뻗으면 다음 차로의 바깥 경계로 보고, 반폭 안쪽 중심선을 열린 쪽으로 앞보기 0.12 m 에서 추종(그보다 멀면 직진). 방향은 프레임 수로 잠그고(자세 없음), 돌기 시작하면 직진으로 돌아가지 않으며, 잠금 중에는 열린 쪽으로 35° 넘게 기운 선도 모서리 선이고 이런 선은 잠금을 소모만 한다. (2) flank 시험을 한쪽 기준으로 — 양쪽 flank 가 다 밝거나(각 0.225×core) 합이 0.6×core 를 넘을 때만 blob(횡단보도 막대 옆 차로선이 살아남는다). `tools/lane_replay.py` 에 `keep_corner` 검출기와 `--keep-bright`. 하네스 `docs/validation/map-v2-fleet-keep-2026-09-30/`(keep_run.py, make_video.py, run_sim.sh, result.md).
+- 증거: real-profile sim(ROS_DOMAIN_ID 53, CORE 8093, sim 전용 장애물 정지 0.10/0.14 m) 폐루프 — 서쪽 직선은 모든 run 에서 횡오차 최대 3.4 mm, A8 1.531 m(좌하 L 모서리·하단 직선·셰브런 굽이 통과, 횡오차 평균 25.3/최대 84.5 mm, 모서리 안쪽 자름), 회전교차로 앞에서 LOST. 녹화 벤치(keep 기본) pilot on_line/on_paint/none 0.102/0.015/0.332 → 0.083/0.015/0.332, teleop 0.042/0.071/0.094 → 0.043/0.070/0.080(on_line 한 프레임 악화, 눈부심 곡선 f_00121). `test_lane_keep.py` 18 passed (2026-09-30 Windows). 영상·궤적 `X:\DevTemp\rosy-pilot-evidence\2026-09-30-sim-keep\`. DEVICE: NOT RUN.
+- gate 변화: ROS-SIM 진행 — keep 직선 차로 유지 통과, L 모서리·60° 굽이 통과(안쪽 자름), 회전교차로·분기 실패(fail-closed). 한 바퀴 미달.
+- 결정: D-353. 모서리 회전은 실물에서 끈 채로 둔다(벤치 on_line 지표가 모서리 프레임에서 나빠지고 실물 검증 전).
+- 교훈: 모서리 로직은 2 fps 표본으로는 재현되지 않았다 — 매 카메라 프레임(8 fps)을 저장해 오프라인으로 같은 순서로 재생하자 잠긴 방향 뒤집힘이 그대로 재현됐다. L 모서리에서 둘레 벽이 base_link 앞 ~0.2 m 라 장치 기본 장애물 정지(0.20 m)에 걸린다.
