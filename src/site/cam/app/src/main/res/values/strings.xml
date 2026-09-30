@@ -125,6 +125,7 @@
     <string name="pair_cancel">취소</string>
     <string name="pair_invalid">페어링 링크가 올바르지 않습니다: %1$s</string>
     <string name="settings_mdns_intro">같은 Wi-Fi에서 천장 카메라 수신기와 로봇 CORE를 검색합니다. 발견 정보에는 인증 토큰이 포함되지 않습니다.</string>
+    <string name="settings_mdns_paused">카메라가 켜져 있는 동안에는 수신기를 검색하지 않습니다. 송출 중인 연결이 자동 찾기를 쓰고 있습니다.</string>
     <string name="settings_mdns_scan">수신기 자동 찾기</string>
     <string name="settings_mdns_rescan">다시 검색</string>
     <string name="settings_mdns_scanning">같은 Wi-Fi의 수신기를 찾고 있습니다. 최대 18초 걸릴 수 있습니다.</string>

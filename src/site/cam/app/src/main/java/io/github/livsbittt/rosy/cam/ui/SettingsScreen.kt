@@ -82,7 +82,7 @@ fun SettingsScreen(
     var wifiConnected by remember { mutableStateOf(false) }
     var scanGeneration by remember { mutableStateOf(0) }
     val context = LocalContext.current
-    val discovery = remember(context, scanGeneration) {
+    val discovery = remember(context, scanGeneration, locked) {
         OverheadServerDiscovery(context) { overhead, robots, active, onWifi ->
             overheadServices = overhead
             robotServices = robots
@@ -90,7 +90,9 @@ fun SettingsScreen(
             wifiConnected = onWifi
         }
     }
-    LaunchedEffect(discovery) { discovery.start() }
+    // No scan while the camera runs: the stream's own re-discovery needs the one NSD resolve slot on
+    // Android < 14, and settings are read-only then anyway (review m8).
+    LaunchedEffect(discovery) { if (!locked) discovery.start() }
     var backCameras by remember { mutableStateOf<List<LensCandidate>?>(null) }
     LaunchedEffect(Unit) {
         backCameras = try {
@@ -118,6 +120,7 @@ fun SettingsScreen(
         LensSection(lens, backCameras, running = locked, onLens = onLens)
         Text(stringResource(R.string.settings_mdns_intro), style = MaterialTheme.typography.bodyMedium)
         OutlinedButton(
+            enabled = !locked,
             onClick = {
                 discovery.stop()
                 overheadServices = emptyList()
@@ -136,7 +139,9 @@ fun SettingsScreen(
             )
         }
         if (scanning) Text(stringResource(R.string.settings_mdns_scanning))
-        if (!wifiConnected) {
+        if (locked) {
+            Text(stringResource(R.string.settings_mdns_paused), style = MaterialTheme.typography.bodySmall)
+        } else if (!wifiConnected) {
             Text(stringResource(R.string.settings_mdns_wifi_required), color = RosyColors.StatusWarn)
         } else {
             Text(stringResource(R.string.settings_mdns_overhead_heading), style = MaterialTheme.typography.titleSmall)

@@ -11,6 +11,8 @@ import io.github.livsbittt.rosy.cam.link.SiteSighting
 import java.net.Inet4Address
 import java.net.InetAddress
 import java.util.concurrent.Executors
+import java.util.concurrent.RejectedExecutionException
+import java.util.concurrent.TimeUnit
 
 /**
  * [SiteBrowser] over Android NSD for the site link's re-discovery (D-391 1, D-341 13). Each call is one short
@@ -53,9 +55,10 @@ class NsdSiteBrowser(context: Context) : SiteBrowser {
     /** One browse: discovery listener, resolves, and the matches by service name. */
     private inner class Session(private val match: (SiteSighting) -> Boolean) {
         private val guard = Any()
-        private val executor = Executors.newSingleThreadExecutor()
+        private val executor = Executors.newSingleThreadScheduledExecutor()
         private val byService = linkedMapOf<String, SiteSighting>()
         private val pending = ArrayDeque<NsdServiceInfo>()
+        private val retried = mutableSetOf<String>()
         private val callbacks = mutableListOf<Any>()
         private var resolving = false
         private var stopped = false
@@ -146,7 +149,23 @@ class NsdSiteBrowser(context: Context) : SiteBrowser {
                 pending.removeFirstOrNull()?.also { resolving = true } ?: return
             }
             val listener = object : NsdManager.ResolveListener {
-                override fun onResolveFailed(info: NsdServiceInfo, errorCode: Int) = done()
+                override fun onResolveFailed(info: NsdServiceInfo, errorCode: Int) {
+                    // Another resolve in this app (the settings scan) held the one slot: retry once shortly,
+                    // still inside the browse window (review m8).
+                    val retry = errorCode == NsdManager.FAILURE_ALREADY_ACTIVE && synchronized(guard) { retried.add(next.serviceName) }
+                    if (!retry) return done()
+                    try {
+                        executor.schedule({
+                            synchronized(guard) {
+                                resolving = false
+                                if (!stopped) pending.addFirst(next)
+                            }
+                            resolveNext()
+                        }, RETRY_MS, TimeUnit.MILLISECONDS)
+                    } catch (e: RejectedExecutionException) {
+                        done() // the browse already ended
+                    }
+                }
                 override fun onServiceResolved(info: NsdServiceInfo) {
                     record(info, listOfNotNull(info.host))
                     done()
@@ -165,6 +184,9 @@ class NsdSiteBrowser(context: Context) : SiteBrowser {
     private companion object {
         const val TAG = "NsdSiteBrowser"
         const val POLL_MS = 50L
+
+        /** Delay before the one retry of a resolve refused with FAILURE_ALREADY_ACTIVE. */
+        const val RETRY_MS = 200L
 
         /** After the first match, how long to keep listening for a second address of the same name (conflict). */
         const val SETTLE_MS = 400L
