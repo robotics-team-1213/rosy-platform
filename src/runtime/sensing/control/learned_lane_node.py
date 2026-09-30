@@ -20,11 +20,8 @@ from std_msgs.msg import String
 from . import executor_choice
 from .sensing.perception.image_frame import image_msg_to_frame
 from .sensing.perception.learned.runner import ModelSlot
-from .sensing.perception.learned.shadow import TOPIC, shadow_payload
+from .sensing.perception.learned.shadow import TOPIC, RuleRing, shadow_payload
 from .sensing.perception.learned.status import STATUS_TOPIC, LearnedStatus
-
-RULE_MAX_AGE_S = 0.5  # older rule evidence is not compared
-
 
 def _image_to_bgr(msg: Image) -> np.ndarray:
     frame = image_msg_to_frame(msg)
@@ -39,12 +36,13 @@ class LearnedLaneNode(Node):
         pointer = self.declare_parameter('pointer', '/var/lib/rosy/models/shadow').value
         self._slot = ModelSlot(pointer)
         self._busy = False  # only matters under a MultiThreadedExecutor
-        self._rule_error = None
-        self._rule_stamp = None
+        # Rule answers keyed by image stamp: compared per frame, not newest-wins.
+        self._rules = RuleRing()
         self._logged_error = None
         self._logged_revision = None
         self._pub = self.create_publisher(String, TOPIC, 10)
-        self._status = LearnedStatus()
+        fps = float(self.declare_parameter('camera_fps', 8.0).value)  # camera.yaml fps
+        self._status = LearnedStatus(period_s=1.0 / max(fps, 0.1))
         self._status_pub = self.create_publisher(String, STATUS_TOPIC, 1)
         self.create_timer(1.0, self._publish_status)
         # camera_detect_node publishes best effort (sensor data); a reliable
@@ -62,10 +60,9 @@ class LearnedLaneNode(Node):
         if not isinstance(doc, dict):
             return
         if doc.get('source') == 'CAMERA_LINE':
-            self._rule_error = doc.get('error') if doc.get('visible') else None
             stamp = doc.get('stamp')
-            ok = isinstance(stamp, (int, float)) and not isinstance(stamp, bool)
-            self._rule_stamp = float(stamp) if ok else None
+            if isinstance(stamp, (int, float)) and not isinstance(stamp, bool):
+                self._rules.add(float(stamp), doc.get('visible') is True, doc.get('error'))
 
     def _publish_status(self) -> None:
         try:
@@ -80,7 +77,7 @@ class LearnedLaneNode(Node):
         self._status_pub.publish(String(data=json.dumps(payload, sort_keys=True)))
 
     def _on_camera(self, msg: Image) -> None:
-        self._status.frame_in()
+        self._status.frame_in(msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9)
         if self._busy:
             self._status.frame_skipped()  # still inferring the previous frame
             return
@@ -106,11 +103,9 @@ class LearnedLaneNode(Node):
             result = model.infer(bgr)
             self._status.frame_inferred(result.latency_ms)
             stamp = msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
-            rule_error = self._rule_error
-            if (self._rule_stamp is None
-                    or abs(stamp - self._rule_stamp) > RULE_MAX_AGE_S):
-                rule_error = None
-            payload = shadow_payload(result, stamp=stamp, rule_error=rule_error)
+            rule_visible, rule_error = self._rules.match(stamp)
+            payload = shadow_payload(result, stamp=stamp, rule_error=rule_error,
+                                     rule_visible=rule_visible)
             self._pub.publish(String(data=json.dumps(payload, sort_keys=True)))
         except Exception as exc:
             self.get_logger().warn(f'shadow inference failed: {exc}',

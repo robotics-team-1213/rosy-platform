@@ -6,7 +6,8 @@ based line error has lasted long enough to be worth a 60 s snapshot.
 
   error_delta          |error_delta| >= threshold for N consecutive frames
   visibility_mismatch  only one side sees the lane for N consecutive frames
-                       (learned visible+error vs rule_error non-null)
+                       (learned visible+error vs an explicit rule_visible bool;
+                       rule_visible null = rule answer unknown, never a mismatch)
   operator             an explicit capture/request; bypasses the cooldown
 
 A frame whose delta is missing (stale or absent rule evidence) neither extends
@@ -74,7 +75,7 @@ class CaptureTrigger:
         error = _number(payload.get("error"))
         rule_error = _number(payload.get("rule_error"))
         learned_visible = payload.get("visible") is True and error is not None
-        rule_visible = rule_error is not None
+        rule_visible = payload.get("rule_visible")
 
         delta = _number(payload.get("error_delta"))
         if delta is not None:
@@ -82,7 +83,8 @@ class CaptureTrigger:
                 self._deltas.append(delta)
             else:
                 self._deltas = []
-        self._mismatch = self._mismatch + 1 if learned_visible != rule_visible else 0
+        if isinstance(rule_visible, bool):  # unknown neither extends nor breaks the streak
+            self._mismatch = self._mismatch + 1 if learned_visible != rule_visible else 0
 
         if self._cooling(now):
             return None

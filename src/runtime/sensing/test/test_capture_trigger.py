@@ -12,12 +12,18 @@ from control.capture_trigger import (
 from control.sensing.perception.learned.shadow import SHADOW_SCHEMA
 
 
-def shadow(delta=None, *, error=0.1, rule_error=0.1, visible=True, stamp=1.0):
+_DERIVE = object()
+
+
+def shadow(delta=None, *, error=0.1, rule_error=0.1, visible=True, stamp=1.0,
+           rule_visible=_DERIVE):
     if delta is not None and error is not None and rule_error is None:
         rule_error = error - delta
+    if rule_visible is _DERIVE:  # the rule answered: it saw a lane iff it gave an error
+        rule_visible = rule_error is not None
     return {"schema": SHADOW_SCHEMA, "stamp": stamp, "model_revision": "rev",
             "visible": visible, "error": error, "rule_error": rule_error,
-            "error_delta": delta, "confidence": 0.9}
+            "rule_visible": rule_visible, "error_delta": delta, "confidence": 0.9}
 
 
 def feed(trig, payloads, t0=100.0, dt=0.125):
@@ -190,3 +196,25 @@ def test_capture_trigger_node_is_evidence_only():
     assert "write_snapshot_request" in src  # the reason reaches session.json
     from control.recording import SHADOW_TOPIC
     assert f"create_subscription(String, '{SHADOW_TOPIC}', self._on_shadow, 10)" in src
+
+
+def test_unknown_rule_evidence_never_counts_as_mismatch():
+    """Stale/missing rule evidence (rule_visible null) is not "rule saw no lane"."""
+    trig = CaptureTrigger()
+    unknown = shadow(None, error=0.2, rule_error=None, rule_visible=None)
+    assert feed(trig, [unknown] * 6) == [None] * 6
+
+
+def test_unknown_rule_evidence_neither_extends_nor_breaks_a_mismatch_streak():
+    trig = CaptureTrigger()
+    mis = shadow(None, error=0.2, rule_error=None)
+    unknown = shadow(None, error=0.2, rule_error=None, rule_visible=None)
+    got = feed(trig, [mis, unknown, mis, unknown, mis])
+    assert got[:4] == [None] * 4 and got[4].reason == "visibility_mismatch"
+
+
+def test_payload_without_rule_visible_field_is_unknown():
+    trig = CaptureTrigger()
+    p = shadow(None, error=0.2, rule_error=None)
+    del p["rule_visible"]
+    assert feed(trig, [p] * 5) == [None] * 5
