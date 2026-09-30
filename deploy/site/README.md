@@ -550,73 +550,83 @@ The state file records every commit, so a commit is processed once:
 - **Robots.** A passed commit stays pending for each robot until its push
   succeeds. A robot that is off or unreachable does not block the others and
   is retried on later runs, without re-running intake, up to `max_attempts`.
-  The newest model wins: once a newer commit is pending or delivered for a
-  robot, an older pending one is marked `superseded` and never pushed.
+  A robot added to the config later gets the newest passed commit. The newest
+  model wins: once a newer commit is pending or delivered for a robot, an
+  older pending one is marked `superseded` and never pushed.
+- **Operators come first.** Before each push the watcher reads the robot's
+  real shadow pointer and `history.jsonl`. A model already there (an operator
+  pushed it) is recorded without a push. If the latest pointer action on the
+  robot is an operator's rollback away from this revision, the watcher holds
+  it: no push, no attempt used, until an operator pushes something else or
+  runs `rosy_ml release-hold <robot>`. Every push and rollback, the watcher's
+  included, runs under the robot's models lock and is recorded in
+  `history.jsonl`; the watcher's entries say `site:<hostname>`.
 
 The watcher needs a reviewed source checkout (it imports the manifest contract
 and runner from `src/runtime/sensing`) and a Python venv with `onnxruntime`,
 `opencv-python-headless`, `numpy`, `PyYAML`, and `huggingface_hub`. It is not
 part of the signed site candidate (follow-up: add the units and a pinned
-watcher bundle to `build_candidate.py`). Install it on the Ubuntu site host:
+watcher bundle to `build_candidate.py`). Prepare both, then run the install
+script from that checkout:
 
 ```sh
-sudo useradd --system --no-create-home --shell /usr/sbin/nologin rosy-model-watch
 sudo install -d -o root -g root -m 0755 /opt/rosy/model-watch
 sudo git clone --no-checkout <reviewed-remote> /opt/rosy/model-watch/src
 sudo git -C /opt/rosy/model-watch/src checkout --detach <reviewed-commit>
 sudo python3 -m venv /opt/rosy/model-watch/venv
 sudo /opt/rosy/model-watch/venv/bin/pip install onnxruntime opencv-python-headless numpy PyYAML huggingface_hub
+sudo /opt/rosy/model-watch/src/deploy/site/install-model-watch.sh --dry-run   # what it would do
+sudo /opt/rosy/model-watch/src/deploy/site/install-model-watch.sh
 ```
 
-Put a read-only HF token in `/etc/rosy/site/secrets/hf_token`, readable only
-by root and the service group (surrounding whitespace is ignored). The unit
-passes only its path (`HF_TOKEN_FILE`); the token never appears in a command
-line, the unit, the config, or the checkout. A public model repository needs
-no token file.
+`install-model-watch.sh` is idempotent and never overwrites a config, key,
+`known_hosts` or token file. It creates the `rosy-model-watch` system user,
+`/etc/rosy/model-watch/` with the site's own SSH key (`ssh-keygen`, owned by
+the service user, 0600) and an empty pinned `known_hosts`,
+`/etc/rosy/model-watch.yaml` from the example, and an empty token file
+placeholder; installs the unit and timer; enables the timer only when the
+config has no `<...>` placeholders left; and then runs
+`rosy_ml doctor --watch-config /etc/rosy/model-watch.yaml` as the service user.
+It prints the remaining steps:
+
+- **Site key.** The site host uses its own SSH key, not a person's;
+  `ssh.identity` is required and has no default. Add the printed
+  `site-ed25519.pub` line to `rosy`'s `authorized_keys` on each robot, so the
+  site can be revoked without touching anyone else's access.
+- **Host keys.** Record each robot's host key in
+  `/etc/rosy/model-watch/known_hosts` from a trusted network
+  (`StrictHostKeyChecking=yes`).
+- **Config.** `sudoedit /etc/rosy/model-watch.yaml`: robots, repo,
+  `replay_root`, optional `since:`. The config names robot addresses and so
+  stays out of the checkout.
+- **Token.** For a private repo, paste a read-only HF token into
+  `/etc/rosy/site/secrets/hf_token` (root:rosy-model-watch 0640) with
+  `sudoedit`. The unit passes only its path (`HF_TOKEN_FILE`); the token never
+  appears in a command line, the unit, the config, or the checkout. An empty
+  or missing file means no token, which is what a public repo needs.
+- **Replay clips.** Intake replays `data/teleop/learning/*.mp4` under
+  `replay_root`. Without clips intake stops with a setup error (retried, not
+  recorded as a model failure); doctor checks the count.
+
+Re-run the script after these steps; then check a run by hand:
 
 ```sh
-sudo install -o root -g rosy-model-watch -m 0640 /dev/null /etc/rosy/site/secrets/hf_token
-sudoedit /etc/rosy/site/secrets/hf_token   # paste the token; keep it out of shell history
-```
-
-The site host uses its own SSH key, not a person's. `ssh.identity` is
-required in the config and has no default. Create a dedicated key for the
-service user and add its public half to `rosy`'s `authorized_keys` on each
-robot (then it can be revoked per site without touching operator access).
-Robots are reached with a pinned `known_hosts` (`StrictHostKeyChecking=yes`):
-record each robot's host key once from a trusted channel before enabling the
-timer. The config names robot addresses and so stays out of the checkout:
-
-```sh
-sudo install -d -o root -g rosy-model-watch -m 0750 /etc/rosy/model-watch
-sudo ssh-keygen -t ed25519 -N '' -C rosy-model-watch@<site-host> -f /etc/rosy/model-watch/site-ed25519
-sudo chown rosy-model-watch:rosy-model-watch /etc/rosy/model-watch/site-ed25519
-sudo chmod 0600 /etc/rosy/model-watch/site-ed25519
-sudo cat /etc/rosy/model-watch/site-ed25519.pub
-# on each robot, as an operator: append that line to ~rosy/.ssh/authorized_keys
-sudo install -o root -g rosy-model-watch -m 0644 <pinned-known-hosts> /etc/rosy/model-watch/known_hosts
-sudo install -o root -g rosy-model-watch -m 0640 deploy/site/model-watch.yaml.example /etc/rosy/model-watch.yaml
-sudoedit /etc/rosy/model-watch.yaml
-```
-
-Intake replays `data/teleop/learning/*.mp4` under `replay_root`; without those
-clips every model fails with `no replay frames`. Copy reviewed clips there and
-make them readable by `rosy-model-watch`. Then install and start the units:
-
-```sh
-sudo cp deploy/site/rosy-model-watch.service deploy/site/rosy-model-watch.timer /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl start rosy-model-watch.service   # one run now; check the journal
+sudo systemctl start rosy-model-watch.service
 journalctl -u rosy-model-watch.service -n 50
-sudo systemctl enable --now rosy-model-watch.timer
 ```
+
+`TimeoutStartSec=6h` bounds one run. Worst case is roughly
+`max_new_per_run` intakes (a few minutes each on the site CPU) plus, per robot,
+one pointer read (60 s) and three push steps of `push_timeout_s` (600 s):
+6 h covers about 10 robots at the defaults. Raise it for a larger site or
+lower `push_timeout_s`.
 
 Exit codes in the journal: `0` finished with nothing waiting on a retry (a
-failed intake is a recorded outcome), `1` an intake infrastructure error or a
-robot push failed and will be retried, `2` config or state file error, `3` the
-HF listing failed and nothing was recorded. The state lives in
-`/var/lib/rosy-model-watch/state.json`; deleting a commit's entry makes the
-next run process it again.
+failed intake or a held robot is a recorded outcome), `1` an intake
+infrastructure error or a robot push failed and will be retried, `2` config or
+state file error, `3` the HF listing failed and nothing was recorded. The
+state lives in `/var/lib/rosy-model-watch/state.json`; deleting a commit's
+entry makes the next run process it again.
 
 ## Current acceptance boundary
 

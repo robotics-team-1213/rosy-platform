@@ -47,6 +47,8 @@ def test_service_is_an_unprivileged_hardened_oneshot():
                        ("RestrictNamespaces", "yes"), ("SystemCallFilter", "@system-service")):
         assert unit[key] == [value], key
     assert "ReadWritePaths" not in unit  # StateDirectory is the only writable path
+    # one run may push to many robots: see the README's worst-case formula
+    assert unit["TimeoutStartSec"] == ["6h"]
 
 
 def test_timer_runs_the_service_every_10_minutes():
@@ -71,7 +73,8 @@ def test_readme_documents_the_install_paths():
     readme = (SITE / "README.md").read_text(encoding="utf-8")
     for needle in ("rosy-model-watch.timer", CONFIG, TOKEN, "rosy-model-watch",
                    "authorized_keys", "ssh-keygen", "since:", "max_attempts",
-                   "not part of the signed site candidate"):
+                   "not part of the signed site candidate", "install-model-watch.sh",
+                   "release-hold", "TimeoutStartSec=6h", "An empty or missing file means no token"):
         assert needle in " ".join(readme.split()), needle  # prose is line-wrapped
     section = readme.split("## Automatic shadow delivery")[1].split("\n## ")[0]
     assert "operator key" not in section  # the site host has its own key
