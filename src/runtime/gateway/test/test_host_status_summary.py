@@ -37,13 +37,14 @@ def _config(tmp_path: Path, mode: str = "core") -> dict:
 
 
 class FakeState:
-    def __init__(self, percent=None, voltage=None, evidence="fresh", mode=None):
+    def __init__(self, percent=None, voltage=None, evidence="fresh", mode=None, nav=None):
         self.percent, self.voltage, self.evidence, self.mode = percent, voltage, evidence, mode
+        self.navigation = nav
 
     def snapshot(self):
         evidence = {} if self.evidence is None else {"battery": SimpleNamespace(evidence=self.evidence)}
         return SimpleNamespace(battery=SimpleNamespace(percent=self.percent, voltage=self.voltage),
-                               evidence=evidence, mode=self.mode)
+                               evidence=evidence, mode=self.mode, navigation=self.navigation)
 
 
 class FakeProbe:
@@ -311,29 +312,31 @@ def test_the_boot_display_and_the_summary_say_the_same_state(tmp_path, case):
 def test_the_status_inputs_carry_only_the_threshold_the_states_and_the_mode(tmp_path):
     config = _m1_config(tmp_path)
     _hardware(tmp_path, [_device("camera", "no_response", label="카메라")])
-    svc = SimpleNamespace(config=config, state=FakeState(80.0, 8.0, mode="NAVIGATION"),
+    svc = SimpleNamespace(config=config, state=FakeState(80.0, 8.0, mode="NAVIGATION", nav="BLOCKED"),
                           safety=SimpleNamespace(battery_policy=SimpleNamespace(warning_percent=25.0)))
 
     host_api.write_status_inputs(svc)
     written = json.loads((tmp_path / "run/rosy/status-inputs.json").read_text(encoding="utf-8"))
 
-    assert set(written) == {"schema", "written_at", "battery_warning_percent", "devices", "robot_mode"}
+    assert set(written) == {"schema", "written_at", "battery_warning_percent", "devices",
+                            "robot_mode", "nav_state"}
     assert written["battery_warning_percent"] == 25.0
     assert written["devices"] == [{"id": "camera", "state": "no_response", "product": True}]
     assert written["robot_mode"] == "NAVIGATION"
+    assert written["nav_state"] == "BLOCKED"
 
 
-@pytest.mark.parametrize("mode", [None, "DRIVE", 3, True])
-def test_an_unknown_or_missing_mode_is_written_as_absent(tmp_path, mode):
-    # D-380: the mode is additive — a value outside RobotMode is absent, never guessed.
+@pytest.mark.parametrize("mode,nav", [(None, None), ("DRIVE", "LOST"), (3, 4), (True, False)])
+def test_an_unknown_or_missing_mode_is_written_as_absent(tmp_path, mode, nav):
+    # D-380/D-381: both are additive — a value outside the enums is absent, never guessed.
     config = _m1_config(tmp_path)
-    svc = SimpleNamespace(config=config, state=FakeState(80.0, 8.0, mode=mode),
+    svc = SimpleNamespace(config=config, state=FakeState(80.0, 8.0, mode=mode, nav=nav),
                           safety=SimpleNamespace(battery_policy=SimpleNamespace(warning_percent=20.0)))
 
     host_api.write_status_inputs(svc)
     written = json.loads((tmp_path / "run/rosy/status-inputs.json").read_text(encoding="utf-8"))
 
-    assert written["robot_mode"] is None
+    assert written["robot_mode"] is None and written["nav_state"] is None
 
 
 def test_a_core_without_a_state_manager_writes_no_mode(tmp_path):
@@ -388,22 +391,24 @@ def _hand_over(tmp_path: Path, **extra) -> dict:
 
 def test_the_hand_over_carries_the_robot_mode_to_the_record(tmp_path):
     status = _native("rosy_boot_status_m1d", "rosy-boot-status.py")
-    _hand_over(tmp_path, robot_mode="NAVIGATION")
+    _hand_over(tmp_path, robot_mode="NAVIGATION", nav_state="BLOCKED")
 
-    assert status._core_inputs(tmp_path, datetime.now(timezone.utc))["robot_mode"] == "NAVIGATION"
+    inputs = status._core_inputs(tmp_path, datetime.now(timezone.utc))
+    assert inputs["robot_mode"] == "NAVIGATION"
+    assert inputs["nav_state"] == "BLOCKED"
 
 
 @pytest.mark.parametrize("mode", [None, "DRIVE", "manual", 7, True])
 def test_an_unknown_mode_is_copied_as_absent_but_keeps_the_rest(tmp_path, mode):
     # D-380: the mode is additive — unlike a bad warning or device row it drops only
     # itself, because a wrong-but-plausible mode is undetectable anyway and the
-    # warning and devices are independently useful.
+    # warning and devices are independently useful. D-381: the nav state too.
     status = _native("rosy_boot_status_m1e", "rosy-boot-status.py")
-    _hand_over(tmp_path, robot_mode=mode)
+    _hand_over(tmp_path, robot_mode=mode, nav_state="LOST")
 
     inputs = status._core_inputs(tmp_path, datetime.now(timezone.utc))
 
-    assert inputs["robot_mode"] is None
+    assert inputs["robot_mode"] is None and inputs["nav_state"] is None
     assert inputs["battery_warning_percent"] == 30.0
     assert inputs["devices"] == [{"id": "camera", "state": "ok", "product": True}]
 
@@ -413,4 +418,4 @@ def test_without_a_hand_over_the_record_carries_no_mode(tmp_path):
     # No run/rosy at all: CORE never wrote a hand-over, so the record has no mode.
     facts = status.gather(tmp_path, lambda command: "active\n" if command[:2] == ["systemctl", "show"] else "")
 
-    assert facts["robot_mode"] is None
+    assert facts["robot_mode"] is None and facts["nav_state"] is None

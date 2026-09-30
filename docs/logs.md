@@ -3929,3 +3929,9 @@
 - Change: ActionStore now moves every in-flight phase to UNKNOWN in the same transaction that holds its parent Action. The existing goal UUID remains attached for later matching terminal readback, and no next phase can begin.
 - Evidence: The ActionStore suite passed (22 passed), including an accepted first phase followed by HOLD, retained goal identity, UNKNOWN phase state, and rejected continuation. Changed files passed flake8 with max line length 120.
 - Gate: SOURCE stop-state persistence only. This does not prove driver cancellation, standstill, or physical E-stop behavior; per-phase ROS submit/cancel wiring remains open.
+
+## 2026-10-01 · uncommitted · docs(adr): D-381 막힌 내비게이션·비상정지 진입음 결정
+
+- 변경: ADR D-381(파일+로그 행) 추가, D-380 설계 문서의 뒤따를 일 두 항목을 구현됨으로 표시.
+- 증거: rosy_harness lint 오류 0.
+- gate 변화: 없음.
