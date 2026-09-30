@@ -649,6 +649,92 @@ def test_cli_refuses_a_tampered_release_and_writes_nothing(device, tmp_path):
     assert _tree(device) == before
 
 
+# --- robots in the field verify with their image's OLD native_release.py -------------
+
+GIT = shutil.which("git")
+# Images on robots today, with the source commit each image was built from.
+OLD_VERIFIERS = {
+    "2026.09.27-010": ("8b67c909", "deploy/robot/native/native_release.py", "deploy/release/signing.py"),
+    "2026.09.30-009": ("5c0ce600", "deploy/robot/pinky_pro/native/native_release.py",
+                       "deploy/robot/pinky_pro/release/signing.py"),
+}
+
+
+def _python_native(destination: Path) -> None:
+    """install-native-runtime.sh in pure Python, so this runs without bash."""
+    shutil.copytree(NATIVE, destination, ignore=shutil.ignore_patterns("__pycache__", "install-native-runtime.sh"))
+    shutil.copyfile(ROOT / "deploy/robot/pinky_pro/release/signing.py", destination / "signing.py")
+    for folder, pattern in (("udev", "*.rules"), ("modprobe", "*.conf")):
+        (destination / "image-layer" / folder).mkdir(parents=True)
+        for source in (ROOT / "deploy/robot/pinky_pro" / folder).glob(pattern):
+            shutil.copyfile(source, destination / "image-layer" / folder / source.name)
+
+
+def _old_manager(tmp_path: Path, sha: str, verifier: str, signing: str):
+    """Load an old image's native_release.py with that image's signing.py."""
+    import sys
+
+    folder = tmp_path / f"old-{sha}"
+    folder.mkdir()
+    for path, name in ((verifier, "native_release.py"), (signing, "signing.py")):
+        shown = subprocess.run([GIT, "show", f"{sha}:{path}"], cwd=ROOT, capture_output=True)
+        if shown.returncode != 0:
+            pytest.skip(f"{sha} is not in this clone (shallow?)")
+        (folder / name).write_bytes(shown.stdout)
+    saved = sys.modules.pop("signing", None)
+    sys.path.insert(0, str(folder))
+    try:
+        spec = importlib.util.spec_from_file_location(f"native_release_{sha}", folder / "native_release.py")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+    finally:
+        sys.path.remove(str(folder))
+        sys.modules.pop("signing", None)
+        if saved is not None:
+            sys.modules["signing"] = saved
+    return module.NativeReleaseManager
+
+
+@pytest.mark.skipif(GIT is None, reason="git is required to read the old verifiers")
+@pytest.mark.parametrize("image", sorted(OLD_VERIFIERS))
+def test_an_old_image_verifier_accepts_the_new_payload(tmp_path, image):
+    from build_payload_release import build_release
+
+    sha, verifier, signing = OLD_VERIFIERS[image]
+    manager_type = _old_manager(tmp_path, sha, verifier, signing)
+    device = tmp_path / "device"
+    private = tmp_path / "keys/test.key"
+    public = device / sync_mod.DEFAULT_PUBLIC_KEY
+    private.parent.mkdir(parents=True)
+    public.parent.mkdir(parents=True)
+    subprocess.run(["openssl", "genpkey", "-algorithm", "ed25519", "-out", str(private)],
+                   check=True, capture_output=True)
+    subprocess.run(["openssl", "pkey", "-in", str(private), "-pubout", "-out", str(public)],
+                   check=True, capture_output=True)
+    payload = tmp_path / "payload"
+    for relative, content in {
+        "install/.rosy-release": NEW_ID + "\n",
+        "rosy-packages.txt": "core\n",
+        "source-revision.txt": "b" * 40 + "\n",
+        "python-runtime.sha256": "1" * 64 + "\n",
+    }.items():
+        (payload / relative).parent.mkdir(parents=True, exist_ok=True)
+        (payload / relative).write_text(content, encoding="utf-8")
+    _python_native(payload / "deploy/robot/native")
+    release = device / "opt/rosy/releases" / NEW_ID
+    build_release(payload, NEW_ID, release, signing_key_id=public.stem)
+    sums = (release / "SHA256SUMS").read_bytes()
+    (release / "SHA256SUMS.sig").write_text(sign_checksums(sums, private) + "\n", encoding="ascii")
+    listed = {entry["path"] for entry in json.loads((release / "manifest.json").read_text(encoding="utf-8"))["files"]}
+    assert "deploy/robot/native/image-layer/udev/99-rosy-lamp.rules" in listed
+    assert "deploy/robot/native/image-layer/modprobe/rosy-ws281x.conf" in listed
+    assert "deploy/robot/native/sync-image-layer.py" in listed
+
+    manifest = manager_type(root=device, public_key=public).verify(NEW_ID)
+
+    assert manifest["release_id"] == NEW_ID
+
+
 # --- the payload carries the image-layer sources -------------------------------------
 
 
