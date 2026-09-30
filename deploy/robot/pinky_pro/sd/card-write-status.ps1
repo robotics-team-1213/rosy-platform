@@ -58,6 +58,7 @@ function Get-NextByCardState([string]$CardState) {
         "unverified-no-bundle" { return "re-run the same command with -ResumeAfterWrite (keep -Emergency and its reason, or drop both for the full readback)" }
         "bundle-partial" { return "re-run the full write (a partial bundle cannot be resumed)" }
         "complete" { return "check the registry for this device, then re-run the full write" }
+        "complete-unverified" { return "emergency card, never read back: check the registry for this device, then re-run the full write" }
         default { return "re-run the full write (without -ResumeAfterWrite)" }
     }
 }

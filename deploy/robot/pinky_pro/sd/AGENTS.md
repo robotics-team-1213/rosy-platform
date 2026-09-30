@@ -109,6 +109,11 @@ never with `-PlanOnly`).
   active release against its signed `SHA256SUMS` and run `dpkg --verify`, as on
   rosy-pinky-9dfk), then rewrite it with a standard write and
   `-ReprovisionReceipt <emergency receipt>` when possible.
+- `-Emergency -ResumeAfterWrite` needs `-PlanPath` and a clean history of that
+  plan in the plan/log folders' `*.progress.jsonl`: the last full write reached
+  the readback stage (clean Imager exit) and no attempt since recorded a writer
+  failure (stall, kill, exit code), a readback mismatch or an image error.
+  Otherwise it refuses: rewrite the card, and replace it after a mismatch.
 - `-ReprovisionReceipt` accepts an emergency receipt only for a standard write
   (the new receipt records `supersedes.emergency: true`) and refuses an
   emergency write on an emergency receipt. Other unverified receipts are refused.

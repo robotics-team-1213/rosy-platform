@@ -58,8 +58,8 @@ if ($Emergency -and ([string]::IsNullOrWhiteSpace($EmergencyReason) -or $Emergen
     Fail "-Emergency needs -EmergencyReason '<why the card cannot wait for the readback>' (at least 10 characters)"
 }
 if ($EmergencyReason -and -not $Emergency) { Fail "-EmergencyReason is only valid with -Emergency" }
-if ($EmergencyReason -and $EmergencyReason -cnotmatch '^[\x20-\x21\x23-\x7E]{1,200}$') {
-    Fail "-EmergencyReason must be printable ASCII without double quotes, at most 200 characters"
+if ($EmergencyReason -and $EmergencyReason -cnotmatch '^[\x20-\x21\x23-\x5B\x5D-\x7E]{1,200}$') {
+    Fail "-EmergencyReason must be printable ASCII without double quotes or backslashes, at most 200 characters"
 }
 
 $PlanPath = (Resolve-Path -LiteralPath $PlanPath).ProviderPath
@@ -222,7 +222,7 @@ if (-not $isAdministrator) {
     if (-not (Test-Path -LiteralPath $exitMarker)) {
         $last = Get-LastProgress
         $where = $(if ($last) { "last stage=$($last.stage) card_state=$($last.card_state)" } else { "no stage was recorded, so the card is untouched" })
-        Fail ("the elevated write did not finish ({0}); see $LogPath`nnext: if card_state is written-unverified or verified-no-bundle, re-run with -ResumeAfterWrite; if it is untouched, re-run; otherwise re-run the full write" -f $where)
+        Fail ("the elevated write did not finish ({0}); see $LogPath`nnext: if card_state is written-unverified, verified-no-bundle or unverified-no-bundle, re-run with -ResumeAfterWrite (an emergency write keeps -Emergency and its reason); if it is untouched, re-run; otherwise re-run the full write" -f $where)
     }
     $code = [int]((Get-Content -LiteralPath $exitMarker -Raw).Trim())
     Get-Content -LiteralPath $LogPath -Tail 20

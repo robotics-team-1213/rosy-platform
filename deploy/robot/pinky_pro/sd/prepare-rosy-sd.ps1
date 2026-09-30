@@ -111,6 +111,7 @@ function Get-NextStep {
         # see an extra file, so resume cannot finish it.
         "bundle-partial" { return "a partial provisioning bundle may be on the card and cannot be resumed: $fullWriteNext" }
         "complete" { return "the card has its bundle but no receipt: check the registry file, then $fullWriteNext" }
+        "complete-unverified" { return "the emergency card has its bundle but no receipt and was never read back: check the registry file, then $fullWriteNext" }
         default { return $fullWriteNext }
     }
 }
@@ -267,6 +268,63 @@ function Test-EarlierWriteOfThisPlan {
         }
     }
     return $false
+}
+
+# D-389 review (HIGH): a standard resume is judged by the full readback; an
+# emergency resume is not, so it may only finish a card whose earlier attempts of
+# this plan are clean. The last full write must have reached a clean Imager exit
+# (its attempt entered the readback stage), and neither it nor any later attempt
+# may record a writer failure (stall, kill, exit code), a readback mismatch or an
+# image error. Lines of the current progress file from this run are skipped.
+function Assert-CleanEarlierWrite {
+    $current = $(if ($ProgressPath) { [IO.Path]::GetFullPath($ProgressPath) } else { "" })
+    $folders = @((Split-Path -Parent $planFullPath))
+    if ($current) { $folders += (Split-Path -Parent $current) }
+    $attempts = New-Object System.Collections.ArrayList
+    foreach ($file in @(Get-ChildItem -LiteralPath ($folders | Select-Object -Unique) -Filter "*.progress.jsonl" -File -ErrorAction SilentlyContinue)) {
+        $lines = New-Object System.Collections.ArrayList
+        foreach ($text in @(Get-Content -LiteralPath $file.FullName -ErrorAction SilentlyContinue)) {
+            try { [void]$lines.Add(($text | ConvertFrom-Json)) } catch { continue }
+        }
+        if ($file.FullName -eq $current) {
+            # This run's own lines start at its verify-signature line, the last one in the file.
+            $last = -1
+            for ($i = 0; $i -lt $lines.Count; $i++) { if ([string]$lines[$i].stage -eq "verify-signature") { $last = $i } }
+            if ($last -ge 0) { $lines.RemoveRange($last, $lines.Count - $last) }
+        }
+        $attempt = $null
+        foreach ($line in $lines) {
+            if ([string]$line.stage -eq "verify-signature") {
+                $attempt = $null
+                if ($line.PSObject.Properties["plan"] -and [string]$line.plan -eq $planFullPath) {
+                    $attempt = New-Object System.Collections.ArrayList
+                    [void]$attempts.Add([pscustomobject]@{ ts = [string]$line.ts; lines = $attempt })
+                }
+            }
+            if ($null -ne $attempt) { [void]$attempt.Add($line) }
+        }
+    }
+    $ordered = @($attempts | Sort-Object ts)
+    $fullWrite = -1
+    for ($i = 0; $i -lt $ordered.Count; $i++) {
+        if (@($ordered[$i].lines | Where-Object { [string]$_.stage -eq "write" -and [string]$_.card_state -eq "writing" }).Count) { $fullWrite = $i }
+    }
+    $refuseNext = "rewrite the card with a full write (without -ResumeAfterWrite); if a readback reported a mismatch, replace the card"
+    if ($fullWrite -lt 0) { Fail "emergency resume refused: no earlier write of this plan was recorded next to the plan or the log" $refuseNext }
+    for ($i = $fullWrite; $i -lt $ordered.Count; $i++) {
+        foreach ($line in $ordered[$i].lines) {
+            if ([string]$line.stage -ne "failed") { continue }
+            $detail = $(if ($line.PSObject.Properties["detail"]) { [string]$line.detail } else { "" })
+            $kind = $(if ($line.PSObject.Properties["kind"]) { [string]$line.kind } else { "" })
+            if ($detail.StartsWith("write:") -or $kind -in @("mismatch", "image")) {
+                Fail ("emergency resume refused: an earlier attempt of this plan recorded: {0}" -f $detail) $refuseNext
+            }
+        }
+    }
+    # The readback stage is entered only after Imager exited 0.
+    if (-not @($ordered[$fullWrite].lines | Where-Object { [string]$_.stage -eq "readback" }).Count) {
+        Fail "emergency resume refused: the last full write of this plan never reached a clean Imager exit" $refuseNext
+    }
 }
 
 # $Sector: what the probe read from the card's first sector. When it was read,
@@ -653,8 +711,13 @@ if ($Emergency -and ([string]::IsNullOrWhiteSpace($EmergencyReason) -or $Emergen
     Fail "-Emergency needs -EmergencyReason '<why the card cannot wait for the readback>' (at least 10 characters)"
 }
 if ($EmergencyReason -and -not $Emergency) { Fail "-EmergencyReason is only valid with -Emergency" }
-if ($EmergencyReason -and $EmergencyReason -cnotmatch '^[\x20-\x21\x23-\x7E]{1,200}$') {
-    Fail "-EmergencyReason must be printable ASCII without double quotes, at most 200 characters"
+if ($EmergencyReason -and $EmergencyReason -cnotmatch '^[\x20-\x21\x23-\x5B\x5D-\x7E]{1,200}$') {
+    Fail "-EmergencyReason must be printable ASCII without double quotes or backslashes, at most 200 characters"
+}
+# D-389 review (HIGH): an emergency resume has no readback to judge the card, so
+# it needs the reviewed plan to find the earlier attempts (Assert-CleanEarlierWrite).
+if ($Emergency -and $ResumeAfterWrite -and -not $PlanPath) {
+    Fail "-Emergency -ResumeAfterWrite needs the reviewed plan (-PlanPath) to check the earlier write of this card"
 }
 if ($WriterSoftStallMinutes -le 0) { Fail "stall limits must be positive" }
 # The soft limit only warns; it never kills. Clamp it at half the hard limit
@@ -927,6 +990,7 @@ Write-Host ("Pre-flight: card read {0}. Image {1:N0} MB: write about {2:N0} min 
     [Math]::Ceiling($predictedReadback / 60), [Math]::Ceiling(($predictedWrite + $predictedReadback) / 60))
 
 if ($ResumeAfterWrite) {
+    if ($Emergency) { Assert-CleanEarlierWrite }
     # A fast pre-check before an hour of readback: a card that holds this
     # release's image starts with the image's MBR disk signature.
     if (-not $imageSignature) {
@@ -1446,7 +1510,8 @@ try {
     Move-Item -LiteralPath $bundleTargetTemp -Destination $bundleTarget
     # The bundle is on the card; the readback would now see it as an extra file,
     # so from here on a failure needs a full rewrite, not -ResumeAfterWrite.
-    Set-Stage "receipt" "complete" ""
+    # D-389 review: an emergency card is never "complete", even if this window dies here.
+    Set-Stage "receipt" $(if ($Emergency) { "complete-unverified" } else { "complete" }) ""
     $bundleReceipt = Get-Content -LiteralPath $bundleReceiptTemp -Raw | ConvertFrom-Json
     # D-176: an editable settings file next to the bundle; never overwrite one a person edited.
     $configTarget = Join-Path $bootRoot "rosy-config.yaml"

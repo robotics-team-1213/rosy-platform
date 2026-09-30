@@ -2211,7 +2211,8 @@ EMERGENCY = ("-EmergencyReason", "robot needed on the floor now; readback CPU-st
 EMERGENCY_STAGES = [
     ("verify-signature", "untouched"), ("select-disk", "untouched"), ("preflight", "untouched"),
     ("confirm", "untouched"), ("write", "writing"), ("readback", "written-unverified"),
-    ("bundle", "unverified-no-bundle"), ("bundle-writing", "bundle-partial"), ("receipt", "complete"),
+    ("bundle", "unverified-no-bundle"), ("bundle-writing", "bundle-partial"),
+    ("receipt", "complete-unverified"),  # D-389 review: never "complete", even mid-crash
     ("done", "complete-unverified"),
 ]
 
@@ -2303,8 +2304,9 @@ def test_an_emergency_write_keeps_every_pre_write_check(writer_case, tmp_path, c
     ((), ("-Emergency",), "-Emergency needs -EmergencyReason"),
     (("-EmergencyReason", "  hurry   "), ("-Emergency",), "-Emergency needs -EmergencyReason"),
     (("-EmergencyReason", 'robot "needed" now please'), ("-Emergency",), "printable ASCII without double quotes"),
+    (("-EmergencyReason", "robot needed now, path X:\\cards\\"), ("-Emergency",), "or backslashes"),
     (EMERGENCY, (), "-EmergencyReason is only valid with -Emergency"),
-], ids=["missing", "too-short", "quotes", "reason-without-switch"])
+], ids=["missing", "too-short", "quotes", "trailing-backslash", "reason-without-switch"])
 def test_an_emergency_write_needs_a_stated_reason(writer_case, tmp_path, extra, switches, message):
     _emergency_card(writer_case)
 
@@ -2436,3 +2438,156 @@ def test_the_follow_up_readback_is_only_for_emergency_receipts_and_fixtures_stay
         "-ReadbackDevice", str(writer_case["readback"]),
     ], capture_output=True, text=True, env=writer_case["env"])
     assert real.returncode != 0 and "refused for a real disk" in _err(real)
+
+
+# D-389 review (MEDIUM): prove the follow-up tolerance with the writer's files
+# inside the stand-in card's FAT boot partition, where a real card holds them.
+def _fat_fixture():
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("media_readback_fixture", ROOT / "test" / "test_media_readback.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _provisioned_card(case, corrupt_boot_file=False):
+    fat = _fat_fixture()
+    card = fat._Card()
+    image = card.build()
+    struct.pack_into("<I", image, 440, 0x1A2B3C4D)  # the image's MBR disk signature
+    _rerelease(case, bytes(image))
+    device = bytearray(image)
+    root = card.cluster_offset(2) + 4 * 32  # after config.txt and overlays
+    entries = b"".join(fat._lfn_entries("rosy-config.yaml")) + fat._dir_entry(b"ROSY-C~1YAM", 0x20, 8, 5)
+    entries += b"".join(fat._lfn_entries("rosy-provision")) + fat._dir_entry(b"ROSY-P~1", 0x10, 9, 0)
+    device[root:root + len(entries)] = entries
+    card.put(device, 8, b"a: 1\n")
+    bundle = b'{"fixture": true}'
+    inside = fat._dir_entry(b".", 0x10, 9, 0) + fat._dir_entry(b"..", 0x10, 0, 0)
+    inside += b"".join(fat._lfn_entries("provision.json")) + fat._dir_entry(b"PROVIS~1JSO", 0x20, 10, len(bundle))
+    card.put(device, 9, inside)
+    card.put(device, 10, bundle)
+    if corrupt_boot_file:
+        device[card.cluster_offset(5)] ^= 0x01  # overlays/rpi-overlay.dtbo
+    return bytes(device)
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+@pytest.mark.parametrize("corrupt", [False, True], ids=["provisioned-card-verifies", "other-boot-file-differs"])
+def test_the_follow_up_tolerates_only_the_writers_boot_files_inside_the_card(writer_case, tmp_path, corrupt):
+    device = _provisioned_card(writer_case, corrupt_boot_file=corrupt)
+    receipt = _receipt_for_follow_up(writer_case, tmp_path)
+    writer_case["readback"].write_bytes(device)  # the card as it leaves the writer
+
+    completed = _follow_up(writer_case, receipt)
+
+    supplement = receipt.with_suffix(".readback.json")
+    if corrupt:
+        assert completed.returncode != 0
+        assert "did NOT verify" in _err(completed) and "rpi-overlay.dtbo" in _err(completed)
+        assert not supplement.exists()
+    else:
+        assert completed.returncode == 0, completed.stderr
+        boot = json.loads(supplement.read_text(encoding="utf-8-sig"))["media_readback"]["boot_partition"]
+        assert boot["provisioning_extras"] == ["rosy-config.yaml", "rosy-provision", "rosy-provision/provision.json"]
+
+
+# D-389 review (HIGH): an emergency resume has no readback to judge the card, so it
+# may only finish a card whose earlier attempts of this plan are clean.
+def _emergency_resume(case, tmp_path, plan_path):
+    boot = tmp_path / "boot"
+    boot.mkdir(exist_ok=True)
+    return _run(case, "-PlanPath", plan_path, *WRITE_CONFIRMATION, "-BootMountPath", boot, *EMERGENCY,
+                plan_only=False, switches=("-Emergency", "-ResumeAfterWrite", "-AcceptSlowMedia"))
+
+
+def _planned_emergency_card(case, tmp_path, flip=False):
+    raw = _mbr_raw(0x1A2B3C4D)
+    _rerelease(case, raw)
+    plan_path, _plan = _plan_with_card(case, tmp_path, Signature=0x1A2B3C4D)
+    if flip:
+        case["readback"].write_bytes(_flip_one_byte(raw))
+    return plan_path
+
+
+def _earlier_attempt(tmp_path, plan_path, *lines):
+    # The exact line shapes prepare-rosy-sd.ps1 writes (Add-ProgressLine / Format-Failure).
+    plan_full = str(Path(plan_path).resolve())
+    records = [{"ts": "2026-10-01T00:00:00.0000000Z", "stage": "verify-signature", "card_state": "untouched",
+                "detail": "write", "plan": plan_full}]
+    for index, (stage, state, extra) in enumerate(lines, start=1):
+        records.append({"ts": f"2026-10-01T00:0{index}:00.0000000Z", "stage": stage, "card_state": state, **extra})
+    (tmp_path / "write-earlier.log.progress.jsonl").write_text(
+        "".join(json.dumps(record) + "\n" for record in records), encoding="utf-8")
+
+
+WRITING = ("write", "writing", {"detail": "raw image 1048576 bytes"})
+READBACK = ("readback", "written-unverified", {})
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+def test_an_emergency_resume_refuses_a_card_whose_readback_found_a_mismatch(writer_case, tmp_path):
+    plan_path = _planned_emergency_card(writer_case, tmp_path, flip=True)
+    boot = tmp_path / "boot"
+    boot.mkdir()
+    first = _run(writer_case, "-PlanPath", plan_path, *WRITE_CONFIRMATION, "-BootMountPath", boot, plan_only=False,
+                 switches=("-AcceptSlowMedia",))
+    assert first.returncode != 0 and "full media readback verification failed" in _err(first)
+
+    completed = _emergency_resume(writer_case, tmp_path, plan_path)
+
+    assert completed.returncode != 0
+    assert "emergency resume refused" in _err(completed) and "readback verification failed" in _err(completed)
+    assert "replacethecard" in "".join(completed.stderr.split())  # PowerShell wraps mid-word
+    _nothing_recorded(writer_case, boot)
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+@pytest.mark.parametrize("history,message", [
+    ([WRITING, ("failed", "writing", {"detail": "write: image writer stalled: no progress for 5 minutes after "
+                                                 "writing 1 of 2 bytes; it was stopped", "next": "x"})],
+     "image writer stalled"),
+    ([WRITING, ("failed", "written-unverified", {"detail": "write: image writer stalled: no progress for 5 minutes "
+                                                           "after writing 2 of 2 bytes; it was stopped", "next": "x"})],
+     "image writer stalled"),
+    ([WRITING, ("failed", "writing", {"detail": "write: image writer failed with exit code 3", "next": "x"})],
+     "exit code 3"),
+    ([WRITING], "never reached a clean Imager exit"),
+    ([], "no earlier write of this plan"),
+], ids=["stall-mid-write", "stall-after-last-byte", "writer-exit-code", "window-died-mid-write", "no-record"])
+def test_an_emergency_resume_refuses_a_card_without_a_clean_earlier_write(writer_case, tmp_path, history, message):
+    plan_path = _planned_emergency_card(writer_case, tmp_path)
+    if history:
+        _earlier_attempt(tmp_path, plan_path, *history)
+
+    completed = _emergency_resume(writer_case, tmp_path, plan_path)
+
+    assert completed.returncode != 0
+    assert "emergency resume refused" in _err(completed) and message in _err(completed)
+    assert not writer_case["receipt"].exists()
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+def test_an_emergency_resume_finishes_a_card_after_a_clean_writer_exit(writer_case, tmp_path):
+    plan_path = _planned_emergency_card(writer_case, tmp_path)
+    _earlier_attempt(tmp_path, plan_path, WRITING, READBACK,
+                     ("failed", "written-unverified", {"detail": "readback: the card could not be read during readback",
+                                                       "kind": "io", "next": "x"}))
+
+    completed = _emergency_resume(writer_case, tmp_path, plan_path)
+
+    assert completed.returncode == 0, completed.stderr
+    receipt = json.loads(writer_case["receipt"].read_text(encoding="utf-8-sig"))
+    assert receipt["resumed_after_write"] is True and receipt["media_readback"]["verified"] is False
+    assert receipt["emergency"]["reason"] == EMERGENCY[1]
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+def test_an_emergency_resume_needs_the_reviewed_plan(writer_case, tmp_path):
+    _emergency_card(writer_case)
+
+    completed, boot = _write(writer_case, tmp_path, *EMERGENCY, switches=("-Emergency", "-ResumeAfterWrite"))
+
+    assert completed.returncode != 0
+    assert "needs the reviewed plan (-PlanPath)" in _err(completed)
+    _nothing_recorded(writer_case, boot)

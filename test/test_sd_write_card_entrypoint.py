@@ -493,8 +493,10 @@ def test_a_standard_write_passes_no_emergency(case):
     (("-Emergency",), "-Emergency needs -EmergencyReason"),
     (("-Emergency", "-EmergencyReason", "now"), "-Emergency needs -EmergencyReason"),
     (("-Emergency", "-EmergencyReason", 'say "now" please ok'), "printable ASCII without double quotes"),
+    # A trailing backslash would escape the closing quote forwarded to the elevated window.
+    (("-Emergency", "-EmergencyReason", "robot needed now X:\\cards\\"), "or backslashes"),
     (("-EmergencyReason", REASON), "-EmergencyReason is only valid with -Emergency"),
-], ids=["missing", "too-short", "quotes", "reason-without-switch"])
+], ids=["missing", "too-short", "quotes", "trailing-backslash", "reason-without-switch"])
 def test_an_emergency_without_a_reason_is_refused_before_the_uac_prompt(case, extra, message):
     launcher, record = _launcher(case, "accept")
 
@@ -523,3 +525,22 @@ def test_status_of_an_emergency_write_says_not_verified(tmp_path):
 
     assert status["result"] == "complete-unverified"
     assert "Result: COMPLETE, NOT VERIFIED" in text and "next: the card is written but NOT verified" in text
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+def test_a_crash_after_the_emergency_receipt_stage_never_reads_as_complete(tmp_path):
+    lines = [{"ts": _ts(3), "stage": "launch", "card_state": "untouched"},
+             {"ts": _ts(2), "stage": "bundle", "card_state": "unverified-no-bundle"},
+             {"ts": _ts(1), "stage": "receipt", "card_state": "complete-unverified"}]
+
+    text, status = _status(tmp_path, lines, exit_code=1)
+
+    assert status["card_state"] == "complete-unverified"
+    assert "emergency card, never read back" in status["next"]
+
+
+def test_a_lost_elevated_write_names_the_emergency_resume_state():
+    # Review (LOW): the "did not finish" hint must cover unverified-no-bundle too.
+    text = SCRIPT.read_text(encoding="utf-8")
+    assert ("if card_state is written-unverified, verified-no-bundle or unverified-no-bundle, "
+            "re-run with -ResumeAfterWrite (an emergency write keeps -Emergency and its reason)") in text
