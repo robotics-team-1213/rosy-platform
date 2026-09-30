@@ -127,7 +127,9 @@
   **차선 자동은 L1 이상에서만(사용자 결정 2026-09-30).** 살아 있는 `safety.manual_angular` 가
   `line_follow.lane_auto_min_manual_angular`(0.30 = L1) 보다 작으면 차선 추종 틱이 `limit_level_too_low`
   로 멈춘다(모드는 켜진 채 HOLD, 계단을 올리면 다음 틱부터 간다). pilot 은 "수동 한도 L1 이상에서만
-  차선 자동" 으로 보인다. 0 이면 이 문턱을 끈다. L1 이상에서는 위 상한이 그대로 걸린다.
+  차선 자동" 으로 보인다. 이 문턱을 끄는 것은 `lane_auto_min_manual_angular: 0` 뿐이다 —
+  `max_angular_follows_manual: false`(각속도 상한 덮어쓰기)는 문턱을 우회하지 않는다. L1 이상에서는 위
+  상한이 그대로 걸린다.
 
 ### Alternatives
 

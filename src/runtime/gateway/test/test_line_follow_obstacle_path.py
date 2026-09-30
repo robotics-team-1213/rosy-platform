@@ -279,6 +279,9 @@ def test_explicit_override_ignores_the_ladder_cap_and_the_floor_can_be_disabled(
     m = _laddered(lambda: 0.30, max_angular_follows_manual=False)
     _camera(m, 10.0, error=-0.8)
     assert m.tick(10.05).angular == pytest.approx(0.64)
+    floor = _laddered(lambda: 0.10, max_angular_follows_manual=False)   # 덮어쓰기는 문턱을 못 넘는다
+    _camera(floor, 10.0, error=-0.8)
+    assert floor.tick(10.05).linear == 0 and floor.status().reason == "limit_level_too_low"
     low = _laddered(lambda: 0.10, lane_auto_min_manual_angular=0.0)
     _camera(low, 10.0, error=-0.8)
     assert low.tick(10.05).angular == pytest.approx(0.10)

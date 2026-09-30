@@ -91,7 +91,8 @@ line_follow:                       # D-143 selected-source, fail-closed policy
   steering_gain: 0.80
   max_angular: 0.70                # ceiling; the live cap is min(this, safety.manual_angular)
   max_angular_follows_manual: true # D-344 §13: follow the D-342 manual-limit ladder; false = max_angular only
-  lane_auto_min_manual_angular: 0.30  # D-344 §13: lane auto only at ladder L1+ (else HOLD limit_level_too_low); 0 = off
+  lane_auto_min_manual_angular: 0.30  # D-344 §13: lane auto only at ladder L1+ (else HOLD limit_level_too_low).
+                                   # 0 disables this floor; max_angular_follows_manual: false does NOT bypass it
   min_confidence: 0.35
   stale_after_s: 0.30              # stop immediately when evidence lease expires
   lost_after_s: 3.0                # latch LOST; operator must explicitly reselect
