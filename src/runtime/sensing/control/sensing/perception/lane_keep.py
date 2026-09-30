@@ -104,9 +104,11 @@ TRANSVERSE_MIN_ANGLE_RAD = math.radians(65.0)
 #: A line steeper than this whose extrapolated offset at SIDE_X_M lies beyond
 #: STEEP_MAX_LATERAL_FRACTION of the lane width is a diagonal mark (a junction
 #: mouth, a crosswalk edge) read far outside the lane, not a boundary. Real
-#: 124745Z frames sided 60-64 deg lines at y -0.30..-0.42 m.
+#: 124745Z frames sided 60-64 deg lines at y -0.30..-0.42 m. Both ends of the
+#: seen paint must also lie beyond the lane half width plus STEEP_PAINT_MARGIN_M.
 STEEP_MIN_ANGLE_RAD = math.radians(45.0)
 STEEP_MAX_LATERAL_FRACTION = 1.0
+STEEP_PAINT_MARGIN_M = 0.03
 #: Two boundaries of one lane run within this angle of each other.
 PAIR_MAX_ANGLE_RAD = math.radians(30.0)
 #: A lone boundary further than this fraction of the lane width is not ours.
@@ -295,7 +297,13 @@ class LaneKeeper:
             # left +) where the lane is read. Almost under the robot, the last
             # target decides instead.
             lateral = _lateral_at(centre, direction, SIDE_X_M)
-            if (abs(heading) > STEEP_MIN_ANGLE_RAD and self._corner_side is None
+            # The seen paint itself must lie outside the lane on one side: a
+            # short steep boundary segment far ahead on a curve extrapolates
+            # far at SIDE_X_M but its paint starts at the lane edge.
+            end_ys = [p[1] for p in ends]
+            paint_outside = (min(abs(float(y)) for y in end_ys) > half + STEEP_PAINT_MARGIN_M
+                             and (end_ys[0] > 0.0) == (end_ys[1] > 0.0))
+            if (abs(heading) > STEEP_MIN_ANGLE_RAD and self._corner_side is None and paint_outside
                     and abs(lateral) > STEEP_MAX_LATERAL_FRACTION * 2.0 * half):
                 self.last["candidates"].append(dict(record, y_at_side_x_m=round(lateral, 3),
                                                     rejected=True, reason="steep_far"))
