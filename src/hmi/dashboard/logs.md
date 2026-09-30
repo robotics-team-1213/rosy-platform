@@ -569,3 +569,12 @@
 - 증거: 두 시험 모두 수정 전 빨강.
 - gate 변화: 없음. SOURCE/LOCAL 증거다.
 - 결정: D-359 §5·§6 (US-008).
+
+## 2026-09-30 · uncommitted · fix(dashboard): D-359 restore legacy /dashboard (missing dom.js imports, teleop pad overflow)
+
+- 변경: `app.js`·`ros-network.js`·`settings.js`가 부르던 `setTagState`를 `./dom.js`에서 가져온다(없어서 렌더 사슬 전체가 ReferenceError로 끊겼다). `.teleop-pad ui-button`은 세로 쌓기·간격 0이라 1366×600에서 "→우회전"(keep-all로 안 끊김)이 8 px 넘치지 않는다. 시험 두 곳은 뜻을 지켜 새 마크업(ui-tag 벤치 태그, 사유 small 제외한 부저 라벨)을 본다. 새 호스트 시험 `test_module_imports.py`가 dom.js·core_ui_logic.js·ui.js에서 내보낸 이름을 부르는 모든 대시보드 스크립트가 그 이름을 가져오는지(또는 지역 바인딩인지) 본다.
+- 증거: `ROSY_RUN_BROWSER_TESTS=1 python -m pytest test/test_dashboard_browser.py -q` 70 passed, 1 failed(`test_operate_view_fits_and_does_not_crush[viewport0-]`, 동시 Fleet 브라우저 부하 중) → 단독 재실행 4 passed. `test_module_imports.py` 39 passed, 옛 app.js·ros-network.js·settings.js에 대해 `setTagState (from dom.js)`를 짚고 import 하나를 지우는 변이도 잡는다.
+- 미증명: 실기 대시보드
+- gate 변화: 없음
+- 결정: D-359
+- 교훈: 호스트 시험은 브라우저 모듈의 ReferenceError를 못 본다 — 공용 도우미 import는 정적 스캔으로 지킨다.

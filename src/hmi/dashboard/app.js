@@ -28,6 +28,7 @@ import {
   setFieldMessage,
   setMeter,
   markRequested,
+  setTagState,
   setText,
   svgText,
 } from "./dom.js";

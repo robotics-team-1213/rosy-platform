@@ -763,6 +763,9 @@ body[data-view="operate"] .page-footer { display: none; }
 }
 .teleop-pad { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--space-1); }
 .teleop-pad ui-button { touch-action: none; user-select: none; }
+/* D-359: 한글 라벨은 keep-all로 어절째 붙어 있어 화살표와 한 줄이면 320px 조작 열의
+   4칸을 넘친다(1366×600). 화살표 아래 라벨로 쌓는다 — 사유가 붙은 비활성 모양과 같다. */
+.teleop-pad ui-button { flex-direction: column; gap: 0; }
 
 .teleop-message, .action-message { min-height: 1.4em; margin: 0; color: var(--ink); font: var(--weight-regular) var(--text-label)/var(--leading-body) var(--body); }
 

@@ -1956,9 +1956,10 @@ def test_inspect_view_lists_every_device_with_its_state_and_bench_tag():
             " id: row.dataset.device,"
             " chip: row.querySelector('.device-state').textContent,"
             " status: row.querySelector('.device-state').dataset.status || null,"
-            " bench: Boolean([...row.querySelectorAll('.machine-tag')]"
+            " bench: Boolean([...row.querySelectorAll('.device-name ui-tag')]"
             "   .find((tag) => tag.textContent === '벤치 전용')),"
-            " bus: getComputedStyle(row.querySelector('.device-bus')).fontFamily }))"
+            " bus: getComputedStyle(row.querySelector('.device-bus')).fontFamily,"
+            " hangul: row.querySelector('.device-bus').hasAttribute('data-hangul') }))"
         )
         assert [(row["id"], row["chip"], row["status"], row["bench"]) for row in rows] == [
             ("motor.1", "정상", "OK", False),
@@ -1968,7 +1969,11 @@ def test_inspect_view_lists_every_device_with_its_state_and_bench_tag():
             ("buzzer", "사람 확인 필요", None, True),
             ("lidar", "측정 안 함", None, False),
         ]
-        assert all("mono" in row["bus"].lower() or "consol" in row["bus"].lower() for row in rows), rows
+        # D-359 US-008: a bus string carrying Hangul (the buzzer's) is drawn in the body family,
+        # because mono fonts have no Hangul; every other bus stays mono.
+        assert [row["id"] for row in rows if row["hangul"]] == ["buzzer"], rows
+        assert all("mono" in row["bus"].lower() or "consol" in row["bus"].lower()
+                   for row in rows if not row["hangul"]), rows
         assert page.locator("#hardware-card").get_attribute("data-available") == "true"
         assert page.locator("#hardware-measured").inner_text().endswith("42초 전")
         assert "전원을 완전히 껐다 켜세요" in page.locator("#hardware-list").inner_text()
@@ -2038,13 +2043,18 @@ def test_an_administrator_tests_the_buzzer_and_records_what_was_heard():
         page.locator("#view-inspect").click()
         page.wait_for_function("document.querySelectorAll('#hardware-list .device-row').length === 6")
         # Only the buzzer and the lamp have a test, and the lamp without a driver cannot start one.
+        # D-359 §5.3: the disabled reason is a <small data-reason> inside the button, so the label
+        # is read without it and the reason is checked on its own.
         actions = page.evaluate(
             "[...document.querySelectorAll('#hardware-list .device-actions')].map((box) => ({"
             " device: box.closest('.device-row').dataset.device,"
-            " buttons: [...box.querySelectorAll('ui-button')].map((b) => [b.textContent, b.disabled]) }))"
+            " buttons: [...box.querySelectorAll('ui-button')].map((b) => {"
+            "   const label = [...b.childNodes].filter((n) => !n.matches?.('small[data-reason]'))"
+            "     .map((n) => n.textContent).join('');"
+            "   return [label, b.disabled, b.getAttribute('reason')]; }) }))"
         )
-        assert actions == [{"device": "lamp", "buttons": [["켜 보기", True]]},
-                           {"device": "buzzer", "buttons": [["울려 보기", False]]}]
+        assert actions == [{"device": "lamp", "buttons": [["켜 보기", True, "드라이버 없음"]]},
+                           {"device": "buzzer", "buttons": [["울려 보기", False, None]]}]
 
         page.locator("#hardware-list [data-device='buzzer'] [data-hw-action='test']").click()
         page.wait_for_function(

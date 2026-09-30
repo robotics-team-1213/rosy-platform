@@ -13,6 +13,7 @@ import {
   number,
   setEnabled,
   setFieldMessage,
+  setTagState,
   setText,
 } from "./dom.js";
 import { api, expiryLabel, session, sourceLabel } from "./client.js";
