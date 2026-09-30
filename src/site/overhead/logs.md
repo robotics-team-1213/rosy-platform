@@ -142,3 +142,11 @@
 - gate 변화: 없음.
 - 결정: 이 항목 앞의 "D-358 S1/S2/S3"·"D-358 N항"은 D-370을 가리킨다(main의 D-358 ER2 피드백 outbox와 다름). 옛 항목은 고치지 않는다.
 - 교훈: 없음.
+
+## 2026-09-30 · uncommitted · fix(overhead-app): D-370 리뷰 — Kotlin tls_host 규칙을 Python 분류기와 맞춤
+
+- 변경: `OverheadServiceRecord.rejection`이 한 레이블 `<name>.local`만 받고, 해석된 호스트와 `tls_host`를 소문자·끝 점 제거 뒤 비교한다. 저장하는 `tlsHost`도 같은 정규화. 공유 벡터 `overhead_multilabel_tls_host`(bad_host)·`overhead_tls_host_case`(accepted) 추가. `.github/workflows/android.yml`이 `test/fixtures/protocol/**`·`src/hmi/web_common/icons/**` 변경에도 돈다.
+- 증거: `gradlew testDebugUnitTest` 녹색, Python 벡터 소비자 122 passed.
+- gate 변화: 없음. 실제 폰 발견은 DEVICE 회차.
+- 결정: D-370 5.1.
+- 교훈: 없음.

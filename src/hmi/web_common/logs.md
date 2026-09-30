@@ -236,3 +236,11 @@
 - gate 변화: 없음.
 - 결정: 이 항목 앞의 "D-358 S1/S2/S3"·"D-358 N항"은 D-370을 가리킨다(main의 D-358 ER2 피드백 outbox와 다름). 옛 항목은 고치지 않는다.
 - 교훈: 없음.
+
+## 2026-09-30 · uncommitted · fix(ci): D-370 리뷰 — 아이콘 시험이 Pillow 없이도 수집되고, 토큰 이름 중복을 막음
+
+- 변경: `tools/icons/render_png.py`는 `render()` 안에서만 PIL을 import한다. `test_surface_icons.py`의 실루엣 시험은 `pytest.importorskip("PIL")`, CI는 `python3-pil`을 깐다. 새 시험 `test_token_names_are_defined_once`.
+- 증거: `test_surface_icons.py` 9 passed; PIL을 막으면 8 passed, 1 skipped(토큰 시험 추가 전 기준 7/1).
+- gate 변화: 없음.
+- 결정: D-370 3항, D-359(테마 블록이 생기면 정규식 사전이 뒤 값을 고르는 위험).
+- 교훈: 없음.

@@ -69,8 +69,8 @@
 
 ## 최근 기록
 
+- 2026-09-30 · uncommitted · fix(fleet): D-370 리뷰 — 발견 행은 분류기가 정규화한 호스트를 저장
 - 2026-09-30 · uncommitted · docs(adr): D-358 앱 역할 ADR을 D-370으로 재번호
 - 2026-09-30 · uncommitted · feat(icons): D-358 S3 관제 파비콘
 - 2026-09-30 · uncommitted · feat(discovery): D-358 S1 발견 행 검사와 사이트 스크립트를 공유 벡터에 묶음
 - 2026-09-30 · uncommitted · docs(validation): record final ER2 feedback audit gates
-- 2026-09-30 · uncommitted · fix(fleet): recheck ER2 egress fence after Vision capture

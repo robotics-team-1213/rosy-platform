@@ -245,8 +245,8 @@
 
 ## 최근 기록
 
+- 2026-09-30 · uncommitted · docs(adr): D-370 독립 리뷰 반영(MERGE-AFTER-FIXES)
 - 2026-09-30 · uncommitted · docs(adr): D-358 앱 역할 ADR을 D-370으로 재번호
 - 2026-09-30 · uncommitted · docs(adr): D-358 앱 역할·이름·아이콘·화면 소유와 공유 연결 조각
 - 2026-09-30 · uncommitted · docs(sensing): D-356 학습 루프 기록 정정·리뷰 수정
 - 2026-09-30 · uncommitted · fix(contracts): reconcile ER2 API version and Fleet size ratchet
-- 2026-09-30 · uncommitted · docs(validation): record final ER2 feedback audit gates

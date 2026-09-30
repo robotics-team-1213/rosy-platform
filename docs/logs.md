@@ -3768,3 +3768,11 @@
 - gate 변화: 없음. 문서·주석만.
 - 결정: 이 항목 앞의 로그 항목에 적힌 "D-358 앱 역할…", "D-358 S1/S2/S3", "D-358 N항"은 모두 D-370을 가리킨다. main의 D-358(ER2 피드백 outbox와 재계획 펜싱)과 다르다. 옛 항목은 고치지 않는다.
 - 교훈: 번호 확인은 커밋된 브랜치만이 아니라 main 체크아웃의 미커밋 초안까지 봐야 한다.
+
+## 2026-09-30 · uncommitted · docs(adr): D-370 독립 리뷰 반영(MERGE-AFTER-FIXES)
+
+- 변경: main 재병합(D-371, `d8e5f994`) — ADR Log는 D-370 뒤 D-371, `harness.yaml` `adr_gaps`는 main의 D-363–D-370 "skipped" 줄을 지우고 브랜치의 "reserved by" 줄(D-362–D-369)만 남김. CI `python3-pil`, `render_png.py` PIL 지연 import와 `importorskip`, `android.yml` 경로에 공유 벡터·아이콘 추가, Kotlin `tls_host` 규칙을 Python과 같게(한 레이블 `.local`, 대소문자·끝 점 무시)와 벡터 2건, Fleet 발견 행 호스트 정규화, `test_app_roles.py` transitional은 `D-<n>` 필수·카메라 owns id 정규화, `tokens.css` 토큰 이름 중복 금지 시험. D-370에 Pilot 착지 시 `test_pilot_is_not_on_main_yet` 교체 의무(8항)와 브리지 릴리스 노트(Consequences)를 더하고 76행 "아래 **번호:**"를 "위"로 고침.
+- 증거: 병합 직전 전체 재실행 수치는 병합 커밋 메시지에 적는다. 각 단계 커밋에 해당 시험 수치가 있다.
+- gate 변화: 없음. SOURCE/LOCAL.
+- 결정: D-370. **정정:** 바로 앞 재번호 항목의 "`harness.yaml` `adr_gaps`에 D-358–D-369의 사유를 적었다"는 병합 뒤 기준으로 틀렸다. D-358–D-361은 main에 착지해 지웠고, 남은 선언은 D-362–D-369다.
+- 교훈: 두 세션이 같은 번호 구간을 각각 gap으로 선언하면 YAML 자동 병합이 중복 키를 만든다. 병합 뒤 `adr_gaps`를 손으로 확인한다.
