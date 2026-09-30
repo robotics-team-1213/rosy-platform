@@ -252,6 +252,12 @@ def build_auto_dataset(label_dirs, store, name, min_labelled: float = 0.05) -> t
         metas.append((d, meta))
     if classes is None:
         raise BuildError("no label folders")
+    seen = {}
+    for d, meta in metas:
+        if meta["session"] in seen:
+            raise BuildError(f"session {meta['session']!r} is in both {seen[meta['session']]} and {d}: "
+                             "one label folder per session")
+        seen[meta["session"]] = d
     ignore = metas[0][1].get("ignore_index")
     splits = assign_splits(m["session"] for _, m in metas)
     tmp = Path(store) / "datasets" / name / f".staging-{os.getpid()}"

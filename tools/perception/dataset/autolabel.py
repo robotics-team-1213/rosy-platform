@@ -216,6 +216,33 @@ def _sha(path: Path) -> str:
     return h.hexdigest()
 
 
+def video_session(video: Path) -> tuple[str | None, dict | None]:
+    """(session name, session.json) from bag_to_video.py's <stem>.json, as extract.py reads it.
+
+    The session name, not the video stem, keeps a converted session and its bag in
+    one split."""
+    meta = video.with_suffix(".json")
+    if not meta.is_file():
+        return None, None
+    doc = json.loads(meta.read_text(encoding="utf-8"))
+    return (doc.get("source") or {}).get("session"), doc.get("session")
+
+
+def check_out(out: Path, session: str, force: bool) -> str | None:
+    """Why labels may not be written to out, or None when they may.
+
+    Never silently replace earlier labels, and never, even with force, the labels of
+    a different session."""
+    meta = out / "meta.json"
+    if not (out / "labels.jsonl").exists() and not meta.exists():
+        return None
+    if meta.is_file():
+        other = json.loads(meta.read_text(encoding="utf-8")).get("session")
+        if other != session:
+            return f"{out} holds labels of session {other!r}, not {session!r}"
+    return None if force else f"{out} already holds labels (use --force to replace them)"
+
+
 def calibrate_pitch(frames, odom: PoseSeries, scans: Scans, lidar=Lidar(), every_s=4.0,
                     max_samples=80, max_range=1.6):
     """Fit the camera pitch to the session's LiDAR walls (labels.fit_pitch)."""
@@ -337,7 +364,8 @@ def main(argv=None) -> int:
     ap.add_argument("session", nargs="?", type=Path)
     ap.add_argument("--video", type=Path)
     ap.add_argument("--sidecar", type=Path)
-    ap.add_argument("--session-name", help="session id for a --video input (default: video stem)")
+    ap.add_argument("--session-name", help="session id for a --video input without <stem>.json")
+    ap.add_argument("--force", action="store_true", help="replace this session's earlier labels")
     ap.add_argument("--out", type=Path)
     ap.add_argument("--overlays", type=Path)
     ap.add_argument("--overlay-every", type=int, default=5)
@@ -362,7 +390,12 @@ def main(argv=None) -> int:
         source = {"kind": "mcap", "files": [str(f) for f in files]}
     else:
         sidecar = args.sidecar or args.video.with_suffix(".jsonl")
-        session = args.session_name or args.video.stem
+        session, session_json = video_session(args.video)
+        if args.session_name and session and args.session_name != session:
+            ap.error(f"--session-name {args.session_name} differs from {session} in the video metadata")
+        session = session or args.session_name
+        if not session:
+            ap.error(f"{args.video.with_suffix('.json')} has no source.session: give --session-name")
         odom, make_frames, scans = read_sidecar(args.video, sidecar)
         source = {"kind": "video+sidecar", "video": str(args.video), "sidecar": str(sidecar),
                   "sha256": {"video": _sha(args.video), "sidecar": _sha(sidecar)}}
@@ -376,6 +409,10 @@ def main(argv=None) -> int:
         camera["pitch_source"] = "lidar-fit"
         print(f"pitch fitted to LiDAR walls: {camera}")
     out = args.out or DATA / "labels" / session
+    refusal = check_out(out, session, args.force)
+    if refusal:
+        print(f"error: {refusal}", file=sys.stderr)
+        return 1
     totals = label_session(make_frames(), odom, scans, out, session=session, pitch_rad=pitch,
                            lidar=lidar, rules=rules,
                            overlays=args.overlays, overlay_every=args.overlay_every,
@@ -393,6 +430,8 @@ def main(argv=None) -> int:
     sj = args.session / "session.json" if args.session else None
     if sj is not None and sj.is_file():
         meta["session_json"] = json.loads(sj.read_text(encoding="utf-8"))
+    elif args.video is not None and session_json:
+        meta["session_json"] = session_json
     (out / "meta.json").write_text(json.dumps(meta, indent=1), encoding="utf-8")
     print(json.dumps(totals, indent=1))
     return 0
