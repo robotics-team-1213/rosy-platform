@@ -38,3 +38,5 @@ plans:
 
 1. 장치 절차(계획 단계 1 "장치"): 옛 앱 송출 중지·삭제(`adb uninstall io.github.livsbittt.rosy.overhead`), 새 APK 설치, 사이트 QR 또는 D-341 콘솔 승인으로 재페어링, 관제 카메라 패널에서 프레임과 sighting 확인.
 2. 옛 폰을 재사용하면 그 source의 폰 토큰을 교체한다.
+3. D-341 9 인증서 고정 DEVICE 점검(S21): (a) 프록시가 leaf+CA(`site-fullchain.crt`)를 보내고 `rosy-vision pair-link --pin-ca --pin-cert`의 CA pin 링크로 60 s 이상 송출, (b) leaf만 보내는 프록시에 CA pin 링크 → `TLS_PIN` 안내 후 정지, (c) 위조 체인(다른 CA leaf + 진짜 사이트 CA) 거절, (d) 사이트 CA 서명이 SHA-1이 아님을 `openssl x509 -text`로 확인. 수신기 hello 대기가 4400 "no hello"로 닫혀도 카메라가 멈추지 않고 다시 붙는지도 본다.
+4. 열린 후속: `network_security_config.xml`에 user 인증서 trust-anchor가 없어 D-341 16항의 되돌림 경로(`static` source + 사용자 CA 설치)는 이 앱에서 동작하지 않는다. NSC는 바꾸지 않았다 — 되돌림 경로를 살릴지 ADR에서 정한다.

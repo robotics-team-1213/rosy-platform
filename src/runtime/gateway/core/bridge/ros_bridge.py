@@ -47,7 +47,7 @@ from core.bridge.goal_tracker import GoalTracker
 from core_features.maps import occupancy_map_id
 from core_features.vision import PREVIEW_TOPIC
 from core_features.navigation.initial_pose import amcl_pose_covariance
-from interfaces.srv import SetLed
+from interfaces.srv import Emotion, SetLed
 import tf2_ros
 from tf2_ros import Buffer, TransformListener
 
@@ -135,6 +135,8 @@ class RosBridge:
         self.dock_exemption_pub = node.create_publisher(
             Bool, "docking/collision_exemption", _LATCHED)
         self._led_client = node.create_client(SetLed, "set_led")
+        # D-385: 모드별 표정 — 정책은 core_features.command.emotion_map, 노드는 감정 서버.
+        self._emotion_client = node.create_client(Emotion, "set_emotion")
         # sllidar_ros2가 제공하는 모터 제어 서비스 (PWR-005).
         self._lidar_start_client = node.create_client(Empty, "start_motor")
         self._lidar_stop_client = node.create_client(Empty, "stop_motor")
@@ -170,6 +172,7 @@ class RosBridge:
         self._applied_lidar_spinning = True
         self._info_was_visible = False
         self._applied_led = None
+        self._emotion_shown = None
         self._info_last_pub = 0.0
         self._voltage_topic_seen = False
         self._api_address: Optional[str] = None
@@ -408,6 +411,7 @@ class RosBridge:
         self._info_was_visible = status.info_visible
 
         self._reconcile_led(status.info_visible, now)
+        self._reconcile_emotion()
 
     def _publish_display_info(self, status) -> None:
         payload = display.info_payload(
@@ -434,6 +438,24 @@ class RosBridge:
             now=now,
             act=lambda command: self._call_led(
                 command.command, command.r, command.g, command.b))
+
+    def _reconcile_emotion(self) -> None:
+        """D-385: 모드가 얼굴 표정을 고른다 — 감정 노드가 없으면 지금 표정을 유지한다."""
+        snapshot = self._svc.state.snapshot()
+        self._emotion_shown = reconcile.emotion(
+            getattr(snapshot.mode, "value", snapshot.mode),
+            getattr(snapshot.navigation, "value", snapshot.navigation),
+            self._emotion_shown,
+            act=lambda face: self._call_emotion(face))
+
+    def _call_emotion(self, face: str) -> bool:
+        """표정은 부가 표시다 — 서비스가 없으면 조용히 건너뛰고 다음 틱에 다시 한다."""
+        if not self._emotion_client.service_is_ready():
+            return False
+        request = Emotion.Request()
+        request.emotion = face
+        self._emotion_client.call_async(request)
+        return True
 
     def _reconcile_lidar(self, spinning: bool) -> None:
         """LiDAR 는 내비게이션 입력 — 서비스가 늦게 뜨면 latch 없이 다음 틱에 재시도한다."""

@@ -177,6 +177,7 @@
 | D-369 | Mission 제어·장치 실행·ROS 제어·안전 정지의 책임을 분리한다 |
 | D-370 | 앱과 표면은 한 역할씩 맡는다 — 역할·이름·아이콘·화면 소유를 한 표로 고정하고, 발견·기기 연결·실패 어휘는 공유 벡터로 하나로 맞춘다 |
 | D-374 | 앱의 폴더·패키지·식별자·표시 이름은 역할 이름 하나에서 나온다 — 역할 id(kebab)·snake·compact·표시 네 표기; 와이어 계약 이름(mDNS 종류, `rosy-overhead/1`, `/api/fleet`·`/api/vision`, `rosyov://`, 웹 경로, 설정·저장소 키, compose 서비스)은 바꾸지 않는다 |
+| D-375 | 천장 카메라→지도 보정도 제안일 뿐이다 — Vision이 알려진 차선 페인트를 영상에 맞춰 homography·coverage·가려진 쪽을 제안하고, 운용자가 확인하기 전에는 어디에도 쓰지 않는다 |
 | D-376 | OMX PICK_PLACE planning stays local and trajectory execution stays with the Action owner |
 | D-377 | 앱 이름 규칙: Rosy + 영어 한 단어 — 표시 이름 `Rosy <Word>`, id·폴더 끝 `<word>`, 패키지 `rosy_<word>`, Android `io.github.livsbittt.rosy.<word>`, Gradle `rosy-<word>`, 아이콘 `<word>.svg`; Rosy Cam·Vision·Console·Robot·Pilot |
 | D-382 | 로봇 ↔ 사이트 관제 통신은 계약 스냅샷 하나로 판정하고, 실물 확인은 읽기 전용 적합성 탐침으로 시작한다 |
@@ -260,8 +261,8 @@
 
 ## 최근 기록
 
+- 2026-10-01 · uncommitted · docs(adr): D-385 Rosy가 스스로 표현한다
 - 2026-10-01 · uncommitted · docs(adr): D-341·D-382 Accepted — 병행 세션 결정 회차
 - 2026-10-01 · uncommitted · docs(adr): D-341·D-382 교차 세션 검토 반영
 - 2026-10-01 · uncommitted · docs(adr): D-178 기준선 rosy_vision 잠정 행 추가, overhead 행 제거
 - 2026-10-01 · uncommitted · docs(adr): D-341·D-382 착지 — 천장 카메라 콘솔 승인·로봇 ↔ 관제 통신 적합성
-- 2026-10-01 · uncommitted · fix(perception): bag_to_video sidecar 가 stamp 달린 증거를 제 프레임에 붙인다

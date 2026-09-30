@@ -565,6 +565,9 @@ class BootDisplay:
             self.battery_reads += 1
             self._battery_due = now + self._battery_interval
         view = read_view(self.root, self._battery_value)
+        # D-385: 기다리는 동안 무대 제목이 1 fps 로 숨쉰다 — 끝난 상태는 고요히 그대로.
+        if str(view["stage"]).split(":", 1)[0] in ("BOOTING", "PROVISIONED"):
+            view["frame"] = int(now) % 2
         state = self.robot_state_of(view)
         if state != self._state:
             self._state = state
