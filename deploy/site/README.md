@@ -535,6 +535,22 @@ not prove phone pairing, site calibration, CORE connectivity, robot behavior,
 or field acceptance. D-257/D-268 remain at their recorded status; autonomous
 movement and pick are disabled pending those gates.
 
+## Map auto-fit overlay (D-375)
+
+Both images bake the `map_v2_fleet` track files at `/opt/rosy/maps/map_v2_fleet/`
+(read-only). Vision runs with `--map-paint .../road_lines.stl` and serves
+`GET /api/vision/sources/{id}/map-proposal` on the preview lease. Fleet runs with
+`--site-lane-graph .../lane_graph.yaml --site-lane-paint .../road_lines.stl` and
+serves `GET /api/fleet/site-lanes` (lane polylines and paint triangles, no video).
+In `/console`, the operator presses **맵 자동 맞춤** in the ceiling-camera panel:
+the lanes are drawn on the raw frame and the frame is shown warped into map
+metres. **맞춤 수락** only stores a browser-local display draft per camera; it is
+never used for sightings, `CameraMap`, or driving.
+
+For another track, put its files under `ROSY_SITE_CONFIG_DIR` and point the flags
+at `/run/rosy-config/...` (a `MAP_ID=` prefix limits a Fleet lane file to one
+`map_id`). Removing the flags turns the feature off (404 on both routes).
+
 ## RTX 5080 GPU preflight
 
 The current `vision` image runs the CPU ArUco pipeline. The site Compose file

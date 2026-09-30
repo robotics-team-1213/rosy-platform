@@ -40,6 +40,11 @@ services:
       - /run/secrets/site_cert
       - --tls-key
       - /run/secrets/site_key
+      # D-375 console map-fit overlay (display only); files baked in the image, read-only.
+      - --site-lane-graph
+      - /opt/rosy/maps/map_v2_fleet/lane_graph.yaml
+      - --site-lane-paint
+      - /opt/rosy/maps/map_v2_fleet/road_lines.stl
     environment:
       ROSY_CREDENTIAL_PATHS: '{"ROSY_SITE_REGISTRY_TOKEN":"/run/secrets/registry_token","ROSY_FLEET_CEILING_NORTH_TOKEN":"/run/secrets/fleet_sighting_token","ROSY_SITE_DISCOVERY_TOKEN":"/run/secrets/discovery_token","ROSY_VISION_PREVIEW_SECRET":"/run/secrets/vision_preview_secret"}'
       SSL_CERT_FILE: /run/secrets/site_ca
@@ -94,6 +99,9 @@ services:
       - /run/secrets/site_cert
       - --tls-key
       - /run/secrets/site_key
+      # D-375 map-proposal (lane paint in map metres); baked in the image, read-only.
+      - --map-paint
+      - /opt/rosy/maps/map_v2_fleet/road_lines.stl
     environment:
       ROSY_CREDENTIAL_PATHS: '{"ROSY_PHONE_CEILING_NORTH":"/run/secrets/phone_ingress_token","ROSY_FLEET_CEILING_NORTH_TOKEN":"/run/secrets/fleet_sighting_token","ROSY_VISION_PREVIEW_SECRET":"/run/secrets/vision_preview_secret"}'
       SSL_CERT_FILE: /run/secrets/site_ca

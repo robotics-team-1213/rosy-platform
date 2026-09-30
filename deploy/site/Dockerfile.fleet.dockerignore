@@ -14,3 +14,10 @@
 !deploy/site
 !deploy/site/requirements-fleet.txt
 !deploy/site/secret_exec.py
+!src/runtime
+!src/runtime/sensing
+!src/runtime/sensing/map
+!src/runtime/sensing/map/map_v2_fleet
+!src/runtime/sensing/map/map_v2_fleet/lane_graph.yaml
+!src/runtime/sensing/map/map_v2_fleet/meshes
+!src/runtime/sensing/map/map_v2_fleet/meshes/road_lines.stl
