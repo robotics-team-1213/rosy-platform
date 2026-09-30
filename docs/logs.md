@@ -3890,3 +3890,9 @@
 - 변경: `docs/reference/ROSY API & Protocol Reference.md` §8 에 `nav.line_obstacle_hold`(warning, `{mode, clearance_m, held_s}`), line-follow 행에 `limit_level_too_low`·`angular_limit_zero`. 버전 머리글·핀(app.py 등)은 올리지 않았다 — "다음 버전 표기 전" 으로 적고 병합 때 한 번에 올린다.
 - 증거: `test_event_catalogue.py` 72 passed(추가 전 `test_nothing_is_emitted_behind_the_contract` 빨강) (2026-09-30 Windows).
 - gate 변화: 없음. 병합 전에 API 버전 올림이 필요하다.
+
+## 2026-09-30 · uncommitted · docs(adr): D-356 보강 — 텔레옵 학습 영상 H.265/H.264 압축과 로봇 JPEG 기록 제안
+
+- 변경: D-356 에 2026-09-30 보강을 붙였다. `tools/perception/dataset/bag_to_video.py`(세션 카메라 → CFR mp4 + 프레임별 jsonl sidecar·scan.npz·메타)의 형식, 기본값(보관 libx265 CRF 24 slow, 호환 libx264 CRF 23 slow, `accurate_rnd`), `data/teleop/learning/*` gitignore, 그리고 로봇 `camera/front/compressed` JPEG q85 기록 제안(승인 전 미반영)과 Pi 5 CPU·저장량 추정을 적었다.
+- 증거: 세션 20260930T124745Z 2258 프레임에서 22개 설정의 크기·PSNR·SSIM·흰/바닥 마스크 IoU·`lane_replay` line/between/keep 차이 표. 기본값은 bag 대비 156배(0.66 MB/min), PSNR 37.24 dB, line 목표 차 평균 0.0027. `tools/perception/test` 전체 통과(ML venv, 2026-09-30 Windows). 두 실세션 변환: 3.12 MB, 3.89 MB(+ scan.npz 3.6 MB).
+- gate 변화: 없음(문서·개발 PC 도구). 로봇 압축 기록은 사용자 승인과 Pi 실측 전까지 SOURCE 이전 단계.
