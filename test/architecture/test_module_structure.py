@@ -143,6 +143,13 @@ SIZE_VERDICTS = {
         "accept: one concern (lane/IR line detection), ROS-free pure functions and trackers, host-testable (X5); "
         "the ground-geometry lane keeper already lives apart in lane_keep.py (D-364)",
     ),
+    "runtime/gateway/core/bridge/ros_bridge.py": (
+        606,
+        "accept: one CORE ROS executor integration point for publishers, subscriptions, lifecycle wiring, and "
+        "service/action clients; extracted policy and callback logic lives in core/bridge modules, and "
+        "timer/bridge behavior is covered by test_bridge_timers.py and test_bridge_reconcile.py. Re-judged "
+        "2026-10-01 at 606 after D-385 mode-to-emotion handoff wiring",
+    ),
     "runtime/sensing/control/sensing/perception/lane_bev.py": (
         611,
         "accept: one owner (LaneEdgeFollower + its bird's-eye helpers), ROS-free, host-testable (X5)",

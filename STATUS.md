@@ -68,7 +68,7 @@
 - pilot ROS-SIM: 가제보 실조종으로 방향·제자리 회전·놓으면 0 을 확인(2026-09-29). 녹화된 증거 폴더와 호스트 포화 없는 재측정 전
 - pilot ARTIFACT: share/pilot 설치를 이미지에서 본 기록이 없다
 - pilot DEVICE: 실기 Pinky 에서 페달 hold-해제가 실제 정지로 이어지는 확인 전
-- omx_adapter ROS-SIM: The pinned simulation profile and full phase fault scenario have not run on the intended Linux workstation. Current Windows Docker engine did not answer the availability probe; WSL did not provide a usable ROS shell. Target-host timing and fault behavior are unmeasured; no physical arm/independent stop or selected camera exists, so camera source, format/FPS/drop/latency, and device calibration remain unverified.
+- omx_adapter ROS-SIM: Implement and test D-386's asynchronous acceptance/stop-race and fresh per-phase state/path validation before Task 9. The pinned simulation profile and full phase fault scenario have not run on the intended Linux workstation. Current Windows Docker engine did not answer the availability probe; WSL did not provide a usable ROS shell. Target-host timing and fault behavior are unmeasured; no physical arm/independent stop or selected camera exists, so camera source, format/FPS/drop/latency, and device calibration remain unverified.
 - omx_adapter ARTIFACT: A local workstation image ID exists, but no immutable published artifact digest or dependency inventory exists; source lock is not an artifact
 - interfaces ARTIFACT: io 이미지에 포함된다(deploy/robot/pinky_pro/image/ 빌더 `COPY src/interfaces`, `--packages-select`에 포함). 서명 manifest·OCI archive·immutable registry digest 발행 전
 - interfaces DEVICE: Pi OS Lite bench Device의 install-pi.sh 설치, verify-pi.sh, device-readback.sh --json 증거 없음
