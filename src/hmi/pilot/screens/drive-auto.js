@@ -110,7 +110,6 @@ export function mountAutoMode({drive, element, apiGet, releaseAll, onIdle}) {
       if (!on) takeover();
       drive.dataset.autoMode = on ? "on" : "off";
       element.autoToggle.setAttribute("aria-pressed", String(on));
-      element.autoToggle.dataset.active = String(on);
     });
   }
 

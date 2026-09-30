@@ -168,9 +168,9 @@ function buildHud() {
   return hud;
 }
 
-// 조작 버튼의 종류(D-345 공용 컨트롤): 속도·정밀은 한 판 안의 segment(aria-pressed), 차선 자동은
-// 켜고 끄는 toggle(data-active), 누르는 동안만 움직이는 페달·제자리·진행은 toggle(누르는 동안
-// .active 로 채워진다) + size primary.
+// 조작 버튼의 종류(D-345 공용 컨트롤): 고르는 것(속도·정밀·차선 자동)은 segment(aria-pressed),
+// 누르는 동안만 움직이는 페달·제자리·진행은 toggle(누르는 동안 .active 로 채워진다) + size primary.
+// 진행은 tone="good" — 자동 대기(초록 테두리)와 자동 진행(초록 채움)이 HUD 의 초록 알약과 같은 말을 한다.
 // 게임형 큰 표적은 styles.css 의 배치 규칙(min-height·폭)이 정한다 — 면·글자·테두리는 components.css.
 export function buildControls(profile) {
   const controls = el("div", null, {"data-drive-controls": ""});
@@ -192,14 +192,13 @@ export function buildControls(profile) {
   pedals.append(forward, reverse);
   left.append(tune);
   if (profile.autonomy?.includes("line")) {
-    const autoToggle = el("ui-button", "차선 자동", {type: "button", "data-drive-auto": "", "aria-pressed": "false",
-                                                    "data-active": "false"});
-    autoToggle.setAttribute("kind", "toggle");
+    const autoToggle = el("ui-button", "차선 자동", {type: "button", "data-drive-auto": "", "aria-pressed": "false"});
+    autoToggle.setAttribute("kind", "segment");
     left.append(autoToggle);
   }
   left.append(pedals);
   if (profile.autonomy?.includes("line")) {
-    const go = el("ui-button", "진행 ▶ 누르는 동안", {type: "button", size: "primary", "data-drive-go": "",
+    const go = el("ui-button", "진행 ▶ 누르는 동안", {type: "button", size: "primary", tone: "good", "data-drive-go": "",
                                                      "aria-label": "차선 따라 진행(누르는 동안만)"});
     go.setAttribute("kind", "toggle");
     left.append(go);
