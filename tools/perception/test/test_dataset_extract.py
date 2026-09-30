@@ -344,3 +344,19 @@ def test_compressed_camera_is_preferred_over_raw(tmp_path):
     assert len(rows) == 3  # not six: raw frames are dropped when compressed exists
     assert [r["t"] for r in rows] == [1.001, 2.001, 3.001]
     assert [r["side"][SHADOW_TOPIC]["stamp"] for r in rows] == [1.0, 2.0, 3.0]
+
+
+def test_truncated_file_keeps_what_was_read_and_is_counted(tmp_path, capsys):
+    """A crash-recovered snapshot can end mid-chunk; the rest of the session still extracts."""
+    pytest.importorskip("mcap_ros2")
+    sess = _write_stamped(tmp_path, [(1.0, "raw", 1.0), (2.0, "raw", 2.0)])
+    good = sess / "bag" / "bag_0.mcap"
+    full = good.read_bytes()
+    (sess / "bag" / "bag_1.mcap").write_bytes(full[: len(full) // 2])  # cut mid-file
+    (sess / "bag" / "bag_2.mcap").write_bytes(b"\x89MCAP0\r\n")  # magic only
+    out = tmp_path / "out"
+    assert extract.main([str(sess), "--out", str(out), "--min-interval", "0",
+                         "--max-hamming", "-1"]) == 0
+    rows = (out / "frames.jsonl").read_text().splitlines()
+    assert len(rows) >= 2
+    assert "truncated 2" in capsys.readouterr().out

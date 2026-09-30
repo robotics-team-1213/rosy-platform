@@ -9,6 +9,15 @@ stamp equals it, if logged within SIDE_LOOKAHEAD_S after that frame (inference
 finishes after the frame is logged); stamp-less side data (cmd_vel, text) is
 the latest one logged before the frame. camera/front/compressed is preferred:
 when a session has it, raw camera/front frames are not extracted.
+
+Known limits of the matching: line/observation from sources other than the
+camera (IR_LINE, stamped with odometry time) never equals an image stamp and
+does not attach. The shadow node compares its frame with the nearest rule
+answer within 0.2 s when the exact one is missing, so its rule_error can
+belong to a neighbouring frame (control.sensing.perception.learned.shadow).
+
+A truncated or corrupt MCAP file (a snapshot recovered after a crash) keeps
+the messages read before the damage and is counted in the summary line.
 """
 import argparse
 import json
@@ -131,22 +140,26 @@ def _header_stamp(msg):
 def _has_compressed(files, make_reader) -> bool:
     for f in files:
         with open(f, "rb") as fh:
-            reader = make_reader(fh)
             try:
-                summary = reader.get_summary()
+                summary = make_reader(fh).get_summary()
             except Exception:  # truncated file: no summary section
                 summary = None
             if summary is not None:
-                channels = summary.channels.values()
+                topics = [ch.topic for ch in summary.channels.values()]
             else:
                 fh.seek(0)
-                channels = (ch for _, ch, _ in make_reader(fh).iter_messages())
-            if any(_topic_is(ch.topic, COMPRESSED_CAMERA_TOPIC) for ch in channels):
+                topics = []
+                try:
+                    for _, ch, _ in make_reader(fh).iter_messages():
+                        topics.append(ch.topic)
+                except Exception:  # damaged tail: the topics seen so far count
+                    pass
+            if any(_topic_is(t, COMPRESSED_CAMERA_TOPIC) for t in topics):
                 return True
     return False
 
 
-def _mcap_frames(files, skipped=None):
+def _mcap_frames(files, skipped=None, truncated=None):
     try:
         from mcap.reader import make_reader
         from mcap_ros2.decoder import DecoderFactory
@@ -162,52 +175,62 @@ def _mcap_frames(files, skipped=None):
             f = pending.popleft()
             yield f["t"], f["item"], f["side"], f["ext"]
 
-    for f in files:
+    def decoded(f):
+        """Messages of one file; a damaged file ends early instead of failing."""
         with open(f, "rb") as fh:
-            reader = make_reader(fh, decoder_factories=[DecoderFactory()])
-            for schema, ch, message, msg in reader.iter_decoded_messages():
-                t = message.log_time / 1e9
-                yield from ready(t)
-                while early and early[0][0] + SIDE_LOOKAHEAD_S < t:
-                    early.popleft()
-                # Channels carry absolute, possibly namespaced topics.
-                name = next((n for n in SIDE_TOPICS if _topic_is(ch.topic, n)), None)
-                if name is not None:
-                    value = _side_value(schema.name, msg)
-                    stamp = _payload_stamp(value)
-                    if stamp is None:
-                        latest[name] = value
-                        continue
-                    frame = next((p for p in pending if p["stamp"] is not None
-                                  and abs(p["stamp"] - stamp) <= STAMP_TOL_S), None)
-                    if frame is not None:
-                        frame["side"][name] = value
-                    else:
-                        early.append((t, stamp, name, value))
+            try:
+                reader = make_reader(fh, decoder_factories=[DecoderFactory()])
+                yield from reader.iter_decoded_messages()
+            except Exception as exc:
+                print(f"{f.name}: truncated or corrupt ({type(exc).__name__}); "
+                      "kept what was read", file=sys.stderr)
+                if truncated is not None:
+                    truncated[0] += 1
+
+    for f in files:
+        for schema, ch, message, msg in decoded(f):
+            t = message.log_time / 1e9
+            yield from ready(t)
+            while early and early[0][0] + SIDE_LOOKAHEAD_S < t:
+                early.popleft()
+            # Channels carry absolute, possibly namespaced topics.
+            name = next((n for n in SIDE_TOPICS if _topic_is(ch.topic, n)), None)
+            if name is not None:
+                value = _side_value(schema.name, msg)
+                stamp = _payload_stamp(value)
+                if stamp is None:
+                    latest[name] = value
                     continue
-                if _topic_is(ch.topic, COMPRESSED_CAMERA_TOPIC):
-                    ext = "png" if "png" in str(msg.format).lower() else "jpg"
-                    item = bytes(msg.data)
-                elif _topic_is(ch.topic, CAMERA_TOPIC):
-                    if prefer_compressed:
-                        continue
-                    try:
-                        item = image_to_bgr(msg.encoding, msg.width, msg.height, msg.step,
-                                            bytes(msg.data))
-                    except ValueError:  # malformed frame: count it, keep going
-                        if skipped is not None:
-                            skipped[0] += 1
-                        continue
-                    ext = "jpg"
+                frame = next((p for p in pending if p["stamp"] is not None
+                              and abs(p["stamp"] - stamp) <= STAMP_TOL_S), None)
+                if frame is not None:
+                    frame["side"][name] = value
                 else:
+                    early.append((t, stamp, name, value))
+                continue
+            if _topic_is(ch.topic, COMPRESSED_CAMERA_TOPIC):
+                ext = "png" if "png" in str(msg.format).lower() else "jpg"
+                item = bytes(msg.data)
+            elif _topic_is(ch.topic, CAMERA_TOPIC):
+                if prefer_compressed:
                     continue
-                stamp = _header_stamp(msg)
-                side = dict(latest)
-                if stamp is not None:
-                    for _, s_stamp, s_name, s_value in early:
-                        if abs(s_stamp - stamp) <= STAMP_TOL_S:
-                            side[s_name] = s_value
-                pending.append({"t": t, "stamp": stamp, "item": item, "side": side, "ext": ext})
+                try:
+                    item = image_to_bgr(msg.encoding, msg.width, msg.height, msg.step,
+                                        bytes(msg.data))
+                except ValueError:  # malformed frame: count it, keep going
+                    if skipped is not None:
+                        skipped[0] += 1
+                    continue
+                ext = "jpg"
+            else:
+                continue
+            stamp = _header_stamp(msg)
+            side = dict(latest)
+            if stamp is not None:
+                for _, s_stamp, s_name, s_value in early:
+                    if abs(s_stamp - stamp) <= STAMP_TOL_S:
+                        side[s_name] = s_value
+            pending.append({"t": t, "stamp": stamp, "item": item, "side": side, "ext": ext})
     yield from ready(None)
 
 
@@ -221,12 +244,13 @@ def main(argv=None) -> int:
     src, out = Path(args.source), Path(args.out)
     is_session = src.is_dir()
     skipped = [0]
+    truncated = [0]
     if is_session:
         files = _mcap_files(src)
         if not files:
             print(f"no .mcap files under {src / 'bag'}", file=sys.stderr)
             return 1
-        it = _mcap_frames(files, skipped)
+        it = _mcap_frames(files, skipped, truncated)
     else:
         it = _video_frames(src)
     session = src.name if is_session else None
@@ -254,7 +278,9 @@ def main(argv=None) -> int:
             n += 1
     if is_session and (src / "session.json").is_file():
         shutil.copy2(src / "session.json", out / "session.json")
-    note = f" (skipped {skipped[0]} malformed)" if skipped[0] else ""
+    notes = ([f"skipped {skipped[0]} malformed"] if skipped[0] else []) + (
+        [f"truncated {truncated[0]} files"] if truncated[0] else [])
+    note = f" ({', '.join(notes)})" if notes else ""
     print(f"extracted {n} frames{note} -> {out}")
     return 0
 
