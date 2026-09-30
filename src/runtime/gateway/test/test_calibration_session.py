@@ -224,3 +224,27 @@ def test_activity_is_in_the_ws_state_push(lease):
         frame = ws.receive_json()
     assert frame["activity"]["kind"] == "CALIBRATING"
     assert frame["activity"]["label"] == "주행 보정"
+
+
+def test_expiry_is_published_outside_the_lease_lock(lease):
+    """Review item 5: a bus subscriber that reads the lease back must not block on it."""
+    client, services, clock = lease
+    seen = []
+
+    def subscriber(event):
+        if event.type == "calibration.session_expired":
+            # A plain Lock held by the publisher would deadlock this read.
+            acquired = services.calibration._lock.acquire(timeout=1.0)
+            seen.append(acquired)
+            if acquired:
+                services.calibration._lock.release()
+            seen.append(services.calibration.current())
+
+    unsubscribe = services.events.subscribe(subscriber)
+    try:
+        _open(client)
+        clock.now += 31
+        assert services.calibration.current() is None
+    finally:
+        unsubscribe()
+    assert seen == [True, None]

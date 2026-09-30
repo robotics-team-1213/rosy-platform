@@ -63,9 +63,9 @@ class CalibrationSessionManager:
         self._events = events
         self._monotonic = monotonic
         self._clock = clock
-        # Re-entrant: expiry publishes under the lock, and a bus subscriber that
-        # reads state (activity -> current) must not deadlock on it.
-        self._lock = threading.RLock()
+        # Every event is published after this lock is released, so a bus
+        # subscriber that reads state back (activity -> current) cannot deadlock.
+        self._lock = threading.Lock()
         self._session: Optional[_Session] = None
 
     # --- lease -------------------------------------------------------------
@@ -82,7 +82,7 @@ class CalibrationSessionManager:
             raise CalibrationSessionError(
                 "VALIDATION_ERROR", f"ttl_s must be within {MIN_TTL_S:g}..{MAX_TTL_S:g}")
         with self._lock:
-            self._expire_locked()
+            expired = self._expire_locked()
             current = self._session
             if current is not None:
                 busy = self._public(current)
@@ -95,6 +95,7 @@ class CalibrationSessionManager:
                     started_mono=now, renewed_mono=now)
                 busy = None
                 opened = self._public(current)
+        self._announce_expired(expired)
         if busy is not None:
             # One robot, one session. A second one (even from the same token)
             # would hide the first operator's work behind a new label.
@@ -108,11 +109,12 @@ class CalibrationSessionManager:
 
     def heartbeat(self, session_id: str, owner_id: str) -> dict:
         with self._lock:
-            self._expire_locked()
+            expired = self._expire_locked()
             current = self._require_locked(session_id)
             if current is not None and current.owner_id == owner_id:
                 current.renewed_mono = self._monotonic()
             snapshot = self._public(current) if current is not None else None
+        self._announce_expired(expired)
         if snapshot is None:
             raise CalibrationSessionError("NOT_FOUND", "no such active calibration session")
         if snapshot["owner"]["id"] != owner_id:
@@ -123,12 +125,13 @@ class CalibrationSessionManager:
     def end(self, session_id: str, *, by_id: str, force: bool = False) -> dict:
         """End the session. ``force`` lets an administrator clear another owner's lease."""
         with self._lock:
-            self._expire_locked()
+            expired = self._expire_locked()
             current = self._require_locked(session_id)
             snapshot = self._public(current) if current is not None else None
             allowed = current is not None and (current.owner_id == by_id or force)
             if allowed:
                 self._session = None
+        self._announce_expired(expired)
         if snapshot is None:
             raise CalibrationSessionError("NOT_FOUND", "no such active calibration session")
         if not allowed:
@@ -145,8 +148,9 @@ class CalibrationSessionManager:
 
     def current(self) -> Optional[dict]:
         with self._lock:
-            self._expire_locked()
+            expired = self._expire_locked()
             snapshot = self._public(self._session) if self._session is not None else None
+        self._announce_expired(expired)
         return snapshot
 
     def expire_due(self) -> None:
@@ -183,17 +187,21 @@ class CalibrationSessionManager:
             return None
         return current
 
-    def _expire_locked(self) -> None:
-        """Drop a lapsed lease and say so once. The session is cleared before the
-        publish, so a subscriber that reads back in (RLock) already sees none."""
+    def _expire_locked(self) -> Optional[_Session]:
+        """Drop a lapsed lease; the caller announces it after releasing the lock."""
         current = self._session
         if current is None or self._monotonic() - current.renewed_mono < current.ttl_s:
-            return
+            return None
         self._session = None
+        return current
+
+    def _announce_expired(self, expired: Optional[_Session]) -> None:
+        if expired is None:
+            return
         self._events.publish(
             "calibration.session_expired", severity="warning", source="calibration",
-            data={"session_id": current.id, "kind": current.kind,
-                  "owner": current.owner_id, "ttl_s": current.ttl_s})
+            data={"session_id": expired.id, "kind": expired.kind,
+                  "owner": expired.owner_id, "ttl_s": expired.ttl_s})
 
     def _public(self, session: _Session) -> dict:
         now = self._monotonic()
