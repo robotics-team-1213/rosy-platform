@@ -16,7 +16,14 @@ activation. Nothing image-resident needs to change for that.
     sudo -n python3 -B sync-image-layer.py             # back up, install, reload
 
 It never restarts a unit. ``restart_units`` names the active units whose unit
-file or native-runtime script changed; the caller decides.
+file or native-runtime script changed; the caller decides. Boot oneshots and
+network/config units are reported as ``next_boot_units`` instead.
+
+After a rollback it also undoes, within the allowlist, what an earlier sync
+did to paths the current release no longer carries: files it added are
+removed and files it replaced are restored, per the backup manifests. Files
+no sync recorded (the image's own) are never removed. Reload/enable commands
+that failed stay in pending.json and run again on the next call.
 """
 
 from __future__ import annotations

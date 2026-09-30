@@ -65,8 +65,8 @@
 
 ## 최근 기록
 
+- 2026-10-01 · uncommitted · fix(release): D-383 독립 리뷰 반영
 - 2026-10-01 · uncommitted · feat(release): 페이로드 푸시가 이미지 계층을 활성 릴리스 사본으로 맞춘다 (D-383)
 - 2026-10-01 · uncommitted · feat(native): D-381 blocked 패턴과 비상정지 진입음
 - 2026-09-30 · uncommitted · docs(adr): D-375 에서 D-380 으로 개명
 - 2026-09-30 · uncommitted · feat(native): D-375 부팅 표시가 운용 모드를 램프와 LCD에 표시
-- 2026-09-30 · uncommitted · deploy(harness): last_verified를 CI 초록 커밋으로 기록

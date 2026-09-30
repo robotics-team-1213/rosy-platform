@@ -70,13 +70,22 @@ Verified twice on 2026-09-26: releases 013 and 014 on a Pinky Pro running image 
    apply runs.
    - The apply backs up every replaced file to `/var/lib/rosy/image-layer-backup/<UTC>-<id>/`
      with a `backup-manifest.json`, and installs atomically. It then runs `daemon-reload` and
-     `udevadm control --reload`, and enables new units the image enables.
+     `udevadm control --reload`, and enables new units the image enables (`.path`/`.timer`
+     with `--now`).
+   - If one of those commands fails, `/var/lib/rosy/image-layer-backup/pending.json` keeps
+     it. Re-run the push (or the sync): it re-runs the commands and offers the units again.
    - The push restarts the active units the apply lists in `restart_units`, prints
      `restarted: ...`, and checks CORE readiness again. Restarting `rosy-io` briefly stops
-     the motors.
+     the motors. `rosy-network`, `rosy-config`, `rosy-release-recover` and
+     `rosy-sd-provision` are never restarted live; the push prints them as
+     `takes effect next boot`.
    - Changed modprobe options print a warning. They apply at the next module load or reboot.
-   - `-Rollback` re-syncs from the release that becomes current. `-SkipImageLayerSync` turns
-     the step off. `-PrintCommands` shows the steps without running them.
+   - `-Rollback` runs rollback, then the sync from the release that became current, then
+     the restarts, then CORE readiness. The sync removes files an earlier sync added that
+     this release does not carry (disabling such units first) and restores files it
+     replaced, unless someone changed them since. `-SkipImageLayerSync` turns the step
+     off. `-PrintCommands` shows the steps without running them.
+   - Files the image installed are never removed, even when a later release drops them.
    - Only a release that carries the script can sync. A robot syncs on its first push of
      such a release.
 
