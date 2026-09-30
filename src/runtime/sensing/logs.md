@@ -633,3 +633,10 @@
 - gate 변화: ROS-SIM HOLD 유지 — blocker에 planning 슬라이스 통과 기록. 남은 것: calibration(병행 세션 진행 중)·safety-policy 그래프, Gazebo 폐루프, 물리 센서.
 - 결정: 없음.
 - 교훈: 검증기의 오판은 노드 소스의 의도 주석(_clear_route "Revoke old routes immediately; silence is not a stop command")과 대조해야 한다 — 계약 문서가 검증기보다 위다.
+
+## 2026-09-30 · uncommitted · fix(control): keep v2 — 경계 추적과 벽 밑 테이프(D-364 addendum)
+- 변경: `perception/lane_keep.py` — (1) 직전 프레임 경계를 기억해(오도메트리 없음) 이어지는 경계(6 cm·20° 안)는 반대쪽으로 8 cm 넘게 넘어가기 전까지 좌·우를 이어받고, 한쪽만 보이면 이어지는 경계를 먼저 고른다(fc2a81dc). 목표 이동 제한은 시도 후 뺐다. (2) 벽 줄기가 밝기 계단(3×3 평균, 3 행 사이 V 16)에서도 끝나 벽 밑 테이프가 남고, 벽 판정 밝기를 바닥 10 백분위 기준으로도 묶어 화면을 채운 벽도 찾는다(2d947c18). `test_lane_keep.py` 18 → 23.
+- 증거: 녹화 재생 벤치(공칭 지면, keep 기본) on_line/on_paint/none/jump — pilot 0.083/0.015/0.332/0.016 → 0.019/0.014/0.319/0.007, teleop 0.043/0.070/0.080/0.047 → 0.040/0.066/0.078/0.024. real-profile sim 폐루프: edge_left 출발 1.531 m → 3.496 m(V1A, 다만 SW 진입로 뒤 회전교차로 남쪽을 가로질러 off-lane 2, 동쪽 고리 안쪽으로 흐름), B1 0.509 → 1.326 m(off-lane 1), C1 0.509 m LOST → 2.001 m 이지만 x 0.20 분기에서 ±1 진동 후 둘레 벽에 붙음(off-lane 1). `pytest src/runtime/sensing/test -k "lane or ground or observer or keep"` 364 passed, 18 skipped (2d947c18, 2026-09-30 Windows). 영상·궤적 `X:\DevTemp\rosy-pilot-evidence\2026-09-30-sim-keep-v2\`. DEVICE: NOT RUN.
+- gate 변화: SOURCE 진행(실물 녹화 벤치 전 지표 개선). ROS-SIM 한 바퀴 미달 유지 — 분기에서 fail-closed 가 깨졌다(C1), 모서리 자르기·원호 미해결.
+- 결정: D-364 addendum(새 번호 없음). 모서리 회전은 실물에서 계속 끈다.
+- 교훈: 같은 저장 프레임의 4 fps 오프라인 재생과 8 fps 라이브가 모서리 잠금에서 다른 답을 냈다(V1C). 폐루프 로그에 전략(`strategy`)이 없으면 라이브를 재현할 수 없다.
