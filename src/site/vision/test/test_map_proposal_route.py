@@ -15,7 +15,7 @@ from core_common.protocol.vision_preview import VisionLeaseSigner
 from rosy_vision.ingest import IngestServer, LatestFrame
 from rosy_vision.map_register import load_map_paint
 from rosy_vision.protocol import FrameHeader
-from test_map_register import STL, _render, _similarity
+from map_paint_frames import STL, render, similarity
 
 PATH = "/api/vision/sources/ceiling-north/map-proposal"
 
@@ -27,7 +27,7 @@ def paint():
 
 @pytest.fixture(scope="module")
 def track_jpeg(paint):
-    ok, encoded = cv2.imencode(".jpg", _render(paint, _similarity(440.0, 180.0, (780.0, 360.0))))
+    ok, encoded = cv2.imencode(".jpg", render(paint, similarity(440.0, 180.0, (780.0, 360.0))))
     assert ok
     return encoded.tobytes()
 
