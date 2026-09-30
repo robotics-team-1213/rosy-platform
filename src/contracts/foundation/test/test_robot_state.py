@@ -305,6 +305,26 @@ def test_only_a_known_nav_state_is_kept(value, expected):
     assert rs.valid_nav_state(value) == expected
 
 
+# --- D-383: the swarm role beside the mode ---------------------------------------
+
+
+@pytest.mark.parametrize("value,expected", [
+    ("leader", "leader"), ("follower", "follower"),
+    (None, None), ("none", None), ("LEADER", None), ("", None), (3, None),
+])
+def test_only_a_real_swarm_role_is_kept(value, expected):
+    assert rs.valid_swarm_role(value) == expected
+
+
+@pytest.mark.parametrize("role,suffix", [
+    ("leader", " - LEADER"), ("follower", " - FOLLOWER"),
+    (None, ""), ("none", ""), ("captain", ""),
+])
+def test_the_role_suffix_names_the_formation_only(role, suffix):
+    assert rs.role_suffix(role) == suffix
+    assert suffix.isascii()  # the boot card font has no Hangul
+
+
 @pytest.mark.parametrize("nav,pattern,why", [
     ("BLOCKED", "blocked", "a blocked goal blinks the navigating cyan"),
     ("FAILED", "blocked", "a failed goal is just as stuck"),

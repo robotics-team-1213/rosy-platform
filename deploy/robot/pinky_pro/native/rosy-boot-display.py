@@ -174,6 +174,7 @@ def read_view(root: Path, battery: tuple[float, float] | None) -> dict:
         "network": network,
         "robot_mode": status.get("robot_mode"),
         "nav_state": status.get("nav_state"),
+        "swarm_role": status.get("swarm_role"),
         "battery_percent": None if battery is None else round(battery[0]),
         "battery_voltage": None if battery is None else round(battery[1], 2),
     }
@@ -207,8 +208,11 @@ def _state_view(view: dict, status: dict) -> dict:
                                   robot_mode=status.get("robot_mode"))
     todos = result["todos"]
     # D-380: the LCD line names the operating mode beside the health state — the
-    # lamp shows it as a colour, the card says it in words.
-    line = robot_state.state_line(result, lcd=True) + robot_state.mode_suffix(status.get("robot_mode"))
+    # lamp shows it as a colour, the card says it in words. D-383: a formation
+    # role rides at the end ("Ready - NAVIGATION - LEADER").
+    line = (robot_state.state_line(result, lcd=True)
+            + robot_state.mode_suffix(status.get("robot_mode"))
+            + robot_state.role_suffix(status.get("swarm_role")))
     return {"robot_state": result["state"], "state_line": line,
             "todo": todos[0]["lcd"] if todos else None}
 
