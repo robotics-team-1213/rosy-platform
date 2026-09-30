@@ -64,6 +64,7 @@ fun SettingsScreen(
     var secure by remember(current) { mutableStateOf(current?.secure ?: false) }
     // Only a rosyov:// link sets the pin; it is not typed by hand and is dropped when TLS is unchecked.
     var pin by remember(current) { mutableStateOf(current?.pin) }
+    var pinDropped by remember(current) { mutableStateOf(false) }
     var invalid by remember { mutableStateOf<String?>(null) }
     var saved by remember { mutableStateOf(false) }
     var overheadServices by remember { mutableStateOf(emptyList<OverheadServiceRecord>()) }
@@ -183,6 +184,7 @@ fun SettingsScreen(
                         source = parsed.pairing.source
                         secure = parsed.pairing.secure
                         pin = parsed.pairing.pin
+                        pinDropped = false
                         invalid = null
                     }
                     is PairingUri.Parsed.Invalid -> invalid = parsed.reason
@@ -208,7 +210,17 @@ fun SettingsScreen(
         )
         Field(source, { source = it; saved = false }, R.string.settings_source, invalid == "source")
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Checkbox(checked = secure, onCheckedChange = { secure = it; if (!it) pin = null; saved = false })
+            Checkbox(
+                checked = secure,
+                onCheckedChange = {
+                    secure = it
+                    if (!it && pin != null) {
+                        pin = null
+                        pinDropped = true
+                    }
+                    saved = false
+                },
+            )
             Text(stringResource(R.string.settings_tls))
         }
         if (secure) {
@@ -217,6 +229,9 @@ fun SettingsScreen(
                     ?: stringResource(R.string.settings_pin_none),
                 style = MaterialTheme.typography.bodySmall,
             )
+        }
+        if (pinDropped && pin == null) {
+            Text(stringResource(R.string.settings_pin_dropped), color = RosyColors.StatusWarn)
         }
 
         invalid?.let { CritMessage(invalidText(it)) }
