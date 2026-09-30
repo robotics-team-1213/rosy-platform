@@ -110,3 +110,44 @@ def test_no_wall_class_means_zero_wall_fraction():
     mask = np.zeros((240, 320), np.int64)
     mask[:, 150:170] = 1
     assert lane_evidence(_logits(mask), CLASSES).wall_fraction == 0.0
+
+
+def _reference_evidence(logits, classes):
+    """The pre-2026-10-01 implementation: full-frame softmax, labels from it."""
+    from control.sensing.perception.learned import lane_mask as lm
+
+    probs = lm._softmax(logits[0].astype(np.float32))
+    labels = probs.argmax(axis=0)
+    fractions = {c.name: float((labels == c.index).sum()) / labels.size for c in classes}
+    h, w = labels.shape
+    band = slice(int(h * (1 - lm.NEAR_FIELD_FRACTION)), h)
+    band_labels, band_conf = labels[band], probs.max(axis=0)[band]
+
+    def _target(role):
+        idx = [c.index for c in classes if c.role == role]
+        return np.isin(band_labels, idx) if idx else np.zeros_like(band_labels, bool)
+
+    wall = _target("wall")
+    target = _target("drivable") & ~wall
+    if target.mean() < lm.DRIVABLE_MIN_FRACTION:
+        target = _target("lane_marking") & ~wall
+    if not target.any():
+        return LaneMaskEvidence(False, None, 0.0, fractions, float(wall.mean()))
+    _, xs = np.nonzero(target)
+    error = float(np.clip((xs.mean() - (w - 1) / 2.0) / (w / 2.0), -1.0, 1.0))
+    confidence = float(np.clip(target.any(axis=1).mean() * band_conf[target].mean(), 0.0, 1.0))
+    return LaneMaskEvidence(True, error, confidence, fractions, float(wall.mean()))
+
+
+@pytest.mark.parametrize("seed", range(8))
+def test_band_only_softmax_matches_the_full_frame_reference(seed):
+    """D-373 CPU budget: softmax on the near-field band only, argmax on logits for
+    the fractions; error and confidence stay bit-identical on random logits."""
+    classes = (ClassSpec(0, "floor", "background"), ClassSpec(1, "line", "lane_marking"),
+               ClassSpec(2, "wall", "wall"), ClassSpec(3, "drivable", "drivable"))
+    rng = np.random.default_rng(seed)
+    logits = rng.normal(0.0, 3.0, (1, 4, 240, 320)).astype(np.float32)
+    if seed % 2:
+        logits[0, 3] -= 6.0  # drivable rare: the lane_marking fallback path
+    got, want = lane_evidence(logits, classes), _reference_evidence(logits, classes)
+    assert got == want

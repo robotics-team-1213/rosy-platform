@@ -403,8 +403,6 @@ DECLARED_WRITES = {
 
 # Absolute paths a unit's program names but only reads.
 DECLARED_READS = {
-    # D-373: root:rosy-camera 0750 models, written only by the operator's sudo install.
-    "rosy-camera.service": {"/var/lib/rosy/models"},
     "rosy-release-recover.service": {"/opt/rosy/releases"},  # verify() of old_current
     "rosy-core.service": {
         "/var/lib/rosy",       # calibration data_root, runtime probe default
@@ -422,7 +420,8 @@ DECLARED_READS = {
         "/var/lib/rosy/maps/site.yaml", "/etc/rosy/line_follow.yaml", "/etc/rosy/profile.yaml",
     },
     # D-344 §12: the optional per-robot IR calibration overlay for line_observer.
-    "rosy-camera.service": {"/etc/rosy/ir_calibration.yaml"},
+    # D-373: root:rosy-camera 0750 models, written only by the operator's sudo install.
+    "rosy-camera.service": {"/etc/rosy/ir_calibration.yaml", "/var/lib/rosy/models"},
     # boot-status.json, network.json and ap-display.txt (root-written; D-190).
     "rosy-boot-display.service": {"/run/rosy-boot"},
     # D-193: boot-status.json; CORE's used/burned signal (read strictly, never

@@ -15,6 +15,12 @@ NO_MODEL = "no shadow model loaded"
 MAX_GAP_S = 1.0  # a longer stamp gap is a camera restart, not queue drops
 
 
+def rate_limited(now: float, last: float | None, max_rate_hz: float) -> bool:
+    """True when fewer than 1/max_rate_hz seconds passed since the last inference
+    (learned_lane_node max_rate_hz, D-373 CPU budget). max_rate_hz <= 0: no limit."""
+    return max_rate_hz > 0 and last is not None and now - last < 1.0 / max_rate_hz
+
+
 def expected_frames(gap_s: float, *, period_s: float, max_gap_s: float = MAX_GAP_S) -> int:
     """Frames the camera produced for one arrival: 1 + those lost between.
 
@@ -41,6 +47,7 @@ class LearnedStatus:
         self.frames_expected = 0
         self.frames_inferred = 0
         self.frames_skipped = 0
+        self.frames_rate_limited = 0
         self._latency = deque(maxlen=window)
 
     def frame_in(self, stamp: float | None = None) -> None:
@@ -56,6 +63,10 @@ class LearnedStatus:
     def frame_skipped(self) -> None:
         self.frames_skipped += 1
 
+    def frame_rate_limited(self) -> None:
+        """Left out on purpose by max_rate_hz, not by overload."""
+        self.frames_rate_limited += 1
+
     def frame_inferred(self, latency_ms: float) -> None:
         self.frames_inferred += 1
         self._latency.append(float(latency_ms))
@@ -64,9 +75,10 @@ class LearnedStatus:
         if model_revision is None and last_error is None:
             last_error = NO_MODEL  # D-62: off is reported, not silent
         p50 = round(statistics.median(self._latency), 3) if self._latency else None
-        # Everything the camera produced that was not inferred: queue drops,
-        # busy skips, and frames seen while no model was loaded.
-        missed = self.frames_expected - self.frames_inferred
+        # Everything the camera produced that was not inferred and not left out
+        # on purpose by the rate limit: queue drops, busy skips, and frames seen
+        # while no model was loaded. skip_ratio is overload only.
+        missed = max(0, self.frames_expected - self.frames_inferred - self.frames_rate_limited)
         ratio = missed / self.frames_expected if self.frames_expected else 0.0
         return {
             "schema": STATUS_SCHEMA,
@@ -76,6 +88,7 @@ class LearnedStatus:
             "frames_expected": self.frames_expected,
             "frames_inferred": self.frames_inferred,
             "frames_skipped": self.frames_skipped,
+            "frames_rate_limited": self.frames_rate_limited,
             "skip_ratio": round(ratio, 4),
             "latency_ms_p50": p50,
         }

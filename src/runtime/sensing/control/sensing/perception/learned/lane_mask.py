@@ -60,15 +60,19 @@ def lane_evidence(logits: np.ndarray, classes: tuple[ClassSpec, ...]) -> LaneMas
         raise ValueError(f"logits shape {logits.shape} does not match {len(classes)} classes")
     if not np.isfinite(logits).all():
         raise NonFiniteLogits("non-finite logits")
-    probs = _softmax(logits[0].astype(np.float32))
-    labels = probs.argmax(axis=0)
+    x = logits[0].astype(np.float32)
+    # Class fractions need labels only: argmax over logits, no softmax (D-373
+    # CPU budget). Softmax (for confidence) runs on the near-field band alone;
+    # it is per pixel, so the band's values equal a full-frame softmax's.
+    labels = x.argmax(axis=0)
     total = labels.size
     fractions = {c.name: float((labels == c.index).sum()) / total for c in classes}
 
     h, w = labels.shape
     band = slice(int(h * (1 - NEAR_FIELD_FRACTION)), h)
-    band_labels = labels[band]
-    band_conf = probs.max(axis=0)[band]
+    band_probs = _softmax(x[:, band])
+    band_labels = band_probs.argmax(axis=0)
+    band_conf = band_probs.max(axis=0)
 
     def _target(role: str) -> np.ndarray:
         idx = [c.index for c in classes if c.role == role]

@@ -8,6 +8,7 @@ never publishes cmd_vel (D-2, D-209). The model comes from the pointer file
 /var/lib/rosy/models/shadow (parameter `pointer`) and swaps without restart."""
 
 import json
+import time
 
 import cv2
 import numpy as np
@@ -19,9 +20,10 @@ from std_msgs.msg import String
 
 from . import executor_choice
 from .sensing.perception.image_frame import image_msg_to_frame
-from .sensing.perception.learned.runner import ModelSlot
+from .sensing.perception.learned.runner import LaneSegModel, ModelSlot
 from .sensing.perception.learned.shadow import TOPIC, RuleRing, shadow_payload
-from .sensing.perception.learned.status import STATUS_TOPIC, LearnedStatus
+from .sensing.perception.learned.status import STATUS_TOPIC, LearnedStatus, rate_limited
+
 
 def _image_to_bgr(msg: Image) -> np.ndarray:
     frame = image_msg_to_frame(msg)
@@ -34,7 +36,13 @@ class LearnedLaneNode(Node):
     def __init__(self):
         super().__init__('learned_lane_node')
         pointer = self.declare_parameter('pointer', '/var/lib/rosy/models/shadow').value
-        self._slot = ModelSlot(pointer)
+        # D-373 CPU budget: ~175 % of a Pi 5 at the full 8 fps (2026-10-01), too
+        # heavy for an always-on shadow. Infer at most max_rate_hz; 0 = no limit.
+        self._max_rate_hz = float(self.declare_parameter('max_rate_hz', 3.0).value)
+        threads = int(self.declare_parameter('threads', 2).value)
+        self._slot = ModelSlot(pointer,
+                               opener=lambda folder: LaneSegModel.open(folder, threads=threads))
+        self._last_infer: float | None = None
         self._busy = False  # only matters under a MultiThreadedExecutor
         # Rule answers keyed by image stamp: compared per frame, not newest-wins.
         self._rules = RuleRing()
@@ -86,6 +94,10 @@ class LearnedLaneNode(Node):
         if self._busy:
             self._status.frame_skipped()  # still inferring the previous frame
             return
+        now = time.monotonic()
+        if rate_limited(now, self._last_infer, self._max_rate_hz):
+            self._status.frame_rate_limited()
+            return
         try:
             model = self._slot.poll()
         except Exception as exc:
@@ -103,6 +115,7 @@ class LearnedLaneNode(Node):
             self._logged_revision = model.model_revision
             self.get_logger().info(f'shadow model {model.model_revision}')
         self._busy = True
+        self._last_infer = now
         try:
             bgr = _image_to_bgr(msg)
             result = model.infer(bgr)

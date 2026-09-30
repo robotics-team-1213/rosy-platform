@@ -10,7 +10,9 @@ D-373 payload switches, both off by default (off starts nothing new):
                         writing sessions under recording_root
 On the device both default from ROSY_LEARNED_SHADOW / ROSY_CAPTURE, which
 rosy-camera.service reads from the optional /etc/rosy/learned-perception.env.
-Only "true" and "false" count; anything else is off, with a warning (D-62)."""
+Only "true" and "false" count; anything else is off, with a warning (D-62).
+learned_max_rate_hz (ROSY_LEARNED_MAX_HZ, default 3.0; 0 = every frame) caps
+how often learned_lane_node infers: a Pi 5 at the full 8 fps was ~175 % CPU."""
 
 import os
 
@@ -36,6 +38,21 @@ def _env_switch(name):
     return 'false'
 
 
+def _env_rate(name, default):
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    try:
+        rate = float(value)
+    except ValueError:
+        rate = -1.0
+    if 0.0 <= rate < float('inf'):
+        return str(rate)
+    get_logger('camera_preview.launch').warning(
+        f'{name}={value!r} is not a rate >= 0 in Hz; using {default}')
+    return default
+
+
 def generate_launch_description():
     config = os.path.join(get_package_share_directory('control'), 'config')
     namespace = LaunchConfiguration('namespace')
@@ -54,6 +71,8 @@ def generate_launch_description():
         DeclareLaunchArgument('learned_shadow',
                               default_value=_env_switch('ROSY_LEARNED_SHADOW')),
         DeclareLaunchArgument('shadow_pointer', default_value='/var/lib/rosy/models/shadow'),
+        DeclareLaunchArgument('learned_max_rate_hz',
+                              default_value=_env_rate('ROSY_LEARNED_MAX_HZ', '3.0')),
         DeclareLaunchArgument('capture', default_value=_env_switch('ROSY_CAPTURE')),
         DeclareLaunchArgument('recording_root',
                               default_value='/var/lib/rosy/camera/recordings'),
@@ -79,7 +98,9 @@ def generate_launch_description():
             package='control', executable='learned_lane_node', namespace=namespace,
             output='screen', respawn=True, respawn_delay=2.0,
             condition=IfCondition(learned_shadow),
-            parameters=[{'pointer': LaunchConfiguration('shadow_pointer')}],
+            parameters=[{'pointer': LaunchConfiguration('shadow_pointer'),
+                         'max_rate_hz': ParameterValue(LaunchConfiguration('learned_max_rate_hz'),
+                                                       value_type=float)}],
         ),
         Node(
             package='control', executable='capture_trigger_node', namespace=namespace,

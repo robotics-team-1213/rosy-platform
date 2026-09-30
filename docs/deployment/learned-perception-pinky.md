@@ -170,8 +170,10 @@ sudo -n bash deploy/robot/pinky_pro/dev/install-learned-perception.sh
    `frames_inferred`가 늘어나는지 몇 초 간격으로 두 번 본다. `last_error`가 있으면 그 문구가 이유다
    (모델 없음, 런타임 import 실패, 해시 불일치 등).
 3. **지연과 건너뜀.** 같은 메시지의 `latency_ms_p50`과 `skip_ratio`를 카메라가 앞을 보는 평소 상태로
-   2분 이상 돌린 뒤 읽는다. `skip_ratio`는 카메라가 낸 프레임 중 추론하지 못한 비율이다(바쁨으로
-   건너뜀, 큐 버림, 모델 없는 동안의 프레임 포함).
+   2분 이상 돌린 뒤 읽는다. `skip_ratio`는 카메라가 낸 프레임 중 과부하로 추론하지 못한 비율이다(바쁨으로
+   건너뜀, 큐 버림, 모델 없는 동안의 프레임 포함). 추론 빈도 상한(`ROSY_LEARNED_MAX_HZ`, 기본 3.0 Hz,
+   `learned_max_rate_hz`)으로 일부러 건너뛴 프레임은 `frames_rate_limited`에 따로 세고 `skip_ratio`에는
+   넣지 않는다. ONNX 스레드 수는 노드 파라미터 `threads`(기본 2)다.
 4. **CPU.** C절에서 함께 보낸 `deploy/robot/pinky_pro/verify/measure-resident-cpu.sh`로 잰다. 섀도가
    켜진 상태에서 `rosy-camera.service` A/B를 120 s로 돌리면 카메라 유닛이 멈췄을 때와의 차이가
    나온다. 결과는 `/var/lib/rosy/resident-cpu-<ts>.md`에도 남는다. 기준 절차는
@@ -283,3 +285,19 @@ sudo -n bash deploy/robot/pinky_pro/dev/install-learned-perception.sh
 - **남은 조건:**
   - INT8 파일도 별도 산출물로 intake를 통과해야 한다(D-356).
   - 이 측정은 노드 없이 추론만 잰 값이다. 섀도 노드를 실제로 켠 상태의 `skip_ratio`, 지연, CPU는 E절 절차로 다시 기록한다.
+
+## 부록. 섀도 노드를 켠 첫 실측 (2026-10-01, 임시 `/tmp` 실행)
+
+E절 절차가 아니라 `/tmp`에서 띄운 임시 실행이다. 모델은 잠정 INT8 manifest
+`lane-seg-20261001-10ccb388`, 추론 빈도 상한이 생기기 전(카메라 8 fps를 다 받으려 함) 값이다.
+
+| 로봇 | 추론 빈도 | `latency_ms_p50` | `skip_ratio` |
+|---|---|---|---|
+| `rosy-pinky-9dfk` | 4.9 Hz | 204 ms | 0.37 |
+| `rosy-pinky-8kcn` | 6.5 Hz | 기록 없음 | 기록 없음 |
+
+- `learned_lane_node` 프로세스 CPU는 Pi 5에서 약 175 %(코어 1.75개)로 보고됐다. 로봇별 값은 따로 받지 않았다.
+
+- 상시 섀도로 쓰기에는 무겁다. 그래서 노드에 추론 빈도 상한 `max_rate_hz`(기본 3.0,
+  `ROSY_LEARNED_MAX_HZ`)와 `threads`(기본 2)를 두었고, 후처리는 softmax를 가까운 띠에만 계산한다.
+- 상한을 둔 뒤의 CPU·지연은 아직 재지 않았다. E절 4의 A/B로 다시 기록한다.

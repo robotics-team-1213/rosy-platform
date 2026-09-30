@@ -8,6 +8,7 @@ from control.sensing.perception.learned.status import (
     STATUS_SCHEMA,
     STATUS_TOPIC,
     LearnedStatus,
+    rate_limited,
 )
 
 
@@ -22,6 +23,7 @@ def test_empty_status_says_no_model():
         "frames_expected": 0,
         "frames_inferred": 0,
         "frames_skipped": 0,
+        "frames_rate_limited": 0,
         "skip_ratio": 0.0,
         "latency_ms_p50": None,
     }
@@ -170,3 +172,39 @@ def test_status_is_latched_and_published_at_start():
     init = next(n for n in ast.walk(tree)
                 if isinstance(n, ast.FunctionDef) and n.name == "__init__")
     assert ast.unparse(init.body[-1]) == "self._publish_status()"
+
+
+def test_rate_limit_waits_one_period_since_the_last_inference():
+    assert not rate_limited(10.0, None, 3.0)          # first frame
+    assert rate_limited(10.2, 10.0, 3.0)              # 0.2 s < 1/3 s
+    assert not rate_limited(10.34, 10.0, 3.0)
+    assert not rate_limited(10.01, 10.0, 0.0)         # 0 = no limit
+
+
+def test_rate_limited_frames_are_not_overload_skips():
+    """8 fps camera, 3 Hz cap: 5 of 8 frames are left out on purpose, skip_ratio 0."""
+    s = LearnedStatus(period_s=0.125)
+    last = None
+    for i in range(8):
+        t = i * 0.125
+        s.frame_in(t)
+        if rate_limited(t, last, 3.0):
+            s.frame_rate_limited()
+            continue
+        last = t
+        s.frame_inferred(200.0)
+    p = s.payload(model_revision="r", last_error=None)
+    assert (p["frames_inferred"], p["frames_rate_limited"], p["frames_skipped"]) == (3, 5, 0)
+    assert p["skip_ratio"] == 0.0
+    s.frame_in(1.0)
+    s.frame_skipped()  # busy: overload
+    assert s.payload(model_revision="r", last_error=None)["skip_ratio"] == pytest.approx(1 / 9, abs=1e-4)
+
+
+def test_node_declares_rate_and_threads_and_passes_threads_to_the_model():
+    from pathlib import Path
+    src = (Path(__file__).resolve().parents[1] / "control" / "learned_lane_node.py").read_text(encoding="utf-8")
+    assert "declare_parameter('max_rate_hz', 3.0)" in src
+    assert "declare_parameter('threads', 2)" in src
+    assert "LaneSegModel.open(folder, threads=threads)" in src
+    assert src.index("frame_skipped()") < src.index("rate_limited(") < src.index("self._busy = True")

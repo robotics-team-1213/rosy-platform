@@ -22,6 +22,8 @@ def _declared_defaults():
             value = kw["default_value"]
             if isinstance(value, ast.Call) and getattr(value.func, "id", "") == "_env_switch":
                 out[name] = ("env", ast.literal_eval(value.args[0]))
+            elif isinstance(value, ast.Call) and getattr(value.func, "id", "") == "_env_rate":
+                out[name] = ("env", *map(ast.literal_eval, value.args))
             else:
                 out[name] = ast.literal_eval(value)
     return out
@@ -33,6 +35,7 @@ def test_switches_default_from_the_unit_environment():
     assert d["learned_shadow"] == ("env", "ROSY_LEARNED_SHADOW")
     assert d["capture"] == ("env", "ROSY_CAPTURE")
     assert d["shadow_pointer"] == "/var/lib/rosy/models/shadow"
+    assert d["learned_max_rate_hz"] == ("env", "ROSY_LEARNED_MAX_HZ", "3.0")
     assert d["recording_root"] == "/var/lib/rosy/camera/recordings"
 
 
@@ -76,7 +79,7 @@ def _started(args):
     pytest.importorskip("launch.launch_context")
     pytest.importorskip("launch_ros.actions")
     from launch import LaunchContext
-    from launch.actions import DeclareLaunchArgument, ExecuteProcess
+    from launch.actions import DeclareLaunchArgument, ExecuteProcess, LogInfo
     from launch.substitutions import TextSubstitution
     from launch.utilities import perform_substitutions
 
@@ -88,6 +91,8 @@ def _started(args):
         if isinstance(e, DeclareLaunchArgument):
             ctx.launch_configurations.setdefault(
                 e.name, perform_substitutions(ctx, e.default_value))
+            continue
+        if isinstance(e, LogInfo):  # the IR overlay note (D-344 §12)
             continue
         if e.condition is not None and not e.condition.evaluate(ctx):
             continue
@@ -102,7 +107,7 @@ def _started(args):
 BASE = ["camera_detect_node", "line_observer_node", "road_observer_node"]
 
 
-SWITCH_ENV = ("ROSY_LEARNED_SHADOW", "ROSY_CAPTURE")
+SWITCH_ENV = ("ROSY_LEARNED_SHADOW", "ROSY_CAPTURE", "ROSY_LEARNED_MAX_HZ")
 
 
 @pytest.fixture
@@ -169,3 +174,42 @@ def test_introspection_learned_shadow_only():
 def test_introspection_capture_only():
     assert _started({"capture": "true"}) == BASE + ["capture_trigger_node",
                                                      "record_session --snapshot"]
+
+
+def _max_rate(args=None):
+    """The max_rate_hz parameter learned_lane_node would get, as a float."""
+    pytest.importorskip("launch.launch_context")
+    pytest.importorskip("launch_ros.actions")
+    from launch import LaunchContext
+    from launch.actions import DeclareLaunchArgument
+    from launch.utilities import perform_substitutions
+
+    ld = _load().generate_launch_description()
+    ctx = LaunchContext()
+    ctx.launch_configurations.update(args or {})
+    for e in ld.entities:
+        if isinstance(e, DeclareLaunchArgument):
+            ctx.launch_configurations.setdefault(e.name, perform_substitutions(ctx, e.default_value))
+    return float(ctx.launch_configurations["learned_max_rate_hz"])
+
+
+def test_learned_rate_is_passed_to_the_node():
+    assert "'max_rate_hz': ParameterValue(LaunchConfiguration('learned_max_rate_hz')" in SRC
+    assert "value_type=float" in SRC
+
+
+def test_learned_rate_defaults_to_3_hz_and_reads_the_env(no_switch_env, launch_warnings):
+    assert _max_rate() == 3.0
+    no_switch_env.setenv("ROSY_LEARNED_MAX_HZ", "1.5")
+    assert _max_rate() == 1.5
+    no_switch_env.setenv("ROSY_LEARNED_MAX_HZ", "0")
+    assert _max_rate() == 0.0
+    assert launch_warnings == []
+    assert _max_rate({"learned_max_rate_hz": "5.0"}) == 5.0
+
+
+@pytest.mark.parametrize("garbage", ["fast", "-1", "", "inf", "nan"])
+def test_learned_rate_garbage_keeps_the_default_and_says_so(no_switch_env, launch_warnings, garbage):
+    no_switch_env.setenv("ROSY_LEARNED_MAX_HZ", garbage)
+    assert _max_rate() == 3.0
+    assert "ROSY_LEARNED_MAX_HZ" in " ".join(r.getMessage() for r in launch_warnings)
