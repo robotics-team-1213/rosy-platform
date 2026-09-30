@@ -34,6 +34,8 @@ def test_pilot_assets_allowlist_blocks_the_rest():
     assert client.get("/pilot/assets/autonomy.js").status_code == 200
     assert client.get("/pilot/assets/screens/connect.js").status_code == 200
     assert client.get("/pilot/assets/screens/drive.js").status_code == 200
+    assert client.get("/pilot/assets/screens/drive-auto.js").status_code == 200
+    assert client.get("/pilot/assets/screens/drive-view.js").status_code == 200
     assert client.get("/pilot/assets/screens/inputs.js").status_code == 200
     assert client.get("/pilot/assets/input-state.js").status_code == 200
     assert client.get("/pilot/assets/vision.js").status_code == 200

@@ -40,6 +40,8 @@ PILOT_MIME = {
     "autonomy.js": "application/javascript",
     "screens/connect.js": "application/javascript",
     "screens/drive.js": "application/javascript",
+    "screens/drive-auto.js": "application/javascript",
+    "screens/drive-view.js": "application/javascript",
     "screens/inputs.js": "application/javascript",
     "input-state.js": "application/javascript",
     "vision.js": "application/javascript",

@@ -24,13 +24,6 @@ VERDICTS = {
         "vision, ros-network, host-cards extracted; further splits only on "
         "D-130.2 qualification (D-262)",
     ),
-    "hmi/pilot/screens/drive.js": (
-        708,
-        "accept for now: the drive screen owns layout, input wiring, auto mode "
-        "and the intent strip; pure logic already lives in stick.js, link.js, "
-        "input-state.js and autonomy.js. Next split when it grows: the auto "
-        "mode block and the zoom/layout block (D-323, D-344, D-363)",
-    ),
     "hmi/dashboard/index.html": (
         713,
         "accept: markup is a document, not code; ui-shell grammar is guarded "
