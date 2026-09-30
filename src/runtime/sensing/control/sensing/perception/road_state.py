@@ -31,20 +31,19 @@ Measurements (near field only, x <= 0.33 m):
             comes from image evidence only: the learned wall fraction and the
             keeper's own candidate rejection reasons.
 
-Gates, in order: wall, NIS (chi2 99 %: 9.21 for 2-D, 6.63 for 1-D), lateral
-jump |dy| > 0.04 m (only on an established track: a fresh acquisition has no
-track to jump from), pair width |y_L - y_R - w| < 0.04 m and |psi_L - psi_R| <
-12 deg. SLOW widens every gate 1.5x, re-acquisition 2x (NIS thresholds by the
-square).
+Gates, in order: wall, NIS (chi2 99 %: 9.21 2-D, 6.63 1-D), lateral jump |dy| >
+0.04 m (off only on a fresh acquisition: no previous track, i.e. after the reset to
+the prior; a STOP that keeps its coast is not fresh), pair width |y_L - y_R - w| <
+0.04 m and |psi_L - psi_R| < 12 deg. SLOW widens gates 1.5x, STOP 2x (NIS by square).
 
 Association: every near-field candidate is labelled R, L or noise; at most one
 R and one L. Score = sum of Gaussian log-likelihoods + a noise penalty per
 noise label. The top 3 hypotheses are kept. The best wins when it leads every
 *conflicting* hypothesis (one that labels some candidate differently) by
 more than 2. Otherwise it is a tie:
-  - an explicit route hint (Fleet) picks the leftmost / rightmost lane, or the
-    best score for "straight";
-  - on a fresh acquisition (no established track) the rightmost lane wins
+  - at a decision point, an explicit route hint (Fleet) picks the leftmost /
+    rightmost lane, or the best score for "straight";
+  - on a fresh acquisition (as above) the rightmost lane wins
     (Korean right-hand traffic: keep a lone line on the right). If IR sees a
     line, the choice must agree with it or the frame HOLDs (STOP, reason
     `ambiguous`);
@@ -86,6 +85,7 @@ from .road_state_model import (  # noqa: F401 — re-exported: callers import fr
     WALL_REASONS,
     BoundaryMeas,
     IrMeas,
+    OdomBuffer,
     OffsetMeas,
     RoadStateParams,
     WallSeg,
@@ -173,6 +173,7 @@ class RoadStateEstimator:
         self.reacq_counts = {"pair": 0, "side+ir": 0, "side+learned": 0}
         self._applied = None   # (travel, turn) at the last applied boundary update
         self._s_at_stop = 0.0
+        self._kept_prior = False   # a stop that keeps its coasted state as the prior
         self._learned_accepted: list = []
         self._calib_since = None
         self._calib_suspect = False
@@ -235,12 +236,14 @@ class RoadStateEstimator:
         self._tick(float(now))
         if profile is not None:
             self.profile = profile
-        fresh = self._stopped
-        if fresh and self._consistent == 0 and (
+        stopped = self._stopped
+        if stopped and self._consistent == 0 and (
                 self._stop_t is None or self._now - self._stop_t > p.reacq_timeout_s
                 or self._s_total - self._s_at_stop > p.slow_s_m):
             self._restart_from_prior()   # a recent stop keeps its coast as the prior mean
-        scale = p.reacq_gate if fresh else (p.slow_gate if self._level == SLOW else 1.0)
+        # Fresh = no previous target: a kept coasted prior is one (ADR rev1 section 5).
+        fresh = stopped and not self._kept_prior
+        scale = p.reacq_gate if stopped else (p.slow_gate if self._level == SLOW else 1.0)
         bounds = [m for m in measurements if isinstance(m, BoundaryMeas)]
         offsets = [m for m in measurements if isinstance(m, OffsetMeas)]
         irs = ([m for m in measurements if isinstance(m, IrMeas)]
@@ -359,7 +362,7 @@ class RoadStateEstimator:
         }
 
     def _tick(self, now: float) -> None:
-        self._now = now
+        self._now = now if self._now is None else max(self._now, now)   # never backwards
         if self._stopped and self._stop_t is None:
             self._stop_t = now
 
@@ -557,14 +560,14 @@ class RoadStateEstimator:
     def _restart_from_prior(self) -> None:
         """Lost d/phi/kappa (still integrating odometry) say nothing of the next lane."""
         self.x[:3] = 0.0
-        self._applied = None
+        self._applied, self._kept_prior = None, False
         variances = np.maximum(np.diag(self.P)[:3], np.diag(self._P0)[:3])
         self.P[:3, :], self.P[:, :3] = 0.0, 0.0
         self.P[:3, :3] = np.diag(variances)
 
     def _enter_stop(self, reason: str) -> None:
         if not self._stopped:
-            self._stop_t, self._s_at_stop = self._now, self._s_total
+            self._stop_t, self._s_at_stop, self._kept_prior = self._now, self._s_total, True
         self._stopped, self.stop_reason = True, reason
         self._consistent = 0
         for i in range(3):   # d, phi, kappa start over as wide as a first acquisition

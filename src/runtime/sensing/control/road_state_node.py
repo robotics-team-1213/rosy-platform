@@ -40,6 +40,7 @@ from . import executor_choice
 from .sensing.perception.road_state import (
     TOPIC,
     IrMeas,
+    OdomBuffer,
     RoadStateEstimator,
     RoadStateParams,
     boundaries_from_keep,
@@ -89,7 +90,8 @@ class RoadStateNode(Node):
             lane_width_m=width, lidar_wall_veto=veto, mode='shadow', ir_geometry_measured=self._ir_on,
             ir_calibrated=bool(self.get_parameter('ir_calibrated').value)), route_hint=hint)
         self._half = width / 2.0
-        self._odom = None       # (stamp, x, y, yaw, v, w)
+        self._odom = None       # (stamp, x, y, yaw, v, w), the latest, for the R1 log
+        self._odom_buffer = OdomBuffer()
         self._ir = None         # (stamp, y)
         self._learned = None    # payload not yet used
         self._walls = []
@@ -112,14 +114,10 @@ class RoadStateNode(Node):
         pose = msg.pose.pose
         x, y, yaw = float(pose.position.x), float(pose.position.y), _yaw(pose.orientation)
         twist = msg.twist.twist
-        sample = (stamp, x, y, yaw, float(twist.linear.x), float(twist.angular.z))
-        previous, self._odom = self._odom, sample
-        if previous is None or stamp < previous[0]:
-            return
-        dx, dy = x - previous[1], y - previous[2]
-        ds = dx * math.cos(previous[3]) + dy * math.sin(previous[3])
-        dtheta = math.atan2(math.sin(yaw - previous[3]), math.cos(yaw - previous[3]))
-        self._est.predict(ds, dtheta, dt=stamp - previous[0], stamp=stamp)
+        self._odom = (stamp, x, y, yaw, float(twist.linear.x), float(twist.angular.z))
+        # Held until a camera frame: the estimator is advanced to the image stamp,
+        # never past it, so its clock never runs backwards.
+        self._odom_buffer.add(stamp, x, y, yaw)
 
     def _on_line(self, msg: String) -> None:
         doc = _load(msg.data)
@@ -149,6 +147,8 @@ class RoadStateNode(Node):
         if not isinstance(stamp, (int, float)):
             return
         stamp = float(stamp)
+        for ds, dtheta, dt, odom_stamp in self._odom_buffer.advance_to(stamp):
+            self._est.predict(ds, dtheta, dt=dt, stamp=odom_stamp)
         records = bundle.get('candidates')
         source = 'candidates' if records is not None else 'boundaries'
         measurements = boundaries_from_keep(bundle)

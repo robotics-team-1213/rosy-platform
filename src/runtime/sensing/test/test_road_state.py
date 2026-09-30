@@ -23,6 +23,7 @@ from control.sensing.perception.road_state import (
     WallSeg,
     boundaries_from_keep,
     decision_point_from_keep,
+    OdomBuffer,
     offset_from_shadow,
     wall_segments_from_scan,
 )
@@ -847,3 +848,66 @@ def test_a_fresh_stop_keeps_the_coasted_state_as_its_acquisition_prior():
     for _ in range(int(2.2 / DT)):
         clock.frame([], v=0.04)
     assert list(est.x[:3]) == [0.0, 0.0, 0.0]
+
+
+def _stopped_with_kept_prior():
+    est, clock = tracking()
+    for _ in range(int(2.7 / DT)):          # lost_time STOP at 2.5 s; the coast is kept
+        clock.frame([], v=0.0)
+    assert est.level == STOP and est.stop_reason == "lost_time"
+    return est, clock
+
+
+def test_a_kept_prior_is_a_previous_track_so_the_right_rule_does_not_apply():
+    """ADR rev1 section 5: the right tie-break only without a previous target/track. A STOP
+    that keeps its coasted state still has one; only the reset to the prior is fresh."""
+    est, clock = _stopped_with_kept_prior()
+    est.P[0, 0] = 1.0
+    clock.frame(THREE_LINES, v=0.0)
+    assert est.last_frame["tie_rule"] != "right"
+    assert est.last_frame["hypothesis"]["labels"] == "NRL"     # the kept lane, not the rightmost
+
+
+def test_the_jump_gate_stays_active_while_the_prior_is_kept():
+    est, clock = _stopped_with_kept_prior()
+    clock.frame([BoundaryMeas(y=-HALF - 0.10, psi=0.0, x=X)], v=0.0)   # 10 cm > 2 x 0.04 m
+    assert est.rejects["jump"] == 1
+
+
+def test_after_the_reset_to_the_prior_the_acquisition_is_fresh_again():
+    est, clock = _stopped_with_kept_prior()
+    for _ in range(int(2.2 / DT)):          # the stop ages past reacq_timeout_s
+        clock.frame([], v=0.0)
+    est.P[0, 0] = 1.0
+    clock.frame(THREE_LINES, v=0.0)
+    assert est.last_frame["tie_rule"] == "right"
+    assert est.last_frame["hypothesis"]["labels"] == "RLN"
+
+
+def test_time_never_runs_backwards_in_the_estimator():
+    est, clock = tracking()
+    t = clock.t
+    est.update(pair(), t - 0.5)              # a late frame
+    assert est.snapshot()["stamp"] == t
+
+
+def test_odom_buffer_applies_motion_only_up_to_the_image_stamp():
+    buf = OdomBuffer()
+    for k in range(6):                       # 0.1 m/s along x, samples every 0.1 s
+        buf.add(10.0 + 0.1 * k, 0.01 * k, 0.0, 0.0)
+    steps = list(buf.advance_to(10.25))
+    assert [round(s[3], 3) for s in steps] == [10.1, 10.2]
+    assert sum(s[0] for s in steps) == pytest.approx(0.02)
+    later = list(buf.advance_to(10.55))
+    assert [round(s[3], 3) for s in later] == [10.3, 10.4, 10.5]
+    assert list(buf.advance_to(10.2)) == []  # never backwards
+
+
+def test_node_predicts_only_up_to_the_image_stamp():
+    import ast
+    tree = ast.parse(NODE.read_text(encoding="utf-8"))
+    methods = {n.name: n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)}
+    calls = lambda fn: {ast.unparse(c.func) for c in ast.walk(methods[fn]) if isinstance(c, ast.Call)}
+    assert not any(c.endswith(".predict") for c in calls("_on_odom"))      # odometry is buffered
+    assert "self._odom_buffer.add" in calls("_on_odom")
+    assert "self._odom_buffer.advance_to" in calls("_on_keep") and "self._est.predict" in calls("_on_keep")

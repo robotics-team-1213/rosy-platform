@@ -216,6 +216,34 @@ def boundaries_from_keep(last: dict, *, near_x_m: float = 0.33) -> list[Boundary
     return out
 
 
+class OdomBuffer:
+    """Odometry poses held until a camera frame asks for them: the prediction advances
+    only to the image stamp, never past it, never backwards (road_state_node)."""
+
+    def __init__(self):
+        self._pending: list = []    # (stamp, x, y, yaw), stamp order
+        self._last = None           # the last applied (stamp, x, y, yaw)
+
+    def add(self, stamp: float, x: float, y: float, yaw: float) -> None:
+        if self._last is not None and stamp <= self._last[0]:
+            return
+        if self._pending and stamp <= self._pending[-1][0]:
+            return
+        self._pending.append((float(stamp), float(x), float(y), float(yaw)))
+
+    def advance_to(self, t: float):
+        """(ds, dtheta, dt, stamp) steps for the poses stamped up to t."""
+        while self._pending and self._pending[0][0] <= t:
+            sample = self._pending.pop(0)
+            previous, self._last = self._last, sample
+            if previous is None:
+                continue
+            dx, dy = sample[1] - previous[1], sample[2] - previous[2]
+            ds = dx * math.cos(previous[3]) + dy * math.sin(previous[3])
+            dtheta = math.atan2(math.sin(sample[3] - previous[3]), math.cos(sample[3] - previous[3]))
+            yield ds, dtheta, sample[0] - previous[0], sample[0]
+
+
 def boundary_noise(b: BoundaryMeas, p: RoadStateParams) -> np.ndarray:
     """R: fitted floors plus keeper jitter growing with range (y) and for short lines (psi)."""
     reach = max(0.0, (b.x if b.x_psi is None else b.x_psi) - p.jitter_y_ref_x_m)
