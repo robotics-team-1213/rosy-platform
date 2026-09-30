@@ -3959,3 +3959,9 @@
 - 변경: 검토(APPROVE-WITH-FIXES) 1번. `bag_to_video.py` sidecar 의 부수 토픽(cmd_vel·odom·line/observation·scan)을 최근접에서 "프레임 bag log time 이하의 최신 메시지"로 바꿨다(미래 누설 없음, `dt` ≤ 0). motion 창도 프레임 이전 0.5 s 만 본다. `extract.py` MCAP 경로의 `t` 를 bag log time 에서 카메라 헤더 stamp 로 바꾸고 행에 `stamp_ns`·`log_ns` 를 적는다. D-356 보강에 sidecar 스키마(필드·시계)를 적었다. D-379 자동 라벨러가 같은 규칙을 쓴다.
 - 증거: `test_bag_to_video.py` 에 직전값·미래 배제·extract 헤더 stamp 시험 추가, `test_bag_to_video.py test_dataset_extract.py` 25 passed (2026-10-01 Windows, ML venv). 두 실세션 재변환: moving 653/2258, 772/6940.
 - gate 변화: 없음(개발 PC 도구·문서).
+
+## 2026-10-01 · uncommitted · fix(perception): bag_to_video sidecar 가 stamp 달린 증거를 제 프레임에 붙인다
+
+- 변경: `tools/perception/dataset/bag_to_video.py` sidecar 에 두 갈래 규칙(D-356/D-373 소유자 합의). `line/observation`·`perception/learned/shadow` 는 JSON 페이로드 `stamp` 가 프레임 헤더 stamp 와 ±1 ms 로 같고, 그 프레임 촬영(헤더 stamp) 뒤·프레임 log time 뒤 0.5 s 안에 기록된 첫 메시지를 붙이고 항목에 `stamp_ns`(int ns)를 넣는다. 아니면 null. 나머지(cmd_vel·odom·scan)는 프레임 log time 이하의 최신값 그대로. 하한을 프레임 log time 이 아니라 촬영 시각으로 둔 이유: 8kcn 에서 관측 45/2258 개가 제 영상보다 37–61 µs 먼저 녹화기에 닿았다. 행 형식(필드·단위·시계)은 모듈 docstring 에 적었다. `extract.py` 와 D-356 보강 문구는 학습 루프 소유자 브랜치가 고친다.
+- 증거: `test_bag_to_video.py` 16 passed — 프레임 N 관측이 N+1 영상 뒤(0.199 s)에 기록돼도 N 에 붙음, stamp 5 ms 어긋남·0.599 s 지연·촬영 전 기록은 null, 비-stamp 토픽 dt ≤ 0. `tools/perception/test` 159 passed, 1 skipped (2026-10-01 Windows, ML venv). 두 실세션 재변환: 관측 부착 2258/2258, 6940/6940(이전 규칙에서는 한 프레임 밀림), dt 중앙값 3.0 ms·2.6 ms, 최대 10.9 ms.
+- gate 변화: 없음(개발 PC 도구).
