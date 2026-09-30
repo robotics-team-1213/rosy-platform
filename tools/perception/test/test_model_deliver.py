@@ -133,8 +133,10 @@ def test_remote_push_root_work_runs_as_root_under_the_lock():
     for line in outer.splitlines():
         if ROOT_M in line and "trap" not in line:
             assert line.startswith(S), line
-    assert f"{S} test -f {ROOT_M}/.lock || {S} install -o root -g rosy-camera -m 0640 " \
-           f"/dev/null {ROOT_M}/.lock" in outer
+    # created in place (append + chown/chmod), never unlinked or replaced
+    assert (f"{S} sh -c ': >> {ROOT_M}/.lock; chown root:rosy-camera {ROOT_M}/.lock; "
+            f"chmod 0660 {ROOT_M}/.lock'") in outer
+    assert f"rm -f {ROOT_M}/.lock" not in s and f"{ROOT_M}/.lock.tmp" not in s
     assert "busy for 30 s" in s and "exit $rc" in s
     local = _push_script(privileged=False)
     assert "sudo" not in local and " -o root" not in local and " -m 07" not in local
@@ -171,7 +173,7 @@ def test_remote_push_reverifies_existing_final_and_quarantines_bad():
 def test_history_line_quotes_the_audit_fields():
     evil = {"operator": "o'x $(reboot) \"q\"", "host_of_operator": "h;rm", "tool_commit": None}
     s = _push_script(audit=evil)
-    body = shlex.split(s[s.index(LOCKED):].split(" || {")[0])[-1]  # the sh -c script
+    body = shlex.split(s[s.index(LOCKED):].split(" || { rc=$?;")[0])[-1]  # the sh -c script
     (printf,) = [ln for ln in body.splitlines() if "tee -a" in ln]
     words = shlex.split(printf)
     # each audit field is exactly one single-quoted word: no expansion on the robot
@@ -472,11 +474,11 @@ def remote(tmp_path):
     checks = [(hashlib.sha256(good).hexdigest(), "model.onnx")]
     report = {"text": b"report-1"}
 
-    def run(checks=checks, audit=None):
+    def run(checks=checks, audit=None, unless_held=False):
         rep = (hashlib.sha256(report["text"]).hexdigest(), "intake_report.json")
         script = deliver.remote_script("push", REV, to_posix(root), checks=checks, report=rep,
                                        stage=to_posix(stage_dir / REV), audit=audit,
-                                       privileged=False)
+                                       unless_held=unless_held, privileged=False)
         return subprocess.run([bash, "-c", FLOCK_SHIM + script], capture_output=True, text=True)
 
     def stage(content, folder=None, report_text=None):
@@ -636,40 +638,146 @@ def test_busy_lock_fails_clearly(tmp_path):
     assert (root / "shadow.previous").exists()  # nothing changed
 
 
-# --- operator hold and robot observation (D-373 decision 7) ---------------------------------
+# --- hold file, exit codes 75/76, history failure (D-373 decision 7) ------------------------
 
-def _h(action, revision, previous=""):
-    return {"action": action, "revision": revision, "previous": previous}
-
-
-def test_operator_hold_is_the_revision_rolled_back_from():
-    assert deliver.operator_hold([]) is None
-    assert deliver.operator_hold([_h("push", "r1"), _h("push", "r2", "r1")]) is None
-    held = [_h("push", "r1"), _h("push", "r2", "r1"), _h("rollback", "r1", "r2")]
-    assert deliver.operator_hold(held) == "r2"
-    assert deliver.operator_hold([*held, _h("release-hold", "r1", "r1")]) is None
-    assert deliver.operator_hold([*held, _h("push", "r3", "r1")]) is None
+HOLD = f"{ROOT_M}/hold"
 
 
-def test_release_hold_is_locked_and_audited():
-    s = deliver.remote_script("release-hold", None, audit=AUDIT)
-    assert LOCKED in s and '"release-hold"' in s and f"tee -a {ROOT_M}/history.jsonl" in s
-    assert "mv " not in s  # the pointer is not touched
+def _body(script):
+    return shlex.split(script[script.index(LOCKED):].split(" || { rc=$?;")[0])[-1]
 
 
-def test_observe_parses_pointer_and_history():
-    lines = [json.dumps(_h("push", "r1")), "not json", json.dumps(_h("rollback", "r0", "r1"))]
-    out = f"{ROOT_M}/r0\n--- history\n" + "\n".join(lines) + "\n"
-    runner = FakeRunner(stdout=out)
+def test_manual_push_writes_the_hold_before_the_pointer_moves():
+    body = _body(_push_script(audit=AUDIT))
+    hold = body.index(f"mv {HOLD}.tmp {HOLD}")
+    assert body.index(f"(: >> {ROOT_M}/history.jsonl)") < hold  # appendable, checked first
+    assert hold < body.index(f"mv {ROOT_M}/shadow.tmp {ROOT_M}/shadow")
+    assert "manual push" in body and f"exit 76" not in body
+
+
+def test_site_push_unless_held_checks_first_and_writes_no_hold():
+    body = _body(_push_script(audit=AUDIT, unless_held=True))
+    gate = body.index(f"if test -e {HOLD}; then")
+    assert gate < body.index(f"rm -rf {ROOT_M}/{REV}.partial")
+    assert "exit 76" in body[gate:gate + 200]
+    assert f"mv {HOLD}.tmp {HOLD}" not in body
+
+
+def test_inner_75_and_76_are_remapped():
+    body = _body(_push_script(audit=AUDIT))
+    assert "set +e\n(\nset -e" in body and "case $rc in 75|76) rc=1;; esac" in body
+
+
+def test_rollback_holds_and_release_hold_only_removes_it():
+    rb = _body(deliver.remote_script("rollback", None, audit=AUDIT))
+    assert rb.index(f"mv {HOLD}.tmp {HOLD}") < rb.index(f"mv {ROOT_M}/shadow.previous {ROOT_M}/shadow")
+    rel = deliver.remote_script("release-hold", None, audit=AUDIT)
+    body = _body(rel)
+    assert f"rm -f {HOLD}" in body and '"release-hold"' in body
+    assert "mv " not in body  # the pointer is not touched
+
+
+def test_history_failure_after_the_move_is_reported():
+    body = _body(_push_script(audit=AUDIT))
+    assert "pointer changed, history not written" in body and "exit 3" in body
+
+
+def test_status_and_observe_read_the_hold_file():
+    assert f"{S} cat {HOLD}" in deliver.remote_script("status", None)
+    assert f"{S} cat {HOLD}" in deliver.remote_script("observe", None)
+
+
+def test_observe_parses_pointer_and_hold():
+    hold = {"by": "ana", "host": "pc", "ts": "t", "action": "rollback", "revision": "r0",
+            "reason": "manual rollback"}
+    runner = FakeRunner(stdout=f"{ROOT_M}/r0\n--- hold\n{json.dumps(hold)}\n")
     got = deliver.observe("robot", identity="/keys/id", known_hosts="/keys/kh", runner=runner)
-    assert got == {"shadow": "r0", "history": [_h("push", "r1"), _h("rollback", "r0", "r1")]}
-    assert runner.calls[0][-2] == "rosy@robot" and "tail -n 50" in runner.calls[0][-1]
-    assert runner.kwargs[0]["timeout"] == 60
+    assert got == {"shadow": "r0", "hold": hold}
+    assert runner.calls[0][-2] == "rosy@robot" and runner.kwargs[0]["timeout"] == 60
+    assert deliver.parse_observation("\n--- hold\n") == {"shadow": None, "hold": None}
     with pytest.raises(RuntimeError):
         deliver.observe("robot", identity="/k", known_hosts="/kh", runner=FakeRunner(returncode=1))
 
 
-def test_release_hold_cli(tmp_path):
+def test_release_hold_cli():
     runner = FakeRunner()
     assert deliver.main(["release-hold", "robot", "--operator", "ana", *SSH], runner=runner) == 0
     assert '"release-hold"' in runner.calls[0][-1]
+
+
+@pytest.mark.parametrize("rc, expected", [(75, 75), (76, 76), (3, 1), (1, 1)])
+def test_push_passes_busy_and_held_through(tmp_path, rc, expected):
+    models = tmp_path / "models"
+    rev = _model(models, "pass")
+
+    class LastFails(FakeRunner):
+        def __call__(self, cmd, **kw):
+            r = super().__call__(cmd, **kw)
+            if len(self.calls) == 3:
+                r.returncode = rc
+            return r
+
+    runner = LastFails()
+    assert deliver.main(["push", "robot", rev, "--models", str(models), "--unless-held", *SSH],
+                        runner=runner) == expected
+    assert "if test -e /var/lib/rosy/models/hold" in runner.calls[2][-1]
+
+
+def test_rollback_busy_is_75():
+    assert deliver.main(["rollback", "robot", *SSH], runner=FakeRunner(returncode=75)) == 75
+
+
+# executed under bash (flock shim in Git Bash)
+
+def _run_script(bash, script):
+    return subprocess.run([bash, "-c", FLOCK_SHIM + script], capture_output=True, text=True)
+
+
+def test_manual_push_leaves_a_parseable_hold(remote):
+    root, to_posix, run, stage, good, _ = remote
+    stage(good)
+    r = run(audit={"operator": "ana", "host_of_operator": "pc"})
+    assert r.returncode == 0, r.stderr
+    hold = json.loads((root / "hold").read_text())
+    assert hold["by"] == "ana" and hold["action"] == "push" and hold["revision"] == REV
+    assert hold["reason"] == "manual push" and hold["ts"].endswith("Z")
+
+
+def test_held_site_push_touches_nothing(remote, tmp_path):
+    root, to_posix, run, stage, good, stage_dir = remote
+    (root / "hold").write_text('{"by": "ana"}')
+    (root / "shadow").write_text("/old/model")
+    stage(good)
+    r = run(unless_held=True)
+    assert r.returncode == 76 and "held" in r.stderr
+    assert (root / "shadow").read_text() == "/old/model"
+    assert not (root / REV).exists() and not (root / f"{REV}.partial").exists()
+    assert not (root / "history.jsonl").exists()
+
+
+def test_release_hold_removes_the_file_and_keeps_the_pointer(tmp_path):
+    env = _bash_env()
+    if env is None:
+        pytest.skip("needs bash")
+    bash, to_posix = env
+    root = tmp_path / "models"
+    root.mkdir()
+    (root / "hold").write_text("{}")
+    (root / "shadow").write_text("/x/lane-seg-20260930-aaaaaaaa")
+    r = _run_script(bash, deliver.remote_script("release-hold", None, to_posix(root),
+                                                privileged=False, audit={"operator": "bo"}))
+    assert r.returncode == 0, r.stderr
+    assert not (root / "hold").exists()
+    assert (root / "shadow").read_text() == "/x/lane-seg-20260930-aaaaaaaa"
+    rec = json.loads((root / "history.jsonl").read_text())
+    assert rec["action"] == "release-hold" and rec["operator"] == "bo"
+
+
+def test_unappendable_history_changes_nothing(remote):
+    root, to_posix, run, stage, good, _ = remote
+    (root / "history.jsonl").mkdir()  # cannot be appended to
+    (root / "shadow").write_text("/old/model")
+    stage(good)
+    r = run()
+    assert r.returncode == 3 and "not appendable" in r.stderr
+    assert (root / "shadow").read_text() == "/old/model" and not (root / "hold").exists()

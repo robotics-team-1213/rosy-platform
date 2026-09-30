@@ -2,17 +2,23 @@
 
 deliver.py push <host> <model_revision> [--models data/perception/models]
 deliver.py rollback <host>
-deliver.py release-hold <host>   (ends an operator hold, see operator_hold)
+deliver.py release-hold <host>   (removes the hold file; the pointer is not changed)
 deliver.py status <host>
 common: [--user rosy] [--identity KEY] [--known-hosts FILE] [--root /var/lib/rosy/models]
         [--timeout S]  (per ssh/scp step; 600 for push, 60 for rollback/status)
 push/rollback: [--operator NAME] (default: the OS user; recorded in history.jsonl)
 status: [--history N] (last N history.jsonl lines, default 5)
 
-Every pointer change (push, rollback) runs on the robot as root under flock on
-/var/lib/rosy/models/.lock (30 s wait, then a clear "busy" failure) and appends
-one JSON line {ts, action, revision, previous, operator, host_of_operator,
-tool_commit} to /var/lib/rosy/models/history.jsonl (root:rosy-camera 0640).
+Every pointer change (push, rollback, release-hold) runs on the robot as root
+under flock on /var/lib/rosy/models/.lock and appends one JSON line {ts, action,
+revision, previous, operator, host_of_operator, tool_commit} to history.jsonl
+(root:rosy-camera 0640; audit only). A manual push or rollback first writes the
+hold file /var/lib/rosy/models/hold {by, host, ts, action, revision, reason},
+which stops the site watcher (push --unless-held) for that robot until
+release-hold removes it.
+
+Exit codes: 0 ok, 1 failed, 2 refused locally, 3 history.jsonl not appendable,
+75 lock busy for 30 s (retry later), 76 held (--unless-held only; nothing changed).
 
 SSH is key-only and pinned (BatchMode, IdentitiesOnly, StrictHostKeyChecking=yes;
 see operator_ssh.py). /var/lib/rosy/models is root:rosy-camera 0750, so every
@@ -62,47 +68,42 @@ _STAGE = re.compile(r"/tmp/rosy-model\.[A-Za-z0-9]{8,}")
 
 
 LOCK_WAIT_S = 30
-LOCK_BUSY_EXIT = 75  # flock -E: the lock stayed held for LOCK_WAIT_S
-LOCK_NAME, HISTORY_NAME = ".lock", "history.jsonl"
-OBSERVE_SEPARATOR, OBSERVE_HISTORY = "--- history", 50
-POINTER_ACTIONS = ("push", "rollback", "release-hold")
-
-
-def operator_hold(history: list[dict]) -> str | None:
-    """The revision an operator rolled back from, while that rollback is the
-    latest pointer action (a later push or release-hold ends the hold)."""
-    last = next((h for h in reversed(history) if h.get("action") in POINTER_ACTIONS), None)
-    if last and last["action"] == "rollback":
-        return last.get("previous") or None
-    return None
+LOCK_BUSY_EXIT = 75  # only flock -w running out (flock -E); the body never exits 75
+HELD_EXIT = 76  # --unless-held found the hold file; nothing was touched
+HISTORY_EXIT = 3  # history.jsonl not appendable (before: nothing changed; after: see stderr)
+LOCK_NAME, HISTORY_NAME, HOLD_NAME = ".lock", "history.jsonl", "hold"
+OBSERVE_SEPARATOR = "--- hold"
+_HISTORY_LINE = ('{"ts":"%s","action":%s,"revision":"%s","previous":"%s",'
+                 '"operator":%s,"host_of_operator":%s,"tool_commit":%s}\\n')
+_HOLD_JSON = '{"by":%s,"host":%s,"ts":"%s","action":%s,"revision":"%s","reason":%s}\\n'
 
 
 def parse_observation(text: str) -> dict:
+    """{"shadow": revision or None, "hold": the hold file (dict) or None}."""
     head, _, tail = text.partition(OBSERVE_SEPARATOR)
-    pointer = head.strip()
-    history = []
-    for line in tail.splitlines():
+    pointer, hold_text = head.strip(), tail.strip()
+    hold = None
+    if hold_text:
         try:
-            entry = json.loads(line)
+            hold = json.loads(hold_text)
         except ValueError:
-            continue
-        if isinstance(entry, dict):
-            history.append(entry)
-    return {"shadow": pointer.rsplit("/", 1)[-1] if pointer else None, "history": history}
+            hold = {"raw": hold_text}
+        if not isinstance(hold, dict):
+            hold = {"raw": hold_text}
+    return {"shadow": pointer.rsplit("/", 1)[-1] if pointer else None, "hold": hold}
 
 
 def observe(host: str, *, identity: str, known_hosts: str, user: str = "rosy",
-            root: str = None, timeout: float = None, runner=subprocess.run) -> dict:
-    """{"shadow": revision or None, "history": [recent history.jsonl entries]}."""
+            root: str | None = None, timeout: float | None = None,
+            runner=subprocess.run) -> dict:
+    """The robot's real shadow pointer and hold file (watch.py, rosy_ml)."""
     opts = operator_ssh.options(identity, known_hosts)
     r = _run(runner, ["ssh", *opts, "--", f"{user}@{host}",
                       remote_script("observe", None, root or REMOTE_ROOT)],
              timeout or STATUS_TIMEOUT_S)
-    if r is None:
+    if r.returncode != 0:
         raise RuntimeError(f"cannot read the shadow pointer on {host}")
     return parse_observation(r.stdout or "")
-_HISTORY_LINE = ('{"ts":"%s","action":%s,"revision":"%s","previous":"%s",'
-                 '"operator":%s,"host_of_operator":%s,"tool_commit":%s}\\n')
 
 
 def _safe_word(expr: str) -> str:
@@ -112,25 +113,31 @@ def _safe_word(expr: str) -> str:
 
 def remote_script(action: str, rev: str | None, root: str = REMOTE_ROOT, *,
                   checks=(), report=None, stage: str | None = None, audit=None,
-                  history: int = 5, lock_wait: int = LOCK_WAIT_S,
-                  privileged: bool = True) -> str:
+                  unless_held: bool = False, history: int = 5,
+                  lock_wait: int = LOCK_WAIT_S, privileged: bool = True) -> str:
     """Shell text for one remote step. Every path is shlex.quote'd.
 
     checks: [(sha256, file name), ...] of the model: manifest-listed files and
     the manifest. report: (sha256, name) of the intake report, installed too.
     stage: the scp'd copy, <mktemp dir>/<rev>; the mktemp dir is removed on exit.
-    audit: {operator, host_of_operator, tool_commit} for the history line (push,
-    rollback). Pointer changes run as root under flock on <root>/.lock (wait
-    lock_wait s, exit 75 if busy) and append one JSON line to history.jsonl.
-    privileged=False drops sudo -n and the -o/-g/-m of install so the script runs
-    as an ordinary user in tests (Git Bash cannot set directory modes either);
-    main() never passes it."""
+    audit: {operator, host_of_operator, tool_commit} for hold and history.
+
+    Pointer changes run as root under flock on <root>/.lock (wait lock_wait s,
+    exit 75 only if the lock stayed busy). A manual push or rollback writes the
+    hold file first (fail safe), then moves the pointer, then appends history.
+    unless_held (the site watcher): if the hold file exists, exit 76 untouched.
+    release-hold removes the hold file; the pointer is not changed.
+    privileged=False drops sudo -n and the owner/mode flags so the script runs
+    as an ordinary user in tests; main() never passes it."""
     q = shlex.quote
+    a = audit or {}
     s = f"{SUDO} " if privileged else ""
     own = f" -o {OWNER} -g {GROUP}" if privileged else ""
     dmode, fmode = (" -m 0750", " -m 0640") if privileged else ("", "")
     ptr, prev, tmp = q(f"{root}/shadow"), q(f"{root}/shadow.previous"), q(f"{root}/shadow.tmp")
     lock, hist = q(f"{root}/{LOCK_NAME}"), q(f"{root}/{HISTORY_NAME}")
+    hold, hold_tmp = q(f"{root}/{HOLD_NAME}"), q(f"{root}/{HOLD_NAME}.tmp")
+    ts = '"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'
 
     def check(folder: str, *, quiet: bool = False, files=None) -> str:
         files = everything if files is None else files
@@ -138,23 +145,56 @@ def remote_script(action: str, rev: str | None, root: str = REMOTE_ROOT, *,
         return (f"printf '%s\\n' {sums} | sha256sum -c -"
                 + (" >/dev/null 2>&1" if quiet else ""))
 
-    def history_line(act: str, revision_expr: str, previous_expr: str) -> list[str]:
-        a = audit or {}
+    def history_ready() -> list[str]:
         return [
-            f"test -f {hist} || install{own}{fmode} /dev/null {hist}",
-            f"printf {q(_HISTORY_LINE)} \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\" "
-            f"{q(json.dumps(act))} \"{_safe_word(revision_expr)}\" "
-            f"\"{_safe_word(previous_expr)}\" {q(json.dumps(a.get('operator')))} "
-            f"{q(json.dumps(a.get('host_of_operator')))} {q(json.dumps(a.get('tool_commit')))}"
-            f" | tee -a {hist} >/dev/null",
+            f"test -e {hist} || install{own}{fmode} /dev/null {hist}",
+            # a subshell: a redirect error on the special builtin : would end the shell
+            f"(: >> {hist}) 2>/dev/null || {{ echo 'history.jsonl is not appendable; nothing changed' >&2;"
+            f" exit {HISTORY_EXIT}; }}",
         ]
 
-    def locked(inner: list[str]) -> list[str]:
-        """Run inner (as root via sudo -n) while holding the models lock."""
-        body = "\n".join(["set -e", *inner])
+    def history_line(act: str, revision_expr: str, previous_expr: str) -> list[str]:
+        return [
+            f"printf {q(_HISTORY_LINE)} {ts} {q(json.dumps(act))} "
+            f"\"{_safe_word(revision_expr)}\" \"{_safe_word(previous_expr)}\" "
+            f"{q(json.dumps(a.get('operator')))} {q(json.dumps(a.get('host_of_operator')))} "
+            f"{q(json.dumps(a.get('tool_commit')))} | tee -a {hist} >/dev/null"
+            f" || {{ echo 'pointer changed, history not written' >&2; exit {HISTORY_EXIT}; }}",
+        ]
+
+    def write_hold(act: str, revision_expr: str) -> list[str]:
+        """Before the pointer moves: a failure after this still leaves the hold."""
+        return [
+            f"install{own}{fmode} /dev/null {hold_tmp}",
+            f"printf {q(_HOLD_JSON)} {q(json.dumps(a.get('operator')))} "
+            f"{q(json.dumps(a.get('host_of_operator')))} {ts} {q(json.dumps(act))} "
+            f"\"{_safe_word(revision_expr)}\" {q(json.dumps('manual ' + act))} > {hold_tmp}",
+            f"mv {hold_tmp} {hold}",
+        ]
+
+    def locked(inner: list[str], *, skip_if_held: bool = False) -> list[str]:
+        """inner runs as root while holding the lock, in a subshell whose exit
+        code 75/76 is remapped to 1, so 75 can only mean a busy lock and 76 only
+        the held check."""
+        gate = ([f"if test -e {hold}; then echo \"held: $(cat {hold})\" >&2; exit {HELD_EXIT}; fi"]
+                if skip_if_held else [])
+        body = "\n".join([
+            *gate,
+            "set +e",
+            "(",
+            "set -e",
+            *inner,
+            ")",
+            "rc=$?",
+            f"case $rc in {LOCK_BUSY_EXIT}|{HELD_EXIT}) rc=1;; esac",
+            "exit $rc",
+        ])
+        make_lock = f": >> {lock}" + (f"; chown {OWNER}:{GROUP} {lock}; chmod 0660 {lock}"
+                                      if privileged else "")
         return [
             f"{s}test -d {q(root)} || {s}install -d{own}{dmode} {q(root)}",
-            f"{s}test -f {lock} || {s}install{own}{fmode} /dev/null {lock}",
+            # create in place, never unlink: a concurrent holder keeps the same inode
+            f"{s}sh -c {q(make_lock)}",
             f"{s}flock -E {LOCK_BUSY_EXIT} -w {lock_wait} {lock} sh -c {q(body)} || {{ rc=$?;",
             f"  [ $rc -ne {LOCK_BUSY_EXIT} ] || echo {q(f'models lock {root}/{LOCK_NAME} busy for {lock_wait} s: another push or rollback is running; retry later')} >&2;",
             "  exit $rc; }",
@@ -193,6 +233,8 @@ def remote_script(action: str, rev: str | None, root: str = REMOTE_ROOT, *,
                 f"  else mv {final} {final}.bad.$$; mv {partial} {final}; fi",
                 f"else mv {partial} {final}; fi",
                 check(final_path),
+                *history_ready(),
+                *([] if unless_held else write_hold("push", q(rev))),
                 f"cur=$(cat {ptr} 2>/dev/null || true)",
                 f'if [ "$cur" != {final} ]; then',
                 f"  if test -f {ptr}; then",
@@ -206,7 +248,7 @@ def remote_script(action: str, rev: str | None, root: str = REMOTE_ROOT, *,
                 "  sync",
                 "fi",
                 *history_line("push", q(rev), '"${cur##*/}"'),
-            ]),
+            ], skip_if_held=unless_held),
         ])
     if action == "rollback":
         return "\n".join([
@@ -215,30 +257,35 @@ def remote_script(action: str, rev: str | None, root: str = REMOTE_ROOT, *,
                 f"test -f {prev} || {{ echo 'no shadow.previous to roll back to' >&2; exit 1; }}",
                 f"cur=$(cat {ptr} 2>/dev/null || true)",
                 f"new=$(cat {prev})",
+                *history_ready(),
+                *write_hold("rollback", '"${new##*/}"'),
                 f"mv {prev} {ptr}",
                 "sync",
                 *history_line("rollback", '"${new##*/}"', '"${cur##*/}"'),
             ]),
         ])
-    if action == "release-hold":  # history only: ends an operator hold (operator_hold)
+    if action == "release-hold":  # removes the hold; the pointer is not changed
         return "\n".join([
             "set -e",
             *locked([
                 f"cur=$(cat {ptr} 2>/dev/null || true)",
+                *history_ready(),
+                f"rm -f {hold}",
                 *history_line("release-hold", '"${cur##*/}"', '"${cur##*/}"'),
             ]),
         ])
-    if action == "observe":  # machine-read by watch.py
+    if action == "observe":  # machine-read by watch.py and rosy_ml
         return "\n".join([
             f"{s}cat {ptr} 2>/dev/null || true",
             "echo",
             f"echo {q(OBSERVE_SEPARATOR)}",
-            f"{s}tail -n {OBSERVE_HISTORY} {hist} 2>/dev/null || true",
+            f"{s}cat {hold} 2>/dev/null || true",
         ])
     if action == "status":
         return "\n".join([
             f"echo \"shadow: $({s}cat {ptr} 2>/dev/null)\"",
             f"echo \"previous: $({s}cat {prev} 2>/dev/null)\"",
+            f"echo \"hold: $({s}cat {hold} 2>/dev/null || echo none)\"",
             f"{s}ls -1 {q(root)} 2>/dev/null || true",
             f"echo 'history (last {int(history)}):'",
             f"{s}tail -n {int(history)} {hist} 2>/dev/null || true",
@@ -247,18 +294,22 @@ def remote_script(action: str, rev: str | None, root: str = REMOTE_ROOT, *,
 
 
 def _run(runner, cmd, timeout: float):
-    """The completed process on success, else None (reported on stderr).
+    """The completed process (returncode 124 on a timeout); failures go to stderr.
 
     A timeout is a failed step (the watcher retries it on a later run)."""
     try:
         r = runner(cmd, check=False, capture_output=True, text=True, timeout=timeout)
     except subprocess.TimeoutExpired:
         print(f"failed (timeout {timeout:g} s): {cmd[0]}", file=sys.stderr)
-        return None
+        return subprocess.CompletedProcess(cmd, 124, "", "")
     if r.returncode != 0:
         print(f"failed ({r.returncode}): {cmd[0]} {getattr(r, 'stderr', '')}", file=sys.stderr)
-        return None
     return r
+
+
+def _remote_rc(r) -> int:
+    """75 busy and 76 held pass through for the watcher; any other failure is 1."""
+    return r.returncode if r.returncode in (LOCK_BUSY_EXIT, HELD_EXIT) else 1
 
 
 def _sha256(path: Path) -> str:
@@ -299,20 +350,21 @@ def _push(args, ssh, scp, runner) -> int:
     report_check = (_sha256(folder / REPORT_NAME), REPORT_NAME)
     t = args.timeout
     r = _run(runner, [*ssh, target, remote_script("prepare", rev)], t)
-    if r is None:
+    if r.returncode != 0:
         return 1
     stage_dir = (r.stdout or "").strip()
     if not _STAGE.fullmatch(stage_dir):
         print(f"refused: unexpected remote temp dir {stage_dir!r}", file=sys.stderr)
         return 1
-    if _run(runner, [*scp, str(folder), f"{target}:{stage_dir}/{rev}"], t) is None:
+    if _run(runner, [*scp, str(folder), f"{target}:{stage_dir}/{rev}"], t).returncode != 0:
         _run(runner, [*ssh, target, f"rm -rf -- {shlex.quote(stage_dir)}"], t)
         return 1
     r = _run(runner, [*ssh, target, remote_script("push", rev, args.root, checks=checks,
                                                   report=report_check, audit=_audit(args),
+                                                  unless_held=args.unless_held,
                                                   stage=f"{stage_dir}/{rev}")], t)
-    if r is None:
-        return 1
+    if r.returncode != 0:
+        return _remote_rc(r)
     print(r.stdout or "", end="")
     print(f"shadow -> {args.root}/{rev} on {args.host}")
     return 0
@@ -341,6 +393,9 @@ def main(argv=None, runner=subprocess.run) -> int:
         if name == "push":
             p.add_argument("revision")
             p.add_argument("--models", default=str(ROOT / "data" / "perception" / "models"))
+            p.add_argument("--unless-held", action="store_true",
+                           help="site watcher: exit 76 without changes if the robot is held; "
+                                "without it a push is manual and holds the robot")
         p.add_argument("--user", default=operator_ssh.USER)
         p.add_argument("--root", default=REMOTE_ROOT)
         operator_ssh.add_arguments(p)
@@ -373,8 +428,8 @@ def main(argv=None, runner=subprocess.run) -> int:
              else {"audit": _audit(args)})
     r = _run(runner, [*ssh, f"{args.user}@{args.host}",
                       remote_script(args.action, None, args.root, **extra)], args.timeout)
-    if r is None:
-        return 1
+    if r.returncode != 0:
+        return _remote_rc(r)
     print(r.stdout or "", end="")
     return 0
 
