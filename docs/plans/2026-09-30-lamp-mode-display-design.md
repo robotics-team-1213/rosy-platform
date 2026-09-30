@@ -46,8 +46,8 @@ CORE StateManager.snapshot().mode        (RobotMode: IDLE/MANUAL/NAVIGATION/DOCK
 - 호스트: `test_robot_state.py`(우선순위 전 표), `test_host_status_summary.py`(핸드오버 키·검증), `test_boot_status_indicator.py`(레코드), `test_boot_display.py`(패턴 선택·무음 전환·LCD 접미·C 이름 동기). 변이 증명 4종.
 - 기기(별도 DEVICE 단계): hardware 모드에서 모드별 패턴 확인, CORE 정지 60 s 후 모드 표시 소멸, EMERGENCY에서 실패 빨강과 속도 구분 확인.
 
-## 뒤따를 일 (이 설계에 없음)
+## 뒤따를 일 → 2026-10-01 D-381로 구현됨
 
-- NAVIGATION 세부 상태(PLANNING/BLOCKED 등)의 물리 표시 — `NavigationState`까지 넘기면 되지만 우선 RobotMode만.
-- 부저의 EMERGENCY 진입음 — 모드 전환 무음 원칙과 충돌하므로 제품 정책이 먼저.
-- 대시보드 요약줄에 모드 병기 — 대시보드는 이미 `state.mode`를 따로 보여준다.
+- ~~NAVIGATION 세부 상태(PLANNING/BLOCKED 등)의 물리 표시~~ — **D-381**: `nav_state`가 같은 핸드오버를 타고, NAVIGATION 안에서 BLOCKED/FAILED가 `blocked`(청록 2 Hz 점멸)로 보인다. PLANNING·ARRIVED·CANCELED는 무늬를 바꾸지 않는다.
+- ~~부저의 EMERGENCY 진입음 — 제품 정책이 먼저~~ — **D-381**: 진입 시 2.5 kHz 네 번(한 번만), 유지 무음, 해제 시 ready 차임. 패턴 기반으로 건강 상태와 무관하게 판정한다.
+- 대시보드 요약줄에 모드 병기 — 대시보드는 이미 `state.mode`를 따로 보여준다. (계속 열어 둠)
