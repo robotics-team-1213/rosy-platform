@@ -182,6 +182,12 @@
 
 ## 2026-09-30 · feat/console-lane-map-overlay · feat(vision): 계산 중인 map-proposal 읽기는 마지막 완료 결과를 받는다
 
-- 변경: `ingest.py` — 한 번에 1.2–2 s라 1 s 간격보다 길어 도중 읽기가 429 busy였다. source마다 마지막 완료 결과(`_map_done`)를 그 결과의 `frame_seq`·나이와 `X-Proposal-State: previous`로 돌려준다(새 결과는 `current`). 완료 결과가 아직 없을 때와 주체별 속도 제한만 429.
+- 변경: `ingest.py` — 한 번에 1.2–2 s라 1 s 간격보다 길어 도중 읽기가 429 busy였다. source마다 마지막 성공 결과(`_map_done`)를 그 결과의 `frame_seq`·나이와 `X-Proposal-State: previous`로 돌려준다(새 결과는 `current`). 성공 결과가 아직 없을 때와 주체별 속도 제한만 429. 2026-10-01 병합: 아래 단일 비행·작업 프로세스 설계 위에 얹었다(바쁠 때만 이전 결과).
 - 증거: `test_map_proposal_route.py` 새 시험 1개; 콘솔 헤드리스 시험에서 실제 프레임 4장(rx5·rx6·standard·wide) 모두 수락.
 - gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · fix(vision): D-375 review fixes and worker process
+
+- 변경: 독립 리뷰(APPROVE WITH FIXES)와 실기 시험 결함 반영. 방향 차는 다른 방향(적어도 180°) 후보를 늘 정밀화해서 구하고, 경쟁자가 없으면 1.0이 아니라 미정(거부). recall×precision ≥ 0.75 추가, 거울상은 잘 맞고 방향이 분명할 때만. 픽셀 중심 변환은 실제 축별 배율, 세로 프레임은 긴 변 기준. 정합은 별도 작업 프로세스 하나(`map_worker.py`)에서 돌고 source마다 한 번에 하나, 실패는 다음 계산까지 422, `rejected_fit`에는 homography를 넣지 않는다. hello 대기는 루프가 응답하던 시간만 세고, 시간 초과는 1013(재시도)으로 닫는다(4400은 틀린 hello만).
+- 증거: `python -m pytest src/site/vision/test -q` 143 passed (2026-10-01 Windows). 각 거부 기준을 끄면 해당 합성 시험이 실패함을 확인. 3 s CPU 정합 중에도 새 폰 hello·프레임 읽기가 0.5 s 안에 끝나는 시험(스레드로 바꾸면 실패). LOCAL 실제 프레임 6장·렌즈 2장·실기 프레임 1장(JPEG 품질 20–40 포함) 수락, 리뷰 부분 시야 45장 중 잘못된 수락 0.
+- gate 변화: 없음. DEVICE/FIELD PARKED 유지. 실기 컨테이너에서 작업 프로세스 시간 재측정은 남았다.

@@ -31,6 +31,9 @@ DEFAULT_CONFIG = {"fps": 3, "width": 1280, "jpeg_quality": 70, "max_bytes": 2000
 CLOSE_BAD_PROTO = 4400
 CLOSE_UNAUTHORIZED = 4401
 CLOSE_REPLACED = 4409
+# No hello in time. A busy receiver must not look like a protocol mismatch (D-375
+# live test): standard 1013 try again later, so the app reconnects with backoff.
+CLOSE_HELLO_TIMEOUT = 1013
 
 
 class ProtocolError(ValueError):

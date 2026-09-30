@@ -28,37 +28,33 @@ import numpy as np
 
 REGISTER_VERSION = "paint-register/1"
 
-# Refinement and scoring work on an image this wide; the coarse search compares
-# the map at a fixed _COARSE_PX_PER_M against the line image resampled per scale.
-_FINE_WIDTH = 480
-_COARSE_PX_PER_M = 30.0
-# Map raster used as the ECC input image, metres per pixel.
-_RASTER_RES_M = 0.005
-# Coarse scale ladder: geometric step, and the range as fractions of the frame.
-_SCALE_STEP = 1.12
-_MIN_MAP_FRACTION = 0.5    # map long side >= this share of the frame long side
-_MIN_TEMPLATE_INSIDE = 0.3  # coarse poses need this share of the paint inside the frame
-_MAX_MAP_FRACTION = 1.4    # map short side <= this multiple of the frame short side
-# Coarse candidates (best pose per orientation and tilt hypothesis) refined and compared.
-_REFINE_CANDIDATES = 4
-# Tilt hypotheses (pitch about the image x axis, roll about the image y axis), degrees,
-# and the assumed focal length as a multiple of the image width (phone main camera).
+_FINE_LONG_SIDE = 480        # refine/score image long side (landscape or portrait)
+_COARSE_PX_PER_M = 30.0      # fixed map template resolution of the coarse search
+_RASTER_RES_M = 0.005        # map raster (ECC input), metres per pixel
+_SCALE_STEP = 1.12           # coarse scale ladder step
+_MIN_MAP_FRACTION = 0.5      # map long side >= this share of the frame long side
+_MIN_TEMPLATE_INSIDE = 0.3   # coarse poses need this share of the paint inside the frame
+_MAX_MAP_FRACTION = 1.4      # map short side <= this multiple of the frame short side
+# Refined: the best coarse candidates, plus the best of other orientations (always the
+# 180-degree turn of the leader), so the orientation margin has real competitors.
+_REFINE_CANDIDATES = 3
+_REFINE_OTHER_ORIENTATIONS = 2
+# Tilt hypotheses (pitch about image x, roll about image y), degrees; focal length as a
+# multiple of the image long side (phone main camera).
 _TILTS_DEG = ((0, 0), (20, 0), (-20, 0), (0, 20), (0, -20), (35, 0), (-35, 0), (0, 35), (0, -35))
 _TILT_FOCAL = 0.9
-# ECC refinement pyramid: (map raster cell, blur) in metres on the floor.
-_ECC_LEVELS = ((0.03, 0.08), (0.02, 0.04), (0.015, 0.02))
-# Coarse-search tolerance band (coarse-image pixels).
-_COARSE_BAND_PX = 1
-# The score compares paint and image lines on the map at the coarse resolution
-# (2.5 cm cells), with a tolerance band of one cell, the same as the coarse search.
+_ECC_LEVELS = ((0.03, 0.08), (0.02, 0.04), (0.015, 0.02))  # (raster cell, blur), metres
+_COARSE_BAND_PX = 1          # coarse tolerance band, template cells
+# The score compares paint and lines on the map in 3.3 cm cells with a one-cell band,
+# the same as the coarse search.
 _SCORE_RES_M = 1.0 / _COARSE_PX_PER_M
 _TOLERANCE_CELLS = _COARSE_BAND_PX
-# Acceptance gates.
-# Real frames (2026-09-30, lab, 6 views up to ~30 deg tilt): correct fits scored
-# recall 0.86-0.96 / precision 0.97-0.98; wrong or unconverged fits and crops of
-# neighbouring tracks at most 0.78 / 0.72 (or failed the orientation margin).
+# Acceptance gates. Real frames (2026-09-30, lab, 6 views up to ~30 deg tilt and two lens
+# captures): correct fits scored recall 0.86-0.96, precision 0.93-0.98, product >= 0.83;
+# wrong fits reached 0.85 / 0.87 (product 0.73) on a partial crop, so the product gate.
 MIN_RECALL = 0.8
 MIN_PRECISION = 0.8
+MIN_MATCH = 0.75           # recall x precision
 MIN_COVERAGE = 0.2
 MIN_ORIENTATION_MARGIN = 0.1
 # A map side counts as cut when more than this share of the paint in its outer band
@@ -151,7 +147,7 @@ class MapRegistration:
     side_outside: dict              # side -> share of that map edge outside the frame
     rotation_deg: float             # direction of map +x in the image, degrees CCW on screen
     mirrored: bool
-    orientation_margin: float       # score gap to the best other orientation
+    orientation_margin: float | None  # relative score gap to the best other orientation
     image_size: tuple[int, int]
 
     @property
@@ -173,7 +169,8 @@ class MapRegistration:
             "side_outside": {side: round(value, 3) for side, value in self.side_outside.items()},
             "rotation_deg": round(self.rotation_deg, 1),
             "mirrored": self.mirrored,
-            "orientation_margin": round(self.orientation_margin, 3),
+            "orientation_margin": (None if self.orientation_margin is None
+                                   else round(self.orientation_margin, 3)),
         }
 
 
@@ -215,7 +212,7 @@ def register_map(image: np.ndarray, paint: MapPaint) -> RegistrationResult:
 
 def _register(image: np.ndarray, paint: MapPaint) -> tuple[MapRegistration | None, bool, str]:
     height, width = image.shape[:2]
-    fine_scale = min(1.0, _FINE_WIDTH / width)
+    fine_scale = min(1.0, _FINE_LONG_SIDE / max(width, height))
     fine = cv2.resize(image, (round(width * fine_scale), round(height * fine_scale)),
                       interpolation=cv2.INTER_AREA)
     lines = _line_mask(fine)
@@ -228,22 +225,27 @@ def _register(image: np.ndarray, paint: MapPaint) -> tuple[MapRegistration | Non
 
     to_raster = np.vstack([paint.raster_matrix, [0.0, 0.0, 1.0]])
     results = []
-    for _, key, map_to_fine in candidates:
+    for _, _, map_to_fine in _refine_set(candidates):
         # Keep the seed when refinement scores worse.
         for pose in (map_to_fine, _refine(lines, paint, map_to_fine)):
             warp = to_raster @ np.linalg.inv(pose)  # fine px -> raster px
             warp /= warp[2, 2]
             recall, precision, inside = _score(lines, paint, warp)
-            # Same evidence weighting as the coarse search.
-            results.append((recall * precision * math.sqrt(inside), recall, precision, key, warp))
+            # Same evidence weighting as the coarse search. The orientation is read from
+            # the refined pose itself, not from the coarse hypothesis that seeded it.
+            results.append((recall * precision * math.sqrt(inside), recall, precision,
+                            _pose_key(pose), warp))
     results.sort(key=lambda item: item[0], reverse=True)
     best_rank, best_recall, best_precision, best_key, best_warp = results[0]
     others = [r[0] for r in results if r[3] != best_key]
-    # Relative gap to the best other orientation / mirror.
-    margin = (best_rank - max(others)) / best_rank if others and best_rank > 0 else 1.0
+    # Relative gap to the best other orientation / mirror; unknown (None) when no other
+    # orientation was scored, which the gate treats as ambiguous.
+    margin = (best_rank - max(others)) / best_rank if others and best_rank > 0 else None
 
-    # Full-resolution image px -> map metres.
-    fine_from_full = np.diag([fine_scale, fine_scale, 1.0])
+    # Full-resolution image px -> map metres (pixel centres, per-axis resize scale).
+    fh, fw = lines.shape
+    sx, sy = fw / width, fh / height
+    fine_from_full = np.array([[sx, 0.0, (sx - 1) / 2], [0.0, sy, (sy - 1) / 2], [0.0, 0.0, 1.0]])
     image_to_map = np.linalg.inv(to_raster) @ best_warp @ fine_from_full
     image_to_map /= image_to_map[2, 2]
     coverage, side_outside = _coverage(paint, image_to_map, (width, height))
@@ -254,17 +256,33 @@ def _register(image: np.ndarray, paint: MapPaint) -> tuple[MapRegistration | Non
         coverage=coverage, cut_sides=cut, side_outside=side_outside, rotation_deg=rotation,
         mirrored=mirrored, orientation_margin=margin, image_size=(width, height),
     )
+    accepted, reason = _verdict(coverage, best_recall, best_precision, margin, mirrored)
+    return registration, accepted, reason
+
+
+def _verdict(coverage: float, recall: float, precision: float, margin: float | None,
+             mirrored: bool) -> tuple[bool, str]:
+    """Acceptance gates, first failing gate wins.
+
+    Mirrored is reported only for a fit that matches well and is unambiguous: a poor or
+    tied fit that happens to be mirrored is a weak or ambiguous match, not a camera-app
+    fault (the paint has near-mirror-symmetric parts, e.g. around the roundabout).
+    """
     if coverage < MIN_COVERAGE:
-        return registration, False, f"too little of the map in view ({coverage:.2f})"
-    if best_recall < MIN_RECALL:
-        return registration, False, f"weak paint match ({best_recall:.2f})"
-    if best_precision < MIN_PRECISION:
-        return registration, False, f"too many unmatched lines ({best_precision:.2f})"
+        return False, f"too little of the map in view ({coverage:.2f})"
+    if recall < MIN_RECALL:
+        return False, f"weak paint match ({recall:.2f})"
+    if precision < MIN_PRECISION:
+        return False, f"too many unmatched lines ({precision:.2f})"
+    if recall * precision < MIN_MATCH:
+        return False, f"weak overall match ({recall * precision:.2f})"
+    if margin is None:
+        return False, "orientation ambiguous (no other orientation scored)"
     if margin < MIN_ORIENTATION_MARGIN:
-        return registration, False, f"orientation ambiguous (margin {margin:.2f})"
+        return False, f"orientation ambiguous (margin {margin:.2f})"
     if mirrored:
-        return registration, False, "image is mirrored; check the camera app"
-    return registration, True, "ok"
+        return False, "image is mirrored; check the camera app"
+    return True, "ok"
 
 
 def _line_mask(image: np.ndarray) -> np.ndarray:
@@ -314,7 +332,7 @@ def _tilt_homography(width: int, height: int, pitch_deg: float, roll_deg: float
     fits only similarities, so it runs once per tilt hypothesis on the image rectified
     by that hypothesis; the refinement then fits the exact homography.
     """
-    focal = _TILT_FOCAL * width
+    focal = _TILT_FOCAL * max(width, height)
     k = np.array([[focal, 0.0, width / 2], [0.0, focal, height / 2], [0.0, 0.0, 1.0]])
     p, r = math.radians(pitch_deg), math.radians(roll_deg)
     rx = np.array([[1, 0, 0], [0, math.cos(p), -math.sin(p)], [0, math.sin(p), math.cos(p)]])
@@ -347,7 +365,35 @@ def _tilted_search(lines: np.ndarray, paint: MapPaint) -> list:
         for value, key, map_to_view in _coarse_search(view, paint, yaw, mirrors):
             found.append((value, key, back @ map_to_view))
     found.sort(key=lambda item: item[0], reverse=True)
-    return found[:_REFINE_CANDIDATES]
+    return found
+
+
+def _pose_key(map_to_image: np.ndarray) -> tuple[int, bool]:
+    """(quarter turn of map +x on screen, mirrored) at the map origin, for any pose."""
+    points = cv2.perspectiveTransform(
+        np.array([[[0.0, 0.0]], [[0.1, 0.0]], [[0.0, 0.1]]]), map_to_image).reshape(-1, 2)
+    ex, ey = points[1] - points[0], points[2] - points[0]
+    rotation = math.degrees(math.atan2(-ex[1], ex[0]))
+    cross = ex[0] * (-ey[1]) - (-ex[1]) * ey[0]
+    return int(round(rotation / 90.0)) % 4, bool(cross < 0)
+
+
+def _refine_set(candidates: list) -> list:
+    """Coarse candidates worth refining: the best overall, plus the best of other
+    orientations so the orientation margin always has a competitor — at least the
+    180-degree turn of the leader, which the near-symmetric track outline favours."""
+    by_key: dict[tuple[int, bool], list] = {}
+    for candidate in candidates:
+        by_key.setdefault(_pose_key(candidate[2]), []).append(candidate)
+    chosen = candidates[:_REFINE_CANDIDATES]
+    leader = _pose_key(candidates[0][2])
+    wanted = [((leader[0] + 2) % 4, leader[1])]
+    wanted += [key for key in sorted(by_key, key=lambda k: -by_key[k][0][0])
+               if key != leader][:_REFINE_OTHER_ORIENTATIONS]
+    for key in wanted:
+        if key in by_key and not any(c is by_key[key][0] for c in chosen):
+            chosen.append(by_key[key][0])
+    return chosen
 
 
 def _disk(radius: int) -> np.ndarray:
