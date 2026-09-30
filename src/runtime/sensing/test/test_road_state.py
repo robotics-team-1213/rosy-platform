@@ -595,6 +595,55 @@ def test_boundaries_from_keep_prefers_candidates_with_reasons():
     assert out[0].rejected is None and out[1].rejected == "transverse"
 
 
+# LaneKeeper.last shape from feat/lane-keep-candidates (7218c6b5, test_candidates_list_every_line_
+# with_its_reject_reason: a centred lane with a stop line at 0.25 m), plus one extrapolation reject.
+KEEP_CANDIDATES_7218C6B5 = {
+    "strategy": "both", "reason": None, "blobs": 0,
+    "transverse": [{"heading_deg": 89.6, "length_m": 0.21, "ends_m": [[0.25, -0.105], [0.251, 0.105]],
+                    "ends_px": [[228.4, 150.2], [91.6, 150.3]]}],
+    "boundaries": [
+        {"heading_deg": 0.3, "length_m": 0.31, "ends_m": [[0.12, -0.093], [0.43, -0.091]],
+         "ends_px": [[291.2, 222.0], [205.1, 121.4]], "side": "right", "y_at_side_x_m": -0.092,
+         "tracked": False, "pursuit_m": [0.25, -0.001]},
+        {"heading_deg": -0.2, "length_m": 0.3, "ends_m": [[0.12, 0.093], [0.42, 0.092]],
+         "ends_px": [[28.9, 222.0], [115.2, 122.5]], "side": "left", "y_at_side_x_m": 0.093,
+         "tracked": False, "pursuit_m": [0.25, 0.0]}],
+    "candidates": [
+        {"heading_deg": 89.6, "length_m": 0.21, "ends_m": [[0.25, -0.105], [0.251, 0.105]],
+         "ends_px": [[228.4, 150.2], [91.6, 150.3]], "rejected": True, "reason": "transverse"},
+        {"heading_deg": 12.0, "length_m": 0.05, "ends_m": [[0.52, 0.2], [0.57, 0.21]],
+         "ends_px": [[40.0, 110.0], [52.0, 106.0]], "side": "left", "y_at_side_x_m": 0.14,
+         "rejected": True, "reason": "extrapolation"},
+        {"heading_deg": 0.3, "length_m": 0.31, "ends_m": [[0.12, -0.093], [0.43, -0.091]],
+         "ends_px": [[291.2, 222.0], [205.1, 121.4]], "side": "right", "y_at_side_x_m": -0.092,
+         "tracked": False, "pursuit_m": [0.25, -0.001], "rejected": False, "reason": None},
+        {"heading_deg": -0.2, "length_m": 0.3, "ends_m": [[0.12, 0.093], [0.42, 0.092]],
+         "ends_px": [[28.9, 222.0], [115.2, 122.5]], "side": "left", "y_at_side_x_m": 0.093,
+         "tracked": False, "pursuit_m": [0.25, 0.0], "rejected": False, "reason": None}],
+}
+
+
+def test_boundaries_from_the_lane_owner_candidates_shape():
+    out = boundaries_from_keep(KEEP_CANDIDATES_7218C6B5)
+    # transverse lines carry no side fields: a decision-point cue, not a boundary
+    assert [(b.side_hint, b.rejected) for b in out] == [
+        ("left", "extrapolation"), ("right", None), ("left", None)]
+    assert out[0].x > 0.33                       # far extrapolation reject: outside the near field
+    assert decision_point_from_keep(KEEP_CANDIDATES_7218C6B5) is True
+    fallback = {k: v for k, v in KEEP_CANDIDATES_7218C6B5.items() if k != "candidates"}
+    assert [(b.side_hint, b.rejected) for b in boundaries_from_keep(fallback)] == [
+        ("right", None), ("left", None)]
+
+
+def test_owner_candidates_drive_the_estimator():
+    est = RoadStateEstimator()
+    clock = Clock(est)
+    for _ in range(3):
+        clock.frame(boundaries_from_keep(KEEP_CANDIDATES_7218C6B5))
+    assert est.level == TRACK
+    assert est.last_frame["hypothesis"]["labels"] == "RL"
+
+
 def test_keeper_rejected_candidates_are_not_measurements():
     est, clock = tracking()
     right, left = pair()

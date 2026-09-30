@@ -183,8 +183,10 @@ def boundaries_from_keep(last: dict, *, near_x_m: float = 0.33) -> list[Boundary
         nearest = min((float(e[0]) for e in ends), default=SIDE_X_M)
         x = SIDE_X_M if nearest <= near_x_m else nearest
         flag = r.get("rejected")
-        # LaneKeeper candidates (lane owner schema): rejected is a bool with a
-        # reason in {transverse, extrapolation, corner_line, flipping, junction}.
+        # LaneKeeper candidates (feat/lane-keep-candidates, 7218c6b5): rejected is
+        # a bool; reason None (accepted), "transverse" (no side fields: skipped
+        # above, a decision-point cue) or "extrapolation". Junction, flipping and
+        # no_boundary stay frame-level in last['reason'].
         reason = (str(r.get("reason") or "keeper") if flag is True
                   else flag if isinstance(flag, str) and flag else None)
         out.append(BoundaryMeas(y=y, psi=psi, x=x, side_hint=r.get("side"),
