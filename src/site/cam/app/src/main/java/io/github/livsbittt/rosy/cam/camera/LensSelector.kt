@@ -1,5 +1,6 @@
 package io.github.livsbittt.rosy.cam.camera
 
+import io.github.livsbittt.rosy.cam.link.HelloLens
 import kotlin.math.atan
 import kotlin.math.max
 
@@ -35,6 +36,12 @@ data class LensCandidate(
     val sensorHeightMm: Float?,
     val logical: Boolean,
 ) {
+    /**
+     * A logical multi-camera that lists several focal lengths switches physical lenses itself,
+     * so the focal length and FOV of the frames are not known.
+     */
+    val uncertain: Boolean get() = logical && focalLengthsMm.size > 1
+
     /** Shortest focal length the lens reports; null when it reports none. */
     val focalMm: Float? get() = focalLengthsMm.filter { it > 0f }.minOrNull()
 
@@ -79,7 +86,16 @@ object LensSelector {
         return LensPick(wide, LensChoice.WIDE, fellBack = false)
     }
 
-    /** True when some back camera is wider than the default one; decides the default setting. */
+    /** The optional hello.lens for [pick]; null when its focal length or FOV is unknown or uncertain. */
+    fun helloLens(pick: LensPick?): HelloLens? {
+        val camera = pick?.camera ?: return null
+        if (camera.uncertain) return null
+        val focal = camera.focalMm ?: return null
+        val hfov = camera.hfovDeg ?: return null
+        return HelloLens(pick.kind.wire, focal.toDouble(), hfov)
+    }
+
+    /** True when some back camera is wider than the default one. */
     fun hasWide(backCameras: List<LensCandidate>): Boolean =
         backCameras.firstOrNull()?.let { widest(backCameras, it) } != null
 

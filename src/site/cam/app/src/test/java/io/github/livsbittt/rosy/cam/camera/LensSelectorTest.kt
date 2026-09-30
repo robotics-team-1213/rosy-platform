@@ -102,6 +102,24 @@ class LensSelectorTest {
     }
 
     @Test
+    fun helloLensCarriesKindFocalAndFov() {
+        val hello = LensSelector.helloLens(LensSelector.pick(s21, LensChoice.WIDE))!!
+        assertEquals("wide", hello.kind)
+        assertEquals(2.2, hello.focalMm, 1e-6)
+        assertEquals(104.1, hello.hfovDeg, 0.1)
+        assertNull(LensSelector.helloLens(null))
+    }
+
+    @Test
+    fun logicalMultiFocalCameraIsUncertainAndSendsNoLens() {
+        val multi = LensCandidate("3", listOf(5.4f, 2.2f), 7.2576f, 5.4432f, logical = true)
+        assertTrue(multi.uncertain)
+        assertFalse(logicalMain.uncertain)
+        assertFalse(LensCandidate("9", listOf(6.0f, 2.4f), 7.2576f, 5.4432f, logical = false).uncertain)
+        assertNull(LensSelector.helloLens(LensPick(multi, LensChoice.STANDARD, fellBack = false)))
+    }
+
+    @Test
     fun choiceRoundTripsThroughItsWireName() {
         for (choice in LensChoice.entries) assertEquals(choice, LensChoice.fromWire(choice.wire))
         assertNull(LensChoice.fromWire("tele"))

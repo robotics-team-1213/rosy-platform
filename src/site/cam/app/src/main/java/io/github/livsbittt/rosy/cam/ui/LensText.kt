@@ -10,6 +10,7 @@ import java.util.Locale
 object LensText {
     /** "렌즈: 초광각 2.2 mm · 화각 104°"; null when the lens reports no focal length. */
     fun line(res: Resources, pick: LensPick): String? {
+        if (pick.camera.uncertain) return res.getString(R.string.lens_uncertain)
         val focal = pick.camera.focalMm ?: return null
         val hfov = pick.camera.hfovDeg?.let { String.format(Locale.ROOT, "%.0f", it) } ?: "?"
         val mm = String.format(Locale.ROOT, "%.1f", focal)

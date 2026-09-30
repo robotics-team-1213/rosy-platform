@@ -165,6 +165,9 @@ private fun StatusPanel(
         if (state.running) {
             val res = LocalContext.current.resources
             state.lens?.let { LensText.line(res, it) }?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
+            if (state.lensSwitchFailed) {
+                Text(stringResource(R.string.lens_switch_failed), color = RosyColors.StatusWarn, style = MaterialTheme.typography.bodyMedium)
+            }
         }
         state.health?.let { HealthPanel(it) }
         val site = link.site

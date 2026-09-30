@@ -89,12 +89,29 @@ class CameraController(
 
     /**
      * Switches lens. Rebinding resets adaptive JPEG quality and re-reads the timestamp source
-     * and sensor size, exactly as the first bind does.
+     * and sensor size, exactly as the first bind does. If the new camera cannot be bound, the
+     * previous one is bound again and this returns false (the stream goes on); only when that
+     * also fails does [onError] end the session.
      */
-    fun selectCamera(id: String?) {
-        if (id == cameraId) return
-        cameraId = id
-        if (provider != null) bind()
+    fun selectCamera(id: String?): Boolean {
+        if (id == cameraId) return true
+        val previous = cameraId
+        if (provider == null) {
+            cameraId = id
+            return true
+        }
+        return when (val outcome = LensSwitch.run(previous, id) { target -> cameraId = target; bindOrThrow() }) {
+            LensSwitch.Outcome.Switched -> true
+            is LensSwitch.Outcome.RolledBack -> {
+                Log.w(TAG, "lens switch to $id failed; back on ${previous ?: "default-back"}", outcome.error)
+                false
+            }
+            is LensSwitch.Outcome.Failed -> {
+                Log.e(TAG, "lens switch failed and the previous camera did not rebind", outcome.error)
+                onError(outcome.error)
+                false
+            }
+        }
     }
 
     fun setPreviewSurface(surfaceProvider: Preview.SurfaceProvider?) {
@@ -118,10 +135,19 @@ class CameraController(
     }
 
     private fun bind() {
+        try {
+            bindOrThrow()
+        } catch (e: Exception) {
+            Log.e(TAG, "camera bind failed", e)
+            onError(e)
+        }
+    }
+
+    private fun bindOrThrow() {
         val cameraProvider = provider ?: return
         val target = config
         val selector = selectorForCamera(cameraId)
-        try {
+        run {
             cameraProvider.unbindAll()
             val analysis = if (link == null) null else ImageAnalysis.Builder()
                 .setResolutionSelector(selectorFor(target.width))
@@ -151,9 +177,6 @@ class CameraController(
                     "${analysis?.resolutionInfo?.resolution ?: "preview-only"} for width ${target.width}, " +
                     "timestamp source $timestampSource",
             )
-        } catch (e: Exception) {
-            Log.e(TAG, "camera bind failed", e)
-            onError(e)
         }
     }
 

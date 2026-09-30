@@ -43,6 +43,7 @@ import kotlinx.coroutines.flow.distinctUntilChangedBy
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
 /** Why streaming could not run, apart from link errors (those live in [LinkStatus.error]). */
@@ -65,6 +66,8 @@ data class StreamState(
     val lens: LensPick? = null,
     /** True when this phone has a back camera wider than the default one. */
     val wideAvailable: Boolean = false,
+    /** The last live lens change failed and the previous lens is still streaming. */
+    val lensSwitchFailed: Boolean = false,
 )
 
 /**
@@ -83,6 +86,9 @@ class StreamService : LifecycleService() {
     private var wifiLock: WifiManager.WifiLock? = null
     private var healthMonitor: DeviceHealthMonitor? = null
     private var sessionActive = false
+
+    /** Parent of every collector of one session; cancelled when the session is released. */
+    private var sessionJob: Job? = null
 
     // Last notification inputs, so a lens change can redraw it without waiting for the link.
     private var shownLinkState = LinkState.CONNECTING
@@ -129,7 +135,7 @@ class StreamService : LifecycleService() {
     private fun beginSession() {
         sessionActive = true
         _state.value = StreamState(running = true)
-        lifecycleScope.launch {
+        sessionJob = lifecycleScope.launch {
             val store = SettingsStore(applicationContext)
             val pairing = store.pairing.first()
             val plan = CameraSessionPlan.from(pairing)
@@ -151,7 +157,7 @@ class StreamService : LifecycleService() {
             launch { monitor.health.collect { h -> _state.update { it.copy(health = h) } } }
             val newLink = if (plan.sendFrames && pairing != null) {
                 OverheadLink(pairing, BuildConfig.VERSION_NAME, "${Build.MANUFACTURER} ${Build.MODEL}")
-                    .also { it.lens = LensProbe.helloLens(pick) }
+                    .also { it.lens = LensSelector.helloLens(pick) }
             } else null
             val newCamera = CameraController(this@StreamService, this@StreamService, newLink) { e ->
                 _state.update { it.copy(error = StreamError.Camera(e.message ?: e.javaClass.simpleName)) }
@@ -180,10 +186,16 @@ class StreamService : LifecycleService() {
                     val current = _state.value.lens
                     if (current == next) return@collect
                     Log.i(TAG, "lens change ${choice.wire} -> ${LensProbe.describe(next.camera)}")
-                    _state.update { it.copy(lens = next) }
-                    if (current?.camera?.id != next.camera.id) newCamera.selectCamera(next.camera.id)
+                    val switched = current?.camera?.id == next.camera.id || newCamera.selectCamera(next.camera.id)
+                    if (!sessionActive) return@collect
+                    if (!switched) {
+                        // The previous lens is bound again: keep its state and hello.
+                        _state.update { it.copy(lensSwitchFailed = true) }
+                        return@collect
+                    }
+                    _state.update { it.copy(lens = next, lensSwitchFailed = false) }
                     newLink?.let { l ->
-                        l.lens = LensProbe.helloLens(next)
+                        l.lens = LensSelector.helloLens(next)
                         l.reconnect()
                     }
                     refreshNotification()
@@ -220,6 +232,8 @@ class StreamService : LifecycleService() {
     private fun releaseSession() {
         if (!sessionActive) return
         sessionActive = false
+        sessionJob?.cancel()
+        sessionJob = null
         camera?.stop()
         camera = null
         val lastLink = link
@@ -232,7 +246,7 @@ class StreamService : LifecycleService() {
         healthMonitor?.stop()
         healthMonitor = null
         _state.update { current ->
-            current.copy(running = false, previewOnly = false, health = null, lens = null, link = lastLink?.status?.value ?: current.link)
+            current.copy(running = false, previewOnly = false, health = null, lens = null, lensSwitchFailed = false, link = lastLink?.status?.value ?: current.link)
         }
     }
 

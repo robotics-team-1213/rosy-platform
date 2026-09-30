@@ -11,7 +11,6 @@ import androidx.camera.camera2.interop.ExperimentalCamera2Interop
 import androidx.camera.core.CameraInfo
 import androidx.camera.core.CameraSelector
 import androidx.camera.lifecycle.ProcessCameraProvider
-import io.github.livsbittt.rosy.cam.link.HelloLens
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -32,14 +31,6 @@ object LensProbe {
     fun describe(c: LensCandidate): String =
         "id=${c.id} f=${c.focalMm}mm hfov=${c.hfovDeg?.let { "%.1f".format(java.util.Locale.ROOT, it) }} " +
             (if (c.logical) "logical" else "physical")
-
-    /** The optional hello.lens for [pick]; null when the lens reports no focal length or FOV. */
-    fun helloLens(pick: LensPick?): HelloLens? {
-        val camera = pick?.camera ?: return null
-        val focal = camera.focalMm ?: return null
-        val hfov = camera.hfovDeg ?: return null
-        return HelloLens(pick.kind.wire, focal.toDouble(), hfov)
-    }
 
     @SuppressLint("InlinedApi") // LOGICAL_MULTI_CAMERA is API 28; older phones never report it.
     @OptIn(ExperimentalCamera2Interop::class)

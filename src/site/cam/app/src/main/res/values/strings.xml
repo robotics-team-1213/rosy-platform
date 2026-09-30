@@ -49,6 +49,8 @@
 
     <string name="lens_wide">렌즈: 초광각 %1$s mm · 화각 %2$s°</string>
     <string name="lens_standard">렌즈: 기본 %1$s mm · 화각 %2$s°</string>
+    <string name="lens_uncertain">렌즈: 렌즈 정보 불확실</string>
+    <string name="lens_switch_failed">렌즈를 바꾸지 못해 이전 렌즈로 계속 송출합니다.</string>
     <string name="lens_no_wide">이 폰에는 더 넓은 후면 카메라가 없어 기본 렌즈를 씁니다</string>
     <string name="settings_lens_heading">화각</string>
     <string name="settings_lens_wide">넓게 (초광각 0.5×) — 필드가 화면에 다 안 들어올 때</string>
