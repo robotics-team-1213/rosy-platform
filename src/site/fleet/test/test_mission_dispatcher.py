@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 import pytest
 
@@ -8,7 +8,9 @@ from fleet.server.task_store import FleetTaskStore
 from core_common.protocol.schemas import FleetActionGrant
 
 from fleet.server.mission_dispatcher import MissionDispatcher
-from fleet.server.local_action_transport import LocalActionUnavailable, UnixLocalActionTransport
+from fleet.server.local_action_transport import (
+    LocalActionRejected, LocalActionUnavailable, UnixLocalActionTransport,
+)
 
 
 def _plan():
@@ -189,3 +191,50 @@ def test_local_transport_requires_v1_and_exact_fence_bound_receipt(tmp_path):
     wrong_fence = {**receipt, "dispatch_generation": grant.dispatch_generation + 1}
     with pytest.raises(LocalActionUnavailable, match="does not match"):
         parser._parse_receipt(grant, {"version": 1, "status": 200, "receipt": wrong_fence})
+
+
+def test_duplicate_terminal_receipt_and_late_running_readback_do_not_regress_mission(tmp_path):
+    task_store, service, mission, _ = _ready_mission(tmp_path)
+    transport = Transport()
+    dispatcher = MissionDispatcher(
+        service, task_store, transport, {"omx-1": "omx-1-control"},
+    )
+    dispatcher.dispatch_next()
+    grant = FleetActionGrant.model_validate(service.get(mission["mission_id"])["action_grant"])
+    terminal = dispatcher._verified_receipt(grant, _receipt(grant, "SUCCEEDED", 3))
+    stale_running = dispatcher._verified_receipt(grant, _receipt(grant, "RUNNING", 2))
+
+    dispatcher._apply_receipt(grant, terminal)
+    duplicate = dispatcher._apply_receipt(grant, terminal)
+    stale = dispatcher._apply_receipt(grant, stale_running)
+
+    history = service.history(mission["mission_id"])
+    device_results = [event for event in history if event["event_source"] == "device_action"]
+    assert duplicate["state"] == "ACTION_SUCCEEDED"
+    assert stale["state"] == "RUNNING"  # Readback is advisory and does not mutate Fleet.
+    assert service.get(mission["mission_id"])["status"] == "ACTION_SUCCEEDED"
+    assert len(device_results) == 1
+
+
+def test_explicit_local_4xx_refusal_is_failed_without_automatic_retry(tmp_path):
+    task_store, service, mission, _ = _ready_mission(tmp_path)
+
+    class RejectingTransport(Transport):
+        def submit(self, grant):
+            self.submissions.append(FleetActionGrant.model_validate(grant))
+            raise LocalActionRejected("ACTION_SCOPE_MISMATCH: rejected before acceptance")
+
+    transport = RejectingTransport()
+    dispatcher = MissionDispatcher(
+        service, task_store, transport, {"omx-1": "omx-1-control"},
+    )
+
+    result = dispatcher.dispatch_next()
+    retried = dispatcher.dispatch_next()
+    current = service.get(mission["mission_id"])
+
+    assert result["state"] == "HOLD"
+    assert current["reason"] == "ACTION_FAILED"
+    assert current["reconciliation_pending"] == 0
+    assert retried is None
+    assert len(transport.submissions) == 1

@@ -246,8 +246,8 @@
 
 ## 최근 기록
 
+- 2026-09-30 · uncommitted · docs(plan): hold ROS Action mapping for selected hardware profile
+- 2026-09-30 · uncommitted · test(contracts): Mission feedback, goal, and stop truth separation
+- 2026-09-30 · uncommitted · test(contracts): Action response-loss and result-order recovery
 - 2026-09-30 · uncommitted · docs(contracts): Action과 message type의 책임·식별 수명 정리
 - 2026-09-30 · uncommitted · docs(adr): D-362 제어권·정지 증거 책임 경계
-- 2026-09-30 · uncommitted · docs(sensing): D-356 학습 루프 기록 정정·리뷰 수정
-- 2026-09-30 · uncommitted · fix(contracts): reconcile ER2 API version and Fleet size ratchet
-- 2026-09-30 · uncommitted · docs(validation): record final ER2 feedback audit gates

@@ -3765,3 +3765,18 @@
 - 계약 정정: GetAction은 v1에서 action_id만 요청하고 Fleet이 응답의 전체 grant/attempt를 검증한다. API Ref와 DeviceActionLookup 설명을 실제 producer/consumer에 맞췄다. wire/runtime 동작 변경 없음.
 - 검증: 실제 Fleet JSON producer와 OMX API/runner/store의 host 결합 시험 8개 추가, 인접 dispatcher/OMX suite 포함 21 passed. socket peer 인증·ROS·물리 driver는 이 검증의 범위 밖이다. 최종 quick gate + network 문서 계약 119 passed, harness lint 0 errors/기존 freshness warnings 12, 새 시험 flake8 및 diff check 통과.
 - gate 변화: 없음. 새 message bus·자동 시도·provider/OMX 활성화·물리 수용 없음. 계획 Task 2–4는 후속이다.
+
+## 2026-09-30 · uncommitted · test(contracts): Action response-loss and result-order recovery
+- Change: extended the Fleet/OMX JSON boundary test through the real dispatcher, API, runner, and SQLite stores. It drops the response after device acceptance, reconstructs Fleet against the same database, verifies GetAction recovery with one driver submit, proves stale-generation 4xx rejection before driver submission, and checks duplicate terminal / late RUNNING results do not regress mission state or release claims.
+- Evidence: Fleet/OMX dispatcher/API combined suite 25 passed; OMX action-store suite 8 passed (Windows, Python 3.14.5). Existing implementation met the invariants; no runtime change was needed.
+- Gate: SOURCE/LOCAL tests only. UDS peer credentials, ROS 2, physical stop, device, and field acceptance are not covered.
+
+## 2026-09-30 · uncommitted · test(contracts): Mission feedback, goal, and stop truth separation
+- Change: strengthened the actual Mission progress projection test to inspect state immediately after Fleet stop latch and before any Action terminal result. Existing producer/consumer suites cover correlated current attempt, stale previous-attempt result, action terminal versus goal confirmation, local stop latch versus physical state, Cancel ACK=`CANCEL_REQUESTED`, and provider turn/outbox status-only behavior.
+- Evidence: Fleet progress, local-stop, goal-provenance, and ER 2 feedback-loop suites 43 passed; OMX stop-fence suite 5 passed (Windows, Python 3.14.5). No schema or runtime change was required; the provider turn remains a separate durable lifecycle, not another device progress axis.
+- Gate: SOURCE/LOCAL tests only. No ROS-SIM, hardware E-stop, device, or field proof.
+
+## 2026-09-30 · uncommitted · docs(plan): hold ROS Action mapping for selected hardware profile
+- Change: recorded the Task 4 source audit. OMX-AI remains disabled with empty driver package, hardware plugin, and joint configuration; `ActionRunner` only accepts an injected `LocalActionPort`, while the ROS FollowJointTrajectory runtime is candidate code. No production ActionRunner/driver composition exists outside tests.
+- Evidence: source/config inspection of `src/products/omx/profile/config/omx.disabled.yaml`, `action_runner.py`, and `ros_runtime.py`; existing SOURCE/LOCAL tests do not identify an accepted arm/gripper hardware profile.
+- Gate: Task 4 remains pending target hardware+driver+gripper package/version and ROS 2 distro/API selection. No mock port or hardware was invented; no runtime/ROS/device activation.
