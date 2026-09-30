@@ -13,6 +13,7 @@ import cv2
 import numpy as np
 import rclpy
 from rclpy.node import Node
+from rclpy.qos import QoSProfile, ReliabilityPolicy
 from sensor_msgs.msg import Image
 from std_msgs.msg import String
 
@@ -46,7 +47,11 @@ class LearnedLaneNode(Node):
         self._status = LearnedStatus()
         self._status_pub = self.create_publisher(String, STATUS_TOPIC, 1)
         self.create_timer(1.0, self._publish_status)
-        self.create_subscription(Image, 'camera/front', self._on_camera, 1)
+        # camera_detect_node publishes best effort (sensor data); a reliable
+        # subscriber is QoS-incompatible and never receives a frame (seen in the
+        # D-373 WSL run). Depth 1: only the newest frame is worth inferring (D-185).
+        self.create_subscription(Image, 'camera/front', self._on_camera,
+                                 QoSProfile(depth=1, reliability=ReliabilityPolicy.BEST_EFFORT))
         self.create_subscription(String, 'line/observation', self._on_rule, 10)
 
     def _on_rule(self, msg: String) -> None:

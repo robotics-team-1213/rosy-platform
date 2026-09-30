@@ -82,3 +82,18 @@ def test_node_publishes_status_and_counts_busy_frames_as_skipped():
     assert "STATUS_TOPIC" in src and "create_timer(1.0" in src
     assert "frame_skipped()" in src and "frame_in()" in src and "frame_inferred(" in src
     assert "cmd_vel" not in src.replace("never publishes cmd_vel", "")
+
+
+def test_node_camera_subscription_is_best_effort_depth_one():
+    """A reliable subscriber never matches camera_detect_node's sensor-data publisher."""
+    import ast
+    from pathlib import Path
+
+    src = (Path(__file__).resolve().parents[1] / "control" / "learned_lane_node.py").read_text(
+        encoding="utf-8")
+    calls = [n for n in ast.walk(ast.parse(src)) if isinstance(n, ast.Call)
+             and getattr(n.func, "attr", "") == "create_subscription"
+             and isinstance(n.args[1], ast.Constant) and n.args[1].value == "camera/front"]
+    assert len(calls) == 1
+    assert ast.unparse(calls[0].args[3]) == (
+        "QoSProfile(depth=1, reliability=ReliabilityPolicy.BEST_EFFORT)")

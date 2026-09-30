@@ -10,7 +10,8 @@ try:
     from rclpy.parameter import Parameter
     from sensor_msgs.msg import CompressedImage, Image
     from std_msgs.msg import Bool, Float32, String
-    from rclpy.qos import ReliabilityPolicy
+    # camera_detect_node's module globals the exec'd class body needs.
+    from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy, qos_profile_sensor_data
     from control.sensing.perception.jpeg_frame import DEFAULT_QUALITY, encode_jpeg
 except ImportError:
     rclpy = None
