@@ -13,7 +13,7 @@ Developer-side half of the D-356 perception learning loop: turn robot recordings
 |------|-------------|
 | `dataset/` | `harvest.py` pulls sessions off a robot, `extract.py`/`frames.py` cut frames, `prelabel.py` pre-labels, `build.py` builds a session-split dataset, `publish.py` publishes it for the trainer |
 | `model/` | `export_onnx.py` exports ONNX, `intake.py` + `intake_gate.yaml` verify a returned model, `deliver.py` ships it (and rolls back) |
-| `training/` | Trainer contract (`README.md`), `check_manifest.py`, `export_cell.py`. Training itself runs outside this repo |
+| `training/` | Trainer contract (`README.md`), step-by-step Colab manual (`COLAB.md`), `check_manifest.py`, `export_cell.py`. Training itself runs outside this repo |
 | `test/` | Host tests for the above |
 | `prototype/` | Unreviewed D-205 prototypes, see `prototype/README.md` |
 
