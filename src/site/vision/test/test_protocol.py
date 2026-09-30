@@ -170,3 +170,11 @@ def test_generator_refuses_a_pin_without_tls():
     with pytest.raises(protocol.PairingError) as excinfo:
         protocol.pairing_uri("h", 1, "t", "s", secure=False, pin=pin)
     assert excinfo.value.reason == "pin"
+
+
+def test_receiver_hello_timeout_reason_is_a_retryable_4400():
+    """The phone retries 4400 only for reasons in close_4400_reasons.retry; the hello timer's reason must be one."""
+    source = (Path(protocol.__file__).parent / "ingest.py").read_text(encoding="utf-8")
+    assert 'protocol.CLOSE_BAD_PROTO, "no hello"' in source
+    assert "no hello" in VECTORS["close_4400_reasons"]["retry"]
+    assert VECTORS["close_codes"]["try_again_later"] == 1013

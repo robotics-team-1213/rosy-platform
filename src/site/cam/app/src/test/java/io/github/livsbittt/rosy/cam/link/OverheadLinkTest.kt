@@ -195,6 +195,28 @@ class OverheadLinkTest {
     }
 
     @Test
+    fun noHelloTimeoutAndTryAgainLaterRetryInsteadOfStopping() {
+        // 2026-10-01 device test: Vision's loop was blocked, its hello timer closed with 4400 "no hello".
+        for ((code, reason) in listOf(Protocol.CLOSE_BAD_PROTO to "no hello", Protocol.CLOSE_TRY_AGAIN to "busy")) {
+            val first = ServerSide()
+            val second = ServerSide()
+            server.enqueue(MockResponse().withWebSocketUpgrade(first))
+            server.enqueue(MockResponse().withWebSocketUpgrade(second))
+            val l = newLink()
+            l.start()
+            first.opened.poll(5, TimeUnit.SECONDS)!!.close(code, reason)
+
+            val lost = awaitStatus(l) { it.error is LinkError.Busy }
+            assertFalse(lost.stopped)
+            assertEquals(LinkError.Busy(code, reason), lost.error)
+            // First backoff step is 1 s, then the link reconnects on its own.
+            assertNotNull(second.opened.poll(5, TimeUnit.SECONDS))
+            awaitStatus(l) { it.state == LinkState.STREAMING }
+            l.stop()
+        }
+    }
+
+    @Test
     fun replacedCloseStopsRetrying() {
         val side = ServerSide()
         server.enqueue(MockResponse().withWebSocketUpgrade(side))

@@ -30,8 +30,11 @@ sealed interface LinkError {
     /** Upgrade refused with 401 or close 4401: token is unknown or not allowed for this source. */
     data object Unauthorized : LinkError
 
-    /** Close 4400: the adapter speaks another protocol version. Retrying cannot help. */
+    /** Close 4400 with an incompatibility reason: the adapter speaks another protocol version. Retrying cannot help. */
     data object ProtocolMismatch : LinkError
+
+    /** Close 1013, or 4400 for a receiver-side wait such as "no hello": the receiver was busy; retry with backoff. */
+    data class Busy(val code: Int, val reason: String) : LinkError
 
     /** Close 4409: another connection with the same source replaced this one. */
     data object Replaced : LinkError
@@ -319,7 +322,13 @@ class OverheadLink(
 
         private fun handleClose(code: Int, reason: String) {
             when (code) {
-                Protocol.CLOSE_BAD_PROTO -> onLost(gen, LinkError.ProtocolMismatch, fatal = true)
+                Protocol.CLOSE_BAD_PROTO ->
+                    if (Protocol.isIncompatibleClose(code, reason)) {
+                        onLost(gen, LinkError.ProtocolMismatch, fatal = true)
+                    } else {
+                        onLost(gen, LinkError.Busy(code, reason), fatal = false)
+                    }
+                Protocol.CLOSE_TRY_AGAIN -> onLost(gen, LinkError.Busy(code, reason), fatal = false)
                 Protocol.CLOSE_UNAUTHORIZED -> onLost(gen, LinkError.Unauthorized, fatal = true)
                 Protocol.CLOSE_REPLACED -> onLost(gen, LinkError.Replaced, fatal = true)
                 else -> onLost(gen, LinkError.Closed(code, reason), fatal = false)

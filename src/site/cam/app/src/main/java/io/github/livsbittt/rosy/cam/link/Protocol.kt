@@ -49,6 +49,19 @@ object Protocol {
     const val CLOSE_UNAUTHORIZED = 4401
     const val CLOSE_REPLACED = 4409
 
+    /** RFC 6455 "Try Again Later": the receiver is overloaded; always retryable. */
+    const val CLOSE_TRY_AGAIN = 1013
+
+    private val TRANSIENT_4400 = Regex("no hello|time ?out|timed out|busy", RegexOption.IGNORE_CASE)
+
+    /**
+     * Close 4400 means a real incompatibility (wrong `proto`, hello schema) only when the reason says so.
+     * An empty reason or a receiver-side wait such as "no hello" (its hello timer fired while it was busy)
+     * is transient: the camera retries instead of stopping for good. Shared cases: vectors `close_4400_reasons`.
+     */
+    fun isIncompatibleClose(code: Int, reason: String): Boolean =
+        code == CLOSE_BAD_PROTO && reason.isNotBlank() && !TRANSIENT_4400.containsMatchIn(reason)
+
     fun hello(
         source: String,
         appVersion: String,
