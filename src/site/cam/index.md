@@ -31,8 +31,8 @@
 
 ## 최근 기록
 
+- 2026-10-01 · 6588c4a8 · fix(cam): D-391 태블릿 실기·독립 리뷰 반영
 - 2026-10-01 · f908c2d5 · feat(cam): D-391 사이트 연결 기록 + 접속마다 mDNS로 tls_host 찾기
 - 2026-10-01 · 35140f13 · fix(cam): 보안 리뷰 반영(인증서 고정) + 바쁜 수신기에서 멈추지 않음
 - 2026-10-01 · 9c69e38f · fix(cam): review fixes for the ultra-wide lens
 - 2026-09-30 · a4d9fa7c · feat(cam): STANDARD default, wide on suggestion only
-- 2026-09-30 · 877a6fb4 · test(cam): S21 ultra-wide device check
