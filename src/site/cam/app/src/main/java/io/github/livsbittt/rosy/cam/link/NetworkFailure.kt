@@ -24,6 +24,12 @@ enum class NetworkFailure {
     /** The served chain does not contain the certificate pinned by the pairing link (D-341 10). */
     TLS_PIN,
 
+    /** mDNS did not show the site's `tls_host` on this Wi-Fi and there is no manual address (D-390 1). */
+    NOT_DISCOVERED,
+
+    /** The site's `tls_host` is advertised from more than one address (D-370 5.3). */
+    CONFLICT,
+
     OTHER,
     ;
 
@@ -37,6 +43,9 @@ enum class NetworkFailure {
         fun classify(error: Throwable): NetworkFailure {
             val chain = generateSequence(error) { it.cause }.take(MAX_DEPTH).toList()
             if (chain.any(::isPinMismatch)) return TLS_PIN
+            // Our own lookup failures; both are UnknownHostExceptions, so they go before specific().
+            if (chain.any { it is SiteNotDiscoveredException }) return NOT_DISCOVERED
+            if (chain.any { it is SiteConflictException }) return CONFLICT
             chain.firstNotNullOfOrNull(::specific)?.let { return it }
             return if (chain.any { it is ConnectException }) UNREACHABLE else OTHER
         }

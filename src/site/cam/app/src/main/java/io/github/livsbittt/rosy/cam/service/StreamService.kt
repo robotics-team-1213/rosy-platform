@@ -32,7 +32,11 @@ import io.github.livsbittt.rosy.cam.link.LinkState
 import io.github.livsbittt.rosy.cam.link.LinkStatus
 import io.github.livsbittt.rosy.cam.link.OverheadConfig
 import io.github.livsbittt.rosy.cam.link.OverheadLink
+import io.github.livsbittt.rosy.cam.link.SiteResolver
+import io.github.livsbittt.rosy.cam.link.SiteRoute
+import io.github.livsbittt.rosy.cam.settings.NsdSiteBrowser
 import io.github.livsbittt.rosy.cam.settings.SettingsStore
+import kotlinx.coroutines.Dispatchers
 import io.github.livsbittt.rosy.cam.ui.LensText
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -68,6 +72,8 @@ data class StreamState(
     val wideAvailable: Boolean = false,
     /** The last live lens change failed and the previous lens is still streaming. */
     val lensSwitchFailed: Boolean = false,
+    /** How the last connect reached the site (mDNS, "수동 주소", not found); null before the first lookup. */
+    val route: SiteRoute? = null,
 )
 
 /**
@@ -137,7 +143,10 @@ class StreamService : LifecycleService() {
         _state.value = StreamState(running = true)
         sessionJob = lifecycleScope.launch {
             val store = SettingsStore(applicationContext)
-            val pairing = store.pairing.first()
+            val siteLink = store.siteLink.first()
+            val pairing = siteLink?.toPairing()
+            // D-390 1: the site's address is looked up on every (re)connect, never taken from the saved record.
+            val resolver = siteLink?.let { SiteResolver(it, NsdSiteBrowser(applicationContext)) }
             val plan = CameraSessionPlan.from(pairing)
             val backCameras = try {
                 LensProbe.backCameras(applicationContext)
@@ -156,9 +165,22 @@ class StreamService : LifecycleService() {
             val notificationHealth = monitor.health.distinctUntilChangedBy { it?.notificationKey }
             launch { monitor.health.collect { h -> _state.update { it.copy(health = h) } } }
             val newLink = if (plan.sendFrames && pairing != null) {
-                OverheadLink(pairing, BuildConfig.VERSION_NAME, "${Build.MANUFACTURER} ${Build.MODEL}")
+                OverheadLink(pairing, BuildConfig.VERSION_NAME, "${Build.MANUFACTURER} ${Build.MODEL}", resolver)
                     .also { it.lens = LensSelector.helloLens(pick) }
             } else null
+            if (newLink != null && resolver != null && siteLink != null) {
+                launch { resolver.route.collect { r -> _state.update { it.copy(route = r) } } }
+                // A link that only knows its manual IP learns the site's tls_host once, for the next session.
+                if (siteLink.tlsHost == null) {
+                    resolver.resolve() // "수동 주소" at once; no browse without a tls_host
+                    launch(Dispatchers.IO) {
+                        resolver.learnTlsHost()?.let { seen ->
+                            Log.i(TAG, "learned tls_host ${seen.tlsHost} at ${siteLink.manualHost}")
+                            store.learnTlsHost(siteLink, seen.tlsHost, seen.serviceName)
+                        }
+                    }
+                }
+            }
             val newCamera = CameraController(this@StreamService, this@StreamService, newLink) { e ->
                 _state.update { it.copy(error = StreamError.Camera(e.message ?: e.javaClass.simpleName)) }
                 endSession()

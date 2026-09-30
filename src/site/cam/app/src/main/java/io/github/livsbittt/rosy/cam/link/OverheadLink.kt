@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import okhttp3.Dns
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -86,12 +87,15 @@ data class SensorInfo(val width: Int, val height: Int, val rotationDeg: Int)
  *   network. The adapter's `captured_at = received - age_ms` is therefore later than the true
  *   capture time by that transmit delay.
  * - Reconnects with [Backoff]; close 4400 or 4409 stops retrying.
+ * - With a [resolver], the URL host is the site's `tls_host` and each connect looks its address up through
+ *   mDNS ([SiteDns]); a failed connect drops the cached address so the next one browses again (D-390 1).
  */
 class OverheadLink(
     private val pairing: PairingUri,
     private val appVersion: String,
     private val device: String,
-    private val client: OkHttpClient = defaultClient(pairing.pin),
+    private val resolver: SiteResolver? = null,
+    private val client: OkHttpClient = defaultClient(pairing.pin, resolver?.let { SiteDns(pairing.host, it) }),
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val lock = Any()
@@ -320,6 +324,8 @@ class OverheadLink(
             // A pin mismatch cannot heal by retrying: the site certificate changed or this is not the site
             // (D-341 10). It can only happen before any HTTP response, so a response rules it out.
             val fatal = response == null && error is LinkError.Network && error.kind == NetworkFailure.TLS_PIN
+            // The site may have moved: the next attempt browses again instead of reusing the cached address.
+            if (response == null) resolver?.invalidate()
             onLost(gen, error, fatal = fatal)
         }
 
@@ -344,12 +350,16 @@ class OverheadLink(
             else -> LinkError.Closed(code, reason) to false
         }
 
-        /** [pin] set: trust only the paired site certificate (see [PinnedTrustManager]); null: system trust. */
-        fun defaultClient(pin: String? = null): OkHttpClient = OkHttpClient.Builder()
+        /**
+         * [pin] set: trust only the paired site certificate (see [PinnedTrustManager]); null: system trust.
+         * [dns] set: name lookups go through it (the site's `tls_host` via mDNS, [SiteDns]).
+         */
+        fun defaultClient(pin: String? = null, dns: Dns? = null): OkHttpClient = OkHttpClient.Builder()
             .connectTimeout(5, TimeUnit.SECONDS)
             .readTimeout(0, TimeUnit.MILLISECONDS)
             .pingInterval(10, TimeUnit.SECONDS)
             .pinnedTo(pin)
+            .apply { if (dns != null) dns(dns) }
             .build()
     }
 }

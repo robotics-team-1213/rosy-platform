@@ -3,8 +3,10 @@ package io.github.livsbittt.rosy.cam.ui
 import io.github.livsbittt.rosy.cam.link.LinkError
 import io.github.livsbittt.rosy.cam.link.NetworkFailure
 import io.github.livsbittt.rosy.cam.service.StreamError
+import java.net.InetAddress
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -98,13 +100,55 @@ class ProblemGuideTest {
         assertFalse(ProblemGuide.stopsCameraFirst(Problem.UNREACHABLE, running = true))
     }
 
+    private fun lanAt(address: String, prefix: Int, gateway: String?) =
+        LanSnapshot.from(listOf(InetAddress.getByName(address) to prefix), gateway?.let { InetAddress.getByName(it) })
+
     @Test
-    fun lanNetworksStayConnectedUntilTheLastOneIsLost() {
+    fun lanNetworksCountOnlyNetworksThatHoldAnAddress() {
         val lan = LanNetworks()
-        assertTrue(lan.onAvailable("wifi-site"))
-        assertTrue(lan.onAvailable("eth0"))
-        assertTrue(lan.onLost("eth0"))
-        assertFalse(lan.onLost("wifi-site"))
-        assertFalse(lan.onLost("unknown"))
+        lan.onAvailable("wifi-site")
+        // Associated, no lease yet: the Wi-Fi icon is on but nothing can connect.
+        assertNull(lan.current())
+        lan.onLinkProperties("wifi-site", lanAt("192.168.1.37", 24, "192.168.1.1"))
+        lan.onAvailable("eth0")
+        assertEquals("192.168.1.0/24", lan.current()?.subnet)
+        lan.onLost("wifi-site")
+        assertNull(lan.current())
+        lan.onLost("unknown")
+        assertNull(lan.current())
+    }
+
+    @Test
+    fun lanSnapshotNamesSubnetAndGateway() {
+        val lan = lanAt("10.16.36.7", 24, "10.16.36.1")
+        assertEquals("10.16.36.0/24", lan.subnet)
+        assertEquals("10.16.36.1", lan.gateway)
+        assertTrue(lan.connected)
+        assertEquals("172.16.0.0/12", LanSnapshot.subnetOf(InetAddress.getByName("172.20.3.4"), 12))
+        // A link-local address alone is not connectivity.
+        assertFalse(LanSnapshot.from(listOf(InetAddress.getByName("169.254.3.4") to 16), null).connected)
+        assertFalse(LanSnapshot.from(listOf(InetAddress.getByName("fe80::1") to 64), null).connected)
+    }
+
+    @Test
+    fun notDiscoveredAndConflictAreTheirOwnProblems() {
+        val missing = ProblemGuide.forLink(network(NetworkFailure.NOT_DISCOVERED), stopped = false, wifiConnected = true)
+        assertEquals(Problem.NOT_DISCOVERED, missing.problem)
+        assertEquals(NextStep.OPEN_SETTINGS, missing.step)
+        assertTrue(missing.retrying)
+        val conflict = ProblemGuide.forLink(network(NetworkFailure.CONFLICT), stopped = false, wifiConnected = true)
+        assertEquals(Problem.SITE_CONFLICT, conflict.problem)
+        assertEquals(NextStep.NONE, conflict.step)
+    }
+
+    @Test
+    fun notDiscoveredHintComparesTheSubnetWithPairingTime() {
+        val other = lanAt("10.16.36.7", 24, "10.16.36.1")
+        val site = lanAt("192.168.1.37", 24, "192.168.1.1")
+        // 2026-10-01 tablet: same SSID, other AP, 10.16.36.0/24 instead of the site's 192.168.1.0/24.
+        assertEquals(ProblemGuide.NotDiscoveredHint.OTHER_NETWORK, ProblemGuide.notDiscoveredHint(other, "192.168.1.0/24"))
+        assertEquals(ProblemGuide.NotDiscoveredHint.SAME_NETWORK, ProblemGuide.notDiscoveredHint(site, "192.168.1.0/24"))
+        assertEquals(ProblemGuide.NotDiscoveredHint.UNKNOWN, ProblemGuide.notDiscoveredHint(site, null))
+        assertEquals(ProblemGuide.NotDiscoveredHint.UNKNOWN, ProblemGuide.notDiscoveredHint(null, "192.168.1.0/24"))
     }
 }

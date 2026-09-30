@@ -12,6 +12,10 @@ enum class Problem {
     UNKNOWN_HOST,
     TLS,
     TLS_PIN,
+    /** D-390 `not_discovered`: the site is not advertised on this Wi-Fi (often a same-SSID other network). */
+    NOT_DISCOVERED,
+    /** D-370 5.3 `conflict`: the site name is advertised from more than one address. */
+    SITE_CONFLICT,
     UNAUTHORIZED,
     REPLACED,
     PROTOCOL_MISMATCH,
@@ -53,10 +57,15 @@ object ProblemGuide {
                         NetworkFailure.UNKNOWN_HOST -> Problem.UNKNOWN_HOST
                         NetworkFailure.TLS -> Problem.TLS
                         NetworkFailure.TLS_PIN -> Problem.TLS_PIN
+                        NetworkFailure.NOT_DISCOVERED -> Problem.NOT_DISCOVERED
+                        NetworkFailure.CONFLICT -> Problem.SITE_CONFLICT
                         NetworkFailure.OTHER -> Problem.NETWORK_OTHER
                     }
                 }
-                val step = if (problem == Problem.REFUSED || problem == Problem.NETWORK_OTHER) NextStep.NONE else NextStep.OPEN_SETTINGS
+                val step = when (problem) {
+                    Problem.REFUSED, Problem.NETWORK_OTHER, Problem.SITE_CONFLICT -> NextStep.NONE
+                    else -> NextStep.OPEN_SETTINGS
+                }
                 Guidance(problem, step, error.detail, retrying)
             }
             LinkError.Unauthorized -> Guidance(Problem.UNAUTHORIZED, NextStep.OPEN_SETTINGS, "HTTP 401 / close 4401", retrying)
@@ -75,6 +84,28 @@ object ProblemGuide {
      */
     fun stopsCameraFirst(problem: Problem, running: Boolean): Boolean =
         running && (problem == Problem.UNAUTHORIZED || problem == Problem.REPLACED || problem == Problem.TLS_PIN)
+
+    /** Which second sentence follows "사이트가 이 Wi-Fi에서 보이지 않습니다". */
+    enum class NotDiscoveredHint {
+        /** The Wi-Fi subnet differs from the one at pairing time: same SSID, another AP or hotspot. */
+        OTHER_NETWORK,
+
+        /** Same subnet as at pairing time: the site PC or its mDNS advertisement is off, or multicast is blocked. */
+        SAME_NETWORK,
+
+        /** The subnet at pairing time or now is unknown. */
+        UNKNOWN,
+    }
+
+    /**
+     * @param current the Wi-Fi now (null or no subnet: unknown).
+     * @param pairingSubnet the subnet saved at pairing time, diagnostic only.
+     */
+    fun notDiscoveredHint(current: LanSnapshot?, pairingSubnet: String?): NotDiscoveredHint {
+        val now = current?.subnet ?: return NotDiscoveredHint.UNKNOWN
+        val then = pairingSubnet ?: return NotDiscoveredHint.UNKNOWN
+        return if (now == then) NotDiscoveredHint.SAME_NETWORK else NotDiscoveredHint.OTHER_NETWORK
+    }
 
     fun forStream(error: StreamError): Guidance = when (error) {
         StreamError.NotPaired -> Guidance(Problem.NOT_PAIRED, NextStep.OPEN_SETTINGS, null, retrying = false)

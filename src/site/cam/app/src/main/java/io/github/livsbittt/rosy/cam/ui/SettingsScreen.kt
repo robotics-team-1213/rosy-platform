@@ -45,17 +45,21 @@ import io.github.livsbittt.rosy.cam.settings.PairingUri
 import io.github.livsbittt.rosy.cam.settings.OverheadServerDiscovery
 import io.github.livsbittt.rosy.cam.settings.OverheadServiceRecord
 import io.github.livsbittt.rosy.cam.settings.RobotCoreServiceRecord
+import io.github.livsbittt.rosy.cam.settings.SiteLink
 
 /** Manual pairing entry, validated with the same rules as the rosyov:// deep link. */
 @Composable
 fun SettingsScreen(
-    current: PairingUri?,
+    currentLink: SiteLink?,
     locked: Boolean,
     lens: LensChoice,
     onLens: (LensChoice) -> Unit,
-    onSave: (PairingUri) -> Unit,
+    /** The pairing and, when it came from the mDNS list, that service's name (`site_name`). */
+    onSave: (PairingUri, String?) -> Unit,
     onBack: () -> Unit,
 ) {
+    val current = remember(currentLink) { currentLink?.toPairing() }
+    var siteName by remember(currentLink) { mutableStateOf(currentLink?.siteName) }
     var link by remember { mutableStateOf("") }
     var host by remember(current) { mutableStateOf(current?.host ?: "") }
     var port by remember(current) { mutableStateOf(current?.port?.toString() ?: "") }
@@ -142,6 +146,7 @@ fun SettingsScreen(
                             host = service.tlsHost
                             port = service.port.toString()
                             secure = true
+                            siteName = service.name
                             invalid = null
                             saved = false
                         },
@@ -178,6 +183,7 @@ fun SettingsScreen(
             onClick = {
                 when (val parsed = PairingUri.parse(link)) {
                     is PairingUri.Parsed.Valid -> {
+                        if (parsed.pairing.host != host) siteName = null
                         host = parsed.pairing.host
                         port = parsed.pairing.port.toString()
                         token = parsed.pairing.token
@@ -196,7 +202,15 @@ fun SettingsScreen(
             Text(stringResource(R.string.settings_link_apply))
         }
 
-        Field(host, { host = it; saved = false }, R.string.settings_host, invalid == "host")
+        Field(host, { host = it; siteName = null; saved = false }, R.string.settings_host, invalid == "host")
+        // D-390 1: the saved IP is only the labelled fallback; the name is looked up through mDNS on each connect.
+        currentLink?.manualHost?.let { manual ->
+            Text(
+                stringResource(if (currentLink.tlsHost == null) R.string.settings_manual_only else R.string.settings_manual_host, manual),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
         Field(port, { port = it; saved = false }, R.string.settings_port, invalid == "port", KeyboardType.Number)
         OutlinedTextField(
             value = token,
@@ -247,7 +261,7 @@ fun SettingsScreen(
                     val reason = PairingUri.validate(trimmedHost, portNumber, token, source.trim(), secure, pin)
                     invalid = reason
                     if (reason == null) {
-                        onSave(PairingUri(trimmedHost, portNumber, token, source.trim(), secure, pin))
+                        onSave(PairingUri(trimmedHost, portNumber, token, source.trim(), secure, pin), siteName)
                         saved = true
                     }
                 },

@@ -33,9 +33,6 @@ class SettingsStore(context: Context) {
         .catch { e -> if (e is IOException) emit(emptyPreferences()) else throw e }
         .map(::decode)
 
-    /** Connection input of the saved site link (URL host = `tls_host` when known), for the screens. */
-    val pairing: Flow<PairingUri?> = siteLink.map { it?.toPairing() }
-
     /** Saved lens setting; null until the operator picks one (then [LensChoice.DEFAULT] applies). */
     val lens: Flow<LensChoice?> = store.data
         .catch { e -> if (e is IOException) emit(emptyPreferences()) else throw e }
