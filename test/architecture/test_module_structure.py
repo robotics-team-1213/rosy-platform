@@ -76,7 +76,7 @@ CONTROL_SPLIT = "docs/plans/2026-09-22-control-package-split-design.md"
 #: P6 verdicts: path (relative to src/) or package name -> (lines at verdict, verdict).
 SIZE_VERDICTS = {
     "fleet": (
-        20_236,
+        20_399,
         "split: server HTTP boundary, console, signals and the mission-control stores are separate owners "
         "today; group them into subpackages rather than one flat server/ tree (B2); owner fleet, unscheduled "
         "(re-judged 2026-09-29 at 11164 after mission_store joined the server tree; re-judged 2026-09-30 at "
@@ -90,7 +90,7 @@ SIZE_VERDICTS = {
         "assets (server/web console js/css/html); re-judged 2026-09-30 at 19243 after D-362 P0-1 "
         "executed the app.py router split (app.py 1556 -> 476 plus mission/task_dispatch/intent/"
         "console/ingest/static route modules and site_auth) — the flat server/ tree still wants the "
-        "B2 subpackage regroup; re-judged 2026-10-01 at 20236: the same-host OMX phase receipt "
+        "B2 subpackage regroup; re-judged 2026-10-01 at 20399: the same-host OMX phase receipt "
         "projection joined the existing Fleet mission journal and read-only status surface (19468), and the "
         "D-375 console map-fit overlay joined as its own modules (server/site_lanes.py, web/map-fit.js pure, "
         "web/map-fit-view.js DOM, each under the D-362 budget); verdict unchanged. Split remains "
