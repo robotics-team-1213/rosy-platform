@@ -248,6 +248,33 @@ def test_action_runner_exposes_owner_scoped_phase_lifecycle(tmp_path):
     assert driver.submissions == [grant.action_id]
 
 
+def test_validated_phase_recorder_is_attempt_scoped_and_needs_no_peer_impersonation(tmp_path):
+    store, driver, runner = _runner(tmp_path)
+    grant = FleetActionGrant.model_validate(_grant())
+    runner.submit(grant, peer_uid=1001)
+
+    recorder = runner._phase_recorder_for_validated_grant(grant, peer_uid=1001)
+    intent = recorder.begin_phase(
+        phase_id="approach", ordinal=0, command_digest="a" * 64,
+    )
+    first_response = recorder.record_submission(
+        phase_id="approach", accepted=True, driver_goal_id="ros-goal-approach",
+    )
+
+    assert recorder.action_id == grant.action_id
+    assert recorder.attempt_id == grant.attempt_id
+    assert intent["state"] == "SUBMITTING"
+    assert first_response["driver_goal_id"] == "ros-goal-approach"
+    assert store.action_phases(grant.action_id)[0]["phase_id"] == "approach"
+    assert driver.submissions == [grant.action_id]
+
+    with pytest.raises(PermissionError, match="peer"):
+        runner._phase_recorder_for_validated_grant(grant, peer_uid=9)
+    changed_attempt = FleetActionGrant.model_validate(_grant(attempt_id="attempt-2"))
+    with pytest.raises(PermissionError, match="stored Action identity"):
+        runner._phase_recorder_for_validated_grant(changed_attempt, peer_uid=1001)
+
+
 def test_phase_cancel_ack_requires_terminal_goal_result_before_next_phase(tmp_path):
     store, driver, runner = _runner(tmp_path)
     grant = FleetActionGrant.model_validate(_grant())

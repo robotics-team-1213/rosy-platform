@@ -162,6 +162,13 @@ private fun StatusPanel(
             },
             style = MaterialTheme.typography.bodyMedium,
         )
+        if (state.running) {
+            val res = LocalContext.current.resources
+            state.lens?.let { LensText.line(res, it) }?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
+            if (state.lensSwitchFailed) {
+                Text(stringResource(R.string.lens_switch_failed), color = RosyColors.StatusWarn, style = MaterialTheme.typography.bodyMedium)
+            }
+        }
         state.health?.let { HealthPanel(it) }
         val site = link.site
         // Per camera session: once the receiver has reported a marker, an empty report is a real 0/4.
@@ -171,7 +178,11 @@ private fun StatusPanel(
         }
         if (state.running && link.state == LinkState.STREAMING && site != null) {
             if (markersReported || CornerGuide.reportsMarkers(site)) {
-                InstallGuide(CornerGuide.from(site))
+                val guide = CornerGuide.from(site)
+                InstallGuide(guide)
+                if (LensAdvice.suggestWide(state.lens, state.wideAvailable, guide, markersReported = true)) {
+                    Text(stringResource(R.string.guide_lens_wide), style = MaterialTheme.typography.bodyMedium)
+                }
             } else {
                 Text(
                     stringResource(R.string.guide_markers_unreported),
