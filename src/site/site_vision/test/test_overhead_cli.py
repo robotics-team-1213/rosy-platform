@@ -81,8 +81,21 @@ def test_pairing_uri_from_cli_args_round_trips():
     }
 
 
-def test_overhead_console_script_is_an_alias_of_site_vision():
+def test_overhead_console_script_is_an_alias_of_site_vision(monkeypatch):
     """D-374 3: `overhead` stays for one site candidate release, then stage 5 removes it."""
-    setup = (Path(__file__).resolve().parents[1] / "setup.py").read_text(encoding="utf-8")
-    assert '"site_vision=site_vision.cli:main"' in setup
-    assert '"overhead=site_vision.cli:main"' in setup
+    import runpy
+
+    import setuptools
+
+    captured: dict = {}
+    monkeypatch.setattr(setuptools, "setup", lambda **kwargs: captured.update(kwargs))
+    package = Path(__file__).resolve().parents[1]
+    monkeypatch.chdir(package)
+    runpy.run_path(str(package / "setup.py"), run_name="__main__")
+
+    scripts = {}
+    for spec in captured["entry_points"]["console_scripts"]:
+        name, target = (part.strip() for part in spec.split("=", 1))
+        scripts[name] = target
+    assert captured["name"] == "site_vision"
+    assert scripts == {"site_vision": "site_vision.cli:main", "overhead": "site_vision.cli:main"}
