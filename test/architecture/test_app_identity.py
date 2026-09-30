@@ -34,6 +34,12 @@ PENDING = {
 }
 
 
+#: Participants that are not surfaces (no `app_name`, no icon) but still take a D-374 role id.
+NON_SURFACE_PARTICIPANTS = [
+    {"id": "site-vision", "path": "src/site/site_vision"},
+]
+
+
 def _apps() -> list[dict]:
     rows = yaml.safe_load(REGISTRY.read_text(encoding="utf-8"))["surfaces"]
     return [row for row in rows if row.get("app_name")]
@@ -44,7 +50,7 @@ def _gradle_value(text: str, key: str) -> str | None:
     return match.group(1) if match else None
 
 
-def identity_problems(row: dict, root: Path = ROOT) -> list[str]:
+def identity_problems(row: dict, root: Path = ROOT, *, check_icon: bool = True) -> list[str]:
     """Every way `row` breaks the D-374 naming rule; empty when it follows it."""
     role = row["id"]
     if not KEBAB.match(role):
@@ -55,7 +61,7 @@ def identity_problems(row: dict, root: Path = ROOT) -> list[str]:
     if folder.name != snake:
         problems.append(f"folder {row['path']!r} should end in {snake!r}")
     icon = row.get("icon")
-    if not icon or Path(icon).name != f"{role}.svg":
+    if check_icon and (not icon or Path(icon).name != f"{role}.svg"):
         problems.append(f"icon {icon!r} should be named {role}.svg")
     package_xml = folder / "package.xml"
     if package_xml.is_file():
@@ -85,6 +91,11 @@ def test_app_identity_follows_its_role_id(row):
         assert problems, f"{row['id']} now follows D-374; delete its PENDING line ({PENDING[row['id']]})"
     else:
         assert problems == []
+
+
+@pytest.mark.parametrize("participant", NON_SURFACE_PARTICIPANTS, ids=lambda row: row["id"])
+def test_non_surface_participant_follows_its_role_id(participant):
+    assert identity_problems(participant, check_icon=False) == []
 
 
 def test_pending_rows_exist_in_the_registry():
