@@ -291,3 +291,56 @@ def test_swarm_reference_frames_from_non_owners_are_dropped_during_a_lease(lease
             socket.send_json(_pose_frame())
             socket.send_json({"type": "ping"})
         assert len(received) == expected, token
+
+
+# --- review item 4: limits, host restarts, pose/slam/power are fenced too ------------
+
+ADMIN = OTHER   # rosy-dev-admin: an administrator that is not the lease owner
+
+
+def test_non_owner_admin_cannot_move_the_safety_limits(lease):
+    client, services, _ = lease
+    before = services.safety.limits.manual_linear
+    _open(client)
+    refused = client.put("/api/v1/safety/limits", json={"manual_linear": 0.05}, headers=ADMIN)
+    assert refused.status_code == 409
+    assert refused.json()["error"]["code"] == "CALIBRATION_ACTIVE"
+    assert services.safety.limits.manual_linear == before
+
+
+@pytest.mark.parametrize("path,body", [
+    ("/api/v1/host/release/install", {"release_id": "2026.10.01-001", "confirmed": True}),
+    ("/api/v1/host/release/rollback", {"confirmed": True}),
+    ("/api/v1/host/reboot", {"confirmed": True}),
+])
+def test_host_restarts_need_an_explicit_override_during_a_lease(lease, path, body):
+    client, _, _ = lease
+    _open(client)
+    refused = client.post(path, json=body, headers=ADMIN)
+    assert refused.status_code == 409
+    assert refused.json()["error"]["code"] == "CALIBRATION_ACTIVE"
+    assert "override_calibration" in refused.json()["error"]["message"]
+    # With the flag the request goes on to the Host Agent (absent here, so not 409).
+    forced = client.post(path, json={**body, "override_calibration": True}, headers=ADMIN)
+    assert forced.status_code != 409 or forced.json()["error"]["code"] != "CALIBRATION_ACTIVE"
+
+
+@pytest.mark.parametrize("path,body", [
+    ("/api/v1/localization/initialpose", {"x": 0.0, "y": 0.0, "yaw": 0.0}),
+    ("/api/v1/slam/start", None),
+    ("/api/v1/slam/stop", None),
+    ("/api/v1/slam/reset", None),
+    ("/api/v1/power/mode", {"mode": "STANDBY"}),
+])
+def test_pose_slam_and_power_mode_are_fenced_for_non_owners(lease, path, body):
+    client, _, _ = lease
+    _open(client)
+    response = client.post(path, json=body, headers=OTHER)
+    assert response.status_code == 409, (path, response.json())
+    assert response.json()["error"]["code"] == "CALIBRATION_ACTIVE"
+
+
+def test_power_wake_stays_open(lease):
+    client, _, _ = lease
+    _open(client)
+    assert client.post("/api/v1/power/wake", headers=OTHER).status_code == 200
