@@ -75,15 +75,7 @@ class FleetAgent:
         ca_file = Path(discovery["ca_file"]) if discover else None
 
         # Keep buffering events even when disconnected to not lose them
-        def on_event(ev):
-            self._event_seq += 1
-            ev.seq = self._event_seq
-            self._event_buffer.append(ev)
-            # cap buffer to prevent memory leak
-            if len(self._event_buffer) > 1000:
-                self._event_buffer = self._event_buffer[-1000:]
-
-        self.events.subscribe(on_event)
+        unsubscribe = self.events.subscribe(self._buffer_event)
 
         backoff = 1.0
         try:
@@ -146,7 +138,16 @@ class FleetAgent:
                     await asyncio.sleep(backoff)
                     backoff = next_backoff(backoff)
         finally:
-            self.events.unsubscribe(on_event)
+            unsubscribe()
+
+    def _buffer_event(self, ev) -> None:
+        # The bus hands every subscriber the object it keeps in its ring buffer;
+        # renumber a copy so /api/v1/events and audit keep the bus seq (D-382 I4).
+        self._event_seq += 1
+        self._event_buffer.append(ev.model_copy(update={"seq": self._event_seq}))
+        # cap buffer to prevent memory leak
+        if len(self._event_buffer) > 1000:
+            self._event_buffer = self._event_buffer[-1000:]
 
     async def _heartbeat_loop(self, ws) -> None:
         import websockets

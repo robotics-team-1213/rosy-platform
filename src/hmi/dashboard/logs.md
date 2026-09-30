@@ -546,3 +546,15 @@
 - 변경: `index.html` `<title>` `Rosy Robot`, `surface.html` `Rosy Robot — {{title}}`, 파비콘 `/common/icons/robot.svg`.
 - 증거: `python -m pytest src/hmi/dashboard/test -q` 17 passed, 34 skipped (브라우저 시험 opt-in); `src/hmi/web_common/test` 111 passed (2026-09-30 Windows).
 - gate 변화: 없음. 폴더·패키지 이동(`src/hmi/robot`, `rosy_robot`)은 D-374 단계 3 게이트 그대로.
+
+## 2026-10-01 · uncommitted · feat(console): D-383 편대 역할 칸과 버전 계보
+
+- 변경: 계기 셋에 FORMATION ROLE 칸(leader/follower 한국어, 대형 이름, 기본 hidden), 식별줄에 software_version 추가. telemetry.js renderFormationHero + app.js 배선, console-detail.css 계기 문법. 새 파일·새 엔드포인트 없음.
+- 증거: dashboard 패키지 시험 9 passed·suite 21 passed 34 skipped, 게이트웨이 dashboard/웹공통 139 passed. 변이 증명 2종(배선·hidden 규칙 제거 시 빨강).
+- gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · fix(console): 계보줄 단일 작성자 — 10Hz 덮어쓰기 제거
+
+- 변경: renderRobotState 가 robot-id 를 더 이상 쓰지 않는다. 실기(013)에서 D-383 계보(모델·버전·모드)가 매 틱 state.robot_id 하나로 지워지는 것을 확인했다. 식별 렌더(renderRobotInfo)가 유일한 작성자다.
+- 증거: dashboard 패키지 시험 (app.js 에 setText("robot-id" 부재). 변이: 재추가 시 빨강.
+- gate 변화: 없음.

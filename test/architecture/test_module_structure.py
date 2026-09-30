@@ -76,7 +76,7 @@ CONTROL_SPLIT = "docs/plans/2026-09-22-control-package-split-design.md"
 #: P6 verdicts: path (relative to src/) or package name -> (lines at verdict, verdict).
 SIZE_VERDICTS = {
     "fleet": (
-        19_243,
+        19_468,
         "split: server HTTP boundary, console, signals and the mission-control stores are separate owners "
         "today; group them into subpackages rather than one flat server/ tree (B2); owner fleet, unscheduled "
         "(re-judged 2026-09-29 at 11164 after mission_store joined the server tree; re-judged 2026-09-30 at "
@@ -90,7 +90,9 @@ SIZE_VERDICTS = {
         "assets (server/web console js/css/html); re-judged 2026-09-30 at 19243 after D-362 P0-1 "
         "executed the app.py router split (app.py 1556 -> 476 plus mission/task_dispatch/intent/"
         "console/ingest/static route modules and site_auth) — the flat server/ tree still wants the "
-        "B2 subpackage regroup, verdict unchanged. Split remains "
+        "B2 subpackage regroup; re-judged 2026-10-01 at 19468 after the same-host OMX phase receipt "
+        "projection joined the existing Fleet mission journal and read-only status surface. The phase "
+        "events share the Mission SQLite transaction and owner; B2 regroup remains unscheduled. Split remains "
         "unscheduled (docs/plans/2026-09-30-er2-mission-feedback-loop.md)",
     ),
     "site/fleet/fleet/server/enrollment.py": (
@@ -99,19 +101,23 @@ SIZE_VERDICTS = {
         "pending logout share one state machine over the register), ROS-free, host-testable (X5)",
     ),
     "site/fleet/fleet/server/mission_store.py": (
-        728,
-        "accept: one owner (the Fleet Mission SQLite ledger — missions, attempts, progress snapshots, and "
-        "their transitions in one transactional store), ROS-free, host-testable; correlated task evidence "
-        "stays in task_store/task_results (X5)",
+        887,
+        "accept: one owner (the Fleet Mission SQLite ledger — missions, attempts, progress snapshots, "
+        "fenced device phase snapshots, and their transitions in one transactional store), ROS-free, "
+        "host-testable; correlated task evidence stays in task_store/task_results (X5). Re-judged "
+        "2026-10-01 at 887 after idempotent per-attempt phase projection joined the Mission event transaction",
     ),
     "contracts/foundation/core_common/protocol/schemas.py": (
-        1002,
+        1_067,
         "accept: the D-18 single contract source — every envelope, event and capability model in one "
         "importable place; per-domain schema files would fork the version pin that "
         "test_protocol_version_alignment guards. Re-judged 2026-09-30 at 1000 lines after the bounded "
         "Mission feedback scope/context/tool-result contracts were added; re-judged 2026-09-30 at 1001 "
         "under the D-362 zero-allowance tier; re-judged 2026-09-30 at 1002 when the pilot branch added "
-        "LineFollowStatus.clearance_m (D-344 §11, one field). ROS-free, host-testable (X5)",
+        "LineFollowStatus.clearance_m (D-344 §11, one field); re-judged 2026-10-01 at 1067 for the "
+        "bounded UDS v2 phase receipt and read-only Mission phase progress schemas, which remain in the "
+        "single contract source guarded by protocol alignment. The hard-tier zero-growth rule prevents "
+        "silent expansion. ROS-free, host-testable (X5)",
     ),
     "site/fleet/fleet/server/task_store.py": (
         1060,
@@ -233,11 +239,13 @@ SIZE_VERDICTS = {
         "splitting probe sequence from reporting would sever one diagnostic narrative (X5)",
     ),
     "products/omx/adapter/omx_adapter/action_store.py": (
-        788,
-        "accept: one owner for the durable local Action and per-attempt ROS phase journal; "
-        "they share SQLite transactions, identity fences, and restart-to-UNKNOWN recovery. "
-        "ROS-free and host-testable; runner integration remains tracked in docs/plans/"
-        "2026-09-30-action-message-identity.md (X5)",
+        1_109,
+        "accept: one owner for the durable local Action, per-attempt ROS phase journal, and semantic "
+        "workflow terminal gate; they share SQLite transactions, identity fences, and restart-to-UNKNOWN "
+        "recovery. ROS-free and host-testable. Re-judged 2026-10-01 at 1109 after the durable gripper "
+        "evidence gate and restart-to-HOLD journal recovery; recovery updates share the same SQLite "
+        "transaction so the Action, phase, and possible-held-object state cannot split. The hard-tier "
+        "zero-growth rule prevents silent expansion",
     ),
 }
 

@@ -582,3 +582,10 @@
 - 증거: 해당 8건 복구. core 도메인 전체(gateway·events·services·web_common·api_web) 2014 passed, 29 skipped (2026-10-01 Windows). 단 `test_core_node_teardown::test_run_drains_executor_workers_before_returning` 은 이 변경과 무관하게 Windows에서 간헐 실패한다(재실행 통과, CI Linux 통과).
 - gate 변화: 없음.
 - 교훈: 파일을 나누는 리팩터는 그 파일을 텍스트로 읽는 계약 시험의 소유자도 함께 옮겨야 한다 — 분할 커밋이 시험을 안 고치면 CI가 다음 커밋에서 대신 말한다.
+
+## 2026-10-01 · uncommitted · fix(test): status-inputs 키 집합에 swarm_role 추가 (D-383 뒤치움)
+
+- 변경: d0f2b7f5(D-383)가 `api/v1/host.py` 의 `status_inputs` 에 `swarm_role`(대형 역할 leader/follower, 없으면 absent)을 더하며 루트 host 시험만 갱신했다. 게이트웨이의 키 집합 동일성 시험이 그 키를 몰라 main CI core 단계가 붉었다. 기대 키 집합에 `swarm_role` 을 넣고, 상태 없음(None)도 absent로 기록됨을 함께 단언한다.
+- 증거: test_host_status_summary.py 전체 passed(키 집합·absent·핸드오버). 로컬 core 도메인 전체 회귀 결과는 별도 기록.
+- gate 변화: 없음.
+- 교훈: 핸드오버에 필드를 더하는 커밋은 그 필드의 소비자 시험이 사는 *모든* 시험실을 찾아 갱신해야 한다 — 이번에도 한쪽(루트 test/)만 녹색이어서 다른 쪽(gateway)이 다음 push 에서 붉었다.

@@ -12,8 +12,9 @@ class DummyState:
     def snapshot(self): pass
 
 class DummyEventBus:
-    def subscribe(self, cb): pass
-    def unsubscribe(self, cb): pass
+    # Same surface as core_events EventBus: subscribe returns the unsubscribe callable.
+    def subscribe(self, cb):
+        return lambda: None
 
 class DummyIdentity:
     robot_id = "rosy_01"
@@ -121,3 +122,27 @@ def test_fleet_agent_start_does_not_open_a_url():
         agent.stop()
         
     asyncio.run(_test())
+
+
+def test_agent_run_unsubscribes_from_the_real_event_bus():
+    # D-382 F10: EventBus has no unsubscribe(); subscribe() returns the callable.
+    from core_events.events.bus import EventBus
+    bus = EventBus("rosy_01")
+    agent = FleetAgent(DummyState(), bus, {}, DummyIdentity())
+    agent.enabled = False
+    asyncio.run(agent._run("ws://example.invalid", "token"))
+    assert bus._subscribers == []
+
+
+def test_agent_renumbers_a_copy_not_the_bus_event():
+    # D-382 I4: the agent's own seq must not rewrite /api/v1/events history.
+    from core_events.events.bus import EventBus
+    bus = EventBus("rosy_01")
+    bus.publish("first")
+    agent = FleetAgent(DummyState(), bus, {}, DummyIdentity())
+    agent._event_seq = 40
+    bus.subscribe(agent._buffer_event)
+    published = bus.publish("nav.completed")
+    assert published.seq == 2
+    assert [e.seq for e in bus.history()] == [1, 2]
+    assert [e.seq for e in agent._event_buffer] == [41]

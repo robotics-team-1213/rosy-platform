@@ -65,6 +65,7 @@ def _receipt(grant, state, event_id):
         "observed_at": datetime.now(timezone.utc).isoformat(),
         "driver_goal_id": "ros-goal-1" if state in {"ACCEPTED", "RUNNING"} else None,
         "reason": None,
+        "phase_summaries": [],
     }
 
 
@@ -173,7 +174,7 @@ def test_closed_generation_prevents_any_local_submit(tmp_path):
     assert service.get(mission["mission_id"])["status"] == "HOLD"
 
 
-def test_local_transport_requires_v1_and_exact_fence_bound_receipt(tmp_path):
+def test_local_transport_requires_v2_phase_summary_and_exact_fence_bound_receipt(tmp_path):
     task_store, service, mission, _ = _ready_mission(tmp_path)
     transport = Transport()
     dispatcher = MissionDispatcher(
@@ -184,13 +185,16 @@ def test_local_transport_requires_v1_and_exact_fence_bound_receipt(tmp_path):
     receipt = _receipt(grant, "ACCEPTED", 9)
     parser = UnixLocalActionTransport(tmp_path)
 
-    parsed = parser._parse_receipt(grant, {"version": 1, "status": 200, "receipt": receipt})
+    parsed = parser._parse_receipt(grant, {"version": 2, "status": 200, "receipt": receipt})
     assert parsed.request_digest == grant.request_digest
+    missing_summary = {key: value for key, value in receipt.items() if key != "phase_summaries"}
     with pytest.raises(LocalActionUnavailable, match="version"):
-        parser._parse_receipt(grant, {"version": 2, "status": 200, "receipt": receipt})
+        parser._parse_receipt(grant, {"version": 1, "status": 200, "receipt": receipt})
+    with pytest.raises(LocalActionUnavailable, match="missing phase summaries"):
+        parser._parse_receipt(grant, {"version": 2, "status": 200, "receipt": missing_summary})
     wrong_fence = {**receipt, "dispatch_generation": grant.dispatch_generation + 1}
     with pytest.raises(LocalActionUnavailable, match="does not match"):
-        parser._parse_receipt(grant, {"version": 1, "status": 200, "receipt": wrong_fence})
+        parser._parse_receipt(grant, {"version": 2, "status": 200, "receipt": wrong_fence})
 
 
 def test_duplicate_terminal_receipt_and_late_running_readback_do_not_regress_mission(tmp_path):
@@ -201,7 +205,14 @@ def test_duplicate_terminal_receipt_and_late_running_readback_do_not_regress_mis
     )
     dispatcher.dispatch_next()
     grant = FleetActionGrant.model_validate(service.get(mission["mission_id"])["action_grant"])
-    terminal = dispatcher._verified_receipt(grant, _receipt(grant, "SUCCEEDED", 3))
+    terminal_document = _receipt(grant, "SUCCEEDED", 7)
+    observed_at = datetime.now(timezone.utc).isoformat()
+    terminal_document["phase_summaries"] = [
+        {"phase_id": phase_id, "ordinal": ordinal, "state": "SUCCEEDED",
+         "journal_event_id": ordinal + 1, "observed_at": observed_at}
+        for ordinal, phase_id in enumerate(("approach", "grasp", "transfer", "release"))
+    ]
+    terminal = dispatcher._verified_receipt(grant, terminal_document)
     stale_running = dispatcher._verified_receipt(grant, _receipt(grant, "RUNNING", 2))
 
     dispatcher._apply_receipt(grant, terminal)
