@@ -173,6 +173,7 @@ async def _run_vision(args: argparse.Namespace) -> int:
         finally:
             ws_server.close()
             await ws_server.wait_closed()
+            ingest.close_map_worker()
     return 0
 
 

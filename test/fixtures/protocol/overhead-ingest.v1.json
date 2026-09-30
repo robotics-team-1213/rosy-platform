@@ -116,7 +116,8 @@
   "close_codes": {
     "bad_proto": 4400,
     "unauthorized_source": 4401,
-    "replaced_by_same_source": 4409
+    "replaced_by_same_source": 4409,
+    "hello_timeout": 1013
   },
   "pairing_uris": {
     "valid": [

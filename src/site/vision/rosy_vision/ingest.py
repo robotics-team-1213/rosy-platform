@@ -21,7 +21,7 @@ import logging
 import ssl
 import time
 from collections import deque
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import BrokenExecutor, Executor
 from dataclasses import dataclass, field
 from typing import Mapping
 
@@ -42,9 +42,8 @@ from core_common.protocol.vision_preview import (
     PreviewRectification, VisionLeaseError, VisionLeaseSigner,
 )
 from rosy_vision.field_detect import DETECTOR_VERSION, FieldDetection, detect_field_jpeg
-from rosy_vision.map_register import (
-    REGISTER_VERSION, MapPaint, RegistrationResult, register_map_jpeg,
-)
+from rosy_vision import map_worker
+from rosy_vision.map_register import REGISTER_VERSION, MapPaint, RegistrationResult
 from rosy_vision.rectify import rectify_jpeg
 
 logger = logging.getLogger("rosy_vision")
@@ -53,8 +52,10 @@ STATUS_INTERVAL_S = 1.0
 # A marker report older than this is not repeated in ``status`` (worker stopped
 # detecting, e.g. frames went stale); the phone then sees empty lists again.
 MARKER_REPORT_TTL_S = 3.0
-# A peer that upgrades but never sends hello is closed after this long.
+# A peer that upgrades but never sends hello is closed after this long, counted in
+# steps of _HELLO_STEP_S so a stalled event loop cannot use the peer's time up.
 HELLO_TIMEOUT_S = 5.0
+_HELLO_STEP_S = 0.25
 # Frames websockets may hold for one connection before it stops reading the
 # socket (D-136 6항: latest only, no backlog). TCP flow control does the rest.
 RECEIVE_QUEUE_FRAMES = 1
@@ -72,8 +73,9 @@ _FIELD_PROPOSAL_INTERVAL_S = 1.0
 # Field detection is ~30 ms of CPU per frame: at most one run per source per this
 # interval, whoever asks; readers in between get the last result.
 _FIELD_DETECT_INTERVAL_S = 1.0
-# Map registration (D-375) is ~1.5-2.7 s of CPU per frame: one run in flight per source,
-# the next at least this long after the last one finished, all on one worker thread.
+# Map registration (D-375) is seconds of CPU per frame and runs in a separate worker
+# process (never on this event loop's threads): one run in flight per source, the next
+# at least this long after the last one finished, one worker for all sources.
 _MAP_REGISTER_INTERVAL_S = 1.0
 
 
@@ -188,7 +190,9 @@ class IngestServer:
         # D-375: site map lane paint for the map-proposal view; None disables the view.
         self.map_paint = map_paint
         self._map_cache: dict[str, _MapRun] = {}
-        self._map_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="map-register")
+        # Started on the first map proposal; tests may swap in another executor or job.
+        self._map_executor: Executor | None = None
+        self._map_job = map_worker.register
         self.config: dict = dict(protocol.DEFAULT_CONFIG if config is None else config)
         self._sources: dict[str, _Source] = {}
         self._closing: set[asyncio.Task] = set()
@@ -203,6 +207,12 @@ class IngestServer:
             max_queue=RECEIVE_QUEUE_FRAMES,
             ssl=ssl_context,
         )
+
+    def close_map_worker(self) -> None:
+        """Stop the map-registration worker process (a new one starts on the next proposal)."""
+        executor, self._map_executor = self._map_executor, None
+        if executor is not None:
+            executor.shutdown(wait=False, cancel_futures=True)
 
     def source_names(self) -> list[str]:
         return list(self._sources)
@@ -371,13 +381,15 @@ class IngestServer:
             run = _MapRun(frame=frame)
             self._map_cache[source] = run
             try:
-                # One shared worker thread: runs for all sources queue behind each other,
-                # so map proposals never take more than one CPU core from the worker.
+                if self._map_executor is None:
+                    self._map_executor = map_worker.start(self.map_paint)
                 run.result = await asyncio.get_running_loop().run_in_executor(
-                    self._map_executor, register_map_jpeg, frame.jpeg, self.map_paint)
-            except Exception:  # noqa: BLE001 - any failure is a per-frame 422, never a crash
+                    self._map_executor, self._map_job, frame.jpeg)
+            except Exception as exc:  # noqa: BLE001 - any failure is a per-frame 422, never a crash
                 logger.exception("map registration failed for source %s", source)
                 run.failed = True
+                if isinstance(exc, BrokenExecutor):  # worker died: start a fresh one next time
+                    self.close_map_worker()
             finally:
                 run.finished = time.monotonic()
         if run.failed:
@@ -414,9 +426,9 @@ class IngestServer:
     async def _handler(self, connection: ServerConnection) -> None:
         source_name: str | None = None
         try:
-            raw = await asyncio.wait_for(connection.recv(), HELLO_TIMEOUT_S)
+            raw = await _receive_hello(connection)
         except asyncio.TimeoutError:
-            await connection.close(protocol.CLOSE_BAD_PROTO, "no hello")
+            await connection.close(protocol.CLOSE_HELLO_TIMEOUT, "no hello in time; retry")
             return
         except websockets.exceptions.ConnectionClosed:
             return
@@ -516,6 +528,28 @@ class IngestServer:
         captured_at = now - header.age_ms / 1000.0
         src.latest = LatestFrame(header=header, jpeg=jpeg, captured_at=captured_at, received_at=now)
         src.stats.record_frame(now, len(jpeg), header.age_ms, header.seq)
+
+
+async def _receive_hello(connection: ServerConnection):
+    """First message, or ``TimeoutError`` after ``HELLO_TIMEOUT_S`` of *responsive* waiting.
+
+    Each step charges at most twice its length, so time the loop spent blocked on
+    other work is not charged to the peer.
+    """
+    receive = asyncio.ensure_future(connection.recv())
+    budget = HELLO_TIMEOUT_S
+    try:
+        while True:
+            started = time.monotonic()
+            done, _ = await asyncio.wait({receive}, timeout=min(_HELLO_STEP_S, budget))
+            if done:
+                return receive.result()
+            budget -= min(time.monotonic() - started, 2 * _HELLO_STEP_S)
+            if budget <= 0:
+                raise asyncio.TimeoutError
+    finally:
+        if not receive.done():
+            receive.cancel()
 
 
 def _http_response(status: int, body: bytes, *, extra: Mapping[str, str] | None = None) -> Response:
