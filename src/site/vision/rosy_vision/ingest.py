@@ -17,9 +17,11 @@ import asyncio
 import contextlib
 import hmac
 import json
+import logging
 import ssl
 import time
 from collections import deque
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from typing import Mapping
 
@@ -45,6 +47,8 @@ from rosy_vision.map_register import (
 )
 from rosy_vision.rectify import rectify_jpeg
 
+logger = logging.getLogger("rosy_vision")
+
 STATUS_INTERVAL_S = 1.0
 # A marker report older than this is not repeated in ``status`` (worker stopped
 # detecting, e.g. frames went stale); the phone then sees empty lists again.
@@ -68,7 +72,8 @@ _FIELD_PROPOSAL_INTERVAL_S = 1.0
 # Field detection is ~30 ms of CPU per frame: at most one run per source per this
 # interval, whoever asks; readers in between get the last result.
 _FIELD_DETECT_INTERVAL_S = 1.0
-# Map registration (D-375) is ~1.5 s of CPU per frame: same once-per-source-per-interval rule.
+# Map registration (D-375) is ~1.5-2.7 s of CPU per frame: one run in flight per source,
+# the next at least this long after the last one finished, all on one worker thread.
 _MAP_REGISTER_INTERVAL_S = 1.0
 
 
@@ -136,10 +141,12 @@ class _FieldRun:
 
 @dataclass
 class _MapRun:
-    """The last map registration for one source; ``result`` is None while it runs or after it failed."""
+    """The last map registration for one source. ``finished`` is None while it runs (the
+    next run may start ``_MAP_REGISTER_INTERVAL_S`` after it); ``failed`` marks an error."""
 
     frame: LatestFrame
-    started: float
+    finished: float | None = None
+    failed: bool = False
     result: RegistrationResult | None = None
 
 
@@ -181,6 +188,7 @@ class IngestServer:
         # D-375: site map lane paint for the map-proposal view; None disables the view.
         self.map_paint = map_paint
         self._map_cache: dict[str, _MapRun] = {}
+        self._map_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="map-register")
         self.config: dict = dict(protocol.DEFAULT_CONFIG if config is None else config)
         self._sources: dict[str, _Source] = {}
         self._closing: set[asyncio.Task] = set()
@@ -351,22 +359,31 @@ class IngestServer:
         Never applied to sightings or ``CameraMap``. ``proposal`` is set only when the fit
         passed every gate; a rejected fit is returned as ``rejected_fit`` with the reason
         (its coverage and cut sides still tell the installer where to move the camera).
-        Runs off the event loop, at most once per source per ``_MAP_REGISTER_INTERVAL_S``.
+        Runs off the event loop on one shared worker thread, single flight per source
+        (429 while running), and a new run only ``_MAP_REGISTER_INTERVAL_S`` after the
+        last one finished. A failed run answers 422 until the next run replaces it.
         """
         run = self._map_cache.get(source)
-        now_mono = time.monotonic()
+        if run is not None and run.finished is None:  # single flight per source
+            return _http_response(429, b"map registration busy\n", extra={"Retry-After": "1"})
         if run is None or (run.frame is not frame
-                           and now_mono - run.started >= _MAP_REGISTER_INTERVAL_S):
-            run = _MapRun(frame=frame, started=now_mono)
+                           and time.monotonic() - run.finished >= _MAP_REGISTER_INTERVAL_S):
+            run = _MapRun(frame=frame)
             self._map_cache[source] = run
             try:
-                run.result = await asyncio.to_thread(register_map_jpeg, frame.jpeg, self.map_paint)
-            except (ValueError, cv2.error):
-                return _http_response(422, b"map registration failed\n",
-                                      extra={"X-Frame-State": "detection-error"})
+                # One shared worker thread: runs for all sources queue behind each other,
+                # so map proposals never take more than one CPU core from the worker.
+                run.result = await asyncio.get_running_loop().run_in_executor(
+                    self._map_executor, register_map_jpeg, frame.jpeg, self.map_paint)
+            except Exception:  # noqa: BLE001 - any failure is a per-frame 422, never a crash
+                logger.exception("map registration failed for source %s", source)
+                run.failed = True
+            finally:
+                run.finished = time.monotonic()
+        if run.failed:
+            return _http_response(422, b"map registration failed\n",
+                                  extra={"X-Frame-State": "detection-error"})
         result = run.result
-        if result is None:
-            return _http_response(429, b"map registration busy\n", extra={"Retry-After": "1"})
         frame = run.frame
         age = max(0.0, time.time() - frame.captured_at)
         width, height = result.image_size
@@ -379,7 +396,10 @@ class IngestServer:
             "map_frame": "map",
             "accepted": result.accepted,
             "proposal": fit if result.accepted else None,
-            "rejected_fit": None if result.accepted else fit,
+            # A rejected fit keeps only placement hints, never a homography to misuse.
+            "rejected_fit": None if result.accepted or fit is None else {
+                key: fit[key] for key in ("score", "precision", "coverage", "cut_sides",
+                                          "cut_directions", "side_outside")},
             "reason": result.reason,
             "registrar": {"version": REGISTER_VERSION, "elapsed_ms": round(result.elapsed_ms, 1)},
         }

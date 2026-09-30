@@ -97,3 +97,64 @@ def test_blank_floor_is_a_null_proposal_with_reason(paint):
 def test_stale_frame_fails_like_the_frame_route(track_jpeg, paint):
     server = _server(track_jpeg, paint, captured_at=time.time() - 5.0, max_age=1.0)
     assert _get(server, PATH, _lease(server)).status_code == 404
+
+def test_one_viewer_is_rate_limited_per_second(track_jpeg, paint):
+    server = _server(track_jpeg, paint)
+    assert _get(server, PATH, _lease(server, principal="warm")).status_code == 200
+    lease = _lease(server)
+    assert _get(server, PATH, lease).status_code == 200  # served from the cached run
+    limited = _get(server, PATH, lease)
+    assert limited.status_code == 429 and limited.headers["Retry-After"] == "1"
+
+
+def test_corrupt_jpeg_is_a_consistent_422(paint):
+    server = _server(b"\xff\xd8\xff" + bytes(range(256)) * 8, paint)
+    first = _get(server, PATH, _lease(server, principal="a"))
+    again = _get(server, PATH, _lease(server, principal="b"))
+    assert first.status_code == 422 and again.status_code == 422
+    assert first.headers["X-Frame-State"] == "detection-error"
+
+
+def test_rejected_fit_carries_placement_hints_but_no_homography(paint):
+    truth = similarity(400.0, 0.0, (640.0, 360.0))
+    first = render(paint, truth, seed=1)
+    second = render(paint, similarity(400.0, 0.0, (680.0, 388.0)), seed=1)
+    ok, encoded = cv2.imencode(".jpg", np.maximum(first, second))
+    server = _server(encoded.tobytes(), paint)
+    body = json.loads(_get(server, PATH, _lease(server)).body)
+    assert body["accepted"] is False and body["proposal"] is None
+    fit = body["rejected_fit"]
+    assert "coverage" in fit and "cut_sides" in fit
+    assert "image_to_map" not in fit and "map_to_image" not in fit
+
+
+def test_map_registration_is_single_flight_per_source(monkeypatch, track_jpeg, paint):
+    import threading
+    import rosy_vision.ingest as ingest
+
+    release, calls = threading.Event(), []
+
+    def slow(jpeg, paint_):
+        calls.append(threading.current_thread().name)
+        release.wait(5.0)
+        return ingest.RegistrationResult(None, False, "stub", 1.0, (1280, 720))
+
+    monkeypatch.setattr(ingest, "register_map_jpeg", slow)
+    server = _server(track_jpeg, paint)
+
+    async def scenario():
+        first = asyncio.create_task(server._preview_response(PATH, _lease(server, principal="a")))
+        await asyncio.sleep(0.2)
+        # A new frame arrives while the first run is still going: no second run starts.
+        src = server._sources["ceiling-north"]
+        src.latest = LatestFrame(header=FrameHeader(seq=10, age_ms=0, width=1280, height=720,
+                                                    rotation_deg=0),
+                                 jpeg=track_jpeg, captured_at=time.time(), received_at=time.time())
+        busy = await server._preview_response(PATH, _lease(server, principal="b"))
+        release.set()
+        return await first, busy
+
+    first, busy = asyncio.run(scenario())
+    assert busy.status_code == 429 and busy.headers["Retry-After"] == "1"
+    assert first.status_code == 200
+    assert len(calls) == 1 and calls[0].startswith("map-register")
