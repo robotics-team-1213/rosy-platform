@@ -45,16 +45,6 @@ from .control.startup_diagnostics import StartupDiagnostics
 from .control.calibration_runtime import calibration_runtime, precision_scan_required
 
 
-def _nominal_camera_profile():
-    """The installed product NOMINAL profile (pinky_pro share), or '' when absent."""
-    try:
-        from ament_index_python.packages import get_package_share_directory
-        path = Path(get_package_share_directory('pinky_pro')) / 'config' / 'camera_nominal.yaml'
-        return str(path) if path.is_file() else ''
-    except Exception:
-        return ''
-
-
 class StartupCalibrationNode(Node, CalibrationSequence, CalibrationRotation, CalibrationAtomic, CalibrationRelocationAdapter,
                              CalibrationCamera):
     def __init__(self, parameter_overrides=None):
@@ -79,8 +69,8 @@ class StartupCalibrationNode(Node, CalibrationSequence, CalibrationRotation, Cal
         self.declare_parameter('robot_radius', .076)
         self.declare_parameter('rotation_footprint_xy', [], ParameterDescriptor(dynamic_typing=True))
         self.declare_parameter('result_path', str(Path.home() / '.local/state/control/calibration.json'))
-        # Base intrinsics for the stationary camera step (calibration_camera.py).
-        self.declare_parameter('camera_extrinsic_profile_path', _nominal_camera_profile())
+        # Base intrinsics for the stationary camera step (calibration_camera.py); '' refuses the step.
+        self.declare_parameter('camera_extrinsic_profile_path', '')
         self.camera_capture = self.camera_extrinsic = None
         latched = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL,
                              reliability=ReliabilityPolicy.RELIABLE)
@@ -354,16 +344,7 @@ class StartupCalibrationNode(Node, CalibrationSequence, CalibrationRotation, Cal
         self.add('camera', (mean, contrast),
                  valid and self.stamped(msg) and 5 <= mean <= 250 and contrast >= 2)
         if valid and self.camera_capture is not None and self.stamped(msg):
-            rows = pixels[:msg.step * msg.height].reshape(msg.height, msg.step)
-            self.camera_capture_frame(rows[:, :msg.width * 3].reshape(msg.height, msg.width, 3)
-                                      .mean(axis=2, dtype=np.float32))
-
-    def fresh_odom(self):
-        """(x, y, yaw, speed) of a valid odometry sample at most .25 s old, else None."""
-        rows = self.baseline.samples['odom']
-        if not rows or not rows[-1][2] or not 0 <= time.monotonic() - rows[-1][0] <= .25:
-            return None
-        return rows[-1][1]
+            self.camera_capture_frame(pixels, msg.width, msg.height, msg.step)
 
     def read_tf(self):
         try:

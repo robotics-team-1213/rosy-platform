@@ -7,6 +7,7 @@ known mount, so the fit must return the camera it was drawn with. Walls are
 """
 import json
 import math
+import shutil
 import tempfile
 import time
 import unittest
@@ -178,7 +179,8 @@ class Node(CalibrationCamera):
         self.camera_capture = self.camera_extrinsic = None
         self.params = {'result_path': str(Path(tmp) / 'calibration.json'),
                        'lidar_yaw_offset': math.radians(yaw_deg),
-                       'camera_extrinsic_profile_path': str(PROFILE_PATH)}
+                       'camera_extrinsic_profile_path': str(PROFILE_PATH),
+                       'calibration_store_root': str(Path(tmp).with_name(Path(tmp).name + '-store'))}
         self.zeros = self.stops = self.published = 0
 
     def get_parameter(self, name):
@@ -204,11 +206,11 @@ class StepTest(unittest.TestCase):
 
     def feed(self, node, n_scans=12, n_frames=6):
         scan = cast_scan(182.0)
-        gray = render(true_camera()).astype(np.float32)
+        bgr = np.repeat(render(true_camera())[:, :, None], 3, axis=2)
         for _ in range(n_scans):
             node.camera_capture_scan(scan)
         for _ in range(n_frames):
-            node.camera_capture_frame(gray)
+            node.camera_capture_frame(bgr.reshape(-1), bgr.shape[1], bgr.shape[0], bgr.shape[1] * 3)
 
     def run_to_end(self, node, t0):
         now = t0 + step.CAPTURE_SECONDS + 0.1
@@ -234,6 +236,14 @@ class StepTest(unittest.TestCase):
             self.assertFalse(saved['lidar_yaw_check']['disagrees'])
             # Only the candidate file: the calibration result itself is untouched.
             self.assertEqual(sorted(p.name for p in Path(tmp).iterdir()), ['calibration.camera_candidate.json'])
+            # And a new candidate version in the store, never current until an operator accepts it.
+            from core_common.calibration_store import CalibrationStore, default_robot
+            store = CalibrationStore(node.params['calibration_store_root'])
+            records = store.records(default_robot(), 'camera_profile')
+            self.assertEqual([r['id'] for r in records], [report['store_record']])
+            self.assertEqual(records[0]['status'], 'candidate')
+            self.assertIsNone(store.current(default_robot(), 'camera_profile'))
+            shutil.rmtree(node.params['calibration_store_root'])
 
     def test_refuses_while_moving_or_during_calibration_motion(self):
         with tempfile.TemporaryDirectory() as tmp:

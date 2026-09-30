@@ -30,6 +30,7 @@ ICP_GATES_M = (0.20, 0.10, 0.05, 0.03)
 ICP_TRIM = 0.8            # keep the best 80 % of matches
 NORMAL_GAP_M = 0.06       # neighbours further apart than this give no normal
 MIN_INLIER_SHARE = 0.4    # below this the registration is not trusted
+SOURCE_STRIDE = 2         # every 2nd return of the moving scan (the key scan keeps all)
 MIN_SEGMENT_S = 1.0
 # A command component smaller than this is zero (m/s, rad/s).
 COMMAND_EPS = 1e-3
@@ -150,23 +151,28 @@ def lidar_motion(scans, odom_guess, lidar_yaw_offset, lidar_x_m):
 
     scans: [(ranges, angle_min, angle_increment, range_min, range_max)] in
     time order; odom_guess: the base pose (x, y, yaw) at each scan from
-    odometry (only increments are used, as ICP seeds). Returns
+    odometry (only increments are used, as ICP seeds), or None to seed each
+    scan with the previous LiDAR increment (constant velocity), which keeps
+    the result independent of an odometry that may be scaled or mirrored. Returns
     {'dx', 'dy', 'dth' (unwrapped), 'lidar_dx', 'lidar_dy', 'min_inliers', 'rmse'}
     in the base frame of the first scan, or {'error': ...}."""
     mount = (lidar_x_m, 0.0, -lidar_yaw_offset)
     to_lidar = lambda b: compose(compose(inverse(mount), b), mount)  # noqa: E731
     key = scan_points(*scans[0])
     pose = (0.0, 0.0, 0.0)           # LiDAR frame k in LiDAR frame 0
+    last_step = (0.0, 0.0, 0.0)
     unwrapped, worst, rmses = 0.0, 1.0, []
     for k in range(1, len(scans)):
-        step = to_lidar(between(odom_guess[k - 1], odom_guess[k]))
+        step = to_lidar(between(odom_guess[k - 1], odom_guess[k])) if odom_guess is not None else last_step
         guess = compose(pose, step)
-        est, info = icp(scan_points(*scans[k]), key, init=guess)
+        est, info = icp(scan_points(*scans[k])[::SOURCE_STRIDE], key, init=guess)
         if info['inliers'] < MIN_INLIER_SHARE:
             return {'error': f'scan {k} did not register (inliers {info["inliers"]:.2f})'}
         worst, rmses = min(worst, info['inliers']), rmses + [info['rmse']]
         unwrapped += wrap(est[2] - pose[2])
-        pose = (est[0], est[1], unwrapped)
+        new = (est[0], est[1], unwrapped)
+        last_step = between(pose, new)
+        pose = new
     base = compose(compose(mount, pose), inverse(mount))
     return {'dx': base[0], 'dy': base[1], 'dth': unwrapped, 'lidar_dx': pose[0], 'lidar_dy': pose[1],
             'min_inliers': worst, 'rmse': float(np.median(rmses)) if rmses else 0.0}

@@ -142,27 +142,29 @@ def vertical_gradient(gray):
 
 
 def wall_edge_score(cam: CameraPose, samples, wall_height_m=WALL_HEIGHT_M):
-    """(mean edge response at projected wall tops minus contacts, returns used).
+    """(mean edge response over projected wall contacts and tops, contacts used).
 
-    samples: [(xy (N,2) base-frame wall returns, vertical_gradient image)]. The
-    score is None when no return lands in the image with both ends visible."""
-    total, n = 0.0, 0
+    samples: [(xy (N,2) base-frame wall returns, vertical_gradient image)].
+    Contacts (bright wall over dark carpet: negative gradient) and tops (dark
+    room over bright wall: positive) count separately, so a near wall whose
+    top is above the image, or a board taller than a track wall, still pins
+    its contact row. The score is None when no contact lands in the image."""
+    total, items, n = 0.0, 0, 0
     for xy, grad in samples:
         xy = np.asarray(xy, dtype=np.float64).reshape(-1, 2)
         if len(xy) == 0:
             continue
-        ub, vb, db = cam.project(np.column_stack([xy, np.zeros(len(xy))]))
-        ut, vt, dt = cam.project(np.column_stack([xy, np.full(len(xy), wall_height_m)]))
         h, w = grad.shape
-        ub, vb, ut, vt = (np.rint(a) for a in (ub, vb, ut, vt))
-        ok = ((db > 0.05) & (dt > 0.05) & (ub >= 0) & (ub < w) & (ut >= 0) & (ut < w)
-              & (vb >= 0) & (vb < h) & (vt >= 0) & (vt < h))
-        if not ok.any():
-            continue
-        total += float(grad[vt[ok].astype(int), ut[ok].astype(int)].sum()
-                       - grad[vb[ok].astype(int), ub[ok].astype(int)].sum())
-        n += int(ok.sum())
-    return (total / n if n else None), n
+        for z, sign in ((0.0, -1.0), (wall_height_m, 1.0)):
+            u, v, d = cam.project(np.column_stack([xy, np.full(len(xy), z)]))
+            u, v = np.rint(u), np.rint(v)
+            ok = (d > 0.05) & (u >= 0) & (u < w) & (v >= 0) & (v < h)
+            if not ok.any():
+                continue
+            total += sign * float(grad[v[ok].astype(int), u[ok].astype(int)].sum())
+            items += int(ok.sum())
+            n += int(ok.sum()) if z == 0.0 else 0
+    return (total / items if n else None), n
 
 
 def _grid(lo, hi, step):
@@ -226,7 +228,13 @@ def fit_camera_extrinsic(base: CameraPose, samples, wall_height_m=WALL_HEIGHT_M,
     peak, n = fine[best]
     p_lo, p_hi = _band(*_profile(fine, 0), peak)
     r_lo, r_hi = _band(*_profile(fine, 2), peak)
-    recommended = (n >= MIN_WALL_POINTS and
+    # An optimum on the edge of a search window is not an optimum: the scene
+    # (walls of unknown height, lane tape) fooled the score.
+    at_bound = (min(abs(best[0] - PITCH_RANGE_DEG[0]), abs(best[0] - PITCH_RANGE_DEG[1])) < 1e-6
+                or min(abs(best[2] - ROLL_RANGE_DEG[0]), abs(best[2] - ROLL_RANGE_DEG[1])) < 1e-6
+                or (height_observable and min(abs(best[1] - HEIGHT_RANGE_M[0]),
+                                              abs(best[1] - HEIGHT_RANGE_M[1])) < 1e-6))
+    recommended = (not at_bound and n >= MIN_WALL_POINTS and
                    (score_at_base is None or peak >= score_at_base + SCORE_MARGIN))
     return {
         'pitch_rad': math.radians(best[0]), 'roll_rad': math.radians(best[2]), 'height_m': best[1],
@@ -236,7 +244,9 @@ def fit_camera_extrinsic(base: CameraPose, samples, wall_height_m=WALL_HEIGHT_M,
         'uncertainty': {'pitch_deg': round((p_hi - p_lo) / 2, 2), 'roll_deg': round((r_hi - r_lo) / 2, 2),
                         'height_m': round((h_hi - h_lo) / 2, 4) if h_lo is not None else None},
         'recommended': bool(recommended),
+        'at_bound': bool(at_bound),
         'why': ('fit beats the base profile' if recommended else
+                'optimum on the search bound (scene walls not usable)' if at_bound else
                 'too few wall returns in view' if n < MIN_WALL_POINTS else
                 'fit not better than the base profile by the margin'),
     }

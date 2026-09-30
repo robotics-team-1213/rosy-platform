@@ -69,6 +69,11 @@ class MotionTest(unittest.TestCase):
         self.assertAlmostEqual(m['dth'], math.radians(360.0), delta=math.radians(0.3))
         self.assertLess(math.hypot(m['dx'], m['dy']), 0.002)
 
+    def test_pivot_without_odometry_seed_is_independent_of_a_mirrored_odom(self):
+        angles = np.radians(np.arange(0.0, 361.0, 5.0))
+        m = of.lidar_motion([cast((0.0, 0.0, float(a))) for a in angles], None, YAW, LIDAR_X)
+        self.assertAlmostEqual(m['dth'], math.radians(360.0), delta=math.radians(0.3))
+
     def test_straight_run_measures_length_and_the_mount_yaw(self):
         poses = [(x, 0.0, 0.0) for x in np.arange(0.0, 0.181, 0.02)]
         m = of.lidar_motion([cast(p) for p in poses], poses, YAW, LIDAR_X)

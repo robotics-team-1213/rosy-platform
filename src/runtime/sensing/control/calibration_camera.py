@@ -20,7 +20,11 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
+import numpy as np
+
 from .sensing.perception import camera_extrinsic as extrinsic
+
+CAMERA_METHOD = 'startup_calibration/camera_extrinsic/1'
 
 CAPTURE_SECONDS = 3.0
 CAPTURE_TIMEOUT_S = 10.0
@@ -72,12 +76,23 @@ class CalibrationCamera:
                 return
             capture['scans'].append(scan)
 
-    def camera_capture_frame(self, gray):
+    def camera_capture_frame(self, pixels, width, height, step):
+        """One bgr8/rgb8 image (flat uint8 buffer) -> a float gray frame for the capture."""
         capture = getattr(self, 'camera_capture', None)
-        if capture is not None and capture.get('thread') is None and len(capture['frames']) < MAX_FRAMES:
-            if capture['frames'] and capture['frames'][0].shape != gray.shape:
-                return
-            capture['frames'].append(gray)
+        if capture is None or capture.get('thread') is not None or len(capture['frames']) >= MAX_FRAMES:
+            return
+        rows = pixels[:step * height].reshape(height, step)
+        gray = rows[:, :width * 3].reshape(height, width, 3).mean(axis=2, dtype=np.float32)
+        if capture['frames'] and capture['frames'][0].shape != gray.shape:
+            return
+        capture['frames'].append(gray)
+
+    def fresh_odom(self):
+        """(x, y, yaw, speed) of a valid odometry sample at most .25 s old, else None."""
+        rows = self.baseline.samples['odom']
+        if not rows or not rows[-1][2] or not 0 <= time.monotonic() - rows[-1][0] <= .25:
+            return None
+        return rows[-1][1]
 
     def tick_camera_extrinsic(self, now, odom):
         capture = getattr(self, 'camera_capture', None)
@@ -126,6 +141,24 @@ class CalibrationCamera:
                 'tf_nose_rad': getattr(self, 'lidar_nose', None),
                 'profile_path': str(self.get_parameter('camera_extrinsic_profile_path').value)}
 
+    def store_camera_candidate(self, candidate):
+        """Also keep the run as a candidate version in the calibration store (D-47 addendum).
+
+        Returns the record id, or the reason it was not stored; the JSON file stays either way."""
+        try:
+            # core_common may be absent from a sensing-only image; the JSON candidate still stands.
+            from core_common.calibration_store import CalibrationStore, default_robot
+            store = CalibrationStore(str(self.get_parameter('calibration_store_root').value) or None)
+            values = {k: candidate[k] for k in (*extrinsic.PROFILE_KEYS, 'roll_rad', 'max_range_m') if k in candidate}
+            return store.add(default_robot(), 'camera_profile', values, method=CAMERA_METHOD,
+                             sessions=[candidate['revision']],
+                             intervals={'uncertainty': candidate['uncertainty']},
+                             extra={k: candidate[k] for k in ('score', 'score_at_base', 'wall_points', 'height_source',
+                                                             'recommended', 'why', 'source', 'lidar_yaw_check')
+                                    if k in candidate})
+        except (ImportError, OSError, ValueError) as exc:
+            return f'not stored: {exc}'
+
     def finish_camera_extrinsic(self, result):
         if 'error' in result:
             self.camera_extrinsic = {'state': 'failed', 'message': result['error']}
@@ -137,7 +170,8 @@ class CalibrationCamera:
                     'state': 'candidate', 'path': str(path),
                     'message': ('Candidate written; review before applying' if result['candidate']['recommended']
                                 else 'Candidate written but not recommended: ' + result['candidate']['why']),
-                    'candidate': result['candidate']}
+                    'candidate': result['candidate'],
+                    'store_record': self.store_camera_candidate(result['candidate'])}
             except (OSError, ValueError) as exc:
                 self.camera_extrinsic = {'state': 'failed', 'message': f'Cannot persist camera candidate: {exc}'}
         self.publish()
