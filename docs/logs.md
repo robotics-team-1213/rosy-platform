@@ -3891,6 +3891,11 @@
 - 증거: `test_event_catalogue.py` 72 passed(추가 전 `test_nothing_is_emitted_behind_the_contract` 빨강) (2026-09-30 Windows).
 - gate 변화: 없음. 병합 전에 API 버전 올림이 필요하다.
 
+## 2026-09-30 · uncommitted · docs(adr): D-375 램프 운용 모드 표시 결정
+
+- 변경: ADR D-375(파일+로그 행)와 설계 문서 `docs/plans/2026-09-30-lamp-mode-display-design.md`를 추가했다.
+- 증거: rosy_harness lint·generate 통과.
+- gate 변화: 없음.
 ## 2026-09-30 · uncommitted · docs(adr): D-377 앱 이름 규칙 — Rosy + 영어 한 단어
 - 변경: D-377(Accepted, 사용자 결정) 추가. 표시 이름 `Rosy <Word>`(한국어는 부제에만), id·폴더 끝 `<word>`, 패키지 `rosy_<word>`, Android `io.github.livsbittt.rosy.<word>`, Gradle `rosy-<word>`, 아이콘 `<word>.svg`. 대응: Rosy Cam(`src/site/cam`, `…rosy.cam`), Rosy Vision(`src/site/vision`, `rosy_vision`, 실행 파일 `rosy-vision`), Rosy Console(계획 `src/site/console`·`rosy_console`, 단계 4 게이트), Rosy Robot(계획 `src/hmi/robot`·`rosy_robot`, 단계 3 게이트), Rosy Pilot(그대로). D-370 2항 이름표와 D-374 1·2항을 대체한다고 두 ADR 머리에 적었다. D-374 계획의 2.4·2.5와 단계 3·4·5 목표를 새 이름으로 고쳤다.
 - 증거: 문서만. 번호는 로컬 브랜치 전부·`.worktrees/*/docs/adr`·main 체크아웃 미추적 파일을 확인해 D-375(`feat/overhead-map-auto-register`)·D-376(`omx-pick-place-execution` 워크트리) 다음 빈 번호로 잡았다.
@@ -3902,6 +3907,11 @@
 - 증거: baseline OMX suite 154 passed / 3 skipped. 잠금 이미지 `sha256:b47034e436119cea97c2922a1b4af9bd6596975ac8acbb4cece3a19d2fe1e9f0`에 Jazzy와 OMX-F URDF/ros2_control은 있으나 MoveIt/MTC 및 OMX SRDF/kinematics/planning config는 없다. 임시 apt metadata probe에서 MTC Core `0.1.8-1noble.20260904.024044`, MoveIt Core `2.12.4-1noble.20260903.075716` 후보를 확인했지만 설치·빌드·모델 통합은 하지 않았다.
 - gate 변화: 계약/SOURCE 구현은 진행 가능. 검증된 OMX MoveIt config, scene/IK, trajectory export 통합 전 production planner와 ROS-SIM pick/place는 HOLD; profile 비활성, DEVICE/FIELD PARKED 유지.
 
+## 2026-09-30 · uncommitted · docs(adr): D-375 에서 D-380 으로 개명
+
+- 변경: 병합 시점에 main 이 D-375 를 feat/overhead-map-auto-register 예약으로 adr_gaps 에 넣은 것이 확인됐다(선례 D-324→D-325). 이 작업의 결정 번호를 다음 빈 번호 D-380 으로 개명하고 코드 주석·시험·설계 문서의 D-375 표기를 함께 바꿨다. 앞선 항목의 D-375 표기는 역사 기록으로 그대로 둔다.
+- 증거: rosy_harness lint 오류 0. 본문 참조는 docs/adr/D-380-lamp-mode-patterns-from-core-status-inputs.md.
+- gate 변화: 없음.
 ## 2026-09-30 · uncommitted · persist first phase intent and atomic response
 
 - Change: ActionStore permits only ordinal-zero phase intent while the parent is SUBMITTING and records the parent's first acceptance/rejection/unknown response with the phase state and ROS goal identity in one SQLite transaction.

@@ -261,5 +261,5 @@
 - 2026-09-30 · uncommitted · hold unresolved phase state under local stop
 - 2026-09-30 · uncommitted · mint validated attempt-scoped phase recorder
 - 2026-09-30 · uncommitted · persist first phase intent and atomic response
+- 2026-09-30 · uncommitted · docs(adr): D-375 에서 D-380 으로 개명
 - 2026-09-30 · uncommitted · docs(adr): set OMX local planning and owner execution boundary
-- 2026-09-30 · uncommitted · docs(adr): D-377 앱 이름 규칙 — Rosy + 영어 한 단어
