@@ -23,7 +23,7 @@
 | [core_events](src/runtime/events/progress.md) | CORE | bed604ef (2026-09-30) | GO | GO | N/A | N/A | N/A | N/A |
 | [core_features](src/runtime/services/progress.md) | CORE | bed604ef (2026-09-30) | GO | GO | N/A | N/A | N/A | N/A |
 | [core_api_web](src/runtime/api_web/progress.md) | CORE | bed604ef (2026-09-30) | GO | GO | N/A | N/A | N/A | N/A |
-| [web_common](src/hmi/web_common/progress.md) | CORE | 9049bd37 (2026-09-27) | GO | GO | N/A | N/A | N/A | N/A |
+| [web_common](src/hmi/web_common/progress.md) | CORE | 0409c371 (2026-09-30) | GO | GO | N/A | N/A | N/A | N/A |
 | [dashboard](src/hmi/dashboard/progress.md) | 화면 | e7cdf490 (2026-09-29) | GO | GO | N/A | HOLD | N/A | N/A |
 | [omx_adapter](src/products/omx/adapter/progress.md) | OMX workcell | bed604ef (2026-09-30) | GO | GO | HOLD | HOLD | PARKED | PARKED |
 | [interfaces](src/contracts/interfaces/progress.md) | 장치 | dc89264 (2026-09-17) | GO | GO | N/A | HOLD | HOLD | PARKED |
