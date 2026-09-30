@@ -469,12 +469,85 @@ def test_a_run_cut_off_part_way_is_undone_from_its_backups(device):
     assert "/etc/systemd/system/rosy-io.service" in result[0][0]["paths"]
     assert "/opt/rosy/native-runtime/mapping_approval.py" not in result[0][0]["paths"]
     assert result[1]["daemon_reload"] and result[1]["udev_reload"]
+    # ...and the reloads are owed durably, before the manifest was marked.
+    owed = json.loads((device / sync_mod.PENDING_FILE).read_text(encoding="utf-8"))
+    assert owed["daemon_reload"] and owed["udev_reload"]
     after = {k: v for k, v in _tree(device).items() if not k.startswith(sync_mod.BACKUP_ROOT)}
     assert after == {k: v for k, v in before.items() if not k.startswith(sync_mod.BACKUP_ROOT)}
     assert json.loads((folder / sync_mod.BACKUP_MANIFEST).read_text(encoding="utf-8"))["abandoned"] is True
     # Settled once: a second pass does nothing.
     assert sync_mod.reconcile(device, dry_run=False)[0] == []
     assert runner.calls == []
+
+
+def test_owed_work_survives_an_install_failure_right_after_reconciliation(device, monkeypatch):
+    _sync(device, NEW_ID, Runner(), dry_run=False)
+    _unflag_last_manifest(device)
+    # Something for this run to install, which then fails. rosy-core.service is
+    # not in the cut-off run's manifest, so that run still reconciles as applied.
+    (device / "etc/systemd/system/rosy-core.service").write_text("# drift\n", encoding="utf-8")
+
+    def broken(source, destination, mode):
+        raise OSError("disk full")
+
+    real = sync_mod._install
+    monkeypatch.setattr(sync_mod, "_install", broken)
+    with pytest.raises(OSError):
+        _sync(device, NEW_ID, Runner(), dry_run=False)
+    monkeypatch.setattr(sync_mod, "_install", real)
+
+    owed = json.loads((device / sync_mod.PENDING_FILE).read_text(encoding="utf-8"))
+    assert owed["daemon_reload"] and "rosy-hw-test.path" in owed["enable"]
+    runner = Runner()
+    _sync(device, NEW_ID, runner, dry_run=False)
+    assert ["systemctl", "enable", "--now", "rosy-hw-test.path"] in runner.mutating()
+    assert not (device / sync_mod.PENDING_FILE).exists()
+
+
+def test_owed_work_survives_a_crash_between_pending_and_the_manifest_flag(device, monkeypatch):
+    _sync(device, NEW_ID, Runner(), dry_run=False)
+    folder = _unflag_last_manifest(device)
+    real = sync_mod._write_json
+
+    def crash_on_flag(path, payload):
+        if Path(path).name == sync_mod.BACKUP_MANIFEST and payload.get("files_applied") is True:
+            raise KeyboardInterrupt("power lost")
+        real(path, payload)
+
+    monkeypatch.setattr(sync_mod, "_write_json", crash_on_flag)
+    with pytest.raises(KeyboardInterrupt):
+        _sync(device, NEW_ID, Runner(), dry_run=False)
+    monkeypatch.setattr(sync_mod, "_write_json", real)
+
+    # The owed work was durable before the flag; the manifest is still unflagged.
+    owed = json.loads((device / sync_mod.PENDING_FILE).read_text(encoding="utf-8"))
+    assert "rosy-hw-test.path" in owed["enable"]
+    assert json.loads((folder / sync_mod.BACKUP_MANIFEST).read_text(encoding="utf-8"))["files_applied"] is False
+    runner = Runner()
+    again = _sync(device, NEW_ID, runner, dry_run=False)
+    assert [entry["outcome"] for entry in again["reconciled"]] == ["applied"]
+    assert ["systemctl", "enable", "--now", "rosy-hw-test.path"] in runner.mutating()
+    assert not (device / sync_mod.PENDING_FILE).exists()
+
+
+def test_a_legacy_folder_without_a_serial_is_never_reconciled(device):
+    # Pre-serial folders: an undone run there was never marked abandoned.
+    legacy = device / sync_mod.BACKUP_ROOT / f"20260930T120000Z-{NEW_ID}"
+    legacy.mkdir(parents=True)
+    kept = device / "opt/rosy/native-runtime/rosy_config.py"
+    (legacy / sync_mod.BACKUP_MANIFEST).write_text(json.dumps({
+        "files_applied": False, "complete": False, "release_id": NEW_ID,
+        "files": [{"path": "/opt/rosy/native-runtime/rosy_config.py", "state": "new",
+                   "sha256": hashlib.sha256(kept.read_bytes()).hexdigest(), "backup": None}],
+    }), encoding="utf-8")
+    shown = f"/{sync_mod.BACKUP_ROOT}/{legacy.name}/{sync_mod.BACKUP_MANIFEST}"
+
+    dry = _sync(device, NEW_ID, Runner(), dry_run=True)
+    result = _sync(device, NEW_ID, Runner(), dry_run=False)
+
+    assert dry["legacy_ignored"] == [shown] and result["legacy_ignored"] == [shown]
+    assert result["reconciled"] == []
+    assert kept.is_file()
 
 
 def test_an_undone_run_is_marked_abandoned_and_never_reconciled(device, monkeypatch):

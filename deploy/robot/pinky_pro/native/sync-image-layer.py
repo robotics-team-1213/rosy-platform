@@ -320,9 +320,44 @@ def _install(source: Path, destination: Path, mode: int) -> None:
 
 
 def _write_json(path: Path, payload: dict) -> None:
+    """Write, fsync, rename, and fsync the folder: it survives a power loss."""
     temporary = path.with_name(f".{path.name}.tmp")
-    temporary.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    with temporary.open("w", encoding="utf-8", newline="\n") as handle:
+        handle.write(json.dumps(payload, indent=2, sort_keys=True) + "\n")
+        handle.flush()
+        os.fsync(handle.fileno())
     os.replace(temporary, path)
+    if os.name == "posix":
+        descriptor = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            os.fsync(descriptor)
+        finally:
+            os.close(descriptor)
+
+
+def _owe(root: Path, steps: dict) -> None:
+    """Merge owed reload/enable/restart work into pending.json, durably.
+
+    Called before a reconciled manifest is flagged, so a failure or a power
+    loss after the flag still leaves the work for the next run.
+    """
+    path = root / PENDING_FILE
+    pending: dict = {}
+    if path.is_file():
+        try:
+            loaded = json.loads(path.read_text(encoding="utf-8"))
+            pending = loaded if isinstance(loaded, dict) else {}
+        except (OSError, ValueError):
+            pending = {}
+    merged = {
+        **pending,
+        "daemon_reload": bool(pending.get("daemon_reload")) or bool(steps.get("daemon_reload")),
+        "udev_reload": bool(pending.get("udev_reload")) or bool(steps.get("udev_reload")),
+        "enable": sorted(set(pending.get("enable", [])) | set(steps.get("enable", []))),
+        "units": sorted(set(pending.get("units", [])) | set(steps.get("units", []))),
+    }
+    path.parent.mkdir(parents=True, exist_ok=True)
+    _write_json(path, merged)
 
 
 def _check(runner: Runner, argv: list[str]) -> None:
@@ -430,7 +465,7 @@ def _landed(root: Path, record: dict) -> bool:
             and _sha256(destination) == record.get("sha256"))
 
 
-def reconcile(root: Path, *, dry_run: bool) -> tuple[list[dict], dict]:
+def reconcile(root: Path, *, dry_run: bool) -> tuple[list[dict], dict, list[str]]:
     """Settle manifests that are neither files_applied nor abandoned.
 
     Such a manifest means a run stopped between its first file change and
@@ -438,8 +473,13 @@ def reconcile(root: Path, *, dry_run: bool) -> tuple[list[dict], dict]:
     run recorded, the run did land: flag it, and hand back the reloads and
     enables it never ran. Otherwise undo exactly what it installed from its
     backups and mark it abandoned. Nothing else is touched.
+
+    The owed work goes to pending.json before the manifest is flagged. Folders
+    without a serial predate this rule (their undone runs were never marked
+    abandoned), so they are only reported, as legacy_ignored.
     """
     report: list[dict] = []
+    legacy: list[str] = []
     steps = {"daemon_reload": False, "enable": [], "udev_reload": False, "units": []}
     for folder in _run_folders(root):
         path = folder / BACKUP_MANIFEST
@@ -453,22 +493,30 @@ def reconcile(root: Path, *, dry_run: bool) -> tuple[list[dict], dict]:
         if data.get("files_applied") is True or data.get("abandoned") is True:
             continue
         shown = "/" + path.relative_to(root).as_posix()
+        if not SERIAL.match(folder.name):
+            legacy.append(shown)
+            continue
         records = [record for record in files if isinstance(record, dict)]
         if dry_run:
             report.append({"manifest": shown, "outcome": "unreconciled"})
             continue
         kinds = {_kind(str(record.get("path", "")).lstrip("/")) for record in records}
         if all(_landed(root, record) for record in records):
-            data["files_applied"] = True
-            _write_json(path, data)
-            steps["daemon_reload"] |= "unit" in kinds
-            steps["udev_reload"] |= "udev" in kinds
+            owed = {"daemon_reload": "unit" in kinds, "udev_reload": "udev" in kinds,
+                    "enable": [], "units": []}
             for record in records:
                 name = Path(str(record["path"])).name
                 if _kind(str(record["path"]).lstrip("/")) == "unit":
-                    steps["units"].append(name)
+                    owed["units"].append(name)
                     if record.get("state") == "new" and name in ENABLED_UNITS:
-                        steps["enable"].append(name)
+                        owed["enable"].append(name)
+            _owe(root, owed)
+            data["files_applied"] = True
+            _write_json(path, data)
+            for key in ("daemon_reload", "udev_reload"):
+                steps[key] = steps[key] or owed[key]
+            steps["enable"] += owed["enable"]
+            steps["units"] += owed["units"]
             report.append({"manifest": shown, "outcome": "applied"})
             continue
         undone: list[str] = []
@@ -491,10 +539,12 @@ def reconcile(root: Path, *, dry_run: bool) -> tuple[list[dict], dict]:
                 steps["daemon_reload"] = True
             if _kind(relative) == "udev":
                 steps["udev_reload"] = True
+        if steps["daemon_reload"] or steps["udev_reload"]:
+            _owe(root, {"daemon_reload": steps["daemon_reload"], "udev_reload": steps["udev_reload"]})
         data["abandoned"] = True
         _write_json(path, data)
         report.append({"manifest": shown, "outcome": "undone", "paths": undone})
-    return report, steps
+    return report, steps, legacy
 
 
 def _kind(relative: str) -> str:
@@ -744,7 +794,7 @@ def sync(
         if not native.is_dir():
             raise SyncError(f"IMAGE_LAYER_SOURCE: release {release_id} has no {RELEASE_NATIVE}")
         pending, pending_report = _load_pending(root, dry_run=dry_run)
-        reconciled, owed = reconcile(root, dry_run=dry_run)
+        reconciled, owed, legacy_ignored = reconcile(root, dry_run=dry_run)
         if owed["daemon_reload"] or owed["udev_reload"] or owed["enable"]:
             pending = {
                 **pending,
@@ -770,6 +820,7 @@ def sync(
             restored=["/" + item["destination"] for item in cleanup if item["state"] == "restored"],
             pending=pending or None,
             reconciled=reconciled,
+            legacy_ignored=legacy_ignored,
             pending_quarantined=pending_report.get("pending_quarantined"),
             pending_parked=pending_report.get("pending_parked"),
             corrupt_manifests=corrupt,
