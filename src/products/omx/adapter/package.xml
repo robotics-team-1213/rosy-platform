@@ -4,7 +4,7 @@
   <name>omx_adapter</name>
   <version>0.1.0</version>
   <description>ROS-native OMX adapter profile and ros2_control contract boundary.</description>
-  <maintainer email="kyung133851@pinklab.art">ROSY</maintainer>
+  <maintainer email="56295815+livsbittt@users.noreply.github.com">ROSY</maintainer>
   <license>Apache-2.0</license>
 
   <buildtool_depend>ament_python</buildtool_depend>
