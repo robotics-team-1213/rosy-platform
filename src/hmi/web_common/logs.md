@@ -247,3 +247,10 @@
 - gate 변화: 없음. SOURCE/LOCAL 증거다.
 - 결정: D-359 §6·§7.7.
 - 교훈: CSS 블록을 문자열 치환으로 옮기면 닫는 괄호를 잃거나 남기기 쉽다 — 남은 `}` 하나가 다음 규칙을 조용히 지웠고 시험은 못 봤다. 괄호 짝 검사를 붙였다.
+
+## 2026-09-30 · a1568095 · D-359 US-006 §7 구조 계약 시험의 빈칸을 닫았다
+
+- 변경: §7.2 원시 색 스캔(`test_no_raw_colour_outside_the_token_file`)을 레지스트리의 모든 웹 표면(dashboard 최상위·shell/·panels/, web_common, Fleet, games, 진단, lane 뷰어)의 CSS·JS·HTML로 넓혔다. hex·`rgb(`·`hsl(`·`hwb(`·`oklch(`·`oklab(`·`lab(`·`lch(`·`color(`를 원시 색으로 본다(예전 판정은 dashboard 최상위 `*.css|*.js`만 보고 oklch·color(를 놓쳤다). 예외는 tokens.css 테마 팔레트 블록, ui.js RosyPalette rgba 형식기, 정적 theme-color(§7.3 판정이 따로 본다), `surfaces.yaml` `raw_colours`(`[dark]` 고정 웹 표면만, 이유 필수, 쓰이지 않는 항목 금지) — games `:root` 경기장 블록, PARKED `diagnostic.html`, 개발 도구 `lane_live_view.html`. `@container` 값도 `@media`처럼 세 단 경계 또는 표면 `container_breakpoints`(web-common 22rem)로 대조한다. 캔버스를 그리는 모든 웹 표면 스크립트는 캔버스 계약 목록이나 이유 있는 예외에 있어야 한다. 자간 규칙이 HTML·JS(`style.letterSpacing`·`setProperty`)도 본다.
+- 증거: 변이 19건 전부 빨강 후 `git checkout --`로 복구 초록, 트리 깨끗(`X:/DevTemp/rosy-d359/us006_mutations.py`, `us006-mutations.log`) — PRD 여섯(파생 hex, light 키 삭제, Fleet 입력 공용 필드·min-height, `@media (max-width: 41rem)`, 자간 0.1em, outline 덧칠)과 새 검사 13. 단위 묶음(+ 뿌리 `test`) 5490 passed 321 skipped 10 failed — 9건은 base 1eba8cbb에서도 같은 실패(ADR 로그·harness·보안 스캔 등), `test_sd_writer_contract` 1건은 33분 부하 실행의 시간 의존 실패. 브라우저 web_common 162 passed.
+- gate 변화: 없음. SOURCE/LOCAL 증거다.
+- 결정: D-359 §6.3·§7.
