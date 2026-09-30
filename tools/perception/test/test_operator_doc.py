@@ -66,3 +66,27 @@ def test_trainer_docs_need_no_hf():
             assert needle in text, (name, needle)
         assert "HF는 선택" in text, name
         assert "로컬 stub 실행으로만" in text, name  # never verified on real Colab
+
+
+RUNBOOK = ROOT / "docs" / "deployment" / "learned-perception-pinky.md"
+PAYLOAD = ROOT / "deploy" / "robot" / "pinky_pro" / "image" / "build-native-payload.sh"
+NATIVE_SRC = ROOT / "deploy" / "robot" / "pinky_pro" / "native"
+
+
+def test_runbook_uses_the_native_path_the_release_payload_packs():
+    script = PAYLOAD.read_text(encoding="utf-8")
+    m = re.search(r'"\$NATIVE_RUNTIME_SOURCE/install-native-runtime\.sh" "\$RELEASE_ROOT/([^"]+)"',
+                  script)
+    assert m, "build-native-payload.sh no longer installs the native runtime into the release"
+    packed = m.group(1)
+    # install-native-runtime.sh copies its whole folder (deploy/robot/pinky_pro/native)
+    assert 'cp -a "$SCRIPT_DIR" "$DESTINATION"' in (
+        NATIVE_SRC / "install-native-runtime.sh").read_text(encoding="utf-8")
+    on_device = f"/opt/rosy/current/{packed}/"
+    for doc in (RUNBOOK, DOC):
+        text = doc.read_text(encoding="utf-8")
+        used = re.findall(r"/opt/rosy/current/deploy/[A-Za-z0-9_./-]+", text)
+        for path in used:
+            assert path.startswith(on_device), (doc.name, path, on_device)
+            assert (NATIVE_SRC / path.removeprefix(on_device)).exists(), path
+    assert on_device in RUNBOOK.read_text(encoding="utf-8")

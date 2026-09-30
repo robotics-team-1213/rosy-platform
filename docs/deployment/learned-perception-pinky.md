@@ -124,7 +124,7 @@ sudo -n bash deploy/robot/pinky_pro/dev/install-learned-perception.sh
    sudo -n install -d -m 0700 "$B"
    sudo -n cp -a /etc/systemd/system/rosy-camera.service "$B/"
    sudo -n install -m 0644 -o root -g root \
-     /opt/rosy/current/deploy/robot/pinky_pro/native/rosy-camera.service /etc/systemd/system/
+     /opt/rosy/current/deploy/robot/native/rosy-camera.service /etc/systemd/system/
    sudo -n systemctl daemon-reload
    systemctl cat rosy-camera | grep learned-perception.env
    ```
@@ -135,7 +135,7 @@ sudo -n bash deploy/robot/pinky_pro/dev/install-learned-perception.sh
 
    ```bash
    sudo -n install -m 0644 -o root -g root \
-     /opt/rosy/current/deploy/robot/pinky_pro/native/learned-perception.env.example \
+     /opt/rosy/current/deploy/robot/native/learned-perception.env.example \
      /etc/rosy/learned-perception.env
    sudo -n sed -i 's/^ROSY_LEARNED_SHADOW=false$/ROSY_LEARNED_SHADOW=true/' /etc/rosy/learned-perception.env
    cat /etc/rosy/learned-perception.env | grep -v '^#'
