@@ -101,6 +101,7 @@ function renderRobotState(state) {
   elements["hitl-escalation"].hidden = state.hitl_requested !== true;
   setText("robot-id", state.robot_id || "—");
   setText("robot-mode", state.mode);
+  renderCalibrationChip(state.activity);
   renderFormationHero(state.swarm);
   setText("state-sequence", `SEQ ${state.seq ?? "—"}`);
   setText("pose-x", number(state.pose?.x, 3), "—", state.evidence?.pose);
@@ -128,6 +129,17 @@ function renderRobotState(state) {
   if (teleopActive() && !teleopEligible()) stopTeleop("운전 조건이 변경되어 정지했습니다.");
   updateTeleopControls();
   fieldMap.setPose();
+}
+
+// D-321 부록: 보정 세션이 살아 있으면 모드 옆에 "보정 중 — <label>" 칩. 조종 거부는 CORE 409 가 한다.
+function renderCalibrationChip(activity) {
+  const chip = elements["calibration-chip"];
+  if (!chip) return;
+  const active = activity?.kind === "CALIBRATING";
+  chip.hidden = !active;
+  chip.textContent = active ? `보정 중 — ${activity.label || "보정"}` : "";
+  const owner = activity?.owner;
+  chip.title = active ? `보정 주체: ${owner?.label || owner?.role || owner?.id || "알 수 없음"}` : "";
 }
 
 function renderSafety(safety) {
