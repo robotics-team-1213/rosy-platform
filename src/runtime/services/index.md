@@ -34,8 +34,8 @@
 
 ## 최근 기록
 
+- 2026-10-01 · 22017f42 · fix(core): 만료 이벤트를 lock 밖에서 발행
+- 2026-10-01 · a527920a · feat(core): D-321 부록 보정 세션 lease
 - 2026-10-01 · 6d94e88f · docs(road_behaviour): D-384 도로 주행 행동 항목의 커밋 기록
 - 2026-10-01 · uncommitted · feat(road_behaviour): D-384 도로 주행 행동 상태 기계(ROS-free, 명령 없음)
 - 2026-10-01 · uncommitted · feat(command): D-385 모드→표정 정책 emotion_map
-- 2026-10-01 · uncommitted · fix(fleet_agent): D-382 F10·I4 — 구독 해제와 이벤트 seq 사본
-- 2026-10-01 · f34781ae · feat(line_follow): 시작 때 정한 LiDAR 장착 yaw 를 받는다

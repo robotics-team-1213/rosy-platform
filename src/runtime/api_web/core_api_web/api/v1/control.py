@@ -5,7 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
-from core_api_web.api.v1.common import operator, require_kept
+from core_api_web.api.v1.common import operator, require_calibration_owner, require_kept
 from core_api_web.api.deps import AuthContext, get_services, CoreServicesLike
 from core_api_web.api.errors import ApiError
 from core_api_web.api.deps import Mode
@@ -29,6 +29,9 @@ class TeleopRequest(BaseModel):
 def set_mode(body: ModeRequest, auth: AuthContext = Depends(operator),
              svc: CoreServicesLike = Depends(get_services)):
     new_mode = Mode(body.mode)
+    if new_mode is not Mode.IDLE:
+        # IDLE only stops the robot, so like e-stop it stays open to everyone.
+        require_calibration_owner(svc, auth, "mode change")
     if svc.line_follow.active:
         status = svc.line_follow.stop()
         svc.command.clear_navigation()
@@ -55,6 +58,7 @@ def set_mode(body: ModeRequest, auth: AuthContext = Depends(operator),
 def teleop(body: TeleopRequest, auth: AuthContext = Depends(operator),
            svc: CoreServicesLike = Depends(get_services)):
     TaskKind.MOVE.require(svc.capability)
+    require_calibration_owner(svc, auth, "teleop")
     require_kept(svc, "teleop")
     accepted, code = svc.command.teleop(body.linear, body.angular, source="manual")
     if not accepted:

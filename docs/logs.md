@@ -4032,3 +4032,13 @@
 - 변경: `docs/deployment/site-ceiling-camera-console-runbook.md` 추가. 현장 PC 스택(fullchain, 지도 맞춤 옵션, mDNS 광고), 이름·CA 고정 페어링(D-341 §9, D-391), 카메라 위치 기준, 관제 맵 자동 맞춤(D-375)·경기장 뷰 대체(D-360), 로봇 등록·운전 모드·G4/G5, 규칙 점검표, 폰·관제 문제 해결표.
 - 증거: 2026-09-30~10-01 현장 벤치(S21·Lenovo 태블릿, rosy-cam 스택)에서 실측한 수치와 실제 앱·관제 문구를 옮겼다. 절차 문서라 실행 코드는 바꾸지 않았다.
 - gate 변화: 없음.
+
+## 2026-10-01 · e8028fb0 · docs(adr): D-321 부록 — 보정 세션 표시와 차단
+- 변경: D-321 에 부록(보정 lease, activity 표시, CALIBRATION_ACTIVE, E-Stop 예외, 재시작 guard). 새 ADR 번호를 쓰지 않았다. API Ref v1.67(1a1a2c3a): 엔드포인트·activity·에러·이벤트 3종, 변경 이력 행. 참고: main 변경 이력에 v1.65 행이 없다(다른 브랜치 몫으로 보임).
+- 증거: rosy_harness lint 0 errors, test_event_catalogue 통과.
+- gate 변화: 없음.
+
+## 2026-10-01 · 4483e7a8 · docs(api,adr): 보정 lease 소유·회수·배터리 복귀
+- 변경: API Ref v1.67 과 D-321 부록에 — 소유는 토큰 단위, 회수된 토큰의 lease 는 ttl 까지 남음(Admin DELETE), SAF-005 RETURN_HOME 은 lease 를 일부러 무시, 시작 조건과 전체 차단 목록, host `override_calibration`, Pilot 이탈 규칙. 272151b6: main 이 추가한 test_mission_progress 핀 v1.66 → v1.67.
+- 증거: 문서 계약 시험 1 passed, 버전 핀 시험 통과, rosy_harness lint 0 errors.
+- gate 변화: 없음.

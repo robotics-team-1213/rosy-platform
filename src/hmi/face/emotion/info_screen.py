@@ -178,13 +178,17 @@ def render(payload: dict, size: tuple[int, int] = DEFAULT_SIZE) -> Image.Image:
         rows[2] = ("HEALTH", "E-STOP")
     elif payload.get("hitl_requested"):
         rows[2] = ("HEALTH", "ASSIST REQ")
+    # D-321 addendum: a calibration lease replaces the mode value. The LCD font is
+    # ASCII-only (D-221), so the machine word stands in for "보정 중".
+    if payload.get("activity") == "CALIBRATING":
+        rows[0] = ("MODE", "CALIBRATING")
 
     for index, (label, value) in enumerate(rows):
         y = 142 + index * 24
         draw.text((16, y), label, font=_font(14), fill=_MUTED)
         if value == "E-STOP":
             _draw_alarm(draw, (92, y), value, _font(16))
-        elif value == "ASSIST REQ":
+        elif value in ("ASSIST REQ", "CALIBRATING"):
             _draw_caution(draw, (92, y), value, _font(16))
         else:
             value_font, value = _fit(draw, value, 16, width - 108)

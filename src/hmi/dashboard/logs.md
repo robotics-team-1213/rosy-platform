@@ -558,3 +558,8 @@
 - 변경: renderRobotState 가 robot-id 를 더 이상 쓰지 않는다. 실기(013)에서 D-383 계보(모델·버전·모드)가 매 틱 state.robot_id 하나로 지워지는 것을 확인했다. 식별 렌더(renderRobotInfo)가 유일한 작성자다.
 - 증거: dashboard 패키지 시험 (app.js 에 setText("robot-id" 부재). 변이: 재추가 시 빨강.
 - gate 변화: 없음.
+
+## 2026-10-01 · c302529d · feat(dashboard): 보정 중 칩
+- 변경: 콘솔 로봇 카드(`panels/console/overview.js`) 맨 위와 /dashboard 모드 옆(`#calibration-chip`)에 `ui-tag status=warn` "보정 중 — <label>".
+- 증거: ROSY_RUN_BROWSER_TESTS=1 test_calibration_chip_browser.py 1 passed(실제 CoreServices 로 lease 를 열고 닫는다). 스크린샷 X:\DevTemp\calibration-mode\dashboard-*-calibration-chip.png.
+- gate 변화: 없음.

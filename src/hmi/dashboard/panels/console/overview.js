@@ -16,8 +16,22 @@ export function mount(el, ctx) {
   head.textContent = "로봇 상태";
   const summary = document.createElement("dl");
   summary.className = "ui-readout";
+  // D-321 부록: 보정 세션이 살아 있는 동안 로봇 카드 맨 위에 경고 칩을 단다.
+  const calibration = document.createElement("ui-tag");
+  calibration.setAttribute("status", "warn");
+  calibration.dataset.calibrationChip = "";
   const fields = ["mode", "navigation", "pose", "battery"];
+  function renderCalibration(activity) {
+    const active = activity?.kind === "CALIBRATING";
+    // ui-tag 은 display 를 스스로 정하므로 hidden 대신 붙였다 뗀다.
+    if (active && !calibration.isConnected) summary.before(calibration);
+    if (!active) calibration.remove();
+    calibration.textContent = active ? `보정 중 — ${activity.label || "보정"}` : "";
+    const owner = activity?.owner;
+    calibration.title = active ? `보정 주체: ${owner?.label || owner?.role || owner?.id || "알 수 없음"}` : "";
+  }
   function render(state) {
+    renderCalibration(state.activity);
     summary.replaceChildren();
     const pose = state.pose;
     const battery = state.battery;

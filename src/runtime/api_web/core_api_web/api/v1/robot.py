@@ -5,7 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
-from core_api_web.api.v1.common import operator, viewer
+from core_api_web.api.v1.common import operator, require_calibration_owner, viewer
 from core_api_web.api.deps import AuthContext, get_services, CoreServicesLike
 from core_api_web.api.errors import ApiError
 from core_common.protocol.schemas import PowerMode
@@ -77,6 +77,8 @@ def power_wake(auth: AuthContext = Depends(operator), svc: CoreServicesLike = De
 def power_set_mode(body: PowerModeRequest, auth: AuthContext = Depends(operator),
                    svc: CoreServicesLike = Depends(get_services)):
     """운영자 강제 전환. 활동이 감지되면 정책이 다시 ACTIVE로 되돌린다."""
+    # D-321 addendum: STANDBY/ECO can stop sensors the owner is calibrating. Wake stays open.
+    require_calibration_owner(svc, auth, "power mode change")
     svc.power.request_mode(body.mode, source=f"api:{auth.role}")
     svc.state.set_power(svc.power.status())
     return svc.power.status().model_dump()

@@ -7,7 +7,10 @@ param(
     [string]$PiUser,
     [Parameter(Mandatory = $true)]
     [ValidateSet("docker", "native")]
-    [string]$Backend
+    [string]$Backend,
+    [switch]$Force,
+    [string]$ApiToken = "",
+    [int]$ApiPort = 8080
 )
 
 $ErrorActionPreference = "Stop"
@@ -46,6 +49,12 @@ if ((& git status --porcelain 2>&1 | Out-String).Trim()) {
     $dirtyFlag = " --dirty"
 }
 $remote = "${PiUser}@${PiHost}"
+# D-321 addendum: the overlay apply restarts rosy-core; do not cut a calibration short.
+& (Join-Path $repoRoot "deploy/robot/pinky_pro/rosy-calibration-guard.ps1") -Robot $PiHost `
+    -Action "a CORE dev overlay sync (CORE restart)" -ApiPort $ApiPort -ApiToken $ApiToken -Force:$Force
+if ($LASTEXITCODE -eq 3) {
+    throw "CORE dev overlay sync refused: a calibration session is active on $PiHost. Pass -Force to override."
+}
 try {
     New-Item -ItemType Directory -Path $tempDir | Out-Null
     & python -B (Join-Path $repoRoot "deploy/robot/pinky_pro/dev/core_dev_overlay.py") pack --repo $repoRoot --output $archive

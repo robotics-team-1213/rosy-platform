@@ -213,3 +213,8 @@
 - Change: Add typed sim-only target, jog and goal contracts in core_common.protocol.omx_sim; document the additive v1.67 routes in the API reference.
 - Evidence: focused contract and adapter tests passed; API version alignment test 4 passed after the document bump.
 - Gate: SOURCE only; no physical profile admission.
+
+## 2026-10-01 · a527920a · feat(protocol): StateSnapshot.activity (v1.67 additive)
+- 변경: `RobotActivity`·`ActivityOwner` 모델과 `StateSnapshot.activity: Optional[RobotActivity] = None`. 보정 lease 가 살아 있을 때만 객체, 아니면 null.
+- 증거: test_calibration_session.py 의 robot/state·/ws/state 시험, test_protocol_version_alignment 통과.
+- gate 변화: 없음.

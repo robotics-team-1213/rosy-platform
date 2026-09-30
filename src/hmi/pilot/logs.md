@@ -200,3 +200,13 @@
 - Change: Select the OMX simulation driver from same-origin identity; render bounded arm and gripper jog, seat renewal, goal readback and cancellation. Keep Pinky routing behind a 404 target response.
 - Evidence: rendered OMX pairing-to-jog 1 passed, Pinky gate browser 1 passed, driver/link/route 26 passed; Gazebo action evidence in docs/validation/pilot-omx-gazebo-2026-10-01/.
 - Gate: sim control path observed; video, recording and physical OMX remain HOLD.
+
+## 2026-10-01 · 5db3391d · feat(pilot): 보정 중 판과 비소유자 주행 잠금
+- 변경: `calibration.js`(순수 판정) 추가. 상태의 `activity` 가 CALIBRATING 이면 영상 위 "보정 중 — <label>" 판과 HUD 칩. whoami id 가 owner 가 아니면 조작부 전체 disabled + 사유, 명령 루프는 아무것도 보내지 않는다. 상단 E-Stop 은 그대로. SW 셸 키 `2026-10-01-1`.
+- 증거: test_calibration_view.py 5 passed; ROSY_RUN_BROWSER_TESTS=1 test_pilot_browser 전체 18 passed(새 `test_calibration_banner_locks_drive_for_other_tokens_and_keeps_estop` 포함, 배치 시험 유지). 스크린샷 X:\DevTemp\calibration-mode\pilot-calibration-locked.png·pilot-calibration-owner.png.
+- gate 변화: 없음.
+
+## 2026-10-01 · c04de23a · fix(pilot): 보정 주인의 모드를 끊지 않는다; whoami 재시도
+- 변경: 나갈 때 `/mode` IDLE 은 이 화면이 MANUAL 을 잡았고(modeHeld) 남의 보정으로 잠기지 않았을 때만 보낸다. whoami 실패는 1→2→4→8 s(최대 15 s) 재시도, 대기 중에는 "보정 확인 중"으로 잠근다.
+- 증거: ROSY_RUN_BROWSER_TESTS=1 pilot 전체 + dashboard 칩 70 passed(새: 잠긴 화면 이탈은 /mode 없음, 주인 이탈은 IDLE, whoami 대기 표시 후 조작 복귀). test_calibration_view 6 passed.
+- gate 변화: 없음.
