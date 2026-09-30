@@ -513,3 +513,27 @@ def test_wall_segments_from_scan_straight_wall():
     assert segs
     for s in segs:
         assert s.y0 == pytest.approx(-0.15, abs=1e-6) and s.y1 == pytest.approx(-0.15, abs=1e-6)
+
+
+# ---------------------------------------------------------------- shadow node (static; rclpy is not on the host)
+
+NODE = __import__("pathlib").Path(__file__).resolve().parents[1] / "control" / "road_state_node.py"
+
+
+def test_node_publishes_only_the_road_state_and_never_a_command():
+    import ast
+    text = NODE.read_text(encoding="utf-8")
+    tree = ast.parse(text)
+    publishers = [n for n in ast.walk(tree) if isinstance(n, ast.Call)
+                  and isinstance(n.func, ast.Attribute) and n.func.attr == "create_publisher"]
+    assert [ast.unparse(n.args[1]) for n in publishers] == ["TOPIC"]
+    assert "cmd_vel" not in text and "Twist" not in text
+    assert "DurabilityPolicy.TRANSIENT_LOCAL" in text and "ReliabilityPolicy.RELIABLE" in text
+    subs = {ast.unparse(n.args[1]).strip("'") for n in ast.walk(tree) if isinstance(n, ast.Call)
+            and isinstance(n.func, ast.Attribute) and n.func.attr == "create_subscription"}
+    assert subs == {"odom", "line/keep_debug", "line/observation", "perception/learned/shadow", "scan"}
+
+
+def test_node_is_an_installed_entry_point():
+    setup = (NODE.parents[1] / "setup.py").read_text(encoding="utf-8")
+    assert "'road_state_node = control.road_state_node:main'" in setup
