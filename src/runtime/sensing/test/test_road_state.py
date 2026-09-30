@@ -729,7 +729,7 @@ def test_a_lost_track_restarts_from_the_prior():
     roundabout), so no later line could pass the gate. Without an acquisition under way the
     lane state starts again from the prior."""
     est, clock = tracking()
-    for _ in range(int(3.0 / DT)):
+    for _ in range(int(5.0 / DT)):          # STOP at 2.5 s, then more than 2 s lost
         clock.frame([], v=0.0)
     assert est.level == STOP
     est.x[:3] = [0.05, 5.0, 3.0]
@@ -826,3 +826,24 @@ def test_a_steep_crossing_candidate_is_a_decision_point_never_a_boundary():
     clock.frame(boundaries_from_keep(last) + pair())
     assert est.rejects["keeper"] == 1
     assert est.last_frame["hypothesis"]["labels"] == "RL"
+
+
+def test_a_fresh_stop_keeps_the_coasted_state_as_its_acquisition_prior():
+    """Trace 2026-10-01 (124745Z): a 0.10 m line dropout at 0.03-0.05 m/s outlasts the 2.5 s
+    COAST/SLOW clock, so the ladder stops; wiping d/phi/kappa right then threw away a coast
+    that was still good (every 0.10 m dropout trial failed on the zeroed prior). A recent stop
+    keeps the coasted mean with the covariance widened to the acquisition prior; only a stop
+    older than reacq_timeout_s or longer than slow_s_m of travel restarts from zero."""
+    est, clock = tracking()
+    est.x[:2] = [0.02, math.radians(3)]
+    for _ in range(int(2.7 / DT)):
+        clock.frame([], v=0.04)
+    assert est.level == STOP
+    coasted = est.x[:3].copy()
+    assert coasted[0] > 0.02 and coasted[1] == pytest.approx(math.radians(3), abs=1e-3)
+    clock.frame([], v=0.04)
+    assert est.x[0] == pytest.approx(coasted[0] + 0.04 * DT * math.sin(coasted[1]), abs=1e-6)
+    assert est.P[0, 0] >= RoadStateParams().sigma_d0_m ** 2
+    for _ in range(int(2.2 / DT)):
+        clock.frame([], v=0.04)
+    assert list(est.x[:3]) == [0.0, 0.0, 0.0]

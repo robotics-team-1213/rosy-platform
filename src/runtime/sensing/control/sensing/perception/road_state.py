@@ -16,7 +16,7 @@ Prediction per odometry step (ds = v dt, dtheta = omega dt):
   d <- d + ds sin(phi);  phi <- wrap(phi + dtheta - kappa ds); kappa is pulled
   toward the map curvature when set, else a random walk. Q_d = (0.08 ds)^2 +
   (0.002 m)^2 dt, Q_phi = (0.03 |dtheta|)^2 + (0.02 ds)^2 + floor^2 dt.
-  While STOP with no acquisition under way, d/phi/kappa restart from the prior.
+  A stop older than 2 s or 0.25 m with no acquisition restarts d/phi/kappa from the prior.
 
 Measurements (near field only, x <= 0.33 m):
   boundary  y = +-w/2 - d - x phi + kappa x^2 / 2 (L +, R -), psi = -phi +
@@ -172,6 +172,7 @@ class RoadStateEstimator:
         self.reacq_reason = None
         self.reacq_counts = {"pair": 0, "side+ir": 0, "side+learned": 0}
         self._applied = None   # (travel, turn) at the last applied boundary update
+        self._s_at_stop = 0.0
         self._learned_accepted: list = []
         self._calib_since = None
         self._calib_suspect = False
@@ -235,8 +236,10 @@ class RoadStateEstimator:
         if profile is not None:
             self.profile = profile
         fresh = self._stopped
-        if fresh and self._consistent == 0:
-            self._restart_from_prior()
+        if fresh and self._consistent == 0 and (
+                self._stop_t is None or self._now - self._stop_t > p.reacq_timeout_s
+                or self._s_total - self._s_at_stop > p.slow_s_m):
+            self._restart_from_prior()   # a recent stop keeps its coast as the prior mean
         scale = p.reacq_gate if fresh else (p.slow_gate if self._level == SLOW else 1.0)
         bounds = [m for m in measurements if isinstance(m, BoundaryMeas)]
         offsets = [m for m in measurements if isinstance(m, OffsetMeas)]
@@ -561,7 +564,7 @@ class RoadStateEstimator:
 
     def _enter_stop(self, reason: str) -> None:
         if not self._stopped:
-            self._stop_t = self._now
+            self._stop_t, self._s_at_stop = self._now, self._s_total
         self._stopped, self.stop_reason = True, reason
         self._consistent = 0
         for i in range(3):   # d, phi, kappa start over as wide as a first acquisition
