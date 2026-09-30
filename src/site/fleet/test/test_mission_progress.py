@@ -367,12 +367,21 @@ def test_running_action_and_stop_request_do_not_claim_physical_completion(tmp_pa
     assert running["stop"]["state"] == "DISPATCH_ENABLED"
     assert running["stop"]["physical_state"] == "UNKNOWN"
 
+    tasks.store.trip_stop_latch(actor_id="operator-1", reason="ESTOP_REQUESTED")
+    latched = client.get(
+        f"/api/fleet/missions/{mission_id}", headers=_OPERATOR,
+    ).json()["progress"]
+    assert latched["mission"]["state"] == "RUNNING"
+    assert latched["action"]["state"] == "RUNNING"
+    assert latched["goal_evidence"]["state"] == "UNKNOWN"
+    assert latched["stop"]["state"] == "DISPATCH_BLOCKED"
+    assert latched["stop"]["physical_state"] == "UNKNOWN"
+
     store.record_action_result(
         mission_id, event_id="result-current", action_id="action-current",
         attempt_id="attempt-current", outcome="SUCCEEDED",
         result={"observed_at": time.time(), "source": "local_action_receipt"},
     )
-    tasks.store.trip_stop_latch(actor_id="operator-1", reason="ESTOP_REQUESTED")
     after = client.get(
         f"/api/fleet/missions/{mission_id}", headers=_OPERATOR,
     ).json()["progress"]

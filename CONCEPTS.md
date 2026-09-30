@@ -22,6 +22,12 @@ The site mission coordinator and durable task ledger. It selects and sequences a
 
 A Fleet Mission owns site order, priority, handoffs and result history. Its Mission Steps request bounded Device Actions through device APIs. A Local Transaction sequences work inside one accepted action, such as approach, grasp and place; it does not own final actuator commands or a second site Mission DSL. An Episode records observed execution evidence. These are target terms; the current Fleet `/api/fleet/tasks/*` tracks durable navigation requests, not a general Mission engine (D-298).
 
+### Action identity and message identity
+
+A Device Action has a lifecycle across multiple submit, read, cancel, feedback and result exchanges. `action_kind` describes the work (currently `PICK_PLACE` in the OMX grant), `action_id` identifies that work, and `attempt_id` identifies its execution attempt. The current first slice binds one attempt to an Action; automatic multi-attempt execution is not enabled.
+
+PRT `Envelope.type` and `msg_id` describe a message. UDS `operation` selects an operation on the Action. These fields do not replace Action identity. `GetAction` currently sends only `action_id`; Fleet validates the returned attempt and full grant scope. Repeated reads do not create an execution or a journal event. Top-level PRT `correlation_id` is schema-only today; it must not be presented as implemented end-to-end correlation. See D-369 and `docs/plans/2026-09-30-action-message-identity-design.md`.
+
 ### Stop evidence
 
 Request sent, device response, local safety latch, zero-motion readback, and physical E-stop/driver interlock are distinct observations. The current Fleet `estop` response's legacy `stopped` count means HTTP response received from CORE, not verified physical stop. A missing response leaves the result unknown (D-298).

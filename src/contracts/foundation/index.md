@@ -33,8 +33,8 @@
 
 ## 최근 기록
 
+- 2026-09-30 · uncommitted · docs(protocol): DeviceActionLookup 의미를 실제 사용에 맞춤
 - 2026-09-30 · uncommitted · docs(adr): D-358 앱 역할 ADR을 D-370으로 재번호
 - 2026-09-30 · uncommitted · feat(discovery): D-358 S1 공유 TXT 벡터와 정본 분류기
 - 2026-09-29 · uncommitted · feat(domain): capability lifecycle 단일 어휘 (D-347)
 - 2026-09-29 · uncommitted · feat(protocol): traffic policy signal-source status fields (API Ref v1.56)
-- 2026-09-29 · uncommitted · feat(protocol): TrafficPolicyStatus.junction_rule (API Ref v1.54)

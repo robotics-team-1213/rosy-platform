@@ -1297,8 +1297,15 @@ against the dedicated Fleet service UID. A bounded, versioned JSON frame has a
 maximum encoded size of 64 KiB. Remote Fleet/OMX placement remains HOLD pending
 the separate host-placement and device validation decisions in D-281/D-273.
 
+The v1 `GetAction` request contains only `version`, `operation`, and `action_id`.
+Its receipt includes `attempt_id`; Fleet compares the full receipt identity and
+generation against the persisted grant before accepting that readback.
+`DeviceActionLookup` is the identity-pair base for attempt-scoped operations
+such as cancellation, not the v1 `GetAction` request shape. A lookup does not
+resubmit or create an attempt.
+
 Required operations are `SubmitAction(FleetActionGrant)`,
-`GetAction(DeviceActionLookup)`, `CancelAction(DeviceActionCancelRequest)`,
+`GetAction(action_id)`, `CancelAction(DeviceActionCancelRequest)`,
 `StopLocal(LocalStopRequest)`, `GetStopState(LocalStopQuery)`, and
 `RearmLocal(LocalStopRearmRequest)`. Every request
 and response is bound to the workcell and runtime instance. The submit grant

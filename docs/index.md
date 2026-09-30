@@ -168,6 +168,7 @@
 | D-358 | ER 2 feedback turns use trusted scope, fenced candidates, and explicit ambiguity |
 | D-360 | 천장 카메라 경기장 자동 검출은 제안일 뿐이다 — Vision이 네 모서리를 제안하고, 관제는 운용자가 확인한 모서리로 보정·마스킹한 경기장 뷰를 보여 준다 |
 | D-361 | 사이트 콘솔이 로봇 화면 코드로 로봇을 등록한다 — Fleet이 코드를 로봇에서 직접 교환하고, 자격은 Fleet 소유 저장소에 둔다 |
+| D-369 | Mission 제어·장치 실행·ROS 제어·안전 정지의 책임을 분리한다 |
 | D-370 | 앱과 표면은 한 역할씩 맡는다 — 역할·이름·아이콘·화면 소유를 한 표로 고정하고, 발견·기기 연결·실패 어휘는 공유 벡터로 하나로 맞춘다 |
 
 ## 계획·결과 문서
@@ -228,6 +229,8 @@
 - [2026-09-29-pinky-deployment-fast-path.md](plans/2026-09-29-pinky-deployment-fast-path.md)
 - [2026-09-29-policy-evidence-contract-design.md](plans/2026-09-29-policy-evidence-contract-design.md)
 - [2026-09-29-policy-evidence-contract.md](plans/2026-09-29-policy-evidence-contract.md)
+- [2026-09-30-action-message-identity-design.md](plans/2026-09-30-action-message-identity-design.md)
+- [2026-09-30-action-message-identity.md](plans/2026-09-30-action-message-identity.md)
 - [2026-09-30-dock-device-implementation-plan.md](plans/2026-09-30-dock-device-implementation-plan.md)
 - [2026-09-30-er2-mission-feedback-loop.md](plans/2026-09-30-er2-mission-feedback-loop.md)
 - [2026-09-30-goal-evidence-producer-and-verifier-design.md](plans/2026-09-30-goal-evidence-producer-and-verifier-design.md)
@@ -245,8 +248,8 @@
 
 ## 최근 기록
 
-- 2026-09-30 · uncommitted · docs(adr): D-370 독립 리뷰 반영(MERGE-AFTER-FIXES)
-- 2026-09-30 · uncommitted · docs(adr): D-358 앱 역할 ADR을 D-370으로 재번호
-- 2026-09-30 · uncommitted · docs(adr): D-358 앱 역할·이름·아이콘·화면 소유와 공유 연결 조각
-- 2026-09-30 · uncommitted · docs(sensing): D-356 학습 루프 기록 정정·리뷰 수정
-- 2026-09-30 · uncommitted · fix(contracts): reconcile ER2 API version and Fleet size ratchet
+- 2026-09-30 · uncommitted · docs(plan): classify prior OMX ROS-SIM evidence for Action mapping
+- 2026-09-30 · uncommitted · docs(plan): hold ROS Action mapping for selected hardware profile
+- 2026-09-30 · uncommitted · test(contracts): Mission feedback, goal, and stop truth separation
+- 2026-09-30 · uncommitted · test(contracts): Action response-loss and result-order recovery
+- 2026-09-30 · uncommitted · docs(contracts): Action과 message type의 책임·식별 수명 정리

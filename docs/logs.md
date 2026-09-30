@@ -3801,3 +3801,35 @@
 - Change: `hmi/dashboard/app.js` 1338 → 745. 상태 렌터는 `telemetry.js`(419 — 텔레메트리 채널·로봇 정보·트리이지·안전 히어로·인벤토리·런타임·이벤트 + 교통 정책 패널 상태·렌더·바인딩), 수동 조종은 `teleop.js`(128 — 홀드 티커 내재화, D-250 절차 보존), 상태 소켓은 `state-socket.js`(111 — 재접속 후퇴 팩토리, 4401/4403 분기 보존). 임포트 방향은 dom←client←settings←셸 한 방향 유지, 빌드 단계 없음(D-23). allowlist·CMake·AGENTS 갱신. D-262의 로컬 웹 예산 스캔(test_web_budgets, 600줄)은 map-view.js 612 커밋(e89e09e1)으로 이미 main에서 빨간 상태였다 — D-362 아키텍처 게이트(웹 800·set-equality·>1000 허용량 0)가 상위 집합이므로 통합하고, 이 파일은 인수 시험(아키텍처 게이트가 .js/.html/.css를 실제로 커버하는지)으로 대체.
 - Evidence: node --check 4파일 통과(UTF-8 직접 읽기 — 첫 시도는 cp949 오독으로 미변경 파일까지 거짓 실패), gateway dashboard+ui_route+web_common 142 passed, dashboard 패키지 17 passed 34 skipped, 구조 게이트 33 passed(app.js 판정 제거 set-equality 확인). 시험 재지정 5건은 app.js 단독 텍스트 고정이 새 모듈로 이동한 것 — 파일 자신의 교리(16-18줄, "모듈 간 이동 시 app.js만 읽으면 잘못된 이유로 통과/실패한다")대로 bundle/state-socket.js로 재지정.
 - Gate: 동작 불변(함수 이동·엣지 치환만, renderCapabilities 래퍼·teleopActive·lineFollow.pending 적응 3곳). 브라우저 회귀(ROSY_RUN_BROWSER_TESTS=1)는 Playwright 환경에서 별도 확인 필요 — 정적 검사+문법+번들 계약 시험이 이 변경의 증거 한계다.
+## 2026-09-30 · uncommitted · docs(adr): D-362 제어권·정지 증거 책임 경계
+
+- 변경: Fleet Mission Orchestrator, ER 2, CORE/OMX device-local Action owner, ROS controller/driver, 독립 hardware safety chain, goal verifier의 권한을 분리하고 요청→Action→goal→stop 증거의 의미를 표로 고정했다. Pick-and-place를 자연어 좌표 변환부터 독립 완료 판정까지의 흐름에 대입해 현재 구현/비활성 범위를 명시했다.
+- 증거: D-330/D-333/D-336/D-357/D-358와 Fleet/OMX 소스와 공개 API Reference 경로를 대조. rosy_harness lint 0 errors/12 freshness warnings; network-topology 및 harness 계약 시험 80 passed; diff check 통과.
+- Gate: SOURCE 문서 결정만. wire/API, provider dispatch, OMX capability, ROS-SIM, DEVICE/FIELD, 물리 E-stop/동작 승격 없음.
+
+## 2026-09-30 · uncommitted · docs(contracts): Action과 message type의 책임·식별 수명 정리
+
+- 변경: 제어권 초안 D-362를 다른 main/Pilot 작업의 번호와 충돌하지 않게 D-369로 변경했다. 이전 D-362 제어권 로그는 D-369를 뜻한다. Action 종류·인스턴스·attempt, PRT type/msg_id, UDS operation, 사건 ID, grant generation의 역할을 ADR·CONCEPTS·설계·단계별 계획에 기록했다.
+- 계약 정정: GetAction은 v1에서 action_id만 요청하고 Fleet이 응답의 전체 grant/attempt를 검증한다. API Ref와 DeviceActionLookup 설명을 실제 producer/consumer에 맞췄다. wire/runtime 동작 변경 없음.
+- 검증: 실제 Fleet JSON producer와 OMX API/runner/store의 host 결합 시험 8개 추가, 인접 dispatcher/OMX suite 포함 21 passed. socket peer 인증·ROS·물리 driver는 이 검증의 범위 밖이다. 최종 quick gate + network 문서 계약 119 passed, harness lint 0 errors/기존 freshness warnings 12, 새 시험 flake8 및 diff check 통과.
+- gate 변화: 없음. 새 message bus·자동 시도·provider/OMX 활성화·물리 수용 없음. 계획 Task 2–4는 후속이다.
+
+## 2026-09-30 · uncommitted · test(contracts): Action response-loss and result-order recovery
+- Change: extended the Fleet/OMX JSON boundary test through the real dispatcher, API, runner, and SQLite stores. It drops the response after device acceptance, reconstructs Fleet against the same database, verifies GetAction recovery with one driver submit, proves stale-generation 4xx rejection before driver submission, and checks duplicate terminal / late RUNNING results do not regress mission state or release claims.
+- Evidence: Fleet/OMX dispatcher/API combined suite 25 passed; OMX action-store suite 8 passed (Windows, Python 3.14.5). Existing implementation met the invariants; no runtime change was needed.
+- Gate: SOURCE/LOCAL tests only. UDS peer credentials, ROS 2, physical stop, device, and field acceptance are not covered.
+
+## 2026-09-30 · uncommitted · test(contracts): Mission feedback, goal, and stop truth separation
+- Change: strengthened the actual Mission progress projection test to inspect state immediately after Fleet stop latch and before any Action terminal result. Existing producer/consumer suites cover correlated current attempt, stale previous-attempt result, action terminal versus goal confirmation, local stop latch versus physical state, Cancel ACK=`CANCEL_REQUESTED`, and provider turn/outbox status-only behavior.
+- Evidence: Fleet progress, local-stop, goal-provenance, and ER 2 feedback-loop suites 43 passed; OMX stop-fence suite 5 passed (Windows, Python 3.14.5). No schema or runtime change was required; the provider turn remains a separate durable lifecycle, not another device progress axis.
+- Gate: SOURCE/LOCAL tests only. No ROS-SIM, hardware E-stop, device, or field proof.
+
+## 2026-09-30 · uncommitted · docs(plan): hold ROS Action mapping for selected hardware profile
+- Change: recorded the Task 4 source audit. OMX-AI remains disabled with empty driver package, hardware plugin, and joint configuration; `ActionRunner` only accepts an injected `LocalActionPort`, while the ROS FollowJointTrajectory runtime is candidate code. No production ActionRunner/driver composition exists outside tests.
+- Evidence: source/config inspection of `src/products/omx/profile/config/omx.disabled.yaml`, `action_runner.py`, and `ros_runtime.py`; existing SOURCE/LOCAL tests do not identify an accepted arm/gripper hardware profile.
+- Gate: Task 4 remains pending target hardware+driver+gripper package/version and ROS 2 distro/API selection. No mock port or hardware was invented; no runtime/ROS/device activation.
+
+## 2026-09-30 · uncommitted · docs(plan): classify prior OMX ROS-SIM evidence for Action mapping
+- Change: reconciled Task 4 with the existing 2026-09-26 vendor simulation record. The pinned ROBOTIS OpenManipulator 5.1.2 simulation exercised FollowJointTrajectory, simulated gripper-joint motion, and cancel status, but did not bind FleetActionGrant to a LocalActionPort or establish an accepted physical OMX profile.
+- Evidence: existing `docs/validation/omx-two-instance-ros-sim-2026-09-26/README.md` and `src/products/omx/adapter/progress.md`; current Windows host has no `ROS_DISTRO` or `ros2` command. Focused ROS runtime tests skipped because ROS 2 Jazzy/rclpy is unavailable here (2 skipped).
+- Gate: Task 4 remains pending selected device/hardware revision, driver and gripper package/version, ROS 2 distro and API endpoint. Historical SIM evidence remains SIM-only; no physical claim or activation.
