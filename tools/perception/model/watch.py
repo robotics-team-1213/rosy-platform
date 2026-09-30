@@ -407,6 +407,11 @@ def settle_inbox(st, state: dict, listed: list[str]) -> tuple[dict, list[str], b
     return state, left, all_ok
 
 
+def _short(key: str) -> str:
+    """An HF commit shortened for logs; an inbox folder name in full."""
+    return key[:12] if _SHA.fullmatch(key) else key
+
+
 def _now() -> str:
     return dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")
 
@@ -423,13 +428,13 @@ def intake_result(sha: str, prev: dict | None, robots: list[str], intake_fn,
             "model_revision": report.get("model_revision")}
     if report.get("transient"):
         state = "gave_up" if attempts >= max_attempts else "error"
-        print(f"{sha[:12]}: intake error (attempt {attempts}/{max_attempts}): "
+        print(f"{_short(sha)}: intake error (attempt {attempts}/{max_attempts}): "
               f"{'; '.join(reasons)}", file=sys.stderr)
         return {**base, "intake": state, "last_error": "; ".join(reasons)}
     if rc != 0 or report.get("verdict") != "pass" or not report.get("model_revision"):
-        print(f"{sha[:12]}: intake FAIL {'; '.join(reasons)}", file=sys.stderr)
+        print(f"{_short(sha)}: intake FAIL {'; '.join(reasons)}", file=sys.stderr)
         return {**base, "intake": "fail", "reasons": reasons}
-    print(f"{sha[:12]}: intake PASS {report['model_revision']}")
+    print(f"{_short(sha)}: intake PASS {report['model_revision']}")
     return {**base, "intake": "pass", "reasons": reasons,
             "robots": {r: {"status": "pending", "attempts": 0} for r in robots}}
 
@@ -509,7 +514,7 @@ def main(argv=None, *, list_commits=hf_list_commits, intake_fn=None, deliver_fn=
                 continue
             decision, error = "error", f"{type(exc).__name__}: {exc}"
         if decision == "held":
-            print(f"{sha[:12]}: {rev} -> {name}: held by an operator (rosy_ml release-hold)")
+            print(f"{_short(sha)}: {rev} -> {name}: held by an operator (rosy_ml release-hold)")
             continue
         if decision == "ok":
             if entry["status"] != "ok":
@@ -526,17 +531,17 @@ def main(argv=None, *, list_commits=hf_list_commits, intake_fn=None, deliver_fn=
             else:
                 error = None if code == 0 else f"deliver exit {code}"
             if code == HELD_EXIT:  # an operator took the hold after we looked
-                print(f"{sha[:12]}: {rev} -> {name}: held by an operator (rosy_ml release-hold)")
+                print(f"{_short(sha)}: {rev} -> {name}: held by an operator (rosy_ml release-hold)")
                 save_state(cfg["state_file"], state)
                 continue
             if code == BUSY_EXIT:
-                print(f"{sha[:12]}: {rev} -> {name}: robot lock busy, retry next run")
+                print(f"{_short(sha)}: {rev} -> {name}: robot lock busy, retry next run")
                 save_state(cfg["state_file"], state)
                 continue
         state = record_delivery(state, sha, name, error=error, max_attempts=max_attempts)
         save_state(cfg["state_file"], state)
         outcome = state["commits"][sha]["robots"][name]["status"]
-        print(f"{sha[:12]}: {rev} -> {name} shadow: {outcome}"
+        print(f"{_short(sha)}: {rev} -> {name} shadow: {outcome}"
               + (f" ({error})" if error else ""))
         retry_later |= error is not None
     return 1 if retry_later else 0

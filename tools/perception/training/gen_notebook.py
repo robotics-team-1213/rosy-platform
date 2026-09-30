@@ -20,16 +20,15 @@ def code(text):
 md("""
 # Rosy 차선 분할 학습 (D-373)
 
-입력 칸만 채우고 **런타임 → 모두 실행**을 누르면 기준 모델(LaneUNet)로 학습부터 HF 업로드까지 끝난다.
-결과는 HF 모델 저장소의 commit 하나(`model.onnx` + `model_manifest.json`)다.
-사이트 PC가 그 commit을 자동으로 intake하고, 통과하면 로봇에 **섀도**로 배포한다(주행에는 쓰지 않는다).
+입력 칸만 채우고 **런타임 → 모두 실행**을 누르면 기준 모델(LaneUNet)로 학습부터 넘기기까지 끝난다.
+**HF 계정은 필요 없다.** 데이터셋과 모델의 정본은 팀의 **store 폴더**다(D-373 결정 8).
 
-준비물:
+- 데이터셋: store의 `datasets/<이름>/<내용 해시>/` 폴더(Google Drive 마운트) 또는 운영자에게 받은 데이터셋 zip.
+- 결과: `model.onnx` + `model_manifest.json` 폴더 하나. store의 `models/inbox/`에 넣거나(Drive 마운트), zip으로 받아 운영자에게 준다.
+- 사이트 PC가 inbox의 새 폴더를 자동으로 intake하고, 통과하면 로봇에 **섀도**로 배포한다(주행에는 쓰지 않는다).
+- HF에 올리고 싶은 사람만 마지막 10단계(선택)를 쓴다.
 
-- 팀 HF 조직의 **모델 저장소에 쓰기 권한이 있는 내 HF 토큰**. Colab 왼쪽 열쇠 아이콘(Secrets)에 `HF_TOKEN`으로 넣고 노트북 접근을 허용한다.
-- 데이터셋 저장소 이름과 **commit SHA(40자)**. 태그·브랜치 이름은 받지 않는다.
-- 런타임 유형은 GPU(T4 이상)를 권장한다. CPU로도 돌지만 느리다.
-
+런타임 유형은 GPU(T4 이상)를 권장한다. CPU로도 돌지만 느리다.
 약속의 전체 정의는 [README.md](https://github.com/livsbittt/rosy-os/blob/main/tools/perception/training/README.md)에 있다.
 """)
 
@@ -53,8 +52,9 @@ if not os.path.exists(os.path.join(ROSY, ".git")):
                     "tools/perception/training", "src/runtime/sensing/control"], check=True)
 elif not os.environ.get("ROSY_REPO_DIR"):
     subprocess.run(["git", "-C", ROSY, "pull", "--ff-only"], check=True)
-%pip install -q onnx onnxruntime huggingface_hub
-for p in (os.path.join(ROSY, "tools", "perception", "training"), os.path.join(ROSY, "src", "runtime", "sensing")):
+%pip install -q onnx onnxruntime
+for p in (os.path.join(ROSY, "tools", "perception", "training"), os.path.join(ROSY, "tools", "perception"),
+          os.path.join(ROSY, "src", "runtime", "sensing")):
     if p not in sys.path:
         sys.path.insert(0, p)
 REPO_COMMIT = subprocess.run(["git", "-C", ROSY, "rev-parse", "--short", "HEAD"],
@@ -65,18 +65,23 @@ print("rosy-os commit:", REPO_COMMIT)
 md("""
 ## 2. 입력 칸
 
-- `TRAINER_NOTE`: manifest의 `trainer`에 덧붙일 짧은 메모(예: `lr 실험 A`). 이름과 노트북 commit은 자동으로 들어간다.
-- `HF_DATASET_SHA`: 데이터셋 commit **40자 SHA**. 학습 중에는 바꾸지 않는다.
+- `TRAINER`: 내 이름(필수). manifest의 `trainer`에 노트북 commit과 함께 들어간다.
+- `TRAINER_NOTE`: `trainer`에 덧붙일 짧은 메모(예: `lr 실험 A`).
+- `STORE`: store 폴더 경로. Google Drive에 있으면 `/content/drive/MyDrive/<store 폴더>`처럼 적는다(3단계가 Drive를 마운트한다).
+  비워 두면 Drive 없이 진행한다: 데이터셋은 zip으로 받고, 결과도 zip으로 내려받는다.
+- `DATASET`: 운영자가 `publish.py`로 받은 `store:<이름>@<내용 해시 64자>`. 학습 중에는 바꾸지 않는다.
+- `DATASET_ZIP`: `STORE`를 비웠을 때만. 데이터셋 zip 경로. 비워 두면 3단계에서 업로드 창이 뜬다.
 - `CLASSES`: 비워 두면 데이터셋 manifest의 클래스를 그대로 쓴다. 적으면 `이름:role,이름:role,...`(출력 채널 순서)로 쓰고, 데이터셋과 다르면 멈춘다.
 - `COLOR`/`SCALE`/`MEAN`/`STD`: 학습 전처리. **이 값이 그대로 manifest에 적히고 로봇이 같은 값으로 전처리한다.**
 - `CAMERA_PROFILE_REVISION`: 비워 두면 데이터셋 `sources[]`에서 가져온다.
 """)
 code('''
 #@title 2. 입력 칸
+TRAINER = ""  #@param {type:"string"}
 TRAINER_NOTE = ""  #@param {type:"string"}
-HF_DATASET_REPO = "<org>/rosy-lane-seg-data"  #@param {type:"string"}
-HF_DATASET_SHA = ""  #@param {type:"string"}
-HF_MODEL_REPO = "<org>/rosy-lane-seg-models"  #@param {type:"string"}
+STORE = "/content/drive/MyDrive/rosy-store"  #@param {type:"string"}
+DATASET = ""  #@param {type:"string"}
+DATASET_ZIP = ""  #@param {type:"string"}
 CLASSES = ""  #@param {type:"string"}
 COLOR = "rgb"  #@param ["rgb", "bgr"]
 SCALE = 1/255  #@param {type:"raw"}
@@ -87,61 +92,76 @@ LR = 0.001  #@param {type:"number"}
 BATCH = 8  #@param {type:"integer"}
 CAMERA_PROFILE_REVISION = ""  #@param {type:"string"}
 
-import re
 from rosy_lane_model import Preprocess
+from store import parse_dataset_ref
 
-HF_DATASET_SHA = HF_DATASET_SHA.strip().lower()
-for _name, _repo in (("HF_DATASET_REPO", HF_DATASET_REPO), ("HF_MODEL_REPO", HF_MODEL_REPO)):
-    if "<" in _repo or "/" not in _repo:
-        raise ValueError(f"2단계 입력 칸의 {_name}을(를) 채우세요: '<org>'를 팀 HF 조직 이름으로 바꿉니다 "
-                         f"(지금: {_repo!r}). 바꾼 뒤 2단계부터 다시 실행합니다.")
-if not re.fullmatch(r"[0-9a-f]{40}", HF_DATASET_SHA):
-    raise ValueError("2단계 입력 칸의 HF_DATASET_SHA를 채우세요: 데이터셋 commit의 40자 hex SHA. "
-                     "태그·브랜치 이름은 받지 않습니다.")
+TRAINER, STORE, DATASET_ZIP = TRAINER.strip(), STORE.strip(), DATASET_ZIP.strip()
+if not TRAINER:
+    raise ValueError("2단계 입력 칸의 TRAINER를 채우세요: 내 이름(예: ana). 바꾼 뒤 2단계부터 다시 실행합니다.")
+try:
+    DS_NAME, DS_SHA = parse_dataset_ref(DATASET)
+except ValueError:
+    raise ValueError("2단계 입력 칸의 DATASET을 채우세요: 운영자가 준 'store:<이름>@<내용 해시 64자>' "
+                     f"(지금: {DATASET!r}). 바꾼 뒤 2단계부터 다시 실행합니다.") from None
 PRE = Preprocess(COLOR, SCALE, MEAN, STD)   # 데이터셋과 export가 이 한 객체를 같이 쓴다
 print(PRE)
+print("dataset:", f"store:{DS_NAME}@{DS_SHA}", "| store:", STORE or "(없음: zip으로 받고 zip으로 넘긴다)")
 ''')
 
 md("""
-## 3. Hugging Face 로그인
+## 3. 데이터셋 가져오기 (내용 해시 확인)
 
-Colab Secret `HF_TOKEN`이 있으면 그것을 쓰고, 없으면 가려진 입력 칸에 토큰을 붙여 넣는다.
-토큰은 노트북에 적지 않고 출력하지도 않는다. 로그인한 HF 사용자 이름이 manifest의 `trainer`에 자동으로 들어간다.
+`STORE`가 있으면 `STORE/datasets/<이름>/<해시>/`를 이 런타임의 `ds/`로 복사한다(Drive에서 바로 읽으면 느리다).
+없으면 데이터셋 zip을 `ds/`에 푼다. 그다음 `ds/`의 **내용 해시**를 계산해 `DATASET`의 해시와 비교한다.
+다르면 경고하고 **멈춘다**: 다른 데이터로 학습한 모델에 틀린 데이터셋 이름이 붙지 않게 하기 위해서다.
 """)
 code('''
-#@title 3. Hugging Face 로그인
-import getpass
-from huggingface_hub import login, whoami
+#@title 3. 데이터셋 가져오기
+import shutil, zipfile
+from store import Store, content_sha
 
-_token = None
-try:
-    from google.colab import userdata
-    _token = userdata.get("HF_TOKEN")
-except Exception:   # Colab 밖이거나, Secret이 없거나, 노트북 접근을 허용하지 않았다
-    _token = None
-if not _token:
-    _token = getpass.getpass("HF 토큰(쓰기 권한)을 붙여 넣으세요: ").strip()
-if not _token:
-    raise RuntimeError("HF 토큰이 없습니다. Colab 왼쪽 열쇠 아이콘(Secrets)에 HF_TOKEN을 추가하고 "
-                       "'노트북 액세스'를 켠 뒤 이 셀을 다시 실행하세요.")
-login(token=_token, add_to_git_credential=False)
-del _token
-HF_USER = whoami()["name"]
-print("HF 사용자:", HF_USER)
+DS_DIR = os.path.abspath("ds")
+shutil.rmtree(DS_DIR, ignore_errors=True)
+if STORE:
+    if STORE.startswith("/content/drive") and not os.path.isdir("/content/drive/MyDrive"):
+        from google.colab import drive
+        drive.mount("/content/drive")
+    _src = Store(STORE).dataset_path(DS_NAME, DS_SHA)
+    if not _src.is_dir():
+        raise FileNotFoundError(f"store에 데이터셋이 없습니다: {_src}. STORE 경로와 DATASET을 확인하세요.")
+    shutil.copytree(_src, DS_DIR)
+else:
+    _zip = DATASET_ZIP
+    if not _zip:
+        try:
+            from google.colab import files
+        except ImportError:
+            raise RuntimeError("STORE가 비었으면 2단계 입력 칸의 DATASET_ZIP에 데이터셋 zip 경로를 적으세요.") from None
+        _zip = next(iter(files.upload()))
+    with zipfile.ZipFile(_zip) as _z:
+        _z.extractall(DS_DIR)
+    _subs = os.listdir(DS_DIR)
+    if "manifest.json" not in _subs and len(_subs) == 1:   # zip 안에 폴더 하나로 묶인 경우
+        DS_DIR = os.path.join(DS_DIR, _subs[0])
+_got = content_sha(DS_DIR)
+if _got != DS_SHA:
+    print("경고: 데이터셋 내용 해시가 DATASET과 다릅니다.")
+    print("  DATASET:", DS_SHA)
+    print("  받은 것:", _got)
+    raise RuntimeError("데이터셋 내용이 DATASET의 해시와 다릅니다. 멈춥니다. 운영자에게 받은 ref와 zip/폴더를 확인하세요.")
+print("데이터셋 내용 해시 OK:", _got)
 ''')
 
 md("""
-## 4. 데이터셋 받기
+## 4. 데이터셋 읽기
 
 `manifest.json`의 `frames[].image` / `frames[].mask` 경로만 따라 읽는다.
 split(`train`/`val`)은 세션 단위로 이미 나뉘어 있으므로 **다시 섞지 않는다.**
 """)
 code('''
-#@title 4. 데이터셋 받기 (SHA 고정)
-from huggingface_hub import snapshot_download
+#@title 4. 데이터셋 읽기
 from rosy_lane_model import RosyLaneDataset, class_mismatch
 
-DS_DIR = snapshot_download(HF_DATASET_REPO, repo_type="dataset", revision=HF_DATASET_SHA, local_dir="ds")
 _pre = dict(color=PRE.color, scale=PRE.scale, mean=PRE.mean, std=PRE.std)
 train_ds = RosyLaneDataset(DS_DIR, "train", **_pre)
 val_ds = RosyLaneDataset(DS_DIR, "val", **_pre)
@@ -151,7 +171,7 @@ for c in ds_classes:
     print(f"  {c['index']}: {c['name']:<20} {c['role']}")
 print(f"train {len(train_ds)} frames, val {len(val_ds)} frames")
 if not len(train_ds) or not len(val_ds):
-    raise RuntimeError("train 또는 val split이 비었습니다. 데이터셋 SHA를 확인하세요.")
+    raise RuntimeError("train 또는 val split이 비었습니다. 데이터셋을 확인하세요.")
 
 EXPORT_CLASSES = [(c["name"], c["role"]) for c in ds_classes]
 if CLASSES.strip():
@@ -229,29 +249,31 @@ for _k, _v in result["val_iou"].items():
 model = model.cpu().eval()
 ''')
 
+
 md("""
 ## 7. 내보내기
 
 `export()`가 opset 17 ONNX와 `model_manifest.json`을 만든다. 전처리 값은 2단계의 `PRE`에서 그대로 가져온다.
+manifest의 `dataset`에는 `store:<이름>`과 내용 해시가 들어간다.
 """)
 code('''
 #@title 7. 내보내기
 from export_cell import export
 
-TRAINER = f"{HF_USER} colab:rosy_lane_training.ipynb@{REPO_COMMIT} {TRAINER_NOTE}".strip()
+TRAINER_ID = f"{TRAINER} colab:rosy_lane_training.ipynb@{REPO_COMMIT} {TRAINER_NOTE}".strip()
 OUT_DIR = "out/lane_model"
 doc = export(model, OUT_DIR, classes=EXPORT_CLASSES, **PRE.manifest_kwargs(),
-             dataset_repo=HF_DATASET_REPO, dataset_revision=HF_DATASET_SHA,
-             camera_profile_revision=CAMERA_PROFILE_REVISION, trainer=TRAINER, val_iou=VAL_IOU)
+             dataset_repo=f"store:{DS_NAME}", dataset_revision=DS_SHA,
+             camera_profile_revision=CAMERA_PROFILE_REVISION, trainer=TRAINER_ID, val_iou=VAL_IOU)
 MODEL_REVISION = doc["model_revision"]
 print(MODEL_REVISION)
-print("trainer:", TRAINER)
+print("trainer:", TRAINER_ID)
 ''')
 
 md("""
 ## 8. 검사
 
-로봇과 같은 코드로 manifest, sha256, ONNX 로드와 워밍업을 확인한다. `OK`가 아니면 올리지 않는다.
+로봇과 같은 코드로 manifest, sha256, ONNX 로드와 워밍업을 확인한다. `OK`가 아니면 넘기지 않는다.
 """)
 code('''
 #@title 8. check_manifest
@@ -259,30 +281,82 @@ _r = subprocess.run([sys.executable, os.path.join(ROSY, "tools", "perception", "
                      OUT_DIR], capture_output=True, text=True)
 print(_r.stdout, _r.stderr)
 if _r.returncode != 0 or not _r.stdout.startswith("OK"):
-    raise RuntimeError("check_manifest 실패. 올리지 않습니다.")
+    raise RuntimeError("check_manifest 실패. 넘기지 않습니다.")
 ''')
 
 md("""
-## 9. 올리기
+## 9. 넘기기
 
-팀 모델 저장소(private)에 commit 하나로 올린다. 여러 사람이 같은 저장소에 올리면 **intake를 통과한 가장 새 commit**이 로봇의 섀도가 된다.
-누가 올렸는지는 commit 메시지와 manifest의 `trainer`에 남는다.
+- `STORE`가 있으면 `STORE/models/inbox/<revision>__<UTC 시각>/`에 넣는다. 파일을 모두 복사한 **뒤에** `READY` 표식을 쓴다.
+  사이트 PC는 `READY`가 폴더 내용과 맞는 폴더만 가져가므로, Drive 동기화가 덜 끝난 폴더는 끝날 때까지 기다린다.
+- `STORE`가 없으면 같은 폴더(안에 `READY` 포함)를 zip으로 만들어 내려받는다. 운영자는 zip을 store의 `models/inbox/`에 **그대로 푼다**.
+
+여러 사람이 넘기면 **intake를 통과한 가장 새 폴더**가 로봇의 섀도가 된다. 누가 넘겼는지는 manifest의 `trainer`에 남는다.
 """)
 code('''
-#@title 9. HF 모델 저장소에 올리기
-from huggingface_hub import HfApi
-from huggingface_hub.utils import RepositoryNotFoundError
+#@title 9. store inbox에 넘기기 (또는 zip)
+from handover import package, package_zip
 
-api = HfApi()
-try:
-    api.repo_info(HF_MODEL_REPO, repo_type="model")   # 쓰기 권한만 있어도 된다
-except RepositoryNotFoundError:
-    api.create_repo(HF_MODEL_REPO, repo_type="model", private=True, exist_ok=True)
-info = api.upload_folder(folder_path=OUT_DIR, repo_id=HF_MODEL_REPO, repo_type="model",
-                         commit_message=f"{MODEL_REVISION} by {HF_USER}")
-MODEL_SHA = info.oid
-print(HF_MODEL_REPO, MODEL_SHA)
-print("이 SHA가 자동 반영의 입력입니다 — 사이트 PC가 intake 후 섀도로 배포합니다")
+if STORE:
+    HANDED = package(OUT_DIR, os.path.join(STORE, "models", "inbox"))
+    print("넘김:", HANDED)
+    print("사이트 PC가 10분 안에 intake하고, 통과하면 섀도로 배포합니다.")
+else:
+    HANDED = package_zip(OUT_DIR, os.path.join("out", f"{MODEL_REVISION}.zip"))
+    try:
+        from google.colab import files
+        files.download(str(HANDED))
+    except ImportError:
+        pass
+    print("zip:", HANDED, "— 운영자에게 주고 store의 models/inbox/에 그대로 풀게 합니다.")
+''')
+
+md("""
+## 10. (선택) HF 모델 저장소에도 올리기
+
+HF를 쓰는 팀만 쓴다. **store로 넘기는 데는 필요 없다.** `USE_HF`를 켜야 실행된다.
+토큰은 Colab Secret `HF_TOKEN`(없으면 가려진 입력 칸)에서 읽고, 노트북에 적지 않고 출력하지도 않는다.
+""")
+code('''
+#@title 10. (선택) HF 모델 저장소에 올리기
+USE_HF = False  #@param {type:"boolean"}
+HF_MODEL_REPO = "<org>/rosy-lane-seg-models"  #@param {type:"string"}
+
+if USE_HF:
+    if "<" in HF_MODEL_REPO or "/" not in HF_MODEL_REPO:
+        raise ValueError(f"10단계 입력 칸의 HF_MODEL_REPO를 채우세요 (지금: {HF_MODEL_REPO!r}).")
+    try:
+        import huggingface_hub  # noqa: F401
+    except ImportError:
+        subprocess.run([sys.executable, "-m", "pip", "install", "-q", "huggingface_hub"], check=True)
+    import getpass
+    from huggingface_hub import HfApi, login, whoami
+    from huggingface_hub.utils import RepositoryNotFoundError
+
+    _token = None
+    try:
+        from google.colab import userdata
+        _token = userdata.get("HF_TOKEN")
+    except Exception:   # Colab 밖이거나, Secret이 없거나, 노트북 접근을 허용하지 않았다
+        _token = None
+    if not _token:
+        _token = getpass.getpass("HF 토큰(쓰기 권한)을 붙여 넣으세요: ").strip()
+    if not _token:
+        raise RuntimeError("HF 토큰이 없습니다. Colab 왼쪽 열쇠 아이콘(Secrets)에 HF_TOKEN을 추가하고 "
+                           "'노트북 액세스'를 켠 뒤 이 셀을 다시 실행하세요.")
+    login(token=_token, add_to_git_credential=False)
+    del _token
+    HF_USER = whoami()["name"]
+    api = HfApi()
+    try:
+        api.repo_info(HF_MODEL_REPO, repo_type="model")   # 쓰기 권한만 있어도 된다
+    except RepositoryNotFoundError:
+        api.create_repo(HF_MODEL_REPO, repo_type="model", private=True, exist_ok=True)
+    info = api.upload_folder(folder_path=OUT_DIR, repo_id=HF_MODEL_REPO, repo_type="model",
+                             commit_message=f"{MODEL_REVISION} by {TRAINER} ({HF_USER})")
+    print(HF_MODEL_REPO, info.oid)
+else:
+    print("HF 건너뜀 (USE_HF = False). store/zip으로 이미 넘겼습니다.")
 ''')
 
 nb = {
