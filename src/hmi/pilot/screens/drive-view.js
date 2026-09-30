@@ -116,6 +116,10 @@ export function mountDriveView(drive, element) {
     close() {
       layoutObserver.disconnect();
       syncFullscreen(false);
+      // 같은 section 에 다시 마운트된다 — 지난 배치·배율 표시를 남기지 않는다.
+      for (const key of ["driveLayout", "viewMode", "zoomed"]) delete drive.dataset[key];
+      drive.style.removeProperty("--band");
+      drive.style.removeProperty("--video-ratio");
     },
   };
 }

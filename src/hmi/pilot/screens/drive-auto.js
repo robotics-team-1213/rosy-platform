@@ -18,6 +18,8 @@ const LF_REASON = {
 // onIdle: 자동이 끝났을 때 수동 경로를 되돌린다(상한 표시·명령 경로 재개·슬루 초기화).
 // releaseAll: "진행"을 누르면 수동 입력을 먼저 모두 놓는다.
 export function mountAutoMode({drive, element, apiGet, releaseAll, onIdle}) {
+  // 같은 section 에 다시 마운트된다 — 지난 주행의 자동 모드 표시를 물려받지 않는다.
+  drive.dataset.autoMode = "off";
   const request = (method, path, body) =>
     method === "GET" ? apiGet(path) : apiGet(path, {method, body: JSON.stringify(body ?? {})});
   const auto = createAutoSession({
