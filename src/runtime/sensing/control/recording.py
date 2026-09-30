@@ -181,7 +181,7 @@ def bag_command(folder, namespace: str = "", camera_topic: str = CAMERA_TOPIC) -
             "--storage-preset-profile", "zstd_fast",
             "--max-bag-duration", "30",
             "-o", str(Path(folder) / "bag"),
-            *_ns_topics(record_topics(camera_topic), namespace)]
+            "--topics", *_ns_topics(record_topics(camera_topic), namespace)]
 
 
 def snapshot_bag_command(cache_dir, namespace: str = "", node_name: str = "") -> list[str]:
@@ -191,7 +191,7 @@ def snapshot_bag_command(cache_dir, namespace: str = "", node_name: str = "") ->
             "--snapshot-mode", "--max-cache-size", str(SNAPSHOT_CACHE_BYTES),
             "--node-name", node_name,
             "-o", str(cache_dir),
-            *_ns_topics(record_topics(COMPRESSED_CAMERA_TOPIC), namespace)]
+            "--topics", *_ns_topics(record_topics(COMPRESSED_CAMERA_TOPIC), namespace)]
 
 
 def write_snapshot_request(root, reason: str, values: dict, now) -> Path:

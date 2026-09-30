@@ -336,3 +336,12 @@ def test_topic_listed_parses_topic_list(monkeypatch):
         a, 0, stdout=out, stderr=""))
     assert rs._topic_listed("/camera/front/compressed") is True
     assert rs._topic_listed("/rosy_01/camera/front/compressed") is False
+
+
+def test_topics_use_the_jazzy_topics_flag(tmp_path):
+    """Positional topics are deprecated in Jazzy ros2 bag record."""
+    for cmd in (bag_command(tmp_path / "s", namespace="rosy_01"),
+                snapshot_bag_command(tmp_path / "c", namespace="rosy_01", node_name="n")):
+        i = cmd.index("--topics")
+        assert all(t.startswith("/rosy_01/") for t in cmd[i + 1:])
+        assert len(cmd[i + 1:]) == 5
