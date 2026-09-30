@@ -90,7 +90,7 @@ surfaces:
       저장소에 추적된 캡처가 없다. 진단 표면은 PARKED라 회차 G2 대상에서 빠져 있고,
       해제 회차가 첫 셀을 남기면 이 문장을 baseline 경로로 바꾼다.
 
-  - id: rosy-pilot
+  - id: pilot
     app_name: Rosy Pilot
     app_name_en: Rosy Pilot
     short_name: Rosy Pilot
