@@ -3847,3 +3847,9 @@
 - 변경: D-369 구현 계획의 Task 4 증거를 갱신했다. `deploy/robot/omx/probe_vendor_owner_sim.sh`를 기존 `rosy-omx-workstation:native-action-only-local` 이미지에서 재실행했다.
 - 증거: image `sha256:b47034e436119cea97c2922a1b4af9bd6596975ac8acbb4cece3a19d2fe1e9f0`; `--network none`, 저장소 read-only bind mount, device grant 없음; 1 passed (2.53s). 이 검증은 vendor 시뮬레이터의 정책 owner/경쟁 요청/cancel 동작 재현이다.
 - gate 변화: ROS-SIM 재현만 확인. Fleet grant의 production driver 결선, 실제 arm/gripper profile, 물리 E-stop, DEVICE/FIELD 수용은 여전히 확인하지 않았다.
+
+## 2026-09-30 · uncommitted · docs(adr): D-344 보강 — path 앞 물체 정지, IR 교정 절차, 각속도 계단 §13
+
+- 변경: `docs/adr/D-344-pilot-assisted-autonomy.md` 에 2026-09-30 보강(§11 path 판정, §12 교정 도구·rosy-camera 덮어쓰기, §13 수동 한도 계단 각속도). 운영 절차 `docs/deployment/pinky-pro-ir-line-calibration-runbook.md` 신설(한국어).
+- 증거: 코드 커밋 e3eb2561, 7e467a4b, 6f00a74d 와 그 시험.
+- gate 변화: 없음(문서). DEVICE 절차는 로봇 복귀 뒤 사용자와 실행.

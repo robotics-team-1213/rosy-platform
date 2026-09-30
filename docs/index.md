@@ -254,8 +254,8 @@
 
 ## 최근 기록
 
+- 2026-09-30 · uncommitted · docs(adr): D-344 보강 — path 앞 물체 정지, IR 교정 절차, 각속도 계단 §13
 - 2026-09-30 · uncommitted · test(omx): rerun vendor owner policy ROS-SIM
 - 2026-09-30 · uncommitted · docs(plan): classify prior OMX ROS-SIM evidence for Action mapping
 - 2026-09-30 · uncommitted · docs(plan): hold ROS Action mapping for selected hardware profile
 - 2026-09-30 · uncommitted · test(contracts): Mission feedback, goal, and stop truth separation
-- 2026-09-30 · uncommitted · test(contracts): Action response-loss and result-order recovery

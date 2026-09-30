@@ -200,3 +200,10 @@
 - gate 변화: 없음.
 - 결정: 없음.
 - 교훈: 파싱을 공용 계층으로 옮길 때 그 계층을 소비하는 계약 시험까지가 한 변경 단위다.
+
+## 2026-09-30 · e3eb2561 · feat(line-follow): 조향을 아는 앞 물체 정지(path)와 수동 한도 계단 각속도 상한
+
+- 변경: `core_features/line_follow/clearance.py` 에 `scan_points`(LiDAR → 로봇 좌표 점, `lidar_forward_deg` 반영)와 `path_clearance`(의도 (linear, angular) 의 짧은 호 둘레 ±half_width 띠 안 점까지의 호 길이, 호는 horizon 과 90° 중 짧은 쪽, 선속도 0 이면 제자리 회전) 추가. `manager.py` — `observe_scan_points` 가 점을 받고 틱이 의도 조향(관측 + IR 비킴)으로 여유 거리를 재서 기존 stop/resume 떨림 방지를 그대로 쓴다. 쓸 관측이 없으면 마지막 의도. 새 설정 `obstacle_mode`(path 기본 | sector), `obstacle_corridor_half_width_m` 0.09, `obstacle_path_horizon_m` 0.40(≥ resume), `max_angular_follows_manual` true. `angular_ceiling` 콜백(서비스가 `safety.limits.manual_angular` 연결)으로 유효 상한 = min(max_angular, 수동 한도); 자를 때 선속도도 같은 비율(곡률 유지), 한도 0·NaN·예외면 `angular_limit_zero` HOLD. 조향 계산은 `_steer` 하나로 모았다.
+- 증거: 새 `src/runtime/gateway/test/test_line_follow_obstacle_path.py` 18 passed — 모서리 벽 0.2 m 앞에서 왼쪽으로 크게 돌면 정지 없음, 같은 장면 sector·직진은 정지, 호 위 상자는 정지·떨림 방지·재출발, LiDAR 끊김 HOLD, 계단 L0 0.10→L1 0.30 즉시 추종, 덮어쓰기, IR 비킴 상한. `pytest src/runtime/gateway/test -k "line_follow or clearance or ir"` 247 passed, 5 skipped (2026-09-30 Windows).
+- gate 변화: SOURCE 진행. ROS-SIM(가제보 L 모서리 0.20 m 기본값으로 한 바퀴)·DEVICE 미실행.
+- 결정: D-344 §11 보강, §13.

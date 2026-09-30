@@ -81,6 +81,38 @@
       `ir_guard_enabled: true`. 기본값은 꺼짐이다.
     - 검증은 녹화 루프로 한다: 자동 주행 녹화 → 프레임 격자 → 경계 안에 있었는지 판정 → 조정 → 반복.
 
+### 보강 (2026-09-30, 실물 준비 — 로봇 부재 중 SOURCE 만)
+
+- **§11 보강 — 앞 물체 정지는 조향을 안다(`line_follow.obstacle_mode: path`, 기본).** 실물 L 모서리에서
+  둘레 벽이 로봇 앞 약 0.2 m 라, 정면 ±20° 부채꼴 판정(0.20 m)은 모든 모서리에서 로봇을 세운다
+  (가제보는 0.10/0.14 m 로 낮춰야 돌았다). 이제 CORE 는 스캔을 로봇 좌표 점으로 받아, 틱마다
+  **의도 조향**(지금 차선 관측이 시킬 선·각속도, IR 감시의 비킴 포함)의 짧은 호를 그리고 그 호 둘레
+  ±`obstacle_corridor_half_width_m`(0.09 = 발자국 반폭 0.06 + 여유 0.03) 띠 안 점까지의 호 길이를
+  여유 거리로 쓴다. 호는 `obstacle_path_horizon_m`(0.40, resume 이상) 와 90° 회전 중 짧은 쪽까지다.
+  출력이 아니라 의도를 쓰는 까닭은, 멈춘 뒤 출력은 0 이라 직진 호가 되어 모서리 벽에 영영 막히기
+  때문이다. 쓸 관측이 없으면 마지막 의도를 쓴다. 지키는 것: 정지 0.20·재출발 0.28 떨림 방지, LiDAR
+  0.5 s 끊김이면 `obstacle_sensor_stale`, 경로 위 진짜 물체면 `obstacle_ahead`, LOST 로 굳지 않음.
+  직진일 때 띠는 부채꼴보다 좁지 않다(부채꼴 0.2 m 에서 ±0.068 m, 띠 ±0.09 m). 선속도 0 인 제자리
+  회전은 로봇 둘레 띠 안 점을 0 거리로 본다. `obstacle_mode: sector` 는 옛 판정 그대로다.
+  **실물 확인 필요:** path 는 좌·우를 가른다 — LiDAR 가 뒤집혀(거울) 달렸으면 왼쪽 회전에 오른쪽을
+  본다. 켜기 전에 로봇 왼쪽에 물체를 두고 점이 +y 에 오는지(스캔 +90° 가 180° 장착에서 로봇 오른쪽)
+  확인한다.
+- **§12 보강 — IR 교정 절차와 도구.** `src/runtime/sensing/tools/device/ir_line_calibrate.py`(읽기 전용,
+  `ir_sensor/range` 구독만) 가 카펫·왼쪽·가운데·오른쪽 테이프 네 자리 표본에서 채널별 중앙값으로
+  끝점을 내고, `min_span`·잡음 6 배 분리·채널 순서·되읽기 부호(왼쪽 ≤ −0.3, 오른쪽 ≥ +0.3)를
+  모두 통과할 때만 관측 노드 YAML 과 CORE `ir_calibration_revision` 을 찍는다. 절차는
+  `docs/deployment/pinky-pro-ir-line-calibration-runbook.md`. 실물 관측 노드는 `rosy-camera` 의
+  `camera_preview.launch.py` 에서 돌므로, 기기 교정 파일 `/etc/rosy/line_follow.yaml` 이 있으면 그
+  노드가 패키지 기본 뒤에 덧읽는다(없으면 IR 교정 꺼짐 = IR_LINE fail-closed, 이전과 같다).
+- **§13 — 차선 추종 각속도는 수동 한도 계단을 따른다.** 실물 자동 주행이 0.66 rad/s 까지 돌았는데
+  수동은 D-342 L0 0.10 rad/s 다. 이제 차선 추종의 유효 각속도 상한은
+  `min(line_follow.max_angular, safety.manual_angular)` 이고(`max_angular_follows_manual: true`, 기본),
+  관리자 API 로 계단을 바꾸면 다음 틱부터 따른다. 상한이 조향을 자르면 선속도도 같은 비율로 줄여
+  **같은 호를 더 천천히** 돈다(자르기만 하면 굽이에서 차로 밖으로 밀린다). IR 감시의 비킴도 같은
+  상한을 넘지 않는다. 한도를 읽을 수 없거나 0 이면 조향 없이 직진하지 않도록 `angular_limit_zero`
+  로 멈춘다. `max_angular_follows_manual: false` 는 명시적 덮어쓰기(= `max_angular` 만)다. 선속도는
+  계단에 묶지 않았다 — 실물 순항은 §10 의 `cruise_speed` 가 따로 정한다.
+
 ### Alternatives
 
 - **자동 모드를 켜 두고 손을 떼도 계속 간다.** 거부. 원격 화면은 지연·끊김이 있고(D-368) 무인 주행의

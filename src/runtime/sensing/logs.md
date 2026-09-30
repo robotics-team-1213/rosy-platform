@@ -633,3 +633,17 @@
 - gate 변화: ROS-SIM HOLD 유지 — blocker에 planning 슬라이스 통과 기록. 남은 것: calibration(병행 세션 진행 중)·safety-policy 그래프, Gazebo 폐루프, 물리 센서.
 - 결정: 없음.
 - 교훈: 검증기의 오판은 노드 소스의 의도 주석(_clear_route "Revoke old routes immediately; silence is not a stop command")과 대조해야 한다 — 계약 문서가 검증기보다 위다.
+
+## 2026-09-30 · 7e467a4b · feat(control): 읽기 전용 IR 차선 교정 도구와 좌·우 부호 확인
+
+- 변경: `control/sensing/perception/ir_calibration.py`(순수) — 카펫·왼쪽·가운데·오른쪽 네 자리 표본에서 채널별 중앙값 끝점, MAD 잡음, ADC 끝(0·4095) 비율, `min_span`·잡음 6 배 분리, 테이프 둔 센서가 가장 크게 움직였는지(채널 순서), `detect_ir_line` 되읽기 부호(카펫 = 선 없음, 왼쪽 ≤ −0.3, 가운데 |e| < 0.3, 오른쪽 ≥ +0.3)를 검사하고 통과 때만 관측 노드 YAML(실수형)과 CORE `ir_calibration_revision` 을 찍는다. `tools/device/ir_line_calibrate.py` — run/capture/compute/check, rclpy 는 표본 수집 때만 import, 구독만 한다.
+- 증거: 새 `test/test_ir_calibration.py` 9 passed — 합성 표본(잡음·이상치) 끝점, 노드와 같은 해시, 역극성 허용, 분리 부족·잡음·빠진 단계·레일 고정·좌우 뒤바뀜 거절, CLI compute 오프라인 (2026-09-30 Windows).
+- gate 변화: SOURCE 진행. DEVICE: NOT RUN(로봇 부재) — 절차 `docs/deployment/pinky-pro-ir-line-calibration-runbook.md`.
+- 결정: D-344 §12 보강.
+
+## 2026-09-30 · 6f00a74d · fix(camera): 기기 IR 교정 덮어쓰기 파일을 line_observer 에 싣는다
+
+- 변경: 실물 `line_observer_node` 는 `rosy-camera`(`camera_preview.launch.py`)에서 돌며 패키지 `config/line_follow.yaml` 만 읽었다 — `/etc/rosy/line_follow.yaml` 에 교정을 써도 닿지 않았다(그 파일은 Compose·내비게이션 그래프만 읽음). 파일이 있으면 패키지 기본 뒤에 덧읽는다. `test/test_native_systemd_contract.py` DECLARED_READS 에 rosy-camera 의 그 경로를 선언.
+- 증거: 선언 전 `test_declared_paths_account_for_every_write_root_in_the_program[rosy-camera.service]` 빨강, 선언 뒤 `test_camera_image_stack.py test_native_systemd_contract.py` 129 passed, 1 skipped (2026-09-30 Windows).
+- gate 변화: SOURCE. 실물 재시작 확인 전.
+- 결정: D-344 §12 보강.
