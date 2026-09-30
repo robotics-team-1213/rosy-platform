@@ -110,6 +110,12 @@
      "expect": {"accepted": false, "reason": "bad_host"}},
     {"id": "overhead_duplicate_key", "service_type": "_rosy-overhead._tcp", "host": "camera-site.local", "address": "192.168.1.30", "port": 8443,
      "txt": ["product=rosy", "role=overhead-camera", "proto=rosy-overhead/1", "tls=required", "tls=required", "tls_host=camera-site.local"],
-     "expect": {"accepted": false, "reason": "duplicate_key"}}
+     "expect": {"accepted": false, "reason": "duplicate_key"}},
+    {"id": "overhead_multilabel_tls_host", "service_type": "_rosy-overhead._tcp", "host": null, "address": "192.168.1.30", "port": 8443,
+     "txt": ["product=rosy", "role=overhead-camera", "proto=rosy-overhead/1", "tls=required", "tls_host=camera.site.local"],
+     "expect": {"accepted": false, "reason": "bad_host"}},
+    {"id": "overhead_tls_host_case", "service_type": "_rosy-overhead._tcp", "host": "Camera-Site.local.", "address": "192.168.1.30", "port": 8443,
+     "txt": ["product=rosy", "role=overhead-camera", "proto=rosy-overhead/1", "tls=required", "tls_host=camera-site.LOCAL"],
+     "expect": {"accepted": true, "legacy": false}}
   ]
 }

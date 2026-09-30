@@ -8,6 +8,7 @@ data class OverheadServiceRecord(val serviceName: String, val tlsHost: String, v
     val name: String get() = serviceName
     companion object {
         const val SERVICE_TYPE = "_rosy-overhead._tcp."
+        private val SINGLE_LABEL_LOCAL = Regex("[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.local")
 
         fun parse(info: NsdServiceInfo): OverheadServiceRecord? {
             val txt = info.attributes.mapValues { (_, value) -> value?.toString(StandardCharsets.UTF_8)?.toByteArray(StandardCharsets.UTF_8) }
@@ -16,12 +17,12 @@ data class OverheadServiceRecord(val serviceName: String, val tlsHost: String, v
 
         fun parse(serviceType: String, serviceName: String, tlsHost: String, port: Int, attributes: Map<String, ByteArray?>): OverheadServiceRecord? {
             if (rejection(serviceType, tlsHost, port, attributes) != null) return null
-            return OverheadServiceRecord(serviceName, attributes.text("tls_host").orEmpty().lowercase(), port)
+            return OverheadServiceRecord(serviceName, normalizeHost(attributes.text("tls_host").orEmpty()), port)
         }
 
         private fun parse(serviceType: String, serviceName: String, port: Int, attributes: Map<String, ByteArray?>): OverheadServiceRecord? {
             if (rejection(serviceType, null, port, attributes) != null) return null
-            return OverheadServiceRecord(serviceName, attributes.text("tls_host").orEmpty().lowercase(), port)
+            return OverheadServiceRecord(serviceName, normalizeHost(attributes.text("tls_host").orEmpty()), port)
         }
 
         /**
@@ -34,8 +35,10 @@ data class OverheadServiceRecord(val serviceName: String, val tlsHost: String, v
             val txt = attributes.mapValues { (_, value) -> value?.toString(StandardCharsets.UTF_8)?.trim().orEmpty() }
             commonKeyRejection(txt, "overhead-camera", "rosy-overhead/1", "required")?.let { return it }
             val tlsHost = attributes.text("tls_host") ?: return "missing_key"
-            if (!tlsHost.lowercase().matches(Regex("[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*\\.local"))) return "bad_host"
-            if (resolvedHost != null && resolvedHost != tlsHost) return "tls_host_mismatch"
+            // Same rule as core_common discovery_txt: one label + ".local", compared case-insensitively
+            // with a trailing root dot trimmed.
+            if (!normalizeHost(tlsHost).matches(SINGLE_LABEL_LOCAL)) return "bad_host"
+            if (resolvedHost != null && normalizeHost(resolvedHost) != normalizeHost(tlsHost)) return "tls_host_mismatch"
             return null
         }
     }
@@ -85,3 +88,5 @@ internal fun normalizeServiceType(serviceType: String): String = serviceType
     .trimEnd('.')
     .removePrefix(".")
     .lowercase()
+
+private fun normalizeHost(host: String): String = host.trim().lowercase().trimEnd('.')
