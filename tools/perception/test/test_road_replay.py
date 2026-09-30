@@ -302,7 +302,7 @@ def test_wrong_side_reference_is_the_keepers_nearest_pair_not_the_extremes():
 def test_nis_tail_is_the_pre_gate_best_association_with_a_gated_out_rate():
     metrics, rows = rr.replay(synthetic(24), dropouts=())
     tail = metrics["nis"]["tail"]
-    assert tail["basis"] == "pre_gate_best_association"
+    assert tail["basis"] == "pre_gate_best_association_keeper_side"
     assert tail["n"] == 2 * sum(1 for r in rows if r["level"] != "STOP")   # best R and best L per frame
     assert tail["above_9_21"] == 0.0 and tail["gated_out_rate"] == 0.0
     assert metrics["gates"]["nis_above_9_21"]["value"] == tail["above_9_21"]
@@ -334,3 +334,20 @@ def test_held_view_frames_are_not_nis_samples():
     frames = list(synthetic(24)) + [rr.Frame(103.0 + i / FPS, LANE, (0.15, 0.0, 0.0)) for i in range(8)]
     metrics, _ = rr.replay(iter(frames), dropouts=())
     assert metrics["nis"]["by_state"]["stationary"]["n"] <= 2      # only the first held view is applied
+
+
+def test_tail_counts_a_side_only_among_the_keepers_own_lines_for_that_side():
+    cands = [{"side_hint": "right", "nis": {"R": 1.0, "L": 400.0}, "gate": {"R": None, "L": "nis"}},
+             {"side_hint": "right", "nis": {"R": 30.0, "L": 900.0}, "gate": {"R": "nis", "L": "nis"}}]
+    samples, missing = rr._tail_samples(cands)
+    assert samples == [("R", 1.0, False)]      # the left side has no keeper line: no phantom sample
+    assert missing == 1
+    samples, missing = rr._tail_samples(cands + [{"side_hint": "left", "nis": {"R": 300.0, "L": 12.0},
+                                                   "gate": {"R": "nis", "L": "nis"}}])
+    assert samples == [("R", 1.0, False), ("L", 12.0, True)] and missing == 0
+
+
+def test_report_carries_the_side_missing_rate():
+    metrics, _ = rr.replay(synthetic(16), dropouts=())
+    assert metrics["nis"]["tail"]["basis"] == "pre_gate_best_association_keeper_side"
+    assert metrics["nis"]["tail"]["side_missing_rate"] == 0.0

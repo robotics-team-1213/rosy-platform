@@ -3,19 +3,18 @@
   python tools/perception/road_replay.py data/perception/raw/<session> --out X:/DevTemp/road-replay/<name>
   python tools/perception/road_replay.py <bag_to_video>.mp4 --out ... [--labels data/perception/labels/<session>]
 
-Inputs follow extract.py's two-class rule: a folder is a recording session (bag/*.mcap;
-odometry joined to each camera frame by header stamp, interpolated), a file is a
-bag_to_video.py video read with its <stem>.jsonl sidecar (odometry already joined per
-frame). Frame-only input (lane_replay.py --frames) is refused: the estimator needs odometry.
-Results stay outside the public repo (D-226).
+Inputs follow extract.py's two-class rule: a folder is an MCAP session (odometry joined by
+stamp), a file a bag_to_video.py video with its sidecar; frame-only input is refused (the
+estimator needs odometry). Results stay outside the public repo (D-226).
 
 Metrics and D-384 R0 gates (lane-owner review, 2026-10-01):
   keep / road     on_line, on_paint, none, jump (lane_replay.py definitions); the road target
                   is the estimated lane centre at LOOKAHEAD_M. Gate: road on_line and on_paint
                   <= keep; road jump <= 0.02; straight mean |err| <= 0.08 (|yaw rate| < 0.1 rad/s)
   levels          TRACK/COAST/SLOW/STOP rates
-  NIS             per candidate (likelier side, non-wall, while not STOP): mean 1.6-2.5 and
-                  0.5-3 % above 9.21; histogram
+  NIS             mean of applied associations per regime (straight/curve/turning) in [0.5, 4];
+                  tail: pre-gate best association per side among the keeper's own lines for
+                  that side, 0.5-3 % above 9.21 (side_missing_rate, gated_out_rate reported)
   coast survival  dropouts of 0.05 / 0.10 m injected from TRACK checkpoints; at the first
                   accepted frame after the dropout the coasted state is within 2 cm and 5 deg
                   of the uninterrupted run in >= 95 % of trials
@@ -23,8 +22,7 @@ Metrics and D-384 R0 gates (lane-owner review, 2026-10-01):
   switches        lane switches (|dd| > w/2 between accepted frames) per 100 straight frames
                   <= 1; wrong-side lock (TRACK while the keeper's pair centre is > w/2 away) = 0
   determinism     the estimator re-run over the cached inputs reproduces the snapshot hash
-  calibration     runs with calibration_suspect frames are marked
-Numbers from real sessions are unvalidated until the lane owner accepts the gates.
+Real-session numbers are unvalidated until the lane owner accepts them.
 """
 from __future__ import annotations
 
@@ -66,14 +64,11 @@ from control.sensing.perception.road_state import (  # noqa: E402
 
 HALF = lane_replay.LANE_HALF_WIDTH_M
 LOOKAHEAD_M = 0.25
-STRAIGHT_MAX_RATE = 0.1        # rad/s
-CURVE_MIN_RATE = 0.1           # rad/s, moving: a curved segment for the residual check
-IR_HALF_SPAN_M = 0.012
-IR_MAX_AGE_S = 0.2
+STRAIGHT_MAX_RATE = CURVE_MIN_RATE = 0.1   # rad/s; moving above CURVE_MIN_RATE is a curve
+IR_HALF_SPAN_M, IR_MAX_AGE_S = 0.012, 0.2
 KEEP_MAX_FRAME_GAP_S = 0.5     # as line_observer_node: a camera gap restarts the keeper
 DROPOUTS_M = (0.05, 0.10)
-CHECKPOINT_EVERY = 8
-DROPOUT_MAX_S = 4.0
+CHECKPOINT_EVERY, DROPOUT_MAX_S = 8, 4.0
 NIS_BINS = (0.0, 1.0, 2.0, 4.0, 6.0, 9.21, 16.0, math.inf)
 WALL_CLASS = 2
 
@@ -319,6 +314,21 @@ def _parallel_pair_width(last):
     return [width] if abs(l["heading_deg"] - r["heading_deg"]) <= 5.0 and 0.10 <= width <= 0.30 else []
 
 
+def _tail_samples(candidates):
+    """([(side, pre-gate NIS, gated)], sides missing): per side the best association among
+    the lines the keeper itself put on that side (lane owner, 2026-10-01). A side with no
+    keeper line gives no sample, only a missing count."""
+    samples, missing = [], 0
+    for lab, side in (("R", "right"), ("L", "left")):
+        own = [c for c in candidates if c.get("side_hint") == side]
+        if not own:
+            missing += 1
+            continue
+        best = min(own, key=lambda c: c["nis"][lab])
+        samples.append((lab, best["nis"][lab], (best.get("gate") or {}).get(lab) is not None))
+    return samples, missing
+
+
 def _nis_mean_gate(by_state):
     """D-384 R0 (lane owner, 2026-10-01): each regime's applied-association NIS mean in
     [0.5, 4.0], two-sided and not pooled; stationary is not a regime."""
@@ -370,7 +380,7 @@ def replay(frames, *, labels: dict | None = None, dropouts=DROPOUTS_M,
     est = RoadStateEstimator(params)
     labels = labels or {}
     rows, inputs, checkpoints, nis = [], [], {}, []
-    nis_candidates, nis_tail, tail_frames, tail_gated = [], [], 0, 0
+    nis_candidates, nis_tail, tail_frames, tail_gated, side_missing, side_slots = [], [], 0, 0, 0, 0
     residual = {"left": [], "right": []}
     nis_state = {"straight": [], "curve": [], "turning": [], "stationary": []}
     prev_pose = prev_t = None
@@ -434,14 +444,13 @@ def replay(frames, *, labels: dict | None = None, dropouts=DROPOUTS_M,
         if snap["level"] != STOP:
             scored = [c for c in snap["candidates"] if isinstance(c.get("nis"), dict)]
             nis_candidates += [min(c["nis"].values()) for c in scored]
-            # tail: pre-gate NIS of the best association per side (lowest NIS for R, for L)
-            best = [min(scored, key=lambda c, lab=lab: c["nis"][lab]) for lab in ("R", "L")] if scored else []
-            for lab, c in zip(("R", "L"), best):
-                nis_tail.append(c["nis"][lab])
-            if best:
-                lab, c = min(zip(("R", "L"), best), key=lambda p: p[1]["nis"][p[0]])
+            samples, missing = _tail_samples(scored)
+            nis_tail += [nis_value for _, nis_value, _ in samples]
+            side_missing += missing
+            side_slots += 2
+            if samples:
                 tail_frames += 1
-                tail_gated += (c.get("gate") or {}).get(lab) is not None
+                tail_gated += min(samples, key=lambda x: x[1])[2]
             for c in scored:
                 if c.get("label") in ("R", "L") and not snap["deduplicated"]:   # applied innovations
                     nis.append(c["nis"][c["label"]])
@@ -522,7 +531,8 @@ def replay(frames, *, labels: dict | None = None, dropouts=DROPOUTS_M,
     metrics["params"] = dataclasses.asdict(params)
     metrics["curve_residuals"] = _curve_residuals(nis_state)
     tail = np.asarray(nis_tail, float)
-    metrics["nis"]["tail"] = {"basis": "pre_gate_best_association", "n": len(nis_tail),
+    metrics["nis"]["tail"] = {"basis": "pre_gate_best_association_keeper_side", "n": len(nis_tail),
+                              "side_missing_rate": round(side_missing / side_slots, 4) if side_slots else None,
                               "above_9_21": round(float((tail > 9.21).mean()), 4) if len(tail) else None,
                               "gated_out_rate": round(tail_gated / tail_frames, 4) if tail_frames else None}
     metrics["extrinsic_residual"] = {
