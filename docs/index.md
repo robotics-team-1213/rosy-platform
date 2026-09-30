@@ -245,8 +245,8 @@
 
 ## 최근 기록
 
-- 2026-09-30 · uncommitted · docs(adr): D-370 독립 리뷰 반영(MERGE-AFTER-FIXES)
-- 2026-09-30 · uncommitted · docs(adr): D-358 앱 역할 ADR을 D-370으로 재번호
-- 2026-09-30 · uncommitted · docs(adr): D-358 앱 역할·이름·아이콘·화면 소유와 공유 연결 조각
-- 2026-09-30 · uncommitted · docs(sensing): D-356 학습 루프 기록 정정·리뷰 수정
-- 2026-09-30 · uncommitted · fix(contracts): reconcile ER2 API version and Fleet size ratchet
+- 2026-09-30 · uncommitted · refactor(dashboard): D-362 P1 app.js 분할 실행 및 웹 예산 게이트 통합
+- 2026-09-30 · uncommitted · refactor(dashboard): D-362 P1 styles.css 분할 + diagnostic 판정 정정
+- 2026-09-30 · uncommitted · refactor(sensing): D-362 P0-2 캘리브레이션 상태기계 추출 실행
+- 2026-09-30 · uncommitted · refactor(fleet): D-362 P0-1 app.py 라우터 분리 실행
+- 2026-09-30 · uncommitted · governance(structure): D-362 파일 크기 예산 채택 및 P6 게이트 확장
