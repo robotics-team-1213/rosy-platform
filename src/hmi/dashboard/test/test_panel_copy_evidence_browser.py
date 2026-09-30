@@ -120,3 +120,32 @@ def test_mode_panel_names_modes_in_korean_and_keeps_the_enum_in_title(panel):
     prompts = page.evaluate("window.__prompts")
     assert prompts and prompts[0].startswith("내비게이션 모드로 바꿀까요?")
     assert "NAVIGATION" not in prompts[0]
+
+
+def test_overview_mode_and_navigation_carry_evidence_like_every_other_row(panel):
+    page = panel("console/overview.js")
+    page.evaluate("""() => {
+      const ago = new Date(Date.now() - 7000).toISOString();
+      __callbacks['/api/v1/robot/state'].onData({mode: 'MANUAL', navigation: 'NAVIGATING',
+        pose: {x: 1, y: 2}, battery: {percent: 80},
+        evidence: {navigation: {evidence: 'delayed', received_at: ago},
+                   pose: {evidence: 'fresh'}, battery: {evidence: 'fresh'}}});
+    }""")
+    rows = page.locator("dl.ui-readout dd")
+    mode, navigation = rows.nth(0), rows.nth(1)
+    assert mode.inner_text() == "수동"
+    assert mode.get_attribute("title") == "MANUAL"
+    assert mode.get_attribute("data-evidence") == "fresh"
+    assert navigation.get_attribute("data-evidence") == "delayed"
+    assert navigation.inner_text().startswith("지연 · ") and navigation.inner_text().endswith("초 전")
+    assert "NAVIGATING" not in page.inner_text("#root")
+
+    page.evaluate("""() => __callbacks['/api/v1/robot/state'].onData({mode: 'IDLE', navigation: 'ARRIVED',
+      evidence: {navigation: {evidence: 'disconnected'}}})""")
+    assert rows.nth(1).inner_text() == "연결 끊김"
+    assert rows.nth(1).get_attribute("data-evidence") == "disconnected"
+
+    page.evaluate("""() => __callbacks['/api/v1/robot/state'].onData({mode: 'IDLE', navigation: 'ARRIVED',
+      evidence: {navigation: {evidence: 'fresh'}}})""")
+    assert rows.nth(1).inner_text() == "도착"
+    assert rows.nth(1).get_attribute("title") == "ARRIVED"
