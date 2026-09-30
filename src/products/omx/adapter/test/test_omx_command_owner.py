@@ -12,6 +12,7 @@ from omx_adapter.command_owner import (
     JointStateSnapshot,
     TrajectoryCommand,
 )
+from omx_adapter.manipulation_plan import JointTrajectoryPoint
 
 SESSION = "session-01"
 
@@ -396,3 +397,103 @@ def test_completed_action_clears_active_writer_but_requires_new_command_id():
     assert not second_without_readback.accepted
     assert second_without_readback.reason == "joint_state_not_advanced"
     assert len(action.commands) == 1
+
+
+def _bounded_trajectory(*, middle_position=0.2, middle_velocity=0.2, middle_acceleration=0.2):
+    return (
+        JointTrajectoryPoint(
+            time_from_start_s=0.4,
+            positions=(middle_position, 0.1),
+            velocities=(middle_velocity, 0.1),
+            accelerations=(middle_acceleration, 0.1),
+        ),
+        JointTrajectoryPoint(
+            time_from_start_s=1.0,
+            positions=(0.3, 0.2),
+            velocities=(0.2, 0.1),
+            accelerations=(0.1, 0.1),
+        ),
+    )
+
+
+def _trajectory_config(clock, action):
+    config = replace(
+        make_config(),
+        max_goal_duration_s=2.0,
+        velocity_limits={"joint_1": 1.0, "joint_2": 1.0},
+        acceleration_limits={"joint_1": 2.0, "joint_2": 2.0},
+    )
+    return ArmCommandOwner(config, action, monotonic=lambda: clock[0], session_id=SESSION)
+
+
+def _multi_point_command(owner, *, command_id="path-1", points=None):
+    points = points or _bounded_trajectory()
+    final = points[-1]
+    return TrajectoryCommand(
+        workcell_id="omx_01", instance_id="omx_01_control",
+        command_id=command_id, session_id=owner.session_id, owner="moveit",
+        joint_names=("joint_1", "joint_2"),
+        positions=dict(zip(("joint_1", "joint_2"), final.positions)),
+        trajectory_points=points, duration_s=final.time_from_start_s,
+        source_state_sequence=10, calibration_revision="cal-7",
+    )
+
+
+def test_owner_preserves_every_validated_timed_trajectory_waypoint():
+    clock = [100.0]
+    action = FakeActionClient()
+    owner = _trajectory_config(clock, action)
+    owner.observe_joint_state(make_state())
+    points = _bounded_trajectory()
+
+    result = owner.submit(_multi_point_command(owner, points=points))
+
+    assert result.accepted and result.reason == "submitted"
+    sent = action.commands[0]
+    assert sent.joint_names == ("joint_1", "joint_2")
+    assert sent.trajectory_points == points
+    assert tuple(point.time_from_start_s for point in sent.trajectory_points) == (0.4, 1.0)
+
+
+@pytest.mark.parametrize("points, reason", [
+    (_bounded_trajectory(middle_position=1.1), "joint_limit"),
+    (_bounded_trajectory(middle_velocity=1.1), "velocity_limit"),
+    (_bounded_trajectory(middle_acceleration=2.1), "acceleration_limit"),
+])
+def test_owner_rejects_any_waypoint_or_derivative_outside_configured_limits(points, reason):
+    clock = [100.0]
+    action = FakeActionClient()
+    owner = _trajectory_config(clock, action)
+    owner.observe_joint_state(make_state())
+
+    result = owner.submit(_multi_point_command(owner, points=points))
+
+    assert not result.accepted and result.reason == reason
+    assert action.commands == []
+
+
+def test_command_identity_includes_all_trajectory_points_and_rejects_reuse():
+    clock = [100.0]
+    action = FakeActionClient()
+    owner = _trajectory_config(clock, action)
+    owner.observe_joint_state(make_state())
+    owner.submit(_multi_point_command(owner))
+    changed = _bounded_trajectory(middle_position=0.25)
+
+    result = owner.submit(_multi_point_command(owner, points=changed))
+
+    assert not result.accepted and result.reason == "command_id_reused"
+    assert len(action.commands) == 1
+
+
+def test_multi_point_command_requires_explicit_velocity_and_acceleration_limits():
+    clock = [100.0]
+    action = FakeActionClient()
+    config = replace(make_config(), max_goal_duration_s=2.0)
+    owner = ArmCommandOwner(config, action, monotonic=lambda: clock[0], session_id=SESSION)
+    owner.observe_joint_state(make_state())
+
+    result = owner.submit(_multi_point_command(owner))
+
+    assert not result.accepted and result.reason == "trajectory_rate_limits_missing"
+    assert action.commands == []

@@ -12,6 +12,7 @@ from core_common.protocol.schemas import FleetActionGrant
 
 from .action_store import ActionStore, InvalidActionTransition
 from .local_stop import LocalStopBlocked
+from .phase_recorder import ActionPhaseRecorder
 
 
 def action_grant_digest(value: FleetActionGrant | Mapping[str, object]) -> str:
@@ -322,6 +323,32 @@ class ActionRunner:
         if action["attempt_id"] != attempt_id:
             raise PermissionError("phase attempt does not match current Action")
         return action
+
+    def _phase_recorder_for_validated_grant(
+        self, grant: FleetActionGrant, *, peer_uid: int,
+    ) -> ActionPhaseRecorder:
+        """Mint an in-process, attempt-scoped phase journal after grant checks."""
+        principal_id = self._principal(peer_uid)
+        self._validate(grant)
+        action = self.store.get_action(grant.action_id)
+        if action is None or action["principal_id"] != principal_id:
+            raise PermissionError("Fleet peer does not own this Action")
+        request = action.get("request", {})
+        payload = request.get("payload", {}) if isinstance(request, Mapping) else {}
+        stored_grant_digest = payload.get("request_digest") if isinstance(payload, Mapping) else None
+        if (action["attempt_id"] != grant.attempt_id
+                or stored_grant_digest != grant.request_digest
+                or action["workcell_id"] != grant.workcell_id
+                or action["instance_id"] != grant.instance_id
+                or action["owner_generation"] != grant.dispatch_generation):
+            raise PermissionError("stored Action identity does not match the validated grant")
+        if action["state"] not in {
+            "SUBMITTING", "ACCEPTED", "RUNNING", "CANCEL_REQUESTED", "UNKNOWN", "HOLD",
+        }:
+            raise InvalidActionTransition("terminal Action cannot mint a phase recorder")
+        return ActionPhaseRecorder(
+            self.store, action_id=grant.action_id, attempt_id=grant.attempt_id,
+        )
 
     def cancel_unresolved(self, *, peer_uid: int) -> list[dict[str, object]]:
         """Best-effort cancel fanout after the persistent local stop latch is set."""
