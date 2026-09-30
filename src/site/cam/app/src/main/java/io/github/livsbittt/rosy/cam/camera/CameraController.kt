@@ -29,7 +29,7 @@ import kotlin.math.abs
 import kotlin.math.max
 
 /**
- * Binds CameraX Preview + ImageAnalysis (back camera, KEEP_ONLY_LATEST, YUV_420_888) to
+ * Binds CameraX Preview + ImageAnalysis (the chosen back camera, KEEP_ONLY_LATEST, YUV_420_888) to
  * [lifecycleOwner] and feeds admitted frames to [link]:
  * fps limiter -> latest-only gate -> JPEG -> link. Pixels are never rotated.
  * All public methods must be called on the main thread.
@@ -57,13 +57,17 @@ class CameraController(
     private var provider: ProcessCameraProvider? = null
     private var boundWidth = 0
 
+    /** Camera2 id to bind (see [LensSelector]); null binds DEFAULT_BACK_CAMERA. */
+    private var cameraId: String? = null
+
     /** Sensor timestamp base, read once per bind; written on main, read on the analysis thread. */
     @Volatile
     private var timestampSource = CaptureClock.Source.UNAVAILABLE
     private var stopped = false
 
-    fun start(initial: OverheadConfig) {
+    fun start(initial: OverheadConfig, initialCameraId: String?) {
         applyValues(initial)
+        cameraId = initialCameraId
         val future = ProcessCameraProvider.getInstance(context)
         future.addListener({
             if (stopped) return@addListener
@@ -81,6 +85,16 @@ class CameraController(
     fun applyConfig(newConfig: OverheadConfig) {
         applyValues(newConfig)
         if (link != null && provider != null && newConfig.width != boundWidth) bind()
+    }
+
+    /**
+     * Switches lens. Rebinding resets adaptive JPEG quality and re-reads the timestamp source
+     * and sensor size, exactly as the first bind does.
+     */
+    fun selectCamera(id: String?) {
+        if (id == cameraId) return
+        cameraId = id
+        if (provider != null) bind()
     }
 
     fun setPreviewSurface(surfaceProvider: Preview.SurfaceProvider?) {
@@ -106,6 +120,7 @@ class CameraController(
     private fun bind() {
         val cameraProvider = provider ?: return
         val target = config
+        val selector = selectorForCamera(cameraId)
         try {
             cameraProvider.unbindAll()
             val analysis = if (link == null) null else ImageAnalysis.Builder()
@@ -115,11 +130,11 @@ class CameraController(
                 .build()
             analysis?.setAnalyzer(analysisExecutor, ::analyze)
             val camera = if (analysis == null) {
-                cameraProvider.bindToLifecycle(lifecycleOwner, CameraSelector.DEFAULT_BACK_CAMERA, preview)
+                cameraProvider.bindToLifecycle(lifecycleOwner, selector, preview)
             } else {
                 cameraProvider.bindToLifecycle(
                     lifecycleOwner,
-                    CameraSelector.DEFAULT_BACK_CAMERA,
+                    selector,
                     preview,
                     analysis,
                 )
@@ -132,13 +147,22 @@ class CameraController(
             }
             Log.i(
                 TAG,
-                "bound analysis at ${analysis?.resolutionInfo?.resolution ?: "preview-only"} for width ${target.width}, " +
+                "bound camera ${cameraId ?: "default-back"} analysis at " +
+                    "${analysis?.resolutionInfo?.resolution ?: "preview-only"} for width ${target.width}, " +
                     "timestamp source $timestampSource",
             )
         } catch (e: Exception) {
             Log.e(TAG, "camera bind failed", e)
             onError(e)
         }
+    }
+
+    @OptIn(ExperimentalCamera2Interop::class)
+    private fun selectorForCamera(id: String?): CameraSelector {
+        if (id == null) return CameraSelector.DEFAULT_BACK_CAMERA
+        return CameraSelector.Builder()
+            .addCameraFilter { infos -> infos.filter { Camera2CameraInfo.from(it).cameraId == id } }
+            .build()
     }
 
     @OptIn(ExperimentalCamera2Interop::class)

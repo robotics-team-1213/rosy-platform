@@ -21,6 +21,10 @@ import io.github.livsbittt.rosy.cam.BuildConfig
 import io.github.livsbittt.rosy.cam.MainActivity
 import io.github.livsbittt.rosy.cam.R
 import io.github.livsbittt.rosy.cam.camera.CameraController
+import io.github.livsbittt.rosy.cam.camera.LensChoice
+import io.github.livsbittt.rosy.cam.camera.LensPick
+import io.github.livsbittt.rosy.cam.camera.LensProbe
+import io.github.livsbittt.rosy.cam.camera.LensSelector
 import io.github.livsbittt.rosy.cam.health.DeviceHealth
 import io.github.livsbittt.rosy.cam.health.DeviceHealthMonitor
 import io.github.livsbittt.rosy.cam.health.HealthText
@@ -29,6 +33,7 @@ import io.github.livsbittt.rosy.cam.link.LinkStatus
 import io.github.livsbittt.rosy.cam.link.OverheadConfig
 import io.github.livsbittt.rosy.cam.link.OverheadLink
 import io.github.livsbittt.rosy.cam.settings.SettingsStore
+import io.github.livsbittt.rosy.cam.ui.LensText
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -56,6 +61,8 @@ data class StreamState(
     val error: StreamError? = null,
     /** Battery and heat while a session runs; null when stopped. */
     val health: DeviceHealth? = null,
+    /** Lens in use while a session runs; null when stopped or when no back camera was found. */
+    val lens: LensPick? = null,
 )
 
 /**
@@ -74,6 +81,11 @@ class StreamService : LifecycleService() {
     private var wifiLock: WifiManager.WifiLock? = null
     private var healthMonitor: DeviceHealthMonitor? = null
     private var sessionActive = false
+
+    // Last notification inputs, so a lens change can redraw it without waiting for the link.
+    private var shownLinkState = LinkState.CONNECTING
+    private var shownPreviewOnly = false
+    private var shownHealth: DeviceHealth? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         super.onStartCommand(intent, flags, startId)
@@ -116,8 +128,18 @@ class StreamService : LifecycleService() {
         sessionActive = true
         _state.value = StreamState(running = true)
         lifecycleScope.launch {
-            val pairing = SettingsStore(applicationContext).pairing.first()
+            val store = SettingsStore(applicationContext)
+            val pairing = store.pairing.first()
             val plan = CameraSessionPlan.from(pairing)
+            val backCameras = try {
+                LensProbe.backCameras(applicationContext)
+            } catch (e: Exception) {
+                Log.w(TAG, "lens probe failed; binding the default back camera", e)
+                emptyList()
+            }
+            val lensSetting = store.lens.first() ?: LensChoice.WIDE
+            val pick = LensSelector.pick(backCameras, lensSetting)
+            pick?.let { Log.i(TAG, "lens ${lensSetting.wire} -> ${it.kind.wire} ${LensProbe.describe(it.camera)} fellBack=${it.fellBack}") }
             if (!sessionActive) return@launch
             acquireLocks()
             val monitor = DeviceHealthMonitor(this@StreamService).also { it.start() }
@@ -127,6 +149,7 @@ class StreamService : LifecycleService() {
             launch { monitor.health.collect { h -> _state.update { it.copy(health = h) } } }
             val newLink = if (plan.sendFrames && pairing != null) {
                 OverheadLink(pairing, BuildConfig.VERSION_NAME, "${Build.MANUFACTURER} ${Build.MODEL}")
+                    .also { it.lens = LensProbe.helloLens(pick) }
             } else null
             val newCamera = CameraController(this@StreamService, this@StreamService, newLink) { e ->
                 _state.update { it.copy(error = StreamError.Camera(e.message ?: e.javaClass.simpleName)) }
@@ -138,13 +161,31 @@ class StreamService : LifecycleService() {
                 it.copy(
                     target = pairing?.let { p -> "${p.host}:${p.port} · ${p.source}" },
                     previewOnly = !plan.sendFrames,
+                    lens = pick,
                 )
             }
             if (!plan.sendFrames) {
                 launch { notificationHealth.collect { updateNotification(LinkState.DISCONNECTED, previewOnly = true, health = it) } }
             }
             newLink?.start()
-            newCamera.start(OverheadConfig.DEFAULT)
+            newCamera.start(OverheadConfig.DEFAULT, pick?.camera?.id)
+
+            // Lens changes from the settings screen apply live: rebind, then a fresh hello.
+            launch {
+                store.lens.map { it ?: LensChoice.WIDE }.distinctUntilChanged().collect { choice ->
+                    val next = LensSelector.pick(backCameras, choice) ?: return@collect
+                    val current = _state.value.lens
+                    if (current == next) return@collect
+                    Log.i(TAG, "lens change ${choice.wire} -> ${LensProbe.describe(next.camera)}")
+                    _state.update { it.copy(lens = next) }
+                    if (current?.camera?.id != next.camera.id) newCamera.selectCamera(next.camera.id)
+                    newLink?.let { l ->
+                        l.lens = LensProbe.helloLens(next)
+                        l.reconnect()
+                    }
+                    refreshNotification()
+                }
+            }
 
             launch { previewSurface.collect { newCamera.setPreviewSurface(it) } }
             newLink?.let { activeLink ->
@@ -188,7 +229,7 @@ class StreamService : LifecycleService() {
         healthMonitor?.stop()
         healthMonitor = null
         _state.update { current ->
-            current.copy(running = false, previewOnly = false, health = null, link = lastLink?.status?.value ?: current.link)
+            current.copy(running = false, previewOnly = false, health = null, lens = null, link = lastLink?.status?.value ?: current.link)
         }
     }
 
@@ -240,6 +281,7 @@ class StreamService : LifecycleService() {
         val lines = buildList {
             health?.let { h -> h.warnings.forEach { add(HealthText.warning(resources, it, h)) } }
             add(getString(text))
+            _state.value.lens?.let { LensText.line(resources, it) }?.let { add(it) }
             health?.let { add(HealthText.line(resources, it)) }
         }
         return NotificationCompat.Builder(this, CHANNEL_ID)
@@ -258,9 +300,14 @@ class StreamService : LifecycleService() {
 
     private fun updateNotification(linkState: LinkState, previewOnly: Boolean = false, health: DeviceHealth? = null) {
         if (!sessionActive) return
+        shownLinkState = linkState
+        shownPreviewOnly = previewOnly
+        shownHealth = health
         val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         manager.notify(NOTIFICATION_ID, buildNotification(linkState, previewOnly, health))
     }
+
+    private fun refreshNotification() = updateNotification(shownLinkState, shownPreviewOnly, shownHealth)
 
     companion object {
         private const val TAG = "StreamService"

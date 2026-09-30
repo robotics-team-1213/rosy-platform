@@ -100,6 +100,10 @@ class OverheadLink(
     @Volatile
     var sentQuality: Int? = null
 
+    /** Optional hello.lens; a change takes effect on the next hello (see [reconnect]). */
+    @Volatile
+    var lens: HelloLens? = null
+
     @Volatile
     var sensor: SensorInfo = OverheadConfig.DEFAULT.let { SensorInfo(it.width, it.height, 0) }
 
@@ -146,6 +150,24 @@ class OverheadLink(
         ws?.close(1000, "stopped")
         scope.cancel()
         _status.update { it.copy(state = LinkState.DISCONNECTED, sentFps = 0.0, kbps = 0.0) }
+    }
+
+    /**
+     * Drops the current connection and connects again at once so the next `hello` carries the
+     * current [sensor] and [lens] (after a lens change). No backoff: this is not a failure.
+     */
+    fun reconnect() {
+        val ws: WebSocket?
+        synchronized(lock) {
+            if (!running) return
+            reconnectJob?.cancel()
+            reconnectJob = null
+            ws = socket
+            socket = null
+            generation++
+        }
+        ws?.close(1000, "lens changed")
+        connect()
     }
 
     /**
@@ -245,7 +267,7 @@ class OverheadLink(
                 return
             }
             val s = sensor
-            webSocket.send(Protocol.hello(pairing.source, appVersion, device, s.width, s.height, s.rotationDeg))
+            webSocket.send(Protocol.hello(pairing.source, appVersion, device, s.width, s.height, s.rotationDeg, lens))
             backoff.reset()
             Log.i(TAG, "connected to ${pairing.wsUrl}")
             _status.update { it.copy(state = LinkState.STREAMING, error = null, stopped = false) }

@@ -162,6 +162,10 @@ private fun StatusPanel(
             },
             style = MaterialTheme.typography.bodyMedium,
         )
+        if (state.running) {
+            val res = LocalContext.current.resources
+            state.lens?.let { LensText.line(res, it) }?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
+        }
         state.health?.let { HealthPanel(it) }
         val site = link.site
         // Per camera session: once the receiver has reported a marker, an empty report is a real 0/4.
