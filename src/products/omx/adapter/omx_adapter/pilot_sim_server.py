@@ -1,0 +1,88 @@
+"""Run the Pilot HTTP server inside an isolated OMX Gazebo container."""
+
+from __future__ import annotations
+
+import os
+import secrets
+from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
+
+import rclpy
+import uvicorn
+from rclpy.executors import MultiThreadedExecutor
+from rclpy.node import Node
+
+from .command_owner import ArmCommandConfig
+from .pilot_sim_api import create_pilot_sim_app
+from .pilot_sim_runtime import PilotSimRuntime
+from .ros_runtime import RosArmCommandRuntime
+
+
+JOINTS = ("joint1", "joint2", "joint3", "joint4", "joint5", "gripper_joint_1")
+
+
+def main() -> None:
+    if os.environ.get("ROS_AUTOMATIC_DISCOVERY_RANGE") != "LOCALHOST":
+        raise RuntimeError("Pilot simulation requires localhost-only ROS discovery")
+    if Path("/dev/serial/by-id").exists() or list(Path("/dev").glob("video*")):
+        raise RuntimeError("Pilot simulation refuses hardware device grants")
+    repo = Path(os.environ.get("ROSY_SIM_REPO", "/repo"))
+    config = ArmCommandConfig(
+        enabled=True, workcell_id="omx_pilot_sim", instance_id="omx_pilot_sim_01",
+        joint_names=JOINTS,
+        # Narrow SIM admission limits; these are not hardware calibration values.
+        position_limits={name: ((-0.5, 0.5) if name == "gripper_joint_1" else (-3.0, 3.0))
+                         for name in JOINTS},
+        allowed_owners=("pilot_sim",), calibration_revision="omx-f-gazebo-only-v1",
+        max_joint_state_age_s=0.5, max_goal_duration_s=1.0, action_timeout_s=8.0,
+    )
+    rclpy.init()
+    node = Node("rosy_omx_pilot_sim")
+    facade: PilotSimRuntime | None = None
+
+    def on_event(event):
+        if event.kind != "RUNNING_FEEDBACK":
+            print(f"OMX Pilot ROS event: {event.kind} command={event.command_id} "
+                  f"goal_id_present={bool(event.goal_id)} status={event.status}", flush=True)
+        if facade is not None:
+            try:
+                facade.on_goal_event(event)
+            except Exception as exc:
+                print(f"OMX Pilot ROS event handler failed: {type(exc).__name__}: {exc}", flush=True)
+                raise
+
+    arm = RosArmCommandRuntime(
+        node, config, joint_state_topic="/joint_states",
+        trajectory_action="/arm_controller/follow_joint_trajectory",
+        on_goal_event=on_event,
+    )
+    facade = PilotSimRuntime(arm)
+    executor = MultiThreadedExecutor(num_threads=3)
+    executor.add_node(node)
+    spinner = ThreadPoolExecutor(max_workers=1)
+    spinner.submit(executor.spin)
+    code = secrets.token_urlsafe(12)
+    code_file = Path("/run/rosy-omx-pilot/pairing-code")
+    code_file.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    descriptor = os.open(code_file, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(descriptor, "w", encoding="utf-8") as output:
+        output.write(code)
+    print("OMX Pilot pairing code is available via the local container CLI", flush=True)
+    app = create_pilot_sim_app(
+        runtime=facade, pilot_root=repo / "src/hmi/pilot",
+        common_root=repo / "src/hmi/web_common", pairing_code=code,
+    )
+    try:
+        uvicorn.run(app, host="0.0.0.0", port=8088, access_log=False)
+    finally:
+        code_file.unlink(missing_ok=True)
+        facade.cancel_active()
+        executor.shutdown()
+        arm.destroy()
+        node.destroy_node()
+        rclpy.shutdown()
+        spinner.shutdown(wait=True)
+
+
+if __name__ == "__main__":
+    main()

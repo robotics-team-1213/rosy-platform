@@ -195,3 +195,8 @@
 - 변경: 세로 전체화면에서 조작부가 0px 이 되던 것을 아래 겹침(높이 min(40dvh, 28rem))으로 고쳤다(bb604a6f). `sw.js` SHELL 에 `/common/evidence.js` 를 넣고(drive.js 의 정적 import, bf7a8886), 쓰지 않던 `recent.js` 와 그 allowlist 행을 지웠다(0fd862fc, 캐시 `-5`). 다시 들어오면 자동 모드·배치 표시를 초기화한다(`drive-auto.js`·`view.close()`). 자동 요청에 1.5 s 시한, 진행 버튼은 도는 중이거나 켜는 중에 아직 누르고 있을 때만 채운다. 차선 자동은 `segment`, 진행은 공용 `toggle` `tone="good"`(12f322f9). `test_pwa_icons` 는 PIL 을 바로 import 한다. `render_png.py` docstring·`sync_pilot_files.sh` 경로·빈 줄 정리.
 - 증거: 새 시험 `test_shell_assets.py`(모든 pilot 모듈의 import 를 /common 까지 따라가 SHELL·pilot_assets 대조), 브라우저 `test_go_releases_on_cancel_and_leave`·`test_stick_takes_over_auto`·`test_reenter_resets_auto_mode`, `test_zoom_cycles_and_always_reports_crop` 에 1200×2000(옛 CSS 에서 스틱 4px 로 실패 확인). 스크린샷 `X:\DevTemp\pilot-polish\after4-*.png`(세로 전체화면 `after4-drive-fullzoom-*`).
 - gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · D-390 Pilot OMX Gazebo practice
+- Change: Select the OMX simulation driver from same-origin identity; render bounded arm and gripper jog, seat renewal, goal readback and cancellation. Keep Pinky routing behind a 404 target response.
+- Evidence: rendered OMX pairing-to-jog 1 passed, Pinky gate browser 1 passed, driver/link/route 26 passed; Gazebo action evidence in docs/validation/pilot-omx-gazebo-2026-10-01/.
+- Gate: sim control path observed; video, recording and physical OMX remain HOLD.

@@ -4021,3 +4021,8 @@
 - 증거: 저장소 코드·기존 OMX 두 인스턴스 ROS-SIM 기록과 문서 대조. 이번 변경은 새 Gazebo 실행이나 Pilot 종단 동작을 수행하지 않았다.
 - 번호: D-387~D-389는 병행 브랜치가 `harness.yaml`에서 예약해 D-390으로 기록했다.
 - gate 변화: 없음(설계 문서만).
+
+## 2026-10-01 · uncommitted · D-390 Pilot OMX simulation implementation and evidence
+- Change: Version the sim-only API at v1.67, reconcile the ADR plan with implemented work and record the dated Gazebo run.
+- Evidence: local adapter 163 passed/3 skipped; Pilot and registry/browser checks; joint, gripper and cancel ROS readback in docs/validation/pilot-omx-gazebo-2026-10-01/. Harness lint 0 errors/23 existing freshness warnings.
+- Gate: the control slice has ROS-SIM evidence; camera, recording, restart recovery and physical acceptance stay HOLD.

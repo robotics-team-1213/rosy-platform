@@ -208,3 +208,8 @@
 - 변경: SWARM_ROLES·valid_swarm_role()·role_suffix()(ASCII " - LEADER") 추가. mode/nav 와 같은 부재 규칙, evaluate 판정은 그대로.
 - 증거: test_robot_state.py (변이 증명: 접미를 없애면 해당 2행 빨강).
 - gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · D-390 OMX Pilot simulation wire contract
+- Change: Add typed sim-only target, jog and goal contracts in core_common.protocol.omx_sim; document the additive v1.67 routes in the API reference.
+- Evidence: focused contract and adapter tests passed; API version alignment test 4 passed after the document bump.
+- Gate: SOURCE only; no physical profile admission.

@@ -227,3 +227,8 @@
 - 변경: _swarm_role()가 snapshot().swarm.role 를 검색·검증해 핸드오버에 실었다. none·모르는 값은 없음.
 - 증거: test_host_status_summary.py 40 passed (키 셋·none 부재 포함).
 - gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · D-390 Pilot asset and API version alignment
+- Change: Serve the new OMX driver and arm screen modules through the existing Pilot asset allowlist; update API description to v1.67.
+- Evidence: Pilot driver/link/route tests 26 passed and API version alignment tests 4 passed.
+- Gate: CORE command ownership unchanged.

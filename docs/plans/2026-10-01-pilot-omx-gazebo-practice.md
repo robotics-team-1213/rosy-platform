@@ -1,5 +1,7 @@
 # Rosy Pilot OMX-AI Gazebo Practice Implementation Plan
 
+**진행 상태 (2026-10-01):** 시뮬레이션 전용 API·조종권·단일 owner 연결·Pilot 관절/그리퍼 화면과 브라우저 계약 시험을 구현했다. [Gazebo 실행 검증](../validation/pilot-omx-gazebo-2026-10-01/README.md)에서 관절·그리퍼 goal과 취소 readback을 관측했다. 그리퍼 정밀 도달, 카메라, 시연 기록, lease 만료·브라우저 이탈·재시작의 실제 회복 시험은 남았다. 현재 경로는 `/api/v1/sim/omx`, schema는 `core_common.protocol.omx_sim`이다. 아래 목록은 최초 범위와 남은 게이트를 보존한다.
+
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
 **Goal:** Rosy Pilot에서 OMX-AI 고정 작업대를 선택해 Gazebo 팔·그리퍼를 제한된 조작으로 연습하고, 카메라·관절 readback과 시연 기록을 확인한다.
@@ -23,16 +25,16 @@
 ## 경계와 선행 조건
 
 - 이 계획의 실행 프로필은 `omx_sim`이다. `src/products/omx/profile/config/omx.disabled.yaml`을 활성화하지 않는다. 시뮬레이터에는 serial/camera 실장치 grant가 없어야 한다.
-- 본 문서에 적은 `/api/omx-sim/v1/...` 경로는 **구현할 후보 계약**이며 현재 제공되는 API가 아니다. Task 1에서 API Reference와 `core_common.protocol.schemas`를 같은 변경으로 확정한다. Pinky의 `/api/v1`을 뜻하지 않는다.
+- 본 문서에 적은 `/api/v1/sim/omx/...` 경로는 **구현할 후보 계약**이며 현재 제공되는 API가 아니다. Task 1에서 API Reference와 `core_common.protocol.schemas`를 같은 변경으로 확정한다. Pinky의 `/api/v1`을 뜻하지 않는다.
 - D-386의 비동기 ROS goal 수락/신선한 상태 결속이 미완료면 명령 경로는 HOLD한다. `ActionApi`의 Fleet grant를 브라우저 토큰으로 바꾸거나 우회하지 않는다.
 - 시뮬레이션 카메라의 `CameraInfo`와 source identity는 명시된 sim 전용 보정 revision으로만 수용한다. 실물 보정으로 승격하지 않는다.
 - 학습용 기록은 이 계획에서는 **시연 원본**이다. LeRobot 포맷 변환·모델 학습·정책 실행은 포함하지 않는다. 교육용 튜토리얼 영상은 별도 정적 콘텐츠 슬롯만 마련한다.
 
 ## Task 1 — 시뮬레이션 API·상태 계약 고정
 
-**Files:** Modify `docs/reference/ROSY API & Protocol Reference.md`, `src/contracts/foundation/core_common/protocol/schemas.py`; create `src/contracts/foundation/test/test_omx_sim_pilot_contract.py`(실제 foundation test 위치를 확인해 그 디렉터리에 배치).
+**Files:** Modify `docs/reference/ROSY API & Protocol Reference.md`, `src/contracts/foundation/core_common/protocol/omx_sim.py`; create `src/contracts/foundation/test/test_omx_sim_pilot_contract.py`(실제 foundation test 위치를 확인해 그 디렉터리에 배치).
 
-1. 기존 API 버전·envelope·오류 규칙과 `D-18`을 읽고, sim 전용 경로를 정의한다: target/capability read, code pairing·whoami, 단일 운전석 획득/갱신/반납, arm goal 제출/조회/취소, state, camera status/frame, record start/stop/manifest. 경로 접두사는 `/api/omx-sim/v1`로 고정한다.
+1. 기존 API 버전·envelope·오류 규칙과 `D-18`을 읽고, sim 전용 경로를 정의한다: target/capability read, code pairing·whoami, 단일 운전석 획득/갱신/반납, arm goal 제출/조회/취소, state, camera status/frame, record start/stop/manifest. 경로 접두사는 `/api/v1/sim/omx`로 고정한다.
 2. typed schema와 계약 테스트를 먼저 작성한다. 모든 요청은 `instance_id`, session/seat identity, monotonically increasing request id, 유효기간을 검증한다. 명령은 joint 이름·방향/목표·최대 이동·속도·시간 제한을 갖고, gripper는 별도 허용 범위를 갖는다. 응답 상태는 `LOCAL_ACCEPTED`, `ROS_ACCEPTED`, `RUNNING`, `SUCCEEDED`, `REJECTED`, `CANCEL_REQUESTED`, `CANCELED`, `UNKNOWN_HOLD`를 혼동하지 않는다. 버전·중복·늦은 요청과 권한 거부를 테스트한다.
 3. 시험을 실패시킨 뒤 최소 schema·reference를 함께 추가하고 다시 통과시킨다. API Reference의 MINOR/변경 이력을 저장소 규칙대로 갱신한다. `python -B -X utf8 -m pytest src/contracts/foundation/test/test_omx_sim_pilot_contract.py -q -p no:cacheprovider`를 기준으로 한다.
 

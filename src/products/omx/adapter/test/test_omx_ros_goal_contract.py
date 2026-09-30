@@ -1,3 +1,4 @@
+from array import array
 from uuid import UUID
 
 import pytest
@@ -9,7 +10,14 @@ def test_ros_goal_uuid_is_canonicalized_from_ros_uuid_bytes_or_text():
     expected = "12345678-1234-5678-1234-567812345678"
 
     assert canonical_ros_goal_id(bytes.fromhex("12345678123456781234567812345678")) == expected
+    assert canonical_ros_goal_id(array("B", bytes.fromhex("12345678123456781234567812345678"))) == expected
     assert canonical_ros_goal_id(expected.upper()) == expected
+
+
+def test_ros_generated_numpy_byte_array_is_accepted_when_numpy_is_available():
+    np = pytest.importorskip("numpy")
+    raw = bytes.fromhex("12345678123456781234567812345678")
+    assert canonical_ros_goal_id(np.frombuffer(raw, dtype=np.uint8)) == "12345678-1234-5678-1234-567812345678"
 
 
 @pytest.mark.parametrize("value", [b"short", b"\0" * 16, "not-a-uuid", None])

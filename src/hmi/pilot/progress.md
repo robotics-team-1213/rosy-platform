@@ -10,11 +10,11 @@ gates:
     cmd: "python -m pytest src/hmi/pilot/test src/runtime/api_web/test/test_pilot_route.py -q -p no:cacheprovider"
   LOCAL:
     state: HOLD
-    blocker: "화면(connect·drive·inputs)과 Playwright 종단 시험은 실행 계획 T6~T11 이후"
+    blocker: "OMX 페어링→조그와 Pinky 게이트 브라우저 시험은 각각 통과. 전체 Pilot 브라우저 경로 및 영상·녹화 수용 시험은 아직 이번 회차에 실행하지 않음"
     cmd: "python -m pytest src/hmi/pilot/test/test_pilot_browser.py -q -p no:cacheprovider"
   ROS-SIM:
     state: HOLD
-    blocker: "가제보 실조종으로 방향·제자리 회전·놓으면 0 을 확인(2026-09-29). 녹화된 증거 폴더와 호스트 포화 없는 재측정 전"
+    blocker: "OMX 관절·그리퍼·취소의 Gazebo action/readback은 docs/validation/pilot-omx-gazebo-2026-10-01/에서 확인. 그리퍼 정밀 도달·카메라·기록, lease 이탈/재시작, Pinky 이전 재측정은 남음"
   ARTIFACT:
     state: HOLD
     blocker: "share/pilot 설치를 이미지에서 본 기록이 없다"
@@ -23,10 +23,11 @@ gates:
     blocker: "실기 Pinky 에서 페달 hold-해제가 실제 정지로 이어지는 확인 전"
   FIELD:
     state: N/A
-adrs: [D-323, D-365, D-366]
+adrs: [D-323, D-365, D-366, D-390]
 plans:
   - docs/plans/2026-09-29-rosy-pilot-teleop-app-design.md
   - docs/plans/2026-09-29-rosy-pilot-teleop-app.md
+  - docs/plans/2026-10-01-pilot-omx-gazebo-practice.md
 ---
 
 ## 지금 상태
