@@ -1,6 +1,6 @@
 ## D-385 페이로드 릴리스를 올리면 이미지 계층(native-runtime·유닛·udev·modprobe)도 활성 릴리스 사본으로 맞춘다
 
-**Status:** Accepted (2026-09-30, 2026-10-01 독립 리뷰 반영 개정; 호스트 시험만, 실기 검증은 2026-10-02 예정). D-225(페이로드 릴리스)를 넓힌다. 이미지 안의 `activate-release.sh`·`native_release.py`는 바꾸지 않는다.
+**Status:** Accepted (2026-09-30, 2026-10-01 독립 리뷰 두 차례 반영 개정; 호스트 시험만, 실기 검증은 2026-10-02 예정). D-225(페이로드 릴리스)를 넓힌다. 이미지 안의 `activate-release.sh`·`native_release.py`는 바꾸지 않는다.
 
 **번호:** 작업 중에는 D-375로 불렀다. D-375(예약)·D-382·D-383이 차례로 다른 세션에 먼저 쓰였고 D-384는 예약돼 있어 D-385가 됐다. 브랜치 `feat/release-image-layer-sync`의 앞선 커밋 메시지는 D-375(f05858af, 4859bce0, 6c5ee9bb) 또는 D-383(6e57c35c 이후)이라고 적혀 있고, 이력은 다시 쓰지 않는다.
 
@@ -38,13 +38,18 @@ D-225 페이로드 릴리스는 `/opt/rosy/releases/<id>`(`install/`, 릴리스 
    - 유닛이 바뀌면 `systemctl daemon-reload`. 새로 생긴 유닛은 `customize-rootfs.sh`가 enable하는 목록에 있을 때만 enable한다. 그 가운데 `.path`·`.timer`는 `systemctl enable --now`로 바로 시작한다(다음 부팅까지 감시·주기가 멈춰 있지 않게). `.service`·`.target`은 enable만 한다. 규칙이 바뀌면 `udevadm control --reload`.
    - 대상이 심볼릭 링크(`/dev/null`로 mask된 유닛)면 건너뛰고 `skipped`에 적는다. mask를 풀지 않는다.
    - modprobe 변경은 `modprobe_changed`로 알리고 모듈을 다시 올리지 않는다.
-8. **끝나지 않은 적용은 다음 실행이 이어서 한다.** 파일을 깐 뒤 명령(daemon-reload·enable·udevadm) 전에 `/var/lib/rosy/image-layer-backup/pending.json`에 밀린 명령과 영향 유닛을 적는다. 명령이 모두 성공해야 지우고 매니페스트를 `complete: true`로 바꾼다. 다음 실행은 파일이 모두 같아도 `pending.json`이 있으면 그 명령을 다시 돌리고, 그 영향 유닛을 재시작 후보에 다시 올린다. 드라이런은 `pending`으로 보여 주기만 한다. 그래서 명령 하나가 실패해도 다음 푸시나 재실행이 나머지를 끝낸다.
-9. **롤백 복원.** 동기화는 자기가 한 일을 백업 매니페스트로 안다. current 릴리스의 허용 목록이 만들지 않는 경로 가운데, 백업 매니페스트의 마지막 기록이
-   - `new`(동기화가 추가)이고 지금 파일 해시가 그 기록과 같으면 지운다. 유닛이면 `systemctl disable --now`로 끄고 daemon-reload한다.
-   - `changed`(동기화가 바꿈)이고 지금 해시가 그 기록과 같으면 그 백업으로 되돌린다.
+8. **끝나지 않은 적용은 다음 실행이 이어서 한다.** 파일을 깐 뒤 명령(daemon-reload·enable·udevadm) 전에 `/var/lib/rosy/image-layer-backup/pending.json`에 밀린 명령, 영향 유닛, 시도 횟수를 적는다. 명령이 모두 성공해야 지우고 매니페스트를 `complete: true`로 바꾼다. 다음 실행은 파일이 모두 같아도 `pending.json`이 있으면 그 명령을 다시 돌리고, 그 영향 유닛을 재시작 후보에 다시 올린다. 드라이런은 `pending`으로 보여 주기만 한다.
+   - 밀린 enable 가운데 유닛 파일이 없거나 이번 실행이 지우는 유닛은 버린다. 롤백이 치운 유닛을 영원히 enable하려 들지 않게 한다.
+   - 같은 밀린 명령을 3번 시도해도 실패하면 `pending.json`을 `pending.parked-<UTC>.json`으로 옮기고 `pending_parked`로 크게 알린 뒤, 이번 실행의 자기 명령만 돌린다. 한 번 활성화된 뒤의 푸시마다 적용이 같은 곳에서 멈추지 않게 한다.
+   - `pending.json`이 깨졌으면 `pending.corrupt-<UTC>.json`으로 옮기고 `pending_quarantined`로 알린 뒤 파일 단위 계획으로 이어 간다(드라이런은 옮기지 않고 알리기만 한다).
+9. **롤백 복원.** 동기화는 자기가 한 일을 백업 매니페스트로 안다.
+   - **믿는 매니페스트.** 매니페스트는 파일을 바꾸기 전에 `files_applied: false`로 쓰고, 파일 변경이 모두 끝난 직후(명령 전)에 `true`로 바꾼다. 기록 조회는 `files_applied: true`인 매니페스트만 쓴다. 파일 변경 전의 disable 실패나, 설치 실패 뒤 되돌린 실행은 기록으로 남지 않는다. `complete`로 거르지 않는 까닭은 파일은 깔렸고 명령만 실패한 실행도 `complete: false`이기 때문이다. 읽을 수 없는 매니페스트는 건너뛰고 `corrupt_manifests`로 알린다.
+   - **기원까지 거슬러 간다.** current 릴리스의 허용 목록이 만들지 않는 경로마다 그 경로의 기록을 최신부터 거슬러 읽는다. 이어지는 `changed`를 지나 `new`를 만나면 그 경로는 동기화가 만든 것이므로 지운다. `restored`·`removed`나 기록의 처음에 닿으면 가장 오래된 `changed`의 백업(동기화 이전 상태)으로 되돌린다. 최신 기록이 `removed`·`restored`면 이미 되돌린 것이므로 손대지 않는다. 그래서 A→C(추가)→D(변경)→B에서 X는 D 백업의 C 사본이 아니라 없음으로 돌아간다.
+   - 지금 파일 해시가 최신 기록(마지막 동기화가 깐 것)과 다르면 사람이 손댄 것으로 보고 건드리지 않고 `skipped`에 적는다.
+   - 유닛을 지울 때는 먼저 `systemctl disable --now`로 끄고 daemon-reload한다. 이 disable도 되돌림 범위 안에 있다. 뒤이은 설치가 실패하면 파일을 되돌리고, 그 유닛이 enable이었으면 다시 enable, 활성이었으면 다시 start한다.
    - current가 만드는 경로는 current 사본으로 맞추는 일반 동기화가 곧 복원이다.
 
-   해시가 다르면 사람이 손댄 것으로 보고 건드리지 않고 `skipped`에 적는다. 지우고 되돌린 파일도 이번 실행의 백업에 먼저 남긴다. 모두 허용 목록 네 디렉터리 안에서만 한다.
+   지우고 되돌린 파일도 이번 실행의 백업에 먼저 남긴다. 모두 허용 목록 네 디렉터리 안에서만 한다.
 10. **재시작 후보에서 빼는 유닛.** `restart_units`는 활성이고 바뀐 유닛 가운데 다음을 뺀다.
     - `.target`
     - `rosy-release-recover.service`·`rosy-sd-provision.service`(rosy-core가 Requires로 묶은 부팅 oneshot이라 재시작하면 CORE가 따라 재시작된다)
@@ -81,6 +86,7 @@ D-225 페이로드 릴리스는 `/opt/rosy/releases/<id>`(`install/`, 릴리스 
 ### Validation
 
 - 호스트 시험 `test/test_image_layer_sync.py`: 허용 목록이 빌드 스크립트 결과와 같음, 새 이미지는 이미 동기, 드라이런 무기록, 적용·백업·매니페스트, 멱등, 설치 실패 복원, 명령 실패 뒤 재실행이 밀린 명령·재시작 후보를 되살림, 롤백 복원(추가 파일 제거·유닛 disable, 바꾼 파일 되돌림, 손댄 파일은 그대로), 재시작 제외 유닛, `.path`·`.timer` 즉시 시작, current 거절, 서명 불일치 거절, 금지 경로, 옛 릴리스, 서명된 릴리스로 CLI 실행 후 바이트코드 없음, 옛 검증기(8b67c909·5c0ce600)가 새 페이로드를 받아들임. 가짜 루트와 기록용 러너만 쓰고 실제 systemctl·udevadm은 부르지 않는다.
+- 2차 리뷰 시험(`test/test_image_layer_sync.py`): 파일 변경 전 disable 실패·설치 실패로 되돌린 매니페스트가 기록을 가리지 않음, 파일은 깔렸고 명령만 실패한 매니페스트는 기록으로 씀, 롤백이 치운 유닛의 밀린 enable을 버림, 밀린 명령 3회 실패 시 보관 후 진행, A→C→D→B 연쇄에서 X 제거, disable 뒤 설치 실패 시 유닛 재enable·재start, 깨진 `pending.json` 격리, 깨진 매니페스트 보고.
 - `test/test_release_push_entrypoint.py`: 푸시·롤백 계획의 단계와 순서(롤백은 동기화가 준비 확인 앞), `-SkipImageLayerSync`, 가짜 ssh로 적용 결과의 `rosy-*` 유닛만 재시작, 다음 부팅 유닛 안내, 롤백 대상에 스크립트가 없으면 경고 후 건너뛰고 준비 확인은 함, ASCII 유지.
 - 새 방어 각각은 깨뜨려 빨강, 되돌려 초록을 확인한다(`test/AGENTS.md`).
 - mask 유닛 건너뛰기와 POSIX 모드 비교 시험은 Windows에서 건너뛰어 CI(Linux)에서만 돈다. 옛 검증기 시험은 그 커밋이 없는 얕은 클론에서 건너뛴다.
