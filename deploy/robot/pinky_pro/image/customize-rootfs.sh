@@ -419,7 +419,7 @@ RELEASE_KEY=/etc/rosy/trusted-release-keys/rosy-release-2026-01.pem
 chroot "$ROOT" python3 -B /opt/rosy/native-runtime/native_release.py \
     --root "$NATIVE_PROBE" --public-key "$RELEASE_KEY" recover \
     || fail "installed native-runtime recovery entrypoint does not run"
-chroot "$ROOT" python3 -B /opt/rosy/releases/$RELEASE_ID/deploy/robot/pinky_pro/native/native_release.py \
+chroot "$ROOT" python3 -B /opt/rosy/releases/$RELEASE_ID/deploy/robot/native/native_release.py \
     --root "$NATIVE_PROBE" --public-key "$RELEASE_KEY" recover \
     || fail "installed release native entrypoint does not run"
 chroot "$ROOT" python3 -B /opt/rosy/first-boot/rosy-first-boot.py --help >/dev/null \
