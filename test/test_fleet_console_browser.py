@@ -1240,6 +1240,33 @@ def test_mobile_console_has_no_horizontal_overflow(console_url, width):
         assert layout["stopAccessibleName"] == "전체 로봇 정지", layout
 
 
+@pytest.mark.parametrize("width", [320, 390, 1366])
+def test_formation_buttons_keep_their_reasons_readable(console_url, width):
+    """D-359 US-007 캡처: 네 버튼을 한 줄에 같은 폭으로 눌러 담아 390px에서 '무장 / 이미 대형 중'이
+    어절마다 한 줄씩 네 줄이 됐다. 버튼 줄은 접히고, 이름·사유는 각각 두 줄을 넘지 않는다."""
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as playwright:
+        browser, page, errors = _open_console(playwright, API)
+        page.set_viewport_size({"width": width, "height": 844})
+        page.goto(console_url, wait_until="networkidle")
+        page.wait_for_function("() => document.querySelector('#formation-start small[data-reason]')")
+        tall = page.evaluate("""() => [...document.querySelector('#formation-start').parentElement.querySelectorAll('ui-button')].flatMap(button => {
+          const note = button.querySelector('small[data-reason]');
+          const lines = (node) => node ? Math.round(node.getBoundingClientRect().height
+            / parseFloat(getComputedStyle(node).lineHeight)) : 0;
+          const label = [...button.childNodes].filter(n => n.nodeType === 3).map(n => n.textContent.trim()).join('');
+          const range = document.createRange();
+          const text = [...button.childNodes].find(n => n.nodeType === 3 && n.textContent.trim());
+          let labelLines = 0;
+          if (text) { range.selectNodeContents(text); labelLines = range.getClientRects().length; }
+          return (lines(note) > 2 || labelLines > 2) ? [`${button.id} ${label}: label ${labelLines}, reason ${lines(note)}`] : [];
+        })""")
+        browser.close()
+    assert errors == []
+    assert tall == []
+
+
 # --- D-359 §6.4: 세로 예산 — 붙박이 머리 ≤ 창 높이 20%, 비상 정지는 첫 화면에 ---------
 
 @pytest.mark.parametrize("width,height", [(390, 844), (320, 568)])

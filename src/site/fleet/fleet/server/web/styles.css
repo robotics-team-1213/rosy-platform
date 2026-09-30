@@ -260,6 +260,10 @@ main {
 
 .robot-actions { display: flex; gap: var(--space-2); }
 .robot-actions ui-button { flex: 1; }
+/* D-359 US-007 — 대형 버튼 넷은 사유를 달면 한 줄에 같은 폭으로 들지 않는다. 내용 폭에서 시작해
+   남는 폭을 나누고, 모자라면 다음 줄로 접는다(390px에서 사유가 어절마다 꺾였다). */
+.formation-actions { flex-wrap: wrap; }
+.formation-actions ui-button { flex: 1 1 auto; }
 
 /* 신호등 카드(ROSY-SIGNAL-001). 램프 도트는 구동값(lamps)을 그대로 보여 준다 —
    "켜라고 시킨 것"이 아니라 "실제 켜진 것"이 화면의 축이다. */
