@@ -57,3 +57,19 @@ def test_installs_units_and_enables_only_a_filled_config():
     assert "runuser -u \"$SVC\" --" in text and "doctor --watch-config" in text
     for name in ("rosy-model-watch.service", "rosy-model-watch.timer", "model-watch.yaml.example"):
         assert (SCRIPT.parent / name).is_file()
+
+
+def test_store_folder_is_created_and_made_writable_by_a_drop_in():
+    text = _text()
+    assert "STORE=" in text and "store:" in text
+    assert '[ -d "$STORE" ] || run install -d -o "$SVC" -g "$SVC"' in text
+    for sub in ("datasets", "models/inbox", "models/accepted", "models/rejected"):
+        assert sub in text, sub
+    assert "rosy-model-watch.service.d" in text and "ReadWritePaths=" in text
+
+
+def test_hf_token_placeholder_only_for_backend_hf():
+    text = _text()
+    token = text.index('[ -e "$TOKEN" ] || run install')
+    block = text[text.rindex("\nif ", 0, token):token]
+    assert 'if [ "$BACKEND" = hf ]' in block and "\nfi\n" not in block

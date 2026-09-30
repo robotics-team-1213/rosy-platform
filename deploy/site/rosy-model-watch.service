@@ -1,5 +1,5 @@
 [Unit]
-Description=Push new HF perception models to robot shadow slots (D-373)
+Description=Push new perception models from the store inbox to robot shadow slots (D-373)
 Wants=network-online.target
 After=network-online.target
 

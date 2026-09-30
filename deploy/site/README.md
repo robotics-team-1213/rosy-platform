@@ -528,31 +528,67 @@ outstanding.
 ## Automatic shadow delivery of new perception models (D-373)
 
 `rosy-model-watch.timer` runs `tools/perception/model/watch.py` every 10
-minutes. Each run lists the newest `history_limit` commits of one Hugging Face
-model repository, runs intake on each unseen commit (oldest first, at most
-`max_new_per_run`), and on a pass pushes that model to every configured
-robot's **shadow** slot with `deliver.py push`. Automation stops at the shadow
-slot: selecting a learned model for driving is not automated and stays behind
-the D-205 gate. The HF listing and the model download are the only outbound
-calls; robots are reached over SSH as `rosy` with `sudo -n` (D-373 decision 6).
+minutes. Automation stops at the shadow slot: selecting a learned model for
+driving is not automated and stays behind the D-205 gate. Robots are reached
+over SSH as `rosy` with `sudo -n` (D-373 decision 6).
 
-The state file records every commit, so a commit is processed once:
+### The store folder (default backend, no HF)
 
-- **First run.** Without a state file, every listed commit except the newest
-  is recorded as skipped (`bootstrap`), so an old history is not replayed.
-  To start from a known point instead, set `since: <commit sha>` in the
-  config: that commit and all older ones are skipped, every later one is
-  processed.
+Datasets and models live in one **store folder** (D-373 decision 8). HF is
+optional: the whole loop runs without an HF account. The config names it as
+`store:` (default `/srv/rosy/store`, a local folder). To move it to a NAS or
+Google Drive later, mount the share (SMB/NFS) or sync the folder with Google
+Drive for desktop on the site PC, point `store:` at the mounted path and
+re-run the install script; the layout and the code stay the same:
+
+```text
+<store>/datasets/<name>/<content_sha>/   publish.py writes; never overwritten
+<store>/models/inbox/<folder>/           trainers drop hand-overs (handover.py)
+<store>/models/accepted/<revision>/      intake passed
+<store>/models/rejected/<folder>/        intake failed; REJECTED.txt says why
+```
+
+`content_sha` is the sha256 over the sorted `relpath\0sha256(file)` lines of
+a folder (OS litter such as `desktop.ini` and the marker left out). An inbox
+folder is taken only when its `READY` file holds that value, so a folder that
+is still copying or half-synced from Drive or a NAS is ignored until it is
+complete.
+
+Each run lists the complete `models/inbox` folders oldest `READY` first,
+runs intake on each unseen one (at most `max_new_per_run`), and moves it to
+`models/accepted/<revision>/` on a pass or `models/rejected/<folder>/` on a
+fail. On a pass the model is pushed to every configured robot's **shadow**
+slot with `deliver.py push`. A missing store root (a mount that is not there)
+is a listing failure, never an empty inbox. A folder name that was already
+processed and reappears with other content is rejected as `reused`.
+
+### Optional HF backend (`backend: hf`)
+
+With `backend: hf` and `repo: <org>/<name>` the watcher lists the newest
+`history_limit` commits of that HF model repository instead, and needs
+`huggingface_hub` in the venv and, for a private repo, a read-only token.
+The HF listing and the model download are then the only outbound calls.
+First run: without a state file, every listed commit except the newest is
+recorded as skipped (`bootstrap`), so an old history is not replayed. To
+start from a known point instead, set `since: <commit sha>`: that commit and
+all older ones are skipped, every later one is processed.
+
+### What both backends share
+
+The state file records every entry (inbox folder or commit), so each is
+processed once:
+
 - **Gate result.** An intake `pass` or `fail` is final.
-- **Infrastructure errors** (network, HF, disk, missing runtime, timeouts) are
-  not a verdict. The commit is retried on later runs up to `max_attempts`
-  (default 5), then recorded as `gave_up`.
-- **Robots.** A passed commit stays pending for each robot until its push
+- **Infrastructure errors** (disk, network, missing runtime, missing replay
+  clips, timeouts) are not a verdict. The entry is retried on later runs up to
+  `max_attempts` (default 5), then recorded as `gave_up`; an inbox folder stays
+  in the inbox (fix the site, then delete its state entry to retry).
+- **Robots.** A passed entry stays pending for each robot until its push
   succeeds. A robot that is off or unreachable does not block the others and
   is retried on later runs, without re-running intake, up to `max_attempts`.
-  A robot added to the config later gets the newest passed commit. The newest
-  model wins: once a newer commit is pending or delivered for a robot, an
-  older pending one is marked `superseded` and never pushed.
+  A robot added to the config later gets the newest passed model. The newest
+  model wins: once a newer one is pending or delivered for a robot, an older
+  pending one is marked `superseded` and never pushed.
 - **Operators come first.** A manual `deliver` or `rollback` writes the
   robot's hold file `/var/lib/rosy/models/hold`; while it exists the watcher
   pushes nothing to that robot (no attempt used). It checks the file before a
@@ -564,19 +600,21 @@ The state file records every commit, so a commit is processed once:
   (busy: exit 75, retried next run without using an attempt) and is recorded
   in `history.jsonl` (audit only; the watcher's entries say `site:<hostname>`).
 
+### Install
+
 The watcher needs a reviewed source checkout (it imports the manifest contract
 and runner from `src/runtime/sensing`) and a Python venv with `onnxruntime`,
-`opencv-python-headless`, `numpy`, `PyYAML`, and `huggingface_hub`. It is not
-part of the signed site candidate (follow-up: add the units and a pinned
-watcher bundle to `build_candidate.py`). Prepare both, then run the install
-script from that checkout:
+`opencv-python-headless`, `numpy` and `PyYAML` (add `huggingface_hub` only for
+`backend: hf`). It is not part of the signed site candidate (follow-up: add
+the units and a pinned watcher bundle to `build_candidate.py`). Prepare both,
+then run the install script from that checkout:
 
 ```sh
 sudo install -d -o root -g root -m 0755 /opt/rosy/model-watch
 sudo git clone --no-checkout <reviewed-remote> /opt/rosy/model-watch/src
 sudo git -C /opt/rosy/model-watch/src checkout --detach <reviewed-commit>
 sudo python3 -m venv /opt/rosy/model-watch/venv
-sudo /opt/rosy/model-watch/venv/bin/pip install onnxruntime opencv-python-headless numpy PyYAML huggingface_hub
+sudo /opt/rosy/model-watch/venv/bin/pip install onnxruntime opencv-python-headless numpy PyYAML
 sudo /opt/rosy/model-watch/src/deploy/site/install-model-watch.sh --dry-run   # what it would do
 sudo /opt/rosy/model-watch/src/deploy/site/install-model-watch.sh
 ```
@@ -585,11 +623,14 @@ sudo /opt/rosy/model-watch/src/deploy/site/install-model-watch.sh
 `known_hosts` or token file. It creates the `rosy-model-watch` system user,
 `/etc/rosy/model-watch/` with the site's own SSH key (`ssh-keygen`, owned by
 the service user, 0600) and an empty pinned `known_hosts`,
-`/etc/rosy/model-watch.yaml` from the example, and an empty token file
-placeholder; installs the unit and timer; enables the timer only when the
-config has no `<...>` placeholders left; and then runs
-`rosy_ml doctor --watch-config /etc/rosy/model-watch.yaml` as the service user.
-It prints the remaining steps:
+`/etc/rosy/model-watch.yaml` from the example, the store folder and its
+layout dirs when they are missing (a mount that exists keeps its owner), and
+the drop-in `/etc/systemd/system/rosy-model-watch.service.d/store.conf` with
+`ReadWritePaths=<store>` (the unit is `ProtectSystem=strict`; the store is its
+only writable path besides its state directory); installs the unit and timer;
+enables the timer only when the config has no `<...>` placeholders left; and
+then runs `rosy_ml doctor --watch-config /etc/rosy/model-watch.yaml` as the
+service user. It prints the remaining steps:
 
 - **Site key.** The site host uses its own SSH key, not a person's;
   `ssh.identity` is required and has no default. Add the printed
@@ -598,11 +639,15 @@ It prints the remaining steps:
 - **Host keys.** Record each robot's host key in
   `/etc/rosy/model-watch/known_hosts` from a trusted network
   (`StrictHostKeyChecking=yes`).
-- **Config.** `sudoedit /etc/rosy/model-watch.yaml`: robots, repo,
-  `replay_root`, optional `since:`. The config names robot addresses and so
-  stays out of the checkout.
-- **Token.** For a private repo, paste a read-only HF token into
-  `/etc/rosy/site/secrets/hf_token` (root:rosy-model-watch 0640) with
+- **Config.** `sudoedit /etc/rosy/model-watch.yaml`: robots, `store`,
+  `replay_root`. The config names robot addresses and so stays out of the
+  checkout.
+- **Store access.** People and tools that write the store (publish.py,
+  trainers dropping into `models/inbox/`) need write access to it: members of
+  the `rosy-model-watch` group on a local store, or the share's own
+  permissions on a NAS or Drive folder.
+- **Token (backend hf only).** For a private repo, paste a read-only HF token
+  into `/etc/rosy/site/secrets/hf_token` (root:rosy-model-watch 0640) with
   `sudoedit`. The unit passes only its path (`HF_TOKEN_FILE`); the token never
   appears in a command line, the unit, the config, or the checkout. An empty
   or missing file means no token, which is what a public repo needs.
@@ -625,10 +670,11 @@ lower `push_timeout_s`.
 
 Exit codes in the journal: `0` finished with nothing waiting on a retry (a
 failed intake or a held robot is a recorded outcome), `1` an intake
-infrastructure error or a robot push failed and will be retried, `2` config or
-state file error, `3` the HF listing failed and nothing was recorded. The
-state lives in `/var/lib/rosy-model-watch/state.json`; deleting a commit's
-entry makes the next run process it again.
+infrastructure error, a store move or a robot push failed and will be retried,
+`2` config or state file error, `3` the listing failed (store missing or
+unreadable, or the HF listing failed) and nothing was recorded. The state
+lives in `/var/lib/rosy-model-watch/state.json`; deleting an entry makes the
+next run process it again.
 
 ## Current acceptance boundary
 

@@ -46,7 +46,9 @@ def test_service_is_an_unprivileged_hardened_oneshot():
                        ("ProtectKernelModules", "yes"), ("ProtectKernelLogs", "yes"),
                        ("RestrictNamespaces", "yes"), ("SystemCallFilter", "@system-service")):
         assert unit[key] == [value], key
-    assert "ReadWritePaths" not in unit  # StateDirectory is the only writable path
+    # StateDirectory is the only writable path in the unit; the store folder is added
+    # by install-model-watch.sh as a drop-in, because its path is site config
+    assert "ReadWritePaths" not in unit
     # one run may push to many robots: see the README's worst-case formula
     assert unit["TimeoutStartSec"] == ["6h"]
 
@@ -60,10 +62,11 @@ def test_timer_runs_the_service_every_10_minutes():
 
 def test_example_config_matches_the_watcher_and_the_unit_state_dir(tmp_path):
     text = (SITE / "model-watch.yaml.example").read_text(encoding="utf-8")
-    filled = text.replace("<hf-org>/<model-repo>", "org/lane-seg").replace(
-        "<robot-name>", "pinky-005").replace("<robot-ip>", "192.0.2.10")
+    filled = text.replace("<robot-name>", "pinky-005").replace("<robot-ip>", "192.0.2.10")
     (tmp_path / "c.yaml").write_text(filled, encoding="utf-8")
     cfg = watch.load_config(tmp_path / "c.yaml")
+    assert cfg["backend"] == "inbox" and cfg["store"] == "/srv/rosy/store"  # no HF by default
+    assert "repo" not in cfg
     for key in ("intake_out", "state_file"):
         assert cfg[key].startswith("/var/lib/rosy-model-watch/")
     assert not [k for k in cfg if "token" in k.lower()]  # the token is never a config value
@@ -74,7 +77,16 @@ def test_readme_documents_the_install_paths():
     for needle in ("rosy-model-watch.timer", CONFIG, TOKEN, "rosy-model-watch",
                    "authorized_keys", "ssh-keygen", "since:", "max_attempts",
                    "not part of the signed site candidate", "install-model-watch.sh",
-                   "release-hold", "TimeoutStartSec=6h", "An empty or missing file means no token"):
+                   "release-hold", "TimeoutStartSec=6h", "An empty or missing file means no token",
+                   "models/inbox", "READY", "models/accepted", "models/rejected", "backend: hf",
+                   "ReadWritePaths", "Google Drive", "NAS"):
         assert needle in " ".join(readme.split()), needle  # prose is line-wrapped
     section = readme.split("## Automatic shadow delivery")[1].split("\n## ")[0]
     assert "operator key" not in section  # the site host has its own key
+
+
+def test_readme_says_hf_is_optional():
+    readme = " ".join((SITE / "README.md").read_text(encoding="utf-8").split())
+    section = readme.split("## Automatic shadow delivery")[1].split(" ## ")[0]
+    assert "HF is optional" in section
+    assert "huggingface_hub" not in section.split("backend: hf")[0]  # not in the default setup
