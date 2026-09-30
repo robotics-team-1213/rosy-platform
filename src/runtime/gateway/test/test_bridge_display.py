@@ -12,13 +12,15 @@ from types import SimpleNamespace
 from core.bridge import display
 
 
-def _snapshot(percent=87.6543, voltage=7.8912, estop=False, charging=False):
+def _snapshot(percent=87.6543, voltage=7.8912, estop=False, charging=False,
+              mode="IDLE", navigation="ARRIVED", speed=0.2367):
     return SimpleNamespace(
         battery=SimpleNamespace(percent=percent, voltage=voltage),
         battery_status=SimpleNamespace(charging=charging),
         robot_id="rosy_01",
-        mode=SimpleNamespace(value="IDLE"),
-        navigation=SimpleNamespace(value="ARRIVED"),
+        mode=SimpleNamespace(value=mode),
+        navigation=SimpleNamespace(value=navigation),
+        velocity=SimpleNamespace(linear=speed, angular=0.0),
         safety=SimpleNamespace(estop=estop),
         hitl_requested=False,
     )
@@ -136,3 +138,37 @@ def test_a_closed_window_never_republishes():
 
 def test_the_republish_interval_is_one_second():
     assert display.REPUBLISH_S == 1.0
+
+
+# --- D-391: the drive card ---------------------------------------------------
+
+
+def test_the_drive_card_is_due_only_while_operating_and_slowly():
+    # IDLE(및 모름)에서는 얼굴이 주인이다 — 카드는 아무 때도 아니다.
+    assert display.drive_due("IDLE", now=100.0, last_pub=None) is False
+    assert display.drive_due(None, now=100.0, last_pub=None) is False
+    # 운용 중: 처음엔 곧, 그 뒤로는 20 s 마다.
+    assert display.drive_due("MANUAL", now=100.0, last_pub=None) is True
+    assert display.drive_due("MANUAL", now=100.0, last_pub=95.0) is False
+    assert display.drive_due("MANUAL", now=121.0, last_pub=100.0) is True
+    # EMERGENCY 도 운용이다: 무엇에 멈춰 있는지가 읽혀야 한다.
+    assert display.drive_due("EMERGENCY", now=100.0, last_pub=None) is True
+
+
+def test_the_drive_payload_names_its_kind_and_rounds_like_the_wake_card():
+    payload = display.drive_payload(_snapshot(mode="NAVIGATION", navigation="NAVIGATING"))
+
+    assert payload["kind"] == "drive"
+    assert payload["mode"] == "NAVIGATION"
+    assert payload["navigation"] == "NAVIGATING"
+    assert payload["speed"] == 0.24          # 0.01 m/s — 웨이크 카드와 같은 계약
+    assert payload["battery_percent"] == 87.7
+    assert payload["battery_voltage"] == 7.89
+    assert payload["estop"] is False
+    assert payload["hold_s"] == 5.0
+
+
+def test_a_missing_speed_stays_none_because_zero_reads_as_stopped():
+    payload = display.drive_payload(_snapshot(speed=None, mode="MANUAL"))
+
+    assert payload["speed"] is None

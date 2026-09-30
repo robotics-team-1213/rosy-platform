@@ -4014,3 +4014,9 @@
 - 변경: ADR D-385(파일+로그 행). 절전 "꼭 필요한 것만"이 기존 WAKE_BATTERY 체계임을 확인·기록.
 - 증거: rosy_harness lint 오류 0.
 - gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · docs(adr): D-391 화면 카드 계약과 장치 프로파일
+
+- 변경: ADR D-391(파일+로그 행). 재사용 단위=페이로드 계약, 전자잉크 렌더러 예약.
+- 증거: rosy_harness lint 오류 0.
+- gate 변화: 없음.

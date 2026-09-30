@@ -173,6 +173,7 @@ class RosBridge:
         self._info_was_visible = False
         self._applied_led = None
         self._emotion_shown = None
+        self._drive_last_pub: Optional[float] = None
         self._info_last_pub = 0.0
         self._voltage_topic_seen = False
         self._api_address: Optional[str] = None
@@ -412,6 +413,7 @@ class RosBridge:
 
         self._reconcile_led(status.info_visible, now)
         self._reconcile_emotion()
+        self._maybe_publish_drive(now)
 
     def _publish_display_info(self, status) -> None:
         payload = display.info_payload(
@@ -438,6 +440,15 @@ class RosBridge:
             now=now,
             act=lambda command: self._call_led(
                 command.command, command.r, command.g, command.b))
+
+    def _maybe_publish_drive(self, now: float) -> None:
+        """D-391: 운용 중에는 20 s 마다 주행 카드가 얼굴 위로 잠깐 지나간다."""
+        snapshot = self._svc.state.snapshot()
+        mode = getattr(snapshot.mode, "value", snapshot.mode)
+        if not display.drive_due(mode, now, self._drive_last_pub):
+            return
+        self.display_info_pub.publish(String(data=json.dumps(display.drive_payload(snapshot))))
+        self._drive_last_pub = now
 
     def _reconcile_emotion(self) -> None:
         """D-385: 모드가 얼굴 표정을 고른다 — 감정 노드가 없으면 지금 표정을 유지한다."""

@@ -594,3 +594,9 @@
 - 증거: test_host_status_summary.py 전체 passed(키 집합·absent·핸드오버). 로컬 core 도메인 전체 회귀 결과는 별도 기록.
 - gate 변화: 없음.
 - 교훈: 핸드오버에 필드를 더하는 커밋은 그 필드의 소비자 시험이 사는 *모든* 시험실을 찾아 갱신해야 한다 — 이번에도 한쪽(루트 test/)만 녹색이어서 다른 쪽(gateway)이 다음 push 에서 붉었다.
+
+## 2026-10-01 · uncommitted · feat(bridge): D-391 주행 카드 drive_due·drive_payload
+
+- 변경: bridge/display.py 에 DRIVE_EVERY_S/DRIVE_HOLD_S·drive_due(운용 중에만, 20 s)·drive_payload(kind: drive, 웨이크 카드와 같은 반올림 계약, 결측 속도 None). ros_bridge 상태 틱이 기존 display/info 퍼블리셔로 발행한다(구조 변화 없음).
+- 증거: test_bridge_display.py (변이: EMERGENCY 제외 시 빨강). 게이트웨이 관련 212 passed.
+- gate 변화: 없음.

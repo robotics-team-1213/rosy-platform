@@ -23,6 +23,10 @@ _ROUTE_PROBE_TARGET = ("8.8.8.8", 80)
 #: 정보 창이 열려 있는 동안 display/info 재발행 간격 (s).
 REPUBLISH_S = 1.0
 
+#: D-391: 주행 카드 케이던스. 운용 중에만, 얼굴 위로 잠깐 — 20 s 마다 5 s 동안.
+DRIVE_EVERY_S = 20.0
+DRIVE_HOLD_S = 5.0
+
 
 def republish_due(visible: bool, was_visible: bool, now: float,
                   last_pub: float) -> bool:
@@ -99,3 +103,43 @@ def resolve_api_address(port: Any, *, hostname: Callable[[], str] = socket.getho
                         probe: Callable[[], Optional[str]] = outbound_ip) -> str:
     """`api_address` with the two lookups wired. Injected so tests need no network."""
     return api_address(port, probe(), hostname())
+
+
+# --- D-391: drive card ------------------------------------------------------
+
+
+def drive_due(mode: Any, now: float, last_pub: Optional[float],
+              every_s: float = DRIVE_EVERY_S) -> bool:
+    """주행 카드를 이 틱에 띄울까 — 운용 중에만, 느리게.
+
+    IDLE 에는 얼굴이 주인이다(표정은 기분이다, 카드는 일이다). EMERGENCY 도
+    운용이다: 멈춰 있는 동안 무엇에 멈춰 있는지가 바로 읽혀야 한다.
+    """
+    if mode is None or mode == "IDLE":
+        return False
+    return last_pub is None or (now - last_pub) >= every_s
+
+
+def drive_payload(snapshot, *, hold_s: float = DRIVE_HOLD_S) -> dict[str, Any]:
+    """The `display/info` body of the drive card (`kind: "drive"`).
+
+    웨이크 카드(``info_payload``)와 같은 반올림 계약: 속도는 0.01 m/s, 배터리는
+    0.1 % / 0.01 V. 결측은 None — 주행 중 0.00 m/s 는 '멈춤'으로 읽히고,
+    카드 한 장이 거짓말할 수 있는 지점이 여기다.
+    """
+    battery = snapshot.battery
+    velocity = snapshot.velocity
+    return {
+        "kind": "drive",
+        "robot_id": snapshot.robot_id,
+        "mode": snapshot.mode.value,
+        "navigation": snapshot.navigation.value,
+        "speed": (round(velocity.linear, 2)
+                  if velocity.linear is not None else None),
+        "battery_percent": (round(battery.percent, 1)
+                            if battery.percent is not None else None),
+        "battery_voltage": (round(battery.voltage, 2)
+                            if battery.voltage is not None else None),
+        "estop": snapshot.safety.estop,
+        "hold_s": round(hold_s, 1),
+    }

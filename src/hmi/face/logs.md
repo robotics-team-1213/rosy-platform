@@ -166,3 +166,9 @@
 - 변경: info_screen.render_boot 이 frame 인자를 받아 BOOTING·PROVISIONED 중 무대 제목을 두 밝기로 갈아 그린다(45 % 단계). 끝난 상태는 프레임과 무관하게 동일 픽셀.
 - 증거: test_info_screen.py TestBootCardBreathesWhileWaiting (변이: 밝기 단계 제거 시 빨강).
 - gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · feat(emotion): D-391 DisplayProfile·주행 카드·kind 디스패치
+
+- 변경: info_screen.py 에 DisplayProfile(PINKY_ST7789, animation 게이트 — 전자잉크는 프레임 무시)·render_drive(큰 모드 단어·속도·NAV·배터리 게이지)·render_card(kind 디스패치 단일 입구). emotion_server 는 render_card 로 갈아탔다(호환: kind 없으면 웨이크 카드).
+- 증거: test_info_screen.py TestDisplayProfile·TestDriveCard (픽셀 비교; 변이: 디스패치 절단 시 빨강).
+- gate 변화: 없음.
