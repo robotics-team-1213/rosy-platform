@@ -23,9 +23,13 @@ from geometry import WALL_HEIGHT_M, Camera, to_frame
 
 LABEL_VERSION = "d379-auto/1"
 
-FLOOR, LANE, WALL, DRIVABLE, STOP_LINE, CROSSWALK, UNKNOWN = range(7)
-# role is the closed D-356 list; wall stays its own class (role ignore until
-# the contract gets a wall role), unknown is the loss ignore_index.
+FLOOR, LANE, WALL, DRIVABLE, STOP_LINE, CROSSWALK = range(6)
+# Unlabelled pixels are not a class: in the masks they hold IGNORE_INDEX, which
+# training masks out of the loss (manifest "ignore_index"). role is the closed
+# D-356 list, where "ignore" means an output channel nobody post-processes; wall
+# stays its own class with that role until the contract gets a wall role.
+IGNORE_INDEX = 255
+UNKNOWN = IGNORE_INDEX
 CLASSES = [
     {"index": FLOOR, "name": "floor", "role": "background", "color": [90, 90, 90]},
     {"index": LANE, "name": "lane_line", "role": "lane_marking", "color": [255, 255, 255]},
@@ -33,9 +37,7 @@ CLASSES = [
     {"index": DRIVABLE, "name": "drivable", "role": "drivable", "color": [60, 200, 60]},
     {"index": STOP_LINE, "name": "stop_line", "role": "stop_line", "color": [250, 200, 0]},
     {"index": CROSSWALK, "name": "crosswalk", "role": "ignore", "color": [0, 160, 255]},
-    {"index": UNKNOWN, "name": "unknown", "role": "ignore", "color": [0, 0, 0]},
 ]
-IGNORE_INDEX = UNKNOWN
 
 # Rows either side of a wall's floor contact left unknown: NOMINAL pitch is
 # good to about 1 deg (horizon robust sd 2.6 px, D-364 section 3), ~5 px/deg.
@@ -263,6 +265,7 @@ def combine(bgr, *, wall=None, floor=None, band=None, rules=None, wall_dist=None
     rec["conflict"] = rec["disagreement"].get("trajectory_on_lidar_wall_px", 0) >= CONFLICT_PX
     rec["rules"] = {name: rule_stats(m.astype(bool), cls) for name, m in rules.items()}
     rec["pixels"] = {c["name"]: int((cls == c["index"]).sum()) for c in CLASSES}
+    rec["pixels"]["unlabelled"] = int((cls == IGNORE_INDEX).sum())
     return cls, (np.clip(conf, 0, 1) * 255).astype(np.uint8), rec
 
 

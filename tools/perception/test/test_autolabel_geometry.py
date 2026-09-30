@@ -189,4 +189,12 @@ def test_classes_follow_the_shared_contract():
     assert roles <= {"background", "lane_marking", "drivable", "stop_line", "ignore"}
     assert [c["index"] for c in L.CLASSES] == list(range(len(L.CLASSES)))
     assert sum(c["role"] == "lane_marking" for c in L.CLASSES) >= 1
-    assert L.CLASSES[L.IGNORE_INDEX]["role"] == "ignore"
+    # unlabelled is loss-masked, not a class (role ignore = an unused output channel)
+    assert L.IGNORE_INDEX == 255 and L.UNKNOWN == 255
+    assert "unknown" not in {c["name"] for c in L.CLASSES}
+
+
+def test_unlabelled_pixels_hold_the_ignore_index():
+    cls, conf, rec = L.combine(np.full((240, 320, 3), 90, np.uint8))
+    assert (cls == 255).all() and (conf == 0).all()
+    assert rec["pixels"]["unlabelled"] == 240 * 320

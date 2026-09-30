@@ -8,7 +8,7 @@
 from bag_to_video.py plus its per-frame sidecar jsonl works too (odometry from
 the sidecar; no LiDAR unless the sidecar carries a "scan" side value).
 
-Writes <out>/frames/NNNNNN.jpg (camera frame), masks/NNNNNN.png (class ids,
+Writes <out>/frames/NNNNNN.jpg (camera frame), masks/NNNNNN.png (class ids, 255 = unlabelled,
 labels.CLASSES), conf/NNNNNN.png (confidence x255), labels.jsonl (per frame:
 sources, versions, disagreements, rule comparison) and meta.json (parameters,
 totals). Nothing here goes into git: data/ is gitignored.

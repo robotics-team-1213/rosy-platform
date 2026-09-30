@@ -35,6 +35,9 @@ import cv2
 import numpy as np
 
 SCHEMA = "rosy.perception.dataset/1"
+# Mask value for unlabelled pixels (manifest "ignore_index"): excluded from the
+# loss, never a class. D-379 addendum 2026-10-01.
+IGNORE_INDEX = 255
 MIN_SESSIONS_MSG = "need at least 2 sessions for a session-level split"
 
 
@@ -258,7 +261,14 @@ def build_auto_dataset(label_dirs, store, name, min_labelled: float = 0.05) -> t
             raise BuildError(f"session {meta['session']!r} is in both {seen[meta['session']]} and {d}: "
                              "one label folder per session")
         seen[meta["session"]] = d
-    ignore = metas[0][1].get("ignore_index")
+    # ignore_index: mask value for unlabelled pixels, masked out of the loss; it is
+    # not a class (a class with role "ignore" is an output channel nobody reads).
+    ignore = metas[0][1].get("ignore_index", IGNORE_INDEX)
+    if any(m.get("ignore_index", IGNORE_INDEX) != ignore for _, m in metas):
+        raise BuildError("label folders disagree on ignore_index")
+    if ignore in {c["index"] for c in classes}:
+        raise BuildError(f"ignore_index {ignore} is also a class index")
+    allowed = {c["index"] for c in classes} | {ignore}
     # Argument order must not change the manifest, hence the content sha.
     metas.sort(key=lambda dm: dm[1]["session"])
     splits = assign_splits(m["session"] for _, m in metas)
@@ -282,7 +292,13 @@ def build_auto_dataset(label_dirs, store, name, min_labelled: float = 0.05) -> t
                 idx = int(rec["index"])
                 key = f"{session}__{idx:06d}"
                 mask = cv2.imread(str(d / "masks" / f"{idx:06d}.png"), cv2.IMREAD_UNCHANGED)
-                labelled = float((mask != ignore).mean()) if mask is not None else 0.0
+                if mask is None or mask.ndim != 2:
+                    raise BuildError(f"{d}: mask {idx:06d}.png missing or not single-channel")
+                bad = set(np.unique(mask).tolist()) - allowed
+                if bad:
+                    raise BuildError(f"{d}: mask {idx:06d}.png has values {sorted(bad)} that are "
+                                     f"neither a class index nor ignore_index {ignore}")
+                labelled = float((mask != ignore).mean())
                 if rec.get("conflict"):
                     excluded.append({"frame": key, "reason": "sources disagree",
                                      "disagreement": rec.get("disagreement")})

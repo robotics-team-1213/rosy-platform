@@ -6,7 +6,7 @@ import math
 import numpy as np
 import pytest
 
-pytest.importorskip("cv2")
+cv2 = pytest.importorskip("cv2")
 
 import autolabel  # noqa: E402
 import build  # noqa: E402
@@ -95,6 +95,25 @@ def test_shuffled_inputs_give_the_same_dataset_version(tmp_path):
     assert second.name == first.name
     assert [f["image"].rsplit("/", 1)[1] for f in manifest["frames"]] == [
         "s1__000000.jpg", "s1__000001.jpg", "s1__000002.jpg", "s2__000000.jpg", "s2__000001.jpg"]
+
+
+# --- 4. unlabelled = ignore_index 255, not a class -----------------------------
+
+def test_auto_build_keeps_255_as_ignore_and_rejects_stray_values(tmp_path):
+    a = _labels_dir(tmp_path, "s1", [(L.DRIVABLE, False)])
+    b = _labels_dir(tmp_path, "s2", [(L.FLOOR, False)])
+    mask = cv2.imread(str(a / "masks" / "000000.png"), cv2.IMREAD_UNCHANGED)
+    mask[10:] = 255
+    cv2.imwrite(str(a / "masks" / "000000.png"), mask)
+    manifest, final = build.build_auto_dataset([a, b], tmp_path / "st", "n")
+    assert manifest["ignore_index"] == 255
+    assert all(c["index"] < len(manifest["classes"]) for c in manifest["classes"])
+    got = cv2.imread(str(final / manifest["frames"][0]["mask"]), cv2.IMREAD_UNCHANGED)
+    assert set(np.unique(got).tolist()) == {L.WALL, L.DRIVABLE, 255}
+    mask[0, 0] = 6  # not a class, not ignore
+    cv2.imwrite(str(a / "masks" / "000000.png"), mask)
+    with pytest.raises(build.BuildError, match=r"values \[6\]"):
+        build.build_auto_dataset([a, b], tmp_path / "st2", "n")
 
 
 def test_auto_build_refuses_one_session_in_two_label_folders(tmp_path):

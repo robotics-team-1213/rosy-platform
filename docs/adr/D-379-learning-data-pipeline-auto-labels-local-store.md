@@ -114,3 +114,16 @@
 **남은 일:** 지도 투영(정지선·횡단보도, D-379 5(c))은 지도 자세(오도메트리+천장 카메라 D-257) 정합이 먼저다. 지금은 띠 안의
 정지선·횡단보도 칠도 lane_line 으로 들어간다. LiDAR 높이·카메라 높이의 실측, 사람 운전 + `scan` 세션 추가, 궤적 라벨에
 LiDAR 바닥 대조, keep 의 공칭 pitch 재확인(4항).
+
+### 부록 (2026-10-01) — 데이터셋 스키마의 `ignore_index`
+
+검토(REQUEST-CHANGES) 반영. 학습 계약에서 role `ignore` 는 "아무도 후처리하지 않는 출력 채널"이지 손실에서 빼는 화소가
+아니다. 그래서 2026-09-30 부록 2항의 `6 unknown=ignore` 클래스를 없앤다.
+
+- `rosy.perception.dataset/1` 매니페스트에 **`ignore_index`**(정수, 기본 255)를 둔다. 마스크에서 이 값인 화소는 라벨이 없다는
+  뜻이고 학습 손실·IoU 에서 뺀다. 클래스가 아니므로 `classes[]` 에 없고, 어떤 클래스 index 와도 같을 수 없다. 마스크 값은
+  `classes[].index` 또는 `ignore_index` 뿐이다(`build.py --auto-labels` 가 검사한다).
+- D-379 클래스는 0 floor, 1 lane_line, 2 wall(role ignore, 채널로 학습), 3 drivable, 4 stop_line, 5 crosswalk(role ignore)
+  이고, 라벨 없는 화소는 255 다.
+- CVAT 빌더(`build.py` CVAT 경로, D-356/D-373 담당)와 학습 로더도 같은 필드를 내고 읽어야 한다: 학습 로더는 지금 마스크 최댓값이
+  클래스 수 이상이면 거부하므로 `ignore_index` 화소를 예외로 두어야 한다.
