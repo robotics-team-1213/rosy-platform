@@ -89,5 +89,6 @@ Expected: 모두 통과. socket 인증·ROS·실물 수용은 별도다.
 - Task 2는 response-loss/restart, stale generation 4xx, duplicate terminal/late readback을 검증했다. 기존 runtime 안전 경계가 유지되어 runtime 수정은 하지 않았다.
 - Task 3은 Mission/Action/goal/stop projection 및 별도 provider-turn 수명을 검증했다. stop latch/cancel ACK/Action success를 물리 정지 또는 목표 완료로 승격하지 않았다.
 - Task 4 사전 조사에서 기존 vendor ROS-SIM 증거와 현재 시험 환경을 대조했다. 시뮬레이터 동작은 재사용할 수 있지만 Fleet grant 통합과 실제 gripper profile은 별도다.
+- 2026-09-30 재실행: 통합된 `deploy/robot/omx/probe_vendor_owner_sim.sh`를 `rosy-omx-workstation:native-action-only-local` 이미지(`sha256:b47034e436119cea97c2922a1b4af9bd6596975ac8acbb4cece3a19d2fe1e9f0`)에서 실행했다. 컨테이너는 `--network none`, 저장소 read-only bind mount, device grant 없이 구동했고 결과는 1 passed (2.53s)였다. 기존 policy-owner/경쟁 요청/cancel 경로의 재실행 증거이며, FleetActionGrant→LocalActionPort 생산 결선이나 실물 수용 증거는 아니다.
 - 제어권 ADR 초안 D-362는 충돌을 피하여 D-369로 변경했다. D-362–D-368은 다른 작업의 번호다.
 - 최종 quick gate + network 문서 계약 119 passed; harness lint 0 errors/기존 freshness warnings 12; 새 시험 flake8 및 diff check 통과. 자세한 기록은 docs/logs.md의 action/message 항목에 둔다.

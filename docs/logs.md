@@ -3841,3 +3841,9 @@
 - Change: reconciled Task 4 with the existing 2026-09-26 vendor simulation record. The pinned ROBOTIS OpenManipulator 5.1.2 simulation exercised FollowJointTrajectory, simulated gripper-joint motion, and cancel status, but did not bind FleetActionGrant to a LocalActionPort or establish an accepted physical OMX profile.
 - Evidence: existing `docs/validation/omx-two-instance-ros-sim-2026-09-26/README.md` and `src/products/omx/adapter/progress.md`; current Windows host has no `ROS_DISTRO` or `ros2` command. Focused ROS runtime tests skipped because ROS 2 Jazzy/rclpy is unavailable here (2 skipped).
 - Gate: Task 4 remains pending selected device/hardware revision, driver and gripper package/version, ROS 2 distro and API endpoint. Historical SIM evidence remains SIM-only; no physical claim or activation.
+
+## 2026-09-30 · uncommitted · test(omx): rerun vendor owner policy ROS-SIM
+
+- 변경: D-369 구현 계획의 Task 4 증거를 갱신했다. `deploy/robot/omx/probe_vendor_owner_sim.sh`를 기존 `rosy-omx-workstation:native-action-only-local` 이미지에서 재실행했다.
+- 증거: image `sha256:b47034e436119cea97c2922a1b4af9bd6596975ac8acbb4cece3a19d2fe1e9f0`; `--network none`, 저장소 read-only bind mount, device grant 없음; 1 passed (2.53s). 이 검증은 vendor 시뮬레이터의 정책 owner/경쟁 요청/cancel 동작 재현이다.
+- gate 변화: ROS-SIM 재현만 확인. Fleet grant의 production driver 결선, 실제 arm/gripper profile, 물리 E-stop, DEVICE/FIELD 수용은 여전히 확인하지 않았다.
