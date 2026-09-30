@@ -167,3 +167,8 @@
 - 변경: `surfaces.yaml` 의 pilot 이 `contracts: [shared_controls, typography_focus]` 를 받는다. 버튼 종류는 JS 에서 `setAttribute("kind", …)` 로 명시(페달·제자리·진행 `toggle`+`size="primary"`, 차선 자동 `toggle`, 속도·정밀·입력 조정 `segment`+`aria-pressed`). `styles.css` 는 공용 컨트롤의 면·글자·테두리를 다시 칠하지 않고, 영상 위 대비는 조작부 판이 가진다. HUD 글자는 크기 토큰(`--text-display`·`--text-value`·`--text-label`)만 쓴다. PWA 아이콘 192·512·192-maskable 을 `web_common/icons/pilot.svg` 에서 `tools/icons/render_png.py` 로 다시 그렸다(maskable 은 `--ground` 판에 합성). D-363 에 부록.
 - 증거: `src/hmi/web_common/test` 계약 시험 통과, `test_pwa_icons.py`(PNG = 렌더 결과), 스크린샷 `X:\DevTemp\pilot-polish\after2-*.png`(가로 2000×1200·세로 1200×2000, 수동·자동).
 - gate 변화: 없음(SOURCE 범위 안).
+
+## 2026-09-30 · bf0fab99 · feat(pilot): 세로 조작부가 영상 아래 공간을 채운다
+- 변경: below 배치에서 조작부 칸을 크기 컨테이너 두 칸으로 나눴다. 왼쪽 절반은 속도 줄·차선 자동·페달(2fr)·제자리(1fr, 둘 다 88px 이상)가 높이를 다 쓰고, 오른쪽 스틱 지름은 min(45cqw, 80cqh). 자동 모드면 진행 버튼이 페달 자리를 차지한다. 배치 규칙만 바꿨다(재도색 없음).
+- 증거: ROSY_RUN_BROWSER_TESTS=1 pilot·web_common·test_pilot_route 161 passed; 스크린샷 X:\DevTemp\pilot-polish\after3-*.png(1200×2000·800×1280·390×844·2000×1200).
+- gate 변화: 없음.
