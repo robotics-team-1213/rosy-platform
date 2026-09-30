@@ -361,7 +361,7 @@ def test_real_operation_panels_block_switch_during_start_and_while_active():
             page.wait_for_function("document.getElementById('shell-notice').textContent.includes('요청이 처리 중')")
             assert page.locator("#action-group-docking").is_visible()
             page.evaluate("window.__deferred.find((item) => item.path === '/api/v1/docking/dock').resolve({state:'DOCKING'})")
-            page.wait_for_function('document.querySelectorAll(`[data-panel="console.docking"] dd`)[1]?.textContent === "DOCKING"')
+            page.wait_for_function('document.querySelectorAll(`[data-panel="console.docking"] dd`)[1]?.title === "DOCKING"')
             page.get_by_role("tab", name="운전").click()
             page.wait_for_function("document.getElementById('shell-notice').textContent.includes('도킹 작업이 끝나거나')")
             assert page.locator("#action-group-docking").is_visible()

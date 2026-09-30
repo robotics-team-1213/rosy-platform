@@ -578,3 +578,52 @@
 - gate 변화: 없음
 - 결정: D-359
 - 교훈: 호스트 시험은 브라우저 모듈의 ReferenceError를 못 본다 — 공용 도우미 import는 정적 스캔으로 지킨다.
+
+## 2026-09-30 · 6d296cd6 · D-359 US-009 로봇 상태 개요의 모드·내비게이션 증거
+
+- 변경: 내비게이션은 자기 채널로 `readout()`을 거쳐 `지연 · N초 전`/`연결 끊김`과 `data-evidence`를 얻는다. 모드는 CORE 자신의 값이라 응답이 부모 증거다. 둘 다 한국어 표, 열거값은 title. 시험 `test_panel_copy_evidence_browser.py::test_overview_…`.
+- 증거: 수정 전 `NAVIGATING` 날값·증거 없음(빨강).
+- gate 변화: 없음. SOURCE/LOCAL 증거다.
+- 결정: D-359 (US-009).
+
+## 2026-09-30 · 5518f9bc · D-359 US-009 운용자 말을 CONCEPTS 용어로
+
+- 변경: mode·line-follow·map·docking·teleop·setup(docking·localization)·host/system·app.js·settings.js·index.html의 profile/capability/Navigation/hardware 모드/프로필/MANUAL·NAVIGATION 모드 문장을 내비게이션·실행 모드·하드웨어 실행 모드·기능·수동 모드로. 모드 패널 상태·버튼·확인 문장은 MODE_LABEL(6cadb183).
+- 증거: web_common `test_operator_copy.py` 0건. role-menu 시험 문구 기대값 갱신.
+- gate 변화: 없음.
+- 결정: D-359 (US-009).
+
+## 2026-09-30 · 937bd659 · D-359 US-009 호스트 에이전트 원인은 한 번
+
+- 변경: 네트워크·릴리스 작업이 같은 에이전트 상태로 막히면 패널 머리 아래 상태 한 줄(원인+다음 할 일), 버튼 사유는 `위 사유` + aria-describedby. 한쪽만 막히면 그 묶음 상태가 말한다. 403은 권한 문장. 묶음 상태는 쓸 때만 문서에 있다(698e6192). CONCEPTS.md에 호스트 에이전트.
+- 증거: `test_host_agent_outage_is_said_once_and_buttons_point_at_it` — 원인 글을 가진 보이는 요소 정확히 1개. 수정 전 네트워크 버튼 4개 + 상태 줄들이 같은 원인을 되풀이.
+- gate 변화: 없음.
+- 결정: D-359 (US-009).
+
+## 2026-09-30 · 26226596 · D-359 US-009 호스트 런타임 빠진 원천을 한국어로
+
+- 변경: `system.js` `runtimeGap()` — os_release→운영체제 … network_counters→네트워크 통계, 전부 없으면 `호스트 런타임 정보를 받지 못했습니다`, 키는 title. node 단위 시험이 CORE runtime.py 키 목록과 대조.
+- 증거: `test_host_system_copy.py` 5 passed.
+- gate 변화: 없음.
+- 결정: D-359 (US-009).
+
+## 2026-09-30 · 029188c4 · D-359 US-009 카메라 상태 태그
+
+- 변경: vision.js 상태 태그가 `실시간`/`수신 대기`/`지연 · N초` + data-evidence, 옛 LIVE/WAITING/STALE은 title. 콘솔 카메라 패널은 프레임이 없으면 동작 아래 대기 줄을 숨긴다(대기 문장 1회). 레거시 대시보드 시험 기대값 갱신.
+- 증거: `test_camera_status_speaks_korean_with_evidence_and_waits_on_one_line`, 레거시 카메라 시험 초록.
+- gate 변화: 없음.
+- 결정: D-359 (US-009).
+
+## 2026-09-30 · 709651d1 · D-359 US-009 로봇 지도 읽기 실패는 무대 위에
+
+- 변경: 지도 읽기 실패(또는 권한 없음)면 무대의 ui-empty가 원인을 말하고 곁에 `다시 시도`(권한 없음은 없음), 같은 원인의 지도 상태 줄과 `선택 좌표` 줄은 숨긴다. createFieldMap은 `mapState`를 내보인다. role-surface-states 시험은 빈 무대 대신 실패 장을 기대한다.
+- 증거: `test_robot_map_read_failure_is_an_overlay_with_retry_and_no_target_row`(모의 500 → 다시 시도 → 복구).
+- gate 변화: 없음.
+- 결정: D-359 (US-009).
+
+## 2026-09-30 · bd2bd093 · D-359 US-009 도크 상태 한국어, 빈 목록 모양 통일
+
+- 변경: /setup·/console 도크 상태가 DOCK_STATE_LABEL(모든 DockState). 도크·도크 관리·웨이포인트 빈 목록은 목록을 숨기고 목록 밖 ui-empty 한 줄.
+- 증거: `test_setup_empty_lists_are_one_ui_empty_outside_the_list[3]`, `test_dock_state_reads_korean_with_the_enum_in_title[2]`; 웨이포인트 간격 시험은 빈 줄을 잰다.
+- gate 변화: 없음.
+- 결정: D-359 (US-009).

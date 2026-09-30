@@ -279,3 +279,10 @@
 - 변경: 760px → `(width < 64rem)`, 540px → `(width < 30rem)`. `.chips`는 `repeat(auto-fill, minmax(min(100%, max(4.5rem, 25% - gap)), 1fr))` — 넓은 칸은 네 칸을 넘지 않고 320px에서는 세 칸. compact 머리는 부제를 접고 위아래 여백을 줄인다(320×568 105px, 18.5%). 시험 `test_compact_board_keeps_header_budget_stop_and_chips_in_view[390|320]`.
 - 증거: `test/test_games_board_browser.py` 10 passed 7 failed — 7건은 이 가지 이전부터 같은 목록(CSP, main에서도 실패). `test/test_rosy_games_surface.py` 9 passed. 변이 `ui-topbar` `min-height: 300px` → 빨강. 옛 네 칸 격자 되돌림은 초록이다 — US-003 자간 0 뒤로 320px에서 넘치지 않는다(칩 검사는 감시용).
 - gate 변화: 없음.
+
+## 2026-09-30 · ce709e4d · D-359 US-009 경기 보드 문구
+
+- 변경: `(FIELD GO 아님)` → `· 경기장 준비 전`, 정지 곁 안내 `스페이스 키로도 두 로봇을 세웁니다`. `test_rosy_games_surface.py` 기대값을 새 문구로(뜻 유지: FIELD GO 아님).
+- 증거: `test/test_rosy_games_surface.py` 9 passed.
+- gate 변화: 없음. FIELD PARKED 그대로.
+- 결정: D-359 (US-009).

@@ -530,7 +530,7 @@ def test_console_mode_feedback_full_shell_captures(tmp_path):
             )?.textContent.length > 0""")
             mode_status = page.locator('[data-panel="console.mode"] ui-status').nth(0)
             action_status = page.locator('[data-panel="console.mode"] ui-status[role="status"]').last
-            assert "IDLE" in mode_status.inner_text()
+            assert "대기" in mode_status.inner_text()  # US-009: MODE_LABEL, enum in title
             assert "CORE" in action_status.inner_text(), action_status.inner_text()
             assert posts == [{"path": "/api/v1/mode", "body": {"mode": "MANUAL"}}]
             filename = f"operator-console-mode-feedback-{width}x{height}.png"
@@ -545,7 +545,7 @@ def test_console_mode_feedback_full_shell_captures(tmp_path):
             phase["mode"] = "MANUAL"
             page.wait_for_function("""document.querySelector(
               '[data-panel="console.mode"] ui-status'
-            )?.textContent.includes('MANUAL')""")
+            )?.textContent.includes('수동')""")
             assert "CORE" in action_status.inner_text(), action_status.inner_text()
             records.append({"viewport": f"{width}x{height}", "image": filename,
                             "posts": posts, "errors": errors, **measured})

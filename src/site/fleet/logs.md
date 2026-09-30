@@ -606,3 +606,39 @@
 - 증거: 수정 전 빨강.
 - gate 변화: 없음. SOURCE/LOCAL 증거다.
 - 결정: D-359 §5·§6 (US-008).
+
+## 2026-09-30 · 0f10bb91 · D-359 US-009 Fleet 모드 태그는 공용 MODE_LABEL
+
+- 변경: `roster.js`가 `/common/core_ui_logic.js`에서 MODE_LABEL을 읽는다(내비게이션 등), 열거값은 title. 시험 `test_roster_mode_tag_speaks_korean_and_keeps_the_enum_in_title`.
+- 증거: 수정 전 `NAVIGATION`(빨강).
+- gate 변화: 없음. SOURCE/LOCAL 증거다.
+- 결정: D-359 (US-009).
+
+## 2026-09-30 · 2d12eed3 · D-359 US-009 릴레이 알약은 릴레이라고 말한다
+
+- 변경: `streamEvidence`를 순수 `site-layer.js`로 옮기고 `릴레이 끊김`/`릴레이 지연 · N초`/`릴레이 증거 없음` + data-evidence. node 단위 시험(site-layer.test.mjs).
+- 증거: 6 node tests pass.
+- gate 변화: 없음.
+- 결정: D-359 (US-009).
+
+## 2026-09-30 · c14e0ad3 · D-359 US-009 한 열 단 순서: 예외 → 지도 → 카메라 → 대형
+
+- 변경: DOM 순서를 주의 → 로봇 패널 → 지도 패널로, 카메라는 범례·안내 뒤로. 넓은 창 배치는 명시 격자선이라 1920/1366이 안내 문구 외 픽셀 동일(비교 캡처). 64rem 아래에서 로봇 패널을 풀어 두 패널로 두고 대형·신호등·기록 묶음만 order로 맨 뒤.
+- 증거: `test_single_column_tier_puts_exceptions_before_the_map_and_formation_last[390|320]`.
+- 미증명/열림: 좁은 창에서 Tab은 대형 묶음을 지도보다 먼저 만난다(넓은 창 불변 조건과 충돌).
+- gate 변화: 없음.
+- 결정: D-359 §6 (US-009).
+
+## 2026-09-30 · ce709e4d · D-359 US-009 대형·신호등 문구
+
+- 변경: 대형 상태 태그 대기/무장 중/진행 중/유지 중/해제됨(열거값 title), 재개 사유 `대형 유지 중일 때만`, 신호등 안내에서 signals.yaml 파일명 제거. 지도 HOLD 칩은 `대형 유지 · …`(a622bbcc).
+- 증거: HOLDING/read-loss 시험 기대값 갱신·초록.
+- gate 변화: 없음.
+- 결정: D-359 (US-009).
+
+## 2026-09-30 · a622bbcc · D-359 US-009 지도 칩은 선 뒤에, 로봇 표식 밖에
+
+- 변경: `drawChip`은 자리만 정하고(칩·로봇 표식 상자 회피) `flushChips`가 대형·중재·사이트 선을 다 그린 뒤 칠한다. `window.__mapMarkers`. map-view.js 599줄(예산 600).
+- 증거: `test_map_chips_paint_after_lines_and_clear_robot_markers` — 칠 순서(stroke < fillText)와 칩/표식 겹침 0.
+- gate 변화: 없음.
+- 결정: D-359 (US-008 잔여).

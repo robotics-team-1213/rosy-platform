@@ -290,3 +290,25 @@
 - 증거: 수정 전 빨강(빈 줄이 목록 바로 위), 수정 후 초록.
 - gate 변화: 없음. SOURCE/LOCAL 증거다.
 - 결정: D-359 §5·§6 (US-008).
+
+## 2026-09-30 · 0f10bb91 · D-359 US-009 공용 한국어 열거 표(MODE_LABEL)
+
+- 변경: `core_ui_logic.js`에 `MODE_LABEL`·`NAVIGATION_LABEL`·`DOCK_STATE_LABEL`·`enumLabel()`. 두 서버가 이미 `/common/`으로 서빙하는 파일이라 번들러 없이 로봇 대시보드와 Fleet이 같은 표를 읽는다. 모르는 값은 받은 그대로. 시험 `test_enum_labels.py`(schemas.py의 RobotMode·NavigationState·DockState 전 값 대조).
+- 증거: 수정 전 export 없음(빨강), 수정 후 5 passed.
+- gate 변화: 없음. SOURCE/LOCAL 증거다.
+- 결정: D-359 (US-009).
+
+## 2026-09-30 · 5518f9bc · D-359 US-009 운용자 말 린트
+
+- 변경: `test/test_operator_copy.py` — 대시보드(패널·최상위 js·index/surface html)·Fleet web·games web의 한글 문자열 리터럴(템플릿 구멍은 따로 판정, 주석·정규식 제외)과 HTML 글·aria-label/placeholder/reason/alt에서 `profile|capability|hardware 모드|Navigation|프로필`과 맨 열거값을 막는다. 허용 목록은 이유 필수·죽은 항목 금지(지금 비어 있음).
+- 증거: 처음 46건 → 0건. 변이 증명: 실제 파일에서 고친 문자열 다섯 개를 되돌리면 각각 빨강.
+- 미증명: 한글 없는 순수 열거값 표시(`OFFLINE` 등)는 린트가 보지 않는다.
+- gate 변화: 없음.
+- 결정: D-359 (US-009), CONCEPTS.md.
+
+## 2026-09-30 · c1ecd8e0 · D-359 US-009 꺼진 체크 상자는 점선 테
+
+- 변경: `input.ui-field[type=checkbox]:disabled { border-style: dashed }`. 색은 `--ink-quiet` 그대로(3:1), 흐리지 않는다. 시험 `test_a_disabled_unchecked_box_does_not_look_like_an_enabled_one[dark|light]`, 대비 시험에 켜진 빈 상자 추가.
+- 증거: 수정 전 빨강(둘 다 solid).
+- gate 변화: 없음.
+- 결정: D-359 §5 (US-008 잔여).
