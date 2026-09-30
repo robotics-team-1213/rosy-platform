@@ -177,12 +177,24 @@ def test_receiver_hello_timeout_closes_with_try_again_later():
     """D-341 §11: the hello timer closes with 1013, which the phone always retries.
 
     Pre-1013 receivers closed it with 4400 "no hello"; that reason stays in the retry
-    list for one release so older site PCs do not stop the camera for good."""
+    list for one release so older site PCs do not stop the camera for good.
+
+    Transition exception, remove one release after every site runs 1013 receivers (D-341 §11)."""
     source = (Path(protocol.__file__).parent / "ingest.py").read_text(encoding="utf-8")
     assert "protocol.CLOSE_HELLO_TIMEOUT," in source
     assert 'protocol.CLOSE_BAD_PROTO, "no hello"' not in source
     assert protocol.CLOSE_HELLO_TIMEOUT == VECTORS["close_codes"]["try_again_later"] == 1013
-    assert "no hello" in VECTORS["close_4400_reasons"]["retry"]
+    assert VECTORS["close_4400_reasons"]["retry"] == ["", "no hello"]
+
+
+def test_4400_retry_list_is_exactly_the_transition_exception():
+    """A validation message (ingest.py: str(exc)) must never be retryable, whatever words it holds."""
+    reasons = VECTORS["close_4400_reasons"]
+    assert set(reasons["retry"]).isdisjoint(reasons["fatal"])
+    for reason in reasons["fatal"]:
+        assert reason.strip().lower() not in ("", "no hello")
+    for exc_text in ("receiver busy", "hello timeout", "timed out waiting for hello"):
+        assert exc_text not in reasons["retry"]
 
 
 def test_huge_integer_focal_length_is_ignored_not_raised():

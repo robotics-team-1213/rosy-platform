@@ -49,3 +49,8 @@
 - 결정: 4400 사유 분류는 "일시적 사유 목록이 아니면 비호환"이다. 수신기의 4400 사유를 바꾸면 벡터 목록도 같이 고친다.
 - 교훈: PowerShell 5.1은 네이티브 인자로 넘긴 here-string 안의 큰따옴표를 깨뜨린다. 커밋 메시지는 `git commit -F <파일>`로 넘긴다.
 - 열린 후속: NSC에 user 인증서가 없어 D-341 16항 되돌림 경로가 이 앱에서 동작하지 않는다(progress 4항).
+
+## 2026-10-01 · uncommitted · fix(cam): 4400 재시도 범위를 합의한 전환 예외로 좁힘
+- 변경: 4400은 사유가 정확히 빈 문자열이거나 "no hello"(공백 제거, 대소문자 무시, 1013 이전 수신기)일 때만 재접속한다. 그 밖의 사유는 "busy"나 "timeout"이 들어 있어도 비호환으로 보고 멈춘다(`ingest.py`의 `str(exc)` 검증 메시지가 재시도 대상이 되면 안 된다). 공유 벡터 `close_4400_reasons.retry`는 `["", "no hello"]`. `OverheadLink`의 KDoc은 4400이 비호환일 때만, 4401·4409는 멈춘다고 바로잡았다. 예외 자리에 제거 시점 표식(1013 수신기 전환 후 한 릴리스, D-341 11항).
+- 증거: `gradlew testDebugUnitTest --rerun-tasks` BUILD SUCCESSFUL (2026-10-01 Windows, JDK 21). `ProtocolTest`는 공유 벡터의 retry·fatal 목록과 "receiver busy"·"timeout" 같은 fatal 사유를 함께 확인한다.
+- gate 변화: 없음.

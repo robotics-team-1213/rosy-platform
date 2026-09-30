@@ -234,8 +234,8 @@
     "credential_unknown": 4503
   },
   "close_4400_reasons": {
-    "_doc": "The phone stops for good on 4400 only for an incompatibility reason; an empty reason or a receiver-side wait retries with backoff (1013 always retries). Keep the receiver's own 4400 reasons in these lists.",
-    "retry": ["", "no hello", "hello timeout", "timed out waiting for hello", "receiver busy"],
+    "_doc": "The phone stops for good on 4400 only for an incompatibility reason; only an empty reason or \"no hello\" (pre-1013 receivers) retries with backoff, and 1013 always retries. Transition exception, remove one release after every site runs 1013 receivers (D-341 §11). Any other 4400 reason is fatal, including one that merely contains \"busy\" or \"timeout\".",
+    "retry": ["", "no hello"],
     "fatal": ["proto must be 'rosy-overhead/1'", "expected hello text message", "sensor must be an object", "message type must be 'hello'"]
   },
   "pairing_uris": {
