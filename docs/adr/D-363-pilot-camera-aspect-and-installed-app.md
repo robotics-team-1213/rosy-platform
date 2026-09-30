@@ -46,8 +46,12 @@ Pilot 이 `shared_controls`·`typography_focus` 계약을 받는다(`surfaces.ya
 이 결정의 배치는 그대로이고, 게임형 큰 표적은 다음처럼 계약 안에서 만든다.
 
 - 버튼의 면·글자·테두리는 `components.css` 만 그린다. 누르는 동안 움직이는 페달·제자리·진행은
-  `kind="toggle"` + `size="primary"`(누르는 동안 `.active` 로 채워짐), 차선 자동은 `toggle`(`data-active`),
-  속도·정밀은 한 판 안의 `segment`(`aria-pressed`).
+  `kind="toggle"` + `size="primary"`(누르는 동안 `.active` 로 채워짐). 진행은 공용 변형
+  `tone="good"` 이라 자동 대기(초록 테두리)와 자동 진행(초록 채움)이 HUD 의 초록 알약과 같다.
+  고르는 것(속도·정밀·차선 자동)은 `segment`(`aria-pressed`).
+- 세로 배치(below)에서는 영상 아래 공간 전체가 조종기다: 왼쪽 절반 페달·제자리(88px 이상),
+  오른쪽 절반 스틱(지름 min(폭 45%, 남은 높이 80%)). 세로 전체화면에서는 조작부가 아래에 겹쳐 뜬다
+  (가로 전체화면과 같이, 높이 min(40dvh, 28rem)).
 - 표적 크기(`min-height`·폭)는 표면 CSS 의 배치 규칙이다. 계약의 재도색 목록(면·글자·테두리·투명도·
   모서리)에 들지 않는다.
 - 확대·전체화면에서 조작부가 영상 위에 올라올 때의 대비는 버튼이 아니라 조작부 판(`[data-drive-left]`)이

@@ -172,3 +172,8 @@
 - 변경: below 배치에서 조작부 칸을 크기 컨테이너 두 칸으로 나눴다. 왼쪽 절반은 속도 줄·차선 자동·페달(2fr)·제자리(1fr, 둘 다 88px 이상)가 높이를 다 쓰고, 오른쪽 스틱 지름은 min(45cqw, 80cqh). 자동 모드면 진행 버튼이 페달 자리를 차지한다. 배치 규칙만 바꿨다(재도색 없음).
 - 증거: ROSY_RUN_BROWSER_TESTS=1 pilot·web_common·test_pilot_route 161 passed; 스크린샷 X:\DevTemp\pilot-polish\after3-*.png(1200×2000·800×1280·390×844·2000×1200).
 - gate 변화: 없음.
+
+## 2026-09-30 · 7711cb84 · fix(pilot): 리뷰 수정 — 세로 전체화면·오프라인 셸·자동 모드 상태
+- 변경: 세로 전체화면에서 조작부가 0px 이 되던 것을 아래 겹침(높이 min(40dvh, 28rem))으로 고쳤다(bb604a6f). `sw.js` SHELL 에 `/common/evidence.js` 를 넣고(drive.js 의 정적 import, bf7a8886), 쓰지 않던 `recent.js` 와 그 allowlist 행을 지웠다(0fd862fc, 캐시 `-5`). 다시 들어오면 자동 모드·배치 표시를 초기화한다(`drive-auto.js`·`view.close()`). 자동 요청에 1.5 s 시한, 진행 버튼은 도는 중이거나 켜는 중에 아직 누르고 있을 때만 채운다. 차선 자동은 `segment`, 진행은 공용 `toggle` `tone="good"`(12f322f9). `test_pwa_icons` 는 PIL 을 바로 import 한다. `render_png.py` docstring·`sync_pilot_files.sh` 경로·빈 줄 정리.
+- 증거: 새 시험 `test_shell_assets.py`(모든 pilot 모듈의 import 를 /common 까지 따라가 SHELL·pilot_assets 대조), 브라우저 `test_go_releases_on_cancel_and_leave`·`test_stick_takes_over_auto`·`test_reenter_resets_auto_mode`, `test_zoom_cycles_and_always_reports_crop` 에 1200×2000(옛 CSS 에서 스틱 4px 로 실패 확인). 스크린샷 `X:\DevTemp\pilot-polish\after4-*.png`(세로 전체화면 `after4-drive-fullzoom-*`).
+- gate 변화: 없음.
