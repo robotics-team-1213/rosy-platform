@@ -4,6 +4,8 @@
 2. The token row starts with a quiet `삭제…`; the confirm dialog names the
    token; Esc and cancel send nothing and give focus back to the row button;
    execute sends exactly one DELETE for that token.
+3. The dialog is non-modal: the shell E-stop stays live (not inert, not under
+   the scrim, in the Tab ring) and pressing it stops and cancels the delete.
 """
 
 from __future__ import annotations
@@ -128,5 +130,77 @@ def test_device_token_delete_goes_through_a_dialog_that_names_the_token(tmp_path
         dialog.locator("ui-button[kind=irreversible]").click()
         page.wait_for_function("document.body.textContent.includes('토큰을 삭제했습니다')", timeout=5_000)
         assert deletes == [("DELETE", f"/api/v1/system/tokens/{token_id}")]
+        assert errors == []
+        browser.close()
+
+
+# Every control a user could reach on the page, dialog and live stops aside.
+STOP_STATE = """() => {
+  const stop = document.querySelector('#shell-estop');
+  const box = stop.getBoundingClientRect();
+  const hit = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+  const outside = [...document.querySelectorAll('ui-button, button, a[href], input, select, nav')]
+    .filter((n) => !n.closest('dialog.ui-confirm') && !n.closest('[data-always-live]'));
+  return {
+    stopInert: stop.closest('[inert]') !== null,
+    hitIsStop: hit !== null && stop.contains(hit),
+    live: outside.filter((n) => !n.closest('[inert]')).map((n) => n.outerHTML.slice(0, 80)),
+    outside: outside.length,
+  };
+}"""
+
+
+def test_device_estop_stays_live_over_the_delete_dialog(tmp_path):
+    from playwright.sync_api import sync_playwright
+
+    requests = []
+    with sync_playwright() as playwright:
+        browser, page, errors = _open_device(playwright, tmp_path, 1366, 768, "dark", requests)
+        row = page.locator("li[data-token-id]").filter(has=page.locator("ui-button:not([disabled])")).first
+        dialog = page.locator("dialog.ui-confirm")
+        stop = page.locator("#shell-estop")
+        assert stop.get_attribute("data-always-live") is not None
+        assert page.evaluate("document.querySelectorAll('[inert]').length") == 0
+
+        row.locator("ui-button").click()
+        assert dialog.is_visible()
+        state = page.evaluate(STOP_STATE)
+        assert not state["stopInert"], "D-280 원칙 2: 대화상자가 비상정지를 inert로 만들었다"
+        assert state["hitIsStop"], "스크림이 비상정지를 덮었다"
+        assert state["outside"] > 5 and state["live"] == [], f"대화상자 밖이 살아 있다: {state['live']}"
+
+        # Polling re-renders while open: the robot state poll runs every second,
+        # and a node appended later is sealed too.
+        page.wait_for_timeout(1_500)
+        page.evaluate("document.body.append(Object.assign(document.createElement('button'), {id: 'late'}))")
+        page.wait_for_function("document.getElementById('late')?.closest('[inert]') !== null")
+        state = page.evaluate(STOP_STATE)
+        assert not state["stopInert"] and state["hitIsStop"] and state["live"] == []
+
+        # Tab ring: cancel -> execute -> E-stop -> cancel; Shift+Tab walks back.
+        focused = "document.activeElement?.id || document.activeElement?.textContent"
+        assert page.evaluate(focused) == "취소"
+        page.keyboard.press("Tab")
+        assert page.evaluate(focused) == "토큰 삭제"
+        page.keyboard.press("Tab")
+        assert page.evaluate(focused) == "shell-estop"
+        page.keyboard.press("Tab")
+        assert page.evaluate(focused) == "취소"
+        page.keyboard.press("Shift+Tab")
+        assert page.evaluate(focused) == "shell-estop"
+
+        stop.click()
+        page.wait_for_function("!document.querySelector('dialog.ui-confirm')")
+        page.wait_for_function("document.getElementById('shell-notice').textContent.includes('비상 정지')")
+        assert ("POST", "/api/v1/safety/stop") in requests
+        assert not any(method == "DELETE" for method, _ in requests)
+        assert page.evaluate("[...document.querySelectorAll('[inert]')].filter((n) => n.id !== 'late').length") == 0
+        assert page.evaluate("document.querySelector('.ui-confirm-scrim')") is None
+
+        # The Esc path still cancels after the stop path.
+        row.locator("ui-button").click()
+        page.keyboard.press("Escape")
+        page.wait_for_function("!document.querySelector('dialog.ui-confirm')")
+        assert not any(method == "DELETE" for method, _ in requests)
         assert errors == []
         browser.close()

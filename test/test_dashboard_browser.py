@@ -574,6 +574,62 @@ def test_field_settings_save_limits_waypoint_and_dock_without_navigation():
     assert dock["body"]["type"] == "rosy_v1"
 
 
+WAYPOINT_ROW_INIT = """
+const listed = window.fetch;
+window.fetch = async (input, options = {}) => {
+  const url = new URL(typeof input === 'string' ? input : input.url, location.href);
+  if ((options.method || 'GET').toUpperCase() === 'GET' && url.pathname === '/api/v1/waypoints') {
+    window.__apiCalls.push({method: 'GET', path: url.pathname, search: '', body: null});
+    return new Response(JSON.stringify({waypoints: [{name: 'zone_a', x: 1.25, y: 0.5, yaw: 0}]}),
+      {status: 200, headers: {'Content-Type': 'application/json'}});
+  }
+  return listed(input, options);
+};
+"""
+
+
+def test_waypoint_delete_dialog_keeps_the_estop_out_of_the_inert_region():
+    """D-371 non-modal confirm on the legacy /dashboard settings list.
+
+    The E-stop lives on the operate view, which is hidden while the inspect view
+    shows the settings list, so here the check is that the dialog never inerts it
+    (it is reachable again the moment the operator switches back), that the rest
+    of the page is inert while open, and that Esc and cancel send no DELETE.
+    """
+    pytest.importorskip("playwright.sync_api")
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as playwright:
+        try:
+            browser, page = _launch_page(playwright, extra_init=WAYPOINT_ROW_INIT, width=1366, height=768)
+        except Exception as error:
+            pytest.skip(f"Playwright Chromium unavailable: {error}")
+        page.goto("http://rosy.test/dashboard", wait_until="domcontentloaded", timeout=5_000)
+        page.wait_for_function("document.getElementById('robot-mode')?.textContent === 'MANUAL'")
+        page.locator("#view-inspect").click()
+        delete = page.locator('li[data-name="zone_a"] [data-waypoint-action="delete"]')
+        delete.wait_for()
+        assert page.locator("#emergency-stop").get_attribute("data-always-live") is not None
+
+        delete.click()
+        dialog = page.locator("dialog.ui-confirm")
+        assert dialog.is_visible()
+        assert page.evaluate("document.getElementById('emergency-stop').closest('[inert]')") is None
+        assert page.evaluate("document.getElementById('waypoint-save').closest('[inert]') !== null")
+        assert page.evaluate("document.getElementById('view-operate').closest('[inert]') !== null")
+        page.keyboard.press("Escape")
+        page.wait_for_function("!document.querySelector('dialog.ui-confirm')")
+
+        delete.click()
+        dialog.locator("ui-button[kind=quiet]").click()
+        page.wait_for_function("!document.querySelector('dialog.ui-confirm')")
+        assert page.evaluate("document.querySelectorAll('[inert]').length") == 0
+        calls = page.evaluate("window.__apiCalls")
+        browser.close()
+
+    assert not any(call["method"] == "DELETE" for call in calls)
+
+
 def test_traffic_policy_is_staged_before_stopped_only_apply():
     pytest.importorskip("playwright.sync_api")
     from playwright.sync_api import sync_playwright
