@@ -93,6 +93,15 @@ test("a rejected fit is reference-only; a malformed or matrix-less accept is not
   assert.equal(normalizeMapProposal({}), null);
   const blank = normalizeMapProposal(body({ accepted: false, proposal: null, reason: "no white paint" }));
   assert.equal(blank.fit, null);
+  // A rejected fit that carries only coverage and cut sides: guidance yes, nothing to draw.
+  const metricsOnly = normalizeMapProposal(body({ accepted: false, proposal: null, reason: "weak paint match (0.5)",
+    rejected_fit: { coverage: 0.4, cut_sides: ["-x"], cut_directions: ["west"] } }));
+  assert.equal(metricsOnly.fit.mapToImage, null);
+  assert.equal(metricsOnly.fit.coverage, 0.4);
+  const summary = fitSummary(metricsOnly);
+  assert.match(summary.headline, /지도 40% 보임/);
+  assert.doesNotMatch(summary.headline, /주황 선/);
+  assert.match(summary.guidance, /서쪽으로/);
 });
 
 test("reasons and cut sides become Korean operator guidance", () => {

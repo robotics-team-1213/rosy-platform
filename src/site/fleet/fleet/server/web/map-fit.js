@@ -68,7 +68,8 @@ export function projectTriangles(triangles, h) {
   return out;
 }
 
-// Vision map-proposal 응답 검사. accepted 면 proposal, 아니면 rejected_fit(참고용)을 fit 으로 준다.
+// Vision map-proposal 응답 검사. accepted 면 proposal, 아니면 rejected_fit 을 fit 으로 준다.
+// rejected_fit 은 coverage·잘린 쪽만 실을 수 있다(행렬 없음) — 그때 mapToImage 는 null 이고 그리지 않는다.
 export function normalizeMapProposal(body) {
   if (!body || typeof body !== "object" || typeof body.accepted !== "boolean") return null;
   const width = body.image?.width;
@@ -77,9 +78,10 @@ export function normalizeMapProposal(body) {
   const raw = body.accepted ? body.proposal : body.rejected_fit;
   let fit = null;
   if (raw && typeof raw === "object") {
-    const imageToMap = flatMatrix(raw.image_to_map);
-    const mapToImage = flatMatrix(raw.map_to_image) || (imageToMap && invert3(imageToMap));
-    if (imageToMap && mapToImage) {
+    let imageToMap = flatMatrix(raw.image_to_map);
+    let mapToImage = flatMatrix(raw.map_to_image) || (imageToMap && invert3(imageToMap));
+    if (!imageToMap || !mapToImage) imageToMap = mapToImage = null;
+    if (mapToImage || !body.accepted) {
       fit = {
         imageToMap, mapToImage,
         score: finite(raw.score) ? raw.score : null,
@@ -146,7 +148,7 @@ export function fitSummary(norm) {
     return { tone: "good", headline: `맞춤 제안${numbers}. 선이 흰 페인트 위에 있는지 보고 수락하세요. 자동 적용하지 않습니다.`,
       guidance: cutGuidance(f.cutDirections) };
   }
-  const tail = f ? " 주황 선은 참고용 최선 적합이며 수락할 수 없습니다." : "";
+  const tail = f?.mapToImage ? " 주황 선은 참고용 최선 적합이며 수락할 수 없습니다." : "";
   return { tone: "warn", headline: `맞춤 거부 — ${reasonText(norm.reason)}${numbers}.${tail}`,
     guidance: cutGuidance(f?.cutDirections) };
 }

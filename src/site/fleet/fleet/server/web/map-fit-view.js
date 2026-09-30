@@ -66,7 +66,7 @@ export function createMapFitView({ el, view, call, visionView, onChanged = () =>
   function active() {
     const source = visionView.currentSource();
     const fit = pending?.source === source ? pending.norm.fit : null;
-    if (fit) {
+    if (fit?.mapToImage) { // 행렬 없는 거부(coverage·잘린 쪽만)는 그리지 않는다
       return { kind: pending.norm.accepted ? "proposal" : "rejected", mapToImage: fit.mapToImage,
         imageToMap: fit.imageToMap, image: pending.norm.image };
     }
