@@ -88,7 +88,9 @@ def _px(i):
 
 
 def _write_session(root, name="20260930T124745Z_rosy-pinky-test", lidar=False,
-                   compressed=False):
+                   compressed=False, obs=None):
+    """obs: {frame i: (log offset s, payload stamp offset s)} for its line/observation and
+    shadow result; the default is logged 4 ms after the image with the image's stamp."""
     pytest.importorskip("mcap_ros2")
     from mcap_ros2.writer import Writer
 
@@ -109,6 +111,12 @@ def _write_session(root, name="20260930T124745Z_rosy-pinky-test", lidar=False,
             sc_s = w.register_msgdef("sensor_msgs/msg/LaserScan", SCAN_DEF)
             ci_s = w.register_msgdef("sensor_msgs/msg/CompressedImage", COMPRESSED_DEF)
             events = []
+            for i, t in enumerate(FRAME_S):
+                log_off, stamp_off = (obs or {}).get(i, (0.004, 0.0))
+                for topic, key in (("line/observation", "error"),
+                                   ("perception/learned/shadow", "error_delta")):
+                    events.append((t + log_off, NS + topic, st_s, {"data": json.dumps(
+                        {key: i / 10, "visible": True, "stamp": t + stamp_off})}))
             for k, t in enumerate(SCAN_S if lidar else []):
                 events.append((t, NS + "scan", sc_s, {
                     "header": {"stamp": {"sec": 1, "nanosec": _ns(t) - 1_000_000_000},
@@ -132,8 +140,6 @@ def _write_session(root, name="20260930T124745Z_rosy-pinky-test", lidar=False,
                                                       "z": math.sin(yaw / 2),
                                                       "w": math.cos(yaw / 2)}}}}))
             for i, t in enumerate(FRAME_S):
-                events.append((t + 0.004, NS + "line/observation", st_s,
-                               {"data": json.dumps({"error": i / 10, "visible": True})}))
                 if compressed:
                     jpg = cv2.imencode(".jpg", _px(i), [cv2.IMWRITE_JPEG_QUALITY, 85])[1]
                     events.append((t + 0.001, NS + "camera/front/compressed", ci_s,
@@ -206,16 +212,68 @@ def test_sidecar_takes_the_latest_side_sample_never_a_later_one(tmp_path):
         assert r["side"]["cmd_vel"] == {"linear": pytest.approx(round(want, 2)),
                                         "angular": pytest.approx(-round(want, 2))}
         assert r["dt"]["cmd_vel"] == pytest.approx(round(want - log_t, 4), abs=1e-4)
-        assert all(d is None or d <= 0 for d in r["dt"].values())
-        # line/observation of frame i is logged 3 ms AFTER frame i: frame i sees frame i-1's
+        # unstamped topics never take a later sample
+        assert all(d is None or d <= 0 for k, d in r["dt"].items() if k not in b2v.STAMPED_TOPICS)
+        # stamped evidence is logged 3 ms AFTER its frame and still attaches to it
         obs = r["side"]["line/observation"]
-        assert (obs is None) if i == 0 else obs["error"] == pytest.approx((i - 1) / 10)
+        assert obs["error"] == pytest.approx(i / 10) and obs["stamp_ns"] == r["stamp_ns"]
+        assert r["dt"]["line/observation"] == pytest.approx(0.003, abs=1e-4)
+        shadow = r["side"]["perception/learned/shadow"]
+        assert shadow["error_delta"] == pytest.approx(i / 10) and shadow["stamp_ns"] == r["stamp_ns"]
     # frame 1 (log 1.126 s): odom 1.13 s is later, so the 0.99 s sample wins
     assert rows[1]["side"]["odom"] == {"x": 0.0, "y": 0.0, "yaw": pytest.approx(0.1)}
     assert rows[1]["dt"]["odom"] == pytest.approx(0.99 - 1.126, abs=1e-4)
     assert rows[3]["side"]["odom"]["x"] == 2.0            # 1.24 s, 0.136 s old
     # frames 4.. are more than --max-gap after the last odom sample
     assert all(r["side"]["odom"] is None and r["dt"]["odom"] is None for r in rows[4:])
+
+
+@needs_tools
+def test_stamped_evidence_attaches_by_payload_stamp_within_half_a_second(tmp_path):
+    obs = {
+        2: (0.2, 0.0),        # logged after frame 3's image (1.376 s), 0.199 s after frame 2
+        3: (0.004, 0.005),    # payload stamp 5 ms off every frame stamp -> null
+        4: (0.6, 0.0),        # logged 0.599 s after its frame -> null
+        1: (0.0005, 0.0009),  # stamp within 1 ms, logged after the capture but 0.5 ms
+                              # before the image itself reached the bag -> still frame 1's
+        5: (-0.002, 0.0),     # logged before its frame was even captured -> null
+    }
+    _, stem = _convert(tmp_path, obs=obs)
+    rows = [json.loads(l) for l in stem.with_suffix(".jsonl").read_text().splitlines()]
+    for r in rows:
+        assert {"stamp_ns", "log_ns"} <= set(r)
+    for i in (0, 1):
+        assert rows[i]["side"]["line/observation"]["error"] == pytest.approx(i / 10)
+    assert rows[1]["dt"]["line/observation"] == pytest.approx(-0.0005, abs=1e-4)
+    # frame 2 gets its own observation, not frame 1's or none
+    got = rows[2]["side"]["line/observation"]
+    assert got["error"] == pytest.approx(0.2) and got["stamp_ns"] == _ns(FRAME_S[2])
+    assert rows[2]["dt"]["line/observation"] == pytest.approx(0.199, abs=1e-4)
+    # frame 3 must not borrow frame 2's late observation, which is logged after frame 3
+    for i in (3, 4, 5):
+        for topic in b2v.STAMPED_TOPICS:
+            assert rows[i]["side"][topic] is None and rows[i]["dt"][topic] is None, (i, topic)
+
+
+def test_evidence_for_picks_the_first_logged_match_and_ignores_unstamped():
+    # payload stamp 1e-6 s = 1000 ns; logs in ns
+    index = b2v.stamped_index([3000, 2000, 500, 5], [{"stamp": 1e-6, "n": "late"},
+                                                    {"stamp": 1e-6, "n": "early"},
+                                                    {"stamp": 1e-6, "n": "pre-capture"},
+                                                    "raw text"])
+    assert [e[2]["n"] for e in index] == ["pre-capture", "early", "late"]
+    keys = [e[0] for e in index]
+    log, value = b2v.evidence_for(index, keys, {"stamp_ns": 1000, "log_ns": 1500})
+    assert (log, value["n"], value["stamp_ns"]) == (2000, "early", 1000)
+    # logged before the frame's log time but after its capture still counts
+    assert b2v.evidence_for(index, keys, {"stamp_ns": 1000, "log_ns": 2500})[1]["n"] == "early"
+    # more than EVIDENCE_WINDOW_S after the frame's log time: nothing
+    late_frame = {"stamp_ns": 1000, "log_ns": 3000 - int(0.6e9)}
+    assert b2v.evidence_for(index, keys, late_frame) is None
+    # stamp more than 1 ms away: nothing
+    assert b2v.evidence_for(index, keys, {"stamp_ns": 1_002_000, "log_ns": 0}) is None
+    assert b2v.payload_stamp_ns({"stamp": True}) is None
+    assert b2v.payload_stamp_ns({"stamp": float("nan")}) is None
 
 
 @needs_tools
@@ -295,21 +353,43 @@ def test_latest_is_at_or_before_and_within_the_gap():
 
 
 @needs_tools
-def test_extract_session_uses_header_stamps_and_only_past_side_data(tmp_path):
-    sess = _write_session(tmp_path)
-    out = tmp_path / "frames"
-    assert extract.main([str(sess), "--out", str(out),
-                         "--min-interval", "0", "--max-hamming", "-1"]) == 0
-    rows = [json.loads(l) for l in (out / "frames.jsonl").read_text().splitlines()]
-    # t is the header stamp, 1 ms before the bag log time
-    assert [r["t"] for r in rows] == pytest.approx(FRAME_S, abs=1e-9)
-    assert [r["log_ns"] for r in rows] == [_ns(t + 0.001) for t in FRAME_S]
-    for i, r in enumerate(rows):
-        # this fixture's line/observation carries no image stamp: it attaches to no
-        # frame (clock rule class (a)); cmd_vel is the latest logged at or before
-        assert "line/observation" not in r["side"]
-        assert r["side"]["cmd_vel"]["linear"]["x"] <= FRAME_S[i] + 0.001
-        assert r["dt"]["cmd_vel"] <= 0
+def test_extract_session_uses_header_stamps_and_the_two_class_clock_rule(tmp_path):
+    """extract.py on the MCAP session and on its mp4 + sidecar gives each frame the
+    same side data: stamped evidence of its own image, other topics from the past."""
+    obs = {3: (0.004, 0.005),     # payload stamp 5 ms off every frame stamp -> nothing
+           1: (0.0005, 0.0),      # logged after the capture, 0.5 ms before the image
+           2: (0.6, 0.0)}         # logged 0.599 s after the frame's log time -> nothing
+    sess, stem = _convert(tmp_path, obs=obs)
+    got = {}
+    for kind, src in (("mcap", sess), ("video", stem.with_suffix(".mp4"))):
+        out = tmp_path / ("frames_" + kind)
+        assert extract.main([str(src), "--out", str(out),
+                             "--min-interval", "0", "--max-hamming", "-1"]) == 0
+        got[kind] = [json.loads(l) for l in (out / "frames.jsonl").read_text().splitlines()]
+    for rows in got.values():
+        # t is the header stamp, 1 ms before the bag log time
+        assert [r["t"] for r in rows] == pytest.approx(FRAME_S, abs=1e-9)
+        assert [r["log_ns"] for r in rows] == [_ns(t + 0.001) for t in FRAME_S]
+        for i, r in enumerate(rows):
+            for topic, key in (("line/observation", "error"),
+                               ("perception/learned/shadow", "error_delta")):
+                value = r["side"].get(topic)
+                if i in (2, 3):
+                    assert value is None, (i, topic)
+                else:
+                    assert value[key] == pytest.approx(i / 10), (i, topic)
+            cmd = r["side"]["cmd_vel"]["linear"]  # MCAP: the Twist; sidecar: m/s
+            assert (cmd["x"] if isinstance(cmd, dict) else cmd) <= FRAME_S[i] + 0.001
+            assert r["dt"]["cmd_vel"] <= 0
+        assert rows[0]["dt"]["line/observation"] > 0
+        assert -0.001 < rows[1]["dt"]["line/observation"] < 0
+    strip = ("line/observation", "perception/learned/shadow")
+    for m, v in zip(got["mcap"], got["video"]):
+        for topic in strip:
+            a, b = m["side"].get(topic), v["side"].get(topic)
+            assert (a is None) == (b is None)
+            if a is not None:
+                assert {k: b[k] for k in a} == a  # the sidecar adds only stamp_ns
 
 
 def test_output_stem_and_rate(tmp_path):

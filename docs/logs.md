@@ -3516,6 +3516,21 @@
 - 증거: `src/runtime/sensing` 로그 참조. 커밋 1695b402(호스트 폐루프 + 시험 2 passed).
 - gate 변화: 없음. T5 잔여: WSL Gazebo 실렌더링, 관측 서비스 실HTTP, 실물 LAN.
 
+## 2026-09-29 · 5184169b · docs(adr): D-341 천장 카메라 콘솔 승인 페어링 제안과 리뷰 반영
+
+- 변경: docs/adr/D-341-overhead-console-approved-pairing.md(Proposed)와 docs/plans/2026-09-29-overhead-console-pairing-plan.md 신설. mDNS 발견 → 페어링 요청 → 이름 있는 operator가 폰의 6자리 코드를 입력해 승인 → 1회 수령 → 설치자가 폰·콘솔의 사이트 CA 지문과 자격 번호를 맞춰 보는 상호 확인 → 앱 전용 CA 고정 WSS → IP 변경 시 mDNS 재발견. 독립 리뷰(APPROVE-WITH-CHANGES)를 같은 날 반영: 가짜 수신기 대비 상호 확인, 4401(최종)/4503(재시도) 분리와 Vision→`https://fleet:8090` 직접 동기화, 원격 주소별 한도 삭제, source `static|paired`, leaf DER 해시, 메모리 대기, Windows Compose 벤치 절차와 실제 로봇 포함 DEVICE 관문, 되돌림 경로. D-261·발견 규칙(3·4항 보충)·deploy/site/README.md에는 교차 참조만 더했다. tools/harness/harness.yaml의 D-341 예약 gap을 지웠다(이 ADR이 착지).
+- 증거: 2026-09-29 S21(SM-G991N, Android 15) 벤치 — NSD가 시험 `_rosy-overhead._tcp`와 로봇 `_rosy._tcp`를 함께 찾음, 평문 ws 딥링크 60 s 3 fps·178 프레임·seq_gaps 0·age_ms p50 ~110–120. LOCAL/벤치이며 DEVICE 아님.
+- gate 변화: 없음(SOURCE 문서만). 구현·DEVICE·FIELD는 계획 1–5단계와 벤치 절차.
+- 결정: 승인자는 `require_named_operator`, 신뢰는 사이트 CA 고정, 수명 180일·회수 목표 5 s(동기화 2 s). 로봇 FleetAgent 페어링은 옮기지 않는다. 역할 등록표는 방향만 두고 첫 조각은 상수 하나.
+
+## 2026-09-29 · uncommitted · docs(adr): D-382 로봇 ↔ 사이트 관제 통신 적합성 제안과 계획
+
+- 변경: `docs/adr/D-382-robot-site-console-protocol-conformance.md`(Proposed), `docs/plans/2026-09-29-robot-fleet-protocol-conformance-plan.md`(S1–S6), ADR Log 행 추가. `tools/harness/harness.yaml`에 `.worktrees/pilot-teleop`의 미커밋 초안 D-346–D-350을 예약했다.
+- 증거: DEVICE(읽기 전용) — 실물 `rosy-pinky-8kcn`(192.168.1.202:8080, 릴리스 `2026.09.27-010`)에 토큰 없이 GET·WS만 보냈다(2026-09-29). 결과: `/api/v1`·`/openapi.json`·`/docs`·`/metrics`는 공개, state·map·events·system/info·whoami는 401, `/ws/state`·`/ws/events`는 close 4401, `/api/v1/health`는 404. mDNS TXT는 프로파일에 적합. 로봇 OpenAPI와 `main` 9b3cfb59 `create_app().openapi()`를 비교하니 경로 93개는 같고, `GoalRequest.correlation_id`(D-316)와 `TrafficPolicyPatch.junction_rule`이 로봇에 없다. 판 표기는 v1.41(로봇)·v1.52(`app.py`)·v1.56(문서)이고 `info.version`은 셋 다 1.20.0. LOCAL — `python -m pytest src/runtime/gateway/test/test_protocol_version_alignment.py -q` 1 failed/2 passed(`main`의 기존 실패). SOURCE — Hub 세션 결속·Agent seq 재시작·mDNS 브리지 TXT 검사 결함을 코드 판독으로 확인.
+- gate 변화: 없음. 관제 DEVICE는 HOLD(토큰·짝 토큰·v1.44 이상 이미지 필요).
+- 결정: D-382 Proposed(브랜치 초안 번호 D-351은 main의 도킹 재시도 결정과 겹쳐 착지 때 D-382로 바꿈, D-346 4항).
+- 교훈: 계약 문서와 코드가 같은 판을 말하는지 시험이 있어도, 배포된 이미지가 어느 판인지는 런타임에서 알 수 없었다 — 판을 와이어로 노출해야 실물 대조가 된다.
+
 ## 2026-09-30 · uncommitted · feat(fleet): D-352 S1–S3 구현 착지(브랜치 feat/fleet-robot-enrollment-s1)
 
 - 변경: D-352 문서 브랜치를 병합하고 첫 조각(S1–S3)을 구현했다. `site-lan-discovery-profile.md`에 D-352 한 줄, 하네스 `adr_gaps`에서 이미 착지한 D-347 예약 줄을 뺐다(병합 잔상).
@@ -3966,3 +3981,15 @@
 - 변경: 검토(APPROVE-WITH-FIXES) 1번. `bag_to_video.py` sidecar 의 부수 토픽(cmd_vel·odom·line/observation·scan)을 최근접에서 "프레임 bag log time 이하의 최신 메시지"로 바꿨다(미래 누설 없음, `dt` ≤ 0). motion 창도 프레임 이전 0.5 s 만 본다. `extract.py` MCAP 경로의 `t` 를 bag log time 에서 카메라 헤더 stamp 로 바꾸고 행에 `stamp_ns`·`log_ns` 를 적는다. D-356 보강에 sidecar 스키마(필드·시계)를 적었다. D-379 자동 라벨러가 같은 규칙을 쓴다.
 - 증거: `test_bag_to_video.py` 에 직전값·미래 배제·extract 헤더 stamp 시험 추가, `test_bag_to_video.py test_dataset_extract.py` 25 passed (2026-10-01 Windows, ML venv). 두 실세션 재변환: moving 653/2258, 772/6940.
 - gate 변화: 없음(개발 PC 도구·문서).
+
+## 2026-10-01 · uncommitted · fix(perception): bag_to_video sidecar 가 stamp 달린 증거를 제 프레임에 붙인다
+
+- 변경: `tools/perception/dataset/bag_to_video.py` sidecar 에 두 갈래 규칙(D-356/D-373 소유자 합의). `line/observation`·`perception/learned/shadow` 는 JSON 페이로드 `stamp` 가 프레임 헤더 stamp 와 ±1 ms 로 같고, 그 프레임 촬영(헤더 stamp) 뒤·프레임 log time 뒤 0.5 s 안에 기록된 첫 메시지를 붙이고 항목에 `stamp_ns`(int ns)를 넣는다. 아니면 null. 나머지(cmd_vel·odom·scan)는 프레임 log time 이하의 최신값 그대로. 하한을 프레임 log time 이 아니라 촬영 시각으로 둔 이유: 8kcn 에서 관측 45/2258 개가 제 영상보다 37–61 µs 먼저 녹화기에 닿았다. 행 형식(필드·단위·시계)은 모듈 docstring 에 적었다. `extract.py` 와 D-356 보강 문구는 학습 루프 소유자 브랜치가 고친다.
+- 증거: `test_bag_to_video.py` 16 passed — 프레임 N 관측이 N+1 영상 뒤(0.199 s)에 기록돼도 N 에 붙음, stamp 5 ms 어긋남·0.599 s 지연·촬영 전 기록은 null, 비-stamp 토픽 dt ≤ 0. `tools/perception/test` 159 passed, 1 skipped (2026-10-01 Windows, ML venv). 두 실세션 재변환: 관측 부착 2258/2258, 6940/6940(이전 규칙에서는 한 프레임 밀림), dt 중앙값 3.0 ms·2.6 ms, 최대 10.9 ms.
+- gate 변화: 없음(개발 PC 도구).
+## 2026-10-01 · uncommitted · docs(adr): D-341·D-382 착지 — 천장 카메라 콘솔 승인·로봇 ↔ 관제 통신 적합성
+
+- 변경: 브랜치 `docs/d341-overhead-console-pairing`(D-341)과 `docs/robot-fleet-protocol-conformance`를 main에 머지. 뒤 브랜치의 D-351은 main이 2026-09-30 도킹 재시도 결정으로 선점해(2e0b699a) D-346 4항대로 D-382로 재부여. D-360·D-361·D-370과 계획 두 개(`2026-09-29-fleet-robot-code-enrollment-plan.md`, `2026-09-30-site-app-roles-and-shared-link-plan.md`)의 "브랜치" 인용을 D-341·D-382 링크로 고침. D-370의 번호 충돌 서술 두 줄은 기록으로 두고 착지 번호만 덧붙임. `adr_gaps`의 D-341 예약과 낡은 D-346–D-350 예약 제거.
+- 증거: harness generate·lint 0 error.
+- gate 변화: 없음(SOURCE 문서만). 두 ADR 모두 Proposed 그대로.
+- 결정: 없음(착지·번호 정리만). D-341 본문의 옛 이름(`src/site/overhead`, `overhead` CLI)은 D-374·D-377 표로 읽는다.

@@ -229,6 +229,16 @@ CA in Android's trusted credentials so WSS certificate checks succeed. The
 robot CORE `_rosy._tcp` record is a different API and is shown as a robot
 discovery result, not as a camera-stream target.
 
+See [D-341](../../docs/adr/D-341-overhead-console-approved-pairing.md)
+(Proposed) for console-approved camera pairing: a named operator approves a
+discovered camera's request by typing its 6-digit confirmation code, and the
+installer confirms that the phone and console show the same site fingerprint
+and credential ID. Only then is the per-camera token active and the site CA
+pinned in the app. Discovery alone still grants nothing. Until D-341 is
+implemented, and as the rollback path if pairing fails at a site, use a
+`static` source with the manual `rosyov://...&tls=1` link, which still needs
+the site CA installed in Android's user credentials.
+
 ## Prepare an Ubuntu host
 
 Install Docker Engine and the Compose plugin from the approved Ubuntu package

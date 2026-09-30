@@ -7,12 +7,34 @@ Usage: bag_to_video.py <session> [--out data/teleop/learning] [--codec hevc|h264
     <out>/teleop_<device>_<UTC stamp>.jsonl     one row per video frame, same order
     <out>/teleop_<device>_<UTC stamp>.json      session.json + conversion metadata
     <out>/teleop_<device>_<UTC stamp>.scan.npz  latest LiDAR scan per frame (if recorded)
-The video is CFR at the mean camera rate; the sidecar row i describes decoded frame i:
-t = camera header stamp (s); stamp_ns / log_ns = header stamp and bag log time (ns);
-side = the latest message of each side topic at or before the frame's bag log time
-(never a later one: no future leakage); dt = side log time - frame log time (<= 0);
-motion = moving/idle from the preceding odom window and the current command. extract.py reads this set like a
-session. The camera may be raw (camera/front) or JPEG (camera/front/compressed).
+The video is CFR at the mean camera rate. The camera may be raw (camera/front) or JPEG
+(camera/front/compressed). extract.py reads this set like a session.
+
+Sidecar row i (JSON, one line) describes decoded frame i. Two clocks: the camera header
+stamp (when the image was captured) and the bag log time (when the recorder got it).
+    index     int     decoded frame number, 0-based, = mp4 frame order
+    t         float   camera header stamp, seconds
+    stamp_ns  int     camera header stamp, ns
+    log_ns    int     bag log time of the image, ns
+    side      dict    per side topic, null when no message qualifies:
+      cmd_vel                     {"linear" m/s, "angular" rad/s}
+      odom                        {"x" m, "y" m, "yaw" rad}
+      scan                        {"stamp_ns"}; the ranges are row i of .scan.npz
+      line/observation,
+      perception/learned/shadow   the decoded JSON payload plus "stamp_ns" (int ns, the
+                                  payload's own "stamp", = its source image's header stamp)
+    dt        dict    per side topic: side log time - frame log time, seconds, or null
+    motion    dict    {"moving", "commanded", "v" m/s, "w" rad/s} from the odom of the
+                      MOTION_WINDOW_S before the frame's log time and the current cmd_vel
+Which side message a frame gets (two classes, agreed with the D-356/D-373 owner):
+  stamped evidence (STAMPED_TOPICS) is published after inference on a given image, so it
+    attaches to the frame whose header stamp equals the payload stamp within STAMP_TOL_NS,
+    and only when it is logged after that frame's capture (header stamp) and at most
+    EVIDENCE_WINDOW_S after the frame's log time. The lower bound is the capture, not the
+    frame's log time: on 8kcn 45 of 2258 observations reach the recorder 37-61 us before
+    their own image does (2026-09-30), and nothing can be computed before the capture;
+  every other topic takes the latest message at or before the frame's log time, no older
+    than --max-gap (dt <= 0), so no later sample leaks into a frame.
 """
 import argparse
 import bisect
@@ -29,12 +51,16 @@ import cv2
 import numpy as np
 
 import extract
-from control.recording import CAMERA_TOPIC, SIDE_TOPICS
+from control.recording import CAMERA_TOPIC, SHADOW_TOPIC, SIDE_TOPICS
 
 SCHEMA = "rosy.teleop.video/1"
 ODOM_TOPIC = "odom"
 SCAN_TOPIC = "scan"
 PIX_FMT = "yuv420p"
+# Evidence stamped with its source image's header stamp (see the module docstring).
+STAMPED_TOPICS = ("line/observation", SHADOW_TOPIC)
+STAMP_TOL_NS = 1_000_000         # payload stamp vs frame header stamp
+EVIDENCE_WINDOW_S = 0.5          # evidence log time may trail its frame's by this much
 # Chosen by the D-356 codec study (2026-09-30 addendum): H.265 for archive, H.264 when a
 # player or decoder without HEVC must read it. accurate_rnd halves the BGR->YUV rounding
 # bias of the default swscale path at no size cost.
@@ -185,11 +211,55 @@ def motion(t_ns, odom, cmd):
             "v": None if v is None else round(v, 4), "w": None if w is None else round(w, 4)}
 
 
+def payload_stamp_ns(value):
+    """The JSON payload's "stamp" (seconds) as int ns, or None."""
+    stamp = value.get("stamp") if isinstance(value, dict) else None
+    if isinstance(stamp, bool) or not isinstance(stamp, (int, float)) or not math.isfinite(stamp):
+        return None
+    return int(round(stamp * 1e9))
+
+
+def stamped_index(times, series):
+    """Sorted [(payload stamp ns, log ns, value)] of the messages that carry a stamp."""
+    out = []
+    for log_ns, value in zip(times, series):
+        ps = payload_stamp_ns(value)
+        if ps is not None:
+            out.append((ps, log_ns, value))
+    out.sort(key=lambda e: (e[0], e[1]))
+    return out
+
+
+def evidence_for(index, keys, frame):
+    """The first-logged message whose payload stamp is the frame's header stamp (+-tol),
+    logged after the frame's capture and at most EVIDENCE_WINDOW_S after the frame's log
+    time; (log ns, value) or None."""
+    lo = bisect.bisect_left(keys, frame["stamp_ns"] - STAMP_TOL_NS)
+    hi = bisect.bisect_right(keys, frame["stamp_ns"] + STAMP_TOL_NS)
+    window = int(EVIDENCE_WINDOW_S * 1e9)
+    best = None
+    for ps, log_ns, value in index[lo:hi]:
+        in_window = frame["stamp_ns"] <= log_ns <= frame["log_ns"] + window
+        if in_window and (best is None or log_ns < best[0]):
+            best = (log_ns, {**value, "stamp_ns": ps})
+    return best
+
+
 def sidecar_rows(frames, side, max_gap_s: float, scans=None):
     gap = int(max_gap_s * 1e9)
+    stamped = {}
+    for name in STAMPED_TOPICS:
+        if name in side:
+            index = stamped_index(*side[name])
+            stamped[name] = (index, [e[0] for e in index])
     for i, f in enumerate(frames):
         values, dts = {}, {}
         for name, (times, series) in side.items():
+            if name in stamped:
+                hit = evidence_for(*stamped[name], f)
+                values[name] = None if hit is None else hit[1]
+                dts[name] = None if hit is None else round((hit[0] - f["log_ns"]) / 1e9, 4)
+                continue
             j = latest(times, f["log_ns"], gap)
             values[name] = None if j is None else series[j]
             dts[name] = None if j is None else round((times[j] - f["log_ns"]) / 1e9, 4)
@@ -338,7 +408,11 @@ def main(argv=None) -> int:
                   "height": size[1], "frames": len(frames), "fps": fps,
                   "duration_s": round(duration, 3), "bytes": video.stat().st_size,
                   "encode_s": round(encode_s, 2)},
-        "sidecar": {"file": rows_path.name, "match": "latest at or before the frame's bag log time",
+        "sidecar": {"file": rows_path.name,
+                    "match": "stamped evidence: payload stamp = frame header stamp (+-1 ms), "
+                             "logged after the capture and <= 0.5 s after the frame's "
+                             "log time; other topics: latest at or "
+                             "before the frame's bag log time",
                     "t": "camera header stamp (s)",
                     "max_gap_s": args.max_gap, "dt": "side log time minus frame log time (s)",
                     "moving_frames": moving,

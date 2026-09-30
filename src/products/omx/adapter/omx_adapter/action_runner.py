@@ -57,6 +57,17 @@ class StopFence(Protocol):
                     operation: Callable[[], DriverSubmission]) -> DriverSubmission: ...
 
 
+class PhaseExecution(Protocol):
+    """One grant-bound coordinator for exact phase submission and cancellation."""
+
+    @property
+    def active_phase_id(self) -> str | None: ...
+
+    def start(self) -> object: ...
+
+    def cancel_current(self) -> Mapping[str, object]: ...
+
+
 class ActionRunner:
     """Journal before driver I/O; never retries an existing Fleet Action."""
 
@@ -67,6 +78,9 @@ class ActionRunner:
                  current_fence: Callable[[int, int], bool],
                  capability_current: Callable[[FleetActionGrant], bool],
                  submission_fence: StopFence | None = None,
+                 phase_runner_factory: Callable[
+                     [FleetActionGrant, ActionPhaseRecorder], PhaseExecution
+                 ] | None = None,
                  enabled: bool = False,
                  now: Callable[[], datetime] | None = None) -> None:
         self.store = store
@@ -78,6 +92,8 @@ class ActionRunner:
         self.current_fence = current_fence
         self.capability_current = capability_current
         self.submission_fence = submission_fence
+        self.phase_runner_factory = phase_runner_factory
+        self._phase_runners: dict[tuple[str, str], object] = {}
         if not isinstance(enabled, bool):
             raise ValueError("enabled must be boolean")
         if enabled and submission_fence is None:
@@ -161,6 +177,38 @@ class ActionRunner:
                 raise
             return self._receipt(current, created=False)
 
+        if grant.action_kind == "PICK_PLACE" and self.phase_runner_factory is not None:
+            identity = (grant.action_id, grant.attempt_id)
+            try:
+                recorder = self._phase_recorder_for_validated_grant(
+                    grant, peer_uid=peer_uid,
+                )
+                phase_runner = self.phase_runner_factory(grant, recorder)
+                start = getattr(phase_runner, "start", None)
+                cancel_current = getattr(phase_runner, "cancel_current", None)
+                if not callable(start) or not callable(cancel_current):
+                    raise TypeError("phase runner must support start and exact-goal cancel")
+                self._phase_runners[identity] = phase_runner
+                start()
+            except Exception:
+                current = self.store.get_action(grant.action_id)
+                if current is not None and current["state"] in {
+                    "SUBMITTING", "ACCEPTED", "RUNNING", "CANCEL_REQUESTED", "UNKNOWN",
+                }:
+                    self.store.hold_action(
+                        grant.action_id, grant.attempt_id,
+                        reason="PHASE_RUNNER_START_UNKNOWN",
+                    )
+                current = self.store.get_action(grant.action_id)
+                if current is None:
+                    raise
+                return self._receipt(current, created=created,
+                                     reason="PHASE_RUNNER_START_UNKNOWN")
+            current = self.store.get_action(grant.action_id)
+            if current is None:
+                raise RuntimeError("phase runner removed its Action journal")
+            return self._receipt(current, created=created)
+
         def _fenced_submission() -> dict[str, object]:
             # The driver call AND its ACCEPTED recording stay inside the
             # stop fence: a stop latched while the driver call blocks must
@@ -214,6 +262,29 @@ class ActionRunner:
             raise KeyError(action_id)
         if action["attempt_id"] != attempt_id:
             raise PermissionError("cancel attempt does not match current Action")
+        phases = self.store.action_phases(action_id, attempt_id=attempt_id)
+        if phases:
+            if action["state"] == "SUBMITTING":
+                held = self.store.hold_action(
+                    action_id, attempt_id, reason="PHASE_CANCEL_DURING_SUBMISSION",
+                )
+                return self._receipt(held, created=False,
+                                     reason="PHASE_CANCEL_DURING_SUBMISSION")
+            active = next((phase for phase in reversed(phases)
+                           if phase["state"] in {"ACCEPTED", "RUNNING"}), None)
+            if active is not None:
+                self.cancel_phase(
+                    action_id, attempt_id, phase_id=active["phase_id"], peer_uid=peer_uid,
+                )
+                current = self.store.get_action(action_id)
+                return self._receipt(current or action, created=False)
+            if action["state"] in {"ACCEPTED", "RUNNING", "CANCEL_REQUESTED"}:
+                held = self.store.hold_action(
+                    action_id, attempt_id, reason="PHASE_CANCEL_TARGET_UNAVAILABLE",
+                )
+                return self._receipt(held, created=False,
+                                     reason="PHASE_CANCEL_TARGET_UNAVAILABLE")
+            return self._receipt(action, created=False)
         requested = self.store.request_cancel(action_id, attempt_id)
         try:
             acknowledged = self.driver.cancel(requested)
@@ -279,6 +350,20 @@ class ActionRunner:
                      phase_id: str, peer_uid: int) -> dict[str, object]:
         """Request cancel for one phase; an ACK remains separate from its result."""
         action = self._require_attempt_owner(action_id, attempt_id, peer_uid)
+        phase_runner = self._phase_runners.get((action_id, attempt_id))
+        if phase_runner is not None:
+            active_phase_id = getattr(phase_runner, "active_phase_id", None)
+            cancel_current = getattr(phase_runner, "cancel_current", None)
+            if (active_phase_id != phase_id
+                    or not callable(cancel_current)):
+                raise InvalidActionTransition("phase is not the coordinator's active ROS goal")
+            cancel_current()
+            phase = next((row for row in self.store.action_phases(
+                action_id, attempt_id=attempt_id,
+            ) if row["phase_id"] == phase_id), None)
+            if phase is None:
+                raise RuntimeError("coordinator phase journal disappeared")
+            return phase
         phase = self.store.request_phase_cancel(
             action_id, attempt_id, phase_id=phase_id,
         )
