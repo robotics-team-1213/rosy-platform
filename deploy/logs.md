@@ -1578,6 +1578,12 @@
 - 증거: test_boot_display.py·test_boot_status_indicator.py. 실기 확인은 다음 릴리스 때.
 - gate 변화: 없음.
 
+## 2026-10-01 · uncommitted · feat(native): D-385 기다리는 카드에 프레임 위상
+
+- 변경: rosy-boot-display.py 가 BOOTING·PROVISIONED 중 view 에 frame(1 s 위상)을 실어 다시 그림 키에 태운다 — 0.5 Hz 숨쉼, CORE_READY 는 기존처럼 무변경 무재그림.
+- 증거: test_boot_display.py (대기 중 재그림·ready 정지). 실기는 다음 릴리스.
+- gate 변화: 없음.
+
 ## 2026-10-01 · 7d0f3f89 · fix(deploy): 사이트 빌드 컨텍스트는 이미지가 복사하는 것만
 
 - 변경: `Dockerfile.{vision,fleet}.dockerignore` — 맨 `!src`·`!deploy`는 BuildKit의 상위 디렉터리 일치로 트리 전체를 다시 넣었다(vision 컨텍스트 2330개 파일). 잎 glob만 남기고 `__pycache__`·`.pytest_cache`를 뺐다.

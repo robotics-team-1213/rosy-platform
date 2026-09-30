@@ -238,3 +238,9 @@
 - 변경: FleetAgent가 `EventBus.subscribe`가 돌려준 해제 함수를 쥐고 종료 때 부른다(없는 `events.unsubscribe`를 부르던 결함, F10). 버스가 모든 구독자에게 넘기는 링 버퍼 속 같은 `EventMessage`의 `seq`를 덮어쓰지 않고 사본에 Agent seq를 매긴다(`/api/v1/events`·`/ws/events`·감사의 seq가 바뀌던 문제, F7의 일부). F7의 재시작 뒤 누락(부팅 세대)은 다음 이미지 회차(L2).
 - 증거: `test_fleet_agent.py` 신규 2건 — 수정 전 실패, 수정 후 통과. 시험용 `DummyEventBus`가 실제 버스에 없는 `unsubscribe`를 갖고 있어 결함을 가렸으므로 실제 표면(`subscribe`가 해제 함수를 돌려줌)으로 맞췄다.
 - gate 변화: 없음(SOURCE/LOCAL). 로봇에는 다음 이미지·payload로만 간다.
+
+## 2026-10-01 · uncommitted · feat(command): D-385 모드→표정 정책 emotion_map
+
+- 변경: core_features/command/emotion_map.py — EMOTION_BY_MODE 와 막힘(bored) 우선순위. 모르는 모드는 None(표정 유지). ROS-free.
+- 증거: gateway/test/test_emotion_map.py (어휘가 감정 노드의 GIF 이름 안에 있는지도 검증).
+- gate 변화: 없음.

@@ -4008,3 +4008,9 @@
 - 증거: 세션 답 7/8(rosy-84·75·63·bc·0d·d3·70 동의, 반대 없음; rosy-c8 무응답 = 동의 처리). 사용자가 결정을 뒤집을 수 있다.
 - gate 변화: 없음. Accepted는 설계 수용이며 LOCAL·DEVICE·FIELD 증거가 아니다.
 - 결정: 위 D1–D3.
+
+## 2026-10-01 · uncommitted · docs(adr): D-385 Rosy가 스스로 표현한다
+
+- 변경: ADR D-385(파일+로그 행). 절전 "꼭 필요한 것만"이 기존 WAKE_BATTERY 체계임을 확인·기록.
+- 증거: rosy_harness lint 오류 0.
+- gate 변화: 없음.
