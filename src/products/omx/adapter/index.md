@@ -39,7 +39,7 @@
 ## 최근 기록
 
 - 2026-10-01 · uncommitted · D-390 Pilot simulation action bridge
+- 2026-10-01 · uncommitted · implement D-386 asynchronous phase response and fresh start-state checks
 - 2026-10-01 · uncommitted · correct OMX phase ADR number to D-386
 - 2026-10-01 · uncommitted · D-385 exposes ROS phase acceptance and state-binding gates
 - 2026-10-01 · uncommitted · merge phase recovery and record readiness gates
-- 2026-10-01 · uncommitted · fix(api): error responses echo the request's protocol version
