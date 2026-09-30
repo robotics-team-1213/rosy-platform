@@ -85,7 +85,7 @@
 | 등급 | 인정하는 증거 |
 |---|---|
 | SOURCE | 이 ADR, 계획, 발견 규칙·README·D-261 교차 참조. ADR Log 연속성 시험 녹색 |
-| LOCAL | Fleet·overhead pytest, Kotlin JVM 시험이 같은 `pairing_vectors.json`으로 녹색. 페어링을 켠 구성에서도 `test_no_video_relay.py` 녹색. Compose 스택 + 합성 Python 클라이언트로 요청→승인→수령→상호 확인→WSS 고정 CA 송신→회수 후 `4401`, Fleet 정지 중 `4503` 후 재접속까지 재현. 중계형 중간자·가짜 수신기·CA 변경은 JVM/종단 시험으로 LOCAL에서 판정한다. Windows 벤치 PC에서 `compose up` + `https://<pc>.local:8443/healthz` 성공이 폰 작업 전 관문이다 |
+| LOCAL | Fleet·overhead pytest, Kotlin JVM 시험이 같은 `test/fixtures/protocol/pairing.v1.json`으로 녹색. 페어링을 켠 구성에서도 `test_no_video_relay.py` 녹색. Compose 스택 + 합성 Python 클라이언트로 요청→승인→수령→상호 확인→WSS 고정 CA 송신→회수 후 `4401`, Fleet 정지 중 `4503` 후 재접속까지 재현. 중계형 중간자·가짜 수신기·CA 변경은 JVM/종단 시험으로 LOCAL에서 판정한다. Windows 벤치 PC에서 `compose up` + `https://<pc>.local:8443/healthz` 성공이 폰 작업 전 관문이다 |
 | DEVICE | 실물 Android 폰(첫 기록은 S21)과 벤치 LAN, 사이트 CA를 Android 설정에 설치하지 않은 상태: 발견→요청→콘솔 코드 입력 승인→상호 확인→TLS 고정 송신 60 s 이상, 사이트 IP 변경 후 폰을 만지지 않고 재연결(옛/새 IP·재연결 시간 기록), 검출·제안 계산 부하 중 회수 후 5 s 안에 송신 중단, CA 변경 확인 1회. 같은 벤치 Fleet의 `robots.yaml`에 실제 로봇 `rosy-pinky-8kcn`(`http://192.168.1.202:8080`)을 두고 preview 비밀을 켜서, 콘솔 "관제 카메라"에 페어링된 카메라의 실시간 프레임과 로스터의 로봇이 함께 보이는 화면 캡처. 절차는 계획의 벤치 절차 |
 | FIELD | 실제 Ubuntu 사이트 호스트(Avahi, Compose, 사이트 CA)와 천장 거치 폰 30분 이상, 사이트 DHCP 변경·재부팅 포함. D-210 범위 판단은 별도 |
 
