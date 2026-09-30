@@ -64,7 +64,7 @@
 ## 최근 기록
 
 - 2026-10-01 · uncommitted · refactor(control): keep 앞단을 lane_keep_lines.py 로 분리(파일 예산)
+- 2026-09-30 · uncommitted · feat(recording): 녹화기가 LiDAR `scan` 도 기록한다(D-379)
 - 2026-09-30 · uncommitted · fix(control): keep 2차 — 모서리 모드 분기 fail-closed, 라이브 재생, 끊김 뒤 초기화(D-364 addendum 2)
 - 2026-09-30 · uncommitted · fix(control): keep v2 — 경계 추적과 벽 밑 테이프(D-364 addendum)
 - 2026-09-30 · 40757d69 · fix(camera): 교정 검사기를 import 못 해도 덮어쓰기만 건너뛴다(재검토 R4)
-- 2026-09-30 · uncommitted · fix(camera,control): IR 교정 덮어쓰기를 전용 경로·검증으로, 도구 문턱 인자(검토 반영)

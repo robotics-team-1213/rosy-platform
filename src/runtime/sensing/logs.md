@@ -676,6 +676,13 @@
 - 결정: D-364 addendum 2(새 번호 없음). 실물 모서리 회전은 계속 끔.
 - 교훈: 폐루프 원인은 라이브와 같은 프레임 순서로 재생해야 보인다 — 4 fps 표본은 모서리 잠금이 걸린 몇 프레임을 빼먹어 반대 답을 냈다. 순간이동 벤치에서는 노드 상태가 이전 위치를 기억한다.
 
+## 2026-09-30 · uncommitted · feat(recording): 녹화기가 LiDAR `scan` 도 기록한다(D-379)
+
+- 변경: `control/recording.py` `RECORD_TOPICS` 에 `scan` 을 더했다. D-379 자동 라벨(`tools/perception/dataset/autolabel.py`)이 LiDAR 반사점을 카메라 영상에 투영해 벽을 라벨하는데, LiDAR 는 벽은 보고 바닥 테이프는 못 보므로 벽/차선 구분의 기준이 된다. `session.json` 의 `topics` 와 `bag_command` 에 그대로 반영된다. 이 기록기는 아직 장치에 배포되지 않았다.
+- 증거: `test/test_recording.py` 에 `test_record_topics_include_the_lidar_for_wall_labels` 추가, `test_recording.py` 25 passed (2026-09-30 Windows). `feat/d373-learning-loop-lap2` 가 같은 줄을 `record_topics()` 로 바꿨으므로 병합 때 `scan` 을 그 함수에 옮겨야 한다.
+- gate 변화: SOURCE. 장치 반영 없음.
+- 결정: D-379 부록(2026-09-30).
+
 ## 2026-10-01 · uncommitted · refactor(control): keep 앞단을 lane_keep_lines.py 로 분리(파일 예산)
 - 변경: `perception/lane_keep.py`(698 행, 예산 600)에서 바닥 흰색 마스크·조감도 선 맞춤(`floor_white_mask`·`extract_lines` 와 그 상수)을 `lane_keep_lines.py` 로 옮겼다. `LaneKeeper` 는 상태(쪽 추적·짝짓기·모서리·HOLD)만 남는다(541 행). 옛 이름은 lane_keep 에서 다시 내보내 호출·시험은 그대로다. control 크기 판정 36861 로 재판정.
 - 증거: `pytest src/runtime/sensing/test -k "lane or keep or observer"` 336 passed; 실물 세션 재생 keep 수치가 분리 전과 같다(on_line 0.149 / on_paint 0.052 / none 0.095 / jump 0.007).
