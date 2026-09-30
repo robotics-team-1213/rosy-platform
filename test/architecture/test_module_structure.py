@@ -111,6 +111,14 @@ SIZE_VERDICTS = {
         "Mission feedback scope/context/tool-result contracts were added; re-judged 2026-09-30 at 1001 "
         "under the D-362 zero-allowance tier. ROS-free, host-testable (X5)",
     ),
+    "site/fleet/fleet/server/app.py": (
+        1466,
+        "split: the mission/dispatch route groups now carry their own stores and lifecycles (task_store, "
+        "mission modules) — the independent-boundary condition the 813-line accept was waiting for arrived "
+        "with the arbitration work; owner fleet, unscheduled (docs/plans/"
+        "2026-09-29-fleet-mission-control-arbitration-implementation.md; re-judged 2026-09-30 at 1466 after "
+        "the enrollment route groups joined; committed tree measured 1556, inside the regrowth allowance)",
+    ),
     "site/fleet/fleet/server/task_store.py": (
         1060,
         "accept: keep SQLite task, history, lease, reservation, and dispatch-claim transactions together; "
@@ -122,6 +130,17 @@ SIZE_VERDICTS = {
     "runtime/sensing/control/safety/node.py": (
         795,
         "accept: legacy comparison-graph publisher pinned by test_module_separation; no new work (X3)",
+    ),
+    # calib cluster: verdicts restored for the COMMITTED sizes (642 / 970) -
+    # the in-flight calibration_sequence extraction (uncommitted) carries the
+    # split; these entries guard origin until that lands.
+    "runtime/sensing/control/calib_node.py": (
+        642,
+        f"split: same calibration cluster as startup_calibration_node (C1); {CONTROL_SPLIT}",
+    ),
+    "runtime/sensing/control/startup_calibration_node.py": (
+        970,
+        f"split: extract the ROS-free calibration state machine (C1); {CONTROL_SPLIT}",
     ),
     "site/fleet/fleet/server/console.py": (
         1021,
@@ -180,9 +199,22 @@ SIZE_VERDICTS = {
         "with one owner (web_node). Splitting it into css/js partials would break that contract "
         "to shorten a dev-only file. Zero growth allowance applies (>1000)",
     ),
-    # hmi/dashboard/app.js: the P1 extraction (state-socket/telemetry/teleop out,
-    # 2026-09-30) brought it from 1338 under the 800-line web budget - verdict
-    # removed by the split arriving, not by re-judgement.
+    # hmi/dashboard/app.js + styles.css: verdicts are for the COMMITTED sizes
+    # (1338 / 1119). The in-flight P1 extraction (state-socket/telemetry/teleop
+    # out) shrinks them in an uncommitted tree; when that lands, the entries
+    # go with it. Recorded here so origin's committed state stays guarded.
+    "hmi/dashboard/app.js": (
+        1338,
+        "split: role-surface modules with no build step (D-23 — native ES modules or multiple script "
+        "tags only; D-7 React+Vite stays declined); aligns with the D-359 token layers; owner dashboard, "
+        "scheduled docs/plans/2026-09-30-file-size-budget-and-refactor-queue.md (P1)",
+    ),
+    "hmi/dashboard/styles.css": (
+        1119,
+        "split: grew past the 800-line web budget with the D-359 token layers and the P1 surface "
+        "work; the same file-size queue owns the reduction; owner dashboard, "
+        "docs/plans/2026-09-30-file-size-budget-and-refactor-queue.md",
+    ),
     "sim/gz_sim/scripts/lane_live_view.html": (
         856,
         "accept: same owner as the accepted lane_live_view.py — the pure logic already lives in "

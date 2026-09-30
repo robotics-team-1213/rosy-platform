@@ -7,6 +7,7 @@ adr_log: docs/reference/ROSY ADR Log.md
 
 # IDs absent from the ADR log on purpose. Remove an entry once the ADR is written.
 adr_gaps:
+  D-362: "reserved by an uncommitted ADR-log edit carrying the file-size-budget decision (cited by test_module_structure and the task_store verdict); remove once that session commits it"
   D-363: "skipped: never written - a concurrent session's numbering jumped from D-362 to D-371 (2026-09-30). Remove the entry if a session lands an ADR as D-363"
   D-364: "skipped: never written (D-362 -> D-371 jump, 2026-09-30); remove if an ADR lands as D-364"
   D-365: "skipped: never written (D-362 -> D-371 jump, 2026-09-30); remove if an ADR lands as D-365"
