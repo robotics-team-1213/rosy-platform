@@ -314,18 +314,6 @@ for (const [name, ctor] of [
 // 취소·Esc는 false, 실행은 true. 닫히면 포커스는 누른 행 버튼으로 돌아간다. 목록은
 // 대화상자가 열린 동안 폴링으로 다시 그려질 수 있어 opener는 함수로도 받는다
 // (닫힐 때 불러 지금 화면에 있는 그 행의 버튼을 찾는다).
-//
-// 비모달이다(2026-09-30 US-010 측정: showModal()은 문서 전체를 inert로 만들어 비상
-// 정지까지 막았다 — D-280 원칙 2 위반). 그래서 모달은 여기서 흉내 낸다:
-// * `[data-always-live]`(각 표면 마크업이 정지 컨트롤에 단다)와 대화상자만 살리고
-//   나머지 가지에 inert를 건다. 폴링이 새로 붙인 노드도 MutationObserver가 다시 건다.
-// * 스크림(`--scrim`)은 정지 컨트롤 자리에 구멍을 낸다(clip-path) — 보이고 눌린다.
-// * Esc는 취소, Tab은 취소 → 실행 → 보이는 정지 컨트롤을 돈다. 정지에는 단축키가
-//   없으므로 새로 만들지 않고 포커스 순환에 넣었다(키보드로도 두 번의 Tab 안에 닿는다).
-// * 정지를 누르면 정지는 제 할 일을 하고 대화상자는 취소로 닫힌다(삭제 없음).
-// aria-modal은 달지 않는다: 달면 보조기기가 살아 있는 정지를 못 찾는다(inert가 나머지를 숨긴다).
-const ALWAYS_LIVE = "[data-always-live]";
-
 export function confirmIrreversible({ message, action, opener = document.activeElement }) {
   const dialog = document.createElement("dialog");
   dialog.className = "ui-confirm";
@@ -344,6 +332,29 @@ export function confirmIrreversible({ message, action, opener = document.activeE
   run.addEventListener("click", () => dialog.close("confirm"));
   actions.append(cancel, run);
   dialog.append(text, actions);
+  return new Promise((resolve) => {
+    openLiveDialog(dialog, { initialFocus: cancel, opener, onClose: (value) => resolve(value === "confirm") });
+  });
+}
+
+// 모든 대화상자는 비모달이다(2026-09-30 US-010 측정: showModal()은 문서 전체를 inert로
+// 만들어 비상 정지까지 막았다 — D-280 원칙 2 위반). 그래서 모달은 여기서 흉내 낸다:
+// * `[data-always-live]`(각 표면 마크업이 정지 컨트롤에 단다)와 대화상자만 살리고
+//   나머지 가지에 inert를 건다. 폴링이 새로 붙인 노드도 MutationObserver가 다시 건다.
+// * 스크림(`--scrim`)은 정지 컨트롤 자리에 구멍을 낸다(clip-path) — 보이고 눌린다.
+// * Esc는 취소, Tab은 대화상자 안의 컨트롤 → 보이는 정지 컨트롤을 돈다. 정지에는
+//   단축키가 없으므로 새로 만들지 않고 포커스 순환에 넣었다.
+// * 정지를 누르면 정지는 제 할 일을 하고 대화상자는 취소("cancel")로 닫힌다.
+// * 마크업에 있던 대화상자는 열린 동안 body 끝으로 옮겨(조상의 쌓임 맥락을 벗어남)
+//   닫히면 제자리로 돌아간다. 만들어 넘긴 대화상자는 닫히면 지운다.
+// aria-modal은 달지 않는다: 달면 보조기기가 살아 있는 정지를 못 찾는다(inert가 나머지를 숨긴다).
+// 닫기는 dialog.close(value)로 한다. onClose(returnValue, { byStop })가 정리 뒤에 불린다.
+const ALWAYS_LIVE = "[data-always-live]";
+const DIALOG_FOCUSABLE = "input:not([type=hidden]), select, textarea, button, ui-button, a[href], [tabindex]:not([tabindex='-1'])";
+
+export function openLiveDialog(dialog, { initialFocus = null, opener = document.activeElement, onClose } = {}) {
+  dialog.classList.add("ui-live-dialog");
+  const home = dialog.isConnected ? { parent: dialog.parentNode, next: dialog.nextSibling } : null;
   const scrim = document.createElement("div");
   scrim.className = "ui-confirm-scrim";
   scrim.setAttribute("aria-hidden", "true");
@@ -385,7 +396,8 @@ export function confirmIrreversible({ message, action, opener = document.activeE
       return;
     }
     if (event.key !== "Tab") return;
-    const ring = [cancel, run, ...liveNodes().filter(shown)];
+    const ring = [...dialog.querySelectorAll(DIALOG_FOCUSABLE)].filter(shown).concat(liveNodes().filter(shown));
+    if (!ring.length) return;
     const at = ring.findIndex((node) => node === document.activeElement || node.contains(document.activeElement));
     event.preventDefault();
     const step = event.shiftKey ? -1 : 1;
@@ -398,34 +410,34 @@ export function confirmIrreversible({ message, action, opener = document.activeE
     dialog.close("cancel");
   };
 
-  return new Promise((resolve) => {
-    dialog.addEventListener("close", () => {
-      observer.disconnect();
-      document.removeEventListener("keydown", onKey, true);
-      document.removeEventListener("click", onClick, true);
-      removeEventListener("resize", punch);
-      removeEventListener("scroll", punch, true);
-      for (const node of inerted) node.inert = false;
-      inerted.clear();
-      dialog.remove();
-      scrim.remove();
-      if (!byStop) {
-        const back = typeof opener === "function" ? opener() : opener;
-        if (back?.isConnected && typeof back.focus === "function") back.focus();
-      }
-      resolve(dialog.returnValue === "confirm");
-    }, { once: true });
-    document.body.append(scrim, dialog);
-    seal();
-    punch();
-    observer.observe(document.body, { childList: true, subtree: true });
-    document.addEventListener("keydown", onKey, true);
-    document.addEventListener("click", onClick, true);
-    addEventListener("resize", punch);
-    addEventListener("scroll", punch, { capture: true, passive: true });
-    dialog.show();
-    cancel.focus();
-  });
+  dialog.addEventListener("close", () => {
+    observer.disconnect();
+    document.removeEventListener("keydown", onKey, true);
+    document.removeEventListener("click", onClick, true);
+    removeEventListener("resize", punch);
+    removeEventListener("scroll", punch, true);
+    for (const node of inerted) node.inert = false;
+    inerted.clear();
+    scrim.remove();
+    if (home?.parent.isConnected) home.parent.insertBefore(dialog, home.next?.parentNode === home.parent ? home.next : null);
+    else dialog.remove();
+    if (!byStop) {
+      const back = typeof opener === "function" ? opener() : opener;
+      if (back?.isConnected && typeof back.focus === "function") back.focus();
+    }
+    onClose?.(dialog.returnValue, { byStop });
+  }, { once: true });
+  document.body.append(scrim, dialog);
+  seal();
+  punch();
+  observer.observe(document.body, { childList: true, subtree: true });
+  document.addEventListener("keydown", onKey, true);
+  document.addEventListener("click", onClick, true);
+  addEventListener("resize", punch);
+  addEventListener("scroll", punch, { capture: true, passive: true });
+  dialog.returnValue = "";
+  dialog.show();
+  (initialFocus || [...dialog.querySelectorAll(DIALOG_FOCUSABLE)].find(shown))?.focus();
 }
 
 // D-359 §4 — 캔버스 색·글꼴. 캔버스는 CSS 변수를 못 쓰므로 여기서 한 번 풀어

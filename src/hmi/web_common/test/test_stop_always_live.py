@@ -7,6 +7,7 @@ inert로 만든다. 그러니 ui.js를 싣는 모든 페이지는 마크업의 �
 """
 
 from html.parser import HTMLParser
+import re
 from pathlib import Path
 
 SRC = Path(__file__).resolve().parents[3]
@@ -77,3 +78,45 @@ def test_the_scan_fires_when_the_attribute_is_removed():
     assert stops_in(stripped) == [(25, False)]
     assert stops_in('<ui-button kind="irreversible">도크 삭제</ui-button>') == []
     assert stops_in('<ui-button kind="irreversible" aria-label="전체 로봇 정지"><span>전체</span></ui-button>') == [(1, False)]
+
+
+# D-280 원칙 2 — `showModal()`은 대화상자 밖 문서 전체를 inert로 만들어 정지까지 막는다
+# (2026-09-30 US-010, 2026-10-01 Fleet 등록 대화상자). 대화상자는 ui.js openLiveDialog로 연다.
+SHOW_MODAL = re.compile(r"""\.\s*showModal\s*\(|\[\s*["']showModal["']\s*\]""")
+WEB_SCRIPT_ROOTS = (
+    SRC / "hmi" / "dashboard",
+    SRC / "hmi" / "web_common",
+    SRC / "hmi" / "pilot",
+    SRC / "site" / "fleet" / "fleet" / "server" / "web",
+    SRC / "site" / "games" / "games" / "web",
+)
+
+
+def surface_scripts():
+    for base in WEB_SCRIPT_ROOTS:
+        for path in sorted(base.rglob("*.js")):
+            parts = path.relative_to(base).parts
+            if "test" in parts or "node_modules" in parts:
+                continue
+            yield path
+
+
+def test_no_surface_script_opens_a_modal_dialog():
+    scripts = list(surface_scripts())
+    offenders = [f"{path.relative_to(SRC)}:{text.count(chr(10), 0, match.start()) + 1}"
+                 for path in scripts
+                 for text in [path.read_text(encoding="utf-8")]
+                 for match in SHOW_MODAL.finditer(text)]
+    assert offenders == [], f"showModal()은 정지를 inert로 만든다 — ui.js openLiveDialog를 쓴다: {offenders}"
+    names = {path.relative_to(SRC).as_posix() for path in scripts}
+    for script in ("site/fleet/fleet/server/web/enrollment.js", "hmi/web_common/ui.js", "hmi/pilot/app.js",
+                   "hmi/dashboard/settings.js", "site/games/games/web/board.js"):
+        assert script in names, f"스캔이 {script}를 놓쳤다"
+
+
+def test_the_modal_scan_fires_on_the_old_enrollment_call():
+    """Mutation proof: the 2026-10-01 Fleet enrollment call and its variants are caught."""
+    for planted in ("if (dialog?.showModal) dialog.showModal();", "el('d')?.showModal()", "dialog['showModal']()"):
+        assert SHOW_MODAL.search(planted), planted
+    assert not SHOW_MODAL.search("// showModal()은 정지까지 inert로 만든다")
+    assert not SHOW_MODAL.search("openLiveDialog(dialog, { initialFocus })")

@@ -44,8 +44,8 @@
 
 ## 최근 기록
 
+- 2026-10-01 · uncommitted · fix(web): D-359 리뷰 P1-2/P2-3 — 비모달 열기를 openLiveDialog로 공유
 - 2026-10-01 · uncommitted · fix(web): D-359 리뷰 P1-1/P2-2 — 한글 없는 열거값 표시도 린트가 본다
 - 2026-09-30 · uncommitted · refactor(web_common): D-377 icon files and registry ids follow one word
 - 2026-09-30 · uncommitted · fix(ci): D-370 리뷰 — 아이콘 시험이 Pillow 없이도 수집되고, 토큰 이름 중복을 막음
 - 2026-09-30 · uncommitted · docs(adr): D-358 앱 역할 ADR을 D-370으로 재번호
-- 2026-09-30 · uncommitted · feat(icons): D-358 S3 이름·아이콘·파비콘

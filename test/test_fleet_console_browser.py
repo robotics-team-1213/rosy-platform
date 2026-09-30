@@ -1055,6 +1055,106 @@ def test_robot_enrollment_panel_enrolls_by_screen_code(console_url):
         browser.close()
 
 
+def _enrollment_api(listing):
+    return {
+        "/api/fleet/state": SNAPSHOT, "/api/fleet/map": MAP_GRID, "/api/fleet/formation": FORMATION,
+        "/api/fleet/session": {"principal_id": "alice", "role": "operator"},
+        "/api/fleet/discovery": {"scanner_online": True, "devices": [{
+            "name": "rosy-pinky-8kcn", "hostname": "rosy-pinky-8kcn.local",
+            "address": "192.168.1.202", "port": 8080, "stage": "CORE_READY", "release": "",
+            "robot_id": None, "status": "registration_pending", "enrollable": True}]},
+        "/api/fleet/enrollment/robots": listing,
+        "/api/fleet/estop": {"stopped": 3, "total": 3, "robots": []},
+    }
+
+
+def test_enrollment_dialog_leaves_the_fleet_stop_live(console_url):
+    """D-280 원칙 2 (P1-2 review): the enrollment dialog is non-modal — #estop stays live."""
+    from playwright.sync_api import sync_playwright
+
+    listing = {"available": True, "unavailable_reason": None, "static_robot_ids": [], "robots": [], "alarms": []}
+    posts = []
+    with sync_playwright() as playwright:
+        browser, page, errors = _open_console(playwright, _enrollment_api(listing), posts)
+        page.on("dialog", lambda dialog: dialog.accept())  # 전체 정지의 window.confirm
+        page.goto(console_url, wait_until="networkidle")
+        page.get_by_role("heading", name="로봇 등록", exact=True).wait_for()
+        opener = page.locator("#discovery-list ui-button", has_text="등록").first
+        opener.click()
+        page.wait_for_function("document.getElementById('enroll-dialog').open")
+        assert page.evaluate("document.activeElement?.id") == "enroll-code"
+        state = page.evaluate("""() => {
+          const stop = document.getElementById('estop');
+          const box = stop.getBoundingClientRect();
+          const hit = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+          const inertAncestor = (node) => { for (; node; node = node.parentElement) if (node.inert) return true; return false; };
+          return {stopInert: inertAncestor(stop), hitsStop: Boolean(hit && stop.contains(hit)),
+                  dialogInert: inertAncestor(document.getElementById('enroll-dialog')),
+                  panelInert: inertAncestor(document.getElementById('enrolled-list'))};
+        }""")
+        assert state == {"stopInert": False, "hitsStop": True, "dialogInert": False, "panelInert": True}
+        page.locator("#estop").click()
+        page.wait_for_function("!document.getElementById('enroll-dialog').open")
+        for _ in range(50):
+            if ("POST", "/api/fleet/estop") in posts:
+                break
+            page.wait_for_timeout(100)
+        assert ("POST", "/api/fleet/estop") in posts
+        assert page.evaluate("[...document.querySelectorAll('[inert]')].length") == 0
+        # the dialog went back to its panel (it sat at the end of body only while open)
+        assert page.evaluate("document.getElementById('enroll-dialog').parentElement !== document.body")
+        assert not errors
+        browser.close()
+
+
+def test_unenroll_is_a_quiet_row_action_confirmed_by_name(console_url):
+    """D-371 (P2-3 review): 등록 해제 revokes the site token, so it is `등록 해제…` + confirmIrreversible."""
+    from playwright.sync_api import sync_playwright
+
+    enrolled = {"robot_id": "rosy_09", "hostname": "rosy-pinky-8kcn", "address": "192.168.1.202:8080",
+                "state": "active", "legacy_lifetime": True, "origin": "enrolled", "hold": None,
+                "expires_at": "2026-10-07T00:00:00+00:00"}
+    listing = {"available": True, "unavailable_reason": None, "static_robot_ids": [], "robots": [enrolled],
+               "alarms": []}
+    deletes = []
+    with sync_playwright() as playwright:
+        browser, page, errors = _open_console(playwright, _enrollment_api(listing))
+
+        def remove(route):
+            if route.request.method != "DELETE":
+                route.fallback()
+                return
+            deletes.append(route.request.url)
+            route.fulfill(status=200, json={"state": "removed"})
+
+        page.route("**/api/fleet/enrollment/robots/rosy_09", remove)
+        page.goto(console_url, wait_until="networkidle")
+        row_button = page.locator('#enrolled-list li[data-robot-id="rosy_09"] ui-button[data-action="unenroll"]')
+        row_button.wait_for()
+        assert row_button.inner_text() == "등록 해제…"
+        assert row_button.get_attribute("kind") == "quiet"
+        row_button.click()
+        dialog = page.locator("dialog.ui-confirm")
+        dialog.wait_for()
+        assert '"rosy_09"' in dialog.locator("p").inner_text()
+        run = dialog.locator('ui-button[kind="irreversible"]')
+        assert run.inner_text() == "등록 해제"
+        page.keyboard.press("Escape")
+        page.wait_for_function("!document.querySelector('dialog.ui-confirm')")
+        assert deletes == []
+        assert page.evaluate("document.activeElement?.dataset.action") == "unenroll"
+        row_button.click()
+        page.locator('dialog.ui-confirm ui-button[kind="irreversible"]').click()
+        page.wait_for_function("!document.querySelector('dialog.ui-confirm')")
+        for _ in range(50):
+            if deletes:
+                break
+            page.wait_for_timeout(100)
+        assert len(deletes) == 1
+        assert not errors
+        browser.close()
+
+
 def test_camera_rectification_controls_are_accessible_source_scoped_and_reset(console_url):
     from playwright.sync_api import sync_playwright
 

@@ -9,6 +9,7 @@ import { createFieldView } from "./field-view.js";
 import { applyRoleToControls } from "./authorization.js";
 import { DISCOVERY_LABELS, createEnrollmentPanel } from "./enrollment.js";
 import { createPollGate } from "./poll-gate.js";
+import { confirmIrreversible, openLiveDialog } from "/common/ui.js";
 // 좌표계: 로봇 pose 는 CORE 가 TF `map → <ns>base_footprint` 로 읽어 주는 map 프레임
 // 값이다(ros_bridge `_map_frame = "map"`). 그래서 N대를 한 격자 위에 그대로 겹쳐
 // 그릴 수 있다. 격자는 행 0 이 아래쪽(y 최소)이고 캔버스는 위가 0 이라 y 를 뒤집는다.
@@ -303,6 +304,7 @@ const enrollment = createEnrollmentPanel({
   headers: authHeaders,
   identity: () => ({ role: auth.role, principal_id: auth.principal }),
   log,
+  dialogs: { confirmIrreversible, openLiveDialog },
 });
 
 function showDiscoveryUnavailable(label, message) {

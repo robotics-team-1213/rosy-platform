@@ -382,3 +382,11 @@
 - gate 변화: 새 시험 `test_no_bare_enum_reaches_operator_text`·`test_the_lint_catches_bare_enums_flowing_to_text`·`test_reverting_an_enum_text_fix_fails_the_lint`·`test_every_enum_text_allowlist_entry_still_matches`.
 - 결정: D-359 US-009. 실행 모드 이름(core/motor/hardware)·릴리스 상태·차선 추종 결과 상태는 한국어 지도가 아직 없어 예외 표에 사유와 함께 둔다.
 - 교훈: 2026-09-30 항목의 "미증명: 한글 없는 순수 열거값"이 이 회차에서 닫혔다.
+
+## 2026-10-01 · uncommitted · fix(web): D-359 리뷰 P1-2/P2-3 — 비모달 열기를 openLiveDialog로 공유
+
+- 변경: `ui.js` `confirmIrreversible`의 봉인·스크림 구멍·Tab 고리·정지 클릭·Esc·포커스 복원을 `export openLiveDialog(dialog, {initialFocus, opener, onClose})`로 뽑았다. 마크업에 있던 대화상자는 열린 동안 body 끝으로 옮겼다가 닫히면 제자리로 돌린다. Tab 고리는 대화상자 안 포커스 가능 요소 → 보이는 정지. `components.css` 위치 규칙은 `dialog.ui-live-dialog`(+`.ui-confirm`). `test_stop_always_live.py`에 `showModal(` 금지 스캔(dashboard·web_common·pilot·fleet·games JS)과 변이 증명. `test_list_row_irreversible.py`는 `IRREVERSIBLE_VERBS`(삭제·등록 해제·폐기·초기화) 표로 말줄임을 보고, `action:` 값만 면제한다.
+- 증거: `test_stop_always_live.py`·`test_list_row_irreversible.py` 통과. `src/hmi/dashboard/test/test_list_row_confirm_browser.py` 6 passed(2026-10-01, 7분 — 부하).
+- gate 변화: 새 시험 `test_no_surface_script_opens_a_modal_dialog`·`test_the_modal_scan_fires_on_the_old_enrollment_call`. 행 말줄임 검사가 동사 표로 넓어짐.
+- 결정: D-280 원칙 2, D-371.
+- 교훈: showModal 금지를 한 함수 본문에만 걸면 다른 파일의 새 대화상자가 빠져나간다 — 스캔은 표면 전체에 건다.

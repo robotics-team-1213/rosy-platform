@@ -69,8 +69,8 @@
 
 ## 최근 기록
 
-- 2026-10-01 · uncommitted · fix(fleet): D-359 리뷰 P1-1 — 명렬 카드 오프라인은 한국어, 열거값은 title
-- 2026-09-30 · uncommitted · refactor(fleet): D-377 console title and favicon
-- 2026-09-30 · uncommitted · fix(fleet): D-370 리뷰 — 발견 행은 분류기가 정규화한 호스트를 저장
-- 2026-09-30 · uncommitted · docs(adr): D-358 앱 역할 ADR을 D-370으로 재번호
-- 2026-09-30 · uncommitted · feat(icons): D-358 S3 관제 파비콘
+- 2026-09-27 · bb58221b · D-300 surface typography and focus tokens
+- 2026-09-27 · uncommitted · secure roster and signal rendering
+- 2026-09-27 · uncommitted · Fleet 결과 상태는 검증된 CORE 경로에서만 기록
+- 2026-09-27 · uncommitted · docs(policy): define fail-closed automatic-source acceptance record
+- 2026-09-26 · uncommitted · validation: revision-pinned site candidate LOCAL smoke

@@ -11,7 +11,10 @@ Structural signal:
   all — only `confirmIrreversible` in ui.js does. Static E-stops and
   single-target commands are HTML (`index.html`, `surface.html`, Fleet, games).
 * JS: a row delete is labelled `삭제…` (the ellipsis promises the dialog), never
-  a bare `"삭제"`.
+  a bare `"삭제"`. The same holds for every verb in `IRREVERSIBLE_VERBS` (Fleet
+  `등록 해제…` revokes the site token). The bare verb is allowed only as the
+  `action:` of a `confirmIrreversible` call — that is the execute button.
+* The dialog opens non-modal through `openLiveDialog` (ui.js).
 """
 
 from html.parser import HTMLParser
@@ -33,7 +36,10 @@ SCRIPT_IRREVERSIBLE = re.compile(
     r"""setAttribute\(\s*["']kind["']\s*,\s*["']irreversible["']\s*\)"""
     r"""|kind\s*=\s*\\?["']irreversible|kind\s*:\s*["']irreversible["']|\.kind\s*=\s*["']irreversible["']"""
 )
-BARE_DELETE = re.compile(r"""(["'`])삭제\1""")
+#: Row actions that cannot be undone from the same row. Add a verb here when a new one ships.
+IRREVERSIBLE_VERBS = ("삭제", "등록 해제", "폐기", "초기화")
+BARE_VERB = re.compile(
+    r"""(?<!action:\s)(?<!action:)(["'`])(?:""" + "|".join(map(re.escape, IRREVERSIBLE_VERBS)) + r""")\1""")
 
 
 def web_files(suffix):
@@ -89,10 +95,13 @@ def test_only_the_shared_confirm_dialog_mints_an_irreversible_button_in_script()
         "D-371: 스크립트가 만든 행의 되돌릴 수 없는 버튼은 조용한 `삭제…`이고, 위험 채움은 "
         f"ui.js confirmIrreversible의 실행 버튼뿐이다: {offenders}"
     )
-    body = UI.read_text(encoding="utf-8").split("export function confirmIrreversible", 1)[1].split("\n}\n", 1)[0]
+    source = UI.read_text(encoding="utf-8")
+    body = source.split("export function confirmIrreversible", 1)[1].split("\n}\n", 1)[0]
     assert len(SCRIPT_IRREVERSIBLE.findall(body)) == 1, "확인 대화상자의 위험 채움은 실행 버튼 하나다"
     assert 'setAttribute("kind", "quiet")' in body, "취소는 조용한 버튼이다"
-    assert "showModal()" not in body and "dialog.show()" in body, (
+    assert "openLiveDialog(dialog" in body, "확인 대화상자도 공용 비모달 열기를 지난다"
+    live = source.split("export function openLiveDialog", 1)[1].split("\n}\n", 1)[0]
+    assert "showModal(" not in live and "dialog.show()" in live, (
         "비모달로 연다 — showModal()은 비상정지까지 inert로 만든다(2026-09-30 US-010 측정)")
 
 
@@ -100,8 +109,8 @@ def test_row_delete_buttons_promise_the_dialog_with_an_ellipsis():
     offenders = []
     for path in web_files(".js"):
         text = path.read_text(encoding="utf-8")
-        offenders += [f"{path.relative_to(ROOT)}:{text.count(chr(10), 0, m.start()) + 1}" for m in BARE_DELETE.finditer(text)]
-    assert offenders == [], f"D-371: 행 삭제는 `삭제…`로 다음 단계를 알린다: {offenders}"
+        offenders += [f"{path.relative_to(ROOT)}:{text.count(chr(10), 0, m.start()) + 1}" for m in BARE_VERB.finditer(text)]
+    assert offenders == [], f"D-371: 되돌릴 수 없는 행 행동은 `삭제…`·`등록 해제…`로 다음 단계를 알린다: {offenders}"
 
 
 def test_every_confirm_irreversible_call_names_its_target_and_asks():
@@ -123,5 +132,12 @@ def test_the_structural_scans_catch_what_they_forbid():
     assert row_irreversible_in_html('<ui-topbar><ui-button kind="irreversible">비상 정지</ui-button></ui-topbar>') == []
     assert SCRIPT_IRREVERSIBLE.search('remove.setAttribute("kind", "irreversible");')
     assert SCRIPT_IRREVERSIBLE.search('row.innerHTML = `<ui-button kind="irreversible">`')
-    assert BARE_DELETE.search('el("ui-button", "", "삭제")')
-    assert not BARE_DELETE.search('el("ui-button", "", "삭제…")')
+    for verb in IRREVERSIBLE_VERBS:
+        assert BARE_VERB.search(f'el("ui-button", "", "{verb}")'), verb
+        assert BARE_VERB.search(f'button(a ? "옮기기" : "{verb}", run)'), verb
+        assert not BARE_VERB.search(f'el("ui-button", "", "{verb}…")'), verb
+        assert not BARE_VERB.search(f'confirmIrreversible({{message: m, action: "{verb}"}})'), verb
+    # the real regression: Fleet enrollment's quiet row button loses its ellipsis
+    fleet = (ROOT / "site" / "fleet" / "fleet" / "server" / "web" / "enrollment.js").read_text(encoding="utf-8")
+    assert '"등록 해제…"' in fleet and not BARE_VERB.search(fleet)
+    assert BARE_VERB.search(fleet.replace('"등록 해제…"', '"등록 해제"', 1))

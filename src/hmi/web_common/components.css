@@ -716,10 +716,11 @@ ui-section {
    display: contents는 상자만 없애고 요소는 접근성 트리에 남겨 aria-live가 계속 알린다. */
 ui-section > [role="status"]:empty { display: contents; }
 
-/* D-371 — 목록 삭제의 확인 대화상자. 대상 문장 하나와 취소·실행 두 버튼뿐이다.
-   비모달(show())이라 top layer가 아니다: 가운데 고정과 쌓임은 여기서 준다. 스크림은
-   ::backdrop이 아니라 형제 div이고, ui.js가 정지 컨트롤(`[data-always-live]`) 자리에
-   clip-path 구멍을 낸다 — 정지는 대화상자가 열려 있어도 보이고 눌린다. */
+/* D-371 — 대화상자는 모두 ui.js openLiveDialog()로 연다(비모달 show()). top layer가
+   아니라서 가운데 고정과 쌓임은 여기서 준다(`.ui-live-dialog`). 스크림은 ::backdrop이
+   아니라 형제 div이고, ui.js가 정지 컨트롤(`[data-always-live]`) 자리에 clip-path 구멍을
+   낸다 — 정지는 대화상자가 열려 있어도 보이고 눌린다. 목록 삭제 확인(`.ui-confirm`)은
+   대상 문장 하나와 취소·실행 두 버튼뿐이다. */
 .ui-confirm-scrim {
   position: fixed;
   z-index: 2000;
@@ -727,6 +728,7 @@ ui-section > [role="status"]:empty { display: contents; }
   background: var(--scrim);
 }
 
+dialog.ui-live-dialog,
 dialog.ui-confirm {
   position: fixed;
   z-index: 2001;
