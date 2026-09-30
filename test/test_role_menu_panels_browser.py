@@ -17,6 +17,9 @@ def _route_panel_test(page) -> None:
     ui_source = (ROOT / "src" / "hmi" / "web_common" / "ui.js").read_text(encoding="utf-8")
     page.route("http://rosy.test/common/ui.js", lambda route: route.fulfill(
         status=200, content_type="application/javascript", body=ui_source))
+    logic_source = (ROOT / "src" / "hmi" / "web_common" / "core_ui_logic.js").read_text(encoding="utf-8")
+    page.route("http://rosy.test/common/core_ui_logic.js", lambda route: route.fulfill(
+        status=200, content_type="application/javascript", body=logic_source))
     pose_source = (WEB / "panels" / "setup" / "pose-evidence.js").read_text(encoding="utf-8")
     page.route("http://rosy.test/assets/panels/setup/pose-evidence.js", lambda route: route.fulfill(
         status=200, content_type="application/javascript", body=pose_source))
@@ -372,7 +375,7 @@ def test_device_host_operations_block_writes_when_host_agent_is_absent():
           window.confirm = () => true;
           root.querySelectorAll('ui-button').forEach(button => button.click());
         }""")
-        assert "Host Agent" in page.locator("[role=status]").all_inner_texts()[0]
+        assert "호스트 에이전트" in page.locator("[role=status]").all_inner_texts()[0]
         page.locator(".surface-disclosure summary").filter(has_text="응답 세부 정보").first.click()
         details = page.locator(".surface-disclosure .surface-message").all_inner_texts()
         assert any("agent offline" in text for text in details)

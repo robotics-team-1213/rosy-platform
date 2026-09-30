@@ -225,7 +225,7 @@ def test_host_status_cards_render_only_server_evidence_and_block_untrusted_actio
                 assert section.locator("details").first.get_attribute("open") is None
                 assert section.locator("details").nth(1).is_hidden()
                 assert section.locator("details").nth(2).is_hidden()
-            assert "Host Agent 연결을 확인" in page.locator("section.ui-readback").nth(0).inner_text()
+            assert "호스트 에이전트 연결을 확인" in page.locator("section.ui-readback").nth(0).inner_text()
             assert "관리자 권한을 확인" in page.locator("section.ui-readback").nth(1).inner_text()
             assert errors == []
             page.evaluate("window.__unmount()")

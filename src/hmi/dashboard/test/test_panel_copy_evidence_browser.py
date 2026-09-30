@@ -149,3 +149,47 @@ def test_overview_mode_and_navigation_carry_evidence_like_every_other_row(panel)
       evidence: {navigation: {evidence: 'fresh'}}})""")
     assert rows.nth(1).inner_text() == "도착"
     assert rows.nth(1).get_attribute("title") == "ARRIVED"
+
+
+CAUSE = "호스트 에이전트에 연결할 수 없어"
+
+
+def _holders(page, text):
+    """Elements whose own text (not a descendant's) says `text`, visible or not."""
+    return page.evaluate("""(text) => [...document.querySelectorAll('#root *')].filter((node) =>
+      [...node.childNodes].some((child) => child.nodeType === 3 && child.textContent.includes(text)))
+      .map((node) => ({id: node.id, hidden: node.hidden || !node.offsetParent}))""", text)
+
+
+def test_host_agent_outage_is_said_once_and_buttons_point_at_it(panel):
+    page = panel("host/operations.js", role="administrator")
+    page.evaluate("""() => {
+      const down = {available: false, code: 'HOST_AGENT_UNAVAILABLE', evidence: {evidence: 'disconnected'}};
+      __callbacks['/api/v1/host/network'].onData(down);
+      __callbacks['/api/v1/host/release'].onData(down);
+    }""")
+    visible = [row for row in _holders(page, CAUSE) if not row["hidden"]]
+    assert len(visible) == 1, _holders(page, CAUSE)
+    group = page.locator(f"#{visible[0]['id']}")
+    assert group.inner_text() == ("호스트 에이전트에 연결할 수 없어 네트워크·릴리스 작업을 막았습니다. "
+                                  "장치 전원과 서비스를 확인하세요.")
+    buttons = page.locator("ui-button")
+    assert buttons.count() == 6
+    for i in range(6):
+        button = buttons.nth(i)
+        assert button.evaluate("b => b.disabled")
+        assert button.get_attribute("reason") == "위 사유"
+        assert visible[0]["id"] in button.get_attribute("aria-describedby").split()
+    assert "Host Agent" not in page.inner_text("#root")
+
+    # Only the network agent is down: its own section note says it, once.
+    page.evaluate("""() => __callbacks['/api/v1/host/release'].onData({available: true, ok: true,
+      evidence: {evidence: 'fresh', age_s: 0}, data: {state: 'IDLE', previous: 'r1'}})""")
+    visible = [row for row in _holders(page, CAUSE) if not row["hidden"]]
+    assert len(visible) == 1
+    network_note = page.locator(f"#{visible[0]['id']}")
+    assert "네트워크 작업을 막았습니다" in network_note.inner_text()
+    sta = page.locator("ui-button").filter(has_text="사업장 Wi-Fi로 전환")
+    assert visible[0]["id"] in sta.get_attribute("aria-describedby").split()
+    rollback = page.locator("ui-button").filter(has_text="이전 릴리스로 복귀")
+    assert not rollback.evaluate("b => b.disabled")
