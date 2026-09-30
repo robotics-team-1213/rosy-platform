@@ -52,7 +52,8 @@ export function rectificationKey(source, lensKind) {
   return lensKind ? `${RECTIFICATION_PREFIX}${source}@${lensKind}` : `${RECTIFICATION_PREFIX}${source}`;
 }
 
-// 저장된 보정값 찾기. 렌즈 이전의 예전 키는 기본 렌즈로 찍은 것이라 "standard" 로 옮긴다.
+// 저장된 보정값 찾기. 렌즈 이전의 예전 키는 기본 렌즈로 찍은 것이라 "standard" 로 복사한다.
+// 예전 키는 지우지 않는다: 렌즈를 알리지 않는 옛 앱으로 되돌려도 그 값을 그대로 쓴다.
 // 지금 렌즈의 값이 없고 다른 렌즈의 값만 있으면 적용하지 않고 경고를 돌려준다.
 // → { saved: string|null, warning: string|null }
 export function resolveSavedProfile(storage, source, lensKind) {
@@ -63,7 +64,6 @@ export function resolveSavedProfile(storage, source, lensKind) {
     const legacy = storage.getItem(legacyKey);
     if (legacy !== null && lensKind === "standard") {
       storage.setItem(key, legacy);
-      storage.removeItem(legacyKey);
       saved = legacy;
     }
   }

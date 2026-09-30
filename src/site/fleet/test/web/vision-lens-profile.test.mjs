@@ -28,10 +28,16 @@ test("the profile key is per source and lens; an app without lens keeps the old 
   assert.equal(rectificationKey("s21", null), LEGACY);
 });
 
-test("an old profile migrates to the standard lens", () => {
+test("an old profile is copied to the standard lens and kept for an old app", () => {
   const storage = memoryStorage({ [LEGACY]: PROFILE });
   assert.deepEqual(resolveSavedProfile(storage, "s21", "standard"), { saved: PROFILE, warning: null });
-  assert.deepEqual(storage.keys(), ["rosy-camera-rectification:s21@standard"]);
+  assert.deepEqual(storage.keys().sort(), [LEGACY, "rosy-camera-rectification:s21@standard"]);
+  // Downgrade to an app without lens: the old key still holds the profile.
+  assert.deepEqual(resolveSavedProfile(storage, "s21", null), { saved: PROFILE, warning: null });
+  // A later standard edit does not touch the old key.
+  storage.setItem("rosy-camera-rectification:s21@standard", "{}");
+  assert.equal(resolveSavedProfile(storage, "s21", "standard").saved, "{}");
+  assert.equal(storage.getItem(LEGACY), PROFILE);
 });
 
 test("an old app without lens still reads the old profile untouched", () => {
