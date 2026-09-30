@@ -43,6 +43,8 @@ def require_calibration_owner(svc: CoreServicesLike, auth: AuthContext, action: 
 
 def enter_navigation_mode(svc: CoreServicesLike, auth: AuthContext) -> None:
     """D-2: Nav2 velocity only reaches the wheels in NAVIGATION."""
+    # Nav goal, return-home, swarm follow and line-follow all drive through here.
+    require_calibration_owner(svc, auth, "navigation")
     if svc.line_follow.active:
         status = svc.line_follow.stop()
         svc.command.clear_navigation()

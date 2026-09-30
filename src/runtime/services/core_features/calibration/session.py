@@ -63,7 +63,9 @@ class CalibrationSessionManager:
         self._events = events
         self._monotonic = monotonic
         self._clock = clock
-        self._lock = threading.Lock()
+        # Re-entrant: expiry publishes under the lock, and a bus subscriber that
+        # reads state (activity -> current) must not deadlock on it.
+        self._lock = threading.RLock()
         self._session: Optional[_Session] = None
 
     # --- lease -------------------------------------------------------------
@@ -182,8 +184,8 @@ class CalibrationSessionManager:
         return current
 
     def _expire_locked(self) -> None:
-        """Drop a lapsed lease and say so once. Publishing under our lock is safe:
-        bus subscribers (audit, sockets) never call back into this object."""
+        """Drop a lapsed lease and say so once. The session is cleared before the
+        publish, so a subscriber that reads back in (RLock) already sees none."""
         current = self._session
         if current is None or self._monotonic() - current.renewed_mono < current.ttl_s:
             return

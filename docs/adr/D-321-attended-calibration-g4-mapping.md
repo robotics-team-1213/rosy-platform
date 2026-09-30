@@ -96,11 +96,14 @@ PC 반복 질문과 수동 파일 편집은 한 번의 세션 안내와 자동 �
    started_at, remaining_s}` 를 싣는다. Pilot 은 "보정 중 — <label>" 판과 HUD
    칩, 대시보드는 로봇 카드·모드 옆 칩, 로봇 LCD 는 MODE 행에 `CALIBRATING`
    (LCD 글꼴이 ASCII 뿐이라 D-221 대로 기계어)을 보인다.
-3. 다른 토큰의 `POST /teleop`, `POST /mode`, `PUT /line-follow/mode`(OFF 제외),
-   `POST /line-follow/hold` 는 409 `CALIBRATION_ACTIVE`. owner 의 teleop 은
+3. 다른 토큰의 구동 쓰기 — `POST /teleop`, `POST /mode`(IDLE 제외),
+   `PUT /line-follow/mode`(OFF 제외), `POST /line-follow/hold`,
+   `POST /navigation/goal`·`/home`, `POST /docking/dock`·`/undock`,
+   `POST /swarm/follow` — 는 409 `CALIBRATION_ACTIVE`. Fleet 도 같은 HTTP
+   경로로 명령하므로 같이 막힌다. owner 의 teleop 은
    D-342 수동 한도 안에서 그대로 동작한다. **E-Stop 은 누구에게나 열려 있다**
-   (`POST /safety/stop` 은 이 lease 를 보지 않는다). 멈추기만 하는 line-follow
-   OFF 도 막지 않는다. Pilot 은 owner 가 아니면 주행 조작을 사유와 함께 끄고
+   (`POST /safety/stop` 은 이 lease 를 보지 않는다). 멈추기만 하는 `/mode` IDLE,
+   line-follow OFF, 각종 cancel 도 막지 않는다. Pilot 은 owner 가 아니면 주행 조작을 사유와 함께 끄고
    명령을 보내지 않지만, 최종 판정은 CORE 의 409 다.
 4. 이 lease 는 아무것도 구동하지 않는다. 모드 전이도 `cmd_vel` 도 만들지 않는다
    — [D-2](D-2-cmd-vel.md) 그대로 CORE 가 유일한 최종 발행자이고, 보정
@@ -115,9 +118,8 @@ PC 반복 질문과 수동 파일 편집은 한 번의 세션 안내와 자동 �
 **Consequences.** 보정 도구(`tools/calibration/run_calibration.py`,
 `feat/camera-extrinsic-autocalib`)는 플래그 뒤에서 세션을 열고 heartbeat 한다.
 재부팅·CORE 재시작은 메모리의 lease 를 지운다 — 결정 1 대로 세션은 자동 재개되지
-않고, 도구의 다음 heartbeat 가 404 를 받아 중단을 알게 된다. Fleet 명령·Nav2
-목표·도킹은 이번 차단 목록에 없다(후속). 장치의 systemd 수동 재시작은 막지 못하며
-SKILL 절차가 guard 실행을 요구한다.
+않고, 도구의 다음 heartbeat 가 404 를 받아 중단을 알게 된다. 장치의 systemd 수동
+재시작은 막지 못하며 SKILL 절차가 guard 실행을 요구한다.
 
 **Related:** [D-2](D-2-cmd-vel.md),
 [D-342](D-342-manual-limit-commissioning-ladder.md),

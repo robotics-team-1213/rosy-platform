@@ -136,15 +136,37 @@ def test_non_owner_drive_and_mode_writes_get_409(lease):
 
     for method, path, body in (
         ("post", "/api/v1/teleop", {"linear": 0.1, "angular": 0.0}),
-        ("post", "/api/v1/mode", {"mode": "IDLE"}),
+        ("post", "/api/v1/mode", {"mode": "NAVIGATION"}),
+        ("post", "/api/v1/mode", {"mode": "MANUAL"}),
         ("put", "/api/v1/line-follow/mode", {"mode": "IR_LINE"}),
         ("post", "/api/v1/line-follow/hold", None),
+        ("post", "/api/v1/navigation/goal", {"x": 1.0, "y": 0.0}),
+        ("post", "/api/v1/navigation/home", None),
+        ("post", "/api/v1/swarm/follow", {"target_robot_id": "rosy_02"}),
     ):
         response = getattr(client, method)(path, json=body, headers=OTHER)
         assert response.status_code == 409, path
         assert response.json()["error"]["code"] == "CALIBRATION_ACTIVE", path
         assert response.json()["error"]["detail"]["session"]["label"] == "주행 보정"
     assert services.command.select_output().linear == 0.0
+
+
+def test_non_owner_docking_is_fenced(core_client):
+    client, services = core_client(capabilities={"docking": {"supported": True}})
+    _open(client)
+    for path, body in (("/api/v1/docking/dock", {"dock": "d1"}), ("/api/v1/docking/undock", None)):
+        response = client.post(path, json=body, headers=OTHER)
+        assert response.status_code == 409, (path, response.json())
+        assert response.json()["error"]["code"] == "CALIBRATION_ACTIVE"
+
+
+def test_non_owner_may_still_stop_through_idle(lease):
+    client, services, _ = lease
+    assert client.post("/api/v1/mode", json={"mode": "MANUAL"}, headers=OPERATOR).status_code == 200
+    _open(client)
+    stopped = client.post("/api/v1/mode", json={"mode": "IDLE"}, headers=OTHER)
+    assert stopped.status_code == 200
+    assert stopped.json()["mode"] == "IDLE"
 
 
 def test_owner_teleop_still_works_within_limits(lease):

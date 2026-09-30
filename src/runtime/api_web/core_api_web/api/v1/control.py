@@ -28,8 +28,10 @@ class TeleopRequest(BaseModel):
 @control_router.post("/mode")
 def set_mode(body: ModeRequest, auth: AuthContext = Depends(operator),
              svc: CoreServicesLike = Depends(get_services)):
-    require_calibration_owner(svc, auth, "mode change")
     new_mode = Mode(body.mode)
+    if new_mode is not Mode.IDLE:
+        # IDLE only stops the robot, so like e-stop it stays open to everyone.
+        require_calibration_owner(svc, auth, "mode change")
     if svc.line_follow.active:
         status = svc.line_follow.stop()
         svc.command.clear_navigation()
