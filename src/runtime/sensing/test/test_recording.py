@@ -128,6 +128,12 @@ def test_shadow_topic_matches():
     assert SHADOW_TOPIC == TOPIC
 
 
+def test_shadow_schema_matches():
+    from control.recording import SHADOW_SCHEMA
+    from control.sensing.perception.learned import shadow
+    assert SHADOW_SCHEMA == shadow.SHADOW_SCHEMA
+
+
 def test_sessions_skip_bad_metadata(tmp_path):
     good = _mk(tmp_path, 0, size=10)
     finish_session(good, T0)
@@ -166,6 +172,12 @@ def test_same_second_sessions_get_suffix(tmp_path):
 # ---- main() ----
 import subprocess
 import control.record_session as rs
+
+
+@pytest.fixture(autouse=True)
+def _no_ros_graph(monkeypatch):
+    """main() asks the ROS graph whether camera/front/compressed exists; not here."""
+    monkeypatch.setattr(rs, "_topic_listed", lambda name: False)
 
 
 class FakePopen:
