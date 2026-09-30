@@ -46,6 +46,7 @@ class PickPlaceRunner:
         command_for_phase: Callable[[PlannedMotionPhase], TrajectoryCommand],
         goal_port: PhaseGoalPort,
         submission_fence: StopFence,
+        phase_gate: Callable[[str], bool],
         current_fence: Callable[[int, int], bool],
         now: Callable[[], datetime] | None = None,
     ) -> None:
@@ -55,6 +56,7 @@ class PickPlaceRunner:
         self.command_for_phase = command_for_phase
         self.goal_port = goal_port
         self.submission_fence = submission_fence
+        self.phase_gate = phase_gate
         self.current_fence = current_fence
         self.now = now or (lambda: datetime.now(timezone.utc))
         self._lock = threading.RLock()
@@ -72,8 +74,9 @@ class PickPlaceRunner:
             raise ValueError("phase recorder identity must match the Fleet grant")
         if not isinstance(plan, ResolvedPickPlacePlan):
             raise ValueError("plan must be a validated ResolvedPickPlacePlan")
-        if not callable(command_for_phase) or not callable(current_fence):
-            raise ValueError("command factory and current fence must be callable")
+        if (not callable(command_for_phase) or not callable(phase_gate)
+                or not callable(current_fence)):
+            raise ValueError("command factory, semantic phase gate, and current fence must be callable")
         if not math_is_aware(self.now()):
             raise ValueError("clock must return timezone-aware timestamps")
 
@@ -124,6 +127,8 @@ class PickPlaceRunner:
 
     def start(self) -> dict[str, object]:
         """Persist and submit only the first phase of a fresh attempt."""
+        if self.phase_gate(self.plan.phases[0].phase_id) is not True:
+            raise RuntimeError("semantic workflow gate does not permit the first motion phase")
         if self.recorder.phases():
             raise RuntimeError("phase journal is not empty; automatic replay is forbidden")
         return self._submit_phase(self.plan.phases[0], first=True)
@@ -143,11 +148,14 @@ class PickPlaceRunner:
         next_ordinal = int(previous["ordinal"]) + 1
         if next_ordinal >= len(self.plan.phases):
             raise RuntimeError("all planned motion phases have already been submitted")
+        next_phase = self.plan.phases[next_ordinal]
+        if self.phase_gate(next_phase.phase_id) is not True:
+            raise RuntimeError("semantic workflow gate does not permit the next motion phase")
         if self._current_phase is None or self._current_phase.ordinal != previous["ordinal"]:
             raise RuntimeError("prior phase identity is not the coordinator's active phase")
         if self._current_goal_id != previous["driver_goal_id"]:
             raise RuntimeError("prior terminal result does not match the active ROS goal")
-        return self._submit_phase(self.plan.phases[next_ordinal], first=False)
+        return self._submit_phase(next_phase, first=False)
 
     def _submit_phase(self, phase: PlannedMotionPhase, *, first: bool) -> dict[str, object]:
         command = self._build_command(phase)

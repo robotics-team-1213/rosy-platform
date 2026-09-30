@@ -3987,6 +3987,13 @@
 - gate 변화: 없음(SOURCE 문서만). 두 ADR 모두 Proposed 그대로.
 - 결정: 없음(착지·번호 정리만). D-341 본문의 옛 이름(`src/site/overhead`, `overhead` CLI)은 D-374·D-377 표로 읽는다.
 
+## 2026-10-01 · uncommitted · docs(adr): D-178 기준선 rosy_vision 잠정 행 추가, overhead 행 제거
+
+- 변경: D-374(2af26662)가 `overhead`를 `ceiling_camera`와 `site_vision`(D-377 명명 `rosy_vision`)으로 나눈 뒤 기준선 표가 집합 동일성에서 어긋났다 — 새 패키지 누락(rosy_vision)과 삭제 패키지 잔존(overhead)이 같이 걸려 있었으나 core 단계 적색이 이 시험을 가려왔다. `rosy_vision` 잠정 행(5·4·4·3·4 = 82, A · 자기 시험 소유 site/vision/test)을 추가하고 `overhead` 행을 지웠으며, 분포 서술에 2026-10-01 행 교체 기록을 덧붙였다.
+- 증거: `test/test_module_scorecard.py` passed — 집합 동일성·총점 재계산·등급 구간·컷 게이트 전부(2026-10-01 Windows).
+- gate 변화: 없음.
+- 결정: D-178 기준선 갱신(D-374·D-377 반영). 점수 값은 다음 회차 문서가 재소유한다.
+
 ## 2026-10-01 · uncommitted · docs(adr): D-341·D-382 교차 세션 검토 반영
 
 - 변경: 병행 세션 8곳(rosy-84·70·bc·0d·d3·75·63, c8 대기)에 D-341·D-382 검토 질문 7개를 보내고 답을 반영. D-341: 닫힘 코드 분류표(최종 4401·4400, 재시도 4503·1013; hello 제한 시간은 4400에서 떼어 1013, 옛 수신기의 `no hello` 4400만 전환 예외), 프록시 fullchain·IP SAN, 403 문구와 벤치 `site-users.yaml` 단계, 감사 표는 D-361 S1이 만든 `device_pairing_audit` 재사용 + `device_kind` 명시, 회수 5 s는 검출·제안 부하 중에도, hello 선택 필드(`lens`) 무시 유지, 벡터 자리 `test/fixtures/protocol/pairing.v1.json`, D-377 이름. D-382: 2026-10-01 로봇 판 갱신(8kcn `2026.10.01-012`, .201 새 카드 `rosy-pinky-9dfk` `2026.09.30-009`, main API Ref v1.64)과 이미지 판을 기준으로 고정하지 않는 규칙, 발견 상태(3·8 해결, 6 부분, 7·10 열림), 스냅샷은 S1 시점 main에서, ROS 토픽은 스냅샷 대상 아님, 벤치 기준선은 S4 때 새로.

@@ -21,6 +21,7 @@ runtime/sensing/control/wander/navigator.py
 runtime/sensing/map/map_260905.world
 runtime/sensing/map/map_260905_update_v2/original/map_260905.world
 runtime/sensing/tools/device/hotpath_measure.py
+runtime/sensing/tools/device/ir_line_calibrate.py
 runtime/sensing/tools/gz/calibration_mapping_audit.py
 runtime/sensing/tools/gz/calibration_mapping_rig.py
 runtime/sensing/tools/gz/calibration_spaces.py
@@ -50,6 +51,7 @@ contracts/foundation/core_common/protocol/schemas.py
 hmi/face/emotion/wifi_qr.py
 runtime/navigation/launch/hardware.launch.py
 runtime/navigation/params/nav2_params.yaml
+runtime/services/core_features/line_follow/clearance.py
 sim/gz_sim/config/simulation_actuation.yaml
 sim/gz_sim/config/worlds.yaml
 sim/gz_sim/launch/gz_multi.launch.py

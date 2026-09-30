@@ -43,6 +43,13 @@ class ActionApi:
         return {"version": 1, "status": status,
                 "error": {"code": code, "message": message}}
 
+    @staticmethod
+    def _success(version: int, receipt: Mapping[str, Any]) -> dict[str, Any]:
+        payload = dict(receipt)
+        if version == 1:
+            payload.pop("phase_summaries", None)
+        return {"version": version, "status": 200, "receipt": payload}
+
     def dispatch(self, request: Mapping[str, Any], *, peer_uid: int) -> dict[str, Any]:
         if not isinstance(request, Mapping):
             return self._error("INVALID_REQUEST", "request must be a JSON object", status=400)
@@ -51,8 +58,9 @@ class ActionApi:
                 return self._error("FRAME_TOO_LARGE", "request exceeds 64 KiB", status=413)
         except (TypeError, ValueError):
             return self._error("INVALID_JSON", "request must be finite JSON", status=400)
-        if not isinstance(request, Mapping) or request.get("version") != self.VERSION:
-            return self._error("UNSUPPORTED_VERSION", "version must equal 1", status=400)
+        version = request.get("version")
+        if not isinstance(version, int) or isinstance(version, bool) or version not in {1, 2}:
+            return self._error("UNSUPPORTED_VERSION", "version must equal 1 or 2", status=400)
         operation = request.get("operation")
         try:
             if operation == "SubmitAction":
@@ -60,14 +68,14 @@ class ActionApi:
                     raise ValueError("SubmitAction contains unsupported fields")
                 grant = FleetActionGrant.model_validate(request["grant"])
                 receipt = self.runner.submit(grant, peer_uid=peer_uid)
-                return {"version": 1, "status": 200, "receipt": receipt}
+                return self._success(version, receipt)
             if operation == "GetAction":
                 if set(request) != {"version", "operation", "action_id"}:
                     raise ValueError("GetAction contains unsupported fields")
                 receipt = self.runner.get(request["action_id"], peer_uid=peer_uid)
                 if receipt is None:
                     return self._error("ACTION_NOT_FOUND", "Action is unavailable", status=404)
-                return {"version": 1, "status": 200, "receipt": receipt}
+                return self._success(version, receipt)
             if operation == "CancelAction":
                 expected = {"version", "operation", "action_id", "attempt_id",
                             "reason", "requested_at"}
@@ -79,8 +87,11 @@ class ActionApi:
                 receipt = self.runner.cancel(
                     cancel.action_id, cancel.attempt_id, peer_uid=peer_uid,
                 )
-                return {"version": 1, "status": 200, "receipt": receipt}
+                return self._success(version, receipt)
             if operation in {"StopLocal", "GetStopState", "RearmLocal"}:
+                if version != 1:
+                    return self._error("UNSUPPORTED_VERSION",
+                                       "stop operations use protocol version 1", status=400)
                 if self.stop_api is None:
                     return self._error("STOP_API_NOT_CONFIGURED",
                                        "local stop adapter is unavailable", status=503)
