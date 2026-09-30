@@ -127,6 +127,47 @@ class CalibrationStore:
             raise ValueError("only an accepted record can be pinned")
         self._event(robot, kind, {"pin": record_id, "actor": str(actor), "note": note})
 
+    def merge_from(self, other_root, robot):
+        """Bring another copy of this robot's store in (PC mirror <-> robot).
+
+        Record files missing here are copied; a record id present on both sides
+        must be byte-identical (else ValueError, nothing is overwritten). Events
+        missing here are appended in the other side's order. Returns
+        {"records": n copied, "events": n appended}."""
+        _check("robot", robot)
+        other = Path(other_root) / robot
+        copied = appended = 0
+        for kind in KINDS:
+            src = other / kind
+            if not src.is_dir():
+                continue
+            dst = self._dir(robot, kind)
+            (dst / "records").mkdir(parents=True, exist_ok=True)
+            for path in sorted((src / "records").glob("*.json")):
+                target = dst / "records" / path.name
+                data = path.read_bytes()
+                if target.exists():
+                    if target.read_bytes() != data:
+                        raise ValueError(f"record {kind}/{path.stem} differs between the two stores")
+                    continue
+                fd = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644)
+                with os.fdopen(fd, "wb") as stream:
+                    stream.write(data)
+                    stream.flush()
+                    os.fsync(stream.fileno())
+                copied += 1
+            mine = {json.dumps(e, sort_keys=True) for e in self._events(robot, kind)}
+            theirs = CalibrationStore(other_root)._events(robot, kind)
+            new = [e for e in theirs if json.dumps(e, sort_keys=True) not in mine]
+            if new:
+                with open(dst / "events.jsonl", "a", encoding="utf-8") as stream:
+                    for event in new:
+                        stream.write(json.dumps(event, allow_nan=False) + "\n")
+                    stream.flush()
+                    os.fsync(stream.fileno())
+                appended += len(new)
+        return {"records": copied, "events": appended}
+
     # --- reads ---------------------------------------------------------------
 
     def load(self, robot, kind, record_id) -> dict:
