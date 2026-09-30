@@ -715,6 +715,8 @@ def test_admin_security_preserves_token_and_safety_action_feedback_across_pollin
           {id:'delete-token',label:'delete-me',role:'operator',source:'test',current:false}
         ]})""")
         page.locator('[data-token-id="delete-token"] ui-button').click()
+        # D-371: the row button opens the shared confirm dialog; its execute button deletes.
+        page.locator("dialog.ui-confirm ui-button[kind=irreversible]").click()
         page.wait_for_function("""document.querySelector(
           'main > section.ui-readback ui-status[role=status]'
         )?.textContent.includes('삭제했습니다')""")
