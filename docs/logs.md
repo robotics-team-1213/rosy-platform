@@ -3854,3 +3854,8 @@
 - 근거: `ResolvedTargetEvidence`는 pixel bbox와 camera/optical-frame/calibration/transform revision을 전달하지만 workspace pose/joint target은 전달하지 않는다. 픽/플레이스 연결에는 승인된 camera-to-workcell pose resolver, arm/gripper phase 계약, 독립 goal/placement verifier가 필요하다.
 - 결정: revision ID에서 변환값을 추정하거나 pixel 좌표를 joint 값으로 쓰지 않는다. profile-specific ROS mapping은 해당 pose/phase 계약이 선택될 때까지 대기한다.
 - gate 변화: 없음. ROS-SIM 경로 증거와 물리/production profile 수용은 분리한다.
+
+## 2026-09-30 · uncommitted · docs(plan): specify local OMX pick-and-place execution
+- 변경: D-369 제어권 경계를 지키는 OMX `PICK_PLACE` 구현 계획을 추가하고, 기존 Action/message 계획 및 OMX progress에서 연결했다.
+- 증거: 새 계획 및 기존 `docs/plans/2026-09-30-action-message-identity.md`와 `src/products/omx/adapter/progress.md`의 교차 링크. 계획에는 RGB-D 기반 pose 검증, 로컬 planning, phase별 ROS goal/취소/저널, Fleet 진행 투영을 순차 작업으로 둔다.
+- gate 변화: 없음. 모델은 후보/읽기 전용이고 Fleet은 Mission/grant/status를 소유한다. 첫 phase 의도는 ROS 제출 전에 기록하며 첫 ROS 응답의 부모 Action/phase 결과는 단일 SQLite 트랜잭션으로 기록한다. 응답 전 crash는 UNKNOWN/HOLD이며 재전송하지 않는다. MTC/Jazzy 적합성은 probe gate이며, profile 비활성 및 DEVICE/FIELD PARKED 상태를 유지한다.

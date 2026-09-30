@@ -8,7 +8,7 @@
 
 **Tech Stack:** Python, Pydantic, SQLite, pytest. ROS 2 Jazzy 실기 검증은 별도.
 
-[설계](2026-09-30-action-message-identity-design.md). Task 1–3은 완료했다. Task 4는 선정 driver/gripper profile과 실장 환경 증거를 기다린다. provider/OMX 활성화와 실물 수용은 포함하지 않는다.
+[설계](2026-09-30-action-message-identity-design.md). Task 1–3과 phase journal 경계는 완료했다. ROS Action callback/phase runner 및 Fleet 진행 투영의 end-to-end 연결은 [OMX pick-and-place 실행 계획](2026-09-30-omx-pick-place-local-execution.md)에서 다룬다. 계획의 ROS-SIM 및 소프트웨어 작업은 실물 profile 수용을 기다리지 않고 진행할 수 있지만, profile 활성화와 물리 수용은 별도 gate다.
 
 ### Task 1: 현재 계약 정정과 Fleet–OMX JSON 경계 시험
 
