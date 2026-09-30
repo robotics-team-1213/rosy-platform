@@ -228,6 +228,13 @@ SIZE_VERDICTS = {
         "accept: single-entry hardware probe CLI the commissioning runbook drives top-to-bottom — "
         "splitting probe sequence from reporting would sever one diagnostic narrative (X5)",
     ),
+    "products/omx/adapter/omx_adapter/action_store.py": (
+        788,
+        "accept: one owner for the durable local Action and per-attempt ROS phase journal; "
+        "they share SQLite transactions, identity fences, and restart-to-UNKNOWN recovery. "
+        "ROS-free and host-testable; runner integration remains tracked in docs/plans/"
+        "2026-09-30-action-message-identity.md (X5)",
+    ),
 }
 
 WORKSPACE_REF_PATTERNS = (

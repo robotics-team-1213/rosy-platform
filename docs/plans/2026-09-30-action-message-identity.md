@@ -68,18 +68,20 @@ Expected: 모두 통과. socket 인증·ROS·실물 수용은 별도다.
 
 ### Task 4: 선정 ROS/driver profile의 Action–goal 대응
 
-**상태:** 부분 점검 완료, profile-specific Fleet/driver 결합은 대기 — driver/gripper 실장 환경 증거가 정해지지 않았다. OMX profile은 `enabled: false`, driver/hardware plugin/joint 설정이 비어 있다. ActionRunner는 주입된 `LocalActionPort` Protocol뿐이며 production ActionRunner/driver 결선은 없다. ROS `FollowJointTrajectory` runtime은 후보 코드이지 Fleet grant에 결선된 OMX 실행 profile이 아니다.
+**상태:** Action 아래 다중 ROS goal phase를 위한 내부 SQLite 원장 v2와 계약 시험 구현 완료. 실제 `FleetActionGrant`→ROS phase runner 결선, 좌표 해석, 물리 profile은 미완료이며 OMX profile은 계속 `enabled: false`다. 기존 `ActionRunner`는 단일 `LocalActionPort.submit()` 및 단일 `driver_goal_id` receipt만 다룬다.
 
 **Files:**
 - Inspect: `src/products/omx/adapter/omx_adapter/action_runner.py`, `action_store.py`
 - Contract: `docs/reference/ROSY API & Protocol Reference.md` §10.12
 - Test: 선정 driver의 ROS-SIM suite 및 phase/goal 대응 시험
 
-1. 한 Action/attempt에 속하는 arm/gripper phase와 각 ROS goal UUID의 대응표를 작성한다. 현재 driver_goal_id 하나로 여러 goal을 덮어쓰지 않는다.
-2. phase별 submit intent·goal ID·terminal·cancel 범위·재시작 조회 가능성을 실제 port와 정한다. 이력 store/schema 변경은 별도 검토한다.
-3. ROS-SIM에서 늦은 feedback·재시작·cancel 경쟁을 검증하고 DEVICE에서 정지와 목표 증거를 각각 수용한다.
+1. 완료: Action/attempt별 ordered phase, command digest, ROS goal ID, cancel acknowledgement, terminal result를 별도 `omx_action_phases` 행으로 보존한다. 각 phase의 submit intent를 먼저 기록하고, 바로 앞 phase의 성공 결과 전에는 다음 phase를 시작하지 않는다.
+2. 완료: schema v1에서 additive schema v2 migration을 추가했다. 재시작 시 미해결 Action과 phase를 `UNKNOWN`으로 표시하며 자동 재전송하지 않는다. 이 phase journal은 ROS/Fleet wire를 변경하지 않는다.
+3. 미완료: 실제 선택된 physical target의 `LocalActionPort`가 phase journal을 사용하도록 연결하고, 결과/취소/복구의 end-to-end ROS-SIM 검증을 한다. DEVICE stop 및 독립 목표 증거는 각각 별도 수용 단계다.
 
-진행 기록: SOURCE 점검에서 `src/products/omx/profile/config/omx.disabled.yaml`의 `enabled: false`, 빈 `driver_package`/`hardware_plugin`/`joint_names`, 테스트 이외의 `ActionRunner` 조립 부재를 확인했다. 기존 2026-09-26 ROS-SIM 기록에는 ROBOTIS open_manipulator 5.1.2의 `/arm_controller/follow_joint_trajectory`, simulated gripper joint 및 cancel 결과가 있으나, 이는 Fleet의 `FleetActionGrant`→`LocalActionPort` 결선이나 선정된 물리 하드웨어 profile을 증명하지 않는다. 이번 Windows 호스트에는 `ROS_DISTRO`와 `ros2`가 없으며 두 ROS runtime 시험은 Jazzy/rclpy 부재로 skip되었다. 따라서 arm/gripper phase·ROS goal UUID·cancel 범위를 이 target에 확정하지 않았다. Task 4 시작 전 실제 target을 선택해야 한다: OMX-AI의 정확한 hardware/driver/gripper package 및 버전, 또는 Franka 등 별도 target과 ROS 2 distro, 선택된 제어 action/service 이름. ROS-SIM도 그 binding 이후 진행한다.
+진행 기록: `stack.lock.yaml`의 ROBOTIS open_manipulator 5.1.2 commit `0a4af6a923b8b7d80b8c20506d1839c54d2e993e`로 만든 기존 로컬 이미지를 네트워크·장치 grant 없이 조회했다. 잠금된 OMX-F follower 설정에서 `arm_controller`의 한 `FollowJointTrajectory` controller가 `joint1`–`joint5` 및 `gripper_joint_1`을 포함한다. 기존 vendor ROS-SIM 시험은 arm controller action만 검증하며, gripper motion/힘 또는 pick/place를 검증하지 않는다. 그러므로 “팔과 그리퍼는 별도 ROS controller”라는 가정은 이 simulation target에는 적용하지 않는다. 최신 ROBOTIS eManual의 OpenMANIPULATOR-X 페이지는 별도 `gripper_controller` 및 폐기 예정 `position_controllers/GripperActionController`를 보여주므로, X 계열 문서를 OMX-F에 그대로 일반화하지 않는다. [ROBOTIS pinned OMX-F controller 설정](https://github.com/ROBOTIS-GIT/open_manipulator/blob/0a4af6a923b8b7d80b8c20506d1839c54d2e993e/open_manipulator_bringup/config/omx_f_follower_ai/hardware_controller_manager.yaml), [ROBOTIS OpenMANIPULATOR-X 문서](https://emanual.robotis.com/docs/en/platform/openmanipulator_x/quick_start_guide_basic_operation/).
+
+phase 원장은 물리 profile 및 runner가 없더라도 단일 `driver_goal_id`를 덮어쓰지 않는 저장 규약을 선행 확정하도록 추가했다. `begin_phase()`는 순서와 이전 phase terminal 성공을 검사하고, ROS goal별 UUID/취소 ACK/terminal 결과를 별도 저장한다. 재시작 시 실행 중 phase는 `UNKNOWN`이 되며 같은 goal을 재생하지 않는다. 이는 영속성 계약이지 Fleet→ROS 명령의 실제 생산자/소비자 결선의 증거가 아니다. OMX profile의 `enabled: false`, 빈 `driver_package`/`hardware_plugin`/`joint_names`, production ActionRunner 조립 부재, workspace pose 부재는 계속 남아 있다. 따라서 실제 pick/place를 위해서는 승인된 camera-to-workcell pose resolver와 독립 목표 verifier, 선정된 실물 hardware/driver, 그리고 phase journal을 사용하는 안전한 ROS runner가 필요하다.
 
 완료 조건: profile 하나의 생산자/소비자와 복구 근거가 있으며 ROS goal terminal, 독립 goal confirmation, 물리 stop을 구분한다.
 
@@ -89,6 +91,8 @@ Expected: 모두 통과. socket 인증·ROS·실물 수용은 별도다.
 - Task 2는 response-loss/restart, stale generation 4xx, duplicate terminal/late readback을 검증했다. 기존 runtime 안전 경계가 유지되어 runtime 수정은 하지 않았다.
 - Task 3은 Mission/Action/goal/stop projection 및 별도 provider-turn 수명을 검증했다. stop latch/cancel ACK/Action success를 물리 정지 또는 목표 완료로 승격하지 않았다.
 - Task 4 사전 조사에서 기존 vendor ROS-SIM 증거와 현재 시험 환경을 대조했다. 시뮬레이터 동작은 재사용할 수 있지만 Fleet grant 통합과 실제 gripper profile은 별도다.
+- Task 4 continuation: 고정된 OMX-F 시뮬레이터 controller map을 확인하고, 단일 Action/attempt 아래 ordered multi-goal phase 이력(schema v2), goal identity fence, cancel ACK와 terminal 구분, restart-to-UNKNOWN 복구를 구현·시험했다. 이는 하위 원장 계약만 구현한 SOURCE 증거로, ActionRunner/ROS runtime 결선이나 pick/place 동작 검증으로 승격하지 않는다.
+- 확인: ActionStore phase/migration 시험 13 passed; Fleet/OMX Action integration suite 54 passed; D-346 quick gate 95 passed; 문서 harness lint 0 errors / 19 existing freshness warnings; 변경 Python 파일 flake8 `--max-line-length=120` 통과. Quick gate 중 P6가 새 788-line ActionStore size verdict를 요구해 same-change verdict를 추가하고 재실행했다. ROS-SIM 재실행은 원장 변경이 실제 driver port와 결선되지 않아 이 단계 검증에서 제외했다.
 - 2026-09-30 재실행: 통합된 `deploy/robot/omx/probe_vendor_owner_sim.sh`를 `rosy-omx-workstation:native-action-only-local` 이미지(`sha256:b47034e436119cea97c2922a1b4af9bd6596975ac8acbb4cece3a19d2fe1e9f0`)에서 실행했다. 컨테이너는 `--network none`, 저장소 read-only bind mount, device grant 없이 구동했고 결과는 1 passed (2.53s)였다. 기존 policy-owner/경쟁 요청/cancel 경로의 재실행 증거이며, FleetActionGrant→LocalActionPort 생산 결선이나 실물 수용 증거는 아니다.
 - Grant 좌표 조사: `FleetActionGrant.source_evidence`와 `destination_evidence`는 `ResolvedTargetEvidence`로, pixel bbox·optical frame·camera identity·calibration/transform revision을 담지만 ROS workspace pose나 joint target은 담지 않는다. 따라서 `PICK_PLACE`를 joint trajectory로 바꾸려면 승인된 camera-to-workcell pose resolver, arm/gripper phase 명령 계약, 독립 goal/placement verifier가 먼저 필요하다. revision ID만으로 변환값을 추정하거나 image pixel을 관절값으로 직접 쓰지 않는다.
 - 제어권 ADR 초안 D-362는 충돌을 피하여 D-369로 변경했다. D-362–D-368은 다른 작업의 번호다.
