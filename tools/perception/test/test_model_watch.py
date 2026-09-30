@@ -18,7 +18,7 @@ ROBOTS = ["pinky-a", "pinky-b"]
 
 def _config(tmp_path, **extra):
     doc = {
-        "repo": "org/lane-seg",
+        "backend": "hf", "repo": "org/lane-seg",
         "robots": [{"name": "pinky-a", "host": "10.0.0.11"},
                    {"name": "pinky-b", "host": "10.0.0.12"}],
         "ssh": {"identity": "/etc/rosy/model-watch/id", "known_hosts": "/etc/rosy/model-watch/kh"},

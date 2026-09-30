@@ -1,18 +1,36 @@
-"""Site model watcher: new HF model commit -> intake -> shadow push (D-373 decision 5).
+"""Site model watcher: new model -> intake -> shadow push (D-373 decisions 5 and 8).
 
 watch.py [--config /etc/rosy/model-watch.yaml]
 
-One run (rosy-model-watch.timer, every 10 min):
+Two backends, one delivery logic. The key of an entry is the inbox folder name
+(backend inbox, the default) or the HF commit (backend hf, optional).
+
+backend inbox (store folder, no HF): each run
+1. The store root must exist (a NAS or Drive mount that is not there is a
+   listing failure, never an empty inbox). Its layout dirs are created.
+2. List the complete folders of <store>/models/inbox/ (READY marker equal to the
+   folder's content_sha), oldest marker first. Half-synced folders are ignored.
+3. A folder whose verdict is recorded but that is still in the inbox (a move
+   failed last run) is moved now. A folder name reused with other content is
+   moved to rejected/ ("reused"); hand it over under a new name.
+4. Intake the unseen ones (at most max_new_per_run). Pass: the folder moves to
+   models/accepted/<model_revision>/. Fail: to models/rejected/<folder>/ with
+   REJECTED.txt. An infrastructure error keeps the folder in the inbox and is
+   retried up to max_attempts, then recorded as gave_up (still in the inbox:
+   fix the site, then delete its state entry, or remove the folder).
+
+backend hf: each run
 1. List the newest `history_limit` commits of the HF model repo.
 2. First run (no state file) without `since`: every listed commit but the newest
    is recorded as skipped ("bootstrap"). With `since: <sha>`, that commit and
    everything before it are recorded as skipped ("since").
 3. Intake, in-process, on unseen commits and on commits whose earlier intake
-   hit an infrastructure error (oldest first, at most max_new_per_run). A real
-   gate verdict (pass/fail) is final; an infrastructure error (disk, network,
-   HF, missing runtime, timeout) is retried on later runs up to max_attempts,
-   then recorded as gave_up.
-4. Deliver: only the newest passed commit is ever pushed (newest wins); older
+   hit an infrastructure error (oldest first, at most max_new_per_run).
+
+Both: a real gate verdict (pass/fail) is final; an infrastructure error (disk,
+network, HF, missing runtime, timeout) is retried on later runs up to
+max_attempts, then recorded as gave_up.
+Deliver: only the newest passed entry is ever pushed (newest wins); older
    pending entries are superseded, and a robot added to the config later gets
    it too. For every robot the robot's real hold file and shadow pointer are
    read each run:
@@ -30,30 +48,33 @@ The state file is rewritten atomically after every step.
 The end of automation is the shadow slot: this only ever calls `deliver push`.
 Selecting a model for driving stays behind the D-205 P3 gate.
 
-HF token: only a secret file, named by config `hf_token_file` or HF_TOKEN_FILE.
-A named file that does not exist means no token (a public repo). Without one,
-token=False is passed so huggingface_hub does not fall back to
-HF_TOKEN or $HF_HOME/token. Never an argument, never a repo file.
+HF token (backend hf only): only a secret file, named by config `hf_token_file`
+or HF_TOKEN_FILE. A named file that does not exist means no token (a public
+repo). Without one, token=False is passed so huggingface_hub does not fall back
+to HF_TOKEN or $HF_HOME/token. Never an argument, never a repo file.
 
 Config (YAML):
-  repo: org/lane-seg                      # HF model repo
+  backend: inbox                          # optional: inbox (default) | hf
+  store: /srv/rosy/store                  # backend inbox: the store folder (local, NAS, Drive)
+  repo: org/lane-seg                      # backend hf: the HF model repo
   robots: [{name: pinky-005, host: <robot-ip>, user: rosy}]   # user optional
   ssh: {identity: <site key>, known_hosts: <pinned file>}     # both required
   intake_out: /var/lib/rosy-model-watch/models
   state_file: /var/lib/rosy-model-watch/state.json
-  since: <40-hex sha>                     # optional: skip it and older commits
-  hf_token_file: <path>                   # optional, else HF_TOKEN_FILE
+  since: <40-hex sha>                     # backend hf, optional: skip it and older commits
+  hf_token_file: <path>                   # backend hf, optional, else HF_TOKEN_FILE
   gate: <intake_gate.yaml>                # optional, intake's default
   replay_root: <dir holding data/teleop/learning/*.mp4>   # optional, the repo root
   max_new_per_run: 1                      # optional: intakes per run
-  history_limit: 20                       # optional: newest commits considered
+  history_limit: 20                       # optional (hf): newest commits considered
   max_attempts: 5                         # optional: per intake / per robot push
   push_timeout_s: 600                     # optional: deliver --timeout
 
 Exit codes: 0 run finished and nothing is waiting on a retry (a failed intake,
-a held robot or a busy lock is a recorded outcome, not an error); 1 an intake infrastructure error or a robot
-push failed this run (retried later); 2 bad config or state file; 3 the HF
-listing failed (nothing recorded)."""
+a held robot or a busy lock is a recorded outcome, not an error); 1 an intake
+infrastructure error, a store move or a robot push failed this run (retried
+later); 2 bad config or state file; 3 the listing failed (store missing or
+unreadable, or the HF listing failed; nothing recorded)."""
 
 from __future__ import annotations
 
@@ -68,8 +89,11 @@ import tempfile
 from pathlib import Path
 
 MODEL_DIR = Path(__file__).resolve().parent
-if str(MODEL_DIR) not in sys.path:
-    sys.path.insert(0, str(MODEL_DIR))
+for _p in (MODEL_DIR, MODEL_DIR.parent):
+    if str(_p) not in sys.path:
+        sys.path.insert(0, str(_p))
+
+import store  # noqa: E402
 
 DEFAULT_CONFIG = "/etc/rosy/model-watch.yaml"
 STATE_VERSION = 1
@@ -77,6 +101,9 @@ _REPO = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*")
 _NAME = re.compile(r"[A-Za-z0-9._][A-Za-z0-9._-]*")
 _SHA = re.compile(r"[0-9a-f]{40}")
 BUSY_EXIT, HELD_EXIT = 75, 76  # deliver.py: robot lock busy / robot held (no attempt used)
+LIST_FAILED_EXIT = 3
+BACKENDS = ("inbox", "hf")
+INBOX_KEY = "store-inbox"
 
 
 # --- pure core ------------------------------------------------------------------------------
@@ -211,8 +238,17 @@ def load_config(path) -> dict:
     cfg = yaml.safe_load(Path(path).read_text(encoding="utf-8"))
     if not isinstance(cfg, dict):
         raise ValueError("config must be a mapping")
-    if not isinstance(cfg.get("repo"), str) or not _REPO.fullmatch(cfg["repo"]):
-        raise ValueError(f"repo must be org/name, got {cfg.get('repo')!r}")
+    backend = cfg.setdefault("backend", "inbox")
+    if backend not in BACKENDS:
+        raise ValueError(f"backend must be one of {BACKENDS}, got {backend!r}")
+    if backend == "hf":
+        if not isinstance(cfg.get("repo"), str) or not _REPO.fullmatch(cfg["repo"]):
+            raise ValueError(f"repo must be org/name, got {cfg.get('repo')!r}")
+    else:
+        if not isinstance(cfg.get("store"), str) or not cfg["store"].strip():
+            raise ValueError("store: the store folder path is required (backend inbox)")
+        if cfg.get("since") is not None:
+            raise ValueError("since applies only to backend hf")
     robots = cfg.get("robots")
     if not isinstance(robots, list) or not robots:
         raise ValueError("robots: at least one {name, host}")
@@ -269,6 +305,10 @@ def save_state(path, state: dict) -> None:
 
 # --- real HF / intake / deliver (lazy: heavy imports only when used) ------------------------
 
+def state_key(cfg: dict) -> str:
+    return cfg["repo"] if cfg["backend"] == "hf" else INBOX_KEY
+
+
 def hf_list_commits(repo: str, token) -> list[str]:
     from huggingface_hub import HfApi
     return [c.commit_id for c in HfApi(token=token).list_repo_commits(repo, repo_type="model")]
@@ -284,6 +324,15 @@ def default_intake(cfg: dict, token):
                           gate_path=cfg.get("gate") or intake.DEFAULT_GATE,
                           root=cfg.get("replay_root") or intake.ROOT,
                           downloader=functools.partial(snapshot_download, token=token))
+    return run
+
+
+def default_inbox_intake(cfg: dict):
+    def run(name: str):
+        import intake
+        return intake.run(f"store-inbox:{name}", out=cfg["intake_out"],
+                          gate_path=cfg.get("gate") or intake.DEFAULT_GATE,
+                          root=cfg.get("replay_root") or intake.ROOT, store=cfg["store"])
     return run
 
 
@@ -310,6 +359,53 @@ def default_observer(cfg: dict):
 
 
 # --- one run --------------------------------------------------------------------------------
+
+def finish_inbox(st, state: dict, name: str) -> tuple[dict, bool]:
+    """Move a folder with a verdict out of the inbox: (state, moved). A clash with an
+    accepted revision of other files turns the pass into a fail (nothing delivered)."""
+    rec = state["commits"][name]
+    try:
+        if rec["intake"] == "pass":
+            try:
+                st.accept(name, rec["model_revision"])
+                print(f"{name}: accepted as {rec['model_revision']}")
+                return state, True
+            except store.StoreError as exc:
+                rec = {k: v for k, v in rec.items() if k != "robots"}
+                rec.update(intake="fail", reasons=[*(rec.get("reasons") or []), str(exc)])
+                state = apply_result(state, name, rec)
+        reasons = "; ".join(rec.get("reasons") or []) or "intake fail"
+        dest = st.reject(name, reasons)
+        print(f"{name}: rejected -> {dest.name}: {reasons}")
+        return state, True
+    except OSError as exc:
+        print(f"{name}: cannot move out of the inbox ({exc}); retried next run", file=sys.stderr)
+        return state, False
+
+
+def settle_inbox(st, state: dict, listed: list[str]) -> tuple[dict, list[str], bool]:
+    """Listed folders that already have a verdict are moved now; a name reused with
+    other content is rejected. Returns (state, folders left to plan, all moved)."""
+    all_ok, left = True, []
+    for name in listed:
+        rec = (state.get("commits") or {}).get(name)
+        if not rec or rec.get("intake") not in ("pass", "fail"):
+            left.append(name)
+            continue
+        try:
+            if store.content_sha(st.inbox_folder(name)) != rec.get("content_sha"):
+                dest = st.reject(name, f"folder name reused: {name} was already processed "
+                                       f"(intake {rec['intake']}); hand it over under a new name")
+                print(f"{name}: name reused, rejected -> {dest.name}", file=sys.stderr)
+                continue
+        except OSError as exc:
+            print(f"{name}: {exc}", file=sys.stderr)
+            all_ok = False
+            continue
+        state, ok = finish_inbox(st, state, name)
+        all_ok &= ok
+    return state, left, all_ok
+
 
 def _now() -> str:
     return dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")
@@ -347,36 +443,55 @@ def main(argv=None, *, list_commits=hf_list_commits, intake_fn=None, deliver_fn=
     try:
         cfg = load_config(args.config)
         fresh = not Path(cfg["state_file"]).exists()
-        state = load_state(cfg["state_file"], cfg["repo"])
-        token = read_hf_token(env, cfg)
+        state = load_state(cfg["state_file"], state_key(cfg))
+        inbox = cfg["backend"] == "inbox"
+        token = False if inbox else read_hf_token(env, cfg)
     except (OSError, ValueError) as exc:
         print(f"model-watch: {exc}", file=sys.stderr)
         return 2
-    try:
-        commits = list_commits(cfg["repo"], token)[:cfg["history_limit"]]
-    except Exception as exc:  # noqa: BLE001 - network, auth, missing repo: retry next tick
-        print(f"model-watch: cannot list {cfg['repo']}: {type(exc).__name__}: {exc}",
-              file=sys.stderr)
-        return 3
-    try:
-        state = skip_old(commits, state, since=cfg.get("since"), fresh=fresh)
-    except ValueError as exc:
-        print(f"model-watch: {exc}", file=sys.stderr)
-        return 2
+    retry_later = False
+    if inbox:
+        st = store.Store(cfg["store"])
+        try:
+            if not st.root.is_dir():
+                raise OSError(f"store {st.root} does not exist (NAS or Drive not mounted?)")
+            st.ensure_layout()
+            commits = list(reversed(st.list_inbox()))  # newest first, like HF
+        except OSError as exc:
+            print(f"model-watch: cannot list the store inbox: {exc}", file=sys.stderr)
+            return LIST_FAILED_EXIT
+        state, commits, moved_ok = settle_inbox(st, state, commits)
+        retry_later |= not moved_ok
+    else:
+        try:
+            commits = list_commits(cfg["repo"], token)[:cfg["history_limit"]]
+        except Exception as exc:  # noqa: BLE001 - network, auth, missing repo: retry next tick
+            print(f"model-watch: cannot list {cfg['repo']}: {type(exc).__name__}: {exc}",
+                  file=sys.stderr)
+            return LIST_FAILED_EXIT
+        try:
+            state = skip_old(commits, state, since=cfg.get("since"), fresh=fresh)
+        except ValueError as exc:
+            print(f"model-watch: {exc}", file=sys.stderr)
+            return 2
     save_state(cfg["state_file"], state)
 
     robots = {r["name"]: r for r in cfg["robots"]}
     max_attempts = cfg["max_attempts"]
-    intake_fn = intake_fn or default_intake(cfg, token)
+    intake_fn = intake_fn or (default_inbox_intake(cfg) if inbox else default_intake(cfg, token))
     deliver_fn = deliver_fn or default_deliverer(cfg)
     observe_fn = observe_fn or default_observer(cfg)
-    retry_later = False
     for sha in plan_run(commits, state, cfg["max_new_per_run"], max_attempts):
-        result = intake_result(sha, state["commits"].get(sha), list(robots), intake_fn,
-                               max_attempts)
+        extra = {"content_sha": store.content_sha(st.inbox_folder(sha))} if inbox else {}
+        result = {**intake_result(sha, state["commits"].get(sha), list(robots), intake_fn,
+                                  max_attempts), **extra}
         retry_later |= result["intake"] == "error"
         state = apply_result(state, sha, result)
         save_state(cfg["state_file"], state)
+        if inbox and result["intake"] in ("pass", "fail"):
+            state, ok = finish_inbox(st, state, sha)
+            retry_later |= not ok
+            save_state(cfg["state_file"], state)
 
     state = supersede_older(ensure_targets(state, list(robots)))
     save_state(cfg["state_file"], state)
