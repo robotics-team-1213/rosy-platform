@@ -324,6 +324,38 @@ def test_restart_after_first_phase_intent_is_unknown_and_never_replayable(tmp_pa
         )
 
 
+def test_restart_appends_workflow_hold_and_preserves_possible_held_object(tmp_path):
+    path = tmp_path / "actions.sqlite3"
+    store = ActionStore(path)
+    action = create(store)["action"]
+    attempt = store.begin_submission(action["action_id"], expected_generation=8)
+    store.record_workflow_state(
+        action["action_id"], attempt["attempt_id"],
+        workflow_state="VERIFY_HOLD", object_may_be_held=True,
+        evidence_refs={"phase_result_id": "grasp-result"},
+    )
+
+    recovered = ActionStore(path)
+    assert recovered.recover_after_restart() == [action["action_id"]]
+    reopened = ActionStore(path)
+    history = reopened.history(action["action_id"])
+    workflow_events = [event for event in history
+                       if event["event_type"] == "ACTION_WORKFLOW_STATE"]
+
+    assert reopened.get_action(action["action_id"])["state"] == "UNKNOWN"
+    assert workflow_events[-1]["detail"]["workflow_state"] == "HOLD"
+    assert workflow_events[-1]["detail"]["object_may_be_held"] is True
+    assert workflow_events[-1]["detail"]["evidence_refs"]["hold_reason"] == (
+        "PROCESS_RESTARTED_WITH_UNRESOLVED_ACTION"
+    )
+    with pytest.raises(InvalidActionTransition):
+        reopened.record_workflow_state(
+            action["action_id"], attempt["attempt_id"],
+            workflow_state="TRANSFER", object_may_be_held=True,
+            evidence_refs={"phase_result_id": "late-result"},
+        )
+
+
 @pytest.mark.parametrize("accepted", [False, None])
 def test_unaccepted_first_phase_cannot_claim_a_ros_goal_id(tmp_path, accepted):
     store = ActionStore(tmp_path / "actions.sqlite3")
