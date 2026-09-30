@@ -2,10 +2,12 @@
 import ast
 import json
 import re
+import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
-NB = ROOT / "tools" / "perception" / "training" / "rosy_lane_training.ipynb"
+TRAINING = ROOT / "tools" / "perception" / "training"
+NB = TRAINING / "rosy_lane_training.ipynb"
 
 
 def _nb():
@@ -44,6 +46,29 @@ def test_references_the_contract_and_baseline():
                    "Preprocess", "snapshot_download", "upload_folder", "whoami", "#@param"):
         assert needle in text, needle
     assert "rosy_lane_training.ipynb@" in text   # trainer string carries the notebook commit
+    assert '"pull", "--ff-only"' in text           # an existing clone is refreshed
+    assert "repo_info(" in text and "RepositoryNotFoundError" in text  # write-only trainers
+    assert "best_epoch" in text
+
+
+def test_login_never_prints_or_embeds_the_token():
+    login = next(s for s in _code_cells() if s.startswith("#@title 3."))
+    assert "getpass" in login and "RuntimeError" in login
+    assert not re.search(r"print\([^)]*_token", login)
+
+
+def test_placeholder_stop_names_the_field():
+    form = next(s for s in _code_cells() if s.startswith("#@title 2."))
+    assert '"<org>/' in form and "2단계 입력 칸" in form
+
+
+def test_notebook_is_regenerated_from_generator():
+    if str(TRAINING) not in sys.path:
+        sys.path.insert(0, str(TRAINING))
+    import gen_notebook
+
+    committed = NB.read_bytes().decode("utf-8").replace("\r\n", "\n")
+    assert gen_notebook.render() == committed
 
 
 def test_no_literal_token():
