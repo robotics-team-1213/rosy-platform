@@ -49,7 +49,12 @@ def overlay_problem(data) -> Optional[str]:
     if params.get("ir_calibration_enabled"):
         if "ir_black" not in params or "ir_white" not in params:
             return "enabled calibration needs ir_black and ir_white"
-        from control.sensing.perception.lane import IRLineCalibration
+        try:
+            # Lazy: lane.py pulls in cv2/numpy. A broken import must skip the overlay,
+            # never abort the camera launch.
+            from control.sensing.perception.lane import IRLineCalibration
+        except ImportError as exc:
+            return f"cannot check the calibration ({exc})"
         try:
             IRLineCalibration(black=tuple(params["ir_black"]), white=tuple(params["ir_white"]),
                               min_span=params.get("ir_min_span", 100.0))
