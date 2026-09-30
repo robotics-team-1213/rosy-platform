@@ -9,7 +9,7 @@ description: Use when current main (CORE, dashboard, ROS nodes) must run on an e
 
 A payload release replaces everything under `/opt/rosy/releases/<id>` (`install/`, the
 release's copy of `deploy/robot/pinky_pro/native`). Activation alone does **not** replace the
-image layer. Since D-383 the push script then runs the new release's `sync-image-layer.py`,
+image layer. Since D-385 the push script then runs the new release's `sync-image-layer.py`,
 which brings `/opt/rosy/native-runtime/*`, the rosy units in `/etc/systemd/system`, udev
 rules and `/etc/modprobe.d` up to the release's copy (step 6). `/etc/rosy/*`, `config.txt`,
 kernel modules, `/usr/local` Python and the first-boot units still need a new image.
@@ -64,7 +64,7 @@ Verified twice on 2026-09-26: releases 013 and 014 on a Pinky Pro running image 
    - **Automatic rollback:** a CORE that fails its 45 s readiness check is rolled back by
      `activate-release.sh`.
    - **Manual rollback:** `-Rollback`.
-6. **Image-layer sync (automatic, D-383).** After `CORE readiness: PASS` the push runs
+6. **Image-layer sync (automatic, D-385).** After `CORE readiness: PASS` the push runs
    `/opt/rosy/releases/<id>/deploy/robot/native/sync-image-layer.py` twice under `sudo -n`.
    `--dry-run` prints the JSON plan (`changed`, `new`, `unchanged`, `skipped`), then the
    apply runs.
@@ -92,7 +92,7 @@ Verified twice on 2026-09-26: releases 013 and 014 on a Pinky Pro running image 
    **Manual fallback.** Use it when the sync failed or the file is outside its allowlist.
    Bench only; record it.
    - Take files from `/opt/rosy/current/deploy/robot/native/`. udev and modprobe files are in
-     its `image-layer/udev/` and `image-layer/modprobe/`. A release older than D-383 lacks
+     its `image-layer/udev/` and `image-layer/modprobe/`. A release older than D-385 lacks
      them, so copy them from the repo's `deploy/robot/pinky_pro/udev/` and `modprobe/`.
    - First back up every file you replace, for example into
      `/var/lib/rosy-bench-backup/<timestamp>/`.
@@ -120,4 +120,4 @@ Verified twice on 2026-09-26: releases 013 and 014 on a Pinky Pro running image 
 ## Related
 
 `rosy-device-access`, `rosy-hw-bringup`, `rosy-land-on-main`, `rosy-dashboard-drive`;
-ADR D-225, D-247, D-260, D-383.
+ADR D-225, D-247, D-260, D-385.

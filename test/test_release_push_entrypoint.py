@@ -84,7 +84,7 @@ def test_print_commands_verifies_locally_and_builds_the_full_push_plan(release):
     assert json.loads(result["verification"]["rejections_json"]) == []
 
     plan = result["plan"]
-    # D-383: four image-layer sync steps follow CORE readiness.
+    # D-385: four image-layer sync steps follow CORE readiness.
     assert [step["kind"] for step in plan] == ["ssh", "scp", "scp", "ssh", "ssh", "ssh", "ssh"] + ["ssh"] * 4
     # scp sends the tarball, then the unpack helper.
     assert plan[1]["arguments"][-1].endswith(f"{RELEASE_ID}.tar.gz")
@@ -120,7 +120,7 @@ def test_rollback_plan_skips_the_release_and_only_rolls_back_and_waits(release):
     assert result["rollback"] is True
     assert result["verification"] is None
     plan = result["plan"]
-    assert len(plan) == 1 + 3 + 1  # D-383: rollback, image-layer sync, then readiness
+    assert len(plan) == 1 + 3 + 1  # D-385: rollback, image-layer sync, then readiness
     assert plan[0]["arguments"][-1] == "/opt/rosy/native-runtime/rollback-release.sh"
     assert "sudo" in plan[0]["arguments"] and "-n" in plan[0]["arguments"]
     ready_args = plan[-1]["arguments"]
@@ -268,7 +268,7 @@ IMAGE_LAYER_ROLES = ["image-layer-dry-run", "image-layer-apply", "image-layer-re
 
 @pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
 def test_push_plan_syncs_the_image_layer_from_the_new_release_after_readiness(release):
-    # D-383: dry run, apply, restart what changed, re-check CORE.
+    # D-385: dry run, apply, restart what changed, re-check CORE.
     completed = _print_push(release)
 
     assert completed.returncode == 0, completed.stderr
@@ -300,7 +300,7 @@ def test_rollback_plan_resyncs_the_image_layer_from_the_release_that_becomes_cur
     assert not any("wait-core-ready.py" in " ".join(step["arguments"]) for step in plan[:-1])
     dry_run, apply = plan[1]["arguments"], plan[2]["arguments"]
     assert dry_run[-5:-1] == ["sudo", "-n", "sh", "-c"] and apply[-5:-1] == ["sudo", "-n", "sh", "-c"]
-    # current first; the release rolled away from only if current predates D-383.
+    # current first; the release rolled away from only if current predates D-385.
     assert dry_run[-1].index("/opt/rosy/current/deploy/robot/native/sync-image-layer.py") < \
         dry_run[-1].index("/opt/rosy/previous/deploy/robot/native/sync-image-layer.py")
     assert "--dry-run" in dry_run[-1] and "--dry-run" not in apply[-1]

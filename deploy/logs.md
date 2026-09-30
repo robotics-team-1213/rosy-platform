@@ -1557,18 +1557,18 @@
 - 증거: test_boot_display.py (blocked 행·진입/유지/해제 소리). 변이 증명: 진입음 제거 시 빨강.
 - gate 변화: 없음.
 
-## 2026-10-01 · uncommitted · feat(release): 페이로드 푸시가 이미지 계층을 활성 릴리스 사본으로 맞춘다 (D-383)
+## 2026-10-01 · uncommitted · feat(release): 페이로드 푸시가 이미지 계층을 활성 릴리스 사본으로 맞춘다 (D-385)
 
 - 변경: 릴리스 `deploy/robot/native/`에 `sync-image-layer.py` 추가(검증된 `/opt/rosy/current`에서 native-runtime·rosy 유닛 18개·udev·modprobe 허용 목록만, 드라이런·백업·원자 설치·실패 시 복원·멱등, 재시작 안 함). `install-native-runtime.sh`가 udev·modprobe를 `image-layer/`로 실어 페이로드에 들어간다. `rosy-release-push.ps1`이 활성화·롤백 뒤 드라이런→적용→바뀐 활성 `rosy-*` 유닛 재시작→CORE 재확인, `-SkipImageLayerSync`.
 - 증거: `python -m pytest test/test_image_layer_sync.py test/test_release_push_entrypoint.py -q` (Windows). 변이 증명 16건 모두 빨강→초록. mask 유닛·POSIX 모드 시험은 Windows에서 건너뜀(CI Linux).
 - gate 변화: 없음. DEVICE HOLD — 실기 드라이런·적용·재시작 미실행.
-- 결정: D-383.
+- 결정: D-385.
 - 교훈: 이미지 상주 스크립트를 못 바꾸는 로봇에는 새 동작을 릴리스에 싣고 PC 쪽에서 부른다. `docs/solutions/workflow-issues/payload-push-leaves-the-image-layer-stale-2026-10-01.md`.
 
-## 2026-10-01 · uncommitted · fix(release): D-383 독립 리뷰 반영
+## 2026-10-01 · uncommitted · fix(release): D-385 독립 리뷰 반영
 
 - 변경: 끝나지 않은 적용은 `pending.json`으로 다음 실행이 명령·재시작 후보를 되살림. 롤백은 동기화 → 재시작 → CORE 준비 순서. 롤백 때 백업 매니페스트로 앞선 동기화가 추가한 파일은 지우고(유닛은 `disable --now`) 바꾼 파일은 되돌림(그 뒤 손댄 파일은 그대로). `rosy-network`·`rosy-config`·`rosy-release-recover`·`rosy-sd-provision`은 재시작 후보에서 빼고 다음 부팅 적용으로 알림. 새 `.path`·`.timer`는 `enable --now`. 옛 이미지 검증기(8b67c909·5c0ce600)가 새 페이로드를 받아들이는 순수 파이썬 시험.
 - 증거: `python -m pytest test/test_image_layer_sync.py test/test_release_push_entrypoint.py -q` (Windows). 새 방어 각각 변이 증명 빨강→초록.
 - gate 변화: 없음. DEVICE HOLD — 벤치 로봇 푸시·드라이런·적용·재시작·`-Rollback`은 2026-10-02 예정.
-- 결정: D-383 개정.
+- 결정: D-385 개정.
 - 교훈: 파일을 먼저 깔고 명령을 뒤에 돌리는 적용은 "파일이 같다"만으로 끝났다고 볼 수 없다. 밀린 명령을 따로 남겨야 재실행이 이어받는다.

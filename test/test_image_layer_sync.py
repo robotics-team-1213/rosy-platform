@@ -1,4 +1,4 @@
-"""D-383: a payload push brings the image layer up to the active release.
+"""D-385: a payload push brings the image layer up to the active release.
 
 sync-image-layer.py ships in the release's deploy/robot/native and copies the
 allowlisted files (native-runtime scripts, rosy units, udev rules, modprobe
@@ -322,7 +322,7 @@ def test_a_failed_reload_command_is_retried_by_the_next_run(device):
 
 
 def _older_release(device: Path) -> Path:
-    """OLD_ID as a pre-D-383 release: no image-layer/, no mapping_approval.py,
+    """OLD_ID as a pre-D-385 release: no image-layer/, no mapping_approval.py,
     no rosy-hw-test.path, no rosy_blackbox.py, and the old rosy-io.service."""
     new = device / "opt/rosy/releases" / NEW_ID / "deploy/robot/native"
     old = device / "opt/rosy/releases" / OLD_ID / "deploy/robot/native"
