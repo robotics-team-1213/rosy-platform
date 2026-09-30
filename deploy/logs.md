@@ -1556,3 +1556,11 @@
 - 변경: `rosy-boot-status.py`가 `nav_state`를 같은 규칙으로 검증·복사. `rosy-boot-display.py`는 `lamp_pattern()`에 nav를 넘기고, `_announce`가 패턴 기반으로 EMERGENCY 진입음(2.5 kHz×4, 유지 무음, 해제 시 ready 차임)을 낸다.
 - 증거: test_boot_display.py (blocked 행·진입/유지/해제 소리). 변이 증명: 진입음 제거 시 빨강.
 - gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · feat(release): 페이로드 푸시가 이미지 계층을 활성 릴리스 사본으로 맞춘다 (D-383)
+
+- 변경: 릴리스 `deploy/robot/native/`에 `sync-image-layer.py` 추가(검증된 `/opt/rosy/current`에서 native-runtime·rosy 유닛 18개·udev·modprobe 허용 목록만, 드라이런·백업·원자 설치·실패 시 복원·멱등, 재시작 안 함). `install-native-runtime.sh`가 udev·modprobe를 `image-layer/`로 실어 페이로드에 들어간다. `rosy-release-push.ps1`이 활성화·롤백 뒤 드라이런→적용→바뀐 활성 `rosy-*` 유닛 재시작→CORE 재확인, `-SkipImageLayerSync`.
+- 증거: `python -m pytest test/test_image_layer_sync.py test/test_release_push_entrypoint.py -q` (Windows). 변이 증명 16건 모두 빨강→초록. mask 유닛·POSIX 모드 시험은 Windows에서 건너뜀(CI Linux).
+- gate 변화: 없음. DEVICE HOLD — 실기 드라이런·적용·재시작 미실행.
+- 결정: D-383.
+- 교훈: 이미지 상주 스크립트를 못 바꾸는 로봇에는 새 동작을 릴리스에 싣고 PC 쪽에서 부른다. `docs/solutions/workflow-issues/payload-push-leaves-the-image-layer-stale-2026-10-01.md`.
