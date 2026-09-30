@@ -472,3 +472,60 @@ def test_reenter_resets_auto_mode(tablet_page):
     assert page.locator("[data-drive-pedal=forward]").is_visible()
     assert not page.locator("[data-drive-go]").is_visible()
     assert errors == [], errors
+
+
+def _calibrating(owner_id: str) -> dict:
+    return {"kind": "CALIBRATING", "session_id": "cal-1", "calibration_kind": "drive",
+            "label": "주행 보정", "owner": {"id": owner_id, "role": "operator", "label": "보정 노트북"},
+            "started_at": "2026-10-01T09:00:00+00:00", "remaining_s": 27.0}
+
+
+@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
+                    reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
+def test_calibration_banner_locks_drive_for_other_tokens_and_keeps_estop(tablet_page):
+    """D-321 부록: 보정 중이면 띠가 뜨고, 남의 보정이면 주행 조작이 사유와 함께 잠긴다."""
+    base_url, page, errors = tablet_page
+    shots = Path(os.environ.get("ROSY_SHOT_DIR", "X:/DevTemp/calibration-mode"))
+    shots.mkdir(parents=True, exist_ok=True)
+    log = f"{base_url}/__test__/teleop"
+    _enter_drive(page, base_url)
+    try:
+        page.request.post(f"{base_url}/__test__/activity", data=_calibrating("someone-else"))
+        page.wait_for_selector("[data-drive-calibration]:not([hidden])")
+        assert page.inner_text("[data-drive-calibration-title]") == "보정 중 — 주행 보정"
+        reason = page.inner_text("[data-drive-calibration-reason]")
+        assert "보정 노트북" in reason and "비상 정지" in reason
+        assert page.locator("[data-drive-fact=activity]").is_visible()
+        page.wait_for_selector("[data-drive-controls][data-locked]")
+        assert page.evaluate("""[...document.querySelectorAll('[data-drive-controls] ui-button')]
+                                .every((b) => b.disabled)""")
+        estop = page.locator("ui-topbar ui-button[data-estop]")
+        assert estop.is_visible() and not estop.evaluate("(b) => b.disabled")
+        page.screenshot(path=str(shots / "pilot-calibration-locked.png"))
+
+        # 잠긴 동안에는 스틱을 밀어도 teleop 을 한 번도 보내지 않는다.
+        before = len(page.request.get(log).json())
+        box = page.locator("[data-drive-stick]").bounding_box()
+        page.mouse.move(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
+        page.mouse.down()
+        page.mouse.move(box["x"] + box["width"] / 2, box["y"] + 5, steps=3)
+        page.keyboard.down("ArrowUp")
+        page.wait_for_timeout(600)
+        page.keyboard.up("ArrowUp")
+        page.mouse.up()
+        assert len(page.request.get(log).json()) == before, "잠긴 조작부가 명령을 보냈다"
+
+        # 이 기기(whoami id dev-1)가 보정 주인이면 띠는 그대로, 조작은 풀린다.
+        page.request.post(f"{base_url}/__test__/activity", data=_calibrating("dev-1"))
+        page.wait_for_selector("[data-drive-controls]:not([data-locked])")
+        assert page.locator("[data-drive-calibration]").is_visible()
+        assert "이 기기" in page.inner_text("[data-drive-calibration-reason]")
+        page.screenshot(path=str(shots / "pilot-calibration-owner.png"))
+
+        page.request.post(f"{base_url}/__test__/activity", data="null",
+                          headers={"Content-Type": "application/json"})
+        page.wait_for_selector("[data-drive-calibration]", state="hidden")
+        assert not page.locator("[data-drive-fact=activity]").is_visible()
+    finally:
+        dev_server.STATE["activity"] = None
+    assert errors == [], errors

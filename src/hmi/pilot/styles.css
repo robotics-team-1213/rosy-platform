@@ -208,6 +208,8 @@ body[data-pilot-screen="drive"] .pilot-main {
 [data-drive-fact=link][data-state=FORBIDDEN] { color: var(--status-crit); }
 [data-drive-fact=link][data-state=RETRYING] { color: var(--status-warn); }
 [data-drive-fact=latency][data-slow=true] { color: var(--status-warn); }
+[data-drive-fact=activity] { color: var(--status-warn); }
+[data-drive-fact=activity][hidden] { display: none; }
 
 /* HUD 액션은 공용 quiet 버튼 그대로(표적 --target-secondary). 자리만 오른쪽 끝. */
 [data-drive-hud] ui-actions { flex-wrap: nowrap; align-items: center; gap: var(--space-1); margin-left: auto; }
@@ -566,3 +568,26 @@ body[data-pilot-screen="drive"] ui-brand small { display: none; }
 [data-drive-intent][data-state="guard"] [data-intent-steer],
 [data-drive-intent][data-state="hold"] [data-intent-steer] { color: var(--status-warn); }
 @media (prefers-reduced-motion: reduce) { [data-intent-target] { transition: none; } }
+
+/* 보정 중 띠(D-321 부록): 영상 위쪽 가운데의 경고 판. 판만 칠하고, 사유 글자색은 공용 경고 상태 요소가 정한다. */
+[data-drive-calibration] {
+  position: absolute;
+  top: var(--space-3);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 3;
+  display: grid;
+  gap: var(--space-1);
+  width: max-content;
+  max-width: min(40rem, calc(100% - var(--space-4) * 2));
+  padding: var(--space-3) var(--space-4);
+  background: color-mix(in srgb, var(--ground-raise) 94%, transparent);
+  border: 1px solid var(--status-warn);
+  border-radius: var(--radius-panel);
+}
+[data-drive-calibration][hidden] { display: none; }
+/* 남의 보정 중에는 주행 조작부 전체가 입력을 받지 않는다. 비상 정지(상단 막대)는 이 밖에 있다. */
+[data-drive-controls][data-locked] {
+  pointer-events: none;
+  opacity: 0.45;
+}

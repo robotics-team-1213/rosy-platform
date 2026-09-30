@@ -37,6 +37,7 @@ PILOT_MIME = {
     "drivers/registry.js": "application/javascript",
     "drivers/pinky_core.js": "application/javascript",
     "autonomy.js": "application/javascript",
+    "calibration.js": "application/javascript",
     "screens/connect.js": "application/javascript",
     "screens/drive.js": "application/javascript",
     "screens/drive-auto.js": "application/javascript",
@@ -68,7 +69,8 @@ CAPABILITIES = {
     "runtime": {"hardware": True, "evidence": True, "drive": True,
                 "navigation": False, "maps": False},
 }
-STATE = {"mode": "IDLE", "velocity": {"linear": 0.0, "angular": 0.0}, "battery": {"percent": 84, "volts": 7.6}}
+STATE = {"mode": "IDLE", "velocity": {"linear": 0.0, "angular": 0.0}, "battery": {"percent": 84, "volts": 7.6},
+         "activity": None}
 
 #: 시뮬/개발용 canned 프레임 — 토큰 색 원 하나(실 카메라가 없는 자리 표시).
 _buf = __import__("io").BytesIO()
@@ -83,7 +85,15 @@ FRAME_SEQ = 4
 def robot_state(request: Request):
     if _role(request) is None:
         return JSONResponse({"detail": "unauthorized"}, status_code=401)
-    return {"mode": STATE["mode"], "velocity": STATE["velocity"], "battery": STATE["battery"]}
+    return {"mode": STATE["mode"], "velocity": STATE["velocity"], "battery": STATE["battery"],
+            "activity": STATE["activity"]}
+
+
+@app.post("/__test__/activity")
+async def set_activity(request: Request):
+    """시험이 보정 세션 표시(D-321 부록)를 정한다. 본문이 null 이면 보정 끝."""
+    STATE["activity"] = await request.json()
+    return {"activity": STATE["activity"]}
 
 
 @app.get("/api/v1/vision/front/status")

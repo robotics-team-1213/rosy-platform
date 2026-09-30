@@ -221,6 +221,7 @@ def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
         "drivers/registry.js": "application/javascript",
         "drivers/pinky_core.js": "application/javascript",
         "autonomy.js": "application/javascript",
+        "calibration.js": "application/javascript",
         "screens/connect.js": "application/javascript",
         "screens/drive.js": "application/javascript",
         "screens/drive-auto.js": "application/javascript",
