@@ -430,6 +430,14 @@ body[data-pilot-screen="drive"] ui-brand small { display: none; }
   max-height: none;
 }
 .pilot-drive[data-drive-layout="below"][data-view-mode="full"] [data-drive-view] { grid-row: 1 / span 2; }
+/* 세로 전체화면: 영상이 무대 높이를 다 쓴다. 조작부는 가로 전체화면처럼 아래에 겹쳐 뜨고, 크기 컨테이너가
+   0 이 되지 않게 높이를 정해 준다(스틱이 cq 단위로 잰다). */
+.pilot-drive[data-drive-layout="below"][data-view-mode="full"] [data-drive-controls] {
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  height: min(40dvh, 28rem);
+  background: transparent;
+}
 
 /* ---- 전체화면(D-363 §5): 영상이 무대 전체를 채운다(cover, 잘림 표시). 비상 정지가 있는 상단 바는 남는다 ---- */
 /* 같은 칸에 겹쳐 놓으려면 열도 명시해야 한다 — 안 하면 격자 자동 배치가 옆 칸으로 밀어낸다 */
