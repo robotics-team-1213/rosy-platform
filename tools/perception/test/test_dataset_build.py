@@ -254,6 +254,7 @@ def test_two_sessions_split_without_overlap(tmp_path):
     assert set(by_split) == {"train", "val"}
     assert not by_split["train"] & by_split["val"]
     assert m["sources"] == [{"session": "s1"}, {"session": "s2"}]
+    assert m["ignore_index"] == build.IGNORE_INDEX == 255  # D-379 schema field
     saved = cv2.imread(str(out / "masks" / "s1" / "s1__000000.png"), cv2.IMREAD_UNCHANGED)
     assert (saved == _mask()).all()
     assert json.loads((out / "manifest.json").read_text()) == m
@@ -469,3 +470,8 @@ def test_prelabel_refuses_an_unknown_role_even_if_the_model_agrees():
                     {"index": 2, "name": "x", "role": "bogus", "color": [5, 5, 5]}]
     with pytest.raises(build.BuildError, match="role"):
         prelabel.resolve_classes(yaml_classes, model)
+
+
+def test_a_class_cannot_take_the_ignore_index():
+    with pytest.raises(build.BuildError, match="ignore_index"):
+        build.label_to_index([CLASSES[0], dict(CLASSES[1], index=255)])

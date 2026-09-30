@@ -250,3 +250,59 @@ def test_export_via_export_cell_passes_check_manifest(tmp_path):
     assert check_manifest.main([str(out)]) == 0
     assert check_manifest.check(str(out)) == doc["model_revision"]
     assert doc["input"]["color"] == "rgb" and doc["input"]["scale"] == pytest.approx(1 / 255)
+
+
+def _with_ignore(root: Path, ignore) -> Path:
+    """The mini dataset with its top 40 rows unlabelled (mask value `ignore`)."""
+    _mini_dataset(root)
+    manifest = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
+    manifest["ignore_index"] = ignore
+    (root / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+    for f in manifest["frames"]:
+        mask = cv2.imread(str(root / f["mask"]), cv2.IMREAD_UNCHANGED)
+        mask[:40] = 255
+        cv2.imwrite(str(root / f["mask"]), mask)
+    return root
+
+
+def test_dataset_accepts_ignore_index_pixels_and_train_leaves_them_out(tmp_path):
+    root = _with_ignore(tmp_path, 255)
+    train_ds = rlm.RosyLaneDataset(root, "train")
+    val_ds = rlm.RosyLaneDataset(root, "val")
+    assert train_ds.ignore_index == 255
+    _, mask = train_ds[0]
+    assert int(mask.max()) == 255
+    torch.manual_seed(0)
+    model = rlm.LaneUNet(n_classes=4, base=4)
+    result = rlm.train(model, train_ds, val_ds, epochs=1, lr=1e-3, batch_size=2,
+                       device="cpu", log=None)
+    # 255 would crash CrossEntropyLoss (target out of range) unless it is ignored
+    assert math.isfinite(result["history"][0]["train_loss"])
+    assert math.isfinite(result["history"][0]["val_loss"])
+
+
+def test_dataset_without_ignore_index_still_rejects_255(tmp_path):
+    root = _with_ignore(tmp_path, None)
+    with pytest.raises(ValueError, match="class indexes"):
+        rlm.RosyLaneDataset(root, "train")[0]
+
+
+def test_dataset_rejects_other_out_of_range_values_and_bad_ignore_index(tmp_path):
+    root = _with_ignore(tmp_path / "a", 255)
+    manifest = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
+    mask_path = root / manifest["frames"][0]["mask"]
+    mask = cv2.imread(str(mask_path), cv2.IMREAD_UNCHANGED)
+    mask[100, 100] = 7
+    cv2.imwrite(str(mask_path), mask)
+    ds = rlm.RosyLaneDataset(root, "train")
+    with pytest.raises(ValueError, match="ignore_index 255"):
+        ds[[f["mask"] for f in ds.frames].index(manifest["frames"][0]["mask"])]
+    for bad in (2, True, "255", 256):
+        with pytest.raises(ValueError, match="ignore_index"):
+            rlm.RosyLaneDataset(_with_ignore(tmp_path / f"b{bad!r}".replace("'", ""), bad), "train")
+
+
+def test_class_iou_excludes_ignore_pixels_from_both_sides():
+    pred = torch.tensor([0, 1, 1, 0])
+    target = torch.tensor([0, 1, 255, 255])
+    assert rlm.class_iou(pred, target, 2, ignore_index=255) == [1.0, 1.0]

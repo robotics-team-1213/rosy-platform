@@ -8,6 +8,8 @@ Trainer-side only: imports torch at module level. export_cell.py stays torch-fre
   apply(); export_cell.export() gets manifest_kwargs(). The robot applies the same
   formula from the manifest: x = (pixel * scale - mean) / std, rgb flips BGR frames.
 - RosyLaneDataset: follows frames[].image / frames[].mask only (dataset/1 manifest).
+  Mask pixels equal to the manifest's ignore_index (D-379: 255, unlabelled) are
+  allowed and left out of the loss and the IoU; train() takes it from the dataset.
 """
 
 from __future__ import annotations
@@ -102,6 +104,13 @@ class RosyLaneDataset(torch.utils.data.Dataset):
         self.manifest = json.loads((self.root / "manifest.json").read_text(encoding="utf-8"))
         self.classes = self.manifest["classes"]
         self.frames = [f for f in self.manifest["frames"] if f["split"] == split]
+        # Unlabelled mask value (D-379 addendum 2026-10-01); None when the manifest has none.
+        ignore = self.manifest.get("ignore_index")
+        if ignore is not None and (isinstance(ignore, bool) or not isinstance(ignore, int)
+                                   or not len(self.classes) <= ignore <= 255):
+            raise ValueError(f"manifest ignore_index {ignore!r}: an integer in "
+                             f"[{len(self.classes)}, 255], never a class index")
+        self.ignore_index = ignore
         self.preprocess = Preprocess(color, scale, mean, std)
 
     def __len__(self):
@@ -113,9 +122,12 @@ class RosyLaneDataset(torch.utils.data.Dataset):
         mask = cv2.imread(str(self.root / f["mask"]), cv2.IMREAD_UNCHANGED)
         if bgr is None or mask is None:
             raise FileNotFoundError(f"unreadable frame {f['image']} / {f['mask']}")
-        if mask.ndim != 2 or int(mask.max()) >= len(self.classes):
+        bad = mask.ndim != 2 or bool(np.any((mask >= len(self.classes)) & (mask != (
+            -1 if self.ignore_index is None else self.ignore_index))))
+        if bad:
+            allowed = "" if self.ignore_index is None else f" or ignore_index {self.ignore_index}"
             raise ValueError(f"{f['mask']}: mask must be single-channel class indexes "
-                             f"< {len(self.classes)} (shape {mask.shape}, max {int(mask.max())})")
+                             f"< {len(self.classes)}{allowed} (shape {mask.shape}, max {int(mask.max())})")
         bgr = cv2.resize(bgr, (WIDTH, HEIGHT), interpolation=cv2.INTER_AREA)
         mask = cv2.resize(mask, (WIDTH, HEIGHT), interpolation=cv2.INTER_NEAREST)
         return torch.from_numpy(self.preprocess.apply(bgr)), torch.from_numpy(mask.astype(np.int64))
@@ -160,8 +172,12 @@ def _mean_iou(val_iou: dict) -> float:
 def train(model, train_ds, val_ds, *, epochs, lr, batch_size, device, ignore_index=None,
           num_workers=None, log=print) -> dict:
     """Adam + cross-entropy; the model ends with the best epoch's weights (mean non-None val IoU).
+    ignore_index defaults to the dataset's (manifest ignore_index): those pixels count in
+    neither the loss nor the IoU.
 
     Returns {history: [{epoch, train_loss, val_loss, val_iou{name: iou}}], best_epoch, val_iou}."""
+    if ignore_index is None:
+        ignore_index = getattr(train_ds, "ignore_index", None)
     names = [c["name"] for c in sorted(val_ds.classes, key=lambda c: c["index"])]
     n = len(names)
     model = model.to(device)

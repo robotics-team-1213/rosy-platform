@@ -170,6 +170,9 @@ print("데이터셋 클래스 (출력 채널 순서):")
 for c in ds_classes:
     print(f"  {c['index']}: {c['name']:<20} {c['role']}")
 print(f"train {len(train_ds)} frames, val {len(val_ds)} frames")
+# D-379: 라벨 없는 화소 값(manifest ignore_index, 보통 255)은 손실과 IoU에서 빠진다.
+IGNORE_INDEX = train_ds.ignore_index
+print(f"ignore_index: {IGNORE_INDEX}")
 if not len(train_ds) or not len(val_ds):
     raise RuntimeError("train 또는 val split이 비었습니다. 데이터셋을 확인하세요.")
 
@@ -240,7 +243,8 @@ code('''
 #@title 6. 학습
 from rosy_lane_model import train
 
-result = train(model, train_ds, val_ds, epochs=EPOCHS, lr=LR, batch_size=BATCH, device=DEVICE)
+result = train(model, train_ds, val_ds, epochs=EPOCHS, lr=LR, batch_size=BATCH, device=DEVICE,
+               ignore_index=IGNORE_INDEX)
 best_epoch = result["best_epoch"]
 VAL_IOU = {k: round(v, 4) for k, v in result["val_iou"].items() if v is not None}
 print(f"가장 좋은 에폭 {best_epoch}/{EPOCHS}의 검증 클래스별 IoU:")
