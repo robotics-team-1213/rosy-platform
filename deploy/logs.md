@@ -1556,3 +1556,9 @@
 - 변경: `rosy-boot-status.py`가 `nav_state`를 같은 규칙으로 검증·복사. `rosy-boot-display.py`는 `lamp_pattern()`에 nav를 넘기고, `_announce`가 패턴 기반으로 EMERGENCY 진입음(2.5 kHz×4, 유지 무음, 해제 시 ready 차임)을 낸다.
 - 증거: test_boot_display.py (blocked 행·진입/유지/해제 소리). 변이 증명: 진입음 제거 시 빨강.
 - gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · fix(sd): ERASE 프롬프트 type-ahead, 아티팩트 다운로더, D-383 긴급 카드 쓰기
+
+- 변경: (1) `prepare-rosy-sd.ps1`의 ERASE 프롬프트가 먼저 콘솔 입력 버퍼를 비우고(`Clear-TypeAhead`), 빈 줄·입력 끝은 불일치가 아니라 `no console input`으로 멈춘다. 2026-09-30 `-Detach` 창에서 앞 단계 중 눌린 Enter가 0.9초 만에 프롬프트에 답해 `typed: ''`로 실패했다. (2) `tools/release/download_artifact.py`: Actions 아티팩트 병렬 range 다운로드(진행·재개·크기 확인·안전 압축 해제). (3) D-383 `write-card.ps1 -Emergency -EmergencyReason`: 전체 readback만 건너뛰고 증거에 검증 안 됨을 남기며, `verify-emergency-card.ps1` 후속 readback과 표준 재공급으로 메운다.
+- 증거: test_sd_writer_contract.py·test_sd_write_card_entrypoint.py·test_media_readback.py·test_download_artifact.py (호스트 fixture만, 실제 디스크 없음). 새 게이트마다 변이 증명.
+- gate 변화: 없음. 실제 카드에서의 긴급 쓰기·후속 readback은 아직 안 해 봤다.

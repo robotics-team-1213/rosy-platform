@@ -31,6 +31,7 @@
 | D-319 | SETUP 뒤 현장 입회 하에 모터 구동 준비를 자동화한다 |
 | D-321 | 현장 보정과 G4 실측을 한 세션으로 모으고 지도 생성은 승인 뒤에 시작한다 |
 | D-325 | 기존 Pinky 배포는 변경에 맞는 가장 작은 산출물을 선택한다 |
+| D-383 | 긴급 카드 쓰기(`write-card.ps1 -Emergency -EmergencyReason`)는 전체 readback만 건너뛰고 서명·시리얼·plan·ERASE 게이트와 MBR 점검은 지킨다; receipt·진행 파일·상태가 검증 안 됨을 적고, 후속 readback(`verify-emergency-card.ps1`)이나 표준 재기록으로 메운다 |
 
 ## 계획·결과 문서
 
@@ -65,8 +66,8 @@
 
 ## 최근 기록
 
+- 2026-10-01 · uncommitted · fix(sd): ERASE 프롬프트 type-ahead, 아티팩트 다운로더, D-383 긴급 카드 쓰기
 - 2026-10-01 · uncommitted · feat(native): D-381 blocked 패턴과 비상정지 진입음
 - 2026-09-30 · uncommitted · docs(adr): D-375 에서 D-380 으로 개명
 - 2026-09-30 · uncommitted · feat(native): D-375 부팅 표시가 운용 모드를 램프와 LCD에 표시
 - 2026-09-30 · uncommitted · deploy(harness): last_verified를 CI 초록 커밋으로 기록
-- 2026-09-30 · uncommitted · feat(site): D-352 robot_credential_key secret와 오프라인 rekey
