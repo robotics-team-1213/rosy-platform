@@ -40,6 +40,9 @@ from core_common.protocol.vision_preview import (
     PreviewRectification, VisionLeaseError, VisionLeaseSigner,
 )
 from site_vision.field_detect import DETECTOR_VERSION, FieldDetection, detect_field_jpeg
+from site_vision.map_register import (
+    REGISTER_VERSION, MapPaint, RegistrationResult, register_map_jpeg,
+)
 from site_vision.rectify import rectify_jpeg
 
 STATUS_INTERVAL_S = 1.0
@@ -65,6 +68,8 @@ _FIELD_PROPOSAL_INTERVAL_S = 1.0
 # Field detection is ~30 ms of CPU per frame: at most one run per source per this
 # interval, whoever asks; readers in between get the last result.
 _FIELD_DETECT_INTERVAL_S = 1.0
+# Map registration (D-375) is ~1 s of CPU per frame: same once-per-source-per-interval rule.
+_MAP_REGISTER_INTERVAL_S = 1.0
 
 
 @dataclass
@@ -130,6 +135,15 @@ class _FieldRun:
 
 
 @dataclass
+class _MapRun:
+    """The last map registration for one source; ``result`` is None while it runs or after it failed."""
+
+    frame: LatestFrame
+    started: float
+    result: RegistrationResult | None = None
+
+
+@dataclass
 class _Source:
     name: str
     connection: ServerConnection
@@ -144,7 +158,7 @@ class IngestServer:
 
     def __init__(self, source_tokens: Mapping[str, str], config: dict | None = None,
                  *, preview_signer: VisionLeaseSigner | None = None,
-                 preview_max_age_s: float = 1.0) -> None:
+                 preview_max_age_s: float = 1.0, map_paint: MapPaint | None = None) -> None:
         if not source_tokens:
             raise ValueError("at least one source token is required")
         tokens = dict(source_tokens)
@@ -164,6 +178,9 @@ class IngestServer:
         # Last detection per source, keyed by frame identity (a reconnect restarts seq);
         # dropped with the source.
         self._field_cache: dict[str, _FieldRun] = {}
+        # D-375: site map lane paint for the map-proposal view; None disables the view.
+        self.map_paint = map_paint
+        self._map_cache: dict[str, _MapRun] = {}
         self.config: dict = dict(protocol.DEFAULT_CONFIG if config is None else config)
         self._sources: dict[str, _Source] = {}
         self._closing: set[asyncio.Task] = set()
@@ -226,13 +243,16 @@ class IngestServer:
         """Serve one authorized latest-frame read directly from Vision, never from Fleet."""
         prefix = "/api/vision/sources/"
         source, _, view = path[len(prefix):].partition("/") if path.startswith(prefix) else ("", "", "")
-        if not source or view not in ("frame", "field-proposal") or self.preview_signer is None:
+        if (not source or view not in ("frame", "field-proposal", "map-proposal")
+                or self.preview_signer is None):
             return _http_response(404, b"not found\n")
         bearer = authorization[len("Bearer "):] if authorization and authorization.startswith("Bearer ") else ""
         try:
             lease = self.preview_signer.verify(bearer, source_id=source)
         except VisionLeaseError:
             return _http_response(401, b"unauthorized\n")
+        if view == "map-proposal" and self.map_paint is None:
+            return _http_response(404, b"site map paint not configured\n")
         if view == "frame":
             limited = self._rate_limited((str(lease["sub"]), source), _FRAME_INTERVAL_S)
         else:
@@ -247,6 +267,8 @@ class IngestServer:
             return _http_response(404, b"frame stale\n", extra={"X-Frame-State": "stale"})
         if view == "field-proposal":
             return await self._field_proposal_response(source, frame)
+        if view == "map-proposal":
+            return await self._map_proposal_response(source, frame)
         jpeg = frame.jpeg
         rectification_active = False
         if "rectification" in lease:
@@ -323,6 +345,50 @@ class IngestServer:
             "X-Frame-Age-Ms": str(round(age * 1000)),
         })
 
+    async def _map_proposal_response(self, source: str, frame: LatestFrame) -> Response:
+        """D-375: an image-to-map homography proposal from the lane paint, for operator review.
+
+        Never applied to sightings or ``CameraMap``. ``proposal`` is set only when the fit
+        passed every gate; a rejected fit is returned as ``rejected_fit`` with the reason
+        (its coverage and cut sides still tell the installer where to move the camera).
+        Runs off the event loop, at most once per source per ``_MAP_REGISTER_INTERVAL_S``.
+        """
+        run = self._map_cache.get(source)
+        now_mono = time.monotonic()
+        if run is None or (run.frame is not frame
+                           and now_mono - run.started >= _MAP_REGISTER_INTERVAL_S):
+            run = _MapRun(frame=frame, started=now_mono)
+            self._map_cache[source] = run
+            try:
+                run.result = await asyncio.to_thread(register_map_jpeg, frame.jpeg, self.map_paint)
+            except (ValueError, cv2.error):
+                return _http_response(422, b"map registration failed\n",
+                                      extra={"X-Frame-State": "detection-error"})
+        result = run.result
+        if result is None:
+            return _http_response(429, b"map registration busy\n", extra={"Retry-After": "1"})
+        frame = run.frame
+        age = max(0.0, time.time() - frame.captured_at)
+        width, height = result.image_size
+        fit = result.registration.to_dict() if result.registration is not None else None
+        body = {
+            "source": source,
+            "frame_seq": frame.header.seq,
+            "frame_age_ms": round(age * 1000),
+            "image": {"width": width, "height": height},
+            "map_frame": "map",
+            "accepted": result.accepted,
+            "proposal": fit if result.accepted else None,
+            "rejected_fit": None if result.accepted else fit,
+            "reason": result.reason,
+            "registrar": {"version": REGISTER_VERSION, "elapsed_ms": round(result.elapsed_ms, 1)},
+        }
+        return _http_response(200, (json.dumps(body, separators=(",", ":")) + "\n").encode(), extra={
+            "Content-Type": "application/json", "Cache-Control": "no-store",
+            "X-Frame-Seq": str(frame.header.seq),
+            "X-Frame-Age-Ms": str(round(age * 1000)),
+        })
+
     # -- per-connection lifecycle ------------------------------------------
 
     async def _handler(self, connection: ServerConnection) -> None:
@@ -354,6 +420,7 @@ class IngestServer:
         src = _Source(name=source_name, connection=connection)
         self._sources[source_name] = src
         self._field_cache.pop(source_name, None)
+        self._map_cache.pop(source_name, None)
         if replaced is not None:
             # Never await this inline: a half-open old peer (phone lost Wi-Fi)
             # never answers the close frame and would stall the new connection.
@@ -395,6 +462,7 @@ class IngestServer:
         if current is not None and current.connection is connection:
             del self._sources[source_name]
             self._field_cache.pop(source_name, None)
+            self._map_cache.pop(source_name, None)
 
     async def _status_loop(self, src: _Source) -> None:
         while True:

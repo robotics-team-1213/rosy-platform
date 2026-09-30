@@ -24,6 +24,7 @@ from typing import Sequence
 
 from site_vision import protocol
 from site_vision.ingest import STATUS_INTERVAL_S, IngestServer
+from site_vision.map_register import load_map_paint
 from site_vision.publish import SightingPublishError, SightingPublisher
 from site_vision.vision_config import load_vision_sources
 from site_vision.worker import VisionWorker
@@ -139,6 +140,7 @@ async def _run_vision(args: argparse.Namespace) -> int:
     ingest = IngestServer(
         {config.camera.source_id: config.phone_token for config in configs},
         preview_signer=preview_signer,
+        map_paint=load_map_paint(args.map_paint) if args.map_paint else None,
     )
     workers = []
     async with AsyncExitStack() as stack:
@@ -197,6 +199,9 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     vision.add_argument("--port", type=int, default=8095)
     vision.add_argument("--tls-cert", type=Path, default=None)
     vision.add_argument("--tls-key", type=Path, default=None)
+    vision.add_argument("--map-paint", type=Path, default=None,
+                        help="site map lane paint STL in map metres (e.g. road_lines.stl); "
+                             "enables the D-375 map-proposal view")
 
     return parser.parse_args(argv)
 
