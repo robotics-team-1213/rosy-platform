@@ -1,4 +1,4 @@
-"""D-375: a payload push brings the image layer up to the active release.
+"""D-383: a payload push brings the image layer up to the active release.
 
 sync-image-layer.py ships in the release's deploy/robot/native and copies the
 allowlisted files (native-runtime scripts, rosy units, udev rules, modprobe
