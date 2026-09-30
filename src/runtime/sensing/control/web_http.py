@@ -49,10 +49,10 @@ GOAL_BOUND = 50.0   # metres; a dashboard goal beyond this is a typo
 
 
 def web_common_dir(share=None):
-    """The installed web_common share when it ships manifest.json, else the
+    """The installed web_common share when it ships shared-assets.json, else the
     source tree (src/hmi/web_common). The node resolves ``share``; this module stays
     ROS-free (D-171)."""
-    if share and os.path.isfile(os.path.join(share, "manifest.json")):
+    if share and os.path.isfile(os.path.join(share, "shared-assets.json")):
         return share
     return os.path.join(
         os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(
@@ -63,7 +63,7 @@ def web_common_dir(share=None):
 def shared_assets(root):
     """name -> media type from web_common's manifest: the one /common allowlist."""
     try:
-        with open(os.path.join(root, "manifest.json"), encoding="utf-8") as handle:
+        with open(os.path.join(root, "shared-assets.json"), encoding="utf-8") as handle:
             return dict(json.load(handle)["shared_assets"])
     except (OSError, ValueError, KeyError):
         return {}

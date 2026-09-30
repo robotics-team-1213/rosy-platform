@@ -58,12 +58,12 @@ OPERATOR_PAGE_HEADERS = {"Cache-Control": "no-cache", "Content-Security-Policy":
 def _web_common_root() -> Path:
     """Resolve installed assets first, with a source-tree fallback for host tests.
 
-    A web_common directory is one that ships ``manifest.json``."""
+    A web_common directory is one that ships ``shared-assets.json``."""
     try:
         from ament_index_python.packages import get_package_share_directory
 
         share = Path(get_package_share_directory("web_common"))
-        if (share / "manifest.json").is_file():
+        if (share / "shared-assets.json").is_file():
             return share
     except (ImportError, LookupError):
         pass
@@ -72,7 +72,7 @@ def _web_common_root() -> Path:
 
 def _shared_assets(web_common: Path) -> dict[str, str]:
     """name -> media type, from web_common's manifest (the one /common allowlist)."""
-    manifest = json.loads((web_common / "manifest.json").read_text(encoding="utf-8"))
+    manifest = json.loads((web_common / "shared-assets.json").read_text(encoding="utf-8"))
     return dict(manifest["shared_assets"])
 
 

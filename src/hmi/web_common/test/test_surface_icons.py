@@ -131,7 +131,7 @@ def test_registry_names_and_icons_follow_the_naming_table():
 
 
 def test_web_icons_are_on_the_common_allowlist_and_linked_as_favicons():
-    assets = json.loads((WEB / "manifest.json").read_text(encoding="utf-8"))["shared_assets"]
+    assets = json.loads((WEB / "shared-assets.json").read_text(encoding="utf-8"))["shared_assets"]
     for ident in GLYPH_TOKEN:
         assert assets.get(f"icons/{ident}.svg") == "image/svg+xml"
     pages = {
