@@ -55,6 +55,22 @@ def _sidecar(path: Path):
     return rows, meta
 
 
+def _check_sidecar(path: Path, rows, meta) -> None:
+    """Refuse a sidecar whose row count differs from the metadata or container frame count."""
+    counts = {}
+    if meta and (meta.get("video") or {}).get("frames") is not None:
+        counts["metadata"] = int(meta["video"]["frames"])
+    cap = cv2.VideoCapture(str(path))
+    if not cap.isOpened():
+        raise SystemExit(f"cannot open video: {path}")
+    counts["container"] = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    cap.release()
+    bad = {k: v for k, v in counts.items() if v != len(rows)}
+    if bad:
+        raise SystemExit(f"{path}: sidecar has {len(rows)} rows but "
+                         + ", ".join(f"{k} says {v} frames" for k, v in bad.items()))
+
+
 def _video_frames(path: Path, rows=None):
     """rows (sidecar) give frame i its recorded stamp and side data instead of POS_MSEC."""
     cap = cv2.VideoCapture(str(path))
@@ -186,6 +202,8 @@ def main(argv=None) -> int:
         session = src.name
     else:
         rows, video_meta = _sidecar(src)
+        if rows is not None:
+            _check_sidecar(src, rows, video_meta)  # before any output is written
         it = _video_frames(src, rows)
         # A converted session keeps its session name, so build.py splits it with its bag.
         session = ((video_meta or {}).get("source") or {}).get("session")

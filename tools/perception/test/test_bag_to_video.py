@@ -262,9 +262,25 @@ def test_extract_refuses_a_sidecar_that_does_not_match_the_video(tmp_path):
     _, stem = _convert(tmp_path)
     sidecar = stem.with_suffix(".jsonl")
     sidecar.write_text("\n".join(sidecar.read_text().splitlines()[:-1]) + "\n")
-    with pytest.raises(SystemExit, match="sidecar"):
-        extract.main([str(stem.with_suffix(".mp4")), "--out", str(tmp_path / "f"),
+    out = tmp_path / "f"
+    with pytest.raises(SystemExit, match="sidecar has 5 rows but metadata says 6 frames, "
+                                         "container says 6 frames"):
+        extract.main([str(stem.with_suffix(".mp4")), "--out", str(out),
                       "--min-interval", "0", "--max-hamming", "-1"])
+    assert not out.exists()   # refused before decoding: no partial frames or jsonl
+
+
+@needs_tools
+def test_extract_refuses_metadata_that_disagrees_with_the_sidecar(tmp_path):
+    _, stem = _convert(tmp_path)
+    meta = stem.with_suffix(".json")
+    doc = json.loads(meta.read_text())
+    doc["video"]["frames"] += 1
+    meta.write_text(json.dumps(doc))
+    out = tmp_path / "f"
+    with pytest.raises(SystemExit, match="metadata says 7 frames"):
+        extract.main([str(stem.with_suffix(".mp4")), "--out", str(out)])
+    assert not out.exists()
 
 
 def test_latest_is_at_or_before_and_within_the_gap():
