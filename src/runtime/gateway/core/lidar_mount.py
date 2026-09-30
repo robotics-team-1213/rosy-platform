@@ -2,37 +2,56 @@
 
 Resolution order, first hit wins:
   1. the calibration store's current accepted ``lidar_mount`` record
-     (core_common/calibration_store.py; accepted by an operator, never automatic);
-  2. ``lidar_yaw_offset`` bound through the control sensor adapter (D-47:
-     required calibration snapshot or explicit sensor parameters);
-  3. the hand value ``line_follow.lidar_forward_deg`` (fallback only).
+     (core_common/calibration_store.py; accepted by an operator, never
+     automatic), when its value is a finite real inside 150-210 deg or within
+     15 deg of the hand value (check_values); otherwise it is logged and skipped;
+  2. the hand value ``line_follow.lidar_forward_deg``.
 
-The caller logs the returned source line so the log says which value drives
-the obstacle sector/path. ROS-free.
+``lidar_yaw_offset`` bound through the control sensor adapter (D-47) is only
+compared: it is the safety node's hand-tuned 190 deg today, which motion and
+camera measurements contradict (~181-182 deg), so it must not silently
+override the line_follow value. A disagreement above 3 deg is reported in the
+source line, which the caller logs as a warning. ROS-free.
 """
 from __future__ import annotations
 
 import math
 from typing import Any, Mapping, Optional
 
-from core_common.calibration_store import CalibrationStore, default_robot
+from core_common.calibration_store import CalibrationStore, check_values, default_robot
+
+DISAGREE_DEG = 3.0
+
+
+def _angle_gap(a, b):
+    return abs((a - b + 180.0) % 360.0 - 180.0)
 
 
 def resolve_lidar_forward_deg(line_follow: Mapping[str, Any], *, hand_default: float,
                               adapter_parameters: Optional[Mapping[str, Any]] = None,
                               store: Optional[CalibrationStore] = None,
                               robot: Optional[str] = None) -> tuple[float, str]:
-    """(forward angle in the scan frame, degrees in [0, 360), source line)."""
+    """(forward angle in the scan frame, degrees, source line to log)."""
+    hand = float(line_follow.get("lidar_forward_deg", hand_default))
+    notes = []
     try:
         record = (store or CalibrationStore()).current(robot or default_robot(), "lidar_mount")
-    except (OSError, ValueError):
-        record = None
+    except Exception as exc:  # noqa: BLE001 - CORE must start on the hand value
+        record, notes = None, [f"calibration store unreadable: {exc}"]
     if record is not None:
-        value = float(record["values"]["lidar_yaw_offset"])
-        return (math.degrees(value) % 360.0,
-                f"calibration record {record['id']} sha256 {record['sha256'][:12]}")
+        try:
+            why = check_values("lidar_mount", record["values"], nominal={"lidar_forward_deg": hand})
+            if why is None:
+                deg = math.degrees(float(record["values"]["lidar_yaw_offset"])) % 360.0
+                return deg, f"calibration record {record['id']} sha256 {record['sha256'][:12]}"
+        except (KeyError, TypeError, ValueError) as exc:
+            why = f"malformed record: {exc}"
+        notes.append(f"accepted lidar_mount record {record.get('id')} skipped: {why}")
     bound = (adapter_parameters or {}).get("lidar_yaw_offset")
     if isinstance(bound, (int, float)) and not isinstance(bound, bool) and math.isfinite(bound):
-        return math.degrees(float(bound)) % 360.0, "control sensor adapter lidar_yaw_offset (D-47 binding)"
-    hand = float(line_follow.get("lidar_forward_deg", hand_default))
-    return hand, "line_follow lidar_forward_deg (hand value; no calibrated mount)"
+        gap = _angle_gap(math.degrees(bound) % 360.0, hand)
+        if gap > DISAGREE_DEG:
+            notes.append(f"WARNING adapter lidar_yaw_offset {math.degrees(bound) % 360.0:.1f} deg disagrees "
+                         f"with the hand value by {gap:.1f} deg; accept a measured lidar_mount record")
+    source = "line_follow lidar_forward_deg (hand value; no accepted mount)"
+    return hand, source + ("; " + "; ".join(notes) if notes else "")

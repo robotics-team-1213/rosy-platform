@@ -32,11 +32,59 @@ def test_hand_value_is_only_the_fallback(tmp_path):
     assert deg == 180.0 and "hand value" in source
 
 
-def test_adapter_binding_beats_the_hand_value(tmp_path):
+def test_hand_value_outranks_the_adapter_binding_and_a_disagreement_is_warned(tmp_path):
+    # M3: the adapter carries the safety node's hand-tuned 190 deg; it must not
+    # silently move line_follow until a measured lidar_mount record is accepted.
     deg, source = resolve_lidar_forward_deg({"lidar_forward_deg": 180.0}, hand_default=0.0,
                                             adapter_parameters={"lidar_yaw_offset": 3.31612558},
                                             store=CalibrationStore(tmp_path), robot=ROBOT)
-    assert deg == pytest.approx(190.0, abs=1e-6) and "adapter" in source
+    assert deg == 180.0 and "hand value" in source and "WARNING" in source and "10.0 deg" in source
+    deg, source = resolve_lidar_forward_deg({"lidar_forward_deg": 189.0}, hand_default=0.0,
+                                            adapter_parameters={"lidar_yaw_offset": 3.31612558},
+                                            store=CalibrationStore(tmp_path), robot=ROBOT)
+    assert deg == 189.0 and "WARNING" not in source
+
+
+def test_with_a_real_enabled_adapter_the_hand_value_still_wins(tmp_path):
+    from control.sensor_provider import PROVIDER
+    from core.bridge.control_sensor_adapter import ControlSensorAdapter
+
+    class Sensor:
+        profile = type("P", (), {"revision": "r"})()
+        pub = raw_zero_pub = estop_pub = decision_pub = None
+
+        def __init__(self, **kwargs):
+            pass
+
+        def bind_policy_handoff(self, policy, required, applied_revision=None):
+            return applied_revision
+
+        def destroy_node(self):
+            pass
+
+    adapter = ControlSensorAdapter({"enabled": True, "parameters": {"lidar_yaw_offset": 3.31612558}},
+                                   sensor_node_factory=Sensor, policy_factory=PROVIDER.make_policy,
+                                   calibration_loader=PROVIDER.load_snapshot)
+    assert adapter.bound_parameters["lidar_yaw_offset"] == 3.31612558
+    deg, source = resolve_lidar_forward_deg({"lidar_forward_deg": 180.0}, hand_default=0.0,
+                                            adapter_parameters=adapter.bound_parameters,
+                                            store=CalibrationStore(tmp_path), robot=ROBOT)
+    assert deg == 180.0 and "WARNING" in source
+
+
+@pytest.mark.parametrize("values", [
+    {"lidar_yaw_offset": math.radians(30.0)},      # far from the nose and the hand value
+    {"lidar_yaw_offset": "3.17"},                  # the store cannot even hold inf/nan
+    {"lidar_yaw_offset": True},
+    {"other": 1.0},
+])
+def test_an_implausible_accepted_record_is_logged_and_skipped(tmp_path, values):
+    store = CalibrationStore(tmp_path)
+    rid = store.add(ROBOT, "lidar_mount", values, method="t/1")
+    store.set_status(ROBOT, "lidar_mount", rid, "accepted", actor="operator")
+    deg, source = resolve_lidar_forward_deg({"lidar_forward_deg": 180.0}, hand_default=0.0,
+                                            store=store, robot=ROBOT)
+    assert deg == 180.0 and "skipped" in source and rid in source
 
 
 def test_accepted_store_record_wins_and_a_candidate_does_not(tmp_path):
@@ -45,7 +93,7 @@ def test_accepted_store_record_wins_and_a_candidate_does_not(tmp_path):
     deg, source = resolve_lidar_forward_deg({"lidar_forward_deg": 180.0}, hand_default=0.0,
                                             adapter_parameters={"lidar_yaw_offset": 3.31612558},
                                             store=store, robot=ROBOT)
-    assert deg == pytest.approx(190.0, abs=1e-6)          # candidate: not used
+    assert deg == 180.0          # candidate: not used; the hand value stands
     store.set_status(ROBOT, "lidar_mount", rid, "accepted", actor="operator")
     deg, source = resolve_lidar_forward_deg({"lidar_forward_deg": 180.0}, hand_default=0.0,
                                             adapter_parameters={"lidar_yaw_offset": 3.31612558},
