@@ -4014,3 +4014,10 @@
 - 변경: ADR D-385(파일+로그 행). 절전 "꼭 필요한 것만"이 기존 WAKE_BATTERY 체계임을 확인·기록.
 - 증거: rosy_harness lint 오류 0.
 - gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · docs(adr): D-391 사이트 연결 기록 모양과 기기 연결 서버 자리 제안
+
+- 변경: 앱 공통 구조 점검(main 20d43df0, 읽기 전용) 결과 발견·전송은 모였고 연결 설정·기기 연결 서버가 남았다. D-391 Proposed(처음 D-387, docs/ota-roadmap-adr·Pilot OMX 초안과 번호가 겹쳐 D-391로 옮김): 클라이언트가 같은 필드(이름·CA·자격, IP 없음)로 사이트 연결을 저장하고 `site-link.v1.json` 벡터로 시험한다, 사이트 호스트 설정 원천은 `/run/rosy-config/` 하나 + 일관성 검사 도구, 기기 연결 서버는 Fleet(공통 조각 → pairing/v1 → 패널 → Rosy Cam 클라이언트 → Vision 동기화), 공개 상태 확장은 로봇 이미지가 관대한 탐침을 가진 뒤.
+- 증거: 점검 보고(파일·줄 인용), health 탐침 정확 일치 확인(`fleet_agent/discovery.py:49`, `deploy/site/fleet-mdns.py:123`).
+- gate 변화: 없음(SOURCE 문서만).
+- 결정: 없음(제안). 담당은 병행 세션 결정 회차에서 정한다.
