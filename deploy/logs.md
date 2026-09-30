@@ -1584,6 +1584,11 @@
 - 증거: test_boot_display.py (대기 중 재그림·ready 정지). 실기는 다음 릴리스.
 - gate 변화: 없음.
 
+## 2026-10-01 · uncommitted · D-390 OMX Pilot development container
+- Change: Add a development-only Pilot layer over the locked OMX Gazebo image and a local probe. Publish HTTP only to 127.0.0.1, deny serial/video grants, keep the one-time code in a 0600 container file.
+- Evidence: local image sha256:e94662607c72a7cea83c9449178099c4c9476afab0519275ce0da82a88f3da9a; Gazebo action and readback report in docs/validation/pilot-omx-gazebo-2026-10-01/.
+- Gate: local x86_64 ROS-SIM only; ARTIFACT/DEVICE/FIELD unchanged.
+
 ## 2026-10-01 · 7d0f3f89 · fix(deploy): 사이트 빌드 컨텍스트는 이미지가 복사하는 것만
 
 - 변경: `Dockerfile.{vision,fleet}.dockerignore` — 맨 `!src`·`!deploy`는 BuildKit의 상위 디렉터리 일치로 트리 전체를 다시 넣었다(vision 컨텍스트 2330개 파일). 잎 glob만 남기고 `__pycache__`·`.pytest_cache`를 뺐다.

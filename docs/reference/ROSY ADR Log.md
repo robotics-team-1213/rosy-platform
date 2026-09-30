@@ -383,3 +383,4 @@
 | D-383 | 편대 역할은 계기 셋의 네 번째 칸 — swarm.role가 leader/follower일 때만 나타나고(기본 hidden, hidden이 flex를 이김) 한국어 라벨·색 없음(역할은 경보가 아니다), 식별줄은 software_version을 계보에 함께 말한다 | Accepted (2026-10-01, 사용자 요청·위임; emoji 대신 기존 계기 문법·토큰 체계, D-280/D-82/D-359 준수; 렌더는 telemetry.js가 담당 — D-362 분할) |
 | D-385 | Rosy가 스스로 표현한다 — 모드가 표정을 고른다(IDLE basic·MANUAL interest·NAVIGATION happy·DOCKING fun·EMERGENCY sad, 막힘은 bored)를 set_emotion 으로 LiDAR 문법(재시도) 전달, 부팅 카드는 BOOTING 중 무대 제목이 0.5 Hz 두 밝기로 숨쉬고 끝난 상태는 고요, 절전의 "꼭 필요한 것만"은 기존 WAKE_BATTERY 체계로 확인·문서화 | Accepted (2026-10-01, 사용자 요청·위임; 표정에 깜빡임 축 없음 — 모드 변경 시 한 번, D-280/D-82 준수) |
 | D-386 | OMX phases bind asynchronous ROS goal acceptance and fresh execution state | Accepted (2026-10-01; SOURCE contract only; ROS-SIM, profile activation, ARTIFACT, DEVICE/FIELD remain gated) |
+| D-390 | Pilot의 OMX-AI 연습은 시뮬레이션 전용 장치 API를 거쳐 로컬 팔 명령 소유자에 연결한다 | Accepted (2026-10-01, 설계·실행 순서 결정; API·Pilot·Gazebo 통합과 ROS-SIM·실물 수용은 별도) |

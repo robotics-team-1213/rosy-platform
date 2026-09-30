@@ -86,6 +86,8 @@ data class PairingUri(
             pin: String? = null,
         ): String? = when {
             host.isEmpty() || !HOST_PATTERN.matches(host) -> "host"
+            // A colon is only valid inside an IPv6 literal; "1.2.3.4:8443" is a host with a port (review M1).
+            host.contains(':') && !SiteLink.isIpLiteral(host) -> "host"
             port !in 1..65535 -> "port"
             token.isEmpty() -> "token"
             !SOURCE_PATTERN.matches(source) -> "source"

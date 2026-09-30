@@ -230,6 +230,11 @@
 - 결정: 앱은 호환을 위해 leaf pin을 계속 받지만 사이트 도구는 CA pin만 만든다.
 - 교훈: 없음.
 
+## 2026-10-01 · uncommitted · test(vision): 4400 재시도 목록을 전환 예외로 고정
+- 변경: 공유 벡터 `close_4400_reasons.retry`를 `["", "no hello"]`로 좁혀 "hello timeout"·"timed out waiting for hello"·"receiver busy"를 뺐다. 수신기 코드는 그대로(hello 시간 초과는 1013). 재시도 목록이 fatal 사유와 겹치지 않고 정확히 전환 예외임을 확인하는 시험을 더했다.
+- 증거: `python -m pytest src/site/vision/test -q` 188 passed (2026-10-01 Windows).
+- gate 변화: 없음.
+
 ## 2026-10-01 · 2d6d268b · fix(vision): 재연결 전 계산을 이전 결과로 남기지 않는다
 
 - 변경: `ingest.py` — 옛 연결의 계산이 재연결로 캐시가 비워진 뒤 끝나면 `_map_done`에 들어가 "previous"가 옛 homography를 줬다. 아직 그 source의 현재 계산일 때만 남긴다.

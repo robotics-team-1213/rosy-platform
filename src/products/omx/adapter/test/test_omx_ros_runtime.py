@@ -9,15 +9,15 @@ import pytest
 
 rclpy = pytest.importorskip("rclpy", reason="requires the ROS 2 Jazzy runtime")
 
-from control_msgs.action import FollowJointTrajectory
-from rclpy.action import ActionServer
-from rclpy.executors import MultiThreadedExecutor
-from rclpy.node import Node
-from sensor_msgs.msg import JointState
+from control_msgs.action import FollowJointTrajectory  # noqa: E402
+from rclpy.action import ActionServer  # noqa: E402
+from rclpy.executors import MultiThreadedExecutor  # noqa: E402
+from rclpy.node import Node  # noqa: E402
+from sensor_msgs.msg import JointState  # noqa: E402
 
-from omx_adapter.command_owner import ArmCommandConfig, TrajectoryCommand
-from omx_adapter.manipulation_plan import JointTrajectoryPoint
-from omx_adapter.ros_runtime import RosArmCommandRuntime
+from omx_adapter.command_owner import ArmCommandConfig, TrajectoryCommand  # noqa: E402
+from omx_adapter.manipulation_plan import JointTrajectoryPoint  # noqa: E402
+from omx_adapter.ros_runtime import RosArmCommandRuntime, RosArmPhaseGoalPort  # noqa: E402
 
 
 def test_runtime_subscribes_to_feedback_and_submits_through_one_ros_action_client():
@@ -81,6 +81,7 @@ def test_runtime_subscribes_to_feedback_and_submits_through_one_ros_action_clien
         poll_period_s=0.01,
         on_goal_event=goal_events.append,
     )
+    phase_port = RosArmPhaseGoalPort(runtime)
     executor = MultiThreadedExecutor(num_threads=4)
     for node in (server_node, feedback_node, owner_node):
         executor.add_node(node)
@@ -123,8 +124,12 @@ def test_runtime_subscribes_to_feedback_and_submits_through_one_ros_action_clien
             source_state_sequence=state.sequence,
             calibration_revision=config.calibration_revision,
         )
-        decision = runtime.submit(command)
-        assert decision.accepted and decision.reason == "submitted"
+        phase_events = []
+        dispatch = phase_port.submit(
+            command,
+            on_goal_event=lambda event: (phase_events.append(event) or True),
+        )
+        assert dispatch.dispatched is True
         assert server_goal_received.wait(5.0)
 
         deadline = time.monotonic() + 5.0
@@ -151,6 +156,9 @@ def test_runtime_subscribes_to_feedback_and_submits_through_one_ros_action_clien
         assert goal_events[-1].status == 4
         assert goal_events[-1].result_code == FollowJointTrajectory.Result.SUCCESSFUL
         assert [event.sequence for event in goal_events] == [1, 2, 3]
+        assert [event.kind for event in phase_events] == [
+            "GOAL_ACCEPTED", "RUNNING_FEEDBACK", "TERMINAL_RESULT",
+        ]
     finally:
         executor.shutdown(timeout_sec=2.0)
         spinning.result(timeout=3.0)

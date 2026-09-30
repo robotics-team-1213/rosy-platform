@@ -188,8 +188,28 @@
 - 증거: test_robot_state.py 90 passed (변이 증명: blocked 규칙을 빼면 해당 2행이 빨개진다).
 - gate 변화: 없음.
 
+## 2026-10-01 · 423e4d2f · feat(core_common): 버전 보정 저장소 (D-47 부록)
+- 변경: `core_common/calibration_store.py` — 실행마다 불변 레코드 하나(종류·로봇·세션·방법·값·구간·sha256), 상태는 append-only events.jsonl, 현재값 = 고정된 승인 레코드 또는 최신 승인 레코드, `resolve()` 는 없으면 정적 값과 로그용 출처 문장을 준다. 자동 승인 경로 없음.
+- 증거: `test_calibration_store.py` 9 passed — 이력 보존·덮어쓰기 거부, 후보는 현재값이 아님, 최신 승인 우선·superseded, 고정/해제 롤백, 최신 거부 롤백, 변조 레코드 배제, 정적 대체 (2026-10-01 Windows).
+- gate 변화: SOURCE.
+
+## 2026-10-01 · ddede2f8 · fix(core_common): 보정 저장소 리뷰 수정 (H3·M1·M2·L3)
+- 변경: events.jsonl 의 깨진 줄·형식 불량 이벤트는 기록하고 건너뛴다. load 는 dict values 와 문자열 created_at 을 요구한다. current/resolve 는 어떤 실패든 잡아 정적 값으로 물러난다. 현재값은 created_at 이 아니라 마지막 승인 이벤트 순서다. `check_values`(장착 yaw 150–210° 또는 손값 ±15°, 바퀴 ±10 %, 숫자만) 를 런타임·승인에 같이 쓴다. `merge_from` 은 없는 레코드 파일만 복사(같은 id 는 바이트 동일해야 함)하고 없는 이벤트만 덧붙인다.
+- 증거: test_calibration_store.py 25 passed(깨진 줄, 형식 불량 레코드, 재승인 순서, 저장소 예외 대체, check_values 12 경우) (2026-10-01 Windows).
+- gate 변화: SOURCE.
+
+## 2026-10-01 · 90cac516 · fix(core_common): 2차 리뷰 — 찢긴 꼬리, 양쪽 결정 충돌, 원자적 쓰기, 그룹 권한
+- 변경: events.jsonl 이 개행 없이 끝나면 덧붙이기 전에 개행을 먼저 쓴다(F1). 양쪽 저장소가 서로 모르는 승인/거부/고정을 가지면 병합을 거부하고, 모든 종류를 먼저 검사한 뒤에만 쓴다(F2·F8). 레코드는 임시 파일 + os.replace, 디렉터리 0o2775·파일 0o664(F4). camera_profile 의 width/height/fx/cx/cy/max_range_m 는 유한 양수(F7).
+- 증거: test_calibration_store.py 35 passed + 1 skip(Windows), 권한 시험은 WSL Linux 에서 통과 (2026-10-01).
+- gate 변화: SOURCE. 로봇 쪽 rosy-calib 디렉터리 생성은 열린 커미셔닝 항목.
+
 ## 2026-10-01 · uncommitted · feat(robot_state): D-383 swarm_role 축 — LCD 역할 접미
 
 - 변경: SWARM_ROLES·valid_swarm_role()·role_suffix()(ASCII " - LEADER") 추가. mode/nav 와 같은 부재 규칙, evaluate 판정은 그대로.
 - 증거: test_robot_state.py (변이 증명: 접미를 없애면 해당 2행 빨강).
 - gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · D-390 OMX Pilot simulation wire contract
+- Change: Add typed sim-only target, jog and goal contracts in core_common.protocol.omx_sim; document the additive v1.67 routes in the API reference.
+- Evidence: focused contract and adapter tests passed; API version alignment test 4 passed after the document bump.
+- Gate: SOURCE only; no physical profile admission.
