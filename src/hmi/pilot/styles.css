@@ -447,16 +447,44 @@ body[data-pilot-screen="drive"] ui-brand small { display: none; }
   background: color-mix(in srgb, var(--ground-deep) 60%, transparent);
 }
 
-/* 세로 화면: 영상 아래 남는 공간을 조작부가 쓴다 — 손가락 크기에 맞게 키운다 */
+/* 세로 화면: 영상 아래 남는 공간 전체가 엄지 조종기다. 왼쪽 절반 = 속도 줄·페달·제자리(높이를 다 쓴다),
+   오른쪽 절반 = 스틱(지름 = min(폭의 45%, 남은 높이의 80%)). 조작부 칸이 크기 컨테이너라 cq 단위로 잰다. */
 .pilot-drive[data-drive-layout="below"] [data-drive-controls] {
-  flex: 1 1 auto;
-  align-items: center;
-  justify-content: space-around;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: stretch;
+  min-height: 0;
+  gap: var(--space-3);
+  container-type: size;
 }
-.pilot-drive[data-drive-layout="below"] [data-drive-stick] { width: min(42vw, 20rem); }
-.pilot-drive[data-drive-layout="below"] [data-drive-pedals] ui-button { min-height: 6rem; min-width: min(20vw, 9rem); }
-.pilot-drive[data-drive-layout="below"] [data-drive-pivots] ui-button { min-height: 4rem; min-width: min(20vw, 9rem); }
-.pilot-drive[data-drive-layout="below"] [data-drive-presets] ui-button { min-width: 3.5rem; }
+.pilot-drive[data-drive-layout="below"] [data-drive-left] {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  min-height: 0;
+  width: 100%;
+}
+.pilot-drive[data-drive-layout="below"] [data-drive-presets] { width: 100%; }
+.pilot-drive[data-drive-layout="below"] [data-drive-presets] ui-actions { flex: 3 1 0; }
+.pilot-drive[data-drive-layout="below"] [data-drive-presets] ui-actions ui-button { flex: 1 1 0; min-width: 0; }
+.pilot-drive[data-drive-layout="below"] [data-drive-presets] [data-drive-fine] { flex: 1.3 1 0; min-width: 0; }
+.pilot-drive[data-drive-layout="below"] [data-drive-pedals] { flex: 2 1 0; }
+.pilot-drive[data-drive-layout="below"] [data-drive-pivots] { flex: 1 1 0; }
+.pilot-drive[data-drive-layout="below"] [data-drive-pedals],
+.pilot-drive[data-drive-layout="below"] [data-drive-pivots] {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  min-height: 5.5rem;
+}
+.pilot-drive[data-drive-layout="below"] [data-drive-pedals] ui-button,
+.pilot-drive[data-drive-layout="below"] [data-drive-pivots] ui-button {
+  min-width: 0;
+  min-height: 5.5rem;
+  height: 100%;
+}
+.pilot-drive[data-drive-layout="below"][data-auto-mode="on"] [data-drive-go] { flex: 1 1 0; min-height: 7rem; }
+.pilot-drive[data-drive-layout="below"] [data-drive-right] { min-height: 0; }
+.pilot-drive[data-drive-layout="below"] [data-drive-stick] { width: min(45cqw, 80cqh); }
 
 /* ---- 보조 자율(D-344): 차선 자동 모드면 페달·제자리 대신 "진행" 하나 ---- */
 [data-drive-go] { display: none; }
