@@ -1038,7 +1038,8 @@ def test_irreversible_mode_change_needs_confirm_and_decline_blocks_it():
         confirms = page.evaluate("window.__confirms")
         browser.close()
 
-    assert "IDLE 모드로 변경할까요" in confirms[0]
+    # D-359 US-009 (P2-2 review) — the confirm names the mode in Korean, never the enum.
+    assert "대기 모드로 변경할까요" in confirms[0] and "IDLE" not in confirms[0]
     assert declined_calls == []
     assert len(confirms) == 2
 

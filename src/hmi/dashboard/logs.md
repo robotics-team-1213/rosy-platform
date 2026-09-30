@@ -679,3 +679,11 @@
 - gate 변화: web_common `test_theme_choices.py`가 이 파일에 이름 사본이 없는지 본다.
 - 결정: D-359 §2.5.
 - 교훈: 없음.
+
+## 2026-10-01 · uncommitted · test(dashboard): D-359 리뷰 P2-2 — 모드 확인 문구 시험을 한국어로
+
+- 변경: `test/test_dashboard_browser.py`의 모드 변경 확인 시험이 `IDLE 모드로` 대신 `대기 모드로`를 보고, 확인 문구에 열거값이 없는지 본다(bcee2ebb에서 문구가 `enumLabel(MODE_LABEL, …)`로 바뀜).
+- 증거: `test/test_dashboard_browser.py -k test_irreversible_mode_change_needs_confirm` 1 passed. 마무리 회차 `-k "mode or setting or token"`에서 이 시험만 옛 문구로 실패했었다.
+- gate 변화: 없음.
+- 결정: D-359 US-009.
+- 교훈: 문구를 바꾸면 루트 `test/`의 브라우저 시험도 grep한다.
