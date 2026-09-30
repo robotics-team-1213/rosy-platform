@@ -157,6 +157,29 @@ def test_failed_hf_report_goes_under_out_never_cwd(tmp_path, monkeypatch):
     assert failed == [f"org__m@{'a' * 40}.intake_report.json", "org__m@main.intake_report.json"]
 
 
+def test_no_replay_frames_is_a_transient_setup_error(tmp_path, monkeypatch):
+    """An empty or wrong replay_root is the site's problem, not the model's."""
+    folder = tmp_path / "m"
+    folder.mkdir()
+    fake = type("M", (), {"model_revision": "lane-seg-20260930-abcd1234", "files": ()})()
+    monkeypatch.setattr(intake, "load_manifest", lambda f: fake)
+    monkeypatch.setattr(intake, "verify_files", lambda m: None)
+    monkeypatch.setattr(intake.LaneSegModel, "open", classmethod(lambda cls, f: object()))
+    rc, report = intake.run(str(folder), out=tmp_path / "out", root=tmp_path / "empty")
+    assert rc == 1 and report["verdict"] == "fail"
+    assert report["transient"] is True
+    assert any("replay" in r for r in report["reasons"])
+
+
+def test_count_replay_frames_sources(tmp_path):
+    (tmp_path / "data" / "teleop" / "learning").mkdir(parents=True)
+    assert intake.replay_videos({"replay_sources": ["data/teleop/learning/*.mp4"]}, tmp_path) == []
+    clip = tmp_path / "data" / "teleop" / "learning" / "a.mp4"
+    clip.write_bytes(b"")
+    assert intake.replay_videos({"replay_sources": ["data/teleop/learning/*.mp4"]},
+                                tmp_path) == [clip]
+
+
 def test_gate_failures_are_final(tmp_path):
     folder = tmp_path / "m"
     folder.mkdir()

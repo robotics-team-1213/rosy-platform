@@ -173,6 +173,12 @@ def main(argv=None) -> int:
                max_frames=args.max_frames)[0]
 
 
+def replay_videos(gate: dict, root) -> list[Path]:
+    """The replay clips the gate names under root (rosy_ml doctor checks it too)."""
+    return sorted({Path(p) for pat in gate["replay_sources"]
+                   for p in glob.glob(str(Path(root) / pat))})
+
+
 def run(source: str, *, out, gate_path=DEFAULT_GATE, root=ROOT, max_frames=None,
         downloader=None) -> tuple[int, dict]:
     """(exit code, report). main() and model/watch.py (in-process, own downloader)."""
@@ -191,12 +197,14 @@ def run(source: str, *, out, gate_path=DEFAULT_GATE, root=ROOT, max_frames=None,
         # deliver.py push refuses a model whose files differ from these.
         report["files"] = [{"name": f.name, "sha256": f.sha256} for f in manifest.files]
         model = LaneSegModel.open(folder)
-        videos = sorted({Path(p) for pat in gate["replay_sources"]
-                         for p in glob.glob(str(Path(root) / pat))})
+        videos = replay_videos(gate, root)
         stats = replay(model, videos, max_frames)
         report.update(stats)
         report["sources"] = [str(v) for v in videos]
         report["verdict"], report["reasons"] = judge(stats, gate)
+        if stats["frames"] == 0:  # no clips under root: a setup error, not the model's
+            report["transient"] = True
+            report["reasons"].append(f"no replay clips for {gate['replay_sources']} under {root}")
     except (ManifestError, ValueError, ImportError, OSError, cv2.error) as exc:
         report["reasons"] = [f"{type(exc).__name__}: {exc}"]
         report["transient"] = isinstance(exc, (OSError, ImportError, cv2.error))
