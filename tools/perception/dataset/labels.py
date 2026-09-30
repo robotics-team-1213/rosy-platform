@@ -61,6 +61,7 @@ TRAJ_MIN_TRAVEL_M = 0.15                # otherwise the band is below the image
 TRAJ_STEP_M = 0.01
 # A band pixel on a LiDAR wall is a contradiction; this many make the frame a conflict.
 CONFLICT_PX = 150
+WALL_CORE_PX = 8  # rule_stats: wall this far above its bottom edge is surely wall
 
 CONF = {"wall_near": 0.9, "wall_far": 0.7, "floor": 0.8, "paint": 0.7, "paint_rule_agrees": 0.85,
         "drivable": 0.9, "drivable_lidar": 0.95}
@@ -263,9 +264,16 @@ def combine(bgr, *, wall=None, floor=None, band=None, rules=None, wall_dist=None
 
 
 def rule_stats(rule, cls):
-    """Rule paint against the auto label: where did the rule put paint?"""
+    """Rule paint against the auto label: where did the rule put paint?
+
+    on_wall_core counts only wall pixels with wall WALL_CORE_PX rows below them too,
+    so a contact row a few pixels off cannot inflate it."""
+    wall = cls == WALL
+    core = np.zeros_like(wall)
+    core[:-WALL_CORE_PX] = wall[:-WALL_CORE_PX] & wall[WALL_CORE_PX:]
     return {"paint_px": int(rule.sum()),
-            "on_wall": int((rule & (cls == WALL)).sum()),
+            "on_wall": int((rule & wall).sum()),
+            "on_wall_core": int((rule & core).sum()),
             "on_floor": int((rule & ((cls == FLOOR) | (cls == DRIVABLE))).sum()),
             "on_lane": int((rule & (cls == LANE)).sum()),
             "on_unknown": int((rule & (cls == UNKNOWN)).sum()),

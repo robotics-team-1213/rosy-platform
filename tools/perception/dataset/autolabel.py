@@ -313,6 +313,7 @@ def confusion(agg) -> dict:
         return None if not b else round(a / b, 4)
     judged = agg.get("on_wall", 0) + agg.get("on_floor", 0) + agg.get("on_lane", 0)
     return {"paint_on_wall_share": ratio(agg.get("on_wall", 0), judged),
+            "paint_on_wall_core_share": ratio(agg.get("on_wall_core", 0), judged),
             "wall_marked_paint_rate": ratio(agg.get("on_wall", 0), agg.get("wall_px", 0)),
             "lane_recall": ratio(agg.get("on_lane", 0), agg.get("lane_px", 0))}
 
