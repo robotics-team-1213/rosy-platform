@@ -4,7 +4,7 @@
   <name>imu_bno055</name>
   <version>0.0.0</version>
   <description>Optional ROS 2 BNO055 IMU driver with bounded startup and fault reporting.</description>
-  <maintainer email="byeongkyu@gmail.com">robot</maintainer>
+  <maintainer email="56295815+livsbittt@users.noreply.github.com">robot</maintainer>
   <license>Apache-2.0</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>

@@ -4,7 +4,7 @@
   <name>gz_sim</name>
   <version>0.0.0</version>
   <description>Gazebo simulation worlds, multi-robot launch files and lamp plugin.</description>
-  <maintainer email="byeongkyu@gmail.com">byeongkyu</maintainer>
+  <maintainer email="56295815+livsbittt@users.noreply.github.com">byeongkyu</maintainer>
   <license>Apache-2.0</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
