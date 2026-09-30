@@ -1,8 +1,8 @@
-# 로봇 ↔ 사이트 관제 통신 적합성 계획 (D-351)
+# 로봇 ↔ 사이트 관제 통신 적합성 계획 (D-382)
 
-**ADR:** [D-351](../adr/D-351-robot-site-console-protocol-conformance.md) (Proposed)
+**ADR:** [D-382](../adr/D-382-robot-site-console-protocol-conformance.md) (Proposed)
 **작성:** 2026-09-29. 기준 커밋 `main` 9b3cfb59.
-**목표:** 로봇(CORE)과 관제(Fleet)가 ROSY-API-REF-001대로 실제로 통신하는지 판정한다. 판정은 두 쪽이 함께 읽는 계약 스냅샷과, 실물 로봇에 읽기 전용으로 붙는 탐침으로 한다. 마지막에 관제 DEVICE 증거 다섯 항목(D-351 Decision 5)을 모은다.
+**목표:** 로봇(CORE)과 관제(Fleet)가 ROSY-API-REF-001대로 실제로 통신하는지 판정한다. 판정은 두 쪽이 함께 읽는 계약 스냅샷과, 실물 로봇에 읽기 전용으로 붙는 탐침으로 한다. 마지막에 관제 DEVICE 증거 다섯 항목(D-382 Decision 5)을 모은다.
 
 ## 범위 밖
 
