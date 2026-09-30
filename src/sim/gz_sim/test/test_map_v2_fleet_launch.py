@@ -176,15 +176,18 @@ def test_the_dock_observer_is_opt_in_with_the_declared_gazebo_camera():
 URDF = Path(__file__).resolve().parents[2] / "description" / "urdf" / "rosy.urdf.xacro"
 
 
-def _urdf_camera_on_base_footprint(tilt_rad):
+def _urdf_camera_on_base_footprint(tilt_rad, cam_mount_z=None):
     """front_camera_link (the Gazebo camera sensor's frame) on base_footprint,
     from the xacro's joint chain: base_footprint -> base_link ->
-    front_camera_mount (pitched `tilt_rad`) -> front_camera_link. Returns
-    (x ahead, z above the floor)."""
+    front_camera_mount (pitched `tilt_rad`, raised `cam_mount_z`, default the
+    macro's) -> front_camera_link. Returns (x ahead, z above the floor)."""
     import math
     import re
 
     source = URDF.read_text(encoding="utf-8")
+    if cam_mount_z is None:
+        cam_mount_z = re.search(r"cam_mount_z:=([0-9.]+)", source).group(1)
+    source = source.replace("${cam_mount_z}", str(cam_mount_z))
 
     def origin(joint):
         block = re.split(rf'<joint name="(?:\$\{{namespace\}})?{joint}"', source, maxsplit=1)[1]

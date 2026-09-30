@@ -30,8 +30,13 @@ class LineObservation:
     confidence: float
     ir_calibrated: bool = False
     calibration_revision: Optional[str] = None
+    # D-364 §3: camera evidence computed on an estimated (NOMINAL) floor model.
+    ground: Optional[str] = None
 
     def __post_init__(self) -> None:
+        if self.ground is not None and (self.source is not LineFollowMode.CAMERA_LINE
+                                        or self.ground != "NOMINAL"):
+            raise ValueError("only camera evidence may carry the NOMINAL ground label")
         if self.source is LineFollowMode.OFF:
             raise ValueError("OFF cannot be an observation source")
         if not _finite(self.stamp):
@@ -60,6 +65,20 @@ class LineFollowConfig:
     stale_after_s: float = 0.3
     lost_after_s: float = 3.0
     ir_calibration_revision: Optional[str] = None
+    # D-344 §11: 앞 물체 정지. LiDAR 정면 부채꼴 최소 거리가 stop 보다 가까우면 멈추고
+    # resume 보다 멀어지면 다시 간다(떨림 방지). lidar_forward_deg 는 장착 방향.
+    obstacle_stop_m: float = 0.20
+    obstacle_resume_m: float = 0.28
+    obstacle_half_angle_deg: float = 20.0
+    lidar_forward_deg: float = 0.0
+    clearance_stale_s: float = 0.5
+    # D-344 §12: 카메라 차선 추종 중 IR 이탈 감시. 바닥을 보는 좌·중·우 IR 이 경계선을
+    # 한쪽에서 보면 반대로 비키고(ir_guard_turn, 속도 ir_guard_speed_scale 배), 가운데에서
+    # 보면 선을 밟고 넘는 중이라 멈춘다. 켜져 있는데 IR 이 끊기거나 미교정이면 멈춘다.
+    ir_guard_enabled: bool = False
+    ir_guard_edge_error: float = 0.3
+    ir_guard_turn: float = 0.5
+    ir_guard_speed_scale: float = 0.5
 
     def __post_init__(self) -> None:
         values = (self.cruise_speed, self.max_linear, self.steering_gain,
@@ -75,6 +94,23 @@ class LineFollowConfig:
             raise ValueError("min_confidence must be in (0, 1]")
         if self.stale_after_s <= 0 or self.lost_after_s <= 0:
             raise ValueError("line-follow timeouts must be positive")
+        obstacle = (self.obstacle_stop_m, self.obstacle_resume_m, self.obstacle_half_angle_deg,
+                    self.lidar_forward_deg, self.clearance_stale_s)
+        if not all(_finite(value) for value in obstacle):
+            raise ValueError("line-follow obstacle config must be finite")
+        if not 0.0 < self.obstacle_stop_m < self.obstacle_resume_m <= 2.0:
+            raise ValueError("obstacle_stop_m must be positive and below obstacle_resume_m")
+        if not 0.0 < self.obstacle_half_angle_deg <= 90.0 or self.clearance_stale_s <= 0:
+            raise ValueError("obstacle sector and clearance staleness must be positive")
+        if type(self.ir_guard_enabled) is not bool:
+            raise ValueError("ir_guard_enabled must be a boolean")
+        guard = (self.ir_guard_edge_error, self.ir_guard_turn, self.ir_guard_speed_scale)
+        if not all(_finite(value) for value in guard):
+            raise ValueError("line-follow IR guard config must be finite")
+        if not 0.0 < self.ir_guard_edge_error < 1.0 or self.ir_guard_turn <= 0:
+            raise ValueError("IR guard edge error must be in (0, 1) and turn positive")
+        if not 0.0 <= self.ir_guard_speed_scale <= 1.0:
+            raise ValueError("ir_guard_speed_scale must be in [0, 1]")
         if (self.ir_calibration_revision is not None
                 and (not isinstance(self.ir_calibration_revision, str)
                      or not re.fullmatch(r"[0-9a-f]{64}", self.ir_calibration_revision))):
@@ -113,6 +149,13 @@ class LineFollowManager:
         self._lost_latched = False
         self._invalid_observation = False
         self._status = LineFollowStatus()
+        # D-344 §8: 운전자 확인 만료. hold_s 가 있으면 hold() 가 그 안에 계속 와야 한다.
+        self._hold_s: Optional[float] = None
+        self._hold_until: Optional[float] = None
+        # D-344 §11: 정면 LiDAR 여유 거리. 한 번도 안 왔으면 판정하지 않는다(LiDAR 없는 벤치).
+        self._clearance: Optional[float] = None
+        self._clearance_at: Optional[float] = None
+        self._obstacle_blocked = False
 
     def bind_clock(self, clock: Callable[[], float]) -> None:
         """Use the bridge's line clock for defaults (mode change, loss start)."""
@@ -135,9 +178,18 @@ class LineFollowManager:
         with self._lock:
             return self._mode is not LineFollowMode.OFF
 
-    def set_mode(self, mode: LineFollowMode | str) -> LineFollowStatus:
+    def set_mode(self, mode: LineFollowMode | str,
+                 hold_s: Optional[float] = None) -> LineFollowStatus:
         selected = mode if isinstance(mode, LineFollowMode) else LineFollowMode(mode)
+        if hold_s is not None and (not _finite(hold_s) or not 0.0 < float(hold_s) <= 2.0):
+            raise ValueError("line-follow hold_s must be in (0, 2]")
         with self._lock:
+            if selected is LineFollowMode.OFF or hold_s is None:
+                self._hold_s = None
+                self._hold_until = None
+            else:
+                self._hold_s = float(hold_s)
+                self._hold_until = self._clock() + self._hold_s
             previous = self._mode
             self._generation += 1
             self._mode = selected
@@ -255,6 +307,32 @@ class LineFollowManager:
         with self._lock:
             return self._status.model_copy()
 
+    def observe_clearance(self, distance: Optional[float],
+                          received_at: Optional[float] = None) -> None:
+        """정면 최소 거리(None = 부채꼴 안에 유효 표본 없음 = 막힌 것 없음)."""
+        now = self._clock() if received_at is None else received_at
+        with self._lock:
+            self._clearance = None if distance is None or not _finite(distance) else float(distance)
+            self._clearance_at = float(now)
+            if self._clearance is None or self._clearance >= self._config.obstacle_resume_m:
+                self._obstacle_blocked = False
+            elif self._clearance < self._config.obstacle_stop_m:
+                self._obstacle_blocked = True
+
+    @property
+    def hold_required(self) -> bool:
+        with self._lock:
+            return self._hold_s is not None
+
+    def hold(self, now: Optional[float] = None) -> bool:
+        """운전자가 아직 "진행"을 누르고 있다(D-344 §8). 활성 hold 세션만 연장한다."""
+        current = self._clock() if now is None else now
+        with self._lock:
+            if self._mode is LineFollowMode.OFF or self._hold_s is None:
+                return False
+            self._hold_until = float(current) + self._hold_s
+            return True
+
     def apply_if_current(self, decision: LineFollowDecision,
                          apply: Callable[[LineFollowDecision], None]) -> bool:
         """Apply a decision only while its mode and sensor evidence stay current.
@@ -282,6 +360,33 @@ class LineFollowManager:
         with self._lock:
             if self._mode is LineFollowMode.OFF:
                 return self._stop_decision("OFF", "mode_off")
+            if self._hold_until is not None and current > self._hold_until:
+                # 운전자가 손을 뗐거나 링크가 끊겼다 — 스스로 내린다(D-344 §8).
+                previous = self._mode
+                self._generation += 1
+                self._mode = LineFollowMode.OFF
+                self._hold_s = None
+                self._hold_until = None
+                self._loss_started_at = None
+                self._events.publish(
+                    "nav.line_driver_released", source="line_follow_manager",
+                    data={"mode": previous.value},
+                )
+                return self._stop_decision("OFF", "driver_released")
+            if self._clearance_at is not None:
+                # 앞 물체 정지는 차선 상실이 아니다 — LOST 로 누적하지 않고 치워지면 곧바로 간다.
+                if current - self._clearance_at > self._config.clearance_stale_s:
+                    return self._stop_decision("HOLD", "obstacle_sensor_stale")
+                if self._obstacle_blocked:
+                    return self._stop_decision("HOLD", "obstacle_ahead")
+            guard = None
+            if self._mode is LineFollowMode.CAMERA_LINE and self._config.ir_guard_enabled:
+                # 차선 이탈 감시는 차선 상실이 아니다 — LOST 로 누적하지 않는다(D-344 §12).
+                guard = self._ir_guard(current)
+                if guard == "stale":
+                    return self._stop_decision("HOLD", "lane_guard_stale")
+                if guard == "centre":
+                    return self._stop_decision("HOLD", "lane_departure")
             if self._lost_latched:
                 reason = ("camera_reselection_required"
                           if self._mode is LineFollowMode.CAMERA_LINE
@@ -290,6 +395,10 @@ class LineFollowManager:
 
             observation = self._observation
             age = None if self._received_at is None else current - self._received_at
+            if (observation is not None and observation.ground == "NOMINAL"
+                    and self._hold_s is None):
+                # 교정 없는 공칭 지면은 운전자가 누르고 있을 때만 쓴다(D-364 §3).
+                return self._stop_decision("HOLD", "nominal_ground_requires_driver", age)
             choice = lane_recovery_rule(
                 DecisionRequest(
                     decision_id=f"line-{self._generation}",
@@ -341,6 +450,13 @@ class LineFollowManager:
             linear *= confidence_scale * curve_scale
             angular = max(-self._config.max_angular,
                           min(self._config.max_angular, -self._config.steering_gain * error))
+            reason = "tracking"
+            if guard in ("left", "right"):
+                # 경계선이 왼쪽 IR 밑이면 오른쪽(음의 각속도, REP-103)으로 비킨다.
+                turn = min(self._config.ir_guard_turn, self._config.max_angular)
+                angular = -turn if guard == "left" else turn
+                linear *= self._config.ir_guard_speed_scale
+                reason = f"lane_edge_{guard}"
             decision = LineFollowDecision(
                 linear=linear, angular=angular,
                 generation=self._generation,
@@ -355,9 +471,31 @@ class LineFollowManager:
                 age_s=round(age, 3),
                 linear=linear,
                 angular=angular,
-                reason="tracking",
+                reason=reason,
+                clearance_m=self._clearance,
             )
             return decision
+
+    def _ir_guard(self, now: float) -> str:
+        """stale | clear | left | right | centre — IR 이 본 경계선 위치."""
+        observation = self._ir_observation
+        received_at = self._ir_received_at
+        if observation is None or received_at is None:
+            return "stale"
+        age = now - received_at
+        if age < 0.0 or age > self._config.stale_after_s:
+            return "stale"
+        expected = self._config.ir_calibration_revision
+        if not observation.ir_calibrated or (
+                expected is not None and observation.calibration_revision != expected):
+            return "stale"
+        if not observation.visible or observation.error is None                 or observation.confidence < self._config.min_confidence:
+            return "clear"
+        if observation.error <= -self._config.ir_guard_edge_error:
+            return "left"
+        if observation.error >= self._config.ir_guard_edge_error:
+            return "right"
+        return "centre"
 
     def _loss_or_stop(self, now: float, state: str, reason: str,
                       age: Optional[float]) -> LineFollowDecision:
@@ -386,6 +524,7 @@ class LineFollowManager:
             confidence=(observation.confidence if observation else 0.0),
             age_s=None if age is None else round(max(0.0, age), 3),
             reason=reason,
+            clearance_m=self._clearance,
         )
         return LineFollowDecision(
             generation=self._generation,

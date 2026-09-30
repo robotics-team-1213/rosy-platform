@@ -63,8 +63,8 @@
 
 ## 최근 기록
 
-- 2026-09-30 · uncommitted · feat(ros-sim): camera 슬라이스 통과 — 무장치 부팅 결함 1건 발견·수리 (27def3de)
-- 2026-09-30 · uncommitted · fix(perception): D-356 리뷰 수정·수치 인터프리터 명기
-- 2026-09-30 · uncommitted · feat(perception): D-356 인식 학습 루프 섀도 백엔드·녹화·도구
-- 2026-09-30 · uncommitted · fix(structure): declare imu_bno055 exec_depend
-- 2026-09-29 · uncommitted · feat(traffic): 무신호·관측 융합 폐루크 호스트 시뮬레이션
+- 2026-09-30 · uncommitted · docs(adr): 운전자 실시간 영상 ADR 을 D-362 에서 D-368 로
+- 2026-09-30 · uncommitted · feat(control): 'keep' 폐루프 가제보 주행 — L 모서리 회전(선택)과 한쪽 flank 시험(D-353 §5)
+- 2026-09-30 · uncommitted · docs(adr): pilot ADR 번호를 main 과 겹치지 않게 다시 매김
+- 2026-09-30 · uncommitted · feat(control): 지면 기하 차로 유지기 'keep' 모드(D-353 §2)
+- 2026-09-30 · uncommitted · feat(control): 공칭(NOMINAL) 지면과 차선 녹화 재생 벤치(D-353)

@@ -21,10 +21,11 @@ from sensor_msgs.msg import CompressedImage, Image
 from std_msgs.msg import String, UInt16MultiArray
 
 from . import executor_choice
-from .sensing.perception.camera_ground import simulation_ground_plane
+from .sensing.perception.camera_ground import nominal_ground_plane, simulation_ground_plane
 from .sensing.perception.image_frame import image_msg_to_frame
 from .sensing.perception.lane import (
     IRLineCalibration,
+    LaneBetweenKeeper,
     LaneCornerTracker,
     detect_ir_line,
     detect_lane_centre,
@@ -33,6 +34,7 @@ from .sensing.perception.lane import (
 )
 from .sensing.perception.lane_bev import LaneEdgeFollower, pose_if_fresh
 from .sensing.perception.lane_boundaries import LaneBoundaryTracker
+from .sensing.perception.lane_keep import LaneKeeper
 from .sensing.perception.lane_debug import next_publish_due, render_debug
 from .sensing.perception.paint_localizer import PaintMap
 from .sensing.perception.route_camera import RouteCameraFollower
@@ -63,6 +65,11 @@ class LineObserverNode(Node):
         # half-width off in bird's-eye view (bends, arcs). Both lane modes need
         # a metric ground plane, edge_left also odometry (fail-closed without).
         # 'centre' follows the centre line between both boundaries (fallback ladder).
+        # 'between' keeps the midpoint of the two boundary lines in image
+        # space (no ground plane, no odometry).
+        # 'keep' keeps the middle of the lane from ground-plane boundary lines
+        # found per frame (no odometry): the real-robot lane keeper (D-364 §2),
+        # on camera_ground_source NOMINAL + allow_nominal_ground, or GAZEBO.
         # 'route_a'/'route_b' are the junction prototypes: route-driven
         # manoeuvres over the centre-line tracker (A) and planned-route
         # pursuit from a paint-localised pose (B). 'route_ab' is their
@@ -71,8 +78,16 @@ class LineObserverNode(Node):
         self.declare_parameter('camera_lane_mode', 'line', _READ_ONLY)
         self.declare_parameter('lane_half_width_m', 0.0925)
         self.declare_parameter('camera_roi_bottom_fraction', 1.0)
+        # 'between' only: bottom band start (keeps white walls out) and the
+        # lane width as a frame fraction until both boundaries are seen.
+        self.declare_parameter('camera_between_roi_top_fraction', 0.6)
+        self.declare_parameter('camera_between_lane_width_fraction', 0.6, _READ_ONLY)
         self.declare_parameter('camera_ground_source', 'PINKY')
         self.declare_parameter('allow_simulation_ground', False)
+        # D-364 §3: estimated floor geometry for the real camera. Two opt-ins, and
+        # the evidence is labelled NOMINAL so CORE accepts it only under a driver hold.
+        self.declare_parameter('allow_nominal_ground', False, _READ_ONLY)
+        self.declare_parameter('nominal_camera_profile_path', '', _READ_ONLY)
         self.declare_parameter('gazebo_camera_height_m', 0.0)
         self.declare_parameter('gazebo_camera_pitch_rad', 0.0)
         self.declare_parameter('gazebo_camera_hfov_rad', 0.0)
@@ -97,6 +112,7 @@ class LineObserverNode(Node):
         self._camera_controls_stable = False
         self._simulation_ground_key = None
         self._simulation_ground = None
+        self._nominal_profile_cache = None
         self._odom_pose = None
         self._odom_stamp = None
         self._corner_tracker = LaneCornerTracker(
@@ -106,6 +122,12 @@ class LineObserverNode(Node):
             corner_handoff=bool(self.get_parameter('lane_corner_turning').value))
         self._centre_tracker = LaneBoundaryTracker(
             camera_x_offset_m=float(self.get_parameter('camera_x_offset_m').value))
+        self._between_keeper = LaneBetweenKeeper(
+            default_lane_width_fraction=float(
+                self.get_parameter('camera_between_lane_width_fraction').value))
+        self._lane_keeper = LaneKeeper(
+            camera_x_offset_m=float(self.get_parameter('camera_x_offset_m').value),
+            corner_turning=bool(self.get_parameter('lane_corner_turning').value))
         self._route_follower = None
         camera_lane_mode = str(self.get_parameter('camera_lane_mode').value)
         if camera_lane_mode in ('route_a', 'route_b', 'route_ab'):
@@ -193,8 +215,39 @@ class LineObserverNode(Node):
                 'CAMERA_LINE will publish no observation')
             return None
 
+    def _nominal_profile(self):
+        if self._nominal_profile_cache is None:
+            path = str(self.get_parameter('nominal_camera_profile_path').value)
+            try:
+                with open(path, encoding='utf-8') as handle:
+                    self._nominal_profile_cache = yaml.safe_load(handle) or {}
+            except (OSError, yaml.YAMLError) as exc:
+                self.get_logger().warning(
+                    f'nominal camera profile unreadable ({exc}); no NOMINAL ground',
+                    throttle_duration_sec=5.0)
+                self._nominal_profile_cache = {}
+        return self._nominal_profile_cache
+
+    def _camera_mode_uses_ground(self) -> bool:
+        return str(self.get_parameter('camera_lane_mode').value) in (
+            'lane', 'edge_left', 'centre', 'keep', 'route_a', 'route_b', 'route_ab')
+
+    def _ground_label(self):
+        source = str(self.get_parameter('camera_ground_source').value).strip().upper()
+        return 'NOMINAL' if source == 'NOMINAL' else None
+
     def _ground(self, width: int, height: int):
         source = str(self.get_parameter('camera_ground_source').value)
+        if source.strip().upper() == 'NOMINAL':
+            key = ('NOMINAL', int(width), int(height))
+            if key != self._simulation_ground_key:
+                self._simulation_ground = nominal_ground_plane(
+                    source=source,
+                    allowed=bool(self.get_parameter('allow_nominal_ground').value),
+                    width_px=width, height_px=height,
+                    profile=self._nominal_profile())
+                self._simulation_ground_key = key
+            return self._simulation_ground
         simulation_enabled = bool(
             self.get_parameter('allow_simulation_ground').value)
         use_sim_time = bool(self.get_parameter('use_sim_time').value)
@@ -229,6 +282,8 @@ class LineObserverNode(Node):
             ir_calibrated=(source == 'IR_LINE' and self._ir_calibration is not None),
             calibration_revision=(self._ir_calibration_revision
                                   if source == 'IR_LINE' else None),
+            ground=(self._ground_label()
+                    if source == 'CAMERA_LINE' and self._camera_mode_uses_ground() else None),
         )
         self.observation_pub.publish(String(data=json.dumps(payload, sort_keys=True)))
 
@@ -265,6 +320,18 @@ class LineObserverNode(Node):
                     washed_fraction=float(self.get_parameter('camera_washed_fraction').value),
                     min_pixels=int(self.get_parameter('camera_min_pixels').value),
                 )
+            elif mode == 'between':
+                observation = self._between_keeper.update(
+                    frame,
+                    bright_threshold=int(self.get_parameter('camera_bright_threshold').value),
+                    roi_top_fraction=float(
+                        self.get_parameter('camera_between_roi_top_fraction').value),
+                    washed_fraction=float(self.get_parameter('camera_washed_fraction').value),
+                )
+            elif mode == 'keep':
+                observation = self._lane_keeper.update(
+                    frame, self._ground(frame.shape[1], frame.shape[0]),
+                    lane_half_width_m=float(self.get_parameter('lane_half_width_m').value))
             elif mode in ('lane', 'edge_left', 'centre', 'route_a', 'route_b', 'route_ab'):
                 ground = self._ground(frame.shape[1], frame.shape[0])
                 lane_kwargs = dict(

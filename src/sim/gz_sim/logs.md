@@ -146,3 +146,19 @@
 - 변경: D-306의 Gazebo 전용 라이브 뷰어 탭에 패널 연결, 방향키·Home·End 조작, 선택 탭 포커스 순서와 보이는 포커스 링을 추가했다. 관측 데이터·제어 경로는 변경하지 않았다.
 - 증거: 새 Chromium 브라우저 시험을 변경 전 실패, 변경 후 통과로 확인했다. 기존 viewer v2 계약과 합쳐 59 passed (Windows). 1280×800 라이브·지난 결과 캡처는 `X:\\DevTemp\\rosy-uiux-d306\\`에만 저장했고 가로 넘침·페이지 오류가 없었다.
 - gate 변화: LOCAL 키보드 조작 근거를 추가했다. Gazebo 카메라·인지의 실제 실행과 DEVICE/FIELD 수용은 이 시험으로 증명하지 않는다.
+
+## 2026-09-30 · uncommitted · feat(sim): map_v2_fleet real-profile world and Pinky camera launch (D-353 5)
+
+- 변경: `launch/map_v2_fleet_real.launch.py` 추가. 320x240, 기울기 8°, hfov 1.0334 rad(fx 281.6), 렌즈 높이 0.067 m(`cam_mount_z` 0.05307), 8 fps로 `map_v2_fleet_real.world`(카펫 텍스처, 0.66 회색 테이프, 흰 0.30 m 벽, 파란 이음새 테이프)를 띄운다. line_observer는 `line_follow.yaml` 장치 기본값에 GAZEBO 선언 지오메트리(0.067 m, 8°, 1.0334 rad, x 0.03317 m)만 덮어쓴다. `launch_sim.launch.xml`에 `camera_hfov`, `cam_mount_z` 인자(기본 1.1519, 0.0495)를 추가했다. 기존 `map_v2_fleet_lane.launch.py`와 25° 월드는 바꾸지 않았다.
+- 증거: `docs/validation/map-v2-fleet-real-profile-2026-09-30/result.md`. WSL 헤드리스 20자세 캡처와 실제 teleop 20장 비교에서 하단 회색 66.5 대 65.5, 벽 209 대 214, 테이프 186 대 192, 수평선 row ~80. `python -m pytest src/sim -q` 통과(Windows).
+- gate 변화: ROS-SIM 외형 근거 추가. 이 월드에서의 차선 주행 합격과 DEVICE/FIELD 수용은 아직 없다.
+
+## 2026-09-30 · uncommitted · docs(adr): pilot ADR 번호를 main 과 겹치지 않게 다시 매김
+- 변경: main 이 D-346~D-353 을 다른 결정으로 먼저 썼다. 이 모듈 기록의 옛 번호는 다음으로 읽는다 — D-346→D-362(운전자 실시간 영상), D-347→D-342(수동 한도 계단), D-348→D-343(방·운전석), D-349→D-344(보조 자율), D-350→D-363(카메라 비율·설치 앱), D-353→D-364(차로 유지 인식·재생 벤치). 위 기록은 덧붙이기 전용이라 고치지 않는다.
+- 증거: `docs/adr/` 파일 이름·ADR Log 행·코드 주석·시험이 새 번호를 쓴다. D-342~D-344 는 main 의 harness 가 이 pilot 초안용으로 예약해 둔 번호다.
+- gate 변화: 없음(번호만).
+
+## 2026-09-30 · uncommitted · docs(adr): 운전자 실시간 영상 ADR 을 D-362 에서 D-368 로
+- 변경: 다른 세션이 main 작업 트리에서 D-362(코드 유형별 파일 크기 예산)를 쓰고 있어, 이 모듈 기록의 D-362(운전자 실시간 영상, 옛 D-346)는 D-368 로 읽는다. 위 기록은 덧붙이기 전용이라 고치지 않는다.
+- 증거: `docs/adr/D-368-pilot-live-driver-video.md`, ADR Log 행·코드·시험이 새 번호를 쓴다.
+- gate 변화: 없음(번호만).

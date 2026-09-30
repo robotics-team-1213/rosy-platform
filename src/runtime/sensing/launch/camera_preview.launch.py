@@ -1,4 +1,7 @@
-"""Capture the front camera and publish a bounded CORE preview, without motion nodes."""
+"""Capture the front camera and publish a bounded CORE preview, without motion nodes.
+
+The line observer is observation-only too (D-2): it publishes line/observation for
+CORE's camera line-follow (D-344 §9) and never commands the wheels."""
 
 import os
 
@@ -18,6 +21,11 @@ def generate_launch_description():
             package='control', executable='camera_detect_node', namespace=namespace,
             output='screen', respawn=True, respawn_delay=2.0,
             parameters=[os.path.join(config, 'camera.yaml'), {'camera_backend': 'picamera2'}],
+        ),
+        Node(
+            package='control', executable='line_observer_node', namespace=namespace,
+            output='screen', respawn=True, respawn_delay=2.0,
+            parameters=[os.path.join(config, 'line_follow.yaml')],
         ),
         Node(
             package='control', executable='road_observer_node', namespace=namespace,

@@ -58,6 +58,8 @@ COPY src/runtime/services /opt/rosy_ws/src/runtime/services
 COPY src/runtime/api_web /opt/rosy_ws/src/runtime/api_web
 COPY src/hmi/web_common /opt/rosy_ws/src/hmi/web_common
 COPY src/hmi/dashboard /opt/rosy_ws/src/hmi/dashboard
+# D-323: CORE serves the Rosy Pilot teleop surface at /pilot (core_api_web exec_depends pilot).
+COPY src/hmi/pilot /opt/rosy_ws/src/hmi/pilot
 
 WORKDIR /opt/rosy_ws
 # omx/imu/vision/control belong to optional slices, not this core image.
@@ -67,7 +69,7 @@ COPY src/runtime/gateway ./src/runtime/gateway
 COPY src/products/pinky_pro/profile ./src/products/pinky_pro/profile
 RUN set -eo pipefail \
     && source /opt/ros/jazzy/setup.bash \
-    && colcon build --merge-install --packages-up-to core pinky_pro web_common dashboard \
+    && colcon build --merge-install --packages-up-to core pinky_pro web_common dashboard pilot \
     && test -d /opt/rosy_ws/install
 
 FROM core-runtime AS core

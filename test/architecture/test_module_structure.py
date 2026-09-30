@@ -56,6 +56,7 @@ KNOWN_CHAIN_BACK_EDGES = {
 KNOWN_DIRECTION = {
     ("control", "imu_bno055"): "runtime/sensing -> drivers/imu_bno055; declared exec_depend. Legacy launches start the IMU driver; the long-term fix is bringup assembly, not a sensing launch",
     ("overhead", "games"): "site overhead reuses the ROS-free four-point homography helper for camera calibration",
+    ("bringup", "control"): "products/bringup -> runtime/sensing: bringup_robot.launch.py starts control's ir_adc_node for the rosy-io graph (enable_ir, D-344 §12) — bringup assembling the robot graph is the direction the imu_bno055 row names",
 }
 
 #: P6 budgets.
@@ -104,12 +105,13 @@ SIZE_VERDICTS = {
         "stays in task_store/task_results (X5)",
     ),
     "contracts/foundation/core_common/protocol/schemas.py": (
-        1001,
+        1002,
         "accept: the D-18 single contract source — every envelope, event and capability model in one "
         "importable place; per-domain schema files would fork the version pin that "
         "test_protocol_version_alignment guards. Re-judged 2026-09-30 at 1000 lines after the bounded "
         "Mission feedback scope/context/tool-result contracts were added; re-judged 2026-09-30 at 1001 "
-        "under the D-362 zero-allowance tier. ROS-free, host-testable (X5)",
+        "under the D-362 zero-allowance tier; re-judged 2026-09-30 at 1002 when the pilot branch added "
+        "LineFollowStatus.clearance_m (D-344 §11, one field). ROS-free, host-testable (X5)",
     ),
     "site/fleet/fleet/server/app.py": (
         1556,
@@ -149,8 +151,9 @@ SIZE_VERDICTS = {
         "under the D-362 zero-allowance tier — verdict unchanged",
     ),
     "runtime/sensing/control/sensing/perception/lane.py": (
-        611,
-        "accept: one concern (lane/IR line detection), ROS-free pure functions and trackers, host-testable (X5)",
+        765,
+        "accept: one concern (lane/IR line detection), ROS-free pure functions and trackers, host-testable (X5); "
+        "the ground-geometry lane keeper already lives apart in lane_keep.py (D-364)",
     ),
     "runtime/sensing/control/sensing/perception/lane_bev.py": (
         611,
@@ -181,12 +184,14 @@ SIZE_VERDICTS = {
         "accept: sim-only read-only viewer server (HTTP handler + ROS subscriptions); the pure logic already lives in live_view_model.py and the page in lane_live_view.html, covered by test_lane_live_view*.py and test_live_view_model.py (X5)",
     ),
     "control": (
-        35_197,
+        36_091,
         f"split: deploy closure needs only sensing + safety provider (P1a); {CONTROL_SPLIT} "
         "(re-judged 2026-09-30 at 33090 after D-356 added the ROS-free learned perception backend "
         "(sensing/perception/learned), the shadow node and the recording CLI; the learned backend sits "
         "inside sensing/perception and moves with it — verdict unchanged; re-judged 2026-09-30 at 35197 "
-        "under D-362 — web/diagnostic.html and the sensing web assets now count toward the package total)",
+        "under D-362 — web/diagnostic.html and the sensing web assets now count toward the package total; "
+        "re-judged 2026-09-30 at 36091 when the pilot branch merged the ROS-free lane keepers "
+        "(lane_keep.py 'keep', lane.py 'between') and the NOMINAL ground inside sensing/perception — verdict unchanged)",
     ),
     # --- D-362 newly-covered files (web assets in src/ packages, ops roots). ---
     "runtime/sensing/web/diagnostic.html": (
@@ -401,7 +406,8 @@ def _allowed(source: str, target: str) -> bool:
     if src_domain == "runtime" and dst_domain == "runtime":
         return True
     # D-243: the API package serves the operator screens and nothing else in runtime does.
-    if source == "core_api_web" and target == "dashboard":
+    # D-323: the pilot teleop surface follows the same serving exception.
+    if source == "core_api_web" and target in {"dashboard", "pilot"}:
         return True
     return edge_allowed(src_domain, _family(source), dst_domain, _family(target), target)
 

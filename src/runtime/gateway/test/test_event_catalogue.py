@@ -329,7 +329,7 @@ PINNED_RELAYS = {
 
 
 #: 이벤트 이름과 모양이 같은 파일 이름들 (`app.js`, `docks.json`, `audit.jsonl`).
-_FILE_SUFFIXES = {"js", "css", "html", "json", "jsonl", "yaml", "yml", "md", "sh", "py"}
+_FILE_SUFFIXES = {"js", "css", "html", "json", "jsonl", "yaml", "yml", "md", "sh", "py", "webmanifest"}
 
 #: 첫 인자가 "점 찍힌 이름"인데 이벤트가 아닌 호출들. capability 경로(CAP-001)와
 #: Host Agent RPC 메서드가 그렇다 — 목록이 아니라 **자리** 로 걸러진다.
