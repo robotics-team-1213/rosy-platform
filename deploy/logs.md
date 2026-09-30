@@ -1606,3 +1606,11 @@
 - gate 변화: 없음. DEVICE HOLD — 벤치 로봇 검증은 2026-10-02 예정.
 - 결정: D-388.
 - 교훈: RTC 없는 기기에서 시각은 순서의 근거가 될 수 없다. 순서는 잠금 안의 일련번호로 매긴다.
+
+## 2026-10-01 · uncommitted · fix(release): D-388 맞춤 뒤 밀린 일 보존, 옛 이름 폴더 무시
+
+- 변경: 끊긴 실행을 맞추면서 생긴 reload·enable·재시작 후보를 매니페스트 표시 전에 `pending.json`에 fsync로 남김(모든 JSON 쓰기 fsync). 일련번호 없는 폴더는 맞추지 않고 `legacy_ignored`로 알림.
+- 증거: `python -m pytest test/test_image_layer_sync.py -q` (Windows). 맞춤 직후 설치 실패, 두 쓰기 사이 끊김, 옛 이름 폴더 시험. 새 방어 각각 변이 증명 빨강→초록.
+- gate 변화: 없음. DEVICE HOLD — 벤치 로봇 검증은 2026-10-02 예정.
+- 결정: D-388.
+- 교훈: "표시"와 "남은 일"을 따로 쓰면 둘 사이가 끊길 수 있다. 남은 일을 먼저 영속하고 표시는 나중에.

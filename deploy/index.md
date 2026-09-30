@@ -65,8 +65,8 @@
 
 ## 최근 기록
 
+- 2026-10-01 · uncommitted · fix(release): D-388 맞춤 뒤 밀린 일 보존, 옛 이름 폴더 무시
 - 2026-10-01 · uncommitted · fix(release): D-388 3차 리뷰 반영(RTC 없음, 전원 끊김)
 - 2026-10-01 · uncommitted · fix(release): D-388 2차 리뷰 반영과 번호 이동
 - 2026-10-01 · uncommitted · fix(release): D-385 독립 리뷰 반영
 - 2026-10-01 · uncommitted · feat(release): 페이로드 푸시가 이미지 계층을 활성 릴리스 사본으로 맞춘다 (D-385)
-- 2026-10-01 · uncommitted · feat(native): D-385 기다리는 카드에 프레임 위상
