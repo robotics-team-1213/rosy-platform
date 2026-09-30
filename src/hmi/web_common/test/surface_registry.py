@@ -321,7 +321,7 @@ _JS_LINE_COMMENT = re.compile(r"(?:(?<=^)|(?<=[\s;{}(),]))//[^\n]*", re.M)
 _THEME_COLOUR_VALUE = re.compile(r'(<meta\s+name="theme-color"\s+content=")([^"]*)(")', re.I)
 _TOP_RULE = re.compile(r"([^{}]+)\{([^{}]*)\}")
 #: 라이브러리 예외 — 저장소 상대 파일 → 그대로 지울 조각. 각 조각의 이유:
-#: ui.js `rgbaText`는 RosyPalette가 풀어 낸 [r,g,b,a] 바이트를 캔버스 fillStyle 문자열로
+#: ui.js `cssColor`는 RosyPalette가 풀어 낸 [r,g,b,a] 바이트를 캔버스 fillStyle 문자열로
 #: 옮기는 형식기다. 값은 tokens.css에서 오고 이 글자에는 색 리터럴이 없다.
 LIBRARY_COLOUR_FORMATS = {
     "src/hmi/web_common/ui.js": ("rgba(${r}, ${g}, ${b}, ${a})",),

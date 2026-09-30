@@ -1,7 +1,6 @@
 import { HeadlessState } from "/common/core_ui_logic.js";
 import { poseUnavailableReason } from "./pose-evidence.js";
-// D-359 §5.3 — 끌 때 이유를 같이 준다. 켜거나 짧은 요청 중 잠금이면 이유를 지운다.
-function setOff(control, off, reason = "") { control.disabled = Boolean(off); if (off && reason) control.setAttribute("reason", reason); else control.removeAttribute("reason"); }
+import { setOff } from "/assets/dom.js";
 export function mount(el, ctx) {
   const head = document.createElement("ui-head");
   head.textContent = "웨이포인트 준비";

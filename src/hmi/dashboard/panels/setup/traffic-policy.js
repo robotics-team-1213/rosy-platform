@@ -1,5 +1,4 @@
-// D-359 §5.3 — 끌 때 이유를 같이 준다. 켜거나 짧은 요청 중 잠금이면 이유를 지운다.
-function setOff(control, off, reason = "") { control.disabled = Boolean(off); if (off && reason) control.setAttribute("reason", reason); else control.removeAttribute("reason"); }
+import { setOff } from "/assets/dom.js";
 function el(tag, cls, text) { const node = document.createElement(tag); if (cls) node.className = cls; if (text !== undefined) node.textContent = text; return node; }
 function field(labelText, name, type = "number") {
   const label = el("label", "ui-field-label", labelText); const control = el("input", "ui-field");

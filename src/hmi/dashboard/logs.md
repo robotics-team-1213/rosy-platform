@@ -687,3 +687,11 @@
 - gate 변화: 없음.
 - 결정: D-359 US-009.
 - 교훈: 문구를 바꾸면 루트 `test/`의 브라우저 시험도 grep한다.
+
+## 2026-10-01 · uncommitted · refactor(dashboard): D-359 정리 — 패널의 setOff 사본을 dom.js 하나로
+
+- 변경: 패널 10개(`console/camera·docking·line-follow`, `host/hardware·operations`, `setup/docking·localization·traffic-policy·waypoints`, `system/security`)가 한 줄씩 들고 있던 같은 `setOff`를 지우고 `/assets/dom.js`의 `setOff`를 import한다. 패널은 이미 `/assets/client.js`를 거쳐 dom.js를 싣는다. 차이는 null 컨트롤에서 던지지 않고 돌아온다는 것뿐이다.
+- 증거: `src/hmi/dashboard/test`·`src/hmi/web_common/test` 호스트 시험 통과(`test_module_imports.py` 포함), 브라우저 회귀는 머지 전 최종 회차(7.6)에서 확인.
+- gate 변화: 없음.
+- 결정: D-359 §5.3 (US-004 후속).
+- 교훈: 없음.
