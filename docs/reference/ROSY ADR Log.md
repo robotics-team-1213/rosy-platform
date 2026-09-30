@@ -380,5 +380,4 @@
 | D-381 | 막힌 내비게이션은 같은 청록을 2 Hz로 깜빡이고(blocked), 비상정지 진입은 2.5 kHz 네 번을 한 번만 울린다 — nav_state도 robot_mode와 같은 핸드오버·검증을 타고, 유지 중 무음·해제 시 ready 차임 | Accepted (2026-10-01, 사용자 위임; D-380 잔여 갭 two종 — BLOCKED/FAILED가 "가는 중"으로 보이던 것, 자발 정지의 무음; PLANNING·ARRIVED·CANCELED는 무늬 안 바꿈) |
 | D-382 | 로봇 ↔ 사이트 관제 통신은 계약 스냅샷 하나로 판정하고, 실물 확인은 읽기 전용 적합성 탐침으로 시작한다 | Accepted (2026-10-01; 판정 기준·증거 등급·탐침 경계; 이미지 교체·토큰 발급·이동 명령·관제 DEVICE 수용 아님) |
 | D-383 | 편대 역할은 계기 셋의 네 번째 칸 — swarm.role가 leader/follower일 때만 나타나고(기본 hidden, hidden이 flex를 이김) 한국어 라벨·색 없음(역할은 경보가 아니다), 식별줄은 software_version을 계보에 함께 말한다 | Accepted (2026-10-01, 사용자 요청·위임; emoji 대신 기존 계기 문법·토큰 체계, D-280/D-82/D-359 준수; 렌더는 telemetry.js가 담당 — D-362 분할) |
-| D-382 | 로봇 ↔ 사이트 관제 통신은 계약 스냅샷 하나로 판정하고, 실물 확인은 읽기 전용 적합성 탐침으로 시작한다 | Proposed (판정 기준·증거 등급·탐침 경계; 이미지 교체·토큰 발급·이동 명령·관제 DEVICE 수용 아님) |
 | D-385 | 페이로드 릴리스를 올리면 이미지 계층도 활성 릴리스 사본으로 맞춘다 — 릴리스에 실린 `sync-image-layer.py`가 검증된 `/opt/rosy/current`에서 native-runtime·rosy 유닛·udev·modprobe 허용 목록만 백업 후 원자 설치(드라이런·멱등·재시작은 호출자); `rosy-release-push.ps1`이 활성화·롤백 뒤 실행, `-SkipImageLayerSync` | Accepted (2026-09-30, 호스트 시험만; 실기 실행 대기; D-225 확장) |
