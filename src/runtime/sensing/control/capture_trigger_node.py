@@ -22,7 +22,7 @@ from . import executor_choice
 from .capture_trigger import (DEFAULT_COOLDOWN_S, DEFAULT_DELTA_THRESHOLD, DEFAULT_FRAMES,
                               CaptureTrigger)
 from .record_session import DEFAULT_SNAPSHOT_NODE
-from .recording import DEFAULT_ROOT, SHADOW_TOPIC, write_snapshot_request
+from .recording import DEFAULT_ROOT, write_snapshot_request
 
 
 class CaptureTriggerNode(Node):
@@ -38,7 +38,8 @@ class CaptureTriggerNode(Node):
             'snapshot_service', f'/{DEFAULT_SNAPSHOT_NODE}/snapshot').value)
         self._client = self.create_client(Snapshot, service)
         # Every shadow frame counts toward a streak, so keep a short queue.
-        self.create_subscription(String, SHADOW_TOPIC, self._on_shadow, 10)
+        # Literal (== recording.SHADOW_TOPIC, tested) so the D-185 subscription scan resolves it.
+        self.create_subscription(String, 'perception/learned/shadow', self._on_shadow, 10)
         self.create_subscription(String, 'capture/request', self._on_request, 10)
         self.get_logger().info(
             f'capture trigger ready: |delta|>={self._policy.delta_threshold} for '

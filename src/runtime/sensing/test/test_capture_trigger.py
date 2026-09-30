@@ -188,3 +188,5 @@ def test_capture_trigger_node_is_evidence_only():
     assert "create_publisher" not in src
     assert "rosbag2_interfaces.srv import Snapshot" in src
     assert "write_snapshot_request" in src  # the reason reaches session.json
+    from control.recording import SHADOW_TOPIC
+    assert f"create_subscription(String, '{SHADOW_TOPIC}', self._on_shadow, 10)" in src
