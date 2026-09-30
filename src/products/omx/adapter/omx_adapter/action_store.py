@@ -58,7 +58,7 @@ class ActionStore:
                 raise RuntimeError(f"SQLite WAL mode is required, got {mode!r}")
             connection.execute("PRAGMA synchronous=FULL")
             version = connection.execute("PRAGMA user_version").fetchone()[0]
-            if version > 1:
+            if version > 2:
                 raise RuntimeError(f"unsupported Action database schema version {version}")
             connection.executescript(
                 """
@@ -104,7 +104,30 @@ class ActionStore:
                 );
                 CREATE INDEX IF NOT EXISTS omx_action_events_action
                     ON omx_action_events(action_id, event_id);
-                PRAGMA user_version=1;
+                CREATE TABLE IF NOT EXISTS omx_action_phases (
+                    action_id TEXT NOT NULL REFERENCES omx_actions(action_id),
+                    attempt_id TEXT NOT NULL,
+                    phase_id TEXT NOT NULL,
+                    ordinal INTEGER NOT NULL CHECK(ordinal >= 0),
+                    command_digest TEXT NOT NULL,
+                    state TEXT NOT NULL CHECK(state IN (
+                        'SUBMITTING', 'ACCEPTED', 'RUNNING', 'CANCEL_REQUESTED',
+                        'UNKNOWN', 'SUCCEEDED', 'FAILED', 'CANCELED'
+                    )),
+                    driver_goal_id TEXT UNIQUE,
+                    cancel_acknowledged INTEGER CHECK(cancel_acknowledged IN (0, 1)),
+                    result_source TEXT,
+                    result_observed_at TEXT,
+                    result_json TEXT,
+                    reason TEXT,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    PRIMARY KEY(action_id, attempt_id, phase_id),
+                    UNIQUE(action_id, attempt_id, ordinal)
+                );
+                CREATE INDEX IF NOT EXISTS omx_action_phases_state
+                    ON omx_action_phases(action_id, attempt_id, state, ordinal);
+                PRAGMA user_version=2;
                 """
             )
 
@@ -335,6 +358,280 @@ class ActionStore:
             connection.commit()
         return self._dict(updated)
 
+    @staticmethod
+    def _phase_dict(row: sqlite3.Row) -> dict[str, Any]:
+        result = dict(row)
+        result["ordinal"] = int(result["ordinal"])
+        result["cancel_acknowledged"] = (
+            None if result["cancel_acknowledged"] is None
+            else bool(result["cancel_acknowledged"])
+        )
+        if result["result_json"] is not None:
+            result["result"] = json.loads(result.pop("result_json"))
+        else:
+            result.pop("result_json")
+        return result
+
+    def begin_phase(self, action_id: str, attempt_id: str, *, phase_id: str,
+                    ordinal: int, command_digest: str) -> dict[str, Any]:
+        """Persist one ordered phase intent before its ROS goal is submitted."""
+        action_id = _nonempty("action_id", action_id)
+        attempt_id = _nonempty("attempt_id", attempt_id)
+        phase_id = _nonempty("phase_id", phase_id, maximum=96)
+        if type(ordinal) is not int or ordinal < 0:
+            raise ValueError("ordinal must be a non-negative integer")
+        command_digest = _nonempty("command_digest", command_digest, maximum=64)
+        if (len(command_digest) != 64
+                or any(char not in "0123456789abcdef" for char in command_digest)):
+            raise ValueError("command_digest must be a lowercase SHA-256 hex digest")
+        now = _utc_now()
+        with closing(self._connect()) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            action = self._require_attempt(
+                connection, action_id, attempt_id, {"ACCEPTED", "RUNNING"},
+            )
+            previous = connection.execute(
+                "SELECT * FROM omx_action_phases WHERE action_id=? AND attempt_id=? "
+                "ORDER BY ordinal DESC LIMIT 1",
+                (action_id, attempt_id),
+            ).fetchone()
+            expected_ordinal = 0 if previous is None else int(previous["ordinal"]) + 1
+            if ordinal != expected_ordinal:
+                raise InvalidActionTransition("phase ordinal must be contiguous and ordered")
+            if previous is not None and previous["state"] != "SUCCEEDED":
+                raise InvalidActionTransition("next phase requires successful terminal result for previous phase")
+            duplicate_id = connection.execute(
+                """SELECT 1 FROM omx_action_phases WHERE action_id=? AND attempt_id=?
+                   AND phase_id=?""",
+                (action_id, attempt_id, phase_id),
+            ).fetchone()
+            if duplicate_id is not None:
+                raise InvalidActionTransition("phase_id is already used by this Action attempt")
+            connection.execute(
+                """INSERT INTO omx_action_phases
+                   (action_id, attempt_id, phase_id, ordinal, command_digest, state,
+                    created_at, updated_at)
+                   VALUES (?, ?, ?, ?, ?, 'SUBMITTING', ?, ?)""",
+                (action_id, attempt_id, phase_id, ordinal, command_digest, now, now),
+            )
+            self._append_event(
+                connection, action_id=action_id, attempt_id=attempt_id,
+                state=action["state"], event_type="ACTION_PHASE_SUBMISSION_STARTED",
+                actor_id=action["principal_id"],
+                detail={"phase_id": phase_id, "ordinal": ordinal,
+                        "command_digest": command_digest}, created_at=now,
+            )
+            row = connection.execute(
+                "SELECT * FROM omx_action_phases WHERE action_id=? AND attempt_id=? AND phase_id=?",
+                (action_id, attempt_id, phase_id),
+            ).fetchone()
+            connection.commit()
+        return self._phase_dict(row)
+
+    def record_phase_submission(self, action_id: str, attempt_id: str, *, phase_id: str,
+                                accepted: bool | None,
+                                driver_goal_id: str | None) -> dict[str, Any]:
+        if accepted is not True and accepted is not False and accepted is not None:
+            raise ValueError("accepted must be true, false, or unknown")
+        if accepted is True and driver_goal_id is None:
+            raise ValueError("positive phase acceptance requires driver_goal_id")
+        if accepted is False and driver_goal_id is not None:
+            raise ValueError("rejected phase cannot have a driver_goal_id")
+        if driver_goal_id is not None:
+            driver_goal_id = _nonempty("driver_goal_id", driver_goal_id)
+        phase_id = _nonempty("phase_id", phase_id, maximum=96)
+        state = "ACCEPTED" if accepted is True else "FAILED" if accepted is False else "UNKNOWN"
+        now = _utc_now()
+        with closing(self._connect()) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            action = self._require_attempt(
+                connection, action_id, attempt_id, {"ACCEPTED", "RUNNING"},
+            )
+            phase = connection.execute(
+                "SELECT * FROM omx_action_phases WHERE action_id=? AND attempt_id=? AND phase_id=?",
+                (action_id, attempt_id, phase_id),
+            ).fetchone()
+            if phase is None or phase["state"] != "SUBMITTING":
+                raise InvalidActionTransition("phase is not awaiting driver acceptance")
+            connection.execute(
+                """UPDATE omx_action_phases SET state=?, driver_goal_id=?, reason=?, updated_at=?
+                   WHERE action_id=? AND attempt_id=? AND phase_id=?""",
+                (state, driver_goal_id,
+                 "DRIVER_ACCEPTANCE_UNKNOWN" if accepted is None else None, now,
+                 action_id, attempt_id, phase_id),
+            )
+            self._append_event(
+                connection, action_id=action_id, attempt_id=attempt_id, state=state,
+                event_type="ACTION_PHASE_ACCEPTANCE_RECORDED", actor_id=action["principal_id"],
+                detail={"phase_id": phase_id, "accepted": accepted,
+                        "driver_goal_id": driver_goal_id}, created_at=now,
+            )
+            updated = connection.execute(
+                "SELECT * FROM omx_action_phases WHERE action_id=? AND attempt_id=? AND phase_id=?",
+                (action_id, attempt_id, phase_id),
+            ).fetchone()
+            connection.commit()
+        return self._phase_dict(updated)
+
+    def mark_phase_running(self, action_id: str, attempt_id: str, *, phase_id: str,
+                           driver_goal_id: str) -> dict[str, Any]:
+        return self._transition_phase(
+            action_id, attempt_id, phase_id=phase_id,
+            allowed={"ACCEPTED"}, target="RUNNING", event_type="ACTION_PHASE_RUNNING",
+            driver_goal_id=driver_goal_id,
+        )
+
+    def request_phase_cancel(self, action_id: str, attempt_id: str, *,
+                             phase_id: str) -> dict[str, Any]:
+        return self._transition_phase(
+            action_id, attempt_id, phase_id=phase_id,
+            allowed={"ACCEPTED", "RUNNING"}, target="CANCEL_REQUESTED",
+            event_type="ACTION_PHASE_CANCEL_REQUESTED",
+        )
+
+    def record_phase_cancel_ack(self, action_id: str, attempt_id: str, *,
+                                phase_id: str, acknowledged: bool) -> dict[str, Any]:
+        if type(acknowledged) is not bool:
+            raise ValueError("acknowledged must be boolean")
+        phase_id = _nonempty("phase_id", phase_id, maximum=96)
+        now = _utc_now()
+        with closing(self._connect()) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            action = self._require_attempt(
+                connection, action_id, attempt_id,
+                {"ACCEPTED", "RUNNING", "CANCEL_REQUESTED", "UNKNOWN", "HOLD"},
+            )
+            phase = self._require_phase(
+                connection, action_id, attempt_id, phase_id, {"CANCEL_REQUESTED", "UNKNOWN"},
+            )
+            connection.execute(
+                """UPDATE omx_action_phases SET cancel_acknowledged=?, updated_at=?
+                   WHERE action_id=? AND attempt_id=? AND phase_id=?""",
+                (int(acknowledged), now, action_id, attempt_id, phase_id),
+            )
+            self._append_event(
+                connection, action_id=action_id, attempt_id=attempt_id,
+                state=phase["state"], event_type="ACTION_PHASE_CANCEL_ACK_RECORDED",
+                actor_id=action["principal_id"],
+                detail={"phase_id": phase_id, "driver_goal_id": phase["driver_goal_id"],
+                        "acknowledged": acknowledged}, created_at=now,
+            )
+            updated = self._require_phase(
+                connection, action_id, attempt_id, phase_id,
+                {"CANCEL_REQUESTED", "UNKNOWN"},
+            )
+            connection.commit()
+        return self._phase_dict(updated)
+
+    def record_phase_terminal(self, action_id: str, attempt_id: str, *, phase_id: str,
+                              driver_goal_id: str, outcome: str, result_source: str,
+                              result_observed_at: str,
+                              result: Mapping[str, Any]) -> dict[str, Any]:
+        if outcome not in {"SUCCEEDED", "FAILED", "CANCELED"}:
+            raise ValueError("phase outcome must be SUCCEEDED, FAILED, or CANCELED")
+        phase_id = _nonempty("phase_id", phase_id, maximum=96)
+        driver_goal_id = _nonempty("driver_goal_id", driver_goal_id)
+        result_source = _nonempty("result_source", result_source, maximum=96)
+        result_observed_at = _nonempty("result_observed_at", result_observed_at)
+        if not isinstance(result, Mapping):
+            raise ValueError("result must be a JSON object")
+        result_json = _json(dict(result))
+        now = _utc_now()
+        with closing(self._connect()) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            action = self._require_attempt(
+                connection, action_id, attempt_id,
+                {"ACCEPTED", "RUNNING", "CANCEL_REQUESTED", "UNKNOWN", "HOLD"},
+            )
+            phase = self._require_phase(
+                connection, action_id, attempt_id, phase_id,
+                {"ACCEPTED", "RUNNING", "CANCEL_REQUESTED", "UNKNOWN"},
+            )
+            if phase["driver_goal_id"] != driver_goal_id:
+                raise InvalidActionTransition("ROS goal identity does not match Action phase")
+            connection.execute(
+                """UPDATE omx_action_phases SET state=?, result_source=?, result_observed_at=?,
+                   result_json=?, reason=NULL, updated_at=?
+                   WHERE action_id=? AND attempt_id=? AND phase_id=?""",
+                (outcome, result_source, result_observed_at, result_json, now,
+                 action_id, attempt_id, phase_id),
+            )
+            self._append_event(
+                connection, action_id=action_id, attempt_id=attempt_id, state=outcome,
+                event_type="ACTION_PHASE_TERMINAL_RESULT", actor_id=action["principal_id"],
+                detail={"phase_id": phase_id, "ordinal": phase["ordinal"],
+                        "driver_goal_id": driver_goal_id, "result_source": result_source,
+                        "result_observed_at": result_observed_at, "result": dict(result)},
+                created_at=now,
+            )
+            updated = connection.execute(
+                "SELECT * FROM omx_action_phases WHERE action_id=? AND attempt_id=? AND phase_id=?",
+                (action_id, attempt_id, phase_id),
+            ).fetchone()
+            connection.commit()
+        return self._phase_dict(updated)
+
+    def _transition_phase(self, action_id: str, attempt_id: str, *, phase_id: str,
+                          allowed: set[str], target: str, event_type: str,
+                          driver_goal_id: str | None = None) -> dict[str, Any]:
+        phase_id = _nonempty("phase_id", phase_id, maximum=96)
+        if driver_goal_id is not None:
+            driver_goal_id = _nonempty("driver_goal_id", driver_goal_id)
+        now = _utc_now()
+        with closing(self._connect()) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            action = self._require_attempt(
+                connection, action_id, attempt_id,
+                {"ACCEPTED", "RUNNING", "CANCEL_REQUESTED", "UNKNOWN", "HOLD"},
+            )
+            phase = self._require_phase(connection, action_id, attempt_id, phase_id, allowed)
+            if driver_goal_id is not None and phase["driver_goal_id"] != driver_goal_id:
+                raise InvalidActionTransition("ROS goal identity does not match Action phase")
+            connection.execute(
+                "UPDATE omx_action_phases SET state=?, updated_at=? "
+                "WHERE action_id=? AND attempt_id=? AND phase_id=?",
+                (target, now, action_id, attempt_id, phase_id),
+            )
+            self._append_event(
+                connection, action_id=action_id, attempt_id=attempt_id, state=target,
+                event_type=event_type, actor_id=action["principal_id"],
+                detail={"phase_id": phase_id, "driver_goal_id": phase["driver_goal_id"]},
+                created_at=now,
+            )
+            updated = connection.execute(
+                "SELECT * FROM omx_action_phases WHERE action_id=? AND attempt_id=? AND phase_id=?",
+                (action_id, attempt_id, phase_id),
+            ).fetchone()
+            connection.commit()
+        return self._phase_dict(updated)
+
+    @staticmethod
+    def _require_phase(connection: sqlite3.Connection, action_id: str, attempt_id: str,
+                       phase_id: str, allowed: set[str]) -> sqlite3.Row:
+        row = connection.execute(
+            "SELECT * FROM omx_action_phases WHERE action_id=? AND attempt_id=? AND phase_id=?",
+            (action_id, attempt_id, phase_id),
+        ).fetchone()
+        if row is None or row["state"] not in allowed:
+            raise InvalidActionTransition("Action phase state does not allow this transition")
+        return row
+
+    def action_phases(self, action_id: str, attempt_id: str | None = None) -> list[dict[str, Any]]:
+        action_id = _nonempty("action_id", action_id)
+        with closing(self._connect()) as connection:
+            if attempt_id is None:
+                rows = connection.execute(
+                    "SELECT * FROM omx_action_phases WHERE action_id=? ORDER BY attempt_id, ordinal",
+                    (action_id,),
+                ).fetchall()
+            else:
+                attempt_id = _nonempty("attempt_id", attempt_id)
+                rows = connection.execute(
+                    "SELECT * FROM omx_action_phases WHERE action_id=? AND attempt_id=? ORDER BY ordinal",
+                    (action_id, attempt_id),
+                ).fetchall()
+        return [self._phase_dict(row) for row in rows]
+
     def hold_action(self, action_id: str, attempt_id: str, *, reason: str) -> dict[str, Any]:
         reason = _nonempty("reason", reason, maximum=96)
         now = _utc_now()
@@ -414,6 +711,27 @@ class ActionStore:
                     actor_id="system", detail={"previous_state": row["state"]},
                     created_at=now,
                 )
+                phases = connection.execute(
+                    """SELECT * FROM omx_action_phases WHERE action_id=? AND attempt_id=?
+                       AND state IN ('SUBMITTING', 'ACCEPTED', 'RUNNING', 'CANCEL_REQUESTED')""",
+                    (row["action_id"], row["attempt_id"]),
+                ).fetchall()
+                for phase in phases:
+                    connection.execute(
+                        """UPDATE omx_action_phases SET state='UNKNOWN', reason=?, updated_at=?
+                           WHERE action_id=? AND attempt_id=? AND phase_id=?""",
+                        ("PROCESS_RESTARTED_WITH_UNRESOLVED_PHASE", now,
+                         row["action_id"], row["attempt_id"], phase["phase_id"]),
+                    )
+                    self._append_event(
+                        connection, action_id=row["action_id"], attempt_id=row["attempt_id"],
+                        state="UNKNOWN", event_type="ACTION_PHASE_RESTARTED_UNRESOLVED",
+                        actor_id="system",
+                        detail={"phase_id": phase["phase_id"], "ordinal": phase["ordinal"],
+                                "previous_state": phase["state"],
+                                "driver_goal_id": phase["driver_goal_id"]},
+                        created_at=now,
+                    )
                 recovered.append(row["action_id"])
             connection.commit()
         return recovered

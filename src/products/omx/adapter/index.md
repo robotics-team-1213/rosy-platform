@@ -20,6 +20,7 @@
 - [2026-09-15-module-harness-design.md](../../../../docs/plans/2026-09-15-module-harness-design.md)
 - [2026-09-26-omx-ai-workstation-runtime.md](../../../../docs/plans/2026-09-26-omx-ai-workstation-runtime.md)
 - [2026-09-29-er2-semantic-actions-mission-implementation.md](../../../../docs/plans/2026-09-29-er2-semantic-actions-mission-implementation.md)
+- [2026-09-30-omx-pick-place-local-execution.md](../../../../docs/plans/2026-09-30-omx-pick-place-local-execution.md)
 
 ## 교훈 (docs/solutions)
 

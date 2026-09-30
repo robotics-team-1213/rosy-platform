@@ -157,3 +157,9 @@
 - 변경: main 병합(2026-09-30)과 함께 pilot 을 D-329 표면 레지스트리에 등록(`rosy-pilot`, 역할·소유 `manual-drive`·`driver-video`·`drive-assist`·`estop`, 아이콘 `web_common/icons/pilot.svg`). D-370 이름표대로 제목 `Rosy 로봇 — 조종`, PWA `short_name` `Rosy Pilot`, 상단 버튼 "관제 화면" → "로봇 대시보드". CORE 이미지가 pilot 을 빌드한다. 공용 컨트롤·타이포 계약은 주행 HUD 재도색 때문에 아직 받지 않는다(surfaces.yaml 사유). PWA 아이콘 PNG 교체는 D-370 이행 회차.
 - 증거: `test/architecture/test_app_roles.py`(pilot 이 `/api/fleet` 을 부르지 않음), `src/hmi/web_common/test` 114 passed, `test/test_core_image_closure.py`.
 - gate 변화: 없음(등록·이름만).
+
+## 2026-09-30 · uncommitted · refactor(pilot): D-374 stage 2 — registry id rosy-pilot → pilot
+
+- 변경: `src/hmi/web_common/surfaces.yaml`의 레지스트리 id `rosy-pilot` → `pilot`. 폴더·패키지·아이콘(`src/hmi/pilot`, `pilot`, `icons/pilot.svg`)은 이미 규칙과 같다. `test/architecture/test_app_identity.py`의 pending 줄을 지웠다. 경로 `/pilot`, PWA `start_url`·`scope`, 저장소 키 `rosy.pilot.*`, SW 캐시 이름은 그대로(D-374 3항).
+- 증거: `python -m pytest src/hmi/web_common/test src/hmi/pilot/test src/runtime/api_web/test test/architecture -q` 294 passed, 27 skipped (2026-09-30 Windows).
+- gate 변화: 없음. 장치 절차 없음(계획 단계 2).
