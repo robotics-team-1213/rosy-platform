@@ -73,9 +73,15 @@ class ModelManifest:
     def role_indices(self, role: str) -> tuple[int, ...]:
         return tuple(c.index for c in self.classes if c.role == role)
 
-    def onnx_file(self, precision: str = "fp32") -> Path:
-        for f in self.files:
-            if f.precision == precision and f.name.endswith(".onnx"):
+    def onnx_file(self, precision: str | None = None) -> Path:
+        """The onnx file of that precision; None: the only onnx file, else the fp32 one."""
+        onnx = [f for f in self.files if f.name.endswith(".onnx")]
+        if precision is None:
+            if len(onnx) == 1:
+                return self.folder / onnx[0].name
+            precision = "fp32"
+        for f in onnx:
+            if f.precision == precision:
                 return self.folder / f.name
         raise ManifestError(f"no {precision} onnx file in manifest")
 

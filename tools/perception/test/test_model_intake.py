@@ -401,3 +401,48 @@ def test_export_validates_classes_before_export(tmp_path, monkeypatch):
                           "--classes", str(classes), "--dataset-repo", "r",
                           "--dataset-revision", "s", "--camera-profile-revision", "c",
                           "--trainer", "t"])
+
+
+def _qdq_onnx(path: Path):
+    """The tiny conv behind QuantizeLinear/DequantizeLinear, as quantize_static makes it."""
+    onnx = pytest.importorskip("onnx")
+    from onnx import TensorProto, helper, numpy_helper
+    w = np.zeros((4, 3, 1, 1), np.float32)
+    w[1, :, 0, 0] = 10.0 / 3
+    b = np.array([0.0, -5.0, 0.0, 0.0], np.float32)
+    inits = [numpy_helper.from_array(w, "w"), numpy_helper.from_array(b, "b"),
+             numpy_helper.from_array(np.array(1 / 255, np.float32), "s"),
+             numpy_helper.from_array(np.array(0, np.uint8), "z")]
+    nodes = [helper.make_node("QuantizeLinear", ["x", "s", "z"], ["xq"]),
+             helper.make_node("DequantizeLinear", ["xq", "s", "z"], ["xd"]),
+             helper.make_node("Conv", ["xd", "w", "b"], ["logits"])]
+    graph = helper.make_graph(
+        nodes, "tiny_qdq",
+        [helper.make_tensor_value_info("x", TensorProto.FLOAT, [1, 3, 240, 320])],
+        [helper.make_tensor_value_info("logits", TensorProto.FLOAT, [1, 4, 240, 320])], inits)
+    model = helper.make_model(graph, opset_imports=[helper.make_opsetid("", 17)])
+    model.ir_version = 8
+    onnx.save(model, str(path))
+
+
+def test_graph_precision_reads_qdq_nodes(tmp_path):
+    _tiny_onnx(tmp_path / "f.onnx")
+    _qdq_onnx(tmp_path / "q.onnx")
+    assert intake.graph_precision(tmp_path / "f.onnx") == "fp32"
+    assert intake.graph_precision(tmp_path / "q.onnx") == "int8"
+
+
+@pytest.mark.parametrize("graph, declared, word", [("qdq", "fp32", "int8"), ("fp32", "int8", "fp32")])
+def test_intake_refuses_a_precision_label_that_contradicts_the_graph(tmp_path, graph, declared, word):
+    import export_cell
+    raw = tmp_path / "raw.onnx"
+    (_qdq_onnx if graph == "qdq" else _tiny_onnx)(raw)
+    folder = tmp_path / "m"
+    export_cell.write_manifest(
+        folder, onnx_path=raw, classes=[("bg", "background"), ("lane", "lane_marking")],
+        color="rgb", scale=1 / 255, mean=[0, 0, 0], std=[1, 1, 1], dataset_repo="org/ds",
+        dataset_revision="a" * 40, camera_profile_revision="cam-1", trainer="t",
+        date="20261001", precision=declared)
+    rc, report = intake.run(str(folder), out=tmp_path / "out", root=tmp_path)
+    assert rc != 0 and report["verdict"] == "fail" and not report["transient"]
+    assert any("precision" in r and word in r for r in report["reasons"]), report["reasons"]

@@ -199,3 +199,16 @@ def test_export_accepts_a_store_dataset_ref(tmp_path):
     _, doc = _write(tmp_path, dataset_repo="store:lane", dataset_revision="c" * 64)
     assert doc["dataset"] == {"repo": "store:lane", "revision": "c" * 64}
     assert load_manifest(tmp_path / "out").dataset_revision == "c" * 64
+
+
+def test_write_manifest_records_the_given_precision(tmp_path):
+    out, doc = _write(tmp_path, precision="int8")
+    assert doc["files"][0]["precision"] == "int8"
+    m = load_manifest(out)
+    verify_files(m)
+    assert m.onnx_file().name == "model.onnx"  # the robot opens an int8-only bundle
+    for sub in ("d", "bad"):
+        (tmp_path / sub).mkdir()
+    assert _write(tmp_path / "d")[1]["files"][0]["precision"] == "fp32"  # default
+    with pytest.raises(ValueError, match="precision"):
+        _write(tmp_path / "bad", precision="fp16")

@@ -43,6 +43,29 @@ _HF = re.compile(r"^hf:(?P<repo>[^@\s]+/[^@\s]+)@(?P<rev>[^@\s]*)$")
 _SHA = re.compile(r"^[0-9a-f]{40}$")
 
 
+QDQ_OPS = frozenset({"QuantizeLinear", "DequantizeLinear"})
+
+
+def graph_precision(path) -> str:
+    """"int8" when the ONNX graph holds QuantizeLinear/DequantizeLinear nodes
+    (onnxruntime quantize_static output), else "fp32"."""
+    import onnx  # lazy: the site host's ML environment has it, like onnxruntime
+
+    graph = onnx.load(str(path), load_external_data=False).graph
+    return "int8" if any(n.op_type in QDQ_OPS for n in graph.node) else "fp32"
+
+
+def check_precision(manifest) -> None:
+    """Refuse a manifest whose declared precision the graph contradicts."""
+    for f in manifest.files:
+        if f.name.endswith(".onnx"):
+            found = graph_precision(manifest.folder / f.name)
+            if found != f.precision:
+                raise ManifestError(
+                    f"files[{f.name}].precision is {f.precision} but the graph is {found} "
+                    f"({'has' if found == 'int8' else 'has no'} QuantizeLinear/DequantizeLinear)")
+
+
 def judge(stats: dict, gate: dict) -> tuple[str, list[str]]:
     reasons = []
     if stats.get("frames", 0) <= 0:
@@ -223,6 +246,7 @@ def run(source: str, *, out, gate_path=DEFAULT_GATE, root=ROOT, max_frames=None,
         manifest = load_manifest(folder)
         report["model_revision"] = manifest.model_revision
         verify_files(manifest)
+        check_precision(manifest)
         # deliver.py push refuses a model whose files differ from these.
         report["files"] = [{"name": f.name, "sha256": f.sha256} for f in manifest.files]
         model = LaneSegModel.open(folder)
