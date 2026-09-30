@@ -67,6 +67,8 @@ BACKUP_ROOT = "var/lib/rosy/image-layer-backup"
 BACKUP_MANIFEST = "backup-manifest.json"
 # Written before the reload/enable commands, removed once they all succeed.
 PENDING_FILE = BACKUP_ROOT + "/pending.json"
+# After this many runs that could not finish them, pending commands are parked.
+MAX_PENDING_ATTEMPTS = 3
 LOCK_FILE = "var/lib/rosy/releases/native-release.lock"
 DEFAULT_PUBLIC_KEY = "etc/rosy/trusted-release-keys/rosy-release-2026-01.pem"
 
@@ -333,24 +335,61 @@ def _unit_name(item: dict) -> str:
     return Path(item["destination"]).name
 
 
-def _records(root: Path) -> dict[str, tuple[dict, Path]]:
-    """The last backup-manifest record for every path, oldest manifest first."""
-    last: dict[str, tuple[dict, Path]] = {}
+def _records(root: Path) -> tuple[dict[str, list[tuple[dict, Path]]], list[str]]:
+    """Every path's records, oldest first, from manifests whose files landed.
+
+    A manifest is written with files_applied false before any file changes and
+    set true once they all have. One that never got there (a disable that
+    failed first, an install that failed and was undone) changed nothing, so
+    its records must not shadow the real history. The second value lists the
+    manifests that could not be read.
+    """
+    chains: dict[str, list[tuple[dict, Path]]] = {}
+    corrupt: list[str] = []
     backups = root / BACKUP_ROOT
     if not backups.is_dir():
-        return last
+        return chains, corrupt
     for folder in sorted(path for path in backups.iterdir() if path.is_dir()):
         manifest = folder / BACKUP_MANIFEST
         if not manifest.is_file():
             continue
         try:
-            files = json.loads(manifest.read_text(encoding="utf-8")).get("files", [])
-        except (OSError, ValueError):
+            data = json.loads(manifest.read_text(encoding="utf-8"))
+            files = data["files"] if isinstance(data, dict) else None
+            if not isinstance(files, list):
+                raise ValueError("no file list")
+        except (OSError, ValueError, KeyError):
+            corrupt.append("/" + manifest.relative_to(root).as_posix())
+            continue
+        if data.get("files_applied") is not True:
             continue
         for record in files:
             if isinstance(record, dict) and isinstance(record.get("path"), str):
-                last[record["path"]] = (record, folder)
-    return last
+                chains.setdefault(record["path"], []).append((record, folder))
+    return chains, corrupt
+
+
+def _origin(chain: list[tuple[dict, Path]]) -> tuple[str, tuple[dict, Path] | None] | None:
+    """What a path was before the syncs that still own it.
+
+    Walk back from the newest record through consecutive "changed" records.
+    Reaching "new" means a sync created the path: remove it. Reaching an
+    earlier "restored"/"removed" or the start means the oldest "changed"
+    backup holds the pre-sync file: restore it. A newest "restored"/"removed"
+    means it was already undone.
+    """
+    if not chain or chain[-1][0].get("state") not in {"new", "changed"}:
+        return None
+    oldest_changed: tuple[dict, Path] | None = None
+    for record, folder in reversed(chain):
+        state = record.get("state")
+        if state == "changed":
+            oldest_changed = (record, folder)
+            continue
+        if state == "new":
+            return ("remove", None)
+        break
+    return ("restore", oldest_changed)
 
 
 def _kind(relative: str) -> str:
@@ -363,30 +402,36 @@ def _kind(relative: str) -> str:
     return "runtime"
 
 
-def plan_cleanup(root: Path, native: Path, skipped: list[dict]) -> list[dict]:
-    """Undo what an earlier sync did to paths the current release no longer carries.
+def plan_cleanup(root: Path, native: Path, skipped: list[dict],
+                 chains: dict[str, list[tuple[dict, Path]]]) -> list[dict]:
+    """Undo what earlier syncs did to paths the current release no longer carries.
 
-    Only paths a backup manifest says a sync added ("new") or replaced
-    ("changed"), only while the file still holds what that sync installed, and
-    only inside the allowlisted directories. Anything else stays.
+    Only paths the applied backup manifests record, only while the file still
+    holds what the last sync installed, and only inside the allowlisted
+    directories. Anything else stays.
     """
     carried = {"/" + entry["destination"] for entry in allowlist(native)[0]}
     cleanup: list[dict] = []
-    for shown, (record, folder) in sorted(_records(root).items()):
-        if shown in carried or record.get("state") not in {"new", "changed"}:
+    for shown, chain in sorted(chains.items()):
+        if shown in carried:
+            continue
+        decision = _origin(chain)
+        if decision is None:
             continue
         relative = shown.lstrip("/")
         check_destination(relative)
         destination = root / relative
         if destination.is_symlink() or not destination.is_file():
             continue
-        if _sha256(destination) != record.get("sha256"):
+        if _sha256(destination) != chain[-1][0].get("sha256"):
             skipped.append({"path": shown, "reason": "changed since the sync that installed it"})
             continue
         item = {"destination": relative, "kind": _kind(relative)}
-        if record["state"] == "new":
+        action, origin = decision
+        if action == "remove":
             cleanup.append({**item, "state": "removed"})
             continue
+        record, folder = origin
         saved = folder / str(record.get("backup") or "")
         if not record.get("backup") or saved.is_symlink() or not saved.is_file():
             skipped.append({"path": shown, "reason": "its backup is missing"})
@@ -395,15 +440,36 @@ def plan_cleanup(root: Path, native: Path, skipped: list[dict]) -> list[dict]:
     return cleanup
 
 
-def _load_pending(root: Path) -> dict:
+def _stamp(now: Callable[[], _dt.datetime] | None = None) -> str:
+    return (now or (lambda: _dt.datetime.now(_dt.timezone.utc)))().strftime("%Y%m%dT%H%M%SZ")
+
+
+def _set_aside(path: Path, label: str) -> str:
+    """Rename pending.json out of the way, keeping it for a person to read."""
+    target = path.with_name(f"pending.{label}-{_stamp()}.json")
+    os.replace(path, target)
+    return str(target)
+
+
+def _load_pending(root: Path, *, dry_run: bool) -> tuple[dict, dict]:
+    """(pending, report). A corrupt or exhausted pending.json is set aside."""
     path = root / PENDING_FILE
+    shown = "/" + PENDING_FILE
     if not path.is_file():
-        return {}
+        return {}, {}
     try:
         pending = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError) as exc:
-        raise SyncError(f"IMAGE_LAYER_PENDING: {path} is unreadable") from exc
-    return pending if isinstance(pending, dict) else {}
+        if not isinstance(pending, dict):
+            raise ValueError("not an object")
+    except (OSError, ValueError):
+        if dry_run:
+            return {}, {"pending_quarantined": f"{shown} is corrupt (the apply sets it aside)"}
+        return {}, {"pending_quarantined": _set_aside(path, "corrupt")}
+    if int(pending.get("attempts", 0) or 0) >= MAX_PENDING_ATTEMPTS:
+        if dry_run:
+            return {}, {"pending_parked": f"{shown} failed {pending.get('attempts')} times (the apply parks it)"}
+        return {}, {"pending_parked": _set_aside(path, "parked")}
+    return pending, {}
 
 
 def _post_commands(steps: dict) -> list[list[str]]:
@@ -424,16 +490,31 @@ def _post_commands(steps: dict) -> list[list[str]]:
     return commands
 
 
-def _steps(work: list[dict], cleanup: list[dict], pending: dict) -> dict:
+def _steps(root: Path, work: list[dict], cleanup: list[dict], pending: dict) -> dict:
     kinds = {item["kind"] for item in work + cleanup}
     added = {
         _unit_name(item) for item in work
         if item["kind"] == "unit" and item["state"] == "new" and _unit_name(item) in ENABLED_UNITS
     }
+    removing = {_unit_name(item) for item in cleanup if item["kind"] == "unit" and item["state"] == "removed"}
+    # A pending enable for a unit that is gone, or that this run removes, can
+    # never succeed; retrying it would fail every later push.
+    still_there = {
+        unit for unit in pending.get("enable", [])
+        if unit not in removing
+        and (root / UNIT_DIR / unit).is_file() and not (root / UNIT_DIR / unit).is_symlink()
+    }
     return {
         "daemon_reload": "unit" in kinds or bool(pending.get("daemon_reload")),
-        "enable": sorted(added | set(pending.get("enable", []))),
+        "enable": sorted(added | still_there),
         "udev_reload": "udev" in kinds or bool(pending.get("udev_reload")),
+    }
+
+
+def _unit_state(runner: Runner, unit: str) -> dict:
+    return {
+        "enabled": runner(["systemctl", "is-enabled", "--quiet", unit]).returncode == 0,
+        "active": runner(["systemctl", "is-active", "--quiet", unit]).returncode == 0,
     }
 
 
@@ -441,7 +522,7 @@ def apply(root: Path, release_id: str, work: list[dict], runner: Runner,
           *, cleanup: list[dict] | None = None, units: list[str] | None = None,
           pending: dict | None = None,
           now: Callable[[], _dt.datetime] | None = None) -> dict:
-    """Back up, install, clean up, reload. Undo every file change if one fails.
+    """Back up, clean up, install, reload. Undo every change if one fails.
 
     The reload/enable commands run after the files are in place. Until all of
     them succeed, pending.json names them and the units they affect, so the
@@ -449,14 +530,24 @@ def apply(root: Path, release_id: str, work: list[dict], runner: Runner,
     """
     cleanup = cleanup or []
     pending = pending or {}
-    steps = _steps(work, cleanup, pending)
+    steps = _steps(root, work, cleanup, pending)
     backup_dir = None
     manifest: dict | None = None
     backup: Path | None = None
     if work or cleanup:
-        stamp = (now or (lambda: _dt.datetime.now(_dt.timezone.utc)))().strftime("%Y%m%dT%H%M%SZ")
-        backup = root / BACKUP_ROOT / f"{stamp}-{release_id}"
-        backup.mkdir(parents=True, exist_ok=False)
+        stamp = _stamp(now)
+        # A retry within the same second gets its own folder; names still sort
+        # in run order for _records.
+        (root / BACKUP_ROOT).mkdir(parents=True, exist_ok=True)
+        for serial in range(1000):
+            backup = root / BACKUP_ROOT / f"{stamp}-{serial:03d}-{release_id}"
+            try:
+                backup.mkdir()
+                break
+            except FileExistsError:
+                continue
+        else:
+            raise SyncError("IMAGE_LAYER_BACKUP: no free backup folder name")
         os.chmod(backup, 0o700)
         backup_dir = "/" + backup.relative_to(root).as_posix()
         records = []
@@ -477,17 +568,21 @@ def apply(root: Path, release_id: str, work: list[dict], runner: Runner,
                 record["backup"] = item["destination"]
                 record["previous_sha256"] = _sha256(saved)
             records.append(record)
-        manifest = {"release_id": release_id, "created": stamp, "complete": False, "files": records}
+        manifest = {"release_id": release_id, "created": stamp, "files_applied": False,
+                    "complete": False, "files": records}
         _write_json(backup / BACKUP_MANIFEST, manifest)
 
-        # A unit the sync removes is disabled and stopped while its file, with
-        # its [Install] section, still exists.
-        for item in cleanup:
-            if item["kind"] == "unit" and item["state"] == "removed":
-                _check(runner, ["systemctl", "disable", "--now", _unit_name(item)])
-
+        disabled: list[tuple[str, dict]] = []
         done: list[dict] = []
         try:
+            # A unit the sync removes is disabled and stopped while its file,
+            # with its [Install] section, still exists.
+            for item in cleanup:
+                if item["kind"] == "unit" and item["state"] == "removed":
+                    unit = _unit_name(item)
+                    before = _unit_state(runner, unit)
+                    _check(runner, ["systemctl", "disable", "--now", unit])
+                    disabled.append((unit, before))
             for item in work + cleanup:
                 destination = root / item["destination"]
                 if item["state"] == "removed":
@@ -503,7 +598,15 @@ def apply(root: Path, release_id: str, work: list[dict], runner: Runner,
                 else:
                     saved = backup / item["destination"]
                     _install(saved, destination, _mode(saved))
+            # Best effort: the original failure is what the caller must see.
+            for unit, before in reversed(disabled):
+                if before["enabled"]:
+                    runner(["systemctl", "enable", unit])
+                if before["active"]:
+                    runner(["systemctl", "start", unit])
             raise
+        manifest["files_applied"] = True
+        _write_json(backup / BACKUP_MANIFEST, manifest)
 
     commands = _post_commands(steps)
     if not commands and not pending:
@@ -513,6 +616,7 @@ def apply(root: Path, release_id: str, work: list[dict], runner: Runner,
         "units": sorted(set(units or []) | set(pending.get("units", []))),
         "backup_dir": backup_dir,
         "release_id": release_id,
+        "attempts": int(pending.get("attempts", 0) or 0) + 1,
     })
     for argv in commands:
         _check(runner, argv)
@@ -540,10 +644,11 @@ def sync(
         native = release / RELEASE_NATIVE
         if not native.is_dir():
             raise SyncError(f"IMAGE_LAYER_SOURCE: release {release_id} has no {RELEASE_NATIVE}")
-        pending = _load_pending(root)
+        pending, pending_report = _load_pending(root, dry_run=dry_run)
         result = plan(root, native)
         work = result.pop("_work")
-        cleanup = plan_cleanup(root, native, result["skipped"])
+        chains, corrupt = _records(root)
+        cleanup = plan_cleanup(root, native, result["skipped"], chains)
         restored_units = {
             _unit_name(item) for item in cleanup if item["kind"] == "unit" and item["state"] == "restored"
         }
@@ -556,6 +661,9 @@ def sync(
             removed=["/" + item["destination"] for item in cleanup if item["state"] == "removed"],
             restored=["/" + item["destination"] for item in cleanup if item["state"] == "restored"],
             pending=pending or None,
+            pending_quarantined=pending_report.get("pending_quarantined"),
+            pending_parked=pending_report.get("pending_parked"),
+            corrupt_manifests=corrupt,
             units_affected=units,
             restart_units=[unit for unit in active if _restartable(unit)],
             active_targets_affected=[unit for unit in active if unit.endswith(".target")],
@@ -567,7 +675,7 @@ def sync(
         )
         if dry_run:
             result.update(backup_dir=None, enabled=[], commands=[
-                " ".join(argv) for argv in _post_commands(_steps(work, cleanup, pending))])
+                " ".join(argv) for argv in _post_commands(_steps(root, work, cleanup, pending))])
         else:
             result.update(apply(root, release_id, work, runner, cleanup=cleanup,
                                 units=units, pending=pending))

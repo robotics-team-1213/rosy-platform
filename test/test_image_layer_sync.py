@@ -59,7 +59,8 @@ class Runner:
         return subprocess.CompletedProcess(argv, code, "", "")
 
     def mutating(self) -> list[list[str]]:
-        return [call for call in self.calls if call[:2] != ["systemctl", "is-active"]]
+        # is-active / is-enabled only read state.
+        return [call for call in self.calls if call[:2] not in (["systemctl", "is-active"], ["systemctl", "is-enabled"])]
 
 
 _INSTALLED: list[Path] = []
@@ -388,6 +389,149 @@ def test_a_rollback_never_removes_what_no_sync_recorded(device):
     result = _sync(device, OLD_ID, Runner(), dry_run=False)
 
     assert stray.is_file() and result["removed"] == []
+
+
+# --- second review: manifest trust, pending limits, record chains, corruption --------
+
+
+def test_a_manifest_whose_disable_failed_does_not_shadow_the_history(device):
+    _older_release(device)
+    _sync(device, NEW_ID, Runner(), dry_run=False)
+    with pytest.raises(sync_mod.SyncError, match="disable"):
+        _sync(device, OLD_ID, FailingRunner(["systemctl", "disable"]), dry_run=False)
+
+    result = _sync(device, OLD_ID, Runner(), dry_run=False)
+
+    assert "/opt/rosy/native-runtime/mapping_approval.py" in result["removed"]
+    assert "/etc/systemd/system/rosy-hw-test.path" in result["removed"]
+
+
+def test_an_undone_install_does_not_shadow_the_history_and_re_enables_the_unit(device, monkeypatch):
+    _older_release(device)
+    _sync(device, NEW_ID, Runner(), dry_run=False)
+    real = sync_mod._install
+
+    def broken(source, destination, mode):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(sync_mod, "_install", broken)
+    runner = Runner(active={"rosy-hw-test.path"})
+    with pytest.raises(OSError):
+        _sync(device, OLD_ID, runner, dry_run=False)
+    monkeypatch.setattr(sync_mod, "_install", real)
+
+    # The disable is undone: the unit is enabled and started again.
+    tail = runner.mutating()[-2:]
+    assert tail == [["systemctl", "enable", "rosy-hw-test.path"], ["systemctl", "start", "rosy-hw-test.path"]]
+    assert (device / "etc/systemd/system/rosy-hw-test.path").is_file()
+    result = _sync(device, OLD_ID, Runner(), dry_run=False)
+    assert "/etc/systemd/system/rosy-hw-test.path" in result["removed"]
+
+
+def test_a_manifest_whose_files_landed_but_commands_failed_still_counts(device):
+    _older_release(device)
+    with pytest.raises(sync_mod.SyncError):
+        _sync(device, NEW_ID, FailingRunner(["udevadm"]), dry_run=False)
+
+    result = _sync(device, OLD_ID, Runner(), dry_run=False)
+
+    assert "/opt/rosy/native-runtime/mapping_approval.py" in result["removed"]
+
+
+def test_a_pending_enable_for_a_unit_the_rollback_removes_is_dropped(device):
+    _older_release(device)
+    with pytest.raises(sync_mod.SyncError):
+        _sync(device, NEW_ID, FailingRunner(["systemctl", "enable"]), dry_run=False)
+    assert "rosy-hw-test.path" in json.loads((device / sync_mod.PENDING_FILE).read_text(encoding="utf-8"))["enable"]
+    runner = FailingRunner(["systemctl", "enable"])
+
+    result = _sync(device, OLD_ID, runner, dry_run=False)
+
+    assert "/etc/systemd/system/rosy-hw-test.path" in result["removed"]
+    assert not any(call[1] == "enable" for call in runner.mutating())
+    assert not (device / sync_mod.PENDING_FILE).exists()
+
+
+def test_pending_commands_are_parked_after_three_failed_attempts(device):
+    for attempt in range(3):
+        with pytest.raises(sync_mod.SyncError):
+            _sync(device, NEW_ID, FailingRunner(["udevadm"]), dry_run=False)
+    assert json.loads((device / sync_mod.PENDING_FILE).read_text(encoding="utf-8"))["attempts"] == 3
+    runner = FailingRunner(["udevadm"])
+
+    result = _sync(device, NEW_ID, runner, dry_run=False)
+
+    assert result["ok"] and result["pending_parked"]
+    assert Path(result["pending_parked"]).name.startswith("pending.parked-")
+    assert Path(result["pending_parked"]).is_file()
+    assert not (device / sync_mod.PENDING_FILE).exists()
+    assert runner.mutating() == []
+
+
+def _variant(device: Path, release_id: str, extra: str | None) -> None:
+    source = device / "opt/rosy/releases" / NEW_ID / "deploy/robot/native"
+    target = device / "opt/rosy/releases" / release_id / "deploy/robot/native"
+    shutil.copytree(source, target)
+    if extra is not None:
+        (target / "extra_tool.py").write_text(extra, encoding="utf-8")
+
+
+def test_a_path_added_then_changed_is_removed_not_restored_to_the_first_copy(device):
+    # A (the image) -> C adds X -> D changes X -> B does not carry X.
+    _variant(device, "2026.10.01-001", "# C\n")
+    _variant(device, "2026.10.01-002", "# D\n")
+    _variant(device, "2026.10.01-003", None)
+    extra = device / "opt/rosy/native-runtime/extra_tool.py"
+    _sync(device, "2026.10.01-001", Runner(), dry_run=False)
+    _sync(device, "2026.10.01-002", Runner(), dry_run=False)
+    assert extra.read_text(encoding="utf-8") == "# D\n"
+
+    result = _sync(device, "2026.10.01-003", Runner(), dry_run=False)
+
+    assert result["removed"] == ["/opt/rosy/native-runtime/extra_tool.py"]
+    assert not extra.exists()
+    assert _sync(device, "2026.10.01-003", Runner(), dry_run=True)["removed"] == []
+
+
+def test_a_path_changed_twice_is_restored_to_the_image_copy(device):
+    extra = device / "opt/rosy/native-runtime/extra_tool.py"
+    extra.write_text("# image\n", encoding="utf-8")
+    _variant(device, "2026.10.01-001", "# C\n")
+    _variant(device, "2026.10.01-002", "# D\n")
+    _variant(device, "2026.10.01-003", None)
+    _sync(device, "2026.10.01-001", Runner(), dry_run=False)
+    _sync(device, "2026.10.01-002", Runner(), dry_run=False)
+
+    result = _sync(device, "2026.10.01-003", Runner(), dry_run=False)
+
+    assert result["restored"] == ["/opt/rosy/native-runtime/extra_tool.py"]
+    assert extra.read_text(encoding="utf-8") == "# image\n"
+
+
+def test_a_corrupt_pending_file_is_quarantined_and_the_run_continues(device):
+    pending = device / sync_mod.PENDING_FILE
+    pending.parent.mkdir(parents=True, exist_ok=True)
+    pending.write_text("{not json", encoding="utf-8")
+
+    dry = _sync(device, NEW_ID, Runner(), dry_run=True)
+    assert dry["pending_quarantined"] and pending.is_file()
+    result = _sync(device, NEW_ID, Runner(), dry_run=False)
+
+    assert result["ok"] and result["new"]
+    assert Path(result["pending_quarantined"]).name.startswith("pending.corrupt-")
+    assert Path(result["pending_quarantined"]).read_text(encoding="utf-8") == "{not json"
+    assert not pending.exists()
+
+
+def test_a_corrupt_manifest_is_reported(device):
+    broken = device / sync_mod.BACKUP_ROOT / "20260101T000000Z-2026.09.30-001"
+    broken.mkdir(parents=True)
+    (broken / sync_mod.BACKUP_MANIFEST).write_text("[truncated", encoding="utf-8")
+
+    result = _sync(device, NEW_ID, Runner(), dry_run=True)
+
+    assert result["corrupt_manifests"] == [
+        f"/{sync_mod.BACKUP_ROOT}/20260101T000000Z-2026.09.30-001/{sync_mod.BACKUP_MANIFEST}"]
 
 
 def test_boot_oneshots_and_network_units_are_never_offered_for_a_live_restart(device):
