@@ -38,7 +38,15 @@
 
 **Decision:**
 
-1. **변환기 `tools/perception/dataset/bag_to_video.py`.** 세션의 `camera/front`(raw) 또는 `camera/front/compressed`(JPEG)의 모든 프레임을 원 크기 그대로, 평균 카메라 주기의 CFR로 인코딩하고 `data/teleop/learning/teleop_<device>_<UTC stamp>.{mp4,jsonl,json[,scan.npz]}`를 쓴다. `.jsonl`의 i행은 디코딩 프레임 i이다. 헤더 stamp·bag log time(ns 정수, 정확값), log time 기준 최근접 `cmd_vel`(linear, angular)·`odom`(x, y, yaw)·`line/observation`·섀도 결과와 각 시각차 `dt`, 그리고 `motion`(moving/commanded/v/w)을 담는다. `Twist`에 헤더가 없어 부수 토픽의 공통 시계는 bag log time이다(카메라 log−stamp는 10–27 ms, 평균 13 ms 실측). LiDAR가 있으면 프레임별 최근접 스캔을 `.scan.npz`(float16 `ranges[frame, beam]`, 스캔 stamp, dt, 각도·거리 메타)로 둔다(D-379 벽 라벨러 입력). `.json`은 `session.json` 원문과 변환 메타이다. `extract.py`는 mp4 옆 sidecar를 읽어 기록 stamp·부수 데이터·세션 이름을 그대로 쓴다(세션 분할이 원 bag과 같다). 변환 뒤 ffprobe 프레임 수와 sidecar 행 수가 다르면 실패한다.
+1. **변환기 `tools/perception/dataset/bag_to_video.py`.** 세션의 `camera/front`(raw) 또는 `camera/front/compressed`(JPEG)의 모든 프레임을 원 크기 그대로, 평균 카메라 주기의 CFR로 인코딩하고 `data/teleop/learning/teleop_<device>_<UTC stamp>.{mp4,jsonl,json[,scan.npz]}`를 쓴다. `.jsonl`의 i행은 디코딩 프레임 i이다. 필드와 시계는 아래 sidecar 스키마를 따른다. LiDAR가 있으면 프레임별 직전 스캔을 `.scan.npz`(float16 `ranges[frame, beam]`, 스캔 stamp, dt, 각도·거리 메타)로 둔다(D-379 벽 라벨러 입력). `.json`은 `session.json` 원문과 변환 메타이다. `extract.py`는 mp4 옆 sidecar를 읽어 기록 stamp·부수 데이터·세션 이름을 그대로 쓴다(세션 분할이 원 bag과 같다). 변환 뒤 ffprobe 프레임 수와 sidecar 행 수가 다르면 실패한다.
+   **Sidecar 스키마 `rosy.teleop.video/1`(이 브랜치와 D-379 공통 시계 규칙, 2026-10-01 검토 반영):**
+   - `index`: 디코딩 프레임 번호(0부터, mp4 프레임 순서와 같다).
+   - `t`: **카메라 헤더 stamp(초, float)**. `extract.py`의 MCAP 경로·영상 경로와 D-379 자동 라벨러가 모두 이 시계를 쓴다.
+   - `stamp_ns`, `log_ns`: 헤더 stamp와 bag log time(ns 정수, 정확값). 카메라 log−stamp는 10–27 ms(평균 13 ms) 실측.
+   - `side`: 부수 토픽별로 **프레임 bag log time 이하의 가장 최근 메시지**(나중 메시지는 쓰지 않는다 — 미래 누설 없음). `cmd_vel`={linear, angular}, `odom`={x, y, yaw}, `line/observation`·`perception/learned/shadow`=디코딩한 JSON, `scan`={stamp_ns}(거리값은 `.scan.npz`의 같은 행). `--max-gap`(기본 0.5 s)보다 오래됐거나 앞선 메시지가 없으면 null. `Twist`에 헤더가 없어 부수 토픽 선택의 공통 시계는 bag log time이다.
+   - `dt`: 토픽별 (부수 log time − 프레임 log time) 초, 항상 ≤ 0, 없으면 null.
+   - `motion`: {moving, commanded, v, w}. 프레임 이전 0.5 s의 odom 변위와 현재 명령으로만 정한다.
+   - `extract.py`의 MCAP 경로도 같은 규칙이다: `t`=헤더 stamp, `side`=bag 순서상 프레임 이전의 최신값, 행에 `stamp_ns`·`log_ns`를 같이 적는다.
 2. **기본값: 보관은 H.265 `libx265 -preset slow -crf 24`, 호환은 H.264 `libx264 -preset slow -crf 23`(`--codec h264`). 둘 다 yuv420p와 `scale=flags=accurate_rnd+full_chroma_int`.** 근거는 아래 표이다. H.265 CRF 24는 bag 대비 156배(0.66 MB/min)이고 차선 검출 차이가 CRF 18과 구별되지 않는다. 320×240에서 H.265의 이득은 작다(같은 PSNR에서 x264 slow 대비 약 6 %). 호환이 중요하면 H.264 CRF 23(0.71 MB/min)으로도 충분하다. `accurate_rnd`는 swscale 기본 BGR→YUV 반올림 편향(무손실 qp 0에서도 BGR 평균 −1.5…−2.9)을 줄인다. 크기 변화 없이 PSNR +1.0 dB, 흰 마스크 IoU 0.963→0.973, line 오차 MAE 0.0038→0.0027이다.
 3. **공개 저장소 보호.** `data/teleop/learning/*`를 gitignore한다(`.gitkeep`만 허용). 2026-09-19 클립 7개는 이 규칙 전에 커밋되어 아직 추적된다. 추적 해제(`git rm --cached`)는 별도 결정이다. 원 bag은 `data/perception/raw`에 그대로 둔다.
 4. **제안(승인 필요): 로봇은 raw 대신 `camera/front/compressed` JPEG q85를 기록한다.** 학습 루프 소유자(D-356/D-373)의 선호와 같고, `extract.py`·`bag_to_video.py`가 이미 읽는다. 같은 헤더 stamp를 유지하고 부수 데이터는 stamp/log time으로 맞춘다. 로봇 인식 경로는 계속 raw를 프로세스 안에서 쓴다. H.264 bag 토픽(`foxglove_msgs/CompressedVideo` 또는 `ffmpeg_image_transport`)은 JPEG보다 3.7배 작다. 하지만 프레임 간 의존(키프레임 간격, 분할 시 손실)이 있고 Jazzy arm64 패키지와 이미지 반영이 필요해 2단계로 미룬다.
@@ -76,10 +84,10 @@
 
 | 세션 | 프레임 | 길이 | bag | mp4 (H.265 CRF24) | sidecar | moving 프레임 |
 |---|---|---|---|---|---|---|
-| `20260930T124745Z` real-lane-drive | 2258 | 282 s | 488 MB | 3.12 MB (156×) | jsonl 1.2 MB | 640 (28 %) |
-| `20260930T133221Z` intersection-claude-scripted | 6940 | 867 s | 1420 MB | 3.89 MB (365×) | jsonl 4.1 MB, scan.npz 3.6 MB (720 beams) | 739 (11 %) |
+| `20260930T124745Z` real-lane-drive | 2258 | 282 s | 488 MB | 3.12 MB (156×) | jsonl 1.2 MB | 653 (29 %) |
+| `20260930T133221Z` intersection-claude-scripted | 6940 | 867 s | 1420 MB | 3.89 MB (365×) | jsonl 4.4 MB, scan.npz 3.6 MB (720 beams) | 772 (11 %) |
 
-moving은 명령(|v| > 0.01 m/s 또는 |ω| > 0.05 rad/s)이 있거나, 프레임 앞뒤 0.5 s 창의 odom 변위가 0.01 m/s 또는 0.03 rad/s를 넘는 프레임이다. 이 로봇의 텔레옵은 0.03 m/s·0.1 rad/s이고, 정지 중 odom 잡음은 p99 기준 0.005 m/s·0.008 rad/s 아래였다. 보관 영상에는 정지 프레임도 모두 남긴다.
+moving은 명령(|v| > 0.01 m/s 또는 |ω| > 0.05 rad/s)이 있거나, 프레임 이전 0.5 s 창의 odom 변위가 0.01 m/s 또는 0.03 rad/s를 넘는 프레임이다. 이 로봇의 텔레옵은 0.03 m/s·0.1 rad/s이고, 정지 중 odom 잡음은 p99 기준 0.005 m/s·0.008 rad/s 아래였다. 보관 영상에는 정지 프레임도 모두 남긴다.
 
 **제안 4의 추정(로봇 반영 전에 Pi 실측 필요):**
 
@@ -87,4 +95,4 @@ moving은 명령(|v| > 0.01 m/s 또는 |ω| > 0.05 rad/s)이 있거나, 프레�
 - CPU: 개발 PC(Zen 5) 한 스레드에서 JPEG q85는 0.77 ms/frame, x264 ultrafast는 1.36 ms/frame(raw 읽기 포함)이다. Pi 5(Cortex-A76 2.4 GHz)의 단일 스레드 성능은 대략 3–5배 느리다고 본다(공개 Geekbench 6 단일 코어 비교 수준의 추정). 그러면 Pi 5에서 JPEG q85는 약 2.5–4 ms/frame(libjpeg-turbo NEON), x264 ultrafast는 약 4–7 ms/frame이다. 8 fps에서 **코어 하나의 2–6 %**(4코어 전체의 1–1.5 %)이다. 320×240@8 fps는 0.61 Mpx/s로, Raspberry Pi가 Pi 5에서 소프트웨어 인코딩으로 감당한다고 밝힌 1080p30(62 Mpx/s)의 약 1 %이다. 반대로 raw 기록은 1.8 MB/s를 zstd로 압축해 SD에 쓰므로, 압축 기록은 SD 쓰기(마모)와 zstd CPU를 오히려 줄인다.
 - 로봇 변경 범위(승인 뒤 별도 작업): 카메라 노드가 같은 헤더 stamp로 `camera/front/compressed`(JPEG q85)를 내고, `control/recording.py`의 `RECORD_TOPICS` 카메라 항목을 압축 토픽으로 바꾼다. 이미지 반영이나 릴리스 푸시가 필요하다. 첫 증거는 Pi에서 기록 중 CPU·지연·드롭 프레임 실측이다.
 
-**Validation:** `tools/perception/test/test_bag_to_video.py`(합성 MCAP으로 프레임 수, ns stamp, 최근접 정렬, max-gap null, LiDAR npz, 압축 입력, motion, extract 왕복을 확인)가 통과했다. 코덱 연구 스크립트와 결과는 저장소 밖 `X:\DevTemp\teleop-video\`에 있다. 호스트 결과는 장치 결과가 아니다.
+**Validation:** `tools/perception/test/test_bag_to_video.py`(합성 MCAP으로 프레임 수, ns stamp, 직전값 정렬(미래 메시지 배제), extract 헤더 stamp 시계, max-gap null, LiDAR npz, 압축 입력, motion, extract 왕복을 확인)가 통과했다. 코덱 연구 스크립트와 결과는 저장소 밖 `X:\DevTemp\teleop-video\`에 있다. 호스트 결과는 장치 결과가 아니다.

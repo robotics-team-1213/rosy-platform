@@ -67,9 +67,11 @@ def _video_frames(path: Path, rows=None):
             if not ok:
                 break
             if rows is None:
-                yield cap.get(cv2.CAP_PROP_POS_MSEC) / 1000.0, bgr, {}, "jpg"
+                yield cap.get(cv2.CAP_PROP_POS_MSEC) / 1000.0, bgr, {}, "jpg", {}
             elif n < len(rows):
-                yield rows[n]["t"], bgr, rows[n].get("side") or {}, "jpg"
+                r = rows[n]
+                stamps = {k: r[k] for k in ("stamp_ns", "log_ns") if k in r}
+                yield r["t"], bgr, r.get("side") or {}, "jpg", stamps
             n += 1
     finally:
         cap.release()
@@ -126,6 +128,9 @@ def _dumps(row) -> str:
 
 
 def _mcap_frames(files, skipped=None):
+    """t is the camera header stamp (s), the clock of bag_to_video sidecars and D-379.
+    side holds the latest message of each side topic at or before the frame's bag log
+    time (bag order), never a later one."""
     try:
         from mcap.reader import make_reader
         from mcap_ros2.decoder import DecoderFactory
@@ -141,10 +146,15 @@ def _mcap_frames(files, skipped=None):
                 if name is not None:
                     side[name] = _side_value(schema.name, msg)
                     continue
-                t = message.log_time / 1e9
+                if not (_topic_is(ch.topic, CAMERA_TOPIC)
+                        or _topic_is(ch.topic, CAMERA_TOPIC + "/compressed")):
+                    continue
+                stamp_ns = msg.header.stamp.sec * 1_000_000_000 + msg.header.stamp.nanosec
+                t = stamp_ns / 1e9
+                stamps = {"stamp_ns": stamp_ns, "log_ns": message.log_time}
                 if _topic_is(ch.topic, CAMERA_TOPIC + "/compressed"):
                     ext = "png" if "png" in str(msg.format).lower() else "jpg"
-                    yield t, bytes(msg.data), dict(side), ext
+                    yield t, bytes(msg.data), dict(side), ext, stamps
                 elif _topic_is(ch.topic, CAMERA_TOPIC):
                     try:
                         bgr = image_to_bgr(msg.encoding, msg.width, msg.height, msg.step,
@@ -153,7 +163,7 @@ def _mcap_frames(files, skipped=None):
                         if skipped is not None:
                             skipped[0] += 1
                         continue
-                    yield t, bgr, dict(side), "jpg"
+                    yield t, bgr, dict(side), "jpg", stamps
 
 
 def main(argv=None) -> int:
@@ -184,7 +194,7 @@ def main(argv=None) -> int:
     n = 0
     with open(out / "frames.jsonl", "w", encoding="utf-8") as rows:
         last_t = None
-        for t, item, side, ext in it:
+        for t, item, side, ext, stamps in it:
             if last_t is not None and t < last_t:
                 continue  # never let time run backwards
             last_t = t
@@ -198,7 +208,7 @@ def main(argv=None) -> int:
                     continue
                 data = _jpeg(item)
             (out / "frames" / f"{n:06d}.{ext}").write_bytes(data)
-            rows.write(_dumps({"index": n, "t": t, "source": str(src),
+            rows.write(_dumps({"index": n, "t": t, **stamps, "source": str(src),
                                    "session": session, "side": side}) + "\n")
             n += 1
     if is_session and (src / "session.json").is_file():

@@ -3896,3 +3896,9 @@
 - 변경: D-356 에 2026-09-30 보강을 붙였다. `tools/perception/dataset/bag_to_video.py`(세션 카메라 → CFR mp4 + 프레임별 jsonl sidecar·scan.npz·메타)의 형식, 기본값(보관 libx265 CRF 24 slow, 호환 libx264 CRF 23 slow, `accurate_rnd`), `data/teleop/learning/*` gitignore, 그리고 로봇 `camera/front/compressed` JPEG q85 기록 제안(승인 전 미반영)과 Pi 5 CPU·저장량 추정을 적었다.
 - 증거: 세션 20260930T124745Z 2258 프레임에서 22개 설정의 크기·PSNR·SSIM·흰/바닥 마스크 IoU·`lane_replay` line/between/keep 차이 표. 기본값은 bag 대비 156배(0.66 MB/min), PSNR 37.24 dB, line 목표 차 평균 0.0027. `tools/perception/test` 전체 통과(ML venv, 2026-09-30 Windows). 두 실세션 변환: 3.12 MB, 3.89 MB(+ scan.npz 3.6 MB).
 - gate 변화: 없음(문서·개발 PC 도구). 로봇 압축 기록은 사용자 승인과 Pi 실측 전까지 SOURCE 이전 단계.
+
+## 2026-10-01 · uncommitted · fix(perception): 텔레옵 sidecar·extract 시계 통일 — t=헤더 stamp, 부수값=직전 메시지
+
+- 변경: 검토(APPROVE-WITH-FIXES) 1번. `bag_to_video.py` sidecar 의 부수 토픽(cmd_vel·odom·line/observation·scan)을 최근접에서 "프레임 bag log time 이하의 최신 메시지"로 바꿨다(미래 누설 없음, `dt` ≤ 0). motion 창도 프레임 이전 0.5 s 만 본다. `extract.py` MCAP 경로의 `t` 를 bag log time 에서 카메라 헤더 stamp 로 바꾸고 행에 `stamp_ns`·`log_ns` 를 적는다. D-356 보강에 sidecar 스키마(필드·시계)를 적었다. D-379 자동 라벨러가 같은 규칙을 쓴다.
+- 증거: `test_bag_to_video.py` 에 직전값·미래 배제·extract 헤더 stamp 시험 추가, `test_bag_to_video.py test_dataset_extract.py` 25 passed (2026-10-01 Windows, ML venv). 두 실세션 재변환: moving 653/2258, 772/6940.
+- gate 변화: 없음(개발 PC 도구·문서).

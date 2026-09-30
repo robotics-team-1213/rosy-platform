@@ -6,10 +6,12 @@ Usage: bag_to_video.py <session> [--out data/teleop/learning] [--codec hevc|h264
     <out>/teleop_<device>_<UTC stamp>.mp4       every camera frame, native size, CFR
     <out>/teleop_<device>_<UTC stamp>.jsonl     one row per video frame, same order
     <out>/teleop_<device>_<UTC stamp>.json      session.json + conversion metadata
-    <out>/teleop_<device>_<UTC stamp>.scan.npz  nearest LiDAR scan per frame (if recorded)
-The video is CFR at the mean camera rate; the sidecar holds each frame's exact stamps
-(header stamp and bag log time, in ns), the side topics nearest in bag log time and a
-moving/idle flag, so row i describes decoded frame i. extract.py reads this set like a
+    <out>/teleop_<device>_<UTC stamp>.scan.npz  latest LiDAR scan per frame (if recorded)
+The video is CFR at the mean camera rate; the sidecar row i describes decoded frame i:
+t = camera header stamp (s); stamp_ns / log_ns = header stamp and bag log time (ns);
+side = the latest message of each side topic at or before the frame's bag log time
+(never a later one: no future leakage); dt = side log time - frame log time (<= 0);
+motion = moving/idle from the preceding odom window and the current command. extract.py reads this set like a
 session. The camera may be raw (camera/front) or JPEG (camera/front/compressed).
 """
 import argparse
@@ -154,24 +156,23 @@ def first_pass(files):
     return frames, side, skipped, size, (scans if scans["log_ns"] else None)
 
 
-def nearest(times, t, max_gap_ns):
-    """Index of the element of sorted `times` nearest to t, or None if further than max_gap_ns."""
-    i = bisect.bisect_left(times, t)
-    best = min((j for j in (i - 1, i) if 0 <= j < len(times)), key=lambda j: abs(times[j] - t),
-               default=None)
-    if best is None or abs(times[best] - t) > max_gap_ns:
+def latest(times, t, max_gap_ns):
+    """Index of the last element of sorted `times` at or before t, or None if there is none
+    or it is older than max_gap_ns."""
+    j = bisect.bisect_right(times, t) - 1
+    if j < 0 or t - times[j] > max_gap_ns:
         return None
-    return best
+    return j
 
 
 def motion(t_ns, odom, cmd):
-    """{"moving", "commanded", "v", "w"} around t_ns; odom speeds null without two samples."""
+    """{"moving", "commanded", "v", "w"} over the MOTION_WINDOW_S of odom up to t_ns (no
+    later samples); odom speeds are null without two samples in the window."""
     v = w = None
     if odom is not None:
         times, poses = odom
-        half = int(MOTION_WINDOW_S / 2 * 1e9)
-        a = bisect.bisect_left(times, t_ns - half)
-        b = bisect.bisect_right(times, t_ns + half) - 1
+        a = bisect.bisect_left(times, t_ns - int(MOTION_WINDOW_S * 1e9))
+        b = bisect.bisect_right(times, t_ns) - 1
         if b > a and times[b] > times[a]:
             dt = (times[b] - times[a]) / 1e9
             p, q = poses[a], poses[b]
@@ -189,12 +190,12 @@ def sidecar_rows(frames, side, max_gap_s: float, scans=None):
     for i, f in enumerate(frames):
         values, dts = {}, {}
         for name, (times, series) in side.items():
-            j = nearest(times, f["log_ns"], gap)
+            j = latest(times, f["log_ns"], gap)
             values[name] = None if j is None else series[j]
             dts[name] = None if j is None else round((times[j] - f["log_ns"]) / 1e9, 4)
         if scans is not None:
             # the ranges live in the .scan.npz at row i; the row only says which scan
-            j = nearest(scans["log_ns"], f["log_ns"], gap)
+            j = latest(scans["log_ns"], f["log_ns"], gap)
             values[SCAN_TOPIC] = None if j is None else {"stamp_ns": scans["stamp_ns"][j]}
             dts[SCAN_TOPIC] = None if j is None else round((scans["log_ns"][j] - f["log_ns"]) / 1e9, 4)
         yield {"index": i, "t": f["stamp_ns"] / 1e9, "stamp_ns": f["stamp_ns"],
@@ -203,14 +204,14 @@ def sidecar_rows(frames, side, max_gap_s: float, scans=None):
 
 
 def scan_arrays(frames, scans, max_gap_s: float) -> dict:
-    """npz payload: ranges[i] is the scan nearest to frame i (NaN row when none is near)."""
+    """npz payload: ranges[i] is the latest scan at or before frame i (NaN row when none)."""
     gap = int(max_gap_s * 1e9)
     beams = max(len(r) for r in scans["ranges"])
     ranges = np.full((len(frames), beams), np.nan, np.float16)
     stamp = np.zeros(len(frames), np.int64)
     dt = np.full(len(frames), np.nan, np.float32)
     for i, f in enumerate(frames):
-        j = nearest(scans["log_ns"], f["log_ns"], gap)
+        j = latest(scans["log_ns"], f["log_ns"], gap)
         if j is None:
             continue
         r = scans["ranges"][j]
@@ -337,7 +338,8 @@ def main(argv=None) -> int:
                   "height": size[1], "frames": len(frames), "fps": fps,
                   "duration_s": round(duration, 3), "bytes": video.stat().st_size,
                   "encode_s": round(encode_s, 2)},
-        "sidecar": {"file": rows_path.name, "match": "nearest bag log time",
+        "sidecar": {"file": rows_path.name, "match": "latest at or before the frame's bag log time",
+                    "t": "camera header stamp (s)",
                     "max_gap_s": args.max_gap, "dt": "side log time minus frame log time (s)",
                     "moving_frames": moving,
                     "motion": {"window_s": MOTION_WINDOW_S, "odom_v": MOVING_V,

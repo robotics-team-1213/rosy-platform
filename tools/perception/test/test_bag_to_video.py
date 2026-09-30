@@ -116,13 +116,13 @@ def _write_session(root, name="20260930T124745Z_rosy-pinky-test", lidar=False,
                     "angle_min": -3.0, "angle_max": 3.0, "angle_increment": 0.75,
                     "range_min": 0.1, "range_max": 12.0,
                     "ranges": [float(k + 1)] * (BEAMS - 1) + [float("inf")]}))
-            # cmd_vel every 0.02 s from 0.99 s, linear.x = its own time: nearest is checkable
+            # cmd_vel every 0.02 s from 0.99 s, linear.x = its own time: the match is checkable
             for k in range(40):
                 t = 0.99 + 0.02 * k
                 events.append((t, NS + "cmd_vel", tw_s, {
                     "linear": {"x": round(t, 2), "y": 0.0, "z": 0.0},
                     "angular": {"x": 0.0, "y": 0.0, "z": -round(t, 2)}}))
-            # odom only near the first three frames: later frames are past --max-gap
+            # odom only near the first frames: later frames are past --max-gap
             for k, t in enumerate((0.99, 1.13, 1.24)):
                 yaw = 0.1 * (k + 1)
                 events.append((t, NS + "odom", od_s, {
@@ -170,7 +170,7 @@ def _convert(tmp_path, *extra, **session_kw):
     sess = _write_session(tmp_path, **session_kw)
     out = tmp_path / "learning"
     rc = b2v.main([str(sess), "--out", str(out), "--codec", "h264", "--preset", "ultrafast",
-                   "--max-gap", "0.05", *extra])
+                   "--max-gap", "0.2", *extra])
     assert rc == 0
     stem = out / "teleop_rosy-pinky-test_20260930T124745Z"
     return sess, stem
@@ -197,21 +197,25 @@ def test_every_valid_frame_lands_in_video_and_sidecar(tmp_path):
 
 
 @needs_tools
-def test_sidecar_takes_the_nearest_side_sample_and_nulls_stale_ones(tmp_path):
+def test_sidecar_takes_the_latest_side_sample_never_a_later_one(tmp_path):
     _, stem = _convert(tmp_path)
     rows = [json.loads(l) for l in stem.with_suffix(".jsonl").read_text().splitlines()]
-    for r, t in zip(rows, FRAME_S):
+    for i, (r, t) in enumerate(zip(rows, FRAME_S)):
         log_t = t + 0.001
-        want = min((0.99 + 0.02 * k for k in range(40)), key=lambda c: abs(c - log_t))
+        want = max(c for c in (0.99 + 0.02 * k for k in range(40)) if c <= log_t + 1e-9)
         assert r["side"]["cmd_vel"] == {"linear": pytest.approx(round(want, 2)),
                                         "angular": pytest.approx(-round(want, 2))}
         assert r["dt"]["cmd_vel"] == pytest.approx(round(want - log_t, 4), abs=1e-4)
-        assert r["side"]["line/observation"]["error"] == pytest.approx(FRAME_S.index(t) / 10)
-    # frame 1 (1.126 s): nearest odom is 1.13 s, i.e. the sample AFTER the frame
-    assert rows[1]["side"]["odom"] == {"x": 1.0, "y": -1.0, "yaw": pytest.approx(0.2)}
-    assert rows[1]["dt"]["odom"] > 0
-    # frames 3.. are more than --max-gap from any odom sample
-    assert all(r["side"]["odom"] is None and r["dt"]["odom"] is None for r in rows[3:])
+        assert all(d is None or d <= 0 for d in r["dt"].values())
+        # line/observation of frame i is logged 3 ms AFTER frame i: frame i sees frame i-1's
+        obs = r["side"]["line/observation"]
+        assert (obs is None) if i == 0 else obs["error"] == pytest.approx((i - 1) / 10)
+    # frame 1 (log 1.126 s): odom 1.13 s is later, so the 0.99 s sample wins
+    assert rows[1]["side"]["odom"] == {"x": 0.0, "y": 0.0, "yaw": pytest.approx(0.1)}
+    assert rows[1]["dt"]["odom"] == pytest.approx(0.99 - 1.126, abs=1e-4)
+    assert rows[3]["side"]["odom"]["x"] == 2.0            # 1.24 s, 0.136 s old
+    # frames 4.. are more than --max-gap after the last odom sample
+    assert all(r["side"]["odom"] is None and r["dt"]["odom"] is None for r in rows[4:])
 
 
 @needs_tools
@@ -246,8 +250,10 @@ def test_extract_reads_the_video_with_its_sidecar(tmp_path):
                          "--min-interval", "0", "--max-hamming", "-1"]) == 0
     rows = [json.loads(l) for l in (out / "frames.jsonl").read_text().splitlines()]
     assert [r["t"] for r in rows] == pytest.approx(FRAME_S)
+    assert [r["stamp_ns"] for r in rows] == [_ns(t) for t in FRAME_S]
+    assert [r["log_ns"] for r in rows] == [_ns(t + 0.001) for t in FRAME_S]
     assert {r["session"] for r in rows} == {sess.name}
-    assert rows[0]["side"]["cmd_vel"]["linear"] == pytest.approx(1.01)
+    assert rows[0]["side"]["cmd_vel"]["linear"] == pytest.approx(0.99)
     assert json.loads((out / "session.json").read_text())["device"] == "rosy-pinky-test"
 
 
@@ -261,13 +267,31 @@ def test_extract_refuses_a_sidecar_that_does_not_match_the_video(tmp_path):
                       "--min-interval", "0", "--max-hamming", "-1"])
 
 
-def test_nearest():
+def test_latest_is_at_or_before_and_within_the_gap():
     times = [10, 20, 30]
-    assert b2v.nearest(times, 14, 100) == 0
-    assert b2v.nearest(times, 16, 100) == 1
-    assert b2v.nearest(times, 99, 100) == 2
-    assert b2v.nearest(times, 0, 5) is None
-    assert b2v.nearest([], 5, 100) is None
+    assert b2v.latest(times, 14, 100) == 0
+    assert b2v.latest(times, 19, 100) == 0         # 20 is later: not taken
+    assert b2v.latest(times, 20, 100) == 1         # equal time counts
+    assert b2v.latest(times, 99, 100) == 2
+    assert b2v.latest(times, 5, 100) is None       # nothing before
+    assert b2v.latest(times, 40, 5) is None        # too old
+    assert b2v.latest([], 5, 100) is None
+
+
+@needs_tools
+def test_extract_session_uses_header_stamps_and_only_past_side_data(tmp_path):
+    sess = _write_session(tmp_path)
+    out = tmp_path / "frames"
+    assert extract.main([str(sess), "--out", str(out),
+                         "--min-interval", "0", "--max-hamming", "-1"]) == 0
+    rows = [json.loads(l) for l in (out / "frames.jsonl").read_text().splitlines()]
+    # t is the header stamp, 1 ms before the bag log time
+    assert [r["t"] for r in rows] == pytest.approx(FRAME_S, abs=1e-9)
+    assert [r["log_ns"] for r in rows] == [_ns(t + 0.001) for t in FRAME_S]
+    assert "line/observation" not in rows[0]["side"]
+    for i, r in enumerate(rows[1:], start=1):
+        assert r["side"]["line/observation"]["error"] == pytest.approx((i - 1) / 10)
+        assert r["side"]["cmd_vel"]["linear"]["x"] <= FRAME_S[i] + 0.001
 
 
 def test_output_stem_and_rate(tmp_path):
@@ -287,21 +311,24 @@ def test_empty_session_errors(tmp_path):
 
 
 @needs_tools
-def test_lidar_scan_nearest_per_frame_goes_to_the_npz(tmp_path):
+def test_lidar_latest_scan_per_frame_goes_to_the_npz(tmp_path):
     _, stem = _convert(tmp_path, lidar=True)
     rows = [json.loads(l) for l in stem.with_suffix(".jsonl").read_text().splitlines()]
     npz = np.load(str(stem) + ".scan.npz")
     assert npz["ranges"].dtype == np.float16
     assert npz["ranges"].shape == (len(FRAME_S), BEAMS)
     assert float(npz["angle_increment"]) == pytest.approx(0.75)
-    # frame 0 (log 1.001) -> scan 1.02, frame 1 (1.126) -> 1.12, frame 2 (1.251) -> 1.22
-    for i, k in enumerate((0, 1, 2)):
+    # frame 0 (log 1.001) has no earlier scan (1.02 is later): NaN row, null
+    assert np.isnan(npz["ranges"][0].astype(np.float32)).all() and rows[0]["side"]["scan"] is None
+    # frame 1 (1.126) -> 1.12, frame 2 (1.251) -> 1.22, frame 3 (1.376) -> 1.22
+    for i, k in ((1, 1), (2, 2), (3, 2)):
         assert npz["ranges"][i, 0] == k + 1 and np.isinf(npz["ranges"][i, -1])
         assert int(npz["scan_stamp_ns"][i]) == rows[i]["side"]["scan"]["stamp_ns"] == _ns(SCAN_S[k])
         assert float(npz["dt"][i]) == pytest.approx(rows[i]["dt"]["scan"], abs=1e-4)
+        assert rows[i]["dt"]["scan"] <= 0
     # later frames are past --max-gap: NaN row in the npz, null in the sidecar
-    assert np.isnan(npz["ranges"][3:].astype(np.float32)).all()
-    assert all(r["side"]["scan"] is None for r in rows[3:])
+    assert np.isnan(npz["ranges"][4:].astype(np.float32)).all()
+    assert all(r["side"]["scan"] is None for r in rows[4:])
     doc = json.loads(stem.with_suffix(".json").read_text())
     assert doc["scan"]["beams"] == BEAMS and doc["source"]["topics"]["scan"] == len(SCAN_S)
 
@@ -324,17 +351,21 @@ def _odom(points):
 def test_motion_flags_idle_driving_pivoting_and_commanded():
     still = _odom([(0.0, 0.0, 0.0), (0.1, 0.0, 0.0), (0.2, 0.0, 0.0), (0.3, 0.0, 0.0)])
     zero = {"linear": 0.0, "angular": 0.0}
-    m = b2v.motion(_ns(0.15), still, zero)
+    m = b2v.motion(_ns(0.3), still, zero)
     assert m == {"moving": False, "commanded": False, "v": 0.0, "w": 0.0}
     drive = _odom([(0.0, 0.0, 0.0), (0.1, 0.01, 0.0), (0.2, 0.02, 0.0), (0.3, 0.03, 0.0)])
-    m = b2v.motion(_ns(0.15), drive, zero)
+    m = b2v.motion(_ns(0.3), drive, zero)
     assert m["moving"] and not m["commanded"] and m["v"] == pytest.approx(0.1)
+    # only odom up to the frame counts: a start after it is not seen
+    starts = _odom([(0.0, 0.0, 0.0), (0.1, 0.0, 0.0), (0.2, 0.0, 0.0), (0.3, 0.05, 0.0)])
+    assert not b2v.motion(_ns(0.2), starts, zero)["moving"]
+    assert b2v.motion(_ns(0.3), starts, zero)["moving"]
     # in-place pivot across the +-pi seam: small wrapped yaw change, not 2*pi
     pivot = _odom([(0.0, 0.0, 3.1), (0.1, 0.0, -3.13), (0.2, 0.0, -3.08), (0.3, 0.0, -3.03)])
-    m = b2v.motion(_ns(0.15), pivot, zero)
+    m = b2v.motion(_ns(0.3), pivot, zero)
     wrapped = (-3.03 - 3.1) + 2 * math.pi               # 0.153 rad over the 0.3 s window
     assert m["moving"] and m["v"] == 0.0 and m["w"] == pytest.approx(wrapped / 0.3, abs=1e-3)
-    m = b2v.motion(_ns(0.15), still, {"linear": 0.0, "angular": 0.3})
+    m = b2v.motion(_ns(0.3), still, {"linear": 0.0, "angular": 0.3})
     assert m["moving"] and m["commanded"]
     m = b2v.motion(_ns(5.0), still, None)       # no odom near the frame, no command
     assert m == {"moving": False, "commanded": False, "v": None, "w": None}

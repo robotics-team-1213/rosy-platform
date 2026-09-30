@@ -256,8 +256,8 @@
 
 ## 최근 기록
 
+- 2026-10-01 · uncommitted · fix(perception): 텔레옵 sidecar·extract 시계 통일 — t=헤더 stamp, 부수값=직전 메시지
 - 2026-09-30 · uncommitted · docs(adr): D-356 보강 — 텔레옵 학습 영상 H.265/H.264 압축과 로봇 JPEG 기록 제안
 - 2026-09-30 · uncommitted · docs(api): nav.line_obstacle_hold 이벤트와 차선 추종 정지 사유 두 개를 카탈로그에
 - 2026-09-30 · uncommitted · docs(adr): D-344 보강 검토 반영 — sector 기본, L1 문턱, IR 전용 덮어쓰기 경로
 - 2026-09-30 · uncommitted · docs(adr): D-344 보강 — path 앞 물체 정지, IR 교정 절차, 각속도 계단 §13
-- 2026-09-30 · uncommitted · docs(plan): specify local OMX pick-and-place execution
