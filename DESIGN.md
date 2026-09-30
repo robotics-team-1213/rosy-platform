@@ -286,6 +286,7 @@ D-280 다섯 원칙은 시각에서 이렇게 묶인다.
 - **종류**: `primary`(ink 채움, 48px), `quiet`(테두리만, 조용한 글자), `irreversible`(위험 채움 + `ink-on-crit`, 58px), `segment`(여러 중 하나), `toggle`(켜지면 계열 파랑 채움). `kind`가 없으면 계약 표지(`data-kind-missing`, 위험색 윤곽)가 그려진다.
 - **상태**: `:hover`·`:active`·`:focus-visible`·비활성이 모두 `components.css`에 있다. 눌림은 `aria-pressed="true"`(또는 `aria-selected`, `.active`)의 공용 표현이다. 채움 종류는 누르는 동안 바탕색 안쪽 테를 얻는다.
 - **비활성 사유**: `reason="운용자 권한이 필요합니다"`처럼 속성을 단다. `ui.js`가 버튼 안 `<small data-reason>`으로 그리고 `aria-describedby`로 잇는다. 사유가 있는 비활성은 흐리지 않고 점선 테와 조용한 글자로 말한다. `title`만으로는 사유가 아니다(터치에서 보이지 않는다).
+- **목록 행 예외** ([D-371](docs/adr/D-371-list-row-irreversible-actions-confirm-before-danger-fill.md)): 같은 종류 항목이 반복되는 목록·표의 행(`li`·`tr`·`[role=row]`)에서 되돌릴 수 없는 조작은 `irreversible`이 아니라 `quiet` `삭제…`다(말줄임표 = 다음 단계가 있다). 누르면 `ui.js`의 `confirmIrreversible({message, action, opener})`가 네이티브 `<dialog class="ui-confirm">`를 연다: 대상을 따옴표로 이름 부르며 묻고(`"operator-tablet" 토큰을 삭제할까요?`), `취소`는 `quiet`, 실행 버튼 하나(`토큰 삭제`)만 `irreversible`이다. Esc·취소는 요청 없이 닫히고 포커스는 행 버튼으로 돌아간다. 첫 화면의 위험 채움은 비상 정지 외에 하나를 넘지 않는다. 비상 정지와 단일 대상 명령은 그대로 위험 채움이다. `test_list_row_irreversible.py`·`test_list_row_confirm_browser.py`가 지킨다.
 
 ### 필드 — `class="ui-field"`
 - 네이티브 `input`/`select`/`textarea`에 `class="ui-field"`를 단다(폼 제출·`<label>` 연결·기존 핸들러 유지). 44px, `--radius-control`, `--field-bg`, `--field-line`, 등폭 숫자.
@@ -333,6 +334,7 @@ D-280 다섯 원칙은 시각에서 이렇게 묶인다.
 - **Do** 알파·혼합은 `color-mix(in oklab, …)`로 만든다. oklch는 무채색의 색상각을 0°로 풀어 회색을 붉게 섞는다.
 - **Do** 캔버스 색과 글꼴은 `window.RosyPalette`로 읽고 `rosy:theme`에서 다시 그린다.
 - **Do** 새 중단점이 필요하면 `surfaces.yaml`에 값과 이유를 적는다.
+- **Do** 목록 행의 삭제는 `quiet` `삭제…` → `confirmIrreversible` 대화상자로 연다. 위험 채움은 대화상자의 실행 버튼에만 있다([D-371](docs/adr/D-371-list-row-irreversible-actions-confirm-before-danger-fill.md)).
 - **Do** 새 테마 뒤에는 dark·light 두 테마로 390×844·320×568 캡처를 보고 넘침·머리 높이를 확인한다.
 
 ### Don't:
@@ -343,6 +345,7 @@ D-280 다섯 원칙은 시각에서 이렇게 묶인다.
 - **Don't** 공용 부품(`ui-actions`, `.ui-form`, `.ui-readout`)을 뷰포트 `@media`로 재정의한다.
 - **Don't** 자간·글자 크기·간격에 토큰 밖 값을 쓴다. 12px 아래 글자를 만들지 않는다.
 - **Don't** `title`만으로 비활성 사유를 대신한다.
+- **Don't** 목록의 행마다 `kind="irreversible"` 버튼을 그린다. 빨강이 반복되면 비상 정지의 위계가 흐려진다([D-371](docs/adr/D-371-list-row-irreversible-actions-confirm-before-danger-fill.md)).
 - **Don't** 장식 전환·펄스·반짝임을 더한다([D-220](docs/adr/D-220-stillness-contract-zero-motion-budget.md)).
 - **Don't** 고정 높이 프레임을 낮은 창에 쓴다. `100vh` 대신 `dvh`다.
 - **Don't** 테마를 위해 표면 파일에 `[data-theme=…]` 분기를 둔다. 팔레트 블록 하나로 끝나야 한다.
