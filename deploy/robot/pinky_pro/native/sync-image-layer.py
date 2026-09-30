@@ -536,18 +536,19 @@ def apply(root: Path, release_id: str, work: list[dict], runner: Runner,
     backup: Path | None = None
     if work or cleanup:
         stamp = _stamp(now)
-        # A retry within the same second gets its own folder; names still sort
-        # in run order for _records.
+        # _records orders runs by folder name. Runs in the same second get the
+        # next serial whatever their release id, so the name never lets a
+        # release id reorder two runs.
         (root / BACKUP_ROOT).mkdir(parents=True, exist_ok=True)
-        for serial in range(1000):
-            backup = root / BACKUP_ROOT / f"{stamp}-{serial:03d}-{release_id}"
-            try:
-                backup.mkdir()
-                break
-            except FileExistsError:
-                continue
-        else:
+        taken = [
+            int(path.name[len(stamp) + 1:len(stamp) + 4])
+            for path in (root / BACKUP_ROOT).glob(f"{stamp}-[0-9][0-9][0-9]-*")
+        ]
+        serial = max(taken, default=-1) + 1
+        if serial > 999:
             raise SyncError("IMAGE_LAYER_BACKUP: no free backup folder name")
+        backup = root / BACKUP_ROOT / f"{stamp}-{serial:03d}-{release_id}"
+        backup.mkdir()
         os.chmod(backup, 0o700)
         backup_dir = "/" + backup.relative_to(root).as_posix()
         records = []

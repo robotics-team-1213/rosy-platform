@@ -394,7 +394,21 @@ def test_a_rollback_never_removes_what_no_sync_recorded(device):
 # --- second review: manifest trust, pending limits, record chains, corruption --------
 
 
-def test_a_manifest_whose_disable_failed_does_not_shadow_the_history(device):
+def test_runs_in_the_same_second_keep_their_order_whatever_the_release_id(device, monkeypatch):
+    monkeypatch.setattr(sync_mod, "_stamp", lambda now=None: "20261001T000000Z")
+    _older_release(device)
+    _sync(device, NEW_ID, Runner(), dry_run=False)
+    _sync(device, OLD_ID, Runner(), dry_run=False)
+
+    names = sorted(path.name for path in (device / sync_mod.BACKUP_ROOT).iterdir() if path.is_dir())
+
+    # OLD_ID sorts before NEW_ID by name, but ran second.
+    assert names == [f"20261001T000000Z-000-{NEW_ID}", f"20261001T000000Z-001-{OLD_ID}"]
+
+
+def test_a_manifest_whose_disable_failed_does_not_shadow_the_history(device, monkeypatch):
+    # One second for every run, so only files_applied can tell the runs apart.
+    monkeypatch.setattr(sync_mod, "_stamp", lambda now=None: "20261001T000000Z")
     _older_release(device)
     _sync(device, NEW_ID, Runner(), dry_run=False)
     with pytest.raises(sync_mod.SyncError, match="disable"):
