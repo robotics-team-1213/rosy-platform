@@ -387,8 +387,10 @@ main {
 
 @media (width < 64rem) {
   main { grid-template-columns: minmax(0, 1fr); }
-  /* 한 열 단 순서: 예외(주의·로봇) → 지도 → 관제 카메라 → 대형·신호등·기록.
-     로봇 패널의 상자를 풀고 두 묶음이 각자 패널이 된다. 대형 묶음만 order로 지도 뒤로 간다. */
+  /* 한 열 단 순서: 예외(주의·로봇) → 지도 → 관제 카메라 → 대형·신호등·기록 → 기기 연결.
+     로봇 패널의 상자를 풀고 두 묶음이 각자 패널이 된다. 대형 묶음만 order로 지도 뒤로 간다
+     (지도 패널보다 DOM이 앞이라 키보드 순서는 로봇 → 대형 묶음 → 지도로 남는다; 넓은 창의
+     로봇 패널 안 격자가 두 묶음을 한 부모에 두기를 요구해 DOM 이동은 넓은 배치를 깬다). */
   main > .panel[aria-labelledby="roster-heading"] { display: contents; }
   .roster-block, .ops-block {
     display: block;

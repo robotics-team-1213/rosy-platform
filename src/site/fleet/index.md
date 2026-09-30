@@ -69,8 +69,8 @@
 
 ## 최근 기록
 
+- 2026-10-01 · uncommitted · fix(fleet): D-359 US-009 한 열 순서 — 기기 연결은 대형 묶음 끝, 넓은 창 단언은 main 배치로
 - 2026-10-01 · uncommitted · fix(fleet): D-359 리뷰 P1-2/P2-3 — 등록 대화상자는 비모달, 등록 해제는 D-371
 - 2026-10-01 · uncommitted · fix(fleet): D-359 리뷰 P1-1 — 명렬 카드 오프라인은 한국어, 열거값은 title
 - 2026-09-30 · uncommitted · refactor(fleet): D-377 console title and favicon
 - 2026-09-30 · uncommitted · fix(fleet): D-370 리뷰 — 발견 행은 분류기가 정규화한 호스트를 저장
-- 2026-09-30 · uncommitted · docs(adr): D-358 앱 역할 ADR을 D-370으로 재번호

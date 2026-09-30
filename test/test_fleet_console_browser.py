@@ -1771,10 +1771,12 @@ def test_roster_mode_tag_speaks_korean_and_keeps_the_enum_in_title(console_url):
 
 @pytest.mark.parametrize("width,height", [(390, 844), (320, 568)])
 def test_single_column_tier_puts_exceptions_before_the_map_and_formation_last(console_url, width, height):
-    """D-359 US-009 — below 64rem: 주의·로봇 → 지도 → 관제 카메라 → 대형. Wide keeps its columns."""
+    """D-359 US-009 — below 64rem: 주의·로봇 → 지도 → 관제 카메라 → 대형 → 기기 연결(설정 일은 끝).
+    Wide keeps its columns (main 486e3683: 대형 sits under the roster list, 기기 연결 beside it)."""
     from playwright.sync_api import sync_playwright
 
-    probe = """() => Object.fromEntries(['.queues-panel', '#roster', '#map-stage', '.vision-preview', '.formation']
+    probe = """() => Object.fromEntries(['.queues-panel', '#roster', '#map-stage', '.vision-preview', '.formation',
+        '#log', '.device-link']
       .map((sel) => [sel, Math.round(document.querySelector(sel).getBoundingClientRect().top + window.scrollY)]))"""
     with sync_playwright() as p:
         browser, page, errors = _open_console(p, API)
@@ -1782,17 +1784,22 @@ def test_single_column_tier_puts_exceptions_before_the_map_and_formation_last(co
         page.goto(console_url, wait_until="networkidle")
         page.wait_for_function("() => document.querySelectorAll('#roster article').length > 0")
         top = page.evaluate(probe)
-        assert top["#roster"] < top["#map-stage"] < top[".vision-preview"] < top[".formation"], top
+        assert (top["#roster"] < top["#map-stage"] < top[".vision-preview"] < top[".formation"]
+                < top["#log"] < top[".device-link"]), top
         assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
         page.set_viewport_size({"width": 1366, "height": 768})
         wide = page.evaluate(probe)
-        # wide: map column left, roster column right, both starting on the first row.
-        boxes = page.evaluate("""() => ['#map-stage', '#roster', '.formation'].map((sel) =>
-          document.querySelector(sel).getBoundingClientRect().left)""")
-        assert boxes[0] < boxes[1] < boxes[2], boxes
+        # wide: map column left, roster column right, both starting on the first row. Inside the
+        # roster column, 대형 stacks under the list and 기기 연결 stands beside the list.
+        left = page.evaluate("""() => Object.fromEntries(['#map-stage', '#roster', '.formation', '.device-link']
+          .map((sel) => [sel, document.querySelector(sel).getBoundingClientRect().left]))""")
+        assert left["#map-stage"] < left["#roster"] < left[".device-link"], left
+        assert abs(left[".formation"] - left["#roster"]) < 1 and wide["#roster"] < wide[".formation"], (left, wide)
+        assert wide["#roster"] <= wide[".device-link"] < wide[".formation"], wide
         assert wide["#roster"] < wide["#map-stage"] + 200, wide
         assert not errors
         browser.close()
+
 
 PAINT_LOG = """
 (() => {

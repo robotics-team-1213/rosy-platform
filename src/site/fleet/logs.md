@@ -803,3 +803,11 @@
 - gate 변화: 새 브라우저 시험 `test_enrollment_dialog_leaves_the_fleet_stop_live`·`test_unenroll_is_a_quiet_row_action_confirmed_by_name`.
 - 결정: D-280 원칙 2, D-371.
 - 교훈: 없음.
+
+## 2026-10-01 · uncommitted · fix(fleet): D-359 US-009 한 열 순서 — 기기 연결은 대형 묶음 끝, 넓은 창 단언은 main 배치로
+
+- 변경: 원인은 main 486e3683이 넓은 창 로봇 패널 격자에서 대형을 목록 아래(1열)로 옮긴 것이다. US-009 시험의 넓은 창 단언 `roster.left < formation.left`가 main 병합(c4b9fb3a) 뒤 거짓이 됐다(좁은 창 순서 단언은 통과 중이었다). 또 main의 기기 연결(로봇 등록·카메라 연결) 섹션이 병합에서 `.roster-block`에 들어가 한 열 단에서 지도 앞에 섰다. `web/index.html`에서 `.device-link`를 `.ops-block` 끝(#log 뒤)으로 DOM 이동 — 넓은 창 자리는 명시 격자(`grid-column: 2; grid-row: 2`)라 그대로. 대형 묶음을 DOM으로 지도 뒤로 옮기는 것은 넓은 창 로봇 패널 격자가 한 부모를 요구해 하지 않았다(`styles.css` 주석). 시험은 한 열 단 `#log < .device-link`를 더하고, 넓은 창은 main 배치(대형은 목록 왼쪽 끝 정렬·아래, 기기 연결은 목록 옆·대형 위)로 단언한다.
+- 증거: `ROSY_RUN_BROWSER_TESTS=1 python -m pytest test/test_fleet_console_browser.py -k single_column_tier -q` 2 passed. 캡처 X:\DevTemp\rosy-d359-captures(전: before-order\): 1366·1920 차이는 시계뿐(임계 20), 390 전체 페이지는 기기 연결이 지도 앞에서 대형·신호등·기록 뒤로.
+- gate 변화: 없음.
+- 결정: D-280 Fleet 질문 "어느 로봇에 주의가 필요한가?" — 설정 일은 끝.
+- 교훈: main 병합이 넓은 배치를 바꾸면 US-009 시험의 넓은 창 단언도 main 쪽으로 다시 읽는다. 본 `.discovery` 기본 규칙의 `margin-top`이 64rem 규칙의 `margin-top: 0`을 뒤에서 덮어 넓은 창 기기 연결이 16px 내려앉아 있다(main 기존, 손대지 않음).

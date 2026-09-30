@@ -68,46 +68,12 @@
 
     <section class="panel" aria-labelledby="roster-heading">
       <!-- D-359 US-009 — 넓은 창에서 두 묶음은 상자가 없다(display: contents). 한 열 단에서는
-           각자 패널이 되고 대형·신호등·기록 묶음이 지도·관제 카메라 뒤로 간다. -->
+           각자 패널이 되고 대형·신호등·기록 묶음이 지도·관제 카메라 뒤로 간다. 기기 연결(등록·카메라
+           연결)은 설정 일이라 대형 묶음 맨 끝에 둔다. 넓은 창의 자리는 styles.css 격자가 정한다. -->
       <div class="roster-block">
         <h2 id="roster-heading">등록 로봇</h2>
         <ui-button id="roster-toggle" kind="quiet" type="button" aria-expanded="false" aria-controls="roster">전체 로봇 보기</ui-button>
         <div id="roster" class="roster"><p class="hint" role="status">로봇 목록 불러오는 중</p></div>
-
-        <section class="discovery device-link" aria-labelledby="device-link-heading">
-          <h3 id="device-link-heading">기기 연결</h3>
-          <section id="robot-enrollment" aria-labelledby="discovery-heading">
-            <div class="robot-head">
-              <h4 id="discovery-heading">로봇 등록</h4>
-              <ui-tag id="discovery-status" status="neutral">검색 대기</ui-tag>
-            </div>
-            <p class="hint">발견된 주소는 접속 힌트입니다. 등록은 로봇 화면의 코드로 Fleet이 직접 확인합니다.</p>
-            <p id="enroll-unavailable" class="hint bad" hidden>자격 키를 읽을 수 없음 — 등록을 쓸 수 없습니다.</p>
-            <p id="enroll-alarm" class="enroll-alarm" role="alert" hidden></p>
-            <ul id="discovery-list" class="discovery-list" aria-live="polite"></ul>
-            <div id="enroll-controls" hidden>
-              <div class="enroll-address">
-                <label for="enroll-address">주소로 추가</label>
-                <input class="ui-field" id="enroll-address" inputmode="decimal" autocomplete="off" placeholder="192.168.1.20:8080">
-                <ui-button id="enroll-address-add" kind="quiet" type="button">추가</ui-button>
-              </div>
-              <div id="enroll-result" class="enroll-result" aria-live="polite"></div>
-              <ul id="enrolled-list" class="enrolled-list"></ul>
-              <details class="enroll-help"><summary>등록 도움말</summary><ul id="enroll-help"></ul></details>
-              <dialog id="enroll-dialog" aria-labelledby="enroll-target">
-                <p>로봇 <b id="enroll-target"></b> 화면의 코드</p>
-                <input class="ui-field" id="enroll-code" autocomplete="off" autocapitalize="characters" maxlength="12" placeholder="ABCD-EFGH">
-                <div class="enroll-dialog-actions">
-                  <ui-button id="enroll-submit" kind="primary" type="button">등록</ui-button>
-                  <ui-button id="enroll-cancel" kind="quiet" type="button">취소</ui-button>
-                </div>
-              </dialog>
-            </div>
-          </section>
-          <section id="camera-link" aria-labelledby="camera-link-heading" hidden>
-            <h4 id="camera-link-heading">카메라 연결 요청</h4>
-          </section>
-        </section>
       </div>
 
       <div class="ops-block">
@@ -157,6 +123,41 @@
         <div id="log" class="log" role="status" aria-live="polite" aria-label="최근 관제 이벤트">
           <p class="log-empty"><strong>최근 이벤트가 없습니다</strong><span>관제 요청과 연결 상태 변화가 여기에 표시됩니다.</span></p>
         </div>
+
+        <section class="discovery device-link" aria-labelledby="device-link-heading">
+          <h3 id="device-link-heading">기기 연결</h3>
+          <section id="robot-enrollment" aria-labelledby="discovery-heading">
+            <div class="robot-head">
+              <h4 id="discovery-heading">로봇 등록</h4>
+              <ui-tag id="discovery-status" status="neutral">검색 대기</ui-tag>
+            </div>
+            <p class="hint">발견된 주소는 접속 힌트입니다. 등록은 로봇 화면의 코드로 Fleet이 직접 확인합니다.</p>
+            <p id="enroll-unavailable" class="hint bad" hidden>자격 키를 읽을 수 없음 — 등록을 쓸 수 없습니다.</p>
+            <p id="enroll-alarm" class="enroll-alarm" role="alert" hidden></p>
+            <ul id="discovery-list" class="discovery-list" aria-live="polite"></ul>
+            <div id="enroll-controls" hidden>
+              <div class="enroll-address">
+                <label for="enroll-address">주소로 추가</label>
+                <input class="ui-field" id="enroll-address" inputmode="decimal" autocomplete="off" placeholder="192.168.1.20:8080">
+                <ui-button id="enroll-address-add" kind="quiet" type="button">추가</ui-button>
+              </div>
+              <div id="enroll-result" class="enroll-result" aria-live="polite"></div>
+              <ul id="enrolled-list" class="enrolled-list"></ul>
+              <details class="enroll-help"><summary>등록 도움말</summary><ul id="enroll-help"></ul></details>
+              <dialog id="enroll-dialog" aria-labelledby="enroll-target">
+                <p>로봇 <b id="enroll-target"></b> 화면의 코드</p>
+                <input class="ui-field" id="enroll-code" autocomplete="off" autocapitalize="characters" maxlength="12" placeholder="ABCD-EFGH">
+                <div class="enroll-dialog-actions">
+                  <ui-button id="enroll-submit" kind="primary" type="button">등록</ui-button>
+                  <ui-button id="enroll-cancel" kind="quiet" type="button">취소</ui-button>
+                </div>
+              </dialog>
+            </div>
+          </section>
+          <section id="camera-link" aria-labelledby="camera-link-heading" hidden>
+            <h4 id="camera-link-heading">카메라 연결 요청</h4>
+          </section>
+        </section>
       </div>
     </section>
 
