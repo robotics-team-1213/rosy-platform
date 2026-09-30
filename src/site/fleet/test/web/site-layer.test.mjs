@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 
 import {
   classifySightings, siteBounds, canvasSizeFor, fitTransform, project, gridLines,
-  SIGHTING_STALE_MS, SIGHTING_HIDE_MS,
+  SIGHTING_STALE_MS, SIGHTING_HIDE_MS, streamEvidence,
 } from "../../fleet/server/web/site-layer.js";
 
 const row = (changes) => ({
@@ -59,4 +59,21 @@ test("fit keeps metres square and flips y so +y points up the canvas", () => {
 test("grid lines land on 0.5 m multiples inside the range", () => {
   assert.deepEqual(gridLines(-0.25, 1.25), [0, 0.5, 1]);
   assert.deepEqual(gridLines(0, 1), [0, 0.5, 1]);
+});
+
+// D-359 US-009 — the relay pill sits alone on a robot card, so it names the relay.
+test("relay evidence pills say what is late, lost or unknown", () => {
+  const formation = (evidence) => ({ active: true, stream_evidence: evidence });
+  assert.equal(streamEvidence({ active: false }, "a"), null);
+  assert.equal(streamEvidence(formation({ a: { state: "fresh" } }), "a"), null);
+  assert.deepEqual(streamEvidence(formation({}), "a"),
+    { text: "릴레이 증거 없음", cls: "warn", evidence: "unavailable" });
+  assert.deepEqual(streamEvidence(formation({ a: { state: "disconnected" } }), "a"),
+    { text: "릴레이 끊김", cls: "crit", evidence: "disconnected" });
+  assert.deepEqual(streamEvidence(formation({ a: { state: "delayed", age_s: 1.26 } }), "a"),
+    { text: "릴레이 지연 · 1.3초", cls: "warn", evidence: "delayed" });
+  assert.equal(streamEvidence(formation({ a: { state: "delayed", reason: "rate_below_floor" } }), "a").text,
+    "릴레이 지연 · 송신 빈도 낮음");
+  assert.deepEqual(streamEvidence(formation({ a: { state: "unavailable" } }), "a"),
+    { text: "릴레이 증거 없음", cls: "warn", evidence: "unavailable" });
 });

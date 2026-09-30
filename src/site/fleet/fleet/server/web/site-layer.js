@@ -1,4 +1,5 @@
 // 천장 카메라 사이트 층 (D-257). DOM 없는 순수 계산만 둔다 — map-view.js 가 그린다.
+// 대형 릴레이 증거(streamEvidence)도 같은 순수 계산이라 여기 있다(D-359 US-009).
 // 관측(sighting)은 표시·대조용이다. CORE TF pose 와 합치지 않고, 목표 좌표로 쓰지 않는다.
 
 // 서버 lease(1 s)를 넘기면 `stale` 로 온다. 여기 임계는 그 위의 화면 규칙이다.
@@ -83,4 +84,20 @@ export function gridLines(lo, hi, step = GRID_STEP_M) {
     out.push(Math.round(k * step * 1e6) / 1e6 + 0); // + 0 normalises -0
   }
   return out;
+}
+
+// 릴레이 건강을 D-72 증거로 옮긴다. fresh 는 아무것도 붙이지 않는다(§7.3 정상은 안 보임).
+// D-359 US-009 — 알약은 로봇 카드에 홀로 붙으므로 무엇의 증거인지("릴레이")를 말한다.
+export function streamEvidence(formation, robotId) {
+  if (!formation?.active) return null;
+  const evidence = formation.stream_evidence?.[robotId];
+  if (!evidence) return { text: "릴레이 증거 없음", cls: "warn", evidence: "unavailable" };
+  if (evidence.state === "fresh") return null;
+  if (evidence.state === "disconnected") return { text: "릴레이 끊김", cls: "crit", evidence: "disconnected" };
+  if (evidence.state === "delayed") {
+    const age = finite(evidence.age_s) ? ` · ${evidence.age_s.toFixed(1)}초` : "";
+    const reason = evidence.reason === "rate_below_floor" ? " · 송신 빈도 낮음" : "";
+    return { text: `릴레이 지연${age}${reason}`, cls: "warn", evidence: "delayed" };
+  }
+  return { text: "릴레이 증거 없음", cls: "warn", evidence: "unavailable" };
 }

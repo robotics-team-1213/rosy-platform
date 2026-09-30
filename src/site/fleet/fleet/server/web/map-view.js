@@ -8,6 +8,7 @@
 
 import {
   classifySightings, siteBounds, canvasSizeFor, fitTransform, project, gridLines, GRID_STEP_M,
+  streamEvidence,
 } from "./site-layer.js";
 
 export function createMapView({ el, view, auth, call, onMapChanged, onMapUnavailable }) {
@@ -85,21 +86,6 @@ export function createMapView({ el, view, auth, call, onMapChanged, onMapUnavail
       x: pose.x - offset.distance * hx + offset.lateral * lx,
       y: pose.y - offset.distance * hy + offset.lateral * ly,
     };
-  }
-
-  // 릴레이 건강을 D-72 증거로 옮긴다. fresh 는 아무것도 붙이지 않는다(§7.3 정상은 안 보임).
-  function streamEvidence(formation, robotId) {
-    if (!formation?.active) return null;
-    const evidence = formation.stream_evidence?.[robotId];
-    if (!evidence) return { text: "\uC99D\uAC70 \uD310\uB2E8 \uC5C6\uC74C", cls: "warn" };
-    if (evidence.state === "fresh") return null;
-    if (evidence.state === "disconnected") return { text: "\uB04A\uAE40", cls: "crit" };
-    if (evidence.state === "delayed") {
-      const age = typeof evidence.age_s === "number" ? ` \u00B7 ${evidence.age_s.toFixed(1)}\uCD08` : "";
-      const reason = evidence.reason === "rate_below_floor" ? " \u00B7 \uC1A1\uC2E0 \uBE48\uB3C4 \uB0AE\uC74C" : "";
-      return { text: `\uC9C0\uC5F0${reason}${age}`, cls: "warn" };
-    }
-    return { text: "\uC1A1\uC2E0 \uC2DC\uAC01 \uC5C6\uC74C", cls: "warn" };
   }
 
   // D-359 US-008 — 이번 그리기에 놓인 칩(캔버스 픽셀, 시험은 window.__mapChips). 추적 오차와

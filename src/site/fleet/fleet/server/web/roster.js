@@ -99,7 +99,9 @@ export function createRoster({ el, view, log, call, render, streamEvidence, isOp
     const evidence = view.stateUnavailable ? null : streamEvidence(view.formation, robot.robot_id);
     if (evidence) {
       // 릴레이 건강은 증거다(D-72). fresh 는 아무것도 붙지 않는다 — 붙는 것은 문제뿐이다.
-      head.appendChild(tag(evidence.text, evidence.cls));
+      const relay = tag(evidence.text, evidence.cls);
+      relay.dataset.evidence = evidence.evidence;
+      head.appendChild(relay);
     }
     node.appendChild(head);
 
