@@ -22,3 +22,9 @@ find "$DESTINATION" -name '__pycache__' -type d -prune -exec rm -rf {} +
 rm -f -- "$DESTINATION/install-native-runtime.sh"
 # native_release.py imports signing; it is standard-library only.
 cp "$RELEASE_TOOLS/signing.py" "$DESTINATION/signing.py"
+# D-375: the udev rules and modprobe options the image installs, carried in
+# every copy so sync-image-layer.py has a signed source for them on a robot
+# that only receives payload releases.
+mkdir -p "$DESTINATION/image-layer/udev" "$DESTINATION/image-layer/modprobe"
+cp "$SCRIPT_DIR/../udev/"*.rules "$DESTINATION/image-layer/udev/"
+cp "$SCRIPT_DIR/../modprobe/"*.conf "$DESTINATION/image-layer/modprobe/"
