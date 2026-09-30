@@ -61,6 +61,9 @@ TRAJ_MIN_TRAVEL_M = 0.15                # otherwise the band is below the image
 TRAJ_STEP_M = 0.01
 # A band pixel on a LiDAR wall is a contradiction; this many make the frame a conflict.
 CONFLICT_PX = 150
+# choose_pitch: a fitted pitch must beat the profile's wall-edge score by this much
+# (2026-09-30 mount: 23.2 at the fit vs -0.2 at the profile).
+PITCH_FIT_MARGIN = 2.0
 WALL_CORE_PX = 8  # rule_stats: wall this far above its bottom edge is surely wall
 
 CONF = {"wall_near": 0.9, "wall_far": 0.7, "floor": 0.8, "paint": 0.7, "paint_rule_agrees": 0.85,
@@ -296,26 +299,52 @@ def fit_pitch(cam: Camera, samples, wall_height_m=WALL_HEIGHT_M, lo_deg=2.0, hi_
     carpet: negative gradient) and wall top (dark room above bright wall:
     positive). The NOMINAL pitch came from a 2026-09-19 camera mount; a remounted
     camera moves it by degrees, which is tens of rows at the wall base.
-    Returns (pitch_rad, {pitch_deg: score}).
+    Returns (pitch_rad, {pitch_deg: score}); pitch_rad is None when no return landed
+    in the image at any pitch (the curve then holds None).
     """
+    curve = {round(float(deg), 2): pitch_score(cam, samples, math.radians(deg), wall_height_m)[0]
+             for deg in np.arange(lo_deg, hi_deg + 1e-9, step_deg)}
+    scored = {k: v for k, v in curve.items() if v is not None}
+    if not scored:
+        return None, curve
+    return math.radians(max(scored, key=scored.get)), curve
+
+
+def pitch_score(cam: Camera, samples, pitch_rad, wall_height_m=WALL_HEIGHT_M):
+    """(mean wall-edge response, returns in view) at one pitch; score None when none."""
     import dataclasses
-    curve = {}
-    for deg in np.arange(lo_deg, hi_deg + 1e-9, step_deg):
-        c = dataclasses.replace(cam, pitch_rad=math.radians(deg))
-        total, n = 0.0, 0
-        for xy, gy in samples:
-            if len(xy) == 0:
-                continue
-            ub, vb, db = c.project(np.column_stack([xy, np.zeros(len(xy))]))
-            _, vt, dt = c.project(np.column_stack([xy, np.full(len(xy), wall_height_m)]))
-            ok = ((db > 0.05) & (dt > 0.05) & (ub >= 0) & (ub < c.width)
-                  & (vb >= 0) & (vb < c.height) & (vt >= 0) & (vt < c.height))
-            cols = ub[ok].astype(int)
-            total += float(gy[vt[ok].astype(int), cols].sum() - gy[vb[ok].astype(int), cols].sum())
-            n += int(ok.sum())
-        curve[round(float(deg), 2)] = total / n if n else float("-inf")
-    best = max(curve, key=curve.get)
-    return math.radians(best), curve
+    c = dataclasses.replace(cam, pitch_rad=pitch_rad)
+    total, n = 0.0, 0
+    for xy, gy in samples:
+        if len(xy) == 0:
+            continue
+        ub, vb, db = c.project(np.column_stack([xy, np.zeros(len(xy))]))
+        _, vt, dt = c.project(np.column_stack([xy, np.full(len(xy), wall_height_m)]))
+        ok = ((db > 0.05) & (dt > 0.05) & (ub >= 0) & (ub < c.width)
+              & (vb >= 0) & (vb < c.height) & (vt >= 0) & (vt < c.height))
+        cols = ub[ok].astype(int)
+        total += float(gy[vt[ok].astype(int), cols].sum() - gy[vb[ok].astype(int), cols].sum())
+        n += int(ok.sum())
+    return (total / n if n else None), n
+
+
+def choose_pitch(cam: Camera, samples, margin=PITCH_FIT_MARGIN, **fit_kw):
+    """The pitch to label with, and why: the fit only when it beats the profile's own
+    score by `margin` (edge response units); otherwise the profile pitch.
+
+    Returns (pitch_rad, info) with info["pitch_source"] "lidar-fit" or "profile"."""
+    fitted, curve = fit_pitch(cam, samples, **fit_kw)
+    base, n_base = pitch_score(cam, samples, cam.pitch_rad)
+    info = {"samples": len(samples), "profile_pitch_deg": round(math.degrees(cam.pitch_rad), 2),
+            "score_at_profile": None if base is None else round(base, 3), "margin": margin}
+    if fitted is None:
+        return cam.pitch_rad, {**info, "pitch_source": "profile", "why": "no LiDAR wall in view"}
+    fit_score = curve[round(math.degrees(fitted), 2)]
+    info.update(fitted_pitch_deg=round(math.degrees(fitted), 2), score_at_fit=round(fit_score, 3))
+    if base is not None and fit_score < base + margin:
+        return cam.pitch_rad, {**info, "pitch_source": "profile", "why": "fit not better by the margin",
+                               "pitch_deg": info["profile_pitch_deg"]}
+    return fitted, {**info, "pitch_source": "lidar-fit", "pitch_deg": info["fitted_pitch_deg"]}
 
 
 OVERLAY_BGR = {FLOOR: (200, 120, 40), LANE: (255, 0, 255), WALL: (40, 40, 230),

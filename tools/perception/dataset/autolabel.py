@@ -261,12 +261,8 @@ def calibrate_pitch(frames, odom: PoseSeries, scans: Scans, lidar=Lidar(), every
         if len(samples) >= max_samples:
             break
     if cam is None:
-        return None, {}
-    pitch, curve = L.fit_pitch(cam, samples)
-    return pitch, {"samples": len(samples), "pitch_deg": round(math.degrees(pitch), 2),
-                   "profile_pitch_deg": round(math.degrees(cam.pitch_rad), 2),
-                   "score_at_fit": round(curve[round(math.degrees(pitch), 2)], 3),
-                   "score_at_profile": round(curve.get(round(math.degrees(cam.pitch_rad), 1), float("nan")), 3)}
+        return None, {"pitch_source": "profile", "why": "no frame with a scan"}
+    return L.choose_pitch(cam, samples)
 
 
 def label_session(frames, odom: PoseSeries, scans: Scans | None, out: Path, *, session: str,
@@ -406,8 +402,7 @@ def main(argv=None) -> int:
                                                        "pitch_deg": args.pitch_deg}
     elif scans is not None and scans.t:
         pitch, camera = calibrate_pitch(make_frames(), odom, scans, lidar)
-        camera["pitch_source"] = "lidar-fit"
-        print(f"pitch fitted to LiDAR walls: {camera}")
+        print(f"camera pitch ({camera['pitch_source']}): {camera}")
     out = args.out or DATA / "labels" / session
     refusal = check_out(out, session, args.force)
     if refusal:
