@@ -26,6 +26,15 @@ class InvalidActionTransition(ValueError):
 
 
 _TERMINAL = {"SUCCEEDED", "FAILED"}
+_PICK_PLACE_PHASES = ("approach", "grasp", "transfer", "release")
+_WORKFLOW_STATES = frozenset({
+    "APPROACH", "GRASP", "VERIFY_HOLD", "TRANSFER", "RELEASE",
+    "VERIFY_RELEASE", "ACTION_SUCCEEDED", "HOLD",
+})
+_WORKFLOW_EVIDENCE_KEYS = frozenset({
+    "phase_result_id", "gripper_hold_sequence", "gripper_release_sequence",
+    "hold_reason",
+})
 
 
 def _utc_now() -> str:
@@ -654,6 +663,133 @@ class ActionStore:
             connection.commit()
         return self._phase_dict(updated)
 
+    def record_workflow_state(
+        self, action_id: str, attempt_id: str, *, workflow_state: str,
+        object_may_be_held: bool, evidence_refs: Mapping[str, object],
+    ) -> dict[str, Any]:
+        """Append bounded semantic workflow evidence without inventing ROS goals."""
+        if workflow_state not in _WORKFLOW_STATES:
+            raise ValueError("unsupported pick-place workflow state")
+        if type(object_may_be_held) is not bool:
+            raise ValueError("object_may_be_held must be boolean")
+        if not isinstance(evidence_refs, Mapping) or not set(evidence_refs) <= _WORKFLOW_EVIDENCE_KEYS:
+            raise ValueError("workflow evidence refs contain unsupported fields")
+        refs = dict(evidence_refs)
+        for name, value in refs.items():
+            if name.endswith("_sequence"):
+                if type(value) is not int or value < 0:
+                    raise ValueError(f"{name} must be a non-negative integer")
+            else:
+                _nonempty(name, value, maximum=192)
+        _json(refs)
+        if workflow_state == "ACTION_SUCCEEDED":
+            if object_may_be_held or not {
+                "gripper_hold_sequence", "gripper_release_sequence",
+            } <= set(refs):
+                raise InvalidActionTransition(
+                    "Action success requires released-object readback evidence",
+                )
+            if refs["gripper_release_sequence"] <= refs["gripper_hold_sequence"]:
+                raise InvalidActionTransition("release readback must follow the hold readback")
+        now = _utc_now()
+        with closing(self._connect()) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            action = self._require_attempt(
+                connection, action_id, attempt_id,
+                {"SUBMITTING", "ACCEPTED", "RUNNING", "CANCEL_REQUESTED", "UNKNOWN", "HOLD"},
+            )
+            if workflow_state == "ACTION_SUCCEEDED":
+                if action["state"] not in {"ACCEPTED", "RUNNING"}:
+                    raise InvalidActionTransition("held or unresolved Action cannot complete")
+                phases = connection.execute(
+                    "SELECT phase_id, ordinal, state FROM omx_action_phases "
+                    "WHERE action_id=? AND attempt_id=? ORDER BY ordinal",
+                    (action_id, attempt_id),
+                ).fetchall()
+                if (tuple(row["phase_id"] for row in phases) != _PICK_PLACE_PHASES
+                        or tuple(row["ordinal"] for row in phases) != tuple(range(4))
+                        or any(row["state"] != "SUCCEEDED" for row in phases)):
+                    raise InvalidActionTransition(
+                        "completed workflow requires four successful ROS motion phases",
+                    )
+            detail = {
+                "workflow_state": workflow_state,
+                "object_may_be_held": object_may_be_held,
+                "evidence_refs": refs,
+            }
+            self._append_event(
+                connection, action_id=action_id, attempt_id=attempt_id,
+                state=workflow_state, event_type="ACTION_WORKFLOW_STATE",
+                actor_id=action["principal_id"], detail=detail, created_at=now,
+            )
+            event = connection.execute(
+                "SELECT * FROM omx_action_events WHERE action_id=? ORDER BY event_id DESC LIMIT 1",
+                (action_id,),
+            ).fetchone()
+            connection.commit()
+        result = dict(event)
+        result["detail"] = json.loads(result.pop("detail_json"))
+        return result
+
+    def complete_pick_place(self, action_id: str, attempt_id: str, *,
+                            result_observed_at: str,
+                            result: Mapping[str, Any]) -> dict[str, Any]:
+        """Complete a local Action only after all phase and workflow evidence is durable."""
+        result_observed_at = _nonempty("result_observed_at", result_observed_at)
+        if not isinstance(result, Mapping):
+            raise ValueError("result must be a JSON object")
+        result_json = _json(dict(result))
+        now = _utc_now()
+        with closing(self._connect()) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            action = self._require_attempt(
+                connection, action_id, attempt_id, {"ACCEPTED", "RUNNING"},
+            )
+            phases = connection.execute(
+                "SELECT phase_id, ordinal, state FROM omx_action_phases "
+                "WHERE action_id=? AND attempt_id=? ORDER BY ordinal",
+                (action_id, attempt_id),
+            ).fetchall()
+            latest_workflow = connection.execute(
+                "SELECT detail_json FROM omx_action_events WHERE action_id=? AND attempt_id=? "
+                "AND event_type='ACTION_WORKFLOW_STATE' ORDER BY event_id DESC LIMIT 1",
+                (action_id, attempt_id),
+            ).fetchone()
+            if (tuple(row["phase_id"] for row in phases) != _PICK_PLACE_PHASES
+                    or tuple(row["ordinal"] for row in phases) != tuple(range(4))
+                    or any(row["state"] != "SUCCEEDED" for row in phases)):
+                raise InvalidActionTransition("Action completion requires four successful ROS phases")
+            if latest_workflow is None:
+                raise InvalidActionTransition("Action completion requires durable workflow evidence")
+            workflow = json.loads(latest_workflow["detail_json"])
+            if (workflow.get("workflow_state") != "ACTION_SUCCEEDED"
+                    or workflow.get("object_may_be_held") is not False):
+                raise InvalidActionTransition("Action completion requires verified gripper release")
+            refs = workflow.get("evidence_refs", {})
+            if not {"gripper_hold_sequence", "gripper_release_sequence"} <= set(refs):
+                raise InvalidActionTransition("Action completion evidence refs are incomplete")
+            if refs["gripper_release_sequence"] <= refs["gripper_hold_sequence"]:
+                raise InvalidActionTransition("release readback must follow the hold readback")
+            connection.execute(
+                """UPDATE omx_actions SET state='SUCCEEDED', result_source='pick-place-workflow',
+                   result_observed_at=?, result_json=?, reason=NULL, updated_at=?
+                   WHERE action_id=? AND attempt_id=?""",
+                (result_observed_at, result_json, now, action_id, attempt_id),
+            )
+            self._append_event(
+                connection, action_id=action_id, attempt_id=attempt_id, state="SUCCEEDED",
+                event_type="PICK_PLACE_ACTION_COMPLETED", actor_id=action["principal_id"],
+                detail={"result_source": "pick-place-workflow",
+                        "result_observed_at": result_observed_at,
+                        "phase_count": len(phases), "result": dict(result)},
+                created_at=now,
+            )
+            updated = connection.execute(
+                "SELECT * FROM omx_actions WHERE action_id=?", (action_id,),
+            ).fetchone()
+            connection.commit()
+        return self._dict(updated)
+
     def _transition_phase(self, action_id: str, attempt_id: str, *, phase_id: str,
                           allowed: set[str], target: str, event_type: str,
                           driver_goal_id: str | None = None) -> dict[str, Any]:
@@ -714,6 +850,19 @@ class ActionStore:
                     (action_id, attempt_id),
                 ).fetchall()
         return [self._phase_dict(row) for row in rows]
+
+    def latest_workflow_state(self, action_id: str, attempt_id: str) -> str | None:
+        with closing(self._connect()) as connection:
+            row = connection.execute(
+                "SELECT detail_json FROM omx_action_events WHERE action_id=? AND attempt_id=? "
+                "AND event_type='ACTION_WORKFLOW_STATE' ORDER BY event_id DESC LIMIT 1",
+                (action_id, attempt_id),
+            ).fetchone()
+        if row is None:
+            return None
+        detail = json.loads(row["detail_json"])
+        state = detail.get("workflow_state")
+        return state if state in _WORKFLOW_STATES else None
 
     def hold_action(self, action_id: str, attempt_id: str, *, reason: str) -> dict[str, Any]:
         reason = _nonempty("reason", reason, maximum=96)
