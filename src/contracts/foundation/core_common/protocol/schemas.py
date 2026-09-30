@@ -981,6 +981,29 @@ class VisionEvidenceList(BaseModel):
     records: list[VisionEvidenceRecord] = Field(default_factory=list)
 
 
+class ActivityOwner(BaseModel):
+    """The token that holds an activity lease. `id` is the opaque token id (whoami)."""
+
+    id: str
+    role: str = ""
+    label: str = ""
+
+
+class RobotActivity(BaseModel):
+    """An attended activity every screen must show (D-321 addendum, v1.67 additive).
+
+    Present only while a calibration session lease is alive; `null` otherwise.
+    """
+
+    kind: str = "CALIBRATING"
+    session_id: str
+    calibration_kind: str
+    label: str
+    owner: ActivityOwner
+    started_at: str
+    remaining_s: float
+
+
 class StateSnapshot(BaseModel):
     """로봇 상태 스냅샷 — /ws/state payload와 동일 (API Ref §6.1)."""
 
@@ -1008,6 +1031,8 @@ class StateSnapshot(BaseModel):
     evidence: dict[str, ValueEvidence] = Field(default_factory=dict)
     hitl_requested: bool = False  # ADR-1000: HITL intervention request flag
     capabilities_degraded: list[str] = Field(default_factory=list)  # ADR-1000: Modules in degraded fallback
+    #: v1.67 additive (D-321 addendum): attended calibration lease, else null.
+    activity: Optional[RobotActivity] = None
 
 
 class HeartbeatPayload(BaseModel):

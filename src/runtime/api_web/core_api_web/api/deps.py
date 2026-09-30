@@ -26,6 +26,7 @@ from typing import Protocol
 # v1 라우터는 core_features 를 직접 import 하지 않고 이 면만 본다.
 # features 를 재조정할 때 전파 반경이 이 파일에서 멈춘다. 이 규칙은
 # runtime/gateway/test/test_v1_import_boundary.py 가 고정한다.
+from core_features.calibration import CalibrationSessionError
 from core_features.command.arbitration import Mode
 from core_features.diagnostics.collector import worst
 from core_features.docking.database import DockError, DockInstance, DockType
@@ -39,6 +40,7 @@ from core_common.protocol.schemas import VisionPreviewStatus, VisionEvidenceReco
 
 #: 라우터용 재수출 면. __all__ 선언으로 재수출임을 명시한다(F401 진정).
 __all__ = [
+    "CalibrationSessionError",
     "Mode",
     "NavigationError",
     "DockError",
@@ -68,6 +70,7 @@ class CoreServicesLike(Protocol):
 
     audit: Any
     battery: Any
+    calibration: Any
     capability: Any
     command: Any
     config: Any

@@ -5,7 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
-from core_api_web.api.v1.common import operator, require_kept
+from core_api_web.api.v1.common import operator, require_calibration_owner, require_kept
 from core_api_web.api.deps import AuthContext, get_services, CoreServicesLike
 from core_api_web.api.errors import ApiError
 from core_api_web.api.deps import Mode
@@ -28,6 +28,7 @@ class TeleopRequest(BaseModel):
 @control_router.post("/mode")
 def set_mode(body: ModeRequest, auth: AuthContext = Depends(operator),
              svc: CoreServicesLike = Depends(get_services)):
+    require_calibration_owner(svc, auth, "mode change")
     new_mode = Mode(body.mode)
     if svc.line_follow.active:
         status = svc.line_follow.stop()
@@ -55,6 +56,7 @@ def set_mode(body: ModeRequest, auth: AuthContext = Depends(operator),
 def teleop(body: TeleopRequest, auth: AuthContext = Depends(operator),
            svc: CoreServicesLike = Depends(get_services)):
     TaskKind.MOVE.require(svc.capability)
+    require_calibration_owner(svc, auth, "teleop")
     require_kept(svc, "teleop")
     accepted, code = svc.command.teleop(body.linear, body.angular, source="manual")
     if not accepted:

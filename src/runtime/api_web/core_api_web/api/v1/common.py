@@ -27,6 +27,20 @@ def require_kept(svc: CoreServicesLike, flag: str) -> None:
         )
 
 
+def require_calibration_owner(svc: CoreServicesLike, auth: AuthContext, action: str) -> None:
+    """D-321 addendum: while a calibration lease is alive only its owner drives.
+
+    E-stop is never routed through here — anyone can always stop the robot.
+    """
+    session = svc.calibration.blocking(auth.token_id)
+    if session is not None:
+        raise ApiError(
+            "CALIBRATION_ACTIVE", 409,
+            f"{action} refused: calibration '{session['label']}' is in progress",
+            detail={"session": session},
+        )
+
+
 def enter_navigation_mode(svc: CoreServicesLike, auth: AuthContext) -> None:
     """D-2: Nav2 velocity only reaches the wheels in NAVIGATION."""
     if svc.line_follow.active:
