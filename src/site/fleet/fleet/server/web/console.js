@@ -6,6 +6,7 @@ import { createRoster } from "./roster.js";
 import { createSignals } from "./signals.js";
 import { createVisionView } from "./vision-view.js";
 import { createFieldView } from "./field-view.js";
+import { createMapFitView } from "./map-fit-view.js";
 import { applyRoleToControls } from "./authorization.js";
 import { DISCOVERY_LABELS, createEnrollmentPanel } from "./enrollment.js";
 import { createPollGate } from "./poll-gate.js";
@@ -547,7 +548,12 @@ el("roster-toggle").addEventListener("click", () => {
 const signals = createSignals({ el, view, log, call, refreshState });
 const visionView = createVisionView({ el, call, auth, authHeaders });
 // D-360: 경기장 제안·보정 뷰·레이어 토글. 레이어가 바뀌면 지도를 다시 그린다.
-createFieldView({ el, view, visionView, onLayersChanged: () => mapView.draw() });
+let mapFit = null;
+const fieldView = createFieldView({ el, view, visionView,
+  onLayersChanged: () => { mapView.draw(); mapFit?.render(); } });
+// D-375: 차선 페인트 지도 맞춤 제안 → 카메라 위 차선·지도 평면 뷰. 수락해도 표시 초안일 뿐이다.
+// 수락한 맞춤은 D-360 경기장 뷰의 대체 경로도 된다(경기장 자동 찾기가 실패하는 설치).
+mapFit = createMapFitView({ el, view, call, visionView, onChanged: () => fieldView.render() });
 
 // --- 신호등 (ROSY-SIGNAL-001) --------------------------------------------------
 
@@ -568,6 +574,7 @@ function saveToken() {
     sessionStorage.removeItem("rosy-console-token");
   }
   visionView.reset();
+  mapFit.reset();
   refreshAuthorization();
   visionView.refreshSources();
 }

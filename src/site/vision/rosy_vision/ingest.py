@@ -192,6 +192,7 @@ class IngestServer:
         # D-375: site map lane paint for the map-proposal view; None disables the view.
         self.map_paint = map_paint
         self._map_cache: dict[str, _MapRun] = {}
+        self._map_done: dict[str, _MapRun] = {}  # last successful run, served while the next runs
         # Started on the first map proposal; tests may swap in another executor or job.
         self._map_executor: Executor | None = None
         self._map_job = map_worker.register
@@ -377,15 +378,21 @@ class IngestServer:
         Never applied to sightings or ``CameraMap``. ``proposal`` is set only when the fit
         passed every gate; a rejected fit is returned as ``rejected_fit`` with the reason
         (its coverage and cut sides still tell the installer where to move the camera).
-        Runs off the event loop on one shared worker thread, single flight per source
-        (429 while running), and a new run only ``_MAP_REGISTER_INTERVAL_S`` after the
-        last one finished. A failed run answers 422 until the next run replaces it.
+        Runs off the event loop on one shared worker thread, single flight per source,
+        and a new run only ``_MAP_REGISTER_INTERVAL_S`` after the last one finished. A read
+        that arrives mid-run gets the source's last successful result (its own
+        ``frame_seq``/age, ``X-Proposal-State: previous``), or 429 when there is none yet.
+        A failed run answers 422 until the next run replaces it.
         """
         run = self._map_cache.get(source)
+        state = "current"
         if run is not None and run.finished is None:  # single flight per source
-            return _http_response(429, b"map registration busy\n", extra={"Retry-After": "1"})
-        if run is None or (run.frame is not frame
-                           and time.monotonic() - run.finished >= _MAP_REGISTER_INTERVAL_S):
+            run = self._map_done.get(source)
+            state = "previous"
+            if run is None:
+                return _http_response(429, b"map registration busy\n", extra={"Retry-After": "1"})
+        elif run is None or (run.frame is not frame
+                             and time.monotonic() - run.finished >= _MAP_REGISTER_INTERVAL_S):
             run = _MapRun(frame=frame)
             self._map_cache[source] = run
             try:
@@ -400,6 +407,10 @@ class IngestServer:
                     self.close_map_worker()
             finally:
                 run.finished = time.monotonic()
+            # Only a run that is still this source's current one: a reconnect mid-run cleared
+            # the caches, and the old connection's fit must not come back as "previous".
+            if not run.failed and self._map_cache.get(source) is run:
+                self._map_done[source] = run
         if run.failed:
             return _http_response(422, b"map registration failed\n",
                                   extra={"X-Frame-State": "detection-error"})
@@ -427,6 +438,7 @@ class IngestServer:
             "Content-Type": "application/json", "Cache-Control": "no-store",
             "X-Frame-Seq": str(frame.header.seq),
             "X-Frame-Age-Ms": str(round(age * 1000)),
+            "X-Proposal-State": state,
         })
 
     # -- per-connection lifecycle ------------------------------------------
@@ -467,6 +479,7 @@ class IngestServer:
         self._sources[source_name] = src
         self._field_cache.pop(source_name, None)
         self._map_cache.pop(source_name, None)
+        self._map_done.pop(source_name, None)
         if replaced is not None:
             # Never await this inline: a half-open old peer (phone lost Wi-Fi)
             # never answers the close frame and would stall the new connection.
@@ -509,6 +522,7 @@ class IngestServer:
             del self._sources[source_name]
             self._field_cache.pop(source_name, None)
             self._map_cache.pop(source_name, None)
+            self._map_done.pop(source_name, None)
 
     async def _status_loop(self, src: _Source) -> None:
         while True:
