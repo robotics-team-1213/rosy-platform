@@ -698,3 +698,10 @@
 - 변경: 시동 보정 노드가 카메라 단계가 읽는 `calibration_store_root` 를 선언한다(미선언이면 rclpy 가 단계 끝에서 예외).
 - 증거: test_camera_extrinsic.py 14 passed — 믹스인이 읽는 모든 파라미터가 노드 소스에 선언돼 있는지 AST 로 확인 (2026-10-01 Windows).
 - gate 변화: 없음.
+
+## 2026-10-01 · fff5825f · feat(perception): D-384 도로 상태 추정기와 섀도 노드
+- 변경: (커밋 59fbd3bf부터 fff5825f까지) ROS-free `sensing/perception/road_state.py`(EKF [d, φ, κ, w], 게이트 벽·NIS·점프·쌍 폭, ≤3 가설과 새 획득 때만의 오른쪽 동점 규칙, 저하 사다리와 CORE lost_after_s 시계, 재획득) + `road_state_model.py`(측정·파라미터·어댑터, 124745Z에서 맞춘 R). 섀도 `road_state_node.py`가 `perception/road_state`(RELIABLE depth 1 TRANSIENT_LOCAL)만 낸다 — 명령 없음. R1은 line_observer keep 모드가 필요하다. 재생 도구는 `tools/perception/road_replay.py`
+- 증거: `test/test_road_state.py` 87 passed, `tools/perception/test/test_road_replay.py` 31 passed (2026-10-01 Windows). R0 재생 124745Z(보정 외부 파라미터): NIS 평균 regime별 통과, coast survival 1.0, on_paint·직선 |err|·NIS 꼬리는 아직 불합격
+- gate 변화: SOURCE/LOCAL GO. ROS-SIM·DEVICE HOLD(노드 WSL 빌드·스모크 없음). R2는 validated_on_curves 전 금지
+- 결정: D-384 Proposed (rev 3)
+- 교훈: 멈춘 로봇의 같은 화면을 매 프레임 새 증거로 넣으면 비평행 쌍이 곡률로 흡수돼 φ가 뒤집힌다 — 움직인 화면만 새 증거다

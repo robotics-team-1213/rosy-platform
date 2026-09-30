@@ -1,6 +1,6 @@
 ## D-384 도로 상태 추정기와 도로 주행 행동 — 선이 사라져도 예상 도로를 잇고, 모르면 오른쪽
 
-**Status:** Proposed (2026-10-01). 차선 유지 소유 세션(rosy-bc) 검토 전 초안이다.
+**Status:** Proposed (rev 3; R0 replay run on 124745Z; R2 gated on validated_on_curves).
 
 잇는 결정:
 

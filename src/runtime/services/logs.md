@@ -256,3 +256,8 @@
 - 증거: `src/runtime/services/test/test_road_behaviour.py` 108 passed (2026-10-01 Windows).
 - gate 변화: SOURCE. CORE 통합(호출 위치)은 차선 유지 소유 세션 결정 전이다.
 - 결정: D-384 §2·§4(Proposed).
+
+## 2026-10-01 · 6d94e88f · docs(road_behaviour): D-384 도로 주행 행동 항목의 커밋 기록
+- 변경: 위 `uncommitted · feat(road_behaviour): D-384 도로 주행 행동 상태 기계` 항목은 커밋 6d94e88f로 들어갔다. 로그는 추가만 하므로(harness lint) 그 머리줄을 고치지 않고 이 항목으로 기록한다
+- 증거: `git log --oneline -- src/runtime/services/core_features/road_behaviour` 첫 커밋 6d94e88f
+- gate 변화: 없음
