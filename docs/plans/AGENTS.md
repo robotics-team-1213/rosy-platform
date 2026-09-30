@@ -87,7 +87,7 @@ Flask parity checklist가 추적용으로 여기에 합류했다. 둘은 실행 
 | `2026-09-28-control-and-contract-boundary-audit.md` | D-317 audit `control` and `core_common` consumers and install boundaries before any further move |
 | `2026-09-29-rosy-pilot-teleop-app-design.md` | D-323 원격 조종 PWA Rosy Pilot(src/hmi/pilot) 설계 — same-origin CORE 서빙, 기기별 드라이버 확장점, NFS 계열 HUD·클릭 조종·카메라 증거 재사용 |
 | `2026-09-29-rosy-pilot-teleop-app.md` | D-323 실행 계획 T1~T11 — 패키지 골격·harness 등록부터 stick/link 순수 시험, 게이트 화면, 카메라 증거 web_common 승격, PWA·Playwright 종단, 게이트 기록까지 |
-| `2026-09-29-pilot-lobby-and-live-video-design.md` | D-343·D-362 로비(mDNS 방)·운전석 한 자리·운전자 MJPEG 실시간 영상 설계 — 방 목록, 좌석 임대, 영상 발행 상향 범위 |
+| `2026-09-29-pilot-lobby-and-live-video-design.md` | D-343·D-368 로비(mDNS 방)·운전석 한 자리·운전자 MJPEG 실시간 영상 설계 — 방 목록, 좌석 임대, 영상 발행 상향 범위 |
 | `2026-09-29-uiux-craft-improvement-plan.md` | D-280 후속 전 표면 크래프트 개선 계획 — Impeccable 렌즈(critique→특화 패스→polish, 유한 검증), G3 사람 평가 프로토콄, G2 보존형 증거, ADR 후보 A-1(표정 어휘)·A-2(온기 문구) |
 | `2026-09-29-pinky-deployment-fast-path.md` | D-325: choose no device artifact, native payload, flashable image, or HOLD from changed-path scope |
 | `2026-09-29-er2-agent-loop-gap-map.md` | ER2형 자율 루프 개념(목표→상위 판단 에이전트→Skill/VLA→Controller→결과→재판단)과 현행 소스 대조 — 아래 절반 실재, 위 절반 계약만 존재(AIV-001), 재판단 마디는 `POLICY_DISPATCH_ENABLED=False` 밸브. 결정은 D-326 |

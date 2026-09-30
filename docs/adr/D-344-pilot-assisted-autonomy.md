@@ -83,7 +83,7 @@
 
 ### Alternatives
 
-- **자동 모드를 켜 두고 손을 떼도 계속 간다.** 거부. 원격 화면은 지연·끊김이 있고(D-362) 무인 주행의
+- **자동 모드를 켜 두고 손을 떼도 계속 간다.** 거부. 원격 화면은 지연·끊김이 있고(D-368) 무인 주행의
   안전 사례는 미션 계층(D-12)이 따로 소유한다.
 - **pilot 이 차선 오차로 조향을 계산해 teleop 으로 보낸다.** 거부. CORE 의 차선 추종 정책(신뢰도·신선도·
   교통 게이트)을 우회한다.
@@ -101,4 +101,4 @@
 - DEVICE: `NAVIGATE` 능력 구성 뒤 실물 녹화.
 
 **Related:** [D-2](D-2-cmd-vel.md), [D-12](D-12-mission-fleet.md), [D-143](D-143-ir-navigation-evidence.md),
-[D-323](D-323-rosy-pilot-teleop-app.md), [D-362](D-362-pilot-live-driver-video.md), [D-342](D-342-manual-limit-commissioning-ladder.md).
+[D-323](D-323-rosy-pilot-teleop-app.md), [D-368](D-368-pilot-live-driver-video.md), [D-342](D-342-manual-limit-commissioning-ladder.md).
