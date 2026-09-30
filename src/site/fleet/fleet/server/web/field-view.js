@@ -3,7 +3,7 @@
 
 import {
   LAYER_KEYS, LAYER_STORAGE_KEY, FIELD_SIZE_PREFIX, parseLayers, normalizeProposal, quadAspect,
-  configuredSize, aspectMismatch, parseFieldSize, homography, applyHomography, rectifiedLayout,
+  configuredSize, aspectMismatch, parseFieldSize, homography, rectifiedLayout,
   ASPECT_TOLERANCE,
 } from "./field-layers.js";
 
@@ -18,6 +18,36 @@ function storageGet(key) {
 }
 function storageSet(key, value) {
   try { localStorage.setItem(key, value); return true; } catch { return false; }
+}
+
+// 출력 픽셀마다 h(캔버스 px → 원본 px)로 원본을 표본한다(최근접). 원본 밖·지평선 뒤는 비운다.
+// 편 결과를 돌려주어 같은 프레임·변환에서는 다시 계산하지 않는다. map-fit-view.js 도 쓴다.
+export function warpImage(ctx, image, h, width, height, scratch) {
+  const iw = image.naturalWidth;
+  const ih = image.naturalHeight;
+  if (!iw || !ih) return null;
+  scratch.width = iw;
+  scratch.height = ih;
+  const sctx = scratch.getContext("2d", { willReadFrequently: true });
+  sctx.drawImage(image, 0, 0);
+  const src = sctx.getImageData(0, 0, iw, ih).data;
+  const out = ctx.createImageData(width, height);
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const px = x + 0.5;
+      const py = y + 0.5;
+      const w = h[6] * px + h[7] * py + h[8];
+      if (!(w > 0)) continue;
+      const sx = Math.round((h[0] * px + h[1] * py + h[2]) / w);
+      const sy = Math.round((h[3] * px + h[4] * py + h[5]) / w);
+      if (sx < 0 || sy < 0 || sx >= iw || sy >= ih) continue;
+      const s = (sy * iw + sx) * 4;
+      const d = (y * width + x) * 4;
+      out.data[d] = src[s]; out.data[d + 1] = src[s + 1]; out.data[d + 2] = src[s + 2]; out.data[d + 3] = 255;
+    }
+  }
+  ctx.putImageData(out, 0, 0);
+  return out;
 }
 
 export function createFieldView({ el, view, visionView, onLayersChanged }) {
@@ -191,36 +221,16 @@ export function createFieldView({ el, view, visionView, onLayersChanged }) {
     ctx.restore();
   }
 
-  // 출력 픽셀마다 역변환으로 원본을 표본한다(최근접). 경기장 둘레 여백도 같은 변환으로 채운다.
-  // 편 결과를 돌려주어 같은 프레임·모서리에서는 다시 계산하지 않는다.
+  // 경기장 사각형 → 원본 모서리 호모그래피로 편다. 경기장 둘레 여백도 같은 변환으로 채운다.
   function warp(ctx, image, corners, layout) {
     const iw = image.naturalWidth;
     const ih = image.naturalHeight;
     if (!iw || !ih) return null;
-    scratch.width = iw;
-    scratch.height = ih;
-    const sctx = scratch.getContext("2d", { willReadFrequently: true });
-    sctx.drawImage(image, 0, 0);
-    const src = sctx.getImageData(0, 0, iw, ih).data;
     const { field } = layout;
     const dstQuad = [[field.x, field.y], [field.x + field.width, field.y],
       [field.x + field.width, field.y + field.height], [field.x, field.y + field.height]];
     const h = homography(dstQuad, corners.map(([x, y]) => [x * (iw - 1), y * (ih - 1)]));
-    if (!h) return null;
-    const out = ctx.createImageData(layout.width, layout.height);
-    for (let y = 0; y < layout.height; y += 1) {
-      for (let x = 0; x < layout.width; x += 1) {
-        const [u, v] = applyHomography(h, x + 0.5, y + 0.5);
-        const sx = Math.round(u);
-        const sy = Math.round(v);
-        if (sx < 0 || sy < 0 || sx >= iw || sy >= ih) continue;
-        const s = (sy * iw + sx) * 4;
-        const d = (y * layout.width + x) * 4;
-        out.data[d] = src[s]; out.data[d + 1] = src[s + 1]; out.data[d + 2] = src[s + 2]; out.data[d + 3] = 255;
-      }
-    }
-    ctx.putImageData(out, 0, 0);
-    return out;
+    return h ? warpImage(ctx, image, h, layout.width, layout.height, scratch) : null;
   }
 
   function setProposal(next) {

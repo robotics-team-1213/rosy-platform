@@ -55,6 +55,11 @@ input, select { font: inherit; color: inherit; }
 .field-rectified[hidden] { display: none; }
 .field-rectified canvas { display: block; width: 100%; height: auto; max-height: 50vh; object-fit: contain; background: var(--ground-deep); border: 1px solid var(--line-14); border-radius: var(--radius-panel); }
 .field-rectified figcaption { margin-top: var(--space-1); }
+/* D-375 지도 맞춤: 겹침 캔버스는 원본 img 와 같은 object-fit 으로 같은 자리에 놓인다. */
+.vision-lane-overlay { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; pointer-events: none; }
+.vision-lane-overlay[hidden], #map-fit-accept[hidden], #map-fit-dismiss[hidden], #map-fit-clear[hidden], .map-fit-guidance[hidden] { display: none; }
+.map-fit-state[data-tone="warn"], .map-fit-guidance { color: var(--status-warn); }
+.map-fit-guidance { margin: var(--space-1) 0 0; font-size: var(--text-label); }
 .field-options { margin-top: var(--space-2); }
 .field-options summary { min-height: var(--target-secondary); display: list-item; padding: var(--space-2) 0; cursor: pointer; }
 .field-options summary:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }

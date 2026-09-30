@@ -83,6 +83,8 @@
               <circle data-corner-handle="2" cx="100" cy="100" r="7" tabindex="0" role="button" aria-label="오른쪽 아래 모서리, X 100%, Y 100%"></circle>
               <circle data-corner-handle="3" cx="0" cy="100" r="7" tabindex="0" role="button" aria-label="왼쪽 아래 모서리, X 0%, Y 100%"></circle>
             </svg>
+            <!-- D-375: 지도 맞춤 제안·수락한 맞춤으로 사이트 차선을 원본 위에 겹친다. 표시 전용. -->
+            <canvas id="vision-lane-overlay" class="vision-lane-overlay" width="16" height="9" aria-hidden="true" hidden></canvas>
           </div>
           <p id="vision-message" role="status">관제 사용자 인증 후 카메라를 선택하세요.</p>
         </div>
@@ -95,6 +97,19 @@
         </div>
         <p class="hint" id="field-proposal-state" role="status">경기장 윤곽을 Vision이 제안합니다. 제안은 확인 전까지 적용되지 않습니다.</p>
         <p class="hint field-storage-state" id="field-storage-state" role="status" hidden></p>
+        <!-- D-375: 차선 페인트로 카메라→지도 맞춤을 제안받는다. 수락해도 이 브라우저의 표시 초안일 뿐이다. -->
+        <div class="field-tools">
+          <ui-button kind="quiet" id="map-fit-detect" type="button">맵 자동 맞춤</ui-button>
+          <ui-button kind="quiet" id="map-fit-accept" type="button" hidden>맞춤 수락</ui-button>
+          <ui-button kind="quiet" id="map-fit-dismiss" type="button" hidden>제안 버리기</ui-button>
+          <ui-button kind="quiet" id="map-fit-clear" type="button" hidden>저장한 맞춤 지우기</ui-button>
+        </div>
+        <p class="hint map-fit-state" id="map-fit-state" role="status">Vision이 차선 페인트로 카메라를 사이트 지도에 맞춰 봅니다. 확인 전까지 적용되지 않고, 관측·주행에는 쓰지 않습니다.</p>
+        <p class="map-fit-guidance" id="map-fit-guidance" role="status" hidden></p>
+        <figure class="field-rectified map-fit-figure" id="map-fit-figure" hidden>
+          <canvas id="map-fit-canvas" width="640" height="300" role="img" aria-label="지도 좌표로 편 카메라 영상과 사이트 차선"></canvas>
+          <figcaption class="hint" id="map-fit-caption"></figcaption>
+        </figure>
         <figure class="field-rectified" id="field-rectified" hidden>
           <canvas id="field-canvas" width="640" height="360" role="img" aria-label="위에서 본 경기장"></canvas>
           <figcaption class="hint" id="field-rectified-caption"></figcaption>
@@ -114,6 +129,8 @@
             <label><input type="checkbox" data-layer="grid" checked> 격자</label>
             <label><input type="checkbox" data-layer="sightings" checked> 카메라 관측</label>
             <label><input type="checkbox" data-layer="poses" checked> CORE 로봇 위치</label>
+            <label><input type="checkbox" data-layer="lanes" checked> 카메라 위 차선</label>
+            <label><input type="checkbox" data-layer="maptop" checked> 지도 맞춤 평면</label>
           </fieldset>
         </details>
         <details id="vision-adjustments" class="vision-adjustments">

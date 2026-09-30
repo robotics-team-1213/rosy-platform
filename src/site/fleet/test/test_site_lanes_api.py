@@ -121,6 +121,29 @@ def test_lane_graph_flags_reject_a_missing_file_and_duplicates(tmp_path):
         parse_lane_graph_flags([f"={LANE_GRAPH}"])
 
 
+def test_console_serves_the_map_fit_view_wired_to_vision_and_fleet():
+    client = _client(None)
+
+    page = client.get("/console").text
+    pure = client.get("/console/assets/map-fit.js")
+    fit_view = client.get("/console/assets/map-fit-view.js").text
+    vision_view = client.get("/console/assets/vision-view.js").text
+    shell = client.get("/console/assets/console.js").text
+
+    assert pure.status_code == 200 and "normalizeMapProposal" in pure.text
+    assert 'from "./map-fit.js"' in fit_view and '"/api/fleet/site-lanes"' in fit_view
+    # The warp is field-view's, not a copy.
+    assert 'import { warpImage } from "./field-view.js"' in fit_view
+    # Vision serves the proposal on the same lease; Fleet never relays it.
+    assert 'fetchFieldProposal("map-proposal")' in vision_view
+    assert "createMapFitView({ el, view, call, visionView })" in shell
+    for element_id in ("map-fit-detect", "map-fit-accept", "map-fit-state", "map-fit-guidance",
+                       "map-fit-canvas", "vision-lane-overlay"):
+        assert f'id="{element_id}"' in page
+    assert 'data-layer="lanes"' in page and 'data-layer="maptop"' in page
+    assert "<script>" not in page
+
+
 def test_console_cli_accepts_repeatable_site_lane_graph_and_paint():
     args = parse_args(["console", "--site-lane-graph", "a=x.yaml", "--site-lane-graph", "y.yaml",
                        "--site-lane-paint", "road_lines.stl"])

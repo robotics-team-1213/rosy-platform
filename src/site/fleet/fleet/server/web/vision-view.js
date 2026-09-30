@@ -383,7 +383,8 @@ export function createVisionView({ el, call, auth }) {
     refreshSources().then(refreshFrame);
   });
   // D-360: Vision 제안은 frame 과 같은 lease 로 same-origin 에서 읽는다. Fleet 은 중계하지 않는다.
-  async function fetchFieldProposal() {
+  // D-375 지도 맞춤(map-proposal)도 같은 lease·같은 규칙이다.
+  async function fetchFieldProposal(view = "field-proposal") {
     const source = select.value;
     if (!source || auth.locked || !auth.token) throw new Error("카메라를 먼저 선택하세요.");
     if (!lease || Date.now() >= leaseExpiresAt) {
@@ -397,10 +398,17 @@ export function createVisionView({ el, call, auth }) {
       });
       leaseExpiresAt = Date.now() + 45000;
     }
-    const path = lease.frame_path.replace(/\/frame$/, "/field-proposal");
+    const path = lease.frame_path.replace(/\/frame$/, `/${view}`);
     const response = await fetch(path, {
       headers: { Authorization: `Bearer ${lease.lease}` }, cache: "no-store",
     });
+    if (response.status === 404 && view === "map-proposal" && !response.headers.get("X-Frame-State")) {
+      const text = await response.text().catch(() => "");
+      if (text.includes("not configured")) {
+        throw new Error("Vision에 차선 페인트 지도가 설정되지 않았습니다(vision --map-paint).");
+      }
+      throw new Error("최신 프레임이 없어 맞출 수 없습니다.");
+    }
     if (response.status === 429) throw new Error("잠시 뒤 다시 찾으세요(초당 1회).");
     if (response.status === 422) throw new Error("프레임을 해석하지 못했습니다. 잠시 뒤 다시 찾으세요.");
     if (!response.ok) {
@@ -427,6 +435,9 @@ export function createVisionView({ el, call, auth }) {
 
   return {
     refreshSources, refreshFrame, reset, fetchFieldProposal, showProposal, acceptCorners,
+    fetchMapProposal: () => fetchFieldProposal("map-proposal"),
+    // 지도 맞춤 행렬은 원본 프레임 픽셀 기준이라 화면 보정 미리보기에서는 원본으로 바꾼다.
+    showRaw: () => { if (viewMode !== "raw") selectViewMode("raw"); },
     currentSource: () => select.value,
     currentCorners: () => readProfile().corners,
     onFrame: (listener) => frameListeners.push(listener),
