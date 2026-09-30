@@ -6,7 +6,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** D-390 1 site-link record and the migration of pairings saved before it. */
+/** D-391 1 site-link record and the migration of pairings saved before it. */
 class SiteLinkTest {
     private val pin = "sha256/" + "A".repeat(43)
     private val otherPin = "sha256/" + "B".repeat(43)

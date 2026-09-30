@@ -24,7 +24,7 @@ enum class NetworkFailure {
     /** The served chain does not contain the certificate pinned by the pairing link (D-341 10). */
     TLS_PIN,
 
-    /** mDNS did not show the site's `tls_host` on this Wi-Fi and there is no manual address (D-390 1). */
+    /** mDNS did not show the site's `tls_host` on this Wi-Fi and there is no manual address (D-391 1). */
     NOT_DISCOVERED,
 
     /** The site's `tls_host` is advertised from more than one address (D-370 5.3). */

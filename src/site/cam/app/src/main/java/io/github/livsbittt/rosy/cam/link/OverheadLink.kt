@@ -88,7 +88,7 @@ data class SensorInfo(val width: Int, val height: Int, val rotationDeg: Int)
  *   capture time by that transmit delay.
  * - Reconnects with [Backoff]; close 4400 or 4409 stops retrying.
  * - With a [resolver], the URL host is the site's `tls_host` and each connect looks its address up through
- *   mDNS ([SiteDns]); a failed connect drops the cached address so the next one browses again (D-390 1).
+ *   mDNS ([SiteDns]); a failed connect drops the cached address so the next one browses again (D-391 1).
  */
 class OverheadLink(
     private val pairing: PairingUri,

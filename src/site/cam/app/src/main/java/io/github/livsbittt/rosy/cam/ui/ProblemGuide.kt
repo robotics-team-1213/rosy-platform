@@ -12,7 +12,7 @@ enum class Problem {
     UNKNOWN_HOST,
     TLS,
     TLS_PIN,
-    /** D-390 `not_discovered`: the site is not advertised on this Wi-Fi (often a same-SSID other network). */
+    /** D-391 `not_discovered`: the site is not advertised on this Wi-Fi (often a same-SSID other network). */
     NOT_DISCOVERED,
     /** D-370 5.3 `conflict`: the site name is advertised from more than one address. */
     SITE_CONFLICT,

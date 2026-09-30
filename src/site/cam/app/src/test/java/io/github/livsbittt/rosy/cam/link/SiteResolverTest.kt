@@ -8,7 +8,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Test
 
-/** D-390 1 re-discovery: mDNS, then `manual_host`, then `not_discovered`, with a fake NSD. */
+/** D-391 1 re-discovery: mDNS, then `manual_host`, then `not_discovered`, with a fake NSD. */
 class SiteResolverTest {
     private val pin = "sha256/" + "A".repeat(43)
     private val site = SiteLink("Rosy site", "rosy-site.local", 443, pin, "t", "overhead-1", secure = true)

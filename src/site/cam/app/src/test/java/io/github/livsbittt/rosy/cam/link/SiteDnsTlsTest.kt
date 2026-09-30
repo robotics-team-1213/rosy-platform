@@ -23,7 +23,7 @@ import org.junit.Assert.fail
 import org.junit.Test
 
 /**
- * The URL keeps `tls_host` while TCP goes to the address mDNS found (D-390 1): SNI and hostname verification
+ * The URL keeps `tls_host` while TCP goes to the address mDNS found (D-391 1): SNI and hostname verification
  * check `tls_host` against the pinned site CA. MockWebServer on 127.0.0.1 stands in for the site; a fake NSD
  * maps `rosy-site.local` to it. The certificate carries no IP SAN, so only the name can pass.
  */

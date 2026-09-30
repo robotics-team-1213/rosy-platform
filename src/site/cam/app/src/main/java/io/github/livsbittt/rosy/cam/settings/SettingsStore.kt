@@ -19,10 +19,10 @@ import kotlinx.coroutines.flow.map
 private val Context.camDataStore: DataStore<Preferences> by preferencesDataStore(name = "cam_settings")
 
 /**
- * The site link (D-390 1, [SiteLink]) and the lens setting in app-private DataStore. The token never goes into
+ * The site link (D-391 1, [SiteLink]) and the lens setting in app-private DataStore. The token never goes into
  * the repository (public repo, D-261 6); backups are disabled in the manifest.
  *
- * A pairing saved before D-390 (key `host`, and `pin`) is read through [SiteLink.from]: an IP host becomes
+ * A pairing saved before D-391 (key `host`, and `pin`) is read through [SiteLink.from]: an IP host becomes
  * `manual_host`, a DNS name `tls_host`. The next [save] rewrites it in the new keys.
  */
 class SettingsStore(context: Context) {
@@ -117,11 +117,11 @@ class SettingsStore(context: Context) {
     }
 
     private companion object {
-        // Before D-390: one dialled host (IP or name) and the pin.
+        // Before D-391: one dialled host (IP or name) and the pin.
         val LEGACY_HOST = stringPreferencesKey("host")
         val LEGACY_PIN = stringPreferencesKey("pin")
 
-        // D-390 1 site-link fields.
+        // D-391 1 site-link fields.
         val SITE_NAME = stringPreferencesKey("site_name")
         val TLS_HOST = stringPreferencesKey("tls_host")
         val MANUAL_HOST = stringPreferencesKey("manual_host")

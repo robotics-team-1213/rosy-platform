@@ -13,7 +13,7 @@ import java.net.InetAddress
 import java.util.concurrent.Executors
 
 /**
- * [SiteBrowser] over Android NSD for the site link's re-discovery (D-390 1, D-341 13). Each call is one short
+ * [SiteBrowser] over Android NSD for the site link's re-discovery (D-391 1, D-341 13). Each call is one short
  * browse of `_rosy-overhead._tcp` under a multicast lock.
  *
  * NSD limits handled here:

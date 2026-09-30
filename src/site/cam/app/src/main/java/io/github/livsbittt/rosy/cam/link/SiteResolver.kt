@@ -29,7 +29,7 @@ sealed interface SiteRoute {
     /** mDNS showed nothing; dial the pairing link's IP ("수동 주소"). */
     data class Manual(val address: InetAddress) : SiteRoute
 
-    /** Neither mDNS nor a manual address: D-390 `not_discovered`. */
+    /** Neither mDNS nor a manual address: D-391 `not_discovered`. */
     data class NotDiscovered(val tlsHost: String) : SiteRoute
 
     /** The same `tls_host` answered from different addresses (D-370 5.3): no automatic choice. */
@@ -39,7 +39,7 @@ sealed interface SiteRoute {
     data object SystemDns : SiteRoute
 }
 
-/** mDNS did not show the site's `tls_host` on this network within the browse timeout (D-390 1). */
+/** mDNS did not show the site's `tls_host` on this network within the browse timeout (D-391 1). */
 class SiteNotDiscoveredException(val tlsHost: String) :
     UnknownHostException("$MARKER: $tlsHost was not seen via mDNS on this Wi-Fi") {
     companion object {
@@ -56,7 +56,7 @@ class SiteConflictException(val tlsHost: String, val addresses: List<InetAddress
 }
 
 /**
- * Finds the site of [link] on every (re)connect (D-341 13, D-390 1). Order: mDNS for `tls_host`, then the
+ * Finds the site of [link] on every (re)connect (D-341 13, D-391 1). Order: mDNS for `tls_host`, then the
  * link's `manual_host`, then `not_discovered`. A discovery is reused for [cacheMs] and dropped by [invalidate]
  * after a failed attempt. Nothing here is persisted: the address is never the saved dial target.
  */
@@ -120,7 +120,7 @@ class SiteResolver(
     }
 
     companion object {
-        /** D-390 1 "정해진 시간": how long a browse may look for the site before `not_discovered`. */
+        /** D-391 1 "정해진 시간": how long a browse may look for the site before `not_discovered`. */
         const val BROWSE_TIMEOUT_MS = 5_000L
         const val CACHE_MS = 30_000L
 

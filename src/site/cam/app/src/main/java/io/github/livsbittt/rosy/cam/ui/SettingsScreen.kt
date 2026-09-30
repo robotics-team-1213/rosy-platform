@@ -203,7 +203,7 @@ fun SettingsScreen(
         }
 
         Field(host, { host = it; siteName = null; saved = false }, R.string.settings_host, invalid == "host")
-        // D-390 1: the saved IP is only the labelled fallback; the name is looked up through mDNS on each connect.
+        // D-391 1: the saved IP is only the labelled fallback; the name is looked up through mDNS on each connect.
         currentLink?.manualHost?.let { manual ->
             Text(
                 stringResource(if (currentLink.tlsHost == null) R.string.settings_manual_only else R.string.settings_manual_host, manual),

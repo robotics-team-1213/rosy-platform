@@ -5,7 +5,7 @@ import org.junit.Assert.assertNull
 import org.junit.Test
 
 /**
- * D-390 4항 1단계 minimum rows. The shared vector `test/fixtures/protocol/failure-classes.v1.json` was not on
+ * D-391 4항 1단계 minimum rows. The shared vector `test/fixtures/protocol/failure-classes.v1.json` was not on
  * main when this was written; when it lands, these rows come from it instead of this table.
  */
 class FailureClassTest {

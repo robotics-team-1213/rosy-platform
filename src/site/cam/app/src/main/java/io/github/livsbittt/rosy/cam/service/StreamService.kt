@@ -145,7 +145,7 @@ class StreamService : LifecycleService() {
             val store = SettingsStore(applicationContext)
             val siteLink = store.siteLink.first()
             val pairing = siteLink?.toPairing()
-            // D-390 1: the site's address is looked up on every (re)connect, never taken from the saved record.
+            // D-391 1: the site's address is looked up on every (re)connect, never taken from the saved record.
             val resolver = siteLink?.let { SiteResolver(it, NsdSiteBrowser(applicationContext)) }
             val plan = CameraSessionPlan.from(pairing)
             val backCameras = try {

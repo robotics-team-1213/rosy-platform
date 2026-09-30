@@ -1,7 +1,7 @@
 package io.github.livsbittt.rosy.cam.settings
 
 /**
- * The saved site connection in the D-390 1 shape (`site_name`, `tls_host`, `port`, CA, `role`, credential,
+ * The saved site connection in the D-391 1 shape (`site_name`, `tls_host`, `port`, CA, `role`, credential,
  * `expires_at`). Pure JVM.
  *
  * - No resolved IP is ever the dial target: the address of [tlsHost] is looked up through mDNS on every
@@ -9,7 +9,7 @@ package io.github.livsbittt.rosy.cam.settings
  * - [manualHost] is the IP a `rosyov://` link carried. It is the labelled fallback "수동 주소", used only when
  *   mDNS finds nothing, and the site certificate must then carry that IP as a SAN.
  * - [caPin] is the D-341 9 pin (`sha256/…` of the site CA). This app has no `ca_pem` yet; the pairing
- *   client (D-390 4항 4단계) will add it. Links printed before the CA-only rule may still hold a leaf pin.
+ *   client (D-391 4항 4단계) will add it. Links printed before the CA-only rule may still hold a leaf pin.
  * - [pairingSubnet] is diagnostic only ("same SSID, different network"); it is never dialled.
  */
 data class SiteLink(
@@ -48,7 +48,7 @@ data class SiteLink(
 
         /**
          * A pairing entered in settings or from a `rosyov://` link, and the migration of a pairing saved before
-         * D-390 (keys `host`/`port`/`token`/`source`/`secure`/`pin`): an IP host becomes [manualHost], a DNS name
+         * D-391 (keys `host`/`port`/`token`/`source`/`secure`/`pin`): an IP host becomes [manualHost], a DNS name
          * becomes [tlsHost]. [previous] keeps what the new input cannot carry: the other host kind when it
          * belongs to the same site (same pin), the site name, and the pairing-time subnet.
          */

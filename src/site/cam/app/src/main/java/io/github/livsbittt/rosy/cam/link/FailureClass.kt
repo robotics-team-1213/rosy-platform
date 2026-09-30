@@ -1,8 +1,8 @@
 package io.github.livsbittt.rosy.cam.link
 
 /**
- * Client failure classes of D-370 5.5 plus D-390 1 `not_discovered`. The machine-readable source is the shared
- * vector `test/fixtures/protocol/failure-classes.v1.json` (D-390 4항 1단계, rosy-00). It was not on main when
+ * Client failure classes of D-370 5.5 plus D-391 1 `not_discovered`. The machine-readable source is the shared
+ * vector `test/fixtures/protocol/failure-classes.v1.json` (D-391 4항 1단계, rosy-00). It was not on main when
  * this table was written, so these rows are the app's reading of D-341 11 and D-370 5.5; `FailureClassTest`
  * is the place to switch to the vector once it lands.
  */
@@ -33,7 +33,7 @@ object FailureClass {
         else -> null
     }
 
-    /** HTTP status on the upgrade or a REST call to class; null for statuses outside the D-390 minimum rows. */
+    /** HTTP status on the upgrade or a REST call to class; null for statuses outside the D-391 minimum rows. */
     fun forHttp(status: Int): String? = when (status) {
         401 -> AUTH_FINAL
         403 -> FORBIDDEN

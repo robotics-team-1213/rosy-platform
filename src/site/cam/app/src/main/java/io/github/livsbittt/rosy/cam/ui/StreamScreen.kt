@@ -344,7 +344,7 @@ private fun ProblemMessage(
 
 /**
  * "사이트가 이 Wi-Fi에서 보이지 않습니다" plus the network now and at pairing time, so a same-SSID other
- * network (another AP or hotspot) is obvious (D-390 1, 2026-10-01 tablet).
+ * network (another AP or hotspot) is obvious (D-391 1, 2026-10-01 tablet).
  */
 @Composable
 private fun notDiscoveredText(lan: LanSnapshot?, pairingSubnet: String?): String {
