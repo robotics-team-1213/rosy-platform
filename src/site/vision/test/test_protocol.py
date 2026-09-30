@@ -8,6 +8,7 @@ not a local fixup.
 from __future__ import annotations
 
 import json
+import ssl
 from pathlib import Path
 
 import pytest
@@ -104,6 +105,7 @@ def test_close_codes_match_the_vector():
     assert protocol.CLOSE_BAD_PROTO == VECTORS["close_codes"]["bad_proto"]
     assert protocol.CLOSE_UNAUTHORIZED == VECTORS["close_codes"]["unauthorized_source"]
     assert protocol.CLOSE_REPLACED == VECTORS["close_codes"]["replaced_by_same_source"]
+    assert protocol.CLOSE_HELLO_TIMEOUT == VECTORS["close_codes"]["hello_timeout"]
 
 
 @pytest.mark.parametrize("vector", VECTORS["pairing_uris"]["valid"], ids=lambda v: v["uri"])
@@ -131,13 +133,56 @@ def test_source_pattern_matches_the_vector():
 def test_generated_pairing_uri_round_trips(vector):
     generated = protocol.pairing_uri(
         vector["host"], vector["port"], vector["token"], vector["source"],
-        secure=vector.get("secure", False),
+        secure=vector.get("secure", False), pin=vector.get("pin"),
     )
     parsed = protocol.parse_pairing_uri(generated)
     assert parsed["host"] == vector["host"]
     assert parsed["port"] == vector["port"]
     assert parsed["token"] == vector["token"]
     assert parsed["source"] == vector["source"]
+    assert parsed["pin"] == vector.get("pin")
+
+
+@pytest.mark.parametrize("vector", VECTORS["pairing_uris"]["valid"], ids=lambda v: v["uri"])
+def test_valid_pairing_uri_carries_its_pin(vector):
+    assert protocol.parse_pairing_uri(vector["uri"])["pin"] == vector.get("pin")
+
+
+def test_pin_pattern_matches_the_vector():
+    assert protocol.PIN_PATTERN.pattern == VECTORS["pairing_uris"]["pin_pattern"]
+
+
+@pytest.mark.parametrize("vector", VECTORS["cert_pins"]["vectors"], ids=lambda v: v["der_utf8"])
+def test_cert_pin_matches_the_shared_vector(vector):
+    der = vector["der_utf8"].encode("utf-8")
+    assert protocol.cert_pin(der) == vector["pin"]
+    # PEM_cert_to_DER_cert only strips the armour, so any bytes stand in for a certificate.
+    bundle = ssl.DER_cert_to_PEM_cert(b"leaf-stand-in") + ssl.DER_cert_to_PEM_cert(der)
+    assert protocol.pem_last_cert_pin(bundle) == vector["pin"]
+
+
+def test_pem_without_a_certificate_is_rejected():
+    with pytest.raises(ValueError, match="no PEM certificate"):
+        protocol.pem_last_cert_pin("not a pem")
+
+
+def test_generator_refuses_a_pin_without_tls():
+    pin = VECTORS["cert_pins"]["vectors"][0]["pin"]
+    with pytest.raises(protocol.PairingError) as excinfo:
+        protocol.pairing_uri("h", 1, "t", "s", secure=False, pin=pin)
+    assert excinfo.value.reason == "pin"
+
+
+def test_receiver_hello_timeout_closes_with_try_again_later():
+    """D-341 §11: the hello timer closes with 1013, which the phone always retries.
+
+    Pre-1013 receivers closed it with 4400 "no hello"; that reason stays in the retry
+    list for one release so older site PCs do not stop the camera for good."""
+    source = (Path(protocol.__file__).parent / "ingest.py").read_text(encoding="utf-8")
+    assert "protocol.CLOSE_HELLO_TIMEOUT," in source
+    assert 'protocol.CLOSE_BAD_PROTO, "no hello"' not in source
+    assert protocol.CLOSE_HELLO_TIMEOUT == VECTORS["close_codes"]["try_again_later"] == 1013
+    assert "no hello" in VECTORS["close_4400_reasons"]["retry"]
 
 
 def test_huge_integer_focal_length_is_ignored_not_raised():
