@@ -217,7 +217,10 @@ ui-button[disabled][reason]:not([reason=""]) {
   border-style: dashed;
 }
 
-ui-button > small[data-reason] {
+/* [kind]까지 적는 이유: 불가역 채움의 `ui-button[kind="irreversible"] small`(ink-on-crit)보다
+   앞서야 한다. 사유는 채움이 없는 비활성에 붙으므로 늘 조용한 잉크다(US-007 밝게 캡처). */
+ui-button > small[data-reason],
+ui-button[kind] > small[data-reason] {
   display: block;
   max-width: 100%;
   color: var(--ink-quiet);

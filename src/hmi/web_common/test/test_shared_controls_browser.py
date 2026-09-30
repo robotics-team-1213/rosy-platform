@@ -136,6 +136,30 @@ def test_reason_renders_visible_text_linked_by_describedby(page):
     assert cleared["described"] == "other"
 
 
+@pytest.mark.parametrize("theme", ["dark", "light"])
+def test_a_reason_reads_quiet_on_every_kind_and_theme(page, theme):
+    """US-007 light /device capture: `ui-button[kind="irreversible"] small` (ink-on-crit, for the
+    danger fill) out-ranked the reason colour, so a disabled irreversible reason drew light ink
+    on the unfilled light ground and vanished. The reason is always quiet ink."""
+    page.goto(f"{HOST}/button")
+    page.wait_for_function("() => customElements.get('ui-button') && document.querySelector('#go small')")
+    colours = page.evaluate("""(theme) => {
+      document.documentElement.setAttribute('data-theme', theme);
+      const quiet = (() => { const p = document.createElement('i'); p.style.color = 'var(--ink-quiet)';
+        document.body.append(p); const c = getComputedStyle(p).color; p.remove(); return c; })();
+      const out = {};
+      for (const kind of ['primary', 'quiet', 'irreversible', 'segment', 'toggle']) {
+        const b = document.createElement('ui-button');
+        b.setAttribute('kind', kind); b.disabled = true; b.setAttribute('reason', '지금 쓰는 토큰');
+        b.innerHTML = '<span>삭제</span>';
+        document.body.append(b);
+        out[kind] = getComputedStyle(b.querySelector('small[data-reason]')).color;
+      }
+      return {quiet, out};
+    }""", theme)
+    assert {kind: colour for kind, colour in colours["out"].items() if colour != colours["quiet"]} == {}
+
+
 @pytest.mark.parametrize("path", ["/console", "/dashboard"])
 def test_every_product_field_clears_the_secondary_target(page, path):
     page.goto(f"{HOST}{path}")
