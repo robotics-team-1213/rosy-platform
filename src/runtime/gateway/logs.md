@@ -569,3 +569,9 @@
 - 증거: `test_line_follow_obstacle_path.py` 의 브리지·설정 파싱 시험 포함 18 passed; gateway `-k "line_follow or clearance or ir"` 247 passed, 5 skipped (2026-09-30 Windows).
 - gate 변화: SOURCE 진행. 기본 설정에서 차선 추종 각속도 상한이 0.70 → 0.60(safety.manual_angular 기본)으로 내려간다 — 가제보 재확인 필요.
 - 결정: D-344 §11 보강, §13.
+
+## 2026-10-01 · uncommitted · fix(core): D-380 실기 검증이 잡은 모드 미러 결함
+
+- 변경: services.py 가 ModeMachine change_listener 로 전이를 StateManager 에 미러한다(mirror_mode). 그동안 POST /mode 는 set_mode 를 직접 불렀지만 SAF-001 e-stop 경로는 transition 만 불러, 정지·해제 내내 스냅샷 모드(대시보드 칩·/robot/state·부팅 표시 핸드오버)가 이전 모드를 말했다.
+- 증거: test_api.py test_the_snapshot_mode_follows_the_e_stop_cycle (변이 증명: 리스너 제거 시 빨강).
+- gate 변화: 없음.
