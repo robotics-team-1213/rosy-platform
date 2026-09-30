@@ -239,3 +239,11 @@
 - 변경: `test_every_disabled_control_states_its_reason_or_is_listed` — dashboard·Fleet JS의 `.disabled =`/`setAttribute('disabled')` 자리와 `setOff`/`setEnabled` 호출은 reason을 쓰거나, (파일, 줄 조각) → 이유의 닫힌 목록에 있어야 한다(요청 중 잠금·초기값·네이티브·공용 안내·'할 일 0'). 목록의 옛 항목도 실패. Fleet 역할 잠금 안내 쌍도 확인.
 - 증거: 변이 5건(setOff 사유 삭제, 직접 비활성의 사유 삭제, setEnabled 사유 삭제, 목록 옛 항목, Fleet 안내 삭제) 전부 빨강 후 복구. 브라우저 web_common 156 passed.
 - gate 변화: 없음.
+
+## 2026-09-30 · aeb31356 · D-359 US-005 세 단 반응형과 칸 반응 공용 부품
+
+- 변경: `components.css`의 뷰포트 질의(30rem)를 `@container (width < 22rem)`로 바꿨다 — ui-form·ui-readout·ui-actions가 자기 칸에 반응한다(칸은 표면이 `container-type: inline-size`로 정한다). 22rem은 320px 폰 칸(18.5rem)과 1366px 콘솔 감지·조작 열(약 23–25rem)을 가른다. `.ui-readout dd`는 늘 `overflow-wrap: anywhere`. `surfaces.yaml`에 `breakpoints` 필드(값 정수 px/rem + reason; 세 단 값·쓰이지 않는 값 금지, 웹만) — Fleet 90rem, 진단 1279/900px(PARKED), lane_live_view 1000/640px. `surface_registry.py`에 `media_conditions`·`breakpoint_problems`와 `breakpoint:` 규칙. 새 `test_responsive_tiers.py`: 모든 웹 표면 CSS·`<style>`의 @media 크기 조건이 범위 문법 세 단(이웃 두 단의 합 포함)·§6.5 높이(40rem)·허용 목록 값인지, 필드 모양, drift(tmp), 공용 부품 @container·surface-panels ui-actions 재정의 없음, 괄호 짝. Fleet 테마 시험은 90rem 미만에서 접힌 '설정'을 연다.
+- 증거: 단위 `python -m pytest src/hmi/web_common/test src/hmi/dashboard/test src/site/fleet/test src/site/games/test src/runtime/sensing/test src/runtime/gateway/test/test_dashboard.py -q` 2714 passed 132 skipped(tiers 시험 추가 전), tiers 6 passed. 브라우저 web_common 161 passed. 변이: Fleet CSS에 `@media (max-width: 41rem)` → 빨강, `}` 하나 추가 → 빨강, 복구 초록.
+- gate 변화: 없음. SOURCE/LOCAL 증거다.
+- 결정: D-359 §6·§7.7.
+- 교훈: CSS 블록을 문자열 치환으로 옮기면 닫는 괄호를 잃거나 남기기 쉽다 — 남은 `}` 하나가 다음 규칙을 조용히 지웠고 시험은 못 봤다. 괄호 짝 검사를 붙였다.

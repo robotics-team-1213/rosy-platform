@@ -46,8 +46,8 @@
 
 ## 최근 기록
 
+- 2026-09-30 · aeb31356 · D-359 US-005 lane_live_view @media 범위 문법
 - 2026-09-30 · faa60733 · D-359 US-002 레인 라이브 뷰 어둡게 고정 표시
 - 2026-09-27 · uncommitted · fix(sim-ui): complete Gazebo viewer tab keyboard contract
 - 2026-09-24 · uncommitted · docs(adr): D-205 real lane mission transition order
 - 2026-09-24 · uncommitted · fix(ci): install python3-opencv for the lane live viewer
-- 2026-09-24 · uncommitted · chore(sim): `navigation` exec_depend 중복 제거

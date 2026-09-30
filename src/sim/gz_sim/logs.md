@@ -152,3 +152,9 @@
 - 변경: `scripts/lane_live_view.html`의 `<html>`에 `data-theme="dark" data-theme-pin="dark"`(자체 팔레트, tokens.css 비사용). `surfaces.yaml` `themes: [dark]`.
 - 증거: `python -m pytest src/sim/gz_sim/test/test_lane_live_view.py -q` 통과.
 - gate 변화: 없음.
+
+## 2026-09-30 · aeb31356 · D-359 US-005 lane_live_view @media 범위 문법
+
+- 변경: `scripts/lane_live_view.html` `max-width: 1000px/640px` → `(width <= 1000px)`·`(width <= 640px)`. 개발 도구라 세 단으로 옮기지 않고 surfaces.yaml `lane-live-view.breakpoints`에 이유와 함께 적었다.
+- 증거: `test_lane_live_view.py`·`test_web_budgets.py` 통과.
+- gate 변화: 없음.

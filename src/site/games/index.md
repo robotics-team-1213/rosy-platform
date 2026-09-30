@@ -52,8 +52,8 @@
 
 ## 최근 기록
 
+- 2026-09-30 · aeb31356 · D-359 US-005 경기 보드 세 단
 - 2026-09-30 · 890309a8 · D-359 US-004 보드 자간·낡은 영상 흐림·마커 칩이 토큰을 쓴다
 - 2026-09-30 · bbba318f · D-359 US-003 피치 캔버스가 styles.css 피치 블록을 읽는다
 - 2026-09-30 · faa60733 · D-359 US-002 경기 보드는 어둡게 고정
 - 2026-09-29 · uncommitted · web-surface-hardening: 보드 CSP·/stop Origin·web_common share 해석
-- 2026-09-29 · uncommitted · fix(games): HOLD alarm is a crit-filled chip (P3 round)

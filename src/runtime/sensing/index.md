@@ -62,8 +62,8 @@
 
 ## 최근 기록
 
+- 2026-09-30 · aeb31356 · D-359 US-005 진단 표면 @media 범위 문법
 - 2026-09-30 · f637c1cd · D-359 US-003 진단 페이지 JS 사본 키를 --ink-quiet에 맞춤
 - 2026-09-30 · faa60733 · D-359 US-002 진단 페이지 어둡게 고정
 - 2026-09-30 · uncommitted · fix(structure): declare imu_bno055 exec_depend
 - 2026-09-29 · uncommitted · feat(traffic): 무신호·관측 융합 폐루크 호스트 시뮬레이션
-- 2026-09-29 · uncommitted · web-surface-hardening: PARKED web_node 루프백·Origin 고정

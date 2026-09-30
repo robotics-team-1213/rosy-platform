@@ -574,3 +574,9 @@
 - 변경: `web/diagnostic.html` `const T`의 `muted` 키를 `inkQuiet`로(사용처 1곳 `T.inkQuiet`), `test_map_raster_color_contract.py` 별칭에 `inkQuiet → ink-quiet`. 시험 뜻(JS 사본 = 같은 파일 CSS 토큰)은 그대로다. PARKED 표면이라 그 밖은 고치지 않았다.
 - 증거: `python -m pytest src/runtime/sensing/test/test_map_raster_color_contract.py -q` 3 passed(US-002 항목의 열린 문제 해소).
 - gate 변화: 없음.
+
+## 2026-09-30 · aeb31356 · D-359 US-005 진단 표면 @media 범위 문법
+
+- 변경: `web/diagnostic.html` `max-width: 1279px/900px` → `(width <= 1279px)`·`(width <= 900px)`(같은 뜻). PARKED라 값은 옮기지 않고 surfaces.yaml `control-diagnostic.breakpoints`에 이유와 함께 적었다.
+- 증거: `test_map_raster_color_contract.py` 통과, `test_responsive_tiers.py` 통과.
+- gate 변화: 없음.

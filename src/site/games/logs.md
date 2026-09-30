@@ -273,3 +273,9 @@
 - 변경: `.kicker` 자간 0.14em → `--track-label`, `#frame[data-evidence]` 0.48 → `--disabled-opacity`, `.chips li`는 경기장 칩 어휘를 두고 글자만 토큰 척도(`--weight-label --text-label/--leading-label --body`, 자간 0 — 320px 네 칸이 넓어지지 않게).
 - 증거: `test/test_rosy_games_surface.py` 9 passed, `src/site/games/test` 통과.
 - gate 변화: 없음.
+
+## 2026-09-30 · aeb31356 · D-359 US-005 경기 보드 세 단
+
+- 변경: 760px → `(width < 64rem)`, 540px → `(width < 30rem)`. `.chips`는 `repeat(auto-fill, minmax(min(100%, max(4.5rem, 25% - gap)), 1fr))` — 넓은 칸은 네 칸을 넘지 않고 320px에서는 세 칸. compact 머리는 부제를 접고 위아래 여백을 줄인다(320×568 105px, 18.5%). 시험 `test_compact_board_keeps_header_budget_stop_and_chips_in_view[390|320]`.
+- 증거: `test/test_games_board_browser.py` 10 passed 7 failed — 7건은 이 가지 이전부터 같은 목록(CSP, main에서도 실패). `test/test_rosy_games_surface.py` 9 passed. 변이 `ui-topbar` `min-height: 300px` → 빨강. 옛 네 칸 격자 되돌림은 초록이다 — US-003 자간 0 뒤로 320px에서 넘치지 않는다(칩 검사는 감시용).
+- gate 변화: 없음.

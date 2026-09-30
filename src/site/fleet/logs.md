@@ -571,3 +571,10 @@
 - 변경: `index.html` 대형·보정 묶음에 `data-role-lock`과 숨은 `ui-status.role-lock-note`(`운용자 권한이 필요합니다`). `authorization.js`는 잠글 때 네이티브 입력을 그 안내에 `aria-describedby`로 잇고 안내를 보이며, 풀 때 되돌린다. 재허가 버튼(잠금·조건 미충족·상태 확인 불가)과 신호등 버튼(오프라인)이 사유를 단다. roster의 사유 전용 도우미 이름은 `blockWith`.
 - 증거: `test/test_fleet_console_browser.py` 28 passed 3 failed(기존 swarm_control, mobile overflow 320/390 headerRows 5 — 변화 없음). 정적 검사 `test_every_disabled_control_states_its_reason_or_is_listed`가 안내 쌍을 본다.
 - gate 변화: 없음.
+
+## 2026-09-30 · aeb31356 · D-359 US-005 Fleet 세 단·머리 접힘
+
+- 변경: 62rem 겹침(992px 암시적 열) → 두 열은 `(width >= 64rem)`, 한 열은 `(width < 64rem)`. 24rem의 `grid-column: 3`은 머리를 다시 짜며 사라졌다. 머리: `index.html`에 `#topbar-more`(설정, `aria-expanded`/`aria-controls`)와 `#topbar-extra`(토큰·접속·역할·테마). 90rem 이상은 extra가 `display: contents`로 한 줄에 서고(역할 표지 12rem에서 자름, 전문은 title), 90rem 미만은 한 줄 격자(이름|연결|시계|설정|정지)에 extra가 둘째 줄로 접힌다; compact는 두 줄(이름·설정 / 연결·시계, 정지는 두 줄). `console.js` `setTopbarOpen` — 잠기면 토큰 칸을 연다; 권한 잠금 선택자에서 `#topbar-more` 제외. 테마 이름표 nowrap(1366 두 줄 접힘 해소 — 1366은 이제 접힌 머리). 42rem → 64rem. 90rem은 surfaces.yaml에 이유와 함께 적었다(편 머리 자연 폭 약 1220–1300px). 시험: 모바일 넘침 시험의 연결·시계 같은 줄 검사를 격자 이름 대신 상자 겹침으로(headerRows 2 ≤ 4), 새 `test_compact_header_budget_keeps_the_stop_in_view[390|320]`(머리 ≤ 20%, 정지 첫 화면, 접힘·펼침), `test_wide_header_keeps_every_item_on_one_line`(1920 편 한 줄, 1366·1280 접힌 한 줄).
+- 증거: `test/test_fleet_console_browser.py` 33 passed 1 failed(기존 `test_the_console_renders_what_swarm_control_says`). 320×568 머리 97px(17.1%), 1366 88px. 변이: `ui-topbar` `min-height: 300px` → 빨강. 캡처 `X:/DevTemp/rosy-d359/shots/us005-fleet-{1920x1080,1366x768,1024x768,390x844,320x568}-{dark,light}.png` — 첫 캡처에서 남은 `}`가 `.dispatch-control` 카드를 지운 것을 보고 ea856f38로 고쳤다.
+- gate 변화: 없음.
+- 결정: D-359 §6.

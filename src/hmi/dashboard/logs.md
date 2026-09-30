@@ -548,3 +548,10 @@
 - 변경: `dom.js`에 `setOff(control, off, reason)`, `setEnabled(id, enabled, reason)`. 패널은 한 줄 지역 `setOff`. 라인 추종·교통 신호·SLAM·관리자 전용·네트워크/릴리스·구 `/dashboard` teleop(`teleopBlockReason`은 `teleopEligible`과 같은 순서)·도킹·카메라 녹화·초기 위치·웨이포인트·토큰 삭제·도크 목록 버튼이 같은 조건에서 짧은 사유를 달고 켜지면 지운다. `map.js`는 `goalReason` 선택지. 역할 화면 teleop 네 버튼은 보이는 준비 문장(readinessStatus)에 `aria-describedby`로 잇는다. 요청 중 잠금·첫 readback 전 초기값·네이티브 select/option·공용 안내가 있는 곳은 `test_shared_controls.py` `DISABLED_WITHOUT_REASON` 닫힌 목록(이유 포함)에 있다. role G2 시험은 버튼을 접근 이름으로 찾는다(보이는 사유가 textContent에 들어가므로).
 - 증거: 단위 2709 passed 132 skipped. 브라우저 `src/hmi/dashboard/test` 50 passed 2 failed → G2 로케이터를 `get_by_role`로 고친 뒤 `test_role_g2_browser.py` 12 passed. `test/test_role_surface_states_browser.py` 5 passed. 변이 5건 빨강 후 복구(X:/DevTemp/rosy-d359/us004b-mutations.log).
 - gate 변화: 없음.
+
+## 2026-09-30 · aeb31356 · D-359 US-005 셸 세 단·세로 예산·구 콘솔 프레임
+
+- 변경: `shell/shell.css` — `.surface-main`·`.surface-slot`이 inline-size 칸(`.surface-main`은 flex 열 안에서 0폭이 되지 않게 `width: 100%`). 운용 고정 프레임은 `(width >= 64rem) and (height >= 40rem)`만, 3열·설정 2단 등은 `(width >= 64rem)`. 30.01/63.99 틈을 없앴다. wide 아래 머리는 두 줄 격자(이름·역할 / 화면 전환, 비상 정지가 두 줄 오른쪽), 알림은 글이 있을 때만 셋째 줄; compact는 링크·정지 안쪽 여백만 줄인다 — 320×568에서 머리 105px(18.5%). `surface-panels.css`의 ui-actions 재정의 삭제. 구 `/dashboard` `styles.css`: `.console` 고정 프레임은 `(width >= 64rem) and (height >= 40rem)`에서 `100dvh`, 그 밖(`(width < 64rem), (height < 40rem)`)은 영역을 쌓아 흐른다. 1080/720px → 64rem. `panels/system/events.css` 1080/720px → 64rem/30rem. 시험: 새 `test/test_surface_viewport_budget_browser.py`(FastAPI 원본으로 /console·/setup·/device × 390×844·320×568: 넘침 0, 머리 ≤ 20%, 비상 정지 첫 화면·끝 스크롤 뒤에도 화면 안), 레이아웃 시험은 두 줄 머리 순서·칸 반응(1440의 좁은 칸은 쌓이고 넓은 칸은 행, 320은 쌓임, 390은 두 열)으로 고침, `test_surface_bridge.py` 분할 키를 `@media (width < 64rem) {`로.
+- 증거: 브라우저 `src/hmi/dashboard/test` 55 passed, `test/test_role_surface_states_browser.py` 5 passed. 변이: components.css `ui-topbar` `min-height: 300px` → 예산 시험 두 칸 빨강. 캡처 `X:/DevTemp/rosy-d359/shots/us005-robot-*.png`(console dark·light, setup·device dark; 1366×768·390×844·320×568).
+- gate 변화: 없음.
+- 결정: D-359 §6.
