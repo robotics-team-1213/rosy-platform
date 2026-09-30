@@ -3752,3 +3752,16 @@
 - gate 변화: 없음.
 - 결정: D-356 Proposed 유지.
 - 교훈: 증거 칸에는 결과를 적거나 "미기록"이라고 적는다. 커밋 메시지를 증거 위치로 가리키지 않는다.
+
+## 2026-09-30 · uncommitted · docs(adr): D-362 제어권·정지 증거 책임 경계
+
+- 변경: Fleet Mission Orchestrator, ER 2, CORE/OMX device-local Action owner, ROS controller/driver, 독립 hardware safety chain, goal verifier의 권한을 분리하고 요청→Action→goal→stop 증거의 의미를 표로 고정했다. Pick-and-place를 자연어 좌표 변환부터 독립 완료 판정까지의 흐름에 대입해 현재 구현/비활성 범위를 명시했다.
+- 증거: D-330/D-333/D-336/D-357/D-358와 Fleet/OMX 소스와 공개 API Reference 경로를 대조. rosy_harness lint 0 errors/12 freshness warnings; network-topology 및 harness 계약 시험 80 passed; diff check 통과.
+- Gate: SOURCE 문서 결정만. wire/API, provider dispatch, OMX capability, ROS-SIM, DEVICE/FIELD, 물리 E-stop/동작 승격 없음.
+
+## 2026-09-30 · uncommitted · docs(contracts): Action과 message type의 책임·식별 수명 정리
+
+- 변경: 제어권 초안 D-362를 다른 main/Pilot 작업의 번호와 충돌하지 않게 D-369로 변경했다. 이전 D-362 제어권 로그는 D-369를 뜻한다. Action 종류·인스턴스·attempt, PRT type/msg_id, UDS operation, 사건 ID, grant generation의 역할을 ADR·CONCEPTS·설계·단계별 계획에 기록했다.
+- 계약 정정: GetAction은 v1에서 action_id만 요청하고 Fleet이 응답의 전체 grant/attempt를 검증한다. API Ref와 DeviceActionLookup 설명을 실제 producer/consumer에 맞췄다. wire/runtime 동작 변경 없음.
+- 검증: 실제 Fleet JSON producer와 OMX API/runner/store의 host 결합 시험 8개 추가, 인접 dispatcher/OMX suite 포함 21 passed. socket peer 인증·ROS·물리 driver는 이 검증의 범위 밖이다. 최종 quick gate + network 문서 계약 119 passed, harness lint 0 errors/기존 freshness warnings 12, 새 시험 flake8 및 diff check 통과.
+- gate 변화: 없음. 새 message bus·자동 시도·provider/OMX 활성화·물리 수용 없음. 계획 Task 2–4는 후속이다.

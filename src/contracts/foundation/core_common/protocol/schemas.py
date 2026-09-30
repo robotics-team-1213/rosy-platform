@@ -278,7 +278,7 @@ class DeviceActionReceipt(BaseModel):
 
 
 class DeviceActionLookup(BaseModel):
-    """Read one local Action using its Fleet-issued identity pair."""
+    """Identity pair for attempt-scoped operations, including cancellation."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 

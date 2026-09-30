@@ -33,8 +33,8 @@
 
 ## 최근 기록
 
+- 2026-09-30 · uncommitted · docs(protocol): DeviceActionLookup 의미를 실제 사용에 맞춤
 - 2026-09-29 · uncommitted · feat(domain): capability lifecycle 단일 어휘 (D-347)
 - 2026-09-29 · uncommitted · feat(protocol): traffic policy signal-source status fields (API Ref v1.56)
 - 2026-09-29 · uncommitted · feat(protocol): TrafficPolicyStatus.junction_rule (API Ref v1.54)
 - 2026-09-29 · uncommitted · feat(protocol): define OMX Device Action and software-stop schemas (D-333/D-336)
-- 2026-09-29 · uncommitted · feat(protocol): add PolicyEvidencePayload (D-268 ladder T1)

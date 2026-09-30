@@ -7,6 +7,13 @@ adr_log: docs/reference/ROSY ADR Log.md
 
 # IDs absent from the ADR log on purpose. Remove an entry once the ADR is written.
 adr_gaps:
+  D-362: "reserved by main uncommitted per-code-type file size budget ADR; remove once it lands"
+  D-363: "reserved by feat/pilot-teleop; remove once the decision lands"
+  D-364: "reserved by feat/pilot-teleop; remove once the decision lands"
+  D-365: "reserved by feat/pilot-teleop; remove once the decision lands"
+  D-366: "reserved by feat/pilot-teleop; remove once the decision lands"
+  D-367: "reserved by feat/pilot-teleop; remove once the decision lands"
+  D-368: "reserved by feat/pilot-teleop; remove once the decision lands"
   D-341: "reserved by branch docs/d341-overhead-console-pairing (overhead console-approved pairing, also on feat/pilot-teleop); remove once it lands"
   D-342: "reserved by the uncommitted Pilot draft in .worktrees/pilot-teleop (manual-limit commissioning ladder); remove once it lands"
   D-343: "reserved by the uncommitted Pilot draft in .worktrees/pilot-teleop (pilot rooms and driver seat); remove once it lands"
