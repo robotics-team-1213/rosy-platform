@@ -422,6 +422,16 @@ foreach ($step in $plan) {
             foreach ($unit in @($imageLayer.active_targets_affected)) {
                 if ($unit) { Write-Warning "$unit changed; its new dependencies apply at the next boot." }
             }
+            foreach ($name in @("pending_parked", "pending_quarantined")) {
+                if ($imageLayer.PSObject.Properties[$name] -and $imageLayer.$name) {
+                    Write-Warning "image-layer sync ${name}: $($imageLayer.$name) -- read it and finish those commands by hand."
+                }
+            }
+            if ($imageLayer.PSObject.Properties["corrupt_manifests"]) {
+                foreach ($path in @($imageLayer.corrupt_manifests)) {
+                    if ($path) { Write-Warning "image-layer backup manifest is unreadable and was ignored: $path" }
+                }
+            }
             if ($imageLayer.PSObject.Properties["next_boot_units"]) {
                 foreach ($unit in @($imageLayer.next_boot_units)) {
                     if ($unit) { Write-Host "takes effect next boot (not restarted): $unit" }

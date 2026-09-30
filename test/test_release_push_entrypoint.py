@@ -336,7 +336,7 @@ if ($all -match '--dry-run') {
     exit 0
 }
 if ($all -match 'sync-image-layer') {
-    '{"ok": true, "release_id": "R", "changed": ["/etc/systemd/system/rosy-io.service"], "new": [], "unchanged": [], "skipped": [], "restart_units": ["rosy-io.service", "evil;reboot"], "backup_dir": "/var/lib/rosy/image-layer-backup/x", "modprobe_changed": [], "active_targets_affected": [], "next_boot_units": ["rosy-network.service"]}'
+    '{"ok": true, "release_id": "R", "changed": ["/etc/systemd/system/rosy-io.service"], "new": [], "unchanged": [], "skipped": [], "restart_units": ["rosy-io.service", "evil;reboot"], "backup_dir": "/var/lib/rosy/image-layer-backup/x", "modprobe_changed": [], "active_targets_affected": [], "next_boot_units": ["rosy-network.service"], "pending_parked": "/var/lib/rosy/image-layer-backup/pending.parked-x.json", "pending_quarantined": null, "corrupt_manifests": ["/var/lib/rosy/image-layer-backup/y/backup-manifest.json"]}'
     exit 0
 }
 if ($all -match 'release.sh') { '{"ok": true, "release_id": "R", "previous": "P"}' }
@@ -372,6 +372,11 @@ def test_a_push_restarts_only_the_active_rosy_units_the_apply_changed(release, t
     assert "image-layer backup: /var/lib/rosy/image-layer-backup/x" in completed.stdout
     assert "takes effect next boot (not restarted): rosy-network.service" in completed.stdout
     assert not any("rosy-network" in line for line in restarts)
+    # Warnings wrap at the console width; compare without whitespace.
+    flat = "".join((completed.stdout + completed.stderr).split())
+    assert "pending_parked:/var/lib/rosy/image-layer-backup/pending.parked-x.json" in flat
+    assert "unreadableandwasignored:/var/lib/rosy/image-layer-backup/y/backup-manifest.json" in flat
+    assert "syncpending_quarantined" not in flat  # null is not warned about
 
 
 @pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
