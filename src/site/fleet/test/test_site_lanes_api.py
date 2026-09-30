@@ -11,7 +11,9 @@ from fleet.cli import parse_args
 from fleet.server.app import create_app
 from fleet.server.console import FleetConsole
 from fleet.server.sightings import SightingService, SightingSource
-from fleet.server.site_lanes import load_lane_graph, load_lane_paint, parse_lane_graph_flags
+from fleet.server.site_lanes import (
+    load_lane_graph, load_lane_paint, parse_lane_graph_flags, unmatched_map_ids,
+)
 from fleet.swarm.robots import RobotEndpoint
 
 REPO = Path(__file__).resolve().parents[4]
@@ -119,6 +121,42 @@ def test_lane_graph_flags_reject_a_missing_file_and_duplicates(tmp_path):
         parse_lane_graph_flags([str(LANE_GRAPH), str(LANE_GRAPH)])
     with pytest.raises(ValueError, match="MAP_ID=PATH"):
         parse_lane_graph_flags([f"={LANE_GRAPH}"])
+
+
+def test_site_lanes_is_readable_by_a_viewer_and_revalidates_by_etag(tmp_path):
+    from hashlib import sha256
+
+    from fleet.server.task_service import FleetTaskService
+    from fleet.server.task_store import FleetTaskStore
+
+    robot = FakeRobot("rosy-pinky-8kcn", state={"robot_id": "rosy-pinky-8kcn", "mode": "IDLE"})
+    console = FleetConsole([RobotEndpoint("rosy-pinky-8kcn", "http://127.0.0.1:8080", "robot-rest")],
+                           [robot])
+    app = create_app(console, sightings=SightingService([_source()], known_robot_ids=console.robot_ids),
+                     task_service=FleetTaskService(FleetTaskStore(tmp_path / "fleet.sqlite3"),
+                                                   robot_ids={"rosy-pinky-8kcn"}),
+                     start_task_dispatcher=False, site_lanes=parse_lane_graph_flags([str(LANE_GRAPH)]),
+                     site_users={sha256(b"viewer-secret").hexdigest(): {
+                         "principal_id": "viewer-1", "role": "viewer"}})
+    with TestClient(app) as client:
+        first = client.get("/api/fleet/site-lanes", headers=_auth("viewer-secret"))
+        assert first.status_code == 200 and first.json()["maps"][0]["polylines"]
+        assert first.headers["Cache-Control"] == "private, no-cache"
+        etag = first.headers["ETag"]
+        again = client.get("/api/fleet/site-lanes",
+                           headers={**_auth("viewer-secret"), "If-None-Match": etag})
+        assert again.status_code == 304 and again.headers["ETag"] == etag
+        assert client.get("/api/fleet/site-lanes", headers={"If-None-Match": etag}).status_code == 401
+
+
+def test_a_path_containing_equals_is_not_split_and_unknown_map_ids_are_reported(tmp_path):
+    odd = tmp_path / "a=b"
+    odd.mkdir()
+    copy = odd / "lane_graph.yaml"
+    copy.write_bytes(LANE_GRAPH.read_bytes())
+    assert list(parse_lane_graph_flags([str(copy)])) == [None]
+    lanes = parse_lane_graph_flags([f"site-v1={LANE_GRAPH}", f"typo-map={copy}"])
+    assert unmatched_map_ids(lanes, [_source()]) == ["typo-map"]
 
 
 def test_console_serves_the_map_fit_view_wired_to_vision_and_fleet():

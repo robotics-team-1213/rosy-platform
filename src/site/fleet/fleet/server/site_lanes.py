@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import hashlib
 import math
+import re
 import struct
 from pathlib import Path
 from typing import Iterable, Mapping, Sequence
@@ -117,8 +118,15 @@ def load_lane_paint(path: Path | str) -> dict:
     return {"paint_triangles": triangles, "paint_sha256": hashlib.sha256(data).hexdigest()}
 
 
+_MAP_ID = re.compile(r"^[A-Za-z0-9_.-]+$")
+
+
 def _flag_value(flag: str, value: str) -> tuple[str | None, str]:
+    # A path may itself contain '=' ("/srv/a=b/lane_graph.yaml"): only a plain map id
+    # (no path separators or drive colon) before the first '=' is a MAP_ID prefix.
     map_id, sep, path = value.partition("=")
+    if sep and map_id and not _MAP_ID.fullmatch(map_id):
+        return None, value
     key = map_id.strip() if sep else None
     if sep and (not key or not path):
         raise ValueError(f"{flag} {value!r}: expected MAP_ID=PATH or PATH")
@@ -139,6 +147,12 @@ def parse_lane_graph_flags(values: Iterable[str] | None, paints: Iterable[str] |
             seen.add(key)
             lanes.setdefault(key, {}).update(loader(path))
     return lanes
+
+
+def unmatched_map_ids(lanes: Mapping[str | None, dict], sources: Sequence) -> list[str]:
+    """MAP_ID prefixes that name no configured sighting source (likely a typo)."""
+    known = {source.map_id for source in sources}
+    return sorted(key for key in lanes if key is not None and key not in known)
 
 
 def site_lanes_payload(lanes: Mapping[str | None, dict], sources: Sequence) -> dict | None:

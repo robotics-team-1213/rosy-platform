@@ -444,13 +444,16 @@ def run_console(args: argparse.Namespace) -> None:
                                        fleet_name=console.fleet_name, discovery=discovery)
         enrollment.load()
         roster.sync()
-    from fleet.server.site_lanes import parse_lane_graph_flags
+    from fleet.server.site_lanes import parse_lane_graph_flags, unmatched_map_ids
 
     try:
         site_lanes = parse_lane_graph_flags(getattr(args, "site_lane_graph", None),
                                             getattr(args, "site_lane_paint", None))
     except ValueError as exc:
         sys.exit(str(exc))
+    for map_id in unmatched_map_ids(site_lanes, sighting_service.sources if sighting_service is not None else ()):
+        print(f"warning: --site-lane-graph/--site-lane-paint map id {map_id!r} matches no sighting "
+              "source; that lane entry is served to no camera", file=sys.stderr, flush=True)
     vision_preview_secret_env = getattr(args, "vision_preview_secret_env", None)
     vision_preview_secret = (os.environ.get(vision_preview_secret_env)
                              if vision_preview_secret_env else None)
