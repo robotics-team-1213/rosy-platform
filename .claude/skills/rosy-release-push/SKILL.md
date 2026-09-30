@@ -63,6 +63,12 @@ Verified twice on 2026-09-26: releases 013 and 014 on a Pinky Pro running image 
    - **Automatic rollback:** a CORE that fails its 45 s readiness check is rolled back by
      `activate-release.sh`.
    - **Manual rollback:** `-Rollback`.
+   - **Calibration guard (D-321 addendum):** before the first remote step the script asks
+     CORE `GET /api/v1/calibration/session` (token from `-ApiToken`, `ROSY_API_TOKEN`, or the
+     stored device credential). An active session **refuses** the push (`REFUSED ... would
+     interrupt a running calibration`) — wait for it, ask its owner to end it, or pass
+     `-Force` only when you know the calibration is abandoned. No token or no answer only
+     warns. `-PrintCommands` skips the check.
 6. **Hand-install the image-only pieces** (bench only; record it). Take them from the
    release's own copy, `/opt/rosy/current/deploy/robot/native/`. udev and modprobe files are
    not in the payload, so copy them from the repo's `deploy/robot/pinky_pro/udev/` and
@@ -72,6 +78,9 @@ Verified twice on 2026-09-26: releases 013 and 014 on a Pinky Pro running image 
    - Scripts go to `/opt/rosy/native-runtime/`, units to `/etc/systemd/system/`.
    - Then run `systemctl daemon-reload`, `udevadm control --reload`, and enable any new
      `.path` or `.service` units.
+   - Any `systemctl restart` of `rosy-core`/`rosy-runtime.target` ends a calibration drive:
+     run `deployobot\pinky_proosy-calibration-guard.ps1 -Robot <robot-ip>` first
+     (exit 3 = a session is active).
    - Reload a module whose options changed (`modprobe -r` then `modprobe`).
 7. **Verify on the live dashboard.** Use `rosy-dashboard-drive` and an administrator code
    from `rosy-device-access`. Check the changed surfaces, log the session out, and delete
