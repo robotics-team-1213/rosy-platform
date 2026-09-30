@@ -214,3 +214,10 @@
 - 변경: `_nav_state()`(덕타이핍)가 `snapshot().navigation`을 검증해 핸드오버에 실었다.
 - 증거: test_host_status_summary.py (키 셋·없음 기록). 변이 증명은 D-380과 같은 기제.
 - gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · fix(host): D-380/D-381 hunk 복원 — 인코딩 복구가 떨어뜨린 status_inputs 확장
+
+- 변경: 32da44f0(D-375)부터 d0323181(D-381)까지의 커밋이 `api/v1/host.py`를 손실 인코딩(UTF-8 바이트를 CP949로 재해석 + BOM 삽입)으로 다시 써, 문서화 문자열과 `reason`/`absent_detail`/`detail` 문자열 전부가 깨졌다 — 카탈로그 시험의 `ast.parse`가 U+FEFF로 죽고 `/host/commissioning` 이 깨진 문구를 실었다. c5ed4f5d가 003a7c1f 판본 복원으로 인코딩은 치유했으나 그 복원이 D-380/D-381의 정당 변경(`_robot_mode`, `_nav_state`, `status_inputs`의 `robot_mode`/`nav_state`)을 함께 떨어뜨렸다. 이 변경이 그 hunk를 다시 적용해 인코딩 복구와 부팅 표시 기능을 모두 갖춘다.
+- 증거: 복구 전 gateway 21 실패(event_catalogue 13, host_cards 2, host_hardware 1, triage_contract 2, console_layout 3) → 0. core 도메인 전체 2014 passed, 29 skipped (2026-10-01 Windows).
+- gate 변화: 없음.
+- 교훈: 인코딩 사고를 "옛 판본으로 되돌리기"로 고칠 때는 그 판본 이후의 정당 커밋이 사라지는지 diff 전체를 읽어야 한다 — 이번 복원은 고장(hunk 없음)을 다른 고장(기능 상실)으로 바꿨다.
