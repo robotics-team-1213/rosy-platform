@@ -633,3 +633,31 @@
 - gate 변화: ROS-SIM HOLD 유지 — blocker에 planning 슬라이스 통과 기록. 남은 것: calibration(병행 세션 진행 중)·safety-policy 그래프, Gazebo 폐루프, 물리 센서.
 - 결정: 없음.
 - 교훈: 검증기의 오판은 노드 소스의 의도 주석(_clear_route "Revoke old routes immediately; silence is not a stop command")과 대조해야 한다 — 계약 문서가 검증기보다 위다.
+
+## 2026-09-30 · 7e467a4b · feat(control): 읽기 전용 IR 차선 교정 도구와 좌·우 부호 확인
+
+- 변경: `control/sensing/perception/ir_calibration.py`(순수) — 카펫·왼쪽·가운데·오른쪽 네 자리 표본에서 채널별 중앙값 끝점, MAD 잡음, ADC 끝(0·4095) 비율, `min_span`·잡음 6 배 분리, 테이프 둔 센서가 가장 크게 움직였는지(채널 순서), `detect_ir_line` 되읽기 부호(카펫 = 선 없음, 왼쪽 ≤ −0.3, 가운데 |e| < 0.3, 오른쪽 ≥ +0.3)를 검사하고 통과 때만 관측 노드 YAML(실수형)과 CORE `ir_calibration_revision` 을 찍는다. `tools/device/ir_line_calibrate.py` — run/capture/compute/check, rclpy 는 표본 수집 때만 import, 구독만 한다.
+- 증거: 새 `test/test_ir_calibration.py` 9 passed — 합성 표본(잡음·이상치) 끝점, 노드와 같은 해시, 역극성 허용, 분리 부족·잡음·빠진 단계·레일 고정·좌우 뒤바뀜 거절, CLI compute 오프라인 (2026-09-30 Windows).
+- gate 변화: SOURCE 진행. DEVICE: NOT RUN(로봇 부재) — 절차 `docs/deployment/pinky-pro-ir-line-calibration-runbook.md`.
+- 결정: D-344 §12 보강.
+
+## 2026-09-30 · 6f00a74d · fix(camera): 기기 IR 교정 덮어쓰기 파일을 line_observer 에 싣는다
+
+- 변경: 실물 `line_observer_node` 는 `rosy-camera`(`camera_preview.launch.py`)에서 돌며 패키지 `config/line_follow.yaml` 만 읽었다 — `/etc/rosy/line_follow.yaml` 에 교정을 써도 닿지 않았다(그 파일은 Compose·내비게이션 그래프만 읽음). 파일이 있으면 패키지 기본 뒤에 덧읽는다. `test/test_native_systemd_contract.py` DECLARED_READS 에 rosy-camera 의 그 경로를 선언.
+- 증거: 선언 전 `test_declared_paths_account_for_every_write_root_in_the_program[rosy-camera.service]` 빨강, 선언 뒤 `test_camera_image_stack.py test_native_systemd_contract.py` 129 passed, 1 skipped (2026-09-30 Windows).
+- gate 변화: SOURCE. 실물 재시작 확인 전.
+- 결정: D-344 §12 보강.
+
+## 2026-09-30 · uncommitted · fix(camera,control): IR 교정 덮어쓰기를 전용 경로·검증으로, 도구 문턱 인자(검토 반영)
+
+- 변경: 덮어쓰기 경로를 `/etc/rosy/ir_calibration.yaml` 로 분리(`/etc/rosy/line_follow.yaml` 은 내비게이션 그래프용 전체 설정). 새 `control/ir_overlay.py` 가 모양(관측 노드 블록 하나, IR 교정 키만, 실수형, 켜면 `IRLineCalibration` 통과)을 검사하고 `camera_preview.launch.py` 는 통과할 때만 싣고 `LogInfo` 로 loaded/skipped 이유를 남긴다 — 잘못된 파일이 관측 노드를 재시작 반복에 빠뜨리지 않는다. `compute_ir_calibration` 은 `min_span` 을 0.1 로 반올림해 찍힌 값과 해시가 같다. CLI 에 `--min-white/--min-contrast/--edge-error`, `check` 는 `--black/--white` 한쪽만이면 거절하고 둘 다 있으면 `--session` 이 필요 없다. 시스템 계약 `rosy-camera` 프로그램 목록에 `ir_overlay.py` 를 넣어 선언한 읽기 경로가 실제로 검사된다.
+- 증거: 새 `test/test_ir_overlay.py`(없음·정상·잘못된 7종·도구 출력이 곧 유효 덮어쓰기·launch 문자열) + `test_ir_calibration.py` 추가 3개 → 23 passed. `test/test_native_systemd_contract.py` 는 선언을 비우면 빨강, 되돌리면 초록 (2026-09-30 Windows).
+- gate 변화: SOURCE. 새 모듈이 설치 이미지에 들어가야 실물에서 쓰인다(릴리스 필요).
+- 결정: D-344 §12 보강.
+
+## 2026-09-30 · 40757d69 · fix(camera): 교정 검사기를 import 못 해도 덮어쓰기만 건너뛴다(재검토 R4)
+
+- 변경: `control/ir_overlay.py` 가 `lane.py` 지연 import 의 ImportError 를 잡아 "skipped: cannot check the calibration" 을 돌려준다 — launch 가 멈추지 않는다.
+- 증거: `test_ir_overlay.py` 에 import 실패 시험 추가, `test_ir_overlay.py test_ir_calibration.py` 24 passed (2026-09-30 Windows).
+- gate 변화: SOURCE.
+- 결정: D-344 §12 보강.

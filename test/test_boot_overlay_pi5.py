@@ -59,7 +59,8 @@ def _run(root: Path, *extra: str) -> subprocess.CompletedProcess[str]:
 def test_the_image_enables_the_imu_bus_through_the_script():
     source = CUSTOMIZER.read_text(encoding="utf-8")
     call = f'bash "$BOOT_OVERLAY" --image-root "$ROOT" --overlay "{IMU}"'
-    assert 'BOOT_OVERLAY="$(dirname "$0")/../robot/configure-boot-overlay-pi5.sh"' in source
+    assert 'BOOT_OVERLAY="$(dirname "$0")/../configure-boot-overlay-pi5.sh"' in source
+    assert (CUSTOMIZER.parent / ".." / "configure-boot-overlay-pi5.sh").is_file()
     assert call in source
     # After the UART edit and before the image is accepted.
     assert source.index('bash "$UART_CONFIG" --image-root "$ROOT"') < source.index(call)

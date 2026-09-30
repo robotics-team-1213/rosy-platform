@@ -163,3 +163,15 @@
 - 변경: `src/hmi/web_common/surfaces.yaml`의 레지스트리 id `rosy-pilot` → `pilot`. 폴더·패키지·아이콘(`src/hmi/pilot`, `pilot`, `icons/pilot.svg`)은 이미 규칙과 같다. `test/architecture/test_app_identity.py`의 pending 줄을 지웠다. 경로 `/pilot`, PWA `start_url`·`scope`, 저장소 키 `rosy.pilot.*`, SW 캐시 이름은 그대로(D-374 3항).
 - 증거: `python -m pytest src/hmi/web_common/test src/hmi/pilot/test src/runtime/api_web/test test/architecture -q` 294 passed, 27 skipped (2026-09-30 Windows).
 - gate 변화: 없음. 장치 절차 없음(계획 단계 2).
+
+## 2026-09-30 · uncommitted · feat(pilot): 차선 자동 계단 거절 이유를 한국어로
+
+- 변경: `screens/drive.js LF_REASON` 에 `limit_level_too_low`("수동 한도 L1 이상에서만 차선 자동")와 `angular_limit_zero`("조향 한도 없음 — 정지") 추가. 캐시 키 `sw.js` 를 `rosy-pilot-shell-2026-09-30-3` 으로 올렸다.
+- 증거: `node --check`, `pytest src/hmi/pilot/test` 35 passed, 13 skipped (2026-09-30 Windows, 브라우저 시험은 opt-in 이라 skip).
+- gate 변화: SOURCE. 태블릿 실화면 확인 전.
+- 결정: D-344 §13(사용자 결정: 차선 자동은 L1 이상).
+
+## 2026-09-30 · uncommitted · refactor(pilot): D-377 page title is the display name
+- 변경: `index.html` `<title>` `Rosy 로봇 — 조종` → `Rosy Pilot`(D-377: 앱 제목은 표시 이름).
+- 증거: `src/hmi/web_common/test/test_surface_titles.py` 통과(web_common 111 passed, 2026-09-30 Windows).
+- gate 변화: 없음.

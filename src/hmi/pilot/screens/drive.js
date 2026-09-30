@@ -298,6 +298,7 @@ export function mountDrive(root, {onExit} = {}) {
     lane_edge_left: "왼쪽 경계선 — 오른쪽으로 비킴", lane_edge_right: "오른쪽 경계선 — 왼쪽으로 비킴",
     lane_departure: "차선 밟음 — 정지, 수동으로 빼세요", lane_guard_stale: "IR 차선 감시 끊김 — 정지",
     nominal_ground_requires_driver: "공칭 지면 — 진행을 누르고 있어야 함",
+    limit_level_too_low: "수동 한도 L1 이상에서만 차선 자동", angular_limit_zero: "조향 한도 없음 — 정지",
   };
   const request = (method, path, body) =>
     method === "GET" ? apiGet(path) : apiGet(path, {method, body: JSON.stringify(body ?? {})});
