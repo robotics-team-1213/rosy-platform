@@ -60,6 +60,13 @@ def test_waypoint_save_tracks_fresh_pose_and_stays_blocked_after_disconnect():
             }""")
             save = page.locator("ui-button").filter(has_text="현재 위치 저장")
             assert save.is_disabled()
+            # D-359 US-007 capture: the name field and the save button wrapped onto two lines with
+            # no gap at 390/320. The form is the shared ui-form so wrapping keeps --gap-form.
+            page.add_style_tag(path=str(REPO / "src/hmi/web_common/tokens.css"))
+            page.add_style_tag(path=str(REPO / "src/hmi/web_common/components.css"))
+            assert page.locator("form").evaluate(
+                "form => form.classList.contains('ui-form') && getComputedStyle(form).rowGap"
+            ) == "8px"
             page.evaluate("""() => window.__callbacks['/api/v1/robot/state'].onData({
               pose:{x:1.2,y:0.4,yaw:0},evidence:{pose:{evidence:'fresh'}}
             })""")
