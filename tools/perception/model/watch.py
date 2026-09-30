@@ -12,18 +12,27 @@ One run (rosy-model-watch.timer, every 10 min):
    gate verdict (pass/fail) is final; an infrastructure error (disk, network,
    HF, missing runtime, timeout) is retried on later runs up to max_attempts,
    then recorded as gave_up.
-4. Deliver: every passed commit is pending per robot. Per robot only the newest
-   pending commit is pushed; older pending ones, and any not newer than what the
-   robot's shadow already holds, are superseded (newest wins). A failed push
-   stays pending and is retried on later runs, without re-running intake, up to
-   max_attempts.
+4. Deliver: every passed commit is pending per robot; a robot added to the
+   config later gets the newest passed commit. Per robot only the newest
+   pending commit is considered; older pending ones, and any not newer than
+   what the watcher last delivered, are superseded (newest wins). Before a push
+   the robot's real pointer and history.jsonl are read:
+   - already on that revision (an operator pushed it) -> ok, no push;
+   - the robot holds a revision the watcher knows to be newer -> superseded;
+   - operator hold: the latest pointer action on the robot is a rollback away
+     from this revision -> not pushed (no attempt used) until an operator
+     pushes something else or runs `deliver.py release-hold`;
+   - otherwise push, as operator "site:<hostname>".
+   A failed read or push stays pending and is retried on later runs, without
+   re-running intake, up to max_attempts.
 The state file is rewritten atomically after every step.
 
 The end of automation is the shadow slot: this only ever calls `deliver push`.
 Selecting a model for driving stays behind the D-205 P3 gate.
 
 HF token: only a secret file, named by config `hf_token_file` or HF_TOKEN_FILE.
-Without one, token=False is passed so huggingface_hub does not fall back to
+A named file that does not exist means no token (a public repo). Without one,
+token=False is passed so huggingface_hub does not fall back to
 HF_TOKEN or $HF_HOME/token. Never an argument, never a repo file.
 
 Config (YAML):
@@ -53,6 +62,7 @@ import datetime as dt
 import json
 import os
 import re
+import socket
 import sys
 import tempfile
 from pathlib import Path
@@ -142,6 +152,33 @@ def plan_deliveries(state: dict, robots: list[str], max_attempts: int):
     return [(sha, robot) for _, sha, robot in todo], superseded
 
 
+def ensure_targets(state: dict, robots: list[str]) -> dict:
+    """Robots with no entry on the newest passed commit (added to the config
+    later) become pending for it. Older commits are never back-filled."""
+    passed = [(rec["order"], sha) for sha, rec in (state.get("commits") or {}).items()
+              if rec.get("intake") == "pass"]
+    if not passed:
+        return state
+    sha = max(passed)[1]
+    missing = [r for r in robots if r not in (state["commits"][sha].get("robots") or {})]
+    for robot in missing:
+        state = _set_robot(state, sha, robot, {"status": "pending", "attempts": 0})
+    return state
+
+
+def delivery_decision(rev: str, order: int, observed: dict, rev_orders: dict) -> str:
+    """push | ok | held | superseded, from the robot's real pointer and history."""
+    from deliver import operator_hold
+    actual = observed.get("shadow")
+    if actual == rev:
+        return "ok"
+    if operator_hold(observed.get("history") or []) == rev:
+        return "held"
+    if actual in rev_orders and rev_orders[actual] > order:
+        return "superseded"
+    return "push"
+
+
 def _set_robot(state: dict, sha: str, robot: str, entry: dict) -> dict:
     rec = state["commits"][sha]
     robots = {**(rec.get("robots") or {}), robot: entry}
@@ -172,7 +209,7 @@ def supersede(state: dict, sha: str, robot: str) -> dict:
 def read_hf_token(env, cfg) -> str | bool:
     """The token from the secret file, else False (never HF_TOKEN / $HF_HOME/token)."""
     path = cfg.get("hf_token_file") or env.get("HF_TOKEN_FILE")
-    if not path:
+    if not path or not Path(path).exists():
         return False
     return Path(path).read_text(encoding="utf-8").strip() or False
 
@@ -265,8 +302,18 @@ def default_deliverer(cfg: dict):
                              "--user", robot.get("user", "rosy"),
                              "--identity", cfg["ssh"]["identity"],
                              "--known-hosts", cfg["ssh"]["known_hosts"],
-                             "--timeout", str(cfg["push_timeout_s"])])
+                             "--timeout", str(cfg["push_timeout_s"]),
+                             "--operator", f"site:{socket.gethostname()}"])
     return push
+
+
+def default_observer(cfg: dict):
+    def read(robot: dict) -> dict:
+        import deliver
+        return deliver.observe(robot["host"], user=robot.get("user", "rosy"),
+                               identity=cfg["ssh"]["identity"],
+                               known_hosts=cfg["ssh"]["known_hosts"])
+    return read
 
 
 # --- one run --------------------------------------------------------------------------------
@@ -299,7 +346,7 @@ def intake_result(sha: str, prev: dict | None, robots: list[str], intake_fn,
 
 
 def main(argv=None, *, list_commits=hf_list_commits, intake_fn=None, deliver_fn=None,
-         env=None) -> int:
+         observe_fn=None, env=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--config", default=DEFAULT_CONFIG)
     args = ap.parse_args(argv)
@@ -329,6 +376,7 @@ def main(argv=None, *, list_commits=hf_list_commits, intake_fn=None, deliver_fn=
     max_attempts = cfg["max_attempts"]
     intake_fn = intake_fn or default_intake(cfg, token)
     deliver_fn = deliver_fn or default_deliverer(cfg)
+    observe_fn = observe_fn or default_observer(cfg)
     retry_later = False
     for sha in plan_run(commits, state, cfg["max_new_per_run"], max_attempts):
         result = intake_result(sha, state["commits"].get(sha), list(robots), intake_fn,
@@ -337,14 +385,27 @@ def main(argv=None, *, list_commits=hf_list_commits, intake_fn=None, deliver_fn=
         state = apply_result(state, sha, result)
         save_state(cfg["state_file"], state)
 
+    state = ensure_targets(state, list(robots))
     todo, superseded = plan_deliveries(state, list(robots), max_attempts)
     for sha, name in superseded:
         state = supersede(state, sha, name)
     save_state(cfg["state_file"], state)
+    rev_orders = {rec["model_revision"]: rec["order"] for rec in state["commits"].values()
+                  if rec.get("intake") == "pass" and rec.get("model_revision")}
     for sha, name in todo:
         rev = state["commits"][sha]["model_revision"]
         try:
-            code = deliver_fn(robots[name], rev)
+            decision = delivery_decision(rev, state["commits"][sha]["order"],
+                                         observe_fn(robots[name]), rev_orders)
+            if decision == "held":
+                print(f"{sha[:12]}: {rev} -> {name}: held (an operator rolled it back; "
+                      "deliver.py release-hold ends the hold)")
+                continue
+            if decision == "superseded":
+                state = supersede(state, sha, name)
+                save_state(cfg["state_file"], state)
+                continue
+            code = 0 if decision == "ok" else deliver_fn(robots[name], rev)
             error = None if code == 0 else f"deliver exit {code}"
         except Exception as exc:  # noqa: BLE001 - one robot never blocks the others
             error = f"{type(exc).__name__}: {exc}"

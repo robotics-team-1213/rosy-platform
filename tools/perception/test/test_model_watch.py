@@ -129,8 +129,8 @@ def test_hf_token_only_from_the_secret_file(tmp_path):
     # HF_TOKEN in the environment is ignored; False stops huggingface_hub from
     # falling back to HF_TOKEN or $HF_HOME/token on its own
     assert watch.read_hf_token({"HF_TOKEN": "hf_env"}, {}) is False
-    with pytest.raises(OSError):
-        watch.read_hf_token({"HF_TOKEN_FILE": str(tmp_path / "missing")}, {})
+    # the unit always names the file; absent means a public repo, not an error
+    assert watch.read_hf_token({"HF_TOKEN_FILE": str(tmp_path / "missing")}, {}) is False
     with pytest.raises(SystemExit):  # there is no --token option
         watch.main(["--config", "x", "--token", "hf_x"])
 
@@ -204,6 +204,12 @@ class Fakes:
         self.failing_robot, self.list_error = failing_robot, list_error
         self.intake_error = intake_error
         self.listed, self.intakes, self.delivers = [], [], []
+        self.shadow, self.history, self.observed = {}, {}, []
+
+    def observe(self, robot):
+        self.observed.append(robot["name"])
+        return {"shadow": self.shadow.get(robot["name"]),
+                "history": list(self.history.get(robot["name"], []))}
 
     def list_commits(self, repo, token):
         self.listed.append((repo, token))
@@ -228,12 +234,16 @@ class Fakes:
         self.delivers.append((robot["name"], rev))
         if robot["name"] == self.failing_robot:
             raise RuntimeError("ssh timeout")
+        self.history.setdefault(robot["name"], []).append(
+            {"action": "push", "revision": rev, "previous": self.shadow.get(robot["name"]) or ""})
+        self.shadow[robot["name"]] = rev
         return 0
 
 
 def _run(cfg, fakes, env=None):
     return watch.main(["--config", str(cfg)], list_commits=fakes.list_commits,
-                      intake_fn=fakes.intake, deliver_fn=fakes.deliver, env=env or {})
+                      intake_fn=fakes.intake, deliver_fn=fakes.deliver,
+                      observe_fn=fakes.observe, env=env or {})
 
 
 def test_first_run_bootstraps_to_the_newest_commit(tmp_path):
@@ -419,4 +429,101 @@ def test_default_deliverer_only_pushes_shadow_with_config_ssh(tmp_path, monkeypa
     assert argv[argv.index("--models") + 1] == str(tmp_path / "models")
     assert argv[argv.index("--user") + 1] == "rosy"
     assert argv[argv.index("--timeout") + 1] == "120"
+    assert argv[argv.index("--operator") + 1] == f"site:{watch.socket.gethostname()}"
     assert watch.load_config(_config(tmp_path))["push_timeout_s"] == 600
+
+
+# --- the robot's real pointer and operator actions win (D-373 decision 7) -------------------
+
+def rev_of(sha):
+    return f"lane-seg-20260930-{sha[:8]}"
+
+
+def test_delivery_decision():
+    orders = {"r1": 1, "r2": 2}
+    obs = lambda shadow, hist=(): {"shadow": shadow, "history": list(hist)}  # noqa: E731
+    assert watch.delivery_decision("r2", 2, obs(None), orders) == "push"
+    assert watch.delivery_decision("r2", 2, obs("r2"), orders) == "ok"
+    assert watch.delivery_decision("r1", 1, obs("r2"), orders) == "superseded"
+    assert watch.delivery_decision("r2", 2, obs("manual-x"), orders) == "push"
+    rolled = [{"action": "push", "revision": "r2", "previous": "r1"},
+              {"action": "rollback", "revision": "r1", "previous": "r2"}]
+    assert watch.delivery_decision("r2", 2, obs("r1", rolled), orders) == "held"
+    released = [*rolled, {"action": "release-hold", "revision": "r1", "previous": "r1"}]
+    assert watch.delivery_decision("r2", 2, obs("r1", released), orders) == "push"
+
+
+def test_operator_rollback_holds_that_revision(tmp_path):
+    _seed(tmp_path, {})
+    cfg = _config(tmp_path)
+    fakes = Fakes([C1])
+    fakes.failing_robot = "pinky-a"
+    assert _run(cfg, fakes) == 1
+    # an operator pushes C1's model by hand and rolls it back: hold on that rev
+    fakes.failing_robot = None
+    fakes.shadow["pinky-a"] = "older"
+    fakes.history["pinky-a"] = [
+        {"action": "push", "revision": rev_of(C1), "previous": "older"},
+        {"action": "rollback", "revision": "older", "previous": rev_of(C1)}]
+    before = len(fakes.delivers)
+    assert _run(cfg, fakes) == 0
+    assert _run(cfg, fakes) == 0
+    assert len(fakes.delivers) == before  # not re-pushed while held
+    rec = _state(tmp_path)["commits"][C1]["robots"]["pinky-a"]
+    assert rec["status"] == "pending" and rec["attempts"] == 1  # a hold costs no attempt
+    fakes.history["pinky-a"].append({"action": "release-hold", "revision": "older",
+                                     "previous": "older"})
+    assert _run(cfg, fakes) == 0
+    assert fakes.delivers[-1] == ("pinky-a", rev_of(C1))
+
+
+def test_model_already_on_the_robot_is_not_pushed_again(tmp_path):
+    _seed(tmp_path, {})
+    cfg = _config(tmp_path)
+    fakes = Fakes([C1])
+    fakes.shadow["pinky-a"] = rev_of(C1)  # an operator got there first
+    assert _run(cfg, fakes) == 0
+    assert fakes.delivers == [("pinky-b", rev_of(C1))]
+    assert _state(tmp_path)["commits"][C1]["robots"]["pinky-a"]["status"] == "ok"
+
+
+def test_unreadable_robot_is_a_failed_attempt(tmp_path):
+    _seed(tmp_path, {})
+    cfg = _config(tmp_path)
+    fakes = Fakes([C1])
+
+    def offline(robot):
+        if robot["name"] == "pinky-a":
+            raise RuntimeError("cannot read the shadow pointer")
+        return {"shadow": None, "history": []}
+
+    fakes.observe = offline
+    assert _run(cfg, fakes) == 1
+    rec = _state(tmp_path)["commits"][C1]["robots"]
+    assert rec["pinky-a"]["status"] == "pending" and rec["pinky-a"]["attempts"] == 1
+    assert rec["pinky-b"]["status"] == "ok"
+
+
+def test_robot_added_later_gets_the_newest_passed_commit(tmp_path):
+    _seed(tmp_path, {})
+    cfg = _config(tmp_path)
+    fakes = Fakes([C1])
+    assert _run(cfg, fakes) == 0
+    fakes.commits = [C2, C1]
+    assert _run(cfg, fakes) == 0
+    cfg = _config(tmp_path, robots=[{"name": "pinky-a", "host": "10.0.0.11"},
+                                    {"name": "pinky-b", "host": "10.0.0.12"},
+                                    {"name": "pinky-c", "host": "10.0.0.13"}])
+    assert _run(cfg, fakes) == 0
+    assert [d for d in fakes.delivers if d[0] == "pinky-c"] == [("pinky-c", rev_of(C2))]
+    assert "pinky-c" not in _state(tmp_path)["commits"][C1]["robots"]
+
+
+def test_ensure_targets_is_pure_and_newest_only():
+    state = {"commits": {C1: _passed(1, {"pinky-a": ("ok", 1)}),
+                         C2: _passed(2, {"pinky-a": ("ok", 1)}),
+                         C3: {"order": 3, "intake": "fail"}}}
+    new = watch.ensure_targets(state, ["pinky-a", "pinky-c"])
+    assert new["commits"][C2]["robots"]["pinky-c"] == {"status": "pending", "attempts": 0}
+    assert "pinky-c" not in new["commits"][C1]["robots"]
+    assert "pinky-c" not in state["commits"][C2]["robots"]
