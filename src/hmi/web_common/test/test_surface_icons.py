@@ -14,6 +14,8 @@ import math
 import re
 from itertools import combinations
 
+import pytest
+
 import surface_registry as registry
 
 WEB = registry.REPO / "src/hmi/web_common"
@@ -92,6 +94,7 @@ def test_glyphs_stay_inside_the_adaptive_safe_zone():
 
 def test_monochrome_silhouettes_are_distinct():
     """Themed (monochrome) icons must still tell the four apart by outline alone."""
+    pytest.importorskip("PIL")
     masks = {}
     for ident in GLYPH_TOKEN:
         alpha = RENDER.render(_svg(ident), 48, mono=True).getchannel("A")

@@ -18,7 +18,6 @@ import re
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
-from PIL import Image, ImageDraw
 
 SVG_NS = "{http://www.w3.org/2000/svg}"
 GRID = 108.0
@@ -111,6 +110,7 @@ def shapes(svg: Path) -> list[dict]:
 
 def render(svg: Path, size: int = 512, *, mono: bool = False, supersample: int = 4) -> Image.Image:
     """RGBA icon. ``mono`` drops the background and paints every glyph white on transparent."""
+    from PIL import Image, ImageDraw  # only drawing needs Pillow; shapes() and subpaths() do not
     big = size * supersample
     scale = big / GRID
     image = Image.new("RGBA", (big, big), (0, 0, 0, 0))
