@@ -37,8 +37,8 @@
 
 ## 최근 기록
 
+- 2026-10-01 · uncommitted · refactor(dashboard): D-359 정리 — 패널의 setOff 사본을 dom.js 하나로
 - 2026-10-01 · uncommitted · test(dashboard): D-359 리뷰 P2-2 — 모드 확인 문구 시험을 한국어로
 - 2026-10-01 · uncommitted · fix(dashboard): D-359 리뷰 P2-5 — 화면 테마 패널은 RosyTheme.choices로 그린다
 - 2026-10-01 · uncommitted · fix(dashboard): D-359 리뷰 P2-2 — 모드·도크·네트워크·차선 추종 열거값을 한국어로
 - 2026-09-30 · uncommitted · refactor(dashboard): D-377 Rosy Robot title and favicon
-- 2026-09-30 · uncommitted · docs(adr): D-358 앱 역할 ADR을 D-370으로 재번호
