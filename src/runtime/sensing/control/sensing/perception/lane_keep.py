@@ -461,7 +461,15 @@ class LaneKeeper:
         if side is not None:
             self._corner_side = side
         if self._corner_side is not None:
-            self._corner_frames = CORNER_LATCH_FRAMES
+            if not steep:
+                self._corner_frames = CORNER_LATCH_FRAMES
+            else:
+                # Steep lines only carry a turn already under way; a later
+                # bend must not keep an old corner alive.
+                self._corner_frames -= 1
+                if self._corner_frames <= 0:
+                    self._corner_side, self._corner_engaged = None, False
+                    return None
         side = self._corner_side
         if side is None:
             return None  # a stop line or a T: not a corner

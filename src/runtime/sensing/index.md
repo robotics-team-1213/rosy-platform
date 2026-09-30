@@ -62,8 +62,8 @@
 
 ## 최근 기록
 
+- 2026-09-30 · uncommitted · feat(control): 'keep' 폐루프 가제보 주행 — L 모서리 회전(선택)과 한쪽 flank 시험(D-353 §5)
 - 2026-09-30 · uncommitted · docs(adr): pilot ADR 번호를 main 과 겹치지 않게 다시 매김
 - 2026-09-30 · uncommitted · feat(control): 지면 기하 차로 유지기 'keep' 모드(D-353 §2)
 - 2026-09-30 · uncommitted · feat(control): 공칭(NOMINAL) 지면과 차선 녹화 재생 벤치(D-353)
 - 2026-09-30 · uncommitted · fix(structure): declare imu_bno055 exec_depend
-- 2026-09-29 · uncommitted · feat(control): image-space two-boundary lane keeper ('between' mode)

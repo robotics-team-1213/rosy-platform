@@ -51,9 +51,12 @@ def main():
     p.add_argument("graph")
     p.add_argument("out")
     p.add_argument("--fps", type=float, default=8.0)
+    p.add_argument("--max-sim-t", type=float, default=None, help="stop at this sim time (s)")
     args = p.parse_args()
     polylines = lane_polylines(yaml.safe_load(open(args.graph)))
     rows = list(csv.DictReader(open(os.path.join(args.run, "frames.csv"))))
+    if args.max_sim_t is not None:
+        rows = [r for r in rows if float(r["sim_t"]) <= args.max_sim_t]
     track = []
     base = base_map(polylines)
     with tempfile.TemporaryDirectory() as tmp:
