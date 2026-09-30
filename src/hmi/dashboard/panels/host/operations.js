@@ -126,7 +126,7 @@ export function mount(root, ctx) {
   const cards = [network, release, commissioning];
   // 두 작업 묶음이 같은 에이전트 상태로 막히면 원인은 패널 위 한 줄에만 둔다.
   const groupNote = el("ui-status", "", ""); groupNote.setAttribute("state", "unavailable");
-  groupNote.id = `host-agent-note-${++noteSerial}`; groupNote.hidden = true;
+  groupNote.id = `host-agent-note-${++noteSerial}`;
   let syncGroup = () => {};
 
   const networkActions = el("div", "ui-readback");
@@ -195,8 +195,10 @@ export function mount(root, ctx) {
       && ["disconnected", "unavailable", "delayed"].includes(card.wrap.dataset.evidence);
     const same = blocked(network, networkPending) && blocked(release, releasePending)
       && (network.wrap.dataset.evidence === "delayed") === (release.wrap.dataset.evidence === "delayed");
-    groupNote.hidden = !same;
+    // 묶음 상태는 있을 때만 문서에 있다 — 숨긴 채 남은 옛 문장이 첫 상태 줄로 읽히지 않게.
+    if (same && !groupNote.isConnected) head.after(groupNote);
     if (!same) {
+      groupNote.remove();
       // 묶음이 풀리면 각 작업 묶음이 제 사유를 되찾는다(숨김·연결을 그 묶음의 식대로).
       const netOff = network.wrap.dataset.available !== "true" && !networkPending;
       const relOff = release.wrap.dataset.available !== "true" && !releasePending;
@@ -251,6 +253,7 @@ export function mount(root, ctx) {
   rollback.addEventListener("click", () => postHost(rollback, "/api/v1/host/release/rollback", {}, "이전 릴리스로 복귀할까요? 현재 실행이 중단될 수 있습니다.", releaseNote, "롤백을 요청했습니다."));
   clearHold.addEventListener("click", () => postHost(clearHold, "/api/v1/host/release/clear-hold", {}, "복구 보류를 해제할까요?", releaseNote, "복구 보류 해제를 요청했습니다."));
 
-  root.append(head, groupNote, ...cards.map(({wrap}) => wrap));
+  root.append(head, ...cards.map(({wrap}) => wrap));
+  syncGroup();
   return () => cards.forEach(({stop}) => stop());
 }
