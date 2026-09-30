@@ -316,6 +316,14 @@
       {
         "uri": "rosyov://192.0.2.10:443/?t=abc&s=overhead-1&tls=1&pin=sha256/WNw0aD4VRr0fYaYNrmbRzYkHQiCLUBxOZjwTo6lQjt",
         "reason": "pin"
+      },
+      {
+        "uri": "rosyov://192.0.2.10:8095/?t=abc&s=overhead-1%0A",
+        "reason": "source"
+      },
+      {
+        "uri": "rosyov://192.0.2.10:443/?t=abc&s=overhead-1&tls=1&pin=sha256/WNw0aD4VRr0fYaYNrmbRzYkHQiCLUBxOZjwTo6lQjtE%0A",
+        "reason": "pin"
       }
     ],
     "source_pattern": "^[A-Za-z0-9_-]{1,32}$",

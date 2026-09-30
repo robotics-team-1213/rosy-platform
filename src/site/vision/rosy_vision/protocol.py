@@ -110,7 +110,7 @@ def validate_hello(message: dict) -> None:
     if message.get("proto") != PROTO:
         raise HelloError("proto", f"proto must be {PROTO!r}")
     source = message.get("source")
-    if not isinstance(source, str) or not SOURCE_PATTERN.match(source):
+    if not isinstance(source, str) or not SOURCE_PATTERN.fullmatch(source):
         raise HelloError("source", f"source must match {SOURCE_PATTERN.pattern}")
     sensor = message.get("sensor")
     if not isinstance(sensor, dict):
@@ -197,7 +197,7 @@ def pairing_uri(
     host: str, port: int, token: str, source: str, *, secure: bool = False, pin: str | None = None
 ) -> str:
     """Build a ``rosyov://`` pairing URI that :func:`parse_pairing_uri` round-trips."""
-    if pin is not None and (not secure or not PIN_PATTERN.match(pin)):
+    if pin is not None and (not secure or not PIN_PATTERN.fullmatch(pin)):
         raise PairingError("pin", "pin needs tls=1 and the form sha256/<43 base64url chars>")
     suffix = "&tls=1" if secure else ""
     if pin is not None:
@@ -236,11 +236,11 @@ def parse_pairing_uri(uri: str) -> dict:
         raise PairingError("tls", "tls must be 0 or 1")
     source = source_values[0]
     secure = tls_values[0] == "1"
-    if not SOURCE_PATTERN.match(source):
+    if not SOURCE_PATTERN.fullmatch(source):
         raise PairingError("source", f"source must match {SOURCE_PATTERN.pattern}")
     pin_values = query.get("pin")
     pin = pin_values[0] if pin_values else None
-    if pin is not None and (not secure or not PIN_PATTERN.match(pin)):
+    if pin is not None and (not secure or not PIN_PATTERN.fullmatch(pin)):
         raise PairingError("pin", "pin needs tls=1 and the form sha256/<43 base64url chars>")
     return {
         "host": host,
