@@ -161,8 +161,11 @@ SIZE_VERDICTS = {
         "accept: sim-only read-only viewer server (HTTP handler + ROS subscriptions); the pure logic already lives in live_view_model.py and the page in lane_live_view.html, covered by test_lane_live_view*.py and test_live_view_model.py (X5)",
     ),
     "control": (
-        32_106,
-        f"split: deploy closure needs only sensing + safety provider (P1a); {CONTROL_SPLIT}",
+        33_090,
+        f"split: deploy closure needs only sensing + safety provider (P1a); {CONTROL_SPLIT} "
+        "(re-judged 2026-09-30 at 33090 after D-356 added the ROS-free learned perception backend "
+        "(sensing/perception/learned), the shadow node and the recording CLI; the learned backend sits "
+        "inside sensing/perception and moves with it — verdict unchanged)",
     ),
 }
 
