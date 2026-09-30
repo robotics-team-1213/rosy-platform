@@ -43,3 +43,26 @@ def test_hold_rule_and_exit_codes_are_stated():
     # holds live in the hold file, not in history: rotation cannot drop them
     assert "history.jsonl" in text and "감사" in text
     assert "마지막 포인터 기록이 그 rollback인 동안" not in text  # the old history rule is gone
+
+
+def test_store_is_the_source_of_truth_and_hf_is_optional():
+    text = DOC.read_text(encoding="utf-8")
+    for needle in ("rosy_ml store-status", "--store", "datasets/<name>/<content_sha>",
+                   "models/inbox", "models/accepted", "models/rejected", "READY",
+                   "store-inbox:", "NAS", "Google Drive", "publish.py"):
+        assert needle in text, needle
+    assert "HF는 선택" in text
+    init = text.split("rosy_ml init", 1)[1].split("```", 1)[0]
+    assert "--store" in init and "--hf-repo" not in init  # the first-time setup needs no HF
+
+
+TRAINING = ROOT / "tools" / "perception" / "training"
+
+
+def test_trainer_docs_need_no_hf():
+    for name in ("COLAB.md", "README.md"):
+        text = (TRAINING / name).read_text(encoding="utf-8")
+        for needle in ("store", "READY", "models/inbox", "content_sha"):
+            assert needle in text, (name, needle)
+        assert "HF는 선택" in text, name
+        assert "로컬 stub 실행으로만" in text, name  # never verified on real Colab

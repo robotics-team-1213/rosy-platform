@@ -151,7 +151,8 @@ sudo -n bash deploy/robot/pinky_pro/dev/install-learned-perception.sh
 1. **모델 접수와 전달.** 운영 PC에서 (자세한 설명은 [운영자 안내](learned-perception-operators.md)):
 
    ```bash
-   rosy_ml intake hf:<hf-org>/<model-repo>@<40자리 commit>   # PASS <model_revision> -> data/perception/models/<rev>
+   rosy_ml store-status                         # inbox에 READY가 맞는 폴더가 있는지
+   rosy_ml intake store-inbox:<inbox 폴더>       # PASS <model_revision> -> data/perception/models/<rev>
    rosy_ml deliver <robot> <model_revision>
    rosy_ml status <robot>
    ```

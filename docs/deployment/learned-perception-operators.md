@@ -34,10 +34,11 @@
 
    ```bash
    rosy_ml init --robot pinky-005=<robot-ip> --robot pinky-007=<robot-ip> \
-     --hf-repo <hf-org>/<model-repo> --hf-token-file <내 HF 토큰 파일> \
-     --core-token-file <CORE viewer 토큰 파일>
+     --store <store 폴더 경로> --core-token-file <CORE viewer 토큰 파일>
    ```
 
+   - `--store`는 팀의 store 폴더다(아래 "store 폴더"). HF는 필요 없다.
+   - HF도 쓰는 팀만 `--hf-repo <hf-org>/<model-repo> --hf-token-file <내 HF 토큰 파일>`을 더한다.
    - 위치: `ROSY_ML_CONFIG`가 있으면 그 경로, 없으면 Windows `%APPDATA%\Rosy\ml.yaml`,
      Linux `~/.config/rosy/ml.yaml`.
    - `operator`는 기본이 OS 사용자 이름이다. 로봇의 `history.jsonl`에 이 이름이 남는다.
@@ -55,12 +56,50 @@
    줄마다 `✓`(통과), `✗`(필수 실패), `!`(권고)가 나온다. `✗`마다 `fix:` 뒤에 할 일이 적혀
    있다. 모든 필수 항목이 통과해야 종료 코드가 0이다. 아래 "문제가 생기면" 표를 본다.
 
+## store 폴더
+
+데이터셋과 모델의 정본은 **store 폴더** 하나다(D-373 결정 8). **HF는 선택이다.** HF 계정이 없어도
+녹화 → 데이터셋 → 학습 → intake → 섀도 배포 전체가 돈다.
+
+- 지금은 사이트 PC의 로컬 폴더다. 나중에 NAS나 Google Drive로 옮길 때는 그 폴더를 마운트하고
+  (사이트 PC의 Google Drive for desktop, 또는 SMB/NFS 마운트) 설정의 `store` 경로만 바꾼다.
+  구조와 명령은 그대로다. 운영자 PC도 같은 폴더를 마운트한 경로를 `--store`로 적는다.
+- 구조:
+
+  ```text
+  <store>/datasets/<name>/<content_sha>/   데이터셋 (한 번 쓰면 바꾸지 않는다)
+  <store>/models/inbox/<폴더>/             학습자가 넘긴 모델
+  <store>/models/accepted/<revision>/      intake 통과
+  <store>/models/rejected/<폴더>/          intake 탈락 (REJECTED.txt에 이유)
+  ```
+
+- **버전은 내용 해시다.** `content_sha`는 폴더 안 파일의 상대 경로와 sha256을 정렬해 해시한 값이다.
+  같은 내용이면 어느 PC, 어느 OS에서 계산해도 같다.
+- **READY 규칙.** inbox 폴더는 안에 `READY` 파일이 있고 그 내용이 폴더의 `content_sha`와 같을 때만
+  완성으로 본다. Drive나 NAS에서 아직 동기화 중인 폴더는 표식이 없거나 맞지 않으므로 사이트 PC가
+  건드리지 않는다. 노트북과 `handover.py`는 파일을 모두 쓴 **뒤에** `READY`를 쓴다.
+- **데이터셋 올리기.** 만든 데이터셋을 store에 넣고, 출력된 ref를 학습자에게 준다.
+
+  ```bash
+  python tools/perception/dataset/publish.py data/perception/datasets/<name>   # --store 기본값은 설정의 store
+  # dataset: store:<name>@<content_sha>   ← 이 줄을 학습자에게 전달
+  ```
+
+  Drive를 못 쓰는 학습자에게는 `datasets/<name>/<content_sha>/` 폴더를 zip으로 묶어 준다.
+  노트북이 풀고 내용 해시를 다시 확인한다.
+- **모델 받기.** 학습자가 zip을 주면 store의 `models/inbox/`에 그대로 푼다(zip 안에 `READY`가 있다).
+  Drive를 마운트한 학습자는 노트북이 inbox에 바로 넣는다.
+- `rosy_ml store-status`: 데이터셋 목록과 inbox(완성/대기), accepted, rejected 개수.
+  새 store에는 `rosy_ml store-status --init`이 폴더 구조를 만든다.
+
 ## 매일 쓰는 명령
 
 ```bash
 rosy_ml status                              # 모든 로봇: 섀도 포인터, 설치된 revision, 최근 기록
 rosy_ml status pinky-005 --history 20       # 한 대, 기록 20줄
-rosy_ml intake hf:<hf-org>/<model-repo>@<40자리 commit>   # 모델 검사 (통과 시 data/perception/models)
+rosy_ml store-status                        # store: 데이터셋, inbox/accepted/rejected
+rosy_ml intake store-inbox:<폴더>           # inbox의 모델 검사 (통과 시 data/perception/models)
+rosy_ml intake <모델 폴더>                   # 아무 폴더나 검사 (HF를 쓰면 hf:<org>/<repo>@<40자리 commit>도 된다)
 rosy_ml deliver pinky-005 <model_revision>  # 섀도에 넣기 (intake 통과본만)
 rosy_ml rollback pinky-005                  # 바로 전 섀도로 되돌리기
 rosy_ml release-hold pinky-005              # 이 로봇의 자동 반영을 다시 켜기 (포인터는 그대로)
@@ -100,16 +139,19 @@ rosy_ml harvest pinky-005                   # 끝난 녹화 세션 가져오기
   정하므로, 기록 파일을 정리(rotation)해도 보류는 사라지지 않는다. 포인터를 옮기기 전에 기록
   파일에 쓸 수 있는지 확인하고, 쓸 수 없으면 아무것도 바꾸지 않고 종료 코드 `3`으로 멈춘다.
   옮긴 뒤 기록만 실패하면 "pointer changed, history not written"을 출력하고 `3`으로 끝난다.
-- **가장 새 모델이 섀도가 된다.** 여러 학습자가 같은 HF 모델 저장소에 올리면, intake를 통과한
-  가장 새 commit이 섀도가 된다(보류 중인 로봇은 제외). 누가 올렸는지는 manifest의 `trainer`와
-  HF commit에 남는다.
+- **가장 새 모델이 섀도가 된다.** 여러 학습자가 같은 store inbox에 넘기면, intake를 통과한
+  가장 새 폴더(`READY`가 가장 늦은 것)가 섀도가 된다(보류 중인 로봇은 제외). 누가 넘겼는지는
+  manifest의 `trainer`에 남는다. HF 백엔드를 쓰면 가장 새 commit이 같은 규칙을 따른다.
 - 사이트 자동 반영은 로봇 잠금 안에서 보류 파일을 한 번 더 본다. 그 사이에 누가 보류를 걸었으면
   종료 코드 `76`("held")으로 아무것도 바꾸지 않고 물러난다.
 
 ## 사이트 PC 자동 반영 켜기
 
-사이트 PC(Ubuntu)의 `rosy-model-watch.timer`가 10분마다 HF 모델 저장소의 새 commit을 보고,
-intake를 통과하면 설정된 로봇 모두의 섀도에 넣는다. 끝은 섀도다. 주행 반영은 하지 않는다.
+사이트 PC(Ubuntu)의 `rosy-model-watch.timer`가 10분마다 store의 `models/inbox/`에서 `READY`가 맞는
+새 폴더를 찾아 intake하고, 통과하면 `models/accepted/<revision>/`으로 옮기고 설정된 로봇 모두의
+섀도에 넣는다. 탈락하면 `models/rejected/<폴더>/`로 옮기고 `REJECTED.txt`에 이유를 쓴다.
+디스크·런타임 같은 설비 오류면 inbox에 그대로 두고 다음 실행에 다시 한다. 끝은 섀도다.
+주행 반영은 하지 않는다. HF 모델 저장소를 보게 하려면 설정에 `backend: hf`와 `repo:`를 쓴다(선택).
 
 1. 검토된 commit으로 `/opt/rosy/model-watch/src` 체크아웃과 venv를 준비한다
    ([`deploy/site/README.md`](../../deploy/site/README.md)의 "Automatic shadow delivery").
@@ -123,11 +165,13 @@ intake를 통과하면 설정된 로봇 모두의 섀도에 넣는다. 끝은 �
 3. **사이트 전용 SSH 키.** 스크립트가 `/etc/rosy/model-watch/site-ed25519`를 만든다. 사람의
    키를 쓰지 않는다. 출력된 `.pub` 한 줄을 각 로봇 `rosy`의 `authorized_keys`에 넣는다.
    사이트를 끊을 때는 이 줄만 지우면 된다.
-4. **읽기 전용 HF 토큰.** 비공개 저장소면 HF에서 read 권한 토큰을 만들어
-   `sudoedit /etc/rosy/site/secrets/hf_token`에 붙여 넣는다. 파일이 비어 있거나 없으면
-   토큰 없이 동작한다(공개 저장소).
-5. `sudoedit /etc/rosy/model-watch.yaml`에 로봇 이름과 주소, 저장소, `replay_root`를 채운다.
-   `replay_root` 아래 `data/teleop/learning/*.mp4` 재생 클립이 있어야 intake가 돈다.
+4. `sudoedit /etc/rosy/model-watch.yaml`에 로봇 이름과 주소, `store`(기본 `/srv/rosy/store`),
+   `replay_root`를 채운다. `replay_root` 아래 `data/teleop/learning/*.mp4` 재생 클립이 있어야
+   intake가 돈다. 스크립트가 store 폴더와 구조를 만들고, 서비스가 그 경로에 쓸 수 있게
+   unit drop-in(`ReadWritePaths`)을 넣는다. store를 NAS나 Drive로 옮길 때는 마운트한 뒤
+   `store`만 바꾸고 스크립트를 다시 실행한다.
+5. **HF 토큰은 `backend: hf`일 때만.** 비공개 HF 저장소를 보게 할 때만 read 권한 토큰을
+   `sudoedit /etc/rosy/site/secrets/hf_token`에 붙여 넣는다. store만 쓰면 토큰 파일은 만들지 않는다.
 6. 스크립트를 다시 실행하면 타이머를 켜고, 서비스 사용자로 `rosy_ml doctor --watch-config`를
    돌린다.
 
@@ -146,7 +190,11 @@ intake를 통과하면 설정된 로봇 모두의 섀도에 넣는다. 끝은 �
 | `sudo -n works ✗` | `rosy`의 비밀번호 없는 sudo가 없다 | 오래된 이미지다. 관리자에게 이미지 확인 요청 |
 | `/var/lib/rosy/models is root:rosy-camera 750 ✗` | 모델 디렉터리가 없거나 권한이 다르다 | 벤치 로봇은 `deploy/robot/pinky_pro/dev/install-learned-perception.sh`, 아니면 D-373 이미지 |
 | `robot python3 imports onnxruntime ✗` | 로봇에 추론 런타임이 없다 | 위와 같은 설치 스크립트 또는 재플래시 |
-| `HF token file ... ✗` | 적어 둔 토큰 파일이 없다 | 파일을 만들거나 공개 저장소면 `hf_token_file`을 뺀다 |
+| `store ... exists ✗` | store 폴더가 없다, 또는 NAS·Drive가 마운트되지 않았다 | 마운트하거나 폴더를 만든다. 설정의 경로가 마운트된 경로인지 확인 |
+| `store ... is writable ✗` | store에 쓸 권한이 없다 | 내 사용자(사이트 PC는 `rosy-model-watch`)에게 쓰기 권한 |
+| `store layout: missing ... ✗` | `datasets`나 `models/inbox` 같은 폴더가 없다 | `rosy_ml store-status --init` |
+| `! no store configured` | 설정에 `store`가 없다 | `rosy_ml init --store <경로> --force` 또는 설정에 `store:` 추가 |
+| `HF token file ... ✗` | (HF를 쓸 때만) 적어 둔 토큰 파일이 없다 | 파일을 만들거나 공개 저장소면 `hf_token_file`을 뺀다 |
 | `replay clips for intake (0) ✗` | 재생 클립이 없다 | `replay_root`(또는 저장소 루트) 아래 `data/teleop/learning/*.mp4` |
 | `! local onnxruntime` | 내 PC에서 intake를 못 돌린다 (권고) | venv에 `pip install onnxruntime` |
 
