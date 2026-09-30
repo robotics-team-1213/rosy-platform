@@ -5,11 +5,15 @@ robots:
   - name: <robot-name>
     host: <robot-ip>
 ssh:
-  identity: /etc/rosy/model-watch/rosy-operator-ed25519
+  # the site host's own key, authorized for rosy on each robot (not the operator key)
+  identity: /etc/rosy/model-watch/site-ed25519
   known_hosts: /etc/rosy/model-watch/known_hosts
 intake_out: /var/lib/rosy-model-watch/models
 state_file: /var/lib/rosy-model-watch/state.json
 # Intake replays data/teleop/learning/*.mp4 under this directory.
 replay_root: /var/lib/rosy-model-watch/replay
+# since: <40-hex commit sha>   # optional: skip this commit and everything older
 max_new_per_run: 1
 history_limit: 20
+max_attempts: 5
+push_timeout_s: 600

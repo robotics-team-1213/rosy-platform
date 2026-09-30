@@ -41,8 +41,12 @@ def test_service_is_an_unprivileged_hardened_oneshot():
     assert unit["User"] == ["rosy-model-watch"] and unit["Group"] == ["rosy-model-watch"]
     assert unit["StateDirectory"] == ["rosy-model-watch"]
     for key, value in (("NoNewPrivileges", "yes"), ("ProtectSystem", "strict"),
-                       ("ProtectHome", "yes"), ("PrivateTmp", "yes")):
-        assert unit[key] == [value]
+                       ("ProtectHome", "yes"), ("PrivateTmp", "yes"), ("UMask", "0077"),
+                       ("PrivateDevices", "yes"), ("ProtectKernelTunables", "yes"),
+                       ("ProtectKernelModules", "yes"), ("ProtectKernelLogs", "yes"),
+                       ("RestrictNamespaces", "yes"), ("SystemCallFilter", "@system-service")):
+        assert unit[key] == [value], key
+    assert "ReadWritePaths" not in unit  # StateDirectory is the only writable path
 
 
 def test_timer_runs_the_service_every_10_minutes():
@@ -65,5 +69,9 @@ def test_example_config_matches_the_watcher_and_the_unit_state_dir(tmp_path):
 
 def test_readme_documents_the_install_paths():
     readme = (SITE / "README.md").read_text(encoding="utf-8")
-    for needle in ("rosy-model-watch.timer", CONFIG, TOKEN, "rosy-model-watch"):
-        assert needle in readme
+    for needle in ("rosy-model-watch.timer", CONFIG, TOKEN, "rosy-model-watch",
+                   "authorized_keys", "ssh-keygen", "since:", "max_attempts",
+                   "not part of the signed site candidate"):
+        assert needle in " ".join(readme.split()), needle  # prose is line-wrapped
+    section = readme.split("## Automatic shadow delivery")[1].split("\n## ")[0]
+    assert "operator key" not in section  # the site host has its own key

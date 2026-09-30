@@ -528,21 +528,36 @@ outstanding.
 ## Automatic shadow delivery of new perception models (D-373)
 
 `rosy-model-watch.timer` runs `tools/perception/model/watch.py` every 10
-minutes. Each run lists the commits of one Hugging Face model repository,
-runs intake on each unseen commit (oldest first, at most `max_new_per_run`),
-and on a pass pushes that model to every configured robot's **shadow** slot
-with `deliver.py push`. The state file records each commit's verdict and
-per-robot result, so a commit is processed once. A robot that is off or
-unreachable is recorded as failed and does not block the others; re-push it by
-hand with `deliver.py push`. Automation stops at the shadow slot: selecting a
-learned model for driving is not automated and stays behind the D-205 gate.
-The HF listing and the model download are the only outbound calls; robots are
-reached over SSH as `rosy` with `sudo -n` (D-373 decision 6).
+minutes. Each run lists the newest `history_limit` commits of one Hugging Face
+model repository, runs intake on each unseen commit (oldest first, at most
+`max_new_per_run`), and on a pass pushes that model to every configured
+robot's **shadow** slot with `deliver.py push`. Automation stops at the shadow
+slot: selecting a learned model for driving is not automated and stays behind
+the D-205 gate. The HF listing and the model download are the only outbound
+calls; robots are reached over SSH as `rosy` with `sudo -n` (D-373 decision 6).
+
+The state file records every commit, so a commit is processed once:
+
+- **First run.** Without a state file, every listed commit except the newest
+  is recorded as skipped (`bootstrap`), so an old history is not replayed.
+  To start from a known point instead, set `since: <commit sha>` in the
+  config: that commit and all older ones are skipped, every later one is
+  processed.
+- **Gate result.** An intake `pass` or `fail` is final.
+- **Infrastructure errors** (network, HF, disk, missing runtime, timeouts) are
+  not a verdict. The commit is retried on later runs up to `max_attempts`
+  (default 5), then recorded as `gave_up`.
+- **Robots.** A passed commit stays pending for each robot until its push
+  succeeds. A robot that is off or unreachable does not block the others and
+  is retried on later runs, without re-running intake, up to `max_attempts`.
+  The newest model wins: once a newer commit is pending or delivered for a
+  robot, an older pending one is marked `superseded` and never pushed.
 
 The watcher needs a reviewed source checkout (it imports the manifest contract
 and runner from `src/runtime/sensing`) and a Python venv with `onnxruntime`,
 `opencv-python-headless`, `numpy`, `PyYAML`, and `huggingface_hub`. It is not
-part of the signed site candidate. Install it on the Ubuntu site host:
+part of the signed site candidate (follow-up: add the units and a pinned
+watcher bundle to `build_candidate.py`). Install it on the Ubuntu site host:
 
 ```sh
 sudo useradd --system --no-create-home --shell /usr/sbin/nologin rosy-model-watch
@@ -564,15 +579,21 @@ sudo install -o root -g rosy-model-watch -m 0640 /dev/null /etc/rosy/site/secret
 sudoedit /etc/rosy/site/secrets/hf_token   # paste the token; keep it out of shell history
 ```
 
-The watcher reaches robots with the operator key authorized for `rosy` on the
-robot image, and with a pinned `known_hosts` (`StrictHostKeyChecking=yes`, so
+The site host uses its own SSH key, not a person's. `ssh.identity` is
+required in the config and has no default. Create a dedicated key for the
+service user and add its public half to `rosy`'s `authorized_keys` on each
+robot (then it can be revoked per site without touching operator access).
+Robots are reached with a pinned `known_hosts` (`StrictHostKeyChecking=yes`):
 record each robot's host key once from a trusted channel before enabling the
-timer). The key is owned by the service user; the config names robot
-addresses and so stays out of the checkout:
+timer. The config names robot addresses and so stays out of the checkout:
 
 ```sh
 sudo install -d -o root -g rosy-model-watch -m 0750 /etc/rosy/model-watch
-sudo install -o rosy-model-watch -g rosy-model-watch -m 0600 <operator-key> /etc/rosy/model-watch/rosy-operator-ed25519
+sudo ssh-keygen -t ed25519 -N '' -C rosy-model-watch@<site-host> -f /etc/rosy/model-watch/site-ed25519
+sudo chown rosy-model-watch:rosy-model-watch /etc/rosy/model-watch/site-ed25519
+sudo chmod 0600 /etc/rosy/model-watch/site-ed25519
+sudo cat /etc/rosy/model-watch/site-ed25519.pub
+# on each robot, as an operator: append that line to ~rosy/.ssh/authorized_keys
 sudo install -o root -g rosy-model-watch -m 0644 <pinned-known-hosts> /etc/rosy/model-watch/known_hosts
 sudo install -o root -g rosy-model-watch -m 0640 deploy/site/model-watch.yaml.example /etc/rosy/model-watch.yaml
 sudoedit /etc/rosy/model-watch.yaml
@@ -590,9 +611,10 @@ journalctl -u rosy-model-watch.service -n 50
 sudo systemctl enable --now rosy-model-watch.timer
 ```
 
-Exit codes in the journal: `0` finished (a failed intake is a recorded
-outcome), `1` at least one robot delivery failed, `2` config or state file
-error, `3` the HF listing failed and nothing was recorded. The state lives in
+Exit codes in the journal: `0` finished with nothing waiting on a retry (a
+failed intake is a recorded outcome), `1` an intake infrastructure error or a
+robot push failed and will be retried, `2` config or state file error, `3` the
+HF listing failed and nothing was recorded. The state lives in
 `/var/lib/rosy-model-watch/state.json`; deleting a commit's entry makes the
 next run process it again.
 
