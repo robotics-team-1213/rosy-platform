@@ -197,3 +197,8 @@
 - 변경: events.jsonl 의 깨진 줄·형식 불량 이벤트는 기록하고 건너뛴다. load 는 dict values 와 문자열 created_at 을 요구한다. current/resolve 는 어떤 실패든 잡아 정적 값으로 물러난다. 현재값은 created_at 이 아니라 마지막 승인 이벤트 순서다. `check_values`(장착 yaw 150–210° 또는 손값 ±15°, 바퀴 ±10 %, 숫자만) 를 런타임·승인에 같이 쓴다. `merge_from` 은 없는 레코드 파일만 복사(같은 id 는 바이트 동일해야 함)하고 없는 이벤트만 덧붙인다.
 - 증거: test_calibration_store.py 25 passed(깨진 줄, 형식 불량 레코드, 재승인 순서, 저장소 예외 대체, check_values 12 경우) (2026-10-01 Windows).
 - gate 변화: SOURCE.
+
+## 2026-10-01 · 90cac516 · fix(core_common): 2차 리뷰 — 찢긴 꼬리, 양쪽 결정 충돌, 원자적 쓰기, 그룹 권한
+- 변경: events.jsonl 이 개행 없이 끝나면 덧붙이기 전에 개행을 먼저 쓴다(F1). 양쪽 저장소가 서로 모르는 승인/거부/고정을 가지면 병합을 거부하고, 모든 종류를 먼저 검사한 뒤에만 쓴다(F2·F8). 레코드는 임시 파일 + os.replace, 디렉터리 0o2775·파일 0o664(F4). camera_profile 의 width/height/fx/cx/cy/max_range_m 는 유한 양수(F7).
+- 증거: test_calibration_store.py 35 passed + 1 skip(Windows), 권한 시험은 WSL Linux 에서 통과 (2026-10-01).
+- gate 변화: SOURCE. 로봇 쪽 rosy-calib 디렉터리 생성은 열린 커미셔닝 항목.
