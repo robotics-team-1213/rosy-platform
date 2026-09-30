@@ -12,7 +12,9 @@ Trainer-side only: imports torch at module level. export_cell.py stays torch-fre
 
 from __future__ import annotations
 
+import copy
 import json
+import os
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -79,8 +81,9 @@ class Preprocess:
 
     def apply(self, bgr: np.ndarray) -> np.ndarray:
         """HxWx3 uint8 BGR (OpenCV) -> 3xHxW float32, exactly as the robot does it."""
-        img = bgr[..., ::-1] if self.color == "rgb" else bgr
-        x = (img.astype(np.float32) * self.scale - np.float32(self.mean)) / np.float32(self.std)
+        img = bgr[..., ::-1] if self.color == "rgb" else bgr   # same ops as lane_mask.preprocess
+        x = img.astype(np.float32) * np.float32(self.scale)
+        x = (x - np.asarray(self.mean, np.float32)) / np.asarray(self.std, np.float32)
         return np.ascontiguousarray(x.transpose(2, 0, 1))
 
     def manifest_kwargs(self) -> dict:
@@ -110,6 +113,9 @@ class RosyLaneDataset(torch.utils.data.Dataset):
         mask = cv2.imread(str(self.root / f["mask"]), cv2.IMREAD_UNCHANGED)
         if bgr is None or mask is None:
             raise FileNotFoundError(f"unreadable frame {f['image']} / {f['mask']}")
+        if mask.ndim != 2 or int(mask.max()) >= len(self.classes):
+            raise ValueError(f"{f['mask']}: mask must be single-channel class indexes "
+                             f"< {len(self.classes)} (shape {mask.shape}, max {int(mask.max())})")
         bgr = cv2.resize(bgr, (WIDTH, HEIGHT), interpolation=cv2.INTER_AREA)
         mask = cv2.resize(mask, (WIDTH, HEIGHT), interpolation=cv2.INTER_NEAREST)
         return torch.from_numpy(self.preprocess.apply(bgr)), torch.from_numpy(mask.astype(np.int64))
@@ -146,17 +152,28 @@ def class_iou(pred, target, n, ignore_index=None) -> list:
     return _ratios(*_iou_counts(pred, target, n, ignore_index))
 
 
+def _mean_iou(val_iou: dict) -> float:
+    vals = [v for v in val_iou.values() if v is not None]
+    return sum(vals) / len(vals) if vals else -1.0
+
+
 def train(model, train_ds, val_ds, *, epochs, lr, batch_size, device, ignore_index=None,
-          log=print) -> list[dict]:
-    """Adam + cross-entropy. Returns one {epoch, train_loss, val_loss, val_iou{name: iou}} per epoch."""
+          num_workers=None, log=print) -> dict:
+    """Adam + cross-entropy; the model ends with the best epoch's weights (mean non-None val IoU).
+
+    Returns {history: [{epoch, train_loss, val_loss, val_iou{name: iou}}], best_epoch, val_iou}."""
     names = [c["name"] for c in sorted(val_ds.classes, key=lambda c: c["index"])]
     n = len(names)
     model = model.to(device)
     opt = torch.optim.Adam(model.parameters(), lr=lr)
     loss_fn = nn.CrossEntropyLoss(ignore_index=-100 if ignore_index is None else ignore_index)
-    train_dl = torch.utils.data.DataLoader(train_ds, batch_size=batch_size, shuffle=True)
-    val_dl = torch.utils.data.DataLoader(val_ds, batch_size=batch_size)
-    history = []
+    if num_workers is None:
+        num_workers = 0 if os.name == "nt" else 2
+    loader = dict(batch_size=batch_size, num_workers=num_workers,
+                  pin_memory=str(device).startswith("cuda"))
+    train_dl = torch.utils.data.DataLoader(train_ds, shuffle=True, **loader)
+    val_dl = torch.utils.data.DataLoader(val_ds, **loader)
+    history, best, best_state = [], None, None
     for epoch in range(1, epochs + 1):
         model.train()
         total, count = 0.0, 0
@@ -182,7 +199,14 @@ def train(model, train_ds, val_ds, *, epochs, lr, batch_size, device, ignore_ind
                "val_loss": vtotal / max(vcount, 1),
                "val_iou": dict(zip(names, _ratios(inter, union)))}
         history.append(row)
+        if best is None or _mean_iou(row["val_iou"]) > _mean_iou(best["val_iou"]):
+            best, best_state = row, copy.deepcopy(model.state_dict())
         if log:
             ious = " ".join(f"{k}={'-' if v is None else f'{v:.3f}'}" for k, v in row["val_iou"].items())
             log(f"epoch {epoch}/{epochs} loss {row['train_loss']:.4f} val_loss {row['val_loss']:.4f} {ious}")
-    return history
+    if best_state is not None:
+        model.load_state_dict(best_state)
+        if log:
+            log(f"best epoch {best['epoch']} (mean val IoU {_mean_iou(best['val_iou']):.3f}) restored")
+    return {"history": history, "best_epoch": best["epoch"] if best else None,
+            "val_iou": best["val_iou"] if best else {}}

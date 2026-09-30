@@ -166,13 +166,72 @@ class _Synthetic(torch.utils.data.Dataset):
 def test_train_reduces_loss_and_reports_iou():
     torch.manual_seed(0)
     model = rlm.LaneUNet(n_classes=2, base=4)
-    history = rlm.train(model, _Synthetic(8, 1), _Synthetic(2, 2), epochs=2, lr=5e-3,
-                        batch_size=4, device="cpu")
+    result = rlm.train(model, _Synthetic(8, 1), _Synthetic(2, 2), epochs=2, lr=5e-3,
+                       batch_size=4, device="cpu", num_workers=0)
+    history = result["history"]
     assert len(history) == 2
     assert history[-1]["train_loss"] < history[0]["train_loss"]
     assert set(history[-1]["val_iou"]) == {"floor", "lane"}
     assert all(v is None or 0.0 <= v <= 1.0 for v in history[-1]["val_iou"].values())
     assert math.isfinite(history[-1]["val_loss"])
+
+
+def test_train_restores_best_epoch():
+    torch.manual_seed(1)
+    model = rlm.LaneUNet(n_classes=2, base=4)
+    val = _Synthetic(2, 2)
+    result = rlm.train(model, _Synthetic(8, 1), val, epochs=3, lr=5e-2, batch_size=4,
+                       device="cpu", num_workers=0)
+    best = result["best_epoch"]
+    rows = result["history"]
+    score = lambda r: sum(v for v in r["val_iou"].values() if v is not None) / max(
+        1, sum(v is not None for v in r["val_iou"].values()))
+    assert best == max(rows, key=score)["epoch"]  # max() keeps the first of ties
+    assert result["val_iou"] == rows[best - 1]["val_iou"]
+    # The model left behind is the best epoch's, not the last one's.
+    with torch.no_grad():
+        pred = model.eval()(val.x).argmax(1)
+    assert dict(zip(["floor", "lane"], rlm.class_iou(pred, val.y, 2))) == pytest.approx(
+        result["val_iou"])
+
+
+def _frame_folder(root, image, mask, classes=CLASSES):
+    root.mkdir(parents=True)
+    cv2.imwrite(str(root / "f.png"), image)
+    cv2.imwrite(str(root / "m.png"), mask)
+    manifest = {"schema": "rosy.perception.dataset/1", "classes": classes, "sources": [],
+                "frames": [{"image": "f.png", "mask": "m.png", "session": "s", "split": "train"}]}
+    (root / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+    return root
+
+
+@pytest.mark.parametrize("pre", [
+    dict(color="rgb", scale=1 / 255, mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
+    dict(color="bgr", scale=1.0, mean=(0.0, 0.0, 0.0), std=(1.0, 1.0, 1.0)),
+])
+def test_dataset_matches_robot_preprocess_exactly(tmp_path, pre):
+    from control.sensing.perception.learned.lane_mask import preprocess
+    from control.sensing.perception.learned.manifest import InputSpec
+
+    image = np.random.default_rng(3).integers(0, 256, (480, 640, 3), dtype=np.uint8)
+    root = _frame_folder(tmp_path / "ds", image, np.zeros((480, 640), np.uint8))
+    x, _ = rlm.RosyLaneDataset(root, "train", **pre)[0]
+    spec = InputSpec(shape=(1, 3, 240, 320), color=pre["color"], scale=pre["scale"],
+                     mean=pre["mean"], std=pre["std"])
+    robot = preprocess(cv2.imread(str(root / "f.png"), cv2.IMREAD_COLOR), spec)
+    assert np.array_equal(x.numpy()[None], robot)
+
+
+def test_dataset_rejects_bad_masks(tmp_path):
+    image = np.zeros((48, 64, 3), np.uint8)
+    rgb_mask = _frame_folder(tmp_path / "a", image, np.zeros((48, 64, 3), np.uint8))
+    with pytest.raises(ValueError, match="m.png"):
+        rlm.RosyLaneDataset(rgb_mask, "train")[0]
+    too_big = np.zeros((48, 64), np.uint8)
+    too_big[0, 0] = 4   # four classes -> valid indexes are 0..3
+    big = _frame_folder(tmp_path / "b", image, too_big)
+    with pytest.raises(ValueError, match="m.png"):
+        rlm.RosyLaneDataset(big, "train")[0]
 
 
 def test_export_via_export_cell_passes_check_manifest(tmp_path):
