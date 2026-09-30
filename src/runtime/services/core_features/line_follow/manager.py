@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import math
 import threading
 import time
@@ -29,6 +30,7 @@ class LineFollowManager:
         self._angular_ceiling = angular_ceiling
         self._lock = threading.RLock()
         self._config = config or LineFollowConfig()
+        self._lidar_forward_source = "line_follow lidar_forward_deg (config)"
         self._clock = clock
         self._mode = LineFollowMode.OFF
         self._generation = 0
@@ -71,6 +73,16 @@ class LineFollowManager:
     @property
     def config(self) -> LineFollowConfig:
         return self._config
+
+    @property
+    def lidar_forward_source(self) -> str:
+        return self._lidar_forward_source
+
+    def use_lidar_forward(self, forward_deg: float, source: str) -> None:
+        """Bind the LiDAR mount yaw resolved at startup (core/lidar_mount.py, D-47 addendum)."""
+        with self._lock:
+            self._config = dataclasses.replace(self._config, lidar_forward_deg=float(forward_deg))
+            self._lidar_forward_source = str(source)
 
     @property
     def active(self) -> bool:

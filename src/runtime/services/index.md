@@ -36,6 +36,6 @@
 
 - 2026-10-01 · uncommitted · feat(command): D-385 모드→표정 정책 emotion_map
 - 2026-10-01 · uncommitted · fix(fleet_agent): D-382 F10·I4 — 구독 해제와 이벤트 seq 사본
+- 2026-10-01 · f34781ae · feat(line_follow): 시작 때 정한 LiDAR 장착 yaw 를 받는다
 - 2026-10-01 · uncommitted · fix(command): release_emergency 도 리스너 계약을 지킨다
 - 2026-09-30 · uncommitted · refactor(line_follow): 데이터 모델을 model.py 로 분리(파일 예산)
-- 2026-09-30 · 61c25393 · fix(line-follow): 재검토 R1·R2 — 풀림 지연은 연속 측정만, 모드 선택마다 새 앞 물체 세션
