@@ -1,0 +1,515 @@
+"""D-384 road-state estimator: prediction, gates, association, degradation ladder.
+
+ROS-free. Operating point 0.03-0.08 m/s at 8 fps (lane auto is refused below L1);
+the tests drive at 0.05 m/s unless a case needs another speed.
+"""
+
+import json
+import math
+
+import numpy as np
+import pytest
+
+from control.sensing.perception.road_state import (
+    COAST,
+    SLOW,
+    STOP,
+    TRACK,
+    BoundaryMeas,
+    IrMeas,
+    OffsetMeas,
+    RoadStateEstimator,
+    RoadStateParams,
+    WallSeg,
+    boundaries_from_keep,
+    offset_from_shadow,
+    wall_segments_from_scan,
+)
+
+W = 0.185
+HALF = W / 2
+X = 0.22
+FPS = 8.0
+DT = 1.0 / FPS
+V = 0.05
+
+
+def pair(d=0.0, phi=0.0, width=W):
+    """Right and left boundary as seen from lateral offset d (left +) and heading error phi."""
+    return [BoundaryMeas(y=-width / 2 - d - X * phi, psi=-phi, x=X),
+            BoundaryMeas(y=width / 2 - d - X * phi, psi=-phi, x=X)]
+
+
+class Clock:
+    def __init__(self, est, v=V):
+        self.est, self.v, self.t = est, v, 0.0
+
+    def frame(self, meas=(), v=None, **kw):
+        v = self.v if v is None else v
+        self.t += DT
+        self.est.predict(v * DT, 0.0, dt=DT, stamp=self.t)
+        return self.est.update(list(meas), self.t, **kw)
+
+
+def tracking(**params):
+    est = RoadStateEstimator(RoadStateParams(**params))
+    clock = Clock(est)
+    for _ in range(8):
+        clock.frame(pair())
+    assert est.level == TRACK
+    return est, clock
+
+
+# ---------------------------------------------------------------- prediction
+
+def test_predict_straight_moves_d_along_the_heading_error():
+    est = RoadStateEstimator()
+    est.x[:] = [0.01, 0.1, 0.0, W]
+    est.predict(0.1, 0.0, dt=1.0)
+    assert est.x[0] == pytest.approx(0.01 + 0.1 * math.sin(0.1))
+    assert est.x[1] == pytest.approx(0.1)
+
+
+def test_predict_on_an_arc_keeps_the_heading_error_when_turning_with_the_road():
+    est = RoadStateEstimator()
+    est.x[:] = [0.0, 0.0, 2.0, W]
+    est.predict(0.1, 0.2, dt=1.0)   # dtheta = kappa * ds
+    assert est.x[1] == pytest.approx(0.0)
+    assert est.x[0] == pytest.approx(0.0)
+    est.predict(0.1, 0.0, dt=1.0)   # not turning on a left bend: heading error goes right
+    assert est.x[1] == pytest.approx(-0.2)
+
+
+def test_process_noise_matches_odometry_error_and_has_a_time_floor():
+    p = RoadStateParams()
+    est = RoadStateEstimator(p)
+    before = est.P.copy()
+    est.predict(0.0, 0.0, dt=1.0)   # held still: the filter must not collapse
+    grow = np.diag(est.P - before)
+    assert grow[0] == pytest.approx(p.q_d_floor ** 2)
+    assert grow[1] == pytest.approx(p.q_phi_floor ** 2)
+    assert grow[2] > 0 and grow[3] > 0
+    est = RoadStateEstimator(p)
+    est.P[:] = 0.0                  # only Q remains
+    est.predict(0.1, 0.05, dt=0.0)
+    grow = np.diag(est.P)
+    assert grow[0] == pytest.approx((0.08 * 0.1) ** 2)
+    assert grow[1] == pytest.approx((0.03 * 0.05) ** 2 + (0.02 * 0.1) ** 2)
+
+
+def test_map_curvature_pulls_kappa():
+    est = RoadStateEstimator()
+    est.set_map_curvature(3.0)
+    for _ in range(40):
+        est.predict(0.05, 0.0, dt=DT)
+    assert est.x[2] == pytest.approx(3.0, abs=0.05)
+
+
+# ---------------------------------------------------------------- update and gates
+
+def test_update_pulls_toward_the_measurement():
+    est, clock = tracking()
+    clock.frame(pair(d=0.01))
+    assert 0.0 < est.x[0] < 0.01
+
+
+def test_image_wall_rejection_and_lidar_veto_off_by_default():
+    est, clock = tracking()
+    right, left = pair(d=0.0)
+    clock.frame([BoundaryMeas(y=right.y, psi=right.psi, x=X, rejected="wall"), left])
+    assert est.rejects["wall"] == 1
+    assert est.last_frame["hypothesis"]["labels"] == "L"
+    wall = WallSeg(0.1, right.y, 0.4, right.y)
+    clock.frame([right, left, wall])       # LiDAR veto off: the wall segment is ignored
+    assert est.rejects["wall"] == 1
+    assert est.last_frame["hypothesis"]["labels"] == "RL"
+
+
+def test_lidar_veto_when_enabled_rejects_a_boundary_on_a_wall():
+    est, clock = tracking(lidar_wall_veto=True)
+    right, left = pair()
+    clock.frame([right, left, WallSeg(0.1, right.y + 0.03, 0.4, right.y + 0.03)])
+    assert est.rejects["wall"] == 1
+    assert est.last_frame["hypothesis"]["labels"] == "L"
+    # 20 degrees off the wall is not the wall
+    tilt = math.radians(20)
+    clock.frame([right, left, WallSeg(0.1, right.y, 0.1 + math.cos(tilt), right.y + math.sin(tilt))])
+    assert est.rejects["wall"] == 1
+
+
+def test_nis_outlier_is_rejected():
+    est, clock = tracking()
+    right, _ = pair()
+    d0 = est.x[0]
+    clock.frame([BoundaryMeas(y=right.y, psi=math.radians(40), x=X)])
+    assert est.rejects["nis"] == 1
+    assert est.x[0] == pytest.approx(d0, abs=1e-3)
+
+
+def test_five_centimetre_jump_is_rejected_even_when_nis_passes():
+    est, clock = tracking()
+    est.P[0, 0] = 0.04 ** 2       # loose enough that NIS alone would accept 5 cm
+    clock.frame([BoundaryMeas(y=-HALF - 0.05, psi=0.0, x=X)])
+    assert est.rejects["jump"] == 1
+    assert est.last_frame["hypothesis"]["labels"] == "N"
+
+
+def test_bad_pair_width_is_rejected():
+    est, clock = tracking()
+    clock.frame([BoundaryMeas(y=-HALF - 0.025, psi=0.0, x=X),
+                 BoundaryMeas(y=HALF + 0.025, psi=0.0, x=X)])
+    assert est.rejects["width"] == 1
+    assert est.last_frame["hypothesis"]["labels"] in ("RN", "NL")
+
+
+def test_non_parallel_pair_is_rejected():
+    est, clock = tracking()
+    est.P[1, 1] = math.radians(15) ** 2
+    clock.frame([BoundaryMeas(y=-HALF, psi=math.radians(7), x=X),
+                 BoundaryMeas(y=HALF, psi=math.radians(-7), x=X)])
+    assert est.rejects["width"] == 1
+
+
+def test_far_boundaries_are_not_measurements():
+    est, clock = tracking()
+    clock.frame([BoundaryMeas(y=-HALF, psi=0.0, x=0.40)])
+    assert est.last_frame["candidates"] == []
+
+
+def test_learned_offset_gated_in_one_dimension():
+    est, clock = tracking()
+    clock.frame([OffsetMeas(d=0.2, sigma=0.01, stamp=clock.t)])
+    assert est.rejects["nis"] == 1
+    clock.frame([OffsetMeas(d=0.005, sigma=0.01, stamp=clock.t)])
+    assert est.last_frame["accepted"]["learned"] == 1
+
+
+def test_learned_offset_with_wall_in_view_is_not_used():
+    est, clock = tracking()
+    meas = offset_from_shadow({"visible": True, "error": 0.0, "confidence": 0.9, "stamp": clock.t,
+                               "class_fractions": {"wall": 0.4}}, half_width_m=HALF)
+    clock.frame([meas])
+    assert est.rejects["wall"] == 1
+
+
+def test_offset_from_shadow_sigma_and_sign():
+    m = offset_from_shadow({"visible": True, "error": 0.2, "confidence": 0.1, "stamp": 3.0,
+                            "class_fractions": {}}, half_width_m=HALF)
+    # lane right of image centre (error > 0) -> the robot is left of the lane centre (d > 0)
+    assert m.d == pytest.approx(0.2 * HALF)
+    assert m.sigma == pytest.approx(0.03 / 0.2)
+    assert m.stamp == 3.0
+    assert offset_from_shadow({"visible": False, "error": None, "confidence": 0.0,
+                               "stamp": 1.0}, half_width_m=HALF) is None
+
+
+def test_stale_learned_measurement_is_shifted_by_odometry_since_its_stamp():
+    est = RoadStateEstimator()
+    est.x[:] = [0.0, 0.1, 0.0, W]
+    t = 0.0
+    for _ in range(10):
+        t += 0.1
+        est.predict(0.005, 0.0, dt=0.1, stamp=t)
+    meas = OffsetMeas(d=0.02, sigma=0.01, stamp=0.5)   # 5 steps = 0.025 m ago
+    assert est.shifted_offset(meas) == pytest.approx(0.02 + 0.025 * math.sin(0.1), abs=1e-9)
+    assert est.shifted_offset(OffsetMeas(d=0.02, sigma=0.01, stamp=t)) == pytest.approx(0.02)
+    assert est.shifted_offset(OffsetMeas(d=0.02, sigma=0.01, stamp=-5.0)) is None   # older than history
+
+
+def test_stale_learned_measurement_beyond_history_is_rejected():
+    est, clock = tracking()
+    clock.frame([OffsetMeas(d=0.0, sigma=0.01, stamp=clock.t - 60.0)])
+    assert est.rejects["stale"] == 1
+
+
+# ---------------------------------------------------------------- association
+
+def test_single_boundary_is_tracked_as_right_on_fresh_acquisition():
+    est = RoadStateEstimator()
+    est.update([BoundaryMeas(y=-0.005, psi=0.0, x=X)], 0.1)
+    assert est.last_frame["hypothesis"]["labels"] == "R"
+    assert est.x[0] < 0.0
+
+
+def test_single_boundary_is_left_when_right_fails_the_gate():
+    est, clock = tracking()
+    clock.frame([BoundaryMeas(y=HALF, psi=0.0, x=X)])
+    assert est.last_frame["hypothesis"]["labels"] == "L"
+    assert est.x[0] == pytest.approx(0.0, abs=0.005)
+
+
+THREE_LINES = [BoundaryMeas(y=-HALF - W, psi=0.0, x=X),
+               BoundaryMeas(y=-HALF, psi=0.0, x=X),
+               BoundaryMeas(y=HALF, psi=0.0, x=X)]
+
+
+def test_ambiguity_on_fresh_acquisition_takes_the_rightmost_lane():
+    est = RoadStateEstimator()
+    est.P[0, 0] = 1.0
+    est.update(THREE_LINES, 0.1)
+    frame = est.last_frame
+    assert frame["tie"] and frame["tie_rule"] == "right"
+    assert frame["hypothesis"]["labels"] == "RLN"
+    assert est.x[0] == pytest.approx(W, abs=0.01)
+
+
+def test_route_hint_overrides_the_right_rule():
+    est = RoadStateEstimator(route_hint="left")
+    est.P[0, 0] = 1.0
+    est.update(THREE_LINES, 0.1)
+    assert est.last_frame["tie_rule"] == "route"
+    assert est.last_frame["hypothesis"]["labels"] == "NRL"
+    assert est.x[0] == pytest.approx(0.0, abs=0.01)
+
+
+def test_right_rule_must_agree_with_ir_or_hold():
+    est = RoadStateEstimator()
+    est.P[0, 0] = 1.0
+    est.update(THREE_LINES + [IrMeas(y=HALF)], 0.1)    # IR sees a line where the rightmost lane has none
+    assert est.level == STOP
+    assert est.stop_reason == "ambiguous"
+    assert est.x[0] == pytest.approx(0.0)
+    est = RoadStateEstimator()
+    est.P[0, 0] = 1.0
+    est.update(THREE_LINES + [IrMeas(y=-HALF)], 0.1)  # the rightmost lane's left line under IR
+    assert est.last_frame["hypothesis"]["labels"] == "RLN"
+
+
+def test_an_established_track_is_never_switched_by_the_right_rule():
+    est, clock = tracking()
+    for _ in range(3):
+        clock.frame(THREE_LINES)
+    assert est.x[0] == pytest.approx(0.0, abs=0.01)
+    assert est.last_frame["hypothesis"]["labels"] == "NRL"
+
+
+def test_a_tie_on_an_established_track_uses_no_boundary():
+    est, clock = tracking()
+    d0 = est.x[0]
+    clock.frame([BoundaryMeas(y=-HALF + 0.0125, psi=0.0, x=X), BoundaryMeas(y=-HALF - 0.0125, psi=0.0, x=X)])
+    frame = est.last_frame
+    assert frame["tie"] and frame["tie_rule"] == "ambiguous"
+    assert frame["hypothesis"]["labels"] is None
+    assert est.rejects["ambiguous"] == 1
+    assert est.x[0] == pytest.approx(d0, abs=1e-3)
+    assert est.level == TRACK          # the ladder, not an immediate stop
+
+
+def test_compatible_labellings_are_not_a_tie():
+    est, clock = tracking()
+    right, left = pair()
+    clock.frame([right, BoundaryMeas(y=left.y + 0.03, psi=0.0, x=X)])   # a mediocre left line
+    assert est.last_frame["tie_rule"] is None
+
+
+def test_at_most_three_hypotheses_are_kept():
+    est, clock = tracking()
+    clock.frame(THREE_LINES + [BoundaryMeas(y=HALF + W, psi=0.0, x=X)])
+    assert 1 <= len(est.last_frame["hypotheses"]) <= 3
+
+
+# ---------------------------------------------------------------- degradation ladder
+
+def test_ladder_by_distance_and_clock_at_operating_speed():
+    est, clock = tracking()
+    levels = []
+    for _ in range(40):          # 5 s at 0.05 m/s without a line
+        clock.frame([])
+        levels.append(est.level)
+    assert levels[0] == TRACK and levels[1] == COAST
+    first_slow = levels.index(SLOW)
+    first_stop = levels.index(STOP)
+    # COAST until 1.08 * s_lost reaches 0.10 m (1.85 s at 0.05 m/s)
+    assert first_slow == pytest.approx(0.10 / 1.08 / (V * DT), abs=1.5)
+    # CORE latches LOST after 3.0 s: SLOW ends at 2.5 s, before the 0.25 m budget
+    assert (first_stop + 1) * DT == pytest.approx(2.5, abs=DT + 1e-9)
+    assert est.stop_reason == "lost_time"
+
+
+def test_ladder_distance_budget_ends_slow_at_higher_speed():
+    est, clock = tracking()
+    for _ in range(30):
+        clock.frame([], v=0.15)
+        if est.level == STOP:
+            break
+    assert est.stop_reason == "lost_distance"
+
+
+def test_held_robot_still_times_out():
+    est, clock = tracking()
+    for _ in range(int(2.4 / DT)):
+        clock.frame([], v=0.0)
+    assert est.level == COAST
+    for _ in range(3):
+        clock.frame([], v=0.0)
+    assert est.level == STOP and est.stop_reason == "lost_time"
+
+
+def test_ladder_by_covariance():
+    est, clock = tracking()
+    clock.frame([])
+    est.P[0, 0] = 0.04 ** 2
+    clock.frame([])
+    assert est.level == SLOW
+    est.P[0, 0] = 0.06 ** 2
+    clock.frame([])
+    assert est.level == STOP and est.stop_reason == "covariance"
+
+
+def test_three_wall_only_frames_stop():
+    est, clock = tracking()
+    wall = [BoundaryMeas(y=-HALF, psi=0.0, x=X, rejected="wall")]
+    clock.frame(wall)
+    clock.frame(wall)
+    assert est.level != STOP
+    clock.frame(wall)
+    assert est.level == STOP and est.stop_reason == "wall_only"
+
+
+def test_reacquisition_needs_three_consistent_frames_over_one_centimetre():
+    est = RoadStateEstimator()
+    assert est.level == STOP
+    held = Clock(est, v=0.0)
+    for _ in range(5):
+        held.frame(pair())
+    assert est.level == STOP             # consistent but not moving
+    est = RoadStateEstimator()
+    clock = Clock(est)
+    clock.frame(pair())
+    clock.frame(pair())
+    assert est.level == STOP
+    clock.frame(pair())
+    assert est.level == TRACK
+
+
+def test_reacquisition_resets_on_an_inconsistent_frame():
+    est = RoadStateEstimator()
+    clock = Clock(est)
+    clock.frame(pair())
+    clock.frame(pair())
+    right, _ = pair()
+    clock.frame([right])                 # one side, no IR: not consistent
+    clock.frame(pair())
+    assert est.level == STOP
+    clock.frame(pair())
+    clock.frame(pair())
+    assert est.level == TRACK
+
+
+def test_one_side_with_matching_ir_is_consistent():
+    est = RoadStateEstimator()
+    clock = Clock(est)
+    right, _ = pair()
+    for _ in range(3):
+        clock.frame([right, IrMeas(y=right.y)])   # IR places the same right line
+    assert est.level == TRACK
+
+
+def test_reacquisition_timeout_reports():
+    est = RoadStateEstimator()
+    clock = Clock(est)
+    for _ in range(int(2.4 / DT)):
+        clock.frame([])
+    assert est.snapshot()["reacquire"]["timed_out"] is True
+    est = RoadStateEstimator()
+    clock = Clock(est)
+    clock.frame([])
+    assert est.snapshot()["reacquire"]["timed_out"] is False
+
+
+# ---------------------------------------------------------------- calibration and output
+
+def test_calibration_suspect_after_two_seconds_of_width_mismatch():
+    est, clock = tracking()
+    wide = W * 1.15
+    for _ in range(int(1.8 / DT)):
+        est.x[3] = wide
+        clock.frame(pair(width=wide))
+    assert est.snapshot()["calibration_suspect"] is False
+    for _ in range(4):
+        est.x[3] = wide
+        clock.frame(pair(width=wide))
+    assert est.snapshot()["calibration_suspect"] is True
+
+
+def test_width_prior_is_tight():
+    est = RoadStateEstimator()
+    assert math.sqrt(est.P[3, 3]) == pytest.approx(0.005)
+
+
+def test_snapshot_is_json_and_carries_no_command():
+    est, clock = tracking()
+    clock.frame(pair(), profile="nominal-v1")
+    snap = est.snapshot()
+    json.dumps(snap, allow_nan=False)
+    for key in ("d", "phi", "kappa", "w", "p_diag", "level", "hypothesis", "rejects", "s_lost_m",
+                "core_suggestion", "candidates", "hypotheses", "profile"):
+        assert key in snap, key
+    assert set(snap["rejects"]) >= {"wall", "nis", "jump", "width"}
+    assert snap["profile"] == "nominal-v1"
+    text = json.dumps(snap)
+    for word in ("cmd", "linear", "angular", "speed", "velocity", "steer", "error"):
+        assert f'"{word}' not in text, word
+
+
+@pytest.mark.parametrize("level,visible,confidence", [
+    (TRACK, True, 0.9), (COAST, True, 0.8), (SLOW, True, 0.6), (STOP, False, 0.0)])
+def test_core_suggestion_by_level(level, visible, confidence):
+    est, clock = tracking()
+    frames = {TRACK: 0, COAST: 2, SLOW: 17, STOP: 30}[level]
+    for _ in range(frames):
+        clock.frame([])
+    assert est.level == level
+    assert est.snapshot()["core_suggestion"] == {"visible": visible, "confidence": confidence}
+
+
+def test_slow_confidence_is_the_lane_memory_confidence():
+    from control.sensing.perception.lane_bev import MEMORY_CONFIDENCE
+    assert RoadStateParams().slow_confidence == MEMORY_CONFIDENCE
+
+
+def test_replay_is_deterministic():
+    def run():
+        est, clock = tracking()
+        for k in range(20):
+            clock.frame(pair(d=0.002 * (k % 5)) + THREE_LINES[:1])
+        return json.dumps(est.snapshot(), sort_keys=True)
+    assert run() == run()
+
+
+# ---------------------------------------------------------------- adapters
+
+def test_boundaries_from_keep_debug_bundle():
+    last = {"strategy": "both", "transverse": [{"heading_deg": 88.0, "ends_m": [[0.3, -0.1], [0.3, 0.1]]}],
+            "boundaries": [
+                {"side": "right", "y_at_side_x_m": -0.09, "heading_deg": 2.0,
+                 "ends_m": [[0.12, -0.09], [0.35, -0.08]]},
+                {"side": "left", "y_at_side_x_m": 0.10, "heading_deg": -1.0,
+                 "ends_m": [[0.40, 0.10], [0.55, 0.10]]},      # starts beyond the near field
+            ]}
+    out = boundaries_from_keep(last)
+    assert len(out) == 2
+    near = out[0]
+    assert near.y == pytest.approx(-0.09) and near.psi == pytest.approx(math.radians(2.0))
+    assert near.x == pytest.approx(X) and near.side_hint == "right" and near.rejected is None
+    assert out[1].x > 0.33                                 # the estimator drops it
+
+
+def test_boundaries_from_keep_prefers_candidates_with_reasons():
+    last = {"boundaries": [], "candidates": [
+        {"side": "right", "y_at_side_x_m": -0.09, "heading_deg": 0.0, "ends_m": [[0.1, -0.09], [0.3, -0.09]],
+         "rejected": "wall"}]}
+    out = boundaries_from_keep(last)
+    assert out[0].rejected == "wall"
+
+
+def test_wall_segments_from_scan_straight_wall():
+    # a wall 0.15 m to the right, scan frame rotated 180 deg from the nose
+    yaws = np.radians(np.arange(-80.0, -30.0, 1.0))
+    ranges = 0.15 / np.abs(np.sin(yaws))
+    angles = yaws + math.pi
+    inc = math.radians(1.0)
+    segs = wall_segments_from_scan(ranges, float(angles[0]), inc, yaw_offset_rad=math.pi, max_range_m=0.6)
+    assert segs
+    for s in segs:
+        assert s.y0 == pytest.approx(-0.15, abs=1e-6) and s.y1 == pytest.approx(-0.15, abs=1e-6)
