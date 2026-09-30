@@ -226,3 +226,9 @@
 - 변경: `core_features/line_follow/manager.py`(704 행, 예산 600) 에서 `LineFollowMode`·`LineObservation`·`LineFollowConfig`·`LineFollowDecision`·`_finite` 를 `line_follow/model.py` 로 옮겼다. manager 는 잠금 한 개를 가진 주인(tick·observe·set_mode·물체/IR/계단 게이트)만 남는다(561 행). manager 가 같은 이름을 다시 내보내 기존 import 는 그대로다. docking/model.py 선례(크기 예외가 아니라 분리).
 - 증거: `pytest src/runtime/gateway/test -k "line_follow or clearance or ir"` 통과, `test/architecture/test_module_structure.py` 통과, pyflakes 깨끗.
 - gate 변화: 없음(동작 불변).
+
+## 2026-10-01 · uncommitted · fix(command): release_emergency 도 리스너 계약을 지킨다
+
+- 변경: release_emergency() 가 잠금 해제 후 change_listeners 를 transition() 과 같은 계약으로 돌린다(EMERGENCY→IDLE). 여태 리스너를 건너뛰어 모드 미러·도킹 정리가 해제를 못 봤다.
+- 증거: test_core_logic.py 두 시험(해제 리스너 호출, 실패하는 리스너는 자기만 건너뜀).
+- gate 변화: 없음.

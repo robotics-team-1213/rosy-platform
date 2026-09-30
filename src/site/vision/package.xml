@@ -4,7 +4,7 @@
   <name>rosy_vision</name>
   <version>0.1.0</version>
   <description>ROS-free overhead camera ingest and display-only sighting worker.</description>
-  <maintainer email="kyung133851@pinklab.art">ROSY</maintainer>
+  <maintainer email="56295815+livsbittt@users.noreply.github.com">ROSY</maintainer>
   <license>Apache-2.0</license>
 
   <buildtool_depend>ament_python</buildtool_depend>

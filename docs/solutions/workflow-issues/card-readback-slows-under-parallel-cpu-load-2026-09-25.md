@@ -12,7 +12,8 @@ symptoms:
 root_cause: concurrency
 resolution_type: workflow_improvement
 severity: low
-tags: [sd-writer, readback, xz, cpu-contention, parallel-agents, operator-pc]
+tags: [sd-writer, readback, xz, cpu-contention, parallel-agents, operator-pc, emergency-card-write]
+last_updated: 2026-10-01
 ---
 
 # The card readback took 18 minutes instead of 7 because parallel agent work competed for the CPU
@@ -46,6 +47,18 @@ idle machine, so the headroom is only about 2x.
 - Treat the readback as a CPU-sensitive step: schedule parallel agent work around it.
 - After a faster (USB 3) reader is in place (ADR D-225 3.1), decompression becomes the limit even when
   idle, so the same rule matters more, and a multithreaded or zstd decompressor becomes worth it.
+
+## Recurrence 2026-10-01 (release 2026.09.30-009, rosy-pinky-9dfk)
+This happened again, worse, although this doc existed. The session that wrote the card had two background executor agents running host test suites. WSL (a Gazebo sim from another session, about 3 cores) and opencode were also busy. The readback ran at 0.2-4 MB/s, against 88 MB/s at preflight. The ETA was about 1.5 h for 12.9 GB. The operator needed the card at once.
+
+- **How to diagnose it in 10 s:** `\PhysicalDisk(<card>)\Current Disk Queue Length` averaged **0** while `\Processor(_Total)\% Processor Time` was **100**. The card sat idle and the verifier was starved of CPU. Per-process `% Processor Time` counters show elevated and protected processes (vmmemwsl, MsMpEng) that `Get-Process` CPU deltas hide.
+- **What helped:** stopping the session's own background agents roughly doubled the rate.
+  - Raising the verifier's priority needs an **elevated** shell. The readback python runs elevated and its command line is not visible unelevated:
+    `Get-CimInstance Win32_Process -Filter "Name='python.exe'" | ? CommandLine -match 'verify-media-readback' | % { (Get-Process -Id $_.ProcessId).PriorityClass='High' }`
+  - `wsl --shutdown` frees the most CPU, but it kills other sessions' sims, so it needs the operator's approval.
+- **Emergency path used:** the operator accepted the risk. A local, uncommitted copy of `prepare-rosy-sd.ps1` without the readback block ran with `-ResumeAfterWrite`, which skips the write. The signature, serial, plan and bundle steps were unchanged, and the receipt records `media_readback.verified=false`. The card was then checked on the device instead: all 2152 release files matched `SHA256SUMS`, `dpkg --verify` was clean, and no systemd unit had failed. A first-class `-Emergency` mode with a mandatory reason is being built on `fix/card-write-confirm-and-artifact-download`.
+
+**Stronger rule:** the writing session must not have any background agent running from the confirm stage until the receipt is written. Before launching `write-card.ps1`, check `ListAgents` and the session's own task list.
 
 ## Related Issues
 - ADR D-225 (update without reflash, faster card writes)

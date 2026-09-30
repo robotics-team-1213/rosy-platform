@@ -4,7 +4,7 @@
 
 **번호:** 처음 D-354로 적었으나 main에 다른 D-354(mDNS 서비스 발견)가 먼저 착지해 2026-09-30 병합 때 D-360으로 옮겼다. 그 전 로그 항목의 "D-354 경기장 제안"은 이 ADR을 가리킨다.
 
-잇는 결정: [D-257](D-257-site-lane-map-and-overhead-sightings.md)(sighting은 표시 전용) · [D-261](D-261-overhead-camera-app-skeleton.md)(폰 → Vision 수신기, Fleet은 영상을 받지 않음) · [D-318](D-318-site-camera-preview-rectification.md)(미리보기 보정, 모서리 직접 조작, 브라우저 로컬 초안) · D-341(천장 카메라 앱 페어링, 브랜치 `docs/d341-overhead-console-pairing`).
+잇는 결정: [D-257](D-257-site-lane-map-and-overhead-sightings.md)(sighting은 표시 전용) · [D-261](D-261-overhead-camera-app-skeleton.md)(폰 → Vision 수신기, Fleet은 영상을 받지 않음) · [D-318](D-318-site-camera-preview-rectification.md)(미리보기 보정, 모서리 직접 조작, 브라우저 로컬 초안) · [D-341](D-341-overhead-console-approved-pairing.md)(천장 카메라 앱 페어링).
 
 ### Context
 
@@ -69,4 +69,4 @@
 
 ### References
 
-[D-257](D-257-site-lane-map-and-overhead-sightings.md), [D-261](D-261-overhead-camera-app-skeleton.md), [D-275](D-275-web-surface-and-video-runtime-ownership.md), [D-293](D-293-site-fleet-intent-api-contracts.md), [D-318](D-318-site-camera-preview-rectification.md), D-341.
+[D-257](D-257-site-lane-map-and-overhead-sightings.md), [D-261](D-261-overhead-camera-app-skeleton.md), [D-275](D-275-web-surface-and-video-runtime-ownership.md), [D-293](D-293-site-fleet-intent-api-contracts.md), [D-318](D-318-site-camera-preview-rectification.md), [D-341](D-341-overhead-console-approved-pairing.md).

@@ -128,7 +128,15 @@ class ModeMachine:
             if self.mode is not Mode.EMERGENCY:
                 return False, "not in EMERGENCY"
             self.mode = Mode.IDLE
-            return True, ""
+        # Same listener contract as transition(): the mode is committed, a
+        # listener's failure must not escape (the state mirror relies on it).
+        for listener in list(self.change_listeners):
+            try:
+                listener(Mode.EMERGENCY, Mode.IDLE)
+            except Exception:
+                log.exception("mode listener failed on %s->%s",
+                              Mode.EMERGENCY.value, Mode.IDLE.value)
+        return True, ""
 
     @property
     def is_emergency(self) -> bool:
