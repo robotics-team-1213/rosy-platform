@@ -28,3 +28,10 @@
 - 증거: CameraX 후면 카메라는 id 0(5.4 mm, 67.8°)과 id 2(2.2 mm, 104.1°) 둘이고, WIDE는 id 2, STANDARD는 id 0에 1280x720으로 바인딩됐다. 두 경우 모두 3.0 fps, 건너뜀 0. 촬영 중 넓게로 바꾸자 약 30 ms 안에 다시 바인딩됐고, 새 hello로 Vision `X-Source-Lens`가 `kind=wide;focal_mm=2.2;hfov_deg=104.1`로 바뀌었다. WIDE 프레임에는 트랙 전체가 여유 있게 들어오고, STANDARD는 울타리 가장자리가 잘린다. field_detect는 두 프레임 모두 오류 없이 "field runs past the frame"으로 제안하지 않았다. 증거는 `private/validation/2026-09-30-cam-ultrawide/`(git 밖).
 - gate 변화: 없음(DEVICE는 벤치 한 대, 한 장면. 현장 FIELD 전).
 - 교훈: 초광각은 옆 트랙까지 담아 흰 외곽선 제안이 프레임 끝까지 번질 수 있다. 제안을 받으려면 D-318 모서리 수동 지정이 필요하다.
+
+## 2026-09-30 · a4d9fa7c · feat(cam): STANDARD default, wide on suggestion only
+- 변경: 기본 화각은 STANDARD(`LensChoice.DEFAULT`), 저장된 `lens`가 없는 설치(새 설치, 이 설정 이전 설치)도 기본 렌즈. 설정의 넓게는 "넓게 (초광각 0.5×) — 필드가 화면에 다 안 들어올 때"이고, 넓게는 1 m당 화소가 절반쯤이라는 안내를 붙였다. 설치 안내는 수신기가 마커를 보고하는데 모서리가 다 보이지 않고, 지금 렌즈가 기본이며, 더 넓은 카메라가 있을 때만 "연결 설정 › 화각에서 넓게"를 권한다(`LensAdvice`). 렌즈를 저절로 바꾸지는 않는다. 폰은 수신기의 모서리 보고만 받으므로 "필드 잘림"은 모서리 누락으로 본다. Vision/Fleet의 차선 정합 결과는 폰에 오지 않는다.
+- 근거: 사용자 결정 2026-09-30. rosy-84가 S21 두 프레임을 차선 정합한 결과, 벤치의 기울어진 설치에서 STANDARD는 점수 0.865, 커버리지 0.992, 약 420 px/m였고 WIDE는 0.896, 1.0, 약 196 px/m였다.
+- 증거: `gradlew testDebugUnitTest --rerun assembleDebug lintDebug` BUILD SUCCESSFUL, JVM 시험 151 passed, 0 failed, lint 0 errors·42 warnings(기존); `python -m pytest src/site/vision/test -q` 127 passed (2026-09-30 Windows, JDK 21).
+- gate 변화: 없음.
+- 결정: 기본 STANDARD, WIDE는 운용자 선택(자동 전환 없음).
