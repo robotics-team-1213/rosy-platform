@@ -596,9 +596,13 @@ def test_holding_formation_enables_resume_and_warns(console_url):
         page.goto(console_url, wait_until="networkidle")
         page.wait_for_function(
             "() => document.getElementById('formation-state')?.textContent"
-            " === 'HOLDING'"
+            " === '유지 중'"
         )
         assert page.locator("#formation-state").get_attribute("status") == "warn"
+        assert page.locator("#formation-state").get_attribute("title") == "HOLDING"
+        assert page.locator("#formation-resume").get_attribute("reason") is None
+        assert "signals.yaml" not in page.inner_text("#signals-hint")
+        assert "HOLDING" not in page.inner_text("main")
         assert page.locator("#formation-resume").is_enabled()
         assert not errors
         save_temp_screenshot(page, "fleet_console_holding.png")
@@ -617,7 +621,7 @@ def test_formation_read_loss_hides_last_running_evidence_and_recovers(console_ur
     with sync_playwright() as playwright:
         browser, page, errors = _open_console(playwright, api)
         page.goto(console_url, wait_until="networkidle")
-        page.wait_for_function("() => document.querySelector('#formation-state')?.textContent === 'RUNNING'")
+        page.wait_for_function("() => document.querySelector('#formation-state')?.textContent === '진행 중'")
         assert "9.8 Hz" in page.inner_text("#formation-detail")
         assert page.evaluate("window.__swarmOverlay?.slots") == 2
 
@@ -632,7 +636,7 @@ def test_formation_read_loss_hides_last_running_evidence_and_recovers(console_ur
         save_temp_screenshot(page, "fleet_formation_read_lost.png")
 
         api["/api/fleet/formation"] = FORMATION
-        page.wait_for_function("() => document.querySelector('#formation-state')?.textContent === 'RUNNING'",
+        page.wait_for_function("() => document.querySelector('#formation-state')?.textContent === '진행 중'",
                                timeout=7000)
         assert "9.8 Hz" in page.inner_text("#formation-detail")
         assert page.evaluate("window.__swarmOverlay?.slots") == 2
@@ -1637,3 +1641,4 @@ def test_single_column_tier_puts_exceptions_before_the_map_and_formation_last(co
         assert wide["#roster"] < wide["#map-stage"] + 200, wide
         assert not errors
         browser.close()
+

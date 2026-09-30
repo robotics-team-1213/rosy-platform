@@ -209,8 +209,8 @@ async function tick() {
     const stair1 = document.getElementById("stair1");
     if (stair1) {
       stair1.textContent = vis.ready
-        ? "계단 1 마커 보임 (FIELD GO 아님)"
-        : "계단 1 아직 (FIELD GO 아님)";
+        ? "계단 1 마커 보임 · 경기장 준비 전"
+        : "계단 1 아직 · 경기장 준비 전";
     }
     if (!payload.has_frame) {
       frame.hidden = true;
