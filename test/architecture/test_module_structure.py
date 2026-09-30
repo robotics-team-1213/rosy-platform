@@ -112,12 +112,11 @@ SIZE_VERDICTS = {
         "under the D-362 zero-allowance tier. ROS-free, host-testable (X5)",
     ),
     "site/fleet/fleet/server/app.py": (
-        1466,
+        1556,
         "split: the mission/dispatch route groups now carry their own stores and lifecycles (task_store, "
         "mission modules) — the independent-boundary condition the 813-line accept was waiting for arrived "
-        "with the arbitration work; owner fleet, unscheduled (docs/plans/"
-        "2026-09-29-fleet-mission-control-arbitration-implementation.md; re-judged 2026-09-30 at 1466 after "
-        "the enrollment route groups joined; committed tree measured 1556, inside the regrowth allowance)",
+        "with the arbitration work; owner fleet, unscheduled; re-judged 2026-09-30 at 1556 in the "
+        "committed tree after the enrollment route groups joined (zero-allowance tier)",
     ),
     "site/fleet/fleet/server/task_store.py": (
         1060,
@@ -206,14 +205,13 @@ SIZE_VERDICTS = {
     "hmi/dashboard/app.js": (
         1338,
         "split: role-surface modules with no build step (D-23 — native ES modules or multiple script "
-        "tags only; D-7 React+Vite stays declined); aligns with the D-359 token layers; owner dashboard, "
-        "scheduled docs/plans/2026-09-30-file-size-budget-and-refactor-queue.md (P1)",
+        "tags only; D-7 React+Vite stays declined); aligns with the D-359 token layers; owner "
+        "dashboard — the P1 extraction is in flight in an uncommitted tree",
     ),
     "hmi/dashboard/styles.css": (
         1119,
         "split: grew past the 800-line web budget with the D-359 token layers and the P1 surface "
-        "work; the same file-size queue owns the reduction; owner dashboard, "
-        "docs/plans/2026-09-30-file-size-budget-and-refactor-queue.md",
+        "work; the dashboard file-size queue owns the reduction; owner dashboard",
     ),
     "sim/gz_sim/scripts/lane_live_view.html": (
         856,
