@@ -553,14 +553,16 @@ The state file records every commit, so a commit is processed once:
   A robot added to the config later gets the newest passed commit. The newest
   model wins: once a newer commit is pending or delivered for a robot, an
   older pending one is marked `superseded` and never pushed.
-- **Operators come first.** Before each push the watcher reads the robot's
-  real shadow pointer and `history.jsonl`. A model already there (an operator
-  pushed it) is recorded without a push. If the latest pointer action on the
-  robot is an operator's rollback away from this revision, the watcher holds
-  it: no push, no attempt used, until an operator pushes something else or
-  runs `rosy_ml release-hold <robot>`. Every push and rollback, the watcher's
-  included, runs under the robot's models lock and is recorded in
-  `history.jsonl`; the watcher's entries say `site:<hostname>`.
+- **Operators come first.** A manual `deliver` or `rollback` writes the
+  robot's hold file `/var/lib/rosy/models/hold`; while it exists the watcher
+  pushes nothing to that robot (no attempt used). It checks the file before a
+  push and again inside the robot lock (`deliver.py push --unless-held`, exit
+  76). `rosy_ml release-hold <robot>` removes the file; the next run reads the
+  robot's real pointer and pushes the newest passed model if the robot is
+  behind, even one it delivered before. A model already there is recorded
+  without a push. Every pointer change runs under the robot's models lock
+  (busy: exit 75, retried next run without using an attempt) and is recorded
+  in `history.jsonl` (audit only; the watcher's entries say `site:<hostname>`).
 
 The watcher needs a reviewed source checkout (it imports the manifest contract
 and runner from `src/runtime/sensing`) and a Python venv with `onnxruntime`,

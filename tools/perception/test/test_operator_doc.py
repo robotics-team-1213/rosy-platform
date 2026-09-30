@@ -28,3 +28,18 @@ def test_relative_links_resolve():
     for target in re.findall(r"\]\(([^)#]+)\)", DOC.read_text(encoding="utf-8")):
         if "://" not in target:
             assert (DOC.parent / target).resolve().exists(), target
+
+
+RULE = ("사람이 손으로 deliver/rollback 하면 그 로봇의 자동 반영은 멈춘다; "
+        "`rosy_ml release-hold <robot>`로 다시 켠다.")
+
+
+def test_hold_rule_and_exit_codes_are_stated():
+    text = DOC.read_text(encoding="utf-8")
+    assert RULE in text
+    assert "/var/lib/rosy/models/hold" in text
+    for code in ("75", "76", "3"):
+        assert f"`{code}`" in text, code
+    # holds live in the hold file, not in history: rotation cannot drop them
+    assert "history.jsonl" in text and "감사" in text
+    assert "마지막 포인터 기록이 그 rollback인 동안" not in text  # the old history rule is gone

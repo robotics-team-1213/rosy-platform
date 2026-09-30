@@ -3,9 +3,9 @@
   rosy_ml init --robot NAME=HOST [...]   write your per-user config (paths only)
   rosy_ml doctor [ROBOT]                 check key, known_hosts, robot, sudo, runtime
   rosy_ml status [ROBOT]                 shadow pointer, installed revisions, history
-  rosy_ml deliver ROBOT REVISION         push an intake-passed model to the shadow slot
-  rosy_ml rollback ROBOT                 back to shadow.previous (holds the rolled-back rev)
-  rosy_ml release-hold ROBOT             let the site watcher push the held rev again
+  rosy_ml deliver ROBOT REVISION         push an intake-passed model to the shadow slot (holds the robot)
+  rosy_ml rollback ROBOT                 back to shadow.previous (holds the robot)
+  rosy_ml release-hold ROBOT             remove the hold: site auto delivery resumes
   rosy_ml harvest ROBOT                  pull finished recordings (only while idle)
   rosy_ml intake SOURCE                  check a model folder or hf:org/repo@<sha>
 

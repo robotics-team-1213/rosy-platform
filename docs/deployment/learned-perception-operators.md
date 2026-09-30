@@ -63,7 +63,7 @@ rosy_ml status pinky-005 --history 20       # 한 대, 기록 20줄
 rosy_ml intake hf:<hf-org>/<model-repo>@<40자리 commit>   # 모델 검사 (통과 시 data/perception/models)
 rosy_ml deliver pinky-005 <model_revision>  # 섀도에 넣기 (intake 통과본만)
 rosy_ml rollback pinky-005                  # 바로 전 섀도로 되돌리기
-rosy_ml release-hold pinky-005              # 되돌린 revision을 자동 반영이 다시 넣어도 되게 풀기
+rosy_ml release-hold pinky-005              # 이 로봇의 자동 반영을 다시 켜기 (포인터는 그대로)
 rosy_ml harvest pinky-005                   # 끝난 녹화 세션 가져오기
 ```
 
@@ -78,23 +78,33 @@ rosy_ml harvest pinky-005                   # 끝난 녹화 세션 가져오기
 
 ## 여러 사람이 같이 쓸 때
 
-- **잠금.** 로봇의 섀도 포인터를 바꾸는 일(`deliver`, `rollback`, `release-hold`, 사이트 자동
-  반영)은 로봇 안의 `/var/lib/rosy/models/.lock` 하나로 줄을 선다. 다른 사람이 작업 중이면
-  30초 기다리고, 그래도 안 풀리면 "busy"로 실패한다. 잠시 뒤 다시 한다.
-- **기록.** 포인터를 바꿀 때마다 로봇의 `/var/lib/rosy/models/history.jsonl`에 한 줄이
+규칙은 하나다.
+
+> 사람이 손으로 deliver/rollback 하면 그 로봇의 자동 반영은 멈춘다; `rosy_ml release-hold <robot>`로 다시 켠다.
+
+- **보류(hold) 파일.** 손으로 한 `deliver`나 `rollback`은 로봇의
+  `/var/lib/rosy/models/hold`(root:rosy-camera 0640)에 누가, 어디서, 언제, 무엇을, 왜 했는지를
+  JSON으로 남긴다. 포인터를 옮기기 **전에** 쓰므로, 도중에 실패해도 보류는 남는다. 이 파일이
+  있는 동안 사이트 자동 반영은 그 로봇에 아무것도 넣지 않는다. `rosy_ml status`와
+  `rosy_ml doctor`가 보류를 보여 준다.
+- **보류 풀기.** `rosy_ml release-hold <robot>`은 보류 파일만 지우고 기록을 남긴다. 섀도
+  포인터는 바꾸지 않는다. 다음 자동 반영(10분 이내) 때 사이트가 그 로봇의 실제 포인터를 읽고,
+  intake를 통과한 가장 새 모델이 아니면 그 모델을 다시 넣는다. 전에 받았던 모델이라도 되돌려져
+  있으면 다시 넣는다.
+- **잠금.** 포인터를 바꾸는 일(`deliver`, `rollback`, `release-hold`, 사이트 자동 반영)은 로봇
+  안의 `/var/lib/rosy/models/.lock` 하나로 줄을 선다. 다른 사람이 작업 중이면 30초 기다리고,
+  그래도 안 풀리면 종료 코드 `75`("busy")로 실패한다. 잠시 뒤 다시 한다.
+- **기록은 감사용이다.** 포인터를 바꿀 때마다 `/var/lib/rosy/models/history.jsonl`에 한 줄이
   남는다: 시각(UTC), 동작, revision, 이전 revision, 운영자, 운영자 PC 이름, 도구 commit.
-  누가 무엇을 넣고 뺐는지는 `rosy_ml status`로 본다. 사이트 자동 반영은 `site:<hostname>`
-  으로 남는다.
+  사이트 자동 반영은 `site:<hostname>`으로 남는다. 보류 여부는 기록이 아니라 보류 파일로
+  정하므로, 기록 파일을 정리(rotation)해도 보류는 사라지지 않는다. 포인터를 옮기기 전에 기록
+  파일에 쓸 수 있는지 확인하고, 쓸 수 없으면 아무것도 바꾸지 않고 종료 코드 `3`으로 멈춘다.
+  옮긴 뒤 기록만 실패하면 "pointer changed, history not written"을 출력하고 `3`으로 끝난다.
 - **가장 새 모델이 섀도가 된다.** 여러 학습자가 같은 HF 모델 저장소에 올리면, intake를 통과한
-  가장 새 commit이 섀도가 된다. 누가 올렸는지는 manifest의 `trainer`와 HF commit에 남는다.
-- **운영자 보류(hold).** 누군가 `rollback`으로 어떤 revision을 뺐다면, 사이트 자동 반영은 그
-  revision을 다시 넣지 않는다. 로봇의 마지막 포인터 기록이 그 rollback인 동안 보류가 유지된다.
-  보류는 두 가지로 풀린다.
-  - 누가 다른 revision을 `deliver`한다(더 새 모델이면 자동 반영도 그것을 따른다).
-  - 문제를 확인한 사람이 `rosy_ml release-hold <robot>`을 실행한다. 다음 자동 반영 때 그
-    revision이 다시 들어간다.
-- 자동 반영은 넣기 전에 로봇의 실제 포인터와 기록을 읽는다. 사람이 이미 같은 revision을
-  넣었으면 다시 보내지 않는다.
+  가장 새 commit이 섀도가 된다(보류 중인 로봇은 제외). 누가 올렸는지는 manifest의 `trainer`와
+  HF commit에 남는다.
+- 사이트 자동 반영은 로봇 잠금 안에서 보류 파일을 한 번 더 본다. 그 사이에 누가 보류를 걸었으면
+  종료 코드 `76`("held")으로 아무것도 바꾸지 않고 물러난다.
 
 ## 사이트 PC 자동 반영 켜기
 
@@ -142,8 +152,11 @@ intake를 통과하면 설정된 로봇 모두의 섀도에 넣는다. 끝은 �
 
 그 밖에:
 
-- `deliver`가 `busy`로 실패: 다른 사람이 같은 로봇에서 작업 중이다. 잠시 뒤 다시 한다.
+- 종료 코드 `75`(busy): 다른 사람이 같은 로봇에서 작업 중이다. 잠시 뒤 다시 한다.
+- 종료 코드 `76`(held): 사이트 자동 반영만 받는다. 그 로봇에 보류가 있다.
+- 종료 코드 `3`: 로봇의 `history.jsonl`에 쓸 수 없다(디스크, 권한). 메시지가
+  "pointer changed, history not written"이면 포인터는 이미 바뀌었으니 `rosy_ml status`로 확인한다.
 - `harvest`가 종료 코드 4: 로봇이 움직이는 중이거나 속도 값이 최신이 아니다. 로봇을 세우고,
   CORE와 오도메트리 상태를 확인한다.
-- 자동 반영이 어떤 로봇에 안 들어간다: `rosy_ml status <robot>`에서 마지막 기록이 rollback이면
-  보류 중이다. 확인 후 `rosy_ml release-hold <robot>`.
+- 자동 반영이 어떤 로봇에 안 들어간다: `rosy_ml status <robot>`의 `hold:` 줄에 누가 걸었는지
+  나온다. 그 사람과 확인한 뒤 `rosy_ml release-hold <robot>`.
