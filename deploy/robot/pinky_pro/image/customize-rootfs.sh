@@ -237,7 +237,7 @@ chmod 0644 "$ROOT/usr/local/share/rosy/python-runtime.sha256"
 # part of the payload runtime id recorded above.
 install -d -m 0755 -o root -g root "$ROOT$(dirname "$LEARNED_TARGET")" "$ROOT$LEARNED_TARGET"
 cp "$LEARNED_REQUIREMENTS" "$ROOT/tmp/rosy-core-probe/learned-perception-requirements.txt"
-(umask 022 && chroot "$ROOT" python3 -m pip install --no-cache-dir \
+(umask 022 && chroot "$ROOT" python3 -m pip install --no-cache-dir --upgrade \
     --require-hashes --no-deps --only-binary=:all: --target "$LEARNED_TARGET" \
     -r /tmp/rosy-core-probe/learned-perception-requirements.txt) \
     || fail "learned-perception runtime did not install from the hash lock"

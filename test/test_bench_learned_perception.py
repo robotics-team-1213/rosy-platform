@@ -95,6 +95,11 @@ def test_image_and_bench_install_into_the_same_prefix_with_the_same_flags():
             assert flag in command, flag
         assert "--target" in command and "--break-system-packages" not in command
         assert "--prefix" not in command and "--user" not in command
+    # Identical flags (review 2026-10-01): --upgrade replaces a partial or older
+    # prefix on a re-run; on the fresh image it changes nothing.
+    flags = [sorted(re.findall(r"--[a-z-]+(?:=[^ ]+)?", _learned_pip_command(src)))
+             for src in (CUSTOMIZER.read_text(encoding="utf-8"), _source())]
+    assert flags[0] == flags[1] and "--upgrade" in flags[0]
     customizer = CUSTOMIZER.read_text(encoding="utf-8")
     assert "lock_value learned_perception_runtime target" in customizer
     assert "learned-perception-requirements.txt" not in _source()  # named by the lock only

@@ -320,6 +320,9 @@ def _mcap_frames(files, skipped=None, truncated=None):
     def ready(now):
         while pending and (now is None or pending[0]["log_t"] + SIDE_LOOKAHEAD_S < now):
             f = pending.popleft()
+            for name in STAMPED_SIDE_TOPICS:  # no evidence of this image: null, as in a sidecar
+                f["side"].setdefault(name, None)
+                f["extra"]["dt"].setdefault(name, None)
             yield f["t"], f["item"], f["side"], f["ext"], f["extra"]
 
     def decoded(f):

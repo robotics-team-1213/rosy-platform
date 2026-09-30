@@ -204,7 +204,7 @@ def test_string_side_data_round_trips_into_prelabel_score(tmp_path):
     row = json.loads((out / "frames.jsonl").read_text().splitlines()[0])
     assert row["side"][SHADOW_TOPIC] == payload
     # line/observation is a stamped topic; raw text carries no image stamp: no frame
-    assert "line/observation" not in row["side"]
+    assert row["side"]["line/observation"] is None
     assert prelabel.SHADOW_KEY == SHADOW_TOPIC
     lg = _logits(lane_cols=slice(4, 6))
     base = prelabel.score_frame(lg, MODEL_CLASSES, {}, "r1")
@@ -232,7 +232,8 @@ def test_namespaced_session_extracts_frames_and_side_data(tmp_path):
     assert extract.main([str(sess), "--out", str(out)]) == 0
     rows = [json.loads(l) for l in (out / "frames.jsonl").read_text().splitlines()]
     assert len(rows) == 1
-    assert rows[0]["side"] == {SHADOW_TOPIC: {"stamp": 8e-7, "error_delta": 0.1}}
+    assert rows[0]["side"] == {SHADOW_TOPIC: {"stamp": 8e-7, "error_delta": 0.1},
+                               "line/observation": None}
 
 
 COMPRESSED_DEF = """std_msgs/Header header
@@ -377,9 +378,9 @@ def test_shadow_logged_after_its_frame_attaches_to_that_frame(tmp_path):
     rows = _rows(sess, tmp_path)
     assert extract.STAMP_TOL_S == 1e-6
     assert [r["t"] for r in rows] == [1.0, 2.0, 3.0]
-    assert [r["side"].get(SHADOW_TOPIC, {}).get("stamp") for r in rows] == [1.0, 2.0, None]
+    assert [(r["side"][SHADOW_TOPIC] or {}).get("stamp") for r in rows] == [1.0, 2.0, None]
     assert rows[0]["dt"][SHADOW_TOPIC] == pytest.approx(0.1)  # logged after its frame
-    assert [r["side"].get("line/observation", {}).get("stamp") for r in rows] == [1.0, 2.0, None]
+    assert [(r["side"]["line/observation"] or {}).get("stamp") for r in rows] == [1.0, 2.0, None]
     # cmd_vel has no stamp: latest logged before the frame
     assert [r["side"]["cmd_vel"]["linear"]["x"] for r in rows] == [1.0, 2.0, 2.0]
 
@@ -392,9 +393,9 @@ def test_side_message_beyond_the_lookahead_window_is_not_attached(tmp_path):
     sess = _write_stamped(tmp_path, [
         (1.0, "raw", 1.0), (1.45, "line", 1.0), (1.6, "shadow", 1.0), (2.0, "raw", 2.0)])
     rows = _rows(sess, tmp_path)
-    assert SHADOW_TOPIC not in rows[0]["side"]
+    assert rows[0]["side"][SHADOW_TOPIC] is None
     assert rows[0]["side"]["line/observation"]["stamp"] == 1.0
-    assert SHADOW_TOPIC not in rows[1]["side"]
+    assert rows[1]["side"][SHADOW_TOPIC] is None
 
 
 def test_compressed_camera_is_preferred_over_raw(tmp_path):
@@ -443,7 +444,7 @@ def test_observation_logged_between_capture_and_its_own_image_attaches(tmp_path)
     rows = _rows(sess, tmp_path)
     assert rows[0]["side"]["line/observation"]["stamp"] == 1.0
     assert -0.0001 <= rows[0]["dt"]["line/observation"] < 0  # logged before the image (4 dp)
-    assert SHADOW_TOPIC not in rows[1]["side"]
+    assert rows[1]["side"][SHADOW_TOPIC] is None
 
 
 def _sidecar_row(i, stamp_s, side, dt):
@@ -511,7 +512,7 @@ def test_ir_line_near_an_image_stamp_is_not_camera_evidence(tmp_path):
     rows = _rows(sess, tmp_path)
     assert rows[0]["side"]["line/observation"]["source"] == "CAMERA_LINE"
     assert rows[0]["side"]["line/observation"]["stamp"] == 1.0
-    assert "line/observation" not in rows[1]["side"]
+    assert rows[1]["side"]["line/observation"] is None
 
 
 def test_sidecar_ignores_ir_line_evidence():
@@ -621,3 +622,15 @@ def test_late_evidence_dt_is_exact_from_integer_nanoseconds(tmp_path):
     rows = _rows(sess, tmp_path)
     log_frame = rows[0]["log_ns"]
     assert rows[0]["dt"][SHADOW_TOPIC] == round((int(round((base + 0.10035) * 1e9)) - log_frame) / 1e9, 4)
+
+
+def test_mcap_writes_null_for_unmatched_stamped_evidence_like_the_sidecar(tmp_path):
+    """D-356: a frame without its stamped evidence says so (null), in both inputs."""
+    pytest.importorskip("mcap_ros2")
+    from control.recording import SHADOW_TOPIC
+
+    rows = _rows(_write_stamped(tmp_path, [(1.0, "raw", 1.0), (1.1, "cmd", 1.0)]), tmp_path)
+    for topic in extract.STAMPED_SIDE_TOPICS:
+        assert topic in rows[0]["side"] and rows[0]["side"][topic] is None
+        assert rows[0]["dt"][topic] is None
+    assert SHADOW_TOPIC in extract.STAMPED_SIDE_TOPICS
