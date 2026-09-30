@@ -1,4 +1,4 @@
-"""manifest.json is the one /common allowlist for core, fleet, games and control.
+"""shared-assets.json is the one /common allowlist for core, fleet, games and control.
 
 Each server reads it instead of keeping its own list, so a shared file that is
 installed but missing here would 404 on some servers and not others.
@@ -9,10 +9,10 @@ import re
 from pathlib import Path
 
 WEB = Path(__file__).resolve().parents[1]
-MANIFEST = json.loads((WEB / "manifest.json").read_text(encoding="utf-8"))
+MANIFEST = json.loads((WEB / "shared-assets.json").read_text(encoding="utf-8"))
 ASSETS = MANIFEST["shared_assets"]
 #: Installed next to the assets but not served under /common.
-NOT_SHARED = {"manifest.json"}
+NOT_SHARED = {"shared-assets.json"}
 
 
 def _installed_files() -> set[str]:
@@ -39,10 +39,19 @@ def test_every_manifest_asset_exists_as_a_plain_file():
 
 def test_manifest_and_install_list_agree():
     installed = _installed_files()
-    assert "manifest.json" in installed, "servers read share/web_common/manifest.json"
+    assert "shared-assets.json" in installed, "servers read share/web_common/shared-assets.json"
     assert installed - NOT_SHARED == set(ASSETS), (
         f"installed but not shared: {sorted(installed - NOT_SHARED - set(ASSETS))}; "
         f"shared but not installed: {sorted(set(ASSETS) - installed)}")
+
+
+def test_no_installed_file_uses_a_release_metadata_name():
+    # A payload release refuses these basenames at any depth, and the robot's
+    # native_release.py leaves them out of its inventory (D-225): installing
+    # share/web_common/manifest.json broke the 2026.09.30 image and payload builds.
+    release_metadata = {"manifest.json", "SHA256SUMS", "SHA256SUMS.sig"}
+    clashes = {name for name in _installed_files() if name.rsplit("/", 1)[-1] in release_metadata}
+    assert not clashes, clashes
 
 
 def test_media_types_are_canonical():

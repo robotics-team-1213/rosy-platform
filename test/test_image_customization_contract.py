@@ -106,7 +106,7 @@ def _valid_root(tmp_path: Path) -> Path:
         (root / "opt/rosy/first-boot" / name).write_text("# fixture\n", encoding="utf-8")
     for runtime, names in (
         (root / "opt/rosy/native-runtime", ("native_release.py", "recover-release.sh", "signing.py")),
-        (release / "deploy/robot/pinky_pro/native", ("native_release.py", "signing.py")),
+        (release / "deploy/robot/native", ("native_release.py", "signing.py")),
     ):
         runtime.mkdir(parents=True, exist_ok=True)
         for name in names:
@@ -561,7 +561,7 @@ def test_customizer_executes_native_entrypoints_inside_the_image():
     probe = "rosy-native-probe"
     assert probe in source
     for runtime in ("/opt/rosy/native-runtime/native_release.py",
-                    '/opt/rosy/releases/$RELEASE_ID/deploy/robot/pinky_pro/native/native_release.py'):
+                    '/opt/rosy/releases/$RELEASE_ID/deploy/robot/native/native_release.py'):
         assert f'chroot "$ROOT" python3 -B {runtime}' in source
     assert 'chroot "$ROOT" python3 -B /opt/rosy/first-boot/rosy-first-boot.py --help' in source
     assert source.index("rosy-native-probe") < source.index("verify-mounted-image.py")

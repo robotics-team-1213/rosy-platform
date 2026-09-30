@@ -24,8 +24,10 @@ BEGIN = "# BEGIN D-373 learned-perception runtime"
 END = "# END D-373 learned-perception runtime"
 LEARNED = {"onnxruntime": "1.30.0", "flatbuffers": "25.12.19", "packaging": "26.3", "protobuf": "7.36.2"}
 MODELS_RULE = "d /var/lib/rosy/models 0750 root rosy-camera -"
-# What every card baked before D-373 records (inputs.lock.yaml before 9f33aa64).
-PRE_D373_RUNTIME = "2b003fd4f94d89e3735f6225323df731c45aae0d35132e781f7680676d20bf00"
+# What every card baked before D-373 records: the flashed runtime that
+# test_python_runtime_id.py pins (main 3afb64a6; 2b003fd4 was a comment-only
+# drift that no flashed card carries).
+PRE_D373_RUNTIME = "a66f224ab570cb08d1c474bdbb1f93899692625cd167a7f6f907fc99690f4176"
 LOCK = PINKY / "image" / "inputs.lock.yaml"
 
 

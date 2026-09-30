@@ -9,7 +9,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
 LOCK="$SCRIPT_DIR/inputs.lock.yaml"
 DIST="${ROSY_DIST_DIR:-$REPO_ROOT/dist}"
 WORKSPACE="$REPO_ROOT"

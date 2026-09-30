@@ -16,13 +16,16 @@ import os
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, ExecuteProcess
+from launch.actions import DeclareLaunchArgument, ExecuteProcess, LogInfo
 from launch.conditions import IfCondition
 from launch.logging import get_logger
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
 from launch_ros.substitutions import FindPackagePrefix
+
+from control.ir_overlay import usable_overlay
+
 
 def _env_switch(name):
     value = os.environ.get(name, 'false')
@@ -39,6 +42,13 @@ def generate_launch_description():
     learned_shadow = LaunchConfiguration('learned_shadow')
     capture = LaunchConfiguration('capture')
     recording_root = LaunchConfiguration('recording_root')
+    line_params = [os.path.join(config, 'line_follow.yaml')]
+    # D-344 §12: optional per-robot IR calibration overlay, validated here so a
+    # malformed file is skipped (IR_LINE stays fail-closed) instead of crash-looping
+    # the observer that CORE's camera line-follow depends on.
+    overlay, overlay_note = usable_overlay()
+    if overlay is not None:
+        line_params.append(overlay)
     return LaunchDescription([
         DeclareLaunchArgument('namespace', default_value=''),
         DeclareLaunchArgument('learned_shadow',
@@ -47,6 +57,7 @@ def generate_launch_description():
         DeclareLaunchArgument('capture', default_value=_env_switch('ROSY_CAPTURE')),
         DeclareLaunchArgument('recording_root',
                               default_value='/var/lib/rosy/camera/recordings'),
+        LogInfo(msg=f'IR calibration overlay: {overlay_note}'),
         Node(
             package='control', executable='camera_detect_node', namespace=namespace,
             output='screen', respawn=True, respawn_delay=2.0,
@@ -57,7 +68,7 @@ def generate_launch_description():
         Node(
             package='control', executable='line_observer_node', namespace=namespace,
             output='screen', respawn=True, respawn_delay=2.0,
-            parameters=[os.path.join(config, 'line_follow.yaml')],
+            parameters=line_params,
         ),
         Node(
             package='control', executable='road_observer_node', namespace=namespace,

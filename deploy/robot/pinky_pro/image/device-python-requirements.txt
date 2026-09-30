@@ -1,7 +1,7 @@
 # Device Python runtime for the Pinky Pro image (D-189, D-192). Hash-locked, no resolver.
 # CORE's set first, then the I/O runtime's (rosy-io: bringup's DYNAMIXEL driver).
 #
-# Installed by deploy/robot/pinky_pro/image/customize-rootfs.sh into the image's /usr/local with
+# Installed by deploy/image/customize-rootfs.sh into the image's /usr/local with
 #   pip install --require-hashes --no-deps --only-binary=:all: -r THIS_FILE
 # and by .github/workflows/ci.yml, so host tests run what the device runs.
 # Ubuntu 24.04 apt ships pydantic 1.10 / fastapi 0.101 and no websockets;
@@ -54,7 +54,7 @@ typing-inspection==0.4.4 \
 
 # D-192: rosy-io runtime. bringup's dynamixel_driver/dynamixel_probe import
 # dynamixel_sdk; the old Docker io image pip-installed the same pin
-# (deploy/robot/pinky_pro/requirements-io.txt). pyserial is its only dependency.
+# (deploy/robot/requirements-io.txt). pyserial is its only dependency.
 # Both are pure wheels (one hash each); checked 2026-09-24 by a
 # --require-hashes --only-binary=:all: download for cp312 aarch64 and x86_64.
 dynamixel-sdk==3.8.4 \

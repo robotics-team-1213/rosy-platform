@@ -81,11 +81,18 @@ rosbag2_*/
 *.sqlite3
 *.db
 
-# Session recordings stay untracked. Learning clips under teleop/learning are tracked.
+# Session recordings stay untracked. The repo is public: new learning media under
+# teleop/learning (mp4/mkv/mcap, jsonl/json sidecars, images) stay untracked too (D-356
+# 2026-09-30 addendum). The seven 20260919 clips committed before this rule are still tracked.
 data/teleop/*
 data/drive/**
 !data/teleop/.gitkeep
 !data/teleop/learning/
+data/teleop/learning/*
+!data/teleop/learning/.gitkeep
+# The seven 2026-09-19 clips were committed before this rule; they stay tracked until the user
+# decides to untrack them (git rm --cached). Excepted here so tracked files are never ignored.
+!data/teleop/learning/teleop_20260919_151213_part0[1-7].mp4
 !data/drive/.gitkeep
 
 # Perception learning-loop artifacts (recordings, datasets, models) stay untracked (D-356).

@@ -104,6 +104,11 @@ def test_bag_command(tmp_path):
         assert topic in cmd
 
 
+def test_record_topics_include_the_lidar_for_wall_labels():
+    # D-379: tools/perception/dataset/autolabel.py projects scan into the camera
+    assert "scan" in RECORD_TOPICS and "odom" in RECORD_TOPICS
+
+
 def test_bag_command_namespace_prefixes_every_topic(tmp_path):
     cmd = bag_command(tmp_path / "s", namespace="/pinky1/")
     assert cmd[-len(RECORD_TOPICS):] == [f"/pinky1/{t}" for t in RECORD_TOPICS]

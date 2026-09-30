@@ -38,14 +38,14 @@ SHADOW_SCHEMA = "rosy.perception.learned_shadow/1"  # == shadow.SHADOW_SCHEMA
 # (ODOM_PUB_TOPIC_NAME).
 CAMERA_TOPIC = "camera/front"
 COMPRESSED_CAMERA_TOPIC = CAMERA_TOPIC + "/compressed"
-# scan is the LiDAR sensor_msgs/LaserScan; extract.py attaches the scan
-# nearest in stamp (within 0.1 s) to each frame, the input of LiDAR-projected
-# wall labels (D-373 decision 9, D-379).
+# scan is the LiDAR sensor_msgs/LaserScan; extract.py attaches the latest scan
+# logged at or before each frame (no future leakage, D-356 clock rule), the
+# input of LiDAR-projected wall labels (D-373 decision 9, D-379): the LiDAR
+# sees walls, never floor paint.
 SCAN_TOPIC = "scan"
 # Topics tools/perception/dataset/extract.py attaches to each frame as side
 # data, keyed by these relative names (prelabel.py reads SHADOW_TOPIC).
 SIDE_TOPICS = ("cmd_vel", "line/observation", SHADOW_TOPIC, SCAN_TOPIC)
-RECORD_TOPICS = (CAMERA_TOPIC, *SIDE_TOPICS, "odom")
 
 # The camera unit's StateDirectory (D-373 decision 1): no new write path.
 DEFAULT_ROOT = "/var/lib/rosy/camera/recordings"
@@ -78,6 +78,11 @@ def snapshot_node_name(namespace: str = "") -> str:
 
 def record_topics(camera_topic: str = CAMERA_TOPIC) -> tuple:
     return (camera_topic, *SIDE_TOPICS, "odom")
+
+
+# The one topic list: raw camera by default; snapshot capture passes the
+# compressed topic (D-373 decision 3).
+RECORD_TOPICS = record_topics()
 
 
 def _iso(now: datetime) -> str:

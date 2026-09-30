@@ -168,6 +168,7 @@ def _write_side_session(tmp_path, shadow_text, camera="/camera/front", shadow_to
         w = Writer(fh)
         img_s = w.register_msgdef("sensor_msgs/msg/Image", IMAGE_DEF)
         str_s = w.register_msgdef("std_msgs/msg/String", STRING_DEF)
+        # logged after the frame's capture (header stamp 0.0000008 s), before its log
         w.write_message(shadow_topic or "/" + SHADOW_TOPIC, str_s, {"data": shadow_text},
                         900, 900)
         w.write_message(camera.replace("camera/front", "line/observation"), str_s,
@@ -175,7 +176,7 @@ def _write_side_session(tmp_path, shadow_text, camera="/camera/front", shadow_to
         px = np.zeros((4, 6, 3), np.uint8)
         px[:, 2:4] = 255
         w.write_message(camera, img_s, {
-            "header": {"stamp": {"sec": 1, "nanosec": 0}, "frame_id": "c"},
+            "header": {"stamp": {"sec": 0, "nanosec": 800}, "frame_id": "c"},
             "height": 4, "width": 6, "encoding": "bgr8", "is_bigendian": 0,
             "step": 18, "data": list(px.tobytes())}, 1000, 1000)
         w.finish()
@@ -195,13 +196,15 @@ def test_string_side_data_round_trips_into_prelabel_score(tmp_path):
     from control.recording import SHADOW_TOPIC
     from test_dataset_build import MODEL_CLASSES, _logits
 
-    payload = {"model_revision": "r1", "error_delta": -0.4, "confidence": 0.9}
+    # stamp = the frame's header stamp: the shadow result of that frame
+    payload = {"stamp": 8e-7, "model_revision": "r1", "error_delta": -0.4, "confidence": 0.9}
     sess = _write_side_session(tmp_path, json.dumps(payload))
     out = tmp_path / "out"
     assert extract.main([str(sess), "--out", str(out)]) == 0
     row = json.loads((out / "frames.jsonl").read_text().splitlines()[0])
     assert row["side"][SHADOW_TOPIC] == payload
-    assert row["side"]["line/observation"] == "not json"  # raw text fallback
+    # line/observation is a stamped topic; raw text carries no image stamp: no frame
+    assert "line/observation" not in row["side"]
     assert prelabel.SHADOW_KEY == SHADOW_TOPIC
     lg = _logits(lane_cols=slice(4, 6))
     base = prelabel.score_frame(lg, MODEL_CLASSES, {}, "r1")
@@ -222,15 +225,14 @@ def test_namespaced_session_extracts_frames_and_side_data(tmp_path):
     pytest.importorskip("mcap_ros2")
     from control.recording import SHADOW_TOPIC
 
-    sess = _write_side_session(tmp_path, json.dumps({"error_delta": 0.1}),
+    sess = _write_side_session(tmp_path, json.dumps({"stamp": 8e-7, "error_delta": 0.1}),
                                camera="/pinky1/camera/front",
                                shadow_topic="/pinky1/" + SHADOW_TOPIC)
     out = tmp_path / "out"
     assert extract.main([str(sess), "--out", str(out)]) == 0
     rows = [json.loads(l) for l in (out / "frames.jsonl").read_text().splitlines()]
     assert len(rows) == 1
-    assert rows[0]["side"] == {SHADOW_TOPIC: {"error_delta": 0.1},
-                               "line/observation": "not json"}
+    assert rows[0]["side"] == {SHADOW_TOPIC: {"stamp": 8e-7, "error_delta": 0.1}}
 
 
 COMPRESSED_DEF = """std_msgs/Header header
@@ -323,27 +325,29 @@ uint32 nanosec
 """
 
 
-def test_nearest_scan_within_0_1_s_is_attached_per_frame(tmp_path):
+def test_scan_is_the_latest_logged_at_or_before_the_frame(tmp_path):
+    """Clock rule class (b): no future leakage, even when a later scan is nearer."""
     pytest.importorskip("mcap_ros2")
     from control.recording import RECORD_TOPICS, SCAN_TOPIC, SIDE_TOPICS
 
     assert SCAN_TOPIC == "scan" and SCAN_TOPIC in SIDE_TOPICS and SCAN_TOPIC in RECORD_TOPICS
-    assert extract.SCAN_TOLERANCE_S == 0.1
+    assert SCAN_TOPIC not in extract.STAMPED_SIDE_TOPICS
     sess = _write_stamped(tmp_path, [
-        (0.90, "scan", 0.90),                       # 0.1 s before frame 1 ...
-        (0.97, "scan", 0.97),                       # ... this one is nearer
+        (0.5, "raw", 0.5),                          # no scan logged yet -> none
+        (0.90, "scan", 0.90),
+        (0.97, "scan", 0.97),                       # latest before frame 1
         (1.0, "raw", 1.0),
-        (1.06, "scan", 1.06),                       # logged after frame 1, still 0.06 away
-        (2.0, "raw", 2.0),                          # nearest scan 1.06: 0.94 s away -> none
-        (3.0, "raw", 3.0),
-        (3.08, "scan", 3.08),                       # after the frame, within 0.1 s
+        (1.01, "scan", 1.01),                       # nearer, but logged after: not frame 1's
+        (2.0, "raw", 2.0),                          # latest before: 1.01, however old
     ])
     rows = _rows(sess, tmp_path)
     scans = [r["side"].get(SCAN_TOPIC) for r in rows]
-    assert scans[0]["stamp"] == pytest.approx(0.97, abs=1e-6)
-    assert scans[1] is None
-    assert scans[2]["stamp"] == pytest.approx(3.08, abs=1e-6)
-    s = scans[0]
+    assert scans[0] is None
+    assert scans[1]["stamp"] == pytest.approx(0.97, abs=1e-6)
+    assert scans[2]["stamp"] == pytest.approx(1.01, abs=1e-6)
+    assert rows[1]["dt"][SCAN_TOPIC] == pytest.approx(-0.03, abs=1e-6)
+    assert rows[2]["dt"][SCAN_TOPIC] == pytest.approx(-0.99, abs=1e-6)
+    s = scans[1]
     assert set(s) == {"stamp", "angle_min", "angle_increment", "range_min", "range_max",
                       "ranges"}
     assert s["ranges"][0] == pytest.approx(0.97, abs=1e-6)
@@ -370,8 +374,10 @@ def test_shadow_logged_after_its_frame_attaches_to_that_frame(tmp_path):
         (3.2, "shadow", 99.0),  # stamp of no frame in the bag: attaches nowhere
     ])
     rows = _rows(sess, tmp_path)
+    assert extract.STAMP_TOL_S == 1e-3
     assert [r["t"] for r in rows] == [1.0, 2.0, 3.0]
     assert [r["side"].get(SHADOW_TOPIC, {}).get("stamp") for r in rows] == [1.0, 2.0, None]
+    assert rows[0]["dt"][SHADOW_TOPIC] == pytest.approx(0.1)  # logged after its frame
     assert [r["side"].get("line/observation", {}).get("stamp") for r in rows] == [1.0, 2.0, None]
     # cmd_vel has no stamp: latest logged before the frame
     assert [r["side"]["cmd_vel"]["linear"]["x"] for r in rows] == [1.0, 2.0, 2.0]
@@ -399,7 +405,8 @@ def test_compressed_camera_is_preferred_over_raw(tmp_path):
         events += [(t, "raw", t), (t + 0.001, "jpeg", t), (t + 0.1, "shadow", t)]
     rows = _rows(_write_stamped(tmp_path, events), tmp_path)
     assert len(rows) == 3  # not six: raw frames are dropped when compressed exists
-    assert [r["t"] for r in rows] == [1.001, 2.001, 3.001]
+    assert [r["t"] for r in rows] == [1.0, 2.0, 3.0]  # header stamp, not log time
+    assert [r["log_ns"] for r in rows] == [1_001_000_000, 2_001_000_000, 3_001_000_000]
     assert [r["side"][SHADOW_TOPIC]["stamp"] for r in rows] == [1.0, 2.0, 3.0]
 
 
@@ -417,3 +424,71 @@ def test_truncated_file_keeps_what_was_read_and_is_counted(tmp_path, capsys):
     rows = (out / "frames.jsonl").read_text().splitlines()
     assert len(rows) >= 2
     assert "truncated 2" in capsys.readouterr().out
+
+
+def test_observation_logged_between_capture_and_its_own_image_attaches(tmp_path):
+    """8kcn: 45/2258 line observations reached the recorder 37-61 us before their own
+    image. The window opens at the frame's capture (header stamp), not its log time;
+    evidence logged before the capture cannot be about that image."""
+    pytest.importorskip("mcap_ros2")
+    from control.recording import SHADOW_TOPIC
+
+    sess = _write_stamped(tmp_path, [
+        (1.00004, "line", 1.0),    # after capture 1.0, 60 us before its image's log time
+        (1.0001, "raw", 1.0),
+        (1.9999, "shadow", 2.0),   # stamp of frame 2 but logged before its capture
+        (2.0001, "raw", 2.0),
+    ])
+    rows = _rows(sess, tmp_path)
+    assert rows[0]["side"]["line/observation"]["stamp"] == 1.0
+    assert -0.0001 <= rows[0]["dt"]["line/observation"] < 0  # logged before the image (4 dp)
+    assert SHADOW_TOPIC not in rows[1]["side"]
+
+
+def _sidecar_row(i, stamp_s, side, dt):
+    return {"index": i, "t": stamp_s, "stamp_ns": round(stamp_s * 1e9),
+            "log_ns": round((stamp_s + 0.01) * 1e9), "side": side, "dt": dt}
+
+
+def test_sidecar_rows_follow_the_same_two_class_clock_rule():
+    """mp4 + sidecar input: stamped entries (with stamp_ns) are attached by stamp and
+    window from wherever they sit; class (b) stays as the sidecar recorded it."""
+    from control.recording import SHADOW_TOPIC
+
+    cmd = {"linear": 0.03, "angular": 0.0}
+    rows = [
+        _sidecar_row(0, 1.0, {SHADOW_TOPIC: None, "cmd_vel": cmd},
+                     {SHADOW_TOPIC: None, "cmd_vel": -0.02}),
+        # frame 0's shadow held in row 1 (an older writer): logged 1.11 s, 0.1 s after
+        # frame 0's log time; line/observation of frame 1 logged 50 us before its image
+        _sidecar_row(1, 1.125, {
+            SHADOW_TOPIC: {"stamp": 1.0, "error_delta": 0.1, "stamp_ns": 1_000_000_000},
+            "line/observation": {"stamp": 1.125, "error": 0.2, "stamp_ns": 1_125_000_000},
+            "cmd_vel": cmd},
+            {SHADOW_TOPIC: -0.025, "line/observation": -0.00005, "cmd_vel": -0.02}),
+        # frame 2's shadow logged 0.6 s after frame 2's log time: beyond the window
+        _sidecar_row(2, 1.25, {SHADOW_TOPIC: None}, {SHADOW_TOPIC: None}),
+        _sidecar_row(3, 2.0, {SHADOW_TOPIC: {"stamp": 1.25, "stamp_ns": 1_250_000_000}},
+                     {SHADOW_TOPIC: -0.15}),
+    ]
+    got = extract.sidecar_side(rows)
+    assert got[0][0][SHADOW_TOPIC]["error_delta"] == 0.1
+    assert got[0][1][SHADOW_TOPIC] == pytest.approx(0.1)
+    assert got[0][0]["cmd_vel"] == cmd and got[0][1]["cmd_vel"] == -0.02  # class (b) as is
+    assert got[1][0]["line/observation"]["error"] == 0.2
+    assert got[1][0][SHADOW_TOPIC] is None
+    assert got[0][0]["line/observation"] is None
+    assert got[2][0][SHADOW_TOPIC] is None and got[3][0][SHADOW_TOPIC] is None
+
+
+def test_old_sidecar_without_stamp_ns_attaches_no_stamped_evidence():
+    """Sidecars written before stamp_ns: stamped evidence is null, never shifted."""
+    from control.recording import SHADOW_TOPIC
+
+    rows = [_sidecar_row(0, 1.0, {SHADOW_TOPIC: None, "line/observation": None}, {}),
+            _sidecar_row(1, 1.125, {SHADOW_TOPIC: {"stamp": 1.0, "error_delta": 0.1},
+                                    "line/observation": {"stamp": 1.0, "error": 0.2}},
+                         {SHADOW_TOPIC: -0.02, "line/observation": -0.03})]
+    for side, dt in extract.sidecar_side(rows):
+        assert side[SHADOW_TOPIC] is None and side["line/observation"] is None
+        assert dt[SHADOW_TOPIC] is None

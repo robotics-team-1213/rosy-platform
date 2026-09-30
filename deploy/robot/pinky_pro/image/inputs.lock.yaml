@@ -129,13 +129,13 @@ hardware_dependencies:
 
 python_runtime:
   requirements: device-python-requirements.txt
-  requirements_sha256: 4c320f54011a8843b749deb40694662a7499d11ce2758ac3bcffdd352cd2cd06
+  requirements_sha256: 6f3353ea301de18f87843d1f729158fe342ee1b4bbd0365892093f2a23949876
   # D-373: runtime records whose requirements are a strict subset of this file.
   # The image and the bench install write them to the card
   # (python-runtime-compatible.sha256) so a release built for one still
   # activates and rolls back here. Never list a runtime that pins a different
   # version of anything this file pins.
-  compatible_predecessors: [2b003fd4f94d89e3735f6225323df731c45aae0d35132e781f7680676d20bf00]
+  compatible_predecessors: [a66f224ab570cb08d1c474bdbb1f93899692625cd167a7f6f907fc99690f4176]
   python_version: "3.12"
   install_prefix: /usr/local
   pydantic_major: 2
@@ -152,7 +152,8 @@ python_runtime:
     flatbuffers 25.12.19, packaging 26.3, protobuf 7.36.2; numpy stays apt's
     1.26.4) as the file's last block; hashes were checked on 2026-09-30 by a
     --require-hashes download for both platforms. The sha is sha256 of the
-    file's LF bytes; without that block it is the previous 2b003fd4...
+    file's LF bytes; without that block it is a66f224a..., the runtime
+    every image flashed since D-192 carries (main 3afb64a6).
 
 camera_runtime:
   sources: camera-sources.lock.json

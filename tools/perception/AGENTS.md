@@ -11,7 +11,8 @@ Developer-side half of the D-356 perception learning loop: turn robot recordings
 
 | File | Description |
 |------|-------------|
-| `dataset/` | `harvest.py` pulls sessions off a robot, `extract.py`/`frames.py` cut frames, `prelabel.py` pre-labels, `build.py` builds a session-split dataset, `publish.py` publishes it for the trainer |
+| `dataset/` | `harvest.py` pulls sessions off a robot, `extract.py`/`frames.py` cut frames, `bag_to_video.py` turns a session into an H.265/H.264 mp4 plus per-frame sidecar in `data/teleop/learning/` (gitignored), `prelabel.py` pre-labels, `build.py` builds a session-split dataset, `publish.py` publishes it for the trainer |
+| `dataset/` (D-379) | `catalog.py` keeps `data/perception/catalog.jsonl` (one row per session); `autolabel.py` + `labels.py` + `geometry.py` label frames automatically (LiDAR walls, driven floor); `build.py --auto-labels` builds them into `<store>/datasets/<name>/<content_sha>/` |
 | `model/` | `export_onnx.py` exports ONNX, `intake.py` + `intake_gate.yaml` verify a returned model, `deliver.py` ships it to the shadow slot (and rolls back), `watch.py` does intake + shadow push for each READY folder in the store inbox (or, with `backend: hf`, each new HF commit) on the site host (D-373) |
 | `store.py` | The store folder (D-373 decision 8): `content_sha`, `datasets/<name>/<content_sha>/`, `models/{inbox,accepted,rejected}`, the READY rule. Stdlib only |
 | `rosy_ml.py` | The operator CLI (D-373 decision 7): `init`, `doctor`, `status`, `store-status`, `deliver`, `rollback`, `release-hold`, `harvest`, `intake`; guide in `docs/deployment/learned-perception-operators.md` |
@@ -38,6 +39,7 @@ Developer-side half of the D-356 perception learning loop: turn robot recordings
 - Delivery refuses a model whose intake failed; unharvested robot data is never deleted; the store is the source of truth (HF is an optional backend; its revisions must be commit hashes, not tags); a store version folder is never overwritten and an inbox folder counts only with a matching READY.
 - Robot writes go through `sudo -n` as `rosy` (D-373); `harvest.py` pulls only while CORE `/api/v1/robot/state` reports idle (D-136), `--assume-idle` is bench-only.
 - The delivered model runs shadow-only. Activating it for driving is a separate decision after the D-205 P3 gate.
+- D-379 labels are automatic only. Rule masks (device `line`, keep) are compared, never used as labels. LiDAR geometry comes from the sim URDF; the camera pitch is fitted per session to the LiDAR walls, so a session without `scan` needs `--pitch-deg` from a LiDAR session of the same camera mount.
 
 ### Testing Requirements
 

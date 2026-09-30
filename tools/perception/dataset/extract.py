@@ -1,18 +1,32 @@
 """Extract training frames from an MP4 or a robot recording session (MCAP).
 
 Usage: extract.py <source> --out data/perception/frames/<name>
-<source> is a video file (cv2-readable) or a session folder with bag/*.mcap.
+<source> is a video file (cv2-readable) or a session folder with bag/*.mcap. A video made
+by bag_to_video.py is read with its <stem>.jsonl sidecar (stamps, side data) and
+<stem>.json metadata (session name, session.json).
 
-Side data is matched to frames, not attached in bag order: payloads that carry
-a `stamp` (the shadow result, line/observation) go to the frame whose header
-stamp equals it, if logged within SIDE_LOOKAHEAD_S after that frame (inference
-finishes after the frame is logged); stamp-less side data (cmd_vel, text) is
-the latest one logged before the frame. The LiDAR scan (sensor_msgs/LaserScan)
-nearest in header stamp within SCAN_TOLERANCE_S, logged before the frame or
-within the look-ahead after it, is attached as {stamp, angle_min,
-angle_increment, range_min, range_max, ranges} (non-finite ranges -> null;
-D-373 decision 9). camera/front/compressed is preferred:
-when a session has it, raw camera/front frames are not extracted.
+Each row: t = the camera header stamp (s), stamp_ns / log_ns = header stamp and bag
+log time (ns), side = side data, dt = side log time - frame log time (s) per topic.
+One two-class clock rule for both inputs (D-356 addendum, D-373 decision 9):
+
+(a) Side topics that carry the stamp of the image they judged (STAMPED_SIDE_TOPICS:
+    the shadow result, line/observation; payload `stamp` in s from MCAP, the
+    entry's `stamp_ns` in a sidecar) attach to the frame whose header stamp
+    equals it (within STAMP_TOL_S) if logged after that frame's capture (its
+    header stamp) and at most SIDE_LOOKAHEAD_S after the frame's log time;
+    otherwise to no frame. The lower bound is the capture, not the frame's log
+    time: a camera observation can reach the recorder tens of microseconds
+    before its own image does. A sidecar whose stamped entries carry no
+    `stamp_ns` (written before that field) attaches no stamped evidence: null.
+(b) Every other side topic (cmd_vel, odom, scan, ...) is the latest message
+    logged at or before the frame's log time; a later one is never used.
+    From MCAP the LiDAR scan (sensor_msgs/LaserScan) is attached as {stamp,
+    angle_min, angle_increment, range_min, range_max, ranges} (non-finite
+    ranges -> null); a sidecar carries {stamp_ns}, the ranges are in
+    <stem>.scan.npz.
+
+camera/front/compressed is preferred: when a session has it, raw camera/front
+frames are not extracted.
 
 Known limits of the matching: line/observation from sources other than the
 camera (IR_LINE, stamped with odometry time) never equals an image stamp and
@@ -42,14 +56,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "src" / "runtime" /
 
 from frames import FrameSelector  # noqa: E402
 from control.recording import (  # noqa: E402
-    CAMERA_TOPIC, COMPRESSED_CAMERA_TOPIC, SCAN_TOPIC, SIDE_TOPICS)
+    CAMERA_TOPIC, COMPRESSED_CAMERA_TOPIC, SCAN_TOPIC, SHADOW_TOPIC, SIDE_TOPICS)
 from control.sensing.perception.image_frame import image_msg_to_frame  # noqa: E402
 
 STRING_SCHEMA = "std_msgs/msg/String"
 JPEG_Q = 95
+# Class (a) of the clock rule: payloads carrying the stamp of the image they judged.
+STAMPED_SIDE_TOPICS = (SHADOW_TOPIC, "line/observation")
 SIDE_LOOKAHEAD_S = 0.5  # a stamped side message may be logged this long after its frame
-STAMP_TOL_S = 1e-4  # stamps round-trip through JSON floats
-SCAN_TOLERANCE_S = 0.1  # the nearest scan must be this close to the frame stamp
+STAMP_TOL_S = 1e-3  # equal stamps: within 1 ms (they round-trip through JSON floats)
 
 
 def image_to_bgr(encoding: str, width: int, height: int, step: int, data: bytes) -> np.ndarray:
@@ -67,18 +82,106 @@ def _jpeg(bgr) -> bytes:
     return buf.tobytes()
 
 
-def _video_frames(path: Path):
+def _sidecar(path: Path):
+    """bag_to_video.py rows (<stem>.jsonl) and metadata (<stem>.json), or (None, None)."""
+    rows_path = path.with_suffix(".jsonl")
+    if not rows_path.is_file():
+        return None, None
+    rows = [json.loads(line) for line in rows_path.read_text(encoding="utf-8").splitlines() if line]
+    meta_path = path.with_suffix(".json")
+    meta = json.loads(meta_path.read_text(encoding="utf-8")) if meta_path.is_file() else None
+    return rows, meta
+
+
+def _check_sidecar(path: Path, rows, meta) -> None:
+    """Refuse a sidecar whose row count differs from the metadata or container frame count."""
+    counts = {}
+    if meta and (meta.get("video") or {}).get("frames") is not None:
+        counts["metadata"] = int(meta["video"]["frames"])
     cap = cv2.VideoCapture(str(path))
     if not cap.isOpened():
         raise SystemExit(f"cannot open video: {path}")
+    counts["container"] = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    cap.release()
+    bad = {k: v for k, v in counts.items() if v != len(rows)}
+    if bad:
+        raise SystemExit(f"{path}: sidecar has {len(rows)} rows but "
+                         + ", ".join(f"{k} says {v} frames" for k, v in bad.items()))
+
+
+def _evidence_stamp_ns(value):
+    """Image stamp (ns) of a stamped sidecar entry, or None (old sidecar, no stamp_ns)."""
+    ns = value.get("stamp_ns") if isinstance(value, dict) else None
+    return ns if isinstance(ns, int) and not isinstance(ns, bool) else None
+
+
+def _in_window(e_log_ns, stamp_ns, log_ns) -> bool:
+    """Clock rule (a): logged after the frame's capture, at most SIDE_LOOKAHEAD_S
+    after its log time."""
+    return stamp_ns <= e_log_ns <= log_ns + round(SIDE_LOOKAHEAD_S * 1e9)
+
+
+def sidecar_side(rows):
+    """(side, dt) per sidecar row under the clock rule. Class (b) values are the
+    sidecar's own (latest at or before the frame's log time). Class (a) entries
+    are gathered from every row and attached again by stamp and window, so a
+    sidecar that holds a frame's evidence in a later row gives the same result."""
+    tol_ns = round(STAMP_TOL_S * 1e9)
+    evidence = {name: [] for name in STAMPED_SIDE_TOPICS}  # (stamp ns, log ns, value)
+    seen = set()
+    for r in rows:
+        side, dts = r.get("side") or {}, r.get("dt") or {}
+        for name in STAMPED_SIDE_TOPICS:
+            value = side.get(name)
+            stamp_ns = _evidence_stamp_ns(value)
+            if stamp_ns is None or r.get("log_ns") is None or dts.get(name) is None:
+                continue
+            e_log = r["log_ns"] + round(dts[name] * 1e9)
+            if (name, stamp_ns, e_log) not in seen:
+                seen.add((name, stamp_ns, e_log))
+                evidence[name].append((stamp_ns, e_log, value))
+    out = []
+    for r in rows:
+        side = {k: v for k, v in (r.get("side") or {}).items() if k not in STAMPED_SIDE_TOPICS}
+        dts = {k: v for k, v in (r.get("dt") or {}).items() if k not in STAMPED_SIDE_TOPICS}
+        stamp_ns, log_ns = r.get("stamp_ns"), r.get("log_ns")
+        for name in STAMPED_SIDE_TOPICS:
+            side[name], dts[name] = None, None
+            if stamp_ns is None or log_ns is None:
+                continue
+            for e_stamp, e_log, value in evidence[name]:
+                if abs(e_stamp - stamp_ns) <= tol_ns and _in_window(e_log, stamp_ns, log_ns):
+                    side[name] = value
+                    dts[name] = round((e_log - log_ns) / 1e9, 4)
+                    break
+        out.append((side, dts))
+    return out
+
+
+def _video_frames(path: Path, rows=None):
+    """rows (sidecar) give frame i its recorded stamp and side data instead of POS_MSEC."""
+    cap = cv2.VideoCapture(str(path))
+    if not cap.isOpened():
+        raise SystemExit(f"cannot open video: {path}")
+    attached = sidecar_side(rows) if rows is not None else None
+    n = 0
     try:
         while True:
             ok, bgr = cap.read()
             if not ok:
                 break
-            yield cap.get(cv2.CAP_PROP_POS_MSEC) / 1000.0, bgr, {}, "jpg"
+            if rows is None:
+                yield cap.get(cv2.CAP_PROP_POS_MSEC) / 1000.0, bgr, {}, "jpg", {}
+            elif n < len(rows):
+                r = rows[n]
+                side, dts = attached[n]
+                extra = {k: r[k] for k in ("stamp_ns", "log_ns") if k in r}
+                yield r["t"], bgr, side, "jpg", {**extra, "dt": dts}
+            n += 1
     finally:
         cap.release()
+    if rows is not None and n != len(rows):
+        raise SystemExit(f"{path} decodes {n} frames but its sidecar has {len(rows)} rows")
 
 
 def _jsonable(value):
@@ -136,11 +239,16 @@ def _payload_stamp(value):
     return float(stamp) if math.isfinite(stamp) else None
 
 
-def _header_stamp(msg):
+def _header_stamp_ns(msg):
     try:
-        return float(msg.header.stamp.sec) + float(msg.header.stamp.nanosec) * 1e-9
+        return int(msg.header.stamp.sec) * 1_000_000_000 + int(msg.header.stamp.nanosec)
     except AttributeError:
         return None
+
+
+def _header_stamp(msg):
+    ns = _header_stamp_ns(msg)
+    return None if ns is None else ns / 1e9
 
 
 def _scan_value(msg, stamp: float) -> dict:
@@ -150,14 +258,6 @@ def _scan_value(msg, stamp: float) -> dict:
     return {"stamp": stamp, "angle_min": num(msg.angle_min),
             "angle_increment": num(msg.angle_increment), "range_min": num(msg.range_min),
             "range_max": num(msg.range_max), "ranges": [num(r) for r in msg.ranges]}
-
-
-def _nearest_scan(scans, stamp):
-    """The scan value nearest to stamp within SCAN_TOLERANCE_S, else None."""
-    if stamp is None:
-        return None
-    best = min(scans, key=lambda s: abs(s[1] - stamp), default=None)
-    return best[2] if best is not None and abs(best[1] - stamp) <= SCAN_TOLERANCE_S else None
 
 
 def _has_compressed(files, make_reader) -> bool:
@@ -183,24 +283,22 @@ def _has_compressed(files, make_reader) -> bool:
 
 
 def _mcap_frames(files, skipped=None, truncated=None):
+    """Frames as (t, item, side, ext, extra) under the clock rule (module docstring);
+    t is the camera header stamp, the clock of bag_to_video sidecars and D-379."""
     try:
         from mcap.reader import make_reader
         from mcap_ros2.decoder import DecoderFactory
     except ImportError:
         raise SystemExit("MCAP extraction needs: pip install mcap mcap-ros2-support")
     prefer_compressed = _has_compressed(files, make_reader)
-    latest = {}  # stamp-less side data, latest by log time
-    early = deque()  # stamped side data logged before its frame: (t, stamp, name, value)
+    latest = {}  # class (b): name -> (log ns, value), latest by log time
+    early = deque()  # class (a) logged before its frame: (log ns, stamp, name, value)
     pending = deque()  # frames still inside their look-ahead window
-    scans = deque()  # recent LaserScans: (log t, header stamp, value)
 
     def ready(now):
-        while pending and (now is None or pending[0]["t"] + SIDE_LOOKAHEAD_S < now):
+        while pending and (now is None or pending[0]["log_t"] + SIDE_LOOKAHEAD_S < now):
             f = pending.popleft()
-            scan = _nearest_scan(scans, f["stamp"])
-            if scan is not None:
-                f["side"][SCAN_TOPIC] = scan
-            yield f["t"], f["item"], f["side"], f["ext"]
+            yield f["t"], f["item"], f["side"], f["ext"], f["extra"]
 
     def decoded(f):
         """Messages of one file; a damaged file ends early instead of failing."""
@@ -218,29 +316,31 @@ def _mcap_frames(files, skipped=None, truncated=None):
         for schema, ch, message, msg in decoded(f):
             t = message.log_time / 1e9
             yield from ready(t)
-            while early and early[0][0] + SIDE_LOOKAHEAD_S < t:
+            while early and early[0][0] / 1e9 + SIDE_LOOKAHEAD_S < t:
                 early.popleft()
-            while scans and scans[0][0] + 2 * SIDE_LOOKAHEAD_S + SCAN_TOLERANCE_S < t:
-                scans.popleft()
-            if _topic_is(ch.topic, SCAN_TOPIC):
-                stamp = _header_stamp(msg)
-                if stamp is not None:
-                    scans.append((t, stamp, _scan_value(msg, stamp)))
-                continue
             # Channels carry absolute, possibly namespaced topics.
             name = next((n for n in SIDE_TOPICS if _topic_is(ch.topic, n)), None)
             if name is not None:
-                value = _side_value(schema.name, msg)
+                if name == SCAN_TOPIC:
+                    value = _scan_value(msg, _header_stamp(msg))
+                else:
+                    value = _side_value(schema.name, msg)
+                if name not in STAMPED_SIDE_TOPICS:
+                    latest[name] = (message.log_time, value)
+                    continue
                 stamp = _payload_stamp(value)
                 if stamp is None:
-                    latest[name] = value
-                    continue
+                    continue  # no image stamp: it belongs to no frame
+                # Every pending frame was logged at most SIDE_LOOKAHEAD_S before now.
                 frame = next((p for p in pending if p["stamp"] is not None
-                              and abs(p["stamp"] - stamp) <= STAMP_TOL_S), None)
+                              and abs(p["stamp"] - stamp) <= STAMP_TOL_S
+                              and message.log_time >= p["extra"]["stamp_ns"]), None)
                 if frame is not None:
-                    frame["side"][name] = value
+                    if name not in frame["side"]:
+                        frame["side"][name] = value
+                        frame["extra"]["dt"][name] = round(t - frame["log_t"], 4)
                 else:
-                    early.append((t, stamp, name, value))
+                    early.append((message.log_time, stamp, name, value))
                 continue
             if _topic_is(ch.topic, COMPRESSED_CAMERA_TOPIC):
                 ext = "png" if "png" in str(msg.format).lower() else "jpg"
@@ -258,13 +358,21 @@ def _mcap_frames(files, skipped=None, truncated=None):
                 ext = "jpg"
             else:
                 continue
-            stamp = _header_stamp(msg)
-            side = dict(latest)
+            stamp_ns = _header_stamp_ns(msg)
+            stamp = None if stamp_ns is None else stamp_ns / 1e9
+            side = {n: v for n, (_, v) in latest.items()}
+            dts = {n: round((log_ns - message.log_time) / 1e9, 4)
+                   for n, (log_ns, _) in latest.items()}
             if stamp is not None:
-                for _, s_stamp, s_name, s_value in early:
-                    if abs(s_stamp - stamp) <= STAMP_TOL_S:
-                        side[s_name] = s_value
-            pending.append({"t": t, "stamp": stamp, "item": item, "side": side, "ext": ext})
+                for e_log, e_stamp, e_name, e_value in early:
+                    # logged before this frame's log time, but not before its capture
+                    if (abs(e_stamp - stamp) <= STAMP_TOL_S and e_name not in side
+                            and e_log >= stamp_ns):
+                        side[e_name] = e_value
+                        dts[e_name] = round((e_log - message.log_time) / 1e9, 4)
+            extra = {"stamp_ns": stamp_ns, "log_ns": message.log_time, "dt": dts}
+            pending.append({"t": t if stamp is None else stamp, "log_t": t, "stamp": stamp,
+                            "item": item, "side": side, "ext": ext, "extra": extra})
     yield from ready(None)
 
 
@@ -279,21 +387,27 @@ def main(argv=None) -> int:
     is_session = src.is_dir()
     skipped = [0]
     truncated = [0]
+    video_meta = None
     if is_session:
         files = _mcap_files(src)
         if not files:
             print(f"no .mcap files under {src / 'bag'}", file=sys.stderr)
             return 1
         it = _mcap_frames(files, skipped, truncated)
+        session = src.name
     else:
-        it = _video_frames(src)
-    session = src.name if is_session else None
+        rows, video_meta = _sidecar(src)
+        if rows is not None:
+            _check_sidecar(src, rows, video_meta)  # before any output is written
+        it = _video_frames(src, rows)
+        # A converted session keeps its session name, so build.py splits it with its bag.
+        session = ((video_meta or {}).get("source") or {}).get("session")
     (out / "frames").mkdir(parents=True, exist_ok=True)
     sel = FrameSelector(args.min_interval, args.max_hamming)
     n = 0
     with open(out / "frames.jsonl", "w", encoding="utf-8") as rows:
         last_t = None
-        for t, item, side, ext in it:
+        for t, item, side, ext, extra in it:
             if last_t is not None and t < last_t:
                 continue  # never let time run backwards
             last_t = t
@@ -307,11 +421,14 @@ def main(argv=None) -> int:
                     continue
                 data = _jpeg(item)
             (out / "frames" / f"{n:06d}.{ext}").write_bytes(data)
-            rows.write(_dumps({"index": n, "t": t, "source": str(src),
-                                   "session": session, "side": side}) + "\n")
+            rows.write(_dumps({"index": n, "t": t, **extra, "source": str(src),
+                               "session": session, "side": side}) + "\n")
             n += 1
     if is_session and (src / "session.json").is_file():
         shutil.copy2(src / "session.json", out / "session.json")
+    elif video_meta and video_meta.get("session"):
+        (out / "session.json").write_text(json.dumps(video_meta["session"], indent=2),
+                                          encoding="utf-8")
     notes = ([f"skipped {skipped[0]} malformed"] if skipped[0] else []) + (
         [f"truncated {truncated[0]} files"] if truncated[0] else [])
     note = f" ({', '.join(notes)})" if notes else ""

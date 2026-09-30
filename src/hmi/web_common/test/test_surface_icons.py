@@ -1,4 +1,4 @@
-"""D-370 2·3항: product names and one icon family with distinct silhouettes.
+"""D-377 names and the D-370 3항 icon family with distinct silhouettes.
 
 Icons are ``icons/<surface-id>.svg`` on a 108 grid (safe zone = centre circle of
 diameter 66). Every colour is a ``tokens.css`` value: ``--ground`` plate, one
@@ -25,16 +25,17 @@ TOKENS = dict(re.findall(r"(--[a-z0-9-]+)\s*:\s*(#[0-9a-fA-F]{6})\s*;",
 
 #: D-370 3항 table: icon file -> glyph colour token.
 GLYPH_TOKEN = {
-    "overhead-camera-app": "--series-primary",
+    "cam": "--series-primary",
     "pilot": "--brand-rose",
-    "fleet-console": "--paper",
-    "robot-dashboard": "--robot-1",
+    "console": "--paper",
+    "robot": "--robot-1",
 }
-#: D-370 2항 table, for the surfaces registered on main (Pilot lands with its branch).
+#: D-377 2항 table: display name, English name and short name are all `Rosy <Word>`.
 NAMES = {
-    "overhead-camera-app": ("Rosy 천장 카메라", "Rosy Ceiling Camera", "Rosy 카메라"),
-    "fleet-console": ("Rosy 관제", "Rosy Site Console", "Rosy 관제"),
-    "robot-dashboard": ("Rosy 로봇 대시보드", "Rosy Robot Dashboard", "Rosy 대시보드"),
+    "cam": ("Rosy Cam", "Rosy Cam", "Rosy Cam"),
+    "console": ("Rosy Console", "Rosy Console", "Rosy Console"),
+    "robot": ("Rosy Robot", "Rosy Robot", "Rosy Robot"),
+    "pilot": ("Rosy Pilot", "Rosy Pilot", "Rosy Pilot"),
 }
 DOT = "M70,34A4,4 0 1,1 78,34A4,4 0 1,1 70,34Z"
 SAFE_RADIUS = 33.0
@@ -131,13 +132,13 @@ def test_registry_names_and_icons_follow_the_naming_table():
 
 
 def test_web_icons_are_on_the_common_allowlist_and_linked_as_favicons():
-    assets = json.loads((WEB / "manifest.json").read_text(encoding="utf-8"))["shared_assets"]
+    assets = json.loads((WEB / "shared-assets.json").read_text(encoding="utf-8"))["shared_assets"]
     for ident in GLYPH_TOKEN:
         assert assets.get(f"icons/{ident}.svg") == "image/svg+xml"
     pages = {
-        "src/site/fleet/fleet/server/web/index.html": "fleet-console",
-        "src/hmi/dashboard/index.html": "robot-dashboard",
-        "src/hmi/dashboard/surface.html": "robot-dashboard",
+        "src/site/fleet/fleet/server/web/index.html": "console",
+        "src/hmi/dashboard/index.html": "robot",
+        "src/hmi/dashboard/surface.html": "robot",
     }
     for page, ident in pages.items():
         text = (registry.REPO / page).read_text(encoding="utf-8")
@@ -146,8 +147,8 @@ def test_web_icons_are_on_the_common_allowlist_and_linked_as_favicons():
 
 
 def test_android_launcher_label_is_the_registered_app_name():
-    strings = (registry.REPO / "src/site/overhead/android/app/src/main/res/values/strings.xml"
+    strings = (registry.REPO / "src/site/cam/app/src/main/res/values/strings.xml"
                ).read_text(encoding="utf-8")
     label = re.search(r'<string name="app_name">([^<]*)</string>', strings).group(1)
-    camera = next(row for row in registry.load() if row["id"] == "overhead-camera-app")
-    assert label == camera["app_name"] == NAMES["overhead-camera-app"][0]
+    camera = next(row for row in registry.load() if row["id"] == "cam")
+    assert label == camera["app_name"] == NAMES["cam"][0]

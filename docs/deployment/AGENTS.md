@@ -28,6 +28,7 @@ safety plan (D-246).
 | `release-retention.md` | How many signed releases to keep |
 | `pinky-pro-first-device-runbook.md` | Fail-closed G0-G5 first physical Pinky Pro commissioning, including the hardware SLAM/MCAP map run |
 | `pinky-release-artifact-selection.md` | D-325 path selector: none, native payload, flashable image, or fail-closed review |
+| `pinky-pro-ir-line-calibration-runbook.md` | D-344 §12 IR line calibration with the read-only tool: four placements, checks, sign check, where the YAML and CORE revision go |
 | `pinky-pro-commissioning-body-templates.md` | Exact operator-attested G3-G5 JSON bodies; G5 binds MCAP and generated YAML/PGM hashes; invalid until physically measured |
 | `learned-perception-operators.md` | D-373 operator guide: `rosy_ml` setup and doctor, shadow deliver/rollback/harvest, lock and history, site auto-delivery install |
 | `learned-perception-pinky.md` | D-373 Pinky first-deploy runbook: layer table, new SD vs bench card, unit hand-install, `/etc/rosy/learned-perception.env` switch, first shadow measurement, capture/harvest, rollback |

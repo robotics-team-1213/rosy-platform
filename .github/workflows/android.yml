@@ -1,19 +1,19 @@
 name: android
 
-# Overhead camera phone app (src/site/overhead/android). JVM unit tests only;
-# no emulator, no signing. Runs when the overhead tree changes, or the shared
+# Rosy Cam ceiling camera phone app (src/site/cam, D-377). JVM unit tests only;
+# no emulator, no signing. Runs when the app tree changes, or the shared
 # inputs its tests read: discovery TXT vectors and the D-370 icon SVGs.
 on:
   push:
     branches: [main]
     paths:
-      - "src/site/overhead/**"
+      - "src/site/cam/**"
       - ".github/workflows/android.yml"
       - "test/fixtures/protocol/**"
       - "src/hmi/web_common/icons/**"
   pull_request:
     paths:
-      - "src/site/overhead/**"
+      - "src/site/cam/**"
       - ".github/workflows/android.yml"
       - "test/fixtures/protocol/**"
       - "src/hmi/web_common/icons/**"
@@ -23,7 +23,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: src/site/overhead/android
+        working-directory: src/site/cam
     steps:
       - name: Checkout
         uses: actions/checkout@v4

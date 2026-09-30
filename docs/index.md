@@ -176,6 +176,9 @@
 | D-368 | 운전 중인 한 사람에게만 인증된 MJPEG 실시간 영상을 주고, 그동안만 로봇 미리보기 발행을 올린다 |
 | D-369 | Mission 제어·장치 실행·ROS 제어·안전 정지의 책임을 분리한다 |
 | D-370 | 앱과 표면은 한 역할씩 맡는다 — 역할·이름·아이콘·화면 소유를 한 표로 고정하고, 발견·기기 연결·실패 어휘는 공유 벡터로 하나로 맞춘다 |
+| D-374 | 앱의 폴더·패키지·식별자·표시 이름은 역할 이름 하나에서 나온다 — 역할 id(kebab)·snake·compact·표시 네 표기; 와이어 계약 이름(mDNS 종류, `rosy-overhead/1`, `/api/fleet`·`/api/vision`, `rosyov://`, 웹 경로, 설정·저장소 키, compose 서비스)은 바꾸지 않는다 |
+| D-376 | OMX PICK_PLACE planning stays local and trajectory execution stays with the Action owner |
+| D-377 | 앱 이름 규칙: Rosy + 영어 한 단어 — 표시 이름 `Rosy <Word>`, id·폴더 끝 `<word>`, 패키지 `rosy_<word>`, Android `io.github.livsbittt.rosy.<word>`, Gradle `rosy-<word>`, 아이콘 `<word>.svg`; Rosy Cam·Vision·Console·Robot·Pilot |
 
 ## 계획·결과 문서
 
@@ -237,6 +240,7 @@
 - [2026-09-29-policy-evidence-contract.md](plans/2026-09-29-policy-evidence-contract.md)
 - [2026-09-30-action-message-identity-design.md](plans/2026-09-30-action-message-identity-design.md)
 - [2026-09-30-action-message-identity.md](plans/2026-09-30-action-message-identity.md)
+- [2026-09-30-app-identity-rename-plan.md](plans/2026-09-30-app-identity-rename-plan.md)
 - [2026-09-30-dock-device-implementation-plan.md](plans/2026-09-30-dock-device-implementation-plan.md)
 - [2026-09-30-er2-mission-feedback-loop.md](plans/2026-09-30-er2-mission-feedback-loop.md)
 - [2026-09-30-goal-evidence-producer-and-verifier-design.md](plans/2026-09-30-goal-evidence-producer-and-verifier-design.md)
@@ -259,3 +263,8 @@
 - 2026-09-30 · uncommitted · test(omx): rerun vendor owner policy ROS-SIM
 - 2026-09-30 · uncommitted · docs(plan): classify prior OMX ROS-SIM evidence for Action mapping
 - 2026-09-30 · uncommitted · docs(plan): hold ROS Action mapping for selected hardware profile
+- 2026-10-01 · uncommitted · fix(perception): 텔레옵 sidecar·extract 시계 통일 — t=헤더 stamp, 부수값=직전 메시지
+- 2026-10-01 · uncommitted · docs(adr): D-381 막힌 내비게이션·비상정지 진입음 결정
+- 2026-09-30 · uncommitted · docs(adr): D-356 보강 — 텔레옵 학습 영상 H.265/H.264 압축과 로봇 JPEG 기록 제안
+- 2026-09-30 · uncommitted · hold unresolved phase state under local stop
+- 2026-09-30 · uncommitted · mint validated attempt-scoped phase recorder
