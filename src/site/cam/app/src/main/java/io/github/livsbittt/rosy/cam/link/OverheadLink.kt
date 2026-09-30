@@ -30,8 +30,14 @@ sealed interface LinkError {
     /** Upgrade refused with 401 or close 4401: token is unknown or not allowed for this source. */
     data object Unauthorized : LinkError
 
-    /** Close 4400: the adapter speaks another protocol version. Retrying cannot help. */
+    /** Close 4400 with an incompatibility reason: the adapter speaks another protocol version. Retrying cannot help. */
     data object ProtocolMismatch : LinkError
+
+    /** Close 1013, or 4400 for a receiver-side wait such as "no hello": the receiver was busy; retry with backoff. */
+    data class Busy(val code: Int, val reason: String) : LinkError
+
+    /** Close 4503 (D-341 11): the site cannot check the credential right now. Retry; never a re-pair prompt. */
+    data object CredentialUnknown : LinkError
 
     /** Close 4409: another connection with the same source replaced this one. */
     data object Replaced : LinkError
@@ -85,7 +91,7 @@ class OverheadLink(
     private val pairing: PairingUri,
     private val appVersion: String,
     private val device: String,
-    private val client: OkHttpClient = defaultClient(),
+    private val client: OkHttpClient = defaultClient(pairing.pin),
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val lock = Any()
@@ -311,26 +317,39 @@ class OverheadLink(
             } else {
                 LinkError.Network(t.message ?: t.javaClass.simpleName, NetworkFailure.classify(t))
             }
-            onLost(gen, error, fatal = false)
+            // A pin mismatch cannot heal by retrying: the site certificate changed or this is not the site
+            // (D-341 10). It can only happen before any HTTP response, so a response rules it out.
+            val fatal = response == null && error is LinkError.Network && error.kind == NetworkFailure.TLS_PIN
+            onLost(gen, error, fatal = fatal)
         }
 
         private fun handleClose(code: Int, reason: String) {
-            when (code) {
-                Protocol.CLOSE_BAD_PROTO -> onLost(gen, LinkError.ProtocolMismatch, fatal = true)
-                Protocol.CLOSE_UNAUTHORIZED -> onLost(gen, LinkError.Unauthorized, fatal = true)
-                Protocol.CLOSE_REPLACED -> onLost(gen, LinkError.Replaced, fatal = true)
-                else -> onLost(gen, LinkError.Closed(code, reason), fatal = false)
-            }
+            val (error, fatal) = closeOutcome(code, reason)
+            onLost(gen, error, fatal)
         }
     }
 
     companion object {
         private const val TAG = "OverheadLink"
 
-        fun defaultClient(): OkHttpClient = OkHttpClient.Builder()
+        /** What a server close means for the link: the error to show and whether to stop retrying. */
+        internal fun closeOutcome(code: Int, reason: String): Pair<LinkError, Boolean> = when (code) {
+            Protocol.CLOSE_BAD_PROTO ->
+                if (Protocol.isIncompatibleClose(code, reason)) LinkError.ProtocolMismatch to true
+                else LinkError.Busy(code, reason) to false
+            Protocol.CLOSE_TRY_AGAIN -> LinkError.Busy(code, reason) to false
+            Protocol.CLOSE_CREDENTIAL_UNKNOWN -> LinkError.CredentialUnknown to false
+            Protocol.CLOSE_UNAUTHORIZED -> LinkError.Unauthorized to true
+            Protocol.CLOSE_REPLACED -> LinkError.Replaced to true
+            else -> LinkError.Closed(code, reason) to false
+        }
+
+        /** [pin] set: trust only the paired site certificate (see [PinnedTrustManager]); null: system trust. */
+        fun defaultClient(pin: String? = null): OkHttpClient = OkHttpClient.Builder()
             .connectTimeout(5, TimeUnit.SECONDS)
             .readTimeout(0, TimeUnit.MILLISECONDS)
             .pingInterval(10, TimeUnit.SECONDS)
+            .pinnedTo(pin)
             .build()
     }
 }

@@ -34,8 +34,8 @@
 
 ## 최근 기록
 
+- 2026-10-01 · 4ae81b6e · fix(vision): 사이트 CA pin만 발급(D-341 9), 패턴 fullmatch
 - 2026-10-01 · 14253f8e · fix(vision): bound hello.lens numbers, safe connect log
 - 2026-10-01 · uncommitted · fix(vision): D-375 review fixes and worker process
 - 2026-09-30 · 80096516 · feat(vision): optional hello.lens logged and exposed
-- 2026-09-30 · uncommitted · feat(vision): D-375 tilt hypotheses for the paint fit
-- 2026-09-30 · uncommitted · refactor(vision): D-377 site_vision becomes rosy_vision in src/site/vision
+- 2026-09-30 · 1f769d4a · feat(vision): pair-link이 사이트 CA 고정을 먼저 쓴다 (`--pin-ca`)

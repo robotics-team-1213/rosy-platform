@@ -21,6 +21,7 @@ class PairingUriTest {
                 token = v.getString("token"),
                 source = v.getString("source"),
                 secure = v.optBoolean("secure", false),
+                pin = if (v.has("pin")) v.getString("pin") else null,
             )
             assertEquals(v.getString("uri"), PairingUri.Parsed.Valid(expected), PairingUri.parse(v.getString("uri")))
             assertEquals(v.getString("ws_url"), expected.wsUrl)
@@ -44,6 +45,21 @@ class PairingUriTest {
     @Test
     fun sourcePatternMatchesVectors() {
         assertEquals(pairing.getString("source_pattern"), PairingUri.SOURCE_PATTERN.pattern)
+    }
+
+    @Test
+    fun pinPatternMatchesVectors() {
+        assertEquals(pairing.getString("pin_pattern"), PairingUri.PIN_PATTERN.pattern)
+    }
+
+    @Test
+    fun pinnedPairingRoundTripsAndNeedsTls() {
+        val pin = Vectors.root.getJSONObject("cert_pins").getJSONArray("vectors").getJSONObject(0).getString("pin")
+        val original = PairingUri("192.168.1.102", 18447, "secret", "ceiling_north", secure = true, pin = pin)
+        assertEquals(PairingUri.Parsed.Valid(original), PairingUri.parse(original.toUri()))
+        assertTrue(original.toString(), original.toString().contains(pin) && !original.toString().contains("secret"))
+        assertEquals("pin", PairingUri.validate("h", 1, "t", "s", secure = false, pin = pin))
+        assertNull(PairingUri.validate("h", 1, "t", "s", secure = true, pin = pin))
     }
 
     @Test

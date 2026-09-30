@@ -152,6 +152,14 @@
 - 결정: D-370 5.1.
 - 교훈: 없음.
 
+## 2026-09-30 · 3c263ff0 · feat(overhead): 페어링 링크 인증서 고정 — `&pin=sha256/<b64url>` (D-341 9 첫 조각)
+
+- 변경: `rosyov://`에 선택 키 `pin`(서버가 보내는 체인 안 인증서 하나의 DER SHA-256, base64url 무패딩; SPKI 아님)을 더했다. `tls=1` 없이 오면 `pin` 거절. 앱은 pin을 페어링과 함께 저장하고 그 링크의 OkHttp 클라이언트에만 `PinnedTrustManager`를 붙인다: 고정 인증서가 체인에 있어야 하고, CA 고정이면 leaf가 그 CA 하나를 앵커로 PKIX 검증을 통과해야 하며, 호스트명 검사(IP SAN 포함)는 OkHttp가 그대로 한다. pin 없음 + tls=1은 시스템 신뢰 그대로, 평문 ws는 그대로. 불일치는 재시도하지 않고 멈추며(D-341 10) 전용 한국어 안내를 띄운다. 사이트 쪽은 `overhead pair-link --pin-cert site.crt`(PEM 마지막 인증서 고정)와 `overhead receive --tls-cert`가 pin 든 링크를 찍는다.
+- 증거: `python -m pytest src/site/overhead/test -q` 126 passed. `gradlew testDebugUnitTest assembleDebug` 녹색 142 tests(새 `PinnedTrustTest` 8개: MockWebServer TLS + 임시 CA로 CA pin 통과, leaf pin 통과, 다른 CA 거절 TLS_PIN, 위조 leaf + 진짜 CA 거절, SAN 불일치 거절, pin 없음은 시스템 신뢰로 거절, wss 링크 STREAMING 및 불일치 시 stopped). 공유 벡터 `pairing_uris`(pin 링크 1, 거절 3, `pin_pattern`)·`cert_pins`.
+- gate 변화: 없음. S21 실기 TLS 송출은 DEVICE 회차(부모 세션).
+- 결정: D-341의 "DER 해시, SPKI 기각"을 따른다. 콘솔 승인·1회 수령·CA PEM 전달·mDNS 재발견은 이 조각 밖이다. 링크에 CA 해시만 실리므로 CA 고정에는 프록시가 leaf+CA 체인을 보내야 한다. leaf만 보내면 leaf 고정이 되고 leaf 재발급 때 새 링크가 필요하다.
+- 교훈: JDK는 서명이 안 맞는 체인을 서버 키로 싣지 못하므로 위조 체인 시험은 TrustManager를 직접 부른다.
+
 ## 2026-09-30 · uncommitted · refactor(site-vision): D-374 stage 1 — overhead becomes site_vision
 
 - 변경: `src/site/overhead` → `src/site/site_vision`(`git mv`), ROS·Python 패키지 `overhead` → `site_vision`, console script `site_vision=site_vision.cli:main`, `argparse` prog `site_vision`, logger `site_vision`, `setup.cfg` `lib/site_vision`. `protocol/vectors.json` → `test/fixtures/protocol/overhead-ingest.v1.json`(Kotlin과 같이 읽는 공유 자리). 폰 앱은 새 모듈 `src/site/ceiling_camera`로 갈라졌다. `Dockerfile.vision`·`.dockerignore`·`compose.yaml` 명령은 `python3 -m site_vision.cli`, mDNS 인스턴스 이름은 `ROSY Site Vision %h`. 하네스 모듈 `overhead` → `site_vision`. 와이어 이름(`rosy-overhead/1`, `/overhead/v1/frames`, `_rosy-overhead._tcp`, TXT, `/api/vision/*`, `rosyov://`, compose 서비스 `vision`, 이미지 `rosy-site-vision`, `ROSY_OVERHEAD_TOKEN`)은 그대로(D-374 3항).
@@ -182,6 +190,14 @@
 - 증거: `python -m pytest src/site/vision/test -q` 126 passed (2026-09-30 Windows). LOCAL 실제 프레임 6장(현재 설치 약 2.0 m·23° 2장, 약 30° 1장 포함, 공개 저장소 밖) 모두 수락, 손 기준 대비 중앙 오차 3.6–6.6 px, 한 번 1.2–2 s. 옆 트랙만·로터리만 자른 영상과 좌우 반전 영상은 거부.
 - gate 변화: 없음. DEVICE/FIELD PARKED 유지.
 
+## 2026-09-30 · 1f769d4a · feat(vision): pair-link이 사이트 CA 고정을 먼저 쓴다 (`--pin-ca`)
+
+- 변경: `rosy-vision pair-link`에 `--pin-ca site-ca.crt`를 더했다. CA 고정이 기본 권장이다. `--pin-cert`(프록시가 서비스하는 PEM)와 함께 주면 그 파일에 CA가 들어 있는지 확인하고, 없으면 `site-fullchain.crt`를 만드는 법을 알리고 거절한다(exit 2). `--pin-cert`만 주면 마지막 인증서를 고정하고, leaf 하나뿐이면 재발급 때마다 새 링크가 필요하다는 경고를 stderr에 찍는다. `protocol.pem_cert_pins` 추가. README는 CA 고정 + leaf+CA 서비스(`cat site.crt site-ca.crt > site-fullchain.crt`, Caddy는 파일 전체를 보낸다)로 고쳤다.
+- 증거: `python -m pytest src/site/vision/test -q` 132 passed. 앱 쪽 `PinnedTrustTest.caPinAcceptsALeafTheCaSigned`가 leaf+CA 서비스 + CA pin 경로를 이미 시험한다.
+- gate 변화: 없음. 실제 사이트의 `site.crt`는 leaf 하나라 CA 고정 전에 `site_cert`를 fullchain으로 바꿔야 한다(DEVICE 회차).
+- 결정: 서비스 파일에 없는 CA는 고정하지 않는다 — 폰은 서버가 보낸 체인에서만 pin을 찾는다(D-341 9).
+- 교훈: 없음.
+
 ## 2026-09-30 · 80096516 · feat(vision): optional hello.lens logged and exposed
 - 변경: `protocol.parse_hello_lens()`가 hello의 선택 필드 `lens {kind: wide|standard, focal_mm, hfov_deg}`를 읽는다. 없거나 잘못된 lens는 무시하고 hello를 거절하지 않는다(`validate_hello`는 그대로). ingest가 연결 시 lens를 로그로 남기고, 미리보기 프레임 헤더 `X-Source-Lens: kind=…;focal_mm=…;hfov_deg=…`와 field-proposal 본문 `lens`로 알린다(보정 선택용).
 - 근거: 배포된 수신기(main의 `site_vision/protocol.py` 포함)는 모르는 hello 필드를 무시한다. 그래서 와이어 추가만으로 충분하고 `rosy-overhead/1`은 바꾸지 않는다.
@@ -198,3 +214,11 @@
 - 변경: `parse_hello_lens`는 `0 < v < upper`(focal_mm 1000, hfov_deg 180)로 검사한다. 400자리 정수는 `float()` OverflowError로 연결 처리기를 죽였고, `Infinity`/`1e400`은 `> 0`을 통과해 나중에 `json.dumps`가 JSON이 아닌 `Infinity`를 내보냈다. 이제 둘 다 무시한다(공유 벡터 `huge_int_focal`, Python 전용 Infinity/NaN/1e400 시험). 연결 로그의 `app_version`·`device`는 폰이 보낸 글이라 64자로 자르고 `%r`로 남긴다.
 - 증거: `python -m pytest src/site/vision/test -q` 132 passed (2026-10-01 Windows).
 - gate 변화: 없음.
+
+## 2026-10-01 · 4ae81b6e · fix(vision): 사이트 CA pin만 발급(D-341 9), 패턴 fullmatch
+
+- 변경: `rosy-vision pair-link`는 `--pin-ca`와 `--pin-cert`를 모두 요구하고, 서비스 파일이 leaf 위에 그 CA를 싣지 않거나 CA 자리에 leaf를 주면 exit 2로 거절한다(fullchain 만드는 법 안내). leaf 단독 pin은 더 이상 찍지 않는다. `receive --tls-cert`는 leaf+CA 파일일 때만 CA를 고정하고, 아니면 pin 없이 이유를 찍는다. PEM의 UTF-8 BOM을 받아들이고 해석할 수 없는 파일은 깔끔한 오류로 끝낸다. `SOURCE_PATTERN`·`PIN_PATTERN`은 `fullmatch`라 끝의 `%0A`가 더는 통과하지 않는다(Kotlin과 일치).
+- 증거: `python -m pytest src/site/vision/test -q` 156 passed.
+- gate 변화: 없음.
+- 결정: 앱은 호환을 위해 leaf pin을 계속 받지만 사이트 도구는 CA pin만 만든다.
+- 교훈: 없음.

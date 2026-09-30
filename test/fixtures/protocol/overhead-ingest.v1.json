@@ -229,7 +229,14 @@
     "bad_proto": 4400,
     "unauthorized_source": 4401,
     "replaced_by_same_source": 4409,
-    "hello_timeout": 1013
+    "hello_timeout": 1013,
+    "try_again_later": 1013,
+    "credential_unknown": 4503
+  },
+  "close_4400_reasons": {
+    "_doc": "The phone stops for good on 4400 only for an incompatibility reason; an empty reason or a receiver-side wait retries with backoff (1013 always retries). Keep the receiver's own 4400 reasons in these lists.",
+    "retry": ["", "no hello", "hello timeout", "timed out waiting for hello", "receiver busy"],
+    "fatal": ["proto must be 'rosy-overhead/1'", "expected hello text message", "sensor must be an object", "message type must be 'hello'"]
   },
   "pairing_uris": {
     "valid": [
@@ -257,6 +264,16 @@
         "source": "ceiling_north",
         "secure": true,
         "ws_url": "wss://fleet-site.local:443/overhead/v1/frames"
+      },
+      {
+        "uri": "rosyov://192.168.1.102:18447/?t=abc123&s=ceiling_north&tls=1&pin=sha256/WNw0aD4VRr0fYaYNrmbRzYkHQiCLUBxOZjwTo6lQjtE",
+        "host": "192.168.1.102",
+        "port": 18447,
+        "token": "abc123",
+        "source": "ceiling_north",
+        "secure": true,
+        "pin": "sha256/WNw0aD4VRr0fYaYNrmbRzYkHQiCLUBxOZjwTo6lQjtE",
+        "ws_url": "wss://192.168.1.102:18447/overhead/v1/frames"
       }
     ],
     "invalid": [
@@ -287,9 +304,39 @@
       {
         "uri": "rosyov://192.0.2.10:443/?t=abc&s=overhead-1&tls=maybe",
         "reason": "tls"
+      },
+      {
+        "uri": "rosyov://192.0.2.10:8095/?t=abc&s=overhead-1&pin=sha256/WNw0aD4VRr0fYaYNrmbRzYkHQiCLUBxOZjwTo6lQjtE",
+        "reason": "pin"
+      },
+      {
+        "uri": "rosyov://192.0.2.10:443/?t=abc&s=overhead-1&tls=1&pin=sha1/WNw0aD4VRr0fYaYNrmbRzYkHQiCLUBxOZjwTo6lQjtE",
+        "reason": "pin"
+      },
+      {
+        "uri": "rosyov://192.0.2.10:443/?t=abc&s=overhead-1&tls=1&pin=sha256/WNw0aD4VRr0fYaYNrmbRzYkHQiCLUBxOZjwTo6lQjt",
+        "reason": "pin"
+      },
+      {
+        "uri": "rosyov://192.0.2.10:8095/?t=abc&s=overhead-1%0A",
+        "reason": "source"
+      },
+      {
+        "uri": "rosyov://192.0.2.10:443/?t=abc&s=overhead-1&tls=1&pin=sha256/WNw0aD4VRr0fYaYNrmbRzYkHQiCLUBxOZjwTo6lQjtE%0A",
+        "reason": "pin"
       }
     ],
-    "source_pattern": "^[A-Za-z0-9_-]{1,32}$"
+    "source_pattern": "^[A-Za-z0-9_-]{1,32}$",
+    "pin_pattern": "^sha256/[A-Za-z0-9_-]{43}$"
+  },
+  "cert_pins": {
+    "_doc": "pin = 'sha256/' + base64url-without-padding(SHA-256(certificate DER)). DER hash, not SPKI (D-341 9, rejected alternative 'SPKI hash'). 'der_utf8' stands in for DER bytes: hash its UTF-8 encoding. The phone accepts a wss:// chain only when one certificate in the served chain has this pin; the pinned certificate is the trust anchor and the leaf must chain to it with hostname verification still on.",
+    "vectors": [
+      {
+        "der_utf8": "rosy-pin-vector",
+        "pin": "sha256/WNw0aD4VRr0fYaYNrmbRzYkHQiCLUBxOZjwTo6lQjtE"
+      }
+    ]
   },
   "ws_path": "/overhead/v1/frames"
 }

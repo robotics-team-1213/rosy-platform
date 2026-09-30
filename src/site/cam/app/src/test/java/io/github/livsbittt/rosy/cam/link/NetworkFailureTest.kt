@@ -47,6 +47,23 @@ class NetworkFailureTest {
     }
 
     @Test
+    fun pinMismatchBeatsTheOuterTlsError() {
+        val wrapped = SSLHandshakeException("handshake failed").apply { initCause(PinMismatchException("no match")) }
+        assertEquals(NetworkFailure.TLS_PIN, NetworkFailure.classify(wrapped))
+        // Some TLS stacks keep only the message of the trust manager's exception.
+        val flattened = SSLHandshakeException("java.security.cert.CertificateException: ${PinMismatchException.MARKER}: no match")
+        assertEquals(NetworkFailure.TLS_PIN, NetworkFailure.classify(flattened))
+    }
+
+    @Test
+    fun theMarkerInPeerTextIsNotAPinMismatch() {
+        // OkHttp puts the HTTP reason phrase into its exception text; a server must not be able to force a stop.
+        val reason = java.net.ProtocolException("Expected HTTP 101 response but was '503 ${PinMismatchException.MARKER}: x'")
+        assertEquals(NetworkFailure.OTHER, NetworkFailure.classify(reason))
+        assertEquals(NetworkFailure.OTHER, NetworkFailure.classify(IOException("wrapped", reason)))
+    }
+
+    @Test
     fun okHttpWrappedRefusalIsRefusedNotUnreachable() {
         val wrapped = ConnectException("Failed to connect to /10.0.0.2:8095").apply {
             initCause(ConnectException("Connection refused: connect"))
