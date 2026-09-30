@@ -180,7 +180,7 @@
 - 증거: `python -m pytest src/site/vision/test -q` 126 passed (2026-09-30 Windows). LOCAL 실제 프레임 6장(현재 설치 약 2.0 m·23° 2장, 약 30° 1장 포함, 공개 저장소 밖) 모두 수락, 손 기준 대비 중앙 오차 3.6–6.6 px, 한 번 1.2–2 s. 옆 트랙만·로터리만 자른 영상과 좌우 반전 영상은 거부.
 - gate 변화: 없음. DEVICE/FIELD PARKED 유지.
 
-## 2026-09-30 · feat/console-lane-map-overlay · feat(vision): 계산 중인 map-proposal 읽기는 마지막 완료 결과를 받는다
+## 2026-09-30 · 646fe8e6 · feat(vision): 계산 중인 map-proposal 읽기는 마지막 완료 결과를 받는다
 
 - 변경: `ingest.py` — 한 번에 1.2–2 s라 1 s 간격보다 길어 도중 읽기가 429 busy였다. source마다 마지막 성공 결과(`_map_done`)를 그 결과의 `frame_seq`·나이와 `X-Proposal-State: previous`로 돌려준다(새 결과는 `current`). 성공 결과가 아직 없을 때와 주체별 속도 제한만 429. 2026-10-01 병합: 아래 단일 비행·작업 프로세스 설계 위에 얹었다(바쁠 때만 이전 결과).
 - 증거: `test_map_proposal_route.py` 새 시험 1개; 콘솔 헤드리스 시험에서 실제 프레임 4장(rx5·rx6·standard·wide) 모두 수락.

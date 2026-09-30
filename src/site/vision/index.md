@@ -35,7 +35,7 @@
 ## 최근 기록
 
 - 2026-10-01 · uncommitted · fix(vision): D-375 review fixes and worker process
+- 2026-09-30 · 646fe8e6 · feat(vision): 계산 중인 map-proposal 읽기는 마지막 완료 결과를 받는다
 - 2026-09-30 · uncommitted · feat(vision): D-375 tilt hypotheses for the paint fit
 - 2026-09-30 · uncommitted · refactor(vision): D-377 site_vision becomes rosy_vision in src/site/vision
 - 2026-09-30 · uncommitted · feat(site-vision): D-375 map-proposal from the lane paint
-- 2026-09-30 · uncommitted · feat(site-vision): D-374 overhead console-script alias
