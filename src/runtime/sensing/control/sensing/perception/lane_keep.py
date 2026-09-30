@@ -9,8 +9,11 @@ robot is in, never the tape. Per frame, no odometry:
                 tape, the pilot overlay and yellow/black signs drop out); only
                 below the horizon and below the base of the white walls. A
                 wall is a bright run that starts above the horizon; per image
-                column its base is where that run ends, median-filtered across
-                columns so a far tape line touching the wall is not eaten.
+                column its base is where that run ends (turns dark, or drops a
+                step: tape laid along the base is bright but darker than the
+                wall), median-filtered across columns so a far tape line
+                touching the wall is not eaten. Its brightness bound comes from
+                the darkest floor too, so a wall filling most rows is found.
   bird's-eye    the mask sampled on the lane_bev robot-frame floor grid
                 (base_link, x ahead, y LEFT positive, REP 103), so width and
                 heading are metres and radians, not pixels
@@ -122,6 +125,13 @@ MAX_SATURATION = 80
 WALL_START_ABOVE_HORIZON_PX = 4
 WALL_MEDIAN_COLUMNS = 31
 WALL_BASE_MARGIN_PX = 3
+#: A wall run also ends at a drop of more than this (V, over WALL_STEP_ROWS):
+#: the tape just below the wall base (brighter than the carpet, darker than the
+#: wall) stays floor.
+WALL_TAPE_STEP = 16
+#: The carpet under a wall that fills most of the view: this low percentile.
+WALL_CARPET_PERCENTILE = 10
+WALL_STEP_ROWS = 3
 #: Lit fraction of the floor above which the frame is washed out.
 WASHED_FRACTION = 0.5
 #: Corners: the lookahead on the corner path (shorter than LOOKAHEAD_M, or the
@@ -181,9 +191,18 @@ def floor_white_mask(bgr: np.ndarray, horizon_row: float) -> np.ndarray:
     # Walls: a bright run through the row just above the horizon, followed down.
     start = max(0, int(math.floor(horizon_row)) - WALL_START_ABOVE_HORIZON_PX)
     if start < height:
-        wall_threshold = float(np.median(threshold[:max(1, len(threshold) // 4)]))
+        # A wall filling the upper floor rows lifts their carpet reference (up
+        # to 255, no wall found); the darkest floor bounds it.
+        carpet = float(np.percentile(floor, WALL_CARPET_PERCENTILE))
+        wall_threshold = min(float(np.median(threshold[:max(1, len(threshold) // 4)])),
+                             carpet + max(MIN_CONTRAST, CONTRAST_HEADROOM * (255.0 - carpet)))
         bright = value[start:] >= wall_threshold
-        run = np.cumprod(bright, axis=0).sum(axis=0)
+        # Tape laid at the wall base is bright too: the run ends where the
+        # (smoothed) column drops by a step, not only where it turns dark.
+        smooth = cv2.blur(value, (3, 3)).astype(np.int16)[start:]
+        step = np.zeros_like(bright)
+        step[WALL_STEP_ROWS:] = (smooth[:-WALL_STEP_ROWS] - smooth[WALL_STEP_ROWS:]) > WALL_TAPE_STEP
+        run = np.cumprod(bright & ~step, axis=0).sum(axis=0)
         base = start + run
         base = _median_filter_1d(base, WALL_MEDIAN_COLUMNS)
         rows = np.arange(height)[:, None]

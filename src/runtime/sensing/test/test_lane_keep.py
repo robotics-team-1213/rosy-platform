@@ -265,3 +265,19 @@ def test_one_sided_choice_prefers_the_boundary_seen_last_frame():
     assert keeper.last["strategy"] == "right_only" and obs.error < 0.0
     fresh = _keep(_render([(0.045, 0.0), (-0.06, 0.0)]))[1]
     assert fresh["strategy"] == "left_only"
+
+
+@pytest.mark.parametrize("gap", [0.02, 0.0])
+def test_tape_at_the_base_of_a_wall_filling_the_view_is_kept(gap):
+    # Heading ~31 deg into a white wall on the left that fills most of the
+    # floor view; the outer tape runs along its base (with or without a strip
+    # of carpet between). The wall must not become floor (a blob swallowing
+    # the tape) and the tape must not be masked with the wall.
+    slope, wall_y = -0.6, 0.12
+    image = _render([(wall_y - gap - TAPE_HALF, slope)])
+    floor = np.isfinite(X)
+    image[floor & (Y > wall_y + slope * X)] = 215
+    image[~floor] = 215
+    obs, last = _keep(image)
+    assert obs is not None and last["blobs"] == 0
+    assert any(abs(b["heading_deg"] + 31.0) < 5.0 for b in last["boundaries"])
