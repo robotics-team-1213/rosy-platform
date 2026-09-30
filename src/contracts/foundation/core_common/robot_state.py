@@ -55,6 +55,15 @@ PRIORITY = {FAILED: 1, CAUTION: 2, READY_HELD: 3, READY: 4}
 BATTERY_WARNING_PERCENT = 20.0
 DEFAULT_RUNTIME_MODE = "core"
 
+#: D-375: CORE's RobotMode (protocol.schemas) as this table sees it. IDLE is "not
+#: operating" — the lamp stays at the health pattern; the rest light a mode pattern.
+ROBOT_MODES = frozenset({"IDLE", "MANUAL", "NAVIGATION", "DOCKING", "EMERGENCY"})
+OPERATING_MODES = frozenset(ROBOT_MODES - {"IDLE"})
+
+#: D-375: the lamp pattern per operating mode; ``lamp_pattern.c`` knows these names.
+MODE_LAMP = {"MANUAL": "manual", "NAVIGATION": "navigating", "DOCKING": "docking",
+             "EMERGENCY": "emergency"}
+
 #: D-247 decision 7: why the robot cannot move, per runtime mode. Empty: the mode holds nothing.
 MOTION_REASON = {
     "core": "모터가 꺼진 CORE 전용 모드입니다. 관리자가 모터 모드로 올려야 움직입니다.",
@@ -112,6 +121,44 @@ def stage_kind(stage: Any) -> str:
 def motion_reason(runtime_mode: Optional[str]) -> str:
     """D-247 7's sentence for the mode; a missing mode is CORE's own default, ``core``."""
     return MOTION_REASON.get(runtime_mode or DEFAULT_RUNTIME_MODE, "")
+
+
+def valid_robot_mode(value: Any) -> Optional[str]:
+    """D-375: a known RobotMode name, or None. An unknown name is absent, not an error."""
+    return value if isinstance(value, str) and value in ROBOT_MODES else None
+
+
+def mode_suffix(robot_mode: Any) -> str:
+    """D-375: ``" - MANUAL"`` for an operating mode (the LCD state line), else empty.
+
+    ASCII on purpose, and the established LCD qualifier punctuation: the card font
+    has no Hangul, ``LABELS`` already says ``준비됨 — 못 움직임`` as ``Ready - cannot
+    move``, and the dashboard shows the mode on its own line already.
+    """
+    mode = valid_robot_mode(robot_mode)
+    return f" - {mode}" if mode in OPERATING_MODES else ""
+
+
+def lamp_pattern(state: Any, robot_mode: Any = None) -> str:
+    """D-375: the one lamp pattern for a health state and CORE's mode.
+
+    Priority: FAILED > EMERGENCY > CAUTION > BOOTING > DOCKING > NAVIGATION >
+    MANUAL > READY. A mode reaches the lamp only through CORE's 10 s hand-over
+    (``status-inputs.json``), so a robot whose CORE is down never keeps showing
+    a stale mode — the health patterns alone answer for it.
+    """
+    mode = valid_robot_mode(robot_mode)
+    if state == FAILED:
+        return "failed"
+    if mode == "EMERGENCY":
+        return "emergency"
+    if state == CAUTION:
+        return "caution"
+    if state == BOOTING:
+        return "booting"
+    if mode in MODE_LAMP:
+        return MODE_LAMP[mode]
+    return "ready"
 
 
 def battery_low(percent: Any, warning_percent: Any = BATTERY_WARNING_PERCENT) -> bool:
@@ -189,14 +236,19 @@ def todos(stage: Any = None, devices: Optional[Iterable[Any]] = None, *, battery
 
 def evaluate(stage: Any = None, devices: Optional[Iterable[Any]] = None, *, battery_percent: Any = None,
              battery_warning_percent: Any = BATTERY_WARNING_PERCENT, runtime_mode: Optional[str] = None,
-             failed_unit: Any = None) -> dict:
+             failed_unit: Any = None, robot_mode: Any = None) -> dict:
     """D-260 decision 1: the one state, its reason line (Korean and LCD) and the todo list.
 
     Priority when conditions overlap: FAILED > CAUTION > READY_HELD > READY; the
     lower ones stay in ``todos``. Before CORE_READY (and not FAILED) it is BOOTING
     whatever else holds. Missing or malformed inputs never raise.
+
+    D-375: ``robot_mode`` (CORE's live RobotMode) does not change the state — the
+    five states are health — it is echoed validated as ``result["robot_mode"]`` so
+    the lamp and the LCD state line can show the operating mode beside it.
     """
     kind = stage_kind(stage)
+    mode = valid_robot_mode(robot_mode)
     if kind == "SETUP":
         action = _todo("new_device_setup", "새 장치를 등록하세요", "Register new device")
         return {
@@ -206,6 +258,7 @@ def evaluate(stage: Any = None, devices: Optional[Iterable[Any]] = None, *, batt
             "reason": "새 장치 등록 대기",
             "lcd_reason": "register new device",
             "motion_reason": "",
+            "robot_mode": mode,
             "todos": [action],
         }
     items = todos(stage, devices, battery_percent=battery_percent,
@@ -244,6 +297,7 @@ def evaluate(stage: Any = None, devices: Optional[Iterable[Any]] = None, *, batt
         "reason": reason,
         "lcd_reason": lcd_reason,
         "motion_reason": held if kind == "CORE_READY" else "",
+        "robot_mode": mode,
         "todos": items,
     }
 

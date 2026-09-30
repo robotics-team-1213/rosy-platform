@@ -47,7 +47,10 @@ the stage and the battery into one state:
 * the WS2812 lamp shows the state's pattern through ``lamp_pattern`` (one
   helper process per pattern, /dev/ws281x_pwm granted to this unit alone),
   and only when the driver runs on PWM0 channel 3 (GPIO19; channel 2 is the
-  LCD backlight). Anything missing leaves the lamp out, never the boot;
+  LCD backlight). Anything missing leaves the lamp out, never the boot.
+  D-375: while CORE keeps its hand-over fresh, the lamp also names the
+  operating mode (manual/navigating/docking/emergency patterns) beside the
+  health state — the rule table's priority decides which one wins;
 * the LCD gets the state line and the most urgent todo (ASCII: the card font
   has no Hangul);
 * a D-247 buzzer or lamp test that rosy-hw-test hands over while this program
@@ -110,7 +113,8 @@ REPEAT_LIMITED = frozenset({"caution"})
 TEST_BEEPS, TEST_ON_S, TEST_OFF_S = 3, 0.15, 0.15
 #: robot state -> sound; booting is silent.
 SOUNDS = {"ready": "ready", "ready_held": "ready", "failed": "failed", "caution": "caution"}
-#: robot state -> lamp_pattern argument (D-260 3).
+#: robot state -> lamp_pattern argument (D-260 3). Fallback for a release without the
+#: rule table; with it, the table also folds CORE's mode in (D-375, robot_state.lamp_pattern).
 LAMP_PATTERNS = {"booting": "booting", "ready": "ready", "ready_held": "ready", "failed": "failed",
                  "caution": "caution"}
 LAMP_NODE = "dev/ws281x_pwm"
@@ -165,6 +169,7 @@ def read_view(root: Path, battery: tuple[float, float] | None) -> dict:
         "ipv4": status.get("ipv4") or [],
         "api_port": status.get("api_port") or 8080,
         "network": network,
+        "robot_mode": status.get("robot_mode"),
         "battery_percent": None if battery is None else round(battery[0]),
         "battery_voltage": None if battery is None else round(battery[1], 2),
     }
@@ -194,9 +199,13 @@ def _state_view(view: dict, status: dict) -> dict:
         warning = robot_state.BATTERY_WARNING_PERCENT
     result = robot_state.evaluate(view["stage"], devices, battery_percent=view["battery_percent"],
                                   battery_warning_percent=warning, runtime_mode=mode,
-                                  failed_unit=view["failed_unit"])
+                                  failed_unit=view["failed_unit"],
+                                  robot_mode=status.get("robot_mode"))
     todos = result["todos"]
-    return {"robot_state": result["state"], "state_line": robot_state.state_line(result, lcd=True),
+    # D-375: the LCD line names the operating mode beside the health state — the
+    # lamp shows it as a colour, the card says it in words.
+    line = robot_state.state_line(result, lcd=True) + robot_state.mode_suffix(status.get("robot_mode"))
+    return {"robot_state": result["state"], "state_line": line,
             "todo": todos[0]["lcd"] if todos else None}
 
 
@@ -496,6 +505,14 @@ class BootDisplay:
         kind = str(view["stage"]).split(":", 1)[0]
         return {"CORE_READY": "ready", "FAILED": "failed"}.get(kind, "booting")
 
+    @staticmethod
+    def lamp_pattern_for(view: dict, state: str) -> str | None:
+        """D-375: the table's pattern for the state and CORE's mode; the stage-only
+        mapping only on a release too old to carry core_common.robot_state."""
+        if robot_state is None:
+            return LAMP_PATTERNS.get(state)
+        return robot_state.lamp_pattern(state, view.get("robot_mode"))
+
     def _announce(self, state: str, now: float) -> None:
         sound = SOUNDS.get(state)
         # Ready and held ready are one sound: moving between them is not a new sound.
@@ -536,10 +553,11 @@ class BootDisplay:
         state = self.robot_state_of(view)
         if state != self._state:
             self._state = state
-            if self._lamp is not None:
-                self._lamp.show(LAMP_PATTERNS.get(state))
             self._announce(state, now)
         if self._lamp is not None:
+            # D-375: a mode change switches the pattern without a sound; show() is
+            # idempotent, so an unchanged pattern costs nothing.
+            self._lamp.show(self.lamp_pattern_for(view, state))
             self._lamp.poll()
         self.handle_test()
         key = json.dumps(view, sort_keys=True)

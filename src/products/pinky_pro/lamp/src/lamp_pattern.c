@@ -13,6 +13,11 @@
  *   ready    green for 3 s, then off and exit
  *   failed   red, 1 Hz blink, until stopped
  *   caution  orange, 0.5 Hz blink, until stopped
+ *   manual   white, breathing, 3 s period, at most 25 % brightness (D-375)
+ *   navigating  cyan, breathing, 4 s period, at most 25 % brightness (D-375)
+ *   docking  magenta, 1 Hz blink, until stopped (D-375)
+ *   emergency  red, 4 Hz blink, until stopped — four times faster than
+ *            failed's 1 Hz, so the two reds never read alike (D-375)
  *   test     red, green, blue for 1 s each, then off and exit (D-247 lamp test
  *            handed to the boot display while it owns the lamp)
  *   off      off and exit
@@ -89,6 +94,30 @@ static int frame(const char *pattern, long elapsed_ms, ws2811_led_t *color)
         *color = (elapsed_ms % 2000) < 1000 ? rgb(DIM, DIM / 3, 0) : 0;
         return 0;
     }
+    if (strcmp(pattern, "manual") == 0) {
+        /* D-375: calm white breathing — a person holds the wheel. */
+        double phase = (double)(elapsed_ms % 3000) / 3000.0;
+        int level = (int)lround(BREATH_MAX * (0.5 - 0.5 * cos(2.0 * M_PI * phase)));
+        *color = rgb(level, level, level);
+        return 0;
+    }
+    if (strcmp(pattern, "navigating") == 0) {
+        /* D-375: cyan breathing, slower than booting's blue 2 s. */
+        double phase = (double)(elapsed_ms % 4000) / 4000.0;
+        int level = (int)lround(BREATH_MAX * (0.5 - 0.5 * cos(2.0 * M_PI * phase)));
+        *color = rgb(0, level, level);
+        return 0;
+    }
+    if (strcmp(pattern, "docking") == 0) {
+        /* D-375: magenta blink at failed's rate, never its colour. */
+        *color = (elapsed_ms % 1000) < 500 ? rgb(DIM, 0, DIM / 2) : 0;
+        return 0;
+    }
+    if (strcmp(pattern, "emergency") == 0) {
+        /* D-375: red at 4 Hz — failed blinks at 1 Hz, so speed tells them apart. */
+        *color = (elapsed_ms % 250) < 125 ? rgb(DIM, 0, 0) : 0;
+        return 0;
+    }
     if (strcmp(pattern, "test") == 0) {
         static const int steps[3][3] = {{0x30, 0, 0}, {0, 0x30, 0}, {0, 0, 0x30}};
         long step = elapsed_ms / 1000;
@@ -105,7 +134,8 @@ static int frame(const char *pattern, long elapsed_ms, ws2811_led_t *color)
 
 static int known(const char *pattern)
 {
-    static const char *names[] = {"booting", "ready", "failed", "caution", "test", "off"};
+    static const char *names[] = {"booting", "ready", "failed", "caution", "manual",
+                                  "navigating", "docking", "emergency", "test", "off"};
     for (size_t i = 0; i < sizeof(names) / sizeof(names[0]); i++) {
         if (strcmp(pattern, names[i]) == 0) {
             return 1;
@@ -117,7 +147,7 @@ static int known(const char *pattern)
 int main(int argc, char **argv)
 {
     if (argc != 2 || !known(argv[1])) {
-        fprintf(stderr, "usage: lamp_pattern booting|ready|failed|caution|test|off\n");
+        fprintf(stderr, "usage: lamp_pattern booting|ready|failed|caution|manual|navigating|docking|emergency|test|off\n");
         return 64;
     }
     const char *pattern = argv[1];

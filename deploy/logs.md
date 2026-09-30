@@ -1538,3 +1538,9 @@
 - gate 변화: 없음 (ARTIFACT/DEVICE는 여전히 HOLD — native ARM64·실기 증거는 그대로 남는다).
 - 결정: 없음.
 - 교훈: 없음.
+
+## 2026-09-30 · uncommitted · feat(native): D-375 부팅 표시가 운용 모드를 램프와 LCD에 표시
+
+- 변경: `rosy-boot-status.py`가 핸드오버의 `robot_mode`를 검증(모르는 값은 나머지를 버리지 않고 없음)해 boot-status.json에 옮긴다. `rosy-boot-display.py`는 `robot_state.lamp_pattern()`으로 패턴을 고르고, 모드 전환은 소리 없이 패턴만 바꾸며, LCD 상태줄에 ` - MODE` 접미를 붙인다.
+- 증거: test_boot_status_indicator.py 37 passed, 2 skipped · test_boot_display.py 117 passed, 1 skipped (패턴 선택 변이 증명: 표시가 모드를 무시하면 모드 행이 빨개진다).
+- gate 변화: 없음.

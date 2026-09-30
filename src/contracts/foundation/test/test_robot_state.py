@@ -104,7 +104,7 @@ def test_hardware_mode_with_nothing_wrong_is_ready():
     result = rs.evaluate("CORE_READY", OK_BOARD, battery_percent=80, runtime_mode="hardware")
 
     assert result == {"state": rs.READY, "label": "준비됨", "lcd_label": "Ready", "reason": "",
-                      "lcd_reason": "", "motion_reason": "", "todos": []}
+                      "lcd_reason": "", "motion_reason": "", "robot_mode": None, "todos": []}
     assert rs.state_line(result) == "준비됨"
 
 
@@ -242,3 +242,62 @@ def test_moved_card_setup_is_caution_with_registration_action():
     assert result["state"] == "caution"
     assert result["lcd_reason"] == "register new device"
     assert result["todos"][0]["id"] == "new_device_setup"
+
+
+# --- D-375: the mode axis (lamp patterns, the LCD suffix) ------------------------
+
+
+@pytest.mark.parametrize("value,expected", [
+    ("IDLE", "IDLE"), ("MANUAL", "MANUAL"), ("NAVIGATION", "NAVIGATION"),
+    ("DOCKING", "DOCKING"), ("EMERGENCY", "EMERGENCY"),
+    (None, None), ("", None), ("manual", None), ("DRIVE", None), (7, None), (True, None),
+])
+def test_only_a_known_robot_mode_is_kept(value, expected):
+    assert rs.valid_robot_mode(value) == expected
+
+
+@pytest.mark.parametrize("mode,suffix", [
+    ("MANUAL", " - MANUAL"), ("NAVIGATION", " - NAVIGATION"), ("EMERGENCY", " - EMERGENCY"),
+    ("IDLE", ""), (None, ""), ("DRIVE", ""),
+])
+def test_the_suffix_names_an_operating_mode_only(mode, suffix):
+    assert rs.mode_suffix(mode) == suffix
+    assert suffix.isascii()  # the boot card font has no Hangul
+
+
+def test_evaluate_echoes_the_validated_mode_without_changing_the_state():
+    result = rs.evaluate("CORE_READY", OK_BOARD, runtime_mode="hardware", robot_mode="NAVIGATION")
+
+    assert result["state"] == rs.READY  # the five states are health; the mode rides beside
+    assert result["robot_mode"] == "NAVIGATION"
+    assert rs.evaluate("CORE_READY", OK_BOARD, runtime_mode="hardware",
+                       robot_mode="DRIVE")["robot_mode"] is None
+    assert rs.evaluate("SETUP", robot_mode="MANUAL")["robot_mode"] == "MANUAL"
+
+
+@pytest.mark.parametrize("state,mode,pattern,why", [
+    ("failed", "NAVIGATION", "failed", "a failed boot outranks a live mode"),
+    ("ready", "EMERGENCY", "emergency", "an e-stop outranks a healthy state"),
+    ("caution", "MANUAL", "caution", "a person must act before a mode matters"),
+    ("caution", "EMERGENCY", "emergency", "but an e-stop outranks a caution"),
+    ("booting", "NAVIGATION", "booting", "before CORE_READY the mode cannot be fresh"),
+    ("ready", "DOCKING", "docking", ""),
+    ("ready", "NAVIGATION", "navigating", ""),
+    ("ready", "MANUAL", "manual", ""),
+    ("ready_held", "IDLE", "ready", "held is a health state at heart"),
+    ("ready", "IDLE", "ready", "idle is not operating"),
+    ("ready", None, "ready", "no CORE hand-over, no mode"),
+    ("ready", "DRIVE", "ready", "an unknown mode is absent"),
+    ("unknown", None, "ready", "an unknown state falls to the calm neutral"),
+])
+def test_the_lamp_priority_is_the_adr_s(state, mode, pattern, why):
+    assert rs.lamp_pattern(state, mode) == pattern, why
+
+
+def test_the_mode_lamp_names_are_the_helper_s_vocabulary():
+    # lamp_pattern.c must know every name the table can ask for; the reverse
+    # (helper names the table never asks for, e.g. test/off) is its own business.
+    assert rs.MODE_LAMP == {"MANUAL": "manual", "NAVIGATION": "navigating",
+                            "DOCKING": "docking", "EMERGENCY": "emergency"}
+    assert set(rs.MODE_LAMP) == rs.OPERATING_MODES
+    assert rs.ROBOT_MODES == rs.OPERATING_MODES | {"IDLE"}

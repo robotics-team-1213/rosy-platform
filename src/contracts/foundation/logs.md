@@ -169,3 +169,9 @@
 - 변경: DeviceActionLookup은 attempt 범위 연산(현재 취소)의 identity pair라는 docstring으로 정정했다. OMX UDS v1 GetAction의 요청은 action_id만이며 응답에서 Fleet이 attempt/grant를 검증한다. API Reference §10.12를 함께 정정했다.
 - 증거: Fleet–OMX 결합 시험과 인접 suite 21 passed. Pydantic field·validation·wire·runtime 동작은 바뀌지 않았다.
 - gate 변화: 없음.
+
+## 2026-09-30 · uncommitted · feat(robot_state): D-375 운용 모드 축 — 램프 패턴 중재와 LCD 접미
+
+- 변경: `ROBOT_MODES`/`OPERATING_MODES`/`MODE_LAMP` 상수와 `valid_robot_mode()`·`mode_suffix()`·`lamp_pattern()`를 추가했다. `evaluate()`는 `robot_mode`를 받아 검증해 결과에 실으며, 다섯 건강 상태 판정은 바꾸지 않는다. 우선순위: 실패 > 비상정지 > 주의 > 부팅 > 도킹 > 내비게이션 > 수동 > 준비.
+- 증거: test_robot_state.py 69 passed (우선순위 전 표 변이 증명: EMERGENCY를 주의 아래로 내리면 해당 행이 빨개진다).
+- gate 변화: 없음.

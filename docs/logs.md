@@ -3890,3 +3890,9 @@
 - 변경: `docs/reference/ROSY API & Protocol Reference.md` §8 에 `nav.line_obstacle_hold`(warning, `{mode, clearance_m, held_s}`), line-follow 행에 `limit_level_too_low`·`angular_limit_zero`. 버전 머리글·핀(app.py 등)은 올리지 않았다 — "다음 버전 표기 전" 으로 적고 병합 때 한 번에 올린다.
 - 증거: `test_event_catalogue.py` 72 passed(추가 전 `test_nothing_is_emitted_behind_the_contract` 빨강) (2026-09-30 Windows).
 - gate 변화: 없음. 병합 전에 API 버전 올림이 필요하다.
+
+## 2026-09-30 · uncommitted · docs(adr): D-375 램프 운용 모드 표시 결정
+
+- 변경: ADR D-375(파일+로그 행)와 설계 문서 `docs/plans/2026-09-30-lamp-mode-display-design.md`를 추가했다.
+- 증거: rosy_harness lint·generate 통과.
+- gate 변화: 없음.

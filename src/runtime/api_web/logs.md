@@ -196,3 +196,9 @@
 - gate 변화: 없음.
 - 결정: 없음.
 - 교훈: v1.57→v1.59→v1.60 세 번 연속 같은 누락이다 — 이제 습관이 아니라 구멍이다. 범프 회차가 핀을 스스로 갱신하지 못한다면, 버전 핀 시험이 실패를 push 이전(pre-push)에 잡는 지금 구조가 유일한 안전망이다.
+
+## 2026-09-30 · uncommitted · feat(host): D-375 status-inputs 핸드오버에 robot_mode 추가
+
+- 변경: `status_inputs()`가 `_robot_mode()`(덕타이핍)로 `svc.state.snapshot().mode`를 검증해 `robot_mode`로 실었다. 모르는 모드는 없음이 된다.
+- 증거: test_host_status_summary.py 39 passed, 1 skipped (키 셋·없음 기록 변이 증명: 필드를 빼면 키 셋 시험이 빨개진다).
+- gate 변화: 없음.
