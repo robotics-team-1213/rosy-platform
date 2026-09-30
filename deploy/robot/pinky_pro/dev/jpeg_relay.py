@@ -21,7 +21,8 @@ import numpy as np
 _CHANNELS = {"bgr8": 3, "rgb8": 3, "mono8": 1}
 
 
-def _encoder(backend: str):
+def resolve_encoder(backend: str = "auto"):
+    """Pick the JPEG backend once: ("simplejpeg", module) or ("cv2", module)."""
     if backend in ("auto", "simplejpeg"):
         try:
             import simplejpeg
@@ -42,15 +43,15 @@ def encode_jpeg(
     step: int,
     encoding: str,
     quality: int,
-    backend: str = "auto",
+    encoder,
 ) -> bytes:
-    """Encode one raw sensor_msgs/Image payload to JPEG bytes."""
+    """Encode one raw sensor_msgs/Image payload with an encoder from resolve_encoder()."""
     ch = _CHANNELS.get(encoding)
     if ch is None:
         raise ValueError(f"unsupported encoding {encoding!r}")
     rows = np.frombuffer(data, dtype=np.uint8, count=step * height).reshape(height, step)
     img = np.ascontiguousarray(rows[:, : width * ch].reshape(height, width, ch))
-    name, mod = _encoder(backend)
+    name, mod = encoder
     if name == "simplejpeg":
         space = {"bgr8": "BGR", "rgb8": "RGB", "mono8": "GRAY"}[encoding]
         sub = "Gray" if ch == 1 else "420"
@@ -64,18 +65,22 @@ def encode_jpeg(
 
 
 class Decimator:
-    """Pass at most max_fps frames per second; max_fps <= 0 passes all."""
+    """Pass at most max_fps frames per second; max_fps <= 0 passes all.
+
+    Spacing is measured from the last passed frame, so a late frame after a gap is
+    never followed by another one sooner than 0.9 period (0.1 absorbs input jitter).
+    """
 
     def __init__(self, max_fps: float) -> None:
-        self.period = 1.0 / max_fps if max_fps > 0 else 0.0
-        self.next_due: float | None = None
+        self.min_gap = 0.9 / max_fps if max_fps > 0 else 0.0
+        self.last: float | None = None
 
     def accept(self, t: float) -> bool:
-        if self.period <= 0:
+        if self.min_gap <= 0:
             return True
-        if self.next_due is not None and t < self.next_due:
+        if self.last is not None and t - self.last < self.min_gap:
             return False
-        self.next_due = t + self.period if self.next_due is None else max(self.next_due + self.period, t)
+        self.last = t
         return True
 
 
@@ -97,11 +102,11 @@ def main() -> None:
     rclpy.init()
     node = Node("jpeg_relay")
     log = node.get_logger()
-    backend_name = _encoder(args.backend)[0]
+    encoder = resolve_encoder(args.backend)
     sub_qos = QoSProfile(depth=1, history=HistoryPolicy.KEEP_LAST, reliability=ReliabilityPolicy.BEST_EFFORT)
     pub = node.create_publisher(CompressedImage, f"{ns}/camera/front/compressed", 5)
     dec = Decimator(args.max_fps)
-    stats = {"in": 0, "out": 0, "ms": [], "bytes": 0}
+    stats = {"in": 0, "out": 0, "errors": 0, "ms": [], "bytes": 0}
 
     def on_image(msg: Image) -> None:
         stats["in"] += 1
@@ -109,16 +114,17 @@ def main() -> None:
             return
         t0 = time.perf_counter()
         try:
-            jpg = encode_jpeg(bytes(msg.data), msg.width, msg.height, msg.step, msg.encoding, args.quality, args.backend)
-        except ValueError as exc:
-            log.warn(str(exc), throttle_duration_sec=10.0)
+            jpg = encode_jpeg(bytes(msg.data), msg.width, msg.height, msg.step, msg.encoding, args.quality, encoder)
+            stats["ms"].append((time.perf_counter() - t0) * 1000.0)
+            out = CompressedImage()
+            out.header = msg.header
+            out.format = "jpeg"
+            out.data = jpg
+            pub.publish(out)
+        except Exception as exc:  # one bad frame must not kill the relay
+            stats["errors"] += 1
+            log.warning(f"frame dropped: {type(exc).__name__}: {exc}", throttle_duration_sec=10.0)
             return
-        stats["ms"].append((time.perf_counter() - t0) * 1000.0)
-        out = CompressedImage()
-        out.header = msg.header
-        out.format = "jpeg"
-        out.data = jpg
-        pub.publish(out)
         stats["out"] += 1
         stats["bytes"] += len(jpg)
 
@@ -126,16 +132,16 @@ def main() -> None:
         ms, n = stats["ms"], stats["out"]
         if n:
             log.info(
-                f"in={stats['in']} out={n} encode_ms_p50={statistics.median(ms):.2f} "
+                f"in={stats['in']} out={n} errors={stats['errors']} encode_ms_p50={statistics.median(ms):.2f} "
                 f"encode_ms_max={max(ms):.2f} bytes_per_frame={stats['bytes'] // n}"
             )
         else:
-            log.info(f"in={stats['in']} out=0")
-        stats.update({"in": 0, "out": 0, "ms": [], "bytes": 0})
+            log.info(f"in={stats['in']} out=0 errors={stats['errors']}")
+        stats.update({"in": 0, "out": 0, "errors": 0, "ms": [], "bytes": 0})
 
     node.create_subscription(Image, f"{ns}/camera/front", on_image, sub_qos)
     node.create_timer(10.0, report)
-    log.info(f"relay {ns}/camera/front -> compressed q={args.quality} max_fps={args.max_fps} backend={backend_name}")
+    log.info(f"relay {ns}/camera/front -> compressed q={args.quality} max_fps={args.max_fps} backend={encoder[0]}")
     try:
         rclpy.spin(node)
     except (KeyboardInterrupt, ExternalShutdownException):
