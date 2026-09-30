@@ -127,6 +127,17 @@ def test_steep_line_far_outside_the_lane_is_not_sided():
     assert steep and all(c["rejected"] and abs(c["heading_deg"]) > 45 for c in steep)
 
 
+def test_steep_diagonal_crossing_the_path_ahead_is_not_sided():
+    # Real 124745Z frame 94: a ~60 deg mark from y -0.11 to +0.10, 0.33-0.45 m ahead.
+    image = _render([(HALF, 0.0), (-HALF, 0.0)])
+    segment = np.isfinite(X) & (np.abs(X - (0.33 + (Y + 0.11) / 1.73)) <= 0.015) & (Y > -0.11) & (Y < 0.10)
+    image[segment] = 195
+    obs, last = _keep(image)
+    assert obs is not None and last["strategy"] == "both" and abs(obs.error) < 0.15
+    assert all(abs(b["heading_deg"]) < 45 for b in last["boundaries"])
+    assert [c for c in last["candidates"] if c["reason"] == "steep_crossing" and c["rejected"]]
+
+
 def test_steep_segment_starting_at_the_lane_edge_is_still_sided():
     # A curving boundary seen far ahead: steep, extrapolates far at SIDE_X_M,
     # but its paint starts at the lane edge, so it stays a boundary.
