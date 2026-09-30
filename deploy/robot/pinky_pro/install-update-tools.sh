@@ -22,7 +22,7 @@ command -v openssl >/dev/null
 command -v zstd >/dev/null
 install -d -m 0755 /opt/rosy/deploy/release /etc/rosy /var/cache/rosy /var/lib/rosy
 install -d -m 0755 /etc/rosy/trusted-release-keys
-SOURCE="$(cd "$SCRIPT_DIR/../release" && pwd)"
+SOURCE="$(cd "$SCRIPT_DIR/release" && pwd)"
 if [[ "$SOURCE" != /opt/rosy/deploy/release ]]; then
     install -m 0644 "$SOURCE/"*.py /opt/rosy/deploy/release/
     install -m 0644 "$SOURCE/manifest.schema.json" /opt/rosy/deploy/release/

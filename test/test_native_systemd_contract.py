@@ -35,7 +35,7 @@ def test_core_runs_as_a_device_free_hardened_service():
         "EnvironmentFile=/etc/rosy/runtime.env",
         "DevicePolicy=closed", "PrivateDevices=true",
         "NoNewPrivileges=true", "ProtectSystem=strict", "ProtectHome=true",
-        "ExecStartPost=/usr/bin/python3 /opt/rosy/current/deploy/robot/pinky_pro/native/wait-core-ready.py",
+        "ExecStartPost=/usr/bin/python3 /opt/rosy/current/deploy/robot/native/wait-core-ready.py",
         "exec /opt/rosy/current/install/lib/core/core --ros-args", "Restart=on-failure",
         "KillSignal=SIGINT",
     ):
@@ -415,6 +415,8 @@ DECLARED_READS = {
     "rosy-navigation.service": {
         "/var/lib/rosy/maps/site.yaml", "/etc/rosy/line_follow.yaml", "/etc/rosy/profile.yaml",
     },
+    # D-344 §12: the optional per-robot IR calibration overlay for line_observer.
+    "rosy-camera.service": {"/etc/rosy/ir_calibration.yaml"},
     # boot-status.json, network.json and ap-display.txt (root-written; D-190).
     "rosy-boot-display.service": {"/run/rosy-boot"},
     # D-193: boot-status.json; CORE's used/burned signal (read strictly, never
@@ -458,7 +460,9 @@ PROGRAM_SOURCES = {
     "rosy-io.service": ["src/products/pinky_pro/bringup"],
     "rosy-camera.service": ["src/runtime/sensing/launch/camera_preview.launch.py",
                             "src/runtime/sensing/control/camera_detect_node.py",
-                            "src/runtime/sensing/control/road_observer_node.py"],
+                            "src/runtime/sensing/control/road_observer_node.py",
+                            # D-344 §12: the IR calibration overlay the launch validates.
+                            "src/runtime/sensing/control/ir_overlay.py"],
     "rosy-navigation.service": ["src/runtime/navigation", "src/products/pinky_pro/bringup"],
     # D-190: the display loop, the emotion card and LCD driver, rosylib.Battery.
     "rosy-boot-display.service": ["deploy/robot/pinky_pro/native/rosy-boot-display.py",

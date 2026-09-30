@@ -159,7 +159,7 @@ def test_page_handler_serves_web_common_manifest_assets():
             assert response.headers['Content-Type'] == 'text/javascript'
             assert b'createHoldTicker' in response.read()
         with pytest.raises(urllib.error.HTTPError) as error:
-            urllib.request.urlopen(base + '/common/manifest.json', timeout=5)
+            urllib.request.urlopen(base + '/common/shared-assets.json', timeout=5)
         assert error.value.code == 404
     finally:
         server.shutdown()
@@ -167,8 +167,8 @@ def test_page_handler_serves_web_common_manifest_assets():
 
 
 def test_web_common_dir_falls_back_to_the_source_tree(tmp_path):
-    root = web_common_dir(str(tmp_path))                 # no manifest.json: not a web_common share
-    assert os.path.isfile(os.path.join(root, 'manifest.json'))
+    root = web_common_dir(str(tmp_path))                 # no shared-assets.json: not a web_common share
+    assert os.path.isfile(os.path.join(root, 'shared-assets.json'))
     assert 'hold-ticker.js' in shared_assets(root)
 
 

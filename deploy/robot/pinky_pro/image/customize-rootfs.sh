@@ -62,8 +62,8 @@ CAMERA_INSTALLER="$(dirname "$0")/install-camera-stack.sh"
 CORE_PROBE="$(dirname "$0")/probe-core-runtime.py"
 IO_PROBE="$(dirname "$0")/probe-io-runtime.py"
 DISPLAY_PROBE="$(dirname "$0")/probe-display-runtime.py"
-UART_CONFIG="$(dirname "$0")/../robot/configure-uart-pi5.sh"
-BOOT_OVERLAY="$(dirname "$0")/../robot/configure-boot-overlay-pi5.sh"
+UART_CONFIG="$(dirname "$0")/../configure-uart-pi5.sh"
+BOOT_OVERLAY="$(dirname "$0")/../configure-boot-overlay-pi5.sh"
 [[ "$ROS_SOURCE_URL" == https://* ]] || fail "ROS apt source package URL must use HTTPS"
 [[ "$ROS_SOURCE_SHA" =~ ^[0-9a-f]{64}$ ]] || fail "ROS apt source package SHA-256 is invalid"
 [[ "$WIRINGPI_URL" == https://* ]] || fail "WiringPi package URL must use HTTPS"
@@ -419,7 +419,7 @@ RELEASE_KEY=/etc/rosy/trusted-release-keys/rosy-release-2026-01.pem
 chroot "$ROOT" python3 -B /opt/rosy/native-runtime/native_release.py \
     --root "$NATIVE_PROBE" --public-key "$RELEASE_KEY" recover \
     || fail "installed native-runtime recovery entrypoint does not run"
-chroot "$ROOT" python3 -B /opt/rosy/releases/$RELEASE_ID/deploy/robot/pinky_pro/native/native_release.py \
+chroot "$ROOT" python3 -B /opt/rosy/releases/$RELEASE_ID/deploy/robot/native/native_release.py \
     --root "$NATIVE_PROBE" --public-key "$RELEASE_KEY" recover \
     || fail "installed release native entrypoint does not run"
 chroot "$ROOT" python3 -B /opt/rosy/first-boot/rosy-first-boot.py --help >/dev/null \

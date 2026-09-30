@@ -1,4 +1,4 @@
-"""core_api_web.api.app — FastAPI 팩토리 (P1-9, API-101). 계약: ROSY-API-REF-001 v1.63."""
+"""core_api_web.api.app — FastAPI 팩토리 (P1-9, API-101). 계약: ROSY-API-REF-001 v1.64."""
 
 from __future__ import annotations
 
@@ -58,12 +58,12 @@ OPERATOR_PAGE_HEADERS = {"Cache-Control": "no-cache", "Content-Security-Policy":
 def _web_common_root() -> Path:
     """Resolve installed assets first, with a source-tree fallback for host tests.
 
-    A web_common directory is one that ships ``manifest.json``."""
+    A web_common directory is one that ships ``shared-assets.json``."""
     try:
         from ament_index_python.packages import get_package_share_directory
 
         share = Path(get_package_share_directory("web_common"))
-        if (share / "manifest.json").is_file():
+        if (share / "shared-assets.json").is_file():
             return share
     except (ImportError, LookupError):
         pass
@@ -72,7 +72,7 @@ def _web_common_root() -> Path:
 
 def _shared_assets(web_common: Path) -> dict[str, str]:
     """name -> media type, from web_common's manifest (the one /common allowlist)."""
-    manifest = json.loads((web_common / "manifest.json").read_text(encoding="utf-8"))
+    manifest = json.loads((web_common / "shared-assets.json").read_text(encoding="utf-8"))
     return dict(manifest["shared_assets"])
 
 
@@ -106,7 +106,7 @@ def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
     app = FastAPI(
         title="ROSY CORE API",
         version="1.20.0",
-        description="로봇 미들웨어 API — 계약: ROSY-API-REF-001 (v1.63)",
+        description="로봇 미들웨어 API — 계약: ROSY-API-REF-001 (v1.64)",
     )
     app.state.core = services
     app.state.pairing = PairingState()
@@ -131,7 +131,11 @@ def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
         # 이 allowlist는 `{asset_name:path}`가 슬래시를 허용하므로 경로 순회를
         # 막는 파일시스템 방어목적이므로 폴더 스캔으로 바꾸지 않는다.
         "styles.css": "text/css",
+        "console-detail.css": "text/css",
         "app.js": "application/javascript",
+        "telemetry.js": "application/javascript",
+        "teleop.js": "application/javascript",
+        "state-socket.js": "application/javascript",
         "map.js": "application/javascript",
         "host-cards.js": "application/javascript",
         "ros-network.js": "application/javascript",
@@ -214,10 +218,11 @@ def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
         "client.js": "application/javascript",
         "drivers/registry.js": "application/javascript",
         "drivers/pinky_core.js": "application/javascript",
-        "recent.js": "application/javascript",
         "autonomy.js": "application/javascript",
         "screens/connect.js": "application/javascript",
         "screens/drive.js": "application/javascript",
+        "screens/drive-auto.js": "application/javascript",
+        "screens/drive-view.js": "application/javascript",
         "screens/inputs.js": "application/javascript",
         "input-state.js": "application/javascript",
         "vision.js": "application/javascript",

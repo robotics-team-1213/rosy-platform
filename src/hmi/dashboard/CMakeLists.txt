@@ -6,9 +6,13 @@ find_package(ament_cmake REQUIRED)
 install(FILES
   index.html
   styles.css
+  console-detail.css
   styleguide.html
   styleguide.css
   app.js
+  telemetry.js
+  teleop.js
+  state-socket.js
   client.js
   dom.js
   host-cards.js

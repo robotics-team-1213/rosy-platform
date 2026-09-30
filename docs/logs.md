@@ -3847,3 +3847,91 @@
 - 변경: D-369 구현 계획의 Task 4 증거를 갱신했다. `deploy/robot/omx/probe_vendor_owner_sim.sh`를 기존 `rosy-omx-workstation:native-action-only-local` 이미지에서 재실행했다.
 - 증거: image `sha256:b47034e436119cea97c2922a1b4af9bd6596975ac8acbb4cece3a19d2fe1e9f0`; `--network none`, 저장소 read-only bind mount, device grant 없음; 1 passed (2.53s). 이 검증은 vendor 시뮬레이터의 정책 owner/경쟁 요청/cancel 동작 재현이다.
 - gate 변화: ROS-SIM 재현만 확인. Fleet grant의 production driver 결선, 실제 arm/gripper profile, 물리 E-stop, DEVICE/FIELD 수용은 여전히 확인하지 않았다.
+
+## 2026-09-30 · uncommitted · docs(plan): identify PICK_PLACE coordinate resolution gap
+
+- 변경: D-369 Task 4 계획에 FleetActionGrant→ROS 좌표 변환의 선결 조건을 적고, 2026-09-26 검증 기록의 현재 probe 경로를 `deploy/robot/omx/`로 정정했다.
+- 근거: `ResolvedTargetEvidence`는 pixel bbox와 camera/optical-frame/calibration/transform revision을 전달하지만 workspace pose/joint target은 전달하지 않는다. 픽/플레이스 연결에는 승인된 camera-to-workcell pose resolver, arm/gripper phase 계약, 독립 goal/placement verifier가 필요하다.
+- 결정: revision ID에서 변환값을 추정하거나 pixel 좌표를 joint 값으로 쓰지 않는다. profile-specific ROS mapping은 해당 pose/phase 계약이 선택될 때까지 대기한다.
+- gate 변화: 없음. ROS-SIM 경로 증거와 물리/production profile 수용은 분리한다.
+
+## 2026-09-30 · uncommitted · docs(adr): D-374 앱 이름 규칙 — 폴더·패키지·식별자를 역할 이름 하나에서
+- 변경: D-374(Proposed)와 단계 계획 `docs/plans/2026-09-30-app-identity-rename-plan.md` 추가. 사용자 결정("모든 앱을 규칙대로, 식별자까지")으로 D-370 2항의 "식별자 그대로"를 대체한다. 역할 id = D-370 영어 이름 − `Rosy`(kebab), snake는 폴더·패키지·실행 파일, compact는 Android id. 새 이름: `ceiling-camera`(`src/site/ceiling_camera`, `io.github.livsbittt.rosy.ceilingcamera`), `site-vision`(`src/site/site_vision`), `site-console`(`src/site/site_console` 자산 패키지, Fleet 서비스 `fleet`은 유지), `robot-dashboard`(`src/hmi/robot_dashboard`), `pilot`(레지스트리 id만).
+- 증거: main `15a4302f` 읽기 전용 조사(계획 부록 A, 파일:줄 인용). 앱 폴더를 고치는 열린 브랜치 13개(부록 B). D-362 P0-1·P1이 조사 도중 main에 착지(`b67c9dfc`, `13803932`).
+- gate 변화: 없음(문서만).
+- 결정: mDNS 종류·TXT, `rosy-overhead/1`·`/overhead/v1/frames`, `/api/fleet/*`·`/api/vision/*`, `rosyov://`, 웹 경로·PWA 범위, 로봇 설정 키, 브라우저 저장소 키, compose 서비스·이미지·SAN은 never. `overhead` 실행 파일만 한 사이트 릴리스 동안 alias. 단계 1(카메라 앱+Vision)이 먼저, 대시보드·관제 화면은 D-362 착지·main 체크아웃 깨끗함 게이트 뒤.
+- 열린 질문: games 등 범위 밖 표면, 관제 화면 분리안 B vs 패키지 전체 개명 A, 폰 재페어링 수용, compose 이름.
+
+## 2026-09-30 · uncommitted · docs(adr): accept D-374 app identity rename
+- 변경: D-374 Status를 Accepted로 올리고 사용자 결정(2026-09-30)을 적었다. (1) 규칙·대응표를 제안대로 적용, (2) Fleet 관제 화면은 안 B — 화면 자산만 `site_console`로 떼고 서비스 패키지 `fleet` 유지, (3) 새 applicationId에 따른 폰 재설치·재페어링 1회 수용, (4) 경기 보드·제어 진단·시뮬 라이브 뷰는 지금 바꾸지 않음. 계획의 열린 질문 1–3을 닫고, ADR Log 행 상태를 고쳤다.
+- 증거: 문서만. 사용자 결정은 리드 세션 전달(2026-09-30).
+- gate 변화: 단계 1(카메라 앱+Site Vision)·단계 2(Pilot 레지스트리 id)를 시작할 수 있다. 단계 3·4·5는 계획의 D-362·릴리스 게이트 그대로.
+- 열린 질문: compose 서비스·이미지 이름(열린 질문 4, 권장: 바꾸지 않음).
+
+## 2026-09-30 · uncommitted · docs(plan): specify local OMX pick-and-place execution
+- 변경: D-369 제어권 경계를 지키는 OMX `PICK_PLACE` 구현 계획을 추가하고, 기존 Action/message 계획 및 OMX progress에서 연결했다.
+- 증거: 새 계획 및 기존 `docs/plans/2026-09-30-action-message-identity.md`와 `src/products/omx/adapter/progress.md`의 교차 링크. 계획에는 RGB-D 기반 pose 검증, 로컬 planning, phase별 ROS goal/취소/저널, Fleet 진행 투영을 순차 작업으로 둔다.
+- gate 변화: 없음. 모델은 후보/읽기 전용이고 Fleet은 Mission/grant/status를 소유한다. 첫 phase 의도는 ROS 제출 전에 기록하며 첫 ROS 응답의 부모 Action/phase 결과는 단일 SQLite 트랜잭션으로 기록한다. 응답 전 crash는 UNKNOWN/HOLD이며 재전송하지 않는다. MTC/Jazzy 적합성은 probe gate이며, profile 비활성 및 DEVICE/FIELD PARKED 상태를 유지한다.
+
+## 2026-09-30 · uncommitted · docs(adr): D-344 보강 — path 앞 물체 정지, IR 교정 절차, 각속도 계단 §13
+
+- 변경: `docs/adr/D-344-pilot-assisted-autonomy.md` 에 2026-09-30 보강(§11 path 판정, §12 교정 도구·rosy-camera 덮어쓰기, §13 수동 한도 계단 각속도). 운영 절차 `docs/deployment/pinky-pro-ir-line-calibration-runbook.md` 신설(한국어).
+- 증거: 코드 커밋 e3eb2561, 7e467a4b, 6f00a74d 와 그 시험.
+- gate 변화: 없음(문서). DEVICE 절차는 로봇 복귀 뒤 사용자와 실행.
+
+## 2026-09-30 · uncommitted · docs(adr): D-344 보강 검토 반영 — sector 기본, L1 문턱, IR 전용 덮어쓰기 경로
+
+- 변경: D-344 2026-09-30 보강의 §11(path 는 선택·기본 sector, 급회전 창·near-field·풀림 지연·WAITING·장기 정지 사건), §12(`/etc/rosy/ir_calibration.yaml`, launch 검증), §13(차선 자동은 L1 이상, `limit_level_too_low`)을 사용자 결정과 독립 검토대로 고쳤다. 이 보강은 아직 main 에 없는 같은 날 초안이라 제자리에서 고쳤다. 런북도 새 경로·첫 블록만 붙이기·loaded/skipped 로그 확인·L1 문턱으로 갱신.
+- 증거: 코드 커밋 794e75bb(CORE), 04213a43(pilot) 과 이 회차의 덮어쓰기 커밋.
+- gate 변화: 없음(문서).
+
+## 2026-09-30 · uncommitted · docs(api): nav.line_obstacle_hold 이벤트와 차선 추종 정지 사유 두 개를 카탈로그에
+
+- 변경: `docs/reference/ROSY API & Protocol Reference.md` §8 에 `nav.line_obstacle_hold`(warning, `{mode, clearance_m, held_s}`), line-follow 행에 `limit_level_too_low`·`angular_limit_zero`. 버전 머리글·핀(app.py 등)은 올리지 않았다 — "다음 버전 표기 전" 으로 적고 병합 때 한 번에 올린다.
+- 증거: `test_event_catalogue.py` 72 passed(추가 전 `test_nothing_is_emitted_behind_the_contract` 빨강) (2026-09-30 Windows).
+- gate 변화: 없음. 병합 전에 API 버전 올림이 필요하다.
+
+## 2026-09-30 · uncommitted · docs(adr): D-375 램프 운용 모드 표시 결정
+
+- 변경: ADR D-375(파일+로그 행)와 설계 문서 `docs/plans/2026-09-30-lamp-mode-display-design.md`를 추가했다.
+- 증거: rosy_harness lint·generate 통과.
+- gate 변화: 없음.
+## 2026-09-30 · uncommitted · docs(adr): D-377 앱 이름 규칙 — Rosy + 영어 한 단어
+- 변경: D-377(Accepted, 사용자 결정) 추가. 표시 이름 `Rosy <Word>`(한국어는 부제에만), id·폴더 끝 `<word>`, 패키지 `rosy_<word>`, Android `io.github.livsbittt.rosy.<word>`, Gradle `rosy-<word>`, 아이콘 `<word>.svg`. 대응: Rosy Cam(`src/site/cam`, `…rosy.cam`), Rosy Vision(`src/site/vision`, `rosy_vision`, 실행 파일 `rosy-vision`), Rosy Console(계획 `src/site/console`·`rosy_console`, 단계 4 게이트), Rosy Robot(계획 `src/hmi/robot`·`rosy_robot`, 단계 3 게이트), Rosy Pilot(그대로). D-370 2항 이름표와 D-374 1·2항을 대체한다고 두 ADR 머리에 적었다. D-374 계획의 2.4·2.5와 단계 3·4·5 목표를 새 이름으로 고쳤다.
+- 증거: 문서만. 번호는 로컬 브랜치 전부·`.worktrees/*/docs/adr`·main 체크아웃 미추적 파일을 확인해 D-375(`feat/overhead-map-auto-register`)·D-376(`omx-pick-place-execution` 워크트리) 다음 빈 번호로 잡았다.
+- gate 변화: 없음(문서만). 실행은 `refactor/app-naming-cam-vision`.
+- 결정: 와이어 이름은 D-374 3항 그대로. Vision 옛 실행 파일 `site_vision`·`overhead`는 한 사이트 후보 릴리스 동안 별칭.
+
+## 2026-09-30 · uncommitted · docs(adr): set OMX local planning and owner execution boundary
+- 변경: D-376을 Accepted로 기록했다. MTC는 plan-only 평가 후보로 두고 OMX Action owner를 유일한 ROS trajectory writer로 고정했다. phased Fleet receipt는 UDS v2로 명시하되 v1 호출과 기존 operation은 유지한다.
+- 증거: baseline OMX suite 154 passed / 3 skipped. 잠금 이미지 `sha256:b47034e436119cea97c2922a1b4af9bd6596975ac8acbb4cece3a19d2fe1e9f0`에 Jazzy와 OMX-F URDF/ros2_control은 있으나 MoveIt/MTC 및 OMX SRDF/kinematics/planning config는 없다. 임시 apt metadata probe에서 MTC Core `0.1.8-1noble.20260904.024044`, MoveIt Core `2.12.4-1noble.20260903.075716` 후보를 확인했지만 설치·빌드·모델 통합은 하지 않았다.
+- gate 변화: 계약/SOURCE 구현은 진행 가능. 검증된 OMX MoveIt config, scene/IK, trajectory export 통합 전 production planner와 ROS-SIM pick/place는 HOLD; profile 비활성, DEVICE/FIELD PARKED 유지.
+
+## 2026-09-30 · uncommitted · docs(adr): D-375 에서 D-380 으로 개명
+
+- 변경: 병합 시점에 main 이 D-375 를 feat/overhead-map-auto-register 예약으로 adr_gaps 에 넣은 것이 확인됐다(선례 D-324→D-325). 이 작업의 결정 번호를 다음 빈 번호 D-380 으로 개명하고 코드 주석·시험·설계 문서의 D-375 표기를 함께 바꿨다. 앞선 항목의 D-375 표기는 역사 기록으로 그대로 둔다.
+- 증거: rosy_harness lint 오류 0. 본문 참조는 docs/adr/D-380-lamp-mode-patterns-from-core-status-inputs.md.
+- gate 변화: 없음.
+## 2026-09-30 · uncommitted · persist first phase intent and atomic response
+
+- Change: ActionStore permits only ordinal-zero phase intent while the parent is SUBMITTING and records the parent's first acceptance/rejection/unknown response with the phase state and ROS goal identity in one SQLite transaction.
+- Evidence: ActionStore tests cover accepted, rejected, unknown, database rollback on the second event write, process restart after first intent, and rejection of a goal ID when acceptance is not positive. The focused ActionStore suite passes.
+- Gate: SOURCE persistence contract only. No ActionRunner phase coordinator, ROS submission callback wiring, Fleet phase receipt, physical stop, or capability activation is claimed.
+
+## 2026-09-30 · uncommitted · mint validated attempt-scoped phase recorder
+
+- Change: Added a private ActionRunner factory for an in-process phase recorder after authenticated peer, grant freshness/digest, principal, stored request, workcell, instance, generation, and attempt checks. The recorder is bound to one action/attempt and takes no peer UID for callback writes; ActionApi exposes no new operation.
+- Evidence: Action API plus ActionStore tests passed (33 passed). Changed ActionRunner, recorder, ActionStore, and tests passed flake8 with max line length 120.
+- Gate: SOURCE trust-boundary contract only. The ROS phase coordinator and per-phase stop-fenced submission path remain open.
+
+## 2026-09-30 · uncommitted · hold unresolved phase state under local stop
+
+- Change: ActionStore now moves every in-flight phase to UNKNOWN in the same transaction that holds its parent Action. The existing goal UUID remains attached for later matching terminal readback, and no next phase can begin.
+- Evidence: The ActionStore suite passed (22 passed), including an accepted first phase followed by HOLD, retained goal identity, UNKNOWN phase state, and rejected continuation. Changed files passed flake8 with max line length 120.
+- Gate: SOURCE stop-state persistence only. This does not prove driver cancellation, standstill, or physical E-stop behavior; per-phase ROS submit/cancel wiring remains open.
+
+## 2026-10-01 · uncommitted · docs(adr): D-381 막힌 내비게이션·비상정지 진입음 결정
+
+- 변경: ADR D-381(파일+로그 행) 추가, D-380 설계 문서의 뒤따를 일 두 항목을 구현됨으로 표시.
+- 증거: rosy_harness lint 오류 0.
+- gate 변화: 없음.

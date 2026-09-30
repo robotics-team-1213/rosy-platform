@@ -12,6 +12,7 @@ from core_common.protocol.schemas import FleetActionGrant
 
 from .action_store import ActionStore, InvalidActionTransition
 from .local_stop import LocalStopBlocked
+from .phase_recorder import ActionPhaseRecorder
 
 
 def action_grant_digest(value: FleetActionGrant | Mapping[str, object]) -> str:
@@ -245,12 +246,109 @@ class ActionRunner:
         )
         return self._receipt(updated, created=False)
 
+    def begin_phase(self, action_id: str, attempt_id: str, *, phase_id: str,
+                    ordinal: int, command_digest: str,
+                    peer_uid: int) -> dict[str, object]:
+        """Persist an ordered phase intent under the Fleet Action owner."""
+        self._require_attempt_owner(action_id, attempt_id, peer_uid)
+        return self.store.begin_phase(
+            action_id, attempt_id, phase_id=phase_id, ordinal=ordinal,
+            command_digest=command_digest,
+        )
+
+    def record_phase_submission(self, action_id: str, attempt_id: str, *,
+                                phase_id: str, accepted: bool | None,
+                                driver_goal_id: str | None,
+                                peer_uid: int) -> dict[str, object]:
+        self._require_attempt_owner(action_id, attempt_id, peer_uid)
+        return self.store.record_phase_submission(
+            action_id, attempt_id, phase_id=phase_id,
+            accepted=accepted, driver_goal_id=driver_goal_id,
+        )
+
+    def record_phase_running(self, action_id: str, attempt_id: str, *,
+                             phase_id: str, driver_goal_id: str,
+                             peer_uid: int) -> dict[str, object]:
+        self._require_attempt_owner(action_id, attempt_id, peer_uid)
+        return self.store.mark_phase_running(
+            action_id, attempt_id, phase_id=phase_id,
+            driver_goal_id=driver_goal_id,
+        )
+
+    def cancel_phase(self, action_id: str, attempt_id: str, *,
+                     phase_id: str, peer_uid: int) -> dict[str, object]:
+        """Request cancel for one phase; an ACK remains separate from its result."""
+        action = self._require_attempt_owner(action_id, attempt_id, peer_uid)
+        phase = self.store.request_phase_cancel(
+            action_id, attempt_id, phase_id=phase_id,
+        )
+        cancel_phase = getattr(self.driver, "cancel_phase", None)
+        if not callable(cancel_phase):
+            return phase
+        try:
+            acknowledged = cancel_phase(action, phase)
+        except Exception:
+            return phase
+        if type(acknowledged) is bool:
+            return self.store.record_phase_cancel_ack(
+                action_id, attempt_id, phase_id=phase_id,
+                acknowledged=acknowledged,
+            )
+        return phase
+
+    def record_phase_terminal(self, action_id: str, attempt_id: str, *,
+                              phase_id: str, driver_goal_id: str,
+                              outcome: str, result_source: str,
+                              result_observed_at: str,
+                              result: Mapping[str, object],
+                              peer_uid: int) -> dict[str, object]:
+        self._require_attempt_owner(action_id, attempt_id, peer_uid)
+        return self.store.record_phase_terminal(
+            action_id, attempt_id, phase_id=phase_id,
+            driver_goal_id=driver_goal_id, outcome=outcome,
+            result_source=result_source, result_observed_at=result_observed_at,
+            result=result,
+        )
+
     def _require_owner(self, action_id: str, peer_uid: int) -> dict[str, object]:
         principal_id = self._principal(peer_uid)
         action = self.store.get_action(action_id)
         if action is None or action["principal_id"] != principal_id:
             raise KeyError(action_id)
         return action
+
+    def _require_attempt_owner(self, action_id: str, attempt_id: str,
+                               peer_uid: int) -> dict[str, object]:
+        action = self._require_owner(action_id, peer_uid)
+        if action["attempt_id"] != attempt_id:
+            raise PermissionError("phase attempt does not match current Action")
+        return action
+
+    def _phase_recorder_for_validated_grant(
+        self, grant: FleetActionGrant, *, peer_uid: int,
+    ) -> ActionPhaseRecorder:
+        """Mint an in-process, attempt-scoped phase journal after grant checks."""
+        principal_id = self._principal(peer_uid)
+        self._validate(grant)
+        action = self.store.get_action(grant.action_id)
+        if action is None or action["principal_id"] != principal_id:
+            raise PermissionError("Fleet peer does not own this Action")
+        request = action.get("request", {})
+        payload = request.get("payload", {}) if isinstance(request, Mapping) else {}
+        stored_grant_digest = payload.get("request_digest") if isinstance(payload, Mapping) else None
+        if (action["attempt_id"] != grant.attempt_id
+                or stored_grant_digest != grant.request_digest
+                or action["workcell_id"] != grant.workcell_id
+                or action["instance_id"] != grant.instance_id
+                or action["owner_generation"] != grant.dispatch_generation):
+            raise PermissionError("stored Action identity does not match the validated grant")
+        if action["state"] not in {
+            "SUBMITTING", "ACCEPTED", "RUNNING", "CANCEL_REQUESTED", "UNKNOWN", "HOLD",
+        }:
+            raise InvalidActionTransition("terminal Action cannot mint a phase recorder")
+        return ActionPhaseRecorder(
+            self.store, action_id=grant.action_id, attempt_id=grant.attempt_id,
+        )
 
     def cancel_unresolved(self, *, peer_uid: int) -> list[dict[str, object]]:
         """Best-effort cancel fanout after the persistent local stop latch is set."""

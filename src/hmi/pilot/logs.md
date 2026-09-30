@@ -157,3 +157,41 @@
 - 변경: main 병합(2026-09-30)과 함께 pilot 을 D-329 표면 레지스트리에 등록(`rosy-pilot`, 역할·소유 `manual-drive`·`driver-video`·`drive-assist`·`estop`, 아이콘 `web_common/icons/pilot.svg`). D-370 이름표대로 제목 `Rosy 로봇 — 조종`, PWA `short_name` `Rosy Pilot`, 상단 버튼 "관제 화면" → "로봇 대시보드". CORE 이미지가 pilot 을 빌드한다. 공용 컨트롤·타이포 계약은 주행 HUD 재도색 때문에 아직 받지 않는다(surfaces.yaml 사유). PWA 아이콘 PNG 교체는 D-370 이행 회차.
 - 증거: `test/architecture/test_app_roles.py`(pilot 이 `/api/fleet` 을 부르지 않음), `src/hmi/web_common/test` 114 passed, `test/test_core_image_closure.py`.
 - gate 변화: 없음(등록·이름만).
+
+## 2026-09-30 · uncommitted · refactor(pilot): D-374 stage 2 — registry id rosy-pilot → pilot
+
+- 변경: `src/hmi/web_common/surfaces.yaml`의 레지스트리 id `rosy-pilot` → `pilot`. 폴더·패키지·아이콘(`src/hmi/pilot`, `pilot`, `icons/pilot.svg`)은 이미 규칙과 같다. `test/architecture/test_app_identity.py`의 pending 줄을 지웠다. 경로 `/pilot`, PWA `start_url`·`scope`, 저장소 키 `rosy.pilot.*`, SW 캐시 이름은 그대로(D-374 3항).
+- 증거: `python -m pytest src/hmi/web_common/test src/hmi/pilot/test src/runtime/api_web/test test/architecture -q` 294 passed, 27 skipped (2026-09-30 Windows).
+- gate 변화: 없음. 장치 절차 없음(계획 단계 2).
+
+## 2026-09-30 · uncommitted · feat(pilot): 차선 자동 계단 거절 이유를 한국어로
+
+- 변경: `screens/drive.js LF_REASON` 에 `limit_level_too_low`("수동 한도 L1 이상에서만 차선 자동")와 `angular_limit_zero`("조향 한도 없음 — 정지") 추가. 캐시 키 `sw.js` 를 `rosy-pilot-shell-2026-09-30-3` 으로 올렸다.
+- 증거: `node --check`, `pytest src/hmi/pilot/test` 35 passed, 13 skipped (2026-09-30 Windows, 브라우저 시험은 opt-in 이라 skip).
+- gate 변화: SOURCE. 태블릿 실화면 확인 전.
+- 결정: D-344 §13(사용자 결정: 차선 자동은 L1 이상).
+
+## 2026-09-30 · uncommitted · refactor(pilot): D-377 page title is the display name
+- 변경: `index.html` `<title>` `Rosy 로봇 — 조종` → `Rosy Pilot`(D-377: 앱 제목은 표시 이름).
+- 증거: `src/hmi/web_common/test/test_surface_titles.py` 통과(web_common 111 passed, 2026-09-30 Windows).
+- gate 변화: 없음.
+
+## 2026-09-30 · 47f814a6 · refactor(pilot): drive.js 를 drive-auto·drive-view 로 나눔
+- 변경: `screens/drive.js`(708줄)를 입력·명령 루프만 남기고 `drive-view.js`(마크업·D-363 배치·배율)와 `drive-auto.js`(D-344 보조 자율·D-364 의도 띠)로 나눴다. 동작은 같다. 새 파일을 CORE `pilot_assets`·`dev_server`·`sw.js` 사전 캐시(이름 `-3`, 빠져 있던 `inputs.js` 도 더함)·`test_pilot_route`·동기화 스크립트에 등록. drive.js 예산 판정(`test_web_budgets.py`)은 예산 아래라 지웠다.
+- 증거: `src/hmi/pilot/test` + `test_pilot_route.py` 51 passed(브라우저 포함).
+- gate 변화: 없음.
+
+## 2026-09-30 · uncommitted · feat(pilot): 공용 컨트롤·타이포 계약과 D-370 PWA 아이콘
+- 변경: `surfaces.yaml` 의 pilot 이 `contracts: [shared_controls, typography_focus]` 를 받는다. 버튼 종류는 JS 에서 `setAttribute("kind", …)` 로 명시(페달·제자리·진행 `toggle`+`size="primary"`, 차선 자동 `toggle`, 속도·정밀·입력 조정 `segment`+`aria-pressed`). `styles.css` 는 공용 컨트롤의 면·글자·테두리를 다시 칠하지 않고, 영상 위 대비는 조작부 판이 가진다. HUD 글자는 크기 토큰(`--text-display`·`--text-value`·`--text-label`)만 쓴다. PWA 아이콘 192·512·192-maskable 을 `web_common/icons/pilot.svg` 에서 `tools/icons/render_png.py` 로 다시 그렸다(maskable 은 `--ground` 판에 합성). D-363 에 부록.
+- 증거: `src/hmi/web_common/test` 계약 시험 통과, `test_pwa_icons.py`(PNG = 렌더 결과), 스크린샷 `X:\DevTemp\pilot-polish\after2-*.png`(가로 2000×1200·세로 1200×2000, 수동·자동).
+- gate 변화: 없음(SOURCE 범위 안).
+
+## 2026-09-30 · bf0fab99 · feat(pilot): 세로 조작부가 영상 아래 공간을 채운다
+- 변경: below 배치에서 조작부 칸을 크기 컨테이너 두 칸으로 나눴다. 왼쪽 절반은 속도 줄·차선 자동·페달(2fr)·제자리(1fr, 둘 다 88px 이상)가 높이를 다 쓰고, 오른쪽 스틱 지름은 min(45cqw, 80cqh). 자동 모드면 진행 버튼이 페달 자리를 차지한다. 배치 규칙만 바꿨다(재도색 없음).
+- 증거: ROSY_RUN_BROWSER_TESTS=1 pilot·web_common·test_pilot_route 161 passed; 스크린샷 X:\DevTemp\pilot-polish\after3-*.png(1200×2000·800×1280·390×844·2000×1200).
+- gate 변화: 없음.
+
+## 2026-09-30 · 7711cb84 · fix(pilot): 리뷰 수정 — 세로 전체화면·오프라인 셸·자동 모드 상태
+- 변경: 세로 전체화면에서 조작부가 0px 이 되던 것을 아래 겹침(높이 min(40dvh, 28rem))으로 고쳤다(bb604a6f). `sw.js` SHELL 에 `/common/evidence.js` 를 넣고(drive.js 의 정적 import, bf7a8886), 쓰지 않던 `recent.js` 와 그 allowlist 행을 지웠다(0fd862fc, 캐시 `-5`). 다시 들어오면 자동 모드·배치 표시를 초기화한다(`drive-auto.js`·`view.close()`). 자동 요청에 1.5 s 시한, 진행 버튼은 도는 중이거나 켜는 중에 아직 누르고 있을 때만 채운다. 차선 자동은 `segment`, 진행은 공용 `toggle` `tone="good"`(12f322f9). `test_pwa_icons` 는 PIL 을 바로 import 한다. `render_png.py` docstring·`sync_pilot_files.sh` 경로·빈 줄 정리.
+- 증거: 새 시험 `test_shell_assets.py`(모든 pilot 모듈의 import 를 /common 까지 따라가 SHELL·pilot_assets 대조), 브라우저 `test_go_releases_on_cancel_and_leave`·`test_stick_takes_over_auto`·`test_reenter_resets_auto_mode`, `test_zoom_cycles_and_always_reports_crop` 에 1200×2000(옛 CSS 에서 스틱 4px 로 실패 확인). 스크린샷 `X:\DevTemp\pilot-polish\after4-*.png`(세로 전체화면 `after4-drive-fullzoom-*`).
+- gate 변화: 없음.
