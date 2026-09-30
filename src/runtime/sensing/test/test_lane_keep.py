@@ -101,6 +101,19 @@ def test_transverse_stop_line_is_ignored():
     assert obs is None and last["strategy"] == "none"
 
 
+def test_candidates_list_every_line_with_its_reject_reason():
+    # D-384 replay reads all fitted lines: accepted boundaries and rejects alike.
+    obs, last = _keep(_render([(HALF, 0.0), (-HALF, 0.0)], transverse_x=0.25))
+    accepted = [c for c in last["candidates"] if not c["rejected"]]
+    rejected = [c for c in last["candidates"] if c["rejected"]]
+    assert len(accepted) == len(last["boundaries"]) >= 2
+    assert {c["side"] for c in accepted} == {"left", "right"}
+    assert all(c["reason"] is None for c in accepted)
+    assert any(c["reason"] == "transverse" for c in rejected)
+    assert all("centre" not in c and "direction" not in c for c in last["candidates"])
+    assert _keep(_render([]))[1]["candidates"] == []
+
+
 def test_white_wall_is_not_a_boundary():
     obs, last = _keep(_render([(HALF, 0.0), (-HALF, 0.0)], wall_y=-0.16))
     assert obs is not None and last["strategy"] == "both" and abs(obs.error) < 0.15
