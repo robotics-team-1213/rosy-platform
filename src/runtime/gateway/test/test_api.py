@@ -421,6 +421,26 @@ def test_safety_stop_release_cycle(client):
     assert "safety.estop" in types and "safety.estop_released" in types
 
 
+def test_the_snapshot_mode_follows_the_e_stop_cycle(client):
+    """D-380 fix: the machine's mode and the snapshot's mode are one mode.
+
+    The stop path bypasses POST /mode, and before the state mirror a stop left
+    the snapshot (dashboard chip, /robot/state, the boot display's hand-over)
+    saying the previous mode while the machine held EMERGENCY.
+    """
+    tc, svc = client
+    response = tc.post("/api/v1/mode", json={"mode": "MANUAL"}, headers=OPERATOR)
+    assert response.status_code == 200
+
+    assert tc.post("/api/v1/safety/stop", headers=VIEWER).status_code == 200
+    assert svc.state.snapshot().mode.value == "EMERGENCY"
+    assert tc.get("/api/v1/robot/state", headers=VIEWER).json()["mode"] == "EMERGENCY"
+
+    assert tc.post("/api/v1/safety/release", headers=ADMIN).status_code == 200
+    assert svc.state.snapshot().mode.value == "IDLE"
+    assert tc.get("/api/v1/robot/state", headers=VIEWER).json()["mode"] == "IDLE"
+
+
 def test_admin_can_update_manual_speed_limits(client):
     tc, svc = client
     ceiling = svc.safety.limits.max_linear
