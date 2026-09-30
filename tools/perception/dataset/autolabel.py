@@ -85,45 +85,57 @@ def _iter(files, names):
 
 
 class Scans:
-    """LaserScans by header stamp (scan start)."""
+    """LaserScans: t = header stamp (scan start, for motion compensation).
+
+    Clock rule shared with bag_to_video.py: a frame gets the latest scan whose bag
+    log time is at or before the frame's log time (MCAP input, `log`), or the scan the
+    sidecar's .scan.npz row names for that frame (video input, `by_row`)."""
 
     def __init__(self):
-        self.t, self.msgs = [], []
+        self.t, self.msgs, self.log = [], [], []
+        self.by_row = None
 
-    def add(self, t, msg):
+    def add(self, t, msg, log=None):
         self.add_raw(t, msg.ranges, msg.angle_min, msg.angle_increment, msg.time_increment,
-                     msg.range_min, msg.range_max)
+                     msg.range_min, msg.range_max, log)
 
-    def add_raw(self, t, ranges, angle_min, angle_increment, time_increment, range_min, range_max):
+    def add_raw(self, t, ranges, angle_min, angle_increment, time_increment, range_min, range_max,
+                log=None):
         self.t.append(float(t))
+        self.log.append(float(t) if log is None else float(log))
         self.msgs.append((np.asarray(ranges, dtype=np.float32), float(angle_min),
                           float(angle_increment), float(time_increment),
                           float(range_min), float(range_max)))
 
-    def nearest(self, t):
-        if not self.t:
-            return None, None
-        i = bisect.bisect_left(self.t, t)
-        j = min((k for k in (i - 1, i) if 0 <= k < len(self.t)), key=lambda k: abs(self.t[k] - t))
-        return j, self.t[j] - t
+    def select(self, t, key):
+        """(scan index, scan stamp - frame stamp) for a frame, or (None, None).
+
+        key is the frame's bag log time (MCAP) or its sidecar row (video)."""
+        if self.by_row is not None:
+            j = self.by_row.get(key)
+        else:
+            j = bisect.bisect_right(self.log, key) - 1
+            if j < 0 or key - self.log[j] > MAX_SCAN_DT_S:
+                j = None
+        return (None, None) if j is None else (j, self.t[j] - t)
 
 
 def read_mcap_side(files):
     """First pass: odometry and scans."""
     ot, ox, oy, oa, scans = [], [], [], [], Scans()
-    for name, _log, msg in _iter(files, ("odom", "scan")):
+    for name, log, msg in _iter(files, ("odom", "scan")):
         if name == "odom":
             p = msg.pose.pose.position
             ot.append(_stamp(msg)); ox.append(p.x); oy.append(p.y); oa.append(_yaw(msg.pose.pose.orientation))
         else:
-            scans.add(_stamp(msg), msg)
+            scans.add(_stamp(msg), msg, log)
     return PoseSeries(ot, ox, oy, oa), scans
 
 
 def mcap_frames(files):
-    """Second pass: (stamp, bgr) camera frames, raw or JPEG."""
+    """Second pass: (header stamp, bgr, bag log time) camera frames, raw or JPEG."""
     from extract import image_to_bgr
-    for name, _log, msg in _iter(files, ("camera/front", "camera/front/compressed")):
+    for name, log, msg in _iter(files, ("camera/front", "camera/front/compressed")):
         if name == "camera/front/compressed":
             bgr = cv2.imdecode(np.frombuffer(bytes(msg.data), np.uint8), cv2.IMREAD_COLOR)
         else:
@@ -132,31 +144,39 @@ def mcap_frames(files):
             except ValueError:
                 continue
         if bgr is not None:
-            yield _stamp(msg), bgr
+            yield _stamp(msg), bgr, log
 
 
 def read_sidecar(video: Path, sidecar: Path):
     """bag_to_video.py output -> (PoseSeries, frame iterator factory, Scans or None).
 
-    Odometry is the sidecar's per-frame "odom" side value; scans come from the
-    sibling <stem>.scan.npz (row i = scan nearest frame i) when it exists. The npz
-    has no time_increment, so scans are motion-compensated at their stamp only.
+    Clock rule (agreed with bag_to_video.py): row "t" is the camera header stamp (s);
+    a side value is the latest message at or before the frame's bag log time, and
+    dt[name] is that message's log time minus the frame's (<= 0). Each odom value is
+    therefore placed at t + dt["odom"] and the pose is interpolated to the frame
+    time. Scans come from the sibling <stem>.scan.npz, whose row i is frame i's scan
+    under the same rule. The npz has no time_increment, so scans are
+    motion-compensated at their stamp only.
     """
     rows = [json.loads(line) for line in sidecar.read_text(encoding="utf-8").splitlines() if line.strip()]
-    t, x, y, a = [], [], [], []
+    poses = {}
     for r in rows:
         odom = (r.get("side") or {}).get("odom")
         if isinstance(odom, dict) and all(k in odom for k in ("x", "y", "yaw")):
-            t.append(r["t"]); x.append(odom["x"]); y.append(odom["y"]); a.append(odom["yaw"])
+            lag = (r.get("dt") or {}).get("odom") or 0.0
+            poses[round(r["t"] + lag, 6)] = (odom["x"], odom["y"], odom["yaw"])  # one per message
+    ts = sorted(poses)
+    odom_series = PoseSeries(ts, [poses[k][0] for k in ts], [poses[k][1] for k in ts],
+                             [poses[k][2] for k in ts])
 
     def frames():
         cap = cv2.VideoCapture(str(video))
         try:
-            for r in rows:
+            for i, r in enumerate(rows):
                 ok, bgr = cap.read()
                 if not ok:
                     break
-                yield r["t"], bgr
+                yield r["t"], bgr, i
         finally:
             cap.release()
     scans = None
@@ -164,15 +184,17 @@ def read_sidecar(video: Path, sidecar: Path):
     if npz.is_file():
         with np.load(npz) as z:  # NpzFile re-reads a key on every access
             d = {k: z[k] for k in z.files}
-        scans, seen = Scans(), set()
-        for i in np.argsort(d["scan_stamp_ns"]):
-            s = int(d["scan_stamp_ns"][i])
-            if s == 0 or s in seen or np.isnan(d["ranges"][i].astype(np.float32)).all():
-                continue
-            seen.add(s)
-            scans.add_raw(s / 1e9, d["ranges"][i], d["angle_min"], d["angle_increment"], 0.0,
-                          d["range_min"], d["range_max"])
-    return PoseSeries(t, x, y, a), frames, scans
+        scans, first = Scans(), {}
+        scans.by_row = {}
+        for i, s in enumerate(d["scan_stamp_ns"].tolist()):
+            if s == 0 or np.isnan(d["ranges"][i].astype(np.float32)).all():
+                continue  # no scan for this frame under the rule
+            if s not in first:
+                first[s] = len(scans.t)
+                scans.add_raw(s / 1e9, d["ranges"][i], d["angle_min"], d["angle_increment"], 0.0,
+                              d["range_min"], d["range_max"])
+            scans.by_row[i] = first[s]
+    return odom_series, frames, scans
 
 
 def scan_points_at(lidar: Lidar, odom: PoseSeries, scan, frame_pose, max_range):
@@ -247,12 +269,12 @@ def calibrate_pitch(frames, odom: PoseSeries, scans: Scans, lidar=Lidar(), every
                     max_samples=80, max_range=1.6):
     """Fit the camera pitch to the session's LiDAR walls (labels.fit_pitch)."""
     samples, cam, last = [], None, None
-    for t, bgr in frames:
+    for t, bgr, key in frames:
         if last is not None and t - last < every_s:
             continue
         pose = odom.at(t)
-        j, dt = scans.nearest(t)
-        if pose is None or j is None or abs(dt) > 0.1:
+        j, dt = scans.select(t, key)
+        if pose is None or j is None or abs(dt) > 0.15:
             continue
         last = t
         cam = cam or Camera.from_profile(width=bgr.shape[1], height=bgr.shape[0])
@@ -279,7 +301,7 @@ def label_session(frames, odom: PoseSeries, scans: Scans | None, out: Path, *, s
               "rules": {n: {} for n in rules}}
     n = 0
     with open(out / "labels.jsonl", "w", encoding="utf-8") as rows:
-        for t, bgr in frames:
+        for t, bgr, key in frames:
             if max_frames is not None and n >= max_frames:
                 break
             if not sel.accept(t, bgr):
@@ -295,13 +317,13 @@ def label_session(frames, odom: PoseSeries, scans: Scans | None, out: Path, *, s
                 totals["no_pose"] += 1
             else:
                 if scans is not None and scans.t:
-                    j, dt = scans.nearest(t)
-                    if abs(dt) <= MAX_SCAN_DT_S:
+                    j, dt = scans.select(t, key)
+                    if j is not None:
                         xy = scan_points_at(lidar, odom, (scans.t[j], scans.msgs[j]), pose, max_range)
                         wall, floor, _contact, dist = L.wall_label(cam, xy)
                         rec["lidar"] = {"scan_dt_s": round(dt, 4), "returns": int(len(xy))}
                     else:
-                        rec["lidar"] = {"scan_dt_s": round(dt, 4), "skipped": "no scan near the frame"}
+                        rec["lidar"] = {"skipped": "no scan at or before the frame"}
                 ft = odom.window(t, t + traj_window_s)
                 band, travel = L.trajectory_band(cam, pose, ft[1:])
                 rec["trajectory"] = {"travel_m": round(travel, 3), "used": band is not None}
