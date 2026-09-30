@@ -45,6 +45,8 @@ def test_cache_size_is_sixty_seconds_of_the_compressed_stream():
     assert SNAPSHOT_CACHE_BYTES == (
         (SNAPSHOT_FRAME_BUDGET_BYTES + SNAPSHOT_SIDE_BUDGET_BYTES) * SNAPSHOT_FPS * SNAPSHOT_SECONDS)
     assert 5_000_000 < SNAPSHOT_CACHE_BYTES < 50_000_000  # fits Pi memory next to the stack
+    from control.recording import SCAN_TOPIC, SNAPSHOT_SCAN_BUDGET_BYTES
+    assert SCAN_TOPIC in SIDE_TOPICS and SNAPSHOT_SIDE_BUDGET_BYTES >= 4_000 + SNAPSHOT_SCAN_BUDGET_BYTES
 
 
 def test_record_topics_choose_the_camera_stream():
@@ -345,7 +347,7 @@ def test_topics_use_the_jazzy_topics_flag(tmp_path):
                 snapshot_bag_command(tmp_path / "c", namespace="rosy_01", node_name="n")):
         i = cmd.index("--topics")
         assert all(t.startswith("/rosy_01/") for t in cmd[i + 1:])
-        assert len(cmd[i + 1:]) == 5
+        assert len(cmd[i + 1:]) == 6  # camera, 4 side topics (incl. scan), odom
 
 
 

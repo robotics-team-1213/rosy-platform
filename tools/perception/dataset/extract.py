@@ -7,7 +7,11 @@ Side data is matched to frames, not attached in bag order: payloads that carry
 a `stamp` (the shadow result, line/observation) go to the frame whose header
 stamp equals it, if logged within SIDE_LOOKAHEAD_S after that frame (inference
 finishes after the frame is logged); stamp-less side data (cmd_vel, text) is
-the latest one logged before the frame. camera/front/compressed is preferred:
+the latest one logged before the frame. The LiDAR scan (sensor_msgs/LaserScan)
+nearest in header stamp within SCAN_TOLERANCE_S, logged before the frame or
+within the look-ahead after it, is attached as {stamp, angle_min,
+angle_increment, range_min, range_max, ranges} (non-finite ranges -> null;
+D-373 decision 9). camera/front/compressed is preferred:
 when a session has it, raw camera/front frames are not extracted.
 
 Known limits of the matching: line/observation from sources other than the
@@ -37,13 +41,15 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "src" / "runtime" / "sensing"))
 
 from frames import FrameSelector  # noqa: E402
-from control.recording import CAMERA_TOPIC, COMPRESSED_CAMERA_TOPIC, SIDE_TOPICS  # noqa: E402
+from control.recording import (  # noqa: E402
+    CAMERA_TOPIC, COMPRESSED_CAMERA_TOPIC, SCAN_TOPIC, SIDE_TOPICS)
 from control.sensing.perception.image_frame import image_msg_to_frame  # noqa: E402
 
 STRING_SCHEMA = "std_msgs/msg/String"
 JPEG_Q = 95
 SIDE_LOOKAHEAD_S = 0.5  # a stamped side message may be logged this long after its frame
 STAMP_TOL_S = 1e-4  # stamps round-trip through JSON floats
+SCAN_TOLERANCE_S = 0.1  # the nearest scan must be this close to the frame stamp
 
 
 def image_to_bgr(encoding: str, width: int, height: int, step: int, data: bytes) -> np.ndarray:
@@ -137,6 +143,23 @@ def _header_stamp(msg):
         return None
 
 
+def _scan_value(msg, stamp: float) -> dict:
+    def num(v):
+        v = float(v)
+        return v if math.isfinite(v) else None
+    return {"stamp": stamp, "angle_min": num(msg.angle_min),
+            "angle_increment": num(msg.angle_increment), "range_min": num(msg.range_min),
+            "range_max": num(msg.range_max), "ranges": [num(r) for r in msg.ranges]}
+
+
+def _nearest_scan(scans, stamp):
+    """The scan value nearest to stamp within SCAN_TOLERANCE_S, else None."""
+    if stamp is None:
+        return None
+    best = min(scans, key=lambda s: abs(s[1] - stamp), default=None)
+    return best[2] if best is not None and abs(best[1] - stamp) <= SCAN_TOLERANCE_S else None
+
+
 def _has_compressed(files, make_reader) -> bool:
     for f in files:
         with open(f, "rb") as fh:
@@ -169,10 +192,14 @@ def _mcap_frames(files, skipped=None, truncated=None):
     latest = {}  # stamp-less side data, latest by log time
     early = deque()  # stamped side data logged before its frame: (t, stamp, name, value)
     pending = deque()  # frames still inside their look-ahead window
+    scans = deque()  # recent LaserScans: (log t, header stamp, value)
 
     def ready(now):
         while pending and (now is None or pending[0]["t"] + SIDE_LOOKAHEAD_S < now):
             f = pending.popleft()
+            scan = _nearest_scan(scans, f["stamp"])
+            if scan is not None:
+                f["side"][SCAN_TOPIC] = scan
             yield f["t"], f["item"], f["side"], f["ext"]
 
     def decoded(f):
@@ -193,6 +220,13 @@ def _mcap_frames(files, skipped=None, truncated=None):
             yield from ready(t)
             while early and early[0][0] + SIDE_LOOKAHEAD_S < t:
                 early.popleft()
+            while scans and scans[0][0] + 2 * SIDE_LOOKAHEAD_S + SCAN_TOLERANCE_S < t:
+                scans.popleft()
+            if _topic_is(ch.topic, SCAN_TOPIC):
+                stamp = _header_stamp(msg)
+                if stamp is not None:
+                    scans.append((t, stamp, _scan_value(msg, stamp)))
+                continue
             # Channels carry absolute, possibly namespaced topics.
             name = next((n for n in SIDE_TOPICS if _topic_is(ch.topic, n)), None)
             if name is not None:

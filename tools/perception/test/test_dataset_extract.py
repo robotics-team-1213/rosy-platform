@@ -185,7 +185,7 @@ def _write_side_session(tmp_path, shadow_text, camera="/camera/front", shadow_to
 def test_side_topics_share_the_recording_constants():
     from control.recording import RECORD_TOPICS, SHADOW_TOPIC, SIDE_TOPICS
     assert set(SIDE_TOPICS) <= set(RECORD_TOPICS)
-    assert {"cmd_vel", "line/observation", SHADOW_TOPIC} == set(SIDE_TOPICS)
+    assert {"cmd_vel", "line/observation", SHADOW_TOPIC, "scan"} == set(SIDE_TOPICS)
 
 
 def test_string_side_data_round_trips_into_prelabel_score(tmp_path):
@@ -267,6 +267,7 @@ def _write_stamped(tmp_path, events):
         jpg_s = w.register_msgdef("sensor_msgs/msg/CompressedImage", COMPRESSED_DEF)
         str_s = w.register_msgdef("std_msgs/msg/String", STRING_DEF)
         tw_s = w.register_msgdef("geometry_msgs/msg/Twist", TWIST_DEF)
+        scan_s = w.register_msgdef("sensor_msgs/msg/LaserScan", SCAN_DEF)
         for log_s, kind, stamp in events:
             ns = int(round(log_s * 1e9))
             sec = int(stamp)
@@ -290,8 +291,64 @@ def _write_stamped(tmp_path, events):
             elif kind == "cmd":
                 w.write_message("/cmd_vel", tw_s, {"linear": {"x": stamp, "y": 0.0, "z": 0.0},
                                 "angular": {"x": 0.0, "y": 0.0, "z": 0.0}}, ns, ns)
+            elif kind == "scan":
+                w.write_message("/pinky1/scan", scan_s, {
+                    "header": header, "angle_min": -3.14, "angle_max": 3.14,
+                    "angle_increment": 1.57, "time_increment": 0.0, "scan_time": 0.1,
+                    "range_min": 0.05, "range_max": 8.0,
+                    "ranges": [stamp, float("nan"), float("inf"), 1.5],
+                    "intensities": [1.0, 2.0, 3.0, 4.0]}, ns, ns)
         w.finish()
     return tmp_path / "sess"
+
+
+SCAN_DEF = """std_msgs/Header header
+float32 angle_min
+float32 angle_max
+float32 angle_increment
+float32 time_increment
+float32 scan_time
+float32 range_min
+float32 range_max
+float32[] ranges
+float32[] intensities
+================================================================================
+MSG: std_msgs/Header
+builtin_interfaces/Time stamp
+string frame_id
+================================================================================
+MSG: builtin_interfaces/Time
+int32 sec
+uint32 nanosec
+"""
+
+
+def test_nearest_scan_within_0_1_s_is_attached_per_frame(tmp_path):
+    pytest.importorskip("mcap_ros2")
+    from control.recording import RECORD_TOPICS, SCAN_TOPIC, SIDE_TOPICS
+
+    assert SCAN_TOPIC == "scan" and SCAN_TOPIC in SIDE_TOPICS and SCAN_TOPIC in RECORD_TOPICS
+    assert extract.SCAN_TOLERANCE_S == 0.1
+    sess = _write_stamped(tmp_path, [
+        (0.90, "scan", 0.90),                       # 0.1 s before frame 1 ...
+        (0.97, "scan", 0.97),                       # ... this one is nearer
+        (1.0, "raw", 1.0),
+        (1.06, "scan", 1.06),                       # logged after frame 1, still 0.06 away
+        (2.0, "raw", 2.0),                          # nearest scan 1.06: 0.94 s away -> none
+        (3.0, "raw", 3.0),
+        (3.08, "scan", 3.08),                       # after the frame, within 0.1 s
+    ])
+    rows = _rows(sess, tmp_path)
+    scans = [r["side"].get(SCAN_TOPIC) for r in rows]
+    assert scans[0]["stamp"] == pytest.approx(0.97, abs=1e-6)
+    assert scans[1] is None
+    assert scans[2]["stamp"] == pytest.approx(3.08, abs=1e-6)
+    s = scans[0]
+    assert set(s) == {"stamp", "angle_min", "angle_increment", "range_min", "range_max",
+                      "ranges"}
+    assert s["ranges"][0] == pytest.approx(0.97, abs=1e-6)
+    assert s["ranges"][1] is None and s["ranges"][2] is None and s["ranges"][3] == 1.5
+    assert s["range_max"] == 8.0 and s["angle_increment"] == pytest.approx(1.57, abs=1e-6)
 
 
 def _rows(sess, tmp_path):
