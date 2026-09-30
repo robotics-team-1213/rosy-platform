@@ -1562,3 +1562,9 @@
 - 변경: (1) `prepare-rosy-sd.ps1`의 ERASE 프롬프트가 먼저 콘솔 입력 버퍼를 비우고(`Clear-TypeAhead`), 빈 줄·입력 끝은 불일치가 아니라 `no console input`으로 멈춘다. 2026-09-30 `-Detach` 창에서 앞 단계 중 눌린 Enter가 0.9초 만에 프롬프트에 답해 `typed: ''`로 실패했다. (2) `tools/release/download_artifact.py`: Actions 아티팩트 병렬 range 다운로드(진행·재개·크기 확인·안전 압축 해제). (3) D-383 `write-card.ps1 -Emergency -EmergencyReason`: 전체 readback만 건너뛰고 증거에 검증 안 됨을 남기며, `verify-emergency-card.ps1` 후속 readback과 표준 재공급으로 메운다.
 - 증거: test_sd_writer_contract.py·test_sd_write_card_entrypoint.py·test_media_readback.py·test_download_artifact.py (호스트 fixture만, 실제 디스크 없음). 새 게이트마다 변이 증명.
 - gate 변화: 없음. 실제 카드에서의 긴급 쓰기·후속 readback은 아직 안 해 봤다.
+
+## 2026-10-01 · uncommitted · fix(sd): 모터 커미셔닝 SSH가 Rosy 운영자 키를 쓴다 (D-383 결정 6)
+
+- 변경: `enable-motor-commissioning.ps1`이 `rosy-release-push.ps1`처럼 `-KeyPath`·`-KnownHosts`·`-RosyUser`(기본은 `%LOCALAPPDATA%\Rosy` 운영자 키·known_hosts, `rosy`)를 ssh에 넘기고, 파일이 없으면 로봇에 닿기 전에 멈춘다. 새 카드에서 기본 `~/.ssh` 별칭만 써서 `No ED25519 host key is known`으로 실패했었다. D-383 결정 4에 부팅한 긴급 카드의 장치 위 검증(SHA256SUMS·`dpkg --verify`)을 적었다.
+- 증거: test_motor_commissioning_ssh.py 5 passed, 변이 4종 모두 실패로 잡힘. 로봇 접속 없음.
+- gate 변화: 없음.

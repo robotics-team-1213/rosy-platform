@@ -294,8 +294,10 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\deploy\robot\pinky_pro\sd\
 
    성공하면 `VERIFIED`와 함께 원래 receipt 옆에 `receipt-<release>-<device>.readback.json`(원 receipt의 sha256 포함)이
    생긴다. 원래 receipt는 바꾸지 않는다. 실패하면 카드를 표준 쓰기로 다시 쓴다.
-2. 이미 로봇에서 부팅했으면 readback으로는 검증할 수 없다. 로봇이 `CORE_READY`에 오르고 G2 장치 readback이 통과하는지 본다(기능
-   확인일 뿐 바이트 검증은 아니다). 가능한 빨리 표준 쓰기로 같은 신원을 다시 쓴다:
+2. 이미 로봇에서 부팅했으면 readback으로는 검증할 수 없다. 장치 위에서 검증한다(2026-10-01 rosy-pinky-9dfk에서 이렇게 했다):
+   활성 릴리스 디렉터리에서 서명된 릴리스의 `SHA256SUMS`로 `sha256sum -c`를 돌리고, `sudo dpkg --verify`로 OS 패키지 파일을
+   패키지 해시와 대조한다. 첫 부팅이 바꾸는 설정 파일(`c` 표시 conffile) 차이는 목록으로 남기고 판단한다. 이것은 부팅 뒤 파일
+   무결성 증거이지 카드 전체의 MEDIA 증거가 아니다. 가능하면 표준 쓰기로 같은 신원을 다시 쓴다:
    `-ReprovisionReceipt <긴급 receipt>`는 **표준 쓰기에서만** 받는다. 새 receipt의 `supersedes.emergency: true`가 긴급 카드를
    대체했음을 남긴다. 긴급 receipt로 또 긴급 쓰기를 하면 거부한다(검증 안 된 카드가 이어지지 않게).
 

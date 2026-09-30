@@ -66,8 +66,8 @@
 
 ## 최근 기록
 
+- 2026-10-01 · uncommitted · fix(sd): 모터 커미셔닝 SSH가 Rosy 운영자 키를 쓴다 (D-383 결정 6)
 - 2026-10-01 · uncommitted · fix(sd): ERASE 프롬프트 type-ahead, 아티팩트 다운로더, D-383 긴급 카드 쓰기
 - 2026-10-01 · uncommitted · feat(native): D-381 blocked 패턴과 비상정지 진입음
 - 2026-09-30 · uncommitted · docs(adr): D-375 에서 D-380 으로 개명
 - 2026-09-30 · uncommitted · feat(native): D-375 부팅 표시가 운용 모드를 램프와 LCD에 표시
-- 2026-09-30 · uncommitted · deploy(harness): last_verified를 CI 초록 커밋으로 기록

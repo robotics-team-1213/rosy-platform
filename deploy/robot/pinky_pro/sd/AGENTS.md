@@ -105,13 +105,24 @@ never with `-PlanOnly`).
   <receipt> -ReleaseDir <release>` (elevated, read-only) re-reads the card,
   tolerating `rosy-provision/` and `rosy-config.yaml`, and writes
   `<receipt>.readback.json`; the original receipt is never changed. After boot
-  the card cannot match its image: check `CORE_READY` and G2 on the device, then
-  rewrite it with a standard write and `-ReprovisionReceipt <emergency receipt>`.
+  the card cannot match its image: verify on the device instead (re-hash the
+  active release against its signed `SHA256SUMS` and run `dpkg --verify`, as on
+  rosy-pinky-9dfk), then rewrite it with a standard write and
+  `-ReprovisionReceipt <emergency receipt>` when possible.
 - `-ReprovisionReceipt` accepts an emergency receipt only for a standard write
   (the new receipt records `supersedes.emergency: true`) and refuses an
   emergency write on an emergency receipt. Other unverified receipts are refused.
 - A stand-in card (`-DiskInventoryJson` + `-ReadbackDevice`) is the only way tests
   run either procedure; never point them at a physical disk.
+
+## Motor commissioning SSH (D-383 decision 6)
+
+`enable-motor-commissioning.ps1` connects with the Rosy operator key
+(`-KeyPath`, default `%LOCALAPPDATA%\Rosy\ssh\rosy-operator-ed25519`), the Rosy
+`-KnownHosts` (default `%LOCALAPPDATA%\Rosy\known_hosts`) and `-RosyUser rosy`,
+like `rosy-release-push.ps1`; `StrictHostKeyChecking=yes` stays. A missing key
+or known_hosts file stops it before the robot. `-PrintSshArguments` prints the
+resolved ssh options without connecting (test: `test/test_motor_commissioning_ssh.py`).
 
 ## Rotating the CORE API credential (D-193 5)
 
@@ -166,5 +177,5 @@ nor a card readback proves that motors stay off after a physical reboot.
 ## Testing
 
 ```powershell
-python -m pytest test/test_sd_personalization.py test/test_sd_writer_contract.py test/test_sd_write_card_entrypoint.py test/test_media_readback.py test/test_card_diagnostics.py test/test_rotate_core_api_credential.py test/test_download_artifact.py -q
+python -m pytest test/test_sd_personalization.py test/test_sd_writer_contract.py test/test_sd_write_card_entrypoint.py test/test_media_readback.py test/test_card_diagnostics.py test/test_rotate_core_api_credential.py test/test_download_artifact.py test/test_motor_commissioning_ssh.py -q
 ```
