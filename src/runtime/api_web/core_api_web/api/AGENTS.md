@@ -28,7 +28,7 @@ FastAPI surface for ROSY-API-REF-001. Factory builds the app, serves `/dashboard
 ### Working In This Directory
 
 - Roles: viewer < operator < administrator. Teleop/mode/nav mutations need operator+.
-- REST uses `Authorization: Bearer`; WebSocket auth is `?token=` (close 4401 on bad token).
+- REST uses `Authorization: Bearer`; WebSocket auth is a first frame `{"type": "auth", "token": ...}` (preferred; dashboard, Pilot and Fleet use it). `?token=` is still accepted until removal gated by `contract_version` (close 4401 on bad token).
 - Tokens are stored as `sha256` only (D-30). `AuthContext` carries `token_id`, never the secret — do not add a field that echoes a token or anything derived from one, including to the Host Agent.
 - `/metrics` is unauthenticated Prometheus text — do not put secrets there.
 - `/ws/swarm/reference` is the only inbound stream (D-31). It takes operator, and a malformed frame is dropped rather than closing the socket — closing would let one bad sample put the formation into HOLD.

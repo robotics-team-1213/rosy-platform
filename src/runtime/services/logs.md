@@ -244,3 +244,9 @@
 - 변경: core_features/command/emotion_map.py — EMOTION_BY_MODE 와 막힘(bored) 우선순위. 모르는 모드는 None(표정 유지). ROS-free.
 - 증거: gateway/test/test_emotion_map.py (어휘가 감정 노드의 GIF 이름 안에 있는지도 검증).
 - gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · fix(fleet_agent): D-370 S7 준비 — Fleet health 탐침이 확장 모양을 받는다
+
+- 변경: `fleet_agent/discovery.py`의 `/healthz` 판정을 `check_health_body`로 뺐다. 본문 1024바이트 이하, JSON 객체, `status == "ok"`이면 채택하고, `role` 키가 있으면 `_rosy-fleet._tcp` TXT `role`(`fleet`, `core_common.protocol.discovery_txt.REQUIRED`)과 같아야 한다. 모르는 키는 무시한다. 여태 본문이 정확히 `{"status":"ok"}`여야 해서 D-370 공개 상태 모양(`role`·`proto`·`contract_version`)을 더하면 탐침이 떨어졌다.
+- 증거: `test/test_site_fleet_mdns.py` 신규 2개 시험(사이트·Agent 양쪽 매개변수) — 옛 본문·확장 본문·모르는 키 통과, 다른 role·null role·`degraded`·`down`·status 없음·배열·문자열·JSON 아님·1024바이트 초과 거절. 수정 전 20건 빨강(판정 함수 없음; 옛 정확 비교는 확장 본문을 거절), 수정 후 초록. `test_fleet_agent_mdns.py` 통과.
+- gate 변화: 없음(SOURCE). Fleet·Vision `/healthz` 출력은 바꾸지 않았다 — 이미 깔린 로봇 이미지는 정확 비교를 하므로, 서버 쪽 확장은 이 판정을 실은 새 이미지가 퍼진 뒤에 한다.

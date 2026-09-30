@@ -17,6 +17,8 @@ from pathlib import Path
 
 
 SERVICE_TYPE = "_rosy-fleet._tcp"
+# Copy of core_common.protocol.discovery_txt for _rosy-fleet._tcp (this script cannot import it);
+# test/test_site_fleet_mdns.py holds it to test/fixtures/protocol/discovery-txt.v1.json.
 HOSTNAME = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.local$")
 TXT = {"product": "rosy", "role": "fleet", "proto": "site-v1", "tls": "required"}
 OVERHEAD_TXT = {
@@ -66,6 +68,45 @@ def publish_service(output: Path, port: int, *, role: str = "fleet",
         temp.unlink(missing_ok=True)
 
 
+def parse_txt_pairs(text: str) -> list[tuple[str, str]]:
+    """Avahi's parsable ``"k=v" "k=v"`` column as ordered pairs; duplicates stay."""
+    try:
+        items = shlex.split(text)
+    except ValueError:
+        return []
+    return [tuple(item.split("=", 1)) for item in items if "=" in item]
+
+
+def _lan_ipv4(address: str) -> bool:
+    try:
+        ip = ipaddress.ip_address(address)
+    except (ValueError, TypeError):
+        return False
+    return (ip.version == 4 and ip.is_private and not ip.is_loopback
+            and not ip.is_link_local and not ip.is_multicast and not ip.is_unspecified)
+
+
+def classify_fleet(host: str | None, address: str | None, port: object,
+                   txt: list[tuple[str, str]]) -> str | None:
+    """core_common classify() for _rosy-fleet._tcp: None if accepted, else the reason."""
+    if host is not None and not HOSTNAME.fullmatch(host.strip().lower().rstrip(".")):
+        return "bad_host"
+    if address is not None and not _lan_ipv4(address):
+        return "bad_address"
+    if isinstance(port, bool) or not isinstance(port, int) or not 1 <= port <= 65535:
+        return "bad_port"
+    keys = [key for key, _ in txt]
+    if len(keys) != len(set(keys)):
+        return "duplicate_key"
+    values = dict(txt)
+    for key, expected in TXT.items():
+        if key not in values:
+            return "missing_key"
+        if values[key] != expected:
+            return "value_mismatch"
+    return None
+
+
 def parse_avahi(output: str) -> list[dict]:
     """Accept only resolved LAN records for this version of the site API."""
     candidates = {}
@@ -74,22 +115,15 @@ def parse_avahi(output: str) -> list[dict]:
         if (len(columns) != 10 or columns[0] != "=" or columns[2] != "IPv4"
                 or columns[4] != SERVICE_TYPE or columns[5] != "local"):
             continue
-        hostname = columns[6].lower().rstrip(".")
-        if not HOSTNAME.fullmatch(hostname):
-            continue
         try:
-            address = ipaddress.ip_address(columns[7])
             port = int(columns[8])
-            pairs = [item.split("=", 1) for item in shlex.split(columns[9]) if "=" in item]
-            txt = dict(pairs)
-        except (ValueError, TypeError):
+        except ValueError:
             continue
-        if (address.version != 4 or not address.is_private or address.is_loopback
-                or address.is_link_local or not 1 <= port <= 65535
-                or len(pairs) != len(txt) or any(txt.get(key) != value for key, value in TXT.items())):
+        if classify_fleet(columns[6], columns[7], port, parse_txt_pairs(columns[9])) is not None:
             continue
-        row = {"hostname": hostname, "address": str(address), "port": port}
-        candidates[(hostname, str(address), port)] = row
+        hostname = columns[6].strip().lower().rstrip(".")
+        row = {"hostname": hostname, "address": columns[7], "port": port}
+        candidates[(hostname, columns[7], port)] = row
     return list(candidates.values())
 
 
@@ -107,6 +141,23 @@ def select_candidate(candidates: list[dict], expected_hostname: str) -> dict:
     return matches[0]
 
 
+HEALTH_MAX_BYTES = 1024
+
+
+def check_health_body(body: bytes) -> None:
+    """Accept {"status":"ok"} and the D-370 extended shape; ignore unknown keys.
+
+    A present ``role`` must match the role Fleet advertises in its DNS-SD TXT.
+    """
+    try:
+        payload = json.loads(body) if len(body) <= HEALTH_MAX_BYTES else None
+    except ValueError:
+        payload = None
+    if (not isinstance(payload, dict) or payload.get("status") != "ok"
+            or ("role" in payload and payload["role"] != TXT["role"])):
+        raise ValueError("unexpected Fleet health response")
+
+
 def probe_health(address: str, port: int, hostname: str, ca_file: Path) -> None:
     """Connect to resolved IP, but verify the cert against the expected DNS name."""
     context = ssl.create_default_context(cafile=str(ca_file))
@@ -119,9 +170,7 @@ def probe_health(address: str, port: int, hostname: str, ca_file: Path) -> None:
             response.begin()
             if response.status != 200:
                 raise ValueError("Fleet HTTPS health probe failed")
-            body = response.read(1025)
-            if len(body) > 1024 or json.loads(body) != {"status": "ok"}:
-                raise ValueError("unexpected Fleet health response")
+            check_health_body(response.read(HEALTH_MAX_BYTES + 1))
 
 
 def verify_endpoint(candidate: dict, expected_hostname: str, ca_file: Path) -> str:
