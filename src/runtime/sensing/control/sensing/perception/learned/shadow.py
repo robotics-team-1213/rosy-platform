@@ -77,6 +77,7 @@ def shadow_payload(result: InferResult, *, stamp: float, rule_error: float | Non
         "confidence": ev.confidence,
         "latency_ms": round(result.latency_ms, 3),
         "class_fractions": dict(ev.class_fractions),
+        "wall_fraction": ev.wall_fraction,
         "rule_error": rule_error,
         "rule_visible": rule_visible,
         "error_delta": delta,

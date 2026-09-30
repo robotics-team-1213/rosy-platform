@@ -83,3 +83,30 @@ def test_pixel_centre_reference():
     mask = np.zeros((240, 320), np.int64)
     mask[:, 159:161] = 1  # columns 159,160 -> centroid 159.5 == (w-1)/2
     assert abs(lane_evidence(_logits(mask), CLASSES).error) < 1e-6
+
+
+WALL = CLASSES + (ClassSpec(2, "wall", "wall"),)
+
+
+def test_wall_fraction_is_the_near_field_band_share():
+    mask = np.zeros((240, 320), np.int64)
+    mask[:, 150:170] = 1
+    mask[:, 240:320] = 2          # a wall on the right quarter, whole height
+    mask[:144, 0:80] = 2          # far-field wall only: outside the near band
+    ev = lane_evidence(_logits(mask, 3), WALL)
+    assert ev.wall_fraction == pytest.approx(0.25, abs=1e-6)
+    assert ev.visible and abs(ev.error) < 0.02   # wall pixels never pull the lane centre
+
+
+def test_wall_is_not_a_lane_target_even_without_lane_pixels():
+    mask = np.zeros((240, 320), np.int64)
+    mask[:, 280:320] = 2
+    ev = lane_evidence(_logits(mask, 3), WALL)
+    assert not ev.visible and ev.error is None
+    assert ev.wall_fraction == pytest.approx(0.125, abs=1e-6)
+
+
+def test_no_wall_class_means_zero_wall_fraction():
+    mask = np.zeros((240, 320), np.int64)
+    mask[:, 150:170] = 1
+    assert lane_evidence(_logits(mask), CLASSES).wall_fraction == 0.0

@@ -71,7 +71,7 @@ md("""
   비워 두면 Drive 없이 진행한다: 데이터셋은 zip으로 받고, 결과도 zip으로 내려받는다.
 - `DATASET`: 운영자가 `publish.py`로 받은 `store:<이름>@<내용 해시 64자>`. 학습 중에는 바꾸지 않는다.
 - `DATASET_ZIP`: `STORE`를 비웠을 때만. 데이터셋 zip 경로. 비워 두면 3단계에서 업로드 창이 뜬다.
-- `CLASSES`: 비워 두면 데이터셋 manifest의 클래스를 그대로 쓴다. 적으면 `이름:role,이름:role,...`(출력 채널 순서)로 쓰고, 데이터셋과 다르면 멈춘다.
+- `CLASSES`: 기본값은 팀 기본 클래스 목록이다(D-373 결정 9: 0 floor/background, 1 lane_line/lane_marking, 2 wall/wall, 3 drivable/drivable, 4 stop_line/stop_line, 5 crosswalk/ignore). `이름:role,이름:role,...`(출력 채널 순서)이고, **데이터셋 클래스와 다르면 멈춘다.** 데이터셋이 다른 목록이면 그 목록을 적거나 비운다(비우면 데이터셋 manifest의 클래스를 그대로 쓴다).
 - `COLOR`/`SCALE`/`MEAN`/`STD`: 학습 전처리. **이 값이 그대로 manifest에 적히고 로봇이 같은 값으로 전처리한다.**
 - `CAMERA_PROFILE_REVISION`: 비워 두면 데이터셋 `sources[]`에서 가져온다.
 """)
@@ -82,7 +82,7 @@ TRAINER_NOTE = ""  #@param {type:"string"}
 STORE = "/content/drive/MyDrive/rosy-store"  #@param {type:"string"}
 DATASET = ""  #@param {type:"string"}
 DATASET_ZIP = ""  #@param {type:"string"}
-CLASSES = ""  #@param {type:"string"}
+CLASSES = "floor:background,lane_line:lane_marking,wall:wall,drivable:drivable,stop_line:stop_line,crosswalk:ignore"  #@param {type:"string"}
 COLOR = "rgb"  #@param ["rgb", "bgr"]
 SCALE = 1/255  #@param {type:"raw"}
 MEAN = [0.0, 0.0, 0.0]  #@param {type:"raw"}

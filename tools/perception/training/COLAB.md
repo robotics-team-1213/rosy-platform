@@ -183,9 +183,12 @@ print(doc["model_revision"])
   | `lane_marking` | 차선(흰 선). **하나 이상 반드시 있어야 한다** |
   | `drivable` | 주행 가능 영역(있을 때만) |
   | `stop_line` | 정지선(있을 때만) |
-  | `ignore` | 벽 등 판단에 쓰지 않는 클래스 |
+  | `ignore` | 판단에 쓰지 않는 클래스(예: 횡단보도) |
+  | `wall` | 벽. 차선 중심 계산에서 빠지고, 섀도 결과에 가까운 영역의 벽 비율(`wall_fraction`)로 나온다. `ignore`와 달리 평가·라벨에서 따로 센다(D-373 결정 9) |
 
-  위 예시는 0930 모델 출력을 보고 **추정한** 값이다. 노트북의 실제 클래스 정의로 바꾼다.
+  위 예시는 0930 모델 출력을 보고 **추정한** 값이다(그때는 `wall` role이 없어서 벽을 `ignore`로 적었다).
+  새로 학습할 때는 팀 기본 목록을 쓴다: 0 floor/`background`, 1 lane_line/`lane_marking`, 2 wall/`wall`,
+  3 drivable/`drivable`, 4 stop_line/`stop_line`, 5 crosswalk/`ignore`. 노트북의 실제 클래스 정의로 바꾼다.
 - **`color`, `scale`, `mean`, `std`:** 학습 때 입력을 만든 방식과 똑같이 적는다.
   로봇은 이 값으로 전처리한다. 틀리면 오류 없이 엉뚱한 마스크가 나온다.
   - 0–1로 나누기만 했다면: `scale=1/255, mean=[0,0,0], std=[1,1,1]`

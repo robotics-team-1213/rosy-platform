@@ -76,7 +76,11 @@ store `models/inbox/`의 **한 폴더**에 두 파일과 `READY`가 있어야 �
 | `metrics` | 검증 split의 클래스별 IoU |
 | `trainer` | 코드 저장소·commit 또는 노트북 식별자 |
 
-`role`은 닫힌 목록이다: `background`, `lane_marking`, `drivable`, `stop_line`, `ignore`.
+`role`은 닫힌 목록이다: `background`, `lane_marking`, `drivable`, `stop_line`, `ignore`, `wall`.
+`wall`(D-373 결정 9)은 차선도 주행 가능 영역도 아니다. 후처리는 차선 중심 계산에서 `wall` 화소를 빼고,
+섀도 결과에 가까운 영역(아래 40 %)의 벽 비율 `wall_fraction`을 낸다. `ignore`와 달리 평가와 라벨에서 따로 센다.
+팀 기본 클래스 목록: 0 floor/`background`, 1 lane_line/`lane_marking`, 2 wall/`wall`, 3 drivable/`drivable`,
+4 stop_line/`stop_line`, 5 crosswalk/`ignore`(노트북 입력 칸의 기본값, 데이터셋과 다르면 노트북이 멈춘다).
 후처리는 이름이 아니라 role을 읽는다. `lane_marking`이 하나도 없으면 접수를 거부한다.
 `classes`는 출력 채널 순서 그대로 적는다(index는 0부터 빈틈없이).
 

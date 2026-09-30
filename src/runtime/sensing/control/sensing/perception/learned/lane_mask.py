@@ -8,7 +8,9 @@ Evidence rule: bottom 40 % of rows (near field). Target pixels are the
 error = (target centroid x - W/2) / (W/2), clipped to [-1, 1]; positive means
 the lane is right of centre, the LaneObservation convention in lane.py.
 confidence = fraction of band rows with a target pixel x mean max-softmax on
-target pixels. Shadow evidence only: nothing here commands motion (D-209)."""
+target pixels. `wall` role pixels (D-373 decision 9) are never a target;
+wall_fraction is their share of the near-field band.
+Shadow evidence only: nothing here commands motion (D-209)."""
 
 from __future__ import annotations
 
@@ -33,6 +35,7 @@ class LaneMaskEvidence:
     error: float | None
     confidence: float
     class_fractions: dict
+    wall_fraction: float = 0.0
 
 
 def preprocess(bgr: np.ndarray, spec: InputSpec) -> np.ndarray:
@@ -71,15 +74,17 @@ def lane_evidence(logits: np.ndarray, classes: tuple[ClassSpec, ...]) -> LaneMas
         idx = [c.index for c in classes if c.role == role]
         return np.isin(band_labels, idx) if idx else np.zeros_like(band_labels, bool)
 
-    target = _target("drivable")
+    wall = _target("wall")
+    wall_fraction = float(wall.mean())
+    target = _target("drivable") & ~wall
     if target.mean() < DRIVABLE_MIN_FRACTION:
-        target = _target("lane_marking")
+        target = _target("lane_marking") & ~wall
     if not target.any():
-        return LaneMaskEvidence(False, None, 0.0, fractions)
+        return LaneMaskEvidence(False, None, 0.0, fractions, wall_fraction)
 
     _, xs = np.nonzero(target)
     half = w / 2.0
     error = float(np.clip((xs.mean() - (w - 1) / 2.0) / half, -1.0, 1.0))
     row_coverage = float(target.any(axis=1).mean())
     confidence = float(np.clip(row_coverage * band_conf[target].mean(), 0.0, 1.0))
-    return LaneMaskEvidence(True, error, confidence, fractions)
+    return LaneMaskEvidence(True, error, confidence, fractions, wall_fraction)

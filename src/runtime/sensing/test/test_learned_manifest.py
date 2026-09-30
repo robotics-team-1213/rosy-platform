@@ -87,7 +87,14 @@ def test_class_indices_must_be_dense(tmp_path):
 
 
 def test_roles_are_closed():
-    assert ROLES == ("background", "lane_marking", "drivable", "stop_line", "ignore")
+    assert ROLES == ("background", "lane_marking", "drivable", "stop_line", "ignore", "wall")
+
+
+def test_wall_role_accepted(tmp_path):
+    doc = _manifest()
+    doc["output"]["classes"].append({"index": 2, "name": "wall", "role": "wall"})
+    m = load_manifest(_write(tmp_path, doc))
+    assert m.role_indices("wall") == (2,)
 
 
 def test_verify_files_checks_sha256(tmp_path):

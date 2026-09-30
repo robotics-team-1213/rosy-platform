@@ -14,7 +14,7 @@ def test_payload_fields_and_json_roundtrip():
     assert p == {
         "schema": SHADOW_SCHEMA, "stamp": 12.5, "model_revision": "lane-seg-20260930-00000001",
         "visible": True, "error": 0.25, "confidence": 0.8, "latency_ms": 87.5,
-        "class_fractions": {"floor": 0.9, "line": 0.1},
+        "class_fractions": {"floor": 0.9, "line": 0.1}, "wall_fraction": 0.0,
         "rule_error": 0.1, "rule_visible": True, "error_delta": 0.15,
     }
     json.dumps(p)
@@ -99,3 +99,8 @@ def test_ring_visible_without_numeric_error_counts_as_not_visible():
     ring.add(2.0, True, float("nan"))
     assert ring.match(1.0) == (False, None)
     assert ring.match(2.0) == (False, None)
+
+
+def test_payload_carries_the_near_field_wall_fraction():
+    r = InferResult(LaneMaskEvidence(True, 0.0, 1.0, {}, wall_fraction=0.3125), 1.0, "rev")
+    assert shadow_payload(r, stamp=0.0, rule_error=None)["wall_fraction"] == 0.3125

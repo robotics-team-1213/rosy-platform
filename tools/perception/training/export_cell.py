@@ -14,7 +14,7 @@ from pathlib import Path
 SCHEMA = "rosy.perception.model/1"
 INPUT_SHAPE = (1, 3, 240, 320)
 ONNX_NAME = "model.onnx"
-ROLES = ("background", "lane_marking", "drivable", "stop_line", "ignore")
+ROLES = ("background", "lane_marking", "drivable", "stop_line", "ignore", "wall")  # = manifest.ROLES
 COLORS = ("rgb", "bgr")
 
 

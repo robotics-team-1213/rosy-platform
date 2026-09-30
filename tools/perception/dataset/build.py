@@ -28,6 +28,10 @@ import cv2
 import numpy as np
 
 SCHEMA = "rosy.perception.dataset/1"
+_SENSING = str(Path(__file__).resolve().parents[3] / "src" / "runtime" / "sensing")
+if _SENSING not in sys.path:
+    sys.path.insert(0, _SENSING)
+from control.sensing.perception.learned.manifest import ROLES  # noqa: E402  the closed list
 MIN_SESSIONS_MSG = "need at least 2 sessions for a session-level split"
 
 
@@ -59,6 +63,9 @@ def load_classes(path, require_color: bool = True) -> list[dict]:
 
 def label_to_index(classes) -> dict[str, int]:
     """CVAT label name -> class index (background role is the label "background")."""
+    unknown = sorted({c["role"] for c in classes} - set(ROLES))
+    if unknown:
+        raise BuildError(f"classes: unknown role {unknown}; the closed list is {ROLES}")
     if sum(c["role"] == "background" for c in classes) != 1:
         raise BuildError("classes: exactly one class with role background is required")
     names = [c["name"] for c in classes]

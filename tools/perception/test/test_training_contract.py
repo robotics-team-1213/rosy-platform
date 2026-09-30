@@ -186,3 +186,16 @@ def test_stage_keeps_session_prefixed_names_without_double_prefix(tmp_path):
     m = json.loads((dst / "manifest.json").read_text(encoding="utf-8"))
     assert [Path(f["image"]).name for f in m["frames"]] == ["sA__000004.jpg", "sB__000004.jpg"]
     assert all((dst / f["mask"]).is_file() for f in m["frames"])
+
+
+def test_export_roles_match_the_robot_contract_including_wall(tmp_path):
+    from control.sensing.perception.learned.manifest import ROLES
+    assert export_cell.ROLES == ROLES and "wall" in ROLES
+    _, doc = _write(tmp_path, classes=CLASSES + [("wall", "wall")])
+    assert doc["output"]["classes"][-1] == {"index": 4, "name": "wall", "role": "wall"}
+
+
+def test_export_accepts_a_store_dataset_ref(tmp_path):
+    _, doc = _write(tmp_path, dataset_repo="store:lane", dataset_revision="c" * 64)
+    assert doc["dataset"] == {"repo": "store:lane", "revision": "c" * 64}
+    assert load_manifest(tmp_path / "out").dataset_revision == "c" * 64

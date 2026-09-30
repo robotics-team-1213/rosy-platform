@@ -15,7 +15,7 @@ from pathlib import Path
 
 SCHEMA = "rosy.perception.model/1"
 TASKS = ("lane_seg",)
-ROLES = ("background", "lane_marking", "drivable", "stop_line", "ignore")
+ROLES = ("background", "lane_marking", "drivable", "stop_line", "ignore", "wall")  # D-373 d9
 COLORS = ("rgb", "bgr")
 PRECISIONS = ("fp32", "int8")
 MANIFEST_NAME = "model_manifest.json"

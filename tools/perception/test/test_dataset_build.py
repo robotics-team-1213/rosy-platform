@@ -451,3 +451,21 @@ def test_prelabel_end_to_end_real_onnx(tmp_path):
     assert lines[0].startswith("name,score") and len(lines) == 3
     with zipfile.ZipFile(out / "cvat_import.zip") as z:
         assert "SegmentationClass/s1__000000.png" in z.namelist()
+
+
+def test_roles_are_the_closed_contract_list_with_wall():
+    wall = CLASSES + [{"index": 2, "name": "wall", "role": "wall", "color": [9, 9, 9]}]
+    assert build.label_to_index(wall)["wall"] == 2
+    bad = CLASSES + [{"index": 2, "name": "wall", "role": "walls", "color": [9, 9, 9]}]
+    with pytest.raises(build.BuildError, match="role"):
+        build.label_to_index(bad)
+
+
+def test_prelabel_refuses_an_unknown_role_even_if_the_model_agrees():
+    model = [SimpleNamespace(index=0, name="floor", role="background"),
+             SimpleNamespace(index=1, name="line", role="lane_marking"),
+             SimpleNamespace(index=2, name="x", role="bogus")]
+    yaml_classes = [dict(CLASSES[0]), dict(CLASSES[1]),
+                    {"index": 2, "name": "x", "role": "bogus", "color": [5, 5, 5]}]
+    with pytest.raises(build.BuildError, match="role"):
+        prelabel.resolve_classes(yaml_classes, model)

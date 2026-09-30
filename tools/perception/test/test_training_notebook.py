@@ -101,3 +101,14 @@ def test_notebook_is_regenerated_from_generator():
 def test_no_literal_token():
     raw = NB.read_text(encoding="utf-8")
     assert not re.search(r"hf_[A-Za-z0-9]{20,}", raw)
+
+
+DEFAULT_CLASSES = ("floor:background,lane_line:lane_marking,wall:wall,drivable:drivable,"
+                   "stop_line:stop_line,crosswalk:ignore")
+
+
+def test_default_class_list_is_the_decision_9_list_and_mismatch_stops():
+    form = _cell("#@title 2.")
+    assert f'CLASSES = "{DEFAULT_CLASSES}"  #@param' in form
+    read = _cell("#@title 4.")
+    assert "class_mismatch(_form, ds_classes)" in read and "raise RuntimeError" in read
