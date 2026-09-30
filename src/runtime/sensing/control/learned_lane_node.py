@@ -2,7 +2,8 @@
 
 Subscribes camera/front (sensor_msgs/Image) and line/observation (rule-based
 CAMERA_LINE error for comparison). Publishes perception/learned/shadow
-(std_msgs/String JSON). No consumer in the control path reads it; this node
+(std_msgs/String JSON) and, at 1 Hz, perception/learned/status (model,
+last error, frame counters, latency p50; D-373, D-62). No consumer in the control path reads it; this node
 never publishes cmd_vel (D-2, D-209). The model comes from the pointer file
 /var/lib/rosy/models/shadow (parameter `pointer`) and swaps without restart."""
 
@@ -19,6 +20,7 @@ from . import executor_choice
 from .sensing.perception.image_frame import image_msg_to_frame
 from .sensing.perception.learned.runner import ModelSlot
 from .sensing.perception.learned.shadow import TOPIC, shadow_payload
+from .sensing.perception.learned.status import STATUS_TOPIC, LearnedStatus
 
 RULE_MAX_AGE_S = 0.5  # older rule evidence is not compared
 
@@ -41,6 +43,9 @@ class LearnedLaneNode(Node):
         self._logged_error = None
         self._logged_revision = None
         self._pub = self.create_publisher(String, TOPIC, 10)
+        self._status = LearnedStatus()
+        self._status_pub = self.create_publisher(String, STATUS_TOPIC, 1)
+        self.create_timer(1.0, self._publish_status)
         self.create_subscription(Image, 'camera/front', self._on_camera, 1)
         self.create_subscription(String, 'line/observation', self._on_rule, 10)
 
@@ -57,9 +62,23 @@ class LearnedLaneNode(Node):
             ok = isinstance(stamp, (int, float)) and not isinstance(stamp, bool)
             self._rule_stamp = float(stamp) if ok else None
 
+    def _publish_status(self) -> None:
+        try:
+            self._slot.poll()  # report a missing/broken model even with no camera frames
+        except Exception as exc:
+            self.get_logger().warn(f'shadow model poll failed: {exc}',
+                                   throttle_duration_sec=5.0)
+        model = self._slot.current
+        payload = self._status.payload(
+            model_revision=model.model_revision if model is not None else None,
+            last_error=self._slot.last_error)
+        self._status_pub.publish(String(data=json.dumps(payload, sort_keys=True)))
+
     def _on_camera(self, msg: Image) -> None:
+        self._status.frame_in()
         if self._busy:
-            return  # drop frames while inferring
+            self._status.frame_skipped()  # still inferring the previous frame
+            return
         try:
             model = self._slot.poll()
         except Exception as exc:
@@ -80,6 +99,7 @@ class LearnedLaneNode(Node):
         try:
             bgr = _image_to_bgr(msg)
             result = model.infer(bgr)
+            self._status.frame_inferred(result.latency_ms)
             stamp = msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
             rule_error = self._rule_error
             if (self._rule_stamp is None

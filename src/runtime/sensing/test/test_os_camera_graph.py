@@ -8,8 +8,10 @@ try:
     import rclpy
     from rclpy.node import Node
     from rclpy.parameter import Parameter
-    from sensor_msgs.msg import Image
+    from sensor_msgs.msg import CompressedImage, Image
     from std_msgs.msg import Bool, Float32, String
+    from rclpy.qos import ReliabilityPolicy
+    from control.sensing.perception.jpeg_frame import DEFAULT_QUALITY, encode_jpeg
 except ImportError:
     rclpy = None
 
@@ -52,6 +54,48 @@ class CameraGraphTests(unittest.TestCase):
                 if node is not None:
                     node.destroy_node()
                 rclpy.shutdown()
+
+    def test_compressed_capture_stream_is_opt_in_and_shares_the_raw_stamp(self):
+        path = Path(__file__).parents[1] / 'control/camera_detect_node.py'
+        tree = ast.parse(path.read_text(encoding='utf-8'))
+        cls = next(n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == 'CameraDetectNode')
+        cls.body = [n for n in cls.body if isinstance(n, ast.FunctionDef)
+                    and n.name in ('__init__', '_publish_front')]
+
+        class CaptureNode(Node):
+            def __init__(self, name):
+                super().__init__(name, namespace='rosy_01', parameter_overrides=[
+                    Parameter('publish_compressed', value=True)])
+
+        bindings = dict(globals(), Node=CaptureNode,
+                        ground_plane=lambda **kwargs: None, CameraPolicy=lambda **kwargs: None)
+        exec(compile(ast.Module(body=[cls], type_ignores=[]), str(path), 'exec'), bindings)
+        constructor = bindings['CameraDetectNode']
+        constructor._start_cam = lambda self: None
+        constructor.tick = lambda self: None
+        rclpy.init()
+        node = None
+        try:
+            node = constructor()
+            topics = {p.topic_name for p in node.publishers}
+            self.assertIn('/rosy_01/camera/front/compressed', topics)
+            qos = next(p.qos_profile for p in node.publishers
+                       if p.topic_name == '/rosy_01/camera/front/compressed')
+            self.assertEqual(qos.depth, 1)
+            self.assertEqual(qos.reliability, ReliabilityPolicy.BEST_EFFORT)
+            raw, jpeg = [], []
+            node.img_pub = type('Raw', (), {'publish': lambda self, msg: raw.append(msg)})()
+            node.jpeg_pub = type('Jpeg', (), {'publish': lambda self, msg: jpeg.append(msg)})()
+            frame = np.zeros((8, 8, 3), dtype=np.uint8)
+            node._publish_front(frame, 12.25)
+            self.assertEqual(jpeg[0].format, 'jpeg')
+            self.assertEqual(jpeg[0].header.stamp, raw[0].header.stamp)
+            self.assertEqual(jpeg[0].header.frame_id, raw[0].header.frame_id)
+            self.assertEqual(bytes(jpeg[0].data)[:2], bytes([0xFF, 0xD8]))
+        finally:
+            if node is not None:
+                node.destroy_node()
+            rclpy.shutdown()
 
 
 if __name__ == '__main__':

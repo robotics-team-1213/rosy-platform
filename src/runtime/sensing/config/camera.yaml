@@ -62,3 +62,9 @@
     camera_homography_min_validation_frames: 2      # 2..20
     camera_homography_min_validation_span_cm: 10.0  # 3..100
     camera_homography_max_range_m: 0.6              # 0.05..3.0
+    # D-373: JPEG copy of camera/front on camera/front/compressed for the
+    # snapshot recorder only (never leaves the robot, D-136). The launch
+    # argument capture:=true turns it on; off here so a plain boot pays no
+    # encode cost.
+    publish_compressed: false
+    compressed_quality: 85
