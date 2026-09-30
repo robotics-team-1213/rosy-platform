@@ -270,6 +270,13 @@ def _dropouts(inputs, rows, checkpoints, dropouts):
     return out
 
 
+def _motion(ds, dth, dt):
+    """stationary / straight / turning from odometry (|omega| < 0.05 rad/s is straight)."""
+    if dt <= 0 or (abs(ds / dt) < 0.005 and abs(dth / dt) < 0.05):
+        return "stationary"
+    return "straight" if abs(dth / dt) < 0.05 else "turning"
+
+
 def _detector_metrics(rows, key):
     seen = [r[key] for r in rows if r[key] is not None]
     jumps = sum(1 for a, b in zip(rows, rows[1:]) if a[key] is not None and b[key] is not None
@@ -296,10 +303,12 @@ def replay(frames, *, labels: dict | None = None, dropouts=DROPOUTS_M,
     est = RoadStateEstimator(params)
     labels = labels or {}
     rows, inputs, checkpoints, nis = [], [], {}, []
+    nis_state = {"straight": [], "turning": [], "stationary": []}
     prev_pose = prev_t = None
     wall_accepted = wall_hits = labelled = 0
     keeper_digest = hashlib.sha256()
     headings, pairs = [], 0
+    straight_heading = {"left": [], "right": []}
     for i, frame in enumerate(frames):
         img = frame.bgr
         if img.shape[:2] != (lane_replay.FRAME_H, lane_replay.FRAME_W):
@@ -326,6 +335,10 @@ def replay(frames, *, labels: dict | None = None, dropouts=DROPOUTS_M,
         est.update(meas, t, decision_point=decision)
         snap = est.snapshot()
         inputs.append((t, ds, dth, dt, meas, decision))
+        if _motion(ds, dth, dt) == "straight":
+            for b in keeper.last.get("boundaries", []):
+                if b.get("side") in straight_heading:
+                    straight_heading[b["side"]].append(float(b["heading_deg"]))
         mask = lane_replay.white_mask(img)
         floor = floor_white_mask(img, ground.horizon_row)
         row = {"t": t, "level": snap["level"], "d": snap["d"], "phi": snap["phi"], "w": snap["w"],
@@ -333,7 +346,8 @@ def replay(frames, *, labels: dict | None = None, dropouts=DROPOUTS_M,
                "accepted": sum(snap["accepted"].values()), "strategy": keeper.last.get("strategy"),
                "calibration_suspect": snap["calibration_suspect"],
                "consistent_reason": snap["consistent_reason"], "decision_point": decision,
-               "straight": dt > 0 and abs(dth / dt) < STRAIGHT_MAX_RATE, "keep": None, "road": None}
+               "straight": dt > 0 and abs(dth / dt) < STRAIGHT_MAX_RATE, "keep": None, "road": None,
+               "motion": _motion(ds, dth, dt)}
         if obs is not None:
             point = keeper.last.get("target_px") or (img.shape[1] / 2 * (1 + obs.error), img.shape[0] * 0.835)
             row["keep"] = {"err": round(float(obs.error), 4),
@@ -349,6 +363,7 @@ def replay(frames, *, labels: dict | None = None, dropouts=DROPOUTS_M,
             for c in snap["candidates"]:
                 if isinstance(c.get("nis"), dict):
                     nis.append(min(c["nis"].values()))
+                    nis_state[row["motion"]].append(nis[-1])
         if row["strategy"] == "both" and snap["level"] == TRACK:
             ys = sorted(b["y_at_side_x_m"] for b in keeper.last.get("boundaries", []))
             mid_keep = (ys[0] + ys[-1]) / 2
@@ -383,6 +398,9 @@ def replay(frames, *, labels: dict | None = None, dropouts=DROPOUTS_M,
     metrics = {
         "frames": n, "keep": keep_m, "road": road_m, "levels": levels,
         "nis": {"n": len(nis), "mean": nis_mean, "above_9_21": nis_above,
+                "by_state": {k: {"n": len(v), "mean": round(float(np.mean(v)), 3) if v else None,
+                                 "above_9_21": round(float(np.mean(np.asarray(v) > 9.21)), 4) if v else None}
+                             for k, v in nis_state.items()},
                 "bins": [b if math.isfinite(b) else "inf" for b in NIS_BINS],
                 "hist": [int(h) for h in hist]},
         "d_jump_rate": round(d_jumps / max(1, n - 1), 4),
@@ -395,7 +413,14 @@ def replay(frames, *, labels: dict | None = None, dropouts=DROPOUTS_M,
         "keeper": {"pairs_rate": round(pairs / max(1, n), 4),
                    "median_heading_deg": round(float(np.median(headings)), 2) if headings else None,
                    "median_abs_heading_deg": round(float(np.median(np.abs(headings))), 2) if headings else None,
-                   "boundaries": len(headings)},
+                   "boundaries": len(headings),
+                   # signed heading on straight motion: equal offsets both sides = camera
+                   # yaw; opposite offsets = roll/pitch (lane owner, 2026-10-01)
+                   "straight_heading_deg": {
+                       side: None if not v else {"n": len(v), "median": round(float(np.median(v)), 2),
+                                                 "p25": round(float(np.percentile(v, 25)), 2),
+                                                 "p75": round(float(np.percentile(v, 75)), 2)}
+                       for side, v in straight_heading.items()}},
         "setup": {"pitch_deg": pitch_deg, "lidar_forward_deg": lidar_forward_deg,
                   "lidar_wall_veto": params.lidar_wall_veto,
                   "ir_geometry_measured": params.ir_geometry_measured, "mode": params.mode},

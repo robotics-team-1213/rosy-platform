@@ -208,3 +208,14 @@ def test_heading_sign_convention_matches_the_keeper():
     # -phi + kappa x_psi); the curvature prior takes part of the 10 deg, so only the sign
     # and the magnitude range are asserted here.
     assert 4.0 < math.degrees(rows[-1]["phi"]) <= 10.5
+
+
+def test_nis_is_reported_by_motion_state():
+    frames = list(synthetic(24)) + [rr.Frame(103.0 + i / FPS, LANE, (0.15, 0.0, 0.0)) for i in range(8)]
+    metrics, rows = rr.replay(iter(frames), dropouts=())
+    by = metrics["nis"]["by_state"]
+    assert set(by) == {"straight", "turning", "stationary"}
+    assert by["straight"]["n"] > 0 and by["stationary"]["n"] > 0
+    assert rows[-1]["motion"] == "stationary" and rows[10]["motion"] == "straight"
+    sides = metrics["keeper"]["straight_heading_deg"]
+    assert sides["left"]["n"] > 0 and abs(sides["left"]["median"]) < 2.0 and abs(sides["right"]["median"]) < 2.0
