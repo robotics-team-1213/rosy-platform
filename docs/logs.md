@@ -3780,3 +3780,8 @@
 - Change: recorded the Task 4 source audit. OMX-AI remains disabled with empty driver package, hardware plugin, and joint configuration; `ActionRunner` only accepts an injected `LocalActionPort`, while the ROS FollowJointTrajectory runtime is candidate code. No production ActionRunner/driver composition exists outside tests.
 - Evidence: source/config inspection of `src/products/omx/profile/config/omx.disabled.yaml`, `action_runner.py`, and `ros_runtime.py`; existing SOURCE/LOCAL tests do not identify an accepted arm/gripper hardware profile.
 - Gate: Task 4 remains pending target hardware+driver+gripper package/version and ROS 2 distro/API selection. No mock port or hardware was invented; no runtime/ROS/device activation.
+
+## 2026-09-30 · uncommitted · docs(plan): classify prior OMX ROS-SIM evidence for Action mapping
+- Change: reconciled Task 4 with the existing 2026-09-26 vendor simulation record. The pinned ROBOTIS OpenManipulator 5.1.2 simulation exercised FollowJointTrajectory, simulated gripper-joint motion, and cancel status, but did not bind FleetActionGrant to a LocalActionPort or establish an accepted physical OMX profile.
+- Evidence: existing `docs/validation/omx-two-instance-ros-sim-2026-09-26/README.md` and `src/products/omx/adapter/progress.md`; current Windows host has no `ROS_DISTRO` or `ros2` command. Focused ROS runtime tests skipped because ROS 2 Jazzy/rclpy is unavailable here (2 skipped).
+- Gate: Task 4 remains pending selected device/hardware revision, driver and gripper package/version, ROS 2 distro and API endpoint. Historical SIM evidence remains SIM-only; no physical claim or activation.
