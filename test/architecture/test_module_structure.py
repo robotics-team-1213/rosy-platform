@@ -166,14 +166,16 @@ SIZE_VERDICTS = {
         "accept: sim-only read-only viewer server (HTTP handler + ROS subscriptions); the pure logic already lives in live_view_model.py and the page in lane_live_view.html, covered by test_lane_live_view*.py and test_live_view_model.py (X5)",
     ),
     "control": (
-        36_091,
+        36_677,
         f"split: deploy closure needs only sensing + safety provider (P1a); {CONTROL_SPLIT} "
         "(re-judged 2026-09-30 at 33090 after D-356 added the ROS-free learned perception backend "
         "(sensing/perception/learned), the shadow node and the recording CLI; the learned backend sits "
         "inside sensing/perception and moves with it — verdict unchanged; re-judged 2026-09-30 at 35197 "
         "under D-362 — web/diagnostic.html and the sensing web assets now count toward the package total; "
         "re-judged 2026-09-30 at 36091 when the pilot branch merged the ROS-free lane keepers "
-        "(lane_keep.py 'keep', lane.py 'between') and the NOMINAL ground inside sensing/perception — verdict unchanged)",
+        "(lane_keep.py 'keep', lane.py 'between') and the NOMINAL ground inside sensing/perception — verdict unchanged; "
+        "re-judged again at 36677 with the ROS-free IR line calibration (perception/ir_calibration.py), its read-only "
+        "device CLI and the camera-launch overlay validator (control/ir_overlay.py) — verdict unchanged)",
     ),
     # --- D-362 newly-covered files (web assets in src/ packages, ops roots). ---
     "runtime/sensing/web/diagnostic.html": (

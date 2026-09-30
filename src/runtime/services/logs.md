@@ -221,3 +221,8 @@
 - 증거: `test_line_follow_obstacle_path.py` 24 passed — LiDAR 0.6 s 끊김 뒤 지연 재시작(`finally` 의 지우기를 빼면 빨강), 재선택 뒤 두 번째 정지가 두 번째 `nav.line_obstacle_hold`(R2 를 빼면 빨강), sector 재선택 막힘 유지(R2 를 빼면 빨강), 덮어쓰기로 문턱 못 넘음. gateway `-k line_follow` 85 passed, 3 skipped ×3 (2026-09-30 Windows; 부하 중 한 번 1 failed 가 있었으나 세 번 다시 돌려 재현 안 됨).
 - gate 변화: SOURCE.
 - 결정: D-344 §11 보강, §13.
+
+## 2026-09-30 · uncommitted · refactor(line_follow): 데이터 모델을 model.py 로 분리(파일 예산)
+- 변경: `core_features/line_follow/manager.py`(704 행, 예산 600) 에서 `LineFollowMode`·`LineObservation`·`LineFollowConfig`·`LineFollowDecision`·`_finite` 를 `line_follow/model.py` 로 옮겼다. manager 는 잠금 한 개를 가진 주인(tick·observe·set_mode·물체/IR/계단 게이트)만 남는다(561 행). manager 가 같은 이름을 다시 내보내 기존 import 는 그대로다. docking/model.py 선례(크기 예외가 아니라 분리).
+- 증거: `pytest src/runtime/gateway/test -k "line_follow or clearance or ir"` 통과, `test/architecture/test_module_structure.py` 통과, pyflakes 깨끗.
+- gate 변화: 없음(동작 불변).
