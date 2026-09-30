@@ -241,7 +241,13 @@ class LineFollowManager:
             self._mode = selected
             self._observation = None
             self._intended = (self._config.cruise_speed, 0.0)
+            # 앞 물체 상태는 세션마다 새로 — 다시 고른 뒤의 정지는 다시 알린다. sector 는 마지막
+            # 거리가 재출발 거리 안이면 막힌 채로 시작한다(다음 스캔 전 한 틱도 그냥 가지 않게).
+            self._obstacle_blocked = (self._scan_points is None and self._clearance is not None
+                                      and self._clearance < self._config.obstacle_resume_m)
             self._clear_since = None
+            self._blocked_since = None
+            self._escalated = False
             self._received_at = None
             self._lost_latched = False
             self._invalid_observation = False

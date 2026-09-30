@@ -322,3 +322,35 @@ def test_a_lidar_gap_restarts_the_release_dwell():
     _camera(m, 11.2, error=0.0)
     m.observe_scan_points([(0.35, 0.0)], received_at=11.2)
     assert m.tick(11.21).linear > 0
+
+
+def _hold_for(m, start, seconds, points):
+    for step in range(int(seconds * 10)):
+        t = start + step * 0.1
+        _camera(m, t, error=0.0)
+        m.observe_scan_points(points, received_at=t)
+        m.tick(t + 0.01)
+
+
+def test_reselecting_starts_a_fresh_obstacle_session_and_a_second_stop_alerts_again():
+    m = _manager()
+    _hold_for(m, 10.0, 6.0, [(0.15, 0.0)])
+    assert m._events.published.count("nav.line_obstacle_hold") == 1
+    m.set_mode(LineFollowMode.CAMERA_LINE)                     # 운전자가 다시 골랐다
+    _camera(m, 16.1, error=0.0)
+    m.observe_scan_points([(0.35, 0.0)], received_at=16.1)
+    assert m.tick(16.11).linear > 0                            # 새 세션: 옛 막힘·지연 없음
+    _hold_for(m, 16.2, 6.0, [(0.15, 0.0)])
+    assert m._events.published.count("nav.line_obstacle_hold") == 2
+
+
+def test_sector_reselection_with_a_near_last_reading_stays_blocked_until_the_next_scan():
+    m = _manager(obstacle_mode="sector")
+    _camera(m, 10.0, error=0.0)
+    m.observe_clearance(0.24, received_at=10.0)                # 정지와 재출발 사이
+    m.set_mode(LineFollowMode.CAMERA_LINE)
+    _camera(m, 10.05, error=0.0)
+    assert m.tick(10.06).linear == 0 and m.status().reason == "obstacle_ahead"
+    m.observe_clearance(0.40, received_at=10.1)
+    _camera(m, 10.1, error=0.0)
+    assert m.tick(10.11).linear > 0
