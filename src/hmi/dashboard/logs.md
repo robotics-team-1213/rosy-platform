@@ -562,3 +562,10 @@
 - 증거: 수정 전 빨강, 수정 후 초록. 캡처 `X:/DevTemp/rosy-d359-captures/robot-setup-*`.
 - gate 변화: 없음.
 - 결정: D-359 §5.
+
+## 2026-09-30 · 570e3a29 · D-359 US-008 낮은 wide 콘솔이 열을 지킨다
+
+- 변경: `shell/shell.css` 운용 열(64rem 이상)과 고정 프레임(64rem 이상 + 40rem 이상 높이)을 두 미디어 조건으로 나눴다. 1366×600은 세 열을 지키고 페이지가 스크롤한다. 옛 `/dashboard`(`styles.css`)도 같이 나눴다. `DESIGN.md` Tall Enough Rule에 한 줄. 시험: `test_surface_layout_browser.py::test_wide_but_short_console_keeps_its_columns_and_scrolls_the_page`, `test/test_dashboard_browser.py::test_wide_but_short_operate_view_keeps_three_columns`.
+- 증거: 두 시험 모두 수정 전 빨강.
+- gate 변화: 없음. SOURCE/LOCAL 증거다.
+- 결정: D-359 §5·§6 (US-008).

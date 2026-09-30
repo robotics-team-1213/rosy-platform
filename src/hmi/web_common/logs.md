@@ -262,3 +262,31 @@
 - 증거: 수정 전 시험 빨강 2건, 수정 후 초록. 최종 캡처 `X:/DevTemp/rosy-d359-captures/`(README에 목록·소견).
 - gate 변화: 없음. SOURCE/LOCAL 증거다.
 - 결정: D-359 §5.3·§8.
+
+## 2026-09-30 · ea5a36bd · D-359 US-008 한글에는 라틴 자간을 주지 않는다
+
+- 변경: `ui.js`가 자기 글자(직계 텍스트 노드)에 한글이 있는 요소에 `data-hangul`을 달고 MutationObserver로 글자 변화를 따라간다. `components.css`가 그 요소의 `--track-label/-wide/-state`를 0으로 다시 정의한다(더 구체적인 선택자의 `var(--track-*)`도 0으로 풀린다). 모든 페이지가 `lang="ko"`라 `:lang()`으로는 가를 수 없고, 섞인 글은 0을 따른다. `DESIGN.md` The Latin Tracking Rule. 시험: `test_shared_controls_browser.py::test_hangul_labels_drop_the_latin_tracking`, `test_no_hangul_text_on_a_surface_is_tracked[/console|/dashboard]`.
+- 증거: 수정 전 3 빨강, 수정 후 초록.
+- gate 변화: 없음. SOURCE/LOCAL 증거다.
+- 결정: D-359 §5·§6 (US-008).
+
+## 2026-09-30 · 999c2642 · D-359 US-008 한글 요소는 등폭 대신 본문 가족
+
+- 변경: 자간 0 뒤에도 로봇 캡처가 "점유  지도"로 떠 보였다. 등폭 글꼴에 한글이 없어 대체 글꼴로 그려지고 띄어쓰기만 등폭 칸 폭(14px에서 8.2px, 본문 3.9px)이 남았다. `[data-hangul]`이 `--mono`를 `--body`로 둔다. 시험: 같은 시험에 글꼴 가족 단언.
+- 증거: `--mono` 재정의를 지우는 변이에서 빨강.
+- gate 변화: 없음. SOURCE/LOCAL 증거다.
+- 결정: D-359 §5·§6 (US-008).
+
+## 2026-09-30 · ee98ad09 · D-359 US-008 체크 상자는 비활성에서도 3:1
+
+- 변경: `input.ui-field[type=checkbox]`를 토큰으로 그린다(`appearance: none`, 테 `--ink-quiet`, 켜짐 `--focus-ring`, 체크는 `clip-path`). 비활성은 `--disabled-opacity`로 흐리지 않고 잉크만 `--ink-quiet`로 바꾼다. Chromium 네이티브 비활성 체크는 accent를 버려 light 1.19:1, dark 1.75:1이었다. 시험: `test_checked_checkboxes_hold_three_to_one_even_when_disabled[dark|light]` 픽셀 표본.
+- 증거: 수정 전 held/off 1.19–1.75:1 빨강, 수정 후 6.5:1 이상.
+- gate 변화: 없음. SOURCE/LOCAL 증거다.
+- 결정: D-359 §5·§6 (US-008).
+
+## 2026-09-30 · 998a9197 · D-359 US-008 빈 상태 줄은 ui-section에서 칸을 차지하지 않는다
+
+- 변경: `ui-section > [role=status]:empty { display: contents }`. /setup 웨이포인트의 빈 저장·목록 상태 줄 둘이 각각 gap+여백(44px)을 먹어 짧은 목록 위에 88px 빈 칸이 생겼다. 상자만 없어지고 live region은 접근성 트리에 남는다. 시험: dashboard `test_waypoint_readiness_browser.py::test_short_waypoint_list_sits_under_the_status_line`.
+- 증거: 수정 전 빨강(빈 줄이 목록 바로 위), 수정 후 초록.
+- gate 변화: 없음. SOURCE/LOCAL 증거다.
+- 결정: D-359 §5·§6 (US-008).
