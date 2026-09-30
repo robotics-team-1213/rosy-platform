@@ -2386,7 +2386,9 @@ def _receipt_for_follow_up(case, tmp_path):
     # The writer names the image by release id; the follow-up finds it the same way.
     image = case["image"].parent / "rosy-os-pinky-pro-2026.09.21-001-arm64.img.xz"
     assert image == case["image"]
-    completed, _boot = _write(case, tmp_path, *EMERGENCY, switches=("-Emergency",))
+    # -AcceptSlowMedia: this helper only makes a receipt; on a CPU-starved host the
+    # fixture file itself can probe below 10 MB/s (seen 2026-10-01: 5.8 MB/s).
+    completed, _boot = _write(case, tmp_path, *EMERGENCY, switches=("-Emergency", "-AcceptSlowMedia"))
     assert completed.returncode == 0, completed.stderr
     return case["receipt"]
 
