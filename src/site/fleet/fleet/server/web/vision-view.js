@@ -44,7 +44,7 @@ const LENS_NAMES = { wide: "초광각", standard: "기본 렌즈" };
 export function parseLensHeader(value) {
   if (!value) return null;
   const fields = Object.fromEntries(value.split(";").map((part) => part.split("=").map((item) => item.trim())));
-  if (!(fields.kind in LENS_NAMES)) return null;
+  if (!Object.hasOwn(LENS_NAMES, fields.kind)) return null;
   return { kind: fields.kind, focal_mm: Number(fields.focal_mm), hfov_deg: Number(fields.hfov_deg) };
 }
 

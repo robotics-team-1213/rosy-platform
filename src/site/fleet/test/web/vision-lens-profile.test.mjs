@@ -57,3 +57,8 @@ test("each lens keeps its own profile", () => {
   assert.equal(resolveSavedProfile(storage, "s21", "standard").saved, PROFILE);
   assert.deepEqual(resolveSavedProfile(memoryStorage(), "s21", "wide"), { saved: null, warning: null });
 });
+
+test("inherited object names are not lens kinds", () => {
+  assert.equal(parseLensHeader("kind=toString"), null);
+  assert.equal(parseLensHeader("kind=__proto__"), null);
+});
