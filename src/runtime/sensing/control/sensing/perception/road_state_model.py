@@ -39,6 +39,7 @@ class OffsetMeas:
     sigma: float
     stamp: float | None = None
     wall_fraction: float = 0.0
+    confidence: float = 1.0
     source: str = "learned"
 
 
@@ -88,6 +89,14 @@ class RoadStateParams:
     pair_width_tol_m: float = 0.04
     pair_parallel_rad: float = math.radians(12.0)
     lidar_wall_veto: bool = False
+    # D-384 review: "shadow" is R0/R1 only. The side+learned re-acquisition
+    # path exists only there, and only while IR is uncalibrated.
+    mode: str = "shadow"
+    ir_calibrated: bool = False
+    # IR spacing is not measured yet: until it is, IR evidence is OFF.
+    ir_geometry_measured: bool = False
+    learned_reacq_min_confidence: float = 0.5
+    learned_reacq_sigmas: float = 2.0
     wall_distance_m: float = 0.05
     wall_angle_rad: float = math.radians(10.0)
     # association
@@ -151,7 +160,7 @@ def offset_from_shadow(payload: dict, *, half_width_m: float, params: RoadStateP
     return OffsetMeas(d=float(error) * half_width_m,
                       sigma=p.learned_sigma_m / max(float(confidence), p.learned_min_confidence),
                       stamp=float(stamp) if isinstance(stamp, (int, float)) else None,
-                      wall_fraction=float(wall))
+                      wall_fraction=float(wall), confidence=float(confidence))
 
 
 def boundaries_from_keep(last: dict, *, near_x_m: float = 0.33) -> list[BoundaryMeas]:
@@ -173,10 +182,22 @@ def boundaries_from_keep(last: dict, *, near_x_m: float = 0.33) -> list[Boundary
         ends = r.get("ends_m") or []
         nearest = min((float(e[0]) for e in ends), default=SIDE_X_M)
         x = SIDE_X_M if nearest <= near_x_m else nearest
-        reason = r.get("rejected") or r.get("reason")
+        flag = r.get("rejected")
+        # LaneKeeper candidates (lane owner schema): rejected is a bool with a
+        # reason in {transverse, extrapolation, corner_line, flipping, junction}.
+        reason = (str(r.get("reason") or "keeper") if flag is True
+                  else flag if isinstance(flag, str) and flag else None)
         out.append(BoundaryMeas(y=y, psi=psi, x=x, side_hint=r.get("side"),
-                                rejected=str(reason) if reason else None))
+                                rejected=reason))
     return out
+
+
+def decision_point_from_keep(last: dict) -> bool:
+    """A declared decision point: a line across the path, a latched corner or a
+    junction hold in the keeper bundle. Only there may a route hint break a tie."""
+    strategy = str(last.get("strategy") or "")
+    reason = str(last.get("reason") or "")
+    return bool(last.get("transverse")) or strategy.startswith("corner") or reason.startswith("junction")
 
 
 def wall_segments_from_scan(ranges, angle_min: float, angle_increment: float, *,
@@ -225,3 +246,30 @@ def _near_wall(b: BoundaryMeas, walls, p: RoadStateParams) -> bool:
         if abs(_wrap_line(math.atan2(seg[1], seg[0]) - b.psi)) <= p.wall_angle_rad:
             return True
     return False
+
+
+def _compatible(a: str, b: str) -> bool:
+    """Two labellings describe the same lane: no candidate gets two different
+    sides, and no side goes to two different candidates."""
+    for i, (x, y) in enumerate(zip(a, b)):
+        if NOISE not in (x, y) and x != y:
+            return False
+    for side in (RIGHT, LEFT):
+        if side in a and side in b and a.index(side) != b.index(side):
+            return False
+    return True
+
+
+def _route_key(h, cands, hint: str):
+    """Sort key: smaller wins. right: has an R, rightmost R; left: has an L,
+    leftmost L; straight: best score."""
+    if hint == "left":
+        return (not h.has(LEFT), -h.y_of(LEFT, cands) if h.has(LEFT) else 0.0, -h.score, h.labels)
+    if hint == "straight":
+        return (-h.score, h.labels)
+    return (not h.has(RIGHT), h.y_of(RIGHT, cands) if h.has(RIGHT) else 0.0, -h.score, h.labels)
+
+
+def _r(value, digits: int = 6):
+    value = float(value)
+    return round(value, digits) if math.isfinite(value) else None

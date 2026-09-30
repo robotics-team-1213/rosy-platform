@@ -91,9 +91,13 @@ from .road_state_model import (  # noqa: F401 — re-exported: callers import fr
     OffsetMeas,
     RoadStateParams,
     WallSeg,
+    _compatible,
     _near_wall,
+    _r,
+    _route_key,
     _wrap_line,
     boundaries_from_keep,
+    decision_point_from_keep,
     offset_from_shadow,
     wall_segments_from_scan,
 )
@@ -133,6 +137,8 @@ class RoadStateEstimator:
     def __init__(self, params: RoadStateParams | None = None, *, route_hint: str | None = None):
         if route_hint not in (None, "left", "straight", "right"):
             raise ValueError("route_hint must be None, 'left', 'straight' or 'right'")
+        if (params or RoadStateParams()).mode not in ("shadow", "control"):
+            raise ValueError("mode must be 'shadow' or 'control'")
         self.p = p = params or RoadStateParams()
         self.route_hint = route_hint
         self.w_map = p.lane_width_m
@@ -162,6 +168,10 @@ class RoadStateEstimator:
         self._t_candidate = None
         self._consistent = 0
         self._consistent_s0 = 0.0
+        self._run_reasons: list = []
+        self.reacq_reason = None
+        self.reacq_counts = {"pair": 0, "side+ir": 0, "side+learned": 0}
+        self._learned_accepted: list = []
         self._calib_since = None
         self._calib_suspect = False
         self._level = STOP
@@ -218,7 +228,8 @@ class RoadStateEstimator:
         phi_then = self.x[1] - turn
         return meas.d + ds * math.sin(phi_then + turn / 2.0)
 
-    def update(self, measurements, now: float, *, profile: str | None = None) -> str:
+    def update(self, measurements, now: float, *, profile: str | None = None,
+               decision_point: bool = False) -> str:
         p = self.p
         self._tick(float(now))
         if profile is not None:
@@ -227,7 +238,8 @@ class RoadStateEstimator:
         scale = p.reacq_gate if fresh else (p.slow_gate if self._level == SLOW else 1.0)
         bounds = [m for m in measurements if isinstance(m, BoundaryMeas)]
         offsets = [m for m in measurements if isinstance(m, OffsetMeas)]
-        irs = [m for m in measurements if isinstance(m, IrMeas)]
+        irs = ([m for m in measurements if isinstance(m, IrMeas)]
+               if p.ir_geometry_measured else [])   # IR spacing unmeasured: IR is off
         walls = ([m for m in measurements if isinstance(m, WallSeg)]
                  if p.lidar_wall_veto else [])
         frame = {"candidates": [], "hypotheses": [], "hypothesis": None, "tie": False,
@@ -250,13 +262,17 @@ class RoadStateEstimator:
         cands = sorted(sorted(cands, key=lambda b: abs(b.y))[:p.max_candidates], key=lambda b: b.y)
         if cands:
             self._t_candidate = self._now
-        winner, hold = self._associate(cands, irs, scale, fresh, frame)
-        accepted_labels = []
+        winner, hold = self._associate(cands, irs, scale, fresh, frame, decision_point)
+        accepted_labels, side_d = [], None
         if winner is not None and winner.evals:
+            used = [e for e in winner.evals if e.label != NOISE]
+            if len(used) == 1:   # the lane offset this one side implies
+                side_d = float(self.x[0] - used[0].nu[0])
             self._apply([e for e in winner.evals if e.label != NOISE])
             accepted_labels = [e.label for e in winner.evals if e.label != NOISE]
         frame["accepted"]["boundaries"] = len(accepted_labels)
         ir_labels = []
+        self._learned_accepted = []
         if not hold:
             for m in irs:
                 label = self._update_ir(m, scale)
@@ -277,15 +293,19 @@ class RoadStateEstimator:
             self._enter_stop("ambiguous")
             self._consistent = 0
         elif self._stopped:
-            consistent = (set(accepted_labels) == {RIGHT, LEFT}
-                          or (len(accepted_labels) == 1 and accepted_labels[0] in ir_labels))
-            if consistent:
+            reason = self._consistent_reason(accepted_labels, ir_labels, side_d)
+            frame["consistent_reason"] = reason
+            if reason is not None:
                 if self._consistent == 0:
-                    self._consistent_s0 = self._s_total
+                    self._consistent_s0, self._run_reasons = self._s_total, []
                 self._consistent += 1
+                self._run_reasons.append(reason)
                 if (self._consistent >= p.reacq_frames
                         and self._s_total - self._consistent_s0 >= p.reacq_min_travel_m):
                     self._stopped, self.stop_reason, self._consistent = False, None, 0
+                    self.reacq_reason = next(r for r in ("side+learned", "side+ir", "pair")
+                                             if r in self._run_reasons)
+                    self.reacq_counts[self.reacq_reason] += 1
             else:
                 self._consistent = 0
         self.last_frame = frame
@@ -315,6 +335,9 @@ class RoadStateEstimator:
             "candidates": frame["candidates"],
             "accepted": dict(frame["accepted"]),
             "rejects": dict(self.rejects),
+            "reacq_reason": self.reacq_reason,
+            "reacq_counts": dict(self.reacq_counts),
+            "consistent_reason": frame.get("consistent_reason"),
             "reacquire": {"consistent_frames": self._consistent,
                           "timed_out": self._reacquire_timed_out()},
             "calibration_suspect": self._calib_suspect,
@@ -357,7 +380,25 @@ class RoadStateEstimator:
             reason = "jump"
         return _Eval(label, z, h, H, R, nu, nis, logl, reason)
 
-    def _associate(self, cands, irs, scale, fresh, frame):
+    def _consistent_reason(self, labels, ir_labels, side_d):
+        """Why this frame counts toward re-acquisition, or None. side+learned:
+        shadow mode only, IR uncalibrated, a confident learned offset within
+        2 sigma of the one side's lane offset; learned alone never counts."""
+        p = self.p
+        if set(labels) == {RIGHT, LEFT}:
+            return "pair"
+        if len(labels) != 1:
+            return None
+        if labels[0] in ir_labels:
+            return "side+ir"
+        if p.mode == "shadow" and not p.ir_calibrated and side_d is not None:
+            for d, sigma, confidence in self._learned_accepted:
+                if (confidence >= p.learned_reacq_min_confidence
+                        and abs(d - side_d) <= p.learned_reacq_sigmas * sigma):
+                    return "side+learned"
+        return None
+
+    def _associate(self, cands, irs, scale, fresh, frame, decision_point=False):
         """(winner hypothesis or None, hold) and fills frame's debug fields."""
         p = self.p
         if not cands:
@@ -395,7 +436,7 @@ class RoadStateEstimator:
         if conflicting:
             frame["tie"] = True
             ties = [h for h in top if best.score - h.score <= p.winner_margin]
-            if self.route_hint is not None:
+            if self.route_hint is not None and decision_point:
                 rule = "route"
                 winner = min(ties, key=lambda h: _route_key(h, cands, self.route_hint))
             elif fresh:
@@ -502,6 +543,7 @@ class RoadStateEstimator:
             self.rejects["nis"] += 1
             return 0
         self._kalman(H, nu, R)
+        self._learned_accepted.append((float(d), float(m.sigma), float(m.confidence)))
         return 1
 
     def _calibration(self) -> None:
@@ -551,30 +593,3 @@ class RoadStateEstimator:
         if reason is not None:
             self._enter_stop(reason)
             self._level = STOP
-
-
-def _compatible(a: str, b: str) -> bool:
-    """Two labellings describe the same lane: no candidate gets two different
-    sides, and no side goes to two different candidates."""
-    for i, (x, y) in enumerate(zip(a, b)):
-        if NOISE not in (x, y) and x != y:
-            return False
-    for side in (RIGHT, LEFT):
-        if side in a and side in b and a.index(side) != b.index(side):
-            return False
-    return True
-
-
-def _route_key(h: _Hyp, cands, hint: str):
-    """Sort key: smaller wins. right: has an R, rightmost R; left: has an L,
-    leftmost L; straight: best score."""
-    if hint == "left":
-        return (not h.has(LEFT), -h.y_of(LEFT, cands) if h.has(LEFT) else 0.0, -h.score, h.labels)
-    if hint == "straight":
-        return (-h.score, h.labels)
-    return (not h.has(RIGHT), h.y_of(RIGHT, cands) if h.has(RIGHT) else 0.0, -h.score, h.labels)
-
-
-def _r(value, digits: int = 6):
-    value = float(value)
-    return round(value, digits) if math.isfinite(value) else None

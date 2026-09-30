@@ -22,6 +22,7 @@ from control.sensing.perception.road_state import (
     RoadStateParams,
     WallSeg,
     boundaries_from_keep,
+    decision_point_from_keep,
     offset_from_shadow,
     wall_segments_from_scan,
 )
@@ -199,6 +200,7 @@ def test_offset_from_shadow_sigma_and_sign():
     assert m.d == pytest.approx(0.2 * HALF)
     assert m.sigma == pytest.approx(0.03 / 0.2)
     assert m.stamp == 3.0
+    assert m.confidence == pytest.approx(0.1)
     assert offset_from_shadow({"visible": False, "error": None, "confidence": 0.0,
                                "stamp": 1.0}, half_width_m=HALF) is None
 
@@ -253,23 +255,54 @@ def test_ambiguity_on_fresh_acquisition_takes_the_rightmost_lane():
     assert est.x[0] == pytest.approx(W, abs=0.01)
 
 
-def test_route_hint_overrides_the_right_rule():
+def test_route_hint_overrides_the_right_rule_at_a_decision_point():
     est = RoadStateEstimator(route_hint="left")
     est.P[0, 0] = 1.0
-    est.update(THREE_LINES, 0.1)
+    est.update(THREE_LINES, 0.1, decision_point=True)
     assert est.last_frame["tie_rule"] == "route"
     assert est.last_frame["hypothesis"]["labels"] == "NRL"
     assert est.x[0] == pytest.approx(0.0, abs=0.01)
 
 
+def test_route_hint_is_ignored_away_from_a_decision_point():
+    est = RoadStateEstimator(route_hint="left")
+    est.P[0, 0] = 1.0
+    est.update(THREE_LINES, 0.1)
+    assert est.last_frame["tie_rule"] == "right"
+    assert est.last_frame["hypothesis"]["labels"] == "RLN"
+
+
+def test_route_hint_never_breaks_a_tie_on_an_established_track_without_a_decision_point():
+    est, clock = tracking()
+    est.route_hint = "right"
+    split = [BoundaryMeas(y=-HALF + 0.0125, psi=0.0, x=X), BoundaryMeas(y=-HALF - 0.0125, psi=0.0, x=X)]
+    clock.frame(split)
+    assert est.last_frame["tie_rule"] == "ambiguous"
+    clock.frame(split, decision_point=True)
+    assert est.last_frame["tie_rule"] == "route"
+    assert est.last_frame["hypothesis"]["labels"] == "RN"      # the rightmost candidate as R
+
+
+IR_ON = {"ir_geometry_measured": True}
+
+
+def test_ir_is_off_until_its_geometry_is_measured():
+    est, clock = tracking()
+    clock.frame(pair() + [IrMeas(y=-HALF)])
+    assert est.last_frame["accepted"]["ir"] == 0
+    est, clock = tracking(**IR_ON)
+    clock.frame(pair() + [IrMeas(y=-HALF)])
+    assert est.last_frame["accepted"]["ir"] == 1
+
+
 def test_right_rule_must_agree_with_ir_or_hold():
-    est = RoadStateEstimator()
+    est = RoadStateEstimator(RoadStateParams(**IR_ON))
     est.P[0, 0] = 1.0
     est.update(THREE_LINES + [IrMeas(y=HALF)], 0.1)    # IR sees a line where the rightmost lane has none
     assert est.level == STOP
     assert est.stop_reason == "ambiguous"
     assert est.x[0] == pytest.approx(0.0)
-    est = RoadStateEstimator()
+    est = RoadStateEstimator(RoadStateParams(**IR_ON))
     est.P[0, 0] = 1.0
     est.update(THREE_LINES + [IrMeas(y=-HALF)], 0.1)  # the rightmost lane's left line under IR
     assert est.last_frame["hypothesis"]["labels"] == "RLN"
@@ -397,12 +430,68 @@ def test_reacquisition_resets_on_an_inconsistent_frame():
 
 
 def test_one_side_with_matching_ir_is_consistent():
-    est = RoadStateEstimator()
+    est = RoadStateEstimator(RoadStateParams(**IR_ON))
     clock = Clock(est)
     right, _ = pair()
     for _ in range(3):
         clock.frame([right, IrMeas(y=right.y)])   # IR places the same right line
     assert est.level == TRACK
+    assert est.snapshot()["reacq_reason"] == "side+ir"
+
+
+def test_pair_reacquisition_is_logged():
+    est = RoadStateEstimator()
+    clock = Clock(est)
+    for _ in range(3):
+        clock.frame(pair())
+    snap = est.snapshot()
+    assert snap["reacq_reason"] == "pair"
+    assert snap["reacq_counts"] == {"pair": 1, "side+ir": 0, "side+learned": 0}
+
+
+def _side_learned(est, d=0.0, confidence=0.9, frames=3):
+    clock = Clock(est)
+    right, _ = pair()
+    for _ in range(frames):
+        clock.frame([right, OffsetMeas(d=d, sigma=0.03 / confidence, stamp=clock.t + DT, confidence=confidence)])
+    return est
+
+
+def test_one_side_with_agreeing_learned_reacquires_in_shadow_without_calibrated_ir():
+    est = _side_learned(RoadStateEstimator())
+    assert est.level == TRACK
+    snap = est.snapshot()
+    assert snap["reacq_reason"] == "side+learned"
+    assert snap["reacq_counts"]["side+learned"] == 1
+
+
+def test_side_plus_learned_needs_three_agreeing_frames():
+    assert _side_learned(RoadStateEstimator(), frames=2).level == STOP
+
+
+@pytest.mark.parametrize("kw,params", [
+    ({"d": 0.08}, {}),                           # learned 0.08 m off the side's d: beyond 2 sigma
+    ({"confidence": 0.3}, {}),                   # below the learned re-acquisition confidence
+    ({}, {"ir_calibrated": True}),               # calibrated IR removes the path
+    ({}, {"mode": "control"}),                   # never in a control mode
+])
+def test_side_plus_learned_is_refused(kw, params):
+    est = _side_learned(RoadStateEstimator(RoadStateParams(**params)), **kw)
+    assert est.level == STOP
+    assert est.snapshot()["reacq_counts"]["side+learned"] == 0
+
+
+def test_learned_alone_never_reacquires():
+    est = RoadStateEstimator()
+    clock = Clock(est)
+    for _ in range(5):
+        clock.frame([OffsetMeas(d=0.0, sigma=0.03, stamp=clock.t, confidence=1.0)])
+    assert est.level == STOP
+
+
+def test_unknown_mode_is_refused():
+    with pytest.raises(ValueError, match="mode"):
+        RoadStateEstimator(RoadStateParams(mode="auto"))
 
 
 def test_reacquisition_timeout_reports():
@@ -496,11 +585,32 @@ def test_boundaries_from_keep_debug_bundle():
 
 
 def test_boundaries_from_keep_prefers_candidates_with_reasons():
-    last = {"boundaries": [], "candidates": [
-        {"side": "right", "y_at_side_x_m": -0.09, "heading_deg": 0.0, "ends_m": [[0.1, -0.09], [0.3, -0.09]],
-         "rejected": "wall"}]}
+    accepted = {"side": "right", "y_at_side_x_m": -0.09, "heading_deg": 0.0, "length_m": 0.2,
+                "ends_m": [[0.1, -0.09], [0.3, -0.09]], "ends_px": [], "tracked": True, "pursuit_m": [0.25, 0.0],
+                "rejected": False, "reason": None}
+    transverse = dict(accepted, heading_deg=88.0, rejected=True, reason="transverse")
+    last = {"boundaries": [accepted], "candidates": [accepted, transverse]}
     out = boundaries_from_keep(last)
-    assert out[0].rejected == "wall"
+    assert len(out) == 2                      # accepted lines are not counted twice
+    assert out[0].rejected is None and out[1].rejected == "transverse"
+
+
+def test_keeper_rejected_candidates_are_not_measurements():
+    est, clock = tracking()
+    right, left = pair()
+    clock.frame([right, left, BoundaryMeas(y=0.0, psi=0.0, x=X, rejected="junction")])
+    assert est.rejects["keeper"] == 1
+    assert est.last_frame["hypothesis"]["labels"] == "RL"
+
+
+@pytest.mark.parametrize("last,expected", [
+    ({"strategy": "both", "transverse": [], "reason": None}, False),
+    ({"strategy": "both", "transverse": [{"heading_deg": 88.0}]}, True),
+    ({"strategy": "corner_left", "transverse": []}, True),
+    ({"strategy": "none", "transverse": [], "reason": "junction_fork"}, True),
+])
+def test_decision_point_from_keep(last, expected):
+    assert decision_point_from_keep(last) is expected
 
 
 def test_wall_segments_from_scan_straight_wall():
@@ -532,6 +642,12 @@ def test_node_publishes_only_the_road_state_and_never_a_command():
     subs = {ast.unparse(n.args[1]).strip("'") for n in ast.walk(tree) if isinstance(n, ast.Call)
             and isinstance(n.func, ast.Attribute) and n.func.attr == "create_subscription"}
     assert subs == {"odom", "line/keep_debug", "line/observation", "perception/learned/shadow", "scan"}
+
+
+def test_node_documents_that_r1_needs_keep_mode():
+    import ast
+    doc = ast.get_docstring(ast.parse(NODE.read_text(encoding="utf-8")))
+    assert "camera_lane_mode" in doc and "keep" in doc
 
 
 def test_node_is_an_installed_entry_point():

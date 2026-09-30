@@ -1,6 +1,12 @@
 #!/usr/bin/env python3
 """road_state_node — D-384 road-state estimator in shadow (R1).
 
+R1 needs line_observer_node in keep mode (camera_lane_mode: keep): only that
+mode publishes line/keep_debug, the LaneKeeper bundle this node estimates
+from. In any other lane mode this node receives no boundaries and stays STOP.
+IR evidence is OFF until the IR bar spacing is measured
+(ir_geometry_measured; ir_half_span_m 0.012 is a placeholder).
+
 Subscribes:
   odom                        nav_msgs/Odometry; pose deltas drive the prediction
                               (a dropped sample loses no travel)
@@ -37,6 +43,7 @@ from .sensing.perception.road_state import (
     RoadStateEstimator,
     RoadStateParams,
     boundaries_from_keep,
+    decision_point_from_keep,
     offset_from_shadow,
     wall_segments_from_scan,
 )
@@ -66,7 +73,9 @@ class RoadStateNode(Node):
         self.declare_parameter('ground_profile_id', '')
         self.declare_parameter('camera_pitch_deg', 0.0)
         # IR bar: lateral offset of an outer sensor from the centre one.
-        self.declare_parameter('ir_half_span_m', 0.012)
+        self.declare_parameter('ir_half_span_m', 0.012)   # placeholder, not measured
+        self.declare_parameter('ir_geometry_measured', False)
+        self.declare_parameter('ir_calibrated', False)
         self.declare_parameter('ir_max_age_s', 0.2)
         self.declare_parameter('lidar_wall_veto', False)
         self.declare_parameter('lidar_yaw_offset_deg', 180.0)
@@ -75,8 +84,10 @@ class RoadStateNode(Node):
         width = float(self.get_parameter('lane_width_m').value)
         veto = bool(self.get_parameter('lidar_wall_veto').value)
         hint = str(self.get_parameter('route_hint').value) or None
-        self._est = RoadStateEstimator(RoadStateParams(lane_width_m=width, lidar_wall_veto=veto),
-                                       route_hint=hint)
+        self._ir_on = bool(self.get_parameter('ir_geometry_measured').value)
+        self._est = RoadStateEstimator(RoadStateParams(
+            lane_width_m=width, lidar_wall_veto=veto, mode='shadow', ir_geometry_measured=self._ir_on,
+            ir_calibrated=bool(self.get_parameter('ir_calibrated').value)), route_hint=hint)
         self._half = width / 2.0
         self._odom = None       # (stamp, x, y, yaw, v, w)
         self._ir = None         # (stamp, y)
@@ -142,7 +153,7 @@ class RoadStateNode(Node):
         source = 'candidates' if records is not None else 'boundaries'
         measurements = boundaries_from_keep(bundle)
         ir = None
-        if self._ir is not None and abs(stamp - self._ir[0]) <= float(
+        if self._ir_on and self._ir is not None and abs(stamp - self._ir[0]) <= float(
                 self.get_parameter('ir_max_age_s').value):
             ir = self._ir[1]
             measurements.append(IrMeas(y=ir))
@@ -152,7 +163,8 @@ class RoadStateNode(Node):
             measurements.append(learned)
         measurements.extend(self._walls)
         profile = str(self.get_parameter('ground_profile_id').value) or bundle.get('ground')
-        self._est.update(measurements, stamp, profile=profile)
+        self._est.update(measurements, stamp, profile=profile,
+                         decision_point=decision_point_from_keep(bundle))
         snapshot = self._est.snapshot()
         odom = self._odom
         snapshot.update({
