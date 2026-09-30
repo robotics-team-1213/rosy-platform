@@ -1,0 +1,29 @@
+/camera_detect_node
+  Subscribers:
+    /camera/calibration/cmd: std_msgs/msg/String
+  Publishers:
+    /camera/blocked: std_msgs/msg/Bool
+    /camera/calibration/status: std_msgs/msg/String
+    /camera/cliff: std_msgs/msg/Bool
+    /camera/controls: std_msgs/msg/String
+    /camera/debug: std_msgs/msg/String
+    /camera/front: sensor_msgs/msg/Image
+    /camera/observation: std_msgs/msg/String
+    /camera/side: std_msgs/msg/Float32
+    /camera/telemetry: std_msgs/msg/String
+    /parameter_events: rcl_interfaces/msg/ParameterEvent
+    /rosout: rcl_interfaces/msg/Log
+  Service Servers:
+    /camera_detect_node/describe_parameters: rcl_interfaces/srv/DescribeParameters
+    /camera_detect_node/get_parameter_types: rcl_interfaces/srv/GetParameterTypes
+    /camera_detect_node/get_parameters: rcl_interfaces/srv/GetParameters
+    /camera_detect_node/get_type_description: type_description_interfaces/srv/GetTypeDescription
+    /camera_detect_node/list_parameters: rcl_interfaces/srv/ListParameters
+    /camera_detect_node/set_parameters: rcl_interfaces/srv/SetParameters
+    /camera_detect_node/set_parameters_atomically: rcl_interfaces/srv/SetParametersAtomically
+  Service Clients:
+
+  Action Servers:
+
+  Action Clients:
+

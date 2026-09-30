@@ -7,7 +7,9 @@ adr_log: docs/reference/ROSY ADR Log.md
 
 # IDs absent from the ADR log on purpose. Remove an entry once the ADR is written.
 adr_gaps:
-  D-362: "reserved by the uncommitted per-code-type file-size budget draft in the main checkout (docs/adr/D-362-per-code-type-file-size-budget.md); the pilot live-video ADR moved to D-368 to clear it; remove once it lands"
+  D-362: "reserved by an uncommitted ADR-log edit carrying the file-size-budget decision (cited by test_module_structure and the task_store verdict); remove once that session commits it"
+  D-369: "skipped: never written (D-362 -> D-371 jump, 2026-09-30); remove if an ADR lands as D-369"
+  D-370: "skipped: never written (D-362 -> D-371 jump, 2026-09-30); remove if an ADR lands as D-370"
   D-341: "reserved by branch docs/d341-overhead-console-pairing (overhead console-approved pairing, also on feat/pilot-teleop); remove once it lands"
   D-29: "unused; the vision accelerator shield design only proposed the number"
   D-324: "unused; the Pinky artifact-selection ADR was first written as D-324 and renumbered to D-325 to avoid a same-day collision (commit 45f9470b, 2026-09-29). Remove if another session lands an ADR as D-324"

@@ -41,7 +41,13 @@ class _OpenCVCamera:
         import cv2
 
         self._cv2 = cv2
-        self._capture = cv2.VideoCapture(device)
+        # CAP_V4L2, never the auto backend: on Ubuntu OpenCV tries GStreamer
+        # first, and a missing device then blocks this constructor for seconds
+        # (cold GStreamer registry: 5-13 s measured) and leaves GStreamer
+        # threads that turn a shutdown during init into a hung process
+        # (ROS-SIM isolation, 2026-09-30). V4L2 fails in milliseconds and
+        # matches what this wrapper documents: a V4L2 camera device.
+        self._capture = cv2.VideoCapture(device, cv2.CAP_V4L2)
         self._capture.set(cv2.CAP_PROP_FRAME_WIDTH, width)
         self._capture.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
         self._capture.set(cv2.CAP_PROP_FPS, fps)

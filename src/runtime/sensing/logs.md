@@ -589,6 +589,14 @@
 - 결정: D-356 Proposed 유지.
 - 교훈: 없음.
 
+## 2026-09-30 · uncommitted · feat(ros-sim): camera 슬라이스 통과 — 무장치 부팅 결함 1건 발견·수리 (27def3de)
+
+- 변경: WSL2 Jazzy에서 control을 현재 트리(27def3de)로 재빌드해 두 노드를 살아있는 그래프로 검증했다. (A) camera_detect_node 무장치 부팅 — 카메라 실패 로그 후 1 ms 만에 `camera_detect ready`, 발행자 9종+보정 구독 그래프 형성. (B) line_observer_node camera 모드 — 합성 레인 5단계(중앙→좌→우→무선→와시드) 133건 관측, 레짐 순서·오차 부호(−0.503/+0.497)·불변식 전부 PASS. 두 그래프 모두 twist 토픽 0개, line/observation 발행자 1개(D-38 sensing-only 유지). 검증 중 OpenCV auto 백엔드의 GStreamer 경로가 무장치 실패에 5–13 s 걸리고 invalid-context hang을 내는 결함을 발견, `_OpenCVCamera`를 CAP_V4L2로 고정해 수리(커밋 27def3de, 호스트 시험 30 passed).
+- 증거: docs/validation/control-camera-line-ros-sim-2026-09-30/ (콘솔·node info·JSONL·검증 출력·격리 로그). VERDICT: PASS (0 problems).
+- gate 변화: ROS-SIM HOLD 유지 — blocker에 camera 슬라이스 통과 기록. 남은 것: calibration/planning/safety-policy 그래프, Gazebo 폐루프, 물리 센서.
+- 결정: 없음.
+- 교훈: "컨테이너에서 재실행"이 실제로 노드를 띄우는 순간 잠복 결함이 드러난다 — 이 결함은 3개월(흡수 후) 동안 아무도 무카메라로 노드를 켜보지 않아서 못 본 것이다. ROS-SIM 게이트의 존재 이유다.
+
 ## 2026-09-30 · uncommitted · feat(control): 공칭(NOMINAL) 지면과 차선 녹화 재생 벤치(D-353)
 - 변경: `config/camera_nominal_pinky_pro.yaml`(실물 녹화 4981 프레임으로 추정한 OV5647 기하 — fx 281.6, 피치 8°, 높이 0.067 m, 지평선 80.3 행). `camera_ground.nominal_ground_plane`(NOMINAL 출처 + 허용 플래그 두 겹, 프레임 크기로 비례, 종횡비 다르면 거부). `line_observer_node` 에 `allow_nominal_ground`·`nominal_camera_profile_path`(읽기 전용), 지면 모드 관측에 `ground: NOMINAL` 표시 — CORE 는 운전자 확인(hold) 없이는 멈춘다(`nominal_ground_requires_driver`). `tools/lane_replay.py` 녹화 재생 벤치.
 - 증거: 벤치 기준값(목표가 흰 선 위인 비율) — pilot 녹화 307 프레임: line 0.512, between 0.135, centre(공칭 지면·기억 없음) 비가시 0.99. 원본 teleop 576 프레임: line 0.247, between 0.109, centre 비가시 0.865. `test_nominal_ground.py` 10 passed.
