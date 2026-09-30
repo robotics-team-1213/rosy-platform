@@ -1,9 +1,10 @@
 import { enumLabel } from "/common/core_ui_logic.js";
-import { setOff } from "/assets/dom.js";
 
 // D-359 US-009 — 추종 모드 열거값은 요청 본문과 title에만, 운용자 글은 한국어다.
 const LINE_MODE_LABEL = Object.freeze({ OFF: "꺼짐", IR_LINE: "적외선 센서", CAMERA_LINE: "카메라" });
 
+// D-359 §5.3 — 끌 때 이유를 같이 준다. 켜거나 짧은 요청 중 잠금이면 이유를 지운다.
+function setOff(control, off, reason = "") { control.disabled = Boolean(off); if (off && reason) control.setAttribute("reason", reason); else control.removeAttribute("reason"); }
 function el(tag, cls, text) { const node = document.createElement(tag); if (cls) node.className = cls; if (text !== undefined) node.textContent = text; return node; }
 
 export function mount(root, ctx) {
