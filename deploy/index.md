@@ -65,8 +65,8 @@
 
 ## 최근 기록
 
+- 2026-10-01 · uncommitted · D-390 OMX Pilot development container
 - 2026-10-01 · uncommitted · feat(native): D-385 기다리는 카드에 프레임 위상
 - 2026-10-01 · uncommitted · feat(native): D-383 LCD 상태줄에 편대 역할
 - 2026-10-01 · uncommitted · fix(release,test): main CI deployment 단계 적색 5건 — 핀·등록부·스캐너 면제 정리
 - 2026-10-01 · uncommitted · feat(native): D-381 blocked 패턴과 비상정지 진입음
-- 2026-09-30 · uncommitted · docs(adr): D-375 에서 D-380 으로 개명

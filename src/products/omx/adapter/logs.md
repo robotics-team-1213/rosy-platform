@@ -149,3 +149,8 @@
 - Change: A concurrent branch already reserved D-385 for the image-layer deployment decision. Kept that committed historical log entry intact, moved the final OMX decision to D-386, and declared D-385 reserved in the ADR gap registry until its owning branch lands.
 - Evidence: ADR body/index, ADR gap continuity, all module logs/progress, and generated-record contracts passed (7 passed); the combined network-topology and harness suites passed (80 passed, 22 freshness warnings). Harness lint was rerun after renumbering; its only error was the required append-only guard on the already committed D-385 history, which this correction preserves.
 - Gate: D-386 defines source contract only. ROS acceptance wiring, fresh per-phase state/path validation, pinned ROS-SIM, ARTIFACT, DEVICE, and FIELD remain open; OMX stays disabled.
+
+## 2026-10-01 · uncommitted · D-390 Pilot simulation action bridge
+- Change: Add a simulation-only HTTP facade, one-time pairing, one seat, bounded relative goals and ROS action event readback. Accept ROS-generated NumPy UUID byte arrays. Keep the physical OMX profile disabled.
+- Evidence: adapter suite 163 passed/3 skipped on Windows; Gazebo joint, gripper and cancel probe in docs/validation/pilot-omx-gazebo-2026-10-01/.
+- Gate: ROS-SIM control slice observed; camera, recording, restart recovery and DEVICE/FIELD remain HOLD.

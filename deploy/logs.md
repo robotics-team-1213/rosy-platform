@@ -1575,3 +1575,8 @@
 - 변경: rosy-boot-display.py 가 BOOTING·PROVISIONED 중 view 에 frame(1 s 위상)을 실어 다시 그림 키에 태운다 — 0.5 Hz 숨쉼, CORE_READY 는 기존처럼 무변경 무재그림.
 - 증거: test_boot_display.py (대기 중 재그림·ready 정지). 실기는 다음 릴리스.
 - gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · D-390 OMX Pilot development container
+- Change: Add a development-only Pilot layer over the locked OMX Gazebo image and a local probe. Publish HTTP only to 127.0.0.1, deny serial/video grants, keep the one-time code in a 0600 container file.
+- Evidence: local image sha256:e94662607c72a7cea83c9449178099c4c9476afab0519275ce0da82a88f3da9a; Gazebo action and readback report in docs/validation/pilot-omx-gazebo-2026-10-01/.
+- Gate: local x86_64 ROS-SIM only; ARTIFACT/DEVICE/FIELD unchanged.

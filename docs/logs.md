@@ -4014,3 +4014,15 @@
 - 변경: ADR D-385(파일+로그 행). 절전 "꼭 필요한 것만"이 기존 WAKE_BATTERY 체계임을 확인·기록.
 - 증거: rosy_harness lint 오류 0.
 - gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · docs(adr): D-390 Pilot OMX-AI Gazebo 연습 경계와 실행 계획
+
+- 변경: D-323·D-366의 확장 의도와 현재 Pinky 전용 Pilot 세션/라우팅, OMX의 Fleet UDS·ROS action 경계 사이의 실제 차이를 D-390로 결정했다. 시뮬레이션 전용 same-origin API, 로컬 단일 팔 owner, 영상·시연 데이터 출처, 실물 비활성 경계를 고정하고 단계별 구현 계획을 추가했다.
+- 증거: 저장소 코드·기존 OMX 두 인스턴스 ROS-SIM 기록과 문서 대조. 이번 변경은 새 Gazebo 실행이나 Pilot 종단 동작을 수행하지 않았다.
+- 번호: D-387~D-389는 병행 브랜치가 `harness.yaml`에서 예약해 D-390으로 기록했다.
+- gate 변화: 없음(설계 문서만).
+
+## 2026-10-01 · uncommitted · D-390 Pilot OMX simulation implementation and evidence
+- Change: Version the sim-only API at v1.67, reconcile the ADR plan with implemented work and record the dated Gazebo run.
+- Evidence: local adapter 163 passed/3 skipped; Pilot and registry/browser checks; joint, gripper and cancel ROS readback in docs/validation/pilot-omx-gazebo-2026-10-01/. Harness lint 0 errors/23 existing freshness warnings.
+- Gate: the control slice has ROS-SIM evidence; camera, recording, restart recovery and physical acceptance stay HOLD.
