@@ -193,3 +193,31 @@ def test_host_agent_outage_is_said_once_and_buttons_point_at_it(panel):
     assert visible[0]["id"] in sta.get_attribute("aria-describedby").split()
     rollback = page.locator("ui-button").filter(has_text="이전 릴리스로 복귀")
     assert not rollback.evaluate("b => b.disabled")
+
+
+def test_camera_status_speaks_korean_with_evidence_and_waits_on_one_line(panel):
+    page = panel("console/camera.js")
+    status = page.locator("#vision-status")
+    assert status.inner_text() == "수신 대기"
+    assert status.get_attribute("data-evidence") == "unavailable"
+    assert status.get_attribute("title") == "WAITING"
+    # The waiting sentence lives on the stage only; the capture line under the actions is hidden.
+    assert page.locator("#vision-empty").inner_text() == "카메라 프레임 수신 대기"
+    assert page.locator("#vision-capture-status").is_hidden()
+    assert len([row for row in _holders(page, "카메라 프레임 수신 대기") if not row["hidden"]]) == 1
+
+    page.evaluate("""async () => {
+      const {createVisionPreview} = await import('/assets/vision.js');
+      const ids = ['vision-stage', 'vision-frame', 'vision-empty', 'vision-status', 'vision-source',
+                   'vision-resolution', 'vision-age', 'vision-captured'];
+      const elements = Object.fromEntries(ids.map((id) => [id, document.getElementById(id)]));
+      const preview = createVisionPreview({elements,
+        setText: (id, value) => { elements[id].textContent = value ?? '—'; },
+        api: async () => ({available: false, stale: true, age_ms: 4200}),
+        authHeaders: () => ({}), hasToken: () => true, isHidden: () => false});
+      await preview.refresh();
+    }""")
+    assert status.inner_text() == "지연 · 4초"
+    assert status.get_attribute("data-evidence") == "delayed"
+    assert status.get_attribute("title") == "STALE"
+    assert "STALE" not in page.inner_text("#root") and "WAITING" not in page.inner_text("#root")

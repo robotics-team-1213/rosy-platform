@@ -643,7 +643,7 @@ def test_live_camera_preview_is_visible_beside_the_map():
         assert page.locator("#vision-source").inner_text() == "HOST-SIM"
         assert page.locator("#vision-resolution").inner_text() == "640×360"
         assert page.locator("#vision-captured").inner_text() == "42.250 s"
-        assert page.locator("#vision-status").inner_text() == "LIVE"
+        assert page.locator("#vision-status").inner_text() == "실시간"
         if screenshot := os.environ.get("ROSY_CAMERA_DASHBOARD_SCREENSHOT"):
             output = Path(screenshot)
             output.parent.mkdir(parents=True, exist_ok=True)
@@ -709,7 +709,7 @@ def test_camera_preview_is_cleared_when_reauthentication_fails():
             "document.getElementById('vision-empty')?.textContent.includes('인증 실패')"
         )
         assert page.locator("#vision-frame").is_hidden()
-        assert page.locator("#vision-status").inner_text() == "WAITING"
+        assert page.locator("#vision-status").inner_text() == "수신 대기"
         before = page.evaluate(
             "window.__apiCalls.filter((call) => call.path === '/api/v1/vision/front/status').length"
         )
@@ -744,7 +744,7 @@ def test_rate_limited_camera_never_leaves_an_old_frame_live():
             "document.getElementById('vision-empty')?.textContent.includes('속도 제한')"
         )
         assert page.locator("#vision-frame").is_hidden()
-        assert page.locator("#vision-status").inner_text() == "WAITING"
+        assert page.locator("#vision-status").inner_text() == "수신 대기"
         browser.close()
 
 
@@ -868,7 +868,7 @@ def test_console_state_matrix_renders_each_state(state):
             )
         elif state == "vision-unavailable":
             page.wait_for_function(
-                "document.getElementById('vision-status')?.textContent === 'WAITING'"
+                "document.getElementById('vision-status')?.textContent === '수신 대기'"
             )
             assert "수신 대기" in page.locator("#vision-empty").inner_text()
             assert (

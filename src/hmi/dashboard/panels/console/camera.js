@@ -12,7 +12,8 @@ export function mount(root, ctx) {
   const frame = el("img", "surface-camera-frame"); frame.id = "vision-frame"; frame.alt = "전방 카메라 실시간 영상"; frame.hidden = true;
   const empty = el("ui-empty", "surface-camera-empty", "카메라 프레임 수신 대기"); empty.id = "vision-empty";
   stage.append(frame, empty);
-  const status = el("ui-status", "", "WAITING"); status.id = "vision-status";
+  const status = el("ui-tag", "", "수신 대기"); status.id = "vision-status";
+  status.dataset.evidence = "unavailable"; status.title = "WAITING"; status.setAttribute("status", "neutral");
   const actions = el("ui-actions", "surface-actions surface-camera-actions");
   const storageLabel = el("label", "ui-field-label surface-camera-storage", "저장 위치");
   const storage = el("select", "ui-field"); storage.id = "vision-storage";
@@ -58,7 +59,7 @@ export function mount(root, ctx) {
               {headers: authHeaders(), cache: "no-store"});
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
             saveCameraFile(await response.blob(), record.file_name);
-          } catch (error) { captureStatus.textContent = `저장 파일 다운로드 실패: ${error.message}`; }
+          } catch (error) { captureStatus.hidden = false; captureStatus.textContent = `저장 파일 다운로드 실패: ${error.message}`; }
           finally { button.disabled = false; }
         });
         row.append(button); files.append(row);
@@ -67,11 +68,11 @@ export function mount(root, ctx) {
     }
     refreshLibrary = loadLibrary;
     refresh.addEventListener("click", () => loadLibrary().catch((error) => {
-      captureStatus.textContent = `로봇 저장 목록을 읽지 못했습니다: ${error.message}`;
+      captureStatus.hidden = false; captureStatus.textContent = `로봇 저장 목록을 읽지 못했습니다: ${error.message}`;
     }));
     library.addEventListener("toggle", () => {
       if (library.open) loadLibrary().catch((error) => {
-        captureStatus.textContent = `로봇 저장 목록을 읽지 못했습니다: ${error.message}`;
+        captureStatus.hidden = false; captureStatus.textContent = `로봇 저장 목록을 읽지 못했습니다: ${error.message}`;
       });
     });
   }
@@ -113,6 +114,8 @@ export function mount(root, ctx) {
     setOff(saveVideo, !state.saved || state.recording || state.uploading, saveReason);
     setOff(saveLog, !state.saved || state.recording || state.uploading, saveReason);
     captureStatus.textContent = state.message;
+    // D-359 US-009 — 프레임이 없을 때의 대기 문장은 무대(ui-empty)와 상태 태그가 이미 말한다.
+    captureStatus.hidden = !state.ready && !state.recording && !state.saved && !state.uploading;
   };
   capture = createCameraCapture({onChange: updateCapture, storeOnRobot,
     onComplete: async () => {

@@ -17,6 +17,15 @@ export function createVisionPreview({
     objectUrl = null;
   }
 
+  // D-359 US-009 — 상태 태그는 운용자 말과 증거 상태다. 옛 열거값(LIVE/WAITING/STALE)은 title에만.
+  function renderEvidence(evidence, text, legacy) {
+    setText("vision-status", text);
+    const node = elements["vision-status"];
+    node.dataset.evidence = evidence;
+    node.title = legacy;
+    node.setAttribute("status", evidence === "delayed" ? "warn" : "neutral");
+  }
+
   function renderUnavailable(status = {}, message = "카메라 프레임 수신 대기") {
     onUnavailable?.(message);
     const stale = status.stale === true;
@@ -24,7 +33,10 @@ export function createVisionPreview({
     elements["vision-frame"].hidden = true;
     elements["vision-empty"].hidden = false;
     setText("vision-empty", message);
-    setText("vision-status", stale ? "STALE" : "WAITING");
+    if (stale) {
+      renderEvidence("delayed", hasNumber(status.age_ms)
+        ? `지연 · ${Math.max(0, Math.round(Number(status.age_ms) / 1000))}초` : "지연", "STALE");
+    } else renderEvidence("unavailable", "수신 대기", "WAITING");
     setText("vision-source", status.source || "—");
     setText("vision-resolution", status.width && status.height
       ? `${status.width}×${status.height}` : "—");
@@ -107,7 +119,7 @@ export function createVisionPreview({
       elements["vision-frame"].hidden = false;
       elements["vision-empty"].hidden = true;
       elements["vision-stage"].dataset.state = "live";
-      setText("vision-status", "LIVE");
+      renderEvidence("fresh", "실시간", "LIVE");
     } catch (error) {
       if (error.name === "AbortError" || gen !== generation) return;
       visionSequence = null;
