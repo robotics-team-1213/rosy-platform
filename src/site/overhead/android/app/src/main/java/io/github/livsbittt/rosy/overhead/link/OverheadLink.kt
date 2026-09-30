@@ -85,7 +85,7 @@ class OverheadLink(
     private val pairing: PairingUri,
     private val appVersion: String,
     private val device: String,
-    private val client: OkHttpClient = defaultClient(),
+    private val client: OkHttpClient = defaultClient(pairing.pin),
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val lock = Any()
@@ -289,7 +289,9 @@ class OverheadLink(
             } else {
                 LinkError.Network(t.message ?: t.javaClass.simpleName, NetworkFailure.classify(t))
             }
-            onLost(gen, error, fatal = false)
+            // A pin mismatch cannot heal by retrying: the site certificate changed or this is not the site (D-341 10).
+            val fatal = error is LinkError.Network && error.kind == NetworkFailure.TLS_PIN
+            onLost(gen, error, fatal = fatal)
         }
 
         private fun handleClose(code: Int, reason: String) {
@@ -305,10 +307,12 @@ class OverheadLink(
     companion object {
         private const val TAG = "OverheadLink"
 
-        fun defaultClient(): OkHttpClient = OkHttpClient.Builder()
+        /** [pin] set: trust only the paired site certificate (see [PinnedTrustManager]); null: system trust. */
+        fun defaultClient(pin: String? = null): OkHttpClient = OkHttpClient.Builder()
             .connectTimeout(5, TimeUnit.SECONDS)
             .readTimeout(0, TimeUnit.MILLISECONDS)
             .pingInterval(10, TimeUnit.SECONDS)
+            .pinnedTo(pin)
             .build()
     }
 }

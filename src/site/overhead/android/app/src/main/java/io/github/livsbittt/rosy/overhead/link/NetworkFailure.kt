@@ -20,17 +20,24 @@ enum class NetworkFailure {
     /** TLS handshake or certificate failure on a `wss://` pairing. */
     TLS,
 
+    /** The served chain does not contain the certificate pinned by the pairing link (D-341 10). */
+    TLS_PIN,
+
     OTHER,
     ;
 
     companion object {
         /**
-         * Walks the cause chain; the first specific signal wins. A bare [ConnectException]
+         * Walks the cause chain; the first specific signal wins. A pin mismatch anywhere in the
+         * chain beats the outer SSLException that wraps it. A bare [ConnectException]
          * counts as unreachable only when nothing in the chain is more specific, because
          * OkHttp wraps the socket's "Connection refused" in its own ConnectException.
          */
         fun classify(error: Throwable): NetworkFailure {
             val chain = generateSequence(error) { it.cause }.take(MAX_DEPTH).toList()
+            if (chain.any { it is PinMismatchException || it.message.orEmpty().contains(PinMismatchException.MARKER) }) {
+                return TLS_PIN
+            }
             chain.firstNotNullOfOrNull(::specific)?.let { return it }
             return if (chain.any { it is ConnectException }) UNREACHABLE else OTHER
         }

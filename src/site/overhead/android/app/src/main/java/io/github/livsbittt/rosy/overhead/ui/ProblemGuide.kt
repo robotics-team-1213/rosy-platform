@@ -11,6 +11,7 @@ enum class Problem {
     REFUSED,
     UNKNOWN_HOST,
     TLS,
+    TLS_PIN,
     UNAUTHORIZED,
     REPLACED,
     PROTOCOL_MISMATCH,
@@ -49,6 +50,7 @@ object ProblemGuide {
                         NetworkFailure.REFUSED -> Problem.REFUSED
                         NetworkFailure.UNKNOWN_HOST -> Problem.UNKNOWN_HOST
                         NetworkFailure.TLS -> Problem.TLS
+                        NetworkFailure.TLS_PIN -> Problem.TLS_PIN
                         NetworkFailure.OTHER -> Problem.NETWORK_OTHER
                     }
                 }
@@ -68,7 +70,7 @@ object ProblemGuide {
      * so the button stops the camera first and says so.
      */
     fun stopsCameraFirst(problem: Problem, running: Boolean): Boolean =
-        running && (problem == Problem.UNAUTHORIZED || problem == Problem.REPLACED)
+        running && (problem == Problem.UNAUTHORIZED || problem == Problem.REPLACED || problem == Problem.TLS_PIN)
 
     fun forStream(error: StreamError): Guidance = when (error) {
         StreamError.NotPaired -> Guidance(Problem.NOT_PAIRED, NextStep.OPEN_SETTINGS, null, retrying = false)
