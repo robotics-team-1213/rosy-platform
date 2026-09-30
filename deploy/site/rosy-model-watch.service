@@ -1,0 +1,22 @@
+[Unit]
+Description=Push new HF perception models to robot shadow slots (D-373)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=rosy-model-watch
+Group=rosy-model-watch
+StateDirectory=rosy-model-watch
+StateDirectoryMode=0750
+WorkingDirectory=/var/lib/rosy-model-watch
+Environment=HF_TOKEN_FILE=/etc/rosy/site/secrets/hf_token
+Environment=HF_HOME=/var/lib/rosy-model-watch/hf
+ExecStart=/opt/rosy/model-watch/venv/bin/python /opt/rosy/model-watch/src/tools/perception/model/watch.py --config /etc/rosy/model-watch.yaml
+TimeoutStartSec=45min
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+CapabilityBoundingSet=
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6

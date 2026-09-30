@@ -525,6 +525,77 @@ navigation remains `HOLD` until the D-268 acceptance contract is approved;
 D-177 command correlation and CORE ACK/final-result reconciliation remain
 outstanding.
 
+## Automatic shadow delivery of new perception models (D-373)
+
+`rosy-model-watch.timer` runs `tools/perception/model/watch.py` every 10
+minutes. Each run lists the commits of one Hugging Face model repository,
+runs intake on each unseen commit (oldest first, at most `max_new_per_run`),
+and on a pass pushes that model to every configured robot's **shadow** slot
+with `deliver.py push`. The state file records each commit's verdict and
+per-robot result, so a commit is processed once. A robot that is off or
+unreachable is recorded as failed and does not block the others; re-push it by
+hand with `deliver.py push`. Automation stops at the shadow slot: selecting a
+learned model for driving is not automated and stays behind the D-205 gate.
+The HF listing and the model download are the only outbound calls; robots are
+reached over SSH as `rosy` with `sudo -n` (D-373 decision 6).
+
+The watcher needs a reviewed source checkout (it imports the manifest contract
+and runner from `src/runtime/sensing`) and a Python venv with `onnxruntime`,
+`opencv-python-headless`, `numpy`, `PyYAML`, and `huggingface_hub`. It is not
+part of the signed site candidate. Install it on the Ubuntu site host:
+
+```sh
+sudo useradd --system --no-create-home --shell /usr/sbin/nologin rosy-model-watch
+sudo install -d -o root -g root -m 0755 /opt/rosy/model-watch
+sudo git clone --no-checkout <reviewed-remote> /opt/rosy/model-watch/src
+sudo git -C /opt/rosy/model-watch/src checkout --detach <reviewed-commit>
+sudo python3 -m venv /opt/rosy/model-watch/venv
+sudo /opt/rosy/model-watch/venv/bin/pip install onnxruntime opencv-python-headless numpy PyYAML huggingface_hub
+```
+
+Put a read-only HF token in `/etc/rosy/site/secrets/hf_token`, readable only
+by root and the service group (surrounding whitespace is ignored). The unit
+passes only its path (`HF_TOKEN_FILE`); the token never appears in a command
+line, the unit, the config, or the checkout. A public model repository needs
+no token file.
+
+```sh
+sudo install -o root -g rosy-model-watch -m 0640 /dev/null /etc/rosy/site/secrets/hf_token
+sudoedit /etc/rosy/site/secrets/hf_token   # paste the token; keep it out of shell history
+```
+
+The watcher reaches robots with the operator key authorized for `rosy` on the
+robot image, and with a pinned `known_hosts` (`StrictHostKeyChecking=yes`, so
+record each robot's host key once from a trusted channel before enabling the
+timer). The key is owned by the service user; the config names robot
+addresses and so stays out of the checkout:
+
+```sh
+sudo install -d -o root -g rosy-model-watch -m 0750 /etc/rosy/model-watch
+sudo install -o rosy-model-watch -g rosy-model-watch -m 0600 <operator-key> /etc/rosy/model-watch/rosy-operator-ed25519
+sudo install -o root -g rosy-model-watch -m 0644 <pinned-known-hosts> /etc/rosy/model-watch/known_hosts
+sudo install -o root -g rosy-model-watch -m 0640 deploy/site/model-watch.yaml.example /etc/rosy/model-watch.yaml
+sudoedit /etc/rosy/model-watch.yaml
+```
+
+Intake replays `data/teleop/learning/*.mp4` under `replay_root`; without those
+clips every model fails with `no replay frames`. Copy reviewed clips there and
+make them readable by `rosy-model-watch`. Then install and start the units:
+
+```sh
+sudo cp deploy/site/rosy-model-watch.service deploy/site/rosy-model-watch.timer /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl start rosy-model-watch.service   # one run now; check the journal
+journalctl -u rosy-model-watch.service -n 50
+sudo systemctl enable --now rosy-model-watch.timer
+```
+
+Exit codes in the journal: `0` finished (a failed intake is a recorded
+outcome), `1` at least one robot delivery failed, `2` config or state file
+error, `3` the HF listing failed and nothing was recorded. The state lives in
+`/var/lib/rosy-model-watch/state.json`; deleting a commit's entry makes the
+next run process it again.
+
 ## Current acceptance boundary
 
 The stack is local-testable, but installing and running it on an Ubuntu control
