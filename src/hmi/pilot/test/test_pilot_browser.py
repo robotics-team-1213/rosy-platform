@@ -529,3 +529,64 @@ def test_calibration_banner_locks_drive_for_other_tokens_and_keeps_estop(tablet_
     finally:
         dev_server.STATE["activity"] = None
     assert errors == [], errors
+
+
+@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
+                    reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
+def test_leaving_while_locked_never_posts_idle_over_the_owner(tablet_page):
+    """D-321 부록: 남의 보정으로 잠긴 화면이 나가도 /mode IDLE 로 주인의 주행을 끊지 않는다."""
+    base_url, page, errors = tablet_page
+    _enter_drive(page, base_url)
+    try:
+        page.request.post(f"{base_url}/__test__/activity", data=_calibrating("someone-else"))
+        page.wait_for_selector("[data-drive-controls][data-locked]")
+        before = len(page.request.get(f"{base_url}/__test__/mode-log").json())
+        page.click("[data-drive-exit]")
+        page.wait_for_timeout(500)
+        assert page.request.get(f"{base_url}/__test__/mode-log").json()[before:] == []
+    finally:
+        dev_server.STATE["activity"] = None
+    assert errors == [], errors
+
+
+@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
+                    reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
+def test_owner_leaving_still_returns_the_mode_to_idle(tablet_page):
+    base_url, page, errors = tablet_page
+    _enter_drive(page, base_url)
+    try:
+        page.request.post(f"{base_url}/__test__/activity", data=_calibrating("dev-1"))
+        page.wait_for_selector("[data-drive-calibration]:not([hidden])")
+        page.wait_for_selector("[data-drive-controls]:not([data-locked])")
+        before = len(page.request.get(f"{base_url}/__test__/mode-log").json())
+        page.click("[data-drive-exit]")
+        page.wait_for_timeout(500)
+        assert page.request.get(f"{base_url}/__test__/mode-log").json()[before:] == ["IDLE"]
+    finally:
+        dev_server.STATE["activity"] = None
+    assert errors == [], errors
+
+
+@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
+                    reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
+def test_owner_sees_checking_while_whoami_retries_then_gets_control(tablet_page):
+    """whoami 가 실패하는 동안 '보정 확인 중'으로 잠그고, 재시도가 성공하면 주인에게 조작을 돌려준다."""
+    base_url, page, errors = tablet_page
+    page.request.post(f"{base_url}/__test__/activity", data=_calibrating("dev-1"))
+    try:
+        page.goto(f"{base_url}/pilot")
+        page.wait_for_selector("form[data-pilot-token-form] ui-field input")
+        page.fill("form[data-pilot-token-form] ui-field input", "devtoken")
+        page.click("form[data-pilot-token-form] ui-button")
+        page.wait_for_selector("[data-drive-enter]")
+        page.request.post(f"{base_url}/__test__/whoami-fail", data={"count": 2})
+        page.click("[data-drive-enter]")
+        page.wait_for_function(
+            "document.querySelector('[data-drive-calibration-reason]')?.textContent.startsWith('보정 확인 중')")
+        assert page.locator("[data-drive-controls][data-locked]").count() == 1
+        page.wait_for_selector("[data-drive-controls]:not([data-locked])", timeout=30_000)
+        assert "이 기기" in page.inner_text("[data-drive-calibration-reason]")
+    finally:
+        dev_server.STATE["activity"] = None
+        dev_server.WHOAMI_FAILURES["remaining"] = 0
+    assert errors == [], errors

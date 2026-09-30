@@ -56,3 +56,24 @@ def test_unknown_own_id_fails_toward_locked():
 
 def test_other_activity_kinds_are_ignored():
     assert _view({**ACTIVITY, "kind": "SOMETHING_ELSE"}, "x")["active"] is False
+
+
+def test_pending_identity_says_checking_and_stays_locked():
+    view = _view_pending(ACTIVITY)
+    assert view["locked"] is True
+    assert view["reason"].startswith("보정 확인 중")
+
+
+def _view_pending(activity):
+    node = shutil.which("node")
+    if not node:
+        pytest.skip("Node.js is unavailable")
+    script = f"""
+import fs from 'node:fs';
+const source = fs.readFileSync({json.dumps(str(MODULE))}, 'utf8');
+const C = await import('data:text/javascript;base64,' + Buffer.from(source).toString('base64'));
+console.log(JSON.stringify(C.calibrationView({json.dumps(activity)}, null, true)));
+"""
+    result = subprocess.run([node, "--input-type=module", "-e", script], capture_output=True,
+                            text=True, encoding="utf-8", check=True)
+    return json.loads(result.stdout)

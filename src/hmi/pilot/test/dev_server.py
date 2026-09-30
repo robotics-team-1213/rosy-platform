@@ -145,11 +145,31 @@ def common_asset(asset_name: str):
                         headers={"Cache-Control": "no-cache"})
 
 
+#: 시험 훅: whoami 를 앞으로 N 번 503 으로 실패시킨다(보정 확인 중 표시·재시도).
+WHOAMI_FAILURES = {"remaining": 0}
+#: 시험이 읽는다: POST /mode 로 들어온 mode 값의 순서.
+MODE_LOG: list[str] = []
+
+
+@app.post("/__test__/whoami-fail")
+async def whoami_fail(request: Request):
+    WHOAMI_FAILURES["remaining"] = int((await request.json()).get("count", 0))
+    return WHOAMI_FAILURES
+
+
+@app.get("/__test__/mode-log")
+def mode_log():
+    return MODE_LOG
+
+
 @app.get("/api/v1/auth/whoami")
 def whoami(request: Request):
     role = _role(request)
     if role is None:
         return JSONResponse({"detail": "unauthorized"}, status_code=401)
+    if WHOAMI_FAILURES["remaining"] > 0:
+        WHOAMI_FAILURES["remaining"] -= 1
+        return JSONResponse({"detail": "busy"}, status_code=503)
     return {"id": "dev-1", "role": role, "label": "개발 운전자",
             "source": "dev", "created_at": "", "expires_at": None}
 
@@ -167,6 +187,7 @@ async def set_mode(request: Request):
         return JSONResponse({"detail": "unauthorized"}, status_code=401)
     body = await request.json()
     STATE["mode"] = body.get("mode", "IDLE")
+    MODE_LOG.append(STATE["mode"])
     return {"mode": STATE["mode"]}
 
 

@@ -30,6 +30,9 @@ export function mountDrive(root, {onExit} = {}) {
   const profile = gate.profile ?? {};
   const element = {};
   let engaged = false;
+  // 이 화면이 실제로 MANUAL 을 잡았는가(engage 가 200). 잡은 적 없는 화면이 나가면서
+  // IDLE 을 보내면 남(보정 주인)의 주행을 끊는다.
+  let modeHeld = false;
 
   const drive = root;
   root.replaceChildren(buildStage(), buildControls(profile));
@@ -55,15 +58,31 @@ export function mountDrive(root, {onExit} = {}) {
   // --- 보정 세션(D-321 부록): 누가 보정 중인지 보이고, 남의 보정이면 주행 조작을 잠근다 -----
   // 비상 정지(상단 막대)는 이 화면 밖에 있고 잠그지 않는다. 409 CALIBRATION_ACTIVE 가 최종 판정이다.
   let myTokenId = null;
+  let identityPending = true;
   let calibrationLocked = false;
   let lastActivity = null;
-  whoami().then((me) => {
-    if (me?.status === 200) myTokenId = me.body?.id ?? null;
-    renderActivity(lastActivity);
-  }).catch(() => {});
+  let whoamiTimer = null;
+  // 이 기기의 토큰 id. 실패하면 늘어나는 간격(1→2→4→8 s, 최대 15 s)으로 다시 묻는다.
+  // 401/403 은 토큰 문제라 다시 물어도 같다 — 그때는 멈추고 "남의 보정" 잠금으로 둔다.
+  function askWhoami(delayMs = 1000) {
+    whoami().then((me) => {
+      if (me?.status === 200) {
+        myTokenId = me.body?.id ?? null;
+        identityPending = false;
+      } else if (me?.status === 401 || me?.status === 403) {
+        identityPending = false;
+      } else {
+        throw new Error(`whoami ${me?.status}`);
+      }
+      renderActivity(lastActivity);
+    }).catch(() => {
+      whoamiTimer = setTimeout(() => askWhoami(Math.min(delayMs * 2, 15000)), delayMs);
+    });
+  }
+  askWhoami();
   function renderActivity(activity) {
     lastActivity = activity ?? null;
-    const view = calibrationView(lastActivity, myTokenId);
+    const view = calibrationView(lastActivity, myTokenId, identityPending);
     element.calibration.hidden = !view.active;
     element.activity.hidden = !view.active;
     element.calibrationTitle.textContent = view.text;
@@ -437,6 +456,7 @@ export function mountDrive(root, {onExit} = {}) {
     const response = await gate.engage(postJson).catch(() => null);
     if (response?.status === 200) {
       engaged = true;
+      modeHeld = true;
       session.resume();
       return;
     }
@@ -464,7 +484,11 @@ export function mountDrive(root, {onExit} = {}) {
     releaseAll();
     session.hidden();
     session.close?.();
-    gate.disengage(postJson).catch(() => {});
+    // D-321 부록: 잡은 적 없거나 남의 보정으로 잠긴 화면은 모드를 돌려놓지 않는다 — /mode IDLE 은
+    // 누구에게나 열려 있어서, 그대로 보내면 보정 주인의 MANUAL 을 끊는다.
+    if (modeHeld && !calibrationLocked) gate.disengage(postJson).catch(() => {});
+    modeHeld = false;
+    clearTimeout(whoamiTimer);
     vision.stop();
     window.removeEventListener("keydown", onKey);
     window.removeEventListener("keyup", onKey);
