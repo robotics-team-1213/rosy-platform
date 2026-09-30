@@ -44,6 +44,10 @@ LIDAR_YAW_TOLERANCE_DEG = 15.0
 NOMINAL_WHEEL_RADIUS_M = 0.027
 NOMINAL_WHEEL_SEPARATION_M = 0.0961
 WHEEL_TOLERANCE = 0.10
+# Robot: /var/lib/rosy/calibration root:rosy-calib; group-writable, setgid dirs.
+DIR_MODE = 0o2775
+FILE_MODE = 0o664
+PROFILE_POSITIVE_KEYS = ("width", "height", "fx", "cx", "cy", "max_range_m")
 _SAFE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$")
 
 
@@ -82,6 +86,60 @@ class CalibrationStore:
 
     # --- writes: never overwrite -------------------------------------------
 
+    def _mkdir(self, path):
+        """Create path (and parents under root) group-writable and setgid (0o2775), so a
+        second member of the operator group can write (robot: root:rosy-calib)."""
+        path = Path(path)
+        missing = []
+        probe = path
+        while not probe.exists() and probe != probe.parent:
+            missing.append(probe)
+            probe = probe.parent
+        path.mkdir(parents=True, exist_ok=True)
+        for made in reversed(missing):
+            try:
+                os.chmod(made, DIR_MODE)
+            except OSError as exc:  # e.g. a filesystem without setgid; the store still works
+                _LOG.warning("cannot set mode on %s: %s", made, exc)
+
+    def _write_new(self, path, data: bytes):
+        """Write a file that must not exist yet: tmp in the same folder, fsync, 0o664, rename."""
+        if path.exists():
+            raise FileExistsError(str(path))
+        tmp = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, FILE_MODE)
+        try:
+            with os.fdopen(fd, "wb") as stream:
+                stream.write(data)
+                stream.flush()
+                os.fsync(stream.fileno())
+            os.chmod(tmp, FILE_MODE)
+            if path.exists():
+                raise FileExistsError(str(path))
+            os.replace(tmp, path)
+        finally:
+            if tmp.exists():
+                tmp.unlink()
+
+    def _append(self, path, lines):
+        """Append event lines. A torn tail (power cut mid-append, no trailing newline)
+        is closed with a newline first, so the new event is never glued onto it."""
+        created = not path.exists()
+        with open(path, "a+b") as stream:
+            stream.seek(0, os.SEEK_END)
+            if stream.tell() > 0:
+                stream.seek(-1, os.SEEK_END)
+                if stream.read(1) != b"\n":
+                    stream.seek(0, os.SEEK_END)
+                    stream.write(b"\n")
+            stream.seek(0, os.SEEK_END)
+            for line in lines:
+                stream.write(line.encode("utf-8") + b"\n")
+            stream.flush()
+            os.fsync(stream.fileno())
+        if created:
+            os.chmod(path, FILE_MODE)
+
     def add(self, robot, kind, values, *, sessions=(), method, intervals=None, created_at=None,
             extra=None) -> str:
         """Store one run's result as a new candidate record; returns its id."""
@@ -92,28 +150,21 @@ class CalibrationStore:
                 "intervals": intervals or {}, "extra": extra or {}}
         sha = content_sha(body)
         folder = self._dir(robot, kind) / "records"
-        folder.mkdir(parents=True, exist_ok=True)
+        self._mkdir(folder)
         stamp = re.sub(r"[^0-9A-Za-z]", "", body["created_at"])[:20]
         record_id = f"{stamp}_{sha[:12]}"
-        path = folder / f"{record_id}.json"
-        # O_EXCL: an existing record is never replaced, even with equal content.
-        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644)
-        with os.fdopen(fd, "w", encoding="utf-8") as stream:
-            json.dump({**body, "sha256": sha}, stream, indent=1, allow_nan=False)
-            stream.flush()
-            os.fsync(stream.fileno())
+        # An existing record is never replaced, even with equal content.
+        self._write_new(folder / f"{record_id}.json",
+                        json.dumps({**body, "sha256": sha}, indent=1, allow_nan=False).encode("utf-8"))
         return record_id
 
     def _event(self, robot, kind, event):
         folder = self._dir(robot, kind)
-        folder.mkdir(parents=True, exist_ok=True)
-        with open(folder / "events.jsonl", "a", encoding="utf-8") as stream:
-            stream.write(json.dumps({"at": _now(), **event}, allow_nan=False) + "\n")
-            stream.flush()
-            os.fsync(stream.fileno())
+        self._mkdir(folder)
+        self._append(folder / "events.jsonl", [json.dumps({"at": _now(), **event}, allow_nan=False)])
 
     def set_status(self, robot, kind, record_id, status, *, actor, note=""):
-        """Accept or reject a record (an operator action)."""
+        """Accept or reject a record (an operator action, on the PC mirror only)."""
         if status not in ("accepted", "rejected"):
             raise ValueError("status must be accepted or rejected")
         if not str(actor).strip():
@@ -130,19 +181,24 @@ class CalibrationStore:
     def merge_from(self, other_root, robot):
         """Bring another copy of this robot's store in (PC mirror <-> robot).
 
-        Record files missing here are copied; a record id present on both sides
-        must be byte-identical (else ValueError, nothing is overwritten). Events
-        missing here are appended in the other side's order. Returns
-        {"records": n copied, "events": n appended}."""
+        Two passes. The first only checks, across every kind: a record id on both
+        sides must be byte-identical, and status/pin decisions may exist on one
+        side only — when each side holds decisions the other lacks, the two
+        stores could resolve `current` differently, so the merge refuses
+        (accept/reject/pin happen on the PC mirror only). Nothing is written
+        when a check fails. The second pass copies missing record files and
+        appends missing events in the other side's order.
+        Returns {"records": n copied, "events": n appended}."""
         _check("robot", robot)
+        other_store = CalibrationStore(other_root)
         other = Path(other_root) / robot
-        copied = appended = 0
+        plan = []
         for kind in KINDS:
             src = other / kind
             if not src.is_dir():
                 continue
             dst = self._dir(robot, kind)
-            (dst / "records").mkdir(parents=True, exist_ok=True)
+            copies = []
             for path in sorted((src / "records").glob("*.json")):
                 target = dst / "records" / path.name
                 data = path.read_bytes()
@@ -150,22 +206,25 @@ class CalibrationStore:
                     if target.read_bytes() != data:
                         raise ValueError(f"record {kind}/{path.stem} differs between the two stores")
                     continue
-                fd = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644)
-                with os.fdopen(fd, "wb") as stream:
-                    stream.write(data)
-                    stream.flush()
-                    os.fsync(stream.fileno())
+                copies.append((target, data))
+            mine = [json.dumps(e, sort_keys=True) for e in self._events(robot, kind)]
+            theirs = [json.dumps(e, sort_keys=True) for e in other_store._events(robot, kind)]
+            mine_only = [e for e in mine if e not in set(theirs)]
+            theirs_only = [e for e in theirs if e not in set(mine)]
+            if mine_only and theirs_only:
+                raise ValueError(f"{kind}: both stores hold status/pin decisions the other lacks "
+                                 f"({len(mine_only)} here, {len(theirs_only)} there); decide on the PC "
+                                 "mirror only and sync from it")
+            plan.append((dst, copies, theirs_only))
+        copied = appended = 0
+        for dst, copies, new_events in plan:
+            self._mkdir(dst / "records")
+            for target, data in copies:
+                self._write_new(target, data)
                 copied += 1
-            mine = {json.dumps(e, sort_keys=True) for e in self._events(robot, kind)}
-            theirs = CalibrationStore(other_root)._events(robot, kind)
-            new = [e for e in theirs if json.dumps(e, sort_keys=True) not in mine]
-            if new:
-                with open(dst / "events.jsonl", "a", encoding="utf-8") as stream:
-                    for event in new:
-                        stream.write(json.dumps(event, allow_nan=False) + "\n")
-                    stream.flush()
-                    os.fsync(stream.fileno())
-                appended += len(new)
+            if new_events:
+                self._append(dst / "events.jsonl", new_events)
+                appended += len(new_events)
         return {"records": copied, "events": appended}
 
     # --- reads ---------------------------------------------------------------
@@ -305,6 +364,9 @@ def check_values(kind, values, *, nominal=None):
             return "pitch_rad/height_m missing or not finite numbers"
         if not (-0.2 <= pitch <= 0.6 and 0.02 <= height <= 0.2):
             return f"pitch_rad {pitch} or height_m {height} outside the physical range"
+        for key in PROFILE_POSITIVE_KEYS:
+            if key in values and not (_real(values[key]) and values[key] > 0):
+                return f"{key} must be a finite positive number"
         return None
     return f"unknown kind {kind!r}"
 

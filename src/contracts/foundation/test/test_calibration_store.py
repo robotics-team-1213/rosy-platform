@@ -1,6 +1,7 @@
 """Versioned calibration store (core_common/calibration_store.py, D-47 addendum 2026-10-01)."""
 import json
 import math
+import os
 
 import pytest
 
@@ -175,6 +176,80 @@ def test_resolve_falls_back_on_any_store_error_and_on_implausible_values(tmp_pat
 ])
 def test_check_values(kind, values, nominal, ok):
     assert (check_values(kind, values, nominal=nominal) is None) is ok
+
+
+def test_an_append_after_a_torn_tail_is_not_lost(tmp_path):
+    # F1: power cut mid-append leaves no trailing newline; the next accept must survive.
+    store = CalibrationStore(tmp_path)
+    a = add(store, 3.17, "2026-10-01T10:00:00.000000Z")
+    events = tmp_path / ROBOT / "lidar_mount" / "events.jsonl"
+    events.write_text('{"record": "' + a + '", "sta')          # torn, no newline
+    store.set_status(ROBOT, "lidar_mount", a, "accepted", actor="op")
+    assert store.current(ROBOT, "lidar_mount")["id"] == a
+
+
+def _two_stores(tmp_path):
+    pc, robot = CalibrationStore(tmp_path / "pc"), CalibrationStore(tmp_path / "robot")
+    rid = pc.add(ROBOT, "lidar_mount", {"lidar_yaw_offset": 3.17}, method="t/1",
+                 created_at="2026-10-01T10:00:00.000000Z")
+    robot.merge_from(tmp_path / "pc", ROBOT)
+    return pc, robot, rid
+
+
+def test_sync_refuses_when_both_sides_decided_independently(tmp_path):
+    # F2: decisions on both sides could make `current` differ; refuse, write nothing.
+    pc, robot, rid = _two_stores(tmp_path)
+    pc.set_status(ROBOT, "lidar_mount", rid, "accepted", actor="op")
+    robot.set_status(ROBOT, "lidar_mount", rid, "rejected", actor="someone-on-the-robot")
+    before = (tmp_path / "robot" / ROBOT / "lidar_mount" / "events.jsonl").read_bytes()
+    with pytest.raises(ValueError, match="decide on the PC"):
+        robot.merge_from(tmp_path / "pc", ROBOT)
+    assert (tmp_path / "robot" / ROBOT / "lidar_mount" / "events.jsonl").read_bytes() == before
+
+
+def test_a_conflict_in_one_kind_writes_nothing_in_any_kind(tmp_path):
+    # F8: the whole merge is checked before the first write.
+    pc, robot, rid = _two_stores(tmp_path)
+    wheel = pc.add(ROBOT, "wheel_odometry", {"wheel_radius": 0.0271, "wheel_separation": 0.0968}, method="t/1")
+    pc.set_status(ROBOT, "lidar_mount", rid, "accepted", actor="op")
+    robot.set_status(ROBOT, "lidar_mount", rid, "rejected", actor="x")
+    with pytest.raises(ValueError):
+        robot.merge_from(tmp_path / "pc", ROBOT)
+    assert not (tmp_path / "robot" / ROBOT / "wheel_odometry" / "records" / f"{wheel}.json").exists()
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX modes")
+def test_directories_and_files_are_group_writable(tmp_path):
+    # F4: a second member of rosy-calib must be able to write.
+    store = CalibrationStore(tmp_path)
+    rid = add(store, 3.17, "2026-10-01T10:00:00.000000Z")
+    store.set_status(ROBOT, "lidar_mount", rid, "accepted", actor="op")
+    base = tmp_path / ROBOT / "lidar_mount"
+    for folder in (tmp_path / ROBOT, base, base / "records"):
+        assert folder.stat().st_mode & 0o7777 == 0o2775
+    for file in (base / "events.jsonl", base / "records" / f"{rid}.json"):
+        assert file.stat().st_mode & 0o777 == 0o664
+
+
+def test_records_are_written_whole_and_never_leave_a_temporary(tmp_path):
+    store = CalibrationStore(tmp_path)
+    add(store, 3.17, "2026-10-01T10:00:00.000000Z")
+    assert [p.name for p in (tmp_path / ROBOT / "lidar_mount" / "records").iterdir()
+            if p.name.startswith(".")] == []
+
+
+@pytest.mark.parametrize("extra,ok", [
+    ({}, True),
+    ({"width": 320, "height": 240, "fx": 281.6, "cx": 160.0, "cy": 120.0, "max_range_m": 0.6}, True),
+    ({"fx": 0.0}, False),
+    ({"width": -320}, False),
+    ({"cy": True}, False),
+    ({"max_range_m": "0.6"}, False),
+])
+def test_camera_profile_intrinsics_must_be_finite_positive(extra, ok):
+    # F7
+    values = {"pitch_rad": 0.195, "height_m": 0.058, **extra}
+    assert (check_values("camera_profile", values) is None) is ok
 
 
 def test_names_are_checked():
