@@ -60,6 +60,18 @@
    - 사이트 PC의 자동 반영은 `models/inbox/`를 감시한다. 완성 표식이 있는 폴더만 intake에 넣는다. 통과하면 `accepted`로, 떨어지면 `rejected`로 옮긴다.
    - HF는 쓸 수 있는 사람을 위한 선택 백엔드로 남는다. HF 계정이 없어도 전체 루프가 돈다.
 
+9. **닫힌 role 목록에 `wall`을 더한다(D-356 목록 확장).**
+   - 흰 벽과 흰 테이프를 가르는 것이 학습 데이터의 첫 목표다.
+   - `wall`은 차선도 주행 가능 영역도 아니다. 후처리는 차선 중심 계산에서 `wall` 화소를 빼고, `status`에 벽 비율을 낸다. `ignore`와 달리 평가와 라벨에서 따로 센다.
+   - 추출은 프레임마다 시각이 가장 가까운 `scan`을 곁 데이터로 붙인다. LiDAR 투영 벽 라벨(D-379)의 입력이다.
+   - 기본 클래스 목록(D-379와 합의):
+     - 0 floor/`background`
+     - 1 lane_line/`lane_marking`
+     - 2 wall/`wall`
+     - 3 drivable/`drivable`
+     - 4 stop_line/`stop_line`
+     - 5 crosswalk/`ignore`
+
 **Consequences:** 섀도 결과와 불일치 스냅샷이 쌓이면 D-356 데이터셋 도구의 입력이 되고, 나중에 D-205 P3 재생 게이트의 재료가 된다. onnxruntime과 디렉터리 규칙은 다음 이미지 릴리스부터 SD에 들어간다. 그 전의 벤치 장치는 기록된 수동 설치다. Pi 5에서의 지연과 CPU는 첫 장치 실측 전까지 모른다. 지연 예산(8 fps의 한 주기 125 ms)을 넘으면 노드는 프레임을 건너뛰고, 그 비율을 `status`에 낸다.
 
 **Validation:**
