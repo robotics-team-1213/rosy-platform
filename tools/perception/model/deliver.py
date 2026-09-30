@@ -309,8 +309,9 @@ def _run(runner, cmd, timeout: float):
 
 
 def _remote_rc(r) -> int:
-    """75 busy and 76 held pass through for the watcher; any other failure is 1."""
-    return r.returncode if r.returncode in (LOCK_BUSY_EXIT, HELD_EXIT) else 1
+    """75 busy, 76 held and 3 history not written pass through (the docstring's codes);
+    any other remote failure is 1."""
+    return r.returncode if r.returncode in (LOCK_BUSY_EXIT, HELD_EXIT, HISTORY_EXIT) else 1
 
 
 def _sha256(path: Path) -> str:

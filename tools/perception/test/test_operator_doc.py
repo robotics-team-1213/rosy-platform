@@ -90,3 +90,25 @@ def test_runbook_uses_the_native_path_the_release_payload_packs():
             assert path.startswith(on_device), (doc.name, path, on_device)
             assert (NATIVE_SRC / path.removeprefix(on_device)).exists(), path
     assert on_device in RUNBOOK.read_text(encoding="utf-8")
+
+
+def test_exit_code_table_is_exact():
+    import sys
+    for p in ("model", "dataset"):
+        sys.path.insert(0, str(ROOT / "tools" / "perception" / p))
+    import deliver
+    import harvest
+    import watch
+    text = DOC.read_text(encoding="utf-8")
+    section = text.split("### 종료 코드", 1)[1].split("\n## ", 1)[0]
+    rows = set()
+    for line in section.splitlines():
+        cells = [c.strip().strip("`") for c in line.strip().strip("|").split("|")]
+        if len(cells) == 3 and cells[1].isdigit():
+            rows.add((cells[0], int(cells[1])))
+    want = {("deliver", c) for c in (0, 1, 2, deliver.HISTORY_EXIT, deliver.LOCK_BUSY_EXIT,
+                                     deliver.HELD_EXIT)}
+    want |= {("harvest", c) for c in (0, 1, 2, harvest.EXIT_NOT_IDLE)}
+    want |= {("watch", c) for c in (0, 1, 2, watch.LIST_FAILED_EXIT)}
+    want |= {("doctor", c) for c in (0, 1, 2)}
+    assert rows == want

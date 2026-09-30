@@ -705,7 +705,7 @@ def test_release_hold_cli():
     assert '"release-hold"' in runner.calls[0][-1]
 
 
-@pytest.mark.parametrize("rc, expected", [(75, 75), (76, 76), (3, 1), (1, 1)])
+@pytest.mark.parametrize("rc, expected", [(75, 75), (76, 76), (3, 3), (1, 1), (124, 1)])
 def test_push_passes_busy_and_held_through(tmp_path, rc, expected):
     models = tmp_path / "models"
     rev = _model(models, "pass")
@@ -725,6 +725,12 @@ def test_push_passes_busy_and_held_through(tmp_path, rc, expected):
 
 def test_rollback_busy_is_75():
     assert deliver.main(["rollback", "robot", *SSH], runner=FakeRunner(returncode=75)) == 75
+
+
+@pytest.mark.parametrize("action", ["rollback", "release-hold"])
+def test_history_not_written_is_exit_3_as_documented(action):
+    assert deliver.HISTORY_EXIT == 3
+    assert deliver.main([action, "robot", *SSH], runner=FakeRunner(returncode=3)) == 3
 
 
 # executed under bash (flock shim in Git Bash)

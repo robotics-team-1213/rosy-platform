@@ -377,10 +377,20 @@ def test_at_most_n_intakes_per_run_oldest_first(tmp_path):
     assert fakes.intakes == [C1, C2, C3]
 
 
-def test_hf_listing_failure_exits_3_and_keeps_state(tmp_path):
+def test_watcher_exit_codes_never_overlap_the_robot_tools():
+    import deliver
+    import harvest
+    assert (watch.BUSY_EXIT, watch.HELD_EXIT) == (deliver.LOCK_BUSY_EXIT, deliver.HELD_EXIT)
+    own = {0, 1, 2, watch.LIST_FAILED_EXIT}
+    assert watch.LIST_FAILED_EXIT == 5
+    assert not own - {0, 1, 2} & {deliver.HISTORY_EXIT, harvest.EXIT_NOT_IDLE,
+                                  deliver.LOCK_BUSY_EXIT, deliver.HELD_EXIT}
+
+
+def test_hf_listing_failure_exits_5_and_keeps_state(tmp_path):
     cfg = _config(tmp_path)
     fakes = Fakes([C1], list_error=OSError("offline"))
-    assert _run(cfg, fakes) == 3
+    assert _run(cfg, fakes) == watch.LIST_FAILED_EXIT
     assert not (tmp_path / "state.json").exists()
     assert fakes.intakes == []
 

@@ -671,7 +671,7 @@ lower `push_timeout_s`.
 Exit codes in the journal: `0` finished with nothing waiting on a retry (a
 failed intake or a held robot is a recorded outcome), `1` an intake
 infrastructure error, a store move or a robot push failed and will be retried,
-`2` config or state file error, `3` the listing failed (store missing or
+`2` config or state file error, `5` the listing failed (store missing or
 unreadable, or the HF listing failed) and nothing was recorded. The state
 lives in `/var/lib/rosy-model-watch/state.json`; deleting an entry makes the
 next run process it again.

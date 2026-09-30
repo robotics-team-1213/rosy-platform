@@ -198,13 +198,32 @@ rosy_ml harvest pinky-005                   # 끝난 녹화 세션 가져오기
 | `replay clips for intake (0) ✗` | 재생 클립이 없다 | `replay_root`(또는 저장소 루트) 아래 `data/teleop/learning/*.mp4` |
 | `! local onnxruntime` | 내 PC에서 intake를 못 돌린다 (권고) | venv에 `pip install onnxruntime` |
 
+### 종료 코드
+
+`rosy_ml`의 종료 코드는 감싼 도구의 코드 그대로다(`deliver`, `rollback`, `release-hold`, `status`는
+deliver, `harvest`는 harvest). 사이트 자동 반영(watch)은 journal에 남는다.
+
+| 도구 | 코드 | 뜻 |
+|---|---|---|
+| deliver | `0` | 성공 |
+| deliver | `1` | 실패(SSH·scp·원격 단계, 시간 초과). 다시 한다 |
+| deliver | `2` | 내 PC에서 거부(인자, intake 보고서, 해시, 키 설정). 메시지대로 고친다 |
+| deliver | `3` | 로봇의 `history.jsonl`에 쓸 수 없다(디스크, 권한). "pointer changed, history not written"이면 포인터는 이미 바뀌었으니 `rosy_ml status`로 확인한다 |
+| deliver | `75` | busy: 다른 사람이 같은 로봇에서 작업 중이다. 잠시 뒤 다시 한다 |
+| deliver | `76` | held: 사이트 자동 반영(`--unless-held`)만 받는다. 그 로봇에 보류가 있다 |
+| harvest | `0` | 모두 가져왔다 |
+| harvest | `1` | 일부 세션이 실패했다. 다시 하면 남은 것만 가져온다 |
+| harvest | `2` | 인자가 잘못됐다 |
+| harvest | `4` | 로봇이 움직이는 중이거나 속도 값이 최신이 아니다. 로봇을 세우고 CORE와 오도메트리를 확인한다 |
+| doctor | `0` | 필수 점검 모두 통과 |
+| doctor | `1` | 필수 점검 중 `✗`가 있다 |
+| doctor | `2` | 설정이나 인자가 잘못됐다 |
+| watch | `0` | 끝났고 재시도할 것이 없다(탈락, 보류, busy는 기록된 결과다) |
+| watch | `1` | intake 설비 오류, store 이동 실패, 로봇 push 실패. 다음 실행에 다시 한다 |
+| watch | `2` | 설정이나 상태 파일 오류 |
+| watch | `5` | 목록을 못 읽었다(store가 없거나 마운트되지 않음, HF 백엔드면 HF 목록 실패). 아무것도 기록하지 않았다 |
+
 그 밖에:
 
-- 종료 코드 `75`(busy): 다른 사람이 같은 로봇에서 작업 중이다. 잠시 뒤 다시 한다.
-- 종료 코드 `76`(held): 사이트 자동 반영만 받는다. 그 로봇에 보류가 있다.
-- 종료 코드 `3`: 로봇의 `history.jsonl`에 쓸 수 없다(디스크, 권한). 메시지가
-  "pointer changed, history not written"이면 포인터는 이미 바뀌었으니 `rosy_ml status`로 확인한다.
-- `harvest`가 종료 코드 4: 로봇이 움직이는 중이거나 속도 값이 최신이 아니다. 로봇을 세우고,
-  CORE와 오도메트리 상태를 확인한다.
 - 자동 반영이 어떤 로봇에 안 들어간다: `rosy_ml status <robot>`의 `hold:` 줄에 누가 걸었는지
   나온다. 그 사람과 확인한 뒤 `rosy_ml release-hold <robot>`.

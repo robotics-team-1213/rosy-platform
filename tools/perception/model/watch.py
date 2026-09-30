@@ -73,8 +73,10 @@ Config (YAML):
 Exit codes: 0 run finished and nothing is waiting on a retry (a failed intake,
 a held robot or a busy lock is a recorded outcome, not an error); 1 an intake
 infrastructure error, a store move or a robot push failed this run (retried
-later); 2 bad config or state file; 3 the listing failed (store missing or
-unreadable, or the HF listing failed; nothing recorded)."""
+later); 2 bad config or state file; 5 the listing failed (store missing or
+unreadable, or the HF listing failed; nothing recorded). A robot push that
+fails with deliver.py's own code (3, 75, 76) is logged with that code; the
+watcher's exit stays one of these."""
 
 from __future__ import annotations
 
@@ -100,8 +102,9 @@ STATE_VERSION = 1
 _REPO = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*")
 _NAME = re.compile(r"[A-Za-z0-9._][A-Za-z0-9._-]*")
 _SHA = re.compile(r"[0-9a-f]{40}")
-BUSY_EXIT, HELD_EXIT = 75, 76  # deliver.py: robot lock busy / robot held (no attempt used)
-LIST_FAILED_EXIT = 3
+from deliver import HELD_EXIT, LOCK_BUSY_EXIT as BUSY_EXIT  # noqa: E402  no attempt used
+# 5, not 3: deliver.py's 3 (history not written) and harvest.py's 4 (not idle) stay distinct.
+LIST_FAILED_EXIT = 5
 BACKENDS = ("inbox", "hf")
 INBOX_KEY = "store-inbox"
 
