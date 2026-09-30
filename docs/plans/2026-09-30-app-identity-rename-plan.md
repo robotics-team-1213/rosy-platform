@@ -2,7 +2,7 @@
 
 **결정:** [D-374](../adr/D-374-app-identity-follows-one-role-name.md) Accepted (2026-09-30). D-370 2항의 "식별자는 그대로"를 대체한다. 사용자 결정: 규칙·대응표 그대로, 관제 화면은 안 B, 폰 재설치·재페어링 1회 수용, 경기 보드·제어 진단·시뮬 라이브 뷰는 지금 바꾸지 않음(아래 열린 질문 1–3 닫힘).
 
-**현재 상태:** 문서만 있다(2026-09-30, main `15a4302f` 기준 조사). 단계마다 별도 브랜치(D-372 이름 규칙: `refactor/app-identity-s<N>-<대상>`)와 별도 병합이다.
+**현재 상태:** 문서만 있다(2026-09-30, main `15a4302f` 기준 조사). 단계마다 별도 브랜치(D-372 이름 규칙: `refactor/d374-s<N>-<대상>`)와 별도 병합이다.
 
 **공통 규칙:**
 - Windows 호스트는 `python`이다. pytest `--basetemp X:\DevTemp\<session>\pt`.
@@ -130,7 +130,12 @@
 
 ### 단계 1 — 천장 카메라 앱 + Site Vision
 
-**게이트:** `feat/camera-preview-rectification`(overhead 9파일)과 `feat/d359-theme-ready`(1파일) 주인에게 알린다. 먼저 병합하거나, 이동 뒤 rebase하겠다는 답을 받는다. main 체크아웃 `git status --porcelain -- src/site/overhead`가 비어 있어야 한다.
+**게이트:** `feat/camera-preview-rectification`(overhead 9파일), `feat/d359-theme-ready`(1파일), `feat/overhead-app-site-ca-pin`(overhead 22파일, D-341 카메라 TLS 고정, 진행 중) 주인에게 알린다. 먼저 병합하거나, 이동 뒤 rebase하겠다는 답을 받는다. main 체크아웃 `git status --porcelain -- src/site/overhead`가 비어 있어야 한다.
+
+**`feat/overhead-app-site-ca-pin` 후속(이 스택이 main에 착지한 뒤):** 그 브랜치가 새로 만든 `PinnedTrust.kt`·`PinnedTrustTest.kt`는 이름 바뀜 감지가 따라오지 않는 새 파일이다. 병합할 때 다음을 손으로 고친다.
+- `package io.github.livsbittt.rosy.overhead.link` → `package io.github.livsbittt.rosy.ceilingcamera.link`, 파일 위치도 `…/rosy/ceilingcamera/link/`.
+- import `…rosy.overhead.Vectors`, `…rosy.overhead.settings.PairingUri`, `…rosy.overhead.PIN_PREVIEW` → `…rosy.ceilingcamera.*`.
+- 충돌 풀이: `SettingsScreen.kt`, `src/site/site_vision/logs.md`(추가만 — 두 쪽 항목을 날짜 순으로 모두 둔다), `src/site/site_vision/test/test_overhead_cli.py`(별칭 시험과 그 브랜치의 새 시험을 모두 둔다).
 
 **커밋 A — 이동만:**
 ```
@@ -246,6 +251,7 @@ python tools/harness/rosy_harness.py generate && python tools/harness/rosy_harne
 | `uiux/host-console-readback-evidence` | 0 | 0 | 2 | 0 |
 | `uiux/mobile-acceptance` | 0 | 0 | 2 | 0 |
 | `refactor/web-transport` | 0 | 1 | 1 | 0 |
+| `feat/overhead-app-site-ca-pin` (2026-09-30 추가, 진행 중) | 22 | 0 | 0 | 0 |
 
 `refactor/d362-*` 두 브랜치는 D-372 보존 백업이다. 같은 내용이 `b67c9dfc`·`13803932`로 main에 있다.
 
