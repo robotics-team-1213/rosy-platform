@@ -64,6 +64,13 @@ def test_every_icon_uses_only_its_tokens():
         assert colours == allowed, (ident, colours, allowed)
 
 
+def test_token_names_are_defined_once():
+    """TOKENS is a dict: a second definition would silently win (D-359 adds theme blocks)."""
+    names = re.findall(r"(--[a-z0-9-]+)\s*:", (WEB / "tokens.css").read_text(encoding="utf-8"))
+    repeated = sorted({name for name in names if names.count(name) > 1})
+    assert repeated == [], repeated
+
+
 def test_no_icon_uses_a_status_colour():
     status = {value.lower() for name, value in TOKENS.items() if name.startswith("--status-")}
     assert status, "tokens.css has no --status-* values; the guard would be vacuous"

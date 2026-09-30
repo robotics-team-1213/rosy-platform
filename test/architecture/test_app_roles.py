@@ -38,6 +38,8 @@ FLEET_VISION_ROUTES = {"/api/fleet/vision/sources", "/api/fleet/vision/lease"}
 LEASE_KEYS = {"source_id", "lease", "frame_path", "expires_in_s"}
 # 5. Only e-stop may be owned by several surfaces (D-370 4항).
 SHARED_OWNERSHIP = {"estop"}
+# A transitional overlap must name the ADR that retires it.
+TRANSITIONAL = re.compile(r"\bD-\d+")
 
 
 def _hits(root: Path, suffixes: tuple[str, ...], rules: dict[str, re.Pattern]) -> list[str]:
@@ -53,12 +55,15 @@ def _hits(root: Path, suffixes: tuple[str, ...], rules: dict[str, re.Pattern]) -
 
 
 def owns_overlaps(rows: list[dict]) -> list[str]:
-    """Operations owned by two surfaces, except e-stop and entries marked transitional."""
+    """Operations owned by two surfaces, except e-stop and entries marked transitional.
+
+    An entry counts as transitional only when its note cites an ADR (``D-<n>``).
+    """
     owners: dict[str, list[str]] = {}
     for row in rows:
         for entry in row.get("owns") or []:
             if isinstance(entry, dict):
-                if entry.get("transitional"):
+                if TRANSITIONAL.search(str(entry.get("transitional") or "")):
                     continue
                 entry = entry.get("id")
             owners.setdefault(entry, []).append(row["id"])
@@ -113,7 +118,11 @@ def test_each_operation_has_one_owner():
               for row in rows for entry in row.get("owns") or []}
     assert {"estop", "manual-drive", "site-monitoring", "robot-detail"} <= owners
     camera = next(row for row in rows if row["id"] == "overhead-camera-app")
-    assert "estop" not in camera["owns"]
+    camera_owns = {entry if isinstance(entry, str) else entry["id"] for entry in camera["owns"]}
+    assert "estop" not in camera_owns
+    notes = [entry["transitional"] for row in rows for entry in row.get("owns") or []
+             if isinstance(entry, dict) and "transitional" in entry]
+    assert notes and all(TRANSITIONAL.search(str(note)) for note in notes), notes
 
 
 def test_overlap_check_allows_only_estop_and_transitional():
@@ -126,3 +135,13 @@ def test_overlap_check_allows_only_estop_and_transitional():
     rows[0]["owns"][1] = "manual-drive"
     rows[2]["owns"].append("manual-drive")
     assert owns_overlaps(rows) == ["manual-drive: dashboard, pilot, fleet"]
+
+
+def test_transitional_without_an_adr_number_is_an_overlap():
+    rows = [
+        {"id": "dashboard", "owns": [{"id": "manual-drive", "transitional": "later"}]},
+        {"id": "pilot", "owns": ["manual-drive"]},
+    ]
+    assert owns_overlaps(rows) == ["manual-drive: dashboard, pilot"]
+    rows[0]["owns"][0]["transitional"] = "D-370 4항 1"
+    assert owns_overlaps(rows) == []
