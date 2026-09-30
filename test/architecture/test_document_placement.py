@@ -49,9 +49,10 @@ MUST_TRACK = [
     "data/teleop/learning/teleop_20260919_151213_part01.mp4",
 ]
 
+# DESIGN.md is the shared visual guide D-359 §8 places at the repo root.
 ROOT_FILES = {
     ".dockerignore", ".gitattributes", ".gitignore",
-    "AGENTS.md", "CONCEPTS.md", "LICENSE", "PRODUCT.md", "README.md", "STATUS.md", "env.sh",
+    "AGENTS.md", "CONCEPTS.md", "DESIGN.md", "LICENSE", "PRODUCT.md", "README.md", "STATUS.md", "env.sh",
 }
 MODULE_ROOT_DOCS = {"README.md", "AGENTS.md", "CLAUDE.md", "progress.md", "logs.md", "index.md"}
 # Accepted ADRs that name a module-root file keep it there until superseded.
