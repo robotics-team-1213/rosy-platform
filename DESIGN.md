@@ -228,7 +228,7 @@ D-280 다섯 원칙은 시각에서 이렇게 묶인다.
 
 굵기는 `--weight-regular/medium/label/emphasis/strong`(400/500/600/650/700), 행간은 `--leading-flat … --leading-copy`(1–1.5), 자간은 `--track-label`(0.12em)·`--track-wide`(0.04em)·`--track-state`(0.06em) 또는 0만 쓴다([D-294](docs/adr/D-294-shared-typography-and-interaction-tokens.md)).
 
-**The Latin Tracking Rule.** 자간 토큰은 라틴 대문자 라벨용이다. 자기 글자에 한글이 있는 요소(섞인 글 포함)는 자간 0이다: `ui.js`가 그런 요소에 `data-hangul`을 달고(글자가 바뀌면 따라간다) `components.css`가 그 요소의 `--track-*`를 0으로 둔다. 모든 페이지가 `lang="ko"`라 `:lang()`으로는 가를 수 없고, 한 요소 안에서 글자별 자간은 CSS로 줄 수 없어 섞인 글은 한글 쪽을 따른다.
+**The Latin Tracking Rule.** 자간 토큰은 라틴 대문자 라벨용이다. 자기 글자에 한글이 있는 요소(섞인 글 포함)는 자간 0이다: `ui.js`가 그런 요소에 `data-hangul`을 달고(글자가 바뀌면 따라간다) `components.css`가 그 요소의 `--track-*`를 0으로, `--mono`를 `--body`로 둔다(등폭 글꼴에는 한글이 없어 대체 글꼴로 그려지고 넓은 등폭 띄어쓰기만 남는다). 모든 페이지가 `lang="ko"`라 `:lang()`으로는 가를 수 없고, 한 요소 안에서 글자별 자간은 CSS로 줄 수 없어 섞인 글은 한글 쪽을 따른다.
 
 **The Six Steps Rule.** 글자 크기는 여섯 단계로 닫혀 있다. 캔버스 글꼴도 `RosyPalette.canvasFont`로 토큰 가족·12px 이상이다.
 

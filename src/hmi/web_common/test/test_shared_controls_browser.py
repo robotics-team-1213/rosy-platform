@@ -33,7 +33,7 @@ TRACKING_PAGE = """<!doctype html><html lang="ko"><head><meta charset="utf-8">
 <link rel="stylesheet" href="/common/tokens.css">
 <link rel="stylesheet" href="/common/components.css">
 <script type="module" src="/common/ui.js"></script></head>
-<body><ui-button id="seg" kind="segment" type="button">점유 지도</ui-button>
+<body style="font-family: var(--body)"><ui-button id="seg" kind="segment" type="button">점유 지도</ui-button>
 <ui-tag id="latin" status="neutral">RUNNING</ui-tag>
 <ui-tag id="ko" status="neutral">대기</ui-tag>
 <ui-brand><b>ROSY</b><small id="sub">작업 준비</small></ui-brand></body></html>"""
@@ -212,6 +212,14 @@ def test_hangul_labels_drop_the_latin_tracking(page):
     assert _spacing_px(probe["latin"]["spacing"]) == pytest.approx(track_state * probe["latin"]["size"], abs=0.05)
     for key in ("seg", "ko", "sub"):
         assert _spacing_px(probe[key]["spacing"]) == 0, (key, probe[key])
+    # 등폭 칸의 띄어쓰기도 한글을 띄운다 — 한글 라벨은 본문 가족, 라틴 태그는 등폭 그대로다.
+    families = page.evaluate("""() => ({
+      body: getComputedStyle(document.body).fontFamily,
+      latin: getComputedStyle(document.getElementById('latin')).fontFamily,
+      ko: getComputedStyle(document.getElementById('ko')).fontFamily,
+      mono: getComputedStyle(document.documentElement).getPropertyValue('--mono').trim()})""")
+    assert families["ko"] == families["body"], families
+    assert families["latin"] != families["body"], families
 
     page.evaluate("""() => {
       document.getElementById('latin').textContent = '정지';
