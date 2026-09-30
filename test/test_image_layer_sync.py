@@ -458,14 +458,17 @@ def test_a_run_cut_off_part_way_is_undone_from_its_backups(device):
     before = _tree(device)
     _sync(device, NEW_ID, Runner(), dry_run=False)
     folder = _unflag_last_manifest(device)
-    # The power failed before rosy-io.service was replaced.
-    old_io = folder / "etc/systemd/system/rosy-io.service"
-    shutil.copyfile(old_io, device / "etc/systemd/system/rosy-io.service")
+    # The power failed before mapping_approval.py was written; the replaced
+    # rosy-io.service and the other new files had landed.
+    (device / "opt/rosy/native-runtime/mapping_approval.py").unlink()
     runner = Runner()
 
     result = sync_mod.reconcile(device, dry_run=False)
 
     assert result[0][0]["outcome"] == "undone"
+    assert "/etc/systemd/system/rosy-io.service" in result[0][0]["paths"]
+    assert "/opt/rosy/native-runtime/mapping_approval.py" not in result[0][0]["paths"]
+    assert result[1]["daemon_reload"] and result[1]["udev_reload"]
     after = {k: v for k, v in _tree(device).items() if not k.startswith(sync_mod.BACKUP_ROOT)}
     assert after == {k: v for k, v in before.items() if not k.startswith(sync_mod.BACKUP_ROOT)}
     assert json.loads((folder / sync_mod.BACKUP_MANIFEST).read_text(encoding="utf-8"))["abandoned"] is True
