@@ -76,13 +76,13 @@ def validate(record: object) -> str | None:
     if ca_reason:
         return ca_reason
 
-    has_secret = record.get("credential") is not None
+    inline = record.get("credential") is not None
     has_ref = record.get("credential_ref") is not None
-    if has_secret and has_ref:
+    if inline and has_ref:
         return "credential_conflict"
-    if not (has_secret or has_ref):
+    if not (inline or has_ref):
         return "missing_credential"
-    value = record["credential"] if has_secret else record["credential_ref"]
+    value = record["credential"] if inline else record["credential_ref"]
     if not isinstance(value, str) or not value:
         return "bad_value"
 
@@ -106,7 +106,7 @@ def _is_utc_timestamp(value: object) -> bool:
     if not isinstance(value, str) or not _EXPIRES_AT.match(value):
         return False
     try:
-        datetime.strptime(value[:19], "%Y-%m-%dT%H:%M:%S")
+        datetime.strptime(value[:19] + "+0000", "%Y-%m-%dT%H:%M:%S%z")
     except ValueError:
         return False
     return True

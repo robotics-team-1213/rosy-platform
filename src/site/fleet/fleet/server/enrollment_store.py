@@ -17,10 +17,9 @@ import time
 from contextlib import closing
 from pathlib import Path
 
+from core_common.protocol.device_kind import ROBOT
 from cryptography.exceptions import InvalidTag
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
-
-from core_common.protocol.device_kind import ROBOT
 
 from .sqlite_policy import configure_connection, enable_wal
 

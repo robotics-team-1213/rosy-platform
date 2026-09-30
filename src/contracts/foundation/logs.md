@@ -200,3 +200,9 @@
 - 결정: WS 4400의 재시도 사유(빈 사유·`no hello` 등, ingest 벡터 `close_4400_reasons.retry`와 같은 목록)는 D-341 11항 전환 규칙대로 `busy`로 둔다(`auth_retry` 아님 — 자격은 의심받지 않는다). 표에 없는 WS 코드는 `unreachable`, HTTP 4xx는 `protocol_mismatch`, 5xx는 `busy`. `tls_host`는 `.local` 이름만(IP면 `ip_as_tls_host`), `expires_at`은 `Z` 붙은 UTC만, 모르는 최상위 필드는 무시한다. CA 판정은 최소 DER 탐색으로 basicConstraints `cA`만 읽는다(서명·유효기간·체인은 TLS 몫). 벡터의 인증서는 공개 fixture이고 44자로 줄바꿈해 비밀 스캔의 50자 엔트로피 기준 아래에 둔다. 개인 키는 작성 때 버렸다.
 - 증거: `test_site_link_vectors.py` 71 passed, foundation 전체 279 passed. 변이 증명: CA 판정을 항상 참으로 바꾸면 `ca_pem_is_leaf`·`ca_pem_leaf_then_ca_bundle` 2건이 빨개진다.
 - gate 변화: 없음(LOCAL). Kotlin 쪽 로더는 rosy-84 몫.
+
+## 2026-10-01 · uncommitted · fix(protocol): site_link 비밀 스캔 오탐·ruff 정리
+
+- 변경: `site_link.py`의 지역 변수 `has_secret`가 비밀 스캔 `credential` 규칙에 걸려 `inline`으로 바꿨다(D-256: 스캐너가 아니라 호출 자리를 고친다). `expires_at` 달력 검사는 `%z`를 붙인 aware datetime으로(DTZ007), 새 시험의 import 정렬을 맞췄다. 동작 변경 없음.
+- 증거: `test/test_release_boundary_guards.py` 73 passed(수정 전 `test_no_secrets_in_tracked_files` 1 failed), foundation 279 passed, 새 파일 ruff 통과.
+- gate 변화: 없음.

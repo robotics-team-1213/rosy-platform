@@ -6,7 +6,6 @@ import json
 from pathlib import Path
 
 import pytest
-
 from core_common.protocol import device_kind, failure_class, site_link
 
 FIXTURES = Path(__file__).resolve().parents[4] / "test/fixtures/protocol"
