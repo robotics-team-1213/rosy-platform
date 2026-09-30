@@ -4014,3 +4014,9 @@
 - 변경: `site-lan-discovery-profile.md` 33행. `/healthz`가 정확히 `{"status":"ok"}`가 아니라 1024바이트 이하 JSON 객체에 `status == "ok"`, `role`이 있으면 `fleet`, 모르는 키 무시로 적었다(D-370 공개 상태 모양 대비).
 - 증거: `test/test_site_fleet_mdns.py` health 시험, `test/test_discovery_txt_profile_parity.py`.
 - gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · docs(reference): API Ref 군집 소켓 표에서 `?token=` 표기 제거
+
+- 변경: `ROSY API & Protocol Reference.md` §군집 소켓 표의 `WS /ws/swarm/pose?token=`·`/ws/swarm/reference?token=`를 경로만으로 고치고 "인증은 AUTH-101 첫 메시지 방식(Fleet도 D-370 S7부터)" 한 줄을 더했다. AUTH-101의 `?token=` 한시 수락 문구는 그대로.
+- 증거: `src/site/fleet/test/test_transport.py`.
+- gate 변화: 없음.

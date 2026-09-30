@@ -708,3 +708,9 @@
 - 변경: 코드 리뷰(APPROVE WITH FIXES) 1·2번. 다른 로봇 것을 보내거나 새 소켓에 밀려나 `PAIRING_INVALID`를 받은 소켓은 4401로 닫아 Agent가 백오프 재접속하게 한다(남은 좀비 연결 방지). `SiteHub.handle`의 `session`을 키워드 전용으로 바꾸고 네트워크 코드는 반드시 넘긴다고 적었다. 3번(빈 토큰)은 `set_pairing_token`이 이미 거절해 해당 없음, 4번(Agent 재시작 뒤 seq)은 F7 부팅 세대로 다음 이미지 회차(L2).
 - 증거: `src/site/fleet/test/` 956 passed, 6 skipped; `test_fleet_agent.py`·`test_fleet_agent_mdns.py` 15 passed (2026-10-01 Windows). `test_console_hub_integration.py`의 간헐 실패는 uvicorn 기동 4 s 대기 초과(Hub 코드 이전 단계)로, 같은 부하 교차 실행에서 main 1/8·이 브랜치 0/8 — 기존 부하 의존 flake.
 - gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · fix(swarm): D-370 S7 — Fleet→CORE WS는 첫 메시지 인증, URL에 토큰 없음
+
+- 변경: `swarm/robots.py` `ws_url`이 토큰을 받지 않는다(쿼리는 `types` 같은 나머지만). `swarm/transport.py` `HttpRobotClient._open_socket`이 접속 직후 `{"type": "auth", "token": ...}`를 첫 프레임으로 보낸다(pose·reference·events 세 소켓). 대시보드·Pilot과 같은 방식이고 CORE `ws.py:_authorize`의 첫 메시지 경로를 탄다. 5fd0c12e·5c0ce600 이미지가 이미 받으므로 `?token=` 대체 경로는 두지 않았다. 로봇이 첫 프레임 전에 닫으면 전송 실패를 삼키고 소켓을 읽어 닫힘 코드(4401/4403 → `RobotApiError`)와 앞선 프레임을 그대로 드러낸다. websockets는 DEBUG에서 모든 프레임을 찍으므로 로봇 소켓은 INFO로 고정한 `fleet.swarm.transport.websocket` 로거를 쓴다(토큰이 기록에 남지 않게).
+- 증거: `test_transport.py` 신규 시험(실제 websockets 서버: 세 경로 모두 URL에 토큰 없음, 첫 프레임이 auth, DEBUG 기록에 토큰 없음)과 URL 시험, `test_robots.py` `ws_url` 시험 3건 — 수정 전 5건 빨강, 수정 후 초록. `src/site/fleet/test/` 전체는 커밋 기록 참조.
+- gate 변화: 없음(LOCAL). CORE의 `?token=` 수락은 그대로(제거는 `contract_version` 관문 뒤).
