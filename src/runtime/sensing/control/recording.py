@@ -17,6 +17,7 @@ import json
 import os
 import re
 import shutil
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -58,6 +59,15 @@ SNAPSHOT_CACHE_BYTES = ((SNAPSHOT_FRAME_BUDGET_BYTES + SNAPSHOT_SIDE_BUDGET_BYTE
                         * SNAPSHOT_FPS * SNAPSHOT_SECONDS)  # 11,520,000 bytes
 SNAPSHOT_REQUESTS = ".snapshot-requests"
 SNAPSHOT_CACHE_PREFIX = ".snapshot-cache-"
+SNAPSHOT_NODE_SUFFIX = "snapshot_recorder"
+
+
+def snapshot_node_name(namespace: str = "") -> str:
+    """Recorder node per robot namespace. `ros2 bag record` cannot be placed in
+    a namespace (no --ros-args; checked on Jazzy), so the namespace goes into
+    the node name: /rosy_01 -> /rosy_01_snapshot_recorder/snapshot."""
+    ns = "_".join(p for p in namespace.strip("/").split("/") if p)
+    return f"{ns or 'rosy'}_{SNAPSHOT_NODE_SUFFIX}"
 
 
 def record_topics(camera_topic: str = CAMERA_TOPIC) -> tuple:
@@ -194,11 +204,15 @@ def snapshot_bag_command(cache_dir, namespace: str = "", node_name: str = "") ->
             "--topics", *_ns_topics(record_topics(COMPRESSED_CAMERA_TOPIC), namespace)]
 
 
-def write_snapshot_request(root, reason: str, values: dict, now) -> Path:
-    """Leave the trigger's reason for record_session before the service call."""
+def write_snapshot_request(root, reason: str, values: dict, now, *, seq: int | None = None) -> Path:
+    """Leave the trigger's reason for record_session before the service call.
+
+    File names sort by `seq` (default CLOCK_MONOTONIC ns, shared by all
+    processes of one boot), so an NTP step cannot reorder the FIFO pairing;
+    requests left from an earlier boot are dropped when the recorder starts."""
     folder = Path(root) / SNAPSHOT_REQUESTS
     folder.mkdir(parents=True, exist_ok=True)
-    stem = now.astimezone(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+    stem = f"{time.monotonic_ns() if seq is None else seq:020d}_{os.getpid()}"
     path, n = folder / f"{stem}.json", 1
     while path.exists():
         n += 1
@@ -232,6 +246,24 @@ def _mcap_index(p: Path) -> tuple[int, str]:
 def snapshot_files(cache_dir) -> list[Path]:
     cache = Path(cache_dir)
     return sorted(cache.glob("*.mcap"), key=_mcap_index) if cache.is_dir() else []
+
+
+def mcap_message_count(path) -> int | None:
+    """Messages in an MCAP file; None when unknown (no reader, unreadable)."""
+    try:
+        from mcap.reader import make_reader
+    except ImportError:
+        return None
+    try:
+        with open(path, "rb") as fh:
+            reader = make_reader(fh)
+            summary = reader.get_summary()
+            if summary is not None and summary.statistics is not None:
+                return int(summary.statistics.message_count)
+            fh.seek(0)
+            return sum(1 for _ in make_reader(fh).iter_messages())
+    except Exception:
+        return None
 
 
 def closed_snapshot_files(cache_dir) -> list[Path]:

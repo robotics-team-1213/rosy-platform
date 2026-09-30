@@ -20,9 +20,6 @@ from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
 from launch_ros.substitutions import FindPackagePrefix
 
-SNAPSHOT_NODE = 'rosy_snapshot_recorder'  # == record_session.DEFAULT_SNAPSHOT_NODE
-
-
 def generate_launch_description():
     config = os.path.join(get_package_share_directory('control'), 'config')
     namespace = LaunchConfiguration('namespace')
@@ -63,8 +60,10 @@ def generate_launch_description():
             package='control', executable='capture_trigger_node', namespace=namespace,
             output='screen', respawn=True, respawn_delay=2.0,
             condition=IfCondition(capture),
-            parameters=[{'recording_root': recording_root,
-                         'snapshot_service': f'/{SNAPSHOT_NODE}/snapshot'}],
+            # The recorder service name follows the namespace on both sides
+            # (control.recording.snapshot_node_name), so robots sharing a
+            # domain do not collide.
+            parameters=[{'recording_root': recording_root}],
         ),
         # Not respawned: it exits only on a full quota (2/3) or a broken ROS
         # environment (1), and says why; the trigger node then logs every
@@ -74,8 +73,7 @@ def generate_launch_description():
             cmd=[PathJoinSubstitution([FindPackagePrefix('control'), 'lib', 'control',
                                        'record_session']),
                  # "--opt=" + value keeps an empty namespace a real argument.
-                 '--snapshot', ['--root=', recording_root], ['--namespace=', namespace],
-                 '--node-name', SNAPSHOT_NODE],
+                 '--snapshot', ['--root=', recording_root], ['--namespace=', namespace]],
             output='screen', condition=IfCondition(capture),
             sigterm_timeout='40',
         ),

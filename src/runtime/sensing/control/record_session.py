@@ -23,14 +23,15 @@ from pathlib import Path
 from control.recording import (CAMERA_TOPIC, COMPRESSED_CAMERA_TOPIC, DEFAULT_ROOT,
                                SNAPSHOT_CACHE_PREFIX, adopt_snapshot, bag_command,
                                can_record, closed_snapshot_files, enforce_quota,
-                               finish_session, new_session, pending_snapshot_requests,
-                               record_topics, snapshot_bag_command, snapshot_files)
+                               finish_session, mcap_message_count, new_session,
+                               pending_snapshot_requests, record_topics,
+                               snapshot_bag_command, snapshot_files, snapshot_node_name)
 
 QUOTA_POLL_S = 5.0
 SNAPSHOT_POLL_S = 1.0  # how soon a dump shows up as a session folder
 STOP_TIMEOUT_S = 30
 TOPIC_LIST_TIMEOUT_S = 10
-DEFAULT_SNAPSHOT_NODE = "rosy_snapshot_recorder"
+DEFAULT_SNAPSHOT_NODE = snapshot_node_name("")
 
 
 def _ignore_signals() -> None:
@@ -150,11 +151,12 @@ class _Adopter:
                          camera_profile_revision=args.camera_profile_revision,
                          model_revision=args.model_revision)
 
-    def adopt(self, mcap: Path, fallback: str | None = None) -> None:
-        pending = pending_snapshot_requests(self.root)
-        path, request = pending[0] if pending else (None, None)
-        if request is None and fallback is not None:
-            request = {"reason": fallback, "values": {}, "requested_at": None}
+    def adopt(self, mcap: Path, request: dict | None = None) -> None:
+        """Pair with the oldest pending request unless `request` is given."""
+        path = None
+        if request is None:
+            pending = pending_snapshot_requests(self.root)
+            path, request = pending[0] if pending else (None, None)
         folder = adopt_snapshot(self.root, mcap, request, now=datetime.now(timezone.utc),
                                 **self.meta)
         if path is not None:
@@ -183,13 +185,21 @@ class _Adopter:
         shutil.rmtree(cache, ignore_errors=True)
 
     def recover(self) -> None:
-        """A cache left by a crash: keep every non-empty file (never unharvested
-        data is deleted), then drop the folder."""
+        """A cache left by a crash. A file with messages is a dump and becomes a
+        "recovered" session; a file with zero messages is the tail rosbag2 had
+        open (our own cache, not data) and is deleted; a file whose count is
+        unknown is kept. Recovery never consumes a request: requests left by
+        the crashed run have no data and are dropped."""
         for cache in sorted(self.root.glob(SNAPSHOT_CACHE_PREFIX + "*")):
             for mcap in snapshot_files(cache):
-                if mcap.stat().st_size > 0:
-                    self.adopt(mcap, fallback="recovered")
+                count = mcap_message_count(mcap)
+                if mcap.stat().st_size > 0 and count != 0:
+                    self.adopt(mcap, {"reason": "recovered", "values": {"messages": count},
+                                      "requested_at": None})
             shutil.rmtree(cache, ignore_errors=True)
+        for path, request in pending_snapshot_requests(self.root):
+            print(f"stale snapshot request dropped: {request['reason']}", file=sys.stderr)
+            path.unlink(missing_ok=True)
 
 
 def _snapshot_main(args, quota) -> int:
@@ -226,11 +236,14 @@ def main(argv=None) -> int:
                    help="robot namespace prefixed to every recorded topic")
     p.add_argument("--snapshot", action="store_true",
                    help="rosbag2 snapshot mode; each dump becomes one session")
-    p.add_argument("--node-name", default=DEFAULT_SNAPSHOT_NODE,
-                   help="snapshot recorder node; its service is /<name>/snapshot")
+    p.add_argument("--node-name", default=None,
+                   help="snapshot recorder node (default: <namespace>_snapshot_recorder, "
+                        "rosy_snapshot_recorder without one); service /<name>/snapshot")
     p.add_argument("--raw-camera", action="store_true",
                    help="session mode: record raw camera/front even when compressed exists")
     args = p.parse_args(argv)
+    if args.node_name is None:
+        args.node_name = snapshot_node_name(args.namespace)
     if not args.snapshot and not args.reason:
         p.error("--reason is required unless --snapshot")
 

@@ -253,6 +253,7 @@ def test_request_left_at_exit_claims_the_tail_file(monkeypatch, tmp_path):
 
 
 def test_stale_cache_from_a_crash_is_recovered_not_deleted(monkeypatch, tmp_path):
+    monkeypatch.setattr(rs, "mcap_message_count", lambda p: None)  # no mcap reader
     stale = tmp_path / ".snapshot-cache-old"
     stale.mkdir()
     (stale / "old_0.mcap").write_bytes(b"0" * 200)
@@ -345,3 +346,89 @@ def test_topics_use_the_jazzy_topics_flag(tmp_path):
         i = cmd.index("--topics")
         assert all(t.startswith("/rosy_01/") for t in cmd[i + 1:])
         assert len(cmd[i + 1:]) == 5
+
+
+
+def test_requests_order_by_monotonic_sequence_not_wall_clock(tmp_path):
+    """An NTP step backwards must not reorder the FIFO pairing."""
+    later_wall = write_snapshot_request(tmp_path, "first", {}, now=T0, seq=100)
+    earlier_wall = write_snapshot_request(
+        tmp_path, "second", {}, now=T0.replace(hour=11), seq=200)
+    assert [r["reason"] for _, r in pending_snapshot_requests(tmp_path)] == ["first", "second"]
+    assert later_wall.name < earlier_wall.name
+
+
+def test_request_default_sequence_is_monotonic(tmp_path):
+    names = [write_snapshot_request(tmp_path, str(i), {}, now=T0).name for i in range(5)]
+    assert names == sorted(names)
+    assert [r["reason"] for _, r in pending_snapshot_requests(tmp_path)] == list("01234")
+
+
+def test_snapshot_node_name_is_per_namespace():
+    from control.recording import snapshot_node_name
+    assert snapshot_node_name("") == "rosy_snapshot_recorder"
+    assert snapshot_node_name("/") == "rosy_snapshot_recorder"
+    assert snapshot_node_name("/rosy_01") == "rosy_01_snapshot_recorder"
+    assert snapshot_node_name("fleet/rosy_02/") == "fleet_rosy_02_snapshot_recorder"
+
+
+def test_snapshot_cli_node_name_follows_the_namespace(monkeypatch, tmp_path):
+    code, h = _snap(monkeypatch, tmp_path, [0], extra=("--namespace", "rosy_01"))
+    assert h["cmd"][h["cmd"].index("--node-name") + 1] == "rosy_01_snapshot_recorder"
+
+
+def test_mcap_message_count_reads_real_files(tmp_path):
+    pytest.importorskip("mcap")
+    from mcap.writer import Writer
+    from control.recording import mcap_message_count
+
+    def write(path, n):
+        with open(path, "wb") as fh:
+            w = Writer(fh)
+            w.start()
+            sid = w.register_schema(name="s", encoding="jsonschema", data=b"{}")
+            cid = w.register_channel(topic="/t", message_encoding="json", schema_id=sid)
+            for i in range(n):
+                w.add_message(channel_id=cid, log_time=i, publish_time=i, data=b"{}")
+            w.finish()
+
+    write(tmp_path / "a.mcap", 3)
+    write(tmp_path / "b.mcap", 0)
+    (tmp_path / "c.mcap").write_bytes(b"not an mcap at all")
+    assert mcap_message_count(tmp_path / "a.mcap") == 3
+    assert mcap_message_count(tmp_path / "b.mcap") == 0
+    assert mcap_message_count(tmp_path / "c.mcap") is None
+
+
+def _stale(tmp_path):
+    stale = tmp_path / ".snapshot-cache-old"
+    stale.mkdir()
+    (stale / "old_0.mcap").write_bytes(b"0" * 200)  # a dump
+    (stale / "old_1.mcap").write_bytes(b"1" * 150)  # the empty tail rosbag2 had open
+    (stale / "old_2.mcap").write_bytes(b"2" * 120)  # unreadable: count unknown
+    return stale
+
+
+def test_recover_adopts_files_with_messages_and_deletes_our_empty_tail(monkeypatch, tmp_path):
+    counts = {"old_0.mcap": 5, "old_1.mcap": 0, "old_2.mcap": None}
+    monkeypatch.setattr(rs, "mcap_message_count", lambda p: counts[p.name])
+    stale = _stale(tmp_path)
+    code, _ = _snap(monkeypatch, tmp_path, [0])
+    assert code == 0
+    bags = sorted(f.name for s in _sessions(tmp_path) for f in (s / "bag").iterdir())
+    # unknown count is kept (never guess data away); zero messages is our own tail
+    assert bags == ["old_0.mcap", "old_2.mcap"]
+    assert {_meta(s)["trigger"]["reason"] for s in _sessions(tmp_path)} == {"recovered"}
+    assert not stale.exists()
+
+
+def test_recover_never_consumes_a_request_and_drops_stale_ones(monkeypatch, tmp_path):
+    monkeypatch.setattr(rs, "mcap_message_count", lambda p: 1)
+    stale = tmp_path / ".snapshot-cache-old"
+    stale.mkdir()
+    (stale / "old_0.mcap").write_bytes(b"0" * 200)
+    write_snapshot_request(tmp_path, "error_delta", {}, now=T0)  # left by the crashed run
+    code, _ = _snap(monkeypatch, tmp_path, [0])
+    assert code == 0
+    assert [_meta(s)["trigger"]["reason"] for s in _sessions(tmp_path)] == ["recovered"]
+    assert pending_snapshot_requests(tmp_path) == []

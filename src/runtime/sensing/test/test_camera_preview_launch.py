@@ -39,9 +39,9 @@ def test_new_actions_are_gated_by_their_switch():
     assert "cmd_vel" not in SRC  # camera unit never touches motion (test_camera_image_stack)
 
 
-def test_snapshot_node_name_matches_record_session():
-    from control.record_session import DEFAULT_SNAPSHOT_NODE
-    assert f"SNAPSHOT_NODE = '{DEFAULT_SNAPSHOT_NODE}'" in SRC
+def test_recorder_name_is_left_to_the_namespace():
+    """record_session and capture_trigger_node both derive it from the namespace."""
+    assert "--node-name" not in SRC and "snapshot_service" not in SRC
 
 
 def test_recording_root_matches_recording_default():

@@ -127,11 +127,29 @@ def test_cooldown_blocks_then_releases():
     assert d is not None and d.reason == "error_delta"
 
 
-def test_operator_request_triggers_and_starts_a_cooldown():
+def test_operator_request_does_not_touch_the_auto_cooldown():
     trig = CaptureTrigger(cooldown_s=30.0)
     d = trig.on_request("  lap 3 weird turn ", 5.0)
     assert d.reason == "operator" and d.values == {"note": "lap 3 weird turn"}
-    assert feed(trig, [shadow(0.5)] * 3, t0=6.0)[-1] is None
+    assert feed(trig, [shadow(0.5)] * 3, t0=6.0)[-1].reason == "error_delta"
+
+
+def test_operator_request_keeps_the_auto_streak():
+    trig = CaptureTrigger()
+    assert feed(trig, [shadow(0.5)] * 2, t0=0.0) == [None, None]
+    assert trig.on_request("x", 0.3).reason == "operator"
+    assert trig.on_shadow(shadow(0.5), 0.4).reason == "error_delta"
+
+
+def test_operator_requests_are_rate_limited_on_their_own_clock():
+    from control.capture_trigger import DEFAULT_OPERATOR_COOLDOWN_S
+    assert DEFAULT_OPERATOR_COOLDOWN_S == 5.0
+    trig = CaptureTrigger()
+    assert trig.on_request("a", 10.0) is not None
+    assert trig.on_request("b", 14.99) is None
+    assert trig.on_request("c", 15.0) is not None
+    with __import__("pytest").raises(ValueError):
+        CaptureTrigger(operator_cooldown_s=-1.0)
 
 
 def test_operator_request_bypasses_the_automatic_cooldown():
@@ -218,3 +236,23 @@ def test_payload_without_rule_visible_field_is_unknown():
     p = shadow(None, error=0.2, rule_error=None)
     del p["rule_visible"]
     assert feed(trig, [p] * 5) == [None] * 5
+
+
+def test_capture_trigger_node_times_out_a_hung_snapshot_call():
+    """A call that never answers must not leave its request file to pair with the next dump."""
+    from pathlib import Path
+
+    src = (Path(__file__).resolve().parents[1] / "control" / "capture_trigger_node.py").read_text(
+        encoding="utf-8")
+    assert "SNAPSHOT_CALL_TIMEOUT_S = 10.0" in src
+    assert "remove_pending_request(future)" in src
+    assert "self._forget(request)" in src
+    assert "operator request ignored" in src  # D-62: a rate-limited request is said, not dropped
+
+
+def test_capture_trigger_node_derives_the_recorder_service_from_its_namespace():
+    from pathlib import Path
+
+    src = (Path(__file__).resolve().parents[1] / "control" / "capture_trigger_node.py").read_text(
+        encoding="utf-8")
+    assert "snapshot_node_name(self.get_namespace())" in src

@@ -8,11 +8,13 @@ based line error has lasted long enough to be worth a 60 s snapshot.
   visibility_mismatch  only one side sees the lane for N consecutive frames
                        (learned visible+error vs an explicit rule_visible bool;
                        rule_visible null = rule answer unknown, never a mismatch)
-  operator             an explicit capture/request; bypasses the cooldown
+  operator             an explicit capture/request; its own rate limit
+                       (operator_cooldown_s), independent of the auto cooldown
 
 A frame whose delta is missing (stale or absent rule evidence) neither extends
 nor breaks the delta streak; a numeric delta under the threshold breaks it.
-Streaks restart after every trigger; automatic triggers then wait cooldown_s.
+Streaks restart after every automatic trigger, which then waits cooldown_s.
+An operator request touches neither the streaks nor the automatic cooldown.
 """
 
 from __future__ import annotations
@@ -25,6 +27,7 @@ from .recording import SHADOW_SCHEMA
 DEFAULT_DELTA_THRESHOLD = 0.35
 DEFAULT_FRAMES = 3
 DEFAULT_COOLDOWN_S = 30.0
+DEFAULT_OPERATOR_COOLDOWN_S = 5.0
 
 
 @dataclass(frozen=True)
@@ -41,13 +44,16 @@ def _number(v) -> float | None:
 
 class CaptureTrigger:
     def __init__(self, delta_threshold: float = DEFAULT_DELTA_THRESHOLD,
-                 frames: int = DEFAULT_FRAMES, cooldown_s: float = DEFAULT_COOLDOWN_S):
+                 frames: int = DEFAULT_FRAMES, cooldown_s: float = DEFAULT_COOLDOWN_S,
+                 operator_cooldown_s: float = DEFAULT_OPERATOR_COOLDOWN_S):
         if not delta_threshold > 0:
             raise ValueError("delta_threshold must be > 0")
         if frames < 1:
             raise ValueError("frames must be >= 1")
-        if cooldown_s < 0:
-            raise ValueError("cooldown_s must be >= 0")
+        if cooldown_s < 0 or operator_cooldown_s < 0:
+            raise ValueError("cooldowns must be >= 0")
+        self.operator_cooldown_s = float(operator_cooldown_s)
+        self._last_operator: float | None = None
         self.delta_threshold = float(delta_threshold)
         self.frames = int(frames)
         self.cooldown_s = float(cooldown_s)
@@ -66,8 +72,13 @@ class CaptureTrigger:
     def _cooling(self, now: float) -> bool:
         return self._last_trigger is not None and now - self._last_trigger < self.cooldown_s
 
-    def on_request(self, note: str, now: float) -> TriggerDecision:
-        return self._fire("operator", {"note": str(note).strip()}, now)
+    def on_request(self, note: str, now: float) -> TriggerDecision | None:
+        """None while rate-limited; the caller must say so (D-62)."""
+        if (self._last_operator is not None
+                and now - self._last_operator < self.operator_cooldown_s):
+            return None
+        self._last_operator = now
+        return TriggerDecision("operator", {"note": str(note).strip()})
 
     def on_shadow(self, payload, now: float) -> TriggerDecision | None:
         if not isinstance(payload, dict) or payload.get("schema") != SHADOW_SCHEMA:
