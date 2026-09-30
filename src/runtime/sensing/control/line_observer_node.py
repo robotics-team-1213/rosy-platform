@@ -44,6 +44,8 @@ from .sensing.perception.route_map import RouteMapFollower
 #: Fixed at startup: the edge follower and the odom subscription are built
 #: from these once, so a later change would silently run the wrong pipeline.
 _READ_ONLY = ParameterDescriptor(read_only=True)
+#: 'keep' mode: a gap between camera frames longer than this resets the keeper.
+KEEP_MAX_FRAME_GAP_S = 0.5
 
 
 class LineObserverNode(Node):
@@ -125,6 +127,7 @@ class LineObserverNode(Node):
         self._between_keeper = LaneBetweenKeeper(
             default_lane_width_fraction=float(
                 self.get_parameter('camera_between_lane_width_fraction').value))
+        self._keep_last_stamp = None
         self._lane_keeper = LaneKeeper(
             camera_x_offset_m=float(self.get_parameter('camera_x_offset_m').value),
             corner_turning=bool(self.get_parameter('lane_corner_turning').value))
@@ -312,6 +315,7 @@ class LineObserverNode(Node):
                 and not self._camera_controls_stable):
             self._publish('CAMERA_LINE', None, stamp=(
                 float(msg.header.stamp.sec) + float(msg.header.stamp.nanosec) * 1e-9))
+            self._keep_last_stamp = None
             return
         try:
             frame = image_msg_to_frame(msg)
@@ -333,6 +337,15 @@ class LineObserverNode(Node):
                     washed_fraction=float(self.get_parameter('camera_washed_fraction').value),
                 )
             elif mode == 'keep':
+                # A camera gap (or the first keep frame of this node) starts
+                # the keeper afresh: sides and steering remembered from before
+                # the gap may belong to another place.
+                image_stamp = (float(msg.header.stamp.sec)
+                               + float(msg.header.stamp.nanosec) * 1e-9)
+                if (self._keep_last_stamp is None
+                        or not 0.0 <= image_stamp - self._keep_last_stamp <= KEEP_MAX_FRAME_GAP_S):
+                    self._lane_keeper.reset()
+                self._keep_last_stamp = image_stamp
                 observation = self._lane_keeper.update(
                     frame, self._ground(frame.shape[1], frame.shape[0]),
                     lane_half_width_m=float(self.get_parameter('lane_half_width_m').value))

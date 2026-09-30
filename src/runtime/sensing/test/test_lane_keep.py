@@ -6,7 +6,7 @@ import pytest
 import yaml
 
 from control.sensing.perception.camera_ground import nominal_ground_plane
-from control.sensing.perception.lane_keep import FLIP_WINDOW_FRAMES as FLIP_WINDOW, LaneKeeper
+from control.sensing.perception.lane_keep import CORNER_MAX_ERROR as CORNER_CAP, FLIP_WINDOW_FRAMES as FLIP_WINDOW, LaneKeeper
 
 PKG = Path(__file__).resolve().parents[1]
 PROFILE = yaml.safe_load((Path(__file__).resolve().parents[3] / "products" / "pinky_pro" / "profile" / "config" / "camera_nominal.yaml").read_text(encoding="utf-8"))
@@ -337,7 +337,7 @@ def test_corner_turn_command_is_capped():
     keeper.update(_render_corner(0.40, "left"), GROUND, lane_half_width_m=HALF)
     obs = keeper.update(_render_corner(0.19, "left"), GROUND, lane_half_width_m=HALF)
     assert keeper.last["strategy"] == "corner_left"
-    assert -0.6 - 1e-9 <= obs.error < -0.3
+    assert -CORNER_CAP - 1e-9 <= obs.error < -0.3
 
 
 def test_flipping_hold_is_sticky_until_both_lane_lines_are_seen():
@@ -351,3 +351,26 @@ def test_flipping_hold_is_sticky_until_both_lane_lines_are_seen():
     # ... the lane seen on both sides does.
     assert keeper.update(_render([(HALF, 0.0), (-HALF, 0.0)]), GROUND,
                          lane_half_width_m=HALF) is not None
+
+
+@pytest.mark.parametrize("y", [0.05, -0.05])
+def test_a_washed_frame_forgets_the_tracked_sides(y):
+    # A line tracked on the other side, then a washed-out frame: the next line
+    # is sided afresh by its own geometry, not inherited across the gap.
+    keeper = _keeper()
+    keeper.update(_render([(-y * 0.1, 0.0)]), GROUND, lane_half_width_m=HALF)
+    assert keeper.last["strategy"] == ("right_only" if y > 0 else "left_only")
+    washed = np.full((240, 320, 3), 100, np.uint8)   # glare over most of the floor
+    washed[:, 110:] = 240
+    washed[:80] = 60
+    assert keeper.update(washed, GROUND, lane_half_width_m=HALF) is None
+    assert keeper.last["reason"] == "washed"
+    keeper.update(_render([(y, 0.0)]), GROUND, lane_half_width_m=HALF)
+    assert keeper.last["strategy"] == ("left_only" if y > 0 else "right_only")
+    assert keeper.last["boundaries"][0]["tracked"] is False
+
+
+def test_node_resets_the_keeper_after_a_camera_gap():
+    text = (PKG / "control" / "line_observer_node.py").read_text(encoding="utf-8")
+    keep = text.split("elif mode == 'keep':", 1)[1].split("elif mode in", 1)[0]
+    assert "KEEP_MAX_FRAME_GAP_S" in keep and "self._lane_keeper.reset()" in keep

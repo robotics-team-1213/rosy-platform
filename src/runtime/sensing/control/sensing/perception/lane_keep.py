@@ -354,6 +354,13 @@ class LaneKeeper:
         self._corner_engaged = False
         self.last: dict = {}
 
+    def _forget(self) -> None:
+        """No usable view: the next frame is judged afresh (no inherited
+        target, sides or steering history); a latched corner keeps counting."""
+        self._previous_target = None
+        self._tracked = []
+        self._steer_history.clear()
+
     def reset(self) -> None:
         self._previous_target = None
         self._tracked = []
@@ -393,7 +400,7 @@ class LaneKeeper:
                      "lookahead_m": self._lookahead, "target_m": None, "target_px": None}
         if ground is None:
             self.last["reason"] = "no_ground"
-            self._previous_target = None
+            self._forget()
             return None
         half = float(lane_half_width_m)
         height, width = bgr.shape[:2]
@@ -404,7 +411,7 @@ class LaneKeeper:
         lit = int(grid.sum())
         if observable == 0 or lit > WASHED_FRACTION * observable:
             self.last["reason"] = "washed"
-            self._previous_target = None
+            self._forget()
             return None
         coarse = grid[::FIT_STRIDE, ::FIT_STRIDE]
         cells = np.flatnonzero(coarse.ravel())
