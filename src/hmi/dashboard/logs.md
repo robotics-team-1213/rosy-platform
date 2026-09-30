@@ -555,3 +555,10 @@
 - 증거: 브라우저 `src/hmi/dashboard/test` 55 passed, `test/test_role_surface_states_browser.py` 5 passed. 변이: components.css `ui-topbar` `min-height: 300px` → 예산 시험 두 칸 빨강. 캡처 `X:/DevTemp/rosy-d359/shots/us005-robot-*.png`(console dark·light, setup·device dark; 1366×768·390×844·320×568).
 - gate 변화: 없음.
 - 결정: D-359 §6.
+
+## 2026-09-30 · 0308c67c · D-359 US-007 웨이포인트 폼이 공용 ui-form을 쓴다
+
+- 변경: `panels/setup/waypoints.js` 폼에 `ui-form`. 390·320에서 이름 칸과 저장 버튼이 틈 없이 두 줄로 붙었다(평범한 인라인 폼). 이제 `--gap-form`을 지키고 좁은 칸에서 한 열로 접힌다. 시험: `test_waypoint_readiness_browser.py`에 폼 클래스·행 간격 8px 단언.
+- 증거: 수정 전 빨강, 수정 후 초록. 캡처 `X:/DevTemp/rosy-d359-captures/robot-setup-*`.
+- gate 변화: 없음.
+- 결정: D-359 §5.

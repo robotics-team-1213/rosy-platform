@@ -254,3 +254,11 @@
 - 증거: 변이 19건 전부 빨강 후 `git checkout --`로 복구 초록, 트리 깨끗(`X:/DevTemp/rosy-d359/us006_mutations.py`, `us006-mutations.log`) — PRD 여섯(파생 hex, light 키 삭제, Fleet 입력 공용 필드·min-height, `@media (max-width: 41rem)`, 자간 0.1em, outline 덧칠)과 새 검사 13. 단위 묶음(+ 뿌리 `test`) 5490 passed 321 skipped 10 failed — 9건은 base 1eba8cbb에서도 같은 실패(ADR 로그·harness·보안 스캔 등), `test_sd_writer_contract` 1건은 33분 부하 실행의 시간 의존 실패. 브라우저 web_common 162 passed.
 - gate 변화: 없음. SOURCE/LOCAL 증거다.
 - 결정: D-359 §6.3·§7.
+
+## 2026-09-30 · 04a9b587 · D-359 US-007 비활성 사유 글자가 불가역 버튼에서도 조용한 잉크다
+
+- 변경: `components.css` 사유 선택자를 `ui-button[kind] > small[data-reason]`까지 적어 `ui-button[kind="irreversible"] small`(ink-on-crit, 위험 채움용)보다 앞서게 했다. 밝게 `/device`에서 "삭제 / 지금 쓰는 토큰" 사유가 채움 없는 밝은 바탕 위 밝은 글자로 사라졌다(어둡게는 두 값이 같아 숨었다). 시험: `test_shared_controls_browser.py::test_a_reason_reads_quiet_on_every_kind_and_theme[dark|light]` — 다섯 종류 모두 사유 색이 `--ink-quiet`.
+- 함께: 뿌리 `DESIGN.md`(7b1c8e70, D-359 §8)와 `.impeccable/design.json`(무시되는 로컬 사이드카). ADR §2.5·§5.1·§5.5·§6.3·§6.4 실측 다듬음(1b2eb48a). 해법 노트 두 건(20147779).
+- 증거: 수정 전 시험 빨강 2건, 수정 후 초록. 최종 캡처 `X:/DevTemp/rosy-d359-captures/`(README에 목록·소견).
+- gate 변화: 없음. SOURCE/LOCAL 증거다.
+- 결정: D-359 §5.3·§8.
