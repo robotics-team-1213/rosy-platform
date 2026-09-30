@@ -3890,3 +3890,9 @@
 - 변경: `docs/reference/ROSY API & Protocol Reference.md` §8 에 `nav.line_obstacle_hold`(warning, `{mode, clearance_m, held_s}`), line-follow 행에 `limit_level_too_low`·`angular_limit_zero`. 버전 머리글·핀(app.py 등)은 올리지 않았다 — "다음 버전 표기 전" 으로 적고 병합 때 한 번에 올린다.
 - 증거: `test_event_catalogue.py` 72 passed(추가 전 `test_nothing_is_emitted_behind_the_contract` 빨강) (2026-09-30 Windows).
 - gate 변화: 없음. 병합 전에 API 버전 올림이 필요하다.
+
+## 2026-09-30 · uncommitted · docs(adr): D-377 앱 이름 규칙 — Rosy + 영어 한 단어
+- 변경: D-377(Accepted, 사용자 결정) 추가. 표시 이름 `Rosy <Word>`(한국어는 부제에만), id·폴더 끝 `<word>`, 패키지 `rosy_<word>`, Android `io.github.livsbittt.rosy.<word>`, Gradle `rosy-<word>`, 아이콘 `<word>.svg`. 대응: Rosy Cam(`src/site/cam`, `…rosy.cam`), Rosy Vision(`src/site/vision`, `rosy_vision`, 실행 파일 `rosy-vision`), Rosy Console(계획 `src/site/console`·`rosy_console`, 단계 4 게이트), Rosy Robot(계획 `src/hmi/robot`·`rosy_robot`, 단계 3 게이트), Rosy Pilot(그대로). D-370 2항 이름표와 D-374 1·2항을 대체한다고 두 ADR 머리에 적었다. D-374 계획의 2.4·2.5와 단계 3·4·5 목표를 새 이름으로 고쳤다.
+- 증거: 문서만. 번호는 로컬 브랜치 전부·`.worktrees/*/docs/adr`·main 체크아웃 미추적 파일을 확인해 D-375(`feat/overhead-map-auto-register`)·D-376(`omx-pick-place-execution` 워크트리) 다음 빈 번호로 잡았다.
+- gate 변화: 없음(문서만). 실행은 `refactor/app-naming-cam-vision`.
+- 결정: 와이어 이름은 D-374 3항 그대로. Vision 옛 실행 파일 `site_vision`·`overhead`는 한 사이트 후보 릴리스 동안 별칭.
