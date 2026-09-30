@@ -7,6 +7,14 @@ adr_log: docs/reference/ROSY ADR Log.md
 
 # IDs absent from the ADR log on purpose. Remove an entry once the ADR is written.
 adr_gaps:
+  D-363: "skipped: never written - a concurrent session's numbering jumped from D-362 to D-371 (2026-09-30). Remove the entry if a session lands an ADR as D-363"
+  D-364: "skipped: never written (D-362 -> D-371 jump, 2026-09-30); remove if an ADR lands as D-364"
+  D-365: "skipped: never written (D-362 -> D-371 jump, 2026-09-30); remove if an ADR lands as D-365"
+  D-366: "skipped: never written (D-362 -> D-371 jump, 2026-09-30); remove if an ADR lands as D-366"
+  D-367: "skipped: never written (D-362 -> D-371 jump, 2026-09-30); remove if an ADR lands as D-367"
+  D-368: "skipped: never written (D-362 -> D-371 jump, 2026-09-30); remove if an ADR lands as D-368"
+  D-369: "skipped: never written (D-362 -> D-371 jump, 2026-09-30); remove if an ADR lands as D-369"
+  D-370: "skipped: never written (D-362 -> D-371 jump, 2026-09-30); remove if an ADR lands as D-370"
   D-341: "reserved by branch docs/d341-overhead-console-pairing (overhead console-approved pairing, also on feat/pilot-teleop); remove once it lands"
   D-342: "reserved by the uncommitted Pilot draft in .worktrees/pilot-teleop (manual-limit commissioning ladder); remove once it lands"
   D-343: "reserved by the uncommitted Pilot draft in .worktrees/pilot-teleop (pilot rooms and driver seat); remove once it lands"
