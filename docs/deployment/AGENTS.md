@@ -29,6 +29,7 @@ safety plan (D-246).
 | `pinky-pro-first-device-runbook.md` | Fail-closed G0-G5 first physical Pinky Pro commissioning, including the hardware SLAM/MCAP map run |
 | `pinky-release-artifact-selection.md` | D-325 path selector: none, native payload, flashable image, or fail-closed review |
 | `pinky-pro-commissioning-body-templates.md` | Exact operator-attested G3-G5 JSON bodies; G5 binds MCAP and generated YAML/PGM hashes; invalid until physically measured |
+| `learned-perception-operators.md` | D-373 operator guide: `rosy_ml` setup and doctor, shadow deliver/rollback/harvest, lock and history, site auto-delivery install |
 
 ## Subdirectories
 

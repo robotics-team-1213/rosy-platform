@@ -13,6 +13,7 @@ Developer-side half of the D-356 perception learning loop: turn robot recordings
 |------|-------------|
 | `dataset/` | `harvest.py` pulls sessions off a robot, `extract.py`/`frames.py` cut frames, `prelabel.py` pre-labels, `build.py` builds a session-split dataset, `publish.py` publishes it for the trainer |
 | `model/` | `export_onnx.py` exports ONNX, `intake.py` + `intake_gate.yaml` verify a returned model, `deliver.py` ships it to the shadow slot (and rolls back), `watch.py` does intake + shadow push for each new HF commit on the site host (D-373) |
+| `rosy_ml.py` | The operator CLI (D-373 decision 7): `init`, `doctor`, `status`, `deliver`, `rollback`, `release-hold`, `harvest`, `intake`; guide in `docs/deployment/learned-perception-operators.md` |
 | `operator_ssh.py` | Operator SSH options shared by `deliver.py` and `harvest.py`: user `rosy`, key + pinned known_hosts, BatchMode (D-373) |
 | `training/` | Trainer contract (`README.md`), step-by-step Colab manual (`COLAB.md`), `check_manifest.py`, `export_cell.py`. Training itself runs outside this repo |
 | `test/` | Host tests for the above |
