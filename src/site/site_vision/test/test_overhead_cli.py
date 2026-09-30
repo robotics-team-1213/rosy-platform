@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from overhead import protocol
-from overhead.cli import _detect_advertise_host, _server_ssl_context, parse_args
+from site_vision import protocol
+from site_vision.cli import _detect_advertise_host, _server_ssl_context, parse_args
 
 
 def test_receive_defaults_match_the_design_doc():

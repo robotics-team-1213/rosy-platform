@@ -1,4 +1,4 @@
-package io.github.livsbittt.rosy.overhead.health
+package io.github.livsbittt.rosy.ceilingcamera.health
 
 /** Health condition that needs the operator; nominal health has no warning (D-82). */
 enum class HealthWarning { HOT, BATTERY_LOW }

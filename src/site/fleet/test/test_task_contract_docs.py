@@ -141,7 +141,7 @@ def test_site_camera_rectification_contract_keeps_preview_and_sightings_separate
         encoding="utf-8")
     adr = (ROOT / "docs/adr/D-318-site-camera-preview-rectification.md").read_text(
         encoding="utf-8")
-    vision = (ROOT / "src/site/overhead/overhead/ingest.py").read_text(encoding="utf-8")
+    vision = (ROOT / "src/site/site_vision/site_vision/ingest.py").read_text(encoding="utf-8")
     ui = (ROOT / "src/site/fleet/fleet/server/web/index.html").read_text(encoding="utf-8")
 
     assert "## D-318 Site Fleet camera preview supports measured lens and plane rectification" in adr

@@ -22,8 +22,8 @@ import httpx
 import websockets
 from websockets.exceptions import ConnectionClosed, InvalidStatus
 
-from overhead import protocol
-from overhead.ingest import IngestServer
+from site_vision import protocol
+from site_vision.ingest import IngestServer
 
 TOKEN = "test-token"
 HELLO = {
@@ -305,7 +305,7 @@ async def test_replacing_a_half_open_old_connection_does_not_stall_the_new_one()
 
 @run_async
 async def test_a_peer_that_never_sends_hello_is_closed_4400(monkeypatch):
-    monkeypatch.setattr("overhead.ingest.HELLO_TIMEOUT_S", 0.2)
+    monkeypatch.setattr("site_vision.ingest.HELLO_TIMEOUT_S", 0.2)
     async with _Harness() as h:
         ws = await h.connect()
         with pytest.raises(ConnectionClosed) as exc:
@@ -333,7 +333,7 @@ async def test_frames_near_max_bytes_are_accepted_not_closed_1009():
 async def test_receive_queue_is_bounded_small(monkeypatch):
     """D-136 6항: the receiver must not buffer a backlog of frames inside
     websockets while a handler is busy — the bound must reach serve()."""
-    import overhead.ingest as ingest
+    import site_vision.ingest as ingest
 
     seen = {}
     real_serve = ingest.serve
@@ -352,7 +352,7 @@ async def test_receive_queue_is_bounded_small(monkeypatch):
 def test_marker_report_expires_so_status_falls_back_to_empty(monkeypatch):
     from types import SimpleNamespace
 
-    from overhead import ingest as ingest_module
+    from site_vision import ingest as ingest_module
 
     server = IngestServer({"overhead-1": TOKEN})
     server.report_markers("overhead-1", [31, 30], ["rosy_01"])  # unknown source: no-op

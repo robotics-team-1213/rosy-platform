@@ -1,4 +1,4 @@
-package io.github.livsbittt.rosy.overhead.health
+package io.github.livsbittt.rosy.ceilingcamera.health
 
 import android.content.BroadcastReceiver
 import android.content.Context

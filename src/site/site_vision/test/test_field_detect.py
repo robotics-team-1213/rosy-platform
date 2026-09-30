@@ -6,7 +6,7 @@ import cv2
 import numpy as np
 import pytest
 
-from overhead.field_detect import FieldProposal, detect_field, detect_field_jpeg
+from site_vision.field_detect import FieldProposal, detect_field, detect_field_jpeg
 
 W, H = 1280, 720
 # A 2:1 field seen at an angle: top edge shorter than the bottom edge.

@@ -1,6 +1,6 @@
-package io.github.livsbittt.rosy.overhead.link
+package io.github.livsbittt.rosy.ceilingcamera.link
 
-import io.github.livsbittt.rosy.overhead.settings.PairingUri
+import io.github.livsbittt.rosy.ceilingcamera.settings.PairingUri
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.flow.first

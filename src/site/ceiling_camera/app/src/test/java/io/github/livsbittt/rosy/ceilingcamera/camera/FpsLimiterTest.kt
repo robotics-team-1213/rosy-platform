@@ -1,4 +1,4 @@
-package io.github.livsbittt.rosy.overhead.camera
+package io.github.livsbittt.rosy.ceilingcamera.camera
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse

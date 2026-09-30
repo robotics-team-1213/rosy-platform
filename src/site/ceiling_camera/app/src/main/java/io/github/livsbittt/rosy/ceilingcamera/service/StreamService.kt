@@ -1,4 +1,4 @@
-package io.github.livsbittt.rosy.overhead.service
+package io.github.livsbittt.rosy.ceilingcamera.service
 
 import android.app.Notification
 import android.app.NotificationChannel
@@ -17,18 +17,18 @@ import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.LifecycleService
 import androidx.lifecycle.lifecycleScope
-import io.github.livsbittt.rosy.overhead.BuildConfig
-import io.github.livsbittt.rosy.overhead.MainActivity
-import io.github.livsbittt.rosy.overhead.R
-import io.github.livsbittt.rosy.overhead.camera.CameraController
-import io.github.livsbittt.rosy.overhead.health.DeviceHealth
-import io.github.livsbittt.rosy.overhead.health.DeviceHealthMonitor
-import io.github.livsbittt.rosy.overhead.health.HealthText
-import io.github.livsbittt.rosy.overhead.link.LinkState
-import io.github.livsbittt.rosy.overhead.link.LinkStatus
-import io.github.livsbittt.rosy.overhead.link.OverheadConfig
-import io.github.livsbittt.rosy.overhead.link.OverheadLink
-import io.github.livsbittt.rosy.overhead.settings.SettingsStore
+import io.github.livsbittt.rosy.ceilingcamera.BuildConfig
+import io.github.livsbittt.rosy.ceilingcamera.MainActivity
+import io.github.livsbittt.rosy.ceilingcamera.R
+import io.github.livsbittt.rosy.ceilingcamera.camera.CameraController
+import io.github.livsbittt.rosy.ceilingcamera.health.DeviceHealth
+import io.github.livsbittt.rosy.ceilingcamera.health.DeviceHealthMonitor
+import io.github.livsbittt.rosy.ceilingcamera.health.HealthText
+import io.github.livsbittt.rosy.ceilingcamera.link.LinkState
+import io.github.livsbittt.rosy.ceilingcamera.link.LinkStatus
+import io.github.livsbittt.rosy.ceilingcamera.link.OverheadConfig
+import io.github.livsbittt.rosy.ceilingcamera.link.OverheadLink
+import io.github.livsbittt.rosy.ceilingcamera.settings.SettingsStore
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -266,8 +266,8 @@ class StreamService : LifecycleService() {
         private const val TAG = "StreamService"
         private const val CHANNEL_ID = "stream"
         private const val NOTIFICATION_ID = 1
-        const val ACTION_START = "io.github.livsbittt.rosy.overhead.action.START"
-        const val ACTION_STOP = "io.github.livsbittt.rosy.overhead.action.STOP"
+        const val ACTION_START = "io.github.livsbittt.rosy.ceilingcamera.action.START"
+        const val ACTION_STOP = "io.github.livsbittt.rosy.ceilingcamera.action.STOP"
 
         private val _state = MutableStateFlow(StreamState())
 

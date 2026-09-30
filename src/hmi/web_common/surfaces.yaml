@@ -154,21 +154,21 @@ surfaces:
       LCD 화면은 브라우저 캡처 회차(G2) 대상이 아니다. 정보 화면 캡처는
       test_info_screen_capture가 호스트에서 만들고 저장소에 기준선을 두지 않는다.
 
-  - id: overhead-camera-app
+  - id: ceiling-camera
     app_name: Rosy 천장 카메라
     app_name_en: Rosy Ceiling Camera
     short_name: Rosy 카메라
-    icon: src/hmi/web_common/icons/overhead-camera-app.svg
-    path: src/site/overhead/android
+    icon: src/hmi/web_common/icons/ceiling-camera.svg
+    path: src/site/ceiling_camera
     surface: site
     medium: native
     ports:
-      - {port: 8095, source: src/site/overhead/overhead/cli.py}
+      - {port: 8095, source: src/site/site_vision/site_vision/cli.py}
     audience: 천장 카메라 설치자 — 사이트 휴대폰·태블릿 앱 (D-261)
     role: 카메라 캡처·프레임 송신·설치 위치 안내만 — 로봇 명령·정지·CORE 연결이 없다 (D-370 1항)
     owns: [camera-physical-install]
     contracts: [token_parity]
-    token_copy: src/site/overhead/android/app/src/main/java/io/github/livsbittt/rosy/overhead/ui/RosyTheme.kt
+    token_copy: src/site/ceiling_camera/app/src/main/java/io/github/livsbittt/rosy/ceilingcamera/ui/RosyTheme.kt
     baseline_reason: >
       네이티브 앱 화면은 브라우저 캡처 회차(G2) 대상이 아니다. 실제 폰 화면 확인은
       D-261의 A3 실기기 회차에서 첫 캡처를 남긴다.

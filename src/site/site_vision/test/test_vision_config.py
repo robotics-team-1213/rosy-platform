@@ -1,7 +1,7 @@
 import yaml
 import pytest
 
-from overhead.vision_config import load_vision_sources
+from site_vision.vision_config import load_vision_sources
 
 
 def _source(**changes):

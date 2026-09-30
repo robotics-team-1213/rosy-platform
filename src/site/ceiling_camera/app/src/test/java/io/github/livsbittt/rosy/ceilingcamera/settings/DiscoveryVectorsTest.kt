@@ -1,4 +1,4 @@
-package io.github.livsbittt.rosy.overhead.settings
+package io.github.livsbittt.rosy.ceilingcamera.settings
 
 import java.io.File
 import java.nio.charset.StandardCharsets.UTF_8

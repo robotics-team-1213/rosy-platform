@@ -1,4 +1,4 @@
-package io.github.livsbittt.rosy.overhead.camera
+package io.github.livsbittt.rosy.ceilingcamera.camera
 
 /**
  * Keeps JPEGs under the adapter's `max_bytes` on detailed scenes: an oversize frame is

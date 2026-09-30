@@ -1,4 +1,4 @@
-package io.github.livsbittt.rosy.overhead
+package io.github.livsbittt.rosy.ceilingcamera
 
 import android.Manifest
 import android.content.Intent
@@ -22,13 +22,13 @@ import androidx.compose.ui.res.stringResource
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
-import io.github.livsbittt.rosy.overhead.service.StreamService
-import io.github.livsbittt.rosy.overhead.settings.PairingUri
-import io.github.livsbittt.rosy.overhead.settings.SettingsStore
-import io.github.livsbittt.rosy.overhead.ui.RosyTheme
-import io.github.livsbittt.rosy.overhead.ui.SettingsScreen
-import io.github.livsbittt.rosy.overhead.ui.StreamScreen
-import io.github.livsbittt.rosy.overhead.ui.invalidText
+import io.github.livsbittt.rosy.ceilingcamera.service.StreamService
+import io.github.livsbittt.rosy.ceilingcamera.settings.PairingUri
+import io.github.livsbittt.rosy.ceilingcamera.settings.SettingsStore
+import io.github.livsbittt.rosy.ceilingcamera.ui.RosyTheme
+import io.github.livsbittt.rosy.ceilingcamera.ui.SettingsScreen
+import io.github.livsbittt.rosy.ceilingcamera.ui.StreamScreen
+import io.github.livsbittt.rosy.ceilingcamera.ui.invalidText
 import kotlinx.coroutines.launch
 
 /**

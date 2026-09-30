@@ -1,7 +1,7 @@
 import cv2
 import numpy as np
 
-from overhead.detect import detect_markers, generate_marker_image
+from site_vision.detect import detect_markers, generate_marker_image
 
 
 def _jpeg_with_marker(marker_id=7):

@@ -1,6 +1,6 @@
-package io.github.livsbittt.rosy.overhead.ui
+package io.github.livsbittt.rosy.ceilingcamera.ui
 
-import io.github.livsbittt.rosy.overhead.link.ServerMessage
+import io.github.livsbittt.rosy.ceilingcamera.link.ServerMessage
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -36,7 +36,7 @@ class CornerGuideTest {
 
     @Test
     fun matchesTheSharedStatusVector() {
-        // vectors.json status_example: corners_seen [30, 31, 33], corners_needed 4, robots_seen [rosy_01].
+        // overhead-ingest.v1.json status_example: corners_seen [30, 31, 33], corners_needed 4, robots_seen [rosy_01].
         val g = CornerGuide.from(status(listOf(30, 31, 33), 4, listOf("rosy_01")))
         assertEquals("30, 31, 33", g.seenIds)
         assertEquals(listOf(true, true, true, false), g.dots)
@@ -44,7 +44,7 @@ class CornerGuideTest {
 
     @Test
     fun placeholderEmptyStatusIsNotAMarkerReport() {
-        // `overhead receive` always sends empty lists; that must not render as "0/4 seen".
+        // `site_vision receive` always sends empty lists; that must not render as "0/4 seen".
         assertEquals(false, CornerGuide.reportsMarkers(status(emptyList())))
         assertEquals(true, CornerGuide.reportsMarkers(status(listOf(30))))
         assertEquals(true, CornerGuide.reportsMarkers(status(emptyList(), robots = listOf("rosy_01"))))

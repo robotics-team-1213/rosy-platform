@@ -3,7 +3,7 @@
 Covers the 20-byte binary frame header, the ``hello``/``config`` JSON
 messages, and the ``rosyov://`` pairing URI (D-261 A1). Kotlin keeps a
 parallel implementation on the Android side; both read the shared test
-vectors at ``src/site/overhead/protocol/vectors.json`` so a change to one
+vectors at ``test/fixtures/protocol/overhead-ingest.v1.json`` so a change to one
 side that the other misses fails a test instead of shipping silently.
 
 See docs/plans/2026-09-26-overhead-camera-android-app-design.md §3-4 and

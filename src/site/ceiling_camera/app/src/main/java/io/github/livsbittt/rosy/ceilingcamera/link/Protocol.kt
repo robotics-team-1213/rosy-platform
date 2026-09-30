@@ -1,4 +1,4 @@
-package io.github.livsbittt.rosy.overhead.link
+package io.github.livsbittt.rosy.ceilingcamera.link
 
 import org.json.JSONArray
 import org.json.JSONException
@@ -15,7 +15,7 @@ data class OverheadConfig(
     val height: Int get() = ((width * 9 / 16) + 1) and 1.inv()
 
     companion object {
-        /** Same values as vectors.json `config_default`; used until the adapter's first `config`. */
+        /** Same values as overhead-ingest.v1.json `config_default`; used until the adapter's first `config`. */
         val DEFAULT = OverheadConfig(fps = 3.0, width = 1280, jpegQuality = 70, maxBytes = 200_000)
     }
 }

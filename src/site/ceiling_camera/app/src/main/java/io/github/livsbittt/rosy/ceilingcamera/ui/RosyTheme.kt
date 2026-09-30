@@ -1,4 +1,4 @@
-package io.github.livsbittt.rosy.overhead.ui
+package io.github.livsbittt.rosy.ceilingcamera.ui
 
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding

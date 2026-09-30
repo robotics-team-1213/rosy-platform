@@ -1,4 +1,4 @@
-package io.github.livsbittt.rosy.overhead.camera
+package io.github.livsbittt.rosy.ceilingcamera.camera
 
 import java.nio.ByteBuffer
 import org.junit.Assert.assertArrayEquals

@@ -150,3 +150,9 @@
 - gate 변화: 없음. 실제 폰 발견은 DEVICE 회차.
 - 결정: D-370 5.1.
 - 교훈: 없음.
+
+## 2026-09-30 · uncommitted · refactor(site-vision): D-374 stage 1 — overhead becomes site_vision
+
+- 변경: `src/site/overhead` → `src/site/site_vision`(`git mv`), ROS·Python 패키지 `overhead` → `site_vision`, console script `site_vision=site_vision.cli:main`, `argparse` prog `site_vision`, logger `site_vision`, `setup.cfg` `lib/site_vision`. `protocol/vectors.json` → `test/fixtures/protocol/overhead-ingest.v1.json`(Kotlin과 같이 읽는 공유 자리). 폰 앱은 새 모듈 `src/site/ceiling_camera`로 갈라졌다. `Dockerfile.vision`·`.dockerignore`·`compose.yaml` 명령은 `python3 -m site_vision.cli`, mDNS 인스턴스 이름은 `ROSY Site Vision %h`. 하네스 모듈 `overhead` → `site_vision`. 와이어 이름(`rosy-overhead/1`, `/overhead/v1/frames`, `_rosy-overhead._tcp`, TXT, `/api/vision/*`, `rosyov://`, compose 서비스 `vision`, 이미지 `rosy-site-vision`, `ROSY_OVERHEAD_TOKEN`)은 그대로(D-374 3항).
+- 증거: `python -m pytest src/site/site_vision/test -q` 111 passed; `src/site/fleet/test` 938 passed, 6 skipped; `src/hmi/web_common/test` + discovery 벡터 144 passed; 루트 architecture·site·discovery 185 passed, 1 skipped (2026-09-30 Windows).
+- gate 변화: 없음. SOURCE/LOCAL GO 유지. 사이트 호스트 vision 이미지 재빌드·mDNS 인스턴스 확인은 DEVICE 절차(계획 단계 1).

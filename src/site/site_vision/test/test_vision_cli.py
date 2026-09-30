@@ -1,4 +1,4 @@
-from overhead.cli import parse_args
+from site_vision.cli import parse_args
 
 
 def test_vision_command_requires_explicit_camera_config_and_defaults_to_site_ingress():

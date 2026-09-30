@@ -1,4 +1,4 @@
-package io.github.livsbittt.rosy.overhead.settings
+package io.github.livsbittt.rosy.ceilingcamera.settings
 
 import android.net.nsd.NsdServiceInfo
 import java.nio.charset.StandardCharsets

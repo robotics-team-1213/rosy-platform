@@ -1,5 +1,5 @@
 ---
-module: overhead
+module: site_vision
 logical_modules: []
 owner: SITE
 last_verified: { commit: "c5e87977", date: 2026-09-28 }
@@ -7,11 +7,11 @@ gates:
   SOURCE:
     state: GO
     evidence: "D-318 adds bounded, signed Vision-only OpenCV lens and plane transform for direct preview. Raw latest frame for ArUco/sightings remains unchanged; ROS-free and no cmd_vel. Local overhead suite 86 passed (2026-09-28 Windows)"
-    cmd: "python -m pytest src/site/overhead/test -q"
+    cmd: "python -m pytest src/site/site_vision/test -q"
   LOCAL:
     state: GO
     evidence: "86 passed (Windows), including synthetic perspective warp, lease validation, raw-frame immutability, and direct preview readback. Packaged Docker preview returned authorized transformed latest-only frames in source browser; no page errors/horizontal overflow at 1920/390/320 px. Synthetic only; no measured calibration, phone/Ubuntu site acceptance, DEVICE, or FIELD"
-    cmd: "python -m pytest src/site/overhead/test -q && (cd src/site/overhead/android && gradlew testDebugUnitTest --rerun-tasks --no-daemon) && docker compose -f deploy/site/compose.yaml build && docker compose -f deploy/site/compose.yaml up -d"
+    cmd: "python -m pytest src/site/site_vision/test -q && (cd src/site/ceiling_camera && gradlew testDebugUnitTest --rerun-tasks --no-daemon) && docker compose -f deploy/site/compose.yaml build && docker compose -f deploy/site/compose.yaml up -d"
   ROS-SIM:
     state: N/A
   ARTIFACT:
@@ -20,8 +20,9 @@ gates:
     state: PARKED
   FIELD:
     state: PARKED
-adrs: [D-257, D-261, D-269, D-318]
+adrs: [D-257, D-261, D-269, D-318, D-374]
 plans:
+  - docs/plans/2026-09-30-app-identity-rename-plan.md
   - docs/plans/2026-09-26-overhead-camera-android-app-design.md
   - docs/plans/2026-09-26-middleware-device-server-contract-integration.md
   - docs/plans/2026-09-28-site-camera-preview-rectification.md

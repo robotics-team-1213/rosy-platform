@@ -1,4 +1,4 @@
-package io.github.livsbittt.rosy.overhead.link
+package io.github.livsbittt.rosy.ceilingcamera.link
 
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
@@ -8,7 +8,7 @@ import java.nio.ByteOrder
  * magic `ROF1`, seq u32, age_ms u32, width u16, height u16, rotation_deg u16, reserved u16.
  * The JPEG bytes follow directly. u32 fields are held as Long so seq can wrap at 2^32.
  *
- * Pure Kotlin: no android.* imports, verified against protocol/vectors.json on the JVM.
+ * Pure Kotlin: no android.* imports, verified against test/fixtures/protocol/overhead-ingest.v1.json on the JVM.
  */
 data class FrameHeader(
     val seq: Long,

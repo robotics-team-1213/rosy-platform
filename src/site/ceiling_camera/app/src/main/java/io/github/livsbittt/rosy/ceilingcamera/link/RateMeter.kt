@@ -1,4 +1,4 @@
-package io.github.livsbittt.rosy.overhead.link
+package io.github.livsbittt.rosy.ceilingcamera.link
 
 /** Sent frames per second and kbit/s over a sliding window, for the on-screen counters. */
 class RateMeter(private val windowNanos: Long = 2_000_000_000L) {

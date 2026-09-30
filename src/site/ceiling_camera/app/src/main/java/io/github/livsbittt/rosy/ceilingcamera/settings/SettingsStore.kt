@@ -1,4 +1,4 @@
-package io.github.livsbittt.rosy.overhead.settings
+package io.github.livsbittt.rosy.ceilingcamera.settings
 
 import android.content.Context
 import androidx.datastore.core.DataStore
@@ -14,14 +14,14 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.map
 
-private val Context.overheadDataStore: DataStore<Preferences> by preferencesDataStore(name = "overhead_settings")
+private val Context.ceilingCameraDataStore: DataStore<Preferences> by preferencesDataStore(name = "ceiling_camera_settings")
 
 /**
  * Pairing target (host, port, token, source) in app-private DataStore. The address and token
  * never go into the repository (public repo, D-261 6); backups are disabled in the manifest.
  */
 class SettingsStore(context: Context) {
-    private val store = context.applicationContext.overheadDataStore
+    private val store = context.applicationContext.ceilingCameraDataStore
 
     /** The saved pairing, or null when nothing valid is saved yet. */
     val pairing: Flow<PairingUri?> = store.data

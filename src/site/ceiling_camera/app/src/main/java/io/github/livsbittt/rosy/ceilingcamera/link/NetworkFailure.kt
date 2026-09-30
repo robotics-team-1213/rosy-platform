@@ -1,4 +1,4 @@
-package io.github.livsbittt.rosy.overhead.link
+package io.github.livsbittt.rosy.ceilingcamera.link
 
 import java.net.ConnectException
 import java.net.NoRouteToHostException

@@ -18,7 +18,7 @@ install(FILES
 
 # D-370 3항 surface icons, listed one by one in manifest.json (never the folder).
 install(FILES
-  icons/overhead-camera-app.svg
+  icons/ceiling-camera.svg
   icons/pilot.svg
   icons/fleet-console.svg
   icons/robot-dashboard.svg

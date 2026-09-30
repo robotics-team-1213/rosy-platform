@@ -1,6 +1,6 @@
-package io.github.livsbittt.rosy.overhead.service
+package io.github.livsbittt.rosy.ceilingcamera.service
 
-import io.github.livsbittt.rosy.overhead.settings.PairingUri
+import io.github.livsbittt.rosy.ceilingcamera.settings.PairingUri
 
 /** Camera preview is useful before a server is configured; frame sending requires pairing. */
 data class CameraSessionPlan(

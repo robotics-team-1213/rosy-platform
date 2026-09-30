@@ -1,4 +1,4 @@
-package io.github.livsbittt.rosy.overhead.camera
+package io.github.livsbittt.rosy.ceilingcamera.camera
 
 import android.content.Context
 import android.hardware.camera2.CameraCharacteristics
@@ -20,9 +20,9 @@ import androidx.camera.core.resolutionselector.ResolutionStrategy
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.LifecycleOwner
-import io.github.livsbittt.rosy.overhead.link.OverheadConfig
-import io.github.livsbittt.rosy.overhead.link.OverheadLink
-import io.github.livsbittt.rosy.overhead.link.SensorInfo
+import io.github.livsbittt.rosy.ceilingcamera.link.OverheadConfig
+import io.github.livsbittt.rosy.ceilingcamera.link.OverheadLink
+import io.github.livsbittt.rosy.ceilingcamera.link.SensorInfo
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import kotlin.math.abs

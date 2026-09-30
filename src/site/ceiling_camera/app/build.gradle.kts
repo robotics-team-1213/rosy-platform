@@ -5,11 +5,11 @@ plugins {
 }
 
 android {
-    namespace = "io.github.livsbittt.rosy.overhead"
+    namespace = "io.github.livsbittt.rosy.ceilingcamera"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "io.github.livsbittt.rosy.overhead"
+        applicationId = "io.github.livsbittt.rosy.ceilingcamera"
         minSdk = 26
         targetSdk = 35
         versionCode = 1
@@ -37,17 +37,17 @@ android {
             // Shared rosy-overhead/1 vectors, also read by the Python adapter tests.
             it.systemProperty(
                 "rosy.overhead.vectors",
-                rootProject.file("../protocol/vectors.json").absolutePath,
+                rootProject.file("../../../test/fixtures/protocol/overhead-ingest.v1.json").absolutePath,
             )
             // D-370 shared DNS-SD TXT vectors, also read by the Python discovery parsers.
             it.systemProperty(
                 "rosy.discovery.vectors",
-                rootProject.file("../../../../test/fixtures/protocol/discovery-txt.v1.json").absolutePath,
+                rootProject.file("../../../test/fixtures/protocol/discovery-txt.v1.json").absolutePath,
             )
             // D-370 icon sources; LauncherIconParityTest compares the launcher drawables to them.
             it.systemProperty(
                 "rosy.icons.dir",
-                rootProject.file("../../../hmi/web_common/icons").absolutePath,
+                rootProject.file("../../hmi/web_common/icons").absolutePath,
             )
         }
     }

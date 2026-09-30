@@ -1,4 +1,4 @@
-package io.github.livsbittt.rosy.overhead.health
+package io.github.livsbittt.rosy.ceilingcamera.health
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse

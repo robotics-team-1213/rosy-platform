@@ -1,8 +1,8 @@
-package io.github.livsbittt.rosy.overhead.ui
+package io.github.livsbittt.rosy.ceilingcamera.ui
 
-import io.github.livsbittt.rosy.overhead.link.LinkError
-import io.github.livsbittt.rosy.overhead.link.NetworkFailure
-import io.github.livsbittt.rosy.overhead.service.StreamError
+import io.github.livsbittt.rosy.ceilingcamera.link.LinkError
+import io.github.livsbittt.rosy.ceilingcamera.link.NetworkFailure
+import io.github.livsbittt.rosy.ceilingcamera.service.StreamError
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue

@@ -1,8 +1,8 @@
 import asyncio
 from types import SimpleNamespace
 
-from overhead.project import CameraMap
-from overhead.worker import VisionWorker
+from site_vision.project import CameraMap
+from site_vision.worker import VisionWorker
 
 
 def _camera():

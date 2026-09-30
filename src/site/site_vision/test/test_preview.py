@@ -7,8 +7,8 @@ import httpx
 import numpy as np
 
 from core_common.protocol.vision_preview import VisionLeaseSigner
-from overhead.ingest import IngestServer, LatestFrame
-from overhead.protocol import FrameHeader
+from site_vision.ingest import IngestServer, LatestFrame
+from site_vision.protocol import FrameHeader
 
 
 def _get(server, path, authorization):

@@ -1,4 +1,4 @@
-package io.github.livsbittt.rosy.overhead.settings
+package io.github.livsbittt.rosy.ceilingcamera.settings
 
 import java.nio.charset.StandardCharsets.UTF_8
 import org.junit.Assert.assertEquals
@@ -11,7 +11,7 @@ class OverheadServiceRecordTest {
     fun acceptsOnlyTlsOverheadReceiverAdvertisements() {
         val record = OverheadServiceRecord.parse(
             serviceType = "_rosy-overhead._tcp.",
-            serviceName = "ROSY Overhead site-a",
+            serviceName = "ROSY Site Vision site-a",
             tlsHost = "site-a.local",
             port = 8443,
             attributes = attributes(),
@@ -20,7 +20,7 @@ class OverheadServiceRecordTest {
         assertNotNull(record)
         assertEquals("site-a.local", record?.tlsHost)
         assertEquals(8443, record?.port)
-        assertEquals("ROSY Overhead site-a", record?.serviceName)
+        assertEquals("ROSY Site Vision site-a", record?.serviceName)
     }
 
     @Test

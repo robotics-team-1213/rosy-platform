@@ -1,6 +1,6 @@
 from setuptools import find_packages, setup
 
-package_name = "overhead"
+package_name = "site_vision"
 
 setup(
     name=package_name,
@@ -22,7 +22,7 @@ setup(
     license="Apache-2.0",
     entry_points={
         "console_scripts": [
-            "overhead=overhead.cli:main",
+            "site_vision=site_vision.cli:main",
         ],
     },
 )

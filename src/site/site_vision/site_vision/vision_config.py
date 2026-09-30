@@ -10,7 +10,7 @@ from typing import Mapping
 
 import yaml
 
-from overhead.project import CameraMap
+from site_vision.project import CameraMap
 
 _REQUIRED = {
     "source_id", "phone_token_env", "token_env", "fleet_base_url", "robot_ids",

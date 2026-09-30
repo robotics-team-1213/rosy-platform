@@ -54,11 +54,18 @@ modules:
     tests: [src/site/games/test, test/test_rosy_games_surface.py]
     functional_kind: pytest
     functional: [src/site/games/test]
-  - name: overhead
-    path: src/site/overhead
-    tests: [src/site/overhead/test]
+  - name: site_vision
+    path: src/site/site_vision
+    tests: [src/site/site_vision/test]
     functional_kind: pytest
-    functional: [src/site/overhead/test]
+    functional: [src/site/site_vision/test]
+  # D-374: Android JVM tests need a JDK/Gradle, so the host functional surface is the
+  # registry/icon/role contract tests; `gradlew testDebugUnitTest` runs in android.yml.
+  - name: ceiling_camera
+    path: src/site/ceiling_camera
+    tests: [test/architecture/test_app_roles.py, src/hmi/web_common/test/test_surface_icons.py]
+    functional_kind: host-contract
+    functional: [test/architecture/test_app_roles.py, src/hmi/web_common/test/test_surface_icons.py]
   - name: gz_sim
     path: src/sim/gz_sim
     tests: [src/sim/gz_sim/test]

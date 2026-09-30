@@ -1,4 +1,4 @@
-package io.github.livsbittt.rosy.overhead.ui
+package io.github.livsbittt.rosy.ceilingcamera.ui
 
 import java.io.File
 import javax.xml.parsers.DocumentBuilderFactory
@@ -8,7 +8,7 @@ import org.junit.Test
 import org.w3c.dom.Element
 
 /**
- * D-370 3항: the adaptive launcher icon is a copy of src/hmi/web_common/icons/overhead-camera-app.svg.
+ * D-370 3항: the adaptive launcher icon is a copy of src/hmi/web_common/icons/ceiling-camera.svg.
  * Paths, stroke widths and colours must stay equal; the monochrome layer is the same geometry in one colour.
  */
 class LauncherIconParityTest {
@@ -27,7 +27,7 @@ class LauncherIconParityTest {
     }
 
     private fun svgShapes(): Pair<String, List<Shape>> {
-        val paths = xml(File(iconsDir, "overhead-camera-app.svg")).paths()
+        val paths = xml(File(iconsDir, "ceiling-camera.svg")).paths()
         val background = paths.first { it.getAttribute("id") == "background" }.getAttribute("fill")
         val shapes = paths.filter { it.getAttribute("id") != "background" }.map {
             val stroke = it.getAttribute("stroke").takeIf { value -> value.isNotEmpty() && value != "none" }

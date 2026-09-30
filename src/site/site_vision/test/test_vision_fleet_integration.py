@@ -13,12 +13,12 @@ import uvicorn
 import websockets
 import yaml
 
-from overhead import protocol
-from overhead.detect import generate_marker_image
-from overhead.ingest import IngestServer
-from overhead.publish import SightingPublisher
-from overhead.vision_config import load_vision_sources
-from overhead.worker import VisionWorker
+from site_vision import protocol
+from site_vision.detect import generate_marker_image
+from site_vision.ingest import IngestServer
+from site_vision.publish import SightingPublisher
+from site_vision.vision_config import load_vision_sources
+from site_vision.worker import VisionWorker
 from fleet.server.app import create_app
 from fleet.server.console import FleetConsole
 from fleet.server.sightings import SightingService

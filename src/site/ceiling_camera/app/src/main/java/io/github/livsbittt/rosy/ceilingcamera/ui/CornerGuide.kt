@@ -1,6 +1,6 @@
-package io.github.livsbittt.rosy.overhead.ui
+package io.github.livsbittt.rosy.ceilingcamera.ui
 
-import io.github.livsbittt.rosy.overhead.link.ServerMessage
+import io.github.livsbittt.rosy.ceilingcamera.link.ServerMessage
 
 /**
  * Installation guidance from the adapter's `status`: how many corner markers the camera sees
@@ -29,7 +29,7 @@ data class CornerGuide(val seen: List<Int>, val needed: Int, val robots: List<St
         private const val MAX_DOTS = 8
 
         /**
-         * True once the receiver reports any marker. `overhead receive` (and Vision before it
+         * True once the receiver reports any marker. `site_vision receive` (and Vision before it
          * sees a frame) sends empty placeholder lists, which must not read as "0/4 seen".
          */
         fun reportsMarkers(status: ServerMessage.Status): Boolean =

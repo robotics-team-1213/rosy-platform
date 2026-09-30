@@ -1,6 +1,6 @@
-package io.github.livsbittt.rosy.overhead.link
+package io.github.livsbittt.rosy.ceilingcamera.link
 
-import io.github.livsbittt.rosy.overhead.Vectors
+import io.github.livsbittt.rosy.ceilingcamera.Vectors
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue

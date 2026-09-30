@@ -1,9 +1,9 @@
-package io.github.livsbittt.rosy.overhead
+package io.github.livsbittt.rosy.ceilingcamera
 
 import java.io.File
 import org.json.JSONObject
 
-/** Loads the shared rosy-overhead/1 vectors (src/site/overhead/protocol/vectors.json). */
+/** Loads the shared rosy-overhead/1 vectors (test/fixtures/protocol/overhead-ingest.v1.json). */
 object Vectors {
     val root: JSONObject by lazy {
         val path = System.getProperty("rosy.overhead.vectors")
