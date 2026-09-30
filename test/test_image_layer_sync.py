@@ -403,7 +403,88 @@ def test_runs_in_the_same_second_keep_their_order_whatever_the_release_id(device
     names = sorted(path.name for path in (device / sync_mod.BACKUP_ROOT).iterdir() if path.is_dir())
 
     # OLD_ID sorts before NEW_ID by name, but ran second.
-    assert names == [f"20261001T000000Z-000-{NEW_ID}", f"20261001T000000Z-001-{OLD_ID}"]
+    assert names == [f"000000-20261001T000000Z-{NEW_ID}", f"000001-20261001T000000Z-{OLD_ID}"]
+
+
+def test_a_clock_that_goes_backwards_does_not_reorder_runs(device, monkeypatch):
+    # No RTC on the Pinky: each run's clock reads earlier than the last.
+    stamps = iter(["20261001T120000Z", "20261001T110000Z", "20261001T100000Z"])
+    monkeypatch.setattr(sync_mod, "_stamp", lambda now=None: next(stamps))
+    _variant(device, "2026.10.01-001", "# C\n")
+    _variant(device, "2026.10.01-002", "# D\n")
+    _variant(device, "2026.10.01-003", None)
+    extra = device / "opt/rosy/native-runtime/extra_tool.py"
+    _sync(device, "2026.10.01-001", Runner(), dry_run=False)   # C adds X
+    _sync(device, "2026.10.01-002", Runner(), dry_run=False)   # D changes X
+
+    result = _sync(device, "2026.10.01-003", Runner(), dry_run=False)  # B lacks X
+
+    assert result["removed"] == ["/opt/rosy/native-runtime/extra_tool.py"]
+    assert not extra.exists()
+
+
+def _unflag_last_manifest(device: Path) -> Path:
+    """What a power loss between the installs and files_applied leaves."""
+    folder = sorted(path for path in (device / sync_mod.BACKUP_ROOT).iterdir() if path.is_dir())[-1]
+    manifest = folder / sync_mod.BACKUP_MANIFEST
+    data = json.loads(manifest.read_text(encoding="utf-8"))
+    data.update(files_applied=False, complete=False)
+    manifest.write_text(json.dumps(data), encoding="utf-8")
+    (device / sync_mod.PENDING_FILE).unlink(missing_ok=True)
+    return folder
+
+
+def test_a_run_cut_off_after_every_install_is_reconciled_as_applied(device):
+    _older_release(device)
+    _sync(device, NEW_ID, Runner(), dry_run=False)
+    _unflag_last_manifest(device)
+    # The dry run only reports; the next apply settles it.
+    assert _sync(device, NEW_ID, Runner(), dry_run=True)["reconciled"][0]["outcome"] == "unreconciled"
+    runner = Runner(active={"rosy-io.service"})
+
+    again = _sync(device, NEW_ID, runner, dry_run=False)
+
+    assert [entry["outcome"] for entry in again["reconciled"]] == ["applied"]
+    # The reloads and enables the cut-off run never ran are run now.
+    assert ["systemctl", "daemon-reload"] in runner.mutating()
+    assert ["systemctl", "enable", "--now", "rosy-hw-test.path"] in runner.mutating()
+    assert "rosy-io.service" in again["restart_units"]
+    # And the history is intact: a rollback removes what that run added.
+    rollback = _sync(device, OLD_ID, Runner(), dry_run=False)
+    assert "/opt/rosy/native-runtime/mapping_approval.py" in rollback["removed"]
+
+
+def test_a_run_cut_off_part_way_is_undone_from_its_backups(device):
+    before = _tree(device)
+    _sync(device, NEW_ID, Runner(), dry_run=False)
+    folder = _unflag_last_manifest(device)
+    # The power failed before rosy-io.service was replaced.
+    old_io = folder / "etc/systemd/system/rosy-io.service"
+    shutil.copyfile(old_io, device / "etc/systemd/system/rosy-io.service")
+    runner = Runner()
+
+    result = sync_mod.reconcile(device, dry_run=False)
+
+    assert result[0][0]["outcome"] == "undone"
+    after = {k: v for k, v in _tree(device).items() if not k.startswith(sync_mod.BACKUP_ROOT)}
+    assert after == {k: v for k, v in before.items() if not k.startswith(sync_mod.BACKUP_ROOT)}
+    assert json.loads((folder / sync_mod.BACKUP_MANIFEST).read_text(encoding="utf-8"))["abandoned"] is True
+    # Settled once: a second pass does nothing.
+    assert sync_mod.reconcile(device, dry_run=False)[0] == []
+    assert runner.calls == []
+
+
+def test_an_undone_run_is_marked_abandoned_and_never_reconciled(device, monkeypatch):
+    def broken(source, destination, mode):
+        raise OSError("disk full")
+
+    real = sync_mod._install
+    monkeypatch.setattr(sync_mod, "_install", broken)
+    with pytest.raises(OSError):
+        _sync(device, NEW_ID, Runner(), dry_run=False)
+    monkeypatch.setattr(sync_mod, "_install", real)
+
+    assert sync_mod.reconcile(device, dry_run=False)[0] == []
 
 
 def test_a_manifest_whose_disable_failed_does_not_shadow_the_history(device, monkeypatch):

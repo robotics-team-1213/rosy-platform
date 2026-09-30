@@ -335,6 +335,36 @@ def _unit_name(item: dict) -> str:
     return Path(item["destination"]).name
 
 
+SERIAL = re.compile(r"^([0-9]{6})-")
+
+
+def _run_folders(root: Path) -> list[Path]:
+    """Backup folders in run order: by serial, never by the clock.
+
+    The Pinky has no RTC, so a timestamp can go backwards between runs.
+    Folders without a serial sort first.
+    """
+    backups = root / BACKUP_ROOT
+    if not backups.is_dir():
+        return []
+
+    def key(path: Path) -> tuple[int, str]:
+        match = SERIAL.match(path.name)
+        return (int(match.group(1)) if match else -1, path.name)
+
+    return sorted((path for path in backups.iterdir() if path.is_dir()), key=key)
+
+
+def _next_serial(root: Path) -> int:
+    """One more than the highest serial so far; the caller holds the lock."""
+    serials = [int(match.group(1)) for match in
+               (SERIAL.match(path.name) for path in _run_folders(root)) if match]
+    serial = max(serials, default=-1) + 1
+    if serial > 999999:
+        raise SyncError("IMAGE_LAYER_BACKUP: backup serials are exhausted")
+    return serial
+
+
 def _records(root: Path) -> tuple[dict[str, list[tuple[dict, Path]]], list[str]]:
     """Every path's records, oldest first, from manifests whose files landed.
 
@@ -346,10 +376,7 @@ def _records(root: Path) -> tuple[dict[str, list[tuple[dict, Path]]], list[str]]
     """
     chains: dict[str, list[tuple[dict, Path]]] = {}
     corrupt: list[str] = []
-    backups = root / BACKUP_ROOT
-    if not backups.is_dir():
-        return chains, corrupt
-    for folder in sorted(path for path in backups.iterdir() if path.is_dir()):
+    for folder in _run_folders(root):
         manifest = folder / BACKUP_MANIFEST
         if not manifest.is_file():
             continue
@@ -390,6 +417,84 @@ def _origin(chain: list[tuple[dict, Path]]) -> tuple[str, tuple[dict, Path] | No
             return ("remove", None)
         break
     return ("restore", oldest_changed)
+
+
+def _landed(root: Path, record: dict) -> bool:
+    """Whether the destination holds what this record's run meant to leave."""
+    relative = str(record.get("path", "")).lstrip("/")
+    check_destination(relative)
+    destination = root / relative
+    if record.get("state") == "removed":
+        return not destination.exists() and not destination.is_symlink()
+    return (destination.is_file() and not destination.is_symlink()
+            and _sha256(destination) == record.get("sha256"))
+
+
+def reconcile(root: Path, *, dry_run: bool) -> tuple[list[dict], dict]:
+    """Settle manifests that are neither files_applied nor abandoned.
+
+    Such a manifest means a run stopped between its first file change and
+    its files_applied flag: a power loss. If every destination holds what the
+    run recorded, the run did land: flag it, and hand back the reloads and
+    enables it never ran. Otherwise undo exactly what it installed from its
+    backups and mark it abandoned. Nothing else is touched.
+    """
+    report: list[dict] = []
+    steps = {"daemon_reload": False, "enable": [], "udev_reload": False, "units": []}
+    for folder in _run_folders(root):
+        path = folder / BACKUP_MANIFEST
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            files = data["files"]
+            if not isinstance(files, list):
+                raise ValueError("no file list")
+        except (OSError, ValueError, KeyError, TypeError):
+            continue  # _records reports it as corrupt
+        if data.get("files_applied") is True or data.get("abandoned") is True:
+            continue
+        shown = "/" + path.relative_to(root).as_posix()
+        records = [record for record in files if isinstance(record, dict)]
+        if dry_run:
+            report.append({"manifest": shown, "outcome": "unreconciled"})
+            continue
+        kinds = {_kind(str(record.get("path", "")).lstrip("/")) for record in records}
+        if all(_landed(root, record) for record in records):
+            data["files_applied"] = True
+            _write_json(path, data)
+            steps["daemon_reload"] |= "unit" in kinds
+            steps["udev_reload"] |= "udev" in kinds
+            for record in records:
+                name = Path(str(record["path"])).name
+                if _kind(str(record["path"]).lstrip("/")) == "unit":
+                    steps["units"].append(name)
+                    if record.get("state") == "new" and name in ENABLED_UNITS:
+                        steps["enable"].append(name)
+            report.append({"manifest": shown, "outcome": "applied"})
+            continue
+        undone: list[str] = []
+        for record in reversed(records):
+            relative = str(record.get("path", "")).lstrip("/")
+            destination = root / relative
+            saved = folder / str(record.get("backup") or "")
+            has_backup = bool(record.get("backup")) and saved.is_file() and not saved.is_symlink()
+            state = record.get("state")
+            if state == "new" and _landed(root, record):
+                destination.unlink()
+            elif state in {"changed", "restored"} and _landed(root, record) and has_backup:
+                _install(saved, destination, _mode(saved))
+            elif state == "removed" and _landed(root, record) and has_backup:
+                _install(saved, destination, _mode(saved))
+            else:
+                continue
+            undone.append("/" + relative)
+            if _kind(relative) == "unit":
+                steps["daemon_reload"] = True
+            if _kind(relative) == "udev":
+                steps["udev_reload"] = True
+        data["abandoned"] = True
+        _write_json(path, data)
+        report.append({"manifest": shown, "outcome": "undone", "paths": undone})
+    return report, steps
 
 
 def _kind(relative: str) -> str:
@@ -536,18 +641,9 @@ def apply(root: Path, release_id: str, work: list[dict], runner: Runner,
     backup: Path | None = None
     if work or cleanup:
         stamp = _stamp(now)
-        # _records orders runs by folder name. Runs in the same second get the
-        # next serial whatever their release id, so the name never lets a
-        # release id reorder two runs.
+        # The serial orders runs; the timestamp is only for people (no RTC).
         (root / BACKUP_ROOT).mkdir(parents=True, exist_ok=True)
-        taken = [
-            int(path.name[len(stamp) + 1:len(stamp) + 4])
-            for path in (root / BACKUP_ROOT).glob(f"{stamp}-[0-9][0-9][0-9]-*")
-        ]
-        serial = max(taken, default=-1) + 1
-        if serial > 999:
-            raise SyncError("IMAGE_LAYER_BACKUP: no free backup folder name")
-        backup = root / BACKUP_ROOT / f"{stamp}-{serial:03d}-{release_id}"
+        backup = root / BACKUP_ROOT / f"{_next_serial(root):06d}-{stamp}-{release_id}"
         backup.mkdir()
         os.chmod(backup, 0o700)
         backup_dir = "/" + backup.relative_to(root).as_posix()
@@ -599,6 +695,8 @@ def apply(root: Path, release_id: str, work: list[dict], runner: Runner,
                 else:
                     saved = backup / item["destination"]
                     _install(saved, destination, _mode(saved))
+            manifest["abandoned"] = True
+            _write_json(backup / BACKUP_MANIFEST, manifest)
             # Best effort: the original failure is what the caller must see.
             for unit, before in reversed(disabled):
                 if before["enabled"]:
@@ -646,6 +744,15 @@ def sync(
         if not native.is_dir():
             raise SyncError(f"IMAGE_LAYER_SOURCE: release {release_id} has no {RELEASE_NATIVE}")
         pending, pending_report = _load_pending(root, dry_run=dry_run)
+        reconciled, owed = reconcile(root, dry_run=dry_run)
+        if owed["daemon_reload"] or owed["udev_reload"] or owed["enable"]:
+            pending = {
+                **pending,
+                "daemon_reload": bool(pending.get("daemon_reload")) or owed["daemon_reload"],
+                "udev_reload": bool(pending.get("udev_reload")) or owed["udev_reload"],
+                "enable": sorted(set(pending.get("enable", [])) | set(owed["enable"])),
+                "units": sorted(set(pending.get("units", [])) | set(owed["units"])),
+            }
         result = plan(root, native)
         work = result.pop("_work")
         chains, corrupt = _records(root)
@@ -662,6 +769,7 @@ def sync(
             removed=["/" + item["destination"] for item in cleanup if item["state"] == "removed"],
             restored=["/" + item["destination"] for item in cleanup if item["state"] == "restored"],
             pending=pending or None,
+            reconciled=reconciled,
             pending_quarantined=pending_report.get("pending_quarantined"),
             pending_parked=pending_report.get("pending_parked"),
             corrupt_manifests=corrupt,
