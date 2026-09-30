@@ -34,6 +34,7 @@ Two kinds of directory live under `rosy_core/`:
 
 **Size is not in this table and must not be added.** See X1.
 *(Amended 2026-09-22 by D-168 P6: size is still not a split criterion here, but a production file over 600 lines or a package over 10k lines must carry a recorded `split`/`accept` verdict in `test/test_module_structure.py`.)*
+*(Amended 2026-09-30 by D-362: the budget is per code type and the gate sees the whole production tree — 600 physical lines for `.py`/`.cpp`/`.hpp`/`.sh` across `src/`, `deploy/`, `tools/`, `firmware/`; 800 for web assets `.js`/`.html`/`.css` inside `src/` packages; growth allowance is 0 above 1000. The gate lives at `test/architecture/test_module_structure.py`. Size is still not a split criterion — only the trigger for a recorded verdict. See [2026-09-30-file-size-budget-and-refactor-queue.md](2026-09-30-file-size-budget-and-refactor-queue.md).)*
 
 ### Verification — all sixteen subpackages
 

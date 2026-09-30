@@ -63,7 +63,10 @@ def test_the_shell_wires_the_bridge_to_the_callers_identity():
 
 
 def test_the_bridge_stays_a_quiet_topbar_link_and_owns_its_states():
-    css = (ROOT / "styles.css").read_text(encoding="utf-8")
+    # D-362 P1: the shell ships two linked sheets; responsive rules live in the
+    # detail sheet, so read them concatenated in link order (like dashboard_css).
+    css = (ROOT / "styles.css").read_text(encoding="utf-8") + "\n" \
+        + (ROOT / "console-detail.css").read_text(encoding="utf-8")
     assert ".surface-bridge a" in css
     assert ".surface-bridge a:hover" in css
     assert ".surface-bridge a:focus-visible" in css
