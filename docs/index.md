@@ -168,6 +168,7 @@
 | D-358 | ER 2 feedback turns use trusted scope, fenced candidates, and explicit ambiguity |
 | D-360 | 천장 카메라 경기장 자동 검출은 제안일 뿐이다 — Vision이 네 모서리를 제안하고, 관제는 운용자가 확인한 모서리로 보정·마스킹한 경기장 뷰를 보여 준다 |
 | D-361 | 사이트 콘솔이 로봇 화면 코드로 로봇을 등록한다 — Fleet이 코드를 로봇에서 직접 교환하고, 자격은 Fleet 소유 저장소에 둔다 |
+| D-370 | 앱과 표면은 한 역할씩 맡는다 — 역할·이름·아이콘·화면 소유를 한 표로 고정하고, 발견·기기 연결·실패 어휘는 공유 벡터로 하나로 맞춘다 |
 
 ## 계획·결과 문서
 
@@ -231,6 +232,7 @@
 - [2026-09-30-er2-mission-feedback-loop.md](plans/2026-09-30-er2-mission-feedback-loop.md)
 - [2026-09-30-goal-evidence-producer-and-verifier-design.md](plans/2026-09-30-goal-evidence-producer-and-verifier-design.md)
 - [2026-09-30-goal-evidence-producer-and-verifier.md](plans/2026-09-30-goal-evidence-producer-and-verifier.md)
+- [2026-09-30-site-app-roles-and-shared-link-plan.md](plans/2026-09-30-site-app-roles-and-shared-link-plan.md)
 
 ## 교훈 (docs/solutions)
 
@@ -243,8 +245,8 @@
 
 ## 최근 기록
 
+- 2026-09-30 · uncommitted · docs(adr): D-370 독립 리뷰 반영(MERGE-AFTER-FIXES)
+- 2026-09-30 · uncommitted · docs(adr): D-358 앱 역할 ADR을 D-370으로 재번호
+- 2026-09-30 · uncommitted · docs(adr): D-358 앱 역할·이름·아이콘·화면 소유와 공유 연결 조각
 - 2026-09-30 · uncommitted · docs(sensing): D-356 학습 루프 기록 정정·리뷰 수정
 - 2026-09-30 · uncommitted · fix(contracts): reconcile ER2 API version and Fleet size ratchet
-- 2026-09-30 · uncommitted · docs(validation): record final ER2 feedback audit gates
-- 2026-09-30 · uncommitted · fix(fleet): recheck ER2 egress fence after Vision capture
-- 2026-09-30 · uncommitted · fix(fleet): enforce the ER2 feedback deadline across tool dispatch

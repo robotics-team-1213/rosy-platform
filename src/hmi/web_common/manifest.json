@@ -6,6 +6,10 @@
     "template.html": "text/html",
     "core_ui_logic.js": "text/javascript",
     "hold-ticker.js": "text/javascript",
-    "ui.js": "text/javascript"
+    "ui.js": "text/javascript",
+    "icons/overhead-camera-app.svg": "image/svg+xml",
+    "icons/pilot.svg": "image/svg+xml",
+    "icons/fleet-console.svg": "image/svg+xml",
+    "icons/robot-dashboard.svg": "image/svg+xml"
   }
 }

@@ -117,3 +117,36 @@
 - 변경: main에 다른 D-354(mDNS 서비스 발견)가 먼저 착지해, main 병합 때 경기장 자동 검출 제안 ADR을 D-360으로 옮겼다. 코드 주석·시험·API Ref의 D-354 표기를 D-360으로 바꿨고 ADR 본문에 까닭을 적었다. 이 항목보다 앞선 로그의 "D-354"(경기장 제안)는 D-360을 가리킨다(로그는 고치지 않는다).
 - 증거: 병합 커밋의 overhead·Fleet·node 실행.
 - gate 변화: 없음.
+
+## 2026-09-30 · uncommitted · test(overhead-app): D-358 S1 DiscoveryVectorsTest
+
+- 변경: Gradle 단위 시험에 시스템 속성 `rosy.discovery.vectors`(`test/fixtures/protocol/discovery-txt.v1.json`)를 더했다. `OverheadServiceRecord`/`RobotCoreServiceRecord`에 벡터 어휘로 사유를 내는 `rejection()`을 두고 `parse()`가 그것을 쓴다. 받는 집합은 바뀌지 않았다.
+- 증거: `gradlew testDebugUnitTest` 95 tests, 0 failures. 변이 증명: 벡터 기대 사유 하나를 바꾸면 Kotlin도 적신.
+- gate 변화: 없음.
+- 결정: D-358 5.1. 로봇 레코드는 주소·호스트·AP·legacy를 아직 보지 않는다. 앱 동작 변경이라 이번 범위 밖이고, 시험에 `knownRobotDivergence` 8건으로 못 박았다(고치면 시험이 목록 삭제를 요구한다).
+- 교훈: 없음.
+
+## 2026-09-30 · uncommitted · feat(overhead-app): D-358 S3 적응형 런처 아이콘
+
+- 변경: `mipmap-anydpi-v26/ic_launcher(_round).xml`(배경·전경·흑백 세 층), `drawable/ic_launcher_foreground.xml`·`ic_launcher_monochrome.xml`(`web_common/icons/overhead-camera-app.svg`에서 생성), `values/ic_launcher_background.xml`(ground #101214), 매니페스트 `android:icon`·`roundIcon`. `app_name`은 이미 "Rosy 천장 카메라"라 그대로 두었다. `LauncherIconParityTest`(`rosy.icons.dir`)가 경로·굵기·색을 SVG와 대조한다. 밀도별 PNG는 만들지 않았다(minSdk 26).
+- 증거: `gradlew testDebugUnitTest assembleDebug` 녹색(99 tests). 변이 증명: SVG 렌즈 고리 굵기를 바꾸면 패리티 시험 2건 적신. 512 px PNG: `private/validation/2026-09-30-d358-icons/overhead-camera-app-512.png`.
+- gate 변화: 없음. 실제 폰 런처 확인은 DEVICE 회차.
+- 결정: D-358 3항.
+- 교훈: 없음.
+
+
+## 2026-09-30 · uncommitted · docs(adr): D-358 앱 역할 ADR을 D-370으로 재번호
+
+- 변경: 이 모듈의 D-358 앱 역할·이름·아이콘 주석과 시험 문서 문자열을 D-370으로 바꿨다. 동작 변경 없음.
+- 증거: 번호만 바꾼 diff. 시험은 병합 뒤 회차에서 다시 돌린다.
+- gate 변화: 없음.
+- 결정: 이 항목 앞의 "D-358 S1/S2/S3"·"D-358 N항"은 D-370을 가리킨다(main의 D-358 ER2 피드백 outbox와 다름). 옛 항목은 고치지 않는다.
+- 교훈: 없음.
+
+## 2026-09-30 · uncommitted · fix(overhead-app): D-370 리뷰 — Kotlin tls_host 규칙을 Python 분류기와 맞춤
+
+- 변경: `OverheadServiceRecord.rejection`이 한 레이블 `<name>.local`만 받고, 해석된 호스트와 `tls_host`를 소문자·끝 점 제거 뒤 비교한다. 저장하는 `tlsHost`도 같은 정규화. 공유 벡터 `overhead_multilabel_tls_host`(bad_host)·`overhead_tls_host_case`(accepted) 추가. `.github/workflows/android.yml`이 `test/fixtures/protocol/**`·`src/hmi/web_common/icons/**` 변경에도 돈다.
+- 증거: `gradlew testDebugUnitTest` 녹색, Python 벡터 소비자 122 passed.
+- gate 변화: 없음. 실제 폰 발견은 DEVICE 회차.
+- 결정: D-370 5.1.
+- 교훈: 없음.

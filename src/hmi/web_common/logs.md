@@ -211,3 +211,36 @@
 - gate 변화: 없음 (LOCAL GO 유지, cmd만 재현 가능해짐).
 - 결정: 스크린샷·리포트는 기본 임시 디렉터리, --out-dir로 증거 디렉터리 지정 — 검증 게이트와 증거 보관을 분리한다.
 - 교훈: 검증 cmd가 임시 디렉터리를 가리키는 순간 그 gate 기록은 그 호스트에서만 유효하다 — 도구가 저장소에 없으면 gate가 아니다.
+
+## 2026-09-30 · uncommitted · test(roles): D-358 S2 역할 경계 시험과 표면 소유 목록
+
+- 변경: `surfaces.yaml` 모든 표면에 `role`(D-358 1항 한 줄 요약)과 `owns`(4항 소유 조작) 목록을 더했다. 레지스트리 로더가 빈 `role`, 없는 `owns`, 중복 소유, 사유 없는 표 항목을 거절한다. 대시보드 `manual-drive`는 `transitional: "D-358 4항 1"`로 표시했다. 새 `test/architecture/test_app_roles.py`가 천장 카메라 앱(`/api/v1/`·`/api/fleet/`(pairing/v1 제외)·`cmd_vel`·`estop` 없음), Vision(`/api/v1/`·`cmd_vel` 없음, Fleet에는 sightings만), Fleet vision 라우트(lease만 발급, 바이트 없음), 소유 겹침(estop·transitional만 허용)을 검사한다.
+- 증거: `test_app_roles.py` 6 passed, `src/hmi/web_common/test` 98 passed. 변이 증명 네 가지(카메라 앱에 `/api/v1/estop`, Vision에 `/api/fleet/missions`, lease 응답에 `jpeg` 키, Fleet에 `robot-detail` 소유 추가) 모두 적신 → 되돌림.
+- gate 변화: 없음. SOURCE/LOCAL.
+- 결정: D-358 1·4항. Pilot(`src/hmi/pilot`)은 main에 없어 대상이 아니다. `test_pilot_is_not_on_main_yet`이 착지 순간 적신이 되어 Pilot 검사 추가를 강제한다(skip 아님).
+- 교훈: 없음.
+
+## 2026-09-30 · uncommitted · feat(icons): D-358 S3 이름·아이콘·파비콘
+
+- 변경: `icons/`에 SVG 네 개(`overhead-camera-app`·`pilot`·`fleet-console`·`robot-dashboard`)를 두었다. 108 격자, `--ground` 바탕, `--brand-rose` 점 하나, 표면마다 글리프 토큰 하나(`<path>`만). `surfaces.yaml`에 `app_name`·`app_name_en`·`short_name`·`icon`을 더했다. `manifest.json`이 아이콘을 한 개씩 `image/svg+xml`로 허용하고(폴더를 열지 않음) CMake가 `share/web_common/icons`로 설치한다. `test_asset_manifest.py`는 `icons/` 한 단계와 SVG 미디어 타입을 받도록 고쳤다. `tools/icons/render_png.py`(Pillow)가 SVG를 PNG로 그린다.
+- 증거: `test_surface_icons.py` 8 passed(토큰 색만, `--status-*` 없음, 안전 영역, 48 px 흑백 IoU < 0.5, 이름표·Android `app_name` 대조). G2 캡처: `private/validation/2026-09-30-d358-icons/d358-icons-side-by-side.png`(색·흑백 × 48·192 px, 원형 마스크).
+- gate 변화: 없음. G2 사용자 확인 대기, DEVICE(실제 런처)는 별도 회차.
+- 결정: D-358 2·3항. Pilot 이름·아이콘 PNG·버튼 문구는 Pilot이 main에 없어 착지 회차로 미룬다(`pilot.svg`만 먼저 둠).
+- 교훈: SVG·Android XML 주석에 `--`를 쓰면 파서가 거절한다(토큰 이름을 주석에 적지 말 것).
+
+
+## 2026-09-30 · uncommitted · docs(adr): D-358 앱 역할 ADR을 D-370으로 재번호
+
+- 변경: 이 모듈의 D-358 앱 역할·이름·아이콘 주석과 시험 문서 문자열을 D-370으로 바꿨다. 동작 변경 없음.
+- 증거: 번호만 바꾼 diff. 시험은 병합 뒤 회차에서 다시 돌린다.
+- gate 변화: 없음.
+- 결정: 이 항목 앞의 "D-358 S1/S2/S3"·"D-358 N항"은 D-370을 가리킨다(main의 D-358 ER2 피드백 outbox와 다름). 옛 항목은 고치지 않는다.
+- 교훈: 없음.
+
+## 2026-09-30 · uncommitted · fix(ci): D-370 리뷰 — 아이콘 시험이 Pillow 없이도 수집되고, 토큰 이름 중복을 막음
+
+- 변경: `tools/icons/render_png.py`는 `render()` 안에서만 PIL을 import한다. `test_surface_icons.py`의 실루엣 시험은 `pytest.importorskip("PIL")`, CI는 `python3-pil`을 깐다. 새 시험 `test_token_names_are_defined_once`.
+- 증거: `test_surface_icons.py` 9 passed; PIL을 막으면 8 passed, 1 skipped(토큰 시험 추가 전 기준 7/1).
+- gate 변화: 없음.
+- 결정: D-370 3항, D-359(테마 블록이 생기면 정규식 사전이 뒤 값을 고르는 위험).
+- 교훈: 없음.
