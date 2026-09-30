@@ -59,54 +59,66 @@ def _print_pairing(uri: str) -> None:
     qr.print_ascii(invert=True)
 
 
-def _pin_from(cert_file: Path) -> str:
-    """Pin of the last certificate in the PEM file the TLS server serves (see ``pem_last_cert_pin``)."""
-    return protocol.pem_last_cert_pin(cert_file.read_text(encoding="ascii"))
+def _read_pem(path: Path) -> str:
+    """PEM text; a UTF-8 BOM is tolerated. Undecodable bytes become a clean ValueError."""
+    try:
+        return path.read_bytes().decode("utf-8-sig")
+    except UnicodeDecodeError:
+        raise ValueError(f"{path} is not a PEM text file") from None
+
+
+def _served_pins(path: Path) -> list[str]:
+    """Pins of the chain a TLS server serves from ``path``, leaf first."""
+    return protocol.pem_cert_pins(_read_pem(path))
 
 
 _FULLCHAIN_HINT = ("serve leaf + CA: `cat site.crt site-ca.crt > site-fullchain.crt` and point the proxy's "
                    "certificate (Caddy `tls` / Compose secret site_cert) at it; Caddy serves the whole file")
 
 
-def _choose_pin(served: Path | None, ca: Path | None) -> tuple[str, str]:
-    """Returns ``(pin, "CA"|"leaf")``. A CA pin is preferred: it survives leaf re-issue (D-341 10).
+def _choose_ca_pin(served: Path, ca: Path) -> str:
+    """The site CA pin, only when the served chain carries that CA above the leaf (D-341 9).
 
-    Raises ValueError when ``ca`` is given but ``served`` (if known) does not carry it, because the
-    phone can only match certificates the proxy actually sends.
+    D-341 9 pins the site CA; a leaf-only pin is not issued. The phone matches only certificates the
+    proxy sends, so a CA missing from ``served`` would fail on the phone; refuse it here instead.
     """
-    served_pins = protocol.pem_cert_pins(served.read_text(encoding="ascii")) if served else None
-    if ca is not None:
-        pin = _pin_from(ca)
-        if served_pins is not None and pin not in served_pins:
-            raise ValueError(f"{served} does not contain the CA from {ca}; the phone would reject the site. "
-                             + _FULLCHAIN_HINT)
-        return pin, "CA"
-    assert served_pins is not None
-    return served_pins[-1], ("CA" if len(served_pins) > 1 else "leaf")
+    served_pins = _served_pins(served)
+    pin = protocol.pem_last_cert_pin(_read_pem(ca))
+    if pin == served_pins[0]:
+        raise ValueError(f"{ca} is the served leaf, not the site CA (D-341 9 pins the CA, never a leaf)")
+    if pin not in served_pins[1:]:
+        raise ValueError(f"{served} does not carry the CA from {ca}; the phone would reject the site. "
+                         + _FULLCHAIN_HINT)
+    return pin
+
+
+def _receive_pin(served: Path) -> str | None:
+    """CA pin for ``receive --tls-cert``: the last certificate when the file is leaf + CA, else none."""
+    try:
+        served_pins = _served_pins(served)
+    except (OSError, ValueError) as exc:
+        print(f"no pin in the pairing link: {exc}")
+        return None
+    if len(served_pins) < 2:
+        print("no pin in the pairing link: the served file is leaf-only and D-341 9 pins only the site CA; "
+              + _FULLCHAIN_HINT)
+        return None
+    return served_pins[-1]
 
 
 def _pair_link(args: argparse.Namespace) -> int:
-    """Print a pinned ``rosyov://...&tls=1&pin=`` link for a site TLS proxy."""
+    """Print a CA-pinned ``rosyov://...&tls=1&pin=`` link for a site TLS proxy."""
     token = os.environ.get(args.token_env)
     if not token:
         print(f"${args.token_env} must hold the phone token for source {args.source!r}", file=sys.stderr)
         return 2
-    if args.pin_cert is None and args.pin_ca is None:
-        print("give --pin-ca site-ca.crt (preferred) and/or --pin-cert <served PEM>", file=sys.stderr)
-        return 2
     try:
-        pin, kind = _choose_pin(args.pin_cert, args.pin_ca)
+        pin = _choose_ca_pin(args.pin_cert, args.pin_ca)
     except (OSError, ValueError) as exc:
         print(f"pair-link: {exc}", file=sys.stderr)
         return 2
-    if kind == "leaf":
-        print("WARNING: pinning the site LEAF certificate. Re-issuing it needs a new pairing link on every "
-              "phone. Prefer --pin-ca site-ca.crt and " + _FULLCHAIN_HINT + ".", file=sys.stderr)
-    elif args.pin_cert is None:
-        print("note: CA pin; the proxy must " + _FULLCHAIN_HINT + ". Add --pin-cert <served PEM> to check it.",
-              file=sys.stderr)
     uri = protocol.pairing_uri(args.host, args.port, token, args.source, secure=True, pin=pin)
-    print(f"pin: {pin}  ({kind} pin; the phone shows the first 19 characters when it saves the link)")
+    print(f"pin: {pin}  (site CA; the phone shows the first 19 characters when it saves the link)")
     _print_pairing(uri)
     return 0
 
@@ -149,7 +161,7 @@ async def _run_receive(args: argparse.Namespace) -> int:
     server = IngestServer({args.source_name: token})
     ws_server = await server.start(args.host, args.port, ssl_context=_server_ssl_context(args.tls_cert, args.tls_key))
     advertise_host = args.advertise_host or _detect_advertise_host(args.host)
-    pin = _pin_from(args.tls_cert) if args.tls_cert else None
+    pin = _receive_pin(args.tls_cert) if args.tls_cert else None
     uri = protocol.pairing_uri(advertise_host, args.port, token, args.source_name,
                                secure=bool(args.tls_cert), pin=pin)
     print(f"listening on {args.host}:{args.port}{protocol.WS_PATH}")
@@ -260,13 +272,12 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     link.add_argument("--source", required=True, help="camera source id from site-cameras.yaml")
     link.add_argument("--token-env", default="ROSY_OVERHEAD_TOKEN")
     link.add_argument(
-        "--pin-ca", type=Path, default=None,
-        help="site CA PEM (site-ca.crt) to pin; preferred, survives leaf re-issue. The proxy must serve leaf+CA",
+        "--pin-ca", required=True, type=Path,
+        help="site CA PEM (site-ca.crt) to pin (D-341 9: the CA, never a leaf)",
     )
     link.add_argument(
-        "--pin-cert", type=Path, default=None,
-        help="PEM the proxy serves (site.crt). With --pin-ca it is checked to carry that CA; alone, its last "
-             "certificate is pinned (the CA when the file is leaf+CA, else the leaf, with a warning)",
+        "--pin-cert", required=True, type=Path,
+        help="PEM the proxy serves (site-fullchain.crt); must carry the CA above the leaf",
     )
 
     return parser.parse_args(argv)
