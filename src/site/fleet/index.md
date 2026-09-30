@@ -69,8 +69,8 @@
 
 ## 최근 기록
 
+- 2026-10-01 · 8fac2428 · fix(console): D-375 지도 맞춤 독립 리뷰 반영
+- 2026-10-01 · uncommitted · fix(hub): D-382 F6 독립 리뷰 반영 — 밀려난 소켓 닫기, 세션 인자 키워드 전용
+- 2026-10-01 · uncommitted · fix(hub): D-382 F6 — 소켓을 로봇 하나에 묶고 짝 토큰을 상수 시간으로 비교
 - 2026-10-01 · 952d5d80 · fix(fleet): lens profile review fixes
-- 2026-09-30 · f21364e6 · feat(fleet): D-318 rectification profile per source and lens
-- 2026-09-30 · uncommitted · refactor(fleet): D-377 console title and favicon
-- 2026-09-30 · uncommitted · fix(fleet): D-370 리뷰 — 발견 행은 분류기가 정규화한 호스트를 저장
-- 2026-09-30 · uncommitted · docs(adr): D-358 앱 역할 ADR을 D-370으로 재번호
+- 2026-09-30 · 54d0fc73 · feat(console): D-375 지도 자동 맞춤 겹침·평면 뷰

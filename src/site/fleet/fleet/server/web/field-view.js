@@ -3,9 +3,10 @@
 
 import {
   LAYER_KEYS, LAYER_STORAGE_KEY, FIELD_SIZE_PREFIX, parseLayers, normalizeProposal, quadAspect,
-  configuredSize, aspectMismatch, parseFieldSize, homography, applyHomography, rectifiedLayout,
+  configuredSize, aspectMismatch, parseFieldSize, homography, rectifiedLayout,
   ASPECT_TOLERANCE,
 } from "./field-layers.js";
+import { multiply3, fieldToMap } from "./map-fit.js";
 
 const IDENTITY = [[0, 0], [1, 0], [1, 1], [0, 1]];
 
@@ -18,6 +19,36 @@ function storageGet(key) {
 }
 function storageSet(key, value) {
   try { localStorage.setItem(key, value); return true; } catch { return false; }
+}
+
+// 출력 픽셀마다 h(캔버스 px → 원본 px)로 원본을 표본한다(최근접). 원본 밖·지평선 뒤는 비운다.
+// 편 결과를 돌려주어 같은 프레임·변환에서는 다시 계산하지 않는다. map-fit-view.js 도 쓴다.
+export function warpImage(ctx, image, h, width, height, scratch) {
+  const iw = image.naturalWidth;
+  const ih = image.naturalHeight;
+  if (!iw || !ih) return null;
+  scratch.width = iw;
+  scratch.height = ih;
+  const sctx = scratch.getContext("2d", { willReadFrequently: true });
+  sctx.drawImage(image, 0, 0);
+  const src = sctx.getImageData(0, 0, iw, ih).data;
+  const out = ctx.createImageData(width, height);
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const px = x + 0.5;
+      const py = y + 0.5;
+      const w = h[6] * px + h[7] * py + h[8];
+      if (!(w > 0)) continue;
+      const sx = Math.round((h[0] * px + h[1] * py + h[2]) / w);
+      const sy = Math.round((h[3] * px + h[4] * py + h[5]) / w);
+      if (sx < 0 || sy < 0 || sx >= iw || sy >= ih) continue;
+      const s = (sy * iw + sx) * 4;
+      const d = (y * width + x) * 4;
+      out.data[d] = src[s]; out.data[d + 1] = src[s + 1]; out.data[d + 2] = src[s + 2]; out.data[d + 3] = 255;
+    }
+  }
+  ctx.putImageData(out, 0, 0);
+  return out;
 }
 
 export function createFieldView({ el, view, visionView, onLayersChanged }) {
@@ -123,11 +154,17 @@ export function createFieldView({ el, view, visionView, onLayersChanged }) {
     const active = activeCorners();
     updateMismatch(active);
     const frame = lastFrame;
+    // D-375 대체 경로: 경기장 모서리가 없고 운용자가 지도 맞춤을 수락했으면 지도 사각형을 그 homography 로 편다.
+    const byMap = !active && frame && !frame.rectified ? view.mapFieldFallback?.(frame) ?? null : null;
     const show = view.layers.rectified && frame && frame.source === visionView.currentSource()
-      && (frame.rectified || active);
+      && (frame.rectified || active || byMap);
     figure.hidden = !show;
     if (!show) return;
-    const size = operatorSize();
+    const mapSize = byMap ? {
+      width: Math.round((byMap.bounds.max_x - byMap.bounds.min_x) * 1000) / 1000,
+      height: Math.round((byMap.bounds.max_y - byMap.bounds.min_y) * 1000) / 1000,
+    } : null;
+    const size = mapSize || operatorSize();
     const aspect = size ? size.width / size.height
       : detectedAspect(active, frame.image) || (frame.image.naturalWidth / frame.image.naturalHeight);
     const layout = rectifiedLayout(aspect, 640, 400);
@@ -141,9 +178,13 @@ export function createFieldView({ el, view, visionView, onLayersChanged }) {
       // Vision 이 확인한 모서리로 이미 펴서 보냈다(D-318). 바깥은 없다.
       ctx.drawImage(frame.image, field.x, field.y, field.width, field.height);
     } else {
-      const key = JSON.stringify([frame.source, frame.url ?? frame.seq, active.corners, layout.width, layout.height]);
-      if (warped?.key !== key) warped = { key, data: warp(ctx, frame.image, active.corners, layout) };
-      else if (warped.data) ctx.putImageData(warped.data, 0, 0);
+      // 지도 경로는 전체 homography 라 0–100% 로 잘리는 모서리 조정값을 거치지 않는다.
+      const h = byMap ? multiply3(byMap.mapToShown, fieldToMap(byMap.bounds, field)) : null;
+      const key = JSON.stringify([frame.source, frame.url ?? frame.seq, h || active.corners, layout.width, layout.height]);
+      if (warped?.key !== key) {
+        warped = { key, data: h ? warpImage(ctx, frame.image, h, layout.width, layout.height, scratch)
+          : warp(ctx, frame.image, active.corners, layout) };
+      } else if (warped.data) ctx.putImageData(warped.data, 0, 0);
       // 경기장 밖을 가린다.
       ctx.save();
       ctx.fillStyle = "rgba(0, 0, 0, 0.72)";
@@ -160,9 +201,12 @@ export function createFieldView({ el, view, visionView, onLayersChanged }) {
     ctx.strokeRect(field.x + 1, field.y + 1, field.width - 2, field.height - 2);
     ctx.restore();
     if (size) drawMetric(ctx, field, size);
-    const source = frame.rectified ? "Vision 보정 프레임" : `${active.kind === "제안" ? "제안으로" : "확인한 모서리로"} 편 원본`;
+    const source = frame.rectified ? "Vision 보정 프레임"
+      : byMap ? "수락한 지도 맞춤으로 편 원본(모서리가 화면 밖이어도 됨)"
+        : `${active.kind === "제안" ? "제안으로" : "확인한 모서리로"} 편 원본`;
     caption.textContent = `위에서 본 경기장 · ${source} · 경기장 밖은 가림`
-      + (size ? ` · 표시 축척 ${size.width}×${size.height} m(이 브라우저만)` : " · 축척 미입력")
+      + (mapSize ? ` · 지도 ${size.width}×${size.height} m`
+        : size ? ` · 표시 축척 ${size.width}×${size.height} m(이 브라우저만)` : " · 축척 미입력")
       + " · 표시 전용, 관측·주행에 쓰지 않음";
     canvas.setAttribute("aria-label", caption.textContent);
   }
@@ -191,36 +235,16 @@ export function createFieldView({ el, view, visionView, onLayersChanged }) {
     ctx.restore();
   }
 
-  // 출력 픽셀마다 역변환으로 원본을 표본한다(최근접). 경기장 둘레 여백도 같은 변환으로 채운다.
-  // 편 결과를 돌려주어 같은 프레임·모서리에서는 다시 계산하지 않는다.
+  // 경기장 사각형 → 원본 모서리 호모그래피로 편다. 경기장 둘레 여백도 같은 변환으로 채운다.
   function warp(ctx, image, corners, layout) {
     const iw = image.naturalWidth;
     const ih = image.naturalHeight;
     if (!iw || !ih) return null;
-    scratch.width = iw;
-    scratch.height = ih;
-    const sctx = scratch.getContext("2d", { willReadFrequently: true });
-    sctx.drawImage(image, 0, 0);
-    const src = sctx.getImageData(0, 0, iw, ih).data;
     const { field } = layout;
     const dstQuad = [[field.x, field.y], [field.x + field.width, field.y],
       [field.x + field.width, field.y + field.height], [field.x, field.y + field.height]];
     const h = homography(dstQuad, corners.map(([x, y]) => [x * (iw - 1), y * (ih - 1)]));
-    if (!h) return null;
-    const out = ctx.createImageData(layout.width, layout.height);
-    for (let y = 0; y < layout.height; y += 1) {
-      for (let x = 0; x < layout.width; x += 1) {
-        const [u, v] = applyHomography(h, x + 0.5, y + 0.5);
-        const sx = Math.round(u);
-        const sy = Math.round(v);
-        if (sx < 0 || sy < 0 || sx >= iw || sy >= ih) continue;
-        const s = (sy * iw + sx) * 4;
-        const d = (y * layout.width + x) * 4;
-        out.data[d] = src[s]; out.data[d + 1] = src[s + 1]; out.data[d + 2] = src[s + 2]; out.data[d + 3] = 255;
-      }
-    }
-    ctx.putImageData(out, 0, 0);
-    return out;
+    return h ? warpImage(ctx, image, h, layout.width, layout.height, scratch) : null;
   }
 
   function setProposal(next) {
@@ -238,7 +262,10 @@ export function createFieldView({ el, view, visionView, onLayersChanged }) {
       const found = normalizeProposal(body);
       if (!found) {
         setProposal(null);
-        state.textContent = `제안 없음 — ${body?.reason || "경기장을 찾지 못했습니다"}. 모서리는 손으로 맞추세요.`;
+        state.textContent = `제안 없음 — ${body?.reason || "경기장을 찾지 못했습니다"}. `
+          + (view.mapFieldFallback?.(lastFrame)
+            ? "수락한 지도 맞춤으로 경기장 뷰를 그립니다."
+            : "모서리는 손으로 맞추거나 '맵 자동 맞춤'을 수락하세요.");
         return;
       }
       setProposal({ ...found, source });

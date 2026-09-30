@@ -17,6 +17,8 @@
 | D-336 | Fleet와 OMX 제어 owner 사이 첫 연결은 같은 호스트의 local IPC로 제한한다 |
 | D-369 | Mission 제어·장치 실행·ROS 제어·안전 정지의 책임을 분리한다 |
 | D-376 | OMX PICK_PLACE planning stays local and trajectory execution stays with the Action owner |
+| D-386 | OMX phases bind asynchronous ROS goal acceptance and fresh execution state |
+| D-390 | Pilot의 OMX-AI 연습은 시뮬레이션 전용 장치 API를 거쳐 로컬 팔 명령 소유자에 연결한다 |
 
 ## 계획·결과 문서
 
@@ -24,6 +26,7 @@
 - [2026-09-26-omx-ai-workstation-runtime.md](../../../../docs/plans/2026-09-26-omx-ai-workstation-runtime.md)
 - [2026-09-29-er2-semantic-actions-mission-implementation.md](../../../../docs/plans/2026-09-29-er2-semantic-actions-mission-implementation.md)
 - [2026-09-30-omx-pick-place-local-execution.md](../../../../docs/plans/2026-09-30-omx-pick-place-local-execution.md)
+- [2026-10-01-pilot-omx-gazebo-practice.md](../../../../docs/plans/2026-10-01-pilot-omx-gazebo-practice.md)
 
 ## 교훈 (docs/solutions)
 
@@ -35,8 +38,8 @@
 
 ## 최근 기록
 
-- 2026-10-01 · uncommitted · add fenced pick-place phase coordinator
-- 2026-09-30 · uncommitted · hold unresolved phase state under local stop
-- 2026-09-30 · uncommitted · mint validated attempt-scoped phase recorder
-- 2026-09-30 · uncommitted · persist first phase intent and atomic response
-- 2026-09-30 · uncommitted · OMX pick-and-place plan, trajectory, and ROS goal contracts (D-376)
+- 2026-10-01 · uncommitted · D-390 Pilot simulation action bridge
+- 2026-10-01 · uncommitted · implement D-386 asynchronous phase response and fresh start-state checks
+- 2026-10-01 · uncommitted · correct OMX phase ADR number to D-386
+- 2026-10-01 · uncommitted · D-385 exposes ROS phase acceptance and state-binding gates
+- 2026-10-01 · uncommitted · merge phase recovery and record readiness gates

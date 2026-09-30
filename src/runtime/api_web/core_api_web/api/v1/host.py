@@ -437,6 +437,13 @@ def _nav_state(svc: CoreServicesLike) -> Optional[str]:
     return robot_state.valid_nav_state(getattr(nav, "value", nav))
 
 
+def _swarm_role(svc: CoreServicesLike) -> Optional[str]:
+    """D-383: the live swarm role (leader/follower), same rules as the mode."""
+    snapshot = getattr(getattr(svc, "state", None), "snapshot", None)
+    swarm = getattr(snapshot() if callable(snapshot) else None, "swarm", None)
+    return robot_state.valid_swarm_role(getattr(swarm, "role", None))
+
+
 def status_inputs(svc: CoreServicesLike) -> dict[str, Any]:
     """What the root side cannot know: the live warning threshold, the overlaid device states and the live robot mode."""
     hardware = host_hardware(None, svc)
@@ -444,7 +451,8 @@ def status_inputs(svc: CoreServicesLike) -> dict[str, Any]:
                for row in (hardware["devices"] if hardware.get("available") else [])]
     return {"schema": 1, "written_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
             "battery_warning_percent": _warning_percent(svc), "devices": devices,
-            "robot_mode": _robot_mode(svc), "nav_state": _nav_state(svc)}
+            "robot_mode": _robot_mode(svc), "nav_state": _nav_state(svc),
+            "swarm_role": _swarm_role(svc)}
 
 
 def write_status_inputs(svc: CoreServicesLike) -> None:

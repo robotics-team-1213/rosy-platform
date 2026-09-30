@@ -1,9 +1,5 @@
 package io.github.livsbittt.rosy.cam.ui
 
-import android.net.ConnectivityManager
-import android.net.Network
-import android.net.NetworkCapabilities
-import android.net.NetworkRequest
 import androidx.camera.view.PreviewView
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.size
@@ -51,18 +47,21 @@ import io.github.livsbittt.rosy.cam.R
 import io.github.livsbittt.rosy.cam.link.LinkState
 import io.github.livsbittt.rosy.cam.service.CameraSessionPlan
 import io.github.livsbittt.rosy.cam.service.StreamService
+import io.github.livsbittt.rosy.cam.link.SiteRoute
 import io.github.livsbittt.rosy.cam.service.StreamState
-import io.github.livsbittt.rosy.cam.settings.PairingUri
+import io.github.livsbittt.rosy.cam.settings.SiteLink
 
 @Composable
 fun StreamScreen(
     state: StreamState,
-    pairing: PairingUri?,
+    siteLink: SiteLink?,
+    lan: LanSnapshot?,
     localError: String?,
     onStart: () -> Unit,
     onStop: () -> Unit,
     onOpenSettings: () -> Unit,
 ) {
+    val pairing = siteLink?.toPairing()
     // Keep the screen on while streaming (design section 5).
     val view = LocalView.current
     DisposableEffect(state.running) {
@@ -96,7 +95,7 @@ fun StreamScreen(
             }
         }
 
-        StatusPanel(state, pairing, localError, onStop, onOpenSettings)
+        StatusPanel(state, siteLink, lan, localError, onStop, onOpenSettings)
 
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
             // Opens read-only while the camera runs; the settings screen says how to unlock it.
@@ -130,11 +129,13 @@ fun StreamScreen(
 @Composable
 private fun StatusPanel(
     state: StreamState,
-    pairing: PairingUri?,
+    siteLink: SiteLink?,
+    lan: LanSnapshot?,
     localError: String?,
     onStop: () -> Unit,
     onOpenSettings: () -> Unit,
 ) {
+    val pairing = siteLink?.toPairing()
     val link = state.link
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         val stateText = when {
@@ -162,6 +163,20 @@ private fun StatusPanel(
             },
             style = MaterialTheme.typography.bodyMedium,
         )
+        if (state.running && !state.previewOnly) {
+            when (val route = state.route) {
+                is SiteRoute.Discovered -> stringResource(
+                    R.string.target_route_mdns,
+                    route.sighting.addresses.joinToString { it.hostAddress.orEmpty() },
+                )
+                // An IP-only or unpinned record never browses, so it must not claim "자동 찾기로 못 찾음".
+                is SiteRoute.Manual -> stringResource(
+                    if (route.afterBrowse) R.string.target_route_manual else R.string.target_route_manual_only,
+                    route.address.hostAddress.orEmpty(),
+                )
+                else -> null
+            }?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+        }
         if (state.running) {
             val res = LocalContext.current.resources
             state.lens?.let { LensText.line(res, it) }?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
@@ -216,13 +231,12 @@ private fun StatusPanel(
                 )
             }
         }
-        val wifiConnected = rememberWifiConnected()
         val guidance = state.error?.let(ProblemGuide::forStream)
             // A stopped session is not reconnecting, whatever the link's last state said.
-            ?: link.error?.let { ProblemGuide.forLink(it, link.stopped || !state.running, wifiConnected) }
+            ?: link.error?.let { ProblemGuide.forLink(it, link.stopped || !state.running, wifiConnected = lan != null, route = state.route) }
         when {
             localError != null -> CritMessage(localError)
-            guidance != null -> ProblemMessage(guidance, pairing, state.running, onStop, onOpenSettings)
+            guidance != null -> ProblemMessage(guidance, siteLink, lan, state.running, onStop, onOpenSettings)
         }
     }
 }
@@ -277,11 +291,13 @@ private fun InstallGuide(guide: CornerGuide) {
 @Composable
 private fun ProblemMessage(
     guidance: Guidance,
-    pairing: PairingUri?,
+    siteLink: SiteLink?,
+    lan: LanSnapshot?,
     running: Boolean,
     onStop: () -> Unit,
     onOpenSettings: () -> Unit,
 ) {
+    val pairing = siteLink?.toPairing()
     var showDetail by rememberSaveable(guidance.problem) { mutableStateOf(false) }
     val address = pairing?.let { "${it.host}:${it.port}" } ?: ""
     val text = when (guidance.problem) {
@@ -289,10 +305,17 @@ private fun ProblemMessage(
         Problem.UNREACHABLE -> stringResource(R.string.problem_unreachable, address)
         Problem.REFUSED -> stringResource(R.string.problem_refused, address)
         Problem.UNKNOWN_HOST -> stringResource(R.string.problem_unknown_host, pairing?.host ?: "")
-        Problem.TLS -> stringResource(R.string.problem_tls)
+        Problem.TLS -> stringResource(
+            if (pairing?.secure == true && pairing.pin == null) R.string.problem_tls_unpinned else R.string.problem_tls,
+        )
+        Problem.TLS_PIN -> stringResource(R.string.problem_tls_pin)
+        Problem.NOT_DISCOVERED -> notDiscoveredText(lan, siteLink?.pairingSubnet)
+        Problem.SITE_CONFLICT -> stringResource(R.string.problem_site_conflict, siteLink?.tlsHost ?: "")
         Problem.UNAUTHORIZED -> stringResource(R.string.problem_unauthorized)
         Problem.REPLACED -> stringResource(R.string.problem_replaced, pairing?.source ?: "")
         Problem.PROTOCOL_MISMATCH -> stringResource(R.string.problem_protocol_mismatch)
+        Problem.BUSY -> stringResource(R.string.problem_busy)
+        Problem.SITE_CHECKING -> stringResource(R.string.problem_site_checking)
         Problem.INVALID_CONFIG -> stringResource(R.string.problem_invalid_config)
         Problem.CLOSED -> stringResource(R.string.problem_closed)
         Problem.NETWORK_OTHER -> stringResource(R.string.problem_network_other)
@@ -300,8 +323,16 @@ private fun ProblemMessage(
         Problem.CAMERA -> stringResource(R.string.problem_camera)
         Problem.FOREGROUND_DENIED -> stringResource(R.string.problem_foreground)
     }
+    // mDNS found nothing and the "수동 주소" fallback failed as well: say both, not-found first.
+    val manual = siteLink?.manualHost.orEmpty()
+    val manualLine = when (guidance.manualFailure) {
+        Problem.UNREACHABLE -> "\n" + stringResource(R.string.problem_manual_unreachable, manual)
+        Problem.REFUSED -> "\n" + stringResource(R.string.problem_manual_refused, manual)
+        Problem.NETWORK_OTHER -> "\n" + stringResource(R.string.problem_manual_other, manual)
+        else -> ""
+    }
     val retrying = if (guidance.retrying) "\n" + stringResource(R.string.problem_retrying) else ""
-    CritMessage(text + retrying)
+    CritMessage(text + manualLine + retrying)
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
         if (guidance.step == NextStep.OPEN_SETTINGS) {
             if (ProblemGuide.stopsCameraFirst(guidance.problem, running)) {
@@ -324,41 +355,25 @@ private fun ProblemMessage(
 }
 
 /**
- * True while any Wi-Fi or Ethernet network is up, whether or not it is the default network or
- * has internet: a closed site Wi-Fi without internet often loses "default" to mobile data.
+ * "사이트가 이 Wi-Fi에서 보이지 않습니다" plus the network now and at pairing time, so a same-SSID other
+ * network (another AP or hotspot) is obvious (D-391 1, 2026-10-01 tablet).
  */
 @Composable
-private fun rememberWifiConnected(): Boolean {
-    val context = LocalContext.current
-    val connectivity = remember(context) { context.getSystemService(ConnectivityManager::class.java) }
-    val lan = remember { LanNetworks() }
-    var connected by remember {
-        val caps = connectivity.getNetworkCapabilities(connectivity.activeNetwork)
-        mutableStateOf(
-            caps != null &&
-                (caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) || caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)),
-        )
+private fun notDiscoveredText(lan: LanSnapshot?, pairingSubnet: String?): String {
+    val now = lan?.subnet?.let { subnet ->
+        lan.gateway?.let { stringResource(R.string.network_with_gateway, subnet, it) } ?: subnet
+    } ?: stringResource(R.string.network_unknown)
+    val kind = ProblemGuide.notDiscoveredHint(lan, pairingSubnet)
+    val hint = when (kind) {
+        ProblemGuide.NotDiscoveredHint.OTHER_SUBNET -> stringResource(R.string.problem_not_discovered_other, now, pairingSubnet ?: "")
+        ProblemGuide.NotDiscoveredHint.SAME_SUBNET -> stringResource(R.string.problem_not_discovered_same, now)
+        ProblemGuide.NotDiscoveredHint.UNKNOWN -> stringResource(R.string.problem_not_discovered_unknown, now)
     }
-    DisposableEffect(connectivity) {
-        // Transports are OR-ed; dropping INTERNET keeps a no-internet site Wi-Fi in the request.
-        val request = NetworkRequest.Builder()
-            .addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
-            .addTransportType(NetworkCapabilities.TRANSPORT_ETHERNET)
-            .removeCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
-            .build()
-        val callback = object : ConnectivityManager.NetworkCallback() {
-            override fun onAvailable(network: Network) {
-                connected = lan.onAvailable(network.toString())
-            }
-
-            override fun onLost(network: Network) {
-                connected = lan.onLost(network.toString())
-            }
-        }
-        connectivity.registerNetworkCallback(request, callback)
-        onDispose { connectivity.unregisterNetworkCallback(callback) }
+    val headline = when (ProblemGuide.notDiscoveredHeadline(kind)) {
+        ProblemGuide.NotDiscoveredHeadline.OTHER_WIFI -> stringResource(R.string.problem_not_discovered)
+        ProblemGuide.NotDiscoveredHeadline.MDNS_SILENT -> stringResource(R.string.problem_not_discovered_mdns)
     }
-    return connected
+    return headline + "\n" + hint
 }
 
 /** Binds a PreviewView to the running session, and detaches it while the activity is stopped. */

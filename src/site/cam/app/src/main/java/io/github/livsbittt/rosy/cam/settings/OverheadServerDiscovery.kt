@@ -2,12 +2,12 @@ package io.github.livsbittt.rosy.cam.settings
 
 import android.content.Context
 import android.net.ConnectivityManager
-import android.net.NetworkCapabilities
 import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
 import android.net.wifi.WifiManager
 import android.os.Handler
 import android.os.Looper
+import io.github.livsbittt.rosy.cam.ui.currentLan
 import java.util.concurrent.atomic.AtomicBoolean
 
 /** Short-lived DNS-SD lookup for receiver and CORE endpoints on the current Wi-Fi LAN. */
@@ -28,8 +28,8 @@ class OverheadServerDiscovery(
 
     fun start() {
         if (finished.get()) return
-        wifiConnected = connectivity.activeNetwork?.let(connectivity::getNetworkCapabilities)
-            ?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true
+        // A Wi-Fi network that holds an address, default or not (not just the Wi-Fi icon).
+        wifiConnected = connectivity.currentLan() != null
         if (!wifiConnected) {
             finished.set(true)
             publish(scanning = false)
