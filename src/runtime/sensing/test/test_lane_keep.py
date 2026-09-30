@@ -202,6 +202,64 @@ def test_crosswalk_bars_beside_the_lane_lines_do_not_hide_them():
     assert last["strategy"] == "both" and abs(obs.error) < 0.15
 
 
+def _segment(image, y0, slope, x0, x1):
+    """Paint tape y = y0 + slope * x for x0 <= x <= x1 onto a _render image."""
+    band = np.abs(Y - (y0 + slope * X)) <= TAPE_HALF * np.sqrt(1.0 + slope * slope)
+    image[np.isfinite(X) & (X >= x0) & (X <= x1) & band] = 195
+    return image
+
+
+def _conflicts(last):
+    return [c for c in last["candidates"] if c["reason"] == "pair_conflict"]
+
+
+def test_chord_closing_on_the_lane_line_is_not_its_pair():
+    # Real 124745Z frames 800-1017: a -17..-20 deg chord across crosswalk bars
+    # on the right, 0.12 m from the left lane line at SIDE_X_M but closing to
+    # half a lane at its near end, was paired with it (target pulled 3 cm left).
+    image = _segment(_render([(0.045, 0.0)]), -0.055 + 0.15 * 0.306, -0.306, 0.15, 0.40)
+    obs, last = _keep(image)
+    assert last["strategy"] == "left_only" and obs.error > 0.4
+    assert [b["side"] for b in last["boundaries"]] == ["left"]
+    chord = _conflicts(last)
+    assert len(chord) == 1 and chord[0]["rejected"] and chord[0]["heading_deg"] < -15
+
+
+@pytest.mark.parametrize("x0, x1", [(0.28, 0.35), (0.18, 0.36)])
+def test_junction_corner_chord_is_not_a_boundary(x0, x1):
+    # Real 124745Z frames 58-252: a chord across a junction-mouth corner on the
+    # left, +25..+30 deg and a lane width from the right lane line, was sided
+    # left: a 7 cm stub (sided, unpaired at 33 deg) or a 20 cm chord (paired).
+    slope = 0.53
+    image = _segment(_render([(-0.085, 0.0)]), 0.10 - 0.22 * slope, slope, x0, x1)
+    obs, last = _keep(image)
+    assert last["strategy"] == "right_only" and abs(obs.error) < 0.2
+    assert [b["side"] for b in last["boundaries"]] == ["right"]
+    chord = _conflicts(last)
+    assert len(chord) == 1 and chord[0]["side"] == "left" and chord[0]["heading_deg"] > 20
+
+
+def test_a_dropped_chord_keeps_its_side_next_frame():
+    # Dropped chords are still tracked: one drifting across the robot's path
+    # is not re-sided as the other lane boundary (teleop replay: 40 -> 21
+    # frames whose error moved by more than 0.5).
+    slope = 0.47
+    keeper = _keeper()
+    first = _segment(_render([(-0.085, 0.0)]), 0.04 - 0.22 * slope, slope, 0.18, 0.36)
+    keeper.update(first, GROUND, lane_half_width_m=HALF)
+    assert [c["side"] for c in _conflicts(keeper.last)] == ["left"]
+    keeper.update(_segment(_render(), -0.015 - 0.22 * slope, slope, 0.18, 0.36), GROUND, lane_half_width_m=HALF)
+    assert keeper.last["strategy"] == "left_only"
+    assert _keep(_segment(_render(), -0.015 - 0.22 * slope, slope, 0.18, 0.36))[1]["strategy"] == "right_only"
+
+
+def test_lane_lines_splayed_by_the_nominal_ground_still_pair():
+    # NOMINAL pitch errors splay the two lines of one lane by several degrees.
+    obs, last = _keep(_render([(HALF, 0.09), (-HALF, -0.09)]))
+    assert last["strategy"] == "both" and abs(obs.error) < 0.1
+    assert not _conflicts(last)
+
+
 def _render_corner(line_x, open_side):
     """An L-corner: the outer boundary of the next lane runs across at
     x = line_x from the closed side's lane line toward the open side; the
