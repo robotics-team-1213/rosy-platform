@@ -260,8 +260,8 @@
 
 ## 최근 기록
 
+- 2026-10-01 · uncommitted · docs(adr): D-341·D-382 Accepted — 병행 세션 결정 회차
 - 2026-10-01 · uncommitted · docs(adr): D-341·D-382 교차 세션 검토 반영
 - 2026-10-01 · uncommitted · docs(adr): D-341·D-382 착지 — 천장 카메라 콘솔 승인·로봇 ↔ 관제 통신 적합성
 - 2026-10-01 · uncommitted · fix(perception): bag_to_video sidecar 가 stamp 달린 증거를 제 프레임에 붙인다
 - 2026-10-01 · uncommitted · fix(perception): 텔레옵 sidecar·extract 시계 통일 — t=헤더 stamp, 부수값=직전 메시지
-- 2026-10-01 · uncommitted · docs(adr): D-381 막힌 내비게이션·비상정지 진입음 결정

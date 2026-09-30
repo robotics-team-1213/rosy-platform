@@ -1,6 +1,6 @@
 ## D-341 천장 카메라 앱은 mDNS로 사이트를 찾고, 관제 콘솔 승인으로 연결 자격을 받는다 — 발견은 여전히 자격을 주지 않는다
 
-**Status:** Proposed (2026-09-29, 2026-09-29 독립 리뷰 반영 개정, 2026-10-01 교차 세션 검토 반영 — 닫힘 코드 분류, fullchain·IP SAN, 감사 표 재사용, D-377 이름). 신뢰 모델과 첫 구현 조각(천장 카메라)의 계약을 정한다. 구현 GO, DEVICE·FIELD 승격, 로봇 FleetAgent 페어링 변경이 아니다.
+**Status:** Accepted (2026-10-01, 병행 세션 결정 회차 — 설계 수용, 구현 게이트는 아래 그대로; 제안 2026-09-29, 2026-09-29 독립 리뷰 반영 개정, 2026-10-01 교차 세션 검토 반영 — 닫힘 코드 분류, fullchain·IP SAN, 감사 표 재사용, D-377 이름). 신뢰 모델과 첫 구현 조각(천장 카메라)의 계약을 정한다. 구현 GO, DEVICE·FIELD 승격, 로봇 FleetAgent 페어링 변경이 아니다.
 
 잇는 결정: [D-257](D-257-site-lane-map-and-overhead-sightings.md) 2·4항 · [D-261](D-261-overhead-camera-app-skeleton.md) 5·6항 · [D-193](D-193-login-code-and-credential-lifecycle.md) 1항(일회용 코드 선례) · [D-269](D-269-device-server-contracts-and-ros-boundary.md) 4항 · [D-276](D-276-site-fleet-per-principal-api-authorization.md) · [D-302](D-302-site-registry-credential-separation.md) · [D-136](D-136-.md) 3항 · [D-95](D-95-device-observer-hold.md) · [D-345](D-345-design-philosophy-reaches-every-surface.md)(설치자 문구, 실행 파일 이름 `overhead`).
 발견 규칙: [`docs/reference/site-lan-discovery-profile.md`](../reference/site-lan-discovery-profile.md). 실행 계획: [`docs/plans/2026-09-29-overhead-console-pairing-plan.md`](../plans/2026-09-29-overhead-console-pairing-plan.md).
@@ -64,6 +64,7 @@
       | 재시도 | `1013` | hello 제한 시간(5 s) 초과 — Vision은 이벤트 루프가 응답한 시간만 센다 | 자격 유지, 백오프 |
 
       근거: 2026-10-01 S21 실측에서 무거운 지도 제안 계산이 Vision 이벤트 루프를 막아 재접속의 hello가 늦었고, Vision이 이를 `4400 no hello`로 닫아 앱이 "버전 불일치"로 영구 정지했다. 그래서 hello 제한 시간은 `4400`에서 떼어 `1013`으로 닫는다(브랜치 `feat/overhead-map-auto-register`; 기계가 읽는 원천은 `test/fixtures/protocol/overhead-ingest.v1.json` `close_codes.hello_timeout`). **전환 규칙:** 1013 이전 수신기는 hello 제한 시간에도 사유 `no hello`(또는 빈 사유)의 `4400`을 보낸다. 앱은 그 경우에 한해 재시도하고(브랜치 `feat/overhead-app-site-ca-pin`), 모든 사이트가 1013 수신기로 바뀐 뒤 한 릴리스 지나 이 예외를 지운다. `4409`(같은 source를 다른 연결이 대체)는 이 ADR이 바꾸지 않는다.
+    - **한 코드 한 뜻(2026-10-01 결정).** Vision과 Rosy Cam 사이 닫힘 코드는 하나의 뜻만 갖는다. 기계가 읽는 원천은 `test/fixtures/protocol/overhead-ingest.v1.json` `close_codes`이고, 새 코드나 뜻 변경은 그 파일에 행을 먼저 더한 뒤 양쪽 코드·시험을 바꾼다. 옛 수신기 예외처럼 한시적 규칙도 제거 조건과 함께 적는다.
     - 카메라 자격은 frames ingress 한 source 전용이다. Fleet 사용자 API, sighting 제출, preview, CORE에는 쓸 수 없다. 기존 자격 분리 규칙(D-302, `create_app`의 중복 거절)에 페어링 digest와 새 동기화 비밀을 더한다.
 12. **Vision은 발급 자격을 동적으로 받는다.**
     - Vision은 새 전용 서비스 자격(`pairing_sync_token`, 다른 모든 비밀과 달라야 함)으로 Fleet의 `GET /api/fleet/pairing/v1/credentials?role=overhead-camera`를 **백엔드 주소 `https://fleet:8090`로 직접** 읽는다(Compose에서 프록시는 Vision보다 늦게 뜬다). 이 라우트는 사용자 `authorize`가 아닌 전용 인증 의존성을 쓴다 — `authorize`는 사용자 digest가 설정되면 다른 bearer를 모두 401로 막기 때문이다.
