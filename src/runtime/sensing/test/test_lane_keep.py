@@ -101,6 +101,63 @@ def test_transverse_stop_line_is_ignored():
     assert obs is None and last["strategy"] == "none"
 
 
+def test_candidates_list_every_line_with_its_reject_reason():
+    # D-384 replay reads all fitted lines: accepted boundaries and rejects alike.
+    obs, last = _keep(_render([(HALF, 0.0), (-HALF, 0.0)], transverse_x=0.25))
+    accepted = [c for c in last["candidates"] if not c["rejected"]]
+    rejected = [c for c in last["candidates"] if c["rejected"]]
+    assert len(accepted) == len(last["boundaries"]) >= 2
+    assert {c["side"] for c in accepted} == {"left", "right"}
+    assert all(c["reason"] is None for c in accepted)
+    assert any(c["reason"] == "transverse" for c in rejected)
+    assert all("centre" not in c and "direction" not in c for c in last["candidates"])
+    assert _keep(_render([]))[1]["candidates"] == []
+
+
+def test_steep_line_far_outside_the_lane_is_not_sided():
+    # Real 124745Z: 60-64 deg diagonals sided at y -0.30..-0.42 m (beyond the lane).
+    image = _render([(HALF, 0.0), (-HALF, 0.0)])
+    # A ~60 deg tape segment right of the lane only (x = 0.40 + (y + 0.13) / 1.73).
+    segment = np.isfinite(X) & (np.abs(X - (0.40 + (Y + 0.13) / 1.73)) <= 0.015) & (Y < -0.14) & (Y > -0.3)
+    image[segment] = 195
+    obs, last = _keep(image)
+    assert obs is not None and last["strategy"] == "both" and abs(obs.error) < 0.15
+    assert all(abs(b["y_at_side_x_m"]) < 0.2 for b in last["boundaries"])
+    steep = [c for c in last["candidates"] if c["reason"] == "steep_far"]
+    assert steep and all(c["rejected"] and abs(c["heading_deg"]) > 45 for c in steep)
+
+
+def test_steep_diagonal_crossing_the_path_ahead_is_not_sided():
+    # Real 124745Z frame 94: a ~60 deg mark from y -0.11 to +0.10, 0.33-0.45 m ahead.
+    image = _render([(HALF, 0.0), (-HALF, 0.0)])
+    segment = np.isfinite(X) & (np.abs(X - (0.33 + (Y + 0.11) / 1.73)) <= 0.015) & (Y > -0.11) & (Y < 0.10)
+    image[segment] = 195
+    obs, last = _keep(image)
+    assert obs is not None and last["strategy"] == "both" and abs(obs.error) < 0.15
+    assert all(abs(b["heading_deg"]) < 45 for b in last["boundaries"])
+    assert [c for c in last["candidates"] if c["reason"] == "steep_crossing" and c["rejected"]]
+
+
+def test_steep_segment_starting_at_the_lane_edge_is_still_sided():
+    # A curving boundary seen far ahead: steep, extrapolates far at SIDE_X_M,
+    # but its paint starts at the lane edge, so it stays a boundary.
+    image = _render([(HALF, 0.0)])
+    segment = np.isfinite(X) & (np.abs(X - (0.40 + (Y + 0.09) / 1.73)) <= 0.015) & (Y < -0.09) & (Y > -0.3)
+    image[segment] = 195
+    _, last = _keep(image)
+    assert not [c for c in last["candidates"] if c["reason"] == "steep_far"]
+
+
+def test_steep_far_line_is_sided_while_a_corner_is_latched():
+    keeper = LaneKeeper(camera_x_offset_m=X_OFFSET, smoothing=0.0)
+    image = _render([(HALF, 0.0), (-HALF, 0.0)])
+    segment = np.isfinite(X) & (np.abs(X - (0.40 + (Y + 0.13) / 1.73)) <= 0.015) & (Y < -0.14) & (Y > -0.3)
+    image[segment] = 195
+    keeper._corner_side = "right"
+    keeper.update(image, GROUND, lane_half_width_m=HALF)
+    assert not [c for c in keeper.last["candidates"] if c["reason"] == "steep_far"]
+
+
 def test_white_wall_is_not_a_boundary():
     obs, last = _keep(_render([(HALF, 0.0), (-HALF, 0.0)], wall_y=-0.16))
     assert obs is not None and last["strategy"] == "both" and abs(obs.error) < 0.15

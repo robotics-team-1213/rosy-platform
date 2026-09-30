@@ -304,13 +304,13 @@ async def test_replacing_a_half_open_old_connection_does_not_stall_the_new_one()
 
 
 @run_async
-async def test_a_peer_that_never_sends_hello_is_closed_4400(monkeypatch):
+async def test_a_peer_that_never_sends_hello_is_closed_retryable(monkeypatch):
     monkeypatch.setattr("rosy_vision.ingest.HELLO_TIMEOUT_S", 0.2)
     async with _Harness() as h:
         ws = await h.connect()
         with pytest.raises(ConnectionClosed) as exc:
             await asyncio.wait_for(ws.recv(), timeout=2)
-        assert exc.value.rcvd.code == protocol.CLOSE_BAD_PROTO
+        assert exc.value.rcvd.code == protocol.CLOSE_HELLO_TIMEOUT
 
 
 @run_async

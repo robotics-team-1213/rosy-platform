@@ -28,6 +28,7 @@ from .command_owner import (
     JointStateSnapshot,
     TrajectoryCommand,
 )
+from .pick_place_runner import PhaseDispatch
 from .ros_goal_contract import RosGoalEvent, canonical_ros_goal_id
 
 
@@ -243,6 +244,19 @@ class RosTrajectoryActionHandle(ActionHandle):
         with self._lock:
             return self._done and self._succeeded and not self._observation_failed
 
+    def mark_timeout(self) -> None:
+        """Emit an unresolved acceptance/result fact when the local owner times out."""
+        with self._lock:
+            if self._done:
+                return
+            self._done = True
+            self._succeeded = False
+            goal_id = self._goal_id
+        if goal_id is None:
+            self._emit("GOAL_ACCEPTANCE_UNKNOWN")
+        else:
+            self._emit("TERMINAL_UNKNOWN", goal_id=goal_id)
+
 
 class RosTrajectoryActionPort:
     """Single rclpy action client used exclusively by one ArmCommandOwner."""
@@ -302,10 +316,15 @@ class RosArmCommandRuntime:
 
         self._node = node
         self._sequence = 0
+        self._goal_event_lock = threading.RLock()
+        self._phase_event_sinks: dict[str, Callable[[RosGoalEvent], bool]] = {}
         self.latest_joint_state: JointStateSnapshot | None = None
         if on_goal_event is not None and not callable(on_goal_event):
             raise ValueError("on_goal_event must be callable when provided")
-        self.action_port = RosTrajectoryActionPort(node, trajectory_action, on_goal_event)
+        self._observer_goal_event = on_goal_event
+        self.action_port = RosTrajectoryActionPort(
+            node, trajectory_action, self._dispatch_goal_event,
+        )
         self.owner = ArmCommandOwner(config, self.action_port, monotonic=time.monotonic)
         self.last_decision = CommandDecision(True, "ready", "ready")
         self.last_terminal_decision: CommandDecision | None = None
@@ -349,8 +368,41 @@ class RosArmCommandRuntime:
             self.last_terminal_decision = None
         return self.last_decision
 
+    def register_phase_event_sink(
+        self, command_id: str, sink: Callable[[RosGoalEvent], bool],
+    ) -> None:
+        """Bind callback delivery before dispatch so fast ROS responses are not lost."""
+        if not isinstance(command_id, str) or not command_id or not callable(sink):
+            raise ValueError("phase event registration requires command identity and callback")
+        with self._goal_event_lock:
+            if command_id in self._phase_event_sinks:
+                raise ValueError("phase event sink is already registered for this command")
+            self._phase_event_sinks[command_id] = sink
+
+    def unregister_phase_event_sink(self, command_id: str) -> None:
+        with self._goal_event_lock:
+            self._phase_event_sinks.pop(command_id, None)
+
+    def _dispatch_goal_event(self, event: RosGoalEvent) -> None:
+        with self._goal_event_lock:
+            phase_sink = self._phase_event_sinks.get(event.command_id)
+            observer = self._observer_goal_event
+        try:
+            if phase_sink is not None and phase_sink(event) is not True:
+                raise RuntimeError("phase runner did not durably accept the ROS goal event")
+            if observer is not None:
+                observer(event)
+        finally:
+            # Unknown is not definitive: the goal response or result can still arrive late.
+            if event.kind in {"GOAL_REJECTED", "TERMINAL_RESULT"}:
+                self.unregister_phase_event_sink(event.command_id)
+
     def _watchdog_tick(self) -> None:
         self.last_decision = self.owner.poll()
+        if self.last_decision.reason in {"action_timeout", "joint_state_stale"}:
+            handle = self.action_port.last_handle
+            if handle is not None:
+                handle.mark_timeout()
         if self.last_decision.reason not in {"active", "ready"}:
             self.last_terminal_decision = self.last_decision
 
@@ -365,3 +417,48 @@ class RosArmCommandRuntime:
         self._node.destroy_timer(self._timer)
         self._node.destroy_subscription(self._subscription)
         self.action_port.destroy()
+
+
+class RosArmPhaseGoalPort:
+    """Adapt the shared local owner to PickPlaceRunner's asynchronous contract."""
+
+    def __init__(self, runtime: RosArmCommandRuntime) -> None:
+        self.runtime = runtime
+        self._lock = threading.RLock()
+        self._command_by_goal: dict[str, tuple[str, str]] = {}
+
+    def submit(
+        self, command: TrajectoryCommand, *,
+        on_goal_event: Callable[[RosGoalEvent], bool],
+    ) -> PhaseDispatch:
+        def deliver(event: RosGoalEvent) -> bool:
+            if event.kind == "GOAL_ACCEPTED" and event.goal_id is not None:
+                with self._lock:
+                    self._command_by_goal[event.goal_id] = (command.command_id, command.owner)
+            try:
+                return on_goal_event(event)
+            finally:
+                if event.kind in {"TERMINAL_RESULT", "TERMINAL_UNKNOWN"} and event.goal_id is not None:
+                    with self._lock:
+                        self._command_by_goal.pop(event.goal_id, None)
+
+        self.runtime.register_phase_event_sink(command.command_id, deliver)
+        decision = self.runtime.submit(command)
+        if decision.accepted and decision.reason == "submitted":
+            return PhaseDispatch(dispatched=True)
+        self.runtime.unregister_phase_event_sink(command.command_id)
+        if decision.reason == "action_submission_failed":
+            return PhaseDispatch(dispatched=None)
+        return PhaseDispatch(dispatched=False)
+
+    def cancel_goal(self, driver_goal_id: str) -> bool | None:
+        with self._lock:
+            command = self._command_by_goal.get(driver_goal_id)
+        if command is None:
+            return None
+        command_id, owner = command
+        decision = self.runtime.cancel(command_id=command_id, owner=owner)
+        if decision.reason == "cancel_requested":
+            # The cancel response callback is the ACK source. Local admission is not ACK.
+            return None
+        return False

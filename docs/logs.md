@@ -3516,6 +3516,21 @@
 - 증거: `src/runtime/sensing` 로그 참조. 커밋 1695b402(호스트 폐루프 + 시험 2 passed).
 - gate 변화: 없음. T5 잔여: WSL Gazebo 실렌더링, 관측 서비스 실HTTP, 실물 LAN.
 
+## 2026-09-29 · 5184169b · docs(adr): D-341 천장 카메라 콘솔 승인 페어링 제안과 리뷰 반영
+
+- 변경: docs/adr/D-341-overhead-console-approved-pairing.md(Proposed)와 docs/plans/2026-09-29-overhead-console-pairing-plan.md 신설. mDNS 발견 → 페어링 요청 → 이름 있는 operator가 폰의 6자리 코드를 입력해 승인 → 1회 수령 → 설치자가 폰·콘솔의 사이트 CA 지문과 자격 번호를 맞춰 보는 상호 확인 → 앱 전용 CA 고정 WSS → IP 변경 시 mDNS 재발견. 독립 리뷰(APPROVE-WITH-CHANGES)를 같은 날 반영: 가짜 수신기 대비 상호 확인, 4401(최종)/4503(재시도) 분리와 Vision→`https://fleet:8090` 직접 동기화, 원격 주소별 한도 삭제, source `static|paired`, leaf DER 해시, 메모리 대기, Windows Compose 벤치 절차와 실제 로봇 포함 DEVICE 관문, 되돌림 경로. D-261·발견 규칙(3·4항 보충)·deploy/site/README.md에는 교차 참조만 더했다. tools/harness/harness.yaml의 D-341 예약 gap을 지웠다(이 ADR이 착지).
+- 증거: 2026-09-29 S21(SM-G991N, Android 15) 벤치 — NSD가 시험 `_rosy-overhead._tcp`와 로봇 `_rosy._tcp`를 함께 찾음, 평문 ws 딥링크 60 s 3 fps·178 프레임·seq_gaps 0·age_ms p50 ~110–120. LOCAL/벤치이며 DEVICE 아님.
+- gate 변화: 없음(SOURCE 문서만). 구현·DEVICE·FIELD는 계획 1–5단계와 벤치 절차.
+- 결정: 승인자는 `require_named_operator`, 신뢰는 사이트 CA 고정, 수명 180일·회수 목표 5 s(동기화 2 s). 로봇 FleetAgent 페어링은 옮기지 않는다. 역할 등록표는 방향만 두고 첫 조각은 상수 하나.
+
+## 2026-09-29 · uncommitted · docs(adr): D-382 로봇 ↔ 사이트 관제 통신 적합성 제안과 계획
+
+- 변경: `docs/adr/D-382-robot-site-console-protocol-conformance.md`(Proposed), `docs/plans/2026-09-29-robot-fleet-protocol-conformance-plan.md`(S1–S6), ADR Log 행 추가. `tools/harness/harness.yaml`에 `.worktrees/pilot-teleop`의 미커밋 초안 D-346–D-350을 예약했다.
+- 증거: DEVICE(읽기 전용) — 실물 `rosy-pinky-8kcn`(192.168.1.202:8080, 릴리스 `2026.09.27-010`)에 토큰 없이 GET·WS만 보냈다(2026-09-29). 결과: `/api/v1`·`/openapi.json`·`/docs`·`/metrics`는 공개, state·map·events·system/info·whoami는 401, `/ws/state`·`/ws/events`는 close 4401, `/api/v1/health`는 404. mDNS TXT는 프로파일에 적합. 로봇 OpenAPI와 `main` 9b3cfb59 `create_app().openapi()`를 비교하니 경로 93개는 같고, `GoalRequest.correlation_id`(D-316)와 `TrafficPolicyPatch.junction_rule`이 로봇에 없다. 판 표기는 v1.41(로봇)·v1.52(`app.py`)·v1.56(문서)이고 `info.version`은 셋 다 1.20.0. LOCAL — `python -m pytest src/runtime/gateway/test/test_protocol_version_alignment.py -q` 1 failed/2 passed(`main`의 기존 실패). SOURCE — Hub 세션 결속·Agent seq 재시작·mDNS 브리지 TXT 검사 결함을 코드 판독으로 확인.
+- gate 변화: 없음. 관제 DEVICE는 HOLD(토큰·짝 토큰·v1.44 이상 이미지 필요).
+- 결정: D-382 Proposed(브랜치 초안 번호 D-351은 main의 도킹 재시도 결정과 겹쳐 착지 때 D-382로 바꿈, D-346 4항).
+- 교훈: 계약 문서와 코드가 같은 판을 말하는지 시험이 있어도, 배포된 이미지가 어느 판인지는 런타임에서 알 수 없었다 — 판을 와이어로 노출해야 실물 대조가 된다.
+
 ## 2026-09-30 · uncommitted · feat(fleet): D-352 S1–S3 구현 착지(브랜치 feat/fleet-robot-enrollment-s1)
 
 - 변경: D-352 문서 브랜치를 병합하고 첫 조각(S1–S3)을 구현했다. `site-lan-discovery-profile.md`에 D-352 한 줄, 하네스 `adr_gaps`에서 이미 착지한 D-347 예약 줄을 뺐다(병합 잔상).
@@ -3965,3 +3980,37 @@
 - 변경: `tools/perception/dataset/bag_to_video.py` sidecar 에 두 갈래 규칙(D-356/D-373 소유자 합의). `line/observation`·`perception/learned/shadow` 는 JSON 페이로드 `stamp` 가 프레임 헤더 stamp 와 ±1 ms 로 같고, 그 프레임 촬영(헤더 stamp) 뒤·프레임 log time 뒤 0.5 s 안에 기록된 첫 메시지를 붙이고 항목에 `stamp_ns`(int ns)를 넣는다. 아니면 null. 나머지(cmd_vel·odom·scan)는 프레임 log time 이하의 최신값 그대로. 하한을 프레임 log time 이 아니라 촬영 시각으로 둔 이유: 8kcn 에서 관측 45/2258 개가 제 영상보다 37–61 µs 먼저 녹화기에 닿았다. 행 형식(필드·단위·시계)은 모듈 docstring 에 적었다. `extract.py` 와 D-356 보강 문구는 학습 루프 소유자 브랜치가 고친다.
 - 증거: `test_bag_to_video.py` 16 passed — 프레임 N 관측이 N+1 영상 뒤(0.199 s)에 기록돼도 N 에 붙음, stamp 5 ms 어긋남·0.599 s 지연·촬영 전 기록은 null, 비-stamp 토픽 dt ≤ 0. `tools/perception/test` 159 passed, 1 skipped (2026-10-01 Windows, ML venv). 두 실세션 재변환: 관측 부착 2258/2258, 6940/6940(이전 규칙에서는 한 프레임 밀림), dt 중앙값 3.0 ms·2.6 ms, 최대 10.9 ms.
 - gate 변화: 없음(개발 PC 도구).
+## 2026-10-01 · uncommitted · docs(adr): D-341·D-382 착지 — 천장 카메라 콘솔 승인·로봇 ↔ 관제 통신 적합성
+
+- 변경: 브랜치 `docs/d341-overhead-console-pairing`(D-341)과 `docs/robot-fleet-protocol-conformance`를 main에 머지. 뒤 브랜치의 D-351은 main이 2026-09-30 도킹 재시도 결정으로 선점해(2e0b699a) D-346 4항대로 D-382로 재부여. D-360·D-361·D-370과 계획 두 개(`2026-09-29-fleet-robot-code-enrollment-plan.md`, `2026-09-30-site-app-roles-and-shared-link-plan.md`)의 "브랜치" 인용을 D-341·D-382 링크로 고침. D-370의 번호 충돌 서술 두 줄은 기록으로 두고 착지 번호만 덧붙임. `adr_gaps`의 D-341 예약과 낡은 D-346–D-350 예약 제거.
+- 증거: harness generate·lint 0 error.
+- gate 변화: 없음(SOURCE 문서만). 두 ADR 모두 Proposed 그대로.
+- 결정: 없음(착지·번호 정리만). D-341 본문의 옛 이름(`src/site/overhead`, `overhead` CLI)은 D-374·D-377 표로 읽는다.
+
+## 2026-10-01 · uncommitted · docs(adr): D-178 기준선 rosy_vision 잠정 행 추가, overhead 행 제거
+
+- 변경: D-374(2af26662)가 `overhead`를 `ceiling_camera`와 `site_vision`(D-377 명명 `rosy_vision`)으로 나눈 뒤 기준선 표가 집합 동일성에서 어긋났다 — 새 패키지 누락(rosy_vision)과 삭제 패키지 잔존(overhead)이 같이 걸려 있었으나 core 단계 적색이 이 시험을 가려왔다. `rosy_vision` 잠정 행(5·4·4·3·4 = 82, A · 자기 시험 소유 site/vision/test)을 추가하고 `overhead` 행을 지웠으며, 분포 서술에 2026-10-01 행 교체 기록을 덧붙였다.
+- 증거: `test/test_module_scorecard.py` passed — 집합 동일성·총점 재계산·등급 구간·컷 게이트 전부(2026-10-01 Windows).
+- gate 변화: 없음.
+- 결정: D-178 기준선 갱신(D-374·D-377 반영). 점수 값은 다음 회차 문서가 재소유한다.
+
+## 2026-10-01 · uncommitted · docs(adr): D-341·D-382 교차 세션 검토 반영
+
+- 변경: 병행 세션 8곳(rosy-84·70·bc·0d·d3·75·63, c8 대기)에 D-341·D-382 검토 질문 7개를 보내고 답을 반영. D-341: 닫힘 코드 분류표(최종 4401·4400, 재시도 4503·1013; hello 제한 시간은 4400에서 떼어 1013, 옛 수신기의 `no hello` 4400만 전환 예외), 프록시 fullchain·IP SAN, 403 문구와 벤치 `site-users.yaml` 단계, 감사 표는 D-361 S1이 만든 `device_pairing_audit` 재사용 + `device_kind` 명시, 회수 5 s는 검출·제안 부하 중에도, hello 선택 필드(`lens`) 무시 유지, 벡터 자리 `test/fixtures/protocol/pairing.v1.json`, D-377 이름. D-382: 2026-10-01 로봇 판 갱신(8kcn `2026.10.01-012`, .201 새 카드 `rosy-pinky-9dfk` `2026.09.30-009`, main API Ref v1.64)과 이미지 판을 기준으로 고정하지 않는 규칙, 발견 상태(3·8 해결, 6 부분, 7·10 열림), 스냅샷은 S1 시점 main에서, ROS 토픽은 스냅샷 대상 아님, 벤치 기준선은 S4 때 새로.
+- 증거: 세션 답(문서 판독·코드 대조, 재측정 아님). `enrollment_store.py:119-136,199` 직접 확인. harness lint.
+- gate 변화: 없음(SOURCE 문서만). 두 ADR 모두 Proposed 유지.
+- 결정: 닫힘 코드 충돌(rosy-84: 1013 + 4400 사유 예외 / rosy-75·63: 4400은 최종만, 제한 시간은 별도 재시도 코드)은 "제한 시간 = 1013, 4400 = 최종, 옛 수신기 예외는 한 릴리스 뒤 삭제"로 합쳤다.
+- 교훈: 브랜치에서 쓴 ADR은 착지까지 이틀 사이에 사실(로봇 이미지, 이미 고쳐진 발견, 먼저 착지한 표)이 낡는다. 착지 직후 해당 영역 세션에 묻는 것이 싸다.
+
+## 2026-10-01 · uncommitted · docs(adr): D-341·D-382 Accepted — 병행 세션 결정 회차
+
+- 변경: 결정 3건(D1 D-382 Accepted, D2 D-341 설계 Accepted·구현 게이트 불변, D3 닫힘 코드 한 코드 한 뜻 + fixture 우선 규칙을 D-341 11항에 명문화)과 즉시 처리 4건·나중 4건을 병행 세션 8곳에 물어 정했다. 즉시: I1 FleetAgent unsubscribe(F10)·I2 Hub 소켓-로봇 결속+상수 시간 비교(F6)·I4 이벤트 seq 사본(F7 일부)은 rosy-00, I3 닫힘 코드 분리(1013/4400/4503)는 rosy-84가 검토 끝난 두 브랜치(`feat/overhead-app-site-ca-pin`, `feat/overhead-map-auto-register`) 통째 착지. 나중: L1 페어링 구현(소유자 미정), L2 F7 부팅 세대(다음 이미지), L3 D-382 S1 스냅샷·탐침(rosy-00, api_web에서 `/pilot` 라우트 순서·v1.64 기준 유지 조건), L4 사이트 인증서 fullchain·IP SAN(운영, rosy-84 벤치에서 입증됨).
+- 증거: 세션 답 7/8(rosy-84·75·63·bc·0d·d3·70 동의, 반대 없음; rosy-c8 무응답 = 동의 처리). 사용자가 결정을 뒤집을 수 있다.
+- gate 변화: 없음. Accepted는 설계 수용이며 LOCAL·DEVICE·FIELD 증거가 아니다.
+- 결정: 위 D1–D3.
+
+## 2026-10-01 · uncommitted · docs(adr): D-385 Rosy가 스스로 표현한다
+
+- 변경: ADR D-385(파일+로그 행). 절전 "꼭 필요한 것만"이 기존 WAKE_BATTERY 체계임을 확인·기록.
+- 증거: rosy_harness lint 오류 0.
+- gate 변화: 없음.

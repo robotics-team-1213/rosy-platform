@@ -2,7 +2,7 @@
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.64
+**Version:** v1.66
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -1308,6 +1308,20 @@ generation against the persisted grant before accepting that readback.
 such as cancellation, not the v1 `GetAction` request shape. A lookup does not
 resubmit or create an attempt.
 
+Pick-and-place receipts use UDS protocol v2 while retaining the same six
+operation names. V2 adds at most four ordered `phase_summaries`, each containing
+only fixed `phase_id`, `ordinal`, bounded ROS phase `state`, local
+`journal_event_id`, and aware `observed_at`. It excludes ROS goal UUIDs, joint
+trajectories, camera payloads, and planner scenes. Fleet requires v2 for
+`PICK_PLACE` and fails closed on a missing summary; it never falls back to v1.
+V1 remains available to non-phased operations. Stop requests remain v1.
+Every response — success or error — carries the version of the request it
+answers; only frames rejected before version validation (bad JSON, framing,
+an unsupported version) answer version 1.
+Repeated phase snapshots are idempotently keyed by Mission/Action/attempt,
+ordinal, and local journal event ID. Reuse with changed evidence conflicts;
+older snapshots cannot regress the current phase projection.
+
 Required operations are `SubmitAction(FleetActionGrant)`,
 `GetAction(action_id)`, `CancelAction(DeviceActionCancelRequest)`,
 `StopLocal(LocalStopRequest)`, `GetStopState(LocalStopQuery)`, and
@@ -1482,6 +1496,9 @@ the authenticated principal and workcell. It contains only Mission/step/Action/
 goal/stop states and bounded reasons; it excludes object selectors, raw
 observations, evidence payloads, and credentials. This context is consumed by an
 internal ER 2 feedback adapter. It is not a public `get_mission_status` route.
+The read-only status result also contains up to four ordered phase summaries
+and `active_phase` from the durable Fleet event journal. These fields describe
+local progress only and cannot submit, cancel, stop, rearm, or confirm a Mission.
 
 ## 10.15 ER 2 Mission feedback tools and outbox (D-357/D-358)
 
@@ -1600,6 +1617,8 @@ fake credentials and clocks; device and field acceptance remain separate gates.
 | 버전 | 일자 | 내용 |
 |---|---|---|
 | v1.64 | 2026-09-30 | Additive (D-344 §11·§13): 이벤트 `nav.line_obstacle_hold`(앞 물체 정지가 `line_follow.obstacle_escalate_s` 넘게 이어지면 한 번), line-follow 정지 사유 `limit_level_too_low`(수동 한도가 L1 미만이면 차선 자동 HOLD)·`angular_limit_zero`(수동 각속도 한도를 읽을 수 없음), 설정 `obstacle_mode`(`sector` 기본·`path`)·`obstacle_release_s`·`obstacle_escalate_s`·`lane_auto_min_manual_angular`·`max_angular_follows_manual`. 와이어 형식 변화 없음 |
+| v1.66 | 2026-10-01 | Clarify (D-382 부합): a local Action UDS response — success or error — carries the version of the request it answers; only frames rejected before version validation answer version 1. Fixes v2 stale-fence 403 and `GetAction` 404 being read as version-unsupported by the Fleet client. |
+| v1.65 | 2026-10-01 | Additive (OMX Task 6): version the same-host phased `PICK_PLACE` receipt as UDS v2 with bounded durable phase snapshots; project current phase state into Fleet progress and the existing read-only ER 2 status result. V1 remains compatible for non-phased operations; no new command, public route, or Mission-completion shortcut. |
 | v1.63 | 2026-09-30 | Additive + Corrective (D-344): `PUT /line-follow/mode` 가 선택 필드 `hold_s` 를 받고 `POST /line-follow/hold`·이벤트 `nav.line_driver_released`·에러 `LINE_FOLLOW_NOT_HELD` 를 둔다 — 운전자가 누르고 있는 동안만 가는 보조 자율. **Corrective**: line-follow 요구 능력을 `navigation.goal_navigation` 에서 `mobility.move` 로 — Nav2 가 없는 실물 `motor` 런타임에서 차선 추종이 늘 거절되던 것을 고친다(증거 검사는 그대로). `hold_s` 없는 기존 호출은 동작이 같다. envelope `protocol_version` 1.0 유지 |
 | v1.62 | 2026-09-30 | Additive (D-358): Vision frame replies expose width, height, and source rotation for the exact no-store JPEG. A trusted Fleet post-action reader uses the existing source-scoped lease, capture timestamp/sequence/freshness headers, and immutable workcell-to-camera mapping; the app consumes provider turns only when a shared-database worker is explicitly injected. Default CLI remains provider-disabled. |
 | v1.56 | 2026-09-29 | Additive (D-337): traffic policy status gains `signal_source_kind`/`signal_head_age_s`/`signal_head_frozen`; the optional file-only `traffic_policy.signal_observer` binding fuses the observer service's measured light with camera evidence (mismatch `signal_source_conflict` HOLD, dark/indeterminate `signal_dark`, silence falls back camera-only) and emits `nav.traffic_policy_signal_source_stale` once per lapse |

@@ -35,6 +35,8 @@
 
 **Validation / Transition:** (1) `python -m pytest src/site/overhead/test -q` 녹색, (2) `android/gradlew testDebugUnitTest assembleDebug` 녹색, (3) 에뮬레이터 → 수신 전용 어댑터에서 프레임 수신 기록, (4) `rosy_harness.py lint` 녹색. DEVICE(A3)는 실물 폰 30분 기록 후 별도 판정.
 
-**References:** D-61, D-95, D-136, D-257.
+**Amendment (2026-09-29):** 5·6항의 후속으로 [D-341](D-341-overhead-console-approved-pairing.md)(Proposed)이 mDNS 발견 → 콘솔 승인 페어링과 사이트 CA 고정 WSS를 제안한다. 5항 평문 ws 벤치 모드와 6항 딥링크·수동 입력은 바뀌지 않고, D-341은 운용자 승인 단계를 더할 뿐 인증을 빼지 않는다.
+
+**References:** D-61, D-95, D-136, D-257, D-341.
 
 ---
