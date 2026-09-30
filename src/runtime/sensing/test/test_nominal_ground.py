@@ -1,4 +1,4 @@
-"""D-353 §3: NOMINAL floor model from the estimated Pinky Pro camera profile."""
+"""D-364 §3: NOMINAL floor model from the estimated Pinky Pro camera profile."""
 from pathlib import Path
 
 import pytest

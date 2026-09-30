@@ -62,8 +62,8 @@
 
 ## 최근 기록
 
+- 2026-09-30 · uncommitted · docs(adr): pilot ADR 번호를 main 과 겹치지 않게 다시 매김
 - 2026-09-30 · uncommitted · feat(control): 지면 기하 차로 유지기 'keep' 모드(D-353 §2)
 - 2026-09-30 · uncommitted · feat(control): 공칭(NOMINAL) 지면과 차선 녹화 재생 벤치(D-353)
 - 2026-09-29 · uncommitted · feat(control): image-space two-boundary lane keeper ('between' mode)
 - 2026-09-25 · uncommitted · refactor(runtime): move control under src/runtime (D-231)
-- 2026-09-25 · uncommitted · refactor(control): camera and lane evidence under sensing/perception

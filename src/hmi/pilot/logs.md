@@ -137,3 +137,8 @@
 - 변경: 자동 중 영상 아래에 겨누는 점(차선 오차 −1…+1 을 가로 위치로)과 CORE 가 실제로 낸 조향 방향·크기("◀ 왼쪽 N°/s", "오른쪽 N°/s ▶", "▲ 직진", 멈추면 "멈춤") 띠. 이탈 감시(`lane_edge_*`)·멈춤이면 경고색. 띠는 영상 틀이 아니라 실제로 그려진 영상 안에 맞춘다(옆 조작부·검은 띠를 넘지 않음). 표시만 하고 조향을 계산하지 않는다(`autonomy.intentView`). HUD 사유 `nominal_ground_requires_driver`. 가짜 CORE(dev_server)에 차선 추종 흉내 끝점.
 - 증거: `test_autonomy.py::test_intent_view_maps_core_status_to_target_and_steer_direction`, 브라우저 `test_auto_intent_strip_shows_target_and_core_steer`(오차 +0.40 → 띠 70 % 위치, 각속도 −0.32 → "오른쪽 18°/s ▶", 앞 물체 HOLD → "멈춤", 떼면 숨김, 띠가 그려진 영상 안). 스크린샷은 저장소 밖.
 - gate 변화: SOURCE 진행. 실물·가제보 표시 확인은 인식 v2·헤드리스 벤치 뒤.
+
+## 2026-09-30 · uncommitted · docs(adr): pilot ADR 번호를 main 과 겹치지 않게 다시 매김
+- 변경: main 이 D-346~D-353 을 다른 결정으로 먼저 썼다. 이 모듈 기록의 옛 번호는 다음으로 읽는다 — D-346→D-362(운전자 실시간 영상), D-347→D-342(수동 한도 계단), D-348→D-343(방·운전석), D-349→D-344(보조 자율), D-350→D-363(카메라 비율·설치 앱), D-353→D-364(차로 유지 인식·재생 벤치). 위 기록은 덧붙이기 전용이라 고치지 않는다.
+- 증거: `docs/adr/` 파일 이름·ADR Log 행·코드 주석·시험이 새 번호를 쓴다. D-342~D-344 는 main 의 harness 가 이 pilot 초안용으로 예약해 둔 번호다.
+- gate 변화: 없음(번호만).

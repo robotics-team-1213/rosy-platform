@@ -1,4 +1,4 @@
-## D-348 Pilot 은 로봇이 찾아 준 이웃 목록으로 방(로비)을 보이고, 로봇 한 대에는 운전석 하나만 둔다
+## D-343 Pilot 은 로봇이 찾아 준 이웃 목록으로 방(로비)을 보이고, 로봇 한 대에는 운전석 하나만 둔다
 
 **Status:** Accepted (2026-09-29, 설계 결정). 구현·장치 수용은 Validation 게이트로 따로 닫는다.
 D-340 의 셸 조건 2(mDNS 로봇 탐색)가 실제 요구로 기록되었다 — 셸 착수는 D-340 이 정한 CORS·토큰
@@ -50,4 +50,4 @@ D-340 의 셸 조건 2(mDNS 로봇 탐색)가 실제 요구로 기록되었다 �
 - DEVICE: 로봇 두 대(또는 로봇+시뮬)에서 태블릿 로비 → 입장 → 좌석 → 다른 태블릿 409 를 녹화한다.
 
 **Related:** [D-193](D-193-login-code-and-credential-lifecycle.md), [D-275](D-275-web-surface-and-video-runtime-ownership.md),
-[D-323](D-323-rosy-pilot-teleop-app.md), [D-340](D-340-app-shell-wraps-web-surfaces.md), [D-346](D-346-pilot-live-driver-video.md).
+[D-323](D-323-rosy-pilot-teleop-app.md), [D-340](D-340-app-shell-wraps-web-surfaces.md), [D-362](D-362-pilot-live-driver-video.md).

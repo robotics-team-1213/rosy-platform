@@ -94,12 +94,12 @@ line_follow:                       # D-143 selected-source, fail-closed policy
   stale_after_s: 0.30              # stop immediately when evidence lease expires
   lost_after_s: 3.0                # latch LOST; operator must explicitly reselect
   ir_calibration_revision: null    # must match the configured IR line-observer digest
-  obstacle_stop_m: 0.20            # D-349 §11: stop when the front LiDAR sector is closer
+  obstacle_stop_m: 0.20            # D-344 §11: stop when the front LiDAR sector is closer
   obstacle_resume_m: 0.28          # resume once it is farther (hysteresis)
   obstacle_half_angle_deg: 20.0    # front sector is +-this around the robot's forward
   lidar_forward_deg: 0.0           # LiDAR angle of the robot's forward (Pinky Pro device: 180)
   clearance_stale_s: 0.5           # hold when the LiDAR stops reporting mid-run
-  ir_guard_enabled: false          # D-349 §12 IR lane-departure guard; turn on only after IR calibration
+  ir_guard_enabled: false          # D-344 §12 IR lane-departure guard; turn on only after IR calibration
   ir_guard_edge_error: 0.3         # |IR error| at or above this = boundary under a side sensor
   ir_guard_turn: 0.5               # rad/s steer away from the boundary (clamped to max_angular)
   ir_guard_speed_scale: 0.5        # linear scale while steering away

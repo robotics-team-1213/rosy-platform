@@ -21,7 +21,7 @@ line_follow_router = APIRouter(prefix="/api/v1/line-follow", tags=["line-follow"
 
 class LineFollowModeRequest(BaseModel):
     mode: str
-    # D-349 §8: 있으면 POST /hold 로 이 시간 안에 계속 갱신해야 한다(운전자 확인).
+    # D-344 §8: 있으면 POST /hold 로 이 시간 안에 계속 갱신해야 한다(운전자 확인).
     hold_s: Optional[float] = Field(default=None, gt=0, le=2.0)
 
 
@@ -90,7 +90,7 @@ def set_line_follow_mode(body: LineFollowModeRequest,
                 detail={"reasons": list(ir_reasons)},
             )
 
-    # D-349 §7: 차선 추종은 Nav2 가 아니라 구동을 요구한다. 증거 검사는 LineFollowManager 가 한다.
+    # D-344 §7: 차선 추종은 Nav2 가 아니라 구동을 요구한다. 증거 검사는 LineFollowManager 가 한다.
     TaskKind.MOVE.require(svc.capability)
     svc.nav.cancel(source=f"line_follow:{auth.role}")
     svc.command.clear_navigation()
@@ -103,7 +103,7 @@ def set_line_follow_mode(body: LineFollowModeRequest,
 @line_follow_router.post("/hold")
 def hold_line_follow(auth: AuthContext = Depends(operator),
                      svc: CoreServicesLike = Depends(get_services)):
-    """운전자가 "진행"을 누르고 있다(D-349 §8). hold 세션이 아니면 409."""
+    """운전자가 "진행"을 누르고 있다(D-344 §8). hold 세션이 아니면 409."""
     if not svc.line_follow.hold():
         raise ApiError("LINE_FOLLOW_NOT_HELD", 409, "no active hold-to-run line-follow session")
     return _status(svc)

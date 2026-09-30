@@ -1,4 +1,4 @@
-"""차선 인식 녹화 재생 벤치 (D-353 §4).
+"""차선 인식 녹화 재생 벤치 (D-364 §4).
 
 녹화(mp4) 또는 프레임 폴더를 풀어 차선 검출기들을 같은 프레임에 돌리고, 격자 그림·프레임별 JSON·
 지표를 낸다. 녹화와 결과는 공개 저장소 밖에 둔다(D-226) — --out 이 저장소 안이면 거부한다.
@@ -39,7 +39,7 @@ from control.sensing.perception.lane_keep import LaneKeeper, floor_white_mask  #
 PROFILE_PATH = REPO / "src" / "runtime" / "sensing" / "config" / "camera_nominal_pinky_pro.yaml"
 LANE_HALF_WIDTH_M = 0.0925
 
-# pilot 녹화(1332x760, 가로 배치 D-350)의 카메라 영상 전체(4:3, 머리띠는 지평선 위라 지면 계산에 안 든다).
+# pilot 녹화(1332x760, 가로 배치 D-363)의 카메라 영상 전체(4:3, 머리띠는 지평선 위라 지면 계산에 안 든다).
 # none = 원본 카메라 녹화(예: data/teleop/learning, 320x240). 둘 다 공칭 프로필 크기(320x240)로 맞춘다.
 CROPS = {"pilot-side": (233, 110, 866, 650), "none": None}
 FRAME_W, FRAME_H = 320, 240
@@ -72,7 +72,7 @@ def _nominal_ground():
 
 
 def _keep_detector(corner_turning=False):
-    """'keep' 모드(LaneKeeper, D-353 §2)를 공칭 지면으로. 오도메트리 없이 매 프레임 판단하고,
+    """'keep' 모드(LaneKeeper, D-364 §2)를 공칭 지면으로. 오도메트리 없이 매 프레임 판단하고,
     직전 목표로만 짧게 평활한다(실물 노드와 같은 설정). keep_corner 는 L 모서리 회전
     (lane_corner_turning, 실물 기본 꺼짐)을 켠 것."""
     profile, ground = _nominal_ground()

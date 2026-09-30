@@ -68,7 +68,7 @@ class LineObserverNode(Node):
         # 'between' keeps the midpoint of the two boundary lines in image
         # space (no ground plane, no odometry).
         # 'keep' keeps the middle of the lane from ground-plane boundary lines
-        # found per frame (no odometry): the real-robot lane keeper (D-353 §2),
+        # found per frame (no odometry): the real-robot lane keeper (D-364 §2),
         # on camera_ground_source NOMINAL + allow_nominal_ground, or GAZEBO.
         # 'route_a'/'route_b' are the junction prototypes: route-driven
         # manoeuvres over the centre-line tracker (A) and planned-route
@@ -84,7 +84,7 @@ class LineObserverNode(Node):
         self.declare_parameter('camera_between_lane_width_fraction', 0.6, _READ_ONLY)
         self.declare_parameter('camera_ground_source', 'PINKY')
         self.declare_parameter('allow_simulation_ground', False)
-        # D-353 §3: estimated floor geometry for the real camera. Two opt-ins, and
+        # D-364 §3: estimated floor geometry for the real camera. Two opt-ins, and
         # the evidence is labelled NOMINAL so CORE accepts it only under a driver hold.
         self.declare_parameter('allow_nominal_ground', False, _READ_ONLY)
         self.declare_parameter('nominal_camera_profile_path', '', _READ_ONLY)

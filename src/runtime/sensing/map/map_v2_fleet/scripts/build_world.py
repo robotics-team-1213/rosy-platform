@@ -43,7 +43,7 @@ TEXTURE_URI = "model://control/map/map_v2_fleet/textures/dock_tag_7.png"
 
 WALL_MATERIAL = "<ambient>0.30 0.35 0.45 1</ambient><diffuse>0.30 0.35 0.45 1</diffuse>"
 
-#: D-353 5 real profile: the 2026-09-19 track as the Pinky camera sees it
+#: D-364 5 real profile: the 2026-09-19 track as the Pinky camera sees it
 #: (teleop_20260919_151213): grey textured carpet (~60-75 grey, speckle sd
 #: ~8-10 in the 320x240 frame), white tape, white foam-board walls (~220
 #: grey) taller than the camera's view near, blue tape on the board seams.
@@ -225,7 +225,7 @@ def world_xml(scene, line_colour: str, profile: str = "default") -> str:
         walls = "".join(_wall_xml(i, w, REAL_WALL_HEIGHT_M, REAL_WALL_MATERIAL)
                         for i, w in enumerate(scene.walls))
         extra = _carpet_xml() + _tape_xml(scene.walls)
-        note = ("\n  Real profile (D-353 5): carpet texture, white 0.30 m walls, "
+        note = ("\n  Real profile (D-364 5): carpet texture, white 0.30 m walls, "
                 "blue seam tape.")
         scene_xml = "    <scene><background>0.35 0.30 0.30 1</background></scene>\n\n"
     else:

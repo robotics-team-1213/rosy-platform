@@ -314,7 +314,7 @@ class LineFollowStatus(BaseModel):
     linear: float = 0.0
     angular: float = 0.0
     reason: str = "mode_off"
-    clearance_m: Optional[float] = None   # D-349 §11: 정면 LiDAR 최소 거리(없으면 None)
+    clearance_m: Optional[float] = None   # D-344 §11: 정면 LiDAR 최소 거리(없으면 None)
 
 
 class TrafficPolicyStatus(BaseModel):

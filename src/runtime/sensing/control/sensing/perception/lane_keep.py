@@ -1,4 +1,4 @@
-"""Subject: lane keeping ('keep' mode) on a real, near-horizontal camera (D-353 §2).
+"""Subject: lane keeping ('keep' mode) on a real, near-horizontal camera (D-364 §2).
 
 A lane keeper, not a line tracer: the target is the middle of the lane the
 robot is in, never the tape. Per frame, no odometry:

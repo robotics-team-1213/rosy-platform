@@ -49,3 +49,8 @@
 - 변경: `robot.urdf.xacro`/`rosy.urdf.xacro`/`rosy_gz.urdf.xacro`에 `camera_hfov`(기본 1.1519), `cam_mount_z`(기본 0.0495) 인자를 추가하고 `upload_robot.launch.py`로 전달했다. 기본값은 이전 URDF와 같다. 실제 Pinky 카메라 프로필 시뮬(`gz_sim/launch/map_v2_fleet_real.launch.py`)이 쓴다.
 - 증거: `test_map_v2_fleet_launch.py`의 URDF 체인 계산이 기본값에서 (0.028481, 0.060194) 그대로, 8°·0.05307에서 (0.03317, 0.06700). `python -m pytest src/sim -q` 통과(Windows).
 - gate 변화: 없음. 장치 URDF 기하는 기본값이라 바뀌지 않는다.
+
+## 2026-09-30 · uncommitted · docs(adr): pilot ADR 번호를 main 과 겹치지 않게 다시 매김
+- 변경: main 이 D-346~D-353 을 다른 결정으로 먼저 썼다. 이 모듈 기록의 옛 번호는 다음으로 읽는다 — D-346→D-362(운전자 실시간 영상), D-347→D-342(수동 한도 계단), D-348→D-343(방·운전석), D-349→D-344(보조 자율), D-350→D-363(카메라 비율·설치 앱), D-353→D-364(차로 유지 인식·재생 벤치). 위 기록은 덧붙이기 전용이라 고치지 않는다.
+- 증거: `docs/adr/` 파일 이름·ADR Log 행·코드 주석·시험이 새 번호를 쓴다. D-342~D-344 는 main 의 harness 가 이 pilot 초안용으로 예약해 둔 번호다.
+- gate 변화: 없음(번호만).

@@ -1,11 +1,11 @@
-# D-353 §3: NOMINAL camera geometry for the Pinky Pro OV5647 front camera.
+# D-364 §3: NOMINAL camera geometry for the Pinky Pro OV5647 front camera.
 # Estimated from 4981 real teleop frames (2026-09-19 track, 320x240, 8 fps):
 # fx from 54 crosswalk frames (RMS 1.08 px), horizon row from 1707 lane
 # vanishing points (median 80.3, robust sd 2.6 px), height from crosswalk
 # pitch / wall height / lane spacing (63.7-69.4 mm). Principal point assumed
 # centred. This is NOT a validated homography profile: line_observer_node
 # uses it only with camera_ground_source NOMINAL + allow_nominal_ground, and
-# CORE accepts NOMINAL-ground lane evidence only under a driver hold (D-349).
+# CORE accepts NOMINAL-ground lane evidence only under a driver hold (D-344).
 # One tape-measure reading of the lens height should replace height_m.
 width: 320
 height: 240

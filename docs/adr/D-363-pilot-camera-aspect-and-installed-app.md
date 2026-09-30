@@ -1,4 +1,4 @@
-## D-350 주행 화면의 카메라는 원본 비율 그대로 잘림 없이 보이고, 조작부·HUD 는 영상을 가리지 않으며, 현장 운용은 설치 앱으로 연다
+## D-363 주행 화면의 카메라는 원본 비율 그대로 잘림 없이 보이고, 조작부·HUD 는 영상을 가리지 않으며, 현장 운용은 설치 앱으로 연다
 
 **Status:** Accepted (2026-09-29, 화면 결정). D-323 §5.2 의 "전방 카메라 풀블리드"를 바꾼다.
 
@@ -33,11 +33,11 @@
 ### Consequences
 
 - 가로 태블릿에서 영상이 화면을 꽉 채우지 않는다(좌우 검은 띠). 그 띠가 조작부 자리다.
-- D-346 의 스트림 캔버스도 같은 규칙(`contain`)을 따른다.
+- D-362 의 스트림 캔버스도 같은 규칙(`contain`)을 따른다.
 
 ### Validation
 
 - SOURCE: 브라우저 시험이 영상 비율과 조작부 비겹침을 잰다(가로 2000×1200, 세로 1200×2000).
 - DEVICE: 태블릿 설치 앱 가로·세로 스크린샷.
 
-**Related:** [D-323](D-323-rosy-pilot-teleop-app.md), [D-328](D-328-pilot-pwa-first.md), [D-346](D-346-pilot-live-driver-video.md), [D-348](D-348-pilot-rooms-and-driver-seat.md).
+**Related:** [D-323](D-323-rosy-pilot-teleop-app.md), [D-328](D-328-pilot-pwa-first.md), [D-362](D-362-pilot-live-driver-video.md), [D-343](D-343-pilot-rooms-and-driver-seat.md).

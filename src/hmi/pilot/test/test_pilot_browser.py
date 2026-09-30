@@ -222,7 +222,7 @@ def test_key_released_while_an_input_has_focus_still_stops(tablet_page):
 @pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
                     reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
 def test_login_code_pairs_and_recent_list_keeps_no_token(tablet_page):
-    """로그인 코드로 입장하고(D-193), 최근 접속에는 토큰을 남기지 않는다(D-348)."""
+    """로그인 코드로 입장하고(D-193), 최근 접속에는 토큰을 남기지 않는다(D-343)."""
     base_url, page, errors = tablet_page
     page.goto(f"{base_url}/pilot")
     page.evaluate("localStorage.setItem('rosy.pilot.recent', JSON.stringify([{host: 'x', label: 'old', token: 'leak'}]))")
@@ -263,7 +263,7 @@ MEASURE_VIDEO = """(() => {
                     reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
 @pytest.mark.parametrize("viewport", [(2000, 1200), (1333, 760), (1200, 2000), (390, 844)])
 def test_camera_keeps_aspect_and_controls_never_cover_it(base_url, viewport):
-    """D-350: 카메라는 원본 비율 그대로 전부 보이고, 조작부·HUD·상단 바가 영상을 덮지 않는다."""
+    """D-363: 카메라는 원본 비율 그대로 전부 보이고, 조작부·HUD·상단 바가 영상을 덮지 않는다."""
     with playwright_sync.sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
         page = browser.new_page(viewport={"width": viewport[0], "height": viewport[1]})
@@ -284,7 +284,7 @@ def test_camera_keeps_aspect_and_controls_never_cover_it(base_url, viewport):
 @pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
                     reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
 def test_zoom_cycles_and_always_reports_crop(tablet_page):
-    """D-350 §5: 맞춤 → 1.2× → 1.4× → 가득 → 전체화면 → 맞춤. 1.0× 을 넘으면 잘림을 늘 보인다."""
+    """D-363 §5: 맞춤 → 1.2× → 1.4× → 가득 → 전체화면 → 맞춤. 1.0× 을 넘으면 잘림을 늘 보인다."""
     base_url, page, errors = tablet_page
     _enter_drive(page, base_url)
     page.wait_for_function("document.querySelector('[data-drive-frame]').naturalWidth > 0")
@@ -307,7 +307,7 @@ def test_zoom_cycles_and_always_reports_crop(tablet_page):
 @pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
                     reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
 def test_auto_intent_strip_shows_target_and_core_steer(tablet_page):
-    """D-353 §6: 진행을 누르는 동안 영상 아래에 겨누는 점과 CORE 의 실제 조향 방향."""
+    """D-364 §6: 진행을 누르는 동안 영상 아래에 겨누는 점과 CORE 의 실제 조향 방향."""
     import json
     import urllib.request
     base_url, page, errors = tablet_page

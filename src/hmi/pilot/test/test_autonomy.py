@@ -1,4 +1,4 @@
-"""D-349 — autonomy.js 누르는 동안만 가는 차선 추종 상태 기계. Node 서브프로세스 패턴."""
+"""D-344 — autonomy.js 누르는 동안만 가는 차선 추종 상태 기계. Node 서브프로세스 패턴."""
 
 import json
 from pathlib import Path
@@ -96,7 +96,7 @@ def test_release_while_starting_turns_it_off_right_after():
 
 
 def test_intent_view_maps_core_status_to_target_and_steer_direction():
-    """D-353 §6: pilot shows where CORE aims and which way it actually turns."""
+    """D-364 §6: pilot shows where CORE aims and which way it actually turns."""
     out = _run_js("""
 const v = A.intentView;
 console.log(JSON.stringify([

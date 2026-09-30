@@ -1,4 +1,4 @@
-"""map_v2_fleet real-profile launch (D-353 5): the Gazebo camera is the Pinky one."""
+"""map_v2_fleet real-profile launch (D-364 5): the Gazebo camera is the Pinky one."""
 
 import ast
 import math

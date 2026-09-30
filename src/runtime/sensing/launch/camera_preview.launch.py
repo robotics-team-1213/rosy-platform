@@ -1,7 +1,7 @@
 """Capture the front camera and publish a bounded CORE preview, without motion nodes.
 
 The line observer is observation-only too (D-2): it publishes line/observation for
-CORE's camera line-follow (D-349 §9) and never commands the wheels."""
+CORE's camera line-follow (D-344 §9) and never commands the wheels."""
 
 import os
 

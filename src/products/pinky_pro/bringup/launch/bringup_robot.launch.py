@@ -136,7 +136,7 @@ def generate_launch_description():
                 condition=IfCondition(enable_battery),
             ),
             # ir_sensor/range single-publisher rule: ir_adc_node here is for the
-            # rosy-io graph only (D-349 §12 lane-departure guard). The navigation
+            # rosy-io graph only (D-344 §12 lane-departure guard). The navigation
             # hardware graph leaves enable_ir false and starts it via line_follow;
             # the C++ sensor_adc bench reader never runs beside it.
             Node(

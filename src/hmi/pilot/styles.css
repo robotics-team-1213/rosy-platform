@@ -366,7 +366,7 @@ body[data-pilot-screen="drive"] ui-topbar ui-button { white-space: nowrap; }
   [data-drive-hud] [data-drive-fact=cap] { display: none; }
 }
 
-/* ---- 배치(D-350) — 조작부는 영상을 덮지 않는다 ---- */
+/* ---- 배치(D-363) — 조작부는 영상을 덮지 않는다 ---- */
 /* side: 가로 태블릿. 영상 좌우 검은 띠(--band)에 조작부를 넣는다. */
 .pilot-drive[data-drive-layout="side"] [data-drive-controls] {
   padding: 0 var(--space-2) calc(var(--space-3) + env(safe-area-inset-bottom, 0));
@@ -407,7 +407,7 @@ body[data-pilot-screen="drive"] ui-topbar ui-button { white-space: nowrap; }
   background: var(--ground-deep);
 }
 
-/* ---- 영상 키우기(D-350 §5): 주행 중 머리를 얇게 ---- */
+/* ---- 영상 키우기(D-363 §5): 주행 중 머리를 얇게 ---- */
 body[data-pilot-screen="drive"] ui-topbar {
   min-height: 0;
   padding-top: var(--space-1);
@@ -443,7 +443,7 @@ body[data-pilot-screen="drive"] ui-brand small { display: none; }
 }
 .pilot-drive[data-drive-layout="below"][data-view-mode="full"] [data-drive-view] { grid-row: 1 / span 2; }
 
-/* ---- 전체화면(D-350 §5): 영상이 무대 전체를 채운다(cover, 잘림 표시). 비상 정지가 있는 상단 바는 남는다 ---- */
+/* ---- 전체화면(D-363 §5): 영상이 무대 전체를 채운다(cover, 잘림 표시). 비상 정지가 있는 상단 바는 남는다 ---- */
 /* 같은 칸에 겹쳐 놓으려면 열도 명시해야 한다 — 안 하면 격자 자동 배치가 옆 칸으로 밀어낸다 */
 [data-drive-view], [data-drive-hud] { grid-column: 1; }
 .pilot-drive[data-view-mode="full"] [data-drive-view] {
@@ -470,7 +470,7 @@ body[data-pilot-screen="drive"] ui-brand small { display: none; }
 .pilot-drive[data-drive-layout="below"] [data-drive-pivots] ui-button { min-height: 4rem; min-width: min(20vw, 9rem); }
 .pilot-drive[data-drive-layout="below"] [data-drive-presets] ui-button { min-height: 3rem; min-width: 3.4rem; font-size: 1rem; }
 
-/* ---- 보조 자율(D-349): 차선 자동 모드면 페달·제자리 대신 "진행" 하나 ---- */
+/* ---- 보조 자율(D-344): 차선 자동 모드면 페달·제자리 대신 "진행" 하나 ---- */
 [data-drive-go] { display: none; }
 .pilot-drive[data-auto-mode="on"] [data-drive-pedals],
 .pilot-drive[data-auto-mode="on"] [data-drive-pivots] { display: none; }
@@ -496,7 +496,7 @@ body[data-pilot-screen="drive"] ui-brand small { display: none; }
 
 [data-drive-left] [data-drive-auto] { width: 100%; min-height: 2.8rem; }
 
-/* ---- 자동 의도 띠(D-353 §6): 영상 아래쪽에 겨누는 점과 실제 조향 방향 ---- */
+/* ---- 자동 의도 띠(D-364 §6): 영상 아래쪽에 겨누는 점과 실제 조향 방향 ---- */
 [data-drive-intent] {
   position: absolute;          /* left·width·top 은 drive.js 가 그려진 영상에 맞춘다 */
   display: flex;

@@ -1,4 +1,4 @@
-"""D-349 §12: 카메라 차선 추종 중 IR 차선 이탈 감시."""
+"""D-344 §12: 카메라 차선 추종 중 IR 차선 이탈 감시."""
 
 import pytest
 
@@ -108,7 +108,7 @@ def test_guard_config_is_validated():
 
 
 def test_nominal_ground_evidence_needs_a_driver_hold():
-    """D-353 §3: estimated floor geometry drives only while someone holds 'go'."""
+    """D-364 §3: estimated floor geometry drives only while someone holds 'go'."""
     m = LineFollowManager(_Events(), config=LineFollowConfig(), clock=lambda: 10.0)
     m.set_mode(LineFollowMode.CAMERA_LINE)
     obs = LineObservation(source=LineFollowMode.CAMERA_LINE, stamp=10.0, visible=True,

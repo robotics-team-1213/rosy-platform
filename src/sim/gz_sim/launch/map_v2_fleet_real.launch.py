@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""One Pinky on the 260919 track with the real Pinky Pro camera (D-353 5).
+"""One Pinky on the 260919 track with the real Pinky Pro camera (D-364 5).
 
 Same track as map_v2_fleet_lane.launch.py, but the scene and the camera follow
 the device instead of the 2026-09-22 lap bench: grey carpet, white tape,

@@ -247,7 +247,7 @@ if __name__ == "__main__":
     uvicorn.run(app, host="127.0.0.1", port=8642, log_level="warning")
 
 
-# --- 차선 추종(D-349/D-353) 흉내: 시험이 /__test__/line-follow 로 다음 상태를 정한다 ---
+# --- 차선 추종(D-344/D-364) 흉내: 시험이 /__test__/line-follow 로 다음 상태를 정한다 ---
 LINE_FOLLOW = {"mode": "OFF", "state": "OFF", "source": None, "error": None, "confidence": 0.0,
                "linear": 0.0, "angular": 0.0, "reason": "mode_off", "clearance_m": None}
 LINE_FOLLOW_SCRIPT = {}

@@ -174,7 +174,7 @@ NOMINAL_PROFILE_KEYS = ("width", "height", "fx", "cx", "cy", "pitch_rad", "heigh
 
 
 def nominal_ground_plane(*, source, allowed, width_px, height_px, profile):
-    """Build a plane from an estimated (NOMINAL) camera profile, D-353 section 3.
+    """Build a plane from an estimated (NOMINAL) camera profile, D-364 section 3.
 
     The profile is geometry estimated from real footage, not a validated
     homography, so it takes two explicit opt-ins -- the NOMINAL source and the

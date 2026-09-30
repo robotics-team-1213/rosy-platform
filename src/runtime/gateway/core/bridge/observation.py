@@ -107,7 +107,7 @@ def road_observation(services, raw: str, *, source_now: float,
 
 
 def front_clearance(services, sample, *, received_at: float) -> None:
-    """D-349 §11: LiDAR 정면 최소 거리를 차선 추종 정지 판정에 넘긴다."""
+    """D-344 §11: LiDAR 정면 최소 거리를 차선 추종 정지 판정에 넘긴다."""
     config = services.line_follow.config
     try:
         distance = _front_clearance(

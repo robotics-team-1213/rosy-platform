@@ -1,4 +1,4 @@
-// 보조 자율(D-349): 누르고 있는 동안만 CORE 차선 추종이 진행한다.
+// 보조 자율(D-344): 누르고 있는 동안만 CORE 차선 추종이 진행한다.
 // DOM·fetch 를 모른다 — request/schedule/now 를 주입받아 Node 로 시험한다.
 //
 //   idle ──press()──▶ starting ──PUT mode(CAMERA_LINE, hold_s)=200──▶ running
@@ -96,7 +96,7 @@ export function createAutoSession({request, schedule, onChange = () => {}, onSta
   };
 }
 
-// 자동의 의도(D-353 §6): CORE 가 낸 차선 상태를 화면 표시로만 바꾼다 — 조향을 계산하지 않는다.
+// 자동의 의도(D-364 §6): CORE 가 낸 차선 상태를 화면 표시로만 바꾼다 — 조향을 계산하지 않는다.
 // target: 로봇이 겨누는 곳(차선 오차, −1 왼쪽 … +1 오른쪽)을 가로 백분율로.
 // steer: CORE 가 실제로 낸 각속도의 방향(REP-103: 양수 = 왼쪽으로 돈다).
 export const STEER_DEADBAND = 0.02;   // rad/s — 이보다 작으면 직진으로 본다

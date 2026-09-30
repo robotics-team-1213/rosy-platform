@@ -75,7 +75,7 @@ def test_calib_operator_messages_name_the_real_package():
 
 
 def test_rosy_io_graph_starts_ir_but_hardware_graph_does_not_double_it():
-    """D-349 §12: rosy-io (motor/core modes) gets IR from bringup's enable_ir;
+    """D-344 §12: rosy-io (motor/core modes) gets IR from bringup's enable_ir;
     the navigation hardware graph includes bringup without enable_ir and takes
     IR from line_follow instead. The two units conflict, so one reader per bus."""
     bringup = (SRC / "products" / "pinky_pro" / "bringup" / "launch"

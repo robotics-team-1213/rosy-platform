@@ -133,7 +133,7 @@ export function mountDrive(root, {onExit} = {}) {
   const blockContextMenu = (event) => event.preventDefault();
   root.addEventListener("contextmenu", blockContextMenu);
 
-  // --- 배치(D-350): 영상은 원본 비율 그대로, 조작부는 영상 밖 --------------------
+  // --- 배치(D-363): 영상은 원본 비율 그대로, 조작부는 영상 밖 --------------------
   // 영상이 실제로 그려지는 폭을 계산해 좌우 띠가 조작부를 담을 만큼 넓으면 "side",
   // 아니면 영상 아래에 조작부를 두는 "below" 로 바꾼다.
   const SIDE_MIN_BAND_PX = 200;
@@ -152,7 +152,7 @@ export function mountDrive(root, {onExit} = {}) {
     drive.style.setProperty("--band", `${Math.max(0, Math.floor(band))}px`);
     drive.style.setProperty("--video-ratio", String(ratio));
   }
-  // --- 배율(D-350 §5): 맞춤 1.0× → 1.2× → 1.4× → 가득(화면 폭) → 전체화면 → 맞춤 ------
+  // --- 배율(D-363 §5): 맞춤 1.0× → 1.2× → 1.4× → 가득(화면 폭) → 전체화면 → 맞춤 ------
   const ZOOM_STEPS = [1, 1.2, 1.4, "fill", "full"];
   function zoomValue(step) {
     const box = element.view.getBoundingClientRect();
@@ -289,7 +289,7 @@ export function mountDrive(root, {onExit} = {}) {
   if (element.pivotLeft) holdButton(element.pivotLeft, (value) => setPivot("left", value));
   if (element.pivotRight) holdButton(element.pivotRight, (value) => setPivot("right", value));
 
-  // --- 보조 자율(D-349): "진행"을 누르는 동안만 CORE 차선 추종 -------------------
+  // --- 보조 자율(D-344): "진행"을 누르는 동안만 CORE 차선 추종 -------------------
   const LF_REASON = {
     tracking: "차선 추종", camera_no_observation: "차선 관측 대기", camera_line_not_visible: "차선 안 보임",
     camera_low_confidence: "차선 신뢰 낮음", camera_observation_stale: "차선 관측 늦음",
@@ -327,7 +327,7 @@ export function mountDrive(root, {onExit} = {}) {
       renderIntent(lf);
     },
   });
-  // 자동의 의도(D-353 §6): 겨누는 곳과 CORE 가 실제로 도는 방향. 표시만 한다.
+  // 자동의 의도(D-364 §6): 겨누는 곳과 CORE 가 실제로 도는 방향. 표시만 한다.
   function renderIntent(lf) {
     const view = intentView(lf, DEG);
     if (!element.intent) return;
@@ -626,9 +626,9 @@ function buildStage() {
     el("ui-text", "", {scale: "value", "data-drive-blocked-reason": ""}),
     el("ui-button", "수동 모드 다시 잡기", {kind: "primary", type: "button", "data-drive-retake": ""}),
   );
-  // 영상 틀: 확대(D-350 §5) 때 넘치는 부분을 이 틀 안에서만 자른다.
+  // 영상 틀: 확대(D-363 §5) 때 넘치는 부분을 이 틀 안에서만 자른다.
   const view = el("div", null, {"data-drive-view": ""});
-  // 자동 의도 띠: 가운데 눈금, 겨누는 점, 실제 조향 방향(D-353 §6)
+  // 자동 의도 띠: 가운데 눈금, 겨누는 점, 실제 조향 방향(D-364 §6)
   const intent = el("div", null, {"data-drive-intent": "", hidden: "", "aria-live": "polite"});
   const track = el("span", null, {"data-intent-track": ""});
   track.append(el("i", null, {"data-intent-centre": ""}), el("i", null, {"data-intent-target": ""}));

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Closed-loop 'keep' lane run in the map_v2_fleet real-profile sim (D-353 5).
+"""Closed-loop 'keep' lane run in the map_v2_fleet real-profile sim (D-364 5).
 
 Runs inside the ROS box (WSL) next to map_v2_fleet_real.launch.py
 camera_lane_mode:=keep. It optionally teleports the robot, starts CAMERA_LINE

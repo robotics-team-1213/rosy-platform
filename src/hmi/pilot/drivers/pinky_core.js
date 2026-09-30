@@ -51,7 +51,7 @@ export const PROFILE = Object.freeze({
   command: "velocity",
   pivot: true,
   fine: true,
-  autonomy: ["line"],          // D-349: 누르는 동안만 가는 카메라 차선 추종
+  autonomy: ["line"],          // D-344: 누르는 동안만 가는 카메라 차선 추종
 });
 
 export const pinkyCore = {

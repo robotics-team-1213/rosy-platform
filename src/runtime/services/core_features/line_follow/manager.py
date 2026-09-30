@@ -30,7 +30,7 @@ class LineObservation:
     confidence: float
     ir_calibrated: bool = False
     calibration_revision: Optional[str] = None
-    # D-353 §3: camera evidence computed on an estimated (NOMINAL) floor model.
+    # D-364 §3: camera evidence computed on an estimated (NOMINAL) floor model.
     ground: Optional[str] = None
 
     def __post_init__(self) -> None:
@@ -65,14 +65,14 @@ class LineFollowConfig:
     stale_after_s: float = 0.3
     lost_after_s: float = 3.0
     ir_calibration_revision: Optional[str] = None
-    # D-349 §11: 앞 물체 정지. LiDAR 정면 부채꼴 최소 거리가 stop 보다 가까우면 멈추고
+    # D-344 §11: 앞 물체 정지. LiDAR 정면 부채꼴 최소 거리가 stop 보다 가까우면 멈추고
     # resume 보다 멀어지면 다시 간다(떨림 방지). lidar_forward_deg 는 장착 방향.
     obstacle_stop_m: float = 0.20
     obstacle_resume_m: float = 0.28
     obstacle_half_angle_deg: float = 20.0
     lidar_forward_deg: float = 0.0
     clearance_stale_s: float = 0.5
-    # D-349 §12: 카메라 차선 추종 중 IR 이탈 감시. 바닥을 보는 좌·중·우 IR 이 경계선을
+    # D-344 §12: 카메라 차선 추종 중 IR 이탈 감시. 바닥을 보는 좌·중·우 IR 이 경계선을
     # 한쪽에서 보면 반대로 비키고(ir_guard_turn, 속도 ir_guard_speed_scale 배), 가운데에서
     # 보면 선을 밟고 넘는 중이라 멈춘다. 켜져 있는데 IR 이 끊기거나 미교정이면 멈춘다.
     ir_guard_enabled: bool = False
@@ -149,10 +149,10 @@ class LineFollowManager:
         self._lost_latched = False
         self._invalid_observation = False
         self._status = LineFollowStatus()
-        # D-349 §8: 운전자 확인 만료. hold_s 가 있으면 hold() 가 그 안에 계속 와야 한다.
+        # D-344 §8: 운전자 확인 만료. hold_s 가 있으면 hold() 가 그 안에 계속 와야 한다.
         self._hold_s: Optional[float] = None
         self._hold_until: Optional[float] = None
-        # D-349 §11: 정면 LiDAR 여유 거리. 한 번도 안 왔으면 판정하지 않는다(LiDAR 없는 벤치).
+        # D-344 §11: 정면 LiDAR 여유 거리. 한 번도 안 왔으면 판정하지 않는다(LiDAR 없는 벤치).
         self._clearance: Optional[float] = None
         self._clearance_at: Optional[float] = None
         self._obstacle_blocked = False
@@ -325,7 +325,7 @@ class LineFollowManager:
             return self._hold_s is not None
 
     def hold(self, now: Optional[float] = None) -> bool:
-        """운전자가 아직 "진행"을 누르고 있다(D-349 §8). 활성 hold 세션만 연장한다."""
+        """운전자가 아직 "진행"을 누르고 있다(D-344 §8). 활성 hold 세션만 연장한다."""
         current = self._clock() if now is None else now
         with self._lock:
             if self._mode is LineFollowMode.OFF or self._hold_s is None:
@@ -361,7 +361,7 @@ class LineFollowManager:
             if self._mode is LineFollowMode.OFF:
                 return self._stop_decision("OFF", "mode_off")
             if self._hold_until is not None and current > self._hold_until:
-                # 운전자가 손을 뗐거나 링크가 끊겼다 — 스스로 내린다(D-349 §8).
+                # 운전자가 손을 뗐거나 링크가 끊겼다 — 스스로 내린다(D-344 §8).
                 previous = self._mode
                 self._generation += 1
                 self._mode = LineFollowMode.OFF
@@ -381,7 +381,7 @@ class LineFollowManager:
                     return self._stop_decision("HOLD", "obstacle_ahead")
             guard = None
             if self._mode is LineFollowMode.CAMERA_LINE and self._config.ir_guard_enabled:
-                # 차선 이탈 감시는 차선 상실이 아니다 — LOST 로 누적하지 않는다(D-349 §12).
+                # 차선 이탈 감시는 차선 상실이 아니다 — LOST 로 누적하지 않는다(D-344 §12).
                 guard = self._ir_guard(current)
                 if guard == "stale":
                     return self._stop_decision("HOLD", "lane_guard_stale")
@@ -397,7 +397,7 @@ class LineFollowManager:
             age = None if self._received_at is None else current - self._received_at
             if (observation is not None and observation.ground == "NOMINAL"
                     and self._hold_s is None):
-                # 교정 없는 공칭 지면은 운전자가 누르고 있을 때만 쓴다(D-353 §3).
+                # 교정 없는 공칭 지면은 운전자가 누르고 있을 때만 쓴다(D-364 §3).
                 return self._stop_decision("HOLD", "nominal_ground_requires_driver", age)
             choice = lane_recovery_rule(
                 DecisionRequest(

@@ -1,4 +1,4 @@
-# map_v2_fleet real-profile Gazebo bench (D-353 §5 prerequisite), 2026-09-30
+# map_v2_fleet real-profile Gazebo bench (D-364 §5 prerequisite), 2026-09-30
 
 증거 등급: **ROS-SIM (렌더 외형 비교)**. 장치·필드 수용이 아니다. 주행 합격 시험도 아니다.
 

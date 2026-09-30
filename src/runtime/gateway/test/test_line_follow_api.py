@@ -188,7 +188,7 @@ def test_ir_fallback_is_not_automatic_and_requires_camera_failure(core_client):
 
 
 def test_line_follow_needs_drive_not_nav2_and_hold_to_run_expires(core_client):
-    """D-349 §7·§8: motor 런타임(Nav2 없음)에서도 켜지고, 운전자 확인이 끊기면 스스로 멈춘다."""
+    """D-344 §7·§8: motor 런타임(Nav2 없음)에서도 켜지고, 운전자 확인이 끊기면 스스로 멈춘다."""
     client, services = core_client()
     services.capability._data["navigation"]["goal_navigation"] = False
     clock = {"t": 100.0}

@@ -1,4 +1,4 @@
-"""앞 공간(clearance) — LiDAR 한 장에서 로봇 정면 부채꼴의 가장 가까운 거리 (D-349 §11).
+"""앞 공간(clearance) — LiDAR 한 장에서 로봇 정면 부채꼴의 가장 가까운 거리 (D-344 §11).
 
 ROS 를 모른다. `sample` 은 bridge 의 `translate.lidar_sample` 모양(`ranges`, `angle_min`,
 `angle_max`, `range_min`, `range_max`)이다. LiDAR 는 로봇마다 다르게 장착된다 — Pinky Pro

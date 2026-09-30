@@ -6,7 +6,7 @@
   Lane paint is visual-only; the perimeter ring is the only collision.
   dock_tag_7: the stage-3 parking marker (visual-only wedge face).
   Line colour: bright. Orientation vs the physical mat: see README.md.
-  Real profile (D-353 5): carpet texture, white 0.30 m walls, blue seam tape.
+  Real profile (D-364 5): carpet texture, white 0.30 m walls, blue seam tape.
 -->
 <sdf version="1.6">
   <world name="map_v2_fleet">

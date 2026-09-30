@@ -668,7 +668,7 @@ class LaneCornerTracker:
         return LaneObservation(error=-sign, confidence=1.0)
 
 
-#: Floor models a camera observation may be labelled with (D-353 section 3).
+#: Floor models a camera observation may be labelled with (D-364 section 3).
 GROUND_LABELS = ("NOMINAL",)
 
 
@@ -680,7 +680,7 @@ def line_observation_payload(source: str, stamp: float,
     """One compact wire shape shared by IR and camera publishers.
 
     ``ground`` labels camera evidence computed on an estimated floor model
-    (``"NOMINAL"``, D-353 section 3) so CORE can hold it to driver-held use.
+    (``"NOMINAL"``, D-364 section 3) so CORE can hold it to driver-held use.
     """
     if source not in ("IR_LINE", "CAMERA_LINE"):
         raise ValueError("unsupported line observation source")

@@ -46,8 +46,8 @@
 
 ## 최근 기록
 
+- 2026-09-30 · uncommitted · docs(adr): pilot ADR 번호를 main 과 겹치지 않게 다시 매김
 - 2026-09-30 · uncommitted · feat(sim): map_v2_fleet real-profile world and Pinky camera launch (D-353 5)
 - 2026-09-27 · uncommitted · fix(sim-ui): complete Gazebo viewer tab keyboard contract
 - 2026-09-24 · uncommitted · docs(adr): D-205 real lane mission transition order
 - 2026-09-24 · uncommitted · fix(ci): install python3-opencv for the lane live viewer
-- 2026-09-24 · uncommitted · chore(sim): `navigation` exec_depend 중복 제거
