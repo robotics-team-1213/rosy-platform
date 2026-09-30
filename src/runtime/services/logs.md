@@ -232,3 +232,8 @@
 - 변경: release_emergency() 가 잠금 해제 후 change_listeners 를 transition() 과 같은 계약으로 돌린다(EMERGENCY→IDLE). 여태 리스너를 건너뛰어 모드 미러·도킹 정리가 해제를 못 봤다.
 - 증거: test_core_logic.py 두 시험(해제 리스너 호출, 실패하는 리스너는 자기만 건너뜀).
 - gate 변화: 없음.
+
+## 2026-10-01 · f34781ae · feat(line_follow): 시작 때 정한 LiDAR 장착 yaw 를 받는다
+- 변경: `LineFollowManager.use_lidar_forward(deg, source)` 와 `lidar_forward_source` — CORE 가 정한 장착 yaw(D-47 부록)를 설정에 넣고 출처를 기억한다.
+- 증거: gateway `test_lidar_mount_source.py`, services 265 passed (2026-10-01 Windows).
+- gate 변화: 없음(값 주입 경로만).

@@ -187,3 +187,8 @@
 - 변경: `NAV_STATES`·`NAV_STUCK`·`valid_nav_state()` 추가. `lamp_pattern()`이 세 번째 인자 `nav_state`를 받아 NAVIGATION 안에서 BLOCKED/FAILED를 `blocked`로 구분한다(다른 우선순위는 불변).
 - 증거: test_robot_state.py 90 passed (변이 증명: blocked 규칙을 빼면 해당 2행이 빨개진다).
 - gate 변화: 없음.
+
+## 2026-10-01 · 423e4d2f · feat(core_common): 버전 보정 저장소 (D-47 부록)
+- 변경: `core_common/calibration_store.py` — 실행마다 불변 레코드 하나(종류·로봇·세션·방법·값·구간·sha256), 상태는 append-only events.jsonl, 현재값 = 고정된 승인 레코드 또는 최신 승인 레코드, `resolve()` 는 없으면 정적 값과 로그용 출처 문장을 준다. 자동 승인 경로 없음.
+- 증거: `test_calibration_store.py` 9 passed — 이력 보존·덮어쓰기 거부, 후보는 현재값이 아님, 최신 승인 우선·superseded, 고정/해제 롤백, 최신 거부 롤백, 변조 레코드 배제, 정적 대체 (2026-10-01 Windows).
+- gate 변화: SOURCE.

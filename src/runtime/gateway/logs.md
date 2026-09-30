@@ -582,3 +582,8 @@
 - 증거: 해당 8건 복구. core 도메인 전체(gateway·events·services·web_common·api_web) 2014 passed, 29 skipped (2026-10-01 Windows). 단 `test_core_node_teardown::test_run_drains_executor_workers_before_returning` 은 이 변경과 무관하게 Windows에서 간헐 실패한다(재실행 통과, CI Linux 통과).
 - gate 변화: 없음.
 - 교훈: 파일을 나누는 리팩터는 그 파일을 텍스트로 읽는 계약 시험의 소유자도 함께 옮겨야 한다 — 분할 커밋이 시험을 안 고치면 CI가 다음 커밋에서 대신 말한다.
+
+## 2026-10-01 · f34781ae · feat(core): line_follow LiDAR 장착 yaw 단일 출처 (D-47 부록)
+- 변경: `core/lidar_mount.py` 가 시작 때 한 번 정한다 — 승인된 `lidar_mount` 레코드 > 센서 어댑터에 묶인 `lidar_yaw_offset`(D-47) > `line_follow.lidar_forward_deg` 손값. `node.py` 가 쓴 값과 출처를 로그에 남긴다. 어댑터에 `bound_parameters` 속성 추가.
+- 증거: `test_lidar_mount_source.py` 7 passed(순서, 후보 무시, 190° 섹터·경로), gateway 전체 1501 passed(event_catalogue 한 건은 점 표기 출처 문자열을 고쳐 통과), teardown 간헐 실패는 기존과 같다 (2026-10-01 Windows).
+- gate 변화: SOURCE. 기본 설정에서는 여전히 손값(저장소·어댑터 비어 있음).
