@@ -361,7 +361,11 @@ DECLARED_WRITES = {
         "/run/rosy/status-inputs.json",
     },
     "rosy-io.service": {"/var/log/rosy-io/launch.log"},
-    "rosy-camera.service": {"/var/log/rosy-camera/launch.log"},
+    "rosy-camera.service": {
+        "/var/log/rosy-camera/launch.log",
+        # D-373: capture snapshots under the unit's own StateDirectory=rosy/camera.
+        "/var/lib/rosy/camera/recordings",
+    },
     "rosy-navigation.service": {
         "/var/log/rosy-navigation/launch.log",
         # slam_toolbox save_map output: ros_bridge.py ROSY_MAP_OUTPUT_DIR default.
@@ -399,6 +403,8 @@ DECLARED_WRITES = {
 
 # Absolute paths a unit's program names but only reads.
 DECLARED_READS = {
+    # D-373: root:rosy-camera 0750 models, written only by the operator's sudo install.
+    "rosy-camera.service": {"/var/lib/rosy/models"},
     "rosy-release-recover.service": {"/opt/rosy/releases"},  # verify() of old_current
     "rosy-core.service": {
         "/var/lib/rosy",       # calibration data_root, runtime probe default
