@@ -614,8 +614,10 @@ processed once:
 
 The watcher needs a reviewed source checkout (it imports the manifest contract
 and runner from `src/runtime/sensing`) and a Python venv with `onnxruntime`,
-`opencv-python-headless`, `numpy` and `PyYAML` (add `huggingface_hub` only for
-`backend: hf`). It is not part of the signed site candidate (follow-up: add
+`onnx` (intake reads the graph's precision with it), `opencv-python-headless`,
+`numpy` and `PyYAML` (add `huggingface_hub` only for `backend: hf`). A missing
+package is a configuration error: the watcher exits 6 every run and records
+nothing until the venv is fixed; `rosy_ml doctor --watch-config` names it. It is not part of the signed site candidate (follow-up: add
 the units and a pinned watcher bundle to `build_candidate.py`). Prepare both,
 then run the install script from that checkout:
 
@@ -624,7 +626,7 @@ sudo install -d -o root -g root -m 0755 /opt/rosy/model-watch
 sudo git clone --no-checkout <reviewed-remote> /opt/rosy/model-watch/src
 sudo git -C /opt/rosy/model-watch/src checkout --detach <reviewed-commit>
 sudo python3 -m venv /opt/rosy/model-watch/venv
-sudo /opt/rosy/model-watch/venv/bin/pip install onnxruntime opencv-python-headless numpy PyYAML
+sudo /opt/rosy/model-watch/venv/bin/pip install onnxruntime onnx==1.23.1 opencv-python-headless numpy PyYAML
 sudo /opt/rosy/model-watch/src/deploy/site/install-model-watch.sh --dry-run   # what it would do
 sudo /opt/rosy/model-watch/src/deploy/site/install-model-watch.sh
 ```

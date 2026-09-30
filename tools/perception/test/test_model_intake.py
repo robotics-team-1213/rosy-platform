@@ -446,3 +446,24 @@ def test_intake_refuses_a_precision_label_that_contradicts_the_graph(tmp_path, g
     rc, report = intake.run(str(folder), out=tmp_path / "out", root=tmp_path)
     assert rc != 0 and report["verdict"] == "fail" and not report["transient"]
     assert any("precision" in r and word in r for r in report["reasons"]), report["reasons"]
+
+
+def test_a_missing_package_is_a_config_error_not_transient(tmp_path, monkeypatch):
+    """Review 2026-10-01: ImportError (onnx or onnxruntime missing) is the site's
+    environment, not a network hiccup: exit CONFIG_EXIT, never retried as transient."""
+    import export_cell
+    raw = tmp_path / "raw.onnx"
+    raw.write_bytes(b"not-really-onnx")
+    folder = tmp_path / "m"
+    export_cell.write_manifest(
+        folder, onnx_path=raw, classes=[("bg", "background"), ("lane", "lane_marking")],
+        color="rgb", scale=1 / 255, mean=[0, 0, 0], std=[1, 1, 1], dataset_repo="org/ds",
+        dataset_revision="a" * 40, camera_profile_revision="cam-1", trainer="t", date="20261001")
+
+    def no_onnx(path):
+        raise ImportError("No module named 'onnx'")
+    monkeypatch.setattr(intake, "graph_precision", no_onnx)
+    rc, report = intake.run(str(folder), out=tmp_path / "out", root=tmp_path)
+    assert rc == intake.CONFIG_EXIT == 4
+    assert report["config_error"] is True and report["transient"] is False
+    assert "onnx" in report["reasons"][0]

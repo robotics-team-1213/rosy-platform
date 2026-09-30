@@ -103,6 +103,17 @@ else
   echo "timer NOT enabled: $CONFIG still has <...> placeholders"
 fi
 
+# The watcher's intake imports these; a missing one is a config error (watch exit 6).
+VENV_MODULES="onnxruntime onnx cv2 numpy yaml"
+VENV_PIP="onnxruntime onnx==1.23.1 opencv-python-headless numpy PyYAML"
+if [ -x "$VENV/bin/python" ]; then
+  for module in $VENV_MODULES; do
+    if ! "$VENV/bin/python" -c "import $module" 2>/dev/null; then
+      echo "venv $VENV lacks $module: sudo $VENV/bin/pip install $VENV_PIP" >&2
+    fi
+  done
+fi
+
 if [ "$configured" = 1 ] && [ -x "$VENV/bin/python" ] && [ -f "$SRC/tools/perception/rosy_ml.py" ]; then
   run runuser -u "$SVC" -- "$VENV/bin/python" "$SRC/tools/perception/rosy_ml.py" doctor --watch-config "$CONFIG" \
     || echo "doctor found problems (lines marked with a cross above)"

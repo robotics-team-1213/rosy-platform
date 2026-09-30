@@ -74,7 +74,10 @@ Exit codes: 0 run finished and nothing is waiting on a retry (a failed intake,
 a held robot or a busy lock is a recorded outcome, not an error); 1 an intake
 infrastructure error, a store move or a robot push failed this run (retried
 later); 2 bad config or state file; 5 the listing failed (store missing or
-unreadable, or the HF listing failed; nothing recorded). A robot push that
+unreadable, or the HF listing failed; nothing recorded); 6 CONFIG_EXIT: intake
+reported a configuration error (a Python package such as onnx missing from the
+watcher's venv): the run stops at once, nothing is recorded and no attempt is
+spent, so the timer retries every run until the venv is fixed. A robot push that
 fails with deliver.py's own code (3, 75, 76) is logged with that code; the
 watcher's exit stays one of these."""
 
@@ -410,6 +413,13 @@ def settle_inbox(st, state: dict, listed: list[str]) -> tuple[dict, list[str], b
     return state, left, all_ok
 
 
+def _replay(outcome):
+    """intake_fn's recorded outcome, as intake_result expects to receive it."""
+    if isinstance(outcome, BaseException):
+        raise outcome
+    return outcome
+
+
 def _short(key: str) -> str:
     """An HF commit shortened for logs; an inbox folder name in full."""
     return key[:12] if _SHA.fullmatch(key) else key
@@ -440,6 +450,9 @@ def intake_result(sha: str, prev: dict | None, robots: list[str], intake_fn,
     print(f"{_short(sha)}: intake PASS {report['model_revision']}")
     return {**base, "intake": "pass", "reasons": reasons,
             "robots": {r: {"status": "pending", "attempts": 0} for r in robots}}
+
+
+CONFIG_EXIT = 6
 
 
 def main(argv=None, *, list_commits=hf_list_commits, intake_fn=None, deliver_fn=None,
@@ -490,9 +503,19 @@ def main(argv=None, *, list_commits=hf_list_commits, intake_fn=None, deliver_fn=
     deliver_fn = deliver_fn or default_deliverer(cfg)
     observe_fn = observe_fn or default_observer(cfg)
     for sha in plan_run(commits, state, cfg["max_new_per_run"], max_attempts):
+        try:
+            probe = intake_fn(sha)
+        except Exception as exc:  # noqa: BLE001 - intake_result records it below
+            probe = exc
+        if isinstance(probe, tuple) and (probe[1] or {}).get("config_error"):
+            reasons = "; ".join(probe[1].get("reasons") or [])
+            print(f"model-watch: CONFIG ERROR, intake cannot run on this host: {reasons}. "
+                  "Fix the watcher venv (deploy/site/README.md) and check with "
+                  "rosy_ml doctor --watch-config; nothing was recorded.", file=sys.stderr)
+            return CONFIG_EXIT
         extra = {"content_sha": store.content_sha(st.inbox_folder(sha))} if inbox else {}
-        result = {**intake_result(sha, state["commits"].get(sha), list(robots), intake_fn,
-                                  max_attempts), **extra}
+        result = {**intake_result(sha, state["commits"].get(sha), list(robots),
+                                  lambda _sha, p=probe: _replay(p), max_attempts), **extra}
         retry_later |= result["intake"] == "error"
         state = apply_result(state, sha, result)
         save_state(cfg["state_file"], state)

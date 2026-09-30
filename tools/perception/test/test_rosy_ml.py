@@ -431,3 +431,30 @@ def test_intake_passes_the_store_for_inbox_refs(tmp_path, monkeypatch):
     assert rosy_ml.main(["intake", "store-inbox:m1"]) == 0
     assert got["source"] == "store-inbox:m1" and got["store"] == str(tmp_path / "store")
     assert got["downloader"] is None
+
+
+def test_doctor_on_the_site_requires_onnx_and_onnxruntime(tmp_path, monkeypatch, capsys):
+    key = tmp_path / "id"
+    key.write_text("k")
+    if os.name != "nt":
+        key.chmod(0o600)
+    wc = tmp_path / "model-watch.yaml"
+    wc.write_text(json.dumps({"store": str(tmp_path / "store"),
+                              "robots": [{"name": "pinky-a", "host": "h"}],
+                              "ssh": {"identity": str(key), "known_hosts": str(tmp_path / "kh")},
+                              "intake_out": str(tmp_path), "state_file": str(tmp_path / "s")}))
+    monkeypatch.setattr(rosy_ml, "_replay_clip_count", lambda cfg: 1)
+    r = Robot()
+    rc = rosy_ml.main(["doctor", "--watch-config", str(wc)], runner=r.runner, connect=r.connect,
+                      find_spec=lambda n: None if n == "onnx" else object())
+    out = capsys.readouterr().out
+    assert rc == 1 and "onnx importable" in out
+
+
+def test_doctor_local_onnx_is_advisory_for_an_operator(tmp_path, monkeypatch, capsys):
+    _init(tmp_path, monkeypatch=monkeypatch)
+    monkeypatch.setattr(rosy_ml, "_replay_clip_count", lambda cfg: 1)
+    r = Robot()
+    assert rosy_ml.main(["doctor", "pinky-a"], runner=r.runner, connect=r.connect,
+                        find_spec=lambda n: None if n == "onnx" else object()) == 0
+    assert "onnx importable" in capsys.readouterr().out

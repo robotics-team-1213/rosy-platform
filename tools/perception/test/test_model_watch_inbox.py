@@ -237,3 +237,24 @@ def test_the_inbox_backend_never_reads_an_hf_token(tmp_path, monkeypatch):
     _drop(tmp_path, "m1")
     monkeypatch.setattr(watch, "read_hf_token", lambda *a: pytest.fail("token read"))
     assert _run(_config(tmp_path), Fakes(), env={"HF_TOKEN_FILE": "/nope"}) == 0
+
+
+def test_a_missing_package_stops_the_run_as_a_config_error_and_spends_no_attempt(tmp_path, capsys):
+    """Review 2026-10-01: a missing `onnx` in the site venv was retried as transient
+    until gave_up, so auto-delivery stopped without a word. It is a config error."""
+    cfg = _config(tmp_path)
+    _drop(tmp_path, "m1")
+    fakes = Fakes()
+
+    def intake(name):
+        fakes.intakes.append(name)
+        return 4, {"verdict": "fail", "model_revision": None, "transient": False,
+                   "config_error": True, "reasons": ["ImportError: No module named 'onnx'"]}
+    fakes.intake = intake
+    for _ in range(watch_max := 3):
+        assert _run(cfg, fakes) == watch.CONFIG_EXIT
+    assert watch.CONFIG_EXIT == 6
+    assert fakes.intakes == ["m1"] * watch_max        # tried again every run, never given up
+    assert "m1" not in _state(tmp_path).get("commits", {})
+    assert (tmp_path / "store" / "models" / "inbox" / "m1").is_dir()
+    assert "onnx" in capsys.readouterr().err

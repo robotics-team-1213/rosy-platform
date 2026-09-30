@@ -9,7 +9,9 @@ marker matches its content (D-373 decision 8). hf: is the optional HF backend.
 manifest + sha256 -> onnxruntime open -> replay MP4 frames through the model
 and the rule-based detector -> intake_report.json. Pass: the folder is copied
 to <out>/<model_revision>/ with the report. Fail: the report is written next
-to the source and the exit code is 1. Not the D-205 selection gate."""
+to the source and the exit code is 1. A missing Python package (onnx,
+onnxruntime) is a configuration error of this host, not the model's: exit
+CONFIG_EXIT (4), report "config_error": true. Not the D-205 selection gate."""
 
 from __future__ import annotations
 
@@ -44,6 +46,7 @@ _SHA = re.compile(r"^[0-9a-f]{40}$")
 
 
 QDQ_OPS = frozenset({"QuantizeLinear", "DequantizeLinear"})
+CONFIG_EXIT = 4  # a required package is missing here: fix the environment, not the model
 
 
 def graph_precision(path) -> str:
@@ -258,9 +261,12 @@ def run(source: str, *, out, gate_path=DEFAULT_GATE, root=ROOT, max_frames=None,
         if stats["frames"] == 0:  # no clips under root: a setup error, not the model's
             report["transient"] = True
             report["reasons"].append(f"no replay clips for {gate['replay_sources']} under {root}")
-    except (ManifestError, ValueError, ImportError, OSError, cv2.error) as exc:
+    except ImportError as exc:  # onnx / onnxruntime missing: the host's setup
+        report["reasons"] = [f"{type(exc).__name__}: {exc} (install it in this venv)"]
+        report["config_error"] = True
+    except (ManifestError, ValueError, OSError, cv2.error) as exc:
         report["reasons"] = [f"{type(exc).__name__}: {exc}"]
-        report["transient"] = isinstance(exc, (OSError, ImportError, cv2.error))
+        report["transient"] = isinstance(exc, (OSError, cv2.error))
 
     text = json.dumps(report, indent=2, ensure_ascii=False) + "\n"
     if report["verdict"] == "pass":
@@ -283,7 +289,7 @@ def run(source: str, *, out, gate_path=DEFAULT_GATE, root=ROOT, max_frames=None,
     target.write_text(text, encoding="utf-8")
     print(f"FAIL {report['model_revision']}: {'; '.join(report['reasons'])} (report: {target})",
           file=sys.stderr)
-    return 1, report
+    return (CONFIG_EXIT if report.get("config_error") else 1), report
 
 
 if __name__ == "__main__":

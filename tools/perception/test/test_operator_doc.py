@@ -109,6 +109,8 @@ def test_exit_code_table_is_exact():
     want = {("deliver", c) for c in (0, 1, 2, deliver.HISTORY_EXIT, deliver.LOCK_BUSY_EXIT,
                                      deliver.HELD_EXIT)}
     want |= {("harvest", c) for c in (0, 1, 2, harvest.EXIT_NOT_IDLE)}
-    want |= {("watch", c) for c in (0, 1, 2, watch.LIST_FAILED_EXIT)}
+    want |= {("watch", c) for c in (0, 1, 2, watch.LIST_FAILED_EXIT, watch.CONFIG_EXIT)}
     want |= {("doctor", c) for c in (0, 1, 2)}
+    import intake
+    want |= {("intake", intake.CONFIG_EXIT)}
     assert rows == want

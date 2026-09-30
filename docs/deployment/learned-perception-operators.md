@@ -196,7 +196,8 @@ rosy_ml harvest pinky-005                   # 끝난 녹화 세션 가져오기
 | `! no store configured` | 설정에 `store`가 없다 | `rosy_ml init --store <경로> --force` 또는 설정에 `store:` 추가 |
 | `HF token file ... ✗` | (HF를 쓸 때만) 적어 둔 토큰 파일이 없다 | 파일을 만들거나 공개 저장소면 `hf_token_file`을 뺀다 |
 | `replay clips for intake (0) ✗` | 재생 클립이 없다 | `replay_root`(또는 저장소 루트) 아래 `data/teleop/learning/*.mp4` |
-| `! local onnxruntime` | 내 PC에서 intake를 못 돌린다 (권고) | venv에 `pip install onnxruntime` |
+| `! local onnxruntime` / `! local onnx` | 내 PC에서 intake를 못 돌린다 (권고) | venv에 `pip install onnxruntime onnx` |
+| `local onnx importable ✗` (사이트 PC, `--watch-config`) | watcher venv에 `onnx`가 없다. intake가 모델 정밀도를 못 읽어 watch가 매번 `6`으로 멈춘다 | `deploy/site/README.md`의 pip 줄(`onnx==1.23.1`)로 설치 |
 
 ### 종료 코드
 
@@ -222,6 +223,8 @@ deliver, `harvest`는 harvest). 사이트 자동 반영(watch)은 journal에 남
 | watch | `1` | intake 설비 오류, store 이동 실패, 로봇 push 실패. 다음 실행에 다시 한다 |
 | watch | `2` | 설정이나 상태 파일 오류 |
 | watch | `5` | 목록을 못 읽었다(store가 없거나 마운트되지 않음, HF 백엔드면 HF 목록 실패). 아무것도 기록하지 않았다 |
+| watch | `6` | 설정 오류: watcher venv에 필요한 패키지(`onnx`, `onnxruntime` 등)가 없다. 아무것도 기록하지 않고 시도 횟수도 쓰지 않는다. venv를 고치고 `rosy_ml doctor --watch-config`로 확인한다 |
+| intake | `4` | 설정 오류: 이 PC의 venv에 필요한 패키지가 없다(모델 탓이 아니다) |
 
 그 밖에:
 

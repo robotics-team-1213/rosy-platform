@@ -312,9 +312,15 @@ def _doctor(cfg, robots, runner, connect, find_spec) -> int:
         rep.check("replay clips for intake", lambda: _replay_clip_count(cfg),
                   "copy data/teleop/learning/*.mp4 under replay_root (or the repo root); "
                   "without clips every intake stops as a setup error")
-    rep.check("local onnxruntime importable", lambda: find_spec("onnxruntime") is not None,
-              "needed for rosy_ml intake only: pip install onnxruntime in your venv",
-              required=False)
+    # The site watcher's intake needs both (onnx reads the graph's precision);
+    # without them every inbox model stops with a config error (watch exit 6).
+    site = str(cfg.get("operator", "")).startswith("site:")
+    for module in ("onnxruntime", "onnx"):
+        rep.check(f"local {module} importable", lambda m=module: find_spec(m) is not None,
+                  ("the site watcher's intake needs it: install it in /opt/rosy/model-watch/venv "
+                   "(deploy/site/README.md)") if site else
+                  f"needed for rosy_ml intake only: pip install {module} in your venv",
+                  required=site)
     return 1 if rep.failed else 0
 
 
