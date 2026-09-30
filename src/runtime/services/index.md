@@ -34,8 +34,8 @@
 
 ## 최근 기록
 
-- 2026-09-30 · uncommitted · refactor(docking): D-353 봉합점 구현 착지
-- 2026-09-30 · uncommitted · feat(docking): D-351 재시도 갈래 — 도달 실패/전류 없음/충전 단절 구분
-- 2026-09-30 · uncommitted · feat(docking): D-350 하드웨어 단계·degrade·만춫·히스테리시스
-- 2026-09-29 · uncommitted · feat(traffic): D-337 T3 — observer wiring, config gate, status contract
-- 2026-09-29 · uncommitted · feat(traffic): D-337 T2 — observer source transport
+- 2026-09-30 · uncommitted · refactor(line_follow): 데이터 모델을 model.py 로 분리(파일 예산)
+- 2026-09-30 · 61c25393 · fix(line-follow): 재검토 R1·R2 — 풀림 지연은 연속 측정만, 모드 선택마다 새 앞 물체 세션
+- 2026-09-30 · 794e75bb · fix(line-follow): 검토 반영 — sector 기본, 급회전 창·near-field, 풀림 지연, L1 문턱
+- 2026-09-30 · e3eb2561 · feat(line-follow): 조향을 아는 앞 물체 정지(path)와 수동 한도 계단 각속도 상한
+- 2026-09-30 · uncommitted · fix(docking): D-353 뒤끝 — 도크 계약 시험을 poll_json 경로로 재연결

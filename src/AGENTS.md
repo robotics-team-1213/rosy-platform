@@ -5,7 +5,7 @@
 
 ## Purpose
 
-ROS 2 colcon workspace. Package names are unchanged. Directories group source by role: contracts (messages and shared schemas), runtime (gateway, events, services, API web, navigation, sensing), products (Pinky Pro and OMX source), drivers (chip drivers), site (Fleet, Overhead, Games), hmi (dashboard and shared interfaces), and sim. These are source groupings only; ROS package identity, running process, final writer, and deployment closure are separate facts under D-315. Build with colcon build --symlink-install from this directory. ament_python: core, core_common, core_events, core_features, core_api_web, control, emotion, games, omx_adapter, fleet, bringup, led. ament_cmake: interfaces, pinky_pro, omx, navigation, description, gz_sim, lamp_control, imu_bno055, sensor_adc, dashboard.
+ROS 2 colcon workspace. Package names are unchanged. Directories group source by role: contracts (messages and shared schemas), runtime (gateway, events, services, API web, navigation, sensing), products (Pinky Pro and OMX source), drivers (chip drivers), site (Fleet, Rosy Vision, Rosy Cam, Games), hmi (dashboard and shared interfaces), and sim. These are source groupings only; ROS package identity, running process, final writer, and deployment closure are separate facts under D-315. Build with colcon build --symlink-install from this directory. ament_python: core, core_common, core_events, core_features, core_api_web, control, emotion, games, omx_adapter, fleet, rosy_vision, bringup, led. ament_cmake: interfaces, pinky_pro, omx, navigation, description, gz_sim, lamp_control, imu_bno055, sensor_adc, dashboard, pilot.
 
 ## Key Files
 
@@ -19,9 +19,9 @@ No files at this level. Each package directory has its own `AGENTS.md` (e.g. `ru
 | `runtime/` | `gateway/` (package `core`), `events/` (`core_events`), `services/` (`core_features`, managers plus `decision/`), `api_web/` (`core_api_web`), `sensing/` (package `control`), `navigation`. Judgment does not publish `cmd_vel` |
 | `products/` | `pinky_pro/` (`profile/` package `pinky_pro`, `bringup`, `adc`, `lamp`, `led`) and `omx/` (`profile/` package `omx`, `adapter/` package `omx_adapter`) |
 | `drivers/` | `imu_bno055` chip driver; product reuse is verified separately |
-| `hmi/` | `face/` (package `emotion`, robot LCD), `web_common/` (package `web_common`, shared browser assets), `dashboard/` (operator screens served by `core_api_web`) |
+| `hmi/` | `face/` (package `emotion`, robot LCD), `web_common/` (package `web_common`, shared browser assets), `dashboard/` (operator screens served by `core_api_web`), `pilot/` (package `pilot`, Rosy Pilot teleop surface served by `core_api_web`, D-323) |
 | `sim/` | Simulation: `description` (URDF/xacro, meshes, RViz), `gz_sim` (Gazebo worlds; CMake no-ops on aarch64), `isaac_sim` (Isaac Sim integration area) |
-| `site/` | `fleet/` (site mission/task ledger and console), `overhead/` (camera-derived sighting input), and `games/` (game host) |
+| `site/` | `fleet/` (site mission/task ledger and console), `vision/` (Rosy Vision, package `rosy_vision`: camera-derived sighting input), `cam/` (Rosy Cam ceiling camera Android app, not a ROS package), and `games/` (game host) |
 
 ## For AI Agents
 
@@ -43,6 +43,7 @@ Folders carry the role name; ROS package names stay (D-231). Where they differ, 
 | `runtime/gateway` | `core` |
 | `runtime/sensing` | `control` |
 | `runtime/services` | `core_features` |
+| `site/vision` | `rosy_vision` (D-377 app rule `rosy_<word>`) |
 
 ### Placement Rules
 
@@ -83,7 +84,7 @@ authority. Follow D-317 for any proposed source split or package move.
 
 ```bash
 cd src && colcon build --symlink-install --event-handlers console_direct+
-python3 -m pytest contracts/foundation/test/ runtime/gateway/test/ runtime/events/test/ runtime/services/test/ hmi/web_common/test/ hmi/dashboard/test/ runtime/sensing/test/ site/fleet/test products/omx/adapter/test site/games/test -q
+python3 -m pytest contracts/foundation/test/ runtime/gateway/test/ runtime/events/test/ runtime/services/test/ hmi/web_common/test/ hmi/dashboard/test/ runtime/sensing/test/ site/fleet/test products/omx/adapter/test site/games/test sim/isaac_sim/test -q
 # ament linters live in each Python package's test/ (copyright, flake8, pep257)
 ```
 

@@ -1,0 +1,3 @@
+[INFO] [1790757917.579938172] [goal_node]: goal_node ready | mode=stop min_size=6
+[INFO] [1790757920.393147130] [goal_node]: mode -> explore
+[INFO] [1790757929.423705187] [goal_node]: mode -> stop

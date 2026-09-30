@@ -20,8 +20,10 @@
 
 ## 시험
 
-- 없음
+- `src/sim/isaac_sim/test`
 
 ## 최근 기록
 
+- 2026-09-30 · uncommitted · fix(sim): isaac_sim을 D-310 target 표에 등록
+- 2026-09-30 · uncommitted · fix(sim): isaac_sim 등록 뒤끝 — functional surface·gate 정확화
 - 2026-09-30 · uncommitted · chore(sim): add package marker for the structure scan (D-322, D-168)

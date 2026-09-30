@@ -1,7 +1,7 @@
 ---
 module: core_api_web
 owner: CORE
-last_verified: { commit: "uncommitted", date: 2026-09-26 }
+last_verified: { commit: "bed604ef", date: 2026-09-30 }
 gates:
   SOURCE:
     state: GO

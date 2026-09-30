@@ -1,36 +1,22 @@
+// 대시보드 셸 — 세션·인증·연결 생명주기와 화면 바인딩. 상태 렌더는
+// telemetry.js, 수동 조종은 teleop.js, 상태 소켓은 state-socket.js가 가진다
+// (D-362 P1 분할; 임포트 방향은 여전히 dom ← client ← settings ← 셸 한 방향).
 import { createFieldMap } from "./map.js";
 import { createHostCards } from "./host-cards.js";
-import { createRosNetwork } from "./ros-network.js";
 import { createVisionPreview } from "./vision.js";
 import { createStatusSummary } from "./status-summary.js";
 import { completeDashboardAuthentication, dashboardSurfaceBridge } from "./surface-navigation.js";
-import {
-  CONFIGURED_REASONS,
-  CORE_ONLY_TEXT,
-  DRIVE_DISABLED_TEXT,
-  estopFault,
-  reasonText,
-  triage,
-} from "./triage.js";
 import { HeadlessState } from "/common/core_ui_logic.js";
-import { createHoldTicker } from "/common/hold-ticker.js";
 import {
   bindFormSave,
-  bytes,
-  duration,
   elements,
+  markRequested,
   metricNumber,
   number,
   percent,
-  rate,
   setEnabled,
-  setOff,
   setFieldMessage,
-  setMeter,
-  markRequested,
-  setTagState,
   setText,
-  svgText,
 } from "./dom.js";
 import {
   PAIRED_SOURCES,
@@ -49,7 +35,6 @@ import {
   sourceLabel,
 } from "./client.js";
 import {
-  fillIdentityForm,
   fillSafetyForm,
   initSettings,
   refreshDocks,
@@ -60,6 +45,26 @@ import {
   renderTokens,
   renderWaypoints,
 } from "./settings.js";
+import {
+  TELEMETRY_CHANNELS,
+  lineFollow,
+  renderCapabilityPanels,
+  renderEvents,
+  renderInventory,
+  renderLineFollow,
+  renderRobotInfo,
+  renderRuntime,
+  renderSafetyHero,
+  renderTrafficPolicy,
+  renderTrafficStatus,
+  renderTriage,
+  showView,
+  updateLineFollowButtons,
+} from "./telemetry.js";
+import { startTeleop, stopTeleop, teleopActive, teleopEligible, updateTeleopControls } from "./teleop.js";
+import { createStateSocket } from "./state-socket.js";
+
+export { TELEMETRY_CHANNELS } from "./telemetry.js";
 
 const fieldMap = createFieldMap({
   canvas: elements["map-canvas"],
@@ -80,39 +85,6 @@ const fieldMap = createFieldMap({
   setAction: (text) => setText("action-message", text),
 });
 
-export const TELEMETRY_CHANNELS = Object.freeze({
-  "pose-x": "pose",
-  "pose-y": "pose",
-  "pose-yaw": "pose",
-  "velocity-linear": "velocity",
-  "velocity-angular": "velocity",
-  "battery-value": "battery",
-  "battery-voltage": "battery",
-  "navigation-state": "navigation",
-});
-
-function evidenceOf(state, channel) {
-  return new HeadlessState(state).evidenceOf(channel);
-}
-
-function motionEvidenceBlocks(state) {
-  const hs = new HeadlessState(state);
-  return !hs.isFresh("pose") || !hs.isFresh("velocity");
-}
-
-function renderRobotInfo(info) {
-  session.runtimeMode = info.runtime_mode || "";
-  renderSafetyHero();
-  const name = info.robot_name || info.name || "Rosy";
-  setText("robot-name", name);
-  setText("robot-id", `${info.robot_id || "—"} / ${info.hardware_model || "unknown model"} / ${info.runtime_mode || "core"}`);
-  fillIdentityForm(info);
-}
-
-let triageSeen = {};
-let lineFollowPending = false;
-let trafficPolicyPending = false;
-
 // D-262: 카메라 미리보기는 vision.js 팩토리가 가진다. 셸은 시작·정지만 부른다.
 const visionPreview = createVisionPreview({
   elements,
@@ -124,128 +96,6 @@ const visionPreview = createVisionPreview({
 });
 const stopVisionPreview = (message) => visionPreview.stop(message);
 const startVisionPreview = () => visionPreview.start();
-let trafficPolicyReadback = null;
-let trafficFormDirty = false;
-
-function updateLineFollowButtons() {
-  const navigationAvailable = session.capabilities?.navigation?.goal_navigation === true;
-  const emergency = session.robotState?.safety?.estop === true;
-  document.querySelectorAll("[data-line-mode]").forEach((button) => {
-    const enabling = button.dataset.lineMode !== "OFF";
-    // 요청 중(lineFollowPending)은 짧은 잠금이라 사유 없이 끈다.
-    setOff(button, lineFollowPending || (enabling && (!navigationAvailable || emergency)),
-      !enabling || lineFollowPending ? "" : emergency ? "비상정지 중" : "내비게이션을 쓸 수 없음");
-  });
-}
-
-function renderLineFollow(status = {}) {
-  const mode = status.mode || "OFF";
-  setText("line-follow-state", status.state || "OFF");
-  setText("line-follow-source", status.source || "없음");
-  setText("line-follow-error", Number.isFinite(Number(status.error)) ? number(status.error, 3) : "—");
-  setText("line-follow-confidence", percent((Number(status.confidence) || 0) * 100));
-  setText("line-follow-linear", `${number(status.linear || 0, 3)} m/s`);
-  setText("line-follow-angular", `${number(status.angular || 0, 3)} rad/s`);
-  setText("line-follow-reason", status.reason || "mode_off");
-  document.querySelectorAll("[data-line-mode]").forEach((button) => {
-    button.setAttribute("aria-pressed", String(button.dataset.lineMode === mode));
-  });
-  updateLineFollowButtons();
-}
-
-function renderTrafficStatus(status = {}) {
-  setText("traffic-policy-state", status.state || "DISABLED");
-  setText("traffic-policy-reason", status.reason || "policy_disabled");
-  setText("traffic-policy-signal", status.signal_conflict ? "CONFLICT" : (status.signal_colour || "—"));
-  setText(
-    "traffic-policy-stop-distance",
-    Number.isFinite(Number(status.stop_line_distance_m))
-      ? `${number(status.stop_line_distance_m, 3)} m`
-      : "—",
-  );
-  setText("traffic-policy-rule", status.junction_rule || "signal_controlled");
-  setText("traffic-policy-source", status.signal_head_frozen ? "frozen" : (status.signal_source_kind || "camera"));
-  setText("traffic-policy-scene", status.scene_revision || "—");
-  setText("traffic-policy-revision", status.policy_revision || "—");
-}
-
-function updateTrafficPolicyControls() {
-  setEnabled("traffic-policy-stage", !trafficPolicyPending);
-  setEnabled("traffic-policy-apply", !trafficPolicyPending && Boolean(trafficPolicyReadback?.staged),
-    trafficPolicyPending ? "" : "저장된 검토본 없음");
-  const signalAvailable = trafficPolicyReadback?.simulation_signal?.available === true;
-  document.querySelectorAll("[data-simulation-signal]").forEach((button) => {
-    setOff(button, trafficPolicyPending || !signalAvailable, trafficPolicyPending ? "" : "시뮬레이션 신호 없음");
-    button.dataset.active = String(
-      button.dataset.simulationSignal === trafficPolicyReadback?.simulation_signal?.colour,
-    );
-  });
-}
-
-function renderTrafficPolicy(readback = {}) {
-  trafficPolicyReadback = readback;
-  renderTrafficStatus(readback.status || {});
-  const draft = readback.staged || readback.active || {};
-  if (!trafficFormDirty) {
-    elements["traffic-policy-mode"].value = draft.mode || "DISABLED";
-    elements["traffic-policy-revision-input"].value = draft.policy_revision || "";
-    elements["traffic-approach-distance"].value = draft.approach_distance_m ?? "";
-    elements["traffic-stop-distance"].value = draft.stop_distance_m ?? "";
-    elements["traffic-stop-dwell"].value = draft.stop_dwell_s ?? "";
-    elements["traffic-min-confidence"].value = draft.min_confidence ?? "";
-  }
-  const message = readback.staged
-    ? `검토 대기: ${readback.staged.policy_revision}`
-    : `적용됨: ${readback.active?.policy_revision || "—"}`;
-  setText("traffic-policy-message", message);
-  updateTrafficPolicyControls();
-}
-
-// 두 문법은 한 화면에 섞이지 않는다(concept 16 §4 L2). 운용은 공간이고
-// 스크롤하지 않으며, 점검은 절차이고 스크롤이 곧 절차다.
-function showView(view) {
-  const operate = view !== "inspect";
-  elements["view-operate-panel"].hidden = !operate;
-  elements["view-inspect-panel"].hidden = operate;
-  elements["view-operate"].setAttribute("aria-pressed", String(operate));
-  elements["view-inspect"].setAttribute("aria-pressed", String(!operate));
-  document.body.dataset.view = operate ? "operate" : "inspect";
-}
-
-function renderTriage() {
-  const node = elements["triage"];
-  if (!node) return;
-  const { headline, context, seenAt } = triage({
-    state: session.robotState,
-    inventory: session.inventory,
-    safetySource: session.safetySource,
-    seenAt: triageSeen,
-  });
-  triageSeen = seenAt;
-
-  // 고장이 없으면 자리를 비운다 — "이상 없음"을 초록으로 칠하지 않는다.
-  node.hidden = !headline;
-  if (!headline) {
-    elements["triage-context"].replaceChildren();
-    return;
-  }
-  node.dataset.category = headline.category;
-  setText("triage-title", headline.title);
-  setText("triage-detail", headline.detail);
-
-  const list = elements["triage-context"];
-  list.replaceChildren();
-  context.forEach((fault) => {
-    const item = document.createElement("li");
-    item.dataset.category = fault.category;
-    const title = document.createElement("b");
-    title.textContent = fault.title;
-    const detail = document.createElement("span");
-    detail.textContent = fault.detail;
-    item.append(title, detail);
-    list.append(item);
-  });
-}
 
 function renderRobotState(state) {
   session.robotState = state;
@@ -275,48 +125,9 @@ function renderRobotState(state) {
   setConnection("online", "상태 스트림 연결");
   setText("last-sync", `마지막 동기화 ${new Date().toLocaleTimeString("ko-KR")}`);
   renderTriage();
-  if (holdTicker.active && !teleopEligible()) stopTeleop("운전 조건이 변경되어 정지했습니다.");
+  if (teleopActive() && !teleopEligible()) stopTeleop("운전 조건이 변경되어 정지했습니다.");
   updateTeleopControls();
   fieldMap.setPose();
-}
-
-// The hero and the triage banner read the same server evidence, so they cannot
-// disagree: READY only while the safety channel is fresh. A channel with no
-// source at all says why instead of claiming a live circuit. Whether hardware
-// runs comes from live evidence (`capabilities.runtime`, v1.21), not from the
-// configured mode string: rosy-io is started by hand under `core` (D-192).
-function safetyHero(state, runtimeMode, source, runtime) {
-  if (state?.safety?.estop) {
-    return { tone: "danger", label: "STOPPED", source: estopFault(source).title };
-  }
-  const judged = evidenceOf(state, "safety");
-  if (judged === "fresh") return { tone: "safe", label: "READY", source: "주행 회로 정상" };
-  if (judged === "unavailable") {
-    const hardware = runtime?.hardware ?? (runtimeMode === "core" ? "off" : "on");
-    if (hardware === "off") return { tone: "unverified", label: "HW OFF", source: CORE_ONLY_TEXT };
-    if (hardware === "silent") {
-      return { tone: "unverified", label: "HW SILENT", source: "하드웨어 런타임 신호 끊김" };
-    }
-    if (runtime?.drive === "disabled") {
-      return { tone: "unverified", label: "NO DRIVE", source: DRIVE_DISABLED_TEXT };
-    }
-    return { tone: "unverified", label: "NO SOURCE", source: "안전 회로 출처 없음" };
-  }
-  return {
-    tone: "unverified",
-    label: "UNVERIFIED",
-    source: judged === "delayed" ? "안전 회로 지연" : "안전 회로 수신 끊김",
-  };
-}
-
-function renderSafetyHero() {
-  if (!session.robotState) return;
-  const hero = safetyHero(
-    session.robotState, session.runtimeMode, session.safetySource, session.capabilities?.runtime,
-  );
-  elements["safety-indicator"].className = `hero-safety ${hero.tone}`;
-  setText("safety-label", hero.label);
-  setText("safety-source", hero.source);
 }
 
 function renderSafety(safety) {
@@ -332,227 +143,13 @@ function renderSafety(safety) {
   updateLineFollowButtons();
 }
 
-
-function renderRuntime(runtime) {
-  setText("host-name", runtime.hostname);
-  setText("os-name", runtime.os?.pretty_name || runtime.os?.name);
-  setText("kernel-name", [runtime.kernel, runtime.architecture].filter(Boolean).join(" / "));
-  setText("network-address", runtime.network?.addresses?.join(", "));
-  setText("uptime", duration(runtime.uptime_seconds));
-
-  setText("cpu-value", percent(runtime.cpu?.usage_percent));
-  setText("cpu-detail", `load ${number(runtime.cpu?.load_1, 2)} / ${runtime.cpu?.logical_count ?? "—"} cores`);
-  setMeter("cpu-bar", runtime.cpu?.usage_percent);
-
-  setText("memory-value", percent(runtime.memory?.used_percent));
-  setText("memory-detail", `${bytes(runtime.memory?.available_bytes)} available`);
-  setMeter("memory-bar", runtime.memory?.used_percent);
-
-  setText("storage-value", percent(runtime.storage?.used_percent));
-  setText("storage-detail", `${bytes(runtime.storage?.free_bytes)} free · ${runtime.storage?.path || "—"}`);
-  setMeter("storage-bar", runtime.storage?.used_percent);
-
-  const temperature = runtime.temperature_c;
-  setText("temperature", Number.isFinite(Number(temperature)) ? `${number(temperature, 1)}°` : null);
-  setText("temperature-state", temperature == null ? "센서 없음" : temperature >= 80 ? "고온 경고" : temperature >= 70 ? "주의" : "정상 범위");
-  const tempCard = elements.temperature?.closest(".temperature-card");
-  if (tempCard) {
-    if (!Number.isFinite(Number(temperature))) delete tempCard.dataset.level;
-    else if (temperature >= 80) tempCard.dataset.level = "crit";
-    else if (temperature >= 70) tempCard.dataset.level = "warn";
-    else delete tempCard.dataset.level;
-  }
-  setText("runtime-warning", runtime.unavailable?.length ? `읽을 수 없는 항목: ${runtime.unavailable.join(", ")}` : "");
-  rosNetwork.render(runtime);
-}
-
-// D-262: 아래 pushNetworkSample/renderSparkline/renderRosGraph/renderRosNetwork는
-// ros-network.js로 옮겼다. 셸은 rosNetwork.render(runtime) 한 줄만 부른다.
-
-// D-262: ROS 통신 격리·연결 지도는 ros-network.js 팩토리가 그린다.
-const rosNetwork = createRosNetwork({
-  elements,
-  setText,
-  metricNumber,
-  rate,
-  svgText,
-  history: session.networkHistory,
-});
-
 function renderCapabilities(capabilities) {
-  session.capabilities = capabilities;
+  renderCapabilityPanels(capabilities);
   // Capability changes can enable map actions after the map is mounted.
   fieldMap.setPose();
-  renderSafetyHero();
-  const slamOn = capabilities?.slam === true;
-  const slamChip = elements["slam-capability"];
-  if (slamChip) {
-    setTagState(slamChip, "mode", slamOn ? "AVAILABLE" : "HOLD");
-    slamChip.textContent = slamOn ? "AVAILABLE" : "HOLD";
-  }
-  setEnabled("slam-start", slamOn, "SLAM을 쓸 수 없음");
-  setEnabled("slam-stop", slamOn, "SLAM을 쓸 수 없음");
-  setEnabled("slam-save", slamOn, "SLAM을 쓸 수 없음");
   updateModeButtons();
   updateTeleopControls();
   updateLineFollowButtons();
-}
-
-function renderInventory(inventory) {
-  session.inventory = inventory;
-  const rows = (inventory?.descriptors || []).filter(
-    (row) => row.state && row.state !== "not_provided",
-  );
-  elements["capability-list"].replaceChildren();
-  rows.forEach((row) => {
-    const item = document.createElement("div");
-    item.className = "capability-item";
-    item.dataset.state = row.state;
-    if (CONFIGURED_REASONS[row.reason]) item.dataset.cause = "runtime";
-    const label = document.createElement("span");
-    label.textContent = row.id;
-    const state = document.createElement("b");
-    state.textContent = row.state;
-    item.append(label, state);
-    if (row.reason) {
-      const reason = document.createElement("small");
-      // Every reason, most basic first (v1.21): a robot without a drive stays
-      // without one after the e-stop is released.
-      const reasons = row.reasons?.length ? row.reasons : [row.reason];
-      reason.textContent = reasons.map(reasonText).join(" · ");
-      item.append(reason);
-    }
-    elements["capability-list"].append(item);
-  });
-  const usable = rows.filter((row) => row.state === "available" || row.state === "constrained");
-  setText("capability-count", `${usable.length} / ${rows.length}`);
-  renderTriage();
-}
-
-function teleopEligible() {
-  return Boolean(
-    session.token
-    && session.capabilities?.teleop === true
-    && session.robotState?.mode === "MANUAL"
-    && session.robotState?.safety?.estop === false
-    && !motionEvidenceBlocks(session.robotState),
-  );
-}
-
-// 사유는 teleopEligible과 같은 조건을 같은 순서로 읽는다.
-function teleopBlockReason() {
-  if (!session.token) return "로그인 필요";
-  if (session.capabilities?.teleop !== true) return "수동 운전 기능 없음";
-  if (session.robotState?.mode !== "MANUAL") return "수동 모드에서만";
-  if (session.robotState?.safety?.estop !== false) return "안전 상태 확인 필요";
-  if (motionEvidenceBlocks(session.robotState)) return "센서 증거 부족";
-  return "";
-}
-
-function updateTeleopControls() {
-  const enabled = teleopEligible();
-  const reason = teleopBlockReason();
-  document.querySelectorAll("[data-teleop]").forEach((button) => {
-    setOff(button, !enabled, reason);
-  });
-  if (!session.token) {
-    setText("teleop-message", "operator 접속 키가 필요합니다.");
-  } else if (session.capabilities && session.capabilities.teleop !== true) {
-    // D-247 7: a runtime mode that holds the motors is not a permission problem.
-    const byMode = String(session.capabilities.withheld?.reason || "").startsWith("runtime_mode:");
-    // v1.21: otherwise say which reason withholds teleop, in operator words.
-    const withheld = session.capabilities.withheld?.reasons?.teleop;
-    setText("teleop-message", byMode && session.motionReason
-      ? session.motionReason
-      : withheld
-        ? `teleop 사용 불가: ${reasonText(withheld)}`
-        : "현재 하드웨어 설정에서는 저속 운전을 쓸 수 없습니다.");
-  } else if (session.robotState?.safety?.estop) {
-    setText("teleop-message", "비상정지가 활성화되어 있습니다.");
-  } else if (motionEvidenceBlocks(session.robotState)) {
-    const pose = evidenceOf(session.robotState, "pose") || "unavailable";
-    const velocity = evidenceOf(session.robotState, "velocity") || "unavailable";
-    setText("teleop-message", `pose ${pose} · velocity ${velocity}`);
-  } else if (session.robotState?.mode !== "MANUAL") {
-    setText("teleop-message", "수동 모드로 전환해야 합니다.");
-  } else if (!holdTicker.active) {
-    setText("teleop-message", "버튼을 누르고 있는 동안만 저속 명령을 보냅니다.");
-  }
-}
-
-function sendTeleop(linear, angular, keepalive = false) {
-  return api("/api/v1/teleop", {
-    method: "POST",
-    body: JSON.stringify({ linear, angular }),
-    keepalive,
-  });
-}
-
-function queueTerminalZero(immediate = false) {
-  const prior = session.teleopPending || Promise.resolve();
-  if (immediate) {
-    const immediateZero = sendTeleop(0, 0, true);
-    immediateZero.catch(() => null);
-  }
-  const terminal = prior
-    .catch(() => null)
-    .then(() => sendTeleop(0, 0, true));
-  session.teleopPending = terminal;
-  terminal
-    .catch((error) => {
-      setText("teleop-message", `정지 전송 실패 · watchdog 대기: ${error.message}`);
-    })
-    .finally(() => {
-      if (session.teleopPending === terminal) session.teleopPending = null;
-    });
-}
-
-let teleopHoldTimeout = null;
-function stopTeleop(message = "정지 명령을 전송했습니다.", immediate = false) {
-  if (teleopHoldTimeout !== null) { clearTimeout(teleopHoldTimeout); teleopHoldTimeout = null; }
-  // D-250: interval 수명과 zero 1회는 티커가 소유한다. 자격·전송·문구는 셸의 몫이다.
-  holdTicker.stop(immediate);
-  document.querySelectorAll("[data-teleop]").forEach((button) => button.setAttribute("aria-pressed", "false"));
-  setText("teleop-message", message);
-  updateTeleopControls();
-}
-
-async function transmitTeleop(linear, angular) {
-  if (!holdTicker.active || session.teleopPending) return;
-  const request = sendTeleop(linear, angular);
-  session.teleopPending = request;
-  try {
-    await request;
-  } catch (error) {
-    if (holdTicker.active) stopTeleop(`주행 명령 실패: ${error.message}`);
-  } finally {
-    if (session.teleopPending === request) session.teleopPending = null;
-  }
-}
-
-let teleopCommand = { linear: 0, angular: 0 };
-// D-250: 홀드-티커는 100ms 운율과 해제 zero만 낸다. 자격은 teleopEligible,
-// 전송은 transmitTeleop, zero 절차는 queueTerminalZero가 가진다.
-const holdTicker = createHoldTicker({
-  intervalMs: session.teleopIntervalMs,
-  onTick: () => transmitTeleop(teleopCommand.linear, teleopCommand.angular),
-  onZero: (immediate) => {
-    if (session.token) queueTerminalZero(immediate);
-  },
-});
-
-function startTeleop(button, event) {
-  event.preventDefault();
-  if (!teleopEligible() || holdTicker.active) return;
-  const linear = Number(button.dataset.linear);
-  const angular = Number(button.dataset.angular);
-  if (!Number.isFinite(linear) || !Number.isFinite(angular)) return;
-
-  teleopCommand = { linear, angular };
-  button.setAttribute("aria-pressed", "true");
-  setText("teleop-message", `${button.querySelector("small")?.textContent || "주행"} 명령 전송 중…`);
-  holdTicker.start();
-  teleopHoldTimeout = setTimeout(() => stopTeleop("2초 한도에 도달해 정지했습니다.", true), 2_000);
 }
 
 function updateModeButtons() {
@@ -567,36 +164,6 @@ function updateModeButtons() {
     else button.removeAttribute("reason");
   });
 }
-
-function renderEvents(payload) {
-  const events = [...(payload.events || [])].reverse().slice(0, 10);
-  elements["event-list"].replaceChildren();
-  if (!events.length) {
-    const empty = document.createElement("li");
-    const note = document.createElement("ui-empty");
-    note.textContent = "수신된 이벤트가 없습니다.";
-    empty.append(note);
-    elements["event-list"].append(empty);
-    return;
-  }
-  events.forEach((event) => {
-    const row = document.createElement("li");
-    const time = document.createElement("time");
-    time.className = "event-time";
-    time.textContent = event.ts ? new Date(event.ts).toLocaleTimeString("ko-KR") : "—";
-    const type = document.createElement("span");
-    type.className = "event-type";
-    type.textContent = event.type || "unknown.event";
-    const severity = document.createElement("span");
-    severity.className = `event-severity ${event.severity || "info"}`;
-    severity.textContent = (event.severity || "info").toUpperCase();
-    row.append(time, type, severity);
-    elements["event-list"].append(row);
-  });
-}
-
-
-
 
 // D-262: 호스트 카드 렌더는 host-cards.js 팩토리가 가진다. 역할 판단은
 // 셸의 isAdmin, 커미셔닝 후속(운전 불가 사유+teleop 갱신)은 셸이 주입한다.
@@ -686,7 +253,7 @@ function renderIdentity() {
   if (!me) {
     if (badge) badge.hidden = true;
     if (button) button.hidden = true;
-    
+
     dashboardSurfaceBridge(elements["surface-bridge"], []);
     return;
   }
@@ -750,118 +317,21 @@ async function refreshRobotState() {
   renderRobotState(state);
 }
 
-// Reconnect backoff. It grows on every close and resets only once a socket has
-// stayed live for RECONNECT_STABLE_MS, so a server that accepts, sends one frame
-// and closes (4401, 1013, a restart loop) never gets a hot loop.
-const RECONNECT_MIN_MS = 1000;
-const RECONNECT_MAX_MS = 30000;
-const RECONNECT_STABLE_MS = 10000;
-
-function closeStateSocket() {
-  const socket = session.socket;
-  session.socket = null;
-  session.socketLive = false;
-  clearTimeout(session.stableTimer);
-  session.stableTimer = null;
-  socket?.close();
-}
-
-function stopStateSocket() {
-  clearTimeout(session.reconnectTimer);
-  session.reconnectTimer = null;
-  clearInterval(session.fallbackTimer);
-  session.fallbackTimer = null;
-  closeStateSocket();
-}
-
-function startRestFallback() {
-  if (session.fallbackTimer) return;
-  setConnection("error", "REST 폴링 전환");
-  session.fallbackTimer = setInterval(() => refreshRobotState().catch(showConnectionError), 2000);
-}
-
-function scheduleReconnect() {
-  clearTimeout(session.reconnectTimer);
-  const delay = session.reconnectDelayMs;
-  session.reconnectDelayMs = Math.min(delay * 2, RECONNECT_MAX_MS);
-  const jitter = Math.round(delay * 0.2 * Math.random());
-  session.reconnectTimer = setTimeout(() => {
-    session.reconnectTimer = null;
-    if (session.token && !session.socket) connectStateSocket();
-  }, delay + jitter);
-}
-
-// 4401 means the token is missing, wrong, revoked, logged out or expired, or the
-// first message came too late. Ask REST which: 401 there ends the session,
-// anything else is retried with backoff.
-async function verifyAfterSocketRefusal() {
-  try {
-    await api("/api/v1/auth/whoami");
-  } catch (error) {
-    if (error.status === 401) {
-      signOut("세션이 만료되었거나 회수되었습니다. 다시 로그인하세요.");
-      return;
-    }
-  }
-  if (session.token) scheduleReconnect();
-}
-
-function connectStateSocket() {
-  // REST polling, if running, keeps going until the new socket delivers state.
-  clearTimeout(session.reconnectTimer);
-  session.reconnectTimer = null;
-  closeStateSocket();
-  if (!session.token) return;
-  const scheme = window.location.protocol === "https:" ? "wss" : "ws";
-  // D-193 10: the token goes in the first message, never in the URL.
-  const socket = new WebSocket(`${scheme}://${window.location.host}/ws/state`);
-  session.socket = socket;
-  socket.addEventListener("open", () => {
-    if (socket !== session.socket || !session.token) return;
-    socket.send(JSON.stringify({ type: "auth", token: session.token }));
-  });
-  socket.addEventListener("message", (event) => {
-    if (socket !== session.socket) return;
-    if (!session.socketLive) {
-      session.socketLive = true;
-      session.stableTimer = setTimeout(() => {
-        if (socket === session.socket) session.reconnectDelayMs = RECONNECT_MIN_MS;
-      }, RECONNECT_STABLE_MS);
-      clearInterval(session.fallbackTimer);
-      session.fallbackTimer = null;
-      setConnection("online", "상태 스트림 연결");
-    }
-    try { renderRobotState(JSON.parse(event.data)); } catch (_error) { setConnection("error", "상태 해석 실패"); }
-  });
-  socket.addEventListener("close", (event) => {
-    if (socket !== session.socket) return;
-    session.socket = null;
-    session.socketLive = false;
-    clearTimeout(session.stableTimer);
-    session.stableTimer = null;
-    if (!session.token) return;
-    startRestFallback();
-    if (event.code === 4401) {
-      verifyAfterSocketRefusal();
-    } else if (event.code === 4403) {
-      // Authenticated but not allowed: retrying cannot change that.
-      setConnection("error", "상태 스트림 권한 없음 · REST 폴링");
-    } else {
-      // 1013 (first-message slots full) arrives as 1006 before accept; both wait.
-      scheduleReconnect();
-    }
-  });
-}
+const stateSocket = createStateSocket({
+  onState: renderRobotState,
+  poll: () => refreshRobotState().catch(showConnectionError),
+  onUnauthorized: () => signOut("세션이 만료되었거나 회수되었습니다. 다시 로그인하세요."),
+});
 
 /** End this browser's session locally: stop everything that uses the token, then forget it. */
 function signOut(message) {
   stopTeleop("로그아웃으로 정지했습니다.");
-  stopStateSocket();
+  stateSocket.stop();
   clearInterval(session.refreshTimer);
   session.refreshTimer = null;
   stopVisionPreview("카메라 인증 대기");
   forgetToken();
-  session.reconnectDelayMs = RECONNECT_MIN_MS;
+  session.reconnectDelayMs = 1000;
   renderIdentity();
   updateAdminControls();
   setConnection("unknown", "인증 대기");
@@ -881,12 +351,12 @@ function showConnectionError(error) {
 }
 
 async function connect() {
-  session.reconnectDelayMs = RECONNECT_MIN_MS;
+  session.reconnectDelayMs = 1000;
   setText("auth-notice", "");
   setConnection("unknown", "연결 중");
   await detectRole();
   await Promise.all([refreshRobotState(), refreshSlowData()]);
-  connectStateSocket();
+  stateSocket.connect();
   clearInterval(session.refreshTimer);
   session.refreshTimer = setInterval(() => refreshSlowData().catch(showConnectionError), 5000);
   startVisionPreview();
@@ -906,7 +376,7 @@ elements["auth-form"].addEventListener("submit", async (event) => {
     setText("auth-message", "연결되었습니다.");
   } catch (error) {
     forgetToken();
-    stopStateSocket();
+    stateSocket.stop();
     renderIdentity();
     stopVisionPreview("카메라 인증 실패");
     setText("auth-message", error.message);
@@ -1003,11 +473,11 @@ document.querySelectorAll("ui-button[data-mode]").forEach((button) => {
 
 document.querySelectorAll("[data-line-mode]").forEach((button) => {
   button.addEventListener("click", async () => {
-    if (button.disabled || lineFollowPending) return;
+    if (button.disabled || lineFollow.pending) return;
     const mode = button.dataset.lineMode;
     stopTeleop("차선 추종 모드 변경 전에 정지했습니다.");
     if (mode !== "OFF" && !window.confirm(`${button.textContent.trim()} 차선 추종을 시작할까요? 주변 안전을 확인하세요.`)) return;
-    lineFollowPending = true;
+    lineFollow.pending = true;
     updateLineFollowButtons();
     try {
       const status = await api("/api/v1/line-follow/mode", {
@@ -1020,87 +490,8 @@ document.querySelectorAll("[data-line-mode]").forEach((button) => {
     } catch (error) {
       setText("action-message", `차선 추종 변경 실패: ${error.message}`);
     } finally {
-      lineFollowPending = false;
+      lineFollow.pending = false;
       updateLineFollowButtons();
-    }
-  });
-});
-
-[
-  "traffic-policy-mode",
-  "traffic-policy-revision-input",
-  "traffic-approach-distance",
-  "traffic-stop-distance",
-  "traffic-stop-dwell",
-  "traffic-min-confidence",
-].forEach((id) => elements[id]?.addEventListener("input", () => {
-  trafficFormDirty = true;
-}));
-
-elements["traffic-policy-stage"]?.addEventListener("click", async () => {
-  if (trafficPolicyPending) return;
-  trafficPolicyPending = true;
-  updateTrafficPolicyControls();
-  const body = {
-    mode: elements["traffic-policy-mode"].value,
-    policy_revision: elements["traffic-policy-revision-input"].value.trim(),
-    approach_distance_m: Number(elements["traffic-approach-distance"].value),
-    stop_distance_m: Number(elements["traffic-stop-distance"].value),
-    stop_dwell_s: Number(elements["traffic-stop-dwell"].value),
-    min_confidence: Number(elements["traffic-min-confidence"].value),
-  };
-  try {
-    const readback = await api("/api/v1/traffic/policy/stage", {
-      method: "POST",
-      body: JSON.stringify(body),
-    });
-    trafficFormDirty = false;
-    renderTrafficPolicy(readback);
-    setText("traffic-policy-message", `검토본 저장됨: ${body.policy_revision}`);
-  } catch (error) {
-    setText("traffic-policy-message", `정책 검증 실패: ${error.message}`);
-  } finally {
-    trafficPolicyPending = false;
-    updateTrafficPolicyControls();
-  }
-});
-
-elements["traffic-policy-apply"]?.addEventListener("click", async () => {
-  if (trafficPolicyPending || !trafficPolicyReadback?.staged) return;
-  if (!window.confirm("로봇이 완전히 정지했습니까? 검토 중인 교통 정책을 적용합니다.")) return;
-  trafficPolicyPending = true;
-  updateTrafficPolicyControls();
-  try {
-    const readback = await api("/api/v1/traffic/policy/apply", {
-      method: "POST",
-    });
-    renderTrafficPolicy(readback);
-    setText("traffic-policy-message", "정지 상태에서 정책을 적용했습니다.");
-  } catch (error) {
-    setText("traffic-policy-message", `정책 적용 실패: ${error.message}`);
-  } finally {
-    trafficPolicyPending = false;
-    updateTrafficPolicyControls();
-  }
-});
-
-document.querySelectorAll("[data-simulation-signal]").forEach((button) => {
-  button.addEventListener("click", async () => {
-    if (button.disabled || trafficPolicyPending) return;
-    trafficPolicyPending = true;
-    updateTrafficPolicyControls();
-    try {
-      await api("/api/v1/traffic/simulation/signal", {
-        method: "PUT",
-        body: JSON.stringify({ colour: button.dataset.simulationSignal }),
-      });
-      const readback = await api("/api/v1/traffic");
-      renderTrafficPolicy(readback);
-    } catch (error) {
-      setText("traffic-policy-message", `SIM 신호 변경 실패: ${error.message}`);
-    } finally {
-      trafficPolicyPending = false;
-      updateTrafficPolicyControls();
     }
   });
 });

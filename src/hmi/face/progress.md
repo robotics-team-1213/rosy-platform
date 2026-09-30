@@ -14,7 +14,7 @@ gates:
     cmd: "PYTHONPATH=src/hmi/face ROSY_FACE_CAPTURE_DIR=X:\\DevTemp\\rosy-uiux-lcd-2026-09-27 python -X utf8 -m pytest src/hmi/face/test/test_info_screen_capture.py -q -p no:cacheprovider"
   ROS-SIM:
     state: HOLD
-    blocker: "rclpy set_emotion 서비스 노드가 있음. ROS 2 Jazzy 컨테이너 재실행 필요, 미실행"
+    blocker: "emotion.py가 모듈 최상위에서 `from .rosy_lcd import LCD`를 부르고 rosy_lcd는 spidev·RPi.GPIO를 최상위에서 import한다 — Pi가 아닌 Jazzy 컨테이너에서 노드 import가 죽는다. 컨테이너 smoke는 하드웨어 import 지연/가드 리팩터가 선행 조건이다(없으면 Pi 벤치는 DEVICE 계층이다)"
   ARTIFACT:
     state: HOLD
     blocker: "hardware 프로필이 이미지에 배선되지 않았다. core/io 이미지 제외는 test/test_nav2_hardware_slice.py::test_io_image_packages_nav2_without_slam_or_aux_drivers가 고정한다"
@@ -38,7 +38,7 @@ plans:
 
 ## 다음 gate
 
-1. ROS 2 Jazzy 컨테이너에서 `set_emotion` 서비스 노드 graph/parameter smoke를 실행해 ROS-SIM을 되돌린다.
+1. ROS 2 Jazzy 컨테이너에서 `set_emotion` 서비스 노드 graph/parameter smoke를 실행해 ROS-SIM을 되돌린다 — 단 `rosy_lcd`의 spidev·RPi.GPIO 최상위 import 때문에 Pi 외 컨테이너에서는 노드가 뜨지 않는다. 하드웨어 import 지연/가드 리팩터가 선행 조건이다.
 3. hardware 프로필이 `deploy/robot/pinky_pro/image/ 빌더`에 배선되면 ARTIFACT blocker를 서명 artifact 발행으로 바꾸고 DEVICE/FIELD를 PARKED에서 HOLD로 올린다.
 
 ## 현재 유효한 금지사항

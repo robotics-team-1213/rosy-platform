@@ -367,12 +367,21 @@ def test_running_action_and_stop_request_do_not_claim_physical_completion(tmp_pa
     assert running["stop"]["state"] == "DISPATCH_ENABLED"
     assert running["stop"]["physical_state"] == "UNKNOWN"
 
+    tasks.store.trip_stop_latch(actor_id="operator-1", reason="ESTOP_REQUESTED")
+    latched = client.get(
+        f"/api/fleet/missions/{mission_id}", headers=_OPERATOR,
+    ).json()["progress"]
+    assert latched["mission"]["state"] == "RUNNING"
+    assert latched["action"]["state"] == "RUNNING"
+    assert latched["goal_evidence"]["state"] == "UNKNOWN"
+    assert latched["stop"]["state"] == "DISPATCH_BLOCKED"
+    assert latched["stop"]["physical_state"] == "UNKNOWN"
+
     store.record_action_result(
         mission_id, event_id="result-current", action_id="action-current",
         attempt_id="attempt-current", outcome="SUCCEEDED",
         result={"observed_at": time.time(), "source": "local_action_receipt"},
     )
-    tasks.store.trip_stop_latch(actor_id="operator-1", reason="ESTOP_REQUESTED")
     after = client.get(
         f"/api/fleet/missions/{mission_id}", headers=_OPERATOR,
     ).json()["progress"]
@@ -440,6 +449,9 @@ def test_model_context_is_allowlisted_and_scoped_to_owner_and_workcell(tmp_path)
 
     assert context["mission_id"] == mission_id
     assert context["mission_state"] == "PROPOSED"
+    control = client.app.state.task_service.store.dispatch_control()
+    assert context["stop_generation"] == control["generation"]
+    assert context["authority_epoch"] == control["authority_epoch"]
     assert "history" not in context and "candidate" not in context
     assert "object_id" not in context and "image_sha256" not in context
     assert wrong_owner is None
@@ -476,7 +488,7 @@ def test_api_reference_pins_snapshot_cursor_retention_and_unknown_physical_state
         encoding="utf-8",
     )
 
-    assert "**Version:** v1.59" in reference
+    assert "**Version:** v1.64" in reference
     assert "## 10.14 Mission progress snapshots and event cursor" in reference
     assert "`/api/fleet/missions/{mission_id}/events?after_event_id=" in reference
     assert "MISSION_CURSOR_EXPIRED" in reference
@@ -484,3 +496,6 @@ def test_api_reference_pins_snapshot_cursor_retention_and_unknown_physical_state
     assert "physical_state: UNKNOWN" in reference
     assert "No percentage is returned" in reference
     assert "history_truncated" in reference
+    assert "## 10.15 ER 2 Mission feedback tools and outbox (D-357/D-358)" in reference
+    assert "atomic stop/candidate transaction" in reference
+    assert "not implemented because candidate creation is unavailable" in reference

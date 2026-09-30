@@ -161,9 +161,25 @@
 | D-345 | D-280 디자인 철학은 사람이 보는 모든 표면에 같은 방식으로 적용한다 — 웹이 아닌 표면도 레지스트리·토큰 사본 검사·이름 규칙을 받는다 |
 | D-348 | 목표 증거 생산자 등록 계약과 검증기 연결은 Fleet이 소유한다 — 사람 확인은 등록 시점뿐, 종단 Action 뒤 자동 증거 검증으로 `GOAL_CONFIRMED`를 연다 |
 | D-352 | 도크·신호등은 같은 패턴의 외부 장비다 — 폴링 실패 어휘·준비 프레임(wire/instrumented/verified)·계약 상호 참조를 공유한다 |
+| D-353 | 외부 장비 설계는 바뀐다 — 바뀌어도 코드가 아니라 설정·전략이 바뀌게 한다 |
+| D-354 | 외부 장비는 mDNS로 서로를 찾는다 — IP 하드코딩 없이, 전원만 연결하면 발견된다 (_rosy-dock._tcp·_rosy-signal._tcp) |
+| D-355 | 도크·외부 장비 구현은 자재→벤치→실기→활성화→통합의 5단계로 간다 — 각 단계의 게이트·의존성·완료 조건을 확정한다 |
 | D-357 | ER 2 consumes bounded Fleet feedback and returns candidates while Mission/device control remain independent |
 | D-358 | ER 2 feedback turns use trusted scope, fenced candidates, and explicit ambiguity |
 | D-359 | 테마는 팔레트 한 블록만 바꾼다 — 토큰을 팔레트·파생·역할로 나누고, 공용 부품이 표면별 사본을 대체하며, 반응형은 세 단 어휘를 쓴다 |
+| D-360 | 천장 카메라 경기장 자동 검출은 제안일 뿐이다 — Vision이 네 모서리를 제안하고, 관제는 운용자가 확인한 모서리로 보정·마스킹한 경기장 뷰를 보여 준다 |
+| D-361 | 사이트 콘솔이 로봇 화면 코드로 로봇을 등록한다 — Fleet이 코드를 로봇에서 직접 교환하고, 자격은 Fleet 소유 저장소에 둔다 |
+| D-363 | 주행 화면의 카메라는 원본 비율 그대로 잘림 없이 보이고, 조작부·HUD 는 영상을 가리지 않으며, 현장 운용은 설치 앱으로 연다 |
+| D-364 | 차선 자동은 선을 따라가는 것이 아니라 차로 안을 지키는 것이며, 인식은 녹화 재생 벤치와 헤드리스 가제보에서 먼저 통과한다 |
+| D-365 | Rosy Pilot 설치형은 PWA로 우선하고 Capacitor 래퍼는 네이티브 전용 수요가 실측될 때까지 보류한다 |
+| D-366 | Rosy Pilot 조종 대상 확장은 기기 종류별 드라이버 레지스트리로 수용하며, 장치별 조종 컨트롤(그리퍼·팔 위치 등)은 그 장치의 계약이 열 때 프런트에 반영한다 |
+| D-367 | Rosy Pilot 의 체감 응답속도는 카메라 폴링 150ms·명령 루프 100ms·햅틱 10ms 로 잡는다 |
+| D-368 | 운전 중인 한 사람에게만 인증된 MJPEG 실시간 영상을 주고, 그동안만 로봇 미리보기 발행을 올린다 |
+| D-369 | Mission 제어·장치 실행·ROS 제어·안전 정지의 책임을 분리한다 |
+| D-370 | 앱과 표면은 한 역할씩 맡는다 — 역할·이름·아이콘·화면 소유를 한 표로 고정하고, 발견·기기 연결·실패 어휘는 공유 벡터로 하나로 맞춘다 |
+| D-374 | 앱의 폴더·패키지·식별자·표시 이름은 역할 이름 하나에서 나온다 — 역할 id(kebab)·snake·compact·표시 네 표기; 와이어 계약 이름(mDNS 종류, `rosy-overhead/1`, `/api/fleet`·`/api/vision`, `rosyov://`, 웹 경로, 설정·저장소 키, compose 서비스)은 바꾸지 않는다 |
+| D-376 | OMX PICK_PLACE planning stays local and trajectory execution stays with the Action owner |
+| D-377 | 앱 이름 규칙: Rosy + 영어 한 단어 — 표시 이름 `Rosy <Word>`, id·폴더 끝 `<word>`, 패키지 `rosy_<word>`, Android `io.github.livsbittt.rosy.<word>`, Gradle `rosy-<word>`, 아이콘 `<word>.svg`; Rosy Cam·Vision·Console·Robot·Pilot |
 
 ## 계획·결과 문서
 
@@ -218,18 +234,23 @@
 - [2026-09-29-er2-manipulation-official-api-research.md](plans/2026-09-29-er2-manipulation-official-api-research.md)
 - [2026-09-29-er2-semantic-actions-mission-implementation.md](plans/2026-09-29-er2-semantic-actions-mission-implementation.md)
 - [2026-09-29-fleet-mission-control-arbitration-implementation.md](plans/2026-09-29-fleet-mission-control-arbitration-implementation.md)
+- [2026-09-29-fleet-robot-code-enrollment-plan.md](plans/2026-09-29-fleet-robot-code-enrollment-plan.md)
 - [2026-09-29-on-demand-activation-measurement-baseline.md](plans/2026-09-29-on-demand-activation-measurement-baseline.md)
 - [2026-09-29-pinky-deployment-fast-path.md](plans/2026-09-29-pinky-deployment-fast-path.md)
 - [2026-09-29-policy-evidence-contract-design.md](plans/2026-09-29-policy-evidence-contract-design.md)
 - [2026-09-29-policy-evidence-contract.md](plans/2026-09-29-policy-evidence-contract.md)
+- [2026-09-30-action-message-identity-design.md](plans/2026-09-30-action-message-identity-design.md)
+- [2026-09-30-action-message-identity.md](plans/2026-09-30-action-message-identity.md)
+- [2026-09-30-app-identity-rename-plan.md](plans/2026-09-30-app-identity-rename-plan.md)
 - [2026-09-30-dock-device-implementation-plan.md](plans/2026-09-30-dock-device-implementation-plan.md)
 - [2026-09-30-er2-mission-feedback-loop.md](plans/2026-09-30-er2-mission-feedback-loop.md)
 - [2026-09-30-goal-evidence-producer-and-verifier-design.md](plans/2026-09-30-goal-evidence-producer-and-verifier-design.md)
 - [2026-09-30-goal-evidence-producer-and-verifier.md](plans/2026-09-30-goal-evidence-producer-and-verifier.md)
+- [2026-09-30-site-app-roles-and-shared-link-plan.md](plans/2026-09-30-site-app-roles-and-shared-link-plan.md)
 
 ## 교훈 (docs/solutions)
 
-- 없음
+- [Verify what you ship - the working tree is not the commit](solutions/workflow-issues/verify-what-you-ship-the-working-tree-is-not-the-commit.md)
 
 ## 시험
 
@@ -238,8 +259,8 @@
 
 ## 최근 기록
 
-- 2026-09-30 · 94ba6de2 · D-371 Refinement — 확인 대화상자는 비모달
-- 2026-09-30 · e07518ac · D-371 US-010 DESIGN.md 목록 행 예외
-- 2026-09-30 · uncommitted · docs(plan): 도크·외부 장비 5단계 구현 플랜 + D-355
-- 2026-09-30 · uncommitted · docs(adr/plan): D-358 feedback outbox and replan fences
-- 2026-09-30 · uncommitted · docs(adr/plan): D-357 ER 2 Mission feedback loop
+- 2026-09-30 · uncommitted · hold unresolved phase state under local stop
+- 2026-09-30 · uncommitted · mint validated attempt-scoped phase recorder
+- 2026-09-30 · uncommitted · persist first phase intent and atomic response
+- 2026-09-30 · uncommitted · docs(adr): D-375 에서 D-380 으로 개명
+- 2026-09-30 · uncommitted · docs(adr): set OMX local planning and owner execution boundary

@@ -10,6 +10,7 @@ import {
   classifySightings, siteBounds, canvasSizeFor, fitTransform, project, gridLines, GRID_STEP_M,
   streamEvidence,
 } from "./site-layer.js";
+import { NO_MAP_RETRY_MS, createPollGate } from "./poll-gate.js";
 
 export function createMapView({ el, view, auth, call, onMapChanged, onMapUnavailable }) {
   // D-359 §4 — 색·글꼴은 ui.js(window.RosyPalette)가 어떤 CSS 색이든 풀어 캐시한다.
@@ -18,6 +19,8 @@ export function createMapView({ el, view, auth, call, onMapChanged, onMapUnavail
   const GRID = { UNKNOWN: -1, FREE_MAX: 25, OCCUPIED_MIN: 65 };
   // Map tracking visualization only; relay evidence comes from the Fleet server.
   const TRACK_WARN_M = 0.3;     // 기본 간격(0.6 m)의 절반을 넘으면 주의 색을 쓴다.
+  // D-360 레이어 토글(field-view.js 가 view.layers 를 채운다). 값이 없으면 모두 켠다.
+  const layerOn = (key) => view.layers?.[key] !== false;
 
   function paintGrid(grid) {
     const canvas = el("map-canvas");
@@ -311,11 +314,12 @@ export function createMapView({ el, view, auth, call, onMapChanged, onMapUnavail
     ctx.lineWidth = 0.5;
     ctx.setLineDash([2, 1.5]);
     ctx.strokeStyle = css("--series-primary");
-    for (const entry of sitePolygons()) {
+    for (const entry of layerOn("site") ? sitePolygons() : []) {
       tracePolygon(ctx, entry.polygon_m, toCell);
       ctx.stroke();
     }
     ctx.restore();
+    if (!layerOn("sightings")) return;
     for (const s of view.sightings) drawSighting(ctx, s, toCell, size, 0.5);
   }
 
@@ -346,12 +350,12 @@ export function createMapView({ el, view, auth, call, onMapChanged, onMapUnavail
     ctx.lineWidth = 1;
     ctx.strokeStyle = css("--line-quiet");
     ctx.globalAlpha = 0.5;
-    for (const gx of gridLines(bounds.min_x, bounds.max_x, GRID_STEP_M)) {
+    for (const gx of layerOn("grid") ? gridLines(bounds.min_x, bounds.max_x, GRID_STEP_M) : []) {
       const a = toPx(gx, bounds.min_y);
       const b = toPx(gx, bounds.max_y);
       ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
     }
-    for (const gy of gridLines(bounds.min_y, bounds.max_y, GRID_STEP_M)) {
+    for (const gy of layerOn("grid") ? gridLines(bounds.min_y, bounds.max_y, GRID_STEP_M) : []) {
       const a = toPx(bounds.min_x, gy);
       const b = toPx(bounds.max_x, gy);
       ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
@@ -361,7 +365,7 @@ export function createMapView({ el, view, auth, call, onMapChanged, onMapUnavail
     // 사각형 + 치수 + 출처(source_id)
     ctx.save();
     ctx.font = labelFont;
-    for (const entry of sitePolygons()) {
+    for (const entry of layerOn("site") ? sitePolygons() : []) {
       tracePolygon(ctx, entry.polygon_m, toPx);
       ctx.globalAlpha = 0.08;
       ctx.fillStyle = css("--series-primary");
@@ -420,6 +424,7 @@ export function createMapView({ el, view, auth, call, onMapChanged, onMapUnavail
     }
     ctx.restore();
 
+    if (!layerOn("sightings")) return;
     for (const s of view.sightings) drawSighting(ctx, s, toPx, Math.max(7, t.scale * 0.09), 1.5);
     flushChips(ctx);
   }
@@ -459,7 +464,7 @@ export function createMapView({ el, view, auth, call, onMapChanged, onMapUnavail
     ctx.lineWidth = 0.6;
     view.robots.forEach((robot, index) => {
       const pose = robot.state && robot.state.pose;
-      if (!pose) return;
+      if (!pose || !layerOn("poses")) return;
       const color = view.colors[index % view.colors.length];
       const cell = worldToCell(grid, pose.x, pose.y);
       const cx = cell.col;
@@ -519,19 +524,35 @@ export function createMapView({ el, view, auth, call, onMapChanged, onMapUnavail
   async function refreshSiteMap() {
     try {
       view.siteMap = await call("/api/fleet/site-map");
+      el("map-stage").dataset.siteMap = "configured";
     } catch (err) {
       // NO_SITE_MAP — 카메라 사각형이 설정되지 않은 현장이다. 일시 실패면 직전 사각형을 둔다.
-      if (err.status === 404 && err.code === "NO_SITE_MAP") view.siteMap = null;
+      if (err.status === 404 && err.code === "NO_SITE_MAP") {
+        view.siteMap = null;
+        el("map-stage").dataset.siteMap = "none";
+      }
     }
+  }
+
+  // NO_MAP(지도를 내는 로봇 없음)은 기능 미설정이 아니라 "아직 없음"이다. 로봇이 나중에
+  // 지도를 낼 수 있으니 멈추지 않고 30 s 간격으로만 다시 묻는다. 라우트 없음 404 는
+  // resetPolling()(로그인) 전까지 멈춘다. 일시 실패는 다음 5 s 주기에 다시 묻는다.
+  const mapGate = createPollGate({ slowCodes: { NO_MAP: NO_MAP_RETRY_MS } });
+
+  function resetPolling() {
+    mapGate.reset();
+    sightingsUnavailable = false;
   }
 
   async function refresh() {
     if (auth.locked) return;
     sightingsUnavailable = false;
     await refreshSiteMap();
-    if (auth.locked) return;
+    if (auth.locked || !mapGate.due()) return;
+    let mapFailure = "retry";
     try {
       const grid = await call("/api/fleet/map");
+      mapGate.ok();
       view.map = grid;
       el("map-stage").dataset.mapState = "ready";
       el("map-empty").hidden = true;
@@ -542,6 +563,7 @@ export function createMapView({ el, view, auth, call, onMapChanged, onMapUnavail
       onMapChanged();
     } catch (err) {
       view.map = null;
+      if (!auth.locked) mapFailure = mapGate.fail(err.status, err.code);
       if (view.siteMap && !auth.locked) {
         // 점유 격자 없이 카메라 사각형만 있다 — 관측 전용 뷰. 목표 지정은 계속 막힌다.
         const canvas = el("map-canvas");
@@ -562,8 +584,16 @@ export function createMapView({ el, view, auth, call, onMapChanged, onMapUnavail
       canvas.tabIndex = -1;
       canvas.classList.add("idle");
       el("map-stage").dataset.mapState = "unavailable";
-      el("map-empty-title").textContent = "지도를 확인할 수 없습니다";
-      el("map-empty-detail").textContent = "Fleet 지도 연결과 등록 로봇 상태를 확인하세요.";
+      if (mapFailure === "slow") {
+        el("map-empty-title").textContent = "지도를 보내는 로봇이 없습니다";
+        el("map-empty-detail").textContent = "로봇이 지도를 내면 30초 안에 표시합니다.";
+      } else if (mapFailure === "absent") {
+        el("map-empty-title").textContent = "지도 미설정";
+        el("map-empty-detail").textContent = "이 Fleet에는 현장 지도 기능이 없습니다.";
+      } else {
+        el("map-empty-title").textContent = "지도를 확인할 수 없습니다";
+        el("map-empty-detail").textContent = "Fleet 지도 연결과 등록 로봇 상태를 확인하세요.";
+      }
       el("map-empty").hidden = false;
       syncLegend("none");
       el("map-tag").textContent = "맵 없음";
@@ -595,5 +625,5 @@ export function createMapView({ el, view, auth, call, onMapChanged, onMapUnavail
     draw();
   }
 
-  return { draw, refresh, refreshSightings, toWorld, streamEvidence };
+  return { draw, refresh, refreshSightings, resetPolling, toWorld, streamEvidence };
 }

@@ -1,23 +1,41 @@
-"""Capture the front camera and publish a bounded CORE preview, without motion nodes."""
+"""Capture the front camera and publish a bounded CORE preview, without motion nodes.
+
+The line observer is observation-only too (D-2): it publishes line/observation for
+CORE's camera line-follow (D-344 §9) and never commands the wheels."""
 
 import os
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument
+from launch.actions import DeclareLaunchArgument, LogInfo
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
+
+from control.ir_overlay import usable_overlay
 
 
 def generate_launch_description():
     config = os.path.join(get_package_share_directory('control'), 'config')
     namespace = LaunchConfiguration('namespace')
+    line_params = [os.path.join(config, 'line_follow.yaml')]
+    # D-344 §12: optional per-robot IR calibration overlay, validated here so a
+    # malformed file is skipped (IR_LINE stays fail-closed) instead of crash-looping
+    # the observer that CORE's camera line-follow depends on.
+    overlay, overlay_note = usable_overlay()
+    if overlay is not None:
+        line_params.append(overlay)
     return LaunchDescription([
         DeclareLaunchArgument('namespace', default_value=''),
+        LogInfo(msg=f'IR calibration overlay: {overlay_note}'),
         Node(
             package='control', executable='camera_detect_node', namespace=namespace,
             output='screen', respawn=True, respawn_delay=2.0,
             parameters=[os.path.join(config, 'camera.yaml'), {'camera_backend': 'picamera2'}],
+        ),
+        Node(
+            package='control', executable='line_observer_node', namespace=namespace,
+            output='screen', respawn=True, respawn_delay=2.0,
+            parameters=line_params,
         ),
         Node(
             package='control', executable='road_observer_node', namespace=namespace,

@@ -192,3 +192,37 @@
 - gate 변화: 없음.
 - 결정: 설계가 바뀌면 새 전략 파일 1개 — manager·ChargingConfirmation 본체 불변.
 - 교훈: Protocol 봉합점의 구현 비용이 0이라는 것을 몸으로 확인했다 (기존 시험 한 건도 안 깨짐).
+
+## 2026-09-30 · uncommitted · fix(docking): D-353 뒤끝 — 도크 계약 시험을 poll_json 경로로 재연결
+
+- 변경: D-353이 DockAgent._parse를 core_common.device_poll.poll_json으로 옮기면서 test/test_dock_contract.py의 "문서 payload가 클라이언트처럼 파싱된다" 시험이 깨졌다( AttributeError: _parse). poll_json을 monkeypatch로 갈아끼워 HTTP 없이 실제 매핑 경로(문서→DockStatus)를 돌리도록 재작성했다. agent.py의 중복 import(같은 줄 2회, 머지 흔적)도 제거.
+- 증거: test_dock_contract 7 passed(전체), services 스위트 265 passed, 경계 수비·target·목표증거 등록부 포함 99 passed (2026-09-30 Windows). poll_json 자체는 test_design_seams가 이미 소유.
+- gate 변화: 없음.
+- 결정: 없음.
+- 교훈: 파싱을 공용 계층으로 옮길 때 그 계층을 소비하는 계약 시험까지가 한 변경 단위다.
+
+## 2026-09-30 · e3eb2561 · feat(line-follow): 조향을 아는 앞 물체 정지(path)와 수동 한도 계단 각속도 상한
+
+- 변경: `core_features/line_follow/clearance.py` 에 `scan_points`(LiDAR → 로봇 좌표 점, `lidar_forward_deg` 반영)와 `path_clearance`(의도 (linear, angular) 의 짧은 호 둘레 ±half_width 띠 안 점까지의 호 길이, 호는 horizon 과 90° 중 짧은 쪽, 선속도 0 이면 제자리 회전) 추가. `manager.py` — `observe_scan_points` 가 점을 받고 틱이 의도 조향(관측 + IR 비킴)으로 여유 거리를 재서 기존 stop/resume 떨림 방지를 그대로 쓴다. 쓸 관측이 없으면 마지막 의도. 새 설정 `obstacle_mode`(path 기본 | sector), `obstacle_corridor_half_width_m` 0.09, `obstacle_path_horizon_m` 0.40(≥ resume), `max_angular_follows_manual` true. `angular_ceiling` 콜백(서비스가 `safety.limits.manual_angular` 연결)으로 유효 상한 = min(max_angular, 수동 한도); 자를 때 선속도도 같은 비율(곡률 유지), 한도 0·NaN·예외면 `angular_limit_zero` HOLD. 조향 계산은 `_steer` 하나로 모았다.
+- 증거: 새 `src/runtime/gateway/test/test_line_follow_obstacle_path.py` 18 passed — 모서리 벽 0.2 m 앞에서 왼쪽으로 크게 돌면 정지 없음, 같은 장면 sector·직진은 정지, 호 위 상자는 정지·떨림 방지·재출발, LiDAR 끊김 HOLD, 계단 L0 0.10→L1 0.30 즉시 추종, 덮어쓰기, IR 비킴 상한. `pytest src/runtime/gateway/test -k "line_follow or clearance or ir"` 247 passed, 5 skipped (2026-09-30 Windows).
+- gate 변화: SOURCE 진행. ROS-SIM(가제보 L 모서리 0.20 m 기본값으로 한 바퀴)·DEVICE 미실행.
+- 결정: D-344 §11 보강, §13.
+
+## 2026-09-30 · 794e75bb · fix(line-follow): 검토 반영 — sector 기본, 급회전 창·near-field, 풀림 지연, L1 문턱
+
+- 변경: `obstacle_mode` 기본 `sector`(사용자 결정 — path 는 가제보 한 바퀴·실물 LiDAR 좌우 확인 뒤). `path_clearance` 회전각 창 max(90°, resume/R)·최대 180°, 0..180° 띠 안이고 `obstacle_stop_m` 안인 점은 직선 거리로 센다, 제자리 회전은 정지 거리 안 점. 막힘은 `obstacle_release_s`(0.2) 동안 계속 비어야 풀린다(path). 관측 전에는 호를 재지 않는다(WAITING). `obstacle_ahead` 가 `obstacle_escalate_s`(5) 이어지면 `nav.line_obstacle_hold` 한 번. 살아 있는 `manual_angular` < `lane_auto_min_manual_angular`(0.30 = L1)면 `limit_level_too_low` HOLD.
+- 증거: `test_line_follow_obstacle_path.py` 21 passed — 0.18 m 벽(직진 정지·돌기 추종 한 시험), range_min 0.15 m 급회전 상자(옛 창은 못 봄), 제자리 회전, 풀림 지연, 의도 교대 떨림 없음(지연을 0 으로 두면 20 틱 중 10 번 출발 — 변이 확인), 띠 안 벽 LOST 없이 HOLD + 사건 한 번, 관측 전 WAITING, 잃은 시야에서 마지막 의도, L0 거절·L1 출발. (2026-09-30 Windows)
+- gate 변화: SOURCE. ROS-SIM·DEVICE 미실행.
+- 결정: D-344 §11 보강, §13.
+
+## 2026-09-30 · 61c25393 · fix(line-follow): 재검토 R1·R2 — 풀림 지연은 연속 측정만, 모드 선택마다 새 앞 물체 세션
+
+- 변경: (R1, 08e791af) 틱이 호를 재지 않으면(LiDAR 끊김·계단 정지·한도 0·OFF·관측 전) 풀림 지연 시작점을 지운다 — 끊김 앞의 빈 측정이 풀림에 세지지 않는다. 틱 본문을 `_tick_locked` 로 옮기고 `finally` 에서 지운다. (R2, 61c25393) `set_mode` 가 막힘·지연·정지 시작·알림 여부를 지운다. sector 는 마지막 거리가 재출발 거리 안이면 막힌 채 시작한다(다음 스캔 전 한 틱도 가지 않게). (R3, c673f6cd) `max_angular_follows_manual: false` 는 L1 문턱을 우회하지 않고, 문턱을 끄는 것은 `lane_auto_min_manual_angular: 0` 뿐이라고 설정 주석·D-344 에 적었다.
+- 증거: `test_line_follow_obstacle_path.py` 24 passed — LiDAR 0.6 s 끊김 뒤 지연 재시작(`finally` 의 지우기를 빼면 빨강), 재선택 뒤 두 번째 정지가 두 번째 `nav.line_obstacle_hold`(R2 를 빼면 빨강), sector 재선택 막힘 유지(R2 를 빼면 빨강), 덮어쓰기로 문턱 못 넘음. gateway `-k line_follow` 85 passed, 3 skipped ×3 (2026-09-30 Windows; 부하 중 한 번 1 failed 가 있었으나 세 번 다시 돌려 재현 안 됨).
+- gate 변화: SOURCE.
+- 결정: D-344 §11 보강, §13.
+
+## 2026-09-30 · uncommitted · refactor(line_follow): 데이터 모델을 model.py 로 분리(파일 예산)
+- 변경: `core_features/line_follow/manager.py`(704 행, 예산 600) 에서 `LineFollowMode`·`LineObservation`·`LineFollowConfig`·`LineFollowDecision`·`_finite` 를 `line_follow/model.py` 로 옮겼다. manager 는 잠금 한 개를 가진 주인(tick·observe·set_mode·물체/IR/계단 게이트)만 남는다(561 행). manager 가 같은 이름을 다시 내보내 기존 import 는 그대로다. docking/model.py 선례(크기 예외가 아니라 분리).
+- 증거: `pytest src/runtime/gateway/test -k "line_follow or clearance or ir"` 통과, `test/architecture/test_module_structure.py` 통과, pyflakes 깨끗.
+- gate 변화: 없음(동작 불변).

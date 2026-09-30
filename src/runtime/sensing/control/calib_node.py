@@ -33,75 +33,16 @@ from control.sensing.lidar import NOSE_YAW, is_robot_scan, sector_range
 from control.safety_node import parse_us_range, roll_pitch
 from control.calibration_storage import merge_calibration, single_calibration_path, calibration_revision
 from control.calibration_record import validate_context, runtime_calibration_path
+from control.calibration_sequence import (
+    _copy_scan,
+    approach_heading,
+    ir_valid,
+    looks_cliff,
+    looks_floor,
+    snap_lidar_yaw,
+    yaw_from_quat,
+)
 from control import executor_choice
-
-
-def yaw_from_quat(q) -> float:
-    siny_cosp = 2.0 * (q.w * q.z + q.x * q.y)
-    cosy_cosp = 1.0 - 2.0 * (q.y * q.y + q.z * q.z)
-    return math.atan2(siny_cosp, cosy_cosp)
-
-
-def ir_valid(sample):
-    return tuple(int(v) for v in sample if 50 < int(v) < 4000)
-
-
-def looks_floor(sample) -> bool:
-    v = ir_valid(sample)
-    return bool(v) and len(v) >= 2 and min(v) >= 1500
-
-
-def looks_cliff(sample, floor_m) -> bool:
-    v = ir_valid(sample)
-    if not v:
-        return False
-    return min(v) < min(1100.0, 0.40 * float(floor_m))
-
-
-def _copy_scan(msg: LaserScan):
-    return (
-        float(msg.angle_min),
-        float(msg.angle_increment),
-        [float(r) for r in msg.ranges],
-        float(msg.range_min),
-        float(msg.range_max),
-    )
-
-
-def approach_heading(s0, s1):
-    if s0 is None or s1 is None:
-        return None
-    amin, ainc, r0, rmin, rmax = s0
-    _, _, r1, _, _ = s1
-    n = min(len(r0), len(r1))
-    sx = sy = wsum = 0.0
-    hi = min(rmax, 6.0)
-    for i in range(n):
-        v0, v1 = r0[i], r1[i]
-        if not (math.isfinite(v0) and math.isfinite(v1)):
-            continue
-        if not (rmin < v0 < hi and rmin < v1 < hi):
-            continue
-        dr = v1 - v0
-        if dr >= -0.006:
-            continue
-        w = -dr
-        ang = amin + i * ainc
-        sx += w * math.cos(ang)
-        sy += w * math.sin(ang)
-        wsum += w
-    if wsum < 0.012:
-        return None
-    return math.atan2(sy, sx)
-
-
-def snap_lidar_yaw(ang: float) -> float:
-    a = math.atan2(math.sin(ang), math.cos(ang))
-    if abs(a) < math.radians(40.0):
-        return 0.0
-    if abs(abs(a) - math.pi) < math.radians(40.0):
-        return math.pi
-    return a
 
 
 class CalibNode(Node):

@@ -1,11 +1,11 @@
 ---
 module: omx_adapter
 owner: OMX workcell
-last_verified: { commit: "uncommitted", date: 2026-09-26 }
+last_verified: { commit: "0dcccd0a", date: 2026-09-30 }
 gates:
   SOURCE:
     state: GO
-    evidence: "140 OMX adapter/profile/vendor-boundary tests passed, 3 skipped. SOURCE adds peer-UID-checked bounded UDS request handling, a disabled-by-default local Action runner, Fleet-issued action/attempt IDs, durable UNKNOWN behavior, and no replay after submission intent. Driver remains an injected port; disabled OMX-AI profile stays empty-contract."
+    evidence: "200 OMX adapter/profile/vendor-boundary tests passed, 3 skipped. SOURCE includes typed 3D RGB-D plan contracts, complete timed multi-waypoint validation, typed ROS goal events, and atomic first phase intent/parent acceptance persistence with restart-to-UNKNOWN behavior. The ActionRunner/ROS phase coordinator remains unwired; no production planner or Fleet phase receipt integration exists."
     cmd: "python -B -X utf8 -m pytest src/products/omx/adapter/test src/products/omx/profile/test test/test_omx_vendor_stack_lock.py test/test_omx_host_inventory.py test/test_omx_multi_preflight.py test/test_dds_identity_contracts.py -q -p no:cacheprovider"
   LOCAL:
     state: GO
@@ -23,9 +23,10 @@ gates:
     blocker: "No OMX-AI, leader/follower OpenRB, or workcell camera is connected for physical acceptance"
   FIELD:
     state: PARKED
-adrs: [D-61, D-147, D-168, D-273, D-282]
+adrs: [D-61, D-147, D-168, D-273, D-282, D-336, D-369, D-376]
 plans:
   - docs/plans/2026-09-15-module-harness-design.md
   - docs/plans/2026-09-26-omx-ai-workstation-runtime.md
   - docs/plans/2026-09-29-er2-semantic-actions-mission-implementation.md
+  - docs/plans/2026-09-30-omx-pick-place-local-execution.md
 ---

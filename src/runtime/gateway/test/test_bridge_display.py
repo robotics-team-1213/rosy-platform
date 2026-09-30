@@ -12,9 +12,10 @@ from types import SimpleNamespace
 from core.bridge import display
 
 
-def _snapshot(percent=87.6543, voltage=7.8912, estop=False):
+def _snapshot(percent=87.6543, voltage=7.8912, estop=False, charging=False):
     return SimpleNamespace(
         battery=SimpleNamespace(percent=percent, voltage=voltage),
+        battery_status=SimpleNamespace(charging=charging),
         robot_id="rosy_01",
         mode=SimpleNamespace(value="IDLE"),
         navigation=SimpleNamespace(value="ARRIVED"),
@@ -76,6 +77,17 @@ def test_payload_carries_hitl_request_to_the_robot_face():
         snapshot, _status(), health="DEGRADED", address="x", hold_s=1.0)
 
     assert payload["hitl_requested"] is True
+
+
+def test_charging_reads_the_confirmed_status_not_the_raw_reading():
+    """D-351: the screen shows the D-27 confirmed-charging judgment
+    (`battery_status.charging`), not a probe of the raw `Battery` reading —
+    that model carries only percent/voltage, so the old getattr default
+    answered False forever and the screen could never say charging."""
+    payload = display.info_payload(
+        _snapshot(charging=True), _status(), health="OK", address="x", hold_s=0.0)
+
+    assert payload["charging"] is True
 
 
 def test_address_prefers_the_routed_interface():

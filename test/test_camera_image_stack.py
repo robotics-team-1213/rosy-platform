@@ -89,7 +89,9 @@ def test_camera_capture_and_preview_start_on_first_boot_without_motor_access():
     assert "dialout" not in unit and "rosy-motor" not in unit and "cmd_vel" not in launch
     assert "camera_backend': 'picamera2'" in launch
     assert "camera_detect_node" in launch and "road_observer_node" in launch
-    assert "line_observer_node" not in launch and "ir_adc_node" not in launch
+    # D-344 §9: 관측 전용 line_observer 는 허용(line/observation 만 낸다). IR ADC·모터는 여전히 금지.
+    assert "line_observer_node" in launch
+    assert "ir_adc_node" not in launch
 
 
 def test_camera_stack_verifier_rejects_missing_payload_and_changed_provenance(tmp_path):

@@ -12,6 +12,8 @@
     <arg name="camera_width" default="1280"/>
     <arg name="camera_height" default="720"/>
     <arg name="camera_update_rate" default="10"/>
+    <arg name="camera_hfov" default="1.1519"/>
+    <arg name="cam_mount_z" default="0.0495"/>
     <arg name="spawn_x" default="0.0"/>
     <arg name="spawn_y" default="0.0"/>
     <arg name="spawn_z" default="0.1"/>
@@ -42,6 +44,8 @@
         <arg name='camera_width' value='$(var camera_width)'/>
         <arg name='camera_height' value='$(var camera_height)'/>
         <arg name='camera_update_rate' value='$(var camera_update_rate)'/>
+        <arg name='camera_hfov' value='$(var camera_hfov)'/>
+        <arg name='cam_mount_z' value='$(var cam_mount_z)'/>
     </include>
 
     <node pkg="ros_gz_sim" exec="create" name='create' output='screen' args="-name $(var robot_name) -topic $(var namespace)/robot_description -x $(var spawn_x) -y $(var spawn_y) -z $(var spawn_z) -Y $(var spawn_yaw)">

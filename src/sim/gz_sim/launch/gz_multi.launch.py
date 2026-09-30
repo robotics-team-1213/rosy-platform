@@ -66,6 +66,10 @@ def _core_config(ns: str, api_port: int) -> dict:
     return {
         "robot": {"id": ns, "name": f"Rosy {number}"},
         "network": {"api_host": "127.0.0.1", "api_port": api_port},
+        # 시뮬은 조속 프리셋(low/mid/high)이 의미 있도록 상한을 연다.
+        # 실기 상한은 장치 프로필/호스트 설정이 그대로 적용된다(여기는 영향 없음).
+        "max_linear": 0.6,
+        "max_angular": 2.0,
     }
 
 

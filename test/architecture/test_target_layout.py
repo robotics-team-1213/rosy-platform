@@ -27,11 +27,13 @@ TARGET = {
     "hmi/face": "hmi/face",
     "hmi/web_common": "hmi/web_common",
     "hmi/dashboard": "hmi/dashboard",
+    "hmi/pilot": "hmi/pilot",
     "site/fleet": "site/fleet",
     "site/games": "site/games",
-    "site/overhead": "site/overhead",
+    "site/vision": "site/vision",
     "sim/description": "sim/description",
     "sim/gz_sim": "sim/gz_sim",
+    "sim/isaac_sim": "sim/isaac_sim",
 }
 
 TARGET_DOMAINS = {"contracts", "runtime", "drivers", "products", "hmi", "site", "sim"}

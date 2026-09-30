@@ -109,6 +109,7 @@
 | `core_events` | 3 | 5 | 3 | 4 | 5 | 79 | A | 시험 예외 (D-168 P2) |
 | `sensor_adc` | 3 | 5 | 3 | 4 | 5 | 79 | A | 기기 전용 ※ |
 | `overhead` | 5 | 4 | 4 | 3 | 3 | 79 | A | D-261 `site/overhead` 신규, 잠정 채점(2026-09-26) · Python 수신기 + 안드로이드 앱 한 모듈(공통 벡터가 경계 시험) · `python3-websockets` 선언이 apt 10.x라 실제 필요(≥14, pip)와 어긋남 |
+| `pilot` | 4 | 4 | 4 | 3 | 4 | 77 | A | D-323 `hmi/pilot` 신규, 잠정 채점(2026-09-30) · 자기 시험·가짜 CORE(dev_server)·브라우저 시험 opt-in · `drive.js` 예산 판정 1건 · 공용 컨트롤 계약 미적용(surfaces.yaml 사유) |
 | `dashboard` | 4 | 4 | 3 | 4 | 3 | 73 | B | D-243 `hmi/dashboard` 신규, 잠정 채점(2026-09-25) · 브라우저 시험 opt-in · `dashboard_assets` 선언 1건 |
 | `imu_bno055` | 3 | 5 | 3 | 4 | 3 | 73 | B | 기기 전용 ※ · 인바운드 미선언 1건 |
 | `gz_sim` | 3 | 4 | 3 | 4 | 4 | 71 | B | launch 경유 `control`·`core`는 선언=실제(정정), `navigation` 중복 선언 1건 |

@@ -58,7 +58,7 @@ class SiteHub:
         # link unavailable for that robot; never fall back to the REST token.
         self._tokens = {e.robot_id: e.fleet_pairing_token for e in endpoints
                         if e.fleet_pairing_token is not None}
-        self._clients = clients or {}
+        self._clients = clients if clients is not None else {}
         self._paired: set[str] = set()
         self.registry = RobotRegistry()
         self._fleet_name = fleet_name
@@ -68,6 +68,23 @@ class SiteHub:
 
     def set_event_callback(self, callback: Callable[[Mapping[str, object]], object]) -> None:
         self.event_callback = callback
+
+    def set_client(self, robot_id: str, client: RobotClient) -> None:
+        """SiteRoster only: a robot joined the roster after start (D-361 5)."""
+        self._clients[robot_id] = client
+
+    def set_pairing_token(self, robot_id: str, token: str) -> None:
+        """SiteRoster only: accept this robot's FleetAgent HELLO from now on."""
+        if not token:
+            raise ValueError("pairing token must be non-empty")
+        self._tokens[robot_id] = token
+
+    def drop(self, robot_id: str) -> None:
+        """SiteRoster only: forget the robot's client, pairing and live session."""
+        self._clients.pop(robot_id, None)
+        self._tokens.pop(robot_id, None)
+        self._paired.discard(robot_id)
+        self.registry.record(robot_id).online = False
 
     def handle(self, envelope: Envelope) -> Envelope:
         if _protocol_major(envelope.protocol_version) != _protocol_major(PROTOCOL_VERSION):

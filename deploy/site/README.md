@@ -105,6 +105,81 @@ contain these DNS SANs: the operator-facing FQDN, the stable Ubuntu host's
 Treat the URI as a credential: do not paste it into tickets, logs, or shell
 history. Use the QR/pairing screen over a trusted local channel.
 
+## Enroll a robot from the console (D-361)
+
+This is the default way to put a robot on the site roster. The operator powers
+the robot on, presses **등록** on its row in **기기 연결 → 로봇 등록** (or uses
+**주소로 추가** with a private `IPv4[:port]`, default port 8080, when multicast is
+blocked), and types the 8-character code shown on the robot LCD. Fleet itself
+calls the robot's `POST /api/v1/auth/pair`, reads `whoami` and `system/info` to
+check the identity, seals the token in the Fleet database and adds the robot to
+the roster. The browser never reaches the robot or sees the token. No SSH, no
+`robots.yaml` edit and no restart. Enrollment writes need a named operator in
+`site-users.yaml`; a single console token can read the panel only.
+
+Scope: this works without SSH only for robots with an LCD whose card keeps
+`login.boot_code` at its default (`operator`). Otherwise the code comes from an
+administrator enrollment code on the robot dashboard or from SSH
+`sudo rosy-login-code`. A new LCD code exists once per boot: the first
+enrollment, each token expiry (7 days on the current image, which ignores the
+site lifetime; 90 days after the S4 image) and each failure that consumed the
+code need a power cycle or an administrator code. Where many people can see
+the robot screens, set `login.boot_code: off` or a short `site_token_days`.
+
+Create the `robot_credential_key` secret once, before the first start:
+
+```bash
+umask 077
+python3 -c "import base64,os;print(base64.b64encode(os.urandom(32)).decode())" \
+  > "$ROSY_SITE_SECRETS_DIR/robot_credential_key"
+chown root:10001 "$ROSY_SITE_SECRETS_DIR/robot_credential_key"
+chmod 0640 "$ROSY_SITE_SECRETS_DIR/robot_credential_key"
+```
+
+It must be exactly one base64 line of 32 bytes and differ from every other
+site secret (`robot-credential-key.template.txt` shows the format only). Back
+the key up to a **different** place than the Fleet database backup: a database
+copy alone yields no token, and the two together restore every enrollment.
+Losing the key means re-enrolling every enrolled robot. A missing or wrong key
+does not stop Fleet: enrollment answers 503, enrolled robots stay off the
+roster for that run and `robots.yaml` robots keep working; fix the key and
+restart, no codes needed. Rotate the key offline with the Fleet service
+stopped, running the utility inside the Fleet image like backup and restore
+(`compose` is the helper from "Backup and restore operations"). Write the new
+key to a separate root-only file first; mount both keys read-only:
+
+```sh
+compose stop fleet
+compose run --rm --no-deps --user 10001:10001 \
+  -v "$ROSY_SITE_SECRETS_DIR/robot_credential_key:/keys/old.key:ro" \
+  -v "$ROSY_SITE_SECRETS_DIR/robot_credential_key.new:/keys/new.key:ro" \
+  --entrypoint python3 fleet /opt/rosy/site_db.py rekey \
+  --path /var/lib/rosy/fleet.sqlite3 --old-key-file /keys/old.key \
+  --new-key-file /keys/new.key --assume-stopped
+```
+
+Then replace `robot_credential_key` with the new file, back it up away from
+the database backup, and start Fleet. `rekey` refuses a database path that does
+not exist and a new key equal to the old one.
+
+The robot address is pinned at enrollment; reserve each enrolled robot's
+address in the router's DHCP table. When the same name appears at another
+address, Fleet marks the robot **주소 바뀜 — 확인 필요**, sends only stop
+requests to the pinned address, alarms if it was moving and holds overlapping
+traffic. Either unenroll and enroll again with a new code, or, as a named
+operator, **새 주소로 옮기기** after confirming the robot. **등록 해제** logs the
+token out on the robot; if the robot is unreachable the row stays
+**해제 대기** and Fleet tries the logout once when the robot reappears at its
+pinned address.
+
+The robot LAN carries codes and tokens in plain HTTP. Accept that only on an
+operator-only SSID/VLAN recorded in the site validation record; a shared LAN,
+routed networks, a central multi-site Fleet or more than 10 site robots need
+the robot CORE TLS ADR first. If a site token is stolen, revoke it on the robot
+dashboard (security panel, source "사이트"); until then it stays valid up to
+its expiry. The manual `robots.yaml` procedure below remains for static and
+simulated robots.
+
 ## Advertise and locate the Ubuntu Fleet PC
 
 Choose a stable Ubuntu hostname before issuing the certificate. Install

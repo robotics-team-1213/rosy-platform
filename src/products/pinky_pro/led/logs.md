@@ -36,3 +36,11 @@
 - gate 변화: 없음
 - 결정: D-231
 - 교훈: 없음
+
+## 2026-09-30 · uncommitted · docs(harness): ROS-SIM blocker를 실제 조건으로 정정 — cmd 경로도 현재 트리로
+
+- 변경: ROS-SIM blocker가 "Jazzy 컨테이너 재실행 필요"라고만 적혀 다음 회차를 불가능한 작업으로 보내었다. 실제 조건을 적었다: 노드의 `from rosylib import LED`는 공개 트리에서 의도적으로 실패한다(rosylib는 repo 밖 bench-only 헬퍼, bringup/test/test_rosylib_battery.py:140이 고정) — 사유 구현 반입 또는 stub 계약 결정이 선행 조건이다. SOURCE/LOCAL cmd의 옛 경로(src/led/test/...)도 현재 경로(src/products/pinky_pro/led/test)로 바로잡았다.
+- 증거: 현재 경로 시험 2 passed 3 skipped(ament linter 3종은 이 호스트에 없어 skip) (2026-09-30 Windows).
+- gate 변화: 없음 (HOLD 유지, blocker 사유만 정확화).
+- 결정: 없음.
+- 교훈: blocker 문구는 다음 회차의 작업 지시다 — "재실행 필요"가 실제로 불가능한 일이면 그 조건을 적어야 막힌 이유가 보인다.

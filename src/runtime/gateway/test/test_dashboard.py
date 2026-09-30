@@ -24,6 +24,18 @@ def dashboard_js(*, without: tuple[str, ...] = ()) -> str:
     )
 
 
+SHELL_SHEETS = ("styles.css", "console-detail.css")
+
+
+def dashboard_css() -> str:
+    """Both shell stylesheets concatenated, in link order (D-362 P1 split).
+
+    Same rationale as `dashboard_js`: a selector may live in either sheet, and
+    the cascade only means something in link order.
+    """
+    return "\n".join((WEB_ROOT / name).read_text(encoding="utf-8") for name in SHELL_SHEETS)
+
+
 
 def assert_storage_rule(bundle: str) -> None:
     """D-193 6: localStorage holds only a paired token, and only when asked to.
@@ -63,13 +75,18 @@ def test_dashboard_shell_is_served_with_accessible_landmarks(dashboard_client):
 
 def test_dashboard_assets_are_local_and_reference_runtime_contract(dashboard_client):
     css = dashboard_client.get("/dashboard/assets/styles.css")
+    detail = dashboard_client.get("/dashboard/assets/console-detail.css")
     script = dashboard_client.get("/dashboard/assets/app.js")
     headless = dashboard_client.get("/common/core_ui_logic.js")
 
     assert css.status_code == 200
     assert css.headers["content-type"].startswith("text/css")
+    assert detail.status_code == 200
+    assert detail.headers["content-type"].startswith("text/css")
     assert "--signal-danger" in css.text
-    assert "prefers-reduced-motion" in css.text
+    # The shell ships as two linked sheets (D-362 P1); the responsive rules
+    # live in the detail sheet, so both must serve.
+    assert "prefers-reduced-motion" in (css.text + detail.text)
 
     assert script.status_code == 200
     assert headless.status_code == 200
@@ -142,7 +159,7 @@ def test_dashboard_exposes_exclusive_ir_and_camera_line_follow_modes():
         assert f'id="{element_id}"' in html
     assert "/api/v1/line-follow" in script
     assert "/api/v1/line-follow/mode" in script
-    assert "lineFollowPending" in script
+    assert "lineFollow.pending" in script
 
 
 def test_dashboard_exposes_traffic_evidence_and_staged_policy_controls():
@@ -172,7 +189,7 @@ def test_dashboard_exposes_traffic_evidence_and_staged_policy_controls():
 def test_dashboard_exposes_authenticated_live_camera_preview():
     html = (WEB_ROOT / "index.html").read_text(encoding="utf-8")
     script = dashboard_js()
-    css = (WEB_ROOT / "styles.css").read_text(encoding="utf-8")
+    css = dashboard_css()
 
     for element_id in (
         "vision-panel", "vision-status", "vision-stage", "vision-frame",
@@ -222,7 +239,7 @@ def test_dashboard_assets_are_their_own_package():
 def test_dashboard_exposes_ros_domain_bandwidth_and_topology_panel():
     html = (WEB_ROOT / "index.html").read_text(encoding="utf-8")
     script = dashboard_js()
-    css = (WEB_ROOT / "styles.css").read_text(encoding="utf-8")
+    css = dashboard_css()
 
     for element_id in (
         "ros-network-panel",
@@ -259,7 +276,7 @@ def test_dashboard_draws_occupancy_map_path_and_click_goal():
     html = (WEB_ROOT / "index.html").read_text(encoding="utf-8")
     app = dashboard_js(without=("map.js",))
     mapper = (WEB_ROOT / "map.js").read_text(encoding="utf-8")
-    css = (WEB_ROOT / "styles.css").read_text(encoding="utf-8")
+    css = dashboard_css()
 
     for element_id in (
         "field-map-panel", "map-canvas", "map-status", "map-empty", "map-legend",
@@ -367,7 +384,7 @@ def test_dashboard_field_settings_use_click_handlers_not_form_submit():
 def test_dashboard_exposes_local_field_settings_not_fleet():
     html = (WEB_ROOT / "index.html").read_text(encoding="utf-8")
     script = dashboard_js()
-    css = (WEB_ROOT / "styles.css").read_text(encoding="utf-8")
+    css = dashboard_css()
 
     for element_id in (
         "field-settings-panel",
@@ -462,7 +479,7 @@ def test_dashboard_assets_are_compressed_for_the_robot_access_point(dashboard_cl
 
 def test_dashboard_drops_ornament_and_stacks_boot_stages():
     html = (WEB_ROOT / "index.html").read_text(encoding="utf-8")
-    css = (WEB_ROOT / "styles.css").read_text(encoding="utf-8")
+    css = dashboard_css()
 
     for token in ("eyebrow", "ambient-grid", "data-tone"):
         assert token not in html
@@ -483,8 +500,8 @@ def test_dashboard_drops_ornament_and_stacks_boot_stages():
 
 def test_dashboard_renders_inventory_states_from_the_server():
     """S6: 목록은 inventory. CAP-001은 게이트만. 이유는 서버가 준다."""
-    app = (WEB_ROOT / "app.js").read_text(encoding="utf-8")
-    css = (WEB_ROOT / "styles.css").read_text(encoding="utf-8")
+    app = dashboard_js()
+    css = dashboard_css()
 
     assert 'api("/api/v1/system/inventory")' in app
     assert "renderInventory" in app
@@ -504,9 +521,9 @@ def test_dashboard_binds_server_evidence_and_gates_stale_motion():
     호스트명·시계 같은 정적 텍스트는 대상이 아니다. 클라이언트는 임계값을
     다시 계산하지 않는다.
     """
-    app = (WEB_ROOT / "app.js").read_text(encoding="utf-8")
+    app = dashboard_js()
     dom = (WEB_ROOT / "dom.js").read_text(encoding="utf-8")
-    css = (WEB_ROOT / "styles.css").read_text(encoding="utf-8")
+    css = dashboard_css()
 
     channels = {
         "pose-x": "pose",
@@ -597,7 +614,8 @@ def test_dashboard_never_puts_a_token_in_a_url_or_the_console():
 
 
 def test_dashboard_websocket_reconnect_backs_off_and_honours_close_codes():
-    script = (WEB_ROOT / "app.js").read_text(encoding="utf-8")
+    # D-362 P1: the socket lives in state-socket.js now; pin it where it lives.
+    script = (WEB_ROOT / "state-socket.js").read_text(encoding="utf-8")
     assert "event.code === 4401" in script and "event.code === 4403" in script
     assert "RECONNECT_MAX_MS" in script and "session.reconnectDelayMs * 2" not in script
     assert "Math.min(delay * 2, RECONNECT_MAX_MS)" in script

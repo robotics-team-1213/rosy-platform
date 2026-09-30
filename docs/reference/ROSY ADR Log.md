@@ -1,4 +1,4 @@
-﻿# ROSY ADR Log
+# ROSY ADR Log
 ## Architecture Decision Records
 
 **Document ID:** ROSY-ADR-001
@@ -200,7 +200,7 @@
 | D-190 | 부팅 표시는 공식 Pinky Pro와 같게 동작한다 — 증거 먼저, 장치 편입은 한 변경에, 장치에서 즉석 수정하지 않는다 | Proposed |
 | D-191 | 이미지는 실기 평가표가 모두 PASS(또는 사람 대기)일 때만 배포한다 — 격차는 스토리 하나씩 저장소→이미지→카드로 닫는다 | Proposed |
 | D-192 | 하드웨어 런타임은 이미지에 들어간다 — UART4·LiDAR 드라이버·DYNAMIXEL SDK·rosylib·io unit을 굽고, 기본은 CORE-only와 무동작이다 | Proposed |
-| D-193 | 대시보드 로그인은 로봇 화면의 일회용 코드로 한다 — 장기 토큰은 화면에 띄우지 않고, 장치 기본값에는 로그인이 없다 | Proposed |
+| D-193 | 대시보드 로그인은 로봇 화면의 일회용 코드로 한다 — 장기 토큰은 화면에 띄우지 않고, 장치 기본값에는 로그인이 없다 | Proposed (D-352가 개정: pair-site 수명, operator 회수) |
 | D-194 | 브라우저 조작 부품은 한 벌이다 | Accepted |
 | D-195 | 치수와 진단 팔레트도 닫힌 집합이다 | Accepted |
 | D-196 | 로봇은 장치의 조합이다 — `src/devices/<계열>/`과 `src/robots/<robot>/`을 두고, 로봇 지식은 그 안에만 둔다 | Proposed |
@@ -339,6 +339,9 @@
 | D-338 | 브리지 콜백의 판정은 ROS-free 시블리가 소유하고 ros_bridge는 적응만 남는다 | Accepted (2026-09-24 구현·2026-09-29 기록; 소스 구조 원칙만, 실기 콜백 증거 별도) |
 | D-339 | 화면 제목과 폴더 이름은 역할을 드러낸다 — 패키지 이름은 그대로 두고 대응표를 시험으로 고정한다 | Accepted (표시 이름·폴더 경로·대응표; 패키지 이름 불변) |
 | D-340 | 설치형 앱은 웹 표면을 감싸는 셸로 만든다 — PWA가 먼저, Capacitor 셸은 저장소 루트 `apps/`에 둔다 | Proposed (방향·위치만; apps/·npm 프로젝트 미생성) |
+| D-342 | 실기 수동 한도는 녹화 증거로 한 계단씩만 올린다(L0 0.03·0.1 → L1 0.06·0.3 → L2 0.10·0.6) | Accepted (2026-09-29 절차; 이미지 기본값 불변) |
+| D-343 | Pilot 은 로봇이 찾아 준 이웃 목록으로 방(로비)을 보이고, 로봇 한 대에는 운전석 하나만 둔다 | Accepted (2026-09-29 설계; D-340 셸 조건 2 기록; 구현·장치 HOLD) |
+| D-344 | Pilot 의 자동 주행은 누르고 있는 동안만 진행하는 보조 자율이며, 스틱을 건드리면 즉시 수동이다 | Accepted (2026-09-29 설계; 가제보 검증 전 실기 금지) |
 | D-345 | D-280 디자인 철학은 사람이 보는 모든 표면에 같은 방식으로 적용한다 — 웹이 아닌 표면도 레지스트리·토큰 사본 검사·이름 규칙을 받는다 | Accepted (적용 범위·색 원본·이름·알림 규칙; D-280 원칙 불변); 라이트 팔레트 금지 문장은 D-359로 대체) |
 | D-346 | 병행 세션 충돌은 커밋 시점 검사로 막는다 — ADR 번호는 행 추가 즉시 선점하고 깨진 인코딩·중복 번호는 lint가 잡는다 | Accepted (2026-09-29, 저장소 도구·작업 규칙만) |
 | D-347 | capability 상태는 단일 생애 어휘로 말한다 — 조정된 플래그별 lifecycle(ready/activating[예약]/unavailable)를 두 표면이 같은 함수에서 낸다 | Accepted (2026-09-29, 계약·어휘만; 그래프 기동·신규 이벤트 없음) |
@@ -346,9 +349,28 @@
 | D-349 | 도크 자동 충전의 코드는 전부 준비됐다 — 남은 것은 물리 조립과 capabilities 전환뿐 | Accepted (2026-09-30, 준비 상태 기록; 실물 조립·D0–D5·분리력 실측은 별도 회차) |
 | D-350 | 도크 하드웨어는 세 단계로 붙는다 — 선만(계측 없음)·ESP32(2소스)·향상(온도·카메라) — 각 단계에서 소프트웨어가 하는 일을 미리 정한다 | Accepted (2026-09-30, 단계 계약·선구현 착수; 실물 조립은 별도 회차) |
 | D-351 | 도킹 재시도는 실패 종류를 가린다 — 도달 못 함은 재시도, 도달했는데 전류 없음은 즉시 폴트, 충전 중 단절은 DOCKED 유지 | Accepted (2026-09-30, 행동 결정 + 구현) |
-| D-357 | ER 2 consumes bounded Fleet feedback and returns candidates while Mission/device control remain independent | Accepted (2026-09-30, standard provider feedback/tool-result boundary only; autonomous dispatch and physical acceptance remain HOLD) |
-| D-358 | ER 2 feedback turns use trusted scope, fenced candidates, and explicit ambiguity | Accepted (2026-09-30, D-357 implementation contract refinement only; provider, policy dispatch, ROS/OMX, and physical acceptance remain HOLD) |
 | D-352 | 도크·신호등은 같은 패턴의 외부 장비다 — 폴링 실패 어휘·준비 프레임(wire/instrumented/verified)·계약 상호 참조를 공유한다 | Accepted (2026-09-30, 구조 결정 + 패턴 정리) |
+| D-353 | 외부 장비 설계는 바뀐다 — 바뀌어도 코드가 아니라 설정·전략이 바뀌게 한다 | Accepted (2026-09-30, 구조 결정 + 봉합점 3개 구현) |
 | D-354 | 외부 장비는 mDNS로 서로를 찾는다 — IP 하드코딩 없이, 전원만 연결하면 발견된다 (_rosy-dock._tcp·_rosy-signal._tcp) | Accepted (2026-09-30, 구조 결정 + 펌웨어·유틸리티 구현) |
 | D-355 | 도크·외부 장비 구현은 자재→벤치→실기→활성화→통합의 5단계로 간다 — 각 단계의 게이트·의존성·완료 조건을 확정한다 | Accepted (2026-09-30, 실행 순서 확정; 구현은 플랜 참조) |
+| D-356 | 인식 학습 루프 — 학습은 저장소 밖, manifest 약속·접수·데이터 세대 전달·섀도 추론은 안 | Proposed (2026-09-30, 섀도 전용; 주행 활성화는 D-205 P3 뒤 별도) |
+| D-357 | ER 2 consumes bounded Fleet feedback and returns candidates while Mission/device control remain independent | Accepted (2026-09-30, standard provider feedback/tool-result boundary only; autonomous dispatch and physical acceptance remain HOLD) |
+| D-358 | ER 2 feedback turns use trusted scope, fenced candidates, and explicit ambiguity | Accepted (2026-09-30, D-357 implementation contract refinement only; provider, policy dispatch, ROS/OMX, and physical acceptance remain HOLD) |
 | D-359 | 테마는 팔레트 한 블록만 바꾼다 — 토큰을 팔레트·파생·역할로 나누고, 공용 부품이 표면별 사본을 대체하며, 반응형은 세 단 어휘를 쓴다 | Accepted (2026-09-30, 웹 토큰 구조·공용 부품·반응형·계약 시험; D-345의 라이트 팔레트 금지 문장 대체; 네이티브·LCD는 dark 고정) |
+| D-360 | 천장 카메라 경기장 자동 검출은 제안일 뿐이다 — Vision이 네 모서리를 제안하고, 관제는 운용자가 확인한 모서리로 보정·마스킹한 경기장 뷰를 보여 준다 | Proposed (검출 위치·제안 API·불일치 표시·레이어 토글; 사이트 설정·sighting 반영 미결정) |
+| D-361 | 사이트 콘솔이 로봇 화면 코드로 로봇을 등록한다 — Fleet이 코드를 로봇에서 직접 교환하고, 자격은 Fleet 소유 저장소에 둔다 | Proposed (등록 흐름·자격·결속·저장·수명 결정만; 구현·CORE 이미지·TLS·DEVICE/FIELD 수용 아님) |
+| D-362 | 파일 크기 예산은 코드 유형별 단일 게이트가 지킨다 — 생산 `.py`/`.cpp`/`.hpp`/`.sh` 600줄, 웹 자산 `.js`/`.html`/`.css` 800줄, 1000줄 초과 파일은 성장 허용량 0; 게이트는 `src/` 패키지와 `deploy/`·`tools/`·`firmware/`까지 본다. 줄 수는 분할 근거가 아니라 `split`/`accept` 판정 의무의 트리거다 (X1 계승, D-168 P6 확장) | Accepted (2026-09-30, 정책·게이트 범위만; 시험 코드·데이터 파일 면제, 분할 실행은 계획 `2026-09-30-file-size-budget-and-refactor-queue.md`의 P0–P2 대기열) |
+| D-363 | 주행 화면의 카메라는 원본 비율 그대로 잘림 없이 보이고, 조작부·HUD 는 영상을 가리지 않으며, 현장 운용은 설치 앱으로 연다 | Accepted (2026-09-29 화면; D-323 §5.2 풀블리드 변경; 운전자 배율 확대 보강) |
+| D-364 | 차선 자동은 선을 따라가는 것이 아니라 차로 안을 지키는 것이며, 인식은 녹화 재생 벤치와 헤드리스 가제보에서 먼저 통과한다 | Accepted (2026-09-30 설계; 실물은 로봇 복귀 뒤 승인 핫픽스) |
+| D-365 | Rosy Pilot 설치형은 PWA로 우선하고 Capacitor 래퍼는 네이티브 전용 수요가 실측될 때까지 보류한다 | Accepted (설치 형식 결정; 구현·장치·현장 수용 별도 HOLD) |
+| D-366 | Rosy Pilot 조종 대상 확장은 기기 종류별 드라이버 레지스트리로 수용하며, 장치별 조종 컨트롤(그리퍼·팔 위치 등)은 그 장치의 계약이 열 때 프런트에 반영한다 | Accepted (로드맵·프런트 경계 결정; Pinky 가제보 최우선, 타 장치 수용은 각 게이트별) |
+| D-367 | Rosy Pilot 의 체감 응답속도는 카메라 폴링 150ms·명령 루프 100ms·햅틱 10ms 로 잡는다 | Accepted (응답속도 설계; 실측 teleop 5ms 근거) |
+| D-368 | 운전 중인 한 사람에게만 인증된 MJPEG 실시간 영상을 주고, 그동안만 로봇 미리보기 발행을 올린다 | Accepted (2026-09-29 설계; D-367 결정 1 대체, D-323 §5 부분 변경; 구현·장치 HOLD) |
+| D-369 | Mission 제어·장치 실행·ROS 제어·안전 정지의 책임을 분리한다 | Accepted (2026-09-30, 사용자 확인 역할 경계; API 변경·provider/OMX 활성화·실물 수용 아님) |
+| D-370 | 앱과 표면은 한 역할씩 맡는다 — 역할·이름·아이콘·화면 소유를 한 표로 고정하고, 발견·기기 연결·실패 어휘는 공유 벡터로 하나로 맞춘다 | Proposed (2026-09-30, 역할·이름·아이콘·화면 소유 규칙과 공유 조각·이행 순서만; 코드·리소스·와이어 변경 없음) |
+| D-371 | 목록 행의 되돌릴 수 없는 행동은 조용한 버튼으로 시작하고, 위험 채움은 확인 단계에만 둔다 | Accepted (2026-09-30, 목록 행 한정; 비상정지·단일 대상·확인 실행 버튼은 위험 채움 유지; D-292/D-359 좁힘) |
+| D-372 | 브랜치·worktree 이름은 처음부터 내용대로 짓고, 공유 main 체크아웃의 남의 작업은 지우지 않고 보존만 한다 — 접두어+주제(+ADR 항목), 한 브랜치 한 주제; 미커밋 남의 작업은 임시 인덱스로 주제별 브랜치에 보존·해시 검증, 되돌리기는 사용자 승인+24시간 무수정일 때만 | Accepted (2026-09-30, 작업 규칙만; D-346 규칙 5 확장) |
+| D-374 | 앱의 폴더·패키지·식별자·표시 이름은 역할 이름 하나에서 나온다 — 역할 id(kebab)·snake·compact·표시 네 표기; 와이어 계약 이름(mDNS 종류, `rosy-overhead/1`, `/api/fleet`·`/api/vision`, `rosyov://`, 웹 경로, 설정·저장소 키, compose 서비스)은 바꾸지 않는다 | Accepted (2026-09-30, 사용자 결정: 규칙·대응표 그대로, 관제 화면 안 B(화면 자산만 `site_console`, 서비스 `fleet` 유지), 폰 재설치·재페어링 1회 수용, games·제어 진단·시뮬 라이브 뷰는 지금 제외; D-370 2항 "식별자 그대로" 대체, D-339 1항·D-231 2항을 앱 패키지에 한해 대체; 실행은 계획의 단계별 브랜치) |
+| D-380 | 램프는 로봇 상태(D-260)에 이어 운용 모드도 밝힌다 — CORE가 status-inputs 핸드오버에 RobotMode를 더해 넘기고, 같은 규칙표(core_common.robot_state)가 우선순위(실패 > 비상정지 > 주의 > 부팅 > 도킹 > 내비게이션 > 수동 > 준비)대로 램프 패턴과 LCD 상태줄 접미를 정한다. 모드 변경은 소리 없이 패턴만 바꾼다 | Accepted (2026-09-30, 램프·LCD가 건강 상태만 말하고 운용 모드는 대시보드에만 있던 갭; lamp_pattern.c에 manual/navigating/docking/emergency 추가, 부저는 D-260 결정 2의 건강 상태 전환에만 그대로) |
+| D-376 | OMX PICK_PLACE planning stays local and trajectory execution stays with the Action owner | Accepted (2026-09-30, SOURCE contract and fail-closed planner gate only; production planner configuration, profile activation, ROS-SIM, DEVICE/FIELD acceptance remain HOLD/PARKED) |
+| D-377 | 앱 이름 규칙: Rosy + 영어 한 단어 — 표시 이름 `Rosy <Word>`, id·폴더 끝 `<word>`, 패키지 `rosy_<word>`, Android `io.github.livsbittt.rosy.<word>`, Gradle `rosy-<word>`, 아이콘 `<word>.svg`; Rosy Cam·Vision·Console·Robot·Pilot | Accepted (2026-09-30, 사용자 결정; D-370 2항 이름표와 D-374 1·2항(규칙·대응표, `rosy_` 접두 금지 포함) 대체; D-374 3–5항(와이어 불변·재페어링·단계 게이트) 유지; Vision 실행 파일 `rosy-vision`, 옛 `site_vision`·`overhead`는 한 릴리스 별칭) |

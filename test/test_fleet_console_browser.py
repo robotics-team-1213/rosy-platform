@@ -993,12 +993,62 @@ def test_fleet_control_groups_are_semantic_subheadings(console_url):
             "() => (window.__swarmOverlay?.slots || 0) === 2", timeout=8000
         )
         headings = [
-            "같은 네트워크에서 발견",
+            "기기 연결",
+            "로봇 등록",
             "대형",
             "신호등",
         ]
         for name in headings:
             assert page.get_by_role("heading", name=name, exact=True).count() == 1
+        assert not errors
+        browser.close()
+
+
+def test_robot_enrollment_panel_enrolls_by_screen_code(console_url):
+    """D-361 S3: a named operator enrolls a discovered robot; the code goes only to Fleet."""
+    import os
+    from playwright.sync_api import sync_playwright
+
+    listing = {"available": True, "unavailable_reason": None, "static_robot_ids": ["rosy_01"],
+               "robots": [], "alarms": []}
+    enrolled = {"robot_id": "rosy_09", "hostname": "rosy-pinky-8kcn", "address": "192.168.1.202:8080",
+                "state": "active", "legacy_lifetime": True, "origin": "enrolled", "hold": None,
+                "expires_at": "2026-10-07T00:00:00+00:00"}
+    api = {
+        "/api/fleet/state": SNAPSHOT, "/api/fleet/map": MAP_GRID, "/api/fleet/formation": FORMATION,
+        "/api/fleet/session": {"principal_id": "alice", "role": "operator"},
+        "/api/fleet/discovery": {"scanner_online": True, "devices": [{
+            "name": "rosy-pinky-8kcn", "hostname": "rosy-pinky-8kcn.local",
+            "address": "192.168.1.202", "port": 8080, "stage": "CORE_READY", "release": "",
+            "robot_id": None, "status": "registration_pending", "enrollable": True}]},
+        "/api/fleet/enrollment/robots": listing,
+    }
+    bodies = []
+    with sync_playwright() as playwright:
+        browser, page, errors = _open_console(playwright, api)
+
+        def enroll(route):
+            if route.request.method != "POST":
+                route.fallback()
+                return
+            bodies.append(route.request.post_data_json)
+            listing["robots"] = [enrolled]
+            route.fulfill(status=201, json=enrolled)
+
+        page.route("**/api/fleet/enrollment/robots", enroll)
+        page.goto(console_url, wait_until="networkidle")
+        page.get_by_role("heading", name="로봇 등록", exact=True).wait_for()
+        page.locator("#discovery-list ui-button", has_text="등록").first.click()
+        page.locator("#enroll-code").fill("7kxm" + "p3qa")
+        page.locator("#enroll-submit").click()
+        page.wait_for_function(
+            "() => document.querySelector('#enrolled-list')?.textContent.includes('rosy_09')")
+        assert bodies == [{"discovery_name": "rosy-pinky-8kcn", "code": "7KXM-" + "P3QA"}]
+        text = page.locator("#enrolled-list").text_content()
+        assert "출처 등록" in text and "7일 뒤 새 코드" in text and "출처 파일" in text
+        shot = os.environ.get("ROSY_ENROLL_SCREENSHOT")
+        if shot:
+            page.screenshot(path=shot, full_page=True)
         assert not errors
         browser.close()
 

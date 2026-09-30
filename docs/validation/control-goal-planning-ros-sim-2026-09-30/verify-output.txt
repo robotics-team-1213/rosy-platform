@@ -1,0 +1,13 @@
+rows=49 states=20 routes=20 goals=9
+PROBLEM: route with 0 pose(s) - not a path
+PROBLEM: route with 0 pose(s) - not a path
+PROBLEM: route with 0 pose(s) - not a path
+PROBLEM: route with 0 pose(s) - not a path
+PROBLEM: route with 0 pose(s) - not a path
+PROBLEM: route with 0 pose(s) - not a path
+PROBLEM: route with 0 pose(s) - not a path
+PROBLEM: route with 0 pose(s) - not a path
+PROBLEM: route with 0 pose(s) - not a path
+PROBLEM: route with 0 pose(s) - not a path
+PROBLEM: route with 0 pose(s) - not a path
+VERDICT: FAIL (11 problems)

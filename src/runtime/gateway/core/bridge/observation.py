@@ -20,6 +20,8 @@ from core.bridge import battery_policy, translate
 from core.bridge.hitl import parse_hitl_request
 from core_features.command.manager import Twist as CoreTwist
 from core_features.line_follow import LineFollowMode, LineObservation
+from core_features.line_follow.clearance import front_clearance as _front_clearance
+from core_features.line_follow.clearance import scan_points as _scan_points
 from core_features.vision import accept_preview
 
 Warn = Callable[[str], None]
@@ -47,6 +49,7 @@ def line_observation(services, raw: str, *, source_now: float,
             confidence=float(data["confidence"]),
             ir_calibrated=calibrated if source is LineFollowMode.IR_LINE else False,
             calibration_revision=revision if source is LineFollowMode.IR_LINE else None,
+            ground=data.get("ground"),
         )
         accepted = services.line_follow.observe(
             observation, received_at=received_at, source_now=source_now)
@@ -102,6 +105,24 @@ def road_observation(services, raw: str, *, source_now: float,
             "reason": "invalid_observation",
             "detail": str(exc),
         })
+
+
+def front_clearance(services, sample, *, received_at: float) -> None:
+    """D-344 §11: LiDAR 를 차선 추종 정지 판정에 넘긴다 — path 는 점, sector 는 정면 최소 거리."""
+    config = services.line_follow.config
+    try:
+        if config.obstacle_mode == "path":
+            points = _scan_points(
+                sample, forward_deg=config.lidar_forward_deg,
+                max_range=config.obstacle_path_horizon_m + config.obstacle_corridor_half_width_m)
+            services.line_follow.observe_scan_points(points, received_at=received_at)
+            return
+        distance = _front_clearance(
+            sample, forward_deg=config.lidar_forward_deg,
+            half_angle_deg=config.obstacle_half_angle_deg)
+    except (KeyError, TypeError, ValueError):
+        return
+    services.line_follow.observe_clearance(distance, received_at=received_at)
 
 
 def detection_evidence(services, raw: str) -> None:

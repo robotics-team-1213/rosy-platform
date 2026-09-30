@@ -1,0 +1,104 @@
+# Action / Message Identity Implementation Plan
+
+> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
+
+**Goal:** 메시지 교환과 장치 실행의 식별 수명을 정리하고 producer/consumer의 상관관계·정지·완료 책임을 검증한다.
+
+**Architecture:** D-369의 Fleet/장치/ROS/safety/verifier 책임을 따른다. PRT·REST·UDS의 wire를 유지하고 공통 의미와 실패 처리를 실제 경계 시험으로 검증한다. 새 범용 bus나 자동 재실행을 만들지 않는다.
+
+**Tech Stack:** Python, Pydantic, SQLite, pytest. ROS 2 Jazzy 실기 검증은 별도.
+
+[설계](2026-09-30-action-message-identity-design.md). Task 1–3과 phase journal 경계는 완료했다. ROS Action callback/phase runner 및 Fleet 진행 투영의 end-to-end 연결은 [OMX pick-and-place 실행 계획](2026-09-30-omx-pick-place-local-execution.md)에서 다룬다. 계획의 ROS-SIM 및 소프트웨어 작업은 실물 profile 수용을 기다리지 않고 진행할 수 있지만, profile 활성화와 물리 수용은 별도 gate다.
+
+### Task 1: 현재 계약 정정과 Fleet–OMX JSON 경계 시험
+
+**상태:** 완료. 결합·인접 suite 21 passed.
+
+**Files:**
+- Modify: `docs/reference/ROSY API & Protocol Reference.md` §10.12
+- Modify: `src/contracts/foundation/core_common/protocol/schemas.py` — DeviceActionLookup docstring만
+- Create: `test/test_fleet_omx_action_identity_contract.py`
+- Modify: `CONCEPTS.md`, D-369, docs progress/log/index
+
+1. 실제 SubmitAction/GetAction/CancelAction JSON 생산자와 소비자를 비교한다.
+2. GetAction 요청은 action ID만 받고 응답에서 attempt를 검증한다는 계약을 명시한다.
+3. Fleet transport의 socket만 메모리 JSON 왕복으로 대체하고 실제 OMX API/runner/store를 연결한다.
+4. 같은 grant 중복 submit·반복 조회·취소가 같은 Action/attempt와 한 번의 driver submit을 유지하는지 시험한다.
+5. 다른 attempt/Mission/step/generation/epoch/digest의 응답을 거절하고 terminal readback에서도 ID를 보존하는지 확인한다.
+
+Run: `python -m pytest test/test_fleet_omx_action_identity_contract.py src/site/fleet/test/test_mission_dispatcher.py src/products/omx/adapter/test/test_omx_action_api.py -q -p no:cacheprovider`
+
+Expected: 모두 통과. socket 인증·ROS·실물 수용은 별도다.
+
+### Task 2: 응답 유실·재시작·늦은 결과의 상관관계
+
+**상태:** 완료. Fleet/OMX 결합 및 인접 suite 25 passed, OMX store 8 passed. runtime 수정은 불필요했다.
+
+**Files:**
+- Test: `test/test_fleet_omx_action_identity_contract.py`
+- Inspect/modify if failing: `src/site/fleet/fleet/server/mission_dispatcher.py`, `local_action_transport.py`
+- Inspect/modify if failing: `src/products/omx/adapter/omx_adapter/action_runner.py`, `action_store.py`
+- Test: `src/site/fleet/test/test_mission_dispatcher.py`, `src/products/omx/adapter/test/test_omx_action_store.py`
+
+1. 실제 API 접수 직후 응답 유실을 주입한다. Fleet을 같은 DB로 재구성하고 GetAction으로 조정하되 driver submit 수는 1이어야 한다.
+2. 이전 attempt/세대의 결과, 중복 terminal 사건, 순서가 뒤바뀐 readback을 주입한다. 상태 퇴행·잘못된 claim 해제가 없어야 한다.
+3. 4xx가 미실행을 확정하는 분기와 transport 후 불명을 비교한다. 재시도 허가를 잘못 내리는 실패만 최소 수정한다.
+4. Task 1 명령과 `python -m pytest src/products/omx/adapter/test/test_omx_action_store.py -q`를 실행한다.
+
+완료 조건: 같은 persisted grant를 조회해 조정하며 자동 새 Action/attempt 또는 driver 재발행이 없다. 기존 구현으로 충족하면 중복 구현을 추가하지 않는다.
+
+결과: 실제 API 접수 후 응답을 버리고 Fleet DB·dispatcher를 재생성했다. GetAction은 동일 Action/attempt의 `ACCEPTED`를 읽었고, 미완료이므로 Mission은 `HOLD`로 남았다. driver submit 1회 및 객체 claim 유지. 오래된 generation 4xx는 API가 driver submit 전 거절했다. 중복 terminal은 사건 1건으로만 저장되며 뒤늦은 RUNNING readback은 완료 Mission을 되돌리지 않는다. 기존 코드가 기준을 만족해 runtime 변경은 하지 않았다.
+
+### Task 3: 진행 상태와 stop 증거의 소비자 계약
+
+**상태:** 완료. Fleet progress/stop/goal/feedback suites 43 passed; OMX stop-fence suite 5 passed. API/schema 수정은 필요하지 않았다.
+
+**Files:**
+- Inspect: `src/site/fleet/fleet/server/mission_progress.py`, `mission_store.py`, `local_stop_transport.py`
+- Inspect: `src/contracts/foundation/core_common/protocol/schemas.py`
+- Test: `src/site/fleet/test/test_mission_progress.py`, `src/site/fleet/test/test_local_stop_transport.py`
+- Test: `src/products/omx/adapter/test/test_omx_stop_fence.py`
+
+1. 실제 store→projection에서 provider/Mission/Action/goal/stop 축의 attempt와 신선도 연결을 시험한다.
+2. cancel ACK, local latch, driver 정지, goal confirmation 중 한 사실만으로 다른 축이 성공하지 않는지 확인한다.
+3. 없는 정보는 unknown/unavailable로 유지한다. 필드 추가가 필요하면 API Ref·schema·producer/consumer·UI를 함께 갱신하고 additive 버전을 올린다.
+4. 위 세 test 파일을 실행한다. UI 변경이 있으면 stale/unknown/진행/완료 화면도 확인한다.
+
+완료 조건: 미확인 증거를 완료로 표시하지 않고 stop 처리가 모델 tool이나 일반 작업 queue의 완료를 기다리지 않는다.
+
+### Task 4: 선정 ROS/driver profile의 Action–goal 대응
+
+**상태:** Action 아래 다중 ROS goal phase용 SQLite 원장 v2와 owner/attempt 검증을 거치는 `ActionRunner` phase lifecycle API가 구현됐다. 실제 `FleetActionGrant`→ROS phase submitter/runtime 결선, 좌표 해석, 물리 profile은 미완료이며 OMX profile은 계속 `enabled: false`다. 기존 Fleet submit 경로는 여전히 단일 `LocalActionPort.submit()` 및 단일 `driver_goal_id` receipt다.
+
+**Files:**
+- Inspect: `src/products/omx/adapter/omx_adapter/action_runner.py`, `action_store.py`
+- Contract: `docs/reference/ROSY API & Protocol Reference.md` §10.12
+- Test: 선정 driver의 ROS-SIM suite 및 phase/goal 대응 시험
+
+1. 완료: Action/attempt별 ordered phase, command digest, ROS goal ID, cancel acknowledgement, terminal result를 별도 `omx_action_phases` 행으로 보존한다. 각 phase의 submit intent를 먼저 기록하고, 바로 앞 phase의 성공 결과 전에는 다음 phase를 시작하지 않는다.
+2. 완료: schema v1에서 additive schema v2 migration을 추가했다. 재시작 시 미해결 Action과 phase를 `UNKNOWN`으로 표시하며 자동 재전송하지 않는다. 이 phase journal은 ROS/Fleet wire를 변경하지 않는다.
+3. 진행: `ActionRunner`에 phase intent, driver acceptance, running, cancel request/ack, terminal result를 owner 및 attempt로 검증해 원장에 기록하는 경계를 추가했다. phase cancel은 goal UUID를 받는 전용 driver capability만 호출하며, capability가 없거나 결과가 불명확하면 ACK를 만들지 않고 phase가 `CANCEL_REQUESTED`에 남는다. cancel ACK만으로 다음 phase나 Action 완료로 넘어갈 수 없고, 다음 phase는 직전 phase의 성공 terminal 결과 뒤에만 열린다.
+4. 미완료: 실제 선택된 physical target의 phase submitter가 이 경계를 ROS action의 UUID/상태 callback과 결선하고, 결과/취소/재시작의 end-to-end ROS-SIM 검증을 한다. 이 단계는 phase callback API 연결이지, 실제 joint command 제출이나 pick/place 계획 실행의 증거가 아니다. DEVICE stop 및 독립 목표 증거는 별도 수용 단계다.
+
+진행 기록: `stack.lock.yaml`의 ROBOTIS open_manipulator 5.1.2 commit `0a4af6a923b8b7d80b8c20506d1839c54d2e993e`로 만든 기존 로컬 이미지를 네트워크·장치 grant 없이 조회했다. 잠금된 OMX-F follower 설정에서 `arm_controller`의 한 `FollowJointTrajectory` controller가 `joint1`–`joint5` 및 `gripper_joint_1`을 포함한다. 기존 vendor ROS-SIM 시험은 arm controller action만 검증하며, gripper motion/힘 또는 pick/place를 검증하지 않는다. 그러므로 “팔과 그리퍼는 별도 ROS controller”라는 가정은 이 simulation target에는 적용하지 않는다. 최신 ROBOTIS eManual의 OpenMANIPULATOR-X 페이지는 별도 `gripper_controller` 및 폐기 예정 `position_controllers/GripperActionController`를 보여주므로, X 계열 문서를 OMX-F에 그대로 일반화하지 않는다. [ROBOTIS pinned OMX-F controller 설정](https://github.com/ROBOTIS-GIT/open_manipulator/blob/0a4af6a923b8b7d80b8c20506d1839c54d2e993e/open_manipulator_bringup/config/omx_f_follower_ai/hardware_controller_manager.yaml), [ROBOTIS OpenMANIPULATOR-X 문서](https://emanual.robotis.com/docs/en/platform/openmanipulator_x/quick_start_guide_basic_operation/).
+
+phase 원장은 물리 profile 및 runner가 없더라도 단일 `driver_goal_id`를 덮어쓰지 않는 저장 규약을 선행 확정하도록 추가했다. `begin_phase()`는 순서와 이전 phase terminal 성공을 검사하고, ROS goal별 UUID/취소 ACK/terminal 결과를 별도 저장한다. 재시작 시 실행 중 phase는 `UNKNOWN`이 되며 같은 goal을 재생하지 않는다. 이는 영속성 계약이지 Fleet→ROS 명령의 실제 생산자/소비자 결선의 증거가 아니다. OMX profile의 `enabled: false`, 빈 `driver_package`/`hardware_plugin`/`joint_names`, production ActionRunner 조립 부재, workspace pose 부재는 계속 남아 있다. 따라서 실제 pick/place를 위해서는 승인된 camera-to-workcell pose resolver와 독립 목표 verifier, 선정된 실물 hardware/driver, 그리고 phase journal을 사용하는 안전한 ROS runner가 필요하다.
+
+`ActionRunner`는 이제 로컬 owner의 peer UID와 현재 Action attempt를 확인한 뒤 phase intent/acceptance/running/cancel/terminal 변경을 `ActionStore`에 위임한다. 이는 orchestrator가 ROS callback을 보존할 호출 경계를 제공하지만, 현재 Fleet Action API가 이 phase lifecycle을 원격으로 노출하거나 실제 ROS runtime이 이를 호출한다는 뜻은 아니다. 특히 ROS cancel callback의 UUID 대조와 controller 결과 mapping은 아직 연결되지 않았다.
+
+완료 조건: profile 하나의 생산자/소비자와 복구 근거가 있으며 ROS goal terminal, 독립 goal confirmation, 물리 stop을 구분한다.
+
+### 실행 기록
+
+- Task 1은 문구·type 설명과 결합 시험을 반영했다. wire/runtime 동작 변경 없음.
+- Task 2는 response-loss/restart, stale generation 4xx, duplicate terminal/late readback을 검증했다. 기존 runtime 안전 경계가 유지되어 runtime 수정은 하지 않았다.
+- Task 3은 Mission/Action/goal/stop projection 및 별도 provider-turn 수명을 검증했다. stop latch/cancel ACK/Action success를 물리 정지 또는 목표 완료로 승격하지 않았다.
+- Task 4 사전 조사에서 기존 vendor ROS-SIM 증거와 현재 시험 환경을 대조했다. 시뮬레이터 동작은 재사용할 수 있지만 Fleet grant 통합과 실제 gripper profile은 별도다.
+- Task 4 continuation: 고정된 OMX-F 시뮬레이터 controller map을 확인하고, 단일 Action/attempt 아래 ordered multi-goal phase 이력(schema v2), goal identity fence, cancel ACK와 terminal 구분, restart-to-UNKNOWN 복구를 구현·시험했다. 이는 하위 원장 계약만 구현한 SOURCE 증거로, ActionRunner/ROS runtime 결선이나 pick/place 동작 검증으로 승격하지 않는다.
+- 확인: ActionStore phase/migration 시험 13 passed; Fleet/OMX Action integration suite 54 passed; D-346 quick gate 95 passed; 문서 harness lint 0 errors / 19 existing freshness warnings; 변경 Python 파일 flake8 `--max-line-length=120` 통과. Quick gate 중 P6가 새 788-line ActionStore size verdict를 요구해 same-change verdict를 추가하고 재실행했다. ROS-SIM 재실행은 원장 변경이 실제 driver port와 결선되지 않아 이 단계 검증에서 제외했다.
+- 2026-09-30 재실행: 통합된 `deploy/robot/omx/probe_vendor_owner_sim.sh`를 `rosy-omx-workstation:native-action-only-local` 이미지(`sha256:b47034e436119cea97c2922a1b4af9bd6596975ac8acbb4cece3a19d2fe1e9f0`)에서 실행했다. 컨테이너는 `--network none`, 저장소 read-only bind mount, device grant 없이 구동했고 결과는 1 passed (2.53s)였다. 기존 policy-owner/경쟁 요청/cancel 경로의 재실행 증거이며, FleetActionGrant→LocalActionPort 생산 결선이나 실물 수용 증거는 아니다.
+- Grant 좌표 조사: `FleetActionGrant.source_evidence`와 `destination_evidence`는 `ResolvedTargetEvidence`로, pixel bbox·optical frame·camera identity·calibration/transform revision을 담지만 ROS workspace pose나 joint target은 담지 않는다. 따라서 `PICK_PLACE`를 joint trajectory로 바꾸려면 승인된 camera-to-workcell pose resolver, arm/gripper phase 명령 계약, 독립 goal/placement verifier가 먼저 필요하다. revision ID만으로 변환값을 추정하거나 image pixel을 관절값으로 직접 쓰지 않는다.
+- Phase lifecycle 연속 작업: 먼저 실패하는 owner/attempt 및 cancel ACK 경계 시험을 추가한 뒤 `ActionRunner` 경계를 구현했다. Action API 10 + phase/store 13, 총 23 passed. 실제 ROS UUID callback 결선, 다중 goal orchestration, pose resolver, 독립 grasp/place verifier는 여전히 남아 있다.
+- Phase 취소 안전성 재검토: Action 단위 `driver.cancel()`이 다중 goal에서 phase 식별을 보장하지 않는 점을 발견해 이를 phase 취소에 재사용하지 않도록 수정했다. UUID별 `cancel_phase(action, phase)` capability가 없으면 요청만 저널링하고 ACK를 비워 둔다. 보강된 Action API + store suite 24 passed.
+- 제어권 ADR 초안 D-362는 충돌을 피하여 D-369로 변경했다. D-362–D-368은 다른 작업의 번호다.
+- 최종 quick gate + network 문서 계약 119 passed; harness lint 0 errors/기존 freshness warnings 12; 새 시험 flake8 및 diff check 통과. 자세한 기록은 docs/logs.md의 action/message 항목에 둔다.

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Build worlds/map_v2_fleet.world, meshes/road_lines.stl and the parking
-marker's textures/dock_tag_7.png from the 260919 STL.
+marker's textures/dock_tag_7.png from the 260919 STL, plus the real-profile
+variant worlds/map_v2_fleet_real.world and its textures/carpet_grey.png.
 
 Usage: python build_world.py [--out BUNDLE_DIR] [--line-colour bright|dark]
 Output is byte-deterministic; re-run and diff before committing.
@@ -40,6 +41,30 @@ DOCK_TAG_DIFFUSE = "0.6 0.6 0.6 1"
 DOCK_TAG_PX_PER_CELL = 40
 TEXTURE_URI = "model://control/map/map_v2_fleet/textures/dock_tag_7.png"
 
+WALL_MATERIAL = "<ambient>0.30 0.35 0.45 1</ambient><diffuse>0.30 0.35 0.45 1</diffuse>"
+
+#: D-364 5 real profile: the 2026-09-19 track as the real robot camera sees it
+#: (teleop_20260919_151213): grey textured carpet (~60-75 grey, speckle sd
+#: ~8-10 in the 320x240 frame), white tape, white foam-board walls (~220
+#: grey) taller than the camera's view near, blue tape on the board seams.
+#: Grey levels are tuned against rendered Gazebo frames, not physics.
+REAL_WALL_HEIGHT_M = 0.30
+REAL_WALL_MATERIAL = (
+    "<ambient>0.85 0.88 0.85 1</ambient><diffuse>0.85 0.88 0.85 1</diffuse>"
+    "<emissive>0.55 0.57 0.55 1</emissive>")
+REAL_FLOOR_RGBA = "0.13 0.14 0.13 1"
+# Real tape reads ~186 grey against the sim's full-white 226.
+REAL_PAINT_RGBA = "0.66 0.68 0.66 1"
+CARPET_URI = "model://control/map/map_v2_fleet/textures/carpet_grey.png"
+CARPET_PX = 256
+CARPET_TILE_M = 0.5
+CARPET_TILES = (6, 3)  # x, y: 3.0 x 1.5 m, past the 2.81 x 1.26 m wall ring
+CARPET_DIFFUSE = "0.27 0.29 0.27 1"
+CARPET_SEED = 260919
+TAPE_RGBA = "0.05 0.15 0.75 1"
+TAPE_SPACING_M = 0.60
+TAPE_SIZE_M = (0.035, 0.12)  # width along the wall, height
+
 
 def _scene_module():
     spec = importlib.util.spec_from_file_location("stl_scene", HERE / "stl_scene.py")
@@ -66,9 +91,10 @@ def write_mesh(lines, path: Path) -> None:
     path.write_bytes(bytes(body))
 
 
-def _wall_xml(i: int, w) -> str:
-    pose = f"{w.cx:.5f} {w.cy:.5f} {w.height / 2:.5f} 0 0 0"
-    size = f"{w.size_x:.5f} {w.size_y:.5f} {w.height:.5f}"
+def _wall_xml(i: int, w, height=None, material=WALL_MATERIAL) -> str:
+    height = w.height if height is None else height
+    pose = f"{w.cx:.5f} {w.cy:.5f} {height / 2:.5f} 0 0 0"
+    size = f"{w.size_x:.5f} {w.size_y:.5f} {height:.5f}"
     return f"""        <collision name="wall_{i:02d}_col">
           <pose>{pose}</pose>
           <geometry><box><size>{size}</size></box></geometry>
@@ -77,7 +103,7 @@ def _wall_xml(i: int, w) -> str:
         <visual name="wall_{i:02d}_vis">
           <pose>{pose}</pose>
           <geometry><box><size>{size}</size></box></geometry>
-          <material><ambient>0.30 0.35 0.45 1</ambient><diffuse>0.30 0.35 0.45 1</diffuse></material>
+          <material>{material}</material>
         </visual>
 """
 
@@ -118,9 +144,93 @@ def _dock_tag_xml() -> str:
 """
 
 
-def world_xml(scene, line_colour: str) -> str:
+def write_carpet_texture(path: Path) -> None:
+    """Grey carpet speckle: per-texel noise over a faint blotch layer."""
+    import cv2
+    import numpy as np
+
+    rng = np.random.RandomState(CARPET_SEED)
+    fine = rng.normal(0.0, 1.0, (CARPET_PX, CARPET_PX))
+    blotch = cv2.GaussianBlur(rng.normal(0.0, 1.0, (CARPET_PX, CARPET_PX)), (0, 0), 6)
+    blotch /= blotch.std() or 1.0
+    image = np.clip(128.0 + 60.0 * fine + 22.0 * blotch, 0, 255).astype(np.uint8)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    ok, data = cv2.imencode(".png", image)
+    if not ok:
+        raise RuntimeError("could not encode the carpet texture")
+    path.write_bytes(data.tobytes())
+
+
+def _carpet_xml() -> str:
+    nx, ny = CARPET_TILES
+    tiles = []
+    for ix in range(nx):
+        for iy in range(ny):
+            x = (ix - (nx - 1) / 2.0) * CARPET_TILE_M
+            y = (iy - (ny - 1) / 2.0) * CARPET_TILE_M
+            tiles.append(f"""        <visual name="tile_{ix}_{iy}">
+          <pose>{x:.3f} {y:.3f} 0 0 0 0</pose>
+          <geometry><plane><normal>0 0 1</normal><size>{CARPET_TILE_M} {CARPET_TILE_M}</size></plane></geometry>
+          <material>
+            <ambient>{CARPET_DIFFUSE}</ambient><diffuse>{CARPET_DIFFUSE}</diffuse>
+            <pbr><metal><albedo_map>{CARPET_URI}</albedo_map></metal></pbr>
+          </material>
+        </visual>
+""")
+    return f"""    <model name="carpet">
+      <static>true</static>
+      <pose>0 0 0.0003 0 0 0</pose>
+      <link name="link">
+{"".join(tiles)}      </link>
+    </model>
+
+"""
+
+
+def _tape_xml(walls) -> str:
+    """Visual-only blue tape strips on each wall's inner face."""
+    width, height = TAPE_SIZE_M
+    strips = []
+    for i, w in enumerate(walls):
+        along_x = w.size_x >= w.size_y
+        length = w.size_x if along_x else w.size_y
+        count = max(1, int(length // TAPE_SPACING_M))
+        for k in range(count):
+            s = (k - (count - 1) / 2.0) * TAPE_SPACING_M
+            if along_x:
+                x, y = w.cx + s, w.cy - math.copysign(w.size_y / 2 + 0.001, w.cy)
+                size = f"{width} 0.002 {height}"
+            else:
+                x, y = w.cx - math.copysign(w.size_x / 2 + 0.001, w.cx), w.cy + s
+                size = f"0.002 {width} {height}"
+            strips.append(f"""        <visual name="tape_{i:02d}_{k}">
+          <pose>{x:.5f} {y:.5f} {0.02 + height / 2:.5f} 0 0 0</pose>
+          <geometry><box><size>{size}</size></box></geometry>
+          <material><ambient>{TAPE_RGBA}</ambient><diffuse>{TAPE_RGBA}</diffuse></material>
+        </visual>
+""")
+    return f"""    <model name="wall_tape">
+      <static>true</static>
+      <link name="link">
+{"".join(strips)}      </link>
+    </model>
+
+"""
+
+
+def world_xml(scene, line_colour: str, profile: str = "default") -> str:
     floor, paint = COLOURS[line_colour]
-    walls = "".join(_wall_xml(i, w) for i, w in enumerate(scene.walls))
+    if profile == "real":
+        floor, paint = REAL_FLOOR_RGBA, REAL_PAINT_RGBA
+        walls = "".join(_wall_xml(i, w, REAL_WALL_HEIGHT_M, REAL_WALL_MATERIAL)
+                        for i, w in enumerate(scene.walls))
+        extra = _carpet_xml() + _tape_xml(scene.walls)
+        note = ("\n  Real profile (D-364 5): carpet texture, white 0.30 m walls, "
+                "blue seam tape.")
+        scene_xml = "    <scene><background>0.35 0.30 0.30 1</background></scene>\n\n"
+    else:
+        walls = "".join(_wall_xml(i, w) for i, w in enumerate(scene.walls))
+        extra = note = scene_xml = ""
     return f"""<?xml version="1.0"?>
 <!-- MAP v2 fleet / 260919 — generated by scripts/build_world.py. Do not edit.
   Source: 260919 MAP FILE.STL sha256 {scene.source_sha256}
@@ -128,7 +238,7 @@ def world_xml(scene, line_colour: str) -> str:
   STL Y-up mm -> ROS Z-up m by R_x(+90 deg); no reshaping.
   Lane paint is visual-only; the perimeter ring is the only collision.
   dock_tag_7: the stage-3 parking marker (visual-only wedge face).
-  Line colour: {line_colour}. Orientation vs the physical mat: see README.md.
+  Line colour: {line_colour}. Orientation vs the physical mat: see README.md.{note}
 -->
 <sdf version="1.6">
   <world name="map_v2_fleet">
@@ -142,7 +252,7 @@ def world_xml(scene, line_colour: str) -> str:
     </plugin>
     <plugin filename="gz-sim-imu-system" name="gz::sim::systems::Imu"/>
 
-    <light type="directional" name="sun">
+{scene_xml}    <light type="directional" name="sun">
       <cast_shadows>false</cast_shadows>
       <pose>0 0 10 0 0 0</pose>
       <diffuse>0.9 0.9 0.9 1</diffuse>
@@ -163,7 +273,7 @@ def world_xml(scene, line_colour: str) -> str:
       </link>
     </model>
 
-    <model name="road_lines">
+{extra}    <model name="road_lines">
       <static>true</static>
       <pose>0 0 0.001 0 0 0</pose>
       <link name="link">
@@ -193,6 +303,9 @@ def build(source: Path, out: Path, line_colour: str = "bright") -> None:
     world = out / "worlds" / "map_v2_fleet.world"
     world.parent.mkdir(parents=True, exist_ok=True)
     world.write_text(world_xml(scene, line_colour), encoding="utf-8", newline="\n")
+    write_carpet_texture(out / "textures" / "carpet_grey.png")
+    (out / "worlds" / "map_v2_fleet_real.world").write_text(
+        world_xml(scene, "bright", "real"), encoding="utf-8", newline="\n")
 
 
 def main(argv=None) -> int:

@@ -1,0 +1,2 @@
+[ERROR] [1790751584.165695669] [camera_detect_node]: OpenCV camera start failed: cannot open V4L2 camera /dev/video0
+[INFO] [1790751584.172736289] [camera_detect_node]: camera_detect ready 320x240 @ 8Hz rotate=180

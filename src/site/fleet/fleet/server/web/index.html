@@ -4,7 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#101214">
-  <title>Rosy 사이트 — 관제</title>
+  <title>Rosy Console</title>
+  <link rel="icon" type="image/svg+xml" href="/common/icons/console.svg">
   <link rel="stylesheet" href="/common/tokens.css">
   <script src="/common/theme.js"></script>
   <link rel="stylesheet" href="/common/components.css">
@@ -73,13 +74,39 @@
         <ui-button id="roster-toggle" kind="quiet" type="button" aria-expanded="false" aria-controls="roster">전체 로봇 보기</ui-button>
         <div id="roster" class="roster"><p class="hint" role="status">로봇 목록 불러오는 중</p></div>
 
-        <section class="discovery" aria-labelledby="discovery-heading">
-          <div class="robot-head">
-            <h3 id="discovery-heading">같은 네트워크에서 발견</h3>
-            <ui-tag id="discovery-status" status="neutral">검색 대기</ui-tag>
-          </div>
-          <p class="hint">발견된 주소는 접속 힌트입니다. Fleet 페어링을 확인한 로봇만 등록된 작업 대상으로 사용합니다.</p>
-          <ul id="discovery-list" class="discovery-list" aria-live="polite"></ul>
+        <section class="discovery device-link" aria-labelledby="device-link-heading">
+          <h3 id="device-link-heading">기기 연결</h3>
+          <section id="robot-enrollment" aria-labelledby="discovery-heading">
+            <div class="robot-head">
+              <h4 id="discovery-heading">로봇 등록</h4>
+              <ui-tag id="discovery-status" status="neutral">검색 대기</ui-tag>
+            </div>
+            <p class="hint">발견된 주소는 접속 힌트입니다. 등록은 로봇 화면의 코드로 Fleet이 직접 확인합니다.</p>
+            <p id="enroll-unavailable" class="hint bad" hidden>자격 키를 읽을 수 없음 — 등록을 쓸 수 없습니다.</p>
+            <p id="enroll-alarm" class="enroll-alarm" role="alert" hidden></p>
+            <ul id="discovery-list" class="discovery-list" aria-live="polite"></ul>
+            <div id="enroll-controls" hidden>
+              <div class="enroll-address">
+                <label for="enroll-address">주소로 추가</label>
+                <input class="ui-field" id="enroll-address" inputmode="decimal" autocomplete="off" placeholder="192.168.1.20:8080">
+                <ui-button id="enroll-address-add" kind="quiet" type="button">추가</ui-button>
+              </div>
+              <div id="enroll-result" class="enroll-result" aria-live="polite"></div>
+              <ul id="enrolled-list" class="enrolled-list"></ul>
+              <details class="enroll-help"><summary>등록 도움말</summary><ul id="enroll-help"></ul></details>
+              <dialog id="enroll-dialog" aria-labelledby="enroll-target">
+                <p>로봇 <b id="enroll-target"></b> 화면의 코드</p>
+                <input class="ui-field" id="enroll-code" autocomplete="off" autocapitalize="characters" maxlength="12" placeholder="ABCD-EFGH">
+                <div class="enroll-dialog-actions">
+                  <ui-button id="enroll-submit" kind="primary" type="button">등록</ui-button>
+                  <ui-button id="enroll-cancel" kind="quiet" type="button">취소</ui-button>
+                </div>
+              </dialog>
+            </div>
+          </section>
+          <section id="camera-link" aria-labelledby="camera-link-heading" hidden>
+            <h4 id="camera-link-heading">카메라 연결 요청</h4>
+          </section>
         </section>
       </div>
 
@@ -139,9 +166,11 @@
           <h2 id="map-heading">현장 지도</h2>
         </div>
         <div class="spacer"></div>
+        <span class="hint layer-hint" id="map-layer-hint" role="status" hidden></span>
         <ui-tag id="map-tag" status="neutral">맵 대기</ui-tag>
       </div>
       <div class="map-stage" id="map-stage" data-map-state="loading">
+        <p class="field-mismatch" id="field-mismatch" role="status" hidden></p>
         <canvas id="map-canvas" class="idle" width="800" height="600" tabindex="-1"
                 role="button" aria-label="지도에서 로봇 목표 위치 선택" aria-describedby="hint"></canvas>
         <div class="map-empty" id="map-empty" role="status">
@@ -178,6 +207,7 @@
                  preserveAspectRatio="none" role="group" aria-label="원본 영상 바닥 사각 영역 모서리 조정"
                  aria-describedby="vision-corner-hint" hidden>
               <polygon id="vision-corner-polygon" points="0,0 100,0 100,100 0,100" aria-hidden="true"></polygon>
+              <polygon id="vision-proposal-polygon" class="vision-proposal-polygon" points="0,0 0,0 0,0 0,0" aria-hidden="true" hidden></polygon>
               <circle data-corner-handle="0" cx="0" cy="0" r="7" tabindex="0" role="button" aria-label="왼쪽 위 모서리, X 0%, Y 0%"></circle>
               <circle data-corner-handle="1" cx="100" cy="0" r="7" tabindex="0" role="button" aria-label="오른쪽 위 모서리, X 100%, Y 0%"></circle>
               <circle data-corner-handle="2" cx="100" cy="100" r="7" tabindex="0" role="button" aria-label="오른쪽 아래 모서리, X 100%, Y 100%"></circle>
@@ -187,6 +217,35 @@
           <p id="vision-message" role="status">관제 사용자 인증 후 카메라를 선택하세요.</p>
         </div>
         <p class="hint" id="vision-meta">화면에 보이는 카메라의 최신 프레임입니다. 실제 시야 범위는 현장 설치에서 확인해야 합니다.</p>
+        <!-- D-360: 경기장 제안은 운용자가 수락해야 조정값이 된다. 관측·주행에는 쓰지 않는다. -->
+        <div class="field-tools">
+          <ui-button kind="quiet" id="field-detect" type="button">경기장 자동 찾기</ui-button>
+          <ui-button kind="quiet" id="field-accept" type="button" hidden>제안 수락</ui-button>
+          <ui-button kind="quiet" id="field-dismiss" type="button" hidden>제안 버리기</ui-button>
+        </div>
+        <p class="hint" id="field-proposal-state" role="status">경기장 윤곽을 Vision이 제안합니다. 제안은 확인 전까지 적용되지 않습니다.</p>
+        <p class="hint field-storage-state" id="field-storage-state" role="status" hidden></p>
+        <figure class="field-rectified" id="field-rectified" hidden>
+          <canvas id="field-canvas" width="640" height="360" role="img" aria-label="위에서 본 경기장"></canvas>
+          <figcaption class="hint" id="field-rectified-caption"></figcaption>
+        </figure>
+        <details class="field-options" id="field-options">
+          <summary>경기장 크기·레이어</summary>
+          <fieldset class="field-size">
+            <legend>경기장 크기(표시 축척, 이 브라우저만)</legend>
+            <label for="field-width">가로 m <input class="ui-field" id="field-width" type="number" inputmode="decimal" min="0.05" max="100" step="0.01"></label>
+            <label for="field-height">세로 m <input class="ui-field" id="field-height" type="number" inputmode="decimal" min="0.05" max="100" step="0.01"></label>
+          </fieldset>
+          <fieldset class="layer-toggles">
+            <legend>레이어</legend>
+            <label><input type="checkbox" data-layer="raw" checked> 원본 카메라</label>
+            <label><input type="checkbox" data-layer="rectified" checked> 보정 경기장</label>
+            <label><input type="checkbox" data-layer="site" checked> 사이트 사각형</label>
+            <label><input type="checkbox" data-layer="grid" checked> 격자</label>
+            <label><input type="checkbox" data-layer="sightings" checked> 카메라 관측</label>
+            <label><input type="checkbox" data-layer="poses" checked> CORE 로봇 위치</label>
+          </fieldset>
+        </details>
         <details id="vision-adjustments" class="vision-adjustments" data-role-lock>
           <summary>왜곡 및 사각 보정</summary>
           <ui-status id="vision-role-lock" class="role-lock-note" state="forbidden" hidden>운용자 권한이 필요합니다</ui-status>

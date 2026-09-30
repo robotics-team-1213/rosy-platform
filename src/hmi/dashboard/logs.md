@@ -642,3 +642,24 @@
 - gate 변화: 없음.
 - 결정: D-371 Refinement(2026-09-30).
 - 교훈: 옛 /dashboard는 정지가 운용 뷰에만 있어 점검 뷰의 설정 목록에서 대화상자를 열면 정지가 화면에 없다(이번 변경 전부터). 대화상자는 정지를 inert로 만들지 않지만, 뷰 전환 탭은 열린 동안 막힌다 — Esc로 닫고 운용 뷰로 간다.
+## 2026-09-30 · uncommitted · feat(icons): D-358 S3 대시보드 파비콘
+
+- 변경: `index.html`·`surface.html`에 `<link rel="icon" type="image/svg+xml" href="/common/icons/robot-dashboard.svg">`를 더했다. 제목(`Rosy 로봇 — 대시보드`)은 이미 이름표와 같아 바꾸지 않았다.
+- 증거: `test_surface_icons.py`, `src/runtime/api_web/test/test_ui_route.py` 녹색.
+- gate 변화: 없음.
+- 결정: D-358 2·3항.
+- 교훈: 없음.
+
+
+## 2026-09-30 · uncommitted · docs(adr): D-358 앱 역할 ADR을 D-370으로 재번호
+
+- 변경: 이 모듈의 D-358 앱 역할·이름·아이콘 주석과 시험 문서 문자열을 D-370으로 바꿨다. 동작 변경 없음.
+- 증거: 번호만 바꾼 diff. 시험은 병합 뒤 회차에서 다시 돌린다.
+- gate 변화: 없음.
+- 결정: 이 항목 앞의 "D-358 S1/S2/S3"·"D-358 N항"은 D-370을 가리킨다(main의 D-358 ER2 피드백 outbox와 다름). 옛 항목은 고치지 않는다.
+- 교훈: 없음.
+
+## 2026-09-30 · uncommitted · refactor(dashboard): D-377 Rosy Robot title and favicon
+- 변경: `index.html` `<title>` `Rosy Robot`, `surface.html` `Rosy Robot — {{title}}`, 파비콘 `/common/icons/robot.svg`.
+- 증거: `python -m pytest src/hmi/dashboard/test -q` 17 passed, 34 skipped (브라우저 시험 opt-in); `src/hmi/web_common/test` 111 passed (2026-09-30 Windows).
+- gate 변화: 없음. 폴더·패키지 이동(`src/hmi/robot`, `rosy_robot`)은 D-374 단계 3 게이트 그대로.

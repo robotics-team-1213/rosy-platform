@@ -147,3 +147,37 @@
 - gate 변화: 없음.
 - 결정: activating 진입은 후속 ADR(온디맨드 B레인) 없이 금지 — 시험이 핀으로 지킨다.
 - 교훈: 정찰이 설계를 바꿨다 — "상태 계약이 없다"가 아니라 "두 표면이 다른 어휘를 쓰고 있었다"가 진짜 갭이었다.
+
+## 2026-09-30 · uncommitted · feat(discovery): D-358 S1 공유 TXT 벡터와 정본 분류기
+
+- 변경: `core_common/protocol/discovery_txt.py`(표준 라이브러리만)를 새로 두었다. `parse_txt_pairs`, `classify(service_type, host, address, port, txt) -> Accepted|Rejected(reason)`, 옛 로봇 광고의 `legacy` 표시. 기계 원천은 `test/fixtures/protocol/discovery-txt.v1.json`(28 사례, 거절 사유 9종 전부)이다. FleetAgent(`core_features/fleet_agent/discovery.py`)의 복사 `TXT`/판정을 이 모듈 import로 바꿨다.
+- 증거: `test_discovery_txt_vectors.py` 31 passed, 프로필 대조 2 passed. 변이 증명: 벡터 사유 하나(`overhead_tls_host_mismatch`)를 바꾸면 Python·Kotlin이 모두 적신, 프로필 값 하나를 바꾸면 대조 시험 적신.
+- gate 변화: 없음. SOURCE/LOCAL.
+- 결정: D-358 5.1.
+- 교훈: 없음.
+
+
+## 2026-09-30 · uncommitted · docs(adr): D-358 앱 역할 ADR을 D-370으로 재번호
+
+- 변경: 이 모듈의 D-358 앱 역할·이름·아이콘 주석과 시험 문서 문자열을 D-370으로 바꿨다. 동작 변경 없음.
+- 증거: 번호만 바꾼 diff. 시험은 병합 뒤 회차에서 다시 돌린다.
+- gate 변화: 없음.
+- 결정: 이 항목 앞의 "D-358 S1/S2/S3"·"D-358 N항"은 D-370을 가리킨다(main의 D-358 ER2 피드백 outbox와 다름). 옛 항목은 고치지 않는다.
+- 교훈: 없음.
+## 2026-09-30 · uncommitted · docs(protocol): DeviceActionLookup 의미를 실제 사용에 맞춤
+
+- 변경: DeviceActionLookup은 attempt 범위 연산(현재 취소)의 identity pair라는 docstring으로 정정했다. OMX UDS v1 GetAction의 요청은 action_id만이며 응답에서 Fleet이 attempt/grant를 검증한다. API Reference §10.12를 함께 정정했다.
+- 증거: Fleet–OMX 결합 시험과 인접 suite 21 passed. Pydantic field·validation·wire·runtime 동작은 바뀌지 않았다.
+- gate 변화: 없음.
+
+## 2026-09-30 · uncommitted · feat(robot_state): D-375 운용 모드 축 — 램프 패턴 중재와 LCD 접미
+
+- 변경: `ROBOT_MODES`/`OPERATING_MODES`/`MODE_LAMP` 상수와 `valid_robot_mode()`·`mode_suffix()`·`lamp_pattern()`를 추가했다. `evaluate()`는 `robot_mode`를 받아 검증해 결과에 실으며, 다섯 건강 상태 판정은 바꾸지 않는다. 우선순위: 실패 > 비상정지 > 주의 > 부팅 > 도킹 > 내비게이션 > 수동 > 준비.
+- 증거: test_robot_state.py 69 passed (우선순위 전 표 변이 증명: EMERGENCY를 주의 아래로 내리면 해당 행이 빨개진다).
+- gate 변화: 없음.
+
+## 2026-09-30 · uncommitted · docs(adr): D-375 에서 D-380 으로 개명
+
+- 변경: 병합 시점에 main 이 D-375 를 feat/overhead-map-auto-register 예약으로 adr_gaps 에 넣은 것이 확인됐다(선례 D-324→D-325). 이 작업의 결정 번호를 다음 빈 번호 D-380 으로 개명하고 코드 주석·시험·설계 문서의 D-375 표기를 함께 바꿨다. 앞선 항목의 D-375 표기는 역사 기록으로 그대로 둔다.
+- 증거: rosy_harness lint 오류 0. 본문 참조는 docs/adr/D-380-lamp-mode-patterns-from-core-status-inputs.md.
+- gate 변화: 없음.

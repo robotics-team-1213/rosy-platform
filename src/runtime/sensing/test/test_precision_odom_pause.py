@@ -3,6 +3,7 @@ import math
 from pathlib import Path
 from types import SimpleNamespace as NS
 import unittest
+from control.calibration_sequence import CalibrationSequence
 from control.control.calibration_runtime import precision_scan_required
 
 
@@ -34,14 +35,14 @@ class PrecisionOdomPauseTest(unittest.TestCase):
 
     def test_transient_odom_gap_holds_zero_with_bounded_origin_preserving_pause(self):
         node,calls=self.node()
-        self.assertTrue(method('pause_precision')(node,10.))
+        self.assertTrue(CalibrationSequence.pause_precision(node,10.))
         self.assertEqual(calls,['zero','pause','publish'])
         self.assertIn('fresh odometry',node.message)
         self.assertEqual(node.motion_start,(0.,{}))
         node.safety_limits=(11.01,node.safety_limits[1])
         node.raw_ranges={key:(11.01,.4,True) for key in ('lidar','us')}
         node.hazards={key:(11.01,False) for key in node.hazards}
-        self.assertFalse(method('pause_precision')(node,11.01))
+        self.assertFalse(CalibrationSequence.pause_precision(node,11.01))
 
     def test_invalid_odom_hazard_or_stale_raw_scan_cannot_reacquire(self):
         for change in ('invalid_odom','hazard','raw'):
@@ -49,7 +50,7 @@ class PrecisionOdomPauseTest(unittest.TestCase):
             if change=='invalid_odom':node.baseline.samples['odom'][-1]=(9.7,(),False)
             elif change=='hazard':node.hazards['/safety/cliff']=(10.,True)
             else:node.raw_ranges['lidar']=(9.7,.4,True)
-            self.assertFalse(method('pause_precision')(node,10.))
+            self.assertFalse(CalibrationSequence.pause_precision(node,10.))
             self.assertEqual(calls,[])
 
     def test_scan_skipped_for_odom_age_replaces_old_success_diagnostic(self):

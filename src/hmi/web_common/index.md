@@ -44,8 +44,8 @@
 
 ## 최근 기록
 
-- 2026-09-30 · 79787e7a · D-371 US-010 확인 대화상자는 비모달, 정지는 살아 있다
-- 2026-09-30 · 5bcd9617 · D-371 US-010 공용 확인 대화상자 confirmIrreversible
-- 2026-09-30 · c1ecd8e0 · D-359 US-009 꺼진 체크 상자는 점선 테
-- 2026-09-30 · 5518f9bc · D-359 US-009 운용자 말 린트
-- 2026-09-30 · 0f10bb91 · D-359 US-009 공용 한국어 열거 표(MODE_LABEL)
+- 2026-09-30 · uncommitted · refactor(web_common): D-377 icon files and registry ids follow one word
+- 2026-09-30 · uncommitted · fix(ci): D-370 리뷰 — 아이콘 시험이 Pillow 없이도 수집되고, 토큰 이름 중복을 막음
+- 2026-09-30 · uncommitted · docs(adr): D-358 앱 역할 ADR을 D-370으로 재번호
+- 2026-09-30 · uncommitted · feat(icons): D-358 S3 이름·아이콘·파비콘
+- 2026-09-30 · uncommitted · test(roles): D-358 S2 역할 경계 시험과 표면 소유 목록

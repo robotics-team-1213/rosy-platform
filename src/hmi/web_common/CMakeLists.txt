@@ -3,9 +3,9 @@ project(web_common)
 
 find_package(ament_cmake REQUIRED)
 
-# manifest.json lists which of these files servers expose under /common/.
+# shared-assets.json lists which of these files servers expose under /common/.
 install(FILES
-  manifest.json
+  shared-assets.json
   tokens.css
   components.css
   template.html
@@ -13,7 +13,17 @@ install(FILES
   hold-ticker.js
   ui.js
   theme.js
+  evidence.js
   DESTINATION share/${PROJECT_NAME}
+)
+
+# D-370 3항 surface icons, listed one by one in shared-assets.json (never the folder).
+install(FILES
+  icons/cam.svg
+  icons/pilot.svg
+  icons/console.svg
+  icons/robot.svg
+  DESTINATION share/${PROJECT_NAME}/icons
 )
 
 ament_package()

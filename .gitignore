@@ -88,6 +88,9 @@ data/drive/**
 !data/teleop/learning/
 !data/drive/.gitkeep
 
+# Perception learning-loop artifacts (recordings, datasets, models) stay untracked (D-356).
+data/perception/
+
 # One-off helper scripts at the repository root. Durable root helpers
 # (env.sh) is tracked explicitly; new throwaway
 # scripts belong in tools/ or outside the repo.

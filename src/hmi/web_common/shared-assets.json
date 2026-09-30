@@ -1,0 +1,17 @@
+{
+  "description": "Shared web_common assets every server may expose under /common/. The only allowlist: servers read this file instead of keeping their own list, and never scan the folder (the list is the path-traversal defence).",
+  "shared_assets": {
+    "tokens.css": "text/css",
+    "components.css": "text/css",
+    "template.html": "text/html",
+    "core_ui_logic.js": "text/javascript",
+    "hold-ticker.js": "text/javascript",
+    "ui.js": "text/javascript",
+    "theme.js": "text/javascript",
+    "evidence.js": "text/javascript",
+    "icons/cam.svg": "image/svg+xml",
+    "icons/pilot.svg": "image/svg+xml",
+    "icons/console.svg": "image/svg+xml",
+    "icons/robot.svg": "image/svg+xml"
+  }
+}

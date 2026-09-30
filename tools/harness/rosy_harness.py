@@ -100,6 +100,11 @@ KNOWN_LEGACY_HEADINGS = frozenset({
     # the hash slot; the history gate forbids reforming it in place, so the
     # exact heading is excused and the canonical entry above records the work.
     "## 2026-09-29 · 5545ce37..uncommitted · feat(fleet): land policy evidence config and store (T2/T3)",
+    # Two pilot entries were committed (72802f30, 35efb5ba) with two hashes in the
+    # hash slot and without the evidence/gate labels; the history gate forbids
+    # reforming them, and their evidence and gate lines live in the entries' prose.
+    "## 2026-09-29 · 72802f30·895786cf · feat: 실물 차선 자동 주행(D-349 보조 자율)",
+    "## 2026-09-29 · 35efb5ba · feat(core): 차선 추종 앞 물체 정지(LiDAR, D-349 §11)",
 })
 
 GENERATED_MARK = (

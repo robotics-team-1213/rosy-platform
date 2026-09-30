@@ -555,6 +555,16 @@
 - 변경: `tools/sim/simulate_semantic_road.py`의 결정론적 합성 카메라 폐루프에 시나리오 2종을 추가했다 — `stop_and_go`(무신호 선언: 정지+dwell 후 `PROCEED/unsignalized_proceed`, 신호 관측 시 `HOLD/signal_unexpected`)와 D-337 관측 융합(카메라 신호 미관측 + `SignalHeadEvidence` 주입: `signal_unknown` 무한 대기 → `PROCEED/signal_green`(signal_source_kind=fused), 불일치 `HOLD/signal_source_conflict`). 폴러 전송은 가짜 없이 정책 계층에서 주입하고 전송 계약은 기존 `test_observer_source.py`가 담당한다. 상태 타임라인 SVG는 표본 수에 맞춰 높이가 늘어난다.
 - 증거: `docs/validation/semantic-road-stop-and-go-2026-09-29/` — `SEMANTIC_ROAD_HOST_SIM_PASS`, 표 3종·result.json·SVG·montage·preview. `test_semantic_road_simulation.py` 신규 단언(무신호 진입·선언 충돌·융합 3단·fused 표기) 포함 2 passed, flake8 clean.
 - gate 변화: 없음. HOST-SIM 한계 그대로 — 실물 Gazebo 폐루프(WSL), 관측 서비스 실HTTP, DEVICE/FIELD는 T5 벤치 회차가 소유한다.
+
+
+
+## 2026-09-29 · uncommitted · feat(control): image-space two-boundary lane keeper ('between' mode)
+- 변경: `lane.py`에 `LaneBetweenKeeper`·`detect_lane_between` 추가. 아래쪽 띠의 여러 행에서 기준 열 왼쪽·오른쪽의 가장 가까운 밝은 런을 찾아 두 안쪽 가장자리의 중점을 목표로 삼는다. 한쪽만 보이면 그 가장자리에서 학습한 차선 폭(행별 EMA, 기본은 화면 폭의 0.6)의 절반만큼 안쪽을 목표로 삼는다. 기준 열은 직전 목표를 따라간다. 지면 평면이 필요 없다. `line_observer_node`에 `camera_lane_mode: between`과 파라미터 `camera_between_roi_top_fraction`(0.6), `camera_between_lane_width_fraction`(0.6, 읽기 전용)을 추가했다. 기본값 `line`은 그대로다.
+- 증거: `python -m pytest src/runtime/sensing/test/ -q` 1670 passed, 78 skipped (2026-09-29 Windows). 새 `test_lane_between.py` 10건이 한쪽 선만 보일 때 `detect_lane_error`는 선 위를 가리키고 `between`은 차선 안쪽을 가리키는 것을 확인한다.
+- gate 변화: 없음. 실물 주행 확인 전이다.
+- 결정: 없음.
+- 교훈: 실물 로봇은 homography가 꺼져 있어 지면 평면이 필요한 차선 모드를 못 쓰고, `line` 모드의 밝은 화소 중심은 경계선이 하나만 보이면 그 선 위로 조향한다.
+
 ## 2026-09-30 · uncommitted · fix(structure): declare imu_bno055 exec_depend
 
 - 변경: package.xml에 `<exec_depend>imu_bno055</exec_depend>` 추가 — KNOWN_UNDECLARED에서 (control, imu_bno055) 제거. KNOWN_DIRECTION에는 유지(방향 위반은 코드 이동이 필요하므로).
@@ -586,3 +596,91 @@
 - 변경: `web/diagnostic.html`의 비상정지 `정지`, `주행 정지`, 수동 조종 `정지`에 `data-always-live`. 진단 페이지는 ui.js를 실으므로 `test_stop_always_live.py` 계약 대상이다. PARKED 표면이라 그 밖은 고치지 않았다.
 - 증거: `python -m pytest src/hmi/web_common/test/test_stop_always_live.py -q` 통과.
 - gate 변화: 없음.
+## 2026-09-30 · uncommitted · feat(perception): D-356 인식 학습 루프 섀도 백엔드·녹화·도구
+
+- 변경: `perception/learned/`(manifest·lane_mask·runner·shadow)와 공유 `image_frame.py`, `learned_lane_node`(+`launch/learned_lane.launch.py`), `recording.py`+`record_session`(콘솔 스크립트 2개) 추가. 개발자 쪽 `tools/perception/{dataset,model,training}`(추출·사전 라벨·데이터셋 빌드·발행·ONNX 내보내기·접수·전달/롤백)과 `tools/perception/test`. 학습 노드는 섀도 전용이라 명령 필드가 없고 `executor_choice.spin`으로 돈다. `hotpath_measure.NODE_NAMES`와 executor 선택 시험 개수를 새 진입점에 맞췄다.
+- 증거: 전체 sensing 스위트 1741 passed 80 skipped(신규 진입점 반영 뒤 실패 2건 수정: executor 선택·hotpath 이름 계약); `tools/perception/test` 94 passed 8 skipped(2026-09-30 Windows).
+- gate 변화: 없음. SOURCE/LOCAL만 다룬다. 노드 그래프·Pi 실행은 HOLD.
+- 결정: D-356 Proposed(섀도 전용; 주행 활성화는 D-205 P3 뒤 별도).
+- 교훈: 새 콘솔 스크립트는 `hotpath_measure.NODE_NAMES`와 `test_executor_choice`의 진입점 개수 계약을 함께 건드린다. 전체 스위트를 돌려야 잡힌다.
+
+## 2026-09-30 · uncommitted · fix(perception): D-356 리뷰 수정·수치 인터프리터 명기
+
+- 변경: 바로 위 D-356 기록의 수치 인터프리터 명기 — sensing 전체 1741 passed 80 skipped와 `tools/perception/test` 94 passed 8 skipped는 시스템 Python 3.14.5 실측. 리뷰 수정: `recording.py`에 `CAMERA_TOPIC`·`SIDE_TOPICS` 공유 상수와 `bag_command(namespace=)`, `record_session --namespace`, `hotpath_measure.NODE_NAMES`에서 `record_session` 제외(노드가 아닌 `ros2 bag record` 래퍼; 시험은 `NON_NODE_SCRIPTS`를 뺀다), `learned_lane_node.main`이 `line_observer_node.main`과 같은 종료 패턴.
+- 증거: venv Python 3.12.14에서 learned·image_frame·recording·executor_choice·hotpath 시험과 `tools/perception/test` 204 passed 2 skipped; 시스템 Python 3.14.5에서 `tools/perception/test`+hotpath+recording 133 passed 10 skipped(2026-09-30 Windows).
+- gate 변화: 없음. SOURCE/LOCAL만.
+- 결정: D-356 Proposed 유지.
+- 교훈: 없음.
+
+## 2026-09-30 · uncommitted · feat(ros-sim): camera 슬라이스 통과 — 무장치 부팅 결함 1건 발견·수리 (27def3de)
+
+- 변경: WSL2 Jazzy에서 control을 현재 트리(27def3de)로 재빌드해 두 노드를 살아있는 그래프로 검증했다. (A) camera_detect_node 무장치 부팅 — 카메라 실패 로그 후 1 ms 만에 `camera_detect ready`, 발행자 9종+보정 구독 그래프 형성. (B) line_observer_node camera 모드 — 합성 레인 5단계(중앙→좌→우→무선→와시드) 133건 관측, 레짐 순서·오차 부호(−0.503/+0.497)·불변식 전부 PASS. 두 그래프 모두 twist 토픽 0개, line/observation 발행자 1개(D-38 sensing-only 유지). 검증 중 OpenCV auto 백엔드의 GStreamer 경로가 무장치 실패에 5–13 s 걸리고 invalid-context hang을 내는 결함을 발견, `_OpenCVCamera`를 CAP_V4L2로 고정해 수리(커밋 27def3de, 호스트 시험 30 passed).
+- 증거: docs/validation/control-camera-line-ros-sim-2026-09-30/ (콘솔·node info·JSONL·검증 출력·격리 로그). VERDICT: PASS (0 problems).
+- gate 변화: ROS-SIM HOLD 유지 — blocker에 camera 슬라이스 통과 기록. 남은 것: calibration/planning/safety-policy 그래프, Gazebo 폐루프, 물리 센서.
+- 결정: 없음.
+- 교훈: "컨테이너에서 재실행"이 실제로 노드를 띄우는 순간 잠복 결함이 드러난다 — 이 결함은 3개월(흡수 후) 동안 아무도 무카메라로 노드를 켜보지 않아서 못 본 것이다. ROS-SIM 게이트의 존재 이유다.
+
+## 2026-09-30 · uncommitted · feat(control): 공칭(NOMINAL) 지면과 차선 녹화 재생 벤치(D-353)
+- 변경: `config/camera_nominal_pinky_pro.yaml`(실물 녹화 4981 프레임으로 추정한 OV5647 기하 — fx 281.6, 피치 8°, 높이 0.067 m, 지평선 80.3 행). `camera_ground.nominal_ground_plane`(NOMINAL 출처 + 허용 플래그 두 겹, 프레임 크기로 비례, 종횡비 다르면 거부). `line_observer_node` 에 `allow_nominal_ground`·`nominal_camera_profile_path`(읽기 전용), 지면 모드 관측에 `ground: NOMINAL` 표시 — CORE 는 운전자 확인(hold) 없이는 멈춘다(`nominal_ground_requires_driver`). `tools/lane_replay.py` 녹화 재생 벤치.
+- 증거: 벤치 기준값(목표가 흰 선 위인 비율) — pilot 녹화 307 프레임: line 0.512, between 0.135, centre(공칭 지면·기억 없음) 비가시 0.99. 원본 teleop 576 프레임: line 0.247, between 0.109, centre 비가시 0.865. `test_nominal_ground.py` 10 passed.
+- gate 변화: SOURCE 진행(실물 카메라 지면 모델·벤치). centre 가 실물 영상에서 거의 늘 비가시 — 인식 v2 가 벤치에서 먼저 통과해야 한다.
+
+## 2026-09-30 · uncommitted · feat(control): 지면 기하 차로 유지기 'keep' 모드(D-353 §2)
+- 변경: `perception/lane_keep.py` 의 `LaneKeeper`. 매 프레임(오도메트리 없음) 바닥 전용 흰색 마스크(지평선 아래, 벽 밑변 아래, 행별 카펫 기준 대비 적응 임계, 채색·오버레이 제외) → lane_bev 조감 격자 → RANSAC 직선. 옆이 같이 밝은 선(벽 쐐기·덩어리)과 진행 방향과 65° 넘게 어긋난 가로 표시(정지선·횡단보도)는 경계에서 뺀다. 좌·우는 영상 행이 아니라 앞 0.22 m 에서 지면 선의 횡오프셋 부호(base_link y, 왼쪽 +)로 가른다. 목표는 차로 폭(0.6-1.6배)만큼 떨어진 가장 가까운 좌·우 경계의 가운데 선을 앞보기 0.25 m 에서, 한쪽만이면 그 선을 반폭 안쪽으로 옮긴 선, 없으면 None(HOLD). error = -목표 y / 반폭(양수 = 오른쪽 조향). `last` 에 경계·가로 표시·목표(m, 화소)·전략(both/left_only/right_only)을 담는다. `line_observer_node` 에 `camera_lane_mode: keep`(지면 `self._ground`, `ground: NOMINAL` 표시). `tools/lane_replay.py` 에 `keep` 검출기와 `on_paint_rate`(검출기 자신의 목표점이 바닥 칠 위인 비율) 추가 — 기존 `on_line_rate` 는 하단을 가로지르는 정지선이면 어느 열이든 걸리고 벽 화소를 센다.
+- 증거: 벤치(공칭 지면) pilot 307 프레임 on_line/on_paint/none — line 0.512/0.399/0.16, between 0.135/0.118/0.202, centre -/-/0.99, keep 0.102/0.015/0.332(비가시 증가분은 대부분 장애물 상자·벽 정면 프레임). teleop 576 프레임 — line 0.247/0.218/0.03, between 0.109/0.126/0.158, centre 0.038/0.026/0.865, keep 0.042/0.071/0.094. 새 `test_lane_keep.py` 11 passed, `pytest src/runtime/sensing/test/ -k "lane or ground or observer"` 293 passed, 12 skipped (2026-09-30 Windows).
+- gate 변화: SOURCE 진행(녹화 재생 벤치에서 keep 이 line·between 보다 목표-선 위 비율이 낮다). 실물 주행·가제보 확인 전이다.
+- 결정: D-353
+- 교훈: 공칭 지면에서는 좌·우 경계가 ±20° 까지 벌어져 보여(주행 중 피치) 원점까지의 수직 거리는 믿을 수 없고, 보이는 범위 안의 한 거리에서 잰 횡오프셋이 안정적이다.
+
+## 2026-09-30 · uncommitted · docs(adr): pilot ADR 번호를 main 과 겹치지 않게 다시 매김
+- 변경: main 이 D-346~D-353 을 다른 결정으로 먼저 썼다. 이 모듈 기록의 옛 번호는 다음으로 읽는다 — D-346→D-362(운전자 실시간 영상), D-347→D-342(수동 한도 계단), D-348→D-343(방·운전석), D-349→D-344(보조 자율), D-350→D-363(카메라 비율·설치 앱), D-353→D-364(차로 유지 인식·재생 벤치). 위 기록은 덧붙이기 전용이라 고치지 않는다.
+- 증거: `docs/adr/` 파일 이름·ADR Log 행·코드 주석·시험이 새 번호를 쓴다. D-342~D-344 는 main 의 harness 가 이 pilot 초안용으로 예약해 둔 번호다.
+- gate 변화: 없음(번호만).
+
+## 2026-09-30 · uncommitted · feat(control): 'keep' 폐루프 가제보 주행 — L 모서리 회전(선택)과 한쪽 flank 시험(D-353 §5)
+- 변경: `perception/lane_keep.py` — (1) 모서리 회전 `corner_turning`(노드 `lane_corner_turning`, 실물 기본 false, real-profile sim launch 는 true): 앞을 가로지르는 선이 한쪽은 바깥 차로선에서 끝나고 다른 쪽으로 차로 밖까지 뻗으면 다음 차로의 바깥 경계로 보고, 반폭 안쪽 중심선을 열린 쪽으로 앞보기 0.12 m 에서 추종(그보다 멀면 직진). 방향은 프레임 수로 잠그고(자세 없음), 돌기 시작하면 직진으로 돌아가지 않으며, 잠금 중에는 열린 쪽으로 35° 넘게 기운 선도 모서리 선이고 이런 선은 잠금을 소모만 한다. (2) flank 시험을 한쪽 기준으로 — 양쪽 flank 가 다 밝거나(각 0.225×core) 합이 0.6×core 를 넘을 때만 blob(횡단보도 막대 옆 차로선이 살아남는다). `tools/lane_replay.py` 에 `keep_corner` 검출기와 `--keep-bright`. 하네스 `docs/validation/map-v2-fleet-keep-2026-09-30/`(keep_run.py, make_video.py, run_sim.sh, result.md).
+- 증거: real-profile sim(ROS_DOMAIN_ID 53, CORE 8093, sim 전용 장애물 정지 0.10/0.14 m) 폐루프 — 서쪽 직선은 모든 run 에서 횡오차 최대 3.4 mm, A8 1.531 m(좌하 L 모서리·하단 직선·셰브런 굽이 통과, 횡오차 평균 25.3/최대 84.5 mm, 모서리 안쪽 자름), 회전교차로 앞에서 LOST. 녹화 벤치(keep 기본) pilot on_line/on_paint/none 0.102/0.015/0.332 → 0.083/0.015/0.332, teleop 0.042/0.071/0.094 → 0.043/0.070/0.080(on_line 한 프레임 악화, 눈부심 곡선 f_00121). `test_lane_keep.py` 18 passed (2026-09-30 Windows). 영상·궤적 `X:\DevTemp\rosy-pilot-evidence\2026-09-30-sim-keep\`. DEVICE: NOT RUN.
+- gate 변화: ROS-SIM 진행 — keep 직선 차로 유지 통과, L 모서리·60° 굽이 통과(안쪽 자름), 회전교차로·분기 실패(fail-closed). 한 바퀴 미달.
+- 결정: D-353. 모서리 회전은 실물에서 끈 채로 둔다(벤치 on_line 지표가 모서리 프레임에서 나빠지고 실물 검증 전).
+- 교훈: 모서리 로직은 2 fps 표본으로는 재현되지 않았다 — 매 카메라 프레임(8 fps)을 저장해 오프라인으로 같은 순서로 재생하자 잠긴 방향 뒤집힘이 그대로 재현됐다. L 모서리에서 둘레 벽이 base_link 앞 ~0.2 m 라 장치 기본 장애물 정지(0.20 m)에 걸린다.
+
+## 2026-09-30 · uncommitted · docs(adr): 운전자 실시간 영상 ADR 을 D-362 에서 D-368 로
+- 변경: 다른 세션이 main 작업 트리에서 D-362(코드 유형별 파일 크기 예산)를 쓰고 있어, 이 모듈 기록의 D-362(운전자 실시간 영상, 옛 D-346)는 D-368 로 읽는다. 위 기록은 덧붙이기 전용이라 고치지 않는다.
+- 증거: `docs/adr/D-368-pilot-live-driver-video.md`, ADR Log 행·코드·시험이 새 번호를 쓴다.
+- gate 변화: 없음(번호만).
+
+## 2026-09-30 · uncommitted · feat(ros-sim): planning 슬라이스 통과 — goal_node 합성 지도·TF 그래프 검증
+
+- 변경: goal_node를 WSL2 Jazzy 살아있는 그래프에서 검증했다. 합성 2×2 m 점유 격자(미지 사분면으로 프론티어 형성) + TF map→odom→base_link + explore→stop 명령. 프론티어 골 발견(1.19,1.59, route 0.65m), 실경로 9건 + 문서화된 빈-Path 취소 11건, 스톨 감지·탈출 기계 작동, 정지 확인, 그래프 twist 토픽 0개(advisory-only). VERDICT: PASS (0 problems).
+- 증거: docs/validation/control-goal-planning-ros-sim-2026-09-30/ (JSONL·콘솔·토픽 목록·검증 출력). 초기 검증기가 취소 Path를 위반으로 오판했으나 이는 "침묵은 정지 명령이 아니다"의 문서화된 메커니즘 — 검증기를 계약에 맞게 수정한 뒤 판정했다.
+- gate 변화: ROS-SIM HOLD 유지 — blocker에 planning 슬라이스 통과 기록. 남은 것: calibration(병행 세션 진행 중)·safety-policy 그래프, Gazebo 폐루프, 물리 센서.
+- 결정: 없음.
+- 교훈: 검증기의 오판은 노드 소스의 의도 주석(_clear_route "Revoke old routes immediately; silence is not a stop command")과 대조해야 한다 — 계약 문서가 검증기보다 위다.
+
+## 2026-09-30 · 7e467a4b · feat(control): 읽기 전용 IR 차선 교정 도구와 좌·우 부호 확인
+
+- 변경: `control/sensing/perception/ir_calibration.py`(순수) — 카펫·왼쪽·가운데·오른쪽 네 자리 표본에서 채널별 중앙값 끝점, MAD 잡음, ADC 끝(0·4095) 비율, `min_span`·잡음 6 배 분리, 테이프 둔 센서가 가장 크게 움직였는지(채널 순서), `detect_ir_line` 되읽기 부호(카펫 = 선 없음, 왼쪽 ≤ −0.3, 가운데 |e| < 0.3, 오른쪽 ≥ +0.3)를 검사하고 통과 때만 관측 노드 YAML(실수형)과 CORE `ir_calibration_revision` 을 찍는다. `tools/device/ir_line_calibrate.py` — run/capture/compute/check, rclpy 는 표본 수집 때만 import, 구독만 한다.
+- 증거: 새 `test/test_ir_calibration.py` 9 passed — 합성 표본(잡음·이상치) 끝점, 노드와 같은 해시, 역극성 허용, 분리 부족·잡음·빠진 단계·레일 고정·좌우 뒤바뀜 거절, CLI compute 오프라인 (2026-09-30 Windows).
+- gate 변화: SOURCE 진행. DEVICE: NOT RUN(로봇 부재) — 절차 `docs/deployment/pinky-pro-ir-line-calibration-runbook.md`.
+- 결정: D-344 §12 보강.
+
+## 2026-09-30 · 6f00a74d · fix(camera): 기기 IR 교정 덮어쓰기 파일을 line_observer 에 싣는다
+
+- 변경: 실물 `line_observer_node` 는 `rosy-camera`(`camera_preview.launch.py`)에서 돌며 패키지 `config/line_follow.yaml` 만 읽었다 — `/etc/rosy/line_follow.yaml` 에 교정을 써도 닿지 않았다(그 파일은 Compose·내비게이션 그래프만 읽음). 파일이 있으면 패키지 기본 뒤에 덧읽는다. `test/test_native_systemd_contract.py` DECLARED_READS 에 rosy-camera 의 그 경로를 선언.
+- 증거: 선언 전 `test_declared_paths_account_for_every_write_root_in_the_program[rosy-camera.service]` 빨강, 선언 뒤 `test_camera_image_stack.py test_native_systemd_contract.py` 129 passed, 1 skipped (2026-09-30 Windows).
+- gate 변화: SOURCE. 실물 재시작 확인 전.
+- 결정: D-344 §12 보강.
+
+## 2026-09-30 · uncommitted · fix(camera,control): IR 교정 덮어쓰기를 전용 경로·검증으로, 도구 문턱 인자(검토 반영)
+
+- 변경: 덮어쓰기 경로를 `/etc/rosy/ir_calibration.yaml` 로 분리(`/etc/rosy/line_follow.yaml` 은 내비게이션 그래프용 전체 설정). 새 `control/ir_overlay.py` 가 모양(관측 노드 블록 하나, IR 교정 키만, 실수형, 켜면 `IRLineCalibration` 통과)을 검사하고 `camera_preview.launch.py` 는 통과할 때만 싣고 `LogInfo` 로 loaded/skipped 이유를 남긴다 — 잘못된 파일이 관측 노드를 재시작 반복에 빠뜨리지 않는다. `compute_ir_calibration` 은 `min_span` 을 0.1 로 반올림해 찍힌 값과 해시가 같다. CLI 에 `--min-white/--min-contrast/--edge-error`, `check` 는 `--black/--white` 한쪽만이면 거절하고 둘 다 있으면 `--session` 이 필요 없다. 시스템 계약 `rosy-camera` 프로그램 목록에 `ir_overlay.py` 를 넣어 선언한 읽기 경로가 실제로 검사된다.
+- 증거: 새 `test/test_ir_overlay.py`(없음·정상·잘못된 7종·도구 출력이 곧 유효 덮어쓰기·launch 문자열) + `test_ir_calibration.py` 추가 3개 → 23 passed. `test/test_native_systemd_contract.py` 는 선언을 비우면 빨강, 되돌리면 초록 (2026-09-30 Windows).
+- gate 변화: SOURCE. 새 모듈이 설치 이미지에 들어가야 실물에서 쓰인다(릴리스 필요).
+- 결정: D-344 §12 보강.
+
+## 2026-09-30 · 40757d69 · fix(camera): 교정 검사기를 import 못 해도 덮어쓰기만 건너뛴다(재검토 R4)
+
+- 변경: `control/ir_overlay.py` 가 `lane.py` 지연 import 의 ImportError 를 잡아 "skipped: cannot check the calibration" 을 돌려준다 — launch 가 멈추지 않는다.
+- 증거: `test_ir_overlay.py` 에 import 실패 시험 추가, `test_ir_overlay.py test_ir_calibration.py` 24 passed (2026-09-30 Windows).
+- gate 변화: SOURCE.
+- 결정: D-344 §12 보강.

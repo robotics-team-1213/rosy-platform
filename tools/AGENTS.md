@@ -15,6 +15,7 @@ Commands a developer runs from the workspace. These are not installed on the rob
 | `run_fleet_sim.sh` | Start multi-robot Gazebo and the Fleet console from the repo root |
 | `run_data.py` | Create `data/teleop` and `data/drive` sessions |
 | `dashboard_drive.py` | Headless Playwright driver for the CORE dashboard: `status`, `mode`, `teleop` (stop latency), `screenshot` (skill `rosy-dashboard-drive`) |
+| `web_visible_roles.py` | Role-surface measurement harness: real CORE TestClient + headless Chromium across roles, surfaces, and viewports; exit 1 on missing button kinds, page errors, horizontal overflow, or a failed first response |
 | `harness/` | Module index generator (`rosy_harness.py`) |
 | `hooks/` | D-346 pre-push fast gate (harness lint + contract suites, ~2 min) and its installer |
 
@@ -24,6 +25,7 @@ Commands a developer runs from the workspace. These are not installed on the rob
 |-----------|---------|
 | `harness/` | Reads each module's `progress.md` and `logs.md` |
 | `sim/` | Local sim probes, `sim_verify.sh`, and host simulations that compose several packages (`simulate_line_follow.py`, `simulate_semantic_road.py`). Not a second product tree |
+| `perception/` | D-356 learned-loop tooling: `dataset/`, `model/`, `training/`, `test/` (see `perception/AGENTS.md`) |
 | `perception/prototype/` | Unreviewed camera-estimation and real-video replay prototypes (D-205). Replaced by the reviewed P2 replay tool |
 
 ## For AI Agents

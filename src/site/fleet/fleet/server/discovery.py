@@ -6,6 +6,14 @@ import ipaddress
 import time
 from urllib.parse import urlsplit
 
+from core_common.protocol.discovery_txt import ROBOT, Rejected, classify
+
+_ROW_ERRORS = {
+    "bad_host": "invalid discovery hostname",
+    "bad_address": "discovery address must be a private LAN IPv4 address",
+    "bad_port": "invalid discovery port",
+}
+
 
 class DiscoveryStore:
     def __init__(self, *, clock=time.monotonic, ttl_s: float = 45.0) -> None:
@@ -30,30 +38,24 @@ class DiscoveryStore:
             if (not isinstance(name, str) or not name or len(name) > 96
                     or any(ord(char) < 32 for char in name)):
                 raise ValueError("invalid discovery name")
-            if (not isinstance(hostname, str) or len(hostname) > 253
-                    or (hostname and (not hostname.endswith(".local")
-                                      or any(char not in "abcdefghijklmnopqrstuvwxyz0123456789-."
-                                             for char in hostname.lower())))):
-                raise ValueError("invalid discovery hostname")
-            try:
-                ip = ipaddress.ip_address(address)
-            except (ValueError, TypeError):
-                raise ValueError("invalid discovery address") from None
-            if (ip.version != 4 or not ip.is_private or ip.is_loopback or ip.is_link_local
-                    or ip.is_multicast or ip.is_unspecified):
-                raise ValueError("discovery address must be a private LAN IPv4 address")
-            if isinstance(port, bool) or not isinstance(port, int) or not 1 <= port <= 65535:
-                raise ValueError("invalid discovery port")
+            if not isinstance(hostname, str) or not isinstance(address, str):
+                raise ValueError("invalid discovery address")
             network = device.get("network", "sta")
-            if network == "ap":
-                continue
-            if network != "sta":
+            if network not in ("sta", "ap"):
                 raise ValueError("invalid discovery network")
+            # The bridge already classified the TXT; re-check the row with the same
+            # classifier (D-370 5.1). Rows carry no common keys, so they classify as legacy.
+            result = classify(ROBOT, hostname or None, address, port, [("network", network)])
+            if isinstance(result, Rejected):
+                if result.reason == "ap_mode":
+                    continue
+                raise ValueError(_ROW_ERRORS[result.reason])
+            ip = ipaddress.ip_address(address)
             stage = device.get("stage", "")
             release = device.get("release", "")
             if any(not isinstance(value, str) or len(value) > 96 for value in (stage, release)):
                 raise ValueError("invalid discovery metadata")
-            rows.append({"name": name, "hostname": hostname.lower(),
+            rows.append({"name": name, "hostname": result.host or "",
                          "address": str(ip), "port": port,
                          "stage": stage, "release": release})
         # One service may appear on several interfaces; identical addresses collapse.
@@ -61,9 +63,18 @@ class DiscoveryStore:
                            for row in rows}.values())
         self._seen_at = self._clock()
 
-    def snapshot(self, registered: dict[str, str], paired: dict[str, dict]) -> dict:
+    def rows(self) -> list[dict]:
+        """Current unexpired scan rows (copies); empty when the scanner is offline."""
+        if self._seen_at is None or self._clock() - self._seen_at > self._ttl_s:
+            return []
+        return [dict(row) for row in self._rows]
+
+    def snapshot(self, registered: dict[str, str], paired: dict[str, dict],
+                 enrolled: dict[str, str] | None = None) -> dict:
+        """`enrolled` maps a lowercase discovery name to its enrolled robot_id (D-361 8)."""
         if self._seen_at is None or self._clock() - self._seen_at > self._ttl_s:
             return {"devices": [], "scanner_online": False}
+        enrolled = enrolled or {}
         counts = {}
         for row in self._rows:
             counts[row["name"]] = counts.get(row["name"], 0) + 1
@@ -81,8 +92,15 @@ class DiscoveryStore:
                     matching.append(robot_id)
             status = "registration_pending"
             robot_id = matching[0] if len(matching) == 1 else None
+            enrolled_id = enrolled.get(row["name"].lower())
             if counts[row["name"]] > 1 or len(matching) > 1:
                 status = "conflict"
+            elif enrolled_id is not None:
+                # Matched by name; an address difference is the register's own state.
+                robot_id = enrolled_id
+                agent = paired.get(robot_id) or {}
+                status = ("verified_online" if agent.get("online") and agent.get("device_uid")
+                          and agent.get("device_name") == row["name"] else "enrolled")
             elif robot_id is not None:
                 agent = paired.get(robot_id) or {}
                 if agent.get("online") and agent.get("device_uid"):
@@ -90,6 +108,7 @@ class DiscoveryStore:
                               and row["stage"] == "CORE_READY" else "conflict")
                 else:
                     status = "pairing_pending"
-            devices.append({**row, "robot_id": robot_id, "status": status})
+            devices.append({**row, "robot_id": robot_id, "status": status,
+                            "enrollable": status == "registration_pending"})
         return {"devices": sorted(devices, key=lambda item: (item["name"], item["address"])),
                 "scanner_online": True}

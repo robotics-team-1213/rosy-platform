@@ -27,6 +27,7 @@
 
 ## 최근 기록
 
+- 2026-09-30 · uncommitted · docs(harness): ROS-SIM blocker를 실제 조건으로 정정 — cmd 경로도 현재 트리로
 - 2026-09-25 · uncommitted · refactor(devices): move led under src/devices/pinky_pro/led (D-231)
 - 2026-09-22 · uncommitted · chore: update ARTIFACT blocker to Native Image Builder (D-164)
 - 2026-09-16 · uncommitted · docs(harness): regrade led gates after review

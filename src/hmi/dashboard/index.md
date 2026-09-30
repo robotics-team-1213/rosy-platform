@@ -37,8 +37,8 @@
 
 ## 최근 기록
 
+- 2026-09-30 · uncommitted · refactor(dashboard): D-377 Rosy Robot title and favicon
+- 2026-09-30 · uncommitted · docs(adr): D-358 앱 역할 ADR을 D-370으로 재번호
+- 2026-09-30 · uncommitted · feat(icons): D-358 S3 대시보드 파비콘
 - 2026-09-30 · 79787e7a · D-371 US-010 정지 컨트롤에 data-always-live, 대화상자 위 정지 시험
 - 2026-09-30 · 5bcd9617 · D-371 US-010 목록 행 삭제는 조용한 `삭제…` + 확인 대화상자
-- 2026-09-30 · bd2bd093 · D-359 US-009 도크 상태 한국어, 빈 목록 모양 통일
-- 2026-09-30 · 709651d1 · D-359 US-009 로봇 지도 읽기 실패는 무대 위에
-- 2026-09-30 · 029188c4 · D-359 US-009 카메라 상태 태그

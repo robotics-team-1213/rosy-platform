@@ -14,7 +14,11 @@ Honest holes, not oversights:
   scan never sees it at all.
 - Dynamic imports (``importlib.import_module``, entry points) are invisible.
   The one intended case is core loading ``rosy.sensor_provider`` (D-126).
-- Line counts are physical lines, blank lines and comments included.
+- P6 budgets are per code type (D-362): 600 for production ``.py``/``.cpp``/``.hpp``/``.sh``
+  across ``src/`` packages and the ``deploy``/``tools``/``firmware`` roots, 800 for web
+  assets (``.js``/``.html``/``.css``) inside ``src/`` packages, zero growth allowance above
+  1000. Test code and data files are exempt. Line counts are physical lines, blank
+  lines and comments included.
 """
 
 import ast
@@ -51,7 +55,8 @@ KNOWN_CHAIN_BACK_EDGES = {
 }
 KNOWN_DIRECTION = {
     ("control", "imu_bno055"): "runtime/sensing -> drivers/imu_bno055; declared exec_depend. Legacy launches start the IMU driver; the long-term fix is bringup assembly, not a sensing launch",
-    ("overhead", "games"): "site overhead reuses the ROS-free four-point homography helper for camera calibration",
+    ("rosy_vision", "games"): "Rosy Vision reuses the ROS-free four-point homography helper for camera calibration",
+    ("bringup", "control"): "products/bringup -> runtime/sensing: bringup_robot.launch.py starts control's ir_adc_node for the rosy-io graph (enable_ir, D-344 §12) — bringup assembling the robot graph is the direction the imu_bno055 row names",
 }
 
 #: P6 budgets.
@@ -59,23 +64,39 @@ FILE_BUDGET = 600
 PACKAGE_BUDGET = 10_000
 REGROWTH_ALLOWANCE = 150
 
+#: P6 per-type budgets and coverage (D-362), docs/plans/2026-09-30-file-size-budget-and-refactor-queue.md
+FILE_BUDGET_WEB = 800
+WEB_SUFFIXES = {".js", ".html", ".css"}
+OPS_SUFFIXES = {".py", ".sh"}
+OPS_ROOTS = ("deploy", "tools", "firmware")
+HARD_TIER = 1_000  # a file above this gets zero growth allowance
+
 CONTROL_SPLIT = "docs/plans/2026-09-22-control-package-split-design.md"
 
 #: P6 verdicts: path (relative to src/) or package name -> (lines at verdict, verdict).
 SIZE_VERDICTS = {
-    "site/fleet/fleet/server/app.py": (
-        1315,
-        "split: the mission/dispatch route groups now carry their own stores and lifecycles (task_store, "
-        "mission modules) — the independent-boundary condition the 813-line accept was waiting for arrived "
-        "with the arbitration work; owner fleet, unscheduled (docs/plans/"
-        "2026-09-29-fleet-mission-control-arbitration-implementation.md)",
-    ),
     "fleet": (
-        11_912,
+        19_243,
         "split: server HTTP boundary, console, signals and the mission-control stores are separate owners "
         "today; group them into subpackages rather than one flat server/ tree (B2); owner fleet, unscheduled "
-        "(re-judged 2026-09-30 at 11912 after the policy/goal-evidence contracts and their stores joined "
-        "the same flat server tree, docs/plans/2026-09-30-goal-evidence-producer-and-verifier.md)",
+        "(re-judged 2026-09-29 at 11164 after mission_store joined the server tree; re-judged 2026-09-30 at "
+        "12419 after the D-361 enrollment register, roster and service joined as their own modules, and "
+        "at 12574 after the D-361 review fixes; re-judged 2026-09-30 at 13187 after main's goal-evidence "
+        "contracts and stores merged in; re-judged 2026-09-30 at 14260 after D-357/D-358 feedback "
+        "contracts, dispatcher, stateless adapter and bounded outbox modules/tests were added; re-judged "
+        "at 14616 after atomic candidate fencing and linked-successor regression tests; re-judged at 15000 "
+        "after the injected outbox consumer, trusted post-action Vision reader, and deadline/egress fence "
+        "coverage joined; re-judged 2026-09-30 at 18967 under D-362 — the package total now counts web "
+        "assets (server/web console js/css/html); re-judged 2026-09-30 at 19243 after D-362 P0-1 "
+        "executed the app.py router split (app.py 1556 -> 476 plus mission/task_dispatch/intent/"
+        "console/ingest/static route modules and site_auth) — the flat server/ tree still wants the "
+        "B2 subpackage regroup, verdict unchanged. Split remains "
+        "unscheduled (docs/plans/2026-09-30-er2-mission-feedback-loop.md)",
+    ),
+    "site/fleet/fleet/server/enrollment.py": (
+        610,
+        "accept: one owner (D-361 robot enrollment — exchange, binding, pinned-address gate, unenroll and "
+        "pending logout share one state machine over the register), ROS-free, host-testable (X5)",
     ),
     "site/fleet/fleet/server/mission_store.py": (
         728,
@@ -84,37 +105,37 @@ SIZE_VERDICTS = {
         "stays in task_store/task_results (X5)",
     ),
     "contracts/foundation/core_common/protocol/schemas.py": (
-        742,
+        1002,
         "accept: the D-18 single contract source — every envelope, event and capability model in one "
         "importable place; per-domain schema files would fork the version pin that "
-        "test_protocol_version_alignment guards. ROS-free, host-testable (X5)",
+        "test_protocol_version_alignment guards. Re-judged 2026-09-30 at 1000 lines after the bounded "
+        "Mission feedback scope/context/tool-result contracts were added; re-judged 2026-09-30 at 1001 "
+        "under the D-362 zero-allowance tier; re-judged 2026-09-30 at 1002 when the pilot branch added "
+        "LineFollowStatus.clearance_m (D-344 §11, one field). ROS-free, host-testable (X5)",
     ),
     "site/fleet/fleet/server/task_store.py": (
-        1014,
+        1060,
         "accept: keep SQLite task, history, lease, reservation, and dispatch-claim transactions together; "
         "correlated CORE event projection lives in task_results.py. Re-judged 2026-09-29 at 1014 lines after "
         "durable dispatch resource claims moved into the same store owner (docs/plans/"
-        "2026-09-29-fleet-mission-control-arbitration-implementation.md)",
-    ),
-    "runtime/sensing/control/startup_calibration_node.py": (
-        954,
-        f"split: extract the ROS-free calibration state machine (C1); {CONTROL_SPLIT}",
-    ),
-    "runtime/sensing/control/calib_node.py": (
-        640,
-        f"split: same calibration cluster as startup_calibration_node (C1); {CONTROL_SPLIT}",
+        "2026-09-29-fleet-mission-control-arbitration-implementation.md); re-judged 2026-09-30 at 1060 "
+        "under the D-362 zero-allowance tier — verdict unchanged",
     ),
     "runtime/sensing/control/safety/node.py": (
         795,
         "accept: legacy comparison-graph publisher pinned by test_module_separation; no new work (X3)",
     ),
     "site/fleet/fleet/server/console.py": (
-        767,
-        "accept: one owner (FleetConsole gather/scatter), host-testable (X5)",
+        1021,
+        "accept: one owner (FleetConsole gather/scatter), host-testable (X5). Re-judged 2026-09-30 at 1013: "
+        "D-361 roster mutation and pinned-address holds change the gather/traffic tables in place, so they "
+        "stay with their owner; the roster policy itself lives in roster.py; re-judged 2026-09-30 at 1021 "
+        "under the D-362 zero-allowance tier — verdict unchanged",
     ),
     "runtime/sensing/control/sensing/perception/lane.py": (
-        611,
-        "accept: one concern (lane/IR line detection), ROS-free pure functions and trackers, host-testable (X5)",
+        765,
+        "accept: one concern (lane/IR line detection), ROS-free pure functions and trackers, host-testable (X5); "
+        "the ground-geometry lane keeper already lives apart in lane_keep.py (D-364)",
     ),
     "runtime/sensing/control/sensing/perception/lane_bev.py": (
         611,
@@ -145,8 +166,76 @@ SIZE_VERDICTS = {
         "accept: sim-only read-only viewer server (HTTP handler + ROS subscriptions); the pure logic already lives in live_view_model.py and the page in lane_live_view.html, covered by test_lane_live_view*.py and test_live_view_model.py (X5)",
     ),
     "control": (
-        32_106,
-        f"split: deploy closure needs only sensing + safety provider (P1a); {CONTROL_SPLIT}",
+        36_677,
+        f"split: deploy closure needs only sensing + safety provider (P1a); {CONTROL_SPLIT} "
+        "(re-judged 2026-09-30 at 33090 after D-356 added the ROS-free learned perception backend "
+        "(sensing/perception/learned), the shadow node and the recording CLI; the learned backend sits "
+        "inside sensing/perception and moves with it — verdict unchanged; re-judged 2026-09-30 at 35197 "
+        "under D-362 — web/diagnostic.html and the sensing web assets now count toward the package total; "
+        "re-judged 2026-09-30 at 36091 when the pilot branch merged the ROS-free lane keepers "
+        "(lane_keep.py 'keep', lane.py 'between') and the NOMINAL ground inside sensing/perception — verdict unchanged; "
+        "re-judged again at 36677 with the ROS-free IR line calibration (perception/ir_calibration.py), its read-only "
+        "device CLI and the camera-launch overlay validator (control/ir_overlay.py) — verdict unchanged)",
+    ),
+    # --- D-362 newly-covered files (web assets in src/ packages, ops roots). ---
+    "runtime/sensing/web/diagnostic.html": (
+        1857,
+        "accept: re-judged 2026-09-30 (D-362 P1) — the single HTML file with one IIFE is the "
+        "recorded design, not an accident (web/AGENTS.md: dependency-free on purpose, no build "
+        "step, served straight from the share dir); it is a debug-only surface excluded from "
+        "operational launch and deploy (D-150, ports pinned out by test_control_launch_boundary), "
+        "with one owner (web_node). Splitting it into css/js partials would break that contract "
+        "to shorten a dev-only file. Zero growth allowance applies (>1000)",
+    ),
+    # hmi/dashboard/app.js (1338 -> 745) and styles.css (1119 -> 492): the P1
+    # extraction landed — telemetry/teleop/state-socket modules and the
+    # console-detail.css tail split — so these entries left with it.
+    "sim/gz_sim/scripts/lane_live_view.html": (
+        856,
+        "accept: same owner as the accepted lane_live_view.py — the pure logic already lives in "
+        "live_view_model.py and this is the read-only page it renders, covered by test_lane_live_view*.py "
+        "and test_live_view_model.py (X5)",
+    ),
+    "deploy/robot/pinky_pro/image/first-boot/rosy-first-boot.py": (
+        799,
+        "accept: single-entry first-boot provisioning that runs once on the card — one state machine, "
+        "covered by test/test_first_boot_provisioning.py (X5)",
+    ),
+    "deploy/robot/pinky_pro/sd/verify-media-readback.py": (
+        788,
+        "accept: standalone Windows readback script the operator runs from one file; covered by "
+        "test/test_media_readback.py (X5)",
+    ),
+    "tools/harness/rosy_harness.py": (
+        693,
+        "accept: the harness gate itself (lint/generate) — one CLI owner pinned by "
+        "test/test_harness_contracts.py (X5)",
+    ),
+    "deploy/robot/pinky_pro/native/rosy-boot-display.py": (
+        688,
+        "accept: single-entry boot status display (T0 indicator) — one render loop, covered by "
+        "test/test_boot_display.py (X5)",
+    ),
+    "deploy/robot/pinky_pro/release/updater.py": (
+        686,
+        "accept: activate/rollback atomicity is one transactional script; covered by "
+        "test/test_release_updater.py (X5)",
+    ),
+    "deploy/robot/pinky_pro/release/secret_scan.py": (
+        670,
+        "accept: one scan entry over the release tree — the rules and the walker are the same concern (X5)",
+    ),
+    "deploy/robot/pinky_pro/native/rosy-hw-probe.py": (
+        641,
+        "accept: single-entry hardware probe CLI the commissioning runbook drives top-to-bottom — "
+        "splitting probe sequence from reporting would sever one diagnostic narrative (X5)",
+    ),
+    "products/omx/adapter/omx_adapter/action_store.py": (
+        788,
+        "accept: one owner for the durable local Action and per-attempt ROS phase journal; "
+        "they share SQLite transactions, identity fences, and restart-to-UNKNOWN recovery. "
+        "ROS-free and host-testable; runner integration remains tracked in docs/plans/"
+        "2026-09-30-action-message-identity.md (X5)",
     ),
 }
 
@@ -222,7 +311,8 @@ def layout_ok(rel: tuple, name: str) -> bool:
         return rel == ROLE_DIR[name]
     if rel[0] == "products":
         return False  # Product packages require an explicit family/role declaration.
-    return len(rel) == 2 and rel[1] == name
+    # D-377: an app package is `rosy_<word>` in folder `<domain>/<word>`.
+    return len(rel) == 2 and name in (rel[1], f"rosy_{rel[1]}")
 
 
 def _declared(name: str) -> set:
@@ -296,7 +386,8 @@ def _allowed(source: str, target: str) -> bool:
     if src_domain == "runtime" and dst_domain == "runtime":
         return True
     # D-243: the API package serves the operator screens and nothing else in runtime does.
-    if source == "core_api_web" and target == "dashboard":
+    # D-323: the pilot teleop surface follows the same serving exception.
+    if source == "core_api_web" and target in {"dashboard", "pilot"}:
         return True
     return edge_allowed(src_domain, _family(source), dst_domain, _family(target), target)
 
@@ -405,17 +496,35 @@ def test_core_chain_stays_one_way():
     )
 
 
+def _is_prod_outside_src(path: Path) -> bool:
+    """Prod filter for the deploy/tools/firmware roots (D-362), same rule as _is_prod."""
+    return not any(
+        p in ("test", "tests", "build", "install", "log") or p.startswith(".")
+        for p in path.relative_to(ROOT).parts
+    )
+
+
 def _over_budget() -> dict:
     over = {}
     for name in PACKAGES:
         total = 0
-        for path in _files(name, CODE_SUFFIXES):
+        for path in _files(name, CODE_SUFFIXES | {".sh"} | WEB_SUFFIXES):
             count = _lines(path)
             total += count
-            if count > FILE_BUDGET:
+            budget = FILE_BUDGET_WEB if path.suffix in WEB_SUFFIXES else FILE_BUDGET
+            if count > budget:
                 over[path.relative_to(SRC).as_posix()] = count
         if total > PACKAGE_BUDGET:
             over[name] = total
+    for root_name in OPS_ROOTS:
+        for path in (ROOT / root_name).rglob("*"):
+            if not path.is_file() or path.suffix not in OPS_SUFFIXES:
+                continue
+            if not _is_prod_outside_src(path):
+                continue
+            count = _lines(path)
+            if count > FILE_BUDGET:
+                over[path.relative_to(ROOT).as_posix()] = count
     return over
 
 
@@ -426,6 +535,13 @@ def test_over_budget_code_has_a_recorded_verdict():
         f"needs a verdict: {sorted((k, over[k]) for k in set(over) - set(SIZE_VERDICTS))}, "
         f"stale: {sorted(set(SIZE_VERDICTS) - set(over))}"
     )
+
+
+def _allowance(key: str, at_verdict: int, now: int) -> int:
+    """D-362: a file above HARD_TIER gets zero growth allowance (packages keep 150)."""
+    if key not in PACKAGES and max(at_verdict, now) > HARD_TIER:
+        return 0
+    return REGROWTH_ALLOWANCE
 
 
 def test_size_verdicts_are_well_formed_and_current():
@@ -439,8 +555,9 @@ def test_size_verdicts_are_well_formed_and_current():
         for plan in re.findall(r"docs/plans/\S+?\.md", verdict):
             if not (ROOT / plan).is_file():
                 bad.append(f"{key}: plan not found {plan}")
-        if key in over and over[key] > at_verdict + REGROWTH_ALLOWANCE:
-            bad.append(f"{key}: {over[key]} lines, grew past {at_verdict}+{REGROWTH_ALLOWANCE}; re-judge")
+        allowance = _allowance(key, at_verdict, over.get(key, 0))
+        if key in over and over[key] > at_verdict + allowance:
+            bad.append(f"{key}: {over[key]} lines, grew past {at_verdict}+{allowance}; re-judge")
     assert bad == [], bad
 
 

@@ -1,4 +1,4 @@
-"""core_api_web.api.app — FastAPI 팩토리 (P1-9, API-101). 계약: ROSY-API-REF-001 v1.59."""
+"""core_api_web.api.app — FastAPI 팩토리 (P1-9, API-101). 계약: ROSY-API-REF-001 v1.64."""
 
 from __future__ import annotations
 
@@ -58,12 +58,12 @@ OPERATOR_PAGE_HEADERS = {"Cache-Control": "no-cache", "Content-Security-Policy":
 def _web_common_root() -> Path:
     """Resolve installed assets first, with a source-tree fallback for host tests.
 
-    A web_common directory is one that ships ``manifest.json``."""
+    A web_common directory is one that ships ``shared-assets.json``."""
     try:
         from ament_index_python.packages import get_package_share_directory
 
         share = Path(get_package_share_directory("web_common"))
-        if (share / "manifest.json").is_file():
+        if (share / "shared-assets.json").is_file():
             return share
     except (ImportError, LookupError):
         pass
@@ -72,7 +72,7 @@ def _web_common_root() -> Path:
 
 def _shared_assets(web_common: Path) -> dict[str, str]:
     """name -> media type, from web_common's manifest (the one /common allowlist)."""
-    manifest = json.loads((web_common / "manifest.json").read_text(encoding="utf-8"))
+    manifest = json.loads((web_common / "shared-assets.json").read_text(encoding="utf-8"))
     return dict(manifest["shared_assets"])
 
 
@@ -89,11 +89,24 @@ def _dashboard_root() -> Path:
     return Path(__file__).resolve().parents[4] / "hmi" / "dashboard"
 
 
+def _pilot_root() -> Path:
+    """Teleop surface (D-323). Same resolution rule as the dashboard."""
+    try:
+        from ament_index_python.packages import get_package_share_directory
+
+        share = Path(get_package_share_directory("pilot"))
+        if (share / "index.html").is_file():
+            return share
+    except (ImportError, LookupError):
+        pass
+    return Path(__file__).resolve().parents[4] / "hmi" / "pilot"
+
+
 def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
     app = FastAPI(
         title="ROSY CORE API",
         version="1.20.0",
-        description="로봇 미들웨어 API — 계약: ROSY-API-REF-001 (v1.59)",
+        description="로봇 미들웨어 API — 계약: ROSY-API-REF-001 (v1.64)",
     )
     app.state.core = services
     app.state.pairing = PairingState()
@@ -118,7 +131,11 @@ def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
         # 이 allowlist는 `{asset_name:path}`가 슬래시를 허용하므로 경로 순회를
         # 막는 파일시스템 방어목적이므로 폴더 스캔으로 바꾸지 않는다.
         "styles.css": "text/css",
+        "console-detail.css": "text/css",
         "app.js": "application/javascript",
+        "telemetry.js": "application/javascript",
+        "teleop.js": "application/javascript",
+        "state-socket.js": "application/javascript",
         "map.js": "application/javascript",
         "host-cards.js": "application/javascript",
         "ros-network.js": "application/javascript",
@@ -188,6 +205,61 @@ def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
             web_root / asset_name,
             media_type=media_type,
             headers={"Cache-Control": "no-cache"},
+        )
+
+    # D-323 — Rosy Pilot 조종 표면. dashboard와 같은 정적 파일·allowlist 규칙.
+    pilot_root = _pilot_root()
+    pilot_assets = {
+        # 이 allowlist도 {asset_name:path}의 경로 순회 방어다. 모듈이 늘 때마다 여기에 등록.
+        "styles.css": "text/css",
+        "stick.js": "application/javascript",
+        "link.js": "application/javascript",
+        "app.js": "application/javascript",
+        "client.js": "application/javascript",
+        "drivers/registry.js": "application/javascript",
+        "drivers/pinky_core.js": "application/javascript",
+        "recent.js": "application/javascript",
+        "autonomy.js": "application/javascript",
+        "screens/connect.js": "application/javascript",
+        "screens/drive.js": "application/javascript",
+        "screens/inputs.js": "application/javascript",
+        "input-state.js": "application/javascript",
+        "vision.js": "application/javascript",
+        "manifest.webmanifest": "application/manifest+json",
+        "sw.js": "application/javascript",
+        "icons/icon-192.png": "image/png",
+        "icons/icon-192-maskable.png": "image/png",
+        "icons/icon-512.png": "image/png",
+    }
+
+    @app.get("/pilot", include_in_schema=False)
+    def pilot():
+        return FileResponse(
+            pilot_root / "index.html",
+            media_type="text/html",
+            headers={
+                "Cache-Control": "no-cache",
+                "Content-Security-Policy": (
+                    "default-src 'self'; connect-src 'self' ws: wss:; "
+                    "img-src 'self' data: blob:; style-src 'self'; script-src 'self'; "
+                    "frame-ancestors 'none'; base-uri 'self'"
+                ),
+            },
+        )
+
+    @app.get("/pilot/assets/{asset_name:path}", include_in_schema=False)
+    def pilot_asset(asset_name: str):
+        media_type = pilot_assets.get(asset_name)
+        if media_type is None:
+            raise HTTPException(status_code=404, detail="pilot asset not found")
+        headers = {"Cache-Control": "no-cache"}
+        if asset_name == "sw.js":
+            # scope /pilot 은 스크립트 디렉터리(/pilot/assets)보다 넓다 — 허용 헤더 필수(D-365).
+            headers["Service-Worker-Allowed"] = "/pilot"
+        return FileResponse(
+            pilot_root / asset_name,
+            media_type=media_type,
+            headers=headers,
         )
 
     # D-129 — 토큰 파일은 트리 전체에서 하나다. 모든 웹 표면이 이 한 파일을

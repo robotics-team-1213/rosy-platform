@@ -12,6 +12,7 @@ Human-facing screens and shared browser assets. These source locations do not id
 | Directory | ROS package / purpose |
 |-----------|-----------------------|
 | dashboard/ | Operator screens served by the CORE FastAPI process (core_api_web); static screens, not a Node server |
+| pilot/ | ROS package pilot; Rosy Pilot teleop surface (D-323) served by the CORE FastAPI process — same static pattern, v1 Pinky driving only |
 | face/ | ROS package emotion; Pinky LCD face and status surfaces |
 | web/ | ROS package web_common; shared browser tokens and controls |
 
@@ -40,7 +41,7 @@ Every screen a person sees is registered in `web_common/surfaces.yaml`. Walk thi
    - Native and LCD code copies token values one per line, `Color(0xFFRRGGBB) // --name` or `(r, g, b)  # --name #hex`, and points `token_copy` at that file.
    - Use no platform default theme. The rose colour is for the ROSY name only.
 5. **Transport:**
-   - Serve shared files from `web_common/manifest.json`; never add a per-server allowlist.
+   - Serve shared files from `web_common/shared-assets.json`; never add a per-server allowlist.
    - Robot screens use same-origin `/api/v1` and `/ws/*`. The WS token goes in the first frame, never the URL (D-193).
    - Send a CSP on every HTML response.
 6. **Verify:** `python -m pytest src/hmi/web_common/test -q` checks the registry, titles, ports and token copies.

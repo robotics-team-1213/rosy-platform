@@ -1,21 +1,18 @@
 """Run the real preflight adapter across footprint/standard limit changes."""
-import ast
 import math
 from pathlib import Path
 from types import SimpleNamespace
 import unittest
+from mixin_method import mixin_method
 from control.control.calibration_clearance import motion_clearance, preflight_clearance_wait
 
 
 class TargetHandoffTest(unittest.TestCase):
     def setUp(self):
-        path=Path(__file__).parents[1]/'control/startup_calibration_node.py'
-        cls=next(n for n in ast.parse(path.read_text(encoding='utf-8')).body if isinstance(n,ast.ClassDef))
-        method=next(n for n in cls.body if isinstance(n,ast.FunctionDef) and n.name=='safe_motion')
-        scope=dict(math=math,motion_clearance=motion_clearance,
-                   motion_evidence=lambda start,current:{'lidar_delta_m':0.})
-        exec(compile(ast.Module(body=[method],type_ignores=[]),str(path),'exec'),scope)
-        self.safe=scope['safe_motion']
+        # D-171: safe_motion lives in the ROS-free calibration_sequence mixin.
+        self.safe=mixin_method('control.calibration_sequence','safe_motion',
+                    math=math,motion_clearance=motion_clearance,
+                    motion_evidence=lambda start,current:{'lidar_delta_m':0.})
         self.node=SimpleNamespace(phase='validating_motion',motion_start=None,selected_target=.03,
             trial_gate_reason=lambda now:None,
             safety_limits=(10.,dict(front_m=.153,rear_m=.138,front_stop_m=.12,rear_stop_m=.09,
@@ -75,15 +72,9 @@ class TargetHandoffTest(unittest.TestCase):
         self.assertEqual(self.node.selected_target,.03)
 
     def test_actual_tick_clearance_wait_publishes_zero_and_expires(self):
-        path=Path(__file__).parents[1]/'control/startup_calibration_node.py'
-        tree=ast.parse(path.read_text(encoding='utf-8'))
-        tick=next(n for n in ast.walk(tree) if isinstance(n,ast.FunctionDef) and n.name=='tick')
-        branch=next(n for n in ast.walk(tick) if isinstance(n,ast.If)
-                    and ast.unparse(n.test)=="self.phase == 'validating_motion'")
-        fn=ast.parse('def run(self, now): pass').body[0]
-        fn.body=branch.body
-        scope={'preflight_clearance_wait':preflight_clearance_wait}
-        exec(compile(ast.fix_missing_locations(ast.Module(body=[fn],type_ignores=[])),str(path),'exec'),scope)
+        # D-171: the validating_motion branch is the ROS-free tick_motion mixin.
+        run=mixin_method('control.calibration_sequence','tick_motion',
+                         preflight_clearance_wait=preflight_clearance_wait)
         calls=[]
         node=self.node
         node.safety_limits[1]['front_m']=.139
@@ -93,8 +84,8 @@ class TargetHandoffTest(unittest.TestCase):
         node.zero=lambda:calls.append('zero')
         node.publish=lambda:calls.append('publish')
         node.finish=lambda ok,reason:calls.append(('finish',ok,reason))
-        scope['run'](node,10.)
+        run(node,10.)
         self.assertEqual(calls,['zero','publish'])
         self.assertIsNone(node.motion_start)
-        scope['run'](node,11.5)
+        run(node,11.5)
         self.assertEqual(calls[-1][0:2],('finish',False))

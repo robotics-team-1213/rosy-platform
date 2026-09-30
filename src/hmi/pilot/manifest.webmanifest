@@ -1,0 +1,16 @@
+{
+  "name": "Rosy Pilot",
+  "short_name": "Rosy Pilot",
+  "description": "ROSY 로봇 직접 조종 표면 (D-323)",
+  "start_url": "/pilot",
+  "scope": "/pilot",
+  "display": "standalone",
+  "orientation": "landscape",
+  "background_color": "#101214",
+  "theme_color": "#101214",
+  "icons": [
+    {"src": "/pilot/assets/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
+    {"src": "/pilot/assets/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"},
+    {"src": "/pilot/assets/icons/icon-192-maskable.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable"}
+  ]
+}

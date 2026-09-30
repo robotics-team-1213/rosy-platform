@@ -39,3 +39,26 @@ def test_non_rosy_and_non_local_records_are_ignored():
               '=;eth0;IPv4;far;_rosy._tcp;example.com;far.example.com;192.168.1.4;8080;'
               '"name=far"')
     assert _module().parse_avahi(output) == []
+
+
+# D-370 5.1: this standalone copy is held to the shared TXT vectors.
+import json  # noqa: E402
+
+import pytest  # noqa: E402
+
+VECTORS = json.loads((Path(__file__).resolve().parent / "fixtures/protocol/discovery-txt.v1.json")
+                     .read_text(encoding="utf-8"))
+
+
+def avahi_line(case: dict) -> str:
+    """One resolved avahi-browse -p row for a vector case."""
+    family = "IPv6" if ":" in (case["address"] or "") else "IPv4"
+    txt = " ".join(f'"{item}"' for item in case["txt"])
+    return (f'=;eth0;{family};ROSY {case["id"]};{case["service_type"]};local;'
+            f'{case["host"]};{case["address"]};{case["port"]};{txt}')
+
+
+@pytest.mark.parametrize("case", VECTORS["cases"], ids=lambda case: case["id"])
+def test_bridge_accepts_exactly_the_robot_vectors(case):
+    accepted = case["expect"]["accepted"] and case["service_type"] == "_rosy._tcp"
+    assert bool(_module().parse_avahi(avahi_line(case))) is accepted

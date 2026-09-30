@@ -37,7 +37,7 @@ jobs:
           # python3-opencv: the lane live viewer (src/sim/gz_sim/scripts/lane_live_view.py)
           # imports cv2 at module top; without the package the gz_sim step dies at
           # collection and masks every later gate (main red since 650fad89, 2026-09-24).
-          apt-get install -y -qq nodejs python3-colcon-common-extensions python3-pip openssl zstd python3-opencv ros-jazzy-xacro ros-jazzy-realtime-tools ros-jazzy-rmw-cyclonedds-cpp ros-jazzy-nav2-msgs
+          apt-get install -y -qq nodejs python3-colcon-common-extensions python3-pip openssl zstd python3-opencv python3-pil ros-jazzy-xacro ros-jazzy-realtime-tools ros-jazzy-rmw-cyclonedds-cpp ros-jazzy-nav2-msgs
           # --break-system-packages: ros:jazzy-ros-base 는 Ubuntu 24.04 / Python 3.12 라
           # 시스템 환경이 PEP 668 로 표시되어 있다. 이 플래그가 없어 run 34474895940 이
           # externally-managed-environment 로 40 초만에 죽었고, 그 아래 colcon build 부터
@@ -83,10 +83,10 @@ jobs:
       - name: Test (fleet formation, relay, session)
         run: python3 -m pytest src/site/fleet/test/ -v
 
-      # overhead 수신기도 ROS 를 import 하지 않는다(conftest 가 fleet·games·foundation 을
+      # Rosy Vision 수신기도 ROS 를 import 하지 않는다(conftest 가 fleet·games·foundation 을
       # sys.path 에 얹는다). games 와 test_preview.py 기본 이름이 겹치므로 따로 돈다.
-      - name: Test (overhead camera receiver)
-        run: python3 -m pytest src/site/overhead/test -q
+      - name: Test (Rosy Vision receiver)
+        run: python3 -m pytest src/site/vision/test -q
 
       # 멀티 인스턴스 런치는 로봇마다 포트·HOME·설정을 갈라야 한다. 그 계약은 런치
       # 파일을 실제로 실행해야 검증되므로 ROS 오버레이가 필요하다. ros_gz_sim share 가

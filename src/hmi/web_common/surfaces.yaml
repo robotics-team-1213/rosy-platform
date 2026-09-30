@@ -11,6 +11,11 @@
 # token_parity를 받는다 — token_copy 파일의 `# --이름 #hex` / `// --이름` 사본이 tokens.css와 같아야 한다.
 # 세 계약을 다 받지 않는 항목은 contract_reason, baseline이 없는 항목은
 # baseline_reason을 적는다.
+# app_name·app_name_en·short_name·icon은 D-377 이름 규칙(Rosy + 영어 한 단어, id = 그 단어 소문자)과
+# D-370 3항 아이콘이다(test_surface_icons.py, test/architecture/test_app_identity.py).
+# role은 D-370 1항 역할 표의 한 줄 요약, owns는 그 표면이 소유하는 조작(D-370 4항)이다. 한 조작은
+# 한 표면만 소유한다 — 겹침은 estop(모든 운용 표면)과 transitional 사유가 붙은 이행기 항목만
+# 허용한다(test/architecture/test_app_roles.py). 소유가 없으면 owns: []로 적는다.
 # ports는 표면을 서빙하거나(웹) 표면이 접속하는(네이티브) 기본 포트다. source 파일에 그 숫자가
 # 있어야 하고 두 표면이 같은 포트를 쓰면 안 된다 — 새 표면은 빈 포트를 여기서 고른다. 이유 없는 빈 칸은 등록되지 않는다.
 # themes는 그 표면이 따르는 테마다(D-359 §2·§3.3). 첫 값은 dark다. [dark, light] 웹 표면의
@@ -26,7 +31,11 @@
 # 표면만 가진다. {file: 표면 폴더 상대 파일, block: 최상위 선택자(없으면 파일 전체), reason: 한 줄}.
 # 가리는 원시 색이 없는 항목은 적지 않는다. 테마를 따르는 표면의 색은 tokens.css에서만 온다.
 surfaces:
-  - id: robot-dashboard
+  - id: robot
+    app_name: Rosy Robot
+    app_name_en: Rosy Robot
+    short_name: Rosy Robot
+    icon: src/hmi/web_common/icons/robot.svg
     path: src/hmi/dashboard
     themes: [dark, light]
     surface: robot
@@ -34,11 +43,23 @@ surfaces:
     ports:
       - {port: 8080, source: src/contracts/foundation/config/rosy_default.yaml}
     audience: 운용자·장비 운용 (D-153 §7 — /dashboard·/console·/setup·/device)
+    role: 한 로봇의 상세 상태·작업 준비·설치·정비와 로봇 쪽 자격 관리 (D-370 1항)
+    owns:
+      - robot-detail
+      - robot-basic-ops
+      - robot-settings
+      - device-link-robot
+      - estop
+      - {id: manual-drive, transitional: "D-370 4항 1 — console.teleop, Pilot DEVICE 수용 뒤 링크 패널로"}
     grammar: spatial
     contracts: [shared_controls, typography_focus, dialog]
     baseline: docs/validation/uiux-surfaces-2026-09-26/captures/console-operate-fresh-1366x768.png
 
-  - id: fleet-console
+  - id: console
+    app_name: Rosy Console
+    app_name_en: Rosy Console
+    short_name: Rosy Console
+    icon: src/hmi/web_common/icons/console.svg
     path: src/site/fleet/fleet/server/web
     themes: [dark, light]
     surface: site
@@ -46,6 +67,8 @@ surfaces:
     ports:
       - {port: 8090, source: src/site/fleet/fleet/cli.py}
     audience: 사이트 관제자 (D-153 §7 — Fleet /console)
+    role: 사이트 로스터·여러 로봇 모니터링·Mission·사이트 정지 요청·기기 연결 승인 (D-370 1항)
+    owns: [site-monitoring, mission, overhead-camera-view, device-link-site, estop]
     grammar: exception
     contracts: [shared_controls, typography_focus, dialog]
     breakpoints:
@@ -61,6 +84,8 @@ surfaces:
     ports:
       - {port: 8765, source: src/site/games/games/cli.py}
     audience: 게임 호스트 노트북 (D-153 §7 — /board)
+    role: 게임 호스트 보드 — D-370 역할 표 밖이다(8항)
+    owns: []
     grammar: focal
     contracts: [shared_controls, typography_focus, dialog]
     raw_colours:
@@ -78,6 +103,8 @@ surfaces:
       - {port: 28181, source: src/runtime/sensing/config/web.yaml}
       - {port: 28182, source: src/runtime/sensing/config/web.yaml}
     audience: 제어 진단 (D-153 §7 — PARKED D-266)
+    role: 제어 진단 — PARKED(D-266), D-370 역할 표 밖이다
+    owns: []
     grammar: procedure
     contracts: [shared_controls]
     breakpoints:
@@ -95,12 +122,36 @@ surfaces:
       저장소에 추적된 캡처가 없다. 진단 표면은 PARKED라 회차 G2 대상에서 빠져 있고,
       해제 회차가 첫 셀을 남기면 이 문장을 baseline 경로로 바꾼다.
 
+  - id: pilot
+    app_name: Rosy Pilot
+    app_name_en: Rosy Pilot
+    short_name: Rosy Pilot
+    icon: src/hmi/web_common/icons/pilot.svg
+    path: src/hmi/pilot
+    surface: robot
+    medium: web
+    audience: 현장 운전자 한 사람 (D-323 원격 조종 PWA — CORE 가 /pilot 으로 서빙, 포트는 robot(로봇 대시보드) 과 같은 CORE 포트)
+    role: 한 로봇 직접 수동 운전·운전석 영상·누르는 동안만 가는 운전 보조 (D-370 1항, D-323·D-344)
+    owns: [manual-drive, driver-video, drive-assist, estop]
+    grammar: focal
+    contracts: []
+    contract_reason: >
+      주행 화면은 게임형 HUD(원형 스틱·홀드 페달·큰 터치 표적)라 공용 버튼 크기·글꼴 굵기를
+      표면 CSS 에서 다시 칠한다 — 공용 컨트롤·타이포 계약 시험이 이 재도색을 막는다. 확인 대화상자는
+      없다(비상 정지·진행은 누르는 즉시, D-344). main 병합(2026-09-30) 때 등록만 하고 계약 적용은
+      별도 회차로 둔다 — 그 회차가 contracts 를 채우면 이 문장을 지운다.
+    baseline_reason: >
+      G2 기준선 셀이 아직 없다. 주행 화면 캡처는 실물·가제보 증거라 공개 저장소 밖(D-226)에 있고,
+      저장소용 합성 캡처를 남기는 회차에 이 문장을 baseline 경로로 바꾼다.
+
   - id: web-common
     path: src/hmi/web_common
     themes: [dark, light]
     surface: robot
     medium: web
     audience: 라이브러리 — 사람이 여는 화면이 아니다
+    role: 공유 토큰·컨트롤·아이콘 라이브러리 — 조작을 소유하지 않는다
+    owns: []
     grammar: spatial
     contracts: [typography_focus]
     container_breakpoints:
@@ -119,6 +170,8 @@ surfaces:
     ports:
       - {port: 28183, source: src/sim/gz_sim/scripts/lane_live_view.py}
     audience: Gazebo 레인 뷰어 — 제품 브라우저 표면이 아니다
+    role: 시뮬 레인 뷰어 — 제품 표면이 아니다(D-370 8항)
+    owns: []
     contracts: []
     breakpoints:
       - value: 1000px
@@ -139,22 +192,30 @@ surfaces:
     surface: robot
     medium: lcd
     audience: 로봇 주변 사람 — 얼굴 LCD와 정보 화면 (D-190)
+    role: 로봇 LCD — 부팅 단계·이름·로그인 코드 표시만, 입력과 명령이 없다 (D-370 1항)
+    owns: []
     contracts: [token_parity]
     token_copy: src/hmi/face/emotion/info_screen.py
     baseline_reason: >
       LCD 화면은 브라우저 캡처 회차(G2) 대상이 아니다. 정보 화면 캡처는
       test_info_screen_capture가 호스트에서 만들고 저장소에 기준선을 두지 않는다.
 
-  - id: overhead-camera-app
-    path: src/site/overhead/android
+  - id: cam
+    app_name: Rosy Cam
+    app_name_en: Rosy Cam
+    short_name: Rosy Cam
+    icon: src/hmi/web_common/icons/cam.svg
+    path: src/site/cam
     themes: [dark]
     surface: site
     medium: native
     ports:
-      - {port: 8095, source: src/site/overhead/overhead/cli.py}
+      - {port: 8095, source: src/site/vision/rosy_vision/cli.py}
     audience: 천장 카메라 설치자 — 사이트 휴대폰·태블릿 앱 (D-261)
+    role: 카메라 캡처·프레임 송신·설치 위치 안내만 — 로봇 명령·정지·CORE 연결이 없다 (D-370 1항)
+    owns: [camera-physical-install]
     contracts: [token_parity]
-    token_copy: src/site/overhead/android/app/src/main/java/io/github/livsbittt/rosy/overhead/ui/RosyTheme.kt
+    token_copy: src/site/cam/app/src/main/java/io/github/livsbittt/rosy/cam/ui/RosyTheme.kt
     baseline_reason: >
       네이티브 앱 화면은 브라우저 캡처 회차(G2) 대상이 아니다. 실제 폰 화면 확인은
       D-261의 A3 실기기 회차에서 첫 캡처를 남긴다.

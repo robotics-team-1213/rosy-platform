@@ -32,6 +32,7 @@
 | D-199 | 카메라 인식은 두 층의 고정 계약과 교체 가능한 백엔드로 나눈다 — 규칙 기반으로 시작하고 학습 모델은 같은 자리에 끼운다 |
 | D-205 | 실물 차선 미션으로의 전환: 시뮬레이션 현실화, 인식 재작업, 재합격 순서 |
 | D-206 | P0 실측은 기록지가 표준이고 확정 카메라 프로필은 revision으로 보관한다 — 게이트 판정은 프로토타입 `camcal`로 잇고 `src/robots/pinky_pro/config/`은 D-196 머지 뒤 만든다 |
+| D-356 | 인식 학습 루프 — 학습은 저장소 밖, manifest 약속·접수·데이터 세대 전달·섀도 추론은 안 |
 
 ## 계획·결과 문서
 
@@ -62,8 +63,8 @@
 
 ## 최근 기록
 
-- 2026-09-30 · 79787e7a · D-371 US-010 진단 정지 세 버튼에 data-always-live
-- 2026-09-30 · aeb31356 · D-359 US-005 진단 표면 @media 범위 문법
-- 2026-09-30 · f637c1cd · D-359 US-003 진단 페이지 JS 사본 키를 --ink-quiet에 맞춤
-- 2026-09-30 · faa60733 · D-359 US-002 진단 페이지 어둡게 고정
-- 2026-09-30 · uncommitted · fix(structure): declare imu_bno055 exec_depend
+- 2026-09-30 · 40757d69 · fix(camera): 교정 검사기를 import 못 해도 덮어쓰기만 건너뛴다(재검토 R4)
+- 2026-09-30 · uncommitted · fix(camera,control): IR 교정 덮어쓰기를 전용 경로·검증으로, 도구 문턱 인자(검토 반영)
+- 2026-09-30 · 6f00a74d · fix(camera): 기기 IR 교정 덮어쓰기 파일을 line_observer 에 싣는다
+- 2026-09-30 · 7e467a4b · feat(control): 읽기 전용 IR 차선 교정 도구와 좌·우 부호 확인
+- 2026-09-30 · uncommitted · feat(ros-sim): planning 슬라이스 통과 — goal_node 합성 지도·TF 그래프 검증

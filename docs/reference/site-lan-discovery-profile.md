@@ -8,14 +8,14 @@
 |---|---|---|---|
 | ROSY 로봇 CORE | `_rosy._tcp.local` | 로봇 CORE API, 기본 8080 | Pi 부팅 상태 서비스에서 광고 |
 | ROSY Ubuntu Fleet | `_rosy-fleet._tcp.local` | 사이트 HTTPS 프록시, 기본 8443 | Ubuntu Avahi 서비스와 확인 도구 준비 |
-| ROSY Site Vision 카메라 수신기 | `_rosy-overhead._tcp.local` | TLS WSS `/overhead/v1/frames`, 보통 8443 | Site Avahi 광고, 앱은 선택 목록으로 표시 |
+| ROSY Vision 카메라 수신기 | `_rosy-overhead._tcp.local` | TLS WSS `/overhead/v1/frames`, 보통 8443 | Site Avahi 광고, 앱은 선택 목록으로 표시 |
 | 다른 SERION 미들웨어·장치 | 제품별 고유 서비스 종류를 먼저 할당 | 해당 제품의 공개 API | 이 저장소에서 구현하지 않음 |
 
 한 서비스 종류는 하나의 연결 프로토콜과 역할을 뜻한다. `_http._tcp` 같은 범용 이름에 모든 제품을 섞지 않는다. 서비스 인스턴스 이름은 사람이 보는 표시용이고, SRV target의 `<hostname>.local`은 주소 후보이며, 둘 다 장치 신원의 증거가 아니다. 같은 호스트가 여러 역할을 제공하면 역할별 서비스 레코드를 따로 광고한다.
 
 모든 새 광고는 다음 TXT 키를 넣는다. TXT는 공개 정보만 포함한다. 알 수 없는 키는 무시하며, 필수 키가 중복되거나 값이 맞지 않으면 해당 광고를 버린다.
 
-| 키 | 뜻 | 로봇 값 | Fleet 값 | Site Vision 값 |
+| 키 | 뜻 | 로봇 값 | Fleet 값 | Rosy Vision 값 |
 |---|---|---|---|---|
 | `product` | 제품군 | `rosy` | `rosy` | `rosy` |
 | `role` | API 역할 | `robot` | `fleet` | `overhead-camera` |
@@ -32,6 +32,7 @@
 3. 설치자가 예상 호스트명을 지정한다. 이는 사이트 구성/QR/서명된 설치 자료에서 받은 값이어야 하며, 광고에서 임의로 선택하지 않는다.
 4. 연결은 발견한 IP로 시도하되 TLS SNI와 인증서 호스트명 검사는 예상 호스트명으로 한다. 별도로 배포된 사이트 CA가 필요하다. Fleet은 `/healthz`가 `200`과 `{"status":"ok"}`를 반환해야 주소로 채택한다.
 5. 주소 검증 이후에도 등록과 권한 부여는 기존 페어링·토큰 절차를 거친다. 신원 불일치, 다중 후보, TLS 오류, 서비스 종료는 대기/오류 상태로 표시하고 다른 장치로 자동 전환하지 않는다.
+6. ROSY 로봇을 사이트 Fleet 로스터에 넣는 등록은 [D-361](../adr/D-361-site-console-enrolls-robot-by-screen-code.md)를 따른다: 콘솔에서 로봇 화면 코드를 입력하면 Fleet이 로봇에서 직접 교환하고, 주소는 등록 때 고정한다.
 
 로봇 CORE는 현재 HTTP 계약이므로 광고만으로 명령 주소를 바꾸지 않는다. Fleet의 로봇 발견 화면도 등록 전 관찰용이다. 로봇 FleetAgent는 승인된 지속 연결 `pairing_token`, 예상 `.local` 호스트명, 별도로 설치된 사이트 CA가 모두 있을 때만 `_rosy-fleet._tcp`를 찾아 outbound WSS로 연결한다. 재접속할 때마다 광고와 TLS health를 다시 확인한다. SD의 `pairing_credential`은 일회성 등록 값이므로 Agent 토큰으로 사용하지 않는다. 현장 호스트와 Pi에서 실제 연결은 별도 검증이 필요하다.
 

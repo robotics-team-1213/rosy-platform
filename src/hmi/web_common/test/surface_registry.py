@@ -489,6 +489,27 @@ def problems(root=None) -> list[str]:
         if not isinstance(audience, str) or not audience.strip() or "\n" in audience:
             found.append(f"value: {label}에 한 줄짜리 audience가 없다")
 
+        # D-370 1·4항: 표면마다 역할 한 줄과 소유 조작 목록. 겹침 판정은 test/architecture/test_app_roles.py.
+        role = row.get("role")
+        if not isinstance(role, str) or not role.strip() or "\n" in role:
+            found.append(f"value: {label}에 한 줄짜리 role이 없다")
+        owns = row.get("owns")
+        if not isinstance(owns, list):
+            found.append(f"value: {label}에 owns 목록이 없다")
+        else:
+            names = []
+            for entry in owns:
+                name = entry.get("id") if isinstance(entry, dict) else entry
+                if not isinstance(name, str) or not name.strip():
+                    found.append(f"value: {label} owns 항목이 이름이 아니다: {entry!r}")
+                    continue
+                if isinstance(entry, dict) and not (
+                        isinstance(entry.get("transitional"), str) and entry["transitional"].strip()):
+                    found.append(f"value: {label} owns {name}이(가) 표이지만 transitional 사유가 없다")
+                names.append(name)
+            if len(set(names)) != len(names):
+                found.append(f"value: {label} owns에 중복이 있다")
+
         medium = row.get("medium")
         if medium not in MEDIA:
             found.append(f"value: {label} medium이 {MEDIA} 밖이다: {medium!r}")

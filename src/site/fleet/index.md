@@ -69,8 +69,8 @@
 
 ## 최근 기록
 
-- 2026-09-30 · 79787e7a · D-371 US-010 전체 정지에 data-always-live
-- 2026-09-30 · a622bbcc · D-359 US-009 지도 칩은 선 뒤에, 로봇 표식 밖에
-- 2026-09-30 · ce709e4d · D-359 US-009 대형·신호등 문구
-- 2026-09-30 · c14e0ad3 · D-359 US-009 한 열 단 순서: 예외 → 지도 → 카메라 → 대형
-- 2026-09-30 · 2d12eed3 · D-359 US-009 릴레이 알약은 릴레이라고 말한다
+- 2026-09-30 · uncommitted · refactor(fleet): D-377 console title and favicon
+- 2026-09-30 · uncommitted · fix(fleet): D-370 리뷰 — 발견 행은 분류기가 정규화한 호스트를 저장
+- 2026-09-30 · uncommitted · docs(adr): D-358 앱 역할 ADR을 D-370으로 재번호
+- 2026-09-30 · uncommitted · feat(icons): D-358 S3 관제 파비콘
+- 2026-09-30 · uncommitted · feat(discovery): D-358 S1 발견 행 검사와 사이트 스크립트를 공유 벡터에 묶음

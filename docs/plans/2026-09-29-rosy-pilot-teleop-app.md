@@ -116,8 +116,9 @@ G4·DEVICE/FIELD 승격.
 - [ ] **Step 1:** `vision.js`는 dashboard `vision.js` 팩토리 패턴(시퀀스·
   abort·generation 가드)을 그대로, 표시만 풀블리드. stale 프레임은 HUD에
   STALE 배지. HUD: 상단 상태 배지(연결·역할·배터리), 좌하단 속도 readout,
-  우상단 e-stop(`ui-button kind=irreversible`). 입력: 좌측 원형 스티어링 패드,
-  우측 전진/후진 홀드 페달, Gamepad API 폴링(끊김 → 0), 키보드. 모든 경로가
+  우상단 e-stop(`ui-button kind=irreversible`). 입력: 좌측 **원형 스티어링 휠**
+  (Pointer Events — 터치점 각도→`steer`, 각도 클램프, 뗄 때 0), 우측 전진/후진
+  홀드 페달, Gamepad API 폴링(끊김 → 0), 키보드. 모든 경로가
   hold-to-drive(~100ms)·`stick.js` 매핑을 공유.
 - [ ] **Step 2:** Task 11 Playwright로 페달 hold→프레임→해제→0 검증.
 

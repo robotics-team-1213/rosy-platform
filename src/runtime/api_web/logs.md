@@ -193,4 +193,22 @@
 
 - 변경: `test_ui_route.py`의 기본 표면 패널 id 집합에 `system.display`(화면 테마)를 더했다. 서버 코드는 바뀌지 않는다 — panels.yaml 레지스트리가 새 패널을 싣는다.
 - 증거: `python -m pytest src/runtime/api_web/test -q` 통과.
+## 2026-09-30 · uncommitted · fix(api): 계약 문구 v1.60 — 세 번째 연속 핀 누락 마무리
+
+- 변경: D-354 필드 제안 회차가 API Ref을 v1.60으로 올리면서 핀 3곳(app.py docstring·FastAPI description·line-follow 핀)을 다시 놓쳤다. D-347의 같은 변경 단위 규칙대로 세 곳을 맞췄다.
+- 증거: test_protocol_version_alignment 3 passed, test_line_follow_contract_docs 1 passed (2026-09-30 Windows).
+- gate 변화: 없음.
+- 결정: 없음.
+- 교훈: v1.57→v1.59→v1.60 세 번 연속 같은 누락이다 — 이제 습관이 아니라 구멍이다. 범프 회차가 핀을 스스로 갱신하지 못한다면, 버전 핀 시험이 실패를 push 이전(pre-push)에 잡는 지금 구조가 유일한 안전망이다.
+
+## 2026-09-30 · uncommitted · feat(host): D-375 status-inputs 핸드오버에 robot_mode 추가
+
+- 변경: `status_inputs()`가 `_robot_mode()`(덕타이핍)로 `svc.state.snapshot().mode`를 검증해 `robot_mode`로 실었다. 모르는 모드는 없음이 된다.
+- 증거: test_host_status_summary.py 39 passed, 1 skipped (키 셋·없음 기록 변이 증명: 필드를 빼면 키 셋 시험이 빨개진다).
+- gate 변화: 없음.
+
+## 2026-09-30 · uncommitted · docs(adr): D-375 에서 D-380 으로 개명
+
+- 변경: 병합 시점에 main 이 D-375 를 feat/overhead-map-auto-register 예약으로 adr_gaps 에 넣은 것이 확인됐다(선례 D-324→D-325). 이 작업의 결정 번호를 다음 빈 번호 D-380 으로 개명하고 코드 주석·시험·설계 문서의 D-375 표기를 함께 바꿨다. 앞선 항목의 D-375 표기는 역사 기록으로 그대로 둔다.
+- 증거: rosy_harness lint 오류 0. 본문 참조는 docs/adr/D-380-lamp-mode-patterns-from-core-status-inputs.md.
 - gate 변화: 없음.

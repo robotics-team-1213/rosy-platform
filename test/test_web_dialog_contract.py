@@ -41,6 +41,7 @@ PINNED_CONFIRMS = {
     "map.js": 1,
     "console.js": 3,   # Fleet 목표 지정, 전체 정지, 정지 래치 재허가
     "roster.js": 1,    # 카메라 고장 뒤 IR 추적 선택 확인
+    "enrollment.js": 1,  # 등록된 로봇 제거 — 등록 토큰 회수 확인 (S1)
 }
 
 

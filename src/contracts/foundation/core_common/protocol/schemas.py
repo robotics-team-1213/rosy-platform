@@ -278,7 +278,7 @@ class DeviceActionReceipt(BaseModel):
 
 
 class DeviceActionLookup(BaseModel):
-    """Read one local Action using its Fleet-issued identity pair."""
+    """Identity pair for attempt-scoped operations, including cancellation."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
@@ -393,6 +393,27 @@ class LocalStopSnapshot(BaseModel):
 # --- Envelope (API Ref §7.1, PRT-001) ------------------------------------
 
 MISSION_EVENT_DETAIL_MAX_BYTES = 16 * 1024
+ER2_FEEDBACK_CONTEXT_MAX_BYTES = 8 * 1024
+ER2_TOOL_ARGUMENT_MAX_BYTES = 4 * 1024
+ER2_TOOL_RESULT_MAX_BYTES = 4 * 1024
+ER2_MAX_FUNCTION_CALLS_PER_TURN = 4
+ER2_PROVIDER_DEADLINE_SECONDS = 45
+ER2_REPLAY_MAX_STEPS = 8
+ER2_REPLAY_MAX_BYTES = 64 * 1024
+ER2_RESPONSE_MAX_BYTES = 64 * 1024
+ER2_IMAGE_MAX_BYTES = 14 * 1024 * 1024
+ER2_MAX_ESTIMATED_TURN_COST_USD = 0.10
+ER2_POST_ACTION_OBSERVATION_MAX_AGE_SECONDS = 30
+
+
+def _bounded_finite_json_size(value: Any) -> int:
+    try:
+        return len(json.dumps(
+            value, sort_keys=True, separators=(",", ":"),
+            ensure_ascii=False, allow_nan=False,
+        ).encode("utf-8"))
+    except (TypeError, ValueError) as exc:
+        raise ValueError("value must be finite JSON") from exc
 
 class MissionProgressAxis(BaseModel):
     """One Fleet Mission progress source; this is not physical-state proof."""
@@ -532,6 +553,101 @@ class MissionModelContext(BaseModel):
     goal_evidence_reason: str | None = Field(default=None, max_length=256)
     stop_state: str = Field(min_length=1, max_length=64)
     stop_reason: str | None = Field(default=None, max_length=256)
+
+
+class MissionFeedbackTurnScope(BaseModel):
+    """Trusted server-side identity captured when an ER 2 turn is enqueued."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    principal_id: str = Field(min_length=1, max_length=96)
+    workcell_id: str = Field(min_length=1, max_length=96)
+    mission_id: str = Field(min_length=1, max_length=192)
+    action_id: str = Field(min_length=1, max_length=192)
+    attempt_id: str = Field(min_length=1, max_length=192)
+    dispatch_generation: int = Field(strict=True, ge=0)
+    event_watermark: int = Field(strict=True, ge=0)
+    model_policy_revision: str = Field(min_length=1, max_length=96)
+    outcome_policy: Literal["STATUS_ONLY", "STATUS_AND_REPLAN"]
+
+    @field_validator("principal_id", "workcell_id", "mission_id", "action_id",
+                     "attempt_id", "model_policy_revision")
+    @classmethod
+    def _trusted_identity_is_trimmed(cls, value: str) -> str:
+        if value != value.strip() or any(ord(char) < 32 for char in value):
+            raise ValueError("trusted identity must be trimmed and contain no controls")
+        return value
+
+
+class MissionFeedbackContext(BaseModel):
+    """Bounded model-facing progress. It describes evidence, never device authority."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    mission_id: str = Field(min_length=1, max_length=192)
+    workcell_id: str = Field(min_length=1, max_length=96)
+    action_id: str = Field(min_length=1, max_length=192)
+    attempt_id: str = Field(min_length=1, max_length=192)
+    dispatch_generation: int = Field(strict=True, ge=0)
+    stop_generation: int = Field(strict=True, ge=0)
+    authority_epoch: int = Field(strict=True, ge=0)
+    snapshot_event_id: int = Field(strict=True, ge=0)
+    snapshot_at: datetime
+    policy_revision: str = Field(min_length=1, max_length=96)
+    outcome_policy: Literal["STATUS_ONLY", "STATUS_AND_REPLAN"]
+    task_summary: str = Field(min_length=1, max_length=10_000)
+    mission_source: str = Field(min_length=1, max_length=96)
+    step_source: str = Field(min_length=1, max_length=96)
+    action_source: str = Field(min_length=1, max_length=96)
+    action_freshness: Literal["CURRENT", "FRESH", "STALE", "UNKNOWN"]
+    action_observed_at: datetime | None = None
+    goal_evidence_source: str = Field(min_length=1, max_length=96)
+    goal_evidence_freshness: Literal["CURRENT", "FRESH", "STALE", "UNKNOWN"]
+    goal_evidence_observed_at: datetime | None = None
+    stop_source: str = Field(min_length=1, max_length=96)
+    stop_freshness: Literal["CURRENT", "FRESH", "STALE", "UNKNOWN"]
+    stop_observed_at: datetime | None = None
+    mission_state: str = Field(min_length=1, max_length=64)
+    step_state: str = Field(min_length=1, max_length=64)
+    action_state: str = Field(min_length=1, max_length=64)
+    action_reason: str | None = Field(default=None, max_length=256)
+    goal_evidence_state: str = Field(min_length=1, max_length=64)
+    goal_evidence_reason: str | None = Field(default=None, max_length=256)
+    stop_state: str = Field(min_length=1, max_length=64)
+    stop_reason: str | None = Field(default=None, max_length=256)
+
+    @model_validator(mode="after")
+    def _bounded_and_replan_is_not_stopped(self) -> "MissionFeedbackContext":
+        if _bounded_finite_json_size(self.model_dump(mode="json")) > ER2_FEEDBACK_CONTEXT_MAX_BYTES:
+            raise ValueError("ER 2 feedback context exceeds the 8 KiB limit")
+        if self.outcome_policy == "STATUS_AND_REPLAN" and (
+                self.stop_state != "DISPATCH_ENABLED"
+                or self.stop_generation != self.dispatch_generation):
+            raise ValueError("replan feedback requires a matching enabled stop generation")
+        for observed in (self.snapshot_at, self.action_observed_at,
+                         self.goal_evidence_observed_at, self.stop_observed_at):
+            if observed is not None and (observed.tzinfo is None or observed.utcoffset() is None):
+                raise ValueError("feedback observation times must be timezone-aware")
+        return self
+
+
+class ER2ToolResult(BaseModel):
+    """Small allowlisted result returned to the provider; never a command receipt."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    tool_name: Literal["get_mission_status", "propose_replan", "unsupported"]
+    status: Literal["accepted", "rejected", "unavailable"]
+    reason_code: str = Field(min_length=1, max_length=64, pattern=r"^[A-Z0-9_]+$")
+    event_id: int | None = Field(default=None, strict=True, ge=0)
+    proposal_id: str | None = Field(default=None, min_length=1, max_length=128)
+    payload: dict[str, Any] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def _bounded_tool_result(self) -> "ER2ToolResult":
+        if _bounded_finite_json_size(self.model_dump(mode="json")) > ER2_TOOL_RESULT_MAX_BYTES:
+            raise ValueError("ER 2 tool result exceeds the 4 KiB limit")
+        return self
 
 
 class EnvelopeType(str, enum.Enum):
@@ -741,6 +857,7 @@ class LineFollowStatus(BaseModel):
     linear: float = 0.0
     angular: float = 0.0
     reason: str = "mode_off"
+    clearance_m: Optional[float] = None   # D-344 §11: 정면 LiDAR 최소 거리(없으면 None)
 
 
 class TrafficPolicyStatus(BaseModel):

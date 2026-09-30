@@ -138,7 +138,8 @@ class UiField extends HTMLElement {
   connectedCallback() {
     if (this.querySelector("input, select, textarea")) return;
     const input = document.createElement("input");
-    for (const name of ["type", "name", "placeholder", "autocomplete", "value", "required", "aria-label"]) {
+    for (const name of ["type", "name", "placeholder", "autocomplete", "value", "required", "aria-label",
+                        "autocapitalize", "autocorrect", "spellcheck", "inputmode"]) {
       if (this.hasAttribute(name)) input.setAttribute(name, this.getAttribute(name));
     }
     if (this.hasAttribute("invalid")) input.setAttribute("aria-invalid", "true");

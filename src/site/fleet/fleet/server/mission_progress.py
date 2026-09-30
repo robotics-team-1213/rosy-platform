@@ -139,6 +139,7 @@ class MissionProgressService:
             and event["attempt_id"] == mission.get("attempt_id")
             and event["event_type"] in {
                 "GOAL_PREDICATE_CONFIRMED", "GOAL_EVIDENCE_REJECTED",
+                "GOAL_PREDICATE_UNSATISFIED",
             }
         ]
         goal_event = goal_events[-1] if goal_events else None
@@ -154,10 +155,11 @@ class MissionProgressService:
             goal_detail = goal_event["detail"]
             evidence = goal_detail.get("evidence", goal_detail)
             observed = _timestamp(evidence.get("observed_at"))
-            goal_state = (
-                "CONFIRMED" if goal_event["event_type"] ==
-                "GOAL_PREDICATE_CONFIRMED" else "REJECTED"
-            )
+            goal_state = {
+                "GOAL_PREDICATE_CONFIRMED": "CONFIRMED",
+                "GOAL_PREDICATE_UNSATISFIED": "UNSATISFIED",
+                "GOAL_EVIDENCE_REJECTED": "REJECTED",
+            }[goal_event["event_type"]]
             goal_axis = MissionProgressAxis(
                 state=goal_state, source="fleet_mission_events",
                 last_event_id=goal_event["event_id"], observed_at=observed,
@@ -217,6 +219,13 @@ class MissionProgressService:
                 or mission["workcell_id"] != workcell_id):
             return None
         progress = snapshot["progress"]
+        stop_revision = progress["stop"].get("revision")
+        try:
+            epoch_text, generation_text = stop_revision.split("/")
+            authority_epoch = int(epoch_text.removeprefix("epoch:"))
+            stop_generation = int(generation_text.removeprefix("generation:"))
+        except (AttributeError, TypeError, ValueError):
+            return None
         context = MissionModelContext(
             mission_id=mission_id, workcell_id=workcell_id,
             snapshot_event_id=progress["snapshot_event_id"],
@@ -229,4 +238,20 @@ class MissionProgressService:
             stop_state=progress["stop"]["state"],
             stop_reason=progress["stop"]["reason"],
         )
-        return context.model_dump(mode="json")
+        return {
+            **context.model_dump(mode="json"),
+            "authority_epoch": authority_epoch,
+            "stop_generation": stop_generation,
+            "snapshot_at": progress["snapshot_at"],
+            "mission_source": progress["mission"]["source"],
+            "step_source": progress["step"]["source"],
+            "action_source": progress["action"]["source"],
+            "action_freshness": progress["action"]["freshness"],
+            "action_observed_at": progress["action"]["observed_at"],
+            "goal_evidence_source": progress["goal_evidence"]["source"],
+            "goal_evidence_freshness": progress["goal_evidence"]["freshness"],
+            "goal_evidence_observed_at": progress["goal_evidence"]["observed_at"],
+            "stop_source": progress["stop"]["source"],
+            "stop_freshness": progress["stop"]["freshness"],
+            "stop_observed_at": progress["stop"]["observed_at"],
+        }

@@ -33,7 +33,7 @@ def render_service(port: int, *, role: str = "fleet", tls_host: str | None = Non
     elif role == "overhead":
         if not isinstance(tls_host, str) or not HOSTNAME.fullmatch(tls_host.lower().rstrip(".")):
             raise ValueError("overhead service needs a .local TLS hostname")
-        service_type, service_name = "_rosy-overhead._tcp", "ROSY Overhead %h"
+        service_type, service_name = "_rosy-overhead._tcp", "ROSY Vision %h"
         metadata = {**OVERHEAD_TXT, "tls_host": tls_host.lower().rstrip(".")}
     else:
         raise ValueError("unknown site mDNS role")

@@ -4,6 +4,7 @@ import time
 from typing import Callable, Optional
 
 from core_features.command.manager import Twist
+from core_features.line_follow.manager import LineFollowMode
 
 
 def line_clock(use_sim_time: bool,
@@ -27,6 +28,11 @@ def apply_line_candidate(line_follow, traffic_policy, command,
     """
     stamp = now if command_now is None else command_now
     result = {"applied": False}
+    if line_decision.mode is LineFollowMode.OFF:
+        # 틱이 스스로 내렸다(운전자 확인 만료, D-344 §8). 마지막 차선 속도를 내비게이션
+        # 시간 초과까지 남기지 않고 지금 지운다.
+        command.clear_navigation()
+        return False
 
     def apply_line(current) -> None:
         traffic_decision = traffic_policy.gate(

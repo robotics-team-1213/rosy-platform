@@ -1522,3 +1522,31 @@
 - gate 변화: 없음.
 - 결정: 장기 수정은 KNOWN_DIRECTION 기록대로 — control의 legacy launch가 IMU 드라이버를 시작하는 것을 bringup 조립으로 옮기는 코드 이동이다.
 - 교훈: 없음.
+
+## 2026-09-30 · uncommitted · feat(site): D-352 robot_credential_key secret와 오프라인 rekey
+
+- 변경: `site/compose.yaml`에 secret `robot_credential_key`와 `--robot-credential-key-file`, `site/robot-credential-key.template.txt`(형식만), `site/site_db.py rekey`(`--assume-stopped` 필수), `site/requirements-fleet.txt`에 `cryptography==49.0.0`, `site/README.md` 콘솔 등록 절차.
+- 증거: `python -m pytest test/test_site_db_maintenance.py -q` 녹색. 사이트 호스트 Compose 실행 없음.
+- gate 변화: 없음.
+- 결정: D-352.
+- 교훈: 없음.
+
+## 2026-09-30 · uncommitted · deploy(harness): last_verified를 CI 초록 커밋으로 기록
+
+- 변경: last_verified를 c8050390(2026-09-30)로 기록. LOCAL gate cmd(전체 `test/`)가 이 커밋에서 CI(GitHub Actions run 36628331442, ubuntu-26.04/ros:jazzy)를 통과했다 — 6연속 적신이던 main CI의 첫 초록이고, 그 수리 과정의 절반(dock 파싱 재연결·시크릿 스캐너·target 등록)이 이 모듈의 계약 시험이었다.
+- 증거: CI run 36628331442 conclusion=success at c8050390; 로컬 관련 파일 155 passed (2026-09-30 Windows).
+- gate 변화: 없음 (ARTIFACT/DEVICE는 여전히 HOLD — native ARM64·실기 증거는 그대로 남는다).
+- 결정: 없음.
+- 교훈: 없음.
+
+## 2026-09-30 · uncommitted · feat(native): D-375 부팅 표시가 운용 모드를 램프와 LCD에 표시
+
+- 변경: `rosy-boot-status.py`가 핸드오버의 `robot_mode`를 검증(모르는 값은 나머지를 버리지 않고 없음)해 boot-status.json에 옮긴다. `rosy-boot-display.py`는 `robot_state.lamp_pattern()`으로 패턴을 고르고, 모드 전환은 소리 없이 패턴만 바꾸며, LCD 상태줄에 ` - MODE` 접미를 붙인다.
+- 증거: test_boot_status_indicator.py 37 passed, 2 skipped · test_boot_display.py 117 passed, 1 skipped (패턴 선택 변이 증명: 표시가 모드를 무시하면 모드 행이 빨개진다).
+- gate 변화: 없음.
+
+## 2026-09-30 · uncommitted · docs(adr): D-375 에서 D-380 으로 개명
+
+- 변경: 병합 시점에 main 이 D-375 를 feat/overhead-map-auto-register 예약으로 adr_gaps 에 넣은 것이 확인됐다(선례 D-324→D-325). 이 작업의 결정 번호를 다음 빈 번호 D-380 으로 개명하고 코드 주석·시험·설계 문서의 D-375 표기를 함께 바꿨다. 앞선 항목의 D-375 표기는 역사 기록으로 그대로 둔다.
+- 증거: rosy_harness lint 오류 0. 본문 참조는 docs/adr/D-380-lamp-mode-patterns-from-core-status-inputs.md.
+- gate 변화: 없음.

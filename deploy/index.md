@@ -65,8 +65,8 @@
 
 ## 최근 기록
 
+- 2026-09-30 · uncommitted · docs(adr): D-375 에서 D-380 으로 개명
+- 2026-09-30 · uncommitted · feat(native): D-375 부팅 표시가 운용 모드를 램프와 LCD에 표시
+- 2026-09-30 · uncommitted · deploy(harness): last_verified를 CI 초록 커밋으로 기록
+- 2026-09-30 · uncommitted · feat(site): D-352 robot_credential_key secret와 오프라인 rekey
 - 2026-09-30 · uncommitted · fix(image): io closure 계약에 D-84 지연 패키지 예외를 명시
-- 2026-09-29 · uncommitted · feat(verify): 상주 단위 CPU 측정·A/B 도구 (D-347 B레인 관문)
-- 2026-09-29 · uncommitted · fix(release): 비밀 스캐너에 저널 인용 산탄 예외
-- 2026-09-29 · uncommitted · test(sd): hung readback 계약의 냉각시작 레이스 제거
-- 2026-09-29 · uncommitted · test(sd): 999% 스톨 시험의 폴 레이스 제거
