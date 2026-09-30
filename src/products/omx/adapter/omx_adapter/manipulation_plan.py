@@ -10,7 +10,8 @@ from __future__ import annotations
 import math
 import re
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Protocol
+from types import MappingProxyType
+from typing import TYPE_CHECKING, Mapping, Protocol
 
 if TYPE_CHECKING:
     from core_common.protocol.schemas import FleetActionGrant, ResolvedTargetEvidence
@@ -157,6 +158,34 @@ class JointTrajectoryPoint:
 
 
 @dataclass(frozen=True)
+class ExecutionStateSnapshot:
+    """Fresh local state used to validate a planned phase's bounded start."""
+
+    sequence: int
+    joint_positions: Mapping[str, float]
+    calibration_revision: str
+    transform_revision: str
+    planning_scene_revision: str
+    observed_at_monotonic_s: float
+
+    def __post_init__(self) -> None:
+        if type(self.sequence) is not int or self.sequence < 0:
+            raise ValueError("sequence must be a non-negative integer")
+        if not isinstance(self.joint_positions, Mapping) or not self.joint_positions:
+            raise ValueError("joint_positions must be a non-empty mapping")
+        positions = {}
+        for name, value in self.joint_positions.items():
+            _text("joint name", name)
+            positions[name] = _finite(f"joint position {name}", value)
+        object.__setattr__(self, "joint_positions", MappingProxyType(positions))
+        for name in ("calibration_revision", "transform_revision", "planning_scene_revision"):
+            _text(name, getattr(self, name))
+        object.__setattr__(self, "observed_at_monotonic_s", _finite(
+            "observed_at_monotonic_s", self.observed_at_monotonic_s,
+        ))
+
+
+@dataclass(frozen=True)
 class PlannedMotionPhase:
     """One motion phase that corresponds to exactly one ROS goal."""
 
@@ -164,6 +193,7 @@ class PlannedMotionPhase:
     ordinal: int
     joint_names: tuple[str, ...]
     points: tuple[JointTrajectoryPoint, ...]
+    start_state_positions: tuple[float, ...]
     source_state_sequence: int
     calibration_revision: str
     transform_revision: str
@@ -190,6 +220,8 @@ class PlannedMotionPhase:
                for point in points):
             raise ValueError("trajectory point joint dimensions must match joint_names")
         object.__setattr__(self, "points", points)
+        start_state = _vector("start_state_positions", self.start_state_positions, len(joints))
+        object.__setattr__(self, "start_state_positions", start_state)
         if type(self.source_state_sequence) is not int or self.source_state_sequence < 0:
             raise ValueError("source_state_sequence must be a non-negative integer")
         for name in ("calibration_revision", "transform_revision", "planning_scene_revision"):
