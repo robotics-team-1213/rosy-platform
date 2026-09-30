@@ -5,6 +5,7 @@ param(
     [string]$Tarball,
     [switch]$Rollback,
     [switch]$PrintCommands,
+    [switch]$SkipImageLayerSync,
     [string]$RosyUser = "rosy",
     [string]$KeyPath = "",
     [string]$KnownHosts = "",
@@ -32,6 +33,14 @@ param(
 # (deploy/robot/pinky_pro/release/signing.py), and the device-side signature/manifest checks
 # remain entirely inside native_release.py via activate-release.sh /
 # rollback-release.sh. This script never disables SSH host-key checking.
+#
+# D-375: after activation (or rollback) and CORE readiness, the release that is
+# now current brings the image layer (native-runtime scripts, rosy units, udev
+# rules, modprobe options) up to its own copy with sync-image-layer.py, which
+# ships inside the release: first a dry run that prints the plan, then the
+# apply. The active units it reports as changed are restarted here, and CORE
+# readiness is checked again if anything was restarted. -SkipImageLayerSync
+# leaves the image layer alone.
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
@@ -245,6 +254,24 @@ function Get-CoreReadyArguments([string]$CoreReadyProbe) {
     )
 }
 
+function Get-ImageLayerSyncArguments([string]$ReleaseId, [switch]$DryRun) {
+    # A push runs the script of the release it just activated. After a
+    # rollback the release that became current may predate D-375, so fall back
+    # to the copy in the release rolled away from (it still syncs from current).
+    $flag = ""
+    if ($DryRun) { $flag = " --dry-run" }
+    if ($ReleaseId) {
+        $arguments = @("sudo", "-n", "python3", "-B", "/opt/rosy/releases/$ReleaseId/deploy/robot/native/sync-image-layer.py")
+        if ($DryRun) { $arguments += "--dry-run" }
+        return $arguments
+    }
+    $candidates = "/opt/rosy/current/deploy/robot/native/sync-image-layer.py /opt/rosy/previous/deploy/robot/native/sync-image-layer.py"
+    return @(
+        "sudo", "-n", "sh", "-c",
+        "'for s in $candidates; do if [ -f `$s ]; then exec python3 -B `$s$flag; fi; done; echo IMAGE_LAYER_SYNC_MISSING >&2; exit 3'"
+    )
+}
+
 function ConvertTo-DisplayLine([string]$Executable, [string[]]$Arguments) {
     $quoted = $Arguments | ForEach-Object {
         if ($_ -match '[\s"]') { '"' + ($_ -replace '"', '\"') + '"' } else { $_ }
@@ -258,7 +285,7 @@ function Get-RemoteCommandPlan {
         [switch]$Rollback, [string]$ReleaseId, [string]$TarballPath, [string]$UnpackScript,
         [string]$RemoteStagingDir, [string]$RemoteReleasesDir,
         [string]$ActivateWrapper, [string]$RollbackWrapper, [string]$CoreReadyProbe,
-        [string]$SshExe, [string]$ScpExe
+        [string]$SshExe, [string]$ScpExe, [switch]$SkipImageLayerSync
     )
     $target = "${RosyUser}@${Robot}"
     # ssh parses a "-o Key=Value" argument the way it parses an ssh_config
@@ -269,18 +296,32 @@ function Get-RemoteCommandPlan {
     $sshOptions = @("-o", "UserKnownHostsFile=`"$KnownHosts`"", "-o", "StrictHostKeyChecking=yes")
     $plan = New-Object System.Collections.ArrayList
 
-    function Add-Step($list, [string]$Kind, [string]$Executable, [string[]]$Arguments) {
+    function Add-Step($list, [string]$Kind, [string]$Executable, [string[]]$Arguments,
+                      [string]$Role = "", [string]$DisplaySuffix = "") {
         [void]$list.Add([ordered]@{
             kind       = $Kind
+            role       = $Role
             executable = $Executable
             arguments  = $Arguments
-            display    = ConvertTo-DisplayLine $Executable $Arguments
+            display    = (ConvertTo-DisplayLine $Executable $Arguments) + $DisplaySuffix
         })
+    }
+
+    # D-375: dry run, apply, restart the active units it changed (their names
+    # come from the apply's JSON, so the display names a placeholder), and
+    # re-check CORE only when something was restarted.
+    function Add-ImageLayerSteps($list, [string]$SyncReleaseId) {
+        $ssh = @("-i", $KeyPath) + $sshOptions + @($target)
+        Add-Step $list "ssh" $SshExe ($ssh + (Get-ImageLayerSyncArguments $SyncReleaseId -DryRun)) "image-layer-dry-run"
+        Add-Step $list "ssh" $SshExe ($ssh + (Get-ImageLayerSyncArguments $SyncReleaseId)) "image-layer-apply"
+        Add-Step $list "ssh" $SshExe ($ssh + @("sudo", "-n", "systemctl", "restart")) "image-layer-restart" " <active units the apply changed>"
+        Add-Step $list "ssh" $SshExe ($ssh + (Get-CoreReadyArguments $CoreReadyProbe)) "image-layer-core-ready"
     }
 
     if ($Rollback) {
         Add-Step $plan "ssh" $SshExe (@("-i", $KeyPath) + $sshOptions + @($target, "sudo", "-n", $RollbackWrapper))
         Add-Step $plan "ssh" $SshExe (@("-i", $KeyPath) + $sshOptions + @($target) + (Get-CoreReadyArguments $CoreReadyProbe))
+        if (-not $SkipImageLayerSync) { Add-ImageLayerSteps $plan "" }
         return $plan
     }
 
@@ -294,6 +335,7 @@ function Get-RemoteCommandPlan {
     Add-Step $plan "ssh" $SshExe (@("-i", $KeyPath) + $sshOptions + @($target, "sudo", "-n", $remoteUnpack, $ReleaseId, $remoteTarball, $RemoteReleasesDir))
     Add-Step $plan "ssh" $SshExe (@("-i", $KeyPath) + $sshOptions + @($target, "sudo", "-n", $ActivateWrapper, $ReleaseId))
     Add-Step $plan "ssh" $SshExe (@("-i", $KeyPath) + $sshOptions + @($target) + (Get-CoreReadyArguments $CoreReadyProbe))
+    if (-not $SkipImageLayerSync) { Add-ImageLayerSteps $plan $ReleaseId }
     return $plan
 }
 
@@ -301,7 +343,7 @@ $plan = Get-RemoteCommandPlan -Robot $Robot -RosyUser $RosyUser -KeyPath $KeyPat
     -Rollback:$Rollback -ReleaseId $releaseId -TarballPath $tarballPath -UnpackScript $unpackScript `
     -RemoteStagingDir $RemoteStagingDir -RemoteReleasesDir $RemoteReleasesDir `
     -ActivateWrapper $ActivateWrapper -RollbackWrapper $RollbackWrapper -CoreReadyProbe $CoreReadyProbe `
-    -SshExe $SshExe -ScpExe $ScpExe
+    -SshExe $SshExe -ScpExe $ScpExe -SkipImageLayerSync:$SkipImageLayerSync
 
 if ($PrintCommands) {
     $result = [ordered]@{
@@ -316,15 +358,70 @@ if ($PrintCommands) {
 
 # --- execution: run exactly the plan just built -----------------------------
 
+$imageLayer = $null
+$imageLayerSkipped = $false
+$restartedUnits = @()
+
+function Read-LastJsonLine($Output) {
+    try {
+        return (($Output | Select-Object -Last 1) | ConvertFrom-Json)
+    } catch {
+        return $null
+    }
+}
+
 foreach ($step in $plan) {
-    Write-Host "+ $($step.display)"
-    $result = Invoke-NativeCapture $step.executable $step.arguments
+    $arguments = $step.arguments
+    if ($step.role -like "image-layer-*" -and $imageLayerSkipped) { continue }
+    if ($step.role -eq "image-layer-restart") {
+        $restartedUnits = @($imageLayer.restart_units | Where-Object { $_ -match '^rosy-[A-Za-z0-9-]+\.(service|path|timer)$' })
+        if ($restartedUnits.Count -eq 0) {
+            Write-Host "image-layer sync: no active unit needs a restart"
+            continue
+        }
+        $arguments = @($arguments) + $restartedUnits
+    }
+    if ($step.role -eq "image-layer-core-ready" -and $restartedUnits.Count -eq 0) { continue }
+
+    $display = ConvertTo-DisplayLine $step.executable $arguments
+    Write-Host "+ $display"
+    $result = Invoke-NativeCapture $step.executable $arguments
+    if ($step.role -eq "image-layer-dry-run" -and $result.exit_code -eq 3 -and
+            ($result.output -join " ") -match "IMAGE_LAYER_SYNC_MISSING") {
+        Write-Warning "image-layer sync skipped: neither current nor previous release carries sync-image-layer.py."
+        $imageLayerSkipped = $true
+        continue
+    }
     if ($result.exit_code -ne 0) {
-        Fail "$($step.kind) failed (exit $($result.exit_code)): $($step.display)`n$($result.output -join [Environment]::NewLine)"
+        Fail "$($step.kind) failed (exit $($result.exit_code)): $display`n$($result.output -join [Environment]::NewLine)"
     }
     if ($result.output) { Write-Host ($result.output -join [Environment]::NewLine) }
 
-    $arguments = $step.arguments
+    if ($step.role -eq "image-layer-dry-run" -or $step.role -eq "image-layer-apply") {
+        $imageLayer = Read-LastJsonLine $result.output
+        if ($null -eq $imageLayer -or -not $imageLayer.ok) {
+            Fail "image-layer sync did not print an ok JSON result: $display"
+        }
+        $label = "plan"
+        if ($step.role -eq "image-layer-apply") { $label = "applied" }
+        Write-Host ("image-layer sync {0} ({1}): changed {2}, new {3}, unchanged {4}, skipped {5}" -f $label,
+            $imageLayer.release_id, @($imageLayer.changed).Count, @($imageLayer.new).Count,
+            @($imageLayer.unchanged).Count, @($imageLayer.skipped).Count)
+        foreach ($path in @($imageLayer.changed) + @($imageLayer.new)) { if ($path) { Write-Host "  $path" } }
+        if ($step.role -eq "image-layer-apply") {
+            if ($imageLayer.backup_dir) { Write-Host "image-layer backup: $($imageLayer.backup_dir)" }
+            foreach ($path in @($imageLayer.modprobe_changed)) {
+                if ($path) { Write-Warning "modprobe options changed ($path): they apply at the next module load or reboot." }
+            }
+            foreach ($unit in @($imageLayer.active_targets_affected)) {
+                if ($unit) { Write-Warning "$unit changed; its new dependencies apply at the next boot." }
+            }
+        }
+    }
+    if ($step.role -eq "image-layer-restart") {
+        Write-Host "restarted: $($restartedUnits -join ', ')"
+    }
+
     if ($arguments -contains $ActivateWrapper -or $arguments -contains $RollbackWrapper) {
         $lastLine = ($result.output | Select-Object -Last 1)
         try {
