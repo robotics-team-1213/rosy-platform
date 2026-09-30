@@ -416,7 +416,7 @@ input:focus-visible, summary:focus-visible { outline:2px solid var(--focus-ring)
         <h3>비상정지</h3>
         <p class="hint">모터 출력을 정지합니다. 해제해도 자동 출발하지 않습니다.</p>
         <div class="btnrow">
-          <ui-button kind="irreversible" type="button" class="danger halt" data-post="/estop"
+          <ui-button kind="irreversible" type="button" class="danger halt" data-post="/estop" data-always-live
                   data-val="stop">정지</ui-button>
         </div>
         <div class="btnrow">
@@ -502,7 +502,7 @@ input:focus-visible, summary:focus-visible { outline:2px solid var(--focus-ring)
         </div>
         <div class="sub">
           <div class="btnrow">
-            <ui-button kind="irreversible" type="button" class="danger" data-post="/wander"
+            <ui-button kind="irreversible" type="button" class="danger" data-post="/wander" data-always-live
                     data-val="stop">주행 정지</ui-button>
           </div>
         </div>
@@ -537,7 +537,7 @@ input:focus-visible, summary:focus-visible { outline:2px solid var(--focus-ring)
           <ui-button kind="toggle" type="button" data-hold="up" aria-label="전진">&#8593;</ui-button>
           <span></span>
           <ui-button kind="toggle" type="button" data-hold="left" aria-label="좌회전">&#8592;</ui-button>
-          <ui-button kind="irreversible" type="button" data-hold="stop" aria-label="정지">정지</ui-button>
+          <ui-button kind="irreversible" type="button" data-hold="stop" aria-label="정지" data-always-live>정지</ui-button>
           <ui-button kind="toggle" type="button" data-hold="right" aria-label="우회전">&#8594;</ui-button>
           <span></span>
           <ui-button kind="toggle" type="button" data-hold="down" aria-label="후진">&#8595;</ui-button>

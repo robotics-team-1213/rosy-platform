@@ -92,7 +92,8 @@ def test_only_the_shared_confirm_dialog_mints_an_irreversible_button_in_script()
     body = UI.read_text(encoding="utf-8").split("export function confirmIrreversible", 1)[1].split("\n}\n", 1)[0]
     assert len(SCRIPT_IRREVERSIBLE.findall(body)) == 1, "확인 대화상자의 위험 채움은 실행 버튼 하나다"
     assert 'setAttribute("kind", "quiet")' in body, "취소는 조용한 버튼이다"
-    assert "showModal()" in body, "네이티브 모달 <dialog>라 Esc·포커스 가둠을 브라우저가 한다"
+    assert "showModal()" not in body and "dialog.show()" in body, (
+        "비모달로 연다 — showModal()은 비상정지까지 inert로 만든다(2026-09-30 US-010 측정)")
 
 
 def test_row_delete_buttons_promise_the_dialog_with_an_ellipsis():
