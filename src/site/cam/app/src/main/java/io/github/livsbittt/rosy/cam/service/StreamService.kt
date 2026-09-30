@@ -63,6 +63,8 @@ data class StreamState(
     val health: DeviceHealth? = null,
     /** Lens in use while a session runs; null when stopped or when no back camera was found. */
     val lens: LensPick? = null,
+    /** True when this phone has a back camera wider than the default one. */
+    val wideAvailable: Boolean = false,
 )
 
 /**
@@ -162,6 +164,7 @@ class StreamService : LifecycleService() {
                     target = pairing?.let { p -> "${p.host}:${p.port} · ${p.source}" },
                     previewOnly = !plan.sendFrames,
                     lens = pick,
+                    wideAvailable = LensSelector.hasWide(backCameras),
                 )
             }
             if (!plan.sendFrames) {

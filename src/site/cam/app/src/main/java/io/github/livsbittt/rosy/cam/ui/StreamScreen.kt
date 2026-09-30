@@ -175,7 +175,11 @@ private fun StatusPanel(
         }
         if (state.running && link.state == LinkState.STREAMING && site != null) {
             if (markersReported || CornerGuide.reportsMarkers(site)) {
-                InstallGuide(CornerGuide.from(site))
+                val guide = CornerGuide.from(site)
+                InstallGuide(guide)
+                if (LensAdvice.suggestWide(state.lens, state.wideAvailable, guide, markersReported = true)) {
+                    Text(stringResource(R.string.guide_lens_wide), style = MaterialTheme.typography.bodyMedium)
+                }
             } else {
                 Text(
                     stringResource(R.string.guide_markers_unreported),
