@@ -1,20 +1,30 @@
-"""Deliver an intake-passed model to a robot's shadow slot (D-356).
+"""Deliver an intake-passed model to a robot's shadow slot (D-356, D-373).
 
-deliver.py push <host> <model_revision> [--user pinky] [--models data/perception/models]
+deliver.py push <host> <model_revision> [--models data/perception/models]
 deliver.py rollback <host>
 deliver.py status <host>
+common: [--user rosy] [--identity KEY] [--known-hosts FILE] [--root /var/lib/rosy/models]
+
+SSH is key-only and pinned (BatchMode, IdentitiesOnly, StrictHostKeyChecking=yes;
+see operator_ssh.py). /var/lib/rosy/models is root:rosy-camera 0750, so every
+write goes through `sudo -n install` with that owner and mode.
 
 push: needs a passing intake_report.json whose files (name, sha256) equal the
-manifest's; then scp to /var/lib/rosy/models/<rev>.partial, sha256sum -c on the robot,
-mv to <rev>, then an atomic pointer swap (shadow.tmp -> shadow; the old value
-stays in shadow.previous; re-pushing the live revision keeps it). An already
-installed <rev> is re-verified and quarantined as <rev>.bad.<pid> if it fails.
-host, user and --root are validated; ssh/scp get "--" before targets. The pointer holds the model folder path that
-ModelSlot reads. Model files are a data generation, not a release payload."""
+manifest's. The folder is scp'd to a mktemp dir under /tmp (the rosy user's),
+checked there, then installed file by file (weights, manifest and report, each
+pinned by sha256) into <rev>.partial, checked again, and moved to <rev>. The
+pointer is written in the temp dir, installed as shadow.tmp and moved over
+shadow (atomic); the old value is installed as shadow.previous the same way.
+Re-pushing the live revision keeps shadow.previous. An already installed <rev>
+is re-verified and quarantined as <rev>.bad.<pid> if it fails. host, user and
+--root are validated; ssh/scp get "--" before targets. The pointer holds the
+model folder path that ModelSlot reads. Model files are a data generation, not
+a release payload."""
 
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
 import shlex
@@ -23,80 +33,109 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
-_SENSING = ROOT / "src" / "runtime" / "sensing"
-if str(_SENSING) not in sys.path:
-    sys.path.insert(0, str(_SENSING))
+for _p in (ROOT / "src" / "runtime" / "sensing", ROOT / "tools" / "perception"):
+    if str(_p) not in sys.path:
+        sys.path.insert(0, str(_p))
 
+import operator_ssh  # noqa: E402
 from control.sensing.perception.learned.manifest import (  # noqa: E402
-    ManifestError, check_revision, load_manifest, verify_files)
+    MANIFEST_NAME, ManifestError, check_revision, load_manifest, verify_files)
 
 REMOTE_ROOT = "/var/lib/rosy/models"
+REPORT_NAME = "intake_report.json"
+SUDO, OWNER, GROUP = "sudo -n", "root", "rosy-camera"  # D-373 decision 1
 _SAFE_NAME = re.compile(r"[A-Za-z0-9._][A-Za-z0-9._-]*")
 _SAFE_ROOT = re.compile(r"/[A-Za-z0-9._/-]+")
+_STAGE = re.compile(r"/tmp/rosy-model\.[A-Za-z0-9]{8,}")
 
 
 def remote_script(action: str, rev: str | None, root: str = REMOTE_ROOT, *,
-                  checks=()) -> str:
+                  checks=(), stage: str | None = None, privileged: bool = True) -> str:
     """Shell text for one remote step. Every path is shlex.quote'd.
 
-    checks: [(sha256, file name), ...] from the manifest, verified before install."""
+    checks: [(sha256, file name), ...], every file that is installed.
+    stage: the scp'd copy, <mktemp dir>/<rev>; the mktemp dir is removed on exit.
+    privileged=False drops sudo -n and the -o/-g/-m of install so the script runs
+    as an ordinary user in tests (Git Bash cannot set directory modes either);
+    main() never passes it."""
     q = shlex.quote
+    s = f"{SUDO} " if privileged else ""
+    own = f" -o {OWNER} -g {GROUP}" if privileged else ""
+    dmode, fmode = (" -m 0750", " -m 0640") if privileged else ("", "")
     ptr, prev, tmp = q(f"{root}/shadow"), q(f"{root}/shadow.previous"), q(f"{root}/shadow.tmp")
+
+    def check(folder: str, *, privileged: bool = True, quiet: bool = False) -> str:
+        sums = " ".join(q(f"{sha}  {folder}/{name}") for sha, name in checks)
+        return (f"printf '%s\\n' {sums} | {s if privileged else ''}sha256sum -c -"
+                + (" >/dev/null 2>&1" if quiet else ""))
+
     if action == "prepare":
-        return f"set -e; mkdir -p {q(root)}; rm -rf {q(f'{root}/{rev}.partial')}"
+        return "set -e; umask 077; mktemp -d /tmp/rosy-model.XXXXXXXX"
     if action == "push":
-        if not checks:
-            raise ValueError("push needs manifest checks")
-        partial, final = q(f"{root}/{rev}.partial"), q(f"{root}/{rev}")
-        sums = " ".join(q(f"{sha}  {name}") for sha, name in checks)
-        check = f"printf '%s\\n' {sums} | sha256sum -c -"
+        if not checks or not stage:
+            raise ValueError("push needs manifest checks and a stage path")
+        stage_dir = stage.rsplit("/", 1)[0]
+        partial_path, final_path = f"{root}/{rev}.partial", f"{root}/{rev}"
+        partial, final = q(partial_path), q(final_path)
+        pointer_src = q(f"{stage_dir}/shadow")
+        installs = [f"{s}install{own}{fmode} {q(f'{stage}/{name}')} "
+                    f"{q(f'{partial_path}/{name}')}" for _, name in checks]
         return "\n".join([
             "set -e",
-            f"cd {partial}",
-            check,
-            "cd /",
-            f"if [ -d {final} ]; then",
-            f"  if (cd {final} && {check} >/dev/null 2>&1); then rm -rf {partial};",
-            f"  else mv {final} {final}.bad.$$; mv {partial} {final}; fi",
-            f"else mv {partial} {final}; fi",
-            f"cd {final}",
-            check,
-            "cd /",
-            f"cur=$(cat {ptr} 2>/dev/null || true)",
+            f"trap {q(f'rm -rf -- {q(stage_dir)}')} EXIT",
+            check(stage, privileged=False),
+            f"{s}test -d {q(root)} || {s}install -d{own}{dmode} {q(root)}",
+            f"{s}rm -rf {partial}",
+            f"{s}install -d{own}{dmode} {partial}",
+            *installs,
+            check(partial_path),
+            f"if {s}test -d {final}; then",
+            f"  if {check(final_path, quiet=True)}; then {s}rm -rf {partial};",
+            f"  else {s}mv {final} {final}.bad.$$; {s}mv {partial} {final}; fi",
+            f"else {s}mv {partial} {final}; fi",
+            check(final_path),
+            f"cur=$({s}cat {ptr} 2>/dev/null || true)",
             f'if [ "$cur" != {final} ]; then',
-            f"  if [ -f {ptr} ]; then cp {ptr} {prev}.tmp; mv {prev}.tmp {prev}; fi",
+            f"  if {s}test -f {ptr}; then",
+            f"    {s}install{own}{fmode} {ptr} {prev}.tmp",
+            f"    {s}mv {prev}.tmp {prev}",
+            "  fi",
             # separate statements: set -e ignores a failure inside an && list
-            f"  printf %s {final} > {tmp}; mv {tmp} {ptr}",
+            f"  printf %s {final} > {pointer_src}",
+            f"  {s}install{own}{fmode} {pointer_src} {tmp}",
+            f"  {s}mv {tmp} {ptr}",
             "  sync",
             "fi",
         ])
     if action == "rollback":
         return "\n".join([
             "set -e",
-            f"[ -f {prev} ] || {{ echo 'no shadow.previous to roll back to' >&2; exit 1; }}",
-            f"mv {prev} {ptr}",
+            f"{s}test -f {prev} || {{ echo 'no shadow.previous to roll back to' >&2; exit 1; }}",
+            f"{s}mv {prev} {ptr}",
         ])
     if action == "status":
         return "\n".join([
-            f"echo \"shadow: $(cat {ptr} 2>/dev/null)\"",
-            f"echo \"previous: $(cat {prev} 2>/dev/null)\"",
-            f"ls -1 {q(root)} 2>/dev/null || true",
+            f"echo \"shadow: $({s}cat {ptr} 2>/dev/null)\"",
+            f"echo \"previous: $({s}cat {prev} 2>/dev/null)\"",
+            f"{s}ls -1 {q(root)} 2>/dev/null || true",
         ])
     raise ValueError(f"unknown action {action!r}")
 
 
-def _run(runner, cmd) -> bool:
+def _run(runner, cmd):
+    """The completed process on success, else None (reported on stderr)."""
     r = runner(cmd, check=False, capture_output=True, text=True)
-    if getattr(r, "stdout", None):
-        print(r.stdout, end="")
     if r.returncode != 0:
-        print(f"failed ({r.returncode}): {' '.join(cmd[:2])} {getattr(r, 'stderr', '')}",
-              file=sys.stderr)
-        return False
-    return True
+        print(f"failed ({r.returncode}): {cmd[0]} {getattr(r, 'stderr', '')}", file=sys.stderr)
+        return None
+    return r
 
 
-def _push(args, runner) -> int:
+def _sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _push(args, ssh, scp, runner) -> int:
     rev = args.revision
     try:
         check_revision(rev)
@@ -105,7 +144,7 @@ def _push(args, runner) -> int:
         return 2
     folder = Path(args.models) / rev
     try:
-        report = json.loads((folder / "intake_report.json").read_text(encoding="utf-8"))
+        report = json.loads((folder / REPORT_NAME).read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
         print(f"refused: no readable intake report: {exc}", file=sys.stderr)
         return 2
@@ -126,14 +165,22 @@ def _push(args, runner) -> int:
         return 2
     target = f"{args.user}@{args.host}"
     checks = [(f.sha256, f.name) for f in manifest.files]
-    steps = [
-        ["ssh", "--", target, remote_script("prepare", rev, args.root)],
-        ["scp", "-r", "--", str(folder), f"{target}:{args.root}/{rev}.partial"],
-        ["ssh", "--", target, remote_script("push", rev, args.root, checks=checks)],
-    ]
-    for cmd in steps:
-        if not _run(runner, cmd):
-            return 1
+    checks += [(_sha256(folder / n), n) for n in (MANIFEST_NAME, REPORT_NAME)]
+    r = _run(runner, [*ssh, target, remote_script("prepare", rev)])
+    if r is None:
+        return 1
+    stage_dir = (r.stdout or "").strip()
+    if not _STAGE.fullmatch(stage_dir):
+        print(f"refused: unexpected remote temp dir {stage_dir!r}", file=sys.stderr)
+        return 1
+    if _run(runner, [*scp, str(folder), f"{target}:{stage_dir}/{rev}"]) is None:
+        _run(runner, [*ssh, target, f"rm -rf -- {shlex.quote(stage_dir)}"])
+        return 1
+    r = _run(runner, [*ssh, target, remote_script("push", rev, args.root, checks=checks,
+                                                  stage=f"{stage_dir}/{rev}")])
+    if r is None:
+        return 1
+    print(r.stdout or "", end="")
     print(f"shadow -> {args.root}/{rev} on {args.host}")
     return 0
 
@@ -147,8 +194,9 @@ def main(argv=None, runner=subprocess.run) -> int:
         if name == "push":
             p.add_argument("revision")
             p.add_argument("--models", default=str(ROOT / "data" / "perception" / "models"))
-        p.add_argument("--user", default="pinky")
+        p.add_argument("--user", default=operator_ssh.USER)
         p.add_argument("--root", default=REMOTE_ROOT)
+        operator_ssh.add_arguments(p)
     args = ap.parse_args(argv)
     for label, value in (("host", args.host), ("user", args.user)):
         if not _SAFE_NAME.fullmatch(value):
@@ -158,11 +206,20 @@ def main(argv=None, runner=subprocess.run) -> int:
         print(f"refused: --root must be an absolute plain path, got {args.root!r}",
               file=sys.stderr)
         return 2
+    try:
+        opts = operator_ssh.options(*operator_ssh.resolve(args.identity, args.known_hosts))
+    except operator_ssh.SshConfigError as exc:
+        print(f"refused: {exc}", file=sys.stderr)
+        return 2
+    ssh, scp = ["ssh", *opts, "--"], ["scp", "-r", *opts, "--"]
     if args.action == "push":
-        return _push(args, runner)
-    ok = _run(runner, ["ssh", "--", f"{args.user}@{args.host}",
-                       remote_script(args.action, None, args.root)])
-    return 0 if ok else 1
+        return _push(args, ssh, scp, runner)
+    r = _run(runner, [*ssh, f"{args.user}@{args.host}",
+                      remote_script(args.action, None, args.root)])
+    if r is None:
+        return 1
+    print(r.stdout or "", end="")
+    return 0
 
 
 if __name__ == "__main__":
