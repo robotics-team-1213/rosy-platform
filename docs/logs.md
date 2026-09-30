@@ -3901,3 +3901,9 @@
 - 변경: D-376을 Accepted로 기록했다. MTC는 plan-only 평가 후보로 두고 OMX Action owner를 유일한 ROS trajectory writer로 고정했다. phased Fleet receipt는 UDS v2로 명시하되 v1 호출과 기존 operation은 유지한다.
 - 증거: baseline OMX suite 154 passed / 3 skipped. 잠금 이미지 `sha256:b47034e436119cea97c2922a1b4af9bd6596975ac8acbb4cece3a19d2fe1e9f0`에 Jazzy와 OMX-F URDF/ros2_control은 있으나 MoveIt/MTC 및 OMX SRDF/kinematics/planning config는 없다. 임시 apt metadata probe에서 MTC Core `0.1.8-1noble.20260904.024044`, MoveIt Core `2.12.4-1noble.20260903.075716` 후보를 확인했지만 설치·빌드·모델 통합은 하지 않았다.
 - gate 변화: 계약/SOURCE 구현은 진행 가능. 검증된 OMX MoveIt config, scene/IK, trajectory export 통합 전 production planner와 ROS-SIM pick/place는 HOLD; profile 비활성, DEVICE/FIELD PARKED 유지.
+
+## 2026-09-30 · uncommitted · persist first phase intent and atomic response
+
+- Change: ActionStore permits only ordinal-zero phase intent while the parent is SUBMITTING and records the parent's first acceptance/rejection/unknown response with the phase state and ROS goal identity in one SQLite transaction.
+- Evidence: ActionStore tests cover accepted, rejected, unknown, database rollback on the second event write, process restart after first intent, and rejection of a goal ID when acceptance is not positive. The focused ActionStore suite passes.
+- Gate: SOURCE persistence contract only. No ActionRunner phase coordinator, ROS submission callback wiring, Fleet phase receipt, physical stop, or capability activation is claimed.
