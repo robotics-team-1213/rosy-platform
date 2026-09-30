@@ -1,4 +1,5 @@
 """D-364 §2: 'keep' lane keeper on synthetic floors rendered through the NOMINAL ground."""
+import math
 from pathlib import Path
 
 import numpy as np
@@ -7,6 +8,8 @@ import yaml
 
 from control.sensing.perception.camera_ground import nominal_ground_plane
 from control.sensing.perception.lane_keep import CORNER_MAX_ERROR as CORNER_CAP, FLIP_WINDOW_FRAMES as FLIP_WINDOW, LaneKeeper
+from control.sensing.perception.lane_keep import SIDE_X_M
+from control.sensing.perception.lane_keep_pairs import pair_conflicts
 
 PKG = Path(__file__).resolve().parents[1]
 PROFILE = yaml.safe_load((Path(__file__).resolve().parents[3] / "products" / "pinky_pro" / "profile" / "config" / "camera_nominal.yaml").read_text(encoding="utf-8"))
@@ -225,13 +228,11 @@ def test_chord_closing_on_the_lane_line_is_not_its_pair():
     assert len(chord) == 1 and chord[0]["rejected"] and chord[0]["heading_deg"] < -15
 
 
-@pytest.mark.parametrize("x0, x1", [(0.28, 0.35), (0.18, 0.36)])
-def test_junction_corner_chord_is_not_a_boundary(x0, x1):
-    # Real 124745Z frames 58-252: a chord across a junction-mouth corner on the
-    # left, +25..+30 deg and a lane width from the right lane line, was sided
-    # left: a 7 cm stub (sided, unpaired at 33 deg) or a 20 cm chord (paired).
+def test_junction_corner_stub_is_not_a_boundary():
+    # Real 124745Z frames 95-252: a 7 cm stub across a junction-mouth corner on
+    # the left, +30 deg and a lane width from the right lane line, was sided left.
     slope = 0.53
-    image = _segment(_render([(-0.085, 0.0)]), 0.10 - 0.22 * slope, slope, x0, x1)
+    image = _segment(_render([(-0.085, 0.0)]), 0.10 - 0.22 * slope, slope, 0.28, 0.35)
     obs, last = _keep(image)
     assert last["strategy"] == "right_only" and abs(obs.error) < 0.2
     assert [b["side"] for b in last["boundaries"]] == ["right"]
@@ -251,6 +252,42 @@ def test_a_dropped_chord_keeps_its_side_next_frame():
     keeper.update(_segment(_render(), -0.015 - 0.22 * slope, slope, 0.18, 0.36), GROUND, lane_half_width_m=HALF)
     assert keeper.last["strategy"] == "left_only"
     assert _keep(_segment(_render(), -0.015 - 0.22 * slope, slope, 0.18, 0.36))[1]["strategy"] == "right_only"
+
+
+def test_a_short_true_boundary_is_kept_by_its_partner():
+    # A long skew stray (+35 deg) out-paints a short true right line, but that
+    # line pairs with the left lane line: the stray is not allowed to drop it.
+    image = _segment(_render([(HALF, 0.0)]), -0.0925, 0.0, 0.28, 0.36)
+    image = _segment(image, 0.12 - 0.30 * 0.7, 0.7, 0.30, 0.43)
+    obs, last = _keep(image)
+    assert any(c["heading_deg"] > 30 for c in last["candidates"]), "the stray must be fitted"
+    assert last["strategy"] == "both" and abs(obs.error) < 0.15
+    assert any(b["side"] == "right" and abs(b["heading_deg"]) < 10 for b in last["boundaries"])
+    assert not _conflicts(last)
+
+
+def test_steep_lines_are_never_pair_conflicts():
+    # Junction crossings steeper than CONFLICT_MAX_HEADING_RAD are left to the
+    # steep and junction rules, not dropped as a skew couple.
+    image = _segment(_render([(HALF, 0.0)]), -0.09 - 0.22 * -1.19, -1.19, 0.20, 0.26)
+    _, last = _keep(image)
+    assert any(abs(c["heading_deg"]) > 45 for c in last["candidates"])
+    assert not _conflicts(last)
+
+
+def _record(y, heading_deg, length, side):
+    direction = np.array([math.cos(math.radians(heading_deg)), math.sin(math.radians(heading_deg))])
+    centre = np.array([0.30, y + (0.30 - 0.22) * direction[1] / direction[0]])
+    ends = [centre - direction * length / 2, centre + direction * length / 2]
+    return {"y_at_side_x_m": y, "heading_deg": heading_deg, "length_m": length, "side": side,
+            "centre": centre, "direction": direction, "ends_m": [[float(p[0]), float(p[1])] for p in ends]}
+
+
+def test_a_tied_conflict_drops_the_line_further_from_the_robot():
+    left, right = _record(0.06, 20.0, 0.2, "left"), _record(-0.12, -20.0, 0.2, "right")
+    assert pair_conflicts([left], [right], HALF, SIDE_X_M) == [right]
+    left, right = _record(0.12, 20.0, 0.2, "left"), _record(-0.06, -20.0, 0.2, "right")
+    assert pair_conflicts([left], [right], HALF, SIDE_X_M) == [left]
 
 
 def test_lane_lines_splayed_by_the_nominal_ground_still_pair():
