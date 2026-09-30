@@ -222,3 +222,46 @@ def test_node_wires_keep_mode_on_the_labelled_ground():
     assert "self._lane_keeper.update(" in text
     assert "frame, self._ground(frame.shape[1], frame.shape[0])" in text
     assert "corner_turning=bool(self.get_parameter('lane_corner_turning').value)" in text
+
+
+def _keeper(**kw):
+    return LaneKeeper(camera_x_offset_m=X_OFFSET, smoothing=0.0, **kw)
+
+
+def test_a_line_drifting_across_keeps_its_side():
+    # Last frame the lone line was the LEFT boundary; now it has drifted 3.5 cm
+    # right of base_link. A fresh keeper calls it right; the tracked one keeps
+    # it left and keeps steering right, back into the lane.
+    assert _keep(_render([(-0.035, 0.0)]))[1]["strategy"] == "right_only"
+    keeper = _keeper()
+    keeper.update(_render([(0.02, 0.0)]), GROUND, lane_half_width_m=HALF)
+    assert keeper.last["strategy"] == "left_only"
+    obs = keeper.update(_render([(-0.035, 0.0)]), GROUND, lane_half_width_m=HALF)
+    assert keeper.last["strategy"] == "left_only" and obs.error > 0.9
+    assert keeper.last["boundaries"][0]["tracked"] is True
+
+
+def test_tracked_side_flips_on_clear_evidence():
+    keeper = _keeper()
+    keeper.update(_render([(0.02, 0.0)]), GROUND, lane_half_width_m=HALF)
+    keeper.update(_render([(-0.035, 0.0)]), GROUND, lane_half_width_m=HALF)
+    assert keeper.last["strategy"] == "left_only"
+    # Now 9 cm right of the robot: past SIDE_FLIP_M, it is the right boundary.
+    keeper.update(_render([(-0.09, 0.0)]), GROUND, lane_half_width_m=HALF)
+    assert keeper.last["strategy"] == "right_only"
+    # A line that turned 31 deg (not continuous) is sided by geometry alone.
+    keeper = _keeper()
+    keeper.update(_render([(0.02, 0.0)]), GROUND, lane_half_width_m=HALF)
+    keeper.update(_render([(-0.035 - 0.6 * 0.22, 0.6)]), GROUND, lane_half_width_m=HALF)
+    assert keeper.last["strategy"] == "right_only"
+
+
+def test_one_sided_choice_prefers_the_boundary_seen_last_frame():
+    # Two lone lines, closer than a lane width: the left one a bit nearer.
+    # After the right one was the boundary, it stays the boundary.
+    keeper = _keeper()
+    keeper.update(_render([(-0.06, 0.0)]), GROUND, lane_half_width_m=HALF)
+    obs = keeper.update(_render([(0.045, 0.0), (-0.06, 0.0)]), GROUND, lane_half_width_m=HALF)
+    assert keeper.last["strategy"] == "right_only" and obs.error < 0.0
+    fresh = _keep(_render([(0.045, 0.0), (-0.06, 0.0)]))[1]
+    assert fresh["strategy"] == "left_only"

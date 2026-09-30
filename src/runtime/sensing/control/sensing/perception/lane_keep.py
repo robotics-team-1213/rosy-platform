@@ -22,7 +22,9 @@ robot is in, never the tape. Per frame, no odometry:
   side          each boundary's lateral offset at the lookahead decides left
                 (y > 0) or right (y < 0) -- ground geometry, not image row
                 position; a line almost under the robot takes its side from the
-                previous target
+                previous target, and a line continuing one seen last frame
+                (close in offset and heading) keeps that side until it lies
+                clearly on the other side
   target        midpoint of the nearest left and right boundary that are a
                 lane width apart; one side only: that boundary moved a
                 half-width inward; none: no output (HOLD)
@@ -90,6 +92,14 @@ PAIR_MIN_FRACTION = 0.6
 PAIR_MAX_FRACTION = 1.6
 #: A boundary nearer the robot than this takes its side from the last target.
 AMBIGUOUS_LATERAL_M = 0.03
+#: Temporal consistency (no odometry): a boundary within TRACK_LATERAL_M and
+#: TRACK_HEADING_RAD of one seen last frame is the same boundary and keeps its
+#: side until it lies more than SIDE_FLIP_M on the other side. (A per-frame
+#: rate limit on the target was tried: it drags the target across the tape
+#: when the side does flip, raising on_paint on the replay bench.)
+TRACK_LATERAL_M = 0.06
+TRACK_HEADING_RAD = math.radians(20.0)
+SIDE_FLIP_M = 0.08
 #: Confidence: both boundaries / one boundary (CORE drives slower on one).
 BOTH_CONFIDENCE = 0.9
 ONE_CONFIDENCE = 0.6
@@ -276,7 +286,8 @@ def extract_lines(points: np.ndarray, rng: np.random.Generator):
 
 
 class LaneKeeper:
-    """Keep the middle of the lane on a real camera, memoryless ('keep' mode)."""
+    """Keep the middle of the lane on a real camera ('keep' mode). No odometry;
+    the only memory is the last frame's target and boundaries."""
 
     def __init__(self, *, camera_x_offset_m: float = 0.0,
                  lookahead_m: float = LOOKAHEAD_M,
@@ -298,6 +309,7 @@ class LaneKeeper:
         self._view = None
         self._view_key = None
         self._previous_target = None
+        self._tracked = []
         self._corner_side = None
         self._corner_frames = 0
         self._corner_engaged = False
@@ -305,6 +317,7 @@ class LaneKeeper:
 
     def reset(self) -> None:
         self._previous_target = None
+        self._tracked = []
         self._corner_side = None
         self._corner_frames = 0
         self._corner_engaged = False
@@ -390,13 +403,19 @@ class LaneKeeper:
             if abs(lateral) < AMBIGUOUS_LATERAL_M and previous is not None:
                 reference = previous[1]
             side = "left" if lateral > reference else "right"
+            # The same boundary as last frame keeps its side while it stays
+            # near the robot: a line drifting across under the camera is still
+            # the boundary it was, not the next lane's.
+            tracked = self._track(lateral, heading)
+            if tracked is not None and abs(lateral) < SIDE_FLIP_M:
+                side = tracked
             inward = (np.array([direction[1], -direction[0]]) if side == "left"
                       else np.array([-direction[1], direction[0]]))
             point, along = _pursuit_point(centre + inward * half, direction, self._lookahead)
             if not (line["along"][0] - MAX_EXTRAPOLATION_M <= along
                     <= line["along"][1] + MAX_EXTRAPOLATION_M):
                 continue
-            record.update(side=side, y_at_side_x_m=round(lateral, 3),
+            record.update(side=side, y_at_side_x_m=round(lateral, 3), tracked=tracked == side,
                           pursuit_m=[round(float(point[0]), 3), round(float(point[1]), 3)],
                           centre=centre, direction=direction)
             (left if side == "left" else right).append(record)
@@ -404,6 +423,8 @@ class LaneKeeper:
         corner = self._corner(transverse, half) if self._corner_turning else None
         if corner is not None and (target is None or corner[1] != "corner_ahead"):
             target, strategy = corner
+        self._tracked = [(r["y_at_side_x_m"], math.radians(r["heading_deg"]), r["side"])
+                         for r in left + right]
         for record in left + right:
             record.pop("direction")
             record.pop("centre")
@@ -493,6 +514,16 @@ class LaneKeeper:
         self._corner_engaged = True
         return point, f"corner_{side}"
 
+    def _track(self, lateral, heading):
+        """Side of the last frame's boundary this line continues, or None."""
+        best = None
+        for previous_lateral, previous_heading, side in self._tracked:
+            gap = abs(lateral - previous_lateral)
+            if (gap <= TRACK_LATERAL_M and abs(heading - previous_heading) <= TRACK_HEADING_RAD
+                    and (best is None or gap < best[0])):
+                best = (gap, side)
+        return None if best is None else best[1]
+
     def _choose(self, left, right, half):
         """Target (x, y) and strategy from the side-classified boundaries."""
         lane = 2.0 * half
@@ -517,7 +548,9 @@ class LaneKeeper:
                       if abs(r["y_at_side_x_m"]) <= ONE_MAX_DISTANCE_FRACTION * lane]
         if not candidates:
             return None, "none"
-        record = min(candidates, key=lambda r: (round(abs(r["y_at_side_x_m"]), 2), -r["length_m"]))
+        # The boundary continuous with last frame's first, then the nearest.
+        record = min(candidates, key=lambda r: (not r["tracked"], round(abs(r["y_at_side_x_m"]), 2),
+                                                -r["length_m"]))
         return np.asarray(record["pursuit_m"], float), f"{record['side']}_only"
 
 
