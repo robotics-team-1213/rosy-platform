@@ -620,8 +620,17 @@ CLOSURE = {"annotated-doc", "annotated-types", "anyio", "click", "h11", "idna",
 # D-192: the rosy-io set in the same file (bringup's DYNAMIXEL driver), so the
 # D-189 image/release runtime check covers it. pyserial is its only dependency.
 IO_PINS = {"dynamixel-sdk": "3.8.4", "pyserial": "3.5"}
+# D-373: the learned-perception runtime (shadow inference in rosy-camera).
+# onnxruntime 1.30.0 requires flatbuffers, numpy>=1.21.6, packaging and
+# protobuf>=4.25.8 (sympy and ml_dtypes are extras only). numpy is deliberately
+# NOT pinned: the image's apt python3-numpy (noble 1.26.4) is what apt's cv2
+# was built against, and a /usr/local numpy 2 would shadow it and break cv2.
+LEARNED_PINS = {"onnxruntime": "1.30.0"}
+LEARNED_CLOSURE = {"flatbuffers": "25.12.19", "packaging": "26.3", "protobuf": "7.36.2"}
+LEARNED_BEGIN = "# BEGIN D-373 learned-perception runtime"
+LEARNED_END = "# END D-373 learned-perception runtime"
 # Distributions with compiled wheels need one hash per platform.
-PLATFORM_WHEELS = {"pydantic-core", "websockets"}
+PLATFORM_WHEELS = {"pydantic-core", "websockets", "onnxruntime", "protobuf"}
 
 
 def _requirements() -> dict[str, tuple[str, list[str]]]:
@@ -651,14 +660,29 @@ def _probe_module():
 def test_core_python_runtime_is_pinned_and_hash_locked_for_both_platforms():
     entries = _requirements()
 
-    assert set(entries) == set(TOP_LEVEL_PINS) | CLOSURE | set(IO_PINS)
-    for name, version in {**TOP_LEVEL_PINS, **IO_PINS}.items():
+    assert set(entries) == set(TOP_LEVEL_PINS) | CLOSURE | set(IO_PINS) | set(LEARNED_PINS) | set(LEARNED_CLOSURE)
+    for name, version in {**TOP_LEVEL_PINS, **IO_PINS, **LEARNED_PINS, **LEARNED_CLOSURE}.items():
         assert entries[name][0] == version, name
     for name, (version, hashes) in entries.items():
         assert version and all(c.isdigit() or c == "." for c in version), name
         assert hashes and all(len(h) == 64 and set(h) <= set("0123456789abcdef") for h in hashes), name
         assert len(set(hashes)) == len(hashes), name
         assert len(hashes) == (2 if name in PLATFORM_WHEELS else 1), name
+
+
+def test_learned_perception_runtime_is_one_marked_block_at_the_end():
+    # D-373: the bench installer applies exactly this block before a re-bake,
+    # so the block must be self-contained and last (the rest is the D-189 set).
+    text = REQUIREMENTS.read_text(encoding="utf-8")
+    assert text.count(LEARNED_BEGIN) == 1 and text.count(LEARNED_END) == 1
+    begin, end = text.index(LEARNED_BEGIN), text.index(LEARNED_END)
+    assert begin < end and text[end:].strip() == LEARNED_END
+    block = text[begin:end].replace("\\\n", " ")
+    names = {line.split("==")[0] for line in block.splitlines() if "==" in line and not line.startswith("#")}
+    assert names == set(LEARNED_PINS) | set(LEARNED_CLOSURE)
+    assert "numpy" not in _requirements()
+    customizer = CUSTOMIZER.read_text(encoding="utf-8")
+    assert "python3-numpy" in customizer[customizer.index("apt-get install -y"):customizer.index("rosdep init")]
 
 
 def test_the_input_lock_pins_the_requirements_file_bytes():

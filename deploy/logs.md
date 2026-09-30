@@ -1538,3 +1538,11 @@
 - gate 변화: 없음 (ARTIFACT/DEVICE는 여전히 HOLD — native ARM64·실기 증거는 그대로 남는다).
 - 결정: 없음.
 - 교훈: 없음.
+
+## 2026-09-30 · uncommitted · feat(image): D-373 learned-perception runtime and models directory
+
+- 변경: `device-python-requirements.txt` 끝에 표식 블록(onnxruntime 1.30.0, flatbuffers 25.12.19, packaging 26.3, protobuf 7.36.2; cp312 aarch64·x86_64 해시)을 붙이고 `inputs.lock.yaml` `requirements_sha256`을 바꿨다. numpy는 고정하지 않는다 — apt python3-numpy 1.26.4 위에 numpy 2를 얹으면 apt cv2가 깨진다. `/var/lib/rosy/models root:rosy-camera 0750`을 `customize-rootfs.sh`와 `tmpfiles-rosy-state.conf`에 같은 규칙으로 넣었다. 녹화는 카메라 유닛 `StateDirectory=rosy/camera` 아래라 규칙을 두지 않는다. 벤치 설치 `pinky_pro/dev/install-learned-perception.sh`는 같은 파일의 블록과 같은 tmpfiles 줄을 읽어 설치하고, 블록을 뺀 파일 sha(이전 이미지 기록)일 때만 `python-runtime.sha256`을 새 값으로 바꾸며 `/var/log/rosy/bench-installs.log`에 남긴다.
+- 증거: 블록을 `pip download --require-hashes --no-deps --only-binary=:all:`로 cp312 aarch64·x86_64 각각 받음(2026-09-30 Windows). 계약 시험 녹색, tmpfiles 모드·핀 버전 변이는 붉음 확인 후 복구.
+- gate 변화: 없음. ARTIFACT/DEVICE HOLD — aarch64 이미지 빌드와 Pi 5에서의 import·지연·CPU는 미실측.
+- 결정: D-373 결정 1.
+- 교훈: 이 블록 이후로 빌드한 릴리스는 이전 카드에서 `NATIVE_PYTHON_RUNTIME`으로 거절된다. 재굽기 전 벤치 카드는 벤치 설치가 먼저다.

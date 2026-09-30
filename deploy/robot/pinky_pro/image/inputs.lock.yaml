@@ -129,7 +129,7 @@ hardware_dependencies:
 
 python_runtime:
   requirements: device-python-requirements.txt
-  requirements_sha256: 2b003fd4f94d89e3735f6225323df731c45aae0d35132e781f7680676d20bf00
+  requirements_sha256: e475bee0a136971076373edfc09cbce0467cdc32df1b9d21b65c6426f29fcde6
   python_version: "3.12"
   install_prefix: /usr/local
   pydantic_major: 2
@@ -142,6 +142,11 @@ python_runtime:
     2026-09-24 by a --require-hashes download for both platforms.
     D-192 added the rosy-io set (dynamixel-sdk 3.8.4, pyserial 3.5) to the
     same file, so native_release.py's runtime check covers it too.
+    D-373 appended the learned-perception block (onnxruntime 1.30.0,
+    flatbuffers 25.12.19, packaging 26.3, protobuf 7.36.2; numpy stays apt's
+    1.26.4) as the file's last block; hashes were checked on 2026-09-30 by a
+    --require-hashes download for both platforms. The sha is sha256 of the
+    file's LF bytes; without that block it is the previous 2b003fd4...
 
 camera_runtime:
   sources: camera-sources.lock.json

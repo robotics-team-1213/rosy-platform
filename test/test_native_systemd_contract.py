@@ -700,6 +700,10 @@ def test_state_rules_keep_the_parent_and_root_only_state_with_root():
     assert 'tmpfiles-rosy-state.conf" "$OVERLAY/etc/tmpfiles.d/rosy-state.conf"' in payload
     assert 'install -d -m 0755 -o root -g root "$ROOT/var/lib/rosy"' in customizer
     assert "install -d -m 2750 -o rosy-io -g rosy-core /var/lib/rosy/maps" in customizer
+    # D-373: models are root-written (operator sudo install) and camera-read.
+    assert "d /var/lib/rosy/models 0750 root rosy-camera -" in rules
+    assert "install -d -m 0750 -o root -g rosy-camera /var/lib/rosy/models" in customizer
+    assert customizer.index("useradd --uid 963") < customizer.index("-g rosy-camera /var/lib/rosy/models")
     # The accounts must exist before the chroot install names them.
     assert customizer.index("useradd --uid 961") < customizer.index("-o rosy-io -g rosy-core")
 
