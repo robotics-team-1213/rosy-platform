@@ -374,3 +374,11 @@
 - 증거: `python -m pytest src/hmi/web_common/test -q` 111 passed (2026-09-30 Windows).
 - gate 변화: 없음.
 - 결정: D-377. 경로 `/common/icons/<id>.svg`는 D-374 3항 예외대로 링크하는 HTML과 같은 커밋에서 바뀐다.
+
+## 2026-10-01 · uncommitted · fix(web): D-359 리뷰 P1-1/P2-2 — 한글 없는 열거값 표시도 린트가 본다
+
+- 변경: `test_operator_copy.py`에 `enum_text_problems()` — 텍스트 싱크(`.textContent =`, `tag(`, `setText(`, `setStatus(`, `el(`, `setChip(`, `pill(`, `setAttribute("reason"|…)`)로 가는 순수 열거값 리터럴(`"OFFLINE"`)과, 한국어 템플릿에 날것으로 들어간 mode/state 구멍(`${requestedMode}`)을 잡는다. 비교·인덱스·메서드 인자 위치는 프로토콜 키로 본다. 예외 표 `ENUM_TEXT_ALLOWLIST`(사유 필수, 낡은 항목 실패). `core_ui_logic.js`에 `NETWORK_MODE_LABEL`.
+- 증거: `test_operator_copy.py` 22 passed(열거 라벨 시험 포함). 변이: 합성 10형과 실제 파일 4곳(roster·app·settings·line-follow)을 되돌리면 실패.
+- gate 변화: 새 시험 `test_no_bare_enum_reaches_operator_text`·`test_the_lint_catches_bare_enums_flowing_to_text`·`test_reverting_an_enum_text_fix_fails_the_lint`·`test_every_enum_text_allowlist_entry_still_matches`.
+- 결정: D-359 US-009. 실행 모드 이름(core/motor/hardware)·릴리스 상태·차선 추종 결과 상태는 한국어 지도가 아직 없어 예외 표에 사유와 함께 둔다.
+- 교훈: 2026-09-30 항목의 "미증명: 한글 없는 순수 열거값"이 이 회차에서 닫혔다.

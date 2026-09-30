@@ -787,3 +787,11 @@
 - 변경: 관제 화면 `<title>` `Rosy Console`, 파비콘 `/common/icons/console.svg`. `test_common_icons.py`, `test_task_contract_docs.py`의 Vision 경로(`src/site/vision/rosy_vision/ingest.py`).
 - 증거: `python -m pytest src/site/fleet/test -q` 938 passed, 6 skipped; node 명세 6파일 34 passed (2026-09-30 Windows).
 - gate 변화: 없음. 자산 폴더 이동(`src/site/console`, `rosy_console`)은 D-374 단계 4 게이트 그대로.
+
+## 2026-10-01 · uncommitted · fix(fleet): D-359 리뷰 P1-1 — 명렬 카드 오프라인은 한국어, 열거값은 title
+
+- 변경: `web/roster.js` 연결 끊긴 로봇의 모드 태그는 `오프라인`, `title="OFFLINE"`. `web/signals.js` 신호등 명령 기록은 `body.mode` 대신 버튼 글(녹색·적색·점멸…)을 쓴다.
+- 증거: `test/test_fleet_console_browser.py -k unreachable` 1 passed (2026-10-01 Windows).
+- gate 변화: web_common `enum_text_problems` 린트.
+- 결정: D-359 US-009, CONCEPTS 어휘(`오프라인`은 signals.js·triage.js에 이미 쓰는 말).
+- 교훈: 없음.

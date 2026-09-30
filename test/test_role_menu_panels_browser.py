@@ -204,7 +204,10 @@ def test_console_line_follow_readback_failure_and_action_feedback_are_independen
         pending_feedback = action.inner_text()
         page.evaluate("window.__resolveRequest({})")
         page.wait_for_function("previous => [...document.querySelectorAll('ui-status[role=status]')].at(-1)?.textContent !== previous", arg=pending_feedback)
-        assert "OFF" in panel.locator("ui-status").first.inner_text()
+        # D-359 US-009 — the line-follow mode is spoken in Korean, never as the enum.
+        assert "꺼짐" in panel.locator("ui-status").first.inner_text()
+        assert "OFF" not in panel.locator("ui-status").first.inner_text()
+        assert "IR_LINE" not in action.inner_text() and "적외선 센서" in action.inner_text()
         assert action.inner_text() != pending_feedback
         assert "CORE" in action.inner_text()
         assert page.evaluate("window.__calls") == [{

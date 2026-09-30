@@ -6,7 +6,7 @@ import { createHostCards } from "./host-cards.js";
 import { createVisionPreview } from "./vision.js";
 import { createStatusSummary } from "./status-summary.js";
 import { completeDashboardAuthentication, dashboardSurfaceBridge } from "./surface-navigation.js";
-import { HeadlessState } from "/common/core_ui_logic.js";
+import { HeadlessState, MODE_LABEL, NETWORK_MODE_LABEL, enumLabel } from "/common/core_ui_logic.js";
 import {
   bindFormSave,
   elements,
@@ -455,12 +455,12 @@ document.querySelectorAll("ui-button[data-mode]").forEach((button) => {
     if (button.disabled || session.modeChangePending) return;
     const requestedMode = button.dataset.mode;
     stopTeleop("모드 변경 전에 정지했습니다.");
-    if (!window.confirm(`${requestedMode} 모드로 변경할까요? 주변 안전을 확인하세요.`)) return;
+    if (!window.confirm(`${enumLabel(MODE_LABEL, requestedMode)} 모드로 변경할까요? 주변 안전을 확인하세요.`)) return;
     session.modeChangePending = true;
     updateModeButtons();
     try {
       await api("/api/v1/mode", { method: "POST", body: JSON.stringify({ mode: requestedMode }) });
-      setText("action-message", `${requestedMode} 모드 요청을 전송했습니다.`);
+      setText("action-message", `${enumLabel(MODE_LABEL, requestedMode)} 모드 요청을 전송했습니다.`);
       await refreshRobotState();
     } catch (error) {
       setText("action-message", `모드 변경 실패: ${error.message}`);
@@ -647,7 +647,7 @@ async function applyNetworkMode(mode, prompt) {
       setText("network-note", payload.detail || "Host Agent가 없어 적용하지 못했습니다.");
       return;
     }
-    setText("network-note", payload.ok ? `${mode} 를 적용했습니다.` : (payload.detail || "적용이 거부되었습니다."));
+    setText("network-note", payload.ok ? `${enumLabel(NETWORK_MODE_LABEL, mode)} 모드를 적용했습니다.` : (payload.detail || "적용이 거부되었습니다."));
     const status = await api("/api/v1/host/network");
     renderHostNetwork(status);
   } catch (error) {

@@ -1,3 +1,5 @@
+import { NETWORK_MODE_LABEL, enumLabel } from "/common/core_ui_logic.js";
+
 // D-359 §5.3 — 끌 때 이유를 같이 준다. 켜거나 짧은 요청 중 잠금이면 이유를 지운다.
 function setOff(control, off, reason = "") { control.disabled = Boolean(off); if (off && reason) control.setAttribute("reason", reason); else control.removeAttribute("reason"); }
 // Read-only host-agent views. An unreachable agent remains visibly unavailable.
@@ -117,8 +119,8 @@ function card(title, path, interval, ctx, describe, summarize) {
 
 export function mount(root, ctx) {
   const head = el("ui-head", "", "네트워크 및 장치 운영 상태");
-  const network = card("네트워크", "/api/v1/host/network", 10_000, ctx, (data) => [["모드", data.mode], ["SSID", data.ssid], ["액세스 포인트", data.ap_active == null ? null : data.ap_active ? "켜짐" : "꺼짐"], ["IPv4", data.ipv4], ["기본 경로", data.default_route], ["DNS", (data.dns || []).join(", ")], ["인터넷", data.internet == null ? null : data.internet ? "도달" : "도달 안 됨"], ["단말 접근", data.peer_reachable == null ? null : data.peer_reachable ? "가능" : "확인 필요"]],
-    (data) => `${data.mode || "모드 미확인"} · ${data.ssid || "SSID 없음"}`);
+  const network = card("네트워크", "/api/v1/host/network", 10_000, ctx, (data) => [["모드", data.mode == null ? null : enumLabel(NETWORK_MODE_LABEL, data.mode)], ["SSID", data.ssid], ["액세스 포인트", data.ap_active == null ? null : data.ap_active ? "켜짐" : "꺼짐"], ["IPv4", data.ipv4], ["기본 경로", data.default_route], ["DNS", (data.dns || []).join(", ")], ["인터넷", data.internet == null ? null : data.internet ? "도달" : "도달 안 됨"], ["단말 접근", data.peer_reachable == null ? null : data.peer_reachable ? "가능" : "확인 필요"]],
+    (data) => `${enumLabel(NETWORK_MODE_LABEL, data.mode, "모드 미확인")} · ${data.ssid || "SSID 없음"}`);
   const release = card("릴리스", "/api/v1/host/release", 15_000, ctx, (data) => [["상태", data.state], ["현재 버전", data.current], ["이전 버전", data.previous], ["대기 버전", data.staged], ["마지막 실패", data.last_failure], ["리비전", data.git_revision], ["설정/데이터 스키마", data.config_schema == null ? null : `${data.config_schema} / ${data.data_schema}`]],
     (data) => `${data.state || "상태 미확인"} · 현재 ${data.current || "버전 미확인"} · 이전 ${data.previous || "없음"}`);
   const commissioning = card("커미셔닝", "/api/v1/host/commissioning", 15_000, ctx, (data) => [["실행 모드", data.runtime_mode], ["동작 차단 사유", data.motion_reason], ["모터", data.motor_hold ? "승인 대기" : "확인됨"], ["LiDAR", data.lidar_hold ? "승인 대기" : "확인됨"], ["배터리", data.battery_hold ? "승인 대기" : "확인됨"], ["IMU", data.imu_hold ? "승인 대기" : "확인됨"], ["SLAM", data.slam_hold ? "승인 대기" : "확인됨"], ["Fleet", data.fleet_hold ? "승인 대기" : "확인됨"], ["세부 정보", data.detail]],

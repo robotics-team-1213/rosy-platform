@@ -663,3 +663,11 @@
 - 변경: `index.html` `<title>` `Rosy Robot`, `surface.html` `Rosy Robot — {{title}}`, 파비콘 `/common/icons/robot.svg`.
 - 증거: `python -m pytest src/hmi/dashboard/test -q` 17 passed, 34 skipped (브라우저 시험 opt-in); `src/hmi/web_common/test` 111 passed (2026-09-30 Windows).
 - gate 변화: 없음. 폴더·패키지 이동(`src/hmi/robot`, `rosy_robot`)은 D-374 단계 3 게이트 그대로.
+
+## 2026-10-01 · uncommitted · fix(dashboard): D-359 리뷰 P2-2 — 모드·도크·네트워크·차선 추종 열거값을 한국어로
+
+- 변경: `app.js` 모드 확인·결과 글은 `enumLabel(MODE_LABEL, requestedMode)`, 네트워크 적용 글은 `NETWORK_MODE_LABEL`. `settings.js` 도크 상태 글은 `DOCK_STATE_LABEL`. `panels/console/line-follow.js`는 `LINE_MODE_LABEL`(꺼짐·적외선 센서·카메라)로 상태·요청 글과 모드 값을 쓴다. `panels/host/operations.js` 네트워크 모드도 `NETWORK_MODE_LABEL`. `test_host_operations_browser.py` 서버가 `/common/`을 web_common으로 옮긴다.
+- 증거: `test_host_operations_browser.py` 3 passed, `test/test_role_menu_panels_browser.py -k line_follow` 2 passed, `test/test_role_surface_states_browser.py -k host_agent` 1 passed (ROSY_RUN_BROWSER_TESTS=1, 2026-10-01 Windows).
+- gate 변화: web_common `enum_text_problems` 린트가 이 파일들을 본다.
+- 결정: D-359 US-009.
+- 교훈: 없음.

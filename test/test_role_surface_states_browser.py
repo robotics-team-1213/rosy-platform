@@ -282,6 +282,7 @@ def test_host_agent_recovery_is_text_only_and_unavailable_controls_stay_blocked(
             browser, page, errors = _module_page(playwright, {
                 "/assets/panels/host/operations.js": WEB / "panels" / "host" / "operations.js",
                 "/assets/ui.js": ROOT / "src" / "hmi" / "web_common" / "ui.js",
+                "/common/core_ui_logic.js": ROOT / "src" / "hmi" / "web_common" / "core_ui_logic.js",
             })
         except Exception as error:
             pytest.skip(f"Playwright Chromium unavailable: {error}")

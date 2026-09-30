@@ -15,6 +15,16 @@ their own literals are judged separately, so `mode === "IDLE"` inside a hole is
 a protocol key, not copy. Comments are skipped. HTML text and the operator-read
 attributes (`aria-label`, `placeholder`, `reason`, `alt`) are judged; `title`
 is the sanctioned home of enums and is not.
+
+Two shapes carry no Hangul in the literal itself and are judged apart:
+
+- a literal that is exactly a bare enum (`"OFFLINE"`) flowing to a text sink
+  (`.textContent =`, `.innerText =`, `tag(`, `setText(`, `setStatus(`, `el(`,
+  `setChip(`, `pill(`, `setAttribute("reason"|"aria-label"|...)`), outside a
+  comparison (`=== "IDLE"`), an index (`[...]`) or a method-call argument;
+- a template hole that interpolates a raw mode/state variable
+  (`${requestedMode}`, `${state.mode || "OFF"}`) into Korean text. The fix is
+  `enumLabel(MODE_LABEL, value)` or a local label map.
 """
 
 from __future__ import annotations
@@ -40,9 +50,10 @@ SURFACES = (
 
 HANGUL = re.compile(r"[가-힣]")
 RETIRED_TERMS = re.compile(r"(?i:profile|capability)|Navigation|hardware 모드|프로필")
-BARE_ENUMS = re.compile(
-    r"(?<![A-Za-z0-9_])(IDLE|MANUAL|NAVIGATION|DOCKING|EMERGENCY|RUNNING|HOLDING|"
-    r"UNDOCKED|UNDOCKING|DOCKED|CHARGING|DOCK_FAILED|WAITING|STALE|OFFLINE)(?![A-Za-z0-9_])")
+ENUM_WORDS = (r"IDLE|MANUAL|NAVIGATION|DOCKING|EMERGENCY|RUNNING|HOLDING|"
+              r"UNDOCKED|UNDOCKING|DOCKED|CHARGING|DOCK_FAILED|WAITING|STALE|OFFLINE")
+BARE_ENUMS = re.compile(r"(?<![A-Za-z0-9_])(" + ENUM_WORDS + r")(?![A-Za-z0-9_])")
+ENUM_ONLY = re.compile(ENUM_WORDS)  # used with fullmatch
 
 #: (path relative to src/, substring of the offending literal) -> reason.
 #: Every entry must still match something, so a fixed string cannot leave a
@@ -52,8 +63,12 @@ ALLOWLIST: dict[tuple[str, str], str] = {}
 OPERATOR_ATTRIBUTES = {"aria-label", "placeholder", "reason", "alt"}
 
 
-def _js_literals(text: str) -> list[tuple[int, str]]:
-    """Static text of every string/template literal, comments and regexes skipped."""
+def _js_literals(text: str, holes: list[tuple[int, str, str]] | None = None) -> list[tuple[int, str]]:
+    """Static text of every string/template literal, comments and regexes skipped.
+
+    `holes`, when given, receives (line, raw hole expression, template text) for
+    every `${...}` hole of a top-level template.
+    """
     found: list[tuple[int, str]] = []
     i, n = 0, len(text)
     prev = ""  # last significant character, to tell a regex from a division
@@ -63,7 +78,7 @@ def _js_literals(text: str) -> list[tuple[int, str]]:
 
     def read_template(start: int) -> int:
         """`start` is just after the backtick. Returns the index after the closing one."""
-        j, parts, begin = start, [], start
+        j, parts, begin, raw_holes = start, [], start, []
         while j < n:
             ch = text[j]
             if ch == "\\":
@@ -71,6 +86,8 @@ def _js_literals(text: str) -> list[tuple[int, str]]:
             if ch == "`":
                 parts.append(text[begin:j])
                 found.append((line_of(start), "".join(parts)))
+                if holes is not None:
+                    holes.extend((line, expr, "".join(parts)) for line, expr in raw_holes)
                 return j + 1
             if ch == "$" and j + 1 < n and text[j + 1] == "{":
                 parts.append(text[begin:j])
@@ -85,6 +102,7 @@ def _js_literals(text: str) -> list[tuple[int, str]]:
                     if c == "{": depth += 1
                     elif c == "}": depth -= 1
                     k += 1
+                raw_holes.append((line_of(expr_start), text[expr_start:k - 1]))
                 inner = _js_literals(text[expr_start:k - 1])
                 found.extend((line_of(expr_start) + line - 1, lit) for line, lit in inner)
                 # `Navigation ${ok ? "사용 가능" : "미제공"}` renders as Korean copy even
@@ -199,6 +217,196 @@ def _judge(literals):
             why.append("bare enum " + BARE_ENUMS.search(literal).group(0))
         if why:
             yield line, literal, "; ".join(why)
+
+
+#: A hole that is only a mode/state value (optionally with a `||`/`??` literal default).
+RAW_ENUM_HOLE = re.compile(
+    r"\s*(?:[A-Za-z_$][\w$]*\??\.)*[A-Za-z_$]*(?i:mode|state)\s*"
+    r"(?:(?:\|\||\?\?)\s*([\"'])[^\"']*\1\s*)?")
+TEXT_SINK = re.compile(
+    r"\.(?:textContent|innerText)\s*=(?!=)"
+    r"|(?<![\w$.])(?:tag|setText|setStatus|setChip|pill|el)\s*\("
+    r"|\.setAttribute\s*\(\s*([\"'])(?:reason|aria-label|placeholder|alt)\1\s*,")
+CONTINUES = ("?", ":", "+", "||", "&&", "??", ".")
+
+
+def _mask_code(text: str) -> str:
+    """Same length as `text`; string/template bodies, regexes and comments become spaces."""
+    out, i, n, prev = list(text), 0, len(text), ""
+
+    def blank(a: int, b: int) -> None:
+        for k in range(a, min(b, n)):
+            if out[k] != "\n":
+                out[k] = " "
+
+    while i < n:
+        ch = text[i]
+        if text.startswith("//", i):
+            end = text.find("\n", i); end = n if end < 0 else end
+            blank(i, end); i = end; continue
+        if text.startswith("/*", i):
+            end = text.find("*/", i + 2); end = n if end < 0 else end + 2
+            blank(i, end); i = end; continue
+        if ch in "\"'`":
+            k, depth = i + 1, 0
+            while k < n:
+                c = text[k]
+                if c == "\\":
+                    k += 2; continue
+                if ch == "`" and text.startswith("${", k):
+                    depth += 1; k += 2; continue
+                if ch == "`" and depth and c == "}":
+                    depth -= 1
+                elif c == ch and not depth:
+                    break
+                k += 1
+            blank(i + 1, k); i = k + 1; prev = "a"; continue
+        if ch == "/" and (prev == "" or prev in "(,=:[!&|?{};+-*%<>~^"):
+            k, in_class = i + 1, False
+            while k < n and text[k] != "\n":
+                c = text[k]
+                if c == "\\":
+                    k += 2; continue
+                if c == "[": in_class = True
+                elif c == "]": in_class = False
+                elif c == "/" and not in_class: break
+                k += 1
+            blank(i + 1, k); i = k + 1; prev = "a"; continue
+        if not ch.isspace():
+            prev = ch
+        i += 1
+    return "".join(out)
+
+
+def _sink_end(masked: str, start: int, is_call: bool) -> int:
+    """End of the expression a text sink receives (on masked code, so strings cannot confuse it)."""
+    depth, k, n = 0, start, len(masked)
+    while k < n:
+        c = masked[k]
+        if c in "([{":
+            depth += 1
+        elif c in ")]}":
+            if depth == 0:
+                return k
+            depth -= 1
+        elif depth == 0 and not is_call and c == ";":
+            return k
+        elif depth == 0 and not is_call and c == "\n":
+            if not masked[k:].lstrip().startswith(CONTINUES) and \
+                    not masked[:k].rstrip().endswith(CONTINUES + ("=", "(")):
+                return k
+        k += 1
+    return n
+
+
+def enum_text_problems(text: str) -> list[tuple[int, str, str]]:
+    """Bare-enum literals flowing to a text sink, and raw mode/state holes in Korean templates."""
+    out = []
+    masked = _mask_code(text)
+    for sink in TEXT_SINK.finditer(text):
+        if masked[sink.start()] != text[sink.start()]:
+            continue  # the sink's own text sits in a comment or a string
+        is_call = sink.group(0).rstrip().endswith(("(", ","))
+        end = _sink_end(masked, sink.end(), is_call)
+        for lit in re.finditer(r"([\"'`])([A-Z_]+)\1", text[sink.end():end]):
+            pos = sink.end() + lit.start()
+            if masked[pos] != lit.group(1) or not ENUM_ONLY.fullmatch(lit.group(2)):
+                continue  # inside a longer string, or not an enum
+            before = masked[:pos].rstrip()
+            after = masked[pos + len(lit.group(0)):].lstrip()
+            if before.endswith(("===", "!==", "==", "!=", "case", "[")) \
+                    or after.startswith(("===", "!==", "==", "!=", "]")) \
+                    or re.search(r"\.[\w$]+\s*\($", before):
+                continue  # a protocol key: compared, indexed or passed to a method
+            out.append((text.count("\n", 0, pos) + 1, lit.group(0), "bare enum to text"))
+    holes: list[tuple[int, str, str]] = []
+    _js_literals(text, holes)
+    for line, expr, template in holes:
+        if HANGUL.search(template) and RAW_ENUM_HOLE.fullmatch(expr):
+            out.append((line, "${" + expr + "}", "raw enum hole in Korean text"))
+    return out
+
+
+def test_the_lint_catches_bare_enums_flowing_to_text():
+    """Mutation proof for the Hangul-free shapes (P1-1 review: OFFLINE on the Fleet roster)."""
+    caught = (
+        'node.textContent = "OFFLINE";',
+        'const t = tag(online ? label : "OFFLINE", "crit");',
+        'setText("mode", ok ? "IDLE" : "MANUAL");',
+        'button.setAttribute("reason", "STALE");',
+        'const t = tag(\n  a ? "상태 확인 불가" : b ? x\n    : "OFFLINE",\n  "crit");',
+        'node.textContent = a\n  ? "대기"\n  : "OFFLINE";',
+        'setStatus(out, `${requestedMode} 모드로 바꿉니다.`);',
+        'const m = `차선 추종 ${current.mode || "OFF"}`;',
+        'const m = `상태 ${state} · 도크`;',
+        'log(`${id} 명령 하달 (${body.mode})`);',
+    )
+    for source in caught:
+        assert enum_text_problems(source), source
+    clean = (
+        'node.textContent = mode === "IDLE" ? "대기" : "수동";',
+        'node.textContent = LABEL["IDLE"];',
+        'node.textContent = set.has("IDLE") ? "대기" : "";',
+        'node.title = "OFFLINE";',
+        'node.textContent = label;\nconst body = { mode: "IDLE" };',
+        '// node.textContent = "OFFLINE";',
+        'node.textContent = "OFFLINE 상태";',
+        'setText("mode", `${enumLabel(MODE_LABEL, requestedMode)} 모드`);',
+        'const url = `/api/${mode}`;',
+        'const t = `Vision 응답 ${status}`;',
+        'const t = `${stateUnavailable ? "확인 불가" : "정상"}`;',
+    )
+    for source in clean:
+        assert enum_text_problems(source) == [], source
+
+
+@pytest.mark.parametrize(("rel", "fixed", "regressed"), [
+    ("site/fleet/fleet/server/web/roster.js", ': "오프라인",', ': "OFFLINE",'),
+    ("hmi/dashboard/app.js", "`${enumLabel(MODE_LABEL, requestedMode)} 모드로", "`${requestedMode} 모드로"),
+    ("hmi/dashboard/settings.js", "상태 ${enumLabel(DOCK_STATE_LABEL, state)}", "상태 ${state}"),
+    ("hmi/dashboard/panels/console/line-follow.js",
+     '`차선 추종 ${enumLabel(LINE_MODE_LABEL, current.mode || "OFF")}`', '`차선 추종 ${current.mode || "OFF"}`'),
+])
+def test_reverting_an_enum_text_fix_fails_the_lint(rel, fixed, regressed):
+    """Mutation proof on the real files: undo one P1-1/P2-2 fix and the lint sees it."""
+    source = (SRC / rel).read_text(encoding="utf-8-sig")
+    assert fixed in source
+    assert _enum_text_unallowed(rel, source) == []
+    assert _enum_text_unallowed(rel, source.replace(fixed, regressed, 1)) != []
+
+
+#: (path relative to src/, exact flagged hole or literal) -> reason. Stale entries fail.
+ENUM_TEXT_ALLOWLIST: dict[tuple[str, str], str] = {
+    ("hmi/dashboard/panels/console/teleop.js", "${readErrors.state}"):
+        "an error message keyed by the state endpoint, not a state value",
+    ("hmi/dashboard/panels/host/operations.js", '${data.runtime_mode || "실행 모드 미확인"}'):
+        "runtime mode names core/motor/hardware are the CONCEPTS.md glossary preset names",
+    ("hmi/dashboard/panels/host/system.js", '${data.runtime_mode || "확인 불가"}'):
+        "runtime mode names core/motor/hardware are the CONCEPTS.md glossary preset names",
+    ("hmi/dashboard/panels/host/operations.js", '${data.state || "상태 미확인"}'):
+        "Host Agent release state is shown as received; no sanctioned Korean map exists yet",
+    ("site/fleet/fleet/server/web/roster.js", '${result.result?.state || "CORE 응답 확인"}'):
+        "CORE line-follow result state in the event log, shown as received; no Korean map exists yet",
+}
+
+
+def _enum_text_unallowed(rel: str, source: str) -> list[tuple[int, str, str]]:
+    return [row for row in enum_text_problems(source) if (rel, row[1]) not in ENUM_TEXT_ALLOWLIST]
+
+
+def test_no_bare_enum_reaches_operator_text():
+    found = [(path.relative_to(SRC).as_posix(), line, literal, why)
+             for path in surface_files() if path.suffix == ".js"
+             for line, literal, why in _enum_text_unallowed(
+                 path.relative_to(SRC).as_posix(), path.read_text(encoding="utf-8-sig"))]
+    assert found == [], "\n".join(f"{rel}:{line}: {why}: {literal}" for rel, line, literal, why in found)
+
+
+def test_every_enum_text_allowlist_entry_still_matches():
+    for (rel, flagged), reason in ENUM_TEXT_ALLOWLIST.items():
+        assert reason.strip(), (rel, flagged)
+        rows = enum_text_problems((SRC / rel).read_text(encoding="utf-8-sig"))
+        assert any(row[1] == flagged for row in rows), (rel, flagged)
 
 
 def test_the_lint_sees_every_surface():

@@ -22,6 +22,12 @@ class _Handler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(REPO), **kwargs)
 
+    def translate_path(self, path):
+        # The dashboard serves web_common under /common/ (operations.js imports the label maps).
+        if path.startswith("/common/"):
+            path = "/src/hmi/web_common/" + path[len("/common/"):]
+        return super().translate_path(path)
+
     def log_message(self, _format, *_args):
         pass
 

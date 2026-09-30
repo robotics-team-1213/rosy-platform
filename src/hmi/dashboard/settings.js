@@ -18,6 +18,7 @@ import {
 } from "./dom.js";
 import { api, expiryLabel, session, sourceLabel } from "./client.js";
 import { confirmIrreversible } from "/common/ui.js";
+import { DOCK_STATE_LABEL, enumLabel } from "/common/core_ui_logic.js";
 
 const hooks = {
   // 신원을 바꾸면 헤더의 이름도 따라가야 한다. 그것은 셸의 영역이다.
@@ -120,7 +121,7 @@ export function renderDockingStatus(payload) {
     : "이 로봇은 도킹 기능이 없어 도킹 명령을 보낼 수 없습니다. 등록과 teach만 저장됩니다. ";
   setText(
     "dock-status-note",
-    `${hold}상태 ${state} · 도크 ${dockId}${phase}${error}`,
+    `${hold}상태 ${enumLabel(DOCK_STATE_LABEL, state)} · 도크 ${dockId}${phase}${error}`,
   );
   setEnabled("dock-undock", supported, "도킹 미지원");
   setEnabled("dock-cancel", supported, "도킹 미지원");

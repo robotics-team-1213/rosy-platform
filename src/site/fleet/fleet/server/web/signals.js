@@ -13,13 +13,13 @@ export function createSignals({ el, view, log, call, refreshState }) {
     flash_red: { text: "flash_red", cls: "warn" },
   };
 
-  function command(signalId, body) {
+  function command(signalId, body, label) {
     return call(`/api/fleet/signals/${encodeURIComponent(signalId)}/command`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     }).then(() => {
-      log(`${signalId} 명령 하달 (${body.mode})`, "good");
+      log(`${signalId} 명령 하달 (${label})`, "good");
       refreshState();
     }).catch((err) => {
       log(`${signalId} 명령 거절 — ${err.message}`, "bad");
@@ -85,7 +85,7 @@ export function createSignals({ el, view, log, call, refreshState }) {
       button.disabled = !row.online;
       if (!row.online) button.setAttribute("reason", "오프라인");
       if (kind) button.classList.add(kind);
-      button.addEventListener("click", () => command(row.signal_id, body_));
+      button.addEventListener("click", () => command(row.signal_id, body_, label));
       return button;
     };
     actions.append(

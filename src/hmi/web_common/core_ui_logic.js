@@ -72,6 +72,12 @@ export const DOCK_STATE_LABEL = Object.freeze({
   DOCK_FAILED: "도킹 실패",
 });
 
+// Host Agent network modes (API Ref host/network). The enum stays in the request body.
+export const NETWORK_MODE_LABEL = Object.freeze({
+  SITE_STA: "사업장 Wi-Fi",
+  RELAY_AP_STA: "릴레이(AP+STA)",
+});
+
 /** Korean word for an enum value; an unknown value is shown as received, never hidden. */
 export function enumLabel(labels, value, fallback = "—") {
   if (value === undefined || value === null || value === "") return fallback;

@@ -87,9 +87,10 @@ export function createRoster({ el, view, log, call, render, streamEvidence, isOp
     head.append(robotName, spacer);
     // D-359 US-009 — 모드 글은 공용 MODE_LABEL, 열거값은 title에만 둔다.
     const modeTag = tag(
-      view.stateUnavailable ? "상태 확인 불가" : robot.online ? enumLabel(MODE_LABEL, state.mode) : "OFFLINE",
+      view.stateUnavailable ? "상태 확인 불가" : robot.online ? enumLabel(MODE_LABEL, state.mode) : "오프라인",
       view.stateUnavailable || !robot.online ? "crit" : "");
     if (!view.stateUnavailable && robot.online && state.mode) modeTag.title = state.mode;
+    else if (!view.stateUnavailable && !robot.online) modeTag.title = "OFFLINE";
     head.appendChild(modeTag);
     const blocked = !view.stateUnavailable && robot.queued && robot.queued.reason === "NO_YIELD_SPACE";
     // 비켜서는 중인 로봇은 "주행 중"이 맞다 — 다만 제 미션을 가는 것이 아니라서 따로 적는다.

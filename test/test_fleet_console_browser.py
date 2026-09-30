@@ -514,7 +514,9 @@ def test_unreachable_robot_is_never_drawn_healthy(console_url):
         )
         roster = page.inner_text("#roster")
         assert "닿지 않음: CONNECT_ERROR" in roster
-        assert "OFFLINE" in roster
+        assert "오프라인" in roster
+        assert "OFFLINE" not in roster
+        assert page.locator("#roster .robot.offline ui-tag[status=crit]", has_text="오프라인").first.get_attribute("title") == "OFFLINE"
         assert not errors
         save_temp_screenshot(page, "fleet_console_unreachable.png")
         browser.close()
