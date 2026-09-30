@@ -50,6 +50,7 @@ import bag_to_video  # noqa: E402
 import extract  # noqa: E402
 import lane_replay  # noqa: E402
 from control.recording import CAMERA_TOPIC, SHADOW_TOPIC  # noqa: E402
+from control.sensing.perception.camera_ground import nominal_ground_plane  # noqa: E402
 from control.sensing.perception.lane_keep import LaneKeeper, floor_white_mask  # noqa: E402
 from control.sensing.perception.road_state import (  # noqa: E402
     STOP,
@@ -58,6 +59,7 @@ from control.sensing.perception.road_state import (  # noqa: E402
     RoadStateEstimator,
     RoadStateParams,
     boundaries_from_keep,
+    decision_point_from_keep,
     offset_from_shadow,
 )
 
@@ -173,10 +175,21 @@ def load_labels(folder: Path | None) -> dict:
 
 # ------------------------------------------------------------------ replay
 
-def _measurements(last, frame: Frame, t: float):
+def ground_for(pitch_deg: float | None):
+    """(profile, NOMINAL ground) with an optional pitch override (degrees down): the
+    real-frame fit (D-379: 11.8 deg) differs from the profile's 8.0 deg."""
+    profile, ground = lane_replay._nominal_ground()
+    if pitch_deg is None:
+        return profile, ground
+    profile = dict(profile, pitch_rad=math.radians(pitch_deg))
+    return profile, nominal_ground_plane(source="NOMINAL", allowed=True, width_px=lane_replay.FRAME_W,
+                                         height_px=lane_replay.FRAME_H, profile=profile)
+
+
+def _measurements(last, frame: Frame, t: float, params: RoadStateParams):
     meas = boundaries_from_keep(last)
     ir = frame.ir
-    if ir and ir.get("visible") and isinstance(ir.get("error"), (int, float)) \
+    if params.ir_geometry_measured and ir and ir.get("visible") and isinstance(ir.get("error"), (int, float)) \
             and abs(float(ir.get("stamp", -1e9)) - t) <= IR_MAX_AGE_S:
         meas.append(IrMeas(y=-float(ir["error"]) * IR_HALF_SPAN_M))
     learned = offset_from_shadow(frame.shadow or {}, half_width_m=HALF)
@@ -217,9 +230,9 @@ def _wall_accepts(snap, keeper, ground, mask):
 def _run_estimator(inputs, params):
     est = RoadStateEstimator(params)
     digest = hashlib.sha256()
-    for t, ds, dth, dt, meas in inputs:
+    for t, ds, dth, dt, meas, decision in inputs:
         est.predict(ds, dth, dt=dt, stamp=t)
-        est.update(meas, t)
+        est.update(meas, t, decision_point=decision)
         digest.update(json.dumps(est.snapshot(), sort_keys=True).encode())
     return digest.hexdigest()
 
@@ -233,7 +246,7 @@ def _dropouts(inputs, rows, checkpoints, dropouts):
                 continue
             est, travel, t0 = copy.deepcopy(saved), 0.0, inputs[start][0]
             for j in range(start, len(inputs)):
-                t, ds, dth, dt, meas = inputs[j]
+                t, ds, dth, dt, meas, decision = inputs[j]
                 if t - t0 > DROPOUT_MAX_S:
                     break
                 est.predict(ds, dth, dt=dt, stamp=t)
@@ -242,7 +255,7 @@ def _dropouts(inputs, rows, checkpoints, dropouts):
                     est.update([], t)
                     continue
                 prior = est.x.copy()
-                est.update(meas, t)
+                est.update(meas, t, decision_point=decision)
                 if sum(est.last_frame["accepted"].values()) == 0:
                     continue
                 if rows[j]["level"] == TRACK:
@@ -275,9 +288,10 @@ def _gate(value, ok):
 
 
 def replay(frames, *, labels: dict | None = None, dropouts=DROPOUTS_M,
-           params: RoadStateParams | None = None) -> tuple[dict, list]:
+           params: RoadStateParams | None = None, pitch_deg: float | None = None,
+           lidar_forward_deg: float = 180.0) -> tuple[dict, list]:
     params = params or RoadStateParams(lane_width_m=2 * HALF)
-    profile, ground = lane_replay._nominal_ground()
+    profile, ground = ground_for(pitch_deg)
     keeper = LaneKeeper(camera_x_offset_m=float(profile["x_offset_m"]))
     est = RoadStateEstimator(params)
     labels = labels or {}
@@ -285,6 +299,7 @@ def replay(frames, *, labels: dict | None = None, dropouts=DROPOUTS_M,
     prev_pose = prev_t = None
     wall_accepted = wall_hits = labelled = 0
     keeper_digest = hashlib.sha256()
+    headings, pairs = [], 0
     for i, frame in enumerate(frames):
         img = frame.bgr
         if img.shape[:2] != (lane_replay.FRAME_H, lane_replay.FRAME_W):
@@ -301,19 +316,23 @@ def replay(frames, *, labels: dict | None = None, dropouts=DROPOUTS_M,
             dth = math.atan2(math.sin(frame.odom[2] - prev_pose[2]), math.cos(frame.odom[2] - prev_pose[2]))
         dt = 0.0 if prev_t is None else max(0.0, t - prev_t)
         prev_pose, prev_t = frame.odom or prev_pose, t
-        meas = _measurements(keeper.last, frame, t)
+        meas = _measurements(keeper.last, frame, t, params)
+        decision = decision_point_from_keep(keeper.last)
+        headings += [float(b["heading_deg"]) for b in keeper.last.get("boundaries", [])]
+        pairs += keeper.last.get("strategy") == "both"
         if i % CHECKPOINT_EVERY == 0:
             checkpoints[i] = copy.deepcopy(est)
         est.predict(ds, dth, dt=dt, stamp=t)
-        est.update(meas, t)
+        est.update(meas, t, decision_point=decision)
         snap = est.snapshot()
-        inputs.append((t, ds, dth, dt, meas))
+        inputs.append((t, ds, dth, dt, meas, decision))
         mask = lane_replay.white_mask(img)
         floor = floor_white_mask(img, ground.horizon_row)
         row = {"t": t, "level": snap["level"], "d": snap["d"], "phi": snap["phi"], "w": snap["w"],
                "hypothesis": (snap["hypothesis"] or {}).get("labels"),
                "accepted": sum(snap["accepted"].values()), "strategy": keeper.last.get("strategy"),
                "calibration_suspect": snap["calibration_suspect"],
+               "consistent_reason": snap["consistent_reason"], "decision_point": decision,
                "straight": dt > 0 and abs(dth / dt) < STRAIGHT_MAX_RATE, "keep": None, "road": None}
         if obs is not None:
             point = keeper.last.get("target_px") or (img.shape[1] / 2 * (1 + obs.error), img.shape[0] * 0.835)
@@ -372,6 +391,14 @@ def replay(frames, *, labels: dict | None = None, dropouts=DROPOUTS_M,
                               "on_wall": wall_hits, "rate": wall_rate},
         "hypothesis_switches_per_100_straight": switch_rate, "wrong_side_lock": wrong,
         "rejects": est.snapshot()["rejects"],
+        "reacq_counts": est.snapshot()["reacq_counts"],
+        "keeper": {"pairs_rate": round(pairs / max(1, n), 4),
+                   "median_heading_deg": round(float(np.median(headings)), 2) if headings else None,
+                   "median_abs_heading_deg": round(float(np.median(np.abs(headings))), 2) if headings else None,
+                   "boundaries": len(headings)},
+        "setup": {"pitch_deg": pitch_deg, "lidar_forward_deg": lidar_forward_deg,
+                  "lidar_wall_veto": params.lidar_wall_veto,
+                  "ir_geometry_measured": params.ir_geometry_measured, "mode": params.mode},
         "calibration_suspect_frames": sum(r["calibration_suspect"] for r in rows),
         "deterministic": baseline == again, "estimator_sha256": baseline,
         "keeper_sha256": keeper_digest.hexdigest(),
@@ -404,6 +431,10 @@ def main(argv=None) -> int:
     parser.add_argument("--out", required=True)
     parser.add_argument("--labels", help="D-379 labels folder (labels.jsonl + masks/) for wall false-accept")
     parser.add_argument("--max-frames", type=int, default=0)
+    parser.add_argument("--pitch-deg", type=float, default=None,
+                        help="camera pitch override (the D-379 real-frame fit is 11.8)")
+    parser.add_argument("--lidar-forward-deg", type=float, default=180.0,
+                        help="LiDAR scan angle of the nose; recorded only while the wall veto is off")
     args = parser.parse_args(argv)
     out = Path(args.out).resolve()
     if REPO in out.parents or out == REPO:
@@ -411,7 +442,8 @@ def main(argv=None) -> int:
     frames = session_frames(Path(args.source))
     if args.max_frames:
         frames = (f for i, f in zip(range(args.max_frames), frames))
-    metrics, rows = replay(frames, labels=load_labels(Path(args.labels) if args.labels else None))
+    metrics, rows = replay(frames, labels=load_labels(Path(args.labels) if args.labels else None),
+                           pitch_deg=args.pitch_deg, lidar_forward_deg=args.lidar_forward_deg)
     metrics["source"] = str(args.source)
     metrics["validated"] = False
     out.mkdir(parents=True, exist_ok=True)

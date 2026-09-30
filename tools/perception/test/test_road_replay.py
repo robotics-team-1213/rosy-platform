@@ -172,3 +172,21 @@ def test_odometry_is_interpolated_by_stamp():
 def test_out_inside_the_repo_is_refused():
     with pytest.raises(SystemExit, match="outside the public repo"):
         rr.main([str(ROOT / "nothing"), "--out", str(ROOT / "tmp-road-replay")])
+
+
+def test_pitch_override_builds_the_ground_without_touching_the_profile():
+    _, ground = rr.ground_for(11.8)
+    assert ground.pitch_rad == pytest.approx(math.radians(11.8))
+    profile, nominal = rr.ground_for(None)
+    assert nominal.pitch_rad == pytest.approx(float(profile["pitch_rad"]))
+
+
+def test_report_carries_heading_pairs_reacquisition_and_setup():
+    metrics, _ = rr.replay(synthetic(48), dropouts=(), pitch_deg=8.0, lidar_forward_deg=181.0)
+    assert metrics["keeper"]["pairs_rate"] > 0.9
+    assert abs(metrics["keeper"]["median_heading_deg"]) < 2.0
+    assert metrics["keeper"]["median_abs_heading_deg"] < 2.0
+    assert metrics["reacq_counts"]["pair"] >= 1
+    assert set(metrics["reacq_counts"]) == {"pair", "side+ir", "side+learned"}
+    assert metrics["setup"] == {"pitch_deg": 8.0, "lidar_forward_deg": 181.0, "lidar_wall_veto": False,
+                                "ir_geometry_measured": False, "mode": "shadow"}
