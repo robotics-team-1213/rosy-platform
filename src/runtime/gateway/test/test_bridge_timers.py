@@ -247,11 +247,12 @@ EXPECTED_PUBLISHERS = [
     ("docking/collision_exemption", "LATCHED"),
 ]
 
-#: Four, not three. The fourth is behind the optional `slam_toolbox` import and
+#: Five, not four. The fourth is behind the optional `slam_toolbox` import and
 #: the harness stubs that module so the branch is always taken — otherwise this
 #: literal would pin whatever happened to be installed, and a reshape could drop
-#: `_slam_client` entirely and stay green.
-EXPECTED_CLIENTS = ["set_led", "start_motor", "stop_motor", "slam_toolbox/save_map"]
+#: `_slam_client` entirely and stay green. The fifth (D-385) hands the face its
+#: mode-chosen expression; absent on a bench, the bridge just keeps the face.
+EXPECTED_CLIENTS = ["set_led", "set_emotion", "start_motor", "stop_motor", "slam_toolbox/save_map"]
 
 
 def test_the_bridge_registers_timers_at_the_expected_periods(registered):

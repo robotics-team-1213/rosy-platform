@@ -34,7 +34,7 @@ param(
 # remain entirely inside native_release.py via activate-release.sh /
 # rollback-release.sh. This script never disables SSH host-key checking.
 #
-# D-385: after activation (or rollback) and CORE readiness, the release that is
+# D-388: after activation (or rollback) and CORE readiness, the release that is
 # now current brings the image layer (native-runtime scripts, rosy units, udev
 # rules, modprobe options) up to its own copy with sync-image-layer.py, which
 # ships inside the release: first a dry run that prints the plan, then the
@@ -256,7 +256,7 @@ function Get-CoreReadyArguments([string]$CoreReadyProbe) {
 
 function Get-ImageLayerSyncArguments([string]$ReleaseId, [switch]$DryRun) {
     # A push runs the script of the release it just activated. After a
-    # rollback the release that became current may predate D-385, so fall back
+    # rollback the release that became current may predate D-388, so fall back
     # to the copy in the release rolled away from (it still syncs from current).
     $flag = ""
     if ($DryRun) { $flag = " --dry-run" }
@@ -307,7 +307,7 @@ function Get-RemoteCommandPlan {
         })
     }
 
-    # D-385: dry run, apply, restart the active units it changed (their names
+    # D-388: dry run, apply, restart the active units it changed (their names
     # come from the apply's JSON, so the display names a placeholder), and
     # re-check CORE only when something was restarted. A rollback skips that
     # conditional re-check: its own readiness check always follows the sync.
@@ -322,7 +322,7 @@ function Get-RemoteCommandPlan {
     }
 
     if ($Rollback) {
-        # D-385: sync the image layer back to the release that became current
+        # D-388: sync the image layer back to the release that became current
         # BEFORE the readiness check. If the newer release's units or scripts
         # do not work with the older one, CORE is only ready after the sync.
         Add-Step $plan "ssh" $SshExe (@("-i", $KeyPath) + $sshOptions + @($target, "sudo", "-n", $RollbackWrapper))

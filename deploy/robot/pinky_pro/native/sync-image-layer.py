@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Bring a flashed robot's image layer up to the active release (D-385).
+"""Bring a flashed robot's image layer up to the active release (D-388).
 
 A payload release (D-225) replaces /opt/rosy/releases/<id> and moves
 /opt/rosy/current. It does not touch what the image installed outside the

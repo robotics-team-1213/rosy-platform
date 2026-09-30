@@ -1569,6 +1569,12 @@
 - 변경: rosy-boot-status.py 가 swarm_role 를 같은 규칙으로 검증·복사, rosy-boot-display.py 상태줄이 role_suffix 를 끝에 붙인다("Ready - NAVIGATION - LEADER").
 - 증거: test_boot_display.py·test_boot_status_indicator.py. 실기 확인은 다음 릴리스 때.
 - gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · feat(native): D-385 기다리는 카드에 프레임 위상
+
+- 변경: rosy-boot-display.py 가 BOOTING·PROVISIONED 중 view 에 frame(1 s 위상)을 실어 다시 그림 키에 태운다 — 0.5 Hz 숨쉼, CORE_READY 는 기존처럼 무변경 무재그림.
+- 증거: test_boot_display.py (대기 중 재그림·ready 정지). 실기는 다음 릴리스.
+- gate 변화: 없음.
 ## 2026-10-01 · uncommitted · feat(release): 페이로드 푸시가 이미지 계층을 활성 릴리스 사본으로 맞춘다 (D-385)
 
 - 변경: 릴리스 `deploy/robot/native/`에 `sync-image-layer.py` 추가(검증된 `/opt/rosy/current`에서 native-runtime·rosy 유닛 18개·udev·modprobe 허용 목록만, 드라이런·백업·원자 설치·실패 시 복원·멱등, 재시작 안 함). `install-native-runtime.sh`가 udev·modprobe를 `image-layer/`로 실어 페이로드에 들어간다. `rosy-release-push.ps1`이 활성화·롤백 뒤 드라이런→적용→바뀐 활성 `rosy-*` 유닛 재시작→CORE 재확인, `-SkipImageLayerSync`.
@@ -1584,3 +1590,11 @@
 - gate 변화: 없음. DEVICE HOLD — 벤치 로봇 푸시·드라이런·적용·재시작·`-Rollback`은 2026-10-02 예정.
 - 결정: D-385 개정.
 - 교훈: 파일을 먼저 깔고 명령을 뒤에 돌리는 적용은 "파일이 같다"만으로 끝났다고 볼 수 없다. 밀린 명령을 따로 남겨야 재실행이 이어받는다.
+
+## 2026-10-01 · uncommitted · fix(release): D-388 2차 리뷰 반영과 번호 이동
+
+- 변경: 앞선 두 항목의 D-383·D-385(이미지 계층 동기화)는 D-388이 됐다(D-375 → D-383 → D-385 → D-388; 예약 해제). 매니페스트 `files_applied`로 반영된 기록만 믿음, 기록 연쇄를 기원까지 거슬러 판정, 사라진 유닛의 밀린 enable 버림, 밀린 명령 3회 실패 시 보관, 정리용 disable도 되돌림 범위, 깨진 `pending.json` 격리·깨진 매니페스트 보고, 같은 초의 실행 순서를 릴리스 id와 무관한 일련번호로 고정. 푸시 스크립트가 보관·격리·깨진 매니페스트를 경고.
+- 증거: `python -m pytest test/test_image_layer_sync.py test/test_release_push_entrypoint.py -q` (Windows). 새 방어 각각 변이 증명 빨강→초록.
+- gate 변화: 없음. DEVICE HOLD — 벤치 로봇 검증은 2026-10-02 예정.
+- 결정: D-388.
+- 교훈: 백업 폴더 이름이 실행 순서를 정한다면, 이름에서 순서 외의 값(릴리스 id)이 순서를 뒤집지 못하게 해야 한다.

@@ -131,3 +131,9 @@
 - Evidence: `test/test_fleet_omx_action_identity_contract.py` 10 passed — the stale-fence case was red before this change and is the mutation proof. OMX adapter + Fleet suites 1112 passed (`test_console_hub_integration` uvicorn-startup timing flaked once on this loaded Windows host; passes alone and green on CI). flake8 max 120 clean; harness lint 0 errors.
 - Gate: SOURCE only. Same-host UDS contract semantics; no device, capability, or wire-format change.
 - Lesson: the cross-contract identity test lives in the root `test/` tree, outside both module suites — module-green is not seam-green, and the seam is exactly where this defect sat.
+
+## 2026-10-01 · uncommitted · merge phase recovery and record readiness gates
+
+- Change: Merged the Task 7 restart recovery and conservative held-object changes, then integrated the current main API Ref v1.66 contract updates. Main now contains merge commit `979c0785`. Updated the pick-and-place plan and OMX readiness record: SOURCE is GO; ROS-SIM/ARTIFACT are HOLD; DEVICE/FIELD are PARKED; the OMX profile remains disabled.
+- Evidence: OMX adapter/profile/vendor-boundary suite 213 passed, 3 skipped; Fleet phase/API identity seam 45 passed; Fleet progress/API doc-pin suites 23 passed; generated-current 1 passed; harness lint 0 errors, 22 freshness warnings. D-346 first run had 93 passed and 2 generated STATUS staleness failures; after `rosy_harness.py generate`, the two affected tests passed. `git diff --check` passed.
+- Gate: Task 8 ROS-SIM remains HOLD. Docker engine availability timed out after 12 seconds on this Windows host; Ubuntu WSL failed with `getpwuid(0)` before ROS could be checked. No new simulation evidence or report is claimed. Hardware, independent E-stop, ARTIFACT, DEVICE, and FIELD remain unverified; OMX capability remains disabled.
