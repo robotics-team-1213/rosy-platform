@@ -35,7 +35,7 @@ def test_core_runs_as_a_device_free_hardened_service():
         "EnvironmentFile=/etc/rosy/runtime.env",
         "DevicePolicy=closed", "PrivateDevices=true",
         "NoNewPrivileges=true", "ProtectSystem=strict", "ProtectHome=true",
-        "ExecStartPost=/usr/bin/python3 /opt/rosy/current/deploy/robot/pinky_pro/native/wait-core-ready.py",
+        "ExecStartPost=/usr/bin/python3 /opt/rosy/current/deploy/robot/native/wait-core-ready.py",
         "exec /opt/rosy/current/install/lib/core/core --ros-args", "Restart=on-failure",
         "KillSignal=SIGINT",
     ):

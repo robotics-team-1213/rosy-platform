@@ -129,7 +129,7 @@ hardware_dependencies:
 
 python_runtime:
   requirements: device-python-requirements.txt
-  requirements_sha256: 2b003fd4f94d89e3735f6225323df731c45aae0d35132e781f7680676d20bf00
+  requirements_sha256: a66f224ab570cb08d1c474bdbb1f93899692625cd167a7f6f907fc99690f4176
   python_version: "3.12"
   install_prefix: /usr/local
   pydantic_major: 2

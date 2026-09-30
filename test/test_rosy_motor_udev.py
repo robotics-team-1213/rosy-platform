@@ -87,7 +87,10 @@ UBUNTU_CONFIG = (
 def test_image_applies_the_overlay_with_the_retrofit_script_not_a_copy():
     customizer = CUSTOMIZER.read_text(encoding="utf-8")
 
-    assert 'UART_CONFIG="$(dirname "$0")/../robot/configure-uart-pi5.sh"' in customizer
+    assert 'UART_CONFIG="$(dirname "$0")/../configure-uart-pi5.sh"' in customizer
+    # The path is relative to the customizer: it must name the real script
+    # (the D-241 move left it pointing at a missing ../robot/ for two days).
+    assert (CUSTOMIZER.parent / ".." / "configure-uart-pi5.sh").resolve() == UART_SCRIPT.resolve()
     call = 'bash "$UART_CONFIG" --image-root "$ROOT"'
     assert call in customizer
     # After the overlay (and its udev rule) lands, before the image is accepted.
