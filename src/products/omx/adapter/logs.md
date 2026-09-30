@@ -76,3 +76,33 @@
 - gate 변화: 없음. SOURCE/LOCAL — 실기 드라이버 직렬화는 DEVICE 회차가 증명한다.
 - 결정: D-333/D-336 정지 경계의 시험 의도(제출과 정지 취소가 driver 호출로 직렬화)를 구현에 맞춘 수정이다.
 - 교훈: 저널은 파일 끝에 붙인다 — 머리글 앵커는 그 항목이 마지막인지 확인하고.
+
+## 2026-09-30 · uncommitted · OMX pick-and-place plan, trajectory, and ROS goal contracts (D-376)
+
+- Change: Added D-376, typed 3D RGB-D planning contracts, validation for complete timed trajectories, preservation of all waypoints in FollowJointTrajectory, and command/phase-bound ROS goal event contracts. No production planner or pixel-to-pose resolver was added.
+- Evidence: The OMX adapter/profile/vendor-boundary host suite passed (190 passed, 3 skipped). Changed Python files passed flake8 with max line length 120. The ROS integration test did not complete because the Docker Python process entered uninterruptible I/O wait. Harness lint reported 0 errors and 18 freshness warnings before this log entry; git diff --check passed.
+- Gate: SOURCE contract evidence only. ROS callback integration is unverified in this run; Fleet phase receipt wiring, the full phase coordinator, production planning, gripper I/O, ROS-SIM, artifact, device, and field evidence remain open. OMX stays disabled.
+
+## 2026-09-30 · uncommitted · persist first phase intent and atomic response
+
+- Change: ActionStore permits only ordinal-zero phase intent while the parent is SUBMITTING and records the parent's first acceptance/rejection/unknown response with the phase state and ROS goal identity in one SQLite transaction.
+- Evidence: ActionStore tests cover accepted, rejected, unknown, database rollback on the second event write, process restart after first intent, and rejection of a goal ID when acceptance is not positive. The focused ActionStore suite passes.
+- Gate: SOURCE persistence contract only. No ActionRunner phase coordinator, ROS submission callback wiring, Fleet phase receipt, physical stop, or capability activation is claimed.
+
+## 2026-09-30 · uncommitted · mint validated attempt-scoped phase recorder
+
+- Change: Added a private ActionRunner factory for an in-process phase recorder after authenticated peer, grant freshness/digest, principal, stored request, workcell, instance, generation, and attempt checks. The recorder is bound to one action/attempt and takes no peer UID for callback writes; ActionApi exposes no new operation.
+- Evidence: Action API plus ActionStore tests passed (33 passed). Changed ActionRunner, recorder, ActionStore, and tests passed flake8 with max line length 120.
+- Gate: SOURCE trust-boundary contract only. The ROS phase coordinator and per-phase stop-fenced submission path remain open.
+
+## 2026-09-30 · uncommitted · hold unresolved phase state under local stop
+
+- Change: ActionStore now moves every in-flight phase to UNKNOWN in the same transaction that holds its parent Action. The existing goal UUID remains attached for later matching terminal readback, and no next phase can begin.
+- Evidence: The ActionStore suite passed (22 passed), including an accepted first phase followed by HOLD, retained goal identity, UNKNOWN phase state, and rejected continuation. Changed files passed flake8 with max line length 120.
+- Gate: SOURCE stop-state persistence only. This does not prove driver cancellation, standstill, or physical E-stop behavior; per-phase ROS submit/cancel wiring remains open.
+
+## 2026-10-01 · uncommitted · add fenced pick-place phase coordinator
+
+- Change: Added a ROS-free coordinator that journals and submits one validated motion phase at a time, correlates events by command/phase/UUID, requires explicit advancement after terminal success, and holds on unknown acceptance, event overflow, or a closed stop fence. ActionRunner now offers an authenticated phase-runner injection seam, and Action/stop cancellation uses the exact active phase goal or remains unresolved when no goal-specific cancel path exists.
+- Evidence: Focused action API and coordinator tests passed (20 passed). Full OMX adapter/profile/vendor-boundary suite passed (208 passed, 3 skipped). D-346 quick gate passed (95 passed, 18 warnings); changed Python files passed flake8 with max line length 120; harness lint reported 0 errors and 18 freshness warnings; git diff --check passed.
+- Gate: SOURCE only. The workcell production factory, real ArmCommandOwner/RosArmCommandRuntime binding, callback integration, Fleet phase projection, ROS-SIM, device, and field acceptance remain open; the OMX capability remains disabled.

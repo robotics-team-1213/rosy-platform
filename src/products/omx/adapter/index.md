@@ -14,6 +14,9 @@
 | D-168 | ROS 패키지 구조 기준 — 인정 조건, 필수 구성, 도메인 방향표를 시험으로 고정한다 |
 | D-273 | OMX 팔 제어와 작업 카메라 스트림은 고정 작업대에서 단계별로 결합한다 |
 | D-282 | 장치별 ROS 실행 인스턴스가 할당된 하드웨어만 소유한다 |
+| D-336 | Fleet와 OMX 제어 owner 사이 첫 연결은 같은 호스트의 local IPC로 제한한다 |
+| D-369 | Mission 제어·장치 실행·ROS 제어·안전 정지의 책임을 분리한다 |
+| D-376 | OMX PICK_PLACE planning stays local and trajectory execution stays with the Action owner |
 
 ## 계획·결과 문서
 
@@ -32,8 +35,8 @@
 
 ## 최근 기록
 
-- 2026-09-29 · uncommitted · fix(omx): 제출 기록을 정지 펜스 잠금 안으로
-- 2026-09-29 · uncommitted · add bounded local Device Action API and runner (D-336)
-- 2026-09-29 · uncommitted · record semantic Action baseline and attempt ledger
-- 2026-09-26 · uncommitted · owner competition in locked vendor simulation
-- 2026-09-26 · uncommitted · OMX ROS arm and calibrated camera runtime
+- 2026-10-01 · uncommitted · add fenced pick-place phase coordinator
+- 2026-09-30 · uncommitted · hold unresolved phase state under local stop
+- 2026-09-30 · uncommitted · mint validated attempt-scoped phase recorder
+- 2026-09-30 · uncommitted · persist first phase intent and atomic response
+- 2026-09-30 · uncommitted · OMX pick-and-place plan, trajectory, and ROS goal contracts (D-376)

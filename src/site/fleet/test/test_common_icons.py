@@ -12,7 +12,7 @@ WEB_COMMON = Path(__file__).resolve().parents[3] / "hmi" / "web_common"
 
 def test_listed_icons_are_served_and_the_folder_is_not():
     client = TestClient(create_app(FleetConsole([], []), web_common=WEB_COMMON))
-    icon = client.get("/common/icons/fleet-console.svg")
+    icon = client.get("/common/icons/console.svg")
     assert icon.status_code == 200
     assert icon.headers["content-type"].startswith("image/svg+xml")
     assert icon.content.startswith(b"<svg")

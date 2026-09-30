@@ -244,3 +244,14 @@
 - gate 변화: 없음.
 - 결정: D-370 3항, D-359(테마 블록이 생기면 정규식 사전이 뒤 값을 고르는 위험).
 - 교훈: 없음.
+
+## 2026-09-30 · uncommitted · refactor(web_common): D-377 icon files and registry ids follow one word
+- 변경: 아이콘 `ceiling-camera.svg` → `cam.svg`, `fleet-console.svg` → `console.svg`, `robot-dashboard.svg` → `robot.svg`(`git mv`), SVG `<title>`을 `Rosy <Word>`로. `surfaces.yaml` id `cam`·`console`·`robot`과 표시 이름 `Rosy Cam`·`Rosy Console`·`Rosy Robot`, 경로 `src/site/cam`. `manifest.json` 허용 목록·`CMakeLists.txt`. `test_surface_icons.py` 표를 D-377로, `test_surface_titles.py`는 앱 행이면 제목이 표시 이름(`Rosy <Word>` 또는 `Rosy <Word> — <화면>`)인지 본다.
+- 증거: `python -m pytest src/hmi/web_common/test -q` 111 passed (2026-09-30 Windows).
+- gate 변화: 없음.
+- 결정: D-377. 경로 `/common/icons/<id>.svg`는 D-374 3항 예외대로 링크하는 HTML과 같은 커밋에서 바뀐다.
+
+## 2026-09-30 · 12f322f9 · feat(web_common): toggle 의 good 톤 변형
+- 변경: `components.css` 에 `ui-button[kind="toggle"][tone="good"]` — 대기는 `--status-good` 테두리·글자, `.active` 는 `--status-good` 채움과 `--button-primary-ink` 글자. Pilot 의 "진행"(누르는 동안만 도는 차선 추종, D-344)이 쓴다. 표면 재도색 대신 공용 변형으로 둔다.
+- 증거: `src/hmi/web_common/test` 통과(원시 색 없음), Pilot 스크린샷 `X:\DevTemp\pilot-polish\after4-drive-auto-*.png`.
+- gate 변화: 없음.

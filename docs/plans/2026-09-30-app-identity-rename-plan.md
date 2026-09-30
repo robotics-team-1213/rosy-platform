@@ -2,6 +2,8 @@
 
 **결정:** [D-374](../adr/D-374-app-identity-follows-one-role-name.md) Accepted (2026-09-30). D-370 2항의 "식별자는 그대로"를 대체한다. 사용자 결정: 규칙·대응표 그대로, 관제 화면은 안 B, 폰 재설치·재페어링 1회 수용, 경기 보드·제어 진단·시뮬 라이브 뷰는 지금 바꾸지 않음(아래 열린 질문 1–3 닫힘).
 
+**D-377 개정 (2026-09-30):** [D-377](../adr/D-377-app-names-rosy-plus-one-english-word.md)이 이름 규칙을 "Rosy + 영어 한 단어"로 바꿨다. 단계 1 이름은 `refactor/app-naming-cam-vision`이 `src/site/cam`(`io.github.livsbittt.rosy.cam`)과 `src/site/vision`(`rosy_vision`)으로 다시 옮긴다. 아래 2.4·2.5와 단계 3·4·5의 목표는 새 이름(`src/hmi/robot`·`rosy_robot`, `src/site/console`·`rosy_console`)으로 고쳤다. 2.1·2.2와 단계 1 본문은 D-374 착지 기록이라 그대로 둔다.
+
 **현재 상태:** 문서만 있다(2026-09-30, main `15a4302f` 기준 조사). 단계마다 별도 브랜치(D-372 이름 규칙: `refactor/d374-s<N>-<대상>`)와 별도 병합이다.
 
 **공통 규칙:**
@@ -81,40 +83,40 @@
 | 저장소 키 | `rosy.pilot.token`·`.input`·`.recent` (`client.js:5`, `input-state.js:8`, `recent.js:4`) | 같음 | never |
 | SW 캐시 이름 | `rosy-pilot-shell-<날짜>` (`sw.js:5`) | 같음 | never (릴리스마다 올리는 값) |
 
-### 2.4 로봇 대시보드 (`robot-dashboard`) — 단계 3 (D-362 게이트)
+### 2.4 로봇 대시보드 (`robot`, D-377 Rosy Robot) — 단계 3 (D-362 게이트)
 
 | 식별자 | 옛 | 새 | 표시 |
 |---|---|---|---|
-| 폴더 | `src/hmi/dashboard` | `src/hmi/robot_dashboard` | now |
-| ROS 패키지·share | `dashboard` (`package.xml:4`, `CMakeLists.txt:2`), `share/dashboard` | `robot_dashboard`, `share/robot_dashboard` | now (이미지 1회) |
-| CORE 자산 조회 | `get_package_share_directory("dashboard")`, fallback `parents[4]/"hmi"/"dashboard"` (`api/app.py:84,89`) | `"robot_dashboard"`, `…/"robot_dashboard"` | now |
-| `core_api_web` 의존 | `<exec_depend>dashboard</exec_depend>` (`api_web/package.xml:14`) | `robot_dashboard` | now |
-| 서빙 예외 | `{"dashboard", "pilot"}` (`test_module_structure.py:410`) | `{"robot_dashboard", "pilot"}` | now |
+| 폴더 | `src/hmi/dashboard` | `src/hmi/robot` | now |
+| ROS 패키지·share | `dashboard` (`package.xml:4`, `CMakeLists.txt:2`), `share/dashboard` | `rosy_robot`, `share/rosy_robot` | now (이미지 1회) |
+| CORE 자산 조회 | `get_package_share_directory("dashboard")`, fallback `parents[4]/"hmi"/"dashboard"` (`api/app.py:84,89`) | `"rosy_robot"`, `…/"robot"` | now |
+| `core_api_web` 의존 | `<exec_depend>dashboard</exec_depend>` (`api_web/package.xml:14`) | `rosy_robot` | now |
+| 서빙 예외 | `{"dashboard", "pilot"}` (`test_module_structure.py:410`) | `{"rosy_robot", "pilot"}` | now |
 | 이미지 | `COPY src/hmi/dashboard` (`deploy/robot/pinky_pro/Dockerfile:60`), `--packages-up-to … dashboard pilot` (`:72`), `.dockerignore:25-26` | 새 경로·이름 | now |
-| 이미지 탐침 | `get_package_share_directory("dashboard")` (`probe-core-image.py:31`) | `"robot_dashboard"` | now |
-| 개발 스크립트 | `tools/sync_rosy.sh:14`, `tools/sync_rosy_fast.sh:11` (`--packages-select … dashboard`) | `robot_dashboard` | now |
+| 이미지 탐침 | `get_package_share_directory("dashboard")` (`probe-core-image.py:31`) | `"rosy_robot"` | now |
+| 개발 스크립트 | `tools/sync_rosy.sh:14`, `tools/sync_rosy_fast.sh:11` (`--packages-select … dashboard`) | `rosy_robot` | now |
 | 경로 | `/dashboard`, `/console`, `/setup`, `/device`, `/dashboard/assets/*`; `ui_registry.py:22` `RESERVED` | 같음 | never |
 | 저장소 키 | `rosy.dashboard.token`·`.paired` (`client.js:10-11`) | 같음 | never |
-| 레지스트리 id·아이콘 | `robot-dashboard`, `/common/icons/robot-dashboard.svg` | 같음 | 이미 규칙 |
-| 하네스 모듈 | `dashboard` (`harness.yaml:127-131`) | `robot_dashboard` | now |
-| 배치 시험 | `"hmi/dashboard"` (`test_target_layout.py:29`) | `"hmi/robot_dashboard"` | now |
+| 레지스트리 id·아이콘 | `robot-dashboard`, `/common/icons/robot-dashboard.svg` | `robot`, `/common/icons/robot.svg` | D-377: 단계 1 브랜치에서 이미 바뀜 |
+| 하네스 모듈 | `dashboard` (`harness.yaml:127-131`) | `rosy_robot` | now |
+| 배치 시험 | `"hmi/dashboard"` (`test_target_layout.py:29`) | `"hmi/robot"` | now |
 | 스킬 | `.claude/skills/rosy-dashboard-drive/SKILL.md` | 경로만 | now (스킬 이름은 그대로) |
 
-### 2.5 관제 화면 (`site-console`) — 단계 4 (D-362 게이트, 열린 질문 2)
+### 2.5 관제 화면 (`console`, D-377 Rosy Console) — 단계 4 (D-362 게이트, 열린 질문 2)
 
 권장안 B: 화면 자산을 자기 패키지로 떼어 낸다. 서버 패키지 `fleet`은 그대로다.
 
 | 식별자 | 옛 | 새 | 표시 |
 |---|---|---|---|
-| 자산 폴더 | `src/site/fleet/fleet/server/web` | `src/site/site_console` (ament_cmake, `share/site_console`) | now |
-| 자산 조회 | `WEB_ROOT = Path(__file__).parent / "web"` (`static_routes.py:17`), `package_data` (`fleet/setup.py:9`) | `get_package_share_directory("site_console")`, fallback `src/site/site_console`, CLI `--console-web`(CORE의 대시보드 조회와 같은 꼴) | now |
-| Docker | `COPY src/site/fleet/` (`Dockerfile.fleet:20`) | `site_console`도 `/opt/rosy/site-console`로 복사하고 `--console-web` 전달, `.dockerignore` 허용 | now |
-| 레지스트리 id·아이콘 | `fleet-console`, `icons/fleet-console.svg` (`surfaces.yaml:44-49`, `manifest.json:13`) | `site-console`, `icons/site-console.svg` (Fleet `index.html`의 favicon 링크 포함) | now |
+| 자산 폴더 | `src/site/fleet/fleet/server/web` | `src/site/console` (ament_cmake, `share/rosy_console`) | now |
+| 자산 조회 | `WEB_ROOT = Path(__file__).parent / "web"` (`static_routes.py:17`), `package_data` (`fleet/setup.py:9`) | `get_package_share_directory("rosy_console")`, fallback `src/site/console`, CLI `--console-web`(CORE의 대시보드 조회와 같은 꼴) | now |
+| Docker | `COPY src/site/fleet/` (`Dockerfile.fleet:20`) | `rosy_console`도 `/opt/rosy/console`로 복사하고 `--console-web` 전달, `.dockerignore` 허용 | now |
+| 레지스트리 id·아이콘 | `fleet-console`, `icons/fleet-console.svg` (`surfaces.yaml:44-49`, `manifest.json:13`) | `console`, `icons/console.svg` (Fleet `index.html`의 favicon 링크 포함) | D-377: 단계 1 브랜치에서 이미 바뀜 |
 | 서버 패키지·CLI·logger | `fleet`, `fleet console`, `fleet.console` (`console.py:46`) | 같음 | never (Fleet 서비스, 앱 아님) |
 | 경로 | `/console`, `/console/assets/*` (`static_routes.py:57,89`), `/api/fleet/*` | 같음 | never |
 | 저장소 키 | `rosy-console-token` (`console.js:33`), `rosy-console-layers` (`field-layers.js:8`) | 같음 | never |
 | compose·이미지·SAN·DB | `fleet`, `rosy-site-fleet`, SAN `fleet`, `fleet.sqlite3` | 같음 | never |
-| 하네스 | `fleet` | 그대로 + 새 모듈 `site_console` | now |
+| 하네스 | `fleet` | 그대로 + 새 모듈 `rosy_console` | now |
 
 ### 2.6 범위 밖(바뀌지 않는다)
 
@@ -144,8 +146,9 @@ git mv src/site/overhead src/site/site_vision
 git mv src/site/site_vision/overhead src/site/site_vision/site_vision
 git mv src/site/site_vision/resource/overhead src/site/site_vision/resource/site_vision
 git mv src/site/site_vision/protocol/vectors.json test/fixtures/protocol/overhead-ingest.v1.json
-git mv src/site/ceiling_camera/app/src/main/java/io/github/livsbittt/rosy/overhead src/site/ceiling_camera/app/src/main/java/io/github/livsbittt/rosy/ceilingcamera
-git mv src/site/ceiling_camera/app/src/test/java/io/github/livsbittt/rosy/overhead src/site/ceiling_camera/app/src/test/java/io/github/livsbittt/rosy/ceilingcamera
+J=src/site/ceiling_camera/app/src; P=io/github/livsbittt/rosy
+git mv $J/main/java/$P/overhead $J/main/java/$P/ceilingcamera
+git mv $J/test/java/$P/overhead $J/test/java/$P/ceilingcamera
 git mv src/hmi/web_common/icons/overhead-camera-app.svg src/hmi/web_common/icons/ceiling-camera.svg
 ```
 (빈 `src/site/site_vision/protocol/`은 지운다.) 모듈 기록: `site_vision`이 `index.md`·`logs.md`·`progress.md`·`AGENTS.md`를 이어받는다. `ceiling_camera`에는 새 네 파일을 만든다. 새 `logs.md` 첫 항목은 "이력은 `src/site/site_vision/logs.md`의 2026-09-30 이전 항목"을 가리킨다.
@@ -190,23 +193,23 @@ python tools/harness/rosy_harness.py generate && python tools/harness/rosy_harne
 3. `git branch --no-merged main`의 브랜치 가운데 `git diff --name-only main...<b> -- src/hmi/dashboard`가 비어 있지 않은 것(부록 B)은 주인이 "먼저 병합" 또는 "이동 뒤 rebase"로 답했다.
 4. 로봇 이미지 릴리스 사이다(D-191). 이 단계는 다음 이미지에 실린다.
 
-**이동:** `git mv src/hmi/dashboard src/hmi/robot_dashboard`.
+**이동:** `git mv src/hmi/dashboard src/hmi/robot`.
 **참조:** 2.4 표 전부 + `git grep -n '"dashboard"\|hmi/dashboard\|share/dashboard'`로 찾은 시험(`src/runtime/gateway/test/test_dashboard*.py`, `test_console_layout.py`, `test_first_paint.py`, `test_host_cards.py`, `test_triage_contract.py`, `test_vision_preview.py` 등), `src/runtime/api_web/test/test_ui_*.py`, `test/test_camera_capture_browser.py`, `web_common/test/test_{palette_gates,shared_controls,ui_token_contracts}.py`, `surfaces.yaml:26`, `STATUS.md`(generate), `AGENTS.md`·`src/AGENTS.md`·`src/runtime/AGENTS.md`·`src/runtime/api_web/AGENTS.md`·`src/runtime/gateway/core/AGENTS.md`, `README.md:46`.
-**시험:** `python -m pytest src/hmi/robot_dashboard/test src/runtime/gateway/test src/runtime/api_web/test src/hmi/web_common/test test/architecture -q`, 그리고 `ROSY_RUN_BROWSER_TESTS=1 python -m pytest test/test_dashboard_browser.py`. WSL ROS box에서 `colcon build --packages-up-to core_api_web` 뒤 `ros2 pkg prefix robot_dashboard`.
+**시험:** `python -m pytest src/hmi/robot/test src/runtime/gateway/test src/runtime/api_web/test src/hmi/web_common/test test/architecture -q`, 그리고 `ROSY_RUN_BROWSER_TESTS=1 python -m pytest test/test_dashboard_browser.py`. WSL ROS box에서 `colcon build --packages-up-to core_api_web` 뒤 `ros2 pkg prefix rosy_robot`.
 **장치:** 이미지를 빌드하고 `probe-core-image.py`를 통과시킨다. 로봇에서 `/dashboard`, `/console`, `/setup`, `/device`, `/pilot`이 열리는지 본다. 개발 PC는 `install/dashboard`를 지우고 다시 빌드한다.
 
 ### 단계 4 — 관제 화면 분리
 
 **게이트:** 단계 3의 1·3번을 `src/site/fleet`에 적용한다. main 체크아웃 `git status --porcelain -- src/site/fleet`가 비어 있어야 한다. 열린 Fleet 브랜치(부록 B: `feat/d355-goal-evidence-verifier` 15파일, `feat/d359-theme-ready` 13파일, `feat/camera-preview-rectification` 9파일 외)의 주인이 답해야 한다. 열린 질문 2의 답(권장 B)도 필요하다.
-**이동:** `git mv src/site/fleet/fleet/server/web src/site/site_console`, `git mv src/hmi/web_common/icons/fleet-console.svg src/hmi/web_common/icons/site-console.svg`. `src/site/site_console/{package.xml,CMakeLists.txt}`는 대시보드 것을 본떠 새로 만든다. 모듈 기록 네 파일도 만든다.
+**이동:** `git mv src/site/fleet/fleet/server/web src/site/console`. 아이콘은 D-377 단계 1 브랜치에서 이미 `console.svg`다. `src/site/console/{package.xml,CMakeLists.txt}`는 대시보드 것을 본떠 새로 만든다. 모듈 기록 네 파일도 만든다.
 **참조:** 2.5 표 + `fleet/setup.py:9` `package_data` 삭제, `static_routes.py` 조회, `fleet/cli.py` `--console-web`, `Dockerfile.fleet`와 그 `.dockerignore`, `compose.yaml` 명령, `test_no_video_relay.py`와 `fleet/test`의 `server/web` 경로(`test_console_palette.py`, `test_grammar_separation.py` 등), `test/test_fleet_console_browser.py`, `test_surface_icons.py:30,36,138`, `surfaces.yaml:44-49`, `manifest.json`, `web_common/CMakeLists.txt`, `harness.yaml`, `test_target_layout.py`, D-362 `SIZE_VERDICTS`의 `site/fleet/fleet/server/web/*` 키(`test_module_structure.py`).
-**시험:** `python -m pytest src/site/fleet/test src/site/site_console/test src/hmi/web_common/test test/architecture test/test_site_candidate.py -q`, `ROSY_RUN_BROWSER_TESTS=1 python -m pytest test/test_fleet_console_browser.py`.
-**장치:** fleet 이미지를 다시 빌드한다. 사이트 `/console`이 열리고 `/common/icons/site-console.svg` favicon이 보여야 한다. 운용자 로그인이 유지되는지도 본다(저장소 키 불변).
+**시험:** `python -m pytest src/site/fleet/test src/site/console/test src/hmi/web_common/test test/architecture test/test_site_candidate.py -q`, `ROSY_RUN_BROWSER_TESTS=1 python -m pytest test/test_fleet_console_browser.py`.
+**장치:** fleet 이미지를 다시 빌드한다. 사이트 `/console`이 열리고 `/common/icons/console.svg` favicon이 보여야 한다. 운용자 로그인이 유지되는지도 본다(저장소 키 불변).
 
 ### 단계 5 — 별칭 제거
 
 **게이트:** 단계 1을 담은 사이트 후보가 `build_candidate.py`로 한 번 나가 현장에 올라갔다.
-`site_vision/setup.py`에서 `overhead=` 줄을 지운다. `git grep -n "\boverhead receive\|\boverhead vision"`의 운용 문서를 `site_vision`으로 고친다.
+`src/site/vision/setup.py`에서 별칭 `overhead=`와 `site_vision=` 두 줄을 지운다(D-377 3항). `git grep -n "\boverhead receive\|\boverhead vision\|\bsite_vision receive\|\bsite_vision vision"`의 운용 문서를 `rosy-vision`으로 고친다.
 
 ## 4. 위험
 

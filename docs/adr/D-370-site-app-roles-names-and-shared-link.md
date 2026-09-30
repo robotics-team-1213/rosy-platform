@@ -1,6 +1,8 @@
 ## D-370 앱과 표면은 한 역할씩 맡는다 — 역할·이름·아이콘·화면 소유를 한 표로 고정하고, 발견·기기 연결·실패 어휘는 공유 벡터로 하나로 맞춘다
 
-**Status:** Proposed (2026-09-30). 역할 표, 이름·아이콘 규칙, 화면 소유 규칙, 공유할 조각과 이행 순서만 정한다. 코드·리소스·와이어 변경은 하지 않는다. D-2·D-12·D-38·D-330(정지·명령 권한), D-193(로그인 코드), D-257(영상 없는 Fleet)·D-152(대시보드 저주기 미리보기 예외), D-339·D-340·D-345(이름·셸·디자인)를 바꾸지 않는다. 브랜치에 있는 D-341·D-351·D-352·D-354와 Pilot 브랜치 ADR의 결정은 그대로 두고, 이 ADR은 그것들이 착지할 때 맞출 공통 틀만 정한다.
+**Status:** Proposed (2026-09-30). 역할 표, 이름·아이콘 규칙, 화면 소유 규칙, 공유할 조각과 이행 순서만 정한다. 코드·리소스·와이어 변경은 하지 않는다. D-2·D-12·D-38·D-330(정지·명령 권한), D-193(로그인 코드), D-257(영상 없는 Fleet)·D-152(대시보드 저주기 미리보기 예외), D-339·D-340·D-345(이름·셸·디자인)를 바꾸지 않는다. 브랜치에 있는 D-341·D-382·D-352·D-354와 Pilot 브랜치 ADR의 결정은 그대로 두고, 이 ADR은 그것들이 착지할 때 맞출 공통 틀만 정한다.
+
+**부분 대체됨 (2026-09-30):** 2항 이름표의 표시 이름은 [D-377](D-377-app-names-rosy-plus-one-english-word.md)이 대체한다(Rosy Cam, Rosy Vision, Rosy Console, Rosy Robot, Rosy Pilot; 한국어는 부제에만).
 
 **번호:** 처음 D-358로 적었으나 main에 다른 D-358(ER2 피드백 outbox와 재계획 펜싱)이 먼저 착지해 2026-09-30 병합 전에 D-370으로 옮겼다. D-359–D-361은 main, D-362는 main 체크아웃의 미커밋 초안, D-363–D-369는 `feat/pilot-teleop`·`docs/control-authority` 브랜치가 쓰고 있어 D-370이 첫 빈 번호였다. 그 전 로그 항목과 커밋 메시지의 "D-358 S1/S2/S3"·"D-358 N항"은 이 ADR을 가리킨다. 본문의 브랜치 번호 D-352(코드 등록)와 D-354(경기장 제안)는 main에 D-361·D-360으로 착지했다.
 
@@ -9,7 +11,7 @@
 - 3항 아이콘 개념을 승인했다: 어두운 둥근 사각 바탕에 `--brand-rose` 점, 천장 카메라 = 천장 막대에 매달린 원, Pilot = 고리 안의 셰브런, Fleet = 한 줄로 이은 2×2 노드 격자, 대시보드 = 로봇 얼굴. 빨강은 비상 정지에만 남긴다.
 - 8항 첫 질문을 결정했다: 천장 카메라 앱에는 **정지 전용 자격을 주지 않는다.** 카메라 기능만 두고, 정지는 관제에서 한다는 안내만 둔다.
 
-잇는 결정: [D-2](D-2-cmd-vel.md) · [D-5](D-5-outbound-ws-fleet-rest.md) · [D-12](D-12-mission-fleet.md) · [D-38](D-38-core.md) · [D-193](D-193-login-code-and-credential-lifecycle.md) · [D-257](D-257-site-lane-map-and-overhead-sightings.md) · [D-261](D-261-overhead-camera-app-skeleton.md) · [D-318](D-318-site-camera-preview-rectification.md) · [D-323](D-323-rosy-pilot-teleop-app.md) · [D-330](D-330-fleet-action-admission-stop-and-recovery.md) · [D-339](D-339-surface-and-folder-role-names.md) · [D-340](D-340-app-shell-wraps-web-surfaces.md) · [D-345](D-345-design-philosophy-reaches-every-surface.md) · D-341(브랜치 `docs/d341-overhead-console-pairing`) · D-351(브랜치 `docs/robot-fleet-protocol-conformance`) · D-352(브랜치 `docs/fleet-robot-code-enrollment`, 코드 `feat/fleet-robot-enrollment-s1`) · D-354(브랜치 `feat/console-field-autodetect`) · Pilot ADR(브랜치 `feat/pilot-teleop`).
+잇는 결정: [D-2](D-2-cmd-vel.md) · [D-5](D-5-outbound-ws-fleet-rest.md) · [D-12](D-12-mission-fleet.md) · [D-38](D-38-core.md) · [D-193](D-193-login-code-and-credential-lifecycle.md) · [D-257](D-257-site-lane-map-and-overhead-sightings.md) · [D-261](D-261-overhead-camera-app-skeleton.md) · [D-318](D-318-site-camera-preview-rectification.md) · [D-323](D-323-rosy-pilot-teleop-app.md) · [D-330](D-330-fleet-action-admission-stop-and-recovery.md) · [D-339](D-339-surface-and-folder-role-names.md) · [D-340](D-340-app-shell-wraps-web-surfaces.md) · [D-345](D-345-design-philosophy-reaches-every-surface.md) · [D-341](D-341-overhead-console-approved-pairing.md) · [D-382](D-382-robot-site-console-protocol-conformance.md) · D-352(브랜치 `docs/fleet-robot-code-enrollment`, 코드 `feat/fleet-robot-enrollment-s1`) · D-354(브랜치 `feat/console-field-autodetect`) · Pilot ADR(브랜치 `feat/pilot-teleop`).
 
 ### Context
 
@@ -25,15 +27,15 @@
 - 로봇 대시보드와 LCD: `src/hmi/dashboard`는 CORE same-origin이다. 운용·작업 준비·설치·정비 세 표면이 있다(`panels.yaml:4-6`). LCD는 입력 장치가 없는 표시 전용이다(`rosy-boot-display.py:203-212`, D-352 대안 절).
 - Rosy Pilot: `feat/pilot-teleop`의 `src/hmi/pilot`. **Android가 아니라 PWA**이고 CORE가 `/pilot/`로 서빙한다. D-193 로그인 코드를 `POST /auth/pair`(이름표 "Rosy Pilot")로 바꾼다. 토큰은 sessionStorage에 둔다. WS는 첫 메시지로, REST는 Bearer로 인증한다. Fleet을 부르지 않는다.
 
-**발견(mDNS) TXT 파서가 다섯 벌이고 규칙이 조금씩 다르다.** 원천은 `docs/reference/site-lan-discovery-profile.md:18-24`의 표다(D-351 1항).
+**발견(mDNS) TXT 파서가 다섯 벌이고 규칙이 조금씩 다르다.** 원천은 `docs/reference/site-lan-discovery-profile.md:18-24`의 표다(D-382 1항).
 - `deploy/site/fleet-mdns.py:19-25,69-96`: Fleet·Vision 광고와 `_rosy-fleet._tcp` 해석. 공통 키를 정확히 일치시키고 중복 키를 거절한다.
 - `src/runtime/services/core_features/fleet_agent/discovery.py:16-44`: 위의 `parse_avahi`를 **복사한 것**이다. `TXT` 사전까지 같다(`:18` ↔ `fleet-mdns.py:21`).
-- `deploy/site/mdns-bridge.py:17-39`: `_rosy._tcp` 로봇 해석. `network=sta`와 `name`만 보고 `product/role/proto/tls`는 **보지 않는다**(D-351 발견 8). 열 개수 검사도 `< 10`으로, 위의 `!= 10`과 다르다.
+- `deploy/site/mdns-bridge.py:17-39`: `_rosy._tcp` 로봇 해석. `network=sta`와 `name`만 보고 `product/role/proto/tls`는 **보지 않는다**(D-382 발견 8). 열 개수 검사도 `< 10`으로, 위의 `!= 10`과 다르다.
 - `src/site/fleet/fleet/server/discovery.py:19-95`: 스캔 행을 다시 검사한다. 이름 길이, `.local`, 사설 IPv4, `stage`, `release`.
 - Kotlin `OverheadServiceRecord.kt:12-56`: `_rosy-overhead._tcp`에서는 `tls=required`이고 `tls_host`가 해석 호스트와 같아야 한다. `_rosy._tcp`에서는 `product/role/proto/tls` 네 키를 본다.
 - 계획만 있는 것: Pilot D-348(브랜치)의 CORE 쪽 `_rosy._tcp` 이웃 목록. 여섯 번째 파서가 된다.
 
-**다른 언어 사이에서 같은 벡터를 읽는 선례가 이미 있다.** `src/site/overhead/protocol/vectors.json`을 Kotlin 시험이 시스템 속성 `rosy.overhead.vectors`로 읽고(`app/build.gradle.kts:37-40`, `Vectors.kt`), Python `overhead/protocol.py`와 `test/test_protocol.py`도 같은 파일을 읽는다. D-351은 공유 벡터 자리로 `test/fixtures/protocol/`을 정했다.
+**다른 언어 사이에서 같은 벡터를 읽는 선례가 이미 있다.** `src/site/overhead/protocol/vectors.json`을 Kotlin 시험이 시스템 속성 `rosy.overhead.vectors`로 읽고(`app/build.gradle.kts:37-40`, `Vectors.kt`), Python `overhead/protocol.py`와 `test/test_protocol.py`도 같은 파일을 읽는다. D-382은 공유 벡터 자리로 `test/fixtures/protocol/`을 정했다.
 
 **자격 발급 절차가 다섯 종류다.** 방향과 저장 방식이 제각각이다.
 
@@ -54,7 +56,7 @@
 - FleetAgent는 재접속할 때마다 `_rosy-fleet._tcp`를 다시 찾고 사이트 CA로 검증한다(`fleet_agent/agent.py:93-97`).
 
 **상태와 실패 어휘가 따로 논다.**
-- 상태: Fleet·Vision은 `/healthz` → `{"status":"ok"}`다(`fleet/server/app.py:438`, `ingest.py:170-171`). CORE에는 인증 없는 health가 없다. D-351은 `GET /api/v1`에 `contract_version`을 더하자고 했다.
+- 상태: Fleet·Vision은 `/healthz` → `{"status":"ok"}`다(`fleet/server/app.py:438`, `ingest.py:170-171`). CORE에는 인증 없는 health가 없다. D-382은 `GET /api/v1`에 `contract_version`을 더하자고 했다.
 - 오류 봉투: CORE는 `{"error":{code,message,detail}}`(`api/errors.py:26`)다. Fleet은 별도 코드 목록을 쓴다(`UNAUTHORIZED`·`OPERATOR_IDENTITY_REQUIRED`…).
 - WS 닫힘 코드: CORE와 hub는 4401/4403, Vision은 4400/4401/4409, D-341은 4503을 새로 둔다.
 - 폰 쪽 분류: `feat/overhead-app-ceiling-ux`의 `NetworkFailure`(UNREACHABLE/REFUSED/UNKNOWN_HOST/TLS/OTHER, `link/NetworkFailure.kt:10-24`)와 `ProblemGuide`다.
@@ -73,7 +75,7 @@
 - 로봇 한도 설정: 대시보드 설치·정비와 Pilot 수동 한도 계단(Pilot D-347).
 - 카메라 설치 안내: 폰 천장 UX와 Fleet 카메라 패널의 모서리 보정(D-318·D-354).
 
-**번호 관리 위험.** Pilot 브랜치는 D-328, D-331, D-332, D-346–D-350 번호를 main과 다른 결정에 쓴다. 이 ADR 번호도 D-357이 `er2-feedback-loop` 워크트리에서 선점돼 있어 처음에는 D-358로 잡았다(위 **번호:** 참고). main은 같은 날 D-350·D-351을 도크 결정으로 선점했다 — 브랜치의 D-351(프로토콜 적합성)과 겹친다.
+**번호 관리 위험.** Pilot 브랜치는 D-328, D-331, D-332, D-346–D-350 번호를 main과 다른 결정에 쓴다. 이 ADR 번호도 D-357이 `er2-feedback-loop` 워크트리에서 선점돼 있어 처음에는 D-358로 잡았다(위 **번호:** 참고). main은 같은 날 D-350·D-351을 도크 결정으로 선점했다 — 브랜치의 D-351(프로토콜 적합성)과 겹친다 — 2026-10-01 착지 때 D-382로 바꿨다.
 
 ### Decision
 
@@ -83,7 +85,7 @@
 |---|---|---|---|---|---|
 | **천장 카메라 앱** (폰) | 카메라 캡처, 프레임 송신, 설치 위치·방향 안내, 자기 페어링 요청 | 로봇 명령·이동·정지 호출, 로봇 CORE 연결, Fleet 사용자 API 호출, 영상 저장 | JPEG 프레임(`rosy-overhead/1`), 페어링 요청(D-341) | Vision의 `config`·`status`, 발견 레코드 | 카메라 자격 하나(frames ingress 한 source 전용, D-341 11항) |
 | **Site Vision** (서비스, 화면 없음) | 영상 수신·보관(최신 1장), 검출, 미리보기 JPEG, 경기장 제안(D-354) | 로봇 명령, 사람 화면, 자격 발급, 좌표를 주행·정책 입력으로 넘기기 | sighting(표시 전용, D-257), 미리보기, 제안 | 폰 프레임, Fleet 자격 digest 목록 | sighting 토큰으로 Fleet에 쓰기만 한다 |
-| **Fleet 관제** | 사이트 로스터, 여러 로봇 모니터링, Mission(D-12), 교통·대형, 사이트 정지 요청, 기기 연결 승인·등록 | 영상 중계·저장·디코딩(D-257), 최종 명령 계산, 로봇 설정 쓰기, 수동 운전 | Mission·목표·정지 **요청**, 로스터, 감사 | CORE 상태·이벤트, sighting, Vision lease 경로 | 이름 있는 operator만 승인·등록한다(D-276). 정지 사실은 CORE가 소유한다(D-330, D-351 5항) |
+| **Fleet 관제** | 사이트 로스터, 여러 로봇 모니터링, Mission(D-12), 교통·대형, 사이트 정지 요청, 기기 연결 승인·등록 | 영상 중계·저장·디코딩(D-257), 최종 명령 계산, 로봇 설정 쓰기, 수동 운전 | Mission·목표·정지 **요청**, 로스터, 감사 | CORE 상태·이벤트, sighting, Vision lease 경로 | 이름 있는 operator만 승인·등록한다(D-276). 정지 사실은 CORE가 소유한다(D-330, D-382 5항) |
 | **로봇 CORE** | 최종 명령·중재·정지(D-2·D-38), 외부 API, 로봇 자격 발급 | Mission 실행(D-12), 사이트 로스터, 영상의 사이트 전송 | 상태·이벤트, 로그인 코드, 토큰 | 대시보드·Pilot·Fleet 요청 | 모든 움직임의 최종 권한 |
 | **로봇 대시보드** | 한 로봇의 상세 상태, 작업 준비(웨이포인트·위치 추정·도크), 설치·정비(로봇 설정), 로봇 쪽 자격 목록·회수 | 여러 로봇 관제, Mission, 사이트 기기 승인 | 운용자 요청(CORE API 경유) | CORE API | 역할은 CORE 토큰이 정한다 |
 | **로봇 LCD** | 부팅 단계, 이름, 로그인 코드 표시 | 입력 받기, 토큰 원문 표시, 명령 | 없음(표시) | 부팅 상태 파일 | 없음 |
@@ -153,7 +155,7 @@ D-345 4항(`Rosy <이름>`, `short_name`도 `Rosy`로 시작)과 D-339 4항(`Ros
 | 로봇 설정(한도·하드웨어·네트워크) | **로봇 대시보드**(설치·정비) | — | 읽기만. 한도 계단(Pilot D-347)은 쓰기를 대시보드로 옮기거나 링크한다 | 없음 | 소유 | — |
 | **비상 정지** | **예외 — 모든 운용 표면** | 아래 참고 | 있음 | 있음(`/api/fleet/estop`, D-330) | 있음 | 입력 없음 |
 
-**비상 정지는 일부러 둔 예외다.** 로봇이 움직일 수 있는 동안 사람이 보는 운용 표면에는 모두 정지 버튼이 있어야 한다. 정지 버튼은 링크로 대신하지 않는다. 모든 정지는 CORE의 한 경로로 모인다. 정지 사실은 CORE `safety/state`가 말한다(D-330, D-351 5항). 천장 카메라 앱은 카메라 자격만 가지므로 스스로 정지를 보낼 수 없다. 앱 안에 "관제에서 정지" 안내만 둔다. 폰에는 정지 전용 자격도 주지 않는다(사용자 확인 2026-09-30, 8항).
+**비상 정지는 일부러 둔 예외다.** 로봇이 움직일 수 있는 동안 사람이 보는 운용 표면에는 모두 정지 버튼이 있어야 한다. 정지 버튼은 링크로 대신하지 않는다. 모든 정지는 CORE의 한 경로로 모인다. 정지 사실은 CORE `safety/state`가 말한다(D-330, D-382 5항). 천장 카메라 앱은 카메라 자격만 가지므로 스스로 정지를 보낼 수 없다. 앱 안에 "관제에서 정지" 안내만 둔다. 폰에는 정지 전용 자격도 주지 않는다(사용자 확인 2026-09-30, 8항).
 
 **지금 겹치는 곳과 결정:**
 1. **수동 운전 두 벌.** 대시보드 `console.teleop`은 Pilot이 DEVICE 수용(D-323 Validation)을 통과할 때까지 **이행기 표면**으로 남긴다. 통과한 회차에 이 패널을 "Rosy Pilot으로 조종" 링크 패널로 바꾼다. 두 표면에서 동시에 운전 화면을 늘리지 않는다. 새 조종 기능은 Pilot에만 넣는다.
@@ -165,7 +167,7 @@ D-345 4항(`Rosy <이름>`, `short_name`도 `Rosy`로 시작)과 D-339 4항(`Ros
 #### 5. 겹치는 통신은 이렇게 하나로 모은다
 
 **5.1 발견: 공유 TXT 벡터 하나, 언어마다 파서 하나.**
-- 기계가 읽는 원천은 `test/fixtures/protocol/discovery-txt.v1.json`이다(D-351 3항의 자리). `site-lan-discovery-profile.md` 표는 사람이 읽는 설명으로 남는다. 시험이 둘이 같은지 대조한다.
+- 기계가 읽는 원천은 `test/fixtures/protocol/discovery-txt.v1.json`이다(D-382 3항의 자리). `site-lan-discovery-profile.md` 표는 사람이 읽는 설명으로 남는다. 시험이 둘이 같은지 대조한다.
 - 벡터는 서비스 종류(`_rosy._tcp`, `_rosy-fleet._tcp`, `_rosy-overhead._tcp`)마다 받는 레코드와 거절 사유를 담는다. 공통 키는 `product/role/proto/tls`, 선택 키는 `tls_host`·`name`·`stage`·`release`·`network`·`pair`다.
 - **거절 사유 어휘는 하나다:** `wrong_type`·`missing_key`·`duplicate_key`·`value_mismatch`·`bad_host`·`bad_address`·`bad_port`·`tls_host_mismatch`·`ap_mode`. 알 수 없는 키는 무시한다.
 - **공통 키가 없는 옛 로봇 광고**(프로필 26행)는 거절하지 않는다. `legacy: true`로 받아 관찰 화면에만 쓴다.
@@ -202,7 +204,7 @@ D-345 4항(`Rosy <이름>`, `short_name`도 `Rosy`로 시작)과 D-339 4항(`Ros
 - WSS는 사이트 CA 하나만 믿는다. 앱 전역 신뢰 저장소를 바꾸지 않는다(D-341 9항).
 
 **5.5 상태와 실패 어휘.**
-- **공개 상태 모양은 하나다.** 토큰 없이 답하는 health는 `{"status":"ok"|"degraded"|"down","role","proto","contract_version"}`다. `role`·`proto`는 TXT와 같은 값이다. 이렇게 하면 광고와 실제 리스너가 맞는지 탐침 한 번으로 본다(프로필 26행, D-351 4항). Fleet·Vision `/healthz`와 CORE `GET /api/v1`(D-351 2항)이 이 모양으로 수렴한다. 필드를 더하기만 하고, 기존 `status` 값은 유지한다.
+- **공개 상태 모양은 하나다.** 토큰 없이 답하는 health는 `{"status":"ok"|"degraded"|"down","role","proto","contract_version"}`다. `role`·`proto`는 TXT와 같은 값이다. 이렇게 하면 광고와 실제 리스너가 맞는지 탐침 한 번으로 본다(프로필 26행, D-382 4항). Fleet·Vision `/healthz`와 CORE `GET /api/v1`(D-382 2항)이 이 모양으로 수렴한다. 필드를 더하기만 하고, 기존 `status` 값은 유지한다.
 - **실패 분류는 클라이언트 쪽 공유 벡터 하나다.**
   - 파일은 `test/fixtures/protocol/failure-classes.v1.json`이다.
   - 분류는 `unreachable`·`refused`·`unknown_host`·`tls_untrusted`·`auth_final`·`auth_retry`·`forbidden`·`protocol_mismatch`·`busy`·`conflict`다.
@@ -228,13 +230,13 @@ D-345 4항(`Rosy <이름>`, `short_name`도 `Rosy`로 시작)과 D-339 4항(`Ros
 #### 7. 이행 순서 — 진행 중 브랜치와의 관계
 
 1. **이 ADR과 계획**(이 브랜치): 문서만 둔다.
-2. **S1 발견 벡터·파서**(main 직행): 진행 중 브랜치와 겹치는 파일이 적다. `mdns-bridge.py`가 공통 키를 검사하게 되어 D-351 발견 8을 닫는다. D-351 브랜치가 먼저 착지하면 `test/fixtures/protocol/` 폴더를 그쪽이 만들고 S1이 파일을 더한다.
+2. **S1 발견 벡터·파서**(main 직행): 진행 중 브랜치와 겹치는 파일이 적다. `mdns-bridge.py`가 공통 키를 검사하게 되어 D-382 발견 8을 닫는다. D-382 브랜치가 먼저 착지하면 `test/fixtures/protocol/` 폴더를 그쪽이 만들고 S1이 파일을 더한다.
 3. **S2 역할 경계 시험**: 역할 표를 시험으로 고정한다. 예: 카메라 앱 코드에 CORE·Fleet 사용자 API 경로가 없다, Pilot 코드에 `/api/fleet`이 없다, Vision에 로봇 명령 경로가 없다. 대상이 main에 있는 표면부터 시작하고, Pilot 시험은 Pilot이 착지할 때 더한다.
 4. **S3 이름·아이콘**: 폰 앱 아이콘과 웹 파비콘은 main에서 한다. Pilot `short_name`과 버튼 이름은 Pilot 브랜치 착지 회차에 맞춘다(D-345 51행과 같은 방식).
 5. **S4 화면 소유**: 대시보드 teleop 링크 전환은 Pilot DEVICE 수용 뒤에 한다. 카메라 설치와 보정의 경계는 D-354 착지 때 확인한다.
 6. **S5 기기 연결 용어·감사**: D-341과 D-352 중 먼저 착지하는 쪽이 패널 틀과 `device_pairing_audit`를 만든다(D-352 11항). 이 ADR은 `device_kind` 확장 규칙과 관리 화면 위치만 더한다.
 7. **S6 실패 분류 벡터**: `feat/overhead-app-ceiling-ux`의 `NetworkFailure`가 착지한 뒤 한다. 웹 쪽은 D-340 6항 회차에 한다.
-8. **S7 전송·상태 정리**: Fleet의 CORE WS `?token=` 제거와 공개 상태 모양이다. D-351 계약 스냅샷 회차와 함께 간다.
+8. **S7 전송·상태 정리**: Fleet의 CORE WS `?token=` 제거와 공개 상태 모양이다. D-382 계약 스냅샷 회차와 함께 간다.
 9. **조건부 S8 Android 공유 모듈**: 두 번째 Kotlin 소비자가 생길 때만 한다.
 
 #### 8. 정하지 않는 것
@@ -243,7 +245,7 @@ D-345 4항(`Rosy <이름>`, `short_name`도 `Rosy`로 시작)과 D-339 4항(`Ros
 - CORE의 TLS·장치 신원 증명 도입. 5.3의 Fleet → CORE 이름 따라가기 전환 조건이다.
 - mDNS 서비스 인스턴스 이름(`ROSY %h`, `ROSY Fleet %h`, `ROSY Overhead %h`)을 2항 이름표에 맞출지. 표시용이지만 이미 설치된 광고와 문서에 퍼져 있다.
 - 경기 보드(`game-board`)·제어 진단·시뮬 라이브 뷰의 아이콘. 운용자 설치 앱이 아니므로 이번 범위 밖이다.
-- Pilot 브랜치의 ADR 번호 충돌(D-328·D-331·D-332·D-346–D-350을 main이 다른 결정에 씀). 착지할 때 D-346 4항대로 새 번호로 바꿔야 한다. 이 ADR은 번호를 고치지 않는다. 같은 위험이 D-351에도 있다: main이 2026-09-30 D-351을 도킹 재시도 결정으로 선점했으므로(`2e0b699a`), 이 ADR이 인용하는 브랜치 `docs/robot-fleet-protocol-conformance`의 D-351(프로토콜 적합성)은 착지 때 새 번호를 받아야 하고, 그때 이 ADR의 D-351 인용을 그 번호로 읽는다.
+- Pilot 브랜치의 ADR 번호 충돌(D-328·D-331·D-332·D-346–D-350을 main이 다른 결정에 씀). 착지할 때 D-346 4항대로 새 번호로 바꿔야 한다. 이 ADR은 번호를 고치지 않는다. 같은 위험이 D-351에도 있다: main이 2026-09-30 D-351을 도킹 재시도 결정으로 선점했으므로(`2e0b699a`), 이 ADR이 인용하는 브랜치 `docs/robot-fleet-protocol-conformance`의 D-351(프로토콜 적합성)은 착지 때 새 번호를 받아야 하고, 그때 이 ADR의 D-351 인용을 그 번호로 읽는다. 2026-10-01 D-382로 착지했고 이 ADR의 인용도 D-382로 고쳤다.
 - 폰 앱의 영어 표시 여부(현재 한국어 전용 문자열).
 - Pilot 역할 경계 시험의 내용. Pilot(`src/hmi/pilot`)을 main에 착지시키는 쪽이 같은 커밋에서 `test/architecture/test_app_roles.py`의 `test_pilot_is_not_on_main_yet`을 Pilot 역할 시험(Pilot 코드에 `/api/fleet` 없음)으로 바꿔야 한다. 그러지 않으면 그 시험이 착지 커밋을 빨갛게 만든다.
 
@@ -272,7 +274,7 @@ D-345 4항(`Rosy <이름>`, `short_name`도 `Rosy`로 시작)과 D-339 4항(`Ros
 - **SOURCE/LOCAL**: 벡터 파일, Python·Kotlin 파서 시험, 역할 경계 시험, 이름·아이콘 레지스트리 시험, 하네스 lint. Windows 호스트에서 `python`으로 돌린다. Kotlin은 `gradlew testDebugUnitTest`로 돌린다.
 - **G2(육안)**: 아이콘 네 개를 홈 화면 크기(48 dp), 테마 흑백, 원형 마스크로 나란히 캡처한다. 서로 구분되는지 사람이 확인한다.
 - **DEVICE**: 실제 폰 런처의 아이콘과 이름, 실제 사이트 LAN에서의 `_rosy._tcp`/`_rosy-overhead._tcp` 발견(옛 이미지 광고 포함). 호스트 시험 통과는 DEVICE가 아니다.
-- **FIELD**: 정지 도달성은 이 ADR이 새로 주장하지 않는다. D-330·D-351 5항의 기존 게이트를 따른다.
+- **FIELD**: 정지 도달성은 이 ADR이 새로 주장하지 않는다. D-330·D-382 5항의 기존 게이트를 따른다.
 
 이 ADR은 Proposed다. 다음 두 조건이 모두 충족되면 Accepted로 올린다. S1(발견 벡터)이 main에서 녹색이다. 역할 표에 대한 사용자 확인이 있다(8항 질문 포함).
 
