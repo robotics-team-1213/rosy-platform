@@ -27,22 +27,22 @@ def _scan(values_by_deg, n=360):
 
 
 def test_hand_value_is_only_the_fallback(tmp_path):
-    deg, source = resolve_lidar_forward_deg({"lidar_forward_deg": 180.0}, hand_default=0.0,
+    deg, source, warn = resolve_lidar_forward_deg({"lidar_forward_deg": 180.0}, hand_default=0.0,
                                             store=CalibrationStore(tmp_path), robot=ROBOT)
-    assert deg == 180.0 and "hand value" in source
+    assert deg == 180.0 and "hand value" in source and warn is False
 
 
 def test_hand_value_outranks_the_adapter_binding_and_a_disagreement_is_warned(tmp_path):
     # M3: the adapter carries the safety node's hand-tuned 190 deg; it must not
     # silently move line_follow until a measured lidar_mount record is accepted.
-    deg, source = resolve_lidar_forward_deg({"lidar_forward_deg": 180.0}, hand_default=0.0,
+    deg, source, warn = resolve_lidar_forward_deg({"lidar_forward_deg": 180.0}, hand_default=0.0,
                                             adapter_parameters={"lidar_yaw_offset": 3.31612558},
                                             store=CalibrationStore(tmp_path), robot=ROBOT)
-    assert deg == 180.0 and "hand value" in source and "WARNING" in source and "10.0 deg" in source
-    deg, source = resolve_lidar_forward_deg({"lidar_forward_deg": 189.0}, hand_default=0.0,
+    assert deg == 180.0 and "hand value" in source and "10.0 deg" in source and warn is True
+    deg, source, warn = resolve_lidar_forward_deg({"lidar_forward_deg": 189.0}, hand_default=0.0,
                                             adapter_parameters={"lidar_yaw_offset": 3.31612558},
                                             store=CalibrationStore(tmp_path), robot=ROBOT)
-    assert deg == 189.0 and "WARNING" not in source
+    assert deg == 189.0 and warn is False
 
 
 def test_with_a_real_enabled_adapter_the_hand_value_still_wins(tmp_path):
@@ -66,10 +66,10 @@ def test_with_a_real_enabled_adapter_the_hand_value_still_wins(tmp_path):
                                    sensor_node_factory=Sensor, policy_factory=PROVIDER.make_policy,
                                    calibration_loader=PROVIDER.load_snapshot)
     assert adapter.bound_parameters["lidar_yaw_offset"] == 3.31612558
-    deg, source = resolve_lidar_forward_deg({"lidar_forward_deg": 180.0}, hand_default=0.0,
+    deg, source, warn = resolve_lidar_forward_deg({"lidar_forward_deg": 180.0}, hand_default=0.0,
                                             adapter_parameters=adapter.bound_parameters,
                                             store=CalibrationStore(tmp_path), robot=ROBOT)
-    assert deg == 180.0 and "WARNING" in source
+    assert deg == 180.0 and warn is True
 
 
 @pytest.mark.parametrize("values", [
@@ -82,20 +82,20 @@ def test_an_implausible_accepted_record_is_logged_and_skipped(tmp_path, values):
     store = CalibrationStore(tmp_path)
     rid = store.add(ROBOT, "lidar_mount", values, method="t/1")
     store.set_status(ROBOT, "lidar_mount", rid, "accepted", actor="operator")
-    deg, source = resolve_lidar_forward_deg({"lidar_forward_deg": 180.0}, hand_default=0.0,
+    deg, source, warn = resolve_lidar_forward_deg({"lidar_forward_deg": 180.0}, hand_default=0.0,
                                             store=store, robot=ROBOT)
-    assert deg == 180.0 and "skipped" in source and rid in source
+    assert deg == 180.0 and "skipped" in source and rid in source and warn is True
 
 
 def test_accepted_store_record_wins_and_a_candidate_does_not(tmp_path):
     store = CalibrationStore(tmp_path)
     rid = store.add(ROBOT, "lidar_mount", {"lidar_yaw_offset": math.radians(181.9)}, method="t/1")
-    deg, source = resolve_lidar_forward_deg({"lidar_forward_deg": 180.0}, hand_default=0.0,
+    deg, source, warn = resolve_lidar_forward_deg({"lidar_forward_deg": 180.0}, hand_default=0.0,
                                             adapter_parameters={"lidar_yaw_offset": 3.31612558},
                                             store=store, robot=ROBOT)
     assert deg == 180.0          # candidate: not used; the hand value stands
     store.set_status(ROBOT, "lidar_mount", rid, "accepted", actor="operator")
-    deg, source = resolve_lidar_forward_deg({"lidar_forward_deg": 180.0}, hand_default=0.0,
+    deg, source, warn = resolve_lidar_forward_deg({"lidar_forward_deg": 180.0}, hand_default=0.0,
                                             adapter_parameters={"lidar_yaw_offset": 3.31612558},
                                             store=store, robot=ROBOT)
     assert deg == pytest.approx(181.9, abs=1e-6) and rid in source
