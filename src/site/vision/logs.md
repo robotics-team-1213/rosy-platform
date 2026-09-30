@@ -195,3 +195,11 @@
 - 변경: `parse_hello_lens`는 `0 < v < upper`(focal_mm 1000, hfov_deg 180)로 검사한다. 400자리 정수는 `float()` OverflowError로 연결 처리기를 죽였고, `Infinity`/`1e400`은 `> 0`을 통과해 나중에 `json.dumps`가 JSON이 아닌 `Infinity`를 내보냈다. 이제 둘 다 무시한다(공유 벡터 `huge_int_focal`, Python 전용 Infinity/NaN/1e400 시험). 연결 로그의 `app_version`·`device`는 폰이 보낸 글이라 64자로 자르고 `%r`로 남긴다.
 - 증거: `python -m pytest src/site/vision/test -q` 132 passed (2026-10-01 Windows).
 - gate 변화: 없음.
+
+## 2026-10-01 · 4ae81b6e · fix(vision): 사이트 CA pin만 발급(D-341 9), 패턴 fullmatch
+
+- 변경: `rosy-vision pair-link`는 `--pin-ca`와 `--pin-cert`를 모두 요구하고, 서비스 파일이 leaf 위에 그 CA를 싣지 않거나 CA 자리에 leaf를 주면 exit 2로 거절한다(fullchain 만드는 법 안내). leaf 단독 pin은 더 이상 찍지 않는다. `receive --tls-cert`는 leaf+CA 파일일 때만 CA를 고정하고, 아니면 pin 없이 이유를 찍는다. PEM의 UTF-8 BOM을 받아들이고 해석할 수 없는 파일은 깔끔한 오류로 끝낸다. `SOURCE_PATTERN`·`PIN_PATTERN`은 `fullmatch`라 끝의 `%0A`가 더는 통과하지 않는다(Kotlin과 일치).
+- 증거: `python -m pytest src/site/vision/test -q` 156 passed.
+- gate 변화: 없음.
+- 결정: 앱은 호환을 위해 leaf pin을 계속 받지만 사이트 도구는 CA pin만 만든다.
+- 교훈: 없음.
