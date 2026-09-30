@@ -55,7 +55,7 @@ class DiscoveryStore:
             release = device.get("release", "")
             if any(not isinstance(value, str) or len(value) > 96 for value in (stage, release)):
                 raise ValueError("invalid discovery metadata")
-            rows.append({"name": name, "hostname": hostname.lower(),
+            rows.append({"name": name, "hostname": result.host or "",
                          "address": str(ip), "port": port,
                          "stage": stage, "release": release})
         # One service may appear on several interfaces; identical addresses collapse.

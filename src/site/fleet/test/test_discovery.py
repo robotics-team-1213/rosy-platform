@@ -100,3 +100,14 @@ def test_scan_rows_follow_the_shared_robot_vectors(case):
 
 def test_row_cases_cover_every_row_reason():
     assert {case["expect"].get("reason") for case in _ROW_CASES} - {None} == _ROW_REASONS
+
+
+def test_stored_hostname_is_the_classifier_normalised_host():
+    store = DiscoveryStore(clock=lambda: 100.0)
+    store.replace_scan([dict(name="rosy-a", hostname="Rosy-A.local.", address="192.168.1.10",
+                             port=8080, network="sta"),
+                        dict(name="rosy-b", address="192.168.1.11", port=8080, network="sta")])
+    assert {row["name"]: row["hostname"] for row in store.rows()} == {
+        "rosy-a": "rosy-a.local", "rosy-b": ""}
+    registered = {"rosy_01": "http://rosy-a.local:8080"}
+    assert store.snapshot(registered, {})["devices"][0]["status"] == "pairing_pending"
