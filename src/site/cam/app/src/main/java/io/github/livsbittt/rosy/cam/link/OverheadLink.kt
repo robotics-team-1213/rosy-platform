@@ -33,7 +33,7 @@ sealed interface LinkError {
     /** Close 4400 with an incompatibility reason: the adapter speaks another protocol version. Retrying cannot help. */
     data object ProtocolMismatch : LinkError
 
-    /** Close 1013, or 4400 for a receiver-side wait such as "no hello": the receiver was busy; retry with backoff. */
+    /** Close 1013, or a pre-1013 receiver's 4400 with an empty reason or "no hello": the receiver was busy; retry with backoff. */
     data class Busy(val code: Int, val reason: String) : LinkError
 
     /** Close 4503 (D-341 11): the site cannot check the credential right now. Retry; never a re-pair prompt. */
@@ -51,7 +51,7 @@ sealed interface LinkError {
 data class LinkStatus(
     val state: LinkState = LinkState.DISCONNECTED,
     val error: LinkError? = null,
-    /** True after 4400/4409: the link gave up and waits for the operator. */
+    /** True after 4400 (incompatibility only), 4401 or 4409: the link gave up and waits for the operator. */
     val stopped: Boolean = false,
     val sentFps: Double = 0.0,
     val kbps: Double = 0.0,
@@ -85,7 +85,8 @@ data class SensorInfo(val width: Int, val height: Int, val rotationDeg: Int)
  *   analysis and encoding but not time spent in the OkHttp writer, kernel send buffer or
  *   network. The adapter's `captured_at = received - age_ms` is therefore later than the true
  *   capture time by that transmit delay.
- * - Reconnects with [Backoff]; close 4400 or 4409 stops retrying.
+ * - Reconnects with [Backoff]; 4400 stops only for an incompatibility reason;
+ *   4401 and 4409 stop.
  */
 class OverheadLink(
     private val pairing: PairingUri,
