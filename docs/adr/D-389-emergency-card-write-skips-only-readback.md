@@ -1,7 +1,8 @@
-## D-385 긴급 카드 쓰기는 전체 readback만 건너뛰고, 검증 안 됨을 모든 증거에 남긴다
+## D-389 긴급 카드 쓰기는 전체 readback만 건너뛰고, 검증 안 됨을 모든 증거에 남긴다
 
 **Status:** Accepted (2026-10-01, 사용자 요청). 브랜치 `fix/card-write-confirm-and-artifact-download`.
 `test_sd_writer_contract`·`test_sd_write_card_entrypoint`·`test_media_readback` 통과, 새 게이트마다 변이 증명.
+번호: D-382 → D-383 → D-385 → D-389로 개명했다(앞 번호들은 병합 시점마다 main의 다른 ADR이 먼저 차지했다).
 
 **Context:**
 

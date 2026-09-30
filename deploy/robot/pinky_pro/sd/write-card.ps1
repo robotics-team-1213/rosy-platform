@@ -42,7 +42,7 @@ param(
 # status-command paths; the write survives this console or agent session closing.
 # card-write-status.ps1 -LogPath <log> reads the progress file without elevation.
 #
-# D-385: -Emergency -EmergencyReason '<why>' is the emergency procedure: every
+# D-389: -Emergency -EmergencyReason '<why>' is the emergency procedure: every
 # pre-write check stays, only the full readback is skipped, and the receipt
 # says the media is unverified. Follow up with verify-emergency-card.ps1.
 

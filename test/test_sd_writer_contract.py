@@ -2204,7 +2204,7 @@ def test_a_wrong_answer_still_reaches_the_exact_match_check():
     assert slow.index("Clear-TypeAhead") < slow.index("(Read-Host")
 
 
-# D-385 (2026-10-01): the full readback ran at 1-3 MB/s on a CPU-starved PC
+# D-389 (2026-10-01): the full readback ran at 1-3 MB/s on a CPU-starved PC
 # (1.5 h ETA) while the robot was needed at once. -Emergency skips only that
 # readback, with a stated reason, and says so everywhere.
 EMERGENCY = ("-EmergencyReason", "robot needed on the floor now; readback CPU-starved")

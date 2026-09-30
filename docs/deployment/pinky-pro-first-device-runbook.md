@@ -253,7 +253,7 @@ Get-CimInstance Win32_Process -Filter "Name='python.exe'" |
 
 느린 readback은 멈춤이 아니므로 `-ReadbackStallMinutes`가 끊지 않는다. 그래도 기다릴 수 없을 때만 아래 긴급 절차로 간다.
 
-### 긴급 카드 쓰기 (Emergency card write, D-385)
+### 긴급 카드 쓰기 (Emergency card write, D-389)
 
 **언제만 쓰나.** 표준 쓰기의 readback을 기다릴 수 없고(예: PC CPU 부족으로 1시간 이상, 위 문단의 조치로도 안 풀림) 로봇이 지금 바로
 카드가 필요할 때만 쓴다. 이유를 반드시 적는다. 편의나 습관으로 쓰지 않는다.

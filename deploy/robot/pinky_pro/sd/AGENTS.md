@@ -87,7 +87,7 @@ byte-for-byte readback; the receipt says `media_readback.verified: true`.
 - Release artifacts: `tools/release/download_artifact.py` (parallel range download
   with progress and resume) instead of a silent `gh run download`.
 
-## Emergency card write (D-385)
+## Emergency card write (D-389)
 
 Only when the robot needs the card now and the readback cannot be waited for.
 `write-card.ps1 ... -Emergency -EmergencyReason '<why>'` (reason: 10-200
@@ -115,7 +115,7 @@ never with `-PlanOnly`).
 - A stand-in card (`-DiskInventoryJson` + `-ReadbackDevice`) is the only way tests
   run either procedure; never point them at a physical disk.
 
-## Motor commissioning SSH (D-385 decision 6)
+## Motor commissioning SSH (D-389 decision 6)
 
 `enable-motor-commissioning.ps1` connects with the Rosy operator key
 (`-KeyPath`, default `%LOCALAPPDATA%\Rosy\ssh\rosy-operator-ed25519`), the Rosy

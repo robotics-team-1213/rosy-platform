@@ -31,7 +31,7 @@
 | D-319 | SETUP 뒤 현장 입회 하에 모터 구동 준비를 자동화한다 |
 | D-321 | 현장 보정과 G4 실측을 한 세션으로 모으고 지도 생성은 승인 뒤에 시작한다 |
 | D-325 | 기존 Pinky 배포는 변경에 맞는 가장 작은 산출물을 선택한다 |
-| D-385 | 긴급 카드 쓰기(`write-card.ps1 -Emergency -EmergencyReason`)는 전체 readback만 건너뛰고 서명·시리얼·plan·ERASE 게이트와 MBR 점검은 지킨다; receipt·진행 파일·상태가 검증 안 됨을 적고, 후속 readback(`verify-emergency-card.ps1`)이나 표준 재기록으로 메운다 |
+| D-389 | 긴급 카드 쓰기(`write-card.ps1 -Emergency -EmergencyReason`)는 전체 readback만 건너뛰고 서명·시리얼·plan·ERASE 게이트와 MBR 점검은 지킨다; receipt·진행 파일·상태가 검증 안 됨을 적고, 후속 readback(`verify-emergency-card.ps1`)이나 표준 재기록으로 메운다 |
 
 ## 계획·결과 문서
 
@@ -66,8 +66,8 @@
 
 ## 최근 기록
 
+- 2026-10-01 · uncommitted · docs(adr): 긴급 카드 쓰기 결정을 D-385에서 D-389로 개명
 - 2026-10-01 · uncommitted · docs(adr): 긴급 카드 쓰기 결정을 D-383에서 D-385로 개명
 - 2026-10-01 · uncommitted · fix(sd): 모터 커미셔닝 SSH가 Rosy 운영자 키를 쓴다 (D-383 결정 6)
 - 2026-10-01 · uncommitted · fix(sd): ERASE 프롬프트 type-ahead, 아티팩트 다운로더, D-383 긴급 카드 쓰기
-- 2026-10-01 · uncommitted · fix(release,test): main CI deployment 단계 적색 5건 — 핀·등록부·스캐너 면제 정리
-- 2026-10-01 · uncommitted · feat(native): D-381 blocked 패턴과 비상정지 진입음
+- 2026-10-01 · uncommitted · feat(native): D-385 기다리는 카드에 프레임 위상

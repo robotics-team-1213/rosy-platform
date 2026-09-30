@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from core.bridge.reconcile import led, reconcile
+from core.bridge.reconcile import emotion, led, reconcile
 
 
 def test_no_action_when_nothing_changed():
@@ -106,3 +106,47 @@ def test_a_live_alert_outbids_the_gauge():
 
     assert applied.command == "fill"
     assert (applied.r, applied.g, applied.b) == (60, 0, 0)
+
+
+# --- D-385: the face follows the mode --------------------------------------------
+
+
+def test_the_face_changes_only_when_the_mode_changes_it():
+    calls = []
+
+    def act(face):
+        calls.append(face)
+        return True
+
+    shown = emotion("MANUAL", "IDLE", None, act)
+    shown = emotion("MANUAL", "IDLE", shown, act)
+
+    assert shown == "interest" and calls == ["interest"]
+
+
+def test_a_missing_emotion_node_is_retried_next_tick():
+    """감정 노드는 늦게 뜰 수 있다 — LiDAR 문법: latch 없이 다음 틱에 다시 시도한다."""
+    ready = {"ok": False}
+    calls = []
+
+    def act(face):
+        if not ready["ok"]:
+            return False
+        calls.append(face)
+        return True
+
+    shown = emotion("NAVIGATION", "IDLE", None, act)
+    assert shown is None and calls == []  # nothing shown yet, nothing latched
+
+    ready["ok"] = True
+    shown = emotion("NAVIGATION", "IDLE", shown, act)
+    assert shown == "happy" and calls == ["happy"]
+
+
+def test_an_unknown_mode_keeps_whatever_the_face_is_showing():
+    calls = []
+
+    shown = emotion("DRIVE", None, "happy", lambda face: calls.append(face) or True)
+    shown = emotion(None, None, shown, lambda face: calls.append(face) or True)
+
+    assert shown == "happy" and calls == []

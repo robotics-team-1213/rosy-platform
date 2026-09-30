@@ -1564,6 +1564,18 @@
 - gate 변화: 없음.
 - 교훈: 고정 목록 계약은 선행 단계가 붉으면 통째로 건너뛴다 — 그 단계의 빚은 다음 초록 커밋으로 이월되므로, 큰 적색을 고친 커밋은 곧바로 다음 단계까지 돌아갔는지 봐야 한다.
 
+## 2026-10-01 · uncommitted · feat(native): D-383 LCD 상태줄에 편대 역할
+
+- 변경: rosy-boot-status.py 가 swarm_role 를 같은 규칙으로 검증·복사, rosy-boot-display.py 상태줄이 role_suffix 를 끝에 붙인다("Ready - NAVIGATION - LEADER").
+- 증거: test_boot_display.py·test_boot_status_indicator.py. 실기 확인은 다음 릴리스 때.
+- gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · feat(native): D-385 기다리는 카드에 프레임 위상
+
+- 변경: rosy-boot-display.py 가 BOOTING·PROVISIONED 중 view 에 frame(1 s 위상)을 실어 다시 그림 키에 태운다 — 0.5 Hz 숨쉼, CORE_READY 는 기존처럼 무변경 무재그림.
+- 증거: test_boot_display.py (대기 중 재그림·ready 정지). 실기는 다음 릴리스.
+- gate 변화: 없음.
+
 ## 2026-10-01 · uncommitted · fix(sd): ERASE 프롬프트 type-ahead, 아티팩트 다운로더, D-383 긴급 카드 쓰기
 
 - 변경: (1) `prepare-rosy-sd.ps1`의 ERASE 프롬프트가 먼저 콘솔 입력 버퍼를 비우고(`Clear-TypeAhead`), 빈 줄·입력 끝은 불일치가 아니라 `no console input`으로 멈춘다. 2026-09-30 `-Detach` 창에서 앞 단계 중 눌린 Enter가 0.9초 만에 프롬프트에 답해 `typed: ''`로 실패했다. (2) `tools/release/download_artifact.py`: Actions 아티팩트 병렬 range 다운로드(진행·재개·크기 확인·안전 압축 해제). (3) D-383 `write-card.ps1 -Emergency -EmergencyReason`: 전체 readback만 건너뛰고 증거에 검증 안 됨을 남기며, `verify-emergency-card.ps1` 후속 readback과 표준 재공급으로 메운다.
@@ -1580,4 +1592,10 @@
 
 - 변경: main 병합 시점에 D-383은 편대 역할 계기 ADR로, D-384는 docs/d384-road-state-and-behaviour 예약으로 잡혀 있었다. 이 작업의 결정(긴급 카드 쓰기, 모터 커미셔닝 SSH)을 다음 빈 번호 D-385로 개명하고 코드 주석·시험·문서를 함께 바꿨다. 앞 항목의 D-383 표기는 역사 기록으로 둔다.
 - 증거: rosy_harness lint 오류 0. 본문은 docs/adr/D-385-emergency-card-write-skips-only-readback.md.
+- gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · docs(adr): 긴급 카드 쓰기 결정을 D-385에서 D-389로 개명
+
+- 변경: main에 D-385(feat/expressive-rosy)가 들어와, main 532b9813이 adr_gaps에 예약한 D-389로 개명하고 그 예약을 지웠다. 코드 주석·시험·문서도 바꿨다. 앞 항목의 D-383/D-385 표기는 역사 기록으로 둔다.
+- 증거: rosy_harness lint 오류 0. 본문은 docs/adr/D-389-emergency-card-write-skips-only-readback.md.
 - gate 변화: 없음.
