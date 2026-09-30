@@ -11,7 +11,7 @@ const MODES = [
 export function mount(root, ctx) {
   const head = el("ui-head", "", "운전 모드");
   const modeStatus = el("ui-status", "", "현재 모드를 불러오는 중입니다.");
-  const capabilityStatus = el("ui-status", "", "Navigation 기능 지원 확인 중입니다.");
+  const capabilityStatus = el("ui-status", "", "내비게이션 기능을 확인하는 중입니다.");
   const actionStatus = el("ui-status");
   actionStatus.setAttribute("role", "status");
   actionStatus.setAttribute("aria-live", "polite");
@@ -19,7 +19,8 @@ export function mount(root, ctx) {
   const buttons = new Map();
   for (const mode of MODES) {
     const button = el("ui-button", "", mode.label); button.setAttribute("kind", "segment"); button.type = "button";
-    button.setAttribute("aria-label", `${mode.label} 모드`); button.dataset.mode = mode.id; button.title = mode.id; button.disabled = true;
+    button.setAttribute("aria-label", `${mode.label} 모드`); button.dataset.mode = mode.id; button.disabled = true;
+    button.title = mode.id;
     controls.append(button); buttons.set(mode.id, button);
   }
   root.append(head, modeStatus, capabilityStatus, actionStatus, controls);
@@ -33,7 +34,7 @@ export function mount(root, ctx) {
       // D-359 §5.3 — 사유는 같은 조건에서 나온다. 지금 모드는 눌림(aria-pressed)이 말한다.
       const reason = pending ? "모드 변경 처리 중"
         : !current ? "현재 모드 확인 중"
-          : id !== current && id === "NAVIGATION" && !navigationAvailable ? "이 프로필에서 쓸 수 없음" : "";
+          : id !== current && id === "NAVIGATION" && !navigationAvailable ? "이 로봇에서 쓸 수 없음" : "";
       if (reason) button.setAttribute("reason", reason);
       else button.removeAttribute("reason");
       button.setAttribute("aria-pressed", String(id === current));
@@ -46,13 +47,13 @@ export function mount(root, ctx) {
   const stopCapabilities = ctx.store.poll("/api/v1/system/capabilities", 5_000, (caps) => {
     navigationAvailable = caps?.navigation?.goal_navigation === true;
     capabilityStatus.textContent = navigationAvailable
-      ? "Navigation 기능을 사용할 수 있습니다."
-      : `Navigation을 사용할 수 없습니다.${caps?.navigation?.reason ? ` ${caps.navigation.reason}` : " 이 profile에서 제한되거나 제공되지 않습니다."}`;
+      ? "내비게이션 기능을 쓸 수 있습니다."
+      : `내비게이션을 쓸 수 없습니다.${caps?.navigation?.reason ? ` ${caps.navigation.reason}` : " 현재 실행 모드에서 막혔거나 이 로봇에 없는 기능입니다."}`;
     capabilityStatus.setAttribute("state", navigationAvailable ? "ready" : "warning");
     update();
   }, (error) => {
     navigationAvailable = false;
-    capabilityStatus.textContent = `Navigation 기능 지원을 확인할 수 없습니다: ${error.message}`;
+    capabilityStatus.textContent = `내비게이션 기능을 확인할 수 없습니다: ${error.message}`;
     capabilityStatus.setAttribute("state", "error");
     update();
   });
