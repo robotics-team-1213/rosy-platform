@@ -221,3 +221,9 @@
 - 증거: 복구 전 gateway 21 실패(event_catalogue 13, host_cards 2, host_hardware 1, triage_contract 2, console_layout 3) → 0. core 도메인 전체 2014 passed, 29 skipped (2026-10-01 Windows).
 - gate 변화: 없음.
 - 교훈: 인코딩 사고를 "옛 판본으로 되돌리기"로 고칠 때는 그 판본 이후의 정당 커밋이 사라지는지 diff 전체를 읽어야 한다 — 이번 복원은 고장(hunk 없음)을 다른 고장(기능 상실)으로 바꿨다.
+
+## 2026-10-01 · uncommitted · feat(host): D-383 status-inputs에 swarm_role 추가
+
+- 변경: _swarm_role()가 snapshot().swarm.role 를 검색·검증해 핸드오버에 실었다. none·모르는 값은 없음.
+- 증거: test_host_status_summary.py 40 passed (키 셋·none 부재 포함).
+- gate 변화: 없음.

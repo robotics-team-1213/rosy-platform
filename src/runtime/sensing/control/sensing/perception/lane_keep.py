@@ -237,7 +237,7 @@ class LaneKeeper:
         _validate_positive("lane_half_width_m", lane_half_width_m)
         if not isinstance(bgr, np.ndarray) or bgr.ndim not in (2, 3) or bgr.size == 0:
             raise ValueError("camera frame must be a non-empty grayscale or BGR array")
-        self.last = {"strategy": "none", "boundaries": [], "transverse": [], "blobs": 0,
+        self.last = {"strategy": "none", "boundaries": [], "transverse": [], "candidates": [], "blobs": 0,
                      "lookahead_m": self._lookahead, "target_m": None, "target_px": None}
         if ground is None:
             self.last["reason"] = "no_ground"
@@ -275,6 +275,7 @@ class LaneKeeper:
                       "ends_px": [self.to_pixel(ground, float(p[0]), float(p[1])) for p in ends]}
             if abs(heading) > TRANSVERSE_MIN_ANGLE_RAD:
                 self.last["transverse"].append(record)
+                self.last["candidates"].append(dict(record, rejected=True, reason="transverse"))
                 transverse.append((centre, direction, ends, False))
                 continue
             if (self._corner_side is not None and abs(heading) > CORNER_MIN_HEADING_RAD
@@ -303,6 +304,8 @@ class LaneKeeper:
             point, along = _pursuit_point(centre + inward * half, direction, self._lookahead)
             if not (line["along"][0] - MAX_EXTRAPOLATION_M <= along
                     <= line["along"][1] + MAX_EXTRAPOLATION_M):
+                self.last["candidates"].append(dict(record, side=side, y_at_side_x_m=round(lateral, 3),
+                                                    rejected=True, reason="extrapolation"))
                 continue
             record.update(side=side, y_at_side_x_m=round(lateral, 3), tracked=tracked == side,
                           pursuit_m=[round(float(point[0]), 3), round(float(point[1]), 3)],
@@ -327,6 +330,7 @@ class LaneKeeper:
             record.pop("direction")
             record.pop("centre")
             self.last["boundaries"].append(record)
+            self.last["candidates"].append(dict(record, rejected=False, reason=None))
         if target is None:
             self.last["reason"] = junction or "no_boundary"
             # Nothing is pursued: the next frame sides its lines afresh (a

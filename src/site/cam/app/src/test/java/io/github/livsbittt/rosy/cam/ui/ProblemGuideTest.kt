@@ -45,6 +45,24 @@ class ProblemGuideTest {
     }
 
     @Test
+    fun busyReceiverIsTransientAndNeedsNoSettings() {
+        val g = ProblemGuide.forLink(LinkError.Busy(4400, "no hello"), stopped = false, wifiConnected = true)
+        assertEquals(Problem.BUSY, g.problem)
+        assertEquals(NextStep.NONE, g.step)
+        assertEquals("close 4400 no hello", g.detail)
+        assertTrue(g.retrying)
+    }
+
+    @Test
+    fun pinMismatchStopsAndPointsToSettings() {
+        val g = ProblemGuide.forLink(network(NetworkFailure.TLS_PIN), stopped = true, wifiConnected = true)
+        assertEquals(Problem.TLS_PIN, g.problem)
+        assertEquals(NextStep.OPEN_SETTINGS, g.step)
+        assertFalse(g.retrying)
+        assertTrue(ProblemGuide.stopsCameraFirst(Problem.TLS_PIN, running = true))
+    }
+
+    @Test
     fun tokenAndDuplicateSourcePointToSettings() {
         val token = ProblemGuide.forLink(LinkError.Unauthorized, stopped = true, wifiConnected = true)
         assertEquals(Problem.UNAUTHORIZED, token.problem)

@@ -69,6 +69,10 @@ MODE_LAMP = {"MANUAL": "manual", "NAVIGATION": "navigating", "DOCKING": "docking
 NAV_STATES = frozenset({"IDLE", "PLANNING", "NAVIGATING", "ARRIVED", "CANCELED", "FAILED", "BLOCKED"})
 NAV_STUCK = frozenset({"BLOCKED", "FAILED"})
 
+#: D-383: the swarm role (SwarmRole) as this table sees it — leader/follower ride
+#: beside the mode for the LCD and the dashboard's fourth gauge cell.
+SWARM_ROLES = frozenset({"leader", "follower"})
+
 #: D-247 decision 7: why the robot cannot move, per runtime mode. Empty: the mode holds nothing.
 MOTION_REASON = {
     "core": "모터가 꺼진 CORE 전용 모드입니다. 관리자가 모터 모드로 올려야 움직입니다.",
@@ -136,6 +140,21 @@ def valid_robot_mode(value: Any) -> Optional[str]:
 def valid_nav_state(value: Any) -> Optional[str]:
     """D-381: a known NavigationState name, or None. Same rule as the mode."""
     return value if isinstance(value, str) and value in NAV_STATES else None
+
+
+def valid_swarm_role(value: Any) -> Optional[str]:
+    """D-383: leader or follower, or None. ``none`` and anything else read as absent."""
+    return value if isinstance(value, str) and value in SWARM_ROLES else None
+
+
+def role_suffix(swarm_role: Any) -> str:
+    """D-383: ``" - LEADER"`` for a formation role on the LCD state line, else empty.
+
+    ASCII like ``mode_suffix``: the boot card font has no Hangul, and the enum
+    word is what the dashboard shows next to its Korean label anyway.
+    """
+    role = valid_swarm_role(swarm_role)
+    return f" - {role.upper()}" if role else ""
 
 
 def mode_suffix(robot_mode: Any) -> str:

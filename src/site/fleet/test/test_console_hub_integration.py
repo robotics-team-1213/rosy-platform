@@ -39,11 +39,10 @@ class _EventBus:
     def __init__(self):
         self.subscribers = set()
 
+    # Same surface as core_events EventBus: subscribe returns the unsubscribe callable.
     def subscribe(self, callback):
         self.subscribers.add(callback)
-
-    def unsubscribe(self, callback):
-        self.subscribers.discard(callback)
+        return lambda: self.subscribers.discard(callback)
 
     def publish(self, event):
         for callback in tuple(self.subscribers):

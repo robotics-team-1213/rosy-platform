@@ -118,7 +118,7 @@ Fleet continues to admit one `PICK_PLACE` Action through the existing same-host 
 1. Write failing tests that an accepted ROS goal exposes its exact `goal_handle.goal_id.uuid` as a canonical lowercase UUID; a rejected/unknown goal has no accepted goal identity.
 2. Add a typed per-goal event snapshot/callback for acceptance, running/feedback, cancel response, and terminal status/result. Attach every event to `command_id`, semantic stage, and UUID; ignore or quarantine late events for another UUID.
 3. Preserve the distinction among goal acceptance, running feedback, cancel ACK, final `SUCCEEDED`/`ABORTED`/`CANCELED`, and joint-state readback. Callback exceptions become UNKNOWN, never success.
-4. Run the ROS-free test first, then the pinned vendor simulation probe in Task 8.
+4. Run the ROS-free test first, then the pinned vendor simulation probe in Task 9 after the callback and fresh-state gates are closed.
 
 **Expected:** One ROS goal can be correlated to one local phase without treating a cancel response or action status as standstill evidence.
 
@@ -207,7 +207,26 @@ Fleet continues to admit one `PICK_PLACE` Action through the existing same-host 
 
 **Expected:** No automatic retry, regrasp, release, phase continuation, software rearm, or goal confirmation follows restart/stop ambiguity.
 
-### Task 8: Add full phase sequence to pinned ROS-SIM
+### Task 8: Close asynchronous ROS acceptance and fresh phase-state contracts
+
+**Decision:** [D-386](../adr/D-386-omx-async-goal-acceptance-and-phase-state.md)
+
+**Files:**
+- Modify: `src/products/omx/adapter/omx_adapter/ros_runtime.py`
+- Modify: `src/products/omx/adapter/omx_adapter/pick_place_runner.py`
+- Modify: `src/products/omx/adapter/omx_adapter/phase_recorder.py`
+- Modify: `src/products/omx/adapter/omx_adapter/manipulation_plan.py`
+- Add/modify: ROS-free contract tests for submission ordering, stop races, and phase start-state validation
+- Modify: `src/products/omx/adapter/test/test_omx_ros_runtime.py`
+
+1. Keep local command admission, ROS goal acceptance/rejection, and durable Action/phase acceptance as separate facts. Persist the exact ROS UUID and first parent Action acceptance atomically only after the matching ROS response arrives.
+2. Do not block a ROS executor callback or hold the stop-generation lock while waiting for that response. Persist intent before dispatch; if stop/generation changes before or after acceptance, hold and cancel only the exact accepted UUID. Rejection, timeout, unknown response, or late callback must not retry or advance.
+3. Before each phase submission, obtain a fresh joint-state sequence and current planning-scene/calibration identity. Replan the next trajectory from that state, or validate an explicit bounded start-state match. Do not relabel a stale precomputed path with a newer sequence.
+4. Add fault tests for response delay, acceptance after stop, rejection, missing/unknown response, UUID mismatch, stale/changed phase start state, restart, and proof that a pending response cannot block the stop latch.
+
+**Expected:** One active phase intent can move to a durable accepted phase only with its exact ROS UUID. Any stop race or unvalidated phase start ends in UNKNOWN/HOLD without progression. This task does not choose or implement a production planner.
+
+### Task 9: Add full phase sequence to pinned ROS-SIM
 
 **Files:**
 - Modify: `src/products/omx/adapter/test/test_omx_ros_runtime_vendor_sim.py`
@@ -222,7 +241,7 @@ Fleet continues to admit one `PICK_PLACE` Action through the existing same-host 
 
 **Expected:** ROS-SIM proves only software sequencing against the pinned simulator. It does not close ARM64 artifact, device, E-stop, gripper force/load, camera calibration, or field gates.
 
-### Task 9: Update capability/readiness gates; keep deployment held
+### Task 10: Update capability/readiness gates; keep deployment held
 
 **Files:**
 - Modify: `src/products/omx/adapter/progress.md`
@@ -257,7 +276,7 @@ Fleet continues to admit one `PICK_PLACE` Action through the existing same-host 
 
 ## Execution Order
 
-Task 0 ADR/dependency gate → Task 1 pose and plan contract → Task 2 trajectory contract → Task 3 ROS goal identity → Task 4 phase coordinator → Task 5 gripper/Fleet goal evidence → Task 6 Fleet/ER 2 read-only progress → Task 7 fault recovery → Task 8 pinned ROS-SIM → Task 9 readiness and docs.
+Task 0 ADR/dependency gate → Task 1 pose and plan contract → Task 2 trajectory contract → Task 3 ROS goal identity → Task 4 phase coordinator → Task 5 gripper/Fleet goal evidence → Task 6 Fleet/ER 2 read-only progress → Task 7 fault recovery → Task 8 async acceptance/fresh phase state → Task 9 pinned ROS-SIM → Task 10 readiness and docs.
 
 Do not start Tasks 2–8 with a fake production planner, synthetic hardware profile, or borrowed calibration. If Task 0 cannot choose a supported local planner and complete phase feedback path, stop at the interface and keep the capability disabled.
 
@@ -270,6 +289,9 @@ Do not start Tasks 2–8 with a fake production planner, synthetic hardware prof
 - **Task 4 — source coordinator path implemented; ROS/device wiring pending:** `PickPlaceRunner` persists ordered phase intent, submits one validated goal through the local owner port inside the stop/generation fence, accepts progress only for the active command/phase/UUID, and advances only after matching terminal success plus an explicit caller `advance()`. `ActionRunner` can inject the phase runner after authenticated grant/attempt validation; `CancelAction` and unresolved-stop cancel fanout route through the active phase UUID or a goal-specific driver method, with no broad cancel fallback. Unknown acceptance and stop-fence rejection hold the Action and prevent retry. This is a source contract only: no production factory connects the plan provider, `ArmCommandOwner`, and `RosArmCommandRuntime`; ROS callbacks and stop timing remain unverified.
 - **Task 5 — local SOURCE workflow gate implemented; workcell profile pending:** Semantic workflow state is append-only in the Action journal. The next motion phase requires both transaction state and its durable event to agree; grasp requires fresh held-object readback, and local Action success requires four successful ROS phases plus fresh OPEN/no-object readback. The transaction no longer duplicates Fleet's placement verifier; the existing registered Fleet producer remains the only path to `GOAL_CONFIRMED`, and its two arrival-order/grace behavior is covered by Fleet tests. No gripper actuation target or force threshold was invented: exact measured hardware targets, sensor revisions, driver wiring, and device acceptance remain unavailable, so this is not an executable hardware profile.
 - **Task 6 — SOURCE contract implemented:** `PICK_PLACE` uses UDS v2 with the existing six operation names; Fleet requires the bounded phase summary and never falls back to v1. The local receipt contains at most four fixed phase IDs, ordinals, ROS phase states, local journal event IDs, and timestamps, with no ROS UUID or motion payload. Fleet stores identity-fenced phase events idempotently, rejects changed evidence under a reused event identity and later state regression, and projects the latest ordered state into Mission progress and the existing read-only `get_mission_status` result. V1 remains compatible for non-phased operations; no new command/API or Mission goal-confirmation path was added.
-- **Tasks 7–9 — not started:** Full restart/stop fault injection, pinned ROS-SIM phase integration, and final readiness gates remain open.
+- **Task 7 — local SOURCE recovery implemented:** Grasp completion now marks the object as possibly held until fresh gripper confirmation. Restart recovery atomically moves every unresolved Action/phase to UNKNOWN and appends a semantic HOLD event that preserves possible-held-object state and evidence references. UNKNOWN/HOLD/canceling Actions can record only HOLD; no phase or semantic workflow continuation is accepted. Existing exact-goal cancel ACK remains nonterminal, explicit operator reconciliation/new generation remains required for rearm, and Fleet retains terminal Action success separately from pending goal evidence. Focused Task 7 suites passed **64 tests**; the full OMX adapter/profile/vendor-boundary suite passed **213 passed, 3 skipped**.
+- **Task 8 — D-386 accepted; source implementation remains:** Source inspection found that local `RosArmCommandRuntime.submit()` returns before ROS acceptance/UUID, while `PickPlaceRunner` records acceptance synchronously; planned phase state sequences also cannot satisfy the command owner's fresh, strictly advancing state requirement after the first goal. The new contract is documented and must be implemented before writing an end-to-end success claim. ROS-free runner/runtime baseline: **6 passed, 2 skipped**; the skips require ROS Jazzy.
+- **Task 9 — HOLD (2026-10-01 environment check):** The full phase sequence has not been run against the pinned vendor simulator. Docker Desktop's `docker info` availability probe timed out after 12 seconds. The Ubuntu WSL invocation reported `getpwuid(0) failed` before ROS could be verified. No simulation validation report was created and no ROS callback, phase timing, or fault behavior is claimed. After Task 8, run on the intended Linux workstation with the pinned compose image and cover all four phase UUIDs, ordered feedback, exact-goal cancel, timeout/rejection/late result, stale state, stop generation, restart UNKNOWN, and gripper readback before recording a dated report.
+- **Task 10 — readiness recorded, release held:** SOURCE is GO at main commit `979c0785`; LOCAL remains limited to the disabled profile/software CLI check; ROS-SIM and ARTIFACT remain HOLD; DEVICE and FIELD remain PARKED. The OMX capability profile stays disabled. Current host verification after merge: OMX adapter/profile/vendor-boundary suite **213 passed, 3 skipped**; Fleet phase and API/version contract suites **45 passed**; progress and API documentation pin suites **23 passed**; generated-record check **1 passed**; harness lint **0 errors, 22 freshness warnings**. The D-346 gate had **93 passed, 2 failed** because `STATUS.md` was stale after the readiness edit; after regeneration, both failing generated-current/history-lint tests passed (**2 passed**, same 22 freshness warnings). The other 93 tests passed in the first run. `git diff --check` passed.
 
-Current source evidence: OMX adapter/profile/vendor-boundary suite **211 passed, 3 skipped**. Task 5 focused adapter and Fleet goal-evidence suites passed **49 tests**. Task 6 shared-contract, UDS, Fleet dispatcher/progress, and ER 2 status suites passed **92 tests**. Host tests do not prove ROS callback execution, planner compatibility, a gripper driver, device behavior, or physical stopping. The OMX capability remains disabled.
+Current source evidence: OMX adapter/profile/vendor-boundary suite **213 passed, 3 skipped** at main `979c0785`. Task 5 focused adapter and Fleet goal-evidence suites passed **49 tests**. Task 6 shared-contract, UDS, Fleet dispatcher/progress, and ER 2 status suites passed **92 tests**; full Fleet suite passed **951 passed, 6 skipped**. Task 7 recovery/stop/progress suites passed **64 tests**. Host tests do not prove ROS callback execution, planner compatibility, a gripper driver, device behavior, or physical stopping. The OMX capability remains disabled.

@@ -7,6 +7,8 @@ from pathlib import Path
 import pytest
 
 from test_mission_api import _client, _create, _resolve
+from fleet.server.mission_progress import MissionProgressService
+from fleet.server.mission_store import MissionStore
 
 
 _OPERATOR = {"Authorization": "Bearer operator-secret"}
@@ -379,6 +381,17 @@ def test_running_action_and_stop_request_do_not_claim_physical_completion(tmp_pa
     assert latched["stop"]["state"] == "DISPATCH_BLOCKED"
     assert latched["stop"]["physical_state"] == "UNKNOWN"
 
+    phase_time = "2026-10-01T12:00:00+00:00"
+    store.record_action_phase_summaries(
+        mission_id, action_id="action-current", attempt_id="attempt-current",
+        authority_epoch=mission["authority_epoch"],
+        dispatch_generation=mission["dispatch_generation"], phases=[
+            {"phase_id": phase_id, "ordinal": ordinal, "state": "SUCCEEDED",
+             "journal_event_id": ordinal + 1, "observed_at": phase_time}
+            for ordinal, phase_id in enumerate(("approach", "grasp", "transfer", "release"))
+        ],
+    )
+
     store.record_action_result(
         mission_id, event_id="result-current", action_id="action-current",
         attempt_id="attempt-current", outcome="SUCCEEDED",
@@ -392,9 +405,15 @@ def test_running_action_and_stop_request_do_not_claim_physical_completion(tmp_pa
     assert after["action"]["state"] == "ACTION_SUCCEEDED"
     assert after["action"]["freshness"] == "FRESH"
     assert after["goal_evidence"]["state"] == "PENDING"
+    assert after["active_phase"] is None
+    assert [phase["state"] for phase in after["phases"]] == ["SUCCEEDED"] * 4
     assert after["stop"]["state"] == "DISPATCH_BLOCKED"
     assert after["stop"]["reason"] == "ESTOP_REQUESTED"
     assert after["stop"]["physical_state"] == "UNKNOWN"
+
+    reopened = MissionProgressService(MissionStore(store.path)).snapshot(mission_id)
+    assert reopened["progress"]["goal_evidence"]["state"] == "PENDING"
+    assert [phase["state"] for phase in reopened["progress"]["phases"]] == ["SUCCEEDED"] * 4
 
 
 def test_late_previous_attempt_event_cannot_replace_current_action_projection(tmp_path):
@@ -490,7 +509,7 @@ def test_api_reference_pins_snapshot_cursor_retention_and_unknown_physical_state
         encoding="utf-8",
     )
 
-    assert "**Version:** v1.64" in reference
+    assert "**Version:** v1.66" in reference
     assert "## 10.14 Mission progress snapshots and event cursor" in reference
     assert "`/api/fleet/missions/{mission_id}/events?after_event_id=" in reference
     assert "MISSION_CURSOR_EXPIRED" in reference

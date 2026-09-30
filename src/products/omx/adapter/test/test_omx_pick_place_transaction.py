@@ -166,6 +166,10 @@ def test_durable_workflow_gates_each_phase_and_completes_local_action_after_rele
     assert workflow.phase_gate("grasp")
     workflow.record_arm_result(arm_result("grasp", action_id="workflow-action",
                                           attempt_id="workflow-attempt", owner_generation=8))
+    workflow_events = [event for event in store.history("workflow-action")
+                       if event["event_type"] == "ACTION_WORKFLOW_STATE"]
+    assert workflow_events[-1]["detail"]["workflow_state"] == "VERIFY_HOLD"
+    assert workflow_events[-1]["detail"]["object_may_be_held"] is True
     assert not workflow.phase_gate("transfer")
     workflow.verify_gripper_held(
         gripper(workcell_id="omx_01", instance_id="omx_01_control",

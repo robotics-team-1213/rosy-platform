@@ -101,7 +101,22 @@ All HTTPS hops verify the configured site CA. The same site certificate must
 contain these DNS SANs: the operator-facing FQDN, the stable Ubuntu host's
 `<hostname>.local`, `proxy`, `fleet`, and
 `vision`. The phone pairing link uses that FQDN and explicit TLS:
-`rosyov://<site-fqdn>:8443/?t=<phone-token>&s=ceiling_north&tls=1`.
+`rosyov://<site-fqdn>:8443/?t=<phone-token>&s=ceiling_north&tls=1&pin=sha256/<b64url>`.
+The `pin` makes the app trust only this site's certificate, so the site CA is
+not installed on the phone (D-341 9). The pin is always the **site CA**
+(D-341 9 never pins a leaf alone), so it survives leaf re-issue. The phone can
+only match certificates the proxy sends, so the proxy must serve leaf + CA. Caddy
+serves the whole `site_cert` file, so build it once with
+`cat site.crt site-ca.crt > site-fullchain.crt` and point the `site_cert`
+secret at `site-fullchain.crt`. Then print the link and QR on the site host:
+`ROSY_OVERHEAD_TOKEN=<phone-token> rosy-vision pair-link --host <fqdn-or-ip>
+--port <published-8443> --source ceiling_north --pin-ca <secrets>/site-ca.crt
+--pin-cert <secrets>/site-fullchain.crt`. Both options are required: the
+command refuses (exit 2, with this recipe) unless the served file carries that
+CA above the leaf. `rosy-vision receive --tls-cert` pins the CA of a leaf + CA
+file and otherwise prints the link without a pin and says why. The app still
+accepts a leaf pin from links printed before this rule, for compatibility only.
+An IP host needs that IP in the certificate SAN.
 Treat the URI as a credential: do not paste it into tickets, logs, or shell
 history. Use the QR/pairing screen over a trusted local channel.
 
