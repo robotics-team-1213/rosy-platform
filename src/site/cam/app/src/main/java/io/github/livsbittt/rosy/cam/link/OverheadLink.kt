@@ -2,7 +2,9 @@ package io.github.livsbittt.rosy.cam.link
 
 import android.util.Log
 import io.github.livsbittt.rosy.cam.settings.PairingUri
+import java.security.cert.X509Certificate
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -15,6 +17,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import okhttp3.Dns
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -87,12 +90,15 @@ data class SensorInfo(val width: Int, val height: Int, val rotationDeg: Int)
  *   capture time by that transmit delay.
  * - Reconnects with [Backoff]; 4400 stops only for an incompatibility reason;
  *   4401 and 4409 stop.
+ * - With a [resolver], the URL host is the site's `tls_host` and each connect looks its address up through
+ *   mDNS ([SiteDns]); a failed connect drops the cached address so the next one browses again (D-391 1).
  */
 class OverheadLink(
     private val pairing: PairingUri,
     private val appVersion: String,
     private val device: String,
-    private val client: OkHttpClient = defaultClient(pairing.pin),
+    private val resolver: SiteResolver? = null,
+    private val client: OkHttpClient = defaultClient(pairing.pin, resolver?.let { SiteDns(pairing.host, it) }),
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val lock = Any()
@@ -102,6 +108,17 @@ class OverheadLink(
 
     private val _status = MutableStateFlow(LinkStatus())
     val status: StateFlow<LinkStatus> = _status.asStateFlow()
+
+    /** One non-fatal pin mismatch per discovered route between successful opens (review M3). */
+    private val pinRetryAvailable = AtomicBoolean(true)
+
+    private val _peerLeaf = MutableStateFlow<X509Certificate?>(null)
+
+    /**
+     * Leaf certificate of the last opened `wss://` session; it already passed the link's trust (the pinned CA).
+     * Null before the first TLS open and on plain `ws://`.
+     */
+    val peerLeaf: StateFlow<X509Certificate?> = _peerLeaf.asStateFlow()
 
     /** Set by the camera after each encode; published with the 1 s counters. */
     @Volatile
@@ -273,6 +290,11 @@ class OverheadLink(
                 webSocket.close(1000, "stale")
                 return
             }
+            // The pinned trust manager records the leaf it verified; OkHttp's handshake list is empty with it.
+            val leaf = (response.handshake?.peerCertificates?.firstOrNull() as? X509Certificate)
+                ?: (client.x509TrustManager as? PinnedTrustManager)?.lastTrustedLeaf
+            if (response.handshake != null && leaf != null) _peerLeaf.value = leaf
+            pinRetryAvailable.set(true)
             val s = sensor
             webSocket.send(Protocol.hello(pairing.source, appVersion, device, s.width, s.height, s.rotationDeg, lens))
             backoff.reset()
@@ -320,7 +342,13 @@ class OverheadLink(
             }
             // A pin mismatch cannot heal by retrying: the site certificate changed or this is not the site
             // (D-341 10). It can only happen before any HTTP response, so a response rules it out.
-            val fatal = response == null && error is LinkError.Network && error.kind == NetworkFailure.TLS_PIN
+            val pinFailed = response == null && error is LinkError.Network && error.kind == NetworkFailure.TLS_PIN
+            // A pin mismatch on an address that mDNS supplied may be one spoofed advert, not the site: browse
+            // again once, and stop only if the fresh route fails the pin too (review M3).
+            val viaDiscovery = resolver?.route?.value is SiteRoute.Discovered
+            val fatal = pinFailed && !(viaDiscovery && pinRetryAvailable.getAndSet(false))
+            // The site may have moved: the next attempt browses again instead of reusing the cached address.
+            if (response == null) resolver?.invalidate()
             onLost(gen, error, fatal = fatal)
         }
 
@@ -345,12 +373,16 @@ class OverheadLink(
             else -> LinkError.Closed(code, reason) to false
         }
 
-        /** [pin] set: trust only the paired site certificate (see [PinnedTrustManager]); null: system trust. */
-        fun defaultClient(pin: String? = null): OkHttpClient = OkHttpClient.Builder()
+        /**
+         * [pin] set: trust only the paired site certificate (see [PinnedTrustManager]); null: system trust.
+         * [dns] set: name lookups go through it (the site's `tls_host` via mDNS, [SiteDns]).
+         */
+        fun defaultClient(pin: String? = null, dns: Dns? = null): OkHttpClient = OkHttpClient.Builder()
             .connectTimeout(5, TimeUnit.SECONDS)
             .readTimeout(0, TimeUnit.MILLISECONDS)
             .pingInterval(10, TimeUnit.SECONDS)
             .pinnedTo(pin)
+            .apply { if (dns != null) dns(dns) }
             .build()
     }
 }

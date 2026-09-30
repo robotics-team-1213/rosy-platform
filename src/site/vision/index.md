@@ -34,8 +34,8 @@
 
 ## 최근 기록
 
+- 2026-10-01 · 2d6d268b · fix(vision): 재연결 전 계산을 이전 결과로 남기지 않는다
 - 2026-10-01 · uncommitted · test(vision): 4400 재시도 목록을 전환 예외로 고정
 - 2026-10-01 · 4ae81b6e · fix(vision): 사이트 CA pin만 발급(D-341 9), 패턴 fullmatch
 - 2026-10-01 · 14253f8e · fix(vision): bound hello.lens numbers, safe connect log
 - 2026-10-01 · uncommitted · fix(vision): D-375 review fixes and worker process
-- 2026-09-30 · 80096516 · feat(vision): optional hello.lens logged and exposed
