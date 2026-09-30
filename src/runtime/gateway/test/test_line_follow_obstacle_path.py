@@ -301,3 +301,24 @@ def test_ir_guard_turn_is_also_capped_by_the_ladder():
                               calibration_revision=rev), received_at=10.0, source_now=10.0)
     d = m.tick(10.05)
     assert d.angular == pytest.approx(-0.30) and m.status().reason == "lane_edge_left"
+
+
+def test_a_lidar_gap_restarts_the_release_dwell():
+    m = _manager()
+    _camera(m, 10.0, error=0.0)
+    m.observe_scan_points([(0.15, 0.0)], received_at=10.0)
+    assert m.tick(10.01).linear == 0                           # 막힘
+
+    _camera(m, 10.3, error=0.0)
+    m.observe_scan_points([(0.35, 0.0)], received_at=10.3)
+    assert m.tick(10.31).linear == 0                           # 풀림 지연 시작
+    _camera(m, 10.9, error=0.0)
+    assert m.tick(10.9).linear == 0                            # LiDAR 0.6 s 끊김 — 재지 않은 틱
+    assert m.status().reason == "obstacle_sensor_stale"
+
+    _camera(m, 10.95, error=0.0)                               # 돌아왔다 — 지연은 처음부터
+    m.observe_scan_points([(0.35, 0.0)], received_at=10.95)
+    assert m.tick(10.96).linear == 0
+    _camera(m, 11.2, error=0.0)
+    m.observe_scan_points([(0.35, 0.0)], received_at=11.2)
+    assert m.tick(11.21).linear > 0
