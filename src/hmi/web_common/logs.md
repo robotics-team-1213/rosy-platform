@@ -390,3 +390,11 @@
 - gate 변화: 새 시험 `test_no_surface_script_opens_a_modal_dialog`·`test_the_modal_scan_fires_on_the_old_enrollment_call`. 행 말줄임 검사가 동사 표로 넓어짐.
 - 결정: D-280 원칙 2, D-371.
 - 교훈: showModal 금지를 한 함수 본문에만 걸면 다른 파일의 새 대화상자가 빠져나간다 — 스캔은 표면 전체에 건다.
+
+## 2026-10-01 · uncommitted · test(web_common): D-359 리뷰 P2-4 — 사유 없는 비활성 목록은 경로와 자리 수로 묶는다
+
+- 변경: `test_shared_controls.py` `DISABLED_WITHOUT_REASON` 키를 파일 이름에서 `src/` 기준 경로로 바꿨다(map.js·teleop.js·docking.js가 여러 폴더에 있다). 조각 하나는 한 자리만 덮고, 일부러 두 자리를 덮는 키는 `DISABLED_SITE_COUNT`에 적는다. 검사는 `scan_disabled()`로 뽑았다. 낡은 항목 검사는 그대로.
+- 증거: `test_shared_controls.py` 26 passed. 변이: hardware.js에 같은 `refresh.disabled = true;` 줄을 붙이면 `widened`로 실패, 다른 폴더의 같은 이름 파일은 키를 빌리지 못함(`test_a_copied_disabled_line_needs_its_own_entry`).
+- gate 변화: 새 시험 `test_a_copied_disabled_line_needs_its_own_entry`, 기존 시험에 자리 수 검사.
+- 결정: D-359 §5.3.
+- 교훈: 없음.

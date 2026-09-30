@@ -6,6 +6,7 @@ or copy a token colour into a second number.
 
 from pathlib import Path
 import re
+from collections import Counter
 
 import pytest
 
@@ -586,55 +587,62 @@ DISABLE_ROOTS = (
     ROOT / "hmi" / "dashboard",
     ROOT / "site" / "fleet" / "fleet" / "server" / "web",
 )
-# D-359 §5.3 — 사유 없이 끄는 곳의 닫힌 목록. (파일, 줄 조각) → 이유. 새 항목은 이유를 적는다.
+# D-359 §5.3 — 사유 없이 끄는 곳의 닫힌 목록. (src/ 기준 경로, 줄 조각) → 이유. 새 항목은 이유를 적는다.
+# 키는 경로로 파일을 가리키고(같은 이름 파일이 여러 폴더에 있다), 조각 하나는 한 곳만 덮는다(DISABLED_SITE_COUNT).
 TRANSIENT = "요청 처리 중 잠금 — 누른 직후 몇 초, 결과 문구가 곧 뒤따른다"
 INITIAL = "첫 readback 전 초기값 — 같은 파일의 sync 함수가 첫 응답에서 reason과 함께 다시 정한다"
 NATIVE = "네이티브 option/select/fieldset/checkbox — 사유를 그릴 자리가 없고, 곁의 상태 문구·태그가 까닭을 말한다"
 NOTE = "공용 보이는 안내(ui-status/p)가 aria-describedby로 이 버튼들에 이어져 사유를 말한다"
 DISABLED_WITHOUT_REASON = {
-    ("app.js", 'elements["code-submit"].disabled = true;'): TRANSIENT,
-    ("app.js", 'elements["code-submit"].disabled = false;'): TRANSIENT,
-    ("telemetry.js", 'setEnabled("traffic-policy-stage", !trafficPolicyPending);'): TRANSIENT,
-    ("app.js", 'setEnabled("hardware-refresh", false);'): TRANSIENT + " (장치 점검 요청)",
-    ("app.js", "button.disabled = true;"): TRANSIENT + " (장치 시험 요청)",
-    ("app.js", "button.disabled = false;"): TRANSIENT + " (장치 시험 실패 뒤 복구)",
-    ("camera.js", "button.disabled = true;"): TRANSIENT,
-    ("camera.js", "finally { button.disabled = false; }"): TRANSIENT,
-    ("camera.js", "option.disabled = true;"): NATIVE,
-    ("camera.js", "storage.disabled = state.recording || state.uploading;"): NATIVE,
-    ("docking.js", 'dock.type = "button"; dock.disabled = true;'): INITIAL,
-    ("docking.js", "select.disabled = locked || !hasDocks;"): NATIVE,
-    ("map.js", "button.disabled = !enabled;"): NOTE + " (#map-action-reason)",
-    ("mode.js", "button.dataset.mode = mode.id; button.disabled = true;"): INITIAL,
-    ("teleop.js", "button.disabled = true;"): INITIAL,
-    ("teleop.js", "button.disabled = !can && button !== activeButton;"): NOTE + " (readinessStatus)",
-    ("teleop.js", "button.disabled = !eligible();"): NOTE + " (readinessStatus)",
-    ("hardware.js", "refresh.disabled = true;"): TRANSIENT,
-    ("operations.js", "rollback.disabled = clearHold.disabled = true;"): INITIAL,
-    ("system.js", "identitySave.disabled = true;"): TRANSIENT,
-    ("system.js", "identityInput.disabled = true;"): TRANSIENT,
-    ("system.js", "identitySave.disabled = false;"): TRANSIENT,
-    ("system.js", "identityInput.disabled = false;"): TRANSIENT,
-    ("dock-admin.js", "add.disabled = true;"): INITIAL,
-    ("dock-admin.js", "add.disabled = pending || blockers.length > 0;"): NOTE + " (gate — 막는 까닭 목록)",
-    ("dock-admin.js", "remove.disabled = deleting;"): TRANSIENT + " (글자가 '삭제 중…')",
-    ("traffic-policy.js", 'apply.type = "button"; apply.disabled = true;'): INITIAL,
-    ("traffic-policy.js", "button.dataset.signal = colour; button.disabled = true;"): INITIAL,
-    ("traffic-policy.js", "pending = true; stage.disabled = true;"): TRANSIENT,
-    ("traffic-policy.js", "pending = true; apply.disabled = true;"): TRANSIENT,
-    ("traffic-policy.js", "pending = true; button.disabled = true;"): TRANSIENT,
-    ("waypoints.js", "save.disabled = true;"): INITIAL + " / " + TRANSIENT,
-    ("security.js", "add.disabled = tokenMutationPending;"): TRANSIENT,
-    ("security.js", "control.disabled = safetyPending;"): TRANSIENT,
-    ("mount.js", "tab.disabled = true;"): TRANSIENT + " (조작 묶음 전환 중)",
-    ("mount.js", "tab.disabled = false;"): TRANSIENT + " (전환 끝 복구)",
-    ("status-summary.js", "toggle.disabled = items.length === 0;"): "버튼 글자가 이미 '할 일 0'이라고 말한다",
-    ("enrollment.js", 'el("enroll-submit").disabled = true;'): TRANSIENT + " (등록 요청)",
-    ("formation.js", 'querySelectorAll("input").forEach((i) => { i.disabled = status.active; });'):
+    ("hmi/dashboard/app.js", 'elements["code-submit"].disabled = true;'): TRANSIENT,
+    ("hmi/dashboard/app.js", 'elements["code-submit"].disabled = false;'): TRANSIENT,
+    ("hmi/dashboard/telemetry.js", 'setEnabled("traffic-policy-stage", !trafficPolicyPending);'): TRANSIENT,
+    ("hmi/dashboard/app.js", 'setEnabled("hardware-refresh", false);'): TRANSIENT + " (장치 점검 요청)",
+    ("hmi/dashboard/app.js", "button.disabled = true;"): TRANSIENT + " (장치 시험 요청)",
+    ("hmi/dashboard/app.js", "button.disabled = false;"): TRANSIENT + " (장치 시험 실패 뒤 복구)",
+    ("hmi/dashboard/panels/console/camera.js", "button.disabled = true;"): TRANSIENT,
+    ("hmi/dashboard/panels/console/camera.js", "finally { button.disabled = false; }"): TRANSIENT,
+    ("hmi/dashboard/panels/console/camera.js", "option.disabled = true;"): NATIVE,
+    ("hmi/dashboard/panels/console/camera.js", "storage.disabled = state.recording || state.uploading;"): NATIVE,
+    ("hmi/dashboard/panels/console/docking.js", 'dock.type = "button"; dock.disabled = true;'): INITIAL,
+    ("hmi/dashboard/panels/console/docking.js", "select.disabled = locked || !hasDocks;"): NATIVE,
+    ("hmi/dashboard/panels/console/map.js", "button.disabled = !enabled;"): NOTE + " (#map-action-reason)",
+    ("hmi/dashboard/panels/console/mode.js", "button.dataset.mode = mode.id; button.disabled = true;"): INITIAL,
+    ("hmi/dashboard/panels/console/teleop.js", "button.disabled = true;"): INITIAL,
+    ("hmi/dashboard/panels/console/teleop.js", "button.disabled = !can && button !== activeButton;"): NOTE + " (readinessStatus)",
+    ("hmi/dashboard/panels/console/teleop.js", "button.disabled = !eligible();"): NOTE + " (readinessStatus)",
+    ("hmi/dashboard/panels/host/hardware.js", "refresh.disabled = true;"): TRANSIENT,
+    ("hmi/dashboard/panels/host/operations.js", "rollback.disabled = clearHold.disabled = true;"): INITIAL,
+    ("hmi/dashboard/panels/host/system.js", "identitySave.disabled = true;"): TRANSIENT,
+    ("hmi/dashboard/panels/host/system.js", "identityInput.disabled = true;"): TRANSIENT,
+    ("hmi/dashboard/panels/host/system.js", "identitySave.disabled = false;"): TRANSIENT,
+    ("hmi/dashboard/panels/host/system.js", "identityInput.disabled = false;"): TRANSIENT,
+    ("hmi/dashboard/panels/setup/dock-admin.js", "add.disabled = true;"): INITIAL,
+    ("hmi/dashboard/panels/setup/dock-admin.js", "add.disabled = pending || blockers.length > 0;"): NOTE + " (gate — 막는 까닭 목록)",
+    ("hmi/dashboard/panels/setup/dock-admin.js", "remove.disabled = deleting;"): TRANSIENT + " (글자가 '삭제 중…')",
+    ("hmi/dashboard/panels/setup/traffic-policy.js", 'apply.type = "button"; apply.disabled = true;'): INITIAL,
+    ("hmi/dashboard/panels/setup/traffic-policy.js", "button.dataset.signal = colour; button.disabled = true;"): INITIAL,
+    ("hmi/dashboard/panels/setup/traffic-policy.js", "pending = true; stage.disabled = true;"): TRANSIENT,
+    ("hmi/dashboard/panels/setup/traffic-policy.js", "pending = true; apply.disabled = true;"): TRANSIENT,
+    ("hmi/dashboard/panels/setup/traffic-policy.js", "pending = true; button.disabled = true;"): TRANSIENT,
+    ("hmi/dashboard/panels/setup/waypoints.js", "save.disabled = true;"): INITIAL + " / " + TRANSIENT,
+    ("hmi/dashboard/panels/system/security.js", "add.disabled = tokenMutationPending;"): TRANSIENT,
+    ("hmi/dashboard/panels/system/security.js", "control.disabled = safetyPending;"): TRANSIENT,
+    ("hmi/dashboard/shell/mount.js", "tab.disabled = true;"): TRANSIENT + " (조작 묶음 전환 중)",
+    ("hmi/dashboard/shell/mount.js", "tab.disabled = false;"): TRANSIENT + " (전환 끝 복구)",
+    ("hmi/dashboard/status-summary.js", "toggle.disabled = items.length === 0;"): "버튼 글자가 이미 '할 일 0'이라고 말한다",
+    ("site/fleet/fleet/server/web/enrollment.js", 'el("enroll-submit").disabled = true;'): TRANSIENT + " (등록 요청)",
+    ("site/fleet/fleet/server/web/formation.js", 'querySelectorAll("input").forEach((i) => { i.disabled = status.active; });'):
         NATIVE + " (대형 상태 태그 RUNNING/HOLDING — 해제 뒤 바꾼다)",
-    ("vision-view.js", "fieldset.disabled = !source;"): NATIVE + " (vision-state 태그)",
-    ("vision-view.js", "select.disabled = result.sources.length === 0;"): NATIVE + " (vision-state 태그)",
-    ("vision-view.js", "select.disabled = true;"): NATIVE + " (vision-state 태그)",
+    ("site/fleet/fleet/server/web/vision-view.js", "fieldset.disabled = !source;"): NATIVE + " (vision-state 태그)",
+    ("site/fleet/fleet/server/web/vision-view.js", "select.disabled = result.sources.length === 0;"): NATIVE + " (vision-state 태그)",
+    ("site/fleet/fleet/server/web/vision-view.js", "select.disabled = true;"): NATIVE + " (vision-state 태그)",
+}
+#: Keys that cover more than one site on purpose. Every other key covers exactly one,
+#: so an identical line added elsewhere in the same file is a new unexplained site.
+DISABLED_SITE_COUNT = {
+    ("hmi/dashboard/app.js", 'elements["code-submit"].disabled = false;'): 2,  # 성공·실패 두 갈래의 복구
+    ("hmi/dashboard/panels/setup/waypoints.js", "save.disabled = true;"): 2,  # 초기값과 요청 중 잠금
 }
 
 
@@ -656,39 +664,50 @@ def _call_args(text: str, start: int) -> list[str]:
     return args
 
 
-def test_every_disabled_control_states_its_reason_or_is_listed():
-    """D-359 §5.3 — 끄는 곳은 reason을 쓰거나(직접·setOff·setEnabled), 닫힌 목록에 이유와 함께 있다."""
-    missing, used = [], set()
+def disabled_scripts():
     for root in DISABLE_ROOTS:
         for path in sorted(root.rglob("*.js")):
-            if "test" in path.parts:
-                continue
-            text = path.read_text(encoding="utf-8-sig")
-            lines = text.splitlines()
-            for index, line in enumerate(lines):
-                if DISABLE_SITE.search(line):
-                    window = "\n".join(lines[max(0, index - 1):index + 6])
-                    if REASON_WRITE.search(window):
-                        continue
-                    key = next((k for k in DISABLED_WITHOUT_REASON
-                                if k[0] == path.name and k[1] in line), None)
-                    if key:
-                        used.add(key)
-                    else:
-                        missing.append(f"{path.name}:{index + 1} {line.strip()[:80]}")
-            for match in REASON_HELPER.finditer(text):
-                if text[max(0, match.start() - 9):match.start()].endswith("function "):
+            if "test" not in path.parts:
+                yield path.relative_to(ROOT).as_posix(), path.read_text(encoding="utf-8-sig")
+
+
+def scan_disabled(scripts):
+    """(unlisted sites, sites per list key, keys covering a different number of sites than declared)."""
+    missing, used = [], Counter()
+    for rel, text in scripts:
+        name = rel.rsplit("/", 1)[-1]
+        lines = text.splitlines()
+        for index, line in enumerate(lines):
+            if DISABLE_SITE.search(line):
+                window = "\n".join(lines[max(0, index - 1):index + 6])
+                if REASON_WRITE.search(window):
                     continue
-                args = _call_args(text, match.end())
-                if len(args) < 3 and args[1:2] != [" true"]:
-                    number = text.count("\n", 0, match.start()) + 1
-                    snippet = lines[number - 1].strip()
-                    key = next((k for k in DISABLED_WITHOUT_REASON
-                                if k[0] == path.name and k[1] in snippet), None)
-                    if key:
-                        used.add(key)
-                    else:
-                        missing.append(f"{path.name}:{number} {match.group(1)} without reason")
+                key = next((k for k in DISABLED_WITHOUT_REASON
+                            if k[0] == rel and k[1] in line), None)
+                if key:
+                    used[key] += 1
+                else:
+                    missing.append(f"{name}:{index + 1} {line.strip()[:80]}")
+        for match in REASON_HELPER.finditer(text):
+            if text[max(0, match.start() - 9):match.start()].endswith("function "):
+                continue
+            args = _call_args(text, match.end())
+            if len(args) < 3 and args[1:2] != [" true"]:
+                number = text.count("\n", 0, match.start()) + 1
+                snippet = lines[number - 1].strip()
+                key = next((k for k in DISABLED_WITHOUT_REASON
+                            if k[0] == rel and k[1] in snippet), None)
+                if key:
+                    used[key] += 1
+                else:
+                    missing.append(f"{name}:{number} {match.group(1)} without reason")
+    widened = {key: count for key, count in used.items() if count != DISABLED_SITE_COUNT.get(key, 1)}
+    return missing, used, widened
+
+
+def test_every_disabled_control_states_its_reason_or_is_listed():
+    """D-359 §5.3 — 끄는 곳은 reason을 쓰거나(직접·setOff·setEnabled), 닫힌 목록에 이유와 함께 있다."""
+    missing, used, widened = scan_disabled(disabled_scripts())
     # Fleet 역할 잠금: 공용 버튼은 reason, 네이티브 입력은 묶음의 보이는 안내에 잇는다.
     fleet = ROOT / "site" / "fleet" / "fleet" / "server" / "web"
     lock = (fleet / "authorization.js").read_text(encoding="utf-8")
@@ -697,9 +716,26 @@ def test_every_disabled_control_states_its_reason_or_is_listed():
     page = (fleet / "index.html").read_text(encoding="utf-8")
     assert page.count("data-role-lock") == page.count('class="role-lock-note"') >= 2
     assert page.count("운용자 권한이 필요합니다</ui-status>") == page.count('class="role-lock-note"')
-    stale = sorted(set(DISABLED_WITHOUT_REASON) - used)
+    stale = sorted(set(DISABLED_WITHOUT_REASON) - set(used))
     assert not missing, "사유 없는 비활성:\n" + "\n".join(missing)
     assert not stale, f"목록에 남은 옛 항목: {stale}"
+    assert set(DISABLED_SITE_COUNT) <= set(DISABLED_WITHOUT_REASON)
+    assert not widened, (
+        "한 조각이 선언과 다른 수의 자리를 덮는다 — 새 같은 줄에는 더 긴 조각으로 제 항목을 준다: "
+        f"{widened}")
+
+
+def test_a_copied_disabled_line_needs_its_own_entry():
+    """Mutation proof (P2-4 review): an identical unexplained line elsewhere no longer rides an old key."""
+    scripts = dict(disabled_scripts())
+    rel = "hmi/dashboard/panels/host/hardware.js"
+    assert "refresh.disabled = true;" in scripts[rel]
+    assert scan_disabled([(rel, scripts[rel])])[2] == {}
+    copied = scripts[rel] + "\nfunction later(refresh) {\n  refresh.disabled = true;\n}\n"
+    assert scan_disabled([(rel, copied)])[2] == {(rel, "refresh.disabled = true;"): 2}
+    # same file name in another folder does not borrow the key either
+    other = "hmi/dashboard/panels/setup/hardware.js"
+    assert scan_disabled([(other, "refresh.disabled = true;\n")])[0] == ["hardware.js:1 refresh.disabled = true;"]
 
 
 def test_disabled_reason_is_a_shared_button_attribute():
