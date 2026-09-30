@@ -8,10 +8,11 @@ Like the D-360 field proposal, the result is a *proposal* for operator review:
 it never feeds sightings, ``CameraMap``, task acceptance, or motion. A weak or
 ambiguous fit is a rejection with a reason, never a guessed pose.
 
-Pipeline: thin-white-line mask -> dominant line yaw -> coarse similarity
-search (4 rotations x mirror x scale, normalised cross-correlation of blurred
-masks) -> ECC homography refinement of the best candidates -> tolerance-band
-precision/recall score -> coverage and cut sides of the map outside the frame.
+Pipeline: thin-white-line mask -> per camera-tilt hypothesis, rectify the line
+image, find the dominant line yaw and run a coarse similarity search (4 rotations
+x scale, plus mirror when untilted; tolerance-band recall x precision against a
+fixed-resolution map template) -> ECC homography refinement of the best
+candidates -> metric recall/precision score -> coverage and cut sides.
 """
 
 from __future__ import annotations
@@ -30,16 +31,20 @@ REGISTER_VERSION = "paint-register/1"
 # Refinement and scoring work on an image this wide; the coarse search compares
 # the map at a fixed _COARSE_PX_PER_M against the line image resampled per scale.
 _FINE_WIDTH = 480
-_COARSE_PX_PER_M = 40.0
+_COARSE_PX_PER_M = 30.0
 # Map raster used as the ECC input image, metres per pixel.
 _RASTER_RES_M = 0.005
 # Coarse scale ladder: geometric step, and the range as fractions of the frame.
-_SCALE_STEP = 1.08
+_SCALE_STEP = 1.12
 _MIN_MAP_FRACTION = 0.5    # map long side >= this share of the frame long side
 _MIN_TEMPLATE_INSIDE = 0.3  # coarse poses need this share of the paint inside the frame
 _MAX_MAP_FRACTION = 1.4    # map short side <= this multiple of the frame short side
-# Orientations (best coarse pose each) that are refined and compared.
-_REFINE_ORIENTATIONS = 4
+# Coarse candidates (best pose per orientation and tilt hypothesis) refined and compared.
+_REFINE_CANDIDATES = 4
+# Tilt hypotheses (pitch about the image x axis, roll about the image y axis), degrees,
+# and the assumed focal length as a multiple of the image width (phone main camera).
+_TILTS_DEG = ((0, 0), (20, 0), (-20, 0), (0, 20), (0, -20), (35, 0), (-35, 0), (0, 35), (0, -35))
+_TILT_FOCAL = 0.9
 # ECC refinement pyramid: (map raster cell, blur) in metres on the floor.
 _ECC_LEVELS = ((0.03, 0.08), (0.02, 0.04), (0.015, 0.02))
 # Coarse-search tolerance band (coarse-image pixels).
@@ -49,8 +54,9 @@ _COARSE_BAND_PX = 1
 _SCORE_RES_M = 1.0 / _COARSE_PX_PER_M
 _TOLERANCE_CELLS = _COARSE_BAND_PX
 # Acceptance gates.
-# Real frames (2026-09-30, lab): a correct fit scored recall 0.91 / precision 0.96,
-# wrong orientations and unconverged fits at most 0.78 / 0.72.
+# Real frames (2026-09-30, lab, 6 views up to ~30 deg tilt): correct fits scored
+# recall 0.86-0.96 / precision 0.97-0.98; wrong or unconverged fits and crops of
+# neighbouring tracks at most 0.78 / 0.72 (or failed the orientation margin).
 MIN_RECALL = 0.8
 MIN_PRECISION = 0.8
 MIN_COVERAGE = 0.2
@@ -216,8 +222,7 @@ def _register(image: np.ndarray, paint: MapPaint) -> tuple[MapRegistration | Non
     if cv2.countNonZero(lines) < 0.002 * lines.size:
         return None, False, "no white paint"
 
-    yaw = _dominant_yaw(cv2.GaussianBlur(lines.astype(np.float32), (0, 0), 2.0))
-    candidates = _coarse_search(lines, paint, yaw)
+    candidates = _tilted_search(lines, paint)
     if not candidates:
         return None, False, "no coarse match"
 
@@ -301,11 +306,56 @@ def _similarity(paint: MapPaint, scale: float, theta: float, mirror: bool) -> tu
     return np.hstack([linear, offset[:, None]]), (int(size[0]), int(size[1]))
 
 
+def _tilt_homography(width: int, height: int, pitch_deg: float, roll_deg: float
+                     ) -> tuple[np.ndarray, tuple[int, int]]:
+    """Image homography that undoes a camera tilt, fitted into a canvas; returns (H, size).
+
+    A floor seen through a tilted camera is a keystone in the image. The coarse search
+    fits only similarities, so it runs once per tilt hypothesis on the image rectified
+    by that hypothesis; the refinement then fits the exact homography.
+    """
+    focal = _TILT_FOCAL * width
+    k = np.array([[focal, 0.0, width / 2], [0.0, focal, height / 2], [0.0, 0.0, 1.0]])
+    p, r = math.radians(pitch_deg), math.radians(roll_deg)
+    rx = np.array([[1, 0, 0], [0, math.cos(p), -math.sin(p)], [0, math.sin(p), math.cos(p)]])
+    ry = np.array([[math.cos(r), 0, math.sin(r)], [0, 1, 0], [-math.sin(r), 0, math.cos(r)]])
+    h = k @ rx @ ry @ np.linalg.inv(k)
+    corners = cv2.perspectiveTransform(
+        np.array([[[0, 0]], [[width, 0]], [[width, height]], [[0, height]]], np.float64), h).reshape(-1, 2)
+    low, high = corners.min(axis=0), corners.max(axis=0)
+    # Keep the canvas near the frame size: scale the rectified view down if it grows.
+    fit = min(1.0, 1.3 * width / (high[0] - low[0]), 1.3 * height / (high[1] - low[1]))
+    place = np.array([[fit, 0.0, -low[0] * fit], [0.0, fit, -low[1] * fit], [0.0, 0.0, 1.0]])
+    size = (int(math.ceil((high[0] - low[0]) * fit)), int(math.ceil((high[1] - low[1]) * fit)))
+    return place @ h, size
+
+
+def _tilted_search(lines: np.ndarray, paint: MapPaint) -> list:
+    """Coarse candidates over tilt hypotheses, as ``(score, key, map metres -> fine px)``."""
+    height, width = lines.shape
+    found = []
+    for pitch, roll in _TILTS_DEG:
+        if pitch == 0 and roll == 0:
+            rectify, view = np.eye(3), lines
+        else:
+            rectify, size = _tilt_homography(width, height, pitch, roll)
+            view = cv2.warpPerspective(lines, rectify, size, flags=cv2.INTER_LINEAR)
+        yaw = _dominant_yaw(cv2.GaussianBlur(view.astype(np.float32), (0, 0), 2.0))
+        # A mirrored image is checked once, untilted; it is a camera-app fault, not a pose.
+        mirrors = (False, True) if pitch == 0 and roll == 0 else (False,)
+        back = np.linalg.inv(rectify)
+        for value, key, map_to_view in _coarse_search(view, paint, yaw, mirrors):
+            found.append((value, key, back @ map_to_view))
+    found.sort(key=lambda item: item[0], reverse=True)
+    return found[:_REFINE_CANDIDATES]
+
+
 def _disk(radius: int) -> np.ndarray:
     return cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2 * radius + 1, 2 * radius + 1))
 
 
-def _coarse_search(lines: np.ndarray, paint: MapPaint, yaw: float) -> list:
+def _coarse_search(lines: np.ndarray, paint: MapPaint, yaw: float,
+                   mirrors: tuple[bool, ...] = (False, True)) -> list:
     """Best similarity pose per (quarter turn, mirror): ``(score, key, map metres -> lines px)``.
 
     The map template stays at ``_COARSE_PX_PER_M``; the line image is resampled per
@@ -326,7 +376,7 @@ def _coarse_search(lines: np.ndarray, paint: MapPaint, yaw: float) -> list:
     small_matrix = np.array([[fx, 0.0, 0.5 * fx - 0.5], [0.0, fy, 0.5 * fy - 0.5],
                              [0.0, 0.0, 1.0]]) @ base_matrix
     for quarter in range(4):
-        for mirror in (False, True):
+        for mirror in mirrors:
             matrix, (tw, th) = _similarity(paint, _COARSE_PX_PER_M, yaw + quarter * math.pi / 2, mirror)
             resample = (np.vstack([matrix, [0.0, 0.0, 1.0]]) @ np.linalg.inv(small_matrix))[:2]
             warped = cv2.warpAffine(small, resample, (tw, th), flags=cv2.INTER_LINEAR)
@@ -355,10 +405,11 @@ def _coarse_search(lines: np.ndarray, paint: MapPaint, yaw: float) -> list:
                 continue
             # Tolerance-band recall (paint near lines) and precision (lines near paint,
             # counted only inside the map outline so walls off the map do not count).
-            inside = cv2.matchTemplate(pad(np.ones_like(image)), paint_t, cv2.TM_CCORR)
+            padded = pad(image)
             matched = cv2.matchTemplate(pad(band), paint_t, cv2.TM_CCORR)
-            on_map = cv2.matchTemplate(pad(image), hull_t, cv2.TM_CCORR)
-            explained = cv2.matchTemplate(pad(image), band_t, cv2.TM_CCORR)
+            on_map = cv2.matchTemplate(padded, hull_t, cv2.TM_CCORR)
+            explained = cv2.matchTemplate(padded, band_t, cv2.TM_CCORR)
+            inside = cv2.matchTemplate(pad(np.ones_like(image)), paint_t, cv2.TM_CCORR)
             total = float(paint_t.sum())
             recall = matched / np.maximum(inside, 1.0)
             # A window with few lines on the map is no evidence: floor the denominator.
@@ -375,7 +426,7 @@ def _coarse_search(lines: np.ndarray, paint: MapPaint, yaw: float) -> list:
             best[key] = (value, key, to_lines @ shift @ np.vstack([matrix, [0.0, 0.0, 1.0]]))
         scale *= _SCALE_STEP
     ranked = sorted(best.values(), key=lambda item: item[0], reverse=True)
-    return ranked[:_REFINE_ORIENTATIONS]
+    return ranked
 
 
 def _refine(lines: np.ndarray, paint: MapPaint, map_to_fine: np.ndarray) -> np.ndarray:

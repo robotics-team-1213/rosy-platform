@@ -173,3 +173,9 @@
 - 증거: `python -m pytest src/site/vision/test -q` 112 passed (2026-09-30 Windows).
 - gate 변화: 없음. SOURCE/LOCAL GO 유지. vision 이미지 재빌드·mDNS 인스턴스 확인은 DEVICE 절차.
 - 결정: D-377. 와이어 이름(`rosy-overhead/1`, `/overhead/v1/frames`, `_rosy-overhead._tcp`, `/api/vision/*`, compose 서비스 `vision`, 이미지 `rosy-site-vision`)은 그대로.
+
+## 2026-09-30 · uncommitted · feat(vision): D-375 tilt hypotheses for the paint fit
+
+- 변경: `map_register.py` 거친 탐색을 카메라 기울기 가설 9개(pitch·roll 0, ±20°, ±35°)마다 편 선 영상에서 돌린다. 템플릿 30 px/m, 배율 12% 간격, 거울은 기울기 0에서만. 합성 시험에 pitch·roll 최대 30° 추가.
+- 증거: `python -m pytest src/site/vision/test -q` 126 passed (2026-09-30 Windows). LOCAL 실제 프레임 6장(현재 설치 약 2.0 m·23° 2장, 약 30° 1장 포함, 공개 저장소 밖) 모두 수락, 손 기준 대비 중앙 오차 3.6–6.6 px, 한 번 1.2–2 s. 옆 트랙만·로터리만 자른 영상과 좌우 반전 영상은 거부.
+- gate 변화: 없음. DEVICE/FIELD PARKED 유지.

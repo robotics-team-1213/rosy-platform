@@ -28,13 +28,20 @@ def _similarity(scale: float, rotation_deg: float, centre_px, mirror: bool = Fal
     return np.array([[*linear[0], centre_px[0]], [*linear[1], centre_px[1]], [0.0, 0.0, 1.0]])
 
 
-def _tilt(width: int, height: int, degrees: float) -> np.ndarray:
-    """Image-plane homography of a camera pitched about the image x axis."""
+def _tilt(width: int, height: int, degrees: float, roll: float = 0.0) -> np.ndarray:
+    """Image-plane homography of a camera pitched about the image x axis (and rolled
+    about the y axis). Apply it to a straight-down view centred in the frame; the
+    result is re-centred so the track stays in view, as an installer would aim it."""
     focal = 1.2 * width
     k = np.array([[focal, 0, width / 2], [0, focal, height / 2], [0, 0, 1.0]])
-    a = math.radians(degrees)
-    rot = np.array([[1, 0, 0], [0, math.cos(a), -math.sin(a)], [0, math.sin(a), math.cos(a)]])
-    return k @ rot @ np.linalg.inv(k)
+    a, b = math.radians(degrees), math.radians(roll)
+    rx = np.array([[1, 0, 0], [0, math.cos(a), -math.sin(a)], [0, math.sin(a), math.cos(a)]])
+    ry = np.array([[math.cos(b), 0, math.sin(b)], [0, 1, 0], [-math.sin(b), 0, math.cos(b)]])
+    h = k @ rx @ ry @ np.linalg.inv(k)
+    centre = h @ np.array([width / 2, height / 2, 1.0])
+    shift = np.array([[1, 0, width / 2 - centre[0] / centre[2]],
+                      [0, 1, height / 2 - centre[1] / centre[2]], [0, 0, 1.0]])
+    return shift @ h
 
 
 def _render(paint, map_to_image: np.ndarray, size=(1280, 720), seed=0, barrel=0.0) -> np.ndarray:
@@ -88,12 +95,20 @@ def test_rotated_180_with_west_cut_off(paint):
     assert reg.orientation_margin > 0.1
 
 
-def test_tilt_yaw_and_mild_barrel_distortion(paint):
+@pytest.mark.parametrize("pitch, roll, yaw, scale, barrel", [
+    (12.0, 0.0, 20.0, 380.0, 0.03),    # mild tilt, yaw, barrel distortion
+    (30.0, 0.0, 0.0, 380.0, 0.0),      # installation-like pitch
+    (-30.0, 0.0, 200.0, 330.0, 0.0),   # pitch the other way, track turned past 180 deg
+    (30.0, 0.0, 30.0, 330.0, 0.02),    # pitch + yaw + distortion
+    (0.0, 25.0, 10.0, 330.0, 0.0),     # roll instead of pitch
+])
+def test_tilted_camera_up_to_30_degrees(paint, pitch, roll, yaw, scale, barrel):
     size = (1280, 720)
-    truth = _tilt(*size, 12.0) @ _similarity(380.0, 20.0, (640.0, 360.0))
-    frame = _render(paint, truth, size, seed=1, barrel=0.03)
+    truth = _tilt(*size, pitch, roll) @ _similarity(scale, yaw, (640.0, 360.0))
+    frame = _render(paint, truth, size, seed=1, barrel=barrel)
     result = register_map(frame, paint)
     assert result.accepted, result.reason
+    assert not result.registration.mirrored
     assert _pose_error_m(paint, result.registration, truth) < 0.03
 
 

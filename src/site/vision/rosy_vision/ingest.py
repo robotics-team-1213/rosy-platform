@@ -68,7 +68,7 @@ _FIELD_PROPOSAL_INTERVAL_S = 1.0
 # Field detection is ~30 ms of CPU per frame: at most one run per source per this
 # interval, whoever asks; readers in between get the last result.
 _FIELD_DETECT_INTERVAL_S = 1.0
-# Map registration (D-375) is ~1 s of CPU per frame: same once-per-source-per-interval rule.
+# Map registration (D-375) is ~1.5 s of CPU per frame: same once-per-source-per-interval rule.
 _MAP_REGISTER_INTERVAL_S = 1.0
 
 
