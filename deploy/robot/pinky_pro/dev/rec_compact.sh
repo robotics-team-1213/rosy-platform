@@ -6,13 +6,16 @@
 #   rec_compact.sh stop             SIGTERM recorder and relay, ended_at written
 #   rec_compact.sh status
 # Env: REC_ROOT (default ~/recordings), REC_STATE, JPEG_QUALITY (85), JPEG_MAX_FPS (0 = all).
-# Test seams: RUNTIME_ENV, ROS_SETUP, REC_START_WAIT.
+# Test seams: RUNTIME_ENV, ROS_SETUP, REC_START_WAIT (seconds the new processes must survive), PROC_ROOT.
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="${REC_ROOT:-$HOME/recordings}"
 STATE="${REC_STATE:-$HOME/.rosy_rec_compact_current}"
 RUNTIME_ENV="${RUNTIME_ENV:-/etc/rosy/runtime.env}"
 ROS_SETUP="${ROS_SETUP:-/opt/ros/jazzy/setup.bash}"
+PROC_ROOT="${PROC_ROOT:-/proc}"
+RELAY_MARK="jpeg_relay.py"
+BAG_MARK="bag record"
 TOPICS=(camera/front/compressed cmd_vel line/observation perception/learned/shadow odom scan imu_raw joint_states)
 mkdir -p "$ROOT"
 env_ros() {
@@ -32,6 +35,10 @@ exec(sys.argv[2])
 t = p + ".tmp"; f = open(t, "w"); json.dump(d, f, indent=2); f.flush(); os.fsync(f.fileno()); f.close(); os.replace(t, p)
 PY
 }
+ours() {  # ours <pid> <mark>: alive AND its cmdline contains mark (a PID reused after a reboot is not ours)
+  [ -n "$1" ] && kill -0 "$1" 2>/dev/null && [ -r "$PROC_ROOT/$1/cmdline" ] \
+    && tr '\0' ' ' < "$PROC_ROOT/$1/cmdline" | grep -qF -- "$2"
+}
 stop_pid() {  # stop_pid <pid> <seconds>: SIGTERM, wait, SIGKILL; returns 1 if it is still alive
   kill -0 "$1" 2>/dev/null || return 0
   kill -TERM "$1" 2>/dev/null
@@ -43,9 +50,11 @@ case "${1:-status}" in
   start)
     if [ -f "$STATE" ]; then
       read -r old_bpid old_rpid old_folder < "$STATE"
-      if kill -0 "$old_bpid" 2>/dev/null; then echo "already recording: $old_folder"; exit 1; fi
+      if ours "$old_bpid" "$BAG_MARK"; then echo "already recording: $old_folder"; exit 1; fi
       # Stale state: the recorder is gone, so a leftover relay must not run twice.
-      stop_pid "$old_rpid" 5 || { echo "stale relay $old_rpid did not exit"; exit 1; }
+      if ours "$old_rpid" "$RELAY_MARK"; then
+        stop_pid "$old_rpid" 5 || { echo "stale relay $old_rpid did not exit"; exit 1; }
+      fi
       rm -f "$STATE"
     fi
     env_ros
@@ -64,8 +73,12 @@ case "${1:-status}" in
       -o "$folder/bag" "${args[@]}" > "$folder/record.log" 2>&1 < /dev/null &
     bpid=$!
     echo "$bpid $rpid $folder" > "$STATE"
-    sleep "${REC_START_WAIT:-3}"
-    if kill -0 "$bpid" 2>/dev/null && kill -0 "$rpid" 2>/dev/null; then echo "recording: $folder"; exit 0; fi
+    # Both must stay alive for the whole window; poll so an early exit is caught as soon as it happens.
+    deadline=$((SECONDS + ${REC_START_WAIT:-3}))
+    while kill -0 "$bpid" 2>/dev/null && kill -0 "$rpid" 2>/dev/null; do
+      [ "$SECONDS" -ge "$deadline" ] && { echo "recording: $folder"; exit 0; }
+      sleep 0.2
+    done
     kill -0 "$bpid" 2>/dev/null || why="recorder exited"
     kill -0 "$rpid" 2>/dev/null || why="${why:+$why; }relay exited"
     echo "FAILED ($why):"; tail -5 "$folder/record.log" "$folder/relay.log"
@@ -79,18 +92,18 @@ case "${1:-status}" in
     read -r bpid rpid folder < "$STATE"
     # Background jobs of a non-interactive shell ignore SIGINT; rosbag2 and rclpy close cleanly on SIGTERM.
     # No SIGKILL for the recorder: a killed bag loses its footer, so wait and report instead.
-    if kill -0 "$bpid" 2>/dev/null; then
+    if ours "$bpid" "$BAG_MARK"; then
       kill -TERM "$bpid"
       for _ in $(seq 1 30); do kill -0 "$bpid" 2>/dev/null || break; sleep 1; done
       kill -0 "$bpid" 2>/dev/null && { echo "recorder $bpid did not exit; not marking ended"; exit 1; }
     fi
-    stop_pid "$rpid" 10 || echo "relay $rpid did not exit"
+    if ours "$rpid" "$RELAY_MARK"; then stop_pid "$rpid" 10 || echo "relay $rpid did not exit"; fi
     meta "$folder" "d['ended_at'] = now"
     rm -f "$STATE"
     echo "stopped: $folder ($(du -sh "$folder" | cut -f1))"; ls "$folder/bag" 2>/dev/null | head
     ;;
   status)
-    if [ -f "$STATE" ]; then read -r bpid rpid folder < "$STATE"; kill -0 "$bpid" 2>/dev/null && echo "recording $folder $(du -sh "$folder" | cut -f1)" || echo "stale state $folder"; else echo "idle"; fi
+    if [ -f "$STATE" ]; then read -r bpid rpid folder < "$STATE"; ours "$bpid" "$BAG_MARK" && echo "recording $folder $(du -sh "$folder" | cut -f1)" || echo "stale state $folder"; else echo "idle"; fi
     ls -1 "$ROOT" | tail -5; df -h "$ROOT" | tail -1
     ;;
 esac

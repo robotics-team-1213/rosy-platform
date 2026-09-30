@@ -145,13 +145,39 @@ def _env(tmp_path: Path, ros2_body: str, runtime_env: str) -> dict:
         RUNTIME_ENV=_posix(tmp_path / "runtime.env"),
         ROS_SETUP=_posix(tmp_path / "setup.bash"),
         REC_START_WAIT="1",
+        PROC_ROOT=_posix(tmp_path / "proc"),
     )
     return env
 
 
+def _fake_proc(tmp_path: Path, pid: str, *argv: str) -> None:
+    """The shims run as `sleep`, so each test states what /proc would show on the robot."""
+    d = tmp_path / "proc" / pid
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "cmdline").write_bytes(b"\0".join(a.encode() for a in argv) + b"\0")
+
+
+def _state(tmp_path: Path) -> tuple[str, str]:
+    bpid, rpid, _ = (tmp_path / "state").read_text().split(" ", 2)
+    return bpid, rpid
+
+
+def _stop(env: dict, tmp_path: Path) -> subprocess.CompletedProcess:
+    if (tmp_path / "state").exists():
+        bpid, rpid = _state(tmp_path)
+        _fake_proc(tmp_path, bpid, "/usr/bin/python3", "/opt/ros/jazzy/bin/ros2", "bag", "record")
+        _fake_proc(tmp_path, rpid, "python3", "/tmp/x/jpeg_relay.py", "--ns", "/pinky_t")
+    return _rec(env, "stop")
+
+
+def _kill(env: dict, *pids: str) -> None:
+    subprocess.run([BASH, "-c", "kill -KILL " + " ".join(pids)], env=env, capture_output=True)
+
+
 def _rec(env: dict, *args: str) -> subprocess.CompletedProcess:
     return subprocess.run([BASH, _posix(DEV / "rec_compact.sh"), *args],
-                          capture_output=True, text=True, env=env, timeout=60)
+                          # stop may legitimately wait 30 s (recorder) + 11 s (relay); Git bash under load is slow
+                          capture_output=True, text=True, env=env, timeout=180)
 
 
 def _sessions(tmp_path: Path) -> list[dict]:
@@ -174,9 +200,9 @@ def test_reason_with_quotes_is_data_not_code(tmp_path: Path) -> None:
         assert s["schema"] == "rosy.recording.session/1"
         assert "camera/front/compressed" in s["topics"] and "camera/front" not in s["topics"]
         assert s["ended_at"] is None
-        bpid, rpid, _ = (tmp_path / "state").read_text().split(" ", 2)
+        bpid, rpid = _state(tmp_path)
     finally:
-        stopped = _rec(env, "stop")
+        stopped = _stop(env, tmp_path)
     assert stopped.returncode == 0, stopped.stdout + stopped.stderr
     assert _sessions(tmp_path)[0]["ended_at"]
     assert not _alive(env, bpid) and not _alive(env, rpid)
@@ -196,6 +222,7 @@ def test_empty_namespace_refuses_to_start(tmp_path: Path) -> None:
 @needs_bash
 def test_failed_start_marks_the_session_ended(tmp_path: Path) -> None:
     env = _env(tmp_path, "echo boom >&2; exit 1", "ROSY_NAMESPACE=pinky_t\n")
+    env["REC_START_WAIT"] = "20"  # polled: returns as soon as the shim exits, even on a slow host
     out = _rec(env, "start", "x")
     assert out.returncode == 1
     (s,) = _sessions(tmp_path)
@@ -210,10 +237,38 @@ def test_stale_state_kills_the_old_relay(tmp_path: Path) -> None:
                          capture_output=True, text=True, env=env)
     old_relay = old.stdout.strip()
     assert _alive(env, old_relay)
+    _fake_proc(tmp_path, old_relay, "python3", "/tmp/x/jpeg_relay.py")
     _write(tmp_path / "state", f"999999 {old_relay} /nowhere\n")
     started = _rec(env, "start", "x")
     try:
         assert started.returncode == 0, started.stdout + started.stderr
         assert not _alive(env, old_relay)
     finally:
-        _rec(env, "stop")
+        _stop(env, tmp_path)
+        _kill(env, old_relay)
+
+
+@needs_bash
+def test_reused_pids_from_state_are_never_signalled(tmp_path: Path) -> None:
+    env = _env(tmp_path, "exec sleep 300", "ROSY_NAMESPACE=pinky_t\n")
+    old = subprocess.run([BASH, "-c", "sleep 300 >/dev/null 2>&1 & echo $!; sleep 300 >/dev/null 2>&1 & echo $!"],
+                         capture_output=True, text=True, env=env)
+    foreign_b, foreign_r = old.stdout.split()
+    _fake_proc(tmp_path, foreign_b, "/usr/lib/firefox")  # alive, but not a recorder
+    _fake_proc(tmp_path, foreign_r, "sshd:", "rosy")  # alive, but not our relay
+    try:
+        _write(tmp_path / "state", f"{foreign_b} {foreign_r} /nowhere\n")
+        started = _rec(env, "start", "x")  # stale state, not "already recording"
+        assert started.returncode == 0, started.stdout + started.stderr
+        assert _alive(env, foreign_b) and _alive(env, foreign_r)
+        stopped = _stop(env, tmp_path)
+        assert stopped.returncode == 0, stopped.stdout + stopped.stderr
+
+        gone = tmp_path / "rec" / "gone"
+        gone.mkdir()
+        _write(tmp_path / "state", f"{foreign_b} {foreign_r} {_posix(gone)}\n")
+        stopped = _rec(env, "stop")  # the recorded pids now belong to someone else
+        assert stopped.returncode == 0, stopped.stdout + stopped.stderr
+        assert _alive(env, foreign_b) and _alive(env, foreign_r)
+    finally:
+        _kill(env, foreign_b, foreign_r)
