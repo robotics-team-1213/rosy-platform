@@ -139,7 +139,7 @@ def can_record(root, quota_bytes) -> bool:
 
 
 def bag_command(folder, namespace: str = "") -> list[str]:
-    """namespace (e.g. "pinky1") prefixes every RECORD_TOPICS entry."""
+    """namespace (e.g. "rosy_01") prefixes every RECORD_TOPICS entry."""
     ns = namespace.strip("/")
     topics = [f"/{ns}/{t}" for t in RECORD_TOPICS] if ns else list(RECORD_TOPICS)
     return ["ros2", "bag", "record", "--storage", "mcap",

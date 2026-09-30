@@ -59,6 +59,17 @@ LEGACY_FINAL_PUBLISHER = (
     "self.declare_parameter('cmd_out', 'cmd_vel')",
 )
 
+#: D-356 dataset harvesting: the session recorder ATTACHES the CORE final
+#: command to each recorded frame as passive side data (a subscription for
+#: training-input capture, never a publish). Pinned read-only exception -
+#: repoint or edit the line and this guard goes red until the pin moves.
+RECORDING_SIDE_TOPIC = (
+    "runtime/sensing/control/recording.py",
+    'SIDE_TOPICS = ("cmd_vel", "line/observation", SHADOW_TOPIC)',
+)
+
+FINAL_TOPIC_EXCEPTIONS = (LEGACY_FINAL_PUBLISHER, RECORDING_SIDE_TOPIC)
+
 
 def _prod_py_files(tree: Path):
     return [
@@ -117,7 +128,8 @@ def test_control_has_no_final_cmd_vel():
         text = path.read_text(encoding="utf-8")
         for i, line in enumerate(text.splitlines(), 1):
             if any(p.search(line) for p in forbidden_patterns):
-                if rel == LEGACY_FINAL_PUBLISHER[0] and line.strip() == LEGACY_FINAL_PUBLISHER[1]:
+                if any(rel == exc[0] and line.strip() == exc[1]
+                       for exc in FINAL_TOPIC_EXCEPTIONS):
                     continue
                 violations.append(f"{rel}:{i}: {line.strip()[:100]}")
     assert violations == [], violations
