@@ -75,5 +75,13 @@ class ActionPhaseRecorder:
             self.action_id, self.attempt_id, reason=reason,
         )
 
+    def parent(self) -> dict[str, Any] | None:
+        return self._store.get_action(self.action_id)
+
+    def mark_action_running(self, *, driver_goal_id: str) -> dict[str, Any]:
+        return self._store.mark_running(
+            self.action_id, self.attempt_id, driver_goal_id=driver_goal_id,
+        )
+
     def phases(self) -> list[dict[str, Any]]:
         return self._store.action_phases(self.action_id, attempt_id=self.attempt_id)
