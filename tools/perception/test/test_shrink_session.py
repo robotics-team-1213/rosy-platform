@@ -1,7 +1,10 @@
 import json
 
 import numpy as np
+import yaml
 import pytest
+
+pytest.importorskip("mcap_ros2")
 from mcap.reader import make_reader
 from mcap_ros2.decoder import DecoderFactory
 from mcap_ros2.writer import Writer
@@ -43,10 +46,11 @@ def _image(i, encoding, step_pad=0):
             "step": rows.shape[1], "data": rows.tobytes()}
 
 
-def make_session(root, encoding="bgr8", n=6, step_pad=0, name="s1", files=2):
+def make_session(root, encoding="bgr8", n=6, step_pad=0, name="s1", files=2,
+                 ended_at="2026-01-01T00:00:00+00:00"):
     sess = root / name
     (sess / "bag").mkdir(parents=True)
-    (sess / "session.json").write_text(json.dumps({"device": "d", "topics": ["camera/front"]}))
+    (sess / "session.json").write_text(json.dumps({"device": "d", "topics": ["camera/front"], "ended_at": ended_at}))
     for f in range(files):
         with open(sess / "bag" / f"bag_{f}.mcap", "wb") as fh:
             w = Writer(fh)
@@ -102,8 +106,8 @@ def test_session_json_and_source_untouched(tmp_path):
     assert {p.name: p.read_bytes() for p in src.rglob("*") if p.is_file()} == before
     meta = json.loads((out / "session.json").read_text())
     assert meta["jpeg_quality"] == 75 and meta["device"] == "d"
-    assert meta["compacted_from"] == ss.source_digest(src)
-    assert len(meta["compacted_from"]) == 64
+    assert meta["source_fingerprint"] == ss.source_fingerprint(src)
+    assert len(meta["source_fingerprint"]) == 64
 
 
 def test_refuses_existing_output(tmp_path):
@@ -144,3 +148,46 @@ def test_extract_reads_compact(tmp_path):
     rows = [json.loads(l) for l in (dst / "frames.jsonl").read_text().splitlines()]
     assert rows and all(r["stamp_ns"] // 10**9 >= 100 for r in rows)
     assert any((dst / "frames").glob("*.jpg"))
+
+
+def _write_bag_metadata(sess, n=6, files=2):
+    meta = {"rosbag2_bagfile_information": {
+        "version": 9, "storage_identifier": "mcap", "message_count": 2 * n * files,
+        "topics_with_message_count": [
+            {"topic_metadata": {"name": "/r/camera/front", "type": IMAGE_T,
+                                "serialization_format": "cdr", "offered_qos_profiles": [],
+                                "type_description_hash": "RIHS01_x"},
+             "message_count": n * files},
+            {"topic_metadata": {"name": "/r/line/observation", "type": "std_msgs/msg/String",
+                                "serialization_format": "cdr", "offered_qos_profiles": [],
+                                "type_description_hash": "RIHS01_y"},
+             "message_count": n * files}],
+        "relative_file_paths": [f"bag_{f}.mcap" for f in range(files)],
+        "files": [{"path": f"bag_{f}.mcap", "message_count": 2 * n} for f in range(files)]}}
+    (sess / "bag" / "metadata.yaml").write_text(yaml.safe_dump(meta))
+
+
+IMAGE_T = "sensor_msgs/msg/Image"
+
+
+def test_refuses_unfinished_session_unless_forced(tmp_path):
+    src = make_session(tmp_path, ended_at=None)
+    with pytest.raises(SystemExit):
+        ss.shrink_session(src)
+    assert not (tmp_path / "s1.compact").exists()
+    assert ss.shrink_session(src, force=True).is_dir()
+
+
+def test_writes_rosbag2_metadata(tmp_path):
+    src = make_session(tmp_path)
+    _write_bag_metadata(src)
+    out = ss.shrink_session(src)
+    info = yaml.safe_load((out / "bag" / "metadata.yaml").read_text())["rosbag2_bagfile_information"]
+    topics = {t["topic_metadata"]["name"]: t for t in info["topics_with_message_count"]}
+    assert set(topics) == {"/r/camera/front/compressed", "/r/line/observation"}
+    cam = topics["/r/camera/front/compressed"]
+    assert cam["topic_metadata"]["type"] == "sensor_msgs/msg/CompressedImage"
+    assert "type_description_hash" not in cam["topic_metadata"] and cam["message_count"] == 12
+    assert topics["/r/line/observation"]["topic_metadata"]["type_description_hash"] == "RIHS01_y"
+    assert info["message_count"] == 24 and info["storage_identifier"] == "mcap"
+    assert info["relative_file_paths"] == ["bag_0.mcap", "bag_1.mcap"]

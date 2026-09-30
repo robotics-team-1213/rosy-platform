@@ -5,9 +5,13 @@ Writes <session>.compact/ next to the source (never modifies it): every bag/*.mc
 rewritten with sensor_msgs/msg/Image (bgr8/rgb8/mono8) turned into
 sensor_msgs/msg/CompressedImage JPEG on <topic>/compressed (same header, same log/publish
 time, same sequence); every other message is copied byte for byte with its schema and
-channel. Chunks are zstd. session.json is copied plus "compacted_from" and "jpeg_quality".
+channel. Chunks are zstd. session.json is copied plus "source_fingerprint" (path+size
+sha256, not a content hash) and "jpeg_quality"; bag/metadata.yaml is regenerated with the
+camera topic renamed. Not copied: record.log and any other file outside session.json and
+bag/*.mcap. Refuses a session whose ended_at is null unless --force.
 """
 import argparse
+import copy
 import hashlib
 import json
 import os
@@ -51,8 +55,10 @@ def _need_mcap():
     return make_reader, Writer, CompressionType, serialize_dynamic, DecoderFactory
 
 
-def source_digest(session: Path) -> str:
-    """sha256 over the sorted 'relative path<TAB>size' lines of every file in the session."""
+def source_fingerprint(session: Path) -> str:
+    """sha256 over sorted 'relative path<TAB>size' lines of every file in the session.
+
+    A path+size fingerprint, not a content hash: it identifies the source file list cheaply."""
     lines = sorted(f"{p.relative_to(session).as_posix()}\t{p.stat().st_size}"
                    for p in Path(session).rglob("*") if p.is_file())
     return hashlib.sha256("\n".join(lines).encode()).hexdigest()
@@ -79,7 +85,7 @@ def compact_mcap(src: Path, dst: Path, quality: int = 90) -> dict:
     make_reader, Writer, CompressionType, serialize_dynamic, DecoderFactory = _need_mcap()
     encode = serialize_dynamic(COMPRESSED, COMPRESSED_DEF)[COMPRESSED]
     decoders = {}
-    stats = {"messages": 0, "converted": 0, "passthrough_images": 0}
+    stats = {"messages": 0, "converted": 0, "passthrough_images": 0, "topics": {}}
     with open(src, "rb") as fin, open(dst, "wb") as fout:
         reader = make_reader(fin)
         writer = Writer(fout, compression=CompressionType.ZSTD)
@@ -116,7 +122,7 @@ def compact_mcap(src: Path, dst: Path, quality: int = 90) -> dict:
                                                         "nanosec": img.header.stamp.nanosec},
                                               "frame_id": img.header.frame_id},
                                    "format": "jpeg", "data": jpg.tobytes()})
-                    out = (chan_ids[key], data)
+                    out = (chan_ids[key], data, ch.topic + "/compressed", ch.topic)
                     stats["converted"] += 1
                 else:
                     stats["passthrough_images"] += 1
@@ -131,7 +137,9 @@ def compact_mcap(src: Path, dst: Path, quality: int = 90) -> dict:
                 if key not in chan_ids:
                     chan_ids[key] = writer.register_channel(
                         ch.topic, ch.message_encoding, sid, ch.metadata)
-                out = (chan_ids[key], m.data)
+                out = (chan_ids[key], m.data, ch.topic, ch.topic)
+            t = stats["topics"].setdefault(out[2], [out[3], 0])
+            t[1] += 1
             writer.add_message(out[0], m.log_time, out[1], m.publish_time, m.sequence)
         for att in reader.iter_attachments():
             writer.add_attachment(att.create_time, att.log_time, att.name, att.media_type,
@@ -142,8 +150,12 @@ def compact_mcap(src: Path, dst: Path, quality: int = 90) -> dict:
     return stats
 
 
-def shrink_session(src, quality: int = 90) -> Path:
+def shrink_session(src, quality: int = 90, force: bool = False) -> Path:
     src = Path(src)
+    sj = src / "session.json"
+    if not force and sj.is_file() and \
+            json.loads(sj.read_text(encoding="utf-8")).get("ended_at", "") is None:
+        raise SystemExit(f"{src.name} has ended_at null (still recording?); use --force")
     files = _mcap_files(src)
     if not files:
         raise SystemExit(f"no .mcap files under {src / 'bag'}")
@@ -154,16 +166,20 @@ def shrink_session(src, quality: int = 90) -> Path:
     if tmp.exists():
         shutil.rmtree(tmp)
     (tmp / "bag").mkdir(parents=True)
+    totals = {}
     try:
         for f in files:
             t0 = time.time()
             st = compact_mcap(f, tmp / "bag" / f.name, quality)
+            for k, (origin, n) in st["topics"].items():
+                totals.setdefault(k, [origin, 0])[1] += n
             print(f"  {f.name}: {st['messages']} msgs, {st['converted']} frames -> JPEG "
                   f"({time.time() - t0:.1f}s)", flush=True)
+        _write_bag_metadata(src, tmp, totals)
         meta = {}
         if (src / "session.json").is_file():
             meta = json.loads((src / "session.json").read_text(encoding="utf-8"))
-        meta["compacted_from"] = source_digest(src)
+        meta["source_fingerprint"] = source_fingerprint(src)
         meta["jpeg_quality"] = quality
         (tmp / "session.json").write_text(json.dumps(meta, indent=2), encoding="utf-8")
         tmp.rename(out)
@@ -171,6 +187,35 @@ def shrink_session(src, quality: int = 90) -> Path:
         shutil.rmtree(tmp, ignore_errors=True)
         raise
     return out
+
+
+def _write_bag_metadata(src: Path, tmp: Path, totals: dict) -> None:
+    """bag/metadata.yaml for the new bag: the source's, with the camera topic renamed.
+
+    Message counts, file list and times are unchanged (same messages, same log times).
+    The CompressedImage type_description_hash is omitted (we do not compute it).
+    """
+    mp = src / "bag" / "metadata.yaml"
+    if not mp.is_file():
+        print("  warning: source has no bag/metadata.yaml; run `ros2 bag reindex` on the output",
+              file=sys.stderr)
+        return
+    import yaml
+    doc = yaml.safe_load(mp.read_text(encoding="utf-8"))
+    info = doc["rosbag2_bagfile_information"]
+    by_name = {t["topic_metadata"]["name"]: t for t in info["topics_with_message_count"]}
+    topics = []
+    for name, (origin, n) in totals.items():
+        entry = copy.deepcopy(by_name[origin])
+        if name != origin:
+            entry["topic_metadata"]["name"] = name
+            entry["topic_metadata"]["type"] = COMPRESSED
+            entry["topic_metadata"].pop("type_description_hash", None)
+        entry["message_count"] = n
+        topics.append(entry)
+    info["topics_with_message_count"] = topics
+    (tmp / "bag" / "metadata.yaml").write_text(yaml.safe_dump(doc, sort_keys=False),
+                                               encoding="utf-8")
 
 
 def _psnr(a, b) -> float:
@@ -233,12 +278,14 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("session")
     ap.add_argument("--quality", type=int, default=90)
+    ap.add_argument("--force", action="store_true",
+                    help="convert even if session.json has ended_at null")
     ap.add_argument("--no-verify", action="store_true")
     ap.add_argument("--sample", type=int, default=50)
     args = ap.parse_args(argv)
     src = Path(args.session)
     t0 = time.time()
-    out = shrink_session(src, args.quality)
+    out = shrink_session(src, args.quality, args.force)
     print(f"{src.name}: {_size(src) / 1e6:.1f} MB -> {_size(out) / 1e6:.1f} MB "
           f"in {time.time() - t0:.0f}s -> {out}", flush=True)
     if args.no_verify:
