@@ -325,61 +325,6 @@ def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
             raise HTTPException(status_code=404, detail="UI asset not found")
         return FileResponse(web_root / asset_name, media_type=media_type, headers={"Cache-Control": "no-cache"})
 
-    # /pilot 은 아래 /{surface} 캐치올보다 먼저 등록돼야 한다(FastAPI 는 등록 순서로 맞춘다).
-    pilot_root = _pilot_root()
-    pilot_assets = {
-        # 이 allowlist도 {asset_name:path}의 경로 순회 방어다. 모듈이 늘 때마다 여기에 등록.
-        "styles.css": "text/css",
-        "stick.js": "application/javascript",
-        "link.js": "application/javascript",
-        "app.js": "application/javascript",
-        "client.js": "application/javascript",
-        "drivers/registry.js": "application/javascript",
-        "drivers/pinky_core.js": "application/javascript",
-        "recent.js": "application/javascript",
-        "autonomy.js": "application/javascript",
-        "screens/connect.js": "application/javascript",
-        "screens/drive.js": "application/javascript",
-        "screens/inputs.js": "application/javascript",
-        "input-state.js": "application/javascript",
-        "vision.js": "application/javascript",
-        "manifest.webmanifest": "application/manifest+json",
-        "sw.js": "application/javascript",
-        "icons/icon-192.png": "image/png",
-        "icons/icon-192-maskable.png": "image/png",
-        "icons/icon-512.png": "image/png",
-    }
-
-    @app.get("/pilot", include_in_schema=False)
-    def pilot():
-        return FileResponse(
-            pilot_root / "index.html",
-            media_type="text/html",
-            headers={
-                "Cache-Control": "no-cache",
-                "Content-Security-Policy": (
-                    "default-src 'self'; connect-src 'self' ws: wss:; "
-                    "img-src 'self' data: blob:; style-src 'self'; script-src 'self'; "
-                    "frame-ancestors 'none'; base-uri 'self'"
-                ),
-            },
-        )
-
-    @app.get("/pilot/assets/{asset_name:path}", include_in_schema=False)
-    def pilot_asset(asset_name: str):
-        media_type = pilot_assets.get(asset_name)
-        if media_type is None:
-            raise HTTPException(status_code=404, detail="pilot asset not found")
-        headers = {"Cache-Control": "no-cache"}
-        if asset_name == "sw.js":
-            # scope /pilot 은 스크립트 디렉터리(/pilot/assets)보다 넓다 — 허용 헤더 필수(D-365).
-            headers["Service-Worker-Allowed"] = "/pilot"
-        return FileResponse(
-            pilot_root / asset_name,
-            media_type=media_type,
-            headers=headers,
-        )
-
     surface_template = (web_root / "surface.html").read_text(encoding="utf-8")
 
     @app.get("/{surface}", include_in_schema=False)

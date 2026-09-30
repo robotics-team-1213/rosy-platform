@@ -36,7 +36,7 @@ from control.sensing.perception.camera_ground import nominal_ground_plane  # noq
 from control.sensing.perception.lane_boundaries import LaneBoundaryTracker  # noqa: E402
 from control.sensing.perception.lane_keep import LaneKeeper, floor_white_mask  # noqa: E402
 
-PROFILE_PATH = REPO / "src" / "runtime" / "sensing" / "config" / "camera_nominal_pinky_pro.yaml"
+PROFILE_PATH = REPO / "src" / "products" / "pinky_pro" / "profile" / "config" / "camera_nominal.yaml"
 LANE_HALF_WIDTH_M = 0.0925
 
 # pilot 녹화(1332x760, 가로 배치 D-363)의 카메라 영상 전체(4:3, 머리띠는 지평선 위라 지면 계산에 안 든다).

@@ -1,5 +1,6 @@
 # D-196 de-Pinky backlog: product literals outside products/pinky_pro and products/omx.
 # Paths follow the regrouped tree (runtime/sensing, products/pinky_pro/bringup, products/omx/adapter).
+runtime/api_web/core_api_web/api/app.py
 runtime/sensing/config/line_follow.yaml
 runtime/sensing/config/robot.yaml
 runtime/sensing/control/calibration_relocation.py

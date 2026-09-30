@@ -9,7 +9,7 @@ from control.sensing.perception.camera_ground import nominal_ground_plane
 from control.sensing.perception.lane_keep import LaneKeeper
 
 PKG = Path(__file__).resolve().parents[1]
-PROFILE = yaml.safe_load((PKG / "config" / "camera_nominal_pinky_pro.yaml").read_text(encoding="utf-8"))
+PROFILE = yaml.safe_load((Path(__file__).resolve().parents[3] / "products" / "pinky_pro" / "profile" / "config" / "camera_nominal.yaml").read_text(encoding="utf-8"))
 GROUND = nominal_ground_plane(source="NOMINAL", allowed=True, width_px=320, height_px=240,
                               profile=PROFILE)
 X_OFFSET = float(PROFILE["x_offset_m"])

@@ -10,7 +10,7 @@ from test_map_v2_fleet_launch import _urdf_camera_on_base_footprint
 
 ROOT = Path(__file__).resolve().parents[3]
 LAUNCH = ROOT / "sim" / "gz_sim" / "launch" / "map_v2_fleet_real.launch.py"
-NOMINAL = ROOT / "runtime" / "sensing" / "config" / "camera_nominal_pinky_pro.yaml"
+NOMINAL = ROOT / "products" / "pinky_pro" / "profile" / "config" / "camera_nominal.yaml"
 BUNDLE = ROOT / "runtime" / "sensing" / "map" / "map_v2_fleet"
 
 

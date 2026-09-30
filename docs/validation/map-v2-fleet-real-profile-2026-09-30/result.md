@@ -5,7 +5,7 @@
 ## 무엇을 바꿨나
 
 기존 260919 차선 시뮬(`map_v2_fleet_lane.launch.py`)은 25° 기울기, 320x180, hfov 66°, 렌즈 높이 0.060 m,
-어두운 바닥의 흰 페인트, 푸른 회색 벽이다. 실제 Pinky 카메라(`camera_nominal_pinky_pro.yaml`)와 다르다.
+어두운 바닥의 흰 페인트, 푸른 회색 벽이다. 실제 Pinky 카메라(`src/products/pinky_pro/profile/config/camera_nominal.yaml`)와 다르다.
 기존 시뮬은 그대로 두고 real-profile 변형을 추가했다.
 
 | 항목 | 기존 lap bench | real profile | 실제 (teleop_20260919_151213) |
@@ -53,7 +53,7 @@ ros2 launch gz_sim map_v2_fleet_real.launch.py camera_lane_mode:=edge_left   # g
 프레임 캡처 (위 launch를 스스로 띄우고, 차로 그래프 west/east 20자세로 순간이동, 종료 시 정리):
 
 ```bash
-bash docs/validation/map-v2-fleet-real-profile-2026-09-30/run_capture.sh \
+bash docs/validation/map-v2-fleet-real-profile-2026-09-30/evidence/run_capture.sh \
   /mnt/x/DevTemp/sim-real-profile/frames v3 map_v2_fleet_real.launch.py
 ```
 
@@ -89,5 +89,5 @@ python docs/validation/map-v2-fleet-real-profile-2026-09-30/sheet.py X:/DevTemp/
 - 벽 위의 방(의자·사람·조명)이 없다. sim 배경은 균일한 적회색이다.
 - 파란 테이프 배치는 이음새 추정이다(0.6 m 간격, 세로 12 cm). 실제의 대각선 조각은 없다.
 - 벽은 STL 외곽 링 위치다. 실제 매트와 벽 사이 간격은 재지 않았다.
-- 렌즈 높이 0.067 m는 추정값이다(`camera_nominal_pinky_pro.yaml`). 줄자 측정으로 바꿔야 한다.
+- 렌즈 높이 0.067 m는 추정값이다(`src/products/pinky_pro/profile/config/camera_nominal.yaml`). 줄자 측정으로 바꿔야 한다.
 - 이 벤치에서 주행(CAMERA_LINE) 합격은 아직 돌리지 않았다. 차선 모드 합격은 이 월드에서 다시 받아야 한다(D-205 P5).

@@ -11,7 +11,7 @@
 # resume 0.14 m, because at the L-corners the perimeter wall is ~0.2 m ahead.
 WS=${WS:-/rosy_realprof_ws}
 HERE="$(cd "$(dirname "$0")" && pwd)"
-REPO="$(cd "$HERE/../../.." && pwd)"
+REPO="$(cd "$HERE/../../../.." && pwd)"
 cd $WS; source /opt/ros/jazzy/setup.bash; source install/setup.bash
 export ROS_DOMAIN_ID=53 GZ_PARTITION=rosy_realprof
 mkdir -p $WS/keep

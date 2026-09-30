@@ -18,7 +18,7 @@ def generate_launch_description():
     camera_height = DeclareLaunchArgument("camera_height", default_value="720")
     camera_update_rate = DeclareLaunchArgument(
         "camera_update_rate", default_value="10")
-    # Real-profile sims (D-364 5) set the Pinky Pro camera geometry.
+    # Real-profile sims (D-364 5) set the real robot's camera geometry.
     camera_hfov = DeclareLaunchArgument("camera_hfov", default_value="1.1519")
     cam_mount_z = DeclareLaunchArgument("cam_mount_z", default_value="0.0495")
 

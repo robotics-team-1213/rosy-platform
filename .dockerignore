@@ -24,6 +24,8 @@
 !src/hmi/web_common/**
 !src/hmi/dashboard/
 !src/hmi/dashboard/**
+!src/hmi/pilot/
+!src/hmi/pilot/**
 !src/products/
 !src/products/pinky_pro/
 !src/products/pinky_pro/**

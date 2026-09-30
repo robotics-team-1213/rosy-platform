@@ -20,6 +20,7 @@ EXPECTED_PACKAGES = {
     "core_features",
     "dashboard",
     "interfaces",
+    "pilot",
     "pinky_pro",
     "web_common",
 }
@@ -71,7 +72,7 @@ def test_core_build_copies_its_declared_package_closure():
         if line.startswith("COPY src/")
     }
     assert copied == {packages[name][0] for name in required}
-    assert "--packages-up-to core pinky_pro web_common dashboard" in build
+    assert "--packages-up-to core pinky_pro web_common dashboard pilot" in build
 
     admitted = set((ROOT / ".dockerignore").read_text(encoding="utf-8").splitlines())
     for source in copied:

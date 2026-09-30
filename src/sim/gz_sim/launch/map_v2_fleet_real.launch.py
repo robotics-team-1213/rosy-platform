@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""One Pinky on the 260919 track with the real Pinky Pro camera (D-364 5).
+"""One robot on the 260919 track with the real robot's camera geometry (D-364 5).
 
 Same track as map_v2_fleet_lane.launch.py, but the scene and the camera follow
 the device instead of the 2026-09-22 lap bench: grey carpet, white tape,
 white 0.30 m walls with blue seam tape (map_v2_fleet_real.world), and the
-camera_nominal_pinky_pro.yaml geometry (320x240, fx 281.6 = hfov 59.2 deg,
+the product NOMINAL camera profile (profile config camera_nominal.yaml) geometry (320x240, fx 281.6 = hfov 59.2 deg,
 8 deg down, lens 0.067 m above the floor). line_observer keeps the device
 defaults from line_follow.yaml except for the declared Gazebo ground.
 """
@@ -21,7 +21,7 @@ from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
 
-# camera_nominal_pinky_pro.yaml: fx 281.6 on a 320 px row.
+# product NOMINAL camera profile: fx 281.6 on a 320 px row.
 REAL_HFOV_RAD = 2.0 * math.atan(160.0 / 281.6)  # 1.0334 rad = 59.2 deg
 REAL_TILT_DEG = 8.0
 # front_camera_mount z on base_link that puts the Gazebo camera sensor

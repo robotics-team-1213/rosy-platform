@@ -28,7 +28,7 @@
 W="/mnt/f/Dev/Control/Robot/ROS/Rosy/Rosy OS/.worktrees/pilot-teleop"
 for f in src/runtime/sensing/control/sensing/perception/lane_keep.py src/runtime/sensing/control/line_observer_node.py; do
   cat "$W/$f" > /rosy_realprof_ws/$f; done          # --symlink-install 이라 빌드 불필요
-bash "$W/docs/validation/map-v2-fleet-keep-2026-09-30/run_sim.sh"      # 전경 실행, CORE 127.0.0.1:8093
+bash "$W/docs/validation/map-v2-fleet-keep-2026-09-30/evidence/run_sim.sh"      # 전경 실행, CORE 127.0.0.1:8093
 # 다른 셸
 source /opt/ros/jazzy/setup.bash; source /rosy_realprof_ws/install/setup.bash
 export ROS_DOMAIN_ID=53 GZ_PARTITION=rosy_realprof
@@ -110,7 +110,7 @@ WSL `/rosy_realprof_ws/keep/runs/<run>/`, 사본 `X:\DevTemp\sim-keep\runs\`.
 
 ## 태블릿에서 보기
 
-- sim: WSL 에서 `run_sim.sh` (CORE `127.0.0.1:8093`, 카메라 중계 `sim_jpeg_relay.py` → `camera/preview/compressed`;
+- sim: WSL 에서 `evidence/run_sim.sh` (CORE `127.0.0.1:8093`, 카메라 중계 `sim_jpeg_relay.py` → `camera/preview/compressed`;
   `GET /api/v1/vision/front/status`·`/frame?sequence=N` 확인, 320x240 jpeg).
 - Windows 는 WSL localhost 전달로 `http://127.0.0.1:8093` 에 바로 닿는다. 태블릿은 pilot 중계로:
   `python tools/pilot_device_bridge.py --robot http://127.0.0.1:8093 --host 0.0.0.0 --port 8094`

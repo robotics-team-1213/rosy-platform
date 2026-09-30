@@ -14,7 +14,7 @@ setsid ros2 launch gz_sim $LF "$@" > "$OUT/launch_$TAG.log" 2>&1 &
 LPID=$!
 for i in $(seq 1 60); do sleep 2; ros2 topic list 2>/dev/null | grep -q camera/front && break; done
 sleep 10
-timeout 300 python3 "$(dirname "$0")/capture_frames.py" "$OUT" $WS/install/control/share/control/map/map_v2_fleet/lane_graph.yaml 20 "$TAG"
+timeout 300 python3 "$(dirname "$0")/../capture_frames.py" "$OUT" $WS/install/control/share/control/map/map_v2_fleet/lane_graph.yaml 20 "$TAG"
 echo "--- nodes"; ros2 node list
 echo "--- launch errors"; grep -iE "unable to find|could not|\[error\]|exception|traceback" "$OUT/launch_$TAG.log" | head -15
 kill -INT -- -$LPID; sleep 6; kill -TERM -- -$LPID 2>/dev/null; sleep 2; kill -KILL -- -$LPID 2>/dev/null

@@ -43,7 +43,7 @@ TEXTURE_URI = "model://control/map/map_v2_fleet/textures/dock_tag_7.png"
 
 WALL_MATERIAL = "<ambient>0.30 0.35 0.45 1</ambient><diffuse>0.30 0.35 0.45 1</diffuse>"
 
-#: D-364 5 real profile: the 2026-09-19 track as the Pinky camera sees it
+#: D-364 5 real profile: the 2026-09-19 track as the real robot camera sees it
 #: (teleop_20260919_151213): grey textured carpet (~60-75 grey, speckle sd
 #: ~8-10 in the 320x240 frame), white tape, white foam-board walls (~220
 #: grey) taller than the camera's view near, blue tape on the board seams.

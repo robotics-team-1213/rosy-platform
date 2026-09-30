@@ -52,6 +52,7 @@ KNOWN_CHAIN_BACK_EDGES = {
 KNOWN_DIRECTION = {
     ("control", "imu_bno055"): "runtime/sensing -> drivers/imu_bno055; declared exec_depend. Legacy launches start the IMU driver; the long-term fix is bringup assembly, not a sensing launch",
     ("overhead", "games"): "site overhead reuses the ROS-free four-point homography helper for camera calibration",
+    ("bringup", "control"): "products/bringup -> runtime/sensing: bringup_robot.launch.py starts control's ir_adc_node for the rosy-io graph (enable_ir, D-344 §12) — bringup assembling the robot graph is the direction the imu_bno055 row names",
 }
 
 #: P6 budgets.
@@ -129,8 +130,9 @@ SIZE_VERDICTS = {
         "stay with their owner; the roster policy itself lives in roster.py",
     ),
     "runtime/sensing/control/sensing/perception/lane.py": (
-        611,
-        "accept: one concern (lane/IR line detection), ROS-free pure functions and trackers, host-testable (X5)",
+        765,
+        "accept: one concern (lane/IR line detection), ROS-free pure functions and trackers, host-testable (X5); "
+        "the ground-geometry lane keeper already lives apart in lane_keep.py (D-364)",
     ),
     "runtime/sensing/control/sensing/perception/lane_bev.py": (
         611,
@@ -161,7 +163,7 @@ SIZE_VERDICTS = {
         "accept: sim-only read-only viewer server (HTTP handler + ROS subscriptions); the pure logic already lives in live_view_model.py and the page in lane_live_view.html, covered by test_lane_live_view*.py and test_live_view_model.py (X5)",
     ),
     "control": (
-        32_106,
+        33_080,
         f"split: deploy closure needs only sensing + safety provider (P1a); {CONTROL_SPLIT}",
     ),
 }
