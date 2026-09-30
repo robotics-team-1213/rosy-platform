@@ -1,6 +1,10 @@
 ## D-390 앱은 사이트 연결을 같은 모양(이름·CA·자격, IP 없음)으로 저장하고, 기기 연결 서버는 Fleet "기기 연결"이 맡는다
 
-**Status:** Proposed (2026-10-01). 사이트 연결 기록의 모양, 사이트 호스트 설정의 원천, 기기 연결(카메라 페어링) 서버의 자리와 구현 순서를 정한다. 구현 GO는 아니다. 병행 세션 결정 회차에서 담당을 정한다.
+**Status:** Proposed (2026-10-01). 사이트 연결 기록의 모양, 사이트 호스트 설정의 원천, 기기 연결(카메라 페어링) 서버의 자리와 구현 순서를 정한다.
+
+**번호:** 처음 D-387로 적었으나 `docs/ota-roadmap-adr`가 먼저 선점해 D-390으로 옮겼다.
+
+**담당(2026-10-01 병행 세션 결정 회차):** 4항 1·2·3·5단계와 1항 벡터·FleetAgent 로더, 3항 일관성 검사 도구는 rosy-00. 4항 4단계(Rosy Cam 사이트 연결 저장·재발견·진단·페어링 클라이언트)와 1단계의 Kotlin 쪽은 rosy-84(사용자 직접 요청), rosy-75·63이 리뷰.
 
 잇는 결정: [D-341](D-341-overhead-console-approved-pairing.md)(카메라 콘솔 승인 페어링) · [D-361](D-361-site-console-enrolls-robot-by-screen-code.md)(로봇 등록) · [D-370](D-370-site-app-roles-names-and-shared-link.md) 5.2–5.5(기기 연결·주소·전송·실패 어휘) · [D-382](D-382-robot-site-console-protocol-conformance.md)(계약 판) · [D-374](D-374-app-identity-follows-one-role-name.md)·[D-377](D-377-app-names-rosy-plus-one-english-word.md)(이름).
 
@@ -26,7 +30,10 @@
 
 1. **사이트 연결 기록은 한 모양이다.** 사이트에 붙는 클라이언트(Rosy Cam, FleetAgent)는 같은 필드로 저장한다.
    - 필드: `site_name`, `tls_host`, `port`, `ca_pem`(사이트 CA; leaf 단독 금지), `role`(자기 역할), `credential_id`, `expires_at`, 자격 원문 또는 그 저장 참조.
-   - **IP를 저장하지 않는다.** 주소는 매번 mDNS로 찾고, 신원은 `tls_host`와 고정 CA로 확인한다(D-341 13항, D-370 5.3 "이름을 따라가는 채널").
+   - **IP를 저장하지 않는다.** 주소는 (재)접속할 때마다 mDNS로 찾고, 신원은 `tls_host`와 고정 CA로 확인한다(D-341 13항, D-370 5.3 "이름을 따라가는 채널").
+   - **접속 방법:** Android는 `*.local`을 일반 DNS로 풀지 못한다(S21 실측). 그래서 NSD가 준 IP로 TCP를 열되, TLS의 SNI와 호스트명 검사는 `tls_host`로 한다. 사이트 인증서 SAN에는 `tls_host`가 반드시 있다. IP SAN은 아래 수동 되돌림용이다.
+   - **수동 되돌림 주소:** 멀티캐스트가 막힌 망에서는 `rosyov://` 링크에 IP를 담을 수 있다. 앱은 그 값을 `manual_host`로 따로 두고, mDNS가 사이트를 찾지 못할 때만 쓰며 화면에 "수동 주소"로 표시한다. 이 경로는 인증서에 그 IP SAN이 있어야 한다.
+   - **"이 Wi-Fi에서 사이트가 보이지 않음" 진단:** 현재 망의 mDNS 탐색이 정해진 시간 안에 같은 `tls_host`를 못 찾으면, 일반 "연결할 수 없음" 대신 이 문구를 띄운다(같은 SSID를 쓰는 다른 AP·핫스팟에 붙은 경우가 실측됐다, 2026-10-01 태블릿). 실패 분류 벡터에 `not_discovered`로 둔다.
    - 예외는 D-370 5.3 그대로다. 평문 HTTP인 Fleet → CORE는 등록 때의 주소를 고정한다. Pilot·대시보드는 same-origin이라 기록이 없다.
    - 기계가 읽는 원천은 `test/fixtures/protocol/site-link.v1.json`(유효·무효 기록 예)이다. Kotlin 설정 저장소와 FleetAgent 설정 로더가 이 벡터로 시험한다. 새 클라이언트는 이 모양을 쓴다.
 2. **기록을 얻는 길은 역할마다 하나이고, 저장 모양은 1항으로 같다.**
@@ -38,13 +45,13 @@
    - `tls_host`, 사이트 CA, 공개 포트처럼 여러 서비스가 쓰는 값은 한 번만 적고(사이트 환경 파일), Compose·Caddy·광고 유닛·Vision·Fleet이 그 값을 읽는다.
    - `deploy/site`에 일관성 검사 도구를 둔다. 인증서 SAN에 `tls_host`와 광고 IP가 있는지, `site_cert`가 leaf + CA인지, TXT `tls_host`와 Caddy 호스트가 같은지 기동 전에 본다. 어기면 이유를 말하고 멈춘다.
 4. **기기 연결 서버는 Fleet이 맡는다(D-341 결정 유지). 구현 순서:**
-   1. **공통 조각:** `device_kind` 값(`overhead-camera`, `robot`)을 `core_common`의 상수 하나로 둔다. 실패 분류 벡터 `test/fixtures/protocol/failure-classes.v1.json`(D-370 5.5)을 D-341 11항 닫힘 코드 분류표와 HTTP 상태에서 만든다. Rosy Cam `NetworkFailure`·`ProblemGuide`와 `web_common` 연결 모듈이 이 벡터로 시험한다.
+   1. **공통 조각:** `device_kind` 값(`overhead-camera`, `robot`)을 `core_common`의 상수 하나로 둔다. 실패 분류 벡터 `test/fixtures/protocol/failure-classes.v1.json`(D-370 5.5 분류 + `not_discovered`)을 D-341 11항 닫힘 코드 분류표와 HTTP 상태에서 만든다. 최소 행: WS 4400·4401·4403·4409·4503·1013, HTTP 401·403·409·429·503. 벡터는 "입력 → 분류"만 정하고, 각 클라이언트는 그 위에 자기 상태를 둔다(예: Pilot은 forbidden→FORBIDDEN, auth_final→OFFLINE, conflict→BLOCKED, 나머지→RETRYING). Rosy Cam `NetworkFailure`·`ProblemGuide`와 `web_common` 연결 코드가 이 벡터로 시험한다.
    2. **Fleet `pairing/v1` 서버:** D-341 1–12항. 감사는 `device_pairing_audit` 재사용(D-341 8항).
    3. **콘솔 "기기 연결" 패널:** 기존 로봇 등록 화면 옆에 카메라 연결 승인 구역을 더한다(D-361 11항).
    4. **Rosy Cam 페어링 클라이언트:** 요청·코드·상호 확인·1항 기록 저장.
    5. **Vision digest 동기화와 회수:** D-341 11·12항.
    - 각 단계는 LOCAL 녹색으로 main에 들어간다. DEVICE는 D-341 판정 등급을 따른다.
-5. **공개 상태 모양 확장(D-370 5.5)은 로봇 이미지가 따라온 뒤에 한다.** 추가 필드를 허용하는 health 탐침(2026-10-01 수정)이 든 이미지가 현장 로봇에 모두 깔리기 전에는 Fleet `/healthz`에 필드를 더하지 않는다. 옛 이미지는 본문이 정확히 `{"status":"ok"}`여야 Fleet으로 인정한다.
+5. **공개 상태 모양 확장(D-370 5.5)은 로봇이 따라온 뒤에 한다.** 추가 필드를 허용하는 health 탐침(2026-10-01 수정)이 현장 로봇 모두에 깔리기 전에는 Fleet `/healthz`에 필드를 더하지 않는다. 옛 코드는 본문이 정확히 `{"status":"ok"}`여야 Fleet으로 인정한다. 이 탐침은 `src/`에 있어 이미지 재굽기 없이 payload push로 간다(rosy-0d 확인). 확장은 두 벤치 로봇이 그 payload를 받은 뒤 한다.
 
 ### 정하지 않는 것
 
