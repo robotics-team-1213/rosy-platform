@@ -122,8 +122,9 @@ def validate_hello(message: dict) -> None:
 LENS_KINDS = ("wide", "standard")
 
 
-def _positive_number(value: object) -> bool:
-    return isinstance(value, (int, float)) and not isinstance(value, bool) and value > 0
+def _bounded(value: object, upper: float) -> bool:
+    """True for a real number in (0, upper). Safe for huge ints, inf and NaN (all compare False)."""
+    return isinstance(value, (int, float)) and not isinstance(value, bool) and 0 < value < upper
 
 
 def parse_hello_lens(message: dict) -> dict | None:
@@ -139,9 +140,7 @@ def parse_hello_lens(message: dict) -> dict | None:
     kind = lens.get("kind")
     focal_mm = lens.get("focal_mm")
     hfov_deg = lens.get("hfov_deg")
-    if kind not in LENS_KINDS or not _positive_number(focal_mm) or not _positive_number(hfov_deg):
-        return None
-    if hfov_deg >= 180:
+    if kind not in LENS_KINDS or not _bounded(focal_mm, 1000) or not _bounded(hfov_deg, 180):
         return None
     return {"kind": kind, "focal_mm": float(focal_mm), "hfov_deg": float(hfov_deg)}
 

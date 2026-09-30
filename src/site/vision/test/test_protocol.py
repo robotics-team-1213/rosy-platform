@@ -78,6 +78,18 @@ def test_malformed_hello_lens_is_ignored_not_rejected(vector):
     assert protocol.parse_hello_lens(hello) is None
 
 
+@pytest.mark.parametrize("text", [
+    '{"kind": "wide", "focal_mm": Infinity, "hfov_deg": 104.1}',
+    '{"kind": "wide", "focal_mm": 2.2, "hfov_deg": NaN}',
+    '{"kind": "wide", "focal_mm": 1e400, "hfov_deg": 104.1}',
+])
+def test_non_finite_hello_lens_is_ignored(text):
+    # Python's json accepts these; a stored inf would make json.dumps emit invalid JSON.
+    hello = {**VECTORS["messages"]["hello_valid"], "lens": json.loads(text)}
+    protocol.validate_hello(hello)
+    assert protocol.parse_hello_lens(hello) is None
+
+
 def test_hello_bad_proto_is_rejected():
     with pytest.raises(protocol.HelloError) as excinfo:
         protocol.validate_hello(VECTORS["messages"]["hello_bad_proto"])
