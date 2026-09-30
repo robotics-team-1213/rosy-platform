@@ -13,6 +13,17 @@ SSH is the operator's (D-373 decision 6, operator_ssh.py). Recordings belong
 to rosy-camera, so marking a session harvested runs through `sudo -n` and keeps
 session.json's owner and mode.
 
+Idle means: mode IDLE, navigation IDLE/ARRIVED/CANCELED/FAILED, line_follow OFF,
+|velocity| <= 0.01, and (API v1.8+) evidence["velocity"] fresh. A CORE older
+than v1.8 has no evidence map, so a stale zero velocity cannot be told from a
+real one there; that limitation is accepted for old images only. The check is
+repeated right before a session is marked harvested: if the robot started
+moving meanwhile, the session is still marked (it is already copied and
+verified, and re-pulling it would repeat the transfer) and the run stops.
+
+Timeouts: --timeout (600 s) per scp/checksum step, --status-timeout (60 s) for
+the listing, the mark and the CORE query. A timeout fails that session.
+
 Exit codes: 0 all fetched, 1 some session failed, 2 bad arguments, 4 robot
 moving or not proven idle (nothing further transferred)."""
 import argparse
@@ -43,6 +54,7 @@ TOKEN_ENV = "ROSY_CORE_TOKEN_FILE"
 # CORE StateSnapshot (core_common.protocol.schemas): what counts as not driving.
 _IDLE_NAVIGATION = {"IDLE", "ARRIVED", "CANCELED", "FAILED"}
 _STILL = 0.01  # m/s and rad/s
+TRANSFER_TIMEOUT_S, STATUS_TIMEOUT_S = 600, 60
 
 _LIST_PY = (
     "import json,sys,glob,os;r=[]\n"
@@ -96,6 +108,12 @@ def idle_verdict(state) -> tuple[bool, str]:
         return False, f"velocity unknown {vel!r}"
     if not (math.isfinite(lin) and math.isfinite(ang)) or abs(lin) > _STILL or abs(ang) > _STILL:
         return False, f"velocity linear={lin} angular={ang}"
+    evidence = state.get("evidence")  # absent before API v1.8: see the module docstring
+    if evidence is not None:
+        vel_ev = evidence.get("velocity") if isinstance(evidence, dict) else None
+        judged = vel_ev.get("evidence") if isinstance(vel_ev, dict) else None
+        if judged != "fresh":
+            return False, f"velocity evidence {judged}"
     return True, "idle"
 
 
@@ -121,15 +139,20 @@ def verify_tree(local, remote_sums: dict[str, str]) -> list[str]:
     return sorted(bad)
 
 
-def _ssh(base: list[str], target: str, command: str) -> str:
-    r = subprocess.run([*base, target, command], capture_output=True, text=True)
+def _ssh(base: list[str], target: str, command: str, timeout: float = STATUS_TIMEOUT_S) -> str:
+    try:
+        r = subprocess.run([*base, target, command], capture_output=True, text=True,
+                           timeout=timeout)
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError(f"ssh timed out after {timeout:g} s") from exc
     if r.returncode != 0:
         raise RuntimeError(f"ssh failed ({r.returncode}): {r.stderr.strip()}")
     return r.stdout
 
 
-def _remote_sums(base, target: str, remote: str) -> dict[str, str]:
-    out = _ssh(base, target, f"cd {shlex.quote(remote)} && find . -type f -exec sha256sum {{}} +")
+def _remote_sums(base, target: str, remote: str, timeout: float) -> dict[str, str]:
+    out = _ssh(base, target, f"cd {shlex.quote(remote)} && find . -type f -exec sha256sum {{}} +",
+               timeout)
     sums = {}
     for line in out.splitlines():
         digest, _, path = line.partition("  ")
@@ -148,10 +171,14 @@ def main(argv=None) -> int:
     ap.add_argument("--core-token-file", help=f"viewer token file (env {TOKEN_ENV})")
     ap.add_argument("--assume-idle", action="store_true",
                     help="bench only: skip the CORE idle check (D-136)")
+    ap.add_argument("--timeout", type=float, default=TRANSFER_TIMEOUT_S,
+                    help="seconds per scp/checksum step")
+    ap.add_argument("--status-timeout", type=float, default=STATUS_TIMEOUT_S,
+                    help="seconds for the listing, the mark and the CORE query")
     operator_ssh.add_arguments(ap)
     args = ap.parse_args(argv)
-    if args.host.startswith("-") or args.user.startswith("-"):
-        print("host and user must not start with '-'", file=sys.stderr)
+    if not (operator_ssh.safe_name(args.host) and operator_ssh.safe_name(args.user)):
+        print(f"refused: unsafe host or user {args.host!r} {args.user!r}", file=sys.stderr)
         return 2
     try:
         opts = operator_ssh.options(*operator_ssh.resolve(args.identity, args.known_hosts))
@@ -175,23 +202,23 @@ def main(argv=None) -> int:
             return 2
     state_url = (args.core_url or f"http://{args.host}:8080").rstrip("/") + "/api/v1/robot/state"
 
-    def still_idle() -> bool:
+    def probe() -> tuple[bool, str]:
         if args.assume_idle:
-            return True
+            return True, "assumed"
         try:
-            idle, why = idle_verdict(fetch_core_state(state_url, token, 5.0))
+            return idle_verdict(fetch_core_state(state_url, token, args.status_timeout))
         except (OSError, ValueError) as exc:
-            idle, why = False, f"CORE state unavailable: {exc}"
-        if not idle:
-            print(f"skipping {args.host}: not idle ({why}); harvest only while parked (D-136)",
-                  file=sys.stderr)
-        return idle
+            return False, f"CORE state unavailable: {exc}"
 
     ssh = ["ssh", *opts, "--"]
     target = f"{args.user}@{args.host}"
     root = args.remote_root.rstrip("/")
-    listing = json.loads(_ssh(ssh, target,
-                              f"python3 -c {shlex.quote(_LIST_PY)} {shlex.quote(root)}"))
+    try:
+        listing = json.loads(_ssh(ssh, target, f"python3 -c {shlex.quote(_LIST_PY)} "
+                                               f"{shlex.quote(root)}", args.status_timeout))
+    except (RuntimeError, ValueError) as exc:
+        print(f"cannot list sessions on {args.host}: {exc}", file=sys.stderr)
+        return 1
     by_name = {s.get("name"): s for s in listing}
     names = []
     for name in sessions_to_fetch(listing):
@@ -201,26 +228,38 @@ def main(argv=None) -> int:
             print(f"skipping session with unsafe name: {name!r}", file=sys.stderr)
     failed = 0
     for name in names:
-        if not still_idle():
+        idle, why = probe()
+        if not idle:
+            print(f"skipping {args.host}: not idle ({why}); harvest only while parked (D-136)",
+                  file=sys.stderr)
             return EXIT_NOT_IDLE
         remote = f"{root}/{name}"
         local = Path(args.dest) / safe_component(by_name[name].get("device")) / name
         try:
             local.parent.mkdir(parents=True, exist_ok=True)
-            r = subprocess.run(["scp", "-r", *opts, "--", f"{target}:{remote}",
-                                str(local.parent)])
+            try:
+                r = subprocess.run(["scp", "-r", *opts, "--", f"{target}:{remote}",
+                                    str(local.parent)], timeout=args.timeout)
+            except subprocess.TimeoutExpired as exc:
+                raise RuntimeError(f"scp timed out after {args.timeout:g} s") from exc
             if r.returncode != 0:
                 raise RuntimeError("scp failed")
-            bad = verify_tree(local, _remote_sums(ssh, target, remote))
+            bad = verify_tree(local, _remote_sums(ssh, target, remote, args.timeout))
             if bad:
                 raise RuntimeError(f"checksum mismatch: {bad}")
+            idle, why = probe()
+            if not idle:  # copied and verified already: mark it anyway, then stop
+                print(f"{name}: robot started moving during the copy ({why}); marking the "
+                      "verified session harvested and stopping", file=sys.stderr)
             _ssh(ssh, target, f"sudo -n python3 -c {shlex.quote(_MARK_PY)} "
-                              f"{shlex.quote(remote + '/session.json')}")
+                              f"{shlex.quote(remote + '/session.json')}", args.status_timeout)
         except (RuntimeError, OSError) as exc:
             print(f"{name}: {exc}", file=sys.stderr)
             failed += 1
             continue
         print(f"harvested {name}")
+        if not idle:
+            return EXIT_NOT_IDLE
     return 1 if failed else 0
 
 

@@ -48,6 +48,8 @@ def test_safe_names_and_args():
     assert harvest.safe_component("pinky/005 x") == "pinky_005_x"
     assert harvest.main([*SSH, "--", "-oProxyCommand=x"]) == 2
     assert harvest.main(["h", "--user=-x", *SSH]) == 2
+    assert harvest.main(["a;b", "--assume-idle", *SSH]) == 2
+    assert harvest.main(["h", "--user=a b", "--assume-idle", *SSH]) == 2
 
 
 # --- D-136 idle rule: never pull recordings off a robot that is driving ---------------------
@@ -88,7 +90,7 @@ def test_non_dict_state_is_not_idle():
 def _fake_listing(monkeypatch, listing):
     calls = []
 
-    def fake_ssh(base, target, command):
+    def fake_ssh(base, target, command, timeout=None):
         if command.startswith("python3 -c") and "glob" in command:
             return json.dumps(listing)
         calls.append(command)
@@ -104,6 +106,7 @@ def test_driving_robot_is_skipped_with_exit_4(monkeypatch, tmp_path, capsys):
     seen = {}
 
     def fake_state(url, tok, timeout):
+        assert timeout == 60
         seen.update(url=url, token=tok)
         return {**IDLE, "mode": "NAVIGATION"}
 
@@ -164,7 +167,7 @@ def test_idle_is_rechecked_before_each_session(monkeypatch, tmp_path):
 def test_ssh_scp_are_rosy_pinned_and_mark_uses_sudo(monkeypatch, tmp_path):
     ran, sshed = [], []
 
-    def fake_ssh(base, target, command):
+    def fake_ssh(base, target, command, timeout=None):
         sshed.append((base, target, command))
         if "glob" in command:
             return json.dumps([{"name": "a", "device": "d", "ended_at": "t",
@@ -205,3 +208,85 @@ def test_failures_counted_and_loop_continues(monkeypatch, tmp_path):
     monkeypatch.setattr(harvest.subprocess, "run", lambda *a, **k: R())
     assert harvest.main(["h", "--dest", str(tmp_path), "--assume-idle", *SSH]) == 1
     assert len(calls) == 2  # both good sessions attempted, bad name skipped
+
+
+# --- review fixes: fresh velocity, re-check before marking, timeouts -------------------------
+
+FRESH = {"velocity": {"evidence": "fresh", "received_at": "t", "stale_after_s": 0.5}}
+
+
+def test_velocity_evidence_must_be_fresh_when_present():
+    assert harvest.idle_verdict({**IDLE, "evidence": FRESH}) == (True, "idle")
+    for ev in ("delayed", "disconnected", "unavailable"):
+        idle, why = harvest.idle_verdict(
+            {**IDLE, "evidence": {"velocity": {"evidence": ev}}})
+        assert idle is False and "velocity evidence" in why and ev in why
+    # evidence reported, but not for velocity: unknown, not idle
+    assert harvest.idle_verdict({**IDLE, "evidence": {"pose": {"evidence": "fresh"}}})[0] is False
+    # a CORE before API v1.8 has no evidence map: accepted (documented limitation)
+    assert harvest.idle_verdict(IDLE)[0] is True
+
+
+def _one_session(monkeypatch, marks):
+    def fake_ssh(base, target, command, timeout=None):
+        if "glob" in command:
+            return json.dumps([{"name": "a", "device": "d", "ended_at": "t",
+                                "harvested": False}])
+        if "sha256sum" in command:
+            return ""
+        marks.append(command)
+        return ""
+
+    class R:
+        returncode = 0
+
+    monkeypatch.setattr(harvest, "_ssh", fake_ssh)
+    monkeypatch.setattr(harvest.subprocess, "run", lambda cmd, **k: R())
+
+
+def test_moving_after_copy_still_marks_then_stops(monkeypatch, tmp_path, capsys):
+    token = tmp_path / "core.token"
+    token.write_text("secret", encoding="utf-8")
+    states = iter([IDLE, {**IDLE, "mode": "MANUAL"}])
+    monkeypatch.setattr(harvest, "fetch_core_state", lambda *a: next(states))
+    marks = []
+    _one_session(monkeypatch, marks)
+    rc = harvest.main(["robot", "--dest", str(tmp_path), "--core-token-file", str(token), *SSH])
+    assert len(marks) == 1  # copied and verified: marked, so it is not pulled again
+    assert rc == 4
+    assert "started moving" in capsys.readouterr().err
+
+
+def test_transfer_timeout_is_a_failed_session(monkeypatch, tmp_path):
+    seen = []
+
+    def fake_ssh(base, target, command, timeout=None):
+        seen.append(timeout)
+        if "glob" in command:
+            return json.dumps([{"name": "a", "device": "d", "ended_at": "t",
+                                "harvested": False}])
+        raise AssertionError("no mark after a failed copy")
+
+    def hang(cmd, **kw):
+        assert kw["timeout"] == 600
+        raise harvest.subprocess.TimeoutExpired(cmd, kw["timeout"])
+
+    monkeypatch.setattr(harvest, "_ssh", fake_ssh)
+    monkeypatch.setattr(harvest.subprocess, "run", hang)
+    assert harvest.main(["robot", "--dest", str(tmp_path), "--assume-idle", *SSH]) == 1
+    assert seen == [60]
+
+
+def test_ssh_helper_passes_timeout(monkeypatch):
+    got = {}
+
+    class R:
+        returncode, stdout, stderr = 0, "ok", ""
+
+    def run(cmd, **kw):
+        got.update(kw)
+        return R()
+
+    monkeypatch.setattr(harvest.subprocess, "run", run)
+    assert harvest._ssh(["ssh", "--"], "rosy@h", "true", timeout=7) == "ok"
+    assert got["timeout"] == 7
