@@ -524,3 +524,20 @@
 - 변경: `/setup` 교통 정책 패어널에 `junction_rule` select(신호 제어 / 무신호: 정지 후 진입)를 스테이징 폼에 추가하고 상태 facts에 "정지선 규칙" 행을, `/console` 교통 facts에 "규칙" 행을 각각 추가했다. 새 토큰·ui-* 부품 없음 — 기존 `select`·facts 문법 재사용. 기본값 `signal_controlled` 표기로 규칙 미선언 상태가 지금과 같음을 화면에서 읽을 수 있다.
 - 증거: 정적 스캔 `src/hmi/dashboard/test` + `src/hmi/web/test` + api_web 105 passed 47 skipped(2026-09-29 Windows, 브라우저 게이트 시험은 스킵 — ROSY_RUN_BROWSER_TESTS 미설정). 패어널 배치 시험(D-283 facts 2열·폼 위치)은 행 추가 후에도 그대로 통과했다.
 - gate 변화: 없음. 무신호 `stop_and_go`의 실화면 확인은 브라우저 회차가 남아 있다.
+
+## 2026-09-30 · uncommitted · feat(icons): D-358 S3 대시보드 파비콘
+
+- 변경: `index.html`·`surface.html`에 `<link rel="icon" type="image/svg+xml" href="/common/icons/robot-dashboard.svg">`를 더했다. 제목(`Rosy 로봇 — 대시보드`)은 이미 이름표와 같아 바꾸지 않았다.
+- 증거: `test_surface_icons.py`, `src/runtime/api_web/test/test_ui_route.py` 녹색.
+- gate 변화: 없음.
+- 결정: D-358 2·3항.
+- 교훈: 없음.
+
+
+## 2026-09-30 · uncommitted · docs(adr): D-358 앱 역할 ADR을 D-370으로 재번호
+
+- 변경: 이 모듈의 D-358 앱 역할·이름·아이콘 주석과 시험 문서 문자열을 D-370으로 바꿨다. 동작 변경 없음.
+- 증거: 번호만 바꾼 diff. 시험은 병합 뒤 회차에서 다시 돌린다.
+- gate 변화: 없음.
+- 결정: 이 항목 앞의 "D-358 S1/S2/S3"·"D-358 N항"은 D-370을 가리킨다(main의 D-358 ER2 피드백 outbox와 다름). 옛 항목은 고치지 않는다.
+- 교훈: 없음.

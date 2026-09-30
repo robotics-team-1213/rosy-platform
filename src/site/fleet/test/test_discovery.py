@@ -67,3 +67,47 @@ def test_external_addresses_and_invalid_ports_are_rejected():
             pass
         else:
             raise AssertionError(f"accepted {address}:{port}")
+
+
+# D-370 5.1: the scan-row check uses the shared classifier and the shared vectors.
+import json  # noqa: E402
+from pathlib import Path  # noqa: E402
+
+import pytest  # noqa: E402
+
+_VECTORS = json.loads((Path(__file__).resolve().parents[4]
+                       / "test/fixtures/protocol/discovery-txt.v1.json").read_text(encoding="utf-8"))
+# A bridge row carries host, address, port and network only; TXT-key reasons stop at the bridge.
+_ROW_REASONS = {"bad_host", "bad_address", "bad_port", "ap_mode"}
+_ROW_CASES = [case for case in _VECTORS["cases"] if case["service_type"] == "_rosy._tcp"
+              and (case["expect"]["accepted"] or case["expect"]["reason"] in _ROW_REASONS)]
+
+
+@pytest.mark.parametrize("case", _ROW_CASES, ids=lambda case: case["id"])
+def test_scan_rows_follow_the_shared_robot_vectors(case):
+    txt = dict(item.split("=", 1) for item in case["txt"])
+    store = DiscoveryStore(clock=lambda: 100.0)
+    row = dict(name=txt.get("name", "rosy-x"), hostname=case["host"], address=case["address"],
+               port=case["port"], network=txt.get("network", "sta"))
+    try:
+        store.replace_scan([row])
+    except ValueError:
+        kept = False
+    else:
+        kept = bool(store.snapshot({}, {})["devices"])
+    assert kept is case["expect"]["accepted"]
+
+
+def test_row_cases_cover_every_row_reason():
+    assert {case["expect"].get("reason") for case in _ROW_CASES} - {None} == _ROW_REASONS
+
+
+def test_stored_hostname_is_the_classifier_normalised_host():
+    store = DiscoveryStore(clock=lambda: 100.0)
+    store.replace_scan([dict(name="rosy-a", hostname="Rosy-A.local.", address="192.168.1.10",
+                             port=8080, network="sta"),
+                        dict(name="rosy-b", address="192.168.1.11", port=8080, network="sta")])
+    assert {row["name"]: row["hostname"] for row in store.rows()} == {
+        "rosy-a": "rosy-a.local", "rosy-b": ""}
+    registered = {"rosy_01": "http://rosy-a.local:8080"}
+    assert store.snapshot(registered, {})["devices"][0]["status"] == "pairing_pending"

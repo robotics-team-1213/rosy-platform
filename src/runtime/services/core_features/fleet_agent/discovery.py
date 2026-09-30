@@ -3,19 +3,15 @@
 from __future__ import annotations
 
 import http.client
-import ipaddress
 import json
-import re
-import shlex
 import socket
 import ssl
 import subprocess
 from pathlib import Path
 
-
-SERVICE_TYPE = "_rosy-fleet._tcp"
-HOSTNAME = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.local$")
-TXT = {"product": "rosy", "role": "fleet", "proto": "site-v1", "tls": "required"}
+from core_common.protocol.discovery_txt import (
+    FLEET as SERVICE_TYPE, HOSTNAME, Accepted, classify, parse_txt_pairs,
+)
 
 
 def parse_avahi(output: str) -> list[dict]:
@@ -25,22 +21,16 @@ def parse_avahi(output: str) -> list[dict]:
         if (len(columns) != 10 or columns[0] != "=" or columns[2] != "IPv4"
                 or columns[4] != SERVICE_TYPE or columns[5] != "local"):
             continue
-        hostname = columns[6].lower().rstrip(".")
-        if not HOSTNAME.fullmatch(hostname):
-            continue
         try:
-            address = ipaddress.ip_address(columns[7])
             port = int(columns[8])
-            pairs = [item.split("=", 1) for item in shlex.split(columns[9]) if "=" in item]
-            txt = dict(pairs)
-        except (ValueError, TypeError):
+        except ValueError:
             continue
-        if (address.version != 4 or not address.is_private or address.is_loopback
-                or address.is_link_local or not 1 <= port <= 65535
-                or len(pairs) != len(txt) or any(txt.get(key) != value for key, value in TXT.items())):
+        result = classify(SERVICE_TYPE, columns[6], columns[7], port,
+                          parse_txt_pairs(columns[9]))
+        if not isinstance(result, Accepted):
             continue
-        row = {"hostname": hostname, "address": str(address), "port": port}
-        candidates[(hostname, str(address), port)] = row
+        row = {"hostname": result.host, "address": columns[7], "port": port}
+        candidates[(result.host, columns[7], port)] = row
     return list(candidates.values())
 
 

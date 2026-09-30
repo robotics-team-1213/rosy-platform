@@ -3752,3 +3752,27 @@
 - gate 변화: 없음.
 - 결정: D-356 Proposed 유지.
 - 교훈: 증거 칸에는 결과를 적거나 "미기록"이라고 적는다. 커밋 메시지를 증거 위치로 가리키지 않는다.
+
+## 2026-09-30 · uncommitted · docs(adr): D-358 앱 역할·이름·아이콘·화면 소유와 공유 연결 조각
+
+- 변경: `docs/adr/D-358-site-app-roles-names-and-shared-link.md`(Proposed) 신설, ADR Log 표행, 실행 계획 `docs/plans/2026-09-30-site-app-roles-and-shared-link-plan.md`(S1–S8) 신설, `progress.md`의 adrs·plans 등재, `harness.yaml` `adr_gaps`에 브랜치·워크트리 선점 번호 D-352–D-357 사유 기록. 결정: 여섯 참여자(천장 카메라·Vision·Fleet 관제·CORE·로봇 대시보드/LCD·Pilot) 역할 표, 이름표(D-345 §4·D-339 §4 적용), 아이콘 가족 규칙(공통 바탕·로즈 점·표면별 실루엣과 토큰 색, 상태색 금지), 조작별 단일 소유 화면 표(비상 정지만 예외), 발견 TXT 공유 벡터 + 언어별 파서, 기기 연결 용어·감사·관리 위치 통일(자격 모양은 방향별 유지), 이름 따라가기/주소 고정을 "채널이 서버를 인증하는가"로 판정, `?token=` 퇴출, 공개 상태 모양, 실패 분류 벡터, Android 공유 모듈은 두 번째 Kotlin 소비자까지 보류.
+- 증거: 코드 앵커 대조(읽기 전용) — TXT 파서 다섯 벌(`fleet-mdns.py`, `fleet_agent/discovery.py` 복사본, `mdns-bridge.py`의 공통 키 미검사, `fleet/server/discovery.py`, Kotlin `OverheadServiceRecord`), Fleet CORE WS의 `?token=`(`swarm/robots.py:122-131`), 대시보드 `console.teleop`과 Pilot의 수동 운전 중복, Pilot `short_name` `Pilot`과 "관제 화면" 버튼(브랜치), 폰 런처 아이콘 부재. `python tools/harness/rosy_harness.py lint` 결과는 커밋 메시지에 적는다. 코드 변경 없음.
+- gate 변화: 없음. 문서만.
+- 결정: D-358 Proposed. D-357은 `er2-feedback-loop` 워크트리가 선점해 D-358로 잡았다. main이 D-351을 다른 결정(도킹 재시도)으로 선점해 브랜치 `docs/robot-fleet-protocol-conformance`의 D-351과 충돌한다 — 그 브랜치 착지 때 재번호가 필요하다(이 변경에서 고치지 않음).
+- 교훈: 번호 확인은 main 표만이 아니라 `.worktrees/*/docs/adr`의 미커밋 초안까지 봐야 한다. 같은 날 main이 D-350·D-351을 연달아 선점했다.
+
+## 2026-09-30 · uncommitted · docs(adr): D-358 앱 역할 ADR을 D-370으로 재번호
+
+- 변경: `docs/adr/D-358-site-app-roles-names-and-shared-link.md`를 `D-370-site-app-roles-names-and-shared-link.md`로 옮기고 ADR Log 표행, `progress.md` adrs, 실행 계획, 코드·시험·아이콘 주석, `surfaces.yaml`의 번호를 D-370으로 바꿨다. ADR에 **번호:** 줄을 더했다. `harness.yaml` `adr_gaps`에 D-358–D-369의 사유를 적었다.
+- 증거: 번호 조사 — main에 D-358(ER2 피드백 outbox)·D-359–D-361, main 체크아웃 미커밋 D-362, `feat/pilot-teleop` D-363–D-368, `docs/control-authority` D-369. 모든 로컬 브랜치·`.worktrees/*/docs/adr`에 D-370 이상 없음.
+- gate 변화: 없음. 문서·주석만.
+- 결정: 이 항목 앞의 로그 항목에 적힌 "D-358 앱 역할…", "D-358 S1/S2/S3", "D-358 N항"은 모두 D-370을 가리킨다. main의 D-358(ER2 피드백 outbox와 재계획 펜싱)과 다르다. 옛 항목은 고치지 않는다.
+- 교훈: 번호 확인은 커밋된 브랜치만이 아니라 main 체크아웃의 미커밋 초안까지 봐야 한다.
+
+## 2026-09-30 · uncommitted · docs(adr): D-370 독립 리뷰 반영(MERGE-AFTER-FIXES)
+
+- 변경: main 재병합(D-371, `d8e5f994`) — ADR Log는 D-370 뒤 D-371, `harness.yaml` `adr_gaps`는 main의 D-363–D-370 "skipped" 줄을 지우고 브랜치의 "reserved by" 줄(D-362–D-369)만 남김. CI `python3-pil`, `render_png.py` PIL 지연 import와 `importorskip`, `android.yml` 경로에 공유 벡터·아이콘 추가, Kotlin `tls_host` 규칙을 Python과 같게(한 레이블 `.local`, 대소문자·끝 점 무시)와 벡터 2건, Fleet 발견 행 호스트 정규화, `test_app_roles.py` transitional은 `D-<n>` 필수·카메라 owns id 정규화, `tokens.css` 토큰 이름 중복 금지 시험. D-370에 Pilot 착지 시 `test_pilot_is_not_on_main_yet` 교체 의무(8항)와 브리지 릴리스 노트(Consequences)를 더하고 76행 "아래 **번호:**"를 "위"로 고침.
+- 증거: 병합 직전 전체 재실행 수치는 병합 커밋 메시지에 적는다. 각 단계 커밋에 해당 시험 수치가 있다.
+- gate 변화: 없음. SOURCE/LOCAL.
+- 결정: D-370. **정정:** 바로 앞 재번호 항목의 "`harness.yaml` `adr_gaps`에 D-358–D-369의 사유를 적었다"는 병합 뒤 기준으로 틀렸다. D-358–D-361은 main에 착지해 지웠고, 남은 선언은 D-362–D-369다.
+- 교훈: 두 세션이 같은 번호 구간을 각각 gap으로 선언하면 YAML 자동 병합이 중복 키를 만든다. 병합 뒤 `adr_gaps`를 손으로 확인한다.

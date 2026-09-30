@@ -648,3 +648,36 @@
 - Change: recorded final regression evidence after numeric-boundary, total-turn deadline, and post-frame egress-fence hardening.
 - Evidence: focused ER2/Mission/Vision/API/Overhead host suites 137 passed; documentation gate 80 passed; changed-file flake8 clean; harness lint 0 errors/12 pre-existing freshness warnings.
 - Gate: SOURCE/LOCAL only. Provider, Mission dispatch, ROS/device, physical actuation, and deployment remain disabled.
+
+## 2026-09-30 · uncommitted · feat(discovery): D-358 S1 발견 행 검사와 사이트 스크립트를 공유 벡터에 묶음
+
+- 변경: `fleet/server/discovery.py`의 스캔 행 검사를 `core_common.protocol.discovery_txt.classify`로 바꿨다(호스트는 단일 레이블 `.local`로 좁아짐). 사이트 호스트 단독 스크립트 `deploy/site/mdns-bridge.py`가 이제 공통 키(`product/role/proto/tls`)·중복 키·`.local` 호스트를 검사하고, 공통 키가 없는 옛 광고는 legacy로 통과시킨다(D-351 발견 8). `fleet-mdns.py`는 이미 규칙과 같아 코드 변경 없이 벡터 시험만 더했다.
+- 증거: `test_site_mdns_bridge.py`·`test_site_fleet_mdns.py`·`test_discovery.py`가 같은 벡터를 돈다. 브리지는 벡터 추가 직후 5건 적신(`value_mismatch` 포함) → 수정 후 녹색. 변이 증명: 브리지의 공통 키 검사를 지우면 3건 적신.
+- gate 변화: 없음. SOURCE/LOCAL. 실제 사이트 LAN 발견은 DEVICE 회차.
+- 결정: D-358 5.1.
+- 교훈: 없음.
+
+## 2026-09-30 · uncommitted · feat(icons): D-358 S3 관제 파비콘
+
+- 변경: 콘솔 `index.html`에 `/common/icons/fleet-console.svg` 파비콘 링크 한 줄. 새 `test_common_icons.py`가 목록의 아이콘은 200(`image/svg+xml`), 폴더·목록 밖·인코딩된 `..`는 404임을 확인한다. 제목 `Rosy 사이트 — 관제`는 이미 이름표와 같다.
+- 증거: `test_common_icons.py` 1 passed.
+- gate 변화: 없음.
+- 결정: D-358 2·3항.
+- 교훈: 없음.
+
+
+## 2026-09-30 · uncommitted · docs(adr): D-358 앱 역할 ADR을 D-370으로 재번호
+
+- 변경: 이 모듈의 D-358 앱 역할·이름·아이콘 주석과 시험 문서 문자열을 D-370으로 바꿨다. 동작 변경 없음.
+- 증거: 번호만 바꾼 diff. 시험은 병합 뒤 회차에서 다시 돌린다.
+- gate 변화: 없음.
+- 결정: 이 항목 앞의 "D-358 S1/S2/S3"·"D-358 N항"은 D-370을 가리킨다(main의 D-358 ER2 피드백 outbox와 다름). 옛 항목은 고치지 않는다.
+- 교훈: 없음.
+
+## 2026-09-30 · uncommitted · fix(fleet): D-370 리뷰 — 발견 행은 분류기가 정규화한 호스트를 저장
+
+- 변경: `fleet/server/discovery.py`가 `hostname.lower()` 대신 `classify(...).host or ""`를 저장한다(소문자, 끝 점 제거). 끝 점 있는 광고가 등록 URL과 맞지 않던 문제.
+- 증거: `test_discovery.py` 20 passed. 새 시험은 옛 줄로 되돌리면 적신(변이 증명).
+- gate 변화: 없음.
+- 결정: D-370 5.1.
+- 교훈: 없음.
