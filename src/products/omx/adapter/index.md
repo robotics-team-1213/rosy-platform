@@ -35,8 +35,8 @@
 
 ## 최근 기록
 
+- 2026-10-01 · uncommitted · merge phase recovery and record readiness gates
 - 2026-10-01 · uncommitted · fix(api): error responses echo the request's protocol version
 - 2026-10-01 · uncommitted · fail closed on restart and possible held object
 - 2026-10-01 · uncommitted · project durable OMX phases into Fleet status
 - 2026-10-01 · uncommitted · gate semantic phases on durable gripper evidence
-- 2026-10-01 · uncommitted · add fenced pick-place phase coordinator
