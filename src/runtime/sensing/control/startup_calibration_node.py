@@ -268,7 +268,7 @@ class StartupCalibrationNode(Node, CalibrationSequence, CalibrationRotation, Cal
                 'reason': 'Waiting for fresh odometry' if valid and pose is None else 'Scan or transform unavailable',
                 'locked': self.wall_tracker.locked,
                 'odom_age_s': time.monotonic()-odom_rows[-1][0] if odom_rows else None}
-        if valid and self.camera_capture is not None:
+        if valid and getattr(self, 'camera_capture', None) is not None:
             self.camera_capture_scan((np.asarray(msg.ranges, dtype=np.float32), msg.angle_min,
                                       msg.angle_increment, msg.range_min, msg.range_max))
         self.add_range('lidar', precision, valid and math.isfinite(precision))
@@ -343,7 +343,7 @@ class StartupCalibrationNode(Node, CalibrationSequence, CalibrationRotation, Cal
         mean, contrast = (float(pixels.mean()), float(pixels.std())) if pixels.size else (0, 0)
         self.add('camera', (mean, contrast),
                  valid and self.stamped(msg) and 5 <= mean <= 250 and contrast >= 2)
-        if valid and self.camera_capture is not None and self.stamped(msg):
+        if valid and getattr(self, 'camera_capture', None) is not None and self.stamped(msg):
             self.camera_capture_frame(pixels, msg.width, msg.height, msg.step)
 
     def read_tf(self):
@@ -468,7 +468,8 @@ class StartupCalibrationNode(Node, CalibrationSequence, CalibrationRotation, Cal
         self.read_tf()
         # TF collection timestamps its own samples; evaluate freshness after it.
         now = time.monotonic()
-        self.tick_camera_extrinsic(now, self.fresh_odom())
+        if getattr(self, 'camera_capture', None) is not None:  # stationary camera step running
+            self.tick_camera_extrinsic(now, self.fresh_odom())
         if self.phase in ('validating_motion', 'failed', 'aborted'):
             # A recovered stream must not retain a paused/failed sample label.
             # Readiness and trial acceptance still use their independent gates.

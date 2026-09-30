@@ -115,7 +115,11 @@ def icp(src, dst, init=(0.0, 0.0, 0.0), iterations=ICP_ITERATIONS):
             jac = np.column_stack([n[:, 0], n[:, 1], n[:, 0] * -dp[:, 1] + n[:, 1] * dp[:, 0]])
             delta = np.linalg.lstsq(jac, -r, rcond=None)[0]
             x += delta
-            info = {'inliers': float(keep.sum()) / len(src), 'rmse': float(np.sqrt(np.mean(r ** 2)))}
+            # Translation constraint: sqrt(min/max eigenvalue) of the normal
+            # directions. Near 0 = a corridor, travel along it is unobserved.
+            ev = np.linalg.eigvalsh(jac[:, :2].T @ jac[:, :2])
+            info = {'inliers': float(keep.sum()) / len(src), 'rmse': float(np.sqrt(np.mean(r ** 2))),
+                    'constraint': float(math.sqrt(max(ev[0], 0.0) / ev[1])) if ev[1] > 0 else 0.0}
             if abs(delta[0]) + abs(delta[1]) < 1e-5 and abs(delta[2]) < 1e-5:
                 break
     return (float(x[0]), float(x[1]), float(x[2])), info
@@ -161,7 +165,7 @@ def lidar_motion(scans, odom_guess, lidar_yaw_offset, lidar_x_m):
     key = scan_points(*scans[0])
     pose = (0.0, 0.0, 0.0)           # LiDAR frame k in LiDAR frame 0
     last_step = (0.0, 0.0, 0.0)
-    unwrapped, worst, rmses = 0.0, 1.0, []
+    unwrapped, worst, rmses, constraint = 0.0, 1.0, [], 1.0
     for k in range(1, len(scans)):
         step = to_lidar(between(odom_guess[k - 1], odom_guess[k])) if odom_guess is not None else last_step
         guess = compose(pose, step)
@@ -169,13 +173,15 @@ def lidar_motion(scans, odom_guess, lidar_yaw_offset, lidar_x_m):
         if info['inliers'] < MIN_INLIER_SHARE:
             return {'error': f'scan {k} did not register (inliers {info["inliers"]:.2f})'}
         worst, rmses = min(worst, info['inliers']), rmses + [info['rmse']]
+        constraint = min(constraint, info.get('constraint', 0.0))
         unwrapped += wrap(est[2] - pose[2])
         new = (est[0], est[1], unwrapped)
         last_step = between(pose, new)
         pose = new
     base = compose(compose(mount, pose), inverse(mount))
     return {'dx': base[0], 'dy': base[1], 'dth': unwrapped, 'lidar_dx': pose[0], 'lidar_dy': pose[1],
-            'min_inliers': worst, 'rmse': float(np.median(rmses)) if rmses else 0.0}
+            'min_inliers': worst, 'rmse': float(np.median(rmses)) if rmses else 0.0,
+            'min_constraint': constraint}
 
 
 # --- wheel model -------------------------------------------------------------
@@ -239,7 +245,8 @@ def segment_record(kind, joint0, joint1, motion, command=None, duration=None, wh
     phi_r = wheel_signs[1] * (joint1[1] - joint0[1])
     ds = math.copysign(math.hypot(motion['dx'], motion['dy']), motion['dx']) if kind == 'straight' else motion['dx']
     rec = {'kind': kind, 'phi_l': phi_l, 'phi_r': phi_r, 'ds': ds, 'dy': motion['dy'],
-           'dth': motion['dth'], 'rmse': motion['rmse'], 'min_inliers': motion['min_inliers']}
+           'dth': motion['dth'], 'rmse': motion['rmse'], 'min_inliers': motion['min_inliers'],
+           'min_constraint': motion.get('min_constraint')}
     if kind == 'straight' and abs(motion['lidar_dx']) + abs(motion['lidar_dy']) > 0:
         # Direction of LiDAR-frame travel = the scan angle of the nose (reverse: +pi).
         heading = math.atan2(motion['lidar_dy'], motion['lidar_dx'])
