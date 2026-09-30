@@ -143,6 +143,13 @@ SIZE_VERDICTS = {
         "accept: one concern (lane/IR line detection), ROS-free pure functions and trackers, host-testable (X5); "
         "the ground-geometry lane keeper already lives apart in lane_keep.py (D-364)",
     ),
+    "runtime/gateway/core/bridge/ros_bridge.py": (
+        606,
+        "accept: one CORE ROS executor integration point for publishers, subscriptions, lifecycle wiring, and "
+        "service/action clients; extracted policy and callback logic lives in core/bridge modules, and "
+        "timer/bridge behavior is covered by test_bridge_timers.py and test_bridge_reconcile.py. Re-judged "
+        "2026-10-01 at 606 after D-385 mode-to-emotion handoff wiring",
+    ),
     "runtime/sensing/control/sensing/perception/lane_bev.py": (
         611,
         "accept: one owner (LaneEdgeFollower + its bird's-eye helpers), ROS-free, host-testable (X5)",
@@ -172,7 +179,7 @@ SIZE_VERDICTS = {
         "accept: sim-only read-only viewer server (HTTP handler + ROS subscriptions); the pure logic already lives in live_view_model.py and the page in lane_live_view.html, covered by test_lane_live_view*.py and test_live_view_model.py (X5)",
     ),
     "control": (
-        36_861,
+        37_732,
         f"split: deploy closure needs only sensing + safety provider (P1a); {CONTROL_SPLIT} "
         "(re-judged 2026-09-30 at 33090 after D-356 added the ROS-free learned perception backend "
         "(sensing/perception/learned), the shadow node and the recording CLI; the learned backend sits "
@@ -183,7 +190,11 @@ SIZE_VERDICTS = {
         "re-judged again at 36677 with the ROS-free IR line calibration (perception/ir_calibration.py), its read-only "
         "device CLI and the camera-launch overlay validator (control/ir_overlay.py) — verdict unchanged; "
         "re-judged again at 36861 with keep v2 (boundary tracking, wall-base tape, corner-mode holds) and its "
-        "front end split into lane_keep_lines.py — verdict unchanged)",
+        "front end split into lane_keep_lines.py — verdict unchanged; re-judged 2026-10-01 at 37732 "
+        "when the D-47 addendum added the ROS-free calibration fits (sensing/odometry_fit.py, "
+        "sensing/perception/camera_extrinsic.py), the stationary camera step mixin "
+        "(calibration_camera.py) and the store reader (calibrated_values.py) — each its own module, "
+        "verdict unchanged)",
     ),
     # --- D-362 newly-covered files (web assets in src/ packages, ops roots). ---
     "runtime/sensing/web/diagnostic.html": (
@@ -239,12 +250,14 @@ SIZE_VERDICTS = {
         "splitting probe sequence from reporting would sever one diagnostic narrative (X5)",
     ),
     "products/omx/adapter/omx_adapter/action_store.py": (
-        1_109,
+        1_176,
         "accept: one owner for the durable local Action, per-attempt ROS phase journal, and semantic "
         "workflow terminal gate; they share SQLite transactions, identity fences, and restart-to-UNKNOWN "
         "recovery. ROS-free and host-testable. Re-judged 2026-10-01 at 1109 after the durable gripper "
         "evidence gate and restart-to-HOLD journal recovery; recovery updates share the same SQLite "
-        "transaction so the Action, phase, and possible-held-object state cannot split. The hard-tier "
+        "transaction so the Action, phase, and possible-held-object state cannot split. Re-judged "
+        "2026-10-01 at 1176 for late ROS UUID and exact-cancel intent journaling after UNKNOWN/HOLD "
+        "without reopening phase state (D-386). The hard-tier "
         "zero-growth rule prevents silent expansion",
     ),
 }
