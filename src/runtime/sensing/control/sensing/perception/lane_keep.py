@@ -131,6 +131,9 @@ CORNER_LATCH_FRAMES = 12
 #: pursues the new centre line at no less than its distance + CORNER_REACH_M.
 CORNER_SQUARE_RAD = math.radians(10.0)
 CORNER_REACH_M = 0.04
+#: While a corner is latched, a line this steep to the heading is still the
+#: corner line (the next lane's outer boundary seen mid-turn).
+CORNER_MIN_HEADING_RAD = math.radians(35.0)
 
 
 def _validate_positive(name, value):
@@ -368,8 +371,15 @@ class LaneKeeper:
                       "ends_px": [self.to_pixel(ground, float(p[0]), float(p[1])) for p in ends]}
             if abs(heading) > TRANSVERSE_MIN_ANGLE_RAD:
                 self.last["transverse"].append(record)
-                transverse.append((centre, direction, ends))
+                transverse.append((centre, direction, ends, False))
                 continue
+            if (self._corner_side is not None and abs(heading) > CORNER_MIN_HEADING_RAD
+                    and (heading > 0.0) == (self._corner_side == "left")):
+                # Mid-turn the next lane's outer line swings below the
+                # transverse angle, leaning toward the open side (the old
+                # lane's line leans the other way); while a corner is latched
+                # it stays the corner line (it cannot pick the side).
+                transverse.append((centre, direction, ends, True))
             # Side by ground geometry: the line's lateral offset (base_link y,
             # left +) where the lane is read. Almost under the robot, the last
             # target decides instead.
@@ -417,7 +427,7 @@ class LaneKeeper:
         """(target, strategy) from the nearest L-corner line ahead, or None.
         Updates the latched corner side."""
         best = None
-        for centre, direction, ends in transverse:
+        for centre, direction, ends, steep in transverse:
             ys = sorted(float(p[1]) for p in ends)
             if ys[0] > half or ys[1] < -half:
                 continue  # beside the path, not across it
@@ -425,17 +435,17 @@ class LaneKeeper:
             if not 0.0 < ahead <= CORNER_MAX_AHEAD_M:
                 continue
             if best is None or ahead < best[0]:
-                best = (ahead, centre, direction, ys)
+                best = (ahead, centre, direction, ys, steep)
         if best is None:
             if self._corner_frames > 0:
                 self._corner_frames -= 1
             if self._corner_frames == 0:
                 self._corner_side = None
             return None
-        ahead, centre, direction, ys = best
+        ahead, centre, direction, ys, steep = best
         left_reach, right_reach = ys[1], -ys[0]
         side = None
-        if max(left_reach, right_reach) > half + CORNER_OPEN_M:
+        if not steep and max(left_reach, right_reach) > half + CORNER_OPEN_M:
             # The closed end is where the corner line meets the outer lane line.
             if (left_reach - right_reach > CORNER_ASYMMETRY_M
                     and abs(right_reach - half) <= CORNER_CLOSED_TOLERANCE_M):

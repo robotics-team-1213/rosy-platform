@@ -197,6 +197,17 @@ def test_mid_turn_keeps_turning_toward_the_new_lane():
     assert obs is not None and obs.error < -0.3
 
 
+def test_latched_corner_follows_the_outer_line_below_the_transverse_angle():
+    # 40 deg into a left turn the next lane's outer line runs at +50 deg: not
+    # transverse any more, but still the corner line, not a side boundary.
+    keeper = LaneKeeper(camera_x_offset_m=X_OFFSET, smoothing=0.0, corner_turning=True)
+    keeper.update(_render_corner(0.40, "left"), GROUND, lane_half_width_m=HALF)
+    slope = np.tan(np.radians(50.0))
+    obs = keeper.update(_render([(-slope * 0.22, slope)]), GROUND, lane_half_width_m=HALF)
+    assert keeper.last["strategy"] == "corner_left"
+    assert obs is not None and obs.error < 0.0
+
+
 def test_corner_turning_is_opt_in():
     keeper = LaneKeeper(camera_x_offset_m=X_OFFSET, smoothing=0.0)
     keeper.update(_render_corner(0.40, "left"), GROUND, lane_half_width_m=HALF)
