@@ -31,6 +31,7 @@
 | D-319 | SETUP 뒤 현장 입회 하에 모터 구동 준비를 자동화한다 |
 | D-321 | 현장 보정과 G4 실측을 한 세션으로 모으고 지도 생성은 승인 뒤에 시작한다 |
 | D-325 | 기존 Pinky 배포는 변경에 맞는 가장 작은 산출물을 선택한다 |
+| D-373 | 학습 인식 두 번째 바퀴 — onnxruntime·모델 디렉터리는 Pinky 이미지 계층, 섀도·캡처는 기본 꺼진 페이로드, 불일치 60 s 스냅샷, 사이트 PC가 새 모델을 섀도까지 자동 반영 |
 
 ## 계획·결과 문서
 
@@ -65,8 +66,8 @@
 
 ## 최근 기록
 
+- 2026-09-30 · uncommitted · feat(native): D-373 operator switch for learned shadow and capture
 - 2026-09-30 · uncommitted · fix(native): D-373 old releases stay activatable on the superset runtime
 - 2026-09-30 · uncommitted · feat(image): D-373 learned-perception runtime and models directory
 - 2026-09-30 · uncommitted · deploy(harness): last_verified를 CI 초록 커밋으로 기록
 - 2026-09-30 · uncommitted · feat(site): D-352 robot_credential_key secret와 오프라인 rekey
-- 2026-09-30 · uncommitted · fix(image): io closure 계약에 D-84 지연 패키지 예외를 명시

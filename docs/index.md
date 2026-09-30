@@ -254,8 +254,8 @@
 
 ## 최근 기록
 
+- 2026-09-30 · uncommitted · docs(deployment): D-373 Pinky first-deploy and SD runbook for learned perception
 - 2026-09-30 · uncommitted · docs(plan): identify PICK_PLACE coordinate resolution gap
 - 2026-09-30 · uncommitted · test(omx): rerun vendor owner policy ROS-SIM
 - 2026-09-30 · uncommitted · docs(plan): classify prior OMX ROS-SIM evidence for Action mapping
 - 2026-09-30 · uncommitted · docs(plan): hold ROS Action mapping for selected hardware profile
-- 2026-09-30 · uncommitted · test(contracts): Mission feedback, goal, and stop truth separation

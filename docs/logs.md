@@ -3854,3 +3854,11 @@
 - 근거: `ResolvedTargetEvidence`는 pixel bbox와 camera/optical-frame/calibration/transform revision을 전달하지만 workspace pose/joint target은 전달하지 않는다. 픽/플레이스 연결에는 승인된 camera-to-workcell pose resolver, arm/gripper phase 계약, 독립 goal/placement verifier가 필요하다.
 - 결정: revision ID에서 변환값을 추정하거나 pixel 좌표를 joint 값으로 쓰지 않는다. profile-specific ROS mapping은 해당 pose/phase 계약이 선택될 때까지 대기한다.
 - gate 변화: 없음. ROS-SIM 경로 증거와 물리/production profile 수용은 분리한다.
+
+## 2026-09-30 · uncommitted · docs(deployment): D-373 Pinky first-deploy and SD runbook for learned perception
+
+- 변경: `docs/deployment/learned-perception-pinky.md` 신규. 계층 표(이미지·유닛·페이로드·운영자 설정), 새 SD 경로(`build-pinky-image.yml` → 서명·검증 → `prepare-rosy-sd.ps1`/`write-card.ps1` readback → `rosy_ml doctor`), 벤치 카드 경로(`install-learned-perception.sh --dry-run` → 실행, 기록 줄, `NATIVE_PYTHON_RUNTIME` 거절과 `compatible_predecessors`), 페이로드·유닛 손 설치·스위치 켜기, 첫 섀도 배포와 측정(125 ms 예산, `skip_ratio`, `measure-resident-cpu.sh` A/B, `docs/validation/` 기록), 캡처·수거·추출·초벌 라벨, 되돌리기. 운영자 안내와 두 스킬은 링크만 한다. `docs/deployment/AGENTS.md` 표에 등록.
+- 증거: `test/test_learned_perception_pinky_runbook.py` — 주소·토큰 없음, 상대 링크와 백틱 저장소 경로 존재, A–G 절, 유닛·launch·토픽·상태 키·`rosy_ml` 명령이 코드와 일치(2026-09-30 Windows).
+- gate 변화: 없음. 런북 절차 자체는 장치에서 한 번도 돌지 않았다.
+- 결정: 없음(D-373 이행 문서).
+- 교훈: 없음.

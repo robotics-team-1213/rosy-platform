@@ -1555,3 +1555,11 @@
 - gate 변화: 없음. DEVICE HOLD.
 - 결정: D-373 결정 1 리뷰 후속.
 - 교훈: 이미지 런타임 sha 한 값 일치 규칙은 상위집합 런타임 추가 때 롤백을 막는다. 부분집합 관계는 카드 쪽 기록으로만 선언한다.
+
+## 2026-09-30 · uncommitted · feat(native): D-373 operator switch for learned shadow and capture
+
+- 변경: `rosy-camera.service`에 `EnvironmentFile=-/etc/rosy/learned-perception.env`(선택). `camera_preview.launch.py`의 `learned_shadow`·`capture` 기본값을 `ROSY_LEARNED_SHADOW`·`ROSY_CAPTURE`에서 엄격하게 읽는다(`true`/`false`만, 그 밖은 꺼짐 + launch 경고). `EnvironmentVariable` 치환 대신 launch 파일 안의 파서를 쓴 이유: 치환은 잘못된 값을 `IfCondition`까지 그대로 넘겨 launch가 실패한다. 예시 `native/learned-perception.env.example`(둘 다 false, `.gitattributes` LF 고정 — CRLF면 systemd가 `false\r`로 읽는다). 하드닝·쓰기 경로는 그대로. 유닛은 이미지 계층이라 기존 카드는 릴리스 사본에서 손 설치한다(런북 D절). 첫 배포 런북 `docs/deployment/learned-perception-pinky.md`.
+- 증거: `test/test_native_systemd_contract.py`(선택 EnvironmentFile, 하드닝 불변, ExecStart에 스위치 없음, 예시 둘 다 false), WSL Jazzy `src/runtime/sensing/test/test_camera_preview_launch.py` 18 passed(환경 없음=꺼짐, `true`=켜짐, 잘못된 값 7종=꺼짐+경고, 명시 인자 우선), `test/test_learned_perception_pinky_runbook.py`(2026-09-30).
+- gate 변화: 없음. DEVICE HOLD — 유닛 손 설치, 스위치 재시작, 섀도 지연·CPU, 첫 캡처 수거는 실물 미확인.
+- 결정: D-373 결정 2(페이로드 스위치)의 장치 쪽 켜는 수단.
+- 교훈: 이미지 계층 유닛에 새 지시어를 넣으면 기존 카드는 페이로드만으로 받지 못한다. 런북에 손 설치와 확인 명령(`systemctl cat`)을 같이 적는다.
