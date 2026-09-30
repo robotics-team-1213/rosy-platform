@@ -117,6 +117,42 @@ def test_verification_uses_pinned_hostname_and_ca_before_returning_endpoint(monk
     assert calls == [("192.168.1.20", 8443, "fleet-a.local", ca_file)]
 
 
+# D-370 S7 prerequisite: /healthz may grow {"status","role","proto","contract_version"};
+# both probes accept the old body and the extended shape, and nothing looser.
+HEALTH_ACCEPTED = (
+    b'{"status":"ok"}',
+    b'{"status":"ok","role":"fleet","proto":"site-v1","contract_version":"1"}',
+    b'{"status":"ok","future_field":[1,2]}',
+)
+HEALTH_REJECTED = (
+    b'{"status":"ok","role":"overhead-camera"}',
+    b'{"status":"ok","role":null}',
+    b'{"status":"degraded","role":"fleet"}',
+    b'{"status":"down"}',
+    b'{"role":"fleet"}',
+    b'["status","ok"]',
+    b'"ok"',
+    b'not json',
+    b'{"status":"ok","pad":"' + b"x" * 1024 + b'"}',
+)
+
+
+@pytest.mark.parametrize("loader", (_module, _robot_module), ids=("site", "agent"))
+def test_health_probes_accept_old_and_extended_ok_bodies(loader):
+    module = loader()
+    for body in HEALTH_ACCEPTED:
+        module.check_health_body(body)
+
+
+@pytest.mark.parametrize("loader", (_module, _robot_module), ids=("site", "agent"))
+@pytest.mark.parametrize("body", HEALTH_REJECTED, ids=(
+    "wrong_role", "null_role", "degraded", "down", "no_status", "array", "string",
+    "not_json", "oversize"))
+def test_health_probes_reject_wrong_role_status_shape_or_size(loader, body):
+    with pytest.raises(ValueError, match="unexpected Fleet health response"):
+        loader().check_health_body(body)
+
+
 # D-370 5.1: the site script copy and FleetAgent are held to the shared TXT vectors.
 import json  # noqa: E402
 

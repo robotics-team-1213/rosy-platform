@@ -107,6 +107,23 @@ def select_candidate(candidates: list[dict], expected_hostname: str) -> dict:
     return matches[0]
 
 
+HEALTH_MAX_BYTES = 1024
+
+
+def check_health_body(body: bytes) -> None:
+    """Accept {"status":"ok"} and the D-370 extended shape; ignore unknown keys.
+
+    A present ``role`` must match the role Fleet advertises in its DNS-SD TXT.
+    """
+    try:
+        payload = json.loads(body) if len(body) <= HEALTH_MAX_BYTES else None
+    except ValueError:
+        payload = None
+    if (not isinstance(payload, dict) or payload.get("status") != "ok"
+            or ("role" in payload and payload["role"] != TXT["role"])):
+        raise ValueError("unexpected Fleet health response")
+
+
 def probe_health(address: str, port: int, hostname: str, ca_file: Path) -> None:
     """Connect to resolved IP, but verify the cert against the expected DNS name."""
     context = ssl.create_default_context(cafile=str(ca_file))
@@ -119,9 +136,7 @@ def probe_health(address: str, port: int, hostname: str, ca_file: Path) -> None:
             response.begin()
             if response.status != 200:
                 raise ValueError("Fleet HTTPS health probe failed")
-            body = response.read(1025)
-            if len(body) > 1024 or json.loads(body) != {"status": "ok"}:
-                raise ValueError("unexpected Fleet health response")
+            check_health_body(response.read(HEALTH_MAX_BYTES + 1))
 
 
 def verify_endpoint(candidate: dict, expected_hostname: str, ca_file: Path) -> str:

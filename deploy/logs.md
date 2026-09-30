@@ -1569,3 +1569,9 @@
 - 변경: rosy-boot-status.py 가 swarm_role 를 같은 규칙으로 검증·복사, rosy-boot-display.py 상태줄이 role_suffix 를 끝에 붙인다("Ready - NAVIGATION - LEADER").
 - 증거: test_boot_display.py·test_boot_status_indicator.py. 실기 확인은 다음 릴리스 때.
 - gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · fix(site): D-370 S7 준비 — fleet-mdns.py health 탐침이 확장 모양을 받는다
+
+- 변경: `deploy/site/fleet-mdns.py`의 `/healthz` 판정을 `check_health_body`로 뺐다(FleetAgent와 같은 규칙). 1024바이트 이하 JSON 객체, `status == "ok"`, `role`이 있으면 광고 TXT `role`(`fleet`)과 같아야 하고 모르는 키는 무시한다. 프로필 `docs/reference/site-lan-discovery-profile.md` 33행 문구도 맞췄다.
+- 증거: `test/test_site_fleet_mdns.py` 신규 health 시험(사이트·Agent 매개변수) 수정 전 빨강, 수정 후 초록.
+- gate 변화: 없음. Fleet·Vision `/healthz` 출력은 그대로 — 옛 로봇 이미지가 정확 비교를 하므로 서버 확장은 새 이미지 배포 뒤로 미룬다.

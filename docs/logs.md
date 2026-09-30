@@ -4008,3 +4008,9 @@
 - 증거: 세션 답 7/8(rosy-84·75·63·bc·0d·d3·70 동의, 반대 없음; rosy-c8 무응답 = 동의 처리). 사용자가 결정을 뒤집을 수 있다.
 - gate 변화: 없음. Accepted는 설계 수용이며 LOCAL·DEVICE·FIELD 증거가 아니다.
 - 결정: 위 D1–D3.
+
+## 2026-10-01 · uncommitted · docs(reference): 사이트 LAN 발견 프로필 — Fleet health 채택 규칙 완화
+
+- 변경: `site-lan-discovery-profile.md` 33행. `/healthz`가 정확히 `{"status":"ok"}`가 아니라 1024바이트 이하 JSON 객체에 `status == "ok"`, `role`이 있으면 `fleet`, 모르는 키 무시로 적었다(D-370 공개 상태 모양 대비).
+- 증거: `test/test_site_fleet_mdns.py` health 시험, `test/test_discovery_txt_profile_parity.py`.
+- gate 변화: 없음.
