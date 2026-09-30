@@ -13,14 +13,17 @@ ROOT = Path(__file__).resolve().parents[4]
 def test_task_contract_is_versioned_documented_and_wired_to_the_site_stack():
     reference = (ROOT / "docs/reference/ROSY API & Protocol Reference.md").read_text(
         encoding="utf-8")
-    app = (ROOT / "src/site/fleet/fleet/server/app.py").read_text(encoding="utf-8")
+    task_dispatch = (ROOT / "src/site/fleet/fleet/server/task_dispatch_routes.py").read_text(
+        encoding="utf-8")
+    intent = (ROOT / "src/site/fleet/fleet/server/intent_routes.py").read_text(
+        encoding="utf-8")
     web_root = ROOT / "src/site/fleet/fleet/server/web"
     web = (web_root / "console.js").read_text(encoding="utf-8")
     roster = (web_root / "roster.js").read_text(encoding="utf-8")
     web_contract = web + roster
     compose = (ROOT / "deploy/site/compose.yaml").read_text(encoding="utf-8")
 
-    assert "**Version:** v1.62" in reference
+    assert "**Version:** v1.63" in reference
     assert "## 10.16 Fleet goal-evidence producer contract (D-348)" in reference
     assert "`/api/fleet/goal-evidence`" in reference
     assert "X-Goal-Evidence-Token" in reference
@@ -51,8 +54,9 @@ def test_task_contract_is_versioned_documented_and_wired_to_the_site_stack():
         "REQUESTED", "QUEUED", "ACCEPTED", "RUNNING", "COMPLETED", "FAILED",
         "UNKNOWN", "HOLD", "CANCELED", "EXPIRED",
     }
-    assert 'alias="Idempotency-Key"' in app
-    assert 'call.verb == "navigate"' in app
+    assert 'alias="Idempotency-Key"' in task_dispatch
+    assert 'alias="Idempotency-Key"' in intent
+    assert 'call.verb == "navigate"' in intent
     assert '"Idempotency-Key": crypto.randomUUID()' in web
     assert 'task.status === "QUEUED"' in web_contract
     assert 'task.status === "UNKNOWN"' in web_contract
@@ -81,7 +85,7 @@ def test_site_fleet_intent_and_message_boundaries_are_governed_together():
     adr = (ROOT / "docs/adr/D-293-site-fleet-intent-api-contracts.md").read_text(
         encoding="utf-8")
 
-    assert "**Version:** v1.62" in reference
+    assert "**Version:** v1.63" in reference
     assert "X-Frame-Width" in reference and "X-Frame-Height" in reference
     assert "X-Frame-Rotation-Deg" in reference
     assert (
@@ -121,12 +125,15 @@ def test_site_fleet_intent_and_message_boundaries_are_governed_together():
 def test_site_estop_audit_failure_boundary_is_documented():
     reference = (ROOT / "docs/reference/ROSY API & Protocol Reference.md").read_text(
         encoding="utf-8")
-    app = (ROOT / "src/site/fleet/fleet/server/app.py").read_text(encoding="utf-8")
+    site_auth = (ROOT / "src/site/fleet/fleet/server/site_auth.py").read_text(
+        encoding="utf-8")
+    task_dispatch = (ROOT / "src/site/fleet/fleet/server/task_dispatch_routes.py").read_text(
+        encoding="utf-8")
 
     assert "still sends the stop fanout if the audit store" in reference
     assert "POST /api/fleet/do` continues to use the normal audit gate" in reference
-    assert "emergency stop audit unavailable" in app
-    assert "emergency stop dispatch latch unavailable" in app
+    assert "emergency stop audit unavailable" in site_auth
+    assert "emergency stop dispatch latch unavailable" in task_dispatch
 
 
 def test_site_camera_rectification_contract_keeps_preview_and_sightings_separate():
