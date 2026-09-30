@@ -34,8 +34,8 @@
 
 ## 최근 기록
 
+- 2026-10-01 · 22017f42 · fix(core): 만료 이벤트를 lock 밖에서 발행
 - 2026-10-01 · a527920a · feat(core): D-321 부록 보정 세션 lease
 - 2026-10-01 · uncommitted · feat(command): D-385 모드→표정 정책 emotion_map
 - 2026-10-01 · uncommitted · fix(fleet_agent): D-382 F10·I4 — 구독 해제와 이벤트 seq 사본
 - 2026-10-01 · uncommitted · fix(command): release_emergency 도 리스너 계약을 지킨다
-- 2026-09-30 · uncommitted · refactor(line_follow): 데이터 모델을 model.py 로 분리(파일 예산)

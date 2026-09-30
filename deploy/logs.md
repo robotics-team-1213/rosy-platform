@@ -1580,3 +1580,8 @@
 - 변경: `pinky_pro/rosy-calibration-guard.ps1`(읽기 전용 GET, 세션 있으면 exit 3). `rosy-release-push.ps1`·`dev/sync-core-dev.ps1` 가 원격 단계 전에 부르고 `-Force` 없으면 거부. 토큰 없음·CORE 무응답은 경고만. rosy-release-push SKILL 에 절차 추가(cfacfcd9 경로 수정).
 - 증거: test/test_calibration_guard.py 10 passed(localhost 가짜 CORE), test_release_push_entrypoint·test_core_dev_sync 통과. 로봇에는 닿지 않았다.
 - gate 변화: 없음.
+
+## 2026-10-01 · 2f59263f · fix(deploy): 보정 guard — 401/403 구분, 예상 밖 응답은 경고
+- 변경: HTTP 401/403 은 REJECTED(토큰 문제), 그 밖 HTTP 는 FAILED, 무응답은 UNREACHABLE. 응답 필드는 도우미로 읽어 StrictMode 중단 대신 UNEXPECTED REPLY 경고, owner 없는 세션도 거부. SKILL 은 `-ApiToken` 보다 ROSY_API_TOKEN·DPAPI 를 권한다.
+- 증거: test/test_calibration_guard.py 15 passed, test_release_push_entrypoint 통과.
+- gate 변화: 없음.

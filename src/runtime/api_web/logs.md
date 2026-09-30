@@ -242,3 +242,8 @@
 - 변경: 리뷰가 찾은 구멍 — 비소유자가 `navigation/goal`·`home`, `docking/dock`·`undock`, `swarm/follow` 로 여전히 구동할 수 있었다. `enter_navigation_mode` 가 lease 를 먼저 보고(goal·home·swarm·line-follow), dock·undock·swarm follow 는 첫 줄에서 본다. `/mode` IDLE 은 멈춤뿐이라 e-stop 처럼 누구에게나 연다. 만료가 lock 안에서 발행하므로 lease lock 을 RLock 으로.
 - 증거: test_calibration_session.py 15 passed(새 docking·IDLE 시험, 비소유자 409 목록 확장). 전체 core 도메인 2318 passed; 실패 3건은 main 에도 있는 test_core_node_teardown·test_module_criteria C6(D-385 ros_bridge getattr), 부하 때만 나는 test_line_follow_api IR 증거 stale(단독 통과).
 - gate 변화: 없음.
+
+## 2026-10-01 · 4f54dc54 · fix(core): 리뷰 반영 — 시작 조건, 차단 확대
+- 변경: `POST /calibration/session` 은 IDLE·MANUAL 이고 navigation·mapping·도킹·line-follow·swarm 이 없을 때만 연다(409 MODE_CONFLICT). `/ws/swarm/reference` 는 lease 중 비소유자 프레임을 버린다(4f54dc54). 1ff0ba6b: 비소유자의 `PUT /safety/limits`, initialpose, SLAM start/stop/reset, `/power/mode` 409, host release install·rollback·reboot 는 `override_calibration: true` 없이는 409. `/power/wake`·`/slam/save` 는 연다.
+- 증거: test_calibration_session.py 42 passed(시작 조건, reference 버림, 한도·host·pose·slam·power, viewer e-stop, cancel 열림, /api/v1/do 차단, 16 스레드 동시 시작 1건만). gateway·api_web·services 1955 passed, 새 실패 0 — test_module_criteria C6 는 main 의 D-385 ros_bridge getattr 에서 온 기존 실패.
+- gate 변화: 없음.

@@ -261,8 +261,8 @@
 
 ## 최근 기록
 
+- 2026-10-01 · 4483e7a8 · docs(api,adr): 보정 lease 소유·회수·배터리 복귀
 - 2026-10-01 · e8028fb0 · docs(adr): D-321 부록 — 보정 세션 표시와 차단
 - 2026-10-01 · uncommitted · docs(adr): D-385 Rosy가 스스로 표현한다
 - 2026-10-01 · uncommitted · docs(adr): D-341·D-382 Accepted — 병행 세션 결정 회차
 - 2026-10-01 · uncommitted · docs(adr): D-341·D-382 교차 세션 검토 반영
-- 2026-10-01 · uncommitted · docs(adr): D-178 기준선 rosy_vision 잠정 행 추가, overhead 행 제거

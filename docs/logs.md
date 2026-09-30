@@ -4019,3 +4019,8 @@
 - 변경: D-321 에 부록(보정 lease, activity 표시, CALIBRATION_ACTIVE, E-Stop 예외, 재시작 guard). 새 ADR 번호를 쓰지 않았다. API Ref v1.67(1a1a2c3a): 엔드포인트·activity·에러·이벤트 3종, 변경 이력 행. 참고: main 변경 이력에 v1.65 행이 없다(다른 브랜치 몫으로 보임).
 - 증거: rosy_harness lint 0 errors, test_event_catalogue 통과.
 - gate 변화: 없음.
+
+## 2026-10-01 · 4483e7a8 · docs(api,adr): 보정 lease 소유·회수·배터리 복귀
+- 변경: API Ref v1.67 과 D-321 부록에 — 소유는 토큰 단위, 회수된 토큰의 lease 는 ttl 까지 남음(Admin DELETE), SAF-005 RETURN_HOME 은 lease 를 일부러 무시, 시작 조건과 전체 차단 목록, host `override_calibration`, Pilot 이탈 규칙. 272151b6: main 이 추가한 test_mission_progress 핀 v1.66 → v1.67.
+- 증거: 문서 계약 시험 1 passed, 버전 핀 시험 통과, rosy_harness lint 0 errors.
+- gate 변화: 없음.
