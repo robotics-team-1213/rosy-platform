@@ -720,3 +720,9 @@
 - 변경: 독립 리뷰(APPROVE WITH FIXES) 1·5번. 첫 메시지 인증에서는 틀린 토큰이 소켓을 연 뒤 4401로 닫혀, 리더가 조용하면 레인이 이유 없이 연결된 것처럼 남았다. `ReferenceSink.wait_closed()`를 더하고 WebSocket 싱크가 닫힘을 `RobotApiError`(WS_4401/4403)로 알린다. 릴레이는 닫힘 감시가 기존 wake 신호를 세우게 해 스케줄 순서를 바꾸지 않고, 깨어나면 닫힘 이유를 레인에 적고 백오프한다. `send`의 `ConnectionClosed`도 같은 이유로 바꾼다. `fleet-mdns.py` 사본은 벡터 밖 입력에서도 `core_common` 판정과 같은지 시험한다.
 - 증거: 신규 시험 2건(수락 뒤 4401 싱크, 조용한 리더 중 레인 이유) 수정 전 실패·수정 후 통과. `test_relay.py`·`test_transport.py` 48 passed, `test/test_site_fleet_mdns.py` 76 passed.
 - gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · refactor(enrollment): D-391 4.1 device_kind 상수 사용
+
+- 변경: `enrollment_store.py`의 감사 기본값과 `retired_robot_ids` 조회가 문자열 `'robot'` 대신 `core_common.protocol.device_kind.ROBOT`을 쓴다(조회는 매개변수 바인딩). 값이 같아 동작 변경 없음.
+- 증거: `src/site/fleet/test/ -k enroll` 84 passed, 1 skipped.
+- gate 변화: 없음.
