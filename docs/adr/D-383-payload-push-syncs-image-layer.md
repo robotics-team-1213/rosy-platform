@@ -66,3 +66,4 @@ D-225 페이로드 릴리스는 `/opt/rosy/releases/<id>`(`install/`, 릴리스 
 
 - D-225 페이로드 전용 릴리스, D-174 F1 native-runtime 설치, D-189 D1 복구 유닛 쓰기 범위, D-247 램프 udev·modprobe
 - `.claude/skills/rosy-release-push/SKILL.md` 6단계
+- 문제 기록: `docs/solutions/workflow-issues/payload-push-leaves-the-image-layer-stale-2026-10-01.md` (작업 중에는 D-375로 불렀으나 번호가 겹쳐 D-383이 됐다)

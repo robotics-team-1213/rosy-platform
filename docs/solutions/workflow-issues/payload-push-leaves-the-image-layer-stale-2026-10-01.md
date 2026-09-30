@@ -13,7 +13,7 @@ symptoms:
 root_cause: missing_workflow_step
 resolution_type: workflow_improvement
 severity: medium
-tags: [payload-release, image-layer, d-225, d-375, drift, systemd-units, operator-workflow]
+tags: [payload-release, image-layer, d-225, d-383, drift, systemd-units, operator-workflow]
 ---
 
 # A payload push updates install/ but silently leaves the image layer stale
@@ -34,8 +34,8 @@ A pushed robot therefore runs new CORE and ROS code under old unit files and old
   - Some are comment or import-path noise, for example `rosy_config.py`, whose import falls back to `deploy.sd`.
   - Some change behaviour. `rosy-io.service` now starts `ir_adc_node`, and `rosy-navigation.service` gains a gate.
 - Back up to `/var/lib/rosy-bench-backup/<ts>-<release>/`, install, run `daemon-reload`, and restart only the changed active units. Then confirm that the new instance's nodes started. `process has died` lines stamped with the old PID come from the old instance shutting down; they are not a failure.
-- Automating this is D-375 (`feat/release-image-layer-sync`). The PC-side push runs a sync script shipped **inside the new release**, because old robots run old image-resident `activate-release.sh`. It uses an allowlist, backs up, rolls back with `-Rollback`, and never touches config.txt, the kernel, /usr/local Python or /etc/rosy.
+- Automating this is D-383 (`feat/release-image-layer-sync`). The PC-side push runs a sync script shipped **inside the new release**, because old robots run old image-resident `activate-release.sh`. It uses an allowlist, backs up, rolls back with `-Rollback`, and never touches config.txt, the kernel, /usr/local Python or /etc/rosy.
 - Base-layer changes (apt, /usr/local Python, config.txt, kernel) still need a card rewrite. The proposed next step is versioned one-time migrations shipped in the release, with Pi 5 `tryboot` for boot-config changes.
 
 ## Applicability
-This applies to any robot pushed with a payload newer than its image. Until D-375 lands, step 6 of the `rosy-release-push` skill (the hand install) is mandatory, not optional.
+This applies to any robot pushed with a payload newer than its image. Until D-383 lands, step 6 of the `rosy-release-push` skill (the hand install) is mandatory, not optional.
