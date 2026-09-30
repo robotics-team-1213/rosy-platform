@@ -248,3 +248,46 @@ def test_expiry_is_published_outside_the_lease_lock(lease):
     finally:
         unsubscribe()
     assert seen == [True, None]
+
+
+# --- review item 3: a lease starts only from a quiet robot; reference feed fenced ----
+
+
+def test_start_is_refused_while_the_robot_is_busy(lease):
+    client, services, _ = lease
+    assert client.post("/api/v1/mode", json={"mode": "MANUAL"}, headers=OPERATOR).status_code == 200
+    assert _open(client).status_code == 201           # MANUAL, nothing running: allowed
+    session_id = client.get("/api/v1/calibration/session", headers=VIEWER).json()["session"]["id"]
+    client.delete(f"/api/v1/calibration/session/{session_id}", headers=OPERATOR)
+
+    enabled = client.put("/api/v1/line-follow/mode", json={"mode": "IR_LINE"}, headers=OPERATOR)
+    assert enabled.status_code == 200                  # NAVIGATION + line-follow active
+    refused = _open(client)
+    assert refused.status_code == 409
+    assert refused.json()["error"]["code"] == "MODE_CONFLICT"
+    assert services.calibration.current() is None
+
+
+def test_start_is_refused_while_swarm_follow_is_armed(lease, monkeypatch):
+    client, services, _ = lease
+    monkeypatch.setattr(type(services.swarm), "active", property(lambda self: True))
+    refused = _open(client)
+    assert refused.status_code == 409 and "swarm" in refused.json()["error"]["message"]
+
+
+def _pose_frame():
+    from core_common.protocol.schemas import EnvelopeType
+    return {"type": EnvelopeType.POSE.value,
+            "payload": {"robot_id": "rosy_02", "pose": {"x": 1.0, "y": 0.0, "yaw": 0.0}, "seq": 1}}
+
+
+def test_swarm_reference_frames_from_non_owners_are_dropped_during_a_lease(lease):
+    client, services, _ = lease
+    received = []
+    services.swarm.on_reference_pose = received.append
+    _open(client)
+    for token, expected in (("rosy-dev-admin", 0), ("rosy-dev-operator", 1)):
+        with client.websocket_connect(f"/ws/swarm/reference?token={token}") as socket:
+            socket.send_json(_pose_frame())
+            socket.send_json({"type": "ping"})
+        assert len(received) == expected, token
