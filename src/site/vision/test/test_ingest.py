@@ -404,4 +404,5 @@ async def test_connect_log_reprs_and_caps_phone_supplied_text(caplog):
     line = next(r.getMessage() for r in caplog.records if "connected" in r.getMessage())
     assert "\n" not in line
     assert r"evil\nFAKE" in line
-    assert "x" * 60 in line and "x" * 60 + "x" * 10 not in line
+    # 64 characters: "evil\nFAKE LOG LINE " (19) plus 45 x.
+    assert "x" * 45 in line and "x" * 46 not in line
