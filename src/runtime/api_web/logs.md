@@ -237,3 +237,8 @@
 - 변경: app.py 가 calibration 라우터를 포함하고, docstring·description 핀을 v1.64(낡음) → v1.67 로. pilot 자산 allowlist 에 `calibration.js`(5db3391d).
 - 증거: test_protocol_version_alignment, test_line_follow_contract_docs, test_task_contract_docs, test_pilot_route 통과.
 - gate 변화: 없음.
+
+## 2026-10-01 · 1ae6b239 · fix(core): 보정 차단을 navigation·docking·swarm 까지, IDLE 은 열어 둔다
+- 변경: 리뷰가 찾은 구멍 — 비소유자가 `navigation/goal`·`home`, `docking/dock`·`undock`, `swarm/follow` 로 여전히 구동할 수 있었다. `enter_navigation_mode` 가 lease 를 먼저 보고(goal·home·swarm·line-follow), dock·undock·swarm follow 는 첫 줄에서 본다. `/mode` IDLE 은 멈춤뿐이라 e-stop 처럼 누구에게나 연다. 만료가 lock 안에서 발행하므로 lease lock 을 RLock 으로.
+- 증거: test_calibration_session.py 15 passed(새 docking·IDLE 시험, 비소유자 409 목록 확장). 전체 core 도메인 2318 passed; 실패 3건은 main 에도 있는 test_core_node_teardown·test_module_criteria C6(D-385 ros_bridge getattr), 부하 때만 나는 test_line_follow_api IR 증거 stale(단독 통과).
+- gate 변화: 없음.
