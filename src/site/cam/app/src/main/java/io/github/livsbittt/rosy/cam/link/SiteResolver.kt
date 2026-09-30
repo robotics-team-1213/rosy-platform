@@ -3,10 +3,12 @@ package io.github.livsbittt.rosy.cam.link
 import io.github.livsbittt.rosy.cam.settings.SiteLink
 import java.net.InetAddress
 import java.net.UnknownHostException
+import java.security.cert.X509Certificate
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import okhttp3.Dns
+import okhttp3.internal.tls.OkHostnameVerifier
 
 /** One resolved `_rosy-overhead._tcp` advertisement that passed the D-370 TXT rule. */
 data class SiteSighting(val serviceName: String, val tlsHost: String, val port: Int, val addresses: List<InetAddress>)
@@ -92,13 +94,14 @@ class SiteResolver(
     }
 
     /**
-     * For a link that knows only `manual_host`: the advertisement whose address is that IP, so its `tls_host`
-     * can be saved. Only for a pinned link: the CA pin, not the advertisement, then vouches for the name.
+     * For a pinned link that knows only `manual_host`: the one advertisement at that IP, as a candidate name.
+     * Null when none or more than one answers there. The advertisement is unauthenticated, so the caller saves
+     * the name only after [leafCovers] confirms it on a live pinned handshake to `manual_host` (review M2).
      */
     fun learnTlsHost(): SiteSighting? {
         if (link.tlsHost != null || link.caPin == null) return null
         val manual = manualAddress() ?: return null
-        return browser.browse(browseTimeoutMs) { manual in it.addresses }.firstOrNull()
+        return browser.browse(browseTimeoutMs) { manual in it.addresses }.singleOrNull()
     }
 
     /** `manual_host` as an address, or null when absent or not a literal (never throws, review M1). */
@@ -131,6 +134,13 @@ class SiteResolver(
         const val CACHE_MS = 30_000L
 
         fun isMdnsName(host: String): Boolean = host.trimEnd('.').lowercase().endsWith(".local")
+
+        /**
+         * True when [leaf], the peer of a live handshake that already passed the pinned site CA, names [host]
+         * in its SAN (OkHttp's own hostname rules). This is what lets an advertised name be saved (review M2).
+         */
+        fun leafCovers(host: String, leaf: X509Certificate?): Boolean =
+            leaf != null && OkHostnameVerifier.verify(host.trimEnd('.'), leaf)
 
         private fun sameHost(a: String, b: String): Boolean =
             a.trim().trimEnd('.').equals(b.trim().trimEnd('.'), ignoreCase = true)

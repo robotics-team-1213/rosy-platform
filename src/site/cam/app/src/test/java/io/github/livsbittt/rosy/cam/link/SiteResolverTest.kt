@@ -154,6 +154,9 @@ class SiteResolverTest {
         assertNull(SiteResolver(link.copy(caPin = null, secure = false), browser).learnTlsHost())
         // Already named: nothing to learn.
         assertNull(SiteResolver(site, browser).learnTlsHost())
+        // Two adverts at the same IP (review M2): ambiguous, learn nothing.
+        val two = FakeBrowser(listOf(seen("rosy-site.local", "192.168.1.10"), seen("evil.local", "192.168.1.10", name = "evil")))
+        assertNull(SiteResolver(link, two).learnTlsHost())
     }
 
     @Test

@@ -2,6 +2,7 @@ package io.github.livsbittt.rosy.cam.link
 
 import android.util.Log
 import io.github.livsbittt.rosy.cam.settings.PairingUri
+import java.security.cert.X509Certificate
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -105,6 +106,14 @@ class OverheadLink(
 
     private val _status = MutableStateFlow(LinkStatus())
     val status: StateFlow<LinkStatus> = _status.asStateFlow()
+
+    private val _peerLeaf = MutableStateFlow<X509Certificate?>(null)
+
+    /**
+     * Leaf certificate of the last opened `wss://` session; it already passed the link's trust (the pinned CA).
+     * Null before the first TLS open and on plain `ws://`.
+     */
+    val peerLeaf: StateFlow<X509Certificate?> = _peerLeaf.asStateFlow()
 
     /** Set by the camera after each encode; published with the 1 s counters. */
     @Volatile
@@ -276,6 +285,10 @@ class OverheadLink(
                 webSocket.close(1000, "stale")
                 return
             }
+            // The pinned trust manager records the leaf it verified; OkHttp's handshake list is empty with it.
+            val leaf = (response.handshake?.peerCertificates?.firstOrNull() as? X509Certificate)
+                ?: (client.x509TrustManager as? PinnedTrustManager)?.lastTrustedLeaf
+            if (response.handshake != null && leaf != null) _peerLeaf.value = leaf
             val s = sensor
             webSocket.send(Protocol.hello(pairing.source, appVersion, device, s.width, s.height, s.rotationDeg, lens))
             backoff.reset()

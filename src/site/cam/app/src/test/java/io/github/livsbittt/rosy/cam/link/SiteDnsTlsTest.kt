@@ -11,14 +11,21 @@ import javax.net.ssl.SSLPeerUnverifiedException
 import javax.net.ssl.SSLSocket
 import javax.net.ssl.SSLSocketFactory
 import javax.net.ssl.StandardConstants
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.WebSocketListener
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import okhttp3.tls.HandshakeCertificates
 import okhttp3.tls.HeldCertificate
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Test
 
@@ -118,6 +125,39 @@ class SiteDnsTlsTest {
         val server = serve(TLS_HOST)
         val link = link(server.port, manualHost = LOOPBACK)
         assertEquals(200, get(client(link, browser()), server))
+    }
+
+    @Test
+    fun aLearnedNameMustBeInTheLeafOfALivePinnedHandshake() {
+        // Review M2: an IP-only link learns tls_host only when the pinned site's own leaf names it.
+        val leaf = HeldCertificate.Builder().commonName("site")
+            .addSubjectAlternativeName(LOOPBACK).addSubjectAlternativeName(TLS_HOST).signedBy(siteCa).build()
+        val certs = HandshakeCertificates.Builder().heldCertificate(leaf, siteCa.certificate).build()
+        val server = MockWebServer().also {
+            it.useHttps(certs.sslSocketFactory(), false)
+            it.start(InetAddress.getByName(LOOPBACK), 0)
+            servers += it
+        }
+        server.enqueue(MockResponse().withWebSocketUpgrade(object : WebSocketListener() {
+            override fun onClosing(webSocket: okhttp3.WebSocket, code: Int, reason: String) {
+                webSocket.close(code, null)
+            }
+        }))
+        val pairing = SiteLink(null, null, server.port, caPin, "t", "overhead-1", secure = true, manualHost = LOOPBACK).toPairing()
+        val link = OverheadLink(pairing, "0.1.0", "jvm-test")
+        try {
+            link.start()
+            val status = runBlocking {
+                withTimeout(10_000) { link.status.first { it.state == LinkState.STREAMING || it.error != null } }
+            }
+            assertEquals(status.toString(), LinkState.STREAMING, status.state)
+            val peer = runBlocking { withTimeout(10_000) { link.peerLeaf.filterNotNull().first() } }
+            assertTrue(SiteResolver.leafCovers(TLS_HOST, peer))
+            assertFalse(SiteResolver.leafCovers("evil.local", peer))
+        } finally {
+            link.stop()
+        }
+        assertFalse(SiteResolver.leafCovers(TLS_HOST, null))
     }
 
     @Test

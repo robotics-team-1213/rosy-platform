@@ -44,6 +44,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.distinctUntilChangedBy
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
@@ -175,9 +176,15 @@ class StreamService : LifecycleService() {
                     // "수동 주소" at once; no browse without a tls_host. Never crash the Main dispatcher (review M1).
                     runCatching { resolver.resolve() }.onFailure { Log.w(TAG, "manual route lookup failed", it) }
                     launch(Dispatchers.IO) {
-                        resolver.learnTlsHost()?.let { seen ->
+                        val seen = resolver.learnTlsHost() ?: return@launch
+                        // The advert is unauthenticated: save its name only when the pinned handshake to
+                        // manual_host presents a leaf that covers it (review M2).
+                        val leaf = newLink.peerLeaf.filterNotNull().first()
+                        if (SiteResolver.leafCovers(seen.tlsHost, leaf)) {
                             Log.i(TAG, "learned tls_host ${seen.tlsHost} at ${siteLink.manualHost}")
                             store.learnTlsHost(siteLink, seen.tlsHost, seen.serviceName)
+                        } else {
+                            Log.w(TAG, "advertised ${seen.tlsHost} at ${siteLink.manualHost} is not in the site certificate; not learned")
                         }
                     }
                 }
