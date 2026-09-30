@@ -319,11 +319,13 @@ def test_the_status_inputs_carry_only_the_threshold_the_states_and_the_mode(tmp_
     written = json.loads((tmp_path / "run/rosy/status-inputs.json").read_text(encoding="utf-8"))
 
     assert set(written) == {"schema", "written_at", "battery_warning_percent", "devices",
-                            "robot_mode", "nav_state"}
+                            "robot_mode", "nav_state", "swarm_role"}
     assert written["battery_warning_percent"] == 25.0
     assert written["devices"] == [{"id": "camera", "state": "no_response", "product": True}]
     assert written["robot_mode"] == "NAVIGATION"
     assert written["nav_state"] == "BLOCKED"
+    # D-383: additive like the modes — a state without a formation role is absent.
+    assert written["swarm_role"] is None
 
 
 @pytest.mark.parametrize("mode,nav", [(None, None), ("DRIVE", "LOST"), (3, 4), (True, False)])
