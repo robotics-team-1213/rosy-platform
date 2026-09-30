@@ -79,6 +79,23 @@
         "rotation_deg": 90
       }
     },
+    "hello_with_lens": {
+      "type": "hello",
+      "proto": "rosy-overhead/1",
+      "source": "overhead-1",
+      "app_version": "0.1.0",
+      "device": "test-device",
+      "sensor": {
+        "width": 1280,
+        "height": 720,
+        "rotation_deg": 90
+      },
+      "lens": {
+        "kind": "wide",
+        "focal_mm": 2.2,
+        "hfov_deg": 104.1
+      }
+    },
     "hello_bad_proto": {
       "type": "hello",
       "proto": "rosy-overhead/2",
@@ -112,6 +129,109 @@
       "rx_fps": 2.9,
       "dropped": 0
     }
+  },
+  "hello_lens": {
+    "_doc": "Optional additive hello field (2026-09-30). Receivers log it and ignore unknown hello fields; a missing or malformed lens never rejects the hello. kind is 'wide' or 'standard'; focal_mm is the shortest LENS_INFO_AVAILABLE_FOCAL_LENGTHS value; hfov_deg is 2*atan(sensor long edge / (2*focal_mm)) over SENSOR_INFO_PHYSICAL_SIZE. Both rounded to 0.1.",
+    "valid": [
+      {
+        "lens": {
+          "kind": "wide",
+          "focal_mm": 2.2,
+          "hfov_deg": 104.1
+        },
+        "parsed": {
+          "kind": "wide",
+          "focal_mm": 2.2,
+          "hfov_deg": 104.1
+        }
+      },
+      {
+        "lens": {
+          "kind": "standard",
+          "focal_mm": 5.4,
+          "hfov_deg": 67.8
+        },
+        "parsed": {
+          "kind": "standard",
+          "focal_mm": 5.4,
+          "hfov_deg": 67.8
+        }
+      },
+      {
+        "lens": {
+          "kind": "standard",
+          "focal_mm": 5.4,
+          "hfov_deg": 67.8,
+          "future": 1
+        },
+        "parsed": {
+          "kind": "standard",
+          "focal_mm": 5.4,
+          "hfov_deg": 67.8
+        }
+      }
+    ],
+    "ignored": [
+      {
+        "name": "not_object",
+        "lens": "wide"
+      },
+      {
+        "name": "unknown_kind",
+        "lens": {
+          "kind": "tele",
+          "focal_mm": 9.0,
+          "hfov_deg": 30.0
+        }
+      },
+      {
+        "name": "zero_focal",
+        "lens": {
+          "kind": "wide",
+          "focal_mm": 0,
+          "hfov_deg": 104.1
+        }
+      },
+      {
+        "name": "string_focal",
+        "lens": {
+          "kind": "wide",
+          "focal_mm": "2.2",
+          "hfov_deg": 104.1
+        }
+      },
+      {
+        "name": "bool_hfov",
+        "lens": {
+          "kind": "wide",
+          "focal_mm": 2.2,
+          "hfov_deg": true
+        }
+      },
+      {
+        "name": "hfov_out_of_range",
+        "lens": {
+          "kind": "wide",
+          "focal_mm": 2.2,
+          "hfov_deg": 180
+        }
+      },
+      {
+        "name": "huge_int_focal",
+        "lens": {
+          "kind": "wide",
+          "focal_mm": 9999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999,
+          "hfov_deg": 104.1
+        }
+      },
+      {
+        "name": "missing_hfov",
+        "lens": {
+          "kind": "wide",
+          "focal_mm": 2.2
+        }
+      }
+    ]
   },
   "close_codes": {
     "bad_proto": 4400,

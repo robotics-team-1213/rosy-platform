@@ -8,14 +8,14 @@
 |---|---|---|---|
 | ROSY 로봇 CORE | `_rosy._tcp.local` | 로봇 CORE API, 기본 8080 | Pi 부팅 상태 서비스에서 광고 |
 | ROSY Ubuntu Fleet | `_rosy-fleet._tcp.local` | 사이트 HTTPS 프록시, 기본 8443 | Ubuntu Avahi 서비스와 확인 도구 준비 |
-| ROSY Site Vision 카메라 수신기 | `_rosy-overhead._tcp.local` | TLS WSS `/overhead/v1/frames`, 보통 8443 | Site Avahi 광고, 앱은 선택 목록으로 표시 |
+| ROSY Vision 카메라 수신기 | `_rosy-overhead._tcp.local` | TLS WSS `/overhead/v1/frames`, 보통 8443 | Site Avahi 광고, 앱은 선택 목록으로 표시 |
 | 다른 SERION 미들웨어·장치 | 제품별 고유 서비스 종류를 먼저 할당 | 해당 제품의 공개 API | 이 저장소에서 구현하지 않음 |
 
 한 서비스 종류는 하나의 연결 프로토콜과 역할을 뜻한다. `_http._tcp` 같은 범용 이름에 모든 제품을 섞지 않는다. 서비스 인스턴스 이름은 사람이 보는 표시용이고, SRV target의 `<hostname>.local`은 주소 후보이며, 둘 다 장치 신원의 증거가 아니다. 같은 호스트가 여러 역할을 제공하면 역할별 서비스 레코드를 따로 광고한다.
 
 모든 새 광고는 다음 TXT 키를 넣는다. TXT는 공개 정보만 포함한다. 알 수 없는 키는 무시하며, 필수 키가 중복되거나 값이 맞지 않으면 해당 광고를 버린다.
 
-| 키 | 뜻 | 로봇 값 | Fleet 값 | Site Vision 값 |
+| 키 | 뜻 | 로봇 값 | Fleet 값 | Rosy Vision 값 |
 |---|---|---|---|---|
 | `product` | 제품군 | `rosy` | `rosy` | `rosy` |
 | `role` | API 역할 | `robot` | `fleet` | `overhead-camera` |

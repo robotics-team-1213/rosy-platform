@@ -11,7 +11,7 @@ Developer-side half of the D-356 perception learning loop: turn robot recordings
 
 | File | Description |
 |------|-------------|
-| `dataset/` | `harvest.py` pulls sessions off a robot, `extract.py`/`frames.py` cut frames, `prelabel.py` pre-labels, `build.py` builds a session-split dataset, `publish.py` publishes it for the trainer |
+| `dataset/` | `harvest.py` pulls sessions off a robot, `extract.py`/`frames.py` cut frames, `bag_to_video.py` turns a session into an H.265/H.264 mp4 plus per-frame sidecar in `data/teleop/learning/` (gitignored), `prelabel.py` pre-labels, `build.py` builds a session-split dataset, `publish.py` publishes it for the trainer |
 | `dataset/` (D-379) | `catalog.py` keeps `data/perception/catalog.jsonl` (one row per session); `autolabel.py` + `labels.py` + `geometry.py` label frames automatically (LiDAR walls, driven floor); `build.py --auto-labels` builds them into `<store>/datasets/<name>/<content_sha>/` |
 | `model/` | `export_onnx.py` exports ONNX, `intake.py` + `intake_gate.yaml` verify a returned model, `deliver.py` ships it (and rolls back) |
 | `training/` | Trainer contract (`README.md`), step-by-step Colab manual (`COLAB.md`), `check_manifest.py`, `export_cell.py`. Training itself runs outside this repo |
