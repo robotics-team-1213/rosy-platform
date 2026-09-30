@@ -4,6 +4,7 @@ import java.net.ConnectException
 import java.net.NoRouteToHostException
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
+import java.security.cert.CertificateException
 import javax.net.ssl.SSLException
 
 /** What a failed WebSocket attempt says about the path to the receiver. Pure JVM; no Android types. */
@@ -35,12 +36,19 @@ enum class NetworkFailure {
          */
         fun classify(error: Throwable): NetworkFailure {
             val chain = generateSequence(error) { it.cause }.take(MAX_DEPTH).toList()
-            if (chain.any { it is PinMismatchException || it.message.orEmpty().contains(PinMismatchException.MARKER) }) {
-                return TLS_PIN
-            }
+            if (chain.any(::isPinMismatch)) return TLS_PIN
             chain.firstNotNullOfOrNull(::specific)?.let { return it }
             return if (chain.any { it is ConnectException }) UNREACHABLE else OTHER
         }
+
+        /**
+         * Our own exception, or a TLS/certificate exception whose text carries the marker (some TLS
+         * stacks keep only the trust manager's message). Other exceptions never count: their text can
+         * come from the peer, e.g. an HTTP reason phrase on plain ws://, and must not force a stop.
+         */
+        private fun isPinMismatch(t: Throwable): Boolean =
+            t is PinMismatchException ||
+                ((t is SSLException || t is CertificateException) && t.message.orEmpty().contains(PinMismatchException.MARKER))
 
         private fun specific(t: Throwable): NetworkFailure? {
             val message = t.message.orEmpty()

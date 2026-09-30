@@ -311,8 +311,9 @@ class OverheadLink(
             } else {
                 LinkError.Network(t.message ?: t.javaClass.simpleName, NetworkFailure.classify(t))
             }
-            // A pin mismatch cannot heal by retrying: the site certificate changed or this is not the site (D-341 10).
-            val fatal = error is LinkError.Network && error.kind == NetworkFailure.TLS_PIN
+            // A pin mismatch cannot heal by retrying: the site certificate changed or this is not the site
+            // (D-341 10). It can only happen before any HTTP response, so a response rules it out.
+            val fatal = response == null && error is LinkError.Network && error.kind == NetworkFailure.TLS_PIN
             onLost(gen, error, fatal = fatal)
         }
 

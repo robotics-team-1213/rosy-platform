@@ -56,6 +56,14 @@ class NetworkFailureTest {
     }
 
     @Test
+    fun theMarkerInPeerTextIsNotAPinMismatch() {
+        // OkHttp puts the HTTP reason phrase into its exception text; a server must not be able to force a stop.
+        val reason = java.net.ProtocolException("Expected HTTP 101 response but was '503 ${PinMismatchException.MARKER}: x'")
+        assertEquals(NetworkFailure.OTHER, NetworkFailure.classify(reason))
+        assertEquals(NetworkFailure.OTHER, NetworkFailure.classify(IOException("wrapped", reason)))
+    }
+
+    @Test
     fun okHttpWrappedRefusalIsRefusedNotUnreachable() {
         val wrapped = ConnectException("Failed to connect to /10.0.0.2:8095").apply {
             initCause(ConnectException("Connection refused: connect"))
