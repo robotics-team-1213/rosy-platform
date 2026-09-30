@@ -5,6 +5,7 @@
 import {
   MAP_FIT_PREFIX, multiply3, invert3, project, scale3, projectPolyline, projectTriangles,
   normalizeMapProposal, fitSummary, pickLanes, topDownLayout, parseMapDraft, draftFrom,
+  retryDelay, MAP_FIT_MAX_TRIES,
 } from "./map-fit.js";
 import { warpImage } from "./field-view.js";
 
@@ -23,7 +24,7 @@ function storageRemove(key) {
 
 const KIND_LABEL = { proposal: "제안(검토 중)", rejected: "거부된 최선 적합(참고용)", draft: "수락한 맞춤(이 브라우저)" };
 
-export function createMapFitView({ el, view, call, visionView }) {
+export function createMapFitView({ el, view, call, visionView, onChanged = () => {} }) {
   const overlay = el("vision-lane-overlay");
   const figure = el("map-fit-figure");
   const canvas = el("map-fit-canvas");
@@ -188,13 +189,30 @@ export function createMapFitView({ el, view, call, visionView }) {
     guidance.textContent = summary.guidance || "";
   }
 
+  // 한 번 맞추는 데 1–2 s 라 Vision 이 429(계산 중·초당 1회)를 줄 수 있다. 오류가 아니라 "맞추는 중"이다.
+  async function fetchUntilDone() {
+    for (let attempt = 0; ; attempt += 1) {
+      try {
+        return await visionView.fetchMapProposal();
+      } catch (error) {
+        const wait = retryDelay(error, attempt);
+        if (wait == null) {
+          if (error.busy) error.message = "Vision이 아직 맞추는 중입니다. 잠시 뒤 다시 누르세요.";
+          throw error;
+        }
+        state.textContent = `맞추는 중… (${attempt + 1}/${MAP_FIT_MAX_TRIES})`;
+        await new Promise((resolve) => setTimeout(resolve, wait));
+      }
+    }
+  }
+
   el("map-fit-detect").addEventListener("click", async () => {
     state.textContent = "Vision에서 차선 페인트를 사이트 지도에 맞추는 중입니다(약 1 s)…";
     state.dataset.tone = "neutral";
     guidance.hidden = true;
     visionView.showRaw();
     try {
-      const [{ source, body }] = await Promise.all([visionView.fetchMapProposal(), ensureLanes({ force: !lanes })]);
+      const [{ source, body }] = await Promise.all([fetchUntilDone(), ensureLanes({ force: !lanes })]);
       const norm = normalizeMapProposal(body);
       pending = norm ? { source, norm } : null;
       showSummary(fitSummary(norm));
@@ -215,6 +233,7 @@ export function createMapFitView({ el, view, call, visionView }) {
       ? "맞춤을 이 브라우저의 표시 초안으로 저장했습니다. 관측 좌표·CameraMap·주행에는 쓰지 않습니다."
       : "브라우저 저장을 쓸 수 없어 수락한 맞춤을 보관하지 못했습니다." });
     render();
+    onChanged();
   });
   dismissButton.addEventListener("click", () => {
     pending = null;
@@ -225,14 +244,23 @@ export function createMapFitView({ el, view, call, visionView }) {
     storageRemove(`${MAP_FIT_PREFIX}${visionView.currentSource()}`);
     showSummary({ tone: "neutral", guidance: null, headline: "이 카메라의 저장한 맞춤을 지웠습니다." });
     render();
+    onChanged();
   });
 
   visionView.onFrame((frame) => {
     if (lastFrame?.source !== frame.source && pending && pending.source !== frame.source) pending = null;
     lastFrame = frame;
-    if (!lanes && draftFor(frame.source)) ensureLanes().then(render);
+    if (!lanes && draftFor(frame.source)) ensureLanes().then(() => { render(); onChanged(); });
     render();
   });
+
+  // D-360 경기장 뷰 대체 경로: 운용자가 수락한 지도 맞춤이 있을 때만, 지도 사각형을 그 homography 로 편다.
+  view.mapFieldFallback = (frame) => {
+    const draft = frame && !frame.rectified ? draftFor(frame.source) : null;
+    const laneSet = draft && lanes ? pickLanes(lanes, frame.source) : null;
+    if (!laneSet || !frame.image?.naturalWidth) return null;
+    return { mapToShown: displayMatrices(draft, frame.image).mapToShown, bounds: laneSet.bounds };
+  };
 
   function reset() {
     lanes = null;

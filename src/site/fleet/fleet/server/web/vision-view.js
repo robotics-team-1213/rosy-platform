@@ -409,7 +409,13 @@ export function createVisionView({ el, call, auth }) {
       }
       throw new Error("최신 프레임이 없어 맞출 수 없습니다.");
     }
-    if (response.status === 429) throw new Error("잠시 뒤 다시 찾으세요(초당 1회).");
+    if (response.status === 429) {
+      // 속도 제한·계산 중. 지도 맞춤은 이 표시로 Retry-After 뒤 다시 묻는다(오류로 보이지 않는다).
+      const error = new Error("잠시 뒤 다시 찾으세요(초당 1회).");
+      error.busy = true;
+      error.retryAfterMs = 1000 * (Number(response.headers.get("Retry-After")) || 1);
+      throw error;
+    }
     if (response.status === 422) throw new Error("프레임을 해석하지 못했습니다. 잠시 뒤 다시 찾으세요.");
     if (!response.ok) {
       throw new Error(response.headers.get("X-Frame-State") === "stale"

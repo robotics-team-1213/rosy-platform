@@ -136,7 +136,13 @@ def test_console_serves_the_map_fit_view_wired_to_vision_and_fleet():
     assert 'import { warpImage } from "./field-view.js"' in fit_view
     # Vision serves the proposal on the same lease; Fleet never relays it.
     assert 'fetchFieldProposal("map-proposal")' in vision_view
-    assert "createMapFitView({ el, view, call, visionView })" in shell
+    assert "createMapFitView({ el, view, call, visionView, onChanged: () => fieldView.render() })" in shell
+    # D-360 fallback: the field view warps through the full map homography, never the clamped corners.
+    field_view = client.get("/console/assets/field-view.js").text
+    assert "view.mapFieldFallback?.(frame)" in field_view
+    assert "multiply3(byMap.mapToShown, fieldToMap(byMap.bounds, field))" in field_view
+    # A busy (429) proposal read is retried, not shown as an error.
+    assert "retryDelay(error, attempt)" in fit_view and "맞추는 중…" in fit_view
     for element_id in ("map-fit-detect", "map-fit-accept", "map-fit-state", "map-fit-guidance",
                        "map-fit-canvas", "vision-lane-overlay"):
         assert f'id="{element_id}"' in page

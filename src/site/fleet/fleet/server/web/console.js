@@ -549,9 +549,11 @@ const signals = createSignals({ el, view, log, call, refreshState });
 const visionView = createVisionView({ el, call, auth, authHeaders });
 // D-360: 경기장 제안·보정 뷰·레이어 토글. 레이어가 바뀌면 지도를 다시 그린다.
 let mapFit = null;
-createFieldView({ el, view, visionView, onLayersChanged: () => { mapView.draw(); mapFit?.render(); } });
+const fieldView = createFieldView({ el, view, visionView,
+  onLayersChanged: () => { mapView.draw(); mapFit?.render(); } });
 // D-375: 차선 페인트 지도 맞춤 제안 → 카메라 위 차선·지도 평면 뷰. 수락해도 표시 초안일 뿐이다.
-mapFit = createMapFitView({ el, view, call, visionView });
+// 수락한 맞춤은 D-360 경기장 뷰의 대체 경로도 된다(경기장 자동 찾기가 실패하는 설치).
+mapFit = createMapFitView({ el, view, call, visionView, onChanged: () => fieldView.render() });
 
 // --- 신호등 (ROSY-SIGNAL-001) --------------------------------------------------
 

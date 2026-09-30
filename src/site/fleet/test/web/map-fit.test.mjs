@@ -4,8 +4,29 @@ import assert from "node:assert/strict";
 import {
   flatMatrix, multiply3, invert3, project, scale3, projectPolyline, projectTriangles,
   normalizeMapProposal, reasonText, cutGuidance, fitSummary, pickLanes, topDownLayout,
-  parseMapDraft, draftFrom,
+  parseMapDraft, draftFrom, fieldToMap, retryDelay, MAP_FIT_MAX_TRIES,
 } from "../../fleet/server/web/map-fit.js";
+
+test("the field fallback maps the field rectangle onto the map rectangle, y up", () => {
+  const bounds = { min_x: -1.405, max_x: 1.405, min_y: -0.63, max_y: 0.63 };
+  const field = { x: 20, y: 10, width: 562, height: 252 };
+  const h = fieldToMap(bounds, field);
+  const tl = project(h, 20, 10);
+  const br = project(h, 582, 262);
+  close(tl[0], -1.405); close(tl[1], 0.63);
+  close(br[0], 1.405); close(br[1], -0.63);
+  // Through a homography whose map corners fall outside the image, nothing is clamped.
+  const shown = multiply3([400, 0, 400, 0, -400, 300, 0, 0, 1], h);
+  assert.ok(project(shown, 20, 10)[0] < 0);
+});
+
+test("a busy map-fit read retries after Retry-After, a real error does not", () => {
+  assert.equal(retryDelay({ busy: true, retryAfterMs: 1000 }, 0), 1000);
+  assert.equal(retryDelay({ busy: true, retryAfterMs: 60000 }, 0), 5000);
+  assert.equal(retryDelay({ busy: true }, 0), 1000);
+  assert.equal(retryDelay({ busy: true, retryAfterMs: 1000 }, MAP_FIT_MAX_TRIES - 1), null);
+  assert.equal(retryDelay(new Error("Vision 응답 500"), 0), null);
+});
 
 const close = (a, b, eps = 1e-6) => assert.ok(Math.abs(a - b) <= eps, `${a} vs ${b}`);
 

@@ -6,6 +6,7 @@ import {
   configuredSize, aspectMismatch, parseFieldSize, homography, rectifiedLayout,
   ASPECT_TOLERANCE,
 } from "./field-layers.js";
+import { multiply3, fieldToMap } from "./map-fit.js";
 
 const IDENTITY = [[0, 0], [1, 0], [1, 1], [0, 1]];
 
@@ -153,11 +154,17 @@ export function createFieldView({ el, view, visionView, onLayersChanged }) {
     const active = activeCorners();
     updateMismatch(active);
     const frame = lastFrame;
+    // D-375 대체 경로: 경기장 모서리가 없고 운용자가 지도 맞춤을 수락했으면 지도 사각형을 그 homography 로 편다.
+    const byMap = !active && frame && !frame.rectified ? view.mapFieldFallback?.(frame) ?? null : null;
     const show = view.layers.rectified && frame && frame.source === visionView.currentSource()
-      && (frame.rectified || active);
+      && (frame.rectified || active || byMap);
     figure.hidden = !show;
     if (!show) return;
-    const size = operatorSize();
+    const mapSize = byMap ? {
+      width: Math.round((byMap.bounds.max_x - byMap.bounds.min_x) * 1000) / 1000,
+      height: Math.round((byMap.bounds.max_y - byMap.bounds.min_y) * 1000) / 1000,
+    } : null;
+    const size = mapSize || operatorSize();
     const aspect = size ? size.width / size.height
       : detectedAspect(active, frame.image) || (frame.image.naturalWidth / frame.image.naturalHeight);
     const layout = rectifiedLayout(aspect, 640, 400);
@@ -171,9 +178,13 @@ export function createFieldView({ el, view, visionView, onLayersChanged }) {
       // Vision 이 확인한 모서리로 이미 펴서 보냈다(D-318). 바깥은 없다.
       ctx.drawImage(frame.image, field.x, field.y, field.width, field.height);
     } else {
-      const key = JSON.stringify([frame.source, frame.url ?? frame.seq, active.corners, layout.width, layout.height]);
-      if (warped?.key !== key) warped = { key, data: warp(ctx, frame.image, active.corners, layout) };
-      else if (warped.data) ctx.putImageData(warped.data, 0, 0);
+      // 지도 경로는 전체 homography 라 0–100% 로 잘리는 모서리 조정값을 거치지 않는다.
+      const h = byMap ? multiply3(byMap.mapToShown, fieldToMap(byMap.bounds, field)) : null;
+      const key = JSON.stringify([frame.source, frame.url ?? frame.seq, h || active.corners, layout.width, layout.height]);
+      if (warped?.key !== key) {
+        warped = { key, data: h ? warpImage(ctx, frame.image, h, layout.width, layout.height, scratch)
+          : warp(ctx, frame.image, active.corners, layout) };
+      } else if (warped.data) ctx.putImageData(warped.data, 0, 0);
       // 경기장 밖을 가린다.
       ctx.save();
       ctx.fillStyle = "rgba(0, 0, 0, 0.72)";
@@ -190,9 +201,12 @@ export function createFieldView({ el, view, visionView, onLayersChanged }) {
     ctx.strokeRect(field.x + 1, field.y + 1, field.width - 2, field.height - 2);
     ctx.restore();
     if (size) drawMetric(ctx, field, size);
-    const source = frame.rectified ? "Vision 보정 프레임" : `${active.kind === "제안" ? "제안으로" : "확인한 모서리로"} 편 원본`;
+    const source = frame.rectified ? "Vision 보정 프레임"
+      : byMap ? "수락한 지도 맞춤으로 편 원본(모서리가 화면 밖이어도 됨)"
+        : `${active.kind === "제안" ? "제안으로" : "확인한 모서리로"} 편 원본`;
     caption.textContent = `위에서 본 경기장 · ${source} · 경기장 밖은 가림`
-      + (size ? ` · 표시 축척 ${size.width}×${size.height} m(이 브라우저만)` : " · 축척 미입력")
+      + (mapSize ? ` · 지도 ${size.width}×${size.height} m`
+        : size ? ` · 표시 축척 ${size.width}×${size.height} m(이 브라우저만)` : " · 축척 미입력")
       + " · 표시 전용, 관측·주행에 쓰지 않음";
     canvas.setAttribute("aria-label", caption.textContent);
   }
@@ -248,7 +262,10 @@ export function createFieldView({ el, view, visionView, onLayersChanged }) {
       const found = normalizeProposal(body);
       if (!found) {
         setProposal(null);
-        state.textContent = `제안 없음 — ${body?.reason || "경기장을 찾지 못했습니다"}. 모서리는 손으로 맞추세요.`;
+        state.textContent = `제안 없음 — ${body?.reason || "경기장을 찾지 못했습니다"}. `
+          + (view.mapFieldFallback?.(lastFrame)
+            ? "수락한 지도 맞춤으로 경기장 뷰를 그립니다."
+            : "모서리는 손으로 맞추거나 '맵 자동 맞춤'을 수락하세요.");
         return;
       }
       setProposal({ ...found, source });

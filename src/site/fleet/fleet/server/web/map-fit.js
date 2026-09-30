@@ -182,6 +182,22 @@ export function topDownLayout(bounds, maxWidth = 640, maxHeight = 400, marginM =
   return { width, height, pxPerM, mapToCanvas, canvasToMap: invert3(mapToCanvas) };
 }
 
+// D-360 경기장 뷰의 대체 경로: 경기장 사각형(field, 캔버스 px) ↔ 지도 사각형(bounds, m, y 위).
+// 모서리가 프레임 밖이어도 된다 — 0–100% 로 잘리는 모서리 조정값을 거치지 않는다.
+export function fieldToMap(bounds, field) {
+  const sx = (bounds.max_x - bounds.min_x) / field.width;
+  const sy = (bounds.max_y - bounds.min_y) / field.height;
+  return [sx, 0, bounds.min_x - field.x * sx, 0, -sy, bounds.max_y + field.y * sy, 0, 0, 1];
+}
+
+// 맞춤 요청이 429(계산 중·초당 1회)면 Retry-After 뒤 다시 묻는다. 너무 오래면 null(그만).
+export const MAP_FIT_MAX_TRIES = 8;
+export function retryDelay(error, attempt, maxTries = MAP_FIT_MAX_TRIES) {
+  if (!error?.busy || attempt + 1 >= maxTries) return null;
+  const ms = Number(error.retryAfterMs);
+  return Number.isFinite(ms) && ms > 0 ? Math.min(ms, 5000) : 1000;
+}
+
 // 수락한 맞춤 초안(브라우저 로컬). 모양이 틀리면 null.
 export function parseMapDraft(raw) {
   let parsed;
