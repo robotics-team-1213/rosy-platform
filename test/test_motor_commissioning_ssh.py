@@ -1,4 +1,4 @@
-"""D-383 (6): motor commissioning reaches the robot with the Rosy operator key.
+"""D-385 (6): motor commissioning reaches the robot with the Rosy operator key.
 
 2026-10-01: enable-motor-commissioning.ps1 used only the default ~/.ssh alias
 and failed on a new card with "No ED25519 host key is known". It now takes the

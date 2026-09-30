@@ -221,7 +221,7 @@ else {
     }
 
     if ($last.stage -eq "done") {
-        # D-383: an emergency write ends written and provisioned but not read back.
+        # D-385: an emergency write ends written and provisioned but not read back.
         $status.result = $(if ($status.card_state -eq "complete-unverified") { "complete-unverified" } else { "complete" })
         $status.next = $(if (Get-Field $last "next") { [string]$last.next } else { "the card is ready" })
     }

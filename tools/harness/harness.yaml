@@ -7,6 +7,7 @@ adr_log: docs/reference/ROSY ADR Log.md
 
 # IDs absent from the ADR log on purpose. Remove an entry once the ADR is written.
 adr_gaps:
+  D-384: "reserved by branch docs/d384-road-state-and-behaviour (road-state estimator with prediction, right-priority tie-breaker, road behaviour state machine); remove when its ADR lands"
   D-375: "reserved by branch feat/overhead-map-auto-register (overhead map registration from lane paint, proposal); remove when its ADR lands"
   D-373: "reserved by branch feat/d373-learning-loop-lap2 (learned perception on the Pinky image, snapshot capture, auto shadow delivery); remove when its ADR lands"
   D-29: "unused; the vision accelerator shield design only proposed the number"

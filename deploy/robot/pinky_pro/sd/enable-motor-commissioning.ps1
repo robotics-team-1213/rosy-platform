@@ -16,7 +16,7 @@ param(
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
-# D-383 (6): the same Rosy operator key and known_hosts as rosy-release-push.ps1.
+# D-385 (6): the same Rosy operator key and known_hosts as rosy-release-push.ps1.
 # 2026-10-01 a new card failed with "No ED25519 host key is known" because only
 # the default ~/.ssh alias was used. Host-key checking stays strict.
 if (-not $KeyPath) { $KeyPath = Join-Path $env:LOCALAPPDATA 'Rosy\ssh\rosy-operator-ed25519' }

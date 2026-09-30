@@ -7,7 +7,7 @@ param(
     [string]$DiskInventoryJson,
     [string]$ReadbackDevice
 )
-# D-383 follow-up for an emergency card write: the full readback that
+# D-385 follow-up for an emergency card write: the full readback that
 # write-card.ps1 -Emergency skipped, run later on the same card. Read-only on
 # the card. The card must not have booted yet: first boot changes the root
 # filesystem and consumes the bundle, so a booted card cannot match its image.

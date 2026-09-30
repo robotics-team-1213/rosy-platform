@@ -42,8 +42,10 @@ def test_mission_read_contains_four_truthful_progress_axes(tmp_path):
     progress = response.json()["progress"]
     assert set(progress) == {
         "snapshot_event_id", "snapshot_at", "mission", "step", "action",
-        "goal_evidence", "stop",
+        "goal_evidence", "stop", "active_phase", "phases",
     }
+    assert progress["active_phase"] is None
+    assert progress["phases"] == []
     assert progress["mission"]["state"] == "PROPOSED"
     assert progress["step"]["state"] == "NOT_ADMITTED"
     assert progress["action"]["state"] == "UNKNOWN"
@@ -488,7 +490,7 @@ def test_api_reference_pins_snapshot_cursor_retention_and_unknown_physical_state
         encoding="utf-8",
     )
 
-    assert "**Version:** v1.64" in reference
+    assert "**Version:** v1.66" in reference
     assert "## 10.14 Mission progress snapshots and event cursor" in reference
     assert "`/api/fleet/missions/{mission_id}/events?after_event_id=" in reference
     assert "MISSION_CURSOR_EXPIRED" in reference

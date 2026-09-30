@@ -1557,6 +1557,13 @@
 - 증거: test_boot_display.py (blocked 행·진입/유지/해제 소리). 변이 증명: 진입음 제거 시 빨강.
 - gate 변화: 없음.
 
+## 2026-10-01 · uncommitted · fix(release,test): main CI deployment 단계 적색 5건 — 핀·등록부·스캐너 면제 정리
+
+- 변경: core 단계 적색이 이 단계를 건너뛰게 해왔다 — core가 초록이 되자 가려져 있던 5건이 드러났다(전부 최근 병합들이 같은 커밋에 함께 갱신했어야 할 고정 목록). (1) D-184 예외 목록에 `test_line_follow_obstacle_path.py` 추가(e3eb2561의 신규 시험, `core_features.line_follow.clearance` 구동). (2) D-218 `PINNED_CONFIRMS`에 교통 정책 적용 확인의 app.js→telemetry.js 이동 반영(13803932, D-362 P1). (3) D-196 로봇 리터럴 백로그에 `runtime/services/core_features/line_follow/clearance.py`·`runtime/sensing/tools/device/ir_line_calibrate.py` 추가. (4) `secret_scan.py` `KNOWN_FIXTURES`에 D-189 런타임 id 핀 등록 — 그 hex는 저장소가 추적하는 `device-python-requirements.txt`의 sha256이며 시험이 저장소에서 재계산하는 공개 다이제스트다. (5) D-178 기준선 행 교체는 docs 모듈 로그에 기록.
+- 증거: 해당 다섯 시험 파일 82 passed (2026-10-01 Windows). 루트 `test/` 전체 회귀는 별도 확인.
+- gate 변화: 없음.
+- 교훈: 고정 목록 계약은 선행 단계가 붉으면 통째로 건너뛴다 — 그 단계의 빚은 다음 초록 커밋으로 이월되므로, 큰 적색을 고친 커밋은 곧바로 다음 단계까지 돌아갔는지 봐야 한다.
+
 ## 2026-10-01 · uncommitted · fix(sd): ERASE 프롬프트 type-ahead, 아티팩트 다운로더, D-383 긴급 카드 쓰기
 
 - 변경: (1) `prepare-rosy-sd.ps1`의 ERASE 프롬프트가 먼저 콘솔 입력 버퍼를 비우고(`Clear-TypeAhead`), 빈 줄·입력 끝은 불일치가 아니라 `no console input`으로 멈춘다. 2026-09-30 `-Detach` 창에서 앞 단계 중 눌린 Enter가 0.9초 만에 프롬프트에 답해 `typed: ''`로 실패했다. (2) `tools/release/download_artifact.py`: Actions 아티팩트 병렬 range 다운로드(진행·재개·크기 확인·안전 압축 해제). (3) D-383 `write-card.ps1 -Emergency -EmergencyReason`: 전체 readback만 건너뛰고 증거에 검증 안 됨을 남기며, `verify-emergency-card.ps1` 후속 readback과 표준 재공급으로 메운다.
@@ -1567,4 +1574,10 @@
 
 - 변경: `enable-motor-commissioning.ps1`이 `rosy-release-push.ps1`처럼 `-KeyPath`·`-KnownHosts`·`-RosyUser`(기본은 `%LOCALAPPDATA%\Rosy` 운영자 키·known_hosts, `rosy`)를 ssh에 넘기고, 파일이 없으면 로봇에 닿기 전에 멈춘다. 새 카드에서 기본 `~/.ssh` 별칭만 써서 `No ED25519 host key is known`으로 실패했었다. D-383 결정 4에 부팅한 긴급 카드의 장치 위 검증(SHA256SUMS·`dpkg --verify`)을 적었다.
 - 증거: test_motor_commissioning_ssh.py 5 passed, 변이 4종 모두 실패로 잡힘. 로봇 접속 없음.
+- gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · docs(adr): 긴급 카드 쓰기 결정을 D-383에서 D-385로 개명
+
+- 변경: main 병합 시점에 D-383은 편대 역할 계기 ADR로, D-384는 docs/d384-road-state-and-behaviour 예약으로 잡혀 있었다. 이 작업의 결정(긴급 카드 쓰기, 모터 커미셔닝 SSH)을 다음 빈 번호 D-385로 개명하고 코드 주석·시험·문서를 함께 바꿨다. 앞 항목의 D-383 표기는 역사 기록으로 둔다.
+- 증거: rosy_harness lint 오류 0. 본문은 docs/adr/D-385-emergency-card-write-skips-only-readback.md.
 - gate 변화: 없음.

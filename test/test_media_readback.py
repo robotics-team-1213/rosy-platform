@@ -445,7 +445,7 @@ def _run_provisioned(image: Path, device: Path):
 
 
 def test_the_emergency_follow_up_names_the_writers_boot_files_and_verifies(tmp_path):
-    # D-383: a provisioned emergency card carries the bundle and settings file.
+    # D-385: a provisioned emergency card carries the bundle and settings file.
     (compressed, raw_device), _card = _card_pair(tmp_path, _plant_provisioning)
 
     assert _run(compressed, raw_device).returncode == 1  # the standard readback refuses them

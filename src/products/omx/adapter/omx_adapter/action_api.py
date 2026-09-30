@@ -39,9 +39,20 @@ class ActionApi:
                           ensure_ascii=False, allow_nan=False).encode("utf-8")
 
     @staticmethod
-    def _error(code: str, message: str, *, status: int) -> dict[str, Any]:
-        return {"version": 1, "status": status,
+    def _error(code: str, message: str, *, status: int,
+               version: int = 1) -> dict[str, Any]:
+        # Errors answer with the version of the request they reject; the
+        # default 1 is only for frames rejected before version validation
+        # (bad JSON, framing, unsupported version) where no version is known.
+        return {"version": version, "status": status,
                 "error": {"code": code, "message": message}}
+
+    @staticmethod
+    def _success(version: int, receipt: Mapping[str, Any]) -> dict[str, Any]:
+        payload = dict(receipt)
+        if version == 1:
+            payload.pop("phase_summaries", None)
+        return {"version": version, "status": 200, "receipt": payload}
 
     def dispatch(self, request: Mapping[str, Any], *, peer_uid: int) -> dict[str, Any]:
         if not isinstance(request, Mapping):
@@ -51,8 +62,9 @@ class ActionApi:
                 return self._error("FRAME_TOO_LARGE", "request exceeds 64 KiB", status=413)
         except (TypeError, ValueError):
             return self._error("INVALID_JSON", "request must be finite JSON", status=400)
-        if not isinstance(request, Mapping) or request.get("version") != self.VERSION:
-            return self._error("UNSUPPORTED_VERSION", "version must equal 1", status=400)
+        version = request.get("version")
+        if not isinstance(version, int) or isinstance(version, bool) or version not in {1, 2}:
+            return self._error("UNSUPPORTED_VERSION", "version must equal 1 or 2", status=400)
         operation = request.get("operation")
         try:
             if operation == "SubmitAction":
@@ -60,14 +72,15 @@ class ActionApi:
                     raise ValueError("SubmitAction contains unsupported fields")
                 grant = FleetActionGrant.model_validate(request["grant"])
                 receipt = self.runner.submit(grant, peer_uid=peer_uid)
-                return {"version": 1, "status": 200, "receipt": receipt}
+                return self._success(version, receipt)
             if operation == "GetAction":
                 if set(request) != {"version", "operation", "action_id"}:
                     raise ValueError("GetAction contains unsupported fields")
                 receipt = self.runner.get(request["action_id"], peer_uid=peer_uid)
                 if receipt is None:
-                    return self._error("ACTION_NOT_FOUND", "Action is unavailable", status=404)
-                return {"version": 1, "status": 200, "receipt": receipt}
+                    return self._error("ACTION_NOT_FOUND", "Action is unavailable",
+                                       status=404, version=version)
+                return self._success(version, receipt)
             if operation == "CancelAction":
                 expected = {"version", "operation", "action_id", "attempt_id",
                             "reason", "requested_at"}
@@ -79,22 +92,31 @@ class ActionApi:
                 receipt = self.runner.cancel(
                     cancel.action_id, cancel.attempt_id, peer_uid=peer_uid,
                 )
-                return {"version": 1, "status": 200, "receipt": receipt}
+                return self._success(version, receipt)
             if operation in {"StopLocal", "GetStopState", "RearmLocal"}:
+                if version != 1:
+                    return self._error("UNSUPPORTED_VERSION",
+                                       "stop operations use protocol version 1",
+                                       status=400, version=version)
                 if self.stop_api is None:
                     return self._error("STOP_API_NOT_CONFIGURED",
                                        "local stop adapter is unavailable", status=503)
                 return self.stop_api.dispatch(request, peer_uid=peer_uid)
-            return self._error("UNKNOWN_OPERATION", "operation is not supported", status=404)
+            return self._error("UNKNOWN_OPERATION", "operation is not supported",
+                               status=404, version=version)
         except PermissionError as exc:
             return self._error("PEER_NOT_ALLOWED" if "peer" in str(exc).lower()
-                               else "GRANT_REJECTED", str(exc), status=403)
+                               else "GRANT_REJECTED", str(exc), status=403,
+                               version=version)
         except KeyError:
-            return self._error("ACTION_NOT_FOUND", "Action is unavailable", status=404)
+            return self._error("ACTION_NOT_FOUND", "Action is unavailable",
+                               status=404, version=version)
         except (TypeError, ValueError) as exc:
-            return self._error("INVALID_REQUEST", str(exc), status=400)
+            return self._error("INVALID_REQUEST", str(exc), status=400,
+                               version=version)
         except Exception:
-            return self._error("LOCAL_ACTION_ERROR", "local Action processing failed", status=500)
+            return self._error("LOCAL_ACTION_ERROR", "local Action processing failed",
+                               status=500, version=version)
 
     def handle_connection(self, connection: socket.socket) -> None:
         """Serve one request frame and derive its UID from SO_PEERCRED (Linux)."""
