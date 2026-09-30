@@ -256,8 +256,8 @@
 
 ## 최근 기록
 
+- 2026-09-30 · uncommitted · docs(plan): specify local OMX pick-and-place execution
 - 2026-09-30 · uncommitted · docs(adr): accept D-374 app identity rename
 - 2026-09-30 · uncommitted · docs(adr): D-374 앱 이름 규칙 — 폴더·패키지·식별자를 역할 이름 하나에서
 - 2026-09-30 · uncommitted · docs(plan): identify PICK_PLACE coordinate resolution gap
 - 2026-09-30 · uncommitted · test(omx): rerun vendor owner policy ROS-SIM
-- 2026-09-30 · uncommitted · docs(plan): classify prior OMX ROS-SIM evidence for Action mapping

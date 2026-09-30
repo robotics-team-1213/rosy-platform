@@ -3867,3 +3867,8 @@
 - 증거: 문서만. 사용자 결정은 리드 세션 전달(2026-09-30).
 - gate 변화: 단계 1(카메라 앱+Site Vision)·단계 2(Pilot 레지스트리 id)를 시작할 수 있다. 단계 3·4·5는 계획의 D-362·릴리스 게이트 그대로.
 - 열린 질문: compose 서비스·이미지 이름(열린 질문 4, 권장: 바꾸지 않음).
+
+## 2026-09-30 · uncommitted · docs(plan): specify local OMX pick-and-place execution
+- 변경: D-369 제어권 경계를 지키는 OMX `PICK_PLACE` 구현 계획을 추가하고, 기존 Action/message 계획 및 OMX progress에서 연결했다.
+- 증거: 새 계획 및 기존 `docs/plans/2026-09-30-action-message-identity.md`와 `src/products/omx/adapter/progress.md`의 교차 링크. 계획에는 RGB-D 기반 pose 검증, 로컬 planning, phase별 ROS goal/취소/저널, Fleet 진행 투영을 순차 작업으로 둔다.
+- gate 변화: 없음. 모델은 후보/읽기 전용이고 Fleet은 Mission/grant/status를 소유한다. 첫 phase 의도는 ROS 제출 전에 기록하며 첫 ROS 응답의 부모 Action/phase 결과는 단일 SQLite 트랜잭션으로 기록한다. 응답 전 crash는 UNKNOWN/HOLD이며 재전송하지 않는다. MTC/Jazzy 적합성은 probe gate이며, profile 비활성 및 DEVICE/FIELD PARKED 상태를 유지한다.
