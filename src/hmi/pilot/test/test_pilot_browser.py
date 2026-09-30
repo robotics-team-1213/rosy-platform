@@ -590,3 +590,26 @@ def test_owner_sees_checking_while_whoami_retries_then_gets_control(tablet_page)
         dev_server.STATE["activity"] = None
         dev_server.WHOAMI_FAILURES["remaining"] = 0
     assert errors == [], errors
+
+
+@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
+                    reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
+def test_exit_after_a_failed_engage_posts_no_idle(tablet_page):
+    """modeHeld 고정: MANUAL 을 잡지 못한 화면은 나가면서 IDLE 을 보내지 않는다(잠금이 없어도)."""
+    base_url, page, errors = tablet_page
+    page.goto(f"{base_url}/pilot")
+    page.wait_for_selector("form[data-pilot-token-form] ui-field input")
+    page.fill("form[data-pilot-token-form] ui-field input", "devtoken")
+    page.click("form[data-pilot-token-form] ui-button")
+    page.wait_for_selector("[data-drive-enter]")
+    page.request.post(f"{base_url}/__test__/mode-refuse", data={"count": 1})
+    try:
+        before = len(page.request.get(f"{base_url}/__test__/mode-log").json())
+        page.click("[data-drive-enter]")
+        page.wait_for_selector("[data-drive-blocked]:not([hidden])")
+        page.click("[data-drive-exit]")
+        page.wait_for_timeout(500)
+        assert page.request.get(f"{base_url}/__test__/mode-log").json()[before:] == []
+    finally:
+        dev_server.MODE_REFUSALS["remaining"] = 0
+    assert errors == [], errors

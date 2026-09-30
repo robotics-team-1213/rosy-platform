@@ -159,6 +159,16 @@ async def whoami_fail(request: Request):
     return WHOAMI_FAILURES
 
 
+#: 시험 훅: 다음 POST /mode MANUAL N 번을 409 로 거절한다(engage 실패).
+MODE_REFUSALS = {"remaining": 0}
+
+
+@app.post("/__test__/mode-refuse")
+async def mode_refuse(request: Request):
+    MODE_REFUSALS["remaining"] = int((await request.json()).get("count", 0))
+    return MODE_REFUSALS
+
+
 @app.get("/__test__/mode-log")
 def mode_log():
     return MODE_LOG
@@ -188,6 +198,10 @@ async def set_mode(request: Request):
     if _role(request) is None:
         return JSONResponse({"detail": "unauthorized"}, status_code=401)
     body = await request.json()
+    if body.get("mode") == "MANUAL" and MODE_REFUSALS["remaining"] > 0:
+        MODE_REFUSALS["remaining"] -= 1
+        return JSONResponse({"error": {"code": "CALIBRATION_ACTIVE", "message": "refused"}},
+                            status_code=409)
     STATE["mode"] = body.get("mode", "IDLE")
     MODE_LOG.append(STATE["mode"])
     return {"mode": STATE["mode"]}

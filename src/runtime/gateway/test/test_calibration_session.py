@@ -458,3 +458,12 @@ def test_contract_documents_ownership_revocation_and_battery_return():
         assert "`ttl_s` 가 지" in text and "DELETE" in text   # revoked token keeps it until TTL
         assert "RETURN_HOME" in text                   # battery return ignores the lease
         assert "override_calibration" in text
+
+
+def test_slam_save_stays_open_to_non_owners(lease):
+    """Saving a map does not move the robot or change what the owner measures."""
+    client, _, _ = lease
+    _open(client)
+    response = client.post("/api/v1/slam/save", json={"name": "cal_map"}, headers=OTHER)
+    assert response.status_code != 409 or response.json()["error"]["code"] != "CALIBRATION_ACTIVE"
+    assert response.status_code in (200, 501), response.json()

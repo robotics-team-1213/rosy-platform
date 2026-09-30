@@ -190,3 +190,13 @@ def test_skill_prefers_environment_or_dpapi_over_a_command_line_token():
     text = (ROOT / ".claude" / "skills" / "rosy-release-push" / "SKILL.md").read_text(encoding="utf-8")
     assert "ROSY_API_TOKEN" in text and "DPAPI" in text
     assert "last resort" in text
+
+
+def test_server_error_is_reported_as_failed_not_rejected(fake_core, tmp_path):
+    fake_core["status"] = 500
+    fake_core["reply"] = {"error": {"code": "INTERNAL_ERROR"}}
+    done = _guard(fake_core["port"], _env(tmp_path, TOKEN))
+    out = done.stdout + done.stderr
+    assert done.returncode == 0, out
+    assert "CALIBRATION CHECK FAILED" in out and "HTTP 500" in out
+    assert "REJECTED" not in out and "UNREACHABLE" not in out
