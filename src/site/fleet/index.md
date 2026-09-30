@@ -69,8 +69,8 @@
 
 ## 최근 기록
 
+- 2026-10-01 · uncommitted · fix(relay): 첫 메시지 인증 뒤 늦게 오는 4401을 레인 이유로 드러낸다
 - 2026-10-01 · uncommitted · fix(swarm): D-370 S7 — Fleet→CORE WS는 첫 메시지 인증, URL에 토큰 없음
 - 2026-10-01 · uncommitted · fix(hub): D-382 F6 독립 리뷰 반영 — 밀려난 소켓 닫기, 세션 인자 키워드 전용
 - 2026-10-01 · uncommitted · fix(hub): D-382 F6 — 소켓을 로봇 하나에 묶고 짝 토큰을 상수 시간으로 비교
 - 2026-10-01 · 952d5d80 · fix(fleet): lens profile review fixes
-- 2026-09-30 · f21364e6 · feat(fleet): D-318 rectification profile per source and lens

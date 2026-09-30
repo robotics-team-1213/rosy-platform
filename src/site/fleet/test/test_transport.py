@@ -343,3 +343,28 @@ def test_robot_sockets_ignore_proxy_environment(monkeypatch):
 
     run(drive())
     assert len(seen) == 3 and all("proxy" in kw and kw["proxy"] is None for kw in seen)
+
+
+def test_a_reference_socket_refused_after_the_auth_frame_names_the_refusal():
+    # CORE accepts first and then closes 4401 on a wrong first-message token.
+    websockets = pytest.importorskip("websockets")
+
+    async def main():
+        async def handler(ws):
+            await ws.recv()                                  # the auth frame
+            await ws.close(code=4401, reason="unauthorized")
+
+        async with websockets.serve(handler, "127.0.0.1", 0) as server:
+            port = server.sockets[0].getsockname()[1]
+            client = HttpRobotClient(RobotEndpoint("rosy_09", f"http://127.0.0.1:{port}", "t"))
+            try:
+                sink = await client.open_reference_sink()
+                reason = await asyncio.wait_for(sink.wait_closed(), 5)
+                assert isinstance(reason, RobotApiError) and reason.code == "WS_4401"
+                with pytest.raises(RobotApiError) as exc:
+                    await sink.send('{"type": "pose"}')
+                assert exc.value.code == "WS_4401"
+                await sink.close()
+            finally:
+                await client.aclose()
+    run(main())

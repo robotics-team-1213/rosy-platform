@@ -184,3 +184,28 @@ def test_site_locator_classifier_copy_gives_the_vector_reason(case):
     result = _module().classify_fleet(case["host"], case["address"], case["port"],
                                       [tuple(item.split("=", 1)) for item in case["txt"]])
     assert result == (None if case["expect"]["accepted"] else case["expect"]["reason"])
+
+
+_BASE_TXT = [("product", "rosy"), ("role", "fleet"), ("proto", "fleet-v1"), ("tls", "required")]
+_EXTRA_INPUTS = [
+    ("site.local", "0.0.0.0", 8443, _BASE_TXT),
+    ("site.local", "224.0.0.251", 8443, _BASE_TXT),
+    ("site.local", "8.8.8.8", 8443, _BASE_TXT),
+    ("bad host!", "192.168.1.10", 8443, _BASE_TXT),
+    ("site.local", "192.168.1.10", 0, _BASE_TXT),
+    ("site.local", "192.168.1.10", 8443, _BASE_TXT + [("role", "robot")]),
+    ("site.local", "192.168.1.10", 8443, [("product", "rosy")]),
+    ("site.local", None, 8443, _BASE_TXT),
+]
+
+
+@pytest.mark.parametrize("inputs", [(c["host"], c["address"], c["port"],
+                                     [tuple(i.split("=", 1)) for i in c["txt"]])
+                                    for c in FLEET_CASES] + _EXTRA_INPUTS)
+def test_site_locator_copy_agrees_with_core_common_outside_the_vectors_too(inputs):
+    """Drift guard: the vendored copy must give core_common's verdict, not only the fixture's."""
+    from core_common.protocol.discovery_txt import classify
+    host, address, port, txt = inputs
+    real = classify("_rosy-fleet._tcp", host, address, port, txt)
+    expected = getattr(real, "reason", None)
+    assert _module().classify_fleet(host, address, port, txt) == expected

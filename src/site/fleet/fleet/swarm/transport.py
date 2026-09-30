@@ -99,6 +99,9 @@ def _as_event(frame) -> Optional[dict]:
 class ReferenceSink(Protocol):
     async def send(self, frame: str) -> None: ...
     async def close(self) -> None: ...
+    async def wait_closed(self) -> BaseException:
+        """Resolve when the robot closes the socket; return why (RobotApiError for 4401/4403)."""
+        ...
 
 
 @runtime_checkable
@@ -125,11 +128,32 @@ class RobotClient(Protocol):
 
 
 class _WebsocketSink:
-    def __init__(self, ws) -> None:
+    def __init__(self, ws, robot_id: str) -> None:
         self._ws = ws
+        self._robot_id = robot_id
+
+    def _reason(self, exc: BaseException) -> BaseException:
+        return _rejection(self._robot_id, exc) or exc
 
     async def send(self, frame: str) -> None:
-        await self._ws.send(frame)
+        # With first-message auth a wrong token is a 4401 close after accept, so the
+        # refusal surfaces here or in wait_closed(), not when the socket opens.
+        from websockets.exceptions import ConnectionClosed
+
+        try:
+            await self._ws.send(frame)
+        except ConnectionClosed as exc:
+            raise self._reason(exc) from exc
+
+    async def wait_closed(self) -> BaseException:
+        from websockets.exceptions import ConnectionClosed
+
+        try:
+            async for _ in self._ws:
+                pass   # the reference socket carries nothing back; drain until close
+        except ConnectionClosed as exc:
+            return self._reason(exc)
+        return ConnectionError("reference socket closed by robot")
 
     async def close(self) -> None:
         await self._ws.close()
@@ -283,7 +307,7 @@ class HttpRobotClient:
             if rejected is not None:
                 raise rejected from exc
             raise
-        return _WebsocketSink(ws)
+        return _WebsocketSink(ws, self.robot_id)
 
     async def events(self, types: Sequence[str]) -> AsyncIterator[dict]:
         from websockets.exceptions import WebSocketException
