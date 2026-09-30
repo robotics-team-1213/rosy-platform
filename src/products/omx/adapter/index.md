@@ -35,8 +35,8 @@
 
 ## 최근 기록
 
+- 2026-10-01 · uncommitted · project durable OMX phases into Fleet status
+- 2026-10-01 · uncommitted · gate semantic phases on durable gripper evidence
 - 2026-10-01 · uncommitted · add fenced pick-place phase coordinator
 - 2026-09-30 · uncommitted · hold unresolved phase state under local stop
 - 2026-09-30 · uncommitted · mint validated attempt-scoped phase recorder
-- 2026-09-30 · uncommitted · persist first phase intent and atomic response
-- 2026-09-30 · uncommitted · OMX pick-and-place plan, trajectory, and ROS goal contracts (D-376)
