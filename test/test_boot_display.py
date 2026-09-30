@@ -149,13 +149,22 @@ def test_the_first_poll_draws_and_an_unchanged_poll_does_not(tmp_path):
     _status(tmp_path, "BOOTING")
     display, lcd, clock, _battery, rendered, _logs = _loop(module, tmp_path)
 
+    # D-385: while BOOTING the stage title breathes — the frame phase rides the
+    # redraw key, so each second redraws. An unchanged view still never redraws
+    # within one phase (the +0.5 s polls below).
     assert display.step() is True
+    assert display.step() is False  # same second, same phase
     clock.now += 1
-    assert display.step() is False
-    clock.now += 1
-    assert display.step() is False
+    assert display.step() is True  # the breath's dark step
 
-    assert lcd.shown == ["image-1"] and display.draws == 1
+    _status(tmp_path, "CORE_READY", runtime_mode="core")
+    clock.now += 1
+    display.step()  # CORE_READY holds still…
+    drawn_at_ready = display.draws
+    clock.now += 1
+    assert display.step() is False  # …and an unchanged ready card does not redraw
+
+    assert lcd.shown == ["image-1", "image-2", "image-3"]
     assert rendered[0]["stage"] == "BOOTING" and rendered[0]["battery_voltage"] == 8.2
 
 
@@ -1222,6 +1231,27 @@ def test_the_lcd_state_line_names_the_formation_role_at_the_end(tmp_path):
     _status(tmp_path, "CORE_READY", runtime_mode="hardware", robot_mode="NAVIGATION",
             swarm_role="captain")
     assert module.read_view(tmp_path, None)["state_line"] == "Ready - NAVIGATION"
+
+
+def test_the_waiting_card_breathes_but_the_ready_card_holds_still(tmp_path):
+    # D-385: BOOTING carries a frame phase in the redraw key; CORE_READY does not.
+    module = _display()
+    _status(tmp_path, "BOOTING")
+
+    display, _lamp, clock, rendered, _lines = _state_loop(module, tmp_path)
+    display.step()
+    clock.now += 1
+    display.step()
+
+    assert "frame" in rendered[-1]
+
+    _status(tmp_path, "CORE_READY", runtime_mode="core")
+    clock.now += 1
+    display.step()
+    clock.now += 1
+    display.step()
+
+    assert "frame" not in rendered[-1]
 
 
 def test_the_helper_knows_every_pattern_the_table_can_ask_for():
