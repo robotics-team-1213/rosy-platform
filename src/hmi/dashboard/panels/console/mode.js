@@ -1,9 +1,12 @@
+import { MODE_LABEL, enumLabel } from "/common/core_ui_logic.js";
+
 function el(tag, cls, text) { const node = document.createElement(tag); if (cls) node.className = cls; if (text !== undefined) node.textContent = text; return node; }
+// D-359 US-009 — 운용자 글은 공용 MODE_LABEL이다. 열거값은 data-mode와 title에만 남는다.
 const MODES = [
-  {id: "IDLE", label: "대기", prompt: "IDLE 모드로 변경할까요? 현재 동작이 중단될 수 있습니다."},
-  {id: "MANUAL", label: "수동", prompt: "MANUAL 모드로 변경할까요? 주변과 운전 면적을 확인하세요."},
-  {id: "NAVIGATION", label: "내비게이션", prompt: "NAVIGATION 모드로 변경할까요? 주행 경로를 확인하세요."},
-];
+  {id: "IDLE", prompt: "현재 동작이 중단될 수 있습니다."},
+  {id: "MANUAL", prompt: "주변과 운전 면적을 확인하세요."},
+  {id: "NAVIGATION", prompt: "주행 경로를 확인하세요."},
+].map((mode) => ({...mode, label: MODE_LABEL[mode.id], prompt: `${MODE_LABEL[mode.id]} 모드로 바꿀까요? ${mode.prompt}`}));
 
 export function mount(root, ctx) {
   const head = el("ui-head", "", "운전 모드");
@@ -16,7 +19,7 @@ export function mount(root, ctx) {
   const buttons = new Map();
   for (const mode of MODES) {
     const button = el("ui-button", "", mode.label); button.setAttribute("kind", "segment"); button.type = "button";
-    button.setAttribute("aria-label", `${mode.label} 모드`); button.dataset.mode = mode.id; button.disabled = true;
+    button.setAttribute("aria-label", `${mode.label} 모드`); button.dataset.mode = mode.id; button.title = mode.id; button.disabled = true;
     controls.append(button); buttons.set(mode.id, button);
   }
   root.append(head, modeStatus, capabilityStatus, actionStatus, controls);
@@ -37,7 +40,8 @@ export function mount(root, ctx) {
     }
   }
   const stopState = ctx.store.poll("/api/v1/robot/state", 1_000, (state) => {
-    current = state.mode || ""; setStatus(modeStatus, `현재 모드: ${current || "확인 중"}`); update();
+    current = state.mode || ""; setStatus(modeStatus, `현재 모드: ${enumLabel(MODE_LABEL, current, "확인 중")}`);
+    if (current) modeStatus.title = current; else modeStatus.removeAttribute("title"); update();
   }, (error) => { current = ""; setStatus(modeStatus, `현재 모드를 읽지 못했습니다: ${error.message}`); update(); });
   const stopCapabilities = ctx.store.poll("/api/v1/system/capabilities", 5_000, (caps) => {
     navigationAvailable = caps?.navigation?.goal_navigation === true;
@@ -58,12 +62,12 @@ export function mount(root, ctx) {
       if (button.disabled || pending || (mode.id === "NAVIGATION" && !navigationAvailable)) return;
       if (!window.confirm(mode.prompt)) return;
       pending = true; update();
-      setStatus(actionStatus, `${mode.id} 모드 요청을 보내는 중입니다.`);
+      setStatus(actionStatus, `${mode.label} 모드 요청을 보내는 중입니다.`);
       // Ask any active hold-to-drive panel to send zero before changing mode.
       window.dispatchEvent(new Event("rosy:stop-motion"));
       try {
         await ctx.api("/api/v1/mode", {method: "POST", body: JSON.stringify({mode: mode.id})});
-        setStatus(actionStatus, `${mode.id} 모드 요청을 CORE가 받았습니다. 현재 모드 readback은 위에서 확인하세요.`);
+        setStatus(actionStatus, `${mode.label} 모드 요청을 CORE가 받았습니다. 현재 모드는 위에서 다시 확인하세요.`);
       } catch (error) { setStatus(actionStatus, `모드 변경 실패: ${error.message}`); }
       finally { pending = false; update(); }
     });

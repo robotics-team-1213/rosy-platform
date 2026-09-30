@@ -3,6 +3,8 @@
 
 // D-359 §5.2 — 카드의 짧은 값은 공용 <ui-tag>다. 주행(nav)·도착(ok)은 색이 아니라
 // ink인 active, 나머지는 태그의 warn/crit 어휘 그대로다.
+import { MODE_LABEL, enumLabel } from "/common/core_ui_logic.js";
+
 const TAG_STATUS = { nav: "active", ok: "active", warn: "warn", crit: "crit" };
 
 function tag(text, cls) {
@@ -83,9 +85,12 @@ export function createRoster({ el, view, log, call, render, streamEvidence, isOp
     const spacer = document.createElement("span");
     spacer.className = "spacer";
     head.append(robotName, spacer);
-    head.appendChild(tag(
-      view.stateUnavailable ? "상태 확인 불가" : robot.online ? (state.mode || "—") : "OFFLINE",
-      view.stateUnavailable || !robot.online ? "crit" : ""));
+    // D-359 US-009 — 모드 글은 공용 MODE_LABEL, 열거값은 title에만 둔다.
+    const modeTag = tag(
+      view.stateUnavailable ? "상태 확인 불가" : robot.online ? enumLabel(MODE_LABEL, state.mode) : "OFFLINE",
+      view.stateUnavailable || !robot.online ? "crit" : "");
+    if (!view.stateUnavailable && robot.online && state.mode) modeTag.title = state.mode;
+    head.appendChild(modeTag);
     const blocked = !view.stateUnavailable && robot.queued && robot.queued.reason === "NO_YIELD_SPACE";
     // 비켜서는 중인 로봇은 "주행 중"이 맞다 — 다만 제 미션을 가는 것이 아니라서 따로 적는다.
     head.appendChild(tag(

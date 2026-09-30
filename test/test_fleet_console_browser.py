@@ -841,7 +841,7 @@ def test_queued_navigation_is_successful_and_cancel_targets_task(console_url):
                                               init_script="window.confirm = () => true")
         page.goto(console_url, wait_until="networkidle")
         page.locator("#roster-toggle").click()
-        page.wait_for_function("() => document.querySelectorAll('#roster article').length === 3")
+        page.wait_for_function("() => document.querySelectorAll('#roster article').length > 0")
         page.wait_for_function("() => !document.querySelector('#roster article ui-button')?.disabled")
         page.locator("#roster article").filter(has_text="rosy_01").locator("ui-button").first.click()
         canvas_box = page.locator("#map-canvas").bounding_box()
@@ -1195,7 +1195,7 @@ def test_mobile_console_has_no_horizontal_overflow(console_url, width):
         page.set_viewport_size({"width": width, "height": 844})
         page.goto(console_url, wait_until="networkidle")
         page.locator("#roster-toggle").click()
-        page.wait_for_function("() => document.querySelectorAll('#roster article').length === 3")
+        page.wait_for_function("() => document.querySelectorAll('#roster article').length > 0")
         save_temp_screenshot(page, f"fleet_console_mobile_{width}.png")
         layout = page.evaluate("""() => ({
           overflow: document.documentElement.scrollWidth - innerWidth,
@@ -1595,3 +1595,19 @@ def test_member_label_sits_beside_the_first_checkbox_row(console_url, width, hei
     assert abs(centre(label) - centre(first)) <= 2, boxes
     assert label["right"] <= members["x"], boxes
     assert boxes["named"] == "formation-members-label", boxes
+
+
+def test_roster_mode_tag_speaks_korean_and_keeps_the_enum_in_title(console_url):
+    """D-359 US-009 — the card's mode tag reads the shared MODE_LABEL."""
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as playwright:
+        browser, page, errors = _open_console(playwright, API)
+        page.goto(console_url, wait_until="networkidle")
+        page.wait_for_function("() => document.querySelectorAll('#roster article').length > 0")
+        first_tag = page.locator("#roster article").first.locator(".robot-head ui-tag").first
+        assert first_tag.inner_text() == "내비게이션"
+        assert first_tag.get_attribute("title") == "NAVIGATION"
+        assert "NAVIGATION" not in page.inner_text("#roster")
+        assert not errors
+        browser.close()

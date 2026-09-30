@@ -489,23 +489,23 @@ def test_console_mode_feedback_survives_state_and_capability_polling():
         assert page.evaluate("window.__callbacks['/api/v1/robot/state'].interval") == 1_000
         assert page.evaluate("window.__callbacks['/api/v1/system/capabilities'].interval") == 5_000
         status = page.locator("main > ui-status")
-        assert "IDLE" in status.nth(0).inner_text()
-        assert "Navigation" in status.nth(1).inner_text()
+        assert "대기" in status.nth(0).inner_text()
+        assert "내비게이션" in status.nth(1).inner_text()
         page.locator('[data-mode="MANUAL"]').click()
         page.wait_for_function("window.__calls.length === 1")
         pending_feedback = status.nth(2).inner_text()
         page.evaluate("window.__callbacks['/api/v1/robot/state'].onData({mode:'IDLE'})")
         page.evaluate("window.__callbacks['/api/v1/system/capabilities'].onData({navigation:{goal_navigation:true}})")
         assert status.nth(2).inner_text() == pending_feedback
-        assert "IDLE" in status.nth(0).inner_text()
+        assert "대기" in status.nth(0).inner_text()
         page.evaluate("window.__resolveMode({accepted:true})")
         page.wait_for_function("document.querySelectorAll('main > ui-status')[2]?.textContent.includes('CORE가 받았습니다')")
         accepted_feedback = status.nth(2).inner_text()
-        assert "IDLE" in status.nth(0).inner_text()
+        assert "대기" in status.nth(0).inner_text()
         assert "CORE가 받았습니다" in accepted_feedback
         page.evaluate("window.__callbacks['/api/v1/robot/state'].onData({mode:'MANUAL'})")
         page.evaluate("window.__callbacks['/api/v1/system/capabilities'].onError(new Error('fixture navigation unavailable'))")
-        assert "MANUAL" in status.nth(0).inner_text()
+        assert "수동" in status.nth(0).inner_text()
         assert "fixture navigation unavailable" in status.nth(1).inner_text()
         assert status.nth(2).inner_text() == accepted_feedback
         assert page.evaluate("window.__calls") == [{"path":"/api/v1/mode","body":{"mode":"MANUAL"}}]
