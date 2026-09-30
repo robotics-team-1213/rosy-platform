@@ -52,6 +52,9 @@ object Protocol {
     /** RFC 6455 "Try Again Later": the receiver is overloaded; always retryable. */
     const val CLOSE_TRY_AGAIN = 1013
 
+    /** D-341 11: the receiver cannot tell whether the credential is valid (e.g. Fleet down); retryable, not an auth failure. */
+    const val CLOSE_CREDENTIAL_UNKNOWN = 4503
+
     private val TRANSIENT_4400 = Regex("no hello|time ?out|timed out|busy", RegexOption.IGNORE_CASE)
 
     /**

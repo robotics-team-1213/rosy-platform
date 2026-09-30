@@ -237,7 +237,8 @@
     "bad_proto": 4400,
     "unauthorized_source": 4401,
     "replaced_by_same_source": 4409,
-    "try_again_later": 1013
+    "try_again_later": 1013,
+    "credential_unknown": 4503
   },
   "close_4400_reasons": {
     "_doc": "The phone stops for good on 4400 only for an incompatibility reason; an empty reason or a receiver-side wait retries with backoff (1013 always retries). Keep the receiver's own 4400 reasons in these lists.",

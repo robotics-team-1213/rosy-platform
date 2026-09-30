@@ -297,6 +297,7 @@ private fun ProblemMessage(
         Problem.REPLACED -> stringResource(R.string.problem_replaced, pairing?.source ?: "")
         Problem.PROTOCOL_MISMATCH -> stringResource(R.string.problem_protocol_mismatch)
         Problem.BUSY -> stringResource(R.string.problem_busy)
+        Problem.SITE_CHECKING -> stringResource(R.string.problem_site_checking)
         Problem.INVALID_CONFIG -> stringResource(R.string.problem_invalid_config)
         Problem.CLOSED -> stringResource(R.string.problem_closed)
         Problem.NETWORK_OTHER -> stringResource(R.string.problem_network_other)

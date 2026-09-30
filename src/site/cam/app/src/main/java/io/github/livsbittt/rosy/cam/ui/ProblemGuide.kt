@@ -16,6 +16,7 @@ enum class Problem {
     REPLACED,
     PROTOCOL_MISMATCH,
     BUSY,
+    SITE_CHECKING,
     INVALID_CONFIG,
     CLOSED,
     NETWORK_OTHER,
@@ -61,6 +62,7 @@ object ProblemGuide {
             LinkError.Unauthorized -> Guidance(Problem.UNAUTHORIZED, NextStep.OPEN_SETTINGS, "HTTP 401 / close 4401", retrying)
             LinkError.Replaced -> Guidance(Problem.REPLACED, NextStep.OPEN_SETTINGS, "close 4409", retrying)
             LinkError.ProtocolMismatch -> Guidance(Problem.PROTOCOL_MISMATCH, NextStep.NONE, "close 4400", retrying)
+            LinkError.CredentialUnknown -> Guidance(Problem.SITE_CHECKING, NextStep.NONE, "close 4503", retrying)
             is LinkError.Busy -> Guidance(Problem.BUSY, NextStep.NONE, "close ${error.code} ${error.reason}".trim(), retrying)
             is LinkError.InvalidConfig -> Guidance(Problem.INVALID_CONFIG, NextStep.NONE, error.field, retrying)
             is LinkError.Closed -> Guidance(Problem.CLOSED, NextStep.NONE, "close ${error.code} ${error.reason}".trim(), retrying)

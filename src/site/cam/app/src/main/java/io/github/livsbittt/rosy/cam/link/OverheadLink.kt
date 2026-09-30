@@ -36,6 +36,9 @@ sealed interface LinkError {
     /** Close 1013, or 4400 for a receiver-side wait such as "no hello": the receiver was busy; retry with backoff. */
     data class Busy(val code: Int, val reason: String) : LinkError
 
+    /** Close 4503 (D-341 11): the site cannot check the credential right now. Retry; never a re-pair prompt. */
+    data object CredentialUnknown : LinkError
+
     /** Close 4409: another connection with the same source replaced this one. */
     data object Replaced : LinkError
 
@@ -321,23 +324,25 @@ class OverheadLink(
         }
 
         private fun handleClose(code: Int, reason: String) {
-            when (code) {
-                Protocol.CLOSE_BAD_PROTO ->
-                    if (Protocol.isIncompatibleClose(code, reason)) {
-                        onLost(gen, LinkError.ProtocolMismatch, fatal = true)
-                    } else {
-                        onLost(gen, LinkError.Busy(code, reason), fatal = false)
-                    }
-                Protocol.CLOSE_TRY_AGAIN -> onLost(gen, LinkError.Busy(code, reason), fatal = false)
-                Protocol.CLOSE_UNAUTHORIZED -> onLost(gen, LinkError.Unauthorized, fatal = true)
-                Protocol.CLOSE_REPLACED -> onLost(gen, LinkError.Replaced, fatal = true)
-                else -> onLost(gen, LinkError.Closed(code, reason), fatal = false)
-            }
+            val (error, fatal) = closeOutcome(code, reason)
+            onLost(gen, error, fatal)
         }
     }
 
     companion object {
         private const val TAG = "OverheadLink"
+
+        /** What a server close means for the link: the error to show and whether to stop retrying. */
+        internal fun closeOutcome(code: Int, reason: String): Pair<LinkError, Boolean> = when (code) {
+            Protocol.CLOSE_BAD_PROTO ->
+                if (Protocol.isIncompatibleClose(code, reason)) LinkError.ProtocolMismatch to true
+                else LinkError.Busy(code, reason) to false
+            Protocol.CLOSE_TRY_AGAIN -> LinkError.Busy(code, reason) to false
+            Protocol.CLOSE_CREDENTIAL_UNKNOWN -> LinkError.CredentialUnknown to false
+            Protocol.CLOSE_UNAUTHORIZED -> LinkError.Unauthorized to true
+            Protocol.CLOSE_REPLACED -> LinkError.Replaced to true
+            else -> LinkError.Closed(code, reason) to false
+        }
 
         /** [pin] set: trust only the paired site certificate (see [PinnedTrustManager]); null: system trust. */
         fun defaultClient(pin: String? = null): OkHttpClient = OkHttpClient.Builder()
