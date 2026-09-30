@@ -1,5 +1,5 @@
 <!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-24 | Updated: 2026-09-24 -->
+<!-- Generated: 2026-09-24 | Updated: 2026-10-01 -->
 
 # tools
 
@@ -17,7 +17,7 @@ Commands a developer runs from the workspace. These are not installed on the rob
 | `dashboard_drive.py` | Headless Playwright driver for the CORE dashboard: `status`, `mode`, `teleop` (stop latency), `screenshot` (skill `rosy-dashboard-drive`) |
 | `web_visible_roles.py` | Role-surface measurement harness: real CORE TestClient + headless Chromium across roles, surfaces, and viewports; exit 1 on missing button kinds, page errors, horizontal overflow, or a failed first response |
 | `harness/` | Module index generator (`rosy_harness.py`) |
-| `hooks/` | D-346 pre-push fast gate (harness lint + contract suites, ~2 min) and its installer |
+| `hooks/` | D-346 pre-push fast gate (harness lint + contract suites, ~3 min) and its installer |
 
 ## Subdirectories
 

@@ -152,10 +152,20 @@ bash tools/run_fleet_sim.sh
 ## 테스트와 CI
 
 ```bash
-# Quick tier (D-346): 커밋/푸시 직전 <2분 게이트. pre-push 훅(tools/hooks/install.sh)과 같은 묶음.
+# Quick tier (D-346): 커밋/푸시 직전 게이트(~3분). pre-push 훅(tools/hooks/install.sh)과 같은 묶음.
+# 2026-10-01 확장: D-362 대시보드 분할·시크릿 스캔·스코어카드 계약이 이 게이트를 통과해
+# 적색으로 랜딩된 뒤 대시보드/루트 계약 suite를 추가했다.
 python3 -m pytest test/test_harness_contracts.py test/architecture/test_module_structure.py \
   test/test_io_image_closure.py test/test_line_follow_contract_docs.py \
-  src/runtime/gateway/test/test_protocol_version_alignment.py -q
+  test/test_behavior_test_ownership.py test/test_module_scorecard.py \
+  test/test_release_boundary_guards.py test/test_robot_literals.py \
+  src/runtime/gateway/test/test_protocol_version_alignment.py \
+  src/runtime/gateway/test/test_event_catalogue.py \
+  src/runtime/gateway/test/test_console_layout.py \
+  src/runtime/gateway/test/test_host_cards.py \
+  src/runtime/gateway/test/test_host_hardware.py \
+  src/runtime/gateway/test/test_triage_contract.py \
+  src/runtime/gateway/test/test_host_status_summary.py -q
 python3 tools/harness/rosy_harness.py lint   # ADR 중복·mojibake·append-only·staleness
 
 # Full tier: 릴리스·현장 푸시 전, 또는 quick tier에 없는 묶음을 건드렸을 때.
