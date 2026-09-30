@@ -189,7 +189,7 @@ def remote_script(action: str, rev: str | None, root: str = REMOTE_ROOT, *,
             f"case $rc in {LOCK_BUSY_EXIT}|{HELD_EXIT}) rc=1;; esac",
             "exit $rc",
         ])
-        make_lock = f": >> {lock}" + (f"; chown {OWNER}:{GROUP} {lock}; chmod 0660 {lock}"
+        make_lock = f": >> {lock}" + (f"; chown {OWNER}:{GROUP} {lock}; chmod 0640 {lock}"
                                       if privileged else "")
         return [
             f"{s}test -d {q(root)} || {s}install -d{own}{dmode} {q(root)}",
@@ -303,7 +303,8 @@ def _run(runner, cmd, timeout: float):
         print(f"failed (timeout {timeout:g} s): {cmd[0]}", file=sys.stderr)
         return subprocess.CompletedProcess(cmd, 124, "", "")
     if r.returncode != 0:
-        print(f"failed ({r.returncode}): {cmd[0]} {getattr(r, 'stderr', '')}", file=sys.stderr)
+        word = {HELD_EXIT: "held", LOCK_BUSY_EXIT: "busy"}.get(r.returncode, "failed")
+        print(f"{word} ({r.returncode}): {cmd[0]} {getattr(r, 'stderr', '')}", file=sys.stderr)
     return r
 
 

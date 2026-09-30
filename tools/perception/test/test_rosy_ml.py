@@ -298,3 +298,31 @@ def test_doctor_shows_a_hold_as_advisory(tmp_path, monkeypatch, capsys):
     assert _doctor(tmp_path, monkeypatch, Robot(hold=hold)) == 0
     out = capsys.readouterr().out
     assert "! pinky-a: held by ana" in out and "rosy_ml release-hold pinky-a" in out
+
+
+def test_doctor_flags_a_hold_older_than_a_day(tmp_path, monkeypatch, capsys):
+    hold = json.dumps({"by": "ana", "ts": "2026-09-01T08:00:00Z", "action": "rollback"})
+    monkeypatch.setattr(rosy_ml, "_utcnow", lambda: rosy_ml.dt.datetime(
+        2026, 9, 2, 14, 0, tzinfo=rosy_ml.dt.timezone.utc))
+    assert _doctor(tmp_path, monkeypatch, Robot(hold=hold)) == 0
+    line = [ln for ln in capsys.readouterr().out.splitlines() if "held by ana" in ln][0]
+    assert line.startswith("!") and "30 h" in line and "older than 24 h" in line
+
+
+def test_doctor_recent_hold_shows_age_without_the_warning(tmp_path, monkeypatch, capsys):
+    hold = json.dumps({"by": "ana", "ts": "2026-09-02T12:00:00Z"})
+    monkeypatch.setattr(rosy_ml, "_utcnow", lambda: rosy_ml.dt.datetime(
+        2026, 9, 2, 14, 0, tzinfo=rosy_ml.dt.timezone.utc))
+    assert _doctor(tmp_path, monkeypatch, Robot(hold=hold)) == 0
+    line = [ln for ln in capsys.readouterr().out.splitlines() if "held by ana" in ln][0]
+    assert "2 h" in line and "older than" not in line
+
+
+def test_robot_names_are_positional(tmp_path, monkeypatch):
+    _init(tmp_path, monkeypatch=monkeypatch)
+    seen = []
+    fake = types.ModuleType("deliver")
+    fake.main = lambda argv, runner=None: seen.append(argv) or 0
+    monkeypatch.setitem(sys.modules, "deliver", fake)
+    assert rosy_ml.main(["release-hold", "pinky-a"]) == 0
+    assert seen[0][:2] == ["release-hold", "10.0.0.11"]

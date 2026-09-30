@@ -135,7 +135,7 @@ def test_remote_push_root_work_runs_as_root_under_the_lock():
             assert line.startswith(S), line
     # created in place (append + chown/chmod), never unlinked or replaced
     assert (f"{S} sh -c ': >> {ROOT_M}/.lock; chown root:rosy-camera {ROOT_M}/.lock; "
-            f"chmod 0660 {ROOT_M}/.lock'") in outer
+            f"chmod 0640 {ROOT_M}/.lock'") in outer
     assert f"rm -f {ROOT_M}/.lock" not in s and f"{ROOT_M}/.lock.tmp" not in s
     assert "busy for 30 s" in s and "exit $rc" in s
     local = _push_script(privileged=False)
@@ -781,3 +781,11 @@ def test_unappendable_history_changes_nothing(remote):
     r = run()
     assert r.returncode == 3 and "not appendable" in r.stderr
     assert (root / "shadow").read_text() == "/old/model" and not (root / "hold").exists()
+
+
+@pytest.mark.parametrize("rc, word", [(76, "held (76)"), (75, "busy (75)"), (1, "failed (1)")])
+def test_step_outcome_is_named(rc, word, capsys):
+    r = deliver._run(FakeRunner(returncode=rc), ["ssh", "x"], 5)
+    assert r.returncode == rc
+    err = capsys.readouterr().err
+    assert word in err and (rc == 1 or "failed" not in err)

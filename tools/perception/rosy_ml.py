@@ -22,6 +22,7 @@ config or argument."""
 from __future__ import annotations
 
 import argparse
+import datetime as dt
 import functools
 import getpass
 import importlib.util
@@ -41,6 +42,19 @@ for _p in (HERE, HERE / "model", HERE / "dataset"):
 import operator_ssh  # noqa: E402
 
 SITE_TOKEN_FILE = "/etc/rosy/site/secrets/hf_token"
+STALE_HOLD_H = 24
+
+
+def _utcnow() -> dt.datetime:
+    return dt.datetime.now(dt.timezone.utc)
+
+
+def _hold_age_h(hold: dict) -> float | None:
+    try:
+        ts = dt.datetime.strptime(hold["ts"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=dt.timezone.utc)
+    except (KeyError, TypeError, ValueError):
+        return None
+    return (_utcnow() - ts).total_seconds() / 3600
 MODELS_DIR, MODELS_OWNER = "/var/lib/rosy/models", "root:rosy-camera 750"
 
 
@@ -257,7 +271,11 @@ def _doctor(cfg, robots, runner, connect, find_spec) -> int:
                 hold = {"by": "?"}
             if hold:
                 who = hold.get("by") if isinstance(hold, dict) else "?"
-                rep.line(False, f"{name}: held by {who} (site auto delivery paused)",
+                age = _hold_age_h(hold) if isinstance(hold, dict) else None
+                since = f" for {age:.0f} h" if age is not None else ""
+                stale = (f" — older than {STALE_HOLD_H} h: ask {who} whether it is still needed"
+                         if age is not None and age > STALE_HOLD_H else "")
+                rep.line(False, f"{name}: held by {who}{since} (site auto delivery paused){stale}",
                          f"when done testing: rosy_ml release-hold {name}", required=False)
 
     if cfg.get("hf_repo"):
