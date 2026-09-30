@@ -654,3 +654,10 @@
 - 증거: 새 `test/test_ir_overlay.py`(없음·정상·잘못된 7종·도구 출력이 곧 유효 덮어쓰기·launch 문자열) + `test_ir_calibration.py` 추가 3개 → 23 passed. `test/test_native_systemd_contract.py` 는 선언을 비우면 빨강, 되돌리면 초록 (2026-09-30 Windows).
 - gate 변화: SOURCE. 새 모듈이 설치 이미지에 들어가야 실물에서 쓰인다(릴리스 필요).
 - 결정: D-344 §12 보강.
+
+## 2026-09-30 · 40757d69 · fix(camera): 교정 검사기를 import 못 해도 덮어쓰기만 건너뛴다(재검토 R4)
+
+- 변경: `control/ir_overlay.py` 가 `lane.py` 지연 import 의 ImportError 를 잡아 "skipped: cannot check the calibration" 을 돌려준다 — launch 가 멈추지 않는다.
+- 증거: `test_ir_overlay.py` 에 import 실패 시험 추가, `test_ir_overlay.py test_ir_calibration.py` 24 passed (2026-09-30 Windows).
+- gate 변화: SOURCE.
+- 결정: D-344 §12 보강.

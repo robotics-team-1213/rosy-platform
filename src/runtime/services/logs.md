@@ -214,3 +214,10 @@
 - 증거: `test_line_follow_obstacle_path.py` 21 passed — 0.18 m 벽(직진 정지·돌기 추종 한 시험), range_min 0.15 m 급회전 상자(옛 창은 못 봄), 제자리 회전, 풀림 지연, 의도 교대 떨림 없음(지연을 0 으로 두면 20 틱 중 10 번 출발 — 변이 확인), 띠 안 벽 LOST 없이 HOLD + 사건 한 번, 관측 전 WAITING, 잃은 시야에서 마지막 의도, L0 거절·L1 출발. (2026-09-30 Windows)
 - gate 변화: SOURCE. ROS-SIM·DEVICE 미실행.
 - 결정: D-344 §11 보강, §13.
+
+## 2026-09-30 · 61c25393 · fix(line-follow): 재검토 R1·R2 — 풀림 지연은 연속 측정만, 모드 선택마다 새 앞 물체 세션
+
+- 변경: (R1, 08e791af) 틱이 호를 재지 않으면(LiDAR 끊김·계단 정지·한도 0·OFF·관측 전) 풀림 지연 시작점을 지운다 — 끊김 앞의 빈 측정이 풀림에 세지지 않는다. 틱 본문을 `_tick_locked` 로 옮기고 `finally` 에서 지운다. (R2, 61c25393) `set_mode` 가 막힘·지연·정지 시작·알림 여부를 지운다. sector 는 마지막 거리가 재출발 거리 안이면 막힌 채 시작한다(다음 스캔 전 한 틱도 가지 않게). (R3, c673f6cd) `max_angular_follows_manual: false` 는 L1 문턱을 우회하지 않고, 문턱을 끄는 것은 `lane_auto_min_manual_angular: 0` 뿐이라고 설정 주석·D-344 에 적었다.
+- 증거: `test_line_follow_obstacle_path.py` 24 passed — LiDAR 0.6 s 끊김 뒤 지연 재시작(`finally` 의 지우기를 빼면 빨강), 재선택 뒤 두 번째 정지가 두 번째 `nav.line_obstacle_hold`(R2 를 빼면 빨강), sector 재선택 막힘 유지(R2 를 빼면 빨강), 덮어쓰기로 문턱 못 넘음. gateway `-k line_follow` 85 passed, 3 skipped ×3 (2026-09-30 Windows; 부하 중 한 번 1 failed 가 있었으나 세 번 다시 돌려 재현 안 됨).
+- gate 변화: SOURCE.
+- 결정: D-344 §11 보강, §13.
