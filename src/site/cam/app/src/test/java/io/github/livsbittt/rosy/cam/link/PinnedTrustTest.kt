@@ -5,7 +5,7 @@ import io.github.livsbittt.rosy.cam.settings.PairingUri
 import java.net.InetAddress
 import java.security.cert.CertificateException
 import java.util.concurrent.TimeUnit
-import javax.net.ssl.SSLException
+import javax.net.ssl.SSLPeerUnverifiedException
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
@@ -119,7 +119,75 @@ class PinnedTrustTest {
     fun caPinStillRequiresTheHostnameInTheCertificate() {
         val server = serve(leaf(siteCa, san = "192.0.2.99"), siteCa)
         val error = failure(OverheadLink.defaultClient(certPin(siteCa.certificate.encoded)), server)
-        assertTrue(error.toString(), error is SSLException)
+        assertTrue(error.toString(), error is SSLPeerUnverifiedException)
+        assertEquals(NetworkFailure.TLS, NetworkFailure.classify(error))
+    }
+
+    @Test
+    fun leafPinStillRequiresTheHostnameInTheCertificate() {
+        val wrongName = leaf(siteCa, san = "192.0.2.99")
+        val server = serve(wrongName, siteCa)
+        val error = failure(OverheadLink.defaultClient(certPin(wrongName.certificate.encoded)), server)
+        assertTrue(error.toString(), error is SSLPeerUnverifiedException)
+        assertEquals(NetworkFailure.TLS, NetworkFailure.classify(error))
+    }
+
+    @Test
+    fun leafPinRejectsAnotherLeafFromTheSameCa() {
+        val pinned = leaf(siteCa)
+        val server = serve(leaf(siteCa), siteCa)
+        val error = failure(OverheadLink.defaultClient(certPin(pinned.certificate.encoded)), server)
+        assertEquals(NetworkFailure.TLS_PIN, NetworkFailure.classify(error))
+    }
+
+    @Test
+    fun leafPinAboveAnotherLeafIsRejected() {
+        val pinned = leaf(siteCa)
+        val attacker = leaf(otherCa)
+        val trust = PinnedTrustManager(certPin(pinned.certificate.encoded))
+        assertRejected(trust, arrayOf(attacker.certificate, pinned.certificate))
+    }
+
+    @Test
+    fun expiredCertificatesAreRejectedUnderLeafAndCaPins() {
+        val now = System.currentTimeMillis()
+        val day = TimeUnit.DAYS.toMillis(1)
+        val expiredLeaf = HeldCertificate.Builder().commonName("site").addSubjectAlternativeName(LOOPBACK)
+            .validityInterval(now - 2 * day, now - day).signedBy(siteCa).build()
+        assertRejected(PinnedTrustManager(certPin(expiredLeaf.certificate.encoded)), arrayOf(expiredLeaf.certificate))
+        assertRejected(
+            PinnedTrustManager(certPin(siteCa.certificate.encoded)),
+            arrayOf(expiredLeaf.certificate, siteCa.certificate),
+        )
+        // PKIX skips the anchor's own dates, so an expired pinned CA is checked explicitly.
+        val expiredCa = HeldCertificate.Builder().commonName("old site CA").certificateAuthority(0)
+            .validityInterval(now - 2 * day, now - day).build()
+        assertRejected(
+            PinnedTrustManager(certPin(expiredCa.certificate.encoded)),
+            arrayOf(leaf(expiredCa).certificate, expiredCa.certificate),
+        )
+    }
+
+    @Test
+    fun aPeerReasonPhraseCannotForceAPinStopOnPlainWs() {
+        val plain = MockWebServer().also { it.start(InetAddress.getByName(LOOPBACK), 0); servers += it }
+        repeat(3) { plain.enqueue(MockResponse().setStatus("HTTP/1.1 503 ${PinMismatchException.MARKER}: fake")) }
+        val l = OverheadLink(PairingUri(LOOPBACK, plain.port, "secret-token", "overhead-1"), "0.1.0", "jvm-test")
+            .also { link = it }
+        l.start()
+        val status = awaitStatus(l) { it.error != null }
+        assertTrue(status.toString(), !status.stopped)
+        val error = status.error as LinkError.Network
+        assertTrue(error.toString(), error.kind != NetworkFailure.TLS_PIN)
+    }
+
+    private fun assertRejected(trust: PinnedTrustManager, chain: Array<java.security.cert.X509Certificate>) {
+        try {
+            trust.checkServerTrusted(chain, "ECDHE_ECDSA")
+            fail("chain must be rejected")
+        } catch (e: CertificateException) {
+            assertTrue(e.toString(), e !is PinMismatchException)
+        }
     }
 
     @Test

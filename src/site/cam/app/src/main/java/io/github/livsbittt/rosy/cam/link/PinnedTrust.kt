@@ -31,7 +31,10 @@ class PinMismatchException(detail: String) : CertificateException("$MARKER: $det
  *   the server to send leaf + CA; a leaf pin works with a leaf-only server.
  * - When the pin is a CA (index > 0), the leaf must chain to it: the platform PKIX validator runs
  *   with that one certificate as its only trust anchor (signatures, validity, CA constraints).
- * - When the pin is the leaf, only its validity period is checked; the pin already names it.
+ * - When the pin is the leaf, only its validity period is checked; the pin already names it. The site
+ *   side (`rosy-vision pair-link`) issues CA pins only (D-341 9); leaf pins are still accepted so links
+ *   printed before that rule keep working.
+ * - The pinned certificate's own validity period is always checked (PKIX skips the anchor's dates).
  * - Hostname verification is not done here; OkHttp's verifier still checks the SAN (DNS or IP).
  */
 class PinnedTrustManager(private val pin: String) : X509TrustManager {
@@ -39,9 +42,12 @@ class PinnedTrustManager(private val pin: String) : X509TrustManager {
         if (chain.isNullOrEmpty()) throw CertificateException("empty server certificate chain")
         val index = chain.indexOfFirst { certPin(it.encoded) == pin }
         if (index < 0) throw PinMismatchException("no certificate in the ${chain.size}-certificate chain matches the paired pin")
-        if (index == 0) {
-            chain[0].checkValidity()
-            return
+        // PKIX never checks the trust anchor's own dates, so the pinned certificate is checked here (review n2).
+        chain[index].checkValidity()
+        if (index == 0) return
+        // A pin above the leaf must be a CA; a pinned leaf sent after someone else's leaf is not one (review m3).
+        if (chain[index].basicConstraints < 0) {
+            throw CertificateException("pinned certificate at chain position $index is not a CA")
         }
         val anchors = KeyStore.getInstance(KeyStore.getDefaultType()).apply {
             load(null, null)
