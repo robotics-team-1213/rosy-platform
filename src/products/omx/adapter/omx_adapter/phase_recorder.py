@@ -34,6 +34,20 @@ class ActionPhaseRecorder:
             accepted=accepted, driver_goal_id=driver_goal_id,
         )
 
+    def record_late_acceptance(self, *, phase_id: str,
+                               driver_goal_id: str) -> dict[str, Any]:
+        return self._store.record_late_phase_acceptance(
+            self.action_id, self.attempt_id, phase_id=phase_id,
+            driver_goal_id=driver_goal_id,
+        )
+
+    def record_late_cancel_request(self, *, phase_id: str,
+                                   driver_goal_id: str) -> dict[str, Any]:
+        return self._store.record_late_phase_cancel_request(
+            self.action_id, self.attempt_id, phase_id=phase_id,
+            driver_goal_id=driver_goal_id,
+        )
+
     def record_submission(self, *, phase_id: str, accepted: bool | None,
                           driver_goal_id: str | None) -> dict[str, Any]:
         return self._store.record_phase_submission(
