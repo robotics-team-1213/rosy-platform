@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # 9p 읽기 캐시 무효화: WSL 쪽에서 소스를 touch 한 뒤 복사한다.
-SRC="/mnt/f/Dev/Control/Robot/ROS/Rosy/Rosy OS/.worktrees/pilot-teleop/src/hmi/pilot"
+# 이 스크립트가 든 체크아웃(메인이든 worktree 든)의 pilot 을 복사한다.
+SRC="$(cd "$(dirname "$0")/.." && pwd)/src/hmi/pilot"
 for file in app.js sw.js styles.css screens/drive.js screens/drive-auto.js screens/drive-view.js screens/inputs.js screens/connect.js input-state.js vision.js stick.js link.js client.js index.html manifest.webmanifest; do
   touch "$SRC/$file"
 done

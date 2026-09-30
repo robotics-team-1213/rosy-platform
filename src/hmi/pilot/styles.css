@@ -179,7 +179,6 @@ body[data-pilot-screen="drive"] .pilot-main {
   text-align: right;
 }
 
-
 [data-drive-hud] [data-drive-fact=turn] {
   font-family: var(--mono);
   font-size: var(--text-value);

@@ -71,7 +71,6 @@ export function mountInputs(root, {onClose, onChange} = {}) {
     const preview = el("ui-text", "—", {scale: "value", "data-input-preview": ""});
 
     const close = el("ui-button", "닫기", {type: "button"});
-
     close.setAttribute("kind", "quiet");
     const closePanel = () => {
       clearInterval(previewTimer);
