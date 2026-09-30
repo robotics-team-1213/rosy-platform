@@ -3776,3 +3776,28 @@
 - gate 변화: 없음. SOURCE/LOCAL.
 - 결정: D-370. **정정:** 바로 앞 재번호 항목의 "`harness.yaml` `adr_gaps`에 D-358–D-369의 사유를 적었다"는 병합 뒤 기준으로 틀렸다. D-358–D-361은 main에 착지해 지웠고, 남은 선언은 D-362–D-369다.
 - 교훈: 두 세션이 같은 번호 구간을 각각 gap으로 선언하면 YAML 자동 병합이 중복 키를 만든다. 병합 뒤 `adr_gaps`를 손으로 확인한다.
+
+## 2026-09-30 · uncommitted · governance(structure): D-362 파일 크기 예산 채택 및 P6 게이트 확장
+- Change: ADR D-362 추가 — 생산 `.py`/`.cpp`/`.hpp`/`.sh` 600줄, 웹 자산 `.js`/`.html`/`.css` 800줄, 1000줄 초과 파일 성장 허용량 0. `test/architecture/test_module_structure.py` P6 스캔을 웹 자산과 `deploy/`·`tools/`·`firmware/` 루트로 확장하고, 신규 11개 판정(diagnostic.html·app.js·styles.css split, lane_live_view.html·운영 스크립트 7개 accept)과 기존 6건 재판정(app.py·fleet·schemas.py·task_store.py·console.py·control)을 `SIZE_VERDICTS`에 기록했다. `2026-09-06-module-split-criteria.md` X1 각주를 D-362로 갱신하고 계획은 `2026-09-30-file-size-budget-and-refactor-queue.md`.
+- Evidence: `python -m pytest test/architecture/test_module_structure.py -q` 33 passed(확장 전과 동일 개수). 변이 증명 3종 — deploy 601줄 신규 파일과 map-view.js 812줄은 "needs a verdict"로, task_store.py 1062줄은 "grew past 1060+0"으로 각각 적발 후 복구 green.
+- Gate: 정책·게이트 범위만. 분할 실행(P0–P2: app.py 라우터, 캘리브레이션 상태기계, 웹 자산)은 별도 변경 — 본 변경에서 코드 이동 없음.
+
+## 2026-09-30 · uncommitted · refactor(fleet): D-362 P0-1 app.py 라우터 분리 실행
+- Change: `fleet/server/app.py` 1556 → 476줄. 경로를 소유자 모듈로 옮겼다 — mission_routes(390, 제안·판정·승인·진행), task_dispatch_routes(288, 디스패치 통제·작업·estop·OMX 국소 정지 팬아웃), intent_routes(141, /api/fleet/do), console_routes(114, 상태·지도·대형·신호), ingest_routes(131, 발견·목격·정책증거·이벤트), static_routes(93), site_auth(154, principal·인증 Dependants), http_errors(36). create_app·lifespan·감사 미들웨어·비전 임대·배경 루프는 app.py에 남고 GoalRequest는 재수출(test_task_contract_docs 참조). task_service 없는 배치의 goal/cancel/estop 직접 console 위임을 원문 분기 그대로 보존. test_task_contract_docs의 app.py 소스 텍스트 고정 4개를 새 소유 모듈로 재지정(이동 감지가 red로 작동한 것 자체가 근거).
+- Evidence: fleet 전체 920 passed 6 skipped(당시 2 failed는 위 문서 고정 — 재지정 후 게이트 포함 39 passed), 최종 상태에서 console·signals·formation·cli·local-stop·no-video·overhead 통합 118 passed, overhead 통합 단독 2회 green(첫 실패는 백그라운드 전체 스위트와의 부하 경합), flake8 신규·변경 파일 0 오류, 구조 게이트 33 passed — app.py 항목 제거를 set-equality가 확인, fleet 패키지 19,243 재판정 기록.
+- Gate: 동작 불변(경로 재배치만, 신규 경로 없음). fleet의 B2 서브패키지 재편은 여전히 미실행(2026-09-30-er2-mission-feedback-loop.md). 다음은 P0-2 캘리브레이션 상태기계 추출(C1).
+
+## 2026-09-30 · uncommitted · refactor(sensing): D-362 P0-2 캘리브레이션 상태기계 추출 실행
+- Change: 2026-09-22 분리 설계의 캘리브레이션 조각 실행 — 신규 `control/calibration_sequence.py`(510줄, ROS-free): `CalibrationSequence` 믹스인(운동 허가 `safe_motion`, 정밀 홈드 `pause_precision`, `tick_motion`/`tick_collecting` 단계 분기, `runtime_health`/`stationary_report`/`sensor_failure`, `report`/`finish`/인증서 영속)과 `calib_node` 순수 함수 8개(`approach_heading`, `snap_lidar_yaw`, `looks_floor/cliff`, `ir_valid`, `yaw_from_quat`, `_copy_scan`). `startup_calibration_node.py` 970→584(배선·센서 콜백·tick 디스패처만), `calib_node.py` 642→583. ROS 접촉은 노드 엣지로만(`drive_trial`/`zero`/`request_command` 신설). AST 추출 시험 5개 파일을 `mixin_method`/믹스인 직접 호출로 갱신, 신규 `test_calibration_sequence.py`(실제값 8건).
+- Evidence: 캘리브레이션 계열 234 passed 1 skipped(회전·인증서·허가·스냅숏·OS 저장소 포함), 갱신 대상 시험 묶음 89 passed, 신규 시험 8 passed(기대값 오류 3건은 포화 채널 제외 의미 등 실제 의미로 정정), py_compile 3파일 통과, 구조 게이트 33 passed — `SIZE_VERDICTS`에서 두 노드 항목 제거를 set-equality가 확인, control 패키지 총계는 허용량 내(재판정 불필요). flake8 신규 위반 범주 없음(해당 경로는 CI flake8 대상 아님, 기존 컴팩트 스타일 유지).
+- Gate: 동작 불변(메서드 이동·엣지 치환만, 신규 경로 없음). ROS 그래프 시험(`test_os_*_graph`)은 종전대로 ROS Jazzy 실행 필요 — Windows 실행은 종전과 같은 skip. P1 웹 자산(diagnostic.html·app.js·styles.css)이 다음.
+
+## 2026-09-30 · uncommitted · refactor(dashboard): D-362 P1 styles.css 분할 + diagnostic 판정 정정
+- Change: `hmi/dashboard/styles.css` 1119 → 492 + 신규 `console-detail.css` 637. 캐스케이드 순서가 곧 규칙이므로 487줄(상태 레일) 경계의 꼬리 분할로 유효 규칙 순서를 그대로 유지하고, 순서 계약을 두 파일 헤더 주석과 `test_dashboard.py`의 `dashboard_css()` 헬퍼(링크 순 연결)로 고정. `index.html` 링크·`core_api_web/api/app.py` `dashboard_assets` allowlist·`CMakeLists.txt` install에 등록. `sensing/web/diagnostic.html`은 아침의 split 판정을 accept로 재판정 — 단일 HTML·단일 IIFE가 `web/AGENTS.md`에 기록된 의도된 설계(D-150 디버그 전용면)라 분할은 계약 위반이다. `SIZE_VERDICTS`에서 styles.css 항목 제거, diagnostic.html 판정문 교체(성장 허용량 0 유지).
+- Evidence: web_common 토큰 계약 + api_web ui_route + gateway dashboard 139 passed(분할 직후 7실패는 styles.css 소스 텍스트 고정 시험 — `dashboard_css()` 재지정으로 해결, HTTP 서빙 시험도 두 시트 모두 확인), 구조 게이트 33 passed(styles.css 제거·diagnostic 재판정을 set-equality가 확인). CSS 이동은 기계적 분할이라 색 토큰 계약은 이행 상태 그대로.
+- Gate: 동작 불변(규칙 순서 보존, 신규 규칙 없음). `app.js` 1338은 split 판정 유지(다음 조각), >1000 성장 허용량 0. 브라우저 회귀(ROSY_RUN_BROWSER_TESTS)는 Playwright 환경에서 별도 확인 필요.
+
+## 2026-09-30 · uncommitted · refactor(dashboard): D-362 P1 app.js 분할 실행 및 웹 예산 게이트 통합
+- Change: `hmi/dashboard/app.js` 1338 → 745. 상태 렌터는 `telemetry.js`(419 — 텔레메트리 채널·로봇 정보·트리이지·안전 히어로·인벤토리·런타임·이벤트 + 교통 정책 패널 상태·렌더·바인딩), 수동 조종은 `teleop.js`(128 — 홀드 티커 내재화, D-250 절차 보존), 상태 소켓은 `state-socket.js`(111 — 재접속 후퇴 팩토리, 4401/4403 분기 보존). 임포트 방향은 dom←client←settings←셸 한 방향 유지, 빌드 단계 없음(D-23). allowlist·CMake·AGENTS 갱신. D-262의 로컬 웹 예산 스캔(test_web_budgets, 600줄)은 map-view.js 612 커밋(e89e09e1)으로 이미 main에서 빨간 상태였다 — D-362 아키텍처 게이트(웹 800·set-equality·>1000 허용량 0)가 상위 집합이므로 통합하고, 이 파일은 인수 시험(아키텍처 게이트가 .js/.html/.css를 실제로 커버하는지)으로 대체.
+- Evidence: node --check 4파일 통과(UTF-8 직접 읽기 — 첫 시도는 cp949 오독으로 미변경 파일까지 거짓 실패), gateway dashboard+ui_route+web_common 142 passed, dashboard 패키지 17 passed 34 skipped, 구조 게이트 33 passed(app.js 판정 제거 set-equality 확인). 시험 재지정 5건은 app.js 단독 텍스트 고정이 새 모듈로 이동한 것 — 파일 자신의 교리(16-18줄, "모듈 간 이동 시 app.js만 읽으면 잘못된 이유로 통과/실패한다")대로 bundle/state-socket.js로 재지정.
+- Gate: 동작 불변(함수 이동·엣지 치환만, renderCapabilities 래퍼·teleopActive·lineFollow.pending 적응 3곳). 브라우저 회귀(ROSY_RUN_BROWSER_TESTS=1)는 Playwright 환경에서 별도 확인 필요 — 정적 검사+문법+번들 계약 시험이 이 변경의 증거 한계다.
