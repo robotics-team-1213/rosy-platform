@@ -164,6 +164,23 @@ def test_bad_folder_fails_with_report(tmp_path, capsys):
     assert not (tmp_path / "out").exists()
 
 
+def test_run_returns_report_and_uses_injected_downloader(tmp_path):
+    """model/watch.py calls run() in-process with its own (token-carrying) downloader."""
+    seen = {}
+
+    def downloader(**kw):
+        seen.update(kw)
+        d = Path(kw["local_dir"])
+        d.mkdir(parents=True)
+        (d / "model_manifest.json").write_text("{}", encoding="utf-8")
+        return str(d)
+
+    rc, report = intake.run(f"hf:org/m@{'a' * 40}", out=tmp_path / "out",
+                            downloader=downloader)
+    assert rc == 1 and report["verdict"] == "fail" and report["reasons"]
+    assert seen["repo_id"] == "org/m" and seen["revision"] == "a" * 40
+
+
 # ---- end to end: tiny ONNX model + synthetic video (venv only) ----
 
 def _tiny_onnx(path: Path):

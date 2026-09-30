@@ -169,14 +169,20 @@ def main(argv=None) -> int:
     ap.add_argument("--root", default=str(ROOT), help="base for gate replay_sources globs")
     ap.add_argument("--max-frames", type=int, help="override max_frames_per_source")
     args = ap.parse_args(argv)
+    return run(args.source, out=args.out, gate_path=args.gate, root=args.root,
+               max_frames=args.max_frames)[0]
 
-    gate = load_gate(args.gate)
-    max_frames = args.max_frames or gate["max_frames_per_source"]
+
+def run(source: str, *, out, gate_path=DEFAULT_GATE, root=ROOT, max_frames=None,
+        downloader=None) -> tuple[int, dict]:
+    """(exit code, report). main() and model/watch.py (in-process, own downloader)."""
+    gate = load_gate(gate_path)
+    max_frames = max_frames or gate["max_frames_per_source"]
     report = {"model_revision": None, "verdict": "fail", "reasons": [], "gate": gate,
               "tool_commit": _tool_commit()}
     folder = None
     try:
-        folder = resolve_source(args.source, workdir=Path(args.out) / ".incoming")
+        folder = resolve_source(source, downloader=downloader, workdir=Path(out) / ".incoming")
         manifest = load_manifest(folder)
         report["model_revision"] = manifest.model_revision
         verify_files(manifest)
@@ -184,7 +190,7 @@ def main(argv=None) -> int:
         report["files"] = [{"name": f.name, "sha256": f.sha256} for f in manifest.files]
         model = LaneSegModel.open(folder)
         videos = sorted({Path(p) for pat in gate["replay_sources"]
-                         for p in glob.glob(str(Path(args.root) / pat))})
+                         for p in glob.glob(str(Path(root) / pat))})
         stats = replay(model, videos, max_frames)
         report.update(stats)
         report["sources"] = [str(v) for v in videos]
@@ -194,21 +200,21 @@ def main(argv=None) -> int:
 
     text = json.dumps(report, indent=2, ensure_ascii=False) + "\n"
     if report["verdict"] == "pass":
-        dest = Path(args.out) / report["model_revision"]
+        dest = Path(out) / report["model_revision"]
         shutil.copytree(folder, dest, dirs_exist_ok=True,
                         ignore=shutil.ignore_patterns(".cache", ".git*", REPORT_NAME))
         (dest / REPORT_NAME).write_text(text, encoding="utf-8")
-        if args.source.startswith("hf:"):  # downloaded snapshot (and its .real copy)
+        if source.startswith("hf:"):  # downloaded snapshot (and its .real copy)
             for d in (folder, Path(str(folder).removesuffix(".real"))):
                 shutil.rmtree(d, ignore_errors=True)
         print(f"PASS {report['model_revision']} -> {dest}")
-        return 0
-    src = Path(folder) if folder else Path(args.source.replace(":", "_").replace("/", "_"))
+        return 0, report
+    src = Path(folder) if folder else Path(source.replace(":", "_").replace("/", "_"))
     target = src.parent / f"{src.name}.{REPORT_NAME}"
     target.write_text(text, encoding="utf-8")
     print(f"FAIL {report['model_revision']}: {'; '.join(report['reasons'])} (report: {target})",
           file=sys.stderr)
-    return 1
+    return 1, report
 
 
 if __name__ == "__main__":
