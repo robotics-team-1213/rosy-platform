@@ -11,7 +11,8 @@ Turn a `FOLLOW` decision into a capped speed (D-228, D-229). Pixels stay in `con
 
 | File | Description |
 |------|-------------|
-| `manager.py` | Mode, loss latch, and the speed formula |
+| `manager.py` | Mode, loss latch, the speed formula, obstacle hold, and the manual-ladder angular cap (D-344 §11/§13) |
+| `clearance.py` | ROS-free LiDAR geometry: front sector minimum and swept-corridor path clearance |
 
 ## Subdirectories
 

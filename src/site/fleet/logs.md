@@ -681,3 +681,8 @@
 - gate 변화: 없음.
 - 결정: D-370 5.1.
 - 교훈: 없음.
+
+## 2026-09-30 · uncommitted · refactor(fleet): D-377 console title and favicon
+- 변경: 관제 화면 `<title>` `Rosy Console`, 파비콘 `/common/icons/console.svg`. `test_common_icons.py`, `test_task_contract_docs.py`의 Vision 경로(`src/site/vision/rosy_vision/ingest.py`).
+- 증거: `python -m pytest src/site/fleet/test -q` 938 passed, 6 skipped; node 명세 6파일 34 passed (2026-09-30 Windows).
+- gate 변화: 없음. 자산 폴더 이동(`src/site/console`, `rosy_console`)은 D-374 단계 4 게이트 그대로.

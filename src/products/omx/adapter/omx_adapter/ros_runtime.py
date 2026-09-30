@@ -9,7 +9,7 @@ from __future__ import annotations
 import math
 import threading
 import time
-from typing import Any
+from typing import Any, Callable
 
 from action_msgs.msg import GoalStatus
 from control_msgs.action import FollowJointTrajectory
@@ -28,13 +28,21 @@ from .command_owner import (
     JointStateSnapshot,
     TrajectoryCommand,
 )
+from .ros_goal_contract import RosGoalEvent, canonical_ros_goal_id
 
 
 class RosTrajectoryActionHandle(ActionHandle):
     """Adapt rclpy's asynchronous FollowJointTrajectory handle to ActionHandle."""
 
-    def __init__(self, action_client: ActionClient, command: TrajectoryCommand) -> None:
+    def __init__(
+        self,
+        action_client: ActionClient,
+        command: TrajectoryCommand,
+        event_sink: Callable[[RosGoalEvent], None] | None = None,
+    ) -> None:
         self._client = action_client
+        self._command = command
+        self._event_sink = event_sink
         self._lock = threading.RLock()
         self._goal_handle: Any | None = None
         self._done = False
@@ -42,19 +50,74 @@ class RosTrajectoryActionHandle(ActionHandle):
         self._status: int | None = None
         self._cancel_requested = False
         self._cancel_acknowledged: bool | None = None
+        self._goal_id: str | None = None
+        self._event_sequence = 0
+        self._feedback_sequence = 0
+        self._observation_failed = False
 
         goal = FollowJointTrajectory.Goal()
-        goal.trajectory.joint_names = list(command.positions)
-        point = JointTrajectoryPoint()
-        point.positions = [command.positions[name] for name in goal.trajectory.joint_names]
-        total_ns = round(command.duration_s * 1_000_000_000)
-        if total_ns < 1:
-            raise ValueError("trajectory duration is below one nanosecond")
-        point.time_from_start = Duration(nanoseconds=total_ns).to_msg()
-        goal.trajectory.points = [point]
+        goal.trajectory.joint_names = list(command.joint_names)
+        points = []
+        for planned in command.trajectory_points:
+            point = JointTrajectoryPoint()
+            point.positions = list(planned.positions)
+            if planned.velocities is not None:
+                point.velocities = list(planned.velocities)
+            if planned.accelerations is not None:
+                point.accelerations = list(planned.accelerations)
+            total_ns = round(planned.time_from_start_s * 1_000_000_000)
+            if total_ns < 1:
+                raise ValueError("trajectory point time is below one nanosecond")
+            point.time_from_start = Duration(nanoseconds=total_ns).to_msg()
+            points.append(point)
+        goal.trajectory.points = points
 
-        future = action_client.send_goal_async(goal)
+        future = action_client.send_goal_async(goal, feedback_callback=self._on_feedback)
         future.add_done_callback(self._on_goal_response)
+
+    def _emit(self, kind: str, *, goal_id: str | None = None, **facts: Any) -> bool:
+        if self._event_sink is None:
+            return True
+        with self._lock:
+            self._event_sequence += 1
+            sequence = self._event_sequence
+        try:
+            self._event_sink(RosGoalEvent(
+                kind=kind,  # type: ignore[arg-type]
+                command_id=self._command.command_id,
+                phase_id=self._command.phase_id,
+                goal_id=goal_id,
+                observed_at_monotonic_s=time.monotonic(),
+                sequence=sequence,
+                **facts,
+            ))
+            return True
+        except Exception:
+            # Telemetry is not allowed to break the ROS executor or imply success.
+            with self._lock:
+                self._observation_failed = True
+                goal_handle = self._goal_handle
+            if goal_handle is not None:
+                try:
+                    self._request_cancel(goal_handle)
+                except Exception:
+                    pass
+            return False
+
+    def _on_feedback(self, message: Any) -> None:
+        with self._lock:
+            goal_id = self._goal_id
+            self._feedback_sequence += 1
+            feedback_sequence = self._feedback_sequence
+        if goal_id is None:
+            with self._lock:
+                self._observation_failed = True
+            return
+        self._emit(
+            "RUNNING_FEEDBACK",
+            goal_id=goal_id,
+            feedback_sequence=feedback_sequence,
+        )
 
     @property
     def cancel_acknowledged(self) -> bool | None:
@@ -75,19 +138,42 @@ class RosTrajectoryActionHandle(ActionHandle):
             with self._lock:
                 self._done = True
                 self._succeeded = False
+            self._emit("GOAL_ACCEPTANCE_UNKNOWN")
             return
 
         if goal_handle is None or not goal_handle.accepted:
             with self._lock:
                 self._done = True
                 self._succeeded = False
+            self._emit("GOAL_REJECTED")
+            return
+
+        try:
+            goal_id = canonical_ros_goal_id(goal_handle.goal_id.uuid)
+        except Exception:
+            with self._lock:
+                self._goal_handle = goal_handle
+                self._observation_failed = True
+            self._emit("GOAL_ACCEPTANCE_UNKNOWN")
+            try:
+                self._request_cancel(goal_handle)
+            except Exception:
+                pass
             return
 
         with self._lock:
             self._goal_handle = goal_handle
+            self._goal_id = goal_id
             cancel_pending = self._cancel_requested
-        result_future = goal_handle.get_result_async()
-        result_future.add_done_callback(self._on_result)
+        self._emit("GOAL_ACCEPTED", goal_id=goal_id)
+        try:
+            result_future = goal_handle.get_result_async()
+            result_future.add_done_callback(self._on_result)
+        except Exception:
+            self._emit("TERMINAL_UNKNOWN", goal_id=goal_id)
+            with self._lock:
+                self._done = True
+                self._succeeded = False
         if cancel_pending:
             self._request_cancel(goal_handle)
 
@@ -103,8 +189,20 @@ class RosTrajectoryActionHandle(ActionHandle):
             status = None
             success = False
         with self._lock:
+            goal_id = self._goal_id
+        if status is None or goal_id is None:
+            self._emit("TERMINAL_UNKNOWN", goal_id=goal_id)
+        else:
+            result_code = getattr(getattr(wrapped, "result", None), "error_code", None)
+            self._emit(
+                "TERMINAL_RESULT",
+                goal_id=goal_id,
+                status=int(status),
+                result_code=int(result_code) if result_code is not None else None,
+            )
+        with self._lock:
             self._done = True
-            self._succeeded = success
+            self._succeeded = success and not self._observation_failed
             self._status = status
 
     def _on_cancel_response(self, future: Any) -> None:
@@ -115,10 +213,20 @@ class RosTrajectoryActionHandle(ActionHandle):
             acknowledged = False
         with self._lock:
             self._cancel_acknowledged = acknowledged
+            goal_id = self._goal_id
+        if goal_id is not None:
+            self._emit("CANCEL_ACK", goal_id=goal_id, cancel_acknowledged=acknowledged)
 
     def _request_cancel(self, goal_handle: Any) -> None:
-        future = goal_handle.cancel_goal_async()
-        future.add_done_callback(self._on_cancel_response)
+        try:
+            future = goal_handle.cancel_goal_async()
+            future.add_done_callback(self._on_cancel_response)
+        except Exception:
+            with self._lock:
+                self._cancel_acknowledged = False
+                goal_id = self._goal_id
+            if goal_id is not None:
+                self._emit("CANCEL_ACK", goal_id=goal_id, cancel_acknowledged=False)
 
     def cancel(self) -> None:
         with self._lock:
@@ -133,16 +241,22 @@ class RosTrajectoryActionHandle(ActionHandle):
 
     def succeeded(self) -> bool:
         with self._lock:
-            return self._done and self._succeeded
+            return self._done and self._succeeded and not self._observation_failed
 
 
 class RosTrajectoryActionPort:
     """Single rclpy action client used exclusively by one ArmCommandOwner."""
 
-    def __init__(self, node: Any, action_name: str) -> None:
+    def __init__(
+        self,
+        node: Any,
+        action_name: str,
+        event_sink: Callable[[RosGoalEvent], None] | None = None,
+    ) -> None:
         if not isinstance(action_name, str) or not action_name.strip():
             raise ValueError("action_name must be non-empty")
         self._client = ActionClient(node, FollowJointTrajectory, action_name)
+        self._event_sink = event_sink
         self.last_handle: RosTrajectoryActionHandle | None = None
 
     def server_is_ready(self) -> bool:
@@ -151,7 +265,7 @@ class RosTrajectoryActionPort:
     def send_goal(self, command: TrajectoryCommand) -> RosTrajectoryActionHandle:
         if not self.server_is_ready():
             raise RuntimeError("FollowJointTrajectory action server is not ready")
-        handle = RosTrajectoryActionHandle(self._client, command)
+        handle = RosTrajectoryActionHandle(self._client, command, self._event_sink)
         self.last_handle = handle
         return handle
 
@@ -175,6 +289,7 @@ class RosArmCommandRuntime:
         joint_state_topic: str = "/joint_states",
         trajectory_action: str = "/arm_controller/follow_joint_trajectory",
         poll_period_s: float = 0.02,
+        on_goal_event: Callable[[RosGoalEvent], None] | None = None,
     ) -> None:
         if not config.enabled:
             raise ValueError("ROS arm runtime requires an explicitly enabled policy")
@@ -188,7 +303,9 @@ class RosArmCommandRuntime:
         self._node = node
         self._sequence = 0
         self.latest_joint_state: JointStateSnapshot | None = None
-        self.action_port = RosTrajectoryActionPort(node, trajectory_action)
+        if on_goal_event is not None and not callable(on_goal_event):
+            raise ValueError("on_goal_event must be callable when provided")
+        self.action_port = RosTrajectoryActionPort(node, trajectory_action, on_goal_event)
         self.owner = ArmCommandOwner(config, self.action_port, monotonic=time.monotonic)
         self.last_decision = CommandDecision(True, "ready", "ready")
         self.last_terminal_decision: CommandDecision | None = None

@@ -19,7 +19,7 @@ Host-side utilities for the absorbed Control package: a static ROS-name audit, c
 | Directory | Purpose |
 |-----------|---------|
 | `gz/` | Gazebo calibration, localization, obstacle, and track-run rigs (see `gz/AGENTS.md`) |
-| `device/` | On-device measurement: `hotpath_measure.py` (D-185 R8 hot-path bench and node CPU watch, JSON report; device evidence only on the Pi) |
+| `device/` | On-device measurement: `hotpath_measure.py` (D-185 R8 hot-path bench and node CPU watch, JSON report; device evidence only on the Pi); `ir_line_calibrate.py` (D-344 §12 read-only IR line calibration: subscribes to `ir_sensor/range` only, prints YAML, never writes config) |
 
 ## For AI Agents
 

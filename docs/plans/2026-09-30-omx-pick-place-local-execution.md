@@ -260,3 +260,14 @@ Fleet continues to admit one `PICK_PLACE` Action through the existing same-host 
 Task 0 ADR/dependency gate → Task 1 pose and plan contract → Task 2 trajectory contract → Task 3 ROS goal identity → Task 4 phase coordinator → Task 5 gripper/Fleet goal evidence → Task 6 Fleet/ER 2 read-only progress → Task 7 fault recovery → Task 8 pinned ROS-SIM → Task 9 readiness and docs.
 
 Do not start Tasks 2–8 with a fake production planner, synthetic hardware profile, or borrowed calibration. If Task 0 cannot choose a supported local planner and complete phase feedback path, stop at the interface and keep the capability disabled.
+
+## Execution Status (2026-09-30)
+
+- **Task 0 — complete, gated:** Accepted D-376 defines MTC as plan-only and the local OMX owner as the only trajectory submitter. The pinned workstation image lacks MoveIt/SRDF/OMX kinematics configuration; Jazzy package availability was observed, but planner/model compatibility was not established. No production planner was added.
+- **Task 1 — source contract complete:** Added typed RGB-D observation, resolved 3D pose, bounded staged plan, and injectable plan-provider protocol. No pixel-to-pose implementation was added.
+- **Task 2 — source contract complete:** The command owner validates every timed waypoint and requires configured rate limits for multi-point paths. The ROS adapter maps all waypoints and derivative fields without collapsing the path. Host coverage passes; the Jazzy integration test could not be re-verified in this run because the Docker Python process entered uninterruptible I/O wait.
+- **Task 3 — source contract implemented, ROS verification pending:** Added canonical UUID and typed acceptance/feedback/cancel/terminal events bound to command and phase. Callback failures fail closed and request goal cancellation when possible. The ROS runtime integration assertion is present, but no current pass is claimed; rerun it in the pinned workstation environment.
+- **Task 4 ? in progress:** ActionStore now supports a first phase intent while its parent is SUBMITTING and atomically records the parent's first driver response with the first phase UUID/state. Rollback and restart-to-UNKNOWN behavior are covered. The ActionRunner/ROS phase coordinator and stop-fenced submission wiring are still open.
+- **Tasks 5?9 ? not started:** Gripper/Fleet goal evidence, Fleet phase progress, full recovery fault injection, pinned ROS-SIM, and final readiness gates remain open.
+
+Current source evidence: OMX adapter/profile/vendor-boundary suite **198 passed, 3 skipped**. Host tests do not prove ROS callback execution, planner compatibility, a gripper driver, Fleet phase receipt integration, device behavior, or physical stopping. The OMX capability remains disabled.

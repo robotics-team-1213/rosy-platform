@@ -177,6 +177,8 @@
 | D-369 | Mission 제어·장치 실행·ROS 제어·안전 정지의 책임을 분리한다 |
 | D-370 | 앱과 표면은 한 역할씩 맡는다 — 역할·이름·아이콘·화면 소유를 한 표로 고정하고, 발견·기기 연결·실패 어휘는 공유 벡터로 하나로 맞춘다 |
 | D-374 | 앱의 폴더·패키지·식별자·표시 이름은 역할 이름 하나에서 나온다 — 역할 id(kebab)·snake·compact·표시 네 표기; 와이어 계약 이름(mDNS 종류, `rosy-overhead/1`, `/api/fleet`·`/api/vision`, `rosyov://`, 웹 경로, 설정·저장소 키, compose 서비스)은 바꾸지 않는다 |
+| D-376 | OMX PICK_PLACE planning stays local and trajectory execution stays with the Action owner |
+| D-377 | 앱 이름 규칙: Rosy + 영어 한 단어 — 표시 이름 `Rosy <Word>`, id·폴더 끝 `<word>`, 패키지 `rosy_<word>`, Android `io.github.livsbittt.rosy.<word>`, Gradle `rosy-<word>`, 아이콘 `<word>.svg`; Rosy Cam·Vision·Console·Robot·Pilot |
 
 ## 계획·결과 문서
 
@@ -256,8 +258,8 @@
 
 ## 최근 기록
 
-- 2026-09-30 · uncommitted · docs(plan): specify local OMX pick-and-place execution
-- 2026-09-30 · uncommitted · docs(adr): accept D-374 app identity rename
-- 2026-09-30 · uncommitted · docs(adr): D-374 앱 이름 규칙 — 폴더·패키지·식별자를 역할 이름 하나에서
-- 2026-09-30 · uncommitted · docs(plan): identify PICK_PLACE coordinate resolution gap
-- 2026-09-30 · uncommitted · test(omx): rerun vendor owner policy ROS-SIM
+- 2026-09-30 · uncommitted · persist first phase intent and atomic response
+- 2026-09-30 · uncommitted · docs(adr): D-375 에서 D-380 으로 개명
+- 2026-09-30 · uncommitted · docs(adr): set OMX local planning and owner execution boundary
+- 2026-09-30 · uncommitted · docs(adr): D-377 앱 이름 규칙 — Rosy + 영어 한 단어
+- 2026-09-30 · uncommitted · docs(adr): D-375 램프 운용 모드 표시 결정

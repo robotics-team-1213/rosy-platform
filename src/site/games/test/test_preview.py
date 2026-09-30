@@ -128,7 +128,7 @@ def test_preview_server_serves_the_web_common_manifest_assets():
         assert ticker.headers["Content-Type"].startswith("text/javascript")
         assert b"createHoldTicker" in ticker.read()
         with pytest.raises(HTTPError) as error:
-            urlopen(url + "common/manifest.json", timeout=2)
+            urlopen(url + "common/shared-assets.json", timeout=2)
         assert error.value.code == 404
     finally:
         server.close()
