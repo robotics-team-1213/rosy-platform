@@ -1,17 +1,22 @@
 name: android
 
 # Overhead camera phone app (src/site/overhead/android). JVM unit tests only;
-# no emulator, no signing. Runs only when the overhead tree changes.
+# no emulator, no signing. Runs when the overhead tree changes, or the shared
+# inputs its tests read: discovery TXT vectors and the D-370 icon SVGs.
 on:
   push:
     branches: [main]
     paths:
       - "src/site/overhead/**"
       - ".github/workflows/android.yml"
+      - "test/fixtures/protocol/**"
+      - "src/hmi/web_common/icons/**"
   pull_request:
     paths:
       - "src/site/overhead/**"
       - ".github/workflows/android.yml"
+      - "test/fixtures/protocol/**"
+      - "src/hmi/web_common/icons/**"
 
 jobs:
   android-unit:
