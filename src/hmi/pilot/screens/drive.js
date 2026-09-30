@@ -461,7 +461,7 @@ export function mountDrive(root, {onExit} = {}) {
       : `${command.linear >= 0 ? "전진" : "후진"}${side ? ` · ${side}` : ""}`;
   }
 
-  // --- 조종 중 화면 꺼짐 방지(D-328/T7) + 이탈 즉시 0 -----------------------
+  // --- 조종 중 화면 꺼짐 방지(D-365/T7) + 이탈 즉시 0 -----------------------
   let wakeLock = null;
   const requestWakeLock = async () => {
     try { wakeLock = await navigator.wakeLock.request("screen"); } catch (error) { /* 지원 없음 */ }

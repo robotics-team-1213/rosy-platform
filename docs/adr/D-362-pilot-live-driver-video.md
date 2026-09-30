@@ -1,7 +1,7 @@
 ## D-362 운전 중인 한 사람에게만 인증된 MJPEG 실시간 영상을 주고, 그동안만 로봇 미리보기 발행을 올린다
 
 **Status:** Accepted (2026-09-29, 설계 결정). 구현·장치 수용은 아래 Validation 게이트로 따로 닫는다.
-D-323 §5 의 "새 영상 전송 경로를 열지 않는다"를 이 범위에서만 바꾼다. D-332 결정 1(카메라 폴링
+D-323 §5 의 "새 영상 전송 경로를 열지 않는다"를 이 범위에서만 바꾼다. D-367 결정 1(카메라 폴링
 150ms)을 대체한다 — CORE 계약(`vision.preview_min_pull_interval_s ≥ 0.4`)과 충돌해 429 만 늘렸다.
 
 ### Context
@@ -51,4 +51,4 @@ D-323 §5 의 "새 영상 전송 경로를 열지 않는다"를 이 범위에서
 - DEVICE: 실물 로봇 태블릿 녹화에서 영상 fps ≥ 10, 명령→화면 반영 지연 측정값을 기록한다.
 
 **Related:** [D-193](D-193-login-code-and-credential-lifecycle.md), [D-275](D-275-web-surface-and-video-runtime-ownership.md),
-[D-323](D-323-rosy-pilot-teleop-app.md), [D-332](D-332-pilot-response-speed.md), [D-343](D-343-pilot-rooms-and-driver-seat.md).
+[D-323](D-323-rosy-pilot-teleop-app.md), [D-367](D-367-pilot-response-speed.md), [D-343](D-343-pilot-rooms-and-driver-seat.md).

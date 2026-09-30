@@ -1,4 +1,4 @@
-## D-328 Rosy Pilot 설치형은 PWA 로 우선하고 Capacitor 래퍼는 네이티브 전용 수요가 실측될 때까지 보류한다
+## D-365 Rosy Pilot 설치형은 PWA 로 우선하고 Capacitor 래퍼는 네이티브 전용 수요가 실측될 때까지 보류한다
 
 **Status:** Accepted (2026-09-29, 설치 형식 결정). 구현·장치·현장 수용은 별도 HOLD.
 

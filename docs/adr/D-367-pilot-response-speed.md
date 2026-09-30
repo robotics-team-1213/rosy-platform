@@ -1,4 +1,4 @@
-## D-332 Rosy Pilot 의 체감 응답속도는 카메라 폴링 150ms·명령 루프 100ms·햅틱 10ms 로 잡는다
+## D-367 Rosy Pilot 의 체감 응답속도는 카메라 폴링 150ms·명령 루프 100ms·햅틱 10ms 로 잡는다
 
 **Status:** Accepted (2026-09-29, 응답속도 설계). 실측 근거: dev_server 5ms 평균 teleop 지연.
 
@@ -32,6 +32,6 @@ Pilot 주행 화면의 체감 지연은 세 층이 겹친다: (1) 카메라 프�
 건너뛴다. 실기 CORE(Pi 5)에서 네트워크 지연이 50ms+ 로 늘어나면 루프 주기를 별도
 조정한다(후속 게이트).
 
-**Related:** [D-323](D-323-rosy-pilot-teleop-app.md), [D-328](D-328-pilot-pwa-first.md).
+**Related:** [D-323](D-323-rosy-pilot-teleop-app.md), [D-365](D-365-pilot-pwa-first.md).
 
 ---

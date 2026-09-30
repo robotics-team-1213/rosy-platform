@@ -1,11 +1,11 @@
-## D-331 Rosy Pilot 의 조종 대상 확장은 기기 종류별 드라이버 레지스트리로 수용하며, 장치별 조종 컨트롤(그리퍼·팔 위치 등)은 그 장치의 계약이 열 때 프런트에 반영한다
+## D-366 Rosy Pilot 의 조종 대상 확장은 기기 종류별 드라이버 레지스트리로 수용하며, 장치별 조종 컨트롤(그리퍼·팔 위치 등)은 그 장치의 계약이 열 때 프런트에 반영한다
 
 **Status:** Accepted (2026-09-29, 로드맵·프런트 경계 결정). Pinky 가제보 주행이 최우선이며,
 OMX-AI 등 타 장치의 실기·시뮬레이션 수용은 각 장치의 게이트를 따른다.
 
 ## Context
 
-Pilot 의 첫 대상은 Pinky 주행이고, 검증 대장정은 가제보다(사용자 결정, D-323·D-328).
+Pilot 의 첫 대상은 Pinky 주행이고, 검증 대장정은 가제보다(사용자 결정, D-323·D-365).
 추후에는 OMX-AI 팔(그리퍼 개폐·위치 이동) 등 다른 장치도 시뮬레이션 포함 조종 대상이
 된다. 장치별 조종은 ROS 측 컨트롤·토픽·액션의 반영이므로, 프런트(아이콘·컨트롤)는 그
 계약이 있을 때 나타나야 한다 — 계약보다 먼저 아이콘을 보여주면 없는 능력을 광고하는
@@ -37,6 +37,6 @@ Pilot 의 첫 대상은 Pinky 주행이고, 검증 대장정은 가제보다(사
 **Related:** [D-323](D-323-rosy-pilot-teleop-app.md), [D-273](D-273-omx-camera-stream-and-arm-control-order.md),
 [D-296](D-296-device-middleware-and-site-orchestration-terminology.md),
 [D-299](D-299-omx-lerobot-development-and-command-ownership.md), [D-322](D-322-isaac-sim-rosy-integration.md),
-[D-328](D-328-pilot-pwa-first.md).
+[D-365](D-365-pilot-pwa-first.md).
 
 ---

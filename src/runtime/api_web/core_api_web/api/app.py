@@ -239,7 +239,7 @@ def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
             raise HTTPException(status_code=404, detail="pilot asset not found")
         headers = {"Cache-Control": "no-cache"}
         if asset_name == "sw.js":
-            # scope /pilot 은 스크립트 디렉터리(/pilot/assets)보다 넓다 — 허용 헤더 필수(D-328).
+            # scope /pilot 은 스크립트 디렉터리(/pilot/assets)보다 넓다 — 허용 헤더 필수(D-365).
             headers["Service-Worker-Allowed"] = "/pilot"
         return FileResponse(
             pilot_root / asset_name,

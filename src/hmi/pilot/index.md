@@ -10,8 +10,8 @@
 | ID | 제목 |
 |---|---|
 | D-323 | 원격 조종 표면은 CORE가 same-origin으로 서빙하는 정적 PWA Rosy Pilot(src/hmi/pilot)이며 기기 종류별 드라이버 확장점을 v1 Pinky 주행과 함께 선행한다 |
-| D-328 | Rosy Pilot 설치형은 PWA로 우선하고 Capacitor 래퍼는 네이티브 전용 수요가 실측될 때까지 보류한다 |
-| D-331 | Rosy Pilot 조종 대상 확장은 기기 종류별 드라이버 레지스트리로 수용하며, 장치별 조종 컨트롤(그리퍼·팔 위치 등)은 그 장치의 계약이 열 때 프런트에 반영한다 |
+| D-365 | Rosy Pilot 설치형은 PWA로 우선하고 Capacitor 래퍼는 네이티브 전용 수요가 실측될 때까지 보류한다 |
+| D-366 | Rosy Pilot 조종 대상 확장은 기기 종류별 드라이버 레지스트리로 수용하며, 장치별 조종 컨트롤(그리퍼·팔 위치 등)은 그 장치의 계약이 열 때 프런트에 반영한다 |
 
 ## 계획·결과 문서
 
@@ -28,8 +28,8 @@
 
 ## 최근 기록
 
+- 2026-09-30 · uncommitted · docs(adr): pilot ADR D-328·D-331·D-332 번호도 main 과 겹치지 않게 다시 매김
 - 2026-09-30 · uncommitted · docs(adr): pilot ADR 번호를 main 과 겹치지 않게 다시 매김
 - 2026-09-30 · uncommitted · feat(pilot): 자동 주행 의도 띠(D-353 §6)
 - 2026-09-29 · uncommitted · feat(core): 차선 추종 IR 이탈 감시(D-349 §12)
 - 2026-09-29 · 35efb5ba · feat(core): 차선 추종 앞 물체 정지(LiDAR, D-349 §11)
-- 2026-09-29 · uncommitted · feat(pilot): 실물 로봇 실주행·카메라 비율·배율 확대·ADR D-346~D-350
