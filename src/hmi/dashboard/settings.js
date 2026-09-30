@@ -115,7 +115,7 @@ export function renderDockingStatus(payload) {
   const error = payload.error ? ` · ${payload.error}` : "";
   const hold = supported
     ? ""
-    : "이 프로필은 도킹 명령을 지원하지 않습니다. 등록과 teach만 저장됩니다. ";
+    : "이 로봇은 도킹 기능이 없어 도킹 명령을 보낼 수 없습니다. 등록과 teach만 저장됩니다. ";
   setText(
     "dock-status-note",
     `${hold}상태 ${state} · 도크 ${dockId}${phase}${error}`,
@@ -280,13 +280,13 @@ elements["waypoint-list"]?.addEventListener("click", async (event) => {
       return;
     }
     if (action === "home") {
-      if (!window.confirm("Home으로 복귀할까요? NAVIGATION 모드로 들어갑니다.")) return;
+      if (!window.confirm("Home으로 복귀할까요? 내비게이션 모드로 들어갑니다.")) return;
       await api("/api/v1/navigation/home", { method: "POST" });
       setFieldMessage("waypoint-message", "Home 복귀를 요청했습니다.");
       await hooks.refreshRobotState();
       return;
     }
-    if (!window.confirm(`${name} 으로 이동할까요? NAVIGATION 모드로 들어갑니다.`)) return;
+    if (!window.confirm(`${name} 으로 이동할까요? 내비게이션 모드로 들어갑니다.`)) return;
     await api("/api/v1/navigation/goal", {
       method: "POST",
       body: JSON.stringify({ waypoint: name }),

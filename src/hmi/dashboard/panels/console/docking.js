@@ -49,7 +49,7 @@ export function mount(root, ctx) {
   }
   const stopStatus = ctx.store.poll("/api/v1/docking/status", 1_000, (data) => {
     renderStatus(data);
-    setStatus(statusMessage, supported ? "도킹 capability가 활성화되어 있습니다." : "도킹 capability가 없어서 주행 명령을 막았습니다.");
+    setStatus(statusMessage, supported ? "도킹 기능을 쓸 수 있습니다." : "도킹 기능이 없어 주행 명령을 막았습니다.");
     statusMessage.setAttribute("state", supported ? "ready" : "warning");
   }, (error) => {
     supported = false; statusKnown = false; currentState = null;

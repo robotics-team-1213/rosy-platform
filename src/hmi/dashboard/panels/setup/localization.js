@@ -55,8 +55,8 @@ export function mount(root, ctx) {
     syncControls();
     if (!navigationAvailable || !slamAvailable) {
       capabilityStatus.textContent = `사용할 수 없는 기능: ${[
-        !navigationAvailable ? `초기 위치 설정 (${caps?.navigation?.reason || "Navigation capability 미제공"})` : "",
-        !slamAvailable ? `SLAM (${caps?.slam_reason || "SLAM capability 미제공"})` : "",
+        !navigationAvailable ? `초기 위치 설정 (${caps?.navigation?.reason || "내비게이션 기능 없음"})` : "",
+        !slamAvailable ? `SLAM (${caps?.slam_reason || "SLAM 기능 없음"})` : "",
       ].filter(Boolean).join(" · ")}`;
     } else capabilityStatus.textContent = "초기 위치와 SLAM 기능을 사용할 수 있습니다.";
   }

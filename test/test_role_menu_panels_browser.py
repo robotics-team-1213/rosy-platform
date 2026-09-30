@@ -184,7 +184,7 @@ def test_console_line_follow_readback_failure_and_action_feedback_are_independen
         assert "fixture line status unavailable" in panel.locator("ui-status").first.inner_text()
         assert "TRACKING" not in panel.locator("dl").inner_text()
         assert panel.locator("ui-button").evaluate_all("nodes=>nodes.every(node=>node.disabled)")
-        assert "Navigation" in panel.locator("ui-status").nth(1).inner_text()
+        assert "내비게이션" in panel.locator("ui-status").nth(1).inner_text()
 
         page.evaluate("""() => {
           window.__callbacks['/api/v1/line-follow'].onData({mode:'OFF',state:'IDLE'});
@@ -430,14 +430,14 @@ def test_admin_host_system_get_failures_clear_only_their_own_readback():
         assert runtime_body.locator("dt").count() == 0
         assert "fixture runtime offline" in overview_status.nth(3).inner_text()
         assert "robot-fixture" in identity_body.inner_text()
-        assert "Navigation" in overview_status.nth(1).inner_text()
+        assert "내비게이션" in overview_status.nth(1).inner_text()
         assert "lidar" in inventory_body.inner_text()
 
         page.evaluate("window.__callbacks['/api/v1/system/info'].onError(new Error('fixture identity offline'))")
         assert identity_body.locator("dt").count() == 0
         assert "fixture identity offline" in overview_status.nth(0).inner_text()
         assert "fixture runtime offline" in overview_status.nth(3).inner_text()
-        assert "Navigation" in overview_status.nth(1).inner_text()
+        assert "내비게이션" in overview_status.nth(1).inner_text()
         assert "lidar" in inventory_body.inner_text()
 
         page.evaluate("window.__callbacks['/api/v1/system/capabilities'].onError(new Error('fixture capabilities offline'))")

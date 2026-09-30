@@ -353,7 +353,7 @@ export function createFieldMap(options) {
       return;
     }
     if (!canGoal?.()) {
-      setAction?.("현재 profile/runtime에서는 위치·목표 조작을 사용할 수 없습니다.");
+      setAction?.("현재 실행 모드나 로봇 기능으로는 위치·목표 조작을 쓸 수 없습니다.");
       return;
     }
     const world = new GridFrame(state.occupancy).canvasToWorld(px, py, canvas.width, canvas.height);

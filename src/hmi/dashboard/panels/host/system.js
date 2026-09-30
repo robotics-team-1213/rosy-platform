@@ -132,7 +132,7 @@ export function mount(root, ctx) {
   function renderCapabilities(data) {
     const navigation = data.navigation?.goal_navigation === true;
     const slam = data.slam === true;
-    capabilityStatus.textContent = `Navigation ${navigation ? "사용 가능" : "제한 또는 미제공"} · SLAM ${slam ? "사용 가능" : "제한 또는 미제공"}`;
+    capabilityStatus.textContent = `내비게이션 ${navigation ? "사용 가능" : "제한 또는 없음"} · SLAM ${slam ? "사용 가능" : "제한 또는 없음"}`;
     capabilityStatus.setAttribute("state", navigation && slam ? "ready" : "warning");
   }
   function renderInventory(data) {

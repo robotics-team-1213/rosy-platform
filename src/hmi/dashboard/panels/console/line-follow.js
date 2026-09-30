@@ -5,7 +5,7 @@ function el(tag, cls, text) { const node = document.createElement(tag); if (cls)
 export function mount(root, ctx) {
   const head = el("ui-head", "", "차선 추종");
   const modeStatus = el("ui-status", "", "차선 추종 상태를 읽는 중입니다.");
-  const capabilityStatus = el("ui-status", "", "Navigation 기능 지원 확인 중입니다.");
+  const capabilityStatus = el("ui-status", "", "내비게이션 기능을 확인하는 중입니다.");
   const actionStatus = el("ui-status");
   actionStatus.setAttribute("role", "status");
   actionStatus.setAttribute("aria-live", "polite");
@@ -52,13 +52,13 @@ export function mount(root, ctx) {
   const stopCapabilities = ctx.store.poll("/api/v1/system/capabilities", 5_000, (data) => {
     navigationAvailable = data?.navigation?.goal_navigation === true;
     setStatus(capabilityStatus, navigationAvailable
-      ? "Navigation 지원이 확인되었습니다."
-      : `Navigation을 사용할 수 없습니다.${data?.navigation?.reason ? ` ${data.navigation.reason}` : " 이 profile에서 제한되거나 제공되지 않습니다."}`);
+      ? "내비게이션 기능을 쓸 수 있습니다."
+      : `내비게이션을 쓸 수 없습니다.${data?.navigation?.reason ? ` ${data.navigation.reason}` : " 현재 실행 모드에서 막혔거나 이 로봇에 없는 기능입니다."}`);
     capabilityStatus.setAttribute("state", navigationAvailable ? "ready" : "warning");
     render();
   }, (error) => {
     navigationAvailable = false;
-    capabilityStatus.textContent = `Navigation 지원을 확인할 수 없습니다: ${error.message}`;
+    capabilityStatus.textContent = `내비게이션 기능을 확인할 수 없습니다: ${error.message}`;
     capabilityStatus.setAttribute("state", "error"); render();
   });
   async function setMode(mode) {

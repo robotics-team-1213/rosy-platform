@@ -42,16 +42,16 @@ export function mount(root, ctx) {
   function describeHold() {
     if (ctx.role === "viewer") return "Operator 권한이 필요합니다.";
     if (readErrors.state) return `로봇 상태를 읽지 못했습니다: ${readErrors.state}`;
-    if (readErrors.capabilities) return `운전 capability를 확인할 수 없습니다: ${readErrors.capabilities}`;
+    if (readErrors.capabilities) return `운전 기능을 확인할 수 없습니다: ${readErrors.capabilities}`;
     if (readErrors.safety) return `안전 상태를 확인할 수 없습니다: ${readErrors.safety}`;
     if (readErrors.commissioning) return `장치 실행 모드를 확인할 수 없습니다: ${readErrors.commissioning}`;
-    if (capabilities && capabilities.teleop !== true) return `현재 runtime/profile에서 teleop을 사용할 수 없습니다${capabilities.withheld?.reason ? ` · ${capabilities.withheld.reason}` : ""}.`;
+    if (capabilities && capabilities.teleop !== true) return `현재 실행 모드나 로봇 기능으로는 저속 운전을 쓸 수 없습니다${capabilities.withheld?.reason ? ` · ${capabilities.withheld.reason}` : ""}.`;
     if (!commissioning) return "장치 실행 모드를 확인할 수 없어 운전을 막았습니다.";
     if (!["motor", "hardware"].includes(commissioning.runtime_mode)) return commissioning.motion_reason || "현재 실행 모드에서 운전할 수 없습니다.";
     if (safety?.estop === true) return "비상정지가 활성화되어 있습니다.";
     if (!safety) return "비상정지 상태를 확인하는 중입니다.";
     if (!state || !new HeadlessState(state).isFresh("pose") || !new HeadlessState(state).isFresh("velocity")) return "pose와 velocity의 최신 상태를 기다립니다.";
-    if (state.mode !== "MANUAL") return "저속 운전 전에 MANUAL 모드로 전환하세요.";
+    if (state.mode !== "MANUAL") return "저속 운전 전에 수동 모드로 전환하세요.";
     return "전진·후진 최대 0.03m/s · 회전 최대 0.10rad/s · 한 번에 최대 2초. 놓으면 정지합니다.";
   }
   function update() {
@@ -133,7 +133,7 @@ export function mount(root, ctx) {
   });
   const stopCapabilities = ctx.store.poll("/api/v1/system/capabilities", 5_000, (data) => { capabilities = data; readErrors.capabilities = null; update(); }, (error) => {
     capabilities = null; readErrors.capabilities = error.message;
-    if (ticker.active) stop("운전 capability를 확인할 수 없어 정지했습니다.", true);
+    if (ticker.active) stop("운전 기능을 확인할 수 없어 정지했습니다.", true);
     update();
   });
   const stopSafety = ctx.store.poll("/api/v1/safety/state", 500, (data) => { safety = data; readErrors.safety = null; update(); }, (error) => {

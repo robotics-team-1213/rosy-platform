@@ -62,7 +62,7 @@ export function createFormation({ el, view, log, call, render }) {
     setOff("formation-start", status.active, "이미 대형 중");
     setOff("formation-reform", !status.active, "열린 대형 없음");
     // 재개는 HOLDING 에서만 뜻이 있다. RUNNING 에서 눌러 봐야 세션이 조용히 무시한다.
-    setOff("formation-resume", status.state !== "HOLDING", "HOLDING일 때만");
+    setOff("formation-resume", status.state !== "HOLDING", "대형 유지 중일 때만");
     setOff("formation-stop", !status.active, "열린 대형 없음");
     // 대형이 열려 있는 동안에는 멤버를 바꿀 수 없다 — 해제하고 다시 연다.
     el("formation-members").querySelectorAll("input").forEach((i) => { i.disabled = status.active; });

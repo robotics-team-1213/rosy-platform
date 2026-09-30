@@ -56,7 +56,7 @@ export function mount(root, ctx) {
   }, (error) => { poseFresh = false; status.textContent = `현재 pose를 읽지 못했습니다: ${error.message}`; renderDocks(); });
   const stopStatus = ctx.store.poll("/api/v1/docking/status", 5_000, (data) => {
     dockingSupported = data.supported === true;
-    facts.replaceChildren(el("dt", "", "도킹 capability"), el("dd", "", dockingSupported ? "사용 가능" : "미지원 또는 제한"),
+    facts.replaceChildren(el("dt", "", "도킹 기능"), el("dd", "", dockingSupported ? "사용 가능" : "미지원 또는 제한"),
       el("dt", "", "현재 상태"), el("dd", "", data.state || "—"),
       el("dt", "", "대상 도크"), el("dd", "", data.dock_id || "—"),
       el("dt", "", "오류"), el("dd", "", data.error || "없음"));

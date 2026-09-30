@@ -442,7 +442,7 @@ function teleopEligible() {
 function teleopBlockReason() {
   if (!session.token) return "로그인 필요";
   if (session.capabilities?.teleop !== true) return "수동 운전 기능 없음";
-  if (session.robotState?.mode !== "MANUAL") return "MANUAL 모드에서만";
+  if (session.robotState?.mode !== "MANUAL") return "수동 모드에서만";
   if (session.robotState?.safety?.estop !== false) return "안전 상태 확인 필요";
   if (motionEvidenceBlocks(session.robotState)) return "센서 증거 부족";
   return "";
@@ -465,7 +465,7 @@ function updateTeleopControls() {
       ? session.motionReason
       : withheld
         ? `teleop 사용 불가: ${reasonText(withheld)}`
-        : "현재 하드웨어 프로필에서 teleop을 사용할 수 없습니다.");
+        : "현재 하드웨어 설정에서는 저속 운전을 쓸 수 없습니다.");
   } else if (session.robotState?.safety?.estop) {
     setText("teleop-message", "비상정지가 활성화되어 있습니다.");
   } else if (motionEvidenceBlocks(session.robotState)) {
@@ -473,7 +473,7 @@ function updateTeleopControls() {
     const velocity = evidenceOf(session.robotState, "velocity") || "unavailable";
     setText("teleop-message", `pose ${pose} · velocity ${velocity}`);
   } else if (session.robotState?.mode !== "MANUAL") {
-    setText("teleop-message", "MANUAL 모드로 전환해야 합니다.");
+    setText("teleop-message", "수동 모드로 전환해야 합니다.");
   } else if (!holdTicker.active) {
     setText("teleop-message", "버튼을 누르고 있는 동안만 저속 명령을 보냅니다.");
   }
@@ -560,7 +560,7 @@ function updateModeButtons() {
     const unsupported = button.dataset.mode === "NAVIGATION" && !navigationAvailable;
     button.disabled = session.modeChangePending || unsupported;
     // D-359 §5.3 — title은 터치에서 보이지 않는다. 사유는 비활성과 같은 조건에서 나온다.
-    const reason = unsupported ? "이 프로필에서는 내비게이션을 쓸 수 없습니다"
+    const reason = unsupported ? "이 로봇에서는 내비게이션을 쓸 수 없습니다"
       : session.modeChangePending ? "모드 변경을 처리하는 중입니다" : "";
     if (reason) button.setAttribute("reason", reason);
     else button.removeAttribute("reason");
