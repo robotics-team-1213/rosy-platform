@@ -1566,3 +1566,32 @@ def test_wordmark_stays_on_one_line(console_url, width, height):
     assert mark["textRight"] <= mark["boxRight"] + 0.5, mark
     if mark["nextLeft"] is not None:
         assert mark["textRight"] <= mark["nextLeft"], mark
+
+
+@pytest.mark.parametrize("width,height", [(1920, 1080), (1366, 768), (390, 844)])
+def test_member_label_sits_beside_the_first_checkbox_row(console_url, width, height):
+    """D-359 US-008 capture: "포함 로봇" sat below the checkbox row (centred on a wrapped list at
+    1366/390; at wide widths it could flow into the previous row). The label shares the first
+    row of the member list and stands to its left."""
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as p:
+        browser, page, errors = _open_console(p, API)
+        page.set_viewport_size({"width": width, "height": height})
+        page.goto(console_url, wait_until="networkidle")
+        page.wait_for_function("() => document.querySelectorAll('#formation-members label').length === 3")
+        boxes = page.evaluate("""() => {
+          const r = (n) => n.getBoundingClientRect().toJSON();
+          return {label: r(document.querySelector('.member-label')),
+                  first: r(document.querySelector('#formation-members label')),
+                  list: r(document.getElementById('formation-members')),
+                  named: document.getElementById('formation-members').getAttribute('aria-labelledby')};
+        }""")
+        browser.close()
+
+    assert errors == []
+    label, first, members = boxes["label"], boxes["first"], boxes["list"]
+    centre = lambda box: box["y"] + box["height"] / 2  # noqa: E731
+    assert abs(centre(label) - centre(first)) <= 2, boxes
+    assert label["right"] <= members["x"], boxes
+    assert boxes["named"] == "formation-members-label", boxes

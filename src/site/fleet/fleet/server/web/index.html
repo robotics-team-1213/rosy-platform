@@ -213,8 +213,8 @@
           </select>
           <label for="formation-spacing">간격 m</label>
           <input class="ui-field" id="formation-spacing" type="number" min="0.2" max="3" step="0.1" value="0.6">
-          <span class="member-label">포함 로봇</span>
-          <div id="formation-members" class="member-list"></div>
+          <span class="member-label" id="formation-members-label">포함 로봇</span>
+          <div id="formation-members" class="member-list" role="group" aria-labelledby="formation-members-label"></div>
         </div>
         <div class="robot-actions formation-actions">
           <ui-button kind="quiet" id="formation-start" type="button">무장</ui-button>
