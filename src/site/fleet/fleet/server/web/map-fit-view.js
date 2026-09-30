@@ -5,7 +5,7 @@
 import {
   MAP_FIT_PREFIX, multiply3, invert3, project, scale3, projectPolyline, projectTriangles,
   normalizeMapProposal, fitSummary, pickLanes, topDownLayout, parseMapDraft, draftFrom,
-  retryDelay, MAP_FIT_MAX_TRIES,
+  retryDelay, MAP_FIT_MAX_TRIES, canAccept, fitUsable, STALE_FIT_TEXT,
 } from "./map-fit.js";
 import { warpImage } from "./field-view.js";
 
@@ -22,7 +22,10 @@ function storageRemove(key) {
   try { localStorage.removeItem(key); } catch { /* 이 화면에서만 지워진다 */ }
 }
 
-const KIND_LABEL = { proposal: "제안(검토 중)", rejected: "거부된 최선 적합(참고용)", draft: "수락한 맞춤(이 브라우저)" };
+const KIND_LABEL = {
+  proposal: "제안(검토 중)", previous: "이전 결과(최신 결과를 기다리는 중)",
+  rejected: "거부된 최선 적합(참고용)", draft: "수락한 맞춤(이 브라우저)",
+};
 
 export function createMapFitView({ el, view, call, visionView, onChanged = () => {} }) {
   const overlay = el("vision-lane-overlay");
@@ -67,15 +70,29 @@ export function createMapFitView({ el, view, call, visionView, onChanged = () =>
     const source = visionView.currentSource();
     const fit = pending?.source === source ? pending.norm.fit : null;
     if (fit?.mapToImage) { // 행렬 없는 거부(coverage·잘린 쪽만)는 그리지 않는다
-      return { kind: pending.norm.accepted ? "proposal" : "rejected", mapToImage: fit.mapToImage,
-        imageToMap: fit.imageToMap, image: pending.norm.image };
+      const kind = pending.norm.previous ? "previous" : pending.norm.accepted ? "proposal" : "rejected";
+      return { kind, mapToImage: fit.mapToImage, imageToMap: fit.imageToMap, image: pending.norm.image,
+        stamp: pending.stamp };
     }
     const draft = draftFor(source);
     return draft ? { kind: "draft", ...draft } : null;
   }
 
+  // 해상도 비·지도가 바뀐 맞춤은 늘여 맞추지 않고 버린다(fitUsable). 안내는 한 번만 붙인다.
+  function usableFit(fit, frame, laneSet) {
+    if (!fit || !frame?.image?.naturalWidth) return null;
+    const verdict = fitUsable(fit, frame.image.naturalWidth, frame.image.naturalHeight, laneSet);
+    if (verdict.ok) return fit;
+    if (!guidance.textContent.includes(STALE_FIT_TEXT)) {
+      guidance.textContent = STALE_FIT_TEXT;
+      guidance.hidden = false;
+    }
+    return null;
+  }
+
   function colour(kind) {
     if (kind === "proposal") return tone("--series-goal", "#12bb81");
+    if (kind === "previous") return tone("--muted", "#9aa0a6");
     if (kind === "rejected") return tone("--status-warn", "#feb432");
     return tone("--series-primary", "#49affd");
   }
@@ -172,10 +189,10 @@ export function createMapFitView({ el, view, call, visionView, onChanged = () =>
   }
 
   function render() {
-    const fit = active();
     const source = visionView.currentSource();
     const laneSet = lanes ? pickLanes(lanes, source) : null;
-    acceptButton.hidden = !(pending?.source === source && pending.norm.accepted);
+    const fit = usableFit(active(), lastFrame, laneSet);
+    acceptButton.hidden = !canAccept(pending, source) || !fit || fit.kind !== "proposal";
     dismissButton.hidden = !(pending?.source === source);
     clearButton.hidden = !draftFor(source);
     renderOverlay(fit, laneSet, lastFrame);
@@ -189,45 +206,71 @@ export function createMapFitView({ el, view, call, visionView, onChanged = () =>
     guidance.textContent = summary.guidance || "";
   }
 
-  // 한 번 맞추는 데 1–2 s 라 Vision 이 429(계산 중·초당 1회)를 줄 수 있다. 오류가 아니라 "맞추는 중"이다.
-  async function fetchUntilDone() {
+  // 한 번 맞추는 데 1–10 s 라 Vision 이 429(계산 중·초당 1회)나 "previous"(지난 결과)를 줄 수 있다.
+  // 둘 다 오류가 아니라 "맞추는 중"이다. previous 는 보여 주되 수락은 못 하게 하고 최신 결과까지 다시 묻는다.
+  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  async function fetchUntilCurrent(generation) {
     for (let attempt = 0; ; attempt += 1) {
+      let reply;
       try {
-        return await visionView.fetchMapProposal();
+        reply = await visionView.fetchMapProposal();
       } catch (error) {
         const wait = retryDelay(error, attempt);
         if (wait == null) {
           if (error.busy) error.message = "Vision이 아직 맞추는 중입니다. 잠시 뒤 다시 누르세요.";
           throw error;
         }
+        if (generation !== fitGeneration) return null;
         state.textContent = `맞추는 중… (${attempt + 1}/${MAP_FIT_MAX_TRIES})`;
-        await new Promise((resolve) => setTimeout(resolve, wait));
+        await sleep(wait);
+        continue;
       }
+      if (reply.proposalState !== "previous" || attempt + 1 >= MAP_FIT_MAX_TRIES) return reply;
+      if (generation !== fitGeneration) return null;
+      showPending(reply, generation); // 이전 결과를 표시만 한다
+      await sleep(1000);
     }
   }
 
-  el("map-fit-detect").addEventListener("click", async () => {
-    state.textContent = "Vision에서 차선 페인트를 사이트 지도에 맞추는 중입니다(약 1 s)…";
+  function showPending({ source, body, proposalState }, generation) {
+    if (generation !== fitGeneration) return; // reset·새 요청 뒤에 도착한 늦은 결과
+    const norm = normalizeMapProposal(body, { proposalState });
+    const laneSet = lanes ? pickLanes(lanes, source) : null;
+    pending = norm ? { source, norm, stamp: laneSet
+      ? { mapId: laneSet.mapId, laneSha: laneSet.laneSha, paintSha: laneSet.paintSha } : null } : null;
+    showSummary(fitSummary(norm));
+    if (!lanes && lanesError) state.textContent += ` ${lanesError}`;
+    render();
+  }
+
+  const detectButton = el("map-fit-detect");
+  let fitGeneration = 0;
+  detectButton.addEventListener("click", async () => {
+    const generation = ++fitGeneration;
+    pending = null; // 지난 제안이 실패한 새 맞춤 뒤에 남지 않게
+    detectButton.setAttribute("disabled", "");
+    state.textContent = "Vision에서 차선 페인트를 사이트 지도에 맞추는 중입니다…";
     state.dataset.tone = "neutral";
     guidance.hidden = true;
+    render();
     visionView.showRaw();
     try {
-      const [{ source, body }] = await Promise.all([fetchUntilDone(), ensureLanes({ force: !lanes })]);
-      const norm = normalizeMapProposal(body);
-      pending = norm ? { source, norm } : null;
-      showSummary(fitSummary(norm));
-      if (!lanes && lanesError) state.textContent += ` ${lanesError}`;
+      const [reply] = await Promise.all([fetchUntilCurrent(generation), ensureLanes({ force: !lanes })]);
+      if (reply) showPending(reply, generation);
     } catch (error) {
-      state.textContent = error.message || "맞춤 제안을 받지 못했습니다.";
-      state.dataset.tone = "warn";
+      if (generation === fitGeneration) {
+        state.textContent = error.message || "맞춤 제안을 받지 못했습니다.";
+        state.dataset.tone = "warn";
+      }
+    } finally {
+      if (generation === fitGeneration) detectButton.removeAttribute("disabled");
     }
     render();
   });
   acceptButton.addEventListener("click", () => {
     const source = visionView.currentSource();
-    if (!pending?.norm.accepted || pending.source !== source) return;
-    const mapId = lanes ? pickLanes(lanes, source)?.mapId ?? null : null;
-    const saved = storageSet(`${MAP_FIT_PREFIX}${source}`, draftFrom(pending.norm, mapId));
+    if (!canAccept(pending, source)) return;
+    const saved = storageSet(`${MAP_FIT_PREFIX}${source}`, draftFrom(pending.norm, pending.stamp));
     pending = null;
     showSummary({ tone: "good", guidance: null, headline: saved
       ? "맞춤을 이 브라우저의 표시 초안으로 저장했습니다. 관측 좌표·CameraMap·주행에는 쓰지 않습니다."
@@ -258,11 +301,14 @@ export function createMapFitView({ el, view, call, visionView, onChanged = () =>
   view.mapFieldFallback = (frame) => {
     const draft = frame && !frame.rectified ? draftFor(frame.source) : null;
     const laneSet = draft && lanes ? pickLanes(lanes, frame.source) : null;
-    if (!laneSet || !frame.image?.naturalWidth) return null;
+    if (!laneSet || !frame.image?.naturalWidth
+        || !fitUsable(draft, frame.image.naturalWidth, frame.image.naturalHeight, laneSet).ok) return null;
     return { mapToShown: displayMatrices(draft, frame.image).mapToShown, bounds: laneSet.bounds };
   };
 
   function reset() {
+    fitGeneration += 1; // 진행 중인 맞춤의 늦은 결과가 초기화를 덮지 않게
+    detectButton.removeAttribute("disabled");
     lanes = null;
     lanesAt = 0;
     pending = null;

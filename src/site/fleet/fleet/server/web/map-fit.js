@@ -68,9 +68,21 @@ export function projectTriangles(triangles, h) {
   return out;
 }
 
+// 두 방향 행렬을 image_to_map 하나에서 만든다. 부호는 영상 중심에서 w > 0 이 되게 맞춘다 —
+// 그래야 project() 의 "지평선 뒤(w≤0)" 판정이 실제 시야와 같은 쪽을 본다(3×3 은 부호까지는 정하지 않는다).
+export function orientHomography(imageToMap, width, height) {
+  if (!imageToMap) return null;
+  const w = imageToMap[6] * (width / 2) + imageToMap[7] * (height / 2) + imageToMap[8];
+  if (!finite(w) || w === 0) return null;
+  const i2m = w < 0 ? imageToMap.map((v) => -v) : imageToMap;
+  const m2i = invert3(i2m);
+  return m2i ? { imageToMap: i2m, mapToImage: m2i } : null;
+}
+
 // Vision map-proposal 응답 검사. accepted 면 proposal, 아니면 rejected_fit 을 fit 으로 준다.
 // rejected_fit 은 coverage·잘린 쪽만 실을 수 있다(행렬 없음) — 그때 mapToImage 는 null 이고 그리지 않는다.
-export function normalizeMapProposal(body) {
+// meta.proposalState: Vision 의 X-Proposal-State. "previous" 는 계산 중이라 받은 지난 결과다.
+export function normalizeMapProposal(body, meta = {}) {
   if (!body || typeof body !== "object" || typeof body.accepted !== "boolean") return null;
   const width = body.image?.width;
   const height = body.image?.height;
@@ -78,9 +90,9 @@ export function normalizeMapProposal(body) {
   const raw = body.accepted ? body.proposal : body.rejected_fit;
   let fit = null;
   if (raw && typeof raw === "object") {
-    let imageToMap = flatMatrix(raw.image_to_map);
-    let mapToImage = flatMatrix(raw.map_to_image) || (imageToMap && invert3(imageToMap));
-    if (!imageToMap || !mapToImage) imageToMap = mapToImage = null;
+    const oriented = orientHomography(flatMatrix(raw.image_to_map), width, height);
+    const imageToMap = oriented?.imageToMap ?? null;
+    const mapToImage = oriented?.mapToImage ?? null;
     if (mapToImage || !body.accepted) {
       fit = {
         imageToMap, mapToImage,
@@ -100,8 +112,36 @@ export function normalizeMapProposal(body) {
     accepted: body.accepted, fit, reason: typeof body.reason === "string" ? body.reason : "",
     image: { width, height }, seq: body.frame_seq ?? null,
     elapsedMs: finite(body.registrar?.elapsed_ms) ? body.registrar.elapsed_ms : null,
+    ageMs: finite(body.frame_age_ms) ? body.frame_age_ms : null,
+    previous: meta.proposalState === "previous",
   };
 }
+
+// 수락할 수 있는 제안: 이 카메라의 것, 통과, 그릴 행렬 있음, 계산 중에 받은 지난 결과가 아님.
+export function canAccept(pending, source) {
+  return Boolean(pending && source && pending.source === source && pending.norm?.accepted === true
+    && pending.norm.fit?.mapToImage && !pending.norm.previous);
+}
+
+// 저장한 맞춤·검토 중 제안을 지금 화면에 쓸 수 있는가. 해상도 비(가로·세로 배율 차 1% 초과)나
+// 지도(map_id·lane/paint 해시)가 바뀌었으면 늘여 맞추지 않고 쓰지 않는다.
+export const SCALE_TOLERANCE = 0.01;
+export function fitUsable(fit, naturalWidth, naturalHeight, laneSet) {
+  if (!fit?.image || !naturalWidth || !naturalHeight) return { ok: false, reason: "no-image" };
+  const sx = naturalWidth / fit.image.width;
+  const sy = naturalHeight / fit.image.height;
+  if (!(Math.abs(sx / sy - 1) <= SCALE_TOLERANCE)) return { ok: false, reason: "shape" };
+  if (laneSet && fit.stamp) {
+    const { mapId, laneSha, paintSha } = fit.stamp;
+    if ((mapId ?? null) !== (laneSet.mapId ?? null)
+        || (laneSha && laneSet.laneSha && laneSha !== laneSet.laneSha)
+        || (paintSha && laneSet.paintSha && paintSha !== laneSet.paintSha)) {
+      return { ok: false, reason: "map" };
+    }
+  }
+  return { ok: true, sx, sy };
+}
+export const STALE_FIT_TEXT = "카메라 해상도·지도가 바뀌어 저장한 맞춤을 쓰지 않습니다. '맵 자동 맞춤'을 다시 하세요.";
 
 const DIRECTION_KO = { east: "동쪽", west: "서쪽", north: "북쪽", south: "남쪽" };
 const REASONS = [
@@ -144,6 +184,11 @@ export function fitSummary(norm) {
   if (norm.seq != null) parts.push(`프레임 ${norm.seq}`);
   if (norm.elapsedMs != null) parts.push(`${Math.round(norm.elapsedMs)} ms`);
   const numbers = parts.length ? ` · ${parts.join(" · ")}` : "";
+  if (norm.previous) {
+    const age = norm.ageMs != null ? ` · ${Math.round(norm.ageMs / 1000)} s 전` : "";
+    return { tone: "neutral", headline: `이전 결과${age}${numbers}. Vision이 새로 맞추는 중이라 최신 결과를 기다립니다(수락은 최신 결과만).`,
+      guidance: cutGuidance(f?.cutDirections) };
+  }
   if (norm.accepted) {
     return { tone: "good", headline: `맞춤 제안${numbers}. 선이 흰 페인트 위에 있는지 보고 수락하세요. 자동 적용하지 않습니다.`,
       guidance: cutGuidance(f.cutDirections) };
@@ -153,10 +198,11 @@ export function fitSummary(norm) {
     guidance: cutGuidance(f?.cutDirections) };
 }
 
-// /api/fleet/site-lanes 에서 이 source 의 지도. source 를 명시한 항목 → 모든 지도용 항목 → 첫 항목.
+// /api/fleet/site-lanes 에서 이 source 의 지도. 이 source 를 가진 map_id 항목 → 모든 지도용(map_id
+// null) 항목 → 첫 항목. 모든 지도용 항목도 source_ids 에 모든 source 를 싣기 때문에 map_id 항목이 먼저다.
 export function pickLanes(siteLanes, sourceId) {
   const maps = Array.isArray(siteLanes?.maps) ? siteLanes.maps : [];
-  const entry = maps.find((m) => (m.source_ids || []).includes(sourceId))
+  const entry = maps.find((m) => m.map_id != null && (m.source_ids || []).includes(sourceId))
     || maps.find((m) => m.map_id == null) || maps[0];
   if (!entry) return null;
   const b = entry.bounds_m;
@@ -165,6 +211,8 @@ export function pickLanes(siteLanes, sourceId) {
   }
   return {
     mapId: entry.map_id ?? null,
+    laneSha: entry.lane_graph_sha256 ?? null,
+    paintSha: entry.paint_sha256 ?? null,
     polylines: (entry.polylines || []).filter((l) => Array.isArray(l.points) && l.points.length > 1),
     triangles: (entry.paint_triangles || []).filter((t) => Array.isArray(t) && t.length === 6),
     bounds: b,
@@ -192,12 +240,13 @@ export function fieldToMap(bounds, field) {
   return [sx, 0, bounds.min_x - field.x * sx, 0, -sy, bounds.max_y + field.y * sy, 0, 0, 1];
 }
 
-// 맞춤 요청이 429(계산 중·초당 1회)면 Retry-After 뒤 다시 묻는다. 너무 오래면 null(그만).
-export const MAP_FIT_MAX_TRIES = 8;
+// 맞춤 요청이 429(계산 중·초당 1회)면 Retry-After 뒤 다시 묻는다. 부하 중 한 번에 4–10 s 라
+// 15회·Retry-After 최대 15 s 까지 기다린다. 너무 오래면 null(그만).
+export const MAP_FIT_MAX_TRIES = 15;
 export function retryDelay(error, attempt, maxTries = MAP_FIT_MAX_TRIES) {
   if (!error?.busy || attempt + 1 >= maxTries) return null;
   const ms = Number(error.retryAfterMs);
-  return Number.isFinite(ms) && ms > 0 ? Math.min(ms, 5000) : 1000;
+  return Number.isFinite(ms) && ms > 0 ? Math.min(ms, 15000) : 1000;
 }
 
 // 수락한 맞춤 초안(브라우저 로컬). 모양이 틀리면 null.
@@ -210,15 +259,19 @@ export function parseMapDraft(raw) {
   const width = parsed.image?.width;
   const height = parsed.image?.height;
   if (!mapToImage || !finite(width) || !finite(height) || width <= 0 || height <= 0) return null;
-  const imageToMap = invert3(mapToImage);
-  if (!imageToMap) return null;
-  return { mapToImage, imageToMap, image: { width, height }, acceptedAt: parsed.accepted_at ?? null,
-    seq: parsed.frame_seq ?? null, mapId: parsed.map_id ?? null };
+  const oriented = orientHomography(invert3(mapToImage), width, height);
+  if (!oriented) return null;
+  const mapId = parsed.map_id ?? null;
+  return { ...oriented, image: { width, height }, acceptedAt: parsed.accepted_at ?? null,
+    seq: parsed.frame_seq ?? null, mapId,
+    stamp: { mapId, laneSha: parsed.lane_graph_sha256 ?? null, paintSha: parsed.paint_sha256 ?? null } };
 }
 
-export function draftFrom(norm, mapId, now = Date.now()) {
+// laneSet: pickLanes 결과(없으면 null). 지도가 바뀌면 fitUsable 이 이 도장으로 초안을 거른다.
+export function draftFrom(norm, laneSet, now = Date.now()) {
   return JSON.stringify({
     map_to_image: norm.fit.mapToImage, image: norm.image, frame_seq: norm.seq,
-    map_id: mapId, accepted_at: new Date(now).toISOString(), use: "display-only",
+    map_id: laneSet?.mapId ?? null, lane_graph_sha256: laneSet?.laneSha ?? null,
+    paint_sha256: laneSet?.paintSha ?? null, accepted_at: new Date(now).toISOString(), use: "display-only",
   });
 }

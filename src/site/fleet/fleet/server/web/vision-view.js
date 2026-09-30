@@ -421,7 +421,8 @@ export function createVisionView({ el, call, auth }) {
       throw new Error(response.headers.get("X-Frame-State") === "stale"
         ? "최신 프레임이 없어 찾을 수 없습니다." : `Vision 응답 ${response.status}`);
     }
-    return { source, body: await response.json() };
+    // D-375: "previous" 는 계산 중이라 돌려준 지난 결과다. 지도 맞춤은 이것을 수락하게 하지 않는다.
+    return { source, body: await response.json(), proposalState: response.headers.get("X-Proposal-State") };
   }
 
   // 제안을 원본 위 점선 사각형으로 보여 준다. 검토하려면 원본 조정 화면으로 바꾼다.

@@ -4,7 +4,8 @@ import assert from "node:assert/strict";
 import {
   flatMatrix, multiply3, invert3, project, scale3, projectPolyline, projectTriangles,
   normalizeMapProposal, reasonText, cutGuidance, fitSummary, pickLanes, topDownLayout,
-  parseMapDraft, draftFrom, fieldToMap, retryDelay, MAP_FIT_MAX_TRIES,
+  parseMapDraft, draftFrom, fieldToMap, retryDelay, MAP_FIT_MAX_TRIES, canAccept, fitUsable,
+  orientHomography,
 } from "../../fleet/server/web/map-fit.js";
 
 test("the field fallback maps the field rectangle onto the map rectangle, y up", () => {
@@ -22,7 +23,9 @@ test("the field fallback maps the field rectangle onto the map rectangle, y up",
 
 test("a busy map-fit read retries after Retry-After, a real error does not", () => {
   assert.equal(retryDelay({ busy: true, retryAfterMs: 1000 }, 0), 1000);
-  assert.equal(retryDelay({ busy: true, retryAfterMs: 60000 }, 0), 5000);
+  assert.equal(retryDelay({ busy: true, retryAfterMs: 8000 }, 0), 8000); // a long Retry-After is honoured
+  assert.equal(retryDelay({ busy: true, retryAfterMs: 60000 }, 0), 15000);
+  assert.equal(MAP_FIT_MAX_TRIES, 15);
   assert.equal(retryDelay({ busy: true }, 0), 1000);
   assert.equal(retryDelay({ busy: true, retryAfterMs: 1000 }, MAP_FIT_MAX_TRIES - 1), null);
   assert.equal(retryDelay(new Error("Vision 응답 500"), 0), null);
@@ -161,11 +164,65 @@ test("top-down layout fits the map with y up and inverts back to metres", () => 
   close(back[1], 0.2);
 });
 
+test("the specific map entry wins over an every-map entry listed first", () => {
+  const b = { min_x: -1.4, min_y: -0.63, max_x: 1.4, max_y: 0.63 };
+  const lanes = { maps: [
+    { map_id: null, source_ids: ["ceiling-north", "south"], bounds_m: b, lane_graph_sha256: "all" },
+    { map_id: "site-v1", source_ids: ["ceiling-north"], bounds_m: b, lane_graph_sha256: "v1" },
+  ] };
+  assert.equal(pickLanes(lanes, "ceiling-north").mapId, "site-v1");
+  assert.equal(pickLanes(lanes, "ceiling-north").laneSha, "v1");
+  assert.equal(pickLanes(lanes, "south").mapId, null);
+});
+
+test("only a current, passed, drawable proposal for this camera can be accepted", () => {
+  const norm = normalizeMapProposal(body());
+  assert.equal(canAccept({ source: "cam", norm }, "cam"), true);
+  assert.equal(canAccept({ source: "cam", norm }, "other"), false);
+  assert.equal(canAccept(null, "cam"), false);
+  const rejected = normalizeMapProposal(body({ accepted: false, proposal: null, rejected_fit: body().proposal }));
+  assert.equal(canAccept({ source: "cam", norm: rejected }, "cam"), false); // the accepted check
+  const previous = normalizeMapProposal(body(), { proposalState: "previous" });
+  assert.equal(previous.previous, true);
+  assert.equal(previous.ageMs, 40);
+  assert.equal(canAccept({ source: "cam", norm: previous }, "cam"), false);
+  const summary = fitSummary(normalizeMapProposal(body({ frame_age_ms: 4200 }), { proposalState: "previous" }));
+  assert.match(summary.headline, /^이전 결과 · 4 s 전/);
+  assert.doesNotMatch(summary.headline, /보고 수락하세요/);
+});
+
+test("a fit is not stretched onto another frame shape or another map", () => {
+  const fit = { image: { width: 1280, height: 720 },
+    stamp: { mapId: "site-v1", laneSha: "a", paintSha: "b" } };
+  const lanesNow = { mapId: "site-v1", laneSha: "a", paintSha: "b" };
+  assert.equal(fitUsable(fit, 640, 360, lanesNow).ok, true); // same shape, half size
+  assert.equal(fitUsable(fit, 1280, 725, lanesNow).ok, true); // < 1 %
+  assert.equal(fitUsable(fit, 720, 1280, lanesNow).reason, "shape"); // rotated phone
+  assert.equal(fitUsable(fit, 1600, 1200, lanesNow).reason, "shape"); // 4:3 mode
+  assert.equal(fitUsable(fit, 1280, 720, { ...lanesNow, mapId: "other" }).reason, "map");
+  assert.equal(fitUsable(fit, 1280, 720, { ...lanesNow, paintSha: "c" }).reason, "map");
+  assert.equal(fitUsable({ image: fit.image }, 1280, 720, lanesNow).ok, true); // pending without a stamp
+});
+
+test("the homography sign is normalised so the image centre is in front (w > 0)", () => {
+  const flipped = IMAGE_TO_MAP.map((v) => -v); // same projective map, opposite sign
+  const norm = normalizeMapProposal(body({ proposal: { ...body().proposal, image_to_map: rows(flipped),
+    map_to_image: rows(MAP_TO_IMAGE.map((v) => -v)) } }));
+  const centreMap = project(norm.fit.imageToMap, 640, 360);
+  assert.ok(centreMap, "image centre must not be behind the horizon");
+  const back = project(norm.fit.mapToImage, ...centreMap);
+  close(back[0], 640, 1e-6);
+  close(back[1], 360, 1e-6);
+  assert.equal(orientHomography([0, 0, 0, 0, 0, 0, 0, 0, 0], 10, 10), null);
+});
+
 test("an accepted draft round-trips through storage and rejects foreign values", () => {
   const norm = normalizeMapProposal(body());
-  const draft = parseMapDraft(draftFrom(norm, "site-v1", Date.UTC(2026, 8, 30)));
-  assert.deepEqual(draft.mapToImage, MAP_TO_IMAGE);
+  const draft = parseMapDraft(draftFrom(norm, { mapId: "site-v1", laneSha: "a", paintSha: "b" },
+    Date.UTC(2026, 8, 30)));
+  draft.mapToImage.forEach((v, i) => close(v / draft.mapToImage[8], MAP_TO_IMAGE[i], 1e-9));
   assert.equal(draft.mapId, "site-v1");
+  assert.deepEqual(draft.stamp, { mapId: "site-v1", laneSha: "a", paintSha: "b" });
   assert.equal(draft.acceptedAt, "2026-09-30T00:00:00.000Z");
   assert.ok(JSON.parse(draftFrom(norm, null)).use === "display-only");
   assert.equal(parseMapDraft("{not json"), null);
