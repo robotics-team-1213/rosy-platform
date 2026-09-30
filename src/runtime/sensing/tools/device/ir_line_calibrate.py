@@ -3,7 +3,7 @@
 
 Subscribes to ``ir_sensor/range`` only. It never publishes, never moves the
 robot and never writes device config: it prints the YAML for the operator to
-paste. Runbook: docs/deployment/pinky-pro-ir-line-calibration-runbook.md
+paste: only the observer block, into /etc/rosy/ir_calibration.yaml. Runbook: docs/deployment/pinky-pro-ir-line-calibration-runbook.md
 
   run      interactive: carpet -> left -> centre -> right, then compute
   capture  record one phase into the session JSON (repeat to redo a phase)
@@ -91,9 +91,14 @@ def capture(args, phase: str) -> None:
     print(f"{phase}: {len(samples)} samples -> {args.session}")
 
 
+def _thresholds(args) -> dict:
+    return {"min_white": args.min_white, "min_contrast": args.min_contrast,
+            "edge_error": args.edge_error}
+
+
 def report(data: dict, args) -> int:
     result = compute_ir_calibration(data["phases"], min_span=args.min_span,
-                                    min_samples=args.min_samples)
+                                    min_samples=args.min_samples, **_thresholds(args))
     print("channel   black(carpet)  white(tape)   span   noise(carpet/tape)")
     for index, name in enumerate(CHANNELS):
         carpet = result.levels["carpet"][index]
@@ -102,8 +107,11 @@ def report(data: dict, args) -> int:
               f"{abs(result.white[index] - result.black[index]):>6.1f}   "
               f"{carpet.sigma:.1f}/{tape.sigma:.1f}")
     for phase, error in result.phase_errors.items():
-        print(f"  {phase:<7} decodes as {ir_side(error):<6} "
+        print(f"  {phase:<7} decodes as {ir_side(error, edge_error=args.edge_error):<6} "
               f"({'no line' if error is None else f'error {error:+.2f}'})")
+    if args.min_white != 0.55 or args.min_contrast != 0.15:
+        print("NOTE: non-default --min-white/--min-contrast: put the same ir_min_white/"
+              "ir_min_contrast in the overlay or the node decodes differently")
     for warning in result.warnings:
         print(f"WARNING: {warning}")
     if not result.ok:
@@ -133,12 +141,17 @@ def cmd_compute(args) -> int:
 
 
 def cmd_check(args) -> int:
-    if args.black and args.white:
+    if (args.black is None) != (args.white is None):
+        raise SystemExit("give both --black and --white, or neither (then --session is used)")
+    if args.black is None and args.session is None:
+        raise SystemExit("check needs --session or both --black and --white")
+    if args.black is not None:
         calibration = IRLineCalibration(black=tuple(args.black), white=tuple(args.white),
                                         min_span=args.min_span)
     else:
         result = compute_ir_calibration(load_session(args.session)["phases"],
-                                        min_span=args.min_span, min_samples=args.min_samples)
+                                        min_span=args.min_span, min_samples=args.min_samples,
+                                        **_thresholds(args))
         if not result.ok:
             raise SystemExit("session does not calibrate; run compute first")
         calibration = result.calibration
@@ -147,9 +160,10 @@ def cmd_check(args) -> int:
           "(left = CORE 는 오른쪽으로 비킨다)")
 
     def show(values):
-        observation = detect_ir_line(values, calibration)
+        observation = detect_ir_line(values, calibration, min_white=args.min_white,
+                                     min_contrast=args.min_contrast)
         error = None if observation is None else observation.error
-        print(f"raw {values}  -> {ir_side(error):<6} "
+        print(f"raw {values}  -> {ir_side(error, edge_error=args.edge_error):<6} "
               f"{'' if error is None else f'error {error:+.2f}'}")
 
     _spin_samples(args.topic, args.seconds, on_sample=show)
@@ -160,10 +174,16 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = parser.add_subparsers(dest="command", required=True)
 
-    def common(p, *, live):
-        p.add_argument("--session", type=Path, required=True)
+    def common(p, *, live, session_required=True):
+        p.add_argument("--session", type=Path, required=session_required)
         p.add_argument("--min-span", type=float, default=100.0)
         p.add_argument("--min-samples", type=int, default=20)
+        p.add_argument("--min-white", type=float, default=0.55,
+                       help="line_observer ir_min_white")
+        p.add_argument("--min-contrast", type=float, default=0.15,
+                       help="line_observer ir_min_contrast")
+        p.add_argument("--edge-error", type=float, default=0.3,
+                       help="CORE line_follow.ir_guard_edge_error")
         if live:
             p.add_argument("--topic", default="ir_sensor/range")
             p.add_argument("--seconds", type=float, default=3.0)
@@ -174,7 +194,7 @@ def build_parser() -> argparse.ArgumentParser:
     common(capture_parser, live=True)
     common(sub.add_parser("compute"), live=False)
     check_parser = sub.add_parser("check")
-    common(check_parser, live=True)
+    common(check_parser, live=True, session_required=False)
     check_parser.add_argument("--black", type=float, nargs=3)
     check_parser.add_argument("--white", type=float, nargs=3)
     check_parser.set_defaults(seconds=20.0)

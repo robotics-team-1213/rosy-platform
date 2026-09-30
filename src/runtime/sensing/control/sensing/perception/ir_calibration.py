@@ -103,6 +103,8 @@ def compute_ir_calibration(session: Mapping[str, Sequence[Sequence[float]]], *,
     """Endpoints and every reason they cannot be trusted yet."""
     errors: list[str] = []
     warnings: list[str] = []
+    # The node reads min_span back from the printed YAML (one decimal); hash the same value.
+    min_span = round(float(min_span), 1)
     levels = {phase: channel_levels(session.get(phase) or ()) for phase in PHASES}
     for phase in PHASES:
         for name, level in zip(CHANNELS, levels[phase]):
@@ -200,7 +202,7 @@ def render_config(result: IRCalibrationResult) -> str:
         return "[" + ", ".join(f"{float(value):.1f}" for value in values) + "]"
 
     return (
-        "# /etc/rosy/line_follow.yaml (rosy-io, line_observer_node)\n"
+        "# /etc/rosy/ir_calibration.yaml (rosy-camera line_observer_node; this block only)\n"
         "/**/line_observer_node:\n"
         "  ros__parameters:\n"
         "    ir_calibration_enabled: true\n"
@@ -208,7 +210,7 @@ def render_config(result: IRCalibrationResult) -> str:
         f"    ir_white: {floats(result.white)}\n"
         f"    ir_min_span: {result.min_span:.1f}\n"
         "\n"
-        "# /etc/rosy/rosy.yaml (CORE) - must equal the observer's digest\n"
+        "# CORE local config (native: /var/lib/rosy/core/.rosy/rosy.yaml) - must equal the digest\n"
         "line_follow:\n"
         f"  ir_calibration_revision: {result.revision}\n"
     )

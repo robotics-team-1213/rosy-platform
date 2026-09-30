@@ -118,3 +118,26 @@ def test_cli_compute_reads_a_session_offline(tmp_path, capsys):
                    encoding="utf-8")
     assert tool.main(["compute", "--session", str(bad)]) == 1
     assert "FAIL:" in capsys.readouterr().out
+
+
+def test_printed_min_span_matches_the_hashed_value():
+    result = compute_ir_calibration(_session(), min_span=100.04)
+    assert result.min_span == 100.0
+    assert "ir_min_span: 100.0" in render_config(result)
+    assert result.revision == IRLineCalibration(black=result.black, white=result.white,
+                                                min_span=100.0).revision
+
+
+def test_cli_check_refuses_half_given_endpoints(capsys):
+    with pytest.raises(SystemExit, match="both --black and --white"):
+        tool.main(["check", "--black", "1", "2", "3"])
+    with pytest.raises(SystemExit, match="--session"):
+        tool.main(["check"])
+
+
+def test_cli_thresholds_reach_the_sign_check(tmp_path, capsys):
+    path = tmp_path / "session.json"
+    path.write_text(json.dumps({"schema": tool.SCHEMA, "phases": _session()}), encoding="utf-8")
+    # an edge threshold no side reading can reach fails the sign check
+    assert tool.main(["compute", "--session", str(path), "--edge-error", "1.5"]) == 1
+    assert "left tape must decode" in capsys.readouterr().out
