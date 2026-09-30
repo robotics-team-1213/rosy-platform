@@ -1,6 +1,10 @@
 """Model intake: shadow-deployment eligibility report (D-356).
 
-intake.py <model_folder | hf:org/repo@<40-hex sha>> --out data/perception/models
+intake.py <model_folder | store-inbox:<folder> | hf:org/repo@<40-hex sha>>
+          --out data/perception/models [--store <store folder>]
+
+store-inbox:<folder> is <store>/models/inbox/<folder>, taken only when its READY
+marker matches its content (D-373 decision 8). hf: is the optional HF backend.
 
 manifest + sha256 -> onnxruntime open -> replay MP4 frames through the model
 and the rule-based detector -> intake_report.json. Pass: the folder is copied
@@ -56,12 +60,35 @@ def judge(stats: dict, gate: dict) -> tuple[str, list[str]]:
     return ("fail" if reasons else "pass"), reasons
 
 
-def resolve_source(source: str, downloader=None, workdir=None) -> Path:
-    """Local folder, or hf:org/repo@<40-hex commit> (tags and branches move: refused).
+STORE_INBOX = "store-inbox:"
+
+
+def _store_inbox(source: str, store_root) -> Path:
+    if store_root is None:
+        raise ValueError(f"{source}: no store configured (--store / rosy_ml `store`)")
+    perception = str(Path(__file__).resolve().parents[1])
+    if perception not in sys.path:
+        sys.path.insert(0, perception)
+    import store
+    st = store.Store(store_root)
+    try:
+        folder = st.inbox_folder(source.removeprefix(STORE_INBOX))
+    except store.StoreError as exc:
+        raise ValueError(str(exc)) from exc
+    if not st.inbox_ready(folder.name):
+        raise ValueError(f"{source}: not complete (no READY marker matching its content)")
+    return folder
+
+
+def resolve_source(source: str, downloader=None, workdir=None, store=None) -> Path:
+    """Local folder, store-inbox:<folder> (needs store), or hf:org/repo@<40-hex commit>
+    (tags and branches move: refused).
 
     The HF cache links snapshot files into blobs, which verify_files refuses, so
     the snapshot goes to a local_dir under workdir; any symlink left is copied
     out as a real file."""
+    if source.startswith(STORE_INBOX):
+        return _store_inbox(source, store)
     if not source.startswith("hf:"):
         return Path(source)
     m = _HF.match(source)
@@ -163,14 +190,15 @@ def _tool_commit() -> str | None:
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("source", help="model folder or hf:org/repo@<40-hex sha>")
+    ap.add_argument("source", help="model folder, store-inbox:<folder> or hf:org/repo@<sha>")
+    ap.add_argument("--store", help="store folder, for store-inbox: sources")
     ap.add_argument("--out", default=str(ROOT / "data" / "perception" / "models"))
     ap.add_argument("--gate", default=str(DEFAULT_GATE))
     ap.add_argument("--root", default=str(ROOT), help="base for gate replay_sources globs")
     ap.add_argument("--max-frames", type=int, help="override max_frames_per_source")
     args = ap.parse_args(argv)
     return run(args.source, out=args.out, gate_path=args.gate, root=args.root,
-               max_frames=args.max_frames)[0]
+               max_frames=args.max_frames, store=args.store)[0]
 
 
 def replay_videos(gate: dict, root) -> list[Path]:
@@ -180,7 +208,7 @@ def replay_videos(gate: dict, root) -> list[Path]:
 
 
 def run(source: str, *, out, gate_path=DEFAULT_GATE, root=ROOT, max_frames=None,
-        downloader=None) -> tuple[int, dict]:
+        downloader=None, store=None) -> tuple[int, dict]:
     """(exit code, report). main() and model/watch.py (in-process, own downloader)."""
     gate = load_gate(gate_path)
     max_frames = max_frames or gate["max_frames_per_source"]
@@ -190,7 +218,8 @@ def run(source: str, *, out, gate_path=DEFAULT_GATE, root=ROOT, max_frames=None,
               "tool_commit": _tool_commit(), "transient": False}
     folder = None
     try:
-        folder = resolve_source(source, downloader=downloader, workdir=Path(out) / ".incoming")
+        folder = resolve_source(source, downloader=downloader, workdir=Path(out) / ".incoming",
+                                store=store)
         manifest = load_manifest(folder)
         report["model_revision"] = manifest.model_revision
         verify_files(manifest)
@@ -213,17 +242,18 @@ def run(source: str, *, out, gate_path=DEFAULT_GATE, root=ROOT, max_frames=None,
     if report["verdict"] == "pass":
         dest = Path(out) / report["model_revision"]
         shutil.copytree(folder, dest, dirs_exist_ok=True,
-                        ignore=shutil.ignore_patterns(".cache", ".git*", REPORT_NAME))
+                        ignore=shutil.ignore_patterns(".cache", ".git*", REPORT_NAME, "READY"))
         (dest / REPORT_NAME).write_text(text, encoding="utf-8")
         if source.startswith("hf:"):  # downloaded snapshot (and its .real copy)
             for d in (folder, Path(str(folder).removesuffix(".real"))):
                 shutil.rmtree(d, ignore_errors=True)
         print(f"PASS {report['model_revision']} -> {dest}")
         return 0, report
-    if folder:
+    if folder and not source.startswith(STORE_INBOX):
         target = Path(folder).parent / f"{Path(folder).name}.{REPORT_NAME}"
-    else:  # nothing was downloaded (hf: source): under --out, never the cwd
-        name = re.sub(r"[^A-Za-z0-9._@-]", "_", source.removeprefix("hf:").replace("/", "__"))
+    else:  # hf: (nothing downloaded) or the store inbox: under --out, never the cwd or inbox
+        name = re.sub(r"[^A-Za-z0-9._@-]", "_",
+                      source.removeprefix("hf:").removeprefix(STORE_INBOX).replace("/", "__"))
         target = Path(out) / "_failed" / f"{name}.{REPORT_NAME}"
         target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(text, encoding="utf-8")

@@ -96,6 +96,41 @@ def test_local_source_is_a_path(tmp_path):
     assert intake.resolve_source(str(tmp_path), workdir=tmp_path / "w") == tmp_path
 
 
+def _inbox(tmp_path, name="m1", ready=True):
+    sys.path.insert(0, str(ROOT / "tools" / "perception"))
+    import store
+    folder = tmp_path / "store" / "models" / "inbox" / name
+    folder.mkdir(parents=True)
+    (folder / "model_manifest.json").write_text("{}", encoding="utf-8")
+    if ready:
+        (folder / "READY").write_text(store.content_sha(folder), encoding="utf-8")
+    return folder
+
+
+def test_store_inbox_source_is_the_ready_inbox_folder(tmp_path):
+    folder = _inbox(tmp_path)
+    assert intake.resolve_source("store-inbox:m1", store=tmp_path / "store") == folder
+
+
+@pytest.mark.parametrize("src, ready, store_given", [
+    ("store-inbox:m1", False, True),      # half-synced: no READY
+    ("store-inbox:m1", True, False),      # no store configured
+    ("store-inbox:../x", True, True),     # never outside the inbox
+])
+def test_store_inbox_source_refusals(tmp_path, src, ready, store_given):
+    _inbox(tmp_path, ready=ready)
+    with pytest.raises(ValueError):
+        intake.resolve_source(src, store=(tmp_path / "store") if store_given else None)
+
+
+def test_failed_store_inbox_report_goes_under_out_not_the_inbox(tmp_path):
+    folder = _inbox(tmp_path)
+    rc, report = intake.run("store-inbox:m1", out=tmp_path / "out", store=tmp_path / "store")
+    assert rc == 1 and report["verdict"] == "fail" and not report["transient"]
+    assert sorted(p.name for p in folder.parent.iterdir()) == ["m1"]
+    assert list((tmp_path / "out" / "_failed").glob("*intake_report.json"))
+
+
 class _Ev:
     visible, error, confidence, class_fractions = False, None, 0.0, {"a": 1.0}
 
