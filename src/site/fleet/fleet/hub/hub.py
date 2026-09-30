@@ -111,8 +111,12 @@ class SiteHub:
         self._paired.discard(robot_id)
         self.registry.record(robot_id).online = False
 
-    def handle(self, envelope: Envelope, session: HubSession | None = None) -> Envelope:
-        """Route one envelope. Sockets pass their session; in-process callers may omit it."""
+    def handle(self, envelope: Envelope, *, session: HubSession | None = None) -> Envelope:
+        """Route one envelope.
+
+        Network code must pass the socket's session. Without one, HEARTBEAT/EVENT
+        fall back to the global paired set, which is only safe in-process (D-382 F6).
+        """
         if _protocol_major(envelope.protocol_version) != _protocol_major(PROTOCOL_VERSION):
             return _error("PROTOCOL_UNSUPPORTED", "protocol major is not supported")
         if envelope.type is EnvelopeType.HELLO:

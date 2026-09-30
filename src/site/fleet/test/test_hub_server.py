@@ -1,6 +1,7 @@
 import asyncio
 import pytest
 from fastapi.testclient import TestClient
+from starlette.websockets import WebSocketDisconnect
 from core_common.protocol.schemas import HelloPayload, Envelope, EnvelopeType, WelcomePayload
 from fleet.hub.hub import SiteHub
 from fleet.swarm.robots import RobotEndpoint
@@ -84,16 +85,32 @@ def test_socket_cannot_speak_for_another_paired_robot():
         ws2.send_json(_hello_env("rosy_02", "pair-02"))
         assert ws2.receive_json()["type"] == "welcome"
 
+        ws2.send_json(_event_env("rosy_02"))
+        assert ws2.receive_json()["payload"] == {"accepted": True}
+
         ws1.send_json(_event_env("rosy_02"))
         reply = ws1.receive_json()
         assert reply["type"] == "error" and reply["payload"]["code"] == "PAIRING_INVALID"
+        with pytest.raises(WebSocketDisconnect) as closed:
+            ws1.receive_json()
+        assert closed.value.code == 4401
+        assert len(hub.registry.record("rosy_02").events) == 1
+        # rosy_01 lost its socket; rosy_02's pairing is untouched.
+        assert hub.registry.online_ids() == ["rosy_02"]
+
+
+def test_socket_cannot_send_heartbeat_for_another_robot():
+    hub = _two_robot_hub()
+    client = TestClient(create_hub_app(hub))
+    with client.websocket_connect("/ws/robots") as ws1,             client.websocket_connect("/ws/robots") as ws2:
+        ws1.send_json(_hello_env("rosy_01", "pair-01"))
+        assert ws1.receive_json()["type"] == "welcome"
+        ws2.send_json(_hello_env("rosy_02", "pair-02"))
+        assert ws2.receive_json()["type"] == "welcome"
         ws1.send_json(_heartbeat_env("rosy_02"))
         reply = ws1.receive_json()
         assert reply["type"] == "error" and reply["payload"]["code"] == "PAIRING_INVALID"
-        assert hub.registry.record("rosy_02").events == []
-
-        ws1.send_json(_event_env("rosy_01"))
-        assert ws1.receive_json()["payload"] == {"accepted": True}
+        assert hub.registry.record("rosy_02").snapshot is None
 
 
 def test_socket_cannot_rebind_to_a_second_robot():
@@ -123,10 +140,10 @@ def test_old_socket_closing_after_reconnect_keeps_the_new_pairing():
     hub = SiteHub([_ep("rosy_01")])
     old, new = hub.open_session(), hub.open_session()
     hello = Envelope.model_validate(_hello_env("rosy_01", "pair-01"))
-    assert hub.handle(hello, old).type is EnvelopeType.WELCOME
-    assert hub.handle(hello, new).type is EnvelopeType.WELCOME
+    assert hub.handle(hello, session=old).type is EnvelopeType.WELCOME
+    assert hub.handle(hello, session=new).type is EnvelopeType.WELCOME
     hub.close_session(old)
     assert hub.registry.online_ids() == ["rosy_01"]
     event = Envelope.model_validate(_event_env("rosy_01"))
-    assert hub.handle(event, new).payload == {"accepted": True}
-    assert hub.handle(event, old).type is EnvelopeType.ERROR
+    assert hub.handle(event, session=new).payload == {"accepted": True}
+    assert hub.handle(event, session=old).type is EnvelopeType.ERROR

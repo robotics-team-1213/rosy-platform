@@ -40,12 +40,14 @@ def install_hub_routes(app: FastAPI, hub: SiteHub,
                     await websocket.close(code=1008)
                     break
                 
-                reply = hub.handle(env, session)
+                reply = hub.handle(env, session=session)
                 if reply.type is EnvelopeType.ERROR:
                     code = reply.payload.get("code")
                     logger.warning("hub rejected %s: %s", env.type.value, code)
                     await websocket.send_json(reply.model_dump(exclude_none=True))
-                    if env.type is EnvelopeType.HELLO:
+                    # A refused HELLO, or a socket another connection took over,
+                    # must not linger: close so the agent's backoff reconnects.
+                    if env.type is EnvelopeType.HELLO or code == "PAIRING_INVALID":
                         await websocket.close(code=4401)
                         break
                     continue
