@@ -238,8 +238,8 @@
 
 ## 최근 기록
 
+- 2026-09-30 · 94ba6de2 · D-371 Refinement — 확인 대화상자는 비모달
 - 2026-09-30 · e07518ac · D-371 US-010 DESIGN.md 목록 행 예외
 - 2026-09-30 · uncommitted · docs(plan): 도크·외부 장비 5단계 구현 플랜 + D-355
 - 2026-09-30 · uncommitted · docs(adr/plan): D-358 feedback outbox and replan fences
 - 2026-09-30 · uncommitted · docs(adr/plan): D-357 ER 2 Mission feedback loop
-- 2026-09-30 · uncommitted · docs: 붉은 main 정리 — 5건 미등록 실패를 계약 안에서 해소

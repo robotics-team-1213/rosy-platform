@@ -642,3 +642,9 @@
 - 증거: `test_map_chips_paint_after_lines_and_clear_robot_markers` — 칠 순서(stroke < fillText)와 칩/표식 겹침 0.
 - gate 변화: 없음.
 - 결정: D-359 (US-008 잔여).
+
+## 2026-09-30 · 79787e7a · D-371 US-010 전체 정지에 data-always-live
+
+- 변경: `server/web/index.html` `#estop`에 `data-always-live`. Fleet은 아직 `confirmIrreversible`을 부르지 않지만(확인은 window.confirm), ui.js를 싣는 페이지의 정지는 모두 표시한다(`test_stop_always_live.py`).
+- 증거: `python -m pytest src/hmi/web_common/test src/hmi/dashboard/test src/site/fleet/test src/site/games/test -q` 1089 passed, 84 skipped; `test/test_web_dialog_contract.py` 3 passed
+- gate 변화: 없음.

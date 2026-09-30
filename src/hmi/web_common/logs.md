@@ -320,3 +320,11 @@
 - gate 변화: 없음.
 - 결정: D-371 (D-218 §1 "커스텀 확인 다이얼로그를 만들지 않는다"를 목록 행에 한해 좁힘 — 실행 버튼의 위험 채움은 window.confirm으로 그릴 수 없다).
 - 교훈: 모달 `<dialog>`는 window.confirm처럼 뒤 화면(비상 정지 포함)을 막는다. 퇴행은 아니지만 열린 동안 비상 정지를 누를 수 없다.
+
+## 2026-09-30 · 79787e7a · D-371 US-010 확인 대화상자는 비모달, 정지는 살아 있다
+
+- 변경: `ui.js` `confirmIrreversible`이 `showModal()` 대신 `dialog.show()`로 연다. 대화상자와 `[data-always-live]` 밖의 곁가지에 `inert`를 걸고(조상 사슬만 타고 내려간다), MutationObserver가 폴링이 새로 붙인 노드도 다시 막는다. 스크림은 형제 `div.ui-confirm-scrim`(`--scrim`)이고 보이는 정지 상자마다 `clip-path: polygon(evenodd …)` 구멍을 낸다. Esc는 취소, Tab은 취소 → 실행 → 보이는 정지를 돈다(정지 단축키가 없어 새로 만들지 않았다). 정지 클릭은 캡처 단계에서 표시만 하고 대화상자를 취소로 닫는다 — 정지 처리기는 그대로 돈다. `aria-modal`은 달지 않았다(보조기기가 정지를 못 찾는다). `components.css` `::backdrop` 삭제, 고정 가운데 배치·z-index. `template.html` 정지에 `data-always-live`. 호스트 계약 `test_stop_always_live.py`(ui.js를 싣는 모든 페이지의 `…정지…` irreversible 버튼, 변이 증명 포함), `test_list_row_irreversible.py`는 이제 `showModal()` 부재를 요구한다.
+- 증거: `python -m pytest src/hmi/web_common/test src/hmi/dashboard/test src/site/fleet/test src/site/games/test -q` 1089 passed, 84 skipped; `test/test_web_dialog_contract.py` 3 passed; ROSY_RUN_BROWSER_TESTS=1: `test_list_row_confirm_browser.py` 6 passed, `test_role_menu_panels_browser.py`+`test_web_dialog_contract.py` 27 passed, `test_dashboard_browser.py -k "setting or token or dock or waypoint"` 7 passed, 2 skipped (`X:\DevTemp\rosy-d359\us010b\browser.txt`)
+- gate 변화: 없음.
+- 결정: D-371 Refinement(2026-09-30), D-280 원칙 2.
+- 교훈: 네이티브 모달은 "E-stop 항상 도달" 계약과 충돌한다 — 모달 흉내는 살릴 요소를 명시한 inert + 구멍 난 막으로 한다. z-index로 정지를 막 위로 올리는 방법은 붙박이 상단바의 쌓임 맥락(z-index 10) 안에 갇혀 통하지 않는다.

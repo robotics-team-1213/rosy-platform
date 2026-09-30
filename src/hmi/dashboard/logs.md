@@ -634,3 +634,11 @@
 - 증거: 브라우저 변이(행 kind=irreversible) → 빨강 2개 채움; 캡처 `X:\DevTemp\rosy-d359-captures\us010-*` 채움 0·넘침 0·오류 0.
 - gate 변화: 없음.
 - 결정: D-371.
+
+## 2026-09-30 · 79787e7a · D-371 US-010 정지 컨트롤에 data-always-live, 대화상자 위 정지 시험
+
+- 변경: `surface.html` `#shell-estop`, `index.html` `#emergency-stop`, `styleguide.html` 표본 정지에 `data-always-live`. 스타일가이드에 `확인 대화상자` 고정 그림(94ba6de2, 인라인 스크립트 없음). 브라우저 시험 `test_device_estop_stays_live_over_the_delete_dialog`(/device: 정지 비inert, elementFromPoint가 정지, 밖 컨트롤 전부 inert, 폴링·늦게 붙은 노드도 막힘, Tab 고리, 정지 클릭 → POST /safety/stop + 대화상자 닫힘 + DELETE 0, Esc 취소)와 옛 /dashboard `test_waypoint_delete_dialog_keeps_the_estop_out_of_the_inert_region`(2bd9c0bb).
+- 증거: ROSY_RUN_BROWSER_TESTS=1: `test_list_row_confirm_browser.py` 6 passed, `test_role_menu_panels_browser.py`+`test_web_dialog_contract.py` 27 passed, `test_dashboard_browser.py -k "setting or token or dock or waypoint"` 7 passed, 2 skipped (`X:\DevTemp\rosy-d359\us010b\browser.txt`)
+- gate 변화: 없음.
+- 결정: D-371 Refinement(2026-09-30).
+- 교훈: 옛 /dashboard는 정지가 운용 뷰에만 있어 점검 뷰의 설정 목록에서 대화상자를 열면 정지가 화면에 없다(이번 변경 전부터). 대화상자는 정지를 inert로 만들지 않지만, 뷰 전환 탭은 열린 동안 막힌다 — Esc로 닫고 운용 뷰로 간다.

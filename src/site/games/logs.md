@@ -286,3 +286,9 @@
 - 증거: `test/test_rosy_games_surface.py` 9 passed.
 - gate 변화: 없음. FIELD PARKED 그대로.
 - 결정: D-359 (US-009).
+
+## 2026-09-30 · 79787e7a · D-371 US-010 경기 정지에 data-always-live
+
+- 변경: `web/index.html` `#halt`에 `data-always-live`(`test_stop_always_live.py` 계약).
+- 증거: `python -m pytest src/hmi/web_common/test src/hmi/dashboard/test src/site/fleet/test src/site/games/test -q` 1089 passed, 84 skipped; `test/test_web_dialog_contract.py` 3 passed
+- gate 변화: 없음.

@@ -580,3 +580,9 @@
 - 변경: `web/diagnostic.html` `max-width: 1279px/900px` → `(width <= 1279px)`·`(width <= 900px)`(같은 뜻). PARKED라 값은 옮기지 않고 surfaces.yaml `control-diagnostic.breakpoints`에 이유와 함께 적었다.
 - 증거: `test_map_raster_color_contract.py` 통과, `test_responsive_tiers.py` 통과.
 - gate 변화: 없음.
+
+## 2026-09-30 · 79787e7a · D-371 US-010 진단 정지 세 버튼에 data-always-live
+
+- 변경: `web/diagnostic.html`의 비상정지 `정지`, `주행 정지`, 수동 조종 `정지`에 `data-always-live`. 진단 페이지는 ui.js를 실으므로 `test_stop_always_live.py` 계약 대상이다. PARKED 표면이라 그 밖은 고치지 않았다.
+- 증거: `python -m pytest src/hmi/web_common/test/test_stop_always_live.py -q` 통과.
+- gate 변화: 없음.
