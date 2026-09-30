@@ -53,7 +53,7 @@ def _read_json(path: Path) -> dict | None:
 
 
 RUNTIME_MODES = frozenset({"core", "motor", "hardware"})
-#: D-375: CORE's RobotMode names the boot display may copy. protocol.schemas is not
+#: D-380: CORE's RobotMode names the boot display may copy. protocol.schemas is not
 #: importable here (stdlib only); this mirrors core_common.robot_state.ROBOT_MODES.
 ROBOT_MODES = frozenset({"IDLE", "MANUAL", "NAVIGATION", "DOCKING", "EMERGENCY"})
 #: hardware.json rows copied for the boot display (D-260): id, state and product flag only.
@@ -134,7 +134,7 @@ def _core_inputs(root: Path, now: datetime) -> dict | None:
     devices = _valid_rows(data.get("devices"))
     if devices is None:
         return None
-    # D-375: the mode is additive — an unknown name is absent (None), it does not
+    # D-380: the mode is additive — an unknown name is absent (None), it does not
     # drop the good warning and device rows the way a malformed one of those does.
     mode = data.get("robot_mode")
     return {"battery_warning_percent": float(warning), "devices": devices,
@@ -228,7 +228,7 @@ def status_record(facts: dict, stage: Stage, now: datetime) -> dict:
         "network": facts.get("network") or {},
         # D-260: the boot display's other two inputs, which it cannot read itself.
         "runtime_mode": facts.get("runtime_mode"),
-        # D-375: CORE's live RobotMode, for the lamp's mode patterns (None without CORE).
+        # D-380: CORE's live RobotMode, for the lamp's mode patterns (None without CORE).
         "robot_mode": facts.get("robot_mode"),
         "devices": facts.get("devices") or [],
         "battery_warning_percent": facts.get("battery_warning_percent"),

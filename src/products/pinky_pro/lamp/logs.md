@@ -65,3 +65,9 @@
 - 변경: `lamp_pattern.c`에 manual(흰색 호흡 3 s)·navigating(청록 호흡 4 s)·docking(마젠타 1 Hz)·emergency(빨강 4 Hz)를 추가했고 `known()`과 usage를 같이 갱신했다. 밝기 대역은 기존과 같다(≤25 %).
 - 증거: test_boot_display.py의 C↔파이썬 패턴 이름 동기 시험 (변이 증명: known()에서 manual을 빼면 빨개진다). aarch64 빌드·실기 점등은 DEVICE 단계.
 - gate 변화: 없음.
+
+## 2026-09-30 · uncommitted · docs(adr): D-375 에서 D-380 으로 개명
+
+- 변경: 병합 시점에 main 이 D-375 를 feat/overhead-map-auto-register 예약으로 adr_gaps 에 넣은 것이 확인됐다(선례 D-324→D-325). 이 작업의 결정 번호를 다음 빈 번호 D-380 으로 개명하고 코드 주석·시험·설계 문서의 D-375 표기를 함께 바꿨다. 앞선 항목의 D-375 표기는 역사 기록으로 그대로 둔다.
+- 증거: rosy_harness lint 오류 0. 본문 참조는 docs/adr/D-380-lamp-mode-patterns-from-core-status-inputs.md.
+- gate 변화: 없음.

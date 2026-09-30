@@ -325,7 +325,7 @@ def test_the_status_inputs_carry_only_the_threshold_the_states_and_the_mode(tmp_
 
 @pytest.mark.parametrize("mode", [None, "DRIVE", 3, True])
 def test_an_unknown_or_missing_mode_is_written_as_absent(tmp_path, mode):
-    # D-375: the mode is additive — a value outside RobotMode is absent, never guessed.
+    # D-380: the mode is additive — a value outside RobotMode is absent, never guessed.
     config = _m1_config(tmp_path)
     svc = SimpleNamespace(config=config, state=FakeState(80.0, 8.0, mode=mode),
                           safety=SimpleNamespace(battery_policy=SimpleNamespace(warning_percent=20.0)))
@@ -374,7 +374,7 @@ def test_an_oversized_hand_over_is_not_read(tmp_path):
     assert status._core_inputs(tmp_path, datetime.now(timezone.utc)) is None
 
 
-# --- D-375: CORE's robot mode rides the same hand-over ---------------------------
+# --- D-380: CORE's robot mode rides the same hand-over ---------------------------
 
 
 def _hand_over(tmp_path: Path, **extra) -> dict:
@@ -395,7 +395,7 @@ def test_the_hand_over_carries_the_robot_mode_to_the_record(tmp_path):
 
 @pytest.mark.parametrize("mode", [None, "DRIVE", "manual", 7, True])
 def test_an_unknown_mode_is_copied_as_absent_but_keeps_the_rest(tmp_path, mode):
-    # D-375: the mode is additive — unlike a bad warning or device row it drops only
+    # D-380: the mode is additive — unlike a bad warning or device row it drops only
     # itself, because a wrong-but-plausible mode is undetectable anyway and the
     # warning and devices are independently useful.
     status = _native("rosy_boot_status_m1e", "rosy-boot-status.py")

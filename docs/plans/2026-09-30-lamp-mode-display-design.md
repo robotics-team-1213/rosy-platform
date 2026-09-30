@@ -1,6 +1,6 @@
-# 램프 운용 모드 표시 설계 — D-375 (2026-09-30)
+# 램프 운용 모드 표시 설계 — D-380 (2026-09-30)
 
-한눈에: Pinky의 램프·LCD는 D-260의 다섯 건강 상태(부팅/실패/주의/준비-못움직임/준비)만 말하고, 운용 모드(MANUAL/NAVIGATION/DOCKING/EMERGENCY)는 대시보드에만 존재했다. 이 설계는 모드를 물리 표시로 끌어온다. 결정 기록은 `docs/adr/D-375-lamp-mode-patterns-from-core-status-inputs.md`.
+한눈에: Pinky의 램프·LCD는 D-260의 다섯 건강 상태(부팅/실패/주의/준비-못움직임/준비)만 말하고, 운용 모드(MANUAL/NAVIGATION/DOCKING/EMERGENCY)는 대시보드에만 존재했다. 이 설계는 모드를 물리 표시로 끌어온다. 결정 기록은 `docs/adr/D-380-lamp-mode-patterns-from-core-status-inputs.md`.
 
 ## 데이터 흐름
 

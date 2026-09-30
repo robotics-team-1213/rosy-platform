@@ -244,7 +244,7 @@ def test_moved_card_setup_is_caution_with_registration_action():
     assert result["todos"][0]["id"] == "new_device_setup"
 
 
-# --- D-375: the mode axis (lamp patterns, the LCD suffix) ------------------------
+# --- D-380: the mode axis (lamp patterns, the LCD suffix) ------------------------
 
 
 @pytest.mark.parametrize("value,expected", [

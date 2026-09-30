@@ -1093,7 +1093,7 @@ def test_ready_and_held_ready_share_one_sound(tmp_path):
     ("CORE_READY", {"runtime_mode": "core"}, "ready"),
     ("FAILED:rosy-core", {}, "failed"),
     ("CORE_READY", {"devices": [{"id": "adc.ir0", "state": "no_response", "product": True}]}, "caution"),
-    # D-375: CORE's mode rides boot-status.json; the rule table picks the pattern.
+    # D-380: CORE's mode rides boot-status.json; the rule table picks the pattern.
     ("CORE_READY", {"runtime_mode": "hardware", "robot_mode": "MANUAL"}, "manual"),
     ("CORE_READY", {"runtime_mode": "hardware", "robot_mode": "NAVIGATION"}, "navigating"),
     ("CORE_READY", {"runtime_mode": "hardware", "robot_mode": "DOCKING"}, "docking"),
@@ -1138,7 +1138,7 @@ def test_a_new_state_stops_the_old_pattern_first_and_an_unchanged_state_keeps_it
     assert spawn.processes[0].terminated == 1
 
 
-# --- D-375: the operating mode on the lamp and the LCD line ----------------------
+# --- D-380: the operating mode on the lamp and the LCD line ----------------------
 
 
 def test_a_mode_change_switches_the_pattern_without_a_sound(tmp_path):

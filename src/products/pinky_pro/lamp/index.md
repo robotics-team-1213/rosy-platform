@@ -27,8 +27,8 @@
 
 ## 최근 기록
 
+- 2026-09-30 · uncommitted · docs(adr): D-375 에서 D-380 으로 개명
 - 2026-09-30 · uncommitted · feat(lamp): D-375 패턴 manual·navigating·docking·emergency
 - 2026-09-26 · uncommitted · fix(lamp_control): strip order GRB, not GBR
 - 2026-09-26 · uncommitted · feat(lamp_control): D-260 lamp_pattern helper
 - 2026-09-26 · 8e6902fd · feat(devices): lamp_selftest for the D-247 lamp test
-- 2026-09-25 · uncommitted · refactor(devices): move lamp_control under src/devices/pinky_pro/lamp_control (D-231)

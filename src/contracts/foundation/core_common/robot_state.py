@@ -55,12 +55,12 @@ PRIORITY = {FAILED: 1, CAUTION: 2, READY_HELD: 3, READY: 4}
 BATTERY_WARNING_PERCENT = 20.0
 DEFAULT_RUNTIME_MODE = "core"
 
-#: D-375: CORE's RobotMode (protocol.schemas) as this table sees it. IDLE is "not
+#: D-380: CORE's RobotMode (protocol.schemas) as this table sees it. IDLE is "not
 #: operating" — the lamp stays at the health pattern; the rest light a mode pattern.
 ROBOT_MODES = frozenset({"IDLE", "MANUAL", "NAVIGATION", "DOCKING", "EMERGENCY"})
 OPERATING_MODES = frozenset(ROBOT_MODES - {"IDLE"})
 
-#: D-375: the lamp pattern per operating mode; ``lamp_pattern.c`` knows these names.
+#: D-380: the lamp pattern per operating mode; ``lamp_pattern.c`` knows these names.
 MODE_LAMP = {"MANUAL": "manual", "NAVIGATION": "navigating", "DOCKING": "docking",
              "EMERGENCY": "emergency"}
 
@@ -124,12 +124,12 @@ def motion_reason(runtime_mode: Optional[str]) -> str:
 
 
 def valid_robot_mode(value: Any) -> Optional[str]:
-    """D-375: a known RobotMode name, or None. An unknown name is absent, not an error."""
+    """D-380: a known RobotMode name, or None. An unknown name is absent, not an error."""
     return value if isinstance(value, str) and value in ROBOT_MODES else None
 
 
 def mode_suffix(robot_mode: Any) -> str:
-    """D-375: ``" - MANUAL"`` for an operating mode (the LCD state line), else empty.
+    """D-380: ``" - MANUAL"`` for an operating mode (the LCD state line), else empty.
 
     ASCII on purpose, and the established LCD qualifier punctuation: the card font
     has no Hangul, ``LABELS`` already says ``준비됨 — 못 움직임`` as ``Ready - cannot
@@ -140,7 +140,7 @@ def mode_suffix(robot_mode: Any) -> str:
 
 
 def lamp_pattern(state: Any, robot_mode: Any = None) -> str:
-    """D-375: the one lamp pattern for a health state and CORE's mode.
+    """D-380: the one lamp pattern for a health state and CORE's mode.
 
     Priority: FAILED > EMERGENCY > CAUTION > BOOTING > DOCKING > NAVIGATION >
     MANUAL > READY. A mode reaches the lamp only through CORE's 10 s hand-over
@@ -243,7 +243,7 @@ def evaluate(stage: Any = None, devices: Optional[Iterable[Any]] = None, *, batt
     lower ones stay in ``todos``. Before CORE_READY (and not FAILED) it is BOOTING
     whatever else holds. Missing or malformed inputs never raise.
 
-    D-375: ``robot_mode`` (CORE's live RobotMode) does not change the state — the
+    D-380: ``robot_mode`` (CORE's live RobotMode) does not change the state — the
     five states are health — it is echoed validated as ``result["robot_mode"]`` so
     the lamp and the LCD state line can show the operating mode beside it.
     """

@@ -1,6 +1,6 @@
-## D-375 램프는 로봇 상태에 이어 운용 모드도 밝힌다 — CORE가 status-inputs에 RobotMode를 넘기고 같은 규칙표가 우선순위를 정한다
+## D-380 램프는 로봇 상태에 이어 운용 모드도 밝힌다 — CORE가 status-inputs에 RobotMode를 넘기고 같은 규칙표가 우선순위를 정한다
 
-**Status:** Accepted (2026-09-30, 사용자 요청·승인). D-260 결정 1의 다섯 건강 상태는 그대로 두고, 그 옆에 운용 모드 축을 하나 더 얹는다.
+**Status:** Accepted (2026-09-30, 사용자 요청·승인). D-260 결정 1의 다섯 건강 상태는 그대로 두고, 그 옆에 운용 모드 축을 하나 더 얹는다. *(첫 기록 번호는 D-375였으나 main의 동시 예약과 충돌해 D-380으로 개명했다 — 선례 D-324→D-325.)*
 
 잇는 결정: [D-260](D-260-robot-shows-its-state-by-sound-light-screen-and-summary.md) · [D-247](D-247-dashboard-shows-every-board-device.md) · [D-190](D-190-vendor-parity-boot-display.md) · [D-174](D-174-first-boot-defects-and-boot-indicator.md).
 

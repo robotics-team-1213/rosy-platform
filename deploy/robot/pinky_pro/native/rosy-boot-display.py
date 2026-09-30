@@ -48,7 +48,7 @@ the stage and the battery into one state:
   helper process per pattern, /dev/ws281x_pwm granted to this unit alone),
   and only when the driver runs on PWM0 channel 3 (GPIO19; channel 2 is the
   LCD backlight). Anything missing leaves the lamp out, never the boot.
-  D-375: while CORE keeps its hand-over fresh, the lamp also names the
+  D-380: while CORE keeps its hand-over fresh, the lamp also names the
   operating mode (manual/navigating/docking/emergency patterns) beside the
   health state — the rule table's priority decides which one wins;
 * the LCD gets the state line and the most urgent todo (ASCII: the card font
@@ -114,7 +114,7 @@ TEST_BEEPS, TEST_ON_S, TEST_OFF_S = 3, 0.15, 0.15
 #: robot state -> sound; booting is silent.
 SOUNDS = {"ready": "ready", "ready_held": "ready", "failed": "failed", "caution": "caution"}
 #: robot state -> lamp_pattern argument (D-260 3). Fallback for a release without the
-#: rule table; with it, the table also folds CORE's mode in (D-375, robot_state.lamp_pattern).
+#: rule table; with it, the table also folds CORE's mode in (D-380, robot_state.lamp_pattern).
 LAMP_PATTERNS = {"booting": "booting", "ready": "ready", "ready_held": "ready", "failed": "failed",
                  "caution": "caution"}
 LAMP_NODE = "dev/ws281x_pwm"
@@ -202,7 +202,7 @@ def _state_view(view: dict, status: dict) -> dict:
                                   failed_unit=view["failed_unit"],
                                   robot_mode=status.get("robot_mode"))
     todos = result["todos"]
-    # D-375: the LCD line names the operating mode beside the health state — the
+    # D-380: the LCD line names the operating mode beside the health state — the
     # lamp shows it as a colour, the card says it in words.
     line = robot_state.state_line(result, lcd=True) + robot_state.mode_suffix(status.get("robot_mode"))
     return {"robot_state": result["state"], "state_line": line,
@@ -507,7 +507,7 @@ class BootDisplay:
 
     @staticmethod
     def lamp_pattern_for(view: dict, state: str) -> str | None:
-        """D-375: the table's pattern for the state and CORE's mode; the stage-only
+        """D-380: the table's pattern for the state and CORE's mode; the stage-only
         mapping only on a release too old to carry core_common.robot_state."""
         if robot_state is None:
             return LAMP_PATTERNS.get(state)
@@ -555,7 +555,7 @@ class BootDisplay:
             self._state = state
             self._announce(state, now)
         if self._lamp is not None:
-            # D-375: a mode change switches the pattern without a sound; show() is
+            # D-380: a mode change switches the pattern without a sound; show() is
             # idempotent, so an unchanged pattern costs nothing.
             self._lamp.show(self.lamp_pattern_for(view, state))
             self._lamp.poll()

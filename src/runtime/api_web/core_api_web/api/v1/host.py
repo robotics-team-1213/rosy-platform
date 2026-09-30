@@ -420,7 +420,7 @@ def _warning_percent(svc: CoreServicesLike) -> float:
 
 
 def _robot_mode(svc: CoreServicesLike) -> Optional[str]:
-    """D-375: CORE's live RobotMode for the boot display; absent rather than wrong.
+    """D-380: CORE's live RobotMode for the boot display; absent rather than wrong.
 
     Duck-typed like ``_warning_percent``: a test double (or a CORE without a state
     manager) reports no mode, and the lamp falls back to the health patterns.
