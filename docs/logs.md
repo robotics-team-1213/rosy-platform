@@ -4046,3 +4046,8 @@
 - 변경: `docs/deployment/site-ceiling-camera-console-runbook.md` 추가. 현장 PC 스택(fullchain, 지도 맞춤 옵션, mDNS 광고), 이름·CA 고정 페어링(D-341 §9, D-391), 카메라 위치 기준, 관제 맵 자동 맞춤(D-375)·경기장 뷰 대체(D-360), 로봇 등록·운전 모드·G4/G5, 규칙 점검표, 폰·관제 문제 해결표.
 - 증거: 2026-09-30~10-01 현장 벤치(S21·Lenovo 태블릿, rosy-cam 스택)에서 실측한 수치와 실제 앱·관제 문구를 옮겼다. 절차 문서라 실행 코드는 바꾸지 않았다.
 - gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · docs(logs): D-373 병합 기록 정정 — 시각 허용치와 학습 런타임 계획
+- 변경: 위 "merge(perception): main 을 feat/d373-learning-loop-lap2 에 병합" 항목을 바로잡는다. (1) stamp 일치 허용치는 ±1 ms가 아니라 1 µs이고, `line/observation`은 `source`가 `CAMERA_LINE`인 것만 이미지 증거다(d050b821). (2) 병합 때 세운 `NATIVE_PYTHON_RUNTIME`·`compatible_predecessors` 계획(요구사항 파일 끝에 블록을 붙이고 옛 런타임을 호환 목록에 올림)은 되돌렸다. 학습 런타임은 따로 된 `learned-perception-requirements.txt`와 전용 prefix `/opt/rosy/learned-perception/site-packages`에 설치하고, 페이로드 런타임 id는 main의 a66f224a 그대로다(d2d6ac1f).
+- 증거: 해당 커밋의 시험(`test_dataset_extract.py`, `test_bench_learned_perception.py`, `test_python_runtime_id.py`).
+- gate 변화: 없음(기록 정정).
