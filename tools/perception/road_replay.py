@@ -177,13 +177,30 @@ def load_labels(folder: Path | None) -> dict:
 
 # ------------------------------------------------------------------ replay
 
-def ground_for(pitch_deg: float | None):
-    """(profile, NOMINAL ground) with an optional pitch override (degrees down): the
-    real-frame fit (D-379: 11.8 deg) differs from the profile's 8.0 deg."""
+def derotate(img, roll_deg: float, cx: float, cy: float):
+    """The image a roll-free camera would see. The ground model has no roll; the
+    calibration (camera_extrinsic.CameraPose.project, feat/camera-extrinsic-autocalib)
+    rolls pixels about the principal point: p = c + R(roll) (p0 - c). Replay only."""
+    if not roll_deg:
+        return img
+    r = math.radians(roll_deg)
+    m = np.array([[math.cos(r), -math.sin(r), 0.0], [math.sin(r), math.cos(r), 0.0]])
+    m[:, 2] = np.array([cx, cy]) - m[:, :2] @ np.array([cx, cy])
+    return cv2.warpAffine(img, m, (img.shape[1], img.shape[0]),
+                          flags=cv2.INTER_LINEAR | cv2.WARP_INVERSE_MAP, borderMode=cv2.BORDER_REPLICATE)
+
+
+def ground_for(pitch_deg: float | None, height_m: float | None = None):
+    """(profile, NOMINAL ground) with replay-only pitch (degrees down) and lens height
+    overrides on a copy of the profile: calibration candidates, never the robot's."""
     profile, ground = lane_replay._nominal_ground()
-    if pitch_deg is None:
+    if pitch_deg is None and height_m is None:
         return profile, ground
-    profile = dict(profile, pitch_rad=math.radians(pitch_deg))
+    profile = dict(profile)
+    if pitch_deg is not None:
+        profile["pitch_rad"] = math.radians(pitch_deg)
+    if height_m is not None:
+        profile["height_m"] = float(height_m)
     return profile, nominal_ground_plane(source="NOMINAL", allowed=True, width_px=lane_replay.FRAME_W,
                                          height_px=lane_replay.FRAME_H, profile=profile)
 
@@ -282,6 +299,16 @@ def _motion(ds, dth, dt):
     return "curve" if abs(ds / dt) >= 0.005 and abs(dth / dt) > CURVE_MIN_RATE else "turning"
 
 
+def _parallel_pair_width(last):
+    """[y_L - y_R] of the nearest left and right boundary when within 5 deg of parallel."""
+    sides = {s: [b for b in last.get("boundaries", []) if b.get("side") == s] for s in ("left", "right")}
+    if not sides["left"] or not sides["right"]:
+        return []
+    l, r = (min(sides[s], key=lambda b: abs(b["y_at_side_x_m"])) for s in ("left", "right"))
+    width = l["y_at_side_x_m"] - r["y_at_side_x_m"]
+    return [width] if abs(l["heading_deg"] - r["heading_deg"]) <= 5.0 and 0.10 <= width <= 0.30 else []
+
+
 def _curve_residuals(nis_state):
     """NIS on curved segments against straights. sigma_kappa0 = 0.5 is accepted only
     until validated on curves (lane owner, 2026-10-01): a blow-up is flagged."""
@@ -317,9 +344,10 @@ def _gate(value, ok):
 
 def replay(frames, *, labels: dict | None = None, dropouts=DROPOUTS_M,
            params: RoadStateParams | None = None, pitch_deg: float | None = None,
-           lidar_forward_deg: float = 180.0) -> tuple[dict, list]:
+           lidar_forward_deg: float = 180.0, height_m: float | None = None,
+           roll_deg: float = 0.0) -> tuple[dict, list]:
     params = params or RoadStateParams(lane_width_m=2 * HALF)
-    profile, ground = ground_for(pitch_deg)
+    profile, ground = ground_for(pitch_deg, height_m)
     keeper = LaneKeeper(camera_x_offset_m=float(profile["x_offset_m"]))
     est = RoadStateEstimator(params)
     labels = labels or {}
@@ -330,10 +358,12 @@ def replay(frames, *, labels: dict | None = None, dropouts=DROPOUTS_M,
     keeper_digest = hashlib.sha256()
     headings, pairs = [], 0
     straight_heading = {"left": [], "right": []}
+    pair_widths = []
     for i, frame in enumerate(frames):
         img = frame.bgr
         if img.shape[:2] != (lane_replay.FRAME_H, lane_replay.FRAME_W):
             img = cv2.resize(img, (lane_replay.FRAME_W, lane_replay.FRAME_H), interpolation=cv2.INTER_AREA)
+        img = derotate(img, roll_deg, ground.principal_x, ground.principal_y)
         t = frame.t
         if prev_t is None or not 0.0 <= t - prev_t <= KEEP_MAX_FRAME_GAP_S:
             keeper.reset()
@@ -350,6 +380,7 @@ def replay(frames, *, labels: dict | None = None, dropouts=DROPOUTS_M,
         decision = decision_point_from_keep(keeper.last)
         headings += [float(b["heading_deg"]) for b in keeper.last.get("boundaries", [])]
         pairs += keeper.last.get("strategy") == "both"
+        pair_widths += _parallel_pair_width(keeper.last)
         if i % CHECKPOINT_EVERY == 0:
             checkpoints[i] = copy.deepcopy(est)
         est.predict(ds, dth, dt=dt, stamp=t)
@@ -435,6 +466,10 @@ def replay(frames, *, labels: dict | None = None, dropouts=DROPOUTS_M,
                    "median_heading_deg": round(float(np.median(headings)), 2) if headings else None,
                    "median_abs_heading_deg": round(float(np.median(np.abs(headings))), 2) if headings else None,
                    "boundaries": len(headings),
+                   "pair_width_m": {"n": len(pair_widths),
+                                    "median": round(float(np.median(pair_widths)), 4) if pair_widths else None,
+                                    "ratio_to_map": round(float(np.median(pair_widths)) / params.lane_width_m, 4)
+                                    if pair_widths else None},
                    # signed heading on straight motion: equal offsets both sides = camera
                    # yaw; opposite offsets = roll/pitch (lane owner, 2026-10-01)
                    "straight_heading_deg": {
@@ -442,7 +477,8 @@ def replay(frames, *, labels: dict | None = None, dropouts=DROPOUTS_M,
                                                  "p25": round(float(np.percentile(v, 25)), 2),
                                                  "p75": round(float(np.percentile(v, 75)), 2)}
                        for side, v in straight_heading.items()}},
-        "setup": {"pitch_deg": pitch_deg, "lidar_forward_deg": lidar_forward_deg,
+        "setup": {"pitch_deg": pitch_deg, "height_m": height_m, "roll_deg": roll_deg,
+                  "lidar_forward_deg": lidar_forward_deg,
                   "lidar_wall_veto": params.lidar_wall_veto,
                   "ir_geometry_measured": params.ir_geometry_measured, "mode": params.mode},
         "calibration_suspect_frames": sum(r["calibration_suspect"] for r in rows),
@@ -481,6 +517,9 @@ def main(argv=None) -> int:
     parser.add_argument("--max-frames", type=int, default=0)
     parser.add_argument("--pitch-deg", type=float, default=None,
                         help="camera pitch override (the D-379 real-frame fit is 11.8)")
+    parser.add_argument("--height-m", type=float, default=None, help="lens height override (m)")
+    parser.add_argument("--roll-deg", type=float, default=0.0,
+                        help="camera roll (calibration convention); frames are derotated before the keeper")
     parser.add_argument("--lidar-forward-deg", type=float, default=180.0,
                         help="LiDAR scan angle of the nose; recorded only while the wall veto is off")
     args = parser.parse_args(argv)
@@ -491,7 +530,8 @@ def main(argv=None) -> int:
     if args.max_frames:
         frames = (f for i, f in zip(range(args.max_frames), frames))
     metrics, rows = replay(frames, labels=load_labels(Path(args.labels) if args.labels else None),
-                           pitch_deg=args.pitch_deg, lidar_forward_deg=args.lidar_forward_deg)
+                           pitch_deg=args.pitch_deg, lidar_forward_deg=args.lidar_forward_deg,
+                           height_m=args.height_m, roll_deg=args.roll_deg)
     metrics["source"] = str(args.source)
     metrics["validated"] = False
     out.mkdir(parents=True, exist_ok=True)

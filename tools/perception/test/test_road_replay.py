@@ -190,7 +190,8 @@ def test_report_carries_heading_pairs_reacquisition_and_setup():
     assert metrics["keeper"]["median_abs_heading_deg"] < 2.0
     assert metrics["reacq_counts"]["pair"] >= 1
     assert set(metrics["reacq_counts"]) == {"pair", "side+ir", "side+learned"}
-    assert metrics["setup"] == {"pitch_deg": 8.0, "lidar_forward_deg": 181.0, "lidar_wall_veto": False,
+    assert metrics["setup"] == {"pitch_deg": 8.0, "height_m": None, "roll_deg": 0.0,
+                                "lidar_forward_deg": 181.0, "lidar_wall_veto": False,
                                 "ir_geometry_measured": False, "mode": "shadow"}
 
 
@@ -238,3 +239,42 @@ def test_curve_residuals_section_and_flag():
     assert curve["validated_on_curves"] is False
     straight, _ = rr.replay(synthetic(24), dropouts=())
     assert straight["curve_residuals"]["frames"] == 0 and straight["curve_residuals"]["blow_up"] is None
+
+
+def _project_rolled(x, y, roll_deg, pitch=GROUND.pitch_rad, h=GROUND.height_m):
+    """camera_extrinsic.CameraPose.project (feat/camera-extrinsic-autocalib), floor point z=0."""
+    dx, dz = x - X_OFFSET, -h
+    s, c = math.sin(pitch), math.cos(pitch)
+    depth, up = dx * c - dz * s, dx * s + dz * c
+    px, py = -GROUND.focal_px * y / depth, -GROUND.focal_px * up / depth
+    sr, cr = math.sin(math.radians(roll_deg)), math.cos(math.radians(roll_deg))
+    return GROUND.principal_x + cr * px - sr * py, GROUND.principal_y + sr * px + cr * py
+
+
+def test_derotation_undoes_camera_roll_with_the_calibration_sign():
+    # a floor point seen by a camera rolled -1.5 deg lands, after derotation, where a
+    # roll-free camera sees it
+    point = (0.30, 0.08)
+    rolled = _project_rolled(*point, -1.5)
+    ideal = _project_rolled(*point, 0.0)
+    img = np.zeros((240, 320, 3), np.uint8)
+    cv2.circle(img, (int(round(rolled[0])), int(round(rolled[1]))), 2, (255, 255, 255), -1)
+    out = rr.derotate(img, -1.5, GROUND.principal_x, GROUND.principal_y)
+    ys, xs = np.nonzero(out[..., 0] > 100)
+    assert xs.mean() == pytest.approx(ideal[0], abs=1.0) and ys.mean() == pytest.approx(ideal[1], abs=1.0)
+    assert rr.derotate(img, 0.0, 160.0, 120.0) is img
+
+
+def test_height_override_builds_the_ground_through_the_profile():
+    _, ground = rr.ground_for(11.2, height_m=0.0575)
+    assert ground.height_m == pytest.approx(0.0575)
+    assert ground.pitch_rad == pytest.approx(math.radians(11.2))
+    metrics, _ = rr.replay(synthetic(8), dropouts=(), pitch_deg=11.2, height_m=0.0575, roll_deg=-1.5)
+    assert metrics["setup"]["height_m"] == 0.0575 and metrics["setup"]["roll_deg"] == -1.5
+
+
+def test_report_carries_the_parallel_pair_width():
+    metrics, _ = rr.replay(synthetic(8), dropouts=())
+    width = metrics["keeper"]["pair_width_m"]
+    assert width["n"] == 8 and width["median"] == pytest.approx(2 * HALF, abs=0.01)
+    assert width["ratio_to_map"] == pytest.approx(width["median"] / (2 * HALF), abs=1e-3)
