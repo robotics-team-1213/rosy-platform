@@ -50,7 +50,8 @@ def test_hf_source_refuses_non_commit(src):
         intake.resolve_source(src, downloader=lambda **kw: pytest.fail("downloaded"))
 
 
-SHA = "0123456789abcdef0123456789abcdef01234567"
+SHA = "ab" * 20  # placeholder-shaped, low-entropy: the secret scanner flags
+# high-entropy 40-hex literals; this fixture only needs the sha1 shape.
 
 
 def test_hf_source_downloads_real_files_into_workdir(tmp_path):

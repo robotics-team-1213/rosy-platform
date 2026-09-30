@@ -236,7 +236,7 @@
 
 ## 교훈 (docs/solutions)
 
-- 없음
+- [Verify what you ship - the working tree is not the commit](solutions/workflow-issues/verify-what-you-ship-the-working-tree-is-not-the-commit.md)
 
 ## 시험
 
