@@ -12,6 +12,7 @@ The package's Python code: executable ROS node wrappers at the top level and the
 | `wander_node.py` | Entry wrapper — re-exports `WanderNode`/`main` from `wander/` |
 | `safety_node.py` | Entry wrapper for the safety gate node |
 | `calib_node.py` | Relative `calib/step` FSM; saves one explicitly configured calibration file and requests safety parameters. Bound records validate device/generation context. Parameter acknowledgement does not prove policy adoption |
+| `ir_overlay.py` | D-344 §12: validates the optional `/etc/rosy/ir_calibration.yaml` observer overlay for `camera_preview.launch.py`; malformed files are skipped with a reason, never handed to the node |
 | `calibration_record.py` / `calibration_storage.py` / `calibration_lock.py` | Versioned context/digest envelope, fixed runtime path, revision checks and locked atomic save; verified runtime consumer and authenticated identity source remain pending |
 | `camera_detect_node.py` | OV5647 capture (BGR8, rotated 180°) through `sensing/camera_worker`, AE/AWB frozen after settle (`sensing/camera_controls`) → `camera.classify_frame` → `sensing/camera_policy` hysteresis → `/camera/blocked|side|observation|telemetry|controls`. `/camera/cliff` is always false: a monocular camera cannot separate a dark wall from a dark hole, so floor IR owns that decision |
 | `control_node.py` | odom-P straight/rotate controller driven by `/goal_distance`, `/goal_rotate` |

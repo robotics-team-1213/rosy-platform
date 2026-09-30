@@ -13,6 +13,7 @@ const LF_REASON = {
   lane_edge_left: "왼쪽 경계선 — 오른쪽으로 비킴", lane_edge_right: "오른쪽 경계선 — 왼쪽으로 비킴",
   lane_departure: "차선 밟음 — 정지, 수동으로 빼세요", lane_guard_stale: "IR 차선 감시 끊김 — 정지",
   nominal_ground_requires_driver: "공칭 지면 — 진행을 누르고 있어야 함",
+  limit_level_too_low: "수동 한도 L1 이상에서만 차선 자동", angular_limit_zero: "조향 한도 없음 — 정지",
 };
 
 // onIdle: 자동이 끝났을 때 수동 경로를 되돌린다(상한 표시·명령 경로 재개·슬루 초기화).

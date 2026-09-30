@@ -32,4 +32,4 @@
 - 2026-09-30 · bf0fab99 · feat(pilot): 세로 조작부가 영상 아래 공간을 채운다
 - 2026-09-30 · uncommitted · feat(pilot): 공용 컨트롤·타이포 계약과 D-370 PWA 아이콘
 - 2026-09-30 · 47f814a6 · refactor(pilot): drive.js 를 drive-auto·drive-view 로 나눔
-- 2026-09-30 · uncommitted · chore(pilot): main 병합 — 표면 등록과 D-370 이름표
+- 2026-09-30 · uncommitted · feat(pilot): 차선 자동 계단 거절 이유를 한국어로

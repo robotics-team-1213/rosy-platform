@@ -158,6 +158,19 @@
 - 증거: `test/architecture/test_app_roles.py`(pilot 이 `/api/fleet` 을 부르지 않음), `src/hmi/web_common/test` 114 passed, `test/test_core_image_closure.py`.
 - gate 변화: 없음(등록·이름만).
 
+## 2026-09-30 · uncommitted · refactor(pilot): D-374 stage 2 — registry id rosy-pilot → pilot
+
+- 변경: `src/hmi/web_common/surfaces.yaml`의 레지스트리 id `rosy-pilot` → `pilot`. 폴더·패키지·아이콘(`src/hmi/pilot`, `pilot`, `icons/pilot.svg`)은 이미 규칙과 같다. `test/architecture/test_app_identity.py`의 pending 줄을 지웠다. 경로 `/pilot`, PWA `start_url`·`scope`, 저장소 키 `rosy.pilot.*`, SW 캐시 이름은 그대로(D-374 3항).
+- 증거: `python -m pytest src/hmi/web_common/test src/hmi/pilot/test src/runtime/api_web/test test/architecture -q` 294 passed, 27 skipped (2026-09-30 Windows).
+- gate 변화: 없음. 장치 절차 없음(계획 단계 2).
+
+## 2026-09-30 · uncommitted · feat(pilot): 차선 자동 계단 거절 이유를 한국어로
+
+- 변경: `screens/drive.js LF_REASON` 에 `limit_level_too_low`("수동 한도 L1 이상에서만 차선 자동")와 `angular_limit_zero`("조향 한도 없음 — 정지") 추가. 캐시 키 `sw.js` 를 `rosy-pilot-shell-2026-09-30-3` 으로 올렸다.
+- 증거: `node --check`, `pytest src/hmi/pilot/test` 35 passed, 13 skipped (2026-09-30 Windows, 브라우저 시험은 opt-in 이라 skip).
+- gate 변화: SOURCE. 태블릿 실화면 확인 전.
+- 결정: D-344 §13(사용자 결정: 차선 자동은 L1 이상).
+
 ## 2026-09-30 · 47f814a6 · refactor(pilot): drive.js 를 drive-auto·drive-view 로 나눔
 - 변경: `screens/drive.js`(708줄)를 입력·명령 루프만 남기고 `drive-view.js`(마크업·D-363 배치·배율)와 `drive-auto.js`(D-344 보조 자율·D-364 의도 띠)로 나눴다. 동작은 같다. 새 파일을 CORE `pilot_assets`·`dev_server`·`sw.js` 사전 캐시(이름 `-3`, 빠져 있던 `inputs.js` 도 더함)·`test_pilot_route`·동기화 스크립트에 등록. drive.js 예산 판정(`test_web_budgets.py`)은 예산 아래라 지웠다.
 - 증거: `src/hmi/pilot/test` + `test_pilot_route.py` 51 passed(브라우저 포함).

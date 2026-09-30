@@ -25,14 +25,14 @@ TOKENS = dict(re.findall(r"(--[a-z0-9-]+)\s*:\s*(#[0-9a-fA-F]{6})\s*;",
 
 #: D-370 3항 table: icon file -> glyph colour token.
 GLYPH_TOKEN = {
-    "overhead-camera-app": "--series-primary",
+    "ceiling-camera": "--series-primary",
     "pilot": "--brand-rose",
     "fleet-console": "--paper",
     "robot-dashboard": "--robot-1",
 }
 #: D-370 2항 table, for the surfaces registered on main (Pilot lands with its branch).
 NAMES = {
-    "overhead-camera-app": ("Rosy 천장 카메라", "Rosy Ceiling Camera", "Rosy 카메라"),
+    "ceiling-camera": ("Rosy 천장 카메라", "Rosy Ceiling Camera", "Rosy 카메라"),
     "fleet-console": ("Rosy 관제", "Rosy Site Console", "Rosy 관제"),
     "robot-dashboard": ("Rosy 로봇 대시보드", "Rosy Robot Dashboard", "Rosy 대시보드"),
 }
@@ -146,8 +146,8 @@ def test_web_icons_are_on_the_common_allowlist_and_linked_as_favicons():
 
 
 def test_android_launcher_label_is_the_registered_app_name():
-    strings = (registry.REPO / "src/site/overhead/android/app/src/main/res/values/strings.xml"
+    strings = (registry.REPO / "src/site/ceiling_camera/app/src/main/res/values/strings.xml"
                ).read_text(encoding="utf-8")
     label = re.search(r'<string name="app_name">([^<]*)</string>', strings).group(1)
-    camera = next(row for row in registry.load() if row["id"] == "overhead-camera-app")
-    assert label == camera["app_name"] == NAMES["overhead-camera-app"][0]
+    camera = next(row for row in registry.load() if row["id"] == "ceiling-camera")
+    assert label == camera["app_name"] == NAMES["ceiling-camera"][0]

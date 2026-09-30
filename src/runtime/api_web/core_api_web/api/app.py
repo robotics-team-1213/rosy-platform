@@ -1,4 +1,4 @@
-"""core_api_web.api.app — FastAPI 팩토리 (P1-9, API-101). 계약: ROSY-API-REF-001 v1.63."""
+"""core_api_web.api.app — FastAPI 팩토리 (P1-9, API-101). 계약: ROSY-API-REF-001 v1.64."""
 
 from __future__ import annotations
 
@@ -106,7 +106,7 @@ def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
     app = FastAPI(
         title="ROSY CORE API",
         version="1.20.0",
-        description="로봇 미들웨어 API — 계약: ROSY-API-REF-001 (v1.63)",
+        description="로봇 미들웨어 API — 계약: ROSY-API-REF-001 (v1.64)",
     )
     app.state.core = services
     app.state.pairing = PairingState()
@@ -131,7 +131,11 @@ def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
         # 이 allowlist는 `{asset_name:path}`가 슬래시를 허용하므로 경로 순회를
         # 막는 파일시스템 방어목적이므로 폴더 스캔으로 바꾸지 않는다.
         "styles.css": "text/css",
+        "console-detail.css": "text/css",
         "app.js": "application/javascript",
+        "telemetry.js": "application/javascript",
+        "teleop.js": "application/javascript",
+        "state-socket.js": "application/javascript",
         "map.js": "application/javascript",
         "host-cards.js": "application/javascript",
         "ros-network.js": "application/javascript",
