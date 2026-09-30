@@ -42,8 +42,10 @@ def test_mission_read_contains_four_truthful_progress_axes(tmp_path):
     progress = response.json()["progress"]
     assert set(progress) == {
         "snapshot_event_id", "snapshot_at", "mission", "step", "action",
-        "goal_evidence", "stop",
+        "goal_evidence", "stop", "active_phase", "phases",
     }
+    assert progress["active_phase"] is None
+    assert progress["phases"] == []
     assert progress["mission"]["state"] == "PROPOSED"
     assert progress["step"]["state"] == "NOT_ADMITTED"
     assert progress["action"]["state"] == "UNKNOWN"

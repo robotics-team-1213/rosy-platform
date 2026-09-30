@@ -5,7 +5,7 @@ last_verified: { commit: "64f686aa", date: 2026-10-01 }
 gates:
   SOURCE:
     state: GO
-    evidence: "211 OMX adapter/profile/vendor-boundary tests passed, 3 skipped. SOURCE includes typed 3D RGB-D plan contracts, bounded timed trajectories, typed ROS goal events, atomic phase acceptance, a stop-fenced PickPlaceRunner, semantic transaction/journal phase gates, fresh gripper release before local Action success, and exact-phase cancel routing. Fleet placement verification remains separate. The production plan/ROS/gripper factory and Fleet phase receipt integration are absent."
+    evidence: "212 OMX adapter/profile/vendor-boundary tests passed, 3 skipped. SOURCE includes typed 3D RGB-D plan contracts, bounded timed trajectories, typed ROS goal events, atomic phase acceptance, a stop-fenced PickPlaceRunner, semantic transaction/journal phase gates, fresh gripper release before local Action success, exact-phase cancel routing, and Fleet's versioned phase receipt/progress projection. Fleet placement verification remains separate. The production plan/ROS/gripper factory and ROS-to-Fleet runtime wiring are absent."
     cmd: "python -B -X utf8 -m pytest src/products/omx/adapter/test src/products/omx/profile/test test/test_omx_vendor_stack_lock.py test/test_omx_host_inventory.py test/test_omx_multi_preflight.py test/test_dds_identity_contracts.py -q -p no:cacheprovider"
   LOCAL:
     state: GO

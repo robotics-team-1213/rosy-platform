@@ -851,6 +851,27 @@ class ActionStore:
                 ).fetchall()
         return [self._phase_dict(row) for row in rows]
 
+    def action_phase_receipts(self, action_id: str, attempt_id: str) -> list[dict[str, Any]]:
+        """Return bounded phase snapshots with each phase's latest local event ID."""
+        phases = self.action_phases(action_id, attempt_id)
+        if len(phases) > 4:
+            raise InvalidActionTransition("pick-place phase journal exceeds its fixed bound")
+        history = self.history(action_id)
+        result = []
+        for phase in phases:
+            matching = [event for event in history
+                        if event["attempt_id"] == attempt_id
+                        and event["detail"].get("phase_id") == phase["phase_id"]
+                        and event["event_type"].startswith("ACTION_PHASE_")]
+            if not matching:
+                raise InvalidActionTransition("phase journal has no durable event")
+            result.append({
+                "phase_id": phase["phase_id"], "ordinal": phase["ordinal"],
+                "state": phase["state"], "journal_event_id": matching[-1]["event_id"],
+                "observed_at": phase["updated_at"],
+            })
+        return result
+
     def latest_workflow_state(self, action_id: str, attempt_id: str) -> str | None:
         with closing(self._connect()) as connection:
             row = connection.execute(
