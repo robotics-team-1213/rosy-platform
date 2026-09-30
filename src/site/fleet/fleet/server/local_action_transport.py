@@ -48,16 +48,18 @@ class UnixLocalActionTransport:
         self.timeout_s = float(timeout_s)
 
     def submit(self, grant: FleetActionGrant) -> DeviceActionReceipt:
+        version = self._version(grant)
         return self._receipt(grant, {
-            "version": 1, "operation": "SubmitAction",
+            "version": version, "operation": "SubmitAction",
             "grant": grant.model_dump(mode="json"),
         })
 
     def get(self, grant: FleetActionGrant) -> DeviceActionReceipt | None:
+        version = self._version(grant)
         response = self._exchange(grant.instance_id, {
-            "version": 1, "operation": "GetAction", "action_id": grant.action_id,
+            "version": version, "operation": "GetAction", "action_id": grant.action_id,
         })
-        if response.get("version") != 1:
+        if response.get("version") != version:
             raise LocalActionUnavailable("local Action protocol version is unsupported")
         if type(response.get("status")) is int and response.get("status") == 404:
             return None
@@ -66,8 +68,9 @@ class UnixLocalActionTransport:
     def cancel(self, grant: FleetActionGrant, *, reason: str) -> DeviceActionReceipt:
         if not isinstance(reason, str) or not reason.strip() or len(reason) > 256:
             raise ValueError("cancel reason must be non-empty and at most 256 characters")
+        version = self._version(grant)
         return self._receipt(grant, {
-            "version": 1, "operation": "CancelAction",
+            "version": version, "operation": "CancelAction",
             "action_id": grant.action_id, "attempt_id": grant.attempt_id,
             "reason": reason,
             "requested_at": datetime.now(timezone.utc).isoformat(),
@@ -78,9 +81,14 @@ class UnixLocalActionTransport:
         return self._parse_receipt(grant, self._exchange(grant.instance_id, document))
 
     @staticmethod
+    def _version(grant: FleetActionGrant) -> int:
+        return 2 if grant.action_kind == "PICK_PLACE" else 1
+
+    @staticmethod
     def _parse_receipt(grant: FleetActionGrant,
                        response: Mapping[str, Any]) -> DeviceActionReceipt:
-        if response.get("version") != 1:
+        version = UnixLocalActionTransport._version(grant)
+        if response.get("version") != version:
             raise LocalActionUnavailable("local Action protocol version is unsupported")
         status = response.get("status")
         if status != 200:
@@ -95,6 +103,10 @@ class UnixLocalActionTransport:
             receipt = DeviceActionReceipt.model_validate(raw)
         except (TypeError, ValueError) as exc:
             raise LocalActionUnavailable("local Action receipt is invalid") from exc
+        if version == 2 and receipt.phase_summaries is None:
+            raise LocalActionUnavailable("v2 local Action receipt is missing phase summaries")
+        if version == 1 and receipt.phase_summaries is not None:
+            raise LocalActionUnavailable("v1 local Action receipt contains v2 phase summaries")
         expected = (
             grant.mission_id, grant.step_id, grant.action_id, grant.attempt_id,
             grant.workcell_id, grant.instance_id, grant.request_digest,

@@ -8,6 +8,7 @@ from typing import Any, Callable
 
 from core_common.protocol.schemas import (
     MissionModelContext,
+    MissionPhaseProgress,
     MissionProgressAxis,
     MissionProgressSnapshot,
 )
@@ -189,11 +190,31 @@ class MissionProgressService:
                 physical_state="UNKNOWN",
             )
 
+        phase_latest: dict[int, dict[str, Any]] = {}
+        for event in data.get("progress_events", []):
+            if event.get("event_type") != "ACTION_PHASE_SNAPSHOT":
+                continue
+            detail = event["detail"]
+            ordinal = detail["ordinal"]
+            prior = phase_latest.get(ordinal)
+            if (prior is None or detail["source_journal_event_id"]
+                    > prior["detail"]["source_journal_event_id"]):
+                phase_latest[ordinal] = {"detail": detail, "event_id": event["event_id"]}
+        phases = tuple(MissionPhaseProgress(
+            phase_id=item["detail"]["phase_id"],
+            ordinal=item["detail"]["ordinal"], state=item["detail"]["state"],
+            last_event_id=item["event_id"],
+            observed_at=_timestamp(item["detail"]["observed_at"]),
+        ) for _, item in sorted(phase_latest.items()))
+        terminal_phase_states = {"SUCCEEDED", "FAILED", "CANCELED"}
+        active_phase = next((phase.phase_id for phase in phases
+                             if phase.state not in terminal_phase_states), None)
         progress = MissionProgressSnapshot(
             snapshot_event_id=watermark,
             snapshot_at=now,
             mission=mission_axis, step=step_axis, action=action_axis,
             goal_evidence=goal_axis, stop=stop_axis,
+            active_phase=active_phase, phases=phases,
         ).model_dump(mode="json")
         return {
             "mission": mission,
@@ -237,6 +258,8 @@ class MissionProgressService:
             goal_evidence_reason=progress["goal_evidence"]["reason"],
             stop_state=progress["stop"]["state"],
             stop_reason=progress["stop"]["reason"],
+            active_phase=progress.get("active_phase"),
+            phases=tuple(progress.get("phases", ())),
         )
         return {
             **context.model_dump(mode="json"),

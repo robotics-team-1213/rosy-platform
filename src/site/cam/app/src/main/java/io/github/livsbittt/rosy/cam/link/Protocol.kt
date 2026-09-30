@@ -49,6 +49,23 @@ object Protocol {
     const val CLOSE_UNAUTHORIZED = 4401
     const val CLOSE_REPLACED = 4409
 
+    /** RFC 6455 "Try Again Later": the receiver is overloaded; always retryable. */
+    const val CLOSE_TRY_AGAIN = 1013
+
+    /** D-341 11: the receiver cannot tell whether the credential is valid (e.g. Fleet down); retryable, not an auth failure. */
+    const val CLOSE_CREDENTIAL_UNKNOWN = 4503
+
+    // Transition exception, remove one release after every site runs 1013 receivers (D-341 §11).
+    private val TRANSIENT_4400 = setOf("", "no hello")
+
+    /**
+     * Close 4400 is an incompatibility (wrong `proto`, hello schema) for every reason except exactly
+     * "" or "no hello" (trimmed, case-insensitive), which pre-1013 receivers sent when their hello timer
+     * fired; those retry. Validation messages never match. Shared cases: vectors `close_4400_reasons`.
+     */
+    fun isIncompatibleClose(code: Int, reason: String): Boolean =
+        code == CLOSE_BAD_PROTO && reason.trim().lowercase() !in TRANSIENT_4400
+
     fun hello(
         source: String,
         appVersion: String,

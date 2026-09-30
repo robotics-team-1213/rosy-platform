@@ -36,9 +36,10 @@ registry = _load_registry()
 
 #: 파일별 window.confirm 허용 수. 늘릴 때는 이 표와 함께 커밋한다.
 PINNED_CONFIRMS = {
-    "app.js": 9,
+    "app.js": 8,
     "settings.js": 11,
     "map.js": 1,
+    "telemetry.js": 1,  # 교통 정책 적용 확인 — D-362 P1 분할로 app.js에서 이동
     "console.js": 3,   # Fleet 목표 지정, 전체 정지, 정지 래치 재허가
     "roster.js": 1,    # 카메라 고장 뒤 IR 추적 선택 확인
     "enrollment.js": 1,  # 등록된 로봇 제거 — 등록 토큰 회수 확인 (S1)

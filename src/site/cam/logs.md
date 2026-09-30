@@ -40,3 +40,17 @@
 - 변경: 촬영 중 렌즈 전환이 실패하면 이전 카메라를 다시 바인딩하고 송출을 이어 간다(`LensSwitch`, 순수·JVM 시험). 화면에 "렌즈를 바꾸지 못해 이전 렌즈로 계속 송출합니다". 상태와 hello의 lens는 전환이 성공한 뒤에만 바뀐다. 초점거리를 여럿 알리는 논리 멀티카메라는 렌즈 정보가 불확실하므로 hello.lens를 보내지 않고 "렌즈 정보 불확실"로 표시한다. 세션 수집기는 하나의 Job 아래에서 돌고 `releaseSession()`이 취소한다. 기기 점검 항목의 커밋 표기를 877a6fb4로 바로잡았다.
 - 증거: `gradlew testDebugUnitTest --rerun assembleDebug lintDebug --no-daemon` BUILD SUCCESSFUL, JVM 시험 156 passed, 0 failed, lint 0 errors·42 warnings(기존) (2026-10-01 Windows, JDK 21).
 - gate 변화: 없음.
+
+## 2026-10-01 · 35140f13 · fix(cam): 보안 리뷰 반영(인증서 고정) + 바쁜 수신기에서 멈추지 않음
+
+- 변경: 핀 불일치 표식은 `PinMismatchException`이나 SSL/인증서 예외에 있을 때만 믿고, HTTP 응답이 온 실패는 핀 정지로 보지 않는다(평문 ws 503 reason으로 영구 정지를 강제할 수 없다). 고정 인증서의 유효 기간을 직접 검사하고(PKIX는 앵커 날짜를 보지 않는다), leaf보다 위의 고정 인증서는 CA여야 한다. 설정 화면은 TLS를 꺼서 pin이 지워졌음을 알리고, 딥링크 확인 창은 새 링크가 TLS나 pin을 잃으면 경고한다. 닫힘 4400은 비호환 사유일 때만 영구 정지하고, 빈 사유·"no hello"·시간 초과·1013은 `LinkError.Busy`로 백오프 재접속하며 "수신기가 바빠서…"를 띄운다(2026-10-01 실기에서 Vision 루프가 막혀 4400 "no hello"로 카메라가 멈춘 문제). 앱은 예전 링크의 leaf pin을 호환용으로만 계속 받는다.
+- 증거: `gradlew testDebugUnitTest assembleDebug` BUILD SUCCESSFUL, JVM 시험 177 passed, 0 failed(`PinnedTrustTest` 13: 호스트명 불일치 CA·leaf pin 모두 `SSLPeerUnverifiedException`/TLS, 같은 CA의 다른 leaf → TLS_PIN, 공격자 leaf 뒤의 고정 leaf 거절, 만료 leaf·만료 CA 거절, 평문 ws 503 표식은 정지 아님). 공유 벡터 `close_codes.try_again_later`·`close_4400_reasons`, `%0A` 거절 벡터.
+- gate 변화: 없음. DEVICE 점검 항목은 progress 3항.
+- 결정: 4400 사유 분류는 "일시적 사유 목록이 아니면 비호환"이다. 수신기의 4400 사유를 바꾸면 벡터 목록도 같이 고친다.
+- 교훈: PowerShell 5.1은 네이티브 인자로 넘긴 here-string 안의 큰따옴표를 깨뜨린다. 커밋 메시지는 `git commit -F <파일>`로 넘긴다.
+- 열린 후속: NSC에 user 인증서가 없어 D-341 16항 되돌림 경로가 이 앱에서 동작하지 않는다(progress 4항).
+
+## 2026-10-01 · uncommitted · fix(cam): 4400 재시도 범위를 합의한 전환 예외로 좁힘
+- 변경: 4400은 사유가 정확히 빈 문자열이거나 "no hello"(공백 제거, 대소문자 무시, 1013 이전 수신기)일 때만 재접속한다. 그 밖의 사유는 "busy"나 "timeout"이 들어 있어도 비호환으로 보고 멈춘다(`ingest.py`의 `str(exc)` 검증 메시지가 재시도 대상이 되면 안 된다). 공유 벡터 `close_4400_reasons.retry`는 `["", "no hello"]`. `OverheadLink`의 KDoc은 4400이 비호환일 때만, 4401·4409는 멈춘다고 바로잡았다. 예외 자리에 제거 시점 표식(1013 수신기 전환 후 한 릴리스, D-341 11항).
+- 증거: `gradlew testDebugUnitTest --rerun-tasks` BUILD SUCCESSFUL (2026-10-01 Windows, JDK 21). `ProtocolTest`는 공유 벡터의 retry·fatal 목록과 "receiver busy"·"timeout" 같은 fatal 사유를 함께 확인한다.
+- gate 변화: 없음.

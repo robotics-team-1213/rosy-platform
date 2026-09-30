@@ -233,6 +233,23 @@
 - 증거: test_core_logic.py 두 시험(해제 리스너 호출, 실패하는 리스너는 자기만 건너뜀).
 - gate 변화: 없음.
 
+## 2026-10-01 · f34781ae · feat(line_follow): 시작 때 정한 LiDAR 장착 yaw 를 받는다
+- 변경: `LineFollowManager.use_lidar_forward(deg, source)` 와 `lidar_forward_source` — CORE 가 정한 장착 yaw(D-47 부록)를 설정에 넣고 출처를 기억한다.
+- 증거: gateway `test_lidar_mount_source.py`, services 265 passed (2026-10-01 Windows).
+- gate 변화: 없음(값 주입 경로만).
+
+## 2026-10-01 · uncommitted · fix(fleet_agent): D-382 F10·I4 — 구독 해제와 이벤트 seq 사본
+
+- 변경: FleetAgent가 `EventBus.subscribe`가 돌려준 해제 함수를 쥐고 종료 때 부른다(없는 `events.unsubscribe`를 부르던 결함, F10). 버스가 모든 구독자에게 넘기는 링 버퍼 속 같은 `EventMessage`의 `seq`를 덮어쓰지 않고 사본에 Agent seq를 매긴다(`/api/v1/events`·`/ws/events`·감사의 seq가 바뀌던 문제, F7의 일부). F7의 재시작 뒤 누락(부팅 세대)은 다음 이미지 회차(L2).
+- 증거: `test_fleet_agent.py` 신규 2건 — 수정 전 실패, 수정 후 통과. 시험용 `DummyEventBus`가 실제 버스에 없는 `unsubscribe`를 갖고 있어 결함을 가렸으므로 실제 표면(`subscribe`가 해제 함수를 돌려줌)으로 맞췄다.
+- gate 변화: 없음(SOURCE/LOCAL). 로봇에는 다음 이미지·payload로만 간다.
+
+## 2026-10-01 · uncommitted · feat(command): D-385 모드→표정 정책 emotion_map
+
+- 변경: core_features/command/emotion_map.py — EMOTION_BY_MODE 와 막힘(bored) 우선순위. 모르는 모드는 None(표정 유지). ROS-free.
+- 증거: gateway/test/test_emotion_map.py (어휘가 감정 노드의 GIF 이름 안에 있는지도 검증).
+- gate 변화: 없음.
+
 ## 2026-10-01 · uncommitted · feat(road_behaviour): D-384 도로 주행 행동 상태 기계(ROS-free, 명령 없음)
 
 - 변경: 새 `core_features/road_behaviour/`(`model.py`·`machine.py`·`table.py`). `step_behaviour(memory, inputs, params)` 순수 함수가 `LANE_FOLLOW`·`FOLLOW`·`HOLD`·`APPROACH`·`STOP_AT_LINE`·`YIELD_CHECK`·`CREEP`·`CROSS`·`FAULT` 중 하나와 속도 상한·갈래 선택만 낸다(D-2, D-151: CORE가 `min()`). 오래된(> 0.3 s)·없는 필수 입력은 `FAULT` 0. 정지 장애물 5 s면 `nav.line_obstacle_hold` 한 번(`LineFollowConfig.obstacle_escalate_s`와 같은 값). `v_cruise` 0.08, CORE 상한 입력과 `min`. 교차로 상태는 `junction_logic_enabled=False` 기본 — `d_jn` 안 교차로는 `HOLD junction_unsupported`. 켜면 일단정지, 도로교통법 제26·27조 양보, Fleet 허가, 경로 > 오른쪽 > 직진 > 왼쪽. 전이표는 `docs/plans/2026-10-01-road-behaviour-transition-table.md`.

@@ -11,9 +11,12 @@ enum class Problem {
     REFUSED,
     UNKNOWN_HOST,
     TLS,
+    TLS_PIN,
     UNAUTHORIZED,
     REPLACED,
     PROTOCOL_MISMATCH,
+    BUSY,
+    SITE_CHECKING,
     INVALID_CONFIG,
     CLOSED,
     NETWORK_OTHER,
@@ -49,6 +52,7 @@ object ProblemGuide {
                         NetworkFailure.REFUSED -> Problem.REFUSED
                         NetworkFailure.UNKNOWN_HOST -> Problem.UNKNOWN_HOST
                         NetworkFailure.TLS -> Problem.TLS
+                        NetworkFailure.TLS_PIN -> Problem.TLS_PIN
                         NetworkFailure.OTHER -> Problem.NETWORK_OTHER
                     }
                 }
@@ -58,6 +62,8 @@ object ProblemGuide {
             LinkError.Unauthorized -> Guidance(Problem.UNAUTHORIZED, NextStep.OPEN_SETTINGS, "HTTP 401 / close 4401", retrying)
             LinkError.Replaced -> Guidance(Problem.REPLACED, NextStep.OPEN_SETTINGS, "close 4409", retrying)
             LinkError.ProtocolMismatch -> Guidance(Problem.PROTOCOL_MISMATCH, NextStep.NONE, "close 4400", retrying)
+            LinkError.CredentialUnknown -> Guidance(Problem.SITE_CHECKING, NextStep.NONE, "close 4503", retrying)
+            is LinkError.Busy -> Guidance(Problem.BUSY, NextStep.NONE, "close ${error.code} ${error.reason}".trim(), retrying)
             is LinkError.InvalidConfig -> Guidance(Problem.INVALID_CONFIG, NextStep.NONE, error.field, retrying)
             is LinkError.Closed -> Guidance(Problem.CLOSED, NextStep.NONE, "close ${error.code} ${error.reason}".trim(), retrying)
         }
@@ -68,7 +74,7 @@ object ProblemGuide {
      * so the button stops the camera first and says so.
      */
     fun stopsCameraFirst(problem: Problem, running: Boolean): Boolean =
-        running && (problem == Problem.UNAUTHORIZED || problem == Problem.REPLACED)
+        running && (problem == Problem.UNAUTHORIZED || problem == Problem.REPLACED || problem == Problem.TLS_PIN)
 
     fun forStream(error: StreamError): Guidance = when (error) {
         StreamError.NotPaired -> Guidance(Problem.NOT_PAIRED, NextStep.OPEN_SETTINGS, null, retrying = false)

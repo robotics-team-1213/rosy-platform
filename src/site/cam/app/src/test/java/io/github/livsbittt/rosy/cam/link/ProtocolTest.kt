@@ -3,6 +3,7 @@ package io.github.livsbittt.rosy.cam.link
 import io.github.livsbittt.rosy.cam.Vectors
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -21,6 +22,25 @@ class ProtocolTest {
         assertEquals(codes.getInt("bad_proto"), Protocol.CLOSE_BAD_PROTO)
         assertEquals(codes.getInt("unauthorized_source"), Protocol.CLOSE_UNAUTHORIZED)
         assertEquals(codes.getInt("replaced_by_same_source"), Protocol.CLOSE_REPLACED)
+        assertEquals(codes.getInt("try_again_later"), Protocol.CLOSE_TRY_AGAIN)
+    }
+
+    @Test
+    fun only4400WithAnIncompatibilityReasonIsFatal() {
+        val reasons = Vectors.root.getJSONObject("close_4400_reasons")
+        val retry = reasons.getJSONArray("retry")
+        for (i in 0 until retry.length()) {
+            assertFalse(retry.getString(i), Protocol.isIncompatibleClose(Protocol.CLOSE_BAD_PROTO, retry.getString(i)))
+        }
+        val fatal = reasons.getJSONArray("fatal")
+        for (i in 0 until fatal.length()) {
+            assertTrue(fatal.getString(i), Protocol.isIncompatibleClose(Protocol.CLOSE_BAD_PROTO, fatal.getString(i)))
+        }
+        for (reason in listOf("receiver busy", "hello timeout", "timed out waiting for hello", "busy: proto mismatch", "timeout")) {
+            assertTrue(reason, Protocol.isIncompatibleClose(Protocol.CLOSE_BAD_PROTO, reason))
+        }
+        assertFalse(Protocol.isIncompatibleClose(Protocol.CLOSE_BAD_PROTO, " No Hello "))
+        assertFalse(Protocol.isIncompatibleClose(Protocol.CLOSE_TRY_AGAIN, "proto must be 'rosy-overhead/1'"))
     }
 
     @Test

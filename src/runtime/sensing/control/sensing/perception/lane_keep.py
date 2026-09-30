@@ -101,6 +101,16 @@ MAX_EXTRAPOLATION_M = 0.15
 FIT_STRIDE = 2
 #: A line this far off the robot's heading is a transverse mark.
 TRANSVERSE_MIN_ANGLE_RAD = math.radians(65.0)
+#: A line steeper than this whose extrapolated offset at SIDE_X_M lies beyond
+#: STEEP_MAX_LATERAL_FRACTION of the lane width is a diagonal mark (a junction
+#: mouth, a crosswalk edge) read far outside the lane, not a boundary. Real
+#: 124745Z frames sided 60-64 deg lines at y -0.30..-0.42 m. Both ends of the
+#: seen paint must also lie beyond the lane half width plus STEEP_PAINT_MARGIN_M.
+STEEP_MIN_ANGLE_RAD = math.radians(45.0)
+STEEP_MAX_LATERAL_FRACTION = 1.0
+STEEP_PAINT_MARGIN_M = 0.03
+#: ... or reach within this of the robot's path line (y = 0) from both sides.
+STEEP_PATH_M = 0.02
 #: Two boundaries of one lane run within this angle of each other.
 PAIR_MAX_ANGLE_RAD = math.radians(30.0)
 #: A lone boundary further than this fraction of the lane width is not ours.
@@ -237,7 +247,7 @@ class LaneKeeper:
         _validate_positive("lane_half_width_m", lane_half_width_m)
         if not isinstance(bgr, np.ndarray) or bgr.ndim not in (2, 3) or bgr.size == 0:
             raise ValueError("camera frame must be a non-empty grayscale or BGR array")
-        self.last = {"strategy": "none", "boundaries": [], "transverse": [], "blobs": 0,
+        self.last = {"strategy": "none", "boundaries": [], "transverse": [], "candidates": [], "blobs": 0,
                      "lookahead_m": self._lookahead, "target_m": None, "target_px": None}
         if ground is None:
             self.last["reason"] = "no_ground"
@@ -275,6 +285,7 @@ class LaneKeeper:
                       "ends_px": [self.to_pixel(ground, float(p[0]), float(p[1])) for p in ends]}
             if abs(heading) > TRANSVERSE_MIN_ANGLE_RAD:
                 self.last["transverse"].append(record)
+                self.last["candidates"].append(dict(record, rejected=True, reason="transverse"))
                 transverse.append((centre, direction, ends, False))
                 continue
             if (self._corner_side is not None and abs(heading) > CORNER_MIN_HEADING_RAD
@@ -288,6 +299,20 @@ class LaneKeeper:
             # left +) where the lane is read. Almost under the robot, the last
             # target decides instead.
             lateral = _lateral_at(centre, direction, SIDE_X_M)
+            # The seen paint itself must lie outside the lane on one side, or
+            # reach across the robot's path (a diagonal junction mouth or
+            # crossing mark ahead; real 124745Z frames 94/754/758). A short
+            # steep boundary segment far ahead on a curve extrapolates far at
+            # SIDE_X_M too, but its paint starts at the lane edge: it is kept.
+            low, high = sorted(float(p[1]) for p in ends)
+            paint_outside = low > half + STEEP_PAINT_MARGIN_M or high < -(half + STEEP_PAINT_MARGIN_M)
+            paint_crosses = low <= STEEP_PATH_M and high >= -STEEP_PATH_M
+            if (abs(heading) > STEEP_MIN_ANGLE_RAD and self._corner_side is None
+                    and (paint_outside or paint_crosses)
+                    and abs(lateral) > STEEP_MAX_LATERAL_FRACTION * 2.0 * half):
+                self.last["candidates"].append(dict(record, y_at_side_x_m=round(lateral, 3), rejected=True,
+                                                    reason="steep_crossing" if paint_crosses else "steep_far"))
+                continue
             reference = 0.0
             if abs(lateral) < AMBIGUOUS_LATERAL_M and previous is not None:
                 reference = previous[1]
@@ -303,6 +328,8 @@ class LaneKeeper:
             point, along = _pursuit_point(centre + inward * half, direction, self._lookahead)
             if not (line["along"][0] - MAX_EXTRAPOLATION_M <= along
                     <= line["along"][1] + MAX_EXTRAPOLATION_M):
+                self.last["candidates"].append(dict(record, side=side, y_at_side_x_m=round(lateral, 3),
+                                                    rejected=True, reason="extrapolation"))
                 continue
             record.update(side=side, y_at_side_x_m=round(lateral, 3), tracked=tracked == side,
                           pursuit_m=[round(float(point[0]), 3), round(float(point[1]), 3)],
@@ -327,6 +354,7 @@ class LaneKeeper:
             record.pop("direction")
             record.pop("centre")
             self.last["boundaries"].append(record)
+            self.last["candidates"].append(dict(record, rejected=False, reason=None))
         if target is None:
             self.last["reason"] = junction or "no_boundary"
             # Nothing is pursued: the next frame sides its lines afresh (a

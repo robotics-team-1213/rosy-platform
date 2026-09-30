@@ -35,6 +35,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import io.github.livsbittt.rosy.cam.PIN_PREVIEW
 import io.github.livsbittt.rosy.cam.R
 import io.github.livsbittt.rosy.cam.camera.LensCandidate
 import io.github.livsbittt.rosy.cam.camera.LensChoice
@@ -61,6 +62,9 @@ fun SettingsScreen(
     var token by remember(current) { mutableStateOf(current?.token ?: "") }
     var source by remember(current) { mutableStateOf(current?.source ?: "overhead-1") }
     var secure by remember(current) { mutableStateOf(current?.secure ?: false) }
+    // Only a rosyov:// link sets the pin; it is not typed by hand and is dropped when TLS is unchecked.
+    var pin by remember(current) { mutableStateOf(current?.pin) }
+    var pinDropped by remember(current) { mutableStateOf(false) }
     var invalid by remember { mutableStateOf<String?>(null) }
     var saved by remember { mutableStateOf(false) }
     var overheadServices by remember { mutableStateOf(emptyList<OverheadServiceRecord>()) }
@@ -179,6 +183,8 @@ fun SettingsScreen(
                         token = parsed.pairing.token
                         source = parsed.pairing.source
                         secure = parsed.pairing.secure
+                        pin = parsed.pairing.pin
+                        pinDropped = false
                         invalid = null
                     }
                     is PairingUri.Parsed.Invalid -> invalid = parsed.reason
@@ -204,8 +210,28 @@ fun SettingsScreen(
         )
         Field(source, { source = it; saved = false }, R.string.settings_source, invalid == "source")
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Checkbox(checked = secure, onCheckedChange = { secure = it; saved = false })
+            Checkbox(
+                checked = secure,
+                onCheckedChange = {
+                    secure = it
+                    if (!it && pin != null) {
+                        pin = null
+                        pinDropped = true
+                    }
+                    saved = false
+                },
+            )
             Text(stringResource(R.string.settings_tls))
+        }
+        if (secure) {
+            Text(
+                pin?.let { stringResource(R.string.settings_pin, it.take(PIN_PREVIEW)) }
+                    ?: stringResource(R.string.settings_pin_none),
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
+        if (pinDropped && pin == null) {
+            Text(stringResource(R.string.settings_pin_dropped), color = RosyColors.StatusWarn)
         }
 
         invalid?.let { CritMessage(invalidText(it)) }
@@ -218,10 +244,10 @@ fun SettingsScreen(
                 onClick = {
                     val trimmedHost = host.trim()
                     val portNumber = port.trim().toIntOrNull() ?: -1
-                    val reason = PairingUri.validate(trimmedHost, portNumber, token, source.trim())
+                    val reason = PairingUri.validate(trimmedHost, portNumber, token, source.trim(), secure, pin)
                     invalid = reason
                     if (reason == null) {
-                        onSave(PairingUri(trimmedHost, portNumber, token, source.trim(), secure))
+                        onSave(PairingUri(trimmedHost, portNumber, token, source.trim(), secure, pin))
                         saved = true
                     }
                 },
@@ -297,6 +323,7 @@ fun invalidText(reason: String): String = stringResource(
         "port" -> R.string.invalid_port
         "token" -> R.string.invalid_token
         "tls" -> R.string.invalid_tls
+        "pin" -> R.string.invalid_pin
         else -> R.string.invalid_source
     },
 )

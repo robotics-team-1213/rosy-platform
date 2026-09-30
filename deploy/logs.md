@@ -1556,3 +1556,27 @@
 - 변경: `rosy-boot-status.py`가 `nav_state`를 같은 규칙으로 검증·복사. `rosy-boot-display.py`는 `lamp_pattern()`에 nav를 넘기고, `_announce`가 패턴 기반으로 EMERGENCY 진입음(2.5 kHz×4, 유지 무음, 해제 시 ready 차임)을 낸다.
 - 증거: test_boot_display.py (blocked 행·진입/유지/해제 소리). 변이 증명: 진입음 제거 시 빨강.
 - gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · fix(release,test): main CI deployment 단계 적색 5건 — 핀·등록부·스캐너 면제 정리
+
+- 변경: core 단계 적색이 이 단계를 건너뛰게 해왔다 — core가 초록이 되자 가려져 있던 5건이 드러났다(전부 최근 병합들이 같은 커밋에 함께 갱신했어야 할 고정 목록). (1) D-184 예외 목록에 `test_line_follow_obstacle_path.py` 추가(e3eb2561의 신규 시험, `core_features.line_follow.clearance` 구동). (2) D-218 `PINNED_CONFIRMS`에 교통 정책 적용 확인의 app.js→telemetry.js 이동 반영(13803932, D-362 P1). (3) D-196 로봇 리터럴 백로그에 `runtime/services/core_features/line_follow/clearance.py`·`runtime/sensing/tools/device/ir_line_calibrate.py` 추가. (4) `secret_scan.py` `KNOWN_FIXTURES`에 D-189 런타임 id 핀 등록 — 그 hex는 저장소가 추적하는 `device-python-requirements.txt`의 sha256이며 시험이 저장소에서 재계산하는 공개 다이제스트다. (5) D-178 기준선 행 교체는 docs 모듈 로그에 기록.
+- 증거: 해당 다섯 시험 파일 82 passed (2026-10-01 Windows). 루트 `test/` 전체 회귀는 별도 확인.
+- gate 변화: 없음.
+- 교훈: 고정 목록 계약은 선행 단계가 붉으면 통째로 건너뛴다 — 그 단계의 빚은 다음 초록 커밋으로 이월되므로, 큰 적색을 고친 커밋은 곧바로 다음 단계까지 돌아갔는지 봐야 한다.
+
+## 2026-10-01 · uncommitted · feat(native): D-383 LCD 상태줄에 편대 역할
+
+- 변경: rosy-boot-status.py 가 swarm_role 를 같은 규칙으로 검증·복사, rosy-boot-display.py 상태줄이 role_suffix 를 끝에 붙인다("Ready - NAVIGATION - LEADER").
+- 증거: test_boot_display.py·test_boot_status_indicator.py. 실기 확인은 다음 릴리스 때.
+- gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · feat(native): D-385 기다리는 카드에 프레임 위상
+
+- 변경: rosy-boot-display.py 가 BOOTING·PROVISIONED 중 view 에 frame(1 s 위상)을 실어 다시 그림 키에 태운다 — 0.5 Hz 숨쉼, CORE_READY 는 기존처럼 무변경 무재그림.
+- 증거: test_boot_display.py (대기 중 재그림·ready 정지). 실기는 다음 릴리스.
+- gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · D-390 OMX Pilot development container
+- Change: Add a development-only Pilot layer over the locked OMX Gazebo image and a local probe. Publish HTTP only to 127.0.0.1, deny serial/video grants, keep the one-time code in a 0600 container file.
+- Evidence: local image sha256:e94662607c72a7cea83c9449178099c4c9476afab0519275ce0da82a88f3da9a; Gazebo action and readback report in docs/validation/pilot-omx-gazebo-2026-10-01/.
+- Gate: local x86_64 ROS-SIM only; ARTIFACT/DEVICE/FIELD unchanged.
