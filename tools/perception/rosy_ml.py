@@ -25,6 +25,7 @@ import argparse
 import functools
 import getpass
 import importlib.util
+import json
 import os
 import socket
 import subprocess
@@ -56,10 +57,26 @@ def config_path(env=None, platform=None) -> Path:
     return Path(base) / "rosy" / "ml.yaml"
 
 
+def _inline_secrets(node, path="") -> list[str]:
+    """Keys anywhere in the config that look like a secret value, not a file path."""
+    found = []
+    if isinstance(node, dict):
+        for key, value in node.items():
+            where = f"{path}.{key}" if path else str(key)
+            if any(w in str(key).lower() for w in ("token", "secret", "password")) \
+                    and not str(key).endswith("_file"):
+                found.append(where)
+            found += _inline_secrets(value, where)
+    elif isinstance(node, list):
+        for i, value in enumerate(node):
+            found += _inline_secrets(value, f"{path}[{i}]")
+    return found
+
+
 def _check(cfg: dict) -> dict:
     if not isinstance(cfg, dict):
         raise ValueError("config must be a mapping")
-    inline = [k for k in cfg if "token" in k and not k.endswith("_file")]
+    inline = _inline_secrets(cfg)
     if inline:
         raise ValueError(f"{inline[0]}: put secrets in a file and name it as *_file")
     robots = cfg.get("robots")
@@ -160,6 +177,16 @@ class _Report:
         print(f"{mark} {label}" + ("" if ok or not hint else f" — fix: {hint}"))
         self.failed |= required and not ok
 
+    def check(self, label: str, probe, hint: str, required: bool = True) -> bool:
+        """probe() -> bool; any exception is a failed check with its message."""
+        try:
+            ok = bool(probe())
+        except Exception as exc:  # noqa: BLE001 - doctor reports, never crashes
+            self.line(False, f"{label} ({type(exc).__name__}: {exc})", hint, required)
+            return False
+        self.line(ok, label, hint, required)
+        return ok
+
 
 def _doctor(cfg, robots, runner, connect, find_spec) -> int:
     rep = _Report()
@@ -181,23 +208,27 @@ def _doctor(cfg, robots, runner, connect, find_spec) -> int:
         except (OSError, subprocess.TimeoutExpired) as exc:
             return subprocess.CompletedProcess([], 1, "", str(exc))
 
-    for name in robots:
-        host = cfg["robots"][name]
+    def in_known_hosts(host):
         try:
-            known = runner(["ssh-keygen", "-F", host, "-f", kh], check=False,
-                           capture_output=True, text=True, timeout=10).returncode == 0
+            return runner(["ssh-keygen", "-F", host, "-f", kh], check=False,
+                          capture_output=True, text=True, timeout=10).returncode == 0
         except (OSError, subprocess.TimeoutExpired):
-            known = Path(kh).is_file() and host in Path(kh).read_text(encoding="utf-8")
-        rep.line(known, f"{name}: {host} in known_hosts",
-                 f"record the robot's host key once from a trusted network into {kh} "
-                 "(see .claude/skills/rosy-device-access/SKILL.md)")
+            return Path(kh).is_file() and host in Path(kh).read_text(encoding="utf-8")
+
+    def tcp22(host):
         try:
             connect((host, 22), timeout=3).close()
-            reachable = True
         except OSError:
-            reachable = False
-        rep.line(reachable, f"{name}: TCP 22 reachable",
-                 "robot off, wrong address in your config, or not on this network")
+            return False
+        return True
+
+    for name in robots:
+        host = cfg["robots"][name]
+        rep.check(f"{name}: {host} in known_hosts", lambda: in_known_hosts(host),
+                  f"record the robot's host key once from a trusted network into {kh} "
+                  "(see .claude/skills/rosy-device-access/SKILL.md)")
+        reachable = rep.check(f"{name}: TCP 22 reachable", lambda: tcp22(host),
+                              "robot off, wrong address in your config, or not on this network")
         checks = [
             ("ssh as rosy (BatchMode)", "true", lambda r: r.returncode == 0,
              "your key is not in rosy's authorized_keys on this robot, or known_hosts is stale"),
@@ -217,24 +248,33 @@ def _doctor(cfg, robots, runner, connect, find_spec) -> int:
             if not reachable:
                 rep.line(False, f"{name}: {label} (skipped: not reachable)")
                 continue
-            rep.line(good(remote(host, command)), f"{name}: {label}", hint)
+            rep.check(f"{name}: {label}", lambda: good(remote(host, command)), hint)
+        if reachable:
+            try:
+                text = remote(host, f"sudo -n cat {MODELS_DIR}/hold 2>/dev/null || true").stdout
+                hold = json.loads(text) if (text or "").strip() else None
+            except Exception:  # noqa: BLE001 - a malformed hold file is still a hold
+                hold = {"by": "?"}
+            if hold:
+                who = hold.get("by") if isinstance(hold, dict) else "?"
+                rep.line(False, f"{name}: held by {who} (site auto delivery paused)",
+                         f"when done testing: rosy_ml release-hold {name}", required=False)
 
     if cfg.get("hf_repo"):
         tok = cfg.get("hf_token_file")
         if tok:
-            rep.line(Path(tok).is_file(), f"HF token file {tok} for {cfg['hf_repo']}",
-                     "put a read-only HF token in that file (never inline in the config)")
+            rep.check(f"HF token file {tok} for {cfg['hf_repo']}", lambda: Path(tok).is_file(),
+                      "put a read-only HF token in that file (never inline in the config)")
         else:
             rep.line(False, f"no hf_token_file for {cfg['hf_repo']}",
                      "fine for a public repo; a private one needs hf_token_file",
                      required=False)
-        clips = _replay_clip_count(cfg)
-        rep.line(bool(clips), f"replay clips for intake ({clips or 0})",
-                 "copy data/teleop/learning/*.mp4 under replay_root (or the repo root); "
-                 "without clips every intake stops as a setup error")
-    rep.line(find_spec("onnxruntime") is not None, "local onnxruntime importable",
-             "needed for rosy_ml intake only: pip install onnxruntime in your venv",
-             required=False)
+        rep.check("replay clips for intake", lambda: _replay_clip_count(cfg),
+                  "copy data/teleop/learning/*.mp4 under replay_root (or the repo root); "
+                  "without clips every intake stops as a setup error")
+    rep.check("local onnxruntime importable", lambda: find_spec("onnxruntime") is not None,
+              "needed for rosy_ml intake only: pip install onnxruntime in your venv",
+              required=False)
     return 1 if rep.failed else 0
 
 

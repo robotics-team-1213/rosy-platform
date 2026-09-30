@@ -167,6 +167,8 @@ class Robot:
         ok, out = True, ""
         if cmd[0] == "ssh-keygen":
             ok = not self.broken.get("known_hosts")
+        elif "cat /var/lib/rosy/models/hold" in text:
+            out = self.broken.get("hold", "")
         elif "sudo -n stat" in text:
             out = self.broken.get("models", "root:rosy-camera 750") + "\n"
         elif "import onnxruntime" in text:
@@ -261,3 +263,38 @@ def test_doctor_watch_config(tmp_path, monkeypatch, capsys):
     assert rosy_ml.main(["doctor", "--watch-config", str(wc)], runner=r.runner,
                         connect=r.connect, find_spec=lambda n: object()) == 0
     assert "site:" in capsys.readouterr().out
+
+
+# --- review: recursive secret check, doctor robustness, holds ------------------------------
+
+def test_inline_secret_check_is_recursive(tmp_path):
+    p = tmp_path / "ml.yaml"
+    p.write_text(yaml.safe_dump({"operator": "a", "robots": {"a": "h"},
+                                 "ssh": {"identity": "/k", "known_hosts": "/kh",
+                                         "extra": [{"hf_token": "hf_x"}]}}))
+    with pytest.raises(ValueError, match="hf_token"):
+        rosy_ml.load_config(p)
+
+
+def test_doctor_turns_any_check_exception_into_a_cross(tmp_path, monkeypatch, capsys):
+    robot = Robot()
+
+    def flaky(cmd, **kw):
+        if "sudo -n true" in " ".join(cmd):
+            raise ValueError("weird")
+        return robot.runner(cmd, **kw)
+
+    _init(tmp_path, monkeypatch=monkeypatch)
+    monkeypatch.setattr(rosy_ml, "_replay_clip_count", lambda cfg: 1)
+    rc = rosy_ml.main(["doctor", "pinky-a"], runner=flaky, connect=robot.connect,
+                      find_spec=lambda n: object())
+    assert rc == 1
+    bad = [ln for ln in capsys.readouterr().out.splitlines() if ln.startswith("✗")]
+    assert len(bad) == 1 and "sudo" in bad[0] and "ValueError" in bad[0]
+
+
+def test_doctor_shows_a_hold_as_advisory(tmp_path, monkeypatch, capsys):
+    hold = json.dumps({"by": "ana", "action": "rollback", "revision": "r1"})
+    assert _doctor(tmp_path, monkeypatch, Robot(hold=hold)) == 0
+    out = capsys.readouterr().out
+    assert "! pinky-a: held by ana" in out and "rosy_ml release-hold pinky-a" in out
