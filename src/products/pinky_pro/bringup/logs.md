@@ -38,3 +38,11 @@
 - gate 변화: 없음
 - 결정: D-231
 - 교훈: 없음
+
+## 2026-09-30 · uncommitted · test(bringup): ADC 소유권 계약을 D-344 §12에 맞춰 갱신
+
+- 변경: D-344 §12(lane-departure guard)의 rosy-io 배선이 `enable_ir`(기본 false, IfCondition 게이트, line_follow 이중 시작 경고 포함)로 랜딩됐는데 계약 시험이 구버전 단순 금지(`'ir_adc_node' not in code`)였다. 조사 결론: 버스 안전은 D-192 flock이 이미 소유(시험 docstring 자체가 ir_adc_node를 합법 판독기로 명시), 금지의 실제 의도는 토픽 배치 규칙 — D-344가 그 예외를 명시적으로 처방했다. 시험을 계약대로 갱신: 기본 false 선언·게이트가 실행 뒤에 있음·이중 시작 경고 문구를 단언.
+- 증거: test_adc_ownership 3 passed; 변이 증명 — 조건을 다른 플래그로 바꾸면 적발, 기본값을 true로 바꾸면 적발 (2026-09-30 Windows).
+- gate 변화: 없음.
+- 결정: 없음.
+- 교훈: "위반"이 잡히면 먼저 어떤 결정이 그 행위를 승인했는지 ADR을 뒤져라 — 이번 경우 계약 시험 자체가 결정보다 오래돼 있었다.

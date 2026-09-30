@@ -55,7 +55,7 @@ KNOWN_CHAIN_BACK_EDGES = {
 }
 KNOWN_DIRECTION = {
     ("control", "imu_bno055"): "runtime/sensing -> drivers/imu_bno055; declared exec_depend. Legacy launches start the IMU driver; the long-term fix is bringup assembly, not a sensing launch",
-    ("overhead", "games"): "site overhead reuses the ROS-free four-point homography helper for camera calibration",
+    ("site_vision", "games"): "Site Vision reuses the ROS-free four-point homography helper for camera calibration",
     ("bringup", "control"): "products/bringup -> runtime/sensing: bringup_robot.launch.py starts control's ir_adc_node for the rosy-io graph (enable_ir, D-344 §12) — bringup assembling the robot graph is the direction the imu_bno055 row names",
 }
 
@@ -113,13 +113,6 @@ SIZE_VERDICTS = {
         "under the D-362 zero-allowance tier; re-judged 2026-09-30 at 1002 when the pilot branch added "
         "LineFollowStatus.clearance_m (D-344 §11, one field). ROS-free, host-testable (X5)",
     ),
-    "site/fleet/fleet/server/app.py": (
-        1556,
-        "split: the mission/dispatch route groups now carry their own stores and lifecycles (task_store, "
-        "mission modules) — the independent-boundary condition the 813-line accept was waiting for arrived "
-        "with the arbitration work; owner fleet, unscheduled; re-judged 2026-09-30 at 1556 in the "
-        "committed tree after the enrollment route groups joined (zero-allowance tier)",
-    ),
     "site/fleet/fleet/server/task_store.py": (
         1060,
         "accept: keep SQLite task, history, lease, reservation, and dispatch-claim transactions together; "
@@ -131,17 +124,6 @@ SIZE_VERDICTS = {
     "runtime/sensing/control/safety/node.py": (
         795,
         "accept: legacy comparison-graph publisher pinned by test_module_separation; no new work (X3)",
-    ),
-    # calib cluster: verdicts restored for the COMMITTED sizes (642 / 970) -
-    # the in-flight calibration_sequence extraction (uncommitted) carries the
-    # split; these entries guard origin until that lands.
-    "runtime/sensing/control/calib_node.py": (
-        642,
-        f"split: same calibration cluster as startup_calibration_node (C1); {CONTROL_SPLIT}",
-    ),
-    "runtime/sensing/control/startup_calibration_node.py": (
-        970,
-        f"split: extract the ROS-free calibration state machine (C1); {CONTROL_SPLIT}",
     ),
     "site/fleet/fleet/server/console.py": (
         1021,
@@ -203,21 +185,9 @@ SIZE_VERDICTS = {
         "with one owner (web_node). Splitting it into css/js partials would break that contract "
         "to shorten a dev-only file. Zero growth allowance applies (>1000)",
     ),
-    # hmi/dashboard/app.js + styles.css: verdicts are for the COMMITTED sizes
-    # (1338 / 1119). The in-flight P1 extraction (state-socket/telemetry/teleop
-    # out) shrinks them in an uncommitted tree; when that lands, the entries
-    # go with it. Recorded here so origin's committed state stays guarded.
-    "hmi/dashboard/app.js": (
-        1338,
-        "split: role-surface modules with no build step (D-23 — native ES modules or multiple script "
-        "tags only; D-7 React+Vite stays declined); aligns with the D-359 token layers; owner "
-        "dashboard — the P1 extraction is in flight in an uncommitted tree",
-    ),
-    "hmi/dashboard/styles.css": (
-        1119,
-        "split: grew past the 800-line web budget with the D-359 token layers and the P1 surface "
-        "work; the dashboard file-size queue owns the reduction; owner dashboard",
-    ),
+    # hmi/dashboard/app.js (1338 -> 745) and styles.css (1119 -> 492): the P1
+    # extraction landed — telemetry/teleop/state-socket modules and the
+    # console-detail.css tail split — so these entries left with it.
     "sim/gz_sim/scripts/lane_live_view.html": (
         856,
         "accept: same owner as the accepted lane_live_view.py — the pure logic already lives in "
@@ -257,6 +227,13 @@ SIZE_VERDICTS = {
         641,
         "accept: single-entry hardware probe CLI the commissioning runbook drives top-to-bottom — "
         "splitting probe sequence from reporting would sever one diagnostic narrative (X5)",
+    ),
+    "products/omx/adapter/omx_adapter/action_store.py": (
+        788,
+        "accept: one owner for the durable local Action and per-attempt ROS phase journal; "
+        "they share SQLite transactions, identity fences, and restart-to-UNKNOWN recovery. "
+        "ROS-free and host-testable; runner integration remains tracked in docs/plans/"
+        "2026-09-30-action-message-identity.md (X5)",
     ),
 }
 

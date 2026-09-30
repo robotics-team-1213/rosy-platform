@@ -3848,6 +3848,31 @@
 - 증거: image `sha256:b47034e436119cea97c2922a1b4af9bd6596975ac8acbb4cece3a19d2fe1e9f0`; `--network none`, 저장소 read-only bind mount, device grant 없음; 1 passed (2.53s). 이 검증은 vendor 시뮬레이터의 정책 owner/경쟁 요청/cancel 동작 재현이다.
 - gate 변화: ROS-SIM 재현만 확인. Fleet grant의 production driver 결선, 실제 arm/gripper profile, 물리 E-stop, DEVICE/FIELD 수용은 여전히 확인하지 않았다.
 
+## 2026-09-30 · uncommitted · docs(plan): identify PICK_PLACE coordinate resolution gap
+
+- 변경: D-369 Task 4 계획에 FleetActionGrant→ROS 좌표 변환의 선결 조건을 적고, 2026-09-26 검증 기록의 현재 probe 경로를 `deploy/robot/omx/`로 정정했다.
+- 근거: `ResolvedTargetEvidence`는 pixel bbox와 camera/optical-frame/calibration/transform revision을 전달하지만 workspace pose/joint target은 전달하지 않는다. 픽/플레이스 연결에는 승인된 camera-to-workcell pose resolver, arm/gripper phase 계약, 독립 goal/placement verifier가 필요하다.
+- 결정: revision ID에서 변환값을 추정하거나 pixel 좌표를 joint 값으로 쓰지 않는다. profile-specific ROS mapping은 해당 pose/phase 계약이 선택될 때까지 대기한다.
+- gate 변화: 없음. ROS-SIM 경로 증거와 물리/production profile 수용은 분리한다.
+
+## 2026-09-30 · uncommitted · docs(adr): D-374 앱 이름 규칙 — 폴더·패키지·식별자를 역할 이름 하나에서
+- 변경: D-374(Proposed)와 단계 계획 `docs/plans/2026-09-30-app-identity-rename-plan.md` 추가. 사용자 결정("모든 앱을 규칙대로, 식별자까지")으로 D-370 2항의 "식별자 그대로"를 대체한다. 역할 id = D-370 영어 이름 − `Rosy`(kebab), snake는 폴더·패키지·실행 파일, compact는 Android id. 새 이름: `ceiling-camera`(`src/site/ceiling_camera`, `io.github.livsbittt.rosy.ceilingcamera`), `site-vision`(`src/site/site_vision`), `site-console`(`src/site/site_console` 자산 패키지, Fleet 서비스 `fleet`은 유지), `robot-dashboard`(`src/hmi/robot_dashboard`), `pilot`(레지스트리 id만).
+- 증거: main `15a4302f` 읽기 전용 조사(계획 부록 A, 파일:줄 인용). 앱 폴더를 고치는 열린 브랜치 13개(부록 B). D-362 P0-1·P1이 조사 도중 main에 착지(`b67c9dfc`, `13803932`).
+- gate 변화: 없음(문서만).
+- 결정: mDNS 종류·TXT, `rosy-overhead/1`·`/overhead/v1/frames`, `/api/fleet/*`·`/api/vision/*`, `rosyov://`, 웹 경로·PWA 범위, 로봇 설정 키, 브라우저 저장소 키, compose 서비스·이미지·SAN은 never. `overhead` 실행 파일만 한 사이트 릴리스 동안 alias. 단계 1(카메라 앱+Vision)이 먼저, 대시보드·관제 화면은 D-362 착지·main 체크아웃 깨끗함 게이트 뒤.
+- 열린 질문: games 등 범위 밖 표면, 관제 화면 분리안 B vs 패키지 전체 개명 A, 폰 재페어링 수용, compose 이름.
+
+## 2026-09-30 · uncommitted · docs(adr): accept D-374 app identity rename
+- 변경: D-374 Status를 Accepted로 올리고 사용자 결정(2026-09-30)을 적었다. (1) 규칙·대응표를 제안대로 적용, (2) Fleet 관제 화면은 안 B — 화면 자산만 `site_console`로 떼고 서비스 패키지 `fleet` 유지, (3) 새 applicationId에 따른 폰 재설치·재페어링 1회 수용, (4) 경기 보드·제어 진단·시뮬 라이브 뷰는 지금 바꾸지 않음. 계획의 열린 질문 1–3을 닫고, ADR Log 행 상태를 고쳤다.
+- 증거: 문서만. 사용자 결정은 리드 세션 전달(2026-09-30).
+- gate 변화: 단계 1(카메라 앱+Site Vision)·단계 2(Pilot 레지스트리 id)를 시작할 수 있다. 단계 3·4·5는 계획의 D-362·릴리스 게이트 그대로.
+- 열린 질문: compose 서비스·이미지 이름(열린 질문 4, 권장: 바꾸지 않음).
+
+## 2026-09-30 · uncommitted · docs(plan): specify local OMX pick-and-place execution
+- 변경: D-369 제어권 경계를 지키는 OMX `PICK_PLACE` 구현 계획을 추가하고, 기존 Action/message 계획 및 OMX progress에서 연결했다.
+- 증거: 새 계획 및 기존 `docs/plans/2026-09-30-action-message-identity.md`와 `src/products/omx/adapter/progress.md`의 교차 링크. 계획에는 RGB-D 기반 pose 검증, 로컬 planning, phase별 ROS goal/취소/저널, Fleet 진행 투영을 순차 작업으로 둔다.
+- gate 변화: 없음. 모델은 후보/읽기 전용이고 Fleet은 Mission/grant/status를 소유한다. 첫 phase 의도는 ROS 제출 전에 기록하며 첫 ROS 응답의 부모 Action/phase 결과는 단일 SQLite 트랜잭션으로 기록한다. 응답 전 crash는 UNKNOWN/HOLD이며 재전송하지 않는다. MTC/Jazzy 적합성은 probe gate이며, profile 비활성 및 DEVICE/FIELD PARKED 상태를 유지한다.
+
 ## 2026-09-30 · uncommitted · docs(adr): D-344 보강 — path 앞 물체 정지, IR 교정 절차, 각속도 계단 §13
 
 - 변경: `docs/adr/D-344-pilot-assisted-autonomy.md` 에 2026-09-30 보강(§11 path 판정, §12 교정 도구·rosy-camera 덮어쓰기, §13 수동 한도 계단 각속도). 운영 절차 `docs/deployment/pinky-pro-ir-line-calibration-runbook.md` 신설(한국어).

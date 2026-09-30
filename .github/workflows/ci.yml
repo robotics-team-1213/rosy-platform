@@ -83,10 +83,10 @@ jobs:
       - name: Test (fleet formation, relay, session)
         run: python3 -m pytest src/site/fleet/test/ -v
 
-      # overhead 수신기도 ROS 를 import 하지 않는다(conftest 가 fleet·games·foundation 을
+      # Site Vision 수신기도 ROS 를 import 하지 않는다(conftest 가 fleet·games·foundation 을
       # sys.path 에 얹는다). games 와 test_preview.py 기본 이름이 겹치므로 따로 돈다.
-      - name: Test (overhead camera receiver)
-        run: python3 -m pytest src/site/overhead/test -q
+      - name: Test (Site Vision receiver)
+        run: python3 -m pytest src/site/site_vision/test -q
 
       # 멀티 인스턴스 런치는 로봇마다 포트·HOME·설정을 갈라야 한다. 그 계약은 런치
       # 파일을 실제로 실행해야 검증되므로 ROS 오버레이가 필요하다. ros_gz_sim share 가
