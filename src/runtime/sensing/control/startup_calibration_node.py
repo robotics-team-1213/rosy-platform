@@ -26,6 +26,7 @@ from std_msgs.msg import Bool, String, UInt16MultiArray, Float32MultiArray
 from tf2_ros import TransformListener
 
 from .calibration_sequence import CalibrationSequence
+from .calibration_camera import CalibrationCamera
 from .control.calibration import StationaryBaseline, wrap
 from .sensing.lidar import NOSE_YAW, is_robot_scan, sector_range
 from .sensing.lidar_mount import nose_from_quaternion
@@ -44,7 +45,8 @@ from .control.startup_diagnostics import StartupDiagnostics
 from .control.calibration_runtime import calibration_runtime, precision_scan_required
 
 
-class StartupCalibrationNode(Node, CalibrationSequence, CalibrationRotation, CalibrationAtomic, CalibrationRelocationAdapter):
+class StartupCalibrationNode(Node, CalibrationSequence, CalibrationRotation, CalibrationAtomic, CalibrationRelocationAdapter,
+                             CalibrationCamera):
     def __init__(self, parameter_overrides=None):
         super().__init__('startup_calibration_node', parameter_overrides=parameter_overrides or [])
         self.startup_diagnostics = StartupDiagnostics()
@@ -67,6 +69,10 @@ class StartupCalibrationNode(Node, CalibrationSequence, CalibrationRotation, Cal
         self.declare_parameter('robot_radius', .076)
         self.declare_parameter('rotation_footprint_xy', [], ParameterDescriptor(dynamic_typing=True))
         self.declare_parameter('result_path', str(Path.home() / '.local/state/control/calibration.json'))
+        # Base intrinsics for the stationary camera step (calibration_camera.py); '' refuses the step.
+        self.declare_parameter('camera_extrinsic_profile_path', '')
+        self.declare_parameter('calibration_store_root', '')  # '' = core_common default store root
+        self.camera_capture = self.camera_extrinsic = None
         latched = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL,
                              reliability=ReliabilityPolicy.RELIABLE)
         self.status_pub = self.create_publisher(String, 'calibration/status', latched)
@@ -263,6 +269,9 @@ class StartupCalibrationNode(Node, CalibrationSequence, CalibrationRotation, Cal
                 'reason': 'Waiting for fresh odometry' if valid and pose is None else 'Scan or transform unavailable',
                 'locked': self.wall_tracker.locked,
                 'odom_age_s': time.monotonic()-odom_rows[-1][0] if odom_rows else None}
+        if valid and getattr(self, 'camera_capture', None) is not None:
+            self.camera_capture_scan((np.asarray(msg.ranges, dtype=np.float32), msg.angle_min,
+                                      msg.angle_increment, msg.range_min, msg.range_max))
         self.add_range('lidar', precision, valid and math.isfinite(precision))
         # Braking still observes the original raw cone; the fitted wall only
         # supplies measurement evidence and cannot hide a closer obstacle.
@@ -335,6 +344,8 @@ class StartupCalibrationNode(Node, CalibrationSequence, CalibrationRotation, Cal
         mean, contrast = (float(pixels.mean()), float(pixels.std())) if pixels.size else (0, 0)
         self.add('camera', (mean, contrast),
                  valid and self.stamped(msg) and 5 <= mean <= 250 and contrast >= 2)
+        if valid and getattr(self, 'camera_capture', None) is not None and self.stamped(msg):
+            self.camera_capture_frame(pixels, msg.width, msg.height, msg.step)
 
     def read_tf(self):
         try:
@@ -389,6 +400,9 @@ class StartupCalibrationNode(Node, CalibrationSequence, CalibrationRotation, Cal
                 # withdraws it; existing parameters plus the speed cap is what remains.
                 self.reset(existing_settings=True, limited_sensors=True,
                            excluded_sensors=plan['excluded_sensors'])
+            return
+        if command == 'camera_extrinsic':
+            self.start_camera_extrinsic(time.monotonic(), self.fresh_odom())
             return
         if command == 'use_existing_settings':
             self.reset(existing_settings=True)
@@ -455,6 +469,8 @@ class StartupCalibrationNode(Node, CalibrationSequence, CalibrationRotation, Cal
         self.read_tf()
         # TF collection timestamps its own samples; evaluate freshness after it.
         now = time.monotonic()
+        if getattr(self, 'camera_capture', None) is not None:  # stationary camera step running
+            self.tick_camera_extrinsic(now, self.fresh_odom())
         if self.phase in ('validating_motion', 'failed', 'aborted'):
             # A recovered stream must not retain a paused/failed sample label.
             # Readiness and trial acceptance still use their independent gates.

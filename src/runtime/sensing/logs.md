@@ -687,3 +687,14 @@
 - 변경: `perception/lane_keep.py`(698 행, 예산 600)에서 바닥 흰색 마스크·조감도 선 맞춤(`floor_white_mask`·`extract_lines` 와 그 상수)을 `lane_keep_lines.py` 로 옮겼다. `LaneKeeper` 는 상태(쪽 추적·짝짓기·모서리·HOLD)만 남는다(541 행). 옛 이름은 lane_keep 에서 다시 내보내 호출·시험은 그대로다. control 크기 판정 36861 로 재판정.
 - 증거: `pytest src/runtime/sensing/test -k "lane or keep or observer"` 336 passed; 실물 세션 재생 keep 수치가 분리 전과 같다(on_line 0.149 / on_paint 0.052 / none 0.095 / jump 0.007).
 - gate 변화: 없음(동작 불변).
+
+## 2026-10-01 · 79b7681a · feat(sensing): 카메라 외부 파라미터 단계와 바퀴 오도메트리 맞춤 (D-47 부록)
+- 변경: 시동 보정에 정지 카메라 단계(`calibration/cmd` `camera_extrinsic`, `calibration_camera.py`)를 넣었다 — 움직이지 않고 LiDAR 벽 접지선·0.155 m 벽 윗선을 영상 밝기 경계에 맞춰 피치·롤(관측될 때만 높이)을 맞추고 `<result>.camera_candidate.json` 과 저장소 후보 레코드를 쓴다. 적용하지 않는다. ROS 없는 맞춤은 `sensing/perception/camera_extrinsic.py`, 바퀴 반지름·간격은 `sensing/odometry_fit.py`(구간 첫 스캔 기준 점-선 ICP, 오도메트리로 시드하지 않음). `line_observer_node` 의 NOMINAL 프로파일은 승인된 `camera_profile` 레코드가 있으면 그것을 쓰고 출처를 로그에 남긴다(`calibrated_values.py`). package.xml 에 core_common 의존 추가.
+- 증거: `test_camera_extrinsic.py`(합성 벽 장면: 피치·롤 복원, 한 시점으로는 높이가 안 갈린다는 것, 정지·이동 중단·시간 초과, 후보만 저장) · `test_odometry_fit.py`(ICP, 360° 피벗 풀림, 거울 오도메트리 무관, 장착 yaw 무관 직진 길이, 바퀴 LS) · `test_calibrated_values.py` 통과(2026-10-01 Windows). 실물 오프라인: D-379 트랙 세션에서 yaw 180/181.9 → 피치 11.2°, 롤 −1.5°, 높이 0.0575 m, 190 은 점수 1/3.
+- gate 변화: SOURCE. 장치 반영 없음.
+- 결정: D-47 부록 2026-10-01.
+
+## 2026-10-01 · 00cdb647 · fix(sensing): calibration_store_root 선언 (M4)
+- 변경: 시동 보정 노드가 카메라 단계가 읽는 `calibration_store_root` 를 선언한다(미선언이면 rclpy 가 단계 끝에서 예외).
+- 증거: test_camera_extrinsic.py 14 passed — 믹스인이 읽는 모든 파라미터가 노드 소스에 선언돼 있는지 AST 로 확인 (2026-10-01 Windows).
+- gate 변화: 없음.

@@ -190,6 +190,7 @@ class ControlSensorAdapter:
         self._executor = None
         self._closed = False
         self._calibration_snapshot = None
+        self._parameters: dict[str, Any] = {}
 
         if not self.config.enabled:
             return
@@ -251,10 +252,16 @@ class ControlSensorAdapter:
 
         self.node = node
         self.policy = policy
+        self._parameters = dict(parameters)
 
     @property
     def enabled(self) -> bool:
         return self.config.enabled
+
+    @property
+    def bound_parameters(self) -> dict[str, Any]:
+        """The measured/explicit parameters handed to the worker (e.g. lidar_yaw_offset); {} when off."""
+        return dict(self._parameters)
 
     @property
     def revision(self) -> str | None:

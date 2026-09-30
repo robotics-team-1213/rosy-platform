@@ -21,6 +21,7 @@ from sensor_msgs.msg import CompressedImage, Image
 from std_msgs.msg import String, UInt16MultiArray
 
 from . import executor_choice
+from .calibrated_values import calibrated
 from .sensing.perception.camera_ground import nominal_ground_plane, simulation_ground_plane
 from .sensing.perception.image_frame import image_msg_to_frame
 from .sensing.perception.lane import (
@@ -233,6 +234,10 @@ class LineObserverNode(Node):
                     f'nominal camera profile unreadable ({exc}); no NOMINAL ground',
                     throttle_duration_sec=5.0)
                 self._nominal_profile_cache = {}
+            # An operator-accepted camera_profile record wins over the file (D-47 addendum).
+            self._nominal_profile_cache, source = calibrated(
+                'camera_profile', self._nominal_profile_cache, static_source=path or 'no profile file')
+            self.get_logger().info(f'camera profile from {source}')
         return self._nominal_profile_cache
 
     def _camera_mode_uses_ground(self) -> bool:
