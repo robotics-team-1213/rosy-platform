@@ -169,7 +169,11 @@ private fun StatusPanel(
                     R.string.target_route_mdns,
                     route.sighting.addresses.joinToString { it.hostAddress.orEmpty() },
                 )
-                is SiteRoute.Manual -> stringResource(R.string.target_route_manual, route.address.hostAddress.orEmpty())
+                // An IP-only or unpinned record never browses, so it must not claim "자동 찾기로 못 찾음".
+                is SiteRoute.Manual -> stringResource(
+                    if (route.afterBrowse) R.string.target_route_manual else R.string.target_route_manual_only,
+                    route.address.hostAddress.orEmpty(),
+                )
                 else -> null
             }?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
         }

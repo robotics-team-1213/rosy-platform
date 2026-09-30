@@ -32,7 +32,8 @@ sealed interface SiteRoute {
 
     /**
      * Dial the pairing link's IP ("수동 주소"). [afterBrowse]: mDNS was searched for `tls_host` and showed
-     * nothing (so a failure here is also `not_discovered`); false for a link that knows only its IP.
+     * nothing (so a failure here is also `not_discovered`); false when no browse was made (an IP-only or
+     * unpinned link).
      */
     data class Manual(val address: InetAddress, val afterBrowse: Boolean = true) : SiteRoute
 

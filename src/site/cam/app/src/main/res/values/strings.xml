@@ -46,6 +46,7 @@
     <string name="problem_site_conflict">사이트 이름(%1$s)이 여러 주소에서 광고되어 자동으로 고르지 않습니다 — 현장 PC 관리자에게 알리세요.</string>
     <string name="target_route_mdns">주소: %1$s (자동 찾기로 찾음)</string>
     <string name="target_route_manual">주소: 수동 주소 %1$s (자동 찾기로 못 찾음)</string>
+    <string name="target_route_manual_only">주소: 수동 주소 %1$s (자동 찾기 쓰지 않음)</string>
     <string name="problem_unauthorized">토큰이 맞지 않습니다 — 현장 PC의 페어링 QR로 다시 연결하세요.</string>
     <string name="problem_replaced">다른 카메라가 같은 이름(%1$s)으로 연결해 이 연결을 멈췄습니다 — 다른 폰을 끄거나 연결 설정에서 이름을 바꾸세요.</string>
     <string name="problem_protocol_mismatch">앱과 수신기의 버전이 맞지 않아 연결을 멈췄습니다 — 둘을 같은 버전으로 맞추세요.</string>
@@ -95,7 +96,7 @@
     <string name="settings_host">현장 PC 주소</string>
     <string name="settings_port">포트</string>
     <string name="settings_manual_host">수동 주소: %1$s — 자동 찾기(mDNS)가 사이트를 못 찾을 때만 씁니다.</string>
-    <string name="settings_manual_only">수동 주소: %1$s — 사이트 이름을 아직 모릅니다. 카메라를 켜면 자동 찾기로 이름을 배웁니다. 이 주소로 붙으려면 사이트 인증서에 이 IP가 있어야 합니다.</string>
+    <string name="settings_manual_only">수동 주소: %1$s — 사이트 이름을 아직 모릅니다. 카메라를 켜면 자동 찾기로 이름을 찾고, 사이트 인증서가 그 이름을 담고 있을 때만 저장합니다. 이 주소로 붙으려면 사이트 인증서에 이 IP가 있어야 합니다.</string>
     <string name="settings_token">토큰</string>
     <string name="settings_source">카메라 이름 (source)</string>
     <string name="settings_tls">TLS 사용 (wss://, 현장 네트워크)</string>
