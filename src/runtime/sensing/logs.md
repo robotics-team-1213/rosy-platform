@@ -693,3 +693,8 @@
 - 증거: `test_camera_extrinsic.py`(합성 벽 장면: 피치·롤 복원, 한 시점으로는 높이가 안 갈린다는 것, 정지·이동 중단·시간 초과, 후보만 저장) · `test_odometry_fit.py`(ICP, 360° 피벗 풀림, 거울 오도메트리 무관, 장착 yaw 무관 직진 길이, 바퀴 LS) · `test_calibrated_values.py` 통과(2026-10-01 Windows). 실물 오프라인: D-379 트랙 세션에서 yaw 180/181.9 → 피치 11.2°, 롤 −1.5°, 높이 0.0575 m, 190 은 점수 1/3.
 - gate 변화: SOURCE. 장치 반영 없음.
 - 결정: D-47 부록 2026-10-01.
+
+## 2026-10-01 · 00cdb647 · fix(sensing): calibration_store_root 선언 (M4)
+- 변경: 시동 보정 노드가 카메라 단계가 읽는 `calibration_store_root` 를 선언한다(미선언이면 rclpy 가 단계 끝에서 예외).
+- 증거: test_camera_extrinsic.py 14 passed — 믹스인이 읽는 모든 파라미터가 노드 소스에 선언돼 있는지 AST 로 확인 (2026-10-01 Windows).
+- gate 변화: 없음.

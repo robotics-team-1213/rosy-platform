@@ -51,3 +51,8 @@
 - 변경: `wheel_calibration.calibrated_wheels()` — 승인된 `wheel_odometry` 레코드가 있으면 그 반지름·간격, 없으면 파라미터(0.027/0.0961, 씨앗). bringup 이 쓴 값과 레코드 id·sha 또는 출처를 로그에 남긴다. core_common 이 이미지에 없으면 파라미터 그대로.
 - 증거: `test_wheel_calibration.py` 2 passed, 기존 adapter/no-motion 시험 통과 (2026-10-01 Windows).
 - gate 변화: SOURCE. 승인 레코드가 생기기 전까지 장치 동작 불변.
+
+## 2026-10-01 · a103808b · fix(bringup): 비상식적 바퀴 레코드 거부 (H2)
+- 변경: 승인된 wheel_odometry 레코드가 0.027/0.0961 ±10 % 밖이거나 bool·문자열이면 파라미터를 유지하고 이유를 로그한다.
+- 증거: test_wheel_calibration.py 7 passed (2026-10-01 Windows).
+- gate 변화: 없음.

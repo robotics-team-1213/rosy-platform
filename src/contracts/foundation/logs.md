@@ -192,3 +192,8 @@
 - 변경: `core_common/calibration_store.py` — 실행마다 불변 레코드 하나(종류·로봇·세션·방법·값·구간·sha256), 상태는 append-only events.jsonl, 현재값 = 고정된 승인 레코드 또는 최신 승인 레코드, `resolve()` 는 없으면 정적 값과 로그용 출처 문장을 준다. 자동 승인 경로 없음.
 - 증거: `test_calibration_store.py` 9 passed — 이력 보존·덮어쓰기 거부, 후보는 현재값이 아님, 최신 승인 우선·superseded, 고정/해제 롤백, 최신 거부 롤백, 변조 레코드 배제, 정적 대체 (2026-10-01 Windows).
 - gate 변화: SOURCE.
+
+## 2026-10-01 · ddede2f8 · fix(core_common): 보정 저장소 리뷰 수정 (H3·M1·M2·L3)
+- 변경: events.jsonl 의 깨진 줄·형식 불량 이벤트는 기록하고 건너뛴다. load 는 dict values 와 문자열 created_at 을 요구한다. current/resolve 는 어떤 실패든 잡아 정적 값으로 물러난다. 현재값은 created_at 이 아니라 마지막 승인 이벤트 순서다. `check_values`(장착 yaw 150–210° 또는 손값 ±15°, 바퀴 ±10 %, 숫자만) 를 런타임·승인에 같이 쓴다. `merge_from` 은 없는 레코드 파일만 복사(같은 id 는 바이트 동일해야 함)하고 없는 이벤트만 덧붙인다.
+- 증거: test_calibration_store.py 25 passed(깨진 줄, 형식 불량 레코드, 재승인 순서, 저장소 예외 대체, check_values 12 경우) (2026-10-01 Windows).
+- gate 변화: SOURCE.

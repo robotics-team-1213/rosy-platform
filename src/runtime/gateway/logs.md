@@ -587,3 +587,8 @@
 - 변경: `core/lidar_mount.py` 가 시작 때 한 번 정한다 — 승인된 `lidar_mount` 레코드 > 센서 어댑터에 묶인 `lidar_yaw_offset`(D-47) > `line_follow.lidar_forward_deg` 손값. `node.py` 가 쓴 값과 출처를 로그에 남긴다. 어댑터에 `bound_parameters` 속성 추가.
 - 증거: `test_lidar_mount_source.py` 7 passed(순서, 후보 무시, 190° 섹터·경로), gateway 전체 1501 passed(event_catalogue 한 건은 점 표기 출처 문자열을 고쳐 통과), teardown 간헐 실패는 기존과 같다 (2026-10-01 Windows).
 - gate 변화: SOURCE. 기본 설정에서는 여전히 손값(저장소·어댑터 비어 있음).
+
+## 2026-10-01 · d20e976e · fix(core): 승인 장착 레코드 검증, 손값이 어댑터 바인딩보다 우선 (H1·M3)
+- 변경: 승인된 lidar_mount 레코드는 check_values 를 통과할 때만 쓴다(아니면 이유를 남기고 넘어감, KeyError/TypeError/ValueError 포함). 측정 레코드가 승인되기 전에는 손값이 어댑터의 lidar_yaw_offset(현재 손으로 맞춘 190°)보다 우선하고, 3° 넘게 다르면 경고로 로그한다.
+- 증거: test_lidar_mount_source.py 12 passed — 실제로 켠 ControlSensorAdapter 로도 손값이 이긴다 (2026-10-01 Windows).
+- gate 변화: 없음(기본 설정은 전과 같이 손값).

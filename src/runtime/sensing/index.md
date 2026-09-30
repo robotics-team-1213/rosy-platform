@@ -63,8 +63,8 @@
 
 ## 최근 기록
 
+- 2026-10-01 · 00cdb647 · fix(sensing): calibration_store_root 선언 (M4)
 - 2026-10-01 · 79b7681a · feat(sensing): 카메라 외부 파라미터 단계와 바퀴 오도메트리 맞춤 (D-47 부록)
 - 2026-10-01 · uncommitted · refactor(control): keep 앞단을 lane_keep_lines.py 로 분리(파일 예산)
 - 2026-09-30 · uncommitted · feat(recording): 녹화기가 LiDAR `scan` 도 기록한다(D-379)
 - 2026-09-30 · uncommitted · fix(control): keep 2차 — 모서리 모드 분기 fail-closed, 라이브 재생, 끊김 뒤 초기화(D-364 addendum 2)
-- 2026-09-30 · uncommitted · fix(control): keep v2 — 경계 추적과 벽 밑 테이프(D-364 addendum)
