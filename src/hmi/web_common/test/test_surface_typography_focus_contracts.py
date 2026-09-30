@@ -81,6 +81,29 @@ def test_letter_spacing_is_a_token_or_zero():
     assert not violations, "자간은 토큰 또는 0이어야 합니다:\n" + "\n".join(violations)
 
 
+def test_letter_spacing_in_markup_and_scripts_is_a_token_or_zero():
+    """위 판정은 .css만 읽는다. HTML `<style>`·style 속성과 JS(`style.letterSpacing =`,
+    `setProperty("letter-spacing", …)`, 템플릿 문자열 안 CSS)도 같은 규칙을 받는다."""
+    forms = (
+        re.compile(r"letter-spacing\s*:\s*([^;}\"'`]+)"),
+        re.compile(r"letterSpacing\s*=\s*[\"'`]([^\"'`]*)"),
+        re.compile(r"setProperty\(\s*[\"']letter-spacing[\"']\s*,\s*[\"'`]([^\"'`]*)"),
+    )
+    allowed = re.compile(r"\s*(?:0|var\(--track-(?:label|wide|state)\))\s*(?:!important)?\s*")
+    violations = []
+    for surface in registry.for_contract(ROOT, "typography_focus"):
+        pages = (surface,) if surface.is_file() else sorted(surface.rglob("*"))
+        for path in pages:
+            if path.suffix not in {".html", ".js"} or "test" in path.relative_to(surface).parts:
+                continue
+            text = re.sub(r"/\*.*?\*/|<!--.*?-->", "", path.read_text(encoding="utf-8"), flags=re.DOTALL)
+            violations.extend(
+                f"{path.relative_to(ROOT)}: {value.strip()}"
+                for form in forms for value in form.findall(text) if not allowed.fullmatch(value)
+            )
+    assert not violations, "자간은 토큰 또는 0이어야 합니다:\n" + "\n".join(violations)
+
+
 def test_dimming_uses_the_disabled_token_not_an_opacity_literal():
     """D-359 §5.5 — 흐림은 --disabled-opacity 또는 --ink-quiet 색이다. 임의 불투명도를 쓰지 않는다."""
     literal = re.compile(r"(?<![-\w])opacity\s*:(?!\s*var\()\s*([^;}]+)")

@@ -20,7 +20,11 @@
 # 세 단 — compact (width < 30rem), medium (30rem <= width < 64rem), wide (width >= 64rem) —
 # 과 §6.5 높이 조건 (height >= 40rem)/(height < 40rem)만 쓴다. 그 밖의 값은 여기에
 # {value: 정수px|정수rem, reason: 한 줄}로 적는다. 세 단 값·쓰이지 않는 값은 적지 않는다.
+# container_breakpoints는 §6.3 칸 질의(@container)의 같은 형식 허용 목록이다 — 세 단 경계 밖의 칸 폭만 적는다.
 # 대조 시험은 src/hmi/web_common/test/test_responsive_tiers.py다.
+# raw_colours는 D-359 §7.2 원시 색 금지 스캔(test_ui_token_contracts.py)의 예외다. [dark] 고정 웹
+# 표면만 가진다. {file: 표면 폴더 상대 파일, block: 최상위 선택자(없으면 파일 전체), reason: 한 줄}.
+# 가리는 원시 색이 없는 항목은 적지 않는다. 테마를 따르는 표면의 색은 tokens.css에서만 온다.
 surfaces:
   - id: robot-dashboard
     path: src/hmi/dashboard
@@ -59,6 +63,10 @@ surfaces:
     audience: 게임 호스트 노트북 (D-153 §7 — /board)
     grammar: focal
     contracts: [shared_controls, typography_focus, dialog]
+    raw_colours:
+      - file: styles.css
+        block: ":root"
+        reason: 경기장 녹색이 곧 바탕인 고정 표면(D-359 §3.3)의 경기장 팔레트 한 블록 — 캔버스도 이 블록을 읽는다
     baseline: docs/validation/uiux-surfaces-2026-09-26/captures/games-play-1280x800.png
 
   - id: control-diagnostic
@@ -77,6 +85,9 @@ surfaces:
         reason: PARKED(D-266) 한 파일 진단 표면(D-150)의 원래 배치 값 — 해제 회차에서 세 단으로 옮긴다
       - value: 900px
         reason: PARKED(D-266) 한 파일 진단 표면(D-150)의 원래 배치 값 — 해제 회차에서 세 단으로 옮긴다
+    raw_colours:
+      - file: diagnostic.html
+        reason: PARKED(D-266) 한 파일 진단 표면(D-150) — 자기 <style> 팔레트와 캔버스 색을 품는다. 해제 회차에서 tokens.css로 옮긴다
     contract_reason: >
       타이포·확인 계약은 이 표면에 도입된 적이 없다 — D-150이 한 파일 고정으로 두고
       PARKED(D-266)라 새로 적용할 회차가 없었다. 두 계약을 받게 되는 날 이 문장을 지운다.
@@ -92,6 +103,9 @@ surfaces:
     audience: 라이브러리 — 사람이 여는 화면이 아니다
     grammar: spatial
     contracts: [typography_focus]
+    container_breakpoints:
+      - value: 22rem
+        reason: 공용 부품(ui-form·ui-readout·ui-actions)이 한 열로 접히는 칸 폭 — 폰 한 열(320px 거터 안쪽)과 1366px 콘솔의 좁은 조작 열(약 23–25rem)을 가른다(D-359 §6.3)
     contract_reason: >
       tokens.css·components.css·ui.js가 계약의 원본이라 소비자 재도색·복제 검사의 대상이 아니다.
       test_shared_controls는 COMMON 파일을 직접 읽으므로 이 폴더를 목록에 넣지 않는다.
@@ -111,6 +125,9 @@ surfaces:
         reason: 개발 도구(제품 표면 아님, contracts 없음) — 두 격자를 한 열로 접는 뷰어 고유 폭
       - value: 640px
         reason: 개발 도구(제품 표면 아님, contracts 없음) — 머리 줄을 접는 뷰어 고유 폭
+    raw_colours:
+      - file: lane_live_view.html
+        reason: 개발 도구(제품 표면 아님, contracts 없음) — 뷰어 고유 팔레트를 한 파일에 품는다
     contract_reason: >
       제품 셸·토큰·확인 문법의 대상이 아니다. 라인 예산과 판정은
       test_web_budgets의 D-262 VERDICTS가 맡는다.

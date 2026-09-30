@@ -34,7 +34,7 @@ REPO = Path(__file__).resolve().parents[4]
 
 _GRAMMARS_DECL = re.compile(r"GRAMMARS\s*=\s*\[([^\]]*)\]")
 _ITEM = re.compile(r"['\"]([^'\"]+)['\"]")
-_SCOPES = ("path", "value", "reason", "baseline", "shape", "port", "theme", "breakpoint")
+_SCOPES = ("path", "value", "reason", "baseline", "shape", "port", "theme", "breakpoint", "colour")
 
 #: D-359 §2·§3 — 표면이 따를 수 있는 테마. tokens.css의 테마 블록과 같은 이름이다.
 THEMES = ("dark", "light")
@@ -56,6 +56,7 @@ FRAME_HEIGHT = ("(height >= 40rem)", "(height < 40rem)")
 TIER_VALUES = ("30rem", "64rem", "40rem")
 _BREAKPOINT_VALUE = re.compile(r"^[1-9][0-9]*(?:px|rem)$")
 _MEDIA_RULE = re.compile(r"@media\b([^{;]*)\{")
+_CONTAINER_RULE = re.compile(r"@container\b([^{;]*)\{")
 _STYLE_BLOCK = re.compile(r"<style\b[^>]*>(.*?)</style>", re.S | re.I)
 _CSS_COMMENT = re.compile(r"/\*.*?\*/", re.S)
 _CONDITION = re.compile(r"\([^()]*\)")
@@ -206,36 +207,40 @@ def _style_sources(base: Path, path: str) -> list[tuple[Path, str]]:
     return found
 
 
-def media_conditions(root=None, row: dict | None = None) -> list[tuple[str, int, str]]:
-    """표면의 모든 `@media` 크기 조건 — (파일, 줄, 정규화한 괄호 조건)."""
-    base = REPO if root is None else Path(root)
+def _size_conditions(base: Path, row: dict | None, rule: re.Pattern) -> list[tuple[str, int, str]]:
     path = (row or {}).get("path")
     if not isinstance(path, str):
         return []
     out: list[tuple[str, int, str]] = []
     for page, css in _style_sources(base, path):
         here = page.relative_to(base).as_posix()
-        for rule in _MEDIA_RULE.finditer(css):
-            line = css.count("\n", 0, rule.start()) + 1
-            for condition in _CONDITION.findall(rule.group(1)):
+        for match in rule.finditer(css):
+            line = css.count("\n", 0, match.start()) + 1
+            for condition in _CONDITION.findall(match.group(1)):
                 normal = "(" + " ".join(condition[1:-1].split()) + ")"
                 if _SIZE_FEATURE.search(normal):
                     out.append((here, line, normal))
     return out
 
 
-def breakpoint_problems(root=None, row: dict | None = None) -> list[str]:
-    """D-359 §6.1·§6.2 — `@media` 크기 조건은 세 단(또는 §6.5 높이)이거나 표면 허용 목록 값이다."""
-    base = REPO if root is None else Path(root)
-    listed = {entry.get("value") for entry in (row or {}).get("breakpoints") or [] if isinstance(entry, dict)}
-    label = (row or {}).get("id")
+def media_conditions(root=None, row: dict | None = None) -> list[tuple[str, int, str]]:
+    """표면의 모든 `@media` 크기 조건 — (파일, 줄, 정규화한 괄호 조건)."""
+    return _size_conditions(REPO if root is None else Path(root), row, _MEDIA_RULE)
+
+
+def container_conditions(root=None, row: dict | None = None) -> list[tuple[str, int, str]]:
+    """표면의 모든 `@container` 크기 조건(§6.3 칸 질의) — (파일, 줄, 정규화한 괄호 조건)."""
+    return _size_conditions(REPO if root is None else Path(root), row, _CONTAINER_RULE)
+
+
+def _size_problems(conditions, listed: set, where_label: str, allowed: tuple, field: str) -> list[str]:
     found: list[str] = []
-    for here, line, condition in media_conditions(base, row):
-        where = f"breakpoint: {label} {here}:{line} {condition}"
+    for here, line, condition in conditions:
+        where = f"breakpoint: {where_label} {here}:{line} {condition}"
         if _LEGACY_FEATURE.search(condition):
             found.append(f"{where} — min-/max- 문법이다. 범위 문법(width < …)을 쓴다")
             continue
-        if condition in TIERS or condition in TIER_UNIONS or condition in FRAME_HEIGHT:
+        if condition in allowed:
             continue
         values = ["".join(value) for value in _LENGTH.findall(condition)]
         if not values:
@@ -244,38 +249,198 @@ def breakpoint_problems(root=None, row: dict | None = None) -> list[str]:
             if "." in value:
                 found.append(f"{where} — {value}는 소수 보정값이다(.01 금지)")
             elif value not in listed:
-                found.append(f"{where} — {value}가 세 단도 아니고 surfaces.yaml breakpoints에도 없다")
+                found.append(f"{where} — {value}가 세 단도 아니고 surfaces.yaml {field}에도 없다")
     return found
 
 
+def _listed(row: dict | None, field: str) -> set:
+    return {entry.get("value") for entry in (row or {}).get(field) or [] if isinstance(entry, dict)}
+
+
+def breakpoint_problems(root=None, row: dict | None = None) -> list[str]:
+    """D-359 §6.1·§6.2 — `@media` 크기 조건은 세 단(또는 §6.5 높이)이거나 표면 허용 목록 값이다."""
+    base = REPO if root is None else Path(root)
+    return _size_problems(media_conditions(base, row), _listed(row, "breakpoints"), (row or {}).get("id"),
+                          TIERS + TIER_UNIONS + FRAME_HEIGHT, "breakpoints")
+
+
+def container_problems(root=None, row: dict | None = None) -> list[str]:
+    """D-359 §6.3 — `@container` 크기 조건은 세 단 경계이거나 표면 `container_breakpoints` 값이다."""
+    base = REPO if root is None else Path(root)
+    return _size_problems(container_conditions(base, row), _listed(row, "container_breakpoints"),
+                          (row or {}).get("id"), TIERS + TIER_UNIONS, "container_breakpoints")
+
+
 def _breakpoint_field_problems(base: Path, row: dict, label: str, medium) -> list[str]:
-    """`breakpoints` 필드 모양 — 값·이유, 세 단 값의 중복 등재 금지, 쓰이지 않는 값 금지."""
-    entries = row.get("breakpoints")
-    if entries is None:
-        return []
-    if medium != "web":
-        return [f"breakpoint: {label}는 웹 표면이 아닌데 breakpoints가 있다"]
-    if not isinstance(entries, list) or not entries:
-        return [f"breakpoint: {label} breakpoints가 비어 있지 않은 목록이 아니다"]
+    """`breakpoints`·`container_breakpoints` 필드 모양 — 값·이유, 세 단 값의 중복 등재 금지, 쓰이지 않는 값 금지."""
     found: list[str] = []
-    used = {"".join(value) for _, _, condition in media_conditions(base, row)
-            for value in _LENGTH.findall(condition)}
-    seen: set[str] = set()
-    for entry in entries:
-        value = entry.get("value") if isinstance(entry, dict) else None
-        reason = entry.get("reason") if isinstance(entry, dict) else None
-        if not isinstance(value, str) or not _BREAKPOINT_VALUE.match(value):
-            found.append(f"breakpoint: {label} breakpoints 값이 정수 px/rem이 아니다: {value!r}")
+    for field, conditions, at in (("breakpoints", media_conditions, "@media"),
+                                  ("container_breakpoints", container_conditions, "@container")):
+        entries = row.get(field)
+        if entries is None:
             continue
-        if value in seen:
-            found.append(f"breakpoint: {label} breakpoints에 {value}가 두 번 있다")
-        seen.add(value)
-        if value in TIER_VALUES:
-            found.append(f"breakpoint: {label} {value}는 세 단 값이라 등재하지 않는다")
+        tag = "" if field == "breakpoints" else f"{field} "
+        if medium != "web":
+            found.append(f"breakpoint: {label}는 웹 표면이 아닌데 {field}가 있다")
+            continue
+        if not isinstance(entries, list) or not entries:
+            found.append(f"breakpoint: {label} {field}가 비어 있지 않은 목록이 아니다")
+            continue
+        used = {"".join(value) for _, _, condition in conditions(base, row)
+                for value in _LENGTH.findall(condition)}
+        seen: set[str] = set()
+        for entry in entries:
+            value = entry.get("value") if isinstance(entry, dict) else None
+            reason = entry.get("reason") if isinstance(entry, dict) else None
+            if not isinstance(value, str) or not _BREAKPOINT_VALUE.match(value):
+                found.append(f"breakpoint: {label} {field} 값이 정수 px/rem이 아니다: {value!r}")
+                continue
+            if value in seen:
+                found.append(f"breakpoint: {label} {field}에 {value}가 두 번 있다")
+            seen.add(value)
+            if value in TIER_VALUES:
+                found.append(f"breakpoint: {label} {tag}{value}는 세 단 값이라 등재하지 않는다")
+            if not isinstance(reason, str) or not reason.strip():
+                found.append(f"breakpoint: {label} {tag}{value}에 reason이 없다")
+            if value not in used:
+                found.append(f"breakpoint: {label} {tag}{value}를 쓰는 {at}가 없다 — 목록에서 지운다")
+    return found
+
+
+#: D-359 §7.2 — 원시 색. hex와 함수형 색 전부(`color-mix(`와 `var(`는 아니다).
+RAW_COLOUR = re.compile(
+    r"#[0-9a-fA-F]{3,8}\b"
+    r"|\b(?:rgba?|hsla?|hwb|oklch|oklab|lab|lch|color)\(")
+_COLOUR_SUFFIXES = (".css", ".js", ".html")
+_HTML_COMMENT = re.compile(r"<!--.*?-->", re.S)
+_JS_LINE_COMMENT = re.compile(r"(?:(?<=^)|(?<=[\s;{}(),]))//[^\n]*", re.M)
+_THEME_COLOUR_VALUE = re.compile(r'(<meta\s+name="theme-color"\s+content=")([^"]*)(")', re.I)
+_TOP_RULE = re.compile(r"([^{}]+)\{([^{}]*)\}")
+#: 라이브러리 예외 — 저장소 상대 파일 → 그대로 지울 조각. 각 조각의 이유:
+#: ui.js `rgbaText`는 RosyPalette가 풀어 낸 [r,g,b,a] 바이트를 캔버스 fillStyle 문자열로
+#: 옮기는 형식기다. 값은 tokens.css에서 오고 이 글자에는 색 리터럴이 없다.
+LIBRARY_COLOUR_FORMATS = {
+    "src/hmi/web_common/ui.js": ("rgba(${r}, ${g}, ${b}, ${a})",),
+}
+
+
+def _blank(match: re.Match) -> str:
+    return re.sub(r"[^\n]", " ", match.group(0))
+
+
+def colour_sources(root=None, row: dict | None = None) -> list[tuple[Path, str]]:
+    """표면의 CSS·JS·HTML(시험 폴더 제외) — 주석과 정적 theme-color 값을 공백으로 지운 본문.
+
+    줄 번호는 지킨다. 정적 theme-color는 `_theme_problems`(§7.3)가 dark `--ground`와 대조한다.
+    """
+    base = REPO if root is None else Path(root)
+    path = (row or {}).get("path")
+    if not isinstance(path, str):
+        return []
+    out: list[tuple[Path, str]] = []
+    for suffix in _COLOUR_SUFFIXES:
+        for page in _pages(base, path, suffix):
+            if "test" in page.relative_to(base).parts:
+                continue
+            text = page.read_text(encoding="utf-8")
+            if suffix == ".html":
+                text = _HTML_COMMENT.sub(_blank, text)
+                text = _THEME_COLOUR_VALUE.sub(
+                    lambda m: m.group(1) + " " * len(m.group(2)) + m.group(3), text)
+            text = _CSS_COMMENT.sub(_blank, text)
+            if suffix != ".css":
+                text = _JS_LINE_COMMENT.sub(_blank, text)
+            for snippet in LIBRARY_COLOUR_FORMATS.get(page.relative_to(base).as_posix(), ()):
+                text = text.replace(snippet, " " * len(snippet))
+            out.append((page, text))
+    return out
+
+
+def _colour_folder(base: Path, path: str) -> Path:
+    target = base / path
+    return target.parent if target.is_file() else target
+
+
+def _raw_colour_entries(base: Path, row: dict, label: str) -> tuple[list[str], list[dict]]:
+    """`raw_colours` 필드 — (문제, 쓸 수 있는 항목). 이유·파일·블록이 맞는 항목만 가린다."""
+    entries = row.get("raw_colours")
+    if entries is None:
+        return [], []
+    if row.get("medium") != "web" or row.get("themes") != ["dark"]:
+        return [f"colour: {label} raw_colours는 [dark] 고정 웹 표면만 가진다(D-359 §7.2)"], []
+    if not isinstance(entries, list) or not entries:
+        return [f"colour: {label} raw_colours가 비어 있지 않은 목록이 아니다"], []
+    path = row.get("path")
+    if not isinstance(path, str):
+        return [], []
+    folder = _colour_folder(base, path)
+    sources = {page.relative_to(folder).as_posix(): text for page, text in colour_sources(base, row)}
+    found: list[str] = []
+    usable: list[dict] = []
+    for entry in entries:
+        name = entry.get("file") if isinstance(entry, dict) else None
+        block = entry.get("block") if isinstance(entry, dict) else None
+        reason = entry.get("reason") if isinstance(entry, dict) else None
+        if not isinstance(name, str) or name not in sources:
+            found.append(f"colour: {label} raw_colours {name}가 표면 파일이 아니다")
+            continue
+        if block is not None and block not in [sel.strip() for sel, _ in _TOP_RULE.findall(sources[name])]:
+            found.append(f"colour: {label} raw_colours {name}에 {block} 블록이 없다")
+            continue
         if not isinstance(reason, str) or not reason.strip():
-            found.append(f"breakpoint: {label} {value}에 reason이 없다")
-        if value not in used:
-            found.append(f"breakpoint: {label} {value}를 쓰는 @media가 없다 — 목록에서 지운다")
+            found.append(f"colour: {label} raw_colours {name}에 reason이 없다")
+            continue
+        usable.append({"file": name, "block": block})
+    return found, usable
+
+
+def _colour_hits(base: Path, row: dict, usable: list[dict]) -> tuple[list[str], set[int]]:
+    """가려지지 않은 원시 색 줄과, 무언가를 가린 항목 번호."""
+    label = row.get("id")
+    folder = _colour_folder(base, row["path"])
+    tokens = (base / TOKENS).resolve()
+    hits: list[str] = []
+    used: set[int] = set()
+    for page, text in colour_sources(base, row):
+        name = page.relative_to(folder).as_posix()
+        spans: list[tuple[int, int, int | None]] = []
+        if page.resolve() == tokens:
+            # 테마 팔레트 블록은 색의 원본이다(§1.1). 파생 `:root`는 여기서도 본다.
+            spans += [(m.start(2), m.end(2), None) for m in _TOP_RULE.finditer(text)
+                      if "[data-theme=" in m.group(1)]
+        for index, entry in enumerate(usable):
+            if entry["file"] != name:
+                continue
+            if entry["block"] is None:
+                spans.append((0, len(text), index))
+            else:
+                spans += [(m.start(2), m.end(2), index) for m in _TOP_RULE.finditer(text)
+                          if m.group(1).strip() == entry["block"]]
+        for match in RAW_COLOUR.finditer(text):
+            cover = [owner for start, end, owner in spans if start <= match.start() < end]
+            if cover:
+                used.update(owner for owner in cover if owner is not None)
+                continue
+            line = text.count("\n", 0, match.start()) + 1
+            hits.append(f"colour: {label} {page.relative_to(base).as_posix()}:{line} {match.group(0)}")
+    return hits, used
+
+
+def raw_colour_problems(root=None, row: dict | None = None) -> list[str]:
+    """D-359 §7.2 — 표면의 CSS·JS·HTML에 가려지지 않은 원시 색."""
+    base = REPO if root is None else Path(root)
+    if not isinstance((row or {}).get("path"), str):
+        return []
+    _, usable = _raw_colour_entries(base, row, row.get("id"))
+    return _colour_hits(base, row, usable)[0]
+
+
+def _raw_colour_field_problems(base: Path, row: dict, label: str) -> list[str]:
+    found, usable = _raw_colour_entries(base, row, label)
+    if usable:
+        _, used = _colour_hits(base, row, usable)
+        found += [f"colour: {label} raw_colours {entry['file']}가 가리는 원시 색이 없다 — 목록에서 지운다"
+                  for index, entry in enumerate(usable) if index not in used]
     return found
 
 
@@ -353,6 +518,7 @@ def problems(root=None) -> list[str]:
 
         found.extend(_theme_problems(base, row, label, medium))
         found.extend(_breakpoint_field_problems(base, row, label, medium))
+        found.extend(_raw_colour_field_problems(base, row, label))
 
         grammar = row.get("grammar")
         if grammar is not None and grammar not in known_grammars:

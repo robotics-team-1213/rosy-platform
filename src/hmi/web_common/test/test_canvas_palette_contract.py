@@ -13,6 +13,8 @@ from pathlib import Path
 
 import pytest
 
+import surface_registry as registry
+
 SRC = Path(__file__).resolve().parents[3]
 COMMON = SRC / "hmi" / "web_common"
 DASHBOARD = SRC / "hmi" / "dashboard"
@@ -80,3 +82,34 @@ def test_fleet_terrain_and_legend_use_the_raster_tokens():
         assert f'"--raster-{kind}"' in view
         assert re.search(rf"\.sw\.{kind} \{{ background: var\(--raster-{kind}\); \}}", styles)
         assert f'class="sw {kind}"' in html
+
+
+#: 캔버스를 그리지만 위 판정을 받지 않는 파일 — 저장소 상대 경로 → 이유.
+CANVAS_EXEMPT = {
+    "src/hmi/web_common/ui.js": "RosyPalette 자신 — 1×1 탐침 캔버스로 토큰 색을 되읽는 라이브러리이고 canvasFont가 12px 바닥을 소유한다",
+    "src/runtime/sensing/web/diagnostic.html": "PARKED(D-266) 한 파일 진단 표면 — surfaces.yaml raw_colours 예외와 같은 해제 회차에 옮긴다",
+}
+DRAWS = re.compile(r"""getContext\(\s*["']2d["']|\.font\s*=""")
+
+
+def test_every_canvas_script_on_a_web_surface_is_under_the_contract():
+    """§7.6 — 캔버스 목록은 손으로 적은 것이라, 새 캔버스 파일이 조용히 판정 밖에 설 수 있다.
+    모든 웹 표면(레지스트리)의 JS·HTML에서 2D 컨텍스트나 `.font =`를 쓰는 파일은 CANVAS_FILES
+    또는 이유 있는 CANVAS_EXEMPT에 있어야 한다."""
+    listed = {_ids(path) for path in CANVAS_FILES}
+    drawing = []
+    for row in registry.load(registry.REPO):
+        if row.get("medium") != "web":
+            continue
+        for suffix in (".js", ".html"):
+            for page in registry._pages(registry.REPO, row["path"], suffix):
+                here = page.relative_to(registry.REPO).as_posix()
+                if "test" in page.relative_to(registry.REPO).parts:
+                    continue
+                if DRAWS.search(page.read_text(encoding="utf-8")):
+                    drawing.append(here)
+    unlisted = [here for here in drawing
+                if here.removeprefix("src/") not in listed and here not in CANVAS_EXEMPT]
+    stale = [here for here in CANVAS_EXEMPT if here not in drawing]
+    assert unlisted == [], f"캔버스 판정 밖의 그리는 파일: {unlisted}"
+    assert stale == [], f"더 그리지 않는 예외는 지운다: {stale}"

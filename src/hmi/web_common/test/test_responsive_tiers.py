@@ -95,6 +95,60 @@ def test_a_breakpoint_drift_is_caught(tmp_path):
     assert "(native)는 웹 표면이 아닌데 breakpoints가 있다" in field
 
 
+def test_every_container_query_uses_a_tier_or_a_listed_value():
+    """§6.3 — 칸 질의(`@container`) 값도 조용히 흐르지 않는다. 세 단 값(30rem·64rem)이거나
+    그 표면 `container_breakpoints`에 이유와 함께 적힌 값이다(공용 부품의 22rem은 web-common)."""
+    found = [line for row in _web_rows() for line in registry.container_problems(REPO, row)]
+    assert found == [], "\n".join(found)
+
+
+def test_the_container_scan_reads_the_shared_parts_and_fleet():
+    seen = {row["id"]: registry.container_conditions(REPO, row) for row in _web_rows()}
+    assert ("src/hmi/web_common/components.css", "(width < 22rem)") in {
+        (here, condition) for here, _, condition in seen["web-common"]}
+    assert seen["fleet-console"], "Fleet 대형 폼의 @container를 읽지 못했다"
+
+
+def test_a_container_drift_is_caught(tmp_path):
+    """목록에 없는 칸 값·min-/max- 문법·소수 보정은 빨갛다. 세 단 값·등록 값은 아니다.
+    등록 값의 이유 누락·세 단 값 등재·쓰이지 않는 값도 필드 검사가 잡는다."""
+    common = tmp_path / "src" / "hmi" / "web_common"
+    common.mkdir(parents=True)
+    (common / "ui.js").write_text("const GRAMMARS = ['spatial'];", encoding="utf-8")
+    (common / "tokens.css").write_text(':root, [data-theme="dark"] { --ground: #101214; }\n', encoding="utf-8")
+    (common / "components.css").write_text(
+        "@container (width < 22rem) { a { gap: 0; } }\n"
+        "@container (width >= 30rem) { a { gap: 0; } }\n"
+        "@container (width < 25rem) { a { gap: 0; } }\n"
+        "@container slot (max-width: 40rem) { a { gap: 0; } }\n"
+        "@container (width < 22.01rem) { a { gap: 0; } }\n"
+        "@container (26rem <= width) { a { gap: 0; } }\n"
+        "/* @container (width < 77rem) */\n",
+        encoding="utf-8")
+    (tmp_path / registry.REGISTRY).write_text(
+        "surfaces:\n"
+        "  - id: common\n    path: src/hmi/web_common\n    themes: [dark]\n    surface: robot\n"
+        "    medium: web\n    audience: x\n    contracts: []\n    contract_reason: x\n    baseline_reason: x\n"
+        "    container_breakpoints:\n"
+        "      - {value: 22rem, reason: 폰 한 열과 좁은 조작 칸의 경계}\n"
+        "      - {value: 30rem, reason: 세 단 값}\n"
+        "      - {value: 18rem, reason: 쓰이지 않는다}\n"
+        "      - {value: 25rem}\n",
+        encoding="utf-8")
+    row = registry.load(tmp_path)[0]
+    found = "\n".join(registry.container_problems(tmp_path, row))
+    assert "components.css:4 (max-width: 40rem) — min-/max- 문법이다" in found
+    assert "components.css:5 (width < 22.01rem) — 22.01rem는 소수 보정값이다" in found
+    assert "components.css:6 (26rem <= width) — 26rem가 세 단도 아니고 surfaces.yaml container_breakpoints에도 없다" in found
+    assert len(found.splitlines()) == 3, found  # 25rem은 이유가 없어도 목록 값이다 — 필드 검사가 잡는다
+
+    field = "\n".join(registry.problems_with(tmp_path, "breakpoint"))
+    assert "(common) container_breakpoints 30rem는 세 단 값이라 등재하지 않는다" in field
+    assert "(common) container_breakpoints 18rem를 쓰는 @container가 없다" in field
+    assert "(common) container_breakpoints 25rem에 reason이 없다" in field
+    assert len(field.splitlines()) == 3, field
+
+
 def test_shared_layout_parts_answer_their_slot_not_the_viewport():
     """§6.3 — ui-form·ui-readout·ui-actions는 @container로 반응하고 표면은 칸을 정한다.
     표면 CSS가 공용 ui-actions를 뷰포트 질의로 다시 정의하지 않는다."""
