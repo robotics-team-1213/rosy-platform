@@ -17,6 +17,7 @@
 | D-336 | Fleet와 OMX 제어 owner 사이 첫 연결은 같은 호스트의 local IPC로 제한한다 |
 | D-369 | Mission 제어·장치 실행·ROS 제어·안전 정지의 책임을 분리한다 |
 | D-376 | OMX PICK_PLACE planning stays local and trajectory execution stays with the Action owner |
+| D-386 | OMX phases bind asynchronous ROS goal acceptance and fresh execution state |
 
 ## 계획·결과 문서
 
@@ -35,8 +36,8 @@
 
 ## 최근 기록
 
+- 2026-10-01 · uncommitted · correct OMX phase ADR number to D-386
+- 2026-10-01 · uncommitted · D-385 exposes ROS phase acceptance and state-binding gates
 - 2026-10-01 · uncommitted · merge phase recovery and record readiness gates
 - 2026-10-01 · uncommitted · fix(api): error responses echo the request's protocol version
 - 2026-10-01 · uncommitted · fail closed on restart and possible held object
-- 2026-10-01 · uncommitted · project durable OMX phases into Fleet status
-- 2026-10-01 · uncommitted · gate semantic phases on durable gripper evidence
