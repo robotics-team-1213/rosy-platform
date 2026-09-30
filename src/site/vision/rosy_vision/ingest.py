@@ -181,6 +181,7 @@ class IngestServer:
         # D-375: site map lane paint for the map-proposal view; None disables the view.
         self.map_paint = map_paint
         self._map_cache: dict[str, _MapRun] = {}
+        self._map_done: dict[str, _MapRun] = {}  # last completed run, served while the next runs
         self.config: dict = dict(protocol.DEFAULT_CONFIG if config is None else config)
         self._sources: dict[str, _Source] = {}
         self._closing: set[asyncio.Task] = set()
@@ -352,6 +353,8 @@ class IngestServer:
         passed every gate; a rejected fit is returned as ``rejected_fit`` with the reason
         (its coverage and cut sides still tell the installer where to move the camera).
         Runs off the event loop, at most once per source per ``_MAP_REGISTER_INTERVAL_S``.
+        A run takes 1-2 s; a read that arrives mid-run gets the last completed result
+        (its own ``frame_seq``/age, ``X-Proposal-State: previous``) instead of 429.
         """
         run = self._map_cache.get(source)
         now_mono = time.monotonic()
@@ -364,9 +367,14 @@ class IngestServer:
             except (ValueError, cv2.error):
                 return _http_response(422, b"map registration failed\n",
                                       extra={"X-Frame-State": "detection-error"})
-        result = run.result
-        if result is None:
+            self._map_done[source] = run
+        state = "current"
+        if run.result is None:  # still running for another reader, or failed on this frame
+            run = self._map_done.get(source)
+            state = "previous"
+        if run is None:
             return _http_response(429, b"map registration busy\n", extra={"Retry-After": "1"})
+        result = run.result
         frame = run.frame
         age = max(0.0, time.time() - frame.captured_at)
         width, height = result.image_size
@@ -387,6 +395,7 @@ class IngestServer:
             "Content-Type": "application/json", "Cache-Control": "no-store",
             "X-Frame-Seq": str(frame.header.seq),
             "X-Frame-Age-Ms": str(round(age * 1000)),
+            "X-Proposal-State": state,
         })
 
     # -- per-connection lifecycle ------------------------------------------
@@ -421,6 +430,7 @@ class IngestServer:
         self._sources[source_name] = src
         self._field_cache.pop(source_name, None)
         self._map_cache.pop(source_name, None)
+        self._map_done.pop(source_name, None)
         if replaced is not None:
             # Never await this inline: a half-open old peer (phone lost Wi-Fi)
             # never answers the close frame and would stall the new connection.
@@ -463,6 +473,7 @@ class IngestServer:
             del self._sources[source_name]
             self._field_cache.pop(source_name, None)
             self._map_cache.pop(source_name, None)
+            self._map_done.pop(source_name, None)
 
     async def _status_loop(self, src: _Source) -> None:
         while True:

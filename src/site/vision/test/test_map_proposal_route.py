@@ -12,7 +12,7 @@ import numpy as np
 import pytest
 
 from core_common.protocol.vision_preview import VisionLeaseSigner
-from rosy_vision.ingest import IngestServer, LatestFrame
+from rosy_vision.ingest import IngestServer, LatestFrame, _MapRun
 from rosy_vision.map_register import load_map_paint
 from rosy_vision.protocol import FrameHeader
 from test_map_register import STL, _render, _similarity
@@ -97,3 +97,27 @@ def test_blank_floor_is_a_null_proposal_with_reason(paint):
 def test_stale_frame_fails_like_the_frame_route(track_jpeg, paint):
     server = _server(track_jpeg, paint, captured_at=time.time() - 5.0, max_age=1.0)
     assert _get(server, PATH, _lease(server)).status_code == 404
+
+
+def test_a_read_during_a_run_gets_the_last_completed_result_not_busy(track_jpeg, paint):
+    server = _server(track_jpeg, paint)
+    first = _get(server, PATH, _lease(server))
+    assert first.headers["X-Proposal-State"] == "current"
+    done = server._map_cache["ceiling-north"]
+    # A newer frame is being registered for another reader (result not in yet).
+    newer = LatestFrame(header=FrameHeader(seq=10, age_ms=0, width=1280, height=720, rotation_deg=0),
+                        jpeg=track_jpeg, captured_at=time.time(), received_at=time.time())
+    server._sources["ceiling-north"].latest = newer
+    server._map_cache["ceiling-north"] = _MapRun(frame=newer, started=time.monotonic())
+
+    response = _get(server, PATH, _lease(server, principal="other"))
+
+    assert response.status_code == 200
+    assert response.headers["X-Proposal-State"] == "previous"
+    body = json.loads(response.body)
+    assert body["frame_seq"] == 9 and body["accepted"] is True
+    assert server._map_done["ceiling-north"] is done
+    # Nothing completed yet for a fresh source: still 429 with Retry-After.
+    server._map_done.clear()
+    busy = _get(server, PATH, _lease(server, principal="third"))
+    assert busy.status_code == 429 and busy.headers["Retry-After"] == "1"
