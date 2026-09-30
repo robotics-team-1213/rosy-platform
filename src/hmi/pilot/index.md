@@ -28,8 +28,8 @@
 
 ## 최근 기록
 
+- 2026-09-30 · uncommitted · refactor(pilot): D-377 page title is the display name
 - 2026-09-30 · uncommitted · feat(pilot): 차선 자동 계단 거절 이유를 한국어로
 - 2026-09-30 · uncommitted · refactor(pilot): D-374 stage 2 — registry id rosy-pilot → pilot
 - 2026-09-30 · uncommitted · chore(pilot): main 병합 — 표면 등록과 D-370 이름표
 - 2026-09-30 · uncommitted · docs(adr): 운전자 실시간 영상 ADR 을 D-362 에서 D-368 로
-- 2026-09-30 · uncommitted · docs(adr): pilot ADR D-328·D-331·D-332 번호도 main 과 겹치지 않게 다시 매김
