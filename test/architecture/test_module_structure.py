@@ -55,7 +55,7 @@ KNOWN_CHAIN_BACK_EDGES = {
 }
 KNOWN_DIRECTION = {
     ("control", "imu_bno055"): "runtime/sensing -> drivers/imu_bno055; declared exec_depend. Legacy launches start the IMU driver; the long-term fix is bringup assembly, not a sensing launch",
-    ("overhead", "games"): "site overhead reuses the ROS-free four-point homography helper for camera calibration",
+    ("site_vision", "games"): "Site Vision reuses the ROS-free four-point homography helper for camera calibration",
     ("bringup", "control"): "products/bringup -> runtime/sensing: bringup_robot.launch.py starts control's ir_adc_node for the rosy-io graph (enable_ir, D-344 §12) — bringup assembling the robot graph is the direction the imu_bno055 row names",
 }
 
@@ -227,6 +227,13 @@ SIZE_VERDICTS = {
         641,
         "accept: single-entry hardware probe CLI the commissioning runbook drives top-to-bottom — "
         "splitting probe sequence from reporting would sever one diagnostic narrative (X5)",
+    ),
+    "products/omx/adapter/omx_adapter/action_store.py": (
+        788,
+        "accept: one owner for the durable local Action and per-attempt ROS phase journal; "
+        "they share SQLite transactions, identity fences, and restart-to-UNKNOWN recovery. "
+        "ROS-free and host-testable; runner integration remains tracked in docs/plans/"
+        "2026-09-30-action-message-identity.md (X5)",
     ),
 }
 

@@ -16,7 +16,8 @@ None at this level. See each package AGENTS.md.
 | Directory | Purpose |
 |-----------|---------|
 | fleet/ | Fleet formation, relay, session, CLI, and console server; consumes shared contracts and does not own robot final commands |
-| overhead/ | ROS package overhead: receive-only image ingest and sighting derivation; sighting is not a robot command |
+| site_vision/ | ROS package site_vision (Site Vision, D-374): receive-only image ingest and sighting derivation; sighting is not a robot command |
+| ceiling_camera/ | Ceiling camera Android app (`io.github.livsbittt.rosy.ceilingcamera`, D-374); `COLCON_IGNORE`, Gradle only |
 | games/ | ROS package games and match host; game coordination is not a cmd_vel writer |
 
 ## For AI Agents
@@ -37,7 +38,7 @@ None at this level. See each package AGENTS.md.
 ### Internal
 
 - Fleet consumes core_common.protocol.schemas (D-18); colcon build order via exec_depend (D-126).
-- Overhead package contracts and deployment are documented in its package-level guidance.
+- Site Vision and ceiling camera app contracts and deployment are documented in their package-level guidance.
 
 ### External
 
