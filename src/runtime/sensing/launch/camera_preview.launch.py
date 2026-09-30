@@ -7,7 +7,10 @@ D-373 payload switches, both off by default (off starts nothing new):
   learned_shadow:=true  learned_lane_node, shadow only; model from shadow_pointer
   capture:=true         camera/front/compressed on, capture_trigger_node, and the
                         rosbag2 snapshot recorder (record_session --snapshot)
-                        writing sessions under recording_root"""
+                        writing sessions under recording_root
+On the device both default from ROSY_LEARNED_SHADOW / ROSY_CAPTURE, which
+rosy-camera.service reads from the optional /etc/rosy/learned-perception.env.
+Only "true" and "false" count; anything else is off, with a warning (D-62)."""
 
 import os
 
@@ -15,10 +18,20 @@ from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, ExecuteProcess
 from launch.conditions import IfCondition
+from launch.logging import get_logger
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
 from launch_ros.substitutions import FindPackagePrefix
+
+def _env_switch(name):
+    value = os.environ.get(name, 'false')
+    if value in ('true', 'false'):
+        return value
+    get_logger('camera_preview.launch').warning(
+        f'{name}={value!r} is not "true" or "false"; treating it as false')
+    return 'false'
+
 
 def generate_launch_description():
     config = os.path.join(get_package_share_directory('control'), 'config')
@@ -28,9 +41,10 @@ def generate_launch_description():
     recording_root = LaunchConfiguration('recording_root')
     return LaunchDescription([
         DeclareLaunchArgument('namespace', default_value=''),
-        DeclareLaunchArgument('learned_shadow', default_value='false'),
+        DeclareLaunchArgument('learned_shadow',
+                              default_value=_env_switch('ROSY_LEARNED_SHADOW')),
         DeclareLaunchArgument('shadow_pointer', default_value='/var/lib/rosy/models/shadow'),
-        DeclareLaunchArgument('capture', default_value='false'),
+        DeclareLaunchArgument('capture', default_value=_env_switch('ROSY_CAPTURE')),
         DeclareLaunchArgument('recording_root',
                               default_value='/var/lib/rosy/camera/recordings'),
         Node(

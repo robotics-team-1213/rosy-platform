@@ -885,3 +885,42 @@ def test_core_program_scan_follows_imports_into_the_control_package():
                 for path in _imported_modules("src/runtime/gateway/test", "control", "src/runtime/sensing")}
     assert "src/runtime/sensing/control/sensor_provider.py" in resolved
     assert "src/runtime/sensing/control/calibration_storage.py" in resolved
+
+
+# D-373: the operator's on-device switch for camera_preview.launch.py learned_shadow/capture.
+CAMERA_HARDENING = (
+    "User=rosy-camera", "Group=rosy-camera", "SupplementaryGroups=video",
+    "NoNewPrivileges=true", "PrivateDevices=false", "DevicePolicy=closed",
+    "DeviceAllow=char-video4linux rw", "DeviceAllow=char-media rw",
+    "DeviceAllow=char-dma_heap rw", "PrivateTmp=true", "ProtectSystem=strict",
+    "ProtectHome=true", "ProtectKernelTunables=true", "ProtectKernelModules=true",
+    "ProtectControlGroups=true", "RestrictSUIDSGID=true", "LockPersonality=true",
+    "RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK", "UMask=0027",
+)
+
+
+def test_camera_reads_the_optional_learned_perception_switch_file():
+    unit = _read("rosy-camera.service")
+    directives = _directives("rosy-camera.service")
+
+    # "-": a card without the file starts the camera exactly as before (both off).
+    assert directives["EnvironmentFile"] == [
+        "/etc/rosy/runtime.env", "-/etc/rosy/learned-perception.env"]
+    for line in CAMERA_HARDENING:
+        assert line in unit.splitlines(), line
+    # The switch opens no new write path and never reaches the command line:
+    # the launch file reads the variables itself (strict true/false).
+    assert "ReadWritePaths" not in directives
+    exec_start = directives["ExecStart"][0]
+    assert "ROSY_LEARNED_SHADOW" not in exec_start and "ROSY_CAPTURE" not in exec_start
+    assert "learned_shadow:=" not in exec_start and "capture:=" not in exec_start
+
+
+def test_learned_perception_env_example_ships_both_switches_off():
+    example = (NATIVE / "learned-perception.env.example").read_text(encoding="utf-8")
+    assert "\r" not in example
+    settings = [line for line in example.splitlines() if line and not line.startswith("#")]
+    assert settings == ["ROSY_LEARNED_SHADOW=false", "ROSY_CAPTURE=false"]
+    assert "/etc/rosy/learned-perception.env" in example
+    launch = (ROOT / "src/runtime/sensing/launch/camera_preview.launch.py").read_text(encoding="utf-8")
+    assert "'ROSY_LEARNED_SHADOW'" in launch and "'ROSY_CAPTURE'" in launch
