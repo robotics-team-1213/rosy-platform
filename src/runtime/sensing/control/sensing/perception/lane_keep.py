@@ -113,6 +113,8 @@ SIDE_FLIP_M = 0.08
 JUNCTION_AHEAD_M = 0.45
 FORK_MIN_ANGLE_RAD = math.radians(30.0)
 DIVERGE_MIN_RAD = math.radians(15.0)
+#: Both branches of a fork are real paint, not a far fragment.
+FORK_MIN_LENGTH_M = 0.12
 FLIP_MIN_ERROR = 0.5
 FLIP_MAX_REVERSALS = 2
 FLIP_WINDOW_FRAMES = 16
@@ -346,6 +348,7 @@ class LaneKeeper:
         self._previous_target = None
         self._tracked = []
         self._steer_history = deque(maxlen=FLIP_WINDOW_FRAMES)
+        self._flip_hold = False
         self._corner_side = None
         self._corner_frames = 0
         self._corner_engaged = False
@@ -355,6 +358,7 @@ class LaneKeeper:
         self._previous_target = None
         self._tracked = []
         self._steer_history.clear()
+        self._flip_hold = False
         self._corner_side = None
         self._corner_frames = 0
         self._corner_engaged = False
@@ -477,7 +481,11 @@ class LaneKeeper:
             self.last["boundaries"].append(record)
         if target is None:
             self.last["reason"] = junction or "no_boundary"
+            # Nothing is pursued: the next frame sides its lines afresh (a
+            # held robot sees the same frame again, and a side inherited
+            # into a hold would otherwise hold it forever).
             self._previous_target = None
+            self._tracked = []
             self._steer_history.append(0)
             return None
         if previous is not None and self._smoothing > 0.0 and not strategy.startswith("corner"):
@@ -501,6 +509,12 @@ class LaneKeeper:
         signs = [v for v in self._steer_history if v]
         if (self._corner_turning
                 and sum(1 for a, b in zip(signs, signs[1:]) if a != b) >= FLIP_MAX_REVERSALS):
+            # Sticky: resuming after the window only weaves again. Only a
+            # lane seen on both sides releases it.
+            self._flip_hold = True
+        if strategy == "both":
+            self._flip_hold = False
+        if self._flip_hold:
             self.last.update(strategy="none", reason="flipping")
             self._previous_target = None
             return None
@@ -645,7 +659,8 @@ def _junction(strategy, transverse, left, right, half, corner_turning):
                          for _, _, ends, steep in transverse):
         return "junction_transverse"
     headings = [math.radians(r["heading_deg"]) for r in side
-                if abs(r["y_at_side_x_m"]) <= ONE_MAX_DISTANCE_FRACTION * 2.0 * half]
+                if abs(r["y_at_side_x_m"]) <= ONE_MAX_DISTANCE_FRACTION * 2.0 * half
+                and r["length_m"] >= FORK_MIN_LENGTH_M]
     if headings and max(headings) - min(headings) > FORK_MIN_ANGLE_RAD:
         return "junction_fork"
     return None

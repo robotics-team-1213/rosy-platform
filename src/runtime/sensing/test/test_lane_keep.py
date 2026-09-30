@@ -6,7 +6,7 @@ import pytest
 import yaml
 
 from control.sensing.perception.camera_ground import nominal_ground_plane
-from control.sensing.perception.lane_keep import LaneKeeper
+from control.sensing.perception.lane_keep import FLIP_WINDOW_FRAMES as FLIP_WINDOW, LaneKeeper
 
 PKG = Path(__file__).resolve().parents[1]
 PROFILE = yaml.safe_load((Path(__file__).resolve().parents[3] / "products" / "pinky_pro" / "profile" / "config" / "camera_nominal.yaml").read_text(encoding="utf-8"))
@@ -338,3 +338,16 @@ def test_corner_turn_command_is_capped():
     obs = keeper.update(_render_corner(0.19, "left"), GROUND, lane_half_width_m=HALF)
     assert keeper.last["strategy"] == "corner_left"
     assert -0.6 - 1e-9 <= obs.error < -0.3
+
+
+def test_flipping_hold_is_sticky_until_both_lane_lines_are_seen():
+    keeper = _corner_keeper()
+    for f in [_render([(0.035, 0.0)]), _render([(-0.035, 0.0)])] * 2:
+        keeper.update(f, GROUND, lane_half_width_m=HALF)
+    assert keeper.last["reason"] == "flipping"
+    # A calm lone boundary does not release the hold ...
+    for _ in range(FLIP_WINDOW + 2):
+        assert keeper.update(_render([(HALF, 0.0)]), GROUND, lane_half_width_m=HALF) is None
+    # ... the lane seen on both sides does.
+    assert keeper.update(_render([(HALF, 0.0), (-HALF, 0.0)]), GROUND,
+                         lane_half_width_m=HALF) is not None
