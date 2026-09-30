@@ -2,6 +2,7 @@ package io.github.livsbittt.rosy.cam.settings
 
 import android.content.Context
 import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.emptyPreferences
@@ -18,25 +19,19 @@ import kotlinx.coroutines.flow.map
 private val Context.camDataStore: DataStore<Preferences> by preferencesDataStore(name = "cam_settings")
 
 /**
- * Pairing target (host, port, token, source) and the lens setting in app-private DataStore. The address and token
- * never go into the repository (public repo, D-261 6); backups are disabled in the manifest.
+ * The site link (D-391 1, [SiteLink]) and the lens setting in app-private DataStore. The token never goes into
+ * the repository (public repo, D-261 6); backups are disabled in the manifest.
+ *
+ * A pairing saved before D-391 (key `host`, and `pin`) is read through [SiteLink.from]: an IP host becomes
+ * `manual_host`, a DNS name `tls_host`. The next [save] rewrites it in the new keys.
  */
 class SettingsStore(context: Context) {
     private val store = context.applicationContext.camDataStore
 
-    /** The saved pairing, or null when nothing valid is saved yet. */
-    val pairing: Flow<PairingUri?> = store.data
+    /** The saved site link, or null when nothing valid is saved yet. */
+    val siteLink: Flow<SiteLink?> = store.data
         .catch { e -> if (e is IOException) emit(emptyPreferences()) else throw e }
-        .map { prefs ->
-            val host = prefs[HOST] ?: return@map null
-            val port = prefs[PORT] ?: return@map null
-            val token = prefs[TOKEN] ?: return@map null
-            val source = prefs[SOURCE] ?: return@map null
-            val secure = prefs[SECURE] ?: false
-            val pin = prefs[PIN]
-            if (PairingUri.validate(host, port, token, source, secure, pin) != null) null
-            else PairingUri(host, port, token, source, secure, pin)
-        }
+        .map(::decode)
 
     /** Saved lens setting; null until the operator picks one (then [LensChoice.DEFAULT] applies). */
     val lens: Flow<LensChoice?> = store.data
@@ -47,29 +42,50 @@ class SettingsStore(context: Context) {
         store.edit { prefs -> prefs[LENS] = choice.wire }
     }
 
-    suspend fun save(pairing: PairingUri) {
-        val reason = PairingUri.validate(
-            pairing.host, pairing.port, pairing.token, pairing.source, pairing.secure, pairing.pin,
-        )
-        require(reason == null) { "invalid pairing field: $reason" }
+    /**
+     * Saves [pairing] as the site link. [siteName] is the mDNS service the operator picked, [pairingSubnet] the
+     * Wi-Fi subnet at this moment (diagnostic only). Fields the input cannot carry come from the saved link
+     * when it is the same site (see [SiteLink.from]).
+     */
+    suspend fun save(pairing: PairingUri, siteName: String? = null, pairingSubnet: String? = null) {
         store.edit { prefs ->
-            prefs[HOST] = pairing.host
-            prefs[PORT] = pairing.port
-            prefs[TOKEN] = pairing.token
-            prefs[SOURCE] = pairing.source
-            prefs[SECURE] = pairing.secure
-            // A new pairing without a pin must not inherit the previous site's pin.
-            if (pairing.pin == null) prefs.remove(PIN) else prefs[PIN] = pairing.pin
+            val link = SiteLink.from(pairing, siteName, pairingSubnet, previous = decode(prefs))
+            val reason = SiteLink.validate(link)
+            require(reason == null) { "invalid site link field: $reason" }
+            write(prefs, link)
         }
     }
 
+    /**
+     * Records the `tls_host` that mDNS showed at this link's `manual_host` (same pinned site CA), so later
+     * connects follow the name instead of the address. No-op when the saved link changed meanwhile.
+     */
+    suspend fun learnTlsHost(expected: SiteLink, tlsHost: String, siteName: String?) {
+        store.edit { prefs ->
+            val current = decode(prefs) ?: return@edit
+            if (current != expected || current.tlsHost != null) return@edit
+            val learned = current.copy(tlsHost = tlsHost, siteName = siteName ?: current.siteName)
+            if (SiteLink.validate(learned) == null) write(prefs, learned)
+        }
+    }
+
+    /** Applies [SiteLinkPrefs.encode]: typed keys for values, removal for nulls (DataStore keys match by name). */
+    private fun write(prefs: MutablePreferences, link: SiteLink) {
+        SiteLinkPrefs.encode(link).forEach { (name, value) ->
+            when (value) {
+                null -> prefs.remove(stringPreferencesKey(name))
+                is String -> prefs[stringPreferencesKey(name)] = value
+                is Int -> prefs[intPreferencesKey(name)] = value
+                is Boolean -> prefs[booleanPreferencesKey(name)] = value
+                else -> error("unsupported site-link value type for $name")
+            }
+        }
+    }
+
+    private fun decode(prefs: Preferences): SiteLink? =
+        SiteLinkPrefs.decode(prefs.asMap().mapKeys { (key, _) -> key.name })
+
     private companion object {
-        val HOST = stringPreferencesKey("host")
-        val PORT = intPreferencesKey("port")
-        val TOKEN = stringPreferencesKey("token")
-        val SOURCE = stringPreferencesKey("source")
-        val SECURE = booleanPreferencesKey("secure")
-        val PIN = stringPreferencesKey("pin")
         val LENS = stringPreferencesKey("lens")
     }
 }

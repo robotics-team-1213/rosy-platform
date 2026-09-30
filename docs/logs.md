@@ -4027,6 +4027,12 @@
 - Evidence: local adapter 163 passed/3 skipped; Pilot and registry/browser checks; joint, gripper and cancel ROS readback in docs/validation/pilot-omx-gazebo-2026-10-01/. Harness lint 0 errors/23 existing freshness warnings.
 - Gate: the control slice has ROS-SIM evidence; camera, recording, restart recovery and physical acceptance stay HOLD.
 
+## 2026-10-01 · uncommitted · docs(deployment): 현장 천장 카메라·관제 운영 가이드
+
+- 변경: `docs/deployment/site-ceiling-camera-console-runbook.md` 추가. 현장 PC 스택(fullchain, 지도 맞춤 옵션, mDNS 광고), 이름·CA 고정 페어링(D-341 §9, D-391), 카메라 위치 기준, 관제 맵 자동 맞춤(D-375)·경기장 뷰 대체(D-360), 로봇 등록·운전 모드·G4/G5, 규칙 점검표, 폰·관제 문제 해결표.
+- 증거: 2026-09-30~10-01 현장 벤치(S21·Lenovo 태블릿, rosy-cam 스택)에서 실측한 수치와 실제 앱·관제 문구를 옮겼다. 절차 문서라 실행 코드는 바꾸지 않았다.
+- gate 변화: 없음.
+
 ## 2026-10-01 · e8028fb0 · docs(adr): D-321 부록 — 보정 세션 표시와 차단
 - 변경: D-321 에 부록(보정 lease, activity 표시, CALIBRATION_ACTIVE, E-Stop 예외, 재시작 guard). 새 ADR 번호를 쓰지 않았다. API Ref v1.67(1a1a2c3a): 엔드포인트·activity·에러·이벤트 3종, 변경 이력 행. 참고: main 변경 이력에 v1.65 행이 없다(다른 브랜치 몫으로 보임).
 - 증거: rosy_harness lint 0 errors, test_event_catalogue 통과.

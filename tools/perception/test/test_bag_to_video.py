@@ -270,8 +270,8 @@ def test_evidence_for_picks_the_first_logged_match_and_ignores_unstamped():
     # more than EVIDENCE_WINDOW_S after the frame's log time: nothing
     late_frame = {"stamp_ns": 1000, "log_ns": 3000 - int(0.6e9)}
     assert b2v.evidence_for(index, keys, late_frame) is None
-    # stamp more than 1 ms away: nothing
-    assert b2v.evidence_for(index, keys, {"stamp_ns": 1_002_000, "log_ns": 0}) is None
+    # stamp more than 1 us away: nothing
+    assert b2v.evidence_for(index, keys, {"stamp_ns": 2_100, "log_ns": 0}) is None
     assert b2v.payload_stamp_ns({"stamp": True}) is None
     assert b2v.payload_stamp_ns({"stamp": float("nan")}) is None
 
@@ -443,3 +443,32 @@ def test_motion_flags_idle_driving_pivoting_and_commanded():
     assert m["moving"] and m["commanded"]
     m = b2v.motion(_ns(5.0), still, None)       # no odom near the frame, no command
     assert m == {"moving": False, "commanded": False, "v": None, "w": None}
+
+
+def test_line_observation_evidence_is_the_camera_line_not_an_ir_line_near_the_same_stamp():
+    # Real 9dfk: an IR_LINE observation 0.05-0.78 ms from the image stamp was taken as the
+    # frame's evidence (first logged, 1 ms tolerance) and extract.py then dropped it.
+    frame_ns = 1_790_772_477_745_000_000
+    series = [{"source": "IR_LINE", "stamp": (frame_ns + 300_000) / 1e9, "n": "ir"},
+              {"source": "CAMERA_LINE", "stamp": frame_ns / 1e9, "n": "cam"}]
+    index = b2v.stamped_index([frame_ns + 1_000, frame_ns + 2_000], series,
+                              source=b2v.STAMPED_SOURCES["line/observation"])
+    keys = [e[0] for e in index]
+    hit = b2v.evidence_for(index, keys, {"stamp_ns": frame_ns, "log_ns": frame_ns + 5_000})
+    assert hit is not None and hit[1]["n"] == "cam"
+    # the float-seconds payload stamp still matches its own image within the tolerance
+    assert abs(hit[1]["stamp_ns"] - frame_ns) <= b2v.STAMP_TOL_NS
+    # an IR_LINE alone is never a frame's stamped evidence
+    only_ir = b2v.stamped_index([frame_ns + 1_000], series[:1], source="CAMERA_LINE")
+    assert only_ir == []
+
+
+@pytest.mark.parametrize("ir_offset_ns", [0, 50_000])   # same stamp (filter) / 50 us (tolerance)
+def test_sidecar_row_takes_the_camera_line_even_when_an_ir_line_is_logged_first(ir_offset_ns):
+    frame_ns = 1_790_772_477_745_000_000
+    series = [{"source": "IR_LINE", "stamp": (frame_ns + ir_offset_ns) / 1e9, "n": "ir"},
+              {"source": "CAMERA_LINE", "stamp": frame_ns / 1e9, "n": "cam"}]
+    side = {"line/observation": ([frame_ns + 1_000, frame_ns + 2_000], series)}
+    frames = [{"stamp_ns": frame_ns, "log_ns": frame_ns + 5_000}]
+    row = next(b2v.sidecar_rows(frames, side, max_gap_s=0.5))
+    assert row["side"]["line/observation"]["n"] == "cam"
