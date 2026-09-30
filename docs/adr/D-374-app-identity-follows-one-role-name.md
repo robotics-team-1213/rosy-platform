@@ -1,6 +1,14 @@
 ## D-374 앱의 폴더·패키지·식별자·표시 이름은 역할 이름 하나에서 나온다 — 와이어 계약 이름은 바꾸지 않는다
 
-**Status:** Proposed (2026-09-30). 이름 규칙, 앱별 옛→새 대응표, 바꾸지 않는 와이어 식별자 목록, 단계 순서만 정한다. 코드·리소스 변경은 하지 않는다. 실행은 [2026-09-30 app identity rename plan](../plans/2026-09-30-app-identity-rename-plan.md)이 단계별로 한다.
+**Status:** Accepted (2026-09-30, 사용자 결정 아래 참조). 이름 규칙, 앱별 옛→새 대응표, 바꾸지 않는 와이어 식별자 목록, 단계 순서만 정한다. 이 ADR 자체는 코드·리소스를 바꾸지 않는다. 실행은 [2026-09-30 app identity rename plan](../plans/2026-09-30-app-identity-rename-plan.md)이 단계별로 한다. 단계 3·4·5는 계획의 게이트를 그대로 따른다.
+
+**사용자 결정 — Accepted (2026-09-30):**
+1. 1항 규칙과 2항 대응표를 제안대로 적용한다.
+2. Fleet 관제 화면은 **안 B**다. 화면 자산만 `site_console` 패키지로 떼어 내고, 서비스 패키지 `fleet`은 그대로 둔다(열린 질문 2 닫힘).
+3. 새 applicationId 때문에 폰 재설치와 재페어링을 한 번 하는 것을 받아들인다(4항, 열린 질문 3 닫힘).
+4. 경기 보드(`games`), 제어 진단, 시뮬 라이브 뷰는 지금 바꾸지 않는다(열린 질문 1 닫힘).
+
+Validation 절의 "단계 1이 main에서 녹색이면 Accepted" 조건은 사용자가 위 결정으로 앞당겼다. 단계 1의 녹색은 여전히 단계 1 병합의 조건이다.
 
 **부분 대체:**
 - [D-370](D-370-site-app-roles-names-and-shared-link.md) 2항의 "패키지·폴더·applicationId·서비스 종류 이름은 바꾸지 않는다(D-231, D-339 1항)"를 대체한다. 이 ADR 이후에는 **앱**의 폴더·패키지·applicationId가 아래 규칙을 따른다. **서비스 종류(mDNS)와 그 밖의 와이어 이름은 여전히 바꾸지 않는다**(3항).
@@ -71,7 +79,7 @@
 - **CORE와 `core_api_web`.** 사람이 여는 앱이 아니라 API다(D-231·D-339 그대로).
 - **로봇 LCD(`rosy-boot-display`)와 얼굴(`emotion`).** D-370 2항이 "앱이 아니라 아이콘이 없다"고 정했다. 장치 이미지·systemd 유닛 이름이다.
 - **`web_common`.** 라이브러리이고 id·폴더·패키지가 이미 같다.
-- **경기 보드(`games`), 제어 진단, 시뮬 라이브 뷰.** D-370 2항 이름표 밖이다(D-370 8항). 사용자가 원하면 새 ADR 없이 이 규칙으로 행을 더한다(열린 질문 1).
+- **경기 보드(`games`), 제어 진단, 시뮬 라이브 뷰.** D-370 2항 이름표 밖이다(D-370 8항). 사용자가 2026-09-30에 "지금은 바꾸지 않는다"고 정했다(사용자 결정 4). 나중에 원하면 새 ADR 없이 이 규칙으로 행을 더한다.
 
 #### 3. 바꾸지 않는 것과 별칭 기간
 
@@ -121,10 +129,10 @@
 ### Alternatives
 
 - **표시 이름만 바꾸고 식별자는 둔다(D-370 원안).** 사용자가 2026-09-30에 거부했다. 폴더 `overhead` 하나가 두 역할을 담는 혼동도 남는다.
-- **`fleet` 패키지 전체를 `site_console`로 바꾼다.** 거부한다. 화면이 아닌 hub·대형·Mission 원장에 화면 이름이 붙는다. 이는 D-315 4항의 구분(Fleet 서비스 ≠ 사이트 console)과 부딪힌다. 파일 수도 수십 배다(Fleet 안 import 102파일, gz_sim `fleet.bench`, `secret_scan.py` 고정 경로). 이득은 화면 쪽 분리로 이미 얻는다. 사용자가 그래도 원하면 열린 질문 2다.
+- **`fleet` 패키지 전체를 `site_console`로 바꾼다.** 거부한다. 화면이 아닌 hub·대형·Mission 원장에 화면 이름이 붙는다. 이는 D-315 4항의 구분(Fleet 서비스 ≠ 사이트 console)과 부딪힌다. 파일 수도 수십 배다(Fleet 안 import 102파일, gz_sim `fleet.bench`, `secret_scan.py` 고정 경로). 이득은 화면 쪽 분리로 이미 얻는다. 사용자가 2026-09-30에 안 B(화면 분리)를 골랐다.
 - **와이어 이름도 함께 바꾼다**(`_rosy-ceiling-camera._tcp`, `rosy-ceiling-camera/1`, `/api/site-console/*`). 거부한다. 로봇 이미지·사이트 호스트·설치된 폰이 동시에 바뀌어야 한다. 한 번에 바꿀 수 없어 이중 광고와 버전 협상이 필요하다. 이름 정리가 프로토콜 변경이 된다.
 - **폴더만 바꾸고 패키지는 둔다(D-339 방식 연장).** 거부한다. 사용자 요청과 다르고, 대응표 예외가 앱마다 하나씩 늘어난다.
-- **Android applicationId는 두고 Kotlin 패키지만 바꾼다.** 재설치를 피할 수 있다. 하지만 사용자는 식별자까지 바꾸라고 했다. 설치된 폰은 한 대뿐이다(현장 설치 전). 그래서 지금 재페어링하는 비용이 가장 작다. 열린 질문 3으로 사용자 확인을 받는다.
+- **Android applicationId는 두고 Kotlin 패키지만 바꾼다.** 재설치를 피할 수 있다. 하지만 사용자는 식별자까지 바꾸라고 했다. 설치된 폰은 한 대뿐이다(현장 설치 전). 그래서 지금 재페어링하는 비용이 가장 작다. 사용자가 2026-09-30에 재설치·재페어링 1회를 받아들였다.
 
 ### Consequences
 
@@ -138,7 +146,7 @@
 
 - **SOURCE/LOCAL:** 단계마다 옛 이름에 대한 `git grep` 잔여 목록을 커밋 메시지에 남긴다. 기록 문서만 남아야 한다. 영향받는 host pytest 묶음, `test/architecture`, `rosy_harness.py lint` 0 errors, Android `gradlew testDebugUnitTest`를 돌린다. 새 **이름 규칙 시험**(`test/architecture/test_app_identity.py`)이 `surfaces.yaml`의 `app_name`이 있는 행마다 다음을 대조한다: id(kebab) ↔ 폴더 끝 이름(snake) ↔ `package.xml` `<name>` ↔ 아이콘 파일 이름 ↔ Android `applicationId`(compact).
 - **DEVICE:** 새 APK 설치, 재페어링, 관제에서 프레임과 sighting 확인. 대시보드는 새 로봇 이미지에서 `/dashboard`, Pilot은 `/pilot`이 열리는지 본다. 호스트 시험 통과는 DEVICE가 아니다.
-- 이 ADR은 단계 1이 main에서 녹색이고 사용자가 열린 질문 2·3에 답하면 Accepted로 올린다.
+- 원래 조건은 "단계 1이 main에서 녹색이고 사용자가 열린 질문 2·3에 답하면 Accepted"였다. 사용자가 2026-09-30에 질문 1–3에 답하고 Accepted로 올렸다(Status의 사용자 결정). 단계 1은 위 SOURCE/LOCAL 검증이 녹색이어야 병합한다.
 
 ### References
 

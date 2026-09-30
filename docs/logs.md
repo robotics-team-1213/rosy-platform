@@ -3861,3 +3861,9 @@
 - gate 변화: 없음(문서만).
 - 결정: mDNS 종류·TXT, `rosy-overhead/1`·`/overhead/v1/frames`, `/api/fleet/*`·`/api/vision/*`, `rosyov://`, 웹 경로·PWA 범위, 로봇 설정 키, 브라우저 저장소 키, compose 서비스·이미지·SAN은 never. `overhead` 실행 파일만 한 사이트 릴리스 동안 alias. 단계 1(카메라 앱+Vision)이 먼저, 대시보드·관제 화면은 D-362 착지·main 체크아웃 깨끗함 게이트 뒤.
 - 열린 질문: games 등 범위 밖 표면, 관제 화면 분리안 B vs 패키지 전체 개명 A, 폰 재페어링 수용, compose 이름.
+
+## 2026-09-30 · uncommitted · docs(adr): accept D-374 app identity rename
+- 변경: D-374 Status를 Accepted로 올리고 사용자 결정(2026-09-30)을 적었다. (1) 규칙·대응표를 제안대로 적용, (2) Fleet 관제 화면은 안 B — 화면 자산만 `site_console`로 떼고 서비스 패키지 `fleet` 유지, (3) 새 applicationId에 따른 폰 재설치·재페어링 1회 수용, (4) 경기 보드·제어 진단·시뮬 라이브 뷰는 지금 바꾸지 않음. 계획의 열린 질문 1–3을 닫고, ADR Log 행 상태를 고쳤다.
+- 증거: 문서만. 사용자 결정은 리드 세션 전달(2026-09-30).
+- gate 변화: 단계 1(카메라 앱+Site Vision)·단계 2(Pilot 레지스트리 id)를 시작할 수 있다. 단계 3·4·5는 계획의 D-362·릴리스 게이트 그대로.
+- 열린 질문: compose 서비스·이미지 이름(열린 질문 4, 권장: 바꾸지 않음).
