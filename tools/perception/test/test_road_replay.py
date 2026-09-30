@@ -278,3 +278,13 @@ def test_report_carries_the_parallel_pair_width():
     width = metrics["keeper"]["pair_width_m"]
     assert width["n"] == 8 and width["median"] == pytest.approx(2 * HALF, abs=0.01)
     assert width["ratio_to_map"] == pytest.approx(width["median"] / (2 * HALF), abs=1e-3)
+
+
+def test_nis_consistency_uses_associated_measurements_only():
+    """Clutter candidates (another lane's line, gated out) are not the filter's innovations;
+    their NIS is reported separately."""
+    metrics, rows = rr.replay(synthetic(24), dropouts=())
+    tracked = sum(1 for r in rows if r["level"] != "STOP")
+    assert metrics["nis"]["n"] == 2 * tracked            # a pair per frame
+    assert metrics["nis"]["basis"] == "associated"
+    assert metrics["nis_candidates"]["n"] >= metrics["nis"]["n"]

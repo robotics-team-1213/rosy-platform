@@ -352,6 +352,7 @@ def replay(frames, *, labels: dict | None = None, dropouts=DROPOUTS_M,
     est = RoadStateEstimator(params)
     labels = labels or {}
     rows, inputs, checkpoints, nis = [], [], {}, []
+    nis_candidates = []
     nis_state = {"straight": [], "curve": [], "turning": [], "stationary": []}
     prev_pose = prev_t = None
     wall_accepted = wall_hits = labelled = 0
@@ -413,8 +414,11 @@ def replay(frames, *, labels: dict | None = None, dropouts=DROPOUTS_M,
                            "on_paint": px is not None and lane_replay.target_on_paint(floor, px)}
         if snap["level"] != STOP:
             for c in snap["candidates"]:
-                if isinstance(c.get("nis"), dict):
-                    nis.append(min(c["nis"].values()))
+                if not isinstance(c.get("nis"), dict):
+                    continue
+                nis_candidates.append(min(c["nis"].values()))
+                if c.get("label") in ("R", "L"):   # the filter's own innovations
+                    nis.append(c["nis"][c["label"]])
                     nis_state[row["motion"]].append(nis[-1])
         if row["strategy"] == "both" and snap["level"] == TRACK:
             ys = sorted(b["y_at_side_x_m"] for b in keeper.last.get("boundaries", []))
@@ -449,7 +453,9 @@ def replay(frames, *, labels: dict | None = None, dropouts=DROPOUTS_M,
     wrong = sum(bool(r.get("wrong_side")) for r in rows)
     metrics = {
         "frames": n, "keep": keep_m, "road": road_m, "levels": levels,
-        "nis": {"n": len(nis), "mean": nis_mean, "above_9_21": nis_above,
+        "nis_candidates": {"n": len(nis_candidates),
+                           "mean": round(float(np.mean(nis_candidates)), 3) if nis_candidates else None},
+        "nis": {"basis": "associated", "n": len(nis), "mean": nis_mean, "above_9_21": nis_above,
                 "by_state": {k: {"n": len(v), "mean": round(float(np.mean(v)), 3) if v else None,
                                  "above_9_21": round(float(np.mean(np.asarray(v) > 9.21)), 4) if v else None}
                              for k, v in nis_state.items()},
