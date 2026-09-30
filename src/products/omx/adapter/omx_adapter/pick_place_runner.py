@@ -4,27 +4,45 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import threading
+import time
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
-from typing import Callable, Protocol
+from typing import Callable, Mapping, Protocol
 
 from core_common.protocol.schemas import FleetActionGrant
 
-from .action_runner import DriverSubmission, StopFence
+from .action_runner import StopFence
 from .command_owner import TrajectoryCommand
 from .local_stop import LocalStopBlocked
-from .manipulation_plan import PlannedMotionPhase, ResolvedPickPlacePlan
+from .manipulation_plan import (
+    ExecutionStateSnapshot,
+    PlannedMotionPhase,
+    ResolvedPickPlacePlan,
+)
 from .phase_recorder import ActionPhaseRecorder
 from .ros_goal_contract import RosGoalEvent
 
 
 class PhaseGoalPort(Protocol):
-    """One local arm owner; submit returns only after ROS acceptance is known."""
+    """One local arm owner; ROS acceptance arrives later as a goal event."""
 
     def submit(self, command: TrajectoryCommand, *,
-               on_goal_event: Callable[[RosGoalEvent], bool]) -> DriverSubmission: ...
+               on_goal_event: Callable[[RosGoalEvent], bool]) -> "PhaseDispatch": ...
 
     def cancel_goal(self, driver_goal_id: str) -> bool | None: ...
+
+
+@dataclass(frozen=True)
+class PhaseDispatch:
+    """Local dispatch result, intentionally separate from ROS goal acceptance."""
+
+    dispatched: bool | None
+
+    def __post_init__(self) -> None:
+        if self.dispatched is not True and self.dispatched is not False and self.dispatched is not None:
+            raise ValueError("dispatched must be true, false, or unknown")
 
 
 class PickPlaceRunner:
@@ -48,6 +66,10 @@ class PickPlaceRunner:
         submission_fence: StopFence,
         phase_gate: Callable[[str], bool],
         current_fence: Callable[[int, int], bool],
+        current_execution_state: Callable[[], ExecutionStateSnapshot],
+        start_state_tolerances: Mapping[str, float],
+        max_joint_state_age_s: float,
+        monotonic: Callable[[], float] = time.monotonic,
         now: Callable[[], datetime] | None = None,
     ) -> None:
         self.recorder = recorder
@@ -58,8 +80,11 @@ class PickPlaceRunner:
         self.submission_fence = submission_fence
         self.phase_gate = phase_gate
         self.current_fence = current_fence
+        self.current_execution_state = current_execution_state
+        self.monotonic = monotonic
         self.now = now or (lambda: datetime.now(timezone.utc))
         self._lock = threading.RLock()
+        self._event_lock = threading.RLock()
         self._current_phase: PlannedMotionPhase | None = None
         self._current_command: TrajectoryCommand | None = None
         self._current_goal_id: str | None = None
@@ -68,12 +93,40 @@ class PickPlaceRunner:
         self._pending_overflow = False
         self._last_event_sequence = 0
         self._cancel_ack_recorded = False
+        self._last_command_state_sequence = -1
+
+        if not isinstance(plan, ResolvedPickPlacePlan):
+            raise ValueError("plan must be a validated ResolvedPickPlacePlan")
+        if not callable(current_execution_state) or not callable(monotonic):
+            raise ValueError("fresh execution-state and monotonic clock providers are required")
+        if isinstance(max_joint_state_age_s, bool):
+            raise ValueError("max_joint_state_age_s must be positive and finite")
+        try:
+            max_state_age = float(max_joint_state_age_s)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("max_joint_state_age_s must be positive and finite") from exc
+        if not math.isfinite(max_state_age) or max_state_age <= 0:
+            raise ValueError("max_joint_state_age_s must be positive and finite")
+        tolerances = dict(start_state_tolerances)
+        if set(tolerances) != set(plan.phases[0].joint_names):
+            raise ValueError("start-state tolerances must cover exactly the planned joints")
+        normalized_tolerances = {}
+        for name, value in tolerances.items():
+            if isinstance(value, bool):
+                raise ValueError("start-state tolerances must be finite and non-negative")
+            try:
+                numeric = float(value)
+            except (TypeError, ValueError) as exc:
+                raise ValueError("start-state tolerances must be finite and non-negative") from exc
+            if not math.isfinite(numeric) or numeric < 0:
+                raise ValueError("start-state tolerances must be finite and non-negative")
+            normalized_tolerances[name] = numeric
+        self.start_state_tolerances = normalized_tolerances
+        self.max_joint_state_age_s = max_state_age
 
         if (recorder.action_id != grant.action_id
                 or recorder.attempt_id != grant.attempt_id):
             raise ValueError("phase recorder identity must match the Fleet grant")
-        if not isinstance(plan, ResolvedPickPlacePlan):
-            raise ValueError("plan must be a validated ResolvedPickPlacePlan")
         if (not callable(command_for_phase) or not callable(phase_gate)
                 or not callable(current_fence)):
             raise ValueError("command factory, semantic phase gate, and current fence must be callable")
@@ -85,9 +138,9 @@ class PickPlaceRunner:
         with self._lock:
             return None if self._current_phase is None else self._current_phase.phase_id
 
-    @staticmethod
-    def _command_digest(command: TrajectoryCommand, phase: PlannedMotionPhase,
-                        plan: ResolvedPickPlacePlan) -> str:
+    def _command_digest(self, command: TrajectoryCommand, phase: PlannedMotionPhase,
+                        plan: ResolvedPickPlacePlan,
+                        state: ExecutionStateSnapshot) -> str:
         document = {
             "command_id": command.command_id,
             "phase_id": phase.phase_id,
@@ -102,7 +155,11 @@ class PickPlaceRunner:
                 }
                 for point in command.trajectory_points
             ],
-            "source_state_sequence": phase.source_state_sequence,
+            "planned_source_state_sequence": phase.source_state_sequence,
+            "execution_state_sequence": state.sequence,
+            "execution_joint_positions": dict(state.joint_positions),
+            "start_state_positions": phase.start_state_positions,
+            "start_state_tolerances": self.start_state_tolerances,
             "calibration_revision": phase.calibration_revision,
             "transform_revision": phase.transform_revision,
             "planning_scene_revision": phase.planning_scene_revision,
@@ -111,7 +168,28 @@ class PickPlaceRunner:
         encoded = json.dumps(document, sort_keys=True, separators=(",", ":"), allow_nan=False)
         return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
 
-    def _build_command(self, phase: PlannedMotionPhase) -> TrajectoryCommand:
+    def _build_command(
+        self, phase: PlannedMotionPhase,
+    ) -> tuple[TrajectoryCommand, ExecutionStateSnapshot]:
+        state = self.current_execution_state()
+        if not isinstance(state, ExecutionStateSnapshot):
+            raise ValueError("phase start state provider returned an invalid snapshot")
+        current_time = self.monotonic()
+        if (not math.isfinite(current_time) or state.observed_at_monotonic_s > current_time
+                or current_time - state.observed_at_monotonic_s > self.max_joint_state_age_s):
+            raise ValueError("phase start state is stale or from the future")
+        if state.sequence <= self._last_command_state_sequence:
+            raise ValueError("phase start state sequence did not advance")
+        if set(state.joint_positions) != set(phase.joint_names):
+            raise ValueError("phase start state joint map does not match the plan")
+        if (state.calibration_revision != phase.calibration_revision
+                or state.transform_revision != phase.transform_revision
+                or state.planning_scene_revision != phase.planning_scene_revision):
+            raise ValueError("phase start state calibration, transform, or planning scene changed")
+        for name, expected in zip(phase.joint_names, phase.start_state_positions):
+            if abs(state.joint_positions[name] - expected) > self.start_state_tolerances[name]:
+                raise ValueError("phase start state is outside the planned tolerance")
+
         command = self.command_for_phase(phase)
         if not isinstance(command, TrajectoryCommand):
             raise TypeError("phase command factory must return TrajectoryCommand")
@@ -123,7 +201,10 @@ class PickPlaceRunner:
                 or command.joint_names != phase.joint_names
                 or command.trajectory_points != phase.points):
             raise ValueError("phase command identity/path does not match the validated plan")
-        return command
+        self._last_command_state_sequence = state.sequence
+        # Rebind only after an explicit bounded start-state and revision match;
+        # ArmCommandOwner checks this sequence again at the final dispatch edge.
+        return replace(command, source_state_sequence=state.sequence), state
 
     def start(self) -> dict[str, object]:
         """Persist and submit only the first phase of a fresh attempt."""
@@ -158,8 +239,12 @@ class PickPlaceRunner:
         return self._submit_phase(next_phase, first=False)
 
     def _submit_phase(self, phase: PlannedMotionPhase, *, first: bool) -> dict[str, object]:
-        command = self._build_command(phase)
-        digest = self._command_digest(command, phase, self.plan)
+        try:
+            command, execution_state = self._build_command(phase)
+        except Exception as exc:
+            self.recorder.hold(reason="PHASE_START_STATE_INVALID")
+            raise RuntimeError("phase start state is invalid; execution is held") from exc
+        digest = self._command_digest(command, phase, self.plan, execution_state)
         with self._lock:
             if self._submitting:
                 raise RuntimeError("another phase submission is already in progress")
@@ -187,24 +272,12 @@ class PickPlaceRunner:
                     command, on_goal_event=self.on_ros_goal_event,
                 )
             except Exception:
-                response = DriverSubmission(accepted=None)
-            if not isinstance(response, DriverSubmission):
-                response = DriverSubmission(accepted=None)
-            if first:
-                recorded = self.recorder.record_first_submission(
-                    phase_id=phase.phase_id, accepted=response.accepted,
-                    driver_goal_id=response.driver_goal_id,
-                )
-                if response.accepted is None:
-                    self.recorder.hold(reason="DRIVER_ACCEPTANCE_UNKNOWN")
-                return recorded
-            phase_receipt = self.recorder.record_submission(
-                phase_id=phase.phase_id, accepted=response.accepted,
-                driver_goal_id=response.driver_goal_id,
-            )
-            if response.accepted is None:
-                self.recorder.hold(reason="DRIVER_ACCEPTANCE_UNKNOWN")
-            return {"phase": phase_receipt}
+                response = PhaseDispatch(dispatched=None)
+            if not isinstance(response, PhaseDispatch):
+                response = PhaseDispatch(dispatched=None)
+            if response.dispatched is not True:
+                self._record_dispatch_failure(phase, first, response.dispatched)
+            return {"dispatched": response.dispatched}
 
         try:
             result = self.submission_fence.run_if_open(
@@ -237,10 +310,36 @@ class PickPlaceRunner:
         else:
             for event in pending:
                 self.on_ros_goal_event(event)
-        return result
+        if result.get("reason") == "STOP_GENERATION_FENCED":
+            return result
+        phase_rows = self.recorder.phases()
+        recorded = next((row for row in phase_rows if row["phase_id"] == phase.phase_id), None)
+        action = self.recorder.parent()
+        if recorded is None or action is None:
+            self.recorder.hold(reason="PHASE_ACCEPTANCE_RECORDING_UNKNOWN")
+            raise RuntimeError("phase dispatch lost its durable journal record")
+        return {"action": action, "phase": recorded, "dispatched": result.get("dispatched")}
+
+    def _record_dispatch_failure(self, phase: PlannedMotionPhase, first: bool,
+                                 dispatched: bool | None) -> None:
+        accepted = False if dispatched is False else None
+        if first:
+            self.recorder.record_first_submission(
+                phase_id=phase.phase_id, accepted=accepted, driver_goal_id=None,
+            )
+        else:
+            self.recorder.record_submission(
+                phase_id=phase.phase_id, accepted=accepted, driver_goal_id=None,
+            )
+        if accepted is None:
+            self.recorder.hold(reason="LOCAL_DISPATCH_UNKNOWN")
 
     def on_ros_goal_event(self, event: RosGoalEvent) -> bool:
         """Persist only facts bound to the active command, phase, and goal."""
+        with self._event_lock:
+            return self._process_ros_goal_event(event)
+
+    def _process_ros_goal_event(self, event: RosGoalEvent) -> bool:
         with self._lock:
             phase = self._current_phase
             command = self._current_command
@@ -253,7 +352,7 @@ class PickPlaceRunner:
                     "GOAL_REJECTED", "GOAL_ACCEPTANCE_UNKNOWN"
             } and event.goal_id != goal_id):
                 return False
-            if self._submitting and event.kind not in {"GOAL_REJECTED", "GOAL_ACCEPTANCE_UNKNOWN"}:
+            if self._submitting:
                 if len(self._pending_events) >= self._MAX_PENDING_EVENTS:
                     self._pending_overflow = True
                     return False
@@ -264,10 +363,82 @@ class PickPlaceRunner:
             self._last_event_sequence = event.sequence
 
         if event.kind in {"GOAL_ACCEPTANCE_UNKNOWN", "GOAL_REJECTED"}:
+            parent = self.recorder.parent()
+            if parent is None:
+                return False
+            accepted = None if event.kind == "GOAL_ACCEPTANCE_UNKNOWN" else False
+            if phase.ordinal == 0 and parent["state"] == "SUBMITTING":
+                self.recorder.record_first_submission(
+                    phase_id=phase.phase_id, accepted=accepted, driver_goal_id=None,
+                )
+            elif parent["state"] in {"ACCEPTED", "RUNNING"}:
+                self.recorder.record_submission(
+                    phase_id=phase.phase_id, accepted=accepted, driver_goal_id=None,
+                )
+            elif (parent["state"] in {"UNKNOWN", "HOLD"}
+                  and any(row["phase_id"] == phase.phase_id and row["state"] == "UNKNOWN"
+                          for row in self.recorder.phases())):
+                return True
+            else:
+                return False
+            if accepted is None:
+                self.recorder.hold(reason="ROS_GOAL_ACCEPTANCE_UNKNOWN")
+            return True
+        if event.kind == "GOAL_ACCEPTED":
+            parent = self.recorder.parent()
+            if parent is None:
+                return False
+            if phase.ordinal == 0 and parent["state"] == "SUBMITTING":
+                self.recorder.record_first_submission(
+                    phase_id=phase.phase_id, accepted=True, driver_goal_id=event.goal_id,
+                )
+            elif parent["state"] in {"ACCEPTED", "RUNNING"}:
+                self.recorder.record_submission(
+                    phase_id=phase.phase_id, accepted=True, driver_goal_id=event.goal_id,
+                )
+            elif parent["state"] in {"UNKNOWN", "HOLD"}:
+                rows = self.recorder.phases()
+                unresolved = next((row for row in rows if row["phase_id"] == phase.phase_id), None)
+                if unresolved is None or unresolved["state"] != "UNKNOWN":
+                    return False
+                self.recorder.record_late_acceptance(
+                    phase_id=phase.phase_id, driver_goal_id=event.goal_id,
+                )
+                with self._lock:
+                    self._current_goal_id = event.goal_id
+                self.recorder.record_late_cancel_request(
+                    phase_id=phase.phase_id, driver_goal_id=event.goal_id,
+                )
+                acknowledged = self.goal_port.cancel_goal(event.goal_id)
+                if type(acknowledged) is bool:
+                    self.recorder.record_cancel_ack(
+                        phase_id=phase.phase_id, acknowledged=acknowledged,
+                    )
+                return True
+            else:
+                return False
+            with self._lock:
+                self._current_goal_id = event.goal_id
+            if (self.current_fence(self.grant.authority_epoch, self.grant.dispatch_generation)
+                    and self.submission_fence.is_open(
+                        authority_epoch=self.grant.authority_epoch,
+                        dispatch_generation=self.grant.dispatch_generation,
+                    )):
+                return True
+            self.recorder.request_cancel(phase_id=phase.phase_id)
+            acknowledged = self.goal_port.cancel_goal(event.goal_id)
+            if type(acknowledged) is bool:
+                self.recorder.record_cancel_ack(
+                    phase_id=phase.phase_id, acknowledged=acknowledged,
+                )
+            self.recorder.hold(reason="STOP_GENERATION_FENCED_AFTER_GOAL_ACCEPTANCE")
             return True
         if goal_id is None or event.goal_id != goal_id:
             return False
-        if event.kind == "GOAL_ACCEPTED":
+        parent = self.recorder.parent()
+        if (parent is not None and parent["state"] in {"UNKNOWN", "HOLD"}
+                and any(row["phase_id"] == phase.phase_id and row["state"] == "UNKNOWN"
+                        for row in self.recorder.phases())):
             return True
         if event.kind == "RUNNING_FEEDBACK":
             try:
