@@ -3974,3 +3974,10 @@
 - 변경: 검토(APPROVE-WITH-FIXES) 1번. `bag_to_video.py` sidecar 의 부수 토픽(cmd_vel·odom·line/observation·scan)을 최근접에서 "프레임 bag log time 이하의 최신 메시지"로 바꿨다(미래 누설 없음, `dt` ≤ 0). motion 창도 프레임 이전 0.5 s 만 본다. `extract.py` MCAP 경로의 `t` 를 bag log time 에서 카메라 헤더 stamp 로 바꾸고 행에 `stamp_ns`·`log_ns` 를 적는다. D-356 보강에 sidecar 스키마(필드·시계)를 적었다. D-379 자동 라벨러가 같은 규칙을 쓴다.
 - 증거: `test_bag_to_video.py` 에 직전값·미래 배제·extract 헤더 stamp 시험 추가, `test_bag_to_video.py test_dataset_extract.py` 25 passed (2026-10-01 Windows, ML venv). 두 실세션 재변환: moving 653/2258, 772/6940.
 - gate 변화: 없음(개발 PC 도구·문서).
+
+## 2026-10-01 · uncommitted · docs(adr): D-341·D-382 착지 — 천장 카메라 콘솔 승인·로봇 ↔ 관제 통신 적합성
+
+- 변경: 브랜치 `docs/d341-overhead-console-pairing`(D-341)과 `docs/robot-fleet-protocol-conformance`를 main에 머지. 뒤 브랜치의 D-351은 main이 2026-09-30 도킹 재시도 결정으로 선점해(2e0b699a) D-346 4항대로 D-382로 재부여. D-360·D-361·D-370과 계획 두 개(`2026-09-29-fleet-robot-code-enrollment-plan.md`, `2026-09-30-site-app-roles-and-shared-link-plan.md`)의 "브랜치" 인용을 D-341·D-382 링크로 고침. D-370의 번호 충돌 서술 두 줄은 기록으로 두고 착지 번호만 덧붙임. `adr_gaps`의 D-341 예약과 낡은 D-346–D-350 예약 제거.
+- 증거: harness generate·lint 0 error.
+- gate 변화: 없음(SOURCE 문서만). 두 ADR 모두 Proposed 그대로.
+- 결정: 없음(착지·번호 정리만). D-341 본문의 옛 이름(`src/site/overhead`, `overhead` CLI)은 D-374·D-377 표로 읽는다.
