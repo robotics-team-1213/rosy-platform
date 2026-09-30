@@ -20,11 +20,13 @@ from __future__ import annotations
 
 import argparse
 from concurrent.futures import ThreadPoolExecutor
+import http.client
 import json
 import os
 from pathlib import Path, PurePosixPath
 import re
 import shutil
+import stat
 import subprocess
 import sys
 import threading
@@ -215,7 +217,9 @@ class Downloader:
                     output.write(payload)
                 progress.add(len(payload))
                 failures = 0
-            except (OSError, URLError) as error:
+            # http.client.IncompleteRead (a connection cut mid-body) is an
+            # HTTPException, not an OSError; it is retried like one.
+            except (OSError, URLError, http.client.HTTPException) as error:
                 failures += 1
                 code = getattr(error, "code", None)
                 print(f"part {index} retry {failures}/{MAX_FAILURES}: {type(error).__name__}"
@@ -250,21 +254,42 @@ class Downloader:
             for index in range(len(ranges)):
                 with self._part(index).open("rb") as source:
                     shutil.copyfileobj(source, output, length=REQUEST_BYTES)
-        actual = temporary.stat().st_size
-        if actual != self.size:
+        try:
+            check_archive(temporary, self.size)
+        except DownloadError as error:
             temporary.unlink()
-            raise DownloadError(f"assembled size {actual} != API size {self.size}; remove {self.parts_dir} and re-run")
+            raise DownloadError(f"assembled {error}; remove {self.parts_dir} and re-run") from None
+        actual = temporary.stat().st_size
         os.replace(temporary, self.out)
         shutil.rmtree(self.parts_dir)
         print(f"complete: {self.out} ({actual} bytes)", flush=True)
         return self.out
 
 
+def check_archive(path: Path, size: int) -> None:
+    """The same check for a fresh download and for an output already on disk:
+    exactly the API's size, and a zip whose every entry passes its CRC."""
+    actual = path.stat().st_size
+    if actual != size:
+        raise DownloadError(f"size {actual} != API size {size}")
+    try:
+        with zipfile.ZipFile(path) as bundle:
+            bad = bundle.testzip()
+    except zipfile.BadZipFile as error:
+        raise DownloadError(f"file is not a valid zip ({error})") from None
+    if bad is not None:
+        raise DownloadError(f"zip entry {bad!r} fails its CRC check")
+
+
 def safe_extract(archive: Path, destination: Path) -> list[str]:
-    """Extract after a CRC check; refuse absolute, drive or '..' entry names."""
+    """Extract after a CRC check; refuse absolute, drive, '..' and symlink entries."""
     destination = destination.resolve()
     with zipfile.ZipFile(archive) as bundle:
         names = bundle.namelist()
+        for info in bundle.infolist():
+            # A Unix symlink entry carries S_IFLNK in the high 16 bits of external_attr.
+            if stat.S_ISLNK(info.external_attr >> 16):
+                raise DownloadError(f"refusing symlink zip entry: {info.filename!r}")
         for name in names:
             path = PurePosixPath(name.replace("\\", "/"))
             if (path.is_absolute() or ".." in path.parts or re.match(r"^[A-Za-z]:", name)
@@ -296,8 +321,14 @@ def main(argv: list[str] | None = None) -> int:
     try:
         github = GitHub(args.api_base, args.repo or default_repo(), github_token())
         artifact = github.artifact(args.artifact_id, args.run, args.name)
-        if args.out.exists() and args.out.stat().st_size == int(artifact["size_in_bytes"]):
-            print(f"already complete: {args.out}", flush=True)
+        if args.out.exists():
+            # Never trusted on size alone: checked exactly like a fresh download.
+            try:
+                check_archive(args.out, int(artifact["size_in_bytes"]))
+            except DownloadError as error:
+                raise DownloadError(f"{args.out} already exists and fails its check ({error}); "
+                                    "remove it and re-run") from None
+            print(f"already complete (size and zip CRC checked): {args.out}", flush=True)
         else:
             Downloader(github, artifact, args.out, args.workers, args.progress_seconds).run()
         if args.extract:

@@ -32,7 +32,9 @@ def _zip(entries: dict[str, bytes]) -> bytes:
 
 
 class Server:
-    def __init__(self, blob: bytes, *, api_size: int | None = None, fail_first: int = 0, honour_range: bool = True):
+    def __init__(self, blob: bytes, *, api_size: int | None = None, fail_first: int = 0, honour_range: bool = True,
+                 short_first: int = 0):
+        self.short_first = short_first
         self.blob = blob
         self.api_size = len(blob) if api_size is None else api_size
         self.fail_first = fail_first
@@ -99,7 +101,16 @@ class Server:
                     self.send_header("Content-Range", f"bytes {start}-{end}/{len(outer.blob)}")
                 with outer.lock:
                     outer.blob_bytes += len(body)
+                    cut = outer.short_first > 0
+                    if cut:
+                        outer.short_first -= 1
                 self.send_header("Content-Length", str(len(body)))
+                if cut:  # promise the whole range, send half, drop the connection
+                    self.send_header("Connection", "close")
+                    self.end_headers()
+                    self.wfile.write(body[:len(body) // 2])
+                    self.close_connection = True
+                    return
                 self.end_headers()
                 self.wfile.write(body)
 
@@ -225,5 +236,60 @@ def test_extract_refuses_a_corrupt_entry(tmp_path):
     archive = tmp_path / "bad.zip"
     archive.write_bytes(bytes(data))
     with pytest.raises(tool.DownloadError, match="CRC"):
+        tool.safe_extract(archive, tmp_path / "dest")
+    assert not (tmp_path / "dest").exists()
+
+
+# Review (MEDIUM): a connection cut mid-body raises http.client.IncompleteRead,
+# which is not an OSError; it must be retried, not end the run.
+def test_a_short_body_is_retried(tmp_path):
+    out = tmp_path / "a.zip"
+    with Server(BLOB, short_first=2) as server:
+        assert _main(server, "--artifact-id", 7, "--out", out, "--workers", 1) == 0
+        assert server.short_first == 0
+    assert out.read_bytes() == BLOB
+
+
+# Review (LOW): an output already on disk is checked like a fresh download.
+def test_an_existing_output_is_checked_not_trusted_on_size(tmp_path, capsys):
+    out = tmp_path / "a.zip"
+    out.write_bytes(b"\0" * len(BLOB))  # the right size, not the artifact
+    with Server(BLOB) as server:
+        assert _main(server, "--artifact-id", 7, "--out", out) == 1
+        assert server.blob_bytes == 0
+    assert "fails its check" in capsys.readouterr().err
+    assert out.read_bytes() == b"\0" * len(BLOB)  # never silently replaced
+
+
+def test_a_fresh_download_gets_the_same_check(tmp_path, capsys):
+    corrupt = bytearray(BLOB)
+    corrupt[corrupt.index(bytes(range(256))) + 7] ^= 0xFF  # right size, a failing CRC
+    out = tmp_path / "a.zip"
+    with Server(bytes(corrupt)) as server:
+        assert _main(server, "--artifact-id", 7, "--out", out, "--workers", 2) == 1
+    assert "fails its CRC check" in capsys.readouterr().err
+    assert not out.exists()
+
+
+def test_a_valid_existing_output_is_reused(tmp_path, capsys):
+    out = tmp_path / "a.zip"
+    out.write_bytes(BLOB)
+    with Server(BLOB) as server:
+        assert _main(server, "--artifact-id", 7, "--out", out) == 0
+        assert server.blob_bytes == 0
+    assert "already complete (size and zip CRC checked)" in capsys.readouterr().out
+
+
+# Review (LOW): a symlink entry is refused explicitly, whatever its name.
+def test_extract_refuses_a_symlink_entry(tmp_path):
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w") as bundle:
+        bundle.writestr("ok.txt", b"ok")
+        link = zipfile.ZipInfo("release/link")
+        link.external_attr = (0o120777 << 16)
+        bundle.writestr(link, "../../outside")
+    archive = tmp_path / "link.zip"
+    archive.write_bytes(buffer.getvalue())
+    with pytest.raises(tool.DownloadError, match="symlink"):
         tool.safe_extract(archive, tmp_path / "dest")
     assert not (tmp_path / "dest").exists()
