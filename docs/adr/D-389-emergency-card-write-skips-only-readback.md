@@ -16,11 +16,19 @@
 **Decision:**
 
 1. **표준 절차가 기본이다.** `write-card.ps1`은 그대로 전체 readback까지 한다. 긴급 절차는 명시 스위치
-   `-Emergency`와 필수 `-EmergencyReason`(10–200자 인쇄 가능 ASCII, 큰따옴표 없음)으로만 켜진다. 이유가 없으면 UAC 전에
-   거부하고, `-PlanOnly`에는 쓸 수 없다.
+   `-Emergency`와 필수 `-EmergencyReason`(10–200자 인쇄 가능 ASCII, 큰따옴표·백슬래시 없음 — 관리자 창으로 넘기는
+   인용이 깨지지 않게)으로만 켜진다. 이유가 없으면 UAC 전에 거부하고, `-PlanOnly`에는 쓸 수 없다.
 2. **건너뛰는 것은 전체 readback 하나다.** 서명 검증, 시리얼 선택, plan 고정, 사전 측정, ERASE 확인, 카드 재확인은 그대로다.
    싼 점검 하나는 남긴다: 쓰기 뒤 카드 첫 섹터의 MBR disk signature가 이미지와 같아야 한다.
-3. **증거는 정직하게.** 진행 파일 `bundle`/`unverified-no-bundle`, `done`/`complete-unverified`, 상태 명령
+   **긴급 resume(`-Emergency -ResumeAfterWrite`)은 이 카드의 이전 시도 기록이 깨끗할 때만 된다.** 표준 resume은 전체 readback이
+   카드를 다시 판정하지만 긴급 resume에는 그 판정이 없어서, 이미 readback 불일치로 "카드 교체"가 나온 카드나 stall
+   watchdog이 죽인 쓰기에도 receipt가 나갈 수 있었다(독립 리뷰 HIGH). 그래서 긴급 resume은 reviewed plan(`-PlanPath`)을
+   요구하고, 같은 plan의 진행 파일(plan 폴더·로그 폴더의 `*.progress.jsonl`, 현재 파일은 이번 시도 이전 줄)을 읽는다.
+   마지막 전체 쓰기 시도가 Imager 정상 종료(exit 0 뒤 `readback` 단계 진입)까지 갔고, 그 뒤 어떤 시도에도 쓰기 단계 실패
+   (stall·kill·exit≠0), readback 불일치(`kind: mismatch`), 이미지 오류(`kind: image`)가 없을 때만 허용한다. 즉 허용되는
+   마지막 상태는 정상 종료 뒤의 `written-unverified`나 `unverified-no-bundle`이다. 기록이 없으면 거부한다.
+3. **증거는 정직하게.** 진행 파일 `bundle`/`unverified-no-bundle`, `receipt`/`complete-unverified`,
+   `done`/`complete-unverified`(receipt 단계에서 창이 죽어도 검증된 카드처럼 보이지 않게), 상태 명령
    `Result: COMPLETE, NOT VERIFIED`, 창 경고 두 번(ERASE 전·끝). receipt는
    `media_readback={verified:false, skipped:"emergency", bytes_verified:0, sanity:{...}}`와
    `emergency={reason, at, readback:"skipped", registry, follow_up}`. 로봇 번호·이름·UID는 registry에 예약된 채로 남고
@@ -28,6 +36,8 @@
 4. **후속 검증.** 첫 부팅 전이면 `verify-emergency-card.ps1`이 같은 카드를 읽기 전용으로 다시 읽는다. boot 파티션에서
    쓰기가 더한 `rosy-provision/`·`rosy-config.yaml`만 이름을 남기고 허용한다(`verify-media-readback.py --allow-boot-extra`).
    성공하면 원 receipt 옆에 `<receipt>.readback.json`(원 receipt sha256 포함)을 쓰고, 원 receipt는 바꾸지 않는다.
+   이 허용은 시험 fixture에서도 카드 이미지의 FAT 파티션 안에 bundle과 설정 파일을 실제로 넣어 증명한다(다른 파일이
+   다르면 실패).
    부팅한 카드는 이미지와 같을 수 없으므로 readback 대신 **장치 위 검증**을 한다: 활성 릴리스 파일을 서명된 릴리스의
    `SHA256SUMS`로 다시 해시하고(`sha256sum -c`), OS 패키지는 `dpkg --verify`로 설치 파일과 패키지 해시를 대조한다
    (2026-10-01 rosy-pinky-9dfk에서 이렇게 했다). 설정 파일처럼 첫 부팅이 바꾸는 항목의 차이는 목록으로 남기고 판단한다.
@@ -48,6 +58,9 @@
   없을 때만 쓴다.
 - 운영자의 로컬 stub과 커미셔닝 사본(`.worktrees/card-emergency`)은 이 결정으로 대체된다.
 - 순서 기록: 결정 1–5의 코드는 이 ADR보다 먼저 커밋됐다(같은 브랜치). 이 ADR이 그 결정을 모두 적고, 결정 6은 코드보다 먼저 적었다.
+  독립 리뷰(REQUEST CHANGES)의 긴급 resume 이력 검사, receipt 단계 상태, 이유의 백슬래시 금지도 코드보다 먼저 여기에 적었다.
+- 결정 6의 `-l rosy`는 맞다: `rosy`는 암호 없는 sudo를 가지며, 2026-10-01 rosy-pinky-9dfk에서 이 키 경로로
+  `sudo -n python3 -`를 실행했다.
 
 **Validation:**
 
