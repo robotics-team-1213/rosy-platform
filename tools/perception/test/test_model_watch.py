@@ -90,20 +90,14 @@ def _passed(order, robots):
             "robots": {n: {"status": st, "attempts": at} for n, (st, at) in robots.items()}}
 
 
-def test_plan_deliveries_newest_pending_wins_per_robot():
+def test_supersede_older_leaves_only_the_newest_pending():
     state = {"commits": {C1: _passed(1, {"pinky-a": ("pending", 1), "pinky-b": ("ok", 1)}),
-                         C2: _passed(2, {"pinky-a": ("pending", 0), "pinky-b": ("pending", 5)})},
-             "shadow": {"pinky-b": {"sha": C1, "order": 1}}}
-    todo, superseded = watch.plan_deliveries(state, ROBOTS, max_attempts=5)
-    assert todo == [(C2, "pinky-a")]
-    assert superseded == [(C1, "pinky-a")]
-
-
-def test_plan_deliveries_never_goes_back_behind_the_shadow():
-    state = {"commits": {C1: _passed(1, {"pinky-a": ("pending", 1)}),
-                         C2: _passed(2, {"pinky-a": ("ok", 1)})},
-             "shadow": {"pinky-a": {"sha": C2, "order": 2}}}
-    assert watch.plan_deliveries(state, ROBOTS, max_attempts=5) == ([], [(C1, "pinky-a")])
+                         C2: _passed(2, {"pinky-a": ("pending", 0)})}}
+    new = watch.supersede_older(state)
+    assert new["commits"][C1]["robots"]["pinky-a"]["status"] == "superseded"
+    assert new["commits"][C1]["robots"]["pinky-b"]["status"] == "ok"
+    assert new["commits"][C2]["robots"]["pinky-a"]["status"] == "pending"
+    assert state["commits"][C1]["robots"]["pinky-a"]["status"] == "pending"  # pure
 
 
 def test_record_delivery_counts_attempts_and_gives_up():
@@ -204,12 +198,11 @@ class Fakes:
         self.failing_robot, self.list_error = failing_robot, list_error
         self.intake_error = intake_error
         self.listed, self.intakes, self.delivers = [], [], []
-        self.shadow, self.history, self.observed = {}, {}, []
+        self.shadow, self.hold, self.busy, self.observed = {}, {}, set(), []
 
     def observe(self, robot):
         self.observed.append(robot["name"])
-        return {"shadow": self.shadow.get(robot["name"]),
-                "history": list(self.history.get(robot["name"], []))}
+        return {"shadow": self.shadow.get(robot["name"]), "hold": self.hold.get(robot["name"])}
 
     def list_commits(self, repo, token):
         self.listed.append((repo, token))
@@ -234,8 +227,10 @@ class Fakes:
         self.delivers.append((robot["name"], rev))
         if robot["name"] == self.failing_robot:
             raise RuntimeError("ssh timeout")
-        self.history.setdefault(robot["name"], []).append(
-            {"action": "push", "revision": rev, "previous": self.shadow.get(robot["name"]) or ""})
+        if robot["name"] in self.busy:
+            return 75
+        if self.hold.get(robot["name"]):  # push --unless-held, checked inside the lock
+            return 76
         self.shadow[robot["name"]] = rev
         return 0
 
@@ -430,6 +425,7 @@ def test_default_deliverer_only_pushes_shadow_with_config_ssh(tmp_path, monkeypa
     assert argv[argv.index("--user") + 1] == "rosy"
     assert argv[argv.index("--timeout") + 1] == "120"
     assert argv[argv.index("--operator") + 1] == f"site:{watch.socket.gethostname()}"
+    assert "--unless-held" in argv  # the site never overrides an operator's hold
     assert watch.load_config(_config(tmp_path))["push_timeout_s"] == 600
 
 
@@ -440,41 +436,90 @@ def rev_of(sha):
 
 
 def test_delivery_decision():
-    orders = {"r1": 1, "r2": 2}
-    obs = lambda shadow, hist=(): {"shadow": shadow, "history": list(hist)}  # noqa: E731
-    assert watch.delivery_decision("r2", 2, obs(None), orders) == "push"
-    assert watch.delivery_decision("r2", 2, obs("r2"), orders) == "ok"
-    assert watch.delivery_decision("r1", 1, obs("r2"), orders) == "superseded"
-    assert watch.delivery_decision("r2", 2, obs("manual-x"), orders) == "push"
-    rolled = [{"action": "push", "revision": "r2", "previous": "r1"},
-              {"action": "rollback", "revision": "r1", "previous": "r2"}]
-    assert watch.delivery_decision("r2", 2, obs("r1", rolled), orders) == "held"
-    released = [*rolled, {"action": "release-hold", "revision": "r1", "previous": "r1"}]
-    assert watch.delivery_decision("r2", 2, obs("r1", released), orders) == "push"
+    assert watch.delivery_decision("r2", {"shadow": None, "hold": None}) == "push"
+    assert watch.delivery_decision("r2", {"shadow": "r1", "hold": None}) == "push"
+    assert watch.delivery_decision("r2", {"shadow": "r2", "hold": None}) == "ok"
+    assert watch.delivery_decision("r2", {"shadow": "r1", "hold": {"by": "ana"}}) == "held"
 
 
-def test_operator_rollback_holds_that_revision(tmp_path):
+def test_manual_hold_stops_the_robot_until_release(tmp_path):
     _seed(tmp_path, {})
     cfg = _config(tmp_path)
     fakes = Fakes([C1])
-    fakes.failing_robot = "pinky-a"
-    assert _run(cfg, fakes) == 1
-    # an operator pushes C1's model by hand and rolls it back: hold on that rev
-    fakes.failing_robot = None
-    fakes.shadow["pinky-a"] = "older"
-    fakes.history["pinky-a"] = [
-        {"action": "push", "revision": rev_of(C1), "previous": "older"},
-        {"action": "rollback", "revision": "older", "previous": rev_of(C1)}]
-    before = len(fakes.delivers)
+    fakes.hold["pinky-a"] = {"by": "ana", "action": "rollback"}
     assert _run(cfg, fakes) == 0
+    assert fakes.delivers == [("pinky-b", rev_of(C1))]  # held robot not even tried
     assert _run(cfg, fakes) == 0
-    assert len(fakes.delivers) == before  # not re-pushed while held
     rec = _state(tmp_path)["commits"][C1]["robots"]["pinky-a"]
-    assert rec["status"] == "pending" and rec["attempts"] == 1  # a hold costs no attempt
-    fakes.history["pinky-a"].append({"action": "release-hold", "revision": "older",
-                                     "previous": "older"})
+    assert rec == {"status": "pending", "attempts": 0}  # a hold costs no attempt
+    fakes.hold.pop("pinky-a")  # rosy_ml release-hold
     assert _run(cfg, fakes) == 0
     assert fakes.delivers[-1] == ("pinky-a", rev_of(C1))
+
+
+def test_hold_set_between_observe_and_push_is_76_and_costs_nothing(tmp_path):
+    _seed(tmp_path, {})
+    cfg = _config(tmp_path)
+    fakes = Fakes([C1])
+    real_observe = fakes.observe
+
+    def racy(robot):  # the operator takes the hold right after the watcher looked
+        got = real_observe(robot)
+        fakes.hold[robot["name"]] = {"by": "ana"}
+        return got
+
+    fakes.observe = racy
+    assert _run(cfg, fakes) == 0
+    rec = _state(tmp_path)["commits"][C1]["robots"]
+    assert rec["pinky-a"] == {"status": "pending", "attempts": 0}
+    assert all(r != rev_of(C1) for r in fakes.shadow.values())
+
+
+def test_busy_lock_is_retried_without_using_an_attempt(tmp_path):
+    _seed(tmp_path, {})
+    cfg = _config(tmp_path, max_attempts=1)
+    fakes = Fakes([C1])
+    fakes.busy.add("pinky-a")
+    assert _run(cfg, fakes) == 0
+    assert _state(tmp_path)["commits"][C1]["robots"]["pinky-a"] == {"status": "pending",
+                                                                    "attempts": 0}
+    fakes.busy.clear()
+    assert _run(cfg, fakes) == 0
+    assert fakes.shadow["pinky-a"] == rev_of(C1)
+
+
+def test_after_release_a_robot_behind_is_brought_back_to_the_newest(tmp_path):
+    _seed(tmp_path, {})
+    cfg = _config(tmp_path)
+    fakes = Fakes([C1])
+    assert _run(cfg, fakes) == 0
+    fakes.commits = [C2, C1]
+    assert _run(cfg, fakes) == 0
+    assert fakes.shadow["pinky-a"] == rev_of(C2)
+    # an operator rolls pinky-a back to C1 (hold), later releases the hold
+    fakes.shadow["pinky-a"], fakes.hold["pinky-a"] = rev_of(C1), {"by": "ana"}
+    n = len(fakes.delivers)
+    assert _run(cfg, fakes) == 0
+    assert len(fakes.delivers) == n
+    fakes.hold.pop("pinky-a")
+    assert _run(cfg, fakes) == 0
+    assert fakes.delivers[-1] == ("pinky-a", rev_of(C2))
+    assert fakes.shadow["pinky-a"] == rev_of(C2)
+    assert _state(tmp_path)["commits"][C2]["robots"]["pinky-a"]["status"] == "ok"
+
+
+def test_unreachable_robot_that_is_up_to_date_is_not_an_error(tmp_path):
+    _seed(tmp_path, {})
+    cfg = _config(tmp_path)
+    fakes = Fakes([C1])
+    assert _run(cfg, fakes) == 0
+
+    def offline(robot):
+        raise RuntimeError("no route")
+
+    fakes.observe = offline
+    assert _run(cfg, fakes) == 0
+    assert _state(tmp_path)["commits"][C1]["robots"]["pinky-a"]["status"] == "ok"
 
 
 def test_model_already_on_the_robot_is_not_pushed_again(tmp_path):

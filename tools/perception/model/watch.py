@@ -12,19 +12,19 @@ One run (rosy-model-watch.timer, every 10 min):
    gate verdict (pass/fail) is final; an infrastructure error (disk, network,
    HF, missing runtime, timeout) is retried on later runs up to max_attempts,
    then recorded as gave_up.
-4. Deliver: every passed commit is pending per robot; a robot added to the
-   config later gets the newest passed commit. Per robot only the newest
-   pending commit is considered; older pending ones, and any not newer than
-   what the watcher last delivered, are superseded (newest wins). Before a push
-   the robot's real pointer and history.jsonl are read:
-   - already on that revision (an operator pushed it) -> ok, no push;
-   - the robot holds a revision the watcher knows to be newer -> superseded;
-   - operator hold: the latest pointer action on the robot is a rollback away
-     from this revision -> not pushed (no attempt used) until an operator
-     pushes something else or runs `deliver.py release-hold`;
-   - otherwise push, as operator "site:<hostname>".
-   A failed read or push stays pending and is retried on later runs, without
-   re-running intake, up to max_attempts.
+4. Deliver: only the newest passed commit is ever pushed (newest wins); older
+   pending entries are superseded, and a robot added to the config later gets
+   it too. For every robot the robot's real hold file and shadow pointer are
+   read each run:
+   - hold file present (an operator pushed or rolled back by hand) -> held:
+     nothing pushed, no attempt used, until `rosy_ml release-hold <robot>`;
+   - already on the newest revision -> ok, no push;
+   - otherwise push `--unless-held` as operator "site:<hostname>" - also when
+     the robot was up to date before and is behind again (released after a
+     rollback). Inside the robot lock a hold taken meanwhile gives exit 76
+     (held) and a busy lock exit 75 (retry next run); neither uses an attempt.
+   A failed read or push of a robot that is not up to date stays pending and is
+   retried on later runs, without re-running intake, up to max_attempts.
 The state file is rewritten atomically after every step.
 
 The end of automation is the shadow slot: this only ever calls `deliver push`.
@@ -50,8 +50,8 @@ Config (YAML):
   max_attempts: 5                         # optional: per intake / per robot push
   push_timeout_s: 600                     # optional: deliver --timeout
 
-Exit codes: 0 run finished and nothing is waiting on a retry (a failed intake is
-a recorded outcome, not an error); 1 an intake infrastructure error or a robot
+Exit codes: 0 run finished and nothing is waiting on a retry (a failed intake,
+a held robot or a busy lock is a recorded outcome, not an error); 1 an intake infrastructure error or a robot
 push failed this run (retried later); 2 bad config or state file; 3 the HF
 listing failed (nothing recorded)."""
 
@@ -76,6 +76,7 @@ STATE_VERSION = 1
 _REPO = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*")
 _NAME = re.compile(r"[A-Za-z0-9._][A-Za-z0-9._-]*")
 _SHA = re.compile(r"[0-9a-f]{40}")
+BUSY_EXIT, HELD_EXIT = 75, 76  # deliver.py: robot lock busy / robot held (no attempt used)
 
 
 # --- pure core ------------------------------------------------------------------------------
@@ -128,28 +129,23 @@ def plan_run(commits: list[str], state: dict, limit: int, max_attempts: int) -> 
     return [sha for sha in reversed(commits) if due(sha)][:max(limit, 0)]
 
 
-def plan_deliveries(state: dict, robots: list[str], max_attempts: int):
-    """([(sha, robot)] to push, [(sha, robot)] superseded). Per robot only the
-    newest pending commit is pushed, and never one not newer than its shadow."""
-    commits = state.get("commits") or {}
-    todo, superseded = [], []
-    for robot in robots:
-        pending = sorted(
-            (rec["order"], sha) for sha, rec in commits.items()
-            if rec.get("intake") == "pass"
-            and (rec.get("robots") or {}).get(robot, {}).get("status") == "pending"
-            and rec["robots"][robot].get("attempts", 0) < max_attempts)
-        if not pending:
+def newest_passed(state: dict) -> str | None:
+    passed = [(rec["order"], sha) for sha, rec in (state.get("commits") or {}).items()
+              if rec.get("intake") == "pass" and rec.get("model_revision")]
+    return max(passed)[1] if passed else None
+
+
+def supersede_older(state: dict) -> dict:
+    """Pending robot entries on any passed commit but the newest are superseded:
+    the newest passed model is the only one ever pushed (newest wins)."""
+    newest = newest_passed(state)
+    for sha, rec in (state.get("commits") or {}).items():
+        if sha == newest or rec.get("intake") != "pass":
             continue
-        floor = (state.get("shadow") or {}).get(robot, {}).get("order", -1)
-        newest_order, newest = pending[-1]
-        superseded += [(sha, robot) for _, sha in pending[:-1]]
-        if newest_order > floor:
-            todo.append((newest_order, newest, robot))
-        else:
-            superseded.append((newest, robot))
-    todo.sort()
-    return [(sha, robot) for _, sha, robot in todo], superseded
+        for robot, entry in (rec.get("robots") or {}).items():
+            if entry.get("status") == "pending":
+                state = supersede(state, sha, robot)
+    return state
 
 
 def ensure_targets(state: dict, robots: list[str]) -> dict:
@@ -166,16 +162,12 @@ def ensure_targets(state: dict, robots: list[str]) -> dict:
     return state
 
 
-def delivery_decision(rev: str, order: int, observed: dict, rev_orders: dict) -> str:
-    """push | ok | held | superseded, from the robot's real pointer and history."""
-    from deliver import operator_hold
-    actual = observed.get("shadow")
-    if actual == rev:
-        return "ok"
-    if operator_hold(observed.get("history") or []) == rev:
+def delivery_decision(rev: str, observed: dict) -> str:
+    """held | ok | push, from the robot's real hold file and shadow pointer."""
+    if observed.get("hold"):
         return "held"
-    if actual in rev_orders and rev_orders[actual] > order:
-        return "superseded"
+    if observed.get("shadow") == rev:
+        return "ok"
     return "push"
 
 
@@ -303,7 +295,8 @@ def default_deliverer(cfg: dict):
                              "--identity", cfg["ssh"]["identity"],
                              "--known-hosts", cfg["ssh"]["known_hosts"],
                              "--timeout", str(cfg["push_timeout_s"]),
-                             "--operator", f"site:{socket.gethostname()}"])
+                             "--operator", f"site:{socket.gethostname()}",
+                             "--unless-held"])
     return push
 
 
@@ -385,30 +378,46 @@ def main(argv=None, *, list_commits=hf_list_commits, intake_fn=None, deliver_fn=
         state = apply_result(state, sha, result)
         save_state(cfg["state_file"], state)
 
-    state = ensure_targets(state, list(robots))
-    todo, superseded = plan_deliveries(state, list(robots), max_attempts)
-    for sha, name in superseded:
-        state = supersede(state, sha, name)
+    state = supersede_older(ensure_targets(state, list(robots)))
     save_state(cfg["state_file"], state)
-    rev_orders = {rec["model_revision"]: rec["order"] for rec in state["commits"].values()
-                  if rec.get("intake") == "pass" and rec.get("model_revision")}
-    for sha, name in todo:
+    sha = newest_passed(state)
+    for name in robots if sha else ():
         rev = state["commits"][sha]["model_revision"]
+        entry = state["commits"][sha]["robots"][name]
+        if entry["status"] == "gave_up":
+            continue
         try:
-            decision = delivery_decision(rev, state["commits"][sha]["order"],
-                                         observe_fn(robots[name]), rev_orders)
-            if decision == "held":
-                print(f"{sha[:12]}: {rev} -> {name}: held (an operator rolled it back; "
-                      "deliver.py release-hold ends the hold)")
+            decision = delivery_decision(rev, observe_fn(robots[name]))
+        except Exception as exc:  # noqa: BLE001 - one robot never blocks the others
+            if entry["status"] == "ok":  # up to date when last seen: nothing to retry
+                print(f"{name}: cannot read the robot ({exc}); last delivered {rev}")
                 continue
-            if decision == "superseded":
-                state = supersede(state, sha, name)
+            decision, error = "error", f"{type(exc).__name__}: {exc}"
+        if decision == "held":
+            print(f"{sha[:12]}: {rev} -> {name}: held by an operator (rosy_ml release-hold)")
+            continue
+        if decision == "ok":
+            if entry["status"] != "ok":
+                state = record_delivery(state, sha, name, error=None, max_attempts=max_attempts)
+                save_state(cfg["state_file"], state)
+            continue
+        if decision == "push":
+            if entry["status"] == "ok":  # the robot is behind again (released after a rollback)
+                state = _set_robot(state, sha, name, {"status": "pending", "attempts": 0})
+            try:
+                code = deliver_fn(robots[name], rev)
+            except Exception as exc:  # noqa: BLE001 - one robot never blocks the others
+                code, error = 1, f"{type(exc).__name__}: {exc}"
+            else:
+                error = None if code == 0 else f"deliver exit {code}"
+            if code == HELD_EXIT:  # an operator took the hold after we looked
+                print(f"{sha[:12]}: {rev} -> {name}: held by an operator (rosy_ml release-hold)")
                 save_state(cfg["state_file"], state)
                 continue
-            code = 0 if decision == "ok" else deliver_fn(robots[name], rev)
-            error = None if code == 0 else f"deliver exit {code}"
-        except Exception as exc:  # noqa: BLE001 - one robot never blocks the others
-            error = f"{type(exc).__name__}: {exc}"
+            if code == BUSY_EXIT:
+                print(f"{sha[:12]}: {rev} -> {name}: robot lock busy, retry next run")
+                save_state(cfg["state_file"], state)
+                continue
         state = record_delivery(state, sha, name, error=error, max_attempts=max_attempts)
         save_state(cfg["state_file"], state)
         outcome = state["commits"][sha]["robots"][name]["status"]
