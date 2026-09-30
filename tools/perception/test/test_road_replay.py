@@ -70,7 +70,7 @@ def test_replay_reports_keep_and_road_metrics_and_gates():
     assert metrics["levels"]["TRACK"] > 0.9
     assert abs(rows[-1]["d"]) < 0.01
     assert set(metrics["gates"]) == {
-        "on_line_le_keep", "on_paint_le_keep", "jump", "straight_mean_abs_err", "nis_mean",
+        "on_line_le_keep", "on_paint_le_keep", "jump", "straight_mean_abs_err", "nis_mean_by_regime",
         "nis_above_9_21", "coast_survival", "wall_false_accept", "hypothesis_switches",
         "wrong_side_lock", "deterministic"}
     assert metrics["gates"]["jump"]["pass"] is True
@@ -216,7 +216,7 @@ def test_nis_is_reported_by_motion_state():
     metrics, rows = rr.replay(iter(frames), dropouts=())
     by = metrics["nis"]["by_state"]
     assert set(by) == {"straight", "curve", "turning", "stationary"}
-    assert by["straight"]["n"] > 0 and by["stationary"]["n"] > 0
+    assert by["straight"]["n"] > 0          # held (stationary) views are not re-applied samples
     assert rows[-1]["motion"] == "stationary" and rows[10]["motion"] == "straight"
     sides = metrics["keeper"]["straight_heading_deg"]
     assert sides["left"]["n"] > 0 and abs(sides["left"]["median"]) < 2.0 and abs(sides["right"]["median"]) < 2.0
@@ -297,3 +297,40 @@ def test_wrong_side_reference_is_the_keepers_nearest_pair_not_the_extremes():
                   {"side": "right", "y_at_side_x_m": -0.422}]
     assert rr._keeper_pair_mid(boundaries) == pytest.approx(-0.028)
     assert rr._keeper_pair_mid([{"side": "left", "y_at_side_x_m": 0.06}]) is None
+
+
+def test_nis_tail_is_the_pre_gate_best_association_with_a_gated_out_rate():
+    metrics, rows = rr.replay(synthetic(24), dropouts=())
+    tail = metrics["nis"]["tail"]
+    assert tail["basis"] == "pre_gate_best_association"
+    assert tail["n"] == 2 * sum(1 for r in rows if r["level"] != "STOP")   # best R and best L per frame
+    assert tail["above_9_21"] == 0.0 and tail["gated_out_rate"] == 0.0
+    assert metrics["gates"]["nis_above_9_21"]["value"] == tail["above_9_21"]
+
+
+def test_nis_mean_gate_is_two_sided_per_regime():
+    by = {"straight": {"n": 10, "mean": 1.2}, "curve": {"n": 5, "mean": 4.5}, "turning": {"n": 0, "mean": None},
+          "stationary": {"n": 3, "mean": 0.1}}
+    gate = rr._nis_mean_gate(by)
+    assert gate["value"] == {"straight": 1.2, "curve": 4.5, "turning": None}
+    assert gate["pass"] is False                                   # curve above 4.0
+    by["curve"]["mean"] = 0.6
+    assert rr._nis_mean_gate(by)["pass"] is True                 # stationary is not a regime
+    by["straight"]["mean"] = 0.4
+    assert rr._nis_mean_gate(by)["pass"] is False                # below 0.5
+    assert rr._nis_mean_gate({k: {"n": 0, "mean": None} for k in by})["pass"] is None
+
+
+def test_extrinsic_residual_logs_the_per_side_bias_on_straights():
+    metrics, _ = rr.replay(synthetic(24), dropouts=())
+    res = metrics["extrinsic_residual"]
+    for side in ("left", "right"):
+        assert res[side]["n"] > 0
+        assert abs(res[side]["median_nu_y_m"]) < 0.01 and abs(res[side]["median_nu_psi_deg"]) < 2.0
+    assert "not absorbed into R" in res["note"]
+
+
+def test_held_view_frames_are_not_nis_samples():
+    frames = list(synthetic(24)) + [rr.Frame(103.0 + i / FPS, LANE, (0.15, 0.0, 0.0)) for i in range(8)]
+    metrics, _ = rr.replay(iter(frames), dropouts=())
+    assert metrics["nis"]["by_state"]["stationary"]["n"] <= 2      # only the first held view is applied

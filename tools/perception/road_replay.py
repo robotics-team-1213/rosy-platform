@@ -319,6 +319,14 @@ def _parallel_pair_width(last):
     return [width] if abs(l["heading_deg"] - r["heading_deg"]) <= 5.0 and 0.10 <= width <= 0.30 else []
 
 
+def _nis_mean_gate(by_state):
+    """D-384 R0 (lane owner, 2026-10-01): each regime's applied-association NIS mean in
+    [0.5, 4.0], two-sided and not pooled; stationary is not a regime."""
+    value = {k: by_state[k]["mean"] for k in ("straight", "curve", "turning")}
+    present = [v for v in value.values() if v is not None]
+    return {"value": value, "pass": None if not present else all(0.5 <= v <= 4.0 for v in present)}
+
+
 def _curve_residuals(nis_state):
     """NIS on curved segments against straights. sigma_kappa0 = 0.5 is accepted only
     until validated on curves (lane owner, 2026-10-01): a blow-up is flagged."""
@@ -362,7 +370,8 @@ def replay(frames, *, labels: dict | None = None, dropouts=DROPOUTS_M,
     est = RoadStateEstimator(params)
     labels = labels or {}
     rows, inputs, checkpoints, nis = [], [], {}, []
-    nis_candidates = []
+    nis_candidates, nis_tail, tail_frames, tail_gated = [], [], 0, 0
+    residual = {"left": [], "right": []}
     nis_state = {"straight": [], "curve": [], "turning": [], "stationary": []}
     prev_pose = prev_t = None
     wall_accepted = wall_hits = labelled = 0
@@ -423,13 +432,22 @@ def replay(frames, *, labels: dict | None = None, dropouts=DROPOUTS_M,
                            "on_line": lane_replay.target_on_line(mask, target[1]),
                            "on_paint": px is not None and lane_replay.target_on_paint(floor, px)}
         if snap["level"] != STOP:
-            for c in snap["candidates"]:
-                if not isinstance(c.get("nis"), dict):
-                    continue
-                nis_candidates.append(min(c["nis"].values()))
-                if c.get("label") in ("R", "L"):   # the filter's own innovations
+            scored = [c for c in snap["candidates"] if isinstance(c.get("nis"), dict)]
+            nis_candidates += [min(c["nis"].values()) for c in scored]
+            # tail: pre-gate NIS of the best association per side (lowest NIS for R, for L)
+            best = [min(scored, key=lambda c, lab=lab: c["nis"][lab]) for lab in ("R", "L")] if scored else []
+            for lab, c in zip(("R", "L"), best):
+                nis_tail.append(c["nis"][lab])
+            if best:
+                lab, c = min(zip(("R", "L"), best), key=lambda p: p[1]["nis"][p[0]])
+                tail_frames += 1
+                tail_gated += (c.get("gate") or {}).get(lab) is not None
+            for c in scored:
+                if c.get("label") in ("R", "L") and not snap["deduplicated"]:   # applied innovations
                     nis.append(c["nis"][c["label"]])
                     nis_state[row["motion"]].append(nis[-1])
+                    if row["motion"] == "straight" and c.get("nu"):
+                        residual["left" if c["label"] == "L" else "right"].append(c["nu"])
         mid_keep = _keeper_pair_mid(keeper.last.get("boundaries", []))
         if row["strategy"] == "both" and snap["level"] == TRACK and mid_keep is not None:
             mid_est = -snap["d"] - 0.22 * snap["phi"] + snap["kappa"] * 0.22 ** 2 / 2
@@ -503,6 +521,16 @@ def replay(frames, *, labels: dict | None = None, dropouts=DROPOUTS_M,
     metrics["calibration_suspect_run"] = metrics["calibration_suspect_frames"] > 0
     metrics["params"] = dataclasses.asdict(params)
     metrics["curve_residuals"] = _curve_residuals(nis_state)
+    tail = np.asarray(nis_tail, float)
+    metrics["nis"]["tail"] = {"basis": "pre_gate_best_association", "n": len(nis_tail),
+                              "above_9_21": round(float((tail > 9.21).mean()), 4) if len(tail) else None,
+                              "gated_out_rate": round(tail_gated / tail_frames, 4) if tail_frames else None}
+    metrics["extrinsic_residual"] = {
+        "note": "median innovation per side on straights, for the calibration record; not absorbed into R",
+        **{side: {"n": len(v),
+                  "median_nu_y_m": round(float(np.median([x["y"] for x in v])), 4) if v else None,
+                  "median_nu_psi_deg": round(float(np.median([x["psi_deg"] for x in v])), 3) if v else None}
+           for side, v in residual.items()}}
 
     def worse(key):
         a, b = road_m[key], keep_m[key]
@@ -513,8 +541,8 @@ def replay(frames, *, labels: dict | None = None, dropouts=DROPOUTS_M,
         "on_paint_le_keep": {"value": road_m["on_paint_rate"], "pass": worse("on_paint_rate")},
         "jump": _gate(road_m["jump_rate"], lambda v: v <= 0.02),
         "straight_mean_abs_err": _gate(road_m["straight_mean_abs_err"], lambda v: v <= 0.08),
-        "nis_mean": _gate(nis_mean, lambda v: 1.6 <= v <= 2.5),
-        "nis_above_9_21": _gate(nis_above, lambda v: 0.005 <= v <= 0.03),
+        "nis_mean_by_regime": _nis_mean_gate(metrics["nis"]["by_state"]),
+        "nis_above_9_21": _gate(metrics["nis"]["tail"]["above_9_21"], lambda v: 0.005 <= v <= 0.03),
         "coast_survival": _gate(min(rates) if rates else None, lambda v: v >= 0.95),
         "wall_false_accept": _gate(wall_rate, lambda v: v <= 0.01),
         "hypothesis_switches": _gate(switch_rate, lambda v: v <= 1.0),
