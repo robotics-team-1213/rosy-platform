@@ -281,8 +281,11 @@ class ActionRunner:
         phase = self.store.request_phase_cancel(
             action_id, attempt_id, phase_id=phase_id,
         )
+        cancel_phase = getattr(self.driver, "cancel_phase", None)
+        if not callable(cancel_phase):
+            return phase
         try:
-            acknowledged = self.driver.cancel(action)
+            acknowledged = cancel_phase(action, phase)
         except Exception:
             return phase
         if type(acknowledged) is bool:

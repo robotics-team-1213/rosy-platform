@@ -40,6 +40,7 @@ class FakeDriver:
         self.fail = fail
         self.submissions = []
         self.cancellations = []
+        self.phase_cancellations = []
 
     def submit(self, grant):
         self.submissions.append(grant.action_id)
@@ -49,6 +50,12 @@ class FakeDriver:
 
     def cancel(self, action):
         self.cancellations.append(action["attempt_id"])
+        return True
+
+    def cancel_phase(self, action, phase):
+        self.phase_cancellations.append(
+            (action["attempt_id"], phase["phase_id"], phase["driver_goal_id"])
+        )
         return True
 
 
@@ -259,7 +266,10 @@ def test_phase_cancel_ack_requires_terminal_goal_result_before_next_phase(tmp_pa
 
     assert canceled["state"] == "CANCEL_REQUESTED"
     assert canceled["cancel_acknowledged"] is True
-    assert driver.cancellations == [grant.attempt_id]
+    assert driver.cancellations == []
+    assert driver.phase_cancellations == [
+        (grant.attempt_id, "approach", "ros-goal-approach")
+    ]
     with pytest.raises(InvalidActionTransition, match="successful terminal"):
         runner.begin_phase(
             grant.action_id, grant.attempt_id, phase_id="grasp", ordinal=1,
@@ -273,6 +283,30 @@ def test_phase_cancel_ack_requires_terminal_goal_result_before_next_phase(tmp_pa
         result={"status": "canceled"}, peer_uid=1001,
     )
     assert terminal["state"] == "CANCELED"
+    assert store.get_action(grant.action_id)["state"] == "ACCEPTED"
+
+
+def test_phase_cancel_without_goal_specific_driver_stays_unacknowledged(tmp_path):
+    store, driver, runner = _runner(tmp_path)
+    driver.cancel_phase = None
+    grant = FleetActionGrant.model_validate(_grant())
+    runner.submit(grant, peer_uid=1001)
+    runner.begin_phase(
+        grant.action_id, grant.attempt_id, phase_id="approach", ordinal=0,
+        command_digest="a" * 64, peer_uid=1001,
+    )
+    runner.record_phase_submission(
+        grant.action_id, grant.attempt_id, phase_id="approach", accepted=True,
+        driver_goal_id="ros-goal-approach", peer_uid=1001,
+    )
+
+    canceled = runner.cancel_phase(
+        grant.action_id, grant.attempt_id, phase_id="approach", peer_uid=1001,
+    )
+
+    assert canceled["state"] == "CANCEL_REQUESTED"
+    assert canceled["cancel_acknowledged"] is None
+    assert driver.cancellations == []
     assert store.get_action(grant.action_id)["state"] == "ACCEPTED"
 
 
