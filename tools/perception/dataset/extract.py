@@ -2,9 +2,17 @@
 
 Usage: extract.py <source> --out data/perception/frames/<name>
 <source> is a video file (cv2-readable) or a session folder with bag/*.mcap.
+
+Side data is matched to frames, not attached in bag order: payloads that carry
+a `stamp` (the shadow result, line/observation) go to the frame whose header
+stamp equals it, if logged within SIDE_LOOKAHEAD_S after that frame (inference
+finishes after the frame is logged); stamp-less side data (cmd_vel, text) is
+the latest one logged before the frame. camera/front/compressed is preferred:
+when a session has it, raw camera/front frames are not extracted.
 """
 import argparse
 import json
+from collections import deque
 import os
 import math
 import re
@@ -20,11 +28,13 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "src" / "runtime" / "sensing"))
 
 from frames import FrameSelector  # noqa: E402
-from control.recording import CAMERA_TOPIC, SIDE_TOPICS  # noqa: E402
+from control.recording import CAMERA_TOPIC, COMPRESSED_CAMERA_TOPIC, SIDE_TOPICS  # noqa: E402
 from control.sensing.perception.image_frame import image_msg_to_frame  # noqa: E402
 
 STRING_SCHEMA = "std_msgs/msg/String"
 JPEG_Q = 95
+SIDE_LOOKAHEAD_S = 0.5  # a stamped side message may be logged this long after its frame
+STAMP_TOL_S = 1e-4  # stamps round-trip through JSON floats
 
 
 def image_to_bgr(encoding: str, width: int, height: int, step: int, data: bytes) -> np.ndarray:
@@ -104,35 +114,101 @@ def _dumps(row) -> str:
     return json.dumps(_clean(row), allow_nan=False)
 
 
+def _payload_stamp(value):
+    stamp = value.get("stamp") if isinstance(value, dict) else None
+    if isinstance(stamp, bool) or not isinstance(stamp, (int, float)):
+        return None
+    return float(stamp) if math.isfinite(stamp) else None
+
+
+def _header_stamp(msg):
+    try:
+        return float(msg.header.stamp.sec) + float(msg.header.stamp.nanosec) * 1e-9
+    except AttributeError:
+        return None
+
+
+def _has_compressed(files, make_reader) -> bool:
+    for f in files:
+        with open(f, "rb") as fh:
+            reader = make_reader(fh)
+            try:
+                summary = reader.get_summary()
+            except Exception:  # truncated file: no summary section
+                summary = None
+            if summary is not None:
+                channels = summary.channels.values()
+            else:
+                fh.seek(0)
+                channels = (ch for _, ch, _ in make_reader(fh).iter_messages())
+            if any(_topic_is(ch.topic, COMPRESSED_CAMERA_TOPIC) for ch in channels):
+                return True
+    return False
+
+
 def _mcap_frames(files, skipped=None):
     try:
         from mcap.reader import make_reader
         from mcap_ros2.decoder import DecoderFactory
     except ImportError:
         raise SystemExit("MCAP extraction needs: pip install mcap mcap-ros2-support")
-    side = {}
+    prefer_compressed = _has_compressed(files, make_reader)
+    latest = {}  # stamp-less side data, latest by log time
+    early = deque()  # stamped side data logged before its frame: (t, stamp, name, value)
+    pending = deque()  # frames still inside their look-ahead window
+
+    def ready(now):
+        while pending and (now is None or pending[0]["t"] + SIDE_LOOKAHEAD_S < now):
+            f = pending.popleft()
+            yield f["t"], f["item"], f["side"], f["ext"]
+
     for f in files:
         with open(f, "rb") as fh:
             reader = make_reader(fh, decoder_factories=[DecoderFactory()])
             for schema, ch, message, msg in reader.iter_decoded_messages():
+                t = message.log_time / 1e9
+                yield from ready(t)
+                while early and early[0][0] + SIDE_LOOKAHEAD_S < t:
+                    early.popleft()
                 # Channels carry absolute, possibly namespaced topics.
                 name = next((n for n in SIDE_TOPICS if _topic_is(ch.topic, n)), None)
                 if name is not None:
-                    side[name] = _side_value(schema.name, msg)
+                    value = _side_value(schema.name, msg)
+                    stamp = _payload_stamp(value)
+                    if stamp is None:
+                        latest[name] = value
+                        continue
+                    frame = next((p for p in pending if p["stamp"] is not None
+                                  and abs(p["stamp"] - stamp) <= STAMP_TOL_S), None)
+                    if frame is not None:
+                        frame["side"][name] = value
+                    else:
+                        early.append((t, stamp, name, value))
                     continue
-                t = message.log_time / 1e9
-                if _topic_is(ch.topic, CAMERA_TOPIC + "/compressed"):
+                if _topic_is(ch.topic, COMPRESSED_CAMERA_TOPIC):
                     ext = "png" if "png" in str(msg.format).lower() else "jpg"
-                    yield t, bytes(msg.data), dict(side), ext
+                    item = bytes(msg.data)
                 elif _topic_is(ch.topic, CAMERA_TOPIC):
+                    if prefer_compressed:
+                        continue
                     try:
-                        bgr = image_to_bgr(msg.encoding, msg.width, msg.height, msg.step,
-                                           bytes(msg.data))
+                        item = image_to_bgr(msg.encoding, msg.width, msg.height, msg.step,
+                                            bytes(msg.data))
                     except ValueError:  # malformed frame: count it, keep going
                         if skipped is not None:
                             skipped[0] += 1
                         continue
-                    yield t, bgr, dict(side), "jpg"
+                    ext = "jpg"
+                else:
+                    continue
+                stamp = _header_stamp(msg)
+                side = dict(latest)
+                if stamp is not None:
+                    for _, s_stamp, s_name, s_value in early:
+                        if abs(s_stamp - stamp) <= STAMP_TOL_S:
+                            side[s_name] = s_value
+                pending.append({"t": t, "stamp": stamp, "item": item, "side": side, "ext": ext})
+    yield from ready(None)
 
 
 def main(argv=None) -> int:

@@ -231,3 +231,116 @@ def test_namespaced_session_extracts_frames_and_side_data(tmp_path):
     assert len(rows) == 1
     assert rows[0]["side"] == {SHADOW_TOPIC: {"error_delta": 0.1},
                                "line/observation": "not json"}
+
+
+COMPRESSED_DEF = """std_msgs/Header header
+string format
+uint8[] data
+================================================================================
+MSG: std_msgs/Header
+builtin_interfaces/Time stamp
+string frame_id
+================================================================================
+MSG: builtin_interfaces/Time
+int32 sec
+uint32 nanosec
+"""
+
+
+def _frame_px(t):
+    px = np.full((4, 6, 3), int(t * 10) % 200, np.uint8)
+    px[:, int(t) % 5:int(t) % 5 + 2] = 255
+    return px
+
+
+def _write_stamped(tmp_path, events):
+    """events: (log_s, kind, stamp_s[, extra]) with kind raw|jpeg|shadow|line|cmd."""
+    from mcap_ros2.writer import Writer
+
+    from control.recording import SHADOW_TOPIC
+
+    bag = tmp_path / "sess" / "bag"
+    bag.mkdir(parents=True)
+    with open(bag / "bag_0.mcap", "wb") as fh:
+        w = Writer(fh)
+        img_s = w.register_msgdef("sensor_msgs/msg/Image", IMAGE_DEF)
+        jpg_s = w.register_msgdef("sensor_msgs/msg/CompressedImage", COMPRESSED_DEF)
+        str_s = w.register_msgdef("std_msgs/msg/String", STRING_DEF)
+        tw_s = w.register_msgdef("geometry_msgs/msg/Twist", TWIST_DEF)
+        for log_s, kind, stamp in events:
+            ns = int(round(log_s * 1e9))
+            sec = int(stamp)
+            header = {"stamp": {"sec": sec, "nanosec": int(round((stamp - sec) * 1e9))},
+                      "frame_id": "c"}
+            px = _frame_px(stamp)
+            if kind == "raw":
+                w.write_message("/camera/front", img_s, {
+                    "header": header, "height": 4, "width": 6, "encoding": "bgr8",
+                    "is_bigendian": 0, "step": 18, "data": list(px.tobytes())}, ns, ns)
+            elif kind == "jpeg":
+                ok, buf = cv2.imencode(".jpg", px)
+                w.write_message("/camera/front/compressed", jpg_s, {
+                    "header": header, "format": "jpeg", "data": list(buf.tobytes())}, ns, ns)
+            elif kind == "shadow":
+                w.write_message("/" + SHADOW_TOPIC, str_s, {"data": json.dumps(
+                    {"stamp": stamp, "error_delta": stamp})}, ns, ns)
+            elif kind == "line":
+                w.write_message("/line/observation", str_s, {"data": json.dumps(
+                    {"source": "CAMERA_LINE", "stamp": stamp, "error": stamp})}, ns, ns)
+            elif kind == "cmd":
+                w.write_message("/cmd_vel", tw_s, {"linear": {"x": stamp, "y": 0.0, "z": 0.0},
+                                "angular": {"x": 0.0, "y": 0.0, "z": 0.0}}, ns, ns)
+        w.finish()
+    return tmp_path / "sess"
+
+
+def _rows(sess, tmp_path):
+    out = tmp_path / "out"
+    assert extract.main([str(sess), "--out", str(out), "--min-interval", "0",
+                         "--max-hamming", "-1"]) == 0
+    return [json.loads(l) for l in (out / "frames.jsonl").read_text().splitlines()]
+
+
+def test_shadow_logged_after_its_frame_attaches_to_that_frame(tmp_path):
+    """WSL lap-1 bug: shadow for frame N (published after inference) landed on N+1."""
+    pytest.importorskip("mcap_ros2")
+    from control.recording import SHADOW_TOPIC
+
+    sess = _write_stamped(tmp_path, [
+        (0.95, "cmd", 1.0), (1.0, "raw", 1.0), (1.02, "line", 1.0), (1.1, "shadow", 1.0),
+        (1.95, "cmd", 2.0), (2.0, "raw", 2.0), (2.02, "line", 2.0), (2.3, "shadow", 2.0),
+        (3.0, "raw", 3.0),  # its shadow never came (skipped frame)
+        (3.2, "shadow", 99.0),  # stamp of no frame in the bag: attaches nowhere
+    ])
+    rows = _rows(sess, tmp_path)
+    assert [r["t"] for r in rows] == [1.0, 2.0, 3.0]
+    assert [r["side"].get(SHADOW_TOPIC, {}).get("stamp") for r in rows] == [1.0, 2.0, None]
+    assert [r["side"].get("line/observation", {}).get("stamp") for r in rows] == [1.0, 2.0, None]
+    # cmd_vel has no stamp: latest logged before the frame
+    assert [r["side"]["cmd_vel"]["linear"]["x"] for r in rows] == [1.0, 2.0, 2.0]
+
+
+def test_side_message_beyond_the_lookahead_window_is_not_attached(tmp_path):
+    pytest.importorskip("mcap_ros2")
+    from control.recording import SHADOW_TOPIC
+
+    assert extract.SIDE_LOOKAHEAD_S == 0.5
+    sess = _write_stamped(tmp_path, [
+        (1.0, "raw", 1.0), (1.45, "line", 1.0), (1.6, "shadow", 1.0), (2.0, "raw", 2.0)])
+    rows = _rows(sess, tmp_path)
+    assert SHADOW_TOPIC not in rows[0]["side"]
+    assert rows[0]["side"]["line/observation"]["stamp"] == 1.0
+    assert SHADOW_TOPIC not in rows[1]["side"]
+
+
+def test_compressed_camera_is_preferred_over_raw(tmp_path):
+    pytest.importorskip("mcap_ros2")
+    from control.recording import SHADOW_TOPIC
+
+    events = []
+    for t in (1.0, 2.0, 3.0):
+        events += [(t, "raw", t), (t + 0.001, "jpeg", t), (t + 0.1, "shadow", t)]
+    rows = _rows(_write_stamped(tmp_path, events), tmp_path)
+    assert len(rows) == 3  # not six: raw frames are dropped when compressed exists
+    assert [r["t"] for r in rows] == [1.001, 2.001, 3.001]
+    assert [r["side"][SHADOW_TOPIC]["stamp"] for r in rows] == [1.0, 2.0, 3.0]
