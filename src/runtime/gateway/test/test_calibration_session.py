@@ -344,3 +344,103 @@ def test_power_wake_stays_open(lease):
     client, _, _ = lease
     _open(client)
     assert client.post("/api/v1/power/wake", headers=OTHER).status_code == 200
+
+
+# --- review item 9: stop paths, cancels, /do, concurrency ----------------------------
+
+
+def test_viewer_token_can_estop_during_a_lease(lease):
+    client, services, _ = lease
+    _open(client)
+    stopped = client.post("/api/v1/safety/stop", headers=VIEWER)
+    assert stopped.status_code == 200
+    assert services.safety.estop is True
+
+
+@pytest.mark.parametrize("method,path,body", [
+    ("post", "/api/v1/navigation/cancel", None),
+    ("post", "/api/v1/swarm/cancel", None),
+    ("put", "/api/v1/line-follow/mode", {"mode": "OFF"}),
+    ("post", "/api/v1/mode", {"mode": "IDLE"}),
+])
+def test_cancel_and_stop_routes_stay_open_to_non_owners(lease, method, path, body):
+    client, _, _ = lease
+    _open(client)
+    response = getattr(client, method)(path, json=body, headers=OTHER)
+    assert response.status_code == 200, (path, response.json())
+
+
+def test_docking_cancel_stays_open_to_non_owners(core_client):
+    client, _ = core_client(capabilities={"docking": {"supported": True}})
+    _open(client)
+    assert client.post("/api/v1/docking/cancel", headers=OTHER).status_code == 200
+
+
+@pytest.mark.parametrize("step", [
+    {"do": "move", "linear": 0.1, "angular": 0.0},
+    {"do": "navigate", "x": 1.0, "y": 0.0},
+    {"do": "home"},
+    {"do": "follow", "target_robot_id": "rosy_02"},
+])
+def test_intent_do_is_fenced_like_the_routes_it_calls(lease, step):
+    client, services, _ = lease
+    assert client.post("/api/v1/mode", json={"mode": "MANUAL"}, headers=OPERATOR).status_code == 200
+    _open(client)
+    response = client.post("/api/v1/do", json=step, headers=OTHER)
+    assert response.status_code == 409, response.json()
+    assert response.json()["error"]["code"] == "CALIBRATION_ACTIVE"
+    assert services.command.select_output().linear == 0.0
+
+
+def test_intent_do_stop_stays_open(lease):
+    client, services, _ = lease
+    _open(client)
+    assert client.post("/api/v1/do", json={"do": "stop"}, headers=OTHER).status_code == 200
+    assert services.safety.estop is True
+
+
+def test_concurrent_starts_open_exactly_one_lease(lease):
+    """Many tokens racing POST /calibration/session: one owner, the rest CALIBRATION_ACTIVE."""
+    import threading
+
+    _, services, _ = lease
+    from core_features.calibration import CalibrationSessionError
+
+    results: list[str] = []
+    barrier = threading.Barrier(16)
+
+    def attempt(index: int) -> None:
+        barrier.wait()
+        try:
+            services.calibration.start(kind="drive", label=f"t{index}", ttl_s=30,
+                                       owner_id=f"tok-{index}", owner_role="operator")
+            results.append("opened")
+        except CalibrationSessionError as exc:
+            results.append(exc.code)
+
+    threads = [threading.Thread(target=attempt, args=(i,)) for i in range(16)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(timeout=5)
+    assert results.count("opened") == 1
+    assert results.count("CALIBRATION_ACTIVE") == 15
+    owner = services.calibration.current()["owner"]["id"]
+    # Heartbeats racing expiry: the owner keeps it, nobody else can renew it.
+    errors: list[str] = []
+
+    def beat(token: str) -> None:
+        for _ in range(50):
+            try:
+                services.calibration.heartbeat(services.calibration.current()["id"], token)
+            except CalibrationSessionError as exc:
+                errors.append(exc.code)
+
+    racers = [threading.Thread(target=beat, args=(owner,)),
+              threading.Thread(target=beat, args=("tok-intruder",))]
+    for thread in racers:
+        thread.start()
+    for thread in racers:
+        thread.join(timeout=5)
+    assert set(errors) == {"FORBIDDEN"} and len(errors) == 50
+    assert services.calibration.current()["owner"]["id"] == owner
