@@ -164,3 +164,8 @@
 - gate 변화: 없음.
 - 결정: 이 항목 앞의 "D-358 S1/S2/S3"·"D-358 N항"은 D-370을 가리킨다(main의 D-358 ER2 피드백 outbox와 다름). 옛 항목은 고치지 않는다.
 - 교훈: 없음.
+## 2026-09-30 · uncommitted · docs(protocol): DeviceActionLookup 의미를 실제 사용에 맞춤
+
+- 변경: DeviceActionLookup은 attempt 범위 연산(현재 취소)의 identity pair라는 docstring으로 정정했다. OMX UDS v1 GetAction의 요청은 action_id만이며 응답에서 Fleet이 attempt/grant를 검증한다. API Reference §10.12를 함께 정정했다.
+- 증거: Fleet–OMX 결합 시험과 인접 suite 21 passed. Pydantic field·validation·wire·runtime 동작은 바뀌지 않았다.
+- gate 변화: 없음.

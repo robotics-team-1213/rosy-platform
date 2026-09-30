@@ -367,12 +367,21 @@ def test_running_action_and_stop_request_do_not_claim_physical_completion(tmp_pa
     assert running["stop"]["state"] == "DISPATCH_ENABLED"
     assert running["stop"]["physical_state"] == "UNKNOWN"
 
+    tasks.store.trip_stop_latch(actor_id="operator-1", reason="ESTOP_REQUESTED")
+    latched = client.get(
+        f"/api/fleet/missions/{mission_id}", headers=_OPERATOR,
+    ).json()["progress"]
+    assert latched["mission"]["state"] == "RUNNING"
+    assert latched["action"]["state"] == "RUNNING"
+    assert latched["goal_evidence"]["state"] == "UNKNOWN"
+    assert latched["stop"]["state"] == "DISPATCH_BLOCKED"
+    assert latched["stop"]["physical_state"] == "UNKNOWN"
+
     store.record_action_result(
         mission_id, event_id="result-current", action_id="action-current",
         attempt_id="attempt-current", outcome="SUCCEEDED",
         result={"observed_at": time.time(), "source": "local_action_receipt"},
     )
-    tasks.store.trip_stop_latch(actor_id="operator-1", reason="ESTOP_REQUESTED")
     after = client.get(
         f"/api/fleet/missions/{mission_id}", headers=_OPERATOR,
     ).json()["progress"]
@@ -479,7 +488,7 @@ def test_api_reference_pins_snapshot_cursor_retention_and_unknown_physical_state
         encoding="utf-8",
     )
 
-    assert "**Version:** v1.62" in reference
+    assert "**Version:** v1.63" in reference
     assert "## 10.14 Mission progress snapshots and event cursor" in reference
     assert "`/api/fleet/missions/{mission_id}/events?after_event_id=" in reference
     assert "MISSION_CURSOR_EXPIRED" in reference
