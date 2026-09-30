@@ -309,19 +309,25 @@ function Get-RemoteCommandPlan {
 
     # D-383: dry run, apply, restart the active units it changed (their names
     # come from the apply's JSON, so the display names a placeholder), and
-    # re-check CORE only when something was restarted.
-    function Add-ImageLayerSteps($list, [string]$SyncReleaseId) {
+    # re-check CORE only when something was restarted. A rollback skips that
+    # conditional re-check: its own readiness check always follows the sync.
+    function Add-ImageLayerSteps($list, [string]$SyncReleaseId, [switch]$NoReadyCheck) {
         $ssh = @("-i", $KeyPath) + $sshOptions + @($target)
         Add-Step $list "ssh" $SshExe ($ssh + (Get-ImageLayerSyncArguments $SyncReleaseId -DryRun)) "image-layer-dry-run"
         Add-Step $list "ssh" $SshExe ($ssh + (Get-ImageLayerSyncArguments $SyncReleaseId)) "image-layer-apply"
         Add-Step $list "ssh" $SshExe ($ssh + @("sudo", "-n", "systemctl", "restart")) "image-layer-restart" " <active units the apply changed>"
-        Add-Step $list "ssh" $SshExe ($ssh + (Get-CoreReadyArguments $CoreReadyProbe)) "image-layer-core-ready"
+        if (-not $NoReadyCheck) {
+            Add-Step $list "ssh" $SshExe ($ssh + (Get-CoreReadyArguments $CoreReadyProbe)) "image-layer-core-ready"
+        }
     }
 
     if ($Rollback) {
+        # D-383: sync the image layer back to the release that became current
+        # BEFORE the readiness check. If the newer release's units or scripts
+        # do not work with the older one, CORE is only ready after the sync.
         Add-Step $plan "ssh" $SshExe (@("-i", $KeyPath) + $sshOptions + @($target, "sudo", "-n", $RollbackWrapper))
+        if (-not $SkipImageLayerSync) { Add-ImageLayerSteps $plan "" -NoReadyCheck }
         Add-Step $plan "ssh" $SshExe (@("-i", $KeyPath) + $sshOptions + @($target) + (Get-CoreReadyArguments $CoreReadyProbe))
-        if (-not $SkipImageLayerSync) { Add-ImageLayerSteps $plan "" }
         return $plan
     }
 

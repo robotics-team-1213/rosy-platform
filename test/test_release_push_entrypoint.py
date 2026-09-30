@@ -120,10 +120,10 @@ def test_rollback_plan_skips_the_release_and_only_rolls_back_and_waits(release):
     assert result["rollback"] is True
     assert result["verification"] is None
     plan = result["plan"]
-    assert len(plan) == 2 + 4  # D-383: then the image-layer sync from the new current
+    assert len(plan) == 1 + 3 + 1  # D-383: rollback, image-layer sync, then readiness
     assert plan[0]["arguments"][-1] == "/opt/rosy/native-runtime/rollback-release.sh"
     assert "sudo" in plan[0]["arguments"] and "-n" in plan[0]["arguments"]
-    ready_args = plan[1]["arguments"]
+    ready_args = plan[-1]["arguments"]
     assert ready_args[-3:-1] == ["bash", "-lc"]
     assert "wait-core-ready.py" in ready_args[-1]
 
@@ -292,8 +292,13 @@ def test_rollback_plan_resyncs_the_image_layer_from_the_release_that_becomes_cur
 
     assert completed.returncode == 0, completed.stderr
     plan = json.loads(completed.stdout)["plan"]
-    assert [step["role"] for step in plan[-4:]] == IMAGE_LAYER_ROLES
-    dry_run, apply = plan[-4]["arguments"], plan[-3]["arguments"]
+    # The sync runs BEFORE the readiness check: if the newer release's units do
+    # not work with the older one, CORE only becomes ready after the sync.
+    assert [step["role"] for step in plan] == ["", *IMAGE_LAYER_ROLES[:3], ""]
+    assert "rollback-release.sh" in plan[0]["arguments"][-1]
+    assert "wait-core-ready.py" in plan[-1]["arguments"][-1]
+    assert not any("wait-core-ready.py" in " ".join(step["arguments"]) for step in plan[:-1])
+    dry_run, apply = plan[1]["arguments"], plan[2]["arguments"]
     assert dry_run[-5:-1] == ["sudo", "-n", "sh", "-c"] and apply[-5:-1] == ["sudo", "-n", "sh", "-c"]
     # current first; the release rolled away from only if current predates D-383.
     assert dry_run[-1].index("/opt/rosy/current/deploy/robot/native/sync-image-layer.py") < \
@@ -315,6 +320,8 @@ def test_skip_image_layer_sync_leaves_the_old_plan(release, rollback):
     assert completed.returncode == 0, completed.stderr
     plan = json.loads(completed.stdout)["plan"]
     assert len(plan) == (2 if rollback else 7)
+    if rollback:
+        assert "wait-core-ready.py" in plan[1]["arguments"][-1]
     assert not any(step["role"] for step in plan)
 
 
@@ -375,6 +382,8 @@ def test_a_rollback_to_a_release_without_the_sync_warns_and_skips_it(tmp_path, m
     assert "image-layer sync skipped" in completed.stdout + completed.stderr
     assert not any("systemctl restart" in line for line in calls)
     assert sum("IMAGE_LAYER_SYNC_MISSING" in line for line in calls) == 1
+    # Readiness is still checked, after the skipped sync.
+    assert "wait-core-ready.py" in calls[-1]
 
 
 def test_restart_runs_only_rosy_units_the_apply_reported():
