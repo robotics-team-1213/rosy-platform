@@ -403,7 +403,7 @@ def compare_boot_partition(expected: bytes, actual: bytes, base: int = 0,
                                    "windows_extras": [path for path in extras if path not in provisioning],
                                    "non_file_areas": non_file}
     if allowed_extras:
-        # D-382: a provisioned card (the emergency follow-up) also carries the
+        # D-383: a provisioned card (the emergency follow-up) also carries the
         # bundle and settings file the writer added; they are named, not hidden.
         evidence["provisioning_extras"] = provisioning
     return evidence
@@ -746,7 +746,7 @@ def main() -> int:
     parser.add_argument("--probe-seconds", type=float, default=120.0)
     parser.add_argument("--allow-boot-extra", action="append", default=[], metavar="NAME",
                         help="a top-level boot-partition entry the writer added after the image "
-                             "(rosy-provision, rosy-config.yaml); D-382 emergency follow-up only")
+                             "(rosy-provision, rosy-config.yaml); D-383 emergency follow-up only")
     args = parser.parse_args()
     progress = Progress(args.progress, args.progress_seconds)
     if args.probe:

@@ -70,6 +70,49 @@ one-time per-card provisioning bundle.
   selected disk's FAT32 boot partition. Registry and receipt are updated only then.
 - An image write is MEDIA evidence only; it is not BOOT, DEVICE, or FLEET proof.
 
+## Standard card write
+
+The default, and the only procedure that produces MEDIA evidence:
+`write-card.ps1 -PlanPath <plan> -ReleaseDir <release> -WifiProfile <p> -Detach`.
+Every gate above runs, then Imager (`--disable-verify`, D-180) and the full
+byte-for-byte readback; the receipt says `media_readback.verified: true`.
+
+- The ERASE prompt (`Read-EraseConfirmation`) first drops keys typed before it
+  (`Clear-TypeAhead`); an empty line or end of input fails as
+  `no console input: ... re-run and type exactly ...`, never as a mismatch
+  (2026-09-30: a buffered Enter answered a `-Detach` prompt 0.9 s after it appeared).
+- A CPU-starved PC makes the readback crawl (2026-10-01: 1-3 MB/s, 1.5 h ETA;
+  CPU 100 %, card disk queue 0). Free CPU or raise the verifier's priority
+  (runbook: "readback이 1-3 MB/s로 느릴 때"); a slow readback is not a stall.
+- Release artifacts: `tools/release/download_artifact.py` (parallel range download
+  with progress and resume) instead of a silent `gh run download`.
+
+## Emergency card write (D-383)
+
+Only when the robot needs the card now and the readback cannot be waited for.
+`write-card.ps1 ... -Emergency -EmergencyReason '<why>'` (reason: 10-200
+printable ASCII characters, no double quotes; refused before UAC otherwise;
+never with `-PlanOnly`).
+
+- Every pre-write gate stays: signature, serial, plan pinning, pre-flight,
+  confirmation. Only the full readback is skipped; a cheap check stays (the
+  card's MBR disk signature must equal the image's after the write).
+- Honest evidence: stages `bundle`/`unverified-no-bundle` and
+  `done`/`complete-unverified`; receipt `media_readback.verified=false,
+  skipped="emergency"` plus `emergency={reason, at, readback, registry,
+  follow_up}`. The robot number, name and UID stay registered (reserved).
+- Follow-up, one of: before first boot, `verify-emergency-card.ps1 -Receipt
+  <receipt> -ReleaseDir <release>` (elevated, read-only) re-reads the card,
+  tolerating `rosy-provision/` and `rosy-config.yaml`, and writes
+  `<receipt>.readback.json`; the original receipt is never changed. After boot
+  the card cannot match its image: check `CORE_READY` and G2 on the device, then
+  rewrite it with a standard write and `-ReprovisionReceipt <emergency receipt>`.
+- `-ReprovisionReceipt` accepts an emergency receipt only for a standard write
+  (the new receipt records `supersedes.emergency: true`) and refuses an
+  emergency write on an emergency receipt. Other unverified receipts are refused.
+- A stand-in card (`-DiskInventoryJson` + `-ReadbackDevice`) is the only way tests
+  run either procedure; never point them at a physical disk.
+
 ## Rotating the CORE API credential (D-193 5)
 
 `rotate-core-api-credential.ps1 -DeviceName <name> [-BaseUrl http://host:8080]`
@@ -123,5 +166,5 @@ nor a card readback proves that motors stay off after a physical reboot.
 ## Testing
 
 ```powershell
-python -m pytest test/test_sd_personalization.py test/test_sd_writer_contract.py test/test_sd_write_card_entrypoint.py test/test_media_readback.py test/test_card_diagnostics.py test/test_rotate_core_api_credential.py -q
+python -m pytest test/test_sd_personalization.py test/test_sd_writer_contract.py test/test_sd_write_card_entrypoint.py test/test_media_readback.py test/test_card_diagnostics.py test/test_rotate_core_api_credential.py test/test_download_artifact.py -q
 ```

@@ -18,6 +18,7 @@ Commands a developer runs from the workspace. These are not installed on the rob
 | `web_visible_roles.py` | Role-surface measurement harness: real CORE TestClient + headless Chromium across roles, surfaces, and viewports; exit 1 on missing button kinds, page errors, horizontal overflow, or a failed first response |
 | `harness/` | Module index generator (`rosy_harness.py`) |
 | `hooks/` | D-346 pre-push fast gate (harness lint + contract suites, ~2 min) and its installer |
+| `release/download_artifact.py` | Download one GitHub Actions artifact (`--run` + `--name`, or `--artifact-id`) in parallel resumable byte ranges with MB/rate/ETA progress, an exact API-size check and optional `--extract DIR` (CRC check, no path traversal). Token from `GH_TOKEN` or `gh auth token`; neither it nor the signed URL is printed. Stdlib only; test `test/test_download_artifact.py` |
 
 ## Subdirectories
 
@@ -40,7 +41,7 @@ Commands a developer runs from the workspace. These are not installed on the rob
 ### Testing Requirements
 
 ```bash
-python -m pytest test/architecture/test_folder_layout.py test/test_run_data.py -q
+python -m pytest test/architecture/test_folder_layout.py test/test_run_data.py test/test_download_artifact.py -q
 ```
 
 ### Common Patterns

@@ -72,6 +72,18 @@ python3 deploy/robot/pinky_pro/release/import_unsigned_payload.py "$ARCHIVE" \
 PAYLOAD="$HANDOFF/rosy-unsigned-payload"
 ```
 
+`gh run download` prints nothing for a multi-GB artifact (10+ minutes silent on
+2026-09-30). `tools/release/download_artifact.py` downloads the same artifact in
+parallel byte ranges with progress lines (MB, rate, ETA), resumes after an
+interruption, and checks the size the API reports; the token comes from
+`GH_TOKEN` or `gh auth token` and is never printed:
+
+```bash
+python tools/release/download_artifact.py --run RUN_ID \
+  --name "rosy-unsigned-${RELEASE_ID}-${REVISION}" --out "X:/DevTemp/${RELEASE_ID}/artifact.zip" \
+  --extract "X:/DevTemp/${RELEASE_ID}/artifact"
+```
+
 Retain the run URL and job result with the builder JSON. The Actions artifact
 expires after seven days, so move the verified archive to the offline signing
 environment before then. The importer verifies the outer checksum before
@@ -116,7 +128,13 @@ EVIDENCE="${SESSION%.json}.evidence"
 mkdir -m 0750 "$EVIDENCE"
 ```
 
-### 카드 쓰기 중 문제가 생겼을 때
+### 표준 카드 쓰기 (Standard card write)
+
+기본 절차다. 언제나 이것부터 쓴다. 서명 검증, 시리얼 선택, plan 대조, ERASE 확인, Imager 쓰기, 그리고 카드 전체를 이미지와
+바이트 단위로 비교하는 readback(D-180: Imager는 `--disable-verify`로 돌고, 이 readback이 유일한 매체 검증이다)을 모두 거친다.
+receipt는 `media_readback.verified: true`를 남긴다. readback을 건너뛰는 긴급 절차는 아래 "긴급 카드 쓰기"에 따로 있다.
+
+#### 카드 쓰기 중 문제가 생겼을 때
 
 카드 쓰기(`deploy/robot/pinky_pro/sd/write-card.ps1`)는 실패하면 스스로 멈추고, 카드 상태와 다음 명령을 알린다(D-187).
 실패 문구 끝은 늘 이 형식이다.
@@ -144,6 +162,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\deploy\robot\pinky_pro\sd\
 ```
 
 출력되는 `Log:`, `Progress:`, `Exit marker:`, `Status:` 경로를 적어 둔다. ERASE 문구는 새 관리자 창에 입력한다.
+프롬프트가 뜨기 전에 창에 누른 키는 버려진다(2026-09-30: 앞 단계 중 눌린 Enter가 프롬프트에 바로 답해 `typed: ''`로 실패했다).
+빈 줄을 입력하면 `no console input: re-run and type exactly: ...`로 멈추고 카드는 그대로다. 문구를 다시 입력해 재실행한다.
 처음 쓸 때 준 `-OperatorPublicKey`·`-ReprovisionReceipt`는 여기에도 같이 준다. 끝나면 창에 `EXIT_CODE=`가 남고,
 로그 옆에 `.exit` 표지가 생긴다. 창은 결과를 보인 채 열려 있다.
 UAC 창에서 "아니요"를 눌렀거나 시간이 지났으면 launcher가 `failed`/`untouched`와 `next:`를 진행 파일에 남기고 실패한다.
@@ -219,6 +239,65 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\deploy\robot\pinky_pro\sd\
 ```
 
 receipt에는 `resumed_after_write: true`가 남는다. plan의 receipt가 이미 있으면 거부한다(이미 끝난 카드다).
+
+**readback이 1–3 MB/s로 느릴 때 (CPU 부족).** 2026-10-01에 readback이 1–3 MB/s로 떨어져 ETA가 1.5시간이 됐다. 카드나 리더기
+문제가 아니라 PC CPU가 100%였다(디스크 큐는 0). verifier는 xz 해제와 해시에 CPU를 쓴다. 작업 관리자에서 CPU가 100%이고 카드
+디스크의 활성 시간이 낮으면 이 경우다. 다른 무거운 작업(빌드, 병렬 다운로드, 다른 에이전트)을 멈추거나, 관리자 PowerShell에서
+verifier 우선순위를 올린다(작업 관리자 "세부 정보"에서 해당 `python.exe` 우선 순위를 "높음 이상"으로 바꿔도 된다):
+
+```powershell
+Get-CimInstance Win32_Process -Filter "Name='python.exe'" |
+  Where-Object { $_.CommandLine -like '*verify-media-readback*' } |
+  ForEach-Object { (Get-Process -Id $_.ProcessId).PriorityClass = 'AboveNormal' }
+```
+
+느린 readback은 멈춤이 아니므로 `-ReadbackStallMinutes`가 끊지 않는다. 그래도 기다릴 수 없을 때만 아래 긴급 절차로 간다.
+
+### 긴급 카드 쓰기 (Emergency card write, D-383)
+
+**언제만 쓰나.** 표준 쓰기의 readback을 기다릴 수 없고(예: PC CPU 부족으로 1시간 이상, 위 문단의 조치로도 안 풀림) 로봇이 지금 바로
+카드가 필요할 때만 쓴다. 이유를 반드시 적는다. 편의나 습관으로 쓰지 않는다.
+
+**무엇이 다른가.** 서명 검증, 시리얼 선택, plan 대조, 사전 측정, ERASE 확인, Imager 쓰기는 표준과 같다. 전체 readback만 건너뛴다.
+대신 싼 점검 하나가 남는다: 쓰기 뒤 카드 첫 섹터의 MBR disk signature가 이미지와 같아야 한다(쓰기가 파티션 표에도 닿지 못했으면
+멈춘다). 나머지 바이트는 검증되지 않는다.
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\deploy\robot\pinky_pro\sd\write-card.ps1 `
+  -PlanPath <cards>\plan-<release>-<device>.json `
+  -ReleaseDir <signed release dir> `
+  -WifiProfile <profile> `
+  -Emergency -EmergencyReason "robot needed on the floor now; readback CPU-starved" `
+  -Detach
+```
+
+- `-EmergencyReason`이 없거나 10자 미만이거나 큰따옴표·비ASCII가 있으면 UAC 전에 거부한다. `-PlanOnly`에는 쓸 수 없다.
+- 창과 로그에 `EMERGENCY CARD WRITE` 경고가 ERASE 전과 끝에 나온다. 진행 파일은 `readback`(detail `EMERGENCY: full readback skipped`)
+  → `bundle`/`unverified-no-bundle` → … → `done`/`complete-unverified`, 상태 명령은 `Result: COMPLETE, NOT VERIFIED`다.
+- receipt: `media_readback = {verified: false, skipped: "emergency", bytes_verified: 0, sanity: {...}}`와
+  `emergency = {reason, at, readback: "skipped", registry, follow_up}`. registry의 로봇 번호·이름·UID는 검증 여부와 상관없이
+  예약된 채로 남고, receipt가 그렇게 적는다.
+
+**위험.** 카드가 조용히 잘못 써졌으면(불량 카드, 리더기 끊김, 끝부분 누락) 부팅 실패나 나중의 파일 손상으로 나타난다. 이 카드로
+부팅한 결과는 BOOT·DEVICE 증거일 뿐 MEDIA 증거가 아니다.
+
+**후속 검증 (둘 중 하나는 반드시 한다).**
+
+1. 카드가 아직 부팅되지 않았으면(첫 부팅은 root 파일시스템을 바꾸고 bundle을 소비한다) 같은 리더기에 다시 꽂고 관리자
+   PowerShell에서 readback만 한다. 카드는 읽기만 한다. boot 파티션의 `rosy-provision/`과 `rosy-config.yaml`은 쓰기가 더한
+   것이라 이름을 남기고 허용하고, 나머지는 표준 readback과 똑같이 비교한다.
+
+   ```powershell
+   powershell -NoProfile -ExecutionPolicy Bypass -File .\deploy\robot\pinky_pro\sd\verify-emergency-card.ps1 `
+     -Receipt <cards>\receipt-<release>-<device>.json -ReleaseDir <signed release dir>
+   ```
+
+   성공하면 `VERIFIED`와 함께 원래 receipt 옆에 `receipt-<release>-<device>.readback.json`(원 receipt의 sha256 포함)이
+   생긴다. 원래 receipt는 바꾸지 않는다. 실패하면 카드를 표준 쓰기로 다시 쓴다.
+2. 이미 로봇에서 부팅했으면 readback으로는 검증할 수 없다. 로봇이 `CORE_READY`에 오르고 G2 장치 readback이 통과하는지 본다(기능
+   확인일 뿐 바이트 검증은 아니다). 가능한 빨리 표준 쓰기로 같은 신원을 다시 쓴다:
+   `-ReprovisionReceipt <긴급 receipt>`는 **표준 쓰기에서만** 받는다. 새 receipt의 `supersedes.emergency: true`가 긴급 카드를
+   대체했음을 남긴다. 긴급 receipt로 또 긴급 쓰기를 하면 거부한다(검증 안 된 카드가 이어지지 않게).
 
 ### 전원을 넣으면 보이는 것 (D-190)
 

@@ -528,7 +528,7 @@ if ($ReprovisionReceipt) {
     $resumed = $receiptKeys -ccontains "resumed_after_write" -and $reprovision.resumed_after_write -is [bool] -and $reprovision.resumed_after_write
     $writerProven = ($exitCode -is [int] -or $exitCode -is [long]) -and $exitCode -eq 0
     if ($resumed -and $null -eq $exitCode) { $writerProven = $true }
-    # D-382: an emergency receipt proves the identity was issued here, not that
+    # D-383: an emergency receipt proves the identity was issued here, not that
     # its card was read back. It may be superseded only by a standard write
     # (that is how an emergency card is made whole); never by another emergency.
     $emergencyReceipt = $receiptKeys -ccontains "emergency" -and $null -ne $reprovision.emergency -and
@@ -646,7 +646,7 @@ if (-not $DiskInventoryJson -and -not $ResumeAfterWrite -and [IO.Path]::GetExten
     Fail "-RpiImager must be the Raspberry Pi Imager .exe; a wrapper would hide the real writer from the stall watchdog"
 }
 if ($ReadbackStallMinutes -le 0 -or $WriterStallMinutes -le 0) { Fail "stall limits must be positive" }
-# D-382: the emergency write skips only the full readback, and only with a
+# D-383: the emergency write skips only the full readback, and only with a
 # stated reason (printable ASCII: it goes into the log, receipt and command line).
 if ($Emergency -and $PlanOnly) { Fail "-Emergency is for a write, not a plan: review the plan as usual, then write with -Emergency" }
 if ($Emergency -and ([string]::IsNullOrWhiteSpace($EmergencyReason) -or $EmergencyReason.Trim().Length -lt 10)) {
@@ -967,7 +967,7 @@ if ($null -ne $readMBps -and $readMBps -lt $MinReadMBps) {
 }
 
 if ($Emergency) {
-    Write-Warning ("EMERGENCY CARD WRITE (D-382): the full media readback will be SKIPPED. The card is written and provisioned but NOT verified; the receipt says so. Reason: {0}. Follow up: verify-emergency-card.ps1 before the card boots, or rewrite it with a standard write later." -f $EmergencyReason)
+    Write-Warning ("EMERGENCY CARD WRITE (D-383): the full media readback will be SKIPPED. The card is written and provisioned but NOT verified; the receipt says so. Reason: {0}. Follow up: verify-emergency-card.ps1 before the card boots, or rewrite it with a standard write later." -f $EmergencyReason)
 }
 Set-Stage "confirm" "untouched" ""
 $expectedConfirmation = "ERASE SERIAL $($firstDisk.SerialNumber) $DeviceName"
@@ -1210,7 +1210,7 @@ else {
     }
 }
 
-# D-382: an emergency write skips only this full readback. A cheap sanity check
+# D-383: an emergency write skips only this full readback. A cheap sanity check
 # stays: the card's first sector must carry the image's MBR disk signature (a
 # write that never reached the partition table stops here). The evidence says
 # plainly that the media is unverified.

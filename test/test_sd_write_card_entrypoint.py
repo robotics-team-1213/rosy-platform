@@ -459,7 +459,7 @@ def test_a_bare_python_name_stays_a_path_lookup(case):
     assert json.loads(completed.stdout)["arguments"]["PythonExe"] == "python"
 
 
-# D-382: the emergency procedure is a first-class entry-point option.
+# D-383: the emergency procedure is a first-class entry-point option.
 REASON = "robot needed on the floor now; readback CPU-starved"
 
 
