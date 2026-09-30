@@ -49,3 +49,11 @@
 - 결정: 4400 사유 분류는 "일시적 사유 목록이 아니면 비호환"이다. 수신기의 4400 사유를 바꾸면 벡터 목록도 같이 고친다.
 - 교훈: PowerShell 5.1은 네이티브 인자로 넘긴 here-string 안의 큰따옴표를 깨뜨린다. 커밋 메시지는 `git commit -F <파일>`로 넘긴다.
 - 열린 후속: NSC에 user 인증서가 없어 D-341 16항 되돌림 경로가 이 앱에서 동작하지 않는다(progress 4항).
+
+## 2026-10-01 · f908c2d5 · feat(cam): D-391 사이트 연결 기록 + 접속마다 mDNS로 tls_host 찾기
+
+- 변경: (기록은 2aa00ca3, 재발견·진단은 f908c2d5) 저장 모양을 D-391 1항 사이트 연결 기록(`SiteLink`: `site_name`·`tls_host`·`port`·`ca_pin`·`role`·토큰·`source`·`secure`·`expires_at`, 되돌림 `manual_host`, 진단용 `pairing_subnet`)으로 바꿨다. 옛 저장값(`host`/`pin`)은 읽을 때 옮긴다: IP면 `manual_host`, 이름이면 `tls_host`. 해석된 IP는 저장하지 않는다. 링크 URL은 `tls_host`를 유지하고 OkHttp `Dns`(`SiteDns`)가 접속마다 `SiteResolver`로 주소를 찾는다: `_rosy-overhead._tcp` 탐색(`NsdSiteBrowser`, D-370 TXT 규칙으로 `tls_host` 일치) → 없으면 `manual_host`("수동 주소") → 없으면 `not_discovered`. 찾은 주소는 30 s 캐시하고 접속 실패 때 버린다. 같은 `tls_host`가 두 주소에서 보이면 `conflict`로 자동 선택하지 않는다(D-370 5.3). pin이 있는 IP 전용 기록은 그 IP의 광고에서 `tls_host`를 배워 다음 세션부터 이름으로 붙는다. NSD 제약: API 34 미만은 resolve를 하나씩, 34 이상은 `registerServiceInfoCallback`. 진단: 5 s 안에 못 찾으면 "사이트가 이 Wi-Fi에서 보이지 않습니다 — 같은 이름의 다른 Wi-Fi일 수 있습니다"와 지금 Wi-Fi 서브넷·게이트웨이, 페어링 때 서브넷을 보여 준다. "Wi-Fi 연결 안 됨"은 주소를 가진 LAN 네트워크(LinkProperties) 기준이다(설정 화면 검색도 `activeNetwork` 대신 같은 기준). 실패 분류 이름은 `link/FailureClass.kt` 한 곳에 두었다.
+- 증거: `gradlew testDebugUnitTest assembleDebug` BUILD SUCCESSFUL, JVM 시험 212 passed, 0 failed(새 시험: `SiteLinkTest` 9 기록·이관, `SiteResolverTest` 14 가짜 NSD·순서·캐시·충돌·학습, `SiteDnsTlsTest` 4 MockWebServer 127.0.0.1 + `tls_host` 인증서: SNI=`tls_host`, 다른 이름 인증서 거절, 수동 주소도 `tls_host` 검사, 못 찾으면 소켓 전 `not_discovered`, `FailureClassTest` 3, `ProblemGuideTest` 진단 문구 선택·실제 연결 기준) (2026-10-01 Windows, JDK 21).
+- gate 변화: 없음. DEVICE 점검은 progress 5항.
+- 결정: `manual_host`로 붙어도 URL은 `tls_host`라서, 이름을 아는 기록은 IP SAN 없이도 수동 주소로 붙는다. IP SAN이 필요한 것은 `tls_host`를 모르는 IP 전용 기록뿐이다.
+- 열린 후속: 공유 벡터 `test/fixtures/protocol/failure-classes.v1.json`·`site-link.v1.json`이 main에 아직 없다(rosy-00). 들어오면 `FailureClassTest`·`SiteLinkTest`가 그 벡터를 읽게 바꾼다. 4400/4403/429/503 행은 앱의 해석이다. leaf 단독 pin 금지는 저장 때 판정할 수 없어 `PinnedTrustManager`가 옛 leaf pin을 계속 받는다.
