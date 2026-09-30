@@ -634,3 +634,42 @@ def test_busy_lock_fails_clearly(tmp_path):
         holder.kill()
     assert r.returncode == 75 and "busy" in r.stderr
     assert (root / "shadow.previous").exists()  # nothing changed
+
+
+# --- operator hold and robot observation (D-373 decision 7) ---------------------------------
+
+def _h(action, revision, previous=""):
+    return {"action": action, "revision": revision, "previous": previous}
+
+
+def test_operator_hold_is_the_revision_rolled_back_from():
+    assert deliver.operator_hold([]) is None
+    assert deliver.operator_hold([_h("push", "r1"), _h("push", "r2", "r1")]) is None
+    held = [_h("push", "r1"), _h("push", "r2", "r1"), _h("rollback", "r1", "r2")]
+    assert deliver.operator_hold(held) == "r2"
+    assert deliver.operator_hold([*held, _h("release-hold", "r1", "r1")]) is None
+    assert deliver.operator_hold([*held, _h("push", "r3", "r1")]) is None
+
+
+def test_release_hold_is_locked_and_audited():
+    s = deliver.remote_script("release-hold", None, audit=AUDIT)
+    assert LOCKED in s and '"release-hold"' in s and f"tee -a {ROOT_M}/history.jsonl" in s
+    assert "mv " not in s  # the pointer is not touched
+
+
+def test_observe_parses_pointer_and_history():
+    lines = [json.dumps(_h("push", "r1")), "not json", json.dumps(_h("rollback", "r0", "r1"))]
+    out = f"{ROOT_M}/r0\n--- history\n" + "\n".join(lines) + "\n"
+    runner = FakeRunner(stdout=out)
+    got = deliver.observe("robot", identity="/keys/id", known_hosts="/keys/kh", runner=runner)
+    assert got == {"shadow": "r0", "history": [_h("push", "r1"), _h("rollback", "r0", "r1")]}
+    assert runner.calls[0][-2] == "rosy@robot" and "tail -n 50" in runner.calls[0][-1]
+    assert runner.kwargs[0]["timeout"] == 60
+    with pytest.raises(RuntimeError):
+        deliver.observe("robot", identity="/k", known_hosts="/kh", runner=FakeRunner(returncode=1))
+
+
+def test_release_hold_cli(tmp_path):
+    runner = FakeRunner()
+    assert deliver.main(["release-hold", "robot", "--operator", "ana", *SSH], runner=runner) == 0
+    assert '"release-hold"' in runner.calls[0][-1]

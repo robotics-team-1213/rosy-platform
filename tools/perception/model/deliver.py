@@ -2,6 +2,7 @@
 
 deliver.py push <host> <model_revision> [--models data/perception/models]
 deliver.py rollback <host>
+deliver.py release-hold <host>   (ends an operator hold, see operator_hold)
 deliver.py status <host>
 common: [--user rosy] [--identity KEY] [--known-hosts FILE] [--root /var/lib/rosy/models]
         [--timeout S]  (per ssh/scp step; 600 for push, 60 for rollback/status)
@@ -63,6 +64,43 @@ _STAGE = re.compile(r"/tmp/rosy-model\.[A-Za-z0-9]{8,}")
 LOCK_WAIT_S = 30
 LOCK_BUSY_EXIT = 75  # flock -E: the lock stayed held for LOCK_WAIT_S
 LOCK_NAME, HISTORY_NAME = ".lock", "history.jsonl"
+OBSERVE_SEPARATOR, OBSERVE_HISTORY = "--- history", 50
+POINTER_ACTIONS = ("push", "rollback", "release-hold")
+
+
+def operator_hold(history: list[dict]) -> str | None:
+    """The revision an operator rolled back from, while that rollback is the
+    latest pointer action (a later push or release-hold ends the hold)."""
+    last = next((h for h in reversed(history) if h.get("action") in POINTER_ACTIONS), None)
+    if last and last["action"] == "rollback":
+        return last.get("previous") or None
+    return None
+
+
+def parse_observation(text: str) -> dict:
+    head, _, tail = text.partition(OBSERVE_SEPARATOR)
+    pointer = head.strip()
+    history = []
+    for line in tail.splitlines():
+        try:
+            entry = json.loads(line)
+        except ValueError:
+            continue
+        if isinstance(entry, dict):
+            history.append(entry)
+    return {"shadow": pointer.rsplit("/", 1)[-1] if pointer else None, "history": history}
+
+
+def observe(host: str, *, identity: str, known_hosts: str, user: str = "rosy",
+            root: str = None, timeout: float = None, runner=subprocess.run) -> dict:
+    """{"shadow": revision or None, "history": [recent history.jsonl entries]}."""
+    opts = operator_ssh.options(identity, known_hosts)
+    r = _run(runner, ["ssh", *opts, "--", f"{user}@{host}",
+                      remote_script("observe", None, root or REMOTE_ROOT)],
+             timeout or STATUS_TIMEOUT_S)
+    if r is None:
+        raise RuntimeError(f"cannot read the shadow pointer on {host}")
+    return parse_observation(r.stdout or "")
 _HISTORY_LINE = ('{"ts":"%s","action":%s,"revision":"%s","previous":"%s",'
                  '"operator":%s,"host_of_operator":%s,"tool_commit":%s}\\n')
 
@@ -182,6 +220,21 @@ def remote_script(action: str, rev: str | None, root: str = REMOTE_ROOT, *,
                 *history_line("rollback", '"${new##*/}"', '"${cur##*/}"'),
             ]),
         ])
+    if action == "release-hold":  # history only: ends an operator hold (operator_hold)
+        return "\n".join([
+            "set -e",
+            *locked([
+                f"cur=$(cat {ptr} 2>/dev/null || true)",
+                *history_line("release-hold", '"${cur##*/}"', '"${cur##*/}"'),
+            ]),
+        ])
+    if action == "observe":  # machine-read by watch.py
+        return "\n".join([
+            f"{s}cat {ptr} 2>/dev/null || true",
+            "echo",
+            f"echo {q(OBSERVE_SEPARATOR)}",
+            f"{s}tail -n {OBSERVE_HISTORY} {hist} 2>/dev/null || true",
+        ])
     if action == "status":
         return "\n".join([
             f"echo \"shadow: $({s}cat {ptr} 2>/dev/null)\"",
@@ -282,7 +335,7 @@ def _audit(args) -> dict:
 def main(argv=None, runner=subprocess.run) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = ap.add_subparsers(dest="action", required=True)
-    for name in ("push", "rollback", "status"):
+    for name in ("push", "rollback", "release-hold", "status"):
         p = sub.add_parser(name)
         p.add_argument("host")
         if name == "push":
@@ -291,7 +344,7 @@ def main(argv=None, runner=subprocess.run) -> int:
         p.add_argument("--user", default=operator_ssh.USER)
         p.add_argument("--root", default=REMOTE_ROOT)
         operator_ssh.add_arguments(p)
-        if name in ("push", "rollback"):
+        if name in ("push", "rollback", "release-hold"):
             p.add_argument("--operator", default=getpass.getuser(),
                            help="who is recorded in the robot's history.jsonl")
         else:
@@ -316,8 +369,8 @@ def main(argv=None, runner=subprocess.run) -> int:
     ssh, scp = ["ssh", *opts, "--"], ["scp", "-r", *opts, "--"]
     if args.action == "push":
         return _push(args, ssh, scp, runner)
-    extra = ({"audit": _audit(args)} if args.action == "rollback"
-             else {"history": max(args.history, 0)})
+    extra = ({"history": max(args.history, 0)} if args.action == "status"
+             else {"audit": _audit(args)})
     r = _run(runner, [*ssh, f"{args.user}@{args.host}",
                       remote_script(args.action, None, args.root, **extra)], args.timeout)
     if r is None:
