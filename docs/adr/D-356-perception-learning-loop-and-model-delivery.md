@@ -39,14 +39,16 @@
 **Decision:**
 
 1. **변환기 `tools/perception/dataset/bag_to_video.py`.** 세션의 `camera/front`(raw) 또는 `camera/front/compressed`(JPEG)의 모든 프레임을 원 크기 그대로, 평균 카메라 주기의 CFR로 인코딩하고 `data/teleop/learning/teleop_<device>_<UTC stamp>.{mp4,jsonl,json[,scan.npz]}`를 쓴다. `.jsonl`의 i행은 디코딩 프레임 i이다. 필드와 시계는 아래 sidecar 스키마를 따른다. LiDAR가 있으면 프레임별 직전 스캔을 `.scan.npz`(float16 `ranges[frame, beam]`, 스캔 stamp, dt, 각도·거리 메타)로 둔다(D-379 벽 라벨러 입력). `.json`은 `session.json` 원문과 변환 메타이다. `extract.py`는 mp4 옆 sidecar를 읽어 기록 stamp·부수 데이터·세션 이름을 그대로 쓴다(세션 분할이 원 bag과 같다). 변환 뒤 ffprobe 프레임 수와 sidecar 행 수가 다르면 실패한다.
-   **Sidecar 스키마 `rosy.teleop.video/1`(이 브랜치와 D-379 공통 시계 규칙, 2026-10-01 검토 반영):**
+   **Sidecar 스키마 `rosy.teleop.video/1`(D-373·D-379와 공통 시계 규칙, 2026-10-01 검토 반영, D-373 담당 세션과 rosy-bc 세션 합의):**
    - `index`: 디코딩 프레임 번호(0부터, mp4 프레임 순서와 같다).
    - `t`: **카메라 헤더 stamp(초, float)**. `extract.py`의 MCAP 경로·영상 경로와 D-379 자동 라벨러가 모두 이 시계를 쓴다.
    - `stamp_ns`, `log_ns`: 헤더 stamp와 bag log time(ns 정수, 정확값). 카메라 log−stamp는 10–27 ms(평균 13 ms) 실측.
-   - `side`: 부수 토픽별로 **프레임 bag log time 이하의 가장 최근 메시지**(나중 메시지는 쓰지 않는다 — 미래 누설 없음). `cmd_vel`={linear, angular}, `odom`={x, y, yaw}, `line/observation`·`perception/learned/shadow`=디코딩한 JSON, `scan`={stamp_ns}(거리값은 `.scan.npz`의 같은 행). `--max-gap`(기본 0.5 s)보다 오래됐거나 앞선 메시지가 없으면 null. `Twist`에 헤더가 없어 부수 토픽 선택의 공통 시계는 bag log time이다.
-   - `dt`: 토픽별 (부수 log time − 프레임 log time) 초, 항상 ≤ 0, 없으면 null.
+   - `side`: 부수 토픽을 **두 부류**로 나눠 붙인다.
+     - (a) **이미지 stamp를 가진 증거**(`perception/learned/shadow`, `line/observation`, 페이로드 `stamp`): 추론이 끝난 뒤 나오므로, 페이로드 stamp가 프레임 헤더 stamp와 ±1 ms로 같고, 그 프레임의 **촬영 시각(헤더 stamp) 이후**, 프레임 log time **0.5 s 이내**에 기록된 것만 그 프레임에 붙인다. 아니면 null. 아래 한계는 log time이 아니라 촬영 시각이다(8kcn에서 관측 45/2258개가 제 이미지보다 37–61 µs 먼저 기록됐다). sidecar의 이 항목은 디코딩한 JSON에 `stamp_ns`(int ns)를 더한다. `stamp_ns`가 없는 옛 sidecar에서는 `extract.py`가 이 부류를 옮기지 않고 null로 둔다.
+     - (b) **그 밖의 토픽**(`cmd_vel`={linear, angular}, `odom`={x, y, yaw}, `scan`={stamp_ns}(거리값은 `.scan.npz`의 같은 행) 등): **프레임 bag log time 이하의 가장 최근 메시지**(나중 메시지는 쓰지 않는다 — 미래 누설 없음). `--max-gap`(기본 0.5 s)보다 오래됐거나 앞선 메시지가 없으면 null. `Twist`에 헤더가 없어 이 부류의 공통 시계는 bag log time이다.
+   - `dt`: 토픽별 (부수 log time − 프레임 log time) 초, 없으면 null. (b)는 항상 ≤ 0, (a)는 0.5 s 이하(음수면 제 이미지보다 먼저 기록된 것).
    - `motion`: {moving, commanded, v, w}. 프레임 이전 0.5 s의 odom 변위와 현재 명령으로만 정한다.
-   - `extract.py`의 MCAP 경로도 같은 규칙이다: `t`=헤더 stamp, `side`=bag 순서상 프레임 이전의 최신값, 행에 `stamp_ns`·`log_ns`를 같이 적는다.
+   - `extract.py`는 MCAP 경로와 영상+sidecar 경로 모두 같은 두 부류 규칙이다: `t`=헤더 stamp, 행에 `stamp_ns`·`log_ns`·`dt`를 같이 적는다. MCAP 경로의 `scan`은 전체 거리 배열({stamp, angle_min, angle_increment, range_min, range_max, ranges})이고, (b) 부류이므로 D-373 브랜치의 '0.1 s 안 최근접' 규칙을 대체한다. MCAP 경로는 (b)에 `--max-gap`을 두지 않고 `dt`로 나이를 알린다.
 2. **기본값: 보관은 H.265 `libx265 -preset slow -crf 24`, 호환은 H.264 `libx264 -preset slow -crf 23`(`--codec h264`). 둘 다 yuv420p와 `scale=flags=accurate_rnd+full_chroma_int`.** 근거는 아래 표이다. H.265 CRF 24는 bag 대비 156배(0.66 MB/min)이고 차선 검출 차이가 CRF 18과 구별되지 않는다. 320×240에서 H.265의 이득은 작다(같은 PSNR에서 x264 slow 대비 약 6 %). 호환이 중요하면 H.264 CRF 23(0.71 MB/min)으로도 충분하다. `accurate_rnd`는 swscale 기본 BGR→YUV 반올림 편향(무손실 qp 0에서도 BGR 평균 −1.5…−2.9)을 줄인다. 크기 변화 없이 PSNR +1.0 dB, 흰 마스크 IoU 0.963→0.973, line 오차 MAE 0.0038→0.0027이다.
 3. **공개 저장소 보호.** `data/teleop/learning/*`를 gitignore한다(`.gitkeep`만 허용). 2026-09-19 클립 7개는 이 규칙 전에 커밋되어 아직 추적된다. 추적 해제(`git rm --cached`)는 별도 결정이다. 원 bag은 `data/perception/raw`에 그대로 둔다.
 4. **제안(승인 필요): 로봇은 raw 대신 `camera/front/compressed` JPEG q85를 기록한다.** 학습 루프 소유자(D-356/D-373)의 선호와 같고, `extract.py`·`bag_to_video.py`가 이미 읽는다. 같은 헤더 stamp를 유지하고 부수 데이터는 stamp/log time으로 맞춘다. 로봇 인식 경로는 계속 raw를 프로세스 안에서 쓴다. H.264 bag 토픽(`foxglove_msgs/CompressedVideo` 또는 `ffmpeg_image_transport`)은 JPEG보다 3.7배 작다. 하지만 프레임 간 의존(키프레임 간격, 분할 시 손실)이 있고 Jazzy arm64 패키지와 이미지 반영이 필요해 2단계로 미룬다.

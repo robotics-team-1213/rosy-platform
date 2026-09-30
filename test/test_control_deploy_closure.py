@@ -42,6 +42,11 @@ DEPLOYED_CONTROL_EXECUTABLES = {
     "camera_detect_node",
     "line_observer_node",
     "road_observer_node",
+    # D-373: shadow-only learned lane evidence and the capture trigger, both in
+    # camera_preview.launch.py behind switches that default off. Neither
+    # publishes a velocity command (learned output is never read by driving).
+    "learned_lane_node",
+    "capture_trigger_node",
 }
 
 #: Control executables that can own the final command (D-149 standalone exception).
@@ -123,7 +128,7 @@ def test_the_closure_reaches_the_control_launch():
 
 
 def test_deployed_closure_runs_exactly_the_evidence_producers():
-    """D-149 Validation (corrected 2026-09-22): four evidence producers, no final publisher."""
+    """D-149 Validation (corrected 2026-09-22): the evidence producers, no final publisher."""
     running = {
         exe
         for path in _closure().values()

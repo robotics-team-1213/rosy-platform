@@ -16,7 +16,7 @@ import yaml
 IMAGE = Path(__file__).resolve().parents[1] / "deploy" / "robot" / "pinky_pro" / "image"
 REQUIREMENTS = IMAGE / "device-python-requirements.txt"
 #: The runtime flashed images since D-192 carry.
-FLASHED_RUNTIME_ID = "a66f224ab570cb08d1c474bdbb1f93899692625cd167a7f6f907fc99690f4176"
+FLASHED_RUNTIME_ID = "a66f224ab570cb08d1c474bdbb1f93899692625cd167a7f6f907fc99690f4176"  # sha256
 
 
 def test_requirements_bytes_keep_the_flashed_runtime_id():
