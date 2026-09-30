@@ -44,9 +44,11 @@ CODECS = {
 }
 DEFAULT_OUT = Path(__file__).resolve().parents[3] / "data" / "teleop" / "learning"
 # Moving vs idle: odom displacement over MOTION_WINDOW_S around the frame, or a command.
+# Teleop runs at 0.03 m/s and 0.1 rad/s; idle odom noise on 8kcn stays below
+# 0.005 m/s and 0.008 rad/s at p99 (2026-09-30 sessions).
 MOTION_WINDOW_S = 0.5
-MOVING_V = 0.02    # m/s
-MOVING_W = 0.10    # rad/s
+MOVING_V = 0.01    # m/s
+MOVING_W = 0.03    # rad/s
 CMD_V = 0.01       # m/s
 CMD_W = 0.05       # rad/s
 
