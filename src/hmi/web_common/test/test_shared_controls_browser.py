@@ -44,6 +44,7 @@ CHECK_PAGE = """<!doctype html><html lang="ko"><head><meta charset="utf-8">
 <label class="ui-check"><input id="on" class="ui-field" type="checkbox" checked>rosy_01</label>
 <label class="ui-check"><input id="held" class="ui-field" type="checkbox" checked disabled>rosy_02</label>
 <label class="ui-check"><input id="off" class="ui-field" type="checkbox" disabled>rosy_03</label>
+<label class="ui-check"><input id="free" class="ui-field" type="checkbox">rosy_04</label>
 </body></html>"""
 TRACKING_PROBE = """(ids) => Object.fromEntries(ids.map((id) => {
   const el = document.getElementById(id);
@@ -272,8 +273,24 @@ def test_checked_checkboxes_hold_three_to_one_even_when_disabled(page, theme):
                         ).convert("RGB").getpixel((1, 1))
     lg = _luminance(ground)
     ratios = {}
-    for box in ("on", "held", "off"):
+    for box in ("on", "held", "off", "free"):
         pixels = image.open(io.BytesIO(page.locator(f"#{box}").screenshot())).convert("RGB")
         ratios[box] = round(max((max(_luminance(p), lg) + 0.05) / (min(_luminance(p), lg) + 0.05)
                                 for _, p in pixels.getcolors(1 << 16)), 2)
     assert {box: ratio for box, ratio in ratios.items() if ratio < 3.0} == {}, (ground, ratios)
+
+
+@pytest.mark.parametrize("theme", ["dark", "light"])
+def test_a_disabled_unchecked_box_does_not_look_like_an_enabled_one(page, theme):
+    """US-009 (US-008 leftover) — disabled and enabled empty boxes drew the same solid frame.
+    Disabled is a dashed frame of the same ink (so 3:1 holds, see above) and is not faded."""
+    page.goto(f"{HOST}/check")
+    page.evaluate("(theme) => document.documentElement.setAttribute('data-theme', theme)", theme)
+    style = page.evaluate("""() => Object.fromEntries(['off', 'free', 'held'].map((id) => {
+      const s = getComputedStyle(document.getElementById(id));
+      return [id, {border: s.borderTopStyle, opacity: s.opacity}];
+    }))""")
+    assert style["free"]["border"] == "solid"
+    assert style["off"]["border"] == "dashed" and style["held"]["border"] == "dashed"
+    assert style["off"]["opacity"] == "1"
+    assert page.locator("#off").screenshot() != page.locator("#free").screenshot()

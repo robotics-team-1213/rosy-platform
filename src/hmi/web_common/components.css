@@ -348,8 +348,11 @@ input.ui-field[type="checkbox"]::before {
 }
 input.ui-field[type="checkbox"]:checked { border-color: currentColor; }
 input.ui-field[type="checkbox"]:checked::before { visibility: visible; }
+/* US-009 — 꺼진 빈 상자가 켜진 빈 상자와 똑같이 보였다. 비활성 테는 점선이다(사유 있는
+   비활성 버튼·unavailable 증거와 같은 어휘). 색은 그대로 `--ink-quiet`라 3:1을 지키고 흐리지 않는다. */
 input.ui-field[type="checkbox"]:disabled {
   color: var(--ink-quiet);
+  border-style: dashed;
   cursor: not-allowed;
 }
 
