@@ -382,3 +382,4 @@
 | D-382 | 로봇 ↔ 사이트 관제 통신은 계약 스냅샷 하나로 판정하고, 실물 확인은 읽기 전용 적합성 탐침으로 시작한다 | Accepted (2026-10-01; 판정 기준·증거 등급·탐침 경계; 이미지 교체·토큰 발급·이동 명령·관제 DEVICE 수용 아님) |
 | D-383 | 편대 역할은 계기 셋의 네 번째 칸 — swarm.role가 leader/follower일 때만 나타나고(기본 hidden, hidden이 flex를 이김) 한국어 라벨·색 없음(역할은 경보가 아니다), 식별줄은 software_version을 계보에 함께 말한다 | Accepted (2026-10-01, 사용자 요청·위임; emoji 대신 기존 계기 문법·토큰 체계, D-280/D-82/D-359 준수; 렌더는 telemetry.js가 담당 — D-362 분할) |
 | D-385 | Rosy가 스스로 표현한다 — 모드가 표정을 고른다(IDLE basic·MANUAL interest·NAVIGATION happy·DOCKING fun·EMERGENCY sad, 막힘은 bored)를 set_emotion 으로 LiDAR 문법(재시도) 전달, 부팅 카드는 BOOTING 중 무대 제목이 0.5 Hz 두 밝기로 숨쉬고 끝난 상태는 고요, 절전의 "꼭 필요한 것만"은 기존 WAKE_BATTERY 체계로 확인·문서화 | Accepted (2026-10-01, 사용자 요청·위임; 표정에 깜빡임 축 없음 — 모드 변경 시 한 번, D-280/D-82 준수) |
+| D-386 | OMX phases bind asynchronous ROS goal acceptance and fresh execution state | Accepted (2026-10-01; SOURCE contract only; ROS-SIM, profile activation, ARTIFACT, DEVICE/FIELD remain gated) |
