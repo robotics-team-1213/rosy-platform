@@ -173,3 +173,14 @@ def test_site_locator_and_agent_accept_exactly_the_fleet_vectors(case):
     line = avahi_line(case)
     assert bool(_module().parse_avahi(line)) is accepted
     assert bool(_robot_module().parse_avahi(line)) is accepted
+
+
+FLEET_CASES = [case for case in VECTORS["cases"] if case["service_type"] == "_rosy-fleet._tcp"]
+
+
+@pytest.mark.parametrize("case", FLEET_CASES, ids=lambda case: case["id"])
+def test_site_locator_classifier_copy_gives_the_vector_reason(case):
+    """The vendored copy must reject for the same reason as core_common, not just reject."""
+    result = _module().classify_fleet(case["host"], case["address"], case["port"],
+                                      [tuple(item.split("=", 1)) for item in case["txt"]])
+    assert result == (None if case["expect"]["accepted"] else case["expect"]["reason"])

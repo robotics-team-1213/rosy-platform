@@ -1575,3 +1575,9 @@
 - 변경: `deploy/site/fleet-mdns.py`의 `/healthz` 판정을 `check_health_body`로 뺐다(FleetAgent와 같은 규칙). 1024바이트 이하 JSON 객체, `status == "ok"`, `role`이 있으면 광고 TXT `role`(`fleet`)과 같아야 하고 모르는 키는 무시한다. 프로필 `docs/reference/site-lan-discovery-profile.md` 33행 문구도 맞췄다.
 - 증거: `test/test_site_fleet_mdns.py` 신규 health 시험(사이트·Agent 매개변수) 수정 전 빨강, 수정 후 초록.
 - gate 변화: 없음. Fleet·Vision `/healthz` 출력은 그대로 — 옛 로봇 이미지가 정확 비교를 하므로 서버 확장은 새 이미지 배포 뒤로 미룬다.
+
+## 2026-10-01 · uncommitted · refactor(site): fleet-mdns.py TXT 판정을 core_common discovery_txt 사본으로
+
+- 변경: `deploy/site/fleet-mdns.py`의 자체 판정(shlex+사전 비교)을 `core_common.protocol.discovery_txt`의 `_rosy-fleet._tcp` 부분 사본으로 바꿨다: `parse_txt_pairs`, `_lan_ipv4`, `classify_fleet`(수락이면 None, 아니면 벡터의 거절 이유). `mdns-bridge.py`와 같은 "Copy of core_common.protocol.discovery_txt" 머리말. 형제 모듈로 나눠 두 스크립트가 함께 쓰는 안은 택하지 않았다 — 사이트 후보 목록(`build_candidate.py`·`verify_candidate.py`·`test_site_candidate.py`)과 README 설치 절차에 새 파일을 더해야 하고, 시험·`tools/overhead_pairing_bench.py`가 스크립트를 파일 경로로 불러와 sys.path 처리도 필요해진다.
+- 증거: `test/test_site_fleet_mdns.py` 신규 벡터 이유 시험(Fleet 사례 6건: 이유까지 core_common과 같음) — 수정 전 6건 빨강(판정 함수 없음), 수정 후 초록. 기존 수락/거절 벡터 루프는 전후 모두 초록 — 벡터 결과가 바뀐 사례 없음. 벡터 밖 차이: `0.0.0.0` 등 multicast/unspecified 주소를 이제 거절(core_common과 같음).
+- gate 변화: 없음. 사이트 호스트에는 다음 후보 설치 때 간다.
