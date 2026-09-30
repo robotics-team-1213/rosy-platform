@@ -811,3 +811,18 @@ def test_associated_candidates_carry_their_innovation():
     for c in est.last_frame["candidates"]:
         assert set(c["nu"]) == {"y", "psi_deg"}
         assert c["nu"]["y"] == pytest.approx(-0.01, abs=0.004)
+
+
+def test_a_steep_crossing_candidate_is_a_decision_point_never_a_boundary():
+    """Lane owner (fix/lane-keep-steep-crossing): a steep diagonal whose paint crosses the
+    path ahead is kept out of `transverse` (that list drives the device's junction HOLD) but
+    is a decision point for the road state, and never a side boundary."""
+    crossing = {"heading_deg": 60.2, "length_m": 0.236, "ends_m": [[0.328, -0.109], [0.446, 0.096]],
+                "ends_px": [], "side": "right", "y_at_side_x_m": -0.297, "rejected": True, "reason": "steep_crossing"}
+    last = {"strategy": "right_only", "reason": None, "transverse": [], "candidates": [crossing]}
+    assert decision_point_from_keep(last) is True
+    assert decision_point_from_keep(dict(last, candidates=[dict(crossing, reason="steep_far")])) is False
+    est, clock = tracking()
+    clock.frame(boundaries_from_keep(last) + pair())
+    assert est.rejects["keeper"] == 1
+    assert est.last_frame["hypothesis"]["labels"] == "RL"

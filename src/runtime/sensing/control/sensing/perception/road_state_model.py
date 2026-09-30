@@ -242,11 +242,17 @@ def consistent_reason(p: RoadStateParams, labels, ir_labels, side_d, learned_acc
 
 
 def decision_point_from_keep(last: dict) -> bool:
-    """A declared decision point: a line across the path, a latched corner or a
-    junction hold in the keeper bundle. Only there may a route hint break a tie."""
+    """A declared decision point: a line across the path (transverse or steep_crossing),
+    a latched corner or a junction hold in the keeper bundle. Only there may a route hint
+    break a tie."""
     strategy = str(last.get("strategy") or "")
     reason = str(last.get("reason") or "")
-    return bool(last.get("transverse")) or strategy.startswith("corner") or reason.startswith("junction")
+    # "steep_crossing": a diagonal whose paint crosses the path ahead. The keeper keeps it
+    # out of `transverse` (that list drives the device's junction HOLD); here it is a cue.
+    crossing = any(isinstance(c, dict) and c.get("reason") == "steep_crossing"
+                   for c in last.get("candidates") or [])
+    return (bool(last.get("transverse")) or crossing or strategy.startswith("corner")
+            or reason.startswith("junction"))
 
 
 def wall_segments_from_scan(ranges, angle_min: float, angle_increment: float, *,
