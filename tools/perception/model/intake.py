@@ -178,8 +178,10 @@ def run(source: str, *, out, gate_path=DEFAULT_GATE, root=ROOT, max_frames=None,
     """(exit code, report). main() and model/watch.py (in-process, own downloader)."""
     gate = load_gate(gate_path)
     max_frames = max_frames or gate["max_frames_per_source"]
+    # transient: the run failed for an infrastructure reason (disk, network, HF,
+    # missing runtime, video decode), not on the model; watch.py retries those.
     report = {"model_revision": None, "verdict": "fail", "reasons": [], "gate": gate,
-              "tool_commit": _tool_commit()}
+              "tool_commit": _tool_commit(), "transient": False}
     folder = None
     try:
         folder = resolve_source(source, downloader=downloader, workdir=Path(out) / ".incoming")
@@ -197,6 +199,7 @@ def run(source: str, *, out, gate_path=DEFAULT_GATE, root=ROOT, max_frames=None,
         report["verdict"], report["reasons"] = judge(stats, gate)
     except (ManifestError, ValueError, ImportError, OSError, cv2.error) as exc:
         report["reasons"] = [f"{type(exc).__name__}: {exc}"]
+        report["transient"] = isinstance(exc, (OSError, ImportError, cv2.error))
 
     text = json.dumps(report, indent=2, ensure_ascii=False) + "\n"
     if report["verdict"] == "pass":
@@ -209,8 +212,12 @@ def run(source: str, *, out, gate_path=DEFAULT_GATE, root=ROOT, max_frames=None,
                 shutil.rmtree(d, ignore_errors=True)
         print(f"PASS {report['model_revision']} -> {dest}")
         return 0, report
-    src = Path(folder) if folder else Path(source.replace(":", "_").replace("/", "_"))
-    target = src.parent / f"{src.name}.{REPORT_NAME}"
+    if folder:
+        target = Path(folder).parent / f"{Path(folder).name}.{REPORT_NAME}"
+    else:  # nothing was downloaded (hf: source): under --out, never the cwd
+        name = re.sub(r"[^A-Za-z0-9._@-]", "_", source.removeprefix("hf:").replace("/", "__"))
+        target = Path(out) / "_failed" / f"{name}.{REPORT_NAME}"
+        target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(text, encoding="utf-8")
     print(f"FAIL {report['model_revision']}: {'; '.join(report['reasons'])} (report: {target})",
           file=sys.stderr)

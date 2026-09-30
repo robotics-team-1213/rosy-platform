@@ -126,6 +126,45 @@ def test_replay_separates_nan_from_other_errors(monkeypatch):
     assert verdict == "fail" and "error" in reasons[0].lower()
 
 
+def test_infrastructure_errors_are_marked_transient(tmp_path, monkeypatch):
+    """watch.py retries these later; only a real gate verdict is final."""
+    folder = tmp_path / "m"
+    folder.mkdir()
+    monkeypatch.setattr(intake, "load_manifest", lambda f: (_ for _ in ()).throw(OSError("disk")))
+    rc, report = intake.run(str(folder), out=tmp_path / "out")
+    assert rc == 1 and report["transient"] is True
+
+    def offline(**kw):
+        raise OSError("HF unreachable")  # requests/HF HTTP errors are OSError subclasses
+
+    rc, report = intake.run(f"hf:org/m@{'a' * 40}", out=tmp_path / "out", downloader=offline)
+    assert rc == 1 and report["transient"] is True
+
+
+def test_failed_hf_report_goes_under_out_never_cwd(tmp_path, monkeypatch):
+    cwd = tmp_path / "cwd"
+    cwd.mkdir()
+    monkeypatch.chdir(cwd)
+
+    def offline(**kw):
+        raise OSError("HF unreachable")
+
+    for source in (f"hf:org/m@{'a' * 40}", "hf:org/m@main"):  # download error, bad spec
+        rc, _ = intake.run(source, out=tmp_path / "out", downloader=offline)
+        assert rc == 1
+    assert list(cwd.iterdir()) == []
+    failed = sorted(p.name for p in (tmp_path / "out" / "_failed").iterdir())
+    assert failed == [f"org__m@{'a' * 40}.intake_report.json", "org__m@main.intake_report.json"]
+
+
+def test_gate_failures_are_final(tmp_path):
+    folder = tmp_path / "m"
+    folder.mkdir()
+    (folder / "model_manifest.json").write_text("{}", encoding="utf-8")
+    rc, report = intake.run(str(folder), out=tmp_path / "out")
+    assert rc == 1 and report["transient"] is False
+
+
 def test_io_failure_still_writes_fail_report(tmp_path, monkeypatch):
     import cv2
     folder = tmp_path / "m"
