@@ -1005,13 +1005,31 @@ class RobotActivity(BaseModel):
     remaining_s: float
 
 
+class ShadowRecordRef(BaseModel):
+    """Last stop/unavailable shadow verdict. `t` is CORE monotonic seconds."""
+
+    t: float
+    reason: str
+    source: str
+
+
+class ShadowEvalStats(BaseModel):
+    p50: Optional[float] = None
+    p99: Optional[float] = None
+    n: int = 0
+
+
 class SafetyShadowStatus(BaseModel):
-    """D-400 shadow counters (v1.71 additive)."""
+    """D-400 shadow counters (v1.71 additive).
+
+    No extra="forbid" on these: an older hub must keep accepting a heartbeat
+    from a newer robot that adds a key.
+    """
 
     counts: dict[str, int]
-    last_stop: Optional[dict] = None          # {t (CORE monotonic s), reason, source}
-    last_unavailable: Optional[dict] = None
-    eval_ms: dict
+    last_stop: Optional[ShadowRecordRef] = None
+    last_unavailable: Optional[ShadowRecordRef] = None
+    eval_ms: ShadowEvalStats
     dropped_events: int = 0
     suppressed_events: int = 0
     record_errors: int = 0

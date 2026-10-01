@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import threading
 from typing import Callable, Optional
 
@@ -26,6 +27,8 @@ from core_common.protocol.schemas import (
     TrafficPolicyStatus,
     Velocity,
 )
+
+log = logging.getLogger(__name__)
 
 
 def _as_map_id(value) -> Optional[str]:
@@ -86,6 +89,7 @@ class StateManager:
         self._capabilities_degraded: list[str] = []
         self._activity_provider: Optional[Callable[[], Optional[dict]]] = None
         self._safety_policy_provider: Optional[Callable[[], Optional[dict]]] = None
+        self._safety_policy_error: Optional[str] = None  # last logged error type
 
     def set_hitl_requested(self, requested: bool) -> None:
         with self._lock:
@@ -228,8 +232,12 @@ class StateManager:
             try:
                 raw_policy = safety_provider()
                 safety_policy = SafetyPolicyStatus.model_validate(raw_policy) if raw_policy else None
-            except Exception:
+                self._safety_policy_error = None
+            except Exception as exc:
                 safety_policy = None
+                if type(exc).__name__ != self._safety_policy_error:
+                    self._safety_policy_error = type(exc).__name__
+                    log.warning("safety_policy block unavailable: %s: %s", type(exc).__name__, exc)
         with self._lock:
             self._seq += 1
             now = self._clock()

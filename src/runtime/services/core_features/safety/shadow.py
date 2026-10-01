@@ -74,7 +74,7 @@ class ShadowLog:
             self._counts[verdict.verdict] += 1
             self._eval_ms.append(verdict.eval_ms)
             if verdict.verdict in ("stop", "unavailable"):
-                self._last[verdict.verdict] = {"t": verdict.t, "reason": verdict.reason, "source": verdict.source}
+                self._last[verdict.verdict] = {"t": round(verdict.t, 3), "reason": verdict.reason, "source": verdict.source}
             previous, self._last_seen_verdict = self._last_seen_verdict, verdict.verdict
             since = verdict.t - self._emitted_at
             if since < 0:  # clock stepped back: treat this record as the first
