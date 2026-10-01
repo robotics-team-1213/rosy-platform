@@ -4196,3 +4196,9 @@
 - 증거: 계획의 코드는 임시 사본에서 모두 실행했다 — 신규 시험 전부 통과, 이 워크트리에 넣고 sensing 전체 2152 passed(시간 예산 시험 제외), fleet·foundation·게이트웨이 프로토콜·아키텍처는 예상된 크기 판정과 main에 이미 있던 실패만. 그 뒤 코드는 지웠고 이 커밋은 문서만이다.
 - gate 변화: 없음(문서). D-395는 Proposed 그대로.
 - 결정: D-395 Proposed(설계 승인).
+
+## 2026-10-01 · uncommitted · docs(adr): D-406 로봇 자동 업데이트 — GitHub Releases에서 스스로 받아 유휴 시 승인 없이 적용, 로봇별 hold
+
+- 변경: D-406(Accepted) 작성. 사용자 선택: 완전 자동(유휴 시), GitHub Releases, 이 PC의 발행 명령, 로봇별 hold, A안(로봇 pull + 카나리 1대 뒤 나머지). D-387 결정 2·5와 Alternatives 두 기각을 개정(D-387 Status에 개정 참조 한 줄). 판정 입력은 토큰 없는 `/run/rosy/status-inputs.json` schema 2, 봉인 자동 hold는 `/etc/rosy/approvals/*.approved`의 `release_id`, 잠정 claim(`/run/rosy-claim`)을 push와 업데이터에 함께 구현, `rosy-release-unpack.sh`를 native로 이동. ADR 번호는 브랜치·로컬 main·작업 트리 확인 뒤 D-406; 다른 브랜치가 쓰는 D-398~405는 `adr_gaps`에 예약으로 적었다.
+- 증거: 두 로봇에서 `api.github.com` 200, `github.com` 200, NTP 동기(2026-10-01 읽기 전용). harness lint 0 error.
+- gate 변화: 없음(설계만).
