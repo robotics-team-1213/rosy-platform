@@ -48,7 +48,7 @@
 **잠금과 `/run`**
 - `native_release.py`는 `native-release.lock`에 flock을 걸고, 잡혀 있으면 `NATIVE_RELEASE_BUSY`로 거절한다. 로봇이 움직이는지, 미션이나 teleop 중인지는 **아무도 보지 않는다**.
 - `/run/rosy`는 `rosy-core.service`가 소유한다(`RuntimeDirectory=rosy`, `RuntimeDirectoryPreserve=restart`, 56·60행). CORE가 멈추면 지워진다. `rosy-boot-status.service` 15행은 이곳에 쓰지 말라고 적는다.
-- 운영자 계정은 `NOPASSWD:ALL`이다(`image/first-boot/rosy-first-boot.py:418`). ssh 세션은 무엇이든 재시작할 수 있다.
+- 운영자 계정은 암호 없이 모든 명령을 sudo로 실행할 수 있다(`image/first-boot/rosy-first-boot.py:418`의 sudoers 규칙). ssh 세션은 무엇이든 재시작할 수 있다.
 
 **`rosy-io`의 드라이브 설정.** `rosy-io.service`는 `Environment=ROSY_IO_DRIVE_ENABLED=false`(17행) 뒤에 `EnvironmentFile=/etc/rosy/runtime.env`(18행)를 둔다. 그래서 장치별 드라이브 승인이 기본값을 이긴다. `ExecStartPre`(39·42행)는 모드와 드라이브 플래그의 조합을 검사한다.
 
