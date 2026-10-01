@@ -782,3 +782,8 @@
 - 변경: `sensing/loc_objects.py` `unmapped_objects` — 지도 벽(`near`)으로 설명되지 않는 반환을 6 cm 간격으로 묶어 중심을 base_link (앞, 왼쪽)으로 낸다. 대칭 맵에서는 거울 가설도 같은 반환을 설명하므로 목록은 가설과 무관하다. 스캔은 고리라서 ±π 이음매(뒤집힌 마운트에서는 로봇 정면)에 걸친 물체를 하나로 합친다(계획에 없던 보강).
 - 증거: `test_loc_objects.py` 4 passed(빈 트랙 0개, 다른 로봇 1개·8 cm 안, 정면 이음매 1개, 거울 가설에서 같은 목록).
 - gate 변화: 없음(SOURCE/LOCAL).
+
+## 2026-10-01 · uncommitted · feat(localization): 주입 뒤 3 s 스캔/지도 검증 (D-395 7항)
+- 변경: `sensing/loc_verify.py` `InjectionCheck` — 0.5 s 안정 뒤 새 스캔마다 적합도 ≥ 0.85가 3 s 유지되면 통과, 한 번이라도 낮거나 스캔이 0.5 s 끊기면 즉시 실패(`fit_low`/`stale_scan`). 출처와 무관하게 같은 관문이다. 한계: 대칭 맵에서는 거울상도 같은 적합도라 이 검증이 거울 주입을 못 거른다. 그래서 LOCALIZED에는 비대칭 단서가 따로 필요하다(loc_state).
+- 증거: `test_loc_verify.py` 5 passed.
+- gate 변화: 없음(SOURCE/LOCAL).

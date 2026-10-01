@@ -64,8 +64,8 @@
 
 ## 최근 기록
 
+- 2026-10-01 · uncommitted · feat(localization): 주입 뒤 3 s 스캔/지도 검증 (D-395 7항)
 - 2026-10-01 · uncommitted · feat(localization): 지도에 없는 LiDAR 물체를 base_link 물체로 묶음 (D-395 4.2절)
 - 2026-10-01 · uncommitted · fix(localization): 슬롯 탐색 비용 상한과 리뷰 지적 (D-395 1단계 작업 2)
 - 2026-10-01 · uncommitted · feat(localization): 거울상까지 모든 자세 후보를 내는 순수 모듈 (D-395 1단계)
 - 2026-10-01 · uncommitted · refactor(localization): 전역 탐색을 후보 목록·발자국 마스크·시드 정밀화로 나눔 (D-395 1단계)
-- 2026-10-01 · uncommitted · feat(map): 기준 사각형에 방향 축 `heading_axis_deg`
