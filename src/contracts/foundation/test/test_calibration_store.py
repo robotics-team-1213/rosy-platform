@@ -258,3 +258,51 @@ def test_names_are_checked():
         store.current("../etc", "lidar_mount")
     with pytest.raises(ValueError):
         store.current(ROBOT, "anything")
+
+
+# D-396: URDF nominal (the static fallback) < accepted record < operator override, per kind.
+URDF_NOMINAL = {
+    "lidar_mount": ({"lidar_yaw_offset": math.pi},
+                    {"lidar_yaw_offset": math.radians(181.9)},
+                    {"lidar_yaw_offset": math.radians(183.0)}),
+    "wheel_odometry": ({"wheel_radius": 0.028, "wheel_separation": 0.0971},
+                       {"wheel_radius": 0.0272, "wheel_separation": 0.0975},
+                       {"wheel_radius": 0.0269}),
+    "camera_profile": ({"pitch_rad": math.radians(8.0), "height_m": 0.06343, "x_offset_m": 0.03317, "fx": 281.6},
+                       {"pitch_rad": math.radians(11.8), "height_m": 0.060},
+                       {"height_m": 0.0615}),
+}
+
+
+@pytest.mark.parametrize("kind", sorted(URDF_NOMINAL))
+def test_order_urdf_nominal_then_accepted_record_then_operator_override(tmp_path, kind):
+    nominal, measured, operator = URDF_NOMINAL[kind]
+    store = CalibrationStore(tmp_path)
+    values, source = resolve(kind, nominal, fallback_source="geometry.yaml", robot=ROBOT, store=store)
+    assert values == nominal and source.startswith("geometry.yaml")
+    rid = store.add(ROBOT, kind, measured, method="t/1")
+    store.set_status(ROBOT, kind, rid, "accepted", actor="op")
+    values, source = resolve(kind, nominal, fallback_source="geometry.yaml", robot=ROBOT, store=store)
+    assert values == {**nominal, **measured} and rid in source
+    values, source = resolve(kind, nominal, fallback_source="geometry.yaml", robot=ROBOT, store=store,
+                             override=operator)
+    assert values == {**nominal, **measured, **operator}
+    assert rid in source and "operator override" in source
+    # An override alone, with no record, also wins over the nominal.
+    values, _ = resolve(kind, nominal, fallback_source="geometry.yaml", robot=ROBOT,
+                        store=CalibrationStore(tmp_path / "empty"), override=operator)
+    assert values == {**nominal, **operator}
+
+
+def test_none_valued_override_keys_are_ignored(tmp_path):
+    values, source = resolve("wheel_odometry", {"wheel_radius": 0.028}, fallback_source="geometry.yaml",
+                             robot=ROBOT, store=CalibrationStore(tmp_path), override={"wheel_radius": None})
+    assert values == {"wheel_radius": 0.028} and "operator override" not in source
+
+
+def test_measured_robots_pass_the_urdf_centred_checks():
+    """8kcn 0.0272/0.0975 and 9dfk 0.0266/0.0953 sit inside the URDF nominal +-10 %; 181-182 deg in the window."""
+    for r, b in ((0.0272, 0.0975), (0.0266, 0.0953)):
+        assert check_values("wheel_odometry", {"wheel_radius": r, "wheel_separation": b}) is None
+    for deg in (181.0, 182.0):
+        assert check_values("lidar_mount", {"lidar_yaw_offset": math.radians(deg)}) is None
