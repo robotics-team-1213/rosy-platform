@@ -1,4 +1,4 @@
-"""D-402 §3: CELL_TRANSFER runs only through the phase runner; gripper excluded from start state."""
+"""D-402 §3: CELL_TRANSFER runs only through its phase runner; gripper start state after grasp."""
 
 from __future__ import annotations
 
@@ -9,13 +9,14 @@ from omx_adapter.action_runner import ActionRunner, action_grant_digest
 from omx_adapter.action_store import ActionStore
 from omx_adapter.command_owner import TrajectoryCommand
 from omx_adapter.kinematics import ARM_JOINTS, OmxKinematics
+from omx_adapter.manipulation_plan import ExecutionStateSnapshot
 from omx_adapter.phase_recorder import ActionPhaseRecorder
 from omx_adapter.pick_place_runner import PickPlaceRunner
+from omx_adapter.pose_plan import CellPlanningProfile
 
 from test_omx_action_api import FakePhaseExecution, _grant, _runner
-from test_omx_pick_place_runner import _Fence, _GoalPort
-from test_omx_pose_plan import PROFILE_PATH, _plan, _state
-from omx_adapter.pose_plan import CellPlanningProfile
+from test_omx_pick_place_runner import _event, _Fence, _GoalPort
+from test_omx_pose_plan import PROFILE_PATH, _plan
 
 
 def _kind(kind):
@@ -34,25 +35,48 @@ def test_direct_driver_path_rejects_every_kind_but_pick_place_before_journal(tmp
     assert store.get_action("action-1") is None
 
 
-def test_cell_transfer_runs_through_the_phase_runner(tmp_path):
-    store, driver, base = _runner(tmp_path)
-    started = []
-    runner = ActionRunner(
+def _action_runner(store, driver, base, **factories):
+    return ActionRunner(
         store, driver, workcell_id="omx-1", instance_id="omx-1-control",
         principal_for_peer=lambda uid: f"fleet-uid-{uid}", allowed_peer_uids={1001},
         current_fence=lambda epoch, generation: (epoch, generation) == (2, 8),
         capability_current=lambda grant: grant.config_revision == "cfg-1",
-        submission_fence=base.submission_fence, enabled=True,
-        phase_runner_factory=lambda grant, recorder: started.append(grant.action_kind)
-        or FakePhaseExecution(recorder),
+        submission_fence=base.submission_fence, enabled=True, **factories,
     )
+
+
+def test_cell_transfer_runs_through_its_own_phase_runner(tmp_path):
+    store, driver, base = _runner(tmp_path)
+    started = []
+    runner = _action_runner(store, driver, base, phase_runner_factories={
+        "CELL_TRANSFER": lambda grant, recorder: started.append(grant.action_kind)
+        or FakePhaseExecution(recorder),
+    })
     receipt = runner.submit(_kind("CELL_TRANSFER"), peer_uid=1001)
     assert receipt["state"] == "ACCEPTED"
     assert started == ["CELL_TRANSFER"]
     assert driver.submissions == []
-    # Unknown kinds stay closed even with a phase runner configured.
     with pytest.raises(PermissionError, match="no admitted executor"):
         runner.submit(_kind("UNKNOWN_KIND").model_copy(update={"action_id": "action-2"}), peer_uid=1001)
+
+
+def test_pick_place_factory_never_executes_cell_transfer(tmp_path):
+    store, driver, base = _runner(tmp_path)
+    started = []
+    runner = _action_runner(store, driver, base, phase_runner_factory=lambda grant, recorder: (
+        started.append(grant.action_kind) or FakePhaseExecution(recorder)))
+    with pytest.raises(PermissionError, match="no admitted executor"):
+        runner.submit(_kind("CELL_TRANSFER"), peer_uid=1001)
+    assert started == [] and store.get_action("action-1") is None
+
+
+def test_factory_map_rejects_unknown_kind_and_double_pick_place(tmp_path):
+    store, driver, base = _runner(tmp_path)
+    with pytest.raises(ValueError, match="phase runner kinds"):
+        _action_runner(store, driver, base, phase_runner_factories={"PICK": lambda g, r: None})
+    with pytest.raises(ValueError, match="PICK_PLACE"):
+        _action_runner(store, driver, base, phase_runner_factory=lambda g, r: None,
+                       phase_runner_factories={"PICK_PLACE": lambda g, r: None})
 
 
 @pytest.fixture(scope="module")
@@ -65,7 +89,9 @@ def profile():
     return CellPlanningProfile.load(PROFILE_PATH)
 
 
-def _phase_runner(tmp_path, kin, profile, *, tolerances=None, gripper=None, arm_delta=0.0):
+def _phase_runner(tmp_path, kin, profile, *, plan=None, grippers=None, arm_delta=0.0,
+                  cell_profile="default"):
+    """Runner whose state provider returns each phase's planned start, with overrides."""
     grant = FleetActionGrant.model_validate(_grant())
     store = ActionStore(tmp_path / "cell.sqlite3")
     store.create_action(
@@ -78,18 +104,30 @@ def _phase_runner(tmp_path, kin, profile, *, tolerances=None, gripper=None, arm_
     store.begin_submission(grant.action_id, expected_generation=grant.dispatch_generation,
                            attempt_id=grant.attempt_id)
     recorder = ActionPhaseRecorder(store, action_id=grant.action_id, attempt_id=grant.attempt_id)
-    plan = _plan(kin, profile)
-    planned = _state(kin, profile, sequence=plan.source_state_sequence + 1)
-    positions = dict(planned.joint_positions)
-    positions["joint2"] += arm_delta
-    if gripper is not None:
-        positions["gripper_joint_1"] = gripper
-    state = type(planned)(
-        sequence=planned.sequence, joint_positions=positions,
-        calibration_revision=planned.calibration_revision, transform_revision=planned.transform_revision,
-        planning_scene_revision=planned.planning_scene_revision, observed_at_monotonic_s=100.6,
-    )
+    plan = plan or _plan(kin, profile)
+    calls = {"n": 0}
+
+    def state():
+        index = min(calls["n"], 3)
+        calls["n"] += 1
+        phase = plan.phases[index]
+        positions = dict(zip(phase.joint_names, phase.start_state_positions))
+        positions["joint2"] += arm_delta
+        if grippers and phase.phase_id in grippers:
+            positions["gripper_joint_1"] = grippers[phase.phase_id]
+        return ExecutionStateSnapshot(
+            sequence=plan.source_state_sequence + 1 + index, joint_positions=positions,
+            calibration_revision=phase.calibration_revision, transform_revision=phase.transform_revision,
+            planning_scene_revision=phase.planning_scene_revision, observed_at_monotonic_s=100.6,
+        )
+
     port = _GoalPort()
+
+    def succeed(command, goal, callback):
+        callback(_event("GOAL_ACCEPTED", command, command.phase_id, goal, 1))
+        callback(_event("TERMINAL_RESULT", command, command.phase_id, goal, 2, status=4, result_code=0))
+
+    port.on_submit = succeed
     runner = PickPlaceRunner(
         recorder, grant, plan, command_for_phase=lambda phase: TrajectoryCommand(
             workcell_id=grant.workcell_id, instance_id=grant.instance_id,
@@ -102,28 +140,50 @@ def _phase_runner(tmp_path, kin, profile, *, tolerances=None, gripper=None, arm_
         ),
         goal_port=port, submission_fence=_Fence(), phase_gate=lambda _phase: True,
         current_fence=lambda epoch, generation: (epoch, generation) == (2, 8),
-        current_execution_state=lambda: state,
-        start_state_tolerances=tolerances or profile.start_state_tolerances(),
+        current_execution_state=state,
+        start_state_tolerances=profile.start_state_tolerances(),
         max_joint_state_age_s=0.5, monotonic=lambda: 100.7,
+        cell_profile=profile if cell_profile == "default" else cell_profile,
     )
     return recorder, port, runner
 
 
-def test_cell_transfer_start_state_ignores_gripper_but_checks_arm(tmp_path, kin, profile):
-    # Gripper far from the planned open value: not a start-state failure.
-    recorder, port, runner = _phase_runner(tmp_path / "a", kin, profile, gripper=0.2)
+def _run_all(runner):
     runner.start()
-    assert len(port.submissions) == 1
-    assert recorder.phases()[0]["state"] == "ACCEPTED"
-    # Arm joint outside tolerance still holds before any goal.
-    recorder, port, runner = _phase_runner(tmp_path / "b", kin, profile, arm_delta=0.05)
+    for _ in range(3):
+        runner.advance()
+
+
+def test_gripper_is_checked_before_grasp_and_ignored_after(tmp_path, kin, profile):
+    # transfer/release: gripper stops at the object width, not the planned closed value.
+    recorder, port, runner = _phase_runner(
+        tmp_path / "after", kin, profile, grippers={"transfer": 0.3, "release": 0.3})
+    _run_all(runner)
+    assert [row["state"] for row in recorder.phases()] == ["SUCCEEDED"] * 4
+    # approach and grasp check the gripper like any joint.
+    for phase_id, name in (("approach", "a"), ("grasp", "g")):
+        recorder, port, runner = _phase_runner(tmp_path / name, kin, profile, grippers={phase_id: 0.3})
+        with pytest.raises(RuntimeError, match="start state is invalid"):
+            _run_all(runner)
+        assert [row["phase_id"] for row in recorder.phases()] == (
+            [] if phase_id == "approach" else ["approach"])
+
+
+def test_arm_joint_outside_tolerance_still_holds(tmp_path, kin, profile):
+    recorder, port, runner = _phase_runner(tmp_path, kin, profile, arm_delta=0.05)
     with pytest.raises(RuntimeError, match="start state is invalid"):
         runner.start()
     assert port.submissions == []
 
 
-def test_cell_transfer_tolerances_must_cover_arm_joints_only(tmp_path, kin, profile):
-    with_gripper = {**profile.start_state_tolerances(), "gripper_joint_1": 0.02}
-    with pytest.raises(ValueError, match="checked planned joints"):
-        _phase_runner(tmp_path, kin, profile, tolerances=with_gripper)
-    assert set(profile.start_state_tolerances()) == set(ARM_JOINTS)
+def test_runner_rejects_a_plan_whose_unchecked_joints_are_not_the_profile_gripper(tmp_path, kin, profile):
+    plan = _plan(kin, profile)
+    object.__setattr__(plan, "gripper_joint_names", ARM_JOINTS)  # forged after validation
+    with pytest.raises(ValueError, match="gripper"):
+        _phase_runner(tmp_path / "forged", kin, profile, plan=plan)
+    with pytest.raises(ValueError, match="cell_profile"):
+        _phase_runner(tmp_path / "noprofile", kin, profile, cell_profile=None)
+
+
+def test_cell_transfer_tolerances_cover_every_planned_joint(profile):
+    assert set(profile.start_state_tolerances()) == set(profile.joint_names)

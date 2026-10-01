@@ -4,6 +4,11 @@ The planner only returns joint trajectories. It never calls an ActionPort;
 the local ArmCommandOwner remains the only submitter (D-402 §9). There is
 no collision scene: placed boxes, neighbours, the carried box, and low
 links are NOT protected, so this backend is for ``simulation`` only.
+
+Pick/place/home ``yaw`` is satisfied modulo pi (the two-finger gripper is
+symmetric under 180 deg). That is valid only for items that are themselves
+symmetric under 180 deg about the vertical (box, slip_sheet); the relative
+rotation between pick and place may differ from the request by pi.
 """
 
 from __future__ import annotations
@@ -37,6 +42,7 @@ _SHA256 = re.compile(r"[0-9a-f]{64}\Z")
 CELL_HASH_MISMATCH = "CELL_HASH_MISMATCH"
 STATE_INVALID = "STATE_INVALID"
 HOME_DEVIATION = "HOME_DEVIATION"
+GRIPPER_NOT_OPEN = "GRIPPER_NOT_OPEN"
 CARRY_Z_INSUFFICIENT = "CARRY_Z_INSUFFICIENT"
 WAYPOINT_DISCONTINUITY = "WAYPOINT_DISCONTINUITY"
 PHASE_DURATION_EXCEEDED = "PHASE_DURATION_EXCEEDED"
@@ -92,6 +98,7 @@ class CellPlanningProfile:
     tool_down_tolerance_rad: float
     home_joint_tolerance_rad: float
     start_state_tolerance_rad: float
+    planning_limit_fraction: float
     max_joint_state_age_s: float
     action_timeout_s: float
 
@@ -160,7 +167,12 @@ class CellPlanningProfile:
         action_timeout = _finite("owner.action_timeout_s", owner.get("action_timeout_s"), positive=True)
         if action_timeout < max(phase_max.values()):
             raise ValueError("owner.action_timeout_s must cover the longest phase")
+        fraction = document.get("planning_limit_fraction")
+        if (isinstance(fraction, bool) or not isinstance(fraction, (int, float))
+                or not 0.0 < float(fraction) <= 1.0):
+            raise ValueError("planning_limit_fraction must be in (0, 1]")
         return cls(
+            planning_limit_fraction=float(fraction),
             revision=revision, kinematics_revision=kin_revision,
             joint_names=ARM_JOINTS + (gripper_joint,), gripper_joint=gripper_joint,
             position_limits=MappingProxyType(position),
@@ -183,8 +195,8 @@ class CellPlanningProfile:
         )
 
     def start_state_tolerances(self) -> dict[str, float]:
-        """Arm joints only; the gripper is judged by gripper_contract readback (D-402 §3d)."""
-        return {name: self.start_state_tolerance_rad for name in ARM_JOINTS}
+        """Every planned joint. PickPlaceRunner skips the gripper only after grasp (D-402 §3d)."""
+        return {name: self.start_state_tolerance_rad for name in self.joint_names}
 
     def arm_command_config(self, *, workcell_id: str, instance_id: str,
                            calibration_revision: str,
@@ -263,8 +275,8 @@ class CellTransferPlan:
                or phase.joint_names != phases[0].joint_names for phase in phases):
             raise ValueError("phases must share joints, source sequence, and the kin: scene revision")
         grippers = tuple(self.gripper_joint_names)
-        if not set(grippers) < set(phases[0].joint_names):
-            raise ValueError("gripper joints must be a strict subset of the planned joints")
+        if not grippers or not set(grippers) < set(phases[0].joint_names) or set(grippers) & set(ARM_JOINTS):
+            raise ValueError("gripper joints must be planned non-arm joints")
         object.__setattr__(self, "gripper_joint_names", grippers)
 
 
@@ -308,14 +320,18 @@ def _trapezoid_points(samples: Sequence[Sequence[float]], names: Sequence[str],
             second.append([0.0 for _ in dims])
     g1 = [max(abs(row[j]) for row in first) for j in dims]
     g2 = [max(abs(row[j]) for row in second) for j in dims]
+    # Plan below the owner's limits; see planning_limit_fraction in the profile.
+    fraction = profile.planning_limit_fraction
+    v_max = {name: profile.velocity_limits[name] * fraction for name in names}
+    a_max = {name: profile.acceleration_limits[name] * fraction for name in names}
     s_dot = math.inf
     for j, name in enumerate(names):
         if g1[j] > 0:
-            s_dot = min(s_dot, profile.velocity_limits[name] / g1[j])
+            s_dot = min(s_dot, v_max[name] / g1[j])
         if g2[j] > 0:
             # Curvature may use at most half of the acceleration budget.
-            s_dot = min(s_dot, math.sqrt(profile.acceleration_limits[name] / (2.0 * g2[j])))
-    s_ddot = min((profile.acceleration_limits[name] - g2[j] * s_dot * s_dot) / g1[j]
+            s_dot = min(s_dot, math.sqrt(a_max[name] / (2.0 * g2[j])))
+    s_ddot = min((a_max[name] - g2[j] * s_dot * s_dot) / g1[j]
                  for j, name in enumerate(names) if g1[j] > 0)
     if s_dot * s_dot / s_ddot >= 1.0:
         accel_time = math.sqrt(1.0 / s_ddot)
@@ -392,6 +408,10 @@ class AnalyticCellTransferPlanner:
         if (current_fk.tool_down_error_rad > profile.tool_down_tolerance_rad
                 or any(abs(a - b) > profile.home_joint_tolerance_rad for a, b in zip(current, home))):
             raise CellTransferPlanRejected(HOME_DEVIATION, "start state is not the taught home")
+        # approach holds the gripper at the open target from its first point, so a
+        # gripper that is not already open would be commanded to jump. Reject instead.
+        if abs(state.joint_positions[profile.gripper_joint] - profile.gripper_open) > profile.start_state_tolerance_rad:
+            raise CellTransferPlanRejected(GRIPPER_NOT_OPEN, "gripper is not open at the start of approach")
 
         names = profile.joint_names
         open_, closed = profile.gripper_open, profile.gripper_closed
@@ -407,8 +427,9 @@ class AnalyticCellTransferPlanner:
                                            request.carry_z, limits, profile)
         segments["transfer"] = [[a + (closed,) for a in seg] for seg in transfer]
         release_open = self._gripper(arm, closed, open_, profile)
+        # Return to the same home joint vector we started from (one q5 of the two yaw twins).
         retreat, arm, _ = self._travel(pose, arm, request.home, request.home.z,
-                                       request.carry_z, limits, profile)
+                                       request.carry_z, limits, profile, end_reference_q5=home[4])
         segments["release"] = [release_open] + [[a + (open_,) for a in seg] for seg in retreat]
 
         phases = []
@@ -458,16 +479,22 @@ class AnalyticCellTransferPlanner:
         return result.joints
 
     def _line(self, start_pose: TopDownPose, start_arm: tuple[float, ...], target_xyz: tuple[float, float, float],
-              target_yaw: float | None, limits: IkLimits,
-              profile: CellPlanningProfile) -> tuple[list[tuple[float, ...]], tuple[float, ...], TopDownPose]:
-        """Straight Cartesian segment; yaw follows q5 continuity toward ``target_yaw``."""
+              target_yaw: float | None, limits: IkLimits, profile: CellPlanningProfile,
+              end_reference_q5: float | None = None,
+              ) -> tuple[list[tuple[float, ...]], tuple[float, ...], TopDownPose]:
+        """Straight Cartesian segment; yaw follows q5 continuity toward ``target_yaw``.
+
+        ``target_yaw`` is honoured modulo pi: the end q5 is the in-limit one of the
+        two 180-deg twins nearest ``end_reference_q5`` (default: the start q5).
+        """
         x0, y0, z0 = start_pose.x, start_pose.y, start_pose.z
         x1, y1, z1 = target_xyz
         yaw0 = start_arm[0] - start_arm[4]
         if target_yaw is None:
             yaw_delta = 0.0
         else:
-            end = self._solve(TopDownPose(x1, y1, z1, target_yaw), limits, start_arm[4])
+            reference = start_arm[4] if end_reference_q5 is None else end_reference_q5
+            end = self._solve(TopDownPose(x1, y1, z1, target_yaw), limits, reference)
             yaw_delta = (end[0] - end[4]) - yaw0
         distance = math.dist((x0, y0, z0), (x1, y1, z1))
         count = max(math.ceil(distance / profile.cartesian_step_m - 1e-9),
@@ -485,15 +512,22 @@ class AnalyticCellTransferPlanner:
         return samples, arm, TopDownPose(x1, y1, z1, arm[0] - arm[4])
 
     def _travel(self, start_pose: TopDownPose, start_arm: tuple[float, ...], target: TopDownPose,
-                approach_z: float, carry_z: float, limits: IkLimits, profile: CellPlanningProfile):
-        """Vertical to carry_z, horizontal at carry_z, vertical to approach_z, vertical to target."""
+                approach_z: float, carry_z: float, limits: IkLimits, profile: CellPlanningProfile,
+                end_reference_q5: float | None = None):
+        """Vertical to carry_z, horizontal at carry_z, vertical to approach_z, vertical to target.
+
+        The first segment is vertical in either direction: when carry_z is below the
+        start height (e.g. a high taught home), the arm descends straight down to
+        carry_z before any horizontal motion. That still obeys D-402 §6 (no diagonal).
+        """
         segments = []
         pose, arm = start_pose, start_arm
         for xyz, yaw in (((pose.x, pose.y, carry_z), None),
                          ((target.x, target.y, carry_z), target.yaw),
                          ((target.x, target.y, approach_z), None),
                          ((target.x, target.y, target.z), None)):
-            samples, arm, pose = self._line(pose, arm, xyz, yaw, limits, profile)
+            samples, arm, pose = self._line(pose, arm, xyz, yaw, limits, profile,
+                                            end_reference_q5 if yaw is not None else None)
             segments.append(samples)
         return segments, arm, pose
 

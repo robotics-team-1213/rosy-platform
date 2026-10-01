@@ -57,6 +57,14 @@ workspace:
   min_m: [-0.28, -0.28, 0.005]
   max_m: [0.28, 0.28, 0.22]
 
+# The planner times trajectories at limit x this fraction; the owner still admits up to
+# the full limits above. Reason: the JointTrajectoryController interpolates between the
+# reported points with quintic splines, and at the trapezoid's accel/cruise/decel corners
+# that spline overshoots the reported acceleration (review probe 2026-10-02: ~1.65x).
+# 0.8 gives headroom so ordinary blends stay at or below the full limit; it does not
+# bound the worst corner overshoot, which remains a simulation-only risk (D-402 §4).
+planning_limit_fraction: 0.8
+
 # 5 mm Cartesian samples: at the 0.05 m singularity radius a step turns joint1 by at most
 # 0.1 rad; at the reach edge the spline chord error between IK-exact samples is sub-mm.
 cartesian_step_m: 0.005

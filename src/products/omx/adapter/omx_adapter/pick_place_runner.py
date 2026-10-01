@@ -22,8 +22,12 @@ from .manipulation_plan import (
     ResolvedPickPlacePlan,
 )
 from .phase_recorder import ActionPhaseRecorder
-from .pose_plan import CellTransferPlan
+from .pose_plan import CellPlanningProfile, CellTransferPlan, validate_cell_transfer_plan
 from .ros_goal_contract import RosGoalEvent
+
+
+# CELL_TRANSFER phases whose gripper start value is not compared (object in hand).
+_AFTER_GRASP_PHASES = frozenset({"transfer", "release"})
 
 
 class PhaseGoalPort(Protocol):
@@ -72,6 +76,7 @@ class PickPlaceRunner:
         max_joint_state_age_s: float,
         monotonic: Callable[[], float] = time.monotonic,
         now: Callable[[], datetime] | None = None,
+        cell_profile: CellPlanningProfile | None = None,
     ) -> None:
         self.recorder = recorder
         self.grant = grant
@@ -98,12 +103,22 @@ class PickPlaceRunner:
 
         if not isinstance(plan, (ResolvedPickPlacePlan, CellTransferPlan)):
             raise ValueError("plan must be a validated ResolvedPickPlacePlan or CellTransferPlan")
-        # CELL_TRANSFER (simulation, D-402 §3d): gripper joints stop at the object
-        # width, so gripper_contract readback judges them, not start-state values.
-        self._unchecked_joints = frozenset(
-            plan.gripper_joint_names if isinstance(plan, CellTransferPlan) else ()
-        )
-        if not callable(current_execution_state) or not callable(monotonic):
+        if not callable(monotonic):
+            raise ValueError("fresh execution-state and monotonic clock providers are required")
+        # CELL_TRANSFER (simulation, D-402 §3d): after grasp the gripper stops at the
+        # object width, so in transfer/release gripper_contract readback judges it,
+        # not the start-state value. approach/grasp check it like any joint. The
+        # skipped set is the accepted profile's gripper, never the plan's own claim.
+        self._unchecked_joints: frozenset[str] = frozenset()
+        if isinstance(plan, CellTransferPlan):
+            if not isinstance(cell_profile, CellPlanningProfile):
+                raise ValueError("a CellTransferPlan requires the accepted cell_profile")
+            validate_cell_transfer_plan(
+                plan, cell_profile, kinematics_revision=cell_profile.kinematics_revision,
+                now_monotonic_s=monotonic(),
+            )
+            self._unchecked_joints = frozenset({cell_profile.gripper_joint})
+        if not callable(current_execution_state):
             raise ValueError("fresh execution-state and monotonic clock providers are required")
         if isinstance(max_joint_state_age_s, bool):
             raise ValueError("max_joint_state_age_s must be positive and finite")
@@ -114,8 +129,8 @@ class PickPlaceRunner:
         if not math.isfinite(max_state_age) or max_state_age <= 0:
             raise ValueError("max_joint_state_age_s must be positive and finite")
         tolerances = dict(start_state_tolerances)
-        if set(tolerances) != set(plan.phases[0].joint_names) - self._unchecked_joints:
-            raise ValueError("start-state tolerances must cover exactly the checked planned joints")
+        if set(tolerances) != set(plan.phases[0].joint_names):
+            raise ValueError("start-state tolerances must cover exactly the planned joints")
         normalized_tolerances = {}
         for name, value in tolerances.items():
             if isinstance(value, bool):
@@ -193,7 +208,7 @@ class PickPlaceRunner:
                 or state.planning_scene_revision != phase.planning_scene_revision):
             raise ValueError("phase start state calibration, transform, or planning scene changed")
         for name, expected in zip(phase.joint_names, phase.start_state_positions):
-            if name in self._unchecked_joints:
+            if name in self._unchecked_joints and phase.phase_id in _AFTER_GRASP_PHASES:
                 continue
             if abs(state.joint_positions[name] - expected) > self.start_state_tolerances[name]:
                 raise ValueError("phase start state is outside the planned tolerance")

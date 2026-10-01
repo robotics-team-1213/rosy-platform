@@ -11,6 +11,9 @@ Conventions (base frame = ``link0``):
   toward -z, the joint condition is q2 + q3 + q4 = +pi/2.
 * ``yaw`` is the heading of the TCP +z axis in the base xy plane. A top-down
   TCP orientation is exactly Rz(yaw) * Ry(+pi/2), so q5 = q1 - yaw (mod 2*pi).
+  ``solve_top_down`` may return the 180-deg twin (yaw + pi), so a requested yaw
+  is satisfied only modulo pi; callers must use it only for items symmetric
+  under 180 deg (box, slip_sheet).
 * The planar 2-link solve uses the elbow-up branch only (elbow above the
   shoulder-wrist line): for table-top picking the elbow-down branch drives the
   elbow toward the table, and the vendor SRDF ``home`` pose is elbow-up.

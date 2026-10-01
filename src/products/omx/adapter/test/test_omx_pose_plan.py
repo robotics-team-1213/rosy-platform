@@ -17,6 +17,7 @@ from omx_adapter.manipulation_plan import ExecutionStateSnapshot
 from omx_adapter.pose_plan import (
     CARRY_Z_INSUFFICIENT,
     CELL_HASH_MISMATCH,
+    GRIPPER_NOT_OPEN,
     HOME_DEVIATION,
     PHASE_DURATION_EXCEEDED,
     STATE_INVALID,
@@ -100,7 +101,9 @@ def test_profile_loads_with_content_hash_revision(profile, kin):
     for name, value in zip(ARM_JOINTS, srdf_home):
         lower, upper = profile.position_limits[name]
         assert lower <= value <= upper
-    assert profile.start_state_tolerances() == {name: 0.02 for name in ARM_JOINTS}
+    # Gripper included: approach/grasp check it; the runner skips it only after grasp.
+    assert profile.start_state_tolerances() == {name: 0.02 for name in profile.joint_names}
+    assert profile.planning_limit_fraction == 0.8
 
 
 @pytest.mark.parametrize("mutate, match", [
@@ -117,6 +120,9 @@ def test_profile_loads_with_content_hash_revision(profile, kin):
     (lambda d: d["phase_max_duration_s"].pop("grasp"), "approach, grasp"),
     (lambda d: d["owner"].update(action_timeout_s=10.0), "longest phase"),
     (lambda d: d.update(kinematics_revision="kin"), "sha256"),
+    (lambda d: d.update(planning_limit_fraction=1.2), "planning_limit_fraction"),
+    (lambda d: d.update(planning_limit_fraction=0.0), "planning_limit_fraction"),
+    (lambda d: d.pop("planning_limit_fraction"), "planning_limit_fraction"),
 ])
 def test_profile_validation_fails_closed(mutate, match):
     document = copy.deepcopy(_document())
@@ -201,8 +207,10 @@ def test_every_point_is_timed_within_profile_rates(kin, profile):
         assert times[-1] <= profile.phase_max_duration_s[phase.phase_id]
         for point in phase.points:
             for name, v, a in zip(phase.joint_names, point.velocities, point.accelerations):
-                assert abs(v) <= profile.velocity_limits[name] + 1e-9
-                assert abs(a) <= profile.acceleration_limits[name] + 1e-9
+                # Planned at limit x planning_limit_fraction; the owner checks the full limit.
+                fraction = profile.planning_limit_fraction
+                assert abs(v) <= profile.velocity_limits[name] * fraction + 1e-9
+                assert abs(a) <= profile.acceleration_limits[name] * fraction + 1e-9
         assert phase.points[-1].velocities == (0.0,) * 6
 
 
@@ -255,7 +263,8 @@ def test_real_command_owner_accepts_every_generated_phase(kin, profile):
 def test_measured_phase_durations_are_reported(kin, profile):
     plan = _plan(kin, profile)
     durations = {phase.phase_id: phase.points[-1].time_from_start_s for phase in plan.phases}
-    assert durations["grasp"] == pytest.approx(3.0, abs=1e-9)
+    # 1.0 rad stroke at 0.4 rad/s, 0.4 rad/s^2 (0.8 x 0.5): 1 s + 1.5 s + 1 s.
+    assert durations["grasp"] == pytest.approx(3.5, abs=1e-9)
     assert all(value > 0 for value in durations.values())
 
 
@@ -287,8 +296,33 @@ def test_rejects_start_state_away_from_home(kin, profile):
     for delta in ({"joint2": 0.05}, {"joint5": -0.03}):
         assert _reason(lambda: _planner(kin).plan_transfer(
             _request(), profile, _state(kin, profile, delta=delta))) == HOME_DEVIATION
-    # A gripper difference is not a home deviation; gripper is judged by readback.
-    _planner(kin).plan_transfer(_request(), profile, _state(kin, profile, delta={"gripper_joint_1": -0.3}))
+
+
+def test_rejects_gripper_that_is_not_open_at_the_start(kin, profile):
+    # Review reproducer: gripper at -0.1 must not be snapped to open by the first approach point.
+    for gripper_delta in (-1.1, -0.5, 0.05):
+        assert _reason(lambda: _planner(kin).plan_transfer(
+            _request(), profile, _state(kin, profile, delta={"gripper_joint_1": gripper_delta}),
+        )) == GRIPPER_NOT_OPEN
+    _planner(kin).plan_transfer(_request(), profile, _state(kin, profile, delta={"gripper_joint_1": -0.015}))
+
+
+def test_retreat_returns_to_the_start_wrist_roll(kin, profile):
+    # Home taught at yaw 1.5: q5 = -1.5 and its 180-deg twin 1.64 are both in limits.
+    home = TopDownPose(0.12, 0.0, 0.12, 1.5)
+    state = _state(kin, profile, home=home)
+    plan = _planner(kin).plan_transfer(_request(home=home), profile, state)
+    end = plan.phases[-1].points[-1].positions
+    assert end[:5] == pytest.approx(tuple(state.joint_positions[name] for name in ARM_JOINTS), abs=1e-6)
+
+
+def test_carry_below_home_descends_vertically_from_home_first(kin, profile):
+    plan = _plan(kin, profile, carry_z=0.09)
+    start = kin.fk(plan.phases[0].start_state_positions[:5])
+    # 0.12 -> 0.09 m at 5 mm samples = the first 6 points.
+    first = [kin.fk(point.positions[:5]) for point in plan.phases[0].points[:6]]
+    assert all((p.x, p.y) == pytest.approx((start.x, start.y), abs=1e-6) for p in first)
+    assert first[0].z < start.z and first[-1].z == pytest.approx(0.09, abs=1e-6)
 
 
 def test_rejects_insufficient_carry_and_approach_heights(kin, profile):
@@ -332,8 +366,20 @@ def test_rejects_phase_over_its_duration_instead_of_splitting(kin, profile):
         _request(), short, _state(kin, profile))) == PHASE_DURATION_EXCEEDED
 
 
+def test_plan_rejects_arm_joints_as_gripper_joints(kin, profile):
+    plan = _plan(kin, profile)
+    with pytest.raises(ValueError, match="gripper"):
+        replace(plan, gripper_joint_names=ARM_JOINTS)
+    with pytest.raises(ValueError, match="gripper"):
+        replace(plan, gripper_joint_names=("joint5", "gripper_joint_1"))
+
+
 def test_validate_rejects_foreign_or_tampered_plan(kin, profile):
     plan = _plan(kin, profile)
+    forged = _plan(kin, profile)
+    object.__setattr__(forged, "gripper_joint_names", ("joint1",))
+    with pytest.raises(ValueError, match="gripper"):
+        validate_cell_transfer_plan(forged, profile, kinematics_revision=kin.revision, now_monotonic_s=101.0)
     with pytest.raises(ValueError, match="profile revision"):
         validate_cell_transfer_plan(plan, replace(profile, revision="1" * 64),
                                     kinematics_revision=kin.revision, now_monotonic_s=101.0)
