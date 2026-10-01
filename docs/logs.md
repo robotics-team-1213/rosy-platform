@@ -4149,3 +4149,8 @@
 - 변경: `raspberry-pi-wifi-image.md`의 리터럴 `192.168.1.42` 두 곳을 `<robot-ip>`로 바꿨다. 앞 문단은 이미 `.local` 이름을 먼저 쓰고 IP는 예비로 안내한다 (D-226).
 - 증거: 2026-10-01 현장 공유기 교체로 서브넷이 10.16.36.0/24로 바뀐 뒤의 IP 고정 감사.
 - gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · refactor(perception): model watch 순수 상태 전이를 watch_core.py로 분리
+- 변경: c3263f7c 뒤 `tools/perception/model/watch.py`가 630줄로 D-362 600줄 예산을 넘었다(test_over_budget_code_has_a_recorded_verdict). 판정 행을 더하지 않고, I/O 없는 상태 전이 함수 13개(`new_state`…`supersede`, `STATE_VERSION`)를 `watch_core.py`(140줄)로 옮겼다. `watch.py`(516줄)가 같은 이름을 다시 내보내므로 호출자와 시험은 그대로 `watch.<name>`을 쓴다. 동작 변경 없음.
+- 증거: tools/perception/test 484 passed, 39 skipped; test_module_structure 예산 시험.
+- gate 변화: 없음(SOURCE). 사이트 설치는 체크아웃 전체를 쓰므로 새 파일도 함께 간다.
