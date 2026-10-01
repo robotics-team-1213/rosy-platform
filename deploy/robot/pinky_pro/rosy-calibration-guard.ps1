@@ -6,6 +6,10 @@ param(
     [string]$ApiToken = "",
     [string]$CredentialPath = "",
     [int]$TimeoutSec = 5,
+    [string]$RosyUser = "rosy",
+    [string]$KeyPath = "",
+    [string]$KnownHosts = "",
+    [string]$SshExe = "ssh",
     [switch]$Force
 )
 # D-321 addendum: soft guard for operator tooling that restarts CORE (release
@@ -20,7 +24,12 @@ param(
 # Read-only: one GET /api/v1/calibration/session. It never ends a session and
 # never touches the robot otherwise. Token order: -ApiToken, $env:ROSY_API_TOKEN,
 # then the DPAPI credential %LOCALAPPDATA%\Rosy\api\<Robot>.credential.xml that
-# sd/rotate-core-api-credential.ps1 writes.
+# sd/rotate-core-api-credential.ps1 writes. That script names the file after
+# the device hostname (rosy-pinky-9dfk.credential.xml) while pushes usually pass
+# an IP, so when <Robot>.credential.xml is missing the guard asks the robot its
+# hostname over the push's own non-interactive, strict-host-key ssh and uses
+# <hostname>.credential.xml. It never tries other robots' files against this
+# address: that would send one robot's token to another device.
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
@@ -35,23 +44,197 @@ function Write-Loud([string]$Message) {
     Write-Warning ("!" * 72)
 }
 
+function Read-StoredToken([string]$Path) {
+    if (-not (Test-Path -LiteralPath $Path)) { return "" }
+    try {
+        return (Import-Clixml -LiteralPath $Path).GetNetworkCredential().Password
+    } catch {
+        return ""
+    }
+}
+
+# --- device hostname lookup ---------------------------------------------------
+# Every ssh here uses the release push's settings: key auth only (BatchMode),
+# known host keys only, no stdin (-n), a connect timeout, keepalives that drop
+# a dead session, and a wall-clock limit after which the process tree is
+# killed, so this soft guard can never hang a push. ssh is started as a
+# process (not with &) because only that can be bounded; the command line is
+# built here, so an argument may hold whitespace but never a double quote.
+$script:hostnameNote = ""
+$script:sshPath = ""
+$sshWallClockMs = ($TimeoutSec + 5) * 1000
+
+function Format-NativeArgument([string]$Value) {
+    if ($Value -notmatch '\s') { return $Value }
+    return '"' + $Value + '"'
+}
+
+function Invoke-BoundedSsh([string[]]$Arguments) {
+    $info = New-Object System.Diagnostics.ProcessStartInfo
+    $info.FileName = $script:sshPath
+    $info.Arguments = ($Arguments | ForEach-Object { Format-NativeArgument $_ }) -join " "
+    $info.UseShellExecute = $false
+    $info.CreateNoWindow = $true
+    $info.RedirectStandardInput = $true
+    $info.RedirectStandardOutput = $true
+    $info.RedirectStandardError = $true
+    $process = [System.Diagnostics.Process]::Start($info)
+    try {
+        $process.StandardInput.Close()
+        $stdout = $process.StandardOutput.ReadToEndAsync()
+        [void]$process.StandardError.ReadToEndAsync()
+        if (-not $process.WaitForExit($sshWallClockMs)) {
+            # Kill the whole tree: a wrapper (.cmd) would otherwise leave its
+            # child holding the output pipes.
+            $previous = $ErrorActionPreference
+            try {
+                $ErrorActionPreference = "Continue"
+                & taskkill.exe /T /F /PID $process.Id *> $null
+            } finally {
+                $ErrorActionPreference = $previous
+            }
+            try { if (-not $process.HasExited) { $process.Kill() } } catch { }
+            return @{ timed_out = $true; exit_code = $null; lines = @() }
+        }
+        $process.WaitForExit()
+        $text = ""
+        if ($stdout.Wait(2000)) { $text = $stdout.Result }
+        $lines = @($text -split "`r?`n" | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+        return @{ timed_out = $false; exit_code = $process.ExitCode; lines = $lines }
+    } finally {
+        $process.Dispose()
+    }
+}
+
+function Get-SshArguments([string]$RemoteCommand, [string]$HostKeyAlias = "") {
+    $arguments = @("-n", "-i", $KeyPath, "-o", "UserKnownHostsFile=$KnownHosts",
+                   "-o", "StrictHostKeyChecking=yes", "-o", "BatchMode=yes",
+                   "-o", "ConnectTimeout=$TimeoutSec", "-o", "ServerAliveInterval=2",
+                   "-o", "ServerAliveCountMax=2")
+    if ($HostKeyAlias) { $arguments += @("-o", "HostKeyAlias=$HostKeyAlias") }
+    return $arguments + @("${RosyUser}@${Robot}", $RemoteCommand)
+}
+
+# Ask the robot its hostname. Returns it, or "" with $script:hostnameNote
+# saying why not.
+function Resolve-DeviceHostname {
+    if ($RosyUser -cnotmatch '^[a-z_][a-z0-9_-]*\z') {
+        $script:hostnameNote = "RosyUser '$RosyUser' is not a plain user name"
+        return ""
+    }
+    # ssh splits an unquoted -o value on whitespace: refuse such a path.
+    if ($KnownHosts -match '[\s"]') {
+        $script:hostnameNote = "known_hosts path '$KnownHosts' contains whitespace or quotes"
+        return ""
+    }
+    if ($KeyPath -match '"') {
+        $script:hostnameNote = "key path '$KeyPath' contains a double quote"
+        return ""
+    }
+    $command = Get-Command $SshExe -CommandType Application -ErrorAction SilentlyContinue |
+        Select-Object -First 1
+    if (-not $command) {
+        $script:hostnameNote = "native ssh executable '$SshExe' not found"
+        return ""
+    }
+    $script:sshPath = $command.Path
+    try {
+        $reply = Invoke-BoundedSsh (Get-SshArguments "hostname")
+    } catch {
+        $script:hostnameNote = "ssh failed: $($_.Exception.Message)"
+        return ""
+    }
+    if ($reply.timed_out) {
+        $script:hostnameNote = "ssh timed out after $($sshWallClockMs / 1000)s and was killed"
+        return ""
+    }
+    if ($reply.exit_code -ne 0) {
+        $script:hostnameNote = "ssh exited $($reply.exit_code)"
+        return ""
+    }
+    # Case-sensitive and anchored: Windows file names are case-insensitive, so
+    # only an exact lowercase device name may pick a credential file.
+    $lines = @($reply.lines)
+    if ($lines.Count -ne 1 -or $lines[0] -cnotmatch '^rosy-[a-z0-9-]+\z') {
+        $script:hostnameNote = "the robot's hostname answer is not a ROSY device name"
+        return ""
+    }
+    return $lines[0]
+}
+
+# The hostname answer comes from the robot's rosy account; a compromised one
+# could name another robot to receive its token. Accept the name only when
+# this address also proves that robot's host key: an ssh with HostKeyAlias
+# set to the known_hosts entry for the name. Entries carry a suffix in
+# practice (rosy-pinky-9dfk.local), so the alias is the first plain entry of
+# <name>, <name>.local, <name>.lan. Hashed entries are not matched (skip).
+function Test-DeviceHostKey([string]$DeviceHost) {
+    $names = @()
+    if (Test-Path -LiteralPath $KnownHosts) {
+        foreach ($line in [IO.File]::ReadAllLines($KnownHosts)) {
+            $fields = $line.Trim() -split '\s+'
+            if ($fields.Count -lt 3 -or $fields[0].StartsWith("#") -or $fields[0].StartsWith("@")) { continue }
+            $names += @($fields[0] -split ',')
+        }
+    }
+    $alias = $null
+    foreach ($candidate in @($DeviceHost, "$DeviceHost.local", "$DeviceHost.lan")) {
+        if ($names -ccontains $candidate) { $alias = $candidate; break }
+    }
+    if (-not $alias) {
+        $script:hostnameNote = ("known_hosts has no entry for $DeviceHost, $DeviceHost.local or " +
+                                "$DeviceHost.lan to prove the claimed hostname")
+        return $false
+    }
+    try {
+        $reply = Invoke-BoundedSsh (Get-SshArguments "true" $alias)
+    } catch {
+        $script:hostnameNote = "host key check for ${alias} failed: $($_.Exception.Message)"
+        return $false
+    }
+    if ($reply.timed_out -or $reply.exit_code -ne 0) {
+        $result = "timed out"
+        if (-not $reply.timed_out) { $result = "ssh exited $($reply.exit_code)" }
+        $script:hostnameNote = ("host key of $Robot does not match the known_hosts entry for " +
+                                "$alias ($result); the claimed hostname $DeviceHost is not trusted")
+        return $false
+    }
+    return $true
+}
+
 $token = $ApiToken
 if (-not $token -and $env:ROSY_API_TOKEN) { $token = $env:ROSY_API_TOKEN }
+$lookedFor = New-Object System.Collections.Generic.List[string]
 if (-not $token) {
+    $explicitCredential = [bool]$CredentialPath
     if (-not $CredentialPath -and $env:LOCALAPPDATA) {
         $CredentialPath = Join-Path $env:LOCALAPPDATA ("Rosy\api\{0}.credential.xml" -f $Robot)
     }
-    if ($CredentialPath -and (Test-Path -LiteralPath $CredentialPath)) {
-        try {
-            $token = (Import-Clixml -LiteralPath $CredentialPath).GetNetworkCredential().Password
-        } catch {
-            $token = ""
+    if ($CredentialPath) {
+        $lookedFor.Add($CredentialPath)
+        $token = Read-StoredToken $CredentialPath
+    }
+    if (-not $token -and -not $explicitCredential -and $env:LOCALAPPDATA) {
+        if (-not $KeyPath) { $KeyPath = Join-Path $env:LOCALAPPDATA "Rosy\ssh\rosy-operator-ed25519" }
+        if (-not $KnownHosts) { $KnownHosts = Join-Path $env:LOCALAPPDATA "Rosy\known_hosts" }
+        $deviceHost = Resolve-DeviceHostname
+        if ($deviceHost -and $deviceHost -ne $Robot) {
+            $byHostname = Join-Path $env:LOCALAPPDATA ("Rosy\api\{0}.credential.xml" -f $deviceHost)
+            $lookedFor.Add($byHostname)
+            if (-not (Test-Path -LiteralPath $byHostname)) {
+                $script:hostnameNote = "the robot answered $deviceHost, which has no stored credential"
+            } elseif (Test-DeviceHostKey $deviceHost) {
+                $token = Read-StoredToken $byHostname
+            }
         }
     }
 }
 if (-not $token) {
-    Write-Loud ("CALIBRATION CHECK SKIPPED for ${Robot}: no CORE API token (pass -ApiToken, set " +
-                "ROSY_API_TOKEN, or store the device credential). Make sure nobody is calibrating " +
+    $where = "looked for: none"
+    if ($lookedFor.Count -gt 0) { $where = "looked for: " + ($lookedFor -join ", ") }
+    if ($script:hostnameNote) { $where += "; device hostname lookup: " + $script:hostnameNote }
+    Write-Loud ("CALIBRATION CHECK SKIPPED for ${Robot}: no CORE API token ($where). Pass -ApiToken, " +
+                "set ROSY_API_TOKEN, or store the device credential. Make sure nobody is calibrating " +
                 "before $Action.")
     exit 0
 }
