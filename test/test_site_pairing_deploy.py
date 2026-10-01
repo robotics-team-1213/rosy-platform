@@ -117,3 +117,12 @@ def test_candidate_ships_the_overlay_and_template():
     spec.loader.exec_module(module)
     assert {"compose.pairing.yaml", "pairing-sync-token.template.txt"} <= set(module.DEPLOY_FILES)
 
+
+
+def test_readme_documents_camera_pairing_in_its_own_subsection():
+    readme = (SITE / "README.md").read_text(encoding="utf-8")
+    start = readme.index("### Camera pairing (D-341)")
+    section = readme[start:readme.index("\n## ", start)]
+    for needle in ("ROSY_SITE_PAIRING=1", "compose.pairing.yaml", "pairing_sync_token", "pair=rosy-pair/1",
+                   "사이트에 연결 요청", "카메라 연결 승인", "site_preflight.py", "revoke"):
+        assert needle in section, needle

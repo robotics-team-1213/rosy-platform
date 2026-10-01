@@ -280,6 +280,55 @@ first Caddyfile site block's addresses are read. IP SANs are not checked: they
 go stale on renumber, and an IP SAN is needed only for a `manual_host`
 fallback link, which this preflight does not cover.
 
+### Camera pairing (D-341)
+
+Off by default: with nothing below set, the stack, the DNS-SD record and the phone behave as before
+(`credential: static` and the manual `rosyov://` link). Pairing is one switch, `ROSY_SITE_PAIRING=1`,
+that must agree in four places; `site_preflight.py` checks that they do.
+
+1. **Sync token.** Vision reads the credentials Fleet issued over `https://fleet:8090`, authenticated
+   by its own token (D-341 12). Make it a new random value, distinct from every other secret in
+   `secrets/` (`discovery-token.template.txt` shows the shape; this one is
+   `pairing-sync-token.template.txt`):
+   `umask 077; openssl rand -hex 32 > "$ROSY_SITE_SECRETS_DIR/pairing_sync_token"`.
+   Only Fleet and Vision mount it. The preflight refuses a missing, empty or duplicated token.
+2. **Cameras.** In `site-cameras.yaml` give each pairable source `credential: paired` and drop its
+   `phone_token_env`. A `credential: static` source keeps its fixed token and manual link; both kinds
+   can live in one file (see `site-cameras.yaml.example`).
+3. **Fleet and Vision.** In `/etc/rosy/site/site.env` set
+   `ROSY_SITE_PAIRING=1` and
+   `ROSY_SITE_PAIRING_COMPOSE=-f /opt/rosy/candidate/deploy/site/compose.pairing.yaml`.
+   `rosy-site-stack.service` appends that word list after `-f compose.yaml` (an empty value adds
+   nothing). The overlay gives Fleet `--pairing-ca /run/secrets/site_ca` (the CA, never the leaf),
+   `--pairing-tls-host ${ROSY_SITE_TLS_HOST}` and the sync token, and gives Vision
+   `--pairing-sync-url https://fleet:8090`, `--pairing-sync-ca /run/secrets/site_ca` and the same
+   token. Vision refuses a plain `http` URL or a missing CA.
+4. **Advertisement.** Put `ROSY_SITE_PAIRING=1` in `/etc/rosy/site/.env` as well.
+   `rosy-overhead-advertise.service` runs `fleet-mdns.py publish --role overhead --pair=${ROSY_SITE_PAIRING}`,
+   which adds TXT `pair=rosy-pair/1` to `_rosy-overhead._tcp` (D-341 14). Never advertise it without
+   step 3: the pairing routes answer 404 when Fleet runs without `--pairing-ca`, and the phone would
+   offer a request that cannot succeed. Apps that predate the key ignore it.
+
+Run `python3 deploy/site/site_preflight.py --site-env /etc/rosy/site/site.env`, then
+`sudo systemctl restart rosy-site-stack rosy-overhead-advertise`. The
+`pairing_consistent` check fails when the two `ROSY_SITE_PAIRING` values differ or are not `1`/empty,
+when the overlay is named without the switch (or the switch without the overlay), when the unit
+advertises `pair` while pairing is off (or omits it while on), and when `pairing_sync_token` is
+missing or equals another secret.
+
+**What the phone sees.** The app offers **사이트에 연결 요청** only for a site whose record carries
+`pair=rosy-pair/1`; otherwise it shows the manual/deep-link path. Nothing is granted by discovery. The
+phone and the console compare a 6-digit code and the site fingerprint before the credential turns
+active.
+
+**Operator flow.** In the Fleet console open **기기 연결**, then **카메라 연결 승인** (D-391 5):
+check that the code and fingerprint match the phone, approve, and the phone receives its per-camera
+credential once. The console section and the revoke control are part of the console work that D-391 5
+tracks; the server side (`/api/fleet/pairing/v1`) is already in Fleet. To revoke a camera, revoke its
+credential in the same panel; Vision drops it at its next credential sync. To turn pairing
+off, clear `ROSY_SITE_PAIRING` and `ROSY_SITE_PAIRING_COMPOSE` in both files and restart; sources
+fall back to `credential: static` with the manual link.
+
 ## Prepare an Ubuntu host
 
 Install Docker Engine and the Compose plugin from the approved Ubuntu package
