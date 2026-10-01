@@ -135,3 +135,9 @@ def test_fleet_can_mark_a_localized_robot_suspect_and_candidates_are_ignored_whi
     assert m.offer([MIRROR], 10.).state is LocState.LOCALIZED
     assert m.mark_suspect("fleet_monitor").reason == "fleet_monitor"
     assert m.mark_suspect("again").reason is None   # only from LOCALIZED
+
+
+def test_a_decision_without_an_open_request_is_stale():
+    """Review M5: in UNKNOWN or SUSPECT there is no request id; None must not match it."""
+    m = machine()
+    assert m.decide(None, 1., pose=(0., 0., 0.), source="human").reason == "stale_request"

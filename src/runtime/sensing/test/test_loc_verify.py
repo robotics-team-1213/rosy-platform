@@ -38,3 +38,10 @@ def test_nan_fit_counts_as_no_scan():
     check = InjectionCheck(0.)
     assert check.observe(.2, float('nan')) == PENDING
     assert check.observe(.6, float('nan')) == FAILED
+
+
+def test_a_fit_after_a_long_silence_is_a_gap_not_a_hold():
+    """Review I3: one scan after 3.6 s of nothing must not pass the 3 s hold."""
+    check = InjectionCheck(0.)
+    assert check.observe(3.6, .9) == FAILED
+    assert check.reason == 'stale_scan'

@@ -29,12 +29,14 @@ class InjectionCheck:
         """Feed one fresh-scan fit (or None for a tick without a scan); returns the result."""
         if self.result != PENDING:
             return self.result
+        # A gap fails the check whether or not this tick brings a scan: one fit
+        # after a long silence must not stand in for the whole hold.
+        if now_s - self.last_s > self.max_gap_s:
+            return self._fail('stale_scan')
         if fit is not None and math.isfinite(fit):
             if now_s >= self.started_s + self.settle_s and fit < self.min_fit:
                 return self._fail('fit_low')
             self.last_s = now_s
-        elif now_s - self.last_s > self.max_gap_s:
-            return self._fail('stale_scan')
         if self.last_s >= self.started_s + self.settle_s + self.hold_s:
             self.result = PASSED
         return self.result

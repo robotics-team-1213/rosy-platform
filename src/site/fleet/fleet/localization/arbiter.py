@@ -90,14 +90,14 @@ class Arbiter:
     def observe(self, report: CandidateReport, context: Context,
                 now: float) -> Optional[LocalizationDecision]:
         robot = report.robot_id
-        if self._decided.get(robot) == report.request_id:
+        if self._decided.get(robot) == (report.request_id, report.stamp):
             return None
         scores = score(report, context, now, self.weights)
         order = sorted(range(len(scores)), key=lambda i: -scores[i]["total"])
         best = order[0]
         gap = scores[best]["total"] - scores[order[1]]["total"] if len(order) > 1 else math.inf
         lead = self._leads.get(robot)
-        carried = _carried(scores, best, order[1] if len(order) > 1 else None)
+        carried = _carried(scores, best)
         if gap < self.margin or not carried:
             self._leads.pop(robot, None)
             return None
@@ -106,7 +106,9 @@ class Arbiter:
             return None
         if now - lead.since < self.hold_s:
             return None
-        self._decided[robot] = report.request_id
+        # Keyed by the report stamp too: a robot whose decision was lost or rejected
+        # re-reports with a newer stamp and gets a fresh hold and decision.
+        self._decided[robot] = (report.request_id, report.stamp)
         self._leads.pop(robot, None)
         return LocalizationDecision(
             request_id=report.request_id, candidate_index=best, source="candidate", cues=carried,
@@ -116,7 +118,13 @@ class Arbiter:
             ttl_s=self.ttl_s)
 
 
-def _carried(scores: list[dict], best: int, runner: Optional[int]) -> list[str]:
-    """Asymmetric cues where the leader beats the runner-up (or is positive, if alone)."""
-    floor = {k: 0.0 for k in ASYMMETRIC} if runner is None else scores[runner]
-    return [k for k in ASYMMETRIC if scores[best][k] > floor[k]]
+def _carried(scores: list[dict], best: int) -> list[str]:
+    """Asymmetric cues with positive evidence for the leader that beat every other candidate.
+
+    Positive: beating a -1 (a peer hidden from the scan, a square not seen) with 0
+    is no evidence for the leader. Every other candidate, not just the runner-up:
+    the cue must separate the leader from its 180-degree twin wherever that twin
+    ranks (review of 1aeada8d)."""
+    others = [row for i, row in enumerate(scores) if i != best]
+    return [k for k in ASYMMETRIC
+            if scores[best][k] > 0.0 and all(scores[best][k] > row[k] for row in others)]

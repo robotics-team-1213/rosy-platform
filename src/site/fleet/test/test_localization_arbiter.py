@@ -133,3 +133,35 @@ def test_score_reports_every_cue_and_the_total():
     rows = score(report(pair(ON_A)), Context(slots=SLOTS), 0.0)
     assert set(rows[0]) == {"scan_fit", "paint", "peers", "slot", "last_good", "overhead", "square", "total"}
     assert rows[0]["total"] == pytest.approx(0.99 + 1.5) and rows[1]["total"] == pytest.approx(0.99)
+
+
+def test_a_hidden_peer_cannot_carry_a_decision_to_the_mirror():
+    """Review C1: the truth scores -1 on peers (peer in range, hidden from the scan),
+    the mirror 0. Beating -1 with 0 is no evidence, so nothing is decided."""
+    truth, twin = (1.0, 0.0, 0.0), (-1.0, 0.0, math.pi)
+    rep = report([(*truth, 0.9, None), (*twin, 0.9, None)])
+    assert run(Arbiter(), rep, Context(peers=[(1.0, 0.94)]))[1] is None
+
+
+def test_a_cue_must_beat_every_other_candidate_not_just_the_runner_up():
+    """Review I2: paint 0.5 for both twins does not separate them, even when a third
+    candidate (paint 0.48, better scan fit) ranks second; last_good + overhead fill
+    the margin, and they may not carry a decision (rev. 3)."""
+    twin = (-OFF[0], -OFF[1], math.pi)
+    rep = report([(*OFF, 0.95, 0.5), (*twin, 0.9, 0.5), (0.0, 0.3, 0.0, 0.95, 0.48)])
+    rows = score(rep, Context(last_good=OFF, sighting=cues.Sighting(*OFF, captured_at=0.0)), 0.0)
+    assert sorted(range(3), key=lambda i: -rows[i]["total"]) == [0, 2, 1]   # the third is runner-up
+    assert rows[0]["total"] - rows[2]["total"] >= 1.0                      # and the margin holds
+    arbiter = Arbiter()
+    for k in range(13):
+        t = k * 0.25
+        context = Context(last_good=OFF, sighting=cues.Sighting(*OFF, captured_at=t))
+        assert arbiter.observe(rep, context, t) is None
+
+
+def test_a_newer_report_for_the_same_request_can_be_decided_again():
+    """Review M4: a lost or rejected decision is retried when the robot re-reports."""
+    arbiter = Arbiter()
+    assert run(arbiter, report(pair(ON_A)), Context(slots=SLOTS))[1] is not None
+    rep2 = report(pair(ON_A)).model_copy(update={"stamp": 5.0})
+    assert run(arbiter, rep2, Context(slots=SLOTS), 6.0, 9.0)[0] == pytest.approx(8.0)

@@ -808,3 +808,8 @@
 - 증거: `test_loc_e2e.py` 4 passed, 슬롯 가중 0 돌연변이에서 첫 사례 실패 확인(커밋 안 함), 아키텍처 시험 33 passed.
 - gate 변화: SOURCE/LOCAL GO. ROS-SIM(S1)·DEVICE 해당 없음 — 노드·launch·API 배선은 2단계.
 - 결정: D-395 Proposed(개정 3, 1단계 완료).
+
+## 2026-10-01 · uncommitted · fix(localization): 3 s 검증의 공백 판정과 열린 요청 없는 결정 (D-395 리뷰)
+- 변경: 최종 리뷰 지적 반영. (중요) `InjectionCheck`가 공백을 fit이 없는 틱에서만 봐서, 3.6 s 침묵 뒤 스캔 한 번으로 3 s 유지가 통과됐다 → 스캔이 오든 안 오든 마지막 스캔 뒤 0.5 s가 지나면 `stale_scan`. (경미) UNKNOWN·SUSPECT처럼 request_id가 없을 때 `None` 결정이 일치로 통과하던 것을 `stale_request`로 거부.
+- 증거: 새 시험 2개와 `test_loc_verify.py`·`test_loc_state.py`·`test_loc_e2e.py` 통과.
+- gate 변화: 없음(SOURCE/LOCAL).

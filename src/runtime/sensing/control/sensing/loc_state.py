@@ -80,7 +80,7 @@ class LocalizationStateMachine:
         (default now) and the decision lapses `ttl_s` later."""
         if self.state is LocState.LOCALIZED:
             return self._reject('already_localized')
-        if request_id != self.request_id:
+        if self.request_id is None or request_id != self.request_id:
             return self._reject('stale_request')
         received_s = now_s if received_s is None else received_s
         if not now_s - received_s < ttl_s:
