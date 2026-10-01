@@ -321,6 +321,9 @@ class PairingHttpTest {
         assertEquals(2_000L, PairingSession.nextPollDelayMs(null))
         assertEquals(2_000L, PairingSession.nextPollDelayMs(1))
         assertEquals(30_000L, PairingSession.nextPollDelayMs(30))
+        assertEquals("a site cannot park the screen", 30_000L, PairingSession.nextPollDelayMs(600))
+        assertEquals(30_000L, PairingSession.nextPollDelayMs(Long.MAX_VALUE))
+        assertEquals(2_000L, PairingSession.nextPollDelayMs(-5))
     }
 
     private companion object {

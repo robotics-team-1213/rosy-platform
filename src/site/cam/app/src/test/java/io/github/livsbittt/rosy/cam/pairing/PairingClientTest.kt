@@ -5,6 +5,9 @@ import io.github.livsbittt.rosy.cam.settings.SiteLink
 import java.nio.charset.StandardCharsets.UTF_8
 import java.security.cert.X509Certificate
 import java.time.Instant
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.runBlocking
 import okhttp3.tls.HeldCertificate
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
@@ -32,6 +35,8 @@ class PairingClientTest {
     ) : PairingTransport {
         /** Set to make confirm fail on the network after the server activated the credential (lost reply). */
         var confirmIo = false
+        var pollThrows: RuntimeException? = null
+        var confirmCalls = 0
         val requestId = "pr-test_0123456789"
         val serverNonce = Pairing.newSecret()
         val token = Pairing.newSecret()
@@ -84,6 +89,7 @@ class PairingClientTest {
 
         override fun poll(site: PairableSite, requestId: String, pollSecret: String): ByteArray {
             refuse()
+            pollThrows?.let { throw it }
             if (Pairing.sha256Text(pollSecret) != pollDigest) throw PairingRefused(401, "POLL_SECRET_INVALID")
             if (state == "delivered") throw PairingRefused(410, "PAIRING_RESULT_GONE")
             if (state != "approved") return JSONObject().put("state", state).toString().toByteArray(UTF_8)
@@ -92,6 +98,7 @@ class PairingClientTest {
         }
 
         override fun confirm(site: PairableSite, requestId: String, pollSecret: String, body: ByteArray): ByteArray {
+            confirmCalls++
             refuse()
             val id = JSONObject(String(body, UTF_8)).getString("credential_id")
             if (state != "delivered") throw PairingRefused(409, "NOT_DELIVERED")
@@ -323,6 +330,49 @@ class PairingClientTest {
             assertFalse(name, name.any { Character.getType(it) == Character.CONTROL.toInt() || Character.getType(it) == Character.FORMAT.toInt() })
         }
         assertEquals("tls_host stands in for a name with nothing printable", host, Pairing.capText("​\u0001", 64).ifEmpty { host })
+    }
+
+    /** A session whose first sleep approves the request, so it stops at the fingerprint step. */
+    private fun CoroutineScope.sessionAtFingerprint(fake: FakeSite): PairingSession {
+        val pairing = client(fake)
+        return PairingSession(pairing, this, Dispatchers.IO) { fake.code?.let(fake::approve) }
+    }
+
+    @Test
+    fun busyIsSetBeforeTheStartIsLaunched() = runBlocking {
+        val fake = FakeSite()
+        val session = sessionAtFingerprint(fake)
+        session.start(site)
+        assertTrue("busy in the same frame as the tap", session.busy.value)
+        session.start(site) // second tap: ignored
+        session.join()
+        assertTrue(session.state.value is PairingState.ConfirmFingerprint)
+        assertEquals(1, fake.sent.count { it.contains("client_commit") })
+    }
+
+    @Test
+    fun aDoubleTapOrACancelCannotInterruptTheAnswer() = runBlocking {
+        val fake = FakeSite()
+        val session = sessionAtFingerprint(fake)
+        session.start(site)
+        session.join()
+        session.answer(true)
+        session.answer(true)
+        session.cancel()
+        session.join()
+        assertTrue(session.state.value is PairingState.Paired)
+        assertEquals(1, fake.confirmCalls)
+        assertEquals(listOf("save"), store.events)
+    }
+
+    @Test
+    fun anUnexpectedExceptionEndsTheAttemptInsteadOfEscaping() = runBlocking {
+        val fake = FakeSite().apply { pollThrows = IllegalStateException("bug") }
+        val session = PairingSession(client(fake), this, Dispatchers.IO) { }
+        session.start(site)
+        session.join()
+        assertEquals(PairingState.Rejected("internal"), session.state.value)
+        assertFalse(session.busy.value)
     }
 
     @Test

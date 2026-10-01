@@ -4,6 +4,7 @@ import io.github.livsbittt.rosy.cam.settings.SettingsStore
 import io.github.livsbittt.rosy.cam.settings.SiteLink
 import java.io.IOException
 import kotlin.coroutines.CoroutineContext
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -38,7 +39,14 @@ class PairingSession(
     private val steps = Mutex()
     private var job: Job? = null
 
+    /** True from the tap on "같습니다/다릅니다" until the answer step ends; nothing may cancel or repeat it. */
+    @Volatile
+    private var answering = false
+
+    /** Starts (or restarts after a final state) an attempt. Ignored while one is starting or an answer runs. */
     fun start(site: PairableSite) {
+        if (answering || (mutableBusy.value && job?.isActive == true)) return
+        mutableBusy.value = true // before launch: a second tap in the same frame sees it
         job?.cancel()
         job = scope.launch {
             step(failure = { PairingState.Rejected(it) }) { client.start(site) }
@@ -52,15 +60,24 @@ class PairingSession(
         }
     }
 
-    /** The installer's answer on the fingerprint step. */
+    /** The installer's answer on the fingerprint step. A double tap or a later cancel cannot interrupt it. */
     fun answer(matches: Boolean) {
-        if (client.state !is PairingState.ConfirmFingerprint) return
-        job?.cancel()
-        // On an I/O failure the client has already discarded the link and ended as `confirm_failed`.
-        job = scope.launch { step(failure = { null }) { client.answerFingerprint(matches) } }
+        if (answering || client.state !is PairingState.ConfirmFingerprint) return
+        answering = true
+        mutableBusy.value = true
+        // On an I/O failure the client has already discarded the link and ended as `confirm_unanswered`.
+        job = scope.launch {
+            try {
+                step(failure = { null }) { client.answerFingerprint(matches) }
+            } finally {
+                answering = false
+            }
+        }
     }
 
+    /** Drops the attempt; ignored while an answer (save + confirm) runs, which ends on its own. */
     fun cancel() {
+        if (answering) return
         job?.cancel()
         job = scope.launch {
             steps.withLock { client.cancel() }
@@ -76,20 +93,30 @@ class PairingSession(
 
     /**
      * Runs one client step off the main thread. An I/O failure maps through [failure] to a final state, or
-     * (null) leaves the attempt where it is so the poll loop tries again.
+     * (null) leaves the attempt where it is so the poll loop tries again. Any other exception ends the attempt as
+     * `internal` (keeping a credential id the client recorded) so nothing escapes [scope].
      */
     private suspend fun step(failure: (String) -> PairingState?, call: () -> PairingState) {
         mutableBusy.value = true
-        val next = steps.withLock {
-            withContext(io) {
-                try {
-                    call()
-                } catch (e: IOException) {
-                    failure(networkReason(e)) ?: client.state
+        val next = try {
+            steps.withLock {
+                withContext(io) {
+                    try {
+                        call()
+                    } catch (e: IOException) {
+                        failure(networkReason(e)) ?: client.state
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: RuntimeException) {
+                        val credential = (client.state as? PairingState.Rejected)?.credentialId
+                        if (client.state.isWaiting() || client.state is PairingState.ConfirmFingerprint) client.cancel()
+                        PairingState.Rejected("internal", credential)
+                    }
                 }
             }
+        } finally {
+            mutableBusy.value = false
         }
-        mutableBusy.value = false
         mutableState.value = next
     }
 
@@ -100,7 +127,12 @@ class PairingSession(
         const val POLL_INTERVAL_MS = 2_000L
         const val LEAF_CHANGED = "leaf_changed"
 
-        fun nextPollDelayMs(retryAfterS: Long?): Long = maxOf(POLL_INTERVAL_MS, (retryAfterS ?: 0L) * 1_000L)
+        /** A site's Retry-After is honoured up to this; a larger value cannot park the screen. */
+        const val MAX_RETRY_AFTER_MS = 30_000L
+
+        /** max(2 s, min(Retry-After, 30 s)). */
+        fun nextPollDelayMs(retryAfterS: Long?): Long =
+            maxOf(POLL_INTERVAL_MS, (retryAfterS ?: 0L).coerceIn(0L, MAX_RETRY_AFTER_MS / 1_000L) * 1_000L)
 
         /** `leaf_changed` when the session's pinned first-contact leaf was replaced, else `unreachable`. */
         fun networkReason(e: Throwable): String =
