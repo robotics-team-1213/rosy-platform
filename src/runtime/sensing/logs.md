@@ -787,3 +787,8 @@
 - 변경: `sensing/loc_verify.py` `InjectionCheck` — 0.5 s 안정 뒤 새 스캔마다 적합도 ≥ 0.85가 3 s 유지되면 통과, 한 번이라도 낮거나 스캔이 0.5 s 끊기면 즉시 실패(`fit_low`/`stale_scan`). 출처와 무관하게 같은 관문이다. 한계: 대칭 맵에서는 거울상도 같은 적합도라 이 검증이 거울 주입을 못 거른다. 그래서 LOCALIZED에는 비대칭 단서가 따로 필요하다(loc_state).
 - 증거: `test_loc_verify.py` 5 passed.
 - gate 변화: 없음(SOURCE/LOCAL).
+
+## 2026-10-01 · uncommitted · feat(localization): UNKNOWN/CANDIDATES/LOCALIZED/SUSPECT 상태 기계 (D-395 5절, 개정 3)
+- 변경: `sensing/loc_state.py` `LocalizationStateMachine` — 전원 투입은 항상 UNKNOWN, 후보가 오면 새 request_id로 CANDIDATES, 결정은 같은 id·받은 뒤 `ttl_s`(5 s) 안·후보 인덱스 또는 직접 좌표 하나만 받고, 사람 결정이 아니면 비대칭 단서(`square`/`paint`/`peers`/`slot`) 하나 이상이 있어야 한다(`no_asymmetric_cue`). `InjectionCheck` 통과 시 LOCALIZED(`cancel_nav_goal`), 검증 실패(`inject_rejected`)·픽업·적합도 1 s 지속 하락(`fit_drop`)·Fleet 감시는 SUSPECT. 자율 주행은 LOCALIZED만. 계획의 절대 시각 `expires_at`은 개정 3에 따라 수신 기준 `ttl_s`로 바꿨다.
+- 증거: `test_loc_state.py` 19 passed.
+- gate 변화: 없음(SOURCE/LOCAL).

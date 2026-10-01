@@ -1,6 +1,6 @@
 ## D-395 Fleet 보조 위치 확정 — 로봇이 후보를 내고 Fleet이 중재하며, 대칭 맵에서도 사람 입력 없이 map 자세를 얻는다
 
-**Status:** Proposed (2026-10-01). 설계만 정한다. 코드·로봇 설정·params·API 참조서는 바꾸지 않는다. 구현은 아래 Validation의 S1 이후 단계를 사용자가 승인한 뒤 별도 변경으로 한다. 개정 1(2026-10-01, 바닥 기준 사각형을 귀환 기준점·출발 슬롯으로 사용)과 개정 2(슬롯 방향은 축만, 부호는 LiDAR 적합)가 아래 결정보다 우선한다. 이 ADR은 D-257 5항과 D-393 3항의 일부를 **개정하자고 제안**한다(아래 "개정 제안"). 제안이 Accepted되기 전에는 두 ADR의 해당 문구가 그대로 유효하다.
+**Status:** Proposed (2026-10-01). 설계만 정한다. 코드·로봇 설정·params·API 참조서는 바꾸지 않는다. 구현은 아래 Validation의 S1 이후 단계를 사용자가 승인한 뒤 별도 변경으로 한다. 개정 1(2026-10-01, 바닥 기준 사각형을 귀환 기준점·출발 슬롯으로 사용)과 개정 2(슬롯 방향은 축만, 부호는 LiDAR 적합), 개정 3(비대칭 단서 필수, 받은 때부터 재는 유효 시간)이 아래 결정보다 우선한다. 이 ADR은 D-257 5항과 D-393 3항의 일부를 **개정하자고 제안**한다(아래 "개정 제안"). 제안이 Accepted되기 전에는 두 ADR의 해당 문구가 그대로 유효하다.
 
 설계 전문: [2026-10-01-fleet-assisted-localization-design.md](../plans/2026-10-01-fleet-assisted-localization-design.md).
 
@@ -133,5 +133,12 @@ LOCAL·ROS-SIM까지만 주장 가능하다. 실물은 승인 뒤다.
 - 슬롯 후보는 축과 축+180° 두 자세다. 축 방향으로 사각형이 중심에서 벗어나 있으면(A는 |y| 0.49 m, B는 |x| 0.86 m) 앞뒤 벽까지 거리가 0.98 m, 1.72 m씩 달라진다. 그래서 LiDAR 적합만으로 둘 중 하나를 고른다. 두 후보의 적합이 비슷하면(가림 등) 보통의 중재·사다리로 넘긴다.
 - 개정 1의 5항 "슬롯 방향(yaw)은 정해야 한다"는 이 축 규칙으로 닫는다. Decision 5항의 10 cm / 20° 슬롯 가산은 두 축 후보 각각에 적용한다.
 - `test_map_v2_fleet_reference_squares.py`가 축 값과, 축 방향으로 중심에서 0.3 m 넘게 벗어났는지를 확인한다.
+
+**개정 3 (2026-10-01, 1단계 구현 착수 때 정한 기본값, 사용자 진행 지시):**
+
+- **거울 안전은 비대칭 단서가 지킨다.** 이 트랙에서는 거울 가설도 스캔 적합도가 참과 같아서 7항의 3 s 검증이 거울 주입을 거르지 못한다. 그래서 결정은 비대칭 단서(`square`·`paint`·`peers`·`slot`) 하나 이상을 이름으로 담아야 로봇이 받는다. 없으면 `no_asymmetric_cue`로 거부한다. `last_good`과 `overhead`는 결정을 거들 수는 있지만 혼자 싣지 못한다. 사람의 결정(`source: human`)만 예외다.
+- **결정 유효 시간은 받은 때부터 잰다.** 절대 시각 `expires_at` 대신 `ttl_s`(기본 5 s)를 쓰고, 로봇은 받은 시각부터 센다. Fleet과 로봇 시계가 맞지 않아도 된다.
+- 상태는 Proposed 그대로다. 1단계는 호스트 전용 순수 로직이며 로봇 설정·API·Fleet 동작을 바꾸지 않는다.
+- 구현: `src/runtime/sensing/control/sensing/loc_state.py`(`ASYMMETRIC_CUES`, `DECISION_TTL_S`), 시험 `test_loc_state.py`.
 
 **References:** `docs/adr/D-257-site-lane-map-and-overhead-sightings.md`, `docs/adr/D-393-nav-amcl-update-min-d-and-goal-tolerance.md`, `docs/adr/D-375-overhead-map-registration-from-lane-paint-proposal.md`, `docs/adr/D-360-overhead-field-auto-detection-proposal.md`, `src/runtime/api_web/core_api_web/api/v1/navigation.py`, `src/runtime/gateway/core/bridge/ros_bridge.py`, `src/runtime/sensing/control/localization_node.py`, `src/site/fleet/fleet/swarm/transport.py`, D-2, D-267, D-269, D-321, D-356, D-369, [D-346](D-346-commit-time-collision-defenses.md).
