@@ -1,15 +1,102 @@
 package io.github.livsbittt.rosy.cam.settings
 
+import io.github.livsbittt.rosy.cam.link.certPin
+import java.io.File
+import org.json.JSONArray
+import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** D-391 1 site-link record and the migration of pairings saved before it. */
+/** D-391 1 site-link record, the shared vector, and the migration of pairings saved before it. */
 class SiteLinkTest {
     private val pin = "sha256/" + "A".repeat(43)
     private val otherPin = "sha256/" + "B".repeat(43)
+
+    private val vector: JSONObject by lazy {
+        val path = System.getProperty("rosy.sitelink.vectors")
+            ?: error("system property rosy.sitelink.vectors is not set (see app/build.gradle.kts)")
+        JSONObject(File(path).readText(Charsets.UTF_8))
+    }
+
+    private fun JSONArray.strings(): List<String> = (0 until length()).map { getString(it) }
+
+    /** A vector record as the map a JSON reader gives: JSON null is null, numbers stay Int, booleans Boolean. */
+    private fun JSONObject.toRecord(): Map<String, Any?> = keys().asSequence().associateWith { key ->
+        get(key).takeUnless { it == JSONObject.NULL }
+    }
+
+    @Test
+    fun everySharedVectorCase() {
+        val cases = vector.getJSONArray("cases")
+        assertEquals(33, cases.length())
+        val failures = mutableListOf<String>()
+        for (i in 0 until cases.length()) {
+            val case = cases.getJSONObject(i)
+            val expect = case.getJSONObject("expect")
+            val want = if (expect.getBoolean("valid")) null else expect.getString("reason")
+            val got = SiteLinkRecord.validate(case.getJSONObject("record").toRecord())
+            if (got != want) failures += "${case.getString("id")}: expected ${want ?: "valid"}, got ${got ?: "valid"}"
+        }
+        assertTrue(failures.joinToString("\n"), failures.isEmpty())
+    }
+
+    @Test
+    fun reasonsAndRolesMatchTheVector() {
+        assertEquals(vector.getJSONArray("reasons").strings(), SiteLinkRecord.REASONS)
+        assertEquals(vector.getJSONArray("roles").strings(), SiteLinkRecord.ROLES)
+    }
+
+    @Test
+    fun everyValidCameraRecordBecomesAValidAppLink() {
+        // The app stores a CA pin and the token, not ca_pem and credential/credential_ref (D-391 1 shape vs SiteLink).
+        val cases = vector.getJSONArray("cases")
+        var adapted = 0
+        for (i in 0 until cases.length()) {
+            val case = cases.getJSONObject(i)
+            if (!case.getJSONObject("expect").getBoolean("valid")) continue
+            val record = case.getJSONObject("record").toRecord()
+            val link = SiteLinkRecord.toSiteLink(record, token = "camera-token", source = "overhead-1")
+            if (record["role"] != SiteLink.ROLE) {
+                assertNull("${case.getString("id")}: a robot record is not this app's", link)
+                continue
+            }
+            assertNotNull(case.getString("id"), link)
+            link!!
+            assertNull("${case.getString("id")}: ${SiteLink.validate(link)}", SiteLink.validate(link))
+            val ca = SiteLinkRecord.caCertificates(record["ca_pem"])!!.first()
+            assertEquals(certPin(ca.encoded), link.caPin)
+            assertEquals((record["tls_host"] as String).lowercase(), link.tlsHost)
+            assertEquals(record["expires_at"], link.expiresAt)
+            adapted++
+        }
+        assertEquals(7, adapted)
+    }
+
+    @Test
+    fun aHostNameManualHostIsNotADialTargetForTheApp() {
+        // Shared rule: manual_host may be an IP or a name. The app dials it without DNS, so a name is dropped.
+        val case = (0 until vector.getJSONArray("cases").length()).map { vector.getJSONArray("cases").getJSONObject(it) }
+            .first { it.getString("id") == "manual_host_name_allowed" }
+        val link = SiteLinkRecord.toSiteLink(case.getJSONObject("record").toRecord(), "camera-token", "overhead-1")!!
+        assertNull(link.manualHost)
+        val ip = (0 until vector.getJSONArray("cases").length()).map { vector.getJSONArray("cases").getJSONObject(it) }
+            .first { it.getString("id") == "manual_host_ip_allowed" }
+        assertEquals("192.168.1.20", SiteLinkRecord.toSiteLink(ip.getJSONObject("record").toRecord(), "t", "overhead-1")!!.manualHost)
+    }
+
+    @Test
+    fun invalidRecordsAreNotAdapted() {
+        val cases = vector.getJSONArray("cases")
+        for (i in 0 until cases.length()) {
+            val case = cases.getJSONObject(i)
+            if (case.getJSONObject("expect").getBoolean("valid")) continue
+            assertNull(case.getString("id"), SiteLinkRecord.toSiteLink(case.getJSONObject("record").toRecord(), "t", "overhead-1"))
+        }
+    }
 
     @Test
     fun legacyIpHostBecomesManualHostOnly() {
