@@ -3,7 +3,6 @@
 from dataclasses import replace
 
 import pytest
-
 from core_features.safety.manager import SafetyDecision, SafetyRequest, check_decision
 
 REQUEST = SafetyRequest(command_id=7, source="navigation", calibration_revision="rev",
@@ -29,9 +28,35 @@ def test_valid_decision_has_no_reason():
     (replace(GOOD, reason="x" * 129), 0.001),
     (GOOD, 0.011),                                     # over the 10 ms budget
     (GOOD, float("nan")),
+    (GOOD, -1e-9),                                     # negative elapsed
+    (replace(GOOD, observed_at=10.0, expires_at=10.0), 0.0),  # zero-length lease: only the lease rule fails
+    (replace(GOOD, command_id=7.0), 0.001),
+    (replace(GOOD, command_id=True), 0.001),           # bool is not an int command id (True != 7 too)
+    (replace(GOOD, source=1), 0.001),
+    (replace(GOOD, calibration_revision=None), 0.001),
+    (replace(GOOD, reason=None), 0.001),
+    (replace(GOOD, angular_limit=-0.1), 0.001),
+    (replace(GOOD, observed_at=float("nan")), 0.001),
+    (replace(GOOD, linear_limit=float("inf")), 0.001),
 ])
 def test_invalid_decisions_are_policy_invalid(decision, elapsed):
     assert check_decision(decision, REQUEST, elapsed=elapsed) == "policy_invalid"
+
+
+@pytest.mark.parametrize("decision, elapsed", [
+    (GOOD, 0.0),
+    (GOOD, 0.01),
+    (replace(GOOD, observed_at=9.75, expires_at=10.25), 0.001),  # exactly 0.5 s lease (dyadic values)
+    (replace(GOOD, reason="x" * 128), 0.001),
+    (replace(GOOD, disposition="allow"), 0.001),
+])
+def test_boundaries_are_inclusive(decision, elapsed):
+    assert check_decision(decision, REQUEST, elapsed=elapsed) == ""
+
+
+def test_validation_runs_before_disposition():
+    stop = replace(GOOD, disposition="stop", reason="x" * 129)
+    assert check_decision(stop, REQUEST, elapsed=0.001) == "policy_invalid"
 
 
 def test_stop_disposition_reports_its_reason():
