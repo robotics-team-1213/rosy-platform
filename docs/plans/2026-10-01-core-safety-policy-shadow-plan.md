@@ -1116,7 +1116,16 @@ def test_enforce_construction_failure_still_refuses_start():
 def test_invalid_mode_in_shadow_config_is_still_a_config_error():
     with pytest.raises(ValueError, match="off, shadow or enforce"):
         build_control_adapter({"mode": "on"}, parameters={})
+
+
+def test_shadow_with_control_policy_required_is_a_config_error():
+    # Design 3.1: shadow never binds a deciding policy, so policy_required would
+    # latch every command. Rejected before any worker is built.
+    with pytest.raises(ValueError, match="control_policy_required"):
+        build_control_adapter({"mode": "shadow"}, parameters={}, policy_required=True)
 ```
+
+(Task 1 리뷰 반영: Task 1 커밋 뒤의 `bind_safety`는 `enforce`에서만 바인딩한다 — 이 태스크가 그 임시 가드를 아래 (b)로 바꾼다. Task 1이 `enabled`를 `mode`에서 계산되는 property로 바꿨다.)
 
 - [ ] **Step 2: 실패 확인**
 
@@ -1157,12 +1166,16 @@ _CALIBRATION_IGNORED = "control.sensor_adapter.calibration is ignored (D-398 3);
 
 
 def build_control_adapter(raw_config: Mapping[str, Any] | None, *, parameters: Mapping[str, Any],
+                          policy_required: bool = False,
                           **factories: Any) -> tuple["ControlSensorAdapter", list[str]]:
     """D-398 assembly: resolved parameters replace the overlay, the calibration
     block is ignored, and a shadow that cannot start runs with the policy off.
-    Config errors (bad mode, bad types) still raise in every mode."""
+    Config errors (bad mode, bad types, shadow + safety.control_policy_required)
+    still raise in every mode."""
     raw = dict(raw_config or {})
-    ControlSensorConfig.from_mapping(raw)          # config errors raise before anything is built
+    config = ControlSensorConfig.from_mapping(raw)  # config errors raise before anything is built
+    if config.mode == "shadow" and policy_required:
+        raise ValueError("control_policy_required is enforce-only; shadow never binds a deciding policy")
     notes = []
     calibration = raw.pop("calibration", None)
     if isinstance(calibration, Mapping) and calibration.get("required") is True:
@@ -1431,7 +1444,8 @@ def safety_policy_block(configured_mode: str, adapter: Any, params: Optional[Any
                 overlay=sensor_cfg.get("parameters") or {})
         namespace = self.get_namespace() if callable(getattr(self, "get_namespace", None)) else None
         self.control_adapter, notes = build_control_adapter(
-            sensor_cfg, parameters=params.parameters if params else {}, namespace=namespace)
+            sensor_cfg, parameters=params.parameters if params else {}, namespace=namespace,
+            policy_required=self.core.safety.policy_required)
         for note in notes:
             self.get_logger().warning(note)
         self.core.control_adapter = self.control_adapter
