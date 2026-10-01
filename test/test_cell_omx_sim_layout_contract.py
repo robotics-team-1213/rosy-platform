@@ -70,6 +70,38 @@ def test_demo_is_two_pallets_two_layers_with_slip_sheets(demo):
     assert recipe.box.mass_kg <= 0.05
 
 
+def _world_models():
+    import xml.etree.ElementTree as ET
+
+    world = ET.parse(ROOT / "src/sim/gz_sim/worlds/omx_cell_workcell.sdf").getroot().find("world")
+    models = {}
+    for model in world.findall("model"):
+        pose = [float(v) for v in model.findtext("pose").split()]
+        size = [float(v) for v in model.find(".//collision/geometry/box/size").text.split()] \
+            if model.find(".//collision/geometry/box/size") is not None else None
+        models[model.get("name")] = (pose, size)
+    return models
+
+
+def test_gazebo_world_matches_the_demo_cell(demo):
+    """World == robot base (vendor spawn at the origin), so poses compare directly."""
+    cell, recipe, _ = demo
+    models = _world_models()
+    for slot, name in ((recipe.pallets[0], "pallet_a"), (recipe.pallets[1], "pallet_b")):
+        (cx, cy, cz, *_), (sx, sy, sz) = models[name]
+        frame = cell.frames[slot.frame]
+        # Taught origin = near-left corner of the plate's top face; frame axes = base axes.
+        assert frame.to_base((0.0, 0.0, 0.0)) == pytest.approx((cx - sx / 2, cy - sy / 2, cz + sz / 2))
+        assert frame.to_base((slot.pallet.length, slot.pallet.width, 0.0)) == pytest.approx(
+            (cx + sx / 2, cy + sy / 2, cz + sz / 2))
+    (bx, by, bz, *_), size = models["infeed_block"]
+    assert size == pytest.approx([recipe.box.length, recipe.box.width, recipe.box.height])
+    assert cell.station_pose(recipe.pick_station) == pytest.approx((bx, by, bz + size[2] / 2, 0.0))
+    (sx, sy, sz, *_), (_, _, thickness) = models["slip_sheet_0"]
+    assert thickness == pytest.approx(recipe.slip_sheet_thickness)
+    assert cell.station_pose(recipe.slip_sheet_station) == pytest.approx((sx, sy, sz + thickness / 2, 0.0))
+
+
 @pytest.mark.parametrize("grasp_depth", [0.0, 0.015], ids=["step-z", "grasp-depth-15mm"])
 def test_every_transfer_plans_without_rejection(demo, kin, profile, grasp_depth):
     cell, _, job = demo
