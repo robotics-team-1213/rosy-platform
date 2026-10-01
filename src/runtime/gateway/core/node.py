@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -70,46 +69,52 @@ class RosyCoreNode(Node):
         waypoints_path = Path.home() / ".rosy" / "waypoints.json"
         self.core = CoreServices.build(config, profile, capability_data, waypoints_path)
 
-        from core.bridge.control_sensor_adapter import ControlSensorAdapter
+        from core.bridge.control_sensor_adapter import ControlSensorConfig, build_control_adapter
+        from core.lidar_mount import resolve_lidar_forward_deg
+        from core.safety_params import resolve_safety_params
+        from core.safety_policy_status import safety_policy_block
+        from core_common.config import local_overlay
         control_cfg = config.get("control", {}) or {}
         if not isinstance(control_cfg, dict):
             raise ValueError("control configuration must be a mapping")
         sensor_cfg = control_cfg.get("sensor_adapter", {}) or {}
-        if isinstance(sensor_cfg, dict):
-            # The release generation belongs to the mounted Device runtime,
-            # not to a baked image. Fill it from Compose only when the
-            # calibration block did not already pin one; the loader then
-            # rejects a context/generation mismatch before creating a worker.
-            sensor_cfg = dict(sensor_cfg)
-            calibration_cfg = sensor_cfg.get("calibration")
-            if isinstance(calibration_cfg, dict):
-                calibration_cfg = dict(calibration_cfg)
-                active_generation = os.environ.get("ROSY_DATA_GENERATION", "").strip()
-                data_root = os.environ.get("ROSY_DATA_PATH", "").strip()
-                if active_generation and not calibration_cfg.get("active_generation"):
-                    calibration_cfg["active_generation"] = active_generation
-                if data_root and not calibration_cfg.get("data_root"):
-                    calibration_cfg["data_root"] = data_root
-                sensor_cfg["calibration"] = calibration_cfg
-        namespace = self.get_namespace() if callable(getattr(self, "get_namespace", None)) else None
-        self.control_adapter = ControlSensorAdapter(sensor_cfg, namespace=namespace)
-        self.core.control_adapter = self.control_adapter
-        if self.control_adapter.enabled:
-            self.control_adapter.bind_safety(self.core.safety)
-        # D-47 addendum / D-397: one LiDAR mount for line_follow (operator overlay >
-        # accepted store record > URDF-nominal hand value; the adapter binding is only compared).
-        from core.lidar_mount import resolve_lidar_forward_deg
-        from core_common.config import local_overlay
+        configured_mode = ControlSensorConfig.from_mapping(
+            {k: v for k, v in sensor_cfg.items() if k != "calibration"}).mode
+        # D-47 addendum / D-397 / D-400: one LiDAR mount for line_follow and the safety
+        # policy (operator overlay > accepted store record > URDF-nominal hand value).
         try:
             operator_deg = (local_overlay().get("line_follow") or {}).get("lidar_forward_deg")
         except Exception:  # noqa: BLE001 - load_config already read this file; never block CORE start
             operator_deg = None
         forward_deg, forward_source, forward_warn = resolve_lidar_forward_deg(
             config.get("line_follow", {}) or {}, hand_default=self.core.line_follow.config.lidar_forward_deg,
-            adapter_parameters=self.control_adapter.bound_parameters, operator_deg=operator_deg)
+            operator_deg=operator_deg)
+        params = None
+        if configured_mode != "off":
+            limits = self.core.safety.limits
+            params = resolve_safety_params(
+                lidar_forward_deg=forward_deg, lidar_source=forward_source,
+                caps=((limits.max_linear, limits.max_angular),
+                      (limits.manual_linear, limits.manual_angular),
+                      (limits.fleet_linear, limits.fleet_angular)),
+                overlay=sensor_cfg.get("parameters") or {})
+        namespace = self.get_namespace() if callable(getattr(self, "get_namespace", None)) else None
+        self.control_adapter, notes = build_control_adapter(
+            sensor_cfg, parameters=params.parameters if params else {}, namespace=namespace,
+            policy_required=self.core.safety.policy_required)
+        for note in notes:
+            self.get_logger().warning(note)
+        self.core.control_adapter = self.control_adapter
+        self.control_adapter.bind_safety(self.core.safety)
         self.core.line_follow.use_lidar_forward(forward_deg, forward_source)
         log = self.get_logger().warning if forward_warn else self.get_logger().info
         log(f"line_follow LiDAR forward {forward_deg:.2f} deg from {forward_source}")
+        self.get_logger().info(f"safety policy mode {configured_mode} (effective "
+                               f"{self.control_adapter.config.mode}) revision "
+                               f"{params.revision if params else '-'}")
+        self.core.state.set_safety_policy_provider(lambda: safety_policy_block(
+            configured_mode, self.control_adapter, params, self.core.safety.shadow,
+            self.core.safety.shadow_record_errors))
 
         from core.system.ros_graph import RosGraphMonitor
         self.ros_graph_monitor = RosGraphMonitor(self)

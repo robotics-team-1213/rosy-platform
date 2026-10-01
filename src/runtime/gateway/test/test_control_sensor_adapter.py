@@ -182,20 +182,19 @@ def test_core_node_owns_adapter_before_bridge_and_closes_it_with_executor():
     run_source = ast.get_source_segment(path.read_text(encoding="utf-8"), methods["run"])
     shutdown_source = ast.get_source_segment(path.read_text(encoding="utf-8"), methods["shutdown"])
 
-    assert "ControlSensorAdapter" in init_source
+    assert "build_control_adapter" in init_source
     assert init_source.index("self.control_adapter") < init_source.index("self.bridge =")
     assert "self.control_adapter.attach(executor)" in run_source
     assert "self.control_adapter.detach(executor)" in run_source
     assert "self.control_adapter.close()" in shutdown_source
 
 
-def test_core_node_binds_calibration_to_the_runtime_data_generation():
-    path = Path(__file__).parents[1] / "core" / "node.py"
-    source = path.read_text(encoding="utf-8")
+def test_core_node_no_longer_fills_the_retired_calibration_block():
+    """D-400: build_control_adapter ignores `calibration`, so node.py has nothing to bind to."""
+    source = (Path(__file__).parents[1] / "core" / "node.py").read_text(encoding="utf-8")
 
-    assert "ROSY_DATA_GENERATION" in source
-    assert "active_generation" in source
-    assert "sensor_cfg" in source
+    assert "ROSY_DATA_GENERATION" not in source
+    assert "active_generation" not in source
 
 
 @pytest.mark.parametrize(
