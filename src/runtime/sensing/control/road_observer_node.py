@@ -2,6 +2,7 @@
 """Publish semantic road evidence without ever publishing motion commands."""
 
 import json
+from collections import deque
 import time
 
 import cv2
@@ -23,6 +24,7 @@ from .sensing.perception.camera_homography import (
     load_homography_profile,
 )
 from .sensing.perception.camera_ground import simulation_ground_plane
+from .sensing.perception.follow_preview import FrameEvidence
 from .sensing.perception.road import (
     RoadObservation,
     RoadPerceptionConfig,
@@ -127,6 +129,9 @@ class RoadObserverNode(Node):
         )
         self._preview_rate = PreviewRateLimiter(
             fps=self._preview_config.fps)
+        self._preview_evidence = FrameEvidence()
+        self._preview_pending = deque(maxlen=8)
+        self._preview_last_stamp = None
         self._homography = load_homography_profile(
             str(self.get_parameter('camera_homography_path').value),
             runtime_image_size=(int(self.get_parameter('width').value),
@@ -173,6 +178,40 @@ class RoadObserverNode(Node):
             String, 'camera/controls', self._on_camera_controls, latched)
         self.create_subscription(
             String, 'camera/calibration/cmd', self._on_calibration_command, 10)
+        self.create_subscription(String, 'line/keep_debug', self._on_keep_preview, 10)
+        self.create_subscription(String, 'line/observation', self._on_line_preview, 10)
+        self.create_subscription(String, 'camera/observation', self._on_object_preview, 10)
+        self.create_subscription(String, 'perception/road_state', self._on_road_state_preview, latched)
+        # Rendering on a bounded timer lets independent callbacks deliver evidence
+        # first. Only exact capture-stamp matches may annotate the latest frame.
+        self.create_timer(1.0 / self._preview_config.fps, self._flush_preview)
+
+    def _add_preview_evidence(self, kind, msg):
+        try:
+            document = json.loads(msg.data)
+        except (ValueError, TypeError):
+            return
+        if kind == 'line' and (not isinstance(document, dict) or document.get('source') != 'CAMERA_LINE'):
+            return
+        self._preview_evidence.add(kind, document)
+
+    def _on_keep_preview(self, msg):
+        self._add_preview_evidence('keep', msg)
+
+    def _on_line_preview(self, msg):
+        self._add_preview_evidence('line', msg)
+
+    def _on_object_preview(self, msg):
+        self._add_preview_evidence('objects', msg)
+
+    def _on_road_state_preview(self, msg):
+        self._add_preview_evidence('road_state', msg)
+
+    def _flush_preview(self):
+        if self._preview_pending:
+            pending = self._preview_evidence.select_frame(self._preview_pending)
+            self._preview_pending.clear()
+            self._publish_preview(*pending)
 
     def _stamp(self, msg: Image) -> float:
         return (
@@ -274,7 +313,11 @@ class RoadObserverNode(Node):
             context = self._scene_matcher.update(observation)
         self._publish(stamp, observation, context)
         if frame is not None:
-            self._publish_preview(msg, frame, observation, stamp)
+            if self._preview_last_stamp is not None and stamp < self._preview_last_stamp:
+                self._preview_pending.clear()
+                self._preview_evidence = FrameEvidence()
+            self._preview_last_stamp = stamp
+            self._preview_pending.append((msg, frame, observation, stamp))
 
     def _publish_preview(self, msg: Image, frame: np.ndarray,
                          observation: RoadObservation, stamp: float) -> None:
@@ -286,6 +329,10 @@ class RoadObserverNode(Node):
                 observation,
                 source=self._preview_config.source,
                 max_width=self._preview_config.max_width,
+                keep=self._preview_evidence.for_frame('keep', stamp),
+                objects=self._preview_evidence.for_frame('objects', stamp),
+                road_state=self._preview_evidence.for_frame('road_state', stamp),
+                line=self._preview_evidence.for_frame('line', stamp),
             )
             ok, encoded = cv2.imencode('.jpg', preview, [
                 cv2.IMWRITE_JPEG_QUALITY,
@@ -307,7 +354,7 @@ class RoadObserverNode(Node):
         source = self._preview_config.source.upper()
         output.format = (
             f'jpeg; source={source}; width={preview.shape[1]}; '
-            f'height={preview.shape[0]}; overlay=semantic-road-v1'
+            f'height={preview.shape[0]}; overlay=follow-road-v2'
         )
         output.data = encoded.tobytes()
         self.preview_pub.publish(output)
@@ -327,6 +374,8 @@ class RoadObserverNode(Node):
         # the previous ranging session is discarded (D-151 session rule).
         if self._scene_matcher is not None:
             self._scene_matcher.reset()
+        self._preview_pending.clear()
+        self._preview_evidence = FrameEvidence()
         self._homography_enabled = command == 'enable'
         if self._homography_enabled and not self._homography.eligible:
             self.get_logger().warning(
