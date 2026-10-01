@@ -17,6 +17,7 @@ from fastapi.responses import FileResponse, JSONResponse, Response
 from pydantic import BaseModel, Field
 
 from core_common.protocol.omx_sim import OmxSimGoal, OmxSimJog, OmxSimTarget
+from core_common.protocol.omx_sim import OmxSimRecordStart, OmxSimRecordStop, OmxSimRecording
 
 
 PREFIX = "/api/v1/sim/omx"
@@ -183,7 +184,8 @@ def create_pilot_sim_app(*, runtime: Any, pilot_root: Path, common_root: Path,
         return OmxSimTarget(instance_id=runtime.instance_id,
                             joints=tuple(j for j in runtime.joint_names if j != runtime.gripper),
                             gripper=runtime.gripper,
-                            camera=bool(getattr(runtime, "camera_available", False)))
+                            camera=bool(getattr(runtime, "camera_available", False)),
+                            recording=getattr(runtime, "capture", None) is not None)
 
     @app.post(f"{PREFIX}/pair", status_code=201)
     def pair(request: PairRequest) -> dict[str, str]:
@@ -214,6 +216,62 @@ def create_pilot_sim_app(*, runtime: Any, pilot_root: Path, common_root: Path,
     def state(authorization: str | None = Header(None)) -> dict[str, Any]:
         auth(authorization)
         return runtime.snapshot()
+
+    def capture():
+        selected = getattr(runtime, "capture", None)
+        if selected is None:
+            raise HTTPException(409, "camera and recording unavailable")
+        return selected
+
+    def recording_response(value: dict) -> OmxSimRecording:
+        return OmxSimRecording.model_validate({key: value[key] for key in OmxSimRecording.model_fields
+                                              if key in value})
+
+    @app.get(f"{PREFIX}/camera")
+    def camera(authorization: str | None = Header(None)) -> dict:
+        auth(authorization)
+        return capture().camera_status()
+
+    @app.get(f"{PREFIX}/camera/frame")
+    def camera_frame(authorization: str | None = Header(None)) -> Response:
+        auth(authorization)
+        try:
+            data = capture().camera_jpeg()
+        except ValueError as exc:
+            raise HTTPException(409, str(exc)) from exc
+        return Response(data, media_type="image/jpeg", headers={"Cache-Control": "no-store"})
+
+    @app.get(f"{PREFIX}/recordings")
+    def recording(authorization: str | None = Header(None)) -> OmxSimRecording:
+        auth(authorization)
+        return recording_response(capture().status())
+
+    @app.post(f"{PREFIX}/recordings", status_code=201)
+    def start_recording(request: OmxSimRecordStart, authorization: str | None = Header(None)) -> OmxSimRecording:
+        sessions.check_seat(auth(authorization), request.seat_id)
+        try:
+            result = capture().start(request.task)
+        except ValueError as exc:
+            raise HTTPException(409, str(exc)) from exc
+        return recording_response(result)
+
+    @app.post(f"{PREFIX}/recordings/{{episode_id}}/stop")
+    def stop_recording(episode_id: str, request: OmxSimRecordStop,
+                       authorization: str | None = Header(None)) -> OmxSimRecording:
+        sessions.check_seat(auth(authorization), request.seat_id)
+        try:
+            result = capture().stop(episode_id, request.outcome)
+        except ValueError as exc:
+            raise HTTPException(409, str(exc)) from exc
+        return recording_response(result)
+
+    @app.get(f"{PREFIX}/recordings/{{episode_id}}/manifest")
+    def recording_manifest(episode_id: str, authorization: str | None = Header(None)) -> dict:
+        auth(authorization)
+        try:
+            return capture().manifest(episode_id)
+        except (ValueError, FileNotFoundError) as exc:
+            raise HTTPException(404, "episode unknown") from exc
 
     @app.post(f"{PREFIX}/goals", status_code=202)
     def submit(jog: OmxSimJog, authorization: str | None = Header(None)) -> dict[str, Any]:

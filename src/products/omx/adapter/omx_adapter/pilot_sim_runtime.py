@@ -17,6 +17,7 @@ class PilotSimRuntime:
         self.joint_names = arm.owner.config.joint_names
         self.gripper = gripper
         self.camera_available = False
+        self.capture = None
         self._lock = threading.RLock()
         self._goals: dict[str, dict] = {}
         self._active: str | None = None
@@ -76,12 +77,19 @@ class PilotSimRuntime:
                 calibration_revision=config.calibration_revision,
                 joint_names=config.joint_names,
             )
-            decision = self.arm.submit(command)
-            if not decision.accepted:
-                return {"command_id": jog.request_id, "state": "REJECTED", "reason": decision.reason}
+            # Register before dispatch: a local ActionServer may respond synchronously.
             receipt = {"command_id": jog.request_id, "state": "LOCAL_ACCEPTED", "reason": ""}
             self._goals[jog.request_id] = receipt
             self._active = jog.request_id
+            if self.capture is not None:
+                self.capture.prepare(command)
+            decision = self.arm.submit(command)
+            if not decision.accepted:
+                self._goals.pop(jog.request_id, None)
+                self._active = None
+                if self.capture is not None:
+                    self.capture.discard(jog.request_id)
+                return {"command_id": jog.request_id, "state": "REJECTED", "reason": decision.reason}
             return dict(receipt)
 
     def goal(self, command_id: str) -> dict:
@@ -96,6 +104,7 @@ class PilotSimRuntime:
             receipt = self._goals[command_id]
             receipt["state"] = "CANCEL_REQUESTED" if decision.reason == "cancel_requested" else "UNKNOWN_HOLD"
             receipt["reason"] = decision.reason
+            self._interrupt_capture("goal_cancel_requested")
             # Cancellation is asynchronous: no further goal may be admitted until explicit recovery.
             self._active = None
             return dict(receipt)
@@ -104,6 +113,16 @@ class PilotSimRuntime:
         with self._lock:
             if self._active:
                 self.cancel(self._active)
+            self._interrupt_capture("control_released")
+
+    def _interrupt_capture(self, reason: str) -> None:
+        if self.capture is not None:
+            try:
+                callback = getattr(self.capture, "request_interrupt", self.capture.interrupt)
+                callback(reason)
+            except Exception:
+                # Recording cannot disable command cancellation or lease expiry.
+                pass
 
     def on_goal_event(self, event) -> None:
         with self._lock:
@@ -133,6 +152,12 @@ class PilotSimRuntime:
                     self._active = None
             elif event.kind == "CANCEL_ACK" and not event.cancel_acknowledged:
                 receipt.update(state="UNKNOWN_HOLD", reason="cancel_not_acknowledged")
+            if self.capture is not None:
+                try:
+                    self.capture.on_goal_event(event)
+                except Exception:
+                    # Storage failures must never erase the controller's outcome.
+                    self._interrupt_capture("capture_io_or_source_error")
 
     def on_watchdog(self) -> None:
         with self._lock:
@@ -140,3 +165,4 @@ class PilotSimRuntime:
                 reason = getattr(getattr(self.arm, "last_terminal_decision", None), "reason", "owner_hold")
                 self._goals[self._active].update(state="UNKNOWN_HOLD", reason=reason)
                 self._active = None
+                self._interrupt_capture("owner_hold")

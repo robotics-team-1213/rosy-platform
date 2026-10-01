@@ -27,6 +27,7 @@
 - [2026-09-29-er2-semantic-actions-mission-implementation.md](../../../../docs/plans/2026-09-29-er2-semantic-actions-mission-implementation.md)
 - [2026-09-30-omx-pick-place-local-execution.md](../../../../docs/plans/2026-09-30-omx-pick-place-local-execution.md)
 - [2026-10-01-model-tool-contract-implementation.md](../../../../docs/plans/2026-10-01-model-tool-contract-implementation.md)
+- [2026-10-01-omx-demonstration-lerobot-design.md](../../../../docs/plans/2026-10-01-omx-demonstration-lerobot-design.md)
 - [2026-10-01-pilot-omx-gazebo-practice.md](../../../../docs/plans/2026-10-01-pilot-omx-gazebo-practice.md)
 
 ## 교훈 (docs/solutions)
@@ -39,8 +40,8 @@
 
 ## 최근 기록
 
+- 2026-10-01 · uncommitted · fix(omx): fence recording closure and isolate storage faults
+- 2026-10-01 · uncommitted · feat(omx): record SIM demonstrations and export LeRobot v3
 - 2026-10-01 · uncommitted · test(omx): Fleet generation-stop terminal reconciliation
 - 2026-10-01 · uncommitted · test(omx): join Fleet grant to a ROS 2 ActionServer goal
 - 2026-10-01 · uncommitted · fix(pilot-sim): serve calibration.js on the sim port
-- 2026-10-01 · uncommitted · test(omx): pinned Jazzy timeout/cancel callback fault coverage
-- 2026-10-01 · uncommitted · D-390 Pilot simulation action bridge

@@ -30,7 +30,8 @@ ZERO = Twist()
 
 class CommandManager:
     def __init__(self, registry: SourceRegistry, modes: ModeMachine,
-                 safety: SafetyManager, events=None, readiness=None) -> None:
+                 safety: SafetyManager, events=None, readiness=None,
+                 teleop_timeout_ms: int = 500) -> None:
         self._registry = registry
         self._modes = modes
         self._safety = safety
@@ -38,7 +39,8 @@ class CommandManager:
         # Optional ROS-free runtime gate.  It is enabled for the hardware
         # profile and remains inert for core/simulation profiles.
         self._readiness = readiness
-        self.watchdog = TeleopWatchdog(timeout_ms=500)
+        # SAF-002: default 500 ms, configurable (safety.teleop_timeout_ms).
+        self.watchdog = TeleopWatchdog(timeout_ms=teleop_timeout_ms)
         self._manual_twist: Optional[Twist] = None
         self._manual_source = 'manual'
         #: teleop 세션 번호. 만료 알림(SAF-002)은 세션당 한 번이다.

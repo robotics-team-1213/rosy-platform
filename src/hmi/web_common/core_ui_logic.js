@@ -78,6 +78,27 @@ export const NETWORK_MODE_LABEL = Object.freeze({
   RELAY_AP_STA: "릴레이(AP+STA)",
 });
 
+// D-398 — operator words for the four evidence states (DESIGN.md 운용자 말).
+// 증거 상태의 한국어는 이 표 하나다. 표면이 문장을 지을 때 주어(릴레이·위치)를
+// 앞에 붙이고 나이 뒤처리는 evidenceAgeText()를 쓴다. 노드 순수 시험이 돌아야 해서
+// /common import를 못 하는 fleet 순수 계산 모듈(site-layer.js)만 예외로 같은 문구를
+// 로컬에 두고 이 표를 참조한다.
+export const EVIDENCE_LABEL = Object.freeze({
+  fresh: "최신",
+  delayed: "지연",
+  disconnected: "연결 끊김",
+  unavailable: "정보 없음",
+});
+
+/** Canonical age suffix for a delayed value: ` · N초 전`.
+ * `seconds` is a server-given age (received_at/age_ms/age_s) — this only formats
+ * it; judging staleness is the server's job (HeadlessState, no clock math). */
+export function evidenceAgeText(seconds) {
+  if (typeof seconds !== "number" || !Number.isFinite(seconds) || seconds < 0) return "";
+  const age = Number.isInteger(seconds) ? seconds : Math.round(seconds * 10) / 10;
+  return ` · ${age}초 전`;
+}
+
 /** Korean word for an enum value; an unknown value is shown as received, never hidden. */
 export function enumLabel(labels, value, fallback = "—") {
   if (value === undefined || value === null || value === "") return fallback;

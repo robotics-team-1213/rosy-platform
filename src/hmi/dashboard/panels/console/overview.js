@@ -1,14 +1,14 @@
-import { HeadlessState, MODE_LABEL, NAVIGATION_LABEL, enumLabel } from "/common/core_ui_logic.js";
+import { HeadlessState, MODE_LABEL, NAVIGATION_LABEL, enumLabel, EVIDENCE_LABEL, evidenceAgeText } from "/common/core_ui_logic.js";
 
 function readout(state, channel, label, freshValue) {
   const evidence = new HeadlessState(state).evidenceOf(channel);
   if (evidence === "fresh") return {evidence, text: freshValue ?? `${label} 값 없음`};
-  if (evidence === "disconnected") return {evidence, text: "연결 끊김"};
-  if (evidence === "unavailable") return {evidence, text: "정보 없음"};
+  if (evidence === "disconnected") return {evidence, text: EVIDENCE_LABEL.disconnected};
+  if (evidence === "unavailable") return {evidence, text: EVIDENCE_LABEL.unavailable};
 
   const stamp = Date.parse(state.evidence?.[channel]?.received_at || "");
   const age = Number.isFinite(stamp) ? Math.max(0, Math.floor((Date.now() - stamp) / 1000)) : null;
-  return {evidence, text: `지연${age === null ? "" : ` · ${age}초 전`}`};
+  return {evidence, text: `${EVIDENCE_LABEL.delayed}${evidenceAgeText(age)}`};
 }
 
 export function mount(el, ctx) {

@@ -72,3 +72,38 @@ def test_stale_state_and_cancel_fail_closed():
     assert runtime.cancel("request")["state"] == "CANCEL_REQUESTED"
     assert runtime.submit(jog())["state"] == "REJECTED"
     assert runtime.goal("request")["state"] == "CANCEL_REQUESTED"
+
+
+def test_immediate_ros_acceptance_is_retained_and_capture_sees_absolute_target():
+    arm = Arm()
+    captured = []
+    runtime = PilotSimRuntime(arm)
+    runtime.capture = SimpleNamespace(prepare=lambda command: captured.append(command),
+                                     on_goal_event=lambda event: captured.append(event))
+    original = arm.submit
+    ros_id = str(uuid4())
+
+    def dispatch(command):
+        runtime.on_goal_event(event("GOAL_ACCEPTED", ros_id))
+        return original(command)
+
+    arm.submit = dispatch
+    runtime.snapshot()
+    assert runtime.submit(jog())["state"] == "ROS_ACCEPTED"
+    assert runtime.goal("request")["ros_goal_id"] == ros_id
+    assert captured[0].positions == {"joint1": 0.02, "gripper_joint_1": 0.0}
+    assert captured[1].kind == "GOAL_ACCEPTED"
+
+
+def test_recording_disk_failure_cannot_disable_cancel_or_seat_expiry():
+    arm = Arm()
+    runtime = PilotSimRuntime(arm)
+    runtime.snapshot()
+    runtime.submit(jog())
+
+    def broken_recording(reason):
+        raise OSError("disk unavailable")
+
+    runtime.capture = SimpleNamespace(interrupt=broken_recording)
+    assert runtime.cancel("request")["state"] == "CANCEL_REQUESTED"
+    runtime.cancel_active()  # The seat watcher must survive this failure too.

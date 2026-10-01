@@ -11,15 +11,16 @@ const row = (changes) => ({
   stale: false, source_id: "ceiling_north", ...changes,
 });
 
-test("fresh, stale and expired sightings are classified by age", () => {
+test("fresh, delayed and expired sightings are classified by age", () => {
   const out = classifySightings({ sightings: [
     row({ robot_id: "a", age_ms: 100 }),
     row({ robot_id: "b", age_ms: SIGHTING_STALE_MS + 1 }),
     row({ robot_id: "c", age_ms: SIGHTING_HIDE_MS + 1 }),
     row({ robot_id: "d", age_ms: 1500, stale: true }),
   ] });
+  // 증거 어휘는 닫힌 네 상태다 — 서버의 stale 플래그는 화면에서 delayed다.
   assert.deepEqual(out.map((s) => [s.robot_id, s.state]),
-    [["a", "fresh"], ["b", "stale"], ["d", "stale"]]);
+    [["a", "fresh"], ["b", "delayed"], ["d", "delayed"]]);
 });
 
 test("only the latest sighting per robot is kept and malformed rows are dropped", () => {
@@ -71,7 +72,7 @@ test("relay evidence pills say what is late, lost or unknown", () => {
   assert.deepEqual(streamEvidence(formation({ a: { state: "disconnected" } }), "a"),
     { text: "릴레이 끊김", cls: "crit", evidence: "disconnected" });
   assert.deepEqual(streamEvidence(formation({ a: { state: "delayed", age_s: 1.26 } }), "a"),
-    { text: "릴레이 지연 · 1.3초", cls: "warn", evidence: "delayed" });
+    { text: "릴레이 지연 · 1.3초 전", cls: "warn", evidence: "delayed" });
   assert.equal(streamEvidence(formation({ a: { state: "delayed", reason: "rate_below_floor" } }), "a").text,
     "릴레이 지연 · 송신 빈도 낮음");
   assert.deepEqual(streamEvidence(formation({ a: { state: "unavailable" } }), "a"),

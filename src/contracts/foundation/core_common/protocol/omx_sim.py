@@ -24,6 +24,26 @@ class OmxSimTarget(_Wire):
     joints: tuple[str, ...] = Field(min_length=1, max_length=8)
     gripper: str = Field(min_length=1, max_length=64)
     camera: bool = False
+    recording: bool = False
+
+
+class OmxSimRecordStart(_Wire):
+    seat_id: str = Field(min_length=1, max_length=64)
+    task: str = Field(min_length=1, max_length=300)
+
+
+class OmxSimRecordStop(_Wire):
+    seat_id: str = Field(min_length=1, max_length=64)
+    outcome: Literal["success", "failure", "unspecified"]
+
+
+class OmxSimRecording(_Wire):
+    status: Literal["idle", "recording", "complete", "incomplete"]
+    episode_id: str | None = None
+    task: str | None = None
+    task_outcome: Literal["success", "failure", "unspecified"] = "unspecified"
+    frame_count: int = Field(ge=0, le=3000)
+    issues: tuple[str, ...] = ()
 
 
 class OmxSimJog(_Wire):

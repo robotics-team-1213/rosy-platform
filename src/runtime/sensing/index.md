@@ -64,8 +64,8 @@
 
 ## 최근 기록
 
-- 2026-10-01 · uncommitted · feat(map): 기준 사각형에 방향 축 `heading_axis_deg`
-- 2026-10-01 · uncommitted · feat(map): map_v2_fleet 바닥 기준 사각형 2개를 맵 데이터와 sim 월드에 기록 (D-395 개정 1)
-- 2026-10-01 · edca9b2e · feat(control): 기하 기본값을 URDF NOMINAL로 (D-397)
-- 2026-10-01 · fff5825f · feat(perception): D-384 도로 상태 추정기와 섀도 노드
-- 2026-10-01 · 00cdb647 · fix(sensing): calibration_store_root 선언 (M4)
+- 2026-10-01 · uncommitted · fix(localization): 3 s 검증의 공백 판정과 열린 요청 없는 결정 (D-395 리뷰)
+- 2026-10-01 · uncommitted · test(localization): D-395 1단계 호스트 종단 시험 — 두 로봇, 사람 입력 0
+- 2026-10-01 · uncommitted · feat(perception): 기준 사각형 HSV 검출기, 출력 계약 고정 (D-395 개정 1 6항)
+- 2026-10-01 · uncommitted · feat(perception): 가설 자세별 페인트 점수 (D-395 7절, D-375)
+- 2026-10-01 · uncommitted · feat(localization): UNKNOWN/CANDIDATES/LOCALIZED/SUSPECT 상태 기계 (D-395 5절, 개정 3)

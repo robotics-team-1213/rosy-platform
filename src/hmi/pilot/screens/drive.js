@@ -19,6 +19,7 @@ import {mountAutoMode} from "./drive-auto.js";
 import {calibrationView} from "../calibration.js";
 import {el, mountDriveView, buildStage, buildControls} from "./drive-view.js";
 import {createCameraCapture, classifyOperation, saveCameraFile} from "/common/evidence.js";
+import {MODE_LABEL} from "/common/core_ui_logic.js";
 
 const LOOP_MS = 100;
 const STATE_POLL_MS = 500;
@@ -330,7 +331,7 @@ export function mountDrive(root, {onExit} = {}) {
     const moving = command.linear !== 0 || command.angular !== 0;
     element.motion.dataset.kind = !moving ? "idle" : command.pivot ? "pivot" : "drive";
     const side = command.angular > 0 ? "좌" : command.angular < 0 ? "우" : "";
-    element.motion.textContent = !moving ? "대기"
+    element.motion.textContent = !moving ? MODE_LABEL.IDLE
       : command.pivot ? `제자리 ${side}회전`
       : `${command.linear >= 0 ? "전진" : "후진"}${side ? ` · ${side}` : ""}`;
   }

@@ -57,8 +57,18 @@ Verified twice on 2026-09-26: releases 013 and 014 on a Pinky Pro running image 
    deploy\\robot\\pinky_pro\rosy-release-push.ps1 -Robot <robot-ip> -Tarball <P>\<id>.tar.gz -PrintCommands   # dry run
    deploy\\robot\\pinky_pro\rosy-release-push.ps1 -Robot <robot-ip> -Tarball <P>\<id>.tar.gz
    ```
-   - **Success** looks like `current release: <id> (previous: <old>)` followed by
-     `CORE readiness: PASS`.
+   - **Success** looks like `current release: <id> (previous: <old>)`, then
+     `CORE runs the activated release: /opt/rosy/releases/<id>`, then `CORE readiness: PASS`.
+   - `WARNING: CORE was still running the previous release after the switch ... restarted
+     rosy-core` means the robot's installed activator predates the 2026-10-01 fix (it stopped
+     only `rosy-runtime.target`, so CORE kept the old release while readiness passed). The
+     push restarted CORE, and the image-layer sync installs the fixed activator, so the
+     warning should not come back on that robot.
+   - Activation now really stops CORE, so `rosy-navigation` (it `Requires=rosy-core`, not
+     part of the target) stops too and stays stopped. Start it again through its approval
+     path; it is not part of the runtime target (D-291).
+   - `CORE did not start ...` stops the push: no CORE is running. Run `-Rollback` (or read
+     `journalctl -u rosy-core` if it was a rollback).
    - `/etc/rosy/runtime.env: Permission denied` is a known harmless defect: the readiness
      step runs as `rosy`, and the file is 0600.
    - **Automatic rollback:** a CORE that fails its 45 s readiness check is rolled back by

@@ -201,8 +201,13 @@ def test_idle_encoder_noise_after_stop_is_zero_but_residual_rotation_is_not(tmp_
         sample["angular"] = 0.0135
     assert approval._validate_trial(raw, "cw", "button_release") == pytest.approx(0.4)
 
+    # Two encoder ticks at rest (0.027 rad/s, seen on 9dfk 2026-10-01) are still zero.
     for sample in raw["samples"][-2:]:
-        sample["angular"] = 0.03
+        sample["angular"] = 0.027
+    assert approval._validate_trial(raw, "cw", "button_release") == pytest.approx(0.4)
+
+    for sample in raw["samples"][-2:]:
+        sample["angular"] = 0.05
     with pytest.raises(ValueError, match="sustained zero velocity"):
         approval._validate_trial(raw, "cw", "button_release")
 

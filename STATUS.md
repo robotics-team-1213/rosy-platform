@@ -67,11 +67,11 @@
 - lamp_control ROS-SIM: C++ 노드(rclcpp)가 있음. ROS 2 Jazzy 컨테이너 재실행 필요, 미실행
 - lamp_control ARTIFACT: hardware 프로필이 이미지에 배선되지 않았다. core/io 이미지 제외는 test/test_nav2_hardware_slice.py::test_io_image_packages_nav2_without_slam_or_aux_drivers가 고정한다
 - dashboard ARTIFACT: share/dashboard 설치를 이미지에서 본 기록이 없다
-- pilot LOCAL: OMX 페어링→조그와 Pinky 게이트 브라우저 시험은 각각 통과. 전체 Pilot 브라우저 경로 및 영상·녹화 수용 시험은 아직 이번 회차에 실행하지 않음
-- pilot ROS-SIM: OMX 관절·그리퍼·취소의 Gazebo action/readback은 docs/validation/pilot-omx-gazebo-2026-10-01/에서 확인. 그리퍼 정밀 도달·카메라·기록, lease 이탈/재시작, Pinky 이전 재측정은 남음
+- pilot LOCAL: OMX 페어링→조그와 Pinky 게이트 브라우저 시험은 각각 통과. 기록 시작 실패·재시도·결과·stale 영상·dispose Chromium 시험과 실제 Gazebo 15프레임→LeRobot 재독출은 통과. 전체 Pilot/Pinky 경로 재측정은 남음
+- pilot ROS-SIM: OMX 관절·그리퍼·취소의 Gazebo action/readback은 docs/validation/pilot-omx-gazebo-2026-10-01/에서 확인. Gazebo 작업대 영상·시연 기록 15프레임과 실제 LeRobot v3 재독출도 통과. 그리퍼 정밀 도달·전체 재시작 회복·Pinky 재측정은 남음
 - pilot ARTIFACT: share/pilot 설치를 이미지에서 본 기록이 없다
 - pilot DEVICE: 실기 Pinky 에서 페달 hold-해제가 실제 정지로 이어지는 확인 전
-- omx_adapter ROS-SIM: Full gate still requires a Fleet Mission admission/grant-to-device-owner simulator harness, a pending vendor goal fenced by generation change, restart recovery to UNKNOWN/HOLD without replay, and four-phase execution with fresh state and independent simulated object/gripper evidence. Simulator has no camera/contact evidence and does not prove independent stop, ARM64, or physical hardware.
+- omx_adapter ROS-SIM: Full gate still requires a Fleet Mission admission/grant-to-device-owner simulator harness, a pending vendor goal fenced by generation change, restart recovery to UNKNOWN/HOLD without replay, and four-phase execution with fresh state and independent simulated object/gripper evidence. Pilot workcell RGB recording is available; full Fleet pick/place still has no contact/object evidence and does not prove independent stop, ARM64, or physical hardware.
 - omx_adapter ARTIFACT: No signed/published production artifact digest, complete SBOM, or provider deployment/secret-injection configuration is available. Simulation manifest does not qualify as a releasable runtime artifact.
 - interfaces ARTIFACT: io 이미지에 포함된다(deploy/robot/pinky_pro/image/ 빌더 `COPY src/interfaces`, `--packages-select`에 포함). 서명 manifest·OCI archive·immutable registry digest 발행 전
 - interfaces DEVICE: Pi OS Lite bench Device의 install-pi.sh 설치, verify-pi.sh, device-readback.sh --json 증거 없음

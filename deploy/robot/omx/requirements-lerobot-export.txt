@@ -1,0 +1,11 @@
+# Tested offline CPU exporter on Python 3.12; separate from the ROS runtime.
+# Install CPU torch/torchvision first from https://download.pytorch.org/whl/cpu.
+lerobot==0.4.4
+torch==2.7.1+cpu
+torchvision==0.22.1+cpu
+numpy==2.2.6
+pillow==12.3.0
+av==15.1.0
+datasets==4.8.5
+pyarrow==25.0.1
+imageio-ffmpeg==0.6.0

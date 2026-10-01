@@ -252,6 +252,7 @@
 - [2026-09-30-goal-evidence-producer-and-verifier-design.md](plans/2026-09-30-goal-evidence-producer-and-verifier-design.md)
 - [2026-09-30-goal-evidence-producer-and-verifier.md](plans/2026-09-30-goal-evidence-producer-and-verifier.md)
 - [2026-09-30-site-app-roles-and-shared-link-plan.md](plans/2026-09-30-site-app-roles-and-shared-link-plan.md)
+- [2026-10-01-omx-demonstration-lerobot-design.md](plans/2026-10-01-omx-demonstration-lerobot-design.md)
 - [2026-10-01-pilot-omx-gazebo-practice.md](plans/2026-10-01-pilot-omx-gazebo-practice.md)
 
 ## 교훈 (docs/solutions)
@@ -265,8 +266,8 @@
 
 ## 최근 기록
 
-- 2026-10-01 · uncommitted · docs(plan): D-395 Fleet 보조 위치 확정 구현 계획
-- 2026-10-01 · uncommitted · docs(adr): D-395 개정 2 — 출발 슬롯은 방향 축만, 부호는 LiDAR 적합
-- 2026-10-01 · uncommitted · docs(adr): D-395 개정 1 — 바닥 기준 사각형 2개를 귀환 기준점·출발 슬롯으로
-- 2026-10-01 · uncommitted · fix(test): proposal_store.py 크기 판정 행 복구
-- 2026-10-01 · uncommitted · docs(adr): D-361 개정 보강 — 옮기기 비교는 일관성 검사, 옛 토큰은 보내지 않음, 고정 주소 탐침
+- 2026-10-01 · uncommitted · fix(pilot): preserve recording errors and reconcile API minor
+- 2026-10-01 · uncommitted · fix(omx): fence recording closure and isolate storage faults
+- 2026-10-01 · uncommitted · feat(omx): record SIM demonstrations and export LeRobot v3
+- 2026-10-01 · uncommitted · docs(plan): D-395 2단계 세 갈래 인터페이스 계약
+- 2026-10-01 · uncommitted · chore(architecture): `control` 크기 판정 재판정 (D-395 1단계)

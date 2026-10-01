@@ -28,7 +28,7 @@ import {
 } from "./triage.js";
 import { fillIdentityForm } from "./settings.js";
 import { createRosNetwork } from "./ros-network.js";
-import { HeadlessState } from "/common/core_ui_logic.js";
+import { HeadlessState, EVIDENCE_LABEL } from "/common/core_ui_logic.js";
 
 export const TELEMETRY_CHANNELS = Object.freeze({
   "pose-x": "pose",
@@ -221,7 +221,7 @@ export function safetyHero(state, runtimeMode, source, runtime) {
   return {
     tone: "unverified",
     label: "UNVERIFIED",
-    source: judged === "delayed" ? "안전 회로 지연" : "안전 회로 수신 끊김",
+    source: judged === "delayed" ? `안전 회로 ${EVIDENCE_LABEL.delayed}` : "안전 회로 수신 끊김",
   };
 }
 

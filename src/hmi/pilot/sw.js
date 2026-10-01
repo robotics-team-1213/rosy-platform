@@ -27,6 +27,7 @@ const SHELL = [
   "/common/components.css",
   "/common/ui.js",
   "/common/evidence.js",
+  "/common/core_ui_logic.js",
 ];
 
 self.addEventListener("install", (event) => {

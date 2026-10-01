@@ -13,8 +13,8 @@ gates:
     cmd: "PYTHONPATH=src/products/omx/adapter python -m omx_adapter.cli src/products/omx/profile/config/omx.disabled.yaml"
   ROS-SIM:
     state: HOLD
-    evidence: "2026-10-01 Pilot OMX Gazebo: joint1/gripper goals reached ROS SUCCEEDED with joint readback; manual cancel reached ROS CANCELED. Direct pinned vendor action callback test passed (1); a Jazzy in-process ROS ActionServer timeout fault test passed (2 total ROS runtime tests), proving timeout HOLD, cancel ACK/terminal CANCELED, and no owner replay. OMX action/store/PICK_PLACE host regression passed 37, skipped 1. Evidence and limits: docs/validation/model-tool-ros-sim-2026-10-01/README.md. These runs did not exercise Fleet grant handoff, vendor-Gazebo generation/restart races, or four-phase pick/place with object/contact evidence."
-    blocker: "Full gate still requires a Fleet Mission admission/grant-to-device-owner simulator harness, a pending vendor goal fenced by generation change, restart recovery to UNKNOWN/HOLD without replay, and four-phase execution with fresh state and independent simulated object/gripper evidence. Simulator has no camera/contact evidence and does not prove independent stop, ARM64, or physical hardware."
+    evidence: "2026-10-01 Pilot OMX Gazebo: joint1/gripper goals reached ROS SUCCEEDED with joint readback; manual cancel reached ROS CANCELED. Direct pinned vendor action callback test passed (1); a Jazzy in-process ROS ActionServer timeout fault test passed (2 total ROS runtime tests), proving timeout HOLD, cancel ACK/terminal CANCELED, and no owner replay. OMX action/store/PICK_PLACE host regression passed 37, skipped 1. Evidence and limits: docs/validation/model-tool-ros-sim-2026-10-01/README.md. Pilot SIM camera/recording and offline LeRobot v3 readback passed for a 15-frame real Gazebo episode (docs/validation/omx-demonstration-lerobot-2026-10-01/README.md). These runs did not exercise Fleet grant handoff, vendor-Gazebo generation/restart races, or four-phase pick/place with object/contact evidence."
+    blocker: "Full gate still requires a Fleet Mission admission/grant-to-device-owner simulator harness, a pending vendor goal fenced by generation change, restart recovery to UNKNOWN/HOLD without replay, and four-phase execution with fresh state and independent simulated object/gripper evidence. Pilot workcell RGB recording is available; full Fleet pick/place still has no contact/object evidence and does not prove independent stop, ARM64, or physical hardware."
   ARTIFACT:
     state: HOLD
     evidence: "Simulation-only immutable evidence manifest and detached SHA-256 record local Pilot/base image IDs, vendor source lock, tool catalog SHA-256, direct Python pins, disabled ER 2/provider credentials, no approved egress data classes, and retention boundaries: docs/validation/model-tool-artifact-2026-10-01/. Manifest is unsigned/local and the OS/transitive dependency inventory is partial."
@@ -26,6 +26,7 @@ gates:
     state: PARKED
 adrs: [D-61, D-147, D-168, D-273, D-282, D-336, D-369, D-376, D-386, D-390]
 plans:
+  - docs/plans/2026-10-01-omx-demonstration-lerobot-design.md
   - docs/plans/2026-09-15-module-harness-design.md
   - docs/plans/2026-09-26-omx-ai-workstation-runtime.md
   - docs/plans/2026-09-29-er2-semantic-actions-mission-implementation.md

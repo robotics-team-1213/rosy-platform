@@ -4196,3 +4196,57 @@
 - 증거: 계획의 코드는 임시 사본에서 모두 실행했다 — 신규 시험 전부 통과, 이 워크트리에 넣고 sensing 전체 2152 passed(시간 예산 시험 제외), fleet·foundation·게이트웨이 프로토콜·아키텍처는 예상된 크기 판정과 main에 이미 있던 실패만. 그 뒤 코드는 지웠고 이 커밋은 문서만이다.
 - gate 변화: 없음(문서). D-395는 Proposed 그대로.
 - 결정: D-395 Proposed(설계 승인).
+
+
+## 2026-10-01 · uncommitted · D-398 ADR + 감사 정합 문서
+
+- 변경: docs/adr/D-398 신규 + ADR 로그 추가. DESIGN.md에 표면 문법 절·증거 어휘 공용 표·D-277 원문 문구·D-280 매체 규칙 수집, 팔레트 게이트 문단에 범위 게이트 언급. PRODUCT.md 컴포넌트 수 실측 정정('13종' → 엘리먼트 16종+클래스 부품). CONCEPTS.md에 실행 모드·기능의 운용자 한국어 어휘 등재(DESIGN.md 인용 근거가 실제로 존재하게). D-396 계획 문서 수치 정정·진행 갱신.
+- 근거: 2026-10-01 전 레이어 감사(ADR·DESIGN·PRODUCT·CONCEPTS·tokens·등록부·9 표면·시험).
+- gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · docs(adr): D-395 개정 3 — 비대칭 단서 필수, 수신 기준 유효 시간
+- 변경: 1단계 착수 때 정한 기본값을 D-395 개정 3으로 기록. 거울 가설도 스캔 적합도가 같아 3 s 검증이 거울을 못 거르므로 결정에는 비대칭 단서가 하나 이상 있어야 하고(사람 예외), 유효 시간은 절대 시각 대신 받은 때부터 5 s다. ADR Log 상태 갱신.
+- 증거: `src/runtime/sensing/test/test_loc_state.py` 19 passed.
+- gate 변화: 없음(Proposed).
+
+## 2026-10-01 · uncommitted · docs(api): API Ref v1.69 — 스냅샷 `localization`과 §7.9 D-395 모델
+- 변경: 헤더 v1.69, §6.1 `localization`(state·pose_frame·confidence·reason·needs_human·request_id), §7.9 `CandidateReport`·`LocalizationDecision`(`cues`, 수신 기준 `ttl_s`; 스키마만, 전송 경로는 2단계), 변경 이력 행. 핀 셋(헤더·`app.py`·`test_line_follow_contract_docs.py`)을 함께 옮겼다. `test_module_structure.py`의 `schemas.py` 판정을 1095로 재판정(accept 유지).
+- 증거: `test_protocol_version_alignment.py`, `test_line_follow_contract_docs.py`, `test_localization_contracts.py`의 참조서 시험.
+- gate 변화: 없음.
+- 결정: D-395 Proposed(개정 3), D-18, D-347, PRT-006.
+
+## 2026-10-01 · uncommitted · chore(architecture): `fleet` 크기 판정 재판정 (D-395 중재기)
+- 변경: `test_module_structure.py`의 `fleet` 판정 줄 수를 D-395 `fleet/localization/` 추가 뒤 실측값 23543으로 옮기고 사유를 덧붙였다. 판정(split, 미예정) 그대로.
+- 증거: `test_module_structure.py`.
+- gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · chore(architecture): `control` 크기 판정 재판정 (D-395 1단계)
+- 변경: `test_module_structure.py`의 `control` 판정 줄 수를 D-395 sensing 순수 모듈 추가 뒤 실측값 40547로 옮기고 사유를 덧붙였다. 판정(split, P1a) 그대로.
+- 증거: `test_module_structure.py` 33 passed.
+- gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · docs(plan): D-395 2단계 세 갈래 인터페이스 계약
+- 변경: `docs/plans/2026-10-01-d395-phase2-interfaces.md` — 사용자 2단계 승인(2026-10-01)에 따라 로봇(sensing)·CORE·Fleet 세 갈래가 함께 쓸 계약을 고정. ROS 토픽(`localization/state|candidates|decision|suspect|result`, String JSON), CORE 새 경로(`GET /localization/candidates`, `POST /localization/decision|suspect|mission`), 새 capability `LOCALIZE_ASSIST`, API Ref v1.70 핀 목록, Fleet 서비스·감시·사다리 시간, 교통정리·bays가 믿지 않는 자세, D-395 이전 로봇(`localization: null`)은 현행 유지+경고. 실제 로봇(S3)은 공유 로봇 공지·대기 규칙을 따른다.
+- 증거: 없음(계획 문서).
+- gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · feat(omx): record SIM demonstrations and export LeRobot v3
+- 변경: D-390 부록·API v1.69·Pilot 기록 패널·SIM 카메라·원본 recorder·오프라인 exporter. ROS 수락 전에 목표를 등록하고, recording I/O는 별도 writer로 분리.
+- 증거: adapter/Pilot/network 259 passed, 28 skipped; quick tier 95 passed; Chromium recording retry/outcome/stale/dispose 1 passed; 실제 LeRobot 0.4.4 reader 3 passed. Gazebo 원본 15프레임 및 동일 원본 export 재독출 PASS. docs/validation/omx-demonstration-lerobot-2026-10-01/README.md 참조.
+- gate 변화: 물리·ARTIFACT/FIELD 승격 없음. 짧은 SIM 시연/데이터 형식 증거만 추가.
+- 결정: D-390 부록; D-18 typed API와 reference 동시 갱신.
+- 교훈: LeRobot 0.4.4는 explicit timestamp를 거부; source ns를 int64로 유지. Windows shared recording mount는 프레임 누락을 만들 수 있으므로 Linux volume 사용.
+
+## 2026-10-01 · uncommitted · fix(omx): fence recording closure and isolate storage faults
+- 변경: 리뷰의 중요 문제 3개 해소 — recording 오류로 lease watcher 종료 금지, hidden 중 늦은 seat 획득 즉시 반납, 종료 저장 중 interruption을 manifest에 반영.
+- 증거: 리뷰 수정 race/runtime/recorder 21 passed; Chromium 2 passed; 최종 adapter/foundation/assets/network 624 passed, 6 skipped. 최종 tree와 같은 해시의 실제 Gazebo 12프레임→LeRobot 재독출 PASS; 같은 실행 lease 만료 incomplete. 독립 리뷰 재검토 완료.
+- gate 변화: 기존 gate 유지; DEVICE/FIELD 승격 없음.
+- 결정: D-390 부록.
+- 교훈: 파일 쓰기 완료 전 들어온 interruption과 logical closure 경계를 구분한다.
+
+## 2026-10-01 · uncommitted · fix(pilot): preserve recording errors and reconcile API minor
+- 변경: polling으로 시작/종료 오류가 지워지지 않게 유지. main D-395/v1.69와 충돌한 OMX 추가분은 v1.70. 양쪽 append-only 로그와 source를 보존.
+- 증거: 전체 추가 실행 680 passed, 6 skipped, 2 failed; 원인/제한을 검증 문서에 기록. OMX polling 오류·hidden seat·Pinky calibration 실패 경로 재실행 3 passed.
+- gate 변화: 전체 Pilot LOCAL HOLD 유지.
+- 결정: D-390 부록, D-18.
+- 교훈: 독립 기능 시험과 전체 부하 실행을 구분한다.
