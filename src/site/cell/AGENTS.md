@@ -5,7 +5,7 @@
 
 ## Purpose
 
-Rosy Cell (D-377 id `cell`, package `rosy_cell`): the D-399 Application for palletizing and easy cell setup. ROS-free core that turns a taught cell config and a recipe into a hashed Job of `pick`/`place`/`pallet_done` Steps in the robot base frame. `cell.yaml` is schema `rosy_cell.cell/2` (required tool-down `home` pose and `kinematics_revision`; `/1` is rejected). The Job carries `carry_z`, computed only by `rosy_cell.compiler.carry_z` (Fleet calls it, never re-implements it). It never sends Motion Intents, solves IK, or judges reachability; the device's local owner does (D-376, D-399).
+Rosy Cell (D-377 id `cell`, package `rosy_cell`): the D-399 Application for palletizing and easy cell setup. ROS-free core that turns a taught cell config and a recipe into a hashed Job of `pick`/`place`/`pallet_done` Steps in the robot base frame. `cell.yaml` is schema `rosy_cell.cell/2` (required tool-down `home` pose and `kinematics_revision`; `/1` is rejected). The Job carries `carry_z`, computed only by `rosy_cell.compiler.carry_z(recipe, cell, *, tol_m)` (same checks as `compile_job`) (Fleet calls it, never re-implements it). It never sends Motion Intents, solves IK, or judges reachability; the device's local owner does (D-376, D-399).
 
 ## Key Files
 

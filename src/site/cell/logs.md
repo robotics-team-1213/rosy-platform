@@ -20,3 +20,9 @@
 - 변경: schema `rosy_cell.cell/2`. 필수 `home`(수직하향 TCP 포즈 x/y/z/yaw)와 `kinematics_revision`; `/1`은 `schema` 문제로 거절(조용한 업그레이드 없음). `Pose`를 `cell.py`로 옮기고 compiler가 다시 내보낸다. `CellConfig.home`, `.kinematics_revision`은 내용 해시에 들어간다. `compiler.carry_z(recipe, cell)` = 모든 팔레트 전체 적재 높이(네 모서리를 팔레트 좌표계로 base z 변환, 기울기 반영)와 레시피가 쓰는 스테이션 z 중 최댓값 + 박스 높이 + `approach_clearance_m`; home은 제외. `Job.carry_z` 추가, 모든 Step의 `approach_z <= carry_z`를 CompileError로 확인. 픽스처 `cell_demo.yaml`을 /2로.
 - 증거: `python -m pytest src/site/cell/test -q -p no:cacheprovider` 140 passed. 손 계산: 스택 상단 0.042 + 박스 0.02 + 여유 0.05 = 0.112.
 - gate 변화: SOURCE GO 유지(증거 123 -> 140).
+
+## 2026-10-01 · 13614bc0 · fix(cell): carry_z runs the compile checks, reject padded kinematics_revision
+
+- 변경: `carry_z(recipe, cell, *, tol_m)`가 `_check`를 먼저 돌려 알 수 없는 frame/station을 KeyError 대신 CompileError로 거절한다(`compile_job`은 `_check`를 한 번만 실행). 앞뒤 공백이 있는 `kinematics_revision`은 CellError. D-401 §2에 `cell/2` 안내 한 줄.
+- 증거: `python -m pytest src/site/cell/test -q -p no:cacheprovider` 143 passed; harness lint 0 error(s).
+- gate 변화: SOURCE GO 유지(증거 140 -> 143).
