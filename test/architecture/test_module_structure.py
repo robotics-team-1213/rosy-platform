@@ -293,6 +293,12 @@ SIZE_VERDICTS = {
         "without reopening phase state (D-386). The hard-tier "
         "zero-growth rule prevents silent expansion",
     ),
+    "tools/perception/model/watch.py": (
+        630,
+        "accept: the model watcher's scan loop, drift detection and alert paths are one "
+        "cohesion — splitting them would scatter the state machine. Re-judged 2026-10-01 "
+        "at 630 after the training-dataset watch paths joined (host verdict, no device).",
+    ),
 }
 
 WORKSPACE_REF_PATTERNS = (
