@@ -1820,6 +1820,12 @@
 - gate 변화: 없음.
 - 교훈: 타깃 하나만 stop하는 것은 PartOf 유닛의 멈춤을 기다리지 않는다. 릴리스 전환 뒤에는 readiness 통과가 아니라 CORE 프로세스가 새 릴리스에서 도는지를 본다.
 
+## 2026-10-01 · uncommitted · perf(release): rosdep apt 패키지를 한 트랜잭션으로 — payload 빌드 7분 9초→4분 49초
+
+- 변경: `build-native-payload.sh`가 `rosdep install --simulate`로 계획을 받아 `rosdep_apt_batch.py`(패키지 이름 아닌 것은 거부)로 apt 패키지를 모으고, rosdep과 같은 플래그로 `apt-get install -y` 한 번에 설치한 뒤 rosdep을 그대로 다시 돌려 남은 것이 없음을 확인한다. 전에는 rosdep이 키마다 `apt-get install`을 따로 실행했다(22회, 트리거 30회, ~958 패키지). 워크플로는 일회용 runner에서만 dpkg `force-unsafe-io`와 man-db auto-update 끄기를 둔다(이미지 빌드 경로는 무관, 시험으로 고정).
+- 증거: 같은 소스 측정 빌드 run 36867742962(id 2026.10.01-901, 설치하지 않는 측정용) 대 021 run 36865620181: "Build native payload tree" 323 s→172 s, 잡 전체 429 s→289 s. `ros-packages.txt`(342)·`deb-packages.txt`(2524)·`required-ros-packages.txt`·`rosy-packages.txt`·`python-runtime.sha256` 동일. `test/test_payload_build_speed.py` 6 passed(파서 거부 변형으로 빨강 확인), 관련 빌드 계약 시험 265 passed. 선행 단계(75→78 s)는 dpkg 설정으로 줄지 않았다.
+- gate 변화: 없음.
+- 교훈: 빌드 시간 대부분은 colcon(40 s)이 아니라 의존성 설치였다. 시간을 줄이기 전에 단계별 로그 타임스탬프로 어디에 쓰이는지부터 잰다. 교훈 문서 `docs/solutions/workflow-issues/release-cycle-time-one-release-per-deployment-2026-10-01.md`, `docs/solutions/runtime-errors/payload-activation-left-core-on-the-old-release-2026-10-01.md`.
 ## 2026-10-01 · f8db47f5 · feat(release): 서명 안 된 페이로드를 push 직전까지 한 명령으로 — `prepare_payload_release.py`
 
 - 변경: `tools/release/prepare_payload_release.py`를 추가했다. 스킬 `rosy-release-push` 3–5단계의 손 작업을 한 명령으로 묶는다. 순서는 (1) `--run`의 `rosy-native-payload-unsigned-<id>-<sha>` 아티팩트 이름을 API 목록에서 찾아 `download_artifact.py`로 받고, zip에서 `<id>.unsigned.tar.gz`만 꺼낸다(`--artifact-dir`면 생략). (2) 타르볼 안의 `required-ros-packages.txt`가 모두 `rosy-packages.txt`에 있는지 본다. 둘 다 ROSY 패키지 이름이다. (3) 각 `--robot`에 읽기 전용 SSH로 `dpkg-query -W 'ros-jazzy-*'`(TAB 구분)를 실행해 `ros-packages.txt`(`name=version`)와 비교한다. 양쪽에 설치된 패키지는 버전이 같아야 하고, 로봇의 빈 버전은 미설치로 본다. 비교 0건도 실패다. 로봇마다 한 줄 판정을 낸다. (4) 임시 폴더에 풀고 rename으로 `<out>/x/<id>`에 놓는다. 이미 있으면 거절한다. (5) `sign_image_release.py`로 서명하고 `build_payload_release.py pack --modes-from`으로 묶는다. (6) `rosy-release-push.ps1` 줄을 dry run 먼저 출력한다. push는 하지 않는다. SSH 실행기와 sign/pack 실행기는 주입할 수 있다. 스킬 3–5단계를 이 도구로 바꾸고 손 명령은 대체 경로로 남겼다.
