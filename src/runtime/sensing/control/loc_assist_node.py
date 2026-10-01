@@ -21,6 +21,7 @@ measurement to act on (Pi), not a cut-off.
 import json
 import math
 import os
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 
@@ -67,6 +68,24 @@ def yaw(q):
     return planar_yaw(q.x, q.y, q.z, q.w)
 
 
+def search_job(stopping, bundle, generation, field, *search_args):
+    """Worker thread: the one-time paint map load, then the candidate search.
+
+    No logging here: notes go back to `finish_search` on the executor. A stop
+    set between the phases (shutdown) skips the search."""
+    notes, paint_map = [], None
+    if bundle:                              # once, off the executor: the STL paint raster takes seconds
+        try:
+            paint_map = PaintMap.from_bundle(bundle)
+        except Exception as exc:
+            notes.append(f'no paint map from {bundle} ({exc!r}); paint_score stays None')
+    if stopping.is_set():
+        return [], [], None, -1, 0., notes, paint_map
+    started = time.monotonic()
+    found, objects, mask = search(field, *search_args)
+    return found, objects, mask, generation, time.monotonic() - started, notes, paint_map
+
+
 class LocAssistNode(Node):
     def __init__(self):
         super().__init__('loc_assist')
@@ -97,10 +116,12 @@ class LocAssistNode(Node):
         self.create_subscription(OccupancyGrid, 'map', self.on_map, latched)
         self.create_subscription(LaserScan, 'scan', self.on_scan, qos_profile_sensor_data)
         self.create_subscription(PoseWithCovarianceStamped, 'amcl_pose', self.on_pose, latched)
-        self.create_subscription(Image, 'camera/front', self.on_camera, qos_profile_sensor_data)
+        self.camera = None                  # camera/front exists only outside LOCALIZED (sync_camera)
+        self.stopping = threading.Event()   # set by main() before the pool shuts down
         self.create_subscription(Bool, 'safety/pickup', self.on_pickup, 1)
         self.create_subscription(String, 'localization/decision', self.on_decision, 5)
         self.create_subscription(String, 'localization/suspect', self.on_suspect, 5)
+        self.sync_camera()
         self.create_timer(.1, self.tick)
 
     def p(self, name):
@@ -184,7 +205,10 @@ class LocAssistNode(Node):
     def on_decision(self, msg):
         payload = self._json(msg, 'localization/decision')
         if payload is not None:
-            self.publish(self.core.on_decision(self.now(), payload))
+            out = self.core.on_decision(self.now(), payload)
+            if not out:
+                self.get_logger().debug('repeat of the decision under its 3 s check; ignored')
+            self.publish(out)
 
     def on_suspect(self, msg):
         payload = self._json(msg, 'localization/suspect')
@@ -193,7 +217,7 @@ class LocAssistNode(Node):
 
     def on_camera(self, msg):
         now = self.now()
-        if self.core.machine.autonomy_allowed or now - self.square_at < self.p('square_period_s'):
+        if not self.core.camera_wanted or now - self.square_at < self.p('square_period_s'):
             return
         self.square_at = now
         if msg.encoding not in ('bgr8', 'rgb8'):
@@ -259,45 +283,48 @@ class LocAssistNode(Node):
         squares, radius, minimum = self.squares, self.p('robot_radius'), self.p('candidate_minimum_fit')
 
         bundle, self.paint_tried = (None if self.paint_tried else self.bundle), True
-        logger = self.get_logger()
-
-        def run():
-            if bundle:                      # once, off the executor: the STL paint raster takes seconds
-                try:
-                    self.paint_map = PaintMap.from_bundle(bundle)
-                except Exception as exc:
-                    logger.warning(f'no paint map from {bundle} ({exc!r}); paint_score stays None')
-            started_search = time.monotonic()
-            found, objects, mask = search(field, clear, squares, ranges, angles, radius, mount, minimum)
-            return found, objects, mask, generation, time.monotonic() - started_search
-        self.search = self.pool.submit(run)
+        self.search = self.pool.submit(search_job, self.stopping, bundle, generation, field, clear, squares,
+                                       ranges, angles, radius, mount, minimum)
 
     def finish_search(self, now):
         future, self.search = self.search, None
         try:
-            found, objects, mask, generation, elapsed = future.result()
+            found, objects, mask, generation, elapsed, notes, paint_map = future.result()
         except Exception as exc:
             self.get_logger().warning(f'candidate search failed: {exc!r}')
-            found, objects, mask, generation, elapsed = [], [], None, -1, 0.
+            found, objects, mask, generation, elapsed, notes, paint_map = [], [], None, -1, 0., [], None
+        for note in notes:
+            self.get_logger().warning(note)
+        self.paint_map = paint_map or self.paint_map
         if generation == self.generation:
             self.clear = mask
         budget = self.p('search_budget_s')
         log = self.get_logger().warning if elapsed > budget else self.get_logger().info
         log(f'candidate search {elapsed:.2f} s (budget {budget:.1f} s): {len(found)} candidates')
         recent = now - self.sighted_at <= self.p('sighting_max_age_s')
-        fresh = self.sightings if recent else []
         scores = None
         if recent and self.paint is not None and self.paint_map is not None:
             scores = [paint_score(self.paint_map, self.paint, (c.x, c.y, c.yaw)) for c in found]
         # A new map while searching: no odom discards the result and the next tick searches again.
         odom = self.odom() if generation in (self.generation, -1) else None
-        self.publish(self.core.search_finished(now, odom, found, objects, fresh, scores))
+        # The core drops camera evidence seen before the search started (evidence_s).
+        self.publish(self.core.search_finished(now, odom, found, objects, self.sightings if recent else [],
+                                               scores, evidence_s=self.sighted_at if recent else None))
+
+    def sync_camera(self):
+        """Hold camera/front only while square/paint evidence can matter (not LOCALIZED)."""
+        if self.core.camera_wanted and self.camera is None:
+            self.camera = self.create_subscription(Image, 'camera/front', self.on_camera, qos_profile_sensor_data)
+        elif not self.core.camera_wanted and self.camera is not None:
+            self.destroy_subscription(self.camera)
+            self.camera = None
 
     def tick(self):
         now = self.now()
         if self.search is not None and self.search.done():
             self.finish_search(now)
         self.publish(self.core.tick(now))
+        self.sync_camera()
         if self.search is None and self.field is not None and self.scan is not None:
             odom = self.odom()
             if odom is not None and self.core.search_due(now, odom):
@@ -333,6 +360,7 @@ def main():
     except KeyboardInterrupt:
         pass
     finally:
+        node.stopping.set()
         node.pool.shutdown(wait=False, cancel_futures=True)
         node.destroy_node()
         if rclpy.ok():

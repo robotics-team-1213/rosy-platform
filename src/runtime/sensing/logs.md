@@ -856,3 +856,8 @@
 - 변경: `control/loc_assist.py`. (중요) 픽업 epoch: 탐색 중 픽업이 있었거나 들린 채면 결과를 버리고, 들린 동안 결정은 `held`로 거부. (중요) 3 s 검증 중에는 후보를 재보고하지 않고, 검증 중인 같은 request_id의 중복 결정은 결과 없이 조용히 무시(노드가 debug 로그). (경미) `received_s` 필수 — 없거나 유한하지 않거나 `now_s`보다 0.5 s 넘게 앞서면 `bad_receipt`(코어에 둠; 1단계 `loc_state.decide`의 기본값은 그대로). (경미) 사각형·페인트 증거는 탐색 시작 뒤에 본 것만(`evidence_s >= 시작`), 아니면 버린다. `camera_wanted`(LOCALIZED 밖에서만).
 - 증거: `test_loc_assist.py` 43 passed(새 시험 12개, 먼저 11개 실패 확인).
 - gate 변화: 없음.
+
+## 2026-10-02 · uncommitted · fix(localization): lane A 리뷰 — 카메라 구독은 LOCALIZED 밖에서만, 종료 플래그, 작업 스레드 로그 없음 (D-395 P2-3)
+- 변경: `control/loc_assist_node.py`. `camera/front` 구독을 LOCALIZED에 들어가면 없애고 나오면 다시 만든다(`sync_camera`, 틱마다; 저장소에 스로틀된 카메라 토픽은 없다). 작업 스레드 본문을 `search_job`으로 빼고, 페인트 지도 적재와 탐색 사이에 `stopping` 플래그를 본다(main이 풀 종료 전에 세움). 작업 스레드는 로그를 남기지 않고 메모를 돌려주며 `finish_search`가 실행기 스레드에서 남긴다. 사각형·페인트 증거 시각을 코어에 `evidence_s`로 넘긴다. 검증 중 중복 결정은 debug 로그만.
+- 증거: `test_loc_assist_node_ros.py` 2개(WSL Jazzy: 카메라 구독 생성·제거·재생성, 정지 플래그가 탐색을 건너뜀) — WSL ROS 시험 55 passed. 호스트 sensing 2224 passed, 104 skipped; 아키텍처 76 passed(`control` 41237로 재판정).
+- gate 변화: 없음.
