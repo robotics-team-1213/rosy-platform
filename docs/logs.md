@@ -4081,3 +4081,8 @@
 - 변경: 위 "merge(perception): main 을 feat/d373-learning-loop-lap2 에 병합" 항목을 바로잡는다. (1) stamp 일치 허용치는 ±1 ms가 아니라 1 µs이고, `line/observation`은 `source`가 `CAMERA_LINE`인 것만 이미지 증거다(d050b821). (2) 병합 때 세운 `NATIVE_PYTHON_RUNTIME`·`compatible_predecessors` 계획(요구사항 파일 끝에 블록을 붙이고 옛 런타임을 호환 목록에 올림)은 되돌렸다. 학습 런타임은 따로 된 `learned-perception-requirements.txt`와 전용 prefix `/opt/rosy/learned-perception/site-packages`에 설치하고, 페이로드 런타임 id는 main의 a66f224a 그대로다(d2d6ac1f).
 - 증거: 해당 커밋의 시험(`test_dataset_extract.py`, `test_bench_learned_perception.py`, `test_python_runtime_id.py`).
 - gate 변화: 없음(기록 정정).
+
+## 2026-10-01 · uncommitted · docs(adr): D-384 개정 4 — 재생 비교와 URDF 형상 사전값
+- 변경: 124745Z R0의 도로 쪽 불합격 3항목(on_paint 0.186, 직선 |err| 0.392, NIS 꼬리)을 추정기 과제로 명시. LaneKeeper d421c86a 재생에서 도로·추정기 수치가 main과 같음. 횡단보도 정지 구간의 on_paint 오판과 참고용 on_lane_paint 지표(D-379 crosswalk/stop_line 클래스 전까지 기준 아님) 기록. URDF 형상 사전값(IR ±0.020 m, 카메라 높이 0.063 m, LiDAR 정면 180°, 바퀴 0.028/0.0971 m)을 재생·시뮬 사전값으로만 기록.
+- 증거: X:\DevTemp\rosy-ml-work\d384-replay-d421 재생 출력(main·d421, 2258 프레임), rosy-bc 세션 합의.
+- gate 변화: 없음(로봇 설정 변경 없음).
