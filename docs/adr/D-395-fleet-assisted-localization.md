@@ -1,6 +1,6 @@
 ## D-395 Fleet 보조 위치 확정 — 로봇이 후보를 내고 Fleet이 중재하며, 대칭 맵에서도 사람 입력 없이 map 자세를 얻는다
 
-**Status:** Proposed (2026-10-01). 설계만 정한다. 코드·로봇 설정·params·API 참조서는 바꾸지 않는다. 구현은 아래 Validation의 S1 이후 단계를 사용자가 승인한 뒤 별도 변경으로 한다. 개정 1(2026-10-01, 바닥 기준 사각형을 귀환 기준점·출발 슬롯으로 사용)과 개정 2(슬롯 방향은 축만, 부호는 LiDAR 적합), 개정 3(비대칭 단서 필수, 받은 때부터 재는 유효 시간)이 아래 결정보다 우선한다. 이 ADR은 D-257 5항과 D-393 3항의 일부를 **개정하자고 제안**한다(아래 "개정 제안"). 제안이 Accepted되기 전에는 두 ADR의 해당 문구가 그대로 유효하다.
+**Status:** Proposed (2026-10-01). 설계만 정한다. 코드·로봇 설정·params·API 참조서는 바꾸지 않는다. 구현은 아래 Validation의 S1 이후 단계를 사용자가 승인한 뒤 별도 변경으로 한다. 개정 1(2026-10-01, 바닥 기준 사각형을 귀환 기준점·출발 슬롯으로 사용)과 개정 2(슬롯 방향은 축만, 부호는 LiDAR 적합), 개정 3(비대칭 단서 필수, 받은 때부터 재는 유효 시간), 개정 4(2단계 결정과 감시 한계)가 아래 결정보다 우선한다. 이 ADR은 D-257 5항과 D-393 3항의 일부를 **개정하자고 제안**한다(아래 "개정 제안"). 제안이 Accepted되기 전에는 두 ADR의 해당 문구가 그대로 유효하다.
 
 설계 전문: [2026-10-01-fleet-assisted-localization-design.md](../plans/2026-10-01-fleet-assisted-localization-design.md).
 
@@ -140,5 +140,19 @@ LOCAL·ROS-SIM까지만 주장 가능하다. 실물은 승인 뒤다.
 - **결정 유효 시간은 받은 때부터 잰다.** 절대 시각 `expires_at` 대신 `ttl_s`(기본 5 s)를 쓰고, 로봇은 받은 시각부터 센다. Fleet과 로봇 시계가 맞지 않아도 된다.
 - 상태는 Proposed 그대로다. 1단계는 호스트 전용 순수 로직이며 로봇 설정·API·Fleet 동작을 바꾸지 않는다.
 - 구현: `src/runtime/sensing/control/sensing/loc_state.py`(`ASYMMETRIC_CUES`, `DECISION_TTL_S`), 시험 `test_loc_state.py`.
+
+**개정 4 (2026-10-01, 2단계 구현에서 정한 것과 남은 한계, 사용자 2단계 승인):**
+
+세 갈래(로봇 노드, CORE, Fleet)의 계약은 `docs/plans/2026-10-01-d395-phase2-interfaces.md`다. 구현하면서 정한 것을 여기 남긴다.
+
+1. **D-395 이전 로봇.** 스냅샷 `localization`이 null인 로봇은 지금 동작을 그대로 쓴다. Fleet 교통정리·bays는 그 자세를 계속 쓰고, 콘솔 로봇 카드에 "위치 상태 미보고" 경고 배지만 단다(경고 대기열에는 넣지 않는다). CORE는 LOCALIZED 관문을 걸지 않는다. 레거시 `POST /localization/initialpose`는 이런 로봇에서 예전처럼 `/initialpose`를 직접 쓰고, D-395 로봇에서는 `source: human` 결정으로 바뀌어 같은 3 s 검증을 거친다.
+2. **LOCALIZED 관문.** 위치 상태를 보고하는 로봇은 LOCALIZED가 아니면 내비게이션 목표·집 복귀·차선 주행·도킹·군집 추종 시작을 거부한다(409 `NOT_LOCALIZED`). LOCALIZED를 벗어나면(SUSPECT·CANDIDATES·UNKNOWN, 또는 상태가 3 s 끊긴 `state_stale`) 진행 중인 자율 주행을 멈춘다. 수동 조종은 허용한다.
+3. **권한.** 새 capability `LOCALIZE_ASSIST`는 운용자·관리자 역할에 붙는다. Fleet 로봇 토큰은 늘 운용자 토큰이라 설정 변경 없이 받는다. 그래서 사람 운용자 토큰도 결정을 보낼 수 있다. 토큰마다 grant를 따로 싣는 방식은 후속 과제다. `source: human` 결정은 `NAVIGATE`도 필요하다.
+4. **천장 카메라 단서는 꺼 둔다.** Fleet의 오버헤드 단서와 감시 입력은 `--localization-overhead-cue` 설정으로만 켜지고 기본은 꺼짐이다. D-257 5항 개정 제안이 Accepted된 뒤에 켠다.
+5. **남은 한계: Fleet 감시(9항)가 늘 작동하지는 않는다.**
+   - 지금 계약에서 다른 로봇이 보는 물체(`unmapped_objects`)는 CANDIDATES 로봇의 `CandidateReport`에만 실린다. 그래서 LOCALIZED 로봇이 거울 자리에 잘못 굳었는지를 Fleet이 다른 로봇의 관찰로 잡아내는 일은 CANDIDATES 로봇이 하나라도 있을 때만 된다. 천장 카메라 단서도 꺼져 있으니(4항), 모든 로봇이 LOCALIZED인 동안에는 9항의 상시 감시가 사실상 비어 있다.
+   - 이 동안 거울 잠금을 막는 것은 로봇 쪽 장치뿐이다. 결정에 비대칭 단서가 있어야 하고(개정 3), 픽업이나 적합도 지속 하락이면 SUSPECT가 된다.
+   - **후속 과제(제안):** LOCALIZED 로봇도 `localization/state`(그리고 CORE 스냅샷 `localization`)에 `unmapped_objects`를 주기적으로 싣는다. Fleet 감시는 LOCALIZED 로봇끼리의 관찰로 서로를 확인한다: 로봇 A의 보고 자세에서 본 물체가 로봇 B의 보고 자세와 25 cm 넘게 1.5 s 어긋나고 B 쪽 거울 자리와는 맞으면 B를 SUSPECT로 돌린다. API Ref MINOR 추가가 필요하며 2단계 통합 뒤 별도 변경으로 한다.
+6. **사다리 시간과 재시도.** 사다리 시계는 CANDIDATES에 처음 들어간 때 시작해 LOCALIZED에서만 멈춘다. 결정 거부로는 다시 시작하지 않는다(거부가 되풀이돼도 60 s에 `needs_human`에 닿게). 실패한 결정 POST는 재시도하지 않고, 로봇이 2 s마다 새 stamp로 다시 보고할 때 새로 결정한다. 확인 동작·귀환 임무는 P2-7 전까지 기록만 남기고 보내지 않는다.
 
 **References:** `docs/adr/D-257-site-lane-map-and-overhead-sightings.md`, `docs/adr/D-393-nav-amcl-update-min-d-and-goal-tolerance.md`, `docs/adr/D-375-overhead-map-registration-from-lane-paint-proposal.md`, `docs/adr/D-360-overhead-field-auto-detection-proposal.md`, `src/runtime/api_web/core_api_web/api/v1/navigation.py`, `src/runtime/gateway/core/bridge/ros_bridge.py`, `src/runtime/sensing/control/localization_node.py`, `src/site/fleet/fleet/swarm/transport.py`, D-2, D-267, D-269, D-321, D-356, D-369, [D-346](D-346-commit-time-collision-defenses.md).
