@@ -2510,15 +2510,19 @@ def _planned_emergency_card(case, tmp_path, flip=False):
     return plan_path
 
 
-def _earlier_attempt(tmp_path, plan_path, *lines):
+def _earlier_attempt(tmp_path, plan_path, *lines, folder=None):
     # The exact line shapes prepare-rosy-sd.ps1 writes (Add-ProgressLine / Format-Failure).
     plan_full = str(Path(plan_path).resolve())
     records = [{"ts": "2026-10-01T00:00:00.0000000Z", "stage": "verify-signature", "card_state": "untouched",
                 "detail": "write", "plan": plan_full}]
     for index, (stage, state, extra) in enumerate(lines, start=1):
         records.append({"ts": f"2026-10-01T00:0{index}:00.0000000Z", "stage": stage, "card_state": state, **extra})
-    (tmp_path / "write-earlier.log.progress.jsonl").write_text(
-        "".join(json.dumps(record) + "\n" for record in records), encoding="utf-8")
+    progress = folder / "write-earlier.log.progress.jsonl" if folder else tmp_path / "write-earlier.log.progress.jsonl"
+    progress.write_text("".join(json.dumps(record) + "\n" for record in records), encoding="utf-8")
+    # The attempt index the writer appends next to the plan (D-389 verification).
+    with open(str(Path(plan_path).resolve()) + ".attempts.jsonl", "a", encoding="utf-8") as index:
+        index.write(json.dumps({"ts": records[0]["ts"], "event": "start", "progress": str(progress.resolve())}) + "\n")
+    return progress
 
 
 WRITING = ("write", "writing", {"detail": "raw image 1048576 bytes"})
@@ -2554,10 +2558,12 @@ def test_an_emergency_resume_refuses_a_card_whose_readback_found_a_mismatch(writ
      "exit code 3"),
     ([WRITING], "never reached a clean Imager exit"),
     ([], "no earlier write of this plan"),
-], ids=["stall-mid-write", "stall-after-last-byte", "writer-exit-code", "window-died-mid-write", "no-record"])
+    (None, "no attempt index next to the plan"),
+], ids=["stall-mid-write", "stall-after-last-byte", "writer-exit-code", "window-died-mid-write", "no-record",
+        "no-index"])
 def test_an_emergency_resume_refuses_a_card_without_a_clean_earlier_write(writer_case, tmp_path, history, message):
     plan_path = _planned_emergency_card(writer_case, tmp_path)
-    if history:
+    if history is not None:
         _earlier_attempt(tmp_path, plan_path, *history)
 
     completed = _emergency_resume(writer_case, tmp_path, plan_path)
@@ -2591,3 +2597,43 @@ def test_an_emergency_resume_needs_the_reviewed_plan(writer_case, tmp_path):
     assert completed.returncode != 0
     assert "needs the reviewed plan (-PlanPath)" in _err(completed)
     _nothing_recorded(writer_case, boot)
+
+
+# D-389 verification (MEDIUM): a log kept elsewhere (-LogPath / -EvidenceDir, here
+# -ProgressPath) must still be seen; the plan's attempt index lists it.
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+def test_an_emergency_resume_sees_a_mismatch_logged_in_another_folder(writer_case, tmp_path):
+    plan_path = _planned_emergency_card(writer_case, tmp_path, flip=True)
+    elsewhere = tmp_path / "other-evidence"
+    elsewhere.mkdir()
+    boot = tmp_path / "boot"
+    boot.mkdir()
+    first = _run(writer_case, "-PlanPath", plan_path, *WRITE_CONFIRMATION, "-BootMountPath", boot,
+                 "-ProgressPath", elsewhere / "r.log.progress.jsonl", plan_only=False, switches=("-AcceptSlowMedia",))
+    assert first.returncode != 0 and "full media readback verification failed" in _err(first)
+    index = [json.loads(line) for line in Path(str(Path(plan_path).resolve()) + ".attempts.jsonl")
+             .read_text(encoding="utf-8").splitlines() if line.strip()]
+    assert [entry["event"] for entry in index] == ["start", "end"]
+    assert index[-1]["kind"] == "mismatch" and Path(index[-1]["progress"]).parent == elsewhere
+
+    completed = _emergency_resume(writer_case, tmp_path, plan_path)
+
+    assert completed.returncode != 0
+    assert "emergency resume refused" in _err(completed) and "readback verification failed" in _err(completed)
+    _nothing_recorded(writer_case, boot)
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+def test_an_emergency_resume_refuses_when_a_listed_log_is_gone(writer_case, tmp_path):
+    plan_path = _planned_emergency_card(writer_case, tmp_path)
+    clean = _earlier_attempt(tmp_path, plan_path, WRITING, READBACK, folder=tmp_path)
+    gone = tmp_path / "moved"
+    gone.mkdir()
+    _earlier_attempt(tmp_path, plan_path, WRITING, READBACK, folder=gone).unlink()  # deleted after the fact
+    assert clean.exists()
+
+    completed = _emergency_resume(writer_case, tmp_path, plan_path)
+
+    assert completed.returncode != 0
+    assert "an attempt log listed in the index is missing" in _err(completed)
+    assert not writer_case["receipt"].exists()

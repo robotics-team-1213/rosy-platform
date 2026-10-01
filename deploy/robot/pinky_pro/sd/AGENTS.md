@@ -109,8 +109,12 @@ never with `-PlanOnly`).
   active release against its signed `SHA256SUMS` and run `dpkg --verify`, as on
   rosy-pinky-9dfk), then rewrite it with a standard write and
   `-ReprovisionReceipt <emergency receipt>` when possible.
+- Every write or resume with `-PlanPath` appends its progress-file path (start)
+  and final `card_state`/`kind` (end) to `<plan>.attempts.jsonl`, whatever
+  `-LogPath` it used. Keep that index and the logs it lists with the plan.
 - `-Emergency -ResumeAfterWrite` needs `-PlanPath` and a clean history of that
-  plan in the plan/log folders' `*.progress.jsonl`: the last full write reached
+  plan in the progress files the attempt index lists (no index, or a listed log
+  missing or unreadable, refuses): the last full write reached
   the readback stage (clean Imager exit) and no attempt since recorded a writer
   failure (stall, kill, exit code), a readback mismatch or an image error.
   Otherwise it refuses: rewrite the card, and replace it after a mismatch.

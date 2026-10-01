@@ -116,12 +116,38 @@ function Get-NextStep {
     }
 }
 
+# D-389 verification: every write or resume of a plan appends to <plan>.attempts.jsonl,
+# whatever -LogPath/-ProgressPath it used, so the emergency resume can find all of
+# this plan's progress files. "start" registers the file; "end" adds the final
+# card_state and failure kind. Append-only, flushed at once.
+$script:attemptIndex = ""
+$script:priorAttemptIndex = $null
+function Add-AttemptRecord([string]$Event, [string]$Kind) {
+    if (-not $script:attemptIndex) { return }
+    $line = [ordered]@{ ts = [DateTime]::UtcNow.ToString("o"); event = $Event; progress = [IO.Path]::GetFullPath($ProgressPath) }
+    if ($Event -eq "end") {
+        $line["card_state"] = $script:cardState
+        $line["stage"] = $script:stage
+        if ($Kind) { $line["kind"] = $Kind }
+    }
+    $bytes = [Text.Encoding]::UTF8.GetBytes(($line | ConvertTo-Json -Compress) + "`n")
+    $stream = New-Object IO.FileStream($script:attemptIndex, [IO.FileMode]::Append, [IO.FileAccess]::Write, [IO.FileShare]::ReadWrite)
+    try {
+        $stream.Write($bytes, 0, $bytes.Length)
+        $stream.Flush($true)
+    }
+    finally {
+        $stream.Dispose()
+    }
+}
+
 function Format-Failure([string]$Message, [string]$Next) {
     if (-not $Next) { $Next = Get-NextStep }
     # D-188: the failed line carries the next step, so the status command can show it.
     $extra = [ordered]@{ next = $Next }
     if ($script:failureKind) { $extra["kind"] = $script:failureKind }
     Add-ProgressLine "failed" $script:cardState "$($script:stage): $Message" $null $extra
+    Add-AttemptRecord "end" $(if ($script:failureKind) { $script:failureKind } else { "failed" })
     $script:failureRecorded = $true
     return "$Message`nstage=$($script:stage) card_state=$($script:cardState)`nnext: $Next"
 }
@@ -276,17 +302,38 @@ function Test-EarlierWriteOfThisPlan {
 # (its attempt entered the readback stage), and neither it nor any later attempt
 # may record a writer failure (stall, kill, exit code), a readback mismatch or an
 # image error. Lines of the current progress file from this run are skipped.
+# D-389 verification: the progress files come from the plan's attempt index (any
+# -LogPath), not a folder scan; a missing index or a missing listed log refuses.
 function Assert-CleanEarlierWrite {
+    $refuseNext = "rewrite the card with a full write (without -ResumeAfterWrite); if a readback reported a mismatch, replace the card"
     $current = $(if ($ProgressPath) { [IO.Path]::GetFullPath($ProgressPath) } else { "" })
-    $folders = @((Split-Path -Parent $planFullPath))
-    if ($current) { $folders += (Split-Path -Parent $current) }
+    if ($null -eq $script:priorAttemptIndex) {
+        Fail "emergency resume refused: no attempt index next to the plan ($($script:attemptIndex)); this plan's earlier writes cannot be checked" $refuseNext
+    }
+    $paths = New-Object System.Collections.ArrayList
+    foreach ($text in $script:priorAttemptIndex) {
+        if (-not ([string]$text).Trim()) { continue }
+        $entry = $null
+        try { $entry = $text | ConvertFrom-Json } catch { $entry = $null }
+        if ($null -eq $entry -or -not $entry.PSObject.Properties["progress"] -or -not [string]$entry.progress) {
+            Fail "emergency resume refused: the attempt index $($script:attemptIndex) has an unreadable line" $refuseNext
+        }
+        if ($paths -notcontains [string]$entry.progress) { [void]$paths.Add([string]$entry.progress) }
+    }
+    if ($current -and $paths -notcontains $current) { [void]$paths.Add($current) }
     $attempts = New-Object System.Collections.ArrayList
-    foreach ($file in @(Get-ChildItem -LiteralPath ($folders | Select-Object -Unique) -Filter "*.progress.jsonl" -File -ErrorAction SilentlyContinue)) {
+    foreach ($path in $paths) {
+        if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+            Fail "emergency resume refused: an attempt log listed in the index is missing: $path" $refuseNext
+        }
+        $texts = $null
+        try { $texts = @(Get-Content -LiteralPath $path -ErrorAction Stop) } catch { $texts = $null }
+        if ($null -eq $texts) { Fail "emergency resume refused: an attempt log listed in the index cannot be read: $path" $refuseNext }
         $lines = New-Object System.Collections.ArrayList
-        foreach ($text in @(Get-Content -LiteralPath $file.FullName -ErrorAction SilentlyContinue)) {
+        foreach ($text in $texts) {
             try { [void]$lines.Add(($text | ConvertFrom-Json)) } catch { continue }
         }
-        if ($file.FullName -eq $current) {
+        if ($path -eq $current) {
             # This run's own lines start at its verify-signature line, the last one in the file.
             $last = -1
             for ($i = 0; $i -lt $lines.Count; $i++) { if ([string]$lines[$i].stage -eq "verify-signature") { $last = $i } }
@@ -309,8 +356,7 @@ function Assert-CleanEarlierWrite {
     for ($i = 0; $i -lt $ordered.Count; $i++) {
         if (@($ordered[$i].lines | Where-Object { [string]$_.stage -eq "write" -and [string]$_.card_state -eq "writing" }).Count) { $fullWrite = $i }
     }
-    $refuseNext = "rewrite the card with a full write (without -ResumeAfterWrite); if a readback reported a mismatch, replace the card"
-    if ($fullWrite -lt 0) { Fail "emergency resume refused: no earlier write of this plan was recorded next to the plan or the log" $refuseNext }
+    if ($fullWrite -lt 0) { Fail "emergency resume refused: no earlier write of this plan was recorded in its attempt index" $refuseNext }
     for ($i = $fullWrite; $i -lt $ordered.Count; $i++) {
         foreach ($line in $ordered[$i].lines) {
             if ([string]$line.stage -ne "failed") { continue }
@@ -759,6 +805,14 @@ if ($OperatorPublicKey) {
 
 if (-not $ProgressPath -and -not $PlanOnly) { $ProgressPath = "$ReceiptPath.progress.jsonl" }
 $planFullPath = $(if ($PlanPath -and (Test-Path -LiteralPath $PlanPath -PathType Leaf)) { (Resolve-Path -LiteralPath $PlanPath).ProviderPath } else { "" })
+if ($planFullPath -and -not $PlanOnly -and $ProgressPath) {
+    $script:attemptIndex = "$planFullPath.attempts.jsonl"
+    # The index as it was before this run: what the emergency resume may rely on.
+    if (Test-Path -LiteralPath $script:attemptIndex -PathType Leaf) {
+        $script:priorAttemptIndex = @(Get-Content -LiteralPath $script:attemptIndex -ErrorAction Stop)
+    }
+    Add-AttemptRecord "start" ""
+}
 Set-Stage "verify-signature" "untouched" $(if ($PlanOnly) { "plan" } elseif ($ResumeAfterWrite) { "resume-after-write" } else { "write" }) $(if ($planFullPath) { [ordered]@{ plan = $planFullPath } } else { $null })
 if (-not (Test-Path -LiteralPath $ImagePath -PathType Leaf)) { Fail "image file is missing" }
 if ($ImageSha256 -notmatch '^[0-9a-fA-F]{64}$') { Fail "image SHA-256 is invalid" }
@@ -1579,6 +1633,7 @@ if ($Emergency) {
 else {
     Set-Stage "done" "complete" "" ([ordered]@{ next = "the card is ready: put it in the Pinky and power on; the receipt is $ReceiptPath; the CORE API credential is in `$env:LOCALAPPDATA\Rosy\api\$DeviceName.credential.xml (runbook: CORE API administrator credential)" })
 }
+Add-AttemptRecord "end" ""
 # Shown once for the operator; not part of the JSON evidence on stdout.
 [Console]::Error.WriteLine("Fallback AP for ${DeviceName}: SSID $DeviceName password $apLogin (stored in your Rosy AP store)")
 [Console]::Error.WriteLine("CORE API administrator for ${DeviceName}: id $($coreApiLogin.Id) value $($coreApiLogin.Value) (stored in your Rosy API store)")

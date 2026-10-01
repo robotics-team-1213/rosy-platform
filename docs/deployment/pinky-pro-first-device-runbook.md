@@ -274,7 +274,9 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\deploy\robot\pinky_pro\sd\
 - `-EmergencyReason`이 없거나 10자 미만이거나 큰따옴표·백슬래시·비ASCII가 있으면 UAC 전에 거부한다. `-PlanOnly`에는 쓸 수 없다.
 - 긴급 resume(`-Emergency -ResumeAfterWrite`)은 `-PlanPath`가 필요하고, 같은 plan의 이전 시도가 깨끗할 때만 된다: 마지막 전체
   쓰기가 Imager 정상 종료(readback 단계 진입)까지 갔고, 그 뒤 쓰기 실패(stall·kill·exit 코드), readback 불일치, 이미지 오류가
-  없어야 한다. 아니면 거부한다. 전체 쓰기를 다시 하고, 불일치가 있었으면 카드를 바꾼다.
+  없어야 한다. 아니면 거부한다. 전체 쓰기를 다시 하고, 불일치가 있었으면 카드를 바꾼다. 이력은 plan 옆 `<plan>.attempts.jsonl`
+  색인이 가리키는 진행 파일에서 읽는다(`-LogPath`를 어디에 줬든 모든 시도가 여기에 남는다). 색인이나 거기 적힌 로그를 지우거나
+  옮기지 않는다: 없으면 긴급 resume은 거부한다.
 - 창과 로그에 `EMERGENCY CARD WRITE` 경고가 ERASE 전과 끝에 나온다. 진행 파일은 `readback`(detail `EMERGENCY: full readback skipped`)
   → `bundle`/`unverified-no-bundle` → … → `done`/`complete-unverified`, 상태 명령은 `Result: COMPLETE, NOT VERIFIED`다.
 - receipt: `media_readback = {verified: false, skipped: "emergency", bytes_verified: 0, sanity: {...}}`와
