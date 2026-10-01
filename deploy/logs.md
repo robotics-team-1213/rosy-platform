@@ -1539,6 +1539,31 @@
 - 결정: 없음.
 - 교훈: 없음.
 
+## 2026-09-30 · uncommitted · feat(image): D-373 learned-perception runtime and models directory
+
+- 변경: `device-python-requirements.txt` 끝에 표식 블록(onnxruntime 1.30.0, flatbuffers 25.12.19, packaging 26.3, protobuf 7.36.2; cp312 aarch64·x86_64 해시)을 붙이고 `inputs.lock.yaml` `requirements_sha256`을 바꿨다. numpy는 고정하지 않는다 — apt python3-numpy 1.26.4 위에 numpy 2를 얹으면 apt cv2가 깨진다. `/var/lib/rosy/models root:rosy-camera 0750`을 `customize-rootfs.sh`와 `tmpfiles-rosy-state.conf`에 같은 규칙으로 넣었다. 녹화는 카메라 유닛 `StateDirectory=rosy/camera` 아래라 규칙을 두지 않는다. 벤치 설치 `pinky_pro/dev/install-learned-perception.sh`는 같은 파일의 블록과 같은 tmpfiles 줄을 읽어 설치하고, 블록을 뺀 파일 sha(이전 이미지 기록)일 때만 `python-runtime.sha256`을 새 값으로 바꾸며 `/var/log/rosy/bench-installs.log`에 남긴다.
+- 증거: 블록을 `pip download --require-hashes --no-deps --only-binary=:all:`로 cp312 aarch64·x86_64 각각 받음(2026-09-30 Windows). 계약 시험 녹색, tmpfiles 모드·핀 버전 변이는 붉음 확인 후 복구.
+- gate 변화: 없음. ARTIFACT/DEVICE HOLD — aarch64 이미지 빌드와 Pi 5에서의 import·지연·CPU는 미실측.
+- 결정: D-373 결정 1.
+- 교훈: 이 블록 이후로 빌드한 릴리스는 이전 카드에서 `NATIVE_PYTHON_RUNTIME`으로 거절된다. 재굽기 전 벤치 카드는 벤치 설치가 먼저다.
+
+## 2026-09-30 · uncommitted · fix(native): D-373 old releases stay activatable on the superset runtime
+
+- 변경: `inputs.lock.yaml` `python_runtime.compatible_predecessors: [2b003fd4…]`(이 파일의 엄격한 부분집합인 런타임 기록). 이미지(`customize-rootfs.sh`)와 벤치 설치가 카드에 `python-runtime-compatible.sha256`로 쓴다. `native_release.check_python_runtime`은 릴리스 런타임이 카드 기록과 같거나 카드가 적은 선행 런타임일 때 받는다 — 옛 릴리스는 새 상위집합 런타임에서 돈다, 반대는 없다. 릴리스 안의 어떤 파일도 허용 범위를 넓히지 못한다(카드가 권위). 요구사항 블록에 packaging 26.3이 apt python3-packaging을 가리는 이유를 적었다(`requirements_sha256` 재고정).
+- 운영: D-373 이후 빌드한 릴리스를 활성화하기 전에 기존 카드는 `pinky_pro/dev/install-learned-perception.sh`를 돌리거나 재굽기한다. 그 뒤 D-373 이전 릴리스로의 활성화·롤백은 허용된다. 벤치 설치 전 카드에서 새 릴리스는 여전히 `NATIVE_PYTHON_RUNTIME`으로 거절된다.
+- 증거: `test_native_release_activation.py`(옛→새 카드 수락, 새→옛 거절, 미등록 거절, 형식 오류 기록은 정확 일치만), `test_bench_learned_perception.py`(pre-block sha 고정). 2026-09-30 Windows.
+- gate 변화: 없음. DEVICE HOLD.
+- 결정: D-373 결정 1 리뷰 후속.
+- 교훈: 이미지 런타임 sha 한 값 일치 규칙은 상위집합 런타임 추가 때 롤백을 막는다. 부분집합 관계는 카드 쪽 기록으로만 선언한다.
+
+## 2026-09-30 · uncommitted · feat(native): D-373 operator switch for learned shadow and capture
+
+- 변경: `rosy-camera.service`에 `EnvironmentFile=-/etc/rosy/learned-perception.env`(선택). `camera_preview.launch.py`의 `learned_shadow`·`capture` 기본값을 `ROSY_LEARNED_SHADOW`·`ROSY_CAPTURE`에서 엄격하게 읽는다(`true`/`false`만, 그 밖은 꺼짐 + launch 경고). `EnvironmentVariable` 치환 대신 launch 파일 안의 파서를 쓴 이유: 치환은 잘못된 값을 `IfCondition`까지 그대로 넘겨 launch가 실패한다. 예시 `native/learned-perception.env.example`(둘 다 false, `.gitattributes` LF 고정 — CRLF면 systemd가 `false\r`로 읽는다). 하드닝·쓰기 경로는 그대로. 유닛은 이미지 계층이라 기존 카드는 릴리스 사본에서 손 설치한다(런북 D절). 첫 배포 런북 `docs/deployment/learned-perception-pinky.md`.
+- 증거: `test/test_native_systemd_contract.py`(선택 EnvironmentFile, 하드닝 불변, ExecStart에 스위치 없음, 예시 둘 다 false), WSL Jazzy `src/runtime/sensing/test/test_camera_preview_launch.py` 18 passed(환경 없음=꺼짐, `true`=켜짐, 잘못된 값 7종=꺼짐+경고, 명시 인자 우선), `test/test_learned_perception_pinky_runbook.py`(2026-09-30).
+- gate 변화: 없음. DEVICE HOLD — 유닛 손 설치, 스위치 재시작, 섀도 지연·CPU, 첫 캡처 수거는 실물 미확인.
+- 결정: D-373 결정 2(페이로드 스위치)의 장치 쪽 켜는 수단.
+- 교훈: 이미지 계층 유닛에 새 지시어를 넣으면 기존 카드는 페이로드만으로 받지 못한다. 런북에 손 설치와 확인 명령(`systemctl cat`)을 같이 적는다.
+
 ## 2026-09-30 · uncommitted · feat(native): D-375 부팅 표시가 운용 모드를 램프와 LCD에 표시
 
 - 변경: `rosy-boot-status.py`가 핸드오버의 `robot_mode`를 검증(모르는 값은 나머지를 버리지 않고 없음)해 boot-status.json에 옮긴다. `rosy-boot-display.py`는 `robot_state.lamp_pattern()`으로 패턴을 고르고, 모드 전환은 소리 없이 패턴만 바꾸며, LCD 상태줄에 ` - MODE` 접미를 붙인다.
@@ -1564,6 +1589,20 @@
 - 변경: `rosy-boot-status.py`가 `nav_state`를 같은 규칙으로 검증·복사. `rosy-boot-display.py`는 `lamp_pattern()`에 nav를 넘기고, `_announce`가 패턴 기반으로 EMERGENCY 진입음(2.5 kHz×4, 유지 무음, 해제 시 ready 차임)을 낸다.
 - 증거: test_boot_display.py (blocked 행·진입/유지/해제 소리). 변이 증명: 진입음 제거 시 빨강.
 - gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · fix(image): D-373 learned-perception runtime in its own file and prefix; payload runtime id unchanged
+
+- 변경: 위 2026-09-30 D-373 항목 둘(`device-python-requirements.txt` 끝 블록, `compatible_predecessors`)을 바로잡는다. 블록을 `image/learned-perception-requirements.txt`로 옮기고 `inputs.lock.yaml`에 `learned_perception_runtime`(sha256, `target`)을 따로 두었다. `device-python-requirements.txt`와 `python_runtime`은 main 바이트 그대로(a66f224a…, `test_python_runtime_id.py`), `native_release.py`의 호환 목록과 카드의 `python-runtime-compatible.sha256`는 되돌렸다. `customize-rootfs.sh`와 `dev/install-learned-perception.sh`는 `pip --require-hashes --no-deps --only-binary=:all: --target /opt/rosy/learned-perception/site-packages`로 설치하고, `learned/runner.py`가 import 직전에 그 경로를 `sys.path` 끝에 붙인다. 벤치 스크립트는 `/usr/local`과 런타임 기록을 쓰지 않는다.
+- 이유: 페이로드 런타임 id는 요구사항 파일 전체의 sha256이라 블록을 붙이면 구운 카드 전부가 재플래시 전까지 페이로드를 못 받는다. `/usr/local` 설치는 apt python3-protobuf 4.21.12·python3-packaging 24.0(8kcn 실측)을 모든 서비스에서 가린다.
+- 증거: `test/test_bench_learned_perception.py`(별도 잠금 항목, 같은 prefix·플래그, `/usr/local`·런타임 기록 미사용, dry-run 출력), `test/test_python_runtime_id.py`, `src/runtime/sensing/test/test_learned_runner.py`(prefix는 끝에 붙고 시스템 패키지가 우선). 2026-10-01 Windows.
+- gate 변화: 없음. ARTIFACT/DEVICE HOLD — 이미지 빌드 미실행.
+- 결정: D-373 결정 1 개정.
+
+## 2026-10-01 · uncommitted · docs(site): D-373 모델 watcher와 store 기록
+- 변경: 이 브랜치 커밋 기준. 사이트 PC의 `deploy/site/rosy-model-watch.service`·`.timer`가 `tools/perception/model/watch.py`를 돌린다(067d4119). 기본 백엔드는 store inbox(`models/inbox/<폴더>/` + READY)이고 HF는 `backend: hf`일 때만 쓴다(68ad0405, f6820e6e). 통과한 모델은 `models/accepted/<revision>/`, 떨어진 것은 `models/rejected/`로 옮기고 설정된 로봇에 섀도로만 전달한다. `deploy/site/install-model-watch.sh`가 설치하고 사이트 전용 SSH 키를 쓴다(b0cf35c6, aaad6da7). 설정 예시는 `deploy/site/model-watch.yaml.example`. store 구조와 `content_sha`는 `tools/perception/store.py`(b50b1118).
+- 증거: `tools/perception/test/test_model_watch.py`, `test_model_watch_inbox.py`, `test_site_install_model_watch.py`, `test_site_model_watch_units.py`, `test_store.py`(호스트 pytest). 사이트 PC 설치 실행 증거는 없다.
+- gate 변화: 없음. 사이트 설치·첫 자동 섀도 전달은 미실행.
+- 결정: D-373 결정 5·7·8.
 
 ## 2026-10-01 · uncommitted · fix(release,test): main CI deployment 단계 적색 5건 — 핀·등록부·스캐너 면제 정리
 

@@ -1,0 +1,4 @@
+# OMX CORE config layer (D-196 robot package). core_common.config.load_config
+# merges this over rosy_default.yaml and under the local overlay when robot.model
+# is omx. Every robot package must ship this file; OMX has no robot facts to add.
+{}

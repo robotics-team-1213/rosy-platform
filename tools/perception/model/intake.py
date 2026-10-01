@@ -1,11 +1,17 @@
 """Model intake: shadow-deployment eligibility report (D-356).
 
-intake.py <model_folder | hf:org/repo@<40-hex sha>> --out data/perception/models
+intake.py <model_folder | store-inbox:<folder> | hf:org/repo@<40-hex sha>>
+          --out data/perception/models [--store <store folder>]
+
+store-inbox:<folder> is <store>/models/inbox/<folder>, taken only when its READY
+marker matches its content (D-373 decision 8). hf: is the optional HF backend.
 
 manifest + sha256 -> onnxruntime open -> replay MP4 frames through the model
 and the rule-based detector -> intake_report.json. Pass: the folder is copied
 to <out>/<model_revision>/ with the report. Fail: the report is written next
-to the source and the exit code is 1. Not the D-205 selection gate."""
+to the source and the exit code is 1. A missing Python package (onnx,
+onnxruntime) is a configuration error of this host, not the model's: exit
+CONFIG_EXIT (4), report "config_error": true. Not the D-205 selection gate."""
 
 from __future__ import annotations
 
@@ -39,6 +45,30 @@ _HF = re.compile(r"^hf:(?P<repo>[^@\s]+/[^@\s]+)@(?P<rev>[^@\s]*)$")
 _SHA = re.compile(r"^[0-9a-f]{40}$")
 
 
+QDQ_OPS = frozenset({"QuantizeLinear", "DequantizeLinear"})
+CONFIG_EXIT = 4  # a required package is missing here: fix the environment, not the model
+
+
+def graph_precision(path) -> str:
+    """"int8" when the ONNX graph holds QuantizeLinear/DequantizeLinear nodes
+    (onnxruntime quantize_static output), else "fp32"."""
+    import onnx  # lazy: the site host's ML environment has it, like onnxruntime
+
+    graph = onnx.load(str(path), load_external_data=False).graph
+    return "int8" if any(n.op_type in QDQ_OPS for n in graph.node) else "fp32"
+
+
+def check_precision(manifest) -> None:
+    """Refuse a manifest whose declared precision the graph contradicts."""
+    for f in manifest.files:
+        if f.name.endswith(".onnx"):
+            found = graph_precision(manifest.folder / f.name)
+            if found != f.precision:
+                raise ManifestError(
+                    f"files[{f.name}].precision is {f.precision} but the graph is {found} "
+                    f"({'has' if found == 'int8' else 'has no'} QuantizeLinear/DequantizeLinear)")
+
+
 def judge(stats: dict, gate: dict) -> tuple[str, list[str]]:
     reasons = []
     if stats.get("frames", 0) <= 0:
@@ -56,12 +86,35 @@ def judge(stats: dict, gate: dict) -> tuple[str, list[str]]:
     return ("fail" if reasons else "pass"), reasons
 
 
-def resolve_source(source: str, downloader=None, workdir=None) -> Path:
-    """Local folder, or hf:org/repo@<40-hex commit> (tags and branches move: refused).
+STORE_INBOX = "store-inbox:"
+
+
+def _store_inbox(source: str, store_root) -> Path:
+    if store_root is None:
+        raise ValueError(f"{source}: no store configured (--store / rosy_ml `store`)")
+    perception = str(Path(__file__).resolve().parents[1])
+    if perception not in sys.path:
+        sys.path.insert(0, perception)
+    import store
+    st = store.Store(store_root)
+    try:
+        folder = st.inbox_folder(source.removeprefix(STORE_INBOX))
+    except store.StoreError as exc:
+        raise ValueError(str(exc)) from exc
+    if not st.inbox_ready(folder.name):
+        raise ValueError(f"{source}: not complete (no READY marker matching its content)")
+    return folder
+
+
+def resolve_source(source: str, downloader=None, workdir=None, store=None) -> Path:
+    """Local folder, store-inbox:<folder> (needs store), or hf:org/repo@<40-hex commit>
+    (tags and branches move: refused).
 
     The HF cache links snapshot files into blobs, which verify_files refuses, so
     the snapshot goes to a local_dir under workdir; any symlink left is copied
     out as a real file."""
+    if source.startswith(STORE_INBOX):
+        return _store_inbox(source, store)
     if not source.startswith("hf:"):
         return Path(source)
     m = _HF.match(source)
@@ -163,52 +216,80 @@ def _tool_commit() -> str | None:
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("source", help="model folder or hf:org/repo@<40-hex sha>")
+    ap.add_argument("source", help="model folder, store-inbox:<folder> or hf:org/repo@<sha>")
+    ap.add_argument("--store", help="store folder, for store-inbox: sources")
     ap.add_argument("--out", default=str(ROOT / "data" / "perception" / "models"))
     ap.add_argument("--gate", default=str(DEFAULT_GATE))
     ap.add_argument("--root", default=str(ROOT), help="base for gate replay_sources globs")
     ap.add_argument("--max-frames", type=int, help="override max_frames_per_source")
     args = ap.parse_args(argv)
+    return run(args.source, out=args.out, gate_path=args.gate, root=args.root,
+               max_frames=args.max_frames, store=args.store)[0]
 
-    gate = load_gate(args.gate)
-    max_frames = args.max_frames or gate["max_frames_per_source"]
+
+def replay_videos(gate: dict, root) -> list[Path]:
+    """The replay clips the gate names under root (rosy_ml doctor checks it too)."""
+    return sorted({Path(p) for pat in gate["replay_sources"]
+                   for p in glob.glob(str(Path(root) / pat))})
+
+
+def run(source: str, *, out, gate_path=DEFAULT_GATE, root=ROOT, max_frames=None,
+        downloader=None, store=None) -> tuple[int, dict]:
+    """(exit code, report). main() and model/watch.py (in-process, own downloader)."""
+    gate = load_gate(gate_path)
+    max_frames = max_frames or gate["max_frames_per_source"]
+    # transient: the run failed for an infrastructure reason (disk, network, HF,
+    # missing runtime, video decode), not on the model; watch.py retries those.
     report = {"model_revision": None, "verdict": "fail", "reasons": [], "gate": gate,
-              "tool_commit": _tool_commit()}
+              "tool_commit": _tool_commit(), "transient": False}
     folder = None
     try:
-        folder = resolve_source(args.source, workdir=Path(args.out) / ".incoming")
+        folder = resolve_source(source, downloader=downloader, workdir=Path(out) / ".incoming",
+                                store=store)
         manifest = load_manifest(folder)
         report["model_revision"] = manifest.model_revision
         verify_files(manifest)
+        check_precision(manifest)
         # deliver.py push refuses a model whose files differ from these.
         report["files"] = [{"name": f.name, "sha256": f.sha256} for f in manifest.files]
         model = LaneSegModel.open(folder)
-        videos = sorted({Path(p) for pat in gate["replay_sources"]
-                         for p in glob.glob(str(Path(args.root) / pat))})
+        videos = replay_videos(gate, root)
         stats = replay(model, videos, max_frames)
         report.update(stats)
         report["sources"] = [str(v) for v in videos]
         report["verdict"], report["reasons"] = judge(stats, gate)
-    except (ManifestError, ValueError, ImportError, OSError, cv2.error) as exc:
+        if stats["frames"] == 0:  # no clips under root: a setup error, not the model's
+            report["transient"] = True
+            report["reasons"].append(f"no replay clips for {gate['replay_sources']} under {root}")
+    except ImportError as exc:  # onnx / onnxruntime missing: the host's setup
+        report["reasons"] = [f"{type(exc).__name__}: {exc} (install it in this venv)"]
+        report["config_error"] = True
+    except (ManifestError, ValueError, OSError, cv2.error) as exc:
         report["reasons"] = [f"{type(exc).__name__}: {exc}"]
+        report["transient"] = isinstance(exc, (OSError, cv2.error))
 
     text = json.dumps(report, indent=2, ensure_ascii=False) + "\n"
     if report["verdict"] == "pass":
-        dest = Path(args.out) / report["model_revision"]
+        dest = Path(out) / report["model_revision"]
         shutil.copytree(folder, dest, dirs_exist_ok=True,
-                        ignore=shutil.ignore_patterns(".cache", ".git*", REPORT_NAME))
+                        ignore=shutil.ignore_patterns(".cache", ".git*", REPORT_NAME, "READY"))
         (dest / REPORT_NAME).write_text(text, encoding="utf-8")
-        if args.source.startswith("hf:"):  # downloaded snapshot (and its .real copy)
+        if source.startswith("hf:"):  # downloaded snapshot (and its .real copy)
             for d in (folder, Path(str(folder).removesuffix(".real"))):
                 shutil.rmtree(d, ignore_errors=True)
         print(f"PASS {report['model_revision']} -> {dest}")
-        return 0
-    src = Path(folder) if folder else Path(args.source.replace(":", "_").replace("/", "_"))
-    target = src.parent / f"{src.name}.{REPORT_NAME}"
+        return 0, report
+    if folder and not source.startswith(STORE_INBOX):
+        target = Path(folder).parent / f"{Path(folder).name}.{REPORT_NAME}"
+    else:  # hf: (nothing downloaded) or the store inbox: under --out, never the cwd or inbox
+        name = re.sub(r"[^A-Za-z0-9._@-]", "_",
+                      source.removeprefix("hf:").removeprefix(STORE_INBOX).replace("/", "__"))
+        target = Path(out) / "_failed" / f"{name}.{REPORT_NAME}"
+        target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(text, encoding="utf-8")
     print(f"FAIL {report['model_revision']}: {'; '.join(report['reasons'])} (report: {target})",
           file=sys.stderr)
-    return 1
+    return (CONFIG_EXIT if report.get("config_error") else 1), report
 
 
 if __name__ == "__main__":

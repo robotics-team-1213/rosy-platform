@@ -711,6 +711,21 @@
 - 증거: `pytest src/runtime/sensing/test -k "lane or keep or observer"` 336 passed; 실물 세션 재생 keep 수치가 분리 전과 같다(on_line 0.149 / on_paint 0.052 / none 0.095 / jump 0.007).
 - gate 변화: 없음(동작 불변).
 
+## 2026-10-01 · uncommitted · feat(sensing): D-373 두 번째 바퀴 — 캡처·스냅샷·상태·압축 카메라·launch 스위치·wall·scan
+- 변경: 이 브랜치 커밋 기준, main 병합 5e76dbe7·a4454366 뒤 상태.
+  - 압축 카메라: `camera_detect_node`가 `publish_compressed`일 때 같은 프레임을 JPEG으로 `camera/front/compressed`에 낸다(5681cca7). 로봇 밖으로 나가지 않는다(D-136).
+  - 상태 토픽: `learned_lane_node`가 `perception/learned/status`(latched, 1 Hz)에 모델·`last_error`·프레임 수·`skip_ratio`·`latency_ms_p50`을 낸다(5681cca7, 73e8b1b0). 2cedf136: 추론 빈도 상한 `max_rate_hz`(기본 3.0)·`threads`(기본 2), 상한으로 건너뛴 프레임은 `frames_rate_limited`로 따로 세고 `skip_ratio`는 과부하만.
+  - 캡처 트리거: `capture_trigger.py`(ROS 없음)·`capture_trigger_node` — |error_delta| ≥ 0.35 또는 한쪽만 차선을 보는 상태가 3프레임 연속이면, 또는 `capture/request`면 스냅샷을 요청한다. 자동 쿨다운 30 s, 운영자 5 s(53a4f94a, dcc479e3).
+  - 스냅샷 녹화: `recording.py` snapshot 모드와 `record_session --snapshot` — 압축 카메라·부수 토픽 60 s를 메모리 링버퍼(15,360,000 B)에 두고 호출마다 세션 폴더와 `session.json`(사유·두 판단값)을 남긴다(53a4f94a).
+  - launch 스위치: `camera_preview.launch.py`의 `learned_shadow`·`capture`(기본 꺼짐, `ROSY_LEARNED_SHADOW`·`ROSY_CAPTURE`에서 `true`/`false`만)와 `learned_max_rate_hz`(`ROSY_LEARNED_MAX_HZ`)(1df022b6, 20d80b3c, 2cedf136). 병합에서 main의 IR 교정 overlay·`LogInfo`와 합쳤다.
+  - wall role: `wall` 화소는 차선 목표에서 빠지고 섀도 결과에 `wall_fraction`(가까운 띠 비율)으로 나간다(28b905fa).
+  - scan 부수 데이터: `SIDE_TOPICS`에 `scan`(693d5d33). 병합에서 main의 `RECORD_TOPICS`(scan 추가)와 한 정의로 합쳤다: `RECORD_TOPICS = record_topics()`.
+  - 학습 런타임 prefix: `learned/runner.py`가 `onnxruntime` import 직전에 `/opt/rosy/learned-perception/site-packages`(`ROSY_LEARNED_SITE`)를 `sys.path` 끝에 붙인다(d2d6ac1f).
+- 증거: `src/runtime/sensing/test` 호스트 pytest(Windows), WSL Jazzy `test_camera_preview_launch.py` 25 passed(2026-10-01). 장치 증거는 없다.
+- gate 변화: SOURCE. ROS-SIM·DEVICE HOLD 유지 — 섀도·스냅샷·수거의 장치 실행과 상한 뒤 CPU는 미측정.
+- 결정: D-373 결정 2·3·4·9, 결정 1 개정(d2d6ac1f).
+- 교훈: 병합이 dict 리터럴에 같은 키 둘을 남기면 뒤의 것이 앞을 조용히 덮는다(`test_native_systemd_contract` `DECLARED_READS`). 충돌 없는 자동 병합도 자료 구조 키를 다시 본다.
+
 ## 2026-10-01 · 79b7681a · feat(sensing): 카메라 외부 파라미터 단계와 바퀴 오도메트리 맞춤 (D-47 부록)
 - 변경: 시동 보정에 정지 카메라 단계(`calibration/cmd` `camera_extrinsic`, `calibration_camera.py`)를 넣었다 — 움직이지 않고 LiDAR 벽 접지선·0.155 m 벽 윗선을 영상 밝기 경계에 맞춰 피치·롤(관측될 때만 높이)을 맞추고 `<result>.camera_candidate.json` 과 저장소 후보 레코드를 쓴다. 적용하지 않는다. ROS 없는 맞춤은 `sensing/perception/camera_extrinsic.py`, 바퀴 반지름·간격은 `sensing/odometry_fit.py`(구간 첫 스캔 기준 점-선 ICP, 오도메트리로 시드하지 않음). `line_observer_node` 의 NOMINAL 프로파일은 승인된 `camera_profile` 레코드가 있으면 그것을 쓰고 출처를 로그에 남긴다(`calibrated_values.py`). package.xml 에 core_common 의존 추가.
 - 증거: `test_camera_extrinsic.py`(합성 벽 장면: 피치·롤 복원, 한 시점으로는 높이가 안 갈린다는 것, 정지·이동 중단·시간 초과, 후보만 저장) · `test_odometry_fit.py`(ICP, 360° 피벗 풀림, 거울 오도메트리 무관, 장착 yaw 무관 직진 길이, 바퀴 LS) · `test_calibrated_values.py` 통과(2026-10-01 Windows). 실물 오프라인: D-379 트랙 세션에서 yaw 180/181.9 → 피치 11.2°, 롤 −1.5°, 높이 0.0575 m, 190 은 점수 1/3.

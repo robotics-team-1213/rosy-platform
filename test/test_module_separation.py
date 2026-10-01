@@ -65,7 +65,7 @@ LEGACY_FINAL_PUBLISHER = (
 #: repoint or edit the line and this guard goes red until the pin moves.
 RECORDING_SIDE_TOPIC = (
     "runtime/sensing/control/recording.py",
-    'SIDE_TOPICS = ("cmd_vel", "line/observation", SHADOW_TOPIC)',
+    'SIDE_TOPICS = ("cmd_vel", "line/observation", SHADOW_TOPIC, SCAN_TOPIC, ODOM_TOPIC)',
 )
 
 FINAL_TOPIC_EXCEPTIONS = (LEGACY_FINAL_PUBLISHER, RECORDING_SIDE_TOPIC)

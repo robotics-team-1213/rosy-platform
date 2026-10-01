@@ -35,6 +35,10 @@ import cv2
 import numpy as np
 
 SCHEMA = "rosy.perception.dataset/1"
+_SENSING = str(Path(__file__).resolve().parents[3] / "src" / "runtime" / "sensing")
+if _SENSING not in sys.path:
+    sys.path.insert(0, _SENSING)
+from control.sensing.perception.learned.manifest import ROLES  # noqa: E402  the closed list
 # Mask value for unlabelled pixels (manifest "ignore_index"): excluded from the
 # loss, never a class. D-379 addendum 2026-10-01.
 IGNORE_INDEX = 255
@@ -69,8 +73,13 @@ def load_classes(path, require_color: bool = True) -> list[dict]:
 
 def label_to_index(classes) -> dict[str, int]:
     """CVAT label name -> class index (background role is the label "background")."""
+    unknown = sorted({c["role"] for c in classes} - set(ROLES))
+    if unknown:
+        raise BuildError(f"classes: unknown role {unknown}; the closed list is {ROLES}")
     if sum(c["role"] == "background" for c in classes) != 1:
         raise BuildError("classes: exactly one class with role background is required")
+    if any(c["index"] == IGNORE_INDEX for c in classes):
+        raise BuildError(f"classes: index {IGNORE_INDEX} is the manifest ignore_index, not a class")
     names = [c["name"] for c in classes]
     if len(set(names)) != len(names):
         raise BuildError("classes: duplicate class names")
@@ -212,9 +221,11 @@ def build_dataset(export, frame_dirs, classes, out, deleted_indexes=()) -> dict:
                         "split": splits[session]})
         if meta is not None and meta not in sources:
             sources.append(meta)
+    # CVAT paints every pixel background or a label, so a CVAT mask holds no
+    # IGNORE_INDEX pixel; the field still states the schema's unlabelled value.
     manifest = {"schema": SCHEMA, "classes": classes, "frames": entries,
                 "deleted_indexes": sorted(f"{s}__{i:06d}" for s, i in deleted),
-                "sources": sources}
+                "sources": sources, "ignore_index": IGNORE_INDEX}
     (out / "manifest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
     return manifest
 

@@ -154,6 +154,20 @@ camera_runtime:
     Python packages are independently SHA-256 pinned. This verifies source
     identity, not an ARM64 image build or device capture.
 
+learned_perception_runtime:
+  requirements: learned-perception-requirements.txt
+  requirements_sha256: dfee19470266b21ef19603f5fae3c2d46e3e2c7e7c15492d59916a7f3d74f256
+  target: /opt/rosy/learned-perception/site-packages
+  verified: true
+  note: >-
+    D-373 decision 1. onnxruntime 1.30.0 with flatbuffers 25.12.19,
+    packaging 26.3 and protobuf 7.36.2 (cp312 aarch64 and x86_64), hash-locked;
+    hashes were checked on 2026-09-30 by a --require-hashes download for both
+    platforms. Installed with pip --target into its own prefix, which only the
+    learned backend appends to sys.path, so apt numpy/protobuf/packaging keep
+    precedence. Not part of python_runtime: the payload runtime id (D-189)
+    stays the flashed a66f224a..., and payloads keep activating on old cards.
+
 containers:
   role: development-and-ci-only
   excluded_from_product_artifact: true
