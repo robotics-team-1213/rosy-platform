@@ -40,3 +40,23 @@ D-171 트랙 3(control 분할)과 한 계획으로 묶는다.
 **Validation / Transition:** P1 `test_module_structure.py`와 `test_robot_literals.py`가 녹색이어야 한다. P2
 `robots/pinky_pro` 패키지와 core 시험이 녹색이어야 한다. P3에서는 이동마다 host 전체 시험, colcon build(WSL Jazzy),
 2대 gz 벤치 결과가 이동 전과 같아야 한다. 백로그가 비고 두 번째 로봇 프로필(sim)이 같은 CORE API로 뜨면 Accepted로 올린다.
+
+### Addendum 2026-10-01 — 로봇 패키지의 CORE 설정 층 (`config/core.yaml`)
+
+**맥락.** `rosy_default.yaml` 은 모든 로봇의 기본값이라 `line_follow.lidar_forward_deg: 0.0` 이고, Pinky Pro 의
+180(rplidar_link yaw π)은 주석으로만 있었다. 장치 CORE 는 이 기본값과 첫 부팅이 쓴 `~/.rosy/rosy.yaml`(카드 자격만)만
+읽으므로, 8kcn 손 핫픽스(2026-09-29) 밖의 모든 새 이미지·페이로드에서 D-344 §11 앞 물체 정지가 로봇 뒤를 봤다.
+
+**결정.** 로봇 사실 중 CORE 설정 키로 들어가는 값은 로봇 패키지 `config/core.yaml` 에 둔다. `core_common.config.load_config`
+병합 순서: 기본값 → 로봇 패키지 `core.yaml` → `~/.rosy/rosy.yaml` → `ROSY_CONFIG`. 모델은 `ROSY_ROBOT` > 오버레이
+`robot.model` > 기본값. 운영자 오버레이가 여전히 이긴다.
+
+- 패키지가 있는 로봇은 `core.yaml` 을 반드시 싣는다(빈 매핑 가능, OMX). 없으면 `ConfigError` — 빠진 층이 조용히 뒤를
+  보게 두지 않는다. 모르는 모델·패키지 없음은 경고 한 줄 뒤 프로필 로더가 거절한다.
+- 최상위 값이 null 이거나 기본값이 매핑인 자리에 매핑이 아니면, 깨진 YAML 이면 파일 경로를 담은 `ConfigError` 로
+  CORE 가 뜨지 않는다(fail closed).
+- 첫 값: Pinky Pro `line_follow.lidar_forward_deg: 180.0`(손값). 승인된 `lidar_mount` 보정 기록(D-47 추가 2026-10-01)이
+  시작 때 이를 덮는다(실측 ≈181–182°).
+
+**검증.** `src/runtime/gateway/test/test_pinky_lidar_forward_device.py`(장치 방식 로드 → 180, 블록 삭제 변이 시 실패),
+`src/contracts/foundation/test/test_robot_core_layer.py`. 브랜치 `fix/pinky-lidar-forward-device`. 실물 반영은 다음 페이로드.

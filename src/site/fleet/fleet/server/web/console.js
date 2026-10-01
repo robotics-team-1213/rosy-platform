@@ -10,13 +10,13 @@ import { createMapFitView } from "./map-fit-view.js";
 import { applyRoleToControls } from "./authorization.js";
 import { DISCOVERY_LABELS, createEnrollmentPanel } from "./enrollment.js";
 import { createPollGate } from "./poll-gate.js";
+import { confirmIrreversible, openLiveDialog } from "/common/ui.js";
 // 좌표계: 로봇 pose 는 CORE 가 TF `map → <ns>base_footprint` 로 읽어 주는 map 프레임
 // 값이다(ros_bridge `_map_frame = "map"`). 그래서 N대를 한 격자 위에 그대로 겹쳐
 // 그릴 수 있다. 격자는 행 0 이 아래쪽(y 최소)이고 캔버스는 위가 0 이라 y 를 뒤집는다.
 
 
 const el = (id) => document.getElementById(id);
-const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 
 // 셸 폴링 운율과 로그 상한은 셸이 가진다. 지도 격자·오버레이 임계는 map-view.js에 있다.
 const STATE_MS = 1000;
@@ -41,8 +41,19 @@ function authHeaders() {
   return auth.token ? { "Authorization": `Bearer ${auth.token}` } : {};
 }
 
+// D-359 §6.4 — compact·medium에서 접속·역할·테마는 토글 뒤에 접힌다(세로 예산).
+// 넓은 창에서는 CSS가 토글을 숨기고 항목을 줄에 세운다. 잠기면 토큰 칸을 연다.
+function setTopbarOpen(open) {
+  el("topbar-more").setAttribute("aria-expanded", String(open));
+  el("topbar-extra").dataset.open = String(open);
+}
+el("topbar-more").addEventListener("click", () => {
+  setTopbarOpen(el("topbar-more").getAttribute("aria-expanded") !== "true");
+});
+
 function markLocked() {
   auth.locked = true;
+  setTopbarOpen(true);
   auth.role = null;
   el("user-role").textContent = "인증 필요";
   el("user-role").setAttribute("status", "crit");
@@ -50,18 +61,20 @@ function markLocked() {
   const pill = el("online-pill");
   pill.textContent = "토큰 필요";
   pill.setAttribute("status", "crit");
-  el("console-token").classList.add("locked");
+  el("console-token").setAttribute("aria-invalid", "true");
   showDiscoveryUnavailable("인증 필요", "관제 토큰을 입력하면 발견 목록을 다시 확인합니다.");
 }
 
 function markUnlocked() {
   auth.locked = false;
-  el("console-token").classList.remove("locked");
+  el("console-token").removeAttribute("aria-invalid");
 }
 
 function operatorControls() {
+  // 화면 테마(data-theme-choice)는 이 브라우저의 표시 선호라 권한과 무관하다(D-359 §2.5).
+  // 머리 토글(#topbar-more)은 접힌 칸을 여는 표시 조작이다(§6.4).
   return document.querySelectorAll(
-    "ui-button:not(#token-save):not(#roster-toggle):not(#vision-refresh), main input, main select:not(#vision-source)");
+    "ui-button:not(#token-save):not(#topbar-more):not(#roster-toggle):not(#vision-refresh):not([data-theme-choice]), main input, main select:not(#vision-source)");
 }
 
 const view = {
@@ -140,6 +153,8 @@ async function refreshDispatchControl() {
     }
     rearm.hidden = !(auth.role === "operator" && !state.dispatch_enabled);
     rearm.disabled = auth.locked || !state.rearm_available;
+    if (rearm.disabled) rearm.setAttribute("reason", auth.locked ? "관제 토큰 필요" : "재허가 조건 미충족");
+    else rearm.removeAttribute("reason");
     return state;
   } catch (err) {
     view.dispatchControl = null;
@@ -153,6 +168,7 @@ async function refreshDispatchControl() {
     }
     rearm.hidden = true;
     rearm.disabled = true;
+    rearm.setAttribute("reason", "발행 상태 확인 불가");
     return null;
   }
 }
@@ -233,7 +249,7 @@ function render() {
   const nextHint = point
     ? `${view.selected} 목표 (${point.x.toFixed(2)}, ${point.y.toFixed(2)}) m · 방향키로 이동, Enter로 확인, Escape로 취소`
     : view.map
-      ? "오른쪽에서 로봇의 목표 지정을 누른 뒤 지도를 찍으면 그 로봇에게만 목표가 갑니다."
+      ? "로봇 카드의 목표 지정을 누른 뒤 지도를 찍으면 그 로봇에게만 목표가 갑니다."
       : view.siteMap
         ? "천장 카메라 관측 전용 지도입니다. 목표 지정은 로봇 지도가 수신되면 사용할 수 있습니다."
         : "지도가 수신되면 로봇의 목표 지정을 사용할 수 있습니다.";
@@ -289,6 +305,7 @@ const enrollment = createEnrollmentPanel({
   headers: authHeaders,
   identity: () => ({ role: auth.role, principal_id: auth.principal }),
   log,
+  dialogs: { confirmIrreversible, openLiveDialog },
 });
 
 function showDiscoveryUnavailable(label, message) {
@@ -355,6 +372,7 @@ async function refreshAuthorization() {
       identity.role === "viewer" ? "조회 전용" :
         identity.role === "policy-admin" ? "정책 관리자" : "권한 없음";
     el("user-role").textContent = `${identity.principal_id} · ${roleName}`;
+    el("user-role").title = el("user-role").textContent; // 넓은 머리에서 12rem으로 잘릴 때의 전문
     el("user-role").setAttribute("status", identity.role === "operator" ? "good" : "neutral");
     await refreshState();
     await refreshDispatchControl();
@@ -526,7 +544,7 @@ formation.bind();
 
 // Fleet 분해 4: 현장 지도 뷰는 map-view.js 팩토리가 그린다.
 const mapView = createMapView({
-  el, view, css, auth, call,
+  el, view, auth, call,
   onMapChanged: render,
   onMapUnavailable: () => {
     const selected = view.selected;
@@ -583,7 +601,14 @@ el("console-token").addEventListener("keydown", (event) => {
   if (event.key === "Enter") saveToken();
 });
 
-view.colors = [css("--robot-1"), css("--robot-2"), css("--robot-3")];
+// D-359 §4 — 로봇 계열 색은 ui.js(window.RosyPalette)가 캔버스용으로 푼다. 테마가
+// 바뀌면 다시 풀고 지도를 새로 고침 없이 다시 그린다(캐시는 ui.js가 먼저 비운다).
+const robotColours = () => ["--robot-1", "--robot-2", "--robot-3"].map((name) => window.RosyPalette.cssColor(name));
+view.colors = robotColours();
+document.addEventListener("rosy:theme", () => {
+  view.colors = robotColours();
+  mapView.draw();
+});
 tickClock();
 setInterval(tickClock, 1000);
 applyRoleToControls(null, operatorControls());

@@ -1,0 +1,16 @@
+# Pinky Pro CORE config layer (D-196 robot package). core_common.config.load_config
+# merges this file over rosy_default.yaml and under the robot's local overlay
+# (~/.rosy/rosy.yaml or ROSY_CONFIG) whenever robot.model / ROSY_ROBOT is pinky_pro,
+# so every Pinky Pro CORE gets it from the payload, not from a hand-edited overlay.
+# Only robot facts belong here; operator tuning stays in the overlay.
+
+line_follow:
+  # D-344 §11 (numbered D-349 in the 2026-09-29 pilot log) front obstacle stop
+  # (+-20 deg, stop 0.20 m, resume 0.28 m): the sector is centred on this scan
+  # angle. rplidar_link is yaw pi on base_link (URDF), so scan 0 is the robot's
+  # rear and forward is 180. Hand value only: an operator-accepted lidar_mount
+  # record in the calibration store (D-47 addendum 2026-10-01,
+  # src/runtime/gateway/core/lidar_mount.py) overrides it at CORE start once
+  # accepted; motion and camera measure ~181-182 deg. The plausibility window
+  # (150-210 deg, or +-15 deg of this value) is centred on 180.
+  lidar_forward_deg: 180.0

@@ -394,6 +394,9 @@ class RosBridge:
     def _tick_power(self) -> None:
         power = self._svc.power
         power.tick()
+        # D-321 addendum: a lapsed calibration lease emits its expiry even when
+        # no screen is reading /robot/state. Rides this timer; commands nothing.
+        self._svc.calibration.expire_due()
         status = power.status()
         self._svc.state.set_power(status)
 

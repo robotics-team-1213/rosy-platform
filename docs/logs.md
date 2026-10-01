@@ -3693,6 +3693,19 @@
 - 결정: Phase B와 C는 병행 가능 (도크 벤치와 로봇 실기가 독립). Phase D는 B6 통과 후에만.
 - 교훈: 6개 ADR이 각기 옳았지만 실행 순서가 없으면 다음 사람이 무엇부터 할지 모른다 — 플랜이 그 갭을 메운다.
 
+## 2026-09-30 · e07518ac · D-371 US-010 DESIGN.md 목록 행 예외
+
+- 변경: D-371 ADR을 main 9ad02b61에서 브랜치로 복사(3842a829, ADR 로그 행은 병합 때 온다). DESIGN.md 버튼 규칙에 목록 행 예외, Do/Don't 한 줄씩.
+- 증거: 문서만.
+- gate 변화: 없음.
+- 결정: D-371.
+
+## 2026-09-30 · 94ba6de2 · D-371 Refinement — 확인 대화상자는 비모달
+
+- 변경: D-371 ADR에 Refinement(2026-09-30): 비모달로 열고 정지는 살아 있다(US-010 측정: showModal이 비상정지를 inert로 만듦), D-218 §1과의 관계(목록 행 삭제에 한해 공유 대화상자). DESIGN.md Components에 확인 대화상자, Do 한 줄.
+- 증거: 문서만.
+- gate 변화: 없음.
+- 결정: D-371.
 ## 2026-09-30 · uncommitted · docs: CI 적신 뒤끝 — C6 판정 기록과 isaac_sim 등록 완성
 
 - 변경: (1) 2026-09-06-module-split-criteria.md에 `bridge/display.py` → `battery.charging` reach의 C6 판정을 추가 — "Seam lie — fixed by deletion"(멤버는 BatteryStatus에 선언돼 있고 raw Battery에는 없어 getattr가 항상 False; 직접 접근으로 대체돼 reach 소거, ALLOWED 무변경). (2) isaac_sim의 harness 등록을 완성(functional_kind·functional·tests)하고 AGENTS.md·progress.md의 "no own tests" 오기를 정정, ROS-SIM을 D-322 명시대로 HOLD로. src/AGENTS.md 시험 호출에 sim/isaac_sim/test 추가.
@@ -4045,6 +4058,16 @@
 
 - 변경: `docs/deployment/site-ceiling-camera-console-runbook.md` 추가. 현장 PC 스택(fullchain, 지도 맞춤 옵션, mDNS 광고), 이름·CA 고정 페어링(D-341 §9, D-391), 카메라 위치 기준, 관제 맵 자동 맞춤(D-375)·경기장 뷰 대체(D-360), 로봇 등록·운전 모드·G4/G5, 규칙 점검표, 폰·관제 문제 해결표.
 - 증거: 2026-09-30~10-01 현장 벤치(S21·Lenovo 태블릿, rosy-cam 스택)에서 실측한 수치와 실제 앱·관제 문구를 옮겼다. 절차 문서라 실행 코드는 바꾸지 않았다.
+- gate 변화: 없음.
+
+## 2026-10-01 · e8028fb0 · docs(adr): D-321 부록 — 보정 세션 표시와 차단
+- 변경: D-321 에 부록(보정 lease, activity 표시, CALIBRATION_ACTIVE, E-Stop 예외, 재시작 guard). 새 ADR 번호를 쓰지 않았다. API Ref v1.67(1a1a2c3a): 엔드포인트·activity·에러·이벤트 3종, 변경 이력 행. 참고: main 변경 이력에 v1.65 행이 없다(다른 브랜치 몫으로 보임).
+- 증거: rosy_harness lint 0 errors, test_event_catalogue 통과.
+- gate 변화: 없음.
+
+## 2026-10-01 · 4483e7a8 · docs(api,adr): 보정 lease 소유·회수·배터리 복귀
+- 변경: API Ref v1.67 과 D-321 부록에 — 소유는 토큰 단위, 회수된 토큰의 lease 는 ttl 까지 남음(Admin DELETE), SAF-005 RETURN_HOME 은 lease 를 일부러 무시, 시작 조건과 전체 차단 목록, host `override_calibration`, Pilot 이탈 규칙. 272151b6: main 이 추가한 test_mission_progress 핀 v1.66 → v1.67.
+- 증거: 문서 계약 시험 1 passed, 버전 핀 시험 통과, rosy_harness lint 0 errors.
 - gate 변화: 없음.
 
 ## 2026-10-01 · uncommitted · docs(logs): D-373 병합 기록 정정 — 시각 허용치와 학습 런타임 계획

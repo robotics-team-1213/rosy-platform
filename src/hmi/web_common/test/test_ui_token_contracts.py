@@ -10,12 +10,11 @@ import re
 
 import pytest
 
+import surface_registry as registry
+
 WEB_ROOT = Path(__file__).resolve().parents[2] / "dashboard"
 TOKENS = Path(__file__).parent.parent.parent / "web_common" / "tokens.css"
 
-COLOR_LITERAL = re.compile(
-    r"#[0-9a-fA-F]{3,8}\b|rgba?\(\s*\d|hsla?\(\s*\d"
-)
 DECLARATION = re.compile(r"^\s*(--[a-z0-9-]+)\s*:", re.MULTILINE)
 # 폴백 없는 참조만 위험하다. `var(--x, <fallback>)`는 의도적인 선택 오버라이드이고
 # (호스트 카드의 테마 훅), `--meter`처럼 JS가 런타임에 넣는 값도 이 형태를 쓴다.
@@ -42,28 +41,114 @@ def test_tokens_file_is_the_single_source_of_colour():
     assert declared, "tokens.css가 토큰을 하나도 선언하지 않는다"
 
 
-@pytest.mark.parametrize("path", surface_stylesheets(), ids=lambda p: p.name)
-def test_no_raw_colour_outside_the_token_file(path: Path):
-    """표면 스타일시트에 원시 색이 있으면 실패한다.
+def _web_rows() -> list[dict]:
+    return [row for row in registry.load(registry.REPO) if row.get("medium") == "web"]
 
-    hex뿐 아니라 `rgba()`/`hsl()`도 원시 색이다. v1 계획이 hex만 셌다가
-    37개의 rgba를 놓쳤다 — 같은 종류의 누락을 다시 만들지 않는다.
+
+@pytest.mark.parametrize("row", _web_rows(), ids=lambda row: row["id"])
+def test_no_raw_colour_outside_the_token_file(row):
+    """D-359 §7.2 — 모든 웹 표면(하위 폴더·Fleet·games의 CSS·JS·HTML)에 원시 색이 없다.
+
+    hex·`rgb(`·`hsl(`·`oklch(`·`oklab(`·`color(`는 모두 원시 색이다. 예전 판정은
+    dashboard 최상위 `*.css|*.js`만 보고 `oklch`/`color(`를 놓쳤다. 예외는 셋뿐이다:
+    tokens.css 테마 팔레트 블록(색의 원본), `[dark]` 고정 표면이 surfaces.yaml
+    `raw_colours`에 이유와 함께 등록한 블록·파일, 정적 `theme-color`(§7.3 판정이 따로 본다).
     """
-    found = COLOR_LITERAL.findall(path.read_text(encoding="utf-8"))
-    assert not found, f"{path.name}에 원시 색 {len(found)}개: {found[:5]}"
+    found = registry.raw_colour_problems(registry.REPO, row)
+    assert found == [], "\n".join(found)
 
 
-@pytest.mark.parametrize("path", surface_scripts(), ids=lambda p: p.name)
-def test_no_raw_colour_in_dashboard_scripts(path: Path):
-    """캔버스도 예외가 아니다. 색은 tokens.css에서 읽어 쓴다."""
-    found = COLOR_LITERAL.findall(path.read_text(encoding="utf-8"))
-    assert not found, f"{path.name}에 원시 색 {len(found)}개: {found[:5]}"
+def test_the_raw_colour_scan_reads_every_web_file():
+    """스캔이 공허하지 않다 — 하위 폴더·Fleet·games의 CSS·JS·HTML을 실제로 읽는다."""
+    seen = {
+        path.relative_to(registry.REPO).as_posix()
+        for row in _web_rows() for path, _ in registry.colour_sources(registry.REPO, row)
+    }
+    for expected in (
+        "src/hmi/dashboard/styles.css", "src/hmi/dashboard/app.js", "src/hmi/dashboard/index.html",
+        "src/hmi/dashboard/shell/shell.css", "src/hmi/dashboard/shell/shell.js",
+        "src/hmi/dashboard/panels/surface-panels.css", "src/hmi/dashboard/panels/setup/waypoints.js",
+        "src/hmi/web_common/components.css", "src/hmi/web_common/ui.js", "src/hmi/web_common/tokens.css",
+        "src/site/fleet/fleet/server/web/styles.css", "src/site/fleet/fleet/server/web/map-view.js",
+        "src/site/fleet/fleet/server/web/index.html",
+        "src/site/games/games/web/styles.css", "src/site/games/games/web/board.js",
+        "src/site/games/games/web/index.html",
+    ):
+        assert expected in seen, f"원시 색 스캔이 {expected}를 읽지 않는다"
+    assert not any("/test/" in here for here in seen), "시험 파일은 표면이 아니다"
+
+
+def test_raw_colour_exceptions_are_registered_with_a_reason():
+    assert registry.problems_with(registry.REPO, "colour") == []
+
+
+def test_a_raw_colour_drift_is_caught(tmp_path):
+    """하위 폴더 JS의 oklch, CSS의 color(, HTML의 hsl(, 패널 hex는 빨갛다. 주석·정적
+    theme-color·등록된 고정 블록은 아니다. 테마 표면의 예외, 이유·파일·블록 없는 예외,
+    쓰이지 않는 예외도 빨갛다."""
+    common = tmp_path / "src" / "hmi" / "web_common"
+    common.mkdir(parents=True)
+    (common / "ui.js").write_text("const GRAMMARS = ['spatial'];", encoding="utf-8")
+    (common / "tokens.css").write_text(
+        ':root, [data-theme="dark"] { --ground: #101214; }\n:root { --line: #222222; }\n',
+        encoding="utf-8")
+    themed = tmp_path / "themed"
+    (themed / "panels").mkdir(parents=True)
+    (themed / "panels" / "map.js").write_text(
+        "// #abcdef 주석은 색이 아니다\nctx.fillStyle = 'oklch(0.5 0.1 200)';\n", encoding="utf-8")
+    (themed / "panels" / "p.css").write_text(
+        "/* rgb(1, 2, 3) */\n.a { color: color(srgb 1 0 0); }\n.b { border-color: #fff; }\n",
+        encoding="utf-8")
+    (themed / "index.html").write_text(
+        '<html><head><meta name="theme-color" content="#101214">\n'
+        '<link rel="stylesheet" href="/common/tokens.css"><script src="/common/theme.js"></script>\n'
+        '</head><body style="background: hsl(10 20% 30%)"></body></html>', encoding="utf-8")
+    pinned = tmp_path / "pinned"
+    pinned.mkdir()
+    (pinned / "styles.css").write_text(
+        ":root {\n  --pitch: #17351f;\n}\n.x { color: rgb(0 0 0); }\n", encoding="utf-8")
+    (pinned / "index.html").write_text('<html data-theme-pin="dark"></html>', encoding="utf-8")
+    base = ("    surface: site\n    medium: web\n    audience: x\n    contracts: []\n"
+            "    contract_reason: x\n    baseline_reason: x\n")
+    (tmp_path / registry.REGISTRY).write_text(
+        "surfaces:\n"
+        "  - id: common\n    path: src/hmi/web_common\n    themes: [dark, light]\n" + base +
+        "  - id: themed\n    path: themed\n    themes: [dark, light]\n" + base +
+        "    raw_colours: [{file: index.html, reason: 테마 표면은 예외를 가질 수 없다}]\n"
+        "  - id: pinned\n    path: pinned\n    themes: [dark]\n" + base +
+        "    raw_colours:\n"
+        "      - {file: styles.css, block: ':root', reason: 경기장 팔레트}\n"
+        "      - {file: index.html, reason: 색이 없는데 적힌 예외}\n"
+        "      - {file: missing.css, reason: 없는 파일}\n"
+        "      - {file: styles.css, block: '.nope', reason: 없는 블록}\n"
+        "      - {file: styles.css}\n",
+        encoding="utf-8")
+
+    rows = {row["id"]: row for row in registry.load(tmp_path)}
+    common_found = registry.raw_colour_problems(tmp_path, rows["common"])
+    assert common_found == ["colour: common src/hmi/web_common/tokens.css:2 #222222"], common_found
+    themed_found = "\n".join(registry.raw_colour_problems(tmp_path, rows["themed"]))
+    assert "themed/panels/map.js:2 oklch(" in themed_found
+    assert "themed/panels/p.css:2 color(" in themed_found
+    assert "themed/panels/p.css:3 #fff" in themed_found
+    assert "themed/index.html:3 hsl(" in themed_found
+    assert len(themed_found.splitlines()) == 4, themed_found  # 주석·theme-color는 세지 않는다
+    pinned_found = registry.raw_colour_problems(tmp_path, rows["pinned"])
+    assert pinned_found == ["colour: pinned pinned/styles.css:4 rgb("], pinned_found
+
+    field = "\n".join(registry.problems_with(tmp_path, "colour"))
+    assert "(themed) raw_colours는 [dark] 고정 웹 표면만 가진다" in field
+    assert "(pinned) raw_colours index.html가 가리는 원시 색이 없다 — 목록에서 지운다" in field
+    assert "(pinned) raw_colours missing.css가 표면 파일이 아니다" in field
+    assert "(pinned) raw_colours styles.css에 .nope 블록이 없다" in field
+    assert "(pinned) raw_colours styles.css에 reason이 없다" in field
+    assert len(field.splitlines()) == 5, field
 
 
 def test_every_referenced_token_is_declared():
     """폴백 없는 `var(--x)` 오타를 잡는다. 선언되지 않으면 조용히 값을 잃는다.
 
-    폴백이 붙은 참조(`var(--surface-raised, var(--sheen-04))`)는 의도적인
+    폴백이 붙은 참조(`var(--surface-raised, var(--line-06))`)는 의도적인
     오버라이드 훅이므로 대상이 아니다.
     """
     declared = set(DECLARATION.findall(tokens_text()))
@@ -82,7 +167,7 @@ def test_every_referenced_token_is_declared():
 
 
 def test_no_token_refers_to_itself():
-    """`--paper: var(--paper)`는 CSS에서 무효이고 조용히 값을 잃는다."""
+    """`--ink: var(--ink)`는 CSS에서 무효이고 조용히 값을 잃는다."""
     for path in [TOKENS, *surface_stylesheets()]:
         text = path.read_text(encoding="utf-8")
         for name, value in re.findall(
@@ -286,7 +371,7 @@ def test_irreversible_actions_are_a_fill_not_text():
         re.findall(r"(--[a-z0-9-]+):\s*var\((--[a-z0-9-]+)\)", tokens_text())
     )
     assert declared.get("--button-irreversible-bg", "").startswith("--status-crit")
-    assert declared.get("--button-irreversible-ink") in ("--paper", "--ink")
+    assert declared.get("--button-irreversible-ink") in ("--ink", "--ink-on-crit")
 
 
 def test_typography_is_declared_in_the_token_file():
@@ -438,7 +523,7 @@ def test_a_danger_fill_carries_ink_not_dark_text():
         if "background: var(--status-crit)" not in body:
             continue
         ink = re.search(r"(?<![-a-z])color:\s*var\((--[a-z0-9-]+)\)", body)
-        if ink and ink.group(1) not in ("--paper", "--ink", "--nominal"):
+        if ink and ink.group(1) not in ("--ink", "--ink-on-crit", "--nominal"):
             offenders.append(f"{selector.strip()[:50]} -> color {ink.group(1)}")
     assert not offenders, f"위험 면 위에 잉크가 아닌 색을 얹는다: {offenders}"
 

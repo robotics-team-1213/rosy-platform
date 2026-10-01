@@ -255,3 +255,40 @@
 - 증거: `python -m pytest src/site/games/test -q` 104 passed.
 - gate 변화: 없음.
 - 결정: D-157.
+
+## 2026-09-30 · faa60733 · D-359 US-002 경기 보드는 어둡게 고정
+
+- 변경: `index.html`에 `data-theme="dark" data-theme-pin="dark"`를 정적으로 둔다(theme.js를 싣지 않는 쪽이 단순하다 — 경기장 녹색이 바탕이다). `surfaces.yaml` `themes: [dark]`, 레지스트리 시험이 pin을 지킨다. `.lost`의 위험 채움 글자를 `--ink-on-crit`로 바꿨다(값은 같다).
+- 증거: `python -m pytest src/site/games/test -q` 통과(876 passed 묶음).
+- gate 변화: 없음.
+
+## 2026-09-30 · bbba318f · D-359 US-003 피치 캔버스가 styles.css 피치 블록을 읽는다
+
+- 변경: `board.js`의 hex 리터럴 9개를 `window.RosyPalette.cssColor("--pitch"|"--line"|"--home"|"--away"|"--pitch-ink"|"--ball")`로 바꿨다 — 값의 주인은 `styles.css` `:root` 피치 블록이다. 로봇 이름 글꼴 `11px sans-serif` → `canvasFont(12, "body")`. 화면은 여전히 dark 고정이라 보이는 색은 같다.
+- 증거: `test_canvas_palette_contract.py::test_games_pitch_colours_live_in_its_stylesheet` 통과. 브라우저 `test/test_rosy_games_surface.py` 9 passed, `test/test_games_board_browser.py` 8 passed 7 failed — 7건은 `wait_for_function` 문자열 평가가 보드 CSP(`script-src 'self'`, unsafe-eval 없음)에 막히는 하네스 문제로 e19f2ef4에서도 똑같이 7 failed. 렌더 시험 `test_match_board_renders_published_play_state`는 페이지 오류 없이 통과, 캡처 `X:/DevTemp/rosy-d359/shots/us003-games-board.png` 색 그대로.
+- gate 변화: 없음.
+
+## 2026-09-30 · 890309a8 · D-359 US-004 보드 자간·낡은 영상 흐림·마커 칩이 토큰을 쓴다
+
+- 변경: `.kicker` 자간 0.14em → `--track-label`, `#frame[data-evidence]` 0.48 → `--disabled-opacity`, `.chips li`는 경기장 칩 어휘를 두고 글자만 토큰 척도(`--weight-label --text-label/--leading-label --body`, 자간 0 — 320px 네 칸이 넓어지지 않게).
+- 증거: `test/test_rosy_games_surface.py` 9 passed, `src/site/games/test` 통과.
+- gate 변화: 없음.
+
+## 2026-09-30 · aeb31356 · D-359 US-005 경기 보드 세 단
+
+- 변경: 760px → `(width < 64rem)`, 540px → `(width < 30rem)`. `.chips`는 `repeat(auto-fill, minmax(min(100%, max(4.5rem, 25% - gap)), 1fr))` — 넓은 칸은 네 칸을 넘지 않고 320px에서는 세 칸. compact 머리는 부제를 접고 위아래 여백을 줄인다(320×568 105px, 18.5%). 시험 `test_compact_board_keeps_header_budget_stop_and_chips_in_view[390|320]`.
+- 증거: `test/test_games_board_browser.py` 10 passed 7 failed — 7건은 이 가지 이전부터 같은 목록(CSP, main에서도 실패). `test/test_rosy_games_surface.py` 9 passed. 변이 `ui-topbar` `min-height: 300px` → 빨강. 옛 네 칸 격자 되돌림은 초록이다 — US-003 자간 0 뒤로 320px에서 넘치지 않는다(칩 검사는 감시용).
+- gate 변화: 없음.
+
+## 2026-09-30 · ce709e4d · D-359 US-009 경기 보드 문구
+
+- 변경: `(FIELD GO 아님)` → `· 경기장 준비 전`, 정지 곁 안내 `스페이스 키로도 두 로봇을 세웁니다`. `test_rosy_games_surface.py` 기대값을 새 문구로(뜻 유지: FIELD GO 아님).
+- 증거: `test/test_rosy_games_surface.py` 9 passed.
+- gate 변화: 없음. FIELD PARKED 그대로.
+- 결정: D-359 (US-009).
+
+## 2026-09-30 · 79787e7a · D-371 US-010 경기 정지에 data-always-live
+
+- 변경: `web/index.html` `#halt`에 `data-always-live`(`test_stop_always_live.py` 계약).
+- 증거: `python -m pytest src/hmi/web_common/test src/hmi/dashboard/test src/site/fleet/test src/site/games/test -q` 1089 passed, 84 skipped; `test/test_web_dialog_contract.py` 3 passed
+- gate 변화: 없음.

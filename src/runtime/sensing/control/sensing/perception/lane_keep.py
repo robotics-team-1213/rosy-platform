@@ -28,9 +28,11 @@ robot is in, never the tape. Per frame, no odometry:
                 previous target, and a line continuing one seen last frame
                 (close in offset and heading) keeps that side until it lies
                 clearly on the other side
-  target        midpoint of the nearest left and right boundary that are a
-                lane width apart; one side only: that boundary moved a
-                half-width inward; none: no output (HOLD)
+  pairs         lane_keep_pairs: near-parallel and a lane width apart along
+                their common stretch; a close skew couple that is no pair
+                drops the weaker line ('pair_conflict')
+  target        midpoint of the nearest pair; one side only: that boundary
+                moved a half-width inward; none: no output (HOLD)
   corner        an L-corner shows a transverse line ahead that runs past the
                 lane on one side only (the open side) -- the outer boundary of
                 the lane after the turn. Its centre line is that line moved a
@@ -47,9 +49,11 @@ angular = -gain * error); error = -target_y / lane_half_width, clipped to
 [-1, 1] -- the target's lateral offset at the lookahead, which also carries
 the heading error (lookahead x heading), like `detect_lane_centre`. Not the
 pure-pursuit curvature law of the odometry modes: at CORE's gain 0.8 and
-~0.05 m/s this loop is overdamped (poles ~ -0.24 and -1.9 1/s), while the
-pursuit law is underdamped and five times softer on a one-sided target. `last` holds a debug bundle for the pilot overlay and the replay
-bench. Short temporal smoothing uses previous targets only (no pose).
+~0.05 m/s this loop is overdamped (poles ~ -0.24 and -1.9 1/s). One-sided and
+paired targets steer with the same gain; one side costs speed, since
+confidence is CORE's speed scale ((c - 0.35) / 0.65: BOTH_CONFIDENCE 0.9 ->
+0.85, ONE_CONFIDENCE 0.6 -> 0.38). `last` holds a debug bundle for the pilot
+overlay and the replay bench. Short temporal smoothing uses previous targets only (no pose).
 """
 
 from __future__ import annotations
@@ -89,6 +93,16 @@ from .lane_keep_lines import (  # noqa: F401 — re-exported for callers and tes
     extract_lines,
     floor_white_mask,
 )
+from .lane_keep_pairs import (  # noqa: F401 — re-exported; patch constants on lane_keep_pairs
+    CONFLICT_MAX_HEADING_RAD,
+    CONFLICT_MIN_ANGLE_RAD,
+    PAIR_MAX_ANGLE_RAD,
+    PAIR_MAX_FRACTION,
+    PAIR_MIN_FRACTION,
+    _lateral_at,
+    is_pair,
+    pair_conflicts,
+)
 
 #: Lookahead from base_link where the lane centre is read.
 LOOKAHEAD_M = 0.25
@@ -111,13 +125,8 @@ STEEP_MAX_LATERAL_FRACTION = 1.0
 STEEP_PAINT_MARGIN_M = 0.03
 #: ... or reach within this of the robot's path line (y = 0) from both sides.
 STEEP_PATH_M = 0.02
-#: Two boundaries of one lane run within this angle of each other.
-PAIR_MAX_ANGLE_RAD = math.radians(30.0)
 #: A lone boundary further than this fraction of the lane width is not ours.
 ONE_MAX_DISTANCE_FRACTION = 1.5
-#: A boundary pair must be this fraction of the lane width apart.
-PAIR_MIN_FRACTION = 0.6
-PAIR_MAX_FRACTION = 1.6
 #: A boundary nearer the robot than this takes its side from the last target.
 AMBIGUOUS_LATERAL_M = 0.03
 #: Temporal consistency (no odometry): a boundary within TRACK_LATERAL_M and
@@ -335,21 +344,30 @@ class LaneKeeper:
                           pursuit_m=[round(float(point[0]), 3), round(float(point[1]), 3)],
                           centre=centre, direction=direction)
             (left if side == "left" else right).append(record)
+        # A dropped chord leaves only pairing and target: it keeps its tracked
+        # side (not re-sided afresh) and the corner and junction rules see it.
+        conflicts = pair_conflicts(left, right, half, SIDE_X_M)
+        for record in conflicts:
+            (left if record["side"] == "left" else right).remove(record)
+            self.last["candidates"].append(
+                dict({k: v for k, v in record.items() if k not in ("centre", "direction")},
+                     rejected=True, reason="pair_conflict"))
         target, strategy = self._choose(left, right, half)
         # A lane seen on both sides is followed; a corner is only looked for
         # when it is not (a line across between two lane lines is a stop
         # line, a crosswalk or a junction mouth, not an L-corner).
         corner = None
         if self._corner_turning and strategy != "both":
-            corner = self._corner(transverse, half, left + right)
+            corner = self._corner(transverse, half, left + right + conflicts)
         if corner is not None and (target is None or corner[1] != "corner_ahead"):
             target, strategy = corner
+        seen_left, seen_right = ([b for b in left + right + conflicts if b["side"] == s] for s in ("left", "right"))
         junction = (None if corner is not None
-                    else _junction(strategy, transverse, left, right, half, self._corner_turning))
+                    else _junction(strategy, transverse, seen_left, seen_right, half, self._corner_turning))
         if junction is not None:
             target = None
         self._tracked = [(r["y_at_side_x_m"], math.radians(r["heading_deg"]), r["side"])
-                         for r in left + right]
+                         for r in left + right + conflicts]
         for record in left + right:
             record.pop("direction")
             record.pop("centre")
@@ -484,11 +502,8 @@ class LaneKeeper:
         pairs = []
         for l in left:
             for r in right:
-                parallel = float(np.dot(l["direction"], r["direction"]))
-                separation = l["y_at_side_x_m"] - r["y_at_side_x_m"]
-                if (parallel >= math.cos(PAIR_MAX_ANGLE_RAD)
-                        and PAIR_MIN_FRACTION * lane <= separation <= PAIR_MAX_FRACTION * lane):
-                    pairs.append((separation, l, r))
+                if is_pair(l, r, lane, SIDE_X_M):
+                    pairs.append((l["y_at_side_x_m"] - r["y_at_side_x_m"], l, r))
         if pairs:
             # The nearest pair: the robot is inside it (adjacent lanes lie beyond).
             # Pursue the centre line: midway at SIDE_X_M, along the mean heading
@@ -551,10 +566,6 @@ def _runs_past(boundaries, open_left, ahead):
         if far >= ahead - CORNER_PAST_MARGIN_M:
             return True
     return False
-
-
-def _lateral_at(centre, direction, x) -> float:
-    return float(centre[1] + (x - centre[0]) * direction[1] / direction[0])
 
 
 def _pursuit_point(origin, direction, radius):

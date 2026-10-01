@@ -7,7 +7,7 @@ import math
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field, field_validator
 
-from core_api_web.api.v1.common import admin, viewer
+from core_api_web.api.v1.common import admin, require_calibration_owner, viewer
 from core_api_web.api.deps import AuthContext, get_services, CoreServicesLike
 from core_api_web.api.errors import ApiError
 from core_api_web.api.deps import Mode
@@ -114,6 +114,8 @@ def _apply_safety_patch(svc: CoreServicesLike, patch: dict) -> None:
 @safety_router.put("/limits")
 def safety_limits(body: LimitsRequest, auth: AuthContext = Depends(admin),
                   svc: CoreServicesLike = Depends(get_services)):
+    # D-321 addendum: the owner calibrates against these limits; nobody else moves them.
+    require_calibration_owner(svc, auth, "safety limits change")
     patch_safety: dict = {}
     if body.manual_linear is not None:
         patch_safety["manual_linear"] = min(body.manual_linear, svc.safety.limits.max_linear)

@@ -33,8 +33,8 @@
 
 ## 최근 기록
 
+- 2026-10-01 · 078d0978 · fix(core_common): robot core.yaml layer fails closed (review of 9966e57b)
+- 2026-10-01 · uncommitted · fix(core_common): robot package core.yaml config layer (D-196)
+- 2026-10-01 · a527920a · feat(protocol): StateSnapshot.activity (v1.67 additive)
 - 2026-10-01 · uncommitted · D-390 OMX Pilot simulation wire contract
 - 2026-10-01 · uncommitted · feat(robot_state): D-383 swarm_role 축 — LCD 역할 접미
-- 2026-10-01 · 90cac516 · fix(core_common): 2차 리뷰 — 찢긴 꼬리, 양쪽 결정 충돌, 원자적 쓰기, 그룹 권한
-- 2026-10-01 · ddede2f8 · fix(core_common): 보정 저장소 리뷰 수정 (H3·M1·M2·L3)
-- 2026-10-01 · 423e4d2f · feat(core_common): 버전 보정 저장소 (D-47 부록)

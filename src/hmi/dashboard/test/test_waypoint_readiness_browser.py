@@ -60,6 +60,13 @@ def test_waypoint_save_tracks_fresh_pose_and_stays_blocked_after_disconnect():
             }""")
             save = page.locator("ui-button").filter(has_text="현재 위치 저장")
             assert save.is_disabled()
+            # D-359 US-007 capture: the name field and the save button wrapped onto two lines with
+            # no gap at 390/320. The form is the shared ui-form so wrapping keeps --gap-form.
+            page.add_style_tag(path=str(REPO / "src/hmi/web_common/tokens.css"))
+            page.add_style_tag(path=str(REPO / "src/hmi/web_common/components.css"))
+            assert page.locator("form").evaluate(
+                "form => form.classList.contains('ui-form') && getComputedStyle(form).rowGap"
+            ) == "8px"
             page.evaluate("""() => window.__callbacks['/api/v1/robot/state'].onData({
               pose:{x:1.2,y:0.4,yaw:0},evidence:{pose:{evidence:'fresh'}}
             })""")
@@ -91,3 +98,46 @@ def test_waypoint_save_tracks_fresh_pose_and_stays_blocked_after_disconnect():
         server.shutdown()
         server.server_close()
         thread.join(timeout=2)
+
+
+def test_short_waypoint_list_sits_under_the_status_line():
+    """D-359 US-008 /setup capture: with no saved waypoints the panel kept a large empty area
+    between the status line and the list — the empty save/list status lines each took a section
+    gap (plus its margins). The list follows the last visible line by one gap and its margins."""
+    server = ThreadingHTTPServer(("127.0.0.1", 0), _Handler)
+    thread = Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch(headless=True)
+            page = browser.new_page(viewport={"width": 1366, "height": 768})
+            page.goto(f"http://127.0.0.1:{server.server_port}/")
+            page.add_style_tag(path=str(REPO / "src/hmi/web_common/tokens.css"))
+            page.add_style_tag(path=str(REPO / "src/hmi/web_common/components.css"))
+            gaps = page.evaluate("""async () => {
+              await import('/common/ui.js');
+              const {mount} = await import('/src/hmi/dashboard/panels/setup/waypoints.js');
+              const root = document.createElement('ui-section'); document.body.append(root);
+              const callbacks = {};
+              const store = {poll(path, _interval, onData) { callbacks[path] = onData; return () => {}; }};
+              mount(root, {role: 'operator', store, api: async () => ({})});
+              callbacks['/api/v1/robot/state']({pose: {x: 1, y: 2, yaw: 0}, evidence: {pose: {evidence: 'fresh'}}});
+              callbacks['/api/v1/waypoints']({waypoints: []});
+              await new Promise(requestAnimationFrame);
+              const visible = [...root.children].filter((n) => n.getClientRects().length && n.tagName !== 'H2');
+              // US-009: an empty list is the ui-empty line outside the (hidden) list.
+              const list = root.querySelector(':scope > ui-empty:not([hidden])');
+              const above = visible[visible.indexOf(list) - 1];
+              const margins = parseFloat(getComputedStyle(above).marginBottom) + parseFloat(getComputedStyle(list).marginTop);
+              return {gap: parseFloat(getComputedStyle(root).rowGap) + margins,
+                      between: list.getBoundingClientRect().top - above.getBoundingClientRect().bottom,
+                      above: above.textContent};
+            }""")
+            browser.close()
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+    assert "현재 위치를 읽었습니다" in gaps["above"], gaps
+    assert gaps["between"] <= gaps["gap"] + 1, gaps

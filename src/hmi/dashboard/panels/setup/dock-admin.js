@@ -1,9 +1,10 @@
 import { HeadlessState } from "/common/core_ui_logic.js";
+import { confirmIrreversible } from "/common/ui.js";
 import { poseUnavailableReason } from "./pose-evidence.js";
 
 function el(tag, cls, text) { const node = document.createElement(tag); if (cls) node.className = cls; if (text !== undefined) node.textContent = text; return node; }
 function input(labelText, name, type = "text") {
-  const label = el("label", "ui-field-label", labelText); const control = el("input");
+  const label = el("label", "ui-field-label", labelText); const control = el("input", "ui-field");
   control.name = name; control.type = type; control.autocomplete = "off"; label.append(control);
   return {label, control};
 }
@@ -26,7 +27,7 @@ export function mount(root, ctx) {
   const typeField = input("도크 유형 이름 (필수 · 기존 유형은 재사용)", "dock_type"); typeField.control.maxLength = 64; typeField.control.required = true;
   const knownTypes = el("datalist", ""); knownTypes.id = "setup-dock-types"; typeField.control.setAttribute("list", knownTypes.id);
   const detectorLabel = el("label", "ui-field-label", "새 유형의 검출기");
-  const detector = el("select"); detector.setAttribute("aria-label", "새 도크 유형 검출기");
+  const detector = el("select", "ui-field"); detector.setAttribute("aria-label", "새 도크 유형 검출기");
   for (const [value, text] of [["", "기존 유형 또는 검출기 선택"], ["simulated", "시뮬레이션"], ["observation", "태그 관측"]]) {
     const option = el("option", "", text); option.value = value; detector.append(option);
   }
@@ -41,7 +42,8 @@ export function mount(root, ctx) {
   listStatus.setAttribute("role", "status");
   listStatus.setAttribute("aria-live", "polite");
   const list = el("ul", "waypoint-list"); list.setAttribute("aria-label", "도크 유형과 등록 위치");
-  root.append(head, status, form, gate, registrationNotice, knownTypes, listStatus, list);
+  const emptyNote = el("ui-empty", "", "등록된 도크가 없습니다."); emptyNote.hidden = true;
+  root.append(head, status, form, gate, registrationNotice, knownTypes, listStatus, list, emptyNote);
 
   let pose = null;
   let poseFresh = false;
@@ -103,17 +105,21 @@ export function mount(root, ctx) {
   }
   function renderDocks() {
     list.replaceChildren();
-    list.hidden = !docksLoaded;
+    list.hidden = !docksLoaded || !docks.length;
+    emptyNote.hidden = !docksLoaded || docks.length > 0;
     if (!docksLoaded) return;
-    if (!docks.length) list.append(el("li", "", "등록된 도크가 없습니다."));
     for (const item of docks) {
       const row = el("li", ""); row.dataset.dockId = item.id;
       row.append(el("span", "", `${item.id} · ${item.type} · ${item.map_id || "맵 없음"}`));
       const deleting = pendingDeletes.has(item.id);
-      const remove = el("ui-button", "", deleting ? "삭제 중…" : "삭제"); remove.setAttribute("kind", "irreversible"); remove.type = "button";
+      // D-371 — 목록 행은 조용한 `삭제…`다. 위험 채움은 확인 대화상자의 실행 버튼에만 있다.
+      const remove = el("ui-button", "", deleting ? "삭제 중…" : "삭제…"); remove.setAttribute("kind", "quiet"); remove.type = "button";
       remove.disabled = deleting;
       remove.addEventListener("click", async () => {
-        if (pendingDeletes.has(item.id) || !docksLoaded || !window.confirm(`${item.id} 도크를 삭제할까요? 되돌릴 수 없습니다.`)) return;
+        if (pendingDeletes.has(item.id) || !docksLoaded) return;
+        const confirmed = await confirmIrreversible({message: `"${item.id}" 도크를 삭제할까요? 되돌릴 수 없습니다.`, action: "도크 삭제",
+          opener: () => (remove.isConnected ? remove : list.querySelector(`li[data-dock-id="${CSS.escape(String(item.id))}"] ui-button`))});
+        if (!confirmed || pendingDeletes.has(item.id) || !docksLoaded) return;
         pendingDeletes.add(item.id);
         listNotice = ""; updateListStatus();
         renderDocks();

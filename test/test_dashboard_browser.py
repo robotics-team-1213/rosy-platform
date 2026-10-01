@@ -574,6 +574,62 @@ def test_field_settings_save_limits_waypoint_and_dock_without_navigation():
     assert dock["body"]["type"] == "rosy_v1"
 
 
+WAYPOINT_ROW_INIT = """
+const listed = window.fetch;
+window.fetch = async (input, options = {}) => {
+  const url = new URL(typeof input === 'string' ? input : input.url, location.href);
+  if ((options.method || 'GET').toUpperCase() === 'GET' && url.pathname === '/api/v1/waypoints') {
+    window.__apiCalls.push({method: 'GET', path: url.pathname, search: '', body: null});
+    return new Response(JSON.stringify({waypoints: [{name: 'zone_a', x: 1.25, y: 0.5, yaw: 0}]}),
+      {status: 200, headers: {'Content-Type': 'application/json'}});
+  }
+  return listed(input, options);
+};
+"""
+
+
+def test_waypoint_delete_dialog_keeps_the_estop_out_of_the_inert_region():
+    """D-371 non-modal confirm on the legacy /dashboard settings list.
+
+    The E-stop lives on the operate view, which is hidden while the inspect view
+    shows the settings list, so here the check is that the dialog never inerts it
+    (it is reachable again the moment the operator switches back), that the rest
+    of the page is inert while open, and that Esc and cancel send no DELETE.
+    """
+    pytest.importorskip("playwright.sync_api")
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as playwright:
+        try:
+            browser, page = _launch_page(playwright, extra_init=WAYPOINT_ROW_INIT, width=1366, height=768)
+        except Exception as error:
+            pytest.skip(f"Playwright Chromium unavailable: {error}")
+        page.goto("http://rosy.test/dashboard", wait_until="domcontentloaded", timeout=5_000)
+        page.wait_for_function("document.getElementById('robot-mode')?.textContent === 'MANUAL'")
+        page.locator("#view-inspect").click()
+        delete = page.locator('li[data-name="zone_a"] [data-waypoint-action="delete"]')
+        delete.wait_for()
+        assert page.locator("#emergency-stop").get_attribute("data-always-live") is not None
+
+        delete.click()
+        dialog = page.locator("dialog.ui-confirm")
+        assert dialog.is_visible()
+        assert page.evaluate("document.getElementById('emergency-stop').closest('[inert]')") is None
+        assert page.evaluate("document.getElementById('waypoint-save').closest('[inert]') !== null")
+        assert page.evaluate("document.getElementById('view-operate').closest('[inert]') !== null")
+        page.keyboard.press("Escape")
+        page.wait_for_function("!document.querySelector('dialog.ui-confirm')")
+
+        delete.click()
+        dialog.locator("ui-button[kind=quiet]").click()
+        page.wait_for_function("!document.querySelector('dialog.ui-confirm')")
+        assert page.evaluate("document.querySelectorAll('[inert]').length") == 0
+        calls = page.evaluate("window.__apiCalls")
+        browser.close()
+
+    assert not any(call["method"] == "DELETE" for call in calls)
+
+
 def test_traffic_policy_is_staged_before_stopped_only_apply():
     pytest.importorskip("playwright.sync_api")
     from playwright.sync_api import sync_playwright
@@ -643,7 +699,7 @@ def test_live_camera_preview_is_visible_beside_the_map():
         assert page.locator("#vision-source").inner_text() == "HOST-SIM"
         assert page.locator("#vision-resolution").inner_text() == "640×360"
         assert page.locator("#vision-captured").inner_text() == "42.250 s"
-        assert page.locator("#vision-status").inner_text() == "LIVE"
+        assert page.locator("#vision-status").inner_text() == "실시간"
         if screenshot := os.environ.get("ROSY_CAMERA_DASHBOARD_SCREENSHOT"):
             output = Path(screenshot)
             output.parent.mkdir(parents=True, exist_ok=True)
@@ -709,7 +765,7 @@ def test_camera_preview_is_cleared_when_reauthentication_fails():
             "document.getElementById('vision-empty')?.textContent.includes('인증 실패')"
         )
         assert page.locator("#vision-frame").is_hidden()
-        assert page.locator("#vision-status").inner_text() == "WAITING"
+        assert page.locator("#vision-status").inner_text() == "수신 대기"
         before = page.evaluate(
             "window.__apiCalls.filter((call) => call.path === '/api/v1/vision/front/status').length"
         )
@@ -744,7 +800,7 @@ def test_rate_limited_camera_never_leaves_an_old_frame_live():
             "document.getElementById('vision-empty')?.textContent.includes('속도 제한')"
         )
         assert page.locator("#vision-frame").is_hidden()
-        assert page.locator("#vision-status").inner_text() == "WAITING"
+        assert page.locator("#vision-status").inner_text() == "수신 대기"
         browser.close()
 
 
@@ -868,7 +924,7 @@ def test_console_state_matrix_renders_each_state(state):
             )
         elif state == "vision-unavailable":
             page.wait_for_function(
-                "document.getElementById('vision-status')?.textContent === 'WAITING'"
+                "document.getElementById('vision-status')?.textContent === '수신 대기'"
             )
             assert "수신 대기" in page.locator("#vision-empty").inner_text()
             assert (
@@ -982,7 +1038,8 @@ def test_irreversible_mode_change_needs_confirm_and_decline_blocks_it():
         confirms = page.evaluate("window.__confirms")
         browser.close()
 
-    assert "IDLE 모드로 변경할까요" in confirms[0]
+    # D-359 US-009 (P2-2 review) — the confirm names the mode in Korean, never the enum.
+    assert "대기 모드로 변경할까요" in confirms[0] and "IDLE" not in confirms[0]
     assert declined_calls == []
     assert len(confirms) == 2
 
@@ -1366,6 +1423,33 @@ def test_operate_view_fits_and_does_not_crush(viewport, state):
         f" {fit['modeHeight']}px로 눌렸다(D-201): {fit}"
     )
     assert fit["estopInside"], f"{viewport}: 즉시 정지가 뷰포트 밖이다: {fit}"
+
+
+def test_wide_but_short_operate_view_keeps_three_columns():
+    """D-359 US-008: at 1366x600 (height < 40rem) the frame lets go and the page scrolls, but the
+    three regions stay side by side — the columns follow width only."""
+    pytest.importorskip("playwright.sync_api")
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as playwright:
+        browser, page = _launch_page(playwright, width=1366, height=600)
+        page.goto("http://rosy.test/dashboard", wait_until="domcontentloaded", timeout=5_000)
+        page.wait_for_function("document.getElementById('robot-mode')?.textContent !== undefined")
+        page.wait_for_timeout(700)
+        probe = page.evaluate("""() => {
+          const rect = (s) => document.querySelector(s).getBoundingClientRect().toJSON();
+          const stop = document.getElementById('emergency-stop').getBoundingClientRect();
+          return {overflow: document.documentElement.scrollWidth - innerWidth,
+                  sense: rect('.region-sense'), observe: rect('.region-observe'), act: rect('.region-act'),
+                  estop: stop.top >= 0 && stop.bottom <= innerHeight && stop.right <= innerWidth};
+        }""")
+        browser.close()
+
+    assert probe["overflow"] <= 0, probe
+    assert probe["sense"]["right"] <= probe["observe"]["x"] + 1, probe
+    assert probe["observe"]["right"] <= probe["act"]["x"] + 1, probe
+    assert probe["sense"]["y"] == probe["observe"]["y"] == probe["act"]["y"], probe
+    assert probe["estop"], probe
 
 
 # --- D-203: 계산 척급 폐쇄 — 보이는 계산 크기는 토큰 단계뿐이다 ---------------
@@ -1929,9 +2013,10 @@ def test_inspect_view_lists_every_device_with_its_state_and_bench_tag():
             " id: row.dataset.device,"
             " chip: row.querySelector('.device-state').textContent,"
             " status: row.querySelector('.device-state').dataset.status || null,"
-            " bench: Boolean([...row.querySelectorAll('.machine-tag')]"
+            " bench: Boolean([...row.querySelectorAll('.device-name ui-tag')]"
             "   .find((tag) => tag.textContent === '벤치 전용')),"
-            " bus: getComputedStyle(row.querySelector('.device-bus')).fontFamily }))"
+            " bus: getComputedStyle(row.querySelector('.device-bus')).fontFamily,"
+            " hangul: row.querySelector('.device-bus').hasAttribute('data-hangul') }))"
         )
         assert [(row["id"], row["chip"], row["status"], row["bench"]) for row in rows] == [
             ("motor.1", "정상", "OK", False),
@@ -1941,7 +2026,11 @@ def test_inspect_view_lists_every_device_with_its_state_and_bench_tag():
             ("buzzer", "사람 확인 필요", None, True),
             ("lidar", "측정 안 함", None, False),
         ]
-        assert all("mono" in row["bus"].lower() or "consol" in row["bus"].lower() for row in rows), rows
+        # D-359 US-008: a bus string carrying Hangul (the buzzer's) is drawn in the body family,
+        # because mono fonts have no Hangul; every other bus stays mono.
+        assert [row["id"] for row in rows if row["hangul"]] == ["buzzer"], rows
+        assert all("mono" in row["bus"].lower() or "consol" in row["bus"].lower()
+                   for row in rows if not row["hangul"]), rows
         assert page.locator("#hardware-card").get_attribute("data-available") == "true"
         assert page.locator("#hardware-measured").inner_text().endswith("42초 전")
         assert "전원을 완전히 껐다 켜세요" in page.locator("#hardware-list").inner_text()
@@ -2011,13 +2100,18 @@ def test_an_administrator_tests_the_buzzer_and_records_what_was_heard():
         page.locator("#view-inspect").click()
         page.wait_for_function("document.querySelectorAll('#hardware-list .device-row').length === 6")
         # Only the buzzer and the lamp have a test, and the lamp without a driver cannot start one.
+        # D-359 §5.3: the disabled reason is a <small data-reason> inside the button, so the label
+        # is read without it and the reason is checked on its own.
         actions = page.evaluate(
             "[...document.querySelectorAll('#hardware-list .device-actions')].map((box) => ({"
             " device: box.closest('.device-row').dataset.device,"
-            " buttons: [...box.querySelectorAll('ui-button')].map((b) => [b.textContent, b.disabled]) }))"
+            " buttons: [...box.querySelectorAll('ui-button')].map((b) => {"
+            "   const label = [...b.childNodes].filter((n) => !n.matches?.('small[data-reason]'))"
+            "     .map((n) => n.textContent).join('');"
+            "   return [label, b.disabled, b.getAttribute('reason')]; }) }))"
         )
-        assert actions == [{"device": "lamp", "buttons": [["켜 보기", True]]},
-                           {"device": "buzzer", "buttons": [["울려 보기", False]]}]
+        assert actions == [{"device": "lamp", "buttons": [["켜 보기", True, "드라이버 없음"]]},
+                           {"device": "buzzer", "buttons": [["울려 보기", False, None]]}]
 
         page.locator("#hardware-list [data-device='buzzer'] [data-hw-action='test']").click()
         page.wait_for_function(

@@ -2,7 +2,20 @@
 // 대기 요약을 가진다. 지도 오버레이(drawFormationOverlay)는 console.js에 남는다 —
 // 그리는 것과 여는 것은 다른 일이다. 서버 기하를 복제하지 않는다.
 
+// D-359 US-009 — 대형 세션 상태(fleet/swarm/session.py SessionState)의 운용자 말. 열거값은 title에만.
+export const FORMATION_STATE_LABEL = {
+  IDLE: "대기", ARMING: "무장 중", RUNNING: "진행 중", HOLDING: "유지 중", STOPPED: "해제됨",
+};
+const stateLabel = (state) => FORMATION_STATE_LABEL[state] || state || "—";
+
 export function createFormation({ el, view, log, call, render }) {
+  function setOff(id, off, reason) {
+    const button = el(id);
+    button.disabled = off;
+    if (off) button.setAttribute("reason", reason);
+    else button.removeAttribute("reason");
+  }
+
   function fillLeaders() {
     const select = el("formation-leader");
     const ids = view.robots.map((r) => r.robot_id);
@@ -20,7 +33,9 @@ export function createFormation({ el, view, log, call, render }) {
     const box = el("formation-members");
     box.replaceChildren(...ids.map((id) => {
       const label = document.createElement("label");
+      label.className = "ui-check";
       const input = document.createElement("input");
+      input.className = "ui-field";
       input.type = "checkbox";
       input.value = id;
       input.checked = true;
@@ -50,14 +65,16 @@ export function createFormation({ el, view, log, call, render }) {
 
   function renderFormation(status) {
     const stateEl = el("formation-state");
-    stateEl.textContent = status.state;
-    stateEl.className = `tag ${status.state === "RUNNING" ? "nav"
-      : status.state === "HOLDING" ? "warn" : ""}`;
-    el("formation-start").disabled = status.active;
-    el("formation-reform").disabled = !status.active;
-    // 재개는 HOLDING 에서만 뜻이 있다. RUNNING 에서 눌러 봐야 세션이 조용히 무시한다.
-    el("formation-resume").disabled = status.state !== "HOLDING";
-    el("formation-stop").disabled = !status.active;
+    stateEl.textContent = stateLabel(status.state);
+    stateEl.title = status.state || "";
+    stateEl.setAttribute("status", status.state === "RUNNING" ? "active"
+      : status.state === "HOLDING" ? "warn" : "neutral");
+    // D-359 §5.3 — 사유는 비활성 조건과 같은 식에서 나온다.
+    setOff("formation-start", status.active, "이미 대형 중");
+    setOff("formation-reform", !status.active, "열린 대형 없음");
+    // 재개는 HOLDING(유지 중)에서만 뜻이 있다. RUNNING에서 눌러 봐야 세션이 조용히 무시한다.
+    setOff("formation-resume", status.state !== "HOLDING", "대형 유지 중일 때만");
+    setOff("formation-stop", !status.active, "열린 대형 없음");
     // 대형이 열려 있는 동안에는 멤버를 바꿀 수 없다 — 해제하고 다시 연다.
     el("formation-members").querySelectorAll("input").forEach((i) => { i.disabled = status.active; });
 
@@ -101,13 +118,14 @@ export function createFormation({ el, view, log, call, render }) {
       view.formationUnavailable = true;
       const state = el("formation-state");
       state.textContent = "확인 불가";
-      state.className = "tag warn";
+      state.removeAttribute("title");
+      state.setAttribute("status", "warn");
       el("formation-detail").textContent = `대형 상태를 읽지 못했습니다 · 새 상태를 기다리는 중 — ${err.message}`;
       for (const id of ["formation-start", "formation-reform", "formation-resume"]) {
-        el(id).disabled = true;
+        setOff(id, true, "상태 확인 불가");
       }
       // 마지막 확인 상태가 활성일 때는 해제 요청만 남긴다. 최종 판정은 Fleet API다.
-      el("formation-stop").disabled = !wasActive;
+      setOff("formation-stop", !wasActive, "상태 확인 불가");
       render();
     }
   }
@@ -120,7 +138,7 @@ export function createFormation({ el, view, log, call, render }) {
         body: JSON.stringify(body),
       } : { method: "POST" });
       applyFormation(status);
-      log(`대형 ${label} — ${status.state}`, "good");
+      log(`대형 ${label} — ${stateLabel(status.state)}`, "good");
     } catch (err) {
       log(`대형 ${label} 거절 — ${err.message}`, "bad");
       refreshFormation();

@@ -10,9 +10,8 @@ import { multiply3, fieldToMap } from "./map-fit.js";
 
 const IDENTITY = [[0, 0], [1, 0], [1, 1], [0, 1]];
 
-function tone(name, fallback) {
-  return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback;
-}
+// D-359 §4 — 색·글꼴은 ui.js(window.RosyPalette)가 토큰에서 푼다(테마를 따른다).
+const tone = (name) => window.RosyPalette.cssColor(name);
 
 function storageGet(key) {
   try { return localStorage.getItem(key); } catch { return null; }
@@ -172,7 +171,7 @@ export function createFieldView({ el, view, visionView, onLayersChanged }) {
     canvas.height = layout.height;
     const ctx = canvas.getContext("2d");
     const { field } = layout;
-    ctx.fillStyle = tone("--ground-deep", "#000");
+    ctx.fillStyle = tone("--ground-deep");
     ctx.fillRect(0, 0, layout.width, layout.height);
     if (frame.rectified) {
       // Vision 이 확인한 모서리로 이미 펴서 보냈다(D-318). 바깥은 없다.
@@ -187,7 +186,7 @@ export function createFieldView({ el, view, visionView, onLayersChanged }) {
       } else if (warped.data) ctx.putImageData(warped.data, 0, 0);
       // 경기장 밖을 가린다.
       ctx.save();
-      ctx.fillStyle = "rgba(0, 0, 0, 0.72)";
+      ctx.fillStyle = tone("--scrim");
       ctx.beginPath();
       ctx.rect(0, 0, layout.width, layout.height);
       ctx.rect(field.x, field.y, field.width, field.height);
@@ -195,7 +194,7 @@ export function createFieldView({ el, view, visionView, onLayersChanged }) {
       ctx.restore();
     }
     ctx.save();
-    ctx.strokeStyle = active?.kind === "제안" ? tone("--series-goal", "#fc3") : tone("--series-primary", "#4cf");
+    ctx.strokeStyle = active?.kind === "제안" ? tone("--series-goal") : tone("--series-primary");
     ctx.lineWidth = 2;
     ctx.setLineDash(active?.kind === "제안" ? [6, 4] : []);
     ctx.strokeRect(field.x + 1, field.y + 1, field.width - 2, field.height - 2);
@@ -216,7 +215,7 @@ export function createFieldView({ el, view, visionView, onLayersChanged }) {
     const step = [0.05, 0.1, 0.25, 0.5, 1, 2, 5].find((s) => size.width / s <= 16) || 10;
     ctx.save();
     if (view.layers.grid) {
-      ctx.strokeStyle = "rgba(255, 255, 255, 0.28)";
+      ctx.strokeStyle = tone("--line-30");
       ctx.lineWidth = 1;
       for (let x = step; x < size.width - 1e-9; x += step) {
         const px = field.x + x * pxPerM;
@@ -227,8 +226,8 @@ export function createFieldView({ el, view, visionView, onLayersChanged }) {
         ctx.beginPath(); ctx.moveTo(field.x, py); ctx.lineTo(field.x + field.width, py); ctx.stroke();
       }
     }
-    ctx.fillStyle = tone("--paper", "#fff");
-    ctx.font = `12px ${tone("--mono", "monospace")}`;
+    ctx.fillStyle = tone("--ink");
+    ctx.font = window.RosyPalette.canvasFont(12, "mono");
     ctx.textBaseline = "bottom";
     ctx.fillText(`${size.width} m`, field.x + field.width / 2 - 16, field.y - 2);
     ctx.fillText(`격자 ${step} m`, field.x + 4, field.y + field.height - 4);

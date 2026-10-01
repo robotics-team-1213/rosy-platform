@@ -1,6 +1,8 @@
+// D-359 §5.3 — 끌 때 이유를 같이 준다. 켜거나 짧은 요청 중 잠금이면 이유를 지운다.
+function setOff(control, off, reason = "") { control.disabled = Boolean(off); if (off && reason) control.setAttribute("reason", reason); else control.removeAttribute("reason"); }
 function el(tag, cls, text) { const node = document.createElement(tag); if (cls) node.className = cls; if (text !== undefined) node.textContent = text; return node; }
 function field(labelText, name, type = "number") {
-  const label = el("label", "ui-field-label", labelText); const control = el("input");
+  const label = el("label", "ui-field-label", labelText); const control = el("input", "ui-field");
   control.name = name; control.type = type; control.autocomplete = "off"; label.append(control);
   return {label, control};
 }
@@ -13,10 +15,10 @@ export function mount(root, ctx) {
     const row = el("div", ""); row.append(el("dt", "", title)); facts[key] = el("dd", "", "—"); row.append(facts[key]); state.append(row);
   }
   const form = el("form", "ui-form");
-  const modeLabel = el("label", "ui-field-label", "정책 모드"); const mode = el("select"); mode.name = "mode";
+  const modeLabel = el("label", "ui-field-label", "정책 모드"); const mode = el("select", "ui-field"); mode.name = "mode";
   for (const value of ["DISABLED", "ADVISORY", "ENFORCED"]) { const option = el("option", "", value); option.value = value; mode.append(option); }
   modeLabel.append(mode);
-  const ruleLabel = el("label", "ui-field-label", "정지선 규칙"); const rule = el("select"); rule.name = "junction_rule";
+  const ruleLabel = el("label", "ui-field-label", "정지선 규칙"); const rule = el("select", "ui-field"); rule.name = "junction_rule";
   for (const [value, title] of [["signal_controlled", "신호 제어"], ["stop_and_go", "무신호: 정지 후 진입"]]) { const option = el("option", "", title); option.value = value; rule.append(option); }
   ruleLabel.append(rule);
   const revision = field("정책 revision", "policy_revision", "text"); revision.control.maxLength = 80;
@@ -48,8 +50,9 @@ export function mount(root, ctx) {
       approach.control.value = draft.approach_distance_m ?? ""; stop.control.value = draft.stop_distance_m ?? "";
       dwell.control.value = draft.stop_dwell_s ?? ""; confidence.control.value = draft.min_confidence ?? "";
     }
-    apply.disabled = pending || !readback.staged;
-    signalButtons.forEach((button) => { button.disabled = pending || readback.simulation_signal?.available !== true; });
+    // 요청 중(pending)은 짧은 잠금이라 사유 없이 끈다.
+    setOff(apply, pending || !readback.staged, pending ? "" : "저장된 검토본 없음");
+    signalButtons.forEach((button) => { setOff(button, pending || readback.simulation_signal?.available !== true, pending ? "" : "시뮬레이션 신호 없음"); });
     if (!dirty) message.textContent = readback.staged ? `검토 대기: ${readback.staged.policy_revision}` : `적용됨: ${readback.active?.policy_revision || "—"}`;
   }
   const stopPoll = ctx.store.poll("/api/v1/traffic", 2_000, render, (error) => { message.textContent = `교통 정책을 읽지 못했습니다: ${error.message}`; });
