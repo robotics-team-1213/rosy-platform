@@ -76,7 +76,7 @@ CONTROL_SPLIT = "docs/plans/2026-09-22-control-package-split-design.md"
 #: P6 verdicts: path (relative to src/) or package name -> (lines at verdict, verdict).
 SIZE_VERDICTS = {
     "fleet": (
-        22_435,
+        23_237,
         "split: server HTTP boundary, console, signals and the mission-control stores are separate owners "
         "today; group them into subpackages rather than one flat server/ tree (B2); owner fleet, unscheduled "
         "(re-judged 2026-09-29 at 11164 after mission_store joined the server tree; re-judged 2026-09-30 at "
@@ -100,13 +100,31 @@ SIZE_VERDICTS = {
         "pairing_routes.py) plus tests (21871 once merged with main's other console work); app.py only "
         "gained the install call; verdict unchanged; re-judged again when the pairing security "
         "fixes and the console camera-approval section (web/camera-pairing.js under the D-362 "
-        "web budget, its node and host tests) joined; verdict unchanged. "
+        "web budget, its node and host tests) joined; verdict unchanged; re-judged "
+        "2026-10-01 at 23166 (main had reached 22797 with D-392 work) after the robot-address drift "
+        "audit joined as its own modules (server/address_drift.py pure classifier, web/address-drift.js "
+        "pure copy) plus its route in ingest_routes.py and tests, then at 23237 after the "
+        "review fix made move-address re-pair with the screen code (enrollment.py) and dropped bulk "
+        "move; verdict unchanged. "
         "Split remains unscheduled (docs/plans/2026-09-30-er2-mission-feedback-loop.md)",
     ),
+    "site/fleet/fleet/server/proposal_store.py": (
+        730,
+        "accept: one owner (the durable non-executable candidate ledger — proposal create, the fenced ER2 "
+        "feedback replan candidate, recoverable resolution and the model tool-call result journal share one "
+        "SQLite file, one schema/migration block and BEGIN IMMEDIATE transactions that must commit "
+        "together with the Mission draft in finalize_resolution), ROS-free, host-testable (X5). Crossed "
+        "600 on 2026-10-01 (557 -> 730) when atomic candidate fencing (3a19b560) and the canonical model "
+        "tool-call journal (1e519cca) joined; the journal (fleet_model_tool_call_results, "
+        "begin/complete/mark_unknown) is the only separable seam, so revisit it as a split if the store "
+        "grows past 800",
+    ),
     "site/fleet/fleet/server/enrollment.py": (
-        610,
+        664,
         "accept: one owner (D-361 robot enrollment — exchange, binding, pinned-address gate, unenroll and "
-        "pending logout share one state machine over the register), ROS-free, host-testable (X5)",
+        "pending logout share one state machine over the register), ROS-free, host-testable (X5); "
+        "re-judged 2026-10-01 at 664 when move-address became a screen-code re-pairing on the same "
+        "exchange and binding check",
     ),
     "site/vision/rosy_vision/ingest.py": (
         671,

@@ -73,6 +73,10 @@
       <div class="roster-block">
         <h2 id="roster-heading">등록 로봇</h2>
         <ui-button id="roster-toggle" kind="quiet" type="button" aria-expanded="false" aria-controls="roster">전체 로봇 보기</ui-button>
+        <div id="address-drift" class="address-drift" hidden>
+          <p id="address-banner" class="enroll-alarm" role="alert" hidden></p>
+          <ul id="address-movable" class="address-movable" aria-label="새 주소로 옮길 수 있는 로봇"></ul>
+        </div>
         <div id="roster" class="roster"><p class="hint" role="status">로봇 목록 불러오는 중</p></div>
       </div>
 
@@ -138,7 +142,7 @@
             <div id="enroll-controls" hidden>
               <div class="enroll-address">
                 <label for="enroll-address">주소로 추가</label>
-                <input class="ui-field" id="enroll-address" inputmode="decimal" autocomplete="off" placeholder="192.168.1.20:8080">
+                <input class="ui-field" id="enroll-address" inputmode="decimal" autocomplete="off" placeholder="로봇 화면의 IP:8080">
                 <ui-button id="enroll-address-add" kind="quiet" type="button">추가</ui-button>
               </div>
               <div id="enroll-result" class="enroll-result" aria-live="polite"></div>
@@ -146,6 +150,11 @@
               <details class="enroll-help"><summary>등록 도움말</summary><ul id="enroll-help"></ul></details>
               <dialog id="enroll-dialog" aria-labelledby="enroll-target">
                 <p>로봇 <b id="enroll-target"></b> 화면의 코드</p>
+                <div id="enroll-move-check" class="enroll-move-check" hidden>
+                  <p class="enroll-move-address-label">새 주소 후보</p>
+                  <p id="enroll-move-address" class="enroll-move-address"></p>
+                  <p id="enroll-move-note" class="hint"></p>
+                </div>
                 <input class="ui-field" id="enroll-code" autocomplete="off" autocapitalize="characters" maxlength="12" placeholder="ABCD-EFGH">
                 <div class="enroll-dialog-actions">
                   <ui-button id="enroll-submit" kind="primary" type="button">등록</ui-button>

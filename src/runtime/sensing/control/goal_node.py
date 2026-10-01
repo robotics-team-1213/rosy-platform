@@ -32,6 +32,7 @@ from tf2_ros import TransformListener
 from tf2_ros import TransformException
 
 from .planning import GoalBrain, OccupancyMap, parse_goal_cmd
+from .sensing.body import URDF_RADIUS
 from .sensing.localization import lease_ready
 from .sensing.pose import planar_pose
 from .planning.obstacle_overlay import obstacle_overlay
@@ -71,7 +72,7 @@ class GoalNode(Node, GoalEscape):
         self.declare_parameter('retry_clear_m', 0.12)
         self.declare_parameter('start_escape_clear_m', 0.0)
         self.declare_parameter('start_escape_distance_m', .08)
-        self.declare_parameter('robot_radius', .076)
+        self.declare_parameter('robot_radius', URDF_RADIUS)
         self.init_escape()
         self.navigation_profile = None
         self.navigation_profile_received = None

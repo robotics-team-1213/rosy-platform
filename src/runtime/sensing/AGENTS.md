@@ -38,7 +38,7 @@ ROS 2 Jazzy package absorbed into the **Rosy OS** workspace for the Pinky Pro de
 - Preserve pure-logic behavior and its tests before changing ROS wiring. The target runtime must not activate this package's legacy final `/cmd_vel` publisher beside `core`.
 - Keep new **decision logic in the pure-logic subjects** (`control/control/`, `control/planning/`, `control/sensing/`, `control/watch.py`) — no ROS imports there, that is what the tests cover.
 - `config/robot.yaml` is the single shared parameter source; per-node yamls override after it.
-- The lidar is mounted rotated: **scan 0° = rear, nose ≈ 190°**. Every heading goes through `robot_yaw()` / `wrap_pi()`.
+- The lidar is mounted rotated: **scan 0° = rear, nose = 180° URDF nominal (D-397; measured 181–182°, an accepted lidar_mount record refines it)**. Every heading goes through `robot_yaw()` / `wrap_pi()`.
 - Docs/STEPS.txt are Korean; code comments and logs are English. Comments explain *why* against measured hardware limits (lidar 5 cm min, US 2 cm blind zone, IR 4095 = ADC saturation, never a cliff).
 - Learned loop (D-356): `learned_lane_node` is shadow-only and never publishes a command. Weights never live in `src/`; dataset, training and delivery tooling is in `tools/perception/`.
 - Commits: short imperative behavioral summaries.

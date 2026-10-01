@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 
 from core_common.protocol.schemas import MissionFeedbackContext, MissionFeedbackTurnScope
 from fleet.ai.candidate import ImageObservation, ImageTransform, PickPlaceProposalCandidate
+from fleet.ai.model_tool_contract import ModelToolCall, ModelToolResult
 from fleet.ai.tool_dispatch import MissionFeedbackToolDispatcher
 from test_mission_api import _client, _create, _resolve
 
@@ -69,6 +70,97 @@ def test_get_mission_status_reads_only_the_durable_turn_mission(tmp_path):
     assert "principal_id" not in result.payload
     assert "history" not in result.payload
     assert client.app.state.mission_service.get(mission_id)["status"] == "RUNNING"
+
+
+def test_status_call_replay_returns_its_durable_result_snapshot(tmp_path):
+    client, mission_id = _running_mission(tmp_path)
+    mission = client.app.state.mission_service.get(mission_id)
+    client.app.state.mission_service.record_action_result(
+        mission_id, event_id="status-replay-action-result",
+        action_id=mission["action_id"], attempt_id=mission["attempt_id"],
+        outcome="SUCCEEDED", result={"fixture": True},
+    )
+    scope = _scope(client, mission_id)
+    turn_store = client.app.state.mission_model_turn_store
+    turn = turn_store.enqueue(
+        scope=scope, trigger_event_id=scope.event_watermark,
+    )["turn"]
+    assert turn_store.claim(turn["turn_id"], worker_id="tool-test-worker")
+    assert turn_store.begin_submission_fenced(
+        turn["turn_id"], worker_id="tool-test-worker",
+    )["state"] == "SUBMITTING"
+    call = ModelToolCall(
+        provider_call_id="status-call-replay", tool_name="get_mission_status",
+        arguments={}, turn_id=turn["turn_id"], ordinal=0,
+    )
+
+    first = _dispatcher(client).dispatch(
+        scope=scope, call_id=call.provider_call_id, tool_name=call.tool_name,
+        arguments=call.arguments, model_tool_call=call,
+    )
+    replay = _dispatcher(client).dispatch(
+        scope=scope, call_id=call.provider_call_id, tool_name=call.tool_name,
+        arguments=call.arguments, model_tool_call=call,
+    )
+
+    assert first.status == "accepted"
+    assert replay.model_dump(mode="json") == first.model_dump(mode="json")
+    journal = client.app.state.proposal_store.begin_model_tool_call(call)
+    assert journal["state"] == "COMPLETED"
+    assert journal["result"]["reason_code"] == "STATUS_CURRENT"
+
+
+def test_replan_early_policy_rejection_is_journaled_and_call_id_reuse_conflicts(tmp_path):
+    client, mission_id = _running_mission(tmp_path)
+    mission = client.app.state.mission_service.get(mission_id)
+    client.app.state.mission_service.record_action_result(
+        mission_id, event_id="replan-early-rejection-result",
+        action_id=mission["action_id"], attempt_id=mission["attempt_id"],
+        outcome="SUCCEEDED", result={"fixture": True},
+    )
+    scope = _scope(client, mission_id)
+    turn = client.app.state.mission_model_turn_store.enqueue(
+        scope=scope, trigger_event_id=scope.event_watermark,
+    )["turn"]
+    turn_store = client.app.state.mission_model_turn_store
+    assert turn_store.claim(turn["turn_id"], worker_id="tool-test-worker")
+    assert turn_store.begin_submission_fenced(
+        turn["turn_id"], worker_id="tool-test-worker",
+    )["state"] == "SUBMITTING"
+    arguments = {
+        "based_on_event_id": scope.event_watermark,
+        "rationale": "The goal remains unsatisfied.",
+    }
+    call = ModelToolCall(
+        provider_call_id="replan-early-rejection", tool_name="propose_replan",
+        arguments=arguments, turn_id=turn["turn_id"], ordinal=0,
+    )
+    dispatcher = _dispatcher(client)
+
+    result = asyncio.run(dispatcher.dispatch_replan(
+        scope=scope, turn_id=call.turn_id, call_id=call.provider_call_id,
+        arguments=arguments, candidate_adapter=None, egress_policy=None,
+        model_tool_call=call,
+    ))
+    assert result.status == "rejected"
+    assert result.reason_code == "REPLAN_NOT_ALLOWED"
+
+    replay = client.app.state.proposal_store.begin_model_tool_call(call)
+    assert replay["state"] == "COMPLETED"
+    assert replay["result"]["reason_code"] == "REPLAN_NOT_ALLOWED"
+
+    changed_arguments = {**arguments, "rationale": "Changed content for same provider ID."}
+    changed_call = ModelToolCall(
+        provider_call_id=call.provider_call_id, tool_name=call.tool_name,
+        arguments=changed_arguments, turn_id=call.turn_id, ordinal=call.ordinal,
+    )
+    collision = asyncio.run(dispatcher.dispatch_replan(
+        scope=scope, turn_id=call.turn_id, call_id=call.provider_call_id,
+        arguments=changed_arguments, candidate_adapter=None, egress_policy=None,
+        model_tool_call=changed_call,
+    ))
+    assert collision.status == "rejected"
+    assert collision.reason_code == "PROVIDER_CALL_ID_REUSE"
 
 
 def test_get_mission_status_includes_only_durable_read_only_phase_projection(tmp_path):
@@ -215,7 +307,10 @@ def test_async_replan_tool_uses_trusted_post_action_frame_and_fenced_candidate_w
             return {"observation": image, "scope": observation_scope}
 
     class CandidateAdapter:
+        calls = 0
+
         async def propose_pick_place(self, *, request_id, instruction, observation):
+            self.calls += 1
             assert observation is image
             return PickPlaceProposalCandidate.from_function_call(
                 request_id=request_id, interaction_id="interaction-1",
@@ -229,9 +324,25 @@ def test_async_replan_tool_uses_trusted_post_action_frame_and_fenced_candidate_w
 
     class ProposalStore:
         saved = None
+        result = None
+
+        def begin_model_tool_call(self, call):
+            self.call = call
+            if self.result is not None:
+                return {"created": False, "state": "COMPLETED", "result": self.result}
+            return {"created": True, "state": "IN_PROGRESS", "result": None}
+
+        def mark_model_tool_call_unknown(self, _call):
+            self.unknown = True
 
         def create_feedback_candidate_fenced(self, **request):
             self.saved = request
+            call = request["tool_call"]
+            self.result = ModelToolResult.for_call(
+                call, outcome="accepted", reason_code="CANDIDATE_RECORDED",
+                event_id=19, proposal_id="proposal-1",
+                payload={"successor_of_mission_id": "mission-1", "executable": False},
+            ).to_mapping()
             return {"proposal": {"proposal_id": "proposal-1"}, "created": True}
 
     class EgressPolicy:
@@ -273,13 +384,33 @@ def test_async_replan_tool_uses_trusted_post_action_frame_and_fenced_candidate_w
             scope=scope, turn_id="turn-1", call_id="tool-call-1",
             arguments={"based_on_event_id": 19, "rationale": "The goal remains unsatisfied."},
             candidate_adapter=CandidateAdapter(), egress_policy=EgressPolicy(),
+            model_tool_call=ModelToolCall(
+                provider_call_id="tool-call-1", tool_name="propose_replan",
+                arguments={"based_on_event_id": 19,
+                           "rationale": "The goal remains unsatisfied."},
+                turn_id="turn-1", ordinal=0,
+            ),
         )
         assert result.status == "accepted"
         assert result.reason_code == "CANDIDATE_RECORDED"
         assert result.proposal_id == "proposal-1"
         assert result.payload == {"successor_of_mission_id": "mission-1", "executable": False}
         assert proposals.saved["turn_id"] == "turn-1"
+        assert proposals.saved["tool_call"].provider_call_id == "tool-call-1"
         assert proposals.saved["candidate"]["source_observation"]["image_sha256"] == image.sha256
+
+        class NoRepeatAdapter:
+            async def propose_pick_place(self, **_request):
+                raise AssertionError("durable call replay must not query the model again")
+
+        replay = await dispatcher.dispatch_replan(
+            scope=scope, turn_id="turn-1", call_id="tool-call-1",
+            arguments={"based_on_event_id": 19, "rationale": "The goal remains unsatisfied."},
+            candidate_adapter=NoRepeatAdapter(), egress_policy=EgressPolicy(),
+            model_tool_call=proposals.call,
+        )
+        assert replay.status == "accepted"
+        assert replay.proposal_id == "proposal-1"
 
     asyncio.run(run())
 

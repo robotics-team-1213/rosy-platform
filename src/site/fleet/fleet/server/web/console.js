@@ -7,8 +7,9 @@ import { createSignals } from "./signals.js";
 import { createVisionView } from "./vision-view.js";
 import { createFieldView } from "./field-view.js";
 import { createMapFitView } from "./map-fit-view.js";
-import { applyRoleToControls } from "./authorization.js";
-import { DISCOVERY_LABELS, createEnrollmentPanel } from "./enrollment.js";
+import { OPERATOR_REASON, applyRoleToControls } from "./authorization.js";
+import { DISCOVERY_LABELS, canManage, createEnrollmentPanel } from "./enrollment.js";
+import { addressMap, movableRobots, renumberBanner } from "./address-drift.js";
 import { createCameraPairingPanel } from "./camera-pairing.js";
 import { createPollGate } from "./poll-gate.js";
 import { confirmIrreversible, openLiveDialog } from "/common/ui.js";
@@ -94,6 +95,7 @@ const view = {
   dispatchControl: null,
   stateUnavailable: false,
   stateLoaded: false,
+  addresses: {},  // robot_id -> GET /api/fleet/discovery/addresses 행(고정 주소 판정)
 };
 
 function log(text, kind) {
@@ -302,11 +304,13 @@ function disarmGoal(reason) {
 }
 
 const discoveryLabels = DISCOVERY_LABELS;
+let scannerLost = false;
 const enrollment = createEnrollmentPanel({
   headers: authHeaders,
   identity: () => ({ role: auth.role, principal_id: auth.principal }),
   log,
   dialogs: { confirmIrreversible, openLiveDialog },
+  onMoved: () => refreshAddresses(),
 });
 // D-341: 같은 "기기 연결" 패널의 카메라 연결 승인 구역. 대기 목록은 모듈이 2.5 s마다 묻는다.
 const cameraPairing = createCameraPairingPanel({
@@ -317,10 +321,10 @@ const cameraPairing = createCameraPairingPanel({
   dialogs: { confirmIrreversible, openLiveDialog },
 });
 
-function showDiscoveryUnavailable(label, message) {
+function showDiscoveryUnavailable(label, message, level = "warn") {
   const status = el("discovery-status");
   status.textContent = label;
-  status.setAttribute("status", "warn");
+  status.setAttribute("status", level);
   const list = el("discovery-list");
   if (list.childElementCount === 1 && list.firstElementChild?.dataset.unavailable === "true" &&
       list.firstElementChild.textContent === message) return;
@@ -338,6 +342,18 @@ async function refreshDiscovery() {
   try {
     const snapshot = await call("/api/fleet/discovery");
     discoveryGate.ok();
+    await refreshAddresses();
+    // 검색기 임대(45 s)가 끊기면 발견과 새 주소로 옮기기가 멈춘다 — 대기와 구별해 경보한다.
+    if (snapshot.scanner_state === "expired") {
+      if (!scannerLost) log("발견 검색기 끊김 — 새 로봇 발견·새 주소로 옮기기 불가", "bad");
+      scannerLost = true;
+      showDiscoveryUnavailable("검색기 끊김",
+        `마지막 스캔 ${snapshot.scanner_age_s}초 전. 새 로봇 발견과 새 주소로 옮기기를 할 수 없습니다. ` +
+        "현장 PC의 rosy-mdns-bridge.timer와 사이트 프록시를 확인하세요.", "crit");
+      return;
+    }
+    if (scannerLost && snapshot.scanner_online) log("발견 검색기 다시 연결됨", "good");
+    scannerLost = false;
     const status = el("discovery-status");
     status.textContent = snapshot.scanner_online
       ? `${snapshot.devices.length}대 발견` : "검색기 연결 대기";
@@ -365,6 +381,56 @@ async function refreshDiscovery() {
         "발견 상태 확인 불가", "발견 목록을 확인할 수 없습니다. Fleet 연결을 확인하세요.");
     }
   }
+}
+
+// 고정 주소 판정은 발견과 같은 주기로 읽는다. 못 읽으면 까닭 줄을 지운다(짐작하지 않는다).
+let addressText = "";
+function moveAddressBlocked() {
+  return auth.role !== "operator" ? OPERATOR_REASON
+    : canManage({ role: auth.role, principal_id: auth.principal }) ? ""
+      : "이름 있는 운용자 계정이 필요합니다";
+}
+
+function moveButton(entry) {
+  const node = document.createElement("ui-button");
+  node.setAttribute("kind", "quiet");
+  node.type = "button";
+  node.dataset.moveRobotId = entry.robot_id;
+  node.textContent = "새 주소로 옮기기…";
+  const reason = moveAddressBlocked();
+  node.disabled = Boolean(reason);
+  if (reason) node.setAttribute("reason", reason);
+  node.addEventListener("click", () => enrollment.openMove(entry.robot_id, entry.seen_addresses[0]));
+  return node;
+}
+
+async function refreshAddresses() {
+  let payload = null;
+  try {
+    payload = await call("/api/fleet/discovery/addresses");
+  } catch (_err) {
+    payload = null;
+  }
+  const banner = el("address-banner");
+  const text = renumberBanner(payload, view.robots);
+  banner.hidden = !text;
+  if (text && banner.textContent !== text) banner.textContent = text;
+  // 옮길 수 있는 로봇마다 한 줄과 그 로봇의 지름길. 옮기기마다 그 로봇의 화면 코드를 묻는다.
+  const movable = movableRobots(payload);
+  const next = JSON.stringify([payload?.robots || [], auth.role, auth.principal]);
+  if (next !== addressText) {
+    addressText = next;
+    el("address-movable").replaceChildren(...movable.map((entry) => {
+      const item = document.createElement("li");
+      const label = document.createElement("span");
+      label.textContent = `${entry.robot_id} → ${entry.seen_addresses[0]}`;
+      item.append(label, moveButton(entry));
+      return item;
+    }));
+    view.addresses = addressMap(payload);
+    render();
+  }
+  el("address-drift").hidden = !text && movable.length === 0;
 }
 
 async function refreshAuthorization() {
@@ -567,7 +633,10 @@ const mapView = createMapView({
 
 // Fleet 분해 3: 명렬 카드와 큐는 roster.js 팩토리가 그린다.
 const roster = createRoster({ el, view, log, call, render,
-  streamEvidence: mapView.streamEvidence, isOperator: () => auth.role === "operator" });
+  streamEvidence: mapView.streamEvidence, isOperator: () => auth.role === "operator",
+  moveAddress: (robotId) => enrollment.openMove(robotId, view.addresses[robotId]?.seen_addresses?.[0]),
+  moveAddressBlocked });
+
 el("roster-toggle").addEventListener("click", () => {
   view.showAllRobots = !view.showAllRobots;
   render();

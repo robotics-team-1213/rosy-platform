@@ -22,7 +22,12 @@ import androidx.compose.ui.res.stringResource
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
+import androidx.activity.viewModels
 import io.github.livsbittt.rosy.cam.camera.LensChoice
+import io.github.livsbittt.rosy.cam.pairing.PairableSite
+import io.github.livsbittt.rosy.cam.pairing.PairingState
+import io.github.livsbittt.rosy.cam.pairing.PairingViewModel
+import io.github.livsbittt.rosy.cam.ui.PairingScreen
 import io.github.livsbittt.rosy.cam.service.StreamService
 import io.github.livsbittt.rosy.cam.settings.PairingUri
 import io.github.livsbittt.rosy.cam.settings.SettingsStore
@@ -44,6 +49,7 @@ class MainActivity : ComponentActivity() {
     private val pendingPairing = mutableStateOf<PairingUri?>(null)
     private val deepLinkInvalid = mutableStateOf<String?>(null)
     private lateinit var settings: SettingsStore
+    private val pairingModel: PairingViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -139,7 +145,26 @@ class MainActivity : ComponentActivity() {
             if (needed.isEmpty()) StreamService.start(this) else permissions.launch(needed.toTypedArray())
         }
 
-        if (showSettings) {
+        // The attempt lives in the ViewModel, so rotation keeps the code, the poll loop and a running answer.
+        val attempt by pairingModel.attempt.collectAsStateWithLifecycle()
+        val current = attempt
+        if (current != null) {
+            val session = current.session
+            val pairingState by session.state.collectAsStateWithLifecycle()
+            val busy by session.busy.collectAsStateWithLifecycle()
+            PairingScreen(
+                site = current.site,
+                state = pairingState,
+                busy = busy,
+                onAnswer = session::answer,
+                onCancel = { pairingModel.close() },
+                onRetry = { session.start(current.site) },
+                onClose = {
+                    if (pairingState is PairingState.Paired) showSettings = false
+                    pairingModel.close()
+                },
+            )
+        } else if (showSettings) {
             SettingsScreen(
                 currentLink = siteLink,
                 locked = state.running,
@@ -151,6 +176,9 @@ class MainActivity : ComponentActivity() {
                     scope.launch { settings.save(p, siteName, subnet) }
                 },
                 onBack = { showSettings = false },
+                onPairRequest = { record ->
+                    pairingModel.open(PairableSite(record.name, record.tlsHost, record.port, record.address), deviceLabel(), BuildConfig.VERSION_NAME)
+                },
             )
         } else {
             StreamScreen(
@@ -209,6 +237,10 @@ class MainActivity : ComponentActivity() {
         }
     }
 }
+
+/** The phone's model as the console's device label: printable, at most 64 characters (rosy-pair/1 request). */
+private fun deviceLabel(): String =
+    Build.MODEL.orEmpty().filterNot { it.code < 32 || it.code == 127 }.trim().take(64).ifBlank { "Rosy Cam" }
 
 private const val KEY_PENDING_PAIRING = "pending_pairing"
 private const val KEY_DEEP_LINK_INVALID = "deep_link_invalid"

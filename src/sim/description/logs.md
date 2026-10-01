@@ -64,3 +64,9 @@
 - 변경: 다른 세션이 main 작업 트리에서 D-362(코드 유형별 파일 크기 예산)를 쓰고 있어, 이 모듈 기록의 D-362(운전자 실시간 영상, 옛 D-346)는 D-368 로 읽는다. 위 기록은 덧붙이기 전용이라 고치지 않는다.
 - 증거: `docs/adr/D-368-pilot-live-driver-video.md`, ADR Log 행·코드·시험이 새 번호를 쓴다.
 - gate 변화: 없음(번호만).
+
+## 2026-10-01 · edca9b2e · feat(description): Gazebo DiffDrive 바퀴 간격 0.0961 → 0.0971 (D-397)
+- 변경: `rosy_gz.urdf.xacro` `wheel_separation`을 URDF 접지 간격 2 × (0.04055 + 0.008)로. URDF 자체는 바꾸지 않았다; `tools/calibration/urdf_nominal.py`가 이 URDF에서 `geometry.yaml`을 만든다.
+- 증거: `test_urdf_nominal.py`(재생성 비교·드리프트).
+- gate 변화: ROS-SIM HOLD(랩 재실행).
+- 결정: D-397 Proposed.

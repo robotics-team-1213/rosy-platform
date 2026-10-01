@@ -2,12 +2,12 @@
 import math
 from dataclasses import dataclass
 
-from ..sensing.body import LIDAR_X, use_radius
+from ..sensing.body import LIDAR_X, ROTATION_RADIUS, use_radius
 
 
 def lidar_limits(stop, clear, radius):
     # Circumradius plus absolute sensor offset bounds every heading even
-    # before the measured 190-degree mounting yaw is transformed. Add an
+    # before the mounting yaw (URDF nominal 180 deg, D-397) is transformed. Add an
     # 18 mm stand-off: 76 + 17 + 18 = 111 mm, above the C1 50 mm blind zone.
     floor = use_radius(radius) + abs(LIDAR_X) + 0.018
     stop = max(floor, stop) if math.isfinite(stop) else floor
@@ -62,7 +62,7 @@ def translation_footprint_eligible(corrected_linear, angular, *, enabled, lidar_
     return bool(enabled and lidar_fresh and mount is not None and travel is not None and
                 all(type(v) in (int, float) and math.isfinite(v)
                     for v in (corrected_linear, angular, scan_age, source_age, radius)) and
-                0 <= scan_age <= .2 and -.05 <= source_age <= .2 and 0 < radius <= .083 and
+                0 <= scan_age <= .2 and -.05 <= source_age <= .2 and 0 < radius <= ROTATION_RADIUS and
                 abs(corrected_linear) <= .014 and abs(angular) < 1e-4 and
                 len(ranges) == 6 and all(math.isfinite(v) and v > 0 for v in ranges))
 

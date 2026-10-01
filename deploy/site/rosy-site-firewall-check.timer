@@ -1,0 +1,10 @@
+[Unit]
+Description=Periodically check the ROSY site LAN filter
+
+[Timer]
+OnBootSec=2min
+OnUnitInactiveSec=5min
+Unit=rosy-site-firewall-check.service
+
+[Install]
+WantedBy=timers.target

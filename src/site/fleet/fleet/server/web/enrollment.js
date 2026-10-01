@@ -38,7 +38,7 @@ export function parseAddress(text) {
 
 export const MESSAGES = {
   bad_format: "코드는 ABCD-EFGH 같은 8자입니다(0·1·I·L·O 없음).",
-  bad_address: "사설 IPv4 주소만 받습니다(예: 192.168.1.20 또는 192.168.1.20:8080).",
+  bad_address: "사설 IPv4 주소만 받습니다 — 로봇 화면에 보이는 IPv4 주소를 적으세요(포트를 바꿨으면 :포트를 붙입니다).",
   code_rejected: "코드가 틀렸거나, 이미 쓰였거나, 만료됐습니다. 선택한 행의 이름이 로봇 화면의 이름과 같은지 확인하세요.",
   code_burned: "이 로봇의 화면 코드가 폐기됐습니다 — 로봇 전원을 다시 넣거나 관리자 등록 코드를 받으세요.",
   rate_limited: "시도가 너무 많습니다. 잠시 뒤 다시 입력하세요.",
@@ -54,12 +54,27 @@ export const MESSAGES = {
   not_enrolled: "등록된 로봇이 아닙니다.",
   address_unchanged: "주소가 바뀐 로봇이 아닙니다.",
   no_new_address: "새 주소가 하나로 보이지 않습니다 — 발견 목록을 확인하세요.",
-  identity_mismatch: "새 주소의 기기가 등록된 로봇과 다릅니다 — 토큰이 다른 기기에 갔을 수 있습니다. 로봇 대시보드에서 사이트 토큰을 회수하고 새로 등록하세요.",
+  still_at_pinned_address: "로봇이 아직 원래 주소에서 응답합니다 — 옮길 필요가 없습니다.",
+  identity_mismatch: "새 주소의 기기가 등록된 로봇과 다릅니다 — 등록된 토큰은 보내지 않았습니다. 발견 목록의 이름과 로봇 화면의 이름이 같은지 확인하세요.",
   ROBOT_BUSY: "진행 중인 목표나 교통 대기가 있습니다 — 먼저 취소하세요.",
   ACTIVE_TASKS: "끝나지 않은 작업이 있습니다 — 먼저 취소하세요.",
   FORMATION_ACTIVE: "대형에 들어 있습니다 — 대형을 먼저 해제하세요.",
   OPERATOR_IDENTITY_REQUIRED: "이름 있는 운영자 계정으로만 등록·해제할 수 있습니다.",
 };
+
+// 새 주소로 옮긴 뒤의 문장. Fleet은 옛 토큰을 어디에도 보내지 않으므로(중계 방어) 회수는 사람 몫이다.
+export function moveDoneLines(row) {
+  const lines = [`${row.robot_id}: ${row.address}(으)로 옮김 — 새 토큰으로 다시 묶었습니다.`];
+  if (row.old_token_revoked !== true) {
+    lines.push("이전 사이트 토큰은 Fleet이 회수하지 않습니다 — 로봇 대시보드에서 회수하거나 만료되게 두세요.");
+  }
+  return lines;
+}
+
+// 평문 HTTP라 Fleet은 새 주소가 그 로봇인지 증명하지 못한다. 로봇 LCD 정보 화면의 주소 줄
+// (`IP:포트`, hmi/face info_screen)과 맞춰 보는 사람이 신원을 묶는다(D-361 2026-10-01 개정).
+export const MOVE_CHECK = "코드를 넣기 전에 이 주소가 로봇 화면에 보이는 IP와 같은지 확인하세요"
+  + "(LCD 정보 화면의 이름 아래 주소 줄). 다르면 옮기지 마세요 — 같은 이름을 다른 기기가 광고하고 있을 수 있습니다.";
 
 export const CONSUMED_REASONS = {
   role_too_low: "원인: 코드 역할이 operator보다 낮습니다.",
@@ -109,7 +124,7 @@ const STATE_LABELS = {
 export function rowText(row) {
   const lines = [STATE_LABELS[row.state] || row.state];
   if (row.hold === "conflict") lines.push("신원 충돌 — 고정 주소로 정지 요청만 보냅니다.");
-  if (row.state === "address_changed") lines.push("고정 주소로 정지 요청만 보냅니다. 해제 후 새 코드로 다시 등록하거나, 확인 후 새 주소로 옮기세요.");
+  if (row.state === "address_changed") lines.push("고정 주소로 정지 요청만 보냅니다. 새 주소로 옮기려면 로봇 화면의 코드가 필요합니다.");
   if (row.state === "pending_logout") {
     lines.push(`로봇에 토큰이 남아 있음(만료 ${row.expires_at || "알 수 없음"}) — 로봇 대시보드에서 회수 가능`);
   }
@@ -153,7 +168,7 @@ export const HELP = [
 
 // dialogs는 /common/ui.js의 { openLiveDialog, confirmIrreversible }다. 셸(console.js)이 넘긴다 —
 // 이 파일은 node 시험이 import하므로 DOM 모듈을 정적으로 끌어오지 않는다.
-export function createEnrollmentPanel({ headers, identity, log, dialogs }) {
+export function createEnrollmentPanel({ headers, identity, log, dialogs, onMoved }) {
   const el = (id) => document.getElementById(id);
   const state = { listing: null, blockedUntil: 0, target: null, busy: false };
 
@@ -209,6 +224,19 @@ export function createEnrollmentPanel({ headers, identity, log, dialogs }) {
     state.busy = true;
     el("enroll-submit").disabled = true;
     try {
+      if (target.move) {
+        // D-361 2026-10-01: 새 주소는 평문이라 인증할 수 없다 — 화면 코드로 그 주소에서 다시 페어링한다.
+        const path = `/api/fleet/enrollment/robots/${encodeURIComponent(target.move)}/move-address`;
+        const row = await call(path, {
+          method: "POST", body: { code: input.value },
+        });
+        input.value = "";
+        el("enroll-dialog")?.close?.();
+        showResult(moveDoneLines(row), false);
+        log?.(`로봇 새 주소로 옮김 ${row.robot_id}`, row.old_token_revoked === false ? "bad" : "good");
+        onMoved?.();
+        return;
+      }
       const row = await call("/api/fleet/enrollment/robots", {
         method: "POST", body: { ...target, code: input.value },
       });
@@ -237,16 +265,29 @@ export function createEnrollmentPanel({ headers, identity, log, dialogs }) {
   function openDialog(target, label) {
     state.target = target;
     el("enroll-target").textContent = label;
+    el("enroll-submit").textContent = target.move ? "옮기기" : "등록";
+    const check = el("enroll-move-check");
+    if (check) {
+      check.hidden = !target.move;
+      el("enroll-move-address").textContent = target.address || "";
+      el("enroll-move-note").textContent = MOVE_CHECK;
+    }
     el("enroll-code").value = "";
     const dialog = el("enroll-dialog");
     // D-280 원칙 2 — showModal()은 #estop까지 inert로 만든다. 비모달로 열고 정지는 살린다.
     if (dialog && !dialog.open) dialogs.openLiveDialog(dialog, { initialFocus: el("enroll-code") });
   }
 
+  function openMove(robotId, address) {
+    openDialog({ move: robotId, address }, address ? `${robotId} → ${address}` : robotId);
+  }
+
   async function act(action, row) {
     if (action === "move") {
-      if (!window.confirm(`${row.robot_id}을(를) 새 주소로 옮길까요? 옮긴 뒤 Fleet이 새 주소에서 신원을 다시 확인합니다.`)) return;
-    } else {
+      openMove(row.robot_id);
+      return;
+    }
+    {
       // D-371 — 등록 해제는 사이트 토큰 회수라 되돌리려면 다시 등록해야 한다. 대상을 이름으로 묻는다.
       // 폴링이 목록을 다시 그려도 포커스는 지금 화면의 그 행 버튼으로 돌아간다.
       const confirmed = await dialogs.confirmIrreversible({
@@ -262,9 +303,6 @@ export function createEnrollmentPanel({ headers, identity, log, dialogs }) {
         const result = await call(path, { method: "DELETE" });
         showResult([result.state === "removed" ? `${row.robot_id} 등록 해제됨`
           : `${row.robot_id}: 로봇에 닿지 않아 해제 대기 — 다시 보이면 한 번 회수합니다.`], false);
-      } else if (action === "move") {
-        await call(`${path}/move-address`, { method: "POST" });
-        showResult([`${row.robot_id} 새 주소로 옮김`], false);
       }
     } catch (err) {
       const detail = err?.detail || {};
@@ -297,7 +335,7 @@ export function createEnrollmentPanel({ headers, identity, log, dialogs }) {
         item.append(small);
       }
       for (const action of rowActions(row, manage)) {
-        const node = button(action === "move" ? "새 주소로 옮기기" : "등록 해제…", () => act(action, row));
+        const node = button(action === "move" ? "새 주소로 옮기기…" : "등록 해제…", () => act(action, row));
         node.dataset.action = action;
         item.append(node);
       }
@@ -357,5 +395,6 @@ export function createEnrollmentPanel({ headers, identity, log, dialogs }) {
     event.target.value = formatCode(event.target.value);
   });
 
-  return { refresh, decorateDiscoveryRow, resetPolling: () => gate.reset() };
+  // 로봇 카드·경보 묶음의 지름길: 등록 패널의 "새 주소로 옮기기…"와 같은 코드 대화상자.
+  return { refresh, decorateDiscoveryRow, resetPolling: () => gate.reset(), openMove };
 }

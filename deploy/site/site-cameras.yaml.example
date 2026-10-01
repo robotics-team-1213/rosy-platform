@@ -2,7 +2,11 @@
 # Marker IDs, map dimensions and revisions below are illustrative; survey and
 # calibrate the real installation before accepting sightings.
 sources:
+  # credential: static (default) - the phone is given a fixed token by hand (rosyov:// link).
+  # credential: paired - D-341: the phone asks the site to connect and an operator approves it in the
+  #   console; drop phone_token_env for such a source and enable pairing (README, Camera pairing).
   - source_id: ceiling_north
+    credential: static
     phone_token_env: ROSY_PHONE_CEILING_NORTH
     token_env: ROSY_FLEET_CEILING_NORTH_TOKEN
     fleet_base_url: https://proxy:8443
@@ -15,3 +19,19 @@ sources:
     robot_markers:
       rosy_01: 7
     heading_edge: [1, 2]
+
+  # A paired source (needs ROSY_SITE_PAIRING=1 and the pairing overlay). No phone_token_env:
+  # Fleet issues the phone its credential at approval, Vision reads it back over HTTPS.
+  # - source_id: ceiling_south
+  #   credential: paired
+  #   token_env: ROSY_FLEET_CEILING_SOUTH_TOKEN
+  #   fleet_base_url: https://proxy:8443
+  #   robot_ids: [rosy_01]
+  #   map_id: replace-with-surveyed-map-id
+  #   calibration_revision: replace-after-calibration
+  #   processor_revision: aruco-opencv-4.12
+  #   corner_marker_ids: [30, 31, 32, 33]
+  #   corner_world_m: [[0.0, 0.0], [4.0, 0.0], [4.0, 2.0], [0.0, 2.0]]
+  #   robot_markers:
+  #     rosy_01: 7
+  #   heading_edge: [1, 2]

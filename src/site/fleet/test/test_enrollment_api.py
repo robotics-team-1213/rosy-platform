@@ -9,7 +9,9 @@ from hashlib import sha256
 import pytest
 from fastapi.testclient import TestClient
 
-from enrollment_fakes import AUTH, CODE, ISSUED, KEY, NAME, PINNED, FakeCore, build, scan_row
+from enrollment_fakes import (
+    AUTH, CODE, ISSUED, KEY, NAME, PINNED, REISSUED, FakeCore, build, scan_row,
+)
 from fakes import FakeRobot
 from fleet.server.app import create_app
 
@@ -62,7 +64,8 @@ def test_viewer_reads_but_cannot_write(tmp_path):
     for method, path in (("post", "/api/fleet/enrollment/robots"),
                          ("post", "/api/fleet/enrollment/robots/rosy_09/move-address"),
                          ("delete", "/api/fleet/enrollment/robots/rosy_09")):
-        kwargs = {"json": {"address": PINNED, "code": CODE}} if path.endswith("robots") else {}
+        kwargs = ({"json": {"address": PINNED, "code": CODE}} if path.endswith("robots")
+                  else {"json": {"code": CODE}} if path.endswith("move-address") else {})
         response = getattr(client, method)(path, headers=_headers(VIEWER), **kwargs)
         assert response.status_code == 403
 
@@ -74,7 +77,8 @@ def test_single_console_token_cannot_write_and_each_route_says_what_it_needs(tmp
     for method, path in (("post", "/api/fleet/enrollment/robots"),
                          ("post", "/api/fleet/enrollment/robots/rosy_09/move-address"),
                          ("delete", "/api/fleet/enrollment/robots/rosy_09")):
-        kwargs = {"json": {"address": PINNED, "code": CODE}} if path.endswith("robots") else {}
+        kwargs = ({"json": {"address": PINNED, "code": CODE}} if path.endswith("robots")
+                  else {"json": {"code": CODE}} if path.endswith("move-address") else {})
         response = getattr(client, method)(path, headers=token, **kwargs)
         assert response.status_code == 403
         assert response.json()["detail"]["code"] == "OPERATOR_IDENTITY_REQUIRED"
@@ -161,3 +165,26 @@ def test_unenroll_with_an_active_console_goal_is_409(tmp_path):
     assert refused.json()["detail"]["code"] == "ROBOT_BUSY"
     assert store.get("rosy_09")["state"] == "active"
     assert "/api/v1/auth/logout" not in network.paths()
+
+
+def test_move_address_takes_the_screen_code_and_answers_without_secrets(tmp_path):
+    moved_at = "10.16.36.20:8080"
+    service, network, console, discovery, store, tasks = build(
+        tmp_path, {PINNED: FakeCore(), moved_at: FakeCore(token=REISSUED, known={ISSUED})})
+    discovery.replace_scan([scan_row()])
+    client = TestClient(create_app(console, task_service=tasks, start_task_dispatcher=False,
+                                   site_users=_users(), enrollment=service, discovery=discovery,
+                                   discovery_token=DISCOVERY))
+    client.post("/api/fleet/enrollment/robots", headers=_headers(OPERATOR),
+                json={"discovery_name": NAME, "code": CODE})
+    del network.cores[PINNED]  # the robot left its pinned address
+    client.post("/api/fleet/discovery/scan", headers=_headers(DISCOVERY),
+                json={"devices": [scan_row(moved_at)]})
+    path = "/api/fleet/enrollment/robots/rosy_09/move-address"
+    assert client.post(path, headers=_headers(OPERATOR)).status_code == 422
+    assert client.post(path, headers=_headers(OPERATOR), json={"code": CODE, "x": 1}).status_code == 422
+    response = client.post(path, headers=_headers(OPERATOR), json={"code": CODE})
+    assert response.status_code == 200, response.text
+    assert response.json()["address"] == moved_at and response.json()["old_token_revoked"] is False
+    for secret in (ISSUED, REISSUED, CODE):
+        assert secret not in response.text

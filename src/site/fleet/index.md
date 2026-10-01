@@ -41,6 +41,7 @@
 | D-333 | ER 2 조작 후보의 Mission 승인, 장치 Action 수락, 정지와 목표 증거를 분리한다 |
 | D-334 | ER 2의 도구 목록과 진행 조회를 Fleet 원장 경계에 둔다 |
 | D-336 | Fleet와 OMX 제어 owner 사이 첫 연결은 같은 호스트의 local IPC로 제한한다 |
+| D-392 | 모델 도구 호출은 provider 중립 메시지 계약과 Fleet 소유 allowlist를 따른다 |
 
 ## 계획·결과 문서
 
@@ -58,6 +59,7 @@
 - [2026-09-29-er2-semantic-actions-mission-implementation.md](../../../docs/plans/2026-09-29-er2-semantic-actions-mission-implementation.md)
 - [2026-09-29-fleet-mission-control-arbitration-implementation.md](../../../docs/plans/2026-09-29-fleet-mission-control-arbitration-implementation.md)
 - [2026-09-29-policy-evidence-contract.md](../../../docs/plans/2026-09-29-policy-evidence-contract.md)
+- [2026-10-01-model-tool-contract-implementation.md](../../../docs/plans/2026-10-01-model-tool-contract-implementation.md)
 
 ## 교훈 (docs/solutions)
 
@@ -69,8 +71,8 @@
 
 ## 최근 기록
 
-- 2026-10-01 · uncommitted · fix(pairing): 같은 자격 ID의 confirm 재시도는 120 s 안에서 멱등
-- 2026-10-01 · uncommitted · test(console): D-341 카메라 연결 승인 브라우저 계약과 화면 다듬기
-- 2026-10-01 · uncommitted · feat(console): D-341 "기기 연결" 패널에 카메라 연결 승인 구역
-- 2026-10-01 · uncommitted · feat(console): D-341 카메라 연결 승인 구역의 순수 규칙(camera-pairing.js)
-- 2026-10-01 · uncommitted · fix(pairing): 보안 리뷰 반영 — 익명 요청은 감사 표에 쓰지 않음, 동기화는 https+CA 필수
+- 2026-10-01 · uncommitted · fix(console): 옮기기 대화상자가 새 주소 후보를 크게 보이고 로봇 화면의 IP와 맞춰 보게 한다
+- 2026-10-01 · uncommitted · fix(enrollment): 옛 토큰은 어디에도 보내지 않고, 고정 주소에서 아직 답하면 옮기지 않는다
+- 2026-10-01 · uncommitted · chore(architecture): 리뷰 수정 뒤 크기 판정 재기록(fleet 23237, enrollment.py 664)
+- 2026-10-01 · uncommitted · fix(console): 옮기기는 로봇마다 화면 코드 대화상자, 전체 옮기기 삭제, 카드·기기 연결 여백
+- 2026-10-01 · uncommitted · fix(discovery): 망 밖 판정은 힌트로 말하고, 이름 고정은 경보를 세우지도 막지도 않는다

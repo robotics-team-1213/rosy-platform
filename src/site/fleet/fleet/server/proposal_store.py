@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from core_common.protocol.schemas import ER2_POST_ACTION_OBSERVATION_MAX_AGE_SECONDS
+from fleet.ai.model_tool_contract import ModelToolCall, ModelToolResult
 
 from .sqlite_policy import configure_connection, enable_wal
 
@@ -148,7 +149,27 @@ class ProposalStore:
                 );
                 CREATE INDEX IF NOT EXISTS fleet_proposals_expiry
                     ON fleet_proposals(expires_at);
+                CREATE TABLE IF NOT EXISTS fleet_model_tool_call_results (
+                    turn_id TEXT NOT NULL,
+                    provider_call_id TEXT NOT NULL,
+                    tool_name TEXT NOT NULL,
+                    ordinal INTEGER NOT NULL CHECK(ordinal >= 0),
+                    content_digest TEXT NOT NULL,
+                    state TEXT NOT NULL CHECK(state IN ('IN_PROGRESS','COMPLETED','UNKNOWN')),
+                    result_json TEXT,
+                    updated_at TEXT NOT NULL,
+                    PRIMARY KEY(turn_id, provider_call_id),
+                    CHECK((state = 'COMPLETED' AND result_json IS NOT NULL)
+                       OR (state IN ('IN_PROGRESS','UNKNOWN') AND result_json IS NULL))
+                );
                 """
+            )
+            # A prior process may have exited after claiming the call but before
+            # durably storing its effect result. Such calls are ambiguous and
+            # must not be replayed automatically after restart.
+            connection.execute(
+                "UPDATE fleet_model_tool_call_results SET state='UNKNOWN', updated_at=? "
+                "WHERE state='IN_PROGRESS'", (_now(),),
             )
             columns = {row[1] for row in connection.execute(
                 "PRAGMA table_info(fleet_proposals)").fetchall()}
@@ -180,6 +201,135 @@ class ProposalStore:
         else:
             del result["resolved_json"]
         return result
+
+    @staticmethod
+    def _tool_call_digest(call: ModelToolCall) -> str:
+        material = f"{call.tool_name}\n{call.ordinal}\n{call.arguments_json}"
+        return hashlib.sha256(material.encode("utf-8")).hexdigest()
+
+    def begin_model_tool_call(self, call: ModelToolCall) -> dict[str, Any]:
+        """Claim a provider call once; return its durable result or ambiguity."""
+        if not isinstance(call, ModelToolCall):
+            raise TypeError("call must be a validated ModelToolCall")
+        digest = self._tool_call_digest(call)
+        with closing(self._connect()) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            turn = connection.execute(
+                "SELECT state FROM fleet_mission_model_turns WHERE turn_id=?",
+                (call.turn_id,),
+            ).fetchone()
+            if turn is None:
+                connection.rollback()
+                raise ProposalRejected("TURN_NOT_FOUND")
+            if turn["state"] != "SUBMITTING":
+                connection.rollback()
+                raise ProposalRejected("TURN_NOT_SUBMITTING")
+            row = connection.execute(
+                "SELECT * FROM fleet_model_tool_call_results "
+                "WHERE turn_id=? AND provider_call_id=?",
+                (call.turn_id, call.provider_call_id),
+            ).fetchone()
+            if row is None:
+                connection.execute(
+                    "INSERT INTO fleet_model_tool_call_results "
+                    "(turn_id, provider_call_id, tool_name, ordinal, content_digest, "
+                    "state, result_json, updated_at) VALUES (?, ?, ?, ?, ?, 'IN_PROGRESS', NULL, ?)",
+                    (call.turn_id, call.provider_call_id, call.tool_name,
+                     call.ordinal, digest, _now()),
+                )
+                connection.commit()
+                return {"created": True, "state": "IN_PROGRESS", "result": None}
+            if (row["content_digest"] != digest or row["tool_name"] != call.tool_name
+                    or row["ordinal"] != call.ordinal):
+                connection.rollback()
+                raise ProposalConflict("provider call id reused with different content")
+            connection.commit()
+            result = (ModelToolResult.model_validate(json.loads(row["result_json"])).to_mapping()
+                      if row["result_json"] is not None else None)
+            return {"created": False, "state": row["state"], "result": result}
+
+    def complete_model_tool_call(self, call: ModelToolCall, *,
+                                 result: ModelToolResult | Mapping[str, Any]) -> dict[str, Any]:
+        """Persist a correlated non-UNKNOWN outcome for a claimed call."""
+        parsed = (result if isinstance(result, ModelToolResult)
+                  else ModelToolResult.model_validate(result))
+        if (parsed.turn_id != call.turn_id
+                or parsed.provider_call_id != call.provider_call_id
+                or parsed.tool_name != call.tool_name or parsed.ordinal != call.ordinal
+                or parsed.outcome == "unknown"):
+            raise ValueError("tool result must match its call and have a known outcome")
+        encoded = json.dumps(parsed.to_mapping(), sort_keys=True, separators=(",", ":"),
+                             ensure_ascii=False, allow_nan=False)
+        with closing(self._connect()) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            row = connection.execute(
+                "SELECT * FROM fleet_model_tool_call_results "
+                "WHERE turn_id=? AND provider_call_id=?",
+                (call.turn_id, call.provider_call_id),
+            ).fetchone()
+            if (row is None or row["content_digest"] != self._tool_call_digest(call)
+                    or row["tool_name"] != call.tool_name or row["ordinal"] != call.ordinal):
+                connection.rollback()
+                raise ProposalConflict("tool call was not claimed with this content")
+            if row["state"] == "UNKNOWN":
+                connection.rollback()
+                raise ProposalConflict("unknown tool call outcome cannot be overwritten")
+            if row["state"] == "COMPLETED":
+                if row["result_json"] != encoded:
+                    connection.rollback()
+                    raise ProposalConflict("completed tool call result cannot be changed")
+                connection.commit()
+                return ModelToolResult.model_validate(json.loads(encoded)).to_mapping()
+            connection.execute(
+                "UPDATE fleet_model_tool_call_results SET state='COMPLETED', result_json=?, "
+                "updated_at=? WHERE turn_id=? AND provider_call_id=? AND state='IN_PROGRESS'",
+                (encoded, _now(), call.turn_id, call.provider_call_id),
+            )
+            connection.commit()
+        return parsed.to_mapping()
+
+    def mark_model_tool_call_unknown(self, call: ModelToolCall) -> None:
+        """Fence an ambiguous provider/effect attempt against replay."""
+        with closing(self._connect()) as connection:
+            connection.execute(
+                "UPDATE fleet_model_tool_call_results SET state='UNKNOWN', updated_at=? "
+                "WHERE turn_id=? AND provider_call_id=? AND content_digest=? "
+                "AND state='IN_PROGRESS'",
+                (_now(), call.turn_id, call.provider_call_id,
+                 self._tool_call_digest(call)),
+            )
+
+    @staticmethod
+    def _complete_model_tool_call_in_transaction(
+        connection: sqlite3.Connection, call: ModelToolCall,
+        result: ModelToolResult,
+    ) -> None:
+        if (result.turn_id != call.turn_id
+                or result.provider_call_id != call.provider_call_id
+                or result.tool_name != call.tool_name or result.ordinal != call.ordinal
+                or result.outcome == "unknown"):
+            raise ValueError("tool result must match its call and have a known outcome")
+        encoded = json.dumps(result.to_mapping(), sort_keys=True, separators=(",", ":"),
+                             ensure_ascii=False, allow_nan=False)
+        prior = connection.execute(
+            "SELECT content_digest, tool_name, ordinal, state, result_json "
+            "FROM fleet_model_tool_call_results WHERE turn_id=? AND provider_call_id=?",
+            (call.turn_id, call.provider_call_id),
+        ).fetchone()
+        if (prior is None or prior["content_digest"] != ProposalStore._tool_call_digest(call)
+                or prior["tool_name"] != call.tool_name or prior["ordinal"] != call.ordinal):
+            raise ProposalConflict("tool call was not claimed with this content")
+        if prior["state"] == "UNKNOWN":
+            raise ProposalConflict("unknown tool call outcome cannot be overwritten")
+        if prior["state"] == "COMPLETED":
+            if prior["result_json"] != encoded:
+                raise ProposalConflict("completed tool call result cannot be changed")
+            return
+        connection.execute(
+            "UPDATE fleet_model_tool_call_results SET state='COMPLETED', result_json=?, "
+            "updated_at=? WHERE turn_id=? AND provider_call_id=? AND state='IN_PROGRESS'",
+            (encoded, _now(), call.turn_id, call.provider_call_id),
+        )
 
     def create(self, *, principal_id: str, request_key: str,
                workcell_id: str, instance_id: str,
@@ -226,7 +376,7 @@ class ProposalStore:
 
     def create_feedback_candidate_fenced(
         self, *, turn_id: str, candidate: Mapping[str, Any],
-        observation: Mapping[str, Any],
+        observation: Mapping[str, Any], tool_call: ModelToolCall | None = None,
     ) -> dict[str, Any]:
         """Atomically persist an ER 2 successor candidate under the live stop fence.
 
@@ -235,6 +385,8 @@ class ProposalStore:
         scope Fleet must bind to the outbox turn and candidate image digest.
         """
         turn_id = _text("turn_id", turn_id, limit=96)
+        if tool_call is not None and tool_call.turn_id != turn_id:
+            raise ProposalRejected("TURN_SCOPE_MISMATCH")
         if not isinstance(observation, Mapping) or set(observation) != {
             "mission_id", "workcell_id", "action_id", "attempt_id",
             "dispatch_generation", "based_on_event_id", "observation_id",
@@ -380,6 +532,17 @@ class ProposalStore:
                 if prior["candidate_digest"] != request_digest:
                     connection.rollback()
                     raise ProposalConflict("feedback turn already has a different candidate")
+                if tool_call is not None:
+                    self._complete_model_tool_call_in_transaction(
+                        connection, tool_call,
+                        ModelToolResult.for_call(
+                            tool_call, outcome="accepted", reason_code="CANDIDATE_RECORDED",
+                            event_id=turn["event_watermark"],
+                            proposal_id=prior["proposal_id"],
+                            payload={"successor_of_mission_id": turn["mission_id"],
+                                     "executable": False},
+                        ),
+                    )
                 connection.commit()
                 return {"proposal": self._row(prior), "created": False}
 
@@ -405,6 +568,16 @@ class ProposalStore:
             row = connection.execute(
                 "SELECT * FROM fleet_proposals WHERE proposal_id=?", (proposal_id,),
             ).fetchone()
+            if tool_call is not None:
+                self._complete_model_tool_call_in_transaction(
+                    connection, tool_call,
+                    ModelToolResult.for_call(
+                        tool_call, outcome="accepted", reason_code="CANDIDATE_RECORDED",
+                        event_id=turn["event_watermark"], proposal_id=proposal_id,
+                        payload={"successor_of_mission_id": turn["mission_id"],
+                                 "executable": False},
+                    ),
+                )
             connection.commit()
         return {"proposal": self._row(row), "created": True}
 

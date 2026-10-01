@@ -18,7 +18,7 @@ Moved out of `src/site/overhead/android` on 2026-09-30 (D-374 stage 1), then ren
 
 | Directory | Purpose |
 |-----------|---------|
-| `app/src/main/java/io/github/livsbittt/rosy/cam/` | `camera/` (CameraX capture, JPEG), `link/` (`OverheadLink` WebSocket client, frame header, protocol), `settings/` (pairing URI, DataStore `cam_settings`, mDNS discovery), `service/` (foreground stream service), `ui/` (Compose screens), `health/` |
+| `app/src/main/java/io/github/livsbittt/rosy/cam/` | `camera/` (CameraX capture, JPEG), `link/` (`OverheadLink` WebSocket client, frame header, protocol), `settings/` (pairing URI, DataStore `cam_settings`, mDNS discovery), `pairing/` (D-341 `rosy-pair/1` console-approved pairing: code, shapes, `PairingClient` state machine, HTTPS transport, `PairingSession`), `service/` (foreground stream service), `ui/` (Compose screens), `health/` |
 | `app/src/test/java/io/github/livsbittt/rosy/cam/` | JVM unit tests (no emulator) |
 
 ## For AI Agents
@@ -26,7 +26,8 @@ Moved out of `src/site/overhead/android` on 2026-09-30 (D-374 stage 1), then ren
 ### Working In This Directory
 
 - Wire names follow the wire, not the app (D-374 3항, D-377 4항): keep `OverheadLink`, `OverheadServiceRecord`, `OverheadServerDiscovery`, `rosy-overhead/1`, `/overhead/v1/frames`, `ROF1`, `_rosy-overhead._tcp`, `rosyov://` and the `rosy.overhead.vectors` test property unchanged.
-- Shared vectors: `test/fixtures/protocol/overhead-ingest.v1.json` (also read by `src/site/vision/test/test_protocol.py`) `test/fixtures/protocol/discovery-txt.v1.json`, and the D-391 `failure-classes.v1.json` / `site-link.v1.json` (also read by `core_common` `failure_class.py` / `site_link.py`). Do not edit one side only.
+- Shared vectors: `test/fixtures/protocol/overhead-ingest.v1.json` (also read by `src/site/vision/test/test_protocol.py`) `test/fixtures/protocol/discovery-txt.v1.json`, and the D-391 `failure-classes.v1.json` / `site-link.v1.json` (also read by `core_common` `failure_class.py` / `site_link.py`), and the D-341 `pairing.v1.json` (property `rosy.pairing.vectors`; also read by `core_common` `pairing.py`). Do not edit one side only.
+- Pairing trust (D-341 3, 8, 9): `FirstContactTrust` records the first leaf unvalidated and then accepts only that leaf, for the pairing calls only. Never reuse it for the frame link, which trusts the pinned site CA (`PinnedTrustManager`).
 - The launcher icon is a copy of `src/hmi/web_common/icons/cam.svg` (D-370 3항); `LauncherIconParityTest` checks it.
 - Harness (D-61): read `progress.md` and `index.md` first. After a change, append `logs.md`, overwrite `progress.md` if a gate moved, then run `python tools/harness/rosy_harness.py generate` from the repo root.
 

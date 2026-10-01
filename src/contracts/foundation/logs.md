@@ -263,3 +263,9 @@
 - 결정: 계획이 열어 둔 바이트 배열은 길이 접두(필드마다 4바이트 big-endian 길이 + UTF-8)로 정했다 — 등록 저장소 AAD와 같은 방식이고 구분 문자를 예약하지 않는다. `decimal6`은 digest 앞 8바이트 big-endian mod 1,000,000. nonce·poll 비밀·토큰은 32바이트 base64url 무패딩 43자, `client_commit`·`poll_secret_sha256`은 그 ASCII 텍스트의 소문자 hex SHA-256. 지문은 CA DER SHA-256 앞 16 hex를 대문자로 4자씩 `-`. 벡터 생성기는 모듈과 별도로 쓴 참조 계산이다(저장소 밖 스크래치). 긴 hex는 `sha256` 이름이 붙은 줄에만 두어 비밀 스캔이 무결성 값으로 읽는다.
 - 증거: `test_pairing_vectors.py` 53 passed(모듈 작성 전 수집 단계 실패 확인). foundation 전체·비밀 스캔은 커밋 기록 참조 — `test_no_secrets_in_tracked_files`의 `docs/logs.md:4077`·`docs/plans/2026-10-01-gemini-robotics-samples-research.md:5` 실패와 `fleet` 크기 판정 실패는 main에 이미 있던 것이다(이 변경 파일 아님).
 - gate 변화: 없음(LOCAL). Kotlin 로더는 Rosy Cam 세션 몫.
+
+## 2026-10-01 · edca9b2e · feat(geometry): calibration_store 중심값과 운영자 층 (D-397)
+- 변경: `calibration_store` 바퀴 기준 0.027/0.0961 → URDF NOMINAL 0.028/0.0971(±10 %), `LIDAR_NOMINAL_DEG` 180, 창 180 ± 30. `resolve(..., override=)` — URDF NOMINAL < 승인 레코드 < 운영자 덮어쓰기, 덮어쓰기도 `check_values`를 통과해야 하고 실패하면 경고·거부. `config.local_overlay()`가 운영자 오버레이만 읽는다(`overlay_path()`).
+- 증거: `test_calibration_store.py` 세 종류 순서·거부 테스트, `tools/calibration/test/test_urdf_nominal.py` 드리프트.
+- gate 변화: SOURCE/LOCAL. DEVICE HOLD(배포 전 사용자 승인).
+- 결정: D-397 Proposed, D-47 addendum 개정.

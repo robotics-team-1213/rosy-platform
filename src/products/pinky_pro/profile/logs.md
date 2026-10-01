@@ -25,3 +25,9 @@
 - gate 변화: SOURCE/LOCAL GO. DEVICE HOLD(페이로드 배포 전; 실물 미접촉).
 - 결정: D-344 §11, D-47 추가(2026-10-01), D-196.
 - 교훈: 제품 기본값을 주석으로만 적어 두면(“Pinky Pro device: 180”) 어떤 배포 경로도 그 값을 싣지 않는다.
+
+## 2026-10-01 · edca9b2e · feat(profile): 생성 `geometry.yaml`, 카메라 NOMINAL을 URDF 값으로 (D-397)
+- 변경: `config/geometry.yaml` 신설(`tools/calibration/urdf_nominal.py` 생성). `camera_nominal.yaml` 피치 0.1396 → 0.139626, 높이 0.067 → 0.06343, x 0.034 → 0.03317. `core.yaml` 180은 그대로, 드리프트 테스트로 묶음.
+- 증거: `tools/calibration/test/test_urdf_nominal.py`.
+- gate 변화: SOURCE/LOCAL. DEVICE HOLD — 보정 없는 로봇의 차선 투영 척도 약 5 % 변화(재생: target-on-paint 1.5 → 5.5 %).
+- 결정: D-397 Proposed.

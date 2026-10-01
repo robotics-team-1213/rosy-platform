@@ -8,9 +8,22 @@ from urllib.parse import urlsplit
 
 from core_common.protocol.discovery_txt import ROBOT, Rejected, classify
 
+#: Robots live on RFC 1918 LANs only (the same rule as enrollment.parse_manual_address).
+#: `ipaddress.is_private` also admits documentation, benchmark and shared ranges.
+RFC1918 = tuple(ipaddress.ip_network(net) for net in ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"))
+
+
+def is_rfc1918(address: object) -> bool:
+    try:
+        ip = ipaddress.ip_address(str(address))
+    except ValueError:
+        return False
+    return ip.version == 4 and any(ip in net for net in RFC1918)
+
+
 _ROW_ERRORS = {
     "bad_host": "invalid discovery hostname",
-    "bad_address": "discovery address must be a private LAN IPv4 address",
+    "bad_address": "discovery address must be an RFC 1918 LAN IPv4 address",
     "bad_port": "invalid discovery port",
 }
 
@@ -50,6 +63,8 @@ class DiscoveryStore:
                 if result.reason == "ap_mode":
                     continue
                 raise ValueError(_ROW_ERRORS[result.reason])
+            if not is_rfc1918(address):
+                raise ValueError(_ROW_ERRORS["bad_address"])
             ip = ipaddress.ip_address(address)
             stage = device.get("stage", "")
             release = device.get("release", "")
@@ -71,9 +86,19 @@ class DiscoveryStore:
 
     def snapshot(self, registered: dict[str, str], paired: dict[str, dict],
                  enrolled: dict[str, str] | None = None) -> dict:
-        """`enrolled` maps a lowercase discovery name to its enrolled robot_id (D-361 8)."""
-        if self._seen_at is None or self._clock() - self._seen_at > self._ttl_s:
-            return {"devices": [], "scanner_online": False}
+        """`enrolled` maps a lowercase discovery name to its enrolled robot_id (D-361 8).
+
+        `scanner_state` is `never_seen` (no scan since Fleet started), `online`, or `expired`
+        (the lease ran out: discovery and move-address stop until the scanner returns).
+        """
+        if self._seen_at is None:
+            return {"devices": [], "scanner_online": False, "scanner_state": "never_seen",
+                    "scanner_age_s": None}
+        elapsed = self._clock() - self._seen_at
+        age_s = int(elapsed)
+        if elapsed > self._ttl_s:
+            return {"devices": [], "scanner_online": False, "scanner_state": "expired",
+                    "scanner_age_s": age_s}
         enrolled = enrolled or {}
         counts = {}
         for row in self._rows:
@@ -111,4 +136,4 @@ class DiscoveryStore:
             devices.append({**row, "robot_id": robot_id, "status": status,
                             "enrollable": status == "registration_pending"})
         return {"devices": sorted(devices, key=lambda item: (item["name"], item["address"])),
-                "scanner_online": True}
+                "scanner_online": True, "scanner_state": "online", "scanner_age_s": age_s}

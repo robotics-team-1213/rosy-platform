@@ -53,6 +53,11 @@ android {
                 "rosy.sitelink.vectors",
                 rootProject.file("../../../test/fixtures/protocol/site-link.v1.json").absolutePath,
             )
+            // D-341 rosy-pair/1 shared vectors, also read by core_common pairing (Fleet, Vision).
+            it.systemProperty(
+                "rosy.pairing.vectors",
+                rootProject.file("../../../test/fixtures/protocol/pairing.v1.json").absolutePath,
+            )
             // D-370 icon sources; LauncherIconParityTest compares the launcher drawables to them.
             it.systemProperty(
                 "rosy.icons.dir",

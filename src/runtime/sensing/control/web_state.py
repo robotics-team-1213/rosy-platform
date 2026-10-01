@@ -10,6 +10,7 @@ import time
 import uuid
 
 from control.sensing.battery import battery_snapshot
+from control.sensing.body import URDF_RADIUS
 
 # STATE keys — the JSON contract with the page; never rename these strings.
 K_TELEOP = 'teleop_topic'
@@ -55,7 +56,7 @@ LIMIT_PARAMS = [
     ('warn_front', 0.18),
     ('us_stop_distance', 0.020),
     ('us_clear_distance', 0.028),
-    ('robot_radius', 0.076),
+    ('robot_radius', URDF_RADIUS),
     ('open_max', 0.40),
 ]
 LIMIT_KEYS = {'stop_distance': 'stop', 'clear_distance': 'clear',

@@ -143,7 +143,7 @@ main {
     grid-row: 1 / span 2;
     display: grid;
     grid-template-columns: minmax(0, 0.46fr) minmax(0, 0.54fr);
-    grid-template-rows: auto auto auto auto auto;
+    grid-template-rows: auto auto auto auto auto auto;
     column-gap: var(--space-4);
     align-items: start;
     min-height: 0;
@@ -154,11 +154,14 @@ main {
      신호등 → 이벤트로 나눠 두 칸을 모두 채운다. 패널 max-height 는 넘침만 만들어 뺐다. */
   #roster-heading { grid-column: 1; grid-row: 1; }
   #roster-toggle { grid-column: 2; grid-row: 1; justify-self: start; }
-  #roster { grid-column: 1; grid-row: 2; min-height: 0; max-height: min(42vh, 30rem); overflow-y: auto; }
-  .discovery { grid-column: 2; grid-row: 2; margin-top: 0; }
-  .formation { grid-column: 1; grid-row: 3 / span 2; margin-top: var(--space-3); }
-  .signals { grid-column: 2; grid-row: 3; }
-  #log { grid-column: 2; grid-row: 4; }
+  /* 사이트 망이 바뀐 경보는 두 칸을 가로지른다. 숨으면 그 행은 높이가 없다. */
+  .address-drift { grid-column: 1 / -1; grid-row: 2; }
+  #roster { grid-column: 1; grid-row: 3; min-height: 0; max-height: min(42vh, 30rem); overflow-y: auto; }
+  .discovery { grid-column: 2; grid-row: 3; margin-top: 0; }
+  .formation { grid-column: 1; grid-row: 4 / span 2; margin-top: var(--space-3); }
+  /* 기기 연결 묶음의 마지막 줄과 신호등 머리 사이에 숨을 둔다(붙어 겹쳐 보였다). */
+  .signals { grid-column: 2; grid-row: 4; margin-top: var(--space-4); }
+  #log { grid-column: 2; grid-row: 5; }
 }
 
 
@@ -283,6 +286,8 @@ main {
 .legend [hidden] { display: none; }
 
 .roster { display: flex; flex-direction: column; gap: var(--space-3); }
+/* 카드는 내용 높이를 지킨다 — 스크롤 칸 안에서 줄어들면 까닭 줄과 버튼이 잘린다. */
+.roster > * { flex-shrink: 0; }
 
 .robot {
   border: 1px solid var(--line-10);
@@ -578,6 +583,16 @@ main {
 .discovery-state.enrolled { color: var(--ink); }
 .device-link h4 { margin: 0; }
 .enroll-alarm { color: var(--status-crit); font-weight: var(--weight-label); }
+.address-drift { display: grid; gap: var(--space-2); margin: var(--space-2) 0; }
+.address-drift[hidden] { display: none; }
+.address-drift .enroll-alarm { margin: 0; }
+.enroll-move-check[hidden] { display: none; }
+.enroll-move-check p { margin: var(--space-1) 0; }
+.enroll-move-address-label { font-size: var(--text-label); color: var(--ink-quiet); }
+.enroll-move-address { font-family: var(--mono); font-size: var(--text-title); font-weight: var(--weight-label); color: var(--ink); }
+.address-movable { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-2); }
+.address-movable li { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.address-movable li span { font-family: var(--mono); font-size: var(--text-label); }
 .enroll-address { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
 .enroll-address input, #enroll-code { min-height: var(--target-secondary); padding: var(--space-1) var(--space-2); color: var(--ink); background: var(--ground-soft); border: 1px solid var(--line-14); border-radius: var(--radius-flag); }
 .enroll-result p { margin: var(--space-1) 0; }

@@ -5,7 +5,9 @@
             <plugin filename="gz-sim-diff-drive-system" name="gz::sim::systems::DiffDrive">
                 <left_joint>${namespace}l_wheel_joint</left_joint>
                 <right_joint>${namespace}r_wheel_joint</right_joint>
-                <wheel_separation>0.0961</wheel_separation>
+                <!-- URDF nominal (D-397 geometry.yaml): wheel contact separation
+                     2 x (0.04055 + 0.008) and the collision cylinder radius. -->
+                <wheel_separation>0.0971</wheel_separation>
                 <wheel_radius>0.028</wheel_radius>
 
                 <min_velocity>-1.0</min_velocity>

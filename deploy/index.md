@@ -67,8 +67,8 @@
 
 ## 최근 기록
 
-- 2026-10-01 · uncommitted · fix(site): 사이트 사전 점검 독립 리뷰 반영 — systemd 형식, env 따옴표, 모든 Caddy 블록
-- 2026-10-01 · uncommitted · feat(site): D-391 3 사이트 호스트 일관성 사전 검사 `site_preflight.py`
-- 2026-10-01 · uncommitted · fix(release): 비밀 검사가 SHA·HEAD 코드 스팬의 리비전을 출처 데이터로 본다
-- 2026-10-01 · uncommitted · fix(sd): 긴급 resume은 plan의 시도 색인을 읽는다 (D-389 검증)
-- 2026-10-01 · uncommitted · fix(sd,release): D-389 독립 리뷰 반영 — 긴급 resume 이력 검사, 다운로더 점검
+- 2026-10-01 · uncommitted · test(site): `site-firewall.py`를 실제 iptables-nft로 검증 (컨테이너)
+- 2026-10-01 · uncommitted · merge(site): main의 D-341 페어링 배선과 인터페이스 바인드 합치기 — 사이트 설정 파일은 site.env 하나
+- 2026-10-01 · uncommitted · fix(site): 재검증 반영 — 컨테이너 직행 트래픽 차단, 라벨로 닫기, 바인드 탐침 정밀화
+- 2026-10-01 · uncommitted · fix(site): 보안 리뷰 반영 — 필터를 Docker 앞 mangle로, 원자 적용·실패 시 닫힘, 설정은 Compose에서
+- 2026-10-01 · uncommitted · fix(site): 사이트 바인드는 인터페이스를 따른다 — 와일드카드 바인드, 인터페이스 방화벽, 루프백 발견 브리지

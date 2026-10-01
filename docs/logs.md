@@ -4154,3 +4154,27 @@
 - 변경: c3263f7c 뒤 `tools/perception/model/watch.py`가 630줄로 D-362 600줄 예산을 넘었다(test_over_budget_code_has_a_recorded_verdict). 판정 행을 더하지 않고, I/O 없는 상태 전이 함수 13개(`new_state`…`supersede`, `STATE_VERSION`)를 `watch_core.py`(140줄)로 옮겼다. `watch.py`(516줄)가 같은 이름을 다시 내보내므로 호출자와 시험은 그대로 `watch.<name>`을 쓴다. 동작 변경 없음.
 - 증거: tools/perception/test 484 passed, 39 skipped; test_module_structure 예산 시험.
 - gate 변화: 없음(SOURCE). 사이트 설치는 체크아웃 전체를 쓰므로 새 파일도 함께 간다.
+## 2026-10-01 · uncommitted · docs(plan): 기록 ER2 model-tool 후속 ROS-SIM 부분 검증
+- 변경: model-tool 구현 계획 Task 8에 OMX Pilot Gazebo 부분 실행 결과와 남은 ROS-SIM 시나리오를 분리 기록하고 검증 노트를 추가했다. provider tool이 Device Action을 직접 실행했다는 뜻으로 해석되지 않도록 Fleet Mission admission/grant 연결은 미검증으로 명시했다.
+- 증거: 고정 amd64 Pilot 이미지에서 `joint1`/그리퍼 action SUCCEEDED 및 관절 readback 변화, 명시 취소 CANCELED. Fleet 116 passed, OMX action/PICK_PLACE 48 passed. Jazzy direct vendor callback pytest 1 passed(무이동 goal, readback, 경쟁 owner 거절, 취소 terminal).
+- gate 변화: OMX ROS-SIM 제어경로 보조 증거만 추가. model-tool 통합 ROS-SIM, ARTIFACT, DEVICE, FIELD는 HOLD/PARKED.
+## 2026-10-01 · uncommitted · test(arch): rejudge current Fleet size snapshot after main integration
+- 변경: D-362 `SIZE_VERDICTS`의 Fleet 기준을 stale `22435`에서 현 실측 `22797`로 재판정했다. 기존 B2 subpackage split 판정과 unscheduled 상태는 유지했다. 이 변경은 허용 예산 확대나 분할 완료 선언이 아니다.
+- 증거: 병합 후 `test_size_verdicts_are_well_formed_and_current`가 `22797 > 22435 + 150`로 재현 실패. 현재 package scanner 결과를 기준점으로 기록하고 구조 테스트에서 다시 검증한다.
+- gate 변화: 구조 ratchet는 현 기준점에서 재판정; Fleet split queue는 계속 unscheduled.
+
+## 2026-10-01 · uncommitted · docs(adr): D-361 "새 주소로 옮기기"는 화면 코드로 새 주소에서 재페어링
+- 변경: D-361에 날짜 붙은 개정을 더했다. 평문 HTTP는 새 주소를 인증하지 못하므로, 옮기기는 저장된 토큰을 먼저 보내지 않고 로봇 화면 코드로 새 주소에서 교환한 새 토큰으로 신원을 확인한 뒤에만 고정 주소와 토큰을 바꾼다. 옛 토큰은 확인 뒤 logout, 실패하면 감사와 콘솔 안내. 전체 옮기기는 두지 않는다. 구현: `src/site/fleet/fleet/server/enrollment.py` (`feat/fleet-robot-address-drift`).
+- 증거: `src/site/fleet/test/test_enrollment_service.py` — 신원 확인 전 새 주소에 저장 토큰·Authorization 0회(기록하는 가짜 로봇).
+- gate 변화: 없음(LOCAL).
+
+## 2026-10-01 · uncommitted · docs(adr): D-361 개정 보강 — 옮기기 비교는 일관성 검사, 옛 토큰은 보내지 않음, 고정 주소 탐침
+- 변경: 보안 재리뷰를 반영해 D-361 2026-10-01 개정을 고쳤다. 고정 주소에서 아직 답하면 409 `still_at_pinned_address`, robot_id·hostname·serial 비교는 인증이 아닌 일관성 검사(device_uid 제외), 신원은 로봇 화면의 코드·IP를 보는 운용자가 묶고 진짜 인증은 로봇 키(이후 과제), 옛 토큰은 어디에도 보내지 않고 대시보드에서 회수.
+- 증거: `src/site/fleet/test/test_enrollment_service.py` 옮기기 시험.
+- gate 변화: 없음(LOCAL).
+
+## 2026-10-01 · uncommitted · fix(test): proposal_store.py 크기 판정 행 복구
+
+- 변경: `feat/fleet-robot-address-drift` 착지 때 rosy-00의 병합 스크립트가 `test/architecture/test_module_structure.py` 충돌을 브랜치 쪽으로 통째로 풀어, rosy-84가 d064a26e에서 넣은 `proposal_store.py` 판정 행(accept, 730)을 지웠다. 그 행을 원문 그대로 되살렸다. 스크립트는 이제 이 파일 충돌에서 멈춘다.
+- 증거: `test_module_structure.py` 33 passed.
+- gate 변화: 없음.

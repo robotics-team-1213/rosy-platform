@@ -60,6 +60,32 @@ class SettingsStore(context: Context) {
     }
 
     /**
+     * Saves a ready [link] (a `rosy-pair/1` result) as is and returns what it replaced, so a failed confirm can
+     * put that back with [restore].
+     */
+    suspend fun replace(link: SiteLink): SiteLink? {
+        require(SiteLink.validate(link) == null) { "invalid site link" }
+        var previous: SiteLink? = null
+        store.edit { prefs ->
+            previous = decode(prefs)
+            write(prefs, link)
+        }
+        return previous
+    }
+
+    /** Undoes [replace]: writes [previous] back, or removes every site-link key when there was none. */
+    suspend fun restore(previous: SiteLink?, replaced: SiteLink) {
+        store.edit { prefs ->
+            if (decode(prefs) != replaced) return@edit
+            if (previous != null) {
+                write(prefs, previous)
+            } else {
+                SiteLinkPrefs.encode(replaced).keys.forEach { prefs.remove(stringPreferencesKey(it)) }
+            }
+        }
+    }
+
+    /**
      * Records the `tls_host` that mDNS showed at this link's `manual_host` (same pinned site CA), so later
      * connects follow the name instead of the address. No-op when the saved link changed meanwhile.
      */

@@ -896,6 +896,18 @@
 - 증거: 집중 테스트 108 passed, flake8·`git diff --check` 통과. Harness lint는 0 errors, 기존 `last_verified` 차이 경고 24건. SOURCE/LOCAL만; ROS-SIM·ARTIFACT·DEVICE·FIELD gate는 미실행.
 - gate 변화: 없음.
 
+## 2026-10-01 · uncommitted · feat(fleet): D-392 P4 per-call 멱등성과 UNKNOWN 결과 저널
+
+- 변경: Fleet 공유 SQLite에 provider call ID·tool 이름·순번·canonical 인수 digest를 기록한다. 동일 call 재실행은 저장 결과를 반환하고, 내용이 바뀐 ID 재사용은 충돌로 거부한다. 프로세스 재시작 때 미완료 call은 UNKNOWN으로 닫아 자동 replay를 막는다.
+- 원자성: `propose_replan` 후보와 상관된 accepted `ModelToolResult`를 같은 SQLite 트랜잭션으로 저장한다. 결과 저장 실패 시 후보도 rollback한다. UNKNOWN/IN_PROGRESS는 Gemini function result로 회신하지 않고 바깥 model turn을 UNKNOWN으로 끝낸다.
+- 증거: call journal·candidate fence·dispatcher·ER2 adapter·turn store·feedback suite 76 passed; Fleet 전체 1035 passed, 6 skipped. flake8, `git diff --check` 통과.
+- gate 변화: 없음. SOURCE/LOCAL만; ROS-SIM·ARTIFACT·DEVICE·FIELD 미실행.
+
+## 2026-10-01 · uncommitted · fix(fleet): D-392 P4 early result journaling
+- Change: dispatch_replan claims each validated canonical call once and journals early policy rejections. Reusing a provider call ID with changed arguments returns a conflict.
+- Evidence: regression covers saved/replayed REPLAN_NOT_ALLOWED and provider call ID collision; focused tests pass.
+- gate 변화: none. SOURCE/LOCAL only; ROS-SIM, ARTIFACT, DEVICE, and FIELD were not run.
+
 ## 2026-10-01 · uncommitted · feat(pairing): D-341 2단계 — Fleet `pairing/v1` 서버 상태와 API
 
 - 변경: `server/pairing.py`(메모리 대기 표 `pending → revealed → approved → delivered → confirmed`, `rejected`·`expired`; 기동마다 새 HMAC 키, 공개 뒤 `server_nonce` 폐기·코드 HMAC만 보관; 대기 300 s·사이트 전체 16건·30건/분·조회 2 s·본문 4 KiB·틀린 코드 3회 거절·승인 후 120 s 확인 없으면 자동 회수, 한도는 429 + `Retry-After`이고 기존 대기를 밀어내지 않는다), `server/pairing_store.py`(`device_credentials`: digest·source·상태·만료만, 원문·nonce·코드 열 없음; 감사는 `device_pairing_audit` 재사용, 모든 쓰기가 `device_kind='overhead-camera'`를 명시), `server/pairing_routes.py`(`/api/fleet/pairing/v1/...` 10개 라우트: 폰 요청·공개·조회·확인, 콘솔 대기·요약·승인·거절·회수, Vision 자격 목록). `enrollment_store.py`는 감사 표 생성·이전·추가를 모듈 함수로 꺼내 두 저장소가 같이 쓴다. `create_app(pairing=, pairing_sync_token=)` — 동기화 비밀은 console·discovery·preview·로봇 REST/Agent·sighting·policy evidence·사용자 digest·로봇 등록 키와 겹치면 기동 거절(`site_auth.assert_pairing_sync_token_isolated`). `sightings_config.py`: source별 `credential: static|paired`. CLI `--pairing-ca`·`--pairing-tls-host`·`--pairing-sync-token-env` — `--tls-cert`·`--tasks-db` 없으면 기동 거절, CA 자리에 leaf면 거절.
@@ -947,3 +959,92 @@
 - 변경: rosy-84 Rosy Cam 클라이언트 보안 리뷰 권고. 첫 confirm 응답이 사라지면 폰은 자격이 살아났는지 알 수 없어 버리고, 그 자리는 운용자가 폐기할 때까지 막혔다. 이제 같은 요청·같은 poll 비밀·같은 `credential_id`로 승인 뒤 120 s 안에 다시 confirm하면, 그 자격이 여전히 active일 때만 같은 200을 돌려준다(감사 행은 처음 한 번). 다른 ID·창 밖·폐기 뒤는 지금처럼 410. 함께: 모델 감시기 분할(625fad86) 뒤 낡은 `watch.py` 크기 판정 행을 지웠다(콘솔 병합이 되살린 행).
 - 증거: `test_pairing_state.py` 31 passed(신규 2건), `test/architecture/test_module_structure.py` 33 passed.
 - gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · test(fleet): D-392 P4 provider adapter conformance fixtures
+- 변경: Test-only Interactions and Live API shaped adapters normalize differing native call/result fields into the same canonical Fleet contract and exercise the actual dispatcher and durable journal.
+- Coverage: read and candidate calls, replay and call-ID collision, argument byte limit, stale turn after stop, and denial of mock motion/gripper, sample-shaped OpenAPI, and model-routed stop tools. Endpoint profiles keep Interactions-only structured output/code execution out of Live assumptions.
+- Evidence: 25 conformance tests passed. No production Live adapter, new provider SDK, physical action, or device claim.
+- gate 변화: none. SOURCE/LOCAL only; ROS-SIM, ARTIFACT, DEVICE, and FIELD were not run.
+
+## 2026-10-01 · uncommitted · feat(discovery): 검색기 임대가 끊기면 관제가 경보한다
+
+- 변경: 점검(2026-10-01) #4 연쇄 — 발견 브리지가 끊긴 뒤 45 s가 지나면 새 로봇 발견과 새 주소로 옮기기가 멈추는데, 관제는 처음부터 스캔이 없을 때와 같은 노란 "검색기 연결 대기"만 보였다. `server/discovery.py` `snapshot()`이 `scanner_state`(`never_seen`·`online`·`expired`)와 `scanner_age_s`를 더한다(`scanner_online`은 그대로). `web/console.js` 발견 패널이 `expired`면 `crit` "검색기 끊김", 마지막 스캔 나이와 멈춘 기능, `rosy-mdns-bridge` 확인 안내를 보이고, 끊김·복귀를 한 번씩 이벤트 로그에 남긴다. 등록 코드(`enrollment.py`·`enrollment.js`)는 건드리지 않았다(feat/d341-fleet-pairing-server와 겹침 회피). API 참조 `/api/fleet/discovery` 행 갱신.
+- 증거: `test_discovery.py` 상태 시험(never_seen → online 45 s → expired), 콘솔 경보 소스 계약, `test_discovery_api.py` 응답 모양, `test/test_fleet_console_browser.py`의 Chromium 시험(`ROSY_RUN_BROWSER_TESTS=1`, 경보 crit·로그 1회·복귀) 통과. `python -m pytest src/site/fleet/test -q` 986 passed, 6 skipped (2026-10-01 Windows).
+- gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · feat(discovery): 고정 주소가 지금 망에 있는지 로봇마다 판정한다
+
+- 변경: 점검(2026-10-01, "192.168.1.x 가정 없음") #2 — 사이트 Wi-Fi가 192.168.1.x에서 10.16.36.x로 바뀌자 로봇이 까닭 없이 오프라인으로만 보였다. 새 순수 모듈 `server/address_drift.py` `classify_addresses()`가 로스터의 고정 base_url을 최근 스캔과 대조해 `in_scanned_subnet`·`outside_scanned_subnets`·`seen_at_other_address`·`unknown`(스캔 없음·검색기 꺼짐·`.local` 이름이 스캔에 없음)으로 나누고, 모든 고정 로봇이 스캔된 망 밖이면 `all_outside`를 켠다. 새 `GET /api/fleet/discovery/addresses`(viewer+)가 이것에 출처(`static`·`enrolled`)와 `movable`(등록부가 `address_changed`이고 새 주소가 하나)을 붙인다. 스캔을 받을 때 robots.yaml 로봇이 모든 스캔 망 밖이거나 다른 주소에 보이면 경고 로그를 한 번 남긴다.
+- 결정: 스캔 행에는 robot_id·device_uid가 없다. 그래서 같은 로봇 판정은 등록부가 이미 쓰는 발견 이름(등록 로봇), 인증된 HELLO의 `device_name`, 그 둘이 없으면 base_url 자체의 `.local` 이름(파일 로봇)으로만 한다. 신원이 없는 로봇은 이름으로 짐작하지 않는다. 실제 이동은 기존 "새 주소로 옮기기"가 토큰으로 robot_id·hostname·serial·device_uid를 다시 확인한다. 스캔 행에 넷마스크가 없어 "스캔된 망"은 스캔 주소마다 /24로 잡는다(`site_networks` 인자는 사이트 호스트 인터페이스를 알게 되면 더한다 — 지금은 배선하지 않음: Fleet은 컨테이너 안이라 호스트 인터페이스를 모른다). 포트만 다르면 주소 변경으로 보지 않는다(파일 로봇의 https:8443 대 광고 8080). `.local`은 풀지 않고(D-370 5.3) 스캔의 IP를 제안으로만 싣는다. 응답에 토큰·경로·userinfo가 없다. API 참조에 행을 더했다.
+- 증거: 새 `test_address_drift.py` 14, `test_address_drift_api.py` 4 — 모듈 없음으로 적색 확인 뒤 18 passed.
+- gate 변화: 없음(LOCAL).
+
+## 2026-10-01 · uncommitted · feat(console): 오프라인 로봇 카드에 고정 주소 까닭, 사이트 망 변경 경보
+
+- 변경: 점검 #3 — 새 순수 모듈 `web/address-drift.js`(`addressReason`·`renumberBanner`·`addressMap`)가 판정을 문장으로 옮긴다. 오프라인 로봇 카드에 "고정 주소 X이(가) 지금 망에 없습니다 — …", 등록 로봇이 다른 주소에 하나로 보이고 등록부가 `address_changed`면 "같은 로봇이 Y에 보입니다 — 새 주소로 옮기기…"와 카드 버튼(기존 로봇별 이동 흐름 `enrollment.confirmMove`를 그대로 부름, viewer는 "운용자 권한이 필요합니다", 공용 토큰은 "이름 있는 운용자 계정이 필요합니다"), 이름이 여러 주소면 신원 충돌 문장(행동 없음). robots.yaml의 `.local` 로봇은 "이름이라 Fleet이 따라가지 않습니다 — 스캔에서 Y에 보입니다 … robots.yaml을 고치세요"로 제안만 한다. 모든 고정 로봇이 스캔 망 밖이면 로봇 목록 위에 `role="alert"` 경보 "사이트 망 주소가 바뀐 것 같습니다 …". `console.js`가 발견과 같은 주기로 읽고 바뀌었을 때만 다시 그린다. 정적 허용 목록에 모듈을 더했고, 넓은 창 격자에 경보 행을 넣어 아래 행을 하나씩 내렸다.
+- 결정: 예시 주소 `192.168.1.20`을 콘솔·서버 문구에서 뺐다. 수동 등록은 사설 IPv4만 받으므로 문서용 192.0.2.x를 예로 들면 그 예가 거절된다 — 자리표시는 "로봇 화면의 IP:8080", 오류 문구는 "로봇 화면에 보이는 IPv4 주소"로 바꿨다. `deploy/site/robots.yaml.example`은 이미 192.0.2.10이다.
+- 증거: 새 `test/web/address-drift.test.mjs` 7(모듈 없음 적색 → 자리표시 `192.168.1.20` 남음 적색 → 녹색), `test_address_drift_api.py` 정적 자산·셸 배선 1 추가. `node --test src/site/fleet/test/web/*.test.mjs` 76 passed, `src/hmi/web_common/test/` + 콘솔 시험 224 passed, 24 skipped.
+- gate 변화: 없음(LOCAL).
+
+## 2026-10-01 · uncommitted · feat(console): "새 주소로 옮기기 (전체)…"
+
+- 변경: 점검 #5 — 로봇 목록 위 경보 묶음에 "새 주소로 옮기기 (전체)…" 버튼. 대상은 서버가 `movable`로 판정한 등록 로봇(새 주소가 하나, 등록부 `address_changed`, 충돌 아님)뿐이다. `confirmIrreversible` 한 번에 로봇별 `"robot_id" → 새 주소`를 모두 적고 묻고, 확인하면 `address-drift.js` `runBulkMove`가 기존 `POST /api/fleet/enrollment/robots/{id}/move-address`를 한 대씩 차례로 부른다(`enrollment.moveAddress`). 한 대가 실패해도 나머지는 가고, 결과는 로봇마다 한 줄(실패는 등록 패널과 같은 분류 문장)과 이벤트 로그 "n/m대 옮김".
+- 결정: 로봇별 이동은 화면 코드를 요구하지 않는다 — 이름 있는 운용자의 감사되는 확인 뒤 Fleet이 기존 토큰으로 새 주소의 `system/info`를 읽고 robot_id·hostname·serial·device_uid가 다르면 그 로봇을 `needs_new_code`로 둔다(D-361 3). 전체 옮기기는 같은 요청을 로봇마다 그대로 보내므로 신원 확인·감사·권한(`require_named_operator`)이 하나도 줄지 않는다. 새 서버 경로는 만들지 않았다. 파일(robots.yaml) 로봇은 대상이 아니다(런타임에 파일을 고치지 않는다 — 제안 문장만).
+- 증거: `address-drift.test.mjs` 3 추가(대상 필터, 확인 문장이 대상·주소를 모두 말하고 묻는다, 순서대로 한 번씩·실패 뒤 계속·로봇별 문장) — export 없음 적색 뒤 녹색, `test_address_drift_api.py` 배선 1 추가. node 79 passed, 주소 시험 20 passed, `src/hmi/web_common/test/` + 대화상자 계약 녹색.
+- gate 변화: 없음(LOCAL).
+
+## 2026-10-01 · uncommitted · chore(architecture): fleet 크기 판정 23166으로 재기록
+
+- 변경: `test/architecture/test_module_structure.py`의 `fleet` 판정을 22435에서 23166으로 다시 적고 'split: …' 문장 끝에 까닭을 붙였다(main이 D-392 작업으로 이미 22797, 이 브랜치의 `address_drift.py`·`address-drift.js`·라우트·시험이 더함). 판정은 그대로다.
+- 증거: 판정 시험 녹색. 같은 파일의 `site/fleet/fleet/server/proposal_store.py`(730줄, D-392 다른 세션) 판정 없음 1건은 main에서도 실패하며 이 브랜치가 다루지 않는다. `src/site/fleet/test/` 1123 passed, 6 skipped(137 s). 바뀐 파일 secret_scan 0건.
+- gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · test(console): 주소 까닭·전체 옮기기 브라우저 계약
+
+- 변경: `test/test_fleet_console_browser.py`에 옵트인 시험 2개 — (1) 모든 로봇이 망 밖인 응답에서 경보, 카드 3장의 까닭 줄, 카드의 "새 주소로 옮기기…", 전체 옮기기 확인 대화상자가 두 로봇과 새 주소를 말하고 그동안 전체 정지가 살아 있음, Escape는 요청 0, 확인하면 `move-address`를 rosy_09 → rosy_10 순서로 한 번씩, 결과 줄은 성공 "good"·신원 불일치 "bad"(줄마다 색), 390 px 가로 넘침 없음. (2) viewer는 까닭은 보고 두 버튼은 꺼짐 + "운용자 권한이 필요합니다". `ROSY_ADDRESS_SCREENSHOT_DIR`가 있으면 캡처를 저장한다. 결과 상자가 성공 줄까지 경고색으로 칠하던 것을 줄마다 `data-kind`로 고쳤다.
+- 증거: 브라우저 전체 61 중 60 passed, 1 failed(`test_the_console_renders_what_swarm_control_says` — main에서도 같은 시간 초과, 이 작업과 무관). node 79 passed, `src/hmi/web_common/test/` 녹색.
+- gate 변화: 없음(LOCAL).
+
+## 2026-10-01 · uncommitted · fix(enrollment)!: 새 주소로 옮기기는 화면 코드로 새 주소에서 재페어링한다
+
+- 변경: 리뷰 HIGH — 기존 `move_address`는 저장된 사이트 토큰을 스캔된 새 주소에 Bearer로 먼저 보내고 나서 신원을 비교했다. 평문 HTTP라 같은 이름을 광고한 기기가 토큰을 받을 수 있었고, 전체 옮기기가 이를 키웠다. 이제 `POST …/{id}/move-address`는 본문 `{code}`(로봇 화면 코드, 등록과 같은 형식 검사)를 받는다. Fleet은 새 주소에서 `auth/pair`(기존 자격 없음)로 새 토큰을 받고, 그 토큰으로 읽은 `whoami`·`system/info`가 robot_id·hostname·serial·(있으면) device_uid 모두 같을 때만 등록부(`EnrollmentStore.rebind` — 암호문과 필드를 한 트랜잭션), 로스터 endpoint, 게이트를 새 토큰으로 바꾼다. 그 뒤에만 옛 토큰을 확인된 주소에 보내 logout한다. 실패하면 감사 `old_token_not_revoked`, 응답 `old_token_revoked: false`. 다른 기기면 그 기기가 방금 준 새 토큰을 logout하고 행은 `address_changed` 그대로, 감사 `identity_mismatch`. `_current_other_address`는 RFC 1918 주소만 고른다(`discovery.is_rfc1918`).
+- 결정: 옛 동작의 "다른 기기면 `needs_new_code`"는 없앴다 — 저장된 토큰이 새지 않았으므로 그 토큰은 여전히 유효하고, 고정 주소로는 정지만 간다. D-361에 날짜 붙은 개정, `docs/logs.md`에 한 줄. 콘솔은 다음 단계에서 코드 대화상자로 바꾼다(이 커밋만으로는 콘솔의 옮기기가 422).
+- 증거: `test_enrollment_service.py` 옮기기 시험을 바꿈 — 기록하는 가짜 로봇(`Network.raw`/`carried`)으로 신원 확인 전 새 주소에 Authorization·저장 토큰이 0회, 성공 경로 요청 순서 pair→whoami→system/info→logout, 다른 기기·결속 키별 불일치에서 저장 토큰 0회, 틀린 코드는 pair 한 번뿐, 형식 오류는 요청 0, 옛 토큰 회수 실패 기록. `test_enrollment_api.py` 본문 없는 옮기기 422·응답에 비밀 없음. `code` 인자 없음으로 10+1 적색 확인 뒤 87 passed.
+- gate 변화: 없음(LOCAL).
+
+## 2026-10-01 · uncommitted · fix(discovery): 스캔 주소는 RFC 1918만 받는다
+
+- 변경: 리뷰 MEDIUM — 공유 분류기의 `is_private`는 링크 로컬은 막지만 문서용(192.0.2.0/24)·벤치마크(198.18.0.0/15)·0.0.0.0을 사설로 본다. `server/discovery.py`에 `is_rfc1918()`(수동 주소 `parse_manual_address`와 같은 세 대역)을 두고 `replace_scan`이 그 밖의 행을 기존 `bad_address`로 거절한다. `enrollment._current_other_address`도 같은 검사를 한 번 더 한다(앞 커밋). 공유 `discovery_txt` 분류기는 다른 클라이언트의 벡터가 걸려 있어 건드리지 않았다.
+- 증거: `test_discovery.py` 2 추가 — 169.254/192.0.2/198.18/100.64/0.0.0.0/공인/멀티캐스트 거절, RFC 1918 세 대역 수용(192.0.2.5에서 적색 확인), 스캔 행에 문서용 주소가 들어 있어도 옮기기 대상이 아님. 발견·등록 API 시험 38 passed.
+- gate 변화: 없음(LOCAL).
+
+## 2026-10-01 · uncommitted · fix(discovery): 망 밖 판정은 힌트로 말하고, 이름 고정은 경보를 세우지도 막지도 않는다
+
+- 변경: 리뷰 MEDIUM·LOW — (1) 카드 문구 "…지금 망에 없을 수 있습니다", 경보 "사이트 망 주소가 바뀌었을 수 있습니다 — IP로 고정된 …"로 단정을 뺐다. (2) `all_outside`는 IP 고정이 하나 이상이고 그것이 모두 망 밖일 때만 켜진다. 이름(`.local`) 고정은 서버 판정에서 빠지고, 콘솔(`renumberBanner(payload, robots)`)이 이름 고정 로봇 중 하나라도 지금 연결돼 있으면 경보를 띄우지 않는다. (3) 스캔 행은 등록부가 쓰는 발견(TXT) 이름으로만 맞춘다 — avahi 호스트 이름에서 `.local`을 뗀 값은 더 이상 신원이 아니다. (4) `address_drift.py` docstring에 /24 가정과 그 한계(더 넓은 접두사의 사이트에서 틀릴 수 있음, 그래서 힌트)를 적었다. 앞 커밋의 `test_discovery.py` 빈 줄 lint도 고쳤다.
+- 증거: `test_address_drift.py` 2(이름 고정과 경보, 호스트 이름 불일치) 적색 확인 뒤 녹색, `address-drift.test.mjs` 문구·억제 2 적색 확인 뒤 10 passed.
+- gate 변화: 없음(LOCAL).
+
+## 2026-10-01 · uncommitted · fix(console): 옮기기는 로봇마다 화면 코드 대화상자, 전체 옮기기 삭제, 카드·기기 연결 여백
+
+- 변경: 리뷰 HIGH의 화면 쪽 — "새 주소로 옮기기 (전체)" 버튼과 `runBulkMove`·`bulkConfirmMessage`를 지웠다. 경보 묶음은 옮길 수 있는 로봇(`movableRobots`)마다 "rosy_09 → 새 주소"와 "새 주소로 옮기기…"를 한 줄씩 보인다. 그 지름길, 로봇 카드의 지름길, 등록 패널 행의 "새 주소로 옮기기…"(기존 `window.confirm` 삭제)가 모두 등록 대화상자(`openLiveDialog`, `ui-field`, 등록과 같은 `ABCD-EFGH` 형식 검사, 429 잠금)를 옮기기 모드로 연다. 대상 줄은 "로봇 rosy_09 → 10.16.36.20:8080 화면의 코드", 실행 버튼은 "옮기기". 성공은 `moveDoneLines`("…(으)로 옮김 — 새 토큰으로 다시 묶었습니다", 옛 토큰을 회수하지 못했으면 "로봇 대시보드에서 이전 사이트 토큰을 회수하세요"), 다른 기기면 "등록된 토큰은 보내지 않았습니다 …". 화면 결함: 기기 연결의 마지막 줄과 "신호등" 머리가 5 px로 붙어 있던 것을 넓은 격자에서 `.signals` 위 여백으로 띄웠다. 로봇 카드는 줄어들지 않게 `flex-shrink: 0`을 걸었다 — 캡처에서 rosy_09가 잘려 보인 것은 카드가 아니라 D-201(한 화면에 들어감)이 요구하는 로봇 목록 스크롤 칸의 경계다. `test/test_web_dialog_contract.py`의 `window.confirm` 고정 목록에서 `enrollment.js` 1을 뺐다.
+- 증거: `address-drift.test.mjs` — 옮길 로봇 목록, 전체 옮기기·`window.confirm` 없음과 본문 `{ code }`, 옛 토큰 문장, 신원 불일치 문장(export 없음 적색 뒤 80 passed). 브라우저 시험을 다시 썼다: 경보 목록 2줄, 지름길 → 코드 대화상자 → 형식 오류는 요청 0 → `{"code": "7KXM-P3QA"}` 한 번, 옛 토큰 안내, 행 버튼도 같은 대화상자, 대화상자 동안 전체 정지 살아 있음, 카드 내용이 줄지 않고 스크롤로 끝까지 보임, 기기 연결 마지막 줄과 신호등 머리 사이 8 px 이상(여백 없이 적색 확인), 390 px 넘침 없음, viewer는 두 지름길 꺼짐. 캡처는 X:/DevTemp/…/console-addr/.
+- gate 변화: 없음(LOCAL).
+
+## 2026-10-01 · uncommitted · chore(architecture): 리뷰 수정 뒤 크기 판정 재기록(fleet 23237, enrollment.py 664)
+
+- 변경: `fleet` 합계를 23166에서 23237로, `enrollment.py` 판정을 610에서 664로 다시 적고 각 문장 끝에 까닭(옮기기가 같은 교환·결속 검사 위의 화면 코드 재페어링이 됨, 전체 옮기기 삭제)을 붙였다. 판정은 그대로다.
+- 증거: 판정 시험에서 남은 실패는 `proposal_store.py`(730줄, D-392 다른 세션) 판정 없음 1건뿐 — main에서도 실패, 이 브랜치가 다루지 않는다. `src/site/fleet/test/` 1134 passed, 6 skipped. 브라우저 61 중 60 passed(`test_the_console_renders_what_swarm_control_says`는 main에서도 같은 시간 초과). 바뀐 파일 secret_scan 0건.
+- gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · fix(enrollment): 옛 토큰은 어디에도 보내지 않고, 고정 주소에서 아직 답하면 옮기지 않는다
+
+- 변경: 보안 재리뷰 HIGH(중계 공격) — 같은 이름을 광고한 중계자가 운용자의 코드를 진짜 로봇의 `auth/pair`로 넘기고 `whoami`·`system/info` 답을 되돌리면 모든 비교가 맞아, Fleet이 중계자로 옮기고 logout으로 옛 토큰까지 건넸다. (a) 옮긴 뒤의 옛 토큰 logout을 지웠다. 옛 토큰은 어디에도 가지 않고, 감사는 늘 `old_token_not_revoked`, 응답은 `old_token_revoked: false`. (b) 새 주소에 닿기 전에 고정 주소(등록 때 확인됨, 정지 요청이 이미 같은 토큰으로 가는 곳)에 `system/info`를 한 번 읽어, 같은 robot_id로 답하면 409 `still_at_pinned_address`(감사 포함)로 거절하고 새 주소에는 아무것도 보내지 않는다. 고정 주소에 다른 기기·무응답·401이면 계속한다. 재리뷰 MEDIUM — 비교는 robot_id·hostname·serial_number뿐이고 이것이 인증이 아니라 일관성 검사임을 docstring과 D-361 개정에 적었다(신원을 묶는 것은 로봇 화면의 코드와 IP를 보는 사람, 진짜 인증은 로봇이 쥔 키 — 이후 과제). `device_uid`는 CORE `system/info`가 주지 않아 저장값이 늘 비므로 비교에서 뺐다(CORE 변경 없음).
+- 결정: 고정 주소 탐침은 저장 토큰을 그 주소로 한 번 더 보낸다. 그 주소가 DHCP로 다른 기기에 갔다면 그 기기가 토큰을 본다 — 그러나 `address_changed` 동안의 정지 요청이 이미 같은 토큰을 같은 주소로 보내므로(D-361 3) 새 노출 경로는 아니다.
+- 증거: `test_enrollment_service.py` 다시 씀 — 성공 경로 새 주소 요청은 pair→whoami→system/info뿐, 옛 토큰은 새 주소에 0회·logout 0회, `old_token_not_revoked` 감사, 고정 주소에서 아직 답하면 409이고 새 주소 요청 0, 고정 주소에 다른 robot_id면 옮김, 일관성 필드(robot_id·hostname·serial)별 불일치, device_uid는 비교 안 함, 성공·불일치·틀린 코드 경로에서 화면 코드(대소문자·하이픈 네 형태)가 감사 행과 로그 레코드 어디에도 없음. logout 남음·탐침 없음으로 6 적색 확인 뒤 99 passed(등록·API·저장소·주소 시험).
+- gate 변화: 없음(LOCAL).
+
+## 2026-10-01 · uncommitted · fix(console): 옮기기 대화상자가 새 주소 후보를 크게 보이고 로봇 화면의 IP와 맞춰 보게 한다
+
+- 변경: 보안 재리뷰 HIGH (c) — 옮기기 모드의 등록 대화상자에 "새 주소 후보"와 그 주소(등폭, 제목 크기)를 보이고, "코드를 넣기 전에 이 주소가 로봇 화면에 보이는 IP와 같은지 확인하세요(LCD 정보 화면의 이름 아래 주소 줄). 다르면 옮기지 마세요 …"를 붙였다 — 로봇 LCD 정보 화면(`src/hmi/face/emotion/info_screen.py`)이 이름 아래에 `IP:포트` 주소 줄을 보이므로 그 말로 맞췄다. 등록 모드에서는 숨는다. 409 `still_at_pinned_address` 문장 "로봇이 아직 원래 주소에서 응답합니다 — 옮길 필요가 없습니다."를 더했다. 옮긴 뒤 문장은 늘 "이전 사이트 토큰은 Fleet이 회수하지 않습니다 — 로봇 대시보드에서 회수하거나 만료되게 두세요."(Fleet이 옛 토큰을 보내지 않으므로).
+- 증거: `address-drift.test.mjs` 2(옛 토큰 문장, IP 확인 문장·고정 주소 문장) export 없음 적색 뒤 81 passed. 브라우저: 옮기기 대화상자의 후보 주소·IP 확인 줄이 보이고 등록 대화상자에서는 숨음(요소 없음 적색 확인), 등록·해제·옮기기 5 passed. `src/hmi/web_common/test/` + 대화상자 계약 녹색. 캡처 `move-code-dialog-1920.png` 다시 찍음.
+- gate 변화: 없음(LOCAL).

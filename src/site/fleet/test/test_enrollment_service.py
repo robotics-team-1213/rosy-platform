@@ -8,7 +8,7 @@ from datetime import timedelta
 import pytest
 
 from enrollment_fakes import (
-    CODE, ISSUED, MOVED, NAME, PINNED, Clock, FakeCore, build, scan_row,
+    CODE, ISSUED, MOVED, NAME, PINNED, REISSUED, Clock, FakeCore, build, scan_row,
 )
 from fakes import FakeRobot, run
 from fleet.hub.hub import HubError
@@ -214,39 +214,158 @@ def test_address_change_sends_no_bearer_except_stop_to_the_pinned_address(tmp_pa
     assert row["error"]["code"] == "ADDRESS_UNVERIFIED"
 
 
-def test_move_address_rebinds_only_after_an_explicit_confirmation(tmp_path):
-    cores = {PINNED: FakeCore(), MOVED: FakeCore()}
-    service, network, console, discovery, store, _ = build(tmp_path, cores)
+def _moved(tmp_path, moved_core, *, pinned_alive=False):
+    cores = {PINNED: FakeCore(), MOVED: moved_core}
+    service, network, console, discovery, store, tasks = build(tmp_path, cores)
     discovery.replace_scan([scan_row()])
     _enroll(service)
+    if not pinned_alive:
+        del network.cores[PINNED]  # the robot really left its pinned address
     discovery.replace_scan([scan_row(MOVED)])
     run(service.on_discovery(discovery.rows()))
     assert network.paths(MOVED) == []
+    network.clear()
+    return service, network, console, discovery, store
 
-    moved = run(service.move_address("rosy_09", principal_id="alice"))
+
+def _same_robot_at_new_address():
+    # The robot itself, renumbered: it still honours the old token and issues a new one.
+    return FakeCore(token=REISSUED, known={ISSUED})
+
+
+def test_move_address_re_pairs_with_the_screen_code_and_rebinds_the_new_token(tmp_path):
+    core = _same_robot_at_new_address()
+    service, network, console, _, store = _moved(tmp_path, core)
+
+    moved = run(service.move_address("rosy_09", code=CODE, principal_id="alice"))
 
     assert moved["address"] == MOVED and moved["state"] == "active" and moved["hold"] is None
-    assert network.paths(MOVED) == ["/api/v1/system/info"]
+    assert network.paths(MOVED) == ["/api/v1/auth/pair", "/api/v1/auth/whoami",
+                                    "/api/v1/system/info"]
+    assert service._tokens["rosy_09"] == REISSUED
     run(console.snapshot())
-    assert "/api/v1/robot/state" in network.paths(MOVED)
+    state_calls = [r for where, r in network.raw if where == MOVED and r.url.path == "/api/v1/robot/state"]
+    assert state_calls and all(r.headers["Authorization"] == f"Bearer {REISSUED}" for r in state_calls)
     assert any(row["action"] == "move_address" and row["outcome"] == "moved"
                for row in store.audit_rows())
+    for text in (repr(moved), repr(store.rows()), repr(store.audit_rows())):
+        assert ISSUED not in text and REISSUED not in text and CODE not in text
 
 
-def test_move_address_to_a_different_device_needs_a_new_code(tmp_path):
-    cores = {PINNED: FakeCore(), MOVED: FakeCore(serial="sn-other")}
-    service, network, console, discovery, store, _ = build(tmp_path, cores)
-    discovery.replace_scan([scan_row()])
-    _enroll(service)
-    discovery.replace_scan([scan_row(MOVED)])
-    run(service.on_discovery(discovery.rows()))
+def test_the_old_token_never_reaches_the_new_address(tmp_path):
+    """Security re-review: a relay can pass every consistency check, so the old token never
+    goes to the new address — not before the check and not afterwards to log out."""
+    core = _same_robot_at_new_address()
+    service, network, *_ = _moved(tmp_path, core)
+
+    moved = run(service.move_address("rosy_09", code=CODE, principal_id="alice"))
+    run(service._console().snapshot())
+
+    requests = [r for where, r in network.raw if where == MOVED]
+    assert "Authorization" not in requests[0].headers  # the code exchange carries no credential
+    assert network.carried(MOVED, ISSUED) == []
+    assert core.logged_out == []
+    assert moved["old_token_revoked"] is False
+
+
+def test_an_unrevoked_old_token_is_recorded_for_the_operator(tmp_path):
+    service, network, _, _, store = _moved(tmp_path, _same_robot_at_new_address())
+    run(service.move_address("rosy_09", code=CODE, principal_id="alice"))
+    assert any(a["action"] == "move_address" and a["outcome"] == "old_token_not_revoked"
+               for a in store.audit_rows())
+
+
+def test_a_robot_still_answering_at_its_pinned_address_is_not_moved(tmp_path):
+    """Relay defence: the pinned address was verified at enrollment; if the robot still answers
+    there, a name seen elsewhere is not this robot moving and the new address gets nothing."""
+    relay = _same_robot_at_new_address()
+    service, network, _, _, store = _moved(tmp_path, relay, pinned_alive=True)
 
     with pytest.raises(EnrollmentError) as refused:
-        run(service.move_address("rosy_09", principal_id="alice"))
+        run(service.move_address("rosy_09", code=CODE, principal_id="alice"))
+
+    assert refused.value.code == "still_at_pinned_address" and refused.value.status == 409
+    assert network.paths(MOVED) == []
+    assert network.paths(PINNED) == ["/api/v1/system/info"]
+    assert store.get("rosy_09")["address"] == PINNED
+    assert any(a["action"] == "move_address" and a["outcome"] == "still_at_pinned_address"
+               for a in store.audit_rows())
+
+
+def test_another_device_on_the_pinned_address_does_not_block_the_move(tmp_path):
+    service, network, *_ = _moved(tmp_path, _same_robot_at_new_address(), pinned_alive=True)
+    network.cores[PINNED] = FakeCore(robot_id="rosy_77", token=ISSUED)
+    moved = run(service.move_address("rosy_09", code=CODE, principal_id="alice"))
+    assert moved["address"] == MOVED
+
+
+def test_a_different_device_at_the_new_address_never_sees_the_stored_token(tmp_path):
+    impostor = FakeCore(token=REISSUED, serial="sn-other")
+    service, network, console, _, store = _moved(tmp_path, impostor)
+
+    with pytest.raises(EnrollmentError) as refused:
+        run(service.move_address("rosy_09", code=CODE, principal_id="alice"))
 
     assert refused.value.code == "identity_mismatch"
-    assert store.get("rosy_09")["state"] == "needs_new_code"
-    assert store.get("rosy_09")["address"] == PINNED
+    assert network.carried(MOVED, ISSUED) == []
+    assert impostor.logged_out == [REISSUED]  # the impostor's own fresh token is handed back
+    row = store.get("rosy_09")
+    assert row["address"] == PINNED and row["state"] == "address_changed"
+    assert service._tokens["rosy_09"] == ISSUED
+    assert any(a["action"] == "move_address" and a["outcome"] == "identity_mismatch"
+               for a in store.audit_rows())
+
+
+@pytest.mark.parametrize("field,value", [("robot_id", "rosy_77"), ("hostname", "rosy-other"),
+                                         ("serial", "sn-other")])
+def test_every_consistency_field_must_match_before_the_move(tmp_path, field, value):
+    service, network, _, _, store = _moved(tmp_path, FakeCore(token=REISSUED, **{field: value}))
+    with pytest.raises(EnrollmentError) as refused:
+        run(service.move_address("rosy_09", code=CODE, principal_id="alice"))
+    assert refused.value.code == "identity_mismatch"
+    assert network.carried(MOVED, ISSUED) == []
+
+
+def test_device_uid_is_not_a_binding_key(tmp_path):
+    # CORE's system/info does not return device_uid; it is not compared (consistency check only).
+    service, network, _, _, store = _moved(tmp_path, _same_robot_at_new_address())
+    store.update("rosy_09", device_uid="uid-9")
+    assert run(service.move_address("rosy_09", code=CODE, principal_id="alice"))["address"] == MOVED
+
+
+def test_a_wrong_screen_code_sends_nothing_else_and_keeps_the_hold(tmp_path):
+    core = FakeCore(token=REISSUED, pair_status=401)
+    service, network, _, _, store = _moved(tmp_path, core)
+    with pytest.raises(EnrollmentError) as refused:
+        run(service.move_address("rosy_09", code=CODE, principal_id="alice"))
+    assert refused.value.code == "code_rejected"
+    assert network.paths(MOVED) == ["/api/v1/auth/pair"]
+    assert store.get("rosy_09")["state"] == "address_changed"
+
+
+def test_a_malformed_screen_code_reaches_no_robot(tmp_path):
+    service, network, *_ = _moved(tmp_path, _same_robot_at_new_address())
+    with pytest.raises(EnrollmentError) as refused:
+        run(service.move_address("rosy_09", code="nope", principal_id="alice"))
+    assert refused.value.code == "bad_format" and network.requests == []
+
+
+@pytest.mark.parametrize("moved_core", [
+    lambda: FakeCore(token=REISSUED, known={ISSUED}),
+    lambda: FakeCore(token=REISSUED, serial="sn-other"),
+    lambda: FakeCore(token=REISSUED, pair_status=401),
+])
+def test_the_screen_code_is_in_no_audit_row_or_log_record(tmp_path, caplog, moved_core):
+    service, network, _, _, store = _moved(tmp_path, moved_core())
+    spaced = CODE[:4] + "-" + CODE[4:]
+    with caplog.at_level(logging.DEBUG):
+        try:
+            run(service.move_address("rosy_09", code=spaced.lower(), principal_id="alice"))
+        except EnrollmentError:
+            pass
+    text = repr(store.audit_rows()) + caplog.text + repr([r.__dict__ for r in caplog.records])
+    for form in (CODE, spaced, CODE.lower(), spaced.lower()):
+        assert form not in text
 
 
 def test_conflict_wins_over_address_changed(tmp_path):
@@ -487,7 +606,7 @@ def test_move_address_is_refused_during_a_conflict(tmp_path):
     run(service.on_discovery(discovery.rows()))
     network.clear()
     with pytest.raises(EnrollmentError) as refused:
-        run(service.move_address("rosy_09", principal_id="alice"))
+        run(service.move_address("rosy_09", code=CODE, principal_id="alice"))
     assert refused.value.code == "conflict" and network.requests == []
 
 
