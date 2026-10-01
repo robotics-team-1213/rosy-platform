@@ -133,6 +133,7 @@ def draw_follow_evidence(image, *, scale, keep=None, objects=None, road_state=No
         regions = records(objects, 'regions', 48)
         object_status = f'OBJECTS: {len(regions)} unknown'
         labelled = 0
+        badges = []
         for index, record in enumerate(regions):
             if not isinstance(record, dict):
                 continue
@@ -149,10 +150,12 @@ def draw_follow_evidence(image, *, scale, keep=None, objects=None, road_state=No
                 ranged = f'{distance:.2f}m' if _number(distance) and distance > 0 else 'unranged'
                 kind = 'DARK' if record.get('k') == 'd' else 'UNKNOWN'
                 # Fixed separate rows stay readable when foreground boxes overlap.
-                text(f'OBJ {index + 1} {kind} {ranged}' + (' NEAR' if record.get('n') == 1 else ''),
-                     (6, 65 + labelled * int(17 * max(1, w / 400))), colour, .32, True)
-                text(str(index + 1), (a[0] + 4, max(120, a[1] + 14)), colour, .32, True)
+                badges.append((f'OBJ {index + 1} {kind} {ranged}' + (' NEAR' if record.get('n') == 1 else ''),
+                               (6, 65 + labelled * int(17 * max(1, w / 400))), colour))
+                text(str(index + 1), (a[0] + 4, max(145, a[1] + 14)), colour, .32, True)
                 labelled += 1
+        for label, location, colour in badges:
+            text(label, location, colour, .32, True)
     for tag in tags[:8] if isinstance(tags, list) else []:
         if not isinstance(tag, dict) or not _number(tag.get('tag_id')):
             continue
