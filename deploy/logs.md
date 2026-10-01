@@ -1857,3 +1857,10 @@
 - 변경: T2가 일시적 문제(네트워크, 활성화기 시간 초과, busy)는 `error`, 확정 실패는 `failed`(`last_result`가 이 id의 `rolled_back`/`refused`)로 보고하게 바뀌었다. 발행 명령은 이 후보의 `failed`(최근 `updated_at`)나 기준 결과 뒤의 `rolled_back`/`refused`일 때만 바로 철회하고, `error`는 시간 초과까지 계속 지켜본다.
 - 증거: `test/test_publish_payload_release.py` 63 passed. 변이 4종 모두 빨강: `error`도 조기 철회, `failed` 조기 철회 제거, 다른 후보의 `failed`로 철회, 오래된 `failed`로 철회.
 - gate 변화: 없음.
+
+## 2026-10-02 · 8198ec47 · fix(release): D-406 T3 재리뷰 반영 — 철회 우선, 로컬 대체본 업로드, known_hosts 정책 하나
+
+- 변경: 커밋 8f633400, 8198ec47. (1) N1: `--withdraw`가 로컬 서명본으로 대체했으면 그 사본이 이미 철회 상태여도 늘 올린다. 이미 철회라 아무것도 안 하는 경우는 GitHub 사본이 서명 검증을 통과했을 때뿐이다. (2) N2: 내려받기 전에 `downloaded/`를 비우고, 자산이 없으면 서명 불일치와 같이 다룬다. (3) N4: 마지막 업로드 뒤 한 번 더 내려받아, 철회가 보이면 그대로 두고 우리가 올린 바이트와 다르면 다시 철회를 올린다. 철회가 늘 이긴다. (4) N7: 잠금 파일의 PID가 없는 프로세스면 stale이라고 말하고 지우는 명령을 준다(Windows는 OpenProcess로 확인, 신호를 보내지 않는다). (5) N8: hostname이 없는 상태는 "updater has not run yet (no status.json)". (6) N9: 수동 철회의 업로드가 실패해도 복구 명령을 출력한다. (7) N3: Windows PowerShell 5.1은 `UserKnownHostsFile="C:\a b\k"`를 그대로 넘기고, 받는 프로그램의 C 런타임이 따옴표를 벗긴 뒤 ssh가 공백에서 나눈다(`test/test_known_hosts_policy.py`가 raw `.cmd` 가짜와 C 런타임 프로그램으로 확인). 그래서 push도 hold처럼 따옴표 없이 넘기고 공백·따옴표가 든 경로는 거절한다. (8) N5: busy인 claim의 holder가 이 PC 자신이면 정확한 release 명령을 출력한다. tarball 업로드 직후 `rosy_claim.py refresh --holder <H> --ttl-s <TTL>`로 claim을 늘린다(실패는 경고만).
+- 증거: 관련 묶음 376 passed, 3 skipped, `test/known_failures.py` 0 new. 변이: 발행 12종 중 10종 바로 빨강, 2종(경합 중 보이는 철회 유지, stale 판정)은 시험이 다시 올린 업로드·임시 경로 이름에 가려 초록 → 시험을 좁혀 빨강. push 7종 모두 빨강.
+- gate 변화: 없음.
+- 남은 일: T2 `rosy_claim.py`(d87d329f)에 `refresh()` 함수는 있으나 CLI 하위 명령이 없다. 그 전까지 push의 refresh는 경고만 내고 claim은 크기로 정한 TTL을 유지한다.
