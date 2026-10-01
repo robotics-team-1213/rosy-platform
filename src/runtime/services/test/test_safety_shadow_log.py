@@ -104,10 +104,34 @@ def test_fast_alternation_is_rate_capped_and_accounted():
         log.record(_v(i * 0.02, "allow" if i % 2 == 0 else "limit"))
 
     events = log.drain()
-    assert len(events) <= 11
+    assert 2 <= len(events) <= 11
     total = log.snapshot()["suppressed_events"]
     assert total > 0
-    assert sum(e["suppressed"] for e in events) <= total
+    assert sum(e["suppressed"] for e in events) + log._suppressed == total
+
+
+def test_suppressed_counts_changes_not_records():
+    log = ShadowLog()
+    log.record(_v(0.00, "allow"))
+    log.record(_v(0.10, "stop", "pickup"))     # change, too soon -> suppressed
+    log.record(_v(0.15, "allow"))
+    log.record(_v(1.00, "allow"))              # repeat after 1 s -> event
+
+    assert [e["suppressed"] for e in log.drain()] == [0, 1]
+
+    held = ShadowLog()
+    held.record(_v(0.0, "allow"))
+    for i in range(1, 10):                      # one held stop, nine records
+        held.record(_v(i * 0.02, "stop", "pickup"))
+    assert held.snapshot()["suppressed_events"] == 1
+
+
+def test_clock_stepping_back_is_treated_as_a_first_record():
+    log = ShadowLog()
+    log.record(_v(10.0, "allow"))
+    log.record(_v(5.0, "stop", "pickup"))
+
+    assert [e["verdict"] for e in log.drain()] == ["allow", "stop"]
 
 
 def test_suppressed_verdict_still_current_is_emitted_later():

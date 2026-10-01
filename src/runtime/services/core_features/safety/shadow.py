@@ -46,8 +46,12 @@ class ShadowLog:
 
     An event is a change of verdict (reason is payload, not key) or a repeat
     after 1 s, and never more often than every 0.2 s. A verdict change that
-    arrives too soon is counted as suppressed and emitted later if it is still
-    current; the next event carries the count since the previous one.
+    arrives too soon is counted as suppressed (verdict changes, not records)
+    and emitted later if it is still current; the next event carries the count
+    since the previous one. A change suppressed by the 0.2 s floor is reported
+    by the next emitted event; if records stop before then (the robot stops
+    commanding), it stays visible only in counts, last_stop/last_unavailable
+    and suppressed_events.
     """
 
     def __init__(self, window: int = 512) -> None:
@@ -60,6 +64,7 @@ class ShadowLog:
         self._pending: deque[dict] = deque(maxlen=_PENDING_MAX)
         self._emitted_verdict: str | None = None
         self._emitted_at = float("-inf")
+        self._last_seen_verdict: str | None = None
         self._suppressed = 0
         self._suppressed_total = 0
         self._dropped = 0
@@ -70,12 +75,17 @@ class ShadowLog:
             self._eval_ms.append(verdict.eval_ms)
             if verdict.verdict in ("stop", "unavailable"):
                 self._last[verdict.verdict] = {"t": verdict.t, "reason": verdict.reason, "source": verdict.source}
+            previous, self._last_seen_verdict = self._last_seen_verdict, verdict.verdict
             since = verdict.t - self._emitted_at
+            if since < 0:  # clock stepped back: treat this record as the first
+                self._emitted_at = float("-inf")
+                since = float("inf")
             if verdict.verdict == self._emitted_verdict and since < _REPEAT_EVERY_S:
                 return
             if since < _MIN_EVENT_INTERVAL_S:
-                self._suppressed += 1
-                self._suppressed_total += 1
+                if verdict.verdict != previous:
+                    self._suppressed += 1
+                    self._suppressed_total += 1
                 return
             if len(self._pending) == _PENDING_MAX:
                 self._dropped += 1
