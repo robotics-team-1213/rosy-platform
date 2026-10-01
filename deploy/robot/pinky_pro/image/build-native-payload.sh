@@ -106,6 +106,15 @@ set +u
 source /opt/ros/jazzy/setup.bash
 set -u
 
+# One apt transaction instead of one per rosdep key (22 runs, ~4.5 of the 6.5
+# runner minutes on 2026-10-01). Same flags as rosdep, so the installed set is
+# unchanged; rosdep then confirms nothing is missing and handles non-apt keys.
+ROSDEP_PLAN="$(rosdep install --from-paths "$WORKSPACE/src" "$SLLIDAR_SRC" --ignore-src -r -y \
+    --rosdistro "$ROS_DISTRO" --simulate)"
+mapfile -t ROSDEP_APT < <(printf '%s\n' "$ROSDEP_PLAN" | python3 "$SCRIPT_DIR/rosdep_apt_batch.py")
+if ((${#ROSDEP_APT[@]})); then
+    apt-get install -y "${ROSDEP_APT[@]}"
+fi
 rosdep install --from-paths "$WORKSPACE/src" "$SLLIDAR_SRC" --ignore-src -r -y \
     --rosdistro "$ROS_DISTRO"
 

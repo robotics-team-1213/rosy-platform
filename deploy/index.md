@@ -67,8 +67,8 @@
 
 ## 최근 기록
 
+- 2026-10-01 · uncommitted · fix(release): `prepare_payload_release.py` 독립 리뷰 반영 — rc 패키지 제외, 오류 처리, 인용
+- 2026-10-01 · f8db47f5 · feat(release): 서명 안 된 페이로드를 push 직전까지 한 명령으로 — `prepare_payload_release.py`
+- 2026-10-01 · uncommitted · perf(release): rosdep apt 패키지를 한 트랜잭션으로 — payload 빌드 7분 9초→4분 49초
 - 2026-10-01 · uncommitted · fix(omx): fence recording closure and isolate storage faults
 - 2026-10-01 · uncommitted · feat(omx): record SIM demonstrations and export LeRobot v3
-- 2026-10-01 · uncommitted · fix(release): 활성화가 CORE를 멈추지 않던 결함 — PartOf 유닛을 함께 멈추고, push가 CORE 릴리스를 확인
-- 2026-10-01 · uncommitted · docs(site): 두 번째 카메라 자리의 배선 안내
-- 2026-10-01 · uncommitted · test(site): `site-firewall.py`를 실제 iptables-nft로 검증 (컨테이너)
