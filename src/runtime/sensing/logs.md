@@ -895,3 +895,10 @@
 - Gazebo 재실행(WSL, GZ_PARTITION rosy_f1, ROS_DOMAIN_ID 95, 시나리오 a, 부하 23–68): 수정 전 기준 `base_b` 는 두 로봇 모두 첫 결정 거부. `fix_a1`·`fix_a2` 에서 r1(slot)은 첫 결정 통과. r2 의 남은 거부는 진짜였다: 첫 결정은 P2-7 `rotate_in_place` 회전 중에 주입돼 주입 자세 적합도도 0.18–0.39, `fix_a1` 두 번째는 후보 yaw 가 약 4° 틀려 0.8. 피어 객체는 r1 16/16, r2 35/35 보고에서 보였다(`fix_a2`). 원시 로그 `X:\DevTemp\rosy-d395-f1\`.
 - 남은 것: Fleet 이 회전 미션 중에도 결정을 보낸다(결과 아님, Fleet 레인). `localization_node` 도 스캔 시각 map 조회라 재국지화 뒤 ~1 s 늦게 반응한다(확인 지연만, 수정 안 함).
 - gate 변화: 없음.
+
+## 2026-10-02 · uncommitted · fix(localization): D-395 S1 재실행 — 미션 중 결정은 `mission_running` 으로 거부
+
+- 원인: F1 WSL 실행에서 Fleet 이 r2 의 첫 결정을 `rotate_in_place` 회전 중에 보냈고, 주입 자세 적합도가 0.18–0.39 라 3 s 검증이 옳게 거부했다.
+- 변경: `LocAssist.on_decision` 은 CORE 미션이 진행 중이면(`localization/mission` `running`, `MISSION_PAUSE_S` 안) 주입하지 않고 `mission_running` 으로 거부한다. 미션 시작 때 열린 request id 와 그 보고를 버린다(미션 전 후보는 미션 뒤에 낡았다). 미션 끝의 재탐색이 새 id 를 만든다. 옛 id 결정은 `stale_request`.
+- 증거: `test/test_loc_assist.py` +2(미션 중 결정 거부·주입 없음, 시작 시 id·재보고 폐기 후 새 id 로 주입).
+- gate 변화: 없음.

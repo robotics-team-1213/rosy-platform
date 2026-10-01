@@ -107,11 +107,14 @@ class LocAssist:
         return out
 
     def on_mission(self, now_s, payload):
-        """CORE's `localization/mission` (D-395 P2-7): no search while a mission moves
-        the robot; every end asks for one at once, so Fleet gets fresh candidates."""
+        """CORE's `localization/mission` (D-395 P2-7): no search and no decision while a
+        mission moves the robot; every end asks for a search at once, so Fleet gets fresh
+        candidates. Candidates offered before the mission are stale after it: the open
+        request id and its report are dropped at the start (S1 re-run, F1 WSL run)."""
         state = payload.get('state') if isinstance(payload, dict) else None
         if state == 'running':
             self._mission = float(now_s)
+            self.machine.request_id, self._report = None, None
         elif state in ('done', 'aborted'):
             self._mission, self._wanted = None, True
 
@@ -143,6 +146,8 @@ class LocAssist:
             return [self._result(decision.request_id, False, 'bad_receipt')]
         if self.held:
             return [self._result(decision.request_id, False, 'held')]
+        if self._mission_running(now_s):
+            return [self._result(decision.request_id, False, 'mission_running')]
         pose = None if decision.pose is None else (decision.pose.x, decision.pose.y, decision.pose.yaw)
         step = self.machine.decide(decision.request_id, now_s, candidate_index=decision.candidate_index,
                                    pose=pose, source=decision.source.value,
@@ -172,8 +177,8 @@ class LocAssist:
     # --- search -------------------------------------------------------------
     def search_due(self, now_s, odom):
         """Whether the node should start a candidate search now (odom: current (x, y, yaw))."""
-        moving = self._mission is not None and now_s - self._mission <= MISSION_PAUSE_S
-        if self._searching is not None or self.held or self.machine.check is not None or moving:
+        if (self._searching is not None or self.held or self.machine.check is not None
+                or self._mission_running(now_s)):
             return False
         waited = now_s - self._searched_at >= self.retry_s
         state = self.machine.state
@@ -183,6 +188,9 @@ class LocAssist:
             return self._wanted or (waited and odom is not None and self._searched_odom is not None
                                     and _moved(odom, self._searched_odom, self.moved_m, self.moved_rad))
         return False
+
+    def _mission_running(self, now_s):
+        return self._mission is not None and now_s - self._mission <= MISSION_PAUSE_S
 
     @property
     def camera_wanted(self):

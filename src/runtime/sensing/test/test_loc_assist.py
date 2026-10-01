@@ -487,6 +487,35 @@ def test_a_mission_message_without_a_known_state_is_ignored():
     assert not a.search_due(2., ODOM)
 
 
+def test_a_decision_while_a_mission_runs_is_rejected_mission_running():
+    """S1 re-run (F1 WSL run): Fleet decided while `rotate_in_place` still turned r2, so
+    even the right pose fitted 0.18-0.39 and failed its check. No injection while moving."""
+    a = core()
+    candidates_ready(a)
+    a.on_mission(1.5, {"kind": "rotate_in_place", "state": "running", "reason": None})
+    out = a.on_decision(2., decision('r-1', 2.))
+    assert one(out, 'result') == {'request_id': 'r-1', 'accepted': False,
+                                  'reason': 'mission_running', 'state': 'CANDIDATES'}
+    assert kinds(out, 'inject') == []
+
+
+def test_a_mission_start_drops_the_open_request_and_its_report():
+    a = core()
+    candidates_ready(a)
+    a.on_mission(1.5, {"kind": "rotate_in_place", "state": "running", "reason": None})
+    state = one(a.tick(1.5), 'state')
+    assert state['status']['state'] == 'CANDIDATES' and state['status']['request_id'] is None
+    assert kinds(a.tick(9.), 'candidates') == []                  # no stale re-report meanwhile
+    a.on_mission(10., {"kind": "rotate_in_place", "state": "done", "reason": "done"})
+    reason = one(a.on_decision(10., decision('r-1', 10.)), 'result')['reason']
+    assert reason == 'stale_request'                              # the old id never comes back
+    assert a.search_due(10., ODOM)
+    a.search_started(10., ODOM)
+    fresh = one(a.search_finished(10.5, ODOM, [TRUTH, MIRROR]), 'candidates')
+    assert fresh['request_id'] == 'r-2'
+    assert kinds(a.on_decision(11., decision('r-2', 11.)), 'inject')
+
+
 def test_a_lost_mission_end_stops_pausing_the_search_after_the_longest_mission():
     """CORE caps a mission at 120 s; a lost end message or a CORE restart must not pause
     the search forever: the pause lapses 10 s after that."""
