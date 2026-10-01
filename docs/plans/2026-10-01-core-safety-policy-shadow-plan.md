@@ -1498,8 +1498,9 @@ def safety_policy_block(configured_mode: str, adapter: Any, params: Optional[Any
             limits = self.core.safety.limits
             params = resolve_safety_params(
                 lidar_forward_deg=forward_deg, lidar_source=forward_source,
-                caps=(limits.max_linear, limits.max_angular, limits.manual_linear,
-                      limits.manual_angular, limits.fleet_linear, limits.fleet_angular),
+                caps=((limits.max_linear, limits.max_angular),
+                      (limits.manual_linear, limits.manual_angular),
+                      (limits.fleet_linear, limits.fleet_angular)),
                 overlay=sensor_cfg.get("parameters") or {})
         namespace = self.get_namespace() if callable(getattr(self, "get_namespace", None)) else None
         self.control_adapter, notes = build_control_adapter(
@@ -1625,3 +1626,6 @@ git commit -m "docs(records): D-400 plan 1 module logs, ADR implementation note"
 | 5 | `announce_pending`은 워치독 알림을 먼저, 각 발행을 개별 보호(`announce_errors`) | 한 발행 실패가 SAF-002 알림·다른 이벤트를 막지 않게 |
 | 8 | §8에 `commanded`는 프로필 클립 뒤 값, `t`는 CORE monotonic 초라고 적는다 | 필드 이름이 원 요청값처럼 읽힌다 |
 | 7 | `build_control_adapter(policy_required=)` — `shadow` + `control_policy_required`는 설정 오류 | 설계 3.1 규칙에 태스크가 없었다 |
+| 6 | **워커는 `lidar_use_tf`(기본 True)일 때 `lidar_yaw_offset`을 쓰지 않고 TF(= URDF NOMINAL 180°)를 쓴다.** 계획 1은 TF를 유지하고 `sources`에 "unused while lidar_use_tf"로 정직하게 적는다. 라인 추종(승인 레코드)과 안전 정책(TF)의 LiDAR 정면을 하나로 만드는 일 — TF를 레코드로 다듬거나 워커가 값을 쓰게 하기 — 은 계획 2(Gazebo에서 CORE 그래프의 TF 존재부터 확인) | `lidar_use_tf=False`는 장착 평행이동(footprint 증거)도 잃는다. 어느 쪽도 호스트 시험만으로 고를 수 없다 |
+| 6 | 리졸버가 워커의 선언 타입·상한(선속 (0,1], 각속 (0,3])을 검사, revision은 파라미터만으로, `caps`는 (선속, 각속) 쌍, `cliff_enable`·`lidar_use_tf` overlay 허용 | 틀린 값이 워커 안에서 조용히 모든 판정을 무효로 만들지 않게 |
+| 6 | 그림자 해석 주의: 봉투를 올리면 빠른 명령이 정책에 닿지만 워커의 정지/해제 거리는 속도에 비례하지 않는다. 속도에서의 그림자 "allow"는 그 속도로 집행해도 안전하다는 증거가 아니다 | G-sim·G-dev 판정 기준에 반영 |
