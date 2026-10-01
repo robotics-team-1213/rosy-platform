@@ -71,8 +71,8 @@
 
 ## 최근 기록
 
+- 2026-10-01 · uncommitted · feat(discovery): 검색기 임대가 끊기면 관제가 경보한다
 - 2026-10-01 · uncommitted · test(fleet): D-392 P4 provider adapter conformance fixtures
 - 2026-10-01 · uncommitted · fix(pairing): 같은 자격 ID의 confirm 재시도는 120 s 안에서 멱등
 - 2026-10-01 · uncommitted · test(console): D-341 카메라 연결 승인 브라우저 계약과 화면 다듬기
 - 2026-10-01 · uncommitted · feat(console): D-341 "기기 연결" 패널에 카메라 연결 승인 구역
-- 2026-10-01 · uncommitted · feat(console): D-341 카메라 연결 승인 구역의 순수 규칙(camera-pairing.js)

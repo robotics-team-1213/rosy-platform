@@ -67,8 +67,8 @@
 
 ## 최근 기록
 
+- 2026-10-01 · uncommitted · merge(site): main의 D-341 페어링 배선과 인터페이스 바인드 합치기 — 사이트 설정 파일은 site.env 하나
+- 2026-10-01 · uncommitted · fix(site): 재검증 반영 — 컨테이너 직행 트래픽 차단, 라벨로 닫기, 바인드 탐침 정밀화
+- 2026-10-01 · uncommitted · fix(site): 보안 리뷰 반영 — 필터를 Docker 앞 mangle로, 원자 적용·실패 시 닫힘, 설정은 Compose에서
+- 2026-10-01 · uncommitted · fix(site): 사이트 바인드는 인터페이스를 따른다 — 와일드카드 바인드, 인터페이스 방화벽, 루프백 발견 브리지
 - 2026-10-01 · uncommitted · docs(site): README "Camera pairing (D-341)" 소절
-- 2026-10-01 · 39dd2ad2 · feat(site): D-341 페어링 오버레이 `compose.pairing.yaml`과 카메라 자격 예시
-- 2026-10-01 · 536077d2 · feat(site): D-341 TXT pair는 요청할 때만 광고하고 사전 점검이 스위치를 확인한다
-- 2026-10-01 · uncommitted · fix(site): 사이트 사전 점검 독립 리뷰 반영 — systemd 형식, env 따옴표, 모든 Caddy 블록
-- 2026-10-01 · uncommitted · feat(site): D-391 3 사이트 호스트 일관성 사전 검사 `site_preflight.py`

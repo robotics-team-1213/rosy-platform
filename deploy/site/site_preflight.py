@@ -27,8 +27,8 @@ import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-DEFAULT_ENV_FILE = "/etc/rosy/site/.env"
-DEFAULT_SITE_ENV = "/etc/rosy/site/site.env"          # what the stack unit hands Compose
+# One private env file for the stack, Compose and (through site-firewall.py apply) the host units.
+DEFAULT_ENV_FILE = "/etc/rosy/site/site.env"
 DEFAULT_SECRETS_DIR = "/etc/rosy/site/secrets"
 DEFAULT_UNITS = ("rosy-overhead-advertise.service", "rosy-fleet-advertise.service")
 FULLCHAIN_FIX = ("build it with `cat site.crt site-ca.crt > site-fullchain.crt` and point the "
@@ -297,7 +297,7 @@ def published_tls_host(unit: Path, env_file: dict[str, str]) -> tuple[bool, str 
 def check_txt_tls_host(units: list[Path], env_file: dict[str, str], tls_host: str) -> dict:
     """Check 4a: the TXT tls_host the advertise units publish equals the configured tls_host."""
     check_id = "txt_tls_host"
-    fix = ("set the same <hostname>.local as ROSY_SITE_TLS_HOST in /etc/rosy/site/.env, then "
+    fix = ("set the same <hostname>.local as ROSY_SITE_TLS_HOST in /etc/rosy/site/site.env, then "
            "`systemctl restart rosy-overhead-advertise.service`")
     wanted, problems, seen = _normalise(tls_host), [], 0
     for unit in units:
@@ -330,22 +330,22 @@ def published_pair(unit: Path, env_file: dict[str, str]) -> tuple[bool, bool]:
 
 def check_pairing(units: list[Path], env_file: dict[str, str], site_env: dict[str, str],
                   secrets_dir: Path) -> dict:
-    """D-341: one switch (ROSY_SITE_PAIRING=1) must mean Fleet pairing, the TXT key and a token."""
+    """D-341: one switch (ROSY_SITE_PAIRING=1) must mean Fleet pairing, the TXT key and a token.
+
+    Both keys live in the one site.env; site-firewall.py apply copies ROSY_SITE_PAIRING into
+    /run/rosy-site/site-public.env for the advertise unit, so `env_file` stands in for both.
+    """
     check_id = "pairing_consistent"
-    fix = ("set ROSY_SITE_PAIRING=1 in both /etc/rosy/site/.env and /etc/rosy/site/site.env plus "
-           "ROSY_SITE_PAIRING_COMPOSE=-f <candidate>/deploy/site/compose.pairing.yaml in site.env, "
-           "create secrets/pairing_sync_token (deploy/site/README.md, Camera pairing), then restart "
-           "rosy-site-stack and rosy-overhead-advertise; or clear all of them to turn pairing off")
+    fix = ("set ROSY_SITE_PAIRING=1 and ROSY_SITE_PAIRING_COMPOSE=-f "
+           "<candidate>/deploy/site/compose.pairing.yaml in /etc/rosy/site/site.env, create "
+           "secrets/pairing_sync_token (deploy/site/README.md, Camera pairing), then restart "
+           "rosy-site-firewall, rosy-site-stack and rosy-overhead-advertise; or clear both to "
+           "turn pairing off")
     problems = []
-    values = {".env": env_file.get("ROSY_SITE_PAIRING", ""),
-              "site.env": site_env.get("ROSY_SITE_PAIRING", "")}
-    for name, value in values.items():
-        if value not in ("", "1"):
-            problems.append(f"{name} has ROSY_SITE_PAIRING={value!r}; use 1 or leave it empty")
-    if values[".env"] != values["site.env"]:
-        problems.append("ROSY_SITE_PAIRING in .env and site.env disagree "
-                        f"(.env={values['.env'] or 'empty'}, site.env={values['site.env'] or 'empty'})")
-    enabled = values["site.env"] == "1"
+    value = site_env.get("ROSY_SITE_PAIRING", "")
+    if value not in ("", "0", "1"):
+        problems.append(f"site.env has ROSY_SITE_PAIRING={value!r}; use 1, or 0/empty for off")
+    enabled = value == "1"
     overlay = "compose.pairing.yaml" in site_env.get("ROSY_SITE_PAIRING_COMPOSE", "")
     if overlay != enabled:
         problems.append("ROSY_SITE_PAIRING_COMPOSE "
@@ -357,9 +357,9 @@ def check_pairing(units: list[Path], env_file: dict[str, str], site_env: dict[st
         except (OSError, ValueError) as exc:
             problems.append(f"{unit.name} cannot be read: {exc}")
             continue
-        if overhead and advertised != (values[".env"] == "1"):
+        if overhead and advertised != enabled:
             problems.append(f"{unit.name} " + ("would advertise pair=rosy-pair/1 but pairing is off"
-                                              if advertised else "does not advertise pair=rosy-pair/1"))
+                                               if advertised else "does not advertise pair=rosy-pair/1"))
     if enabled:
         try:
             token = (secrets_dir / "pairing_sync_token").read_text(encoding="utf-8").strip()
@@ -448,7 +448,7 @@ def run_checks(args: argparse.Namespace) -> list[dict]:
     units = [Path(u) for u in (args.unit or [HERE / name for name in DEFAULT_UNITS])]
     return [*site_cert_checks, check_tls_host_local(tls_host),
             check_txt_tls_host(units, env_file, tls_host),
-            check_pairing(units, env_file, read_env_file(Path(args.site_env)),
+            check_pairing(units, env_file, read_env_file(Path(args.site_env or args.env_file)),
                           Path(args.secrets_dir or secrets or DEFAULT_SECRETS_DIR)),
             check_caddy_host(Path(args.caddyfile or HERE / "Caddyfile"), tls_host)]
 
@@ -463,9 +463,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--tls-host", help="site <hostname>.local name (env ROSY_SITE_TLS_HOST)")
     parser.add_argument("--site-cert", help="site_cert fullchain file (default $ROSY_SITE_SECRETS_DIR/site.crt)")
     parser.add_argument("--env-file", default=DEFAULT_ENV_FILE,
-                        help=f"stand-in for the units' EnvironmentFile (default {DEFAULT_ENV_FILE}; may be absent)")
-    parser.add_argument("--site-env", default=DEFAULT_SITE_ENV,
-                        help=f"the env file the stack unit hands Compose (default {DEFAULT_SITE_ENV}; may be absent)")
+                        help=f"the site env file (default {DEFAULT_ENV_FILE}; may be absent)")
+    parser.add_argument("--site-env",
+                        help="override for the file holding the pairing keys (default: --env-file)")
     parser.add_argument("--secrets-dir",
                         help="secrets directory (default $ROSY_SITE_SECRETS_DIR, else " + DEFAULT_SECRETS_DIR + ")")
     parser.add_argument("--unit", action="append",

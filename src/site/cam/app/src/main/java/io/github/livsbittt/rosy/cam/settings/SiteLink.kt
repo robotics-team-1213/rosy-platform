@@ -24,6 +24,8 @@ data class SiteLink(
     val role: String = ROLE,
     val expiresAt: String? = null,
     val pairingSubnet: String? = null,
+    /** D-391 1 `credential_id` of a credential from `rosy-pair/1` (D-341 8); null for a pasted link's token. */
+    val credentialId: String? = null,
 ) {
     /** The URL host: [tlsHost] whenever it is known, so SNI and hostname checks use it; else [manualHost]. */
     val dialHost: String get() = tlsHost ?: manualHost ?: ""
@@ -34,7 +36,8 @@ data class SiteLink(
     /** Never prints the token. */
     override fun toString(): String =
         "SiteLink(siteName=$siteName, tlsHost=$tlsHost, port=$port, caPin=$caPin, token=<redacted>, source=$source, " +
-            "secure=$secure, manualHost=$manualHost, role=$role, expiresAt=$expiresAt, pairingSubnet=$pairingSubnet)"
+            "secure=$secure, manualHost=$manualHost, role=$role, expiresAt=$expiresAt, pairingSubnet=$pairingSubnet, " +
+            "credentialId=$credentialId)"
 
     companion object {
         /** D-370 2 role name of this app in TXT `role` and the site-link record. */

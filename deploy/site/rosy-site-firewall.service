@@ -1,0 +1,14 @@
+[Unit]
+Description=Allow the ROSY site HTTPS port only on the LAN interface (mangle PREROUTING)
+After=network-pre.target
+# In place before dockerd can restore the proxy; a failed apply stops the proxy.
+Before=docker.service rosy-site-stack.service
+OnFailure=rosy-site-firewall-failclosed.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/bin/python3 /opt/rosy/candidate/deploy/site/site-firewall.py apply --env-file /etc/rosy/site/site.env --compose-file /opt/rosy/candidate/deploy/site/compose.yaml
+
+[Install]
+WantedBy=multi-user.target docker.service
