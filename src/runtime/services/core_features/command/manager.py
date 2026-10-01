@@ -60,6 +60,9 @@ class CommandManager:
         self._docking_updated_at: Optional[float] = None
         self._policy_ids = count(1)
         self._input_epoch = 0
+        #: D-400: one safety.policy_off per entry into NAVIGATION while the policy is off.
+        self._unguarded_noted = False
+        self._pending_unguarded: Optional[str] = None
         self._safety.estop_listeners.append(self._clear_for_stop)
         self._safety.policy_listeners.append(self._clear_for_stop)
 
@@ -186,6 +189,15 @@ class CommandManager:
 
     def announce_pending(self) -> None:
         """밀린 알림을 낸다. 브리지가 cmd_vel 을 내보낸 **뒤** 부른다."""
+        if self._events is not None:
+            if self._pending_unguarded is not None:
+                self._events.publish("safety.policy_off", severity="warning", source="command_manager",
+                                     data={"source": self._pending_unguarded})
+            if self._safety.shadow is not None:
+                for data in self._safety.shadow.drain():
+                    self._events.publish("safety.shadow_verdict", severity="info",
+                                         source="command_manager", data=data)
+        self._pending_unguarded = None
         session = self._pending_watchdog
         if session is None:
             return
@@ -201,8 +213,8 @@ class CommandManager:
     def _policy_output(self, linear: float, angular: float, source: str, now: float) -> Twist:
         if linear == 0. and angular == 0.:
             return ZERO
-        epoch, mode = self._input_epoch, self._modes.mode
-        output = self._safety.evaluate_candidate(next(self._policy_ids), source, linear, angular, now,
+        epoch, mode, command_id = self._input_epoch, self._modes.mode, next(self._policy_ids)
+        output = self._safety.evaluate_candidate(command_id, source, linear, angular, now,
                                                  scope='manual' if mode is Mode.MANUAL else 'nav')
         if epoch != self._input_epoch or mode is not self._modes.mode or self._safety.estop:
             return ZERO
@@ -212,10 +224,19 @@ class CommandManager:
             self._safety.trigger_estop('control:' + self._safety.policy_reason)
             self._modes.transition(Mode.EMERGENCY)
             return ZERO
-        return Twist(*output)
+        result = Twist(*output)
+        # D-400 shadow: judged after the real output is fixed; it can only record.
+        self._safety.shadow_evaluate(command_id, source, linear, angular, now,
+                                     output=(result.linear, result.angular))
+        if self._safety.policy_mode == 'off' and source == 'navigation' and not self._unguarded_noted:
+            self._unguarded_noted = True
+            self._pending_unguarded = source
+        return result
 
     def select_output(self, now: Optional[float] = None) -> Twist:
         current = now if now is not None else time.monotonic()
+        if self._modes.mode is not Mode.NAVIGATION:
+            self._unguarded_noted = False
         stopped = self._safety.estop or self._modes.is_emergency
         ready = self._motion_ready()
         leaving_manual = stopped or not ready or self._modes.mode is not Mode.MANUAL
