@@ -1,6 +1,6 @@
 ## D-395 Fleet 보조 위치 확정 — 로봇이 후보를 내고 Fleet이 중재하며, 대칭 맵에서도 사람 입력 없이 map 자세를 얻는다
 
-**Status:** Proposed (2026-10-01). 설계만 정한다. 코드·로봇 설정·params·API 참조서는 바꾸지 않는다. 구현은 아래 Validation의 S1 이후 단계를 사용자가 승인한 뒤 별도 변경으로 한다. 개정 1(2026-10-01, 바닥 기준 사각형을 귀환 기준점·출발 슬롯으로 사용)과 개정 2(슬롯 방향은 축만, 부호는 LiDAR 적합), 개정 3(비대칭 단서 필수, 받은 때부터 재는 유효 시간), 개정 4(2단계 결정과 감시 한계)가 아래 결정보다 우선한다. 이 ADR은 D-257 5항과 D-393 3항의 일부를 **개정하자고 제안**한다(아래 "개정 제안"). 제안이 Accepted되기 전에는 두 ADR의 해당 문구가 그대로 유효하다.
+**Status:** Proposed (2026-10-01). 설계만 정한다. 코드·로봇 설정·params·API 참조서는 바꾸지 않는다. 구현은 아래 Validation의 S1 이후 단계를 사용자가 승인한 뒤 별도 변경으로 한다. 개정 1(2026-10-01, 바닥 기준 사각형을 귀환 기준점·출발 슬롯으로 사용)과 개정 2(슬롯 방향은 축만, 부호는 LiDAR 적합), 개정 3(비대칭 단서 필수, 받은 때부터 재는 유효 시간), 개정 4(2단계 결정과 감시 한계), 개정 5(실기 항목 보류), 개정 6(S1 결과: 닻을 내린 이웃만 단서)이 아래 결정보다 우선한다. 이 ADR은 D-257 5항과 D-393 3항의 일부를 **개정하자고 제안**한다(아래 "개정 제안"). 제안이 Accepted되기 전에는 두 ADR의 해당 문구가 그대로 유효하다.
 
 설계 전문: [2026-10-01-fleet-assisted-localization-design.md](../plans/2026-10-01-fleet-assisted-localization-design.md).
 
@@ -165,5 +165,37 @@ LOCAL·ROS-SIM까지만 주장 가능하다. 실물은 승인 뒤다.
 4. **장치의 들어 올림 신호.** 장치 그래프에는 지금 `safety/pickup` 발행자가 없다. CORE 선택 센서 작업자가 BNO055 IMU로 `safety/pickup`·`safety/tilt`를 낼 수 있지만 기본 꺼짐(`control.sensor_adapter.enabled: false`)이다. 켜는 것은 로봇 설정 변경이므로 실측과 함께 정한다. 그 전에는 들어 올림 뒤 SUSPECT가 적합도 지속 하락에만 기대므로 실기에서 사람이 로봇을 옮기지 않는다.
 5. **장치 기본값과 릴리스.** `hardware.launch.py`의 `enable_loc_assist`는 1–4가 닫힌 뒤 켠다. 켜는 릴리스는 배포 전 공유 로봇 공지·대기 규칙을 따른다.
 6. **실기 S3.** 위 항목과 S1 통과 뒤, 두 대를 저속으로 S1 시나리오대로 돌린다. 로봇을 움직이기 전에 공지하고, 다른 세션이 주행 중이면 기다린다.
+
+**개정 6 (2026-10-02, S1 Gazebo 결과로 고친 설계: 닻을 내린 이웃만 단서다):**
+
+S1 Gazebo 벤치(`docs/plans/2026-10-02-d395-s1-bench-results.md`)는 통과하지 못했다.
+- 두 로봇 모두 사각형 출발은 9/9, 주행 중 들어 옮김은 3/3이었다.
+- 슬롯 밖 출발은 2/3였고, 강제 거울 탐지는 0/5였다.
+- 단서 없는 외톨이 로봇은 예상대로 `needs_human`에서 끝났다.
+- 거울 결정은 한 번도 보내지 않았다. 하지만 이웃 단서가 거울을 앞세운 경우가 있었고, 1.0 격차와 개정 3 규칙만이 그것을 막았다.
+
+아래가 그 결과로 바꾼 것이다.
+
+1. **이웃(peers)은 대칭을 깨지 못하고 닻을 옮길 뿐이다.**
+   - 지도가 180° 대칭이므로, 함께 뒤집힌 로봇 무리는 서로에게 완벽히 맞는다. 그래서 이웃 단서는 그 이웃 자신이 세계 단서로 고정됐을 때만 증거다.
+   - Fleet은 로봇별로 위치 확정의 출처를 기억한다. **닻(anchor)**은 Fleet이 내렸거나 본 결정으로 LOCALIZED가 된 로봇이다. 그 결정은 세계 단서(`square`·`paint`·`slot`)나 `source: human`, 또는 닻만으로 된 `peers`가 실어야 한다.
+   - `Context.peers`에는 닻만 넣는다.
+   - 출처를 모르는 LOCALIZED 로봇은 다시 확정될 때까지 닻이 아니다. 직접 주입이나 CORE 재시작으로 확정된 경우가 그렇다.
+   - LOCALIZED를 벗어나면 닻도 풀린다.
+   - LOCALIZED인 채로 자세가 폴링 사이에 물리적으로 불가능하게 튀어도 닻이 풀린다. 기준은 0.25 m + 0.5 m/s·dt 또는 0.5 rad + 2 rad/s·dt를 넘는 경우다. 확정된 결정 자세에서 25 cm / 60°보다 멀리 처음 보인 로봇도 닻이 아니다. S1의 거울 주입처럼 AMCL에 직접 들어간 자세는 상태를 바꾸지 않으므로, 이 규칙이 없으면 거울 로봇이 닻으로 남는다. Fleet을 재시작하면 이미 LOCALIZED인 로봇은 다시 확정될 때까지 닻이 아니다.
+   - 개정 3의 `ASYMMETRIC_CUES`는 그대로 `peers`를 포함한다. 닻 규칙이 그 전제(이웃이 옳다)를 Fleet 쪽에서 보장한다.
+2. **보여야 할 이웃이 안 보이는 것은 증거가 아니다.** `peers_cue`의 −1을 없앤다. 시야 안 이웃이 스캔에 안 잡히는 일은 흔하고(가림, 지도 클러터, 거리), S1에서는 이 −1이 거울을 2.0 앞세웠다. "기대한 자리에 보임"만 +1이다.
+3. **감시(9항)는 연속 시간 대신 증거 개수로 판단한다.** 보고가 4–7 s 간격이라 1.5 s 연속 조건이 한 번도 성립하지 않았다. 새 기준은 다음과 같다.
+   - 15 s 안에 신선한(처음 본 뒤 1.0 s 안) 거울 서명 보고가 사이에 맞는 보고 없이 2번 연달아 오면 SUSPECT다.
+   - 개정 4 5항의 한계(모든 로봇이 LOCALIZED일 때 관찰이 없음)는 여전하다.
+4. **`to_square`의 `unsupported`는 그 사다리 회차에서 최종이다.** 바로 `lane_to_stopline`으로 넘어가고 다시 묻지 않는다.
+5. **고쳐야 할 결함, 수정 진행 중:**
+   - 첫 주입이 늘 3 s 검증에서 거부된다(37/37, 적합도 ≈ 0.01). 근본 원인을 찾는 중이다.
+   - 이웃 물체를 성긴 스캔에서 계산해 0.6 m에서도 15 %를 놓친다. 전체 스캔으로 계산한다.
+   - CORE의 `state_stale`가 벽시계를 써서 sim 저속에서 상태가 흔들린다. ROS 시계로 바꾼다.
+6. **S1 다시 하기와 남은 sim 한계.**
+   - 위가 고쳐지면 S1을 다시 돌린다. 통과 기준은 처음 그대로다.
+   - sim 한계 하나: gz_multi에 카메라가 없어 `lane_to_stopline`이 sim에서 늘 `lane_lost`다.
+   - 기준 사각형 B는 영상 유래 좌표로 벽에서 0.105 m라 sim 충돌 반경(0.115 m) 안이다. 그래서 B에서 출발한 주행 시험은 움직이지 못했다. 테이프 실측(개정 5 2항)이 이를 가린다.
 
 **References:** `docs/adr/D-257-site-lane-map-and-overhead-sightings.md`, `docs/adr/D-393-nav-amcl-update-min-d-and-goal-tolerance.md`, `docs/adr/D-375-overhead-map-registration-from-lane-paint-proposal.md`, `docs/adr/D-360-overhead-field-auto-detection-proposal.md`, `src/runtime/api_web/core_api_web/api/v1/navigation.py`, `src/runtime/gateway/core/bridge/ros_bridge.py`, `src/runtime/sensing/control/localization_node.py`, `src/site/fleet/fleet/swarm/transport.py`, D-2, D-267, D-269, D-321, D-356, D-369, [D-346](D-346-commit-time-collision-defenses.md).

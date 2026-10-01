@@ -89,19 +89,44 @@ def test_disagreement_is_25_cm_or_60_degrees():
     assert service_logic.disagrees((0, 0, 0), (0, 0, math.radians(61)))
 
 
-def test_the_monitor_needs_1_5_s_of_continuous_disagreement():
+def test_the_monitor_counts_two_distinct_disagreeing_reports():
+    """S1 finding 7: count reports, not wall-time continuity."""
     m = Monitor()
-    assert not m.update("r", True, 0.0)
-    assert not m.update("r", True, 1.0)
-    assert not m.update("r", False, 1.2)            # agreement resets
-    assert not m.update("r", True, 1.5)
-    assert not m.update("r", None, 2.0)             # a gap in evidence (stale report) keeps the hold
-    assert m.update("r", True, 3.0)
-    assert not m.update("r", True, 3.5)             # fired once; a new hold starts
-    assert not m.update("r", None, 5.5)             # no evidence for > 1.5 s: the hold expires
-    assert not m.update("r", True, 6.0)
-    assert not m.update("r", True, 7.0)
-    assert m.update("r", True, 7.5)
+    assert not m.update("r", [("a", True)], 0.0)
+    assert not m.update("r", [("a", True)], 0.5)    # the same report again is not a second one
+    assert not m.update("r", [], 3.0)               # a gap in evidence keeps the count
+    assert m.update("r", [("b", True)], 5.0)
+    assert not m.update("r", [("c", True)], 6.0)    # fired; the count starts again
+    assert m.update("r", [("d", True)], 7.0)
+
+
+def test_an_agreeing_report_between_two_disagreeing_ones_resets_the_count():
+    m = Monitor()
+    assert not m.update("r", [("a", True)], 0.0)
+    assert not m.update("r", [("b", False)], 2.0)
+    assert not m.update("r", [("c", True)], 4.0)
+    assert m.update("r", [("d", True)], 6.0)
+
+
+def test_two_disagreeing_reports_more_than_15_s_apart_are_not_enough():
+    m = Monitor()
+    assert not m.update("r", [("a", True)], 0.0)
+    assert not m.update("r", [("b", True)], 15.5)
+    assert m.update("r", [("c", True)], 20.0)       # b and c are inside one window
+
+
+def test_disagreement_wins_over_agreement_in_the_same_tick():
+    """Two observers in one poll: a missed mirror lock is worse than a needless SUSPECT."""
+    m = Monitor()
+    assert not m.update("r", [("a", True), ("b", False)], 0.0)
+    assert m.update("r", [("c", True)], 0.5)
+
+
+def test_forget_drops_the_count():
+    m = Monitor()
+    assert not m.update("r", [("a", True)], 0.0)
+    m.forget("r")
+    assert not m.update("r", [("b", True)], 1.0)
 
 
 def _report_at(objects, observer=None):
@@ -204,9 +229,126 @@ def _peer_case(peer_state, peer_frame="map"):
     return r1
 
 
-def test_a_localized_peer_carries_the_decision():
-    r1 = _peer_case("LOCALIZED")
-    assert len(r1.decisions) == 1 and [c.value for c in r1.decisions[0].cues] == ["peers"]
+def test_a_peer_fleet_first_saw_localized_is_not_an_anchor():
+    """Unknown provenance (a direct injection, a Fleet or CORE restart): not a peer."""
+    assert _peer_case("LOCALIZED").decisions == []
+
+
+def seen_from(observer, target):
+    """`target` (map) as a base_link point of a robot at `observer`."""
+    dx, dy = target[0] - observer[0], target[1] - observer[1]
+    c, s = math.cos(observer[2]), math.sin(observer[2])
+    return (c * dx + s * dy, -s * dx + c * dy)
+
+
+class Localizing(FakeRobot):
+    """CANDIDATES at `pose` with its mirror; accepts a decision and is then LOCALIZED at
+    the decided candidate (the robot's 3 s check passes)."""
+
+    def __init__(self, robot_id, pose, objects=(), request_id=None):
+        super().__init__(robot_id, state=state(robot_id, "CANDIDATES", "odom"))
+        self.candidates = report(robot_id, pose, objects=objects, request_id=request_id)
+
+    async def localization_decision(self, decision):
+        out = await super().localization_decision(decision)
+        c = self.candidates.candidates[decision.candidate_index]
+        self._state = state(self.robot_id, "LOCALIZED", pose=(c.x, c.y, c.yaw))
+        self.candidates = None
+        return out
+
+    def search(self, pose, objects=(), request_id="again"):
+        """Back to CANDIDATES (a pickup) with a new report."""
+        self._state = state(self.robot_id, "CANDIDATES", "odom")
+        self.candidates = report(self.robot_id, pose, objects=objects, request_id=request_id)
+
+
+X_OFF = (-0.9, -0.509, 0.0)               # sees A at 1.06 m; its twin is 2.4 m from A
+Z_OFF = (0.9, -0.2, math.pi)              # sees X_OFF only (A is 2.27 m away)
+
+
+def test_an_anchored_chain_localizes_through_peers():
+    """slot -> peers from the slot anchor -> peers from that anchor."""
+    clock = FakeClock()
+    a = Localizing("a", ON_A)
+    x = Localizing("x", X_OFF, objects=[seen_from(X_OFF, ON_A)])
+    z = Localizing("z", Z_OFF, objects=[seen_from(Z_OFF, X_OFF)])
+    svc = service(a, x, z, clock=clock)
+    ticks(svc, clock, 15.0)
+    assert [[c.value for c in r.decisions[0].cues] for r in (a, x, z)] == [["slot"], ["peers"], ["peers"]]
+    assert all(r.decisions[0].candidate_index == 0 for r in (a, x, z))
+    assert svc.anchors() == {"a", "x", "z"}
+
+
+def test_a_robot_that_leaves_localized_loses_its_anchor():
+    clock = FakeClock()
+    a = Localizing("a", ON_A)
+    svc = service(a, clock=clock)
+    ticks(svc, clock, 5.0)
+    assert svc.anchors() == {"a"}
+    a._state = state("a", "SUSPECT", "map", pose=ON_A)
+    ticks(svc, clock, 0.5)
+    a._state = state("a", "LOCALIZED", pose=ON_A)          # back without a Fleet decision
+    x = Localizing("x", X_OFF, objects=[seen_from(X_OFF, ON_A)])
+    svc._clients = lambda: {"a": a, "x": x}
+    ticks(svc, clock, 5.0)
+    assert svc.anchors() == set() and x.decisions == []
+
+
+def test_an_anchor_whose_pose_jumps_while_localized_loses_its_anchor():
+    """A pose injected straight into AMCL keeps the robot LOCALIZED; the jump shows it."""
+    clock = FakeClock()
+    a = Localizing("a", ON_A)
+    svc = service(a, clock=clock)
+    ticks(svc, clock, 5.0)
+    a._state = state("a", "LOCALIZED", pose=(ON_A[0], ON_A[1] - 0.05, ON_A[2]))   # driving
+    ticks(svc, clock, 0.5)
+    assert svc.anchors() == {"a"}
+    a._state = state("a", "LOCALIZED", pose=mirror(ON_A))
+    ticks(svc, clock, 0.5)
+    assert svc.anchors() == set()
+
+
+def test_a_decision_that_ends_elsewhere_does_not_anchor():
+    """LOCALIZED away from the decided pose was not that decision."""
+    clock = FakeClock()
+    a = Localizing("a", ON_A)
+    original = a.localization_decision
+
+    async def decide(decision):
+        out = await original(decision)
+        a._state = state("a", "LOCALIZED", pose=mirror(ON_A))
+        return out
+
+    a.localization_decision = decide
+    svc = service(a, clock=clock)
+    ticks(svc, clock, 5.0)
+    assert len(a.decisions) == 1 and svc.anchors() == set()
+
+
+R2_TRUE = (-0.70, 0.15, math.pi)          # S1 layout a: off-slot, 0.66 m from r1 on A
+
+
+def test_s1_a_mirror_locked_peer_gives_its_observer_no_lead():
+    """S1 p7a1/p7a3: r2, LOCALIZED by peers from r1, is injected at its twin and stays
+    LOCALIZED. r1 is picked up and re-searches; it sees the real r2, which its own twin
+    places exactly on r2's mirror-locked pose. Before: twin peers +1 led the slot by 0.5."""
+    clock = FakeClock()
+    r1 = Localizing("r1", ON_A)
+    r2 = Localizing("r2", R2_TRUE, objects=[seen_from(R2_TRUE, ON_A)])
+    svc = service(r1, r2, clock=clock)
+    ticks(svc, clock, 10.0)
+    assert [[c.value for c in r.decisions[0].cues] for r in (r1, r2)] == [["slot"], ["peers"]]
+    assert svc.anchors() == {"r1", "r2"}
+
+    r2._state = state("r2", "LOCALIZED", pose=mirror(R2_TRUE))     # the injected fault
+    r1.search(ON_A, objects=[seen_from(ON_A, R2_TRUE)])            # the pickup pulse
+    ticks(svc, clock, 5.0)
+    assert "r2" not in svc.anchors()
+    decision = r1.decisions[-1]
+    assert len(r1.decisions) == 2 and decision.candidate_index == 0          # the truth
+    assert [c.value for c in decision.cues] == ["slot"]
+    assert decision.evidence["cues"]["peers"] == 0.0
+    assert decision.evidence["totals"][1] == pytest.approx(0.99)           # the twin: scan fit only
 
 
 @pytest.mark.parametrize("peer_state, frame", [("SUSPECT", "map"), ("CANDIDATES", "odom"),
@@ -241,12 +383,40 @@ def _mirror_locked(clock, objects=((0.5, 0.0),), skew_s=0.0, restamp=True, **kwa
     return truth, r1, r2, service(r1, r2, clock=clock, **kwargs)
 
 
-def test_a_peer_observation_alone_marks_a_mirror_locked_robot_suspect_after_1_5_s():
+def test_a_peer_observation_alone_marks_a_mirror_locked_robot_suspect_on_the_second_report():
     clock = FakeClock()
     _, r1, _, svc = _mirror_locked(clock)
-    ticks(svc, clock, 1.5)                               # observed at 0.0, 0.5, 1.0
+    ticks(svc, clock, 0.5)                               # first report
     assert r1.suspects == []
-    ticks(svc, clock, 0.5)                               # 1.5 s of disagreement
+    ticks(svc, clock, 0.5)                               # a second, distinct report
+    assert r1.suspects == ["fleet_monitor"]
+
+
+class Periodic(Reporting):
+    """Re-reports only every `period_s` of Fleet time (S1: reports 4-7 s apart at RTF ~0.4)."""
+
+    def __init__(self, *args, period_s, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.period_s, self._last = period_s, None
+
+    async def localization_candidates(self):
+        self._record("localization_candidates")
+        if self._last is None or self.clock() - self._last >= self.period_s:
+            self._last, self._stamp = self.clock(), self.clock()
+        return report(self.robot_id, self.pose, objects=self.objects, stamp=self._stamp)
+
+
+@pytest.mark.parametrize("period_s", [4.0, 5.5, 7.0])
+def test_the_monitor_fires_at_the_s1_report_cadence(period_s):
+    """S1 finding 7: twelve disagreeing reports 3.8-6.7 s apart never held 1.5 s of
+    continuity. Two distinct fresh reports are enough now."""
+    clock = FakeClock()
+    truth, r1, _, svc = _mirror_locked(clock)
+    r2 = Periodic("r2", clock, ON_A, [(0.5, 0.0)], period_s=period_s)
+    svc = service(r1, r2, clock=clock)
+    ticks(svc, clock, period_s - 0.5)                    # only the first report so far
+    assert r1.suspects == []
+    ticks(svc, clock, 1.0)
     assert r1.suspects == ["fleet_monitor"]
 
 
@@ -272,13 +442,13 @@ def test_a_fresh_report_is_evidence_whatever_the_robot_clock_says(skew_s):
     """Freshness is counted from Fleet's first sighting of the report, never the robot clock."""
     clock = FakeClock()
     _, r1, _, svc = _mirror_locked(clock, skew_s=skew_s)
-    ticks(svc, clock, 2.0)
+    ticks(svc, clock, 1.0)                               # two re-stamped reports
     assert r1.suspects == ["fleet_monitor"]
 
 
 def test_an_unchanged_report_goes_stale_1_s_after_fleet_first_saw_it():
-    """Re-fetching the same (request_id, stamp) keeps its first-seen time: a robot whose
-    re-reports stopped arriving gives evidence for 1 s only, too short for the 1.5 s hold."""
+    """Re-fetching the same (request_id, stamp) keeps its first-seen time and counts once:
+    a robot whose re-reports stopped arriving gives one report, never the two needed."""
     clock = FakeClock()
     _, r1, _, svc = _mirror_locked(clock, restamp=False)
     ticks(svc, clock, 5.0)
@@ -306,10 +476,21 @@ def test_the_overhead_sighting_counts_when_the_flag_is_on_and_only_when_fresh():
         sightings.see("r1", 1.0, 0.0, 0.0, age_s=0.4)   # older than 300 ms: not a cue
         ticks(svc, clock, 0.5)
     assert r1.suspects == []
-    for _ in range(4):
+    for _ in range(2):
         sightings.see("r1", 0.0, 0.0, math.radians(90))  # fresh, 90 degrees off
         ticks(svc, clock, 0.5)
     assert r1.suspects == ["fleet_monitor"]
+
+
+def test_one_overhead_sighting_re_read_counts_once():
+    clock = FakeClock()
+    sightings = FakeSightings(clock)
+    r1 = FakeRobot("r1", state=state("r1", "LOCALIZED", pose=(0.0, 0.0, 0.0)))
+    svc = service(r1, clock=clock, sightings=sightings, overhead_cue=True)
+    sightings.see("r1", 0.0, 0.0, math.radians(90), age_s=0.0)
+    ticks(svc, clock, 0.5)
+    ticks(svc, clock, 0.5)                               # the same row, 0.5 s old, read again
+    assert r1.suspects == []
 
 
 def test_the_ladder_sends_missions_then_raises_needs_human(caplog):
@@ -359,6 +540,43 @@ def test_homing_tries_to_square_first_and_falls_back_when_core_refuses_it():
     [lane] = [m for m in r1.missions if m[0] == "lane_to_stopline"]
     assert lane[3] is None                                       # only to_square carries a target
     assert svc.view("r1")["last_mission"]["kind"] == "lane_to_stopline"
+
+
+def test_an_unsupported_kind_is_not_asked_again_in_the_same_ladder_episode():
+    """S1: while the rotate still ran, Fleet alternated to_square (unsupported) and
+    lane_to_stopline (busy) every ~2.4 s. unsupported is final until LOCALIZED."""
+    clock = FakeClock()
+    r1 = FakeRobot("r1", state=state("r1", "CANDIDATES", "odom"))
+    r1.candidates = report("r1", OFF)
+    r1.decision_error = RobotApiError("r1", 409, "STALE_REQUEST", "keep the ladder running")
+    calls = []
+    busy = {"lane": True}
+    original = r1.localization_mission
+
+    async def mission(kind, **kwargs):
+        calls.append(kind)
+        if kind == "to_square":
+            raise RobotApiError("r1", 409, "unsupported", "follow-up")
+        if kind == "lane_to_stopline" and busy["lane"]:
+            raise RobotApiError("r1", 409, "busy", "rotate_in_place is running")
+        return await original(kind, **kwargs)
+
+    r1.localization_mission = mission
+    svc = service(r1, clock=clock)
+    ticks(svc, clock, 46.0)
+    assert calls == ["rotate_in_place", "to_square", "lane_to_stopline"]
+    ticks(svc, clock, 6.0)                                   # busy retries: the lane mission only
+    assert calls.count("to_square") == 1 and calls.count("lane_to_stopline") >= 3
+    busy["lane"] = False
+    ticks(svc, clock, 2.5)
+    assert calls[-1] == "lane_to_stopline" and calls.count("to_square") == 1
+
+    r1._state = state("r1", "LOCALIZED")                     # the episode ends
+    ticks(svc, clock, 0.5)
+    r1._state = state("r1", "CANDIDATES", "odom")            # a new one tries to_square again
+    calls.clear()
+    ticks(svc, clock, 46.5)
+    assert "to_square" in calls
 
 
 def test_the_square_target_is_the_square_nearest_the_first_candidate():

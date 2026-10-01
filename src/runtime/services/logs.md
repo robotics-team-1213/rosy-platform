@@ -323,3 +323,9 @@
 - 변경: `line_follow/clearance.py` 새 `front_sector`(정면 최단 유효 거리·유효 빔·빔 수; inf·NaN·`range_min` 미만은 무효 빔으로 셈, self-mask 반사는 빔에서 뺌). `nudge_forward` 는 정면 ±20° 에 유효 빔이 5 개 미만이거나 무효 빔이 30 % 를 넘으면 거부·정지(`range_min` 안 물체는 그렇게 보인다). `lidar_self_mask` 를 넘긴다. `rotate_in_place` 는 전체 스캔에 0.20 m 안 유효 반사가 있거나 스캔이 낡으면 거부. LiDAR 끊김(0.5 s)은 모든 종류를 `obstacle_sensor_stale` 로 끝낸다. `end()` 의 nav 슬롯 지우기는 한 번(지우면 시험이 빨개진다). `bind_clock` — 브리지가 line clock(use_sim_time 이면 ROS 시계)을 준다.
 - 증거: `gateway/test/test_localization_mission.py` +14 (변이: `end()` 의 `clear_navigation` 삭제 → 7 빨강).
 - gate 변화: 없음.
+
+## 2026-10-02 · e93fdd8b · fix(localization): state_stale 창을 묶을 수 있는 시계로 (D-395 S1 finding 6)
+
+- 변경: `localization/assist.py` 에 `bind_clock` — 3 s `state_stale` 창이 벽시계 대신 브리지의 line clock(use_sim_time 이면 ROS 시계, 실기는 monotonic)으로 잰다. 로봇 노드는 상태를 자기 노드 시계로 0.5 s 마다 내므로, 벽시계 창은 RTF ≈ 0.17 아래에서 깜빡였다. `received_s` 는 그대로 `clock`(로봇 노드의 ROS 시계).
+- 증거: `test/test_localization_assist.py` +2 (RTF 0.1, 벽 5 s 간격에도 stale 없음; 그 시계로 3.1 s 침묵은 stale + halt).
+- gate 변화: 없음.

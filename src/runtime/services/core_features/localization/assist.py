@@ -110,6 +110,14 @@ class LocalizationAssist:
         self._emitted: Optional[LocState] = None
         self._decisions: "OrderedDict[str, tuple[str, list[str]]]" = OrderedDict()
 
+    def bind_clock(self, clock: Callable[[], float]) -> None:
+        """The stale window's clock: the bridge's line clock, i.e. the ROS (sim) clock
+        under `use_sim_time`, else monotonic. The robot node publishes its state on
+        its own node clock, so a wall-time window flaps below RTF ~0.17 (D-395 S1
+        finding 6). `received_s` stays on `clock`, the robot node's ROS clock."""
+        with self._lock:
+            self._monotonic = clock
+
     # --- read side ----------------------------------------------------------
 
     @property

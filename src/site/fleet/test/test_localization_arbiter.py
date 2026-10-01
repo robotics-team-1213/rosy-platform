@@ -136,10 +136,11 @@ def test_score_reports_every_cue_and_the_total():
 
 
 def test_a_hidden_peer_cannot_carry_a_decision_to_the_mirror():
-    """Review C1: the truth scores -1 on peers (peer in range, hidden from the scan),
-    the mirror 0. Beating -1 with 0 is no evidence, so nothing is decided."""
+    """Review C1 / S1 finding 3: a peer in range but hidden from the scan scores 0 for
+    every candidate, so it cannot lead anyone, let alone the mirror."""
     truth, twin = (1.0, 0.0, 0.0), (-1.0, 0.0, math.pi)
     rep = report([(*truth, 0.9, None), (*twin, 0.9, None)])
+    assert [row["peers"] for row in score(rep, Context(peers=[(1.0, 0.94)]), 0.0)] == [0.0, 0.0]
     assert run(Arbiter(), rep, Context(peers=[(1.0, 0.94)]))[1] is None
 
 

@@ -1,8 +1,8 @@
 """Fleet localization service (D-395 Phase 2 P2-6, contract §3): poll, arbitrate, post.
 
 Every 0.5 s it reads each robot's `/robot/state`. For a robot in CANDIDATES it reads
-`/localization/candidates`, builds the arbiter `Context` (LOCALIZED map-frame peers,
-the reference squares and slots from `lane_rules.yaml`, and an overhead sighting no
+`/localization/candidates`, builds the arbiter `Context` (anchored LOCALIZED map-frame
+peers, see `_track_provenance`, the reference squares and slots from `lane_rules.yaml`, and an overhead sighting no
 older than 300 ms) and posts the arbiter's decision. It also runs the §9 monitor
 (`POST /localization/suspect`) and times the escalation ladder.
 
@@ -31,7 +31,7 @@ from typing import Awaitable, Callable, Mapping, Optional, Sequence
 
 import yaml
 
-from core_common.protocol.localization import LocalizationDecision, LocState
+from core_common.protocol.localization import DecisionSource, LocalizationDecision, LocState
 from fleet.localization import cues, service_logic, trust
 from fleet.localization.arbiter import Arbiter, Context
 from fleet.localization.service_logic import Ladder, Monitor
@@ -112,6 +112,13 @@ class LocalizationService:
         self._last_report: dict[str, object] = {}
         #: robot_id -> (rung, Fleet time of the busy refusal) still to be retried.
         self._busy_rung: dict[str, tuple[str, float]] = {}
+        #: robot_id -> mission kinds CORE refused as `unsupported` in this ladder episode.
+        self._unsupported: dict[str, set] = {}
+        #: Anchor provenance (S1 finding 3): anchored robots, the decided pose of an anchoring
+        #: decision sent and not yet seen LOCALIZED, and each LOCALIZED robot's last pose.
+        self._anchors: set[str] = set()
+        self._pending: dict[str, cues.Pose] = {}
+        self._localized_at: dict[str, tuple[cues.Pose, float]] = {}
         #: robot_id -> ((request_id, stamp), Fleet monotonic time first seen).
         self._report_seen: dict[str, tuple] = {}
         self._known: set[str] = set()
@@ -153,16 +160,20 @@ class LocalizationService:
         localized = {rid: p for rid, s in states.items()
                      if trust.classify(s) == trust.TRUSTED and (p := _pose(s)) is not None}
         self._last_good.update(localized)
+        self._track_provenance(states, localized, now)
+        anchors = {rid: p for rid, p in localized.items() if rid in self._anchors}
 
         observations: dict[str, list] = {}
         await asyncio.gather(*(
-            self._arbitrate(rid, clients[rid], localized, observations, now)
+            self._arbitrate(rid, clients[rid], localized, anchors, observations, now)
             for rid, state in states.items()
             if (status := trust.status_of(state)) is not None and status.state is LocState.CANDIDATES))
         await self._watch(localized, observations, now)
         for rid, state in states.items():
             status = trust.status_of(state)
             rung = self._ladder.update(rid, status.state if status else None, now)
+            if rid not in self._ladder.robots():
+                self._unsupported.pop(rid, None)          # the ladder episode ended
             retry = self._busy_rung.get(rid)
             if rung is None and retry is not None and retry[0] == self._ladder.view(rid, now)["rung"]                     and now - retry[1] >= service_logic.BUSY_RETRY_S:
                 rung = retry[0]
@@ -175,8 +186,42 @@ class LocalizationService:
     async def _bounded(self, call):
         return await asyncio.wait_for(call, self._timeout_s)
 
+    def _track_provenance(self, states: Mapping[str, dict], localized: Mapping[str, cues.Pose],
+                          now: float) -> None:
+        """Anchors (S1 finding 3): LOCALIZED at the pose of a Fleet decision that a world
+        cue, `source: human` or anchored peers carried. The track is 180-degree symmetric,
+        so robots mirrored together agree with each other; only an anchor may be a peer.
+
+        Provenance resets when the robot is seen outside LOCALIZED (an unreadable poll
+        keeps it) and when its pose jumps while LOCALIZED (a pose injected past Fleet).
+        A robot first seen LOCALIZED, or LOCALIZED away from the decided pose, has
+        unknown provenance and is not an anchor until it re-localizes."""
+        for rid in states:
+            pose = localized.get(rid)
+            previous = self._localized_at.get(rid)
+            if pose is None:
+                self._anchors.discard(rid)
+                self._localized_at.pop(rid, None)
+                continue
+            self._localized_at[rid] = (pose, now)
+            if previous is None:
+                decided = self._pending.pop(rid, None)
+                if decided is not None and not service_logic.disagrees(decided, pose):
+                    self._anchors.add(rid)
+                    logger.info("localization: %s LOCALIZED by a Fleet decision: anchor", rid)
+                else:
+                    logger.info("localization: %s LOCALIZED without a Fleet-known decision: "
+                                "not an anchor, not a peer", rid)
+            elif rid in self._anchors and service_logic.jumped(previous[0], pose, now - previous[1]):
+                self._anchors.discard(rid)
+                logger.warning("localization: %s pose jumped while LOCALIZED: no longer an anchor", rid)
+
+    def anchors(self) -> set:
+        """Robots whose LOCALIZED pose Fleet can trace to a world cue (tests, console)."""
+        return set(self._anchors)
+
     async def _arbitrate(self, rid: str, client: RobotClient, localized: Mapping[str, cues.Pose],
-                         observations: dict, now: float) -> None:
+                         anchors: Mapping[str, cues.Pose], observations: dict, now: float) -> None:
         try:
             report = await self._bounded(client.localization_candidates())
         except Exception as exc:
@@ -188,8 +233,8 @@ class LocalizationService:
             logger.warning("localization: %s reported candidates for %s; ignored", rid, report.robot_id)
             return
         self._last_report[rid] = report
-        peers = {o: p for o, p in localized.items() if o != rid}
-        context = Context(peers=[p[:2] for p in peers.values()], slots=self._slots,
+        peers = {o: p for o, p in localized.items() if o != rid}       # watched by the monitor
+        context = Context(peers=[p[:2] for o, p in anchors.items() if o != rid], slots=self._slots,
                           squares=self._squares, last_good=self._last_good.get(rid),
                           sighting=self._sighting(rid, now))
         # The monitor places this robot's unmapped objects from its leading candidate,
@@ -206,19 +251,24 @@ class LocalizationService:
         fresh = now - seen[1] <= service_logic.REPORT_FRESH_S
         if leader is not None and fresh:
             for peer, seen in service_logic.peer_observations(report, leader, peers).items():
-                observations.setdefault(peer, []).append(seen)
+                observations.setdefault(peer, []).append(((rid, *key), seen))
         decision = self._arbiter.observe(report, context, now)
         if decision is not None:
-            await self._post_decision(rid, client, decision)
+            c = report.candidates[decision.candidate_index]
+            await self._post_decision(rid, client, decision, (c.x, c.y, c.yaw))
 
     async def _post_decision(self, rid: str, client: RobotClient,
-                             decision: LocalizationDecision) -> None:
+                             decision: LocalizationDecision, pose: cues.Pose) -> None:
         record = {"request_id": decision.request_id, "candidate_index": decision.candidate_index,
                   "cues": [c.value for c in decision.cues], "result": "sent"}
         try:
             await self._bounded(client.localization_decision(decision))
             logger.info("localization: %s decision %s candidate %s cues %s", rid,
                         decision.request_id, decision.candidate_index, record["cues"])
+            # Context.peers holds anchors only, so a `peers` cue is anchored too.
+            if decision.source is DecisionSource.HUMAN or any(
+                    k in service_logic.WORLD_CUES or k == "peers" for k in record["cues"]):
+                self._pending[rid] = pose
         except RobotApiError as exc:
             record["result"] = exc.code
             logger.info("localization: %s refused decision %s: %s", rid, decision.request_id, exc.code)
@@ -228,7 +278,8 @@ class LocalizationService:
         self._last_decision[rid] = record
 
     async def _watch(self, localized: Mapping[str, cues.Pose], observations: Mapping[str, list],
-               now: float) -> None:
+                     now: float) -> None:
+        """`observations`: robot -> [(evidence key, observed pose)]; a key is one report."""
         for rid in list(self._known):
             if rid not in localized:
                 self._monitor.forget(rid)
@@ -237,9 +288,10 @@ class LocalizationService:
             seen = list(observations.get(rid, ()))
             sighting = self._sighting(rid, now)
             if sighting is not None:
-                seen.append((sighting.x, sighting.y, sighting.yaw))
-            disagreeing = any(service_logic.disagrees(pose, o) for o in seen) if seen else None
-            if self._monitor.update(rid, disagreeing, now):
+                seen.append((("overhead", round(sighting.captured_at, 3)),
+                             (sighting.x, sighting.y, sighting.yaw)))
+            evidence = [(key, service_logic.disagrees(pose, o)) for key, o in seen]
+            if self._monitor.update(rid, evidence, now):
                 suspects.append(rid)
         await asyncio.gather(*(self._post_suspect(rid) for rid in suspects))
 
@@ -247,9 +299,9 @@ class LocalizationService:
         client = self._clients().get(rid)
         if client is None:
             return
-        logger.warning("localization: %s observed > %.2f m / %.0f deg off for %.1f s; suspect",
+        logger.warning("localization: %s observed > %.2f m / %.0f deg off in %d reports; suspect",
                        rid, service_logic.SUSPECT_DIST_M, math.degrees(service_logic.SUSPECT_YAW_RAD),
-                       service_logic.SUSPECT_HOLD_S)
+                       service_logic.SUSPECT_REPORTS)
         try:
             await self._bounded(client.localization_suspect(service_logic.SUSPECT_REASON))
         except Exception as exc:
@@ -264,7 +316,11 @@ class LocalizationService:
         if status is None or status.state is LocState.LOCALIZED:
             return          # legacy (null) or LOCALIZED robots never get a mission
         target = service_logic.square_target(self._last_report.get(rid), self._squares)
-        kinds = [k for k in service_logic.RUNG_MISSIONS[rung] if k != "to_square" or target is not None]
+        refused = self._unsupported.setdefault(rid, set())
+        kinds = [k for k in service_logic.RUNG_MISSIONS[rung]
+                 if k not in refused and (k != "to_square" or target is not None)]
+        if not kinds:
+            return
         try:
             held = list(await self._traffic_hold(rid)) if self._traffic_hold is not None else []
         except Exception as exc:
@@ -289,6 +345,7 @@ class LocalizationService:
                     self._busy_rung[rid] = (rung, now)
                 if exc.code != "unsupported":
                     return
+                refused.add(kind)          # final for this ladder episode (S1: 13-20 re-asks)
             except Exception as exc:
                 record["result"] = "unreachable"
                 logger.warning("localization: mission %s to %s failed: %s", kind, rid, exc)
@@ -320,5 +377,9 @@ class LocalizationService:
             self._last_mission.pop(rid, None)
             self._last_report.pop(rid, None)
             self._busy_rung.pop(rid, None)
+            self._unsupported.pop(rid, None)
             self._report_seen.pop(rid, None)
+            self._anchors.discard(rid)
+            self._pending.pop(rid, None)
+            self._localized_at.pop(rid, None)
         self._known = current
