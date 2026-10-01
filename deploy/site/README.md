@@ -251,12 +251,11 @@ robot CORE `_rosy._tcp` record is a different API and is shown as a robot
 discovery result, not as a camera-stream target.
 
 See [D-341](../../docs/adr/D-341-overhead-console-approved-pairing.md)
-(Proposed) for console-approved camera pairing: a named operator approves a
+(Accepted as design) for console-approved camera pairing: a named operator approves a
 discovered camera's request by typing its 6-digit confirmation code, and the
 installer confirms that the phone and console show the same site fingerprint
 and credential ID. Only then is the per-camera token active and the site CA
-pinned in the app. Discovery alone still grants nothing. Until D-341 is
-implemented, and as the rollback path if pairing fails at a site, use a
+pinned in the app. Discovery alone still grants nothing. As the rollback path when pairing is off or fails at a site, use a
 `static` source with the manual `rosyov://...&tls=1` link, which still needs
 the site CA installed in Android's user credentials.
 
@@ -321,11 +320,11 @@ missing or equals another secret.
 phone and the console compare a 6-digit code and the site fingerprint before the credential turns
 active.
 
-**Operator flow.** In the Fleet console open **기기 연결**, then **카메라 연결 승인** (D-391 5):
-check that the code and fingerprint match the phone, approve, and the phone receives its per-camera
-credential once. The console section and the revoke control are part of the console work that D-391 5
-tracks; the server side (`/api/fleet/pairing/v1`) is already in Fleet. To revoke a camera, revoke its
-credential in the same panel; Vision drops it at its next credential sync. To turn pairing
+**Operator flow.** In the Fleet console open **기기 연결**, then **카메라 연결 승인** (D-391 4):
+pick the request, choose a free paired source, and type the 6-digit code the phone shows (the console
+never shows the code). The console then shows the site fingerprint and credential ID; the installer
+checks the phone shows the same two values and taps 일치 within 120 s, and only then is the credential
+active. To revoke a camera, use 폐기… on its row in the same panel; Vision drops it at its next credential sync. To turn pairing
 off, clear `ROSY_SITE_PAIRING` and `ROSY_SITE_PAIRING_COMPOSE` in both files and restart; sources
 fall back to `credential: static` with the manual link.
 
