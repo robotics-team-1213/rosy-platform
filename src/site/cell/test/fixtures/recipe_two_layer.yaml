@@ -1,0 +1,14 @@
+schema: rosy_cell.recipe/1
+name: foam-blocks-two-layer
+mode: palletize
+box: {length: 0.05, width: 0.03, height: 0.02, mass_kg: 0.01}
+pallets:
+  - {id: A, frame: pallet_a, length: 0.11, width: 0.10, max_stack_height: 0.05, max_load_kg: 1.0}
+  - {id: B, frame: pallet_b, length: 0.11, width: 0.10, max_stack_height: 0.05, max_load_kg: 1.0}
+pick_station: infeed
+approach: "+x"
+gap: 0.0
+slip_sheet: {thickness: 0.002, station: sheets}
+layers:
+  - {pattern: split}
+  - {pattern: split, mirrored: true, slip_sheet_below: true}
