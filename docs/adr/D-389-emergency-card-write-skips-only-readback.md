@@ -27,6 +27,12 @@
    마지막 전체 쓰기 시도가 Imager 정상 종료(exit 0 뒤 `readback` 단계 진입)까지 갔고, 그 뒤 어떤 시도에도 쓰기 단계 실패
    (stall·kill·exit≠0), readback 불일치(`kind: mismatch`), 이미지 오류(`kind: image`)가 없을 때만 허용한다. 즉 허용되는
    마지막 상태는 정상 종료 뒤의 `written-unverified`나 `unverified-no-bundle`이다. 기록이 없으면 거부한다.
+   **이력의 출처는 plan 옆의 시도 색인 `<plan>.attempts.jsonl`이다**(검증 MEDIUM: `-EvidenceDir`·`-LogPath`로 로그를 다른
+   곳에 두면 폴더 탐색으로는 그 시도의 불일치가 보이지 않았다). plan을 쓰는 모든 쓰기·resume은 `-LogPath`와 상관없이
+   시작할 때 자기 진행 파일 경로를, 끝날 때 마지막 `card_state`와 실패 `kind`를 이 색인에 덧붙인다(append-only). 긴급
+   resume은 이 색인에 적힌 진행 파일만 읽고, 이번 실행 전에 색인이 없거나 적힌 진행 파일이 없거나 읽을 수 없으면 거부한다.
+   남는 위험: 운영자가 진행 파일이나 색인을 지우거나 옮기면 이력이 사라진다. 색인이 없으면 거부하지만, 색인 안의 한 줄을
+   손으로 지운 것까지는 알 수 없다.
 3. **증거는 정직하게.** 진행 파일 `bundle`/`unverified-no-bundle`, `receipt`/`complete-unverified`,
    `done`/`complete-unverified`(receipt 단계에서 창이 죽어도 검증된 카드처럼 보이지 않게), 상태 명령
    `Result: COMPLETE, NOT VERIFIED`, 창 경고 두 번(ERASE 전·끝). receipt는
