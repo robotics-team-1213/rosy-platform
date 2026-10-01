@@ -43,7 +43,8 @@
    - 자격 모양과 보관 방식은 방향마다 다르다(D-370 5.2). 이 ADR은 저장 **필드 이름과 의미**만 맞춘다.
 3. **사이트 호스트 설정의 원천은 `/run/rosy-config/` 하나다.** 새 파일 형식을 만들지 않는다.
    - `tls_host`, 사이트 CA, 공개 포트처럼 여러 서비스가 쓰는 값은 한 번만 적고(사이트 환경 파일), Compose·Caddy·광고 유닛·Vision·Fleet이 그 값을 읽는다.
-   - `deploy/site`에 일관성 검사 도구를 둔다. 인증서 SAN에 `tls_host`와 광고 IP가 있는지, `site_cert`가 leaf + CA인지, TXT `tls_host`와 Caddy 호스트가 같은지 기동 전에 본다. 어기면 이유를 말하고 멈춘다.
+   - `deploy/site`에 일관성 검사 도구를 둔다. 인증서 SAN에 `tls_host`(DNS SAN, 정확히 일치)가 있는지, `site_cert`가 leaf + CA인지, `tls_host`가 `.local` 이름인지, TXT `tls_host`와 Caddy 호스트가 같은지 기동 전에 본다. 어기면 이유와 고치는 법을 말하고 멈춘다.
+   - **IP SAN은 검사하지 않는다(개정, 2026-10-01).** IP SAN은 호스트 주소가 바뀌면 낡는다. IP SAN은 `manual_host` 수동 되돌림 링크에만 필요하고, 그 경로는 이 검사 범위 밖이다(1항). 구현: `deploy/site/site_preflight.py`.
 4. **기기 연결 서버는 Fleet이 맡는다(D-341 결정 유지). 구현 순서:**
    1. **공통 조각:** `device_kind` 값(`overhead-camera`, `robot`)을 `core_common`의 상수 하나로 둔다. 실패 분류 벡터 `test/fixtures/protocol/failure-classes.v1.json`(D-370 5.5 분류 + `not_discovered`)을 D-341 11항 닫힘 코드 분류표와 HTTP 상태에서 만든다. 최소 행: WS 4400·4401·4403·4409·4503·1013, HTTP 401·403·409·429·503. 벡터는 "입력 → 분류"만 정하고, 각 클라이언트는 그 위에 자기 상태를 둔다(예: Pilot은 forbidden→FORBIDDEN, auth_final→OFFLINE, conflict→BLOCKED, 나머지→RETRYING). Rosy Cam `NetworkFailure`·`ProblemGuide`와 `web_common` 연결 코드가 이 벡터로 시험한다.
    2. **Fleet `pairing/v1` 서버:** D-341 1–12항. 감사는 `device_pairing_audit` 재사용(D-341 8항).

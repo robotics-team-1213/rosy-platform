@@ -277,3 +277,9 @@
 - 변경: `fleet_agent/discovery.py`의 `/healthz` 판정을 `check_health_body`로 뺐다. 본문 1024바이트 이하, JSON 객체, `status == "ok"`이면 채택하고, `role` 키가 있으면 `_rosy-fleet._tcp` TXT `role`(`fleet`, `core_common.protocol.discovery_txt.REQUIRED`)과 같아야 한다. 모르는 키는 무시한다. 여태 본문이 정확히 `{"status":"ok"}`여야 해서 D-370 공개 상태 모양(`role`·`proto`·`contract_version`)을 더하면 탐침이 떨어졌다.
 - 증거: `test/test_site_fleet_mdns.py` 신규 2개 시험(사이트·Agent 양쪽 매개변수) — 옛 본문·확장 본문·모르는 키 통과, 다른 role·null role·`degraded`·`down`·status 없음·배열·문자열·JSON 아님·1024바이트 초과 거절. 수정 전 20건 빨강(판정 함수 없음; 옛 정확 비교는 확장 본문을 거절), 수정 후 초록. `test_fleet_agent_mdns.py` 통과.
 - gate 변화: 없음(SOURCE). Fleet·Vision `/healthz` 출력은 바꾸지 않았다 — 이미 깔린 로봇 이미지는 정확 비교를 하므로, 서버 쪽 확장은 이 판정을 실은 새 이미지가 퍼진 뒤에 한다.
+
+## 2026-10-01 · uncommitted · fix(road_behaviour): 발행하지 않는 이벤트 이름 두 개를 사유 코드로
+
+- 변경: `nav.road_stop_line_overshoot`, `nav.road_turn_timeout`은 발행하는 곳이 없어 이벤트 목록 규약(test_event_catalogue)에 걸렸다. R1 노드 연결이 발행자와 목록 행을 더할 때까지 이름공간 없는 사유 코드 `road_stop_line_overshoot`, `road_turn_timeout`(NOTICE_*)로 바꿨다. `nav.line_obstacle_hold`는 line_follow가 발행하므로 그대로다.
+- 증거: test_road_behaviour.py + test_event_catalogue.py 180 passed.
+- gate 변화: 없음(SOURCE, 아직 노드에 연결되지 않은 ROS-free 모델).
