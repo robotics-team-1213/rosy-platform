@@ -10,9 +10,10 @@ One command for the hand steps between "the runner built the payload" and the pu
    download_artifact.py (parallel ranges, CRC check), then `<id>.unsigned.tar.gz` from it.
    The artifact folder drops dotfiles (install/.colcon_install_layout), so it is never signed.
 2. lists: `required-ros-packages.txt` must name only ROSY packages in `rosy-packages.txt`.
-3. ABI: read-only `dpkg-query -W 'ros-jazzy-*'` over ssh on each --robot. Every package
-   installed on both sides must have the same version; an empty robot version is "not
-   installed". Comparing zero packages is a failure, not a pass.
+3. ABI: read-only `dpkg-query -W -f=<status, name, version> 'ros-jazzy-*'` over ssh on each
+   --robot. Every package installed (status `ii`) on both sides must have the same version;
+   `rc` and other states, and an empty version, are "not installed". Comparing zero
+   packages is a failure, not a pass.
 4. extract: into a temp dir beside `<out>/x/<id>`, renamed into place; an existing
    `<out>/x/<id>` is refused, never reused.
 5. sign (sign_image_release.py) and pack (build_payload_release.py pack --modes-from).
@@ -45,7 +46,10 @@ ARTIFACT_PREFIX = "rosy-native-payload-unsigned-"
 ARTIFACT_NAME = re.compile(r"rosy-native-payload-unsigned-(\d{4}\.\d{2}\.\d{2}-\d{3})-([0-9a-f]{40})")
 RELEASE_ID = re.compile(r"\d{4}\.\d{2}\.\d{2}-\d{3}")
 HOST = re.compile(r"[A-Za-z0-9][A-Za-z0-9.\-]*")
-DPKG_COMMAND = "dpkg-query -W 'ros-jazzy-*'"
+# Single quotes only: the remote shell passes ${...}, \t and \n to dpkg-query unexpanded.
+# The status column lets "rc" (removed, config files left) packages, which still report
+# their old version, be dropped.
+DPKG_COMMAND = "dpkg-query -W -f='${db:Status-Abbrev}\\t${binary:Package}\\t${Version}\\n' 'ros-jazzy-*'"
 PUSH_SCRIPT = r"deploy\robot\pinky_pro\rosy-release-push.ps1"
 
 SshRunner = Callable[[list[str]], tuple[int, str, str]]
@@ -74,14 +78,20 @@ def parse_release_ros_packages(text: str) -> dict[str, str]:
 
 
 def parse_dpkg_query(text: str) -> dict[str, str]:
-    """`dpkg-query -W` output: `name<TAB>version`; an empty version means not installed."""
+    """DPKG_COMMAND output: `status<TAB>name<TAB>version`.
+
+    Only status `ii` (installed) counts; an empty version also means not installed.
+    """
     packages: dict[str, str] = {}
     for line in text.splitlines():
         if not line.strip():
             continue
-        name, _, version = line.partition("\t")
+        fields = line.split("\t")
+        if len(fields) != 3:
+            raise PrepareError(f"dpkg-query line is not status<TAB>name<TAB>version: {line!r}")
+        status, name, version = fields
         name, version = name.strip().split(":", 1)[0], version.strip()
-        if name and version:
+        if status.startswith("ii") and name and version:
             packages[name] = version
     return packages
 
@@ -119,7 +129,7 @@ def ssh_argv(host: str, local_appdata: Path) -> list[str]:
     rosy = Path(local_appdata) / "Rosy"
     return ["ssh", "-i", str(rosy / "ssh" / "rosy-operator-ed25519"),
             "-o", "IdentitiesOnly=yes", "-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=yes",
-            "-o", f"UserKnownHostsFile={rosy / 'known_hosts'}", "-o", "ConnectTimeout=5",
+            "-o", f'UserKnownHostsFile="{rosy / "known_hosts"}"', "-o", "ConnectTimeout=5",
             f"rosy@{host}", DPKG_COMMAND]
 
 
@@ -175,15 +185,24 @@ def _remove_tree(path: Path) -> None:
     shutil.rmtree(path, onexc=make_writable)
 
 
+def refuse_existing(release_dir: Path) -> None:
+    if release_dir.exists():
+        raise PrepareError(f"{release_dir} already exists; it may be a partial extract. "
+                           "Remove it or use a new --out-dir")
+
+
 def extract_release(tarball: Path, target: Path) -> Path:
     """Extract into a temp dir beside `target`, check it, then rename it into place."""
     target = Path(target)
-    if target.exists():
-        raise PrepareError(f"{target} already exists; it may be a partial extract. Remove it or use a new --out-dir")
+    refuse_existing(target)
     target.parent.mkdir(parents=True, exist_ok=True)
     temporary = Path(tempfile.mkdtemp(prefix=f".{target.name}.partial-", dir=target.parent))
     try:
         with tarfile.open(tarball, "r:gz") as tar:
+            for member in tar:
+                if member.issym() or member.islnk():
+                    kind = "symlink" if member.issym() else "hardlink"
+                    raise PrepareError(f"{tarball.name} has a {kind} member {member.name!r}; refusing to extract")
             tar.extractall(temporary, filter="tar")
         manifest = temporary / "manifest.json"
         if not manifest.is_file():
@@ -226,6 +245,7 @@ def download_unsigned(run: int, release_id: str | None, out_dir: Path | None, re
         listed = github._json(f"/runs/{run}/artifacts?per_page=100")
         name, release_id = pick_artifact([item.get("name", "") for item in listed.get("artifacts", [])], release_id)
         out_dir = out_dir or default_out_dir(release_id)
+        refuse_existing(out_dir / "x" / release_id)
         artifact = github.artifact(None, run, name)
         archive = out_dir / f"{name}.zip"
         if archive.exists():
@@ -255,8 +275,8 @@ def run_tool(argv: list[str]) -> int:
 
 
 def _ps_path(path: Path) -> str:
-    text = str(path)
-    return f"'{text}'" if re.search(r"[\s'&;()]", text) else text
+    """A PowerShell single-quoted literal: nothing expands, ' is written ''."""
+    return "'" + str(path).replace("'", "''") + "'"
 
 
 def push_commands(hosts: list[str], tarball: Path) -> list[str]:
@@ -310,6 +330,8 @@ def main(argv: list[str] | None = None, *, ssh_runner: SshRunner = run_ssh,
 
         started = time.monotonic()
         if args.run is not None:
+            if args.release_id is not None:
+                refuse_existing((args.out_dir or default_out_dir(args.release_id)) / "x" / args.release_id)
             release_id, unsigned = download_unsigned(args.run, args.release_id, args.out_dir, args.repo, args.workers)
             out_dir = args.out_dir or default_out_dir(release_id)
         else:
@@ -324,9 +346,7 @@ def main(argv: list[str] | None = None, *, ssh_runner: SshRunner = run_ssh,
         release_dir = out_dir / "x" / release_id
         signed = out_dir / f"{release_id}.tar.gz"
         _phase(timings, "download", started)
-        if release_dir.exists():
-            raise PrepareError(f"{release_dir} already exists; it may be a partial extract. "
-                               "Remove it or use a new --out-dir")
+        refuse_existing(release_dir)
 
         started = time.monotonic()
         lists = read_lists(unsigned)
@@ -353,16 +373,17 @@ def main(argv: list[str] | None = None, *, ssh_runner: SshRunner = run_ssh,
         started = time.monotonic()
         if tool_runner([sys.executable, str(RELEASE_TOOLS / "sign_image_release.py"), str(release_dir),
                         "--private-key", str(private_key), "--public-key", str(public_key)]) != 0:
-            raise PrepareError("sign_image_release.py failed")
+            raise PrepareError(f"sign_image_release.py failed; delete {release_dir} before rerunning")
         _phase(timings, "sign", started)
 
         started = time.monotonic()
         if tool_runner([sys.executable, str(RELEASE_TOOLS / "build_payload_release.py"), "pack",
                         "--release-dir", str(release_dir), "--out", str(signed),
                         "--modes-from", str(unsigned), "--public-key", str(public_key)]) != 0:
-            raise PrepareError("build_payload_release.py pack failed")
+            raise PrepareError(f"build_payload_release.py pack failed; delete {release_dir} before rerunning")
         _phase(timings, "pack", started)
-    except (PrepareError, OSError, tarfile.TarError, zipfile.BadZipFile, KeyError) as error:
+    # ValueError covers json.JSONDecodeError and UnicodeDecodeError; EOFError is a truncated gzip.
+    except (PrepareError, OSError, EOFError, ValueError, tarfile.TarError, zipfile.BadZipFile, KeyError) as error:
         print(f"error: {error}", file=sys.stderr)
         return 1
 

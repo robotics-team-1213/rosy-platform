@@ -1826,3 +1826,9 @@
 - 증거: `test/test_prepare_payload_release.py` 19 passed(점 파일 보존, 기존·부분 폴더 거절, 깨진 타르볼 뒤 잔재 없음, `name=version`·TAB 파싱과 빈 버전, 불일치·0건 비교 실패, required 검사, push 줄 출력, 불일치 시 서명 전 중단). 변이 4종이 모두 빨강이었다: 릴리스 파싱을 TAB으로(7 failed), `split()`으로(7 failed), 빈 로봇 버전 유지(5 failed), 0건 비교 통과(1 failed). 실측(2026-10-01 Windows, run 36865620181, 릴리스 2026.10.01-021, 8kcn 192.168.1.202 읽기 전용): 98.4 MB zip 다운로드 99.4 s(`gh run download` 기준 2분 12초), ABI 1.6 s(공통 314개 일치, 릴리스 전용 28개), 추출 6.3 s, 서명 8.8 s(2278 파일), pack 11.4 s(2590 멤버, `install/.colcon_install_layout`·`SHA256SUMS.sig` 포함), 합계 128 s. 결과물은 `X:\DevTemp\rosy-release-021-prep-check`. push는 하지 않았다.
 - gate 변화: 없음.
 - 교훈: 두 목록은 구분자가 다르다(`=`와 TAB). 비교 건수가 0이면 통과가 아니라 파싱 실패로 본다.
+
+## 2026-10-01 · uncommitted · fix(release): `prepare_payload_release.py` 독립 리뷰 반영 — rc 패키지 제외, 오류 처리, 인용
+
+- 변경: (1) 잘린 타르볼(EOFError), 깨진 manifest JSON, UTF-8이 아닌 목록(ValueError)을 traceback 없이 `error:`로 끝낸다. (2) 로봇 조회를 `dpkg-query -W -f='${db:Status-Abbrev}\t${binary:Package}\t${Version}\n' 'ros-jazzy-*'`로 바꾸고 상태가 `ii`인 줄만 설치로 센다. `rc`(삭제, 설정만 남음) 패키지는 옛 버전을 그대로 내므로 비교에서 뺀다. 원격 셸에는 작은따옴표만 지나간다. (3) `-o UserKnownHostsFile="<경로>"`로 인용한다. (4) 출력하는 PowerShell 경로를 늘 작은따옴표로 감싸고 `'`는 `''`로 쓴다. (5) `--run`에 `--release-id`가 있으면 내려받기 전에, 없으면 아티팩트 이름을 정한 직후 내려받기 전에 기존 `x/<id>`를 거절한다. (6) 서명·pack 실패 메시지가 다시 돌리기 전에 지울 `x/<id>`를 알려 준다. (7) 심볼릭·하드 링크 멤버가 있으면 풀기 전에 거절한다. 스킬 3·4단계 설명을 맞췄다.
+- 증거: `test/test_prepare_payload_release.py` 30 passed. 변이 8종이 모두 빨강이었다: rc 줄 유지(6 failed), known_hosts 인용 제거, `''` 미적용, 링크 허용(2 failed), EOFError 미포착, ValueError 미포착, 내려받기 전 검사 제거, 이름 확정 뒤 검사 제거(각 1 failed). 새 조회를 192.168.1.202에 읽기 전용으로 한 번 실행했다: `ii` 319줄, `un` 3줄, 판정은 앞 실측과 같은 공통 314개 일치.
+- gate 변화: 없음.

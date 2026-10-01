@@ -44,11 +44,13 @@ Verified twice on 2026-09-26: releases 013 and 014 on a Pinky Pro running image 
      `X:\DevTemp\rosy-release-<id>`. Already downloaded? Pass `--artifact-dir <dir>`.
    - It checks that every name in `required-ros-packages.txt` is in `rosy-packages.txt`.
      Both list ROSY workspace packages, not debs.
-   - It runs a read-only `dpkg-query -W 'ros-jazzy-*'` over SSH on each `--robot`
-     (repeatable) and prints one verdict per robot. Every package installed on both sides
-     must have the same version (C++ ABI). Packages that exist only on the runner (gz, rqt,
-     rviz, fastrtps) are fine. A robot line with an empty version means not installed.
-     Comparing zero packages fails. `--skip-abi` skips this check.
+   - It runs a read-only `dpkg-query -W` over SSH on each `--robot` (repeatable) and prints
+     one verdict per robot. The query lists `ros-jazzy-*` packages with their status. Every
+     package installed on both sides must have the same version (C++ ABI). Packages that
+     exist only on the runner (gz, rqt, rviz, fastrtps) are fine. Only status `ii` counts as
+     installed: an `rc` package (removed, config files left) still reports its old version
+     and is ignored, and so is an empty version. Comparing zero packages fails.
+     `--skip-abi` skips this check.
    - It extracts `<id>.unsigned.tar.gz` into `<out>/x/<id>` through a temp folder and a
      rename. An existing `<out>/x/<id>` is refused: remove it or use a new `--out-dir`.
      It never signs the artifact folder, because that folder drops dotfiles.
@@ -60,8 +62,9 @@ Verified twice on 2026-09-26: releases 013 and 014 on a Pinky Pro running image 
 4. **Manual fallback** (the same steps by hand). The artifact folder drops dotfiles such
    as `install/.colcon_install_layout`, so signing it fails with `CHECKSUM_FILE_MISSING`.
    Sign from the tarball. The tarball has no top-level directory. Compare `ros-packages.txt`
-   (`name=version`) with the robot's `dpkg-query -W 'ros-jazzy-*'` (`name<TAB>version`)
-   as described in step 3.
+   (`name=version`) with the robot's
+   `dpkg-query -W -f='${db:Status-Abbrev}\t${binary:Package}\t${Version}\n' 'ros-jazzy-*'`
+   (`status<TAB>name<TAB>version`, keep only `ii` lines) as described in step 3.
    ```bash
    gh run download <run-id> -n rosy-native-payload-unsigned-<id>-<sha> -D $P
    mkdir -p $P/x/<id> && python -c "import tarfile,sys; tarfile.open(sys.argv[1]).extractall(sys.argv[2], filter='tar')" $P/<id>.unsigned.tar.gz $P/x/<id>
