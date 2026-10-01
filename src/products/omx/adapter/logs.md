@@ -160,3 +160,8 @@
 - Change: Add a simulation-only HTTP facade, one-time pairing, one seat, bounded relative goals and ROS action event readback. Accept ROS-generated NumPy UUID byte arrays. Keep the physical OMX profile disabled.
 - Evidence: adapter suite 163 passed/3 skipped on Windows; Gazebo joint, gripper and cancel probe in docs/validation/pilot-omx-gazebo-2026-10-01/.
 - Gate: ROS-SIM control slice observed; camera, recording, restart recovery and DEVICE/FIELD remain HOLD.
+
+## 2026-10-01 · uncommitted · fix(pilot-sim): serve calibration.js on the sim port
+- Change: `pilot_sim_api.PILOT_ASSETS` lacked `calibration.js`, which main's Pilot `app.js` now imports (c04de23a), so `/pilot` on port 8088 never mounted and `test_pilot_sim_browser.py` timed out on `[data-sim-code]`. Added it to match the CORE allowlist in `core_api_web/api/app.py`.
+- Evidence: `ROSY_RUN_BROWSER_TESTS=1 python -m pytest src/products/omx/adapter/test/test_pilot_sim_browser.py` 1 passed; adapter suite 168 passed, 3 skipped (2026-10-01 Windows).
+- Gate: none.
