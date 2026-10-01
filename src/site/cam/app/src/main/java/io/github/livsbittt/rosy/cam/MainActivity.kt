@@ -22,14 +22,11 @@ import androidx.compose.ui.res.stringResource
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
-import androidx.compose.runtime.LaunchedEffect
+import androidx.activity.viewModels
 import io.github.livsbittt.rosy.cam.camera.LensChoice
-import io.github.livsbittt.rosy.cam.pairing.HttpPairingTransport
 import io.github.livsbittt.rosy.cam.pairing.PairableSite
-import io.github.livsbittt.rosy.cam.pairing.PairingClient
-import io.github.livsbittt.rosy.cam.pairing.PairingSession
 import io.github.livsbittt.rosy.cam.pairing.PairingState
-import io.github.livsbittt.rosy.cam.pairing.SettingsPairingStore
+import io.github.livsbittt.rosy.cam.pairing.PairingViewModel
 import io.github.livsbittt.rosy.cam.ui.PairingScreen
 import io.github.livsbittt.rosy.cam.service.StreamService
 import io.github.livsbittt.rosy.cam.settings.PairingUri
@@ -52,6 +49,7 @@ class MainActivity : ComponentActivity() {
     private val pendingPairing = mutableStateOf<PairingUri?>(null)
     private val deepLinkInvalid = mutableStateOf<String?>(null)
     private lateinit var settings: SettingsStore
+    private val pairingModel: PairingViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -119,7 +117,6 @@ class MainActivity : ComponentActivity() {
         val lan = rememberLan()
         val lens by settings.lens.collectAsStateWithLifecycle(initialValue = null)
         var showSettings by remember { mutableStateOf(false) }
-        var pairingSite by remember { mutableStateOf<PairableSite?>(null) }
         var localError by remember { mutableStateOf<String?>(null) }
         val scope = rememberCoroutineScope()
         val permissionDenied = stringResource(R.string.error_camera_permission)
@@ -148,32 +145,23 @@ class MainActivity : ComponentActivity() {
             if (needed.isEmpty()) StreamService.start(this) else permissions.launch(needed.toTypedArray())
         }
 
-        val site = pairingSite
-        if (site != null) {
-            // One session per attempt; "다시 요청" starts the same session again on a fresh request.
-            val session = remember(site) {
-                PairingSession(
-                    PairingClient(HttpPairingTransport(site), deviceLabel(), BuildConfig.VERSION_NAME, SettingsPairingStore(settings)),
-                    scope,
-                )
-            }
-            LaunchedEffect(session) { session.start(site) }
+        // The attempt lives in the ViewModel, so rotation keeps the code, the poll loop and a running answer.
+        val attempt by pairingModel.attempt.collectAsStateWithLifecycle()
+        val current = attempt
+        if (current != null) {
+            val session = current.session
             val pairingState by session.state.collectAsStateWithLifecycle()
             val busy by session.busy.collectAsStateWithLifecycle()
             PairingScreen(
-                site = site,
+                site = current.site,
                 state = pairingState,
                 busy = busy,
                 onAnswer = session::answer,
-                onCancel = {
-                    session.cancel()
-                    pairingSite = null
-                },
-                onRetry = { session.start(site) },
+                onCancel = { pairingModel.close() },
+                onRetry = { session.start(current.site) },
                 onClose = {
-                    session.cancel()
-                    pairingSite = null
                     if (pairingState is PairingState.Paired) showSettings = false
+                    pairingModel.close()
                 },
             )
         } else if (showSettings) {
@@ -189,7 +177,7 @@ class MainActivity : ComponentActivity() {
                 },
                 onBack = { showSettings = false },
                 onPairRequest = { record ->
-                    pairingSite = PairableSite(record.name, record.tlsHost, record.port, record.address)
+                    pairingModel.open(PairableSite(record.name, record.tlsHost, record.port, record.address), deviceLabel(), BuildConfig.VERSION_NAME)
                 },
             )
         } else {
