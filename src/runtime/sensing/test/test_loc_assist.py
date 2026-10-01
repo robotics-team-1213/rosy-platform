@@ -321,5 +321,100 @@ def test_the_machine_passes_the_gap_to_its_check():
 def test_paint_scores_ride_on_their_candidates():
     a = core()
     a.search_started(0., ODOM)
-    report = one(a.search_finished(0., ODOM, [TRUTH, MIRROR], paint_scores=[.93, .02]), 'candidates')
+    report = one(a.search_finished(0., ODOM, [TRUTH, MIRROR], paint_scores=[.93, .02], evidence_s=0.), 'candidates')
     assert [c['paint_score'] for c in report['candidates']] == [.93, .02]
+
+
+# --- review fixes (lane A review 2026-10-02) ----------------------------------------
+
+def test_a_pickup_mid_search_discards_the_result_and_no_decision_injects():
+    a = core()
+    a.search_started(0., ODOM)
+    a.on_pickup(.5, True)
+    assert a.search_finished(1., ODOM, [TRUTH, MIRROR]) == []
+    a.on_pickup(1.5, False)
+    assert a.machine.request_id is None
+    out = a.on_decision(2., decision('r-1', 2.))
+    assert kinds(out, 'inject') == [] and one(out, 'result')['reason'] == 'stale_request'
+    assert a.search_due(2., ODOM)                     # the set-down searches again
+
+
+def test_a_search_spanning_a_whole_pickup_is_still_discarded():
+    a = core()
+    a.search_started(0., ODOM)
+    a.on_pickup(.3, True)
+    a.on_pickup(.6, False)
+    assert a.search_finished(1., ODOM, [TRUTH, MIRROR]) == []
+
+
+def test_decisions_while_held_are_rejected():
+    a = core()
+    candidates_ready(a)
+    a.on_pickup(1.5, True)
+    out = a.on_decision(2., decision('r-1', 2.))
+    assert kinds(out, 'inject') == [] and one(out, 'result')['reason'] == 'held'
+
+
+def test_no_re_report_while_the_check_runs():
+    a = core()
+    candidates_ready(a, now=1.)
+    a.on_decision(1.5, decision('r-1', 1.5))
+    out = []
+    t = 1.6
+    while t < 4.5:
+        out += a.on_fit(t, .95) + a.tick(t)
+        t = round(t + .1, 6)
+    assert kinds(out, 'candidates') == []
+
+
+def test_a_duplicate_of_the_pending_decision_gets_no_result():
+    a = core()
+    candidates_ready(a)
+    a.on_decision(2., decision('r-1', 2.))
+    assert a.on_decision(2.2, decision('r-1', 2.2)) == []
+    done = hold(a, 2.1, 5.6)
+    assert one(done, 'result')['accepted'] is True
+
+
+@pytest.mark.parametrize('received', [None, 'nan', math.inf, 2.6])
+def test_received_s_is_required_finite_and_not_from_the_future(received):
+    a = core()
+    candidates_ready(a)
+    payload = decision('r-1', received)
+    if received is None:
+        del payload['received_s']
+    elif received == 'nan':
+        payload['received_s'] = math.nan
+    out = a.on_decision(2., payload)
+    assert kinds(out, 'inject') == [] and one(out, 'result')['reason'] == 'bad_receipt'
+
+
+def test_received_s_slightly_ahead_is_clock_jitter_and_accepted():
+    a = core()
+    candidates_ready(a)
+    assert kinds(a.on_decision(2., decision('r-1', 2.4)), 'inject')
+
+
+def test_square_and_paint_evidence_older_than_the_search_is_dropped():
+    sighting = type('S', (), {'bearing_rad': .1, 'range_m': .4, 'confidence': .9})()
+    a = core()
+    a.search_started(1., ODOM)
+    old = one(a.search_finished(2., ODOM, [TRUTH, MIRROR], sightings=[sighting],
+                                paint_scores=[.9, .1], evidence_s=.8), 'candidates')
+    assert old['square_sightings'] == [] and [c['paint_score'] for c in old['candidates']] == [None, None]
+    b = core()
+    b.search_started(1., ODOM)
+    new = one(b.search_finished(2., ODOM, [TRUTH, MIRROR], sightings=[sighting],
+                                paint_scores=[.9, .1], evidence_s=1.2), 'candidates')
+    assert len(new['square_sightings']) == 1 and new['candidates'][0]['paint_score'] == .9
+
+
+def test_the_camera_is_wanted_only_outside_localized():
+    a = core()
+    assert a.camera_wanted
+    candidates_ready(a)
+    a.on_decision(2., decision('r-1', 2.))
+    hold(a, 2.1, 5.6)
+    assert not a.camera_wanted
+    a.on_suspect(6., {'reason': 'fleet_monitor'})
+    assert a.camera_wanted

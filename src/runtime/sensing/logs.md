@@ -851,3 +851,8 @@
 - 증거: `test_paint_hypothesis.py` 10 passed(합성 바닥 테이프 선: 점이 선 위, 참 자세 > 0.5, 6 cm 옆 < 0.1, 맨 카펫·지면 없음은 0개), `test_loc_assist.py` paint 전달 1개. WSL Jazzy 스모크(번들 지정: 사각형 2개·STL 페인트 지도 적재, 카메라 없음) UNKNOWN → 후보 → 결정 → LOCALIZED 통과.
 - gate 변화: 없음. 실제 카메라 페인트 점 품질은 P2-8 실측.
 - 정정: 앞 리그 항목의 "9 passed"는 Windows에서 8 passed, 1 skip(launch 매개변수 평가는 WSL에서만)이다. 리그의 결정 발행 토픽은 bench 도구 규칙(`test_gz_tools_topics.py`, 절대 발행 토픽 금지)에 따라 상대 `localization/decision`으로 바꿨다.
+
+## 2026-10-02 · uncommitted · fix(localization): lane A 리뷰 — 픽업 epoch, 검증 중 재보고·중복 결정, received_s 필수, 증거 시각 (D-395 P2-3)
+- 변경: `control/loc_assist.py`. (중요) 픽업 epoch: 탐색 중 픽업이 있었거나 들린 채면 결과를 버리고, 들린 동안 결정은 `held`로 거부. (중요) 3 s 검증 중에는 후보를 재보고하지 않고, 검증 중인 같은 request_id의 중복 결정은 결과 없이 조용히 무시(노드가 debug 로그). (경미) `received_s` 필수 — 없거나 유한하지 않거나 `now_s`보다 0.5 s 넘게 앞서면 `bad_receipt`(코어에 둠; 1단계 `loc_state.decide`의 기본값은 그대로). (경미) 사각형·페인트 증거는 탐색 시작 뒤에 본 것만(`evidence_s >= 시작`), 아니면 버린다. `camera_wanted`(LOCALIZED 밖에서만).
+- 증거: `test_loc_assist.py` 43 passed(새 시험 12개, 먼저 11개 실패 확인).
+- gate 변화: 없음.

@@ -46,6 +46,8 @@ COVARIANCE = {'candidate': (.05, .1), 'human': (.15, .3),
 MAX_CANDIDATES, MAX_OBJECTS, MAX_SIGHTINGS = 8, 16, 4
 #: A robot that moved more than this during a search did not stand still.
 STILL_M, STILL_RAD = .005, .02
+#: CORE and this node read the same robot clock; more than this ahead is not jitter.
+RECEIPT_AHEAD_S = .5
 
 
 @dataclass(frozen=True)
@@ -72,8 +74,9 @@ class LocAssist:
         self.moved_m, self.moved_rad = moved_m, moved_rad
         self.pose = self.fit = None
         self.held = False
+        self._epoch = 0                     # pickups so far: a search spanning one is void
         self._wanted = True                 # power-on: search at once
-        self._searching = None              # odom pose when the running search started
+        self._searching = None              # (odom, epoch, start s) of the running search
         self._searched_at, self._searched_odom = -math.inf, None
         self._report, self._reported_s = None, -math.inf
         self._state_s, self._state_key = -math.inf, None
@@ -93,6 +96,7 @@ class LocAssist:
     def on_pickup(self, now_s, active):
         out = []
         if active and not self.held:
+            self._epoch += 1
             out = self._after(self.machine.picked_up(now_s), now_s)
             self._wanted = True
         self.held = bool(active)
@@ -104,14 +108,28 @@ class LocAssist:
         return self._after(self.machine.mark_suspect(reason), now_s)
 
     def on_decision(self, now_s, payload):
-        """`{"decision": LocalizationDecision, "received_s": float}` from CORE."""
+        """`{"decision": LocalizationDecision, "received_s": float}` from CORE.
+
+        `received_s` (CORE's ROS clock at receipt, same robot) is required: the
+        ttl counts from it, so a missing, non-finite or future one (beyond
+        RECEIPT_AHEAD_S of clock jitter) is `bad_receipt`. A repeat of the
+        decision whose 3 s check is running returns nothing at all."""
         body = payload.get('decision') if isinstance(payload, dict) else None
         raw_id = body.get('request_id') if isinstance(body, dict) else None
         try:
             decision = LocalizationDecision.model_validate(body)
-            received_s = float(payload.get('received_s', now_s))
-        except (ValidationError, TypeError, ValueError):
+        except ValidationError:
             return [self._result(raw_id if isinstance(raw_id, str) else '', False, 'bad_decision')]
+        if self._pending is not None and decision.request_id == self._pending:
+            return []
+        try:
+            received_s = float(payload['received_s'])
+        except (KeyError, TypeError, ValueError):
+            received_s = math.nan
+        if not math.isfinite(received_s) or received_s - now_s > RECEIPT_AHEAD_S:
+            return [self._result(decision.request_id, False, 'bad_receipt')]
+        if self.held:
+            return [self._result(decision.request_id, False, 'held')]
         pose = None if decision.pose is None else (decision.pose.x, decision.pose.y, decision.pose.yaw)
         step = self.machine.decide(decision.request_id, now_s, candidate_index=decision.candidate_index,
                                    pose=pose, source=decision.source.value,
@@ -131,7 +149,7 @@ class LocAssist:
         if self.machine.check is not None:
             out += self._after(self.machine.observe_fit(now_s, None), now_s)
         if (self.machine.state is LocState.CANDIDATES and self._report is not None and
-                now_s - self._reported_s >= self.rereport_s):
+                self.machine.check is None and now_s - self._reported_s >= self.rereport_s):
             out.append(self._candidates(now_s))
         if not any(kind == 'state' for kind, _ in out) and (
                 now_s - self._state_s >= self.state_period_s or self._key() != self._state_key):
@@ -152,17 +170,30 @@ class LocAssist:
                 odom, self._searched_odom, self.moved_m, self.moved_rad)
         return False
 
-    def search_started(self, now_s, odom):
-        self._searching = tuple(odom)
+    @property
+    def camera_wanted(self):
+        """Square and paint evidence only matter outside LOCALIZED; the node drops the camera there."""
+        return self.machine.state is not LocState.LOCALIZED
 
-    def search_finished(self, now_s, odom, candidates, unmapped=(), sightings=(), paint_scores=None):
+    def search_started(self, now_s, odom):
+        self._searching = (tuple(odom), self._epoch, float(now_s))
+
+    def search_finished(self, now_s, odom, candidates, unmapped=(), sightings=(), paint_scores=None,
+                        evidence_s=None):
         """Offer what the search found. `sightings`: SquareObservation-like objects;
-        `paint_scores`: one score (or None) per candidate, None for no camera paint."""
-        started, self._searching = self._searching, None
-        if started is None or self.machine.check is not None or self.machine.state is LocState.LOCALIZED:
+        `paint_scores`: one score (or None) per candidate, None for no camera paint;
+        `evidence_s`: when that camera evidence was seen. Evidence from before the
+        search started is dropped: it may belong to where the robot was before."""
+        searching, self._searching = self._searching, None
+        if searching is None or self.machine.check is not None or self.machine.state is LocState.LOCALIZED:
             return []
+        started, epoch, start_s = searching
+        if self.held or epoch != self._epoch:
+            return []                       # picked up meanwhile: the set-down searches again
         if odom is None or _moved(odom, started, STILL_M, STILL_RAD):
             return []                       # still wanted: the next tick retries
+        if evidence_s is None or evidence_s < start_s:
+            sightings, paint_scores = (), None
         self._searched_at, self._searched_odom, self._wanted = now_s, tuple(odom), False
         candidates = list(candidates)[:MAX_CANDIDATES]
         step = self.machine.offer(candidates, now_s)

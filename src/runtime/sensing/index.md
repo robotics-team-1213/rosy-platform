@@ -64,8 +64,8 @@
 
 ## 최근 기록
 
+- 2026-10-02 · uncommitted · fix(localization): lane A 리뷰 — 픽업 epoch, 검증 중 재보고·중복 결정, received_s 필수, 증거 시각 (D-395 P2-3)
 - 2026-10-01 · uncommitted · feat(localization): 카메라 페인트 점으로 후보별 paint_score (D-395 P2-3 후속)
 - 2026-10-01 · uncommitted · fix(tools): Gazebo localization rig를 D-395 흐름으로 (P2-3 후속)
 - 2026-10-01 · uncommitted · fix(localization): 3 s 검증의 스캔 공백 허용을 매개변수로, 노드는 1.0 s (D-395 P2-3 후속)
 - 2026-10-01 · uncommitted · fix(localization): state에서 `cancel_nav_goal` 키 제거 (D-395 P2-3 후속)
-- 2026-10-01 · uncommitted · feat(launch): loc_assist 배선 — sim 켬, 기기 끔 (D-395 P2-3)
