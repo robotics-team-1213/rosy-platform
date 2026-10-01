@@ -10,16 +10,16 @@ export function mountArm(root, target, driver) {
 
   root.innerHTML = `<h2>OMX-AI Gazebo 연습</h2>
     <p>시뮬레이션 전용 · 실제 로봇과 연결되지 않습니다.</p>
-    <div data-sim-pair><label>화면에 표시된 페어링 코드 <input data-sim-code autocomplete="off"></label>
-      <button type="button" data-sim-connect>연결</button></div>
+    <div data-sim-pair><label>화면에 표시된 페어링 코드 <input class="ui-field" data-sim-code autocomplete="off"></label>
+      <ui-button kind="primary" type="button" data-sim-connect>연결</ui-button></div>
     <p data-sim-status role="status">연결 대기</p>
     <div data-sim-controls hidden>
-      <label>관절 <select data-sim-joint></select></label>
-      <div class="sim-jog"><button type="button" data-sim-delta="-0.02">− 0.02 rad</button>
-        <button type="button" data-sim-delta="0.02">+ 0.02 rad</button></div>
-      <p>그리퍼</p><div class="sim-jog"><button type="button" data-sim-gripper="-0.02">닫기</button>
-        <button type="button" data-sim-gripper="0.02">열기</button></div>
-      <button type="button" data-sim-cancel>진행 중 명령 취소</button>
+      <label>관절 <select class="ui-field" data-sim-joint></select></label>
+      <div class="sim-jog"><ui-button kind="quiet" type="button" data-sim-delta="-0.02">− 0.02 rad</ui-button>
+        <ui-button kind="quiet" type="button" data-sim-delta="0.02">+ 0.02 rad</ui-button></div>
+      <p>그리퍼</p><div class="sim-jog"><ui-button kind="quiet" type="button" data-sim-gripper="-0.02">닫기</ui-button>
+        <ui-button kind="quiet" type="button" data-sim-gripper="0.02">열기</ui-button></div>
+      <ui-button kind="quiet" type="button" data-sim-cancel>진행 중 명령 취소</ui-button>
       <pre data-sim-readback></pre>
       <p>카메라: ${target.camera ? "상태 확인 필요" : "이 Gazebo 구성에 없음"} · 연습 기록: 준비 중</p>
     </div>`;
@@ -35,7 +35,10 @@ export function mountArm(root, target, driver) {
   }
   function showError(error) {
     status.textContent = `조작 보류 · ${error.message}`;
-    controls.querySelectorAll("button[data-sim-delta], button[data-sim-gripper]").forEach((button) => { button.disabled = true; });
+    controls.querySelectorAll("[data-sim-delta], [data-sim-gripper]").forEach((button) => {
+      button.disabled = true;
+      button.setAttribute("reason", "조작 보류");
+    });
   }
   async function connect() {
     try {
@@ -67,8 +70,10 @@ export function mountArm(root, target, driver) {
       } else status.textContent = state.ready ? "조작 가능" : `조작 보류 · ${state.owner_state}`;
       $("[data-sim-readback]").textContent = JSON.stringify({sequence: state.state_sequence,
         age_ms: state.joint_age_ms, joints: state.positions, goal: active || null}, null, 2);
-      controls.querySelectorAll("button[data-sim-delta], button[data-sim-gripper]").forEach((button) => {
+      controls.querySelectorAll("[data-sim-delta], [data-sim-gripper]").forEach((button) => {
         button.disabled = !state.ready || Boolean(active);
+        if (!button.disabled) button.removeAttribute("reason");
+        else button.setAttribute("reason", active ? "명령 진행 중" : "조작 보류");
       });
     } catch (error) { state = null; showError(error); }
   }

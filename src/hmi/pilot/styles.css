@@ -13,7 +13,7 @@ body {
   margin: 0;
   min-height: 100vh;
   overflow-x: hidden;
-  color: var(--paper);
+  color: var(--ink);
   background: var(--ground);
   font-family: var(--body);
   font-size: var(--text-body);
@@ -338,7 +338,7 @@ body[data-pilot-screen="drive"] ui-topbar ui-button { white-space: nowrap; }
 [data-drive-presets] { flex-wrap: nowrap; }
 
 /* 휴대폰 세로: 게이트 안내문·속도 라벨은 뺀다(상태는 HUD 가 말한다) */
-@media (max-width: 30rem) {
+@media (width < 30rem) {
   body[data-pilot-screen="drive"] #pilot-notice,
   body[data-pilot-screen="drive"] [data-gate-state],
   body[data-pilot-screen="drive"] ui-brand small,
@@ -349,7 +349,7 @@ body[data-pilot-screen="drive"] ui-topbar ui-button { white-space: nowrap; }
 }
 
 /* 태블릿 세로·휴대폰 */
-@media (max-width: 48rem) {
+@media (width <= 48rem) {
   [data-drive-stick] { width: min(40vw, 11rem); }
   [data-drive-pedals] ui-button { min-height: 4.2rem; min-width: 4.6rem; }
   [data-drive-pivots] ui-button { min-width: 4.6rem; }
@@ -571,13 +571,8 @@ body[data-pilot-screen="drive"] ui-brand small { display: none; }
 
 [data-screen="arm"] { max-width: 48rem; margin: 0 auto; padding: var(--space-4); }
 [data-screen="arm"] label { display: block; margin-block: var(--space-3); }
-[data-screen="arm"] input, [data-screen="arm"] select {
-  display: block; width: 100%; min-height: 2.75rem; color: inherit;
-  background: var(--ground-deep); border: 1px solid currentColor; border-radius: 0.4rem;
-}
+[data-screen="arm"] input, [data-screen="arm"] select { display: flex; width: 100%; }
 .sim-jog { display: flex; gap: var(--space-2); margin-block: var(--space-2); }
-[data-screen="arm"] button { min-height: 2.75rem; padding: 0.5rem 1rem; cursor: pointer; }
-[data-screen="arm"] button:disabled { cursor: not-allowed; opacity: 0.5; }
 [data-sim-readback] { overflow: auto; max-height: 20rem; padding: var(--space-3); }
 
 /* 보정 중 띠(D-321 부록): 영상 위쪽 가운데의 경고 판. 판만 칠하고, 사유 글자색은 공용 경고 상태 요소가 정한다. */
@@ -600,5 +595,5 @@ body[data-pilot-screen="drive"] ui-brand small { display: none; }
 /* 남의 보정 중에는 주행 조작부 전체가 입력을 받지 않는다. 비상 정지(상단 막대)는 이 밖에 있다. */
 [data-drive-controls][data-locked] {
   pointer-events: none;
-  opacity: 0.45;
+  opacity: var(--disabled-opacity);
 }

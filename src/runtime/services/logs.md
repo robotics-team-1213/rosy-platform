@@ -259,3 +259,15 @@
 - 변경: `_expire_locked()` 는 만료된 세션을 돌려주고 호출자가 lock 을 놓은 뒤 `_announce_expired()` 로 발행한다(start/end 와 같은 규칙). lock 은 다시 plain Lock.
 - 증거: 만료 구독자가 lock 을 잡고 lease 를 다시 읽는 시험 통과.
 - gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · feat(road_behaviour): D-384 도로 주행 행동 상태 기계(ROS-free, 명령 없음)
+
+- 변경: 새 `core_features/road_behaviour/`(`model.py`·`machine.py`·`table.py`). `step_behaviour(memory, inputs, params)` 순수 함수가 `LANE_FOLLOW`·`FOLLOW`·`HOLD`·`APPROACH`·`STOP_AT_LINE`·`YIELD_CHECK`·`CREEP`·`CROSS`·`FAULT` 중 하나와 속도 상한·갈래 선택만 낸다(D-2, D-151: CORE가 `min()`). 오래된(> 0.3 s)·없는 필수 입력은 `FAULT` 0. 정지 장애물 5 s면 `nav.line_obstacle_hold` 한 번(`LineFollowConfig.obstacle_escalate_s`와 같은 값). `v_cruise` 0.08, CORE 상한 입력과 `min`. 교차로 상태는 `junction_logic_enabled=False` 기본 — `d_jn` 안 교차로는 `HOLD junction_unsupported`. 켜면 일단정지, 도로교통법 제26·27조 양보, Fleet 허가, 경로 > 오른쪽 > 직진 > 왼쪽. 전이표는 `docs/plans/2026-10-01-road-behaviour-transition-table.md`.
+- 증거: `src/runtime/services/test/test_road_behaviour.py` 108 passed (2026-10-01 Windows).
+- gate 변화: SOURCE. CORE 통합(호출 위치)은 차선 유지 소유 세션 결정 전이다.
+- 결정: D-384 §2·§4(Proposed).
+
+## 2026-10-01 · 6d94e88f · docs(road_behaviour): D-384 도로 주행 행동 항목의 커밋 기록
+- 변경: 위 `uncommitted · feat(road_behaviour): D-384 도로 주행 행동 상태 기계` 항목은 커밋 6d94e88f로 들어갔다. 로그는 추가만 하므로(harness lint) 그 머리줄을 고치지 않고 이 항목으로 기록한다
+- 증거: `git log --oneline -- src/runtime/services/core_features/road_behaviour` 첫 커밋 6d94e88f
+- gate 변화: 없음

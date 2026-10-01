@@ -34,33 +34,16 @@
 .surface-link:hover { background: var(--brand-rose-wash); }
 .surface-link:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
 .surface-link[hidden] { display: none; }
-.surface-slot input:not([type="checkbox"]):not([type="radio"]),
-.surface-slot select,
-.surface-slot textarea {
-  box-sizing: border-box;
-  min-height: var(--target-secondary);
-  min-width: 0;
-  max-width: 100%;
-  padding: 0 var(--space-2);
-  border: 1px solid var(--field-line);
-  border-radius: var(--radius-control);
-  color: var(--paper);
-  background: var(--field-bg);
-  color-scheme: dark;
-  font: var(--weight-regular) var(--text-label)/var(--leading-label) var(--body);
-}
-.surface-slot input::placeholder,
-.surface-slot textarea::placeholder { color: var(--nominal-quiet); opacity: 1; }
-.surface-slot input[type="checkbox"],
-.surface-slot input[type="radio"] { accent-color: var(--focus-ring); }
 .surface-map-frame { position: relative; min-width: 0; min-height: 16rem; }
 .surface-map-frame canvas { display: block; width: 100%; height: clamp(16rem, 45vh, 32rem); background: var(--ground-deep); outline-offset: 3px; }
 .surface-map-readout { margin: 0; }
 .surface-map-frame:has(ui-empty:not([hidden])) canvas { height: 16rem; }
-.surface-map-frame ui-empty { position: absolute; inset: var(--space-3); pointer-events: none; }
+/* D-359 US-009 — 빈 지도·읽기 실패 장(ui-empty + 다시 시도)은 무대 위에 얹는다. 누를 것이 있을 때만 누름을 받는다. */
+.surface-map-overlay { position: absolute; inset: var(--space-3); z-index: 1; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: var(--space-3); pointer-events: none; }
+.surface-map-overlay:has(> :not([hidden])) { background: var(--scrim-solid); border-radius: var(--radius-panel); padding: var(--space-4); }
+.surface-map-overlay > ui-button { pointer-events: auto; }
 .surface-teleop-controls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2); max-width: 24rem; touch-action: none; }
 .surface-teleop-controls ui-button { user-select: none; -webkit-user-select: none; }
-.surface-teleop-controls ui-button.active { outline: 2px solid var(--status-warn); outline-offset: 2px; }
 .surface-camera-stage { position: relative; min-width: 0; min-height: 12rem; display: grid; place-items: center; background: var(--ground-deep); overflow: hidden; }
 .surface-camera-frame { display: block; width: 100%; max-height: 50vh; object-fit: contain; }
 .surface-camera-frame[hidden] { display: none; }
@@ -69,10 +52,6 @@
 .surface-camera-storage { min-width: 0; }
 .surface-camera-library { margin-block: var(--space-2); }
 .surface-camera-files { display: grid; gap: var(--space-2); padding-inline-start: var(--space-5); }
-@media (max-width: 30rem) {
-  ui-actions { align-items: stretch; flex-direction: column; }
-  ui-actions > * { width: 100%; }
-}
 .diagnostic-list, .waypoint-list { display: grid; gap: var(--space-2); padding-inline-start: var(--space-5); }
 /* 토큰 행 — 텍스트 뒤에 오는 58px 불가역 버튼이 행 높이를 넘어 인접 행과
  * 텍스트를 침범하지 않게 한다. 배치 규칙일 뿐 공용 부품을 다시 칠하지 않는다. */

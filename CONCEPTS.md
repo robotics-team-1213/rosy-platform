@@ -36,6 +36,13 @@ Request sent, device response, local safety latch, zero-motion readback, and phy
 
 A target-architecture name for node-local execution. It does not imply a universal `rosy-runtime-base` package, one process, or a shared ROS graph on all hosts (D-296). The source directory `src/runtime/` is a code grouping, not a deployment unit.
 
+### 호스트 에이전트 (Host Agent)
+The one ROSY process on a robot that holds host privilege — network mode, Wi-Fi, release rollback and recovery-hold clearing. CORE reaches it and relays its answers; browsers never talk to it directly.
+
+*Avoid:* `Host Agent` in operator copy — the screen says 호스트 에이전트; the English name stays in code, logs and API codes (`HOST_AGENT_*`).
+
+When it cannot be reached, every host action it would carry is blocked for the same reason, so the screen states that cause and its next step once for the whole group rather than beside each button.
+
 ## Robot commissioning
 
 ### Robot number

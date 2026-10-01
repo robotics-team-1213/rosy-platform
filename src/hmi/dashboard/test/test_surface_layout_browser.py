@@ -66,12 +66,15 @@ def test_mobile_topbar_wraps_without_overlapping_brand_navigation_or_stop():
         }""")
         browser.close()
 
+    # D-359 §6.4 — 두 줄 머리: 이름·역할 / 화면 전환, 비상 정지는 두 줄 오른쪽에 걸친다.
     assert result["overflow"] == 0
     assert result["estop"]["y"] <= result["brand"]["y"]
     assert result["brand"]["bottom"] <= result["estop"]["bottom"]
     assert result["brand"]["bottom"] <= result["nav"]["y"]
-    assert result["nav"]["right"] <= 390
-    assert result["nav"]["bottom"] <= result["role"]["y"]
+    assert result["role"]["bottom"] <= result["nav"]["y"]
+    assert result["brand"]["right"] <= result["role"]["x"]
+    assert result["role"]["right"] <= result["estop"]["x"]
+    assert result["nav"]["right"] <= result["estop"]["x"]
     assert result["estop"]["right"] <= 390
 
 
@@ -122,6 +125,34 @@ def test_desktop_console_keeps_three_regions_and_active_controls_inside_viewport
     assert result["act"]["bottom"] <= 768
     assert result["activeBottom"] <= result["act"]["bottom"]
     assert result["estop"]["bottom"] <= result["topbar"]["bottom"]
+
+
+def test_wide_but_short_console_keeps_its_columns_and_scrolls_the_page():
+    """D-359 US-008: 1366x600 (wide, height < 40rem) stacked the console into one column because
+    the columns rule and the fixed-frame rule shared one media condition. The frame lets go and
+    the page scrolls; the three columns stay."""
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        page = _page(browser, 1366, 600)
+        result = page.evaluate("""() => {
+          const rect = (selector) => document.querySelector(selector).getBoundingClientRect().toJSON();
+          return {
+            overflow: document.documentElement.scrollWidth - innerWidth,
+            documentHeight: document.documentElement.scrollHeight,
+            bodyOverflow: getComputedStyle(document.body).overflowY,
+            sense: rect('[data-slot=sense]'), observe: rect('[data-slot=observe]'),
+            act: rect('[data-slot=act]'), estop: rect('#shell-estop'),
+          };
+        }""")
+        browser.close()
+
+    assert result["overflow"] <= 0, result
+    assert result["sense"]["right"] <= result["observe"]["x"], result
+    assert result["observe"]["right"] <= result["act"]["x"], result
+    assert result["sense"]["y"] == result["observe"]["y"] == result["act"]["y"], result
+    assert result["documentHeight"] > 600 and result["bodyOverflow"] != "hidden", result
+    estop = result["estop"]
+    assert estop["y"] >= 0 and estop["bottom"] <= 600 and estop["right"] <= 1366, result
 
 
 def test_map_uses_remaining_desktop_observe_height_and_stays_within_mobile_width():
@@ -184,10 +215,11 @@ def test_map_uses_remaining_desktop_observe_height_and_stays_within_mobile_width
     assert mobile_overflow == 0
 
 def test_shared_role_form_layout_collapses_to_full_width_on_mobile():
+    """D-359 §6.3 — 폼은 뷰포트가 아니라 칸(#surface-main)에 반응한다. 320px 폰의 칸은 22rem보다 좁다."""
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
         results = {}
-        for width in (1440, 390):
+        for width in (1440, 320):
             page = _page(browser, width, 900)
             page.locator("#surface-main").evaluate("""node => { node.innerHTML = `
               <form class='ui-form' aria-label='로봇 설정'>
@@ -209,16 +241,16 @@ def test_shared_role_form_layout_collapses_to_full_width_on_mobile():
     assert results[1440]["overflow"] == 0
     assert results[1440]["direction"] == "row"
     assert results[1440]["labelDisplay"] == "grid"
-    assert results[390]["overflow"] == 0
-    assert results[390]["direction"] == "column"
-    assert results[390]["firstFieldWidth"] == results[390]["formWidth"]
+    assert results[320]["overflow"] == 0
+    assert results[320]["direction"] == "column"
+    assert results[320]["firstFieldWidth"] == results[320]["formWidth"]
 
 
 def test_shared_role_readout_stacks_label_value_pairs_on_mobile():
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
         results = {}
-        for width in (1440, 390):
+        for width in (1440, 390, 320):
             page = _page(browser, width, 900)
             page.locator("#surface-main").evaluate("""node => { node.innerHTML = `
               <dl class='ui-readout' aria-label='로봇 상태'>
@@ -238,9 +270,43 @@ def test_shared_role_readout_stacks_label_value_pairs_on_mobile():
     assert results[1440]["overflow"] == 0
     assert results[1440]["columns"] == 2
     assert results[1440]["numberStyle"] == "tabular-nums"
+    # 390px 폰의 칸(약 22.9rem)은 두 열을 지키고 긴 값은 줄바꿈한다. 320px 칸은 한 열이다.
     assert results[390]["overflow"] == 0
-    assert results[390]["columns"] == 1
+    assert results[390]["columns"] == 2
     assert not results[390]["valueOverflow"]
+    assert results[320]["overflow"] == 0
+    assert results[320]["columns"] == 1
+    assert not results[320]["valueOverflow"]
+
+
+def test_shared_parts_follow_their_slot_width_not_the_viewport():
+    """D-359 §6.3 — 넓은 창이라도 좁은 칸의 폼·읽기·조작 묶음은 한 열로 쌓이고, 넓은 칸은 그대로다."""
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        page = _page(browser, 1440, 900)
+        page.locator("#surface-main").evaluate("""node => { node.innerHTML = `
+          <div class='surface-slot' data-slot='narrow' style='width: 20rem'>
+            <form class='ui-form'><label class='ui-field-label'>이름<input></label><ui-button>저장</ui-button></form>
+            <dl class='ui-readout'><dt>상태</dt><dd>정상</dd></dl>
+            <ui-actions><ui-button>하나</ui-button><ui-button>둘</ui-button></ui-actions>
+          </div>
+          <div class='surface-slot' data-slot='wide'>
+            <form class='ui-form'><label class='ui-field-label'>이름<input></label><ui-button>저장</ui-button></form>
+            <dl class='ui-readout'><dt>상태</dt><dd>정상</dd></dl>
+            <ui-actions><ui-button>하나</ui-button><ui-button>둘</ui-button></ui-actions>
+          </div>`; }""")
+        result = page.evaluate("""() => Object.fromEntries(['narrow', 'wide'].map(slot => {
+          const root = document.querySelector(`[data-slot=${slot}]`);
+          return [slot, {
+            form: getComputedStyle(root.querySelector('.ui-form')).flexDirection,
+            readout: getComputedStyle(root.querySelector('.ui-readout')).gridTemplateColumns.split(' ').length,
+            actions: getComputedStyle(root.querySelector('ui-actions')).flexDirection,
+          }];
+        }))""")
+        browser.close()
+
+    assert result["narrow"] == {"form": "column", "readout": 1, "actions": "column"}, result
+    assert result["wide"] == {"form": "row", "readout": 2, "actions": "row"}, result
 
 
 def test_shared_readback_section_preserves_heading_gap_at_mobile_width():

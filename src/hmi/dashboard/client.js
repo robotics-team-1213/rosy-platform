@@ -1,6 +1,6 @@
 // 세션과 인증된 fetch. 토큰이 사는 유일한 곳이다.
 
-import { elements } from "./dom.js";
+import { elements, tagStatus } from "./dom.js";
 import { classifyOperation } from "./camera-capture.js";
 
 // D-193 6 storage rule. A token without an expiry (card, manual) lives only in
@@ -69,7 +69,7 @@ export const authHeaders = () => ({
 
 export function setConnection(kind, label) {
   const badge = elements["connection-badge"];
-  badge.className = `status-badge status-${kind}`;
+  badge.setAttribute("status", tagStatus(kind));
   badge.querySelector("span").textContent = label;
 }
 

@@ -210,3 +210,10 @@
 - 변경: 나갈 때 `/mode` IDLE 은 이 화면이 MANUAL 을 잡았고(modeHeld) 남의 보정으로 잠기지 않았을 때만 보낸다. whoami 실패는 1→2→4→8 s(최대 15 s) 재시도, 대기 중에는 "보정 확인 중"으로 잠근다.
 - 증거: ROSY_RUN_BROWSER_TESTS=1 pilot 전체 + dashboard 칩 70 passed(새: 잠긴 화면 이탈은 /mode 없음, 주인 이탈은 IDLE, whoami 대기 표시 후 조작 복귀). test_calibration_view 6 passed.
 - gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · fix(pilot): main의 OMX 연습 화면·데드존을 D-359 공용 컨트롤 계약 아래로
+- 변경: main이 Pilot에 `shared_controls`·`typography_focus` 계약을 켜면서 D-359 쪽 더 엄한 판정에 걸렸다. `screens/arm.js` 입력·선택은 `class="ui-field"`, 버튼은 `ui-button`(연결 primary, 나머지 quiet), 조그·그리퍼 비활성은 `reason`(조작 보류/명령 진행 중)을 단다. `screens/inputs.js` 데드존 range에 `ui-field`. `styles.css`의 arm 입력·버튼 재도색(2.75rem·0.4rem·0.5rem 1rem·opacity 0.5)을 지우고, 보정 잠금 흐림은 `var(--disabled-opacity)`.
+- 증거: web_common 199 passed; `ROSY_RUN_BROWSER_TESTS=1` `src/hmi/pilot/test` 70 passed, `src/products/omx/adapter/test/test_pilot_sim_browser.py` 1 passed (2026-10-01 Windows).
+- gate 변화: 없음.
+- 결정: D-359 §5.1·§5.3·§5.5.
+- 교훈: 없음.

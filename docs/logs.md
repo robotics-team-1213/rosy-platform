@@ -3693,6 +3693,19 @@
 - 결정: Phase B와 C는 병행 가능 (도크 벤치와 로봇 실기가 독립). Phase D는 B6 통과 후에만.
 - 교훈: 6개 ADR이 각기 옳았지만 실행 순서가 없으면 다음 사람이 무엇부터 할지 모른다 — 플랜이 그 갭을 메운다.
 
+## 2026-09-30 · e07518ac · D-371 US-010 DESIGN.md 목록 행 예외
+
+- 변경: D-371 ADR을 main 9ad02b61에서 브랜치로 복사(3842a829, ADR 로그 행은 병합 때 온다). DESIGN.md 버튼 규칙에 목록 행 예외, Do/Don't 한 줄씩.
+- 증거: 문서만.
+- gate 변화: 없음.
+- 결정: D-371.
+
+## 2026-09-30 · 94ba6de2 · D-371 Refinement — 확인 대화상자는 비모달
+
+- 변경: D-371 ADR에 Refinement(2026-09-30): 비모달로 열고 정지는 살아 있다(US-010 측정: showModal이 비상정지를 inert로 만듦), D-218 §1과의 관계(목록 행 삭제에 한해 공유 대화상자). DESIGN.md Components에 확인 대화상자, Do 한 줄.
+- 증거: 문서만.
+- gate 변화: 없음.
+- 결정: D-371.
 ## 2026-09-30 · uncommitted · docs: CI 적신 뒤끝 — C6 판정 기록과 isaac_sim 등록 완성
 
 - 변경: (1) 2026-09-06-module-split-criteria.md에 `bridge/display.py` → `battery.charging` reach의 C6 판정을 추가 — "Seam lie — fixed by deletion"(멤버는 BatteryStatus에 선언돼 있고 raw Battery에는 없어 getattr가 항상 False; 직접 접근으로 대체돼 reach 소거, ALLOWED 무변경). (2) isaac_sim의 harness 등록을 완성(functional_kind·functional·tests)하고 AGENTS.md·progress.md의 "no own tests" 오기를 정정, ROS-SIM을 D-322 명시대로 HOLD로. src/AGENTS.md 시험 호출에 sim/isaac_sim/test 추가.

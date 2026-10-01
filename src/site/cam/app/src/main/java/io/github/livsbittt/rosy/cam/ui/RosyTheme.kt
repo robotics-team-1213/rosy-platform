@@ -23,7 +23,8 @@ import androidx.compose.ui.unit.dp
  * palette, so there is no light scheme.
  *
  * Aliases in tokens.css: --surface-flat = --ground-soft, --surface-raised = --ground-card,
- * --nominal = --button-primary-bg = --paper, --nominal-quiet = --muted,
+ * --nominal = --button-primary-bg = --ink, --nominal-quiet = --ink-quiet,
+ * --button-irreversible-ink = --flag-danger-ink = --ink-on-crit (same value as --ink),
  * --focus-ring = --series-primary.
  */
 object RosyColors {
@@ -33,8 +34,8 @@ object RosyColors {
     val GroundSoft = Color(0xFF1D1F21) // --ground-soft
     val GroundCard = Color(0xFF2B2D30) // --ground-card
     val GroundCard2 = Color(0xFF35383C) // --ground-card-2
-    val Paper = Color(0xFFEEEEEF) // --paper
-    val Muted = Color(0xFF9499A0) // --muted
+    val Paper = Color(0xFFEEEEEF) // --ink
+    val Muted = Color(0xFF9499A0) // --ink-quiet
 
     /** ROSY wordmark only (D-277). Not for status, focus, commands or data. */
     val BrandRose = Color(0xFFF697E7) // --brand-rose
@@ -42,13 +43,13 @@ object RosyColors {
     /** Status colours are for thresholds only; nominal state has no colour (D-82). Crit is a fill with Paper ink. */
     val StatusCrit = Color(0xFFC40921) // --status-crit
     val StatusWarn = Color(0xFFFEB432) // --status-warn
-    val StatusOk = Color(0xFF12BB81) // --status-ok
+    val StatusOk = Color(0xFF12BB81) // --status-good
 
     /** Focus ring and data series; not a status. */
     val SeriesPrimary = Color(0xFF49AFFD) // --series-primary
 
-    /** Ink-alpha lines, derived from Paper exactly as tokens.css derives them: rgba(238, 238, 239, a). */
-    val Line08 = Paper.copy(alpha = 0.08f) // derived: --line-08
+    /** Ink-alpha lines, derived from Paper exactly as tokens.css derives them: color-mix(in oklab, --ink a%, transparent). */
+    val Line08 = Paper.copy(alpha = 0.08f) // derived: --gauge-track (ink 8%)
     val Line14 = Paper.copy(alpha = 0.14f) // derived: --line-14 (= --surface-line, --field-line)
 }
 

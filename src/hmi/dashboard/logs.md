@@ -525,6 +525,123 @@
 - 증거: 정적 스캔 `src/hmi/dashboard/test` + `src/hmi/web/test` + api_web 105 passed 47 skipped(2026-09-29 Windows, 브라우저 게이트 시험은 스킵 — ROSY_RUN_BROWSER_TESTS 미설정). 패어널 배치 시험(D-283 facts 2열·폼 위치)은 행 추가 후에도 그대로 통과했다.
 - gate 변화: 없음. 무신호 `stop_and_go`의 실화면 확인은 브라우저 회차가 남아 있다.
 
+## 2026-09-30 · ff6938e4 · D-359 US-002 /device 화면 테마 패널과 테마 로드
+
+- 변경: `index.html`·`surface.html`·`styleguide.html`이 tokens.css 바로 뒤에 `/common/theme.js`를 싣는다. `/device`에 `system.display` 패널(화면 테마: 어둡게/밝게/시스템, 공용 segment 버튼, 이 브라우저에만 저장)을 order 110(맨 뒤)으로 더했다 — 좁은 화면에서 상태·조치가 먼저 보이게. `styles.css`·`surface-panels.css`의 `color-scheme` 선언을 지웠다(테마 블록의 몫). 위험 채움 위 글자 `--ink` 세 곳을 `--ink-on-crit`로 바꿨다(밝게에서 짙은 글자가 짙은 적색 위에 사라짐).
+- 증거: `python -m pytest src/hmi/dashboard/test src/site/fleet/test src/site/games/test -q` 876 passed 39 skipped. 1366×768 밝게 캡처(`X:/DevTemp/rosy-d359/shots`)에서 /console·/device 글자 가독 확인.
+- gate 변화: 없음.
+
+## 2026-09-30 · 089bdb69 · D-359 US-003 로봇 지도·카메라 오버레이가 RosyPalette로 색을 읽는다
+
+- 변경: `map.js`의 hex 전용 `readToken`·`paletteCache`를 지우고 `window.RosyPalette.readPalette`를 쓴다(래스터 한 장에 표 한 번). `rosy:theme`이면 새로 고침 없이 `rebuildRaster()`·`paint()`. `camera-capture.js` 오버레이는 `cssColor`와 `canvasFont(…, "body")`(sans-serif·직접 getPropertyValue 제거) — 녹화 중 프레임마다 다시 그리므로 따로 듣지 않는다. 시험 하네스(`test_map_readout_browser.py`, `test/test_camera_capture_browser.py`, Node 스텁 `test_camera_capture.py`)가 실제 셸처럼 ui.js/RosyPalette를 먼저 싣는다.
+- 증거: `python -m pytest src/hmi/web_common/test src/hmi/dashboard/test src/site/fleet/test src/site/games/test src/runtime/sensing/test -q` 2674 passed 129 skipped 1 failed — 실패는 Node 스텁이 RosyPalette를 몰라서였고 스텁을 고친 뒤(2aaae787) `test_camera_capture.py` 5 passed. 브라우저(`ROSY_RUN_BROWSER_TESTS=1`) `src/hmi/dashboard/test` 51 passed + 같은 Node 1건, `test/test_camera_capture_browser.py`·`test_role_menu_panels_browser.py` 통과.
+- gate 변화: 없음.
+
+## 2026-09-30 · 1cea0fe5 · D-359 US-004 로봇 표면 필드·태그·사유·눌림이 공용 부품을 쓴다
+
+- 변경: `/dashboard`와 역할 패널의 입력·선택 전부 `class="ui-field"`(패널은 `el("input", "ui-field")`), 로그인 유지 체크는 `label.ui-check`. `styles.css` 필드 사본(auth/settings/host/traffic-policy)과 `surface-panels.css`의 `.surface-slot` 필드 사본을 지웠다. `.status-badge/.machine-tag/.mode-chip`과 `[data-status]`·`.mode-chip[data-mode]` 색 규칙을 지우고 `<ui-tag>`로 바꿨다 — `dom.js` `tagStatus`/`setTagState`가 OK·SITE_STA 등 → active, WARNING·AP 계열 → warn, ERROR·UNAVAILABLE·HOLD 계열 → crit(채움)로 옮긴다. 모드 버튼은 `title` 대신 `reason`(app.js, panels/console/mode.js), `[data-mode]` 선택자를 `ui-button[data-mode]`로 좁혀 태그가 모드 버튼 클릭 처리를 받지 않게 했다. teleop·모드·라인 모드 눌림은 `aria-pressed`, `surface-panels.css`의 teleop `outline` 덧칠 삭제. 자간 리터럴 10곳 → 토큰/0, 불투명도 0.9/0.42/0.72 → 삭제·`--ink-quiet`. styleguide에 필드·체크·readonly·사유·눌림·active 태그 예를 실었다(cda6c382).
+- 증거: 브라우저 `src/hmi/dashboard/test` 52 passed, `test/test_role_surface_states_browser.py` 5 passed. 캡처 `X:/DevTemp/rosy-d359/shots/us004-robot-{console,setup}-{dark,light}-{1366x768,390x844}.png` — 필드 44px, 내비게이션 비활성 사유 보임.
+- gate 변화: 없음.
+
+## 2026-09-30 · 06650820 · D-359 US-004 알 수 있는 비활성 사유를 모두 reason으로
+
+- 변경: `dom.js`에 `setOff(control, off, reason)`, `setEnabled(id, enabled, reason)`. 패널은 한 줄 지역 `setOff`. 라인 추종·교통 신호·SLAM·관리자 전용·네트워크/릴리스·구 `/dashboard` teleop(`teleopBlockReason`은 `teleopEligible`과 같은 순서)·도킹·카메라 녹화·초기 위치·웨이포인트·토큰 삭제·도크 목록 버튼이 같은 조건에서 짧은 사유를 달고 켜지면 지운다. `map.js`는 `goalReason` 선택지. 역할 화면 teleop 네 버튼은 보이는 준비 문장(readinessStatus)에 `aria-describedby`로 잇는다. 요청 중 잠금·첫 readback 전 초기값·네이티브 select/option·공용 안내가 있는 곳은 `test_shared_controls.py` `DISABLED_WITHOUT_REASON` 닫힌 목록(이유 포함)에 있다. role G2 시험은 버튼을 접근 이름으로 찾는다(보이는 사유가 textContent에 들어가므로).
+- 증거: 단위 2709 passed 132 skipped. 브라우저 `src/hmi/dashboard/test` 50 passed 2 failed → G2 로케이터를 `get_by_role`로 고친 뒤 `test_role_g2_browser.py` 12 passed. `test/test_role_surface_states_browser.py` 5 passed. 변이 5건 빨강 후 복구(X:/DevTemp/rosy-d359/us004b-mutations.log).
+- gate 변화: 없음.
+
+## 2026-09-30 · aeb31356 · D-359 US-005 셸 세 단·세로 예산·구 콘솔 프레임
+
+- 변경: `shell/shell.css` — `.surface-main`·`.surface-slot`이 inline-size 칸(`.surface-main`은 flex 열 안에서 0폭이 되지 않게 `width: 100%`). 운용 고정 프레임은 `(width >= 64rem) and (height >= 40rem)`만, 3열·설정 2단 등은 `(width >= 64rem)`. 30.01/63.99 틈을 없앴다. wide 아래 머리는 두 줄 격자(이름·역할 / 화면 전환, 비상 정지가 두 줄 오른쪽), 알림은 글이 있을 때만 셋째 줄; compact는 링크·정지 안쪽 여백만 줄인다 — 320×568에서 머리 105px(18.5%). `surface-panels.css`의 ui-actions 재정의 삭제. 구 `/dashboard` `styles.css`: `.console` 고정 프레임은 `(width >= 64rem) and (height >= 40rem)`에서 `100dvh`, 그 밖(`(width < 64rem), (height < 40rem)`)은 영역을 쌓아 흐른다. 1080/720px → 64rem. `panels/system/events.css` 1080/720px → 64rem/30rem. 시험: 새 `test/test_surface_viewport_budget_browser.py`(FastAPI 원본으로 /console·/setup·/device × 390×844·320×568: 넘침 0, 머리 ≤ 20%, 비상 정지 첫 화면·끝 스크롤 뒤에도 화면 안), 레이아웃 시험은 두 줄 머리 순서·칸 반응(1440의 좁은 칸은 쌓이고 넓은 칸은 행, 320은 쌓임, 390은 두 열)으로 고침, `test_surface_bridge.py` 분할 키를 `@media (width < 64rem) {`로.
+- 증거: 브라우저 `src/hmi/dashboard/test` 55 passed, `test/test_role_surface_states_browser.py` 5 passed. 변이: components.css `ui-topbar` `min-height: 300px` → 예산 시험 두 칸 빨강. 캡처 `X:/DevTemp/rosy-d359/shots/us005-robot-*.png`(console dark·light, setup·device dark; 1366×768·390×844·320×568).
+- gate 변화: 없음.
+- 결정: D-359 §6.
+
+## 2026-09-30 · 0308c67c · D-359 US-007 웨이포인트 폼이 공용 ui-form을 쓴다
+
+- 변경: `panels/setup/waypoints.js` 폼에 `ui-form`. 390·320에서 이름 칸과 저장 버튼이 틈 없이 두 줄로 붙었다(평범한 인라인 폼). 이제 `--gap-form`을 지키고 좁은 칸에서 한 열로 접힌다. 시험: `test_waypoint_readiness_browser.py`에 폼 클래스·행 간격 8px 단언.
+- 증거: 수정 전 빨강, 수정 후 초록. 캡처 `X:/DevTemp/rosy-d359-captures/robot-setup-*`.
+- gate 변화: 없음.
+- 결정: D-359 §5.
+
+## 2026-09-30 · 570e3a29 · D-359 US-008 낮은 wide 콘솔이 열을 지킨다
+
+- 변경: `shell/shell.css` 운용 열(64rem 이상)과 고정 프레임(64rem 이상 + 40rem 이상 높이)을 두 미디어 조건으로 나눴다. 1366×600은 세 열을 지키고 페이지가 스크롤한다. 옛 `/dashboard`(`styles.css`)도 같이 나눴다. `DESIGN.md` Tall Enough Rule에 한 줄. 시험: `test_surface_layout_browser.py::test_wide_but_short_console_keeps_its_columns_and_scrolls_the_page`, `test/test_dashboard_browser.py::test_wide_but_short_operate_view_keeps_three_columns`.
+- 증거: 두 시험 모두 수정 전 빨강.
+- gate 변화: 없음. SOURCE/LOCAL 증거다.
+- 결정: D-359 §5·§6 (US-008).
+
+## 2026-09-30 · uncommitted · fix(dashboard): D-359 restore legacy /dashboard (missing dom.js imports, teleop pad overflow)
+
+- 변경: `app.js`·`ros-network.js`·`settings.js`가 부르던 `setTagState`를 `./dom.js`에서 가져온다(없어서 렌더 사슬 전체가 ReferenceError로 끊겼다). `.teleop-pad ui-button`은 세로 쌓기·간격 0이라 1366×600에서 "→우회전"(keep-all로 안 끊김)이 8 px 넘치지 않는다. 시험 두 곳은 뜻을 지켜 새 마크업(ui-tag 벤치 태그, 사유 small 제외한 부저 라벨)을 본다. 새 호스트 시험 `test_module_imports.py`가 dom.js·core_ui_logic.js·ui.js에서 내보낸 이름을 부르는 모든 대시보드 스크립트가 그 이름을 가져오는지(또는 지역 바인딩인지) 본다.
+- 증거: `ROSY_RUN_BROWSER_TESTS=1 python -m pytest test/test_dashboard_browser.py -q` 70 passed, 1 failed(`test_operate_view_fits_and_does_not_crush[viewport0-]`, 동시 Fleet 브라우저 부하 중) → 단독 재실행 4 passed. `test_module_imports.py` 39 passed, 옛 app.js·ros-network.js·settings.js에 대해 `setTagState (from dom.js)`를 짚고 import 하나를 지우는 변이도 잡는다.
+- 미증명: 실기 대시보드
+- gate 변화: 없음
+- 결정: D-359
+- 교훈: 호스트 시험은 브라우저 모듈의 ReferenceError를 못 본다 — 공용 도우미 import는 정적 스캔으로 지킨다.
+
+## 2026-09-30 · 6d296cd6 · D-359 US-009 로봇 상태 개요의 모드·내비게이션 증거
+
+- 변경: 내비게이션은 자기 채널로 `readout()`을 거쳐 `지연 · N초 전`/`연결 끊김`과 `data-evidence`를 얻는다. 모드는 CORE 자신의 값이라 응답이 부모 증거다. 둘 다 한국어 표, 열거값은 title. 시험 `test_panel_copy_evidence_browser.py::test_overview_…`.
+- 증거: 수정 전 `NAVIGATING` 날값·증거 없음(빨강).
+- gate 변화: 없음. SOURCE/LOCAL 증거다.
+- 결정: D-359 (US-009).
+
+## 2026-09-30 · 5518f9bc · D-359 US-009 운용자 말을 CONCEPTS 용어로
+
+- 변경: mode·line-follow·map·docking·teleop·setup(docking·localization)·host/system·app.js·settings.js·index.html의 profile/capability/Navigation/hardware 모드/프로필/MANUAL·NAVIGATION 모드 문장을 내비게이션·실행 모드·하드웨어 실행 모드·기능·수동 모드로. 모드 패널 상태·버튼·확인 문장은 MODE_LABEL(6cadb183).
+- 증거: web_common `test_operator_copy.py` 0건. role-menu 시험 문구 기대값 갱신.
+- gate 변화: 없음.
+- 결정: D-359 (US-009).
+
+## 2026-09-30 · 937bd659 · D-359 US-009 호스트 에이전트 원인은 한 번
+
+- 변경: 네트워크·릴리스 작업이 같은 에이전트 상태로 막히면 패널 머리 아래 상태 한 줄(원인+다음 할 일), 버튼 사유는 `위 사유` + aria-describedby. 한쪽만 막히면 그 묶음 상태가 말한다. 403은 권한 문장. 묶음 상태는 쓸 때만 문서에 있다(698e6192). CONCEPTS.md에 호스트 에이전트.
+- 증거: `test_host_agent_outage_is_said_once_and_buttons_point_at_it` — 원인 글을 가진 보이는 요소 정확히 1개. 수정 전 네트워크 버튼 4개 + 상태 줄들이 같은 원인을 되풀이.
+- gate 변화: 없음.
+- 결정: D-359 (US-009).
+
+## 2026-09-30 · 26226596 · D-359 US-009 호스트 런타임 빠진 원천을 한국어로
+
+- 변경: `system.js` `runtimeGap()` — os_release→운영체제 … network_counters→네트워크 통계, 전부 없으면 `호스트 런타임 정보를 받지 못했습니다`, 키는 title. node 단위 시험이 CORE runtime.py 키 목록과 대조.
+- 증거: `test_host_system_copy.py` 5 passed.
+- gate 변화: 없음.
+- 결정: D-359 (US-009).
+
+## 2026-09-30 · 029188c4 · D-359 US-009 카메라 상태 태그
+
+- 변경: vision.js 상태 태그가 `실시간`/`수신 대기`/`지연 · N초` + data-evidence, 옛 LIVE/WAITING/STALE은 title. 콘솔 카메라 패널은 프레임이 없으면 동작 아래 대기 줄을 숨긴다(대기 문장 1회). 레거시 대시보드 시험 기대값 갱신.
+- 증거: `test_camera_status_speaks_korean_with_evidence_and_waits_on_one_line`, 레거시 카메라 시험 초록.
+- gate 변화: 없음.
+- 결정: D-359 (US-009).
+
+## 2026-09-30 · 709651d1 · D-359 US-009 로봇 지도 읽기 실패는 무대 위에
+
+- 변경: 지도 읽기 실패(또는 권한 없음)면 무대의 ui-empty가 원인을 말하고 곁에 `다시 시도`(권한 없음은 없음), 같은 원인의 지도 상태 줄과 `선택 좌표` 줄은 숨긴다. createFieldMap은 `mapState`를 내보인다. role-surface-states 시험은 빈 무대 대신 실패 장을 기대한다.
+- 증거: `test_robot_map_read_failure_is_an_overlay_with_retry_and_no_target_row`(모의 500 → 다시 시도 → 복구).
+- gate 변화: 없음.
+- 결정: D-359 (US-009).
+
+## 2026-09-30 · bd2bd093 · D-359 US-009 도크 상태 한국어, 빈 목록 모양 통일
+
+- 변경: /setup·/console 도크 상태가 DOCK_STATE_LABEL(모든 DockState). 도크·도크 관리·웨이포인트 빈 목록은 목록을 숨기고 목록 밖 ui-empty 한 줄.
+- 증거: `test_setup_empty_lists_are_one_ui_empty_outside_the_list[3]`, `test_dock_state_reads_korean_with_the_enum_in_title[2]`; 웨이포인트 간격 시험은 빈 줄을 잰다.
+- gate 변화: 없음.
+- 결정: D-359 (US-009).
+
+## 2026-09-30 · 5bcd9617 · D-371 US-010 목록 행 삭제는 조용한 `삭제…` + 확인 대화상자
+
+- 변경: `/device` 토큰 목록(`panels/system/security.js`)과 도크 관리(`panels/setup/dock-admin.js`)의 행 `삭제`가 위험 채움 → quiet `삭제…`, 누르면 `confirmIrreversible`(대상 이름, `토큰 삭제`/`도크 삭제`). "지금 쓰는 토큰" 사유 유지. 옛 `/dashboard` `settings.js` 토큰·도크·웨이포인트 삭제도 같은 대화상자(이미 quiet였음, `삭제…`로), D-218 핀 settings.js 11→8. 새 브라우저 시험 `src/hmi/dashboard/test/test_list_row_confirm_browser.py`(e20078de): 실제 /device 첫 화면 위험 채움 ≤1(비상정지 제외, dark/light × 1366/390), 삭제 흐름(Esc·취소 → 요청 0·포커스 복귀, 실행 → DELETE 1회). 패널 시험은 대화상자 실행 버튼을 누른다.
+- 증거: 브라우저 변이(행 kind=irreversible) → 빨강 2개 채움; 캡처 `X:\DevTemp\rosy-d359-captures\us010-*` 채움 0·넘침 0·오류 0.
+- gate 변화: 없음.
+- 결정: D-371.
+
+## 2026-09-30 · 79787e7a · D-371 US-010 정지 컨트롤에 data-always-live, 대화상자 위 정지 시험
+
+- 변경: `surface.html` `#shell-estop`, `index.html` `#emergency-stop`, `styleguide.html` 표본 정지에 `data-always-live`. 스타일가이드에 `확인 대화상자` 고정 그림(94ba6de2, 인라인 스크립트 없음). 브라우저 시험 `test_device_estop_stays_live_over_the_delete_dialog`(/device: 정지 비inert, elementFromPoint가 정지, 밖 컨트롤 전부 inert, 폴링·늦게 붙은 노드도 막힘, Tab 고리, 정지 클릭 → POST /safety/stop + 대화상자 닫힘 + DELETE 0, Esc 취소)와 옛 /dashboard `test_waypoint_delete_dialog_keeps_the_estop_out_of_the_inert_region`(2bd9c0bb).
+- 증거: ROSY_RUN_BROWSER_TESTS=1: `test_list_row_confirm_browser.py` 6 passed, `test_role_menu_panels_browser.py`+`test_web_dialog_contract.py` 27 passed, `test_dashboard_browser.py -k "setting or token or dock or waypoint"` 7 passed, 2 skipped (`X:\DevTemp\rosy-d359\us010b\browser.txt`)
+- gate 변화: 없음.
+- 결정: D-371 Refinement(2026-09-30).
+- 교훈: 옛 /dashboard는 정지가 운용 뷰에만 있어 점검 뷰의 설정 목록에서 대화상자를 열면 정지가 화면에 없다(이번 변경 전부터). 대화상자는 정지를 inert로 만들지 않지만, 뷰 전환 탭은 열린 동안 막힌다 — Esc로 닫고 운용 뷰로 간다.
 ## 2026-09-30 · uncommitted · feat(icons): D-358 S3 대시보드 파비콘
 
 - 변경: `index.html`·`surface.html`에 `<link rel="icon" type="image/svg+xml" href="/common/icons/robot-dashboard.svg">`를 더했다. 제목(`Rosy 로봇 — 대시보드`)은 이미 이름표와 같아 바꾸지 않았다.
@@ -546,6 +663,46 @@
 - 변경: `index.html` `<title>` `Rosy Robot`, `surface.html` `Rosy Robot — {{title}}`, 파비콘 `/common/icons/robot.svg`.
 - 증거: `python -m pytest src/hmi/dashboard/test -q` 17 passed, 34 skipped (브라우저 시험 opt-in); `src/hmi/web_common/test` 111 passed (2026-09-30 Windows).
 - gate 변화: 없음. 폴더·패키지 이동(`src/hmi/robot`, `rosy_robot`)은 D-374 단계 3 게이트 그대로.
+
+## 2026-10-01 · uncommitted · fix(dashboard): D-359 리뷰 P2-2 — 모드·도크·네트워크·차선 추종 열거값을 한국어로
+
+- 변경: `app.js` 모드 확인·결과 글은 `enumLabel(MODE_LABEL, requestedMode)`, 네트워크 적용 글은 `NETWORK_MODE_LABEL`. `settings.js` 도크 상태 글은 `DOCK_STATE_LABEL`. `panels/console/line-follow.js`는 `LINE_MODE_LABEL`(꺼짐·적외선 센서·카메라)로 상태·요청 글과 모드 값을 쓴다. `panels/host/operations.js` 네트워크 모드도 `NETWORK_MODE_LABEL`. `test_host_operations_browser.py` 서버가 `/common/`을 web_common으로 옮긴다.
+- 증거: `test_host_operations_browser.py` 3 passed, `test/test_role_menu_panels_browser.py -k line_follow` 2 passed, `test/test_role_surface_states_browser.py -k host_agent` 1 passed (ROSY_RUN_BROWSER_TESTS=1, 2026-10-01 Windows).
+- gate 변화: web_common `enum_text_problems` 린트가 이 파일들을 본다.
+- 결정: D-359 US-009.
+- 교훈: 없음.
+
+## 2026-10-01 · uncommitted · fix(dashboard): D-359 리뷰 P2-5 — 화면 테마 패널은 RosyTheme.choices로 그린다
+
+- 변경: `panels/system/display.js`의 따로 적은 선택지 표를 지우고 `window.RosyTheme?.choices`로 버튼을 그린다.
+- 증거: `src/hmi/web_common/test/test_theme_browser.py -k device_display` 통과, `test_theme_choices.py` 4 passed.
+- gate 변화: web_common `test_theme_choices.py`가 이 파일에 이름 사본이 없는지 본다.
+- 결정: D-359 §2.5.
+- 교훈: 없음.
+
+## 2026-10-01 · uncommitted · test(dashboard): D-359 리뷰 P2-2 — 모드 확인 문구 시험을 한국어로
+
+- 변경: `test/test_dashboard_browser.py`의 모드 변경 확인 시험이 `IDLE 모드로` 대신 `대기 모드로`를 보고, 확인 문구에 열거값이 없는지 본다(bcee2ebb에서 문구가 `enumLabel(MODE_LABEL, …)`로 바뀜).
+- 증거: `test/test_dashboard_browser.py -k test_irreversible_mode_change_needs_confirm` 1 passed. 마무리 회차 `-k "mode or setting or token"`에서 이 시험만 옛 문구로 실패했었다.
+- gate 변화: 없음.
+- 결정: D-359 US-009.
+- 교훈: 문구를 바꾸면 루트 `test/`의 브라우저 시험도 grep한다.
+
+## 2026-10-01 · uncommitted · revert(dashboard): D-359 정리의 setOff 통합을 되돌림
+
+- 변경: 034fa28f(패널 10개가 `/assets/dom.js`의 `setOff`를 import)를 되돌렸다. 패널은 각자 한 줄 `setOff`를 다시 든다.
+- 증거: 7.6 회귀에서 `test/test_role_menu_panels_browser.py` 12건·`src/hmi/dashboard/test` 6건·`test_role_surface_states_browser.py` 1건이 실패했다. 패널 시험 하네스는 패널 파일만 라우팅하고 `/assets/dom.js`를 제공하지 않는다.
+- gate 변화: 없음.
+- 결정: D-359 §5.3. 정리 패스는 동작·시험 하네스를 바꾸지 않는다.
+- 교훈: 패널 모듈의 import 그래프는 운영 서버뿐 아니라 패널 단위 하네스가 제공하는 경로 안에 있어야 한다.
+
+## 2026-10-01 · uncommitted · fix(dashboard): D-359 차선 추종 모드 값은 title에 원래 열거값을 둔다
+
+- 변경: `panels/console/line-follow.js`의 모드 `dd`가 한국어 라벨과 함께 `title`에 원래 열거값(`IR_LINE`·`OFF` 등)을 둔다(DESIGN.md 운용자 말: 열거값은 title에만). `test_action_groups_browser.py`는 `title`로 상태 도착을 기다린다.
+- 증거: 7.6 회귀에서 `test_real_operation_panels_block_switch_during_start_and_while_active`가 단독 재실행에서도 `textContent === "IR_LINE"` 대기로 실패. 수정 후 해당 파일 + `test/test_role_menu_panels_browser.py` 30 passed, 호스트 340 passed.
+- gate 변화: 없음.
+- 결정: D-359 §5, US-009 P2-2 후속.
+- 교훈: 화면 글자를 한국어로 바꿀 때 열거값을 title로 옮기지 않으면 상태를 읽는 시험·도구가 기댈 곳이 사라진다.
 
 ## 2026-10-01 · uncommitted · feat(console): D-383 편대 역할 칸과 버전 계보
 

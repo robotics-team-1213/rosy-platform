@@ -594,3 +594,40 @@ def test_stalled_stop_request_recovers_for_retry():
             browser.close()
     finally:
         server.close()
+
+
+@pytest.mark.parametrize("width,height", [(390, 844), (320, 568)])
+def test_compact_board_keeps_header_budget_stop_and_chips_in_view(width, height):
+    """D-359 §6.4·§6.6 — 붙박이 머리 ≤ 창 높이 20%, 정지는 첫 화면에, 마커 칩은 칸 안에.
+
+    변이 증명: components.css `ui-topbar`에 `min-height: 300px`을 넣으면 빨갛다. 칩 검사는
+    감시용이다 — US-003의 자간 0 이후 옛 네 칸 격자도 320px에서 넘치지 않는다(2026-09-30 실측)."""
+    pytest.importorskip("playwright.sync_api")
+    from playwright.sync_api import sync_playwright
+
+    board = PreviewBoard(clock=lambda: 100.0)
+    board.publish(_play_payload(), jpeg=None)
+    server = PreviewServer(board, port=0)
+    url = server.start()
+    try:
+        with sync_playwright() as playwright:
+            browser, page, errors = open_page(playwright, width, height)
+            page.goto(url, wait_until="domcontentloaded")
+            page.wait_for_function("document.querySelectorAll('#markers li').length === 8")
+            fit = page.evaluate("""() => ({
+              overflow: document.documentElement.scrollWidth - innerWidth,
+              topbar: document.querySelector('ui-topbar').getBoundingClientRect().height,
+              halt: document.getElementById('halt').getBoundingClientRect().toJSON(),
+              chips: [...document.querySelectorAll('#markers li')]
+                .filter(li => li.scrollWidth > li.clientWidth).map(li => li.textContent),
+            })""")
+            browser.close()
+    finally:
+        server.close()
+
+    assert errors == [], errors
+    assert fit["overflow"] <= 0, fit
+    assert fit["topbar"] <= 0.2 * height, fit
+    halt = fit["halt"]
+    assert halt["top"] >= 0 and halt["bottom"] <= height and halt["right"] <= width, fit
+    assert fit["chips"] == [], fit

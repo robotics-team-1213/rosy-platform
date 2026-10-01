@@ -204,6 +204,130 @@
 - gate 변화: 없음. 라이브러리 계층이라 ROS-SIM~FIELD는 N/A.
 - 결정: D-157(명시 allowlist) 유지, D-129 정정 2026-09-29.
 
+## 2026-09-30 · 960a76f2 · D-359 US-001 토큰 세 층과 이름 정리
+
+- 변경: `tokens.css`를 팔레트(원시 색은 여기에만, 닫힌 키 목록) → 파생(`color-mix(in oklab, …)`로 팔레트만 참조) → 역할 층으로 나눴다. 이름 paper→`--ink`, muted→`--ink-quiet`, muted-line→`--line-quiet`을 src 전체(CSS·JS·HTML·LCD/Kotlin 사본 주석·시험)에서 기계적으로 바꿨다. `--ink-on-crit`·`--shadow-base`를 팔레트에 두고, 쓰이지 않는 토큰(sheen 셋, status-good 알파 여섯, crit-a12, warn-a40, series-primary-a08, line-08, status-crit-ground, muted-cool)과 같은 값 별칭(`-2`, status-ok, route-dim → `--series-secondary`)을 지웠다. games의 경기장 잉크는 `--pitch-ink`로 이름을 옮겨 공용 `--ink`와 겹치지 않게 했다. oklch가 아니라 oklab으로 섞는 이유: Chromium이 채도 ~0 색의 oklch 색상각을 none으로 풀어 0°로 그린다(실측 ΔE_OK 최대 0.019).
+- 증거: Chromium 계산 색 비교(옛 main 대 새 파일, 이름 변경 반영) 68개 전부 허용 범위, 최대 ΔE_OK×100 = 0.77(`--brand-rose-wash`, RGB 2.14/255), 나머지 ≤ 0.2. `python -m pytest src/hmi/web_common/test -q` 97 passed.
+- gate 변화: 없음. 라이브러리 계층이라 ROS-SIM~FIELD는 N/A.
+- 결정: D-359 §1.
+
+## 2026-09-30 · faa60733 · D-359 US-002 밝은 팔레트·테마 선택 경로·테마별 게이트
+
+- 변경: `tokens.css` 팔레트 선택자를 `:root, [data-theme="dark"]`로 바꾸고 같은 키 집합의 `[data-theme="light"]` 블록을 더했다(OKLCH 생성, 각 블록이 자기 `color-scheme`). 파생 공식은 두 테마에서 그대로 뜻이 맞아 고치지 않았다(선·장막은 잉크·바탕 알파, 그림자는 `--shadow-base` 알파). `theme.js`(외부 스크립트, tokens.css 바로 뒤 동기 로드)가 `rosy.theme` dark|light|system(기본·무효·저장소 실패 → dark)을 풀어 `html[data-theme]`과 `meta[name=theme-color]`(계산된 `--ground`)를 첫 그림 전에 정하고, `data-theme-pin`을 따르며, `window.RosyTheme {get,set,resolved}`와 `rosy:theme` 이벤트, `[data-theme-choice]` 버튼 배선을 준다. `manifest.json`·설치 목록에 등록. `surfaces.yaml`에 `themes`를 두고 레지스트리가 테마 표면의 theme.js, 고정 표면의 pin, 정적 theme-color = dark `--ground`, 표면 CSS의 `color-scheme` 부재를 본다. `test_palette_gates.py`는 `token_themes.py`로 테마별 팔레트를 읽어 모든 게이트를 테마마다 돌리고(브랜드 밝기 대역·래스터 단조는 바탕 극성 기준으로 일반화), 키 집합 동일·파생 블록 원시 색 없음·로봇 사다리·주 명령 ink 채움·위험 채움 위 글자 = on-crit 잉크를 더했다. LCD·진단·네이티브 사본 비교는 dark 블록으로 고정했다. 위험 채움 위 `--ink` 참조 10곳을 `--ink-on-crit`로 바꿨다(2297d11d).
+- 증거: `python -m pytest src/hmi/web_common/test -q` 121 passed 9 skipped(브라우저 게이트 제외). 변이 6건 전부 빨강 후 복구: light 키 삭제 → `test_every_theme_defines_the_same_palette_keys` 외 3, 파생 블록 `#123456` → `test_the_derived_block_has_no_raw_colour`, light `--ink` 저대비 회색 → `test_text_tokens_meet_wcag_on_the_ground[light]` 외 2, 공용 위험 태그 `--ink` → `test_text_on_a_danger_fill_uses_the_on_crit_ink`, Fleet theme.js 제거·games pin 제거 → `test_every_surface_declares_its_themes_and_its_pages_follow_them`.
+- 브라우저(`ROSY_RUN_BROWSER_TESTS=1`): `src/hmi/dashboard/test src/hmi/web_common/test` 181 passed 1 failed → 실패는 새 패널 순서(order 10)가 390×844 /device에서 운영 상태를 밀어낸 것이라 order 110으로 옮긴 뒤 해당 시험·`test_theme_browser.py` 10 passed. `test/test_role_surface_states_browser.py test/test_fleet_console_browser.py test/test_rosy_games_surface.py` 42 passed 3 failed: swarm_control(기존 알려진 실패), semantic_subheadings(기준 커밋 fdb428de에서도 실패), slow_initial_gather(부하 플레이크 — 단독 재실행 통과).
+- gate 변화: 없음. 라이브러리 계층이라 ROS-SIM~FIELD는 N/A. 밝게는 제품 기본값이 아니고 사람 G3·현장 조명 관측 전이다.
+- 결정: D-359 §2·§3·§7.1·§7.3.
+
+## 2026-09-30 · 4d513a41 · D-359 US-003 캔버스 색·글꼴 해석기 RosyPalette
+
+- 변경: `ui.js`에 `readColour`·`readPalette`·`cssColor`·`canvasFont`·`clearPalette`를 더해 export하고 `window.RosyPalette`로도 건다(D-75 번들러 없음; camera-capture.js는 Node에서도 import되므로 캔버스 파일은 전역으로 부른다). 색은 글자로 파싱하지 않는다 — 숨은 탐침 `<span>`에 `color: var(--x)`를 걸어 계산된 색(Chromium은 color-mix를 `color(srgb …)`/`oklab(…)`로 준다)을 1×1 캔버스에 칠해 sRGB 바이트 `[r,g,b,a]`(a 0–1)로 되읽고 캐시한다. `canvasFont(size, "body"|"mono")`는 `--body`/`--mono` 계산값과 12px 하한. `rosy:theme`에서 캐시를 비운다(ui.js가 캔버스 모듈보다 먼저 실행되므로 다시 그리기 전에 비워진다). 새 시험: `test_canvas_palette_contract.py`(캔버스 5파일에 hex 리터럴·hexToRgb·getPropertyValue·px 리터럴·sans-serif 없음, `ctx.font`는 canvasFont 경유, games 피치 색은 styles.css, Fleet 지형·범례는 raster 토큰), `test_canvas_palette_browser.py`(로봇 지도·Fleet 지도 빈 칸 픽셀 dark → `RosyTheme.set('light')` → light `--raster-free` ±3, color-mix 토큰 `--line-quiet`·`--ground-grad-1`이 검정이 아님, canvasFont(10) → 12px).
+- 증거: 아래 US-003 묶음. `ROSY_RUN_BROWSER_TESTS=1 python -m pytest src/hmi/web_common/test -q` 146 passed. 1366×768 캡처 `X:/DevTemp/rosy-d359/shots/us003-{robot,fleet}-{dark,light}.png`(ROSY_D359_SHOTS로 켬).
+- gate 변화: 없음. 라이브러리 계층이라 ROS-SIM~FIELD는 N/A.
+- 결정: D-359 §4.
+
+## 2026-09-30 · cda6c382 · D-359 US-004 공용 필드 클래스·버튼 상태·비활성 사유·active 태그
+
+- 변경: 필드 API는 네이티브 `input/select/textarea`에 `class="ui-field"`(components.css가 이미 가진 `input.ui-field` 규칙을 확장) — `<ui-field>` 감싸개는 폼 제출·label 연결·기존 핸들러를 흔들어 제품 화면에는 쓰지 않는다(components.css 머리 주석·styleguide 기록). 필드는 body 글꼴·44px 바닥·공용 선/바탕/포커스/placeholder/readonly/`:user-invalid`·`aria-invalid`/비활성 흐림, 체크·라디오는 상자 없이 `label.ui-check`(44px)가 누름 면. 모든 `ui-button` 종류에 `:hover`·`:active`(비활성 제외, 채움 종류는 바탕색 안쪽 테), 토글 눌림은 `aria-pressed="true"`. `ui-button reason` 속성: ui.js가 버튼 안 `<small data-reason aria-hidden>`로 그리고 `aria-describedby`로 잇고, 갱신·삭제·`textContent` 교체(MutationObserver)를 따라간다. 사유가 있는 비활성은 흐리지 않고 점선·`--ink-quiet`. `ui-tag status="active"`(ink, 무색)와 `ui-tag[hidden]`. 공용 기본: `:where(a,button,input,select,textarea,summary,[tabindex]):focus-visible` 링, body `word-break: keep-all; overflow-wrap: break-word`(f2a836a7 — ADR 문구의 `anywhere`는 최소 내용 폭을 한 글자로 줄여 1366px Fleet 상단바의 짧은 라벨을 음절 사이에서 꺾어 break-word로 바꿨다).
+- 시험(2824d8c6): `test_product_fields_carry_the_shared_field_class`(HTML 태그 + JS createElement/el/node 생성처, 체크는 `label.ui-check`), `test_fields_clear_the_secondary_target_on_every_surface`, `test_every_button_kind_has_shared_interaction_states`, `test_disabled_reason_is_a_shared_button_attribute`(title만의 사유 금지), 재도색 검사에 `outline` 추가, `test_letter_spacing_is_a_token_or_zero`, `test_dimming_uses_the_disabled_token_not_an_opacity_literal`, 브라우저 `test_shared_controls_browser.py`(사유 글자·describedby·이름 제외·색·갱신/삭제, Fleet·/dashboard DOM의 모든 필드 min-height ≥ 44).
+- 증거: 변이 14건 전부 빨강 후 복구 초록(X:/DevTemp/rosy-d359/us004-mutations.log). `python -m pytest src/hmi/web_common/test src/hmi/dashboard/test src/site/fleet/test src/site/games/test src/runtime/sensing/test src/runtime/gateway/test/test_dashboard.py -q` 2708 passed 132 skipped. 브라우저 web_common 155 passed.
+- gate 변화: 없음. 라이브러리 계층이라 ROS-SIM~FIELD는 N/A.
+- 결정: D-359 §5·§7.4–7.6.
+
+## 2026-09-30 · fd2249cd · D-359 US-004 비활성 사유 구조 검사
+
+- 변경: `test_every_disabled_control_states_its_reason_or_is_listed` — dashboard·Fleet JS의 `.disabled =`/`setAttribute('disabled')` 자리와 `setOff`/`setEnabled` 호출은 reason을 쓰거나, (파일, 줄 조각) → 이유의 닫힌 목록에 있어야 한다(요청 중 잠금·초기값·네이티브·공용 안내·'할 일 0'). 목록의 옛 항목도 실패. Fleet 역할 잠금 안내 쌍도 확인.
+- 증거: 변이 5건(setOff 사유 삭제, 직접 비활성의 사유 삭제, setEnabled 사유 삭제, 목록 옛 항목, Fleet 안내 삭제) 전부 빨강 후 복구. 브라우저 web_common 156 passed.
+- gate 변화: 없음.
+
+## 2026-09-30 · aeb31356 · D-359 US-005 세 단 반응형과 칸 반응 공용 부품
+
+- 변경: `components.css`의 뷰포트 질의(30rem)를 `@container (width < 22rem)`로 바꿨다 — ui-form·ui-readout·ui-actions가 자기 칸에 반응한다(칸은 표면이 `container-type: inline-size`로 정한다). 22rem은 320px 폰 칸(18.5rem)과 1366px 콘솔 감지·조작 열(약 23–25rem)을 가른다. `.ui-readout dd`는 늘 `overflow-wrap: anywhere`. `surfaces.yaml`에 `breakpoints` 필드(값 정수 px/rem + reason; 세 단 값·쓰이지 않는 값 금지, 웹만) — Fleet 90rem, 진단 1279/900px(PARKED), lane_live_view 1000/640px. `surface_registry.py`에 `media_conditions`·`breakpoint_problems`와 `breakpoint:` 규칙. 새 `test_responsive_tiers.py`: 모든 웹 표면 CSS·`<style>`의 @media 크기 조건이 범위 문법 세 단(이웃 두 단의 합 포함)·§6.5 높이(40rem)·허용 목록 값인지, 필드 모양, drift(tmp), 공용 부품 @container·surface-panels ui-actions 재정의 없음, 괄호 짝. Fleet 테마 시험은 90rem 미만에서 접힌 '설정'을 연다.
+- 증거: 단위 `python -m pytest src/hmi/web_common/test src/hmi/dashboard/test src/site/fleet/test src/site/games/test src/runtime/sensing/test src/runtime/gateway/test/test_dashboard.py -q` 2714 passed 132 skipped(tiers 시험 추가 전), tiers 6 passed. 브라우저 web_common 161 passed. 변이: Fleet CSS에 `@media (max-width: 41rem)` → 빨강, `}` 하나 추가 → 빨강, 복구 초록.
+- gate 변화: 없음. SOURCE/LOCAL 증거다.
+- 결정: D-359 §6·§7.7.
+- 교훈: CSS 블록을 문자열 치환으로 옮기면 닫는 괄호를 잃거나 남기기 쉽다 — 남은 `}` 하나가 다음 규칙을 조용히 지웠고 시험은 못 봤다. 괄호 짝 검사를 붙였다.
+
+## 2026-09-30 · a1568095 · D-359 US-006 §7 구조 계약 시험의 빈칸을 닫았다
+
+- 변경: §7.2 원시 색 스캔(`test_no_raw_colour_outside_the_token_file`)을 레지스트리의 모든 웹 표면(dashboard 최상위·shell/·panels/, web_common, Fleet, games, 진단, lane 뷰어)의 CSS·JS·HTML로 넓혔다. hex·`rgb(`·`hsl(`·`hwb(`·`oklch(`·`oklab(`·`lab(`·`lch(`·`color(`를 원시 색으로 본다(예전 판정은 dashboard 최상위 `*.css|*.js`만 보고 oklch·color(를 놓쳤다). 예외는 tokens.css 테마 팔레트 블록, ui.js RosyPalette rgba 형식기, 정적 theme-color(§7.3 판정이 따로 본다), `surfaces.yaml` `raw_colours`(`[dark]` 고정 웹 표면만, 이유 필수, 쓰이지 않는 항목 금지) — games `:root` 경기장 블록, PARKED `diagnostic.html`, 개발 도구 `lane_live_view.html`. `@container` 값도 `@media`처럼 세 단 경계 또는 표면 `container_breakpoints`(web-common 22rem)로 대조한다. 캔버스를 그리는 모든 웹 표면 스크립트는 캔버스 계약 목록이나 이유 있는 예외에 있어야 한다. 자간 규칙이 HTML·JS(`style.letterSpacing`·`setProperty`)도 본다.
+- 증거: 변이 19건 전부 빨강 후 `git checkout --`로 복구 초록, 트리 깨끗(`X:/DevTemp/rosy-d359/us006_mutations.py`, `us006-mutations.log`) — PRD 여섯(파생 hex, light 키 삭제, Fleet 입력 공용 필드·min-height, `@media (max-width: 41rem)`, 자간 0.1em, outline 덧칠)과 새 검사 13. 단위 묶음(+ 뿌리 `test`) 5490 passed 321 skipped 10 failed — 9건은 base 1eba8cbb에서도 같은 실패(ADR 로그·harness·보안 스캔 등), `test_sd_writer_contract` 1건은 33분 부하 실행의 시간 의존 실패. 브라우저 web_common 162 passed.
+- gate 변화: 없음. SOURCE/LOCAL 증거다.
+- 결정: D-359 §6.3·§7.
+
+## 2026-09-30 · 04a9b587 · D-359 US-007 비활성 사유 글자가 불가역 버튼에서도 조용한 잉크다
+
+- 변경: `components.css` 사유 선택자를 `ui-button[kind] > small[data-reason]`까지 적어 `ui-button[kind="irreversible"] small`(ink-on-crit, 위험 채움용)보다 앞서게 했다. 밝게 `/device`에서 "삭제 / 지금 쓰는 토큰" 사유가 채움 없는 밝은 바탕 위 밝은 글자로 사라졌다(어둡게는 두 값이 같아 숨었다). 시험: `test_shared_controls_browser.py::test_a_reason_reads_quiet_on_every_kind_and_theme[dark|light]` — 다섯 종류 모두 사유 색이 `--ink-quiet`.
+- 함께: 뿌리 `DESIGN.md`(7b1c8e70, D-359 §8)와 `.impeccable/design.json`(무시되는 로컬 사이드카). ADR §2.5·§5.1·§5.5·§6.3·§6.4 실측 다듬음(1b2eb48a). 해법 노트 두 건(20147779).
+- 증거: 수정 전 시험 빨강 2건, 수정 후 초록. 최종 캡처 `X:/DevTemp/rosy-d359-captures/`(README에 목록·소견).
+- gate 변화: 없음. SOURCE/LOCAL 증거다.
+- 결정: D-359 §5.3·§8.
+
+## 2026-09-30 · ea5a36bd · D-359 US-008 한글에는 라틴 자간을 주지 않는다
+
+- 변경: `ui.js`가 자기 글자(직계 텍스트 노드)에 한글이 있는 요소에 `data-hangul`을 달고 MutationObserver로 글자 변화를 따라간다. `components.css`가 그 요소의 `--track-label/-wide/-state`를 0으로 다시 정의한다(더 구체적인 선택자의 `var(--track-*)`도 0으로 풀린다). 모든 페이지가 `lang="ko"`라 `:lang()`으로는 가를 수 없고, 섞인 글은 0을 따른다. `DESIGN.md` The Latin Tracking Rule. 시험: `test_shared_controls_browser.py::test_hangul_labels_drop_the_latin_tracking`, `test_no_hangul_text_on_a_surface_is_tracked[/console|/dashboard]`.
+- 증거: 수정 전 3 빨강, 수정 후 초록.
+- gate 변화: 없음. SOURCE/LOCAL 증거다.
+- 결정: D-359 §5·§6 (US-008).
+
+## 2026-09-30 · 999c2642 · D-359 US-008 한글 요소는 등폭 대신 본문 가족
+
+- 변경: 자간 0 뒤에도 로봇 캡처가 "점유  지도"로 떠 보였다. 등폭 글꼴에 한글이 없어 대체 글꼴로 그려지고 띄어쓰기만 등폭 칸 폭(14px에서 8.2px, 본문 3.9px)이 남았다. `[data-hangul]`이 `--mono`를 `--body`로 둔다. 시험: 같은 시험에 글꼴 가족 단언.
+- 증거: `--mono` 재정의를 지우는 변이에서 빨강.
+- gate 변화: 없음. SOURCE/LOCAL 증거다.
+- 결정: D-359 §5·§6 (US-008).
+
+## 2026-09-30 · ee98ad09 · D-359 US-008 체크 상자는 비활성에서도 3:1
+
+- 변경: `input.ui-field[type=checkbox]`를 토큰으로 그린다(`appearance: none`, 테 `--ink-quiet`, 켜짐 `--focus-ring`, 체크는 `clip-path`). 비활성은 `--disabled-opacity`로 흐리지 않고 잉크만 `--ink-quiet`로 바꾼다. Chromium 네이티브 비활성 체크는 accent를 버려 light 1.19:1, dark 1.75:1이었다. 시험: `test_checked_checkboxes_hold_three_to_one_even_when_disabled[dark|light]` 픽셀 표본.
+- 증거: 수정 전 held/off 1.19–1.75:1 빨강, 수정 후 6.5:1 이상.
+- gate 변화: 없음. SOURCE/LOCAL 증거다.
+- 결정: D-359 §5·§6 (US-008).
+
+## 2026-09-30 · 998a9197 · D-359 US-008 빈 상태 줄은 ui-section에서 칸을 차지하지 않는다
+
+- 변경: `ui-section > [role=status]:empty { display: contents }`. /setup 웨이포인트의 빈 저장·목록 상태 줄 둘이 각각 gap+여백(44px)을 먹어 짧은 목록 위에 88px 빈 칸이 생겼다. 상자만 없어지고 live region은 접근성 트리에 남는다. 시험: dashboard `test_waypoint_readiness_browser.py::test_short_waypoint_list_sits_under_the_status_line`.
+- 증거: 수정 전 빨강(빈 줄이 목록 바로 위), 수정 후 초록.
+- gate 변화: 없음. SOURCE/LOCAL 증거다.
+- 결정: D-359 §5·§6 (US-008).
+
+## 2026-09-30 · 0f10bb91 · D-359 US-009 공용 한국어 열거 표(MODE_LABEL)
+
+- 변경: `core_ui_logic.js`에 `MODE_LABEL`·`NAVIGATION_LABEL`·`DOCK_STATE_LABEL`·`enumLabel()`. 두 서버가 이미 `/common/`으로 서빙하는 파일이라 번들러 없이 로봇 대시보드와 Fleet이 같은 표를 읽는다. 모르는 값은 받은 그대로. 시험 `test_enum_labels.py`(schemas.py의 RobotMode·NavigationState·DockState 전 값 대조).
+- 증거: 수정 전 export 없음(빨강), 수정 후 5 passed.
+- gate 변화: 없음. SOURCE/LOCAL 증거다.
+- 결정: D-359 (US-009).
+
+## 2026-09-30 · 5518f9bc · D-359 US-009 운용자 말 린트
+
+- 변경: `test/test_operator_copy.py` — 대시보드(패널·최상위 js·index/surface html)·Fleet web·games web의 한글 문자열 리터럴(템플릿 구멍은 따로 판정, 주석·정규식 제외)과 HTML 글·aria-label/placeholder/reason/alt에서 `profile|capability|hardware 모드|Navigation|프로필`과 맨 열거값을 막는다. 허용 목록은 이유 필수·죽은 항목 금지(지금 비어 있음).
+- 증거: 처음 46건 → 0건. 변이 증명: 실제 파일에서 고친 문자열 다섯 개를 되돌리면 각각 빨강.
+- 미증명: 한글 없는 순수 열거값 표시(`OFFLINE` 등)는 린트가 보지 않는다.
+- gate 변화: 없음.
+- 결정: D-359 (US-009), CONCEPTS.md.
+
+## 2026-09-30 · c1ecd8e0 · D-359 US-009 꺼진 체크 상자는 점선 테
+
+- 변경: `input.ui-field[type=checkbox]:disabled { border-style: dashed }`. 색은 `--ink-quiet` 그대로(3:1), 흐리지 않는다. 시험 `test_a_disabled_unchecked_box_does_not_look_like_an_enabled_one[dark|light]`, 대비 시험에 켜진 빈 상자 추가.
+- 증거: 수정 전 빨강(둘 다 solid).
+- gate 변화: 없음.
+- 결정: D-359 §5 (US-008 잔여).
+
+## 2026-09-30 · 5bcd9617 · D-371 US-010 공용 확인 대화상자 confirmIrreversible
+
+- 변경: `ui.js` `confirmIrreversible({message, action, opener})` — 네이티브 `<dialog class="ui-confirm">`(showModal), 대상 문장 + quiet `취소` + irreversible 실행 버튼 하나. Esc·취소는 false, 닫히면 포커스를 행 버튼으로(목록이 다시 그려졌으면 opener 함수로 다시 찾는다). `components.css` `dialog.ui-confirm`, `tokens.css` `--inset-dialog`·`--gap-dialog`. 계약 시험 `test_list_row_irreversible.py`(HTML li/tr/ul/ol/table/role=row 안 irreversible 금지, 스크립트는 ui.js 대화상자만 irreversible을 만든다, 행 삭제는 `삭제…`, 메시지는 대상을 따옴표로 부르고 묻는다).
+- 증거: 변이 5/5 빨강(`X:\DevTemp\rosy-d359\us010\mutations.log`); `python -m pytest src/hmi/web_common/test -q` 167 passed, 24 skipped.
+- gate 변화: 없음.
+- 결정: D-371 (D-218 §1 "커스텀 확인 다이얼로그를 만들지 않는다"를 목록 행에 한해 좁힘 — 실행 버튼의 위험 채움은 window.confirm으로 그릴 수 없다).
+- 교훈: 모달 `<dialog>`는 window.confirm처럼 뒤 화면(비상 정지 포함)을 막는다. 퇴행은 아니지만 열린 동안 비상 정지를 누를 수 없다.
+
+## 2026-09-30 · 79787e7a · D-371 US-010 확인 대화상자는 비모달, 정지는 살아 있다
+
+- 변경: `ui.js` `confirmIrreversible`이 `showModal()` 대신 `dialog.show()`로 연다. 대화상자와 `[data-always-live]` 밖의 곁가지에 `inert`를 걸고(조상 사슬만 타고 내려간다), MutationObserver가 폴링이 새로 붙인 노드도 다시 막는다. 스크림은 형제 `div.ui-confirm-scrim`(`--scrim`)이고 보이는 정지 상자마다 `clip-path: polygon(evenodd …)` 구멍을 낸다. Esc는 취소, Tab은 취소 → 실행 → 보이는 정지를 돈다(정지 단축키가 없어 새로 만들지 않았다). 정지 클릭은 캡처 단계에서 표시만 하고 대화상자를 취소로 닫는다 — 정지 처리기는 그대로 돈다. `aria-modal`은 달지 않았다(보조기기가 정지를 못 찾는다). `components.css` `::backdrop` 삭제, 고정 가운데 배치·z-index. `template.html` 정지에 `data-always-live`. 호스트 계약 `test_stop_always_live.py`(ui.js를 싣는 모든 페이지의 `…정지…` irreversible 버튼, 변이 증명 포함), `test_list_row_irreversible.py`는 이제 `showModal()` 부재를 요구한다.
+- 증거: `python -m pytest src/hmi/web_common/test src/hmi/dashboard/test src/site/fleet/test src/site/games/test -q` 1089 passed, 84 skipped; `test/test_web_dialog_contract.py` 3 passed; ROSY_RUN_BROWSER_TESTS=1: `test_list_row_confirm_browser.py` 6 passed, `test_role_menu_panels_browser.py`+`test_web_dialog_contract.py` 27 passed, `test_dashboard_browser.py -k "setting or token or dock or waypoint"` 7 passed, 2 skipped (`X:\DevTemp\rosy-d359\us010b\browser.txt`)
+- gate 변화: 없음.
+- 결정: D-371 Refinement(2026-09-30), D-280 원칙 2.
+- 교훈: 네이티브 모달은 "E-stop 항상 도달" 계약과 충돌한다 — 모달 흉내는 살릴 요소를 명시한 inert + 구멍 난 막으로 한다. z-index로 정지를 막 위로 올리는 방법은 붙박이 상단바의 쌓임 맥락(z-index 10) 안에 갇혀 통하지 않는다.
 ## 2026-09-30 · uncommitted · fix(harness): 역할 표면 검증을 저장소 안 도구로 — LOCAL cmd 재현 가능화
 
 - 변경: design-system-polish worktree의 평가 스크립트(visible_roles.py)가 X:\DevTemp 임시 경로에만 있어 LOCAL gate cmd가 다른 호스트에서 재현 불가능했다. 같은 측정(실 CORE TestClient + Chromium, 역할×표면×뷰포트, kind 누락·페이지 오류·수평 오버플로·첫 응답 실패 검사)을 `tools/web_visible_roles.py`로 저장소 안에 들였다 — headless, 루트 자체 위치 계산, 위반 시 exit 1. LOCAL cmd를 이 도구로 교체했다.
@@ -255,6 +379,38 @@
 - 변경: `components.css` 에 `ui-button[kind="toggle"][tone="good"]` — 대기는 `--status-good` 테두리·글자, `.active` 는 `--status-good` 채움과 `--button-primary-ink` 글자. Pilot 의 "진행"(누르는 동안만 도는 차선 추종, D-344)이 쓴다. 표면 재도색 대신 공용 변형으로 둔다.
 - 증거: `src/hmi/web_common/test` 통과(원시 색 없음), Pilot 스크린샷 `X:\DevTemp\pilot-polish\after4-drive-auto-*.png`.
 - gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · fix(web): D-359 리뷰 P1-1/P2-2 — 한글 없는 열거값 표시도 린트가 본다
+
+- 변경: `test_operator_copy.py`에 `enum_text_problems()` — 텍스트 싱크(`.textContent =`, `tag(`, `setText(`, `setStatus(`, `el(`, `setChip(`, `pill(`, `setAttribute("reason"|…)`)로 가는 순수 열거값 리터럴(`"OFFLINE"`)과, 한국어 템플릿에 날것으로 들어간 mode/state 구멍(`${requestedMode}`)을 잡는다. 비교·인덱스·메서드 인자 위치는 프로토콜 키로 본다. 예외 표 `ENUM_TEXT_ALLOWLIST`(사유 필수, 낡은 항목 실패). `core_ui_logic.js`에 `NETWORK_MODE_LABEL`.
+- 증거: `test_operator_copy.py` 22 passed(열거 라벨 시험 포함). 변이: 합성 10형과 실제 파일 4곳(roster·app·settings·line-follow)을 되돌리면 실패.
+- gate 변화: 새 시험 `test_no_bare_enum_reaches_operator_text`·`test_the_lint_catches_bare_enums_flowing_to_text`·`test_reverting_an_enum_text_fix_fails_the_lint`·`test_every_enum_text_allowlist_entry_still_matches`.
+- 결정: D-359 US-009. 실행 모드 이름(core/motor/hardware)·릴리스 상태·차선 추종 결과 상태는 한국어 지도가 아직 없어 예외 표에 사유와 함께 둔다.
+- 교훈: 2026-09-30 항목의 "미증명: 한글 없는 순수 열거값"이 이 회차에서 닫혔다.
+
+## 2026-10-01 · uncommitted · fix(web): D-359 리뷰 P1-2/P2-3 — 비모달 열기를 openLiveDialog로 공유
+
+- 변경: `ui.js` `confirmIrreversible`의 봉인·스크림 구멍·Tab 고리·정지 클릭·Esc·포커스 복원을 `export openLiveDialog(dialog, {initialFocus, opener, onClose})`로 뽑았다. 마크업에 있던 대화상자는 열린 동안 body 끝으로 옮겼다가 닫히면 제자리로 돌린다. Tab 고리는 대화상자 안 포커스 가능 요소 → 보이는 정지. `components.css` 위치 규칙은 `dialog.ui-live-dialog`(+`.ui-confirm`). `test_stop_always_live.py`에 `showModal(` 금지 스캔(dashboard·web_common·pilot·fleet·games JS)과 변이 증명. `test_list_row_irreversible.py`는 `IRREVERSIBLE_VERBS`(삭제·등록 해제·폐기·초기화) 표로 말줄임을 보고, `action:` 값만 면제한다.
+- 증거: `test_stop_always_live.py`·`test_list_row_irreversible.py` 통과. `src/hmi/dashboard/test/test_list_row_confirm_browser.py` 6 passed(2026-10-01, 7분 — 부하).
+- gate 변화: 새 시험 `test_no_surface_script_opens_a_modal_dialog`·`test_the_modal_scan_fires_on_the_old_enrollment_call`. 행 말줄임 검사가 동사 표로 넓어짐.
+- 결정: D-280 원칙 2, D-371.
+- 교훈: showModal 금지를 한 함수 본문에만 걸면 다른 파일의 새 대화상자가 빠져나간다 — 스캔은 표면 전체에 건다.
+
+## 2026-10-01 · uncommitted · test(web_common): D-359 리뷰 P2-4 — 사유 없는 비활성 목록은 경로와 자리 수로 묶는다
+
+- 변경: `test_shared_controls.py` `DISABLED_WITHOUT_REASON` 키를 파일 이름에서 `src/` 기준 경로로 바꿨다(map.js·teleop.js·docking.js가 여러 폴더에 있다). 조각 하나는 한 자리만 덮고, 일부러 두 자리를 덮는 키는 `DISABLED_SITE_COUNT`에 적는다. 검사는 `scan_disabled()`로 뽑았다. 낡은 항목 검사는 그대로.
+- 증거: `test_shared_controls.py` 26 passed. 변이: hardware.js에 같은 `refresh.disabled = true;` 줄을 붙이면 `widened`로 실패, 다른 폴더의 같은 이름 파일은 키를 빌리지 못함(`test_a_copied_disabled_line_needs_its_own_entry`).
+- gate 변화: 새 시험 `test_a_copied_disabled_line_needs_its_own_entry`, 기존 시험에 자리 수 검사.
+- 결정: D-359 §5.3.
+- 교훈: 없음.
+
+## 2026-10-01 · uncommitted · fix(web_common): D-359 리뷰 P2-5 — 테마 선택지 단일 출처, 고정 표면은 사유를 적는다
+
+- 변경: `theme.js` `CHOICES`([{value, label}])가 선호 검증과 `RosyTheme.choices`(얼린 배열)의 단일 출처다. `surfaces.yaml`의 [dark] 웹 표면 넷(games·diagnostic·pilot·lane_live_view)에 `theme_reason`, `surface_registry.py`가 고정 웹 표면의 사유 누락과 테마 표면의 남은 사유를 막는다. 새 `test_theme_choices.py`: Fleet 정적 버튼 = `CHOICES`(순서·값·이름), `/device` display.js는 `RosyTheme.choices`로만 그린다. `DESIGN.md` 새 테마 절차(팔레트 블록 + `CHOICES` 한 줄, Fleet 마크업은 시험이 알려 줌)와 고정 표면 목록에 Pilot.
+- 증거: `test_surface_registry.py` 14 passed, `test_theme_choices.py` 4 passed, `test_theme_browser.py -k "device_display or fleet_topbar"` 2 passed (2026-10-01 Windows).
+- gate 변화: 새 시험 파일 `test_theme_choices.py`(변이: Fleet 이름 바꿈·theme.js에 테마 추가가 실패), 레지스트리 `theme_reason` 검사(변이: `test_a_theme_drift_is_caught`).
+- 결정: D-359 §2.5·§3.3.
+- 교훈: 없음.
 
 ## 2026-10-01 · uncommitted · D-390 Pilot simulation surface registry
 - Change: Register the existing Pilot surface on the isolated OMX simulation port 8088 and its sim-arm-practice role. The sim server reads the common asset manifest.

@@ -5,7 +5,7 @@ function el(tag, cls, text) { const node = document.createElement(tag); if (cls)
 export function mount(root, ctx) {
   const head = el("ui-head", "", "지도 및 위치");
   const status = el("ui-status", "", "지도를 불러오는 중…"); status.setAttribute("state", "pending");
-  const readinessStatus = el("ui-status", "", "로봇 상태·Navigation 지원·실행 모드를 확인하는 중입니다.");
+  const readinessStatus = el("ui-status", "", "로봇 상태·내비게이션 기능·실행 모드를 확인하는 중입니다.");
   readinessStatus.setAttribute("role", "status"); readinessStatus.setAttribute("aria-live", "polite");
   const layers = el("ui-actions", "surface-actions map-layer-actions"); layers.setAttribute("aria-label", "지도 레이어");
   for (const [id, label] of [["occupancy", "점유 지도"], ["costmap", "비용 지도"], ["path", "경로"]]) {
@@ -38,7 +38,11 @@ export function mount(root, ctx) {
   setupLink.hidden = true;
   const action = el("ui-status", "", ""); action.setAttribute("state", "ready");
   action.setAttribute("role", "status"); action.setAttribute("aria-live", "polite");
-  const mapFrame = el("div", "surface-map-frame"); mapFrame.append(empty, canvas, targetReadout);
+  // D-359 US-009 — 읽기 실패는 무대 위 같은 ui-empty가 말하고, 그 곁에 다시 시도가 선다.
+  const overlay = el("div", "surface-map-overlay");
+  const retry = el("ui-button", "", "다시 시도"); retry.setAttribute("kind", "quiet"); retry.type = "button"; retry.hidden = true;
+  overlay.append(empty, retry);
+  const mapFrame = el("div", "surface-map-frame"); mapFrame.append(overlay, canvas, targetReadout);
   root.append(head, status, readinessStatus, layers, clickReason, clicks, mapFrame, setupLink, mapStatus, action);
 
   let state = null;
@@ -47,7 +51,7 @@ export function mount(root, ctx) {
   const readErrors = {state: null, capabilities: null, commissioning: null};
   function setText(target, text) { if (target.textContent !== text) target.textContent = text; }
   function renderReadiness() {
-    const errors = [["로봇 상태", readErrors.state], ["Navigation 지원", readErrors.capabilities], ["실행 모드", readErrors.commissioning]]
+    const errors = [["로봇 상태", readErrors.state], ["내비게이션 기능", readErrors.capabilities], ["실행 모드", readErrors.commissioning]]
       .filter(([, reason]) => reason);
     if (errors.length) {
       readinessStatus.textContent = `조작 근거를 확인할 수 없습니다: ${errors.map(([source, reason]) => `${source}: ${reason}`).join(" · ")}`;
@@ -55,11 +59,11 @@ export function mount(root, ctx) {
       return;
     }
     if (!state || !capabilities || !commissioning) {
-      readinessStatus.textContent = "로봇 상태·Navigation 지원·실행 모드를 확인하는 중입니다.";
+      readinessStatus.textContent = "로봇 상태·내비게이션 기능·실행 모드를 확인하는 중입니다.";
       readinessStatus.setAttribute("state", "pending");
       return;
     }
-    readinessStatus.textContent = "로봇 상태·Navigation 지원·실행 모드를 읽었습니다.";
+    readinessStatus.textContent = "로봇 상태·내비게이션 기능·실행 모드를 읽었습니다.";
     readinessStatus.setAttribute("state", "ready");
   }
   const syncMapActions = () => {
@@ -69,11 +73,11 @@ export function mount(root, ctx) {
     const enabled = operator && supported && hardware;
     if (enabled) clickReason.textContent = "지도를 선택하면 확인 후 위치 또는 주행 목표를 전송합니다.";
     else if (!operator) clickReason.textContent = "위치·주행 목표 설정에는 운용자 권한이 필요합니다.";
-    else if (readErrors.capabilities) clickReason.textContent = `Navigation 지원을 확인할 수 없어 지도 조작을 막았습니다: ${readErrors.capabilities}`;
+    else if (readErrors.capabilities) clickReason.textContent = `내비게이션 기능을 확인할 수 없어 지도 조작을 막았습니다: ${readErrors.capabilities}`;
     else if (readErrors.commissioning) clickReason.textContent = `장치 실행 모드를 확인할 수 없어 지도 조작을 막았습니다: ${readErrors.commissioning}`;
-    else if (!capabilities || !commissioning) clickReason.textContent = "Navigation 지원과 장치 실행 모드를 확인하는 중입니다.";
-    else if (!hardware) clickReason.textContent = "바닥 주행과 지도 목표 조작은 승인된 hardware 모드에서만 가능합니다. 현재 지도를 볼 수는 있습니다.";
-    else clickReason.textContent = "이 로봇 프로필은 위치·주행 목표 설정용 Navigation 기능을 제공하지 않습니다.";
+    else if (!capabilities || !commissioning) clickReason.textContent = "내비게이션 기능과 장치 실행 모드를 확인하는 중입니다.";
+    else if (!hardware) clickReason.textContent = "바닥 주행과 지도 목표 조작은 승인된 하드웨어 실행 모드에서만 가능합니다. 현재 지도를 볼 수는 있습니다.";
+    else clickReason.textContent = "이 로봇에는 위치·주행 목표 설정에 쓰는 내비게이션 기능이 없습니다.";
     for (const button of clicks.querySelectorAll("[data-map-click]")) {
       button.disabled = !enabled;
     }
@@ -125,8 +129,22 @@ export function mount(root, ctx) {
     loading = true;
     try { await map.refresh(); }
     catch (error) { mapStatus.setAttribute("state", error.status === 403 ? "forbidden" : "error"); mapStatus.textContent = `지도 데이터를 받지 못했습니다: ${error.message}`; }
-    finally { status.hidden = true; loading = false; }
+    finally {
+      status.hidden = true; loading = false;
+      const failed = ["error", "forbidden"].includes(map.mapState) || mapStatus.getAttribute("state") === "error";
+      mapStatus.hidden = failed; // 같은 원인을 무대 밖에서 한 번 더 말하지 않는다.
+      if (failed) {
+        empty.hidden = false;
+        empty.setAttribute("role", "alert");
+        empty.textContent = map.mapState === "forbidden"
+          ? "지도 데이터를 볼 권한이 없습니다." : "지도를 불러오지 못했습니다. 연결을 확인한 뒤 다시 시도하세요.";
+      } else empty.removeAttribute("role");
+      retry.hidden = !failed || map.mapState === "forbidden";
+      // 선택 좌표는 지도가 쓸 수 있을 때만 뜻이 있다.
+      targetReadout.hidden = map.mapState !== "ready";
+    }
   };
+  retry.addEventListener("click", () => { refresh(); });
   refresh();
   const timer = setInterval(refresh, 10_000);
   return () => { clearInterval(timer); stopState(); stopCapabilities(); stopCommissioning(); map.destroy(); };
