@@ -1806,3 +1806,9 @@
 - gate 변화: 없음. 증명한 것: iptables-nft 1.8.10의 실제 출력 형식과 parser, `iptables-restore --noflush` 원자 교체·멱등, mangle PREROUTING(-150)이 nat DNAT(-100)보다 먼저 공개 포트로 판정해 비 LAN 인터페이스를 버리고 LAN·lo는 통과시키는 것, 포트 교체 무틈. 증명 못 한 것: 실제 사이트 호스트의 systemd 순서(`Before=docker.service`, 실패 닫힘 유닛, 5분 타이머), 재부팅·망 변경, 실제 dockerd·docker-proxy·`br_netfilter`(컨테이너 커널은 Docker Desktop WSL2 커널), Docker가 깔아 둔 규칙과의 공존, 다른 iptables 버전·legacy 백엔드.
 - 결정: 없음.
 - 교훈: 가짜 iptables는 넣은 문자열을 그대로 돌려주지만 iptables-nft는 암묵 매치(`-m tcp`)를 붙여 돌려준다. `-S` 비교 parser는 실제 출력 원문을 시험에 고정한다. 관찰: 와일드카드→`127.0.0.1` 전환 시 `apply`는 기존 필터를 지우지 않는다(lo는 통과라 무해).
+
+## 2026-10-01 · uncommitted · docs(site): 두 번째 카메라 자리의 배선 안내
+
+- 변경: 실제 Compose 스택 페어링 실측에서 발견. `site-cameras.yaml.example`의 페어링 예시(`ceiling_south`)를 그대로 켜면 그 `token_env`가 Compose `ROSY_CREDENTIAL_PATHS`에 없어 Fleet·Vision이 기동을 거절한다. 예시 주석에 비밀 파일·두 서비스의 `ROSY_CREDENTIAL_PATHS` 추가가 필요하다는 것과, 카메라 하나로 시험할 때는 `ceiling_north`를 `credential: paired`로 바꾸면 된다는 것을 적었다.
+- 증거: 예시 시험·배포 배선 시험 통과; 실측은 `ceiling_north` paired로 18/18.
+- gate 변화: 없음.

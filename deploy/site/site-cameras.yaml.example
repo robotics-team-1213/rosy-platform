@@ -22,6 +22,10 @@ sources:
 
   # A paired source (needs ROSY_SITE_PAIRING=1 and the pairing overlay). No phone_token_env:
   # Fleet issues the phone its credential at approval, Vision reads it back over HTTPS.
+  # A second source needs its own sighting token wired in too: add a secret file and its
+  # token_env (here ROSY_FLEET_CEILING_SOUTH_TOKEN) to ROSY_CREDENTIAL_PATHS of both the fleet
+  # and vision services (compose.yaml and compose.pairing.yaml), or Fleet and Vision refuse to
+  # start. To try pairing with one camera, switch ceiling_north to `credential: paired` instead.
   # - source_id: ceiling_south
   #   credential: paired
   #   token_env: ROSY_FLEET_CEILING_SOUTH_TOKEN
