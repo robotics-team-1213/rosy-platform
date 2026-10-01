@@ -297,14 +297,22 @@ function Get-ImageLayerSyncArguments([string]$ReleaseId, [switch]$DryRun) {
     )
 }
 
-function Get-ClaimArguments([string]$Action, [string]$Holder) {
+function Get-ClaimTtl([long]$TarballBytes) {
+    # The claim must outlive the whole push: 1200 s for activation, readiness
+    # and the image-layer sync, plus the upload at a pessimistic 0.5 MB/s.
+    # Bounded to [1800, 7200] s; a crashed push frees the robot within that.
+    $seconds = 1200 + 2 * [Math]::Ceiling($TarballBytes / 1MB)
+    return [int][Math]::Min(7200, [Math]::Max(1800, $seconds))
+}
+
+function Get-ClaimArguments([string]$Action, [string]$Holder, [int]$ClaimTtl = 1800) {
     # D-387/D-406 claim: the push and the robot's auto-updater never run at the
     # same time. The helper ships in native-runtime from D-406 on; an older
     # robot has none, so the wrapper says so instead of failing. Single quotes
     # only: PowerShell 5.1 eats embedded double quotes.
     $helper = "/opt/rosy/native-runtime/rosy_claim.py"
     $call = "$helper $Action --holder $Holder"
-    if ($Action -eq "acquire") { $call += " --purpose push --ttl-s 1800" }
+    if ($Action -eq "acquire") { $call += " --purpose push --ttl-s $ClaimTtl" }
     return @(
         "sudo", "-n", "sh", "-c",
         "'if [ -f $helper ]; then exec python3 $call; fi; echo ROSY_CLAIM_HELPER_MISSING; exit 4'"
@@ -324,7 +332,7 @@ function Get-RemoteCommandPlan {
         [switch]$Rollback, [string]$ReleaseId, [string]$TarballPath, [string]$UnpackScript,
         [string]$RemoteStagingDir, [string]$RemoteReleasesDir,
         [string]$ActivateWrapper, [string]$RollbackWrapper, [string]$CoreReadyProbe,
-        [string]$SshExe, [string]$ScpExe, [switch]$SkipImageLayerSync, [string]$ClaimHolder
+        [string]$SshExe, [string]$ScpExe, [switch]$SkipImageLayerSync, [string]$ClaimHolder, [int]$ClaimTtl
     )
     $target = "${RosyUser}@${Robot}"
     # ssh parses a "-o Key=Value" argument the way it parses an ssh_config
@@ -363,7 +371,7 @@ function Get-RemoteCommandPlan {
     # The claim brackets every other step; the execution loop runs the release
     # in its finally block, so a failed step still lets the claim go.
     $claimSsh = @("-i", $KeyPath) + $sshOptions + @($target)
-    Add-Step $plan "ssh" $SshExe ($claimSsh + (Get-ClaimArguments "acquire" $ClaimHolder)) "claim-acquire"
+    Add-Step $plan "ssh" $SshExe ($claimSsh + (Get-ClaimArguments "acquire" $ClaimHolder $ClaimTtl)) "claim-acquire"
 
     if ($Rollback) {
         # D-388: sync the image layer back to the release that became current
@@ -398,12 +406,14 @@ function Get-RemoteCommandPlan {
 # The claim holder travels inside a single-quoted remote shell line: keep only
 # characters that need no quoting there.
 $claimHolder = "push-$env:USERNAME@$env:COMPUTERNAME" -replace '[^A-Za-z0-9._@-]', '_'
+$claimTtl = 1800
+if ($tarballPath) { $claimTtl = Get-ClaimTtl (Get-Item -LiteralPath $tarballPath).Length }
 
 $plan = Get-RemoteCommandPlan -Robot $Robot -RosyUser $RosyUser -KeyPath $KeyPath -KnownHosts $KnownHosts `
     -Rollback:$Rollback -ReleaseId $releaseId -TarballPath $tarballPath -UnpackScript $unpackScript `
     -RemoteStagingDir $RemoteStagingDir -RemoteReleasesDir $RemoteReleasesDir `
     -ActivateWrapper $ActivateWrapper -RollbackWrapper $RollbackWrapper -CoreReadyProbe $CoreReadyProbe `
-    -SshExe $SshExe -ScpExe $ScpExe -SkipImageLayerSync:$SkipImageLayerSync -ClaimHolder $claimHolder
+    -SshExe $SshExe -ScpExe $ScpExe -SkipImageLayerSync:$SkipImageLayerSync -ClaimHolder $claimHolder -ClaimTtl $claimTtl
 
 if ($PrintCommands) {
     $result = [ordered]@{
@@ -459,16 +469,26 @@ foreach ($step in $plan) {
 
     $display = ConvertTo-DisplayLine $step.executable $arguments
     Write-Host "+ $display"
+    if ($step.role -eq "claim-acquire") {
+        # From here on the release in finally runs: a failed or lost answer
+        # may still have taken the claim, and the release is holder-scoped.
+        $claimed = $true
+    }
     $result = Invoke-NativeCapture $step.executable $arguments
     if ($step.role -eq "claim-acquire") {
-        if (($result.output -join " ") -match "ROSY_CLAIM_HELPER_MISSING") {
+        $answer = $result.output -join " "
+        if ($answer -match "ROSY_CLAIM_HELPER_MISSING") {
+            $claimed = $false
             Write-Warning "$Robot has no rosy_claim.py (native-runtime older than D-406): pushing without the claim; its auto-updater, if any, is not excluded."
             continue
         }
-        if ($result.exit_code -ne 0) {
-            Fail "Release push refused: $Robot is claimed by another job (D-406 claim, exit $($result.exit_code)): $($result.output -join [Environment]::NewLine)"
+        if ($result.exit_code -eq 3 -or $answer -match "CLAIM_BUSY") {
+            $claimed = $false
+            Fail "Release push refused: $Robot is claimed by another job (D-406 claim): $answer"
         }
-        $claimed = $true
+        if ($result.exit_code -ne 0) {
+            Fail "Release push refused: the claim helper failed (exit $($result.exit_code)) on ${Robot}: $answer"
+        }
         if ($result.output) { Write-Host ($result.output -join [Environment]::NewLine) }
         continue
     }

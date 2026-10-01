@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from pathlib import Path
 import shutil
 import subprocess
@@ -27,7 +28,12 @@ $all = $args -join ' '
 Add-Content -Path $env:ROSY_FAKE_LOG -Value $all
 if ($all -match 'rosy_claim.py acquire') {
     if ($env:ROSY_FAKE_CLAIM -eq 'missing') { 'ROSY_CLAIM_HELPER_MISSING'; exit 4 }
-    if ($env:ROSY_FAKE_CLAIM -eq 'held') { 'CLAIM_HELD holder=rosy-auto-update purpose=update'; exit 1 }
+    if ($env:ROSY_FAKE_CLAIM -eq 'held') {
+        '{' + [char]34 + 'claim' + [char]34 + ': {' + [char]34 + 'holder' + [char]34 + ': ' + [char]34 + 'rosy-auto-update' + [char]34 + '}, ' + [char]34 + 'error' + [char]34 + ': ' + [char]34 + 'CLAIM_BUSY' + [char]34 + ', ' + [char]34 + 'ok' + [char]34 + ': false}'
+        exit 3
+    }
+    if ($env:ROSY_FAKE_CLAIM -eq 'sshfail') { 'ssh: connect to host rosy-e4us.local port 22: Connection timed out'; exit 255 }
+    if ($env:ROSY_FAKE_CLAIM -eq 'invalid') { '{' + [char]34 + 'error' + [char]34 + ': ' + [char]34 + 'CLAIM_HOLDER_INVALID' + [char]34 + ', ' + [char]34 + 'ok' + [char]34 + ': false}'; exit 2 }
     'CLAIM_ACQUIRED'; exit 0
 }
 if ($all -match 'rosy_claim.py release') { if ($env:ROSY_FAKE_RELEASE_FAIL) { exit 1 }; exit 0 }
@@ -123,7 +129,8 @@ def test_a_claimed_robot_refuses_the_push_before_anything_else(tmp_path):
 
     assert done.returncode != 0
     flat = "".join((done.stdout + done.stderr).split())
-    assert "claimedbyanotherjob" in flat and "CLAIM_HELD" in flat
+    assert "claimedbyanotherjob" in flat and "CLAIM_BUSY" in flat and "rosy-auto-update" in flat
+    assert "claimhelperfailed" not in flat
     assert len(calls) == 1  # no step ran, and nothing we do not hold was released
 
 
@@ -150,3 +157,38 @@ def test_a_failed_release_only_warns(tmp_path):
 
     assert done.returncode == 0, done.stdout + done.stderr
     assert "couldnotreleasetheclaim" in "".join((done.stdout + done.stderr).split())
+
+
+@pytest.mark.parametrize("mode, code", [("sshfail", 255), ("invalid", 2)])
+def test_a_failing_claim_helper_refuses_the_push_and_still_releases(tmp_path, mode, code):
+    """M3/L4: not "busy", so it may have been taken before the failure; the release is holder-scoped."""
+    done, calls = _fake_rollback(tmp_path, ROSY_FAKE_CLAIM=mode)
+
+    assert done.returncode != 0
+    flat = "".join((done.stdout + done.stderr).split())
+    assert f"claimhelperfailed(exit{code})" in flat
+    assert "claimedbyanotherjob" not in flat
+    assert len(calls) == 2
+    assert "rosy_claim.py acquire" in calls[0] and "rosy_claim.py release" in calls[1]
+
+
+TTL_FUNCTION = re.compile(r"^function Get-ClaimTtl.*?^}", re.MULTILINE | re.DOTALL)
+
+
+@pytest.mark.parametrize("megabytes, ttl", [(0, 1800), (100, 1800), (300, 1800), (1000, 3200), (5000, 7200)])
+def test_the_claim_ttl_grows_with_the_tarball(megabytes, ttl):
+    """L4: 1200 s for the steps plus 2 s per MB of upload, at least 1800 s, at most 7200 s."""
+    function = TTL_FUNCTION.search(SCRIPT.read_text(encoding="utf-8")).group(0)
+    done = subprocess.run([POWERSHELL, "-NoProfile", "-Command",
+                           function + f"; Get-ClaimTtl {megabytes * 1024 * 1024}"],
+                          capture_output=True, text=True, timeout=60)
+
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.strip() == str(ttl)
+
+
+def test_the_plan_takes_the_claim_for_the_sized_ttl():
+    script = SCRIPT.read_text(encoding="utf-8")
+
+    assert "Get-ClaimTtl" in script
+    assert "--ttl-s $ClaimTtl" in script
