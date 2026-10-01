@@ -732,3 +732,9 @@
 - 변경: keydown Escape → POST /safety/stop — 확인창 없음(위급 순간의 장벽은 위험). 입력 필드(INPUT·TEXTAREA·SELECT·contentEditable)에서는 발동 안 함. 이미 정지면 재발동 안 함. event.repeat 무시. 토큰 없으면 무시.
 - 증거: test_dashboard_package.py test_escape_key_stops_the_robot_immediately.
 - gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · feat(console): 지도 목표 마커 + 스켈레톤 펄스
+
+- 변경: ① map.js paint() 에 목표 다이아몬드(경로 색) — rosy:goal 설정, rosy:goal-clear 해제. ② 텔레메트리 '--' 값에 data-pending 스켈레톤 펄스(1.6s 호흡).
+- 증거: test_dashboard_package.py 2신규 (마커·스켈레톤).
+- gate 변화: 없음.

@@ -115,6 +115,11 @@ function renderRobotState(state) {
   setText("velocity-linear", number(state.velocity?.linear, 3), "—", state.evidence?.velocity);
   setText("velocity-angular", number(state.velocity?.angular, 3), "—", state.evidence?.velocity);
   setText("battery-value", percent(state.battery?.percent), "—", state.evidence?.battery);
+  // D-396: 값이 아직 없으면 스켈레톤 펄스 — '--' 가 고장처럼 보이지 않게
+  document.querySelectorAll(".telemetry-grid strong").forEach((el) => {
+    if (el.textContent === "—") el.setAttribute("data-pending", "");
+    else el.removeAttribute("data-pending");
+  });
   setText("battery-voltage", metricNumber(state.battery?.voltage) === null ? "voltage —" : `${number(state.battery.voltage, 2)} V`, "—", state.evidence?.battery);
   setText("navigation-state", state.navigation, "—", state.evidence?.navigation);
   // D-396: 목표 좌표 — 지도에서 보냈던 목표를 기억했다가 내비게이션이 살아 있는
@@ -126,7 +131,10 @@ function renderRobotState(state) {
       navGoal.textContent = `→ (${session.lastGoal.x.toFixed(1)}, ${session.lastGoal.y.toFixed(1)})`;
     } else {
       navGoal.textContent = "";
-      if (!active) session.lastGoal = null;
+      if (!active && session.lastGoal) {
+        session.lastGoal = null;
+        window.dispatchEvent(new CustomEvent("rosy:goal-clear"));
+      }
     }
   }
   setText("map-id", `map ${state.map_id || "—"}`);
