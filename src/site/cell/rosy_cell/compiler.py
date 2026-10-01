@@ -67,6 +67,11 @@ def _check(recipe: Recipe, cell: CellConfig, tol_m: float) -> dict[str, StackPla
     for slot in recipe.pallets:
         if slot.frame not in cell.frames:
             problems.append(f"pallet {slot.id}: unknown frame {slot.frame!r}")
+        else:
+            # far-first order needs the robot outside the pallet; inside, "far" has no safe meaning
+            rx, ry, _ = cell.frames[slot.frame].from_base((0.0, 0.0, 0.0))
+            if 0 <= rx <= slot.pallet.length and 0 <= ry <= slot.pallet.width:
+                problems.append(f"pallet {slot.id}: robot base lies inside the pallet footprint")
         plan = build_stack(
             recipe.box,
             slot.pallet,

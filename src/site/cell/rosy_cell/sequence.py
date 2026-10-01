@@ -1,4 +1,7 @@
-"""Order inside one layer: boxes far from the robot go first so the gripper never reaches over a placed box.
+"""Order inside one layer: boxes far from the robot base go first.
+
+Only that far-first order is guaranteed here. Gripper and finger clearance beside boxes already
+placed is not modelled; it belongs to the recipe `gap` and the device planner.
 
 Distance is measured in the pallet frame's xy plane from the box centre to the robot base
 (the base-frame origin), so the order follows the taught frame, not a recipe setting.

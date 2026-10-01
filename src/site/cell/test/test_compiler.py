@@ -112,3 +112,16 @@ def test_compile_refuses_missing_frame_station_and_tall_stack():
     recipe, cell = _inputs(recipe_edit=("max_stack_height: 0.05", "max_stack_height: 0.03"))
     with pytest.raises(CompileError, match="pallet A: stack height"):
         compile_job(recipe, cell, **TOL)
+
+
+def test_compile_refuses_a_robot_base_inside_the_pallet_footprint():
+    # pallet_a taught with origin (-0.05,-0.05,0), identity axes: from_base(0,0,0) = (0.05, 0.05),
+    # which lies inside the 0.11 x 0.10 pallet, so far-first order is meaningless there.
+    recipe, cell = _inputs(
+        cell_edit=(
+            "pallet_a: {origin: [0.2, 0, 0], x_point: [0.3, 0, 0], plane_point: [0.2, 0.1, 0]}",
+            "pallet_a: {origin: [-0.05, -0.05, 0], x_point: [0.05, -0.05, 0], plane_point: [-0.05, 0.05, 0]}",
+        )
+    )
+    with pytest.raises(CompileError, match="pallet A: robot base lies inside the pallet footprint"):
+        compile_job(recipe, cell, **TOL)
