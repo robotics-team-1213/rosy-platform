@@ -34,8 +34,8 @@
 
 ## 최근 기록
 
+- 2026-10-01 · uncommitted · fix(pairing): Vision 자격 동기화는 https와 사이트 CA 고정이 필수
 - 2026-10-01 · uncommitted · fix(vision): receive 링크 호스트 안내와 오류 문구 보강
 - 2026-10-01 · uncommitted · fix(vision): 페어링 링크는 이름(tls_host)을 기본으로, IP는 경고하는 예비로
 - 2026-10-01 · uncommitted · chore(vision): D-341 저장소 가드 정리 — 역할 경계·크기 판정·비밀 스캔
 - 2026-10-01 · uncommitted · test(vision): D-341 합성 종단 시험 — 요청부터 회수 4401까지
-- 2026-10-01 · uncommitted · feat(vision): D-341 3단계 — 페어링 자격 동기화와 회수 닫기

@@ -274,3 +274,9 @@
 - 증거: `python -m pytest src/site/vision/test -q` 206 passed (2026-10-01 Windows).
 - gate 변화: 없음.
 
+
+## 2026-10-01 · uncommitted · fix(pairing): Vision 자격 동기화는 https와 사이트 CA 고정이 필수
+
+- 변경: 보안 리뷰 2번. 평문 `http://`나 CA 없는 동기화 URL은 기동 때 거절한다. 둘 중 하나라도 허용하면 LAN의 위장 서버가 동기화 토큰을 읽고 자기 digest 목록을 내 운용자 승인 없이 카메라 자격을 살릴 수 있었다(D-341 9·12항).
+- 증거: `test_pairing_sync.py` 신규 매개변수 시험 2건, Vision 시험 전체 통과.
+- gate 변화: 없음.

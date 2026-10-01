@@ -112,10 +112,13 @@ class PairingSync:
         if fetch is None:
             if not url or not token:
                 raise ValueError("pairing sync needs a Fleet URL and its sync token")
-            if not url.startswith(("https://", "http://")):
-                raise ValueError("pairing sync URL must be http(s)")
-            verify: ssl.SSLContext | bool = (ssl.create_default_context(cafile=ca_file)
-                                             if ca_file else True)
+            # Plain HTTP or an unpinned CA would let a LAN spoofer read the sync token and
+            # serve its own digest list, i.e. activate a camera without approval (D-341 9, 12).
+            if not url.startswith("https://"):
+                raise ValueError("pairing sync URL must be https (D-341 9)")
+            if not ca_file:
+                raise ValueError("pairing sync needs the site CA file (--pairing-sync-ca)")
+            verify: ssl.SSLContext = ssl.create_default_context(cafile=ca_file)
             endpoint = url.rstrip("/") + LIST_PATH
             headers = {"Authorization": f"Bearer {token}"}
 
