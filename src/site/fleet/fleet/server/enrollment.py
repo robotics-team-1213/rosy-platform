@@ -5,6 +5,9 @@ Fleet itself exchanges the code at the robot (`POST /api/v1/auth/pair`), reads
 in the register and adds the robot to the one roster. The browser never reaches the
 robot and never sees the token. The address is pinned at enrollment; when the same
 name shows up elsewhere Fleet sends only stop requests to the pinned address.
+Moving to a new address is a re-pairing there with the robot's screen code: plain HTTP
+cannot authenticate the new address, so the stored token goes to it only after the
+identity read with the new token matches the register (D-361 3, 2026-10-01 note).
 No request is ever retried automatically.
 """
 
@@ -20,6 +23,7 @@ from typing import Any, Callable, Optional
 
 import httpx
 
+from fleet.server.discovery import is_rfc1918
 from fleet.server.enrollment_store import (
     EnrollmentStore,
     SealError,
@@ -338,12 +342,12 @@ class EnrollmentService:
                 raise self._consumed("store_failed") from None
 
     async def _exchange(self, http: httpx.AsyncClient, code: str, principal_id: str,
-                        target: str) -> dict:
+                        target: str, action: str = "enroll") -> dict:
         body = {"code": code, "label": f"site:{self._fleet_name}", "purpose": "site"}
         try:
             response = await http.post("/api/v1/auth/pair", json=body)
         except httpx.HTTPError:
-            self._store.audit(action="enroll", outcome="unreachable", principal_id=principal_id,
+            self._store.audit(action=action, outcome="unreachable", principal_id=principal_id,
                               target=target)
             raise EnrollmentError("unreachable", 502, "the robot is not reachable (address, port)") from None
         status = response.status_code
@@ -354,7 +358,7 @@ class EnrollmentService:
                     raise ValueError
                 return paired
             except (ValueError, AttributeError):
-                self._store.audit(action="enroll", outcome="robot_error",
+                self._store.audit(action=action, outcome="robot_error",
                                   principal_id=principal_id, target=target)
                 raise EnrollmentError("robot_error", 502, "the robot answered without a token") from None
         outcome = {401: "code_rejected", 429: "rate_limited", 403: "lan_forbidden",
@@ -366,7 +370,7 @@ class EnrollmentService:
             pass
         if status == 401 and isinstance(detail, dict) and detail.get("burned"):
             outcome = "code_burned"
-        self._store.audit(action="enroll", outcome=outcome, principal_id=principal_id, target=target)
+        self._store.audit(action=action, outcome=outcome, principal_id=principal_id, target=target)
         if outcome == "rate_limited":
             try:
                 retry_after = max(1, int(response.headers.get("Retry-After", "60")))
@@ -528,13 +532,22 @@ class EnrollmentService:
 
     def _current_other_address(self, row: dict) -> Optional[str]:
         rows = self._discovery.rows() if self._discovery is not None else []
+        # discovery.py already keeps RFC 1918 rows only; checked again because this address
+        # is about to receive a screen code.
         addresses = {f"{item['address']}:{item['port']}" for item in rows
-                     if item["name"].lower() == self._name_of(row)}
+                     if item["name"].lower() == self._name_of(row) and is_rfc1918(item["address"])}
         addresses.discard(row["address"])
         return addresses.pop() if len(addresses) == 1 else None
 
-    async def move_address(self, robot_id: str, *, principal_id: str) -> dict:
+    async def move_address(self, robot_id: str, *, code: object, principal_id: str) -> dict:
+        """Re-pair at the new address with the robot's screen code (D-361 3, 2026-10-01).
+
+        The code exchange carries no existing credential. Only when `whoami`/`system/info`, read
+        with the token the new address just issued, match every stored binding key does the
+        stored (old) token go there, and then only to log it out.
+        """
         self._require_available()
+        normalized = normalize_code(code)
         row = self._store.get(robot_id)
         if row is None:
             raise EnrollmentError("not_enrolled", 404, "that robot is not enrolled")
@@ -546,35 +559,76 @@ class EnrollmentService:
         new_address = self._current_other_address(row)
         if new_address is None:
             raise EnrollmentError("no_new_address", 409, "no single new address is in the scan")
-        token = self._tokens[robot_id]
         async with self._http(new_address) as http:
+            paired = await self._exchange(http, normalized, principal_id, new_address,
+                                          action="move_address")
+            token = paired["token"]
             try:
-                response = await http.get("/api/v1/system/info",
-                                          headers={"Authorization": f"Bearer {token}"})
-                info = response.json() if response.status_code == 200 else None
-            except (httpx.HTTPError, ValueError):
-                raise EnrollmentError("unreachable", 502, "the new address is not reachable") from None
-        same = (isinstance(info, dict) and info.get("robot_id") == robot_id
+                record = await self._verify_moved(http, paired, row)
+            except EnrollmentError as exc:
+                await self._logout(http, token)
+                self._store.audit(action="move_address", outcome=exc.reason or exc.code,
+                                  principal_id=principal_id, target=robot_id)
+                raise
+            except Exception:
+                _LOG.exception("moving a robot failed after the code was consumed")
+                await self._logout(http, token)
+                self._store.audit(action="move_address", outcome="store_failed",
+                                  principal_id=principal_id, target=robot_id)
+                raise self._consumed("store_failed") from None
+            old_token = self._tokens.get(robot_id)
+            self._store.rebind(robot_id, seal(self._key, token, slot="rest", robot_id=robot_id,
+                                              token_id=record["token_id"]),
+                               address=new_address, state="active", **record)
+            endpoint = RobotEndpoint(robot_id, f"http://{new_address}", token)
+            gate = RobotGate(expires_at=record["fleet_expires_at"])
+            await self._roster.replace_endpoint(endpoint, self._client(endpoint, gate))
+            self._gates[robot_id] = gate
+            self._tokens[robot_id] = token
+            self._console().release_robot(robot_id)
+            self._store.audit(action="move_address", outcome="moved", principal_id=principal_id,
+                              target=robot_id)
+            # The identity is verified now; the old token goes there only to be revoked.
+            revoked = old_token is not None and await self._logout(http, old_token)
+        if not revoked:
+            self._store.audit(action="move_address", outcome="old_token_not_revoked",
+                              principal_id=principal_id, target=robot_id)
+        listed = next(item for item in self.listing()["robots"] if item["robot_id"] == robot_id)
+        return {**listed, "old_token_revoked": revoked}
+
+    async def _verify_moved(self, http: httpx.AsyncClient, paired: dict, row: dict) -> dict:
+        """The identity read with the NEW token must equal the register row; returns token fields."""
+        received_at = self._clock()
+        role = paired.get("role")
+        if role != "operator":
+            raise self._consumed("admin_code_refused" if role == "administrator" else "role_too_low")
+        headers = {"Authorization": f"Bearer {paired['token']}"}
+        try:
+            me = (await http.get("/api/v1/auth/whoami", headers=headers)).raise_for_status().json()
+            info = (await http.get("/api/v1/system/info", headers=headers)).raise_for_status().json()
+        except (httpx.HTTPError, ValueError):
+            raise self._consumed("verify_failed") from None
+        same = (isinstance(info, dict) and info.get("robot_id") == row["robot_id"]
                 and str(info.get("hostname") or "").lower() == row["hostname"]
                 and info.get("serial_number") == row["serial_number"]
                 and (row["device_uid"] is None or info.get("device_uid") == row["device_uid"]))
         if not same:
-            self._store.update(robot_id, state="needs_new_code")
-            self._store.audit(action="move_address", outcome="identity_mismatch",
-                              principal_id=principal_id, target=robot_id)
             raise EnrollmentError(
                 "identity_mismatch", 409,
-                "the token may have reached another device; revoke the site token on the robot "
-                "dashboard and enroll again")
-        endpoint = RobotEndpoint(robot_id, f"http://{new_address}", token)
-        gate = self._gate_for(row)
-        await self._roster.replace_endpoint(endpoint, self._client(endpoint, gate))
-        self._gates[robot_id] = gate
-        self._console().release_robot(robot_id)
-        self._store.update(robot_id, address=new_address, state="active")
-        self._store.audit(action="move_address", outcome="moved", principal_id=principal_id,
-                          target=robot_id)
-        return next(item for item in self.listing()["robots"] if item["robot_id"] == robot_id)
+                "the device at the new address is not the enrolled robot; "
+                "no stored credential was sent to it", reason="identity_mismatch")
+        token_id = str(paired.get("id") or me.get("id") or "")
+        if not token_id:
+            raise self._consumed("verify_failed")
+        source = str(paired.get("source") or me.get("source") or "")
+        lifetime = _seconds_between(me.get("created_at"),
+                                    me.get("expires_at") or paired.get("expires_at"))
+        fleet_expires_at = received_at + lifetime if lifetime is not None else None
+        warn_before = SITE_WARN_S if source == "pair-site" else LEGACY_WARN_S
+        return {"token_id": token_id, "role": role, "source": source,
+                "expires_at": paired.get("expires_at") or me.get("expires_at"),
+                "fleet_expires_at": fleet_expires_at,
+                "warn_at": fleet_expires_at - warn_before if fleet_expires_at is not None else None}
 
     # --- unenroll ------------------------------------------------------------
 

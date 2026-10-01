@@ -998,3 +998,10 @@
 - 변경: `test/test_fleet_console_browser.py`에 옵트인 시험 2개 — (1) 모든 로봇이 망 밖인 응답에서 경보, 카드 3장의 까닭 줄, 카드의 "새 주소로 옮기기…", 전체 옮기기 확인 대화상자가 두 로봇과 새 주소를 말하고 그동안 전체 정지가 살아 있음, Escape는 요청 0, 확인하면 `move-address`를 rosy_09 → rosy_10 순서로 한 번씩, 결과 줄은 성공 "good"·신원 불일치 "bad"(줄마다 색), 390 px 가로 넘침 없음. (2) viewer는 까닭은 보고 두 버튼은 꺼짐 + "운용자 권한이 필요합니다". `ROSY_ADDRESS_SCREENSHOT_DIR`가 있으면 캡처를 저장한다. 결과 상자가 성공 줄까지 경고색으로 칠하던 것을 줄마다 `data-kind`로 고쳤다.
 - 증거: 브라우저 전체 61 중 60 passed, 1 failed(`test_the_console_renders_what_swarm_control_says` — main에서도 같은 시간 초과, 이 작업과 무관). node 79 passed, `src/hmi/web_common/test/` 녹색.
 - gate 변화: 없음(LOCAL).
+
+## 2026-10-01 · uncommitted · fix(enrollment)!: 새 주소로 옮기기는 화면 코드로 새 주소에서 재페어링한다
+
+- 변경: 리뷰 HIGH — 기존 `move_address`는 저장된 사이트 토큰을 스캔된 새 주소에 Bearer로 먼저 보내고 나서 신원을 비교했다. 평문 HTTP라 같은 이름을 광고한 기기가 토큰을 받을 수 있었고, 전체 옮기기가 이를 키웠다. 이제 `POST …/{id}/move-address`는 본문 `{code}`(로봇 화면 코드, 등록과 같은 형식 검사)를 받는다. Fleet은 새 주소에서 `auth/pair`(기존 자격 없음)로 새 토큰을 받고, 그 토큰으로 읽은 `whoami`·`system/info`가 robot_id·hostname·serial·(있으면) device_uid 모두 같을 때만 등록부(`EnrollmentStore.rebind` — 암호문과 필드를 한 트랜잭션), 로스터 endpoint, 게이트를 새 토큰으로 바꾼다. 그 뒤에만 옛 토큰을 확인된 주소에 보내 logout한다. 실패하면 감사 `old_token_not_revoked`, 응답 `old_token_revoked: false`. 다른 기기면 그 기기가 방금 준 새 토큰을 logout하고 행은 `address_changed` 그대로, 감사 `identity_mismatch`. `_current_other_address`는 RFC 1918 주소만 고른다(`discovery.is_rfc1918`).
+- 결정: 옛 동작의 "다른 기기면 `needs_new_code`"는 없앴다 — 저장된 토큰이 새지 않았으므로 그 토큰은 여전히 유효하고, 고정 주소로는 정지만 간다. D-361에 날짜 붙은 개정, `docs/logs.md`에 한 줄. 콘솔은 다음 단계에서 코드 대화상자로 바꾼다(이 커밋만으로는 콘솔의 옮기기가 422).
+- 증거: `test_enrollment_service.py` 옮기기 시험을 바꿈 — 기록하는 가짜 로봇(`Network.raw`/`carried`)으로 신원 확인 전 새 주소에 Authorization·저장 토큰이 0회, 성공 경로 요청 순서 pair→whoami→system/info→logout, 다른 기기·결속 키별 불일치에서 저장 토큰 0회, 틀린 코드는 pair 한 번뿐, 형식 오류는 요청 0, 옛 토큰 회수 실패 기록. `test_enrollment_api.py` 본문 없는 옮기기 422·응답에 비밀 없음. `code` 인자 없음으로 10+1 적색 확인 뒤 87 passed.
+- gate 변화: 없음(LOCAL).

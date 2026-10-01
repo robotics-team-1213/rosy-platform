@@ -11,6 +11,14 @@ from fleet.hub.hub import HubError
 from fleet.server.enrollment import EnrollmentError, EnrollmentService
 
 
+class MoveRequest(BaseModel):
+    """Moving to a new address re-pairs there with the robot's screen code (D-361 3)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    code: str = Field(min_length=1, max_length=32)
+
+
 class EnrollRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -65,9 +73,11 @@ def install_enrollment_routes(app: FastAPI, enrollment: EnrollmentService, *,
             raise _refusal(exc) from None
 
     @app.post("/api/fleet/enrollment/robots/{robot_id}/move-address", tags=["fleet-enrollment"])
-    async def enrollment_move(robot_id: str, principal=Depends(move_guard)) -> dict:
+    async def enrollment_move(robot_id: str, body: MoveRequest,
+                              principal=Depends(move_guard)) -> dict:
         try:
-            result = await enrollment.move_address(robot_id, principal_id=principal.principal_id)
+            result = await enrollment.move_address(robot_id, code=body.code,
+                                                   principal_id=principal.principal_id)
         except (EnrollmentError, HubError) as exc:
             raise _refusal(exc) from None
         return result

@@ -8,6 +8,19 @@ from urllib.parse import urlsplit
 
 from core_common.protocol.discovery_txt import ROBOT, Rejected, classify
 
+#: Robots live on RFC 1918 LANs only (the same rule as enrollment.parse_manual_address).
+#: `ipaddress.is_private` also admits documentation, benchmark and shared ranges.
+RFC1918 = tuple(ipaddress.ip_network(net) for net in ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"))
+
+
+def is_rfc1918(address: object) -> bool:
+    try:
+        ip = ipaddress.ip_address(str(address))
+    except ValueError:
+        return False
+    return ip.version == 4 and any(ip in net for net in RFC1918)
+
+
 _ROW_ERRORS = {
     "bad_host": "invalid discovery hostname",
     "bad_address": "discovery address must be a private LAN IPv4 address",

@@ -227,6 +227,19 @@ class EnrollmentStore:
                     f"UPDATE robot_enrollments SET {assignments}, updated_at=? WHERE robot_id=?",
                     (*fields.values(), time.time(), robot_id))
 
+    def rebind(self, robot_id: str, ciphertext: bytes, **fields) -> None:
+        """Replace the sealed token and its fields in one transaction (move to a new address)."""
+        if not fields or not set(fields) <= _UPDATABLE:
+            raise ValueError("unknown enrollment fields")
+        if "state" in fields and fields["state"] not in STATES:
+            raise ValueError("unknown enrollment state")
+        assignments = ", ".join(f"{name}=?" for name in fields)
+        with closing(self._connect()) as connection:
+            with connection:
+                connection.execute(
+                    f"UPDATE robot_enrollments SET {assignments}, ciphertext=?, updated_at=? "
+                    "WHERE robot_id=?", (*fields.values(), ciphertext, time.time(), robot_id))
+
     def delete(self, robot_id: str) -> None:
         with closing(self._connect()) as connection:
             with connection:

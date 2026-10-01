@@ -21,6 +21,8 @@ from fleet.swarm.robots import RobotEndpoint
 KEY = bytes(range(32))
 CODE = "7KXM" + "P3QA"
 ISSUED = "site-" + "tok-" + "Rz81"
+#: The token a moved robot issues when its new screen code is exchanged at the new address.
+REISSUED = "site-" + "tok-" + "Qm47"
 AUTH = "Authori" + "zation"
 PINNED = "192.168.1.202:8080"
 MOVED = "192.168.1.203:8080"
@@ -41,7 +43,8 @@ class FakeCore:
     def __init__(self, *, role="operator", source="pair-physical", hostname=NAME,
                  robot_id="rosy_09", serial="sn-8kcn", lifetime=timedelta(days=7),
                  skew=timedelta(0), pair_status=201, pair_detail=None, retry_after=None,
-                 token=ISSUED, pose=(0.0, 0.0), navigation="IDLE", path=()) -> None:
+                 token=ISSUED, pose=(0.0, 0.0), navigation="IDLE", path=(), known=(),
+                 device_uid=None) -> None:
         self.role, self.source, self.hostname = role, source, hostname
         self.robot_id, self.serial, self.token = robot_id, serial, token
         created = datetime(2026, 9, 29, tzinfo=timezone.utc) + skew
@@ -50,6 +53,10 @@ class FakeCore:
         self.pair_status, self.pair_detail, self.retry_after = pair_status, pair_detail, retry_after
         self.pose, self.navigation, self.path = pose, navigation, list(path)
         self.logout_status = 204
+        #: Tokens this robot issued earlier and still honours (a moved robot keeps its old one).
+        self.known = set(known)
+        self.device_uid = device_uid
+        self.logged_out: list[str] = []
 
     def handle(self, request: httpx.Request) -> httpx.Response:
         path = request.url.path
@@ -61,16 +68,23 @@ class FakeCore:
             return httpx.Response(201, json={
                 "id": "tid-9", "token": self.token, "role": self.role, "label": "site:x",
                 "source": self.source, "expires_at": self.expires_at})
-        if request.headers.get(AUTH) != f"Bearer {self.token}":
+        bearer = (request.headers.get(AUTH) or "").removeprefix("Bearer ")
+        if bearer != self.token and bearer not in self.known:
             return httpx.Response(401, json={"error": {"code": "UNAUTHORIZED", "message": "no"}})
         if path == "/api/v1/auth/whoami":
             return httpx.Response(200, json={"id": "tid-9", "role": self.role, "label": "site:x",
                                              "source": self.source, "created_at": self.created_at,
                                              "expires_at": self.expires_at})
         if path == "/api/v1/system/info":
-            return httpx.Response(200, json={"robot_id": self.robot_id, "hostname": self.hostname,
-                                             "serial_number": self.serial})
+            info = {"robot_id": self.robot_id, "hostname": self.hostname,
+                    "serial_number": self.serial}
+            if self.device_uid is not None:
+                info["device_uid"] = self.device_uid
+            return httpx.Response(200, json=info)
         if path == "/api/v1/auth/logout":
+            if self.logout_status == 204:
+                self.logged_out.append(bearer)
+                self.known.discard(bearer)
             return httpx.Response(self.logout_status)
         if path == "/api/v1/robot/state":
             return httpx.Response(200, json={"robot_id": self.robot_id, "navigation": self.navigation,
@@ -91,10 +105,13 @@ class Network:
     def __init__(self, cores: dict[str, FakeCore]) -> None:
         self.cores = cores
         self.requests: list[tuple[str, str, str, bool]] = []
+        #: Every request whole (headers and body), to prove what never reached an address.
+        self.raw: list[tuple[str, httpx.Request]] = []
 
     def __call__(self, request: httpx.Request) -> httpx.Response:
         address = f"{request.url.host}:{request.url.port}"
         self.requests.append((request.method, address, request.url.path, AUTH in request.headers))
+        self.raw.append((address, request))
         core = self.cores.get(address)
         if core is None:
             raise httpx.ConnectError("no route to host", request=request)
@@ -105,6 +122,19 @@ class Network:
 
     def clear(self) -> None:
         self.requests.clear()
+        self.raw.clear()
+
+    def carried(self, address: str, secret: str) -> list[str]:
+        """Paths of requests to `address` that carried `secret` anywhere (URL, headers, body)."""
+        hits = []
+        for where, request in self.raw:
+            if where != address:
+                continue
+            text = str(request.url) + repr(list(request.headers.items())) + request.content.decode(
+                "utf-8", "replace")
+            if secret in text:
+                hits.append(request.url.path)
+        return hits
 
 
 def scan_row(address: str = PINNED, name: str = NAME, hostname: str | None = None) -> dict:
