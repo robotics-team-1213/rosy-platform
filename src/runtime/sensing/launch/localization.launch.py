@@ -6,7 +6,8 @@ goal_node also needs static_map:=true. This launch owns no motor publisher.
 import os
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
+from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 
@@ -14,6 +15,7 @@ from launch_ros.actions import Node
 def generate_launch_description():
     folder = os.path.join(get_package_share_directory('control'), 'config')
     config = os.path.join(folder, 'localization.yaml')
+    launch_dir = os.path.join(get_package_share_directory('control'), 'launch')
     sim = {'use_sim_time': LaunchConfiguration('use_sim_time')}
     return LaunchDescription([
         DeclareLaunchArgument('map', description='Absolute path of saved map YAML'),
@@ -28,4 +30,9 @@ def generate_launch_description():
         Node(package='control', executable='localization_node',
              parameters=[os.path.join(folder, 'robot.yaml'), config,
                          os.path.join(folder, 'auto_calib.yaml'), sim], respawn=True, respawn_delay=1., output='screen'),
+        # D-395: localization_node's readiness waits for loc_assist's LOCALIZED.
+        IncludeLaunchDescription(
+            PythonLaunchDescriptionSource(os.path.join(launch_dir, 'loc_assist.launch.py')),
+            launch_arguments={'use_sim_time': LaunchConfiguration('use_sim_time'),
+                              'map_yaml': LaunchConfiguration('map')}.items()),
     ])

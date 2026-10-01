@@ -223,7 +223,7 @@ SIZE_VERDICTS = {
         "accept: sim-only read-only viewer server (HTTP handler + ROS subscriptions); the pure logic already lives in live_view_model.py and the page in lane_live_view.html, covered by test_lane_live_view*.py and test_live_view_model.py (X5)",
     ),
     "control": (
-        40_803,
+        41_491,
         f"split: deploy closure needs only sensing + safety provider (P1a); {CONTROL_SPLIT} "
         "(re-judged 2026-09-30 at 33090 after D-356 added the ROS-free learned perception backend "
         "(sensing/perception/learned), the shadow node and the recording CLI; the learned backend sits "
@@ -255,7 +255,14 @@ SIZE_VERDICTS = {
         "joined — they move with the P1a split, verdict unchanged; re-judged 2026-10-01 at "
         "40803 for the bounded, observation-only follow_preview module and camera-stamp joins "
         "(docs/plans/2026-10-01-follow-preview-design.md): rendering stays in perception, ROS I/O "
-        "stays in observer wrappers, and the P1a sensing/safety split remains required)",
+        "stays in observer wrappers, and the P1a sensing/safety split remains required; re-judged 2026-10-01 at 41059 when the "
+        "D-395 P2-3 robot node joined: the ROS-free LocAssist core (control/loc_assist.py) and its thin ROS "
+        "adapter (control/loc_assist_node.py) stay with the sensing nodes and move with the P1a split, "
+        "verdict unchanged; re-judged 2026-10-02 at 41237 after the lane A review fixes and the camera "
+        "paint points (control/loc_assist*.py, sensing/perception/paint_hypothesis.py) — same subjects, "
+        "verdict unchanged; re-judged 2026-10-02 at 41491 on the D-395 Phase 2 integration branch "
+        "when lane A (loc_assist) met main's follow_preview additions — same subjects, "
+        "verdict unchanged)",
     ),
     # --- D-362 newly-covered files (web assets in src/ packages, ops roots). ---
     "runtime/sensing/web/diagnostic.html": (

@@ -56,6 +56,7 @@ setup(
             'watch_node = control.watch_node:main',
             'goal_node = control.goal_node:main',
             'localization_node = control.localization_node:main',
+            'loc_assist_node = control.loc_assist_node:main',
             'web_node = control.web_node:main',
         ],
         'rosy.sensor_provider': [

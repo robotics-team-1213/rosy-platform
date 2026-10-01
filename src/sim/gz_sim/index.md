@@ -46,8 +46,8 @@
 
 ## 최근 기록
 
+- 2026-10-01 · uncommitted · feat(sim): gz_multi nav 모드에 로봇별 loc_assist (D-395 P2-3)
 - 2026-10-01 · uncommitted · fix(omx): fence recording closure and isolate storage faults
 - 2026-10-01 · uncommitted · feat(omx): record SIM demonstrations and export LeRobot v3
 - 2026-10-01 · edca9b2e · feat(sim): 카메라를 URDF 사슬에 맞춘다 (D-397)
 - 2026-09-30 · uncommitted · docs(adr): 운전자 실시간 영상 ADR 을 D-362 에서 D-368 로
-- 2026-09-30 · uncommitted · docs(adr): pilot ADR 번호를 main 과 겹치지 않게 다시 매김

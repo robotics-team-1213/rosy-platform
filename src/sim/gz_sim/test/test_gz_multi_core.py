@@ -111,7 +111,7 @@ def _setup(mod, **overrides):
     context.launch_configurations.update({
         "robots": "3", "prefix": "rosy", "world_name": "rosy_factory.world", "mode": "none",
         "headless": "true", "spawn_spacing": "1.5", "core": "true", "api_port_base": "8080",
-        "inflation_radius": "", "spawn_x": "", "spawn_y": "", "map": "",
+        "inflation_radius": "", "spawn_x": "", "spawn_y": "", "map": "", "loc_assist": "true",
         **overrides,
     })
     try:
@@ -182,3 +182,24 @@ def test_slam_start_waits_for_sensor_startup_in_wall_time():
     assert not isinstance(timers[0], ROSTimer)
     assert timers[0].period == 15.0
     assert timers[0].actions
+
+
+def _loc_assist_includes(actions):
+    """D-395 P2-3: the per-robot loc_assist launch rides in the delayed nav actions."""
+    from launch.actions import IncludeLaunchDescription
+    found = []
+    for timer in (a for a in actions if isinstance(a, TimerAction)):
+        for action in timer.actions:
+            if isinstance(action, IncludeLaunchDescription):
+                location = action.launch_description_source.location
+                if str(location).endswith("loc_assist.launch.py"):
+                    found.append(action)
+    return found
+
+
+def test_nav_mode_starts_loc_assist_per_robot_unless_turned_off():
+    mod = _module()
+    actions, _ = _setup(mod, robots="2", core="false", mode="nav")
+    assert len(_loc_assist_includes(actions)) == 2
+    actions, _ = _setup(mod, robots="2", core="false", mode="nav", loc_assist="false")
+    assert _loc_assist_includes(actions) == []

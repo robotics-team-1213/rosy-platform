@@ -64,8 +64,8 @@
 
 ## 최근 기록
 
-- 2026-10-01 · uncommitted · feat(perception): explain camera following and foreground evidence
-- 2026-10-01 · uncommitted · fix(localization): 3 s 검증의 공백 판정과 열린 요청 없는 결정 (D-395 리뷰)
-- 2026-10-01 · uncommitted · test(localization): D-395 1단계 호스트 종단 시험 — 두 로봇, 사람 입력 0
-- 2026-10-01 · uncommitted · feat(perception): 기준 사각형 HSV 검출기, 출력 계약 고정 (D-395 개정 1 6항)
-- 2026-10-01 · uncommitted · feat(perception): 가설 자세별 페인트 점수 (D-395 7절, D-375)
+- 2026-10-02 · uncommitted · fix(localization): lane A 리뷰 — 카메라 구독은 LOCALIZED 밖에서만, 종료 플래그, 작업 스레드 로그 없음 (D-395 P2-3)
+- 2026-10-02 · uncommitted · fix(localization): lane A 리뷰 — 픽업 epoch, 검증 중 재보고·중복 결정, received_s 필수, 증거 시각 (D-395 P2-3)
+- 2026-10-01 · uncommitted · feat(localization): 카메라 페인트 점으로 후보별 paint_score (D-395 P2-3 후속)
+- 2026-10-01 · uncommitted · fix(tools): Gazebo localization rig를 D-395 흐름으로 (P2-3 후속)
+- 2026-10-01 · uncommitted · fix(localization): 3 s 검증의 스캔 공백 허용을 매개변수로, 노드는 1.0 s (D-395 P2-3 후속)

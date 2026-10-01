@@ -193,3 +193,7 @@
 - gate 변화: 기존 gate 유지; DEVICE/FIELD 승격 없음.
 - 결정: D-390 부록.
 - 교훈: 파일 쓰기 완료 전 들어온 interruption과 logical closure 경계를 구분한다.
+## 2026-10-01 · uncommitted · feat(sim): gz_multi nav 모드에 로봇별 loc_assist (D-395 P2-3)
+- 변경: 인자 `loc_assist`(기본 true). `mode:=nav`에서 로봇마다 control의 `loc_assist.launch.py`를 namespace·sim 시간·map과 함께 Nav2와 같은 15 s 지연 묶음에 넣는다. seed_initialpose는 그대로이며 근거가 아니다(전원 투입 UNKNOWN). 카메라는 이 런치에 브리지되지 않아 사각형 관측은 없다. 파일 595줄(예산 600).
+- 증거: `test_gz_multi_core.py`에 `loc_assist` 설정과 nav 모드 포함·끔 시험 추가. WSL에는 현재 패키지 이름으로 빌드된 작업공간이 없어 이 런치 그래프 시험은 skip(공유 share 없음) — 미검증으로 남긴다.
+- gate 변화: 없음. ROS-SIM은 P2-8.

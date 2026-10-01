@@ -26,6 +26,7 @@ LATEST_ONLY = {
     ('wander/node.py', 'safety/observation'),
     ('wander/node.py', 'safety/motion_limits'),
     ('goal_escape.py', 'safety/motion_limits'),
+    ('loc_assist_node.py', 'safety/pickup'),
     ('web_node.py', 'safety/decision'),
     ('web_node.py', 'safety/motion_limits'),
 }
