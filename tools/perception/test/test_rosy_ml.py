@@ -167,6 +167,7 @@ class Robot:
         ok, out = True, ""
         if cmd[0] == "ssh-keygen":
             ok = not self.broken.get("known_hosts")
+            out = f"{cmd[2]} ssh-ed25519 AAAA" if ok else ""
         elif "cat /var/lib/rosy/models/hold" in text:
             out = self.broken.get("hold", "")
         elif "sudo -n stat" in text:
@@ -262,7 +263,8 @@ def test_doctor_watch_config(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(rosy_ml, "_replay_clip_count", lambda cfg: 1)
     r = Robot()
     assert rosy_ml.main(["doctor", "--watch-config", str(wc)], runner=r.runner,
-                        connect=r.connect, find_spec=lambda n: object()) == 0
+                        connect=r.connect, find_spec=lambda n: object(),
+                        resolve=lambda h, p: []) == 0
     assert "site:" in capsys.readouterr().out
 
 
@@ -446,7 +448,8 @@ def test_doctor_on_the_site_requires_onnx_and_onnxruntime(tmp_path, monkeypatch,
     monkeypatch.setattr(rosy_ml, "_replay_clip_count", lambda cfg: 1)
     r = Robot()
     rc = rosy_ml.main(["doctor", "--watch-config", str(wc)], runner=r.runner, connect=r.connect,
-                      find_spec=lambda n: None if n == "onnx" else object())
+                      find_spec=lambda n: None if n == "onnx" else object(),
+                      resolve=lambda h, p: [])
     out = capsys.readouterr().out
     assert rc == 1 and "onnx importable" in out
 

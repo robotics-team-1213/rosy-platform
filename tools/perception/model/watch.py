@@ -57,7 +57,9 @@ Config (YAML):
   backend: inbox                          # optional: inbox (default) | hf
   store: /srv/rosy/store                  # backend inbox: the store folder (local, NAS, Drive)
   repo: org/lane-seg                      # backend hf: the HF model repo
-  robots: [{name: pinky-005, host: <robot-ip>, user: rosy}]   # user optional
+  robots: [{name: <robot-id>, host: <hostname>.local, user: rosy}]   # user optional
+      # host is a name (mDNS); an IP works but is not recommended: the network renumbers.
+      # The host key is pinned in known_hosts under `name` (ssh HostKeyAlias), not the host.
   ssh: {identity: <site key>, known_hosts: <pinned file>}     # both required
   intake_out: /var/lib/rosy-model-watch/models
   state_file: /var/lib/rosy-model-watch/state.json
@@ -79,7 +81,15 @@ reported a configuration error (a Python package such as onnx missing from the
 watcher's venv): the run stops at once, nothing is recorded and no attempt is
 spent, so the timer retries every run until the venv is fixed. A robot push that
 fails with deliver.py's own code (3, 75, 76) is logged with that code; the
-watcher's exit stays one of these."""
+watcher's exit stays one of these, except for a network failure to a robot:
+77 its host name did not resolve (DNS / mDNS), 78 connection refused, timed out or no
+route, 79 host key unknown or changed. These are deliver.py's codes (operator_ssh.py);
+the run exits with the code of the first robot (config order) that failed this way, so
+the unit shows failed and the timer keeps firing. A network failure spends no attempt
+(the robot stays pending, never gave_up) and is recorded per robot in the state file
+under robot_failures {kind, exit, at, count}; the next successful contact clears it.
+`rosy_ml status --watch-config` shows it. A robot that is up to date but cannot be
+read also exits with its code (it used to be a silent message)."""
 
 from __future__ import annotations
 
@@ -105,6 +115,7 @@ STATE_VERSION = 1
 _REPO = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*")
 _NAME = re.compile(r"[A-Za-z0-9._][A-Za-z0-9._-]*")
 _SHA = re.compile(r"[0-9a-f]{40}")
+import operator_ssh  # noqa: E402  (tools/perception, on sys.path above)
 from deliver import HELD_EXIT, LOCK_BUSY_EXIT as BUSY_EXIT  # noqa: E402  no attempt used
 # 5, not 3: deliver.py's 3 (history not written) and harvest.py's 4 (not idle) stay distinct.
 LIST_FAILED_EXIT = 5
@@ -116,7 +127,23 @@ INBOX_KEY = "store-inbox"
 
 def new_state(repo: str) -> dict:
     return {"version": STATE_VERSION, "repo": repo, "next_order": 0, "commits": {},
-            "shadow": {}}
+            "shadow": {}, "robot_failures": {}}
+
+
+def record_failure(state: dict, robot: str, kind: str, code: int, at: str) -> dict:
+    """The last network failure of a robot; count = consecutive runs it failed this way."""
+    failures = dict(state.get("robot_failures") or {})
+    prev = failures.get(robot) or {}
+    count = prev.get("count", 0) + 1 if prev.get("kind") == kind else 1
+    failures[robot] = {"kind": kind, "exit": code, "at": at, "count": count}
+    return {**state, "robot_failures": failures}
+
+
+def clear_failure(state: dict, robot: str) -> dict:
+    if robot not in (state.get("robot_failures") or {}):
+        return state
+    return {**state, "robot_failures": {k: v for k, v in state["robot_failures"].items()
+                                        if k != robot}}
 
 
 def apply_result(state: dict, sha: str, result: dict) -> dict:
@@ -347,6 +374,7 @@ def default_deliverer(cfg: dict):
         import deliver
         return deliver.main(["push", robot["host"], rev, "--models", str(cfg["intake_out"]),
                              "--user", robot.get("user", "rosy"),
+                             "--host-key-alias", robot["name"],
                              "--identity", cfg["ssh"]["identity"],
                              "--known-hosts", cfg["ssh"]["known_hosts"],
                              "--timeout", str(cfg["push_timeout_s"]),
@@ -360,7 +388,8 @@ def default_observer(cfg: dict):
         import deliver
         return deliver.observe(robot["host"], user=robot.get("user", "rosy"),
                                identity=cfg["ssh"]["identity"],
-                               known_hosts=cfg["ssh"]["known_hosts"])
+                               known_hosts=cfg["ssh"]["known_hosts"],
+                               host_key_alias=robot["name"])
     return read
 
 
@@ -527,6 +556,18 @@ def main(argv=None, *, list_commits=hf_list_commits, intake_fn=None, deliver_fn=
     state = supersede_older(ensure_targets(state, list(robots)))
     save_state(cfg["state_file"], state)
     sha = newest_passed(state)
+    net_exits: list[int] = []  # network failures this run, in config order
+
+    def net_failure(state: dict, name: str, kind: str, detail: str) -> dict:
+        code = operator_ssh.KIND_EXIT[kind]
+        net_exits.append(code)
+        state = record_failure(state, name, kind, code, _now())
+        n = state["robot_failures"][name]["count"]
+        print(f"model-watch: {name}: {kind} failure (exit {code}, {n} in a row): {detail}",
+              file=sys.stderr)
+        save_state(cfg["state_file"], state)
+        return state
+
     for name in robots if sha else ():
         rev = state["commits"][sha]["model_revision"]
         entry = state["commits"][sha]["robots"][name]
@@ -534,7 +575,13 @@ def main(argv=None, *, list_commits=hf_list_commits, intake_fn=None, deliver_fn=
             continue
         try:
             decision = delivery_decision(rev, observe_fn(robots[name]))
+            if name in (state.get("robot_failures") or {}):  # reachable again
+                state = clear_failure(state, name)
+                save_state(cfg["state_file"], state)
         except Exception as exc:  # noqa: BLE001 - one robot never blocks the others
+            if getattr(exc, "kind", None) in operator_ssh.KIND_EXIT:
+                state = net_failure(state, name, exc.kind, str(exc))
+                continue  # no attempt spent: the robot is not reachable, not broken
             if entry["status"] == "ok":  # up to date when last seen: nothing to retry
                 print(f"{name}: cannot read the robot ({exc}); last delivered {rev}")
                 continue
@@ -556,6 +603,10 @@ def main(argv=None, *, list_commits=hf_list_commits, intake_fn=None, deliver_fn=
                 code, error = 1, f"{type(exc).__name__}: {exc}"
             else:
                 error = None if code == 0 else f"deliver exit {code}"
+            if code in operator_ssh.EXIT_KIND:  # deliver already logged the ssh line
+                state = net_failure(state, name, operator_ssh.EXIT_KIND[code],
+                                    "see the ssh line above")
+                continue
             if code == HELD_EXIT:  # an operator took the hold after we looked
                 print(f"{_short(sha)}: {rev} -> {name}: held by an operator (rosy_ml release-hold)")
                 save_state(cfg["state_file"], state)
@@ -570,6 +621,8 @@ def main(argv=None, *, list_commits=hf_list_commits, intake_fn=None, deliver_fn=
         print(f"{_short(sha)}: {rev} -> {name} shadow: {outcome}"
               + (f" ({error})" if error else ""))
         retry_later |= error is not None
+    if net_exits:
+        return net_exits[0]
     return 1 if retry_later else 0
 
 

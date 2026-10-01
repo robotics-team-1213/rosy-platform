@@ -26,17 +26,28 @@
    비밀번호 SSH와 `pinky` 계정은 쓰지 않는다.
 
 3. **로봇 호스트 키를 known_hosts에 한 번 기록한다.** 믿을 수 있는 네트워크에서 첫 접속으로
-   기록한다. 이후에는 `StrictHostKeyChecking=yes`라서 키가 바뀌면 접속이 거부된다.
-   SD를 다시 구운 로봇이면 관리자와 확인한 뒤 `ssh-keygen -R <robot-ip> -f <known_hosts>`로
-   지우고 다시 기록한다. 검사를 끄지 않는다.
+   기록한다. 키는 주소가 아니라 **로봇 id** 이름으로 기록한다(`ssh -o HostKeyAlias=<robot>`로 읽는다).
+   현장 네트워크가 바뀌어 IP가 달라져도 핀이 그대로 유효하다.
+
+   ```bash
+   ssh-keyscan -t ed25519 <hostname>.local | sed 's/^[^ ]* /<robot> /' >> <known_hosts>
+   ```
+
+   이후에는 `StrictHostKeyChecking=yes`라서 키가 바뀌면 접속이 거부된다(종료 코드 79).
+   SD를 다시 구운 로봇이면 관리자와 확인한 뒤 `ssh-keygen -R <robot> -f <known_hosts>`로
+   지우고 다시 기록한다. 검사를 끄지 않는다. 예전에 주소(IP) 이름으로 기록해 둔 핀은
+   `rosy_ml doctor`가 알려 주며, `rosy_ml repin <robot>` 한 줄이 그 키를 로봇 id 이름으로
+   복사한다(옛 줄은 그대로 둔다. 알아서 고쳐 쓰지 않는다).
 
 4. **설정 파일을 만든다.** 비밀값은 설정에 넣지 않는다. 토큰은 *파일 경로*만 적는다.
 
    ```bash
-   rosy_ml init --robot pinky-005=<robot-ip> --robot pinky-007=<robot-ip> \
+   rosy_ml init --robot pinky-005=<hostname>.local --robot pinky-007=<hostname>.local \
      --store <store 폴더 경로> --core-token-file <CORE viewer 토큰 파일>
    ```
 
+   - 호스트는 로봇의 mDNS 이름(`<hostname>.local`, avahi, `rosy-pinky-<4자>`)을 쓴다. IP도 되지만
+     권장하지 않는다. 현장 네트워크가 바뀌면 주소가 달라지고, init과 doctor가 IP를 경고한다.
    - `--store`는 팀의 store 폴더다(아래 "store 폴더"). HF는 필요 없다.
    - HF도 쓰는 팀만 `--hf-repo <hf-org>/<model-repo> --hf-token-file <내 HF 토큰 파일>`을 더한다.
    - 위치: `ROSY_ML_CONFIG`가 있으면 그 경로, 없으면 Windows `%APPDATA%\Rosy\ml.yaml`,
@@ -184,7 +195,9 @@ rosy_ml harvest pinky-005                   # 끝난 녹화 세션 가져오기
 | `no config at ...` | 설정이 없다 | `rosy_ml init` |
 | `SSH key ... ✗` | 키 파일이 없다 | `ssh-keygen`으로 만들고 공개키 등록을 요청한다 |
 | `SSH key ... is readable by others` | 키 권한이 넓다 (Linux) | `chmod 600 <key>` |
-| `<robot-ip> in known_hosts ✗` | 호스트 키 기록이 없다 | 믿을 수 있는 네트워크에서 한 번 기록한다 |
+| `host name resolves ✗` | 설정의 호스트 이름이 이 네트워크에서 풀리지 않는다 | 설정의 이름 확인, 로봇 전원, mDNS(avahi/Bonjour) 차단 여부 |
+| `host key pinned under <robot> ✗` | 호스트 키가 로봇 id 이름으로 기록돼 있지 않다 | 줄에 `rosy_ml repin <robot>`이 있으면 그것을, 없으면 믿을 수 있는 네트워크에서 한 번 기록한다 |
+| `host is an IP` (경고) | 주소가 바뀌면 끊긴다 | 설정의 호스트를 `<hostname>.local`로 바꾼다 |
 | `TCP 22 reachable ✗` | 로봇이 꺼졌거나 주소·네트워크가 다르다 | 전원, 설정의 주소, 같은 네트워크인지 확인 |
 | `ssh as rosy (BatchMode) ✗` | 내 키가 그 로봇에 없다, 또는 호스트 키가 바뀌었다 | 공개키 등록 요청, 재플래시였다면 known_hosts 정리 |
 | `sudo -n works ✗` | `rosy`의 비밀번호 없는 sudo가 없다 | 오래된 이미지다. 관리자에게 이미지 확인 요청 |
@@ -212,6 +225,9 @@ deliver, `harvest`는 harvest). 사이트 자동 반영(watch)은 journal에 남
 | deliver | `3` | 로봇의 `history.jsonl`에 쓸 수 없다(디스크, 권한). "pointer changed, history not written"이면 포인터는 이미 바뀌었으니 `rosy_ml status`로 확인한다 |
 | deliver | `75` | busy: 다른 사람이 같은 로봇에서 작업 중이다. 잠시 뒤 다시 한다 |
 | deliver | `76` | held: 사이트 자동 반영(`--unless-held`)만 받는다. 그 로봇에 보류가 있다 |
+| deliver | `77` | 호스트 이름이 풀리지 않는다(DNS/mDNS). 설정의 이름, 로봇 전원, 같은 네트워크인지 확인한다 |
+| deliver | `78` | 접속 거부·시간 초과·경로 없음. 로봇이 꺼졌거나 다른 네트워크에 있다 |
+| deliver | `79` | 호스트 키를 모르거나 바뀌었다. 자동 수락하지 않는다. 로봇을 확인한 뒤 다시 핀한다(3단계, `rosy_ml repin`) |
 | harvest | `0` | 모두 가져왔다 |
 | harvest | `1` | 일부 세션이 실패했다. 다시 하면 남은 것만 가져온다 |
 | harvest | `2` | 인자가 잘못됐다 |
