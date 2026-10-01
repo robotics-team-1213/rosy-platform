@@ -289,6 +289,18 @@ SIZE_VERDICTS = {
         670,
         "accept: one scan entry over the release tree — the rules and the walker are the same concern (X5)",
     ),
+    "deploy/robot/pinky_pro/native/rosy_auto_update.py": (
+        1472,
+        "split: D-406 robot-side updater — the GitHub/rollout fetch and staging, the eligibility "
+        "reader (status-inputs, hold, seals, claim), and the apply/resume/rollback transaction with "
+        "its journal are separate seams; move fetch+staging and eligibility into sibling modules in "
+        "deploy/robot/pinky_pro/native after the first two-robot device validation (D-406 Validation)",
+    ),
+    "tools/release/publish_payload_release.py": (
+        655,
+        "accept: D-406 operator publish tool; rollout signing, the GitHub release I/O and the "
+        "canary watch are one short sequential flow; split the canary watch out if it grows further",
+    ),
     "deploy/robot/pinky_pro/native/sync-image-layer.py": (
         876,
         "split: D-388 image-layer sync — the allowlist/plan, the backup-record history (records, "
