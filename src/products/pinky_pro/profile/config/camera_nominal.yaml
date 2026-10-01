@@ -6,7 +6,7 @@
 # centred. This is NOT a validated homography profile: line_observer_node
 # uses it only with camera_ground_source NOMINAL + allow_nominal_ground, and
 # CORE accepts NOMINAL-ground lane evidence only under a driver hold (D-344).
-# D-396: pitch_rad, height_m and x_offset_m are the URDF nominal
+# D-397: pitch_rad, height_m and x_offset_m are the URDF nominal
 # (geometry.yaml camera.*, front_camera_link at cam_tilt_deg 8; drift-tested),
 # refined per robot by an accepted camera_profile calibration record (D-47
 # addendum store). Measured: pitch 8-11.8 deg, height fits 0.0575-0.062 m.

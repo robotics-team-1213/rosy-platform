@@ -1,7 +1,7 @@
 """Wheel geometry: URDF nominal < accepted calibration record < operator override.
 
 The bringup parameters are the URDF nominal (rosy_params.yaml: 0.028 / 0.0971,
-D-396 geometry.yaml). The operator-accepted ``wheel_odometry`` record in the
+D-397 geometry.yaml). The operator-accepted ``wheel_odometry`` record in the
 versioned calibration store (D-47 addendum 2026-10-01) refines them; without
 one, or without core_common in the image, the parameters stand. An accepted
 record outside the URDF nominal +-10 %, or holding a bool or non-number, is

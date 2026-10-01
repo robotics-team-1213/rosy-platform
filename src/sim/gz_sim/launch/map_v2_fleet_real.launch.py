@@ -5,7 +5,7 @@ Same track as map_v2_fleet_lane.launch.py, but the scene and the camera follow
 the device instead of the 2026-09-22 lap bench: grey carpet, white tape,
 white 0.30 m walls with blue seam tape (map_v2_fleet_real.world), and the
 the product NOMINAL camera profile (profile config camera_nominal.yaml) geometry (320x240, fx 281.6 = hfov 59.2 deg,
-8 deg down, lens 0.06343 m above the floor, URDF nominal D-396). line_observer keeps the device
+8 deg down, lens 0.06343 m above the floor, URDF nominal D-397). line_observer keeps the device
 defaults from line_follow.yaml except for the declared Gazebo ground.
 """
 
@@ -24,7 +24,7 @@ from launch_ros.parameter_descriptions import ParameterValue
 # product NOMINAL camera profile: fx 281.6 on a 320 px row.
 REAL_HFOV_RAD = 2.0 * math.atan(160.0 / 281.6)  # 1.0334 rad = 59.2 deg
 REAL_TILT_DEG = 8.0
-# front_camera_mount z on base_link: the URDF default (D-396 geometry.yaml), so the
+# front_camera_mount z on base_link: the URDF default (D-397 geometry.yaml), so the
 # Gazebo camera sensor (front_camera_link) sits at the NOMINAL profile height at 8 deg:
 # 0.028 + z - 0.015*sin(8 deg) - 0.0121*cos(8 deg) = 0.06343.
 REAL_CAM_MOUNT_Z = 0.0495

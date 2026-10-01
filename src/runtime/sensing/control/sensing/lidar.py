@@ -2,7 +2,7 @@
 
 rplidar_link is yaw=π vs base_link, so scan 0 is the back.
 lidar_yaw_offset is the scan-frame angle of the nose.
-NOSE_YAW is the URDF nominal (geometry.yaml lidar.forward_deg, D-396), refined
+NOSE_YAW is the URDF nominal (geometry.yaml lidar.forward_deg, D-397), refined
 per robot by an accepted lidar_mount calibration record (D-47 addendum store).
 A HUD that looked −15deg off was LCD polar L/R (now −sin, left=left).
 Robot yaw 0 = front, +CCW = left:  wrap(scan_angle - lidar_yaw_offset).

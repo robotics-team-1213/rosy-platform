@@ -14,7 +14,7 @@ from typing import Any, Mapping
 
 
 DEFAULTS = {
-    # URDF nominal (D-396 geometry.yaml), refined
+    # URDF nominal (D-397 geometry.yaml), refined
     # per robot by an accepted wheel_odometry calibration record (D-47 addendum store).
     "wheel_radius": 0.028,
     "wheel_separation": 0.0971,

@@ -4,7 +4,7 @@ Lidar sits on top of the chassis, so a live scan is walls, not the body.
 """
 import math
 
-# URDF nominal (D-396: src/products/pinky_pro/profile/config/geometry.yaml, from
+# URDF nominal (D-397: src/products/pinky_pro/profile/config/geometry.yaml, from
 # rosy.urdf.xacro; drift-tested), metres, base_link origin. A calibrated
 # robot_radius refines the circumradius below (use_radius).
 WHEEL_Y = 0.04055                 # wheels.joint_y_m

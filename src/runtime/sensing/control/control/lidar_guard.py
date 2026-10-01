@@ -7,7 +7,7 @@ from ..sensing.body import LIDAR_X, ROTATION_RADIUS, use_radius
 
 def lidar_limits(stop, clear, radius):
     # Circumradius plus absolute sensor offset bounds every heading even
-    # before the mounting yaw (URDF nominal 180 deg, D-396) is transformed. Add an
+    # before the mounting yaw (URDF nominal 180 deg, D-397) is transformed. Add an
     # 18 mm stand-off: 76 + 17 + 18 = 111 mm, above the C1 50 mm blind zone.
     floor = use_radius(radius) + abs(LIDAR_X) + 0.018
     stop = max(floor, stop) if math.isfinite(stop) else floor

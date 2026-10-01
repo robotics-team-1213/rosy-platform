@@ -50,7 +50,7 @@ def local_overlay() -> dict[str, Any]:
     """The operator's local overlay alone (the layer load_config merges last), {} if absent.
 
     Lets a consumer tell an operator-set value from the robot package's
-    URDF-nominal one (D-396: URDF nominal < accepted calibration record <
+    URDF-nominal one (D-397: URDF nominal < accepted calibration record <
     operator overlay)."""
     path = Path(os.environ.get("ROSY_CONFIG", "")) if os.environ.get("ROSY_CONFIG") else LOCAL_CONFIG_PATH
     if not path.exists():

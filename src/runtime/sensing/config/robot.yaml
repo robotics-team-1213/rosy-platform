@@ -37,7 +37,7 @@
     # +1 = wander forward is nose-first. Do not auto-flip.
     cmd_linear_sign: 1.0
     auto_linear_sign: false
-    # Scan 0 = back. URDF nominal (D-396, products/pinky_pro/profile/config/geometry.yaml
+    # Scan 0 = back. URDF nominal (D-397, products/pinky_pro/profile/config/geometry.yaml
     # lidar.forward_deg): rplidar_link yaw pi, nose at 180deg. Refined per robot by an
     # accepted lidar_mount calibration record (D-47 addendum store; measured 181-182deg).
     # The former 190deg sonar-matched value is retired.

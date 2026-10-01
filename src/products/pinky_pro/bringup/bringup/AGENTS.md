@@ -28,7 +28,7 @@ None (ignore `__pycache__/`).
 ### Working In This Directory
 
 - `MotorController` results: `APPLIED` / `LIMITED` / `REJECTED` / `DRIVER_ERROR`. Invalid input or UART error must attempt zero-RPM.
-- Wheel radius default 0.028 m, separation 0.0971 m (URDF nominal, D-396; an accepted wheel_odometry record refines it, the launch `wheel_radius`/`wheel_separation` override wins), 4096 pulse/rev.
+- Wheel radius default 0.028 m, separation 0.0971 m (URDF nominal, D-397; an accepted wheel_odometry record refines it, the launch `wheel_radius`/`wheel_separation` override wins), 4096 pulse/rev.
 - `LOW_BATTERY_THRESHOLD = 6.8` in bringup is a driver-side hint; CORE SAF-005 is the operator policy.
 
 ### Testing Requirements

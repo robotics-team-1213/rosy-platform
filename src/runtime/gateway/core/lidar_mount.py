@@ -1,6 +1,6 @@
 """One source for the LiDAR mount yaw that CORE line_follow uses (D-47 addendum 2026-10-01).
 
-Resolution order, first hit wins (D-396: URDF nominal < accepted record < operator overlay):
+Resolution order, first hit wins (D-397: URDF nominal < accepted record < operator overlay):
   1. the operator's local overlay ``line_follow.lidar_forward_deg``
      (~/.rosy/rosy.yaml or ROSY_CONFIG), passed in as ``operator_deg``;
   2. the calibration store's current accepted ``lidar_mount`` record
@@ -12,7 +12,7 @@ Resolution order, first hit wins (D-396: URDF nominal < accepted record < operat
 
 ``lidar_yaw_offset`` bound through the control sensor adapter (D-47) is only
 compared: it is the safety node's robot.yaml value (the URDF nominal 180 deg
-since D-396, 190 deg before), not a measurement, so it must not silently
+since D-397, 190 deg before), not a measurement, so it must not silently
 override the line_follow value. A disagreement above 3 deg is reported in the
 source line and sets the warn flag, which the caller uses for the log level. ROS-free.
 """

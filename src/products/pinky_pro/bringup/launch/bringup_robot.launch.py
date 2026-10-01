@@ -58,7 +58,7 @@ def generate_launch_description():
         DeclareLaunchArgument('enable_lidar', default_value='true',
                               description='Enable the serial LiDAR driver'),
         # Operator override (m). 0 keeps the URDF nominal of the parameter files
-        # (D-396), refined by an accepted wheel_odometry calibration record;
+        # (D-397), refined by an accepted wheel_odometry calibration record;
         # a positive value wins over both.
         DeclareLaunchArgument('wheel_radius', default_value='0.0'),
         DeclareLaunchArgument('wheel_separation', default_value='0.0'),

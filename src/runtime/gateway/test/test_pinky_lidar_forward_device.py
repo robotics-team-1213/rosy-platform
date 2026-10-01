@@ -98,7 +98,7 @@ def test_operator_overlay_still_wins(monkeypatch, tmp_path):
 
 
 def test_order_urdf_nominal_then_record_then_operator_overlay(monkeypatch, tmp_path):
-    """D-396: core.yaml's URDF nominal 180 < an accepted lidar_mount record < the operator overlay."""
+    """D-397: core.yaml's URDF nominal 180 < an accepted lidar_mount record < the operator overlay."""
     from core_common.config import local_overlay
     _device_env(monkeypatch)
     store = CalibrationStore(tmp_path / "store")

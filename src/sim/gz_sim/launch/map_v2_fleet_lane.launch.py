@@ -115,7 +115,7 @@ def generate_launch_description():
                 "camera_washed_fraction": 0.75,
                 # 90 deg corners: odometry-bounded turn; the URDF camera sits
                 # 0.020 + 0.015*cos(25 deg) - 0.0121*sin(25 deg) = 0.028481 m
-                # ahead of base_link (D-396 URDF chain at cam_tilt_deg 25).
+                # ahead of base_link (D-397 URDF chain at cam_tilt_deg 25).
                 "lane_corner_turning": True,
                 "camera_x_offset_m": 0.028481,
             }],

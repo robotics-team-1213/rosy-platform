@@ -24,7 +24,7 @@ def _front_open_scan():
 
 class RouteTest(unittest.TestCase):
     def test_nose_yaw_is_front(self):
-        # URDF nominal (D-396): the nose is scan angle pi, no extra mount yaw.
+        # URDF nominal (D-397): the nose is scan angle pi, no extra mount yaw.
         self.assertAlmostEqual(MOUNT_YAW_DEG, 0.0)
         self.assertAlmostEqual(NOSE_YAW, math.pi)
         self.assertAlmostEqual(robot_yaw(NOSE_YAW, NOSE_YAW), 0.0, places=6)

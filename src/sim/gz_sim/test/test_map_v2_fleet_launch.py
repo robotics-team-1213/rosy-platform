@@ -102,7 +102,7 @@ def test_crosswalk_paint_is_not_mistaken_for_overexposure():
 
 def test_line_observer_turns_corners_with_the_measured_camera_offset():
     """Run 164757 stopped fail-closed at the first 90 deg corner. The camera
-    optical centre is the URDF chain (D-396), 0.020 + 0.015*cos(25 deg)
+    optical centre is the URDF chain (D-397), 0.020 + 0.015*cos(25 deg)
     - 0.0121*sin(25 deg) = 0.028481 m ahead of base_link (was 0.034, which
     dropped the -0.0121 m link offset like the dock observer once did)."""
     source = LAUNCH.read_text(encoding="utf-8")

@@ -79,7 +79,7 @@ def test_small_column_gap_is_filled_as_floor_only():
 
 
 def test_labeller_yaw_is_the_accepted_record_else_180_not_robot_yaml(tmp_path):
-    # Review M6: robot.yaml is never the default (it held 190 deg until D-396).
+    # Review M6: robot.yaml is never the default (it held 190 deg until D-397).
     import sys
     from pathlib import Path
     sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "src" / "contracts" / "foundation"))
@@ -96,7 +96,7 @@ def test_labeller_yaw_is_the_accepted_record_else_180_not_robot_yaml(tmp_path):
     rid2 = store.add("rosy-x", "lidar_mount", {"lidar_yaw_offset": math.radians(183.0)}, method="t/1")
     store.set_status("rosy-x", "lidar_mount", rid2, "accepted", actor="op")
     assert labeller_lidar_yaw_deg("rosy-x", str(tmp_path / "s"))[0] == pytest.approx(181.9)
-    assert robot_lidar_yaw_deg() == pytest.approx(180.0)   # URDF nominal since D-396; still unused here
+    assert robot_lidar_yaw_deg() == pytest.approx(180.0)   # URDF nominal since D-397; still unused here
 
 
 def test_configured_yaw_rotates_the_returns():

@@ -19,7 +19,7 @@ path here accepts on its own.
 Runtime consumers call ``resolve``: the current record's values, or the
 static fallback (robot.yaml, camera_nominal.yaml, rosy_params.yaml, ...) when
 there is none, together with a source line to log. The static values are the
-URDF nominal (D-396, the robot package's profile config/geometry.yaml), so the
+URDF nominal (D-397, the robot package's profile config/geometry.yaml), so the
 order is URDF nominal < accepted record < operator override.
 """
 from __future__ import annotations
@@ -40,7 +40,7 @@ STATUSES = ("candidate", "accepted", "rejected")
 DEFAULT_ROOT = "/var/lib/rosy/calibration"
 _LOG = logging.getLogger(__name__)
 # Plausibility at runtime and at accept (check_values), centred on the Pinky Pro
-# URDF nominal (D-396, geometry.yaml; drift-tested in tools/calibration/test/
+# URDF nominal (D-397, geometry.yaml; drift-tested in tools/calibration/test/
 # test_urdf_nominal.py): the C1 nose at scan angle 180 deg (rplidar_link yaw pi),
 # wheel radius 0.028 m and contact separation 0.0971 m. A record refines them.
 LIDAR_NOMINAL_DEG = 180.0

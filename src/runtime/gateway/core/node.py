@@ -96,7 +96,7 @@ class RosyCoreNode(Node):
         self.core.control_adapter = self.control_adapter
         if self.control_adapter.enabled:
             self.control_adapter.bind_safety(self.core.safety)
-        # D-47 addendum / D-396: one LiDAR mount for line_follow (operator overlay >
+        # D-47 addendum / D-397: one LiDAR mount for line_follow (operator overlay >
         # accepted store record > URDF-nominal hand value; the adapter binding is only compared).
         from core.lidar_mount import resolve_lidar_forward_deg
         from core_common.config import local_overlay

@@ -1,4 +1,4 @@
-"""Bringup wheel geometry: URDF nominal < accepted calibration record < operator override (D-47 addendum, D-396)."""
+"""Bringup wheel geometry: URDF nominal < accepted calibration record < operator override (D-47 addendum, D-397)."""
 
 import sys
 from pathlib import Path
@@ -57,7 +57,7 @@ def _accept(tmp_path, values):
 
 
 def test_order_urdf_nominal_then_record_then_operator_override(tmp_path):
-    """D-396: the 8kcn fit (0.0272 / 0.0975) refines the URDF 0.028 / 0.0971; a launch override wins."""
+    """D-397: the 8kcn fit (0.0272 / 0.0975) refines the URDF 0.028 / 0.0971; a launch override wins."""
     nominal = {'wheel_radius': 0.028, 'wheel_separation': 0.0971}
     assert calibrated_wheels(*nominal.values(), root=tmp_path, robot=ROBOT)[0] == nominal
     rid = _accept(tmp_path, {'wheel_radius': 0.0272, 'wheel_separation': 0.0975})

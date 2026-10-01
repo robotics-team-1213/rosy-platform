@@ -260,7 +260,7 @@ def test_names_are_checked():
         store.current(ROBOT, "anything")
 
 
-# D-396: URDF nominal (the static fallback) < accepted record < operator override, per kind.
+# D-397: URDF nominal (the static fallback) < accepted record < operator override, per kind.
 URDF_NOMINAL = {
     "lidar_mount": ({"lidar_yaw_offset": math.pi},
                     {"lidar_yaw_offset": math.radians(181.9)},

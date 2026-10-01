@@ -27,7 +27,7 @@ def test_accepted_record_overrides_the_file_and_is_named(tmp_path):
 
 
 def test_operator_override_wins_over_the_accepted_record(tmp_path):
-    """D-396 order: URDF nominal file < accepted camera_profile record < operator override."""
+    """D-397 order: URDF nominal file < accepted camera_profile record < operator override."""
     store = CalibrationStore(tmp_path)
     rid = store.add(ROBOT, 'camera_profile', {**FILE, 'pitch_rad': 0.20}, method='t/1')
     store.set_status(ROBOT, 'camera_profile', rid, 'accepted', actor='operator')

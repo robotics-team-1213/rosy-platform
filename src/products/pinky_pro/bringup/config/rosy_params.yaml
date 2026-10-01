@@ -1,6 +1,6 @@
 bringup:
   ros__parameters:
-    # URDF nominal (D-396 geometry.yaml), refined per robot by an accepted wheel_odometry calibration record (D-47 addendum store).
+    # URDF nominal (D-397 geometry.yaml), refined per robot by an accepted wheel_odometry calibration record (D-47 addendum store).
     wheel_radius: 0.028
     wheel_separation: 0.0971
     cmd_vel_timeout_s: 0.5
