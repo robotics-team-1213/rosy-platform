@@ -171,3 +171,9 @@
 - Change: `pilot_sim_api.PILOT_ASSETS` lacked `calibration.js`, which main's Pilot `app.js` now imports (c04de23a), so `/pilot` on port 8088 never mounted and `test_pilot_sim_browser.py` timed out on `[data-sim-code]`. Added it to match the CORE allowlist in `core_api_web/api/app.py`.
 - Evidence: `ROSY_RUN_BROWSER_TESTS=1 python -m pytest src/products/omx/adapter/test/test_pilot_sim_browser.py` 1 passed; adapter suite 168 passed, 3 skipped (2026-10-01 Windows).
 - Gate: none.
+
+## 2026-10-01 · uncommitted · test(omx): join Fleet grant to a ROS 2 ActionServer goal
+
+- Change: Added `test_omx_fleet_ros_actionserver.py`, joining Fleet Mission admission, the version-2 UDS API with `SO_PEERCRED`, the OMX Action journal, `PickPlaceRunner`, and the real `RosArmCommandRuntime` ROS action client against an in-process ROS 2 ActionServer. It verifies one approach goal, callback-bound UUID/result, accepted-only Mission state, and restart recovery to `UNKNOWN` without replaying the same grant. The fixture uses a bounded no-op joint trajectory and no camera/contact/gripper evidence.
+- Evidence: `rosy-omx-pilot:local`, SHA-256 `e94662607c72a7cea83c9449178099c4c9476afab0519275ce0da82a88f3da9a`, ROS 2 Jazzy: 1 passed. The test checks that Fleet's initial `SUBMITTING` receipt may precede the asynchronous ROS acceptance callback. A stable joint-state fixture preserves stale-state validation without a sample-sequence race.
+- Gate: ROS-SIM remains HOLD. This in-process contract fixture is not the vendor Gazebo generation/restart scenario or four-phase grasp/place proof; ARTIFACT remains HOLD and DEVICE/FIELD remain PARKED. Capability remains disabled.

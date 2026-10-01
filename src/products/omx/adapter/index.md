@@ -39,8 +39,8 @@
 
 ## 최근 기록
 
+- 2026-10-01 · uncommitted · test(omx): join Fleet grant to a ROS 2 ActionServer goal
 - 2026-10-01 · uncommitted · fix(pilot-sim): serve calibration.js on the sim port
 - 2026-10-01 · uncommitted · test(omx): pinned Jazzy timeout/cancel callback fault coverage
 - 2026-10-01 · uncommitted · D-390 Pilot simulation action bridge
 - 2026-10-01 · uncommitted · implement D-386 asynchronous phase response and fresh start-state checks
-- 2026-10-01 · uncommitted · correct OMX phase ADR number to D-386

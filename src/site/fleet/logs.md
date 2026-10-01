@@ -1060,3 +1060,9 @@
 - 변경: 실제 Compose 스택 페어링 실측에서 발견. 닿지 않는 로봇이 하나 있으면 `/api/fleet/state`가 5.1 s 걸리고, 콘솔은 세션(역할)이 이미 확인됐는데도 그동안 "토큰 필요"·운용자 버튼 잠금을 유지했다. 이제 세션이 확인되면 바로 역할을 적용하고 상태 표시를 "상태 확인 중"으로 바꾸며, 상태·발행 제어·발견·카메라 연결·대형 갱신을 나란히(Promise.allSettled) 돌려 느린 하나가 나머지를 막지 않는다. 401은 기존처럼 call()이 잠근다.
 - 증거: 신규 브라우저 시험(상태 수집을 붙잡은 채 로그인 → 3 s 안에 운영자 표시, "토큰 필요" 아님) 수정 전 실패·수정 후 통과. 브라우저 61/62(실패 1건 `test_the_console_renders_what_swarm_control_says`는 main에서도 실패), node 81, web_common·대화상자 계약 통과.
 - gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · test(fleet): exercise grant receipt through the ROS ActionServer callback
+
+- Change: Added a cross-module ROS 2 Jazzy contract fixture that admits a Fleet Mission, dispatches its version-2 grant over UDS with `SO_PEERCRED`, and observes the local Action receipt and asynchronous ROS goal callback. Fleet reports the Mission as accepted/running while the parent Action remains nonterminal; no `GOAL_PREDICATE_CONFIRMED` event is emitted. Restart recovery changes the parent action to `UNKNOWN`, and replaying the same grant does not send a second ROS goal.
+- Evidence: In the pinned local OMX Pilot image, the integration test passed (1). It uses an in-process ActionServer and bounded no-op goal; it is a ROS contract fixture, not a vendor Gazebo or physical grasp/place run. Provider dispatch remains disabled.
+- Gate: No gate promotion. ROS-SIM remains HOLD; ARTIFACT HOLD; DEVICE/FIELD PARKED.
