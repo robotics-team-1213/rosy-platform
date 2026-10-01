@@ -16,8 +16,12 @@ SIDES = ("left", "right", "opposite")
 #: Same name and semantics as line_follow (manager._obstacle_hold): one warning when a
 #: static corridor stop has lasted `obstacle_escalate_s`. Fleet re-routes (D-384 §4).
 EVENT_OBSTACLE_HOLD = "nav.line_obstacle_hold"
-EVENT_STOP_LINE_OVERSHOOT = "nav.road_stop_line_overshoot"
-EVENT_TURN_TIMEOUT = "nav.road_turn_timeout"
+#: Not catalogue events yet: nothing publishes them until the R1 node wiring adds an
+#: emitter and catalogue rows (test_event_catalogue: the catalogue is not a wish list).
+#: Until then they are bare reason codes without a namespace, so they cannot be
+#: mistaken for emitted event names.
+NOTICE_STOP_LINE_OVERSHOOT = "road_stop_line_overshoot"
+NOTICE_TURN_TIMEOUT = "road_turn_timeout"
 
 
 class BehaviourState(str, enum.Enum):
@@ -190,6 +194,7 @@ class BehaviourOutput:
     speed_cap_mps: float
     path_choice: Optional[str]
     reason: str
+    #: Catalogue event names (EVENT_*) and, until R1 wiring, bare NOTICE_* reason codes.
     events: tuple = field(default_factory=tuple)
 
 

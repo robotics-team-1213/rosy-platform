@@ -34,8 +34,8 @@
 
 ## 최근 기록
 
+- 2026-10-01 · uncommitted · fix(road_behaviour): 발행하지 않는 이벤트 이름 두 개를 사유 코드로
 - 2026-10-01 · uncommitted · fix(fleet_agent): D-370 S7 준비 — Fleet health 탐침이 확장 모양을 받는다
 - 2026-10-01 · 6d94e88f · docs(road_behaviour): D-384 도로 주행 행동 항목의 커밋 기록
 - 2026-10-01 · uncommitted · feat(road_behaviour): D-384 도로 주행 행동 상태 기계(ROS-free, 명령 없음)
 - 2026-10-01 · 22017f42 · fix(core): 만료 이벤트를 lock 밖에서 발행
-- 2026-10-01 · a527920a · feat(core): D-321 부록 보정 세션 lease
