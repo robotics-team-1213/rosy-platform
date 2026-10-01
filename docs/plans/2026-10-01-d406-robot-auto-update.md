@@ -72,7 +72,7 @@ All files live under `/var/lib/rosy/updates/` (root 0755; files 0644 except wher
 - **The reader (T2) must evaluate null-ineligibility first.** A null `battery_percent` is ineligible even if `battery_charging` is true. A null `estop`, `swarm_active`, `line_follow_*` or `velocity_*` is ineligible.
 - **Readers:**
   - `rosy-boot-status.py` must accept schema 1 and 2.
-  - T2 requires schema >= 2 and treats the file as stale after 60 s.
+  - T2 requires schema >= 2 and treats the file as stale after 25 s (CORE writes every 10 s). It takes two samples 12 s apart and requires the second `written_at` to be newer than the first (review M1, 2026-10-02).
 
 ## Tasks
 
