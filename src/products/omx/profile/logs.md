@@ -20,3 +20,8 @@
 - 변경: lock the AI follower Gazebo simulation to server-only Bullet Featherstone, synchronous simulated hardware, enforced URDF limits, and an action-only command path after finding direct leader-topic interference.
 - 증거: local amd64 image sha256:3858136d3cd552228549e5c9369b24e23c7fa051c4afc7497251f781cd023954; 21 focused host tests passed; two isolated ROS domains, bounded action, cancel, restart, and gripper mimic observed in docs/validation/omx-two-instance-ros-sim-2026-09-26/README.md.
 - gate 변화: ROS-SIM remains HOLD overall; native command ownership, target-workstation timing, camera, and physical stop remain open. ARTIFACT HOLD and DEVICE/FIELD PARKED.
+
+## 2026-10-01 · 21224829 · fix(omx): ship an empty CORE config layer
+- 변경: `config/core.yaml`(빈 매핑). D-196 추가 2026-10-01 부터 패키지가 있는 로봇은 이 층을 반드시 싣는다. OMX 는 더할 로봇 사실이 없다.
+- 증거: `load_config` with ROSY_ROBOT=omx → line_follow.lidar_forward_deg 0.0 (`test_pinky_lidar_forward_device.py`).
+- gate 변화: 없음.

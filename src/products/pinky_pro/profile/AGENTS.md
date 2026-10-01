@@ -13,6 +13,7 @@ Pinky Pro robot composition (D-196). Config only: the HWA-001 profile and CAP-00
 |------|-------------|
 | `config/profile.yaml` | HWA-001 Pinky Pro profile (model, max velocities, geometry, hardware mapping) |
 | `config/capabilities.yaml` | CAP-001 static flags (D-11); must match the profile (HWA-003) |
+| `config/core.yaml` | Robot-fact CORE config layer merged by `load_config` over `rosy_default.yaml`, under the local overlay (e.g. `line_follow.lidar_forward_deg: 180`) |
 | `package.xml` / `CMakeLists.txt` | ament_cmake; installs `config/` only |
 | `progress.md` | Current gate snapshot (SOURCE…FIELD). Overwrite; state of record over this file |
 | `logs.md` | Append-only work journal, one entry per change |

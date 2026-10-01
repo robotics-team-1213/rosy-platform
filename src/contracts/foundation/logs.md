@@ -219,6 +219,19 @@
 - 증거: test_calibration_session.py 의 robot/state·/ws/state 시험, test_protocol_version_alignment 통과.
 - gate 변화: 없음.
 
+## 2026-10-01 · uncommitted · fix(core_common): robot package core.yaml config layer (D-196)
+
+- 변경: `load_config` 가 rosy_default 위, 로컬 오버레이/ROSY_CONFIG 아래에 로봇 패키지의 `config/core.yaml` 을 병합한다(모델: ROSY_ROBOT > 오버레이 robot.model > 기본값). 파일이 없거나 패키지를 못 찾으면 아무것도 더하지 않는다. 첫 사용: Pinky Pro `line_follow.lidar_forward_deg: 180`.
+- 증거: gateway `test_pinky_lidar_forward_device.py` 5 passed; gateway+foundation+profile+test/ 6 failed 4763 passed — 5개는 기준 0476060b 에서도 같은 내용으로 실패(known_failures.txt 미등재), 1개(test_pinky_user_validation ssh timeout)는 단독 재실행 통과(부하 flaky). services 265 passed.
+- gate 변화: 없음.
+
+## 2026-10-01 · 078d0978 · fix(core_common): robot core.yaml layer fails closed (review of 9966e57b)
+
+- 변경: 21224829 패키지가 있는 로봇의 `core.yaml` 이 없으면 ConfigError, 모르는 모델·패키지 없음은 경고 한 줄. 37b439bf 최상위 null·기본 매핑 자리의 비매핑 값은 ConfigError(파일 이름). 078d0978 깨진 YAML 은 경로를 담은 ConfigError(CORE 기동 거부). 이어서 docstring 네 층, `ROBOT_NAME_PATTERN` 공용 상수, D-196 추가·운영 수용 기준 병합 순서.
+- 증거: `test_robot_core_layer.py` 8 passed; gateway `test_pinky_lidar_forward_device.py` 5 passed(3b525bb6: 가짜 ament 로 소스 트리 고정).
+- gate 변화: 없음.
+- 결정: D-196 추가 2026-10-01.
+
 ## 2026-10-01 · uncommitted · feat(protocol): D-391 4.1 공유 벡터 — device_kind·실패 분류·사이트 연결 기록
 
 - 변경: `core_common/protocol/`에 표준 라이브러리만 쓰는 세 모듈을 두었다. `device_kind.py`(`OVERHEAD_CAMERA`·`ROBOT`·`ALL`), `failure_class.py`(`classify(*, ws_close, reason, http_status, transport, discovery) -> str`, 입력은 정확히 한 종류), `site_link.py`(`validate(record) -> str | None`). 기계 원천은 `test/fixtures/protocol/failure-classes.v1.json`(26 사례, 분류 11종 전부)과 `site-link.v1.json`(33 사례, 사유 12종 전부)이다.

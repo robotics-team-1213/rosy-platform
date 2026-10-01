@@ -176,7 +176,8 @@ gate가 생략된 실행 모듈은 소비 모듈과 같은 stage까지, 그 이�
 
 - 같은 payload를 직렬화·역직렬화해 protocol version, enum, evidence와 오류
   envelope가 보존된다.
-- config가 기본값 → `~/.rosy/rosy.yaml` → `ROSY_CONFIG` 순으로 병합되며,
+- config가 기본값 → 로봇 패키지 `config/core.yaml`(D-196 추가) → `~/.rosy/rosy.yaml` → `ROSY_CONFIG`
+  순으로 병합되며(`ROSY_CONFIG` 가 있으면 `~/.rosy/rosy.yaml` 대신 읽는다),
   잘못된 타입·경로·identity는 명시 오류로 실패한다.
 - robot ID/name, profile, capability 검증이 모순된 조합과 미지원 기능을 거절한다.
 - CORE ROS-SIM 기동에서 동일 schema/config/identity가 REST/WS와 내부 서비스에
