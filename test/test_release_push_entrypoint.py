@@ -74,9 +74,9 @@ def _print_push(release: dict, robot: str = "rosy-e4us.local", *extra: str) -> s
 
 
 def _without_claim(plan: list[dict]) -> list[dict]:
-    """D-406: the claim brackets every plan (test_release_push_claim.py); the steps in between."""
+    """D-406: the claim brackets every plan and is refreshed after the upload (test_release_push_claim.py)."""
     assert plan[0]["role"] == "claim-acquire" and plan[-1]["role"] == "claim-release"
-    return plan[1:-1]
+    return [step for step in plan[1:-1] if step["role"] != "claim-refresh"]
 
 
 @pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
@@ -232,22 +232,22 @@ def test_default_key_and_known_hosts_paths_are_under_localappdata(release, monke
     first_ssh = plan[0]["arguments"]
     assert first_ssh[1] == "C:\\Users\\test-operator\\AppData\\Local\\Rosy\\ssh\\rosy-operator-ed25519"
     known_hosts_option = next(a for a in first_ssh if a.startswith("UserKnownHostsFile="))
-    # the value is quoted: ssh parses "-o Key=Value" like an ssh_config line,
-    # which splits an unquoted value on whitespace, and a LOCALAPPDATA under
-    # "C:\Program Files\..." would otherwise be cut at the first space.
-    assert known_hosts_option == 'UserKnownHostsFile="C:\\Users\\test-operator\\AppData\\Local\\Rosy\\known_hosts"'
+    # Unquoted: Windows PowerShell 5.1 would hand quotes to the C runtime, which
+    # strips them before ssh sees the value (test_known_hosts_policy.py).
+    assert known_hosts_option == "UserKnownHostsFile=C:\\Users\\test-operator\\AppData\\Local\\Rosy\\known_hosts"
 
 
 @pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
-def test_known_hosts_paths_with_spaces_survive_intact(release, monkeypatch):
+def test_known_hosts_paths_with_spaces_are_refused(release, monkeypatch):
+    # ssh would split such a path, and no quoting survives PowerShell 5.1 and
+    # the C runtime (test_known_hosts_policy.py); refuse instead of checking
+    # host keys against the wrong files.
     monkeypatch.setenv("LOCALAPPDATA", "C:\\Users\\test operator\\AppData\\Local")
 
     completed = _print_push(release)
 
-    assert completed.returncode == 0, completed.stderr
-    plan = json.loads(completed.stdout)["plan"]
-    known_hosts_option = next(a for a in plan[0]["arguments"] if a.startswith("UserKnownHostsFile="))
-    assert known_hosts_option == 'UserKnownHostsFile="C:\\Users\\test operator\\AppData\\Local\\Rosy\\known_hosts"'
+    assert completed.returncode != 0
+    assert "KnownHosts path contains a space" in completed.stderr
 
 
 @pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
