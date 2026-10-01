@@ -758,7 +758,14 @@
 - 한계: 저장된 테스트 영상/브라우저 검증과 로봇 실시간 배포는 별도. 전원이 꺼진 로봇에는 아직 반영하지 않음.
 - gate 변화: 없음. LOCAL 브라우저 증거 추가; DEVICE/FIELD 미승격.
 
+
 ## 2026-10-02 · uncommitted · fix(console): fullscreen uses dynamic viewport height
 - 변경: 확대 카메라 높이를 100dvh로 수정해 모바일 주소창 변경과 D-359 높이 규칙을 반영.
 - 증거: 원격 CI 36895230123이 새 100vh를 적발. design scope gate 5 passed로 수정 확인. 기존 테스트만 통과한 상태를 전체 CI 성공으로 취급하지 않음.
 - gate 변화: 없음. 전체 CI 및 실기 관문은 별도.
+
+## 2026-10-02 · uncommitted · D-405 /device 테마 버튼 아이콘 렌더 + fullscreen 100dvh 게이트 수리
+- 변경: panels/system/display.js가 RosyTheme.choices의 icon을 그리고 이름을 sr-only·title로 둔다. panels/surface-panels.css의 #vision-stage:fullscreen height 100vh를 100dvh로(6818ba40에서 들어온 위반을 test_full_viewport_heights_use_dvh가 지적).
+- 근거: D-405; D-359 높이 계약(dvh).
+- gate 변화: 없음.
+- 최종 증거: web_common 209 passed(dvh 게이트 포함); dashboard 회귀 포함 1291 passed 65 skipped.
