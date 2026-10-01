@@ -21,7 +21,10 @@ param(
 #   sudo -n python3 /opt/rosy/native-runtime/rosy_auto_update.py hold|release-hold|status --json
 # ssh joins the remote arguments into one shell line, so -Reason and -Holder
 # are limited to a safe character set and travel in single quotes. No double
-# quotes go into any native argument: Windows PowerShell 5.1 eats them.
+# quotes go into any native argument (Windows PowerShell 5.1 eats them), so the
+# known_hosts path is passed unquoted and one with a space or quote is refused.
+# -Status reads status.json fields that may be missing or null (the updater
+# has not run yet).
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
@@ -87,10 +90,14 @@ if (-not $KnownHosts) {
     $KnownHosts = Join-Path $env:LOCALAPPDATA "Rosy\known_hosts"
 }
 
-# ssh parses "-o Key=Value" like an ssh_config line, so the known_hosts path
-# is quoted for ssh itself (same as rosy-release-push.ps1).
+# ssh parses "-o Key=Value" like an ssh_config line and splits an unquoted
+# value at whitespace, and quoting it would put double quotes into a native
+# argument. So a path ssh would split, or one with a quote, is refused.
+if ($KnownHosts -match "[\s`"']") {
+    Fail "KnownHosts path contains a space or a quote, which ssh -o would split: $KnownHosts. Pass -KnownHosts <path without spaces>."
+}
 $arguments = @("-i", $KeyPath, "-o", "IdentitiesOnly=yes", "-o", "BatchMode=yes",
-    "-o", "StrictHostKeyChecking=yes", "-o", "UserKnownHostsFile=`"$KnownHosts`"",
+    "-o", "StrictHostKeyChecking=yes", "-o", "UserKnownHostsFile=$KnownHosts",
     "-o", "ConnectTimeout=5", "${RosyUser}@${Robot}") + $remote
 
 $previous = $ErrorActionPreference
@@ -116,21 +123,33 @@ try {
     Fail "status --json did not print JSON: $($output -join [Environment]::NewLine)"
 }
 
+# Set-StrictMode throws on a missing property, and the updater's "not run yet"
+# answer has only phase and reason.
+function Get-Field($Object, [string]$Name) {
+    if ($null -eq $Object -or $Object -isnot [PSCustomObject]) { return $null }
+    $property = $Object.PSObject.Properties[$Name]
+    if ($null -eq $property) { return $null }
+    return $property.Value
+}
+
 function Show([string]$Label, $Value) {
     if ($null -eq $Value -or "$Value" -eq "") { $Value = "-" }
     Write-Host ("{0,-13}: {1}" -f $Label, $Value)
 }
 
-Show "robot" "$($state.hostname) ($Robot)"
-Show "current" $state.current_release
-Show "candidate" $state.candidate
-Show "phase" $state.phase
-Show "reason" $state.reason
-if ($state.last_result) {
-    $last = $state.last_result
-    Show "last result" "$($last.release_id) $($last.outcome) at $($last.at) - $($last.detail)"
+$hostname = Get-Field $state "hostname"
+if (-not $hostname) { $hostname = "-" }
+Show "robot" "$hostname ($Robot)"
+Show "current" (Get-Field $state "current_release")
+Show "candidate" (Get-Field $state "candidate")
+Show "phase" (Get-Field $state "phase")
+Show "reason" (Get-Field $state "reason")
+$last = Get-Field $state "last_result"
+if ($null -ne $last) {
+    Show "last result" ("{0} {1} at {2} - {3}" -f (Get-Field $last "release_id"), (Get-Field $last "outcome"),
+        (Get-Field $last "at"), (Get-Field $last "detail"))
 } else {
     Show "last result" $null
 }
-Show "updated at" $state.updated_at
+Show "updated at" (Get-Field $state "updated_at")
 exit 0

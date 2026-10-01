@@ -36,11 +36,12 @@ exit 0
 pytestmark = pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
 
 
-def _run(tmp_path: Path, args: list[str], *, exit_code: int = 0, env_extra: dict | None = None):
+def _run(tmp_path: Path, args: list[str], *, exit_code: int = 0, env_extra: dict | None = None,
+         status_doc: dict = STATUS):
     fake = tmp_path / "fake-ssh.ps1"
     fake.write_text(FAKE_SSH, encoding="ascii")
     status = tmp_path / "status.json"
-    status.write_text(json.dumps(STATUS), encoding="utf-8")
+    status.write_text(json.dumps(status_doc, sort_keys=True), encoding="utf-8")
     log = tmp_path / "ssh.log"
     env = dict(os.environ, ROSY_FAKE_LOG=str(log), ROSY_FAKE_STATUS=str(status),
                LOCALAPPDATA=str(tmp_path / "appdata"), USERNAME="livs", COMPUTERNAME="OPS-PC")
@@ -72,7 +73,7 @@ def test_hold_runs_the_device_cli_with_quoted_arguments(tmp_path):
     for option in ("IdentitiesOnly=yes", "BatchMode=yes", "StrictHostKeyChecking=yes", "ConnectTimeout=5"):
         assert option in argv
     known = next(a for a in argv if a.startswith("UserKnownHostsFile="))
-    assert known.endswith('appdata\\Rosy\\known_hosts"')
+    assert known == "UserKnownHostsFile=" + str(tmp_path / "appdata" / "Rosy" / "known_hosts")
     assert str(tmp_path / "appdata" / "Rosy" / "ssh" / "rosy-operator-ed25519") in argv
     # PowerShell 5.1 eats embedded double quotes on the way to a native exe.
     assert not any('"' in a for a in argv[argv.index("rosy@192.168.1.202"):])
@@ -183,3 +184,33 @@ def test_the_script_stays_ascii_and_never_disables_host_key_checking():
     raw.decode("ascii")
     text = raw.decode("ascii")
     assert "StrictHostKeyChecking=yes" in text and "StrictHostKeyChecking=no" not in text
+
+
+# --- review fixes (M2, L5) ---------------------------------------------------------
+
+# T2 rosy_auto_update.py `status --json` when status.json does not exist yet.
+NOT_RUN_YET = {"phase": None, "reason": "the updater has not run yet"}
+
+
+@pytest.mark.parametrize("doc", [NOT_RUN_YET, {"phase": "idle"}, dict(STATUS, last_result=None), {}])
+def test_status_survives_missing_or_null_fields(tmp_path, doc):
+    done, _calls = _run(tmp_path, ["-Status"], status_doc=doc)
+
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert "phase" in done.stdout and "last result" in done.stdout
+    if doc is NOT_RUN_YET:
+        assert "the updater has not run yet" in done.stdout
+
+
+@pytest.mark.parametrize("appdata", ["with space", "it's"])
+def test_a_known_hosts_path_ssh_would_split_is_refused(tmp_path, appdata):
+    done, calls = _run(tmp_path, ["-Status"], env_extra={"LOCALAPPDATA": str(tmp_path / appdata)})
+
+    assert done.returncode != 0 and calls == []
+    assert "KnownHosts" in done.stderr
+
+
+def test_no_native_argument_carries_a_double_quote(tmp_path):
+    _done, calls = _run(tmp_path, ["-Hold", "-Reason", "bench", "-Hours", "1"])
+
+    assert not any('"' in a for a in calls[0])
