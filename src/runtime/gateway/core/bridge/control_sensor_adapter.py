@@ -219,6 +219,8 @@ class ControlSensorAdapter:
         self._closed = False
         self._calibration_snapshot = None
         self._parameters: dict[str, Any] = {}
+        #: D-400: why a configured shadow fell back to off ('' when it did not).
+        self.mode_error = ""
 
         if not self.config.enabled:
             return
@@ -304,15 +306,15 @@ class ControlSensorAdapter:
         return None if self._calibration_snapshot is None else self._calibration_snapshot.digest
 
     def bind_safety(self, safety: Any) -> bool:
-        """Bind the worker policy to CORE's safety consumer when enabled."""
+        """Bind the worker policy to CORE's safety consumer: shadow records, enforce limits (D-400)."""
         if not self.enabled:
             return False
-        # D-400: shadow binds through bind_shadow_control_policy (plan Task 7); until then it never enforces.
-        if self.config.mode != "enforce":
-            return False
-        if self.policy is None or not callable(getattr(safety, "bind_control_policy", None)):
+        if self.policy is None:
             raise ValueError("enabled sensor adapter cannot bind its policy")
-        safety.bind_control_policy(self.policy)
+        if self.config.mode == "shadow":
+            safety.bind_shadow_control_policy(self.policy)
+        else:
+            safety.bind_control_policy(self.policy)
         return True
 
     def attach(self, executor: Any) -> bool:
@@ -340,3 +342,33 @@ class ControlSensorAdapter:
         self.node.destroy_node()
         self._closed = True
         return True
+
+
+_CALIBRATION_IGNORED = "control.sensor_adapter.calibration is ignored (D-400 3); use the calibration store"
+
+
+def build_control_adapter(raw_config: Mapping[str, Any] | None, *, parameters: Mapping[str, Any],
+                          policy_required: bool = False,
+                          **factories: Any) -> tuple["ControlSensorAdapter", list[str]]:
+    """D-400 assembly: resolved parameters replace the overlay, the calibration
+    block is ignored, and a shadow that cannot start runs with the policy off.
+    Config errors (bad mode, bad types, shadow + safety.control_policy_required)
+    still raise in every mode."""
+    raw = dict(raw_config or {})
+    calibration = raw.pop("calibration", None)
+    raw["parameters"] = dict(parameters)
+    config = ControlSensorConfig.from_mapping(raw)  # config errors raise before anything is built
+    if config.mode == "shadow" and policy_required:
+        raise ValueError("control_policy_required is enforce-only; shadow never binds a deciding policy")
+    notes: list[str] = []
+    if isinstance(calibration, Mapping) and calibration.get("required") is True:
+        notes.append(_CALIBRATION_IGNORED)
+    try:
+        return ControlSensorAdapter(raw, **factories), notes
+    except Exception as exc:
+        if config.mode != "shadow":
+            raise
+        off = ControlSensorAdapter({"mode": "off"})
+        off.mode_error = str(exc)
+        notes.append(f"shadow sensor adapter failed, running with the policy off: {exc}")
+        return off, notes

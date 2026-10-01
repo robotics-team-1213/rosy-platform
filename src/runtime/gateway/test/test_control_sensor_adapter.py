@@ -10,6 +10,7 @@ import pytest
 from core.bridge.control_sensor_adapter import (
     ControlSensorAdapter,
     ControlSensorConfig,
+    build_control_adapter,
 )
 from control.calibration_storage import merge_calibration
 from control.sensor_provider import PROVIDER
@@ -404,20 +405,124 @@ def test_packaged_default_merged_with_legacy_enabled_overlay_is_enforce():
     assert ControlSensorConfig.from_mapping(merged["control"]["sensor_adapter"]).mode == "enforce"
 
 
-def test_shadow_adapter_does_not_bind_safety_before_its_own_binding():
-    sensor = FakeSensorNode()
-    adapter = ControlSensorAdapter(
-        {"mode": "shadow"}, sensor_node_factory=lambda **kwargs: sensor,
-        **_provider_factories()
-    )
+class RecordingSafety:
+    def __init__(self):
+        self.calls = []
 
-    class Safety:
-        def __init__(self):
-            self.calls = []
+    def bind_control_policy(self, policy):
+        self.calls.append(("enforce", policy))
 
-        def bind_control_policy(self, policy):
-            self.calls.append(policy)
+    def bind_shadow_control_policy(self, policy):
+        self.calls.append(("shadow", policy))
 
-    safety = Safety()
+
+def test_bind_safety_follows_the_mode():
+    for mode in ("shadow", "enforce"):
+        adapter = ControlSensorAdapter({"mode": mode}, sensor_node_factory=lambda **k: FakeSensorNode(**k),
+                                       **_provider_factories())
+        safety = RecordingSafety()
+
+        assert adapter.bind_safety(safety) is True
+        assert safety.calls == [(mode, adapter.policy)]
+
+
+def test_build_passes_resolved_parameters_and_ignores_the_calibration_block():
+    created = []
+
+    def factory(**kwargs):
+        created.append(kwargs)
+        return FakeSensorNode(**kwargs)
+
+    adapter, notes = build_control_adapter(
+        {"mode": "shadow", "parameters": {"cliff_enable": False},
+         "calibration": {"required": True, "path": "/x"}},
+        parameters={"lidar_yaw_offset": 3.17, "cliff_enable": False},
+        sensor_node_factory=factory, **_provider_factories())
+
+    assert adapter.config.mode == "shadow"
+    assert created[0]["parameter_overrides"] == {"lidar_yaw_offset": 3.17, "cliff_enable": False}
+    assert notes == ["control.sensor_adapter.calibration is ignored (D-400 3); use the calibration store"]
+
+
+def test_shadow_construction_failure_falls_back_to_off():
+    def broken(**kwargs):
+        raise ValueError("no IR stream")
+
+    adapter, notes = build_control_adapter({"mode": "shadow"}, parameters={},
+                                           sensor_node_factory=broken, **_provider_factories())
+
+    assert adapter.config.mode == "off"
+    assert adapter.mode_error == "no IR stream"
+    assert notes == ["shadow sensor adapter failed, running with the policy off: no IR stream"]
+    safety = RecordingSafety()
     assert adapter.bind_safety(safety) is False
     assert safety.calls == []
+
+
+def test_shadow_non_value_error_also_falls_back_to_off():
+    def broken(**kwargs):
+        raise RuntimeError("rclpy not initialised")
+
+    adapter, notes = build_control_adapter({"mode": "shadow"}, parameters={},
+                                           sensor_node_factory=broken, **_provider_factories())
+
+    assert adapter.config.mode == "off"
+    assert adapter.mode_error == "rclpy not initialised"
+    assert notes == ["shadow sensor adapter failed, running with the policy off: rclpy not initialised"]
+
+
+def test_enforce_construction_failure_still_refuses_start():
+    def broken(**kwargs):
+        raise ValueError("no IR stream")
+
+    with pytest.raises(ValueError, match="no IR stream"):
+        build_control_adapter({"mode": "enforce"}, parameters={},
+                              sensor_node_factory=broken, **_provider_factories())
+
+
+def test_invalid_mode_in_shadow_config_is_still_a_config_error():
+    with pytest.raises(ValueError, match="off, shadow or enforce"):
+        build_control_adapter({"mode": "on"}, parameters={})
+
+
+def test_shadow_with_control_policy_required_is_a_config_error():
+    # Design 3.1: shadow never binds a deciding policy, so policy_required would
+    # latch every command. Rejected before any worker is built.
+    with pytest.raises(ValueError, match="control_policy_required"):
+        build_control_adapter({"mode": "shadow"}, parameters={}, policy_required=True)
+
+
+def test_off_mode_builds_no_worker_and_binds_nothing():
+    calls = []
+    adapter, notes = build_control_adapter(
+        {"mode": "off"}, parameters={"lidar_yaw_offset": 3.17},
+        sensor_node_factory=lambda **k: calls.append(k), **_provider_factories())
+    safety = RecordingSafety()
+
+    assert adapter.config.mode == "off"
+    assert calls == []
+    assert notes == []
+    assert adapter.bind_safety(safety) is False
+    assert safety.calls == []
+
+
+@pytest.mark.parametrize("calibration", [None, {}, {"required": False, "path": "/x"}])
+def test_calibration_block_without_required_produces_no_note(calibration):
+    raw = {"mode": "off"}
+    if calibration is not None:
+        raw["calibration"] = calibration
+
+    _, notes = build_control_adapter(raw, parameters={})
+
+    assert notes == []
+
+
+def test_legacy_enabled_config_builds_an_enforce_binding():
+    adapter, notes = build_control_adapter(
+        {"enabled": True}, parameters={},
+        sensor_node_factory=lambda **k: FakeSensorNode(**k), **_provider_factories())
+    safety = RecordingSafety()
+
+    assert adapter.config.mode == "enforce"
+    assert adapter.bind_safety(safety) is True
+    assert safety.calls == [("enforce", adapter.policy)]
