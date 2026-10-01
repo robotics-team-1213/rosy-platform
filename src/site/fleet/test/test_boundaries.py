@@ -79,3 +79,14 @@ def test_hub_may_import_only_protocol_schemas_from_core():
             for banned in CORE_FORBIDDEN_PREFIXES:
                 assert name != banned and not name.startswith(banned + "."), path.name
 
+
+LOCALIZATION_DIR = Path(__file__).resolve().parents[1] / "fleet" / "localization"
+#: D-395: the arbiter is scoring only. The service loop that talks to robots lives
+#: in server/ (Phase 2) and calls in; the arbiter never calls out.
+LOCALIZATION_FORBIDDEN = FORBIDDEN + ("fleet.server", "fastapi")
+
+
+@pytest.mark.parametrize("module", sorted(p.name for p in LOCALIZATION_DIR.glob("*.py")))
+def test_localization_arbiter_modules_import_no_transport(module):
+    for name in _imports(LOCALIZATION_DIR / module):
+        assert not name.startswith(LOCALIZATION_FORBIDDEN), f"{module} imports {name}"
