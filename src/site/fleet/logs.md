@@ -959,3 +959,9 @@
 - 변경: rosy-84 Rosy Cam 클라이언트 보안 리뷰 권고. 첫 confirm 응답이 사라지면 폰은 자격이 살아났는지 알 수 없어 버리고, 그 자리는 운용자가 폐기할 때까지 막혔다. 이제 같은 요청·같은 poll 비밀·같은 `credential_id`로 승인 뒤 120 s 안에 다시 confirm하면, 그 자격이 여전히 active일 때만 같은 200을 돌려준다(감사 행은 처음 한 번). 다른 ID·창 밖·폐기 뒤는 지금처럼 410. 함께: 모델 감시기 분할(625fad86) 뒤 낡은 `watch.py` 크기 판정 행을 지웠다(콘솔 병합이 되살린 행).
 - 증거: `test_pairing_state.py` 31 passed(신규 2건), `test/architecture/test_module_structure.py` 33 passed.
 - gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · test(fleet): D-392 P4 provider adapter conformance fixtures
+- 변경: Test-only Interactions and Live API shaped adapters normalize differing native call/result fields into the same canonical Fleet contract and exercise the actual dispatcher and durable journal.
+- Coverage: read and candidate calls, replay and call-ID collision, argument byte limit, stale turn after stop, and denial of mock motion/gripper, sample-shaped OpenAPI, and model-routed stop tools. Endpoint profiles keep Interactions-only structured output/code execution out of Live assumptions.
+- Evidence: 25 conformance tests passed. No production Live adapter, new provider SDK, physical action, or device claim.
+- gate 변화: none. SOURCE/LOCAL only; ROS-SIM, ARTIFACT, DEVICE, and FIELD were not run.

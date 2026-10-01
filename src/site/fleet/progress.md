@@ -10,7 +10,7 @@ gates:
     cmd: "python3 -m pytest src/fleet/test/test_boundaries.py -q"
   LOCAL:
     state: GO
-    evidence: "Fleet suite 676 passed/5 skipped including ER2 proposal/admission, durable Mission Action dispatcher with persisted stable grant and restart GetAction reconciliation, independent goal evidence provenance, and SQLite WAL/index contracts. API web 70 passed/13 skipped, OMX adapter 85 passed/3 skipped, foundation 102 passed. Synthetic indexed Mission queries improved by three orders of magnitude locally; this is not target-device evidence. D-348 producer registry, token-scoped evidence ingress, SQLite idempotency, terminal-action verification, and grace-timeout HOLD are implemented and covered by host tests. Dispatcher remains explicit opt-in and automatic policy dispatch remains disabled; no live observation producer, configured OMX service/driver, ROS-SIM, or physical stop/goal proof. SOURCE/LOCAL only."
+    evidence: "Fleet suite 676 passed/5 skipped including ER2 proposal/admission, durable Mission Action dispatcher with persisted stable grant and restart GetAction reconciliation, independent goal evidence provenance, and SQLite WAL/index contracts. API web 70 passed/13 skipped, OMX adapter 85 passed/3 skipped, foundation 102 passed. Synthetic indexed Mission queries improved by three orders of magnitude locally; this is not target-device evidence. D-348 producer registry, token-scoped evidence ingress, SQLite idempotency, terminal-action verification, and grace-timeout HOLD are implemented and covered by host tests. Dispatcher remains explicit opt-in and automatic policy dispatch remains disabled; no live observation producer, configured OMX service/driver, ROS-SIM, or physical stop/goal proof. SOURCE/LOCAL only. D-392 provider-neutral model tool contract and per-call SQLite journal are covered by 1,126 Fleet tests (6 skipped) on 2026-10-01. Interactions and Live API-shaped conformance fixtures use fake provider envelopes only; they do not prove a production Live adapter, ROS-SIM, ARTIFACT, DEVICE, or FIELD acceptance."
     cmd: "python3 -m pytest src/site/fleet/test -q"
   ROS-SIM:
     state: HOLD
@@ -22,7 +22,7 @@ gates:
     state: PARKED
   FIELD:
     state: PARKED
-adrs: [D-5, D-10, D-12, D-18, D-20, D-21, D-30, D-31, D-59, D-60, D-90, D-93, D-106, D-114, D-116, D-157, D-159, D-269, D-288, D-289, D-290, D-291, D-293, D-300, D-306, D-316, D-318, D-331, D-333, D-334, D-336, D-268]
+adrs: [D-5, D-10, D-12, D-18, D-20, D-21, D-30, D-31, D-59, D-60, D-90, D-93, D-106, D-114, D-116, D-157, D-159, D-269, D-288, D-289, D-290, D-291, D-293, D-300, D-306, D-316, D-318, D-331, D-333, D-334, D-336, D-268, D-392]
 plans:
   - docs/plans/2026-09-29-er2-mission-action-contract-closure.md
   - docs/plans/2026-09-29-fleet-mission-control-arbitration-implementation.md
@@ -38,6 +38,7 @@ plans:
   - docs/plans/2026-09-27-uiux-surface-closure.md
   - docs/plans/2026-09-28-site-camera-preview-rectification.md
   - docs/plans/2026-09-29-er2-semantic-actions-mission-implementation.md
+  - docs/plans/2026-10-01-model-tool-contract-implementation.md
 ---
 ## 현재 상태 (2026-09-27)
 
