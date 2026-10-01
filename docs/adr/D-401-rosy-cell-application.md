@@ -41,5 +41,6 @@
 
 - **SOURCE:** `rosy_cell` 코어가 위 형식으로 패턴, 스택, 순서, 로더, 컴파일러를 구현하고 ROS-free pytest가 통과한다.
 - **ROS-SIM / DEVICE / FIELD:** 이 결정으로 승격하지 않는다. 도달성과 실행은 장치 측 Step API와 MoveIt 채택(D-399 후속 3)이 있어야 한다.
+  - **보강 (2026-10-01, D-402):** 시뮬레이션 실행은 [D-402](D-402-omx-motion-planner-v1-analytic-top-down-ik.md)의 해석 IK로 먼저 하고, MoveIt은 같은 인터페이스의 후속 구현으로 붙인다. 셀 schema는 `rosy_cell.cell/2`(`home`, `kinematics_revision`)로 올린다([D-404](D-404-omx-setup-teaching-api-simulation-first.md) §5).
 
 **관련 결정:** [D-328](D-328-model-proposed-missions-and-independent-goal-evidence.md), [D-376](D-376-omx-pick-place-planning-and-execution-boundary.md), [D-377](D-377-app-names-rosy-plus-one-english-word.md), [D-386](D-386-omx-async-goal-acceptance-and-phase-state.md), [D-397](D-397-pinky-geometry-urdf-nominal-calibration-refines.md), [D-399](D-399-rosy-layered-architecture-site-plane-device-pipeline.md), [D-330](D-330-fleet-action-admission-stop-and-recovery.md), [D-336](D-336-fleet-omx-local-ipc-boundary.md)

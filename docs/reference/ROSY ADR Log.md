@@ -397,3 +397,6 @@
 | D-398 | 증거 한국어 어휘(EVIDENCE_LABEL 최신·지연·연결 끊김·정보 없음 + ` · N초 전` 규격)는 core_ui_logic.js 단일 출처로 승격(D-396 G1 첫 적용; 노드 순수 시험 파일은 예외), 2026-10-01 감사의 P0 네 곳(죽은 토큰 참조·LCD 장미색 #e31b5d 드리프트와 parity 정규식 우회·Pilot 장미색 인터랙션 남용·`stale` 다섯째 증거 상태)을 고치고, 철학 범위 게이트 네 종(정지 D-220·장미색 부정 D-277·역할 우선 두 쌍·100vh 금지)을 test_design_scope_gates.py 로 강제 — 펄스·페이드·전이는 걷히고 기다림은 조용한 뮤트 대시, 컴포넌트 수는 실측(엘리먼트 16)으로 말한다 | Accepted (2026-10-01, 사용자 승인 2026-09-29 ADR 확장 범위; 돌연변이 증명 2026-10-01; LCD 실물 사진·운용자 G3 관찰은 별건) |
 | D-399 | ROSY 계층 아키텍처: Application · Fleet(사이트) · 장치별 Command Pipeline — 숙고형 AI는 Fleet 제안, 반응형 정책은 같은 호스트 엔벌로프 스킬 | Proposed |
 | D-401 | Rosy Cell 애플리케이션: 셀 설정·레시피 분리, 해시로 묶은 Job(Step 목록), 팔레타이징 패턴 v1 | Proposed |
+| D-402 | OMX 모션 플래너 v1: 장치 로컬 해석 5축 수직하향 IK(고정 open_manipulator URDF), `CELL_TRANSFER`·simulation 한정으로 D-376 §2·§3 HOLD를 좁게 개방, 충돌 장면 없음, owner만 제출, MoveIt은 같은 Protocol의 두 번째 구현 | Proposed |
+| D-403 | Fleet Cell Job 경로: Rosy Cell Job → Fleet 제안(재컴파일 검증)·승인 → Step마다 `CELL_TRANSFER` Action 하나, 정지 세대 의미, D-330 §2 하달 보류는 simulation에서만 ROS-SIM 정지 세대 시험 후 개방, 셀 해시 검사는 OMX owner | Proposed |
+| D-404 | OMX 셋업·티칭 API(시뮬 우선): D-390 pairing·seat·제한 jog + 읽기 전용 TCP(FK) 조회, 마법사는 팔로워 FK 저장, 장치 셀 수락, 실물 장치 API는 닫힘 | Proposed |

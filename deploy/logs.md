@@ -1833,6 +1833,7 @@
 - gate 변화: 기존 gate 유지; DEVICE/FIELD 승격 없음.
 - 결정: D-390 부록.
 - 교훈: 파일 쓰기 완료 전 들어온 interruption과 logical closure 경계를 구분한다.
+
 ## 2026-10-01 · uncommitted · perf(release): rosdep apt 패키지를 한 트랜잭션으로 — payload 빌드 7분 9초→4분 49초
 
 - 변경: `build-native-payload.sh`가 `rosdep install --simulate`로 계획을 받아 `rosdep_apt_batch.py`(패키지 이름 아닌 것은 거부)로 apt 패키지를 모으고, rosdep과 같은 플래그로 `apt-get install -y` 한 번에 설치한 뒤 rosdep을 그대로 다시 돌려 남은 것이 없음을 확인한다. 전에는 rosdep이 키마다 `apt-get install`을 따로 실행했다(22회, 트리거 30회, ~958 패키지). 워크플로는 일회용 runner에서만 dpkg `force-unsafe-io`와 man-db auto-update 끄기를 둔다(이미지 빌드 경로는 무관, 시험으로 고정).
