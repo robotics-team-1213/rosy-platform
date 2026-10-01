@@ -129,6 +129,9 @@ fi
 
 mv -T -- "$TMP" "$TARGET"
 trap - EXIT
+# tar gave the directory the archive's own (old) mtime; the D-406 updater prunes
+# only release directories older than an hour, so mark this one as new.
+touch -- "$TARGET"
 sync -f -- "$TARGET" 2>/dev/null || sync
 rm -f -- "$TARBALL"
 echo "unpacked $RELEASE_ID"

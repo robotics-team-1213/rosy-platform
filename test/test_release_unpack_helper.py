@@ -328,3 +328,26 @@ def test_a_stale_tmp_directory_from_a_prior_run_is_cleared_at_start(tmp_path, re
 
     assert completed.returncode == 0, completed.stderr
     assert not stale.exists()
+
+
+def test_a_fresh_release_directory_gets_a_fresh_mtime(tmp_path, releases):
+    # D-406: the updater prunes only release directories older than an hour. tar
+    # restores the archive's own (old) mtime on "./", so the script touches the
+    # target after the rename and a just-unpacked release is never pruned.
+    import os
+    import time
+
+    content = tmp_path / "content"
+    (content / "install").mkdir(parents=True)
+    (content / "install" / ".rosy-release").write_text("2026.01.01-001", encoding="utf-8")
+    _sha256sums(content)
+    old = time.time() - 30 * 24 * 3600
+    for path in [content, *content.rglob("*")]:
+        os.utime(path, (old, old))
+    archive = tmp_path / "pack.tar.gz"
+    _pack(content, archive)
+
+    completed = _run("2026.01.01-001", archive, releases)
+
+    assert completed.returncode == 0, completed.stderr
+    assert (releases / "2026.01.01-001").stat().st_mtime > time.time() - 600
