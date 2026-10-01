@@ -244,3 +244,9 @@
 - 변경: `site_link.py`의 지역 변수 `has_secret`가 비밀 스캔 `credential` 규칙에 걸려 `inline`으로 바꿨다(D-256: 스캐너가 아니라 호출 자리를 고친다). `expires_at` 달력 검사는 `%z`를 붙인 aware datetime으로(DTZ007), 새 시험의 import 정렬을 맞췄다. 동작 변경 없음.
 - 증거: `test/test_release_boundary_guards.py` 73 passed(수정 전 `test_no_secrets_in_tracked_files` 1 failed), foundation 279 passed, 새 파일 ruff 통과.
 - gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · fix(protocol): D-391 벡터 — 4400 사유 정규화, manual_host는 IP만
+
+- 변경: rosy-84 Kotlin 대조에서 나온 두 차이. ① 4400 사유는 공백 제거·casefold 뒤 비교한다(" No Hello " → busy, "NO HELLO extra" → protocol_mismatch 사례 추가). ② `manual_host`는 IPv4/IPv6 리터럴만 받는다(D-391 1항 "rosyov 링크의 IP, DNS 없이 연결"과 일치) — 이름·`ip:port`는 `bad_manual_host`, IPv6 허용 사례 추가.
+- 증거: foundation 시험 329 passed; Kotlin 쪽은 rosy-84 브랜치 `feat/cam-d391-shared-vectors`가 같은 벡터로 대조.
+- gate 변화: 없음.

@@ -388,3 +388,4 @@
 | D-390 | Pilot의 OMX-AI 연습은 시뮬레이션 전용 장치 API를 거쳐 로컬 팔 명령 소유자에 연결한다 | Accepted (2026-10-01, 설계·실행 순서 결정; API·Pilot·Gazebo 통합과 ROS-SIM·실물 수용은 별도) |
 | D-391 | 앱은 사이트 연결을 같은 모양(이름·CA·자격, IP 없음)으로 저장하고, 기기 연결 서버는 Fleet "기기 연결"이 맡는다 | Proposed (2026-10-01; 사이트 연결 기록 모양·사이트 호스트 설정 원천·기기 연결 구현 순서; 구현·담당은 결정 회차) |
 | D-392 | 모델 도구 호출은 provider 중립 메시지 계약과 Fleet 소유 allowlist를 따른다 | Accepted (2026-10-01, 내부 호출·결과 경계; 도구는 요청이지 device Action이 아니며 actuation·stop/E-stop 권한과 provider 활성화는 미결정) |
+| D-393 | Pinky 트랙 Nav2 위치추정은 AMCL `update_min_d` 0.02, 목표 허용오차 0.05 m / 0.10 rad, 주차 자세 출발·global localization 금지 운용 규칙을 제안한다 | Proposed (2026-10-01; sim 1대 n=1 증거, 설정 미변경; 반복 sim A/B와 승인된 실물 주행 전 적용 안 함) |

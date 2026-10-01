@@ -4105,3 +4105,10 @@
 - 변경: 124745Z R0의 도로 쪽 불합격 3항목(on_paint 0.186, 직선 |err| 0.392, NIS 꼬리)을 추정기 과제로 명시. LaneKeeper d421c86a 재생에서 도로·추정기 수치가 main과 같음. 횡단보도 정지 구간의 on_paint 오판과 참고용 on_lane_paint 지표(D-379 crosswalk/stop_line 클래스 전까지 기준 아님) 기록. URDF 형상 사전값(IR ±0.020 m, 카메라 높이 0.063 m, LiDAR 정면 180°, 바퀴 0.028/0.0971 m)을 재생·시뮬 사전값으로만 기록.
 - 증거: X:\DevTemp\rosy-ml-work\d384-replay-d421 재생 출력(main·d421, 2258 프레임), rosy-bc 세션 합의.
 - gate 변화: 없음(로봇 설정 변경 없음).
+
+## 2026-10-01 · uncommitted · docs(adr): D-393 제안 — Nav2 AMCL `update_min_d` 0.02와 목표 허용오차
+- 변경: `docs/adr/D-393-nav-amcl-update-min-d-and-goal-tolerance.md` 신규(Proposed), ADR Log에 D-393 행. 기기 AMCL은 `navigation/params/nav2_params.yaml`(0.15)을 쓰고 sensing `localization.yaml`(0.005)은 기기 경로가 아님을 파일 경로로 기록. 허용오차 0.25 m / 0.25 rad, 운용 규칙, 적용 전 게이트 기재
+- 증거: sim 전용(Gazebo Harmonic, 1대, 행당 n=1, WSL 부하 30–60). 평가 스크립트·출력은 저장소 밖 `X:\DevTemp\rosy-ml-work\nav-eval\`. 실물 재생은 추정
+- gate 변화: 없음(로봇 설정·params 변경 없음).
+- 결정: D-393 Proposed
+- 교훈: 없음
