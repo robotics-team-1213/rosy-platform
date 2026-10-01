@@ -67,8 +67,8 @@
 
 ## 최근 기록
 
+- 2026-10-02 · 088a6a9a · fix(native): D-406 T2 재리뷰 반영 — CORE 상태 fail-closed, 확정 코드 목록, 적용 backoff, 활성화기 precheck
 - 2026-10-02 · 8198ec47 · fix(release): D-406 T3 재리뷰 반영 — 철회 우선, 로컬 대체본 업로드, known_hosts 정책 하나
 - 2026-10-02 · 0904824d · fix(release): D-406 T3 카나리 조기 철회는 `failed`만, `error`는 계속 지켜본다
 - 2026-10-02 · 56d292a2 · fix(release): D-406 T3 독립 리뷰 반영 — 철회 보존, 기준 결과, 키 경로, claim 판정
 - 2026-10-02 · 9970f2e0 · feat(release): D-406 T3 운영 PC — 발행·카나리·철회, hold 명령, push claim
-- 2026-10-02 · b909ed5b · fix(native): 재개 시 rosy-core가 멈춰 있으면 유휴 판정 면제 (D-406 T2)

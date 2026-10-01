@@ -312,6 +312,9 @@ class FakeHost(upd.Host):
     def _start(self, argv):
         return self._ok()
 
+    def _corestate(self, argv):
+        return self._ok("ActiveState=active\nSubState=running\nMainPID=101\n")
+
     def _mainpid(self, argv):
         return self._ok({"rosy-core.service": "101\n", "rosy-io.service": "102\n",
                          "rosy-camera.service": "103\n"}.get(argv[-1], "0\n"))
@@ -342,6 +345,8 @@ def kind_of(argv: list[str]) -> str:
         return "recover"
     if argv[:2] == ["systemctl", "start"]:
         return "start"
+    if argv[:2] == ["systemctl", "show"] and "ActiveState,SubState,MainPID" in argv:
+        return "corestate"
     if argv[:2] == ["systemctl", "show"]:
         return "mainpid"
     if argv[:2] == ["systemctl", "restart"]:
@@ -1286,6 +1291,7 @@ def test_transient_activation_failure_is_not_marked_failed(device, host, hub, ke
     assert NEXT not in state(device).get("failed", {})
     assert state(device).get("applying") is None
     del host.overrides["activate"]
+    host.t += dt.timedelta(minutes=11)  # past the first apply backoff (N7)
     assert updater(host, hub).run()["phase"] == "committed"
 
 
@@ -1471,8 +1477,10 @@ def test_not_enough_disk_is_refused_before_downloading(device, host, hub, keys):
 def test_old_and_failed_release_directories_are_pruned_after_commit(device, host, hub, keys):
     # M5
     releases = device / "opt/rosy/releases"
+    stamp = (T0 - dt.timedelta(hours=2)).timestamp()
     for old in ("2026.09.30-001", "2026.09.30-002"):
         (releases / old).mkdir()
+        os.utime(releases / old, (stamp, stamp))  # older than the 1 h prune guard (N6)
     host.links["previous"] = "2026.09.30-002"
     (releases / ".tmp-2026.10.01-099-1").mkdir()
     hub.publish(keys, NEXT)
@@ -1681,10 +1689,23 @@ def test_unexpected_exception_after_activation_rolls_back(device, host, hub, key
 
 
 # --- coordinator decision on H1: CORE down waives idleness for a resume ---------------
+# Re-review N2: "down" is read fail-closed from systemctl show ActiveState/SubState/MainPID.
 
 
-def _core_down_until_restarted(host: FakeHost) -> None:
+def _core_state(active: str, sub: str, pid: int, returncode: int = 0):
+    return lambda h, argv: subprocess.CompletedProcess(
+        [], returncode, f"ActiveState={active}\nSubState={sub}\nMainPID={pid}\n" if returncode == 0 else "", "")
+
+
+def _core_down_until_restarted(host: FakeHost, *, fresh_after_restart: bool = False,
+                               active: str = "inactive", sub: str = "dead") -> None:
     host.core_up = False
+    real_write = FakeHost.write_inputs
+
+    def core_state(h, argv):
+        if h.core_up:
+            return None
+        return _core_state(active, sub, 0)(h, argv)
 
     def is_active(h, argv):
         if "rosy-core.service" in argv and not h.core_up:
@@ -1694,6 +1715,9 @@ def _core_down_until_restarted(host: FakeHost) -> None:
     def restart(h, argv):
         if "rosy-core.service" in argv:
             h.core_up = True
+            if fresh_after_restart:
+                h.write_inputs = lambda: real_write(h)
+                h.write_inputs()
         return None
 
     def mainpid(h, argv):
@@ -1701,7 +1725,8 @@ def _core_down_until_restarted(host: FakeHost) -> None:
             return subprocess.CompletedProcess([], 0, "0\n", "")
         return None
 
-    host.overrides.update({"is-active": is_active, "restart": restart, "mainpid": mainpid})
+    host.overrides.update({"corestate": core_state, "is-active": is_active, "restart": restart,
+                           "mainpid": mainpid})
 
 
 def _stale_inputs(device: Path, host: FakeHost) -> None:
@@ -1709,11 +1734,15 @@ def _stale_inputs(device: Path, host: FakeHost) -> None:
     host.write_inputs = lambda: None
 
 
-def test_resume_with_core_down_waives_the_idleness_check(device, host, hub, keys):
+def _resume_case(device, host, hub, keys, step="image-layer-sync"):
     hub.publish(keys, NEXT)
     switched(device, host)
-    journal(device, "image-layer-sync")
-    _core_down_until_restarted(host)
+    journal(device, step)
+
+
+def test_resume_with_core_down_waives_the_idleness_check(device, host, hub, keys):
+    _resume_case(device, host, hub, keys)
+    _core_down_until_restarted(host, fresh_after_restart=True)
     _stale_inputs(device, host)
 
     result = updater(host, hub).run()
@@ -1723,10 +1752,36 @@ def test_resume_with_core_down_waives_the_idleness_check(device, host, hub, keys
     assert any("idleness check waived" in entry["detail"] for entry in history(device))
 
 
+@pytest.mark.parametrize("active,sub", [("failed", "failed"), ("activating", "auto-restart")])
+def test_failed_or_restarting_core_without_a_pid_is_down(device, host, hub, keys, active, sub):
+    _resume_case(device, host, hub, keys)
+    _core_down_until_restarted(host, fresh_after_restart=True, active=active, sub=sub)
+    _stale_inputs(device, host)
+
+    assert updater(host, hub).run()["phase"] == "committed"
+
+
+@pytest.mark.parametrize("override", [
+    _core_state("active", "running", 0),           # active without a MainPID
+    _core_state("inactive", "dead", 4242),         # a PID still recorded
+    _core_state("activating", "start-pre", 0),     # starting, not crash-looping
+    _core_state("inactive", "dead", 0, returncode=1),  # systemctl failed: assume running
+    lambda h, argv: subprocess.CompletedProcess([], 0, "garbage\n", ""),
+], ids=["active-no-pid", "pid-left", "start-pre", "systemctl-failed", "unparseable"])
+def test_anything_else_counts_as_core_running(device, host, hub, keys, override):
+    _resume_case(device, host, hub, keys)
+    host.overrides["corestate"] = override
+    _stale_inputs(device, host)
+
+    result = updater(host, hub).run()
+
+    assert result["phase"] == "ineligible"
+    assert "waived" not in result["reason"]
+    assert not RESTARTING & set(kinds(host))
+
+
 def test_resume_with_core_down_still_honours_a_hold(device, host, hub, keys):
-    hub.publish(keys, NEXT)
-    switched(device, host)
-    journal(device, "image-layer-sync")
+    _resume_case(device, host, hub, keys)
     _core_down_until_restarted(host)
     _stale_inputs(device, host)
     up = updater(host, hub)
@@ -1740,9 +1795,7 @@ def test_resume_with_core_down_still_honours_a_hold(device, host, hub, keys):
 
 
 def test_resume_with_core_down_still_honours_a_seal_and_a_claim(device, host, hub, keys):
-    hub.publish(keys, NEXT)
-    switched(device, host)
-    journal(device, "image-layer-sync")
+    _resume_case(device, host, hub, keys)
     _core_down_until_restarted(host)
     _stale_inputs(device, host)
     claim_mod.acquire(device, "push-pc", "release push", 1800, now=T0)
@@ -1755,9 +1808,7 @@ def test_resume_with_core_down_still_honours_a_seal_and_a_claim(device, host, hu
 
 
 def test_resume_with_core_active_and_stale_inputs_is_ineligible(device, host, hub, keys):
-    hub.publish(keys, NEXT)
-    switched(device, host)
-    journal(device, "image-layer-sync")
+    _resume_case(device, host, hub, keys)
     _stale_inputs(device, host)
 
     result = updater(host, hub).run()
@@ -1767,16 +1818,276 @@ def test_resume_with_core_active_and_stale_inputs_is_ineligible(device, host, hu
     assert not RESTARTING & set(kinds(host))
 
 
-def test_resume_treats_core_without_a_main_pid_as_down(device, host, hub, keys):
-    # The unit may report active (e.g. ExecStartPre) with no MainPID: nothing commands motion.
-    hub.publish(keys, NEXT)
-    switched(device, host)
-    journal(device, "image-layer-sync")
-    _core_down_until_restarted(host)
-    del host.overrides["is-active"]  # rosy-core.service "active", MainPID 0
+def test_waived_resume_defers_when_core_comes_back_without_idle_status(device, host, hub, keys):
+    # N4: CORE restarted by the core-release check; before restarting units the
+    # normal idleness check applies, and stale inputs defer the resume.
+    _resume_case(device, host, hub, keys)
+    _core_down_until_restarted(host, fresh_after_restart=False)
     _stale_inputs(device, host)
 
     result = updater(host, hub).run()
 
+    assert result["phase"] == "ineligible"
+    assert "deferred" in result["reason"]
+    assert state(device)["applying"]["release_id"] == NEXT
+    assert not any(kind_of(argv) == "restart" and "rosy-io.service" in argv for argv in host.calls)
+    assert "rollback" not in kinds(host)
+
+
+def test_the_waiver_note_is_dropped_once_core_runs_again(device, host, hub, keys):
+    # N15: a later resume with CORE running must not carry the old waiver note.
+    _resume_case(device, host, hub, keys)
+    _core_down_until_restarted(host, fresh_after_restart=False)
+    _stale_inputs(device, host)
+    up = updater(host, hub)
+    assert up.run()["phase"] == "ineligible"
+    host.write_inputs = lambda: FakeHost.write_inputs(host)
+    host.write_inputs()
+
+    result = up.run()
+
     assert result["phase"] == "committed", result
-    assert "idleness check waived" in result["last_result"]["detail"]
+    assert "waived" not in result["last_result"]["detail"]
+
+
+def test_core_active_but_silent_for_30_minutes_is_stuck(device, host, hub, keys):
+    # N5: no auto-rollback; tell the operator.
+    _resume_case(device, host, hub, keys)
+    _stale_inputs(device, host)
+    host.t = T0 + dt.timedelta(minutes=29)
+    assert updater(host, hub).run()["phase"] == "ineligible"
+
+    host.t = T0 + dt.timedelta(minutes=31)
+    result = updater(host, hub).run()
+
+    assert result["phase"] == "stuck"
+    assert result["reason"] == "CORE active but not writing status; operator action required"
+    assert state(device)["applying"]["release_id"] == NEXT
+    assert not RESTARTING & set(kinds(host))
+
+
+# --- re-review: classification, backoff, precheck, rollback recovery --------------------
+
+
+@pytest.mark.parametrize("error,definitive", [
+    ("NATIVE_MANIFEST_PAYLOAD: digest mismatch for x", True),
+    ("NATIVE_TARGET_MISMATCH: host", True),
+    ("NATIVE_PYTHON_RUNTIME: mismatch", True),
+    ("SIGNATURE_INVALID: does not verify", True),
+    ("CHECKSUM_MISMATCH: x", True),
+    ("candidate failed health check and was rolled back", True),
+    ("SIGNATURE_KEY_UNREADABLE: trusted public key is missing", False),
+    ("Command '['systemctl', 'stop', 'rosy-core.service']' timed out after 120 seconds", False),
+    ("[Errno 28] No space left on device", False),
+    ("NATIVE_RELEASE_MISSING: release directory is unavailable", False),
+], ids=lambda value: str(value)[:30])
+def test_only_known_release_errors_are_definitive(device, host, hub, keys, error, definitive):
+    # N3
+    hub.publish(keys, NEXT)
+    host.overrides["activate"] = lambda h, argv: subprocess.CompletedProcess(
+        [], 1, json.dumps({"ok": False, "error": error}), "")
+
+    result = updater(host, hub).run()
+
+    assert (NEXT in state(device).get("failed", {})) is definitive
+    assert result["phase"] == ("failed" if definitive else "error")
+
+
+def test_staging_verify_with_an_unreadable_key_is_transient(device, host, hub, keys):
+    # N3
+    hub.publish(keys, NEXT)
+    host.overrides["verify"] = lambda h, argv: subprocess.CompletedProcess(
+        [], 1, json.dumps({"ok": False, "error": "SIGNATURE_KEY_UNREADABLE: missing"}), "")
+
+    assert updater(host, hub).run()["phase"] == "error"
+    assert NEXT not in state(device).get("failed", {})
+
+
+def test_repeated_transient_apply_failures_back_off_then_hold(device, host, hub, keys):
+    # N7
+    hub.publish(keys, NEXT)
+    host.overrides["activate"] = lambda h, argv: subprocess.CompletedProcess([], 124, "", "TIMEOUT")
+    up = updater(host, hub)
+    for attempt in range(1, 4):
+        assert up.run()["phase"] == "error"
+        assert kinds(host).count("activate") == attempt
+        # inside the backoff no activation; after the third failure the robot is held
+        assert up.run()["phase"] == ("waiting" if attempt < 3 else "held")
+        assert kinds(host).count("activate") == attempt
+        host.t += dt.timedelta(hours=7)
+
+    result = up.run()
+
+    assert result["phase"] == "held"
+    assert result["reason"] == "repeated transient apply failures; operator action required"
+    assert kinds(host).count("activate") == 3
+    assert NEXT not in state(device).get("failed", {})
+
+    del host.overrides["activate"]
+    up.release_hold()  # operator action clears the count
+    assert up.run()["phase"] == "committed"
+
+
+def test_the_activator_gets_the_updater_precheck(device, host, hub, keys):
+    # N1
+    hub.publish(keys, NEXT)
+    updater(host, hub).run()
+    activate = next(argv for argv in host.calls if kind_of(argv) == "activate")
+    assert activate[0] == "env"
+    precheck = next(item for item in activate if item.startswith("ROSY_ACTIVATE_PRECHECK="))
+    assert "rosy_auto_update.py" in precheck and precheck.endswith(" precheck")
+
+
+def test_a_refused_precheck_is_ineligible_not_a_failure(device, host, hub, keys):
+    # N1
+    hub.publish(keys, NEXT)
+    host.overrides["activate"] = lambda h, argv: subprocess.CompletedProcess(
+        [], 1, json.dumps({"ok": False, "error": "NATIVE_PRECHECK_REFUSED: robot mode is MANUAL"}), "")
+
+    result = updater(host, hub).run()
+
+    assert result["phase"] == "ineligible"
+    assert NEXT not in state(device).get("failed", {})
+    assert not state(device).get("apply_errors")
+
+
+@pytest.mark.parametrize("setup,code", [
+    (lambda device, host, up: None, 0),
+    (lambda device, host, up: up.hold("agent", "G5", 1), 3),
+    (lambda device, host, up: write_json(device / "etc/rosy/approvals/hardware.approved",
+                                         {"release_id": CURRENT}), 3),
+    (lambda device, host, up: (setattr(host, "inputs_changes", {"velocity_linear": 0.3}),
+                               host.write_inputs()), 3),
+    (lambda device, host, up: _stale_inputs(device, host), 3),
+], ids=["idle", "hold", "sealed", "moving", "stale"])
+def test_cli_precheck(device, host, hub, setup, code, monkeypatch, capsys):
+    # N1: what the activator runs; one sample, our own claim allowed.
+    up = updater(host, hub)
+    setup(device, host, up)
+    claim_mod.acquire(device, upd.CLAIM_HOLDER, "auto-update", 600, now=host.t)
+    monkeypatch.setattr(upd, "Host", lambda root: host)
+    assert upd.main(["--root", str(device), "precheck"]) == code
+
+
+def test_prune_skips_young_directories_and_runs_under_the_release_lock(device, host, hub, keys):
+    # N6
+    releases = device / "opt/rosy/releases"
+    old = releases / "2026.09.30-001"
+    young = releases / "2026.09.30-002"
+    old.mkdir()
+    young.mkdir()
+    stamp = (T0 - dt.timedelta(hours=2)).timestamp()
+    os.utime(old, (stamp, stamp))
+    young_stamp = (T0 - dt.timedelta(minutes=30)).timestamp()
+    os.utime(young, (young_stamp, young_stamp))
+    up = updater(host, hub)
+
+    with up._locked_file(device / "var/lib/rosy/releases/native-release.lock"):
+        up._prune({})
+    assert old.exists()  # lock busy: nothing pruned
+
+    up._prune({})
+    assert not old.exists() and young.exists()
+
+    os.utime(young, (stamp, stamp))
+    host.links = {"current": None, "previous": None}
+    up._prune({})
+    assert young.exists()  # no current: never prune
+
+
+def test_a_failed_rollback_recovers_a_native_journal(device, host, hub, keys):
+    # N8, N10
+    hub.publish(keys, NEXT)
+    host.overrides["ready"] = lambda h, argv: (subprocess.CompletedProcess([], 1, "", "x")
+                                              if h.links["current"] == NEXT else None)
+
+    def died_midway(h, argv):
+        write_json(device / "var/lib/rosy/releases/native-activation.json",
+                   {"schema_version": 1, "operation": "rollback", "candidate": CURRENT,
+                    "old_current": NEXT, "old_previous": CURRENT, "phase": "prepared"})
+        return subprocess.CompletedProcess([], 124, "", "TIMEOUT")
+
+    host.overrides["rollback"] = died_midway
+
+    updater(host, hub).run()
+
+    order = kinds(host)
+    assert "recover" in order and order.index("recover") < order.index("start")
+
+
+def test_runtime_is_not_started_when_recover_fails(device, host, hub, keys):
+    # N10
+    hub.publish(keys, NEXT)
+
+    def killed_midway(h, argv):
+        write_json(device / "var/lib/rosy/releases/native-activation.json", {"bad": True})
+        return subprocess.CompletedProcess([], 124, "", "TIMEOUT")
+
+    host.overrides["activate"] = killed_midway
+    host.overrides["recover"] = lambda h, argv: subprocess.CompletedProcess(
+        [], 1, json.dumps({"ok": False, "error": "NATIVE_RECOVERY_HOLD: invalid"}), "")
+
+    updater(host, hub).run()
+
+    assert "recover" in kinds(host)
+    assert "start" not in kinds(host)
+
+
+def test_previous_above_current_is_an_operator_rollback(device, host, hub, keys):
+    # N9
+    (device / "opt/rosy/releases" / NEXT).mkdir(parents=True)
+    host.links = {"current": CURRENT, "previous": NEXT}
+    hub.publish(keys, NEXT)
+
+    result = updater(host, hub).run()
+
+    assert result["phase"] == "idle"
+    assert state(device)["failed"][NEXT]["detail"] == "operator rolled back"
+
+
+def test_interrupted_activation_that_never_switched_is_not_a_failure(device, host, hub, keys):
+    # N11
+    hub.publish(keys, NEXT)
+    (device / "opt/rosy/releases" / NEXT).mkdir(parents=True)
+    journal(device, "activate")
+
+    result = updater(host, hub).run()
+
+    assert NEXT not in state(device).get("failed", {})
+    assert state(device).get("applying") is None
+    assert result["phase"] == "waiting"
+
+
+def test_rollback_pending_gives_up_after_five_retries(device, host, hub, keys):
+    # N12
+    hub.publish(keys, NEXT)
+    host.overrides["ready"] = lambda h, argv: (subprocess.CompletedProcess([], 1, "", "x")
+                                              if h.links["current"] == NEXT else None)
+    host.overrides["rollback"] = lambda h, argv: subprocess.CompletedProcess(
+        [], 1, json.dumps({"ok": False, "error": "NATIVE_RELEASE_BUSY: x"}), "")
+    up = updater(host, hub)
+    results = [up.run() for _ in range(7)]
+    phases = [result["phase"] for result in results]
+
+    # the first attempt and five retries; the sixth failure gives up
+    assert phases[:5] == ["error"] * 5
+    assert phases[5] == "failed"
+    assert "operator" in results[5]["reason"]
+    assert state(device).get("applying") is None
+    assert kinds(host).count("rollback") == 6
+    assert phases[6] == "idle"  # no further rollback attempts
+
+
+def test_a_claim_release_error_does_not_crash_the_run(device, host, hub, keys, monkeypatch):
+    # N13
+    hub.publish(keys, NEXT)
+
+    def broken(root, holder):
+        raise OSError("read-only /run")
+
+    monkeypatch.setattr(claim_mod, "release", broken)
+
+    result = updater(host, hub).run()
+
+    assert result["phase"] == "committed"
+    assert any(entry["event"] == "claim_release_failed" for entry in history(device))
