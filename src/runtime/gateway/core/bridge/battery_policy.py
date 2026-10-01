@@ -35,6 +35,7 @@ could move unchanged.
 
 from __future__ import annotations
 
+import contextlib
 import math
 
 from core_features.power.battery import BatteryLevel
@@ -69,9 +70,15 @@ def apply_voltage(services, voltage: float) -> None:
     if action == "RETURN_HOME":
         if services.nav.docking_active_provider():
             return
-        try:
-            services.nav.home(source="battery_policy")
-        except Exception:
-            services.safety.trigger_estop("battery_policy")
+        localization = services.localization  # None on a robot without D-395
+        gate = localization.gate if localization is not None else contextlib.nullcontext()
+        with gate:
+            try:
+                # D-395: not LOCALIZED means the home goal cannot be dispatched.
+                if localization is not None and not localization.autonomy_allowed():
+                    raise RuntimeError("robot localization is not LOCALIZED")
+                services.nav.home(source="battery_policy")
+            except Exception:
+                services.safety.trigger_estop("battery_policy")
     elif action in ("STOP",):
         services.safety.trigger_estop("battery_policy")

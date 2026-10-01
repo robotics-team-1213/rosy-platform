@@ -8,6 +8,7 @@ from core_api_web.api.v1.common import (
     enter_navigation_mode,
     operator,
     require_calibration_owner,
+    localized_start,
     viewer,
 )
 from core_api_web.api.deps import AuthContext, get_services, CoreServicesLike
@@ -51,13 +52,14 @@ def swarm_follow(body: SwarmFollowParams, auth: AuthContext = Depends(operator),
         raise ApiError("MODE_CONFLICT", 409,
                        f"cannot follow from {svc.modes.mode.value}")
 
-    status = svc.swarm.follow(body, source=f"api:{auth.role}")
-    try:
-        enter_navigation_mode(svc, auth)
-    except ApiError:
-        # 여기까지 올 일은 없어야 하지만, 왔다면 무장된 채로 두지 않는다.
-        svc.swarm.cancel(source="api", reason="mode_conflict")
-        raise
+    with localized_start(svc):  # D-395 §2: autonomy only from LOCALIZED
+        status = svc.swarm.follow(body, source=f"api:{auth.role}")
+        try:
+            enter_navigation_mode(svc, auth)
+        except ApiError:
+            # 여기까지 올 일은 없어야 하지만, 왔다면 무장된 채로 두지 않는다.
+            svc.swarm.cancel(source="api", reason="mode_conflict")
+            raise
     return {**svc.swarm.state_payload(), "role": status.role.value}
 
 

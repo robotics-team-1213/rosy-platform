@@ -4255,3 +4255,17 @@
 - 변경: 2단계 구현에서 정한 것을 D-395 개정 4로 기록. D-395 이전 로봇(`localization: null`)은 현행 유지+카드 경고, LOCALIZED 관문(시작 거부·이탈 시 자율 주행 정지, 수동 조종 허용), `LOCALIZE_ASSIST`는 운용자 역할로 부여(토큰별 grant는 후속), 천장 카메라 단서 기본 꺼짐(D-257 개정 수용 전), 사다리 시계·재시도 규칙. 남은 한계: 다른 로봇 관찰은 CANDIDATES 로봇의 보고에만 실려, 모든 로봇이 LOCALIZED인 동안 Fleet 상시 감시가 비어 있다 → LOCALIZED 로봇도 `unmapped_objects`를 싣는 후속 계약 확장 제안. ADR Log 상태 갱신.
 - 증거: 2단계 갈래 B(CORE)·C(Fleet) 구현 보고.
 - gate 변화: 없음(Proposed).
+## 2026-10-01 · uncommitted · docs(api-ref): v1.70 — D-395 2단계 CORE 경로·capability·이벤트
+- 변경: API Ref v1.70. §2 AUTH-102 토큰 capability 표, ERR-102 `NOT_LOCALIZED`·`STALE_REQUEST`·`NO_CANDIDATES`·D-395 lease 423, §5.3 새 경로 3개와 initialpose·goal·home·line-follow 행, §6.1 스냅샷이 실제로 채워짐·frame 정직성·state_stale, §7.9 전송 경로 열림, §8 `localization.state|candidates|result` 와 initialpose `source`, 변경 이력 행. 핀: `app.py` ×2, `test/test_line_follow_contract_docs.py`, `src/site/fleet/test/test_task_contract_docs.py` ×2, `test_mission_progress.py`.
+- 증거: `test_protocol_version_alignment.py`, `test_event_catalogue.py`, 핀 시험.
+- gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · docs(api-ref): v1.70 보강 — LOCALIZED 이탈 정지, 도킹·follow 게이트
+- 변경: §8 `localization.state` 와 `swarm.aborted`(`reason: localization`), ERR-102 `NOT_LOCALIZED` 대상에 `docking/dock`·`swarm/follow`, v1.70 변경 이력 행.
+- 증거: `test_event_catalogue.py`.
+- gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · docs(api-ref): v1.70 보강 — odom 프레임 거부, 내부 시작 게이트
+- 변경: ERR-102 `NOT_LOCALIZED` 에 `pose_frame: odom`, 시작·정지 잠금 순서, 배터리 자동 도킹 대기와 SAF-005 귀환 e-stop. v1.70 변경 이력 행 보강.
+- 증거: `test_event_catalogue.py`, `test_protocol_version_alignment.py`.
+- gate 변화: 없음.

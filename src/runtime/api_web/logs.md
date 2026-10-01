@@ -288,3 +288,20 @@
 - gate 변화: 기존 gate 유지; DEVICE/FIELD 승격 없음.
 - 결정: D-390 부록.
 - 교훈: 파일 쓰기 완료 전 들어온 interruption과 logical closure 경계를 구분한다.
+## 2026-10-01 · uncommitted · feat(api): D-395 P2-4/P2-5 위치 확정 경로·capability, 계약 v1.70
+
+- 변경: 새 `api/grants.py`(`NAVIGATE`·`LOCALIZE_ASSIST`, 역할에서 정해짐), 새 `v1/localization.py`(`GET /localization/candidates`, `POST /localization/decision|suspect`, lease 423, STALE 409, D-395 이전 로봇 501). 레거시 `POST /localization/initialpose` 는 D-395 로봇에서 `source: human` 결정으로 간다(응답 그대로, 이전 로봇은 `/initialpose`). `navigation/goal`·`home`·`line-follow/mode`(OFF 제외)는 D-395 로봇이 LOCALIZED 가 아니면 409 `NOT_LOCALIZED`. `app.py` 핀 v1.70.
+- 증거: `src/runtime/gateway/test/test_localization_api.py`(capability 행렬·lease·stale·재경로·게이트·이벤트), `test_api.py`·`test_calibration_session.py` 그대로 통과, 변이(게이트·재경로 제거 → 4 빨강).
+- gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · feat(api): 도킹·swarm follow 시작도 LOCALIZED 게이트
+
+- 변경: `docking/dock`·`swarm/follow` 에 `require_localized` — D-395 로봇이 LOCALIZED 가 아니면 409 `NOT_LOCALIZED`, `localization` null 로봇은 그대로.
+- 증거: `src/runtime/gateway/test/test_localization_api.py` 게이트·pre-D-395 시험.
+- gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · fix(api): D-395 리뷰 — 시작은 localization 잠금 안에서, odom 프레임 거부
+
+- 변경: `common.localized_start` — `require_localized` 검사와 시작(goal·home·line-follow·dock·swarm follow)을 `localization.gate` 안에서. `require_localized` 는 `pose_frame: odom` 이면 LOCALIZED 라도 409 `NOT_LOCALIZED`. 도킹 `NOT_LOCALIZED` → 409 매핑.
+- 증거: `src/runtime/gateway/test/test_localization_api.py`.
+- gate 변화: 없음.

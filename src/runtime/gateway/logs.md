@@ -663,3 +663,20 @@
 - 변경: CI 빨강(36877526967 등 3회 연속, 2026-10-01 14:28 원격 푸시부터)의 원인인 C6 reach 8종을 전부 삭제로 수정. snapshot.mode/navigation/docking 은 StateSnapshot 이 보장하는 선언 멤버(schemas.py)라 직접 접근으로 바꾸고, docking_state 는 pin 된 모드-맥락 계약(도킹 중에만 실린다)대로 고침. self._svc.nav.current_goal 은 NavigationManager 에 선언된 적이 없는 멤버 — 주행 카드의 목표 좌표는 태어나서 한 번도 값이 실린 적 없었다(죽은 reach). 읽기를 지우고 판정을 문서에 남긴다. 시험 stub 의 docking.state 를 실제 DockState enum 으로(문자열 이중 모양 제거).
 - 근거: docs/plans/2026-09-06-module-split-criteria.md 행 추가(판정: 전부 Seam lie — deletion). test_module_criteria·test_bridge_display·test_bridge_reconcile·test_bridge_timers·test_emotion_map·test_goal_tracker 87 passed, flake8 초록.
 - gate 변화: 없음. 목표 좌표 표시는 NavigationManager 가 current_goal 을 선언하는 커밋에서 돌아온다(직접 접근 + 실측 시험 동반).
+## 2026-10-01 · uncommitted · feat(bridge,services): D-395 P2-1 스냅샷 localization 채움
+
+- 변경: `ros_bridge.py` 가 `localization/state`·`candidates`(transient-local)·`result` 를 구독하고 `localization/decision`·`suspect`(reliable, depth 5)를 발행한다. `received_s` 는 ROS 시계. `_tick_state` 가 `_on_odom` 과 같은 신선도 규칙으로 frame 플래그를 넘긴다. `services.py` 가 `LocalizationAssist` 를 만들어 StateManager 에 live provider 로 걸고, LOCALIZED 진입·결정 수락 때 `nav.cancel(source="localization")` 을 부른다.
+- 증거: `test/test_localization_api.py` 30, `test_bridge_timers.py`(구독 3·발행 2·latch 2 추가), `test_event_catalogue.py`.
+- gate 변화: 없음(장치·sim 미검증; lane A 노드와의 통합은 P2-8).
+
+## 2026-10-01 · uncommitted · feat(services): D-395 LOCALIZED 이탈 정지 조립
+
+- 변경: `services.py` 가 `wire_assist` 로 LocalizationAssist 를 조립한다(LOCALIZED 진입 → Nav2 취소, 이탈 → 자율 주행 정지).
+- 증거: `test/test_localization_api.py` +7 (Nav2·line-follow·swarm·도킹 정지, state_stale, teleop 유지, 도킹·follow 게이트, pre-D-395 무영향).
+- gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · fix(bridge): D-395 리뷰 — SAF-005 귀환 게이트, 시작·정지 순서
+
+- 변경: `battery_policy.py` — `RETURN_HOME` 은 `localization.gate` 안에서 `autonomy_allowed()` 를 보고, 아니면 보낼 수 없는 귀환과 같이 e-stop. `localization` 없는 서비스는 그대로.
+- 증거: `test/test_bridge_battery_policy.py` +2, `test/test_localization_api.py` +2 (odom 프레임 거부, 검사와 시작 사이에 끼어든 정지가 시작 뒤에 접는다 — 잠금 제거 변이로 빨강 확인).
+- gate 변화: 없음.

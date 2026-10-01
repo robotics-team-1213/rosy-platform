@@ -6,6 +6,9 @@
 
 from __future__ import annotations
 
+import contextlib
+from typing import Iterator
+
 from core_api_web.api.deps import AuthContext, require_role, CoreServicesLike
 from core_api_web.api.errors import ApiError
 from core_api_web.api.deps import Mode, NavigationError
@@ -25,6 +28,39 @@ def require_kept(svc: CoreServicesLike, flag: str) -> None:
             "CAPABILITY_WITHHELD", 409, f"{flag} withheld: {reason}",
             detail={"capability": flag, "reason": reason},
         )
+
+
+def require_localized(svc: CoreServicesLike) -> None:
+    """D-395 §2: autonomous driving only from LOCALIZED.
+
+    A robot that predates D-395 reports no localization state; it keeps today's
+    behaviour (contract open question 2).
+    """
+    loc = getattr(svc, "localization", None)
+    status = loc.status() if loc is not None else None
+    if status is None or (status.state.value == "LOCALIZED" and status.pose_frame.value == "map"):
+        return
+    # An odom-frame pose is not one Fleet trusts either (D-395 10), even when LOCALIZED.
+    raise ApiError(
+        "NOT_LOCALIZED", 409,
+        f"robot localization is {status.state.value} in the {status.pose_frame.value} frame",
+        detail={"state": status.state.value, "pose_frame": status.pose_frame.value,
+                "reason": status.reason},
+    )
+
+
+@contextlib.contextmanager
+def localized_start(svc: CoreServicesLike) -> Iterator[None]:
+    """Check LOCALIZED and dispatch the start under the localization gate.
+
+    The leave-LOCALIZED halt takes the same gate, so it runs either before the
+    check (which then refuses) or after the start (which it then stops) — never
+    in between.
+    """
+    loc = getattr(svc, "localization", None)
+    with (loc.gate if loc is not None else contextlib.nullcontext()):
+        require_localized(svc)
+        yield
 
 
 def require_calibration_owner(svc: CoreServicesLike, auth: AuthContext, action: str) -> None:

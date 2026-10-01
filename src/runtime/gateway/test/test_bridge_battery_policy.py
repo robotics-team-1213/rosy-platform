@@ -60,8 +60,9 @@ def build(recorder, *, percent=55.0, level=BatteryLevel.OK, action=None,
         if home_raises:
             raise RuntimeError("no home waypoint")
 
+    # `localization=None`: a robot without D-395 (the policy reads the field directly).
     return SimpleNamespace(battery=battery, state=state, power=power,
-                           safety=safety, docking=docking,
+                           safety=safety, docking=docking, localization=None,
                            nav=SimpleNamespace(
                                home=home,
                                docking_active_provider=lambda: docking_active))
@@ -227,3 +228,39 @@ def test_the_filtered_percent_is_what_the_policy_sees_not_the_raw_volts():
 
     assert ("state.set_battery", 18.5, 7.1) in rec.calls
     assert ("safety.on_battery_percent", 18.5) in rec.calls
+
+
+# --- D-395: the SAF-005 return-home obeys the LOCALIZED gate ----------------------
+
+
+class _Loc:
+    def __init__(self, ok: bool) -> None:
+        import threading
+        self.ok = ok
+        self.gate = threading.RLock()
+
+    def autonomy_allowed(self) -> bool:
+        return self.ok
+
+
+def test_return_home_is_not_dispatched_when_not_localized():
+    """Not LOCALIZED means the home goal cannot be dispatched: the same escalation
+    as any other undispatchable RETURN_HOME (e-stop), never a drive on a bad pose."""
+    rec = Recorder()
+    services = build(rec, action="RETURN_HOME")
+    services.localization = _Loc(False)
+
+    apply_voltage(services, 7.0)
+
+    assert "nav.home" not in rec.names()
+    assert rec.calls[-1] == ("safety.trigger_estop", "battery_policy")
+
+
+def test_return_home_is_dispatched_when_localized():
+    rec = Recorder()
+    services = build(rec, action="RETURN_HOME")
+    services.localization = _Loc(True)
+
+    apply_voltage(services, 7.0)
+
+    assert rec.calls[-1] == ("nav.home", "battery_policy")

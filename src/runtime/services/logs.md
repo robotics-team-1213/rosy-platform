@@ -289,3 +289,21 @@
 - 변경: emotion_map.emotion_for 이 idle_seconds 를 받아 IDLE 5분 이상이면 basic 대신 bored. 모드가 바뀌면 대기 시계 리셋 — 심심함은 대기의 누적이다.
 - 증거: test_emotion_map.py 6신규 (변이: bored→basic 되돌리면 빨강).
 - gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · feat(localization,state): D-395 P2-1 LocalizationAssist
+
+- 변경: 새 `core_features/localization/assist.py` — 로봇 sensing 노드 JSON 파싱, 정직한 `pose_frame`(CORE 가 odom 대체 중이면 odom, odom→map 승격 없음), 3 s 무응답이면 UNKNOWN(`state_stale`), CandidateReport `robot_id` 를 CORE 신원으로, STALE 판정, `localization.state|candidates|result` 이벤트. `state/manager.py` 는 localization provider 를 live 로 읽는다.
+- 증거: `test/test_localization_assist.py` 24.
+- gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · feat(localization): D-395 LOCALIZED 이탈 시 자율 주행 정지
+
+- 변경: `LocalizationAssist.on_lost` — 상태가 LOCALIZED 에서 SUSPECT·CANDIDATES·UNKNOWN(`state_stale` 포함)으로 내려가면 한 번 호출. 새 `localization/halt.py` `autonomy_halt`: swarm 취소(`reason: localization`), 도킹 취소, line-follow OFF, `nav.cancel`, NAVIGATION → IDLE. MANUAL 은 건드리지 않는다. `wire_assist` 가 CORE 조립을 맡는다.
+- 증거: `test/test_localization_assist.py` +5 (변이: 훅 제거 → 8 빨강).
+- gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · fix(localization,docking): D-395 리뷰 — 내부 시작 게이트, 결과 검증, 잠금
+
+- 변경: `LocalizationAssist.autonomy_allowed()`(LOCALIZED + map, 또는 D-395 이전 로봇)와 `gate`(RLock: 상태 반영·이탈 정지와 모든 시작이 같은 잠금). `localization/result` 는 모델 검증(`request_id` 규칙, `reason` ≤ 64), 64 KiB 넘는 메시지는 버림, 거부 로그는 예외 타입과 오류 종류만. `DockingManager.localization_ok` — `dock()` 거부(`NOT_LOCALIZED`), 배터리 복귀는 대기로 남아 LOCALIZED 가 되면 틱이 이어 간다. `wire_assist` 가 바인딩.
+- 증거: `test/test_localization_assist.py` +20, `test/test_docking_localization_gate.py` 5.
+- gate 변화: 없음.
