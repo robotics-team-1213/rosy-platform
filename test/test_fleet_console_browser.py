@@ -2241,3 +2241,46 @@ def test_viewer_sees_reasons_but_no_live_move_buttons(console_url):
             assert button.get_attribute("reason") == "운용자 권한이 필요합니다", selector
         assert not errors
         browser.close()
+
+
+def test_login_unlocks_operator_controls_before_a_slow_state_gather(console_url):
+    """A robot that times out makes /api/fleet/state slow; login must not wait for it.
+
+    Found in the 2026-10-01 live pairing run: with one unreachable robot the state gather
+    took 5.1 s and the console kept "토큰 필요" and locked operator buttons until it returned.
+    """
+    from playwright.sync_api import sync_playwright
+
+    held_state = """(() => {
+      const originalFetch = window.fetch.bind(window);
+      window.__holdState = true;
+      window.fetch = (input, options) => {
+        const url = String(input);
+        const auth = options && options.headers && (options.headers.Authorization || options.headers.authorization);
+        if (url === '/api/fleet/session' && !auth) {
+          return Promise.resolve(new Response(JSON.stringify({detail: {code: 'TOKEN_REQUIRED'}}),
+            {status: 401, headers: {'Content-Type': 'application/json'}}));
+        }
+        if (url === '/api/fleet/state' && window.__holdState) {
+          return new Promise(() => {});   // a gather stuck on an unreachable robot
+        }
+        return originalFetch(input, options);
+      };
+    })();"""
+    api = {
+        "/api/fleet/state": SNAPSHOT,
+        "/api/fleet/map": MAP_GRID,
+        "/api/fleet/formation": {"active": False, "state": "IDLE"},
+    }
+    with sync_playwright() as p:
+        browser, page, errors = _open_console(p, api, init_script=held_state)
+        page.goto(console_url, wait_until="domcontentloaded")
+        page.fill("#console-token", "operator-token")
+        page.locator("#token-save").click()
+        page.wait_for_function(
+            "() => document.querySelector('#user-role')?.textContent.includes('운영자')", timeout=3000)
+        page.wait_for_timeout(500)
+        assert "토큰 필요" not in page.inner_text("#online-pill")
+        assert page.locator("#token-save").is_enabled()
+        assert not errors
+        browser.close()

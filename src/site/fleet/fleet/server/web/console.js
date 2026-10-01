@@ -450,11 +450,23 @@ async function refreshAuthorization() {
     el("user-role").textContent = `${identity.principal_id} · ${roleName}`;
     el("user-role").title = el("user-role").textContent; // 넓은 머리에서 12rem으로 잘릴 때의 전문
     el("user-role").setAttribute("status", identity.role === "operator" ? "good" : "neutral");
-    await refreshState();
-    await refreshDispatchControl();
-    await refreshDiscovery();
-    await cameraPairing.refresh({ credentials: true });
-    await formation.refreshFormation();
+    // The session already proves the token: unlock now. The state gather can take seconds
+    // when a robot times out, and must not hold the operator's controls locked behind it.
+    const pill = el("online-pill");
+    if (pill.textContent === "토큰 필요") {
+      pill.textContent = "상태 확인 중";
+      pill.setAttribute("status", "neutral");
+    }
+    applyRoleToControls(auth.role, operatorControls());
+    render();
+    // Independent panels refresh side by side; one slow source does not delay the rest.
+    await Promise.allSettled([
+      refreshState(),
+      refreshDispatchControl(),
+      refreshDiscovery(),
+      cameraPairing.refresh({ credentials: true }),
+      formation.refreshFormation(),
+    ]);
     render();
   } catch (_err) {
     if (!auth.locked) markLocked();
