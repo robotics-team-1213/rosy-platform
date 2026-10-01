@@ -52,7 +52,7 @@
    리더·팔로워는 단어로 충분히 다르다(D-82 예산 안 씀). */
 /* D-396: 목표 좌표 — 내비게이션 줄의 오른쪽, 뮤트색 모노 */
 .navigation-goal {
-  color: var(--muted);
+  color: var(--ink-quiet);
   font: var(--weight-regular) var(--text-micro)/var(--leading-flat) var(--mono);
   letter-spacing: var(--track-state);
   margin-left: var(--space-2);
@@ -60,7 +60,7 @@
 
 /* D-396: 텔레오퍼레이션 속도 — 패드 아래 한 줄, 누르는 동안만 보인다 */
 .teleop-speed {
-  color: var(--muted);
+  color: var(--ink-quiet);
   font: var(--weight-label) var(--text-label)/var(--leading-flat) var(--mono);
   letter-spacing: var(--track-state);
 }
@@ -76,23 +76,28 @@
   letter-spacing: var(--track-label);
 }
 
+/* D-396 + D-220: 값이 없는 자리는 조용한 대시 — 움직임은 만들지 않는다(정지 계약).
+   색만 뮤트로 바꾼다. */
+.telemetry-grid strong[data-pending],
+.navigation-line b[data-pending],
+.hero-state strong[data-pending] {
+  color: var(--ink-quiet);
+}
+
 /* D-396: 이벤트 심각도 — 위험은 채움, 주의는 색, info 는 뮤트 */
 .event-severity[data-severity="crit"] {
   background: var(--status-crit);
-  color: var(--paper);
+  color: var(--ink-on-crit);
   padding: 0 var(--space-1);
-  border-radius: var(--radius-1);
+  border-radius: var(--radius-control);
 }
 .event-severity[data-severity="warn"] {
   color: var(--status-warn);
 }
 
-/* D-396: 액션 메시지 자동 소멸 — 5초 후 흐려진다 */
-.action-message {
-  transition: opacity 0.6s ease;
-}
+/* D-396 + D-220: 액션 메시지는 5초 뒤 점프 컷으로 사라진다 — 흐려지는 전이 없다 */
 .action-message[data-faded] {
-  opacity: 0;
+  display: none;
 }
 
 .hero-formation {
@@ -668,9 +673,6 @@
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     scroll-behavior: auto !important;
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
   }
 }
 /* ADR-999: HITL Escalation */

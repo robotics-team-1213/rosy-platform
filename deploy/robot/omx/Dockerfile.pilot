@@ -1,8 +1,11 @@
 # Development simulator HTTP layer. Build after the locked workstation image.
 FROM rosy-omx-workstation:native-action-only-local
-RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends python3-venv \
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends python3-venv python3-pil \
     && rm -rf /var/lib/apt/lists/* \
     && python3 -m venv --system-site-packages /opt/rosy-pilot-venv \
     && /opt/rosy-pilot-venv/bin/pip install --no-cache-dir \
       'fastapi==0.116.1' 'uvicorn==0.35.0' 'pydantic==2.11.7'
+RUN python3 -c "from pathlib import Path; p=Path('/opt/omx_ws/install/share/open_manipulator_bringup/launch/omx_f_follower_ai_gazebo.launch.py'); s=p.read_text(); old=' -v 1 -s --physics-engine'; assert s.count(old)==1; p.write_text(s.replace(old, ' -v 1 -s --headless-rendering --physics-engine'))"
 ENV PATH="/opt/rosy-pilot-venv/bin:${PATH}"
+ENV LIBGL_ALWAYS_SOFTWARE=1
+RUN python3 -c "from pathlib import Path; p=Path('/opt/omx_ws/install/share/open_manipulator_bringup/launch/omx_f_follower_ai_gazebo.launch.py'); s=p.read_text(); old=\"arguments=['joint_state_broadcaster']\"; assert s.count(old)==1; p.write_text(s.replace(old, \"arguments=['joint_state_broadcaster', '--switch-timeout', '60']\"))"

@@ -1,4 +1,4 @@
-import { NETWORK_MODE_LABEL, enumLabel } from "/common/core_ui_logic.js";
+import { NETWORK_MODE_LABEL, enumLabel, EVIDENCE_LABEL } from "/common/core_ui_logic.js";
 
 // D-359 §5.3 — 끌 때 이유를 같이 준다. 켜거나 짧은 요청 중 잠금이면 이유를 지운다.
 function setOff(control, off, reason = "") { control.disabled = Boolean(off); if (off && reason) control.setAttribute("reason", reason); else control.removeAttribute("reason"); }
@@ -71,8 +71,8 @@ function card(title, path, interval, ctx, describe, summarize) {
     if (!commissioning && (payload?.available !== true || !["fresh", "delayed"].includes(evidence))) {
       clearReadout();
       status.textContent = evidence === "disconnected"
-        ? `연결 끊김 · ${unavailableLabel(payload?.code)}`
-        : `정보 없음 · ${payload?.evidence?.reason || unavailableLabel(payload?.code)}`;
+        ? `${EVIDENCE_LABEL.disconnected} · ${unavailableLabel(payload?.code)}`
+        : `${EVIDENCE_LABEL.unavailable} · ${payload?.evidence?.reason || unavailableLabel(payload?.code)}`;
       status.setAttribute("state", evidence === "disconnected" ? "error" : "unavailable");
       detailText.textContent = payload?.detail || "";
       detail.hidden = !payload?.detail;

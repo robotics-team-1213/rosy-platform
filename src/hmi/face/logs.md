@@ -200,3 +200,10 @@
 - 변경: render_drive 도킹 중 모드 단어 대신 DockState(CHARGING·DOCKED 등)를 큰 글자로.
 - 증거: test_info_screen.py 통과.
 - gate 변화: 없음.
+
+
+## 2026-10-01 · uncommitted · D-398 부팅 카드 장미색 사본 정합
+
+- 변경: info_screen.py 부팅 카드 로즈 점 (227,27,93)#e31b5d → (246,151,231)#f697e7(--brand-rose). 주석의 토큰 이름 --rose → --brand-rose, 인용 D-82 → D-277. test_info_screen.py pin 갱신. 이 드리프트는 RGBA 4-튜플+소문자 이름이라 parity 정규식을 통과했었다 — 정규식은 web_common에서 고침.
+- 근거: D-398. face 시험 통과.
+- gate 변화: 없음.

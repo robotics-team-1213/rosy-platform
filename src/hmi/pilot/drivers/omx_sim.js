@@ -14,13 +14,13 @@ export const omxSim = {
     }
     return target;
   },
-  async request(path, {token = "", ...options} = {}) {
+  async request(path, {token = "", format = "json", ...options} = {}) {
     const response = await fetch(`${API}${path}`, {
       ...options,
       headers: {"Content-Type": "application/json", ...(token ? {Authorization: `Bearer ${token}`} : {}), ...options.headers},
       cache: "no-store",
     });
     if (!response.ok) throw new Error(`${response.status}: ${await response.text()}`);
-    return response.status === 204 ? null : response.json();
+    return response.status === 204 ? null : format === "blob" ? response.blob() : response.json();
   },
 };

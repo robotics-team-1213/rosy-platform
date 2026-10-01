@@ -46,8 +46,8 @@
 
 ## 최근 기록
 
+- 2026-10-01 · uncommitted · fix(omx): fence recording closure and isolate storage faults
+- 2026-10-01 · uncommitted · feat(omx): record SIM demonstrations and export LeRobot v3
 - 2026-10-01 · edca9b2e · feat(sim): 카메라를 URDF 사슬에 맞춘다 (D-397)
 - 2026-09-30 · uncommitted · docs(adr): 운전자 실시간 영상 ADR 을 D-362 에서 D-368 로
 - 2026-09-30 · uncommitted · docs(adr): pilot ADR 번호를 main 과 겹치지 않게 다시 매김
-- 2026-09-30 · uncommitted · feat(sim): map_v2_fleet real-profile world and Pinky camera launch (D-353 5)
-- 2026-09-30 · aeb31356 · D-359 US-005 lane_live_view @media 범위 문법

@@ -24,6 +24,7 @@ from uuid import uuid4
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from core_common.protocol.evidence import EvidenceState, ValueEvidence
+from core_common.protocol.localization import LocalizationStatus
 
 PROTOCOL_VERSION = "1.0"
 
@@ -1033,6 +1034,8 @@ class StateSnapshot(BaseModel):
     capabilities_degraded: list[str] = Field(default_factory=list)  # ADR-1000: Modules in degraded fallback
     #: v1.68 additive (D-321 addendum): attended calibration lease, else null.
     activity: Optional[RobotActivity] = None
+    #: v1.69 additive (D-395): state and pose frame; null from robots before D-395.
+    localization: Optional[LocalizationStatus] = None
 
 
 class HeartbeatPayload(BaseModel):

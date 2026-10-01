@@ -16,3 +16,10 @@ line_follow:
   # over both. The plausibility window (150-210 deg, or +-15 deg of this value)
   # is centred on 180.
   lidar_forward_deg: 180.0
+
+safety:
+  # SAF-002 teleop watchdog (default 500 ms). D-311 G4 requires a command-loss stop
+  # within 0.65 s; Pinky Pro needs ~0.1-0.2 s after the watchdog fires to bring the
+  # wheels to rest, so 500 ms measured 0.61-0.72 s on 9dfk (2026-10-01). 300 ms keeps
+  # two missed 10 Hz commands of slack and lands the stop near 0.45 s.
+  teleop_timeout_ms: 300

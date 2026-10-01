@@ -591,9 +591,10 @@ def test_shared_components_consume_type_and_interaction_tokens():
 def test_styleguide_renders_the_shared_type_and_interaction_contract():
     """D-294의 실례는 문서 전용 CSS가 아닌 실제 공용 컴포넌트를 보여준다."""
     html = (WEB_ROOT / "styleguide.html").read_text(encoding="utf-8")
-    css = (WEB_ROOT / "styleguide.css").read_text(encoding="utf-8")
+    components = (WEB_ROOT.parent / "web_common" / "components.css").read_text(encoding="utf-8")
     assert 'class="entry" id="type-and-interaction"' in html
     assert 'kind="quiet" type="button"' in html
     assert "disabled" in html
-    assert "--focus-ring-width" in css and "--focus-ring-offset" in css
+    # 초점 링 토큰은 공용 시트가 소비한다 — 견본 시트가 따로 그리지 않는다(D-398 정리).
+    assert "--focus-ring-width" in components and "--focus-ring-offset" in components
 

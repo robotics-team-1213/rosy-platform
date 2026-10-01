@@ -24,6 +24,87 @@ import dev_server  # noqa: E402
 TABLET_VIEWPORTS = [(2000, 1200), (1200, 2000)]
 
 
+@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1", reason="browser opt-in")
+def test_omx_recording_retry_outcome_stale_camera_and_disposal(tablet_page):
+    base_url, page, errors = tablet_page
+    page.goto(f"{base_url}/pilot")
+    page.evaluate("""async () => {
+      const {mountArm} = await import('/pilot/assets/screens/arm.js');
+      const root = document.createElement('main'); document.body.replaceChildren(root);
+      window.recordState = {status:'idle', frame_count:0, issues:[]};
+      window.cameraFresh = true; window.startFailures = 1; window.released = 0;
+      const driver = {request: async (path, options={}) => {
+        if (path === '/pair') return {token:'test-only'};
+        if (path === '/whoami') return {role:'operator'};
+        if (path === '/seat') return {seat_id:'seat-test'};
+        if (options.method === 'DELETE') { window.released++; return null; }
+        if (path.startsWith('/seat/')) return {};
+        if (path === '/state') return {ready:true, state_sequence:1, positions:{joint1:0}, joint_age_ms:0};
+        if (path === '/camera') return {fresh:window.cameraFresh, age_ms:10};
+        if (path === '/camera/frame') return new Blob([], {type:'image/jpeg'});
+        if (path === '/recordings' && options.method === 'POST') {
+          if (window.startFailures-- > 0) throw new Error('409: camera warming up');
+          window.recordState = {status:'recording', episode_id:'episode-test', frame_count:2, issues:[]};
+        }
+        if (path.endsWith('/stop')) {
+          window.outcome = JSON.parse(options.body).outcome;
+          window.recordState = {...window.recordState, status:'complete'};
+        }
+        return window.recordState;
+      }};
+      window.disposeArm = mountArm(root, {joints:['joint1'], gripper:'joint1', camera:true, recording:true}, driver);
+    }""")
+    page.fill("[data-sim-code]", "test-only")
+    page.click("[data-sim-connect]")
+    page.wait_for_selector("[data-sim-record-panel]")
+    page.fill("[data-sim-task]", "관절 이동 시연")
+    page.click("[data-sim-record-start]")
+    page.wait_for_function("document.querySelector('[data-sim-record-status]').textContent.includes('기록 시작 실패')")
+    page.wait_for_timeout(1200)
+    assert "기록 시작 실패" in page.inner_text("[data-sim-record-status]")
+    page.click("[data-sim-record-start]")
+    page.wait_for_function("document.querySelector('[data-sim-record-status]').textContent.includes('recording')")
+    page.select_option("[data-sim-outcome]", "success")
+    page.click("[data-sim-record-stop]")
+    page.wait_for_function("window.outcome === 'success'")
+    page.evaluate("window.cameraFresh = false")
+    page.wait_for_function("document.querySelector('[data-sim-camera]').hidden")
+    assert page.locator("[data-sim-record-start]").evaluate("b => b.disabled")
+    page.evaluate("window.disposeArm()")
+    page.wait_for_function("window.released === 1")
+    assert errors == [], errors
+
+
+@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1", reason="browser opt-in")
+def test_omx_hidden_tab_releases_a_seat_acquired_after_visibility_changed(tablet_page):
+    base_url, page, errors = tablet_page
+    page.goto(f"{base_url}/pilot")
+    page.evaluate("""async () => {
+      const {mountArm} = await import('/pilot/assets/screens/arm.js');
+      const root = document.createElement('main'); document.body.replaceChildren(root);
+      window.testHidden = false; window.released = 0; window.renewed = 0;
+      Object.defineProperty(document, 'hidden', {configurable:true, get:()=>window.testHidden});
+      const driver = {request: async (path, options={}) => {
+        if (path === '/pair') return {token:'test-only'};
+        if (path === '/whoami') return {};
+        if (path === '/seat') return new Promise(resolve => {window.resolveSeat = resolve;});
+        if (options.method === 'DELETE') {window.released++; return null;}
+        if (options.method === 'PUT') {window.renewed++; return {};}
+        throw new Error('unexpected request '+path);
+      }};
+      window.disposeArm = mountArm(root, {joints:['joint1'], gripper:'joint1'}, driver);
+    }""")
+    page.fill("[data-sim-code]", "test-only")
+    page.click("[data-sim-connect]")
+    page.wait_for_function("typeof window.resolveSeat === 'function'")
+    page.evaluate("window.testHidden = true; document.dispatchEvent(new Event('visibilitychange')); window.resolveSeat({seat_id:'late-seat'})")
+    page.wait_for_function("window.released === 1")
+    page.wait_for_timeout(1100)
+    assert page.evaluate("window.renewed") == 0
+    page.evaluate("window.disposeArm()")
+    assert errors == [], errors
+
+
 def _free_port() -> int:
     with socket.socket() as sock:
         sock.bind(("127.0.0.1", 0))
