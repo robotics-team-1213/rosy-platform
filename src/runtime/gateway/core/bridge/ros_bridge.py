@@ -450,15 +450,12 @@ class RosBridge:
     def _maybe_publish_drive(self, now: float) -> None:
         """D-394: 운용 중에는 20 s 마다 주행 카드가 얼굴 위로 잠깐 지나간다."""
         snapshot = self._svc.state.snapshot()
-        mode = getattr(snapshot.mode, "value", snapshot.mode)
+        mode = snapshot.mode.value
         if not display.drive_due(mode, now, self._drive_last_pub):
             return
+        # C6 — 목표 좌표는 NavigationManager 가 current_goal 을 선언하기 전까지는
+        # 없다(2026-10-01 판정). 죽은 reach 를 두지 않는다.
         goal_x = goal_y = None
-        if mode == "NAVIGATION":
-            goal = getattr(self._svc.nav, "current_goal", None)
-            if goal is not None:
-                goal_x = getattr(goal, "x", None)
-                goal_y = getattr(goal, "y", None)
         self.display_info_pub.publish(String(data=json.dumps(
             display.drive_payload(snapshot, goal_x=goal_x, goal_y=goal_y))))
         self._drive_last_pub = now
@@ -474,7 +471,7 @@ class RosBridge:
         if self._hello_until is None:
             self._hello_until = current + 10.0
         snapshot = self._svc.state.snapshot()
-        mode = getattr(snapshot.mode, "value", snapshot.mode)
+        mode = snapshot.mode.value
         if mode != "IDLE" or self._idle_since is None:
             self._idle_since = None if mode != "IDLE" else current
         idle_seconds = 0.0 if self._idle_since is None else current - self._idle_since
@@ -485,7 +482,7 @@ class RosBridge:
             return
         self._emotion_shown = reconcile.emotion(
             mode,
-            getattr(snapshot.navigation, "value", snapshot.navigation),
+            snapshot.navigation.value,
             self._emotion_shown,
             act=lambda face: self._call_emotion(face),
             idle_seconds=idle_seconds)
