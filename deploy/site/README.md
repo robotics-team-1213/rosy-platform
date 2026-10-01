@@ -121,6 +121,8 @@ is only a fallback (D-391). An IP host is stored on the phone as a "수동 주�
 the site subnet changes, needs that IP in the certificate SAN, and makes `pair-link` print
 a WARNING. `rosy-vision receive` puts `<hostname>.local` (or `--tls-host`) in the link and
 prints the route-probe address only as an `IP fallback: <robot-ip>` diagnostic line.
+`--tls-host` accepts only `<name>.local`; for a site FQDN or an IP pass `--advertise-host`.
+When `--host` is a specific bind address, `receive` still links the name and says: "link host is <name>.local (D-391); use --advertise-host <ip> to pair by IP (fallback, needs an IP SAN)".
 Treat the URI as a credential: do not paste it into tickets, logs, or shell
 history. Use the QR/pairing screen over a trusted local channel.
 

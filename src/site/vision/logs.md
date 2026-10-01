@@ -247,3 +247,9 @@
 - 증거: `python -m pytest src/site/vision/test -q` (아래 결과), 새 시험 `test_overhead_link_host_name_first.py`.
 - gate 변화: 없음.
 
+## 2026-10-01 · uncommitted · fix(vision): receive 링크 호스트 안내와 오류 문구 보강
+
+- 변경: 특정 `--host` 주소로 바인드해도 링크는 이름이며 "link host is <name>.local (D-391); use --advertise-host <ip> to pair by IP (fallback, needs an IP SAN)"라고 한 줄 알린다. `--tls-host`는 `<name>.local`만 받고(FQDN은 `--advertise-host`) 오류가 그쪽을 가리킨다. 호스트명 오류는 원래 `gethostname()` 값과 밑줄·점 불가를 말하고, 경로 탐지 실패는 `IP fallback: unknown (no route)`로 쓴다.
+- 증거: `python -m pytest src/site/vision/test -q` 206 passed (2026-10-01 Windows).
+- gate 변화: 없음.
+

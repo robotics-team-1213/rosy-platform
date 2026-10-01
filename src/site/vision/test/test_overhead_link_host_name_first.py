@@ -25,7 +25,7 @@ class _Ws:
         pass
 
 
-def _receive_link(monkeypatch, capsys, *extra, hostname="Site-PC"):
+def _receive_link(monkeypatch, capsys, *extra, hostname="Site-PC", probe="10.9.8.7"):
     """Run ``receive`` far enough to print its link, then stop on the first sleep."""
 
     async def _start(self, *args, **kwargs):
@@ -38,7 +38,7 @@ def _receive_link(monkeypatch, capsys, *extra, hostname="Site-PC"):
     monkeypatch.setattr(cli.IngestServer, "start", _start)
     monkeypatch.setattr(cli.asyncio, "sleep", _stop)
     monkeypatch.setattr(cli.socket, "gethostname", lambda: hostname)
-    monkeypatch.setattr(cli, "_detect_advertise_host", lambda host: "10.9.8.7")
+    monkeypatch.setattr(cli, "_detect_advertise_host", lambda host: probe)
     try:
         code = asyncio.run(cli._run_receive(cli.parse_args(["receive", *extra])))
     except KeyboardInterrupt:
@@ -105,3 +105,35 @@ def test_pair_link_does_not_warn_on_a_local_name(tmp_path, monkeypatch, capsys):
     monkeypatch.setenv("CAM_TOKEN", "tok123")
     assert cli.main(_pair_link_args(tmp_path, "site-pc.local")) == 0
     assert "WARNING" not in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("raw", ["pc.corp.example.com", "MY_PC"])
+def test_receive_hostname_error_shows_the_raw_value_and_the_fix(monkeypatch, capsys, raw):
+    code, parsed, out, _ = _receive_link(monkeypatch, capsys, hostname=raw)
+    assert code == 2 and parsed is None
+    assert repr(raw) in out.err
+    assert "underscores and dots are not allowed in a .local name" in out.err
+    assert "--tls-host <name>.local" in out.err
+
+
+def test_receive_tls_host_error_points_to_advertise_host_for_an_fqdn(monkeypatch, capsys):
+    code, _, out, _ = _receive_link(monkeypatch, capsys, "--tls-host", "site.example.com")
+    assert code == 2
+    assert "--advertise-host" in out.err
+
+
+def test_receive_notes_the_name_when_a_specific_bind_address_was_given(monkeypatch, capsys):
+    _, parsed, out, _ = _receive_link(monkeypatch, capsys, "--host", "192.0.2.5")
+    assert parsed["host"] == "site-pc.local"
+    assert ("link host is site-pc.local (D-391); use --advertise-host <ip> to pair by IP "
+            "(fallback, needs an IP SAN)") in out.out
+
+
+def test_receive_is_quiet_about_it_for_the_wildcard_bind(monkeypatch, capsys):
+    _, _, out, _ = _receive_link(monkeypatch, capsys)
+    assert "use --advertise-host" not in out.out
+
+
+def test_receive_ip_fallback_says_unknown_when_the_route_probe_fails(monkeypatch, capsys):
+    _, _, out, _ = _receive_link(monkeypatch, capsys, probe="site-pc")
+    assert "IP fallback: unknown (no route)" in out.out

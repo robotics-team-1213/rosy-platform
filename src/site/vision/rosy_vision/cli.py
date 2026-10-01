@@ -72,9 +72,17 @@ def _link_host(args: argparse.Namespace) -> str:
     """Host the pairing link carries: an explicit --advertise-host, else a ``.local`` name (D-391)."""
     if args.advertise_host:
         return args.advertise_host
-    name = (args.tls_host or f"{socket.gethostname()}.local").lower()
+    if args.tls_host:
+        name = args.tls_host.lower()
+        if not HOSTNAME.fullmatch(name):
+            raise ValueError(f"--tls-host {args.tls_host!r} must be <name>.local; "
+                             "use --advertise-host for a site FQDN or an IP")
+        return name
+    raw = socket.gethostname()
+    name = f"{raw}.local".lower()
     if not HOSTNAME.fullmatch(name):
-        raise ValueError(f"{name!r} is not a valid <name>.local tls_host; pass --tls-host <name>.local")
+        raise ValueError(f"hostname {raw!r} cannot be a .local name: underscores and dots are not allowed "
+                         "in a .local name; pass --tls-host <name>.local")
     return name
 
 
@@ -206,7 +214,12 @@ async def _run_receive(args: argparse.Namespace) -> int:
     if _is_ip(link_host):
         _warn_ip_host(link_host)
     else:
-        print(f"IP fallback: {_detect_advertise_host(args.host)}  (diagnostic only; not in the link)")
+        probe = _detect_advertise_host(args.host)
+        print(f"IP fallback: {probe if _is_ip(probe) else 'unknown (no route)'}  "
+              "(diagnostic only; not in the link)")
+        if not args.advertise_host and args.host not in ("0.0.0.0", "::", ""):
+            print(f"link host is {link_host} (D-391); use --advertise-host <ip> to pair by IP "
+                  "(fallback, needs an IP SAN)")
     _print_pairing(uri)
 
     stats_file = args.stats_jsonl.open("a", encoding="utf-8") if args.stats_jsonl else None
