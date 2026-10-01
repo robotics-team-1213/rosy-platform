@@ -1,7 +1,7 @@
 ---
 module: omx_adapter
 owner: OMX workcell
-last_verified: { commit: "uncommitted", date: 2026-10-02 }
+last_verified: { commit: "b0979ad6", date: 2026-10-02 }
 gates:
   SOURCE:
     state: GO
