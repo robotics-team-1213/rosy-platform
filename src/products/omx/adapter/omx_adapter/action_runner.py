@@ -207,12 +207,12 @@ class ActionRunner:
                 current = self.store.get_action(grant.action_id)
                 if current is None:
                     raise
-                return self._receipt(current, created=created,
+                return self._receipt(current, created=created["created"],
                                      reason="PHASE_RUNNER_START_UNKNOWN")
             current = self.store.get_action(grant.action_id)
             if current is None:
                 raise RuntimeError("phase runner removed its Action journal")
-            return self._receipt(current, created=created)
+            return self._receipt(current, created=created["created"])
 
         def _fenced_submission() -> dict[str, object]:
             # The driver call AND its ACCEPTED recording stay inside the
