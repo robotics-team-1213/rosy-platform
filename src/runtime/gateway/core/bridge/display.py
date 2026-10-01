@@ -129,16 +129,20 @@ def drive_payload(snapshot, *, hold_s: float = DRIVE_HOLD_S,
     웨이크 카드(``info_payload``)와 같은 반올림 계약: 속도는 0.01 m/s, 배터리는
     0.1 % / 0.01 V. 결측은 None — 주행 중 0.00 m/s 는 '멈춤'으로 읽히고,
     카드 한 장이 거짓말할 수 있는 지점이 여기다. 목표 좌표는 NAVIGATION
-    중에만 실린다(다른 모드에서는 None).
+    중에만 실린다(다른 모드에서는 None). 도킹 중에는 DockState 를 실어
+    화면이 "DOCKING" 대신 "CHARGING"·"DOCKED" 같은 실제 상태를 말하게 한다.
     """
     battery = snapshot.battery
     velocity = snapshot.velocity
     navigating = snapshot.mode.value == "NAVIGATION"
+    docking = getattr(snapshot.docking, "state", None)
+    docking_state = getattr(docking, "value", docking) if docking else None
     return {
         "kind": "drive",
         "robot_id": snapshot.robot_id,
         "mode": snapshot.mode.value,
         "navigation": snapshot.navigation.value,
+        "docking_state": docking_state,
         "speed": (round(velocity.linear, 2)
                   if velocity.linear is not None else None),
         "battery_percent": (round(battery.percent, 1)

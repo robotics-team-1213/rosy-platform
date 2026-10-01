@@ -243,11 +243,16 @@ def render_drive(payload: dict, size: tuple[int, int] = DEFAULT_SIZE) -> Image.I
     draw.text((16, 10), robot_id, font=robot_font, fill=_MUTED)
 
     mode = str(payload.get("mode") or "--")
+    docking_state = payload.get("docking_state")
+    # 도킹 중에는 실제 상태가 모드보다 말이 많다 — "DOCKING" 대신
+    # "CHARGING"·"DOCKED"·"DOCK_FAILED" 가 카드의 한 단어 자리를 쓴다.
+    display_word = docking_state if docking_state and mode == "DOCKING" else mode
     if payload.get("estop"):
         _draw_alarm(draw, (16, 40), "E-STOP", _font(52))
     else:
-        mode_font, mode = _fit(draw, mode, 52, width - 32)
-        draw.text((16, 40), mode, font=mode_font, fill=_CRIT if mode == "EMERGENCY" else _FG)
+        mode_font, display_word = _fit(draw, display_word, 52, width - 32)
+        draw.text((16, 40), display_word, font=mode_font,
+                  fill=_CRIT if mode == "EMERGENCY" else _FG)
 
     speed = payload.get("speed")
     speed_text = f"{float(speed):.2f} m/s" if isinstance(speed, (int, float)) else "-- m/s"

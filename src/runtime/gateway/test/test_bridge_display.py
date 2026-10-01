@@ -13,7 +13,7 @@ from core.bridge import display
 
 
 def _snapshot(percent=87.6543, voltage=7.8912, estop=False, charging=False,
-              mode="IDLE", navigation="ARRIVED", speed=0.2367):
+              mode="IDLE", navigation="ARRIVED", speed=0.2367, docking_state=None):
     return SimpleNamespace(
         battery=SimpleNamespace(percent=percent, voltage=voltage),
         battery_status=SimpleNamespace(charging=charging),
@@ -21,6 +21,7 @@ def _snapshot(percent=87.6543, voltage=7.8912, estop=False, charging=False,
         mode=SimpleNamespace(value=mode),
         navigation=SimpleNamespace(value=navigation),
         velocity=SimpleNamespace(linear=speed, angular=0.0),
+        docking=SimpleNamespace(state=docking_state),
         safety=SimpleNamespace(estop=estop),
         hitl_requested=False,
         activity=None,
@@ -202,3 +203,12 @@ def test_the_drive_card_carries_the_goal_only_while_navigating():
     # NAVIGATION 이 아니면 목표는 실리지 않는다 — 모드가 곧 맥락이다.
     manual = display.drive_payload(_snapshot(mode="MANUAL"), goal_x=1.234, goal_y=4.567)
     assert manual["goal_x"] is None and manual["goal_y"] is None
+
+
+def test_the_drive_card_carries_the_docking_state():
+    payload = display.drive_payload(_snapshot(mode="DOCKING", docking_state="CHARGING"))
+    assert payload["docking_state"] == "CHARGING"
+
+    # 도킹이 아니면 None — 모드가 곧 맥락이다
+    manual = display.drive_payload(_snapshot(mode="MANUAL"))
+    assert manual["docking_state"] is None

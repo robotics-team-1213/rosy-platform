@@ -650,3 +650,9 @@
 - 변경: drive_payload 가 goal_x·goal_y 를 실는다(NAVIGATION 중에만, 소수점 2자리). ros_bridge 가 nav.current_goal 에서 좌표를 가져온다.
 - 증거: test_bridge_display.py 목표 좌표 2건.
 - gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · feat(bridge,display): 주행 카드 도킹 상태 + hello 인사
+
+- 변경: drive_payload 에 docking_state 를 실었다(DOCKING 중 DockState 값). ros_bridge._reconcile_emotion 이 CORE 기동 직후 10초간 hello 표정을 먼저 보낸다.
+- 증거: test_bridge_display.py 도킹 상태 + 기존 전표 통과.
+- gate 변화: 없음.

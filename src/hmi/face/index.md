@@ -32,8 +32,8 @@
 
 ## 최근 기록
 
+- 2026-10-01 · uncommitted · feat(emotion): 주행 카드 도킹 상태 단어
 - 2026-10-01 · uncommitted · feat(emotion): 주행 카드 목표 좌표 표시
 - 2026-10-01 · uncommitted · feat(emotion): 주행 카드 충전 표시
 - 2026-10-01 · uncommitted · feat(emotion): 부팅 카드 Rosy 정체성 점
 - 2026-10-01 · 15770a9c · feat(face): 정보 카드 MODE 행 CALIBRATING
-- 2026-10-01 · uncommitted · feat(emotion): D-394 DisplayProfile·주행 카드·kind 디스패치

@@ -194,3 +194,9 @@
 - 변경: render_drive NAV 행 오른쪽 끝에 '(x, y)' 를 뮤트색으로.
 - 증거: test_info_screen.py 통과.
 - gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · feat(emotion): 주행 카드 도킹 상태 단어
+
+- 변경: render_drive 도킹 중 모드 단어 대신 DockState(CHARGING·DOCKED 등)를 큰 글자로.
+- 증거: test_info_screen.py 통과.
+- gate 변화: 없음.

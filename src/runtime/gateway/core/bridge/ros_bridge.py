@@ -174,6 +174,8 @@ class RosBridge:
         self._applied_led = None
         self._emotion_shown = None
         self._idle_since: Optional[float] = None
+        #: D-385 확장: CORE 기동 직후 10초간 인사한다. 첫 인상은 hello 다.
+        self._hello_until: Optional[float] = None
         self._drive_last_pub: Optional[float] = None
         self._info_last_pub = 0.0
         self._voltage_topic_seen = False
@@ -462,16 +464,25 @@ class RosBridge:
         self._drive_last_pub = now
 
     def _reconcile_emotion(self, now: Optional[float] = None) -> None:
-        """D--385: 모드가 얼굴 표정을 고른다 — 감정 노드가 없으면 지금 표정을 유지한다.
+        """D-385: 모드가 얼굴 표정을 고른다 — 감정 노드가 없으면 지금 표정을 유지한다.
 
         IDLE 로 5분 이상 있으면 심심해한다(bored). 모드가 바뀌면 대기 시계는
         리셋된다 — 심심함은 대기의 누적이지 잔재가 아니다.
+        CORE 기동 직후 10초간은 인사(hello)가 모드보다 먼저다.
         """
+        current = now or time.monotonic()
+        if self._hello_until is None:
+            self._hello_until = current + 10.0
         snapshot = self._svc.state.snapshot()
         mode = getattr(snapshot.mode, "value", snapshot.mode)
         if mode != "IDLE" or self._idle_since is None:
-            self._idle_since = None if mode != "IDLE" else (now or time.monotonic())
-        idle_seconds = 0.0 if self._idle_since is None else (now or time.monotonic()) - self._idle_since
+            self._idle_since = None if mode != "IDLE" else current
+        idle_seconds = 0.0 if self._idle_since is None else current - self._idle_since
+        if current < self._hello_until and self._emotion_shown is None:
+            desired = "hello"
+            if self._call_emotion(desired):
+                self._emotion_shown = desired
+            return
         self._emotion_shown = reconcile.emotion(
             mode,
             getattr(snapshot.navigation, "value", snapshot.navigation),
