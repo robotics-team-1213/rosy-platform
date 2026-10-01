@@ -8,8 +8,14 @@ backend: inbox
 # writable for the service (a unit drop-in) and creates the layout.
 store: /srv/rosy/store
 robots:
-  - name: <robot-name>
-    host: <robot-ip>
+  # name = the robot id. The SSH host key is pinned in known_hosts under this name
+  # (ssh HostKeyAlias), so it survives a renumbered network.
+  # host = the robot's mDNS name, <hostname>.local (the avahi name from its first boot,
+  # pattern rosy-pinky-<4 chars>, D-154; confirm with `ping <hostname>.local` on the site PC).
+  # An IP address still works but is not recommended: the site network renumbers,
+  # and then the timer fails (exit 77 / 78) until the config is edited.
+  - name: <robot-id>
+    host: <hostname>.local
 ssh:
   # the site host's own key, authorized for rosy on each robot (not the operator key)
   identity: /etc/rosy/model-watch/site-ed25519

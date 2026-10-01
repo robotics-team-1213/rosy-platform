@@ -4117,3 +4117,10 @@
 - gate 변화: 없음(로봇 설정·params 변경 없음).
 - 결정: D-393 Proposed
 - 교훈: 없음
+
+## 2026-10-01 · uncommitted · fix(perception): model-watch 로봇을 이름으로 부르고 호스트 키를 로봇 id로 핀, 실패를 눈에 보이게
+
+- 변경: 현장 네트워크가 바뀌면(로봇이 192.168.1.x에서 10.16.36.x로) IP로 적은 `host`와 IP 키 known_hosts 때문에 `rosy-model-watch`가 조용히 실패하던 틈을 막는다. (1) 예제 설정·문서는 `host: <hostname>.local`(mDNS, D-154 `rosy-pinky-<4자>`)이고 IP는 비권장. (2) `operator_ssh.options(alias=)`가 `-o HostKeyAlias=<robot id>`를 넣고 deliver/harvest `--host-key-alias`, watch와 `rosy_ml`이 로봇 이름을 넘긴다. 엄격 검사는 그대로. 주소로만 핀된 known_hosts는 doctor/init이 알리고 `rosy_ml repin ROBOT`이 복사한다. (3) 종료 코드 77(이름 풀이 실패)·78(거부·시간 초과·경로 없음)·79(호스트 키 불명·불일치)와 stderr 한 줄, watch는 닿지 못한 로봇의 코드로 끝나 유닛이 failed로 보이고 타이머는 계속 돈다. 네트워크 실패는 시도 횟수를 쓰지 않는다. state `robot_failures`(종류, 시각, 연속 횟수)를 `rosy_ml status`/`store-status --watch-config`가 보여 주고 doctor는 호스트마다 이름을 풀어 본다. 연결 단계의 시간 초과는 이제 1이 아니라 78이다(`test_timeout_is_a_failed_step` 기대값 정정). D-373 개정 1, 배포 문서 갱신.
+- 증거: `python -m pytest tools/perception/test -q -p no:cacheprovider`, 신규 `test_model_watch_host.py`(모의 ssh/DNS, 네트워크 없음).
+- gate 변화: 없음(SOURCE). 실제 로봇 mDNS 이름과 사이트 PC 해석, systemd에서 failed 표시와 타이머 재실행은 장치·사이트 PC에서 미확인.
+- 결정: D-373 개정 1

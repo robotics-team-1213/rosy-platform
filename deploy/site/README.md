@@ -665,10 +665,20 @@ service user. It prints the remaining steps:
   site can be revoked without touching anyone else's access.
 - **Host keys.** Record each robot's host key in
   `/etc/rosy/model-watch/known_hosts` from a trusted network
-  (`StrictHostKeyChecking=yes`).
+  (`StrictHostKeyChecking=yes`), **under the robot id** (the config's `name`),
+  not the address: `ssh-keyscan -t ed25519 <hostname>.local | sed 's/^[^ ]* /<robot-id> /'
+  >> /etc/rosy/model-watch/known_hosts`. The watcher passes
+  `-o HostKeyAlias=<robot-id>`, so the pin follows the robot when the network is
+  renumbered. A mismatch is still refused (exit 79); nothing is auto-accepted.
+  An older address-keyed entry is reported by `rosy_ml doctor --watch-config`,
+  which prints the one command that copies it under the id:
+  `rosy_ml repin --watch-config /etc/rosy/model-watch.yaml <robot-id>`
+  (it never rewrites `known_hosts` on its own).
 - **Config.** `sudoedit /etc/rosy/model-watch.yaml`: robots, `store`,
-  `replay_root`. The config names robot addresses and so stays out of the
-  checkout.
+  `replay_root`. A robot's `host` is its mDNS name `<hostname>.local`
+  (avahi, `rosy-pinky-<4 chars>`), not an IP: the site network renumbers and
+  an IP then fails silently for hours. An IP still works but doctor flags it.
+  The config names robot hosts and so stays out of the checkout.
 - **Store access.** People and tools that write the store (publish.py,
   trainers dropping into `models/inbox/`) need write access to it: members of
   the `rosy-model-watch` group on a local store, or the share's own
@@ -699,7 +709,20 @@ Exit codes in the journal: `0` finished with nothing waiting on a retry (a
 failed intake or a held robot is a recorded outcome), `1` an intake
 infrastructure error, a store move or a robot push failed and will be retried,
 `2` config or state file error, `5` the listing failed (store missing or
-unreadable, or the HF listing failed) and nothing was recorded. The state
+unreadable, or the HF listing failed) and nothing was recorded, `6` intake
+cannot run on this host (venv package missing). A robot that cannot be reached
+makes the run exit with its own code and the unit show `failed` (the timer keeps
+firing every 10 minutes): `77` its host name did not resolve (DNS / mDNS, or the
+name in the config is wrong), `78` connection refused, timed out or no route
+(robot off or on another network), `79` its host key is unknown or changed
+(never auto-accepted: check the robot, then re-pin it). The journal has one line
+per robot, e.g. `pinky-a: dns failure (exit 77, 3 in a row): ...`. A network
+failure spends no delivery attempt, so a long outage never turns into
+`gave_up`. The last failure per robot (kind, exit, time, consecutive count) is
+kept in `state.json` under `robot_failures`, cleared when the robot answers
+again, and shown by `rosy_ml status --watch-config /etc/rosy/model-watch.yaml`
+and `rosy_ml store-status --watch-config ...`. `rosy_ml doctor --watch-config`
+resolves every configured host and reports the ones that do not. The state
 lives in `/var/lib/rosy-model-watch/state.json`; deleting an entry makes the
 next run process it again.
 

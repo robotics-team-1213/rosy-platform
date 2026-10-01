@@ -107,7 +107,7 @@ def test_exit_code_table_is_exact():
         if len(cells) == 3 and cells[1].isdigit():
             rows.add((cells[0], int(cells[1])))
     want = {("deliver", c) for c in (0, 1, 2, deliver.HISTORY_EXIT, deliver.LOCK_BUSY_EXIT,
-                                     deliver.HELD_EXIT)}
+                                     deliver.HELD_EXIT, *deliver.operator_ssh.KIND_EXIT.values())}
     want |= {("harvest", c) for c in (0, 1, 2, harvest.EXIT_NOT_IDLE)}
     want |= {("watch", c) for c in (0, 1, 2, watch.LIST_FAILED_EXIT, watch.CONFIG_EXIT)}
     want |= {("doctor", c) for c in (0, 1, 2)}
