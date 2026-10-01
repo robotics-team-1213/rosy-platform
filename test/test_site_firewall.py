@@ -33,8 +33,9 @@ def _config(bind="0.0.0.0", port="8443", lan_iface="wlan0", allow="", tls_host="
 class FakeHost:
     """`docker compose config` plus `iptables -t mangle` and `iptables-restore --noflush`."""
 
-    def __init__(self, config=None, chains=None):
+    def __init__(self, config=None, chains=None, engine="28.3.0"):
         self.config = config or _config()
+        self.engine = engine
         self.chains = chains if chains is not None else {"PREROUTING": []}
         self.calls = []
 
@@ -42,6 +43,8 @@ class FakeHost:
         self.calls.append((argv, stdin))
         if argv[:2] == ["docker", "compose"]:
             return 0, json.dumps(self.config), ""
+        if argv[:2] == ["docker", "version"]:
+            return (0, self.engine + "\n", "") if self.engine else (1, "", "Cannot connect")
         if argv[0] == "iptables-restore":
             assert argv[1:] == ["-w", "--noflush"]
             lines = stdin.splitlines()
@@ -84,8 +87,17 @@ def test_restore_payload_is_one_mangle_transaction_by_interface_name():
         "-A ROSY-SITE-INGRESS -i wlan0 -j RETURN\n"
         "-A ROSY-SITE-INGRESS -i eth0 -j RETURN\n"
         "-A ROSY-SITE-INGRESS -m addrtype --dst-type LOCAL -j DROP\n"
+        "-A ROSY-SITE-INGRESS -i br+ -j RETURN\n"
+        "-A ROSY-SITE-INGRESS -i docker0 -j RETURN\n"
+        "-A ROSY-SITE-INGRESS -j DROP\n"
         "COMMIT\n")
-    assert module.jump_rule(9443) == ["-p", "tcp", "--dport", "9443", "-j", "ROSY-SITE-INGRESS"]
+    assert module.jump_rules(8443) == {
+        ("8443", False): ["-p", "tcp", "--dport", "8443", "-j", "ROSY-SITE-INGRESS"]}
+    # A different published port adds the container port, for packets routed to a container IP.
+    assert module.jump_rules(9443) == {
+        ("9443", False): ["-p", "tcp", "--dport", "9443", "-j", "ROSY-SITE-INGRESS"],
+        ("8443", True): ["-p", "tcp", "--dport", "8443", "-m", "addrtype", "!", "--dst-type", "LOCAL",
+                         "-j", "ROSY-SITE-INGRESS"]}
     # Never an address or subnet: the LAN may renumber (2026-10-01 192.168.1.0/24 -> 10.16.36.0/24).
     rules = [token for rule in module.chain_rules(plan["ifaces"]) for token in rule]
     assert not {"-s", "-d", "--src", "--dst"} & set(rules)
@@ -115,16 +127,19 @@ def test_apply_replaces_a_changed_interface_atomically_and_moves_the_port():
     changes = [argv for argv, _ in host.calls[before:] if argv[0] == "iptables-restore"
                or argv[4] in ("-I", "-D")]
     assert [argv[0] if argv[0] == "iptables-restore" else argv[4] for argv in changes] == \
-        ["iptables-restore", "-I", "-D"]  # new jump before the old one goes: no open gap
-    assert [line for line in host.chains["PREROUTING"] if line.endswith("ROSY-SITE-INGRESS")] == \
-        ["-A PREROUTING -p tcp --dport 9443 -j ROSY-SITE-INGRESS"]
+        ["iptables-restore", "-I", "-I", "-D"]  # new jumps before the old one goes: no open gap
+    assert sorted(line for line in host.chains["PREROUTING"] if line.endswith("ROSY-SITE-INGRESS")) == [
+        "-A PREROUTING -p tcp --dport 8443 -m addrtype ! --dst-type LOCAL -j ROSY-SITE-INGRESS",
+        "-A PREROUTING -p tcp --dport 9443 -j ROSY-SITE-INGRESS"]
+    assert module.apply(plan, run=host) == []
     module.check(plan, run=host)
 
 
-@pytest.mark.parametrize("damage", ["no_chain", "wrong_iface", "no_jump", "jump_after_accept"])
+@pytest.mark.parametrize("damage", ["no_chain", "wrong_iface", "no_jump", "jump_after_accept",
+                                    "no_container_port_jump", "no_final_drop"])
 def test_check_refuses_a_missing_or_bypassed_filter(damage):
     module = _module()
-    plan = _plan(module)
+    plan = _plan(module, port="9443")
     host = FakeHost()
     module.apply(plan, run=host)
     if damage == "no_chain":
@@ -133,8 +148,12 @@ def test_check_refuses_a_missing_or_bypassed_filter(damage):
         host.chains["ROSY-SITE-INGRESS"][1] = "-A ROSY-SITE-INGRESS -i eth9 -j RETURN"
     elif damage == "no_jump":
         host.chains["PREROUTING"].clear()
-    else:
+    elif damage == "jump_after_accept":
         host.chains["PREROUTING"].insert(0, "-A PREROUTING -j ACCEPT")
+    elif damage == "no_container_port_jump":
+        host.chains["PREROUTING"] = [line for line in host.chains["PREROUTING"] if "--dst-type" not in line]
+    else:
+        host.chains["ROSY-SITE-INGRESS"].pop()
     with pytest.raises(RuntimeError, match="rosy-site-firewall.service"):
         module.check(plan, run=host)
 
@@ -203,6 +222,32 @@ def test_address_probe_reports_an_address_this_host_does_not_own():
     assert _module().address_assigned("192.0.2.123") is False
 
 
+def test_address_probe_surfaces_other_socket_errors(monkeypatch):
+    import errno
+    import socket
+
+    module = _module()
+
+    class Refusing(socket.socket):
+        def bind(self, address):
+            raise OSError(errno.EACCES, "Permission denied")
+
+    monkeypatch.setattr(module.socket, "socket", Refusing)
+    with pytest.raises(module.ConfigError, match="cannot tell whether .* Permission denied"):
+        module.address_assigned("192.0.2.123")
+
+
+@pytest.mark.parametrize("engine, warned", [("27.5.1", True), ("28.0.4", False), ("", False)])
+def test_check_warns_on_docker_engine_older_than_28(tmp_path, capsys, engine, warned):
+    module = _module()
+    env = tmp_path / "site.env"
+    env.write_text("ROSY_SITE_BIND_ADDRESS=0.0.0.0\n", encoding="utf-8")
+    host = FakeHost(engine=engine)
+    module.apply(_plan(module), run=host)
+    assert module.main(["check", "--env-file", str(env)], run=host) == 0
+    assert ("older than 28" in capsys.readouterr().err) is warned
+
+
 @pytest.mark.parametrize("line", ["export ROSY_SITE_BIND_ADDRESS=0.0.0.0", "rosy_site_lan_iface=wlan0",
                                   "ROSY SITE=1", "just words"])
 def test_env_lines_systemd_and_compose_would_read_differently_exit_2(tmp_path, capsys, line):
@@ -261,6 +306,7 @@ def test_cli_dry_run_prints_the_restore_payload_and_writes_nothing(tmp_path, cap
     out = capsys.readouterr().out
     assert ":ROSY-SITE-INGRESS - [0:0]" in out and "-i wlan0 -j RETURN" in out
     assert "-I PREROUTING 1 -p tcp --dport 8443 -j ROSY-SITE-INGRESS" in out
+    assert "-i docker0 -j RETURN" in out and "-A ROSY-SITE-INGRESS -j DROP" in out
     assert host.mutations() == [] and not public.exists()
 
 
@@ -307,7 +353,12 @@ def test_units_filter_before_docker_fail_closed_and_recheck():
     assert "OnFailure=rosy-site-firewall-failclosed.service" in check
     assert "site-firewall.py apply --env-file /etc/rosy/site/site.env" in firewall
     assert "site-firewall.py check --env-file /etc/rosy/site/site.env" in check
-    assert "compose.yaml stop proxy" in failclosed and "After=docker.service" in failclosed
+    project = re.search(r"--project-name (\S+)", stack).group(1)
+    assert f"Environment=ROSY_SITE_PROJECT={project}" in failclosed  # same project the stack uses
+    assert ("docker ps -q --filter label=com.docker.compose.project=$${ROSY_SITE_PROJECT} "
+            "--filter label=com.docker.compose.service=proxy | xargs -r docker stop") in failclosed
+    assert "docker compose" not in failclosed and "site.env" not in failclosed
+    assert "After=docker.service" in failclosed
     assert "Unit=rosy-site-firewall-check.service" in timer and "OnUnitInactiveSec=5min" in timer
     preflight = stack.index("ExecStartPre=/usr/bin/python3 /opt/rosy/candidate/deploy/site/"
                             "site-firewall.py check --verify-certs --env-file /etc/rosy/site/site.env")
@@ -339,6 +390,8 @@ def test_lan_docs_bind_the_wildcard_and_scope_by_interface():
     assert "DOCKER-USER" not in readme and "br0" in lan and "needs no IP SAN" in lan
     assert "### Upgrading from a literal-IP bind" in lan
     assert "### Site certificate profile" in readme and "openssl verify -x509_strict" in readme
+    assert "Docker Engine 28" in lan and "### Recovering after the port was closed" in lan
+    assert "systemctl restart rosy-site-stack" in lan
     assert "/etc/rosy/site/.env" not in readme
     assert "to the interface address" not in readme and "approved interface address" not in readme
     assert "ROSY_SITE_DISCOVERY_URL=" not in readme

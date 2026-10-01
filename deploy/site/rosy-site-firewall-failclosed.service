@@ -5,4 +5,7 @@ After=docker.service
 
 [Service]
 Type=oneshot
-ExecStart=/usr/bin/docker compose --project-name rosy-site --env-file /etc/rosy/site/site.env -f /opt/rosy/candidate/deploy/site/compose.yaml stop proxy
+# Must equal --project-name in rosy-site-stack.service. The proxy is selected by its Compose
+# labels, with no env or Compose file parse, so a broken config cannot keep the port open.
+Environment=ROSY_SITE_PROJECT=rosy-site
+ExecStart=/bin/sh -c 'docker ps -q --filter label=com.docker.compose.project=$${ROSY_SITE_PROJECT} --filter label=com.docker.compose.service=proxy | xargs -r docker stop'

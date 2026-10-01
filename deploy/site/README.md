@@ -64,19 +64,32 @@ address:
   `-p tcp --dport <port> -j ROSY-SITE-INGRESS` leads to its own chain, which
   returns traffic arriving on `lo` and on each `ROSY_SITE_LAN_IFACE`, then
   drops everything else addressed to this host
-  (`-m addrtype --dst-type LOCAL -j DROP`). Traffic between containers is
-  addressed to container IPs and passes. It matches interface names only,
-  never an IP or subnet. The chain is written in one
-  `iptables-restore -w --noflush` transaction (declaring the chain flushes
-  and refills it atomically), and the jump is inserted once and kept;
-  re-running changes nothing. A named interface that does not exist yet is
-  admitted by name with a warning.
+  (`-m addrtype --dst-type LOCAL -j DROP`). After that only traffic on Docker
+  bridges (`-i br+`, `-i docker0`, container to container) returns, and an
+  unconditional `-j DROP` ends the chain, so a packet routed straight to a
+  container IP from any other interface is dropped too. When the published
+  port differs from the proxy's container port 8443, a second jump
+  `-p tcp --dport 8443 -m addrtype ! --dst-type LOCAL` sends such routed
+  packets to the chain; it skips local destinations, so a host service on
+  8443 is untouched. It matches interface names only, never an IP or subnet.
+  The chain is written in one `iptables-restore -w --noflush` transaction
+  (declaring the chain flushes and refills it atomically), and the jumps are
+  inserted once and kept; re-running changes nothing. A named interface that
+  does not exist yet is admitted by name with a warning.
+- **Docker Engine 28 or later.** Older engines accept packets routed
+  directly to a container address from any interface; the chain's final drop
+  covers that, and Docker Engine 28 closes it on its own side as well. Use
+  Docker Engine 28 or later. `check` warns when `docker version` reports an
+  older engine (it cannot tell before dockerd is up, so `apply` does not
+  enforce it).
 - **Boot order and failure.** The unit runs `After=network-pre.target` and
   `Before=docker.service rosy-site-stack.service`, so the filter is in place
   before dockerd can restore a proxy container. Docker does not touch the
   `mangle` chain. If `apply` fails, `OnFailure=` starts
-  `rosy-site-firewall-failclosed.service`, which stops the proxy
-  (`compose stop proxy`). `rosy-site-firewall-check.timer` runs `check` every
+  `rosy-site-firewall-failclosed.service`, which stops the proxy container
+  found by its Compose labels (project `rosy-site`, service `proxy`) without
+  parsing any config, so a broken `site.env` cannot keep it running.
+  `rosy-site-firewall-check.timer` runs `check` every
   5 minutes; a missing or bypassed filter logs the reason at error level in
   `journalctl -u rosy-site-firewall-check` and closes the port the same way.
   After a clean shutdown no container is left to restore, because the stack
@@ -133,6 +146,18 @@ When the LAN interface name changes (for example from Wi-Fi to Ethernet), set
    `sudo systemctl restart rosy-site-firewall.service rosy-site-stack.service`
    and `sudo systemctl restart rosy-fleet-advertise.service rosy-overhead-advertise.service`.
 6. Confirm the console discovery panel shows devices, not **검색기 끊김**.
+
+### Recovering after the port was closed
+
+The fail-closed unit stops only the proxy container. `rosy-site-stack.service`
+stays `active (exited)`, so nothing restarts the proxy by itself. Read the
+reason in `journalctl -u rosy-site-firewall -u rosy-site-firewall-check`, fix
+it, run `sudo python3 /opt/rosy/candidate/deploy/site/site-firewall.py check`
+until it passes (after `systemctl restart rosy-site-firewall.service` if the
+filter itself was missing), then `sudo systemctl restart rosy-site-stack`.
+Editing `ROSY_SITE_LAN_IFACE` (or the port) without restarting
+`rosy-site-firewall.service` makes the next 5-minute check fail and closes
+the port the same way; always restart the firewall unit after such an edit.
 
 ## Contract path
 

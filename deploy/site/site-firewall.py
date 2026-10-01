@@ -16,6 +16,7 @@ so this script reads site.env exactly as Compose does.
 from __future__ import annotations
 
 import argparse
+import errno
 import ipaddress
 import json
 import re
@@ -85,8 +86,11 @@ def address_assigned(address: str) -> bool:
     with socket.socket(family, socket.SOCK_STREAM) as probe:
         try:
             probe.bind((address, 0))
-        except OSError:
-            return False
+        except OSError as error:
+            if error.errno == errno.EADDRNOTAVAIL:
+                return False
+            raise ConfigError(f"cannot tell whether ROSY_SITE_BIND_ADDRESS={address} is "
+                              f"assigned on this host: {error}") from None
     return True
 
 
@@ -139,10 +143,12 @@ def site_plan(settings: dict, *, assigned=address_assigned, exists=iface_exists)
 def chain_rules(ifaces: list[str]) -> list[list[str]]:
     """Loopback (the discovery bridge) and the LAN pass; anything else to this host drops.
 
-    Traffic to container addresses (Docker bridges with br_netfilter) is not LOCAL and passes.
+    After that, only container-to-container traffic on Docker bridges (br_netfilter) passes;
+    a packet routed straight to a container IP from any other interface drops too.
     """
     return ([["-i", name, "-j", "RETURN"] for name in ["lo", *ifaces]]
-            + [["-m", "addrtype", "--dst-type", "LOCAL", "-j", "DROP"]])
+            + [["-m", "addrtype", "--dst-type", "LOCAL", "-j", "DROP"],
+               ["-i", "br+", "-j", "RETURN"], ["-i", "docker0", "-j", "RETURN"], ["-j", "DROP"]])
 
 
 def chain_listing(ifaces: list[str]) -> list[str]:
@@ -157,8 +163,17 @@ def restore_payload(ifaces: list[str]) -> str:
     return "\n".join([*lines, "COMMIT", ""])
 
 
-def jump_rule(port: int) -> list[str]:
-    return ["-p", "tcp", "--dport", str(port), "-j", CHAIN]
+def jump_rules(port: int) -> dict[tuple[str, bool], list[str]]:
+    """The published host port, plus the container port for packets routed to a container IP.
+
+    The second jump is limited to non-local destinations, so a host service that happens to
+    listen on the container port is not filtered.
+    """
+    rules = {(str(port), False): ["-p", "tcp", "--dport", str(port), "-j", CHAIN]}
+    if port != PROXY_PORT:
+        rules[(str(PROXY_PORT), True)] = ["-p", "tcp", "--dport", str(PROXY_PORT), "-m", "addrtype",
+                                          "!", "--dst-type", "LOCAL", "-j", CHAIN]
+    return rules
 
 
 def _run(argv: list[str], stdin: str | None = None) -> tuple[int, str, str]:
@@ -166,9 +181,10 @@ def _run(argv: list[str], stdin: str | None = None) -> tuple[int, str, str]:
     return result.returncode, result.stdout, result.stderr
 
 
-def _port_of(line: str) -> str | None:
+def _key(line: str) -> tuple[str | None, bool]:
     tokens = line.split()
-    return tokens[tokens.index("--dport") + 1] if "--dport" in tokens else None
+    port = tokens[tokens.index("--dport") + 1] if "--dport" in tokens else None
+    return port, "--dst-type" in tokens
 
 
 def _jumps(listing: str) -> list[str]:
@@ -202,14 +218,15 @@ def apply(plan: dict, run=_run) -> list[str]:
             raise RuntimeError(f"failed: {shlex.join(command)}: {err.strip()}")
         done.append(shlex.join(command))
 
-    jumps = _jumps(_hook_listing(run))
-    port = str(plan["port"])
-    if not any(_port_of(line) == port for line in jumps):
-        mutate("-I", HOOK, "1", *jump_rule(plan["port"]))
-    kept = False
+    jumps, wanted = _jumps(_hook_listing(run)), jump_rules(plan["port"])
+    present = {_key(line) for line in jumps}
+    for key, rule in wanted.items():  # new jumps first, so no gap opens while old ones go
+        if key not in present:
+            mutate("-I", HOOK, "1", *rule)
+    kept = set()
     for line in jumps:  # a changed port leaves an old jump; drop it and any duplicate
-        if _port_of(line) == port and not kept:
-            kept = True
+        if _key(line) in wanted and _key(line) not in kept:
+            kept.add(_key(line))
             continue
         mutate("-D", *shlex.split(line)[1:])
     return done
@@ -224,13 +241,26 @@ def check(plan: dict, run=_run) -> None:
     if code != 0 or current.splitlines() != chain_listing(plan["ifaces"]):
         raise RuntimeError(f"{CHAIN} does not admit only lo,{','.join(plan['ifaces'])}; {hint}")
     lines = _hook_listing(run).splitlines()
-    jumps, port = _jumps("\n".join(lines)), str(plan["port"])
-    jump = next((index for index, line in enumerate(lines)
-                 if line in jumps and _port_of(line) == port), None)
+    jumps = _jumps("\n".join(lines))
     bypass = next((index for index, line in enumerate(lines)
                    if line in (f"-A {HOOK} -j ACCEPT", f"-A {HOOK} -j RETURN")), None)
-    if jump is None or (bypass is not None and bypass < jump):
-        raise RuntimeError(f"{TABLE} {HOOK} does not send port {port} to {CHAIN}; {hint}")
+    for key in jump_rules(plan["port"]):
+        jump = next((index for index, line in enumerate(lines)
+                     if line in jumps and _key(line) == key), None)
+        if jump is None or (bypass is not None and bypass < jump):
+            raise RuntimeError(f"{TABLE} {HOOK} does not send port {key[0]} to {CHAIN}; {hint}")
+
+
+def docker_engine_warning(run=_run) -> str | None:
+    """Docker < 28 accepts packets routed straight to container IPs; warn when it can be read."""
+    code, out, _ = run(["docker", "version", "--format", "{{.Server.Version}}"])
+    major = out.strip().split(".", 1)[0]
+    if code != 0 or not major.isdigit():
+        return None  # dockerd not up (e.g. before docker.service); nothing to read
+    if int(major) < 28:
+        return (f"Docker Engine {out.strip()} is older than 28; upgrade (README 'LAN access'): "
+                "older engines accept traffic routed directly to container addresses")
+    return None
 
 
 def verify_site_certificate(cert: Path, key: Path, ca: Path, tls_host: str) -> None:
@@ -305,7 +335,10 @@ def main(argv: list[str] | None = None, run=_run) -> int:
     except (ConfigError, OSError, KeyError, ValueError) as error:
         print(f"rosy-site preflight: {error}", file=sys.stderr)
         return 2
-    for warning in plan["warnings"]:
+    warnings = list(plan["warnings"])
+    if args.command == "check" and plan["mode"] != "loopback":
+        warnings += [text for text in [docker_engine_warning(run)] if text]
+    for warning in warnings:
         print(f"warning: {warning}", file=sys.stderr)
     try:
         if args.dry_run:
@@ -314,8 +347,8 @@ def main(argv: list[str] | None = None, run=_run) -> int:
             else:
                 print("# iptables-restore -w --noflush <<EOF")
                 print(restore_payload(plan["ifaces"]) + "# EOF")
-                print(shlex.join(["iptables", "-w", "-t", TABLE, "-I", HOOK, "1",
-                                  *jump_rule(plan["port"])]))
+                for rule in jump_rules(plan["port"]).values():
+                    print(shlex.join(["iptables", "-w", "-t", TABLE, "-I", HOOK, "1", *rule]))
         elif args.command == "apply":
             changed = apply(plan, run)
             write_public_env(settings, args.public_env)
