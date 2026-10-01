@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 
 import {
   CONFIRM_PROMPT, MESSAGES, PENDING_POLL_MS, UNAVAILABLE, canApprove, credentialActions, credentialText,
-  formatClock, freeSources, messageFor, normalizePairingCode, pairingCodeError, remainingSeconds,
+  formatClock, freeSources, messageFor, queueHealthText, normalizePairingCode, pairingCodeError, remainingSeconds,
   requestActions, requestText,
 } from "../../fleet/server/web/camera-pairing.js";
 
@@ -104,4 +104,12 @@ test("fixed copy: absent routes are calm, confirm prompt matches the phone check
   assert.equal(UNAVAILABLE, "이 Fleet에는 카메라 연결 승인이 설정되지 않았습니다.");
   assert.equal(CONFIRM_PROMPT, "폰 화면과 이 지문·자격 ID가 같은지 확인하세요");
   assert.ok(PENDING_POLL_MS >= 2000 && PENDING_POLL_MS <= 3000, PENDING_POLL_MS);
+});
+
+test("a jammed queue shows as one quiet line of counts since Fleet start; zero says nothing", () => {
+  assert.equal(queueHealthText({ refused_requests: 0, commit_mismatches: 0 }), null);
+  assert.equal(queueHealthText({}), null);
+  const line = queueHealthText({ refused_requests: 4, commit_mismatches: 1, unauthenticated_requests: 9 });
+  assert.equal(line, "Fleet 시작 뒤: 한도로 거절된 요청 4건 · 확인값이 맞지 않아 닫힌 요청 1건");
+  assert.doesNotMatch(line, /refused|commit|mismatch/i);
 });

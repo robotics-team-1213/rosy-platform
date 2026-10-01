@@ -52,6 +52,14 @@ export function messageFor(detail) {
   return [MESSAGES[code] || `처리하지 못했습니다(${code || "알 수 없음"}).`];
 }
 
+// 대기 줄이 막히는지 보이게 한다(D-341 7). Fleet 시작 뒤 누계, 둘 다 0이면 말하지 않는다.
+export function queueHealthText(listing) {
+  const refused = Number(listing?.refused_requests || 0);
+  const mismatched = Number(listing?.commit_mismatches || 0);
+  if (!refused && !mismatched) return null;
+  return `Fleet 시작 뒤: 한도로 거절된 요청 ${refused}건 · 확인값이 맞지 않아 닫힌 요청 ${mismatched}건`;
+}
+
 export function canApprove(identity) {
   return canManage(identity);
 }
@@ -244,6 +252,10 @@ export function createCameraPairingPanel({ headers, identity, locked, log, dialo
     });
     const fingerprint = el("camera-site-fingerprint");
     if (fingerprint) fingerprint.textContent = listing.site_ca_fingerprint || "—";
+    const health = el("camera-queue-health");
+    const healthText = queueHealthText(listing);
+    health.hidden = healthText === null;
+    health.textContent = healthText || "";
     tickClocks();
   }
 
