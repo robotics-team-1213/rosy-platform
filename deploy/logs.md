@@ -1636,3 +1636,9 @@
 - 변경: `-Emergency -ResumeAfterWrite`는 `-PlanPath`를 요구하고 같은 plan의 진행 파일 이력이 깨끗할 때만 된다(마지막 전체 쓰기가 Imager 정상 종료, 그 뒤 쓰기 실패·readback 불일치·이미지 오류 없음). 긴급 receipt 단계는 `complete-unverified`, 이유에 백슬래시 금지, 끊긴 쓰기 안내에 `unverified-no-bundle` 추가. 후속 readback 허용을 fixture FAT 파티션 안의 bundle로 증명. 다운로더는 `IncompleteRead`를 재시도하고, 기존 출력도 새 다운로드처럼 크기·zip CRC로 점검하며, symlink 항목을 거부한다.
 - 증거: 새 시험 전부 통과, 게이트별 변이 16종 모두 실패로 잡힘(호스트 fixture만, 카드·로봇 접근 없음).
 - gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · fix(sd): 긴급 resume은 plan의 시도 색인을 읽는다 (D-389 검증)
+
+- 변경: plan을 쓰는 모든 쓰기·resume이 -LogPath와 상관없이 <plan>.attempts.jsonl에 시작(진행 파일 경로)·끝(card_state, kind) 줄을 덧붙인다. 긴급 resume은 이 색인이 가리키는 진행 파일만 읽고, 색인이 없거나 적힌 로그가 없거나 읽을 수 없으면 거부한다.
+- 증거: test_sd_writer_contract.py 긴급 resume 시험 11 passed(다른 폴더 로그의 불일치, 사라진 로그, 색인 없음 포함), 변이 4종 모두 실패로 잡힘.
+- gate 변화: 없음.
