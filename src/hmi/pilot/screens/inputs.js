@@ -34,6 +34,7 @@ export function mountInputs(root, {onClose, onChange} = {}) {
     const deadLabel = el("ui-text", `데드존 ${Number(config.deadzone ?? 0.12).toFixed(2)}`, {scale: "label"});
     const dead = el("input", null, {type: "range", min: "0", max: "0.6", step: "0.02",
                                     "aria-label": "데드존", value: String(config.deadzone ?? 0.12)});
+    dead.classList.add("ui-field");
     dead.addEventListener("input", () => {
       config = saveInputConfig({deadzone: Number(dead.value)});
       deadLabel.textContent = `데드존 ${Number(config.deadzone).toFixed(2)}`;

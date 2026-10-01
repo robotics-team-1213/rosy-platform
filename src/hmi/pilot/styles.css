@@ -571,13 +571,8 @@ body[data-pilot-screen="drive"] ui-brand small { display: none; }
 
 [data-screen="arm"] { max-width: 48rem; margin: 0 auto; padding: var(--space-4); }
 [data-screen="arm"] label { display: block; margin-block: var(--space-3); }
-[data-screen="arm"] input, [data-screen="arm"] select {
-  display: block; width: 100%; min-height: 2.75rem; color: inherit;
-  background: var(--ground-deep); border: 1px solid currentColor; border-radius: 0.4rem;
-}
+[data-screen="arm"] input, [data-screen="arm"] select { display: flex; width: 100%; }
 .sim-jog { display: flex; gap: var(--space-2); margin-block: var(--space-2); }
-[data-screen="arm"] button { min-height: 2.75rem; padding: 0.5rem 1rem; cursor: pointer; }
-[data-screen="arm"] button:disabled { cursor: not-allowed; opacity: 0.5; }
 [data-sim-readback] { overflow: auto; max-height: 20rem; padding: var(--space-3); }
 
 /* 보정 중 띠(D-321 부록): 영상 위쪽 가운데의 경고 판. 판만 칠하고, 사유 글자색은 공용 경고 상태 요소가 정한다. */
@@ -600,5 +595,5 @@ body[data-pilot-screen="drive"] ui-brand small { display: none; }
 /* 남의 보정 중에는 주행 조작부 전체가 입력을 받지 않는다. 비상 정지(상단 막대)는 이 밖에 있다. */
 [data-drive-controls][data-locked] {
   pointer-events: none;
-  opacity: 0.45;
+  opacity: var(--disabled-opacity);
 }
