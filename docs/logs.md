@@ -4143,3 +4143,9 @@
 - 증거: `python -m pytest tools/perception/test -q -p no:cacheprovider`, 신규 `test_model_watch_host.py`(모의 ssh/DNS, 네트워크 없음).
 - gate 변화: 없음(SOURCE). 실제 로봇 mDNS 이름과 사이트 PC 해석, systemd에서 failed 표시와 타이머 재실행은 장치·사이트 PC에서 미확인.
 - 결정: D-373 개정 1
+
+## 2026-10-01 · uncommitted · docs(deployment): 로봇 주소 예시를 자리표시자로 (IP 감사 #18)
+
+- 변경: `raspberry-pi-wifi-image.md`의 리터럴 `192.168.1.42` 두 곳을 `<robot-ip>`로 바꿨다. 앞 문단은 이미 `.local` 이름을 먼저 쓰고 IP는 예비로 안내한다 (D-226).
+- 증거: 2026-10-01 현장 공유기 교체로 서브넷이 10.16.36.0/24로 바뀐 뒤의 IP 고정 감사.
+- gate 변화: 없음.

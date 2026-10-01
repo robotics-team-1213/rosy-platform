@@ -882,6 +882,20 @@
 - 증거: `src/site/fleet/test/ -k enroll` 84 passed, 1 skipped.
 - gate 변화: 없음.
 
+## 2026-10-01 · uncommitted · feat(fleet): D-392 P0–P2 모델 도구 call/result 경계
+
+- 변경: D-392 구현 계획 P0–P2. Fleet 내부 `ModelToolCall`/`ModelToolResult`를 추가해 provider call ID·turn ID·ordinal을 결과에 상관시키고, 인수와 payload는 제한된 canonical JSON snapshot으로 보관한다. ER 2 feedback loop는 호출 결과를 이 타입으로 매핑한 뒤 기존 Gemini `function_result` 형식으로 돌려준다. 일회성 `propose_pick_place` 후보 흐름은 D-331대로 후보만 반환하고 callback/result loop에 넣지 않는다.
+- 계획 정합: durable turn store 경로를 실제 `fleet/server/mission_model_turn_store.py`로 수정하고, feedback 호출과 일회성 후보 출력의 결과 왕복 차이를 명시했다.
+- 증거: 변경 전 네 Fleet AI suite 기준선 59 passed. P0–P2 수정 후 contract·ER2·dispatcher·turn-store·feedback suite 88 passed; contract type 단위 28 passed, ER2 adapter 32 passed.
+- gate 변화: 없음. SOURCE/LOCAL 테스트만; ROS-SIM·ARTIFACT·DEVICE·FIELD는 미실행.
+
+## 2026-10-01 · uncommitted · feat(fleet): D-392 P3 폐쇄형 모델 도구 카탈로그
+
+- 변경: `get_mission_status`, `propose_replan`, D-331 단발 후보 도구 `propose_pick_place`를 Fleet 소유 폐쇄형 카탈로그에 등록했다. Provider 스키마는 카탈로그에서 투영하며, dispatch는 feedback 허용 항목만 실행하고 durable turn scope에서 권한을 얻는다.
+- 도구는 모두 비장치 명령이다. 이동, 그리퍼, Action, 취소, stop/E-stop, 재무장, 동적 OpenAPI operation은 카탈로그에 없으며 인수 스키마는 닫혀 있다.
+- 증거: 집중 테스트 108 passed, flake8·`git diff --check` 통과. Harness lint는 0 errors, 기존 `last_verified` 차이 경고 24건. SOURCE/LOCAL만; ROS-SIM·ARTIFACT·DEVICE·FIELD gate는 미실행.
+- gate 변화: 없음.
+
 ## 2026-10-01 · uncommitted · feat(pairing): D-341 2단계 — Fleet `pairing/v1` 서버 상태와 API
 
 - 변경: `server/pairing.py`(메모리 대기 표 `pending → revealed → approved → delivered → confirmed`, `rejected`·`expired`; 기동마다 새 HMAC 키, 공개 뒤 `server_nonce` 폐기·코드 HMAC만 보관; 대기 300 s·사이트 전체 16건·30건/분·조회 2 s·본문 4 KiB·틀린 코드 3회 거절·승인 후 120 s 확인 없으면 자동 회수, 한도는 429 + `Retry-After`이고 기존 대기를 밀어내지 않는다), `server/pairing_store.py`(`device_credentials`: digest·source·상태·만료만, 원문·nonce·코드 열 없음; 감사는 `device_pairing_audit` 재사용, 모든 쓰기가 `device_kind='overhead-camera'`를 명시), `server/pairing_routes.py`(`/api/fleet/pairing/v1/...` 10개 라우트: 폰 요청·공개·조회·확인, 콘솔 대기·요약·승인·거절·회수, Vision 자격 목록). `enrollment_store.py`는 감사 표 생성·이전·추가를 모듈 함수로 꺼내 두 저장소가 같이 쓴다. `create_app(pairing=, pairing_sync_token=)` — 동기화 비밀은 console·discovery·preview·로봇 REST/Agent·sighting·policy evidence·사용자 digest·로봇 등록 키와 겹치면 기동 거절(`site_auth.assert_pairing_sync_token_isolated`). `sightings_config.py`: source별 `credential: static|paired`. CLI `--pairing-ca`·`--pairing-tls-host`·`--pairing-sync-token-env` — `--tls-cert`·`--tasks-db` 없으면 기동 거절, CA 자리에 leaf면 거절.
@@ -893,6 +907,13 @@
 
 - 변경: `server/pairing.py`의 공개 메서드를 `threading.RLock` 하나로 감쌌다. FastAPI의 동기 라우트(승인·거절·회수·조회·목록)는 스레드 풀에서 돌아, 같은 요청에 동시 승인이 들어오면 자격이 두 개 생길 수 있었다. `test/architecture/test_module_structure.py`의 `fleet` 패키지 판정을 21476줄로 다시 적었다(main이 이미 20655로 넘었고, 페어링은 자기 모듈 셋). 비밀 스캔이 이름만 보고 잡은 시험 변수 `shared` → `shared_secret`.
 - 증거: 새 `test_concurrent_approvals_issue_exactly_one_credential`(8개 스레드가 장벽 뒤 같은 코드로 승인) — 잠금 전 3회 연속 실패, 잠금 뒤 3회 통과. 페어링 시험 43 passed. 잠금 전 `src/site/fleet/test/` 1037 passed, 6 skipped(164 s); 잠금 뒤 전체 결과는 커밋 기록 참조.
+- gate 변화: 없음.
+
+
+## 2026-10-01 · uncommitted · fix(pairing): 보안 리뷰 반영 — 익명 요청은 감사 표에 쓰지 않음, 동기화는 https+CA 필수
+
+- 변경: 독립 보안 리뷰(APPROVE WITH FIXES). ① 인증 없는 페어링 요청·커밋 불일치는 `device_pairing_audit`에 쓰지 않고 메모리 계수만 둔다(익명 30건/분으로 운용자·로봇 등록 감사 행이 밀려나던 경로 차단); `GET /pending`에 `unauthenticated_requests`·`refused_requests`·`commit_mismatches`를 보여 큐 막힘을 운용자가 본다. ③ confirm의 `credential_id`는 `[A-Za-z0-9_-]{1,64}`, 비교는 바이트로(비ASCII가 500을 내던 문제). ④ 폰 경로의 잠금·SQLite 호출을 스레드풀로 옮겨 이벤트 루프를 막지 않는다. ⑥ `_Request` repr에서 nonce·commit·poll digest를 숨긴다.
+- 증거: 신규 시험(익명 폭주가 감사 행을 지우지 않음·거절 계수, repr 은닉, 비ASCII confirm 400); `src/site/fleet/test/` 아래 기록.
 - gate 변화: 없음.
 
 ## 2026-10-01 - D-392 P3 closed model-tool catalog
@@ -907,12 +928,6 @@
 - 결정: 콘솔은 코드를 보여 주지 않고 형식만 검사한다. 대기 목록은 2.5 s(폰 조회 하한 2 s보다 느리게), 자격 목록은 그 세 번에 한 번.
 - 증거: 새 `test/web/camera-pairing.test.mjs` 9 — 모듈 없을 때 실패 확인 뒤 9 passed(`node --test`).
 - gate 변화: 없음(LOCAL).
-
-## 2026-10-01 · uncommitted · fix(pairing): 보안 리뷰 반영 — 익명 요청은 감사 표에 쓰지 않음, 동기화는 https+CA 필수
-
-- 변경: 독립 보안 리뷰(APPROVE WITH FIXES). ① 인증 없는 페어링 요청·커밋 불일치는 `device_pairing_audit`에 쓰지 않고 메모리 계수만 둔다(익명 30건/분으로 운용자·로봇 등록 감사 행이 밀려나던 경로 차단); `GET /pending`에 `unauthenticated_requests`·`refused_requests`·`commit_mismatches`를 보여 큐 막힘을 운용자가 본다. ③ confirm의 `credential_id`는 `[A-Za-z0-9_-]{1,64}`, 비교는 바이트로(비ASCII가 500을 내던 문제). ④ 폰 경로의 잠금·SQLite 호출을 스레드풀로 옮겨 이벤트 루프를 막지 않는다. ⑥ `_Request` repr에서 nonce·commit·poll digest를 숨긴다.
-- 증거: 신규 시험(익명 폭주가 감사 행을 지우지 않음·거절 계수, repr 은닉, 비ASCII confirm 400); `src/site/fleet/test/` 아래 기록.
-- gate 변화: 없음.
 
 ## 2026-10-01 · uncommitted · feat(console): D-341 "기기 연결" 패널에 카메라 연결 승인 구역
 

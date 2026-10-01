@@ -176,3 +176,9 @@
 - 변경: `display/info` 의 `activity == "CALIBRATING"` 이면 MODE 값을 주의 칩 `CALIBRATING` 으로. LCD 글꼴은 ASCII 뿐(D-221)이라 "보정 중" 대신 기계어. E-STOP HEALTH 행은 그대로 우선.
 - 증거: face 시험·test_bridge_display 177 passed; 렌더 X:\DevTemp\calibration-mode\face-info-calibrating.png.
 - gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · feat(emotion): 부팅 카드 Rosy 정체성 점
+
+- 변경: render_boot 이 장치 이름 옆에 로즈색 점(--rose #e31b5d)을 그린다. "The rose colour is for the ROSY name only"(D-82) — 어느 화면을 보고 있는지 한눈에.
+- 증거: test_info_screen.py TestBootCardRoseMark (변이: ellipse 제거 시 빨강).
+- gate 변화: 없음.
