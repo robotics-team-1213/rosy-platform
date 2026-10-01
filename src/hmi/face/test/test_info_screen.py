@@ -5,7 +5,10 @@ import pytest
 from PIL import ImageChops
 from pathlib import Path
 
-from emotion.info_screen import DEFAULT_SIZE, _BG, _CRIT, _FG, _WARN, battery_color, hold_duration, render, render_boot
+from emotion.info_screen import (DEFAULT_SIZE, _BG, _CRIT, _FG, _WARN, battery_color,
+                                 hold_duration, render, render_boot, render_card,
+                                 render_drive)
+from emotion.info_screen import DisplayProfile, PINKY_ST7789
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -236,3 +239,65 @@ class TestBootCardBreathesWhileWaiting:
         for stage in ("CORE_READY", "FAILED:rosy-core", "SETUP"):
             steady = ImageChops.difference(self._card(stage, frame=0), self._card(stage, frame=1))
             assert steady.getbbox() is None, stage
+
+
+class TestDisplayProfile:
+    """D-394: 프로파일은 그리는 쪽이 알아야 할 전부다 — 전자잉크는 숨쉬지 않는다."""
+
+    def test_the_default_profile_is_pinky(self):
+        assert PINKY_ST7789.size == (320, 240)
+        assert PINKY_ST7789.animation is True
+
+    def test_a_profile_without_animation_ignores_the_frame(self):
+        from PIL import ImageChops
+
+        e_ink = DisplayProfile("eink-sketch", (400, 300), animation=False)
+        payload = {"stage": "BOOTING", "device_name": "rosy"}
+        steady = ImageChops.difference(
+            render_boot(payload, size=e_ink.size, frame=0, profile=e_ink),
+            render_boot(payload, size=e_ink.size, frame=1, profile=e_ink))
+        assert steady.getbbox() is None  # 같은 프레임 — 숨쉬지 않는다
+
+
+class TestDriveCard:
+    """D-394: 주행 카드 — 큰 모드 단어, 속도, 내비게이션, 배터리."""
+
+    def _drive(self, **over):
+        payload = {"kind": "drive", "robot_id": "rosy_01", "mode": "MANUAL",
+                   "navigation": "NAVIGATING", "speed": 0.24,
+                   "battery_percent": 87.7, "battery_voltage": 7.89,
+                   "estop": False, "hold_s": 5.0}
+        payload.update(over)
+        return render_drive(payload), payload
+
+    def test_mode_speed_and_battery_all_draw(self):
+        image, _payload = self._drive()
+        colours = image.getcolors(maxcolors=1 << 16)
+        assert colours and any(count > 40 for count, colour in colours if colour != _BG)
+
+    def test_a_different_mode_draws_differently(self):
+        from PIL import ImageChops
+
+        manual, _ = self._drive()
+        navigation, _ = self._drive(mode="NAVIGATION")
+        assert ImageChops.difference(manual, navigation).getbbox() is not None
+
+    def test_a_missing_speed_is_a_quiet_placeholder_not_a_zero(self):
+        from PIL import ImageChops
+
+        with_speed, _ = self._drive()
+        without, _ = self._drive(speed=None)
+        assert ImageChops.difference(with_speed, without).getbbox() is not None
+
+    def test_the_card_dispatch_picks_the_drive_kind(self):
+        # kind 가 카드를 고른다 — 없으면 웨이크 카드(호환). 다른 장치의 렌더러도
+        # 이 계약을 따른다. 픽셀로 비교한다: 크기만 같다고 닮은 게 아니다.
+        from PIL import ImageChops
+
+        payload = {"kind": "drive", "robot_id": "rosy_01", "mode": "MANUAL",
+                   "navigation": "NAVIGATING", "speed": 0.24,
+                   "battery_percent": 87.7, "estop": False}
+        dispatched = render_card(payload)
+        assert ImageChops.difference(dispatched, render_drive(payload)).getbbox() is None
+        wake = render_card({"battery_percent": 87.7, "mode": "MANUAL"})  # kind 없음
+        assert ImageChops.difference(dispatched, wake).getbbox() is not None

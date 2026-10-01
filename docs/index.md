@@ -269,4 +269,4 @@
 - 2026-10-01 · uncommitted · docs(adr): D-384 개정 4 — 재생 비교와 URDF 형상 사전값
 - 2026-10-01 · uncommitted · docs(reference): API Ref 군집 소켓 표에서 `?token=` 표기 제거
 - 2026-10-01 · uncommitted · docs(reference): 사이트 LAN 발견 프로필 — Fleet health 채택 규칙 완화
-- 2026-10-01 · uncommitted · docs(adr): D-391 사이트 연결 기록 모양과 기기 연결 서버 자리 제안
+- 2026-10-01 · uncommitted · docs(adr): D-394 사이트 연결 기록 모양과 기기 연결 서버 자리 제안

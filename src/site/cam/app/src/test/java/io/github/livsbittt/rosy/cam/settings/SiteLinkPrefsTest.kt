@@ -85,6 +85,74 @@ class SiteLinkPrefsTest {
     }
 
     @Test
+    fun anOldNonLocalNameIsRejectedSoTheOperatorRePairs() {
+        // D-391 1 decision (2026-10-01): a DNS name is no longer a tls_host. An old IP still migrates to manual_host.
+        val old = legacy("site-pc.example.org")
+        assertNull(K.decode(old))
+        assertEquals("site-pc.example.org", K.rejectedHost(old))
+
+        assertEquals("192.168.1.102", K.decode(legacy("192.168.1.102"))!!.manualHost)
+        assertNull(K.rejectedHost(legacy("192.168.1.102")))
+        assertNull(K.rejectedHost(legacy("perpros.local")))
+        assertNull("nothing stored is not a rejected pairing", K.rejectedHost(emptyMap()))
+    }
+
+    @Test
+    fun aNewFormatRecordWithANonLocalTlsHostIsRejectedToo() {
+        // Written by a build before the .local rule.
+        val stored = mapOf(
+            K.TLS_HOST to "site-pc.example.org", K.CA_PIN to pin, K.ROLE to SiteLink.ROLE,
+            K.PORT to 443, K.TOKEN to "tok", K.SOURCE to "overhead-1", K.SECURE to true,
+        )
+        assertNull(K.decode(stored))
+        assertEquals("site-pc.example.org", K.rejectedHost(stored))
+    }
+
+    private fun stored(tlsHost: String?, manualHost: String? = null, pin: String? = this.pin): Map<String, Any?> = buildMap {
+        tlsHost?.let { put(K.TLS_HOST, it) }
+        manualHost?.let { put(K.MANUAL_HOST, it) }
+        pin?.let { put(K.CA_PIN, it) }
+        put(K.ROLE, SiteLink.ROLE)
+        put(K.PORT, 443)
+        put(K.TOKEN, "tok")
+        put(K.SOURCE, "overhead-1")
+        put(K.SECURE, true)
+    }
+
+    @Test
+    fun aRejectedHostIsReportedOnlyWhenTheHostIsTheFault() {
+        // Review 1: a .local host with a bad pin is broken, but not because of its host.
+        val badPin = stored("perpros.local", pin = "sha256/short")
+        assertNull(K.decode(badPin))
+        assertNull(K.rejectedHost(badPin))
+        val oldBadPin = legacy("perpros.local", pin = "sha256/short")
+        assertNull(K.decode(oldBadPin))
+        assertNull(K.rejectedHost(oldBadPin))
+    }
+
+    @Test
+    fun aNonLocalNameWithAnIpIsSalvagedAndWithoutOneIsRejected() {
+        // Decision 5: keep dialling the manual IP, drop the name, soft note; no IP left is the hard re-pair case.
+        val salvage = K.read(stored("site-pc.example.org", manualHost = "192.168.1.102"))
+        assertEquals("192.168.1.102", salvage.link!!.manualHost)
+        assertNull(salvage.link!!.tlsHost)
+        assertEquals("site-pc.example.org", salvage.droppedTlsHost)
+        assertNull(salvage.rejectedHost)
+        assertNull(SiteLink.validate(salvage.link!!))
+
+        val hard = K.read(stored("site-pc.example.org"))
+        assertNull(hard.link)
+        assertNull(hard.droppedTlsHost)
+        assertEquals("site-pc.example.org", hard.rejectedHost)
+    }
+
+    @Test
+    fun aStoredTlsHostIsReadCanonical() {
+        // Review 3: stored values are canonical after reading, whatever an older build wrote.
+        assertEquals("perpros.local", K.decode(stored("Perpros.Local. "))!!.tlsHost)
+    }
+
+    @Test
     fun invalidOrIncompleteRecordsReadAsNothing() {
         assertNull(K.decode(emptyMap()))
         assertNull(K.decode(legacy("192.168.1.5:8443")))
