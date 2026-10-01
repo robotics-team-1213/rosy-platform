@@ -309,6 +309,14 @@ def test_the_boot_display_and_the_summary_say_the_same_state(tmp_path, case):
         assert view["todo"] is None  # the confirmed buzzer asks nothing on the LCD either
 
 
+SCHEMA_1_KEYS = {"schema", "written_at", "battery_warning_percent", "devices",
+                 "robot_mode", "nav_state", "swarm_role"}
+# D-406: what the device updater judges idleness from, without a token.
+SCHEMA_2_KEYS = {"velocity_linear", "velocity_angular", "battery_percent", "battery_charging",
+                 "docking_state", "line_follow_mode", "line_follow_state", "swarm_active", "estop",
+                 "activity_kind"}
+
+
 def test_the_status_inputs_carry_only_the_threshold_the_states_and_the_mode(tmp_path):
     config = _m1_config(tmp_path)
     _hardware(tmp_path, [_device("camera", "no_response", label="카메라")])
@@ -318,8 +326,8 @@ def test_the_status_inputs_carry_only_the_threshold_the_states_and_the_mode(tmp_
     host_api.write_status_inputs(svc)
     written = json.loads((tmp_path / "run/rosy/status-inputs.json").read_text(encoding="utf-8"))
 
-    assert set(written) == {"schema", "written_at", "battery_warning_percent", "devices",
-                            "robot_mode", "nav_state", "swarm_role"}
+    assert set(written) == SCHEMA_1_KEYS | SCHEMA_2_KEYS
+    assert written["schema"] == 2
     assert written["battery_warning_percent"] == 25.0
     assert written["devices"] == [{"id": "camera", "state": "no_response", "product": True}]
     assert written["robot_mode"] == "NAVIGATION"
@@ -350,10 +358,142 @@ def test_a_core_without_a_state_manager_writes_no_mode(tmp_path):
     written = json.loads((tmp_path / "run/rosy/status-inputs.json").read_text(encoding="utf-8"))
 
     assert written["robot_mode"] is None
+    # D-406: no snapshot means every idleness input is unknown, never a guessed "idle".
+    assert {key: written[key] for key in SCHEMA_2_KEYS} == dict.fromkeys(SCHEMA_2_KEYS)
+
+
+# --- D-406: schema 2 carries the idleness inputs from the robot/state snapshot ------
+
+
+class SnapshotState:
+    """A state manager double that hands out a real StateSnapshot (what GET /robot/state serves)."""
+
+    def __init__(self, snapshot):
+        self.value = snapshot
+
+    def snapshot(self):
+        return self.value
+
+
+def _schema_2_written(tmp_path: Path, snapshot, devices=()) -> dict:
+    config = _m1_config(tmp_path)
+    _hardware(tmp_path, list(devices))
+    svc = SimpleNamespace(config=config, state=SnapshotState(snapshot),
+                          safety=SimpleNamespace(battery_policy=SimpleNamespace(warning_percent=20.0)))
+    host_api.write_status_inputs(svc)
+    return json.loads((tmp_path / "run/rosy/status-inputs.json").read_text(encoding="utf-8"))
+
+
+def test_schema_2_copies_the_idleness_inputs_from_the_state_snapshot(tmp_path):
+    from core_common.protocol import schemas as s
+
+    snapshot = s.StateSnapshot(
+        robot_id="rosy_01", mode=s.RobotMode.MANUAL, navigation=s.NavigationState.NAVIGATING,
+        velocity=s.Velocity(linear=0.12, angular=-0.5),
+        battery=s.Battery(percent=63.5, voltage=7.6),
+        battery_status=s.BatteryStatus(charging=True),
+        docking=s.DockingStatus(state=s.DockState.DOCKED),
+        safety=s.SafetySummary(estop=True),
+        swarm=s.SwarmStatus(role=s.SwarmRole.LEADER, active=True),
+        line_follow=s.LineFollowStatus(mode="FOLLOW", state="TRACKING"),
+        activity=s.RobotActivity(session_id="c1", calibration_kind="camera", label="교정",
+                                 owner=s.ActivityOwner(id="t"), started_at="2026-10-01T00:00:00+00:00",
+                                 remaining_s=30.0))
+
+    written = _schema_2_written(tmp_path, snapshot)
+
+    assert written["schema"] == 2
+    assert {key: written[key] for key in SCHEMA_2_KEYS} == {
+        "velocity_linear": 0.12, "velocity_angular": -0.5,
+        "battery_percent": 63.5, "battery_charging": True,
+        "docking_state": "DOCKED", "line_follow_mode": "FOLLOW", "line_follow_state": "TRACKING",
+        "swarm_active": True, "estop": True, "activity_kind": "CALIBRATING"}
+    # The schema-1 keys come from the same snapshot.
+    assert written["robot_mode"] == "MANUAL" and written["nav_state"] == "NAVIGATING"
+    assert written["swarm_role"] == "leader"
+
+
+def test_schema_2_of_a_resting_robot_is_idle_and_unknown_battery_is_null(tmp_path):
+    from core_common.protocol import schemas as s
+
+    written = _schema_2_written(tmp_path, s.StateSnapshot(robot_id="rosy_01"))
+
+    assert {key: written[key] for key in SCHEMA_2_KEYS} == {
+        "velocity_linear": 0.0, "velocity_angular": 0.0,
+        "battery_percent": None, "battery_charging": False,
+        "docking_state": "UNDOCKED", "line_follow_mode": "OFF", "line_follow_state": "OFF",
+        "swarm_active": False, "estop": False, "activity_kind": None}
+
+
+def test_one_write_reads_one_snapshot(tmp_path):
+    # The updater pairs mode with velocity: both must describe the same instant.
+    from core_common.protocol import schemas as s
+
+    class CountingState(SnapshotState):
+        calls = 0
+
+        def snapshot(self):
+            CountingState.calls += 1
+            return self.value
+
+    config = _m1_config(tmp_path)
+    svc = SimpleNamespace(config=config, state=CountingState(s.StateSnapshot(robot_id="rosy_01")),
+                          safety=SimpleNamespace(battery_policy=SimpleNamespace(warning_percent=20.0)))
+    host_api.status_inputs(svc)
+
+    assert CountingState.calls == 1
+
+
+def test_a_battery_reading_that_is_not_fresh_is_written_as_unknown(tmp_path):
+    # Same rule as the status summary: a delayed channel's last number is not a reading,
+    # and the updater must never apply on a battery figure CORE itself distrusts.
+    from core_common.protocol import schemas as s
+
+    snapshot = s.StateSnapshot(robot_id="rosy_01", battery=s.Battery(percent=90.0, voltage=8.0))
+    snapshot.evidence = {"battery": SimpleNamespace(evidence="delayed")}
+
+    written = _schema_2_written(tmp_path, snapshot)
+
+    assert written["battery_percent"] is None
+
+
+@pytest.mark.parametrize("bad", [
+    {"velocity": SimpleNamespace(linear="fast", angular=True)},
+    {"battery_status": SimpleNamespace(charging="yes")},
+    {"docking": SimpleNamespace(state=7), "line_follow": SimpleNamespace(mode=None, state=3)},
+    {"swarm": SimpleNamespace(active=1), "safety": SimpleNamespace(estop="on")},
+    {"activity": SimpleNamespace(kind=5)},
+])
+def test_a_malformed_snapshot_field_is_written_as_unknown_not_coerced(tmp_path, bad):
+    snapshot = SimpleNamespace(mode=None, navigation=None, swarm=None, battery=None, evidence={}, **{
+        key: None for key in ("velocity", "battery_status", "docking", "line_follow", "safety", "activity")})
+    for key, value in bad.items():
+        setattr(snapshot, key, value)
+
+    written = _schema_2_written(tmp_path, snapshot)
+
+    assert {key: written[key] for key in SCHEMA_2_KEYS} == dict.fromkeys(SCHEMA_2_KEYS)
+
+
+def test_schema_2_stays_well_under_the_reader_cap(tmp_path):
+    from core_common.protocol import schemas as s
+
+    status = _native("rosy_boot_status_d406a", "rosy-boot-status.py")
+    devices = [_device(f"device.{index:02d}", "no_response", label="장치" * 8) for index in range(64)]
+
+    _schema_2_written(tmp_path, s.StateSnapshot(robot_id="rosy_01"), devices)
+    path = tmp_path / "run/rosy/status-inputs.json"
+
+    assert path.stat().st_size < status.MAX_STATUS_INPUTS_BYTES // 2
+    if os.name == "posix":
+        assert path.stat().st_mode & 0o777 == 0o644
 
 
 @pytest.mark.parametrize("mutate", [
-    lambda doc: doc.update(schema=2),
+    lambda doc: doc.update(schema=3),
+    lambda doc: doc.update(schema=0),
+    lambda doc: doc.update(schema="2"),
+    lambda doc: doc.update(schema=True),
     lambda doc: doc.update(written_at="2020-01-01T00:00:00+00:00"),  # CORE stopped writing
     lambda doc: doc.update(written_at="now"),
     lambda doc: doc.update(battery_warning_percent=0),
@@ -398,6 +538,23 @@ def test_the_hand_over_carries_the_robot_mode_to_the_record(tmp_path):
     inputs = status._core_inputs(tmp_path, datetime.now(timezone.utc))
     assert inputs["robot_mode"] == "NAVIGATION"
     assert inputs["nav_state"] == "BLOCKED"
+
+
+def test_a_schema_2_hand_over_reads_exactly_like_schema_1(tmp_path):
+    # D-406: the root reader accepts both; the added keys are the updater's, not the display's.
+    status = _native("rosy_boot_status_d406b", "rosy-boot-status.py")
+    shared = {"robot_mode": "IDLE", "nav_state": "IDLE", "swarm_role": "follower"}
+    _hand_over(tmp_path, **shared)
+    one = status._core_inputs(tmp_path, datetime.now(timezone.utc))
+    (tmp_path / "run/rosy/status-inputs.json").unlink()
+    (tmp_path / "run/rosy").rmdir()
+    _hand_over(tmp_path, schema=2, velocity_linear=0.0, velocity_angular=0.0, battery_percent=70.0,
+               battery_charging=False, docking_state="UNDOCKED", line_follow_mode="OFF",
+               line_follow_state="OFF", swarm_active=False, estop=False, activity_kind=None, **shared)
+    two = status._core_inputs(tmp_path, datetime.now(timezone.utc))
+
+    assert one is not None
+    assert two == one
 
 
 @pytest.mark.parametrize("mode", [None, "DRIVE", "manual", 7, True])

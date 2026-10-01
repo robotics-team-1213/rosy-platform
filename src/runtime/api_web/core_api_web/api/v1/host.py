@@ -431,40 +431,84 @@ def _warning_percent(svc: CoreServicesLike) -> float:
         return robot_state.BATTERY_WARNING_PERCENT
 
 
-def _robot_mode(svc: CoreServicesLike) -> Optional[str]:
+def _snapshot(svc: CoreServicesLike) -> Any:
+    """One StateSnapshot (what GET /robot/state serves), or None without a state manager."""
+    snapshot = getattr(getattr(svc, "state", None), "snapshot", None)
+    return snapshot() if callable(snapshot) else None
+
+
+def _robot_mode(snapshot: Any) -> Optional[str]:
     """D-380: CORE's live RobotMode for the boot display; absent rather than wrong.
 
     Duck-typed like ``_warning_percent``: a test double (or a CORE without a state
     manager) reports no mode, and the lamp falls back to the health patterns.
     """
-    snapshot = getattr(getattr(svc, "state", None), "snapshot", None)
-    mode = getattr(snapshot() if callable(snapshot) else None, "mode", None)
+    mode = getattr(snapshot, "mode", None)
     return robot_state.valid_robot_mode(getattr(mode, "value", mode))
 
 
-def _nav_state(svc: CoreServicesLike) -> Optional[str]:
+def _nav_state(snapshot: Any) -> Optional[str]:
     """D-381: CORE's live NavigationState, same duck-typing and same absence rule."""
-    snapshot = getattr(getattr(svc, "state", None), "snapshot", None)
-    nav = getattr(snapshot() if callable(snapshot) else None, "navigation", None)
+    nav = getattr(snapshot, "navigation", None)
     return robot_state.valid_nav_state(getattr(nav, "value", nav))
 
 
-def _swarm_role(svc: CoreServicesLike) -> Optional[str]:
+def _swarm_role(snapshot: Any) -> Optional[str]:
     """D-383: the live swarm role (leader/follower), same rules as the mode."""
-    snapshot = getattr(getattr(svc, "state", None), "snapshot", None)
-    swarm = getattr(snapshot() if callable(snapshot) else None, "swarm", None)
+    swarm = getattr(snapshot, "swarm", None)
     return robot_state.valid_swarm_role(getattr(swarm, "role", None))
 
 
+def _number(value: Any) -> Optional[float]:
+    return float(value) if isinstance(value, (int, float)) and not isinstance(value, bool) else None
+
+
+def _flag(value: Any) -> Optional[bool]:
+    return value if isinstance(value, bool) else None
+
+
+def _name(value: Any) -> Optional[str]:
+    value = getattr(value, "value", value)
+    return value if isinstance(value, str) else None
+
+
+def _idleness_inputs(snapshot: Any) -> dict[str, Any]:
+    """D-406: what the device updater judges idleness from.
+
+    Every value is typed or null: an unknown is never written as a resting default,
+    because the updater reads null as "not eligible". The battery follows the
+    status summary's rule (a channel that is not fresh has no reading).
+    """
+    velocity = getattr(snapshot, "velocity", None)
+    line_follow = getattr(snapshot, "line_follow", None)
+    return {
+        "velocity_linear": _number(getattr(velocity, "linear", None)),
+        "velocity_angular": _number(getattr(velocity, "angular", None)),
+        "battery_percent": _battery_reading(snapshot)[0],
+        "battery_charging": _flag(getattr(getattr(snapshot, "battery_status", None), "charging", None)),
+        "docking_state": _name(getattr(getattr(snapshot, "docking", None), "state", None)),
+        "line_follow_mode": _name(getattr(line_follow, "mode", None)),
+        "line_follow_state": _name(getattr(line_follow, "state", None)),
+        "swarm_active": _flag(getattr(getattr(snapshot, "swarm", None), "active", None)),
+        "estop": _flag(getattr(getattr(snapshot, "safety", None), "estop", None)),
+        "activity_kind": _name(getattr(getattr(snapshot, "activity", None), "kind", None)),
+    }
+
+
 def status_inputs(svc: CoreServicesLike) -> dict[str, Any]:
-    """What the root side cannot know: the live warning threshold, the overlaid device states and the live robot mode."""
+    """What the root side cannot know: the live warning threshold, the overlaid device states and the live robot mode.
+
+    Schema 2 (D-406) keeps every schema-1 key and adds the updater's idleness
+    inputs. All state keys come from one snapshot, so they describe one instant.
+    """
     hardware = host_hardware(None, svc)
     devices = [{"id": row["id"], "state": row["state"], "product": row["product"]}
                for row in (hardware["devices"] if hardware.get("available") else [])]
-    return {"schema": 1, "written_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+    snapshot = _snapshot(svc)
+    return {"schema": 2, "written_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
             "battery_warning_percent": _warning_percent(svc), "devices": devices,
-            "robot_mode": _robot_mode(svc), "nav_state": _nav_state(svc),
-            "swarm_role": _swarm_role(svc)}
+            "robot_mode": _robot_mode(snapshot), "nav_state": _nav_state(snapshot),
+            "swarm_role": _swarm_role(snapshot), **_idleness_inputs(snapshot)}
 
 
 def write_status_inputs(svc: CoreServicesLike) -> None:
