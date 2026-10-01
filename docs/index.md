@@ -265,8 +265,8 @@
 
 ## 최근 기록
 
+- 2026-10-01 · uncommitted · docs(adr): D-395 개정 2 — 출발 슬롯은 방향 축만, 부호는 LiDAR 적합
 - 2026-10-01 · uncommitted · docs(adr): D-395 개정 1 — 바닥 기준 사각형 2개를 귀환 기준점·출발 슬롯으로
 - 2026-10-01 · uncommitted · fix(test): proposal_store.py 크기 판정 행 복구
 - 2026-10-01 · uncommitted · docs(adr): D-361 개정 보강 — 옮기기 비교는 일관성 검사, 옛 토큰은 보내지 않음, 고정 주소 탐침
 - 2026-10-01 · uncommitted · docs(adr): D-361 "새 주소로 옮기기"는 화면 코드로 새 주소에서 재페어링
-- 2026-10-01 · uncommitted · test(arch): rejudge current Fleet size snapshot after main integration

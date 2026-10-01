@@ -192,3 +192,13 @@ def test_the_drive_card_carries_the_charging_flag():
 
     assert charging["charging"] is True
     assert discharging["charging"] is False
+
+
+def test_the_drive_card_carries_the_goal_only_while_navigating():
+    payload = display.drive_payload(_snapshot(mode="NAVIGATION"), goal_x=1.234, goal_y=4.567)
+    assert payload["goal_x"] == 1.23
+    assert payload["goal_y"] == 4.57
+
+    # NAVIGATION 이 아니면 목표는 실리지 않는다 — 모드가 곧 맥락이다.
+    manual = display.drive_payload(_snapshot(mode="MANUAL"), goal_x=1.234, goal_y=4.567)
+    assert manual["goal_x"] is None and manual["goal_y"] is None

@@ -1,6 +1,6 @@
 ## D-395 Fleet 보조 위치 확정 — 로봇이 후보를 내고 Fleet이 중재하며, 대칭 맵에서도 사람 입력 없이 map 자세를 얻는다
 
-**Status:** Proposed (2026-10-01). 설계만 정한다. 코드·로봇 설정·params·API 참조서는 바꾸지 않는다. 구현은 아래 Validation의 S1 이후 단계를 사용자가 승인한 뒤 별도 변경으로 한다. 개정 1(2026-10-01, 바닥 기준 사각형을 귀환 기준점·출발 슬롯으로 사용)이 아래 결정보다 우선한다. 이 ADR은 D-257 5항과 D-393 3항의 일부를 **개정하자고 제안**한다(아래 "개정 제안"). 제안이 Accepted되기 전에는 두 ADR의 해당 문구가 그대로 유효하다.
+**Status:** Proposed (2026-10-01). 설계만 정한다. 코드·로봇 설정·params·API 참조서는 바꾸지 않는다. 구현은 아래 Validation의 S1 이후 단계를 사용자가 승인한 뒤 별도 변경으로 한다. 개정 1(2026-10-01, 바닥 기준 사각형을 귀환 기준점·출발 슬롯으로 사용)과 개정 2(슬롯 방향은 축만, 부호는 LiDAR 적합)가 아래 결정보다 우선한다. 이 ADR은 D-257 5항과 D-393 3항의 일부를 **개정하자고 제안**한다(아래 "개정 제안"). 제안이 Accepted되기 전에는 두 ADR의 해당 문구가 그대로 유효하다.
 
 설계 전문: [2026-10-01-fleet-assisted-localization-design.md](../plans/2026-10-01-fleet-assisted-localization-design.md).
 
@@ -126,5 +126,12 @@ LOCAL·ROS-SIM까지만 주장 가능하다. 실물은 승인 뒤다.
 6. **검출은 새 인식 단서다.** 전방 카메라에서 빨간 고리와 파란 중심을 HSV로 찾는 규칙 기반 검출기를 둔다. 나중에 학습 클래스로 바꿀 수 있어야 한다(출력 계약을 고정하고 구현을 바꾼다). 출력은 사각형 중심의 방위·거리 추정과 신뢰도다. D-379 라벨 규격(클래스 0–5)에는 해당 클래스가 없다. `reference_square`를 새 클래스로 더하자고 제안한다. 번호와 role(처음엔 ignore)은 D-379·D-373 공유 계약을 개정할 때 정하며 이 개정은 라벨 규격을 바꾸지 않는다. 실제 카메라는 거의 수평이고 바닥이 회색 카펫이라 사각형이 보이는 거리와 조명 조건은 미검증이다.
 7. **채점 단서에 더한다.** 설계 문서 7절에 `square_seen`(후보 자세에서 기대 사각형 위치에 검출 일치)을 큰 가산, 기대 위치에 검출이 없으면 큰 감산으로 넣는다. 가중은 S1에서 정한다. 어느 단서도 단독으로 결정하지 않는 규칙은 유지하되, 도착한 뒤의 사각형 관측은 그 규칙의 "충분한 격차"를 채우는 가장 강한 단서로 본다.
 8. **검증 변경.** S1·S2에 "사각형에서 출발"과 "사각형 도착으로 거울 해소"를 넣는다. sim 월드의 사각형은 영상 유래 위치이므로 실물 테이프 실측이 나오면 `lane_rules.yaml`을 고치고 월드를 다시 생성한다.
+
+**개정 2 (2026-10-01, 슬롯 방향은 축만 정한다, 사용자 결정):**
+
+- 사각형 위에 둔 로봇은 길을 따라 놓이지만 어느 쪽을 보는지는 정하지 않는다. 슬롯은 방향 대신 **방향 축**(`heading_axis_deg`)만 가진다. A는 90°(왼쪽 가장자리 차선이 y축을 따른다), B는 0°(아래 직선이 x축을 따른다)다. 영상에서 읽은 값이라 테이프 실측과 함께 확인한다.
+- 슬롯 후보는 축과 축+180° 두 자세다. 축 방향으로 사각형이 중심에서 벗어나 있으면(A는 |y| 0.49 m, B는 |x| 0.86 m) 앞뒤 벽까지 거리가 0.98 m, 1.72 m씩 달라진다. 그래서 LiDAR 적합만으로 둘 중 하나를 고른다. 두 후보의 적합이 비슷하면(가림 등) 보통의 중재·사다리로 넘긴다.
+- 개정 1의 5항 "슬롯 방향(yaw)은 정해야 한다"는 이 축 규칙으로 닫는다. Decision 5항의 10 cm / 20° 슬롯 가산은 두 축 후보 각각에 적용한다.
+- `test_map_v2_fleet_reference_squares.py`가 축 값과, 축 방향으로 중심에서 0.3 m 넘게 벗어났는지를 확인한다.
 
 **References:** `docs/adr/D-257-site-lane-map-and-overhead-sightings.md`, `docs/adr/D-393-nav-amcl-update-min-d-and-goal-tolerance.md`, `docs/adr/D-375-overhead-map-registration-from-lane-paint-proposal.md`, `docs/adr/D-360-overhead-field-auto-detection-proposal.md`, `src/runtime/api_web/core_api_web/api/v1/navigation.py`, `src/runtime/gateway/core/bridge/ros_bridge.py`, `src/runtime/sensing/control/localization_node.py`, `src/site/fleet/fleet/swarm/transport.py`, D-2, D-267, D-269, D-321, D-356, D-369, [D-346](D-346-commit-time-collision-defenses.md).

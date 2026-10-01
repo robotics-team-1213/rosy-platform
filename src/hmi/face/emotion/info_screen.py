@@ -257,6 +257,14 @@ def render_drive(payload: dict, size: tuple[int, int] = DEFAULT_SIZE) -> Image.I
     nav_font, nav = _fit(draw, str(payload.get("navigation") or "--"), 16, width - 108)
     draw.text((92, 136), nav, font=nav_font, fill=_FG)
 
+    # 목표 좌표 — NAVIGATION 중에만, NAV 행 오른쪽 끝에 조용히
+    goal_x = payload.get("goal_x")
+    goal_y = payload.get("goal_y")
+    if goal_x is not None and goal_y is not None:
+        goal_text = f"({float(goal_x):.1f}, {float(goal_y):.1f})"
+        goal_font, goal_text = _fit(draw, goal_text, 14, width // 3)
+        draw.text((width - 16, 140), goal_text, font=goal_font, fill=_MUTED, anchor="rs")
+
     # 배터리: 웨이크 카드와 같은 게이지 규약 — 결측은 경보가 아니라 침묵이다.
     raw_percent = battery_measurement(payload.get("battery_percent"), percent=True)
     percent = raw_percent if raw_percent is not None else 0.0

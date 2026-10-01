@@ -37,8 +37,8 @@
 
 ## 최근 기록
 
+- 2026-10-01 · uncommitted · feat(console): Escape 키 즉시 비상정지
 - 2026-10-01 · uncommitted · feat(console): 모드 버튼·히어로가 한국어로 말한다
 - 2026-10-01 · c302529d · feat(dashboard): 보정 중 칩
 - 2026-10-01 · uncommitted · fix(console): 계보줄 단일 작성자 — 10Hz 덮어쓰기 제거
 - 2026-10-01 · uncommitted · feat(console): D-383 편대 역할 칸과 버전 계보
-- 2026-10-01 · uncommitted · fix(dashboard): D-359 차선 추종 모드 값은 title에 원래 열거값을 둔다

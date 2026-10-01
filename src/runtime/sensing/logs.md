@@ -755,3 +755,8 @@
 - 증거: `test_map_v2_fleet_reference_squares.py`(신규; 필드, 180° 회전 최소 거리 ≥ 0.3 m = 0.40 m, 월드 일치·충돌 없음), `test_map_v2_fleet_scene.py`(생성기 출력 = 체크인 월드), dock_marker·lane_graph·track_world·gz_map_export 통과.
 - gate 변화: SOURCE/LOCAL. ROS-SIM 미실행(Gazebo에서 렌더 확인 안 함), DEVICE 해당 없음.
 - 결정: D-395 Proposed(개정 1).
+
+## 2026-10-01 · uncommitted · feat(map): 기준 사각형에 방향 축 `heading_axis_deg`
+- 변경: `map_v2_fleet/lane_rules.yaml`의 `reference_squares`에 `heading_axis_deg`(A 90, B 0, 영상 유래)를 더했다. 사용자 결정: 사각형 위 로봇은 길을 따라 놓이고 앞뒤는 정하지 않는다. 시험이 축 값과, 축 방향으로 중심에서 0.3 m 넘게 벗어나 앞뒤가 LiDAR로 갈리는지를 확인한다.
+- 증거: test_map_v2_fleet_reference_squares.py.
+- gate 변화: 없음(SOURCE, 이 키를 읽는 코드는 아직 없다).

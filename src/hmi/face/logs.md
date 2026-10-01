@@ -188,3 +188,9 @@
 - 변경: render_drive 배터리 퍼센트 뒤 충전 중이면 ⚡ 를 붙인다.
 - 증거: test_info_screen.py 62 passed.
 - gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · feat(emotion): 주행 카드 목표 좌표 표시
+
+- 변경: render_drive NAV 행 오른쪽 끝에 '(x, y)' 를 뮤트색으로.
+- 증거: test_info_screen.py 통과.
+- gate 변화: 없음.

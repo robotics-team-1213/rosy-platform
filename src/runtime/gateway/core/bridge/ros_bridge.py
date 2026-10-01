@@ -451,7 +451,14 @@ class RosBridge:
         mode = getattr(snapshot.mode, "value", snapshot.mode)
         if not display.drive_due(mode, now, self._drive_last_pub):
             return
-        self.display_info_pub.publish(String(data=json.dumps(display.drive_payload(snapshot))))
+        goal_x = goal_y = None
+        if mode == "NAVIGATION":
+            goal = getattr(self._svc.nav, "current_goal", None)
+            if goal is not None:
+                goal_x = getattr(goal, "x", None)
+                goal_y = getattr(goal, "y", None)
+        self.display_info_pub.publish(String(data=json.dumps(
+            display.drive_payload(snapshot, goal_x=goal_x, goal_y=goal_y))))
         self._drive_last_pub = now
 
     def _reconcile_emotion(self, now: Optional[float] = None) -> None:

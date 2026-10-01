@@ -726,3 +726,9 @@
 - 변경: 모드 버튼 IDLE→대기·MANUAL→수동·NAV→자율주행. 히어로 모드 표시가 원본 enum 대신 enumLabel(MODE_LABEL, …)을 쓴다. MODE_LABEL 은 core_ui_logic.js 에 이미 있었다 — 버튼만 영어 enum 을 그대로 보여주고 있었다.
 - 증거: test_dashboard_package.py test_the_mode_control_speaks_korean (변이: 영어 되돌리면 빨강).
 - gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · feat(console): Escape 키 즉시 비상정지
+
+- 변경: keydown Escape → POST /safety/stop — 확인창 없음(위급 순간의 장벽은 위험). 입력 필드(INPUT·TEXTAREA·SELECT·contentEditable)에서는 발동 안 함. 이미 정지면 재발동 안 함. event.repeat 무시. 토큰 없으면 무시.
+- 증거: test_dashboard_package.py test_escape_key_stops_the_robot_immediately.
+- gate 변화: 없음.
