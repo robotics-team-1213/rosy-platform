@@ -261,8 +261,8 @@
 
 ## 최근 기록
 
+- 2026-10-01 · uncommitted · docs(adr): D-392 모델 도구 메시지 계약
 - 2026-10-01 · uncommitted · docs(adr): D-385 Rosy가 스스로 표현한다
 - 2026-10-01 · uncommitted · docs(adr): D-341·D-382 Accepted — 병행 세션 결정 회차
 - 2026-10-01 · uncommitted · docs(adr): D-341·D-382 교차 세션 검토 반영
 - 2026-10-01 · uncommitted · docs(adr): D-178 기준선 rosy_vision 잠정 행 추가, overhead 행 제거
-- 2026-10-01 · uncommitted · docs(adr): D-341·D-382 착지 — 천장 카메라 콘솔 승인·로봇 ↔ 관제 통신 적합성
