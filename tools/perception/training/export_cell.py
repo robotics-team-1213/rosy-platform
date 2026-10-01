@@ -14,7 +14,8 @@ from pathlib import Path
 SCHEMA = "rosy.perception.model/1"
 INPUT_SHAPE = (1, 3, 240, 320)
 ONNX_NAME = "model.onnx"
-ROLES = ("background", "lane_marking", "drivable", "stop_line", "ignore")
+PRECISIONS = ("fp32", "int8")  # == control...learned.manifest.PRECISIONS
+ROLES = ("background", "lane_marking", "drivable", "stop_line", "ignore", "wall")  # = manifest.ROLES
 COLORS = ("rgb", "bgr")
 
 
@@ -47,9 +48,13 @@ def _validate(entries, color, mean, std, scale) -> None:
 
 def write_manifest(out_dir, *, onnx_path, classes, color, scale, mean, std,
                    dataset_repo, dataset_revision, camera_profile_revision, trainer,
-                   val_iou=None, date=None) -> dict:
+                   val_iou=None, date=None, precision="fp32") -> dict:
+    """precision: "fp32", or "int8" for a QDQ graph (onnxruntime quantize_static);
+    intake.py refuses a label the graph contradicts."""
     entries = _class_entries(classes)
     _validate(entries, color, mean, std, scale)
+    if precision not in PRECISIONS:
+        raise ValueError(f"precision must be one of {PRECISIONS}, not {precision!r}")
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     data = Path(onnx_path).read_bytes()
@@ -62,7 +67,7 @@ def write_manifest(out_dir, *, onnx_path, classes, color, scale, mean, std,
         "schema": SCHEMA,
         "model_revision": f"lane-seg-{date}-{sha[:8]}",
         "task": "lane_seg",
-        "files": [{"name": ONNX_NAME, "sha256": sha, "precision": "fp32"}],
+        "files": [{"name": ONNX_NAME, "sha256": sha, "precision": precision}],
         "input": {"shape": list(INPUT_SHAPE), "layout": "nchw", "color": color,
                   "scale": float(scale), "mean": [float(v) for v in mean],
                   "std": [float(v) for v in std]},

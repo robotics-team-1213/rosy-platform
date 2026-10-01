@@ -4,13 +4,37 @@ param(
     [string]$SshHost = $DeviceName,
     [switch]$OperatorPresent,
     [switch]$PowerCutReady,
-    [switch]$CheckOnly
+    [switch]$CheckOnly,
+    [string]$RosyUser = 'rosy',
+    [string]$KeyPath = '',
+    [string]$KnownHosts = '',
+    [switch]$PrintSshArguments
 )
 
 # This is the operator-attended continuation after first boot. It prepares the
 # G4 motor runtime but never releases E-Stop or sends a nonzero velocity.
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
+
+# D-389 (6): the same Rosy operator key and known_hosts as rosy-release-push.ps1.
+# 2026-10-01 a new card failed with "No ED25519 host key is known" because only
+# the default ~/.ssh alias was used. Host-key checking stays strict.
+if (-not $KeyPath) { $KeyPath = Join-Path $env:LOCALAPPDATA 'Rosy\ssh\rosy-operator-ed25519' }
+if (-not $KnownHosts) { $KnownHosts = Join-Path $env:LOCALAPPDATA 'Rosy\known_hosts' }
+$KeyPath = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($KeyPath)
+$KnownHosts = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($KnownHosts)
+if ($RosyUser -notmatch '^[a-z_][a-z0-9_-]{0,31}$') { throw 'Invalid Rosy user name.' }
+$script:sshOptions = @('-i', $KeyPath, '-o', 'IdentitiesOnly=yes', '-o', ('UserKnownHostsFile=' + $KnownHosts),
+    '-l', $RosyUser, '-o', 'BatchMode=yes', '-o', 'StrictHostKeyChecking=yes', '-o', 'ConnectTimeout=5')
+if ($PrintSshArguments) {
+    [pscustomobject]@{ ssh_host = $SshHost; ssh_options = $script:sshOptions } | ConvertTo-Json -Compress
+    return
+}
+foreach ($required in @(@('operator key', $KeyPath), @('known_hosts', $KnownHosts))) {
+    if (-not (Test-Path -LiteralPath $required[1] -PathType Leaf)) {
+        throw ("The Rosy {0} file is missing: {1} (pass -KeyPath / -KnownHosts)." -f $required[0], $required[1])
+    }
+}
 
 if (-not $CheckOnly -and (-not $OperatorPresent -or -not $PowerCutReady)) {
     throw 'A present operator and immediate physical power cut are required.'
@@ -39,12 +63,12 @@ function Stop-CoreMotion {
         -ContentType 'application/json' -Body '{}' -TimeoutSec 5 -ErrorAction Stop | Out-Null
 }
 function Invoke-RobotSsh([string]$command) {
-    $output = & ssh.exe -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=5 $SshHost $command 2>&1
+    $output = & ssh.exe @script:sshOptions $SshHost $command 2>&1
     if ($LASTEXITCODE -ne 0) { throw ("SSH command failed: {0}" -f ($output -join ' ')) }
     return $output
 }
 function Invoke-RobotPython([string]$script) {
-    $output = $script | & ssh.exe -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=5 $SshHost 'sudo -n python3 -' 2>&1
+    $output = $script | & ssh.exe @script:sshOptions $SshHost 'sudo -n python3 -' 2>&1
     if ($LASTEXITCODE -ne 0) { throw ("Robot configuration failed: {0}" -f ($output -join ' ')) }
 }
 

@@ -233,6 +233,11 @@
 - 증거: test_core_logic.py 두 시험(해제 리스너 호출, 실패하는 리스너는 자기만 건너뜀).
 - gate 변화: 없음.
 
+## 2026-10-01 · f34781ae · feat(line_follow): 시작 때 정한 LiDAR 장착 yaw 를 받는다
+- 변경: `LineFollowManager.use_lidar_forward(deg, source)` 와 `lidar_forward_source` — CORE 가 정한 장착 yaw(D-47 부록)를 설정에 넣고 출처를 기억한다.
+- 증거: gateway `test_lidar_mount_source.py`, services 265 passed (2026-10-01 Windows).
+- gate 변화: 없음(값 주입 경로만).
+
 ## 2026-10-01 · uncommitted · fix(fleet_agent): D-382 F10·I4 — 구독 해제와 이벤트 seq 사본
 
 - 변경: FleetAgent가 `EventBus.subscribe`가 돌려준 해제 함수를 쥐고 종료 때 부른다(없는 `events.unsubscribe`를 부르던 결함, F10). 버스가 모든 구독자에게 넘기는 링 버퍼 속 같은 `EventMessage`의 `seq`를 덮어쓰지 않고 사본에 Agent seq를 매긴다(`/api/v1/events`·`/ws/events`·감사의 seq가 바뀌던 문제, F7의 일부). F7의 재시작 뒤 누락(부팅 세대)은 다음 이미지 회차(L2).
@@ -244,3 +249,31 @@
 - 변경: core_features/command/emotion_map.py — EMOTION_BY_MODE 와 막힘(bored) 우선순위. 모르는 모드는 None(표정 유지). ROS-free.
 - 증거: gateway/test/test_emotion_map.py (어휘가 감정 노드의 GIF 이름 안에 있는지도 검증).
 - gate 변화: 없음.
+
+## 2026-10-01 · a527920a · feat(core): D-321 부록 보정 세션 lease
+- 변경: `core_features/calibration/session.py` 추가 — 로봇당 한 개의 보정 lease(start/heartbeat/end, ttl 만료), 상태 스냅샷용 `activity()`, API 차단용 `blocking(token_id)`, 이벤트 `calibration.session_started/ended/expired`. `StateManager.set_activity_provider()` 가 lease 를 스냅샷 `activity` 로 실시간으로 싣는다(remaining_s 가 줄어든다). 모드·cmd_vel 은 만지지 않는다(D-2).
+- 증거: src/runtime/gateway/test/test_calibration_session.py 13 passed; gateway·api_web·services 전체 1850 passed, 새 실패 0(test_core_node_teardown 1건은 main f16123eb 에서도 실패) (2026-10-01 Windows).
+- gate 변화: 없음.
+
+## 2026-10-01 · 22017f42 · fix(core): 만료 이벤트를 lock 밖에서 발행
+- 변경: `_expire_locked()` 는 만료된 세션을 돌려주고 호출자가 lock 을 놓은 뒤 `_announce_expired()` 로 발행한다(start/end 와 같은 규칙). lock 은 다시 plain Lock.
+- 증거: 만료 구독자가 lock 을 잡고 lease 를 다시 읽는 시험 통과.
+- gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · feat(road_behaviour): D-384 도로 주행 행동 상태 기계(ROS-free, 명령 없음)
+
+- 변경: 새 `core_features/road_behaviour/`(`model.py`·`machine.py`·`table.py`). `step_behaviour(memory, inputs, params)` 순수 함수가 `LANE_FOLLOW`·`FOLLOW`·`HOLD`·`APPROACH`·`STOP_AT_LINE`·`YIELD_CHECK`·`CREEP`·`CROSS`·`FAULT` 중 하나와 속도 상한·갈래 선택만 낸다(D-2, D-151: CORE가 `min()`). 오래된(> 0.3 s)·없는 필수 입력은 `FAULT` 0. 정지 장애물 5 s면 `nav.line_obstacle_hold` 한 번(`LineFollowConfig.obstacle_escalate_s`와 같은 값). `v_cruise` 0.08, CORE 상한 입력과 `min`. 교차로 상태는 `junction_logic_enabled=False` 기본 — `d_jn` 안 교차로는 `HOLD junction_unsupported`. 켜면 일단정지, 도로교통법 제26·27조 양보, Fleet 허가, 경로 > 오른쪽 > 직진 > 왼쪽. 전이표는 `docs/plans/2026-10-01-road-behaviour-transition-table.md`.
+- 증거: `src/runtime/services/test/test_road_behaviour.py` 108 passed (2026-10-01 Windows).
+- gate 변화: SOURCE. CORE 통합(호출 위치)은 차선 유지 소유 세션 결정 전이다.
+- 결정: D-384 §2·§4(Proposed).
+
+## 2026-10-01 · 6d94e88f · docs(road_behaviour): D-384 도로 주행 행동 항목의 커밋 기록
+- 변경: 위 `uncommitted · feat(road_behaviour): D-384 도로 주행 행동 상태 기계` 항목은 커밋 6d94e88f로 들어갔다. 로그는 추가만 하므로(harness lint) 그 머리줄을 고치지 않고 이 항목으로 기록한다
+- 증거: `git log --oneline -- src/runtime/services/core_features/road_behaviour` 첫 커밋 6d94e88f
+- gate 변화: 없음
+
+## 2026-10-01 · uncommitted · fix(fleet_agent): D-370 S7 준비 — Fleet health 탐침이 확장 모양을 받는다
+
+- 변경: `fleet_agent/discovery.py`의 `/healthz` 판정을 `check_health_body`로 뺐다. 본문 1024바이트 이하, JSON 객체, `status == "ok"`이면 채택하고, `role` 키가 있으면 `_rosy-fleet._tcp` TXT `role`(`fleet`, `core_common.protocol.discovery_txt.REQUIRED`)과 같아야 한다. 모르는 키는 무시한다. 여태 본문이 정확히 `{"status":"ok"}`여야 해서 D-370 공개 상태 모양(`role`·`proto`·`contract_version`)을 더하면 탐침이 떨어졌다.
+- 증거: `test/test_site_fleet_mdns.py` 신규 2개 시험(사이트·Agent 양쪽 매개변수) — 옛 본문·확장 본문·모르는 키 통과, 다른 role·null role·`degraded`·`down`·status 없음·배열·문자열·JSON 아님·1024바이트 초과 거절. 수정 전 20건 빨강(판정 함수 없음; 옛 정확 비교는 확장 본문을 거절), 수정 후 초록. `test_fleet_agent_mdns.py` 통과.
+- gate 변화: 없음(SOURCE). Fleet·Vision `/healthz` 출력은 바꾸지 않았다 — 이미 깔린 로봇 이미지는 정확 비교를 하므로, 서버 쪽 확장은 이 판정을 실은 새 이미지가 퍼진 뒤에 한다.

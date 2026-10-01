@@ -440,3 +440,31 @@ def test_a_hung_send_times_out_names_itself_and_the_lane_recovers():
         assert relay.stats().follower_last_error["rosy_02"] is None   # 다시 열리면 지운다
         await relay.stop()
     run(main())
+
+
+def test_a_follower_socket_refused_after_accept_is_named_even_while_the_leader_is_quiet():
+    # First-message auth (D-370 S7): a wrong token is a 4401 close after the socket
+    # opened, so the lane must not stay connected with no reason while nothing is sent.
+    async def main():
+        leader, f1 = FakeRobot("rosy_01"), FakeRobot("rosy_02")
+        backing_off = asyncio.Event()
+        release = asyncio.Event()
+
+        async def sleep(_s):
+            backing_off.set()
+            await release.wait()          # hold the lane in its backoff to observe it
+
+        relay = Relay(leader, [f1], sleep=sleep)
+        await relay.start()
+        await settle()
+        assert relay.is_connected("rosy_02")
+        f1.sinks[0].close_from_robot(RobotApiError("rosy_02", 401, "WS_4401", "bad token"))
+        await asyncio.wait_for(backing_off.wait(), 2)
+        stats = relay.stats()
+        assert stats.follower_connected["rosy_02"] is False
+        assert "WS_4401" in (stats.follower_last_error["rosy_02"] or "")
+        release.set()
+        await settle()
+        assert len(f1.sinks) >= 2          # then it reopens
+        await relay.stop()
+    run(main())

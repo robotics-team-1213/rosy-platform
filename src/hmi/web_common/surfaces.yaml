@@ -18,6 +18,19 @@
 # 허용한다(test/architecture/test_app_roles.py). 소유가 없으면 owns: []로 적는다.
 # ports는 표면을 서빙하거나(웹) 표면이 접속하는(네이티브) 기본 포트다. source 파일에 그 숫자가
 # 있어야 하고 두 표면이 같은 포트를 쓰면 안 된다 — 새 표면은 빈 포트를 여기서 고른다. 이유 없는 빈 칸은 등록되지 않는다.
+# themes는 그 표면이 따르는 테마다(D-359 §2·§3.3). 첫 값은 dark다. [dark, light] 웹 표면의
+# 모든 HTML은 tokens.css 바로 뒤에 /common/theme.js를 싣고, [dark] 웹 표면의 HTML은
+# <html data-theme-pin="dark">로 고정한다. [dark] 웹 표면은 theme_reason(한 줄)에 왜 테마를
+# 따르지 않는지 적는다. 웹이 아닌 사본(native·lcd)은 [dark]다(§3.4).
+# breakpoints는 D-359 §6.2의 허용 목록이다. 웹 표면의 @media 크기 조건은 범위 문법으로
+# 세 단 — compact (width < 30rem), medium (30rem <= width < 64rem), wide (width >= 64rem) —
+# 과 §6.5 높이 조건 (height >= 40rem)/(height < 40rem)만 쓴다. 그 밖의 값은 여기에
+# {value: 정수px|정수rem, reason: 한 줄}로 적는다. 세 단 값·쓰이지 않는 값은 적지 않는다.
+# container_breakpoints는 §6.3 칸 질의(@container)의 같은 형식 허용 목록이다 — 세 단 경계 밖의 칸 폭만 적는다.
+# 대조 시험은 src/hmi/web_common/test/test_responsive_tiers.py다.
+# raw_colours는 D-359 §7.2 원시 색 금지 스캔(test_ui_token_contracts.py)의 예외다. [dark] 고정 웹
+# 표면만 가진다. {file: 표면 폴더 상대 파일, block: 최상위 선택자(없으면 파일 전체), reason: 한 줄}.
+# 가리는 원시 색이 없는 항목은 적지 않는다. 테마를 따르는 표면의 색은 tokens.css에서만 온다.
 surfaces:
   - id: robot
     app_name: Rosy Robot
@@ -25,6 +38,7 @@ surfaces:
     short_name: Rosy Robot
     icon: src/hmi/web_common/icons/robot.svg
     path: src/hmi/dashboard
+    themes: [dark, light]
     surface: robot
     medium: web
     ports:
@@ -48,6 +62,7 @@ surfaces:
     short_name: Rosy Console
     icon: src/hmi/web_common/icons/console.svg
     path: src/site/fleet/fleet/server/web
+    themes: [dark, light]
     surface: site
     medium: web
     ports:
@@ -57,10 +72,17 @@ surfaces:
     owns: [site-monitoring, mission, overhead-camera-view, device-link-site, estop]
     grammar: exception
     contracts: [shared_controls, typography_focus, dialog]
+    breakpoints:
+      - value: 90rem
+        reason: 토큰·역할·테마·두 줄 비상 정지를 모두 편 머리의 자연 폭(약 1220–1300px)이 1440px 미만에 한 줄로 들지 않는다 — 비상 정지가 둘째 줄로 밀리거나 테마 이름표가 접히지 않게 그 아래에서 머리를 접는다
+      - value: 110rem
+        reason: 지도 칸은 main 폭의 43%라 그 안을 둘로 나누면 관제 카메라가 좁아진다(1440px에서 약 240px) — 지도 칸이 충분히 넓은 이 폭 이상에서만 카메라를 지도 옆에 둔다
     baseline: docs/validation/uiux-surfaces-2026-09-26/captures/fleet-normal-1920x1080.png
 
   - id: game-board
     path: src/site/games/games/web
+    themes: [dark]
+    theme_reason: 경기장 녹색이 곧 바탕이다(D-359 §3.3)
     surface: site
     medium: web
     ports:
@@ -70,10 +92,16 @@ surfaces:
     owns: []
     grammar: focal
     contracts: [shared_controls, typography_focus, dialog]
+    raw_colours:
+      - file: styles.css
+        block: ":root"
+        reason: 경기장 녹색이 곧 바탕인 고정 표면(D-359 §3.3)의 경기장 팔레트 한 블록 — 캔버스도 이 블록을 읽는다
     baseline: docs/validation/uiux-surfaces-2026-09-26/captures/games-play-1280x800.png
 
   - id: control-diagnostic
     path: src/runtime/sensing/web/diagnostic.html
+    themes: [dark]
+    theme_reason: PARKED(D-266) 진단 한 파일 — 해제 회차 전까지 테마 도입 대상이 아니다(D-359 §3.3)
     surface: robot
     medium: web
     ports:
@@ -84,6 +112,14 @@ surfaces:
     owns: []
     grammar: procedure
     contracts: [shared_controls]
+    breakpoints:
+      - value: 1279px
+        reason: PARKED(D-266) 한 파일 진단 표면(D-150)의 원래 배치 값 — 해제 회차에서 세 단으로 옮긴다
+      - value: 900px
+        reason: PARKED(D-266) 한 파일 진단 표면(D-150)의 원래 배치 값 — 해제 회차에서 세 단으로 옮긴다
+    raw_colours:
+      - file: diagnostic.html
+        reason: PARKED(D-266) 한 파일 진단 표면(D-150) — 자기 <style> 팔레트와 캔버스 색을 품는다. 해제 회차에서 tokens.css로 옮긴다
     contract_reason: >
       타이포·확인 계약은 이 표면에 도입된 적이 없다 — D-150이 한 파일 고정으로 두고
       PARKED(D-266)라 새로 적용할 회차가 없었다. 두 계약을 받게 되는 날 이 문장을 지운다.
@@ -97,13 +133,26 @@ surfaces:
     short_name: Rosy Pilot
     icon: src/hmi/web_common/icons/pilot.svg
     path: src/hmi/pilot
+    themes: [dark]
+    theme_reason: >
+      운전석 영상 위에 조종을 겹치는 PWA라 바탕이 곧 영상이다 — 영상 대비와 현장 눈부심을 지키려
+      어둡게 고정한다. 밝게는 DEVICE 수용 뒤 사람 관측(G3)으로 다시 판단한다.
     surface: robot
     medium: web
-    audience: 현장 운전자 한 사람 (D-323 원격 조종 PWA — CORE 가 /pilot 으로 서빙, 포트는 robot(로봇 대시보드) 과 같은 CORE 포트)
+    ports:
+      - {port: 8088, source: src/products/omx/adapter/omx_adapter/pilot_sim_server.py}
+    audience: 현장 운전자 한 사람 (D-323 원격 조종 PWA — Pinky는 CORE /pilot, OMX 연습은 격리된 Gazebo 호스트 8088)
     role: 한 로봇 직접 수동 운전·운전석 영상·누르는 동안만 가는 운전 보조 (D-370 1항, D-323·D-344)
-    owns: [manual-drive, driver-video, drive-assist, estop]
+    owns: [manual-drive, driver-video, drive-assist, sim-arm-practice, estop]
     grammar: focal
     contracts: [shared_controls, typography_focus]
+    breakpoints:
+      - value: 48rem
+        reason: 태블릿 세로·휴대폰에서 스틱·페달·HUD 글자를 줄이는 주행 조작부 폭(D-363) — 세 단 값으로 옮기면 64rem 아래 태블릿 가로에서도 조작부가 작아진다
+    raw_colours:
+      - file: styles.css
+        block: "[data-drive-stage]"
+        reason: 운전석 영상 무대의 검은 띠(D-363) — 영상 비율 밖은 테마 바탕이 아니라 화면 밖 검정이다
     contract_reason: >
       dialog 계약만 받지 않는다 — 확인 대화상자가 없다(비상 정지·진행은 누르는 즉시, D-344).
       게임형 HUD 의 큰 표적은 공용 종류(누르는 동안 채워지는 toggle·고르는 segment)와 size 속성,
@@ -115,6 +164,7 @@ surfaces:
 
   - id: web-common
     path: src/hmi/web_common
+    themes: [dark, light]
     surface: robot
     medium: web
     audience: 라이브러리 — 사람이 여는 화면이 아니다
@@ -122,6 +172,9 @@ surfaces:
     owns: []
     grammar: spatial
     contracts: [typography_focus]
+    container_breakpoints:
+      - value: 22rem
+        reason: 공용 부품(ui-form·ui-readout·ui-actions)이 한 열로 접히는 칸 폭 — 폰 한 열(320px 거터 안쪽)과 1366px 콘솔의 좁은 조작 열(약 23–25rem)을 가른다(D-359 §6.3)
     contract_reason: >
       tokens.css·components.css·ui.js가 계약의 원본이라 소비자 재도색·복제 검사의 대상이 아니다.
       test_shared_controls는 COMMON 파일을 직접 읽으므로 이 폴더를 목록에 넣지 않는다.
@@ -129,6 +182,8 @@ surfaces:
 
   - id: lane-live-view
     path: src/sim/gz_sim/scripts/lane_live_view.html
+    themes: [dark]
+    theme_reason: 개발 도구(제품 표면 아님, D-359 §3.3) — 바탕이 곧 시뮬 영상이다
     surface: sim
     medium: web
     ports:
@@ -137,6 +192,14 @@ surfaces:
     role: 시뮬 레인 뷰어 — 제품 표면이 아니다(D-370 8항)
     owns: []
     contracts: []
+    breakpoints:
+      - value: 1000px
+        reason: 개발 도구(제품 표면 아님, contracts 없음) — 두 격자를 한 열로 접는 뷰어 고유 폭
+      - value: 640px
+        reason: 개발 도구(제품 표면 아님, contracts 없음) — 머리 줄을 접는 뷰어 고유 폭
+    raw_colours:
+      - file: lane_live_view.html
+        reason: 개발 도구(제품 표면 아님, contracts 없음) — 뷰어 고유 팔레트를 한 파일에 품는다
     contract_reason: >
       제품 셸·토큰·확인 문법의 대상이 아니다. 라인 예산과 판정은
       test_web_budgets의 D-262 VERDICTS가 맡는다.
@@ -144,6 +207,7 @@ surfaces:
 
   - id: robot-face
     path: src/hmi/face
+    themes: [dark]
     surface: robot
     medium: lcd
     audience: 로봇 주변 사람 — 얼굴 LCD와 정보 화면 (D-190)
@@ -161,6 +225,7 @@ surfaces:
     short_name: Rosy Cam
     icon: src/hmi/web_common/icons/cam.svg
     path: src/site/cam
+    themes: [dark]
     surface: site
     medium: native
     ports:

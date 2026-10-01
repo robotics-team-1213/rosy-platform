@@ -76,7 +76,7 @@ CONTROL_SPLIT = "docs/plans/2026-09-22-control-package-split-design.md"
 #: P6 verdicts: path (relative to src/) or package name -> (lines at verdict, verdict).
 SIZE_VERDICTS = {
     "fleet": (
-        19_468,
+        20_399,
         "split: server HTTP boundary, console, signals and the mission-control stores are separate owners "
         "today; group them into subpackages rather than one flat server/ tree (B2); owner fleet, unscheduled "
         "(re-judged 2026-09-29 at 11164 after mission_store joined the server tree; re-judged 2026-09-30 at "
@@ -90,9 +90,10 @@ SIZE_VERDICTS = {
         "assets (server/web console js/css/html); re-judged 2026-09-30 at 19243 after D-362 P0-1 "
         "executed the app.py router split (app.py 1556 -> 476 plus mission/task_dispatch/intent/"
         "console/ingest/static route modules and site_auth) — the flat server/ tree still wants the "
-        "B2 subpackage regroup; re-judged 2026-10-01 at 19468 after the same-host OMX phase receipt "
-        "projection joined the existing Fleet mission journal and read-only status surface. The phase "
-        "events share the Mission SQLite transaction and owner; B2 regroup remains unscheduled. Split remains "
+        "B2 subpackage regroup; re-judged 2026-10-01 at 20399: the same-host OMX phase receipt "
+        "projection joined the existing Fleet mission journal and read-only status surface (19468), and the "
+        "D-375 console map-fit overlay joined as its own modules (server/site_lanes.py, web/map-fit.js pure, "
+        "web/map-fit-view.js DOM, each under the D-362 budget); verdict unchanged. Split remains "
         "unscheduled (docs/plans/2026-09-30-er2-mission-feedback-loop.md)",
     ),
     "site/fleet/fleet/server/enrollment.py": (
@@ -179,7 +180,7 @@ SIZE_VERDICTS = {
         "accept: sim-only read-only viewer server (HTTP handler + ROS subscriptions); the pure logic already lives in live_view_model.py and the page in lane_live_view.html, covered by test_lane_live_view*.py and test_live_view_model.py (X5)",
     ),
     "control": (
-        36_861,
+        39_914,
         f"split: deploy closure needs only sensing + safety provider (P1a); {CONTROL_SPLIT} "
         "(re-judged 2026-09-30 at 33090 after D-356 added the ROS-free learned perception backend "
         "(sensing/perception/learned), the shadow node and the recording CLI; the learned backend sits "
@@ -190,7 +191,22 @@ SIZE_VERDICTS = {
         "re-judged again at 36677 with the ROS-free IR line calibration (perception/ir_calibration.py), its read-only "
         "device CLI and the camera-launch overlay validator (control/ir_overlay.py) — verdict unchanged; "
         "re-judged again at 36861 with keep v2 (boundary tracking, wall-base tape, corner-mode holds) and its "
-        "front end split into lane_keep_lines.py — verdict unchanged)",
+        "front end split into lane_keep_lines.py — verdict unchanged; re-judged 2026-10-01 at 37732 "
+        "when the D-47 addendum added the ROS-free calibration fits (sensing/odometry_fit.py, "
+        "sensing/perception/camera_extrinsic.py), the stationary camera step mixin "
+        "(calibration_camera.py) and the store reader (calibrated_values.py) — each its own module, "
+        "verdict unchanged; "
+        "re-judged 2026-09-30 at 36859 on the D-373 branch after it added capture trigger/snapshot recorder/"
+        "compressed camera/learned status, and 2026-10-01 at 37725 after its first main merge — verdict "
+        "unchanged; re-judged 2026-10-01 at 38673 when main (37732) merged into the D-373 branch again: the "
+        "D-373 pieces (control/capture_trigger*, the snapshot half of control/recording.py, the learned "
+        "status/rate cap and wall role in sensing/perception/learned) stay in the same package and move "
+        "with the P1a split — verdict unchanged; re-judged again at 38903 on main when "
+        "feat/d384-road-state-and-behaviour merged the D-384 ROS-free road-state estimator "
+        "(perception/road_state.py + road_state_model.py) and its shadow node — it sits inside "
+        "sensing/perception and moves with it — verdict unchanged; re-judged 2026-10-01 at 39914 when "
+        "main (38903) merged into the D-373 branch: both additions stay inside the control package and "
+        "move with the P1a split — verdict unchanged)",
     ),
     # --- D-362 newly-covered files (web assets in src/ packages, ops roots). ---
     "runtime/sensing/web/diagnostic.html": (
@@ -239,6 +255,14 @@ SIZE_VERDICTS = {
     "deploy/robot/pinky_pro/release/secret_scan.py": (
         670,
         "accept: one scan entry over the release tree — the rules and the walker are the same concern (X5)",
+    ),
+    "deploy/robot/pinky_pro/native/sync-image-layer.py": (
+        876,
+        "split: D-388 image-layer sync — the allowlist/plan, the backup-record history (records, "
+        "cleanup, crash reconcile) and the apply/pending transaction are separate seams; move the "
+        "record history into a sibling module in deploy/robot/pinky_pro/native once the 2026-10-02 bench "
+        "run has exercised it on a robot, so the split does not land untested on device; owner deploy, "
+        "covered by test/test_image_layer_sync.py",
     ),
     "deploy/robot/pinky_pro/native/rosy-hw-probe.py": (
         641,

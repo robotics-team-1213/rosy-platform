@@ -31,6 +31,8 @@
 | D-319 | SETUP 뒤 현장 입회 하에 모터 구동 준비를 자동화한다 |
 | D-321 | 현장 보정과 G4 실측을 한 세션으로 모으고 지도 생성은 승인 뒤에 시작한다 |
 | D-325 | 기존 Pinky 배포는 변경에 맞는 가장 작은 산출물을 선택한다 |
+| D-373 | 학습 인식 두 번째 바퀴 — onnxruntime·모델 디렉터리는 Pinky 이미지 계층, 섀도·캡처는 기본 꺼진 페이로드, 불일치 60 s 스냅샷, 사이트 PC가 새 모델을 섀도까지 자동 반영; 정본은 store 폴더(로컬→NAS·Drive), HF는 선택 |
+| D-389 | 긴급 카드 쓰기(`write-card.ps1 -Emergency -EmergencyReason`)는 전체 readback만 건너뛰고 서명·시리얼·plan·ERASE 게이트와 MBR 점검은 지킨다; receipt·진행 파일·상태가 검증 안 됨을 적고, 후속 readback(`verify-emergency-card.ps1`)이나 표준 재기록으로 메운다 |
 
 ## 계획·결과 문서
 
@@ -65,8 +67,8 @@
 
 ## 최근 기록
 
-- 2026-10-01 · uncommitted · feat(native): D-385 기다리는 카드에 프레임 위상
-- 2026-10-01 · uncommitted · feat(native): D-383 LCD 상태줄에 편대 역할
-- 2026-10-01 · uncommitted · fix(release,test): main CI deployment 단계 적색 5건 — 핀·등록부·스캐너 면제 정리
-- 2026-10-01 · uncommitted · feat(native): D-381 blocked 패턴과 비상정지 진입음
-- 2026-09-30 · uncommitted · docs(adr): D-375 에서 D-380 으로 개명
+- 2026-10-01 · uncommitted · fix(sd): 긴급 resume은 plan의 시도 색인을 읽는다 (D-389 검증)
+- 2026-10-01 · uncommitted · fix(sd,release): D-389 독립 리뷰 반영 — 긴급 resume 이력 검사, 다운로더 점검
+- 2026-10-01 · uncommitted · docs(adr): 긴급 카드 쓰기 결정을 D-385에서 D-389로 개명
+- 2026-10-01 · uncommitted · docs(adr): 긴급 카드 쓰기 결정을 D-383에서 D-385로 개명
+- 2026-10-01 · uncommitted · fix(sd): 모터 커미셔닝 SSH가 Rosy 운영자 키를 쓴다 (D-383 결정 6)

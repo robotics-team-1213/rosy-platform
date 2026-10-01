@@ -1,3 +1,6 @@
+// D-359 §5.3 — 끌 때 이유를 같이 준다. 켜거나 짧은 요청 중 잠금이면 이유를 지운다.
+function setOff(control, off, reason = "") { control.disabled = Boolean(off); if (off && reason) control.setAttribute("reason", reason); else control.removeAttribute("reason"); }
+import { DOCK_STATE_LABEL, enumLabel } from "/common/core_ui_logic.js";
 // Console owns motion commands; setup owns teaching and dock inventory.
 function el(tag, cls, text) { const node = document.createElement(tag); if (cls) node.className = cls; if (text !== undefined) node.textContent = text; return node; }
 
@@ -11,7 +14,7 @@ export function mount(root, ctx) {
   const facts = el("dl", "ui-readout");
   const form = el("div", "ui-form");
   const label = el("label", "ui-field-label", "도킹 위치");
-  const select = el("select"); select.setAttribute("aria-label", "도킹 위치 선택"); label.append(select);
+  const select = el("select", "ui-field"); select.setAttribute("aria-label", "도킹 위치 선택"); label.append(select);
   const dock = el("ui-button", "", "도킹 시작"); dock.setAttribute("kind", "primary"); dock.type = "button"; dock.disabled = true;
   const actions = el("ui-actions", "surface-actions");
   const undock = el("ui-button", "", "언도크"); undock.setAttribute("kind", "quiet"); undock.type = "button";
@@ -27,15 +30,19 @@ export function mount(root, ctx) {
   function enableActions() {
     const locked = pendingCommands > 0;
     select.disabled = locked || !hasDocks;
-    dock.disabled = locked || !statusKnown || !supported || !hasDocks || !select.value;
-    undock.disabled = cancel.disabled = locked || !statusKnown || !supported;
+    // 명령 처리 중(locked)은 짧은 잠금이라 사유 없이 끈다.
+    const base = locked ? "" : !statusKnown ? "상태 확인 중" : !supported ? "도킹 미지원" : "";
+    setOff(dock, locked || !statusKnown || !supported || !hasDocks || !select.value,
+      base || (locked ? "" : !hasDocks ? "등록된 도크 없음" : "도크를 고르세요"));
+    setOff(undock, locked || !statusKnown || !supported, base);
+    setOff(cancel, locked || !statusKnown || !supported, base);
   }
   function renderStatus(data) {
     if (typeof data.supported === "boolean") supported = data.supported;
     statusKnown = true;
     currentState = data.state;
     facts.replaceChildren(el("dt", "", "기능 지원"), el("dd", "", supported ? "사용 가능" : "제한 또는 미지원"),
-      el("dt", "", "상태"), el("dd", "", data.state || "—"),
+      el("dt", "", "상태"), Object.assign(el("dd", "", enumLabel(DOCK_STATE_LABEL, data.state)), {title: data.state || ""}),
       el("dt", "", "현재 도크"), el("dd", "", data.dock_id || "—"),
       el("dt", "", "단계"), el("dd", "", data.phase || "—"),
       el("dt", "", "오류"), el("dd", "", data.error || "없음"));
@@ -43,7 +50,7 @@ export function mount(root, ctx) {
   }
   const stopStatus = ctx.store.poll("/api/v1/docking/status", 1_000, (data) => {
     renderStatus(data);
-    setStatus(statusMessage, supported ? "도킹 capability가 활성화되어 있습니다." : "도킹 capability가 없어서 주행 명령을 막았습니다.");
+    setStatus(statusMessage, supported ? "도킹 기능을 쓸 수 있습니다." : "도킹 기능이 없어 주행 명령을 막았습니다.");
     statusMessage.setAttribute("state", supported ? "ready" : "warning");
   }, (error) => {
     supported = false; statusKnown = false; currentState = null;

@@ -182,6 +182,18 @@ class TestRender:
         colors = {color for _count, color in image.getcolors(maxcolors=1 << 16)}
         assert _CRIT not in colors and _WARN not in colors, sorted(colors)
 
+    def test_calibration_marks_the_mode_row_as_a_caution_and_keeps_estop(self):
+        # D-321 addendum: the robot face says CALIBRATING (ASCII font) on the MODE row.
+        normal = render(self._payload())
+        calibrating = render(self._payload(activity="CALIBRATING"))
+        row = calibrating.crop((88, 138, 320, 164))
+        colors = {color for _count, color in row.getcolors(maxcolors=1 << 16)}
+        assert _WARN in colors, sorted(colors)
+        assert ImageChops.difference(normal, calibrating).getbbox() is not None
+        both = render(self._payload(activity="CALIBRATING", estop=True))
+        health = both.crop((88, 186, 320, 212))
+        assert _CRIT in {color for _count, color in health.getcolors(maxcolors=1 << 16)}
+
     def test_hitl_request_changes_the_health_row_but_never_overrides_estop(self):
         normal = render(self._payload())
         hitl = render(self._payload(hitl_requested=True))

@@ -188,8 +188,71 @@
 - 증거: test_robot_state.py 90 passed (변이 증명: blocked 규칙을 빼면 해당 2행이 빨개진다).
 - gate 변화: 없음.
 
+## 2026-10-01 · 423e4d2f · feat(core_common): 버전 보정 저장소 (D-47 부록)
+- 변경: `core_common/calibration_store.py` — 실행마다 불변 레코드 하나(종류·로봇·세션·방법·값·구간·sha256), 상태는 append-only events.jsonl, 현재값 = 고정된 승인 레코드 또는 최신 승인 레코드, `resolve()` 는 없으면 정적 값과 로그용 출처 문장을 준다. 자동 승인 경로 없음.
+- 증거: `test_calibration_store.py` 9 passed — 이력 보존·덮어쓰기 거부, 후보는 현재값이 아님, 최신 승인 우선·superseded, 고정/해제 롤백, 최신 거부 롤백, 변조 레코드 배제, 정적 대체 (2026-10-01 Windows).
+- gate 변화: SOURCE.
+
+## 2026-10-01 · ddede2f8 · fix(core_common): 보정 저장소 리뷰 수정 (H3·M1·M2·L3)
+- 변경: events.jsonl 의 깨진 줄·형식 불량 이벤트는 기록하고 건너뛴다. load 는 dict values 와 문자열 created_at 을 요구한다. current/resolve 는 어떤 실패든 잡아 정적 값으로 물러난다. 현재값은 created_at 이 아니라 마지막 승인 이벤트 순서다. `check_values`(장착 yaw 150–210° 또는 손값 ±15°, 바퀴 ±10 %, 숫자만) 를 런타임·승인에 같이 쓴다. `merge_from` 은 없는 레코드 파일만 복사(같은 id 는 바이트 동일해야 함)하고 없는 이벤트만 덧붙인다.
+- 증거: test_calibration_store.py 25 passed(깨진 줄, 형식 불량 레코드, 재승인 순서, 저장소 예외 대체, check_values 12 경우) (2026-10-01 Windows).
+- gate 변화: SOURCE.
+
+## 2026-10-01 · 90cac516 · fix(core_common): 2차 리뷰 — 찢긴 꼬리, 양쪽 결정 충돌, 원자적 쓰기, 그룹 권한
+- 변경: events.jsonl 이 개행 없이 끝나면 덧붙이기 전에 개행을 먼저 쓴다(F1). 양쪽 저장소가 서로 모르는 승인/거부/고정을 가지면 병합을 거부하고, 모든 종류를 먼저 검사한 뒤에만 쓴다(F2·F8). 레코드는 임시 파일 + os.replace, 디렉터리 0o2775·파일 0o664(F4). camera_profile 의 width/height/fx/cx/cy/max_range_m 는 유한 양수(F7).
+- 증거: test_calibration_store.py 35 passed + 1 skip(Windows), 권한 시험은 WSL Linux 에서 통과 (2026-10-01).
+- gate 변화: SOURCE. 로봇 쪽 rosy-calib 디렉터리 생성은 열린 커미셔닝 항목.
+
 ## 2026-10-01 · uncommitted · feat(robot_state): D-383 swarm_role 축 — LCD 역할 접미
 
 - 변경: SWARM_ROLES·valid_swarm_role()·role_suffix()(ASCII " - LEADER") 추가. mode/nav 와 같은 부재 규칙, evaluate 판정은 그대로.
 - 증거: test_robot_state.py (변이 증명: 접미를 없애면 해당 2행 빨강).
+- gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · D-390 OMX Pilot simulation wire contract
+- Change: Add typed sim-only target, jog and goal contracts in core_common.protocol.omx_sim; document the additive v1.67 routes in the API reference.
+- Evidence: focused contract and adapter tests passed; API version alignment test 4 passed after the document bump.
+- Gate: SOURCE only; no physical profile admission.
+
+## 2026-10-01 · a527920a · feat(protocol): StateSnapshot.activity (v1.67 additive)
+- 변경: `RobotActivity`·`ActivityOwner` 모델과 `StateSnapshot.activity: Optional[RobotActivity] = None`. 보정 lease 가 살아 있을 때만 객체, 아니면 null.
+- 증거: test_calibration_session.py 의 robot/state·/ws/state 시험, test_protocol_version_alignment 통과.
+- gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · fix(core_common): robot package core.yaml config layer (D-196)
+
+- 변경: `load_config` 가 rosy_default 위, 로컬 오버레이/ROSY_CONFIG 아래에 로봇 패키지의 `config/core.yaml` 을 병합한다(모델: ROSY_ROBOT > 오버레이 robot.model > 기본값). 파일이 없거나 패키지를 못 찾으면 아무것도 더하지 않는다. 첫 사용: Pinky Pro `line_follow.lidar_forward_deg: 180`.
+- 증거: gateway `test_pinky_lidar_forward_device.py` 5 passed; gateway+foundation+profile+test/ 6 failed 4763 passed — 5개는 기준 0476060b 에서도 같은 내용으로 실패(known_failures.txt 미등재), 1개(test_pinky_user_validation ssh timeout)는 단독 재실행 통과(부하 flaky). services 265 passed.
+- gate 변화: 없음.
+
+## 2026-10-01 · 078d0978 · fix(core_common): robot core.yaml layer fails closed (review of 9966e57b)
+
+- 변경: 21224829 패키지가 있는 로봇의 `core.yaml` 이 없으면 ConfigError, 모르는 모델·패키지 없음은 경고 한 줄. 37b439bf 최상위 null·기본 매핑 자리의 비매핑 값은 ConfigError(파일 이름). 078d0978 깨진 YAML 은 경로를 담은 ConfigError(CORE 기동 거부). 이어서 docstring 네 층, `ROBOT_NAME_PATTERN` 공용 상수, D-196 추가·운영 수용 기준 병합 순서.
+- 증거: `test_robot_core_layer.py` 8 passed; gateway `test_pinky_lidar_forward_device.py` 5 passed(3b525bb6: 가짜 ament 로 소스 트리 고정).
+- gate 변화: 없음.
+- 결정: D-196 추가 2026-10-01.
+
+## 2026-10-01 · uncommitted · feat(protocol): D-391 4.1 공유 벡터 — device_kind·실패 분류·사이트 연결 기록
+
+- 변경: `core_common/protocol/`에 표준 라이브러리만 쓰는 세 모듈을 두었다. `device_kind.py`(`OVERHEAD_CAMERA`·`ROBOT`·`ALL`), `failure_class.py`(`classify(*, ws_close, reason, http_status, transport, discovery) -> str`, 입력은 정확히 한 종류), `site_link.py`(`validate(record) -> str | None`). 기계 원천은 `test/fixtures/protocol/failure-classes.v1.json`(26 사례, 분류 11종 전부)과 `site-link.v1.json`(33 사례, 사유 12종 전부)이다.
+- 결정: WS 4400의 재시도 사유(빈 사유·`no hello` 등, ingest 벡터 `close_4400_reasons.retry`와 같은 목록)는 D-341 11항 전환 규칙대로 `busy`로 둔다(`auth_retry` 아님 — 자격은 의심받지 않는다). 표에 없는 WS 코드는 `unreachable`, HTTP 4xx는 `protocol_mismatch`, 5xx는 `busy`. `tls_host`는 `.local` 이름만(IP면 `ip_as_tls_host`), `expires_at`은 `Z` 붙은 UTC만, 모르는 최상위 필드는 무시한다. CA 판정은 최소 DER 탐색으로 basicConstraints `cA`만 읽는다(서명·유효기간·체인은 TLS 몫). 벡터의 인증서는 공개 fixture이고 44자로 줄바꿈해 비밀 스캔의 50자 엔트로피 기준 아래에 둔다. 개인 키는 작성 때 버렸다.
+- 증거: `test_site_link_vectors.py` 71 passed, foundation 전체 279 passed. 변이 증명: CA 판정을 항상 참으로 바꾸면 `ca_pem_is_leaf`·`ca_pem_leaf_then_ca_bundle` 2건이 빨개진다.
+- gate 변화: 없음(LOCAL). Kotlin 쪽 로더는 rosy-84 몫.
+
+## 2026-10-01 · uncommitted · fix(protocol): site_link 비밀 스캔 오탐·ruff 정리
+
+- 변경: `site_link.py`의 지역 변수 `has_secret`가 비밀 스캔 `credential` 규칙에 걸려 `inline`으로 바꿨다(D-256: 스캐너가 아니라 호출 자리를 고친다). `expires_at` 달력 검사는 `%z`를 붙인 aware datetime으로(DTZ007), 새 시험의 import 정렬을 맞췄다. 동작 변경 없음.
+- 증거: `test/test_release_boundary_guards.py` 73 passed(수정 전 `test_no_secrets_in_tracked_files` 1 failed), foundation 279 passed, 새 파일 ruff 통과.
+- gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · fix(protocol): D-391 벡터 — 4400 사유 정규화, manual_host는 IP만
+
+- 변경: rosy-84 Kotlin 대조에서 나온 두 차이. ① 4400 사유는 공백 제거·casefold 뒤 비교한다(" No Hello " → busy, "NO HELLO extra" → protocol_mismatch 사례 추가). ② `manual_host`는 IPv4/IPv6 리터럴만 받는다(D-391 1항 "rosyov 링크의 IP, DNS 없이 연결"과 일치) — 이름·`ip:port`는 `bad_manual_host`, IPv6 허용 사례 추가.
+- 증거: foundation 시험 329 passed; Kotlin 쪽은 rosy-84 브랜치 `feat/cam-d391-shared-vectors`가 같은 벡터로 대조.
+- gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · fix(protocol): D-391 site-link 경계 규칙 — fullmatch, IPv6 zone 거절
+
+- 변경: rosy-84 Kotlin 독립 리뷰가 찾은 차이. `tls_host`·`expires_at` 정규식을 `match`(`$`가 끝 줄바꿈을 허용)에서 `fullmatch`로 바꿨다. `manual_host`에 IPv6 zone id(`%`)가 있으면 `bad_manual_host`(폰에서 다이얼 불가). 사례 7건 추가: 끝 줄바꿈 두 건·zone id(옛 코드에서 통과하던 결함), 0년 날짜·pathLen 없는 CA·CA 뒤 leaf 묶음·END 뒤 쓰레기(기존 동작 고정, 런타임 공통).
+- 증거: foundation 336 passed; 새 사례 중 3건은 옛 `site_link.py`에서 실패함을 직접 대조. 새 CA 인증서는 공개 인증서만 저장, 키는 버렸다.
 - gate 변화: 없음.

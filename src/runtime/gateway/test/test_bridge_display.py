@@ -23,6 +23,7 @@ def _snapshot(percent=87.6543, voltage=7.8912, estop=False, charging=False,
         velocity=SimpleNamespace(linear=speed, angular=0.0),
         safety=SimpleNamespace(estop=estop),
         hitl_requested=False,
+        activity=None,
     )
 
 
@@ -68,6 +69,7 @@ def test_payload_carries_every_field_the_screen_renders():
         "presence": "CONTACT",
         "hold_s": 3.0,
         "hitl_requested": False,
+        "activity": None,
     }
 
 
@@ -79,6 +81,16 @@ def test_payload_carries_hitl_request_to_the_robot_face():
         snapshot, _status(), health="DEGRADED", address="x", hold_s=1.0)
 
     assert payload["hitl_requested"] is True
+
+
+def test_payload_carries_the_calibration_activity_to_the_robot_face():
+    snapshot = _snapshot()
+    snapshot.activity = SimpleNamespace(kind="CALIBRATING", label="drive")
+
+    payload = display.info_payload(
+        snapshot, _status(), health="OK", address="x", hold_s=1.0)
+
+    assert payload["activity"] == "CALIBRATING"
 
 
 def test_charging_reads_the_confirmed_status_not_the_raw_reading():

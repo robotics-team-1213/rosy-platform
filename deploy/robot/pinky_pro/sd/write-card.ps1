@@ -20,6 +20,8 @@ param(
     [switch]$AcceptSlowMedia,
     [switch]$NonInteractive,
     [switch]$Detach,
+    [switch]$Emergency,
+    [string]$EmergencyReason,
     [string]$ElevationLauncher
 )
 # Operator entry point: write one reviewed plan to its card (D-173).
@@ -39,12 +41,25 @@ param(
 # window with one UAC prompt and returns at once, printing the log, progress and
 # status-command paths; the write survives this console or agent session closing.
 # card-write-status.ps1 -LogPath <log> reads the progress file without elevation.
+#
+# D-389: -Emergency -EmergencyReason '<why>' is the emergency procedure: every
+# pre-write check stays, only the full readback is skipped, and the receipt
+# says the media is unverified. Follow up with verify-emergency-card.ps1.
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
 function Fail([string]$Message) {
     throw $Message
+}
+
+# Refused here, before the UAC prompt, with the same rules prepare-rosy-sd.ps1 applies.
+if ($Emergency -and ([string]::IsNullOrWhiteSpace($EmergencyReason) -or $EmergencyReason.Trim().Length -lt 10)) {
+    Fail "-Emergency needs -EmergencyReason '<why the card cannot wait for the readback>' (at least 10 characters)"
+}
+if ($EmergencyReason -and -not $Emergency) { Fail "-EmergencyReason is only valid with -Emergency" }
+if ($EmergencyReason -and $EmergencyReason -cnotmatch '^[\x20-\x21\x23-\x5B\x5D-\x7E]{1,200}$') {
+    Fail "-EmergencyReason must be printable ASCII without double quotes or backslashes, at most 200 characters"
 }
 
 $PlanPath = (Resolve-Path -LiteralPath $PlanPath).ProviderPath
@@ -98,6 +113,10 @@ $arguments.MinReadMBps = $MinReadMBps
 if ($AssumedWriteMBps -gt 0) { $arguments.AssumedWriteMBps = $AssumedWriteMBps }
 if ($AcceptSlowMedia) { $arguments.AcceptSlowMedia = $true }
 if ($NonInteractive) { $arguments.NonInteractive = $true }
+if ($Emergency) {
+    $arguments.Emergency = $true
+    $arguments.EmergencyReason = $EmergencyReason
+}
 
 if (-not $LogPath) {
     $stamp = Get-Date -Format "yyyyMMddTHHmmss"
@@ -152,6 +171,7 @@ $forward += @("-MinReadMBps", $MinReadMBps.ToString($invariant))
 if ($AssumedWriteMBps -gt 0) { $forward += @("-AssumedWriteMBps", $AssumedWriteMBps.ToString($invariant)) }
 if ($AcceptSlowMedia) { $forward += "-AcceptSlowMedia" }
 if ($NonInteractive) { $forward += "-NonInteractive" }
+if ($Emergency) { $forward += @("-Emergency", "-EmergencyReason", "`"$EmergencyReason`"") }
 
 # -ElevationLauncher is a test seam standing in for Start-Process: UAC cannot be
 # driven from a test, so a fixture script receives the same arguments.
@@ -202,7 +222,7 @@ if (-not $isAdministrator) {
     if (-not (Test-Path -LiteralPath $exitMarker)) {
         $last = Get-LastProgress
         $where = $(if ($last) { "last stage=$($last.stage) card_state=$($last.card_state)" } else { "no stage was recorded, so the card is untouched" })
-        Fail ("the elevated write did not finish ({0}); see $LogPath`nnext: if card_state is written-unverified or verified-no-bundle, re-run with -ResumeAfterWrite; if it is untouched, re-run; otherwise re-run the full write" -f $where)
+        Fail ("the elevated write did not finish ({0}); see $LogPath`nnext: if card_state is written-unverified, verified-no-bundle or unverified-no-bundle, re-run with -ResumeAfterWrite (an emergency write keeps -Emergency and its reason); if it is untouched, re-run; otherwise re-run the full write" -f $where)
     }
     $code = [int]((Get-Content -LiteralPath $exitMarker -Raw).Trim())
     Get-Content -LiteralPath $LogPath -Tail 20

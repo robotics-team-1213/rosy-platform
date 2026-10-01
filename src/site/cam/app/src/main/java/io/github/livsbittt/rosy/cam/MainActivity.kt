@@ -26,10 +26,13 @@ import io.github.livsbittt.rosy.cam.camera.LensChoice
 import io.github.livsbittt.rosy.cam.service.StreamService
 import io.github.livsbittt.rosy.cam.settings.PairingUri
 import io.github.livsbittt.rosy.cam.settings.SettingsStore
+import io.github.livsbittt.rosy.cam.settings.SiteLink
+import io.github.livsbittt.rosy.cam.settings.SiteLinkPrefs
 import io.github.livsbittt.rosy.cam.ui.RosyTheme
 import io.github.livsbittt.rosy.cam.ui.SettingsScreen
 import io.github.livsbittt.rosy.cam.ui.StreamScreen
 import io.github.livsbittt.rosy.cam.ui.invalidText
+import io.github.livsbittt.rosy.cam.ui.rememberLan
 import kotlinx.coroutines.launch
 
 /**
@@ -86,8 +89,10 @@ class MainActivity : ComponentActivity() {
         if (!data.scheme.equals(PairingUri.SCHEME, ignoreCase = true)) return
         when (val parsed = PairingUri.parse(data.toString())) {
             is PairingUri.Parsed.Valid -> {
-                pendingPairing.value = parsed.pairing
-                deepLinkInvalid.value = null
+                // The link parses, but a host name must still be a .local site name (D-391 1).
+                val reason = SiteLink.entryReason(parsed.pairing)
+                pendingPairing.value = parsed.pairing.takeIf { reason == null }
+                deepLinkInvalid.value = reason
             }
             is PairingUri.Parsed.Invalid -> deepLinkInvalid.value = parsed.reason
         }
@@ -99,7 +104,11 @@ class MainActivity : ComponentActivity() {
     @Composable
     private fun OverheadApp() {
         val state by StreamService.state.collectAsStateWithLifecycle()
-        val pairing by settings.pairing.collectAsStateWithLifecycle(initialValue = null)
+        val stored by settings.stored.collectAsStateWithLifecycle(initialValue = SiteLinkPrefs.Stored(null))
+        val siteLink = stored.link
+        val pairing = siteLink?.toPairing()
+        // The Wi-Fi now: "not connected" check, and the pairing-time subnet saved for diagnosis only.
+        val lan = rememberLan()
         val lens by settings.lens.collectAsStateWithLifecycle(initialValue = null)
         var showSettings by remember { mutableStateOf(false) }
         var localError by remember { mutableStateOf<String?>(null) }
@@ -132,17 +141,24 @@ class MainActivity : ComponentActivity() {
 
         if (showSettings) {
             SettingsScreen(
-                current = pairing,
+                currentLink = siteLink,
                 locked = state.running,
                 lens = LensChoice.orDefault(lens),
                 onLens = { choice -> scope.launch { settings.saveLens(choice) } },
-                onSave = { p -> scope.launch { settings.save(p) } },
+                onSave = { p, siteName, fresh ->
+                    // A settings edit keeps the pairing-time subnet; only a fresh pairing records the current one.
+                    val subnet = if (fresh) lan?.subnet else null
+                    scope.launch { settings.save(p, siteName, subnet) }
+                },
                 onBack = { showSettings = false },
             )
         } else {
             StreamScreen(
                 state = state,
-                pairing = pairing,
+                siteLink = siteLink,
+                rejectedHost = stored.rejectedHost,
+                droppedTlsHost = stored.droppedTlsHost,
+                lan = lan,
                 localError = localError,
                 onStart = onStart,
                 onStop = { StreamService.stop(this) },
@@ -171,7 +187,8 @@ class MainActivity : ComponentActivity() {
                         enabled = !state.running,
                         onClick = {
                             pendingPairing.value = null
-                            lifecycleScope.launch { settings.save(p) }
+                            val subnet = lan?.subnet
+                            lifecycleScope.launch { settings.save(p, pairingSubnet = subnet) }
                         },
                     ) { Text(stringResource(R.string.pair_save)) }
                 },

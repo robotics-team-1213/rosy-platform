@@ -96,6 +96,8 @@ def info_payload(snapshot, status, *, health: str, address: str,
         "presence": status.presence.value,
         "hold_s": round(hold_s, 1),
         "hitl_requested": snapshot.hitl_requested,
+        # D-321 addendum: "CALIBRATING" while a calibration lease is alive, else None.
+        "activity": snapshot.activity.kind if snapshot.activity is not None else None,
     }
 
 

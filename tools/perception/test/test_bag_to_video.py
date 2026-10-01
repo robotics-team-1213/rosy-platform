@@ -270,8 +270,8 @@ def test_evidence_for_picks_the_first_logged_match_and_ignores_unstamped():
     # more than EVIDENCE_WINDOW_S after the frame's log time: nothing
     late_frame = {"stamp_ns": 1000, "log_ns": 3000 - int(0.6e9)}
     assert b2v.evidence_for(index, keys, late_frame) is None
-    # stamp more than 1 ms away: nothing
-    assert b2v.evidence_for(index, keys, {"stamp_ns": 1_002_000, "log_ns": 0}) is None
+    # stamp more than 1 us away: nothing
+    assert b2v.evidence_for(index, keys, {"stamp_ns": 2_100, "log_ns": 0}) is None
     assert b2v.payload_stamp_ns({"stamp": True}) is None
     assert b2v.payload_stamp_ns({"stamp": float("nan")}) is None
 
@@ -353,19 +353,45 @@ def test_latest_is_at_or_before_and_within_the_gap():
 
 
 @needs_tools
-def test_extract_session_uses_header_stamps_and_only_past_side_data(tmp_path):
-    sess = _write_session(tmp_path)
-    out = tmp_path / "frames"
-    assert extract.main([str(sess), "--out", str(out),
-                         "--min-interval", "0", "--max-hamming", "-1"]) == 0
-    rows = [json.loads(l) for l in (out / "frames.jsonl").read_text().splitlines()]
-    # t is the header stamp, 1 ms before the bag log time
-    assert [r["t"] for r in rows] == pytest.approx(FRAME_S, abs=1e-9)
-    assert [r["log_ns"] for r in rows] == [_ns(t + 0.001) for t in FRAME_S]
-    assert "line/observation" not in rows[0]["side"]
-    for i, r in enumerate(rows[1:], start=1):
-        assert r["side"]["line/observation"]["error"] == pytest.approx((i - 1) / 10)
-        assert r["side"]["cmd_vel"]["linear"]["x"] <= FRAME_S[i] + 0.001
+def test_extract_session_uses_header_stamps_and_the_two_class_clock_rule(tmp_path):
+    """extract.py on the MCAP session and on its mp4 + sidecar gives each frame the
+    same side data: stamped evidence of its own image, other topics from the past."""
+    obs = {3: (0.004, 0.005),     # payload stamp 5 ms off every frame stamp -> nothing
+           1: (0.0005, 0.0),      # logged after the capture, 0.5 ms before the image
+           2: (0.6, 0.0)}         # logged 0.599 s after the frame's log time -> nothing
+    sess, stem = _convert(tmp_path, obs=obs)
+    got = {}
+    for kind, src in (("mcap", sess), ("video", stem.with_suffix(".mp4"))):
+        out = tmp_path / ("frames_" + kind)
+        assert extract.main([str(src), "--out", str(out),
+                             "--min-interval", "0", "--max-hamming", "-1"]) == 0
+        got[kind] = [json.loads(l) for l in (out / "frames.jsonl").read_text().splitlines()]
+    for rows in got.values():
+        # t is the header stamp, 1 ms before the bag log time
+        assert [r["t"] for r in rows] == pytest.approx(FRAME_S, abs=1e-9)
+        assert [r["log_ns"] for r in rows] == [_ns(t + 0.001) for t in FRAME_S]
+        for i, r in enumerate(rows):
+            # this fixture's line/observation has no source: not CAMERA_LINE, never
+            # evidence of an image (audit 2026-10-01); the shadow result is
+            assert r["side"].get("line/observation") is None
+            for topic, key in (("perception/learned/shadow", "error_delta"),):
+                value = r["side"].get(topic)
+                if i in (2, 3):
+                    assert value is None, (i, topic)
+                else:
+                    assert value[key] == pytest.approx(i / 10), (i, topic)
+            cmd = r["side"]["cmd_vel"]["linear"]  # MCAP: the Twist; sidecar: m/s
+            assert (cmd["x"] if isinstance(cmd, dict) else cmd) <= FRAME_S[i] + 0.001
+            assert r["dt"]["cmd_vel"] <= 0
+        assert rows[0]["dt"]["perception/learned/shadow"] > 0
+        assert -0.001 < rows[1]["dt"]["perception/learned/shadow"] < 0
+    strip = ("line/observation", "perception/learned/shadow")
+    for m, v in zip(got["mcap"], got["video"]):
+        for topic in strip:
+            a, b = m["side"].get(topic), v["side"].get(topic)
+            assert (a is None) == (b is None)
+            if a is not None:
+                assert {k: b[k] for k in a} == a  # the sidecar adds only stamp_ns
 
 
 def test_output_stem_and_rate(tmp_path):
@@ -443,3 +469,32 @@ def test_motion_flags_idle_driving_pivoting_and_commanded():
     assert m["moving"] and m["commanded"]
     m = b2v.motion(_ns(5.0), still, None)       # no odom near the frame, no command
     assert m == {"moving": False, "commanded": False, "v": None, "w": None}
+
+
+def test_line_observation_evidence_is_the_camera_line_not_an_ir_line_near_the_same_stamp():
+    # Real 9dfk: an IR_LINE observation 0.05-0.78 ms from the image stamp was taken as the
+    # frame's evidence (first logged, 1 ms tolerance) and extract.py then dropped it.
+    frame_ns = 1_790_772_477_745_000_000
+    series = [{"source": "IR_LINE", "stamp": (frame_ns + 300_000) / 1e9, "n": "ir"},
+              {"source": "CAMERA_LINE", "stamp": frame_ns / 1e9, "n": "cam"}]
+    index = b2v.stamped_index([frame_ns + 1_000, frame_ns + 2_000], series,
+                              source=b2v.STAMPED_SOURCES["line/observation"])
+    keys = [e[0] for e in index]
+    hit = b2v.evidence_for(index, keys, {"stamp_ns": frame_ns, "log_ns": frame_ns + 5_000})
+    assert hit is not None and hit[1]["n"] == "cam"
+    # the float-seconds payload stamp still matches its own image within the tolerance
+    assert abs(hit[1]["stamp_ns"] - frame_ns) <= b2v.STAMP_TOL_NS
+    # an IR_LINE alone is never a frame's stamped evidence
+    only_ir = b2v.stamped_index([frame_ns + 1_000], series[:1], source="CAMERA_LINE")
+    assert only_ir == []
+
+
+@pytest.mark.parametrize("ir_offset_ns", [0, 50_000])   # same stamp (filter) / 50 us (tolerance)
+def test_sidecar_row_takes_the_camera_line_even_when_an_ir_line_is_logged_first(ir_offset_ns):
+    frame_ns = 1_790_772_477_745_000_000
+    series = [{"source": "IR_LINE", "stamp": (frame_ns + ir_offset_ns) / 1e9, "n": "ir"},
+              {"source": "CAMERA_LINE", "stamp": frame_ns / 1e9, "n": "cam"}]
+    side = {"line/observation": ([frame_ns + 1_000, frame_ns + 2_000], series)}
+    frames = [{"stamp_ns": frame_ns, "log_ns": frame_ns + 5_000}]
+    row = next(b2v.sidecar_rows(frames, side, max_gap_s=0.5))
+    assert row["side"]["line/observation"]["n"] == "cam"

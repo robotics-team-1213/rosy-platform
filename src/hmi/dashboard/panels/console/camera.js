@@ -1,6 +1,8 @@
 import { authHeaders, session } from "/assets/client.js";
 import { createVisionPreview } from "/assets/vision.js";
 import { createCameraCapture, evidenceBody, saveCameraFile } from "/assets/camera-capture.js";
+// D-359 §5.3 — 끌 때 이유를 같이 준다. 켜거나 짧은 요청 중 잠금이면 이유를 지운다.
+function setOff(control, off, reason = "") { control.disabled = Boolean(off); if (off && reason) control.setAttribute("reason", reason); else control.removeAttribute("reason"); }
 
 function el(tag, cls, text) { const node = document.createElement(tag); if (cls) node.className = cls; if (text !== undefined) node.textContent = text; return node; }
 
@@ -10,10 +12,11 @@ export function mount(root, ctx) {
   const frame = el("img", "surface-camera-frame"); frame.id = "vision-frame"; frame.alt = "전방 카메라 실시간 영상"; frame.hidden = true;
   const empty = el("ui-empty", "surface-camera-empty", "카메라 프레임 수신 대기"); empty.id = "vision-empty";
   stage.append(frame, empty);
-  const status = el("ui-status", "", "WAITING"); status.id = "vision-status";
+  const status = el("ui-tag", "", "수신 대기"); status.id = "vision-status";
+  status.dataset.evidence = "unavailable"; status.title = "WAITING"; status.setAttribute("status", "neutral");
   const actions = el("ui-actions", "surface-actions surface-camera-actions");
   const storageLabel = el("label", "ui-field-label surface-camera-storage", "저장 위치");
-  const storage = el("select"); storage.id = "vision-storage";
+  const storage = el("select", "ui-field"); storage.id = "vision-storage";
   for (const [value, label] of [["pc", "이 PC"], ["robot", "로봇 SD"], ["both", "PC와 로봇 SD"]]) {
     const option = el("option", "", label); option.value = value;
     if (ctx.role === "viewer" && value !== "pc") option.disabled = true;
@@ -56,7 +59,7 @@ export function mount(root, ctx) {
               {headers: authHeaders(), cache: "no-store"});
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
             saveCameraFile(await response.blob(), record.file_name);
-          } catch (error) { captureStatus.textContent = `저장 파일 다운로드 실패: ${error.message}`; }
+          } catch (error) { captureStatus.hidden = false; captureStatus.textContent = `저장 파일 다운로드 실패: ${error.message}`; }
           finally { button.disabled = false; }
         });
         row.append(button); files.append(row);
@@ -65,11 +68,11 @@ export function mount(root, ctx) {
     }
     refreshLibrary = loadLibrary;
     refresh.addEventListener("click", () => loadLibrary().catch((error) => {
-      captureStatus.textContent = `로봇 저장 목록을 읽지 못했습니다: ${error.message}`;
+      captureStatus.hidden = false; captureStatus.textContent = `로봇 저장 목록을 읽지 못했습니다: ${error.message}`;
     }));
     library.addEventListener("toggle", () => {
       if (library.open) loadLibrary().catch((error) => {
-        captureStatus.textContent = `로봇 저장 목록을 읽지 못했습니다: ${error.message}`;
+        captureStatus.hidden = false; captureStatus.textContent = `로봇 저장 목록을 읽지 못했습니다: ${error.message}`;
       });
     });
   }
@@ -101,12 +104,18 @@ export function mount(root, ctx) {
   let capture;
   const updateCapture = (state) => {
     storage.disabled = state.recording || state.uploading;
-    shot.disabled = !state.ready || state.uploading;
-    start.disabled = !state.ready || !state.supported || state.recording || state.uploading;
-    stop.disabled = !state.recording;
-    saveVideo.disabled = !state.saved || state.recording || state.uploading;
-    saveLog.disabled = !state.saved || state.recording || state.uploading;
+    // 올리는 중(uploading)은 짧은 잠금이라 사유 없이 끈다.
+    const waiting = state.uploading ? "" : !state.ready ? "카메라 대기" : "";
+    setOff(shot, !state.ready || state.uploading, waiting);
+    setOff(start, !state.ready || !state.supported || state.recording || state.uploading,
+      waiting || (state.uploading ? "" : !state.supported ? "이 브라우저는 녹화 불가" : state.recording ? "녹화 중" : ""));
+    setOff(stop, !state.recording, "녹화 중 아님");
+    const saveReason = state.uploading ? "" : state.recording ? "녹화 중" : "저장할 녹화 없음";
+    setOff(saveVideo, !state.saved || state.recording || state.uploading, saveReason);
+    setOff(saveLog, !state.saved || state.recording || state.uploading, saveReason);
     captureStatus.textContent = state.message;
+    // D-359 US-009 — 프레임이 없을 때의 대기 문장은 무대(ui-empty)와 상태 태그가 이미 말한다.
+    captureStatus.hidden = !state.ready && !state.recording && !state.saved && !state.uploading;
   };
   capture = createCameraCapture({onChange: updateCapture, storeOnRobot,
     onComplete: async () => {

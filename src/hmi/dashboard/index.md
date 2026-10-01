@@ -37,8 +37,8 @@
 
 ## 최근 기록
 
+- 2026-10-01 · c302529d · feat(dashboard): 보정 중 칩
 - 2026-10-01 · uncommitted · fix(console): 계보줄 단일 작성자 — 10Hz 덮어쓰기 제거
 - 2026-10-01 · uncommitted · feat(console): D-383 편대 역할 칸과 버전 계보
-- 2026-09-30 · uncommitted · refactor(dashboard): D-377 Rosy Robot title and favicon
-- 2026-09-30 · uncommitted · docs(adr): D-358 앱 역할 ADR을 D-370으로 재번호
-- 2026-09-30 · uncommitted · feat(icons): D-358 S3 대시보드 파비콘
+- 2026-10-01 · uncommitted · fix(dashboard): D-359 차선 추종 모드 값은 title에 원래 열거값을 둔다
+- 2026-10-01 · uncommitted · revert(dashboard): D-359 정리의 setOff 통합을 되돌림

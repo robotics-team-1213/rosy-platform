@@ -122,13 +122,14 @@ def write_robots(path: Path, robots: list[RobotEndpoint]) -> None:
         pass
 
 
-def ws_url(base_url: str, path: str, token: str, **query: str) -> str:
-    """REST base_url → 같은 호스트의 WS URL. 토큰은 쿼리로 간다 (API Ref §6)."""
+def ws_url(base_url: str, path: str, **query: str) -> str:
+    """REST base_url -> WS URL on the same host. Never carries the token: the caller
+    authenticates with a first frame {"type": "auth", "token": ...} (D-370 S7)."""
     scheme, _, host = base_url.partition("://")
     scheme = scheme.lower()
     if scheme not in ("http", "https") or not host:
         # 알 수 없는 스킴을 ws 로 떨어뜨리면 https 오타 하나가 토큰을 평문으로 보낸다.
         raise ValueError(f"base_url must be http(s)://host[:port], got {base_url!r}")
     ws_scheme = "wss" if scheme == "https" else "ws"
-    params = {"token": token, **query}
-    return f"{ws_scheme}://{host}{path}?{urlencode(params)}"
+    suffix = f"?{urlencode(query)}" if query else ""
+    return f"{ws_scheme}://{host}{path}{suffix}"

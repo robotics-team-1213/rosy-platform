@@ -282,9 +282,15 @@ class Relay:
             # 소켓이 다시 열렸다는 것 자체가 지난 이유가 지났다는 뜻이다. 첫 프레임을
             # 보낼 때까지 기다리면, 리더가 조용한 동안 고쳐진 소켓이 옛 이유를 달고 있다.
             lane.last_error = None
+            # A quiet leader sends nothing, so watch the socket itself: a refusal
+            # (4401 after first-message auth) must not leave a healthy-looking lane.
+            closed = asyncio.ensure_future(lane.sink.wait_closed())
+            closed.add_done_callback(lambda _f, wake=lane.wake: wake.set())
             try:
                 while self._running:
                     await lane.wake.wait()
+                    if closed.done() and not closed.cancelled():
+                        raise closed.result()
                     lane.wake.clear()
                     frame, lane.latest = lane.latest, None
                     if frame is None:
@@ -301,11 +307,13 @@ class Relay:
                     lane.last_error = None
                     backoff = _BACKOFF_FIRST_S   # 실제로 보냈을 때만 초기화한다
             except asyncio.CancelledError:
+                closed.cancel()
                 raise
             except Exception as exc:
                 lane.connected = False
                 lane.last_error = str(exc)
                 log.warning("%s: reference socket send failed: %s", lane.robot.robot_id, exc)
+                closed.cancel()
                 try:
                     await lane.sink.close()
                 except Exception:

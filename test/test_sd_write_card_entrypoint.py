@@ -457,3 +457,90 @@ def test_a_bare_python_name_stays_a_path_lookup(case):
 
     assert completed.returncode == 0, completed.stderr
     assert json.loads(completed.stdout)["arguments"]["PythonExe"] == "python"
+
+
+# D-389: the emergency procedure is a first-class entry-point option.
+REASON = "robot needed on the floor now; readback CPU-starved"
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+def test_an_emergency_write_passes_the_switch_and_its_reason_to_the_writer_window(case):
+    launcher, record = _launcher(case, "accept")
+
+    printed = _print(case, "-Emergency", "-EmergencyReason", REASON)
+    completed, _elapsed, _log = _launch(case, launcher, "-Detach", "-Emergency", "-EmergencyReason", REASON)
+
+    assert printed.returncode == 0, printed.stderr
+    arguments = json.loads(printed.stdout)["arguments"]
+    assert arguments["Emergency"] is True and arguments["EmergencyReason"] == REASON
+    assert completed.returncode == 0, completed.stderr
+    forwarded = json.loads(record.read_text(encoding="utf-8-sig"))["arguments"]
+    assert "-Emergency" in forwarded
+    assert forwarded[forwarded.index("-EmergencyReason") + 1] == f'"{REASON}"'
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+def test_a_standard_write_passes_no_emergency(case):
+    completed = _print(case)
+
+    assert completed.returncode == 0, completed.stderr
+    arguments = json.loads(completed.stdout)["arguments"]
+    assert "Emergency" not in arguments and "EmergencyReason" not in arguments
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+@pytest.mark.parametrize("extra,message", [
+    (("-Emergency",), "-Emergency needs -EmergencyReason"),
+    (("-Emergency", "-EmergencyReason", "now"), "-Emergency needs -EmergencyReason"),
+    (("-Emergency", "-EmergencyReason", 'say "now" please ok'), "printable ASCII without double quotes"),
+    # A trailing backslash would escape the closing quote forwarded to the elevated window.
+    (("-Emergency", "-EmergencyReason", "robot needed now X:\\cards\\"), "or backslashes"),
+    (("-EmergencyReason", REASON), "-EmergencyReason is only valid with -Emergency"),
+], ids=["missing", "too-short", "quotes", "trailing-backslash", "reason-without-switch"])
+def test_an_emergency_without_a_reason_is_refused_before_the_uac_prompt(case, extra, message):
+    launcher, record = _launcher(case, "accept")
+
+    completed, _elapsed, log = _launch(case, launcher, "-Detach", *extra)
+
+    assert completed.returncode != 0
+    assert message in " ".join(completed.stderr.split())
+    assert not record.exists()
+    assert not Path(str(log) + ".progress.jsonl").exists()
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+def test_status_of_an_emergency_write_says_not_verified(tmp_path):
+    lines = [{"ts": _ts(5), "stage": "launch", "card_state": "untouched"},
+             {"ts": _ts(4), "stage": "confirm", "card_state": "untouched"},
+             {"ts": _ts(3), "stage": "write", "card_state": "writing", "total": RAW},
+             {"ts": _ts(1), "stage": "readback", "card_state": "written-unverified",
+              "detail": "EMERGENCY: full readback skipped", "total": RAW},
+             {"ts": _ts(0.9), "stage": "bundle", "card_state": "unverified-no-bundle"},
+             {"ts": _ts(0.8), "stage": "bundle-writing", "card_state": "bundle-partial"},
+             {"ts": _ts(0.7), "stage": "receipt", "card_state": "complete"},
+             {"ts": _ts(0.6), "stage": "done", "card_state": "complete-unverified",
+              "detail": "EMERGENCY: readback skipped", "next": "the card is written but NOT verified"}]
+
+    text, status = _status(tmp_path, lines, exit_code=0)
+
+    assert status["result"] == "complete-unverified"
+    assert "Result: COMPLETE, NOT VERIFIED" in text and "next: the card is written but NOT verified" in text
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+def test_a_crash_after_the_emergency_receipt_stage_never_reads_as_complete(tmp_path):
+    lines = [{"ts": _ts(3), "stage": "launch", "card_state": "untouched"},
+             {"ts": _ts(2), "stage": "bundle", "card_state": "unverified-no-bundle"},
+             {"ts": _ts(1), "stage": "receipt", "card_state": "complete-unverified"}]
+
+    text, status = _status(tmp_path, lines, exit_code=1)
+
+    assert status["card_state"] == "complete-unverified"
+    assert "emergency card, never read back" in status["next"]
+
+
+def test_a_lost_elevated_write_names_the_emergency_resume_state():
+    # Review (LOW): the "did not finish" hint must cover unverified-no-bundle too.
+    text = SCRIPT.read_text(encoding="utf-8")
+    assert ("if card_state is written-unverified, verified-no-bundle or unverified-no-bundle, "
+            "re-run with -ResumeAfterWrite (an emergency write keeps -Emergency and its reason)") in text

@@ -1,5 +1,5 @@
 // 색은 tokens.css가 소유한다(concept 16 §6, D-72 L1). 캔버스는 CSS 변수를
-// 직접 못 쓰므로 한 번만 읽어 캐시한다 — 픽셀마다 읽으면 안 된다.
+// 직접 못 쓰므로 한 번 풀어 둔 표를 쓴다 — 픽셀마다 읽으면 안 된다.
 const PALETTE_TOKENS = {
   rasterUnknown: "--raster-unknown",
   rasterFree: "--raster-free",
@@ -9,37 +9,17 @@ const PALETTE_TOKENS = {
   route: "--series-primary",
   // 로봇 자신은 계열 중 하나가 아니라 보는 사람의 현재 위치다. 계열 색
   // 예산을 쓰지 않고 가장 밝은 중립으로 둔다.
-  pose: "--paper",
+  pose: "--ink",
   ground: "--ground-deep",
 };
 
-let paletteCache = null;
-
-function readToken(name) {
-  const raw = getComputedStyle(document.documentElement)
-    .getPropertyValue(name)
-    .trim();
-  const hex = raw.replace("#", "");
-  if (hex.length !== 6) return [0, 0, 0];
-  return [
-    parseInt(hex.slice(0, 2), 16),
-    parseInt(hex.slice(2, 4), 16),
-    parseInt(hex.slice(4, 6), 16),
-  ];
-}
-
+// ui.js(window.RosyPalette)가 어떤 CSS 색이든 풀어 캐시하고 테마가 바뀌면 비운다.
 function palette() {
-  if (paletteCache) return paletteCache;
-  paletteCache = {};
-  for (const [key, token] of Object.entries(PALETTE_TOKENS)) {
-    paletteCache[key] = readToken(token);
-  }
-  return paletteCache;
+  return window.RosyPalette.readPalette(PALETTE_TOKENS);
 }
 
 function cssColor(key) {
-  const [r, g, b] = palette()[key];
-  return `rgb(${r}, ${g}, ${b})`;
+  return window.RosyPalette.cssColor(PALETTE_TOKENS[key]);
 }
 
 function GridFrame(grid) {
@@ -84,8 +64,7 @@ GridFrame.prototype.worldToCanvas = function worldToCanvas(x, y, canvasWidth, ca
   };
 };
 
-function occupancyColor(cell) {
-  const tone = palette();
+function occupancyColor(cell, tone) {
   if (cell < 0) return tone.rasterUnknown;
   if (cell < 20) return tone.rasterFree;
   if (cell < 60) return tone.rasterUncertain;
@@ -95,11 +74,12 @@ function occupancyColor(cell) {
 function paintLayers(occupancy, costmap, layers, width, height) {
   const image = new ImageData(width, height);
   const costFrame = layers.costmap && costmap ? new GridFrame(costmap) : null;
+  const tone = palette();
   for (let y = 0; y < height; y += 1) {
     for (let x = 0; x < width; x += 1) {
       const world = occupancy.canvasToWorld(x + 0.5, y + 0.5, width, height);
       const cell = layers.occupancy ? occupancy.sampleWorld(world.x, world.y) : -1;
-      const color = occupancyColor(cell == null ? -1 : cell);
+      const color = occupancyColor(cell == null ? -1 : cell, tone);
       const index = (y * width + x) * 4;
       image.data[index] = color[0];
       image.data[index + 1] = color[1];
@@ -109,7 +89,7 @@ function paintLayers(occupancy, costmap, layers, width, height) {
       const lethal = costFrame.sampleWorld(world.x, world.y);
       if (lethal == null || lethal < 50) continue;
       const mix = Math.min(1, lethal / 254);
-      const hazard = palette().costLethal;
+      const hazard = tone.costLethal;
       image.data[index] = Math.round(image.data[index] * (1 - mix) + hazard[0] * mix);
       image.data[index + 1] = Math.round(image.data[index + 1] * (1 - mix) + hazard[1] * mix);
       image.data[index + 2] = Math.round(image.data[index + 2] * (1 - mix) + hazard[2] * mix);
@@ -171,8 +151,13 @@ export function createFieldMap(options) {
 
   function syncClickButtons() {
     const allowed = canGoal?.() === true;
+    // D-359 §5.3 — 사유는 호출자가 안다(goalReason). 역할 화면 패널은 버튼에 잇는 공용
+    // 안내문(#map-action-reason)으로 말하므로 goalReason을 넘기지 않는다.
+    const reason = allowed ? "" : (options.goalReason?.() || "");
     clickButtons.forEach((button) => {
       button.disabled = !allowed;
+      if (reason) button.setAttribute("reason", reason);
+      else button.removeAttribute("reason");
       if (allowed) button.setAttribute("aria-pressed", button.dataset.mapClick === clickMode ? "true" : "false");
       else button.removeAttribute("aria-pressed");
     });
@@ -345,6 +330,12 @@ export function createFieldMap(options) {
   });
   syncClickButtons();
 
+  // D-359 §4 — 테마가 바뀌면 새로 고침 없이 다시 칠한다. 색 캐시는 ui.js가 먼저 비운다.
+  document.addEventListener("rosy:theme", () => {
+    rebuildRaster();
+    paint();
+  }, {signal: listenerController.signal});
+
   if (typeof ResizeObserver === "function" && canvas) {
     resizeObserver = new ResizeObserver(() => {
       if (fitCanvas()) {
@@ -362,7 +353,7 @@ export function createFieldMap(options) {
       return;
     }
     if (!canGoal?.()) {
-      setAction?.("현재 profile/runtime에서는 위치·목표 조작을 사용할 수 없습니다.");
+      setAction?.("현재 실행 모드나 로봇 기능으로는 위치·목표 조작을 쓸 수 없습니다.");
       return;
     }
     const world = new GridFrame(state.occupancy).canvasToWorld(px, py, canvas.width, canvas.height);
@@ -434,6 +425,7 @@ export function createFieldMap(options) {
   return {
     refresh,
     setPose,
+    get mapState() { return state.mapState; },
     destroy() {
       listenerController.abort();
       resizeObserver?.disconnect();

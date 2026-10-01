@@ -19,6 +19,10 @@ from core_common.protocol.schemas import SwarmFollowParams
 from fleet.swarm.robots import RobotEndpoint, ws_url
 
 log = logging.getLogger(__name__)
+# websockets dumps every frame at DEBUG, including the first-frame auth token.
+# Robot sockets log through this logger, which never goes below INFO.
+_ws_log = logging.getLogger(__name__ + ".websocket")
+_ws_log.setLevel(logging.INFO)
 
 #: `InvalidStatus` 가 없다는 경고는 한 번이면 된다. 소켓마다 찍으면 재연결 로그가 그것뿐이 된다.
 _missing_invalid_status_logged = False
@@ -95,6 +99,9 @@ def _as_event(frame) -> Optional[dict]:
 class ReferenceSink(Protocol):
     async def send(self, frame: str) -> None: ...
     async def close(self) -> None: ...
+    async def wait_closed(self) -> BaseException:
+        """Resolve when the robot closes the socket; return why (RobotApiError for 4401/4403)."""
+        ...
 
 
 @runtime_checkable
@@ -121,11 +128,32 @@ class RobotClient(Protocol):
 
 
 class _WebsocketSink:
-    def __init__(self, ws) -> None:
+    def __init__(self, ws, robot_id: str) -> None:
         self._ws = ws
+        self._robot_id = robot_id
+
+    def _reason(self, exc: BaseException) -> BaseException:
+        return _rejection(self._robot_id, exc) or exc
 
     async def send(self, frame: str) -> None:
-        await self._ws.send(frame)
+        # With first-message auth a wrong token is a 4401 close after accept, so the
+        # refusal surfaces here or in wait_closed(), not when the socket opens.
+        from websockets.exceptions import ConnectionClosed
+
+        try:
+            await self._ws.send(frame)
+        except ConnectionClosed as exc:
+            raise self._reason(exc) from exc
+
+    async def wait_closed(self) -> BaseException:
+        from websockets.exceptions import ConnectionClosed
+
+        try:
+            async for _ in self._ws:
+                pass   # the reference socket carries nothing back; drain until close
+        except ConnectionClosed as exc:
+            return self._reason(exc)
+        return ConnectionError("reference socket closed by robot")
 
     async def close(self) -> None:
         await self._ws.close()
@@ -221,22 +249,42 @@ class HttpRobotClient:
     # --- WS -------------------------------------------------------------------
 
     def pose_url(self) -> str:
-        return ws_url(self._ep.base_url, "/ws/swarm/pose", self._ep.token)
+        return ws_url(self._ep.base_url, "/ws/swarm/pose")
 
     def reference_url(self) -> str:
-        return ws_url(self._ep.base_url, "/ws/swarm/reference", self._ep.token)
+        return ws_url(self._ep.base_url, "/ws/swarm/reference")
 
     def events_url(self, types: Sequence[str]) -> str:
-        return ws_url(self._ep.base_url, "/ws/events", self._ep.token, types=",".join(types))
+        return ws_url(self._ep.base_url, "/ws/events", types=",".join(types))
+
+    async def _open_socket(self, url: str):
+        """Connect and authenticate with the first frame, not ``?token=`` (D-370 S7).
+
+        CORE's ``_authorize`` waits for ``{"type": "auth", "token": ...}`` when the
+        URL has no token; a wrong token closes the socket with 4401 afterwards.
+        """
+        import websockets
+        from websockets.exceptions import ConnectionClosed
+
+        ws = await websockets.connect(url, proxy=None, logger=_ws_log)
+        try:
+            await ws.send(json.dumps({"type": "auth", "token": self._ep.token}))
+        except ConnectionClosed:
+            # Already closed by the robot: reading the socket surfaces the close
+            # code (4401/4403 -> RobotApiError) and any frames sent before it.
+            pass
+        except BaseException:
+            await ws.close()
+            raise
+        return ws
 
     async def pose_stream(self) -> AsyncIterator[str]:
         """리더 pose 프레임(텍스트). 소켓이 닫히면 끝난다 — 재연결은 호출자 몫.
         4401/4403 으로 거절되면 `RobotApiError` 를 올린다."""
-        import websockets
         from websockets.exceptions import WebSocketException
 
         try:
-            async with websockets.connect(self.pose_url(), proxy=None) as ws:
+            async with await self._open_socket(self.pose_url()) as ws:
                 async for frame in ws:
                     text = _as_text(frame)
                     if text is not None:
@@ -250,24 +298,22 @@ class HttpRobotClient:
     async def open_reference_sink(self) -> ReferenceSink:
         # 거부는 `RobotApiError` 로, 나머지는 날것 그대로 올린다 — 여기서 `InvalidStatus`
         # 를 직접 import 하지 않는 이유는 `_rejection` 의 것과 같다(오래된 websockets).
-        import websockets
         from websockets.exceptions import WebSocketException
 
         try:
-            ws = await websockets.connect(self.reference_url(), proxy=None)
+            ws = await self._open_socket(self.reference_url())
         except (OSError, WebSocketException) as exc:
             rejected = _rejection(self.robot_id, exc)
             if rejected is not None:
                 raise rejected from exc
             raise
-        return _WebsocketSink(ws)
+        return _WebsocketSink(ws, self.robot_id)
 
     async def events(self, types: Sequence[str]) -> AsyncIterator[dict]:
-        import websockets
         from websockets.exceptions import WebSocketException
 
         try:
-            async with websockets.connect(self.events_url(types), proxy=None) as ws:
+            async with await self._open_socket(self.events_url(types)) as ws:
                 async for frame in ws:
                     event = _as_event(frame)
                     if event is not None:

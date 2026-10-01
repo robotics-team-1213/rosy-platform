@@ -8,6 +8,8 @@
   /camera/blocked     obstacle filling the view ahead
   /camera/side        -1 left, +1 right, 0 center/unknown
   /camera/front       OV5647 BGR8 (libcamera RGB888 is BGR in memory)
+  /camera/front/compressed  JPEG of the same frame, same stamp; only when
+                      publish_compressed is true (D-373 capture; stays on the robot, D-136)
   /camera/observation compact per-frame evidence; schema in sensing/perception/camera_evidence
   /camera/controls    the exposure/gain/white-balance the sensor was frozen at
   /camera/debug       one-line human-readable column scores
@@ -19,7 +21,7 @@ import numpy as np
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy, qos_profile_sensor_data
-from sensor_msgs.msg import Image
+from sensor_msgs.msg import CompressedImage, Image
 from std_msgs.msg import Bool, Float32, String
 
 from . import executor_choice
@@ -31,6 +33,7 @@ from .sensing.perception.camera_ground import ground_plane
 from .sensing.perception.camera_homography import CalibrationThresholds, load_homography_profile
 from .sensing.perception.camera_policy import CameraPolicy
 from .sensing.perception.camera_worker import CameraFrame, CameraPreprocessProfile, CameraPreprocessWorker
+from .sensing.perception.jpeg_frame import DEFAULT_QUALITY, encode_jpeg
 from .sensing.perception.v4l2_controls import freeze_v4l2_controls, v4l2_lock_summary
 
 
@@ -120,12 +123,23 @@ class CameraDetectNode(Node):
         self.declare_parameter('camera_homography_min_validation_frames', 2)
         self.declare_parameter('camera_homography_min_validation_span_cm', 10.0)
         self.declare_parameter('camera_homography_max_range_m', 0.6)
+        # D-373: JPEG copy of camera/front for the snapshot recorder. Off unless
+        # the capture launch argument turns it on; encoding costs CPU per frame.
+        self.declare_parameter('publish_compressed', False)
+        self.declare_parameter('compressed_quality', DEFAULT_QUALITY)
 
         self.cliff_pub = self.create_publisher(Bool, 'camera/cliff', 10)
         self.block_pub = self.create_publisher(Bool, 'camera/blocked', 10)
         self.side_pub = self.create_publisher(Float32, 'camera/side', 10)
         self.dbg_pub = self.create_publisher(String, 'camera/debug', 10)
         self.img_pub = self.create_publisher(Image, 'camera/front', qos_profile_sensor_data)
+        self._jpeg_quality = int(self.get_parameter('compressed_quality').value)
+        self.jpeg_pub = None
+        if bool(self.get_parameter('publish_compressed').value):
+            # Best effort, depth 1 (D-185): only the latest frame matters.
+            self.jpeg_pub = self.create_publisher(CompressedImage, 'camera/front/compressed',
+                                                  QoSProfile(depth=1, reliability=ReliabilityPolicy.BEST_EFFORT))
+            self.get_logger().info(f'camera/front/compressed on (quality {self._jpeg_quality})')
         self.observation_pub = self.create_publisher(String, 'camera/observation', 10)
         self.telemetry_pub = self.create_publisher(String, 'camera/telemetry', 10)
         calibration_qos = QoSProfile(
@@ -469,6 +483,18 @@ class CameraDetectNode(Node):
         msg.step = msg.width * 3
         msg.data = np.ascontiguousarray(bgr).tobytes()
         self.img_pub.publish(msg)
+        if self.jpeg_pub is not None:
+            try:
+                data, fmt = encode_jpeg(bgr, self._jpeg_quality)
+            except (ValueError, RuntimeError) as exc:
+                self.get_logger().warn(f'compressed frame skipped: {exc}',
+                                       throttle_duration_sec=5.0)
+                return
+            jpeg = CompressedImage()
+            jpeg.header = msg.header
+            jpeg.format = fmt
+            jpeg.data = data
+            self.jpeg_pub.publish(jpeg)
 
     def destroy_node(self):
         self._stop_cam()

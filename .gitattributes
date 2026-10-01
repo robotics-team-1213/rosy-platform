@@ -18,6 +18,8 @@ deploy/robot/native/rosy-diag text eol=lf
 deploy/robot/pinky_pro/image/device-python-requirements.txt text eol=lf
 deploy/robot/pinky_pro/image/camera-sources.lock.json text eol=lf
 deploy/robot/pinky_pro/image/camera-python-requirements.txt text eol=lf
+# D-373: systemd EnvironmentFile would read a CRLF value as "false" (not a switch value).
+deploy/robot/pinky_pro/native/learned-perception.env.example text eol=lf
 # D-247: inputs.lock.yaml pins the rpi_ws281x patch by SHA-256; the overlay and
 # the udev/modprobe files go into the image byte for byte.
 deploy/robot/pinky_pro/image/patches/*.patch text eol=lf

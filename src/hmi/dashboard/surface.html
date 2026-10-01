@@ -7,6 +7,7 @@
   <title>Rosy Robot — {{title}}</title>
   <link rel="icon" type="image/svg+xml" href="/common/icons/robot.svg">
   <link rel="stylesheet" href="/common/tokens.css">
+  <script src="/common/theme.js"></script>
   <link rel="stylesheet" href="/common/components.css">
   <link rel="stylesheet" href="/assets/shell/shell.css">
   <script type="module" src="/common/ui.js"></script>
@@ -21,7 +22,7 @@
       <span data-spacer></span>
       <ui-text id="shell-notice" scale="label" role="status"></ui-text>
       <ui-tag id="shell-role">인증 대기</ui-tag>
-      <ui-button kind="irreversible" id="shell-estop" type="button">비상 정지</ui-button>
+      <ui-button kind="irreversible" id="shell-estop" data-always-live type="button">비상 정지</ui-button>
     </ui-topbar>
     <main id="surface-main" class="surface-main" tabindex="-1">
       <h1 class="sr-only">Rosy OS — {{title}}</h1>

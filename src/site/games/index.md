@@ -52,8 +52,8 @@
 
 ## 최근 기록
 
-- 2026-09-29 · uncommitted · web-surface-hardening: 보드 CSP·/stop Origin·web_common share 해석
-- 2026-09-29 · uncommitted · fix(games): HOLD alarm is a crit-filled chip (P3 round)
-- 2026-09-28 · uncommitted · fix(games): 필드 중심 반응형 경기 보드 (D-280/D-309)
-- 2026-09-27 · uncommitted · fix(games): 마지막 경기 단계 구분 (D-306/D-309)
-- 2026-09-27 · uncommitted · fix(games): 마지막 필드 위치 구분 (D-306/D-309)
+- 2026-09-30 · 79787e7a · D-371 US-010 경기 정지에 data-always-live
+- 2026-09-30 · ce709e4d · D-359 US-009 경기 보드 문구
+- 2026-09-30 · aeb31356 · D-359 US-005 경기 보드 세 단
+- 2026-09-30 · 890309a8 · D-359 US-004 보드 자간·낡은 영상 흐림·마커 칩이 토큰을 쓴다
+- 2026-09-30 · bbba318f · D-359 US-003 피치 캔버스가 styles.css 피치 블록을 읽는다

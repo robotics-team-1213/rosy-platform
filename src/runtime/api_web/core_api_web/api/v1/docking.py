@@ -5,7 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
-from core_api_web.api.v1.common import admin, operator, viewer
+from core_api_web.api.v1.common import admin, operator, require_calibration_owner, viewer
 from core_api_web.api.deps import AuthContext, get_services, CoreServicesLike
 from core_api_web.api.errors import ApiError
 from core_api_web.api.deps import DockError, DockInstance, DockType
@@ -142,6 +142,7 @@ def teach_dock(dock_id: str, auth: AuthContext = Depends(operator),
 def docking_dock(body: DockCommand, auth: AuthContext = Depends(operator),
                  svc: CoreServicesLike = Depends(get_services)):
     TaskKind.DOCK.require(svc.capability)              # DNC-003 — 미지원이면 501
+    require_calibration_owner(svc, auth, "docking")
     try:
         # 매니저가 DOCKING 을 먼저 쥔다 (CoreServices.take_docking_mode). 못
         # 쥐면 아무것도 바꾸지 않고 MODE_CONFLICT 다.
@@ -155,6 +156,7 @@ def docking_dock(body: DockCommand, auth: AuthContext = Depends(operator),
 def docking_undock(auth: AuthContext = Depends(operator),
                    svc: CoreServicesLike = Depends(get_services)):
     TaskKind.DOCK.require(svc.capability)
+    require_calibration_owner(svc, auth, "undocking")
     try:
         svc.docking.undock()
     except DockError as exc:

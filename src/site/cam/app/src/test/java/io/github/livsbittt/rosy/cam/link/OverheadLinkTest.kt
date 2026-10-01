@@ -180,6 +180,31 @@ class OverheadLinkTest {
     }
 
     @Test
+    fun connectFailureForcesAFreshBrowse() {
+        // Tablet 2026-10-01: Android's NSD cache can keep a dead advertiser resolvable for minutes; the app's
+        // own 30 s cache must still be dropped by a failed connect so the next attempt browses again.
+        val port = server.port
+        server.shutdown()
+        var browses = 0
+        val browser = SiteBrowser { _, match ->
+            browses++
+            listOf(SiteSighting("Rosy site", "rosy-site.local", port, listOf(java.net.InetAddress.getByName("127.0.0.1")))).filter(match)
+        }
+        // Pinned: mDNS is only used for a pinned link (review m3). The port is closed, so no TLS happens.
+        val pin = "sha256/" + "A".repeat(43)
+        val site = io.github.livsbittt.rosy.cam.settings.SiteLink(null, "rosy-site.local", port, pin, "t", "overhead-1", secure = true)
+        val resolver = SiteResolver(site, browser)
+        val l = OverheadLink(site.toPairing(), appVersion = "0.1.0", device = "jvm-test", resolver = resolver).also { link = it }
+        l.start()
+        awaitStatus(l) { it.error is LinkError.Network }
+        l.stop()
+        val afterFailure = browses
+        resolver.resolve()
+        assertEquals("a failed connect must drop the cached address", afterFailure + 1, browses)
+        server = MockWebServer().also { it.start() }
+    }
+
+    @Test
     fun protocolMismatchCloseStopsRetrying() {
         val side = ServerSide()
         server.enqueue(MockResponse().withWebSocketUpgrade(side))

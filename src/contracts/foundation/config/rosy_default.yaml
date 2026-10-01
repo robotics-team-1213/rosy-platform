@@ -100,7 +100,7 @@ line_follow:                       # D-143 selected-source, fail-closed policy
   obstacle_stop_m: 0.20            # D-344 §11: stop when the front LiDAR sector is closer
   obstacle_resume_m: 0.28          # resume once it is farther (hysteresis)
   obstacle_half_angle_deg: 20.0    # front sector is +-this around the robot's forward
-  lidar_forward_deg: 0.0           # LiDAR angle of the robot's forward (Pinky Pro device: 180)
+  lidar_forward_deg: 0.0           # LiDAR angle of the robot's forward (Pinky Pro: 180 in products/pinky_pro/profile/config/core.yaml)
   clearance_stale_s: 0.5           # hold when the LiDAR stops reporting mid-run
   obstacle_mode: sector            # sector = +-half_angle; path = swept corridor along the intended arc
                                    # (path becomes default only after a Gazebo lap + device LiDAR left/right check)
