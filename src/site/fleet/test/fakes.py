@@ -128,6 +128,9 @@ class FakeRobot:
         self.missions: list[tuple] = []
         #: Raised by `localization_mission` (e.g. RobotApiError 409 unsupported).
         self.mission_error: Optional[BaseException] = None
+        #: What `GET /localization/mission` answers, and what it raises instead.
+        self.mission_status: dict = {"kind": None, "state": "idle", "reason": None}
+        self.mission_status_error: Optional[BaseException] = None
 
     def _record(self, *call) -> None:
         self.calls.append(call)
@@ -216,6 +219,12 @@ class FakeRobot:
         if self.mission_error is not None:
             raise self.mission_error
         return {"kind": kind, "state": "running", "reason": None}
+
+    async def localization_mission_status(self) -> dict:
+        self._record("localization_mission_status")
+        if self.mission_status_error is not None:
+            raise self.mission_status_error
+        return dict(self.mission_status)
 
     async def pose_stream(self) -> AsyncIterator[str]:
         self.pose_opens += 1

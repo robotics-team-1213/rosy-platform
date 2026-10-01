@@ -134,6 +134,8 @@ class RobotClient(Protocol):
         target: Optional[dict] = None,
     ) -> dict: ...
 
+    async def localization_mission_status(self) -> dict: ...
+
     def pose_stream(self) -> AsyncIterator[str]: ...
     async def open_reference_sink(self) -> ReferenceSink: ...
     def events(self, types: Sequence[str]) -> AsyncIterator[dict]: ...
@@ -286,6 +288,10 @@ class HttpRobotClient:
         return await self._post("/api/v1/localization/mission", {
             "kind": kind, "max_distance_m": max_distance_m, "max_time_s": max_time_s,
             "target": target})
+
+    async def localization_mission_status(self) -> dict:
+        """CORE's current or last mission: `{kind, state: idle|running|done|aborted, reason}`."""
+        return await self._get("/api/v1/localization/mission")
 
     async def aclose(self) -> None:
         if self._owns_http:

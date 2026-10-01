@@ -210,6 +210,79 @@ def test_a_stale_request_is_logged_not_retried(caplog):
     assert "STALE_REQUEST" in caplog.text
 
 
+RUNNING = {"kind": "rotate_in_place", "state": "running", "reason": None}
+DONE = {"kind": "rotate_in_place", "state": "done", "reason": "done"}
+
+
+def _read(robot):
+    """How often the service read the robot's candidates: once per arbitrated poll."""
+    return sum(1 for c in robot.calls if c[0] == "localization_candidates")
+
+
+def test_no_decision_while_a_mission_runs_nor_1_s_after_it_ends():
+    """S1 re-run (F1 WSL run): Fleet decided while `rotate_in_place` still turned r2."""
+    clock = FakeClock()
+    r1 = FakeRobot("r1", state=state("r1", "CANDIDATES", "odom"))
+    r1.candidates = report("r1", ON_A, stamp=1.0)
+    r1.mission_status = dict(RUNNING)
+    svc = service(r1, clock=clock)
+    ticks(svc, clock, 5.0)
+    assert r1.decisions == [] and _read(r1) == 0
+
+    r1.mission_status = dict(DONE)
+    ticks(svc, clock, 1.0)                              # the end is seen at t, quiet at t + 0.5
+    assert _read(r1) == 0
+    ticks(svc, clock, 0.5)                              # t + 1 s: the arbiter runs again
+    assert _read(r1) == 1
+    ticks(svc, clock, 2.5)                              # its own 2 s hold, from scratch
+    assert len(r1.decisions) == 1
+
+
+def test_a_core_without_missions_is_never_quiet():
+    clock = FakeClock()
+    r1 = FakeRobot("r1", state=state("r1", "CANDIDATES", "odom"))
+    r1.candidates = report("r1", ON_A, stamp=1.0)
+    r1.mission_status_error = RobotApiError("r1", 501, "CAPABILITY_NOT_SUPPORTED", "no missions")
+    ticks(service(r1, clock=clock), clock, 2.5)
+    assert len(r1.decisions) == 1
+
+
+def test_an_unreadable_mission_status_skips_that_poll():
+    clock = FakeClock()
+    r1 = FakeRobot("r1", state=state("r1", "CANDIDATES", "odom"))
+    r1.candidates = report("r1", ON_A, stamp=1.0)
+    r1.mission_status_error = ConnectionError("unreachable")
+    svc = service(r1, clock=clock)
+    ticks(svc, clock, 1.0)
+    assert _read(r1) == 0
+    r1.mission_status_error = None
+    ticks(svc, clock, 0.5)
+    assert _read(r1) == 1
+
+
+def test_a_mission_seen_before_candidates_still_quiets_the_first_decision():
+    """A SUSPECT robot turns, ends, and reports CANDIDATES within the quiet second."""
+    clock = FakeClock()
+    r1 = FakeRobot("r1", state=state("r1", "SUSPECT", "odom"))
+    r1.mission_status = dict(RUNNING)
+    svc = service(r1, clock=clock)
+    ticks(svc, clock, 1.0)
+    r1.mission_status = dict(DONE)
+    r1._state = state("r1", "CANDIDATES", "odom")
+    r1.candidates = report("r1", ON_A, stamp=2.0)
+    ticks(svc, clock, 1.0)
+    assert _read(r1) == 0
+    ticks(svc, clock, 0.5)
+    assert _read(r1) == 1
+
+
+def test_localized_robots_are_not_asked_for_their_mission():
+    clock = FakeClock()
+    r1 = FakeRobot("r1", state=state("r1", "LOCALIZED"))
+    ticks(service(r1, clock=clock), clock, 1.0)
+    assert not any(c[0] == "localization_mission_status" for c in r1.calls)
+
+
 def test_candidates_are_read_only_from_robots_in_candidates():
     clock = FakeClock()
     r1 = FakeRobot("r1", state=state("r1", "LOCALIZED"))

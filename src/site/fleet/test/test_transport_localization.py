@@ -105,6 +105,14 @@ def test_mission_posts_the_request():
                               "target": None}}]
 
 
+def test_mission_status_reads_the_current_mission():
+    seen = []
+    body = {"kind": "rotate_in_place", "state": "running", "reason": None, "elapsed_s": 3.2}
+    assert run(_client(_recording(seen, body=body)).localization_mission_status()) == body
+    assert seen == [{"method": "GET", "path": "/api/v1/localization/mission", "auth": "Bearer op-token",
+                     "body": None}]
+
+
 def test_a_refused_mission_surfaces_the_robots_code():
     body = {"error": {"code": "path_not_clear", "message": "front clearance 0.20 m < 0.25 m"}}
     with pytest.raises(RobotApiError) as exc:

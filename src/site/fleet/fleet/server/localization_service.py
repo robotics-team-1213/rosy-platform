@@ -3,7 +3,9 @@
 Every 0.5 s it reads each robot's `/robot/state`. For a robot in CANDIDATES it reads
 `/localization/candidates`, builds the arbiter `Context` (anchored LOCALIZED map-frame
 peers, see `_track_provenance`, the reference squares and slots from `lane_rules.yaml`, and an overhead sighting no
-older than 300 ms) and posts the arbiter's decision. It also runs the §9 monitor
+older than 300 ms) and posts the arbiter's decision. While CORE runs a mission for the
+robot (`GET /localization/mission` says `running`) and for 1 s after it ends, Fleet
+neither arbitrates nor decides for it. It also runs the §9 monitor
 (`POST /localization/suspect`) and times the escalation ladder.
 
 **Overhead sightings are off by default.** D-257 §5 still says a sighting does not
@@ -42,6 +44,9 @@ logger = logging.getLogger("fleet.localization")
 POLL_S = 0.5
 #: Each robot call is bounded so one stalled CORE cannot hold up the others (review of lane C).
 CALL_TIMEOUT_S = 1.0
+#: No decision while a CORE mission moves the robot, nor this long after it ends: a pose
+#: decided mid-rotation failed its check at fit 0.18-0.39 (S1 re-run, F1 WSL run).
+MISSION_QUIET_S = 1.0
 
 
 def load_lane_rules(path: Optional[Path]) -> dict:
@@ -121,6 +126,10 @@ class LocalizationService:
         self._localized_at: dict[str, tuple[cues.Pose, float]] = {}
         #: robot_id -> ((request_id, stamp), Fleet monotonic time first seen).
         self._report_seen: dict[str, tuple] = {}
+        #: Robots whose CORE mission was `running` at the last poll, and the Fleet time
+        #: until which a robot whose mission ended stays without decisions.
+        self._mission_running: set[str] = set()
+        self._quiet_until: dict[str, float] = {}
         self._known: set[str] = set()
 
     # --- console --------------------------------------------------------------------
@@ -163,11 +172,18 @@ class LocalizationService:
         self._track_provenance(states, localized, now)
         anchors = {rid: p for rid, p in localized.items() if rid in self._anchors}
 
+        unlocalized = [rid for rid, state in states.items()
+                       if (status := trust.status_of(state)) is not None
+                       and status.state is not LocState.LOCALIZED]
+        quiet = await asyncio.gather(*(self._mission_quiet(rid, clients[rid], now) for rid in unlocalized))
+        quiet = {rid for rid, q in zip(unlocalized, quiet) if q}
+
         observations: dict[str, list] = {}
         await asyncio.gather(*(
             self._arbitrate(rid, clients[rid], localized, anchors, observations, now)
             for rid, state in states.items()
-            if (status := trust.status_of(state)) is not None and status.state is LocState.CANDIDATES))
+            if rid not in quiet
+            and (status := trust.status_of(state)) is not None and status.state is LocState.CANDIDATES))
         await self._watch(localized, observations, now)
         for rid, state in states.items():
             status = trust.status_of(state)
@@ -219,6 +235,26 @@ class LocalizationService:
     def anchors(self) -> set:
         """Robots whose LOCALIZED pose Fleet can trace to a world cue (tests, console)."""
         return set(self._anchors)
+
+    async def _mission_quiet(self, rid: str, client: RobotClient, now: float) -> bool:
+        """True while CORE runs a mission for `rid` and MISSION_QUIET_S after it ends:
+        no arbiter, no decision, no report read (its candidates predate the motion).
+        A CORE without missions (an API error such as 501) runs none; an unreadable
+        status is quiet for this poll, since Fleet cannot tell the robot is still."""
+        try:
+            status = await self._bounded(client.localization_mission_status())
+        except RobotApiError:
+            status = {}
+        except Exception as exc:
+            logger.debug("localization: %s mission status unreadable: %s", rid, exc)
+            return True
+        if status.get("state") == "running":
+            self._mission_running.add(rid)
+            return True
+        if rid in self._mission_running:
+            self._mission_running.discard(rid)
+            self._quiet_until[rid] = now + MISSION_QUIET_S
+        return now < self._quiet_until.get(rid, -math.inf)
 
     async def _arbitrate(self, rid: str, client: RobotClient, localized: Mapping[str, cues.Pose],
                          anchors: Mapping[str, cues.Pose], observations: dict, now: float) -> None:
@@ -379,6 +415,8 @@ class LocalizationService:
             self._busy_rung.pop(rid, None)
             self._unsupported.pop(rid, None)
             self._report_seen.pop(rid, None)
+            self._mission_running.discard(rid)
+            self._quiet_until.pop(rid, None)
             self._anchors.discard(rid)
             self._pending.pop(rid, None)
             self._localized_at.pop(rid, None)

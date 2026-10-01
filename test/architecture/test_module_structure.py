@@ -83,7 +83,7 @@ SIZE_VERDICTS = {
         "D-395 P2-7 added localization/mission.py (the mission executor, its own module under budget)",
     ),
     "fleet": (
-        24_403,
+        24_565,
         "split: server HTTP boundary, console, signals and the mission-control stores are separate owners "
         "today; group them into subpackages rather than one flat server/ tree (B2); owner fleet, unscheduled "
         "(re-judged 2026-09-29 at 11164 after mission_store joined the server tree; re-judged 2026-09-30 at "
@@ -123,6 +123,9 @@ SIZE_VERDICTS = {
         "server/localization_service.py, the pre-mission traffic hold in console.py, pure "
         "MISSION_LIMITS/square_target in fleet/localization, the mission client in transport.py) on "
         "top of main's D-405/D-406 console work; verdict unchanged. "
+        "Re-judged 2026-10-02 at 24565 when the service learned "
+        "to stay quiet during a CORE mission (server/localization_service.py, the mission-status "
+        "client in transport.py); verdict unchanged. "
         "Split remains unscheduled (docs/plans/2026-09-30-er2-mission-feedback-loop.md)",
     ),
     "site/fleet/fleet/server/proposal_store.py": (
