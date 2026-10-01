@@ -38,3 +38,15 @@ def test_best_grid_picks_the_orientation_with_more_boxes():
     layer = best_grid(BOX, PALLET, gap=0.0)
     assert len(layer) == 9
     assert all(p.yaw == 0.0 for p in layer)
+
+
+@pytest.mark.parametrize("bad", [math.nan, math.inf, -math.inf])
+def test_box_and_pallet_reject_non_finite_values(bad):
+    with pytest.raises(ValueError):
+        Box(length=bad, width=0.03, height=0.02, mass_kg=0.01)
+    with pytest.raises(ValueError):
+        Box(length=0.04, width=0.03, height=0.02, mass_kg=bad)
+    with pytest.raises(ValueError):
+        Pallet(length=0.12, width=bad, max_stack_height=0.10, max_load_kg=1.0)
+    with pytest.raises(ValueError):
+        Pallet(length=0.12, width=0.09, max_stack_height=0.10, max_load_kg=bad)

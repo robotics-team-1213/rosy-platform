@@ -44,6 +44,8 @@ class Frame:
     def from_three_points(
         cls, origin: Vec3, x_point: Vec3, plane_point: Vec3, *, min_span_m: float, min_angle_deg: float
     ) -> Frame:
+        if not all(len(p) == 3 and all(math.isfinite(c) for c in p) for p in (origin, x_point, plane_point)):
+            raise FrameError("taught points must be three finite coordinates each")
         vx = _sub(x_point, origin)
         vp = _sub(plane_point, origin)
         if _length(vx) < min_span_m:

@@ -36,3 +36,12 @@ def test_plane_point_on_the_right_hand_side_points_z_down():
 def test_degenerate_teaching_is_rejected(x_point, plane_point):
     with pytest.raises(FrameError):
         Frame.from_three_points((0, 0, 0), x_point, plane_point, **RULES)
+
+
+@pytest.mark.parametrize("bad", [math.nan, math.inf])
+@pytest.mark.parametrize("which", [0, 1, 2])
+def test_non_finite_taught_points_are_rejected(bad, which):
+    pts = [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]]
+    pts[which][0] = bad
+    with pytest.raises(FrameError, match="finite"):
+        Frame.from_three_points(*pts, **RULES)
