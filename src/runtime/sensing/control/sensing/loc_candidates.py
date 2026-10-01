@@ -8,6 +8,13 @@ here authorizes motion; a decision still passes the 3 s check (loc_verify).
 
 Poses are base_link in the map frame unless a name says sensor. The lidar is
 mounted rotated (scan 0 is the rear), so the conversion goes through `Mount`.
+
+Cost: the global search scales with map cells x 72 headings (one 4 cm seed grid
+per 5 deg), on top of one full-map `clear_poses`. The slot search checks only
+the slot boxes. Callers that run both compute the clear mask once and pass it as
+`clear=`. Requirement for Phase 2: measure the global search on the Pi with the
+deployed map, and bound it with a pooled grid or a time budget before it runs
+on the device.
 """
 from __future__ import annotations
 
@@ -55,10 +62,24 @@ class ReferenceSquare:
 
 
 def reference_squares(rules):
-    """Squares from a parsed lane_rules.yaml mapping; [] when the map has none."""
-    return [ReferenceSquare(str(s['id']), float(s['centre'][0]), float(s['centre'][1]),
-                            math.radians(float(s['heading_axis_deg'])))
-            for s in (rules or {}).get('reference_squares') or ()]
+    """Squares from a parsed lane_rules.yaml mapping; [] when the map has none.
+
+    A malformed root or square raises ValueError naming the square."""
+    if rules is None:
+        return []
+    if not isinstance(rules, dict):
+        raise ValueError('lane rules must be a mapping to hold reference_squares')
+    out = []
+    for s in rules.get('reference_squares') or ():
+        if not isinstance(s, dict):
+            raise ValueError(f'reference square {s!r} must be a mapping')
+        try:
+            out.append(ReferenceSquare(str(s['id']), float(s['centre'][0]), float(s['centre'][1]),
+                                       math.radians(float(s['heading_axis_deg']))))
+        except (KeyError, IndexError, TypeError, ValueError) as exc:
+            raise ValueError(f'reference square {s.get("id")!r} needs id, centre [x, y] and '
+                             f'heading_axis_deg: {exc!r}') from exc
+    return out
 
 
 def base_from_sensor(sensor, mount):
@@ -83,7 +104,9 @@ def distinct(results, minimum_fit=.9, keep_within=.05, limit=4):
     best = results[0][0]
     picked = []
     for combined, agreement, pose in results:
-        if agreement < minimum_fit or combined < best - keep_within:
+        if combined < best - keep_within:
+            break  # best first: nothing later is inside the window
+        if agreement < minimum_fit:
             continue
         if all(apart(pose, other) for other, _ in picked):
             picked.append((pose, float(agreement)))
@@ -92,33 +115,44 @@ def distinct(results, minimum_fit=.9, keep_within=.05, limit=4):
     return picked
 
 
-def global_candidates(field, ranges, angles, radius, mount, minimum_fit=.9, keep_within=.05, limit=4):
-    """Every distinct global pose; [] when the scan or the map cannot support one."""
-    results, _ = field.global_results(ranges, angles, radius)
+def global_candidates(field, ranges, angles, radius, mount, minimum_fit=.9, keep_within=.05, limit=4,
+                      clear=None):
+    """Every distinct global pose; [] when the scan or the map cannot support one.
+
+    `clear` is an optional precomputed `field.clear_poses(radius)` mask."""
+    results, _ = field.global_results(ranges, angles, radius, clear=clear)
     return [PoseCandidate(*base_from_sensor(pose, mount), scan_fit=fit, origin='global')
             for pose, fit in distinct(results, minimum_fit, keep_within, limit)]
 
 
-def slot_candidates(field, squares, ranges, angles, radius, mount, minimum_fit=.9):
+def slot_candidates(field, squares, ranges, angles, radius, mount, minimum_fit=.9, clear=None):
     """Axis and axis+180 at each square (D-395 rev. 2), refined within the slot box.
 
     The square is off-centre along its axis, so the front and rear walls differ
-    and the scan fit keeps one heading; a blocked view can keep both or neither."""
+    and the scan fit keeps one heading; a blocked view can keep both or neither.
+    `clear` is an optional precomputed `field.clear_poses(radius)` mask; without
+    it only the cells inside the slot boxes get a footprint check."""
     ranges, angles = valid_beams(ranges, angles)
     if len(ranges) < 30 or not squares:
         return []
-    clear = field.clear_poses(radius)
+    seeds = [(square, np.array(sensor_from_base((square.x, square.y, wrap(yaw)), mount)))
+             for square in squares for yaw in (square.axis_rad, square.axis_rad + math.pi)]
+    if clear is None:
+        clear = np.zeros(field.grid.shape, dtype=bool)
+        h, w = clear.shape
+        for _, seed in seeds:
+            cells = np.floor((seed[:2] + SLOT_OFFSETS[:, :2] - field.origin) / field.resolution).astype(int)
+            for ix, iy in np.unique(cells, axis=0):
+                if 0 <= ix < w and 0 <= iy < h and not clear[iy, ix]:
+                    clear[iy, ix] = field.footprint_clear(field.origin[0] + (ix + .5) * field.resolution,
+                                                          field.origin[1] + (iy + .5) * field.resolution, radius)
     out = []
-    for square in squares:
-        for yaw in (square.axis_rad, square.axis_rad + math.pi):
-            seed = np.array(sensor_from_base((square.x, square.y, wrap(yaw)), mount))
-            refined = field.refine([seed], ranges, angles, clear, SLOT_OFFSETS)
-            if not refined:
-                continue
-            _, fit, pose = max(refined, key=lambda item: item[0])
-            if fit >= minimum_fit:
-                out.append(PoseCandidate(*base_from_sensor(pose, mount), scan_fit=float(fit),
-                                         origin='slot:' + square.id))
+    for square, seed in seeds:
+        refined = field.refine([seed], ranges, angles, clear, SLOT_OFFSETS)
+        best = max((r for r in refined if r[1] >= minimum_fit), key=lambda item: item[0], default=None)
+        if best is not None:
+            out.append(PoseCandidate(*base_from_sensor(best[2], mount), scan_fit=float(best[1]),
+                                     origin='slot:' + square.id))
     return out
 
 

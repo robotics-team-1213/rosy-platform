@@ -772,3 +772,8 @@
 - 증거: `test_loc_candidates.py` 9 passed — 대칭 트랙에서 참 자세와 거울상이 함께 나옴, 사각형 A(−90°)·B(0°) 위 로봇은 슬롯 후보 하나와 맞는 방향, 슬롯 밖은 슬롯 후보 없음, 기록된 Gazebo 스캔(독립 픽스처)에서 참 자세 2 cm.
 - gate 변화: 없음(SOURCE/LOCAL). 노드 배선 없음.
 - 결정: D-395 Proposed(설계 승인, 1단계 호스트 전용).
+
+## 2026-10-01 · uncommitted · fix(localization): 슬롯 탐색 비용 상한과 리뷰 지적 (D-395 1단계 작업 2)
+- 변경: `slot_candidates`가 지도 전체 `clear_poses`를 만들지 않고 슬롯 상자 칸만 발자국 검사한다. 두 탐색이 `clear=`로 한 번 만든 마스크를 함께 쓸 수 있다. 전역 탐색 비용(지도 칸 × 72 방향)은 2단계에서 Pi로 재고 풀링 격자나 시간 예산으로 묶는다는 요구를 모듈 설명에 적었다. 기준을 넘는 형제 정밀화를 버리지 않고, 잘못된 `reference_squares`는 사각형 id를 단 ValueError, `distinct`는 창 밖에서 멈춘다. `footprint_clear` 창이 부풀린 반경(+res/√2)을 덮지 못하던 결함도 고쳤다.
+- 증거: test_loc_candidates.py, test_localization_search.py, test_localization.py, test_localization_gate.py 35 passed, 1 skipped.
+- gate 변화: 없음(SOURCE, 호스트 전용).

@@ -150,10 +150,12 @@ class MapAgreement:
         ox, oy = self.origin
         if x-radius < ox or y-radius < oy or x+radius >= ox+w*self.resolution or y+radius >= oy+h*self.resolution:
             return False
-        ix0, ix1 = int((x-radius-ox)/self.resolution), int((x+radius-ox)/self.resolution)+1
-        iy0, iy1 = int((y-radius-oy)/self.resolution), int((y+radius-oy)/self.resolution)+1
+        # The window must cover the inflated radius (as clear_poses does), not just the footprint.
+        inflated = radius + self.resolution/math.sqrt(2)
+        ix0, ix1 = max(0, int((x-inflated-ox)/self.resolution)), min(w, int((x+inflated-ox)/self.resolution)+1)
+        iy0, iy1 = max(0, int((y-inflated-oy)/self.resolution)), min(h, int((y+inflated-oy)/self.resolution)+1)
         yy, xx = np.mgrid[iy0:iy1, ix0:ix1]
-        overlaps = np.hypot(ox+(xx+.5)*self.resolution-x, oy+(yy+.5)*self.resolution-y) <= radius+self.resolution/math.sqrt(2)
+        overlaps = np.hypot(ox+(xx+.5)*self.resolution-x, oy+(yy+.5)*self.resolution-y) <= inflated
         return bool(np.all(self.grid[yy[overlaps], xx[overlaps]] == 0))
 
     def clear_poses(self, radius):
@@ -197,15 +199,16 @@ class MapAgreement:
                 results.append((agreement*.7 + float(quality[idx])*.3, agreement, pose))
         return results
 
-    def global_results(self, ranges, angles, radius):
+    def global_results(self, ranges, angles, radius, clear=None):
         """Every refined sensor-pose candidate, best first, and a reason when there are none.
 
         Coarse-to-fine: 4 cm x 5 deg seeds, the 48 best distinct ones refined by
-        GLOBAL_OFFSETS. Inputs are sensor-frame observations."""
+        GLOBAL_OFFSETS. Inputs are sensor-frame observations. `clear` is an
+        optional precomputed `clear_poses(radius)` mask."""
         ranges, angles = valid_beams(ranges, angles)
         if len(ranges) < 30:
             return [], 'insufficient-scan'
-        clear = self.clear_poses(radius)
+        clear = self.clear_poses(radius) if clear is None else clear
         stride = max(1, round(.04/self.resolution))
         yy, xx = np.nonzero(clear[::stride, ::stride])
         if not len(xx):

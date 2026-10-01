@@ -38,6 +38,17 @@ def test_clear_poses_keeps_the_footprint_off_walls_and_unknown():
     assert not clear[10, 12]      # unknown is never free
 
 
+def test_the_half_cell_diagonal_inflation_alone_blocks_a_footprint_one_cell_short_of_the_wall():
+    """r=9 cm, cell 35 is 10 cm from the wall: blocked only through +res/sqrt(2) (10.4 cm)."""
+    grid = np.zeros((50, 50), dtype=np.int8)
+    grid[:, 40] = 100
+    m = MapAgreement(grid, .02, (0., 0.))
+    clear = m.clear_poses(.09)
+    assert not clear[25, 35] and clear[25, 34]
+    assert not m.footprint_clear(35.5 * .02, 25.5 * .02, .09)
+    assert m.footprint_clear(34.5 * .02, 25.5 * .02, .09)
+
+
 def test_refine_keeps_three_clear_poses_per_seed_around_the_truth():
     d, m = recorded()
     ranges, angles = valid_beams(d["ranges"], d["angles"])
