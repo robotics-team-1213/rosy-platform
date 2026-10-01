@@ -1878,3 +1878,11 @@
 - gate 변화: 없음. DEVICE HOLD.
 - 결정: D-406
 - 교훈: "확정 실패"는 종료 코드나 JSON 유무가 아니라 알려진 오류 코드 목록으로 정한다. 모르는 실패는 일시 실패로 보고 횟수로 사람을 부른다.
+
+## 2026-10-02 · 5f3226bf · fix(native): D-406 T2 검증 리뷰 반영 — 자기 되돌림과 운영자 되돌림 구분, silent_since, rollback_failed
+
+- 변경: HIGH 일시 활성화 실패 뒤 실패 기록 없이 되돌린 id를 `state.self_rolled_back`에 남겨, N9가 previous > current를 운영자 되돌림으로 오인하지 않게 했다. 커밋하면 지운다. M1 `stuck`은 처음 조용함을 본 재개(`applying.silent_since`)부터 잰다. held·다른 이유·적격 재개가 지운다. M2 precheck의 바쁨 종료(3)만 `NATIVE_PRECHECK_REFUSED`. 다른 종료·실행 불가·시간 초과는 `NATIVE_PRECHECK_FAILED`로 적용 backoff에 들어간다(406b8631). L1 `NATIVE_RUNTIME_MISMATCH`를 확정 실패에 더했다. L2 N12 한도에 닿으면 결과를 `rollback_failed`로 남기고, 그 릴리스가 current인 동안 매 실행 `failed`와 처치 명령을 보인다. 계획서 status.json 목록에 `stuck`·`rollback_failed`를 더했다. L3 escalation held와 stuck 이유에 처치 명령(release-hold, `rosy-release-push.ps1 -Rollback`)을 적었다. L6 precheck 시간 초과 시험. 미결 질문: `rosy-release-unpack.sh`가 `mv -T` 뒤 대상 디렉터리를 touch해, 막 푼 릴리스가 정리의 1시간 나이 보호를 받는다(09516b54). L4(건강 실패는 확정)는 그대로 둔다.
+- 증거: 관련 묶음 641 passed, 10 skipped, `python test/known_failures.py` 새 실패 0. 리뷰어의 N9 probe가 이제 committed, 실패 id 없음. 변이 17종 모두 빨강(처음 살아남은 2종 — held·적격 재개에서 silent_since를 지우지 않음 — 은 조용함→held→다시 조용함, 조용함→면제 적격 재개→다시 조용함 시험을 더해 빨강). 로봇에는 손대지 않았다.
+- gate 변화: 없음. DEVICE HOLD.
+- 결정: D-406
+- 교훈: 두 규칙이 같은 흔적(previous > current)을 보면 누가 그 흔적을 남겼는지 기록해 둔다. 경과 시간은 "그 상태를 처음 본 때"부터 잰다.

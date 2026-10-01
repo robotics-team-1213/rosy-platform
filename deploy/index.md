@@ -67,8 +67,8 @@
 
 ## 최근 기록
 
+- 2026-10-02 · 5f3226bf · fix(native): D-406 T2 검증 리뷰 반영 — 자기 되돌림과 운영자 되돌림 구분, silent_since, rollback_failed
 - 2026-10-02 · 088a6a9a · fix(native): D-406 T2 재리뷰 반영 — CORE 상태 fail-closed, 확정 코드 목록, 적용 backoff, 활성화기 precheck
 - 2026-10-02 · b909ed5b · fix(native): 재개 시 rosy-core가 멈춰 있으면 유휴 판정 면제 (D-406 T2)
 - 2026-10-02 · 9a1ae36f · fix(native): D-406 T2 독립 리뷰 반영 — 안전한 재개, 일시·확정 실패 구분, 스테이징 한도
 - 2026-10-02 · 05d58d0a · fix(native): 업데이터 건강 판정을 적용 전 기준선과 비교 (D-406 T2)
-- 2026-10-02 · a44f9e00 · feat(native): 로봇 쪽 자동 업데이터 `rosy_auto_update.py`·claim·유닛 (D-406 T2)
