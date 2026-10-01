@@ -35,24 +35,40 @@ Verified twice on 2026-09-26: releases 013 and 014 on a Pinky Pro running image 
    gh workflow run build-native-payload.yml --ref main -f release_id=<id>
    gh run watch <run-id> --exit-status --interval 30
    ```
-3. **Download the artifact, then sign from the tarball, not from the artifact folder.**
-   The artifact folder drops dotfiles such as `install/.colcon_install_layout`, so signing
-   it fails with `CHECKSUM_FILE_MISSING`. Extract `<id>.unsigned.tar.gz` into a folder
-   named after the release id. The tarball has no top-level directory.
+3. **Download, check, sign and pack with one command.** Run with `PYTHONUTF8=1` on Windows.
+   ```powershell
+   python tools/release/prepare_payload_release.py --run <run-id> --robot <robot-ip>
+   ```
+   - It finds the run's `rosy-native-payload-unsigned-<id>-<sha>` artifact and downloads it
+     with `download_artifact.py`. The work folder is `--out-dir`, default
+     `X:\DevTemp\rosy-release-<id>`. Already downloaded? Pass `--artifact-dir <dir>`.
+   - It checks that every name in `required-ros-packages.txt` is in `rosy-packages.txt`.
+     Both list ROSY workspace packages, not debs.
+   - It runs a read-only `dpkg-query -W 'ros-jazzy-*'` over SSH on each `--robot`
+     (repeatable) and prints one verdict per robot. Every package installed on both sides
+     must have the same version (C++ ABI). Packages that exist only on the runner (gz, rqt,
+     rviz, fastrtps) are fine. A robot line with an empty version means not installed.
+     Comparing zero packages fails. `--skip-abi` skips this check.
+   - It extracts `<id>.unsigned.tar.gz` into `<out>/x/<id>` through a temp folder and a
+     rename. An existing `<out>/x/<id>` is refused: remove it or use a new `--out-dir`.
+     It never signs the artifact folder, because that folder drops dotfiles.
+   - It signs with `%LOCALAPPDATA%\Rosy\signing\<key>.private.pem` (`--key-name`, default
+     `rosy-release-2026-01`), packs `<out>/<id>.tar.gz` with `--modes-from`, and prints
+     the two push lines below. It never pushes.
+   - Each phase prints its wall time. Release 021 (a 98 MB artifact) took 99 s to download
+     and 28 s for everything else.
+4. **Manual fallback** (the same steps by hand). The artifact folder drops dotfiles such
+   as `install/.colcon_install_layout`, so signing it fails with `CHECKSUM_FILE_MISSING`.
+   Sign from the tarball. The tarball has no top-level directory. Compare `ros-packages.txt`
+   (`name=version`) with the robot's `dpkg-query -W 'ros-jazzy-*'` (`name<TAB>version`)
+   as described in step 3.
    ```bash
    gh run download <run-id> -n rosy-native-payload-unsigned-<id>-<sha> -D $P
    mkdir -p $P/x/<id> && python -c "import tarfile,sys; tarfile.open(sys.argv[1]).extractall(sys.argv[2], filter='tar')" $P/<id>.unsigned.tar.gz $P/x/<id>
-   ```
-4. **Compare ROS package versions with the robot** before signing. Every
-   `ros-jazzy-*` package present in both `ros-packages.txt` and the robot's `dpkg-query`
-   output must have the same version (C++ ABI). Packages that exist only on the runner (gz,
-   rqt, rviz, fastrtps) are fine if `required-ros-packages.txt` does not name them.
-   Also check that every required package is installed on the robot.
-5. **Sign, pack, push, activate.** Run with `PYTHONUTF8=1` on Windows.
-   ```bash
    python deploy/robot/pinky_pro/release/sign_image_release.py $P/x/<id> --private-key "$LOCALAPPDATA/Rosy/signing/<key>.private.pem" --public-key deploy/robot/pinky_pro/release/public-keys/<key>.pem
    python deploy/robot/pinky_pro/release/build_payload_release.py pack --release-dir $P/x/<id> --out $P/<id>.tar.gz --modes-from $P/<id>.unsigned.tar.gz --public-key deploy/robot/pinky_pro/release/public-keys/<key>.pem
    ```
+5. **Push and activate.**
    ```powershell
    deploy\\robot\\pinky_pro\rosy-release-push.ps1 -Robot <robot-ip> -Tarball <P>\<id>.tar.gz -PrintCommands   # dry run
    deploy\\robot\\pinky_pro\rosy-release-push.ps1 -Robot <robot-ip> -Tarball <P>\<id>.tar.gz
