@@ -257,7 +257,8 @@ class LaneKeeper:
         if not isinstance(bgr, np.ndarray) or bgr.ndim not in (2, 3) or bgr.size == 0:
             raise ValueError("camera frame must be a non-empty grayscale or BGR array")
         self.last = {"strategy": "none", "boundaries": [], "transverse": [], "candidates": [], "blobs": 0,
-                     "lookahead_m": self._lookahead, "target_m": None, "target_px": None}
+                     "lookahead_m": self._lookahead, "target_m": None, "target_px": None,
+                     "lane_width_m": 2.0 * lane_half_width_m}
         if ground is None:
             self.last["reason"] = "no_ground"
             self._forget()
@@ -369,6 +370,8 @@ class LaneKeeper:
         self._tracked = [(r["y_at_side_x_m"], math.radians(r["heading_deg"]), r["side"])
                          for r in left + right + conflicts]
         for record in left + right:
+            if target is None or strategy.startswith('corner'):
+                record['selected'] = False
             record.pop("direction")
             record.pop("centre")
             self.last["boundaries"].append(record)
@@ -410,6 +413,8 @@ class LaneKeeper:
             self._flip_hold = False
         if self._flip_hold:
             self.last.update(strategy="none", reason="flipping")
+            for record in self.last['boundaries'] + self.last['candidates']:
+                record['selected'] = False
             self._previous_target = None
             return None
         self.last.update(strategy=strategy, target_m=[round(tx, 3), round(ty, 3)],
@@ -498,6 +503,8 @@ class LaneKeeper:
 
     def _choose(self, left, right, half):
         """Target (x, y) and strategy from the side-classified boundaries."""
+        for record in left + right:
+            record['selected'] = False
         lane = 2.0 * half
         pairs = []
         for l in left:
@@ -509,6 +516,7 @@ class LaneKeeper:
             # Pursue the centre line: midway at SIDE_X_M, along the mean heading
             # (on a NOMINAL floor the two lines rarely come out exactly parallel).
             _, l, r = min(pairs, key=lambda p: p[0])
+            l['selected'] = r['selected'] = True
             middle = np.array([SIDE_X_M, (l["y_at_side_x_m"] + r["y_at_side_x_m"]) / 2.0])
             heading = l["direction"] + r["direction"]
             point, _ = _pursuit_point(middle, heading / np.linalg.norm(heading), self._lookahead)
@@ -520,6 +528,7 @@ class LaneKeeper:
         # The boundary continuous with last frame's first, then the nearest.
         record = min(candidates, key=lambda r: (not r["tracked"], round(abs(r["y_at_side_x_m"]), 2),
                                                 -r["length_m"]))
+        record['selected'] = True
         return np.asarray(record["pursuit_m"], float), f"{record['side']}_only"
 
 
