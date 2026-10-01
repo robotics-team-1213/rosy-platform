@@ -390,3 +390,4 @@
 | D-391 | 앱은 사이트 연결을 같은 모양(이름·CA·자격, IP 없음)으로 저장하고, 기기 연결 서버는 Fleet "기기 연결"이 맡는다 | Proposed (2026-10-01; 사이트 연결 기록 모양·사이트 호스트 설정 원천·기기 연결 구현 순서; 구현·담당은 결정 회차) |
 | D-392 | 모델 도구 호출은 provider 중립 메시지 계약과 Fleet 소유 allowlist를 따른다 | Accepted (2026-10-01, 내부 호출·결과 경계; 도구는 요청이지 device Action이 아니며 actuation·stop/E-stop 권한과 provider 활성화는 미결정) |
 | D-393 | Pinky 트랙 Nav2 위치추정은 AMCL `update_min_d` 0.02, 목표 허용오차 0.05 m / 0.10 rad, 주차 자세 출발·global localization 금지 운용 규칙을 제안한다 | Proposed (2026-10-01; sim 1대 n=1 증거, 설정 미변경; 반복 sim A/B와 승인된 실물 주행 전 적용 안 함) |
+| D-396 | Pinky Pro 기하 기본값은 URDF NOMINAL(생성된 `geometry.yaml`, 드리프트 테스트)이고, 로봇마다 승인된 캘리브레이션 레코드가 다듬으며 운영자 덮어쓰기가 둘 다 이긴다 | Proposed (2026-10-01; 저장소 기본값·계약만 변경, 바퀴 0.027→0.028·sensing LiDAR 190→180°·카메라 높이 0.067→0.0634는 기기 배포 전 사용자 승인 필요) |
