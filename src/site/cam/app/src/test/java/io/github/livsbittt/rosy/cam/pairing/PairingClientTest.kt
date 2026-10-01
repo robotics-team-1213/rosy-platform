@@ -33,8 +33,11 @@ class PairingClientTest {
         val siteName: String = "Rosy Lab",
         val expiresAt: String = "2026-10-01T00:05:00Z",
     ) : PairingTransport {
-        /** Set to make confirm fail on the network after the server activated the credential (lost reply). */
-        var confirmIo = false
+        /** The first [lostReplies] confirm calls activate the credential but lose the reply (I/O failure). */
+        var lostReplies = 0
+
+        /** Thrown by every confirm call after the first (the single resend). */
+        var retryRefusal: PairingRefused? = null
         var pollThrows: RuntimeException? = null
         var confirmCalls = 0
         val requestId = "pr-test_0123456789"
@@ -100,12 +103,15 @@ class PairingClientTest {
         override fun confirm(site: PairableSite, requestId: String, pollSecret: String, body: ByteArray): ByteArray {
             confirmCalls++
             refuse()
+            if (confirmCalls > 1) retryRefusal?.let { throw it }
             val id = JSONObject(String(body, UTF_8)).getString("credential_id")
-            if (state != "delivered") throw PairingRefused(409, "NOT_DELIVERED")
+            // rosy-00 d5d4a2e4: a repeat confirm of the same credential answers the same 200.
+            val repeat = state == "confirmed" && id == credentialId
+            if (!repeat && state != "delivered") throw PairingRefused(409, "NOT_DELIVERED")
             if (id != credentialId) throw PairingRefused(409, "CREDENTIAL_MISMATCH")
             confirmed = true
             state = "confirmed"
-            if (confirmIo) throw java.io.IOException("connection reset after the server activated the credential")
+            if (confirmCalls <= lostReplies) throw java.io.IOException("connection reset after the server activated the credential")
             return JSONObject().put("state", "confirmed").put("credential_id", id).toString().toByteArray(UTF_8)
         }
     }
@@ -128,8 +134,15 @@ class PairingClientTest {
     private var clock = Instant.parse("2026-10-01T00:00:00Z")
     private val store = Store()
 
+    /** Waits the client asked for before resending confirm; the clock moves by [pauseAdvanceS] each time. */
+    private val pauses = mutableListOf<Long>()
+    private var pauseAdvanceS = 1L
+
     private fun client(fake: FakeSite) =
-        PairingClient(fake, "Galaxy S21 ceiling", "0.4.0", store, now = { clock })
+        PairingClient(fake, "Galaxy S21 ceiling", "0.4.0", store, now = { clock }, pause = { ms ->
+            pauses += ms
+            clock = clock.plusSeconds(pauseAdvanceS)
+        })
 
     /** Start, operator types the phone's code, poll to the fingerprint step. */
     private fun toFingerprint(fake: FakeSite, pairing: PairingClient): PairingState.ConfirmFingerprint {
@@ -247,21 +260,59 @@ class PairingClientTest {
         assertEquals(PairingState.Rejected("confirm_credential_mismatch", fake.credentialId), pairing.answerFingerprint(true))
         assertEquals(listOf("save", "discard"), store.events)
         assertNull(store.saved)
+        assertEquals("a refused confirm is never resent", 1, fake.confirmCalls)
+        assertTrue(pauses.isEmpty())
     }
 
     @Test
-    fun aConfirmWithoutAnswerDiscardsTheLinkAndNamesTheCredential() {
-        // The server activated it, the reply was lost: the phone keeps nothing and asks for a revoke (review M6).
-        val fake = FakeSite()
+    fun anUnansweredConfirmIsResentOnceAndAMatching200KeepsTheLink() {
+        val fake = FakeSite().apply { lostReplies = 1 }
         val pairing = client(fake)
         toFingerprint(fake, pairing)
-        fake.confirmIo = true
+        val paired = pairing.answerFingerprint(true) as PairingState.Paired
+        assertEquals(paired.link, store.saved)
+        assertEquals("saved once, never discarded", listOf("save"), store.events)
+        assertEquals(2, fake.confirmCalls)
+        assertEquals(listOf(PairingClient.CONFIRM_RETRY_MS), pauses)
+    }
+
+    @Test
+    fun aConfirmWithoutAnswerTwiceDiscardsTheLinkAndNamesTheCredential() {
+        // The server activated it, both replies were lost: the phone keeps nothing and asks for a revoke (review M6).
+        val fake = FakeSite().apply { lostReplies = 2 }
+        val pairing = client(fake)
+        toFingerprint(fake, pairing)
         val final = pairing.answerFingerprint(true)
         assertEquals(PairingState.Rejected(PairingClient.CONFIRM_UNANSWERED, fake.credentialId), final)
         assertEquals(listOf("save", "discard"), store.events)
         assertNull(store.saved)
         assertTrue("the server side is active", fake.confirmed)
         assertEquals(final, pairing.state)
+        assertEquals("exactly one resend", 2, fake.confirmCalls)
+    }
+
+    @Test
+    fun anUnansweredConfirmWhoseResendIsRefusedDiscardsTheLink() {
+        val fake = FakeSite().apply {
+            lostReplies = 1
+            retryRefusal = PairingRefused(410, "PAIRING_REQUEST_CLOSED") // revoked meanwhile
+        }
+        val pairing = client(fake)
+        toFingerprint(fake, pairing)
+        assertEquals(PairingState.Rejected(PairingClient.CONFIRM_UNANSWERED, fake.credentialId), pairing.answerFingerprint(true))
+        assertEquals(listOf("save", "discard"), store.events)
+        assertEquals(2, fake.confirmCalls)
+    }
+
+    @Test
+    fun noResendOnceTheConfirmWindowHasClosed() {
+        val fake = FakeSite().apply { lostReplies = 1 }
+        val pairing = client(fake)
+        toFingerprint(fake, pairing)
+        pauseAdvanceS = PairingClient.CONFIRM_WITHIN_S
+        assertEquals(PairingState.Rejected(PairingClient.CONFIRM_UNANSWERED, fake.credentialId), pairing.answerFingerprint(true))
+        assertEquals(1, fake.confirmCalls)
+        assertEquals(listOf("save", "discard"), store.events)
     }
 
     @Test

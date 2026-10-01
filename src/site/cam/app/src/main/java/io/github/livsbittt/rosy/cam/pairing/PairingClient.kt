@@ -113,6 +113,8 @@ class PairingClient(
     private val store: PairingLinkStore,
     private val newSecret: () -> String = Pairing::newSecret,
     private val now: () -> Instant = Instant::now,
+    /** Blocking wait before the single confirm resend; runs on the step's IO thread. Tests pass a no-op. */
+    private val pause: (Long) -> Unit = { Thread.sleep(it) },
 ) {
     /** Written by the step that runs (one at a time, [PairingSession]); read from the UI thread. */
     @Volatile
@@ -212,8 +214,11 @@ class PairingClient(
         val outcome = try {
             refusing { transport.confirm(shown.site, id, pollSecret!!, confirm.toJson()) }
         } catch (e: IOException) {
-            // No answer: the server may or may not have activated it. Keep nothing; the screen names the
-            // credential so the operator can revoke it if the console lists it as active.
+            // No answer: the server may or may not have activated it. S2 confirm is idempotent (rosy-00 d5d4a2e4),
+            // so ask exactly once more on the same pinned session; a matching 200 keeps the link.
+            if (confirmAgain(shown.site, id, confirm)) return finish(PairingState.Paired(link))
+            // Still unsettled: keep nothing; the screen names the credential so the operator can revoke it if the
+            // console lists it as active.
             store.discard(link)
             return finish(PairingState.Rejected(CONFIRM_UNANSWERED, credential))
         } catch (e: RuntimeException) {
@@ -236,6 +241,24 @@ class PairingClient(
             return finish(failed)
         }
         return finish(PairingState.Paired(link))
+    }
+
+    /**
+     * The one resend after an unanswered confirm: after [CONFIRM_RETRY_MS], only while the 120 s window is open,
+     * through the same transport (same pinned first-contact leaf). True only for a 200 that confirms exactly this
+     * credential; a refusal (409/400/410), another I/O failure or a wrong reply is false. Never retried again.
+     */
+    private fun confirmAgain(site: PairableSite, requestId: String, confirm: PairingConfirm): Boolean {
+        pause(CONFIRM_RETRY_MS)
+        if (!now().isBefore(confirmBy)) return false
+        return try {
+            when (val again = refusing { transport.confirm(site, requestId, pollSecret!!, confirm.toJson()) }) {
+                is Outcome.Done -> confirm.replyReason(again.value) == null
+                else -> false
+            }
+        } catch (e: IOException) {
+            false
+        }
     }
 
     /** Drops the request locally (the server expires it on its own); back to Discover. */
@@ -337,6 +360,9 @@ class PairingClient(
     companion object {
         const val CONFIRM_WITHIN_S = 120L
         const val SITE_NAME_LIMIT = 64
+
+        /** Wait before the one confirm resend after no answer. */
+        const val CONFIRM_RETRY_MS = 1_000L
 
         /** S2 keeps a request 300 s; the phone never waits longer than this from its own start, whatever expires_at says. */
         const val MAX_PENDING_S = 330L

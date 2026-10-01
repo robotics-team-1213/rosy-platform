@@ -58,6 +58,9 @@ class PairingHttpTest {
         var code: String? = null
         var confirmed = false
         val forced = mutableMapOf<String, MockResponse>()
+
+        /** The next n confirm calls get their connection dropped with no reply. */
+        var confirmDisconnects = 0
         val routes = CopyOnWriteArrayList<String>()
         val recorded = CopyOnWriteArrayList<RecordedRequest>()
 
@@ -80,6 +83,10 @@ class PairingHttpTest {
             }
             routes += route
             forced.remove(route)?.let { return it }
+            if (route == "confirm" && confirmDisconnects > 0) {
+                confirmDisconnects--
+                return MockResponse().setSocketPolicy(SocketPolicy.DISCONNECT_AFTER_REQUEST)
+            }
             val body = request.body.readUtf8()
             return when (route) {
                 "request" -> {
@@ -147,7 +154,32 @@ class PairingHttpTest {
 
     private val store = Store()
 
-    private fun client(site: PairableSite) = PairingClient(HttpPairingTransport(site), "Galaxy S21 ceiling", "0.4.0", store)
+    private fun client(site: PairableSite) =
+        PairingClient(HttpPairingTransport(site), "Galaxy S21 ceiling", "0.4.0", store, pause = {})
+
+    @Test
+    fun aDroppedConfirmIsResentOnceOverTheSamePinnedSession() {
+        for ((drops, paired) in listOf(1 to true, 2 to false)) {
+            val fleet = Fleet().apply { confirmDisconnects = drops }
+            val site = serve(fleet)
+            store.saved = null
+            store.events.clear()
+            val pairing = client(site)
+            fleet.approve((pairing.start(site) as PairingState.Requested).code)
+            pairing.poll()
+            val final = pairing.answerFingerprint(true)
+            assertEquals("drops=$drops", 2, fleet.routes.count { it == "confirm" })
+            if (paired) {
+                assertTrue("drops=$drops: $final", final is PairingState.Paired)
+                assertEquals(listOf("save"), store.events)
+            } else {
+                assertEquals(PairingState.Rejected(PairingClient.CONFIRM_UNANSWERED, CRED), final)
+                assertEquals(R.string.pairing_failed_unanswered, PairingText.failure(final))
+                assertEquals(CRED, PairingText.failureArg(final))
+                assertEquals(listOf("save", "discard"), store.events)
+            }
+        }
+    }
 
     @Test
     fun wholeFlowOverTls() {
@@ -220,7 +252,6 @@ class PairingHttpTest {
             Row("confirm", refusal(409, "CREDENTIAL_MISMATCH"), PairingState.Rejected("confirm_credential_mismatch", CRED), R.string.pairing_failed_revoke),
             Row("confirm", refusal(410, "PAIRING_REQUEST_CLOSED"), PairingState.Expired("confirm_gone", CRED), R.string.pairing_failed_revoke),
             Row("confirm", refusal(400, "PAIRING_CONFIRM_INVALID"), PairingState.Rejected("confirm_pairing_confirm_invalid", CRED), R.string.pairing_failed_revoke),
-            Row("confirm", MockResponse().setSocketPolicy(SocketPolicy.DISCONNECT_AFTER_REQUEST), PairingState.Rejected(PairingClient.CONFIRM_UNANSWERED, CRED), R.string.pairing_failed_unanswered),
         )
         for (row in rows) {
             val fleet = Fleet()
