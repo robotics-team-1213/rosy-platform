@@ -826,8 +826,11 @@ def test_apply_success_runs_the_transaction_in_order(device, host, hub, keys):
     assert result["phase"] == "committed"
     assert result["current_release"] == NEXT
     assert result["last_result"]["outcome"] == "committed"
-    order = [k for k in kinds(host) if k not in {"is-active", "failed"}]
-    assert order[:4] == ["unpack", "verify", "activate", "mainpid"]
+    order = [k for k in kinds(host) if k not in {"is-active", "failed", "mainpid"}]
+    assert order[:3] == ["unpack", "verify", "activate"]
+    # The pre-apply baseline (active units, failed units) is taken before activation.
+    before = kinds(host)[:kinds(host).index("activate")]
+    assert "is-active" in before and "failed" in before
     assert order.index("sync") < order.index("restart") < order.index("ready")
     sync = next(argv for argv in host.calls if kind_of(argv) == "sync")
     assert sync[-1] == str(device / "opt/rosy/releases" / NEXT / "deploy/robot/native/sync-image-layer.py")
@@ -889,6 +892,74 @@ def test_health_failure_rolls_back_and_marks_the_id_failed(device, host, hub, ke
     again = up.run()
     assert again["phase"] == "idle"
     assert "activate" not in kinds(host)
+
+
+def _down(unit: str, *, after_only: bool = False):
+    def override(h, argv):
+        if unit in argv and (not after_only or h.links["current"] == NEXT):
+            return subprocess.CompletedProcess([], 3, "", "inactive")
+        return None
+    return override
+
+
+def test_camera_down_before_the_apply_does_not_block_the_commit(device, host, hub, keys):
+    hub.publish(keys, NEXT)
+    host.overrides["is-active"] = _down("rosy-camera.service")
+
+    result = updater(host, hub).run()
+
+    assert result["phase"] == "committed", result
+    assert "rosy-camera.service" in result["last_result"]["detail"]
+    assert NEXT not in state(device).get("failed", {})
+
+
+def test_camera_up_before_and_down_after_rolls_back(device, host, hub, keys):
+    hub.publish(keys, NEXT)
+    host.overrides["is-active"] = _down("rosy-camera.service", after_only=True)
+
+    result = updater(host, hub).run()
+
+    assert result["phase"] == "rolled_back"
+    assert "rosy-camera.service" in result["last_result"]["detail"]
+
+
+def test_core_is_always_required_even_if_it_was_down_before(device, host, hub, keys):
+    hub.publish(keys, NEXT)
+    host.overrides["is-active"] = _down("rosy-core.service")
+
+    assert updater(host, hub).run()["phase"] == "rolled_back"
+
+
+def test_io_cwd_is_not_checked_when_io_was_down_before(device, host, hub, keys):
+    hub.publish(keys, NEXT)
+    host.overrides["is-active"] = _down("rosy-io.service")
+    host.overrides["cwd"] = lambda pid, release: str(
+        device / "opt/rosy/releases" / (CURRENT if pid == 102 else str(release)))
+
+    assert updater(host, hub).run()["phase"] == "committed"
+
+
+def test_a_unit_failed_before_the_apply_does_not_block_the_commit(device, host, hub, keys):
+    hub.publish(keys, NEXT)
+    host.overrides["failed"] = lambda h, argv: subprocess.CompletedProcess(
+        [], 0, "rosy-hw-probe.service loaded failed failed probe\n", "")
+
+    result = updater(host, hub).run()
+
+    assert result["phase"] == "committed", result
+    assert "rosy-hw-probe.service" in result["last_result"]["detail"]
+
+
+def test_a_unit_that_fails_during_the_apply_rolls_back_beside_an_old_failure(device, host, hub, keys):
+    hub.publish(keys, NEXT)
+    host.overrides["failed"] = lambda h, argv: subprocess.CompletedProcess(
+        [], 0, "rosy-hw-probe.service loaded failed failed probe\n"
+        + ("rosy-io.service loaded failed failed io\n" if h.links["current"] == NEXT else ""), "")
+
+    result = updater(host, hub).run()
+
+    assert result["phase"] == "rolled_back"
+    assert "rosy-io.service" in result["last_result"]["detail"]
 
 
 def test_activation_busy_retries_later_and_is_not_failed(device, host, hub, keys):

@@ -704,10 +704,38 @@ class Updater:
         if ready.returncode != 0:
             raise UpdateError(f"CORE_NOT_READY: {_tail(ready.stderr)}")
 
-    def _unit_problems(self, release_id: str) -> list[str]:
+    def _failed_units(self) -> list[str] | None:
+        """Failed rosy-* units (never this one), or None when systemctl cannot say."""
+        listed = self._systemctl("list-units", "--state=failed", "--plain", "--no-legend", "--all", "rosy-*")
+        if listed.returncode != 0:
+            return None
+        failed = [line.split()[0] for line in listed.stdout.splitlines() if line.split()]
+        return sorted(unit for unit in failed if unit != SELF_UNIT)
+
+    def _baseline(self) -> dict:
+        """Which health units ran (and from where) and which rosy-* units had failed, before activation."""
+        active = {}
+        for unit in HEALTH_UNITS:
+            if self._systemctl("is-active", "--quiet", unit).returncode == 0:
+                pid = self._main_pid(unit)
+                active[unit] = self.host.process_cwd(pid) if pid else None
+        return {"active": active, "failed": self._failed_units() or []}
+
+    @staticmethod
+    def _baseline_notes(baseline: dict) -> list[str]:
+        notes = [f"{unit} was not active before the apply; not checked"
+                 for unit in HEALTH_UNITS[1:] if unit not in baseline.get("active", {})]
+        if baseline.get("failed"):
+            notes.append(f"already failed before the apply: {' '.join(baseline['failed'])}")
+        return notes
+
+    def _unit_problems(self, release_id: str, baseline: dict) -> list[str]:
+        """rosy-core always; io/camera only if they ran before; only newly failed units count."""
         problems = []
         want = self.release_path(release_id)
-        for unit in HEALTH_UNITS:
+        required = [unit for unit in HEALTH_UNITS
+                    if unit == "rosy-core.service" or unit in baseline.get("active", {})]
+        for unit in required:
             if self._systemctl("is-active", "--quiet", unit).returncode != 0:
                 problems.append(f"{unit} is not active")
                 continue
@@ -715,20 +743,20 @@ class Updater:
             cwd = self.host.process_cwd(pid) if pid else None
             if cwd != want:
                 problems.append(f"{unit} runs from {cwd}, not {want}")
-        listed = self._systemctl("list-units", "--state=failed", "--plain", "--no-legend", "--all", "rosy-*")
-        failed = [line.split()[0] for line in listed.stdout.splitlines() if line.split()]
-        failed = [unit for unit in failed if unit != SELF_UNIT]
-        if listed.returncode != 0:
+        failed = self._failed_units()
+        if failed is None:
             problems.append("cannot list failed units")
-        if failed:
-            problems.append(f"failed units: {' '.join(failed)}")
+        else:
+            new = [unit for unit in failed if unit not in baseline.get("failed", [])]
+            if new:
+                problems.append(f"failed units: {' '.join(new)}")
         return problems
 
-    def _health(self, release_id: str) -> None:
+    def _health(self, release_id: str, baseline: dict) -> None:
         self._ready()
         deadline = self.host.now() + _dt.timedelta(seconds=HEALTH_HOLD_S)
         while True:
-            problems = self._unit_problems(release_id)
+            problems = self._unit_problems(release_id, baseline)
             if problems:
                 raise UpdateError(f"HEALTH: {'; '.join(problems)}")
             if self.host.now() >= deadline:
@@ -741,6 +769,9 @@ class Updater:
 
     def _settle(self, state: dict, release_id: str) -> dict:
         """Everything after activation; commit, or roll back on any failure."""
+        # A journal without a baseline (none is written that way) checks CORE only.
+        baseline = state["applying"].get("baseline") or {"active": {}, "failed": []}
+        notes = self._baseline_notes(baseline)
         try:
             self._journal(state, "core-release-check")
             self._core_release_check()
@@ -749,12 +780,12 @@ class Updater:
             self._journal(state, "restart")
             self._restart(result)
             self._journal(state, "health")
-            self._health(release_id)
+            self._health(release_id, baseline)
         except UpdateError as exc:
-            return self._roll_back(state, release_id, str(exc))
+            return self._roll_back(state, release_id, "; ".join([str(exc), *notes]))
         state["applying"] = None
         state["staged"] = None
-        self._result(state, release_id, "committed", "healthy for 60 s")
+        self._result(state, release_id, "committed", "; ".join(["healthy for 60 s", *notes]))
         return self._finish(state, "committed", f"{release_id} is healthy", release_id)
 
     def _roll_back(self, state: dict, release_id: str, why: str) -> dict:
@@ -796,7 +827,8 @@ class Updater:
             return self._finish(state, "ineligible", f"claim held by {holder}", release_id)
         try:
             state["applying"] = {"release_id": release_id, "previous": current, "step": "activate",
-                                 "started_at": _z(self.host.now()), "boot_id": self.host.boot_id()}
+                                 "started_at": _z(self.host.now()), "boot_id": self.host.boot_id(),
+                                 "baseline": self._baseline()}
             self._save_state(state)
             self._finish(state, "applying", f"activating {release_id} (from {current})", release_id)
             activated = self.host.run(["bash", self._native("activate-release.sh"), release_id],
