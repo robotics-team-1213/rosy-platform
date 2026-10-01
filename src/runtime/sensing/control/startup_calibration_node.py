@@ -28,8 +28,7 @@ from tf2_ros import TransformListener
 from .calibration_sequence import CalibrationSequence
 from .calibration_camera import CalibrationCamera
 from .control.calibration import StationaryBaseline, wrap
-from .sensing.body import URDF_RADIUS
-from .sensing.lidar import NOSE_YAW, is_robot_scan, sector_range
+from .sensing import NOSE_YAW, URDF_RADIUS, is_robot_scan, sector_range
 from .sensing.lidar_mount import nose_from_quaternion
 from .sensing.range_filter import CalibrationRangeFilter
 from .sensing.wall_tracker import WallTracker
