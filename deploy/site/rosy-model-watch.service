@@ -5,6 +5,11 @@ After=network-online.target
 
 [Service]
 Type=oneshot
+# A non-zero exit is a failure and must stay visible: no SuccessExitStatus, no Restart.
+# watch.py exits 77 (host name did not resolve), 78 (refused / timed out) or 79 (host
+# key unknown or changed) for a robot it cannot reach: `systemctl status` shows failed,
+# the journal has one line per robot, and the timer (OnUnitInactiveSec, a failed
+# oneshot counts as inactive) fires again.
 User=rosy-model-watch
 Group=rosy-model-watch
 StateDirectory=rosy-model-watch

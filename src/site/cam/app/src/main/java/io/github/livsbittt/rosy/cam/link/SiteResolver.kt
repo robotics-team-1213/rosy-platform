@@ -49,9 +49,6 @@ sealed interface SiteRoute {
         val addresses: List<InetAddress>,
         val serviceNames: List<String> = emptyList(),
     ) : SiteRoute
-
-    /** `tls_host` is not an mDNS name; the system resolver handles it, then [manual] if it cannot (review m4). */
-    data class SystemDns(val manual: InetAddress? = null) : SiteRoute
 }
 
 /** mDNS did not show the site's `tls_host` on this network within the browse timeout (D-391 1). */
@@ -128,9 +125,10 @@ class SiteResolver(
         val manual = manualAddress()
         val tlsHost = link.tlsHost ?: return manual?.let { SiteRoute.Manual(it, afterBrowse = false) }
             ?: SiteRoute.NotDiscovered(link.manualHost.orEmpty())
-        if (!isMdnsName(tlsHost)) return SiteRoute.SystemDns(manual)
-        // Unpinned: nothing would authenticate an advertised address (review m3).
-        if (link.caPin == null) {
+        // Unpinned: nothing would authenticate an advertised address (review m3). A tls_host that is not a
+        // .local name is rejected by SiteLink.validate (D-391 1); should one reach here, it is never handed to
+        // system DNS either.
+        if (link.caPin == null || !SiteLink.isTlsHost(tlsHost)) {
             return manual?.let { SiteRoute.Manual(it, afterBrowse = false) } ?: SiteRoute.NotDiscovered(tlsHost)
         }
         cached.get()?.let { if (nowMs() - it.atMs < cacheMs) return it.route }
@@ -162,8 +160,6 @@ class SiteResolver(
         const val BROWSE_TIMEOUT_MS = 5_000L
         const val CACHE_MS = 30_000L
         private const val TAG = "SiteResolver"
-
-        fun isMdnsName(host: String): Boolean = host.trimEnd('.').lowercase().endsWith(".local")
 
         /**
          * True when [leaf], the peer of a live handshake that already passed the pinned site CA, names [host]
@@ -204,12 +200,6 @@ class SiteDns(
             is SiteRoute.Manual -> listOf(route.address)
             is SiteRoute.NotDiscovered -> throw SiteNotDiscoveredException(tlsHost)
             is SiteRoute.Conflict -> throw SiteConflictException(tlsHost, route.addresses)
-            is SiteRoute.SystemDns -> try {
-                fallback.lookup(hostname)
-            } catch (e: UnknownHostException) {
-                // A non-.local name that DNS cannot answer here: the manual address, if any (review m4).
-                route.manual?.let { listOf(it) } ?: throw e
-            }
         }
     }
 }

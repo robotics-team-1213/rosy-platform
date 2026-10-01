@@ -10,7 +10,8 @@
   있다. 여기서는 되풀이하지 않는다. `rosy_ml doctor`가 통과하는 상태에서 시작한다.
 - 로봇 접속은 [rosy-device-access](../../.claude/skills/rosy-device-access/SKILL.md), 페이로드
   배포는 [rosy-release-push](../../.claude/skills/rosy-release-push/SKILL.md) 스킬을 따른다.
-- 로봇은 `<robot>`(예: `pinky-005`), 주소는 `<robot-ip>`로 쓴다. 이 저장소는 공개다. 실제 주소,
+- 로봇은 `<robot>`(예: `pinky-005`), 접속 이름은 `<hostname>.local`, 주소는 `<robot-ip>`로 쓴다.
+  ssh 호스트 키는 주소가 아니라 `<robot>` 이름으로 핀한다(운영자 안내 3단계). 이 저장소는 공개다. 실제 주소,
   토큰, 로그인 코드는 어떤 기록에도 적지 않는다.
 
 아래에서 "로봇에서"는 `rosy` 계정 SSH 세션을 뜻한다. 로봇에서 ROS 명령을 칠 때는 먼저 이

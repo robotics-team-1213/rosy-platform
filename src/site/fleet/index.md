@@ -72,5 +72,5 @@
 - 2026-10-01 · uncommitted · fix(pairing): 보안 리뷰 반영 — 익명 요청은 감사 표에 쓰지 않음, 동기화는 https+CA 필수
 - 2026-10-01 · uncommitted · fix(pairing): 상태 기계를 잠금 하나로 직렬화, 크기 판정 재기록
 - 2026-10-01 · uncommitted · feat(pairing): D-341 2단계 — Fleet `pairing/v1` 서버 상태와 API
-- 2026-10-01 · uncommitted · refactor(enrollment): D-391 4.1 device_kind 상수 사용
-- 2026-10-01 · uncommitted · fix(relay): 첫 메시지 인증 뒤 늦게 오는 4401을 레인 이유로 드러낸다
+- 2026-10-01 · uncommitted · feat(fleet): D-392 P3 폐쇄형 모델 도구 카탈로그
+- 2026-10-01 · uncommitted · feat(fleet): D-392 P0–P2 모델 도구 call/result 경계

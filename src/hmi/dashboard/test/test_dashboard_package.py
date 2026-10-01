@@ -26,6 +26,20 @@ def test_the_formation_cell_hides_when_the_robot_has_no_role():
     assert ".hero-formation[hidden] { display: none; }" in css
 
 
+def test_the_mode_control_speaks_korean():
+    """D-396: 모드 버튼과 히어로가 한국어로 말한다 (운용자의 언어)."""
+    html = (ROOT / "index.html").read_text(encoding="utf-8")
+    assert ">대기</ui-button>" in html
+    assert ">수동</ui-button>" in html
+    assert ">자율주행</ui-button>" in html
+    assert ">IDLE</ui-button>" not in html
+    assert ">MANUAL</ui-button>" not in html
+    # 히어로 모드 표시가 enumLabel 을 쓰는지 (원본 enum 이 아니라)
+    js = (ROOT / "app.js").read_text(encoding="utf-8")
+    assert 'enumLabel(MODE_LABEL, state.mode)' in js
+    assert 'setText("robot-mode", state.mode)' not in js
+
+
 def test_the_state_render_feeds_swarm_to_the_formation_cell():
     shell = (ROOT / "app.js").read_text(encoding="utf-8")
     telemetry = (ROOT / "telemetry.js").read_text(encoding="utf-8")

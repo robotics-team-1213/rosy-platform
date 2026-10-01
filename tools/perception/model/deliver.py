@@ -18,7 +18,12 @@ which stops the site watcher (push --unless-held) for that robot until
 release-hold removes it.
 
 Exit codes: 0 ok, 1 failed, 2 refused locally, 3 history.jsonl not appendable,
-75 lock busy for 30 s (retry later), 76 held (--unless-held only; nothing changed).
+75 lock busy for 30 s (retry later), 76 held (--unless-held only; nothing changed),
+77 the host name did not resolve (DNS / mDNS), 78 connection refused, timed out or no
+route, 79 host key unknown or changed (strict checking; never auto-accepted). 77-79
+come from ssh's own failure text, with one stderr line "ssh <kind> (exit N): ...".
+--host-key-alias NAME: the host key is looked up under NAME (the robot id), not the
+address; the pin survives a renumbered network.
 
 SSH is key-only and pinned (BatchMode, IdentitiesOnly, StrictHostKeyChecking=yes;
 see operator_ssh.py). /var/lib/rosy/models is root:rosy-camera 0750, so every
@@ -93,15 +98,25 @@ def parse_observation(text: str) -> dict:
     return {"shadow": pointer.rsplit("/", 1)[-1] if pointer else None, "hold": hold}
 
 
+class SshFailure(RuntimeError):
+    """A network-level ssh failure (kind: dns | unreachable | hostkey)."""
+
+    def __init__(self, kind: str, message: str):
+        super().__init__(message)
+        self.kind = kind
+
+
 def observe(host: str, *, identity: str, known_hosts: str, user: str = "rosy",
             root: str | None = None, timeout: float | None = None,
-            runner=subprocess.run) -> dict:
+            runner=subprocess.run, host_key_alias: str | None = None) -> dict:
     """The robot's real shadow pointer and hold file (watch.py, rosy_ml)."""
-    opts = operator_ssh.options(identity, known_hosts)
+    opts = operator_ssh.options(identity, known_hosts, host_key_alias)
     r = _run(runner, ["ssh", *opts, "--", f"{user}@{host}",
                       remote_script("observe", None, root or REMOTE_ROOT)],
              timeout or STATUS_TIMEOUT_S)
     if r.returncode != 0:
+        if getattr(r, "net_kind", None):
+            raise SshFailure(r.net_kind, f"{r.net_kind}: {r.net_detail}")
         raise RuntimeError(f"cannot read the shadow pointer on {host}")
     return parse_observation(r.stdout or "")
 
@@ -293,24 +308,37 @@ def remote_script(action: str, rev: str | None, root: str = REMOTE_ROOT, *,
     raise ValueError(f"unknown action {action!r}")
 
 
-def _run(runner, cmd, timeout: float):
+def _run(runner, cmd, timeout: float, *, long_step: bool = False):
     """The completed process (returncode 124 on a timeout); failures go to stderr.
 
     A timeout is a failed step (the watcher retries it on a later run)."""
     try:
         r = runner(cmd, check=False, capture_output=True, text=True, timeout=timeout)
     except subprocess.TimeoutExpired:
-        print(f"failed (timeout {timeout:g} s): {cmd[0]}", file=sys.stderr)
-        return subprocess.CompletedProcess(cmd, 124, "", "")
+        r = subprocess.CompletedProcess(cmd, 124, "", "")
+        if long_step:
+            print(f"failed (timeout {timeout:g} s): {cmd[0]}", file=sys.stderr)
+            return r
     if r.returncode != 0:
+        kind = operator_ssh.classify(r.returncode, getattr(r, "stderr", ""),
+                                   timeout_is_network=not long_step)
+        if kind:  # one clear line; the exit code is KIND_EXIT[kind]
+            lines = (getattr(r, "stderr", "") or "").strip().splitlines()
+            r.net_kind, r.net_detail = kind, (lines[0] if lines else f"{cmd[0]} timed out")
+            print(f"ssh {kind} (exit {operator_ssh.KIND_EXIT[kind]}): {r.net_detail}",
+                  file=sys.stderr)
+            return r
         word = {HELD_EXIT: "held", LOCK_BUSY_EXIT: "busy"}.get(r.returncode, "failed")
         print(f"{word} ({r.returncode}): {cmd[0]} {getattr(r, 'stderr', '')}", file=sys.stderr)
     return r
 
 
 def _remote_rc(r) -> int:
-    """75 busy, 76 held and 3 history not written pass through (the docstring's codes);
-    any other remote failure is 1."""
+    """A network failure maps to its own code (77 dns, 78 unreachable, 79 hostkey); 75 busy,
+    76 held and 3 history not written pass through (the docstring's codes); any other
+    remote failure is 1."""
+    if getattr(r, "net_kind", None):
+        return operator_ssh.KIND_EXIT[r.net_kind]
     return r.returncode if r.returncode in (LOCK_BUSY_EXIT, HELD_EXIT, HISTORY_EXIT) else 1
 
 
@@ -353,18 +381,20 @@ def _push(args, ssh, scp, runner) -> int:
     t = args.timeout
     r = _run(runner, [*ssh, target, remote_script("prepare", rev)], t)
     if r.returncode != 0:
-        return 1
+        return _remote_rc(r)
     stage_dir = (r.stdout or "").strip()
     if not _STAGE.fullmatch(stage_dir):
         print(f"refused: unexpected remote temp dir {stage_dir!r}", file=sys.stderr)
         return 1
-    if _run(runner, [*scp, str(folder), f"{target}:{stage_dir}/{rev}"], t).returncode != 0:
+    r = _run(runner, [*scp, str(folder), f"{target}:{stage_dir}/{rev}"], t, long_step=True)
+    if r.returncode != 0:
         _run(runner, [*ssh, target, f"rm -rf -- {shlex.quote(stage_dir)}"], t)
-        return 1
+        return _remote_rc(r)
     r = _run(runner, [*ssh, target, remote_script("push", rev, args.root, checks=checks,
                                                   report=report_check, audit=_audit(args),
                                                   unless_held=args.unless_held,
-                                                  stage=f"{stage_dir}/{rev}")], t)
+                                                  stage=f"{stage_dir}/{rev}")], t,
+             long_step=True)
     if r.returncode != 0:
         return _remote_rc(r)
     print(r.stdout or "", end="")
@@ -410,7 +440,8 @@ def main(argv=None, runner=subprocess.run) -> int:
                        default=PUSH_TIMEOUT_S if name == "push" else STATUS_TIMEOUT_S,
                        help="seconds per ssh/scp step")
     args = ap.parse_args(argv)
-    for label, value in (("host", args.host), ("user", args.user)):
+    for label, value in (("host", args.host), ("user", args.user),
+                         ("host-key-alias", args.host_key_alias or "a")):
         if not operator_ssh.safe_name(value):
             print(f"refused: unsafe {label} {value!r}", file=sys.stderr)
             return 2
@@ -419,7 +450,8 @@ def main(argv=None, runner=subprocess.run) -> int:
               file=sys.stderr)
         return 2
     try:
-        opts = operator_ssh.options(*operator_ssh.resolve(args.identity, args.known_hosts))
+        opts = operator_ssh.options(*operator_ssh.resolve(args.identity, args.known_hosts),
+                                    args.host_key_alias)
     except operator_ssh.SshConfigError as exc:
         print(f"refused: {exc}", file=sys.stderr)
         return 2

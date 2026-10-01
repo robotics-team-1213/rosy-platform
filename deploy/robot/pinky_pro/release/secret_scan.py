@@ -168,9 +168,12 @@ _SHA256 = re.compile(r"^[A-Fa-f0-9]{64}$")
 # cites the tree it was built from as "merged source `<40-hex>`", but the bare
 # word would also excuse `source_token = <hex>`, and a word that dismisses a
 # line by itself is how a matcher goes quiet without anyone noticing.
+# `SHA` and `HEAD` follow the same rule: research notes pin an upstream tree as
+# "고정 SHA `<40-hex>`" or "HEAD `<40-hex>`". Only the code-span form is
+# excused, so `sha_token = <hex>` or a bare "head <hex>" is still reported.
 _INTEGRITY_CONTEXT = re.compile(
     r"(?<![A-Za-z])(?:sha[-_]?256|sha[-_]?512|digest|revision|checksum|commit|oid"
-    r"|fingerprint|source(?=\s*`))(?![A-Za-z])",
+    r"|fingerprint|(?:source|sha|head)(?=\s*`))(?![A-Za-z])",
     re.IGNORECASE,
 )
 

@@ -1,0 +1,106 @@
+## D-395 Fleet 보조 위치 확정 — 로봇이 후보를 내고 Fleet이 중재하며, 대칭 맵에서도 사람 입력 없이 map 자세를 얻는다
+
+**Status:** Proposed (2026-10-01). 설계만 정한다. 코드·로봇 설정·params·API 참조서는 바꾸지 않는다. 구현은 아래 Validation의 S1 이후 단계를 사용자가 승인한 뒤 별도 변경으로 한다. 이 ADR은 D-257 5항과 D-393 3항의 일부를 **개정하자고 제안**한다(아래 "개정 제안"). 제안이 Accepted되기 전에는 두 ADR의 해당 문구가 그대로 유효하다.
+
+설계 전문: [2026-10-01-fleet-assisted-localization-design.md](../plans/2026-10-01-fleet-assisted-localization-design.md).
+
+잇는 결정:
+
+- **D-257:** 천장 카메라 sighting은 표시·대조용이고 로봇 위치 추정에 들어가지 않는다(5항). 이 ADR이 그 조건을 좁혀 푼다.
+- **D-393:** 180° 대칭 맵에서 global localization 금지, 들어 옮긴 뒤 운영자 재초기화(3항). 이 ADR이 그 운용 규칙을 대체하자고 제안한다.
+- **D-267 2항 / D-269 2–3항:** CORE가 로봇 측 유일한 외부 관문이다. 새 메시지는 모두 CORE를 거친다.
+- **D-2:** 최종 `cmd_vel`은 CORE 하나다. Fleet은 바퀴를 직접 몰지 않는다.
+- **D-375:** 흰 차선 페인트의 비대칭이 180° 모호성을 푸는 단서다.
+- **D-346:** ADR 번호는 행 추가 즉시 선점한다(D-394까지 main과 브랜치에서 사용 중임을 확인하고 다음 번호를 잡았다).
+
+### Context
+
+map_v2_fleet 트랙은 180° 대칭이다. 2–4대가 사람 손 없이 항상 올바른 map 자세를 가져야 하는데 지금 구조는 그렇지 못하다.
+
+1. **대칭 맵에서 위치 확정을 포기했다.** D-393 3항은 global localization을 금지하고 주차 자세 출발과 들어 옮긴 뒤 운영자 재초기화를 규칙으로 둔다(`docs/adr/D-393-nav-amcl-update-min-d-and-goal-tolerance.md:41-42`). 켤 때 아무 데나 놓인 로봇, 픽업된 로봇, 거울상에 잠긴 로봇은 모두 사람이 필요하다.
+2. **기기 경로의 AMCL은 거울상을 가릴 수단이 없다.** `nav2_params.yaml`은 `set_initial_pose: true`와 (0, 0, 0)을 둔다(`src/runtime/navigation/params/nav2_params.yaml:40-45`). 켜는 즉시 근거 없는 자세로 시작한다.
+3. **후보를 내는 코드가 이미 있으나 기기에서 안 돈다.** `src/runtime/sensing/control/localization_node.py`는 유일 해 전역 탐색과 픽업 리셋(`safety/pickup` 구독, 45·94행)을 가진다. 유일하지 않으면(`not result['unique']`, 115행) 아무것도 확정하지 않는다. 대칭 맵에서는 항상 그렇다. 이 노드는 기기 launch 경로에 없다(D-393 사실 2).
+4. **현재 자세 API는 사람이 쓰는 것이다.** `POST /api/v1/localization/initialpose {x, y, yaw}`는 `operator` 역할과 `NAVIGATE` 능력을 요구하고, 교정 임대(D-321) 중에는 막힌다(`src/runtime/api_web/core_api_web/api/v1/navigation.py:89-109`). 발행은 `RosBridge.send_initial_pose`(`src/runtime/gateway/core/bridge/ros_bridge.py:576`)이고 공분산은 고정 0.5 m / 15°다(`src/runtime/services/core_features/navigation/initial_pose.py`). 요청 식별자도 출처도 만료도 검증도 없다.
+5. **Fleet은 자세를 쓸 길이 없다.** `RobotClient`(`src/site/fleet/fleet/swarm/transport.py:108-127`)에 initialpose 메서드가 없다.
+6. **Fleet이 받는 자세는 프레임을 모른다.** CORE 스냅샷 pose는 map TF가 신선하지 않으면 odom이 대신하고(`ros_bridge.py:214-218`, `odometry.odom_owns_pose`) 전송에 프레임 표시가 없다. Fleet 경로는 셋이다: 콘솔 `/api/v1/robot/state` 폴링(`src/site/fleet/fleet/server/console.py:210`), `FleetAgent` 1 Hz 하트비트(`src/runtime/services/core_features/fleet_agent/agent.py:152-166`), `WS /ws/swarm/pose`(`transport.py:252`). 교통정리와 bays는 캐시된 자세를 나이 검사 없이 쓴다(`src/site/fleet/fleet/server/traffic.py`, `bays.py`에 `age`·`stale` 처리 없음).
+7. **오버헤드 카메라는 보조 단서로 쓸 수 있으나 금지돼 있다.** sighting은 `quality`가 null이다. D-257 5항은 sighting이 "로봇 위치 추정, 정책, 최종 `cmd_vel`에 들어가지 않는다"고 못 박고(`docs/adr/D-257-site-lane-map-and-overhead-sightings.md:23`, 범위 밖 `:28`), D-360 3항(`docs/adr/D-360-overhead-field-auto-detection-proposal.md:23`)과 D-375 5항(`docs/adr/D-375-overhead-map-registration-from-lane-paint-proposal.md:22`)이 같은 선을 반복한다. D-341 5항은 승인자 규칙이라 이 선을 반복하지 않는다(D-341을 인용하지 않는다).
+8. **트랙에 쓸 기준점이 적다.** `lane_graph.yaml`의 차선은 `parking` 하나(-1.27, 0)→(-1.0, 0)로 대략 2대가 선다. 비대칭 단서는 페인트(D-375)와 다른 로봇뿐이다. 로봇 상단 마커 40–49와 모서리 마커 30–33은 기존 카메라 파이프라인의 것이다.
+
+### Decision (제안)
+
+1. **목표.** map_v2_fleet에서 2–4대가 사람 입력 없이 항상 올바른 map 자세를 가진다. 대상 상황은 전원 투입(출발 슬롯이든 아무 데든), 픽업 뒤, 거울 잠금 뒤다. 오버헤드 카메라는 보조 단서일 뿐이고 없어도 동작한다. 이 목적으로 로봇이나 트랙에 ArUco를 새로 붙이지 않는다(기존 카메라 파이프라인의 마커를 보조 단서로 쓰는 것은 허용).
+2. **로봇 상태 4개: UNKNOWN, CANDIDATES, LOCALIZED, SUSPECT.** 자율 주행은 LOCALIZED에서만 한다. 수동 원격 운전, 확인 기동, 귀환(homing) 미션은 나머지 상태에서도 허용한다. LOCALIZED는 픽업 감지(바퀴 미끄러짐 또는 IMU 기울기)나 스캔/지도 적합도의 지속적 하락이면 SUSPECT가 된다. 전원 투입은 항상 UNKNOWN에서 시작한다(`set_initial_pose`의 (0,0,0)은 근거가 아니다).
+3. **접근 A: 로봇이 후보를 제안하고 Fleet이 중재한다.**
+   - 로봇(sensing)이 LiDAR 전역 탐색으로 후보 목록을 낸다. 유일하지 않다고 거부하지 않는다. 보통 후보는 둘(참 자세와 그 180° 거울상)이다.
+   - 후보마다 보고한다: 스캔/지도 적합도, 차선 페인트 일치 점수(그 가설에서 기대되는 페인트 대 D-356/keep 인식의 차선 마스크), 지도에 없는 LiDAR 물체 목록(다른 로봇일 수 있음).
+   - 채널은 CORE뿐이다(D-267, D-269).
+   - Fleet의 **localization arbiter**(`src/site/fleet`의 새 모듈)는 로봇별 마지막 정상 자세와 시각을 들고 후보를 채점한다. 1등이 2등을 뚜렷이 앞서고 2 s 동안 1등을 유지할 때만 결정한다.
+4. **에스컬레이션 사다리.**
+   1. 중재.
+   2. **확인 기동.** Fleet이 제자리 회전이나 몇 cm 전진을 요청한다. LiDAR가 경로 비움을 보일 때만 자동으로 허용한다. 그 뒤 다시 중재한다.
+   3. **Fleet 안내 귀환.** Fleet이 귀환 미션을 보내고 로봇의 CORE가 자체 장애물 안전과 E-stop 아래 매우 느리게 실행한다. Fleet은 바퀴를 직접 몰지 않는다. 미션 종류는 map 프레임이 필요 없는 행동만 쓴다: 가장 가까운 벽에 다가가 모서리까지 따라가 멈춤, 차선을 정지선이나 주차 슬롯까지 따라가 멈춤. 기준점에서 후보가 갈라지고 다른 로봇이나 페인트로 가린다. 그때 자세를 넣는다. Fleet은 기존 교통정리·양보로 다른 로봇을 비켜 있게 한다.
+   4. 시간이 지나도 안 되면 정지하고 콘솔에 "위치 확인 필요"를 띄운다. 사람은 이 경우에만 개입한다.
+5. **출발 슬롯.** map/site 설정에 방향이 있는 번호 슬롯 4개를 정의한다. 슬롯은 채점의 강한 사전 정보다(슬롯에서 10 cm / 20° 안의 후보는 큰 가산). 별도 경로가 아니다. 슬롯 밖에 놓인 로봇도 같은 절차로 푼다. 현재 단일 `parking` 차선은 약 2대만 들어가므로 슬롯 배치는 열린 항목이다.
+6. **메시지.** 전문 표는 설계 문서 4절. 요지:
+   - 로봇→Fleet **위치 확정 상태**: 기존 1 Hz 상태에 상태·자세·**프레임 표시(`map`|`odom`)**·신뢰도를 더한다(6항 사실의 프레임 표시 부재를 고친다).
+   - 로봇→Fleet **후보 보고**(상태가 바뀔 때): `request_id`, 후보 `[{x, y, yaw, scan_fit, paint_score}]`, `unmapped_objects`, 픽업 표시, 로봇 시각.
+   - Fleet→로봇 **결정**(기존 initialpose API 확장): `request_id`와 후보 인덱스 **또는 직접 좌표**(사용자 승인: 오버헤드나 귀환 기준점에서 온 좌표), 출처 태그(`candidate|overhead|homing_ref|human`), 증거 요약, 만료. 낡은 `request_id`나 만료된 결정은 로봇이 무시한다.
+   - Fleet→로봇 **확인 기동 / 귀환 미션**: 종류, 최대 거리, 최대 시간. 로봇은 수락/거절과 결과를 답한다.
+   - 로봇→Fleet **결과**: 수렴 여부(스캔/지도 일치가 3 s 유지됨 등).
+   - 이 명령들은 **새 capability**로 구분하고 Fleet의 operator 토큰으로 나른다. 정확한 경로·버전은 열린 항목이다(제안만 하고 API 참조서는 고치지 않는다).
+7. **로봇 쪽 검증은 직접 좌표에도 똑같이 한다.** 주입 뒤 3 s 안에 스캔/지도 일치를 확인한다. 실패하면 거부하고 사유와 함께 SUSPECT로 돌아간다. 모든 주입은 출처를 로그와 이벤트에 남긴다. 재초기화 뒤에는 진행 중이던 Nav2 목표를 취소하고 다시 계획한다.
+8. **채점 단서**(초기값은 sim에서 조정): 이미 LOCALIZED인 다른 로봇이 이 가설의 지도 밖 물체와 일치하면 가산, 있어야 할 로봇이 안 보이면 감점; 페인트 점수; 출발 슬롯 사전; 픽업이 없었을 때에 한해 마지막 정상 자세와의 가까움; 300 ms보다 신선한 오버헤드 sighting과의 가까움.
+9. **LOCALIZED 중 상시 감시.** 로봇: 적합도 하락이나 픽업이면 SUSPECT. Fleet: 오버헤드나 다른 로봇의 관측이 보고된 자세와 25 cm 또는 60° 넘게 1.5 s 어긋나면 그 로봇을 SUSPECT로 표시하고 재중재를 요청한다. 거울 잠금을 여기서 잡는다.
+10. **안전.**
+    - LOCALIZED가 아닌 로봇은 Fleet 교통정리가 넓은 장애물로 다룬다. 다른 로봇은 피하거나 멈춘다.
+    - Fleet이 죽으면 로봇은 마지막 상태를 유지한다: LOCALIZED면 계속하고, 아니면 멈춰 있는다.
+    - Fleet 교통정리와 bays는 프레임 표시가 `odom`이거나 상태가 LOCALIZED가 아닌 자세를 무시한다.
+11. **범위 밖:** 로봇 설정·params 변경(지금), 카메라의 연속 EKF 융합, AMCL 안의 로봇 간 LiDAR 우도.
+
+### 개정 제안 (Accepted 때까지 원문이 유효)
+
+| 대상 | 원문 | 제안하는 개정 |
+|---|---|---|
+| D-257 5항 마지막 문장 (`D-257-...md:23`) | "sighting은 로봇 위치 추정, 정책, 최종 `cmd_vel`에 들어가지 않는다." | "sighting은 정책과 최종 `cmd_vel`에 들어가지 않는다. 로봇 위치 추정에는 Fleet localization arbiter의 채점 단서(신선도 ≤ 300 ms)와 결정 출처 `overhead`로만 들어가며, 로봇이 스캔/지도 일치로 다시 검증한 뒤에만 반영된다(D-395 7·8항). 카메라가 없어도 동작해야 한다." |
+| D-257 범위 밖 (`:28`) | "sighting을 로봇 위치 보정에 쓰는 것" | 같은 조건으로 연다. 연속 융합(EKF)은 계속 범위 밖이다. |
+| D-360 3항 / D-375 5항 (`:23` / `:22`) | 제안·검출 결과가 주행 등에 쓰이지 않는다 | 이 문구는 **그대로 둔다**. 제안(코너·페인트 맵 맞춤)은 sighting 좌표가 아니다. 개정은 D-257의 sighting에만 적용한다. 같은 조건의 확인은 Accepted 때 두 ADR에 한 줄씩 덧붙인다. |
+| D-393 3항 둘째·셋째 줄 (`:41-42`) | 대칭 맵 global localization 금지; 들어 옮긴 뒤 운영자 재초기화 | "로봇 쪽 전역 탐색은 후보 목록을 내는 데만 쓰고 단독으로 확정하지 않는다. 확정은 Fleet 중재와 로봇 검증(D-395)을 거친다. 들어 옮긴 뒤에는 SUSPECT로 가서 같은 절차로 사람 없이 푼다. 사다리 끝까지 안 풀릴 때만 운영자가 재초기화한다." 첫째 줄(알려진 주차 자세 출발)과 `update_min_d`·허용오차(1–2항)는 건드리지 않는다. |
+
+### Alternatives
+
+- **로봇 단독 전역 탐색을 확정까지 허용(B).** 대칭 맵에서 둘 중 하나를 확률로 고르게 된다. 거울 잠금 위험이 커서 기각. 후보 제시만 로봇이 한다.
+- **오버헤드 카메라가 자세를 직접 주입(C).** 카메라가 단일 장애점이 되고 `quality` null·보정 오차를 로봇이 모른 채 믿는다. 기각. 카메라는 채점 단서와 검증된 직접 좌표 출처로만 둔다.
+- **로봇이나 트랙에 ArUco를 새로 붙임.** 사용자가 배제했다.
+- **항상 사람이 재초기화(D-393 현행).** 2–4대 운용 목표와 맞지 않는다. 최후 사다리로만 남긴다.
+- **Fleet이 바퀴를 직접 구동하는 귀환.** D-2·D-369 위반. 기각. 귀환은 CORE 실행 미션이다.
+
+### Consequences
+
+- 새 부품: sensing의 후보 출력, CORE의 상태 기계·검증·미션 실행기·새 capability, Fleet의 arbiter와 `RobotClient` 확장, 콘솔의 "위치 확인 필요" 표시. 모두 아직 코드 0줄이다.
+- D-257·D-393의 금지가 완화된다. 대신 로봇 쪽 3 s 검증과 출처 기록이 모든 주입의 공통 관문이 된다. 잘못된 주입은 SUSPECT로 되돌아가므로 최악은 정지다.
+- Fleet 의존이 늘지만 Fleet 중단 시 거동을 정했다(LOCALIZED만 계속). 전원 투입 직후 Fleet이 없으면 로봇은 UNKNOWN에서 멈춰 있다.
+- 교통정리·bays는 비LOCALIZED 로봇을 장애물로 보므로 귀환 중 처리량이 준다.
+- 하트비트 상태에 필드가 늘어나므로 프로토콜 호환 규칙(API-002)에 따라 선택 필드 추가로 설계해야 한다.
+
+### Validation
+
+LOCAL·ROS-SIM까지만 주장 가능하다. 실물은 승인 뒤다.
+
+| 단계 | 내용 | 통과 기준 |
+|---|---|---|
+| S1 | sim 로봇 2대: 슬롯 출발, 슬롯 밖 출발, 강제 거울, 주행 중 픽업 | 사람 입력 0, 전부 LOCALIZED 도달, 거울 잠금 0 |
+| S2 | sim 로봇 4대: S1과 같음 + 동시 재중재, 교통 속 귀환 | 위와 같고 충돌 0 |
+| S3 | 실물 로봇 2대, 저속 | 사용자 승인 뒤에만 시작 |
+| S4 | 오버헤드 카메라를 보조 단서로 | 카메라 켬/끔 동작이 같다 |
+
+### Open
+
+- 출발 슬롯 기하(4개 배치, 현재 `parking` 차선은 약 2대분).
+- Pinky의 픽업 감지 신호 가용성(IMU 유무, `safety/pickup`의 기기 발행 여부).
+- 페인트 점수의 Pi 비용.
+- 점수 문턱(2등과의 격차, 1등 유지 시간, 슬롯 가산, 25 cm/60°/1.5 s).
+- 정확한 API 경로·버전: 제안은 설계 문서 4.4절. `docs/reference/ROSY API & Protocol Reference.md`는 이 ADR이 고치지 않는다.
+- Fleet operator 토큰이 새 capability를 갖는 방식(역할 모델 변경 범위).
+- 직접 좌표 주입의 공분산(현재 고정 0.5 m / 15°는 출처별로 다르게 해야 하는지).
+
+**References:** `docs/adr/D-257-site-lane-map-and-overhead-sightings.md`, `docs/adr/D-393-nav-amcl-update-min-d-and-goal-tolerance.md`, `docs/adr/D-375-overhead-map-registration-from-lane-paint-proposal.md`, `docs/adr/D-360-overhead-field-auto-detection-proposal.md`, `src/runtime/api_web/core_api_web/api/v1/navigation.py`, `src/runtime/gateway/core/bridge/ros_bridge.py`, `src/runtime/sensing/control/localization_node.py`, `src/site/fleet/fleet/swarm/transport.py`, D-2, D-267, D-269, D-321, D-356, D-369, [D-346](D-346-commit-time-collision-defenses.md).

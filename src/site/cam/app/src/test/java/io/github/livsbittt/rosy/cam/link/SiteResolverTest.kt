@@ -86,28 +86,29 @@ class SiteResolverTest {
     }
 
     @Test
-    fun nonMdnsNamesGoToTheSystemResolver() {
-        val browser = FakeBrowser(emptyList())
-        assertEquals(SiteRoute.SystemDns(), SiteResolver(site.copy(tlsHost = "site.example.org"), browser).resolve())
-        assertEquals(0, browser.browses)
-    }
-
-    @Test
-    fun aNonMdnsNameThatDnsCannotAnswerFallsBackToTheManualAddress() {
-        // Review m4.
-        val failing = object : okhttp3.Dns {
-            override fun lookup(hostname: String): List<InetAddress> = throw java.net.UnknownHostException(hostname)
+    fun aNonLocalTlsHostIsNeverBrowsedNorHandedToSystemDns() {
+        // D-391 1 decision (2026-10-01): tls_host is a .local name; the review m4 system-DNS path is gone.
+        // SiteLink.validate rejects such a record, so this is only the resolver's own guard.
+        var systemCalls = 0
+        val system = object : okhttp3.Dns {
+            override fun lookup(hostname: String): List<InetAddress> {
+                systemCalls++
+                return listOf(ip("10.9.9.9"))
+            }
         }
-        val link = site.copy(tlsHost = "site.example.org", manualHost = "192.168.1.10")
-        val dns = SiteDns("site.example.org", SiteResolver(link, FakeBrowser(emptyList())), failing)
-        assertEquals(listOf(ip("192.168.1.10")), dns.lookup("site.example.org"))
+        val browser = FakeBrowser(listOf(seen("site.example.org", "192.168.1.5")))
+        val named = site.copy(tlsHost = "site.example.org")
+        assertEquals(SiteRoute.NotDiscovered("site.example.org"), SiteResolver(named, browser).resolve())
         try {
-            SiteDns("site.example.org", SiteResolver(site.copy(tlsHost = "site.example.org"), FakeBrowser(emptyList())), failing)
-                .lookup("site.example.org")
-            fail("expected UnknownHostException without a manual address")
-        } catch (e: java.net.UnknownHostException) {
-            assertEquals("site.example.org", e.message)
+            SiteDns("site.example.org", SiteResolver(named, browser), system).lookup("site.example.org")
+            fail("expected not_discovered")
+        } catch (e: SiteNotDiscoveredException) {
+            assertEquals(NetworkFailure.NOT_DISCOVERED, NetworkFailure.classify(e))
         }
+        val withManual = named.copy(manualHost = "192.168.1.10")
+        assertEquals(listOf(ip("192.168.1.10")), SiteDns("site.example.org", SiteResolver(withManual, browser), system).lookup("site.example.org"))
+        assertEquals(0, browser.browses)
+        assertEquals(0, systemCalls)
     }
 
     @Test

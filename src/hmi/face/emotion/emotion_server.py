@@ -12,7 +12,7 @@ from std_msgs.msg import String
 
 from interfaces.srv import Emotion
 
-from .info_screen import hold_duration, render as render_info
+from .info_screen import hold_duration, render_card as render_info
 from .rosy_lcd import LCD
 
 # core가 latch로 발행하므로 늦게 떠도 현재 모드를 즉시 받는다 (PWR-003).

@@ -71,3 +71,23 @@
 - 교훈: `PinnedTrustManager.getAcceptedIssuers()`가 비어 있으면 OkHttp 체인 정리기가 실패해 `Handshake.peerCertificates`가 조용히 빈 목록이 된다. 검증된 leaf가 필요하면 신뢰 관리자에서 받는다. Android NSD 캐시는 goodbye 없이 꺼진 광고도 몇 분 동안 계속 풀어 준다. 앱 캐시 무효화는 새 탐색을 강제하지만, NSD가 같은 옛 주소를 돌려줄 수 있다.
 - 열린 후속: 공유 벡터 `failure-classes.v1.json`·`site-link.v1.json`(rosy-00, `feat/d391-shared-link-vectors`)이 main에 오면 `FailureClassTest`·`SiteLinkTest`·`SiteLinkPrefsTest`가 그 벡터를 읽게 바꾼다.
 
+## 2026-10-01 · 137564eb · test(cam): D-391 공유 벡터(failure-classes·site-link)를 Kotlin 시험이 읽는다
+
+- 변경: (58924f5a) Gradle 속성 `rosy.failure.vectors`·`rosy.sitelink.vectors`를 추가했다. `FailureClassTest`는 `failure-classes.v1.json` 26개 사례를 모두 돌린다: WS 닫힘·HTTP는 `FailureClass`로, transport는 실제 예외를 `NetworkFailure.classify`로, discovery는 `SiteNotDiscoveredException`으로 확인한다. 분류 목록, fallback, 그리고 `Protocol.TRANSIENT_4400` = `close_4400_retry_reasons`도 검사한다. 벡터에 맞춘 분류 차이는 셋이다. 모르는 WS 코드는 null에서 `unreachable`, 사유 없는 4400은 `protocol_mismatch`에서 `busy`, 목록 밖 4xx/5xx는 null에서 `protocol_mismatch`/`busy`가 됐다. 동작은 바꾸지 않았다. 수동 경로의 pin 불일치는 여전히 정지하고, 발견 경로의 첫 불일치는 다시 탐색한다. (137564eb) `SiteLinkRecord`는 공유 기록 모양을 `site_link.py`와 같은 규칙·순서로 검사하고(`ca_pem` CA 판정은 `getBasicConstraints() >= 0`), `SiteLinkTest`가 `site-link.v1.json` 33개 사례를 모두 돌린다. `toSiteLink`는 유효한 카메라 기록을 저장 모양 `SiteLink`로 옮긴다. `ca_pem` 첫 CA의 pin, 주어진 토큰·source, 소문자 `tls_host`. IP `manual_host`는 유지하고, 이름 `manual_host`는 버린다(DNS 없이 다이얼한다). robot 기록은 옮기지 않는다. 저장 형식은 바꾸지 않았다.
+- 증거: `gradlew testDebugUnitTest --rerun-tasks` BUILD SUCCESSFUL, JVM 시험 241 passed, 0 failed(`FailureClassTest` 4: 26 사례·목록·4400·fallback, `SiteLinkTest` +5: 33 사례·사유/역할·카메라 기록 7건 변환·이름 수동 주소·무효 기록). host pytest와 harness lint는 progress 참조 (2026-10-01 Windows, JDK 21).
+- gate 변화: 없음.
+- 결정: 분류와 동작은 따로 둔다. `NetworkFailure.TLS_PIN`은 앱 내부 종류로 남지만 분류는 `tls_untrusted`다.
+- 열린 후속: (1) 앱은 4400 사유를 trim·소문자로 비교한다(Python은 정확 일치). 벡터에 해당 사례는 없다. (2) 앱 `SiteLink.validate`는 `.local`이 아닌 `tls_host`도 받는다(설정 화면에서 입력한 DNS 이름, review m4의 시스템 DNS 경로). 공유 규칙은 `bad_tls_host`다. (3) 공유 기록의 `manual_host`는 이름도 되지만, 앱 저장 모양은 IP만 받는다.
+
+## 2026-10-01 · be9ac996 · fix(cam): D-391 tls_host는 .local 이름만, 공유 벡터 갱신(464b0c88) 반영
+
+- 변경: (be9ac996) 코디네이터 결정에 따라 `SiteLink.validate`는 한 레이블 + `.local`이 아닌 `tls_host`를 거절한다(공유 벡터와 같은 규칙). 설정 화면 저장과 `rosyov://` 딥링크도 `SiteLink.entryReason`으로 같은 검사를 하고, "사이트 이름은 .local 이어야 합니다"를 보인다. IP는 여전히 수동 주소로 받는다. review m4의 시스템 DNS 경로를 없앴다. `.local`이 아닌 이름은 수동 주소나 `not_discovered`로 간다. 저장값은 옛 IP면 그대로 `manual_host`로 옮기고, 옛 기록이든 새 형식이든 `.local`이 아닌 이름이면 읽지 않는다. `SiteLinkPrefs.rejectedHost`가 그 이름을 알려 주고, 송출 화면은 "다시 페어링하세요"를 띄운다. 저장 형식은 그대로다. (54881d1f) main 464b0c88을 병합했다. rosy-00이 4400 사유를 trim·casefold하고, `manual_host`를 IP 리터럴로 좁혔다. `SiteLinkRecord`는 이름·`ip:port` `manual_host`를 `bad_manual_host`로 거절한다.
+- 증거: `gradlew testDebugUnitTest --rerun-tasks` BUILD SUCCESSFUL, JVM 시험 244 passed, 0 failed(`failure-classes.v1.json` 28 사례, `site-link.v1.json` 35 사례, `.local` 규칙·딥링크·옛 기록 거절 시험) (2026-10-01 Windows, JDK 21).
+- gate 변화: 없음.
+- 결정: 앞 항목의 열린 후속 셋은 닫혔다. (1)·(3)은 벡터를 바꿔 앱에 맞췄고, (2)는 앱을 벡터에 맞췄다.
+
+## 2026-10-01 · f449f157 · fix(cam): D-391 벡터 리뷰 반영, 닫힘 4403은 최종(재페어링 안내 없음)
+
+- 변경: 리뷰 반영. (1) `SiteLinkPrefs.read`는 저장 기록을 검증 없이 만든 뒤, `SiteLink.validate`가 `tls_host`일 때만 `rejectedHost`를 낸다. `.local` 호스트에 pin만 틀린 기록은 거절 호스트로 보고하지 않는다. (2) `expires_at` 0년을 거절한다(Python과 같다). (3) `SiteLink.validate`는 저장된 정규형(소문자, 끝 점·공백 없음)만 받는다. 관대한 정규화는 입력(`entryReason`→`from`)과 읽기에서만 한다. (4) 벡터 시험은 정확한 개수 대신 "사례가 있다"를 확인하고, 모든 ws_close 사례에서 `closeOutcome`의 정지/재시도가 분류와 맞는지 본다. (5) `.local`이 아닌 이름에 유효한 IP `manual_host`가 있으면 이름만 버리고 IP로 계속 붙는다. 화면은 이름으로 다시 페어링하라는 약한 안내를 띄운다. IP가 없을 때만 강한 재페어링 문구를 띄운다. (6) `SiteLinkRecord` KDoc에 두 가지를 적었다. `CertificateFactory` 파싱이 Python DER 검사보다 엄격한 것은 의도다. `toSiteLink`는 첫 CA 하나만 pin한다(D-341 §9). rosy-00 결정: 닫힘 4403(자격은 유효하나 허용되지 않음)은 최종이다. `LinkError.Forbidden`으로 멈추고 "이 카메라는 이 사이트에서 송출 권한이 없습니다 — 관리자에게 확인하세요"를 띄우며, 설정·재페어링 버튼은 없다. 재페어링 안내는 4401에만 남는다. 이어서 main 346e9c76을 병합해 `site-link.v1.json` 42 사례를 받았다(끝 줄바꿈, IPv6 zone id, 0년, pathLen 없는 CA, CA 뒤 leaf, 뒤쪽 잔여 문자). 코드 변경 없이 모두 통과했다.
+- 증거: `gradlew testDebugUnitTest --rerun-tasks` BUILD SUCCESSFUL, JVM 시험 250 passed, 0 failed(`failure-classes.v1.json` 28·`site-link.v1.json` 42 사례 전부) (2026-10-01 Windows, JDK 21).
+- gate 변화: 없음.
