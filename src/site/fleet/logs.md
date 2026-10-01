@@ -1078,3 +1078,8 @@
 - 증거: `test_localization_arbiter.py` + cues + boundaries 52 passed — 사각형마다 거울 사례(슬롯·사각형 관측, 거울을 앞에 둔 경우 포함), 페인트·다른 로봇으로 해소, 단서 없음·마지막 자세만·픽업 뒤·단서 없는 단일 후보는 결정 없음, 유지 시간·1등 교체·격차 붕괴 시 재시작, 로봇별 독립.
 - gate 변화: 없음(SOURCE/LOCAL). 서비스 루프·전송은 2단계.
 - 결정: D-395 Proposed(개정 3, 1단계).
+
+## 2026-10-01 · uncommitted · test(fleet): API Ref 버전 핀 v1.69 (D-395 1단계)
+- 변경: `test_task_contract_docs.py`(2곳)·`test_mission_progress.py`의 참조서 버전 핀을 v1.69로 옮겼다. 계획이 세 핀만 셌는데 Fleet 시험에도 같은 핀이 있었다.
+- 증거: 두 파일 22 passed.
+- gate 변화: 없음.
