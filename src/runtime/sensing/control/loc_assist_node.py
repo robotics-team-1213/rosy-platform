@@ -5,11 +5,13 @@ Topics (robot namespace, JSON in std_msgs/String, contract
 docs/plans/2026-10-01-d395-phase2-interfaces.md §1):
   out  localization/state, localization/candidates, localization/result,
        initialpose (PoseWithCovarianceStamped, map frame, only on an accepted decision)
-  in   map, scan, amcl_pose, camera/front (reference-square sightings),
+  in   map, scan, amcl_pose, camera/front (reference-square sightings, paint points),
        safety/pickup, localization/decision, localization/suspect
 
-Paint: no ROS topic carries the camera's paint points (they stay inside
-line_observer's bird's-eye keep/edge pipeline), so every `paint_score` is None.
+Paint: the camera frame already decoded for squares also gives floor paint
+points (`camera_paint_points`, the keep mode's front end) at the same 2 Hz;
+each candidate gets `paint_score` against the map bundle's STL paint map. No
+bundle STL (a site map without it) or no ground plane: paint_score is None.
 
 The search runs on one worker thread over a 2 cm max-pooled copy of the map;
 the clear-footprint mask is computed once per map. A search longer than
@@ -18,6 +20,7 @@ measurement to act on (Pi), not a cut-off.
 """
 import json
 import math
+import os
 import time
 from concurrent.futures import ThreadPoolExecutor
 
@@ -39,6 +42,9 @@ from .sensing.body import URDF_RADIUS
 from .sensing.loc_candidates import Mount, reference_squares
 from .sensing.localization import MapAgreement, planar_yaw
 from .sensing.perception.camera_ground import nominal_ground_plane, simulation_ground_plane
+from .sensing.perception.lane_bev import BirdsEye
+from .sensing.perception.paint_hypothesis import camera_paint_points, paint_score
+from .sensing.perception.paint_localizer import PaintMap
 from .sensing.perception.reference_square import HsvSquareDetector
 from .tf_buffer import RobotTransformBuffer
 
@@ -76,6 +82,7 @@ class LocAssistNode(Node):
         self.squares = self._squares()
         self.detector = HsvSquareDetector(self.p('camera_x_offset_m'))
         self.sightings, self.sighted_at, self.square_at = [], -math.inf, -math.inf
+        self.paint, self.paint_map, self.paint_tried, self.view = None, None, False, None
         self.ground_key = self.ground = self.nominal = None
         self.pool = ThreadPoolExecutor(max_workers=1)
         self.search = None
@@ -104,6 +111,7 @@ class LocAssistNode(Node):
 
     def _squares(self):
         path = self.p('lane_rules_file') or lane_rules_near(self.p('map_yaml'))
+        self.bundle = os.path.dirname(path) if path else None
         if not path:
             self.get_logger().info('no lane_rules.yaml: slot candidates off, global search only')
             return []
@@ -198,6 +206,10 @@ class LocAssistNode(Node):
         ground = self._ground(frame.shape[1], frame.shape[0])
         if ground is not None:
             self.sightings, self.sighted_at = self.detector.detect(frame, ground), now
+            if self.view is None or self.view[0] != self.ground_key:
+                self.view = (self.ground_key, BirdsEye(ground, frame.shape[1], frame.shape[0],
+                                                       self.p('camera_x_offset_m')))
+            self.paint = camera_paint_points(frame, ground, self.p('camera_x_offset_m'), self.view[1])
 
     def _ground(self, width, height):
         source = str(self.p('camera_ground_source'))
@@ -243,12 +255,21 @@ class LocAssistNode(Node):
             return
         ranges, angles = self.scan_arrays(self.scan)
         self.core.search_started(now, odom)
-        field, clear, generation, started = self.field, self.clear, self.generation, time.monotonic()
+        field, clear, generation = self.field, self.clear, self.generation
         squares, radius, minimum = self.squares, self.p('robot_radius'), self.p('candidate_minimum_fit')
 
+        bundle, self.paint_tried = (None if self.paint_tried else self.bundle), True
+        logger = self.get_logger()
+
         def run():
+            if bundle:                      # once, off the executor: the STL paint raster takes seconds
+                try:
+                    self.paint_map = PaintMap.from_bundle(bundle)
+                except Exception as exc:
+                    logger.warning(f'no paint map from {bundle} ({exc!r}); paint_score stays None')
+            started_search = time.monotonic()
             found, objects, mask = search(field, clear, squares, ranges, angles, radius, mount, minimum)
-            return found, objects, mask, generation, time.monotonic() - started
+            return found, objects, mask, generation, time.monotonic() - started_search
         self.search = self.pool.submit(run)
 
     def finish_search(self, now):
@@ -263,10 +284,14 @@ class LocAssistNode(Node):
         budget = self.p('search_budget_s')
         log = self.get_logger().warning if elapsed > budget else self.get_logger().info
         log(f'candidate search {elapsed:.2f} s (budget {budget:.1f} s): {len(found)} candidates')
-        fresh = self.sightings if now - self.sighted_at <= self.p('sighting_max_age_s') else []
+        recent = now - self.sighted_at <= self.p('sighting_max_age_s')
+        fresh = self.sightings if recent else []
+        scores = None
+        if recent and self.paint is not None and self.paint_map is not None:
+            scores = [paint_score(self.paint_map, self.paint, (c.x, c.y, c.yaw)) for c in found]
         # A new map while searching: no odom discards the result and the next tick searches again.
         odom = self.odom() if generation in (self.generation, -1) else None
-        self.publish(self.core.search_finished(now, odom, found, objects, fresh))
+        self.publish(self.core.search_finished(now, odom, found, objects, fresh, scores))
 
     def tick(self):
         now = self.now()

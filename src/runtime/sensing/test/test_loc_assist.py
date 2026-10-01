@@ -316,3 +316,10 @@ def test_the_machine_passes_the_gap_to_its_check():
     machine.decide('x', 0., candidate_index=0, cues=['slot'])
     assert machine.check.max_gap_s == 1.
     assert LocalizationStateMachine(lambda: 'y').__dict__['_check_args'].get('max_gap_s', .5) == .5
+
+
+def test_paint_scores_ride_on_their_candidates():
+    a = core()
+    a.search_started(0., ODOM)
+    report = one(a.search_finished(0., ODOM, [TRUTH, MIRROR], paint_scores=[.93, .02]), 'candidates')
+    assert [c['paint_score'] for c in report['candidates']] == [.93, .02]

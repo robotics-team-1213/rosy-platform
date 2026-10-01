@@ -845,3 +845,9 @@
 - 변경: `tools/gz/localization_rig.py` — 지워진 전역 복구(`recoveries`)를 기대하던 판정을 바꿨다. 새 구성 요소 `LOCALIZATION_COMPONENT=loc_assist`(LocAssistNode)를 `monitor` 옆에 띄우고, 리그가 Fleet·운영자 대역이 된다: 후보가 정확히 하나면 그 자세로 `source: human` 결정을 보낸다(지상 실측은 고르지 않는다, 채점만). 후보가 둘 이상이면 "Fleet 중재기 필요"로 실패. 스캔 공백 판정은 "새 후보 요청이 생기지 않음"으로 바꿨다.
 - 증거: `test_loc_assist_launch.py`에 리그 텍스트 계약 1개(9 passed). Gazebo 미로 실행은 하지 않았다(도메인 228 격리 박스 필요).
 - gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · feat(localization): 카메라 페인트 점으로 후보별 paint_score (D-395 P2-3 후속)
+- 변경: `sensing/perception/paint_hypothesis.py` `camera_paint_points(bgr, ground, camera_x_offset_m, view=None)` — keep 모드와 같은 앞단(`floor_white_mask`를 `lane_bev.BirdsEye` 바닥 격자에 샘플)으로 한 프레임의 base_link 페인트 점을 낸다(최대 400개, 지면 평면 없거나 씻긴 바닥이면 없음). line_observer는 이 점을 밖으로 내지 않으므로(keep 내부 지역 변수) 새 토픽 대신 `loc_assist_node`가 사각형용으로 이미 해독하는 2 Hz 프레임에서 함께 계산한다. 페인트 지도는 lane_rules.yaml 번들의 STL(`PaintMap.from_bundle`)을 첫 탐색 때 작업 스레드에서 한 번 읽고, 없으면 None. 탐색이 끝날 때 1 s 안의 점으로 후보마다 `paint_score`.
+- 증거: `test_paint_hypothesis.py` 10 passed(합성 바닥 테이프 선: 점이 선 위, 참 자세 > 0.5, 6 cm 옆 < 0.1, 맨 카펫·지면 없음은 0개), `test_loc_assist.py` paint 전달 1개. WSL Jazzy 스모크(번들 지정: 사각형 2개·STL 페인트 지도 적재, 카메라 없음) UNKNOWN → 후보 → 결정 → LOCALIZED 통과.
+- gate 변화: 없음. 실제 카메라 페인트 점 품질은 P2-8 실측.
+- 정정: 앞 리그 항목의 "9 passed"는 Windows에서 8 passed, 1 skip(launch 매개변수 평가는 WSL에서만)이다. 리그의 결정 발행 토픽은 bench 도구 규칙(`test_gz_tools_topics.py`, 절대 발행 토픽 금지)에 따라 상대 `localization/decision`으로 바꿨다.

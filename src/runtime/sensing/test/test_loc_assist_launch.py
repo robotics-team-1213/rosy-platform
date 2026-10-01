@@ -92,4 +92,4 @@ def test_the_gazebo_localization_rig_follows_d395_not_the_removed_global_recover
     rig = text(SENSING / 'tools' / 'gz' / 'localization_rig.py')
     assert "'recoveries'" not in rig
     assert "component == 'loc_assist'" in rig
-    assert "'/localization/decision'" in rig and "'/localization/candidates'" in rig
+    assert "'localization/decision'" in rig and "'/localization/candidates'" in rig

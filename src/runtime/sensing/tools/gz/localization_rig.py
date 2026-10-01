@@ -55,7 +55,7 @@ def main():
             self.create_subscription(String, '/localization/status', self.on_status, 10)
             self.create_subscription(RosPath, '/route', self.on_route, 10)
             self.create_subscription(String, '/goal_node/state', self.on_goal_state, 10)
-            self.decision_pub = self.create_publisher(String, '/localization/decision', 5)
+            self.decision_pub = self.create_publisher(String, 'localization/decision', 5)
             self.create_subscription(String, '/localization/candidates', self.on_candidates, 10)
             self.create_subscription(String, '/localization/result', self.on_result, 10)
             self.requests = []
