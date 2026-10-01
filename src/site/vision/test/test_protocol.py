@@ -106,6 +106,7 @@ def test_close_codes_match_the_vector():
     assert protocol.CLOSE_UNAUTHORIZED == VECTORS["close_codes"]["unauthorized_source"]
     assert protocol.CLOSE_REPLACED == VECTORS["close_codes"]["replaced_by_same_source"]
     assert protocol.CLOSE_HELLO_TIMEOUT == VECTORS["close_codes"]["hello_timeout"]
+    assert protocol.CLOSE_CREDENTIAL_UNKNOWN == VECTORS["close_codes"]["credential_unknown"] == 4503
 
 
 @pytest.mark.parametrize("vector", VECTORS["pairing_uris"]["valid"], ids=lambda v: v["uri"])

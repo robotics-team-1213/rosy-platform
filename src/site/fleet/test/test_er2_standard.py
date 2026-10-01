@@ -385,7 +385,7 @@ def test_feedback_turn_replays_stateless_function_result_and_checks_egress_prefl
                     "goal_evidence_state": "PENDING", "goal_evidence_reason": None,
                     "stop_state": "DISPATCH_ENABLED", "stop_reason": None,
                 },
-                dispatcher=dispatcher, egress_policy=policy,
+                dispatcher=dispatcher, egress_policy=policy, turn_id="turn-status-1",
             )
 
     result = asyncio.run(scenario())
@@ -398,7 +398,48 @@ def test_feedback_turn_replays_stateless_function_result_and_checks_egress_prefl
     assert second_input[0] == first_input[0]
     assert second_input[1]["type"] == "function_call"
     assert second_input[2]["type"] == "function_result"
+    assert second_input[2]["call_id"] == "call-1"
+    assert second_input[2]["result"] == {
+        "tool_name": "get_mission_status", "status": "accepted",
+        "reason_code": "STATUS_CURRENT", "event_id": 19, "proposal_id": None,
+        "payload": {"mission_state": "ACTION_SUCCEEDED"},
+    }
     assert "previous_interaction_id" not in requests[1]
+
+
+def test_feedback_function_call_requires_a_trusted_durable_turn_id():
+    scope, context, egress = _feedback_scope_and_context()
+    requests = []
+    dispatches = []
+
+    async def handler(request):
+        requests.append(request)
+        return httpx.Response(200, json={"steps": [{
+            "type": "function_call", "id": "call-without-turn",
+            "name": "get_mission_status", "arguments": {},
+        }]})
+
+    class Dispatcher:
+        def dispatch(self, **_kwargs):
+            dispatches.append(True)
+            return ER2ToolResult(
+                tool_name="get_mission_status", status="accepted",
+                reason_code="STATUS_CURRENT",
+            )
+
+    async def scenario():
+        async with GeminiER2StandardAdapter(
+            api_key="test-secret", transport=httpx.MockTransport(handler)
+        ) as adapter:
+            await adapter.reason_about_mission(
+                scope=scope, context=context, dispatcher=Dispatcher(),
+                egress_policy=egress,
+            )
+
+    with pytest.raises(ER2ProposalError, match="durable turn ID"):
+        asyncio.run(scenario())
+    assert len(requests) == 1
+    assert dispatches == []
 
 
 def test_feedback_adapter_uses_async_candidate_dispatch_with_the_durable_turn_id():
@@ -611,7 +652,7 @@ def test_feedback_turn_rejects_duplicate_provider_call_ids_without_second_dispat
                     "goal_evidence_state": "PENDING", "goal_evidence_reason": None,
                     "stop_state": "DISPATCH_ENABLED", "stop_reason": None,
                 },
-                dispatcher=Dispatcher(), egress_policy=policy,
+                dispatcher=Dispatcher(), egress_policy=policy, turn_id="turn-status-duplicate",
             )
 
     with pytest.raises(ER2ProposalError, match="repeated a function call ID"):
@@ -692,7 +733,7 @@ def test_feedback_function_call_budget_boundary(call_count, expected_dispatches)
         ) as adapter:
             return await adapter.reason_about_mission(
                 scope=scope, context=context, dispatcher=Dispatcher(),
-                egress_policy=egress,
+                egress_policy=egress, turn_id="turn-budget-1",
             )
 
     if call_count == 4:
@@ -736,7 +777,7 @@ def test_feedback_rejects_invalid_provider_steps_before_tool_dispatch(step, matc
         ) as adapter:
             await adapter.reason_about_mission(
                 scope=scope, context=context, dispatcher=Dispatcher(),
-                egress_policy=egress,
+                egress_policy=egress, turn_id="turn-invalid-step-1",
             )
 
     with pytest.raises(ER2ProposalError, match=match):

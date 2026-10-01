@@ -62,11 +62,13 @@ def test_timer_runs_the_service_every_10_minutes():
 
 def test_example_config_matches_the_watcher_and_the_unit_state_dir(tmp_path):
     text = (SITE / "model-watch.yaml.example").read_text(encoding="utf-8")
-    filled = text.replace("<robot-name>", "pinky-005").replace("<robot-ip>", "192.0.2.10")
+    filled = text.replace("<robot-id>", "pinky-005").replace("<hostname>", "rosy-pinky-a1b2")
     (tmp_path / "c.yaml").write_text(filled, encoding="utf-8")
     cfg = watch.load_config(tmp_path / "c.yaml")
     assert cfg["backend"] == "inbox" and cfg["store"] == "/srv/rosy/store"  # no HF by default
     assert "repo" not in cfg
+    # robots by mDNS name, never an address
+    assert cfg["robots"] == [{"name": "pinky-005", "host": "rosy-pinky-a1b2.local"}]
     for key in ("intake_out", "state_file"):
         assert cfg[key].startswith("/var/lib/rosy-model-watch/")
     assert not [k for k in cfg if "token" in k.lower()]  # the token is never a config value

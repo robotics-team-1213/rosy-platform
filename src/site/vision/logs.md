@@ -241,3 +241,41 @@
 - 증거: `test_map_proposal_route.py` 막히는 가짜 작업으로 재현하는 시험.
 - gate 변화: 없음.
 
+## 2026-10-01 · uncommitted · fix(vision): 페어링 링크는 이름(tls_host)을 기본으로, IP는 경고하는 예비로
+
+- 변경: `cli.py` — `receive`는 링크 호스트를 `--advertise-host` > `--tls-host` > `<hostname>.local`로 정하고(D-391 `.local` 규칙으로 검증), 8.8.8.8 경로 탐지 IP는 `IP fallback:` 진단 줄로만 낸다. `pair-link --host <ip>`는 "수동 주소"·서브넷 변경·IP SAN을 설명하는 WARNING을 stderr에 내고 종료 코드 0을 유지한다. `deploy/site/README.md`·사이트 runbook §3에 "이름 기본, IP는 예비"를 적었다.
+- 증거: `python -m pytest src/site/vision/test -q` (아래 결과), 새 시험 `test_overhead_link_host_name_first.py`.
+- gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · fix(vision): receive 링크 호스트 안내와 오류 문구 보강
+
+- 변경: 특정 `--host` 주소로 바인드해도 링크는 이름이며 "link host is <name>.local (D-391); use --advertise-host <ip> to pair by IP (fallback, needs an IP SAN)"라고 한 줄 알린다. `--tls-host`는 `<name>.local`만 받고(FQDN은 `--advertise-host`) 오류가 그쪽을 가리킨다. 호스트명 오류는 원래 `gethostname()` 값과 밑줄·점 불가를 말하고, 경로 탐지 실패는 `IP fallback: unknown (no route)`로 쓴다.
+- 증거: `python -m pytest src/site/vision/test -q` 206 passed (2026-10-01 Windows).
+- gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · feat(vision): D-341 3단계 — 페어링 자격 동기화와 회수 닫기
+
+- 변경: 새 `rosy_vision/pairing_sync.py` — `PairedCredentials`(Fleet 목록의 `token_sha256`만 보관, source별 상수 시간 대조, 첫 동기화 전·마지막 정상 목록 10분 초과는 상태 불명)와 `PairingSync`(전용 데몬 스레드에서 2 s마다 `GET /api/fleet/pairing/v1/credentials?role=overhead-camera`, `pairing_sync_token` bearer, 실패해도 마지막 정상 목록 유지, URL·헤더·본문은 기록하지 않음). `ingest.py` — `paired=`가 있으면 정적 토큰 0개로도 기동; 업그레이드 단계는 정적 토큰 또는 동기화 digest, 상태 불명이면 `503` + `Retry-After: 2`, 모르면 `401`; hello 단계는 paired source면 그 source의 digest만 대조해 불명 `4503`, 회수·모름 `4401`; `enforce_paired_credentials()`가 목록에서 빠진 연결을 `4401`(불명은 `4503`)로 닫고, 그 사이 들어온 프레임은 `_handle_frame`에서 버린다. websockets 서버 로거를 INFO로 고정해 DEBUG에서도 Authorization 헤더가 기록되지 않는다. `protocol.CLOSE_CREDENTIAL_UNKNOWN = 4503`(벡터 `credential_unknown`). `vision_config.py` — `credential: static|paired`(static은 `phone_token_env` 필수, paired는 금지, 어기면 기동 거절). CLI `vision --pairing-sync-url/--pairing-sync-token-env/--pairing-sync-ca`: paired source가 있으면 필수, 없으면 설정 자체를 거절, 동기화 비밀이 폰·sighting·preview 비밀과 같으면 거절, preview 비밀 검사는 폰 토큰이 없는 paired source를 다룬다.
+- 결정: 동기화는 이벤트 루프 밖 스레드에서 돌고, 루프에는 `call_soon_threadsafe`로 닫기 검사만 올린다(2026-10-01 굶주림 교훈). 닫기가 늦어도 회수된 자격의 프레임은 다음 동기화 직후부터 버려진다. 상태 불명은 이미 붙은 paired 연결도 `4503`으로 닫는다(회수가 전파되지 못하는 동안 계속 받지 않는다). 업그레이드에서 paired source가 있고 상태 불명이면 모르는 bearer도 `503`이다(그 순간에는 페어링 자격과 구분할 수 없다).
+- 증거: 새 시험 `test_pairing_sync.py` 14(호출 스레드가 GIL을 쥔 채 도는 동안에도 동기화가 5회 이상), `test_ingest_paired_credentials.py` 9(실제 2 s 동기화 스레드로 회수 후 5 s 안에 `4401`), `test_vision_config.py` 3, `test_vision_cli.py` 7, `test_protocol.py` 1 단언 — 구현 전 실패 확인 뒤 녹색. `src/site/vision/test/` 223 passed(2026-10-01 Windows).
+- gate 변화: 없음(LOCAL).
+
+## 2026-10-01 · uncommitted · test(vision): D-341 합성 종단 시험 — 요청부터 회수 4401까지
+
+- 변경: 새 `test/test_pairing_e2e.py`. 시험의 tmp 폴더에 일회용 CA·leaf(SAN `rosy-e2e.local`·`localhost`·127.0.0.1, AKI/SKI 포함)를 만들고, Fleet(실제 `create_app` + uvicorn TLS, 자기 스레드)과 Vision(`_vision_ingest`로 같은 `site-cameras.yaml`에서 만든 수신기 + 실제 2 s `PairingSync` 스레드)을 127.0.0.1에 띄운다. 합성 폰이 첫 연결 leaf를 검증 없이 기록(SAN에 `tls_host` 확인)하고 그 leaf로만 요청→공개→(운용자 코드 입력 승인)→1회 수령→받은 CA로 leaf 체인 확인·지문 대조→확인→받은 CA 하나만 믿는 WSS로 hello·프레임을 보낸다. 이어서 Fleet 정지 → 오래된 목록으로 살아 있는 연결 `4503`, 재접속 `503` → 같은 DB로 Fleet 재기동 → 재접속 성공 → 콘솔 회수 → `4401`(5 s 안), 재접속 `401`.
+- 결정: 일반 시험 묶음에 둔다(Windows 벤치 PC에서 약 10 s, 3회 반복 9.5–9.9 s). Vision의 상태 불명 한도만 600 s → 3 s로 줄였다. 전체 소요 시간 단언은 부하 때 흔들릴 수 있어 두지 않고, 회수 5 s 단언만 둔다. 개인 키는 tmp에만 생기고 커밋되지 않는다.
+- 증거: `python -m pytest -q -p no:cacheprovider src/site/vision/test/test_pairing_e2e.py` 1 passed(13.4 s 포함 수집). 처음 실행은 Python 3.14의 엄격한 X.509 검사(AKI 없음)로 실패해 시험용 인증서에 키 식별자를 더했다.
+- gate 변화: 없음(LOCAL). Compose 스택 종단(D-341 LOCAL 표의 Compose 항목)과 DEVICE는 별도.
+
+## 2026-10-01 · uncommitted · chore(vision): D-341 저장소 가드 정리 — 역할 경계·크기 판정·비밀 스캔
+
+- 변경: `test/architecture/test_app_roles.py`의 Vision 경계가 sighting 쓰기 말고도 D-341 12항의 `/api/fleet/pairing/v1/credentials` 읽기를 허용한다(다른 Fleet 경로는 여전히 금지). `test_module_structure.py`에 `ingest.py` 671줄 판정(accept: 한 연결 표를 공유하는 한 소유자, digest 저장·동기화 스레드는 `pairing_sync.py`)과 `fleet` 패키지 재판정(21476)을 적었다. 비밀 스캔이 이름만 보고 잡은 호출 자리를 고쳤다(`cli.py` `known_tokens`, 종단 시험 `poll_auth=`, Fleet 시험 `shared_secret`) — 스캐너는 그대로(D-256).
+- 증거: `test/architecture/` 75 passed + 남은 1 failed는 main에 이미 있던 `schemas.py` 1092줄 판정. `test/test_release_boundary_guards.py` 72 passed + 남은 1 failed는 main의 `docs/logs.md:4077`·`docs/plans/2026-10-01-gemini-robotics-samples-research.md:5`(이 브랜치 파일 아님). vision 224 passed, foundation 389 passed.
+- gate 변화: 없음.
+
+
+## 2026-10-01 · uncommitted · fix(pairing): Vision 자격 동기화는 https와 사이트 CA 고정이 필수
+
+- 변경: 보안 리뷰 2번. 평문 `http://`나 CA 없는 동기화 URL은 기동 때 거절한다. 둘 중 하나라도 허용하면 LAN의 위장 서버가 동기화 토큰을 읽고 자기 digest 목록을 내 운용자 승인 없이 카메라 자격을 살릴 수 있었다(D-341 9·12항).
+- 증거: `test_pairing_sync.py` 신규 매개변수 시험 2건, Vision 시험 전체 통과.
+- gate 변화: 없음.

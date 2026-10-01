@@ -9,6 +9,7 @@ import { createFieldView } from "./field-view.js";
 import { createMapFitView } from "./map-fit-view.js";
 import { applyRoleToControls } from "./authorization.js";
 import { DISCOVERY_LABELS, createEnrollmentPanel } from "./enrollment.js";
+import { createCameraPairingPanel } from "./camera-pairing.js";
 import { createPollGate } from "./poll-gate.js";
 import { confirmIrreversible, openLiveDialog } from "/common/ui.js";
 // 좌표계: 로봇 pose 는 CORE 가 TF `map → <ns>base_footprint` 로 읽어 주는 map 프레임
@@ -308,6 +309,14 @@ const enrollment = createEnrollmentPanel({
   log,
   dialogs: { confirmIrreversible, openLiveDialog },
 });
+// D-341: 같은 "기기 연결" 패널의 카메라 연결 승인 구역. 대기 목록은 모듈이 2.5 s마다 묻는다.
+const cameraPairing = createCameraPairingPanel({
+  headers: authHeaders,
+  identity: () => ({ role: auth.role, principal_id: auth.principal }),
+  locked: () => auth.locked,
+  log,
+  dialogs: { confirmIrreversible, openLiveDialog },
+});
 
 function showDiscoveryUnavailable(label, message, level = "warn") {
   const status = el("discovery-status");
@@ -375,6 +384,7 @@ async function refreshAuthorization() {
   dispatchGate.reset();
   discoveryGate.reset();
   enrollment.resetPolling();
+  cameraPairing.resetPolling();
   mapView.resetPolling();
   try {
     const identity = await call("/api/fleet/session");
@@ -389,6 +399,7 @@ async function refreshAuthorization() {
     await refreshState();
     await refreshDispatchControl();
     await refreshDiscovery();
+    await cameraPairing.refresh({ credentials: true });
     await formation.refreshFormation();
     render();
   } catch (_err) {

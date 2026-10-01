@@ -39,6 +39,9 @@ CLOSE_REPLACED = 4409
 # No hello in time. A busy receiver must not look like a protocol mismatch (D-375
 # live test): standard 1013 try again later, so the app reconnects with backoff.
 CLOSE_HELLO_TIMEOUT = 1013
+# D-341 11: the credential state cannot be checked now (Vision never synced with Fleet, or
+# its last good list is older than 10 min). Retryable; the phone keeps its credential.
+CLOSE_CREDENTIAL_UNKNOWN = 4503
 
 
 class ProtocolError(ValueError):

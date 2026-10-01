@@ -105,6 +105,9 @@ KNOWN_LEGACY_HEADINGS = frozenset({
     # reforming them, and their evidence and gate lines live in the entries' prose.
     "## 2026-09-29 · 72802f30·895786cf · feat: 실물 차선 자동 주행(D-349 보조 자율)",
     "## 2026-09-29 · 35efb5ba · feat(core): 차선 추종 앞 물체 정지(LiDAR, D-349 §11)",
+    # The D-392 P3 fleet entry reached main with a `date - summary` heading;
+    # the history gate forbids reforming it in place.
+    "## 2026-10-01 - D-392 P3 closed model-tool catalog",
 })
 
 GENERATED_MARK = (

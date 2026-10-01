@@ -109,7 +109,8 @@ def test_no_surface_script_opens_a_modal_dialog():
                  for match in SHOW_MODAL.finditer(text)]
     assert offenders == [], f"showModal()은 정지를 inert로 만든다 — ui.js openLiveDialog를 쓴다: {offenders}"
     names = {path.relative_to(SRC).as_posix() for path in scripts}
-    for script in ("site/fleet/fleet/server/web/enrollment.js", "hmi/web_common/ui.js", "hmi/pilot/app.js",
+    for script in ("site/fleet/fleet/server/web/enrollment.js", "site/fleet/fleet/server/web/camera-pairing.js",
+                   "hmi/web_common/ui.js", "hmi/pilot/app.js",
                    "hmi/dashboard/settings.js", "site/games/games/web/board.js"):
         assert script in names, f"스캔이 {script}를 놓쳤다"
 

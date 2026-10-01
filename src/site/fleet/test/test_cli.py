@@ -504,3 +504,65 @@ def test_sighting_mapping_to_an_unenrolled_robot_warns_instead_of_refusing(tmp_p
     args.sightings_config = _sighting_config(tmp_path, ["rosy_01", "rosy_77"])
     with pytest.raises(SystemExit, match="unknown robot target"):
         cli.run_console(args)
+
+
+def _pairing_files(tmp_path, monkeypatch):
+    from pairing_fixtures import LEAF_PEM, SITE_CA_PEM
+
+    robots = _write(tmp_path)
+    config = tmp_path / "site-cameras.yaml"
+    config.write_text(yaml.safe_dump({"sources": [{
+        "source_id": "ceiling_north", "token_env": "ROSY_TEST_SIGHTING_TOKEN",
+        "credential": "paired", "robot_ids": ["rosy_01"], "map_id": "site-v1",
+        "calibration_revision": "cal-v3", "corner_marker_ids": [30, 31, 32, 33],
+    }]}), encoding="utf-8")
+    (tmp_path / "site.crt").write_text(LEAF_PEM + SITE_CA_PEM, encoding="utf-8")
+    (tmp_path / "site.key").write_text("private-key", encoding="utf-8")
+    (tmp_path / "site-ca.crt").write_text(SITE_CA_PEM, encoding="utf-8")
+    (tmp_path / "leaf-only.crt").write_text(LEAF_PEM, encoding="utf-8")
+    monkeypatch.setenv("ROSY_TEST_SIGHTING_TOKEN", "source-secret")
+    monkeypatch.setenv("ROSY_SITE_OPERATOR_TOKEN", "operator-secret")
+    monkeypatch.setenv("ROSY_TEST_PAIRING_SYNC", "sync-" + "secret-1")
+    return ["console", "--robots", str(robots), "--token-env", "ROSY_SITE_OPERATOR_TOKEN",
+            "--sightings-config", str(config), "--tasks-db", str(tmp_path / "fleet.sqlite3")]
+
+
+def test_console_wires_d341_pairing_only_with_tls(tmp_path, monkeypatch):
+    from core_common.protocol import pairing
+    from pairing_fixtures import LEAF_SHA256
+
+    base = _pairing_files(tmp_path, monkeypatch)
+    captured = {}
+    monkeypatch.setattr("uvicorn.run", lambda app, **kwargs: captured.update(app=app))
+    cli.run_console(cli.parse_args(base + [
+        "--tls-cert", str(tmp_path / "site.crt"), "--tls-key", str(tmp_path / "site.key"),
+        "--pairing-ca", str(tmp_path / "site-ca.crt"), "--pairing-tls-host", "fixture-site.local",
+        "--pairing-sync-token-env", "ROSY_TEST_PAIRING_SYNC"]))
+
+    client = TestClient(captured["app"])
+    listing = client.get("/api/fleet/pairing/v1/credentials", params={"role": "overhead-camera"},
+                         headers={"Authorization": "Bearer sync-" + "secret-1"})
+    assert listing.status_code == 200 and listing.json()["credentials"] == []
+    pending = client.get("/api/fleet/pairing/v1/pending",
+                         headers={"Authorization": "Bearer operator-secret"}).json()
+    assert pending["paired_sources"] == [{"source_id": "ceiling_north", "has_credential": False}]
+    assert pending["site_ca_fingerprint"] == pairing.site_fingerprint(
+        (tmp_path / "site-ca.crt").read_text(encoding="utf-8"))
+    assert LEAF_SHA256 == pairing.der_sha256((tmp_path / "site.crt").read_text(encoding="utf-8"))
+
+
+@pytest.mark.parametrize("extra, message", [
+    (["--pairing-ca", "{ca}", "--pairing-tls-host", "fixture-site.local"], "--tls-cert"),
+    (["--tls-cert", "{crt}", "--tls-key", "{key}", "--pairing-ca", "{leaf}",
+      "--pairing-tls-host", "fixture-site.local"], "CA"),
+    (["--tls-cert", "{crt}", "--tls-key", "{key}", "--pairing-ca", "{ca}"], "--pairing-tls-host"),
+    (["--pairing-sync-token-env", "ROSY_TEST_PAIRING_SYNC"], "--pairing-ca"),
+])
+def test_console_refuses_incomplete_d341_pairing(tmp_path, monkeypatch, extra, message):
+    base = _pairing_files(tmp_path, monkeypatch)
+    names = {"ca": "site-ca.crt", "crt": "site.crt", "key": "site.key", "leaf": "leaf-only.crt"}
+    extra = [item.format(**{key: str(tmp_path / value) for key, value in names.items()})
+             for item in extra]
+    monkeypatch.setattr("uvicorn.run", lambda app, **kwargs: None)
+    with pytest.raises(SystemExit, match=message):
+        cli.run_console(cli.parse_args(base + extra))

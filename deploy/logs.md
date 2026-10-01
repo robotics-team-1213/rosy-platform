@@ -1740,6 +1740,18 @@
 - 증거: test_release_boundary_guards.py 112 passed(새 시험 6개), 변이 2종(sha/head 제거·코드 스팬 조건 제거) 모두 실패로 잡힘. 같은 커밋에서 크기 판정 fleet 20655·schemas.py 1092를 재판정했다(test_module_structure 통과).
 - gate 변화: 없음.
 
+## 2026-10-01 · uncommitted · feat(site): D-391 3 사이트 호스트 일관성 사전 검사 `site_preflight.py`
+- 변경: `deploy/site/site_preflight.py` 신규(표준 라이브러리만, `compose up` 전에 실행). 검사 다섯 가지: `site_cert`가 leaf(CA 아님) + CA 순서인지(leaf 단독 거부, 2026-09-30 사고), leaf DNS SAN에 `tls_host`가 정확히(대소문자 무시, 와일드카드 불가) 있는지, `tls_host`가 `.local` 이름인지(IP·다른 도메인 거부), 광고 유닛이 낼 TXT `tls_host`(`--tls-host`, `Environment=`·env 파일로 `${VAR}` 전개)가 설정값과 같은지, Caddyfile 첫 사이트 주소가 다른 호스트를 가리키지 않는지(포트만 있는 `:8443`은 통과). IP SAN은 검사하지 않는다(재할당 시 낡음; `manual_host` 되돌림 전용). 실패마다 이유와 고치는 법, 하나라도 실패하면 종료 코드 1, `--json` 지원. README에 "Preflight" 소절 추가. compose.yaml은 건드리지 않았다(rosy-84 병행 작업).
+- 증거: test_site_preflight.py(먼저 31 failed) 구현 후 통과, test_site_fleet_mdns.py 함께 108 passed. CA/leaf DER 복사본이 core_common `site_link`와 site-link.v1.json의 ca_pem 사례에서 일치함을 시험으로 고정. 시험 인증서는 실행 시점에 임시로 만들고 키를 저장소에 두지 않는다. 사이트 호스트 실물 실행은 하지 않았다(LOCAL만).
+- gate 변화: 없음(호스트 배포 없음).
+
+
+## 2026-10-01 · uncommitted · fix(site): 사이트 사전 점검 독립 리뷰 반영 — systemd 형식, env 따옴표, 모든 Caddy 블록
+
+- 변경: 리뷰(APPROVE WITH FIXES) 1–4번. 유닛 파일의 줄 이음(`\`)을 먼저 합치고, `ExecStart=`의 `-@+!:` 접두를 떼고, 빈 `ExecStart=`는 명령을 비우며, `${VAR}`와 `$VAR` 둘 다 펼친다. env 파일은 `export `를 떼고 짝이 맞는 따옴표만 벗긴다. Caddyfile은 첫 블록만이 아니라 모든 최상위 사이트 블록의 호스트를 보며 스니펫 `(name) {`은 건너뛴다.
+- 증거: 신규 시험 4건, `test_site_preflight.py`·`test_site_fleet_mdns.py` 함께 통과.
+- gate 변화: 없음.
+
 ## 2026-10-01 · uncommitted · fix(site): 사이트 바인드는 인터페이스를 따른다 — 와일드카드 바인드, 인터페이스 방화벽, 루프백 발견 브리지
 
 - 변경: 점검(2026-10-01) #1·#4. 사이트 망이 192.168.1.0/24에서 10.16.36.0/24로 바뀌자 `compose.yaml`의 `${ROSY_SITE_BIND_ADDRESS}:8443`(README가 LAN IP를 적게 했다)이 "cannot assign requested address"로 떠지지 않아 관제·카메라·로봇·발견 브리지가 함께 멈췄다. (1) LAN 설정은 `ROSY_SITE_BIND_ADDRESS=0.0.0.0`(IPv6는 `::`) + `ROSY_SITE_LAN_IFACE`, 기본값 `127.0.0.1` 유지. compose는 그대로(기본값만), `.env.example`에 `ROSY_SITE_LAN_IFACE`. (2) `site/site-firewall.py` + `rosy-site-firewall.service`(After·PartOf·WantedBy docker): `DOCKER-USER` 맨 앞에서 conntrack 원래 목적 포트(`--ctstate DNAT --ctdir ORIGINAL --ctorigdstport`)를 자체 체인 `ROSY-SITE-INGRESS`로 보내 `-i <iface> -j RETURN`, 나머지 `DROP`. IP·서브넷은 쓰지 않는다. `apply`는 멱등(바뀐 인터페이스·옛 포트 점프 정리), `--dry-run`은 규칙만 출력. (3) `rosy-site-stack.service` `ExecStartPre`가 `site-firewall.py check`: 이 호스트에 없는 리터럴 IP, 인터페이스 없는 LAN 바인드, 설치 안 된 필터면 이유를 남기고 기동 거부(D-391 3항 일관성 검사가 나중에 흡수할 수 있다). (4) `mdns-bridge.py`는 `--url` 대신 `--tls-host`·`--port`로 루프백(`127.0.0.1`, 이어서 `::1`)에 TLS SNI·호스트명 검사·Host를 `tls_host`로 두고 사이트 CA로 확인해 보낸다. 유닛은 `site.env`를 읽고 `IPAddressAllow=localhost`만 허용, `mdns-bridge.env`(`ROSY_SITE_DISCOVERY_URL`)는 은퇴. Avahi 실패 시 아무것도 보내지 않는 규칙 유지. 후보 목록(`build_candidate.py`·`verify_candidate.py`)에 새 두 파일. README "LAN access", 런북 2항.

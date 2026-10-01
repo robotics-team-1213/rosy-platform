@@ -35,6 +35,8 @@ class SightingSource:
     # Display geometry only (the surveyed rectangle in the map frame); never motion input.
     corner_world_m: tuple[tuple[float, float], ...] | None = None
     robot_markers: tuple[tuple[str, int], ...] = ()
+    # D-341 6: how the phone feeding this source authenticates to Vision (static | paired).
+    credential: str = "static"
 
 
 class SightingService:

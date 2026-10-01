@@ -1881,3 +1881,221 @@ def test_map_chips_paint_after_lines_and_clear_robot_markers(console_url):
         assert overlap == [], (overlap, chips, markers)
         assert not errors
         browser.close()
+
+
+# --- D-341 카메라 연결 승인 (기기 연결 패널) ---------------------------------------
+
+CAMERA_FINGERPRINT = "3F2A-9C1D-77E0-B4C5"
+CAMERA_PENDING = {
+    "requests": [
+        {"request_id": "req-7f3a", "device_label": "Galaxy S21 천장", "app_version": "0.4.0",
+         "state": "revealed", "requested_at": "2026-10-01T09:00:00+00:00", "expires_in_s": 250,
+         "attempts_left": 3},
+        {"request_id": "req-81bc", "device_label": "Pixel 7", "app_version": "0.4.0",
+         "state": "pending", "requested_at": "2026-10-01T09:00:30+00:00", "expires_in_s": 290,
+         "attempts_left": 3},
+    ],
+    "paired_sources": [{"source_id": "ceiling_north", "has_credential": True},
+                       {"source_id": "ceiling_south", "has_credential": False}],
+    "site_ca_fingerprint": CAMERA_FINGERPRINT,
+    "unauthenticated_requests": 5, "refused_requests": 2, "commit_mismatches": 1,
+}
+CAMERA_CREDENTIALS = {"credentials": [{
+    "credential_id": "cred-4be1a09c3d2f", "source_id": "ceiling_north", "state": "active",
+    "device_label": "Galaxy A54", "approved_by": "alice", "approved_at": "2026-10-01T08:00:00+00:00",
+    "confirmed_at": "2026-10-01T08:01:10+00:00", "expires_at": "2027-03-30T08:00:00+00:00",
+    "expired": False}], "site_ca_fingerprint": CAMERA_FINGERPRINT}
+CAMERA_SHOTS = os.environ.get("ROSY_CAMERA_SCREENSHOT_DIR")
+
+
+def _camera_api(principal="alice", role="operator"):
+    return {
+        "/api/fleet/state": SNAPSHOT, "/api/fleet/map": MAP_GRID, "/api/fleet/formation": FORMATION,
+        "/api/fleet/session": {"principal_id": principal, "role": role},
+        "/api/fleet/pairing/v1/pending": CAMERA_PENDING,
+        "/api/fleet/pairing/v1/credentials/summary": CAMERA_CREDENTIALS,
+        "/api/fleet/estop": {"stopped": 3, "total": 3, "robots": []},
+    }
+
+
+def _camera_shot(page, name, selector="#camera-link"):
+    if not CAMERA_SHOTS:
+        return
+    Path(CAMERA_SHOTS).mkdir(parents=True, exist_ok=True)
+    page.locator(selector).scroll_into_view_if_needed()
+    page.locator(selector).screenshot(path=str(Path(CAMERA_SHOTS) / name))
+
+
+def test_camera_approval_takes_the_phone_code_and_shows_the_mutual_check(console_url):
+    """D-341 3–4: approve = free paired source + the phone's six digits; the console never shows a code."""
+    import re
+
+    from playwright.sync_api import sync_playwright
+
+    bodies = []
+    with sync_playwright() as playwright:
+        browser, page, errors = _open_console(playwright, _camera_api())
+
+        def approve(route):
+            bodies.append(route.request.post_data_json)
+            if len(bodies) == 1:
+                route.fulfill(status=409, json={"detail": {
+                    "code": "CODE_MISMATCH", "message": "code does not match the phone", "attempts_left": 2}})
+                return
+            route.fulfill(status=200, json={
+                "request_id": "req-7f3a", "credential_id": "cred-9d0c11aa22bb", "source_id": "ceiling_south",
+                "site_ca_fingerprint": CAMERA_FINGERPRINT, "expires_at": "2027-03-30T09:00:00+00:00",
+                "confirm_within_s": 120})
+
+        page.route("**/api/fleet/pairing/v1/requests/req-7f3a/approve", approve)
+        page.goto(console_url, wait_until="networkidle")
+        page.get_by_role("heading", name="카메라 연결 승인", exact=True).wait_for()
+        ready = page.locator('#camera-requests li[data-request-id="req-7f3a"] ui-button[data-action="approve"]')
+        ready.wait_for()
+        assert ready.inner_text() == "승인…"
+        waiting = page.locator('#camera-requests li[data-request-id="req-81bc"] ui-button[data-action="approve"]')
+        assert waiting.get_attribute("reason") == "폰에 아직 코드가 없습니다"
+        assert page.evaluate("document.getElementById('camera-requests').textContent").count("남은 시간") == 2
+        assert "한도로 거절된 요청 2건" in page.locator("#camera-queue-health").inner_text()
+        assert page.locator("#camera-site-fingerprint").inner_text() == CAMERA_FINGERPRINT
+        _camera_shot(page, "01-pending-operator-1920.png")
+
+        ready.click()
+        page.wait_for_function("document.getElementById('camera-approve-dialog').open")
+        assert page.evaluate("document.activeElement?.id") == "camera-approve-code"
+        assert page.evaluate(
+            "[...document.querySelectorAll('#camera-approve-source option')].map(o => o.value)") == ["ceiling_south"]
+        assert page.evaluate("""() => { const s = document.getElementById('estop');
+          for (let n = s; n; n = n.parentElement) if (n.inert) return false; return true; }""")
+        page.locator("#camera-approve-code").fill("12345")
+        page.locator("#camera-approve-submit").click()
+        assert "숫자 6자리" in page.locator("#camera-approve-error").inner_text()
+        assert bodies == []
+        page.locator("#camera-approve-code").fill("123 456")
+        page.locator("#camera-approve-submit").click()
+        page.wait_for_function(
+            "document.getElementById('camera-approve-error').textContent.includes('남은 입력 2회')")
+        assert bodies == [{"code": "123456", "source_id": "ceiling_south"}]
+        assert page.evaluate("document.getElementById('camera-approve-dialog').open")
+        _camera_shot(page, "02-approve-dialog-mismatch-1920.png", "#camera-approve-dialog")
+        page.locator("#camera-approve-code").fill("654321")
+        page.locator("#camera-approve-submit").click()
+        page.wait_for_function("!document.getElementById('camera-confirm').hidden")
+        confirm = page.locator("#camera-confirm").inner_text()
+        assert "폰 화면과 이 지문·자격 ID가 같은지 확인하세요" in confirm
+        assert page.locator("#camera-confirm-fingerprint").inner_text() == CAMERA_FINGERPRINT
+        assert page.locator("#camera-confirm-credential").inner_text() == "cred-9d0c11aa22bb"
+        assert re.search(r"남은 시간 (2:00|1:5\d)", page.locator("#camera-confirm-clock").inner_text())
+        mono = page.evaluate(
+            "getComputedStyle(document.getElementById('camera-confirm-fingerprint')).fontFamily")
+        assert "mono" in mono.lower() or "consolas" in mono.lower(), mono
+        body = page.inner_text("body")
+        assert "654321" not in body and "123456" not in body
+        _camera_shot(page, "03-mutual-check-1920.png")
+        page.set_viewport_size({"width": 1366, "height": 768})
+        _camera_shot(page, "04-mutual-check-1366.png")
+        page.set_viewport_size({"width": 390, "height": 844})
+        assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
+        _camera_shot(page, "05-mutual-check-390.png")
+        page.set_viewport_size({"width": 320, "height": 568})
+        assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
+        _camera_shot(page, "06-mutual-check-320.png")
+        assert not errors
+        browser.close()
+
+
+def test_camera_reject_and_revoke_are_quiet_row_actions_confirmed_by_name(console_url):
+    """D-371: 거절…/폐기… open confirmIrreversible naming the target; danger fill only there."""
+    from playwright.sync_api import sync_playwright
+
+    posts = []
+
+    def answer(body):
+        def handle(route):
+            posts.append((route.request.method, urlparse(route.request.url).path))
+            route.fulfill(status=200, json=body)
+        return handle
+
+    with sync_playwright() as playwright:
+        browser, page, errors = _open_console(playwright, _camera_api())
+        page.route("**/api/fleet/pairing/v1/requests/req-81bc/reject",
+                   answer({"request_id": "req-81bc", "state": "rejected"}))
+        page.route("**/api/fleet/pairing/v1/credentials/cred-4be1a09c3d2f/revoke",
+                   answer({"credential_id": "cred-4be1a09c3d2f", "state": "revoked"}))
+        page.goto(console_url, wait_until="networkidle")
+        revoke = page.locator('#camera-credentials li[data-credential-id="cred-4be1a09c3d2f"] '
+                              'ui-button[data-action="revoke"]')
+        revoke.wait_for()
+        assert revoke.inner_text() == "폐기…" and revoke.get_attribute("kind") == "quiet"
+        text = page.locator("#camera-credentials").inner_text()
+        assert "사용 중" in text and "alice" in text and "2027-03-30" in text
+        revoke.click()
+        dialog = page.locator("dialog.ui-confirm")
+        dialog.wait_for()
+        assert '"cred-4be1a09c3d2f"' in dialog.locator("p").inner_text()
+        assert dialog.locator('ui-button[kind="irreversible"]').inner_text() == "폐기"
+        _camera_shot(page, "07-revoke-confirm-1920.png", "dialog.ui-confirm")
+        page.keyboard.press("Escape")
+        page.wait_for_function("!document.querySelector('dialog.ui-confirm')")
+        assert page.evaluate("document.activeElement?.dataset.action") == "revoke"
+        revoke_path = "/api/fleet/pairing/v1/credentials/cred-4be1a09c3d2f/revoke"
+        assert ("POST", revoke_path) not in posts
+        revoke.click()
+        page.locator('dialog.ui-confirm ui-button[kind="irreversible"]').click()
+        page.wait_for_function("document.getElementById('camera-result').textContent.includes('폐기했습니다')")
+
+        reject = page.locator('#camera-requests li[data-request-id="req-81bc"] ui-button[data-action="reject"]')
+        assert reject.inner_text() == "거절…"
+        reject.click()
+        page.locator("dialog.ui-confirm").wait_for()
+        assert '"Pixel 7"' in page.locator("dialog.ui-confirm p").inner_text()
+        page.locator('dialog.ui-confirm ui-button[kind="irreversible"]').click()
+        page.wait_for_function("document.getElementById('camera-result').textContent.includes('거절했습니다')")
+        assert ("POST", revoke_path) in posts
+        assert ("POST", "/api/fleet/pairing/v1/requests/req-81bc/reject") in posts
+        assert not errors
+        browser.close()
+
+
+@pytest.mark.parametrize("principal,role", [("vic", "viewer"), ("site-console", "operator")])
+def test_camera_lists_without_actions_for_viewers_and_the_shared_token(console_url, principal, role):
+    """D-341 5: viewers and a single console-token site see the lists, never an action button."""
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as playwright:
+        browser, page, errors = _open_console(playwright, _camera_api(principal, role))
+        page.goto(console_url, wait_until="networkidle")
+        page.locator('#camera-requests li[data-request-id="req-7f3a"]').wait_for()
+        page.locator('#camera-credentials li[data-credential-id="cred-4be1a09c3d2f"]').wait_for()
+        assert page.locator("#camera-requests ui-button, #camera-credentials ui-button").count() == 0
+        if role == "viewer":
+            assert page.locator("#camera-role-lock").is_visible()
+            assert page.locator("#camera-role-lock").inner_text() == "운용자 권한이 필요합니다"
+            assert page.locator("#camera-identity-note").is_hidden()
+        else:
+            note = page.locator("#camera-identity-note")
+            assert note.is_visible() and "site-users.yaml" in note.inner_text()
+        _camera_shot(page, f"08-lists-{role}-{principal}-1920.png")
+        assert not errors
+        browser.close()
+
+
+def test_camera_section_is_calm_when_fleet_has_no_pairing(console_url):
+    """Routes absent (plain 404): one calm sentence, and the panel stops asking."""
+    from playwright.sync_api import sync_playwright
+
+    api = {key: value for key, value in _camera_api().items() if "/pairing/" not in key}
+    posts = []
+    with sync_playwright() as playwright:
+        browser, page, errors = _open_console(playwright, api, posts)
+        page.goto(console_url, wait_until="networkidle")
+        calm = page.locator("#camera-link-unavailable")
+        calm.wait_for()
+        assert calm.inner_text() == "이 Fleet에는 카메라 연결 승인이 설정되지 않았습니다."
+        assert page.locator("#camera-link-controls").is_hidden()
+        page.wait_for_timeout(6000)
+        asked = [p for p in posts if p[1] == "/api/fleet/pairing/v1/pending"]
+        assert len(asked) == 1, asked
+        _camera_shot(page, "09-no-pairing-1920.png")
+        assert not errors
+        browser.close()
