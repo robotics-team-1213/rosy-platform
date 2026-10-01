@@ -4117,3 +4117,9 @@
 - gate 변화: 없음(로봇 설정·params 변경 없음).
 - 결정: D-393 Proposed
 - 교훈: 없음
+
+## 2026-10-01 · uncommitted · docs(adr): D-395 UI/UX 목표 체계와 실행 계획
+
+- 변경: ADR D-395(파일+로그 행)와 docs/plans/2026-10-01-ui-ux-consistency-goals.md. 실측으로 G2(빈 contracts 강제)와 G5(baseline 추적)의 강제 시험이 이미 존재함을 확인.
+- 증거: rosy_harness lint 오류 0.
+- gate 변화: 없음.

@@ -391,3 +391,4 @@
 | D-391 | 앱은 사이트 연결을 같은 모양(이름·CA·자격, IP 없음)으로 저장하고, 기기 연결 서버는 Fleet "기기 연결"이 맡는다 | Proposed (2026-10-01; 사이트 연결 기록 모양·사이트 호스트 설정 원천·기기 연결 구현 순서; 구현·담당은 결정 회차) |
 | D-392 | 모델 도구 호출은 provider 중립 메시지 계약과 Fleet 소유 allowlist를 따른다 | Accepted (2026-10-01, 내부 호출·결과 경계; 도구는 요청이지 device Action이 아니며 actuation·stop/E-stop 권한과 provider 활성화는 미결정) |
 | D-393 | Pinky 트랙 Nav2 위치추정은 AMCL `update_min_d` 0.02, 목표 허용오차 0.05 m / 0.10 rad, 주차 자세 출발·global localization 금지 운용 규칙을 제안한다 | Proposed (2026-10-01; sim 1대 n=1 증거, 설정 미변경; 반복 sim A/B와 승인된 실물 주행 전 적용 안 함) |
+| D-395 | UI/UX 공용화·일관성 목표 체계 — 여섯 목표(단일 언어·문법 일관성·장치 독립·역할 소유·검증 상시화·지식 단일 출처)를 세우고, 강제 가능한 것은 계약 시험으로: web_common 밖 커스텀 엘리먼트 정의와 서피스 :root 토큰 재선언을 금지(예외는 등록부 raw_colours 로 선언), 승격(2서피스+ → web_common)은 계약이 만드는 압력 | Accepted (2026-10-01, 사용자 승인; 실행 추적 docs/plans/2026-10-01-ui-ux-consistency-goals.md; G2·G5 강제 시험은 이미 존재 — 실측으로 확인) |
