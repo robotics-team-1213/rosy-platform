@@ -18,7 +18,7 @@ from core_api_web.api.v1.common import (
 from core_common.domain.tasks import TaskKind
 from core_common.protocol.schemas import DockState, RobotMode
 from core_api_web.api.deps import Mode
-from core_api_web.api.deps import LineFollowMode
+from core_api_web.api.deps import LineFollowMode, LineStuckRefused
 
 
 line_follow_router = APIRouter(prefix="/api/v1/line-follow", tags=["line-follow"])
@@ -28,6 +28,13 @@ class LineFollowModeRequest(BaseModel):
     mode: str
     # D-344 §8: 있으면 POST /hold 로 이 시간 안에 계속 갱신해야 한다(운전자 확인).
     hold_s: Optional[float] = Field(default=None, gt=0, le=2.0)
+
+
+class LineStuckDecisionRequest(BaseModel):
+    """D-407 §2: the console's answer to one open stuck, bound to its id."""
+
+    stuck_id: str = Field(min_length=1, max_length=64)
+    decision: str = Field(pattern="^(WAIT|RESUME|BACK_AND_RETRY|MANUAL|ABORT)$")
 
 
 def _status(svc: CoreServicesLike) -> dict:
@@ -115,3 +122,35 @@ def hold_line_follow(auth: AuthContext = Depends(operator),
     if not svc.line_follow.hold():
         raise ApiError("LINE_FOLLOW_NOT_HELD", 409, "no active hold-to-run line-follow session")
     return _status(svc)
+
+
+@line_follow_router.post("/stuck/decision")
+def decide_line_stuck(body: LineStuckDecisionRequest,
+                      auth: AuthContext = Depends(operator),
+                      svc: CoreServicesLike = Depends(get_services)):
+    """D-407 §2: WAIT | RESUME | BACK_AND_RETRY | MANUAL | ABORT for the open stuck id."""
+    if body.decision in ("RESUME", "BACK_AND_RETRY"):
+        # Answers that move the wheels respect the calibration lease and e-stop; WAIT,
+        # MANUAL (stops line-follow) and ABORT (IDLE) only stop, so they stay open.
+        require_calibration_owner(svc, auth, "line-follow stuck decision")
+        if svc.safety.estop or svc.modes.is_emergency:
+            raise ApiError("EMERGENCY_ACTIVE", 409, "release emergency stop first")
+    try:
+        outcome = svc.line_follow.stuck_decision(body.stuck_id, body.decision, by=auth.role)
+    except LineStuckRefused as exc:
+        raise ApiError(exc.code, 409, str(exc)) from exc
+    if outcome in ("manual", "idle"):
+        status = svc.line_follow.stop()
+        svc.command.clear_navigation()
+        svc.state.set_line_follow(status)
+        target = Mode.MANUAL if outcome == "manual" else Mode.IDLE
+        if svc.modes.mode is not target:
+            ok, reason = svc.modes.transition(target)
+            if not ok:
+                raise ApiError("MODE_CONFLICT", 409, reason)
+            svc.state.set_mode(RobotMode(target.value))
+            svc.events.publish("mode.changed", source="api",
+                               data={"from": "api", "to": target.value, "by": auth.role})
+    else:
+        svc.state.set_line_follow(svc.line_follow.status())
+    return {**_status(svc), "outcome": outcome}

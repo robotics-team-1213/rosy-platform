@@ -120,6 +120,18 @@ line_follow:                       # D-143 selected-source, fail-closed policy
   ir_guard_edge_error: 0.3         # |IR error| at or above this = boundary under a side sensor
   ir_guard_turn: 0.5               # rad/s steer away from the boundary (clamped to max_angular)
   ir_guard_speed_scale: 0.5        # linear scale while steering away
+  # D-407 lane stuck recovery: obstacle_ahead >= obstacle_escalate_s or LOST opens one stuck and
+  # asks the console (POST /line-follow/stuck/decision). No answer in recovery_ask_s, or no
+  # console link -> local back-off (only when recovery_local_enabled, per robot, after its
+  # lidar_self_mask is measured). Rear clearance is measured from the URDF body rear, so the
+  # robot package must set body_lidar_x_m / body_rear_x_m (unset = never backs off).
+  recovery_local_enabled: false
+  recovery_ask_s: 15.0             # console answer window before the local fallback
+  recovery_back_m: 0.08            # one back-off (<= 0.20)
+  recovery_back_speed: 0.03        # m/s ceiling; actual = min(safety.manual_linear, this)
+  recovery_rear_clear_m: 0.06      # rear clearance from the body rear, before and during
+  recovery_max_attempts: 2         # local back-offs per stuck; then HOLD for the console only
+  recovery_settle_s: 1.0           # stand still before re-judging lane + front
 
 traffic_policy:                    # D-151 semantic road evidence gate
   mode: DISABLED                   # DISABLED | MONITOR_ONLY | ENFORCED

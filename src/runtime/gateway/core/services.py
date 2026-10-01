@@ -13,8 +13,8 @@ from core_common.capability import Capability
 from core_features.calibration import CalibrationSessionManager
 from core_features.command.arbitration import Mode, ModeMachine, SourceRegistry
 from core_features.command.manager import CommandManager
-from core_features.line_follow.clearance import self_mask_from_config
 from core.teleop_config import teleop_timeout_ms
+from core.line_follow_wiring import _line_follow_config, bind_stuck_recovery  # noqa: F401 (tests import the parser here)
 from core_features.docking.agent import DockAgent
 from core_features.docking.database import DockDatabase, DockError, DockInstance, DockType
 from core_features.docking.detector import select_detector
@@ -32,7 +32,7 @@ from core_common.identity import RobotIdentity
 from core_features.maps import MapSnapshotStore
 from core_features.navigation.manager import NavigationManager
 from core_features.navigation.readiness import NavigationReadinessGate
-from core_features.line_follow import LineFollowConfig, LineFollowManager
+from core_features.line_follow import LineFollowManager
 from core_features.traffic_policy import (
     SignalObserverMonitor,
     SignalObserverPoller,
@@ -144,42 +144,6 @@ def _power_config(raw: dict[str, Any]) -> PowerConfig:
         standby_rate_hz=float(raw.get("standby_rate_hz", defaults.standby_rate_hz)),
         presence=presence,
         lidar=lidar,
-    )
-
-
-def _line_follow_config(raw: dict[str, Any]) -> LineFollowConfig:
-    """Parse the operator-tunable D-143 policy with validation in one place."""
-    defaults = LineFollowConfig()
-    return LineFollowConfig(
-        cruise_speed=float(raw.get("cruise_speed", defaults.cruise_speed)),
-        max_linear=float(raw.get("max_linear", defaults.max_linear)),
-        steering_gain=float(raw.get("steering_gain", defaults.steering_gain)),
-        max_angular=float(raw.get("max_angular", defaults.max_angular)),
-        min_confidence=float(raw.get("min_confidence", defaults.min_confidence)),
-        stale_after_s=float(raw.get("stale_after_s", defaults.stale_after_s)),
-        lost_after_s=float(raw.get("lost_after_s", defaults.lost_after_s)),
-        ir_calibration_revision=raw.get("ir_calibration_revision") or None,
-        obstacle_stop_m=float(raw.get("obstacle_stop_m", defaults.obstacle_stop_m)),
-        obstacle_resume_m=float(raw.get("obstacle_resume_m", defaults.obstacle_resume_m)),
-        obstacle_half_angle_deg=float(raw.get("obstacle_half_angle_deg", defaults.obstacle_half_angle_deg)),
-        lidar_forward_deg=float(raw.get("lidar_forward_deg", defaults.lidar_forward_deg)),
-        clearance_stale_s=float(raw.get("clearance_stale_s", defaults.clearance_stale_s)),
-        obstacle_mode=str(raw.get("obstacle_mode", defaults.obstacle_mode)),
-        obstacle_corridor_half_width_m=float(raw.get(
-            "obstacle_corridor_half_width_m", defaults.obstacle_corridor_half_width_m)),
-        obstacle_path_horizon_m=float(raw.get(
-            "obstacle_path_horizon_m", defaults.obstacle_path_horizon_m)),
-        lidar_self_mask=self_mask_from_config(raw.get("lidar_self_mask")),
-        obstacle_release_s=float(raw.get("obstacle_release_s", defaults.obstacle_release_s)),
-        obstacle_escalate_s=float(raw.get("obstacle_escalate_s", defaults.obstacle_escalate_s)),
-        max_angular_follows_manual=raw.get(
-            "max_angular_follows_manual", defaults.max_angular_follows_manual),
-        lane_auto_min_manual_angular=float(raw.get(
-            "lane_auto_min_manual_angular", defaults.lane_auto_min_manual_angular)),
-        ir_guard_enabled=raw.get("ir_guard_enabled", defaults.ir_guard_enabled),
-        ir_guard_edge_error=float(raw.get("ir_guard_edge_error", defaults.ir_guard_edge_error)),
-        ir_guard_turn=float(raw.get("ir_guard_turn", defaults.ir_guard_turn)),
-        ir_guard_speed_scale=float(raw.get("ir_guard_speed_scale", defaults.ir_guard_speed_scale)),
     )
 
 
@@ -557,6 +521,8 @@ class CoreServices:
         )
         fleet_agent = FleetAgent(state, events, config, identity)
         fleet_agent.start()
+        bind_stuck_recovery(line_follow, safety=safety, calibration=calibration,
+                            fleet_agent=fleet_agent, vision=vision)
         
         return cls(config=config, identity=identity, profile=profile, capability=capability, fleet_agent=fleet_agent,
                    events=events, state=state, registry=registry, modes=modes,

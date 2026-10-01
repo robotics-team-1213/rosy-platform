@@ -107,15 +107,24 @@ def road_observation(services, raw: str, *, source_now: float,
         })
 
 
+#: D-407 body clearances only need the robot's near field.
+BODY_POINTS_RANGE_M = 0.6
+
+
 def front_clearance(services, sample, *, received_at: float) -> None:
     """D-344 §11: LiDAR 를 차선 추종 정지 판정에 넘긴다 — path 는 점, sector 는 정면 최소 거리."""
     config = services.line_follow.config
     try:
+        # D-407: the stuck recovery reads the same self-masked points for front-band, rear
+        # (from the URDF body rear) and turn clearances; range_min marks the blind zone.
+        points = _scan_points(
+            sample, forward_deg=config.lidar_forward_deg,
+            max_range=max(BODY_POINTS_RANGE_M,
+                          config.obstacle_path_horizon_m + config.obstacle_corridor_half_width_m),
+            self_mask=config.lidar_self_mask)
+        services.line_follow.observe_body_points(
+            points, range_min=float(sample.get("range_min") or 0.0), received_at=received_at)
         if config.obstacle_mode == "path":
-            points = _scan_points(
-                sample, forward_deg=config.lidar_forward_deg,
-                max_range=config.obstacle_path_horizon_m + config.obstacle_corridor_half_width_m,
-                self_mask=config.lidar_self_mask)
             services.line_follow.observe_scan_points(points, received_at=received_at)
             return
         distance = _front_clearance(
