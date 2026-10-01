@@ -64,6 +64,11 @@ class Frame:
             for i in range(3)
         )
 
+    def from_base(self, p: Vec3) -> Vec3:
+        """Inverse of to_base: R^T (p - origin)."""
+        d = _sub(p, self.origin)
+        return (_dot(self.x_axis, d), _dot(self.y_axis, d), _dot(self.z_axis, d))
+
     def yaw_to_base(self, yaw: float) -> float:
         c, s = math.cos(yaw), math.sin(yaw)
         v = tuple(self.x_axis[i] * c + self.y_axis[i] * s for i in range(3))

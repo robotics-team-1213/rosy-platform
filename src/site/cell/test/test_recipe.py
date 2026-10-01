@@ -24,7 +24,6 @@ def test_fixture_loads_with_a_stable_hash():
     [
         ("rosy_cell.recipe/1", "rosy_cell.recipe/0", "schema"),
         ("mode: palletize", "mode: stack", "mode"),
-        ('approach: "+x"', 'approach: "up"', "approach"),
         ("{pattern: split}", "{pattern: pinwheel}", "pattern"),
         ("id: B", "id: A", "duplicate pallet id"),
         ("slip_sheet: {thickness: 0.002, station: sheets}\n", "", "slip_sheet"),

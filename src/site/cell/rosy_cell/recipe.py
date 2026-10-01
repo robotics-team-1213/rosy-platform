@@ -11,7 +11,6 @@ import yaml
 from . import SCHEMA_RECIPE
 from .load import Box, Pallet
 from .pattern import PATTERNS
-from .sequence import APPROACHES
 from .stack import LayerSpec
 
 MODES = ("palletize", "depalletize")
@@ -37,7 +36,6 @@ class Recipe:
     box: Box
     pallets: tuple[PalletSlot, ...]
     pick_station: str
-    approach: str
     gap: float
     slip_sheet_thickness: float | None
     slip_sheet_station: str | None
@@ -71,7 +69,6 @@ def load_recipe(text: str) -> Recipe:
             box=box,
             pallets=pallets,
             pick_station=str(data["pick_station"]),
-            approach=data["approach"],
             gap=float(data["gap"]),
             slip_sheet_thickness=float(sheet["thickness"]) if sheet else None,
             slip_sheet_station=str(sheet["station"]) if sheet else None,
@@ -86,8 +83,6 @@ def load_recipe(text: str) -> Recipe:
         problems.append(f"schema must be {SCHEMA_RECIPE}")
     if recipe.mode not in MODES:
         problems.append(f"mode must be one of {MODES}")
-    if recipe.approach not in APPROACHES:
-        problems.append(f"approach must be one of {sorted(APPROACHES)}")
     if not recipe.pallets:
         problems.append("at least one pallet is required")
     ids = [slot.id for slot in recipe.pallets]

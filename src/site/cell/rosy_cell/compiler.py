@@ -93,7 +93,7 @@ def compile_job(recipe: Recipe, cell: CellConfig, *, tol_m: float) -> Job:
         centre = (slot.pallet.length / 2, slot.pallet.width / 2)
         layer_ids = range(len(plan.layers))
         for n in layer_ids if recipe.mode == "palletize" else reversed(layer_ids):
-            ordered = place_order(plan.layers[n], approach=recipe.approach)
+            ordered = place_order(plan.layers[n], frame)
             sheet = sheets.get(n)
             sheet_pose = _on_pallet(frame, *centre, sheet.z, 0.0) if sheet else None
             if recipe.mode == "palletize":
