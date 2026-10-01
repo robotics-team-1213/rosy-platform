@@ -109,14 +109,18 @@ only match certificates the proxy sends, so the proxy must serve leaf + CA. Cadd
 serves the whole `site_cert` file, so build it once with
 `cat site.crt site-ca.crt > site-fullchain.crt` and point the `site_cert`
 secret at `site-fullchain.crt`. Then print the link and QR on the site host:
-`ROSY_OVERHEAD_TOKEN=<phone-token> rosy-vision pair-link --host <fqdn-or-ip>
+`ROSY_OVERHEAD_TOKEN=<phone-token> rosy-vision pair-link --host <tls_host>
 --port <published-8443> --source ceiling_north --pin-ca <secrets>/site-ca.crt
 --pin-cert <secrets>/site-fullchain.crt`. Both options are required: the
 command refuses (exit 2, with this recipe) unless the served file carries that
 CA above the leaf. `rosy-vision receive --tls-cert` pins the CA of a leaf + CA
 file and otherwise prints the link without a pin and says why. The app still
 accepts a leaf pin from links printed before this rule, for compatibility only.
-An IP host needs that IP in the certificate SAN.
+The link host is the `tls_host` name by default (`<name>.local` or the site FQDN); an IP
+is only a fallback (D-391). An IP host is stored on the phone as a "수동 주소", breaks when
+the site subnet changes, needs that IP in the certificate SAN, and makes `pair-link` print
+a WARNING. `rosy-vision receive` puts `<hostname>.local` (or `--tls-host`) in the link and
+prints the route-probe address only as an `IP fallback: <robot-ip>` diagnostic line.
 Treat the URI as a credential: do not paste it into tickets, logs, or shell
 history. Use the QR/pairing screen over a trusted local channel.
 

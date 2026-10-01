@@ -241,3 +241,9 @@
 - 증거: `test_map_proposal_route.py` 막히는 가짜 작업으로 재현하는 시험.
 - gate 변화: 없음.
 
+## 2026-10-01 · uncommitted · fix(vision): 페어링 링크는 이름(tls_host)을 기본으로, IP는 경고하는 예비로
+
+- 변경: `cli.py` — `receive`는 링크 호스트를 `--advertise-host` > `--tls-host` > `<hostname>.local`로 정하고(D-391 `.local` 규칙으로 검증), 8.8.8.8 경로 탐지 IP는 `IP fallback:` 진단 줄로만 낸다. `pair-link --host <ip>`는 "수동 주소"·서브넷 변경·IP SAN을 설명하는 WARNING을 stderr에 내고 종료 코드 0을 유지한다. `deploy/site/README.md`·사이트 runbook §3에 "이름 기본, IP는 예비"를 적었다.
+- 증거: `python -m pytest src/site/vision/test -q` (아래 결과), 새 시험 `test_overhead_link_host_name_first.py`.
+- gate 변화: 없음.
+
