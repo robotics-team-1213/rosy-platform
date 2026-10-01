@@ -112,3 +112,8 @@
 - 증거: `gradlew testDebugUnitTest lintDebug assembleDebug --rerun-tasks` BUILD SUCCESSFUL, JVM 시험 303 passed, 0 failed, lint 0 errors·44 warnings(새 경고 없음). 변이: M3(승인 뒤 SAN 검사 제거)는 `aResultTlsHostTheLeafDoesNotNameIsRejected`가, M6(무응답 confirm의 discard 제거)는 `aConfirmWithoutAnswerDiscardsTheLinkAndNamesTheCredential`·`everyS2RefusalMapsToAState`가 잡는다. 호스트 시험은 progress 참조 (2026-10-01 Windows, JDK 21).
 - gate 변화: 없음.
 - 결정: confirm 뒤 실패는 서버 쪽 자격이 활성일 수 있으므로 사유와 상관없이 폐기 안내를 띄운다. confirm 전 기한 초과(`confirm_deadline`)는 서버가 120 s 뒤 스스로 회수하므로 폐기 안내가 없다.
+## 2026-10-01 · 2370b41b · feat(cam): 응답 없는 confirm은 한 번만 다시 보낸다(S2 멱등 confirm, rosy-00 d5d4a2e4)
+
+- 변경: (aefe32fa) 로컬 main(d5d4a2e4·6dbcc01b 포함)을 병합했다. `pairing.v1.json`은 그대로다. (2370b41b) confirm이 응답 없이(I/O) 끝나면 약 1 s 뒤, 승인 후 120 s 창이 열려 있을 때만, 같은 고정 세션(같은 첫 접촉 leaf)으로 같은 confirm을 정확히 한 번 더 보낸다. 이 자격의 200이 오면 링크를 지킨다(Paired, discard 없음). 다시 무응답·거절(410 등)·엉뚱한 응답이면 지금처럼 `confirm_unanswered`(링크 버림 + 자격 번호와 폐기 안내)다. 처음 confirm이 거절(409/400/410)되면 다시 보내지 않는다. `retryOnConnectionFailure(false)`는 그대로이고, 이 한 번이 유일한 재전송이다.
+- 증거: `gradlew testDebugUnitTest lintDebug assembleDebug --rerun-tasks` BUILD SUCCESSFUL, JVM 시험 307 passed, 0 failed(새 `PairingClientTest`: 무응답 → 재전송 200 → Paired(save만), 무응답 두 번 → discard + 안내, 무응답 → 재전송 410 → discard + 안내, 창이 닫히면 재전송 없음, 거절된 confirm은 1회만; `PairingHttpTest`: MockWebServer에서 연결이 한 번/두 번 끊기는 confirm), lint 0 errors·44 warnings. 변이: M3, M6, "재전송 없음"이 모두 잡힌다 (2026-10-01 Windows, JDK 21).
+- gate 변화: 없음.
