@@ -290,13 +290,14 @@ SIZE_VERDICTS = {
         "accept: one scan entry over the release tree — the rules and the walker are the same concern (X5)",
     ),
     "deploy/robot/pinky_pro/native/rosy_auto_update.py": (
-        1505,
+        1515,
         "split: D-406 robot-side updater — the GitHub/rollout fetch and staging, the eligibility "
         "reader (status-inputs, hold, seals, claim), and the apply/resume/rollback transaction with "
         "its journal are separate seams; move fetch+staging and eligibility into sibling modules in "
         "deploy/robot/pinky_pro/native after the first two-robot device validation (D-406 Validation). "
         "Re-judged at 1505 (+33): second verification review (self-rollback vs operator rollback, "
-        "bounded tail loop, rollback_failed acknowledgement); verdict unchanged",
+        "bounded tail loop, rollback_failed acknowledgement); 1515 (+10) after the final batch "
+        "(release-hold under the run lock, refused rollback is sticky); verdict unchanged",
     ),
     "tools/release/publish_payload_release.py": (
         655,

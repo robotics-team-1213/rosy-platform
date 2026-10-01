@@ -29,6 +29,7 @@ Add-Content -Path $env:ROSY_FAKE_LOG -Value '----'
 foreach ($a in $args) { Add-Content -Path $env:ROSY_FAKE_LOG -Value $a }
 if ($env:ROSY_FAKE_EXIT) { 'hold refused: bad hours'; exit [int]$env:ROSY_FAKE_EXIT }
 if (($args -join ' ') -match 'status --json') { Get-Content -Raw -Path $env:ROSY_FAKE_STATUS; exit 0 }
+if ($env:ROSY_FAKE_RELEASE -and (($args -join ' ') -match 'release-hold')) { Get-Content -Raw -Path $env:ROSY_FAKE_RELEASE; exit 0 }
 'ok'
 exit 0
 """
@@ -214,3 +215,32 @@ def test_no_native_argument_carries_a_double_quote(tmp_path):
     _done, calls = _run(tmp_path, ["-Hold", "-Reason", "bench", "-Hours", "1"])
 
     assert not any('"' in a for a in calls[0])
+
+
+def test_release_prints_what_the_device_acknowledged(tmp_path):
+    # D-406 final verification LOW 2: the device's release-hold JSON, readable.
+    answer = tmp_path / "release.json"
+    answer.write_text(json.dumps({"ok": True, "released": True,
+                                  "acknowledged_rollback_failure": "2026.10.01-022",
+                                  "cleared_apply_errors": ["2026.10.01-022", "2026.10.01-023"]}),
+                      encoding="utf-8")
+    done, _calls = _run(tmp_path, ["-Release"], env_extra={"ROSY_FAKE_RELEASE": str(answer)})
+
+    assert done.returncode == 0, done.stderr
+    out = done.stdout
+    assert "hold released: yes" in out
+    assert "acknowledged rollback failure: 2026.10.01-022" in out
+    assert "cleared apply errors: 2026.10.01-022, 2026.10.01-023" in out
+    assert "{" not in out
+
+
+def test_release_with_nothing_to_acknowledge_says_so(tmp_path):
+    answer = tmp_path / "release.json"
+    answer.write_text(json.dumps({"ok": True, "released": False, "acknowledged_rollback_failure": None,
+                                  "cleared_apply_errors": []}), encoding="utf-8")
+    done, _calls = _run(tmp_path, ["-Release"], env_extra={"ROSY_FAKE_RELEASE": str(answer)})
+
+    assert done.returncode == 0, done.stderr
+    assert "hold released: no (none was set)" in done.stdout
+    assert "acknowledged rollback failure: -" in done.stdout
+    assert "cleared apply errors: -" in done.stdout

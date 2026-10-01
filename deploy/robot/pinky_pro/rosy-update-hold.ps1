@@ -112,6 +112,32 @@ if ($code -ne 0) {
     Fail "rosy_auto_update.py $($remote[4]) failed on $Robot (exit $code): $($output -join [Environment]::NewLine)"
 }
 
+if ($Release) {
+    # D-406: the device answers with what release-hold acknowledged. An older
+    # device CLI prints something else; show that as it is.
+    try {
+        $answer = ($output -join "`n") | ConvertFrom-Json
+    } catch {
+        $answer = $null
+    }
+    if ($null -eq $answer -or $null -eq $answer.PSObject.Properties["released"]) {
+        if ($output) { Write-Host ($output -join [Environment]::NewLine) }
+        exit 0
+    }
+    $released = "no (none was set)"
+    if ($answer.released) { $released = "yes" }
+    $acknowledged = "-"
+    $property = $answer.PSObject.Properties["acknowledged_rollback_failure"]
+    if ($null -ne $property -and $property.Value) { $acknowledged = [string]$property.Value }
+    $cleared = "-"
+    $property = $answer.PSObject.Properties["cleared_apply_errors"]
+    if ($null -ne $property -and @($property.Value).Count -gt 0) { $cleared = (@($property.Value) -join ", ") }
+    Write-Host "hold released: $released"
+    Write-Host "acknowledged rollback failure: $acknowledged"
+    Write-Host "cleared apply errors: $cleared"
+    exit 0
+}
+
 if (-not $Status) {
     if ($output) { Write-Host ($output -join [Environment]::NewLine) }
     exit 0

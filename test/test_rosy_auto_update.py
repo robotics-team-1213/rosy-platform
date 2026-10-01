@@ -2361,3 +2361,107 @@ def test_the_precheck_busy_exit_matches_native_release():
     from deploy.robot.pinky_pro.native import native_release
 
     assert native_release.PRECHECK_BUSY_EXIT == upd.PRECHECK_BUSY_EXIT == 3
+
+
+# --- final verification batch ----------------------------------------------------------------
+
+
+def test_release_hold_waits_for_no_run(device, host, hub, keys, capsys, monkeypatch):
+    # MEDIUM: release-hold rewrites state.json, so it takes the run lock; busy is an error.
+    up = updater(host, hub)
+    up.hold("agent", "x", 1)
+    write_json(device / "var/lib/rosy/updates/state.json", {"apply_errors": {NEXT: {"attempts": 3}}})
+    with up._run_lock():
+        with pytest.raises(upd.RunBusy):
+            updater(host, hub).release_hold()
+        monkeypatch.setattr(upd, "Host", lambda root: host)
+        code = upd.main(["--root", str(device), "release-hold"])
+    out = json.loads(capsys.readouterr().out)
+
+    assert code == 4
+    assert out["ok"] is False and "RUN_BUSY" in out["error"]
+    assert (device / "var/lib/rosy/updates/hold.json").exists()
+    assert state(device)["apply_errors"] == {NEXT: {"attempts": 3}}
+
+
+def test_a_refused_rollback_is_a_sticky_acknowledgeable_rollback_failure(device, host, hub, keys):
+    # LOW 1
+    hub.publish(keys, NEXT)
+    host.overrides["ready"] = lambda h, argv: (subprocess.CompletedProcess([], 1, "", "x")
+                                              if h.links["current"] == NEXT else None)
+    host.overrides["rollback"] = lambda h, argv: subprocess.CompletedProcess(
+        [], 1, json.dumps({"ok": False, "error": "SIGNATURE_INVALID: previous does not verify"}), "")
+    up = updater(host, hub)
+    up.run()
+    assert state(device)["last_result"]["outcome"] == "rollback_failed"
+
+    sticky = up.run()
+    assert sticky["phase"] == "failed" and "release-hold" in sticky["reason"]
+    assert up.release_hold()["acknowledged_rollback_failure"] == NEXT
+    assert up.run()["phase"] != "failed"
+
+
+def test_release_hold_reports_what_it_acknowledged(device, host, hub, keys, capsys, monkeypatch):
+    # LOW 2
+    up = updater(host, hub)
+    up.hold("agent", "x", 1)
+    write_json(device / "var/lib/rosy/updates/state.json", {
+        "apply_errors": {NEXT: {"attempts": 3}, NEWER: {"attempts": 1}},
+        "last_result": {"release_id": NEXT, "outcome": "rollback_failed", "at": _z(T0), "detail": "x"},
+    })
+    monkeypatch.setattr(upd, "Host", lambda root: host)
+
+    assert upd.main(["--root", str(device), "release-hold"]) == 0
+    out = json.loads(capsys.readouterr().out)
+
+    assert out == {"ok": True, "released": True, "acknowledged_rollback_failure": NEXT,
+                   "cleared_apply_errors": [NEXT, NEWER]}
+
+    assert upd.main(["--root", str(device), "release-hold"]) == 0
+    assert json.loads(capsys.readouterr().out) == {"ok": True, "released": False,
+                                                   "acknowledged_rollback_failure": None,
+                                                   "cleared_apply_errors": []}
+
+
+def test_self_rollback_entries_below_current_are_pruned_unless_previous(device, host, hub, keys):
+    # LOW 3
+    hub.publish(keys, NEXT)
+    host.links = {"current": CURRENT, "previous": "2026.10.01-019"}
+    write_json(device / "var/lib/rosy/updates/state.json", {
+        "self_rolled_back": {"2026.10.01-018": _z(T0), "2026.10.01-019": _z(T0), NEXT: _z(T0)},
+    })
+    up = updater(host, hub)
+    up.hold("agent", "x", 1)
+
+    up.run()
+
+    assert set(state(device)["self_rolled_back"]) == {"2026.10.01-019", NEXT}
+
+
+def test_acknowledged_unmarked_rollback_failure_then_operator_rollback(device, host, hub, keys):
+    # LOW 4: the mark_failed=False variant: transient switch, the rollback never runs.
+    hub.publish(keys, NEXT)
+
+    def switched_then_timed_out(h, argv):
+        h.links = {"current": NEXT, "previous": CURRENT}
+        return subprocess.CompletedProcess([], 124, "", "TIMEOUT")
+
+    host.overrides["activate"] = switched_then_timed_out
+    host.overrides["rollback"] = lambda h, argv: subprocess.CompletedProcess(
+        [], 1, json.dumps({"ok": False, "error": "NATIVE_RELEASE_BUSY: x"}), "")
+    up = updater(host, hub)
+    for _ in range(6):
+        up.run()
+    assert state(device)["last_result"]["outcome"] == "rollback_failed"
+    assert NEXT not in state(device).get("failed", {})
+
+    assert up.release_hold()["acknowledged_rollback_failure"] == NEXT
+    del host.overrides["activate"], host.overrides["rollback"]
+    host.t += dt.timedelta(hours=7)
+    assert up.run()["phase"] != "failed"
+    assert kinds(host).count("activate") == 1  # NEXT is current: nothing to activate again
+
+    host.links = {"current": CURRENT, "previous": NEXT}  # rosy-release-push.ps1 -Rollback
+    up.run()
+    assert state(device)["failed"][NEXT]["detail"] == "operator rolled back"
+    assert kinds(host).count("activate") == 1

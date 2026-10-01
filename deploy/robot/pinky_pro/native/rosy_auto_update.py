@@ -545,24 +545,26 @@ class Updater:
         self._history("hold_set", None, f"{holder}: {reason} until {payload['expires_at']}")
         return payload
 
-    def release_hold(self) -> bool:
-        path = self.updates / "hold.json"
-        existed = path.exists() or path.is_symlink()
-        path.unlink(missing_ok=True)
-        state = self._load_state()
-        changed = bool(state.get("apply_errors"))
-        state["apply_errors"] = {}
-        if (state.get("last_result") or {}).get("outcome") == "rollback_failed":
-            # Verification review 2, MEDIUM: release-hold is also the acknowledgement of a
-            # rollback that could not run (the operator accepts the release as it is).
-            self._history("rollback_failure_acknowledged", state["last_result"].get("release_id"),
-                          "cleared by release-hold")
-            state["last_result"] = None
-            changed = True
-        if changed:
-            self._save_state(state)
-        self._history("hold_released", None, "hold removed" if existed else "no hold was set")
-        return existed
+    def release_hold(self) -> dict:
+        """Remove the hold; also the operator's acknowledgement of a rollback failure and of
+        repeated apply failures. Takes the run lock (RunBusy while a run is active)."""
+        with self._run_lock():
+            path = self.updates / "hold.json"
+            existed = path.exists() or path.is_symlink()
+            path.unlink(missing_ok=True)
+            state = self._load_state()
+            cleared = sorted(state.get("apply_errors") or {})
+            acknowledged = None
+            if (state.get("last_result") or {}).get("outcome") == "rollback_failed":
+                acknowledged = state["last_result"].get("release_id")
+                self._history("rollback_failure_acknowledged", acknowledged, "cleared by release-hold")
+                state["last_result"] = None
+            if cleared or acknowledged:
+                state["apply_errors"] = {}
+                self._save_state(state)
+            self._history("hold_released", None, "hold removed" if existed else "no hold was set")
+            return {"released": existed, "acknowledged_rollback_failure": acknowledged,
+                    "cleared_apply_errors": cleared}
 
     def _expire_hold(self) -> None:
         kind, detail = self._hold()
@@ -1097,7 +1099,8 @@ class Updater:
         detail = why if not problems else f"{why}; rollback incomplete: {'; '.join(problems)}"
         if note and note not in detail:
             detail = f"{detail}; {note}"
-        self._result(state, release_id, "rollback_failed" if gave_up else "rolled_back", detail)
+        # Final verification LOW 1: a refused rollback is as stuck as one that gave up.
+        self._result(state, release_id, "rollback_failed" if gave_up or refused else "rolled_back", detail)
         self._prune(state)
         return self._finish(state, "rolled_back" if not problems else "failed", detail, release_id)
 
@@ -1368,12 +1371,14 @@ class Updater:
         # Review H4: a release we committed that is now above current was rolled back
         # on purpose by an operator; never apply it again.
         withdrawn_ids = state.get("withdrawn") or {}
+        previous = self.host.previous_release()
         mine = state.get("self_rolled_back") or {}
         for item in list(mine):
-            # Verification review 2, LOW: an entry only matters while it explains previous.
-            if item == current or item in failed or item in withdrawn_ids:
+            # Verification review 2, LOW (+ final LOW 3): an entry only matters while it
+            # can still explain previous > current.
+            if (item == current or item in failed or item in withdrawn_ids
+                    or (item < current and item != previous)):
                 del mine[item]
-        previous = self.host.previous_release()
         rolled_back = [item for item in state.get("committed") or [] if item > current]
         if previous is not None and previous > current and previous not in (state.get("self_rolled_back") or {}):
             rolled_back.append(previous)  # re-review N9: previous above current was rolled away from
@@ -1489,7 +1494,12 @@ def main(argv: list[str] | None = None) -> int:
         print("; ".join(reasons) if reasons else "ok")
         return PRECHECK_BUSY_EXIT if reasons else 0
     if args.command == "release-hold":
-        print(json.dumps({"ok": True, "released": updater.release_hold()}))
+        try:
+            result = {"ok": True, **updater.release_hold()}
+        except RunBusy as exc:
+            print(json.dumps({"ok": False, "error": f"{exc}; retry when the run has finished"}, sort_keys=True))
+            return 4
+        print(json.dumps(result, sort_keys=True))
         return 0
     report = updater.eligibility()
     if args.json:
