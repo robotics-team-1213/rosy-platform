@@ -47,51 +47,92 @@ address:
 | Setting (private `site.env`) | Local / SSH tunnel | LAN |
 |---|---|---|
 | `ROSY_SITE_BIND_ADDRESS` | `127.0.0.1` (default) | `0.0.0.0` |
-| `ROSY_SITE_LAN_IFACE` | empty | the LAN interface name, e.g. `wlan0` or `eth0` (comma-separated for several) |
+| `ROSY_SITE_LAN_IFACE` | empty | the LAN interface name, e.g. `wlan0` or `eth0`; a bridged LAN needs the bridge name (`br0`); comma-separated for several |
 
-- **Bind the wildcard.** `0.0.0.0` exists on every IPv4 host, so a new DHCP
-  lease or a renumbered site LAN needs no edit and no restart, and loopback
-  stays reachable for the discovery bridge. Use `::` only on a host whose
-  clients reach the site over IPv6; Docker then publishes on IPv6 and the
-  firewall below uses `ip6tables`. Robot discovery is IPv4.
-- **Scope it by interface.** Docker-published ports are DNAT-forwarded and
-  skip the INPUT chain and ufw, so a ufw rule does not limit them. Install
-  `site-firewall.py` with `rosy-site-firewall.service`: after Docker starts,
-  it puts a jump for the published port (matched on the conntrack original
-  destination port) at the top of Docker's `DOCKER-USER` chain into its own
-  chain `ROSY-SITE-INGRESS`, which returns traffic arriving on
-  `ROSY_SITE_LAN_IFACE` and drops it on every other interface. It matches
-  interface names only, never an IP or subnet. It is idempotent, restarts with
-  Docker (`PartOf=docker.service`) and so survives reboots. Containers on
-  other Docker networks of the same host that call the site through a host IP
-  are dropped too; host processes reach it on loopback. It needs Docker's
-  default iptables firewall backend (iptables-nft on Ubuntu); without a
-  `DOCKER-USER` chain it fails instead of leaving the port open.
-- **Preflight.** `rosy-site-stack.service` runs `site-firewall.py check`
-  before Compose. It refuses to start, with the reason in
-  `journalctl -u rosy-site-stack`, when `ROSY_SITE_BIND_ADDRESS` is a literal
-  non-loopback IP this host no longer owns, when a non-loopback bind has no
-  `ROSY_SITE_LAN_IFACE`, or when the interface filter is not installed. A
-  literal IP that is still assigned starts with a warning; replace it with
-  `0.0.0.0`.
+- **Bind the IPv4 wildcard.** `0.0.0.0` exists on every IPv4 host, so a new
+  DHCP lease or a renumbered site LAN needs no edit and no restart, and
+  loopback stays reachable for the discovery bridge. `::` and an empty bind
+  (which publishes on IPv6 too) are refused: the filter below and robot
+  discovery are IPv4 only. A literal LAN IP is refused unless
+  `ROSY_SITE_ALLOW_LITERAL_BIND=1`; it dies with the address and the
+  discovery bridge cannot reach it on loopback.
+- **Scope it by interface, ahead of Docker.** Docker-published ports are
+  DNAT-forwarded and skip the INPUT chain and ufw, so a ufw rule does not
+  limit them. `site-firewall.py apply` (run by `rosy-site-firewall.service`)
+  filters in the `mangle` table's `PREROUTING` chain, before Docker's DNAT,
+  where the published port is still the destination port. One jump
+  `-p tcp --dport <port> -j ROSY-SITE-INGRESS` leads to its own chain, which
+  returns traffic arriving on `lo` and on each `ROSY_SITE_LAN_IFACE`, then
+  drops everything else addressed to this host
+  (`-m addrtype --dst-type LOCAL -j DROP`). Traffic between containers is
+  addressed to container IPs and passes. It matches interface names only,
+  never an IP or subnet. The chain is written in one
+  `iptables-restore -w --noflush` transaction (declaring the chain flushes
+  and refills it atomically), and the jump is inserted once and kept;
+  re-running changes nothing. A named interface that does not exist yet is
+  admitted by name with a warning.
+- **Boot order and failure.** The unit runs `After=network-pre.target` and
+  `Before=docker.service rosy-site-stack.service`, so the filter is in place
+  before dockerd can restore a proxy container. Docker does not touch the
+  `mangle` chain. If `apply` fails, `OnFailure=` starts
+  `rosy-site-firewall-failclosed.service`, which stops the proxy
+  (`compose stop proxy`). `rosy-site-firewall-check.timer` runs `check` every
+  5 minutes; a missing or bypassed filter logs the reason at error level in
+  `journalctl -u rosy-site-firewall-check` and closes the port the same way.
+  After a clean shutdown no container is left to restore, because the stack
+  unit's stop runs Compose `down`.
+- **One env parser.** The helper takes the bind address, port, interfaces
+  and `tls_host` from `docker compose config` (the `x-rosy-site` block in
+  `compose.yaml`), so `site.env` means the same to it as to Compose. Lines
+  that are not plain `KEY=VALUE` (for example `export KEY=...`) exit 2,
+  because systemd would read them differently. `apply` also writes
+  `/run/rosy-site/site-public.env` with only `ROSY_SITE_TLS_HOST` and
+  `ROSY_SITE_HTTPS_PORT` for the bridge and the advertise units.
+- **Preflight.** `rosy-site-stack.service` runs
+  `site-firewall.py check --verify-certs` before Compose. It refuses to
+  start, with the reason in `journalctl -u rosy-site-stack`, when the bind is
+  a literal IP this host no longer owns, a non-loopback bind has no
+  `ROSY_SITE_LAN_IFACE`, the filter is missing, or the site certificate fails
+  strict verification for `tls_host` ([Site certificate
+  profile](#site-certificate-profile)).
 - **Certificate.** Clients verify the certificate against `tls_host` (and
   the FQDN), not an IP, so the site certificate needs no IP SAN. Add an IP SAN
   only for the manual IP pairing link below.
 
 ```sh
-sudo install -o root -g root -m 0644 \
-  /opt/rosy/candidate/deploy/site/rosy-site-firewall.service /etc/systemd/system/
-sudo python3 /opt/rosy/candidate/deploy/site/site-firewall.py apply \
-  --env-file /etc/rosy/site/site.env --dry-run   # prints the rules; changes nothing
+for unit in rosy-site-firewall.service rosy-site-firewall-failclosed.service \
+    rosy-site-firewall-check.service rosy-site-firewall-check.timer; do
+  sudo install -o root -g root -m 0644 /opt/rosy/candidate/deploy/site/$unit /etc/systemd/system/
+done
+sudo python3 /opt/rosy/candidate/deploy/site/site-firewall.py apply --dry-run  # prints; changes nothing
 sudo systemctl daemon-reload
-sudo systemctl enable --now rosy-site-firewall.service
-sudo iptables -S DOCKER-USER; sudo iptables -S ROSY-SITE-INGRESS
+sudo systemctl enable --now rosy-site-firewall.service rosy-site-firewall-check.timer
+sudo iptables -t mangle -S PREROUTING; sudo iptables -t mangle -S ROSY-SITE-INGRESS
 ```
 
 Check from a LAN client that `https://<tls_host>:8443/healthz` answers, and
 from a client on another interface (if the host has one) that it does not.
 When the LAN interface name changes (for example from Wi-Fi to Ethernet), set
 `ROSY_SITE_LAN_IFACE` and `systemctl restart rosy-site-firewall.service`.
+
+### Upgrading from a literal-IP bind
+
+1. In `/etc/rosy/site/site.env` set `ROSY_SITE_BIND_ADDRESS=0.0.0.0` and
+   `ROSY_SITE_LAN_IFACE=<interface>`, and make sure `ROSY_SITE_TLS_HOST` and
+   `ROSY_SITE_HTTPS_PORT` are set there. Keep every line plain `KEY=VALUE`.
+2. Install and enable `rosy-site-firewall.service`,
+   `rosy-site-firewall-failclosed.service`, `rosy-site-firewall-check.service`
+   and `rosy-site-firewall-check.timer` (commands above).
+3. Run `sudo python3 /opt/rosy/candidate/deploy/site/site-firewall.py check --verify-certs`
+   and fix what it reports, before the stack is restarted.
+4. Copy the new `mdns-bridge.py` to `/opt/rosy/site/mdns-bridge.py` and the new
+   `rosy-mdns-bridge.service`, `rosy-fleet-advertise.service` and
+   `rosy-overhead-advertise.service` to `/etc/systemd/system/`. Remove
+   `/etc/rosy/site/mdns-bridge.env` (`ROSY_SITE_DISCOVERY_URL` is retired).
+5. `sudo systemctl daemon-reload`, then
+   `sudo systemctl restart rosy-site-firewall.service rosy-site-stack.service`
+   and `sudo systemctl restart rosy-fleet-advertise.service rosy-overhead-advertise.service`.
+6. Confirm the console discovery panel shows devices, not **검색기 끊김**.
 
 ## Contract path
 
@@ -130,19 +171,22 @@ Keep it out of the checkout and grant read access only to root and the
 and group `rosy-mdns` with no login shell. Grant that group read access to
 `discovery_token`; `site-ca.crt` is already public to the host service.
 
-The bridge reads `ROSY_SITE_TLS_HOST` and `ROSY_SITE_HTTPS_PORT` from the same
-`/etc/rosy/site/site.env` that Compose reads; it needs no URL, FQDN or LAN
-address. It connects to the proxy on this host's loopback (`127.0.0.1`, then
-`::1`) at that port and sets the TLS server name, the certificate name check
-and the HTTP `Host` to `ROSY_SITE_TLS_HOST`, verified against `site-ca.crt`.
-The unit allows only loopback IP traffic (`IPAddressAllow=localhost`).
+The bridge needs no URL, FQDN or LAN address. Its unit reads
+`ROSY_SITE_TLS_HOST` and `ROSY_SITE_HTTPS_PORT` (default 8443, as in Compose)
+from `/run/rosy-site/site-public.env`, which `site-firewall.py apply` writes
+from `docker compose config`. It connects to the proxy on this host's
+loopback (`127.0.0.1`, then `::1`) at that port and sets the TLS server name,
+the certificate name check and the HTTP `Host` to `ROSY_SITE_TLS_HOST`,
+verified strictly (`VERIFY_X509_STRICT`) against `site-ca.crt`. The unit
+allows only loopback IP traffic (`IPAddressAllow=localhost`), and the token
+file must hold one printable ASCII token.
 Loopback rather than `https://<tls_host>` resolved on the host: resolving the
 name goes through DNS or nss-mdns, which follows the LAN (a stale record, a
 changed subnet or a down Wi-Fi interface makes it fail), while loopback exists
 whatever the LAN does, and both the default `127.0.0.1` and the LAN
 `0.0.0.0` bind include it. The certificate still has to carry `tls_host`, so
 a wrong proxy fails TLS rather than receiving the scan. A literal LAN IP bind
-does not listen on loopback and is not supported for the bridge. Remove the
+does not listen on loopback, so the bridge cannot work with it. Remove the
 retired `/etc/rosy/site/mdns-bridge.env` (`ROSY_SITE_DISCOVERY_URL`) when
 upgrading.
 
@@ -186,6 +230,30 @@ CA above the leaf. `rosy-vision receive --tls-cert` pins the CA of a leaf + CA
 file and otherwise prints the link without a pin and says why. The app still
 accepts a leaf pin from links printed before this rule, for compatibility only.
 An IP host needs that IP in the certificate SAN.
+
+### Site certificate profile
+
+The bridge, `site-firewall.py check --verify-certs` and Python 3.13+ clients
+verify with OpenSSL's X.509 strict mode, which rejects a CA or leaf without
+these extensions:
+
+| Certificate | Extensions |
+|---|---|
+| Site CA | `basicConstraints = critical, CA:TRUE, pathlen:0`; `keyUsage = critical, keyCertSign, cRLSign`; `subjectKeyIdentifier = hash`; `authorityKeyIdentifier = keyid:always` |
+| Site leaf | `basicConstraints = critical, CA:FALSE`; `keyUsage = critical, digitalSignature`; `extendedKeyUsage = serverAuth`; `subjectAltName = DNS:<tls_host>` plus the DNS names above; `subjectKeyIdentifier = hash`; `authorityKeyIdentifier = keyid` |
+
+Gate every issued pair before installing it:
+
+```sh
+openssl verify -x509_strict -purpose sslserver -verify_hostname <tls_host> \
+  -CAfile site-ca.crt site.crt
+```
+
+The stack preflight runs the same check (a strict TLS handshake for
+`tls_host`) and refuses to start on failure. Reissuing the **CA** is a
+rotation, not a fix-up: every Rosy Cam pins the SHA-256 of the CA (DER), so
+each camera must be paired again, and browsers and robots need the new CA.
+Reissuing only the leaf under the same CA keeps every pin.
 Treat the URI as a credential: do not paste it into tickets, logs, or shell
 history. Use the QR/pairing screen over a trusted local channel.
 
@@ -270,9 +338,9 @@ Choose a stable Ubuntu hostname before issuing the certificate. Install
 `avahi-daemon` and `avahi-utils`, and check that TCP 8443 is reachable from
 the intended robot/operator LAN. When LAN clients need access, set
 `ROSY_SITE_BIND_ADDRESS=0.0.0.0` and `ROSY_SITE_LAN_IFACE` to the approved
-LAN interface ([LAN access](#lan-access)). Set the same
-`ROSY_SITE_HTTPS_PORT` in the private `/etc/rosy/site/.env` and the Compose
-environment. Set `ROSY_SITE_TLS_HOST` to the same `<hostname>.local` name in
+LAN interface ([LAN access](#lan-access)). Set `ROSY_SITE_HTTPS_PORT` once,
+in the private `/etc/rosy/site/site.env`; Compose reads it there and the
+advertise units get it through `/run/rosy-site/site-public.env`. Set `ROSY_SITE_TLS_HOST` to the same `<hostname>.local` name in
 the site certificate SAN. Install `fleet-mdns.py` at `/opt/rosy/site/fleet-mdns.py`,
 copy `rosy-fleet-advertise.service` and `rosy-overhead-advertise.service` to
 `/etc/systemd/system/`, then run:

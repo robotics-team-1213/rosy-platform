@@ -28,9 +28,9 @@ Rosy Cam --wss(사이트 CA 고정, tls_host 확인)--> 프록시 :8443 --> Visi
    인증서 SAN에는 `tls_host`(예: `site-pc.local`)가 있어야 한다. 폰·브라우저·발견 브리지는 이 이름으로 인증서를 확인하므로 IP SAN은 필요 없다. 수동 IP 링크(3항 2번)를 쓸 때만 그 IP SAN을 더한다.
 3. **LAN 공개는 IP가 아니라 인터페이스로 한다** (`deploy/site/README.md` "LAN access"). 사이트 망이 192.168.1.0/24에서 10.16.36.0/24로 바뀐 날(2026-10-01), 옛 IP에 묶인 프록시가 "cannot assign requested address"로 못 떠서 관제·카메라·로봇·발견이 한꺼번에 멈췄다.
    - 사이트 환경 파일(`/etc/rosy/site/site.env`): `ROSY_SITE_BIND_ADDRESS=0.0.0.0`, `ROSY_SITE_LAN_IFACE=<LAN 인터페이스, 예: wlan0>`. LAN IP를 적지 않는다. 이 PC만 쓸 때(SSH 터널)는 기본값 `127.0.0.1` 그대로 둔다.
-   - `rosy-site-firewall.service`를 설치하고 켠다. Docker 공개 포트는 ufw를 거치지 않으므로, 이 유닛이 `DOCKER-USER`에서 공개 포트를 `ROSY_SITE_LAN_IFACE`로 들어온 연결만 받고 나머지 인터페이스는 버린다. 인터페이스 이름으로만 거르므로 주소가 바뀌어도 고칠 것이 없다. 미리 보기: `sudo python3 /opt/rosy/candidate/deploy/site/site-firewall.py apply --env-file /etc/rosy/site/site.env --dry-run`.
-   - 스택 유닛이 기동 전에 점검한다. 이 PC에 없는 IP로 묶였거나 LAN 공개인데 인터페이스 필터가 없으면 이유를 남기고 뜨지 않는다(`journalctl -u rosy-site-stack`).
-   - 발견 브리지(`rosy-mdns-bridge`)는 같은 `site.env`의 `ROSY_SITE_TLS_HOST`·`ROSY_SITE_HTTPS_PORT`로 이 PC의 루프백(`127.0.0.1`)에 스캔을 보낸다. 옛 `mdns-bridge.env`(`ROSY_SITE_DISCOVERY_URL`)는 지운다. 브리지가 45초 넘게 스캔을 못 보내면 관제 **기기 연결 → 로봇 등록**에 빨간 **검색기 끊김**이 뜨고, 그동안 새 로봇 발견과 **새 주소로 옮기기**가 안 된다.
+   - `rosy-site-firewall.service`와 `rosy-site-firewall-check.timer`를 설치하고 켠다(README "LAN access"의 명령). Docker 공개 포트는 ufw를 거치지 않으므로, 이 유닛이 Docker보다 먼저 `mangle PREROUTING`에서 공개 포트를 `lo`와 `ROSY_SITE_LAN_IFACE`로 들어온 연결만 받고, 이 PC로 오는 나머지는 버린다. 인터페이스 이름으로만 거르므로 주소가 바뀌어도 고칠 것이 없다. 브리지된 LAN이면 브리지 이름(`br0`)을 쓴다. 적용이 실패하거나 5분 점검에서 필터가 없으면 프록시를 멈춘다(포트가 닫힌 채로 남는다). 미리 보기: `sudo python3 /opt/rosy/candidate/deploy/site/site-firewall.py apply --dry-run`.
+   - 스택 유닛이 기동 전에 점검한다. 이 PC에 없는 IP나 허용하지 않은 리터럴 IP로 묶였거나, LAN 공개인데 인터페이스 필터가 없거나, 사이트 인증서가 `tls_host`에 대한 엄격 검증(README "Site certificate profile")을 통과하지 못하면 이유를 남기고 뜨지 않는다(`journalctl -u rosy-site-stack`). `site.env`는 `KEY=VALUE` 줄만 쓴다(`export` 금지).
+   - 발견 브리지(`rosy-mdns-bridge`)는 `/run/rosy-site/site-public.env`(방화벽 유닛이 Compose 설정에서 쓴 `ROSY_SITE_TLS_HOST`·`ROSY_SITE_HTTPS_PORT`)로 이 PC의 루프백(`127.0.0.1`)에 스캔을 보낸다. 옛 `mdns-bridge.env`(`ROSY_SITE_DISCOVERY_URL`)는 지운다. 브리지가 45초 넘게 스캔을 못 보내면 관제 **기기 연결 → 로봇 등록**에 빨간 **검색기 끊김**이 뜨고, 그동안 새 로봇 발견과 **새 주소로 옮기기**가 안 된다.
 4. `deploy/site/compose.yaml`는 트랙 파일을 이미지에 넣는다. 다음 옵션으로 지도 맞춤과 차선 겹침을 켠다.
    - Fleet: `--site-lane-graph …/lane_graph.yaml --site-lane-paint …/road_lines.stl`
    - Vision: `--map-paint …/road_lines.stl`
