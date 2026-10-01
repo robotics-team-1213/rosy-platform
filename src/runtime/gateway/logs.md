@@ -668,7 +668,7 @@
 - 근거: docs/plans/2026-09-06-module-split-criteria.md 행 추가(판정: 전부 Seam lie — deletion). test_module_criteria·test_bridge_display·test_bridge_reconcile·test_bridge_timers·test_emotion_map·test_goal_tracker 87 passed, flake8 초록.
 - gate 변화: 없음. 목표 좌표 표시는 NavigationManager 가 current_goal 을 선언하는 커밋에서 돌아온다(직접 접근 + 실측 시험 동반).
 
-## 2026-10-02 · feat/d407-stuck-recovery-core · feat(core): D-407 막힘 답 API와 CORE 배선
+## 2026-10-02 · 7a44f39d · feat(core): D-407 막힘 답 API와 CORE 배선
 
 - 변경: `POST /api/v1/line-follow/stuck/decision`(Operator+, `STUCK_ID_MISMATCH`·`STUCK_DECISION_REFUSED` 409, MANUAL·ABORT 는 차선 추종 OFF 후 MANUAL·IDLE), `core/line_follow_wiring.py`(설정 파서를 services.py 에서 옮김 + FleetAgent 연결·보정 lease·수동 선속도·미리보기 순서번호 묶기), scan 브리지가 self-mask 점과 `range_min` 을 넘김. API Ref v1.72.
 - 증거: `python -m pytest src/runtime/gateway/test/ test/architecture` 1780 passed, 17 skipped; `known_failures.py` 0 new.
