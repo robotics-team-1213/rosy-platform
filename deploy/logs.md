@@ -1819,3 +1819,10 @@
 - 증거: 9dfk(2026.10.01-019 push): push가 `current release: 019`·`CORE readiness: PASS`를 냈지만 CORE PID 1078의 cwd는 `releases/2026.09.30-009`, openapi v1.63, 저널에 `Stopping rosy-core` 없음. 같은 로봇에서 재현: `stop target; start target` → CORE PID 9030→9030(active 유지). `stop target core io camera; start target` → stop 직후 inactive, PID 9030→9825. 생성된 확인 명령을 PowerShell 5.1→ssh로 9dfk에 실행 → `CORE_RELEASE_OK /opt/rosy/releases/2026.10.01-019`. `test_native_release_activation.py`·`test_release_push_entrypoint.py` 48 passed. 가드는 변형(카메라 빠짐, 확인 단계 제거, 재시작 보고 제거)으로 빨강 확인.
 - gate 변화: 없음.
 - 교훈: 타깃 하나만 stop하는 것은 PartOf 유닛의 멈춤을 기다리지 않는다. 릴리스 전환 뒤에는 readiness 통과가 아니라 CORE 프로세스가 새 릴리스에서 도는지를 본다.
+
+## 2026-10-01 · uncommitted · fix(release): 보정 가드가 IP로 불릴 때 호스트명 자격 증명을 찾는다
+
+- 변경: `rosy-calibration-guard.ps1`은 `-ApiToken`·`ROSY_API_TOKEN`이 없고 `<Robot>.credential.xml`도 없으면 push와 같은 비대화형 ssh(`rosy@<ip> hostname`, `%LOCALAPPDATA%\Rosy\ssh\rosy-operator-ed25519`, `%LOCALAPPDATA%\Rosy\known_hosts`, `BatchMode=yes`, `StrictHostKeyChecking=yes`, `ConnectTimeout=<TimeoutSec>`)로 장치 호스트명을 묻고, 답이 정확히 한 줄이며 대소문자 구분 `^rosy-[a-z0-9-]+$`일 때만 `<hostname>.credential.xml`을 쓴다. 다른 로봇의 파일은 이 주소에 절대 시도하지 않는다. IP 이름 파일이 있으면 ssh를 부르지 않는다. 조회가 실패하면 예전처럼 경고만 하되 SKIPPED 문구에 찾아본 파일과 조회 실패 이유를 적는다. `-RosyUser`·`-KeyPath`·`-KnownHosts`·`-SshExe`를 주입 가능하게 했고 `rosy-release-push.ps1`이 자기 값을 그대로 넘긴다. known_hosts 경로에 공백·큰따옴표가 있으면 조회하지 않는다(5.1이 native 인자의 큰따옴표를 망가뜨림). 스킬 `rosy-release-push` 5단계 갱신.
+- 증거: 2026-10-01 관찰 — `rosy-release-push.ps1 -Robot 192.168.1.201`이 `192.168.1.201.credential.xml`만 찾아 "CALIBRATION CHECK SKIPPED"를 내고 진행했다. 실제 파일은 `rosy-pinky-9dfk.credential.xml`. `python -m pytest test/test_calibration_guard.py test/test_release_push_entrypoint.py -q` 69 passed(가드 27, 새 11: 호스트명 자격 증명 사용·활성 세션 거절, 나쁜 답 5종, ssh 실패, ssh 없음 시 파일명 표시, IP 파일 우선·ssh 미호출, push 전달). 변형 9종 모두 빨강(정규식 제거, 대소문자 무시, 여러 줄 허용, 종료 코드 무시, IP 파일 우선 제거, 파일명 누락, 조회 제거, BatchMode 제거, push 전달 제거). 가짜 ssh(.ps1)와 localhost 가짜 CORE만 사용, 로봇 접속 없음(Windows).
+- gate 변화: 없음.
+- 교훈: 자격 증명 파일 이름 규칙과 그것을 찾는 쪽의 키가 다르면 안전 점검이 조용히 건너뛰어진다. 건너뜀 경고에는 무엇을 찾았는지를 적는다.

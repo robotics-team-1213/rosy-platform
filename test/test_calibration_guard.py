@@ -192,6 +192,140 @@ def test_skill_prefers_environment_or_dpapi_over_a_command_line_token():
     assert "last resort" in text
 
 
+# --- 2026-10-01: device credentials are stored by hostname, pushes name an IP --
+# sd/rotate-core-api-credential.ps1 names the DPAPI file after the device
+# hostname (rosy-pinky-9dfk.credential.xml), but pushes pass -Robot <ip>. The
+# guard used to look only for <ip>.credential.xml and silently skipped the
+# check. It now asks the robot its hostname over the push's own strict ssh.
+
+FAKE_SSH = r"""
+Add-Content -Path $env:ROSY_FAKE_LOG -Value ($args -join ' ')
+if ($env:ROSY_FAKE_HOSTNAME) { $env:ROSY_FAKE_HOSTNAME -split '\|' }
+exit [int]$env:ROSY_FAKE_EXIT
+"""
+
+
+def _store_credential(tmp_path: Path, name: str, token: str = TOKEN) -> Path:
+    path = tmp_path / "Rosy" / "api" / f"{name}.credential.xml"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    script = ("$s = ConvertTo-SecureString $env:T -AsPlainText -Force; "
+              "New-Object System.Management.Automation.PSCredential('tok-1|uid-1', $s) | "
+              "Export-Clixml -LiteralPath $env:P")
+    env = dict(os.environ, T=token, P=str(path))
+    subprocess.run([POWERSHELL, "-NoProfile", "-Command", script], check=True, env=env, timeout=60)
+    return path
+
+
+def _fake_ssh(tmp_path: Path, env: dict, hostname: str = "", exit_code: int = 0) -> tuple[Path, Path]:
+    fake = tmp_path / "fake-ssh.ps1"
+    fake.write_text(FAKE_SSH, encoding="ascii")
+    log = tmp_path / "ssh.log"
+    env["ROSY_FAKE_LOG"] = str(log)
+    env["ROSY_FAKE_HOSTNAME"] = hostname
+    env["ROSY_FAKE_EXIT"] = str(exit_code)
+    return fake, log
+
+
+def test_ip_resolves_to_the_hostname_credential_over_strict_ssh(fake_core, tmp_path):
+    _store_credential(tmp_path, "rosy-pinky-9dfk")
+    env = _env(tmp_path)
+    fake, log = _fake_ssh(tmp_path, env, "rosy-pinky-9dfk")
+    done = _guard(fake_core["port"], env, "-SshExe", str(fake))
+    out = done.stdout + done.stderr
+    assert done.returncode == 0, out
+    assert fake_core["auth"] == [f"Bearer {TOKEN}"], out
+    assert "no active calibration session" in done.stdout and "SKIPPED" not in out
+    call = log.read_text(encoding="utf-8").strip()
+    assert call.endswith("rosy@127.0.0.1 hostname"), call
+    for option in ("BatchMode=yes", "StrictHostKeyChecking=yes", "ConnectTimeout=",
+                   "UserKnownHostsFile=" + str(tmp_path / "Rosy" / "known_hosts"),
+                   "-i " + str(tmp_path / "Rosy" / "ssh" / "rosy-operator-ed25519")):
+        assert option in call, call
+    assert '"' not in call
+
+
+def test_hostname_credential_still_refuses_an_active_session(fake_core, tmp_path):
+    fake_core["reply"] = ACTIVE
+    _store_credential(tmp_path, "rosy-pinky-9dfk")
+    env = _env(tmp_path)
+    fake, _ = _fake_ssh(tmp_path, env, "rosy-pinky-9dfk")
+    done = _guard(fake_core["port"], env, "-SshExe", str(fake))
+    assert done.returncode == 3, done.stdout + done.stderr
+    assert fake_core["auth"] == [f"Bearer {TOKEN}"]
+
+
+@pytest.mark.parametrize("answer", [
+    "ROSY-PINKY-9DFK",            # case: Windows would open the lowercase file
+    "rosy-pinky-9dfk.local",      # dots are not a device hostname
+    "pinky-9dfk",                 # not a ROSY device name
+    "rosy-pinky-9dfk|rosy-other", # more than one line
+    "rosy-pinky-9dfk;x",
+])
+def test_a_bad_hostname_answer_is_not_used(fake_core, tmp_path, answer):
+    for name in ("rosy-pinky-9dfk", "rosy-pinky-9dfk.local", "pinky-9dfk", "rosy-other"):
+        _store_credential(tmp_path, name)
+    env = _env(tmp_path)
+    fake, _ = _fake_ssh(tmp_path, env, answer)
+    done = _guard(fake_core["port"], env, "-SshExe", str(fake))
+    out = done.stdout + done.stderr
+    assert done.returncode == 0, out
+    assert fake_core["auth"] == [], out
+    assert "CALIBRATION CHECK SKIPPED" in out
+
+
+def test_a_failed_ssh_answer_is_not_used(fake_core, tmp_path):
+    _store_credential(tmp_path, "rosy-pinky-9dfk")
+    env = _env(tmp_path)
+    fake, _ = _fake_ssh(tmp_path, env, "rosy-pinky-9dfk", exit_code=255)
+    done = _guard(fake_core["port"], env, "-SshExe", str(fake))
+    out = done.stdout + done.stderr
+    assert done.returncode == 0, out
+    assert fake_core["auth"] == [], out
+    assert "CALIBRATION CHECK SKIPPED" in out
+
+
+def test_no_ssh_skips_and_names_the_files_it_looked_for(fake_core, tmp_path):
+    _store_credential(tmp_path, "rosy-pinky-9dfk")   # another robot's file: never tried
+    done = _guard(fake_core["port"], _env(tmp_path), "-SshExe", "rosy-no-such-ssh-for-test")
+    out = done.stdout + done.stderr
+    flat = "".join(out.split())  # warnings wrap at the console width
+    assert done.returncode == 0, out
+    assert fake_core["auth"] == [], out
+    assert "CALIBRATION CHECK SKIPPED" in out
+    assert "127.0.0.1.credential.xml" in flat
+    assert "hostname" in out.lower()
+    assert "rosy-pinky-9dfk.credential.xml" not in flat
+
+
+def test_ip_named_credential_wins_without_any_ssh_call(fake_core, tmp_path):
+    _store_credential(tmp_path, "127.0.0.1")
+    _store_credential(tmp_path, "rosy-pinky-9dfk", token="other-robot-token-0002")
+    env = _env(tmp_path)
+    fake, log = _fake_ssh(tmp_path, env, "rosy-pinky-9dfk")
+    done = _guard(fake_core["port"], env, "-SshExe", str(fake))
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert fake_core["auth"] == [f"Bearer {TOKEN}"]
+    assert not log.exists(), "ssh was called although the IP-named credential exists"
+
+
+def test_release_push_passes_its_ssh_settings_to_the_guard(fake_core, tmp_path):
+    fake_core["reply"] = ACTIVE
+    _store_credential(tmp_path, "rosy-pinky-9dfk")
+    env = _env(tmp_path)
+    fake, log = _fake_ssh(tmp_path, env, "rosy-pinky-9dfk")
+    key = tmp_path / "custom-key"
+    known = tmp_path / "custom_known_hosts"
+    done = _ps(PUSH, ["-Robot", "127.0.0.1", "-Rollback", "-ApiPort", str(fake_core["port"]),
+                      "-SshExe", str(fake), "-ScpExe", str(fake), "-KeyPath", str(key),
+                      "-KnownHosts", str(known), "-RosyUser", "rosyop"], env)
+    out = done.stdout + done.stderr
+    assert done.returncode != 0, out
+    assert "calibration session is active" in out
+    calls = log.read_text(encoding="utf-8").splitlines()
+    assert len(calls) == 1 and calls[0].endswith("rosyop@127.0.0.1 hostname"), calls
+    assert "-i " + str(key) in calls[0] and "UserKnownHostsFile=" + str(known) in calls[0]
+
+
 def test_server_error_is_reported_as_failed_not_rejected(fake_core, tmp_path):
     fake_core["status"] = 500
     fake_core["reply"] = {"error": {"code": "INTERNAL_ERROR"}}

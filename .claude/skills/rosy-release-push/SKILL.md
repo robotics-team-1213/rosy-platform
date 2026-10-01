@@ -76,12 +76,20 @@ Verified twice on 2026-09-26: releases 013 and 014 on a Pinky Pro running image 
    - **Manual rollback:** `-Rollback`.
    - **Calibration guard (D-321 addendum):** before the first remote step the script asks
      CORE `GET /api/v1/calibration/session`. Give it a token through `ROSY_API_TOKEN` or the
-     DPAPI device credential (`%LOCALAPPDATA%\Rosy\api\<robot>.credential.xml`); use
+     DPAPI device credential; use
      `-ApiToken` only as a last resort, because a command-line token lands in shell history
-     and the process list. HTTP 401/403 means the token is wrong, not that CORE is down. An active session **refuses** the push (`REFUSED ... would
+     and the process list. The guard first tries `%LOCALAPPDATA%\Rosy\api\<robot>.credential.xml`
+     (`<robot>` exactly as passed to `-Robot`). `rotate-core-api-credential.ps1` names the file
+     after the device hostname (`rosy-pinky-9dfk.credential.xml`), so for an IP the guard
+     runs `ssh <user>@<ip> hostname` with the push's own `-SshExe`/`-KeyPath`/`-KnownHosts`
+     (`BatchMode=yes`, `StrictHostKeyChecking=yes`) and uses `<hostname>.credential.xml`
+     only when the answer is exactly one line matching `^rosy-[a-z0-9-]+$`. It never tries
+     another robot's file against this address. HTTP 401/403 means the token is wrong, not that CORE is down. An active session **refuses** the push (`REFUSED ... would
      interrupt a running calibration`) — wait for it, ask its owner to end it, or pass
      `-Force` only when you know the calibration is abandoned. No token or no answer only
-     warns. `-PrintCommands` skips the check.
+     warns: `CALIBRATION CHECK SKIPPED` lists the credential files it looked for and why
+     the hostname lookup failed. Treat that line as a missing safety check, not as noise.
+     `-PrintCommands` skips the check.
 6. **Image-layer sync (automatic, D-388).** After `CORE readiness: PASS` the push runs
    `/opt/rosy/releases/<id>/deploy/robot/native/sync-image-layer.py` twice under `sudo -n`.
    `--dry-run` prints the JSON plan (`changed`, `new`, `unchanged`, `skipped`), then the
