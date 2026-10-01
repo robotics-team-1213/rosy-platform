@@ -24,7 +24,7 @@ data class OverheadServiceRecord(
             val txt = info.attributes.mapValues { (_, value) -> value?.toString(StandardCharsets.UTF_8)?.toByteArray(StandardCharsets.UTF_8) }
             val record = parse(info.serviceType, info.serviceName, info.port, txt) ?: return null
             @Suppress("DEPRECATION")
-            val address = info.host?.hostAddress
+            val address = dialAddress(info.host?.hostAddress)
             return record.copy(
                 address = address,
                 pairable = Pairing.pairable(info.serviceType, null, address, info.port, txt) == null,
@@ -35,6 +35,12 @@ data class OverheadServiceRecord(
             if (rejection(serviceType, tlsHost, port, attributes) != null) return null
             return OverheadServiceRecord(serviceName, normalizeHost(attributes.text("tls_host").orEmpty()), port)
         }
+
+        /**
+         * The NSD address as a pairing dial target: a plain IPv4/IPv6 literal only. A scoped link-local address
+         * (`fe80::1%wlan0`) or anything else is no target, so the record gets no "연결 요청" button.
+         */
+        internal fun dialAddress(hostAddress: String?): String? = hostAddress?.takeIf { SiteLink.isIpLiteral(it) }
 
         private fun parse(serviceType: String, serviceName: String, port: Int, attributes: Map<String, ByteArray?>): OverheadServiceRecord? {
             if (rejection(serviceType, null, port, attributes) != null) return null
