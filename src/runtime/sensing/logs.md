@@ -760,3 +760,9 @@
 - 변경: `map_v2_fleet/lane_rules.yaml`의 `reference_squares`에 `heading_axis_deg`(A 90, B 0, 영상 유래)를 더했다. 사용자 결정: 사각형 위 로봇은 길을 따라 놓이고 앞뒤는 정하지 않는다. 시험이 축 값과, 축 방향으로 중심에서 0.3 m 넘게 벗어나 앞뒤가 LiDAR로 갈리는지를 확인한다.
 - 증거: test_map_v2_fleet_reference_squares.py.
 - gate 변화: 없음(SOURCE, 이 키를 읽는 코드는 아직 없다).
+
+## 2026-10-01 · uncommitted · refactor(localization): 전역 탐색을 후보 목록·발자국 마스크·시드 정밀화로 나눔 (D-395 1단계)
+- 변경: `sensing/localization.py`에 `valid_beams`, `apart`(0.18 m / 0.3 rad), `GLOBAL_OFFSETS`, `MapAgreement.clear_poses/refine/global_results`를 꺼냈다. `global_match`는 같은 계산을 거쳐 같은 답을 낸다. 대칭 맵에서 유일하지 않다고 버리던 후보를 D-395 후보 목록이 쓰게 하려는 준비다.
+- 증거: `test_localization_search.py`(신규 6), `test_localization.py`의 기록된 Gazebo 모서리 시험(유일 해·2 cm) 그대로 통과, `test_localization_gate.py`.
+- gate 변화: 없음(SOURCE). 노드 동작 불변.
+- 결정: D-395 Proposed(설계 승인, 1단계 호스트 전용).

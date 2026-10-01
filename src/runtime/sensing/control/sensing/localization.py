@@ -1,6 +1,29 @@
 """Subject: saved-map observation agreement and expiring localization authority."""
 import math
 import numpy as np
+#: Refinement around one global seed: +-5 cm in 1 cm steps, +-5 deg in 1 deg steps.
+GLOBAL_OFFSETS = np.array(np.meshgrid(
+    np.arange(-.05, .051, .01), np.arange(-.05, .051, .01), np.radians(np.arange(-5., 5.1, 1.)),
+    indexing='ij')).reshape(3, -1).T
+#: Two poses closer than this in both position and heading are one hypothesis.
+SEPARATION_M = .18
+SEPARATION_RAD = .3
+
+
+def wrap(angle):
+    return math.atan2(math.sin(angle), math.cos(angle))
+
+
+def apart(a, b):
+    """True when two (x, y, yaw) poses are distinct hypotheses, not one blurred twice."""
+    return math.dist(a[:2], b[:2]) > SEPARATION_M or abs(wrap(a[2]-b[2])) > SEPARATION_RAD
+
+
+def valid_beams(ranges, angles):
+    """Finite beams beyond the 5 cm lidar minimum, as arrays."""
+    ranges, angles = np.asarray(ranges, dtype=float), np.asarray(angles, dtype=float)
+    valid = np.isfinite(ranges) & (ranges > .05) & np.isfinite(angles)
+    return ranges[valid], angles[valid]
 
 
 def planar_yaw(x, y, z, w):
@@ -133,20 +156,10 @@ class MapAgreement:
         overlaps = np.hypot(ox+(xx+.5)*self.resolution-x, oy+(yy+.5)*self.resolution-y) <= radius+self.resolution/math.sqrt(2)
         return bool(np.all(self.grid[yy[overlaps], xx[overlaps]] == 0))
 
-    def global_match(self, ranges, angles, radius, minimum=.9, margin=.04):
-        """Coarse-to-fine scan search. Repeated geometry must remain ambiguous.
-
-        Returns a candidate, not driving authority. AMCL and subsequent fresh
-        scans still have to confirm it. Inputs are sensor-frame observations.
-        """
-        ranges, angles = np.asarray(ranges), np.asarray(angles)
-        valid = np.isfinite(ranges) & (ranges > .05) & np.isfinite(angles)
-        ranges, angles = ranges[valid], angles[valid]
-        if len(ranges) < 30:
-            return {'unique': False, 'reason': 'insufficient-scan'}
+    def clear_poses(self, radius):
+        """Cells where a footprint of `radius` is wholly free. Unknown is never free."""
         h, w = self.grid.shape
         free = self.grid == 0
-        # Candidate origins need room for the footprint, never inside walls.
         blocked = ~free
         clear = free.copy()
         inflated_radius = radius + self.resolution/math.sqrt(2)
@@ -159,30 +172,17 @@ class MapAgreement:
                 x0, x1 = max(0, dx), min(w, w+dx)
                 if y1 > y0 and x1 > x0:
                     clear[y0:y1, x0:x1] &= ~blocked[y0-dy:y1-dy, x0-dx:x1-dx]
-        stride = max(1, round(.04/self.resolution))
-        yy, xx = np.nonzero(clear[::stride, ::stride])
-        if not len(xx):
-            return {'unique': False, 'reason': 'no-footprint-clear-candidate'}
-        xy = np.column_stack((xx*stride+.5, yy*stride+.5))*self.resolution + self.origin
-        candidates = []
-        for theta in np.arange(-math.pi, math.pi, math.radians(5)):
-            poses = np.column_stack((xy, np.full(len(xy), theta)))
-            quality = self._qualities(poses, ranges[::2], angles[::2])
-            for idx in np.argsort(quality)[-16:]:
-                candidates.append((float(quality[idx]), poses[idx]))
-        seeds = []
-        for quality, pose in sorted(candidates, key=lambda item: item[0], reverse=True):
-            if all(math.dist(pose[:2], other[:2]) > .18 or
-                   abs(math.atan2(math.sin(pose[2]-other[2]), math.cos(pose[2]-other[2]))) > .3
-                   for other in seeds):
-                seeds.append(pose)
-            if len(seeds) >= 48:
-                break
-        offsets = np.array(np.meshgrid(np.arange(-.05, .051, .01),
-            np.arange(-.05, .051, .01), np.radians(np.arange(-5., 5.1, 1.)), indexing='ij')).reshape(3, -1).T
+        return clear
+
+    def refine(self, seeds, ranges, angles, clear, offsets=None):
+        """Best three refinements per seed as (0.7*agreement + 0.3*quality, agreement, pose).
+
+        Inputs are valid sensor-frame beams (see `valid_beams`); poses are sensor poses."""
+        offsets = GLOBAL_OFFSETS if offsets is None else offsets
+        h, w = self.grid.shape
         results = []
         for seed in seeds:
-            poses = seed + offsets
+            poses = np.asarray(seed) + offsets
             indices = np.floor((poses[:, :2]-self.origin)/self.resolution).astype(int)
             inside = (indices[:, 0] >= 0) & (indices[:, 0] < w) & (indices[:, 1] >= 0) & (indices[:, 1] < h)
             allowed = np.zeros(len(poses), dtype=bool)
@@ -195,12 +195,51 @@ class MapAgreement:
                 pose = poses[idx]
                 agreement = self.score(pose, ranges, angles)
                 results.append((agreement*.7 + float(quality[idx])*.3, agreement, pose))
+        return results
+
+    def global_results(self, ranges, angles, radius):
+        """Every refined sensor-pose candidate, best first, and a reason when there are none.
+
+        Coarse-to-fine: 4 cm x 5 deg seeds, the 48 best distinct ones refined by
+        GLOBAL_OFFSETS. Inputs are sensor-frame observations."""
+        ranges, angles = valid_beams(ranges, angles)
+        if len(ranges) < 30:
+            return [], 'insufficient-scan'
+        clear = self.clear_poses(radius)
+        stride = max(1, round(.04/self.resolution))
+        yy, xx = np.nonzero(clear[::stride, ::stride])
+        if not len(xx):
+            return [], 'no-footprint-clear-candidate'
+        xy = np.column_stack((xx*stride+.5, yy*stride+.5))*self.resolution + self.origin
+        candidates = []
+        for theta in np.arange(-math.pi, math.pi, math.radians(5)):
+            poses = np.column_stack((xy, np.full(len(xy), theta)))
+            quality = self._qualities(poses, ranges[::2], angles[::2])
+            for idx in np.argsort(quality)[-16:]:
+                candidates.append((float(quality[idx]), poses[idx]))
+        seeds = []
+        for quality, pose in sorted(candidates, key=lambda item: item[0], reverse=True):
+            if all(apart(pose, other) for other in seeds):
+                seeds.append(pose)
+            if len(seeds) >= 48:
+                break
+        results = self.refine(seeds, ranges, angles, clear)
         if not results:
-            return {'unique': False, 'reason': 'no-refined-candidate'}
+            return [], 'no-refined-candidate'
         results.sort(key=lambda item: item[0], reverse=True)
+        return results, None
+
+    def global_match(self, ranges, angles, radius, minimum=.9, margin=.04):
+        """Coarse-to-fine scan search. Repeated geometry must remain ambiguous.
+
+        Returns a candidate, not driving authority. AMCL and subsequent fresh
+        scans still have to confirm it. Inputs are sensor-frame observations.
+        """
+        results, reason = self.global_results(ranges, angles, radius)
+        if reason:
+            return {'unique': False, 'reason': reason}
         best = results[0]
-        competitors = [r for r in results[1:] if math.dist(r[2][:2], best[2][:2]) > .18 or
-                       abs(math.atan2(math.sin(r[2][2]-best[2][2]), math.cos(r[2][2]-best[2][2]))) > .3]
+        competitors = [r for r in results[1:] if apart(r[2], best[2])]
         gap = best[0] - competitors[0][0] if competitors else 1.
         return {'unique': bool(best[1] >= minimum and gap >= margin),
                 'pose': best[2].tolist(), 'agreement': best[1], 'quality': best[0], 'margin': gap}

@@ -64,8 +64,8 @@
 
 ## 최근 기록
 
+- 2026-10-01 · uncommitted · refactor(localization): 전역 탐색을 후보 목록·발자국 마스크·시드 정밀화로 나눔 (D-395 1단계)
 - 2026-10-01 · uncommitted · feat(map): 기준 사각형에 방향 축 `heading_axis_deg`
 - 2026-10-01 · uncommitted · feat(map): map_v2_fleet 바닥 기준 사각형 2개를 맵 데이터와 sim 월드에 기록 (D-395 개정 1)
 - 2026-10-01 · edca9b2e · feat(control): 기하 기본값을 URDF NOMINAL로 (D-397)
 - 2026-10-01 · fff5825f · feat(perception): D-384 도로 상태 추정기와 섀도 노드
-- 2026-10-01 · 00cdb647 · fix(sensing): calibration_store_root 선언 (M4)
