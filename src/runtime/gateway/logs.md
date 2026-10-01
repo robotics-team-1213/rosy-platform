@@ -698,3 +698,9 @@
 - 변경: `ros_bridge.py` 가 `loc_mission.bind_clock(self._line_clock)` — `use_sim_time` 이면 미션 시간 한도·센서 신선도가 sim 초로 잰다.
 - 증거: `test/test_localization_mission.py::test_the_bridge_ticks_missions_on_the_line_clock`.
 - gate 변화: 없음.
+
+## 2026-10-02 · 00b806cb · fix(bridge): 지역화 시간을 로봇 노드 시계에 맞춤 (D-395 S1 finding 6)
+
+- 변경: (d1d297d1, 00b806cb) `ros_bridge.py` 가 `localization.bind_clock(self._line_clock)` — `state_stale` 이 sim 초로 잰다. `received_s` 는 노드 ROS 시계 그대로: 두 노드가 use_sim_time 을 같이 쓰므로 sim 에선 sim 시각, 실기에선 epoch 시각이다(실기 line clock 인 monotonic 이면 로봇이 만료로 거부). `pose_frame` 을 정하는 2 s map-pose 신선도도 line clock 으로 찍고 재며, 초기값은 `-inf`(sim 시각은 0 근처에서 시작).
+- 증거: `test/test_localization_cross_lane.py` +7 (sim·device 시계 각각: `received_s` 가 `RECEIPT_AHEAD_S` 안이고 수락됨, line clock 3 s 에 stale; device 에서 monotonic 수령 시각은 거부; 브리지 배선 AST 2).
+- gate 변화: 없음.

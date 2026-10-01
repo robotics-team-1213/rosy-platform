@@ -70,8 +70,8 @@
 
 ## 최근 기록
 
+- 2026-10-02 · 00b806cb · fix(bridge): 지역화 시간을 로봇 노드 시계에 맞춤 (D-395 S1 finding 6)
 - 2026-10-02 · uncommitted · fix(bridge): D-395 P2-7 미션도 line clock 으로
 - 2026-10-02 · uncommitted · feat(bridge): D-395 P2-7 미션 조립과 배선
 - 2026-10-02 · uncommitted · fix(bridge): D-394 주행 카드 reach 셋 삭제(C6) — 죽은 current_goal 판정
 - 2026-10-01 · uncommitted · fix(bridge): D-395 리뷰 — SAF-005 귀환 게이트, 시작·정지 순서
-- 2026-10-01 · uncommitted · feat(services): D-395 LOCALIZED 이탈 정지 조립
