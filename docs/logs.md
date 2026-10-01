@@ -4290,3 +4290,10 @@
 - 변경: 통합 브랜치에 최신 main 재병합. main 이 D-400 으로 v1.71 을 먼저 써서 D-395 2단계 계약을 API Ref **v1.72** 로 다시 올림(헤더, 변경 이력 행 v1.72→v1.71→v1.70 순, D-395 절 언급, `app.py` ×2, Fleet·line-follow 핀). `StateManager` 는 D-400 `safety_policy` 와 D-395 `localization` 공급자를 둘 다 둔다.
 - 증거: 재병합 뒤 빠른 검사(아래 보고).
 - gate 변화: 없음.
+
+## 2026-10-02 · uncommitted · docs(plans): D-395 S1 Gazebo bench 결과 (P2-8)
+- 변경: `docs/plans/2026-10-02-d395-s1-bench-results.md` — 2대 S1(a 슬롯+슬롯 밖, b 두 사각형, c 강제 거울, d 주행 중 픽업)과 1대 슬롯 밖(l) 사다리 시나리오, 런별 표·발견 10개·조정 제안·정확한 명령. 최종 런은 main 5b346b2b(P2-7 사다리 포함) 병합본, 이전 148af568 런은 보조 근거.
+- 증거: WSL Jazzy Gazebo `tools/sim/d395_s1_bench.py` 21회(최종 9회 + 이전 12회, 스모크 제외), Gazebo 정답 대조. 결과: b 9/9 통과, a 2/3, d 3/3(P2-7 회전 필요, 이전 1/3), c 0/5 감지, l 0/3(needs_human). 시스템이 만든 거울 잠금 0, 거울 결정 송신 0. 원시 로그 `X:\DevTemp\rosy-d395-s1\`.
+- gate 변화: 없음. D-395 S1 미통과 — 사람 입력 0·전원 LOCALIZED 기준을 a·c에서 못 채움.
+- 결정: 없음. 기본값 변경 없음(slot 1.5·margin 1.0은 57/57 정답; 발견 1–4·6–7은 다른 갈래의 코드 변경).
+- 교훈: 공유 호스트에서 Gazebo RTF가 0.002–1.9로 흔들린다 — 벽시계 타이머(CORE state_stale 3 s, Fleet 사다리·감시)와 ROS 시계 타이머(로봇 상태 0.5 s, 재보고 2 s)가 섞인 경로는 sim에서 sim 초로 환산해 읽어야 하고, 섞인 것 자체가 발견이다.
