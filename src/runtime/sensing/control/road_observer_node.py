@@ -68,7 +68,7 @@ class RoadObserverNode(Node):
         self.declare_parameter('dashboard_preview_max_width', 640)
         self.declare_parameter('dashboard_preview_jpeg_quality', 72)
         self.declare_parameter('dashboard_preview_max_bytes', 512000)
-        self.declare_parameter('dashboard_source', 'PINKY')
+        self.declare_parameter('dashboard_source', 'ROSY')
         self.declare_parameter('require_camera_controls_stable', True)
         self.declare_parameter('camera_homography_path', '')
         self.declare_parameter('camera_homography_enabled', False)
