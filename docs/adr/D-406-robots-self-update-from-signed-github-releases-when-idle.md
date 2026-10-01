@@ -40,10 +40,10 @@
   5. **적격성.** 아래가 모두 참일 때만 적용한다. 하나라도 거짓이면 이유를 `status.json`에 남기고 다음 실행을 기다린다.
      - hold가 없거나 만료됐다.
      - 지금 릴리스에 묶인 하드웨어 승인이 없다. `/etc/rosy/approvals/hardware.approved` 또는 `navigation.approved`의 `release_id`가 지금 릴리스와 같으면 hold로 본다(`mapping_approval.py check`가 릴리스를 바꾸면 그 승인을 무효로 하기 때문이다).
-     - CORE가 IDLE이고 이동이 없다(10 s 동안 두 표본). navigation·line_follow·docking·swarm·교정 세션이 없고 E-stop이 걸려 있지 않다.
+     - CORE가 IDLE이고 이동이 없다(12 s 간격 두 표본, 서로 다른 두 쓰기). navigation·line_follow·docking·swarm·교정 세션이 없고 E-stop이 걸려 있지 않다.
      - 배터리 40% 이상이거나 충전 중이다. 배터리 값이 없으면 부적격이다.
      - 다른 작업의 claim(`/run/rosy-claim`)이 없다. 업데이터는 적용 동안 스스로 claim을 잡는다.
-     - **판정 입력은 토큰이 필요 없는 로컬 파일이다.** CORE가 10 s마다 쓰는 `/run/rosy/status-inputs.json`을 schema 2로 넓혀 `mode`, `navigation`, `velocity`, `battery.percent`, `battery_status.charging`, `docking.state`, `line_follow`, `swarm.active`, `safety.estop`, `activity`를 싣는다. 업데이터는 `rosy-boot-status.py`와 같은 규칙(O_NOFOLLOW, 크기 상한, 60 s 신선도)으로 읽고, 파일이 없거나 오래됐거나 schema가 다르면 부적격이다. `GET /api/v1/robot/state`는 토큰이 필요하고 업데이트 전용 자격(D-387 P3)이 아직 없으므로 쓰지 않는다.
+     - **판정 입력은 토큰이 필요 없는 로컬 파일이다.** CORE가 10 s마다 쓰는 `/run/rosy/status-inputs.json`을 schema 2로 넓혀 `mode`, `navigation`, `velocity`, `battery.percent`, `battery_status.charging`, `docking.state`, `line_follow`, `swarm.active`, `safety.estop`, `activity`를 싣는다. 업데이터는 `rosy-boot-status.py`와 같은 규칙(O_NOFOLLOW, 크기 상한)과 25 s 신선도(리뷰 M1)으로 읽고, 파일이 없거나 오래됐거나 schema가 다르면 부적격이다. `GET /api/v1/robot/state`는 토큰이 필요하고 업데이트 전용 자격(D-387 P3)이 아직 없으므로 쓰지 않는다.
   6. **적용 트랜잭션.**
      - `native_release.py activate` → CORE 프로세스 cwd 확인(아니면 rosy-core 재시작) → 새 릴리스의 `sync-image-layer.py` → 바뀐 유닛 재시작 → 건강 판정.
      - 건강 판정: CORE 준비(45 s), `rosy-core`·`rosy-io`·`rosy-camera`가 새 릴리스 cwd에서 active, 실패한 `rosy-*` 유닛 없음이 60 s 동안 유지.
@@ -89,6 +89,9 @@
 - **R2. GitHub 계정 탈취.** 내용은 위조할 수 없고(서명), rollout도 서명이라 시점·철회도 못 바꾼다. 서명된 옛 릴리스로 되돌리는 것은 "낮은 id 적용 안 함"으로 막는다.
 - **R3. 적용 중 전원 차단.** `recover()`가 부팅 때 마지막으로 좋았던 릴리스로 돌린다. image layer 중간 상태는 다음 실행의 sync가 맞춘다.
 - **R4. 이동 판정 오판.** IDLE·속도·모드·claim을 함께 보고, 적용 중 E-stop·정지 경로는 늘 열려 있다. 적용 동안 io가 재시작되며 모터는 잠깐 멈춘다.
+  - 판정은 서로 다른 두 쓰기(각 25 s 이내, 12 s 간격)를 보고, 활성화기를 부르기 직전에 status-inputs를 한 번 더 읽는다(리뷰 M2).
+  - **남는 틈:** 그 마지막 읽기와 활성화기가 런타임을 멈추는 순간 사이(보통 1 s 안팎)와, CORE가 파일을 쓰는 10 s 주기 안에서 시작된 움직임은 볼 수 없다. 이 틈에서 시작된 명령은 활성화의 런타임 정지로 끊기고 모터가 멈춘다. 끊긴 주행은 다시 시작해야 한다.
+  - claim을 쓰지 않는 조작(대시보드에서 바로 주행 시작)은 이 틈을 막지 못한다. 시험·주행 세션은 hold를 먼저 건다(R1).
 
 ### Validation
 
