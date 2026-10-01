@@ -2,7 +2,7 @@
 module: cam
 logical_modules: []
 owner: SITE
-last_verified: { commit: "f449f157", date: 2026-10-01 }
+last_verified: { commit: "05280213", date: 2026-10-01 }
 gates:
   SOURCE:
     state: GO
@@ -35,7 +35,14 @@ plans:
 - SOURCE/LOCAL은 JVM 단위 시험과 debug APK 빌드 범위에서 GO다. DEVICE는 새 APK 설치·재페어링 전이라 PARKED다.
 - 2026-10-01 D-391 공유 벡터(`feat/cam-d391-shared-vectors`): Kotlin 시험이 `failure-classes.v1.json`(28)·`site-link.v1.json`(42)을 모두 돌린다. `tls_host`는 `.local` 이름만 받고, 시스템 DNS 경로는 없앴다. 닫힘 4403은 최종이다(재페어링 안내 없음). JVM 시험 250 passed.
 - 2026-10-01 D-391 E1/E2(`feat/cam-site-link-mdns`, main 미병합): 저장은 사이트 연결 기록(`SiteLink`)이고 IP를 다이얼 대상으로 저장하지 않는다. 접속마다 mDNS로 `tls_host`를 찾고(→ `manual_host` "수동 주소" → `not_discovered`), SNI·호스트명 검사는 `tls_host`다. 태블릿 실기와 독립 리뷰(M1–M3, m1–m9)를 반영해 JVM 시험 235 passed. 태블릿(Android 11)에서 이름 재발견과 `not_discovered` 진단을 확인했다.
-- 2026-10-01 D-341 페어링 클라이언트 1단계(`feat/cam-rosy-pair-client`, main 미병합): `pairing/`에 `rosy-pair/1` 코드·커밋·CA 지문·pairable 규칙, 요청·공개·결과·응답 모양, 상태 기계(`PairingClient`, 가짜 transport)가 있다. `pairing.v1.json`(rosy-00 93336f48과 바이트 동일)의 모든 사례를 Kotlin이 돌린다. JVM 시험 281 passed. HTTP·UI는 2단계다.
+- 2026-10-01 D-341 페어링 클라이언트(`feat/cam-rosy-pair-client`, main 미병합): `pairing/`에 `rosy-pair/1` 코드·커밋·CA 지문·pairable 규칙, 요청·공개·결과·응답 모양, 상태 기계(`PairingClient`), S2 라우트 HTTPS transport(`HttpPairingTransport`, 첫 leaf 기록 후 그 leaf만 신뢰), 2 s 조회·Retry-After(`PairingSession`), 설정의 "사이트에 연결 요청"과 페어링 화면이 있다. `pairing.v1.json`(rosy-00 93336f48과 바이트 동일)의 모든 사례를 Kotlin이 돌린다. JVM 시험 291 passed, lint 0 errors. 실기는 아직이다.
+- 페어링에서 남은 것:
+  1. rosy-00: `_rosy-overhead._tcp` TXT `pair=rosy-pair/1` 광고와 Compose 배선. 광고가 없으면 앱은 요청 버튼을 띄우지 않는다(D-341 14). 그 전에는 실기에서 이 경로를 열 수 없다.
+  2. 병합 순서: `feat/d341-fleet-pairing-server`(S1–S3, 920bef4d)가 먼저 main에 간다. 벡터 파일은 바이트 동일이라 충돌하지 않는다.
+  3. DEVICE(D-341 판정 등급): S21에서 발견 → 요청 → 콘솔 코드 입력 → 지문 확인 → 고정 CA 송출 60 s, 회수 후 4401로 멈춤, 사이트 IP 변경 후 재연결.
+  4. 화면 회전 등으로 Activity가 다시 만들어지면 진행 중인 페어링은 사라진다(서버는 300 s/120 s 뒤 스스로 만료). 필요하면 ViewModel로 옮긴다.
+  5. confirm 응답이 오는 길에 끊기면 서버는 자격을 활성으로 두었는데 폰은 버린다. 운용자가 회수한 뒤 다시 요청한다.
+  6. lint `CustomX509TrustManager` 경고 1건(`FirstContactTrust`)은 D-341 3 첫 접촉 기록 때문에 의도된 것이다.
 
 ## 다음 gate
 
