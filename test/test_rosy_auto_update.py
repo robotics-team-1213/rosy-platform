@@ -1196,7 +1196,7 @@ def test_resume_waits_for_a_hold_before_any_restart(device, host, hub, keys):
     result = up.run()
 
     assert result["phase"] == "held"
-    assert not RESTARTING & set(kinds(host)) and "mainpid" not in kinds(host)
+    assert not RESTARTING & set(kinds(host))  # reading MainPID (is CORE running?) is allowed
     assert state(device)["applying"]["release_id"] == NEXT
 
     up.release_hold()
@@ -1678,3 +1678,105 @@ def test_unexpected_exception_after_activation_rolls_back(device, host, hub, key
     assert result["phase"] == "rolled_back"
     assert "UNEXPECTED" in result["last_result"]["detail"]
     assert host.links["current"] == CURRENT
+
+
+# --- coordinator decision on H1: CORE down waives idleness for a resume ---------------
+
+
+def _core_down_until_restarted(host: FakeHost) -> None:
+    host.core_up = False
+
+    def is_active(h, argv):
+        if "rosy-core.service" in argv and not h.core_up:
+            return subprocess.CompletedProcess([], 3, "", "inactive")
+        return None
+
+    def restart(h, argv):
+        if "rosy-core.service" in argv:
+            h.core_up = True
+        return None
+
+    def mainpid(h, argv):
+        if argv[-1] == "rosy-core.service" and not h.core_up:
+            return subprocess.CompletedProcess([], 0, "0\n", "")
+        return None
+
+    host.overrides.update({"is-active": is_active, "restart": restart, "mainpid": mainpid})
+
+
+def _stale_inputs(device: Path, host: FakeHost) -> None:
+    write_json(device / "run/rosy/status-inputs.json", idle_inputs(T0 - dt.timedelta(minutes=10)))
+    host.write_inputs = lambda: None
+
+
+def test_resume_with_core_down_waives_the_idleness_check(device, host, hub, keys):
+    hub.publish(keys, NEXT)
+    switched(device, host)
+    journal(device, "image-layer-sync")
+    _core_down_until_restarted(host)
+    _stale_inputs(device, host)
+
+    result = updater(host, hub).run()
+
+    assert result["phase"] == "committed", result
+    assert "core not running; idleness check waived" in result["last_result"]["detail"]
+    assert any("idleness check waived" in entry["detail"] for entry in history(device))
+
+
+def test_resume_with_core_down_still_honours_a_hold(device, host, hub, keys):
+    hub.publish(keys, NEXT)
+    switched(device, host)
+    journal(device, "image-layer-sync")
+    _core_down_until_restarted(host)
+    _stale_inputs(device, host)
+    up = updater(host, hub)
+    up.hold("agent", "G5", 2)
+
+    result = up.run()
+
+    assert result["phase"] == "held"
+    assert not RESTARTING & set(kinds(host))
+    assert state(device)["applying"]["step"] == "image-layer-sync"
+
+
+def test_resume_with_core_down_still_honours_a_seal_and_a_claim(device, host, hub, keys):
+    hub.publish(keys, NEXT)
+    switched(device, host)
+    journal(device, "image-layer-sync")
+    _core_down_until_restarted(host)
+    _stale_inputs(device, host)
+    claim_mod.acquire(device, "push-pc", "release push", 1800, now=T0)
+
+    result = updater(host, hub).run()
+
+    assert result["phase"] == "ineligible"
+    assert "push-pc" in result["reason"]
+    assert not RESTARTING & set(kinds(host))
+
+
+def test_resume_with_core_active_and_stale_inputs_is_ineligible(device, host, hub, keys):
+    hub.publish(keys, NEXT)
+    switched(device, host)
+    journal(device, "image-layer-sync")
+    _stale_inputs(device, host)
+
+    result = updater(host, hub).run()
+
+    assert result["phase"] == "ineligible"
+    assert "waived" not in result["reason"]
+    assert not RESTARTING & set(kinds(host))
+
+
+def test_resume_treats_core_without_a_main_pid_as_down(device, host, hub, keys):
+    # The unit may report active (e.g. ExecStartPre) with no MainPID: nothing commands motion.
+    hub.publish(keys, NEXT)
+    switched(device, host)
+    journal(device, "image-layer-sync")
+    _core_down_until_restarted(host)
+    del host.overrides["is-active"]  # rosy-core.service "active", MainPID 0
+    _stale_inputs(device, host)
+
+    result = updater(host, hub).run()
+
+    assert result["phase"] == "committed", result
+    assert "idleness check waived" in result["last_result"]["detail"]

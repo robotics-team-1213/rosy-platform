@@ -111,6 +111,7 @@ MAX_HOLD_HOURS = 168.0
 CLAIM_HOLDER = "rosy-auto-update"
 # Review M8: longer than the unit's TimeoutStartSec=45min, and refreshed at every journal step.
 CLAIM_TTL_S = 50 * 60
+CORE_DOWN_NOTE = "core not running; idleness check waived"
 HEALTH_UNITS = ("rosy-core.service", "rosy-io.service", "rosy-camera.service")
 HEALTH_HOLD_S = 60.0
 HEALTH_POLL_S = 5.0
@@ -613,7 +614,7 @@ class Updater:
             problems.append(f"battery {percent!r}% is below {BATTERY_MIN:g}% and not charging")
         return problems
 
-    def eligibility(self, *, own_claim_ok: bool = False) -> dict:
+    def eligibility(self, *, own_claim_ok: bool = False, waive_inputs: bool = False) -> dict:
         """Read-only: may this robot apply now? Two status samples, two different writes."""
         current = self.host.current_release()
         reasons: list[str] = []
@@ -625,7 +626,7 @@ class Updater:
         claim = rosy_claim.check(self.root, now=self.host.now())
         if claim is not None and not (own_claim_ok and claim.get("holder") == CLAIM_HOLDER):
             reasons.append(f"claim held by {claim.get('holder')} ({claim.get('purpose')})")
-        if not held:
+        if not held and not waive_inputs:
             problems, first = self._sample()
             if not problems:
                 self.host.sleep(SAMPLE_GAP_S)
@@ -936,7 +937,7 @@ class Updater:
         """Everything after activation; commit, or roll back on any failure."""
         # A journal without a baseline (none is written that way) checks CORE only.
         baseline = state["applying"].get("baseline") or {"active": {}, "failed": []}
-        notes = self._baseline_notes(baseline)
+        notes = self._baseline_notes(baseline) + ([state["applying"]["note"]] if state["applying"].get("note") else [])
         try:
             self._journal(state, "core-release-check")
             self._core_release_check()
@@ -998,8 +999,11 @@ class Updater:
                 problems.append(f"rollback: {error}")
         if not problems:
             problems = self._rollback_tail(release_id)
+        note = applying.get("note")
         state["applying"] = None
         detail = why if not problems else f"{why}; rollback incomplete: {'; '.join(problems)}"
+        if note and note not in detail:
+            detail = f"{detail}; {note}"
         self._result(state, release_id, "rolled_back", detail)
         self._prune(state)
         return self._finish(state, "rolled_back" if not problems else "failed", detail, release_id)
@@ -1074,6 +1078,10 @@ class Updater:
         finally:
             rosy_claim.release(self.root, CLAIM_HOLDER)
 
+    def _core_running(self) -> bool:
+        return (self._systemctl("is-active", "--quiet", "rosy-core.service").returncode == 0
+                and self._main_pid("rosy-core.service") > 0)
+
     def _resume(self, state: dict) -> dict:
         """A run died mid-apply (power loss, kill): finish it, once the robot is free again."""
         applying = state["applying"]
@@ -1082,12 +1090,18 @@ class Updater:
         if not applying.get("interrupted_logged"):
             applying["interrupted_logged"] = True
             self._history("apply_interrupted", release_id, f"step {step}")
-        # Review H1: nothing restarts while the robot is held, sealed or busy.
-        report = self.eligibility(own_claim_ok=True)
+        # Review H1: nothing restarts while the robot is held, sealed or busy. Coordinator
+        # decision: with rosy-core not running nothing can command motion (CORE is the only
+        # cmd_vel publisher, D-2), so idleness is waived; hold, seal and claim still apply.
+        core_down = not self._core_running()
+        report = self.eligibility(own_claim_ok=True, waive_inputs=core_down)
         if not report["eligible"]:
             phase = "held" if report["held"] else "ineligible"
             return self._finish(state, phase, f"finishing {release_id} (step {step}) waits: "
                                 + "; ".join(report["reasons"]), release_id)
+        if core_down:
+            applying["note"] = CORE_DOWN_NOTE
+            self._history("idleness_waived", release_id, CORE_DOWN_NOTE)
         rosy_claim.release(self.root, CLAIM_HOLDER)  # our own claim from the dead run
         try:
             rosy_claim.acquire(self.root, CLAIM_HOLDER, f"finish auto-update to {release_id}", CLAIM_TTL_S,
@@ -1106,7 +1120,7 @@ class Updater:
                 return self._settle(state, release_id)
             # Boot recovery (or the activator) already restored the old release.
             problems = self._rollback_tail(release_id) if step != "activate" else []
-            why = "interrupted; the previous release is current"
+            why = "; ".join(filter(None, ["interrupted; the previous release is current", applying.get("note")]))
             state["applying"] = None
             self._mark_failed(state, release_id, why)
             detail = why if not problems else f"{why}; rollback incomplete: {'; '.join(problems)}"
