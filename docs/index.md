@@ -266,7 +266,7 @@
 ## 최근 기록
 
 - 2026-10-01 · uncommitted · docs(adr): D-391 3항 개정 — 일관성 검사는 IP SAN을 보지 않는다
+- 2026-10-01 · uncommitted · docs(adr): D-395 제안 — Fleet 보조 위치 확정
 - 2026-10-01 · uncommitted · docs(adr): D-393 제안 — Nav2 AMCL `update_min_d` 0.02와 목표 허용오차
 - 2026-10-01 · uncommitted · docs(adr): D-384 개정 4 — 재생 비교와 URDF 형상 사전값
 - 2026-10-01 · uncommitted · docs(reference): API Ref 군집 소켓 표에서 `?token=` 표기 제거
-- 2026-10-01 · uncommitted · docs(reference): 사이트 LAN 발견 프로필 — Fleet health 채택 규칙 완화
