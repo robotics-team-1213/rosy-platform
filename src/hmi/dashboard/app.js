@@ -83,7 +83,7 @@ const fieldMap = createFieldMap({
     && new HeadlessState(session.robotState).isFresh("pose"),
   goalReason: () => session.capabilities?.navigation?.goal_navigation !== true
     ? "내비게이션을 쓸 수 없음" : "위치 증거 확인 필요",
-  setAction: (text) => setText("action-message", text),
+  setAction: (text) => announceAction( text),
 });
 
 // D-262: 카메라 미리보기는 vision.js 팩토리가 가진다. 셸은 시작·정지만 부른다.
@@ -489,10 +489,10 @@ document.querySelectorAll("ui-button[data-mode]").forEach((button) => {
     updateModeButtons();
     try {
       await api("/api/v1/mode", { method: "POST", body: JSON.stringify({ mode: requestedMode }) });
-      setText("action-message", `${enumLabel(MODE_LABEL, requestedMode)} 모드 요청을 전송했습니다.`);
+      announceAction( `${enumLabel(MODE_LABEL, requestedMode)} 모드 요청을 전송했습니다.`);
       await refreshRobotState();
     } catch (error) {
-      setText("action-message", `모드 변경 실패: ${error.message}`);
+      announceAction( `모드 변경 실패: ${error.message}`);
     } finally {
       session.modeChangePending = false;
       updateModeButtons();
@@ -514,10 +514,10 @@ document.querySelectorAll("[data-line-mode]").forEach((button) => {
         body: JSON.stringify({ mode }),
       });
       renderLineFollow(status);
-      setText("action-message", mode === "OFF" ? "차선 추종을 해제했습니다." : `${button.textContent.trim()} 차선 추종을 선택했습니다.`);
+      announceAction( mode === "OFF" ? "차선 추종을 해제했습니다." : `${button.textContent.trim()} 차선 추종을 선택했습니다.`);
       await refreshRobotState();
     } catch (error) {
-      setText("action-message", `차선 추종 변경 실패: ${error.message}`);
+      announceAction( `차선 추종 변경 실패: ${error.message}`);
     } finally {
       lineFollow.pending = false;
       updateLineFollowButtons();
@@ -558,10 +558,10 @@ elements["emergency-stop"].addEventListener("click", async () => {
   stopTeleop("비상정지를 요청했습니다.");
   try {
     await api("/api/v1/safety/stop", { method: "POST" });
-    setText("action-message", "비상정지가 활성화되었습니다.");
+    announceAction( "비상정지가 활성화되었습니다.");
     await refreshRobotState();
   } catch (error) {
-    setText("action-message", `정지 명령 실패: ${error.message}`);
+    announceAction( `정지 명령 실패: ${error.message}`);
   }
 });
 
@@ -569,6 +569,18 @@ elements["emergency-stop"].addEventListener("click", async () => {
 window.addEventListener("rosy:goal", (event) => {
   session.lastGoal = event.detail;
 });
+
+// D-396: 액션 메시지는 5초 후 조용히 사라진다 — 최신 소식만 눈에 남는다.
+let actionMessageTimer = null;
+function announceAction(text) {
+  const el = elements["action-message"];
+  if (!el) return;
+  el.textContent = text;
+  el.removeAttribute("data-faded");
+  clearTimeout(actionMessageTimer);
+  actionMessageTimer = setTimeout(() => el.setAttribute("data-faded", ""), 5000);
+}
+window.addEventListener("rosy:announce", (event) => announceAction(event.detail));
 
 // D-396: Escape 키 = 즉시 비상정지 — 확인창 없음. 위급 순간의 장벽은
 // 위험하다. 입력 필드에서는 발동하지 않는다(검색 취소·폼 이스케이프).
@@ -584,20 +596,20 @@ document.addEventListener("keydown", (event) => {
   stopTeleop("Escape 키로 비상정지를 요청했습니다.");
   api("/api/v1/safety/stop", { method: "POST" })
     .then(async () => {
-      setText("action-message", "비상정지가 활성화되었습니다 (Escape).");
+      announceAction( "비상정지가 활성화되었습니다 (Escape).");
       await refreshRobotState();
     })
-    .catch((error) => setText("action-message", `정지 명령 실패: ${error.message}`));
+    .catch((error) => announceAction( `정지 명령 실패: ${error.message}`));
 });
 
 elements["release-stop"].addEventListener("click", async () => {
   if (!window.confirm("주변 안전을 확인했고 정지를 해제할까요?")) return;
   try {
     await api("/api/v1/safety/release", { method: "POST" });
-    setText("action-message", "비상정지가 해제되었습니다.");
+    announceAction( "비상정지가 해제되었습니다.");
     await refreshRobotState();
   } catch (error) {
-    setText("action-message", `정지 해제 실패: ${error.message}`);
+    announceAction( `정지 해제 실패: ${error.message}`);
   }
 });
 
@@ -615,12 +627,12 @@ elements["dds-cyclone-apply"]?.addEventListener("click", async () => {
     });
     const reboot = payload.reboot || {};
     if (reboot.available === false) {
-      setText("action-message", reboot.detail || "저장했습니다. 런타임을 다시 띄우세요.");
+      announceAction( reboot.detail || "저장했습니다. 런타임을 다시 띄우세요.");
       return;
     }
-    setText("action-message", reboot.ok ? "재부팅을 요청했습니다." : (reboot.detail || "재부팅이 거부되었습니다."));
+    announceAction( reboot.ok ? "재부팅을 요청했습니다." : (reboot.detail || "재부팅이 거부되었습니다."));
   } catch (error) {
-    setText("action-message", `Cyclone 적용 실패: ${error.message}`);
+    announceAction( `Cyclone 적용 실패: ${error.message}`);
   }
 });
 

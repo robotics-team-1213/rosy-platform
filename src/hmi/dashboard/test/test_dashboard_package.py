@@ -74,6 +74,34 @@ def test_the_teleop_pad_shows_commanded_speed():
     assert "m/s" in teleop and "rad/s" in teleop
 
 
+def test_the_connection_banner_alerts_when_disconnected():
+    """D-396: 연결 배너 — WebSocket 끊김 시 topbar 아래 전체 폭."""
+    html = (ROOT / "index.html").read_text(encoding="utf-8")
+    assert 'id="connection-banner"' in html
+    assert "connection-banner" in html
+    client = (ROOT / "client.js").read_text(encoding="utf-8")
+    assert "connection-banner" in client
+    assert 'kind === "online"' in client  # online 일 때만 숨김
+
+
+def test_the_action_message_fades_after_five_seconds():
+    """D-396: 액션 메시지는 5초 후 조용히 사라진다."""
+    js = (ROOT / "app.js").read_text(encoding="utf-8")
+    assert "announceAction" in js
+    assert "data-faded" in js
+    assert "5000" in js  # 5초
+
+
+def test_event_severity_is_colored():
+    """D-396: 이벤트 심각도 — critical/error 는 채움, warning 은 색."""
+    telemetry = (ROOT / "telemetry.js").read_text(encoding="utf-8")
+    assert 'dataset.severity = "crit"' in telemetry
+    assert 'dataset.severity = "warn"' in telemetry
+    css = (ROOT / "console-detail.css").read_text(encoding="utf-8")
+    assert '[data-severity="crit"]' in css
+    assert '[data-severity="warn"]' in css
+
+
 def test_the_state_render_feeds_swarm_to_the_formation_cell():
     shell = (ROOT / "app.js").read_text(encoding="utf-8")
     telemetry = (ROOT / "telemetry.js").read_text(encoding="utf-8")

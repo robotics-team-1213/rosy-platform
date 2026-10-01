@@ -65,6 +65,36 @@
   letter-spacing: var(--track-state);
 }
 
+/* D-396: 연결 배너 — topbar 아래 전체 폭, 주의색 배경 */
+.connection-banner {
+  flex: none;
+  padding: var(--space-2) var(--space-4);
+  background: var(--status-warn);
+  color: var(--ground-deep);
+  font: var(--weight-label) var(--text-label)/var(--leading-flat) var(--body);
+  text-align: center;
+  letter-spacing: var(--track-label);
+}
+
+/* D-396: 이벤트 심각도 — 위험은 채움, 주의는 색, info 는 뮤트 */
+.event-severity[data-severity="crit"] {
+  background: var(--status-crit);
+  color: var(--paper);
+  padding: 0 var(--space-1);
+  border-radius: var(--radius-1);
+}
+.event-severity[data-severity="warn"] {
+  color: var(--status-warn);
+}
+
+/* D-396: 액션 메시지 자동 소멸 — 5초 후 흐려진다 */
+.action-message {
+  transition: opacity 0.6s ease;
+}
+.action-message[data-faded] {
+  opacity: 0;
+}
+
 .hero-formation {
   display: flex;
   align-items: baseline;

@@ -71,6 +71,11 @@ export function setConnection(kind, label) {
   const badge = elements["connection-badge"];
   badge.setAttribute("status", tagStatus(kind));
   badge.querySelector("span").textContent = label;
+  // D-396: 연결 배너 — WebSocket 이 끊기면 topbar 아래 전체 폭으로 알린다.
+  const banner = elements["connection-banner"];
+  if (banner) {
+    banner.hidden = kind === "online";
+  }
 }
 
 /** Keep `token` for this browser. `persist` applies only to a token that expires within 7 days. */

@@ -362,6 +362,12 @@ export function renderEvents(payload) {
     const severity = document.createElement("span");
     severity.className = `event-severity ${event.severity || "info"}`;
     severity.textContent = (event.severity || "info").toUpperCase();
+    // D-396: 심각도 색 — 위험은 채움, 주의는 텍스트 색, info 는 뮤트.
+    if (event.severity === "critical" || event.severity === "error") {
+      severity.dataset.severity = "crit";
+    } else if (event.severity === "warning") {
+      severity.dataset.severity = "warn";
+    }
     row.append(time, type, severity);
     elements["event-list"].append(row);
   });
