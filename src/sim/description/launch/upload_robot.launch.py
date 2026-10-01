@@ -5,6 +5,7 @@ from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, Shutdown
 from launch.substitutions import LaunchConfiguration, Command, TextSubstitution
 from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterValue
 from ament_index_python.packages import get_package_share_directory
 from launch.substitutions import PathJoinSubstitution, PythonExpression
 
@@ -34,7 +35,9 @@ def generate_launch_description():
         parameters=[{
             'ignore_timestamp': False,
             "use_sim_time": LaunchConfiguration('is_sim'),
-            'robot_description':
+            # value_type=str: launch_ros parses a parameter string as YAML, and a URDF
+            # comment holding ': ' (D-397 geometry notes) fails that parse.
+            'robot_description': ParameterValue(
                 Command([
                     'xacro ',
                     '"',
@@ -52,7 +55,7 @@ def generate_launch_description():
                         'camera_update_rate'),
                     ' camera_hfov:=', LaunchConfiguration('camera_hfov'),
                     ' cam_mount_z:=', LaunchConfiguration('cam_mount_z'),
-                ]),
+                ]), value_type=str),
             'frame_prefix': [namespace],
         }]
     )

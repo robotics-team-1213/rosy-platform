@@ -5,6 +5,7 @@ from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, Shutdown
 from launch.substitutions import LaunchConfiguration, Command, TextSubstitution
 from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterValue
 from ament_index_python.packages import get_package_share_directory
 from launch.substitutions import PathJoinSubstitution
 
@@ -30,14 +31,15 @@ def generate_launch_description():
         output='screen',
         parameters=[{
             'ignore_timestamp': False,
-            'robot_description':
+            # value_type=str: the URDF holds ': ' in comments, not YAML.
+            'robot_description': ParameterValue(
                 Command([
                     'xacro ',
                     PathJoinSubstitution([
                         get_package_share_directory('description'),
                         'urdf/robot.urdf.xacro',
                     ]),
-                ]),
+                ]), value_type=str),
         }]
     )
 
