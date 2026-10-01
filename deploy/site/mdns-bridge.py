@@ -1,21 +1,25 @@
 #!/usr/bin/env python3
-"""Run on the Ubuntu site host: send one Avahi ROSY scan to Fleet over HTTPS."""
+"""Run on the Ubuntu site host: send one Avahi ROSY scan to Fleet over HTTPS (loopback)."""
 
 from __future__ import annotations
 
 import argparse
+import http.client
 import ipaddress
 import json
 import re
 import shlex
+import socket
 import ssl
 import subprocess
 from pathlib import Path
-from urllib.parse import urlsplit
-from urllib.request import Request, urlopen
 
 
 HOSTNAME = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.local$")
+TLS_HOST = re.compile(r"^(?=.{1,253}$)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?"
+                      r"(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$")
+LOOPBACK = ("127.0.0.1", "::1")
+SCAN_PATH = "/api/fleet/discovery/scan"
 # Copy of core_common.protocol.discovery_txt for _rosy._tcp (this script cannot import it);
 # test/test_site_mdns_bridge.py holds it to test/fixtures/protocol/discovery-txt.v1.json.
 TXT = {"product": "rosy", "role": "robot", "proto": "core-v1", "tls": "none"}
@@ -54,31 +58,73 @@ def parse_avahi(output: str) -> list[dict]:
     return list(devices.values())
 
 
+def valid_tls_host(name: str) -> bool:
+    """A certificate DNS name (e.g. site-pc.local), never an IP literal."""
+    try:
+        ipaddress.ip_address(name)
+        return False
+    except ValueError:
+        return bool(TLS_HOST.fullmatch(name))
+
+
+def post_scan(devices: list[dict], *, tls_host: str, port: int, ca_file: Path,
+              token: str) -> int:
+    """POST to the site proxy on this host's loopback; TLS SNI, name check and Host are tls_host.
+
+    Loopback exists whatever the LAN does, so a changed site subnet or a stale DNS/mDNS
+    name cannot take the scanner offline; the site CA still proves it is the site proxy.
+    """
+    body = json.dumps({"devices": devices}).encode("utf-8")
+    head = (f"POST {SCAN_PATH} HTTP/1.1\r\nHost: {tls_host}:{port}\r\n"
+            f"Authorization: Bearer {token}\r\nContent-Type: application/json\r\n"
+            f"Content-Length: {len(body)}\r\nConnection: close\r\n\r\n")
+    context = ssl.create_default_context(cafile=str(ca_file))
+    raw, error = None, None
+    for address in LOOPBACK:  # 127.0.0.1 for a 127.0.0.1/0.0.0.0 bind, ::1 for "::"
+        try:
+            raw = socket.create_connection((address, port), timeout=5)
+            break
+        except OSError as failure:
+            error = failure
+    if raw is None:
+        raise ConnectionError(f"site proxy is not listening on loopback port {port}: {error}")
+    with raw, context.wrap_socket(raw, server_hostname=tls_host) as secured:
+        secured.settimeout(10)
+        secured.sendall(head.encode("ascii") + body)
+        response = http.client.HTTPResponse(secured)
+        response.begin()
+        response.read(4096)
+        return response.status
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--url", required=True,
-                        help="site TLS URL ending /api/fleet/discovery/scan")
+    parser.add_argument("--tls-host", required=True,
+                        help="site certificate DNS name (ROSY_SITE_TLS_HOST)")
+    parser.add_argument("--port", required=True, type=int,
+                        help="published site HTTPS port (ROSY_SITE_HTTPS_PORT)")
     parser.add_argument("--ca-file", required=True, type=Path)
     parser.add_argument("--token-file", required=True, type=Path)
     args = parser.parse_args()
-    url = urlsplit(args.url)
-    if url.scheme != "https" or url.path != "/api/fleet/discovery/scan":
-        parser.error("--url must be the HTTPS discovery scan endpoint")
+    tls_host = args.tls_host.strip().lower().rstrip(".")
+    if not valid_tls_host(tls_host):
+        parser.error("--tls-host must be the DNS name in the site certificate, not an IP")
+    if not 1 <= args.port <= 65535:
+        parser.error("--port must be a TCP port")
     token = args.token_file.read_text(encoding="utf-8").strip()
     if not token:
         parser.error("scanner token file is empty")
+    # Avahi failure raises here, before any POST: Fleet keeps the last good scan until
+    # its lease expires and then shows the scanner offline.
     result = subprocess.run(["avahi-browse", "-r", "-t", "-p", "-k", "_rosy._tcp"],
                             capture_output=True, text=True, timeout=12, check=True)
     devices = parse_avahi(result.stdout)
     if len(devices) > 64:
         raise SystemExit("too many ROSY services; refusing scan")
-    request = Request(args.url, data=json.dumps({"devices": devices}).encode("utf-8"),
-                      headers={"Authorization": f"Bearer {token}",
-                               "Content-Type": "application/json"}, method="POST")
-    with urlopen(request, context=ssl.create_default_context(cafile=str(args.ca_file)),
-                 timeout=10) as response:
-        if response.status != 200:
-            raise SystemExit("Fleet rejected discovery scan")
+    status = post_scan(devices, tls_host=tls_host, port=args.port, ca_file=args.ca_file,
+                       token=token)
+    if status != 200:
+        raise SystemExit(f"Fleet rejected discovery scan (HTTP {status})")
     print(f"ROSY mDNS scan delivered: {len(devices)} service(s)")
 
 
