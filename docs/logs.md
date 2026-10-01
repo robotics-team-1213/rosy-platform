@@ -4158,3 +4158,7 @@
 - 변경: model-tool 구현 계획 Task 8에 OMX Pilot Gazebo 부분 실행 결과와 남은 ROS-SIM 시나리오를 분리 기록하고 검증 노트를 추가했다. provider tool이 Device Action을 직접 실행했다는 뜻으로 해석되지 않도록 Fleet Mission admission/grant 연결은 미검증으로 명시했다.
 - 증거: 고정 amd64 Pilot 이미지에서 `joint1`/그리퍼 action SUCCEEDED 및 관절 readback 변화, 명시 취소 CANCELED. Fleet 116 passed, OMX action/PICK_PLACE 48 passed. Jazzy direct vendor callback pytest 1 passed(무이동 goal, readback, 경쟁 owner 거절, 취소 terminal).
 - gate 변화: OMX ROS-SIM 제어경로 보조 증거만 추가. model-tool 통합 ROS-SIM, ARTIFACT, DEVICE, FIELD는 HOLD/PARKED.
+## 2026-10-01 · uncommitted · test(arch): rejudge current Fleet size snapshot after main integration
+- 변경: D-362 `SIZE_VERDICTS`의 Fleet 기준을 stale `22435`에서 현 실측 `22797`로 재판정했다. 기존 B2 subpackage split 판정과 unscheduled 상태는 유지했다. 이 변경은 허용 예산 확대나 분할 완료 선언이 아니다.
+- 증거: 병합 후 `test_size_verdicts_are_well_formed_and_current`가 `22797 > 22435 + 150`로 재현 실패. 현재 package scanner 결과를 기준점으로 기록하고 구조 테스트에서 다시 검증한다.
+- gate 변화: 구조 ratchet는 현 기준점에서 재판정; Fleet split queue는 계속 unscheduled.
