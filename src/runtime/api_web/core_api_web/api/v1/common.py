@@ -27,6 +27,23 @@ def require_kept(svc: CoreServicesLike, flag: str) -> None:
         )
 
 
+def require_localized(svc: CoreServicesLike) -> None:
+    """D-395 §2: autonomous driving only from LOCALIZED.
+
+    A robot that predates D-395 reports no localization state; it keeps today's
+    behaviour (contract open question 2).
+    """
+    loc = getattr(svc, "localization", None)
+    status = loc.status() if loc is not None else None
+    if status is None or status.state.value == "LOCALIZED":
+        return
+    raise ApiError(
+        "NOT_LOCALIZED", 409, f"robot localization is {status.state.value}, not LOCALIZED",
+        detail={"state": status.state.value, "pose_frame": status.pose_frame.value,
+                "reason": status.reason},
+    )
+
+
 def require_calibration_owner(svc: CoreServicesLike, auth: AuthContext, action: str) -> None:
     """D-321 addendum: while a calibration lease is alive only its owner drives.
 

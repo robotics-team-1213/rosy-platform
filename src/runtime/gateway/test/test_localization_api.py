@@ -94,3 +94,274 @@ def test_localized_cancels_navigation_through_the_manager(core):
     assert cancels == ["localization"]
     assert [e.data["state"] for e in _types(services, "localization.state")] == [
         "CANDIDATES", "LOCALIZED"]
+
+
+# --- P2-5: capability matrix --------------------------------------------------------
+
+
+def _fleet_token(client) -> dict:
+    """Fleet's robot token: an operator token (robots.yaml or D-361 enrollment)."""
+    made = client.post("/api/v1/system/tokens", headers=ADMIN, json={
+        "role": "operator", "label": "site:fleet", "token": "fleet-site-operator-token-0001"})
+    assert made.status_code == 201
+    return {"Authorization": "Bearer fleet-site-operator-token-0001"}
+
+
+def _headers(client, who: str) -> dict:
+    return {"viewer": VIEWER, "operator": OPERATOR}.get(who) or _fleet_token(client)
+
+
+def _candidate(request_id="req-1", **extra) -> dict:
+    return {"request_id": request_id, "candidate_index": 0, "source": "candidate",
+            "cues": ["paint"], **extra}
+
+
+def _human(request_id="req-1") -> dict:
+    return {"request_id": request_id, "pose": {"x": 1.0, "y": 2.0, "yaw": 0.5}, "source": "human"}
+
+
+def _open_candidates(services, request_id="req-1"):
+    services.localization.on_state(_state("CANDIDATES", request_id=request_id))
+    services.localization.on_candidates(_report(request_id))
+
+
+@pytest.mark.parametrize("who,expected", [("viewer", 403), ("operator", 200), ("fleet", 200)])
+def test_candidates_need_localize_assist(core, who, expected):
+    client, services = core
+    _open_candidates(services)
+    response = client.get("/api/v1/localization/candidates", headers=_headers(client, who))
+    assert response.status_code == expected
+    if expected == 403:
+        assert response.json()["error"]["detail"] == {"capability": "LOCALIZE_ASSIST"}
+    else:
+        assert response.json()["robot_id"] == services.identity.robot_id
+        assert response.json()["request_id"] == "req-1"
+
+
+@pytest.mark.parametrize("who,expected", [("viewer", 403), ("operator", 202), ("fleet", 202)])
+def test_decision_and_suspect_need_localize_assist(core, who, expected):
+    client, services = core
+    _open_candidates(services)
+    headers = _headers(client, who)
+    decided = client.post("/api/v1/localization/decision", headers=headers, json=_candidate())
+    suspected = client.post("/api/v1/localization/suspect", headers=headers,
+                            json={"reason": "fleet_monitor"})
+    assert (decided.status_code, suspected.status_code) == (expected, expected)
+    if expected == 202:
+        assert decided.json() == {"request_id": "req-1"}
+        assert services.sent["suspect"] == [{"reason": "fleet_monitor"}]
+
+
+def test_a_human_decision_also_needs_navigate(core, monkeypatch):
+    from core_api_web.api import grants
+    client, services = core
+    _open_candidates(services)
+    monkeypatch.setitem(grants.ROLE_GRANTS, "operator", frozenset({grants.LOCALIZE_ASSIST}))
+    human = client.post("/api/v1/localization/decision", headers=OPERATOR, json=_human())
+    assert human.status_code == 403
+    assert human.json()["error"]["detail"] == {"capability": "NAVIGATE"}
+    assert client.post("/api/v1/localization/decision", headers=OPERATOR,
+                       json=_candidate()).status_code == 202
+
+
+# --- P2-4: routes ----------------------------------------------------------------
+
+
+def test_candidates_404_when_not_in_candidates(core):
+    client, services = core
+    missing = client.get("/api/v1/localization/candidates", headers=OPERATOR)
+    assert missing.status_code == 404 and missing.json()["error"]["code"] == "NO_CANDIDATES"
+    services.localization.on_state(_state("LOCALIZED"))
+    services.localization.on_candidates(_report("req-1"))
+    assert client.get("/api/v1/localization/candidates", headers=OPERATOR).status_code == 404
+
+
+def test_decision_is_published_with_core_receipt_time(core):
+    client, services = core
+    _open_candidates(services)
+    client.post("/api/v1/localization/decision", headers=OPERATOR, json=_candidate(ttl_s=4.0))
+    [sent] = services.sent["decision"]
+    assert sent["received_s"] == 777.25
+    assert sent["decision"]["candidate_index"] == 0 and sent["decision"]["ttl_s"] == 4.0
+
+
+def test_a_decision_for_another_request_is_409_stale(core):
+    client, services = core
+    _open_candidates(services, "req-2")
+    stale = client.post("/api/v1/localization/decision", headers=OPERATOR, json=_candidate("req-1"))
+    assert stale.status_code == 409 and stale.json()["error"]["code"] == "STALE_REQUEST"
+    assert services.sent["decision"] == []
+
+
+def test_an_invalid_decision_is_400(core):
+    client, services = core
+    _open_candidates(services)
+    both = client.post("/api/v1/localization/decision", headers=OPERATOR,
+                       json={**_candidate(), "pose": {"x": 0, "y": 0, "yaw": 0}})
+    assert both.status_code == 400 and both.json()["error"]["code"] == "VALIDATION_ERROR"
+    long_reason = client.post("/api/v1/localization/suspect", headers=OPERATOR,
+                              json={"reason": "x" * 65})
+    assert long_reason.status_code == 400
+
+
+def test_a_pre_d395_robot_answers_501(core):
+    client, services = core
+    decided = client.post("/api/v1/localization/decision", headers=OPERATOR, json=_candidate())
+    suspected = client.post("/api/v1/localization/suspect", headers=OPERATOR, json={"reason": "x"})
+    assert decided.status_code == suspected.status_code == 501
+    assert services.sent == {"decision": [], "suspect": []}
+
+
+def _open_lease(client, headers=ADMIN):
+    opened = client.post("/api/v1/calibration/session", headers=headers,
+                         json={"kind": "drive", "label": "drive", "ttl_s": 30})
+    assert opened.status_code in (200, 201), opened.json()
+
+
+def test_a_calibration_lease_blocks_localization_writes_with_423(core):
+    client, services = core
+    _open_candidates(services)
+    _open_lease(client)
+    for path, body in (("/api/v1/localization/decision", _candidate()),
+                       ("/api/v1/localization/suspect", {"reason": "fleet_monitor"})):
+        refused = client.post(path, headers=OPERATOR, json=body)
+        assert refused.status_code == 423, path
+        assert refused.json()["error"]["code"] == "CALIBRATION_ACTIVE"
+    legacy = client.post("/api/v1/localization/initialpose", headers=OPERATOR,
+                         json={"x": 0.0, "y": 0.0, "yaw": 0.0})
+    assert legacy.status_code == 409 and legacy.json()["error"]["code"] == "CALIBRATION_ACTIVE"
+    assert services.sent == {"decision": [], "suspect": []}
+    # The lease owner itself is not fenced.
+    assert client.post("/api/v1/localization/decision", headers=ADMIN,
+                       json=_candidate()).status_code == 202
+
+
+def test_an_expired_lease_no_longer_blocks(core):
+    client, services = core
+    clock = _Clock()
+    services.calibration._monotonic = clock
+    _open_candidates(services)
+    _open_lease(client)
+    clock.now += 31.0
+    assert client.post("/api/v1/localization/decision", headers=OPERATOR,
+                       json=_candidate()).status_code == 202
+
+
+class _Executor:
+    def __init__(self) -> None:
+        self.poses, self.goals = [], []
+
+    def send_goal(self, spec, **_):
+        self.goals.append(spec)
+
+    def cancel_goal(self):
+        pass
+
+    def send_initial_pose(self, x, y, yaw):
+        self.poses.append((x, y, yaw))
+
+
+def test_legacy_initialpose_becomes_a_human_decision_on_a_d395_robot(core):
+    client, services = core
+    services.nav.executor = executor = _Executor()
+    _open_candidates(services, "req-5")
+    response = client.post("/api/v1/localization/initialpose", headers=OPERATOR,
+                           json={"x": 0.4, "y": -1.2, "yaw": 1.57})
+    assert response.status_code == 200 and response.json() == {"accepted": True}
+    assert executor.poses == []          # /initialpose is the sensing node's now
+    [sent] = services.sent["decision"]
+    assert sent["decision"]["source"] == "human"
+    assert sent["decision"]["request_id"] == "req-5"
+    assert sent["decision"]["pose"] == {"x": 0.4, "y": -1.2, "yaw": 1.57}
+    [event] = _types(services, "localization.initialpose")
+    assert event.data == {"x": 0.4, "y": -1.2, "yaw": 1.57, "source": "human"}
+
+
+def test_legacy_initialpose_on_a_pre_d395_robot_still_writes_initialpose(core):
+    client, services = core
+    services.nav.executor = executor = _Executor()
+    response = client.post("/api/v1/localization/initialpose", headers=OPERATOR,
+                           json={"x": 0.4, "y": -1.2, "yaw": 1.57})
+    assert response.status_code == 200
+    assert executor.poses == [(0.4, -1.2, 1.57)]
+    assert services.sent["decision"] == []
+    assert _types(services, "localization.initialpose")[0].data["source"] == "human"
+
+
+def test_human_decision_route_emits_initialpose_with_source(core):
+    client, services = core
+    _open_candidates(services)
+    assert client.post("/api/v1/localization/decision", headers=OPERATOR,
+                       json=_human()).status_code == 202
+    [event] = _types(services, "localization.initialpose")
+    assert event.data["source"] == "human"
+
+
+def test_result_and_candidate_events_are_emitted(core):
+    client, services = core
+    _open_candidates(services)
+    client.post("/api/v1/localization/decision", headers=OPERATOR,
+                json=_candidate(cues=["peers", "slot"]))
+    services.localization.on_result(json.dumps(
+        {"request_id": "req-1", "accepted": False, "reason": "no_asymmetric_cue",
+         "state": "CANDIDATES"}))
+    assert [e.data["request_id"] for e in _types(services, "localization.candidates")] == ["req-1"]
+    [result] = _types(services, "localization.result")
+    assert result.data["source"] == "candidate" and result.data["cues"] == ["peers", "slot"]
+    assert result.data["accepted"] is False
+
+
+# --- P2-4: navigation and lane keep refuse unless LOCALIZED ------------------------
+
+
+def _ready_for_goal(services):
+    services.state.set_velocity(0.0, 0.0)
+    services.nav.executor = _Executor()
+
+
+@pytest.mark.parametrize("state", ["UNKNOWN", "CANDIDATES", "SUSPECT"])
+def test_navigation_is_refused_unless_localized(core, state):
+    client, services = core
+    _ready_for_goal(services)
+    services.localization.on_state(
+        _state(state, request_id="req-1" if state == "CANDIDATES" else None))
+    for path, body in (("/api/v1/navigation/goal", {"x": 1.0, "y": 2.0, "yaw": 0.0}),
+                       ("/api/v1/navigation/home", None)):
+        refused = client.post(path, headers=OPERATOR, json=body)
+        assert refused.status_code == 409, path
+        assert refused.json()["error"]["code"] == "NOT_LOCALIZED"
+        assert refused.json()["error"]["detail"]["state"] == state
+    assert services.nav.executor.goals == []
+
+
+def test_navigation_goal_is_allowed_when_localized(core):
+    client, services = core
+    _ready_for_goal(services)
+    services.localization.on_state(_state("LOCALIZED"))
+    goal = client.post("/api/v1/navigation/goal", headers=OPERATOR,
+                       json={"x": 1.0, "y": 2.0, "yaw": 0.0})
+    assert goal.status_code == 200, goal.json()
+
+
+def test_navigation_goal_is_allowed_on_a_pre_d395_robot(core):
+    client, services = core
+    _ready_for_goal(services)
+    goal = client.post("/api/v1/navigation/goal", headers=OPERATOR,
+                       json={"x": 1.0, "y": 2.0, "yaw": 0.0})
+    assert goal.status_code == 200, goal.json()
+
+
+def test_lane_keep_start_is_refused_unless_localized(core):
+    client, services = core
+    services.localization.on_state(_state("SUSPECT"))
+    refused = client.put("/api/v1/line-follow/mode", headers=OPERATOR, json={"mode": "CAMERA_LINE"})
+    assert refused.status_code == 409 and refused.json()["error"]["code"] == "NOT_LOCALIZED"
+    # Turning it OFF only stops motion and stays open.
+    assert client.put("/api/v1/line-follow/mode", headers=OPERATOR,
+                      json={"mode": "OFF"}).status_code == 200
+
+
+def test_lane_keep_start_is_not_gated_on_a_pre_d395_robot(core):
+    client, _services = core
+    response = client.put("/api/v1/line-follow/mode", headers=OPERATOR, json={"mode": "CAMERA_LINE"})
+    assert response.status_code != 409 or response.json()["error"]["code"] != "NOT_LOCALIZED"
