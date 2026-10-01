@@ -318,6 +318,8 @@ class SafetyManager:
 
     def bind_policy(self, evaluator, calibration_revision: str) -> None:
         """Bind a bounded, synchronous in-process evaluator; no ROS transport."""
+        if self.shadow is not None:
+            raise ValueError("shadow and enforce bindings are exclusive (D-400)")
         if not callable(evaluator) or not isinstance(calibration_revision, str) or not calibration_revision:
             raise ValueError('A policy evaluator and calibration revision are required')
         self._policy = evaluator
@@ -352,14 +354,12 @@ class SafetyManager:
 
     def bind_control_policy(self, policy) -> None:
         """Consume absorbed Control decisions without importing ROS or publishing."""
-        if self.shadow is not None:
-            raise ValueError("shadow and enforce bindings are exclusive (D-400)")
         self.bind_policy(*self._control_evaluator(policy))
         self.policy_mode = 'enforce'
 
     def bind_shadow_control_policy(self, policy) -> None:
         """D-400 shadow: judge every candidate, record it, never change the output."""
-        if self.policy_required or self._policy is not None:
+        if self.shadow is not None or self.policy_required or self._policy is not None:
             raise ValueError("shadow and enforce bindings are exclusive (D-400)")
         self._shadow_policy, self._shadow_revision = self._control_evaluator(policy)
         self.shadow = ShadowLog()

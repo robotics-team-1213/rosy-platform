@@ -127,7 +127,7 @@ def test_a_failing_clock_never_escapes():
     safety.shadow_evaluate(1, "navigation", 0.1, 0.0, 10.0, output=(0.1, 0.0))   # must not raise
 
     snap = safety.shadow.snapshot()
-    assert sum(snap["counts"].values()) == 1 or safety.shadow_record_errors == 1
+    assert safety.shadow_record_errors == 0
     assert snap["counts"]["unavailable"] == 1
 
 
@@ -138,6 +138,25 @@ def test_shadow_then_enforce_is_refused():
         safety.bind_control_policy(FakePolicy())
 
     assert safety.policy_mode == "shadow" and safety.policy_required is False
+
+
+def test_shadow_then_bind_policy_is_refused():
+    safety, _ = _safety(FakePolicy())
+
+    with pytest.raises(ValueError, match="exclusive"):
+        safety.bind_policy(lambda request: None, "rev")
+
+    assert safety.policy_mode == "shadow" and safety.policy_required is False
+
+
+def test_second_shadow_binding_is_refused_and_keeps_the_log():
+    safety, _ = _safety(FakePolicy())
+    log = safety.shadow
+
+    with pytest.raises(ValueError, match="exclusive"):
+        safety.bind_shadow_control_policy(FakePolicy())
+
+    assert safety.shadow is log
 
 
 def test_enforce_then_shadow_is_refused():
