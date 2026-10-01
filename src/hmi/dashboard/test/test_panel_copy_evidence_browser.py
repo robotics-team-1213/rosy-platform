@@ -217,7 +217,8 @@ def test_camera_status_speaks_korean_with_evidence_and_waits_on_one_line(panel):
         authHeaders: () => ({}), hasToken: () => true, isHidden: () => false});
       await preview.refresh();
     }""")
-    assert status.inner_text() == "지연 · 4초"
+    # D-398 — 나이 뒤처리 규격: `지연 · N초 전`(4200 ms → 4.2).
+    assert status.inner_text() == "지연 · 4.2초 전"
     assert status.get_attribute("data-evidence") == "delayed"
     assert status.get_attribute("title") == "STALE"
     assert "STALE" not in page.inner_text("#root") and "WAITING" not in page.inner_text("#root")

@@ -76,7 +76,7 @@ CONTROL_SPLIT = "docs/plans/2026-09-22-control-package-split-design.md"
 #: P6 verdicts: path (relative to src/) or package name -> (lines at verdict, verdict).
 SIZE_VERDICTS = {
     "fleet": (
-        23_237,
+        23_543,
         "split: server HTTP boundary, console, signals and the mission-control stores are separate owners "
         "today; group them into subpackages rather than one flat server/ tree (B2); owner fleet, unscheduled "
         "(re-judged 2026-09-29 at 11164 after mission_store joined the server tree; re-judged 2026-09-30 at "
@@ -106,6 +106,8 @@ SIZE_VERDICTS = {
         "pure copy) plus its route in ingest_routes.py and tests, then at 23237 after the "
         "review fix made move-address re-pair with the screen code (enrollment.py) and dropped bulk "
         "move; verdict unchanged. "
+        "Re-judged 2026-10-01 at 23543 when the D-395 localization arbiter joined as its own pure "
+        "subpackage (fleet/localization: cues.py, arbiter.py); verdict unchanged. "
         "Split remains unscheduled (docs/plans/2026-09-30-er2-mission-feedback-loop.md)",
     ),
     "site/fleet/fleet/server/proposal_store.py": (
@@ -142,7 +144,7 @@ SIZE_VERDICTS = {
         "2026-10-01 at 887 after idempotent per-attempt phase projection joined the Mission event transaction",
     ),
     "contracts/foundation/core_common/protocol/schemas.py": (
-        1_092,
+        1_095,
         "accept: the D-18 single contract source — every envelope, event and capability model in one "
         "importable place; per-domain schema files would fork the version pin that "
         "test_protocol_version_alignment guards. Re-judged 2026-09-30 at 1000 lines after the bounded "
@@ -151,7 +153,7 @@ SIZE_VERDICTS = {
         "LineFollowStatus.clearance_m (D-344 §11, one field); re-judged 2026-10-01 at 1067 for the "
         "bounded UDS v2 phase receipt and read-only Mission phase progress schemas, which remain in the "
         "single contract source guarded by protocol alignment. The hard-tier zero-growth rule prevents "
-        "silent expansion. ROS-free, host-testable (X5); re-judged 2026-10-01 at 1092 for the calibration-session RobotActivity/ActivityOwner models on robot state (still accept)",
+        "silent expansion. ROS-free, host-testable (X5); re-judged 2026-10-01 at 1092 for the calibration-session RobotActivity/ActivityOwner models on robot state (still accept); re-judged 2026-10-01 at 1095 for the D-395 StateSnapshot.localization field and its import — the models live in protocol/localization.py (still accept)",
     ),
     "site/fleet/fleet/server/task_store.py": (
         1060,
@@ -213,7 +215,7 @@ SIZE_VERDICTS = {
         "accept: sim-only read-only viewer server (HTTP handler + ROS subscriptions); the pure logic already lives in live_view_model.py and the page in lane_live_view.html, covered by test_lane_live_view*.py and test_live_view_model.py (X5)",
     ),
     "control": (
-        39_914,
+        40_547,
         f"split: deploy closure needs only sensing + safety provider (P1a); {CONTROL_SPLIT} "
         "(re-judged 2026-09-30 at 33090 after D-356 added the ROS-free learned perception backend "
         "(sensing/perception/learned), the shadow node and the recording CLI; the learned backend sits "
@@ -239,7 +241,10 @@ SIZE_VERDICTS = {
         "(perception/road_state.py + road_state_model.py) and its shadow node — it sits inside "
         "sensing/perception and moves with it — verdict unchanged; re-judged 2026-10-01 at 39914 when "
         "main (38903) merged into the D-373 branch: both additions stay inside the control package and "
-        "move with the P1a split — verdict unchanged)",
+        "move with the P1a split — verdict unchanged; re-judged 2026-10-01 at 40547 when the "
+        "D-395 ROS-free localization candidates, objects, injection check and state machine "
+        "(sensing/loc_*.py) and the paint-hypothesis and reference-square cues (sensing/perception) "
+        "joined — they move with the P1a split, verdict unchanged)",
     ),
     # --- D-362 newly-covered files (web assets in src/ packages, ops roots). ---
     "runtime/sensing/web/diagnostic.html": (

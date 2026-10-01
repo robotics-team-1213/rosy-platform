@@ -270,6 +270,11 @@
 - 증거: Fleet 쪽 `src/site/fleet/test/test_transport.py` 첫 프레임 시험.
 - gate 변화: 없음.
 
+## 2026-10-01 · uncommitted · docs(api): 계약 버전 핀 v1.69 (D-395 1단계)
+- 변경: `app.py` 독스트링·FastAPI description의 계약 버전 v1.68 → v1.69(D-347 세 핀 중 하나). 코드 경로 변화 없음.
+- 증거: `test_protocol_version_alignment.py`.
+- gate 변화: 없음.
+
 ## 2026-10-01 · uncommitted · feat(omx): record SIM demonstrations and export LeRobot v3
 - 변경: D-390 부록·API v1.69·Pilot 기록 패널·SIM 카메라·원본 recorder·오프라인 exporter. ROS 수락 전에 목표를 등록하고, recording I/O는 별도 writer로 분리.
 - 증거: adapter/Pilot/network 259 passed, 28 skipped; quick tier 95 passed; Chromium recording retry/outcome/stale/dispose 1 passed; 실제 LeRobot 0.4.4 reader 3 passed. Gazebo 원본 15프레임 및 동일 원본 export 재독출 PASS. docs/validation/omx-demonstration-lerobot-2026-10-01/README.md 참조.

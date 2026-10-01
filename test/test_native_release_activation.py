@@ -300,3 +300,40 @@ def test_recovery_never_holds_on_the_python_runtime(native_case):
 
     assert manager.recover()["recovered"] is True
     assert links.values["current"] == first.name
+
+
+NATIVE_DIR = Path(__file__).resolve().parents[1] / "deploy" / "robot" / "pinky_pro" / "native"
+
+
+def _part_of_runtime_units() -> set[str]:
+    return {
+        unit.name for unit in NATIVE_DIR.iterdir()
+        if unit.suffix == ".service"
+        and "PartOf=rosy-runtime.target" in unit.read_text(encoding="utf-8").splitlines()
+    }
+
+
+def test_stopping_the_runtime_waits_for_every_unit_that_is_part_of_it(monkeypatch):
+    # The target is ordered After= its PartOf units, so its own stop job ends at
+    # once while CORE's stop job still waits behind io/camera (After=rosy-core).
+    # systemctl waits only for the jobs it was asked for, and the start that
+    # follows replaced CORE's pending stop with a no-op: CORE kept running the
+    # old release after "activation" (9dfk, 2026-10-01).
+    from deploy.robot.pinky_pro.native import native_release
+
+    calls = []
+    monkeypatch.setattr(native_release.subprocess, "run",
+                        lambda argv, **kwargs: calls.append(argv))
+
+    native_release.NativeReleaseManager._systemctl("stop")
+    native_release.NativeReleaseManager._systemctl("start")
+
+    stop, start = calls
+    assert stop[:2] == ["systemctl", "stop"]
+    assert set(stop[2:]) == {"rosy-runtime.target", *_part_of_runtime_units()}
+    assert start == ["systemctl", "start", "rosy-runtime.target"]
+
+
+def test_the_runtime_part_of_units_are_core_io_and_camera():
+    # Guards the helper above against reading an empty directory.
+    assert _part_of_runtime_units() == {"rosy-core.service", "rosy-io.service", "rosy-camera.service"}

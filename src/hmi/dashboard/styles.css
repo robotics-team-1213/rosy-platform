@@ -27,7 +27,7 @@ html { min-width: 320px; background: var(--ground-deep); }
 
 body {
   margin: 0;
-  min-height: 100vh;
+  min-height: 100dvh;
   overflow-x: hidden;
   color: var(--ink);
   background: var(--ground);
@@ -211,7 +211,7 @@ ui-button, a { -webkit-tap-highlight-color: transparent; }
   text-decoration: none;
   white-space: nowrap;
 }
-.surface-bridge a:hover { color: var(--ink); background: var(--ground-soft); }
+.surface-bridge a:hover { color: var(--ink); background: var(--surface-flat); }
 .surface-bridge a:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
 
 .view-switch { display: inline-flex; border: 1px solid var(--surface-line); border-radius: var(--radius-button); overflow: hidden; }

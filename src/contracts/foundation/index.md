@@ -35,6 +35,6 @@
 
 - 2026-10-01 · uncommitted · fix(omx): fence recording closure and isolate storage faults
 - 2026-10-01 · uncommitted · feat(omx): record SIM demonstrations and export LeRobot v3
+- 2026-10-01 · uncommitted · feat(protocol): D-395 위치 확정 모델과 스냅샷 `localization` (API Ref v1.69)
 - 2026-10-01 · edca9b2e · feat(geometry): calibration_store 중심값과 운영자 층 (D-397)
 - 2026-10-01 · uncommitted · feat(protocol): D-341 rosy-pair/1 공유 벡터와 순수 로직
-- 2026-10-01 · uncommitted · fix(protocol): D-391 site-link 경계 규칙 — fullmatch, IPv6 zone 거절

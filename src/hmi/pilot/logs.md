@@ -218,6 +218,12 @@
 - 결정: D-359 §5.1·§5.3·§5.5.
 - 교훈: 없음.
 
+
+## 2026-10-01 · uncommitted · D-398 장미색 범위·정지·어휘 정리
+
+- 변경: 드라이브 스틱 활성/knob을 --brand-rose → --focus-ring으로(인터랙션 색, D-277). transition 2건(프레임 opacity·intent left) 제거로 D-220 회복. '대기'를 MODE_LABEL.IDLE로(screens/drive·drive-view·drive-auto), sw.js SHELL에 /common/core_ui_logic.js 추가(test_shell_assets가 따라감). vision.js '프레임 지연(STALE)' → '카메라 프레임 지연'(영어 열거값 노출 제거).
+- 근거: D-398. pilot 시험 통과.
+- gate 변화: 없음(LOCAL HOLD 그대로).
 ## 2026-10-01 · uncommitted · feat(omx): record SIM demonstrations and export LeRobot v3
 - 변경: D-390 부록·API v1.69·Pilot 기록 패널·SIM 카메라·원본 recorder·오프라인 exporter. ROS 수락 전에 목표를 등록하고, recording I/O는 별도 writer로 분리.
 - 증거: adapter/Pilot/network 259 passed, 28 skipped; quick tier 95 passed; Chromium recording retry/outcome/stale/dispose 1 passed; 실제 LeRobot 0.4.4 reader 3 passed. Gazebo 원본 15프레임 및 동일 원본 export 재독출 PASS. docs/validation/omx-demonstration-lerobot-2026-10-01/README.md 참조.
@@ -231,3 +237,10 @@
 - gate 변화: 기존 gate 유지; DEVICE/FIELD 승격 없음.
 - 결정: D-390 부록.
 - 교훈: 파일 쓰기 완료 전 들어온 interruption과 logical closure 경계를 구분한다.
+
+## 2026-10-01 · uncommitted · fix(pilot): preserve recording errors and reconcile API minor
+- 변경: polling으로 시작/종료 오류가 지워지지 않게 유지. main D-395/v1.69와 충돌한 OMX 추가분은 v1.70. 양쪽 append-only 로그와 source를 보존.
+- 증거: 전체 추가 실행 680 passed, 6 skipped, 2 failed; 원인/제한을 검증 문서에 기록. OMX polling 오류·hidden seat·Pinky calibration 실패 경로 재실행 3 passed.
+- gate 변화: 전체 Pilot LOCAL HOLD 유지.
+- 결정: D-390 부록, D-18.
+- 교훈: 독립 기능 시험과 전체 부하 실행을 구분한다.

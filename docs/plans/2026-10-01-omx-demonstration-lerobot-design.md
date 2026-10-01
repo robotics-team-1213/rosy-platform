@@ -55,7 +55,7 @@ flowchart LR
 3. [x] 고정한 LeRobot writer/reader의 실제 MP4·Parquet 재독출 시험.
 4. [x] Pilot 기록 패널: 미리보기, 시작 실패와 재시도, 결과 선택, 오래된 영상, dispose 반납 시험.
 5. [x] 실제 Gazebo 영상/JointState/goal UUID를 기록하고 해당 원본을 실제 LeRobot reader로 검증.
-6. [ ] 계약·모듈 기록·quick gate를 갱신하고 검증한 변경을 커밋.
+6. [x] 계약·모듈 기록·quick gate를 갱신하고 검증한 변경을 커밋.
 
 현재 증거와 남은 조건은 마지막 검증 섹션에 추가한다. HOST 시험 통과는
 실제 Gazebo 기록, 물리 OMX, ARM64 이미지, 학습된 정책의 성능을 대신하지 않는다.
@@ -65,3 +65,5 @@ flowchart LR
 실제 Gazebo 시연 15프레임을 LeRobot 0.4.4/v3.0로 export하고 모든 프레임을 다시 읽었다. [증거·재현·제한](../validation/omx-demonstration-lerobot-2026-10-01/README.md). 전체 모듈 gate는 유지한다. 물리·학습 정책 수용은 수행하지 않았다.
 
 최종 소스 해시가 일치하는 Gazebo 시연 12프레임도 동일하게 검증했고, lease 만료 기록을 incomplete로 닫았다. 독립 리뷰의 저장 오류/hidden seat/종료 경합 3개를 수정하고 재검토했다. 회귀 624 passed, 6 skipped; Chromium 2 passed.
+
+커밋: 54e58c69 구현, 87d1f1e2 polling 중 기록 오류 표시 유지. main의 D-395/v1.69와 통합하며 OMX 추가분을 API v1.70으로 승격했다. 병행 변경의 source/문서/로그를 보존하고 생성 색인은 재생성한다.

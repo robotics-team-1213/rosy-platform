@@ -4,7 +4,7 @@ html { min-height: 100%; background: var(--ground); }
 [hidden] { display: none !important; }
 body {
   min-width: 320px;
-  min-height: 100vh;
+  min-height: 100dvh;
   margin: 0;
   color: var(--ink);
   background: var(--ground);
@@ -23,7 +23,7 @@ body {
   text-decoration: none;
   white-space: nowrap;
 }
-.surface-switch a:hover { color: var(--ink); background: var(--ground-soft); }
+.surface-switch a:hover { color: var(--ink); background: var(--surface-flat); }
 .surface-switch a[aria-current="page"] {
   color: var(--brand-rose);
   border-color: var(--brand-rose);

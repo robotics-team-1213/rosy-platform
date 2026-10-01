@@ -19,7 +19,10 @@ import token_themes
 
 TOKENS = registry.REPO / "src" / "hmi" / "web_common" / "tokens.css"
 
-_PY_COLOUR = re.compile(r"^_?[A-Z][A-Z0-9_]*\s*=\s*\((\d{1,3}),\s*(\d{1,3}),\s*(\d{1,3})\)(.*)$")
+_PY_COLOUR = re.compile(
+    r"^_?[A-Za-z][A-Za-z0-9_]*\s*=\s*\((\d{1,3}),\s*(\d{1,3}),\s*(\d{1,3})"
+    r"(?:,\s*(?:\d{1,3}|(?:\d+\.\d*|\.\d+)))?\)(.*)$"
+)
 _KT_COLOUR = re.compile(r"Color\(0x([0-9a-fA-F]{2})([0-9a-fA-F]{6})\)(.*)$")
 _TOKEN_NAME = re.compile(r"(?:#|//)\s*(--[a-z0-9-]+)")
 
@@ -93,3 +96,16 @@ def test_a_drifted_or_unnamed_colour_is_caught():
         "kt:1: tokens.css에 없는 토큰 --rose"
     ]
     assert parity_problems(tokens, "empty", "") != []
+
+
+def test_an_rgba_copy_line_is_compared_too():
+    """2026-10-01 감사: LCD `_rose = (r, g, b, a)` 4-튜플이 정규식을 빠져나갔다.
+
+    네 번째 성분(알파)은 값 비교에서 덜어내고 RGB 세 값으로 팔레트와 맞춘다.
+    """
+    tokens = {"--brand-rose": "#f697e7"}
+    drifted = "_rose = (227, 27, 93, 255)  # --brand-rose #f697e7\n"
+    assert parity_problems(tokens, "py", drifted) == [
+        "py:1: --brand-rose는 tokens.css에서 #f697e7인데 사본은 #e31b5d"
+    ]
+    assert parity_problems(tokens, "py", "_rose = (246, 151, 231, 255)  # --brand-rose\n") == []

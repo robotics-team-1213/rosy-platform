@@ -270,6 +270,12 @@
 - gate 변화: SOURCE/LOCAL. DEVICE HOLD(배포 전 사용자 승인).
 - 결정: D-397 Proposed, D-47 addendum 개정.
 
+## 2026-10-01 · uncommitted · feat(protocol): D-395 위치 확정 모델과 스냅샷 `localization` (API Ref v1.69)
+- 변경: `core_common/protocol/localization.py` — `LocState`, `PoseFrame`(map|odom), `Cue`, `DecisionSource`, `LocalizationStatus`, `LocCandidate`, `RobotPoint`, `SquareSighting`, `CandidateReport`, `LocalizationDecision`(인덱스 또는 직접 좌표 정확히 하나, `candidate` 출처는 인덱스와만, `cues`, 받은 때부터 재는 `ttl_s` 기본 5 s — D-395 개정 3에 따라 계획의 절대 `expires_at` 대신). `StateSnapshot.localization` 선택 필드(D-395 이전 로봇은 null). 모두 추가 전용(API-002, PRT-006).
+- 증거: `test_localization_contracts.py` 18 passed, `test_protocol_schemas.py`, `test_protocol_version_alignment.py`, `test_line_follow_contract_docs.py`.
+- gate 변화: 없음(SOURCE). 아직 아무 경로도 이 모델을 보내거나 받지 않는다.
+- 결정: D-395 Proposed(개정 3), D-18, D-347.
+
 ## 2026-10-01 · uncommitted · feat(omx): record SIM demonstrations and export LeRobot v3
 - 변경: D-390 부록·API v1.69·Pilot 기록 패널·SIM 카메라·원본 recorder·오프라인 exporter. ROS 수락 전에 목표를 등록하고, recording I/O는 별도 writer로 분리.
 - 증거: adapter/Pilot/network 259 passed, 28 skipped; quick tier 95 passed; Chromium recording retry/outcome/stale/dispose 1 passed; 실제 LeRobot 0.4.4 reader 3 passed. Gazebo 원본 15프레임 및 동일 원본 export 재독출 PASS. docs/validation/omx-demonstration-lerobot-2026-10-01/README.md 참조.

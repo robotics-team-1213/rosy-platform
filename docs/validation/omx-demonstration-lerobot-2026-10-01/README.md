@@ -87,3 +87,9 @@ joint1 `0.0000000883 → 0.0199994147 rad`, goal SUCCEEDED.
 - quick tier: 95 passed; 기존 freshness warnings 24.
 - 전체 Pilot 재연결/실물 정지/그리퍼 정밀 도달/물체 접촉·집기 과제 성공은 여기서 증명하지 않는다.
 - 짧은 한 과제의 데이터 형식·연결 검증이다. 학습 데이터의 다양성·모델 성능 수용은 별도다.
+
+### 전체 브라우저 실행에서 확인한 제한
+
+추가 전체 실행은 680 passed, 6 skipped, 2 failed (1143.66초)였다. OMX 시작 오류가 1초 polling으로 사라지는 문제를 87d1f1e2에서 수정하고 오류가 polling 뒤에도 유지됨을 시험했다. 다른 실패는 Pinky calibration 페이지 load timeout이었다. 두 실패 경로와 hidden seat 경로를 다시 실행해 3 passed, 21 deselected를 확인했다. 전체 실행의 실패를 숨기거나 전체 Pilot LOCAL을 GO로 바꾸지 않는다.
+
+main 병합 뒤 API v1.70 정렬 검증: Fleet task/mission + OMX/foundation 627 passed, 6 skipped; quick 95 passed; OMX Chromium 2 passed; harness lint 0 errors, 기존 freshness warnings 24.

@@ -422,3 +422,10 @@
 - 변경: test/test_single_language.py — 서피스 JS/HTML 의 customElements.define 금지, 서피스 CSS 의 :root/[data-theme] --토큰 선언 금지(raw_colours :root 예외는 등록부 선언으로 존중 — 게시판 피치 색).
 - 증거: 변이 증명 2종(pilot 에 :root 토큰·인라인 커스텀 엘리먼트 주입 시 각각 빨강).
 - gate 변화: 없음.
+
+
+## 2026-10-01 · uncommitted · D-398 증거 어휘 단일 출처 + 범위 게이트 4종
+
+- 변경: core_ui_logic.js에 EVIDENCE_LABEL·evidenceAgeText() 추가(증거 한국어와 ' · N초 전' 규격의 단일 출처). test_token_parity.py가 RGBA 4-튜플·소문자 이름 사본도 비교. test_design_scope_gates.py 신규 — 정지(D-220)·장미색 부정(D-277)·역할 우선(ground-soft/card 두 쌍)·100vh 금지.
+- 근거: D-398(2026-10-01 전 레이어 감사). 게이트 4종은 실제 파일에 위반을 심어 전부 붉어지는 것을 확인(돌연변이 증명). web_common·dashboard·fleet·pilot·face 시험 통과.
+- gate 변화: 없음.

@@ -2,7 +2,7 @@
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.69
+**Version:** v1.70
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -315,7 +315,7 @@ v1.42: `GET /api/v1/host/network`와 `/release`는 기존 `{available,ok?,code,d
 
 ---
 
-## 5.9 OMX-AI Gazebo Pilot 전용 API (D-390, v1.69)
+## 5.9 OMX-AI Gazebo Pilot 전용 API (D-390, v1.70)
 
 오류는 ERR-101의 `{error:{code,message,detail}}` 형식이다. 스키마 오류는 400 `VALIDATION_ERROR`, 인증 없음은 401 `UNAUTHORIZED`, 조종권·상태 충돌은 409 `MODE_CONFLICT`로 돌려준다.
 
@@ -334,7 +334,7 @@ v1.42: `GET /api/v1/host/network`와 `/release`는 기존 `{available,ok?,code,d
 
 `OmxSimJog` 필수 필드: `instance_id`, `seat_id`, `request_id`, `joint`, `delta_rad`(0이 아니며 절댓값 ≤0.05 rad), `duration_s`(0.1~1.0), `state_sequence`, `expires_at_ms`. 명령은 현재 관절 상태에서 해당 관절만 상대 이동하며 모든 관절의 현재 값을 함께 보낸다. 최근 5초 안에 Pilot API가 제공하지 않은 sequence, 6초보다 먼 만료 시각, 이미 만료된 요청, 범위 초과, 진행 중 goal, HOLD는 거부한다. ROS는 새 sequence를 계속 발행하므로 제출 시점에는 가장 최근의 신선한 관절 상태를 사용한다. `OmxSimGoal.state`는 `LOCAL_ACCEPTED`, `ROS_ACCEPTED`, `RUNNING`, `SUCCEEDED`, `REJECTED`, `CANCEL_REQUESTED`, `CANCELED`, `UNKNOWN_HOLD` 중 하나다. `LOCAL_ACCEPTED`는 ROS 수락이 아니고, action의 `SUCCEEDED`는 물리적 정지나 목표 도달의 독립 증거가 아니다. schema 정본은 `core_common.protocol.omx_sim`이다.
 
-v1.69 추가 경로(모두 Bearer 인증):
+v1.70 추가 경로(모두 Bearer 인증):
 
 | Method | 경로 (`/api/v1/sim/omx` 아래) | 요청/응답 |
 |---|---|---|
@@ -424,6 +424,23 @@ v1.69 추가 경로(모두 Bearer 인증):
 ```
 
 `GET /api/v1/robot/state` 도 같은 스냅샷이다.
+
+`localization` 은 v1.69 additive 다(D-395). D-395 이전 로봇은 `null` 이다.
+
+```json
+"localization": {
+  "state": "LOCALIZED",
+  "pose_frame": "map",
+  "confidence": 0.93,
+  "reason": null,
+  "needs_human": false,
+  "request_id": "rosy_01-7"
+}
+```
+
+- `state`: `UNKNOWN` \| `CANDIDATES` \| `LOCALIZED` \| `SUSPECT`. 로봇이 소유한다. 전원 투입은 항상 `UNKNOWN` 이고 자율 주행은 `LOCALIZED` 에서만 한다.
+- `pose_frame`: 같은 스냅샷 `pose` 의 프레임, `map` \| `odom`. Fleet 교통정리·bays 는 `odom` 이거나 `LOCALIZED` 가 아닌 자세를 쓰지 않는다(D-395 10항, 적용은 2단계).
+- `confidence`: 스캔/지도 적합도 0–1. `reason`: SUSPECT 사유(`pickup`, `fit_drop`, `inject_rejected`, `fleet_monitor`). `needs_human`: 사다리 시간 초과. `request_id`: 진행 중인 후보 보고의 id.
 
 `activity` 는 v1.68 additive 다(D-321 부록). 보정 세션 lease 가 살아 있는
 동안만 객체이고, 아니면 `null` 이다.
@@ -692,6 +709,17 @@ Fleet 이 들어오면 같은 envelope 을 중계하므로 어느 쪽 끝도 바
 인증은 AUTH-101 첫 메시지 방식이다(Fleet 도 D-370 S7 부터 `?token=` 을 쓰지 않는다).
 
 close code: `4401` 은 토큰이 없거나 틀린 것(`/ws/state` 와 동일), `4403` 은 인증은 됐지만 허용되지 않는 것 — 역할이 모자라거나 capability 가 그 기능을 선언하지 않은 경우(CAP-003)다.
+
+## 7.9 Fleet 보조 위치 확정 모델 (D-395, v1.69 스키마만)
+
+원천은 `core_common.protocol.localization` 이다. v1.69 는 모델만 고정한다. 전송 경로(설계 문서 4.4절의 `POST /api/v1/localization/decision` 등)와 capability 는 2단계에서 이 절과 §5.3 을 함께 고쳐 연다. 그 전에는 어떤 경로도 이 모델을 받지 않는다.
+
+| 모델 | 방향 | 필드 |
+|---|---|---|
+| `CandidateReport` | 로봇 → Fleet | `robot_id`, `request_id`(1–64자 `[A-Za-z0-9_.:-]`), `candidates[1..8]` `{x, y, yaw, scan_fit 0–1, paint_score 0–1\|null}`(map 프레임 base_link), `unmapped_objects[≤16]` `{x, y}`(base_link, 앞 x·왼쪽 y), `square_sightings[≤4]` `{bearing_rad, range_m>0\|null, confidence 0–1}`, `pickup`, `stamp`(로봇 시각 s) |
+| `LocalizationDecision` | Fleet → 로봇 | `request_id`, `candidate_index`(0–7) **또는** `pose {x, y, yaw}` 중 정확히 하나, `source` `candidate`\|`overhead`\|`homing_ref`\|`human`(`candidate` 는 인덱스와만, 나머지는 `pose` 와만), `cues`(≤6, `square`\|`paint`\|`peers`\|`slot`\|`last_good`\|`overhead`), `evidence`(≤16 키), `ttl_s`(받은 때부터 유효한 초, 0 초과 30 이하, 기본 5) |
+
+로봇은 낡은 `request_id` 와, 받은 뒤 `ttl_s` 가 지난 결정을 무시한다(Fleet·로봇 시계 동기 불필요, D-395 개정 3). 사람이 아닌 결정은 `cues` 에 비대칭 단서(`square`·`paint`·`peers`·`slot`)가 하나 이상 있어야 받는다 — `last_good`·`overhead` 만으로는 거부한다. 받아들인 결정도 주입 뒤 3 s 스캔/지도 일치를 통과해야 `LOCALIZED` 가 되고, 실패하면 `SUSPECT`(`inject_rejected`)다. 대칭 맵에서는 거울상도 같은 적합도라 이 검증이 거울 주입을 거르지 못한다 — 거울은 Fleet 중재와 감시가 막는다. `square_sightings` 는 설계 4.2절 표 이후 개정 1의 `square_seen` 단서를 위해 더한 선택 필드다.
 
 ---
 
@@ -1707,7 +1735,8 @@ fake credentials and clocks; device and field acceptance remain separate gates.
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
-| v1.69 | 2026-10-01 | Additive (D-390 부록): OMX SIM camera 상태/JPEG, 시연 기록 시작·종료·manifest, typed 기록 상태와 task outcome. 로컬 LeRobot v3 변환; 실물 권한 변화 없음 |
+| v1.70 | 2026-10-01 | Additive (D-390 부록): OMX SIM camera 상태/JPEG, 시연 기록 시작·종료·manifest, typed 기록 상태와 task outcome. 로컬 LeRobot v3 변환; 실물 권한 변화 없음 |
+| v1.69 | 2026-10-01 | Additive (D-395 1단계, feat/d395-phase1): 상태 스냅샷(`/robot/state`·`/ws/state`)·하트비트 `localization` `{state, pose_frame, confidence, reason, needs_human, request_id}`(D-395 이전 로봇은 null); §7.9 `CandidateReport`·`LocalizationDecision`(`cues`, 수신 기준 `ttl_s`) 모델(스키마만, 전송 경로 없음). 기존 필드 변화 없음 |
 | v1.68 | 2026-10-01 | Additive (D-321 부록, feat/calibration-session-mode): 보정 세션 lease `GET/POST /api/v1/calibration/session`, `POST …/{id}/heartbeat`, `DELETE …/{id}`; 상태 스냅샷(`/robot/state`·`/ws/state`) `activity` (보정 중이면 `{kind: CALIBRATING, session_id, calibration_kind, label, owner, started_at, remaining_s}`, 아니면 null); 에러 `CALIBRATION_ACTIVE`(다른 토큰의 teleop·`/mode`(IDLE 제외)·line-follow 모드(OFF 제외)·hold·navigation goal/home·docking dock/undock·swarm follow 409); 이벤트 `calibration.session_started/ended/expired`. E-Stop 은 막지 않는다. 기존 필드 변화 없음 |
 | v1.67 | 2026-10-01 | Additive (D-390): 격리된 OMX-AI Gazebo Pilot 전용 `/api/v1/sim/omx/*` 목표·상태·조종권 계약. 실물과 Fleet 경계는 불변. 카메라·녹화는 미구현으로 명시. |
 | v1.64 | 2026-09-30 | Additive (D-344 §11·§13): 이벤트 `nav.line_obstacle_hold`(앞 물체 정지가 `line_follow.obstacle_escalate_s` 넘게 이어지면 한 번), line-follow 정지 사유 `limit_level_too_low`(수동 한도가 L1 미만이면 차선 자동 HOLD)·`angular_limit_zero`(수동 각속도 한도를 읽을 수 없음), 설정 `obstacle_mode`(`sector` 기본·`path`)·`obstacle_release_s`·`obstacle_escalate_s`·`lane_auto_min_manual_angular`·`max_angular_follows_manual`. 와이어 형식 변화 없음 |

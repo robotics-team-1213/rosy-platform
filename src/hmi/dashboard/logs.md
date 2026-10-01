@@ -738,3 +738,10 @@
 - 변경: ① map.js paint() 에 목표 다이아몬드(경로 색) — rosy:goal 설정, rosy:goal-clear 해제. ② 텔레메트리 '--' 값에 data-pending 스켈레톤 펄스(1.6s 호흡).
 - 증거: test_dashboard_package.py 2신규 (마커·스켈레톤).
 - gate 변화: 없음.
+
+
+## 2026-10-01 · uncommitted · D-398 죽은 토큰 참조·펄스·페이드 정리
+
+- 변경: console-detail.css의 var(--muted/--paper/--radius-1) → --ink-quiet/--ink-on-crit/--radius-control(존재하지 않는 토큰 참조였음). skeleton 펄스·액션 페이드 제거로 D-220 회복 — 기다림은 조용한 뮤트 대시, 숨김은 점프 컷(레거시 시험 핀 2건 갱신, 깨져 있던 디밍 계약 시험도 초록). overview·pose-evidence·operations·triage·telemetry·vision이 EVIDENCE_LABEL/evidenceAgeText로 말을 만든다. styleguide.css의 죽은 .demo-* 부품 재구현 삭제(견본은 실제 ui-* 요소).
+- 근거: D-398. dashboard·web_common 시험 통과.
+- gate 변화: 없음.

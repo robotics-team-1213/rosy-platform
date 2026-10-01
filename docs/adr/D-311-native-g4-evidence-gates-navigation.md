@@ -51,3 +51,24 @@ systemd 기동 조건과 연결하지 않는다. D-295의 수용 조건을 실�
 **Related:** [D-291](D-291-pinky-io-first-boot-and-signed-card-release.md),
 [D-295](D-295-native-pinky-mapping-promotion-and-capability-truth.md),
 [네이티브 맵핑 절차](../deployment/pinky-native-mapping-recovery.md).
+
+## Addendum 2026-10-01: first real G4 run (9dfk) and two calibrations of the gate
+
+The first schema-2 G4 run on rosy-pinky-9dfk (release 2026.10.01-019, floor, 0.025 m/s and
+0.08 rad/s commands) showed two gaps between this gate and the robot. All raw trials, passes
+and failures, are kept in the operator's evidence folder.
+
+1. **Command-loss stop vs SAF-002.** CORE's teleop watchdog was hard-coded to 500 ms although
+   SAF-002 says "default 500 ms, configurable" and rosy_default.yaml carried
+   `safety.teleop_timeout_ms`. With ~0.1-0.2 s of wheel deceleration after the watchdog fires,
+   the forward command-loss trial measured 0.674 / 0.613 / 0.719 s against the 0.65 s limit.
+   CORE now reads `safety.teleop_timeout_ms` (100-2000 ms, validated), and the Pinky Pro robot
+   package core.yaml sets 300 ms. The 0.65 s limit itself is unchanged.
+2. **Stop threshold vs encoder quantization.** At rest the Pinky reports +-0.0134 rad/s for one
+   encoder tick and 0.027 rad/s for two. `MEASURED_ANGULAR_EPSILON` was 0.02, so a stationary
+   robot intermittently failed "sustained zero velocity" (cw 2/2, forward 1/3). It is now 0.03,
+   above two ticks; real residual rotation (e.g. 0.05 rad/s) still fails.
+
+Device application is a hotfix with backup on 9dfk until the next payload carries this change;
+the G4 approval must be re-recorded after it and sealed only if all five trials pass as recorded.
+
