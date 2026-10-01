@@ -1,0 +1,14 @@
+[Unit]
+Description=Device twin stand-in for the image-only first-boot personalization (already provisioned)
+# The real unit (deploy/robot/pinky_pro/image/first-boot) configures Wi-Fi and
+# identity on a flashed card. The twin is provisioned at build time, so this
+# only satisfies rosy-sd-provision.service's Requires=.
+Before=rosy-sd-provision.service rosy-runtime.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/true
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
