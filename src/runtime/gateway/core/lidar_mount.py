@@ -7,7 +7,7 @@ Resolution order, first hit wins (D-396: URDF nominal < accepted record < operat
      (core_common/calibration_store.py; accepted by an operator, never
      automatic), when its value is a finite real inside 150-210 deg or within
      15 deg of the hand value (check_values); otherwise it is logged and skipped;
-  3. the hand value ``line_follow.lidar_forward_deg``: the Pinky Pro robot
+  3. the hand value ``line_follow.lidar_forward_deg``: the robot
      package's core.yaml, which is the URDF nominal 180 deg (geometry.yaml).
 
 ``lidar_yaw_offset`` bound through the control sensor adapter (D-47) is only

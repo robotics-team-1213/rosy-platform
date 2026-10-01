@@ -19,7 +19,7 @@ path here accepts on its own.
 Runtime consumers call ``resolve``: the current record's values, or the
 static fallback (robot.yaml, camera_nominal.yaml, rosy_params.yaml, ...) when
 there is none, together with a source line to log. The static values are the
-URDF nominal (D-396, products/pinky_pro/profile/config/geometry.yaml), so the
+URDF nominal (D-396, the robot package's profile config/geometry.yaml), so the
 order is URDF nominal < accepted record < operator override.
 """
 from __future__ import annotations
