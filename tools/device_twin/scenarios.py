@@ -298,7 +298,8 @@ class Scenarios:
                      json.dumps(t.state().get("withdrawn")))
 
     # (h) ----------------------------------------------------------------------------
-    def _start_and_interrupt(self, steps: tuple[str, ...], how: str, timeout: float = 240) -> str:
+    def _start_and_interrupt(self, steps: tuple[str, ...], how: str, timeout: float = 240,
+                             wait_runtime: bool = True) -> str:
         """Start the updater, wait until its journal names one of ``steps``, then interrupt it."""
         t = self.twin
         t.x("systemctl start --no-block rosy-auto-update.service")
@@ -318,7 +319,8 @@ class Scenarios:
         else:  # a power cut: the whole container dies at once, then boots again
             run(["docker", "kill", TWIN])
             run(["docker", "start", TWIN])
-            t.wait_runtime()
+            if wait_runtime:
+                t.wait_runtime()
         return step
 
     def h(self) -> None:
@@ -355,21 +357,44 @@ class Scenarios:
                      and t.current() == R["B"] and cwd2 == self.rel("B"), status.get("reason"))
 
     def h3(self) -> None:
-        """Power cut during activate: boot recovery restores a consistent release; the resume settles the apply."""
+        """Power cut during activate: boot recovery must restore a release and the runtime; the resume settles."""
         t = self.twin
         self.github.release(R["B"])
-        step = self._start_and_interrupt(("activate",), "power")
-        self.note("rosy-release-recover after the cut", t.journal("rosy-release-recover.service", 10))
-        state = t.state()
-        self.note("after docker kill + start", f"cut at step {step}; current {t.current()}; "
-                                               f"applying={json.dumps(state.get('applying'))}")
+        step = self._start_and_interrupt(("activate",), "power", wait_runtime=False)
+        time.sleep(25)  # boot: rosy-release-recover, then the runtime
+        journal = t.out("cat /var/lib/rosy/releases/native-activation.json 2>/dev/null || echo none")
+        self.note("after docker kill + start", f"cut at step {step}; native journal: {journal}; "
+                                               f"current {t.current()}")
+        recover = t.out("systemctl is-active rosy-release-recover.service", check=False)
+        self.note("rosy-release-recover after the cut", t.journal("rosy-release-recover.service", 6))
+        self.ev("systemctl is-active rosy-release-recover.service rosy-core.service rosy-runtime.target; "
+                "systemctl show -p ProtectSystem -p PrivateTmp -p ReadWritePaths rosy-release-recover.service")
+        self.r.check("boot recovery (rosy-release-recover.service) succeeds after a cut during activate",
+                     recover == "active", recover)
+        runtime_up = t.x("systemctl is-active --quiet rosy-core.service", check=False).returncode == 0
+        self.r.check("the runtime comes back after the cut", runtime_up)
+        if not runtime_up:
+            done = t.x("systemctl start rosy-auto-update.service", check=False)
+            self.note("systemctl start rosy-auto-update.service (runtime down)", (done.stdout + done.stderr).strip())
+            self.r.check("the updater can still run to settle the apply", done.returncode == 0,
+                         f"exit {done.returncode}; status.json phase {t.status().get('phase')!r}")
+            # Diagnosis only (not a fix): the same recovery with a private /tmp.
+            t.x("mkdir -p /run/systemd/system/rosy-release-recover.service.d && printf '[Service]\nPrivateTmp=yes\n' "
+                "> /run/systemd/system/rosy-release-recover.service.d/twin-diagnosis.conf && systemctl daemon-reload")
+            self.ev("systemctl restart rosy-release-recover.service; systemctl is-active rosy-release-recover.service; "
+                    "journalctl -u rosy-release-recover.service -o cat --no-pager | tail -n 2", timeout=120)
+            t.x("rm -rf /run/systemd/system/rosy-release-recover.service.d && systemctl daemon-reload")
+            t.x("systemctl start rosy-runtime.target", check=False)
+            t.wait_runtime()
         status = self.updater("(resume after a cut during activate)")
         _pid1, cwd1 = self.core()
         self.r.check("the robot ends on one release with CORE running from it",
                      cwd1 == f"/opt/rosy/releases/{t.current()}" and t.main_pid() > 0,
                      f"current {t.current()} cwd {cwd1}")
-        self.r.check("the apply is settled (committed or rolled back), not left journaled",
-                     not t.state().get("applying") and status.get("phase") in ("committed", "rolled_back"),
+        # A cut before the link switch is retried after a backoff ("waiting"); after it, committed or rolled back.
+        self.r.check("the apply is settled, not left journaled",
+                     not t.state().get("applying")
+                     and status.get("phase") in ("committed", "rolled_back", "waiting"),
                      f"{status.get('phase')}: {status.get('reason')}")
         self.note("history", "\n".join(json.dumps(item) for item in t.history()[-8:]))
 
