@@ -81,6 +81,27 @@ def assert_robot_credential_key_isolated(robot_credential_key: str, *,
         raise ValueError("robot credential key must differ from every other site secret")
 
 
+def assert_pairing_sync_token_isolated(sync_token: str, *, console_token: Optional[str],
+                                       discovery_token: Optional[str],
+                                       vision_lease_secret: Optional[str],
+                                       robot_credential_key: Optional[str],
+                                       console, sightings, policy_evidence,
+                                       principals: Mapping[str, SitePrincipal]) -> None:
+    # D-341 11, 12 and D-302: Vision's credential-list secret is its own, never another.
+    token = sync_token.strip()
+    if not token:
+        raise ValueError("pairing sync credential must not be empty")
+    token_digest = sha256(token.encode("utf-8")).hexdigest()
+    same = lambda other: other is not None and hmac.compare_digest(token, other.strip())  # noqa: E731
+    if (same(console_token) or same(discovery_token) or same(vision_lease_secret)
+            or same(robot_credential_key)
+            or console.uses_rest_token(token) or console.uses_agent_pairing_token(token)
+            or (sightings is not None and sightings.uses_token(token))
+            or (policy_evidence is not None and policy_evidence.uses_token(token))
+            or any(hmac.compare_digest(token_digest, digest) for digest in principals)):
+        raise ValueError("pairing sync credential must differ from every other site secret")
+
+
 def build_authorize(console_token: Optional[str],
                     principals: Mapping[str, SitePrincipal],
                     task_service):

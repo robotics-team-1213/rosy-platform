@@ -60,3 +60,21 @@ def test_fleet_server_has_no_video_relay_routes():
     assert paths, "no routes enumerated — the guard is vacuous"
     hit = [path for path in paths if FORBIDDEN_ROUTE.search(path)]
     assert not hit, f"fleet server exposes video relay routes: {hit}"
+
+
+def test_pairing_enabled_fleet_still_has_no_video_relay_routes(tmp_path):
+    """D-341 2: the camera pairing routes keep the role out of the path (body/query only)."""
+    from fleet.server.pairing import PairingService
+    from fleet.server.pairing_store import PairingStore
+    from pairing_fixtures import LEAF_SHA256, SITE_CA_PEM, TLS_HOST
+
+    endpoints = [RobotEndpoint(robot_id="rosy_01", base_url="http://127.0.0.1:8080", token="t")]
+    pairing = PairingService(PairingStore(tmp_path / "fleet.sqlite3"), leaf_cert_sha256=LEAF_SHA256,
+                             site_ca_pem=SITE_CA_PEM, tls_host=TLS_HOST, site_name="Rosy Lab",
+                             sources={"ceiling_north": "paired"})
+    app = create_app(FleetConsole(endpoints, [FakeRobot("rosy_01")]), pairing=pairing,
+                     pairing_sync_token="sync-" + "secret-1")
+    paths = sorted({route.path for route in app.routes if hasattr(route, "path")})
+    assert any(path.startswith("/api/fleet/pairing/v1/") for path in paths)
+    hit = [path for path in paths if FORBIDDEN_ROUTE.search(path)]
+    assert not hit, f"fleet server exposes video relay routes: {hit}"

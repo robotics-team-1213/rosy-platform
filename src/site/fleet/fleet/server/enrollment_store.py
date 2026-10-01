@@ -17,6 +17,7 @@ import time
 from contextlib import closing
 from pathlib import Path
 
+from core_common.protocol.device_kind import ALL as device_kind_values
 from core_common.protocol.device_kind import ROBOT
 from cryptography.exceptions import InvalidTag
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
@@ -86,6 +87,57 @@ def unseal(key: bytes, blob: bytes, *, slot: str, robot_id: str, token_id: str) 
         raise SealError("sealed robot credential did not open") from None
 
 
+def ensure_device_pairing_audit(connection: sqlite3.Connection) -> None:
+    """Create or migrate the audit table shared by robot enrollment and camera pairing.
+
+    D-341 8 and D-391 4: one table for every device kind. The column default stays for
+    rows written before the column existed; every writer passes ``device_kind``.
+    """
+    connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS device_pairing_audit (
+            audit_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            at REAL NOT NULL,
+            device_kind TEXT NOT NULL DEFAULT 'overhead-camera',
+            action TEXT NOT NULL,
+            outcome TEXT NOT NULL,
+            principal_id TEXT,
+            target TEXT
+        )
+        """
+    )
+    columns = {row[1] for row in connection.execute("PRAGMA table_info(device_pairing_audit)")}
+    if "device_kind" not in columns:
+        # D-341 may have created the table first without the column (ADR 11).
+        with connection:
+            connection.execute(
+                "ALTER TABLE device_pairing_audit ADD COLUMN device_kind TEXT "
+                "NOT NULL DEFAULT 'overhead-camera'")
+
+
+def append_device_pairing_audit(connection: sqlite3.Connection, *, at: float, device_kind: str,
+                                action: str, outcome: str, principal_id: str | None,
+                                target: str | None, limit: int) -> None:
+    """Insert one audit row and keep only the newest ``limit`` rows (caller owns the transaction)."""
+    if device_kind not in device_kind_values:
+        raise ValueError("unknown device kind")
+    connection.execute(
+        "INSERT INTO device_pairing_audit(at, device_kind, action, outcome, "
+        "principal_id, target) VALUES (?, ?, ?, ?, ?, ?)",
+        (at, device_kind, action, outcome, principal_id, target))
+    connection.execute(
+        "DELETE FROM device_pairing_audit WHERE audit_id <= "
+        "(SELECT MAX(audit_id) FROM device_pairing_audit) - ?", (limit,))
+
+
+def device_pairing_audit_rows(connection: sqlite3.Connection) -> list[dict]:
+    rows = connection.execute(
+        "SELECT at, device_kind, action, outcome, principal_id, target "
+        "FROM device_pairing_audit ORDER BY audit_id").fetchall()
+    return [dict(zip(("at", "device_kind", "action", "outcome", "principal_id", "target"), row))
+            for row in rows]
+
+
 class EnrollmentStore:
     """`robot_enrollments` rows plus the shared `device_pairing_audit` table."""
 
@@ -117,25 +169,9 @@ class EnrollmentStore:
                     created_at REAL NOT NULL,
                     updated_at REAL NOT NULL
                 );
-                CREATE TABLE IF NOT EXISTS device_pairing_audit (
-                    audit_id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    at REAL NOT NULL,
-                    device_kind TEXT NOT NULL DEFAULT 'overhead-camera',
-                    action TEXT NOT NULL,
-                    outcome TEXT NOT NULL,
-                    principal_id TEXT,
-                    target TEXT
-                );
                 """
             )
-            columns = {row["name"] for row in
-                       connection.execute("PRAGMA table_info(device_pairing_audit)")}
-            if "device_kind" not in columns:
-                # D-341 may have created the table first without the column (ADR 11).
-                with connection:
-                    connection.execute(
-                        "ALTER TABLE device_pairing_audit ADD COLUMN device_kind TEXT "
-                        "NOT NULL DEFAULT 'overhead-camera'")
+            ensure_device_pairing_audit(connection)
         if os.name != "nt":
             for path in (self.path, self.path.with_name(self.path.name + "-wal"),
                          self.path.with_name(self.path.name + "-shm")):
@@ -200,20 +236,14 @@ class EnrollmentStore:
               target: str | None, device_kind: str = ROBOT) -> None:
         with closing(self._connect()) as connection:
             with connection:
-                connection.execute(
-                    "INSERT INTO device_pairing_audit(at, device_kind, action, outcome, "
-                    "principal_id, target) VALUES (?, ?, ?, ?, ?, ?)",
-                    (time.time(), device_kind, action, outcome, principal_id, target))
-                connection.execute(
-                    "DELETE FROM device_pairing_audit WHERE audit_id <= "
-                    "(SELECT MAX(audit_id) FROM device_pairing_audit) - ?", (self._audit_limit,))
+                append_device_pairing_audit(
+                    connection, at=time.time(), device_kind=device_kind, action=action,
+                    outcome=outcome, principal_id=principal_id, target=target,
+                    limit=self._audit_limit)
 
     def audit_rows(self) -> list[dict]:
         with closing(self._connect()) as connection:
-            rows = connection.execute(
-                "SELECT at, device_kind, action, outcome, principal_id, target "
-                "FROM device_pairing_audit ORDER BY audit_id").fetchall()
-        return [dict(row) for row in rows]
+            return device_pairing_audit_rows(connection)
 
     def retired_robot_ids(self) -> set[str]:
         """Robots once enrolled here that are not on the roster now (D-361 5)."""
