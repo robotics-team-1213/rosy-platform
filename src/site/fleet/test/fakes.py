@@ -118,6 +118,12 @@ class FakeRobot:
         #: 참이면 `sink_error` 가 지워지지 않는다 — 고쳐질 때까지 계속 거부하는 소켓.
         #: 소켓이 다시 열리는 순간 이유가 지워지므로, 이유를 보려면 계속 닫혀 있어야 한다.
         self.sink_error_sticky = False
+        #: D-395: what `localization_candidates` returns (None = not in CANDIDATES).
+        self.candidates = None
+        self.decisions: list = []
+        self.suspects: list[str] = []
+        #: Raised by `localization_decision` (e.g. RobotApiError 409 STALE_REQUEST).
+        self.decision_error: Optional[BaseException] = None
 
     def _record(self, *call) -> None:
         self.calls.append(call)
@@ -182,6 +188,26 @@ class FakeRobot:
     async def estop(self) -> dict:
         self._record("estop")
         return {"estop": True}
+
+    async def localization_candidates(self):
+        self._record("localization_candidates")
+        return self.candidates
+
+    async def localization_decision(self, decision) -> dict:
+        self._record("localization_decision", decision.request_id)
+        if self.decision_error is not None:
+            raise self.decision_error
+        self.decisions.append(decision)
+        return {"request_id": decision.request_id}
+
+    async def localization_suspect(self, reason: str) -> dict:
+        self._record("localization_suspect", reason)
+        self.suspects.append(reason)
+        return {}
+
+    async def localization_mission(self, kind: str, *, max_distance_m: float, max_time_s: float,
+                                   target: Optional[dict] = None) -> dict:
+        raise NotImplementedError("localization missions are P2-7")
 
     async def pose_stream(self) -> AsyncIterator[str]:
         self.pose_opens += 1

@@ -14,7 +14,9 @@ import logging
 from typing import Any, AsyncIterator, Optional, Protocol, Sequence, runtime_checkable
 
 import httpx
+from pydantic import ValidationError
 
+from core_common.protocol.localization import CandidateReport, LocalizationDecision
 from core_common.protocol.schemas import SwarmFollowParams
 from fleet.swarm.robots import RobotEndpoint, ws_url
 
@@ -122,6 +124,16 @@ class RobotClient(Protocol):
 
     async def line_follow_mode(self, mode: str) -> dict: ...
     async def estop(self) -> dict: ...
+    # D-395 Phase 2 (contract §2): Fleet-assisted localization.
+    async def localization_candidates(self) -> Optional[CandidateReport]: ...
+    async def localization_decision(self, decision: LocalizationDecision) -> dict: ...
+    async def localization_suspect(self, reason: str) -> dict: ...
+
+    async def localization_mission(
+        self, kind: str, *, max_distance_m: float, max_time_s: float,
+        target: Optional[dict] = None,
+    ) -> dict: ...
+
     def pose_stream(self) -> AsyncIterator[str]: ...
     async def open_reference_sink(self) -> ReferenceSink: ...
     def events(self, types: Sequence[str]) -> AsyncIterator[dict]: ...
@@ -241,6 +253,37 @@ class HttpRobotClient:
 
     async def estop(self) -> dict:
         return await self._post("/api/v1/safety/stop")
+
+    # --- D-395 localization (contract §2) -------------------------------------------
+
+    async def localization_candidates(self) -> Optional[CandidateReport]:
+        """The robot's latest candidate report, or None when it is not in CANDIDATES.
+
+        Any 404 is "no candidates": CORE answers NO_CANDIDATES, and a CORE without
+        the route has none to give either."""
+        resp = await self._http.get("/api/v1/localization/candidates", headers=self._headers())
+        if resp.status_code == 404:
+            return None
+        body = self._check(resp)
+        try:
+            return CandidateReport.model_validate(body)
+        except ValidationError as exc:
+            raise RobotApiError(self.robot_id, resp.status_code, "BAD_RESPONSE",
+                                f"not a candidate report: {exc.error_count()} errors") from exc
+
+    async def localization_decision(self, decision: LocalizationDecision) -> dict:
+        return await self._post("/api/v1/localization/decision", decision.model_dump(mode="json"))
+
+    async def localization_suspect(self, reason: str) -> dict:
+        if not reason or len(reason) > 64:
+            raise ValueError("suspect reason must be 1-64 characters")
+        return await self._post("/api/v1/localization/suspect", {"reason": reason})
+
+    async def localization_mission(self, kind: str, *, max_distance_m: float, max_time_s: float,
+                                   target: Optional[dict] = None) -> dict:
+        raise NotImplementedError(
+            "POST /api/v1/localization/mission is lane B P2-7 (CORE mission executor); "
+            "Fleet logs ladder mission requests as pending until it lands")
 
     async def aclose(self) -> None:
         if self._owns_http:
