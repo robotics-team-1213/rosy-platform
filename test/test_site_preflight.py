@@ -278,3 +278,33 @@ def test_vendored_ca_check_agrees_with_core_common_on_site_link_vectors():
             assert module.ca_pem_reason(ca_pem) == expect.get("reason"), case["id"]
             compared += 1
     assert compared >= 5
+
+
+# --- review fixes: systemd unit forms, env file syntax, every Caddy site block ---
+
+def test_unit_continuation_prefix_and_bare_dollar_var_expand_like_systemd(tmp_path):
+    unit = tmp_path / "rosy-overhead-advertise.service"
+    unit.write_text("[Service]\nEnvironment=H=" + HOST + "\n"
+                    "ExecStart=-/usr/bin/python3 /opt/rosy/site/fleet-mdns.py publish \\n"
+                    "  --role overhead --tls-host $H\n", encoding="utf-8")
+    assert _module().published_tls_host(unit, {}) == (True, HOST)
+
+
+def test_an_empty_execstart_resets_the_command(tmp_path):
+    unit = tmp_path / "rosy-overhead-advertise.service"
+    unit.write_text("[Service]\nExecStart=/x publish --role overhead --tls-host other.local\n"
+                    "ExecStart=\n", encoding="utf-8")
+    assert _module().published_tls_host(unit, {}) == (False, None)
+
+
+def test_env_file_strips_export_and_only_matching_quotes(tmp_path):
+    env = tmp_path / ".env"
+    env.write_text('export ROSY_SITE_TLS_HOST="' + HOST + '"\nODD=\'y"\n', encoding="utf-8")
+    values = _module().read_env_file(env)
+    assert values["ROSY_SITE_TLS_HOST"] == HOST
+    assert values["ODD"] == "'y\""
+
+
+def test_every_top_level_caddy_site_block_is_checked_and_snippets_are_skipped():
+    text = "{\n admin off\n}\n(snip) {\n x\n}\n" + HOST + ":8443 {\n}\nother.local {\n}\n"
+    assert _module().caddy_site_hosts(text) == [HOST, "other.local"]

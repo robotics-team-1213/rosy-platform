@@ -237,8 +237,13 @@ def read_env_file(path: Path) -> dict[str, str]:
         line = line.strip()
         if not line or line[0] in "#;" or "=" not in line:
             continue
+        if line.startswith("export "):
+            line = line[len("export "):]
         key, _, value = line.partition("=")
-        values[key.strip()] = value.strip().strip("\"'")
+        value = value.strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
+            value = value[1:-1]          # only a matching pair of quotes is syntax
+        values[key.strip()] = value
     return values
 
 
@@ -252,7 +257,9 @@ def published_tls_host(unit: Path, env_file: dict[str, str]) -> tuple[bool, str 
     """
     env: dict[str, str] = {}
     words: list[str] = []
-    for raw in unit.read_text(encoding="utf-8").splitlines():
+    # systemd joins a line ending in a backslash with the next one.
+    text = re.sub(r"\\\r?\n", " ", unit.read_text(encoding="utf-8"))
+    for raw in text.splitlines():
         line = raw.strip()
         if line.startswith("Environment="):
             for item in shlex.split(line[len("Environment="):]):
@@ -261,8 +268,11 @@ def published_tls_host(unit: Path, env_file: dict[str, str]) -> tuple[bool, str 
         elif line.startswith("EnvironmentFile="):
             env.update(env_file)
         elif line.startswith("ExecStart="):
-            words = [re.sub(r"\$\{(\w+)\}", lambda m: env.get(m.group(1), ""), word)
-                     for word in shlex.split(line[len("ExecStart="):])]
+            command = line[len("ExecStart="):].lstrip("-@+!:")   # systemd exec prefixes
+            # An empty ExecStart= resets the list; ${VAR} and $VAR both expand.
+            words = [re.sub(r"\$\{(\w+)\}|\$(\w+)",
+                            lambda m: env.get(m.group(1) or m.group(2), ""), word)
+                     for word in shlex.split(command)]
     overhead = any(words[i:i + 2] == ["--role", "overhead"] for i in range(len(words)))
     for index, word in enumerate(words):
         if word == "--tls-host":
@@ -300,21 +310,24 @@ def check_txt_tls_host(units: list[Path], env_file: dict[str, str], tls_host: st
 
 
 def caddy_site_hosts(text: str) -> list[str] | None:
-    """Host parts of the first site block's addresses; None when there is no site block.
+    """Host parts of every top-level site block's addresses; None when there is no site block.
 
     Minimal parse: skip comments and the leading global `{ ... }` options block,
-    take the first line that ends with `{` as the site address line, split it on
+    take every top-level line that ends with `{` as a site address line (snippets
+    `(name) {` are skipped), split it on
     commas/spaces, drop the scheme and the port. A bare `:port` yields no host
     (a catch-all address names nothing that could disagree). Snippets, imports,
     environment placeholders and path matchers are not interpreted.
     """
     depth = 0
+    hosts: list[str] = []
+    found = False
     for raw in text.splitlines():
         line = raw.split("#", 1)[0].strip()
         if not line:
             continue
-        if depth == 0 and line.endswith("{") and line != "{":
-            hosts = []
+        if depth == 0 and line.endswith("{") and line != "{" and not line.startswith("("):
+            found = True
             for address in re.split(r"[,\s]+", line[:-1].strip()):
                 address = re.sub(r"^[a-z][a-z0-9+.-]*://", "", address)
                 address = address.split("/", 1)[0]
@@ -324,9 +337,8 @@ def caddy_site_hosts(text: str) -> list[str] | None:
                     host = address.rsplit(":", 1)[0] if ":" in address else address
                 if host:
                     hosts.append(host)
-            return hosts
         depth += line.count("{") - line.count("}")
-    return None
+    return hosts if found else None
 
 
 def check_caddy_host(path: Path, tls_host: str) -> dict:

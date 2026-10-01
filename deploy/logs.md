@@ -1744,3 +1744,10 @@
 - 변경: `deploy/site/site_preflight.py` 신규(표준 라이브러리만, `compose up` 전에 실행). 검사 다섯 가지: `site_cert`가 leaf(CA 아님) + CA 순서인지(leaf 단독 거부, 2026-09-30 사고), leaf DNS SAN에 `tls_host`가 정확히(대소문자 무시, 와일드카드 불가) 있는지, `tls_host`가 `.local` 이름인지(IP·다른 도메인 거부), 광고 유닛이 낼 TXT `tls_host`(`--tls-host`, `Environment=`·env 파일로 `${VAR}` 전개)가 설정값과 같은지, Caddyfile 첫 사이트 주소가 다른 호스트를 가리키지 않는지(포트만 있는 `:8443`은 통과). IP SAN은 검사하지 않는다(재할당 시 낡음; `manual_host` 되돌림 전용). 실패마다 이유와 고치는 법, 하나라도 실패하면 종료 코드 1, `--json` 지원. README에 "Preflight" 소절 추가. compose.yaml은 건드리지 않았다(rosy-84 병행 작업).
 - 증거: test_site_preflight.py(먼저 31 failed) 구현 후 통과, test_site_fleet_mdns.py 함께 108 passed. CA/leaf DER 복사본이 core_common `site_link`와 site-link.v1.json의 ca_pem 사례에서 일치함을 시험으로 고정. 시험 인증서는 실행 시점에 임시로 만들고 키를 저장소에 두지 않는다. 사이트 호스트 실물 실행은 하지 않았다(LOCAL만).
 - gate 변화: 없음(호스트 배포 없음).
+
+
+## 2026-10-01 · uncommitted · fix(site): 사이트 사전 점검 독립 리뷰 반영 — systemd 형식, env 따옴표, 모든 Caddy 블록
+
+- 변경: 리뷰(APPROVE WITH FIXES) 1–4번. 유닛 파일의 줄 이음(`\`)을 먼저 합치고, `ExecStart=`의 `-@+!:` 접두를 떼고, 빈 `ExecStart=`는 명령을 비우며, `${VAR}`와 `$VAR` 둘 다 펼친다. env 파일은 `export `를 떼고 짝이 맞는 따옴표만 벗긴다. Caddyfile은 첫 블록만이 아니라 모든 최상위 사이트 블록의 호스트를 보며 스니펫 `(name) {`은 건너뛴다.
+- 증거: 신규 시험 4건, `test_site_preflight.py`·`test_site_fleet_mdns.py` 함께 통과.
+- gate 변화: 없음.
