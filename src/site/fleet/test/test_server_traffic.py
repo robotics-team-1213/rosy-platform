@@ -452,3 +452,38 @@ def test_an_unconfirmed_cancel_fails_the_hold():
     driver.navigation_cancel = ambiguous_cancel
     with pytest.raises(RuntimeError, match="cancellation"):
         run(console.hold_for_localization("rosy_02"))
+
+
+def test_a_formation_near_the_mover_is_stopped():
+    from types import SimpleNamespace
+    mover = FakeRobot("rosy_02", state=_standing("rosy_02", (0.0, 0.3), _loc("UNKNOWN", "odom")))
+    leader = _mover()
+    console = _console(leader, mover)
+    run(console.snapshot())
+    console._formation = SimpleNamespace(state="RUNNING", assignment={"rosy_03": "slot"})
+    console._formation_leader = "rosy_01"
+    stopped = []
+
+    async def formation_stop():
+        stopped.append(True)
+        return {"active": False}
+
+    console.formation_stop = formation_stop
+    assert run(console.hold_for_localization("rosy_02")) == ["formation"]
+    assert stopped == [True]
+
+
+def test_a_yield_whose_way_to_its_bay_crosses_the_mover_is_cancelled():
+    mover = FakeRobot("rosy_02", state=_standing("rosy_02", (0.0, 0.3), _loc()))
+    yielder = FakeRobot("rosy_03", state=_standing("rosy_03", (-1.0, 0.3), _loc()))
+    far = FakeRobot("rosy_04", state=_standing("rosy_04", (3.0, 3.0), _loc()))
+    console = _console(mover, yielder, far)
+    run(console.snapshot())                                       # mover last trusted (0, 0.3)
+    mover._state = _standing("rosy_02", (0.0, 0.3), _loc("CANDIDATES", "odom"))
+    run(console.snapshot())
+    console._yielding["rosy_03"] = {"bay": {"x": 1.0, "y": 0.3}, "for": "rosy_01"}
+    console._yielding["rosy_04"] = {"bay": {"x": 3.0, "y": 4.0}, "for": "rosy_01"}
+
+    assert run(console.hold_for_localization("rosy_02")) == ["rosy_03"]
+    assert ("navigation_cancel",) in yielder.calls and "rosy_03" not in console._yielding
+    assert ("navigation_cancel",) not in far.calls and "rosy_04" in console._yielding

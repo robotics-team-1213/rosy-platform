@@ -187,7 +187,7 @@ SIZE_VERDICTS = {
         "accept: legacy comparison-graph publisher pinned by test_module_separation; no new work (X3)",
     ),
     "site/fleet/fleet/server/console.py": (
-        1096,
+        1111,
         "accept: one owner (FleetConsole gather/scatter), host-testable (X5). Re-judged 2026-09-30 at 1013: "
         "D-361 roster mutation and pinned-address holds change the gather/traffic tables in place, so they "
         "stay with their owner; the roster policy itself lives in roster.py; re-judged 2026-09-30 at 1021 "
@@ -197,7 +197,9 @@ SIZE_VERDICTS = {
         "fleet/localization/trust.py — verdict unchanged; re-judged at 1076 when the lane C review queued an "
         "unlocalized mover instead of dispatching it (same queue table) — verdict unchanged; re-judged "
         "2026-10-02 at 1096 for D-395 P2-7: the pre-mission traffic hold cancels and queues goals in "
-        "the same _goals/_claims/_queued tables (hold_for_localization) — verdict unchanged",
+        "the same _goals/_claims/_queued tables (hold_for_localization) — verdict unchanged; re-judged "
+        "2026-10-02 at 1111 when the P2-7 review made the hold also cancel crossing yields "
+        "(_yielding) and stop a formation near the mover — same tables, verdict unchanged",
     ),
     "runtime/sensing/control/sensing/perception/lane.py": (
         765,

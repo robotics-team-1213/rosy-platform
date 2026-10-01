@@ -783,7 +783,9 @@ class FleetConsole:
     async def hold_for_localization(self, mover: str) -> list[str]:
         """D-395 P2-7: before CORE moves an unlocalized `mover`, stop the Fleet-driven robots
         its keep-out reaches (`trust.blocks`, the whole track when it was never trusted).
-        Each held goal waits as LOCALIZATION_UNTRUSTED behind the mover until it is trusted."""
+        Each held goal waits as LOCALIZATION_UNTRUSTED behind the mover until it is trusted; a
+        yield whose way to its bay crosses the keep-out is cancelled, and so is a formation
+        with a robot in it (stopped whole: its session has no per-robot hold)."""
         held, last = [], self._trusted.get(mover)
         for robot_id in list(self._order):
             goal = self._goals.get(robot_id)
@@ -798,6 +800,19 @@ class FleetConsole:
             self._queued[robot_id] = {**goal, "blocked_by": mover, "waiting_on": [mover],
                                       "reason": "LOCALIZATION_UNTRUSTED"}
             held.append(robot_id)
+        for robot_id, yielding in list(self._yielding.items()):     # on the way to a bay
+            here, bay = self._pose_of(robot_id), (yielding["bay"]["x"], yielding["bay"]["y"])
+            if robot_id == mover or not trust.blocks(([here] if here else []) + [bay], last):
+                continue
+            if not self._cancel_confirmed(await self._client(robot_id).navigation_cancel()):
+                raise RuntimeError("navigation goal cancellation was not confirmed")
+            self._yielding.pop(robot_id, None)
+            held.append(robot_id)
+        riders = self._formation_members() | ({self._formation_leader} - {None})
+        if riders and (last is None or any(p is not None and trust.blocks([p], last)
+                                           for p in map(self._pose_of, riders))):
+            await self.formation_stop()
+            held.append("formation")
         return held
 
     # --- pinned-address holds (D-361 3) ------------------------------------------
