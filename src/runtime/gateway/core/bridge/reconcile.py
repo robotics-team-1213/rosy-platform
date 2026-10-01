@@ -61,13 +61,15 @@ def led(alert: Any, applied: Any, *, info_visible: bool, gauge_percent: float,
 
 
 def emotion(mode: Any, nav_state: Any, shown: Any,
-            act: Callable[[str], bool]) -> Any:
+            act: Callable[[str], bool],
+            idle_seconds: float = 0.0) -> Any:
     """D-385: 모드가 정한 표정 — LiDAR 문법으로 latch 없이 다음 틱에 다시 시도한다.
 
     감정 노드는 늦게 뜰 수 있다(부팅 순서). 표정은 살아 있는 표시라 늦게라도
     도달해야 한다. `desired`가 None(모르는 모드)이면 지금 표정을 유지한다.
+    `idle_seconds`는 대기 누적 — 5분 후 심심해한다.
     """
-    desired = emotion_for(mode, nav_state)
+    desired = emotion_for(mode, nav_state, idle_seconds=idle_seconds)
     if desired is None or desired == shown:
         return shown
     return desired if act(desired) else shown

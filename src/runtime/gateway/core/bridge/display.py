@@ -142,6 +142,7 @@ def drive_payload(snapshot, *, hold_s: float = DRIVE_HOLD_S) -> dict[str, Any]:
                             if battery.percent is not None else None),
         "battery_voltage": (round(battery.voltage, 2)
                             if battery.voltage is not None else None),
+        "charging": snapshot.battery_status.charging,
         "estop": snapshot.safety.estop,
         "hold_s": round(hold_s, 1),
     }

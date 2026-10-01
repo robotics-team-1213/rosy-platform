@@ -25,15 +25,22 @@ EMOTION_BY_MODE = {
 #: 내비게이션이 막혀 있으면 기다림이 표정을 이긴다 (램프의 blocked 와 같은 입력).
 NAV_STUCK_EMOTION = "bored"
 
+#: 대기 후 이 시간(초)이 지나면 심심해한다. 5분.
+IDLE_BORED_AFTER_S = 300.0
 
-def emotion_for(mode: Any, nav_state: Any = None) -> Optional[str]:
+
+def emotion_for(mode: Any, nav_state: Any = None,
+                idle_seconds: float = 0.0) -> Optional[str]:
     """The face for this operating mode, or None to keep the current one.
 
-    우선순위: 막힌 내비게이션(bored) > 모드별 표정. 모르는 모드는 None —
-    표정을 지어맞히지 않는다.
+    우선순위: 막힌 내비게이션(bored) > 모드별 표정 > 대기. 모르는 모드는 None —
+    표정을 지어맞히지 않는다. IDLE 로 5분 이상 있으면 basic 대신 bored:
+    아무도 없는 방에서 기다리는 로봇은 심심해한다(D-280 의 성격).
     """
     if not isinstance(mode, str) or mode not in EMOTION_BY_MODE:
         return None
     if mode == "NAVIGATION" and nav_state in ("BLOCKED", "FAILED"):
         return NAV_STUCK_EMOTION
+    if mode == "IDLE" and idle_seconds >= IDLE_BORED_AFTER_S:
+        return "bored"
     return EMOTION_BY_MODE[mode]

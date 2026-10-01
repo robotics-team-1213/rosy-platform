@@ -632,3 +632,9 @@
 - gate 변화: 없음.
 - 결정: D-359 §5.3·§6.5. 시험 의도(넓은 창에서 콘솔은 스크롤하지 않는다, 관리자 전용 버튼)는 그대로다.
 - 교훈: UI 계약을 바꾸는 가지는 `src/runtime/gateway/test` 전체도 회귀 목록에 넣는다(대시보드 정적 자산을 읽는 시험이 거기 있다).
+
+## 2026-10-01 · uncommitted · feat(bridge): idle 시계와 주행 카드 충전 플래그
+
+- 변경: ros_bridge._reconcile_emotion 이 _idle_since 를 추적해 reconcile.emotion 에 전달. drive_payload 에 battery_status.charging 을 실었다.
+- 증거: test_bridge_display.py 충전 플래그, test_bridge_reconcile.py 통과.
+- gate 변화: 없음.

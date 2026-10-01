@@ -182,3 +182,9 @@
 - 변경: render_boot 이 장치 이름 옆에 로즈색 점(--rose #e31b5d)을 그린다. "The rose colour is for the ROSY name only"(D-82) — 어느 화면을 보고 있는지 한눈에.
 - 증거: test_info_screen.py TestBootCardRoseMark (변이: ellipse 제거 시 빨강).
 - gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · feat(emotion): 주행 카드 충전 표시
+
+- 변경: render_drive 배터리 퍼센트 뒤 충전 중이면 ⚡ 를 붙인다.
+- 증거: test_info_screen.py 62 passed.
+- gate 변화: 없음.
