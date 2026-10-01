@@ -67,8 +67,8 @@
 
 ## 최근 기록
 
+- 2026-10-02 · b909ed5b · fix(native): 재개 시 rosy-core가 멈춰 있으면 유휴 판정 면제 (D-406 T2)
 - 2026-10-02 · 9a1ae36f · fix(native): D-406 T2 독립 리뷰 반영 — 안전한 재개, 일시·확정 실패 구분, 스테이징 한도
 - 2026-10-02 · 05d58d0a · fix(native): 업데이터 건강 판정을 적용 전 기준선과 비교 (D-406 T2)
 - 2026-10-02 · a44f9e00 · feat(native): 로봇 쪽 자동 업데이터 `rosy_auto_update.py`·claim·유닛 (D-406 T2)
 - 2026-10-01 · uncommitted · fix(release): `prepare_payload_release.py` 독립 리뷰 반영 — rc 패키지 제외, 오류 처리, 인용
-- 2026-10-01 · f8db47f5 · feat(release): 서명 안 된 페이로드를 push 직전까지 한 명령으로 — `prepare_payload_release.py`

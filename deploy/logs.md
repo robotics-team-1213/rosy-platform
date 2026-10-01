@@ -1862,3 +1862,11 @@
 - gate 변화: 없음. DEVICE HOLD.
 - 결정: D-406
 - 교훈: 끊긴 트랜잭션을 재개하는 경로도 처음 적용과 같은 적격성 문을 지나야 한다. 프로세스 종료 코드만으로 "확정 실패"를 판정하지 않는다 — JSON 판정이 있을 때만 확정이다.
+
+## 2026-10-02 · b909ed5b · fix(native): 재개 시 rosy-core가 멈춰 있으면 유휴 판정 면제 (D-406 T2)
+
+- 변경: 조정자 결정(H1 질문). `applying` 저널을 재개할 때 rosy-core.service가 active가 아니거나 MainPID가 없으면 움직임을 명령할 주체가 없다(CORE가 유일한 cmd_vel 발행자, D-2). 그때는 status-inputs 두 표본 판정을 면제하고, hold·봉인 승인·claim 검사는 그대로 한다. "core not running; idleness check waived"를 history와 `last_result.detail`에 남긴다. CORE가 돌고 있으면 전처럼 전체 판정을 한다.
+- 증거: `test/test_rosy_auto_update.py`·`test/test_rosy_claim.py` 195 passed, 1 skipped. 새 시험: CORE 정지·hold 없음 → 재개해 커밋, CORE 정지·hold → held, CORE 정지·claim → ineligible, CORE 동작·오래된 입력 → ineligible, active지만 MainPID 0 → 정지로 본다. 변이 5종 모두 빨강(처음 살아남은 MainPID 무시 1종은 시험을 더해 빨강).
+- gate 변화: 없음.
+- 결정: D-406
+- 교훈: 면제는 위험의 원천이 없을 때만 준다. 여기서 원천은 CORE 하나뿐이라 그 상태를 직접 확인한다.
