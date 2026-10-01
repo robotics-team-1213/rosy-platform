@@ -52,7 +52,7 @@ def local_overlay() -> dict[str, Any]:
     Lets a consumer tell an operator-set value from the robot package's
     URDF-nominal one (D-397: URDF nominal < accepted calibration record <
     operator overlay)."""
-    path = Path(os.environ.get("ROSY_CONFIG", "")) if os.environ.get("ROSY_CONFIG") else LOCAL_CONFIG_PATH
+    path = overlay_path()
     if not path.exists():
         return {}
     with open(path, encoding="utf-8") as f:

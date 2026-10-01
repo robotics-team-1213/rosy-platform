@@ -264,6 +264,8 @@ def test_a_short_true_boundary_is_kept_by_its_partner():
     assert any(c["heading_deg"] > 25 for c in last["candidates"]), "the stray must be fitted"
     assert last["strategy"] == "both" and abs(obs.error) < 0.15
     assert any(b["side"] == "right" and abs(b["heading_deg"]) < 10 for b in last["boundaries"])
+    # The partner (the true left lane line) stays straight: the stray did not bend it.
+    assert any(b["side"] == "left" and abs(b["heading_deg"]) < 5 for b in last["boundaries"])
     assert not _conflicts(last)
 
 

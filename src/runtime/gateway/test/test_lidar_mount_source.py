@@ -1,8 +1,9 @@
 """D-47 addendum: CORE line_follow takes the calibrated LiDAR mount, the hand value only as fallback.
 
-The Pinky Pro's C1 nose sits near scan angle 180-190 deg. These tests pin
-the resolution order (accepted store record > adapter binding > hand value)
-and that the obstacle sector and path follow a 190-deg mount.
+The Pinky Pro's C1 nose is scan angle 180 deg in the URDF (D-397) and measures
+181-182 deg. These tests pin the resolution order (operator overlay > accepted
+store record > hand value; the adapter binding is only compared) and that the
+obstacle sector and path follow a non-180 mount (190 deg here as a test value).
 """
 import math
 
@@ -33,8 +34,9 @@ def test_hand_value_is_only_the_fallback(tmp_path):
 
 
 def test_hand_value_outranks_the_adapter_binding_and_a_disagreement_is_warned(tmp_path):
-    # M3: the adapter carries the safety node's hand-tuned 190 deg; it must not
-    # silently move line_follow until a measured lidar_mount record is accepted.
+    # M3: the adapter carries the safety node's robot.yaml value (190 deg before
+    # D-397; 3.316 rad here as a test value); it must not silently move
+    # line_follow until a measured lidar_mount record is accepted.
     deg, source, warn = resolve_lidar_forward_deg({"lidar_forward_deg": 180.0}, hand_default=0.0,
                                             adapter_parameters={"lidar_yaw_offset": 3.31612558},
                                             store=CalibrationStore(tmp_path), robot=ROBOT)
