@@ -656,3 +656,8 @@
 - 변경: drive_payload 에 docking_state 를 실었다(DOCKING 중 DockState 값). ros_bridge._reconcile_emotion 이 CORE 기동 직후 10초간 hello 표정을 먼저 보낸다.
 - 증거: test_bridge_display.py 도킹 상태 + 기존 전표 통과.
 - gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · feat(core): D-400 safety policy mode and shadow assembly
+- 변경: `control.sensor_adapter.mode` off/shadow/enforce(`enabled` 호환, property), `build_control_adapter`(그림자 워커 시작 실패 → off + `mode_error`, 설정 오류는 모든 모드에서 예외, enforce는 `calibration.required` 거부·shadow/off는 경고 후 무시, shadow+`control_policy_required` 거부), `safety_params.py`(LiDAR = line_follow 값, 봉투 = CORE 속도 상한 쌍, overlay 허용 키·워커 타입/범위 검사, revision = 파라미터만), `safety_policy_status.py`(상태 `safety_policy` 블록), `node.py` 조립 순서(LiDAR → 안전 파라미터 → 어댑터 → 바인딩 → 상태 공급자).
+- 증거: 전체 시험(gateway+services+foundation+api_web+test/) `5 failed, 5919 passed, 249 skipped, 31 warnings, 4 errors in 3428.70s`; `known_failures.py`는 exit 1: 9건 모두 이 브랜치가 건드리지 않은 시험이며(main 4804d417에서도 test_module_separation, test_release_boundary_guards, test_robot_literals, test_dashboard_drive 4건이 같게 실패, test_module_criteria C6와 test_behavior_test_ownership은 main이 이후 고쳤고 이 브랜치는 그 이전 기준) 이 브랜치 기인 실패는 0건.
+- gate 변화: 없음. SOURCE만. 그림자는 어느 로봇에서도 켜지 않았다(기본 off).

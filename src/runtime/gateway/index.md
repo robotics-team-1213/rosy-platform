@@ -70,8 +70,8 @@
 
 ## 최근 기록
 
+- 2026-10-01 · uncommitted · feat(core): D-400 safety policy mode and shadow assembly
 - 2026-10-01 · uncommitted · feat(bridge,display): 주행 카드 도킹 상태 + hello 인사
 - 2026-10-01 · uncommitted · feat(bridge): 주행 카드에 내비게이션 목표 좌표
 - 2026-10-01 · edca9b2e · feat(core): LiDAR 정면 — 운영자 오버레이가 레코드를 이긴다 (D-397)
 - 2026-10-01 · uncommitted · feat(bridge): idle 시계와 주행 카드 충전 플래그
-- 2026-10-01 · uncommitted · test(gateway): D-359 콘솔 프레임·비활성 사유 시험을 현재 계약에 맞춤

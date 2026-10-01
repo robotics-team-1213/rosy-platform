@@ -289,3 +289,8 @@
 - 변경: emotion_map.emotion_for 이 idle_seconds 를 받아 IDLE 5분 이상이면 basic 대신 bored. 모드가 바뀌면 대기 시계 리셋 — 심심함은 대기의 누적이다.
 - 증거: test_emotion_map.py 6신규 (변이: bored→basic 되돌리면 빨강).
 - gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · feat(core_features): D-400 shadow verdicts without touching the output
+- 변경: `SafetyManager.check_decision`/`decision_valid` 분리, `shadow.py` `ShadowLog`(락, 판정 단위 전이 이벤트, 1 s 반복, 최소 0.2 s 간격, suppressed/dropped 카운터), 그림자·집행 바인딩 상호 배타와 `shadow_evaluate`(예외 비전파), `CommandManager`가 그림자를 `announce_pending`에서 바퀴 출력 뒤에 판정, 네비게이션·도킹의 `policy_off`(모드 진입마다 첫 0 아닌 출력), `StateManager.set_safety_policy_provider`.
+- 증거: 전체 시험(gateway+services+foundation+api_web+test/) `5 failed, 5919 passed, 249 skipped, 31 warnings, 4 errors in 3428.70s`; `known_failures.py`는 exit 1: 9건 모두 이 브랜치가 건드리지 않은 시험이며(main 4804d417에서도 test_module_separation, test_release_boundary_guards, test_robot_literals, test_dashboard_drive 4건이 같게 실패, test_module_criteria C6와 test_behavior_test_ownership은 main이 이후 고쳤고 이 브랜치는 그 이전 기준) 이 브랜치 기인 실패는 0건.
+- gate 변화: 없음. SOURCE만. 그림자는 어느 로봇에서도 켜지 않았다(기본 off).

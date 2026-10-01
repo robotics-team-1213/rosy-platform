@@ -165,3 +165,5 @@ ROS / Gazebo
 | 보정 저장소에 새 종류 세 개를 더하면 D-47 addendum의 운영 절차가 늘어난다 | 정적 씨앗으로 시작해 그림자를 돌릴 수 있고, 레코드 승인은 G-enforce 조건일 뿐이다 |
 | `calib_node` 레코드를 쓰던 경로를 끊는다 | 어느 장치 설정도 그 경로를 켜지 않았다(저장소 검색 결과 0건). 설정에 남아 있으면 경고 |
 | `enforce` 래치가 운영을 자주 끊는다 | 3.4의 HOLD 구간, G-dev의 끊김 빈도 측정 |
+
+**구현 메모 (계획 1):** overlay 허용 키는 워커 기본값 여섯 키(`imu_roll0`, `imu_pitch0`, `cmd_linear_sign`, `cliff_mode`, `cliff_raw_max`, `cliff_clear_raw`), 봉투 두 키, `cliff_enable`(Gazebo는 IR이 없다), `lidar_use_tf`다. 그 여섯 키는 계획 3이 저장소 레코드 종류를 더할 때까지 워커 기본값으로 남는다. `sources` 라벨은 "worker default" / "core speed caps" / "operator overlay" / "line_follow: …"이고, 위 설계의 `nominal | record | overlay` 표기와 다르다. revision은 파라미터만으로 계산한다(레코드 id·sha는 계획 3).
