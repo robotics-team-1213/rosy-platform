@@ -1,4 +1,4 @@
-"""Bash-executed tests for deploy/robot/pinky_pro/rosy-release-unpack.sh (D-225).
+"""Bash-executed tests for deploy/robot/pinky_pro/native/rosy-release-unpack.sh (D-225).
 
 rosy-release-push.ps1 scp's this helper to the robot and runs it under
 `sudo -n`; it is the only thing that ever writes into /opt/rosy/releases on
@@ -25,7 +25,7 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPT = ROOT / "deploy" / "robot" / "pinky_pro" / "rosy-release-unpack.sh"
+SCRIPT = ROOT / "deploy" / "robot" / "pinky_pro" / "native" / "rosy-release-unpack.sh"
 BASH = shutil.which("bash")
 TAR = shutil.which("tar")
 SHA256SUM = shutil.which("sha256sum")
