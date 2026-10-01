@@ -87,6 +87,30 @@ class SafetyDecision:
     reason: str = ''
 
 
+_DISPOSITIONS = ('allow', 'limit', 'stop')
+
+
+def check_decision(decision, request: SafetyRequest, elapsed: float) -> str:
+    """'' when ``decision`` is a valid, current answer to ``request`` that permits motion;
+    otherwise the policy_reason CORE reports. One rule for enforce and shadow (D-398)."""
+    if (not isinstance(decision, SafetyDecision) or not math.isfinite(elapsed) or not 0 <= elapsed <= .01
+            or type(decision.command_id) is not int or decision.command_id != request.command_id
+            or not isinstance(decision.source, str) or decision.source != request.source
+            or not isinstance(decision.calibration_revision, str)
+            or decision.calibration_revision != request.calibration_revision
+            or not finite_velocity(decision.observed_at, decision.expires_at)
+            or not decision.observed_at <= request.now <= request.now + elapsed <= decision.expires_at
+            or not 0 < decision.expires_at - decision.observed_at <= .5
+            or not finite_velocity(decision.linear_limit, decision.angular_limit)
+            or min(decision.linear_limit, decision.angular_limit) < 0
+            or not isinstance(decision.disposition, str) or decision.disposition not in _DISPOSITIONS
+            or not isinstance(decision.reason, str) or len(decision.reason) > 128):
+        return 'policy_invalid'
+    if decision.disposition == 'stop':
+        return decision.reason or 'policy_stop'
+    return ''
+
+
 @dataclass(frozen=True)
 class PersonAdvisory:
     """SAF-006: YOLO `person` 분류 자문. metric 정지의 확대 사유이며 단독
@@ -349,22 +373,11 @@ class SafetyManager:
             self.policy_reason = 'policy_failed'
             return None
         self.policy_reason = 'policy_invalid'
-        if (not isinstance(decision, SafetyDecision) or evaluator is not self._policy
-                or revision != self._policy_revision or not math.isfinite(elapsed) or not 0 <= elapsed <= .01):
+        if evaluator is not self._policy or revision != self._policy_revision:
             return None
-        if (type(decision.command_id) is not int or decision.command_id != command_id
-                or not isinstance(decision.source, str) or decision.source != source
-                or not isinstance(decision.calibration_revision, str) or decision.calibration_revision != revision
-                or not finite_velocity(decision.observed_at, decision.expires_at)
-                or not decision.observed_at <= now <= now + elapsed <= decision.expires_at
-                or not 0 < decision.expires_at - decision.observed_at <= .5
-                or not finite_velocity(decision.linear_limit, decision.angular_limit)
-                or min(decision.linear_limit, decision.angular_limit) < 0
-                or not isinstance(decision.disposition, str) or decision.disposition not in ('allow', 'limit', 'stop')
-                or not isinstance(decision.reason, str) or len(decision.reason) > 128):
-            return None
-        if decision.disposition == 'stop':
-            self.policy_reason = decision.reason or 'policy_stop'
+        why = check_decision(decision, request, elapsed)
+        if why:
+            self.policy_reason = why
             return None
         self.policy_reason = ''
         limited = (max(-decision.linear_limit, min(decision.linear_limit, linear)),
