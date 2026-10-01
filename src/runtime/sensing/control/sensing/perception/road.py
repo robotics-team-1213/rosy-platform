@@ -14,6 +14,7 @@ import cv2
 import numpy as np
 
 from .lane import LaneObservation
+from .follow_preview import draw_follow_evidence
 
 
 @dataclass(frozen=True)
@@ -100,7 +101,8 @@ class RoadObservation:
 
 
 def render_road_preview(bgr: np.ndarray, observation: RoadObservation, *,
-                        source: str, max_width: int = 640) -> np.ndarray:
+                        source: str, max_width: int = 640,
+                        keep=None, objects=None, road_state=None, line=None) -> np.ndarray:
     """Render an observation-only preview; never feed this back to detection."""
     if not isinstance(bgr, np.ndarray) or bgr.ndim != 3 or bgr.shape[2] != 3:
         raise ValueError("road preview requires a BGR frame")
@@ -118,11 +120,13 @@ def render_road_preview(bgr: np.ndarray, observation: RoadObservation, *,
     white = (245, 248, 250)
     shadow = (12, 18, 28)
 
-    if observation.lane is not None:
+    if observation.lane is not None and math.isfinite(observation.lane.error):
         lane_x = int(round(
             width * (0.5 + 0.5 * float(observation.lane.error))))
-        cv2.line(preview, (width // 2, height - 1),
-                 (lane_x, int(height * 0.42)), cyan, 2)
+        # This centroid is road paint evidence, not the keeper's selected path.
+        cv2.circle(preview, (max(0, min(width - 1, lane_x)), int(height * .55)), 4, cyan, 2)
+        cv2.putText(preview, 'PAINT', (max(2, min(width - 45, lane_x + 7)), int(height * .55) - 5),
+                    cv2.FONT_HERSHEY_SIMPLEX, .32, cyan, 1, cv2.LINE_AA)
     for marking, label, colour in (
         (observation.crosswalk, "CROSSWALK", (255, 190, 0)),
         (observation.stop_line, "STOP", (40, 70, 255)),
@@ -132,9 +136,14 @@ def render_road_preview(bgr: np.ndarray, observation: RoadObservation, *,
         row = max(0, min(height - 1,
                          int(round(marking.image_row * scale))))
         cv2.line(preview, (0, row), (width - 1, row), colour, 2)
-        cv2.putText(preview, label, (8, max(18, row - 6)),
+        distance = (f'{marking.distance_m:.2f}m'
+                    if marking.distance_m is not None else 'unranged')
+        label = f'{label} {marking.confidence:.0%} {distance}'
+        cv2.putText(preview, label, (8, max(43, row - 6)),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.42, colour, 1,
                     cv2.LINE_AA)
+
+    draw_follow_evidence(preview, scale=scale, keep=keep, objects=objects, road_state=road_state, line=line)
 
     signal = "CONFLICT" if observation.signal_conflict else (
         observation.signal.colour if observation.signal is not None else "NONE")
@@ -146,10 +155,10 @@ def render_road_preview(bgr: np.ndarray, observation: RoadObservation, *,
         "NONE": (130, 145, 160),
     }
     cv2.rectangle(preview, (0, 0), (width - 1, 28), shadow, -1)
-    cv2.putText(preview, str(source).upper()[:16], (8, 19),
+    cv2.putText(preview, str(source).upper()[:16 if width >= 240 else 4], (8, 19),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.43, white, 1, cv2.LINE_AA)
-    cv2.circle(preview, (width - 84, 14), 5, signal_colours[signal], -1)
-    cv2.putText(preview, signal, (width - 73, 19),
+    cv2.circle(preview, (width - 122, 14), 5, signal_colours[signal], -1)
+    cv2.putText(preview, 'LIGHT ' + signal, (width - 111, 19),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.40, white, 1, cv2.LINE_AA)
     return preview
 

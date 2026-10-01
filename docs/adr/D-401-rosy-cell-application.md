@@ -13,7 +13,7 @@
 
 1. **Rosy Cell은 D-399 Application이다.** 위치는 `src/site/cell`, 패키지는 `rosy_cell`, 표시 이름은 "Rosy Cell"이다(D-377 규칙 `rosy_<word>`).
 2. **입력은 두 파일이다.**
-   - `cell.yaml`(schema `rosy_cell.cell/1`)은 티칭한 3점 좌표계를 원시 점(원점, x축 위의 점, 평면의 +y쪽 점)으로 보관한다. 검증 임계값(`min_span_m`, `min_angle_deg`, `max_tilt_deg`), 스테이션, `approach_clearance_m`도 여기에 둔다.
+   - `cell.yaml`(schema `rosy_cell.cell/1` (→ `rosy_cell.cell/2`, 아래 보강 참조))은 티칭한 3점 좌표계를 원시 점(원점, x축 위의 점, 평면의 +y쪽 점)으로 보관한다. 검증 임계값(`min_span_m`, `min_angle_deg`, `max_tilt_deg`), 스테이션, `approach_clearance_m`도 여기에 둔다.
    - `recipe.yaml`(schema `rosy_cell.recipe/1`)은 박스, 팔레트(각각 좌표계 id를 가리킴), 모드(`palletize`/`depalletize`), 간격(gap), 층 목록, 슬립 시트를 담는다.
 3. **두 파일은 각각 내용 해시(정규화 JSON의 sha256)를 갖는다.** Job은 두 해시를 모두 기록한다. 장치는 자신이 검증받은 셀과 해시가 다른 Job을 거절해야 한다. 티칭이 바뀌면 이전에 검증한 Job은 자동으로 무효가 된다.
 4. **Job은 순서 있는 Step 목록이다.** Step은 `pick`, `place`(대상 `box` 또는 `slip_sheet`, 로봇 베이스 좌표 목표 자세, `approach_z`), `pallet_done`이다. 목표 자세 `Pose`는 위치와 yaw만 담는다. `max_tilt_deg`가 허용하는 팔레트 기울기는 Step에 실리지 않는다. 장치의 계획기는 베이스 좌표 자세로 계획하고, 임계값을 넘는 기울기는 셀 설정을 읽을 때 거절된다. Rosy Cell은 Job을 Mission으로 Fleet에 제출하고, Fleet이 승인(D-330)한 뒤 Step을 장치에 하달하는 것이 **유일한 실행 경로**다(Mission/Step 원장은 Fleet, D-328). 이 경로는 아직 열려 있지 않다. D-330 §2는 정지 세대 계약 시험 전 Mission 하달을 열지 않고, D-336 §5는 호스트 간 하달을 보류한다. 그 보류가 풀리기 전에는 Rosy Cell Job이 장치에서 실행되지 않는다. Rosy Cell은 장치를 직접 호출하지 않고, Motion Intent를 보내지 않으며, IK나 도달성을 판정하지 않는다(D-399 §5). 팔 셋업과 티칭을 장치 곁에서 하는 경로는 별도의 OMX 장치·티칭 API ADR이 필요하며(D-399 §5, D-282 §5), 이 ADR의 범위 밖이다.

@@ -135,8 +135,9 @@ def drive_payload(snapshot, *, hold_s: float = DRIVE_HOLD_S,
     battery = snapshot.battery
     velocity = snapshot.velocity
     navigating = snapshot.mode.value == "NAVIGATION"
-    docking = getattr(snapshot.docking, "state", None)
-    docking_state = getattr(docking, "value", docking) if docking else None
+    # C6 — DockState 는 StateSnapshot 이 보장한다(schemas default_factory). reach 없이
+    # 직접 읽고, 도킹 중에만 실는다(모드가 곧 맥락이다 — pinned test).
+    docking_state = snapshot.docking.state.value if snapshot.mode.value == "DOCKING" else None
     return {
         "kind": "drive",
         "robot_id": snapshot.robot_id,

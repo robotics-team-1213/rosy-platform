@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 
 from rosy_cell.cell import load_cell
-from rosy_cell.compiler import CompileError, compile_job
+from rosy_cell.compiler import CompileError, carry_z, compile_job
 from rosy_cell.recipe import load_recipe
 
 FIX = Path(__file__).parent / "fixtures"
@@ -125,3 +125,42 @@ def test_compile_refuses_a_robot_base_inside_the_pallet_footprint():
     )
     with pytest.raises(CompileError, match="pallet A: robot base lies inside the pallet footprint"):
         compile_job(recipe, cell, **TOL)
+
+
+# carry_z hand calculation (fixtures): every frame is flat at z = 0. Stack per pallet: layer 0 top 0.02,
+# slip sheet 0.002, layer 1 top 0.02 + 0.002 + 0.02 = 0.042. Stations: infeed 0.02, sheets 0.002.
+# Highest surface = 0.042 (pallet stack top); + box height 0.02 + approach_clearance_m 0.05 = 0.112.
+# The home pose z (0.15) is not an obstacle and must not enter the value.
+def test_carry_z_reproduces_the_hand_calculation():
+    recipe, cell = _inputs()
+    assert carry_z(recipe, cell, **TOL) == pytest.approx(0.112)
+
+
+def test_carry_z_rises_with_a_tilted_pallet_frame():
+    flat = carry_z(*_inputs(), **TOL)
+    # plane_point 5 mm above the plane tilts pallet_a by atan(0.005 / 0.1) ~ 2.9 deg (within max_tilt_deg 5);
+    # its far-y corners (y = 0.10 m) lift the stack top by ~0.005 m
+    tilted = carry_z(*_inputs(cell_edit=("plane_point: [0.2, 0.1, 0]", "plane_point: [0.2, 0.1, 0.005]")), **TOL)
+    assert tilted > flat + 0.004
+
+
+def test_carry_z_covers_a_station_above_every_stack():
+    recipe, cell = _inputs(cell_edit=("sheets: {frame: base, x: -0.1, y: 0.2, z: 0.002", "sheets: {frame: base, x: -0.1, y: 0.2, z: 0.3"))
+    assert carry_z(recipe, cell, **TOL) == pytest.approx(0.3 + 0.02 + 0.05)
+
+
+def test_job_carries_carry_z_and_no_step_approaches_above_it():
+    recipe, cell = _inputs()
+    job = compile_job(recipe, cell, **TOL)
+    assert job.carry_z == carry_z(recipe, cell, **TOL)
+    approaches = [s.approach_z for s in job.steps if s.approach_z is not None]
+    assert approaches and all(z <= job.carry_z for z in approaches)
+
+
+def test_carry_z_refuses_unknown_frames_and_stations_like_compile_job():
+    recipe, cell = _inputs(recipe_edit=("frame: pallet_b", "frame: pallet_c"))
+    with pytest.raises(CompileError, match="pallet_c"):
+        carry_z(recipe, cell, **TOL)
+    recipe, cell = _inputs(recipe_edit=("pick_station: infeed", "pick_station: dock"))
+    with pytest.raises(CompileError, match="dock"):
+        carry_z(recipe, cell, **TOL)

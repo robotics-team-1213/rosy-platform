@@ -1,4 +1,4 @@
-schema: rosy_cell.cell/1
+schema: rosy_cell.cell/2
 frame_rules: {min_span_m: 0.02, min_angle_deg: 10.0, max_tilt_deg: 5.0}
 frames:
   base: {origin: [0, 0, 0], x_point: [0.1, 0, 0], plane_point: [0, 0.1, 0]}
@@ -7,4 +7,7 @@ frames:
 stations:
   infeed: {frame: base, x: 0.0, y: 0.2, z: 0.02, yaw: 0.0}
   sheets: {frame: base, x: -0.1, y: 0.2, z: 0.002, yaw: 0.0}
+# Fixture values only: a tool-down TCP pose above the base between the stations, and a placeholder URDF revision.
+home: {x: 0.1, y: 0.0, z: 0.15, yaw: 0.0}
+kinematics_revision: fixture-urdf-1
 approach_clearance_m: 0.05
