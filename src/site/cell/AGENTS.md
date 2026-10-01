@@ -21,6 +21,7 @@ Rosy Cell (D-377 id `cell`, package `rosy_cell`): the D-399 Application for pall
 |-----------|---------|
 | `rosy_cell/` | `geometry`, `load`, `pattern`, `stack`, `sequence`, `fields`, `recipe`, `cell`, `compiler` |
 | `test/` | ROS-free pytest; `conftest.py` puts the package on `sys.path` |
+| `examples/omx_sim/` | C3 demo `cell.yaml`/`recipe.yaml` for the OMX-F Gazebo world `omx_cell_workcell.sdf`; `test/test_cell_omx_sim_layout_contract.py` (repo root) proves every transfer plans and the world matches |
 
 ## For AI Agents
 

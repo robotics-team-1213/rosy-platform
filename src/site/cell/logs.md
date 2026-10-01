@@ -26,3 +26,11 @@
 - 변경: `carry_z(recipe, cell, *, tol_m)`가 `_check`를 먼저 돌려 알 수 없는 frame/station을 KeyError 대신 CompileError로 거절한다(`compile_job`은 `_check`를 한 번만 실행). 앞뒤 공백이 있는 `kinematics_revision`은 CellError. D-401 §2에 `cell/2` 안내 한 줄.
 - 증거: `python -m pytest src/site/cell/test -q -p no:cacheprovider` 143 passed; harness lint 0 error(s).
 - gate 변화: SOURCE GO 유지(증거 140 -> 143).
+
+## 2026-10-02 · 52ef7f91 · feat(cell): OMX sim demo cell/recipe for C3
+
+- 변경: `examples/omx_sim/cell.yaml`(cell/2, home (0.12, 0, 0.12), 프로필과 같은 `kinematics_revision`)과 `recipe.yaml`(2 팔레트 × 2층 × 4블록 40×30×30 mm 20 g + 슬립시트 2장, grid, gap 15 mm). 저장소 루트 `test/test_cell_omx_sim_layout_contract.py`가 Job 18 transfer 전부를 OMX 해석 플래너로 계획하고 Gazebo 월드 포즈와 대조한다(rosy_cell과 omx_adapter는 서로 import하지 않는다).
+- 증거: layout contract 6 passed(변이 확인: 슬립시트 z 0.002, 월드 팔레트 x +0.01 각각 실패); cell suite 143 passed.
+- gate 변화: ROS-SIM HOLD 유지(C3 증거 추가, C6 아님).
+- 결정: D-402 §5 도달 실측, D-403 §2.
+- 교훈: Step z는 물건 윗면인데 OMX-F TCP는 손가락 끝이라 파지 깊이를 실을 자리가 필요하다(C4). 탁자 위 슬립시트(z 0.002)는 프로필 TCP 바닥 0.005 아래라 거절된다.

@@ -211,3 +211,11 @@
 - gate 변화: 없음. SOURCE GO 유지, ROS-SIM HOLD(C3).
 - 결정: D-402 §3·§5·§6. C4 작업으로 남김: `action_store.py`의 완료 journal 이름 `PICK_PLACE_ACTION_COMPLETED`와 `result_source='pick-place-workflow'`는 종류 중립이 아니다. `CELL_TRANSFER` 완료 경로를 열 때 함께 바꾼다.
 - 교훈: 계획이 스스로 내세운 값(`gripper_joint_names`)으로 안전 검사를 줄이지 않는다. 제외 집합은 수락된 프로필에서 온다.
+
+## 2026-10-02 · d8f96fb8 · feat(omx): C3 Gazebo CELL_TRANSFER probe (D-402, plan C3)
+
+- 변경: `deploy/robot/omx/probe_cell_transfer.py`(owner 프로세스 하나: 프로필로 만든 `ArmCommandOwner` → `AnalyticCellTransferPlanner` → `PickPlaceRunner` → `/arm_controller`; `gripper_contract` readback, `gz model -p` = `sim_model_pose`), `run_cell_sim.sh`(owner 없는 vendor follower). 프로덕션 코드는 바꾸지 않았다. 대역은 플래그와 evidence JSON에 남긴다: owner lock 안 sequence rebind, 첫 RUNNING_FEEDBACK만 runner로, tmpfs journal, 표시된 DetachableJoint sim aid.
+- 증거: docs/validation/rosy-cell-gazebo-c3-2026-10-02/README.md (실행 16회, 허용오차 안 배치 0회). 네 phase ROS `SUCCEEDED`(run8). 그대로의 runner/owner는 run1 `joint_state_sequence_mismatch`, run2–4·7 `joint_state_stale` HOLD(feedback 119건 처리 5.94 s, journal 쓰기 최대 0.64 s). 마찰 파지 실패: 깊이 15 mm는 운반 중 낙하인데 모든 gate 통과, 22 mm는 joint5 −0.327 rad 비틀림으로 transfer start-state HOLD. DetachableJoint sim aid는 손가락이 블록을 지나 닫혀(gripper −0.42/짝 +0.71) owner `joint_state_limit` HOLD. 무하중 그리퍼 readback 오차 ≤ 0.0003 rad, 하중 아래 mimic 차 0.02–0.09 rad.
+- gate 변화: ROS-SIM HOLD 유지(C3 증거 추가; C6·Fleet 경로 아님).
+- 결정: D-402 §3·§8, D-403 §5·§8. C4 과제: owner/runner 경쟁과 콜백 그룹 분리, wall/sim 시간 기준, release 전 hold 재확인, grasp 깊이 필드, `CELL_TRANSFER` grant schema.
+- 교훈: SUCCEEDED 네 개와 그리퍼 계약 통과만으로는 물체 이동을 말할 수 없다. `sim_model_pose`가 낙하를 잡았다.

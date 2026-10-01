@@ -16,6 +16,7 @@
 
 - [2026-10-01-rosy-cell-pattern-core.md](../../../docs/plans/2026-10-01-rosy-cell-pattern-core.md)
 - [2026-10-01-rosy-layered-architecture-roadmap.md](../../../docs/plans/2026-10-01-rosy-layered-architecture-roadmap.md)
+- [2026-10-02-rosy-cell-c3-gazebo.md](../../../docs/plans/2026-10-02-rosy-cell-c3-gazebo.md)
 
 ## 교훈 (docs/solutions)
 
@@ -27,6 +28,7 @@
 
 ## 최근 기록
 
+- 2026-10-02 · 52ef7f91 · feat(cell): OMX sim demo cell/recipe for C3
 - 2026-10-01 · 13614bc0 · fix(cell): carry_z runs the compile checks, reject padded kinematics_revision
 - 2026-10-01 · c0900cff · feat(cell): rosy_cell.cell/2 with home and kinematics_revision, compiler.carry_z
 - 2026-10-01 · 014acdf6 · feat(cell): rosy_cell 코어와 리뷰 수정
