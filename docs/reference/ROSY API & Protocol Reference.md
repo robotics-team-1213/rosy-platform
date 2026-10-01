@@ -453,7 +453,7 @@ v1.70 추가 경로(모두 Bearer 인증):
   "mode_effective": "shadow",
   "mode_error": "",
   "revision": "abcd1234abcd1234",
-  "sources": { "lidar_yaw_offset": "line_follow: hand value" },
+  "sources": { "lidar_yaw_offset": "unused while lidar_use_tf (TF = URDF nominal); line_follow uses: line_follow lidar_forward_deg (hand value; no accepted mount)" },
   "shadow": {
     "counts": { "allow": 312, "limit": 4, "stop": 1, "unavailable": 0 },
     "last_stop": { "t": 1843.512, "reason": "pickup", "source": "navigation" },
@@ -466,7 +466,7 @@ v1.70 추가 경로(모두 Bearer 인증):
 }
 ```
 
-- `mode`: `off` \| `shadow` \| `enforce`. `mode_effective`: 실제로 도는 모드(그림자 워커가 못 뜨면 `off`). `mode_error`: 모드 해석 실패 사유(`예외 종류: 메시지`), 없으면 빈 문자열.
+- `mode`: `off` \| `shadow` \| `enforce`. `mode_effective`: 실제로 도는 모드(그림자 워커가 못 뜨면 `off`). `mode_error`: 그림자 워커가 시작하지 못한 이유(예외 종류: 메시지), 없으면 빈 문자열. 설정 오류는 CORE 시작을 막으므로 여기 나타나지 않는다.
 - `revision`: 워커 파라미터 해시 16자. `sources`: 키별 값의 출처.
 - `shadow`: `{counts, last_stop, last_unavailable, eval_ms{p50,p99,n}, dropped_events, suppressed_events, record_errors}`. `shadow` 가 없으면 `null`. `last_stop`·`last_unavailable` 은 `{t, reason, source}` 또는 `null`, 기록이 없으면 `eval_ms.p50`·`p99` 는 `null`.
 - 시각 `t` 는 CORE monotonic 초이며 벽시계가 아니다.

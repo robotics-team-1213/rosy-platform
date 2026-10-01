@@ -149,6 +149,16 @@ def test_shadow_then_bind_policy_is_refused():
     assert safety.policy_mode == "shadow" and safety.policy_required is False
 
 
+def test_shadow_then_simulation_actuation_is_refused_by_the_exclusivity_guard():
+    safety, _ = _safety(FakePolicy())
+
+    # No revision, no clock: the later checks would raise a different message, so only the guard can match.
+    with pytest.raises(ValueError, match="exclusive"):
+        safety.bind_simulation_actuation(SimpleNamespace(revision=None), simulation_clock_enabled=None)
+
+    assert safety.policy_mode == "shadow" and safety.policy_required is False
+
+
 def test_second_shadow_binding_is_refused_and_keeps_the_log():
     safety, _ = _safety(FakePolicy())
     log = safety.shadow

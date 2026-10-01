@@ -372,6 +372,8 @@ class SafetyManager:
 
     def bind_simulation_actuation(self, calibration, *, simulation_clock_enabled):
         """Opt-in only when the sim profile has enabled actuation, never hardware."""
+        if self.shadow is not None:
+            raise ValueError("shadow and enforce bindings are exclusive (D-400)")
         revision = getattr(calibration, "revision", None)
         if (revision != self._policy_revision or not callable(simulation_clock_enabled)):
             raise ValueError('Actuation requires the bound policy revision and simulation clock')

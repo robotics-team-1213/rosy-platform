@@ -51,8 +51,8 @@
 | `src/runtime/services/core_features/command/manager.py` | 수정 | `_policy_output`에서 그림자 관찰, `announce_pending`에서 그림자·`policy_off` 이벤트 |
 | `src/runtime/services/core_features/state/manager.py` | 수정 | `set_safety_policy_provider` |
 | `src/contracts/foundation/core_common/protocol/schemas.py` | 수정 | `SafetyPolicyStatus` 모델, `StateSnapshot.safety_policy` |
-| `src/contracts/foundation/config/rosy_default.yaml` | 수정 | `mode: "off"`, `stale_hold_s`, 주석 |
-| `docs/reference/ROSY API & Protocol Reference.md` | 수정 | v1.69: §6.1 필드, §8 이벤트 2개, §11 행 |
+| `src/contracts/foundation/config/rosy_default.yaml` | 수정 | `mode: "off"`, `stale_hold_s`, 주석 (superseded — see 실행 중 변경 기록) |
+| `docs/reference/ROSY API & Protocol Reference.md` | 수정 | v1.69: §6.1 필드, §8 이벤트 2개, §11 행 (superseded — see 실행 중 변경 기록) |
 | 시험 | 생성/수정 | 각 태스크에 적음 |
 
 ---
@@ -1632,5 +1632,15 @@ git commit -m "docs(records): D-400 plan 1 module logs, ADR implementation note"
 | 8 | API v1.71(main이 v1.70이라 +1). `mode`·`mode_effective`·판정 값은 소문자 평문 문자열(설정 값과 같음, Enum 아님) — 캐싱 규칙 예외로 문서화. `last_stop`·`eval_ms`는 타입 모델, 여분 키 무시. 공급자 실패는 null + 예외 종류가 바뀔 때 한 번 로그 | 오래된 Fleet hub가 새 값 때문에 heartbeat 전체를 버리지 않게 |
 | 9 | `configured_mode`는 `calibration` 키를 뺀 뒤 해석 | shadow에서 낡은 `required: true` 블록이 시작을 막지 않게(build_control_adapter와 같은 규칙) |
 | 9 | **D-313 IR 라인 추종 대체 경로는 계획 3까지 쓸 수 없다**(`api/v1/line_follow.py`가 `adapter.calibration_revision`을 요구하는데, 보정 블록을 읽지 않으므로 항상 None → `IR_FALLBACK_NOT_READY`) | 어느 로봇도 어댑터를 켜지 않아 현장 영향 없음. 계획 3의 저장소 레코드가 이 값을 대신해야 한다 |
-| 9 | enforce도 봉투로 CORE 속도 상한과 라인 추종 LiDAR 각을 받는다. 프로필 상한이 워커 범위(선속 1.0·각속 3.0)를 넘으면 shadow/enforce에서 시작 거부 | Pinky(0.2/0.8)는 해당 없음. 다른 로봇은 설정 오류로 드러난다 |
+| 9 | enforce도 봉투로 CORE 속도 상한과 라인 추종 LiDAR 각을 받는다. 프로필 상한이 워커 범위(선속 1.0·각속 3.0)를 넘으면 shadow/enforce에서 시작 거부 | Pinky(0.2/0.8)는 해당 없음. 다른 로봇은 설정 오류로 드러난다 enforce는 CORE 속도 상한 봉투(Pinky 0.2 m/s·0.8 rad/s, 이전 워커 기본 0.014/0.10의 약 14배)를 받는다. 워커의 정지/해제 거리는 속도에 비례하지 않으므로, 계획 3이 정지 거리를 속도에 맞추거나 enforce용 봉투를 되돌리기 전에는 enforce를 켜지 않는다. |
 | 6 | 그림자 해석 주의: 봉투를 올리면 빠른 명령이 정책에 닿지만 워커의 정지/해제 거리는 속도에 비례하지 않는다. 속도에서의 그림자 "allow"는 그 속도로 집행해도 안전하다는 증거가 아니다 | G-sim·G-dev 판정 기준에 반영 |
+
+## 계획 2·3로 넘기는 일 (최종 검토)
+
+- M-5: `control_sensor_adapter.py`의 죽은 D-47 로더 경로(`_load_required_calibration`, `calibration_loader`, `calibration_revision`/digest, `bound_parameters`, `lidar_mount` `adapter_parameters`)는 `api/v1/line_follow.py`의 `calibration_revision` 의존(D-313)과 함께 지운다. 되살리지 않는다.
+- M-7: 그림자 info 이벤트가 허브 끊김 중 fleet-agent 버퍼(1000칸)의 항목을 밀어낼 수 있다. G-dev 전에 필터하거나 속도를 제한한다.
+- M-8: 그림자 평가는 송신 뒤 동기로 돌아 다음 tick을 늦출 수 있다. G-sim·G-dev에서 Pi의 `eval_ms` p99를 재고, 넘으면 20 Hz로 낮춘다.
+- M-9: `safety/manager.py`가 572/600줄이다. 계획 3의 HOLD/래치 로직은 형제 모듈에 둔다.
+- M-10: `node.py` 조립은 ROS-SIM에서 동작으로 확인해야 한다(ROS 박스에서 `test_node_wiring`).
+- TF와 승인된 LiDAR 장착 레코드(라인 추종)의 정면 값 통일.
+- enforce 봉투: enforce는 CORE 속도 상한 봉투(Pinky 0.2 m/s·0.8 rad/s, 이전 워커 기본 0.014/0.10의 약 14배)를 받는다. 워커의 정지/해제 거리는 속도에 비례하지 않으므로, 계획 3이 정지 거리를 속도에 맞추거나 enforce용 봉투를 되돌리기 전에는 enforce를 켜지 않는다.

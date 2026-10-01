@@ -1,6 +1,6 @@
 ## D-400 CORE 안전 정책은 off · shadow · enforce 세 모드로 켜고, 파라미터는 보정 저장소 하나에서 온다
 
-**Status:** Proposed (2026-10-01, 설계 사용자 승인). 코드·설정 미변경. 장치 단계(그림자 실주행, 집행)는 각각 별도 사용자 승인.
+**Status:** Proposed (2026-10-01, 설계 사용자 승인; 계획 1 소스 반영 — 기본 off, 어느 로봇에서도 켜지 않음; 그림자 실주행·집행은 로봇별 별도 승인)
 
 잇는 결정:
 
@@ -39,7 +39,7 @@
 
 **설정과 모드**
 
-- 기본 yaml(`rosy_default.yaml`)은 `mode`를 두지 않는다(주석만, 없으면 off). 값이 있으면 옛 overlay의 `enabled:`와 deep-merge되어 "not both"로 CORE가 시작하지 못한다. `enabled`는 `mode`에서 계산되는 property다. `stale_hold_s`(기본 2 s)를 더했다.
+- 기본 yaml(`rosy_default.yaml`)은 `mode`를 두지 않는다(주석만, 없으면 off). 값이 있으면 옛 overlay의 `enabled:`와 deep-merge되어 "not both"로 CORE가 시작하지 못한다. `enabled`는 `mode`에서 계산되는 property다. `stale_hold_s`(기본 2 s)를 더했다(reserved: consumed by enforce HOLD in D-400 plan 3; no effect yet).
 - 설정 오류는 모든 모드에서 시작을 막는다: 잘못된 `mode`, overlay 키·타입·범위 오류, `shadow` + `control_policy_required`. 설계 3.1의 "그림자 구성 실패 → off"는 **그림자 워커 시작 실패**(센서 공급자, 워커 검증)만 뜻한다. 이 경우 `mode_effective: off`, `mode_error`는 "예외 종류: 메시지"다. 팩토리 인자는 명시적이라 프로그래밍 오류(오타)는 모든 모드에서 TypeError로 드러난다.
 - `enforce`는 은퇴한 `calibration.required: true` 블록을 설정 오류("retired")로 거부한다(D-47의 "보정되었거나 시작 거부"를 조용히 잃지 않는다). `shadow`/`off`는 경고 후 무시한다. `configured_mode`도 `calibration` 키를 뺀 뒤 해석한다.
 
@@ -65,6 +65,8 @@
 **해석 주의와 한계**
 
 - 속도 맹목: 봉투를 올리면 빠른 명령이 정책에 닿지만 워커의 정지/해제 거리는 속도에 비례하지 않는다. 속도에서의 그림자 `allow`는 그 속도로 집행해도 안전하다는 증거가 아니다. G-sim·G-dev 판정 기준에 반영한다.
+- enforce는 CORE 속도 상한 봉투(Pinky 0.2 m/s·0.8 rad/s, 이전 워커 기본 0.014/0.10의 약 14배)를 받는다. 워커의 정지/해제 거리는 속도에 비례하지 않으므로, 계획 3이 정지 거리를 속도에 맞추거나 enforce용 봉투를 되돌리기 전에는 enforce를 켜지 않는다.
+- `control_sensor_adapter.py`에 죽은 D-47 로더 경로가 남아 있다(`_load_required_calibration`, `calibration_loader`, `calibration_revision`/digest, `bound_parameters`, `lidar_mount` `adapter_parameters`). `api/v1/line_follow.py`의 `calibration_revision` 의존(D-313)과 함께 지운다. 되살리지 않는다.
 - **D-313 IR 라인 추종 대체 경로는 계획 3까지 쓸 수 없다.** `api/v1/line_follow.py`가 `adapter.calibration_revision`을 요구하는데 어댑터가 보정 블록을 더 이상 읽지 않아 항상 None이고 `IR_FALLBACK_NOT_READY`가 된다. 어느 로봇도 어댑터를 켜지 않아 현장 영향은 없다. 계획 3의 저장소 레코드가 이 값을 대신해야 한다.
 - 남은 LOW 항목(Task 5 리뷰): 준비 상태 경합으로 한 tick 동안 브리지가 0으로 만든 후보에 대해 그림자 판정이나 `policy_off`가 기록될 수 있다(감사 기록에만 영향, 출력은 그대로). 후보 슬롯은 위치 기반 튜플이다.
 - 호스트 pytest 통과는 장치·ARM64 이미지·실주행 수용이 아니다. G-sim, G-dev, G-enforce는 모두 열려 있다.

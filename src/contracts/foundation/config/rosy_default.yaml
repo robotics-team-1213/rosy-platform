@@ -37,7 +37,7 @@ control:
     #                             # Set it (quoted) in the robot overlay. Not set here so an older overlay
     #                             # with `enabled:` still merges (mode and enabled together are rejected).
     # Use exactly one of mode / enabled across all layers (default, robot core.yaml, local overlay).
-    stale_hold_s: 2.0             # enforce: gaps shorter than this HOLD, longer latch (D-400 4)
+    stale_hold_s: 2.0             # reserved: consumed by enforce HOLD in D-400 plan 3; no effect yet
     required: [lidar, imu, ir]
     max_age: 0.5                   # policy evidence lease, seconds
     parameters: {}                 # validated ROS SafetyNode overrides
