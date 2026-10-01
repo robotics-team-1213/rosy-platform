@@ -25,11 +25,15 @@ OVERHEAD_TXT = {
     "product": "rosy", "role": "overhead-camera", "proto": "rosy-overhead/1",
     "tls": "required",
 }
+PAIR_TXT = ("pair", "rosy-pair/1")   # D-341 14: only when Fleet runs with --pairing-ca
 
 
-def render_service(port: int, *, role: str = "fleet", tls_host: str | None = None) -> str:
+def render_service(port: int, *, role: str = "fleet", tls_host: str | None = None,
+                   pair: bool = False) -> str:
     if not 1 <= port <= 65535:
         raise ValueError("invalid site HTTPS port")
+    if pair and role != "overhead":
+        raise ValueError("pair applies only to the overhead role")
     if role == "fleet":
         service_type, service_name, metadata = SERVICE_TYPE, "ROSY Fleet %h", TXT
     elif role == "overhead":
@@ -37,6 +41,8 @@ def render_service(port: int, *, role: str = "fleet", tls_host: str | None = Non
             raise ValueError("overhead service needs a .local TLS hostname")
         service_type, service_name = "_rosy-overhead._tcp", "ROSY Vision %h"
         metadata = {**OVERHEAD_TXT, "tls_host": tls_host.lower().rstrip(".")}
+        if pair:
+            metadata[PAIR_TXT[0]] = PAIR_TXT[1]
     else:
         raise ValueError("unknown site mDNS role")
     records = "".join(f"    <txt-record>{key}={value}</txt-record>\n"
@@ -54,9 +60,9 @@ def render_service(port: int, *, role: str = "fleet", tls_host: str | None = Non
 
 
 def publish_service(output: Path, port: int, *, role: str = "fleet",
-                    tls_host: str | None = None) -> None:
+                    tls_host: str | None = None, pair: bool = False) -> None:
     """Avahi watches its service directory; replace the complete XML atomically."""
-    payload = render_service(port, role=role, tls_host=tls_host)
+    payload = render_service(port, role=role, tls_host=tls_host, pair=pair)
     with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=output.parent,
                                      prefix=".rosy-fleet-", suffix=".tmp",
                                      delete=False) as stream:
@@ -188,6 +194,10 @@ def main() -> int:
     publish.add_argument("--port", type=int, required=True)
     publish.add_argument("--role", choices=("fleet", "overhead"), default="fleet")
     publish.add_argument("--tls-host", help="certificate hostname for the overhead WSS endpoint")
+    publish.add_argument("--pair", nargs="?", const="1", default="0", choices=("0", "1", ""),
+                         help="overhead only: add TXT pair=rosy-pair/1 (D-341); off by default. "
+                              "--pair or --pair=1 turns it on; --pair=0 and --pair= leave it off, "
+                              "so a unit can pass --pair=${ROSY_SITE_PAIRING}")
     publish.add_argument("--output", type=Path)
     discover = commands.add_parser("discover", help="list or verify discovered Fleet sites")
     discover.add_argument("--expect-hostname")
@@ -196,8 +206,11 @@ def main() -> int:
     if args.command == "publish":
         if args.role == "overhead" and not args.tls_host:
             parser.error("--tls-host is required for --role overhead")
+        if args.pair == "1" and args.role != "overhead":
+            parser.error("--pair applies only to --role overhead")
         output = args.output or Path(f"/etc/avahi/services/rosy-{args.role}.service")
-        publish_service(output, args.port, role=args.role, tls_host=args.tls_host)
+        publish_service(output, args.port, role=args.role, tls_host=args.tls_host,
+                        pair=args.pair == "1")
         return 0
     if bool(args.expect_hostname) != bool(args.ca_file):
         parser.error("--expect-hostname and --ca-file are required together")

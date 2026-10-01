@@ -265,8 +265,8 @@
 
 ## 최근 기록
 
+- 2026-10-01 · uncommitted · refactor(perception): model watch 순수 상태 전이를 watch_core.py로 분리
 - 2026-10-01 · uncommitted · docs(deployment): 로봇 주소 예시를 자리표시자로 (IP 감사 #18)
 - 2026-10-01 · uncommitted · fix(perception): model-watch 로봇을 이름으로 부르고 호스트 키를 로봇 id로 핀, 실패를 눈에 보이게
 - 2026-10-01 · uncommitted · docs(adr): D-391 3항 개정 — 일관성 검사는 IP SAN을 보지 않는다
 - 2026-10-01 · uncommitted · docs(adr): D-396 제안 — Fleet 보조 위치 확정
-- 2026-10-01 · uncommitted · docs(adr): D-396 UI/UX 목표 체계와 실행 계획

@@ -256,3 +256,10 @@
 - 변경: rosy-84 Kotlin 독립 리뷰가 찾은 차이. `tls_host`·`expires_at` 정규식을 `match`(`$`가 끝 줄바꿈을 허용)에서 `fullmatch`로 바꿨다. `manual_host`에 IPv6 zone id(`%`)가 있으면 `bad_manual_host`(폰에서 다이얼 불가). 사례 7건 추가: 끝 줄바꿈 두 건·zone id(옛 코드에서 통과하던 결함), 0년 날짜·pathLen 없는 CA·CA 뒤 leaf 묶음·END 뒤 쓰레기(기존 동작 고정, 런타임 공통).
 - 증거: foundation 336 passed; 새 사례 중 3건은 옛 `site_link.py`에서 실패함을 직접 대조. 새 CA 인증서는 공개 인증서만 저장, 키는 버렸다.
 - gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · feat(protocol): D-341 rosy-pair/1 공유 벡터와 순수 로직
+
+- 변경: `core_common/protocol/pairing.py`(표준 라이브러리만) — 확인 코드 `confirmation_code`, `commit`, 사이트 지문 `site_fingerprint`·`fingerprint_from_sha256`, leaf/CA DER 해시 `der_sha256`, 요청·공개 본문 검사(`validate_request_bytes`·`validate_reveal_bytes`, 4096바이트 초과는 파싱 전에 `too_large`, 모르는 필드 거절), 결과 검사 `validate_result`(CA는 site_link 규칙: leaf면 `leaf_not_ca`, 모르는 필드는 무시), 발견 기록의 페어링 가능 판정 `pairable`(discovery_txt 판정 위에 `not_overhead`·`no_pair`). 기계 원천은 새 `test/fixtures/protocol/pairing.v1.json`(코드 4건 — leaf만 다른 쌍 포함, 지문 2건, 요청 16·공개 5·결과 14·발견 6건).
+- 결정: 계획이 열어 둔 바이트 배열은 길이 접두(필드마다 4바이트 big-endian 길이 + UTF-8)로 정했다 — 등록 저장소 AAD와 같은 방식이고 구분 문자를 예약하지 않는다. `decimal6`은 digest 앞 8바이트 big-endian mod 1,000,000. nonce·poll 비밀·토큰은 32바이트 base64url 무패딩 43자, `client_commit`·`poll_secret_sha256`은 그 ASCII 텍스트의 소문자 hex SHA-256. 지문은 CA DER SHA-256 앞 16 hex를 대문자로 4자씩 `-`. 벡터 생성기는 모듈과 별도로 쓴 참조 계산이다(저장소 밖 스크래치). 긴 hex는 `sha256` 이름이 붙은 줄에만 두어 비밀 스캔이 무결성 값으로 읽는다.
+- 증거: `test_pairing_vectors.py` 53 passed(모듈 작성 전 수집 단계 실패 확인). foundation 전체·비밀 스캔은 커밋 기록 참조 — `test_no_secrets_in_tracked_files`의 `docs/logs.md:4077`·`docs/plans/2026-10-01-gemini-robotics-samples-research.md:5` 실패와 `fleet` 크기 판정 실패는 main에 이미 있던 것이다(이 변경 파일 아님).
+- gate 변화: 없음(LOCAL). Kotlin 로더는 Rosy Cam 세션 몫.

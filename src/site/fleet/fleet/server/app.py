@@ -49,6 +49,7 @@ from fleet.server.mission_routes import install_mission_routes
 from fleet.server.site_auth import (
     SitePrincipal,
     assert_registry_credential_isolated,
+    assert_pairing_sync_token_isolated,
     assert_robot_credential_key_isolated,
     build_authorize,
     build_role_guards,
@@ -102,7 +103,8 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                mission_model_turn_max_rows: int = 10_000,
                mission_model_turn_worker=None,
                post_action_observation_source=None,
-               site_lanes: Optional[Mapping] = None) -> FastAPI:
+               site_lanes: Optional[Mapping] = None,
+               pairing=None, pairing_sync_token: Optional[str] = None) -> FastAPI:
     mission_configured = mission_service is not None or proposal_store is not None
     if (mission_service is None) != (proposal_store is None):
         raise ValueError("Mission API requires both MissionService and ProposalStore")
@@ -204,6 +206,9 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         if len(set(vision_sources)) != len(vision_sources) or any(
                 not isinstance(source, str) or not source for source in vision_sources):
             raise ValueError("vision preview sources must be unique non-empty ids")
+
+    if pairing_sync_token is not None and pairing is None:
+        raise ValueError("pairing sync credential requires D-341 pairing (--pairing-ca with --tls-cert)")
 
     @asynccontextmanager
     async def lifespan(app):
@@ -308,6 +313,12 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
             discovery_token=discovery_token, vision_lease_secret=vision_lease_secret,
             console=console, sightings=sightings, policy_evidence=policy_evidence,
             principals=principals)
+    if pairing_sync_token is not None:
+        assert_pairing_sync_token_isolated(
+            pairing_sync_token, console_token=console_token, discovery_token=discovery_token,
+            vision_lease_secret=vision_lease_secret, robot_credential_key=robot_credential_key,
+            console=console, sightings=sightings, policy_evidence=policy_evidence,
+            principals=principals)
     authorize = build_authorize(console_token, principals, task_service)
     require_viewer, require_operator, require_named_operator = build_role_guards(
         authorize, principals)
@@ -326,6 +337,13 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         install_enrollment_routes(app, enrollment, require_viewer=require_viewer,
                                   require_operator=require_operator,
                                   named_identity=bool(principals))
+
+    if pairing is not None:
+        from fleet.server.pairing_routes import install_pairing_routes
+
+        install_pairing_routes(app, pairing, sync_token=pairing_sync_token,
+                               require_viewer=require_viewer, require_operator=require_operator,
+                               named_identity=bool(principals))
 
     install_ingest_routes(app, console=console, console_token=console_token, hub=hub,
                           sightings=sightings, policy_evidence=policy_evidence,

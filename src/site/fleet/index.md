@@ -69,8 +69,8 @@
 
 ## 최근 기록
 
-- 2026-10-01 · uncommitted · fix(fleet): D-392 P4 early result journaling
-- 2026-10-01 · uncommitted · feat(fleet): D-392 P4 per-call 멱등성과 UNKNOWN 결과 저널
-- 2026-10-01 · uncommitted · feat(fleet): D-392 P3 폐쇄형 모델 도구 카탈로그
-- 2026-10-01 · uncommitted · feat(fleet): D-392 P0–P2 모델 도구 call/result 경계
-- 2026-10-01 · uncommitted · refactor(enrollment): D-391 4.1 device_kind 상수 사용
+- 2026-10-01 · uncommitted · fix(pairing): 같은 자격 ID의 confirm 재시도는 120 s 안에서 멱등
+- 2026-10-01 · uncommitted · test(console): D-341 카메라 연결 승인 브라우저 계약과 화면 다듬기
+- 2026-10-01 · uncommitted · feat(console): D-341 "기기 연결" 패널에 카메라 연결 승인 구역
+- 2026-10-01 · uncommitted · feat(console): D-341 카메라 연결 승인 구역의 순수 규칙(camera-pairing.js)
+- 2026-10-01 · uncommitted · fix(pairing): 보안 리뷰 반영 — 익명 요청은 감사 표에 쓰지 않음, 동기화는 https+CA 필수

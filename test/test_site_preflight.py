@@ -308,3 +308,88 @@ def test_env_file_strips_export_and_only_matching_quotes(tmp_path):
 def test_every_top_level_caddy_site_block_is_checked_and_snippets_are_skipped():
     text = "{\n admin off\n}\n(snip) {\n x\n}\n" + HOST + ":8443 {\n}\nother.local {\n}\n"
     assert _module().caddy_site_hosts(text) == [HOST, "other.local"]
+
+
+# --- D-341 pairing consistency -------------------------------------------------------------
+
+OVERLAY_ARG = "-f /opt/rosy/candidate/deploy/site/compose.pairing.yaml"
+ON = "ROSY_SITE_PAIRING=1\n"
+
+
+def _pairing_site(site, *, unit_env="", site_env="", compose_arg="", secrets=True,
+                  token="sync-token-value"):
+    tmp = site["tmp"]
+    site["env"].write_text(f"ROSY_SITE_TLS_HOST={HOST}\nROSY_SITE_HTTPS_PORT=8443\n{unit_env}",
+                           encoding="utf-8")
+    site_env_file = tmp / "site.env"
+    site_env_file.write_text(f"{site_env}ROSY_SITE_PAIRING_COMPOSE={compose_arg}\n", encoding="utf-8")
+    secrets_dir = tmp / "secrets"
+    secrets_dir.mkdir(exist_ok=True)
+    if secrets:
+        for name in ("registry_token", "phone_ingress_token", "fleet_sighting_token",
+                     "discovery_token", "vision_preview_secret"):
+            (secrets_dir / name).write_text(f"other-{name}\n", encoding="utf-8")
+        (secrets_dir / "pairing_sync_token").write_text(token + "\n", encoding="utf-8")
+    return ["--site-env", str(site_env_file), "--secrets-dir", str(secrets_dir)]
+
+
+def _pairing_run(site, extra, capsys):
+    code = _module().main(_argv(site) + extra)
+    fails, out = _failed(capsys)
+    return code, fails, out
+
+
+def test_pairing_off_by_default_passes_and_says_so(site, capsys):
+    code, fails, out = _pairing_run(site, _pairing_site(site), capsys)
+    assert code == 0 and not fails
+    assert "PASS pairing_consistent" in out and "pairing off" in out
+
+
+def test_pairing_fully_enabled_passes(site, capsys):
+    extra = _pairing_site(site, unit_env=ON, site_env=ON, compose_arg=OVERLAY_ARG)
+    code, fails, out = _pairing_run(site, extra, capsys)
+    assert code == 0 and not fails, out
+    assert "PASS pairing_consistent" in out and "pairing on" in out
+
+
+@pytest.mark.parametrize("unit_env,site_env,compose_arg,why", [
+    (ON, "", OVERLAY_ARG, "disagree"),                  # Fleet side not enabled
+    ("", ON, OVERLAY_ARG, "disagree"),                  # Fleet on, TXT side off
+    (ON, ON, "", "compose.pairing.yaml"),               # switch without the overlay
+    ("", "", OVERLAY_ARG, "compose.pairing.yaml"),      # overlay without the switch
+    ("ROSY_SITE_PAIRING=yes\n", "ROSY_SITE_PAIRING=yes\n", OVERLAY_ARG, "use 1"),
+])
+def test_pairing_inconsistency_is_refused_with_fix(site, capsys, unit_env, site_env, compose_arg, why):
+    extra = _pairing_site(site, unit_env=unit_env, site_env=site_env, compose_arg=compose_arg)
+    code, fails, _ = _pairing_run(site, extra, capsys)
+    assert code != 0
+    line = next(line for line in fails if "pairing_consistent" in line)
+    assert why in line and "| fix:" in line
+
+
+def test_unit_that_advertises_pair_while_off_or_omits_it_while_on_is_refused(site, capsys, tmp_path):
+    extra = _pairing_site(site, unit_env=ON, site_env=ON, compose_arg=OVERLAY_ARG)
+    unit = tmp_path / "rosy-overhead-advertise.service"
+    unit.write_text("[Service]\nExecStart=/x publish --role overhead --tls-host fixture-site.local\n",
+                    encoding="utf-8")
+    argv = ["--site-cert", str(site["cert"]), "--env-file", str(site["env"]), "--tls-host", HOST,
+            "--caddyfile", str(SITE_DIR / "Caddyfile"), "--unit", str(unit), *extra]
+    assert _module().main(argv) != 0
+    fails, _ = _failed(capsys)
+    assert any("does not advertise pair=rosy-pair/1" in line for line in fails)
+
+
+def test_enabled_pairing_needs_a_distinct_sync_token(site, capsys):
+    on = dict(unit_env=ON, site_env=ON, compose_arg=OVERLAY_ARG)
+    code, fails, _ = _pairing_run(site, _pairing_site(site, secrets=False, **on), capsys)
+    assert code != 0 and any("pairing_sync_token" in line for line in fails)
+    code, fails, _ = _pairing_run(site, _pairing_site(site, token="other-discovery_token", **on), capsys)
+    assert code != 0 and any("distinct" in line for line in fails)
+
+
+def test_shipped_units_wire_the_pairing_switch():
+    unit = (SITE_DIR / "rosy-overhead-advertise.service").read_text(encoding="utf-8")
+    assert "Environment=ROSY_SITE_PAIRING=0" in unit and "--pair=${ROSY_SITE_PAIRING}" in unit
+    stack = (SITE_DIR / "rosy-site-stack.service").read_text(encoding="utf-8")
+    # unbraced $VAR is zero words when empty, so "off" adds nothing to up and down
+    assert stack.count(" $ROSY_SITE_PAIRING_COMPOSE ") == 2

@@ -67,8 +67,8 @@
 
 ## 최근 기록
 
+- 2026-10-01 · uncommitted · docs(site): README "Camera pairing (D-341)" 소절
+- 2026-10-01 · 39dd2ad2 · feat(site): D-341 페어링 오버레이 `compose.pairing.yaml`과 카메라 자격 예시
+- 2026-10-01 · 536077d2 · feat(site): D-341 TXT pair는 요청할 때만 광고하고 사전 점검이 스위치를 확인한다
 - 2026-10-01 · uncommitted · fix(site): 사이트 사전 점검 독립 리뷰 반영 — systemd 형식, env 따옴표, 모든 Caddy 블록
 - 2026-10-01 · uncommitted · feat(site): D-391 3 사이트 호스트 일관성 사전 검사 `site_preflight.py`
-- 2026-10-01 · uncommitted · fix(release): 비밀 검사가 SHA·HEAD 코드 스팬의 리비전을 출처 데이터로 본다
-- 2026-10-01 · uncommitted · fix(sd): 긴급 resume은 plan의 시도 색인을 읽는다 (D-389 검증)
-- 2026-10-01 · uncommitted · fix(sd,release): D-389 독립 리뷰 반영 — 긴급 resume 이력 검사, 다운로더 점검

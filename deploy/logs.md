@@ -1751,3 +1751,22 @@
 - 변경: 리뷰(APPROVE WITH FIXES) 1–4번. 유닛 파일의 줄 이음(`\`)을 먼저 합치고, `ExecStart=`의 `-@+!:` 접두를 떼고, 빈 `ExecStart=`는 명령을 비우며, `${VAR}`와 `$VAR` 둘 다 펼친다. env 파일은 `export `를 떼고 짝이 맞는 따옴표만 벗긴다. Caddyfile은 첫 블록만이 아니라 모든 최상위 사이트 블록의 호스트를 보며 스니펫 `(name) {`은 건너뛴다.
 - 증거: 신규 시험 4건, `test_site_preflight.py`·`test_site_fleet_mdns.py` 함께 통과.
 - gate 변화: 없음.
+
+## 2026-10-01 · 536077d2 · feat(site): D-341 TXT pair는 요청할 때만 광고하고 사전 점검이 스위치를 확인한다
+- 변경: `fleet-mdns.py publish --pair[=1]`이 `_rosy-overhead._tcp`에 `pair=rosy-pair/1`을 더한다(기본 꺼짐, `--pair=0`·`--pair=`도 꺼짐, fleet 역할에는 거부). overhead 유닛은 `--pair=${ROSY_SITE_PAIRING}`(기본 `Environment=ROSY_SITE_PAIRING=0`), 스택 유닛은 `$ROSY_SITE_PAIRING_COMPOSE`(괄호 없는 `$VAR`는 비면 단어 0개)를 `-f compose.yaml` 뒤에 붙인다. `site_preflight.py`에 `pairing_consistent` 검사 추가: `.env`와 `site.env`의 스위치 일치(`1` 또는 빈 값), 오버레이와 스위치 일치, 유닛의 TXT 광고와 스위치 일치, `pairing_sync_token`이 있고 다른 비밀과 다름. `pair` 키는 공유 벡터 `discovery-txt.v1.json`에 이미 선택 키라서 벡터는 바꾸지 않았다.
+- 증거: test_site_fleet_mdns.py·test_site_preflight.py 129 passed(새 시험 먼저 실패 확인). 호스트·컨테이너·기기 접근 없음(LOCAL만).
+- gate 변화: 없음(배포 없음).
+- 결정: 켜는 스위치는 하나(`ROSY_SITE_PAIRING=1`)지만 Compose 쪽은 오버레이 파일이 필요해 `site.env`에 `ROSY_SITE_PAIRING_COMPOSE`가 따로 있고, 불일치는 사전 점검이 잡는다.
+- 교훈: 없음
+
+## 2026-10-01 · 39dd2ad2 · feat(site): D-341 페어링 오버레이 `compose.pairing.yaml`과 카메라 자격 예시
+- 변경: `compose.yaml`은 그대로 두고(rosy-84 병행 작업) `compose.pairing.yaml` 추가. Compose는 `command`와 `ROSY_CREDENTIAL_PATHS` 값을 통째로 바꾸므로 기존 값을 반복하고 Fleet에 `--pairing-ca /run/secrets/site_ca`·`--pairing-tls-host`·`--pairing-sync-token-env`, Vision에 `--pairing-sync-url https://fleet:8090`·`--pairing-sync-ca`·같은 토큰 env를 붙인다. 새 비밀 `pairing_sync_token`(템플릿 `pairing-sync-token.template.txt`)은 Fleet·Vision만 마운트하고 다른 비밀과 파일이 다르다(D-302). 후보 빌드·검증 목록, `.env.example`(별도 블록), `site-cameras.yaml.example`(`credential: static`/`paired`) 갱신.
+- 증거: test/test_site_pairing_deploy.py(오버레이 == 기존 + 페어링 인자, https+CA, 구분되는 비밀, 기본 compose에 pairing 없음), src/site/vision/test/test_site_cameras_example.py(예시가 Vision·Fleet 로더로 읽힘), test_site_candidate*.py 27 passed, test_release_boundary_guards.py 통과(비밀 검사 지적 1건은 변수명 변경으로 해결).
+- gate 변화: 없음.
+- 교훈: 비밀 검사는 `secret = ...` 같은 할당 줄도 credential로 본다. 시험 변수명에 `secret`을 피한다.
+
+## 2026-10-01 · uncommitted · docs(site): README "Camera pairing (D-341)" 소절
+- 변경: 켜는 법(토큰 생성, 카메라 `credential: paired`, 오버레이, 광고), 폰이 보는 것(`pair` TXT가 있을 때만 사이트에 연결 요청), 콘솔 흐름(기기 연결, 카메라 연결 승인), 폐기, 사전 점검이 확인하는 항목을 새 소절로 추가. 콘솔의 승인·폐기 화면은 D-391 5 항목으로 아직 main에 없음을 적었다.
+- 증거: test_site_pairing_deploy.py가 소절 핵심 문구를 확인.
+- gate 변화: 없음.
+- 교훈: 없음
