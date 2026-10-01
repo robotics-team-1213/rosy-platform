@@ -433,7 +433,7 @@ python3 /opt/rosy/site/site_preflight.py --site-cert <secrets>/site.crt --json
 ```
 
 It reads `ROSY_SITE_TLS_HOST` (flag `--tls-host`, else the shell, else
-`/etc/rosy/site/.env`) and checks: `site_cert` is a leaf (not a CA) followed by
+`/etc/rosy/site/site.env`) and checks: `site_cert` is a leaf (not a CA) followed by
 a CA; the leaf has a DNS SAN equal to `tls_host` (exact, case-insensitive, a
 wildcard does not count); `tls_host` is a `<name>.local` name; the
 `--tls-host` that the advertise units publish equals it; and the Caddyfile

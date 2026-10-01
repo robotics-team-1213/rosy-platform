@@ -27,7 +27,7 @@ import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-DEFAULT_ENV_FILE = "/etc/rosy/site/.env"
+DEFAULT_ENV_FILE = "/etc/rosy/site/site.env"
 DEFAULT_UNITS = ("rosy-overhead-advertise.service", "rosy-fleet-advertise.service")
 FULLCHAIN_FIX = ("build it with `cat site.crt site-ca.crt > site-fullchain.crt` and point the "
                  "site_cert secret at that file (deploy/site/README.md)")
@@ -286,7 +286,7 @@ def published_tls_host(unit: Path, env_file: dict[str, str]) -> tuple[bool, str 
 def check_txt_tls_host(units: list[Path], env_file: dict[str, str], tls_host: str) -> dict:
     """Check 4a: the TXT tls_host the advertise units publish equals the configured tls_host."""
     check_id = "txt_tls_host"
-    fix = ("set the same <hostname>.local as ROSY_SITE_TLS_HOST in /etc/rosy/site/.env, then "
+    fix = ("set the same <hostname>.local as ROSY_SITE_TLS_HOST in /etc/rosy/site/site.env, then "
            "`systemctl restart rosy-overhead-advertise.service`")
     wanted, problems, seen = _normalise(tls_host), [], 0
     for unit in units:
