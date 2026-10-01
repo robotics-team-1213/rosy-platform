@@ -125,12 +125,12 @@ def missing_required(required_text: str, inventory_text: str) -> list[str]:
 
 # --- ssh -------------------------------------------------------------------
 
-def ssh_argv(host: str, local_appdata: Path) -> list[str]:
+def ssh_argv(host: str, local_appdata: Path, command: str = DPKG_COMMAND) -> list[str]:
     rosy = Path(local_appdata) / "Rosy"
     return ["ssh", "-i", str(rosy / "ssh" / "rosy-operator-ed25519"),
             "-o", "IdentitiesOnly=yes", "-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=yes",
             "-o", f'UserKnownHostsFile="{rosy / "known_hosts"}"', "-o", "ConnectTimeout=5",
-            f"rosy@{host}", DPKG_COMMAND]
+            f"rosy@{host}", command]
 
 
 def run_ssh(argv: list[str]) -> tuple[int, str, str]:
