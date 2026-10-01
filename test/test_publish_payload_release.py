@@ -11,6 +11,7 @@ import hashlib
 import importlib.util
 import io
 import json
+import os
 from pathlib import Path
 import shutil
 import subprocess
@@ -65,6 +66,7 @@ class FakeGh:
         self.releases: dict[str, dict] = {}
         self.calls: list[list[str]] = []
         self.fail_upload = False
+        self.after_upload = None  # called once, right after the next successful upload
 
     @staticmethod
     def _parse(tokens):
@@ -109,11 +111,18 @@ class FakeGh:
             assert flags.get("--clobber") == [True]
             for f in files:
                 self.releases[tag]["assets"][Path(f).name] = Path(f).read_bytes()
+            if self.after_upload is not None:
+                hook, self.after_upload = self.after_upload, None
+                hook()
             return 0, "", ""
         if command == "download":
+            # Like gh: the assets that exist are downloaded; only no match at all is an error.
             target = Path(flags["--dir"][0])
             target.mkdir(parents=True, exist_ok=True)
-            for pattern in flags["--pattern"]:
+            found = [p for p in flags["--pattern"] if p in self.releases[tag]["assets"]]
+            if not found:
+                return 1, "", "no assets match the file pattern"
+            for pattern in found:
                 (target / pattern).write_bytes(self.releases[tag]["assets"][pattern])
             return 0, "", ""
         raise AssertionError(argv)
@@ -897,3 +906,168 @@ def test_a_tarball_signed_by_another_key_is_not_published(tmp_path, keys):
 
     assert _publish(bad, keys, tmp_path, gh, FakeSsh()) != 0
     assert gh.releases == {}
+
+
+# --- re-review fixes (N1, N2, N4, N7, N8, N9) ----------------------------------------
+
+def _local_copy(tmp_path, keys, **changes) -> Path:
+    """A rollout this PC signed earlier, in the work folder."""
+    work = tmp_path / "w" / f"publish-{RELEASE_ID}"
+    work.mkdir(parents=True, exist_ok=True)
+    rollout = tool.build_rollout(RELEASE_ID, "c" * 64, REVISION, "2026-10-01T14:00:00Z", CANARY, 600)
+    rollout.update(changes)
+    data = tool.rollout_bytes(rollout)
+    (work / "rollout.json").write_bytes(data)
+    (work / "rollout.json.sig").write_bytes(signing.sign_checksums(data, keys["private"]).encode())
+    return work
+
+
+def _withdraw(gh, keys, tmp_path, reason="bad"):
+    return _run(["--release-id", RELEASE_ID, "--out-dir", str(tmp_path / "w"), "--withdraw", "--reason", reason],
+                keys, tmp_path, gh, FakeSsh())
+
+
+def test_a_withdrawn_local_fallback_is_still_uploaded(keys, tmp_path):
+    """N1: the local copy says withdrawn, but GitHub's copy is broken, so GitHub may not be withdrawn."""
+    gh = FakeGh()
+    _signed_release(gh, keys, tmp_path, canary_ok=True)
+    _local_copy(tmp_path, keys, withdrawn=True, reason="earlier withdraw")
+    gh.releases[TAG]["assets"]["rollout.json"] += b" "
+
+    assert _withdraw(gh, keys, tmp_path, "again") == 0
+
+    assert len(_uploads(gh)) == 1
+    final = _verified(gh, keys)
+    assert final["withdrawn"] is True and final["reason"] == "again"
+
+
+def test_an_already_withdrawn_github_copy_is_left_alone(keys, tmp_path):
+    gh = FakeGh()
+    _signed_release(gh, keys, tmp_path, withdrawn=True, reason="first")
+
+    assert _withdraw(gh, keys, tmp_path) == 0
+    assert _uploads(gh) == []
+    assert _verified(gh, keys)["reason"] == "first"
+
+
+def test_a_missing_remote_signature_uses_the_local_copy(keys, tmp_path):
+    """N2: GitHub has a withdrawn rollout.json but no .sig; a matching .sig left in downloaded/ by an
+    earlier run must not make it look verified (robots cannot verify it)."""
+    gh = FakeGh()
+    _signed_release(gh, keys, tmp_path, withdrawn=True, reason="half uploaded")
+    _local_copy(tmp_path, keys)
+    stale = tmp_path / "w" / f"publish-{RELEASE_ID}" / "downloaded"
+    stale.mkdir(parents=True)
+    (stale / "rollout.json.sig").write_bytes(gh.releases[TAG]["assets"]["rollout.json.sig"])
+    del gh.releases[TAG]["assets"]["rollout.json.sig"]
+
+    assert _withdraw(gh, keys, tmp_path) == 0
+
+    assert len(_uploads(gh)) == 1
+    final = _verified(gh, keys)
+    assert final["withdrawn"] is True and final["reason"] == "bad"
+
+
+def test_no_rollout_assets_at_all_uses_the_local_copy(keys, tmp_path):
+    gh = FakeGh()
+    _signed_release(gh, keys, tmp_path)
+    _local_copy(tmp_path, keys)
+    for name in ("rollout.json", "rollout.json.sig"):
+        del gh.releases[TAG]["assets"][name]
+
+    assert _withdraw(gh, keys, tmp_path) == 0
+    assert _verified(gh, keys)["withdrawn"] is True
+
+
+def test_a_withdraw_whose_upload_fails_prints_the_recovery_command(keys, tmp_path, capsys):
+    """N9."""
+    gh = FakeGh()
+    _signed_release(gh, keys, tmp_path)
+    gh.fail_upload = True
+
+    assert _withdraw(gh, keys, tmp_path, "bad gains") != 0
+
+    err = capsys.readouterr().err
+    work = tmp_path / "w" / f"publish-{RELEASE_ID}"
+    assert f"gh release upload {TAG} --repo {REPO} --clobber" in err and str(work / "rollout.json.sig") in err
+    assert "--withdraw --reason" in err and "bad gains" in err
+
+
+def test_a_withdraw_racing_the_final_upload_wins(tarball, keys, tmp_path, capsys):
+    """N4: a withdraw lands right after this process uploaded canary_ok."""
+    gh = FakeGh()
+    gh_calls = gh.__call__
+
+    def arm(argv):
+        if argv[1:3] == ["release", "upload"] and not _uploads(gh):
+            gh.after_upload = lambda: _rewrite_remote(gh, keys, withdrawn=True, reason="withdrawn by hand")
+        return gh_calls(argv)
+
+    assert _publish(tarball, keys, tmp_path, arm, FakeSsh()) == 3
+
+    final = _verified(gh, keys)
+    assert final["withdrawn"] is True and final["reason"] == "withdrawn by hand"
+    assert len(_uploads(gh)) == 1  # the visible withdraw is kept, not uploaded over
+    assert "withdrawn" in capsys.readouterr().out
+
+
+def test_a_rollout_broken_by_a_racing_upload_is_withdrawn(tarball, keys, tmp_path):
+    """N4: after the upload the remote bytes are not ours (half of someone else's --clobber)."""
+    gh = FakeGh()
+    gh_calls = gh.__call__
+
+    def arm(argv):
+        if argv[1:3] == ["release", "upload"] and not _uploads(gh):
+            def clobber_half():
+                gh.releases[TAG]["assets"]["rollout.json"] += b" "
+            gh.after_upload = clobber_half
+        return gh_calls(argv)
+
+    assert _publish(tarball, keys, tmp_path, arm, FakeSsh()) == 3
+
+    final = _verified(gh, keys)
+    assert final["withdrawn"] is True and final["canary_ok"] is True
+    assert "changed during the final upload" in final["reason"]
+
+
+def test_a_clean_final_upload_is_checked_once_more_and_kept(tarball, keys, tmp_path):
+    gh = FakeGh()
+
+    assert _publish(tarball, keys, tmp_path, gh, FakeSsh()) == 0
+
+    downloads = [c for c in gh.calls if c[1:3] == ["release", "download"]]
+    assert len(downloads) == 2  # before the upload and after it
+    assert len(_uploads(gh)) == 1
+
+
+def test_a_stale_lock_is_named_stale(tarball, keys, tmp_path, capsys):
+    """N7."""
+    lock = tarball.parent / f"publish-{RELEASE_ID}" / ".lock"
+    lock.parent.mkdir(parents=True)
+    lock.write_text("99999999\n", encoding="ascii")
+
+    assert _publish(tarball, keys, tmp_path, FakeGh(), FakeSsh()) != 0
+
+    err = capsys.readouterr().err
+    assert "is stale: process 99999999 is not running" in err and str(lock) in err
+    assert lock.exists()
+
+
+def test_a_live_lock_is_named_running(tarball, keys, tmp_path, capsys):
+    lock = tarball.parent / f"publish-{RELEASE_ID}" / ".lock"
+    lock.parent.mkdir(parents=True)
+    lock.write_text(f"{os.getpid()}\n", encoding="ascii")
+
+    assert _publish(tarball, keys, tmp_path, FakeGh(), FakeSsh()) != 0
+
+    err = capsys.readouterr().err
+    assert "stale" not in err and f"process {os.getpid()}" in err and "running" in err
+
+
+def test_a_status_without_hostname_reads_as_not_run_yet(tarball, keys, tmp_path, capsys):
+    """N8."""
+    _publish(tarball, keys, tmp_path, FakeGh(), FakeSsh(statuses=[status(), NOT_RUN_YET, COMMITTED]))
+
+    out = capsys.readouterr().out
+    assert "has not run yet (no status.json)" in out
+    assert "not the canary" not in out and "None" not in out.split("has not run yet")[0].splitlines()[-1]

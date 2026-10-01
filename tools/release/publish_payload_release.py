@@ -243,9 +243,23 @@ class Publisher:
         self.log("release-created", f"{self.tag} on {self.repo} at {rollout['source_revision']}",
                  tarball_sha256=rollout["tarball_sha256"], canary=canary)
 
-    def upload(self, rollout: dict) -> None:
-        _data, files = self.write_signed(rollout)
+    def upload(self, rollout: dict) -> bytes:
+        data, files = self.write_signed(rollout)
         self.gh("release", "upload", self.tag, "--repo", self.repo, "--clobber", *map(str, files))
+        return data
+
+    def upload_or_explain(self, rollout: dict, out_dir: Path) -> bytes:
+        """Upload; on failure print the exact commands that finish the job, then re-raise."""
+        try:
+            return self.upload(rollout)
+        except PublishError:
+            state = "withdrawn=true" if rollout["withdrawn"] else "canary_ok=true"
+            print(f"recovery: {self.work_dir} holds rollout.json signed with {state}. Upload it with\n"
+                  f"  {self.upload_command()}", file=sys.stderr)
+            if rollout["withdrawn"]:
+                print(f"or withdraw again:\n  {SCRIPT} --release-id {self.release_id} --out-dir \"{out_dir}\" "
+                      f"--withdraw --reason \"{rollout['reason']}\"", file=sys.stderr)
+            raise
 
     def upload_command(self) -> str:
         files = " ".join(f'"{self.work_dir / name}"' for name in ("rollout.json", "rollout.json.sig"))
@@ -261,9 +275,20 @@ class Publisher:
         return rollout
 
     def download(self) -> tuple[dict, bytes]:
+        """GitHub's rollout, signature checked. A missing asset is RolloutUnverified, like a bad signature."""
         target = self.work_dir / "downloaded"
-        self.gh("release", "download", self.tag, "--repo", self.repo, "--pattern", "rollout.json",
-                "--pattern", "rollout.json.sig", "--dir", str(target), "--clobber")
+        if target.exists():
+            prepare._remove_tree(target)  # never verify against a file an earlier download left
+        try:
+            self.gh("release", "download", self.tag, "--repo", self.repo, "--pattern", "rollout.json",
+                    "--pattern", "rollout.json.sig", "--dir", str(target), "--clobber")
+        except PublishError as error:
+            if "no assets match" in str(error):
+                raise RolloutUnverified(f"{self.tag} has neither rollout.json nor rollout.json.sig on GitHub") from None
+            raise
+        missing = [name for name in ("rollout.json", "rollout.json.sig") if not (target / name).is_file()]
+        if missing:
+            raise RolloutUnverified(f"{self.tag} on GitHub has no {' or '.join(missing)}")
         data = (target / "rollout.json").read_bytes()
         signature = (target / "rollout.json.sig").read_text(encoding="ascii")
         return self._verified(data, signature, f"{self.tag} (GitHub)"), data
@@ -318,6 +343,9 @@ class Publisher:
             state = self.status(host)
             if state is None:
                 phase, key, line = "unreachable", ("unreachable",), f"{name} ({host}) unreachable or status unreadable"
+            elif not state.get("hostname"):
+                phase, key = "not-run-yet", ("not-run-yet",)
+                line = f"{name} ({host}): the updater has not run yet (no status.json)"
             elif state.get("hostname") != name:
                 phase = "not-the-canary"
                 key = (phase, state.get("hostname"))
@@ -363,18 +391,25 @@ class Publisher:
             raise PublishError(f"{self.tag} rollout.json changed on GitHub since this process uploaded it; "
                                "not overwriting it. Read it, then rerun with --resume or --withdraw")
         if ok:
-            target, state = {**remote, "canary_ok": True}, "canary_ok=true"
+            target = {**remote, "canary_ok": True}
         else:
-            target, state = {**remote, "withdrawn": True, "reason": reason}, "withdrawn=true"
+            target = {**remote, "withdrawn": True, "reason": reason}
+        uploaded = self.upload_or_explain(target, out_dir)
+        # A withdraw that raced this upload must win: look once more.
         try:
-            self.upload(target)
-        except PublishError:
-            print(f"recovery: {self.work_dir} holds rollout.json signed with {state}. Upload it with\n"
-                  f"  {self.upload_command()}", file=sys.stderr)
-            if not ok:
-                print(f"or withdraw again:\n  {SCRIPT} --release-id {self.release_id} --out-dir \"{out_dir}\" "
-                      f"--withdraw --reason \"{reason}\"", file=sys.stderr)
-            raise
+            after, after_data = self.download()
+        except RolloutUnverified:
+            after, after_data = None, None
+        if after_data != uploaded:
+            if after is not None and after["withdrawn"]:
+                self.log("withdrawn", f"{self.tag} was withdrawn during the final upload ({after['reason']}); "
+                                      "left withdrawn", reason=after["reason"])
+                return 3
+            again = target["reason"] if target["withdrawn"] else \
+                "rollout.json changed during the final upload; withdrawn to be safe"
+            self.upload_or_explain({**target, "withdrawn": True, "reason": again}, out_dir)
+            self.log("withdrawn", f"{again}; rollout.json withdrawn=true uploaded again", reason=again)
+            return 3
         if ok:
             self.log("canary-ok", f"{reason}; rollout.json canary_ok=true uploaded")
             self.show_others(target, robots)
@@ -399,12 +434,46 @@ class Publisher:
 
 # --- lock --------------------------------------------------------------------------
 
+def pid_alive(pid: int) -> bool:
+    """Whether a process with this id exists. Never signals it (os.kill on Windows would end it)."""
+    if pid <= 0:
+        return False
+    if os.name == "nt":
+        import ctypes
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        handle = kernel32.OpenProcess(0x1000, False, pid)  # PROCESS_QUERY_LIMITED_INFORMATION
+        if not handle:
+            return ctypes.get_last_error() == 5  # access denied: it exists
+        try:
+            code = ctypes.c_ulong()
+            return bool(kernel32.GetExitCodeProcess(handle, ctypes.byref(code))) and code.value == 259
+        finally:
+            kernel32.CloseHandle(handle)
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
 def take_lock(work_dir: Path) -> Path:
     work_dir.mkdir(parents=True, exist_ok=True)
     lock = work_dir / ".lock"
     try:
         descriptor = os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
     except FileExistsError:
+        try:
+            pid = int(lock.read_text(encoding="ascii").split()[0])
+        except (OSError, ValueError, IndexError):
+            pid = None
+        if pid is not None and not pid_alive(pid):
+            raise PublishError(f"{lock} is stale: process {pid} is not running. "
+                               f"Delete it (del \"{lock}\") and run again") from None
+        if pid is not None:
+            raise PublishError(f"another publish of this release (process {pid}) is running and holds {lock}; "
+                               "stop it (Ctrl+C) first") from None
         raise PublishError(f"another publish of this release holds {lock}; stop it (Ctrl+C) first, "
                            "or delete the file if no publish is running") from None
     with os.fdopen(descriptor, "w", encoding="ascii") as handle:
@@ -501,7 +570,7 @@ def main(argv: list[str] | None = None, *, gh_runner: Runner = run_gh, ssh_runne
         if not publisher.public_key.is_file():
             raise PublishError(f"public key not found: {publisher.public_key}")
         if args.withdraw:
-            return withdraw(publisher, args.reason.strip())
+            return withdraw(publisher, args.reason.strip(), out_dir)
 
         if args.resume:
             rollout, publisher.last_uploaded = publisher.download()
@@ -562,19 +631,22 @@ def main(argv: list[str] | None = None, *, gh_runner: Runner = run_gh, ssh_runne
             lock.unlink(missing_ok=True)
 
 
-def withdraw(publisher: Publisher, reason: str) -> int:
-    """Withdraw by hand. A remote rollout that does not verify (a half-finished --clobber upload)
-    falls back to the copy this PC signed last in the work folder."""
+def withdraw(publisher: Publisher, reason: str, out_dir: Path) -> int:
+    """Withdraw by hand. A remote rollout that does not verify or is missing (a half-finished --clobber
+    upload) falls back to the copy this PC signed last in the work folder, and then always uploads:
+    only a verified GitHub copy that is already withdrawn needs nothing."""
+    from_github = True
     try:
         rollout, _data = publisher.download()
     except RolloutUnverified as error:
         print(f"warning: {error}", file=sys.stderr)
         rollout, _data = publisher.local_copy()
+        from_github = False
         print(f"using the local signed rollout.json in {publisher.work_dir}", flush=True)
-    if rollout["withdrawn"]:
+    if from_github and rollout["withdrawn"]:
         print(f"{publisher.tag} is already withdrawn: {rollout['reason']}")
         return 0
-    publisher.upload({**rollout, "withdrawn": True, "reason": reason})
+    publisher.upload_or_explain({**rollout, "withdrawn": True, "reason": reason}, out_dir)
     publisher.log("withdrawn", f"withdrawn by hand: {reason}", reason=reason)
     return 0
 
