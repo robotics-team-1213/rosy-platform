@@ -1,6 +1,6 @@
 # Rosy Pilot OMX-AI Gazebo Practice Implementation Plan
 
-**진행 상태 (2026-10-01):** 시뮬레이션 전용 API·조종권·단일 owner 연결·Pilot 관절/그리퍼 화면과 브라우저 계약 시험을 구현했다. [Gazebo 실행 검증](../validation/pilot-omx-gazebo-2026-10-01/README.md)에서 관절·그리퍼 goal과 취소 readback을 관측했다. 그리퍼 정밀 도달, 카메라, 시연 기록, lease 만료·브라우저 이탈·재시작의 실제 회복 시험은 남았다. 현재 경로는 `/api/v1/sim/omx`, schema는 `core_common.protocol.omx_sim`이다. 아래 목록은 최초 범위와 남은 게이트를 보존한다.
+**진행 상태 (2026-10-01):** 시뮬레이션 전용 API·조종권·단일 owner 연결·Pilot 관절/그리퍼 화면과 브라우저 계약 시험을 구현했다. [Gazebo 실행 검증](../validation/pilot-omx-gazebo-2026-10-01/README.md)에서 관절·그리퍼 goal과 취소 readback을 관측했다. 후속 [시연·LeRobot 계획](2026-10-01-omx-demonstration-lerobot-design.md)에서 실제 작업대 영상 15프레임 기록과 LeRobot v3 재독출을 확인했다. 그리퍼 정밀 도달·전체 재시작 회복·Pinky 경로 재측정은 남았다. 현재 경로는 `/api/v1/sim/omx`, schema는 `core_common.protocol.omx_sim`이다. 아래 목록은 최초 범위와 남은 게이트를 보존한다.
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 

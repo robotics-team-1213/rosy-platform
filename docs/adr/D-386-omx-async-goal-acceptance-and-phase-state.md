@@ -3,6 +3,8 @@
 **Status:** Accepted (2026-10-01; SOURCE contract only. Runtime wiring, ROS-SIM,
 profile activation, ARTIFACT, DEVICE, and FIELD remain gated.)
 
+**부분 개정 (D-402, 2026-10-01, 시뮬레이션 한정):** [D-402](D-402-omx-motion-planner-v1-analytic-top-down-ik.md)(Proposed, 사용자 승인) §3(d)는 `CELL_TRANSFER`와 `simulation` 프로필에서 §3의 start-state 허용오차 검사 대상에서 그리퍼 관절을 뺀다. 이유: 집은 뒤 그리퍼는 물체 폭에서 멈추므로 관절값 비교로는 판정이 되지 않는다. 그리퍼 상태는 `gripper_contract`의 held/released readback gate로만 판정한다. 팔 관절의 허용오차 검사와 §1·§2·§4는 그대로다. 이 개정은 D-402가 Accepted가 되면 효력이 생긴다. 그 전에는 원문이 그대로 적용된다.
+
 **Related decisions:** [D-369](D-369-control-authority-and-stop-evidence.md)
 keeps local command authority and stop evidence distinct;
 [D-376](D-376-omx-pick-place-planning-and-execution-boundary.md) keeps

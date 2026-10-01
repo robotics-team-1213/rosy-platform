@@ -71,8 +71,8 @@
 
 ## 최근 기록
 
-- 2026-10-01 · uncommitted · test(fleet): exercise grant receipt through the ROS ActionServer callback
-- 2026-10-01 · uncommitted · fix(console): 로그인은 느린 상태 수집을 기다리지 않고 바로 풀린다
-- 2026-10-01 · uncommitted · docs(fleet): D-392 Task 8 ROS-SIM/artifact evidence boundary
-- 2026-10-01 · uncommitted · fix(console): 옮기기 대화상자가 새 주소 후보를 크게 보이고 로봇 화면의 IP와 맞춰 보게 한다
-- 2026-10-01 · uncommitted · fix(enrollment): 옛 토큰은 어디에도 보내지 않고, 고정 주소에서 아직 답하면 옮기지 않는다
+- 2026-10-02 · uncommitted · 관제 콘솔 회차 2 — D-405/D-406 아이콘 크롬·카메라 설치 묶음·목표 토글
+- 2026-10-02 · uncommitted · 관제 콘솔 회차 — 예외 큐 신뢰·지도 위계·카드 문구 정리
+- 2026-10-01 · uncommitted · D-398 후속 — 정체 띠 완성·음영 제거·줄 간격 토큰화
+- 2026-10-01 · uncommitted · docs(api): align Fleet contract pins to v1.70
+- 2026-10-01 · uncommitted · fix(fleet): D-395 중재기 — 결정을 싣는 단서는 양(+)의 증거이고 모든 후보를 이겨야 한다

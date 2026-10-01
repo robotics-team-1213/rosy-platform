@@ -56,6 +56,12 @@ KNOWN_EXTERNAL_BEHAVIOR_TESTS = frozenset({
     "src/runtime/gateway/test/test_docking_parking_wiring.py",
     "src/runtime/gateway/test/test_line_follow_sim_clock.py",
     "src/runtime/gateway/test/test_mode_listener_isolation.py",
+    # 2026-10-02: 세 파일은 각 기능 커밋(D-385 표정 지도·LiDAR 마운트·텔레옵 워치독
+    # 설정)과 같이 들어왔고 목록 갱신이 빠졌다(병합 뒤 CI 빨강). 각자 core_features
+    # 의 순수 결정 함수를 실측한다 — 패키지 이전 여부는 소유자 검토로 남긴다.
+    "src/runtime/gateway/test/test_emotion_map.py",
+    "src/runtime/gateway/test/test_lidar_mount_source.py",
+    "src/runtime/gateway/test/test_teleop_watchdog_config.py",
 })
 
 

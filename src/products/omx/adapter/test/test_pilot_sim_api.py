@@ -44,6 +44,30 @@ class FakeRuntime:
         pass
 
 
+class FakeCapture:
+    def __init__(self):
+        self.value = {"status": "idle", "frame_count": 0, "issues": []}
+
+    def status(self):
+        return self.value
+
+    def start(self, task):
+        self.value = {"episode_id": "11111111-1111-4111-8111-111111111111", "task": task,
+                      "status": "recording", "frame_count": 0, "issues": []}
+        return self.value
+
+    def stop(self, episode_id, outcome):
+        assert episode_id == self.value["episode_id"]
+        self.value.update(status="incomplete", task_outcome=outcome, issues=["insufficient_frames"])
+        return self.value
+
+    def camera_status(self):
+        return {"available": True, "fresh": False}
+
+    def camera_jpeg(self):
+        raise ValueError("camera stale")
+
+
 def _client():
     runtime = FakeRuntime()
     app = create_pilot_sim_app(runtime=runtime, pilot_root=PILOT,
@@ -107,3 +131,25 @@ def test_seat_release_and_validation_fail_closed():
     assert client.delete(f"{PREFIX}/seat/{seat}", headers=headers).status_code == 204
     assert client.post(f"{PREFIX}/goals", headers=headers, json=_jog(seat)).status_code == 409
     assert runtime.calls == ["cancel_active"]
+
+
+def test_recording_needs_own_seat_and_cannot_select_server_output_path():
+    client, runtime = _client()
+    runtime.capture = FakeCapture()
+    assert client.post(f"{PREFIX}/recordings", json={"seat_id": "bad", "task": "move"}).status_code == 401
+    headers = _paired(client)
+    assert client.get(f"{PREFIX}/camera", headers=headers).json()["fresh"] is False
+    assert client.get(f"{PREFIX}/camera/frame", headers=headers).status_code == 409
+    assert client.post(f"{PREFIX}/recordings", headers=headers,
+                       json={"seat_id": "bad", "task": "move"}).status_code == 409
+    seat = client.post(f"{PREFIX}/seat", headers=headers).json()["seat_id"]
+    assert client.post(f"{PREFIX}/recordings", headers=headers,
+                       json={"seat_id": seat, "task": "move", "root": "F:/source"}).status_code == 400
+    started = client.post(f"{PREFIX}/recordings", headers=headers, json={"seat_id": seat, "task": "move"})
+    assert started.status_code == 201
+    episode_id = started.json()["episode_id"]
+    assert client.get(f"{PREFIX}/recordings", headers=headers).json()["status"] == "recording"
+    stopped = client.post(f"{PREFIX}/recordings/{episode_id}/stop", headers=headers,
+                          json={"seat_id": seat, "outcome": "success"})
+    assert stopped.json()["status"] == "incomplete"
+    assert stopped.json()["task_outcome"] == "success"

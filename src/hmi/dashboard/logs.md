@@ -732,3 +732,40 @@
 - 변경: keydown Escape → POST /safety/stop — 확인창 없음(위급 순간의 장벽은 위험). 입력 필드(INPUT·TEXTAREA·SELECT·contentEditable)에서는 발동 안 함. 이미 정지면 재발동 안 함. event.repeat 무시. 토큰 없으면 무시.
 - 증거: test_dashboard_package.py test_escape_key_stops_the_robot_immediately.
 - gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · feat(console): 지도 목표 마커 + 스켈레톤 펄스
+
+- 변경: ① map.js paint() 에 목표 다이아몬드(경로 색) — rosy:goal 설정, rosy:goal-clear 해제. ② 텔레메트리 '--' 값에 data-pending 스켈레톤 펄스(1.6s 호흡).
+- 증거: test_dashboard_package.py 2신규 (마커·스켈레톤).
+- gate 변화: 없음.
+
+
+## 2026-10-01 · uncommitted · D-398 죽은 토큰 참조·펄스·페이드 정리
+
+- 변경: console-detail.css의 var(--muted/--paper/--radius-1) → --ink-quiet/--ink-on-crit/--radius-control(존재하지 않는 토큰 참조였음). skeleton 펄스·액션 페이드 제거로 D-220 회복 — 기다림은 조용한 뮤트 대시, 숨김은 점프 컷(레거시 시험 핀 2건 갱신, 깨져 있던 디밍 계약 시험도 초록). overview·pose-evidence·operations·triage·telemetry·vision이 EVIDENCE_LABEL/evidenceAgeText로 말을 만든다. styleguide.css의 죽은 .demo-* 부품 재구현 삭제(견본은 실제 ui-* 요소).
+- 근거: D-398. dashboard·web_common 시험 통과.
+- gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · D-398 후속 — 원시 줄 간격 토큰화
+
+- 변경: styles.css 2곳(1.55→--leading-copy, 1.35→--leading-label), console-detail.css 2곳(1.45→--leading-body, font 단축형 /1.45→--leading-copy). 표면 줄 간격은 이제 토큰만.
+- 근거: D-398 후속. web_common 타이포 계약 시험이 폐쇄 화이트리스트로 잔존을 적발(변이 증명).
+- gate 변화: 없음.
+
+## 2026-10-02 · uncommitted · feat(console): camera fullscreen and lane/object legend
+- 변경: 카메라 영상 확대/닫기, 종료 시 키보드 초점 복귀, 수신 전 확대 비활성 사유, 차선·객체 표시 읽는 법 범례를 추가.
+- 증거: 실제 브라우저 확대/초점·수신 대기·범례·모바일 overflow 3 passed; viewport/layout 브라우저 10 passed. 기존 camera capture 5 passed.
+- 한계: 저장된 테스트 영상/브라우저 검증과 로봇 실시간 배포는 별도. 전원이 꺼진 로봇에는 아직 반영하지 않음.
+- gate 변화: 없음. LOCAL 브라우저 증거 추가; DEVICE/FIELD 미승격.
+
+
+## 2026-10-02 · uncommitted · fix(console): fullscreen uses dynamic viewport height
+- 변경: 확대 카메라 높이를 100dvh로 수정해 모바일 주소창 변경과 D-359 높이 규칙을 반영.
+- 증거: 원격 CI 36895230123이 새 100vh를 적발. design scope gate 5 passed로 수정 확인. 기존 테스트만 통과한 상태를 전체 CI 성공으로 취급하지 않음.
+- gate 변화: 없음. 전체 CI 및 실기 관문은 별도.
+
+## 2026-10-02 · uncommitted · D-405 /device 테마 버튼 아이콘 렌더 + fullscreen 100dvh 게이트 수리
+- 변경: panels/system/display.js가 RosyTheme.choices의 icon을 그리고 이름을 sr-only·title로 둔다. panels/surface-panels.css의 #vision-stage:fullscreen height 100vh를 100dvh로(6818ba40에서 들어온 위반을 test_full_viewport_heights_use_dvh가 지적).
+- 근거: D-405; D-359 높이 계약(dvh).
+- gate 변화: 없음.
+- 최종 증거: web_common 209 passed(dvh 게이트 포함); dashboard 회귀 포함 1291 passed 65 skipped.

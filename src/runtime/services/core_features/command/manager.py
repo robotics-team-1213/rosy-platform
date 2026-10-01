@@ -30,7 +30,8 @@ ZERO = Twist()
 
 class CommandManager:
     def __init__(self, registry: SourceRegistry, modes: ModeMachine,
-                 safety: SafetyManager, events=None, readiness=None) -> None:
+                 safety: SafetyManager, events=None, readiness=None,
+                 teleop_timeout_ms: int = 500) -> None:
         self._registry = registry
         self._modes = modes
         self._safety = safety
@@ -38,7 +39,8 @@ class CommandManager:
         # Optional ROS-free runtime gate.  It is enabled for the hardware
         # profile and remains inert for core/simulation profiles.
         self._readiness = readiness
-        self.watchdog = TeleopWatchdog(timeout_ms=500)
+        # SAF-002: default 500 ms, configurable (safety.teleop_timeout_ms).
+        self.watchdog = TeleopWatchdog(timeout_ms=teleop_timeout_ms)
         self._manual_twist: Optional[Twist] = None
         self._manual_source = 'manual'
         #: teleop 세션 번호. 만료 알림(SAF-002)은 세션당 한 번이다.
@@ -60,6 +62,14 @@ class CommandManager:
         self._docking_updated_at: Optional[float] = None
         self._policy_ids = count(1)
         self._input_epoch = 0
+        #: D-400: one safety.policy_off per entry into an autonomous mode while the policy is off.
+        self._unguarded_noted = False
+        self._pending_unguarded: Optional[str] = None
+        self._unguarded_mode: Optional[Mode] = None
+        #: D-400: the last candidate that reached the wheels, judged in announce_pending.
+        self._pending_shadow: Optional[tuple] = None
+        #: Failures swallowed in announce_pending (shadow judge or a publish).
+        self.announce_errors = 0
         self._safety.estop_listeners.append(self._clear_for_stop)
         self._safety.policy_listeners.append(self._clear_for_stop)
 
@@ -185,24 +195,56 @@ class CommandManager:
         self._pending_watchdog = session
 
     def announce_pending(self) -> None:
-        """밀린 알림을 낸다. 브리지가 cmd_vel 을 내보낸 **뒤** 부른다."""
+        """밀린 알림을 낸다. 브리지가 cmd_vel 을 내보낸 **뒤** 부른다.
+
+        Nothing here may escape: a failing sink or judge must not reach the
+        50 Hz loop, nor skip the announcements after it.
+        """
         session = self._pending_watchdog
-        if session is None:
-            return
-        self._pending_watchdog = None
-        if session == self._announced_session:
-            return
-        self._announced_session = session
-        if self._events is not None:
-            self._events.publish(
-                "safety.watchdog", severity="warning", source="command_manager",
-                data={"timeout_ms": self.watchdog.timeout_ms})
+        if session is not None:
+            self._pending_watchdog = None
+            if session != self._announced_session:
+                self._announced_session = session
+                if self._events is not None:
+                    try:
+                        self._events.publish(
+                            "safety.watchdog", severity="warning", source="command_manager",
+                            data={"timeout_ms": self.watchdog.timeout_ms})
+                    except Exception:  # noqa: BLE001
+                        self.announce_errors += 1
+        args, self._pending_shadow = self._pending_shadow, None
+        if args is not None:
+            try:
+                self._safety.shadow_evaluate(*args[:5], output=args[5])
+            except Exception:  # noqa: BLE001 - shadow can only record, never raise
+                self.announce_errors += 1
+        unguarded, self._pending_unguarded = self._pending_unguarded, None
+        if unguarded is not None and self._events is not None:
+            try:
+                self._events.publish("safety.policy_off", severity="warning",
+                                     source="command_manager", data={"source": unguarded})
+            except Exception:  # noqa: BLE001
+                self.announce_errors += 1
+        if self._safety.shadow is not None:
+            try:
+                drained = self._safety.shadow.drain()
+            except Exception:  # noqa: BLE001
+                self.announce_errors += 1
+                drained = []
+            for data in drained:
+                if self._events is None:
+                    continue
+                try:
+                    self._events.publish("safety.shadow_verdict", severity="info",
+                                         source="command_manager", data=data)
+                except Exception:  # noqa: BLE001
+                    self.announce_errors += 1
 
     def _policy_output(self, linear: float, angular: float, source: str, now: float) -> Twist:
         if linear == 0. and angular == 0.:
             return ZERO
-        epoch, mode = self._input_epoch, self._modes.mode
-        output = self._safety.evaluate_candidate(next(self._policy_ids), source, linear, angular, now,
+        epoch, mode, command_id = self._input_epoch, self._modes.mode, next(self._policy_ids)
+        output = self._safety.evaluate_candidate(command_id, source, linear, angular, now,
                                                  scope='manual' if mode is Mode.MANUAL else 'nav')
         if epoch != self._input_epoch or mode is not self._modes.mode or self._safety.estop:
             return ZERO
@@ -212,10 +254,22 @@ class CommandManager:
             self._safety.trigger_estop('control:' + self._safety.policy_reason)
             self._modes.transition(Mode.EMERGENCY)
             return ZERO
-        return Twist(*output)
+        result = Twist(*output)
+        # D-400: judged after cmd_vel reached the wheels (announce_pending) so the
+        # policy's cost never delays the output. Single slot: one candidate per cycle.
+        self._pending_shadow = (command_id, source, linear, angular, now,
+                                (result.linear, result.angular))
+        if (self._safety.policy_mode == 'off' and source in ('navigation', 'docking')
+                and not self._unguarded_noted):
+            self._unguarded_noted = True
+            self._pending_unguarded = source
+        return result
 
     def select_output(self, now: Optional[float] = None) -> Twist:
         current = now if now is not None else time.monotonic()
+        if self._modes.mode is not self._unguarded_mode:
+            self._unguarded_noted = False
+            self._unguarded_mode = self._modes.mode
         stopped = self._safety.estop or self._modes.is_emergency
         ready = self._motion_ready()
         leaving_manual = stopped or not ready or self._modes.mode is not Mode.MANUAL

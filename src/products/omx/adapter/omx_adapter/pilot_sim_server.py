@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import os
+import hashlib
+import re
 import secrets
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -11,10 +13,14 @@ import rclpy
 import uvicorn
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
+from rclpy.parameter import Parameter
+import yaml
 
 from .command_owner import ArmCommandConfig
 from .pilot_sim_api import create_pilot_sim_app
 from .pilot_sim_runtime import PilotSimRuntime
+from .pilot_sim_capture import PilotSimCapture
+from .pilot_sim_camera import PilotSimCamera
 from .ros_runtime import RosArmCommandRuntime
 
 
@@ -27,6 +33,21 @@ def main() -> None:
     if Path("/dev/serial/by-id").exists() or list(Path("/dev").glob("video*")):
         raise RuntimeError("Pilot simulation refuses hardware device grants")
     repo = Path(os.environ.get("ROSY_SIM_REPO", "/repo"))
+    revision = os.environ.get("ROSY_SIM_SOURCE_REVISION", "")
+    if not re.fullmatch(r"[0-9a-f]{40}", revision):
+        raise RuntimeError("explicit ROSY_SIM_SOURCE_REVISION is required for demonstration provenance")
+    world = repo / "src/sim/gz_sim/worlds/omx_pilot_workcell.sdf"
+    source_hasher = hashlib.sha256()
+    for file in sorted((repo / "src/products/omx/adapter/omx_adapter").glob("*.py")):
+        source_hasher.update(file.name.encode() + b"\0" + file.read_bytes())
+    source_hasher.update((repo / "src/contracts/foundation/core_common/protocol/omx_sim.py").read_bytes())
+    vendor_revision = yaml.safe_load((repo / "deploy/robot/omx/stack.lock.yaml").read_text())["vendor"]["revision"]
+    source = {"source_revision": revision, "source_tree_sha256": source_hasher.hexdigest(),
+              "vendor_revision": vendor_revision,
+              "world_sha256": hashlib.sha256(world.read_bytes()).hexdigest()}
+    record_root = Path(os.environ.get("ROSY_SIM_RECORD_ROOT", "/recordings")).resolve()
+    if record_root.is_relative_to(repo.resolve()):
+        raise RuntimeError("recordings must be outside the source checkout")
     config = ArmCommandConfig(
         enabled=True, workcell_id="omx_pilot_sim", instance_id="omx_pilot_sim_01",
         joint_names=JOINTS,
@@ -37,7 +58,7 @@ def main() -> None:
         max_joint_state_age_s=0.5, max_goal_duration_s=1.0, action_timeout_s=8.0,
     )
     rclpy.init()
-    node = Node("rosy_omx_pilot_sim")
+    node = Node("rosy_omx_pilot_sim", parameter_overrides=[Parameter("use_sim_time", value=True)])
     facade: PilotSimRuntime | None = None
 
     def on_event(event):
@@ -57,6 +78,10 @@ def main() -> None:
         on_goal_event=on_event,
     )
     facade = PilotSimRuntime(arm)
+    facade.capture = PilotSimCapture(
+        facade, record_root, source, sim_time_ns=lambda: node.get_clock().now().nanoseconds)
+    camera = PilotSimCamera(node, facade.capture, source["world_sha256"])
+    facade.camera_available = True
     executor = MultiThreadedExecutor(num_threads=3)
     executor.add_node(node)
     spinner = ThreadPoolExecutor(max_workers=1)
@@ -78,6 +103,7 @@ def main() -> None:
         code_file.unlink(missing_ok=True)
         facade.cancel_active()
         executor.shutdown()
+        camera.destroy()
         arm.destroy()
         node.destroy_node()
         rclpy.shutdown()

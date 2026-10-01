@@ -48,6 +48,9 @@ METADATA = {"manifest.json", "SHA256SUMS", "SHA256SUMS.sig"}
 PYTHON_RUNTIME_RELEASE_FILE = "python-runtime.sha256"
 PYTHON_RUNTIME_IMAGE_FILE = Path("usr/local/share/rosy/python-runtime.sha256")
 RUNTIME_ID = re.compile(r"^[0-9a-f]{64}$")
+RUNTIME_TARGET = "rosy-runtime.target"
+# Every unit with PartOf=rosy-runtime.target (pinned by a test).
+RUNTIME_STOP_UNITS = (RUNTIME_TARGET, "rosy-core.service", "rosy-io.service", "rosy-camera.service")
 
 
 def _runtime_id(path: Path) -> str | None:
@@ -146,8 +149,13 @@ class NativeReleaseManager:
 
     @staticmethod
     def _systemctl(action: str) -> None:
+        # The target is ordered After= its PartOf units, so stopping only the
+        # target returns while CORE's stop job still waits behind io/camera;
+        # the start that follows then cancels it and CORE keeps the old
+        # release. Name every PartOf unit so systemctl waits for all of them.
+        units = RUNTIME_STOP_UNITS if action == "stop" else (RUNTIME_TARGET,)
         subprocess.run(
-            ["systemctl", action, "rosy-runtime.target"],
+            ["systemctl", action, *units],
             check=True,
             timeout=120,
         )

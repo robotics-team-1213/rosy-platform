@@ -17,6 +17,7 @@ None at this level. See each package AGENTS.md.
 |-----------|---------|
 | fleet/ | Fleet formation, relay, session, CLI, and console server; consumes shared contracts and does not own robot final commands |
 | vision/ | ROS package rosy_vision (Rosy Vision, D-377): receive-only image ingest and sighting derivation; sighting is not a robot command |
+| cell/ | ROS package rosy_cell (Rosy Cell, D-377, D-399 Application): palletizing recipes and taught cell frames compiled into a Job; submits to Fleet, never to a device |
 | cam/ | Rosy Cam ceiling camera Android app (`io.github.livsbittt.rosy.cam`, D-377); `COLCON_IGNORE`, Gradle only |
 | games/ | ROS package games and match host; game coordination is not a cmd_vel writer |
 

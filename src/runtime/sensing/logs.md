@@ -760,3 +760,69 @@
 - 변경: `map_v2_fleet/lane_rules.yaml`의 `reference_squares`에 `heading_axis_deg`(A 90, B 0, 영상 유래)를 더했다. 사용자 결정: 사각형 위 로봇은 길을 따라 놓이고 앞뒤는 정하지 않는다. 시험이 축 값과, 축 방향으로 중심에서 0.3 m 넘게 벗어나 앞뒤가 LiDAR로 갈리는지를 확인한다.
 - 증거: test_map_v2_fleet_reference_squares.py.
 - gate 변화: 없음(SOURCE, 이 키를 읽는 코드는 아직 없다).
+
+## 2026-10-01 · uncommitted · refactor(localization): 전역 탐색을 후보 목록·발자국 마스크·시드 정밀화로 나눔 (D-395 1단계)
+- 변경: `sensing/localization.py`에 `valid_beams`, `apart`(0.18 m / 0.3 rad), `GLOBAL_OFFSETS`, `MapAgreement.clear_poses/refine/global_results`를 꺼냈다. `global_match`는 같은 계산을 거쳐 같은 답을 낸다. 대칭 맵에서 유일하지 않다고 버리던 후보를 D-395 후보 목록이 쓰게 하려는 준비다.
+- 증거: `test_localization_search.py`(신규 6), `test_localization.py`의 기록된 Gazebo 모서리 시험(유일 해·2 cm) 그대로 통과, `test_localization_gate.py`.
+- gate 변화: 없음(SOURCE). 노드 동작 불변.
+- 결정: D-395 Proposed(설계 승인, 1단계 호스트 전용).
+
+## 2026-10-01 · uncommitted · feat(localization): 거울상까지 모든 자세 후보를 내는 순수 모듈 (D-395 1단계)
+- 변경: `sensing/loc_candidates.py` — `global_candidates`(유일하지 않아도 거절하지 않고 서로 다른 가설을 최대 4개, 적합도 ≥ 0.9, 최고점에서 0.05 안), `slot_candidates`(기준 사각형마다 축·축+180°를 10 cm / 20° 안에서 정밀화, 적합도로 방향을 고름, 개정 2), `merge`, 회전 장착(스캔 0° = 후방)을 거치는 base↔sensor 변환. 시험 도우미 `test/loc_world.py`는 체크인된 `map_v2_fleet.pgm`을 2 cm로 읽고 LiDAR를 광선 투사한다.
+- 증거: `test_loc_candidates.py` 9 passed — 대칭 트랙에서 참 자세와 거울상이 함께 나옴, 사각형 A(−90°)·B(0°) 위 로봇은 슬롯 후보 하나와 맞는 방향, 슬롯 밖은 슬롯 후보 없음, 기록된 Gazebo 스캔(독립 픽스처)에서 참 자세 2 cm.
+- gate 변화: 없음(SOURCE/LOCAL). 노드 배선 없음.
+- 결정: D-395 Proposed(설계 승인, 1단계 호스트 전용).
+
+## 2026-10-01 · uncommitted · fix(localization): 슬롯 탐색 비용 상한과 리뷰 지적 (D-395 1단계 작업 2)
+- 변경: `slot_candidates`가 지도 전체 `clear_poses`를 만들지 않고 슬롯 상자 칸만 발자국 검사한다. 두 탐색이 `clear=`로 한 번 만든 마스크를 함께 쓸 수 있다. 전역 탐색 비용(지도 칸 × 72 방향)은 2단계에서 Pi로 재고 풀링 격자나 시간 예산으로 묶는다는 요구를 모듈 설명에 적었다. 기준을 넘는 형제 정밀화를 버리지 않고, 잘못된 `reference_squares`는 사각형 id를 단 ValueError, `distinct`는 창 밖에서 멈춘다. `footprint_clear` 창이 부풀린 반경(+res/√2)을 덮지 못하던 결함도 고쳤다.
+- 증거: test_loc_candidates.py, test_localization_search.py, test_localization.py, test_localization_gate.py 35 passed, 1 skipped.
+- gate 변화: 없음(SOURCE, 호스트 전용).
+
+## 2026-10-01 · uncommitted · feat(localization): 지도에 없는 LiDAR 물체를 base_link 물체로 묶음 (D-395 4.2절)
+- 변경: `sensing/loc_objects.py` `unmapped_objects` — 지도 벽(`near`)으로 설명되지 않는 반환을 6 cm 간격으로 묶어 중심을 base_link (앞, 왼쪽)으로 낸다. 대칭 맵에서는 거울 가설도 같은 반환을 설명하므로 목록은 가설과 무관하다. 스캔은 고리라서 ±π 이음매(뒤집힌 마운트에서는 로봇 정면)에 걸친 물체를 하나로 합친다(계획에 없던 보강).
+- 증거: `test_loc_objects.py` 4 passed(빈 트랙 0개, 다른 로봇 1개·8 cm 안, 정면 이음매 1개, 거울 가설에서 같은 목록).
+- gate 변화: 없음(SOURCE/LOCAL).
+
+## 2026-10-01 · uncommitted · feat(localization): 주입 뒤 3 s 스캔/지도 검증 (D-395 7항)
+- 변경: `sensing/loc_verify.py` `InjectionCheck` — 0.5 s 안정 뒤 새 스캔마다 적합도 ≥ 0.85가 3 s 유지되면 통과, 한 번이라도 낮거나 스캔이 0.5 s 끊기면 즉시 실패(`fit_low`/`stale_scan`). 출처와 무관하게 같은 관문이다. 한계: 대칭 맵에서는 거울상도 같은 적합도라 이 검증이 거울 주입을 못 거른다. 그래서 LOCALIZED에는 비대칭 단서가 따로 필요하다(loc_state).
+- 증거: `test_loc_verify.py` 5 passed.
+- gate 변화: 없음(SOURCE/LOCAL).
+
+## 2026-10-01 · uncommitted · feat(localization): UNKNOWN/CANDIDATES/LOCALIZED/SUSPECT 상태 기계 (D-395 5절, 개정 3)
+- 변경: `sensing/loc_state.py` `LocalizationStateMachine` — 전원 투입은 항상 UNKNOWN, 후보가 오면 새 request_id로 CANDIDATES, 결정은 같은 id·받은 뒤 `ttl_s`(5 s) 안·후보 인덱스 또는 직접 좌표 하나만 받고, 사람 결정이 아니면 비대칭 단서(`square`/`paint`/`peers`/`slot`) 하나 이상이 있어야 한다(`no_asymmetric_cue`). `InjectionCheck` 통과 시 LOCALIZED(`cancel_nav_goal`), 검증 실패(`inject_rejected`)·픽업·적합도 1 s 지속 하락(`fit_drop`)·Fleet 감시는 SUSPECT. 자율 주행은 LOCALIZED만. 계획의 절대 시각 `expires_at`은 개정 3에 따라 수신 기준 `ttl_s`로 바꿨다.
+- 증거: `test_loc_state.py` 19 passed.
+- gate 변화: 없음(SOURCE/LOCAL).
+
+## 2026-10-01 · uncommitted · feat(perception): 가설 자세별 페인트 점수 (D-395 7절, D-375)
+- 변경: `sensing/perception/paint_hypothesis.py` `paint_score` — 카메라의 바닥 페인트 점(base_link)을 가설 자세로 지도에 놓고 페인트 입자 필터와 같은 거리 점수(exp(−평균 거리/5 mm), 3 cm 상한)를 낸다. 점이 10개 미만이면 None(증거 없음).
+- 증거: `test_paint_hypothesis.py` 7 passed — map_v2_fleet 여섯 자세에서 참 > 0.9, 거울 < 0.1.
+- gate 변화: 없음(SOURCE/LOCAL). 실제 카메라 차선 마스크 연결은 2단계.
+
+## 2026-10-01 · uncommitted · feat(perception): 기준 사각형 HSV 검출기, 출력 계약 고정 (D-395 개정 1 6항)
+- 변경: `sensing/perception/reference_square.py` — 출력 계약 `SquareObservation(bearing_rad, range_m, confidence)`(base_link, 왼쪽 +), `SquareDetector` 프로토콜, 규칙 백엔드 `HsvSquareDetector`(파란 중심 연결 요소 + 둘레 빨간 고리 비율, 거리는 지면 평면에서 중심 행). 지면 평면이 없으면 결과 없음, 신뢰 거리 밖이면 방위만. 학습 클래스 `reference_square`가 같은 `detect(bgr, ground)` 뒤로 바꿔 들어올 수 있다. sensing·perception AGENTS 표에 D-395 모듈 행 추가.
+- 증거: `test_reference_square.py` 11 passed — 합성 영상(카펫·벽·11.8° 피치), 0.3–0.6 m에서 방위 3°·거리 3 cm, 카펫·흰 페인트·고리 없는 파랑·중심 없는 빨강은 0개. 합성 영상은 검출기와 같은 믿음이므로 실제 프레임 1장도 돌렸다: 8kcn 20260930T133221Z 프레임 78(320×240, 피치 11.2°, 높이 0.0627 m 가정)에서 1개, 방위 왼쪽 10.2°, 거리 0.43 m, 신뢰 0.91. 한 장이라 가시 거리·조명 범위는 여전히 미검증(2단계 P2-8).
+- gate 변화: 없음(SOURCE/LOCAL).
+
+## 2026-10-01 · uncommitted · test(localization): D-395 1단계 호스트 종단 시험 — 두 로봇, 사람 입력 0
+- 변경: `test/test_loc_e2e.py` — 체크인된 map_v2_fleet 지도 위 모의 로봇 2대가 순수 모듈(후보·물체·상태 기계·3 s 검증·페인트 점수)과 D-395 선 모델(`CandidateReport`/`LocalizationDecision`)과 Fleet 중재기를 거쳐 위치를 확정한다. 사각형 A 위(카메라 없음, 슬롯 사전)와 슬롯 밖(카메라 없음, 먼저 확정된 로봇이 단서)을 동시에 켬, 거울을 첫 후보로 강제한 외톨이 로봇(슬롯 밖·사각형 B, 페인트로 해소), 단서 없는 외톨이는 결정 없음(음성 대조). 결정은 개정 3대로 `cues`와 수신 기준 `ttl_s`를 거친다. `control` 크기 판정을 40547로 재판정.
+- 증거: `test_loc_e2e.py` 4 passed, 슬롯 가중 0 돌연변이에서 첫 사례 실패 확인(커밋 안 함), 아키텍처 시험 33 passed.
+- gate 변화: SOURCE/LOCAL GO. ROS-SIM(S1)·DEVICE 해당 없음 — 노드·launch·API 배선은 2단계.
+- 결정: D-395 Proposed(개정 3, 1단계 완료).
+
+## 2026-10-01 · uncommitted · fix(localization): 3 s 검증의 공백 판정과 열린 요청 없는 결정 (D-395 리뷰)
+- 변경: 최종 리뷰 지적 반영. (중요) `InjectionCheck`가 공백을 fit이 없는 틱에서만 봐서, 3.6 s 침묵 뒤 스캔 한 번으로 3 s 유지가 통과됐다 → 스캔이 오든 안 오든 마지막 스캔 뒤 0.5 s가 지나면 `stale_scan`. (경미) UNKNOWN·SUSPECT처럼 request_id가 없을 때 `None` 결정이 일치로 통과하던 것을 `stale_request`로 거부.
+- 증거: 새 시험 2개와 `test_loc_verify.py`·`test_loc_state.py`·`test_loc_e2e.py` 통과.
+- gate 변화: 없음(SOURCE/LOCAL).
+
+## 2026-10-01 · uncommitted · feat(perception): explain camera following and foreground evidence
+- 변경: `follow-road-v2` 미리보기에 동일 촬영 시각의 차선 경계·선택 목표·방향·제외 이유·전경 영역을 연결. keep 외 카메라 모드는 CAMERA_LINE 오차·신뢰도만 표시. 기존 road_state가 유효하면 별도 shadow 평면도에 근거리 도로 추정을 표시하며 STOP·보정 의심·입력 부재는 이유/사용 불가로 표시한다. 바운디드 캐시·타이머를 사용하고 기존 JPEG 전송 제한과 CORE 최종 명령 경계를 유지한다.
+- 증거: sensing 전체 2189 passed, 102 skipped (493.36 s); 마지막 표시 변경은 추종·도로·wiring·keep 집중 회귀 107 passed로 재검증. CORE preview/차선 계약 8 passed. harness lint 0 errors, 24 기존 검증 시점 경고. 녹화 영상 3프레임 변경 전후 렌더링은 X:/DevTemp/rosy-follow-preview/comparison.png; nominal 재생 지면 사용, 객체 거리는 unranged. 재생 road_state STOP에는 예측을 그리지 않았다.
+- 한계: 객체 박스는 F/D 분할 영역이며 종류·지속 track ID·객체 이동 예측은 아니다. 목표 점선은 모터 궤적이 아니다. road_state 구독은 노드를 활성화하지 않으며 미실행 시 예측 없음. ROS-SIM·ARTIFACT·DEVICE·FIELD를 승격하지 않는다.
+- 설계/실행: docs/plans/2026-10-01-follow-preview-design.md, docs/plans/2026-10-01-follow-preview.md.
+- gate 변화: 없음(SOURCE/LOCAL 기존 GO 유지; ROS-SIM·ARTIFACT·DEVICE·FIELD 미승격).
+
+## 2026-10-02 · uncommitted · feat(perception): visible lane candidates and object labels
+- 변경: LEFT/RIGHT LANE 선택 경계, CURRENT LANE와 인접 차로 후보, FOLLOW PATH 목표 안내를 구분. 폭·방향·중첩 구간으로 후보를 제한하고 중복 경계 조각을 합침. 전경 영역에 UNKNOWN/DARK와 거리 미확인 표시, 실제 ArUco 픽셀에 TAG 번호를 표시. 진단 전용 선택·차폭·카메라 지면 출처 정보를 추가하고 주행 관측 ground enum은 유지.
+- 증거: 추종·keeper·topology·tag·observer wiring 집중 시험 113 passed. 다차선 11 사례, 표식 픽셀 및 무효 입력, GAZEBO 주행 serializer 회귀 포함. docs/plans/2026-10-02-lane-object-preview-design.md.
+- 한계: 후보는 현재 프레임의 관측이며 전체 도로 차선 수·자동 차선 변경·객체 종류/추적/미래 궤적을 뜻하지 않음. 실기 설치는 전원 꺼짐으로 미확인.
+- gate 변화: 없음. SOURCE/LOCAL 표시 개선 검증; DEVICE/FIELD 미승격.

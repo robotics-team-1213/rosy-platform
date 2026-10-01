@@ -1,3 +1,7 @@
+// D-398 — 증상 말의 `지연`은 공용 어휘 표에서 온다. `수신 끊김`은 이 화면의
+// 고정 문장이다(test_dashboard_browser 핀).
+import { EVIDENCE_LABEL } from "/common/core_ui_logic.js";
+
 // 분류 — 셋이 동시에 잘못됐을 때 하나만 머리를 차지한다(concept 16 Law 1, D-72).
 //
 // 색 예산을 경보 둘로 줄여 놓았는데(D-82) 동시 고장 규칙이 없으면 빨간 것이
@@ -165,7 +169,7 @@ function collectFaults({ state, inventory, safetySource } = {}) {
     faults.push({
       id: `evidence.${channel}`,
       category,
-      title: judged === "disconnected" ? `${label} 수신 끊김` : `${label} 지연`,
+      title: judged === "disconnected" ? `${label} 수신 끊김` : `${label} ${EVIDENCE_LABEL.delayed}`,
       detail:
         judged === "disconnected"
           ? "출처는 있는데 값이 오지 않습니다."

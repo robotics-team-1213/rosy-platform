@@ -2,6 +2,8 @@
 
 **Status:** Accepted (2026-09-30, 소프트웨어 경계와 fail-closed gate만). typed planning 계약과 ROS trajectory 단일 writer를 결정한다. production planner 설정, OMX profile 활성화, public API, 장치/현장 동작 또는 안전 성능은 승인하지 않는다.
 
+**부분 개정 (D-402, 2026-10-01, 시뮬레이션 한정):** [D-402](D-402-omx-motion-planner-v1-analytic-top-down-ik.md)(Proposed, 사용자 승인)가 §2 마지막 문장의 "별도 결정"으로 해석 5축 수직하향 IK backend를 고른다. 적용 범위는 `CELL_TRANSFER` Action과 `simulation` 프로필뿐이다. 이 범위에서는 §3의 SRDF·planning group·충돌 scene 조건을 URDF 기구학, 시뮬 프로필 한계, 작업 영역, 운반 높이 경유로 대신한다. RGB-D `PICK_PLACE`와 실물 프로필에서는 §3 HOLD가 그대로다. §1의 단일 제출자와 §4–§8은 바꾸지 않는다. 이 개정은 D-402가 Accepted가 되면 효력이 생긴다. 그 전에는 원문이 그대로 적용된다.
+
 **관련 결정:** [D-327](D-327-semantic-manipulation-actions-and-device-adapters.md) (의미 조작 경계; 고정 작업대 구현 외 항목은 Proposed), [D-336](D-336-fleet-omx-local-ipc-boundary.md) (같은 호스트 UDS), [D-348](D-348-goal-evidence-producer-and-verifier-wiring.md) (Fleet 독립 목표 검증), [D-369](D-369-control-authority-and-stop-evidence.md) (권한과 정지 증거).
 
 ### Context

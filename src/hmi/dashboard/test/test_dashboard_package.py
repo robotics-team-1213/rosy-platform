@@ -84,12 +84,15 @@ def test_the_connection_banner_alerts_when_disconnected():
     assert 'kind === "online"' in client  # online 일 때만 숨김
 
 
-def test_the_action_message_fades_after_five_seconds():
-    """D-396: 액션 메시지는 5초 후 조용히 사라진다."""
+def test_the_action_message_clears_after_five_seconds():
+    """D-396 + D-220: 액션 메시지는 5초 후 점프 컷으로 사라진다 — 전이로 흐려지지 않는다."""
     js = (ROOT / "app.js").read_text(encoding="utf-8")
     assert "announceAction" in js
     assert "data-faded" in js
     assert "5000" in js  # 5초
+    css = (ROOT / "console-detail.css").read_text(encoding="utf-8")
+    assert ".action-message[data-faded]" in css  # 숨김은 점프 컷
+    assert "transition:" not in css  # D-220 정지 계약
 
 
 def test_event_severity_is_colored():
@@ -100,6 +103,25 @@ def test_event_severity_is_colored():
     css = (ROOT / "console-detail.css").read_text(encoding="utf-8")
     assert '[data-severity="crit"]' in css
     assert '[data-severity="warn"]' in css
+
+
+def test_the_map_draws_a_goal_marker():
+    """D-396: 지도에서 보낸 목표를 다이아몬드 마커로 그린다."""
+    map_js = (ROOT / "map.js").read_text(encoding="utf-8")
+    assert "goal" in map_js
+    assert "rosy:goal-clear" in map_js  # 내비게이션 종료 시 지운다
+    assert "strokeRect" in map_js  # 다이아몬드 모양
+    assert "cssColor(\"route\")" in map_js  # 경로 색 토큰
+
+
+def test_a_pending_value_reads_quiet_ink_without_motion():
+    """D-396 + D-220: 값이 없으면 '--' 대신 조용한 뮤트 대시 — 펄스는 없다(정지 계약)."""
+    js = (ROOT / "app.js").read_text(encoding="utf-8")
+    assert "data-pending" in js
+    css = (ROOT / "console-detail.css").read_text(encoding="utf-8")
+    assert "strong[data-pending]" in css
+    assert "var(--ink-quiet)" in css
+    assert "@keyframes" not in css  # D-220 — 움직임 예산 0
 
 
 def test_the_state_render_feeds_swarm_to_the_formation_cell():

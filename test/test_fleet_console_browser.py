@@ -139,6 +139,11 @@ def test_the_console_renders_what_swarm_control_says(console_url):
         def serve_api(route):
             path = urlparse(route.request.url).path
             body = API.get(path)
+            # 세션 폴백은 _open_console 과 같은 모양이다 — 이것이 없으면 콘솔이
+            # 잠긴 채로 폴링을 시작하지 않아 지도·명단이 영영 로딩에 남는다
+            # (2026-10-01 세션 게이트 도입 뒤 이 시험만 인라인 라우트를 썼다).
+            if body is None and path == "/api/fleet/session":
+                body = {"principal_id": "test-operator", "role": "operator"}
             if body is None:
                 route.fulfill(status=404, json={"detail": "no such api"})
                 return
@@ -834,8 +839,7 @@ def test_fleet_map_keyboard_goal_requires_confirmation_and_can_cancel(console_ur
         browser, page, errors = _open_console(playwright, api, posts=posts,
                                                init_script=DECLINE_CONFIRM)
         page.goto(console_url, wait_until="networkidle")
-        assert page.locator("#log .log-empty strong").inner_text() == "최근 이벤트가 없습니다"
-        assert "관제 요청과 연결 상태 변화" in page.locator("#log .log-empty span").inner_text()
+        assert page.locator("#log ui-empty").inner_text() == "최근 이벤트가 없습니다 — 관제 요청과 연결 상태 변화가 여기에 표시됩니다."
         page.locator("#roster-toggle").click()
         page.wait_for_function("() => !document.querySelector('#roster article ui-button')?.disabled")
         aim = page.locator("#roster article").filter(has_text="rosy_02").locator("ui-button").first
@@ -860,7 +864,7 @@ def test_fleet_map_keyboard_goal_requires_confirmation_and_can_cancel(console_ur
         page.keyboard.press("Enter")
         page.wait_for_function("() => document.querySelector('#log')?.textContent.includes('미션 하달')")
         assert sum(method == "POST" and path == goal_path for method, path in posts) == 1
-        assert page.locator("#log .log-empty").count() == 0
+        assert page.locator("#log ui-empty").count() == 0
         assert page.locator(".robot.selected").count() == 0
         assert page.evaluate("document.activeElement?.dataset.goalRobotId") == "rosy_02"
         assert not errors

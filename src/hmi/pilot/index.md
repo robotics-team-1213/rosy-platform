@@ -18,6 +18,7 @@
 
 - [2026-09-29-rosy-pilot-teleop-app-design.md](../../../docs/plans/2026-09-29-rosy-pilot-teleop-app-design.md)
 - [2026-09-29-rosy-pilot-teleop-app.md](../../../docs/plans/2026-09-29-rosy-pilot-teleop-app.md)
+- [2026-10-01-omx-demonstration-lerobot-design.md](../../../docs/plans/2026-10-01-omx-demonstration-lerobot-design.md)
 - [2026-10-01-pilot-omx-gazebo-practice.md](../../../docs/plans/2026-10-01-pilot-omx-gazebo-practice.md)
 
 ## 교훈 (docs/solutions)
@@ -30,8 +31,8 @@
 
 ## 최근 기록
 
+- 2026-10-01 · uncommitted · fix(pilot): preserve recording errors and reconcile API minor
+- 2026-10-01 · uncommitted · fix(omx): fence recording closure and isolate storage faults
+- 2026-10-01 · uncommitted · feat(omx): record SIM demonstrations and export LeRobot v3
+- 2026-10-01 · uncommitted · D-398 장미색 범위·정지·어휘 정리
 - 2026-10-01 · uncommitted · fix(pilot): main의 OMX 연습 화면·데드존을 D-359 공용 컨트롤 계약 아래로
-- 2026-10-01 · c04de23a · fix(pilot): 보정 주인의 모드를 끊지 않는다; whoami 재시도
-- 2026-10-01 · 5db3391d · feat(pilot): 보정 중 판과 비소유자 주행 잠금
-- 2026-10-01 · uncommitted · D-390 Pilot OMX Gazebo practice
-- 2026-09-30 · 7711cb84 · fix(pilot): 리뷰 수정 — 세로 전체화면·오프라인 셸·자동 모드 상태

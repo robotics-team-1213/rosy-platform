@@ -67,8 +67,8 @@
 
 ## 최근 기록
 
-- 2026-10-01 · uncommitted · docs(site): 두 번째 카메라 자리의 배선 안내
-- 2026-10-01 · uncommitted · test(site): `site-firewall.py`를 실제 iptables-nft로 검증 (컨테이너)
-- 2026-10-01 · uncommitted · merge(site): main의 D-341 페어링 배선과 인터페이스 바인드 합치기 — 사이트 설정 파일은 site.env 하나
-- 2026-10-01 · uncommitted · fix(site): 재검증 반영 — 컨테이너 직행 트래픽 차단, 라벨로 닫기, 바인드 탐침 정밀화
-- 2026-10-01 · uncommitted · fix(site): 보안 리뷰 반영 — 필터를 Docker 앞 mangle로, 원자 적용·실패 시 닫힘, 설정은 Compose에서
+- 2026-10-01 · uncommitted · fix(release): 보정 가드 리뷰 반영 — 호스트명 주장을 호스트 키로 증명, ssh 시간 상한
+- 2026-10-01 · uncommitted · fix(release): 보정 가드가 IP로 불릴 때 호스트명 자격 증명을 찾는다
+- 2026-10-01 · uncommitted · fix(release): `prepare_payload_release.py` 독립 리뷰 반영 — rc 패키지 제외, 오류 처리, 인용
+- 2026-10-01 · f8db47f5 · feat(release): 서명 안 된 페이로드를 push 직전까지 한 명령으로 — `prepare_payload_release.py`
+- 2026-10-01 · uncommitted · perf(release): rosdep apt 패키지를 한 트랜잭션으로 — payload 빌드 7분 9초→4분 49초

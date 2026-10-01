@@ -37,8 +37,8 @@
 
 ## 최근 기록
 
-- 2026-10-01 · uncommitted · feat(console): Escape 키 즉시 비상정지
-- 2026-10-01 · uncommitted · feat(console): 모드 버튼·히어로가 한국어로 말한다
-- 2026-10-01 · c302529d · feat(dashboard): 보정 중 칩
-- 2026-10-01 · uncommitted · fix(console): 계보줄 단일 작성자 — 10Hz 덮어쓰기 제거
-- 2026-10-01 · uncommitted · feat(console): D-383 편대 역할 칸과 버전 계보
+- 2026-10-02 · uncommitted · D-405 /device 테마 버튼 아이콘 렌더 + fullscreen 100dvh 게이트 수리
+- 2026-10-02 · uncommitted · fix(console): fullscreen uses dynamic viewport height
+- 2026-10-02 · uncommitted · feat(console): camera fullscreen and lane/object legend
+- 2026-10-01 · uncommitted · D-398 후속 — 원시 줄 간격 토큰화
+- 2026-10-01 · uncommitted · D-398 죽은 토큰 참조·펄스·페이드 정리

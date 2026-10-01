@@ -257,6 +257,28 @@ function Get-CoreReadyArguments([string]$CoreReadyProbe) {
     )
 }
 
+function Get-CoreReleaseCheckArguments {
+    # An activator older than the fix in native_release.py stops only
+    # rosy-runtime.target; CORE's stop job is then cancelled by the start and
+    # CORE keeps serving the old release while readiness passes (9dfk,
+    # 2026-10-01). The fixed activator reaches a robot only with the image-layer
+    # sync, which runs AFTER activation, so check here: CORE's main process
+    # must run from /opt/rosy/current, else restart rosy-core (the units that
+    # Require it restart with it). No quotes inside: PowerShell 5.1 eats double
+    # quotes and the body travels in single quotes, so the cwd (which may end
+    # in " (deleted)") is compared with case, which does not split words.
+    # A failed restart still exits 0 so the push can name -Rollback as the fix.
+    $script = 'p=$(systemctl show -p MainPID --value rosy-core.service); ' +
+        'c=$(readlink /proc/$p/cwd); w=$(readlink -f /opt/rosy/current); s=stale; ' +
+        'if [ x$p != x0 ] && [ x$w != x ]; then case x$c in x$w) s=ok;; esac; fi; ' +
+        'if [ $s = ok ]; then echo CORE_RELEASE_OK $w; ' +
+        'else echo CORE_RELEASE_STALE pid=$p cwd=$c want=$w; ' +
+        'if systemctl restart rosy-core.service; ' +
+        'then echo CORE_RESTARTED $(readlink /proc/$(systemctl show -p MainPID --value rosy-core.service)/cwd); ' +
+        'else echo CORE_RESTART_FAILED; fi; fi'
+    return @("sudo", "-n", "sh", "-c", "'$script'")
+}
+
 function Get-ImageLayerSyncArguments([string]$ReleaseId, [switch]$DryRun) {
     # A push runs the script of the release it just activated. After a
     # rollback the release that became current may predate D-388, so fall back
@@ -328,8 +350,11 @@ function Get-RemoteCommandPlan {
         # D-388: sync the image layer back to the release that became current
         # BEFORE the readiness check. If the newer release's units or scripts
         # do not work with the older one, CORE is only ready after the sync.
+        # The core-release check follows the sync for the same reason: a CORE
+        # restarted into the older release before its units are back may fail.
         Add-Step $plan "ssh" $SshExe (@("-i", $KeyPath) + $sshOptions + @($target, "sudo", "-n", $RollbackWrapper))
         if (-not $SkipImageLayerSync) { Add-ImageLayerSteps $plan "" -NoReadyCheck }
+        Add-Step $plan "ssh" $SshExe (@("-i", $KeyPath) + $sshOptions + @($target) + (Get-CoreReleaseCheckArguments)) "core-release-check"
         Add-Step $plan "ssh" $SshExe (@("-i", $KeyPath) + $sshOptions + @($target) + (Get-CoreReadyArguments $CoreReadyProbe))
         return $plan
     }
@@ -343,6 +368,7 @@ function Get-RemoteCommandPlan {
     Add-Step $plan "ssh" $SshExe (@("-i", $KeyPath) + $sshOptions + @($target, "chmod", "+x", $remoteUnpack))
     Add-Step $plan "ssh" $SshExe (@("-i", $KeyPath) + $sshOptions + @($target, "sudo", "-n", $remoteUnpack, $ReleaseId, $remoteTarball, $RemoteReleasesDir))
     Add-Step $plan "ssh" $SshExe (@("-i", $KeyPath) + $sshOptions + @($target, "sudo", "-n", $ActivateWrapper, $ReleaseId))
+    Add-Step $plan "ssh" $SshExe (@("-i", $KeyPath) + $sshOptions + @($target) + (Get-CoreReleaseCheckArguments)) "core-release-check"
     Add-Step $plan "ssh" $SshExe (@("-i", $KeyPath) + $sshOptions + @($target) + (Get-CoreReadyArguments $CoreReadyProbe))
     if (-not $SkipImageLayerSync) { Add-ImageLayerSteps $plan $ReleaseId }
     return $plan
@@ -368,10 +394,13 @@ if ($PrintCommands) {
 # --- calibration guard (D-321 addendum) -------------------------------------
 # Activation restarts rosy-runtime.target, which cuts any calibration drive
 # short. Ask CORE for an active calibration session first and refuse unless
-# -Force. The check itself is soft: no token or no answer only warns.
+# -Force. The check itself is soft: no token or no answer only warns. The
+# guard gets this push's ssh settings so it can resolve an IP to the device
+# hostname its stored credential is named after.
 $calibrationGuard = Join-Path $PSScriptRoot "rosy-calibration-guard.ps1"
 & $calibrationGuard -Robot $Robot -Action "a release push/rollback (CORE restart)" `
-    -ApiPort $ApiPort -ApiToken $ApiToken -Force:$Force
+    -ApiPort $ApiPort -ApiToken $ApiToken -RosyUser $RosyUser -KeyPath $KeyPath `
+    -KnownHosts $KnownHosts -SshExe $SshExe -Force:$Force
 if ($LASTEXITCODE -eq 3) {
     Fail "Release push refused: a calibration session is active on $Robot. Wait for it to end or pass -Force."
 }
@@ -455,6 +484,21 @@ foreach ($step in $plan) {
     }
     if ($step.role -eq "image-layer-restart") {
         Write-Host "restarted: $($restartedUnits -join ', ')"
+    }
+    if ($step.role -eq "core-release-check") {
+        $checked = $result.output -join " "
+        if ($checked -match "CORE_RESTART_FAILED") {
+            if ($Rollback) {
+                Fail "CORE did not start after the rollback restart. Read 'journalctl -u rosy-core' on $Robot."
+            }
+            Fail "CORE did not start on the new release after the restart; the robot has no running CORE. Run this script with -Rollback."
+        } elseif ($checked -match "CORE_RESTARTED") {
+            Write-Warning "CORE was still running the previous release after the switch (activator predates the fix); restarted rosy-core."
+        } elseif ($checked -match "CORE_RELEASE_OK (/\S+)") {
+            Write-Host "CORE runs the activated release: $($Matches[1])"
+        } else {
+            Fail "could not confirm that CORE runs the activated release: $display"
+        }
     }
 
     if ($arguments -contains $ActivateWrapper -or $arguments -contains $RollbackWrapper) {

@@ -35,30 +35,59 @@ Verified twice on 2026-09-26: releases 013 and 014 on a Pinky Pro running image 
    gh workflow run build-native-payload.yml --ref main -f release_id=<id>
    gh run watch <run-id> --exit-status --interval 30
    ```
-3. **Download the artifact, then sign from the tarball, not from the artifact folder.**
-   The artifact folder drops dotfiles such as `install/.colcon_install_layout`, so signing
-   it fails with `CHECKSUM_FILE_MISSING`. Extract `<id>.unsigned.tar.gz` into a folder
-   named after the release id. The tarball has no top-level directory.
+3. **Download, check, sign and pack with one command.** Run with `PYTHONUTF8=1` on Windows.
+   ```powershell
+   python tools/release/prepare_payload_release.py --run <run-id> --robot <robot-ip>
+   ```
+   - It finds the run's `rosy-native-payload-unsigned-<id>-<sha>` artifact and downloads it
+     with `download_artifact.py`. The work folder is `--out-dir`, default
+     `X:\DevTemp\rosy-release-<id>`. Already downloaded? Pass `--artifact-dir <dir>`.
+   - It checks that every name in `required-ros-packages.txt` is in `rosy-packages.txt`.
+     Both list ROSY workspace packages, not debs.
+   - It runs a read-only `dpkg-query -W` over SSH on each `--robot` (repeatable) and prints
+     one verdict per robot. The query lists `ros-jazzy-*` packages with their status. Every
+     package installed on both sides must have the same version (C++ ABI). Packages that
+     exist only on the runner (gz, rqt, rviz, fastrtps) are fine. Only status `ii` counts as
+     installed: an `rc` package (removed, config files left) still reports its old version
+     and is ignored, and so is an empty version. Comparing zero packages fails.
+     `--skip-abi` skips this check.
+   - It extracts `<id>.unsigned.tar.gz` into `<out>/x/<id>` through a temp folder and a
+     rename. An existing `<out>/x/<id>` is refused: remove it or use a new `--out-dir`.
+     It never signs the artifact folder, because that folder drops dotfiles.
+   - It signs with `%LOCALAPPDATA%\Rosy\signing\<key>.private.pem` (`--key-name`, default
+     `rosy-release-2026-01`), packs `<out>/<id>.tar.gz` with `--modes-from`, and prints
+     the two push lines below. It never pushes.
+   - Each phase prints its wall time. Release 021 (a 98 MB artifact) took 99 s to download
+     and 28 s for everything else.
+4. **Manual fallback** (the same steps by hand). The artifact folder drops dotfiles such
+   as `install/.colcon_install_layout`, so signing it fails with `CHECKSUM_FILE_MISSING`.
+   Sign from the tarball. The tarball has no top-level directory. Compare `ros-packages.txt`
+   (`name=version`) with the robot's
+   `dpkg-query -W -f='${db:Status-Abbrev}\t${binary:Package}\t${Version}\n' 'ros-jazzy-*'`
+   (`status<TAB>name<TAB>version`, keep only `ii` lines) as described in step 3.
    ```bash
    gh run download <run-id> -n rosy-native-payload-unsigned-<id>-<sha> -D $P
    mkdir -p $P/x/<id> && python -c "import tarfile,sys; tarfile.open(sys.argv[1]).extractall(sys.argv[2], filter='tar')" $P/<id>.unsigned.tar.gz $P/x/<id>
-   ```
-4. **Compare ROS package versions with the robot** before signing. Every
-   `ros-jazzy-*` package present in both `ros-packages.txt` and the robot's `dpkg-query`
-   output must have the same version (C++ ABI). Packages that exist only on the runner (gz,
-   rqt, rviz, fastrtps) are fine if `required-ros-packages.txt` does not name them.
-   Also check that every required package is installed on the robot.
-5. **Sign, pack, push, activate.** Run with `PYTHONUTF8=1` on Windows.
-   ```bash
    python deploy/robot/pinky_pro/release/sign_image_release.py $P/x/<id> --private-key "$LOCALAPPDATA/Rosy/signing/<key>.private.pem" --public-key deploy/robot/pinky_pro/release/public-keys/<key>.pem
    python deploy/robot/pinky_pro/release/build_payload_release.py pack --release-dir $P/x/<id> --out $P/<id>.tar.gz --modes-from $P/<id>.unsigned.tar.gz --public-key deploy/robot/pinky_pro/release/public-keys/<key>.pem
    ```
+5. **Push and activate.**
    ```powershell
    deploy\\robot\\pinky_pro\rosy-release-push.ps1 -Robot <robot-ip> -Tarball <P>\<id>.tar.gz -PrintCommands   # dry run
    deploy\\robot\\pinky_pro\rosy-release-push.ps1 -Robot <robot-ip> -Tarball <P>\<id>.tar.gz
    ```
-   - **Success** looks like `current release: <id> (previous: <old>)` followed by
-     `CORE readiness: PASS`.
+   - **Success** looks like `current release: <id> (previous: <old>)`, then
+     `CORE runs the activated release: /opt/rosy/releases/<id>`, then `CORE readiness: PASS`.
+   - `WARNING: CORE was still running the previous release after the switch ... restarted
+     rosy-core` means the robot's installed activator predates the 2026-10-01 fix (it stopped
+     only `rosy-runtime.target`, so CORE kept the old release while readiness passed). The
+     push restarted CORE, and the image-layer sync installs the fixed activator, so the
+     warning should not come back on that robot.
+   - Activation now really stops CORE, so `rosy-navigation` (it `Requires=rosy-core`, not
+     part of the target) stops too and stays stopped. Start it again through its approval
+     path; it is not part of the runtime target (D-291).
+   - `CORE did not start ...` stops the push: no CORE is running. Run `-Rollback` (or read
+     `journalctl -u rosy-core` if it was a rollback).
    - `/etc/rosy/runtime.env: Permission denied` is a known harmless defect: the readiness
      step runs as `rosy`, and the file is 0600.
    - **Automatic rollback:** a CORE that fails its 45 s readiness check is rolled back by
@@ -66,12 +95,27 @@ Verified twice on 2026-09-26: releases 013 and 014 on a Pinky Pro running image 
    - **Manual rollback:** `-Rollback`.
    - **Calibration guard (D-321 addendum):** before the first remote step the script asks
      CORE `GET /api/v1/calibration/session`. Give it a token through `ROSY_API_TOKEN` or the
-     DPAPI device credential (`%LOCALAPPDATA%\Rosy\api\<robot>.credential.xml`); use
+     DPAPI device credential; use
      `-ApiToken` only as a last resort, because a command-line token lands in shell history
-     and the process list. HTTP 401/403 means the token is wrong, not that CORE is down. An active session **refuses** the push (`REFUSED ... would
+     and the process list. The guard first tries `%LOCALAPPDATA%\Rosy\api\<robot>.credential.xml`
+     (`<robot>` exactly as passed to `-Robot`). `rotate-core-api-credential.ps1` names the file
+     after the device hostname (`rosy-pinky-9dfk.credential.xml`), so for an IP the guard
+     runs `ssh <user>@<ip> hostname` with the push's own `-SshExe`/`-KeyPath`/`-KnownHosts`
+     (`-n`, `BatchMode=yes`, `StrictHostKeyChecking=yes`, `ConnectTimeout=<TimeoutSec>`,
+     keepalives, and a wall-clock limit of `TimeoutSec + 5` s per call, after which ssh is
+     killed). The answer must be exactly one line matching `^rosy-[a-z0-9-]+$`. That name
+     is then proven by the device's host key: a second ssh with `HostKeyAlias=` set to the
+     first known_hosts entry of `<name>`, `<name>.local` or `<name>.lan` (plain entries
+     only) must succeed before `<hostname>.credential.xml` is used. It never tries
+     another robot's file against this address. Residual risk: this trusts known_hosts.
+     Robots that share a host key (a cloned image whose keys were never regenerated)
+     cannot be told apart, and a robot whose name has no plain known_hosts entry is
+     skipped (warned), not checked. HTTP 401/403 means the token is wrong, not that CORE is down. An active session **refuses** the push (`REFUSED ... would
      interrupt a running calibration`) — wait for it, ask its owner to end it, or pass
      `-Force` only when you know the calibration is abandoned. No token or no answer only
-     warns. `-PrintCommands` skips the check.
+     warns: `CALIBRATION CHECK SKIPPED` lists the credential files it looked for and why
+     the hostname lookup failed. Treat that line as a missing safety check, not as noise.
+     `-PrintCommands` skips the check.
 6. **Image-layer sync (automatic, D-388).** After `CORE readiness: PASS` the push runs
    `/opt/rosy/releases/<id>/deploy/robot/native/sync-image-layer.py` twice under `sudo -n`.
    `--dry-run` prints the JSON plan (`changed`, `new`, `unchanged`, `skipped`), then the

@@ -314,6 +314,6 @@ class TestBootCardRoseMark:
 
     def test_the_boot_card_has_a_rose_pixel(self):
         image = self._boot()
-        rose = (227, 27, 93)  # --rose #e31b5d
+        rose = (246, 151, 231)  # --brand-rose #f697e7
         colours = {colour for _count, colour in image.getcolors(maxcolors=1 << 16)}
         assert rose in colours, f"로즈색 점이 없다: {sorted(c for c in colours if c != _BG)[:8]}"

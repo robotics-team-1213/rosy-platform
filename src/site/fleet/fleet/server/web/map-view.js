@@ -268,7 +268,7 @@ export function createMapView({ el, view, auth, call, onMapChanged, onMapUnavail
   }
 
   function sightingLabel(s) {
-    const age = s.state === "stale" ? ` · ${(s.age_ms / 1000).toFixed(1)}초 전` : "";
+    const age = s.state === "delayed" ? ` · ${(s.age_ms / 1000).toFixed(1)}초 전` : "";
     return `${s.robot_id} · 카메라${age}`;
   }
 
@@ -276,7 +276,7 @@ export function createMapView({ el, view, auth, call, onMapChanged, onMapUnavail
   function drawSighting(ctx, s, toPoint, size, lineWidth) {
     const { x: cx, y: cy } = toPoint(s.x, s.y);
     ctx.save();
-    ctx.globalAlpha = s.state === "stale" ? 0.4 : 1;
+    ctx.globalAlpha = s.state === "delayed" ? 0.4 : 1;
     ctx.strokeStyle = colorOfSighting(s.robot_id);
     ctx.lineWidth = lineWidth;
     ctx.setLineDash([lineWidth * 2, lineWidth * 1.5]);
@@ -290,7 +290,7 @@ export function createMapView({ el, view, auth, call, onMapChanged, onMapUnavail
     ctx.lineTo(cx + Math.cos(s.yaw) * size * 1.4, cy - Math.sin(s.yaw) * size * 1.4);
     ctx.stroke();
     ctx.restore();
-    drawChip(ctx, null, cx, cy + size * 1.9, sightingLabel(s), s.state === "stale" ? "warn" : undefined);
+    drawChip(ctx, null, cx, cy + size * 1.9, sightingLabel(s), s.state === "delayed" ? "warn" : undefined);
   }
 
   function sitePolygons() {

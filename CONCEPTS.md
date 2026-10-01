@@ -32,6 +32,13 @@ PRT `Envelope.type` and `msg_id` describe a message. UDS `operation` selects an 
 
 Request sent, device response, local safety latch, zero-motion readback, and physical E-stop/driver interlock are distinct observations. The current Fleet `estop` response's legacy `stopped` count means HTTP response received from CORE, not verified physical stop. A missing response leaves the result unknown (D-298).
 
+### Safety policy mode
+How a robot's sensor-based safety policy takes part in motion: off (no policy; drive commands pass with only speed limits), shadow (the policy judges every command and the judgement is recorded, but never changes motion), or enforce (the policy limits or stops motion).
+
+*Avoid:* treating shadow as a weaker enforce — a shadow verdict of "stop" stops nothing.
+
+Shadow exists to gather evidence before enforcing: what the policy would have stopped or limited, and how often it could not judge. A shadow judgement is made only after the command has already gone to the wheels, so the policy's own cost can never delay or alter motion. Moving a robot from shadow to enforce is a per-robot decision made on that evidence, never a default. When a shadow cannot start, the robot runs with the policy off and says why, rather than refusing to start.
+
 ### ROSY Runtime
 
 A target-architecture name for node-local execution. It does not imply a universal `rosy-runtime-base` package, one process, or a shared ROS graph on all hosts (D-296). The source directory `src/runtime/` is a code grouping, not a deployment unit.
@@ -60,7 +67,9 @@ The two halves must agree, because separating robots by domain alone still leave
 ### Runtime mode
 The staged install/hardware preset a unit runs at: core, then motor, then hardware, each admitting more physical hardware than the last.
 
-*Avoid:* profile
+*Operator word:* 실행 모드 (화면 문구는 실행 모드; `core`·`motor`·`hardware` 값 자체는 `title`에만)
+
+*Avoid:* profile, 프로필
 
 Core is the safe default a unit boots into and the only one that starts no motion hardware; motor adds the drivetrain for bench commissioning; hardware adds navigation and the remaining sensors. Promotion is explicit and is expected to be re-earned after an update or rollback. A board catalog may define aliases that resolve to one of the three; anything that resolves to none of them is an error rather than a fallback.
 
@@ -99,7 +108,9 @@ An advertised boolean or descriptor of what the Device can do. It is not a sched
 
 *Code:* `Capability`, `CapabilityDescriptor`
 
-*Avoid:* `rosy-profile-*` as a capability. Install presets and D-62 slices are not capabilities.
+*Operator word:* 기능 (도킹 관련은 도킹 기능)
+
+*Avoid:* `rosy-profile-*` as a capability. Install presets and D-62 slices are not capabilities. 운용자 문구의 `capability` 영어 표기.
 
 ### Asset
 v1 is the single Device (`type=mobile_base`, `asset_id=robot_id`).

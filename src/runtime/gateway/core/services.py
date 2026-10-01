@@ -13,6 +13,7 @@ from core_common.capability import Capability
 from core_features.calibration import CalibrationSessionManager
 from core_features.command.arbitration import Mode, ModeMachine, SourceRegistry
 from core_features.command.manager import CommandManager
+from core.teleop_config import teleop_timeout_ms
 from core_features.docking.agent import DockAgent
 from core_features.docking.database import DockDatabase, DockError, DockInstance, DockType
 from core_features.docking.detector import select_detector
@@ -367,7 +368,8 @@ class CoreServices:
         state.set_activity_provider(calibration.activity)
         registry = SourceRegistry(config.get("command_sources"))
         modes = ModeMachine()
-        command = CommandManager(registry, modes, safety, events=events, readiness=readiness)
+        command = CommandManager(registry, modes, safety, events=events, readiness=readiness,
+                                 teleop_timeout_ms=teleop_timeout_ms(safety_cfg))
         waypoints = WaypointManager(waypoints_path, events=events)
         nav = NavigationManager(events, state, waypoints, safety,
                                 stuck_timeout_s=float(safety_cfg.get("stuck_timeout_s", 30.0)),

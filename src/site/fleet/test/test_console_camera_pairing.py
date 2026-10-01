@@ -181,7 +181,8 @@ def test_the_shell_wires_the_panel_and_reasks_it_on_every_login():
     assert "dialogs: { confirmIrreversible, openLiveDialog }" in shell
     assert "locked: () => auth.locked" in shell
     assert "cameraPairing.resetPolling();" in shell
-    assert "cameraPairing.refresh({ credentials: true });" in shell
+    # 로그인마다 자격을 다시 묻는다 — 갱신 호출은 Promise.allSettled 묶음 안에 있다.
+    assert "cameraPairing.refresh({ credentials: true })" in shell
     # route-absent 404 closes the gate; the calm sentence is the page's, not a failure.
     assert 'gate.fail(err.status, err.code) === "absent"' in module
     assert "dialogs.openLiveDialog(dialog" in module and "showModal" not in module
