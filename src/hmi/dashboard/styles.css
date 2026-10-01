@@ -17,8 +17,6 @@
  *      로봇의 같은 순간이므로 테두리로 조각내지 않고 면과 실선으로 나눈다.
  */
 
-:root { color-scheme: dark; }
-
 /* ===========================================================================
    0. 기본
    ======================================================================== */
@@ -31,14 +29,13 @@ body {
   margin: 0;
   min-height: 100vh;
   overflow-x: hidden;
-  color: var(--paper);
+  color: var(--ink);
   background: var(--ground);
   font-family: var(--body);
   font-size: var(--text-body);
   text-rendering: optimizeLegibility;
 }
 
-input, select { font: inherit; }
 ui-button, a { -webkit-tap-highlight-color: transparent; }
 
 /* 포커스는 상태가 아니라 상호작용이다 — 어디서나 같은 링이다. */
@@ -108,65 +105,9 @@ ui-button, a { -webkit-tap-highlight-color: transparent; }
 .host-actions ui-button,
 .waypoint-actions ui-button { flex: 1 1 auto; }
 
-/* ---- 필드 — 입력은 파인 면이다 ------------------------------------------ */
-.auth-row input,
-.settings-card input,
-.settings-card select,
-.host-card input {
-  min-height: var(--target-secondary);
-  min-width: 0;
-  padding: 0 var(--space-3);
-  border: 1px solid var(--field-line);
-  border-radius: var(--radius-control);
-  color: var(--paper);
-  background: var(--field-bg);
-  font-family: var(--mono);
-  font-size: var(--text-body);
-}
-.auth-row input:focus-visible,
-.settings-card input:focus-visible,
-.settings-card select:focus-visible,
-.host-card input:focus-visible { border-color: var(--focus-ring); }
-.auth-row input:invalid { border-color: var(--field-invalid); }
-
-/* ---- 태그 — 기계가 말한 짧은 값 ----------------------------------------- */
-.status-badge, .machine-tag, .mode-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-1) var(--space-3);
-  border: 1px solid var(--surface-line);
-  border-radius: var(--radius-flag);
-  color: var(--nominal-quiet);
-  font: var(--weight-regular) var(--text-micro)/var(--leading-body) var(--mono);
-  letter-spacing: var(--track-wide);
-  white-space: nowrap;
-}
-.status-badge i { width: var(--space-2); height: var(--space-2); border-radius: var(--radius-flag); background: currentColor; }
-/* 상태 어휘는 셋뿐이다: 중립(기본) · 주의(글자) · 위험(채움).
-   같은 셋을 뱃지·기계 태그·모드 칩·[data-status]가 함께 쓴다 — 표면마다
-   다른 색 규칙을 만들면 그게 곧 세 번째 팔레트다.
-   위험은 채움이다(D-202/D-214): crit 글자는 점검 패널 위에서 2.68:1로
-   읽히지 않는다 — 종이 잉크 + 위험 채움. */
-.status-online, [data-status="OK"] { color: var(--nominal); }
-[data-status="WARNING"] { color: var(--status-warn); border-color: var(--status-warn-a45); }
-.status-error,
-[data-status="ERROR"], [data-status="UNAVAILABLE"] {
-  color: var(--paper);
-  background: var(--status-crit);
-  border-color: transparent;
-}
-
-.mode-chip[data-mode="SITE_STA"],
-.mode-chip[data-mode="ACTIVATED_CORE_ONLY"],
-.mode-chip[data-mode="core"] { color: var(--nominal); }
-.mode-chip[data-mode="RELAY_AP_STA"],
-.mode-chip[data-mode="PROVISIONING_AP"],
-.mode-chip[data-mode="RECOVERY_AP"] { color: var(--status-warn); border-color: var(--status-warn-a45); }
-.mode-chip[data-mode="NETWORK_HOLD"],
-.mode-chip[data-mode="RECOVERY_HOLD"],
-.mode-chip[data-mode="motor"],
-.mode-chip[data-mode="hardware"] { color: var(--status-crit); border-color: var(--status-crit-a45); }
+/* ---- 필드·태그 — 얼굴은 components.css의 공용 필드·태그다(D-359 §5.1·§5.2).
+   여기는 자리와 연결 표시 점만 정한다. */
+#connection-badge i { width: var(--space-2); height: var(--space-2); border-radius: var(--radius-flag); background: currentColor; }
 
 
 
@@ -194,7 +135,7 @@ ui-button, a { -webkit-tap-highlight-color: transparent; }
   background: var(--surface-line);
 }
 .panel-heading h2, .panel-heading h3 { margin: 0; flex: none; }
-.panel-heading .machine-tag { flex: none; }
+.panel-heading ui-tag { flex: none; }
 
 /* 패널은 기본적으로 그릇이 아니다 — 같은 면 위의 묶음일 뿐이다.
    카드 대접은 카드가 맞는 점검 뷰에서만 준다(§4). */
@@ -241,19 +182,19 @@ ui-button, a { -webkit-tap-highlight-color: transparent; }
   background: var(--ground-deep);
 }
 
-.brand { display: inline-flex; align-items: center; gap: var(--space-3); color: var(--paper); text-decoration: none; }
-.brand b { display: block; color: var(--brand-rose); font: var(--weight-strong) var(--text-value)/var(--leading-flat) var(--mono); letter-spacing: 0.18em; }
-.brand small { display: block; margin-top: var(--space-1); color: var(--muted); font: var(--weight-regular) var(--text-micro)/var(--leading-flat) var(--mono); letter-spacing: var(--track-label); }
+.brand { display: inline-flex; align-items: center; gap: var(--space-3); color: var(--ink); text-decoration: none; }
+.brand b { display: block; color: var(--brand-rose); font: var(--weight-strong) var(--text-value)/var(--leading-flat) var(--mono); letter-spacing: var(--track-label); }
+.brand small { display: block; margin-top: var(--space-1); color: var(--ink-quiet); font: var(--weight-regular) var(--text-micro)/var(--leading-flat) var(--mono); letter-spacing: var(--track-label); }
 /* 마크는 로고이지 계기가 아니다 — 상태색을 쓰지 않는다. 화면에서 유일하게
    색이 있어야 할 것은 지금 잘못된 것 하나다. */
 .brand-mark { display: grid; grid-template-columns: repeat(3, 4px); align-items: end; gap: var(--space-1); height: 22px; }
-.brand-mark i { display: block; width: 4px; border-radius: var(--radius-flag); background: var(--muted); }
+.brand-mark i { display: block; width: 4px; border-radius: var(--radius-flag); background: var(--ink-quiet); }
 .brand-mark i:nth-child(1) { height: 10px; }
-.brand-mark i:nth-child(2) { height: 22px; background: var(--paper); }
+.brand-mark i:nth-child(2) { height: 22px; background: var(--ink); }
 .brand-mark i:nth-child(3) { height: 15px; }
 
 .topbar-status { display: flex; align-items: center; gap: var(--space-3); }
-.clock { color: var(--muted); font: var(--weight-regular) var(--text-label)/var(--leading-flat) var(--mono); letter-spacing: 0.1em; font-variant-numeric: tabular-nums; }
+.clock { color: var(--ink-quiet); font: var(--weight-regular) var(--text-label)/var(--leading-flat) var(--mono); letter-spacing: var(--track-label); font-variant-numeric: tabular-nums; }
 /* 인증 브리지의 목적지 — 역할 화면의 스위치와 같은 문법, 이 페이지의 배치다.
    목록은 서버 매니페스트가 역할로 걸러 준다(D-335 뒤의 비평 P1 회차). */
 .surface-bridge { display: flex; align-items: center; gap: var(--space-1); }
@@ -265,12 +206,12 @@ ui-button, a { -webkit-tap-highlight-color: transparent; }
   padding: 0 var(--space-3);
   border: 1px solid transparent;
   border-radius: var(--radius-button);
-  color: var(--muted);
+  color: var(--ink-quiet);
   font: var(--weight-label) var(--text-label)/var(--leading-control) var(--body);
   text-decoration: none;
   white-space: nowrap;
 }
-.surface-bridge a:hover { color: var(--paper); background: var(--ground-soft); }
+.surface-bridge a:hover { color: var(--ink); background: var(--ground-soft); }
 .surface-bridge a:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
 
 .view-switch { display: inline-flex; border: 1px solid var(--surface-line); border-radius: var(--radius-button); overflow: hidden; }
@@ -284,7 +225,7 @@ ui-button, a { -webkit-tap-highlight-color: transparent; }
   cursor: pointer;
 }
 .view-tab[aria-pressed="true"],
-.view-tab[aria-selected="true"] { background: var(--paper); color: var(--button-primary-ink); font-weight: var(--weight-strong); }
+.view-tab[aria-selected="true"] { background: var(--ink); color: var(--button-primary-ink); font-weight: var(--weight-strong); }
 
 .auth-drawer {
   position: fixed;
@@ -300,7 +241,7 @@ ui-button, a { -webkit-tap-highlight-color: transparent; }
 }
 .auth-drawer.open { display: grid; gap: var(--space-4); }
 .auth-drawer h2 { margin: 0 0 var(--space-2); font: var(--weight-label) var(--text-title)/var(--leading-control) var(--body); }
-.auth-drawer p { margin: 0; color: var(--muted); font-size: var(--text-body); line-height: 1.55; }
+.auth-drawer p { margin: 0; color: var(--ink-quiet); font-size: var(--text-body); line-height: 1.55; }
 .auth-drawer label { display: block; margin-bottom: var(--space-2); }
 .auth-row { display: flex; gap: var(--space-2); }
 .auth-row input { flex: 1; }
@@ -308,9 +249,9 @@ ui-button, a { -webkit-tap-highlight-color: transparent; }
 .auth-drawer form[hidden] { display: none; }
 .auth-tabs { justify-self: start; }
 /* The checkbox row keeps its sentence case inside the drawer's label rule. */
-.auth-drawer .bench-confirmation { display: flex; margin: 0; text-transform: none; letter-spacing: normal; font-weight: var(--weight-regular); }
+.auth-drawer .bench-confirmation { display: flex; margin: 0; text-transform: none; letter-spacing: 0; font-weight: var(--weight-regular); }
 .auth-row input#code-input { text-transform: uppercase; letter-spacing: var(--track-label); }
-.whoami-badge b { color: var(--paper); }
+.whoami-badge b { color: var(--ink); }
 .drawer-close {
   position: absolute;
   top: var(--space-2);
@@ -319,7 +260,7 @@ ui-button, a { -webkit-tap-highlight-color: transparent; }
   min-width: var(--target-secondary);
   border: 0;
   border-radius: var(--radius-button);
-  color: var(--muted);
+  color: var(--ink-quiet);
   background: none;
   font-size: var(--text-title);
   cursor: pointer;
@@ -334,9 +275,9 @@ ui-button, a { -webkit-tap-highlight-color: transparent; }
   justify-content: space-between;
   gap: var(--space-4);
   padding: var(--space-4) var(--space-5) var(--space-6);
-  color: var(--muted);
+  color: var(--ink-quiet);
   font: var(--weight-regular) var(--text-micro)/var(--leading-body) var(--mono);
-  letter-spacing: 0.08em;
+  letter-spacing: var(--track-label);
 }
 /* 콘솔은 고정 프레임이다. 꼬리말은 스크롤하는 점검 뷰의 것이므로 운용에서는
    자리를 내주지 않는다 — 64px이면 지도가 그만큼 줄어든다. 클래스 셀렉터여야
@@ -351,11 +292,17 @@ body[data-view="operate"] .page-footer { display: none; }
    ======================================================================== */
 
 .console {
-  height: calc(100vh - var(--topbar-height));
   display: flex;
   flex-direction: column;
   min-height: 0;
-  overflow: hidden;
+}
+/* D-359 §6.5 — 고정 프레임은 넓고 충분히 높은 창에서만이다. 가로 전화·낮은 태블릿은
+   프레임이 잘리지 않고 흐르며 스크롤한다(아래 5절). 높이는 dvh다. */
+@media (width >= 64rem) and (height >= 40rem) {
+  .console {
+    height: calc(100dvh - var(--topbar-height));
+    overflow: hidden;
+  }
 }
 
 /* ---- 요약줄 — 로봇 상태 하나(D-260 5) --------------------------------------
@@ -381,29 +328,29 @@ body[data-view="operate"] .page-footer { display: none; }
   padding: 0 var(--space-1);
   border: 1px solid var(--surface-line);
   border-radius: var(--radius-control);
-  color: var(--muted);
+  color: var(--ink-quiet);
   font: var(--weight-strong) var(--text-label)/var(--leading-label) var(--body);
   white-space: nowrap;
 }
 /* 첫 요청 전에는 빈칸이다(값 자리에 em dash를 싣지 않는다). */
 .summary-state:empty { display: none; }
 .summary-state[data-state="ready"] { color: var(--nominal); }
-.summary-state[data-state="ready_held"], .summary-state[data-state="booting"] { color: var(--paper); }
+.summary-state[data-state="ready_held"], .summary-state[data-state="booting"] { color: var(--ink); }
 /* 주의는 글자, 실패는 채움이다(Law 3, 분류 줄과 같은 문법). */
 .summary-state[data-state="caution"] { color: var(--status-warn); border-color: var(--status-warn-a45); }
-.summary-state[data-state="failed"] { color: var(--paper); background: var(--status-crit); border-color: var(--status-crit); }
+.summary-state[data-state="failed"] { color: var(--ink-on-crit); background: var(--status-crit); border-color: var(--status-crit); }
 .summary-reason {
   max-width: 100%;
   min-width: 0;
   overflow: hidden;
-  color: var(--paper);
+  color: var(--ink);
   font-size: var(--text-micro);
   line-height: var(--leading-body);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .summary-devices { flex: 0 1 auto; min-width: 9ch; max-width: 26ch; white-space: nowrap; overflow: hidden; }
-.summary-power { flex: none; color: var(--muted); font: var(--weight-regular) var(--text-label)/var(--leading-body) var(--mono); white-space: nowrap; }
+.summary-power { flex: none; color: var(--ink-quiet); font: var(--weight-regular) var(--text-label)/var(--leading-body) var(--mono); white-space: nowrap; }
 .summary-power[data-low="true"] { color: var(--status-warn); }
 .summary-todo { flex: none; position: relative; }
 .summary-todos {
@@ -420,7 +367,7 @@ body[data-view="operate"] .page-footer { display: none; }
   border: 1px solid var(--surface-line);
   border-radius: var(--radius-control);
   background: var(--ground-raise);
-  color: var(--paper);
+  color: var(--ink);
   font-size: var(--text-label);
   line-height: var(--leading-body);
   list-style: decimal inside;
@@ -442,7 +389,7 @@ body[data-view="operate"] .page-footer { display: none; }
 }
 /* 물리적 위험과 이동 차단은 채운다 — 되돌릴 수 없는 것과 같은 범주다(Law 3). */
 .triage[data-category="hazard"], .triage[data-category="blocked"] {
-  color: var(--paper);
+  color: var(--ink-on-crit);
   background: var(--status-crit);
   border-bottom-color: var(--status-crit);
 }
@@ -461,7 +408,6 @@ body[data-view="operate"] .page-footer { display: none; }
   margin: 0;
   font-size: var(--text-label);
   line-height: var(--leading-body);
-  opacity: 0.9;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -477,7 +423,7 @@ body[data-view="operate"] .page-footer { display: none; }
 }
 /* 맥락은 "또 무엇이 잘못됐나"를 말한다. 제목은 끝까지 보이고 설명은 자리가
    남는 만큼만 보인다 — DOM에는 남으므로 화면 낭독기는 전문을 읽는다. */
-.triage-context li { display: flex; gap: var(--space-2); max-width: 36ch; color: var(--paper); font-size: var(--text-label); line-height: 1.35; white-space: nowrap; }
+.triage-context li { display: flex; gap: var(--space-2); max-width: 36ch; color: var(--ink); font-size: var(--text-label); line-height: 1.35; white-space: nowrap; }
 .triage-context b { flex-shrink: 0; font-weight: var(--weight-label); }
 .triage-context span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .triage-context:empty { display: none; }

@@ -38,13 +38,25 @@ class PinMismatchException(detail: String) : CertificateException("$MARKER: $det
  * - Hostname verification is not done here; OkHttp's verifier still checks the SAN (DNS or IP).
  */
 class PinnedTrustManager(private val pin: String) : X509TrustManager {
+    /**
+     * Leaf of the last chain that passed every check here. OkHttp's `Handshake.peerCertificates` comes back
+     * empty with this trust manager (its chain cleaner finds no accepted issuers), so the link reads the
+     * trusted leaf from here instead (D-391 learning, review M2).
+     */
+    @Volatile
+    var lastTrustedLeaf: X509Certificate? = null
+        private set
+
     override fun checkServerTrusted(chain: Array<out X509Certificate>?, authType: String?) {
         if (chain.isNullOrEmpty()) throw CertificateException("empty server certificate chain")
         val index = chain.indexOfFirst { certPin(it.encoded) == pin }
         if (index < 0) throw PinMismatchException("no certificate in the ${chain.size}-certificate chain matches the paired pin")
         // PKIX never checks the trust anchor's own dates, so the pinned certificate is checked here (review n2).
         chain[index].checkValidity()
-        if (index == 0) return
+        if (index == 0) {
+            lastTrustedLeaf = chain[0]
+            return
+        }
         // A pin above the leaf must be a CA; a pinned leaf sent after someone else's leaf is not one (review m3).
         if (chain[index].basicConstraints < 0) {
             throw CertificateException("pinned certificate at chain position $index is not a CA")
@@ -56,6 +68,7 @@ class PinnedTrustManager(private val pin: String) : X509TrustManager {
         val factory = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm()).apply { init(anchors) }
         val delegate = factory.trustManagers.filterIsInstance<X509TrustManager>().first()
         delegate.checkServerTrusted(chain.copyOfRange(0, index + 1), authType)
+        lastTrustedLeaf = chain[0]
     }
 
     override fun checkClientTrusted(chain: Array<out X509Certificate>?, authType: String?) {

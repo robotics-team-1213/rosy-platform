@@ -5,7 +5,13 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
-from core_api_web.api.v1.common import enter_navigation_mode, operator, require_kept, viewer
+from core_api_web.api.v1.common import (
+    enter_navigation_mode,
+    operator,
+    require_calibration_owner,
+    require_kept,
+    viewer,
+)
 from core_api_web.api.deps import AuthContext, get_services, CoreServicesLike
 from core_api_web.api.errors import ApiError
 from core_common.domain.tasks import TaskKind
@@ -90,6 +96,8 @@ class InitialPoseRequest(BaseModel):
 def initialpose(body: InitialPoseRequest, auth: AuthContext = Depends(operator),
                 svc: CoreServicesLike = Depends(get_services)):
     TaskKind.NAVIGATE.require(svc.capability)
+    # D-321 addendum: a pose reset mid-calibration corrupts the owner's odometry legs.
+    require_calibration_owner(svc, auth, "initial pose")
     if svc.nav.executor is None:
         raise ApiError("CAPABILITY_NOT_SUPPORTED", 501, "localization executor unavailable")
     svc.nav.executor.send_initial_pose(body.x, body.y, body.yaw)
@@ -114,6 +122,7 @@ class SlamSaveRequest(BaseModel):
 @slam_router.post("/start")
 def slam_start(auth: AuthContext = Depends(operator), svc: CoreServicesLike = Depends(get_services)):
     svc.capability.require("slam")
+    require_calibration_owner(svc, auth, "slam start")
     svc.nav.start_mapping(source=f"api:{auth.role}")
     return {"mapping": True}
 
@@ -121,6 +130,7 @@ def slam_start(auth: AuthContext = Depends(operator), svc: CoreServicesLike = De
 @slam_router.post("/stop")
 def slam_stop(auth: AuthContext = Depends(operator), svc: CoreServicesLike = Depends(get_services)):
     svc.capability.require("slam")
+    require_calibration_owner(svc, auth, "slam stop")
     svc.nav.stop_mapping(source=f"api:{auth.role}")
     return {"mapping": False}
 
@@ -139,5 +149,6 @@ def slam_save(body: SlamSaveRequest, auth: AuthContext = Depends(operator),
 @slam_router.post("/reset")
 def slam_reset(auth: AuthContext = Depends(operator), svc: CoreServicesLike = Depends(get_services)):
     svc.capability.require("slam")
+    require_calibration_owner(svc, auth, "slam reset")
     svc.nav.reset_mapping(source=f"api:{auth.role}")
     return {"reset": True}

@@ -42,6 +42,8 @@ _HTTP_BY_CODE = {
     "IDEMPOTENCY_CONFLICT": 409,
     "IDENTITY_LOCKED": 409,
     "CAPABILITY_WITHHELD": 409,
+    # D-321 addendum: another token holds the calibration session lease.
+    "CALIBRATION_ACTIVE": 409,
     "CAPABILITY_NOT_SUPPORTED": 501,
     "ROBOT_OFFLINE": 503,
     "HARDWARE_NOT_READY": 503,

@@ -67,11 +67,15 @@ function setPhaseEvidence(evidence, phaseCode) {
   return text;
 }
 
+// D-359 §4 — 피치 색은 styles.css `:root` 피치 블록이 소유한다. 캔버스는
+// ui.js(window.RosyPalette)로 읽는다. 이 화면은 dark 고정이다.
+const tone = (name) => window.RosyPalette.cssColor(name);
+
 function draw(payload) {
   const field = payload.field || { length_m: 2, width_m: 1.4, goal_width_m: 0.35 };
   const w = canvas.width;
   const h = canvas.height;
-  ctx.fillStyle = "#17351f";
+  ctx.fillStyle = tone("--pitch");
   ctx.fillRect(0, 0, w, h);
   const pad = 36;
   const sx = (w - pad * 2) / field.length_m;
@@ -81,7 +85,7 @@ function draw(payload) {
   const oy = h / 2;
   const X = (x) => ox + x * s;
   const Y = (y) => oy - y * s;
-  ctx.strokeStyle = "#e8f4ea";
+  ctx.strokeStyle = tone("--line");
   ctx.lineWidth = 2;
   ctx.strokeRect(
     X(-field.length_m / 2),
@@ -94,27 +98,27 @@ function draw(payload) {
   ctx.lineTo(X(0), Y(field.width_m / 2));
   ctx.stroke();
   const gw = field.goal_width_m / 2;
-  ctx.strokeStyle = "#7ec8ff";
+  ctx.strokeStyle = tone("--home");
   ctx.strokeRect(X(-field.length_m / 2) - 10, Y(gw), 10, field.goal_width_m * s);
-  ctx.strokeStyle = "#b6c1cf";
+  ctx.strokeStyle = tone("--away");
   ctx.strokeRect(X(field.length_m / 2), Y(gw), 10, field.goal_width_m * s);
   if (payload.home_goal) {
-    strokePoly(payload.home_goal, X, Y, "#7ec8ff");
+    strokePoly(payload.home_goal, X, Y, tone("--home"));
   }
   if (payload.away_goal) {
-    strokePoly(payload.away_goal, X, Y, "#b6c1cf");
+    strokePoly(payload.away_goal, X, Y, tone("--away"));
   }
   const robots = payload.robots || {};
   const homeId = field.home_id;
   Object.entries(robots).forEach(([id, pose]) => {
-    ctx.fillStyle = id === homeId ? "#7ec8ff" : "#b6c1cf";
+    ctx.fillStyle = tone(id === homeId ? "--home" : "--away");
     wedge(X(pose.x), Y(pose.y), pose.yaw, 11);
-    ctx.fillStyle = "#f4f1ea";
-    ctx.font = "11px sans-serif";
+    ctx.fillStyle = tone("--pitch-ink");
+    ctx.font = window.RosyPalette.canvasFont(12, "body");
     ctx.fillText(id, X(pose.x) + 8, Y(pose.y) - 8);
   });
   if (payload.ball) {
-    ctx.fillStyle = "#f27a1a";
+    ctx.fillStyle = tone("--ball");
     ctx.beginPath();
     ctx.arc(X(payload.ball.x), Y(payload.ball.y), 7, 0, Math.PI * 2);
     ctx.fill();
@@ -205,8 +209,8 @@ async function tick() {
     const stair1 = document.getElementById("stair1");
     if (stair1) {
       stair1.textContent = vis.ready
-        ? "계단 1 마커 보임 (FIELD GO 아님)"
-        : "계단 1 아직 (FIELD GO 아님)";
+        ? "계단 1 마커 보임 · 경기장 준비 전"
+        : "계단 1 아직 · 경기장 준비 전";
     }
     if (!payload.has_frame) {
       frame.hidden = true;

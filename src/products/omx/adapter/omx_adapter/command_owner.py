@@ -19,7 +19,7 @@ from typing import Callable, Mapping, Protocol
 from .manipulation_plan import JointTrajectoryPoint
 
 
-KNOWN_OWNERS = frozenset({"leader_teleop", "moveit", "rule_based", "learned_policy"})
+KNOWN_OWNERS = frozenset({"leader_teleop", "moveit", "rule_based", "learned_policy", "pilot_sim"})
 
 
 def _positive_finite(name: str, value: object) -> float:

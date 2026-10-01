@@ -17,17 +17,20 @@ from itertools import combinations
 import pytest
 
 import surface_registry as registry
+import token_themes
 
 WEB = registry.REPO / "src/hmi/web_common"
 ICONS = WEB / "icons"
-TOKENS = dict(re.findall(r"(--[a-z0-9-]+)\s*:\s*(#[0-9a-fA-F]{6})\s*;",
-                         (WEB / "tokens.css").read_text(encoding="utf-8")))
+#: Icons are drawn in the default (dark) palette. D-359 adds a light theme block that
+#: redefines the same keys, so the whole-file regex would read the light values.
+TOKENS = {f"--{name}": value for name, value in
+          token_themes.palettes(token_themes.read(WEB / "tokens.css"))["dark"].items()}
 
 #: D-370 3항 table: icon file -> glyph colour token.
 GLYPH_TOKEN = {
     "cam": "--series-primary",
     "pilot": "--brand-rose",
-    "console": "--paper",
+    "console": "--ink",
     "robot": "--robot-1",
 }
 #: D-377 2항 table: display name, English name and short name are all `Rosy <Word>`.
@@ -66,10 +69,12 @@ def test_every_icon_uses_only_its_tokens():
 
 
 def test_token_names_are_defined_once():
-    """TOKENS is a dict: a second definition would silently win (D-359 adds theme blocks)."""
-    names = re.findall(r"(--[a-z0-9-]+)\s*:", (WEB / "tokens.css").read_text(encoding="utf-8"))
-    repeated = sorted({name for name in names if names.count(name) > 1})
-    assert repeated == [], repeated
+    """TOKENS is a dict: a second definition would silently win. D-359 theme blocks each
+    redefine the palette keys, so the rule holds per selector block, not per file."""
+    for selector, body in token_themes.blocks(token_themes.read(WEB / "tokens.css")):
+        names = re.findall(r"(--[a-z0-9-]+)\s*:", body)
+        repeated = sorted({name for name in names if names.count(name) > 1})
+        assert repeated == [], (selector, repeated)
 
 
 def test_no_icon_uses_a_status_colour():

@@ -9,7 +9,12 @@ from pydantic import BaseModel, Field
 
 from core_api_web.api.deps import AuthContext, CoreServicesLike, get_services
 from core_api_web.api.errors import ApiError
-from core_api_web.api.v1.common import enter_navigation_mode, operator, viewer
+from core_api_web.api.v1.common import (
+    enter_navigation_mode,
+    operator,
+    require_calibration_owner,
+    viewer,
+)
 from core_common.domain.tasks import TaskKind
 from core_common.protocol.schemas import DockState, RobotMode
 from core_api_web.api.deps import Mode
@@ -56,6 +61,8 @@ def set_line_follow_mode(body: LineFollowModeRequest,
             svc.state.set_mode(RobotMode.IDLE)
         return _status(svc)
 
+    # Turning line-follow OFF above only stops motion, so it stays open to all.
+    require_calibration_owner(svc, auth, "line-follow mode change")
     if svc.safety.estop or svc.modes.is_emergency:
         raise ApiError("EMERGENCY_ACTIVE", 409, "release emergency stop first")
     if svc.modes.mode is Mode.DOCKING or svc.docking.state in (
@@ -104,6 +111,7 @@ def set_line_follow_mode(body: LineFollowModeRequest,
 def hold_line_follow(auth: AuthContext = Depends(operator),
                      svc: CoreServicesLike = Depends(get_services)):
     """운전자가 "진행"을 누르고 있다(D-344 §8). hold 세션이 아니면 409."""
+    require_calibration_owner(svc, auth, "line-follow hold")
     if not svc.line_follow.hold():
         raise ApiError("LINE_FOLLOW_NOT_HELD", 409, "no active hold-to-run line-follow session")
     return _status(svc)

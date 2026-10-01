@@ -2,6 +2,8 @@
 
 **Status:** Accepted (2026-09-30, 웹 표면의 토큰 구조·공용 부품·반응형·계약 시험). D-280 다섯 원칙과 D-82 의미 집합(ground/status/series/brand), D-277 장미색 범위는 바꾸지 않는다. D-345의 "라이트 팔레트를 만들지 않는다"는 이 ADR §3으로 대체한다. 네이티브·LCD 사본은 어두운 팔레트에 고정한다(§3.4). 장치·현장 수용은 포함하지 않는다.
 
+*2026-09-30 구현 실측으로 다듬음(미출시, 같은 날 제자리 수정): §2.5 Fleet 선택 UI 위치, §5.1 필드 API를 `class="ui-field"`로 확정, §5.5 `anywhere` → `break-word`, §6.3 칸 질의 22rem, §6.4 Fleet 머리 90rem 접기.*
+
 잇는 결정: [D-75](D-75-d-7-react.md) · [D-82](D-82-oklch.md) · [D-277](D-277-rosy-brand-colour-tokens.md) · [D-280](D-280-calm-intelligence-product-design-philosophy.md) · [D-292](D-292-design-tokens-and-component-layout-contract.md) · [D-294](D-294-shared-typography-and-interaction-tokens.md) · [D-329](D-329-surface-registry-and-visual-baseline.md) · [D-345](D-345-design-philosophy-reaches-every-surface.md).
 
 ### Context
@@ -39,7 +41,7 @@
 
 **1. 토큰은 세 층이다: 팔레트 → 파생 → 역할.**
 1. **팔레트**는 테마마다 바뀌는 유일한 값이다. 목록은 닫혀 있다: `--ground`, `--ground-deep`, `--ground-raise`, `--ground-soft`, `--ground-card`, `--ground-card-2`, `--ink`, `--ink-quiet`, `--ink-on-crit`(위험 채움 위 글자 — 테마와 무관하게 밝다), `--status-crit`, `--status-warn`, `--status-good`, `--series-primary`, `--series-secondary`, `--series-goal`, `--robot-1..3`, `--raster-unknown/free/uncertain/occupied`, `--brand-rose`, `--shadow-base`.
-2. **파생**은 팔레트만 참조한다. 알파·선·장막·세척은 `color-mix(in oklch, var(--팔레트) N%, transparent | var(--ground))`로 쓴다. 파생 블록에 원시 색(hex/rgb/hsl/oklch 리터럴)이 있으면 시험이 막는다.
+2. **파생**은 팔레트만 참조한다. 알파·선·장막·세척은 `color-mix(in oklab, var(--팔레트) N%, transparent | var(--ground))`로 쓴다(oklch가 아닌 oklab: Chromium은 무채색의 hue를 `none`→0°로 풀어 회색을 붉게 섞는다. 2026-09-30 US-001 실측). 파생 블록에 원시 색(hex/rgb/hsl/oklch 리터럴)이 있으면 시험이 막는다.
 3. **역할**(D-292 §1의 컴포넌트 층)은 파생·팔레트를 참조한다: `--surface-*`, `--button-*`, `--field-*`, `--flag-*`, `--focus-ring`, `--gauge-*`, `--nominal*`.
 4. **이름 정리.** `--paper` → `--ink`, `--muted` → `--ink-quiet`로 바꾼다(밝은 테마에서 뜻이 뒤집히지 않는 이름). 쓰이지 않는 토큰과 같은 값 별칭(`-2`, `--status-ok`)은 지운다. 이름 변경은 한 커밋 안의 기계적 치환이고, 토큰 사본(`test_token_parity.py` 대상)의 주석 이름도 같이 바꾼다.
 5. 표면 CSS·JS는 팔레트 이름 대신 역할·파생을 우선 쓴다. 팔레트 직접 참조는 허용하되 `--brand-*`는 D-277대로 워드마크·현재 위치 표식 선택자에만 쓴다.
@@ -49,7 +51,7 @@
 2. 테마 블록은 **값만** 바꾼다. 이름·의미 집합은 그대로다: status는 따뜻한 띠, series는 차가운 띠, 정상은 색이 아니라 ink, 장미색은 이름에만, 주 명령은 테마와 무관하게 **ink 채움**(바탕과 가장 대비가 강한 중립)이다.
 3. 새 테마 추가 = 팔레트 블록 하나 + 모든 게이트 통과. 다른 파일을 고치지 않는다. 이것이 이 ADR의 수용 기준이다.
 4. **선택 경로.** `web_common/theme.js`(외부 스크립트, CSP 준수, `<head>`에서 동기 로드)가 저장된 선호(`localStorage` `rosy.theme` = `dark|light|system`, 없으면 `dark`)를 읽어 `<html data-theme>`와 `meta[name=theme-color]`(해당 테마 `--ground`)를 첫 그림 전에 정한다. `system`은 `prefers-color-scheme`을 따른다. 바뀌면 `rosy:theme` 이벤트를 낸다. 저장소 접근 실패는 기본값으로 떨어진다.
-5. 선택 UI는 역할 표면의 `/device` 설정과 Fleet 설정에 둔다. 기본은 어둡게다(관제실·현장 조명 계약 유지).
+5. 선택 UI는 역할 표면의 `/device` 설정과 Fleet 설정에 둔다. Fleet은 상단바에 두고, 90rem 아래에서는 `설정` 펼침(토큰·역할과 함께) 안으로 접힌다(§6.4). 기본은 어둡게다(관제실·현장 조명 계약 유지).
 
 **3. 밝은 팔레트를 둔다(D-345 해당 문장 대체).**
 1. `light` 팔레트를 OKLCH에서 생성해 `tokens.css`에 추가한다. 두 번째 테마는 구조가 맞는지 증명하는 수용 시험이며, 제품 기본값을 바꾸지 않는다.
@@ -63,22 +65,22 @@
 3. 캔버스 글꼴은 `--body`/`--mono` 가족과 12px 이상이다.
 
 **5. 공용 부품이 표면 사본을 대체한다(D-292 §4 이행).**
-1. **필드.** 제품 화면의 텍스트 입력·선택·체크는 공용 필드 스타일(`ui-field` 또는 `components.css`가 소유하는 `input.ui-input`/`select.ui-input` 클래스 — 구현이 둘 중 하나로 정하고 styleguide에 싣는다)을 쓴다. 최소 높이 `--target-secondary`, 공용 모서리·바탕·포커스. dashboard `styles.css`와 Fleet `styles.css`의 입력 사본을 지운다. Fleet의 알약 모양 입력은 공용 모양이 된다.
+1. **필드.** 제품 화면의 텍스트 입력·선택·체크는 공용 필드 스타일(구현은 네이티브 `input`/`select`/`textarea`에 `class="ui-field"`를 다는 쪽으로 정했다 — 폼 제출·`<label>` 연결·기존 핸들러가 네이티브 요소를 쥐고 있어서다. 체크·라디오는 감싸는 `<label class="ui-check">`가 44px 누름 면이다. `<ui-field>` 감싸개는 같은 얼굴로 남는다. styleguide에 싣는다)을 쓴다. 최소 높이 `--target-secondary`, 공용 모서리·바탕·포커스. dashboard `styles.css`와 Fleet `styles.css`의 입력 사본을 지운다. Fleet의 알약 모양 입력은 공용 모양이 된다.
 2. **태그.** Fleet `.tag`와 dashboard `.status-badge/.machine-tag/.mode-chip`는 `<ui-tag>`로 바꾼다. games `.chips`는 경기장 어휘로 두되 토큰 글자 척도를 쓴다.
 3. **비활성 사유.** `ui-button`에 `reason` 속성을 둔다. `ui.js`가 보이는 짧은 문구와 `aria-describedby`로 연결한다. `title`만으로는 사유로 치지 않는다(터치에서 보이지 않는다). 권한 잠금은 필요한 역할을 말한다(예: `운용자 권한이 필요합니다`).
 4. **상태.** 모든 `ui-button` 종류가 `:hover`·`:active`·`:focus-visible`·비활성 상태를 `components.css`에서 가진다. 전역 `:focus-visible` 기본 규칙은 `components.css`에 있고 모든 표면이 받는다. 눌림 상태는 `aria-pressed`의 공용 표현이며 표면이 `outline`이나 status 색으로 덧칠하지 않는다.
-5. **글자.** 자간은 토큰 값 또는 0만 쓴다. 표면 본문은 `word-break: keep-all; overflow-wrap: anywhere`를 공용 기본으로 받는다. 흐림은 `--disabled-opacity` 또는 `--ink-quiet`로 표현하고 임의 불투명도를 쓰지 않는다.
+5. **글자.** 자간은 토큰 값 또는 0만 쓴다. 표면 본문은 `word-break: keep-all; overflow-wrap: break-word`를 공용 기본으로 받는다(`anywhere`는 최소 내용 폭을 글자 하나로 줄여 1366px 좁은 flex 줄의 짧은 한국어 라벨을 음절 사이에서 꺾었다 — US-004 캡처). 흐림은 `--disabled-opacity` 또는 `--ink-quiet`로 표현하고 임의 불투명도를 쓰지 않는다.
 
 **6. 반응형은 세 단 어휘를 쓴다.**
 1. 이름: **compact** `width < 30rem`, **medium** `30rem ≤ width < 64rem`, **wide** `width ≥ 64rem`. 범위 문법(`@media (width < 30rem)`)을 쓰고 `.01` 보정을 없앤다. 값은 rem이다.
 2. 표면은 레이아웃을 계속 소유한다(D-292 §4). 세 단 밖의 값이 필요하면 `surfaces.yaml`의 그 표면 `breakpoints`에 값과 이유를 적는다. 시험이 `@media` 값을 이 허용 목록과 대조한다.
-3. 공용 부품(`ui-form`, `ui-readout`, `ui-actions`)은 뷰포트가 아니라 자기 칸에 반응한다(`@container`). 표면이 공용 부품을 뷰포트 질의로 재정의하지 않는다.
-4. 세로 예산: 390×844와 320×568에서 붙박이 머리(상단바)는 창 높이의 20% 이하다. compact에서는 붙박이를 풀거나 부가 항목(토큰 입력·역할 표시)을 접는다. 비상정지는 compact에서도 첫 화면에 보인다.
+3. 공용 부품(`ui-form`, `ui-readout`, `ui-actions`)은 뷰포트가 아니라 자기 칸에 반응한다(`@container (width < 22rem)`, 한 열로 접힌다). 칸(`container-type: inline-size`)은 표면이 정한다. 22rem은 `surfaces.yaml`에 `container_breakpoints`로 적고 시험이 대조한다. 표면이 공용 부품을 뷰포트 질의로 재정의하지 않는다.
+4. 세로 예산: 390×844와 320×568에서 붙박이 머리(상단바)는 창 높이의 20% 이하다. compact에서는 붙박이를 풀거나 부가 항목(토큰 입력·역할 표시)을 접는다. Fleet 머리는 90rem 아래에서 부가 항목(토큰·역할·테마)을 `설정` 펼침 뒤로 접는다 — 편 머리의 자연 폭이 1440px 미만 한 줄에 들지 않아서이며, 값은 `surfaces.yaml` `breakpoints`에 적었다. 비상정지는 compact에서도 첫 화면에 보인다.
 5. 고정 높이 프레임은 높이가 충분할 때만 쓴다(`(width >= 64rem) and (height >= 40rem)`), 그 밖은 흐르며 스크롤한다. 높이는 `dvh`를 쓴다.
 6. 알려진 결함을 고친다: Fleet 62rem 겹침, Fleet 24rem `grid-column: 3`, shell 틈, 구 `.console` 고정 프레임, `surface-panels.css`의 `ui-actions` 재정의, games `.chips` 320px 넘침.
 
 **7. 계약 시험은 구조를 본다.** 기존 시험을 넓히고 새 시험은 변이 증명(일부러 어겨 적신 확인)으로 믿는다.
-1. `tokens.css`를 테마별 집합으로 파싱한다. 모든 테마가 같은 팔레트 키를 정의한다. 팔레트 게이트는 테마마다 돈다. 파생 블록에 원시 색이 없다. 파서는 `color-mix(in oklch, …)`를 풀어 대비를 계산한다.
+1. `tokens.css`를 테마별 집합으로 파싱한다. 모든 테마가 같은 팔레트 키를 정의한다. 팔레트 게이트는 테마마다 돈다. 파생 블록에 원시 색이 없다. 파서는 `color-mix(in oklab, …)`를 풀어 대비를 계산한다.
 2. 원시 색 금지 스캔을 모든 웹 표면(하위 폴더·Fleet·games JS 포함, `themes: [dark]` 고정 표면의 등록된 예외 블록 제외)으로 넓힌다. `oklch(`·`color(`도 원시 색으로 본다.
 3. 표면의 `theme-color`는 `theme.js`가 정하거나, 정적 값이면 dark `--ground`와 같다.
 4. 공용 부품 재정의 검사에 `outline`을 넣고, 이름이 다른 사본(입력·태그)을 구조로 찾는다: 제품 화면의 `input`/`select`는 공용 필드 클래스를 가진다.

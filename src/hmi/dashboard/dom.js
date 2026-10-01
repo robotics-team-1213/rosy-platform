@@ -5,6 +5,28 @@ export const elements = Object.fromEntries(
   [...document.querySelectorAll("[id]")].map((element) => [element.id, element]),
 );
 
+// D-359 §5.2 — 기계가 말한 상태·모드 값을 공용 <ui-tag status> 어휘로 옮긴다.
+// 정상(OK·연결·코어 모드)은 색이 아닌 active, 주의는 warn, 고장·없음은 crit(채움).
+// 표면 CSS가 [data-status]/[data-mode]로 태그를 다시 칠하지 않도록 여기 한 곳에 둔다.
+const TAG_STATUS = {
+  OK: "active", online: "active", SITE_STA: "active", ACTIVATED_CORE_ONLY: "active", core: "active",
+  WARNING: "warn", RELAY_AP_STA: "warn", PROVISIONING_AP: "warn", RECOVERY_AP: "warn",
+  ERROR: "crit", UNAVAILABLE: "crit", error: "crit",
+  NETWORK_HOLD: "crit", RECOVERY_HOLD: "crit", motor: "crit", hardware: "crit",
+};
+
+export function tagStatus(value) {
+  return TAG_STATUS[value] || "neutral";
+}
+
+/** data-status/data-mode 값을 남기고(시험·검사용) 공용 status를 맞춘다. */
+export function setTagState(node, key, value) {
+  if (!node) return;
+  if (value == null) delete node.dataset[key];
+  else node.dataset[key] = value;
+  node.setAttribute("status", tagStatus(value));
+}
+
 // 낡은 값은 나이를 달고 다닌다. 판정 자체는 서버가 내린 `evidence` 문자열이
 // 이미 말하고 있으므로, 화면은 "얼마나 낡았나"만 더한다. 임계값은 읽지 않는다 —
 // 클라이언트가 임계를 만지면 판정자가 둘이 된다(D-72 S4, test_dashboard.py).
@@ -139,9 +161,17 @@ export function setFieldMessage(id, text) {
   setText(id, text, "");
 }
 
-export function setEnabled(id, enabled) {
-  const element = document.getElementById(id);
-  if (element) element.disabled = !enabled;
+/** D-359 §5.3 — 끄는 곳은 이유를 같이 준다. 이유를 알 수 없는 짧은 요청 중 잠금만
+ *  reason 없이 끈다. 켜면 이유는 지운다. */
+export function setOff(control, off, reason = "") {
+  if (!control) return;
+  control.disabled = Boolean(off);
+  if (off && reason) control.setAttribute("reason", reason);
+  else control.removeAttribute("reason");
+}
+
+export function setEnabled(id, enabled, reason = "") {
+  setOff(document.getElementById(id), !enabled, reason);
 }
 
 /** 저장 버튼은 type="button" 이다. Enter 로 submit 되면 셸이 통째로 다시 뜬다. */

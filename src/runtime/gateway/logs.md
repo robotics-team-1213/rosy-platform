@@ -583,6 +583,21 @@
 - gate 변화: 없음.
 - 교훈: 파일을 나누는 리팩터는 그 파일을 텍스트로 읽는 계약 시험의 소유자도 함께 옮겨야 한다 — 분할 커밋이 시험을 안 고치면 CI가 다음 커밋에서 대신 말한다.
 
+## 2026-10-01 · f34781ae · feat(core): line_follow LiDAR 장착 yaw 단일 출처 (D-47 부록)
+- 변경: `core/lidar_mount.py` 가 시작 때 한 번 정한다 — 승인된 `lidar_mount` 레코드 > 센서 어댑터에 묶인 `lidar_yaw_offset`(D-47) > `line_follow.lidar_forward_deg` 손값. `node.py` 가 쓴 값과 출처를 로그에 남긴다. 어댑터에 `bound_parameters` 속성 추가.
+- 증거: `test_lidar_mount_source.py` 7 passed(순서, 후보 무시, 190° 섹터·경로), gateway 전체 1501 passed(event_catalogue 한 건은 점 표기 출처 문자열을 고쳐 통과), teardown 간헐 실패는 기존과 같다 (2026-10-01 Windows).
+- gate 변화: SOURCE. 기본 설정에서는 여전히 손값(저장소·어댑터 비어 있음).
+
+## 2026-10-01 · d20e976e · fix(core): 승인 장착 레코드 검증, 손값이 어댑터 바인딩보다 우선 (H1·M3)
+- 변경: 승인된 lidar_mount 레코드는 check_values 를 통과할 때만 쓴다(아니면 이유를 남기고 넘어감, KeyError/TypeError/ValueError 포함). 측정 레코드가 승인되기 전에는 손값이 어댑터의 lidar_yaw_offset(현재 손으로 맞춘 190°)보다 우선하고, 3° 넘게 다르면 경고로 로그한다.
+- 증거: test_lidar_mount_source.py 12 passed — 실제로 켠 ControlSensorAdapter 로도 손값이 이긴다 (2026-10-01 Windows).
+- gate 변화: 없음(기본 설정은 전과 같이 손값).
+
+## 2026-10-01 · 0af2f6a2 · fix(core): 장착 해석기가 경고 플래그를 돌려준다 (F9)
+- 변경: resolve_lidar_forward_deg 가 (deg, source, warn) 을 돌려주고 node.py 는 문자열 대신 플래그로 로그 수준을 고른다.
+- 증거: test_lidar_mount_source.py 12 passed (2026-10-01 Windows).
+- gate 변화: 없음.
+
 ## 2026-10-01 · uncommitted · feat(bridge): D-385 set_emotion 클라이언트와 표정 래치
 
 - 변경: ros_bridge 가 5 Hz 상태 틱에서 reconcile.emotion(LiDAR 문법 — latch 없이 재시도)으로 표정을 바꾼다. 서비스 클라이언트 5개로 늘어 test_bridge_timers 핀을 같이 갱신했다.
@@ -594,3 +609,13 @@
 - 증거: test_host_status_summary.py 전체 passed(키 집합·absent·핸드오버). 로컬 core 도메인 전체 회귀 결과는 별도 기록.
 - gate 변화: 없음.
 - 교훈: 핸드오버에 필드를 더하는 커밋은 그 필드의 소비자 시험이 사는 *모든* 시험실을 찾아 갱신해야 한다 — 이번에도 한쪽(루트 test/)만 녹색이어서 다른 쪽(gateway)이 다음 push 에서 붉었다.
+
+## 2026-10-01 · a527920a · feat(core): 보정 lease 배선과 만료 타이머
+- 변경: `CoreServices.calibration` 을 만들고 상태 스냅샷 provider 로 건다. `ros_bridge._tick_power` 가 `calibration.expire_due()` 를 불러 아무도 상태를 읽지 않아도 만료 이벤트가 난다. 새 시험 `test/test_calibration_session.py`. 15770a9c: `display.info_payload` 가 `activity` 를 싣는다(LCD).
+- 증거: test_calibration_session.py 13 passed, test_bridge_display 통과, test_event_catalogue·test_module_criteria 통과(릴레이 함수·getattr 도달을 만들지 않도록 고침).
+- gate 변화: 없음.
+
+## 2026-10-01 · ce7a3413 · test(host): host-card 가짜 서비스에 idle 보정 lease
+- 변경: host install/rollback/reboot 가 `svc.calibration` 을 읽게 되어 SimpleNamespace 가짜가 AttributeError 5건. 스텁 메서드가 아니라 실제 `CalibrationSessionManager`(idle)를 넣었다.
+- 증거: test_host_cards·host_hardware·host_status_summary 162 passed.
+- gate 변화: 없음.

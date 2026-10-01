@@ -4,7 +4,7 @@
   --ball: #f27a1a;
   --home: #7ec8ff;
   --away: #b6c1cf;
-  --ink: #f4f1ea;
+  --pitch-ink: #f4f1ea;
   --mute: #9aa894;
   --chip: #24422c;
   --field: #0c160f;
@@ -16,7 +16,7 @@ html, body {
   margin: 0;
   min-height: 100%;
   background: var(--field);
-  color: var(--ink);
+  color: var(--pitch-ink);
   font: var(--weight-regular) var(--text-body)/var(--leading-body) var(--body);
 }
 
@@ -26,7 +26,7 @@ html, body {
 
 .kicker {
   margin: 0;
-  letter-spacing: 0.14em;
+  letter-spacing: var(--track-label);
   text-transform: uppercase;
   font-size: var(--text-label);
   color: var(--mute);
@@ -140,7 +140,7 @@ h1 {
 }
 
 .pitch-wrap[data-evidence] #pitch,
-#frame[data-evidence] { opacity: 0.48; }
+#frame[data-evidence] { opacity: var(--disabled-opacity); }
 
 #field-evidence:not([hidden]) {
   position: absolute;
@@ -154,7 +154,7 @@ h1 {
   border: 1px solid var(--status-warn);
   border-radius: var(--radius-button);
   background: var(--score-well);
-  color: var(--ink);
+  color: var(--pitch-ink);
   font-weight: var(--weight-emphasis);
   text-align: center;
   pointer-events: none;
@@ -162,7 +162,7 @@ h1 {
 
 .pitch-wrap[data-evidence="disconnected"] #field-evidence { border-color: var(--status-crit); }
 
-@media (max-width: 540px) {
+@media (width < 30rem) {
   #field-evidence:not([hidden]) { width: calc(100% - 2 * var(--space-3)); }
 }
 
@@ -178,19 +178,24 @@ h1 {
 
 #frame[hidden] { display: none; }
 
+/* 칸 폭이 칩보다 좁아지면 네 칸을 고집하지 않고 줄 수를 늘린다 — 320px에서 nowrap 칩이
+   칸 밖으로 넘치던 것을 막는다(D-359 §6.6). 넓은 칸에서는 한 줄 네 칸을 넘지 않는다. */
 .chips {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, max(4.5rem, 25% - var(--space-1))), 1fr));
   gap: var(--space-1);
   list-style: none;
   margin: var(--space-2) 0 var(--space-4);
   padding: 0;
 }
 
+/* 경기장 어휘(D-359 §5.2) — 공용 태그가 아니라 마커 칩이다. 글자는 토큰 척도를 쓴다.
+   자간은 0이다: 320px 네 칸 격자에서 추적 자간이 칩을 넓히지 않게 한다. */
 .chips li {
   background: var(--chip);
   padding: var(--space-1) var(--space-2);
-  font-size: var(--text-label);
+  font: var(--weight-label) var(--text-label)/var(--leading-label) var(--body);
+  letter-spacing: 0;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
@@ -215,7 +220,7 @@ h1 {
   padding: var(--space-1) var(--space-3);
   border-radius: var(--radius-button);
   background: var(--status-crit);
-  color: var(--paper);
+  color: var(--ink-on-crit);
   font-weight: var(--weight-label);
 }
 .lost[hidden] { display: none; }
@@ -236,13 +241,13 @@ h1 {
 }
 
 #halt-status[data-state="pending"],
-#halt-status[data-state="sent"] { color: var(--ink); }
+#halt-status[data-state="sent"] { color: var(--pitch-ink); }
 
 #halt-status[data-state="error"] { color: var(--lost); }
 
 #halt { min-width: 96px; }
 
-@media (max-width: 760px) {
+@media (width < 64rem) {
   ui-shell[grammar="focal"] ui-topbar {
     display: grid;
     grid-template-columns: max-content minmax(0, 1fr);
@@ -268,4 +273,11 @@ h1 {
 
   .halt-row { flex-wrap: wrap; }
   #halt-status:not(:empty) { flex-basis: 100%; }
+}
+
+/* D-359 §6.4 — compact 세로 예산: 머리는 창 높이의 20% 이하다. 부제(노트북 게임 호스트)는
+   접고 경기 단계·연결 증거만 남긴다. 정지 행은 아래에 붙어 있다. */
+@media (width < 30rem) {
+  ui-shell[grammar="focal"] ui-topbar { padding-block: var(--space-2); }
+  ui-topbar ui-brand small { display: none; }
 }

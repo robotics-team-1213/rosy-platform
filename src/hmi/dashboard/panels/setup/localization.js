@@ -1,3 +1,5 @@
+// D-359 §5.3 — 끌 때 이유를 같이 준다. 켜거나 짧은 요청 중 잠금이면 이유를 지운다.
+function setOff(control, off, reason = "") { control.disabled = Boolean(off); if (off && reason) control.setAttribute("reason", reason); else control.removeAttribute("reason"); }
 // Operator setup actions use the same capability and API authority as CORE.
 function el(tag, cls, text) {
   const node = document.createElement(tag);
@@ -8,7 +10,7 @@ function el(tag, cls, text) {
 
 function field(labelText, name, value = "0") {
   const label = el("label", "ui-field-label", labelText);
-  const input = el("input");
+  const input = el("input", "ui-field");
   input.type = "number"; input.step = "any"; input.required = true; input.name = name; input.value = value;
   label.append(input);
   return {label, input};
@@ -29,7 +31,7 @@ export function mount(root, ctx) {
 
   const slam = el("section", "ui-readback");
   slam.append(el("h3", "", "SLAM 맵 준비"));
-  const mapName = el("input"); mapName.name = "map_name"; mapName.maxLength = 128; mapName.value = "rosy_map";
+  const mapName = el("input", "ui-field"); mapName.name = "map_name"; mapName.maxLength = 128; mapName.value = "rosy_map";
   mapName.setAttribute("aria-label", "저장할 맵 이름");
   const actions = el("ui-actions", "surface-actions");
   const start = el("ui-button", "", "맵핑 시작"); start.setAttribute("kind", "primary"); start.type = "button";
@@ -43,8 +45,9 @@ export function mount(root, ctx) {
   let posePending = false;
   let slamPending = false;
   function syncControls() {
-    setPose.disabled = !navigationAvailable || posePending;
-    for (const button of [start, stop, save]) button.disabled = !slamAvailable || slamPending;
+    // 요청 중(pending)은 짧은 잠금이라 사유 없이 끈다.
+    setOff(setPose, !navigationAvailable || posePending, posePending ? "" : "내비게이션을 쓸 수 없음");
+    for (const button of [start, stop, save]) setOff(button, !slamAvailable || slamPending, slamPending ? "" : "SLAM을 쓸 수 없음");
   }
   function applyAvailability(caps) {
     navigationAvailable = caps?.navigation?.goal_navigation === true;
@@ -52,8 +55,8 @@ export function mount(root, ctx) {
     syncControls();
     if (!navigationAvailable || !slamAvailable) {
       capabilityStatus.textContent = `사용할 수 없는 기능: ${[
-        !navigationAvailable ? `초기 위치 설정 (${caps?.navigation?.reason || "Navigation capability 미제공"})` : "",
-        !slamAvailable ? `SLAM (${caps?.slam_reason || "SLAM capability 미제공"})` : "",
+        !navigationAvailable ? `초기 위치 설정 (${caps?.navigation?.reason || "내비게이션 기능 없음"})` : "",
+        !slamAvailable ? `SLAM (${caps?.slam_reason || "SLAM 기능 없음"})` : "",
       ].filter(Boolean).join(" · ")}`;
     } else capabilityStatus.textContent = "초기 위치와 SLAM 기능을 사용할 수 있습니다.";
   }
