@@ -69,6 +69,53 @@ def test_overhead_advertisement_exposes_tls_ingest_without_credentials():
     assert "token" not in ElementTree.tostring(root, encoding="unicode").lower()
 
 
+def _txt(xml):
+    return {item.text for item in ElementTree.fromstring(xml).find("service").findall("txt-record")}
+
+
+def test_overhead_pair_key_only_when_asked_and_never_by_default():
+    module = _module()
+    default = _txt(module.render_service(8443, role="overhead", tls_host="camera-site.local"))
+    paired = _txt(module.render_service(8443, role="overhead", tls_host="camera-site.local",
+                                        pair=True))
+    assert not any(item.startswith("pair=") for item in default)
+    assert paired - default == {"pair=rosy-pair/1"}
+    with pytest.raises(ValueError):
+        module.render_service(8443, role="fleet", pair=True)
+
+
+@pytest.mark.parametrize("flag,expected", [
+    ([], False), (["--pair"], True), (["--pair=1"], True), (["--pair="], False),
+    (["--pair=0"], False),
+])
+def test_publish_pair_flag_is_explicit_and_systemd_env_friendly(tmp_path, flag, expected):
+    module = _module()
+    out = tmp_path / "rosy-overhead.service"
+    import sys
+    argv = ["fleet-mdns.py", "publish", "--role", "overhead", "--port", "8443",
+            "--tls-host", "camera-site.local", "--output", str(out), *flag]
+    old, sys.argv = sys.argv, argv
+    try:
+        assert module.main() == 0
+    finally:
+        sys.argv = old
+    assert ("pair=rosy-pair/1" in _txt(out.read_text(encoding="utf-8"))) is expected
+
+
+def test_publish_pair_rejects_unknown_value_and_non_overhead_role(tmp_path):
+    module = _module()
+    import sys
+    base = ["fleet-mdns.py", "publish", "--port", "8443", "--output", str(tmp_path / "x")]
+    for extra in (["--role", "overhead", "--tls-host", "a.local", "--pair=yes"],
+                  ["--role", "fleet", "--pair"]):
+        old, sys.argv = sys.argv, base + extra
+        try:
+            with pytest.raises(SystemExit):
+                module.main()
+        finally:
+            sys.argv = old
+
+
 def test_parser_accepts_site_fleet_and_deduplicates_interfaces():
     rows = "\n".join((_row(), _row(),
                       _row(host="fleet-b.local", address="192.168.1.21"),
