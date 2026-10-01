@@ -85,7 +85,7 @@ python -m pytest src/runtime/sensing/test/test_localization.py src/runtime/sensi
 python tools/harness/rosy_harness.py lint
 ```
 
-Expected: all pass (one skip in `test_localization.py` is pre-existing), lint `0 error(s)`. If anything fails on a clean `main`, write it down with its message before changing code; it is not this plan's to fix. At plan time (main `742d500a`) these failed on main for reasons outside this plan and may still: `test/test_behavior_test_ownership.py` (new `gateway/test/test_emotion_map.py`, `test_lidar_mount_source.py`), `test_over_budget_code_has_a_recorded_verdict` (`hmi/dashboard/app.js` 803 lines), `src/site/fleet/test/test_console_camera_pairing.py::test_the_shell_wires_the_panel_and_reasks_it_on_every_login`, and the timing test `src/runtime/sensing/test/test_follower_budget.py` under host load (it asks for an idle host).
+Expected: all pass (one skip in `test_localization.py` is pre-existing), lint `0 error(s)`. If anything fails on a clean `main`, write it down with its message before changing code; it is not this plan's to fix. At plan time (2026-10-01) these failed on main for reasons outside this plan and may still: `test/test_behavior_test_ownership.py` (new `gateway/test/test_emotion_map.py`, `test_lidar_mount_source.py`), `test_over_budget_code_has_a_recorded_verdict` (`hmi/dashboard/app.js` 803 lines), `src/site/fleet/test/test_console_camera_pairing.py::test_the_shell_wires_the_panel_and_reasks_it_on_every_login`, and the timing test `src/runtime/sensing/test/test_follower_budget.py` under host load (it asks for an idle host).
 
 - [ ] **Step 3: Read the live contract version**
 
