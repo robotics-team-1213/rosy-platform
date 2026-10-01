@@ -766,3 +766,9 @@
 - 증거: `test_localization_search.py`(신규 6), `test_localization.py`의 기록된 Gazebo 모서리 시험(유일 해·2 cm) 그대로 통과, `test_localization_gate.py`.
 - gate 변화: 없음(SOURCE). 노드 동작 불변.
 - 결정: D-395 Proposed(설계 승인, 1단계 호스트 전용).
+
+## 2026-10-01 · uncommitted · feat(localization): 거울상까지 모든 자세 후보를 내는 순수 모듈 (D-395 1단계)
+- 변경: `sensing/loc_candidates.py` — `global_candidates`(유일하지 않아도 거절하지 않고 서로 다른 가설을 최대 4개, 적합도 ≥ 0.9, 최고점에서 0.05 안), `slot_candidates`(기준 사각형마다 축·축+180°를 10 cm / 20° 안에서 정밀화, 적합도로 방향을 고름, 개정 2), `merge`, 회전 장착(스캔 0° = 후방)을 거치는 base↔sensor 변환. 시험 도우미 `test/loc_world.py`는 체크인된 `map_v2_fleet.pgm`을 2 cm로 읽고 LiDAR를 광선 투사한다.
+- 증거: `test_loc_candidates.py` 9 passed — 대칭 트랙에서 참 자세와 거울상이 함께 나옴, 사각형 A(−90°)·B(0°) 위 로봇은 슬롯 후보 하나와 맞는 방향, 슬롯 밖은 슬롯 후보 없음, 기록된 Gazebo 스캔(독립 픽스처)에서 참 자세 2 cm.
+- gate 변화: 없음(SOURCE/LOCAL). 노드 배선 없음.
+- 결정: D-395 Proposed(설계 승인, 1단계 호스트 전용).
