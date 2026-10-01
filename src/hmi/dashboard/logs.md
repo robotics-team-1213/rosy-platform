@@ -720,3 +720,9 @@
 - 변경: 콘솔 로봇 카드(`panels/console/overview.js`) 맨 위와 /dashboard 모드 옆(`#calibration-chip`)에 `ui-tag status=warn` "보정 중 — <label>".
 - 증거: ROSY_RUN_BROWSER_TESTS=1 test_calibration_chip_browser.py 1 passed(실제 CoreServices 로 lease 를 열고 닫는다). 스크린샷 X:\DevTemp\calibration-mode\dashboard-*-calibration-chip.png.
 - gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · feat(console): 모드 버튼·히어로가 한국어로 말한다
+
+- 변경: 모드 버튼 IDLE→대기·MANUAL→수동·NAV→자율주행. 히어로 모드 표시가 원본 enum 대신 enumLabel(MODE_LABEL, …)을 쓴다. MODE_LABEL 은 core_ui_logic.js 에 이미 있었다 — 버튼만 영어 enum 을 그대로 보여주고 있었다.
+- 증거: test_dashboard_package.py test_the_mode_control_speaks_korean (변이: 영어 되돌리면 빨강).
+- gate 변화: 없음.

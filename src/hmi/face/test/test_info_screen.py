@@ -301,3 +301,19 @@ class TestDriveCard:
         assert ImageChops.difference(dispatched, render_drive(payload)).getbbox() is None
         wake = render_card({"battery_percent": 87.7, "mode": "MANUAL"})  # kind 없음
         assert ImageChops.difference(dispatched, wake).getbbox() is not None
+
+
+class TestBootCardRoseMark:
+    """D-396: 부팅 카드의 Rosy 정체성 점 — 장치 이름 옆 로즈색 픽셀."""
+
+    def _boot(self, **over):
+        payload = {"stage": "BOOTING", "device_name": "rosy-pinky-8kcn",
+                   "release_id": "2026.10.01-013"}
+        payload.update(over)
+        return render_boot(payload)
+
+    def test_the_boot_card_has_a_rose_pixel(self):
+        image = self._boot()
+        rose = (227, 27, 93)  # --rose #e31b5d
+        colours = {colour for _count, colour in image.getcolors(maxcolors=1 << 16)}
+        assert rose in colours, f"로즈색 점이 없다: {sorted(c for c in colours if c != _BG)[:8]}"
