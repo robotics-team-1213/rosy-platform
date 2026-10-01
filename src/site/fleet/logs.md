@@ -986,3 +986,9 @@
 - 결정: 로봇별 이동은 화면 코드를 요구하지 않는다 — 이름 있는 운용자의 감사되는 확인 뒤 Fleet이 기존 토큰으로 새 주소의 `system/info`를 읽고 robot_id·hostname·serial·device_uid가 다르면 그 로봇을 `needs_new_code`로 둔다(D-361 3). 전체 옮기기는 같은 요청을 로봇마다 그대로 보내므로 신원 확인·감사·권한(`require_named_operator`)이 하나도 줄지 않는다. 새 서버 경로는 만들지 않았다. 파일(robots.yaml) 로봇은 대상이 아니다(런타임에 파일을 고치지 않는다 — 제안 문장만).
 - 증거: `address-drift.test.mjs` 3 추가(대상 필터, 확인 문장이 대상·주소를 모두 말하고 묻는다, 순서대로 한 번씩·실패 뒤 계속·로봇별 문장) — export 없음 적색 뒤 녹색, `test_address_drift_api.py` 배선 1 추가. node 79 passed, 주소 시험 20 passed, `src/hmi/web_common/test/` + 대화상자 계약 녹색.
 - gate 변화: 없음(LOCAL).
+
+## 2026-10-01 · uncommitted · chore(architecture): fleet 크기 판정 23166으로 재기록
+
+- 변경: `test/architecture/test_module_structure.py`의 `fleet` 판정을 22435에서 23166으로 다시 적고 'split: …' 문장 끝에 까닭을 붙였다(main이 D-392 작업으로 이미 22797, 이 브랜치의 `address_drift.py`·`address-drift.js`·라우트·시험이 더함). 판정은 그대로다.
+- 증거: 판정 시험 녹색. 같은 파일의 `site/fleet/fleet/server/proposal_store.py`(730줄, D-392 다른 세션) 판정 없음 1건은 main에서도 실패하며 이 브랜치가 다루지 않는다. `src/site/fleet/test/` 1123 passed, 6 skipped(137 s). 바뀐 파일 secret_scan 0건.
+- gate 변화: 없음.
