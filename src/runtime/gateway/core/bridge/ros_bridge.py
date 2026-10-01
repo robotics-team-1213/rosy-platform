@@ -173,6 +173,7 @@ class RosBridge:
         self._info_was_visible = False
         self._applied_led = None
         self._emotion_shown = None
+        self._idle_since: Optional[float] = None
         self._drive_last_pub: Optional[float] = None
         self._info_last_pub = 0.0
         self._voltage_topic_seen = False
@@ -453,14 +454,23 @@ class RosBridge:
         self.display_info_pub.publish(String(data=json.dumps(display.drive_payload(snapshot))))
         self._drive_last_pub = now
 
-    def _reconcile_emotion(self) -> None:
-        """D-385: 모드가 얼굴 표정을 고른다 — 감정 노드가 없으면 지금 표정을 유지한다."""
+    def _reconcile_emotion(self, now: Optional[float] = None) -> None:
+        """D--385: 모드가 얼굴 표정을 고른다 — 감정 노드가 없으면 지금 표정을 유지한다.
+
+        IDLE 로 5분 이상 있으면 심심해한다(bored). 모드가 바뀌면 대기 시계는
+        리셋된다 — 심심함은 대기의 누적이지 잔재가 아니다.
+        """
         snapshot = self._svc.state.snapshot()
+        mode = getattr(snapshot.mode, "value", snapshot.mode)
+        if mode != "IDLE" or self._idle_since is None:
+            self._idle_since = None if mode != "IDLE" else (now or time.monotonic())
+        idle_seconds = 0.0 if self._idle_since is None else (now or time.monotonic()) - self._idle_since
         self._emotion_shown = reconcile.emotion(
-            getattr(snapshot.mode, "value", snapshot.mode),
+            mode,
             getattr(snapshot.navigation, "value", snapshot.navigation),
             self._emotion_shown,
-            act=lambda face: self._call_emotion(face))
+            act=lambda face: self._call_emotion(face),
+            idle_seconds=idle_seconds)
 
     def _call_emotion(self, face: str) -> bool:
         """표정은 부가 표시다 — 서비스가 없으면 조용히 건너뛰고 다음 틱에 다시 한다."""

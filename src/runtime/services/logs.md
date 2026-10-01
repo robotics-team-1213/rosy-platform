@@ -283,3 +283,9 @@
 - 변경: `nav.road_stop_line_overshoot`, `nav.road_turn_timeout`은 발행하는 곳이 없어 이벤트 목록 규약(test_event_catalogue)에 걸렸다. R1 노드 연결이 발행자와 목록 행을 더할 때까지 이름공간 없는 사유 코드 `road_stop_line_overshoot`, `road_turn_timeout`(NOTICE_*)로 바꿨다. `nav.line_obstacle_hold`는 line_follow가 발행하므로 그대로다.
 - 증거: test_road_behaviour.py + test_event_catalogue.py 180 passed.
 - gate 변화: 없음(SOURCE, 아직 노드에 연결되지 않은 ROS-free 모델).
+
+## 2026-10-01 · uncommitted · feat(command): 대기 5분 후 bored 표정
+
+- 변경: emotion_map.emotion_for 이 idle_seconds 를 받아 IDLE 5분 이상이면 basic 대신 bored. 모드가 바뀌면 대기 시계 리셋 — 심심함은 대기의 누적이다.
+- 증거: test_emotion_map.py 6신규 (변이: bored→basic 되돌리면 빨강).
+- gate 변화: 없음.

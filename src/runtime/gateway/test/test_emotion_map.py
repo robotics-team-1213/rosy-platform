@@ -32,6 +32,23 @@ def test_an_unknown_mode_keeps_the_current_face(mode):
     assert emotion_for(mode) is None
 
 
+# --- idle boredom ---------------------------------------------------------------
+
+
+@pytest.mark.parametrize("idle_s,face", [
+    (0.0, "basic"), (299.9, "basic"),
+    (300.0, "bored"), (600.0, "bored"), (3600.0, "bored"),
+])
+def test_a_long_idle_gets_bored(idle_s, face):
+    assert emotion_for("IDLE", idle_seconds=idle_s) == face
+
+
+@pytest.mark.parametrize("mode", ["MANUAL", "NAVIGATION", "DOCKING", "EMERGENCY"])
+def test_boredom_never_leaks_into_operating_modes(mode):
+    from core_features.command.emotion_map import EMOTION_BY_MODE
+    assert emotion_for(mode, idle_seconds=99999.0) == EMOTION_BY_MODE[mode]
+
+
 def test_every_name_is_one_the_emotion_node_knows():
     # The GIF filenames are the set_emotion vocabulary; a typo here would be a
     # silent no-op on the robot (the node rejects unknown names).

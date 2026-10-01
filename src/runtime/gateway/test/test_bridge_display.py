@@ -184,3 +184,11 @@ def test_a_missing_speed_stays_none_because_zero_reads_as_stopped():
     payload = display.drive_payload(_snapshot(speed=None, mode="MANUAL"))
 
     assert payload["speed"] is None
+
+
+def test_the_drive_card_carries_the_charging_flag():
+    charging = display.drive_payload(_snapshot(mode="DOCKING", charging=True))
+    discharging = display.drive_payload(_snapshot(mode="MANUAL", charging=False))
+
+    assert charging["charging"] is True
+    assert discharging["charging"] is False

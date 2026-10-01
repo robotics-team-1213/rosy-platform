@@ -269,8 +269,9 @@ def render_drive(payload: dict, size: tuple[int, int] = DEFAULT_SIZE) -> Image.I
         draw.rounded_rectangle((bar_x, bar_y, bar_x + filled, bar_y + bar_h),
                                radius=6, fill=color)
     if raw_percent is not None:
-        draw.text((width - 16, bar_y - 24), f"{percent:.0f}%", font=_font(16),
-                  fill=color, anchor="rs")
+        suffix = "%" + (" ⚡" if payload.get("charging") else "")
+        draw.text((width - 16, bar_y - 24), f"{percent:.0f}{suffix}",
+                  font=_font(16), fill=color, anchor="rs")
 
     return image
 
