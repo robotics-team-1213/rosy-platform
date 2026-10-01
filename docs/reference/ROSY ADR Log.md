@@ -395,3 +395,4 @@
 | D-395 | Fleet 보조 위치 확정 — 로봇(sensing)이 LiDAR 전역 탐색 후보(적합도·페인트 점수·지도 밖 물체)를 CORE로 올리고 Fleet arbiter가 채점·중재, 확인 기동 → CORE 실행 귀환 미션 → "위치 확인 필요" 사다리, 상태 UNKNOWN/CANDIDATES/LOCALIZED/SUSPECT(자율 주행은 LOCALIZED만), 출발 슬롯은 바닥 기준 사각형 2개(A·B, 영상 유래 ±3 cm)가 사전 정보이자 귀환 기준점(벽 모서리는 대칭이라 단서 수집용, 개정 1), 직접 좌표 포함 모든 주입을 로봇이 3 s 스캔/지도 일치로 검증, 위치 프레임 표시(map 또는 odom) 추가. D-257 5항·D-393 3항 일부 개정 제안 | Proposed (2026-10-01; 개정 1 2026-10-01 기준 사각형; 개정 2 슬롯 방향 축; 설계만, 코드·설정·API 참조서 미변경; S1 sim 2대 이후 단계는 별도 승인) |
 | D-397 | Pinky Pro 기하 기본값은 URDF NOMINAL(생성된 `geometry.yaml`, 드리프트 테스트)이고, 로봇마다 승인된 캘리브레이션 레코드가 다듬으며 운영자 덮어쓰기가 둘 다 이긴다 | Proposed (2026-10-01; 저장소 기본값·계약만 변경, 바퀴 0.027→0.028·sensing LiDAR 190→180°·카메라 높이 0.067→0.0634는 기기 배포 전 사용자 승인 필요) |
 | D-399 | ROSY 계층 아키텍처: Application · Fleet(사이트) · 장치별 Command Pipeline — 숙고형 AI는 Fleet 제안, 반응형 정책은 같은 호스트 엔벌로프 스킬 | Proposed |
+| D-401 | Rosy Cell 애플리케이션: 셀 설정·레시피 분리, 해시로 묶은 Job(Step 목록), 팔레타이징 패턴 v1 | Proposed |
