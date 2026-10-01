@@ -26,7 +26,7 @@ import time
 from collections import OrderedDict
 from typing import Any, Callable, Optional
 
-from pydantic import ValidationError
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, ValidationError, field_validator
 
 from core_common.protocol.localization import (
     CandidateReport,
@@ -36,22 +36,49 @@ from core_common.protocol.localization import (
     LocState,
     MapPose,
     PoseFrame,
+    _request_id,
 )
 
 #: 2 Hz state from the robot; this many seconds of silence reads as UNKNOWN.
 STATE_STALE_S = 3.0
 #: Decisions remembered so a result event can name its source and cues.
 _KEEP_DECISIONS = 16
+#: A topic message larger than this is dropped unparsed.
+MAX_RAW_BYTES = 64 * 1024
 
 _log = logging.getLogger(__name__)
 
 
 def _load(raw: str) -> Optional[dict]:
+    if not isinstance(raw, str) or len(raw) > MAX_RAW_BYTES or len(raw.encode("utf-8")) > MAX_RAW_BYTES:
+        return None
     try:
         data = json.loads(raw)
-    except (TypeError, ValueError):
+    except ValueError:
         return None
     return data if isinstance(data, dict) else None
+
+
+def _rejected(what: str, exc: ValidationError) -> None:
+    """Log the rejection without the payload: the exception type and error kinds only."""
+    _log.warning("ignored %s: %s %s", what, type(exc).__name__,
+                 sorted({error["type"] for error in exc.errors(include_input=False)}))
+
+
+class _Result(BaseModel):
+    """`localization/result` (contract §1)."""
+
+    model_config = ConfigDict(extra="ignore", frozen=True)
+
+    request_id: str
+    accepted: StrictBool
+    reason: Optional[str] = Field(default=None, max_length=64)
+    state: LocState
+
+    @field_validator("request_id")
+    @classmethod
+    def _id(cls, value: str) -> str:
+        return _request_id(value)
 
 
 class LocalizationAssist:
@@ -72,6 +99,10 @@ class LocalizationAssist:
         #: CORE's stop paths, run when the state leaves LOCALIZED (D-395 §2: autonomy only there).
         self.on_lost = on_lost
         self._lock = threading.Lock()
+        #: Orders the leave-LOCALIZED halt against every motion start: a start holds
+        #: it from its LOCALIZED check to its dispatch; a state change holds it while
+        #: it lands and runs the halt. Taken before any manager lock.
+        self.gate = threading.RLock()
         self._status: Optional[LocalizationStatus] = None
         self._status_at = 0.0
         self._odom_owns_pose = False
@@ -102,6 +133,12 @@ class LocalizationAssist:
             status = status.model_copy(update={"pose_frame": PoseFrame.ODOM})
         return status
 
+    def autonomy_allowed(self) -> bool:
+        """D-395: LOCALIZED with a map-frame pose, or a robot that predates D-395."""
+        status = self.status()
+        return status is None or (status.state is LocState.LOCALIZED
+                                  and status.pose_frame is PoseFrame.MAP)
+
     def candidates(self) -> Optional[CandidateReport]:
         """The latest report, only while it answers the robot's open request."""
         with self._lock:
@@ -119,18 +156,20 @@ class LocalizationAssist:
         try:
             status = LocalizationStatus.model_validate((data or {}).get("status"))
         except ValidationError as exc:
-            _log.warning("ignored localization state: %s", exc.errors()[:1])
+            _rejected("localization state", exc)
             return
-        with self._lock:
-            self._status = status
-            self._status_at = self._monotonic()
-        self._after_change()
+        with self.gate:
+            with self._lock:
+                self._status = status
+                self._status_at = self._monotonic()
+            self._after_change()
 
     def tick(self, odom_owns_pose: bool) -> None:
         """State-timer hook: the frame flag and the stale timeout move here."""
-        with self._lock:
-            self._odom_owns_pose = bool(odom_owns_pose)
-        self._after_change()
+        with self.gate:
+            with self._lock:
+                self._odom_owns_pose = bool(odom_owns_pose)
+            self._after_change()
 
     def _after_change(self) -> None:
         with self._lock:
@@ -155,7 +194,7 @@ class LocalizationAssist:
         try:
             report = CandidateReport.model_validate({**(data or {}), "robot_id": self._robot_id()})
         except ValidationError as exc:
-            _log.warning("ignored candidate report: %s", exc.errors()[:1])
+            _rejected("candidate report", exc)
             return
         with self._lock:
             new = self._report is None or self._report.request_id != report.request_id
@@ -168,15 +207,13 @@ class LocalizationAssist:
             })
 
     def on_result(self, raw: str) -> None:
-        data = _load(raw) or {}
-        request_id, accepted = data.get("request_id"), data.get("accepted")
-        state = data.get("state")
-        reason = data.get("reason")
-        if (not isinstance(request_id, str) or not isinstance(accepted, bool)
-                or state not in {item.value for item in LocState}
-                or not (reason is None or isinstance(reason, str))):
-            _log.warning("ignored localization result: %r", data)
+        try:
+            result = _Result.model_validate(_load(raw))
+        except ValidationError as exc:
+            _rejected("localization result", exc)
             return
+        request_id, accepted, reason = result.request_id, result.accepted, result.reason
+        state = result.state.value
         with self._lock:
             source, cues = self._decisions.get(request_id, (None, []))
         self._events.publish("localization.result", source="localization", data={

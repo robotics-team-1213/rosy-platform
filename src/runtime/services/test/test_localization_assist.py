@@ -262,3 +262,63 @@ def test_states_that_were_never_localized_do_not_halt(lost):
     lost.on_state(_state("CANDIDATES", request_id="req-1"))
     lost.on_state(_state("SUSPECT"))
     assert lost.lost_calls == []
+
+
+# --- review: result hardening, payload cap, autonomy predicate ---------------------
+
+
+@pytest.mark.parametrize("body", [
+    {"request_id": "bad id with spaces", "accepted": True, "reason": None, "state": "LOCALIZED"},
+    {"request_id": "x" * 65, "accepted": True, "reason": None, "state": "LOCALIZED"},
+    {"request_id": "req-1", "accepted": False, "reason": "r" * 65, "state": "CANDIDATES"},
+    {"request_id": "req-1", "accepted": "yes", "reason": None, "state": "CANDIDATES"},
+    {"request_id": "req-1", "accepted": True, "reason": None, "state": "LOST"},
+])
+def test_an_invalid_result_is_ignored(assist, body):
+    assist.on_result(json.dumps(body))
+    assert assist.events.named("localization.result") == []
+    assert assist.cancels == []
+
+
+def test_a_reason_of_64_characters_is_kept(assist):
+    assist.on_result(json.dumps({"request_id": "req-1", "accepted": False,
+                                 "reason": "r" * 64, "state": "CANDIDATES"}))
+    assert assist.events.named("localization.result")[0]["reason"] == "r" * 64
+
+
+def test_an_oversized_message_is_dropped(assist):
+    big = json.dumps({"status": {"state": "LOCALIZED", "pose_frame": "map"},
+                      "pad": "p" * (64 * 1024)})
+    assist.on_state(big)
+    assert assist.status() is None
+
+
+def test_a_rejected_payload_is_not_logged(assist, caplog):
+    secret = "SECRET-PAYLOAD-VALUE"
+    with caplog.at_level("WARNING"):
+        assist.on_result(json.dumps({"request_id": secret + " !", "accepted": True,
+                                     "reason": None, "state": "LOCALIZED"}))
+        assist.on_state(json.dumps({"status": {"state": secret, "pose_frame": "map"}}))
+        assist.on_candidates(json.dumps({"request_id": secret + " !", "candidates": []}))
+    assert caplog.records, "a rejection is still logged"
+    assert secret not in caplog.text
+    assert "ValidationError" in caplog.text
+
+
+@pytest.mark.parametrize("state,frame,allowed", [
+    ("LOCALIZED", "map", True), ("LOCALIZED", "odom", False),
+    ("SUSPECT", "map", False), ("CANDIDATES", "map", False), ("UNKNOWN", "map", False),
+])
+def test_autonomy_needs_localized_in_the_map_frame(assist, state, frame, allowed):
+    assist.on_state(_state(state, frame=frame, request_id="req-1" if state == "CANDIDATES" else None))
+    assert assist.autonomy_allowed() is allowed
+
+
+def test_a_pre_d395_robot_always_allows_autonomy(assist):
+    assert assist.autonomy_allowed() is True
+
+
+def test_core_substituting_odom_withdraws_autonomy(assist):
+    assist.on_state(_state("LOCALIZED"))
+    assist.tick(odom_owns_pose=True)
+    assert assist.autonomy_allowed() is False
