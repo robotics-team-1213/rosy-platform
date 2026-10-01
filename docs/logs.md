@@ -4190,3 +4190,9 @@
 - 변경: 사용자 결정(사각형 위 로봇은 길을 따라 놓이되 어느 쪽인지는 정하지 않음)을 D-395 개정 2로 기록. 슬롯 후보는 축과 축+180° 두 자세이고, 사각형이 축 방향으로 중심에서 벗어나 있어 LiDAR 적합으로 고른다. ADR Log 상태 갱신.
 - 증거: test_map_v2_fleet_reference_squares.py.
 - gate 변화: 없음(Proposed, 설계만).
+
+## 2026-10-01 · uncommitted · docs(plan): D-395 Fleet 보조 위치 확정 구현 계획
+- 변경: `docs/plans/2026-10-01-fleet-assisted-localization-plan.md` — 1단계(호스트 전용, TDD 12과제): 전역 탐색 분리, 거울상 포함 후보·슬롯 후보, 지도 밖 물체, 3 s 주입 검증, 상태 기계, 페인트 가설 점수, 기준 사각형 HSV 검출기, `core_common` 위치 확정 모델과 스냅샷 `localization`(API Ref v1.69), Fleet 채점 단서·중재기, 두 로봇 종단 시험. 2단계 이후(CORE API·브리지, 로봇 노드·launch, Fleet 클라이언트·서비스 루프, 교통정리·bays, 확인 기동·귀환, Gazebo S1/S2, capability, ADR 개정, 실물 S3, 카메라 S4)는 개요와 승인 표시. 설계와 ADR 사이 해석(검증 실패 → SUSPECT, 거울 주입은 3 s 검증을 통과함, 단독 결정 가능한 단서)과 열린 질문을 적었다.
+- 증거: 계획의 코드는 임시 사본에서 모두 실행했다 — 신규 시험 전부 통과, 이 워크트리에 넣고 sensing 전체 2152 passed(시간 예산 시험 제외), fleet·foundation·게이트웨이 프로토콜·아키텍처는 예상된 크기 판정과 main에 이미 있던 실패만. 그 뒤 코드는 지웠고 이 커밋은 문서만이다.
+- gate 변화: 없음(문서). D-395는 Proposed 그대로.
+- 결정: D-395 Proposed(설계 승인).
