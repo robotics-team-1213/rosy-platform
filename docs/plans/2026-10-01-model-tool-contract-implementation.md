@@ -111,8 +111,10 @@ No public REST path, shared robot wire envelope, ROS interface, capability activ
 
 **Files:**
 
-- Modify: `src/site/fleet/fleet/server/mission_model_turn_store.py`
+- Modify: `src/site/fleet/fleet/server/proposal_store.py` (call-result journal shares the Fleet SQLite database; accepted candidate and result commit in one transaction)
 - Modify: `src/site/fleet/fleet/ai/tool_dispatch.py`
+- Modify: `src/site/fleet/fleet/ai/er2_standard.py`
+- Modify: `src/site/fleet/test/test_model_tool_call_journal.py`
 - Test: `src/site/fleet/test/test_mission_model_turn_store.py`
 - Test: `src/site/fleet/test/test_er2_tool_dispatch.py`
 - Test: `src/site/fleet/test/test_mission_feedback_loop.py`
@@ -122,7 +124,7 @@ No public REST path, shared robot wire envelope, ROS interface, capability activ
 1. Add failing tests that replay an identical `(turn_id, provider_call_id, content_digest)` and receive the stored result without repeating the durable effect.
 2. Add failing tests that reuse the same provider call ID with changed name/arguments and receive a conflict without changing the first result.
 3. Add failing tests for stop/generation changes before effect commit, result persistence failure, provider timeout after transport invocation, late result after stop, and restart with an ambiguous provider attempt. Assert `UNKNOWN`/HOLD and no automatic provider or physical Action replay.
-4. Implement an atomic result/effect journal path using the existing shared SQLite database and transaction boundaries. Retain existing WAL and `synchronous=FULL` configuration.
+4. Implement a per-turn/provider-call journal. Store the accepted candidate and its correlated result atomically using the existing shared SQLite database and transaction boundaries. On restart, interrupted calls become UNKNOWN; retain WAL and `synchronous=FULL` configuration.
 5. Run the three focused suites above.
 
 **Exit:** A repeated call cannot duplicate a candidate write; changed-content identity reuse is rejected; uncertain provider/effect outcomes remain `UNKNOWN` without reopening or dispatching physical work.
@@ -183,4 +185,8 @@ No public REST path, shared robot wire envelope, ROS interface, capability activ
 - Completed through Task 4 (P0–P3): current-boundary inventory, canonical messages, Gemini boundary mapping, and a closed Fleet catalog projected into provider schemas and enforced by the feedback dispatcher.
 - P3 tests reject unknown and low-level actuation names, preserve closed schemas, and verify read-only versus candidate-writing classifications. The `propose_pick_place` one-shot candidate path remains separate from feedback function-result calls.
 - Verification on 2026-10-01: 108 focused tests passed; changed Python files pass flake8; harness lint reports 0 errors and 24 repository `last_verified` drift warnings. No ROS-SIM, ARTIFACT, DEVICE, or FIELD gate was run.
-- Remaining: Task 5 must close per-call durable result/dedupe semantics and explicit UNKNOWN handling; Task 6 provider-shaped conformance fixtures; Task 7 module docs and final gates; Task 8 stays gated on its named environments.
+- Task 5 implementation: canonical feedback calls are journaled by `(turn_id, provider_call_id, tool_name, ordinal, content_digest)`. Exact replays return their saved result, changed-content ID reuse conflicts, interrupted calls recover as UNKNOWN, and a candidate plus accepted result share one SQLite transaction. UNKNOWN/IN_PROGRESS aborts the outer provider turn without sending a function result.
+- A final review found early `dispatch_replan` returns that bypassed the call journal. They now claim a validated and authorized canonical call once, persist deterministic policy/fence/egress/unavailable results, and return stored results on replay; invalid scope and unauthorized requests do not create claims.
+- Task 5 verification: 77 focused tests and the full Fleet suite (1,036 passed, 6 skipped); changed Python files pass flake8 at the Fleet 120-character setting; harness lint reports 0 errors and 24 existing freshness warnings; `git diff --check` passes.
+- Operational constraint: ProposalStore startup converts prior IN_PROGRESS rows to UNKNOWN. Until recovery is owner/lease-aware, run one active Fleet writer per shared database; a second live process could mark the first process's call UNKNOWN.
+- Remaining: Task 6 provider-shaped conformance fixtures; Task 7 module docs and final gates; Task 8 stays gated on its named environments.

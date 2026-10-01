@@ -235,13 +235,14 @@ class GeminiER2StandardAdapter:
                         scope=scope, turn_id=call.turn_id,
                         call_id=call.provider_call_id,
                         arguments=call.arguments, candidate_adapter=self,
-                        egress_policy=egress_policy,
+                        egress_policy=egress_policy, model_tool_call=call,
                     )
                 else:
                     dispatch = asyncio.to_thread(
                         dispatcher.dispatch, scope=scope,
                         call_id=call.provider_call_id,
                         tool_name=call.tool_name, arguments=call.arguments,
+                        model_tool_call=call,
                     )
                 try:
                     result = await asyncio.wait_for(dispatch, timeout=remaining_s)
@@ -249,6 +250,11 @@ class GeminiER2StandardAdapter:
                     raise ER2RequestError(
                         "Gemini ER 2 feedback turn deadline exceeded during tool dispatch"
                     ) from exc
+                if result.reason_code in {
+                        "TOOL_CALL_OUTCOME_UNKNOWN", "TOOL_CALL_IN_PROGRESS"}:
+                    raise ER2RequestError(
+                        "Fleet model tool outcome is ambiguous; feedback turn is unknown"
+                    )
                 model_result = ModelToolResult.from_effect_result(call, result)
                 result_json = model_result.to_provider_payload()
                 result_bytes = json.dumps(result_json, sort_keys=True,
