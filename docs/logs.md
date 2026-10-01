@@ -4123,3 +4123,9 @@
 - 변경: ADR D-395(파일+로그 행)와 docs/plans/2026-10-01-ui-ux-consistency-goals.md. 실측으로 G2(빈 contracts 강제)와 G5(baseline 추적)의 강제 시험이 이미 존재함을 확인.
 - 증거: rosy_harness lint 오류 0.
 - gate 변화: 없음.
+## 2026-10-01 · uncommitted · docs(adr): D-395 제안 — Fleet 보조 위치 확정
+- 변경: `docs/adr/D-395-fleet-assisted-localization.md`와 `docs/plans/2026-10-01-fleet-assisted-localization-design.md` 신규(Proposed), ADR Log에 D-395 행. D-257 5항(sighting은 위치 추정에 안 들어감)과 D-393 3항(대칭 맵 global localization 금지·운영자 재초기화)의 개정을 제안만 하고 원문은 고치지 않았다. 코드·로봇 설정·API 참조서 변경 없음.
+- 증거: 문서 변경뿐. 인용한 코드 위치(`navigation.py:89-109`, `ros_bridge.py:214-218,576`, `transport.py:108-127`, `localization_node.py:45,94,115`, `nav2_params.yaml:40-45`)는 저장소에서 직접 확인. D-341 5항은 승인자 규칙이라 sighting 금지 반복으로 인용하지 않았다.
+- gate 변화: 없음(설계 제안, 실행 대상 없음).
+- 결정: D-395 Proposed
+- 교훈: 없음
