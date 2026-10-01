@@ -30,6 +30,10 @@ KNOWN_EXTERNAL_BEHAVIOR_TESTS = frozenset({
     "src/runtime/gateway/test/test_line_follow_ir_guard.py",
     "src/runtime/gateway/test/test_line_follow_obstacle.py",
     "src/runtime/gateway/test/test_line_follow_obstacle_path.py",
+    # D-407 (2026-10-02): the stuck back-off through core.bridge.traffic_gate and the
+    # decision API via core_client; the pure state machine lives in core_features/test.
+    "src/runtime/gateway/test/test_line_follow_stuck.py",
+    "src/runtime/gateway/test/test_line_follow_stuck_api.py",
     "src/runtime/gateway/test/test_navigation_readiness.py",
     "src/runtime/gateway/test/test_operational_journey.py",
     "src/runtime/gateway/test/test_power.py",
