@@ -64,8 +64,8 @@
 
 ## 최근 기록
 
+- 2026-10-01 · uncommitted · feat(perception): 가설 자세별 페인트 점수 (D-395 7절, D-375)
 - 2026-10-01 · uncommitted · feat(localization): UNKNOWN/CANDIDATES/LOCALIZED/SUSPECT 상태 기계 (D-395 5절, 개정 3)
 - 2026-10-01 · uncommitted · feat(localization): 주입 뒤 3 s 스캔/지도 검증 (D-395 7항)
 - 2026-10-01 · uncommitted · feat(localization): 지도에 없는 LiDAR 물체를 base_link 물체로 묶음 (D-395 4.2절)
 - 2026-10-01 · uncommitted · fix(localization): 슬롯 탐색 비용 상한과 리뷰 지적 (D-395 1단계 작업 2)
-- 2026-10-01 · uncommitted · feat(localization): 거울상까지 모든 자세 후보를 내는 순수 모듈 (D-395 1단계)

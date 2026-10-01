@@ -792,3 +792,8 @@
 - 변경: `sensing/loc_state.py` `LocalizationStateMachine` — 전원 투입은 항상 UNKNOWN, 후보가 오면 새 request_id로 CANDIDATES, 결정은 같은 id·받은 뒤 `ttl_s`(5 s) 안·후보 인덱스 또는 직접 좌표 하나만 받고, 사람 결정이 아니면 비대칭 단서(`square`/`paint`/`peers`/`slot`) 하나 이상이 있어야 한다(`no_asymmetric_cue`). `InjectionCheck` 통과 시 LOCALIZED(`cancel_nav_goal`), 검증 실패(`inject_rejected`)·픽업·적합도 1 s 지속 하락(`fit_drop`)·Fleet 감시는 SUSPECT. 자율 주행은 LOCALIZED만. 계획의 절대 시각 `expires_at`은 개정 3에 따라 수신 기준 `ttl_s`로 바꿨다.
 - 증거: `test_loc_state.py` 19 passed.
 - gate 변화: 없음(SOURCE/LOCAL).
+
+## 2026-10-01 · uncommitted · feat(perception): 가설 자세별 페인트 점수 (D-395 7절, D-375)
+- 변경: `sensing/perception/paint_hypothesis.py` `paint_score` — 카메라의 바닥 페인트 점(base_link)을 가설 자세로 지도에 놓고 페인트 입자 필터와 같은 거리 점수(exp(−평균 거리/5 mm), 3 cm 상한)를 낸다. 점이 10개 미만이면 None(증거 없음).
+- 증거: `test_paint_hypothesis.py` 7 passed — map_v2_fleet 여섯 자세에서 참 > 0.9, 거울 < 0.1.
+- gate 변화: 없음(SOURCE/LOCAL). 실제 카메라 차선 마스크 연결은 2단계.
