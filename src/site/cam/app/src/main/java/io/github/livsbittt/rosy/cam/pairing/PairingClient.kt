@@ -14,8 +14,11 @@ import java.time.Instant
 import java.time.format.DateTimeParseException
 import java.util.Locale
 
-/** A discovery record that passed [Pairing.pairable]: where the pairing request goes (D-341 2, 14). */
-data class PairableSite(val serviceName: String, val tlsHost: String, val port: Int)
+/**
+ * A discovery record that passed [Pairing.pairable]: where the pairing request goes (D-341 2, 14). [address] is
+ * the IP NSD resolved; it is dialled for this pairing only and never stored (D-391 1).
+ */
+data class PairableSite(val serviceName: String, val tlsHost: String, val port: Int, val address: String? = null)
 
 /** The site refused a pairing call with this HTTP [status], S2 error [code] and `Retry-After` seconds. */
 class PairingRefused(val status: Int, val code: String? = null, val retryAfterS: Long? = null) :
