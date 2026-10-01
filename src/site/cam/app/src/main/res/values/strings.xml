@@ -155,7 +155,7 @@
     <string name="pairing_fp_intro">관제 콘솔 승인 화면에 나온 인증서 지문과 자격 번호가 아래와 같은지 확인하세요. 같을 때만 연결하세요.</string>
     <string name="pairing_fp_label">인증서 지문</string>
     <string name="pairing_credential">자격 번호 %1$s</string>
-    <string name="pairing_fp_site">사이트 %1$s · 카메라 이름 %2$s</string>
+    <string name="pairing_fp_source">카메라 이름 %1$s</string>
     <string name="pairing_fp_match">같습니다 — 연결</string>
     <string name="pairing_fp_mismatch">다릅니다 — 취소</string>
     <string name="pairing_paired">연결했습니다. 사이트 %1$s에 카메라 이름 %2$s(으)로 송출합니다.</string>
@@ -172,6 +172,7 @@
     <string name="pairing_failed_busy">사이트에 대기 중인 요청이 많습니다. 잠시 뒤 다시 요청하세요.</string>
     <string name="pairing_failed_unreachable">사이트에 닿지 못했습니다. 같은 Wi-Fi에 연결돼 있는지 확인하세요.</string>
     <string name="pairing_failed_result">사이트가 보낸 연결 정보가 올바르지 않아 저장하지 않았습니다. 관리자에게 알리세요.</string>
-    <string name="pairing_failed_confirm">연결 확인에 실패해 저장하지 않았습니다. 다시 요청하세요.</string>
+    <string name="pairing_failed_revoke">콘솔에서 이 카메라 자격을 폐기한 뒤 다시 연결하세요</string>
+    <string name="pairing_failed_unanswered">확인 응답을 받지 못했습니다. 콘솔 자격 목록에서 자격 번호 %1$s가 \'활성\'이면 폐기한 뒤 다시 연결하세요</string>
     <string name="pairing_failed_other">연결 요청이 거절됐습니다. (%1$s)</string>
 </resources>

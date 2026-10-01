@@ -14,6 +14,7 @@ import okhttp3.mockwebserver.Dispatcher
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import okhttp3.mockwebserver.RecordedRequest
+import okhttp3.mockwebserver.SocketPolicy
 import okhttp3.tls.HandshakeCertificates
 import okhttp3.tls.HeldCertificate
 import org.json.JSONObject
@@ -214,10 +215,12 @@ class PairingHttpTest {
             Row("poll", refusal(401, "POLL_SECRET_INVALID"), PairingState.Rejected("poll_secret"), R.string.pairing_failed_other),
             Row("poll", refusal(410, "PAIRING_RESULT_GONE"), PairingState.Expired("gone"), R.string.pairing_failed_expired),
             Row("poll", refusal(404, "UNKNOWN_PAIRING_REQUEST"), PairingState.Expired("unknown_request"), R.string.pairing_failed_unknown_request),
-            Row("confirm", refusal(409, "NOT_DELIVERED"), PairingState.Rejected("not_delivered"), R.string.pairing_failed_confirm),
-            Row("confirm", refusal(409, "CREDENTIAL_MISMATCH"), PairingState.Rejected("credential_mismatch"), R.string.pairing_failed_confirm),
-            Row("confirm", refusal(410, "PAIRING_REQUEST_CLOSED"), PairingState.Expired("gone"), R.string.pairing_failed_expired),
-            Row("confirm", refusal(400, "PAIRING_CONFIRM_INVALID"), PairingState.Rejected("pairing_confirm_invalid"), R.string.pairing_failed_other),
+            // After confirm is sent the credential may be active: confirm_* reasons keep its id and ask for a revoke.
+            Row("confirm", refusal(409, "NOT_DELIVERED"), PairingState.Rejected("confirm_not_delivered", CRED), R.string.pairing_failed_revoke),
+            Row("confirm", refusal(409, "CREDENTIAL_MISMATCH"), PairingState.Rejected("confirm_credential_mismatch", CRED), R.string.pairing_failed_revoke),
+            Row("confirm", refusal(410, "PAIRING_REQUEST_CLOSED"), PairingState.Expired("confirm_gone", CRED), R.string.pairing_failed_revoke),
+            Row("confirm", refusal(400, "PAIRING_CONFIRM_INVALID"), PairingState.Rejected("confirm_pairing_confirm_invalid", CRED), R.string.pairing_failed_revoke),
+            Row("confirm", MockResponse().setSocketPolicy(SocketPolicy.DISCONNECT_AFTER_REQUEST), PairingState.Rejected(PairingClient.CONFIRM_UNANSWERED, CRED), R.string.pairing_failed_unanswered),
         )
         for (row in rows) {
             val fleet = Fleet()
@@ -238,6 +241,8 @@ class PairingHttpTest {
             val label = "${row.route} ${row.response.status}"
             assertEquals(label, row.expected, final)
             assertEquals(label, row.text, PairingText.failure(final))
+            val arg = PairingText.failureArg(final)
+            if (row.text == R.string.pairing_failed_unanswered) assertEquals(label, CRED, arg)
             assertNull("$label: nothing stays stored", store.saved)
             if (row.route == "confirm") assertEquals(label, listOf("save", "discard"), store.events)
         }
@@ -320,6 +325,7 @@ class PairingHttpTest {
 
     private companion object {
         const val HOST = "fixture-site.local"
+        const val CRED = "cred-0a1b2c3d4e5f"
         const val LOOPBACK = "127.0.0.1"
         const val BASE = HttpPairingTransport.BASE
     }

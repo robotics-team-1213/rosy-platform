@@ -125,6 +125,21 @@ object Pairing {
             else -> "wrong_type"
         }
 
+    /**
+     * Site-supplied text made safe to show or store: control and format characters (C0, C1, bidi overrides,
+     * zero-width) removed, trimmed, then at most [limit] code points. Empty when nothing printable is left.
+     */
+    fun capText(text: String, limit: Int): String {
+        val printable = buildString {
+            text.codePoints().forEach { cp ->
+                val type = Character.getType(cp)
+                if (type != Character.CONTROL.toInt() && type != Character.FORMAT.toInt()) appendCodePoint(cp)
+            }
+        }.trim()
+        val count = printable.codePointCount(0, printable.length)
+        return if (count <= limit) printable else printable.substring(0, printable.offsetByCodePoints(0, limit)).trim()
+    }
+
     private fun sha256(bytes: ByteArray): ByteArray = MessageDigest.getInstance("SHA-256").digest(bytes)
 
     private fun hex(bytes: ByteArray): String = bytes.joinToString("") { String.format(Locale.ROOT, "%02x", it.toInt() and 0xFF) }

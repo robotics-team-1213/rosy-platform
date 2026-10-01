@@ -75,6 +75,8 @@ class HttpPairingTransport(
         .sslSocketFactory(SSLContext.getInstance("TLS").apply { init(null, arrayOf(trust), null) }.socketFactory, trust)
         .hostnameVerifier { _, _ -> true }
         .dns(SiteAddressDns(site))
+        // No silent replay: a lost confirm reply must surface as confirm_unanswered, not be resent behind our back.
+        .retryOnConnectionFailure(false)
         .followRedirects(false)
         .followSslRedirects(false)
         .cache(null)

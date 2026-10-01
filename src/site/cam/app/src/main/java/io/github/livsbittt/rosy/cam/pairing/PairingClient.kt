@@ -2,6 +2,7 @@ package io.github.livsbittt.rosy.cam.pairing
 
 import io.github.livsbittt.rosy.cam.settings.SiteLink
 import io.github.livsbittt.rosy.cam.settings.SiteLinkRecord
+import java.io.IOException
 import java.security.InvalidAlgorithmParameterException
 import java.security.cert.CertPathValidator
 import java.security.cert.CertPathValidatorException
@@ -85,9 +86,14 @@ sealed interface PairingState {
     /** Stored and confirmed; [link] is what was saved. */
     data class Paired(val link: SiteLink) : PairingState
 
-    data class Rejected(val reason: String) : PairingState
+    /**
+     * Ended. [credentialId] is set only when the end came after the link was saved and confirm was sent
+     * (`confirm_*` reasons): the server may hold that credential as active, so the screen asks to revoke it.
+     */
+    data class Rejected(val reason: String, val credentialId: String? = null) : PairingState
 
-    data class Expired(val reason: String) : PairingState
+    /** Ended by a deadline or a gone request; [credentialId] as in [Rejected] (`confirm_gone`). */
+    data class Expired(val reason: String, val credentialId: String? = null) : PairingState
 }
 
 /**
@@ -95,9 +101,10 @@ sealed interface PairingState {
  * drives [start], [poll] (at most every 2 s, S2 `POLL_TOO_FAST`) and [answerFingerprint] from the UI.
  *
  * [store] saves the link before `confirm` is sent, the order D-341 4 sets, and discards it again when the
- * confirm fails (refused, wrong reply or I/O error): an unconfirmed credential is never activated by the server.
- * A confirm whose reply was lost after the server activated it leaves an active credential the phone does
- * not keep; the operator revokes it (S2 refuses a second approval for that source until then).
+ * confirm fails (refused, wrong reply or no answer). The server may still hold that credential as active (a lost
+ * reply after activation), so every such end is a `confirm_*` reason carrying the credential id, and the screen
+ * asks the operator to revoke it in the console before pairing again (S2 refuses a second approval for that
+ * source until then).
  */
 class PairingClient(
     private val transport: PairingTransport,
@@ -107,10 +114,13 @@ class PairingClient(
     private val newSecret: () -> String = Pairing::newSecret,
     private val now: () -> Instant = Instant::now,
 ) {
+    /** Written by the step that runs (one at a time, [PairingSession]); read from the UI thread. */
+    @Volatile
     var state: PairingState = PairingState.Discover
         private set
 
     /** Retry-After of the last 429 (seconds), null when the last call was not rate limited. */
+    @Volatile
     var retryAfterS: Long? = null
         private set
 
@@ -119,6 +129,7 @@ class PairingClient(
     private var pollSecret: String? = null
     private var result: PairingResult? = null
     private var confirmBy: Instant? = null
+    private var deadline: Instant = Instant.MIN
 
     /** Discover -> Requested: record the leaf, request with commits only, reveal, compute the code. */
     fun start(site: PairableSite): PairingState {
@@ -133,14 +144,18 @@ class PairingClient(
         val body = request.toJson()
         PairingRequest.validate(body)?.let { return finish(PairingState.Rejected("request_$it")) }
 
+        val startedAt = now()
         val parsed = when (val reply = refusing { PairingCreated.parse(transport.request(site, body)) }) {
             is Outcome.Done -> reply.value
-            is Outcome.Stop -> return finish(startStop(reply.state))
+            is Outcome.Stop -> return finish(reply.state)
+            // A 429 while starting is not a retry of the same step: the site is busy, ask again later.
+            Outcome.Retry -> return finish(PairingState.Rejected("busy"))
         }
         val created = (parsed as? Parsed.Valid)?.value ?: return finish(PairingState.Rejected("bad_reply"))
         val revealed = refusing { transport.reveal(site, created.requestId, secret, PairingReveal(clientNonce).toJson()) }
         when (revealed) {
-            is Outcome.Stop -> return finish(startStop(revealed.state))
+            is Outcome.Stop -> return finish(revealed.state)
+            Outcome.Retry -> return finish(PairingState.Rejected("busy"))
             is Outcome.Done -> if (PairingJson.readObject(revealed.value)?.opt("state") != "revealed") {
                 return finish(PairingState.Rejected("bad_reply"))
             }
@@ -149,15 +164,15 @@ class PairingClient(
         leaf = seen
         pollSecret = secret
         requestId = created.requestId
+        // The server's expires_at bounds the wait, but never past our own start + MAX_PENDING_S (clock skew,
+        // or a site that claims a far deadline).
+        deadline = minOf(instant(created.expiresAt), startedAt.plusSeconds(MAX_PENDING_S))
         val code = Pairing.confirmationCode(
             Pairing.ROLE, created.requestId, Pairing.derSha256(seen.encoded), clientNonce, created.serverNonce,
         )
         state = PairingState.Requested(site, created.requestId, code, created.expiresAt)
         return state
     }
-
-    /** A 429 while starting is not a retry of the same step: the site is busy, ask again later. */
-    private fun startStop(stop: PairingState): PairingState = if (stop === RETRY) PairingState.Rejected("busy") else stop
 
     /** One poll: Requested/AwaitingApproval -> AwaitingApproval, ConfirmFingerprint, Rejected or Expired. */
     fun poll(): PairingState {
@@ -166,10 +181,11 @@ class PairingClient(
             is PairingState.AwaitingApproval -> Waiting(s.site, s.requestId, s.code, s.expiresAt)
             else -> throw IllegalStateException("nothing to poll in $s")
         }
-        if (!now().isBefore(instant(expiresAt))) return finish(PairingState.Expired("timeout"))
+        if (!now().isBefore(deadline)) return finish(PairingState.Expired("timeout"))
         val raw = when (val reply = refusing { transport.poll(site, requestId, pollSecret!!) }) {
             is Outcome.Done -> reply.value
-            is Outcome.Stop -> return if (reply.state === RETRY) state else finish(reply.state)
+            is Outcome.Stop -> return finish(reply.state)
+            Outcome.Retry -> return state
         }
         val parsed = when (val reply = PollReply.parse(raw)) {
             is Parsed.Valid -> reply.value
@@ -191,18 +207,29 @@ class PairingClient(
         if (!now().isBefore(confirmBy)) return finish(PairingState.Expired("confirm_deadline"))
         val link = siteLink(shown.site, result!!) ?: return finish(PairingState.Rejected("site_link"))
         store.save(link)
-        val confirm = PairingConfirm(shown.credentialId)
+        val credential = shown.credentialId
+        val confirm = PairingConfirm(credential)
         val outcome = try {
             refusing { transport.confirm(shown.site, id, pollSecret!!, confirm.toJson()) }
-        } catch (e: Exception) {
-            // An unconfirmed credential is never activated: keep nothing of it (S2 revokes it after 120 s).
+        } catch (e: IOException) {
+            // No answer: the server may or may not have activated it. Keep nothing; the screen names the
+            // credential so the operator can revoke it if the console lists it as active.
             store.discard(link)
-            finish(PairingState.Rejected("confirm_failed"))
+            return finish(PairingState.Rejected(CONFIRM_UNANSWERED, credential))
+        } catch (e: RuntimeException) {
+            store.discard(link)
+            finish(PairingState.Rejected("internal", credential))
             throw e
         }
+        // Every confirm failure keeps the credential id and a `confirm_` reason, distinct from the poll's.
         val failed: PairingState? = when (outcome) {
-            is Outcome.Stop -> if (outcome.state === RETRY) PairingState.Rejected("confirm_busy") else outcome.state
-            is Outcome.Done -> confirm.replyReason(outcome.value)?.let { PairingState.Rejected("confirm_$it") }
+            Outcome.Retry -> PairingState.Rejected("confirm_busy", credential)
+            is Outcome.Stop -> when (val stop = outcome.state) {
+                is PairingState.Expired -> PairingState.Expired("confirm_${stop.reason}", credential)
+                is PairingState.Rejected -> PairingState.Rejected("confirm_${stop.reason}", credential)
+                else -> PairingState.Rejected("confirm_failed", credential)
+            }
+            is Outcome.Done -> confirm.replyReason(outcome.value)?.let { PairingState.Rejected("confirm_$it", credential) }
         }
         if (failed != null) {
             store.discard(link)
@@ -229,7 +256,7 @@ class PairingClient(
         // S2 CONFIRM_DEADLINE_S: the approval is revoked 120 s after it was given; the phone keeps a local bound.
         confirmBy = now().plusSeconds(CONFIRM_WITHIN_S)
         state = PairingState.ConfirmFingerprint(
-            site, delivered.siteName, delivered.sourceId, Pairing.siteFingerprint(ca.encoded), delivered.credentialId,
+            site, siteName(delivered), delivered.sourceId, Pairing.siteFingerprint(ca.encoded), delivered.credentialId,
             delivered.expiresAt,
         )
         return state
@@ -242,12 +269,15 @@ class PairingClient(
      */
     private fun siteLink(site: PairableSite, r: PairingResult): SiteLink? {
         val record = mapOf(
-            "site_name" to r.siteName, "tls_host" to r.tlsHost, "port" to site.port, "ca_pem" to r.siteCaPem,
+            "site_name" to siteName(r), "tls_host" to r.tlsHost, "port" to site.port, "ca_pem" to r.siteCaPem,
             "role" to Pairing.ROLE, "credential_id" to r.credentialId, "expires_at" to r.expiresAt,
             "credential" to r.token,
         )
         return SiteLinkRecord.toSiteLink(record, token = r.token, source = r.sourceId)?.takeIf { SiteLink.validate(it) == null }
     }
+
+    /** The site's own name, capped before it is shown or stored ([Pairing.capText]); `tls_host` if nothing is left. */
+    private fun siteName(r: PairingResult): String = Pairing.capText(r.siteName, SITE_NAME_LIMIT).ifEmpty { r.tlsHost }
 
     private fun finish(final: PairingState): PairingState {
         reset()
@@ -261,6 +291,7 @@ class PairingClient(
         result = null
         confirmBy = null
         requestId = null
+        deadline = Instant.MIN
     }
 
     private fun PairingState.isFinal(): Boolean =
@@ -271,26 +302,30 @@ class PairingClient(
     private sealed interface Outcome<out T> {
         data class Done<T>(val value: T) : Outcome<T>
         data class Stop(val state: PairingState) : Outcome<Nothing>
+
+        /** HTTP 429: the same step later ([retryAfterS]). */
+        data object Retry : Outcome<Nothing>
     }
 
     /**
      * S2 refusals as states: 404 (Fleet restarted and forgot the request, D-341 8) and 410 end as Expired,
-     * 429 means "same step later" ([retryAfterS]), 401 is a poll-secret mismatch. Any other refusal is Rejected
-     * with the S2 error code in lower case (`commit_mismatch`, `pairing_request_invalid`…) or `refused_<status>`.
+     * 429 is [Outcome.Retry], 401 is a poll-secret mismatch. Any other refusal is Rejected with the S2 error code
+     * in lower case (`commit_mismatch`, `pairing_request_invalid`…) when it is a plain code ([ERROR_CODE]), else
+     * `refused_<status>`: unverified site text never reaches the screen.
      */
     private inline fun <T> refusing(call: () -> T): Outcome<T> = try {
         retryAfterS = null
         Outcome.Done(call())
     } catch (e: PairingRefused) {
-        Outcome.Stop(
-            when (e.status) {
-                404 -> PairingState.Expired("unknown_request")
-                410 -> PairingState.Expired("gone")
-                429 -> RETRY.also { retryAfterS = e.retryAfterS }
-                401 -> PairingState.Rejected("poll_secret")
-                else -> PairingState.Rejected(e.code?.lowercase(Locale.ROOT) ?: "refused_${e.status}")
-            },
-        )
+        when (e.status) {
+            404 -> Outcome.Stop(PairingState.Expired("unknown_request"))
+            410 -> Outcome.Stop(PairingState.Expired("gone"))
+            429 -> Outcome.Retry.also { retryAfterS = e.retryAfterS }
+            401 -> Outcome.Stop(PairingState.Rejected("poll_secret"))
+            else -> Outcome.Stop(
+                PairingState.Rejected(e.code?.takeIf { ERROR_CODE.matches(it) }?.lowercase(Locale.ROOT) ?: "refused_${e.status}"),
+            )
+        }
     }
 
     private fun instant(text: String): Instant = try {
@@ -301,9 +336,16 @@ class PairingClient(
 
     companion object {
         const val CONFIRM_WITHIN_S = 120L
+        const val SITE_NAME_LIMIT = 64
 
-        /** Marker for "try the same step again later" (HTTP 429); never stored as [state]. */
-        private val RETRY = PairingState.Rejected("retry")
+        /** S2 keeps a request 300 s; the phone never waits longer than this from its own start, whatever expires_at says. */
+        const val MAX_PENDING_S = 330L
+
+        /** Confirm sent, no answer (I/O): the credential may be active on the server. */
+        const val CONFIRM_UNANSWERED = "confirm_unanswered"
+
+        /** The only S2 error codes turned into reasons; anything else is `refused_<status>`. */
+        val ERROR_CODE = Regex("^[A-Z0-9_]{1,40}$")
     }
 }
 

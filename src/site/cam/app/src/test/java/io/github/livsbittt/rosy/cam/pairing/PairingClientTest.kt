@@ -26,7 +26,12 @@ class PairingClientTest {
         val servedLeaf: X509Certificate = leaf.certificate,
         val serverLeaf: X509Certificate = leaf.certificate,
         val caPem: String = ca.certificatePem(),
+        val resultTlsHost: String = host,
+        val siteName: String = "Rosy Lab",
+        val expiresAt: String = "2026-10-01T00:05:00Z",
     ) : PairingTransport {
+        /** Set to make confirm fail on the network after the server activated the credential (lost reply). */
+        var confirmIo = false
         val requestId = "pr-test_0123456789"
         val serverNonce = Pairing.newSecret()
         val token = Pairing.newSecret()
@@ -51,7 +56,7 @@ class PairingClientTest {
             commit = json.getString("client_commit")
             pollDigest = json.getString("poll_secret_sha256")
             return JSONObject().put("request_id", requestId).put("server_nonce", serverNonce)
-                .put("expires_at", "2026-10-01T00:05:00Z").toString().toByteArray(UTF_8)
+                .put("expires_at", expiresAt).toString().toByteArray(UTF_8)
         }
 
         override fun reveal(site: PairableSite, requestId: String, pollSecret: String, body: ByteArray): ByteArray {
@@ -73,7 +78,7 @@ class PairingClientTest {
         }
 
         fun result(): JSONObject = JSONObject().put("proto", "rosy-pair/1").put("role", "overhead-camera")
-            .put("site_name", "Rosy Lab").put("source_id", "ceiling_north").put("tls_host", host)
+            .put("site_name", siteName).put("source_id", "ceiling_north").put("tls_host", resultTlsHost)
             .put("site_ca_pem", caPem).put("token", token).put("credential_id", credentialId)
             .put("expires_at", "2027-03-30T00:00:00Z")
 
@@ -93,6 +98,7 @@ class PairingClientTest {
             if (id != credentialId) throw PairingRefused(409, "CREDENTIAL_MISMATCH")
             confirmed = true
             state = "confirmed"
+            if (confirmIo) throw java.io.IOException("connection reset after the server activated the credential")
             return JSONObject().put("state", "confirmed").put("credential_id", id).toString().toByteArray(UTF_8)
         }
     }
@@ -188,7 +194,8 @@ class PairingClientTest {
 
     @Test
     fun aResultWhoseCaDidNotSignTheSeenLeafIsRejected() {
-        // A fake receiver approving its own request (D-341 3 last point) still fails D-341 9 (a).
+        // D-341 9 (a): the delivered CA did not sign the leaf seen on first contact (e.g. a relay passing on another
+        // site's result). A self-approving receiver with its own CA passes this check; see the rogue test below.
         val otherCa = HeldCertificate.Builder().certificateAuthority(0).build()
         val fake = FakeSite(caPem = otherCa.certificatePem())
         val pairing = client(fake)
@@ -230,9 +237,103 @@ class PairingClientTest {
         val pairing = client(fake)
         toFingerprint(fake, pairing)
         fake.refuseNext = PairingRefused(409, "CREDENTIAL_MISMATCH")
-        assertEquals(PairingState.Rejected("credential_mismatch"), pairing.answerFingerprint(true))
+        assertEquals(PairingState.Rejected("confirm_credential_mismatch", fake.credentialId), pairing.answerFingerprint(true))
         assertEquals(listOf("save", "discard"), store.events)
         assertNull(store.saved)
+    }
+
+    @Test
+    fun aConfirmWithoutAnswerDiscardsTheLinkAndNamesTheCredential() {
+        // The server activated it, the reply was lost: the phone keeps nothing and asks for a revoke (review M6).
+        val fake = FakeSite()
+        val pairing = client(fake)
+        toFingerprint(fake, pairing)
+        fake.confirmIo = true
+        val final = pairing.answerFingerprint(true)
+        assertEquals(PairingState.Rejected(PairingClient.CONFIRM_UNANSWERED, fake.credentialId), final)
+        assertEquals(listOf("save", "discard"), store.events)
+        assertNull(store.saved)
+        assertTrue("the server side is active", fake.confirmed)
+        assertEquals(final, pairing.state)
+    }
+
+    @Test
+    fun aConfirm410IsNotAPoll410() {
+        val polled = FakeSite()
+        val first = client(polled)
+        first.start(site)
+        polled.refuseNext = PairingRefused(410, "PAIRING_RESULT_GONE")
+        assertEquals(PairingState.Expired("gone"), first.poll())
+
+        val fake = FakeSite()
+        val pairing = client(fake)
+        toFingerprint(fake, pairing)
+        fake.refuseNext = PairingRefused(410, "PAIRING_REQUEST_CLOSED")
+        assertEquals(PairingState.Expired("confirm_gone", fake.credentialId), pairing.answerFingerprint(true))
+        assertEquals(listOf("save", "discard"), store.events)
+    }
+
+    @Test
+    fun aResultTlsHostTheLeafDoesNotNameIsRejected() {
+        // D-341 9 (b): the CA signs the seen leaf, but the leaf does not name the delivered tls_host (review M3).
+        val fake = FakeSite(resultTlsHost = "other.local")
+        val pairing = client(fake)
+        fake.approve((pairing.start(site) as PairingState.Requested).code)
+        assertEquals(PairingState.Rejected("leaf_san"), pairing.poll())
+        assertNull(store.saved)
+        assertFalse(fake.confirmed)
+    }
+
+    @Test
+    fun aRogueSelfApprovingReceiverOnlyGetsAsFarAsADifferentFingerprint() {
+        // A fake _rosy-overhead._tcp receiver with its own CA approves its own request: code and D-341 9 both pass,
+        // so only the installer's fingerprint comparison (D-341 4) stops it. Nothing is stored before "match".
+        val rogueCa = HeldCertificate.Builder().certificateAuthority(0).commonName("Rosy test site CA").build()
+        val rogueLeaf = HeldCertificate.Builder().signedBy(rogueCa).addSubjectAlternativeName(host).build()
+        val rogue = FakeSite(servedLeaf = rogueLeaf.certificate, serverLeaf = rogueLeaf.certificate, caPem = rogueCa.certificatePem())
+        val pairing = client(rogue)
+        assertTrue(rogue.approve((pairing.start(site) as PairingState.Requested).code))
+        val shown = pairing.poll() as PairingState.ConfirmFingerprint
+        assertNotEquals(Pairing.siteFingerprint(ca.certificatePem()), shown.fingerprint)
+        assertNull(store.saved)
+        assertEquals(PairingState.Rejected("fingerprint_mismatch"), pairing.answerFingerprint(false))
+        assertNull(store.saved)
+        assertTrue(store.events.isEmpty())
+        assertFalse(rogue.confirmed)
+    }
+
+    @Test
+    fun onlyPlainS2CodesBecomeReasons() {
+        for ((code, want) in listOf("PAIRING_REQUEST_INVALID" to "pairing_request_invalid", "<b>bad</b>" to "refused_400",
+            "commit_mismatch" to "refused_400", "A".repeat(41) to "refused_400", null to "refused_400")) {
+            val fake = FakeSite().apply { refuseNext = PairingRefused(400, code) }
+            assertEquals("$code", PairingState.Rejected(want), client(fake).start(site))
+        }
+    }
+
+    @Test
+    fun theSiteNameIsCappedBeforeItIsShownOrStored() {
+        val fake = FakeSite(siteName = "‮" + "Rosy\u0007 Lab " + "x".repeat(100))
+        val pairing = client(fake)
+        val shown = toFingerprint(fake, pairing)
+        val stored = (pairing.answerFingerprint(true) as PairingState.Paired).link.siteName!!
+        for (name in listOf(shown.siteName, stored)) {
+            assertTrue(name, name.codePointCount(0, name.length) <= PairingClient.SITE_NAME_LIMIT)
+            assertTrue(name, name.startsWith("Rosy Lab"))
+            assertFalse(name, name.any { Character.getType(it) == Character.CONTROL.toInt() || Character.getType(it) == Character.FORMAT.toInt() })
+        }
+        assertEquals("tls_host stands in for a name with nothing printable", host, Pairing.capText("​\u0001", 64).ifEmpty { host })
+    }
+
+    @Test
+    fun theWaitIsBoundedByOurOwnStartWhateverTheSiteClaims() {
+        val fake = FakeSite(expiresAt = "2099-01-01T00:00:00Z")
+        val pairing = client(fake)
+        pairing.start(site)
+        clock = clock.plusSeconds(PairingClient.MAX_PENDING_S - 1)
+        assertTrue(pairing.poll() is PairingState.AwaitingApproval)
+        clock = clock.plusSeconds(1)
+        assertEquals(PairingState.Expired("timeout"), pairing.poll())
     }
 
     @Test
