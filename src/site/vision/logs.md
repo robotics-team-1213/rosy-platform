@@ -241,3 +241,10 @@
 - 증거: `test_map_proposal_route.py` 막히는 가짜 작업으로 재현하는 시험.
 - gate 변화: 없음.
 
+
+## 2026-10-01 · uncommitted · feat(vision): D-341 3단계 — 페어링 자격 동기화와 회수 닫기
+
+- 변경: 새 `rosy_vision/pairing_sync.py` — `PairedCredentials`(Fleet 목록의 `token_sha256`만 보관, source별 상수 시간 대조, 첫 동기화 전·마지막 정상 목록 10분 초과는 상태 불명)와 `PairingSync`(전용 데몬 스레드에서 2 s마다 `GET /api/fleet/pairing/v1/credentials?role=overhead-camera`, `pairing_sync_token` bearer, 실패해도 마지막 정상 목록 유지, URL·헤더·본문은 기록하지 않음). `ingest.py` — `paired=`가 있으면 정적 토큰 0개로도 기동; 업그레이드 단계는 정적 토큰 또는 동기화 digest, 상태 불명이면 `503` + `Retry-After: 2`, 모르면 `401`; hello 단계는 paired source면 그 source의 digest만 대조해 불명 `4503`, 회수·모름 `4401`; `enforce_paired_credentials()`가 목록에서 빠진 연결을 `4401`(불명은 `4503`)로 닫고, 그 사이 들어온 프레임은 `_handle_frame`에서 버린다. websockets 서버 로거를 INFO로 고정해 DEBUG에서도 Authorization 헤더가 기록되지 않는다. `protocol.CLOSE_CREDENTIAL_UNKNOWN = 4503`(벡터 `credential_unknown`). `vision_config.py` — `credential: static|paired`(static은 `phone_token_env` 필수, paired는 금지, 어기면 기동 거절). CLI `vision --pairing-sync-url/--pairing-sync-token-env/--pairing-sync-ca`: paired source가 있으면 필수, 없으면 설정 자체를 거절, 동기화 비밀이 폰·sighting·preview 비밀과 같으면 거절, preview 비밀 검사는 폰 토큰이 없는 paired source를 다룬다.
+- 결정: 동기화는 이벤트 루프 밖 스레드에서 돌고, 루프에는 `call_soon_threadsafe`로 닫기 검사만 올린다(2026-10-01 굶주림 교훈). 닫기가 늦어도 회수된 자격의 프레임은 다음 동기화 직후부터 버려진다. 상태 불명은 이미 붙은 paired 연결도 `4503`으로 닫는다(회수가 전파되지 못하는 동안 계속 받지 않는다). 업그레이드에서 paired source가 있고 상태 불명이면 모르는 bearer도 `503`이다(그 순간에는 페어링 자격과 구분할 수 없다).
+- 증거: 새 시험 `test_pairing_sync.py` 14(호출 스레드가 GIL을 쥔 채 도는 동안에도 동기화가 5회 이상), `test_ingest_paired_credentials.py` 9(실제 2 s 동기화 스레드로 회수 후 5 s 안에 `4401`), `test_vision_config.py` 3, `test_vision_cli.py` 7, `test_protocol.py` 1 단언 — 구현 전 실패 확인 뒤 녹색. `src/site/vision/test/` 223 passed(2026-10-01 Windows).
+- gate 변화: 없음(LOCAL).
