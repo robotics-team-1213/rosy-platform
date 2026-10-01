@@ -67,8 +67,8 @@
 
 ## 최근 기록
 
+- 2026-10-01 · uncommitted · fix(site): 보안 리뷰 반영 — 필터를 Docker 앞 mangle로, 원자 적용·실패 시 닫힘, 설정은 Compose에서
 - 2026-10-01 · uncommitted · fix(site): 사이트 바인드는 인터페이스를 따른다 — 와일드카드 바인드, 인터페이스 방화벽, 루프백 발견 브리지
 - 2026-10-01 · uncommitted · fix(release): 비밀 검사가 SHA·HEAD 코드 스팬의 리비전을 출처 데이터로 본다
 - 2026-10-01 · uncommitted · fix(sd): 긴급 resume은 plan의 시도 색인을 읽는다 (D-389 검증)
 - 2026-10-01 · uncommitted · fix(sd,release): D-389 독립 리뷰 반영 — 긴급 resume 이력 검사, 다운로더 점검
-- 2026-10-01 · uncommitted · docs(adr): 긴급 카드 쓰기 결정을 D-385에서 D-389로 개명
