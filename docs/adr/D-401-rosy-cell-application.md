@@ -16,7 +16,7 @@
    - `cell.yaml`(schema `rosy_cell.cell/1`)은 티칭한 3점 좌표계를 원시 점(원점, x축 위의 점, 평면의 +y쪽 점)으로 보관한다. 검증 임계값(`min_span_m`, `min_angle_deg`, `max_tilt_deg`), 스테이션, `approach_clearance_m`도 여기에 둔다.
    - `recipe.yaml`(schema `rosy_cell.recipe/1`)은 박스, 팔레트(각각 좌표계 id를 가리킴), 모드(`palletize`/`depalletize`), 접근 방향, 간격(gap), 층 목록, 슬립 시트를 담는다.
 3. **두 파일은 각각 내용 해시(정규화 JSON의 sha256)를 갖는다.** Job은 두 해시를 모두 기록한다. 장치는 자신이 검증받은 셀과 해시가 다른 Job을 거절해야 한다. 티칭이 바뀌면 이전에 검증한 Job은 자동으로 무효가 된다.
-4. **Job은 순서 있는 Step 목록이다.** Step은 `pick`, `place`(대상 `box` 또는 `slip_sheet`, 로봇 베이스 좌표 목표 자세, `approach_z`), `pallet_done`이다. Rosy Cell은 Job을 Mission으로 Fleet에 제출한다. Fleet이 승인(D-330)하고 Step을 장치에 하달한다(D-336). Rosy Cell은 장치를 직접 호출하지 않고, Motion Intent를 보내지 않으며, IK나 도달성을 판정하지 않는다(D-399 §5). 팔 셋업과 티칭을 장치 곁에서 하는 경로는 별도의 OMX 장치·티칭 API ADR이 필요하며(D-399 §5, D-282 §5), 이 ADR의 범위 밖이다.
+4. **Job은 순서 있는 Step 목록이다.** Step은 `pick`, `place`(대상 `box` 또는 `slip_sheet`, 로봇 베이스 좌표 목표 자세, `approach_z`), `pallet_done`이다. Rosy Cell은 Job을 Mission으로 Fleet에 제출하고, Fleet이 승인(D-330)한 뒤 Step을 장치에 하달하는 것이 **유일한 실행 경로**다(Mission/Step 원장은 Fleet, D-328). 이 경로는 아직 열려 있지 않다. D-330 §2는 정지 세대 계약 시험 전 Mission 하달을 열지 않고, D-336 §5는 호스트 간 하달을 보류한다. 그 보류가 풀리기 전에는 Rosy Cell Job이 장치에서 실행되지 않는다. Rosy Cell은 장치를 직접 호출하지 않고, Motion Intent를 보내지 않으며, IK나 도달성을 판정하지 않는다(D-399 §5). 팔 셋업과 티칭을 장치 곁에서 하는 경로는 별도의 OMX 장치·티칭 API ADR이 필요하며(D-399 §5, D-282 §5), 이 ADR의 범위 밖이다.
 5. **v1 패턴과 기능.**
    - 패턴은 `grid`(0°와 90° 중 더 많이 들어가는 쪽), `split`(0° 열과 90° 띠), 그리고 어느 층에든 적용하는 `mirrored`(아래 층과 맞물리게 하는 반사)다.
    - 슬립 시트는 어느 층 아래에든 둘 수 있다. 여러 팔레트를 순서대로 채울 수 있다. 디팔레타이즈는 정확한 역순이다.
@@ -42,4 +42,4 @@
 - **SOURCE:** `rosy_cell` 코어가 위 형식으로 패턴, 스택, 순서, 로더, 컴파일러를 구현하고 ROS-free pytest가 통과한다.
 - **ROS-SIM / DEVICE / FIELD:** 이 결정으로 승격하지 않는다. 도달성과 실행은 장치 측 Step API와 MoveIt 채택(D-399 후속 3)이 있어야 한다.
 
-**관련 결정:** [D-376](D-376-omx-pick-place-planning-and-execution-boundary.md), [D-377](D-377-app-names-rosy-plus-one-english-word.md), [D-386](D-386-omx-async-goal-acceptance-and-phase-state.md), [D-397](D-397-pinky-geometry-urdf-nominal-calibration-refines.md), [D-399](D-399-rosy-layered-architecture-site-plane-device-pipeline.md), [D-330](D-330-fleet-action-admission-stop-and-recovery.md), [D-336](D-336-fleet-omx-local-ipc-boundary.md)
+**관련 결정:** [D-328](D-328-model-proposed-missions-and-independent-goal-evidence.md), [D-376](D-376-omx-pick-place-planning-and-execution-boundary.md), [D-377](D-377-app-names-rosy-plus-one-english-word.md), [D-386](D-386-omx-async-goal-acceptance-and-phase-state.md), [D-397](D-397-pinky-geometry-urdf-nominal-calibration-refines.md), [D-399](D-399-rosy-layered-architecture-site-plane-device-pipeline.md), [D-330](D-330-fleet-action-admission-stop-and-recovery.md), [D-336](D-336-fleet-omx-local-ipc-boundary.md)
