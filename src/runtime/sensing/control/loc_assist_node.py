@@ -166,8 +166,8 @@ class LocAssistNode(Node):
         self.field = MapAgreement(grid, resolution, (info.origin.position.x, info.origin.position.y),
                                   self.p('wall_tolerance'))
 
-    def scan_arrays(self, scan):
-        stride = max(1, int(self.p('scan_stride')))
+    def scan_arrays(self, scan, stride=None):
+        stride = max(1, int(self.p('scan_stride') if stride is None else stride))
         ranges = np.asarray(scan.ranges, dtype=float)[::stride]
         angles = scan.angle_min + np.arange(len(scan.ranges))[::stride] * scan.angle_increment
         return np.where((ranges < scan.range_max) & (ranges >= scan.range_min), ranges, np.nan), angles
@@ -291,13 +291,14 @@ class LocAssistNode(Node):
         except Exception:
             return
         ranges, angles = self.scan_arrays(self.scan)
+        full = self.scan_arrays(self.scan, 1)   # peer objects: every beam (S1 finding 2)
         self.core.search_started(now, odom)
         field, clear, generation = self.field, self.clear, self.generation
         squares, radius, minimum = self.squares, self.p('robot_radius'), self.p('candidate_minimum_fit')
 
         bundle, self.paint_tried = (None if self.paint_tried else self.bundle), True
         self.search = self.pool.submit(search_job, self.stopping, bundle, generation, field, clear, squares,
-                                       ranges, angles, radius, mount, minimum)
+                                       ranges, angles, radius, mount, minimum, full)
 
     def finish_search(self, now):
         future, self.search = self.search, None

@@ -270,11 +270,14 @@ class LocAssist:
                           'state': self.machine.state.value}
 
 
-def search(field, clear, squares, ranges, angles, radius, mount, minimum_fit=.9):
+def search(field, clear, squares, ranges, angles, radius, mount, minimum_fit=.9, object_scan=None):
     """Slot then global candidates (at most 8) and the unmapped objects at the first one.
 
     `clear` is the cached `field.clear_poses(radius)` mask, or None to compute it;
-    it is returned so the caller computes it once per map."""
+    it is returned so the caller computes it once per map. `object_scan`: the
+    (ranges, angles) the objects come from, default the search's own. Pass the
+    full scan when the search is strided: a peer 2 m away spans about 4 beams
+    of 640, so a stride of 4 leaves it one beam, under MIN_POINTS (S1 finding 2)."""
     clear = field.clear_poses(radius) if clear is None else clear
     found = merge(slot_candidates(field, squares, ranges, angles, radius, mount, minimum_fit, clear=clear),
                   global_candidates(field, ranges, angles, radius, mount, minimum_fit, clear=clear))
@@ -282,8 +285,9 @@ def search(field, clear, squares, ranges, angles, radius, mount, minimum_fit=.9)
     objects = []
     if found:
         first = found[0]
+        object_ranges, object_angles = (ranges, angles) if object_scan is None else object_scan
         objects = unmapped_objects(field, sensor_from_base((first.x, first.y, first.yaw), mount),
-                                   ranges, angles, mount)
+                                   object_ranges, object_angles, mount)
     return found, objects, clear
 
 

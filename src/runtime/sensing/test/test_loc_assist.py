@@ -298,6 +298,29 @@ def test_search_on_the_fleet_map_finds_the_slot_pose_and_its_objects():
     assert same is clear and len(again) == len(found)
 
 
+def test_peer_objects_come_from_the_full_scan_while_the_search_is_strided():
+    """S1 finding 2: at scan_stride 4 a Pinky 2.35 m away is one beam (MIN_POINTS 2),
+    seen 1 in 36 reports. The search stays strided; the objects use every beam."""
+    truth, peer = (.86, -.52, math.pi), (-1.26, .49)        # the S1 (b) layout
+    full = scan(truth, peers=[peer], beams=640)
+    strided = full[0][::4], full[1][::4]
+    _, objects, _ = search(field(), None, SQUARES, *strided, .105, MOUNT)
+    assert objects == []                                    # the defect: one beam is no object
+    found, objects, _ = search(field(), None, SQUARES, *strided, .105, MOUNT, object_scan=full)
+    assert math.dist((found[0].x, found[0].y), truth[:2]) < .05
+    assert len(objects) == 1
+    c, s = math.cos(truth[2]), math.sin(truth[2])
+    dx, dy = peer[0] - truth[0], peer[1] - truth[1]
+    assert math.dist(objects[0], (c * dx + s * dy, -s * dx + c * dy)) < .08
+
+
+@pytest.mark.parametrize('pose', [(.86, -.52, math.pi), (-1.26, .49, math.pi / 2), (-.7, .15, math.pi)])
+def test_the_full_scan_finds_no_objects_on_an_empty_track(pose):
+    full = scan(pose, beams=640)
+    _, objects, _ = search(field(), None, SQUARES, full[0][::4], full[1][::4], .105, MOUNT, object_scan=full)
+    assert objects == []
+
+
 def test_a_wider_scan_gap_survives_an_executor_stall_but_not_a_lost_lidar():
     """Node default max_gap_s 1.0: a 0.8 s stall right after the injection (WSL, a loaded Pi)
     must not fail a correct pose; a 10 Hz lidar still gives ~10 fits per second."""
