@@ -111,3 +111,29 @@ def test_stored_hostname_is_the_classifier_normalised_host():
         "rosy-a": "rosy-a.local", "rosy-b": ""}
     registered = {"rosy_01": "http://rosy-a.local:8080"}
     assert store.snapshot(registered, {})["devices"][0]["status"] == "pairing_pending"
+
+
+def test_scanner_lease_expiry_is_reported_apart_from_never_seen():
+    """2026-10-01 audit #4: an expired lease stops discovery and move-address; say so."""
+    now = [100.0]
+    store = DiscoveryStore(clock=lambda: now[0], ttl_s=45.0)
+    assert store.snapshot({}, {}) == {"devices": [], "scanner_online": False,
+                                      "scanner_state": "never_seen", "scanner_age_s": None}
+    store.replace_scan([dict(name="rosy-a", address="192.168.1.10", port=8080, network="sta")])
+    now[0] = 145.0
+    online = store.snapshot({}, {})
+    assert (online["scanner_online"], online["scanner_state"], online["scanner_age_s"]) == \
+        (True, "online", 45)
+    now[0] = 145.5
+    assert store.snapshot({}, {}) == {"devices": [], "scanner_online": False,
+                                      "scanner_state": "expired", "scanner_age_s": 45}
+
+
+def test_console_raises_an_alarm_when_the_scanner_lease_expires():
+    source = (Path(__file__).resolve().parents[1] / "fleet/server/web/console.js").read_text(
+        encoding="utf-8")
+    block = source[source.index('snapshot.scanner_state === "expired"'):]
+    block = block[:block.index("return;")]
+    assert '"검색기 끊김"' in block and '"crit"' in block
+    assert 'log("발견 검색기 끊김' in block and '"bad")' in block
+    assert "scanner_age_s" in block and "rosy-mdns-bridge" in block
