@@ -1,10 +1,13 @@
 package io.github.livsbittt.rosy.cam.link
 
 /**
- * Client failure classes of D-370 5.5 plus D-391 1 `not_discovered`. The machine-readable source is the shared
- * vector `test/fixtures/protocol/failure-classes.v1.json` (D-391 4항 1단계, rosy-00). It was not on main when
- * this table was written, so these rows are the app's reading of D-341 11 and D-370 5.5; `FailureClassTest`
- * is the place to switch to the vector once it lands.
+ * Client failure classes of D-370 5.5 plus D-391 1 `not_discovered`, one class per observed input. The machine
+ * source is `test/fixtures/protocol/failure-classes.v1.json` (same rules as core_common `failure_class.py`);
+ * `FailureClassTest` runs every vector case through this object.
+ *
+ * Class and behaviour are separate: this says what kind of failure it was; [OverheadLink] decides whether to
+ * retry. Both TLS kinds are `tls_untrusted` here, yet a pin mismatch on a manual route stops the link and the
+ * first one on a discovered route browses again (review M3).
  */
 object FailureClass {
     const val UNREACHABLE = "unreachable"
@@ -19,26 +22,37 @@ object FailureClass {
     const val CONFLICT = "conflict"
     const val NOT_DISCOVERED = "not_discovered"
 
+    val ALL = listOf(
+        UNREACHABLE, REFUSED, UNKNOWN_HOST, TLS_UNTRUSTED, AUTH_FINAL, AUTH_RETRY,
+        FORBIDDEN, PROTOCOL_MISMATCH, BUSY, CONFLICT, NOT_DISCOVERED,
+    )
+
     /**
-     * WebSocket close code to class; null for codes outside D-341 11 (normal closes and the like). A 4400 whose
-     * [reason] is a receiver-side wait is `busy`, as in [OverheadLink.closeOutcome].
+     * WebSocket close code to class. A 4400 whose [reason] is a pre-1013 hello wait (`""`, `"no hello"`; a
+     * missing reason counts as empty) is `busy`, any other 4400 `protocol_mismatch`, as in
+     * [OverheadLink.closeOutcome]. A code outside the table falls back to `unreachable`.
      */
-    fun forClose(code: Int, reason: String = "incompatible"): String? = when (code) {
-        Protocol.CLOSE_BAD_PROTO -> if (Protocol.isIncompatibleClose(code, reason)) PROTOCOL_MISMATCH else BUSY
+    fun forClose(code: Int, reason: String? = null): String = when (code) {
+        Protocol.CLOSE_BAD_PROTO -> if (Protocol.isIncompatibleClose(code, reason.orEmpty())) PROTOCOL_MISMATCH else BUSY
         Protocol.CLOSE_UNAUTHORIZED -> AUTH_FINAL
         CLOSE_FORBIDDEN -> FORBIDDEN
         Protocol.CLOSE_REPLACED -> CONFLICT
         Protocol.CLOSE_CREDENTIAL_UNKNOWN -> AUTH_RETRY
         Protocol.CLOSE_TRY_AGAIN -> BUSY
-        else -> null
+        else -> UNREACHABLE
     }
 
-    /** HTTP status on the upgrade or a REST call to class; null for statuses outside the D-391 minimum rows. */
+    /**
+     * HTTP status on the upgrade or a REST call to class: the listed statuses, then any other 4xx
+     * `protocol_mismatch` and 5xx `busy`. Null for a status that is not a failure.
+     */
     fun forHttp(status: Int): String? = when (status) {
         401 -> AUTH_FINAL
         403 -> FORBIDDEN
         409 -> CONFLICT
         429, 503 -> BUSY
+        in 400..499 -> PROTOCOL_MISMATCH
+        in 500..599 -> BUSY
         else -> null
     }
 
@@ -52,6 +66,23 @@ object FailureClass {
         NetworkFailure.CONFLICT -> CONFLICT
         NetworkFailure.OTHER -> null
     }
+
+    /**
+     * The vector's transport vocabulary (`timeout`, `no_route`, `connection_refused`, `dns_failure`,
+     * `tls_handshake`, `tls_pin_mismatch`) as the [NetworkFailure] the app classifies those exceptions to.
+     * Null for a name outside that closed vocabulary.
+     */
+    fun networkFailureFor(transport: String): NetworkFailure? = when (transport) {
+        "timeout", "no_route" -> NetworkFailure.UNREACHABLE
+        "connection_refused" -> NetworkFailure.REFUSED
+        "dns_failure" -> NetworkFailure.UNKNOWN_HOST
+        "tls_handshake" -> NetworkFailure.TLS
+        "tls_pin_mismatch" -> NetworkFailure.TLS_PIN
+        else -> null
+    }
+
+    /** Discovery outcome to class; only `no_match_within_timeout` exists (D-391 1). */
+    fun forDiscovery(outcome: String): String? = if (outcome == "no_match_within_timeout") NOT_DISCOVERED else null
 
     /** D-341 11 close 4403: the credential is valid but not allowed for this source. */
     private const val CLOSE_FORBIDDEN = 4403

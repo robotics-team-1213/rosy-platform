@@ -56,7 +56,8 @@ object Protocol {
     const val CLOSE_CREDENTIAL_UNKNOWN = 4503
 
     // Transition exception, remove one release after every site runs 1013 receivers (D-341 §11).
-    private val TRANSIENT_4400 = setOf("", "no hello")
+    // Equal to failure-classes.v1.json close_4400_retry_reasons (FailureClassTest asserts it).
+    internal val TRANSIENT_4400 = setOf("", "no hello")
 
     /**
      * Close 4400 is an incompatibility (wrong `proto`, hello schema) for every reason except exactly
