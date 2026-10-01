@@ -60,8 +60,9 @@ def split_block(box: Box, pallet: Pallet, *, gap: float) -> list[Placement]:
     dx1, dy1 = footprint(box, math.pi / 2)
     ny0, ny1 = _count(pallet.width, dy0, gap), _count(pallet.width, dy1, gap)
     best: tuple[int, int, int] | None = None
-    for k in range(_count(pallet.length, dx0, gap) + 1):
-        m = _count(pallet.length - k * (dx0 + gap), dx1, gap)
+    # an orientation with no rows holds no boxes, so it gets no columns (centring must ignore it)
+    for k in range(_count(pallet.length, dx0, gap) + 1 if ny0 else 1):
+        m = _count(pallet.length - k * (dx0 + gap), dx1, gap) if ny1 else 0
         total = k * ny0 + m * ny1
         if best is None or total > best[0]:
             best = (total, k, m)
