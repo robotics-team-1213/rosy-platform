@@ -585,6 +585,7 @@ main {
 .address-drift .enroll-alarm { margin: 0; }
 #address-move-all { justify-self: start; }
 #address-move-all[hidden] { display: none; }
+#address-move-result p[data-kind="bad"] { color: var(--status-crit); }
 .enroll-address { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
 .enroll-address input, #enroll-code { min-height: var(--target-secondary); padding: var(--space-1) var(--space-2); color: var(--ink); background: var(--ground-soft); border: 1px solid var(--line-14); border-radius: var(--radius-flag); }
 .enroll-result p { margin: var(--space-1) 0; }

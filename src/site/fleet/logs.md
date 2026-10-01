@@ -992,3 +992,9 @@
 - 변경: `test/architecture/test_module_structure.py`의 `fleet` 판정을 22435에서 23166으로 다시 적고 'split: …' 문장 끝에 까닭을 붙였다(main이 D-392 작업으로 이미 22797, 이 브랜치의 `address_drift.py`·`address-drift.js`·라우트·시험이 더함). 판정은 그대로다.
 - 증거: 판정 시험 녹색. 같은 파일의 `site/fleet/fleet/server/proposal_store.py`(730줄, D-392 다른 세션) 판정 없음 1건은 main에서도 실패하며 이 브랜치가 다루지 않는다. `src/site/fleet/test/` 1123 passed, 6 skipped(137 s). 바뀐 파일 secret_scan 0건.
 - gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · test(console): 주소 까닭·전체 옮기기 브라우저 계약
+
+- 변경: `test/test_fleet_console_browser.py`에 옵트인 시험 2개 — (1) 모든 로봇이 망 밖인 응답에서 경보, 카드 3장의 까닭 줄, 카드의 "새 주소로 옮기기…", 전체 옮기기 확인 대화상자가 두 로봇과 새 주소를 말하고 그동안 전체 정지가 살아 있음, Escape는 요청 0, 확인하면 `move-address`를 rosy_09 → rosy_10 순서로 한 번씩, 결과 줄은 성공 "good"·신원 불일치 "bad"(줄마다 색), 390 px 가로 넘침 없음. (2) viewer는 까닭은 보고 두 버튼은 꺼짐 + "운용자 권한이 필요합니다". `ROSY_ADDRESS_SCREENSHOT_DIR`가 있으면 캡처를 저장한다. 결과 상자가 성공 줄까지 경고색으로 칠하던 것을 줄마다 `data-kind`로 고쳤다.
+- 증거: 브라우저 전체 61 중 60 passed, 1 failed(`test_the_console_renders_what_swarm_control_says` — main에서도 같은 시간 초과, 이 작업과 무관). node 79 passed, `src/hmi/web_common/test/` 녹색.
+- gate 변화: 없음(LOCAL).

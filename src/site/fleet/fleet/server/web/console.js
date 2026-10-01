@@ -646,13 +646,14 @@ el("address-move-all").addEventListener("click", async () => {
   try {
     const results = await runBulkMove(targets, enrollment.moveAddress);
     const box = el("address-move-result");
+    // 로봇마다 한 줄 이상. 성공 줄까지 경고색으로 칠하지 않도록 줄마다 결과를 단다.
     box.replaceChildren(...results.flatMap((result) => result.lines.map((line) => {
       const p = document.createElement("p");
       p.textContent = line;
+      p.dataset.kind = result.ok ? "good" : "bad";
       return p;
     })));
     const moved = results.filter((result) => result.ok).length;
-    box.dataset.kind = moved === results.length ? "good" : "bad";
     log(`새 주소로 옮기기(전체): ${moved}/${results.length}대 옮김`, moved === results.length ? "good" : "bad");
   } finally {
     bulkMoving = false;

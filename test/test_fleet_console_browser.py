@@ -2099,3 +2099,123 @@ def test_camera_section_is_calm_when_fleet_has_no_pairing(console_url):
         _camera_shot(page, "09-no-pairing-1920.png")
         assert not errors
         browser.close()
+
+
+ADDRESS_SHOTS = os.environ.get("ROSY_ADDRESS_SCREENSHOT_DIR")
+
+
+def _address_api():
+    offline = {"code": "CONNECT_ERROR", "reachable": False}
+    snapshot = {"fleet": {"name": "site", "online": 0, "total": 3}, "ts": 0.0, "robots": [
+        _robot(rid, {"x": 0.5 + i, "y": 1.0, "yaw": 0.0}, online=False, error=offline)
+        for i, rid in enumerate(("rosy_01", "rosy_09", "rosy_10"))]}
+
+    def entry(rid, origin, pinned, status, seen=(), movable=False, is_name=False):
+        return {"robot_id": rid, "origin": origin, "pinned": pinned, "pinned_is_name": is_name,
+                "status": status, "in_subnet": None if is_name else False,
+                "seen_addresses": list(seen), "movable": movable}
+
+    addresses = {"scanner_state": "online", "all_outside": True, "robots": [
+        entry("rosy_01", "static", "192.0.2.10:8443", "outside_scanned_subnets"),
+        entry("rosy_09", "enrolled", "192.0.2.20:8080", "seen_at_other_address",
+              ["10.16.36.20:8080"], True),
+        entry("rosy_10", "enrolled", "192.0.2.21:8080", "seen_at_other_address",
+              ["10.16.36.21:8080"], True),
+    ]}
+    rows = [{"robot_id": rid, "hostname": rid, "address": pinned, "state": "address_changed",
+             "legacy_lifetime": False, "origin": "enrolled", "hold": "address_changed",
+             "expires_at": "2026-12-01T00:00:00+00:00"}
+            for rid, pinned in (("rosy_09", "192.0.2.20:8080"), ("rosy_10", "192.0.2.21:8080"))]
+    listing = {"available": True, "unavailable_reason": None, "static_robot_ids": ["rosy_01"],
+               "robots": rows, "alarms": []}
+    api = {**_enrollment_api(listing), "/api/fleet/state": snapshot,
+           "/api/fleet/discovery/addresses": addresses,
+           "/api/fleet/discovery": {"scanner_online": True, "scanner_state": "online",
+                                    "scanner_age_s": 3, "devices": []}}
+    return api
+
+
+def test_offline_robots_say_why_and_bulk_move_reuses_the_per_robot_move(console_url):
+    """점검 2026-10-01 #2/#3/#5 — 사이트 망 변경 경보, 카드 까닭, 전체 옮기기는 로봇별 요청."""
+    from playwright.sync_api import sync_playwright
+
+    moves = []
+    with sync_playwright() as playwright:
+        browser, page, errors = _open_console(playwright, _address_api())
+
+        def move(route):
+            moves.append(urlparse(route.request.url).path)
+            if "rosy_10" in route.request.url:
+                route.fulfill(status=409, json={"detail": {"code": "identity_mismatch",
+                                                           "message": "x"}})
+            else:
+                route.fulfill(status=200, json={"robot_id": "rosy_09", "state": "active"})
+
+        page.route("**/api/fleet/enrollment/robots/*/move-address", move)
+        page.goto(console_url, wait_until="networkidle")
+        banner = page.locator("#address-banner")
+        banner.wait_for()
+        assert banner.inner_text().startswith("사이트 망 주소가 바뀐 것 같습니다")
+        page.wait_for_function(
+            "() => document.querySelectorAll('#roster p[data-address-reason]').length === 3")
+        card = page.locator('#roster article[data-robot-id="rosy_09"]')
+        assert "같은 로봇이 10.16.36.20:8080에 보입니다 — 새 주소로 옮기기…" in card.inner_text()
+        assert card.locator('ui-button[data-move-robot-id="rosy_09"]').inner_text() == "새 주소로 옮기기…"
+        static = page.locator('#roster article[data-robot-id="rosy_01"]').inner_text()
+        assert "고정 주소 192.0.2.10:8443이(가) 지금 망에 없습니다" in static and "robots.yaml" in static
+        if ADDRESS_SHOTS:
+            Path(ADDRESS_SHOTS).mkdir(parents=True, exist_ok=True)
+            page.screenshot(path=str(Path(ADDRESS_SHOTS) / "roster-renumbered-1920.png"), full_page=True)
+
+        bulk = page.locator("#address-move-all")
+        assert bulk.inner_text() == "새 주소로 옮기기 (전체)…"
+        bulk.click()
+        dialog = page.locator("dialog.ui-confirm")
+        dialog.wait_for()
+        text = dialog.locator("p").inner_text()
+        assert '"rosy_09" → 10.16.36.20:8080' in text and '"rosy_10" → 10.16.36.21:8080' in text
+        assert page.locator("#estop").is_enabled()
+        if ADDRESS_SHOTS:
+            page.screenshot(path=str(Path(ADDRESS_SHOTS) / "bulk-confirm-1920.png"), full_page=False)
+        page.keyboard.press("Escape")
+        page.wait_for_function("!document.querySelector('dialog.ui-confirm')")
+        assert moves == []
+        bulk.click()
+        page.locator('dialog.ui-confirm ui-button[kind="irreversible"]').click()
+        page.wait_for_function(
+            "() => document.querySelectorAll('#address-move-result p').length >= 2")
+        assert moves == ["/api/fleet/enrollment/robots/rosy_09/move-address",
+                         "/api/fleet/enrollment/robots/rosy_10/move-address"]
+        result = page.locator("#address-move-result").inner_text()
+        assert "rosy_09: 10.16.36.20:8080(으)로 옮김" in result
+        assert "rosy_10: 새 주소의 기기가 등록된 로봇과 다릅니다" in result
+        kinds = page.eval_on_selector_all("#address-move-result p", "ps => ps.map(p => p.dataset.kind)")
+        assert kinds[0] == "good" and kinds[1] == "bad"
+        if ADDRESS_SHOTS:
+            page.locator(".address-drift").screenshot(path=str(Path(ADDRESS_SHOTS) / "bulk-result.png"))
+            page.set_viewport_size({"width": 390, "height": 844})
+            page.wait_for_timeout(300)
+            assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
+            page.screenshot(path=str(Path(ADDRESS_SHOTS) / "roster-renumbered-390.png"), full_page=True)
+        assert not errors
+        browser.close()
+
+
+def test_viewer_sees_reasons_but_no_live_move_buttons(console_url):
+    from playwright.sync_api import sync_playwright
+
+    api = {**_address_api(), "/api/fleet/session": {"principal_id": "vic", "role": "viewer"}}
+    with sync_playwright() as playwright:
+        browser, page, errors = _open_console(playwright, api)
+        page.goto(console_url, wait_until="networkidle")
+        page.locator("#address-banner").wait_for()
+        page.wait_for_function(
+            "() => document.querySelectorAll('#roster p[data-address-reason]').length === 3")
+        bulk = page.locator("#address-move-all")
+        assert bulk.get_attribute("reason") == "운용자 권한이 필요합니다"
+        assert bulk.is_disabled()
+        card_move = page.locator('ui-button[data-move-robot-id="rosy_09"]')
+        assert card_move.is_disabled()
+        assert card_move.get_attribute("reason") == "운용자 권한이 필요합니다"
+        assert not errors
+        browser.close()
