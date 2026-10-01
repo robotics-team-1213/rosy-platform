@@ -204,6 +204,13 @@
 - 증거: `python -m pytest src/site/vision/test -q` 127 passed (2026-09-30 Windows). 공유 벡터 `test/fixtures/protocol/overhead-ingest.v1.json`에 `hello_with_lens`, `hello_lens.{valid,ignored}` 추가(Kotlin `ProtocolTest`도 읽음).
 - gate 변화: 없음. 초광각 프레임의 field_detect 결과는 DEVICE 단계에서 기록(폰 대기).
 
+## 2026-09-30 · 646fe8e6 · feat(vision): 계산 중인 map-proposal 읽기는 마지막 완료 결과를 받는다
+
+- 변경: `ingest.py` — 한 번에 1.2–2 s라 1 s 간격보다 길어 도중 읽기가 429 busy였다. source마다 마지막 성공 결과(`_map_done`)를 그 결과의 `frame_seq`·나이와 `X-Proposal-State: previous`로 돌려준다(새 결과는 `current`). 성공 결과가 아직 없을 때와 주체별 속도 제한만 429. 2026-10-01 병합: 아래 단일 비행·작업 프로세스 설계 위에 얹었다(바쁠 때만 이전 결과).
+- 증거: `test_map_proposal_route.py` 새 시험 1개; 콘솔 헤드리스 시험에서 실제 프레임 4장(rx5·rx6·standard·wide) 모두 수락.
+- gate 변화: 없음.
+
+
 ## 2026-10-01 · uncommitted · fix(vision): D-375 review fixes and worker process
 
 - 변경: 독립 리뷰(APPROVE WITH FIXES)와 실기 시험 결함 반영. 방향 차는 다른 방향(적어도 180°) 후보를 늘 정밀화해서 구하고, 경쟁자가 없으면 1.0이 아니라 미정(거부). recall×precision ≥ 0.75 추가, 거울상은 잘 맞고 방향이 분명할 때만. 픽셀 중심 변환은 실제 축별 배율, 세로 프레임은 긴 변 기준. 정합은 별도 작업 프로세스 하나(`map_worker.py`)에서 돌고 source마다 한 번에 하나, 실패는 다음 계산까지 422, `rejected_fit`에는 homography를 넣지 않는다. hello 대기는 루프가 응답하던 시간만 세고, 시간 초과는 1013(재시도)으로 닫는다(4400은 틀린 hello만).
@@ -222,3 +229,15 @@
 - gate 변화: 없음.
 - 결정: 앱은 호환을 위해 leaf pin을 계속 받지만 사이트 도구는 CA pin만 만든다.
 - 교훈: 없음.
+
+## 2026-10-01 · uncommitted · test(vision): 4400 재시도 목록을 전환 예외로 고정
+- 변경: 공유 벡터 `close_4400_reasons.retry`를 `["", "no hello"]`로 좁혀 "hello timeout"·"timed out waiting for hello"·"receiver busy"를 뺐다. 수신기 코드는 그대로(hello 시간 초과는 1013). 재시도 목록이 fatal 사유와 겹치지 않고 정확히 전환 예외임을 확인하는 시험을 더했다.
+- 증거: `python -m pytest src/site/vision/test -q` 188 passed (2026-10-01 Windows).
+- gate 변화: 없음.
+
+## 2026-10-01 · 2d6d268b · fix(vision): 재연결 전 계산을 이전 결과로 남기지 않는다
+
+- 변경: `ingest.py` — 옛 연결의 계산이 재연결로 캐시가 비워진 뒤 끝나면 `_map_done`에 들어가 "previous"가 옛 homography를 줬다. 아직 그 source의 현재 계산일 때만 남긴다.
+- 증거: `test_map_proposal_route.py` 막히는 가짜 작업으로 재현하는 시험.
+- gate 변화: 없음.
+

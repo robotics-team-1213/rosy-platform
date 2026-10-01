@@ -195,3 +195,25 @@
 - 변경: 세로 전체화면에서 조작부가 0px 이 되던 것을 아래 겹침(높이 min(40dvh, 28rem))으로 고쳤다(bb604a6f). `sw.js` SHELL 에 `/common/evidence.js` 를 넣고(drive.js 의 정적 import, bf7a8886), 쓰지 않던 `recent.js` 와 그 allowlist 행을 지웠다(0fd862fc, 캐시 `-5`). 다시 들어오면 자동 모드·배치 표시를 초기화한다(`drive-auto.js`·`view.close()`). 자동 요청에 1.5 s 시한, 진행 버튼은 도는 중이거나 켜는 중에 아직 누르고 있을 때만 채운다. 차선 자동은 `segment`, 진행은 공용 `toggle` `tone="good"`(12f322f9). `test_pwa_icons` 는 PIL 을 바로 import 한다. `render_png.py` docstring·`sync_pilot_files.sh` 경로·빈 줄 정리.
 - 증거: 새 시험 `test_shell_assets.py`(모든 pilot 모듈의 import 를 /common 까지 따라가 SHELL·pilot_assets 대조), 브라우저 `test_go_releases_on_cancel_and_leave`·`test_stick_takes_over_auto`·`test_reenter_resets_auto_mode`, `test_zoom_cycles_and_always_reports_crop` 에 1200×2000(옛 CSS 에서 스틱 4px 로 실패 확인). 스크린샷 `X:\DevTemp\pilot-polish\after4-*.png`(세로 전체화면 `after4-drive-fullzoom-*`).
 - gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · D-390 Pilot OMX Gazebo practice
+- Change: Select the OMX simulation driver from same-origin identity; render bounded arm and gripper jog, seat renewal, goal readback and cancellation. Keep Pinky routing behind a 404 target response.
+- Evidence: rendered OMX pairing-to-jog 1 passed, Pinky gate browser 1 passed, driver/link/route 26 passed; Gazebo action evidence in docs/validation/pilot-omx-gazebo-2026-10-01/.
+- Gate: sim control path observed; video, recording and physical OMX remain HOLD.
+
+## 2026-10-01 · 5db3391d · feat(pilot): 보정 중 판과 비소유자 주행 잠금
+- 변경: `calibration.js`(순수 판정) 추가. 상태의 `activity` 가 CALIBRATING 이면 영상 위 "보정 중 — <label>" 판과 HUD 칩. whoami id 가 owner 가 아니면 조작부 전체 disabled + 사유, 명령 루프는 아무것도 보내지 않는다. 상단 E-Stop 은 그대로. SW 셸 키 `2026-10-01-1`.
+- 증거: test_calibration_view.py 5 passed; ROSY_RUN_BROWSER_TESTS=1 test_pilot_browser 전체 18 passed(새 `test_calibration_banner_locks_drive_for_other_tokens_and_keeps_estop` 포함, 배치 시험 유지). 스크린샷 X:\DevTemp\calibration-mode\pilot-calibration-locked.png·pilot-calibration-owner.png.
+- gate 변화: 없음.
+
+## 2026-10-01 · c04de23a · fix(pilot): 보정 주인의 모드를 끊지 않는다; whoami 재시도
+- 변경: 나갈 때 `/mode` IDLE 은 이 화면이 MANUAL 을 잡았고(modeHeld) 남의 보정으로 잠기지 않았을 때만 보낸다. whoami 실패는 1→2→4→8 s(최대 15 s) 재시도, 대기 중에는 "보정 확인 중"으로 잠근다.
+- 증거: ROSY_RUN_BROWSER_TESTS=1 pilot 전체 + dashboard 칩 70 passed(새: 잠긴 화면 이탈은 /mode 없음, 주인 이탈은 IDLE, whoami 대기 표시 후 조작 복귀). test_calibration_view 6 passed.
+- gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · fix(pilot): main의 OMX 연습 화면·데드존을 D-359 공용 컨트롤 계약 아래로
+- 변경: main이 Pilot에 `shared_controls`·`typography_focus` 계약을 켜면서 D-359 쪽 더 엄한 판정에 걸렸다. `screens/arm.js` 입력·선택은 `class="ui-field"`, 버튼은 `ui-button`(연결 primary, 나머지 quiet), 조그·그리퍼 비활성은 `reason`(조작 보류/명령 진행 중)을 단다. `screens/inputs.js` 데드존 range에 `ui-field`. `styles.css`의 arm 입력·버튼 재도색(2.75rem·0.4rem·0.5rem 1rem·opacity 0.5)을 지우고, 보정 잠금 흐림은 `var(--disabled-opacity)`.
+- 증거: web_common 199 passed; `ROSY_RUN_BROWSER_TESTS=1` `src/hmi/pilot/test` 70 passed, `src/products/omx/adapter/test/test_pilot_sim_browser.py` 1 passed (2026-10-01 Windows).
+- gate 변화: 없음.
+- 결정: D-359 §5.1·§5.3·§5.5.
+- 교훈: 없음.

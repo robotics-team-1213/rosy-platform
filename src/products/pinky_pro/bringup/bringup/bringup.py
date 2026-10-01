@@ -28,6 +28,7 @@ from .motor_control import (
     MotorController,
 )
 from .pinky_pro_adapter import PinkyProAdapter
+from .wheel_calibration import calibrated_wheels
 
 TWIST_SUB_TOPIC_NAME = "cmd_vel"
 ODOM_PUB_TOPIC_NAME = "odom"
@@ -90,9 +91,15 @@ class Rosy(Node):
         # Keep the board-specific boundary explicit.  This validates the
         # complete ROS parameter set before any SDK object opens a UART; the
         # existing driver validations remain as a second, device-side guard.
+        # D-47 addendum: an operator-accepted wheel_odometry record wins over the parameters.
+        wheels, wheel_source = calibrated_wheels(self.get_parameter('wheel_radius').value,
+                                                 self.get_parameter('wheel_separation').value)
+        self.get_logger().info(
+            f"wheel_radius {wheels['wheel_radius']} wheel_separation {wheels['wheel_separation']} "
+            f"from {wheel_source}")
         self.pinky_pro_adapter = PinkyProAdapter.from_mapping({
-            'wheel_radius': self.get_parameter('wheel_radius').value,
-            'wheel_separation': self.get_parameter('wheel_separation').value,
+            'wheel_radius': wheels['wheel_radius'],
+            'wheel_separation': wheels['wheel_separation'],
             'cmd_vel_timeout_s': self.get_parameter('cmd_vel_timeout_s').value,
             'frame_prefix': self.get_parameter('frame_prefix').value,
             'motor_device': self.get_parameter('motor_device').value,

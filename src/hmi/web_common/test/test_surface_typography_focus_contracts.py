@@ -67,6 +67,56 @@ def test_standard_keyboard_focus_rings_use_shared_dimensions():
     assert not violations, "표준 키보드 포커스 링은 공유 치수를 사용해야 합니다:\n" + "\n".join(violations)
 
 
+def test_letter_spacing_is_a_token_or_zero():
+    """D-359 §5.5 — 자간은 --track-label/--track-wide/--track-state 또는 0만 쓴다."""
+    spacing = re.compile(r"letter-spacing\s*:\s*([^;}]+)")
+    allowed = re.compile(r"\s*(?:0|var\(--track-(?:label|wide|state)\))\s*(?:!important)?\s*")
+    violations = []
+    for path in surface_styles():
+        css = re.sub(r"/\*.*?\*/", "", path.read_text(encoding="utf-8"), flags=re.DOTALL)
+        violations.extend(
+            f"{path.relative_to(ROOT)}: letter-spacing: {value.strip()}"
+            for value in spacing.findall(css) if not allowed.fullmatch(value)
+        )
+    assert not violations, "자간은 토큰 또는 0이어야 합니다:\n" + "\n".join(violations)
+
+
+def test_letter_spacing_in_markup_and_scripts_is_a_token_or_zero():
+    """위 판정은 .css만 읽는다. HTML `<style>`·style 속성과 JS(`style.letterSpacing =`,
+    `setProperty("letter-spacing", …)`, 템플릿 문자열 안 CSS)도 같은 규칙을 받는다."""
+    forms = (
+        re.compile(r"letter-spacing\s*:\s*([^;}\"'`]+)"),
+        re.compile(r"letterSpacing\s*=\s*[\"'`]([^\"'`]*)"),
+        re.compile(r"setProperty\(\s*[\"']letter-spacing[\"']\s*,\s*[\"'`]([^\"'`]*)"),
+    )
+    allowed = re.compile(r"\s*(?:0|var\(--track-(?:label|wide|state)\))\s*(?:!important)?\s*")
+    violations = []
+    for surface in registry.for_contract(ROOT, "typography_focus"):
+        pages = (surface,) if surface.is_file() else sorted(surface.rglob("*"))
+        for path in pages:
+            if path.suffix not in {".html", ".js"} or "test" in path.relative_to(surface).parts:
+                continue
+            text = re.sub(r"/\*.*?\*/|<!--.*?-->", "", path.read_text(encoding="utf-8"), flags=re.DOTALL)
+            violations.extend(
+                f"{path.relative_to(ROOT)}: {value.strip()}"
+                for form in forms for value in form.findall(text) if not allowed.fullmatch(value)
+            )
+    assert not violations, "자간은 토큰 또는 0이어야 합니다:\n" + "\n".join(violations)
+
+
+def test_dimming_uses_the_disabled_token_not_an_opacity_literal():
+    """D-359 §5.5 — 흐림은 --disabled-opacity 또는 --ink-quiet 색이다. 임의 불투명도를 쓰지 않는다."""
+    literal = re.compile(r"(?<![-\w])opacity\s*:(?!\s*var\()\s*([^;}]+)")
+    violations = []
+    for path in surface_styles():
+        css = re.sub(r"/\*.*?\*/", "", path.read_text(encoding="utf-8"), flags=re.DOTALL)
+        violations.extend(
+            f"{path.relative_to(ROOT)}: opacity: {value.strip()}"
+            for value in literal.findall(css) if value.strip() not in {"0", "1"}
+        )
+    assert not violations, "임의 불투명도:\n" + "\n".join(violations)
+
+
 def test_skip_link_focus_border_uses_the_shared_focus_width_token():
     css = (ROOT / "src/hmi/web_common/components.css").read_text(encoding="utf-8")
     block = re.search(r"\.skip-link\s*\{([^{}]*)\}", css, re.DOTALL)

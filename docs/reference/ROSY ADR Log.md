@@ -203,7 +203,7 @@
 | D-193 | 대시보드 로그인은 로봇 화면의 일회용 코드로 한다 — 장기 토큰은 화면에 띄우지 않고, 장치 기본값에는 로그인이 없다 | Proposed (D-352가 개정: pair-site 수명, operator 회수) |
 | D-194 | 브라우저 조작 부품은 한 벌이다 | Accepted |
 | D-195 | 치수와 진단 팔레트도 닫힌 집합이다 | Accepted |
-| D-196 | 로봇은 장치의 조합이다 — `src/devices/<계열>/`과 `src/robots/<robot>/`을 두고, 로봇 지식은 그 안에만 둔다 | Proposed |
+| D-196 | 로봇은 장치의 조합이다 — `src/devices/<계열>/`과 `src/robots/<robot>/`을 두고, 로봇 지식은 그 안에만 둔다 | Proposed (추가 2026-10-01: 로봇 패키지 `config/core.yaml` CORE 설정 층) |
 | D-197 | Docker는 제품 아티팩트 체인에서 퇴역한다 — 제품 경로의 신규 Docker 의존은 지금 금지하고, OCI·Compose 체인은 native payload가 ARTIFACT를 통과하면 한 변경으로 정리한다 | Accepted (비안전 사이드카 레인은 D-246가 한정 허용) |
 | D-198 | Docker 시대의 장치 운영면을 철거한다 — 안전 검증 게이트의 native 대체는 지금 만들고, 설치기·모드 전환은 대체 없이 폐기한다 | Accepted |
 | D-199 | 카메라 인식은 두 층의 고정 계약과 교체 가능한 백엔드로 나눈다 — 규칙 기반으로 시작하고 학습 모델은 같은 자리에 끼운다 | Proposed |
@@ -372,7 +372,7 @@
 | D-371 | 목록 행의 되돌릴 수 없는 행동은 조용한 버튼으로 시작하고, 위험 채움은 확인 단계에만 둔다 | Accepted (2026-09-30, 목록 행 한정; 비상정지·단일 대상·확인 실행 버튼은 위험 채움 유지; D-292/D-359 좁힘) |
 | D-372 | 브랜치·worktree 이름은 처음부터 내용대로 짓고, 공유 main 체크아웃의 남의 작업은 지우지 않고 보존만 한다 — 접두어+주제(+ADR 항목), 한 브랜치 한 주제; 미커밋 남의 작업은 임시 인덱스로 주제별 브랜치에 보존·해시 검증, 되돌리기는 사용자 승인+24시간 무수정일 때만 | Accepted (2026-09-30, 작업 규칙만; D-346 규칙 5 확장) |
 | D-374 | 앱의 폴더·패키지·식별자·표시 이름은 역할 이름 하나에서 나온다 — 역할 id(kebab)·snake·compact·표시 네 표기; 와이어 계약 이름(mDNS 종류, `rosy-overhead/1`, `/api/fleet`·`/api/vision`, `rosyov://`, 웹 경로, 설정·저장소 키, compose 서비스)은 바꾸지 않는다 | Accepted (2026-09-30, 사용자 결정: 규칙·대응표 그대로, 관제 화면 안 B(화면 자산만 `site_console`, 서비스 `fleet` 유지), 폰 재설치·재페어링 1회 수용, games·제어 진단·시뮬 라이브 뷰는 지금 제외; D-370 2항 "식별자 그대로" 대체, D-339 1항·D-231 2항을 앱 패키지에 한해 대체; 실행은 계획의 단계별 브랜치) |
-| D-375 | 천장 카메라→지도 보정도 제안일 뿐이다 — Vision이 알려진 차선 페인트를 영상에 맞춰 homography·coverage·가려진 쪽을 제안하고, 운용자가 확인하기 전에는 어디에도 쓰지 않는다 | Proposed (2026-09-30, D-360 부록; `GET /api/vision/sources/{id}/map-proposal`, recall·precision·방향 차 거부 기준; 사이트 설정·`CameraMap` 반영 미결정) |
+| D-375 | 천장 카메라→지도 보정도 제안일 뿐이다 — Vision이 알려진 차선 페인트를 영상에 맞춰 homography·coverage·가려진 쪽을 제안하고, 운용자가 확인하기 전에는 어디에도 쓰지 않는다 | Proposed (2026-09-30, D-360 부록; `GET /api/vision/sources/{id}/map-proposal`, recall·precision·방향 차 거부 기준, 계산 중 읽기는 이전 결과 `X-Proposal-State: previous`; 관제 표시·수락은 브라우저 표시 초안(`GET /api/fleet/site-lanes`); 사이트 설정·`CameraMap` 반영 미결정) |
 | D-376 | OMX PICK_PLACE planning stays local and trajectory execution stays with the Action owner | Accepted (2026-09-30, SOURCE contract and fail-closed planner gate only; production planner configuration, profile activation, ROS-SIM, DEVICE/FIELD acceptance remain HOLD/PARKED) |
 | D-377 | 앱 이름 규칙: Rosy + 영어 한 단어 — 표시 이름 `Rosy <Word>`, id·폴더 끝 `<word>`, 패키지 `rosy_<word>`, Android `io.github.livsbittt.rosy.<word>`, Gradle `rosy-<word>`, 아이콘 `<word>.svg`; Rosy Cam·Vision·Console·Robot·Pilot | Accepted (2026-09-30, 사용자 결정; D-370 2항 이름표와 D-374 1·2항(규칙·대응표, `rosy_` 접두 금지 포함) 대체; D-374 3–5항(와이어 불변·재페어링·단계 게이트) 유지; Vision 실행 파일 `rosy-vision`, 옛 `site_vision`·`overhead`는 한 릴리스 별칭) |
 | D-378 | 실물 로봇은 실물 녹화로 통과한 로직으로만 스스로 간다 — 주행 오류를 기록하고, 차선·정지선·신호는 재생 → 그림자 → 누르는 동안 순서로 들인다 | Accepted (2026-09-30, 오류 기록·도입 순서; 실물 반영은 단계마다 사용자 승인) |
@@ -381,6 +381,10 @@
 | D-381 | 막힌 내비게이션은 같은 청록을 2 Hz로 깜빡이고(blocked), 비상정지 진입은 2.5 kHz 네 번을 한 번만 울린다 — nav_state도 robot_mode와 같은 핸드오버·검증을 타고, 유지 중 무음·해제 시 ready 차임 | Accepted (2026-10-01, 사용자 위임; D-380 잔여 갭 two종 — BLOCKED/FAILED가 "가는 중"으로 보이던 것, 자발 정지의 무음; PLANNING·ARRIVED·CANCELED는 무늬 안 바꿈) |
 | D-382 | 로봇 ↔ 사이트 관제 통신은 계약 스냅샷 하나로 판정하고, 실물 확인은 읽기 전용 적합성 탐침으로 시작한다 | Accepted (2026-10-01; 판정 기준·증거 등급·탐침 경계; 이미지 교체·토큰 발급·이동 명령·관제 DEVICE 수용 아님) |
 | D-383 | 편대 역할은 계기 셋의 네 번째 칸 — swarm.role가 leader/follower일 때만 나타나고(기본 hidden, hidden이 flex를 이김) 한국어 라벨·색 없음(역할은 경보가 아니다), 식별줄은 software_version을 계보에 함께 말한다 | Accepted (2026-10-01, 사용자 요청·위임; emoji 대신 기존 계기 문법·토큰 체계, D-280/D-82/D-359 준수; 렌더는 telemetry.js가 담당 — D-362 분할) |
+| D-384 | 도로 상태 추정기와 도로 주행 행동 — 주행기록계 예측으로 선이 사라져도 예상 도로를 잇고, 모르면 오른쪽(우측통행 동점 규칙), 모든 교차로 일단정지·양보·추월 없음 | Proposed (rev 3; R0 replay run on 124745Z; R2 gated on validated_on_curves) |
 | D-385 | Rosy가 스스로 표현한다 — 모드가 표정을 고른다(IDLE basic·MANUAL interest·NAVIGATION happy·DOCKING fun·EMERGENCY sad, 막힘은 bored)를 set_emotion 으로 LiDAR 문법(재시도) 전달, 부팅 카드는 BOOTING 중 무대 제목이 0.5 Hz 두 밝기로 숨쉬고 끝난 상태는 고요, 절전의 "꼭 필요한 것만"은 기존 WAKE_BATTERY 체계로 확인·문서화 | Accepted (2026-10-01, 사용자 요청·위임; 표정에 깜빡임 축 없음 — 모드 변경 시 한 번, D-280/D-82 준수) |
 | D-386 | OMX phases bind asynchronous ROS goal acceptance and fresh execution state | Accepted (2026-10-01; SOURCE contract only; ROS-SIM, profile activation, ARTIFACT, DEVICE/FIELD remain gated) |
+| D-387 | 로봇은 카드 이미지까지 네 계층(payload·이미지 계층·기반 시스템·전체 이미지)을 서명 릴리스로 네트워크에서 받는다. 스테이징은 자동이고, 적용은 운영자 승인과 호스트 소유 정비 리스(/run/rosy-maintenance + /var/lib/rosy 영속 기록)가 있어야 하며, 로봇 위 systemd-run 트랜잭션이 journal로 한다. 쓰지 않거나 도킹한 로봇부터 한 대씩(canary 10분), 부적격은 건너뛰고 되돌림이 나면 멈춘다. 3계층은 revert가 있는 멱등 migration과 나란히 설치한 런타임, 부팅 변경은 단독 릴리스로 rosy-a/rosy-b 두 os_prefix 슬롯과 tryboot로 한다. 4계층은 A/B(GPT, 32 GB 이상, RAUC 1순위). P1~P4에 게이트를 둔다 | Accepted (2026-10-01; 사용자 승인 — "승인 후 자동"과 다섯 기본값, 독립 리뷰 ACCEPT WITH EDITS 반영; 문서만, 구현 GO·DEVICE 아님) |
 | D-389 | 긴급 카드 쓰기(`write-card.ps1 -Emergency -EmergencyReason`)는 전체 readback만 건너뛰고 서명·시리얼·plan·ERASE 게이트와 MBR 점검은 지킨다; receipt·진행 파일·상태가 검증 안 됨을 적고, 후속 readback(`verify-emergency-card.ps1`)이나 표준 재기록으로 메운다 | Accepted (2026-10-01, CPU 부족으로 readback 1.5 h ETA였던 release 009 카드의 로컬 stub을 대체; 긴급 receipt는 표준 재공급에서만 수용) |
+| D-390 | Pilot의 OMX-AI 연습은 시뮬레이션 전용 장치 API를 거쳐 로컬 팔 명령 소유자에 연결한다 | Accepted (2026-10-01, 설계·실행 순서 결정; API·Pilot·Gazebo 통합과 ROS-SIM·실물 수용은 별도) |
+| D-392 | 모델 도구 호출은 provider 중립 메시지 계약과 Fleet 소유 allowlist를 따른다 | Accepted (2026-10-01, 내부 호출·결과 경계; 도구는 요청이지 device Action이 아니며 actuation·stop/E-stop 권한과 provider 활성화는 미결정) |

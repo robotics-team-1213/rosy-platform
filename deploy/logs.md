@@ -1551,6 +1551,14 @@
 - 증거: rosy_harness lint 오류 0. 본문 참조는 docs/adr/D-380-lamp-mode-patterns-from-core-status-inputs.md.
 - gate 변화: 없음.
 
+## 2026-09-30 · c261839d · build(site): 지도 맞춤용 트랙 파일을 이미지에 넣음
+
+- 변경: Vision 이미지에 `road_lines.stl`, Fleet 이미지에 `lane_graph.yaml`·`road_lines.stl`(`/opt/rosy/maps/map_v2_fleet/`, 읽기 전용). compose: vision `--map-paint`, fleet `--site-lane-graph`/`--site-lane-paint`. dockerignore는 두 파일만 연다. README "Map auto-fit overlay (D-375)".
+- 증거: `test/test_site_map_fit_deploy.py`; `docker compose config` 통과; scratch COPY 빌드로 dockerignore 통과 확인. 전체 이미지 빌드·배포는 하지 않음.
+- gate 변화: 없음.
+- 결정: D-375.
+- 교훈: 없음.
+
 ## 2026-10-01 · uncommitted · feat(native): D-381 blocked 패턴과 비상정지 진입음
 
 - 변경: `rosy-boot-status.py`가 `nav_state`를 같은 규칙으로 검증·복사. `rosy-boot-display.py`는 `lamp_pattern()`에 nav를 넘기고, `_announce`가 패턴 기반으로 EMERGENCY 진입음(2.5 kHz×4, 유지 무음, 해제 시 ready 차임)을 낸다.
@@ -1574,6 +1582,29 @@
 
 - 변경: rosy-boot-display.py 가 BOOTING·PROVISIONED 중 view 에 frame(1 s 위상)을 실어 다시 그림 키에 태운다 — 0.5 Hz 숨쉼, CORE_READY 는 기존처럼 무변경 무재그림.
 - 증거: test_boot_display.py (대기 중 재그림·ready 정지). 실기는 다음 릴리스.
+- gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · D-390 OMX Pilot development container
+- Change: Add a development-only Pilot layer over the locked OMX Gazebo image and a local probe. Publish HTTP only to 127.0.0.1, deny serial/video grants, keep the one-time code in a 0600 container file.
+- Evidence: local image sha256:e94662607c72a7cea83c9449178099c4c9476afab0519275ce0da82a88f3da9a; Gazebo action and readback report in docs/validation/pilot-omx-gazebo-2026-10-01/.
+- Gate: local x86_64 ROS-SIM only; ARTIFACT/DEVICE/FIELD unchanged.
+
+## 2026-10-01 · 7d0f3f89 · fix(deploy): 사이트 빌드 컨텍스트는 이미지가 복사하는 것만
+
+- 변경: `Dockerfile.{vision,fleet}.dockerignore` — 맨 `!src`·`!deploy`는 BuildKit의 상위 디렉터리 일치로 트리 전체를 다시 넣었다(vision 컨텍스트 2330개 파일). 잎 glob만 남기고 `__pycache__`·`.pytest_cache`를 뺐다.
+- 증거: scratch `COPY .` 빌드로 vision 73개·fleet 251개 확인; `test_site_map_fit_deploy.py`가 COPY 원본 포함·다른 트리 제외·맨 디렉터리 금지를 동작으로 검사.
+- gate 변화: 없음.
+- 결정: 없음.
+- 교훈: dockerignore의 `!dir`은 그 아래 전부다 — 허용 목록은 잎 glob으로만 쓴다.
+
+## 2026-10-01 · d5953646 · feat(deploy): 릴리스 push·dev sync 보정 guard
+- 변경: `pinky_pro/rosy-calibration-guard.ps1`(읽기 전용 GET, 세션 있으면 exit 3). `rosy-release-push.ps1`·`dev/sync-core-dev.ps1` 가 원격 단계 전에 부르고 `-Force` 없으면 거부. 토큰 없음·CORE 무응답은 경고만. rosy-release-push SKILL 에 절차 추가(cfacfcd9 경로 수정).
+- 증거: test/test_calibration_guard.py 10 passed(localhost 가짜 CORE), test_release_push_entrypoint·test_core_dev_sync 통과. 로봇에는 닿지 않았다.
+- gate 변화: 없음.
+
+## 2026-10-01 · 2f59263f · fix(deploy): 보정 guard — 401/403 구분, 예상 밖 응답은 경고
+- 변경: HTTP 401/403 은 REJECTED(토큰 문제), 그 밖 HTTP 는 FAILED, 무응답은 UNREACHABLE. 응답 필드는 도우미로 읽어 StrictMode 중단 대신 UNEXPECTED REPLY 경고, owner 없는 세션도 거부. SKILL 은 `-ApiToken` 보다 ROSY_API_TOKEN·DPAPI 를 권한다.
+- 증거: test/test_calibration_guard.py 15 passed, test_release_push_entrypoint 통과.
 - gate 변화: 없음.
 
 ## 2026-10-01 · uncommitted · fix(sd): ERASE 프롬프트 type-ahead, 아티팩트 다운로더, D-383 긴급 카드 쓰기

@@ -8,10 +8,14 @@
 
 import {
   classifySightings, siteBounds, canvasSizeFor, fitTransform, project, gridLines, GRID_STEP_M,
+  streamEvidence,
 } from "./site-layer.js";
 import { NO_MAP_RETRY_MS, createPollGate } from "./poll-gate.js";
 
-export function createMapView({ el, view, css, auth, call, onMapChanged, onMapUnavailable }) {
+export function createMapView({ el, view, auth, call, onMapChanged, onMapUnavailable }) {
+  // D-359 §4 — 색·글꼴은 ui.js(window.RosyPalette)가 어떤 CSS 색이든 풀어 캐시한다.
+  const css = (name) => window.RosyPalette.cssColor(name);
+  const font = (size) => window.RosyPalette.canvasFont(size, "mono");
   const GRID = { UNKNOWN: -1, FREE_MAX: 25, OCCUPIED_MIN: 65 };
   // Map tracking visualization only; relay evidence comes from the Fleet server.
   const TRACK_WARN_M = 0.3;     // 기본 간격(0.6 m)의 절반을 넘으면 주의 색을 쓴다.
@@ -29,15 +33,17 @@ export function createMapView({ el, view, css, auth, call, onMapChanged, onMapUn
     const ctx = canvas.getContext("2d");
     ctx.imageSmoothingEnabled = false;
     const image = ctx.createImageData(width, height);
-    const free = hexToRgb(css("--paper"));
-    const occupied = hexToRgb(css("--ground-deep"));
-    const unknown = hexToRgb(css("--ground-soft"));
+    // 로봇 지도(dashboard map.js)와 같은 raster 토큰이다 — 두 화면의 지형 색이 같다.
+    const tone = window.RosyPalette.readPalette({
+      unknown: "--raster-unknown", free: "--raster-free",
+      uncertain: "--raster-uncertain", occupied: "--raster-occupied",
+    });
     for (let row = 0; row < height; row += 1) {
       for (let col = 0; col < width; col += 1) {
         const value = grid.data[row * width + col];
-        const rgb = value === GRID.UNKNOWN || value < 0 ? unknown
-          : value >= GRID.OCCUPIED_MIN ? occupied
-            : value <= GRID.FREE_MAX ? free : unknown;
+        const rgb = value === GRID.UNKNOWN || value < 0 ? tone.unknown
+          : value >= GRID.OCCUPIED_MIN ? tone.occupied
+            : value <= GRID.FREE_MAX ? tone.free : tone.uncertain;
         const pixel = ((height - 1 - row) * width + col) * 4;
         image.data[pixel] = rgb[0];
         image.data[pixel + 1] = rgb[1];
@@ -51,12 +57,6 @@ export function createMapView({ el, view, css, auth, call, onMapChanged, onMapUn
     cells.getContext("2d").putImageData(image, 0, 0);
     ctx.drawImage(cells, 0, 0, canvas.width, canvas.height);
     ctx.scale(scale, scale); // following geometry keeps using map-cell coordinates
-  }
-
-  function hexToRgb(value) {
-    const hex = value.replace("#", "");
-    const n = parseInt(hex.length === 3 ? hex.split("").map((c) => c + c).join("") : hex, 16);
-    return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
   }
 
   function worldToCell(grid, x, y) {
@@ -91,28 +91,19 @@ export function createMapView({ el, view, css, auth, call, onMapChanged, onMapUn
     };
   }
 
-  // 릴레이 건강을 D-72 증거로 옮긴다. fresh 는 아무것도 붙이지 않는다(§7.3 정상은 안 보임).
-  function streamEvidence(formation, robotId) {
-    if (!formation?.active) return null;
-    const evidence = formation.stream_evidence?.[robotId];
-    if (!evidence) return { text: "\uC99D\uAC70 \uD310\uB2E8 \uC5C6\uC74C", cls: "warn" };
-    if (evidence.state === "fresh") return null;
-    if (evidence.state === "disconnected") return { text: "\uB04A\uAE40", cls: "crit" };
-    if (evidence.state === "delayed") {
-      const age = typeof evidence.age_s === "number" ? ` \u00B7 ${evidence.age_s.toFixed(1)}\uCD08` : "";
-      const reason = evidence.reason === "rate_below_floor" ? " \u00B7 \uC1A1\uC2E0 \uBE48\uB3C4 \uB0AE\uC74C" : "";
-      return { text: `\uC9C0\uC5F0${reason}${age}`, cls: "warn" };
-    }
-    return { text: "\uC1A1\uC2E0 \uC2DC\uAC01 \uC5C6\uC74C", cls: "warn" };
-  }
+  // D-359 US-008 — 이번 그리기에 놓인 칩(캔버스 픽셀, 시험은 window.__mapChips). 추적 오차와
+  // 중재 칩이 겹쳐 못 읽었다: 새 칩은 빈 자리가 날 때까지 아래·위로 한 칸씩 번갈아 비킨다.
+  // US-009 — 칩은 자리만 먼저 정하고(로봇 표식 상자도 피한다) 선을 다 그린 뒤 flushChips가 칠한다.
+  let placedChips = [], pendingChips = [], markerBoxes = []; const CHIP_GAP = 2, CHIP_TRIES = 12;
+  const chipsOverlap = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
 
   function drawChip(ctx, grid, cx, cy, text, tone) {
     const point = ctx.getTransform().transformPoint({ x: cx, y: cy });
     const displayedWidth = ctx.canvas.getBoundingClientRect().width || ctx.canvas.width;
-    const fontSize = Math.max(10, Math.round(12 * ctx.canvas.width / displayedWidth));
+    const fontSize = Math.max(12, Math.round(12 * ctx.canvas.width / displayedWidth));
     ctx.save();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.font = `${fontSize}px ${css("--mono") || "monospace"}`;
+    ctx.font = font(fontSize);
     const padding = fontSize * 0.4;
     const maxTextWidth = Math.max(fontSize, ctx.canvas.width - padding * 2 - 8);
     while (ctx.measureText(text).width > maxTextWidth && text.length > 1) {
@@ -121,19 +112,38 @@ export function createMapView({ el, view, css, auth, call, onMapChanged, onMapUn
     const width = ctx.measureText(text).width + padding * 2;
     const height = fontSize + padding * 2;
     const x = Math.max(width / 2 + 4, Math.min(ctx.canvas.width - width / 2 - 4, point.x));
-    const y = Math.max(height / 2 + 4, Math.min(ctx.canvas.height - height / 2 - 4, point.y));
-    ctx.globalAlpha = 0.92;
-    ctx.fillStyle = css("--scrim");
-    ctx.fillRect(x - width / 2, y - height / 2, width, height);
-    ctx.globalAlpha = 1;
-    ctx.strokeStyle = css("--surface-line");
-    ctx.lineWidth = 0.4;
-    ctx.strokeRect(x - width / 2, y - height / 2, width, height);
-    ctx.fillStyle = tone === "crit" ? css("--status-crit")
-      : tone === "warn" ? css("--status-warn") : css("--paper");
+    const clampY = (value) => Math.max(height / 2 + 4, Math.min(ctx.canvas.height - height / 2 - 4, value));
+    const rectAt = (centreY) => ({ x: x - width / 2, y: centreY - height / 2, w: width, h: height, text });
+    const anchorY = clampY(point.y);
+    let y = anchorY;
+    const taken = (r) => [...placedChips, ...markerBoxes].some((o) => chipsOverlap(r, o));
+    for (let step = 1; step <= CHIP_TRIES && taken(rectAt(y)); step += 1) {
+      const rows = Math.ceil(step / 2);
+      y = clampY(anchorY + (step % 2 ? 1 : -1) * rows * (height + CHIP_GAP));
+    }
+    placedChips.push(rectAt(y));
+    ctx.restore();
+    pendingChips.push({ x, y, width, height, fontSize, text, tone });
+  }
+
+  function flushChips(ctx) {
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText(text, x, y);
+    ctx.lineWidth = 0.4;
+    for (const { x, y, width, height, fontSize, text, tone } of pendingChips) {
+      ctx.font = font(fontSize);
+      ctx.globalAlpha = 0.92;
+      ctx.fillStyle = css("--scrim");
+      ctx.fillRect(x - width / 2, y - height / 2, width, height);
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = css("--surface-line");
+      ctx.strokeRect(x - width / 2, y - height / 2, width, height);
+      ctx.fillStyle = tone === "crit" ? css("--status-crit") : tone === "warn" ? css("--status-warn") : css("--ink");
+      ctx.fillText(text, x, y);
+    }
+    pendingChips = [];
     ctx.restore();
   }
 
@@ -180,7 +190,7 @@ export function createMapView({ el, view, css, auth, call, onMapChanged, onMapUn
         ctx.setLineDash([2, 2]);
         ctx.moveTo(robotCell.cx, robotCell.cy);
         ctx.lineTo(cx, cy);
-        ctx.strokeStyle = error > TRACK_WARN_M ? css("--status-warn") : css("--muted-line");
+        ctx.strokeStyle = error > TRACK_WARN_M ? css("--status-warn") : css("--line-quiet");
         ctx.stroke();
         ctx.setLineDash([]);
         drawChip(ctx, grid, (robotCell.cx + cx) / 2, (robotCell.cy + cy) / 2,
@@ -191,14 +201,14 @@ export function createMapView({ el, view, css, auth, call, onMapChanged, onMapUn
         ctx.setLineDash([1, 2]);
         ctx.moveTo(leaderCell.cx, leaderCell.cy);
         ctx.lineTo(cx, cy);
-        ctx.strokeStyle = css("--muted-line");
+        ctx.strokeStyle = css("--line-quiet");
         ctx.stroke();
       }
     }
     // HOLD 중이면 왜 멈췄는지 맵 위에서 말한다 — 이유 없는 HOLD 는 고장으로 읽힌다.
     if (formation.state === "HOLDING" && formation.reason && formation.reason.length) {
       drawChip(ctx, grid, leaderCell.cx, leaderCell.cy - Math.min(grid.width, grid.height) * 0.08,
-        `HOLD · ${formation.reason.join(" / ")}`, "warn");
+        `대형 유지 · ${formation.reason.join(" / ")}`, "warn");
     }
     ctx.restore();
   }
@@ -254,7 +264,7 @@ export function createMapView({ el, view, css, auth, call, onMapChanged, onMapUn
 
   function colorOfSighting(robotId) {
     const index = view.robots.findIndex((r) => r.robot_id === robotId);
-    return index >= 0 ? view.colors[index % view.colors.length] : css("--paper");
+    return index >= 0 ? view.colors[index % view.colors.length] : css("--ink");
   }
 
   function sightingLabel(s) {
@@ -333,12 +343,12 @@ export function createMapView({ el, view, css, auth, call, onMapChanged, onMapUn
     const toPx = (x, y) => { const p = project(t, x, y); return { x: p.px, y: p.py }; };
     ctx.fillStyle = css("--ground-deep");
     ctx.fillRect(0, 0, width, height);
-    const font = `12px ${css("--mono") || "monospace"}`;
+    const labelFont = font(12);
 
     // 0.5 m 격자
     ctx.save();
     ctx.lineWidth = 1;
-    ctx.strokeStyle = css("--muted-line");
+    ctx.strokeStyle = css("--line-quiet");
     ctx.globalAlpha = 0.5;
     for (const gx of layerOn("grid") ? gridLines(bounds.min_x, bounds.max_x, GRID_STEP_M) : []) {
       const a = toPx(gx, bounds.min_y);
@@ -354,7 +364,7 @@ export function createMapView({ el, view, css, auth, call, onMapChanged, onMapUn
 
     // 사각형 + 치수 + 출처(source_id)
     ctx.save();
-    ctx.font = font;
+    ctx.font = labelFont;
     for (const entry of layerOn("site") ? sitePolygons() : []) {
       tracePolygon(ctx, entry.polygon_m, toPx);
       ctx.globalAlpha = 0.08;
@@ -368,7 +378,7 @@ export function createMapView({ el, view, css, auth, call, onMapChanged, onMapUn
       const bottom = toPx((b.min_x + b.max_x) / 2, b.min_y);
       const right = toPx(b.max_x, (b.min_y + b.max_y) / 2);
       const top = toPx(b.min_x, b.max_y);
-      ctx.fillStyle = css("--muted");
+      ctx.fillStyle = css("--ink-quiet");
       ctx.textAlign = "center";
       ctx.textBaseline = "top";
       ctx.fillText(`${(b.max_x - b.min_x).toFixed(2)} m`, bottom.x, bottom.y + 6);
@@ -392,10 +402,10 @@ export function createMapView({ el, view, css, auth, call, onMapChanged, onMapUn
     const axisLen = Math.min(t.scale * 0.4, width / 8);
     ctx.save();
     ctx.lineWidth = 2;
-    ctx.font = font;
+    ctx.font = labelFont;
     ctx.textBaseline = "middle";
-    ctx.strokeStyle = css("--paper");
-    ctx.fillStyle = css("--paper");
+    ctx.strokeStyle = css("--ink");
+    ctx.fillStyle = css("--ink");
     ctx.beginPath();
     ctx.moveTo(axisAt.x, axisAt.y);
     ctx.lineTo(axisAt.x + axisLen, axisAt.y);
@@ -416,6 +426,7 @@ export function createMapView({ el, view, css, auth, call, onMapChanged, onMapUn
 
     if (!layerOn("sightings")) return;
     for (const s of view.sightings) drawSighting(ctx, s, toPx, Math.max(7, t.scale * 0.09), 1.5);
+    flushChips(ctx);
   }
 
   function describeSightings() {
@@ -425,6 +436,9 @@ export function createMapView({ el, view, css, auth, call, onMapChanged, onMapUn
 
   function draw() {
     const grid = view.map;
+    placedChips = []; pendingChips = []; markerBoxes = [];
+    window.__mapChips = placedChips;
+    window.__mapMarkers = markerBoxes;
     if (!grid) {
       if (view.siteMap) {
         drawSiteView();
@@ -468,6 +482,8 @@ export function createMapView({ el, view, css, auth, call, onMapChanged, onMapUn
       ctx.globalAlpha = robot.online ? 1 : 0.35;
       ctx.fill();
       ctx.restore();
+      const [a, b] = [-size, size].map((d) => ctx.getTransform().transformPoint({ x: cx + d, y: cy + d }));
+      markerBoxes.push({ x: a.x, y: a.y, w: b.x - a.x, h: b.y - a.y, robot: robot.robot_id });
 
       // 목표는 Fleet 이 기억하는 값이다(로봇 상태에는 없다) — "내가 무엇을 시켰는가".
       // 대기 중인 미션도 그린다 — 어디로 갈 예정인지가 보여야 순서를 판단한다.
@@ -484,6 +500,7 @@ export function createMapView({ el, view, css, auth, call, onMapChanged, onMapUn
     drawFormationOverlay(ctx, grid);
     drawMediation(ctx, grid);
     drawSiteOverlay(ctx, grid);
+    flushChips(ctx);
     if (view.selected && view.cursor) {
       const { col, row } = view.cursor;
       ctx.save();

@@ -44,7 +44,11 @@ def client():
     pytest.importorskip("httpx")
     from fastapi.testclient import TestClient
 
-    return TestClient(create_app(CONFIG, SimpleNamespace(config=CONFIG)))
+    from core_features.calibration import CalibrationSessionManager
+
+    # Host actions consult the calibration lease (D-321 addendum); an idle one here.
+    idle_lease = CalibrationSessionManager(SimpleNamespace(publish=lambda *a, **k: None))
+    return TestClient(create_app(CONFIG, SimpleNamespace(config=CONFIG, calibration=idle_lease)))
 
 
 def _auth(token: str) -> dict:

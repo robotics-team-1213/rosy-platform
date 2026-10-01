@@ -80,7 +80,7 @@ class MapRasterColorContractTest(unittest.TestCase):
         block = re.search(r'const T = \{([^}]+)\}', text)
         self.assertIsNotNone(block, 'diagnostic.html에 const T 표가 없다')
         js = dict(re.findall(r"(\w+):\s*'#([0-9a-fA-F]{6})'", block.group(1)))
-        alias = {'ink2': 'ink-2'}
+        alias = {'ink2': 'ink-2', 'inkQuiet': 'ink-quiet'}
         missing = []
         mismatch = []
         for name, value in js.items():

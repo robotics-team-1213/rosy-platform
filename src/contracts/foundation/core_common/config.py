@@ -2,8 +2,10 @@
 
 설정 계층:
 1. config/rosy_default.yaml (패키지 기본값)
-2. ~/.rosy/rosy.yaml (로봇 로컬 오버라이드) — 있으면 병합
-3. 환경변수 ROSY_CONFIG (명시적 경로) — 최우선
+2. <robot package>/config/core.yaml (robot.model 의 로봇 사실 — D-196 추가 2026-10-01;
+   패키지가 있으면 반드시 있어야 한다)
+3. ~/.rosy/rosy.yaml (로봇 로컬 오버라이드) — 있으면 병합
+4. 환경변수 ROSY_CONFIG (명시적 경로) — 있으면 3 대신 병합, 최우선
 
 개발 토큰(D-193 7)은 기본값에 없다. `ROSY_DEV_AUTH=1` 이고 장치 모드
 (`ROSY_DEPLOYMENT=device`)가 아닐 때만 config/rosy_dev_auth.yaml 을 기본값
@@ -12,6 +14,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import re
 from pathlib import Path
@@ -19,7 +22,12 @@ from typing import Any, Optional
 
 import yaml
 
+_LOG = logging.getLogger(__name__)
+
 DEFAULT_CONFIG_NAME = "rosy_default.yaml"
+ROBOT_CORE_CONFIG_NAME = "core.yaml"
+#: A robot package name (robot.model / ROSY_ROBOT), D-196.
+ROBOT_NAME_PATTERN = re.compile(r"[a-z][a-z0-9_]*")
 DEV_AUTH_CONFIG_NAME = "rosy_dev_auth.yaml"
 LOCAL_CONFIG_PATH = Path.home() / ".rosy" / "rosy.yaml"
 RUNTIME_MODES = frozenset({"core", "motor", "hardware"})
@@ -68,8 +76,51 @@ def dev_auth_enabled() -> bool:
     return os.environ.get("ROSY_DEV_AUTH", "").strip() == "1"
 
 
+def _robot_package_layer(config: dict[str, Any], overlay: Any) -> dict[str, Any]:
+    """The robot package's `core.yaml` (D-196): robot facts CORE needs, e.g. its
+    LiDAR forward angle. The model is ROSY_ROBOT, else the overlay's
+    robot.model, else the default's. A robot package that exists must ship the
+    file (ConfigError otherwise: a silently missing layer would point the
+    default robot's obstacle stop at the rear). An unknown model or missing package
+    adds nothing and logs one warning; the profile loader then refuses it."""
+    from core_common.profile import DEFAULT_ROBOT, robot_config_dir
+
+    overlay_robot = overlay.get("robot") if isinstance(overlay, dict) else None
+    model = (os.environ.get("ROSY_ROBOT", "").strip()
+             or (overlay_robot.get("model") if isinstance(overlay_robot, dict) else None)
+             or (config.get("robot") or {}).get("model") or DEFAULT_ROBOT)
+    if not ROBOT_NAME_PATTERN.fullmatch(str(model)):
+        return {}  # ROSY_ROBOT is rejected below; a bad overlay model fails in the profile loader
+    try:
+        path = robot_config_dir(str(model)) / ROBOT_CORE_CONFIG_NAME
+    except ConfigError as exc:
+        _LOG.warning("robot package CORE config layer skipped for model %r: %s", model, exc)
+        return {}
+    if not path.is_file():
+        raise ConfigError(f"robot package {model!r} has no {path}; every robot package must ship "
+                          f"{ROBOT_CORE_CONFIG_NAME} (an empty mapping is fine)")
+    try:
+        with open(path, encoding="utf-8") as f:
+            layer = yaml.safe_load(f) or {}
+    except yaml.YAMLError as exc:
+        raise ConfigError(f"{path} is not valid YAML: {exc}") from exc
+    if not isinstance(layer, dict):
+        raise ConfigError(f"{path} must be a mapping")
+    for key, value in layer.items():
+        # _deep_merge replaces a default section with whatever the layer holds,
+        # so an empty `line_follow:` (None) would wipe every default under it.
+        if value is None:
+            raise ConfigError(f"{path}: top-level key {key!r} is empty (null)")
+        if isinstance(config.get(key), dict) and not isinstance(value, dict):
+            raise ConfigError(f"{path}: top-level key {key!r} must be a mapping like the default")
+    return layer
+
+
 def load_config(explicit_path: Optional[str] = None) -> dict[str, Any]:
-    """기본값 → 로컬 오버라이드 → 명시적 경로 순으로 병합해 반환한다."""
+    """기본값 → 로봇 패키지 core.yaml → ~/.rosy/rosy.yaml 또는 ROSY_CONFIG 순으로 병합해 반환한다.
+
+    ROSY_CONFIG 가 있으면 ~/.rosy/rosy.yaml 대신 그것을 읽는다. 로봇 패키지 층의 오류는 ConfigError.
+    """
 
     base_path = Path(explicit_path) if explicit_path else _find_default_config()
     config: dict[str, Any] = {}
@@ -89,7 +140,8 @@ def load_config(explicit_path: Optional[str] = None) -> dict[str, Any]:
     if override_path.exists():
         with open(override_path, encoding="utf-8") as f:
             overlay = yaml.safe_load(f) or {}
-            config = _deep_merge(config, overlay)
+    config = _deep_merge(config, _robot_package_layer(config, overlay))
+    config = _deep_merge(config, overlay)
     overlay_robot = overlay.get("robot") if isinstance(overlay, dict) else None
     overlay_named = isinstance(overlay_robot, dict) and "name" in overlay_robot
 
@@ -133,7 +185,7 @@ def load_config(explicit_path: Optional[str] = None) -> dict[str, Any]:
 
     model = os.environ.get("ROSY_ROBOT", "").strip()
     if model:
-        if not re.fullmatch(r"[a-z][a-z0-9_]*", model):
+        if not ROBOT_NAME_PATTERN.fullmatch(model):
             raise ConfigError(f"ROSY_ROBOT must be a robot package name, got {model!r}")
         robot["model"] = model
 

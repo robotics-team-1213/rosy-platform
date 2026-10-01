@@ -151,7 +151,9 @@ export const HELP = [
 
 // --- DOM 배선 ------------------------------------------------------------------
 
-export function createEnrollmentPanel({ headers, identity, log }) {
+// dialogs는 /common/ui.js의 { openLiveDialog, confirmIrreversible }다. 셸(console.js)이 넘긴다 —
+// 이 파일은 node 시험이 import하므로 DOM 모듈을 정적으로 끌어오지 않는다.
+export function createEnrollmentPanel({ headers, identity, log, dialogs }) {
   const el = (id) => document.getElementById(id);
   const state = { listing: null, blockedUntil: 0, target: null, busy: false };
 
@@ -220,9 +222,12 @@ export function createEnrollmentPanel({ headers, identity, log }) {
       showResult(messageFor(detail), true);
     } finally {
       state.busy = false;
-      el("enroll-submit").disabled = Date.now() < state.blockedUntil;
+      const blocked = Date.now() < state.blockedUntil;
+      el("enroll-submit").disabled = blocked;
+      if (blocked) el("enroll-submit").setAttribute("reason", "잠시 뒤 다시 시도");
+      else el("enroll-submit").removeAttribute("reason");
       if (state.blockedUntil) {
-        setTimeout(() => { el("enroll-submit").disabled = false; render(); },
+        setTimeout(() => { el("enroll-submit").disabled = false; el("enroll-submit").removeAttribute("reason"); render(); },
           Math.max(0, state.blockedUntil - Date.now()));
       }
     }
@@ -234,14 +239,23 @@ export function createEnrollmentPanel({ headers, identity, log }) {
     el("enroll-target").textContent = label;
     el("enroll-code").value = "";
     const dialog = el("enroll-dialog");
-    if (dialog?.showModal) dialog.showModal();
+    // D-280 원칙 2 — showModal()은 #estop까지 inert로 만든다. 비모달로 열고 정지는 살린다.
+    if (dialog && !dialog.open) dialogs.openLiveDialog(dialog, { initialFocus: el("enroll-code") });
   }
 
   async function act(action, row) {
-    const question = action === "move"
-      ? `${row.robot_id}을(를) 새 주소로 옮길까요? 옮긴 뒤 Fleet이 새 주소에서 신원을 다시 확인합니다.`
-      : `${row.robot_id} 등록을 해제할까요? 로봇의 사이트 토큰을 회수합니다.`;
-    if (!window.confirm(question)) return;
+    if (action === "move") {
+      if (!window.confirm(`${row.robot_id}을(를) 새 주소로 옮길까요? 옮긴 뒤 Fleet이 새 주소에서 신원을 다시 확인합니다.`)) return;
+    } else {
+      // D-371 — 등록 해제는 사이트 토큰 회수라 되돌리려면 다시 등록해야 한다. 대상을 이름으로 묻는다.
+      // 폴링이 목록을 다시 그려도 포커스는 지금 화면의 그 행 버튼으로 돌아간다.
+      const confirmed = await dialogs.confirmIrreversible({
+        message: `"${row.robot_id}" 로봇 등록을 해제할까요? 로봇의 사이트 토큰을 회수하며, 되돌리려면 다시 등록해야 합니다.`,
+        action: "등록 해제",
+        opener: () => el("enrolled-list")?.querySelector(`li[data-robot-id="${CSS.escape(row.robot_id)}"] ui-button[data-action="unenroll"]`),
+      });
+      if (!confirmed) return;
+    }
     const path = `/api/fleet/enrollment/robots/${encodeURIComponent(row.robot_id)}`;
     try {
       if (action === "unenroll") {
@@ -273,6 +287,7 @@ export function createEnrollmentPanel({ headers, identity, log }) {
     }
     for (const row of listing.robots || []) {
       const item = document.createElement("li");
+      item.dataset.robotId = row.robot_id;
       const head = document.createElement("b");
       head.textContent = `${row.robot_id} · 출처 등록 · ${row.address}`;
       item.append(head);
@@ -282,7 +297,9 @@ export function createEnrollmentPanel({ headers, identity, log }) {
         item.append(small);
       }
       for (const action of rowActions(row, manage)) {
-        item.append(button(action === "move" ? "새 주소로 옮기기" : "등록 해제", () => act(action, row)));
+        const node = button(action === "move" ? "새 주소로 옮기기" : "등록 해제…", () => act(action, row));
+        node.dataset.action = action;
+        item.append(node);
       }
       rows.push(item);
     }
@@ -291,7 +308,10 @@ export function createEnrollmentPanel({ headers, identity, log }) {
     const banner = el("enroll-alarm");
     banner.hidden = alarms.length === 0;
     banner.textContent = alarms.map((a) => `${a.robot_id}: 주행 중 로봇의 주소가 바뀜 — 상태를 모름`).join(" · ");
-    el("enroll-address-add").disabled = !manage || Date.now() < state.blockedUntil;
+    const addBlocked = !manage || Date.now() < state.blockedUntil;
+    el("enroll-address-add").disabled = addBlocked;
+    if (addBlocked) el("enroll-address-add").setAttribute("reason", !manage ? "운용자 권한이 필요합니다" : "잠시 뒤 다시 시도");
+    else el("enroll-address-add").removeAttribute("reason");
   }
 
   function decorateDiscoveryRow(item, device) {

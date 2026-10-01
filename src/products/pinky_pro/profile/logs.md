@@ -17,3 +17,11 @@
 - gate 변화: ROS-SIM HOLD→GO
 - 결정: D-196 Proposed
 - 교훈: `wsl -- <cmd>`는 기본 셸(/bin/sh)이 명령줄을 다시 해석해 `$(...)`·`$PATH`가 바깥에서 먼저 펼쳐진다 — `wsl -e bash -c`로 실행한다.
+
+## 2026-10-01 · uncommitted · fix(pinky_pro): device CORE line_follow LiDAR forward 180 deg (D-344 §11)
+
+- 변경: `config/core.yaml` 신설 — `line_follow.lidar_forward_deg: 180.0`. rosy_default 는 0 그대로라 실물·새 이미지·페이로드 모두 앞 물체 정지(±20°, 0.20/0.28 m)가 로봇 뒤를 보고 있었다(8kcn 만 2026-09-29 손 핫픽스). rplidar_link yaw π 라 정면은 스캔 180°. 승인된 lidar_mount 기록(D-47 추가, lidar_mount.py)이 있으면 그것이 이긴다(실측 ≈181–182°). 손값은 180 유지.
+- 증거: `test_pinky_lidar_forward_device.py` 5 passed — rosy-runtime.env + ROSY_DEPLOYMENT=device + 첫 부팅 오버레이로 load_config → 180, 기본값 0 유지, 오버레이 우선, omx 는 0. 변이(블록 삭제) 시 `assert 0.0 == 180.0` 실패.
+- gate 변화: SOURCE/LOCAL GO. DEVICE HOLD(페이로드 배포 전; 실물 미접촉).
+- 결정: D-344 §11, D-47 추가(2026-10-01), D-196.
+- 교훈: 제품 기본값을 주석으로만 적어 두면(“Pinky Pro device: 180”) 어떤 배포 경로도 그 값을 싣지 않는다.

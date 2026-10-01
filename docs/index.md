@@ -166,6 +166,7 @@
 | D-355 | 도크·외부 장비 구현은 자재→벤치→실기→활성화→통합의 5단계로 간다 — 각 단계의 게이트·의존성·완료 조건을 확정한다 |
 | D-357 | ER 2 consumes bounded Fleet feedback and returns candidates while Mission/device control remain independent |
 | D-358 | ER 2 feedback turns use trusted scope, fenced candidates, and explicit ambiguity |
+| D-359 | 테마는 팔레트 한 블록만 바꾼다 — 토큰을 팔레트·파생·역할로 나누고, 공용 부품이 표면별 사본을 대체하며, 반응형은 세 단 어휘를 쓴다 |
 | D-360 | 천장 카메라 경기장 자동 검출은 제안일 뿐이다 — Vision이 네 모서리를 제안하고, 관제는 운용자가 확인한 모서리로 보정·마스킹한 경기장 뷰를 보여 준다 |
 | D-361 | 사이트 콘솔이 로봇 화면 코드로 로봇을 등록한다 — Fleet이 코드를 로봇에서 직접 교환하고, 자격은 Fleet 소유 저장소에 둔다 |
 | D-363 | 주행 화면의 카메라는 원본 비율 그대로 잘림 없이 보이고, 조작부·HUD 는 영상을 가리지 않으며, 현장 운용은 설치 앱으로 연다 |
@@ -176,11 +177,13 @@
 | D-368 | 운전 중인 한 사람에게만 인증된 MJPEG 실시간 영상을 주고, 그동안만 로봇 미리보기 발행을 올린다 |
 | D-369 | Mission 제어·장치 실행·ROS 제어·안전 정지의 책임을 분리한다 |
 | D-370 | 앱과 표면은 한 역할씩 맡는다 — 역할·이름·아이콘·화면 소유를 한 표로 고정하고, 발견·기기 연결·실패 어휘는 공유 벡터로 하나로 맞춘다 |
+| D-371 | 목록 행의 되돌릴 수 없는 행동은 조용한 버튼으로 시작하고, 위험 채움은 확인 단계에만 둔다 |
 | D-374 | 앱의 폴더·패키지·식별자·표시 이름은 역할 이름 하나에서 나온다 — 역할 id(kebab)·snake·compact·표시 네 표기; 와이어 계약 이름(mDNS 종류, `rosy-overhead/1`, `/api/fleet`·`/api/vision`, `rosyov://`, 웹 경로, 설정·저장소 키, compose 서비스)은 바꾸지 않는다 |
 | D-375 | 천장 카메라→지도 보정도 제안일 뿐이다 — Vision이 알려진 차선 페인트를 영상에 맞춰 homography·coverage·가려진 쪽을 제안하고, 운용자가 확인하기 전에는 어디에도 쓰지 않는다 |
 | D-376 | OMX PICK_PLACE planning stays local and trajectory execution stays with the Action owner |
 | D-377 | 앱 이름 규칙: Rosy + 영어 한 단어 — 표시 이름 `Rosy <Word>`, id·폴더 끝 `<word>`, 패키지 `rosy_<word>`, Android `io.github.livsbittt.rosy.<word>`, Gradle `rosy-<word>`, 아이콘 `<word>.svg`; Rosy Cam·Vision·Console·Robot·Pilot |
 | D-382 | 로봇 ↔ 사이트 관제 통신은 계약 스냅샷 하나로 판정하고, 실물 확인은 읽기 전용 적합성 탐침으로 시작한다 |
+| D-390 | Pilot의 OMX-AI 연습은 시뮬레이션 전용 장치 API를 거쳐 로컬 팔 명령 소유자에 연결한다 |
 
 ## 계획·결과 문서
 
@@ -249,6 +252,7 @@
 - [2026-09-30-goal-evidence-producer-and-verifier-design.md](plans/2026-09-30-goal-evidence-producer-and-verifier-design.md)
 - [2026-09-30-goal-evidence-producer-and-verifier.md](plans/2026-09-30-goal-evidence-producer-and-verifier.md)
 - [2026-09-30-site-app-roles-and-shared-link-plan.md](plans/2026-09-30-site-app-roles-and-shared-link-plan.md)
+- [2026-10-01-pilot-omx-gazebo-practice.md](plans/2026-10-01-pilot-omx-gazebo-practice.md)
 
 ## 교훈 (docs/solutions)
 
@@ -261,8 +265,8 @@
 
 ## 최근 기록
 
-- 2026-10-01 · uncommitted · docs(adr): D-385 Rosy가 스스로 표현한다
-- 2026-10-01 · uncommitted · docs(adr): D-341·D-382 Accepted — 병행 세션 결정 회차
-- 2026-10-01 · uncommitted · docs(adr): D-341·D-382 교차 세션 검토 반영
-- 2026-10-01 · uncommitted · docs(adr): D-178 기준선 rosy_vision 잠정 행 추가, overhead 행 제거
-- 2026-10-01 · uncommitted · docs(adr): D-341·D-382 착지 — 천장 카메라 콘솔 승인·로봇 ↔ 관제 통신 적합성
+- 2026-10-01 · uncommitted · docs(adr): D-392 모델 도구 메시지 계약
+- 2026-10-01 · 4483e7a8 · docs(api,adr): 보정 lease 소유·회수·배터리 복귀
+- 2026-10-01 · e8028fb0 · docs(adr): D-321 부록 — 보정 세션 표시와 차단
+- 2026-10-01 · uncommitted · docs(deployment): 현장 천장 카메라·관제 운영 가이드
+- 2026-10-01 · uncommitted · D-390 Pilot OMX simulation implementation and evidence

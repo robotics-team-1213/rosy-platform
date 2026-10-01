@@ -26,6 +26,8 @@ class _Handler(SimpleHTTPRequestHandler):
     def translate_path(self, path):
         if path == "/assets/map.js":
             return str(ROOT / "map.js")
+        if path == "/common/ui.js":
+            return str(ROOT.parent / "web_common" / "ui.js")
         return super().translate_path(path)
 
     def do_GET(self):
@@ -33,6 +35,7 @@ class _Handler(SimpleHTTPRequestHandler):
             body = """<!doctype html><html><head><meta charset='utf-8'></head><body>
               <canvas id='map' width='100' height='100' style='width:100px;height:100px'></canvas>
               <p id='readout' role='status' aria-live='polite'></p>
+              <script type='module' src='/common/ui.js'></script>
               <script type='module'>
                 import {createFieldMap} from '/assets/map.js';
                 const canvas = document.getElementById('map');

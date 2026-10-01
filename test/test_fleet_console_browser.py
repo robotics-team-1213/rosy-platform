@@ -101,7 +101,7 @@ def console_url():
         def translate_path(self, path: str) -> str:
             if path.startswith("/common/"):
                 name = path.removeprefix("/common/")
-                if name in {"tokens.css", "components.css", "ui.js", "core_ui_logic.js"}:
+                if name in {"tokens.css", "theme.js", "components.css", "ui.js", "core_ui_logic.js"}:
                     return str(WEB_COMMON / name)
             if path.startswith("/console/assets/"):
                 path = "/" + path[len("/console/assets/"):]
@@ -164,7 +164,7 @@ def test_the_console_renders_what_swarm_control_says(console_url):
         per_robot = page.evaluate(
             "() => Object.fromEntries([...document.querySelectorAll('#roster article')]"
             ".map((el) => [el.querySelector('b')?.textContent,"
-            " el.querySelectorAll('.tag.crit, .tag.warn').length]))"
+            " el.querySelectorAll('ui-tag[status=crit], ui-tag[status=warn]').length]))"
         )
         assert per_robot == {"rosy_01": 0, "rosy_02": 0, "rosy_03": 2}
 
@@ -514,7 +514,9 @@ def test_unreachable_robot_is_never_drawn_healthy(console_url):
         )
         roster = page.inner_text("#roster")
         assert "닿지 않음: CONNECT_ERROR" in roster
-        assert "OFFLINE" in roster
+        assert "오프라인" in roster
+        assert "OFFLINE" not in roster
+        assert page.locator("#roster .robot.offline ui-tag[status=crit]", has_text="오프라인").first.get_attribute("title") == "OFFLINE"
         assert not errors
         save_temp_screenshot(page, "fleet_console_unreachable.png")
         browser.close()
@@ -596,9 +598,13 @@ def test_holding_formation_enables_resume_and_warns(console_url):
         page.goto(console_url, wait_until="networkidle")
         page.wait_for_function(
             "() => document.getElementById('formation-state')?.textContent"
-            " === 'HOLDING'"
+            " === '유지 중'"
         )
-        assert "warn" in page.locator("#formation-state").get_attribute("class")
+        assert page.locator("#formation-state").get_attribute("status") == "warn"
+        assert page.locator("#formation-state").get_attribute("title") == "HOLDING"
+        assert page.locator("#formation-resume").get_attribute("reason") is None
+        assert "signals.yaml" not in page.inner_text("#signals-hint")
+        assert "HOLDING" not in page.inner_text("main")
         assert page.locator("#formation-resume").is_enabled()
         assert not errors
         save_temp_screenshot(page, "fleet_console_holding.png")
@@ -617,7 +623,7 @@ def test_formation_read_loss_hides_last_running_evidence_and_recovers(console_ur
     with sync_playwright() as playwright:
         browser, page, errors = _open_console(playwright, api)
         page.goto(console_url, wait_until="networkidle")
-        page.wait_for_function("() => document.querySelector('#formation-state')?.textContent === 'RUNNING'")
+        page.wait_for_function("() => document.querySelector('#formation-state')?.textContent === '진행 중'")
         assert "9.8 Hz" in page.inner_text("#formation-detail")
         assert page.evaluate("window.__swarmOverlay?.slots") == 2
 
@@ -632,7 +638,7 @@ def test_formation_read_loss_hides_last_running_evidence_and_recovers(console_ur
         save_temp_screenshot(page, "fleet_formation_read_lost.png")
 
         api["/api/fleet/formation"] = FORMATION
-        page.wait_for_function("() => document.querySelector('#formation-state')?.textContent === 'RUNNING'",
+        page.wait_for_function("() => document.querySelector('#formation-state')?.textContent === '진행 중'",
                                timeout=7000)
         assert "9.8 Hz" in page.inner_text("#formation-detail")
         assert page.evaluate("window.__swarmOverlay?.slots") == 2
@@ -841,7 +847,7 @@ def test_queued_navigation_is_successful_and_cancel_targets_task(console_url):
                                               init_script="window.confirm = () => true")
         page.goto(console_url, wait_until="networkidle")
         page.locator("#roster-toggle").click()
-        page.wait_for_function("() => document.querySelectorAll('#roster article').length === 3")
+        page.wait_for_function("() => document.querySelectorAll('#roster article').length > 0")
         page.wait_for_function("() => !document.querySelector('#roster article ui-button')?.disabled")
         page.locator("#roster article").filter(has_text="rosy_01").locator("ui-button").first.click()
         canvas_box = page.locator("#map-canvas").bounding_box()
@@ -1049,6 +1055,106 @@ def test_robot_enrollment_panel_enrolls_by_screen_code(console_url):
         browser.close()
 
 
+def _enrollment_api(listing):
+    return {
+        "/api/fleet/state": SNAPSHOT, "/api/fleet/map": MAP_GRID, "/api/fleet/formation": FORMATION,
+        "/api/fleet/session": {"principal_id": "alice", "role": "operator"},
+        "/api/fleet/discovery": {"scanner_online": True, "devices": [{
+            "name": "rosy-pinky-8kcn", "hostname": "rosy-pinky-8kcn.local",
+            "address": "192.168.1.202", "port": 8080, "stage": "CORE_READY", "release": "",
+            "robot_id": None, "status": "registration_pending", "enrollable": True}]},
+        "/api/fleet/enrollment/robots": listing,
+        "/api/fleet/estop": {"stopped": 3, "total": 3, "robots": []},
+    }
+
+
+def test_enrollment_dialog_leaves_the_fleet_stop_live(console_url):
+    """D-280 원칙 2 (P1-2 review): the enrollment dialog is non-modal — #estop stays live."""
+    from playwright.sync_api import sync_playwright
+
+    listing = {"available": True, "unavailable_reason": None, "static_robot_ids": [], "robots": [], "alarms": []}
+    posts = []
+    with sync_playwright() as playwright:
+        browser, page, errors = _open_console(playwright, _enrollment_api(listing), posts)
+        page.on("dialog", lambda dialog: dialog.accept())  # 전체 정지의 window.confirm
+        page.goto(console_url, wait_until="networkidle")
+        page.get_by_role("heading", name="로봇 등록", exact=True).wait_for()
+        opener = page.locator("#discovery-list ui-button", has_text="등록").first
+        opener.click()
+        page.wait_for_function("document.getElementById('enroll-dialog').open")
+        assert page.evaluate("document.activeElement?.id") == "enroll-code"
+        state = page.evaluate("""() => {
+          const stop = document.getElementById('estop');
+          const box = stop.getBoundingClientRect();
+          const hit = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+          const inertAncestor = (node) => { for (; node; node = node.parentElement) if (node.inert) return true; return false; };
+          return {stopInert: inertAncestor(stop), hitsStop: Boolean(hit && stop.contains(hit)),
+                  dialogInert: inertAncestor(document.getElementById('enroll-dialog')),
+                  panelInert: inertAncestor(document.getElementById('enrolled-list'))};
+        }""")
+        assert state == {"stopInert": False, "hitsStop": True, "dialogInert": False, "panelInert": True}
+        page.locator("#estop").click()
+        page.wait_for_function("!document.getElementById('enroll-dialog').open")
+        for _ in range(50):
+            if ("POST", "/api/fleet/estop") in posts:
+                break
+            page.wait_for_timeout(100)
+        assert ("POST", "/api/fleet/estop") in posts
+        assert page.evaluate("[...document.querySelectorAll('[inert]')].length") == 0
+        # the dialog went back to its panel (it sat at the end of body only while open)
+        assert page.evaluate("document.getElementById('enroll-dialog').parentElement !== document.body")
+        assert not errors
+        browser.close()
+
+
+def test_unenroll_is_a_quiet_row_action_confirmed_by_name(console_url):
+    """D-371 (P2-3 review): 등록 해제 revokes the site token, so it is `등록 해제…` + confirmIrreversible."""
+    from playwright.sync_api import sync_playwright
+
+    enrolled = {"robot_id": "rosy_09", "hostname": "rosy-pinky-8kcn", "address": "192.168.1.202:8080",
+                "state": "active", "legacy_lifetime": True, "origin": "enrolled", "hold": None,
+                "expires_at": "2026-10-07T00:00:00+00:00"}
+    listing = {"available": True, "unavailable_reason": None, "static_robot_ids": [], "robots": [enrolled],
+               "alarms": []}
+    deletes = []
+    with sync_playwright() as playwright:
+        browser, page, errors = _open_console(playwright, _enrollment_api(listing))
+
+        def remove(route):
+            if route.request.method != "DELETE":
+                route.fallback()
+                return
+            deletes.append(route.request.url)
+            route.fulfill(status=200, json={"state": "removed"})
+
+        page.route("**/api/fleet/enrollment/robots/rosy_09", remove)
+        page.goto(console_url, wait_until="networkidle")
+        row_button = page.locator('#enrolled-list li[data-robot-id="rosy_09"] ui-button[data-action="unenroll"]')
+        row_button.wait_for()
+        assert row_button.inner_text() == "등록 해제…"
+        assert row_button.get_attribute("kind") == "quiet"
+        row_button.click()
+        dialog = page.locator("dialog.ui-confirm")
+        dialog.wait_for()
+        assert '"rosy_09"' in dialog.locator("p").inner_text()
+        run = dialog.locator('ui-button[kind="irreversible"]')
+        assert run.inner_text() == "등록 해제"
+        page.keyboard.press("Escape")
+        page.wait_for_function("!document.querySelector('dialog.ui-confirm')")
+        assert deletes == []
+        assert page.evaluate("document.activeElement?.dataset.action") == "unenroll"
+        row_button.click()
+        page.locator('dialog.ui-confirm ui-button[kind="irreversible"]').click()
+        page.wait_for_function("!document.querySelector('dialog.ui-confirm')")
+        for _ in range(50):
+            if deletes:
+                break
+            page.wait_for_timeout(100)
+        assert len(deletes) == 1
+        assert not errors
+        browser.close()
+
+
 def test_camera_rectification_controls_are_accessible_source_scoped_and_reset(console_url):
     from playwright.sync_api import sync_playwright
 
@@ -1245,7 +1351,7 @@ def test_mobile_console_has_no_horizontal_overflow(console_url, width):
         page.set_viewport_size({"width": width, "height": 844})
         page.goto(console_url, wait_until="networkidle")
         page.locator("#roster-toggle").click()
-        page.wait_for_function("() => document.querySelectorAll('#roster article').length === 3")
+        page.wait_for_function("() => document.querySelectorAll('#roster article').length > 0")
         save_temp_screenshot(page, f"fleet_console_mobile_{width}.png")
         layout = page.evaluate("""() => ({
           overflow: document.documentElement.scrollWidth - innerWidth,
@@ -1270,8 +1376,6 @@ def test_mobile_console_has_no_horizontal_overflow(console_url, width):
           status: document.querySelector('#online-pill').getBoundingClientRect().toJSON(),
           operator: document.querySelector('#user-role').getBoundingClientRect().toJSON(),
           clock: document.querySelector('#clock').getBoundingClientRect().toJSON(),
-          statusRow: getComputedStyle(document.querySelector('#online-pill')).gridRowStart,
-          clockRow: getComputedStyle(document.querySelector('#clock')).gridRowStart,
           stopScopeHidden: getComputedStyle(document.querySelector('#estop small')).display === 'none',
           stopAccessibleName: document.querySelector('#estop').getAttribute('aria-label'),
         })""")
@@ -1284,9 +1388,116 @@ def test_mobile_console_has_no_horizontal_overflow(console_url, width):
     assert layout["headerRows"] <= 4, layout
     assert layout["headerOverlaps"] == [], layout
     if width <= 384:
-        assert layout["statusRow"] == layout["clockRow"] == "1", layout
+        # D-359 §6.4 — compact 머리는 두 줄이다(이름·설정 / 연결·시계, 정지는 두 줄에 걸친다).
+        # 연결 표지와 시계는 여전히 한 줄을 나눠 쓴다 — 격자 이름 대신 상자로 비교한다.
+        status, clock = layout["status"], layout["clock"]
+        assert min(status["bottom"], clock["bottom"]) - max(status["top"], clock["top"]) > 1, layout
         assert layout["stopScopeHidden"], layout
         assert layout["stopAccessibleName"] == "전체 로봇 정지", layout
+
+
+@pytest.mark.parametrize("width", [320, 390, 1366])
+def test_formation_buttons_keep_their_reasons_readable(console_url, width):
+    """D-359 US-007 캡처: 네 버튼을 한 줄에 같은 폭으로 눌러 담아 390px에서 '무장 / 이미 대형 중'이
+    어절마다 한 줄씩 네 줄이 됐다. 버튼 줄은 접히고, 이름·사유는 각각 두 줄을 넘지 않는다."""
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as playwright:
+        browser, page, errors = _open_console(playwright, API)
+        page.set_viewport_size({"width": width, "height": 844})
+        page.goto(console_url, wait_until="networkidle")
+        page.wait_for_function("() => document.querySelector('#formation-start small[data-reason]')")
+        tall = page.evaluate("""() => [...document.querySelector('#formation-start').parentElement.querySelectorAll('ui-button')].flatMap(button => {
+          const note = button.querySelector('small[data-reason]');
+          const lines = (node) => node ? Math.round(node.getBoundingClientRect().height
+            / parseFloat(getComputedStyle(node).lineHeight)) : 0;
+          const label = [...button.childNodes].filter(n => n.nodeType === 3).map(n => n.textContent.trim()).join('');
+          const range = document.createRange();
+          const text = [...button.childNodes].find(n => n.nodeType === 3 && n.textContent.trim());
+          let labelLines = 0;
+          if (text) { range.selectNodeContents(text); labelLines = range.getClientRects().length; }
+          return (lines(note) > 2 || labelLines > 2) ? [`${button.id} ${label}: label ${labelLines}, reason ${lines(note)}`] : [];
+        })""")
+        browser.close()
+    assert errors == []
+    assert tall == []
+
+
+# --- D-359 §6.4: 세로 예산 — 붙박이 머리 ≤ 창 높이 20%, 비상 정지는 첫 화면에 ---------
+
+@pytest.mark.parametrize("width,height", [(390, 844), (320, 568)])
+def test_compact_header_budget_keeps_the_stop_in_view(console_url, width, height):
+    """접속·역할·테마는 '설정' 뒤에 접히고, 펼치면 보인다. 머리는 창 높이의 20% 이하다.
+
+    변이 증명: components.css `ui-topbar`에 `min-height: 300px`을 넣으면 빨갛다."""
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as playwright:
+        browser, page, errors = _open_console(playwright, API)
+        page.set_viewport_size({"width": width, "height": height})
+        page.goto(console_url, wait_until="networkidle")
+        probe = """() => {
+          const box = (s) => document.querySelector(s).getBoundingClientRect().toJSON();
+          const shown = (s) => { const n = document.querySelector(s); return !!n && n.getClientRects().length > 0; };
+          return {overflow: document.documentElement.scrollWidth - innerWidth,
+            topbar: box('ui-topbar'), sticky: getComputedStyle(document.querySelector('ui-topbar')).position,
+            stop: box('#estop'), more: box('#topbar-more'),
+            expanded: document.querySelector('#topbar-more').getAttribute('aria-expanded'),
+            token: shown('#console-token'), theme: shown('#theme-choice'), role: shown('#user-role'),
+            status: shown('#online-pill'), clock: shown('#clock')};
+        }"""
+        folded = page.evaluate(probe)
+        page.get_by_role("button", name="설정", exact=True).click()
+        opened = page.evaluate(probe)
+        page.get_by_role("button", name="설정", exact=True).click()
+        page.evaluate("window.scrollTo(0, document.documentElement.scrollHeight)")
+        scrolled = page.evaluate(probe)
+        save_temp_screenshot(page, f"fleet_header_budget_{width}.png")
+        browser.close()
+
+    assert errors == []
+    assert folded["overflow"] <= 0, folded
+    assert folded["topbar"]["height"] <= 0.2 * height, folded
+    assert folded["sticky"] == "sticky", folded
+    stop = folded["stop"]
+    assert stop["top"] >= 0 and stop["left"] >= 0 and stop["bottom"] <= height and stop["right"] <= width, folded
+    assert folded["expanded"] == "false" and not folded["token"] and not folded["theme"] and not folded["role"], folded
+    assert folded["status"] and folded["clock"], folded
+    assert opened["expanded"] == "true" and opened["token"] and opened["theme"] and opened["role"], opened
+    assert opened["overflow"] <= 0, opened
+    assert scrolled["expanded"] == "false", scrolled
+    assert 0 <= scrolled["stop"]["top"] and scrolled["stop"]["bottom"] <= height, scrolled
+
+
+def test_wide_header_keeps_every_item_on_one_line(console_url):
+    """1920px은 모든 항목을 편 한 줄, 1366·1280px(90rem 미만)은 '설정'으로 접힌 한 줄이다.
+    어느 쪽이든 머리는 한 줄이고 비상 정지는 오른쪽 위이며 테마 이름표는 두 줄로 접히지 않는다."""
+    from playwright.sync_api import sync_playwright
+
+    results = {}
+    with sync_playwright() as playwright:
+        browser, page, errors = _open_console(playwright, API)
+        for width, height in ((1920, 1080), (1366, 768), (1280, 800)):
+            page.set_viewport_size({"width": width, "height": height})
+            page.goto(console_url, wait_until="networkidle")
+            results[width] = page.evaluate("""() => {
+              const label = document.querySelector('#theme-choice-label');
+              const line = parseFloat(getComputedStyle(label).lineHeight) || 20;
+              const more = document.querySelector('#topbar-more');
+              return {labelLines: label.getClientRects().length ? Math.round(label.getBoundingClientRect().height / line) : 0,
+                moreShown: more.getClientRects().length > 0,
+                topbar: document.querySelector('ui-topbar').getBoundingClientRect().height,
+                stop: document.querySelector('#estop').getBoundingClientRect().toJSON()};
+            }""")
+        browser.close()
+
+    assert errors == []
+    assert results[1920]["labelLines"] == 1 and not results[1920]["moreShown"], results
+    for width in (1366, 1280):
+        assert results[width]["moreShown"] and results[width]["labelLines"] == 0, results
+    for width, result in results.items():
+        assert result["topbar"] <= 100, results
+        assert result["stop"]["top"] <= 30 and width - result["stop"]["right"] <= 32, results
 
 
 # --- D-202: 위험은 채움이다 — 따뜻한 글자는 4.5:1 이상이어야 읽힌다 ----------
@@ -1455,3 +1666,179 @@ def test_visible_text_meets_the_contrast_floor(console_url):
         "바닥 아래 텍스트가 있다 — 선택도 읽기를 희생하지 않는다(D-214): "
         + "; ".join(offenders[:6])
     )
+
+
+@pytest.mark.parametrize("width,height", [(1366, 768), (390, 844), (320, 568)])
+def test_map_label_chips_never_cover_each_other(console_url, width, height):
+    """D-359 US-008 capture: near rosy_03 the tracking-error chip ("0.88m") and the mediation
+    chip ("경로 충돌") were drawn on the same spot and neither read. Chips step aside."""
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as p:
+        browser, page, errors = _open_console(p, dict(API))
+        page.set_viewport_size({"width": width, "height": height})
+        page.goto(console_url, wait_until="networkidle")
+        page.wait_for_function("() => (window.__swarmOverlay?.mediation || 0) >= 1"
+                               " && (window.__mapChips || []).length >= 3", timeout=8000)
+        chips = page.evaluate("() => window.__mapChips.map((r) => ({...r}))")
+        assert not errors
+        browser.close()
+
+    texts = [chip["text"] for chip in chips]
+    assert "경로 충돌" in texts and "0.88m" in texts, texts
+    hits = [
+        (a["text"], b["text"])
+        for i, a in enumerate(chips) for b in chips[i + 1:]
+        if a["x"] < b["x"] + b["w"] and b["x"] < a["x"] + a["w"]
+        and a["y"] < b["y"] + b["h"] and b["y"] < a["y"] + a["h"]
+    ]
+    assert hits == [], hits
+
+
+@pytest.mark.parametrize("width,height", [(320, 568), (390, 844), (1366, 768)])
+def test_wordmark_stays_on_one_line(console_url, width, height):
+    """D-359 US-008 capture: at 320px "ROSY FLEET" broke into two lines (brand column 83px,
+    text 119px). The wordmark is one line, not clipped, and does not run under the next item."""
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as p:
+        browser, page, errors = _open_console(p, API)
+        page.set_viewport_size({"width": width, "height": height})
+        page.goto(console_url, wait_until="networkidle")
+        mark = page.evaluate("""() => {
+          const b = document.querySelector('ui-brand b');
+          const range = document.createRange(); range.selectNodeContents(b);
+          const lines = new Set([...range.getClientRects()].map((r) => Math.round(r.top))).size;
+          const text = range.getBoundingClientRect();
+          const more = document.getElementById('topbar-more');
+          const next = more.getClientRects().length ? more.getBoundingClientRect() : null;
+          return {lines, textRight: text.right, boxRight: b.getBoundingClientRect().right,
+                  nextLeft: next && Math.abs(next.top - text.top) < text.height ? next.left : null};
+        }""")
+        browser.close()
+
+    assert errors == []
+    assert mark["lines"] == 1, mark
+    assert mark["textRight"] <= mark["boxRight"] + 0.5, mark
+    if mark["nextLeft"] is not None:
+        assert mark["textRight"] <= mark["nextLeft"], mark
+
+
+@pytest.mark.parametrize("width,height", [(1920, 1080), (1366, 768), (390, 844)])
+def test_member_label_sits_beside_the_first_checkbox_row(console_url, width, height):
+    """D-359 US-008 capture: "포함 로봇" sat below the checkbox row (centred on a wrapped list at
+    1366/390; at wide widths it could flow into the previous row). The label shares the first
+    row of the member list and stands to its left."""
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as p:
+        browser, page, errors = _open_console(p, API)
+        page.set_viewport_size({"width": width, "height": height})
+        page.goto(console_url, wait_until="networkidle")
+        page.wait_for_function("() => document.querySelectorAll('#formation-members label').length === 3")
+        boxes = page.evaluate("""() => {
+          const r = (n) => n.getBoundingClientRect().toJSON();
+          return {label: r(document.querySelector('.member-label')),
+                  first: r(document.querySelector('#formation-members label')),
+                  list: r(document.getElementById('formation-members')),
+                  named: document.getElementById('formation-members').getAttribute('aria-labelledby')};
+        }""")
+        browser.close()
+
+    assert errors == []
+    label, first, members = boxes["label"], boxes["first"], boxes["list"]
+    centre = lambda box: box["y"] + box["height"] / 2  # noqa: E731
+    assert abs(centre(label) - centre(first)) <= 2, boxes
+    assert label["right"] <= members["x"], boxes
+    assert boxes["named"] == "formation-members-label", boxes
+
+
+def test_roster_mode_tag_speaks_korean_and_keeps_the_enum_in_title(console_url):
+    """D-359 US-009 — the card's mode tag reads the shared MODE_LABEL."""
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as playwright:
+        browser, page, errors = _open_console(playwright, API)
+        page.goto(console_url, wait_until="networkidle")
+        page.wait_for_function("() => document.querySelectorAll('#roster article').length > 0")
+        first_tag = page.locator("#roster article").first.locator(".robot-head ui-tag").first
+        assert first_tag.inner_text() == "내비게이션"
+        assert first_tag.get_attribute("title") == "NAVIGATION"
+        assert "NAVIGATION" not in page.inner_text("#roster")
+        assert not errors
+        browser.close()
+
+
+@pytest.mark.parametrize("width,height", [(390, 844), (320, 568)])
+def test_single_column_tier_puts_exceptions_before_the_map_and_formation_last(console_url, width, height):
+    """D-359 US-009 — below 64rem: 주의·로봇 → 지도 → 관제 카메라 → 대형 → 기기 연결(설정 일은 끝).
+    Wide keeps its columns (main 486e3683: 대형 sits under the roster list, 기기 연결 beside it)."""
+    from playwright.sync_api import sync_playwright
+
+    probe = """() => Object.fromEntries(['.queues-panel', '#roster', '#map-stage', '.vision-preview', '.formation',
+        '#log', '.device-link']
+      .map((sel) => [sel, Math.round(document.querySelector(sel).getBoundingClientRect().top + window.scrollY)]))"""
+    with sync_playwright() as p:
+        browser, page, errors = _open_console(p, API)
+        page.set_viewport_size({"width": width, "height": height})
+        page.goto(console_url, wait_until="networkidle")
+        page.wait_for_function("() => document.querySelectorAll('#roster article').length > 0")
+        top = page.evaluate(probe)
+        assert (top["#roster"] < top["#map-stage"] < top[".vision-preview"] < top[".formation"]
+                < top["#log"] < top[".device-link"]), top
+        assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
+        page.set_viewport_size({"width": 1366, "height": 768})
+        wide = page.evaluate(probe)
+        # wide: map column left, roster column right, both starting on the first row. Inside the
+        # roster column, 대형 stacks under the list and 기기 연결 stands beside the list.
+        left = page.evaluate("""() => Object.fromEntries(['#map-stage', '#roster', '.formation', '.device-link']
+          .map((sel) => [sel, document.querySelector(sel).getBoundingClientRect().left]))""")
+        assert left["#map-stage"] < left["#roster"] < left[".device-link"], left
+        assert abs(left[".formation"] - left["#roster"]) < 1 and wide["#roster"] < wide[".formation"], (left, wide)
+        assert wide["#roster"] <= wide[".device-link"] < wide[".formation"], wide
+        assert wide["#roster"] < wide["#map-stage"] + 200, wide
+        assert not errors
+        browser.close()
+
+
+PAINT_LOG = """
+(() => {
+  const log = [];
+  window.__paintLog = log;
+  const proto = CanvasRenderingContext2D.prototype;
+  for (const name of ["drawImage", "stroke", "fillText"]) {
+    const original = proto[name];
+    proto[name] = function (...args) {
+      if (this.canvas.id === "map-canvas") log.push(name === "fillText" ? `text:${args[0]}` : name);
+      return original.apply(this, args);
+    };
+  }
+})();
+"""
+
+
+def test_map_chips_paint_after_lines_and_clear_robot_markers(console_url):
+    """D-359 US-008 leftovers — chips are painted after formation/mediation lines, so no line
+    crosses chip text, and chips are placed off the robot marker boxes."""
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as p:
+        browser, page, errors = _open_console(p, API, init_script=PAINT_LOG)
+        page.goto(console_url, wait_until="networkidle")
+        page.wait_for_function("() => (window.__swarmOverlay?.slots || 0) === 2", timeout=8000)
+        page.wait_for_function("() => (window.__swarmOverlay?.mediation || 0) > 0")
+        log = page.evaluate("window.__paintLog")
+        last = log[max(i for i, op in enumerate(log) if op == "drawImage"):]  # the latest full draw
+        texts = [i for i, op in enumerate(last) if op.startswith("text:")]
+        strokes = [i for i, op in enumerate(last) if op == "stroke"]
+        assert texts and strokes, last
+        assert max(strokes) < min(texts), last
+        chips = page.evaluate("window.__mapChips")
+        markers = page.evaluate("window.__mapMarkers")
+        assert len(markers) == 3
+        overlap = [(c["text"], m["robot"]) for c in chips for m in markers
+                   if c["x"] < m["x"] + m["w"] and m["x"] < c["x"] + c["w"]
+                   and c["y"] < m["y"] + m["h"] and m["y"] < c["y"] + c["h"]]
+        assert overlap == [], (overlap, chips, markers)
+        assert not errors
+        browser.close()

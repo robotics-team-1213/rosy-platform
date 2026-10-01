@@ -209,7 +209,9 @@ def test_console_map_distinguishes_empty_forbidden_error_and_ready_by_role():
 
         page.evaluate("window.__scenario = 'other404'; window.__refresh()")
         page.wait_for_function("document.querySelector('#map-status')?.textContent.includes('최신 지도')")
-        assert page.locator("ui-empty").is_visible() is False
+        # D-359 US-009 — a read failure is said on the stage (ui-empty + 다시 시도), not as a blank map.
+        assert "지도를 불러오지 못했습니다" in page.locator("ui-empty").inner_text()
+        assert page.get_by_role("button", name="다시 시도").count() + page.locator("ui-button", has_text="다시 시도").count() >= 1
 
         page.evaluate("window.__scenario = 'forbidden'; window.__refresh()")
         page.wait_for_function("document.querySelector('#map-status')?.textContent.includes('권한')")
@@ -217,7 +219,9 @@ def test_console_map_distinguishes_empty_forbidden_error_and_ready_by_role():
 
         page.evaluate("window.__scenario = 'error'; window.__refresh()")
         page.wait_for_function("document.querySelector('#map-status')?.textContent.includes('최신 지도')")
-        assert page.locator("ui-empty").is_visible() is False
+        # D-359 US-009 — a read failure is said on the stage (ui-empty + 다시 시도), not as a blank map.
+        assert "지도를 불러오지 못했습니다" in page.locator("ui-empty").inner_text()
+        assert page.get_by_role("button", name="다시 시도").count() + page.locator("ui-button", has_text="다시 시도").count() >= 1
 
         page.evaluate("window.__scenario = 'ready'; window.__refresh()")
         page.wait_for_function("document.querySelector('#map-status')?.textContent.includes('2×2')")
@@ -278,6 +282,7 @@ def test_host_agent_recovery_is_text_only_and_unavailable_controls_stay_blocked(
             browser, page, errors = _module_page(playwright, {
                 "/assets/panels/host/operations.js": WEB / "panels" / "host" / "operations.js",
                 "/assets/ui.js": ROOT / "src" / "hmi" / "web_common" / "ui.js",
+                "/common/core_ui_logic.js": ROOT / "src" / "hmi" / "web_common" / "core_ui_logic.js",
             })
         except Exception as error:
             pytest.skip(f"Playwright Chromium unavailable: {error}")

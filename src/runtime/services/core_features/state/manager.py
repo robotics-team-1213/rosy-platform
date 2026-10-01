@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import threading
-from typing import Optional
+from typing import Callable, Optional
 
 import time
 
@@ -17,6 +17,7 @@ from core_common.protocol.schemas import (
     NavigationState,
     Pose,
     PowerStatus,
+    RobotActivity,
     RobotMode,
     SafetySummary,
     StateSnapshot,
@@ -82,10 +83,16 @@ class StateManager:
         self._sensors: dict[str, dict] = {}
         self._hitl_requested: bool = False
         self._capabilities_degraded: list[str] = []
+        self._activity_provider: Optional[Callable[[], Optional[dict]]] = None
 
     def set_hitl_requested(self, requested: bool) -> None:
         with self._lock:
             self._hitl_requested = requested
+
+    def set_activity_provider(self, provider: Optional[Callable[[], Optional[dict]]]) -> None:
+        """D-321 addendum: the calibration lease is read live, so `remaining_s` ticks."""
+        with self._lock:
+            self._activity_provider = provider
 
     def set_capabilities_degraded(self, modules: list[str]) -> None:
         with self._lock:
@@ -201,6 +208,11 @@ class StateManager:
             self._errors = self._errors[-20:]
 
     def snapshot(self) -> StateSnapshot:
+        # Read the lease before taking our lock: the provider has its own lock
+        # and may publish an expiry event.
+        provider = self._activity_provider
+        raw_activity = provider() if provider is not None else None
+        activity = RobotActivity.model_validate(raw_activity) if raw_activity else None
         with self._lock:
             self._seq += 1
             now = self._clock()
@@ -236,4 +248,5 @@ class StateManager:
                 evidence=evidence,
                 hitl_requested=self._hitl_requested,
                 capabilities_degraded=list(self._capabilities_degraded),
+                activity=activity,
             )

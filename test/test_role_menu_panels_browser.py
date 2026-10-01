@@ -17,6 +17,9 @@ def _route_panel_test(page) -> None:
     ui_source = (ROOT / "src" / "hmi" / "web_common" / "ui.js").read_text(encoding="utf-8")
     page.route("http://rosy.test/common/ui.js", lambda route: route.fulfill(
         status=200, content_type="application/javascript", body=ui_source))
+    logic_source = (ROOT / "src" / "hmi" / "web_common" / "core_ui_logic.js").read_text(encoding="utf-8")
+    page.route("http://rosy.test/common/core_ui_logic.js", lambda route: route.fulfill(
+        status=200, content_type="application/javascript", body=logic_source))
     pose_source = (WEB / "panels" / "setup" / "pose-evidence.js").read_text(encoding="utf-8")
     page.route("http://rosy.test/assets/panels/setup/pose-evidence.js", lambda route: route.fulfill(
         status=200, content_type="application/javascript", body=pose_source))
@@ -184,7 +187,7 @@ def test_console_line_follow_readback_failure_and_action_feedback_are_independen
         assert "fixture line status unavailable" in panel.locator("ui-status").first.inner_text()
         assert "TRACKING" not in panel.locator("dl").inner_text()
         assert panel.locator("ui-button").evaluate_all("nodes=>nodes.every(node=>node.disabled)")
-        assert "Navigation" in panel.locator("ui-status").nth(1).inner_text()
+        assert "내비게이션" in panel.locator("ui-status").nth(1).inner_text()
 
         page.evaluate("""() => {
           window.__callbacks['/api/v1/line-follow'].onData({mode:'OFF',state:'IDLE'});
@@ -201,7 +204,10 @@ def test_console_line_follow_readback_failure_and_action_feedback_are_independen
         pending_feedback = action.inner_text()
         page.evaluate("window.__resolveRequest({})")
         page.wait_for_function("previous => [...document.querySelectorAll('ui-status[role=status]')].at(-1)?.textContent !== previous", arg=pending_feedback)
-        assert "OFF" in panel.locator("ui-status").first.inner_text()
+        # D-359 US-009 — the line-follow mode is spoken in Korean, never as the enum.
+        assert "꺼짐" in panel.locator("ui-status").first.inner_text()
+        assert "OFF" not in panel.locator("ui-status").first.inner_text()
+        assert "IR_LINE" not in action.inner_text() and "적외선 센서" in action.inner_text()
         assert action.inner_text() != pending_feedback
         assert "CORE" in action.inner_text()
         assert page.evaluate("window.__calls") == [{
@@ -372,7 +378,7 @@ def test_device_host_operations_block_writes_when_host_agent_is_absent():
           window.confirm = () => true;
           root.querySelectorAll('ui-button').forEach(button => button.click());
         }""")
-        assert "Host Agent" in page.locator("[role=status]").all_inner_texts()[0]
+        assert "호스트 에이전트" in page.locator("[role=status]").all_inner_texts()[0]
         page.locator(".surface-disclosure summary").filter(has_text="응답 세부 정보").first.click()
         details = page.locator(".surface-disclosure .surface-message").all_inner_texts()
         assert any("agent offline" in text for text in details)
@@ -430,14 +436,14 @@ def test_admin_host_system_get_failures_clear_only_their_own_readback():
         assert runtime_body.locator("dt").count() == 0
         assert "fixture runtime offline" in overview_status.nth(3).inner_text()
         assert "robot-fixture" in identity_body.inner_text()
-        assert "Navigation" in overview_status.nth(1).inner_text()
+        assert "내비게이션" in overview_status.nth(1).inner_text()
         assert "lidar" in inventory_body.inner_text()
 
         page.evaluate("window.__callbacks['/api/v1/system/info'].onError(new Error('fixture identity offline'))")
         assert identity_body.locator("dt").count() == 0
         assert "fixture identity offline" in overview_status.nth(0).inner_text()
         assert "fixture runtime offline" in overview_status.nth(3).inner_text()
-        assert "Navigation" in overview_status.nth(1).inner_text()
+        assert "내비게이션" in overview_status.nth(1).inner_text()
         assert "lidar" in inventory_body.inner_text()
 
         page.evaluate("window.__callbacks['/api/v1/system/capabilities'].onError(new Error('fixture capabilities offline'))")
@@ -489,23 +495,23 @@ def test_console_mode_feedback_survives_state_and_capability_polling():
         assert page.evaluate("window.__callbacks['/api/v1/robot/state'].interval") == 1_000
         assert page.evaluate("window.__callbacks['/api/v1/system/capabilities'].interval") == 5_000
         status = page.locator("main > ui-status")
-        assert "IDLE" in status.nth(0).inner_text()
-        assert "Navigation" in status.nth(1).inner_text()
+        assert "대기" in status.nth(0).inner_text()
+        assert "내비게이션" in status.nth(1).inner_text()
         page.locator('[data-mode="MANUAL"]').click()
         page.wait_for_function("window.__calls.length === 1")
         pending_feedback = status.nth(2).inner_text()
         page.evaluate("window.__callbacks['/api/v1/robot/state'].onData({mode:'IDLE'})")
         page.evaluate("window.__callbacks['/api/v1/system/capabilities'].onData({navigation:{goal_navigation:true}})")
         assert status.nth(2).inner_text() == pending_feedback
-        assert "IDLE" in status.nth(0).inner_text()
+        assert "대기" in status.nth(0).inner_text()
         page.evaluate("window.__resolveMode({accepted:true})")
         page.wait_for_function("document.querySelectorAll('main > ui-status')[2]?.textContent.includes('CORE가 받았습니다')")
         accepted_feedback = status.nth(2).inner_text()
-        assert "IDLE" in status.nth(0).inner_text()
+        assert "대기" in status.nth(0).inner_text()
         assert "CORE가 받았습니다" in accepted_feedback
         page.evaluate("window.__callbacks['/api/v1/robot/state'].onData({mode:'MANUAL'})")
         page.evaluate("window.__callbacks['/api/v1/system/capabilities'].onError(new Error('fixture navigation unavailable'))")
-        assert "MANUAL" in status.nth(0).inner_text()
+        assert "수동" in status.nth(0).inner_text()
         assert "fixture navigation unavailable" in status.nth(1).inner_text()
         assert status.nth(2).inner_text() == accepted_feedback
         assert page.evaluate("window.__calls") == [{"path":"/api/v1/mode","body":{"mode":"MANUAL"}}]
@@ -712,6 +718,8 @@ def test_admin_security_preserves_token_and_safety_action_feedback_across_pollin
           {id:'delete-token',label:'delete-me',role:'operator',source:'test',current:false}
         ]})""")
         page.locator('[data-token-id="delete-token"] ui-button').click()
+        # D-371: the row button opens the shared confirm dialog; its execute button deletes.
+        page.locator("dialog.ui-confirm ui-button[kind=irreversible]").click()
         page.wait_for_function("""document.querySelector(
           'main > section.ui-readback ui-status[role=status]'
         )?.textContent.includes('삭제했습니다')""")

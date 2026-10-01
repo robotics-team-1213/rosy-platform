@@ -38,6 +38,8 @@
     cmd_linear_sign: 1.0
     auto_linear_sign: false
     # Scan 0 = back. Nose ≈ 190deg (US 16cm matched lidar 14.7cm; 180deg was 12cm).
+    # SUSPECT (D-47 addendum 2026-10-01): LiDAR travel and camera walls measure ~181-182deg.
+    # Seed/fallback only: an operator-accepted lidar_mount record in the calibration store wins in CORE.
     lidar_yaw_offset: 3.31612558
     scan_yaw_offset: 3.31612558
     scan_pctl: 0.10

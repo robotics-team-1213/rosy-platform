@@ -6,7 +6,7 @@ import { createHostCards } from "./host-cards.js";
 import { createVisionPreview } from "./vision.js";
 import { createStatusSummary } from "./status-summary.js";
 import { completeDashboardAuthentication, dashboardSurfaceBridge } from "./surface-navigation.js";
-import { HeadlessState } from "/common/core_ui_logic.js";
+import { HeadlessState, MODE_LABEL, NETWORK_MODE_LABEL, enumLabel } from "/common/core_ui_logic.js";
 import {
   bindFormSave,
   elements,
@@ -81,6 +81,8 @@ const fieldMap = createFieldMap({
   getMapSources: () => session.capabilities?.runtime?.maps,
   canGoal: () => session.capabilities?.navigation?.goal_navigation === true
     && new HeadlessState(session.robotState).isFresh("pose"),
+  goalReason: () => session.capabilities?.navigation?.goal_navigation !== true
+    ? "내비게이션을 쓸 수 없음" : "위치 증거 확인 필요",
   setAction: (text) => setText("action-message", text),
 });
 
@@ -103,6 +105,7 @@ function renderRobotState(state) {
   // 작성자다. 여기 10Hz 가 매 틱 덮어쓰면 "모델/버전/모드"가 state.robot_id
   // 하나로 지워진다(D-383 계보가 깜빡이다 사라지던 원인).
   setText("robot-mode", state.mode);
+  renderCalibrationChip(state.activity);
   renderFormationHero(state.swarm);
   setText("state-sequence", `SEQ ${state.seq ?? "—"}`);
   setText("pose-x", number(state.pose?.x, 3), "—", state.evidence?.pose);
@@ -117,8 +120,8 @@ function renderRobotState(state) {
   setText("state-age", state.timestamp ? new Date(state.timestamp).toLocaleTimeString("ko-KR") : "—");
   setText("hero-message", state.online === false ? "로봇이 오프라인 상태를 보고했습니다." : "로봇 런타임과 상태 스트림이 연결되었습니다.");
 
-  document.querySelectorAll("[data-mode]").forEach((button) => {
-    button.classList.toggle("active", button.dataset.mode === state.mode);
+  document.querySelectorAll("ui-button[data-mode]").forEach((button) => {
+    button.setAttribute("aria-pressed", String(button.dataset.mode === state.mode));
   });
   renderLineFollow(state.line_follow);
   renderTrafficStatus(state.traffic_policy);
@@ -130,6 +133,17 @@ function renderRobotState(state) {
   if (teleopActive() && !teleopEligible()) stopTeleop("운전 조건이 변경되어 정지했습니다.");
   updateTeleopControls();
   fieldMap.setPose();
+}
+
+// D-321 부록: 보정 세션이 살아 있으면 모드 옆에 "보정 중 — <label>" 칩. 조종 거부는 CORE 409 가 한다.
+function renderCalibrationChip(activity) {
+  const chip = elements["calibration-chip"];
+  if (!chip) return;
+  const active = activity?.kind === "CALIBRATING";
+  chip.hidden = !active;
+  chip.textContent = active ? `보정 중 — ${activity.label || "보정"}` : "";
+  const owner = activity?.owner;
+  chip.title = active ? `보정 주체: ${owner?.label || owner?.role || owner?.id || "알 수 없음"}` : "";
 }
 
 function renderSafety(safety) {
@@ -156,10 +170,14 @@ function renderCapabilities(capabilities) {
 
 function updateModeButtons() {
   const navigationAvailable = session.capabilities?.navigation?.goal_navigation === true;
-  document.querySelectorAll("[data-mode]").forEach((button) => {
+  document.querySelectorAll("ui-button[data-mode]").forEach((button) => {
     const unsupported = button.dataset.mode === "NAVIGATION" && !navigationAvailable;
     button.disabled = session.modeChangePending || unsupported;
-    button.title = unsupported ? "이 프로필에서는 내비게이션이 비활성화되어 있습니다." : "";
+    // D-359 §5.3 — title은 터치에서 보이지 않는다. 사유는 비활성과 같은 조건에서 나온다.
+    const reason = unsupported ? "이 로봇에서는 내비게이션을 쓸 수 없습니다"
+      : session.modeChangePending ? "모드 변경을 처리하는 중입니다" : "";
+    if (reason) button.setAttribute("reason", reason);
+    else button.removeAttribute("reason");
   });
 }
 
@@ -200,17 +218,15 @@ const statusSummary = createStatusSummary({
 });
 
 function updateAdminControls() {
-  setEnabled("limits-save", isAdmin());
-  setEnabled("dock-register", isAdmin());
-  setEnabled("identity-save", isAdmin());
-  setEnabled("token-add", isAdmin());
-  setEnabled("hardware-refresh", isAdmin());
+  setEnabled("limits-save", isAdmin(), "관리자 권한 필요");
+  setEnabled("dock-register", isAdmin(), "관리자 권한 필요");
+  setEnabled("identity-save", isAdmin(), "관리자 권한 필요");
+  setEnabled("token-add", isAdmin(), "관리자 권한 필요");
+  setEnabled("hardware-refresh", isAdmin(), "관리자 권한 필요");
   const networkCard = document.getElementById("network-card");
   const networkOn = isAdmin() && networkCard?.dataset.available === "true";
-  setEnabled("network-apply", networkOn);
-  setEnabled("network-ap-off", networkOn);
-  setEnabled("network-ap-on", networkOn);
-  setEnabled("network-connect", networkOn);
+  const networkReason = !isAdmin() ? "관리자 권한 필요" : "Host Agent 없음";
+  for (const id of ["network-apply", "network-ap-off", "network-ap-on", "network-connect"]) setEnabled(id, networkOn, networkReason);
 }
 
 // D-193 5: the server says who this browser is (role, label, source, expiry) on a
@@ -450,17 +466,17 @@ elements["open-auth"].addEventListener("click", () => elements["auth-drawer"].cl
 elements["close-auth"].addEventListener("click", () => elements["auth-drawer"].classList.remove("open"));
 elements["refresh-events"].addEventListener("click", () => api("/api/v1/events?limit=10").then(renderEvents).catch(showConnectionError));
 
-document.querySelectorAll("[data-mode]").forEach((button) => {
+document.querySelectorAll("ui-button[data-mode]").forEach((button) => {
   button.addEventListener("click", async () => {
     if (button.disabled || session.modeChangePending) return;
     const requestedMode = button.dataset.mode;
     stopTeleop("모드 변경 전에 정지했습니다.");
-    if (!window.confirm(`${requestedMode} 모드로 변경할까요? 주변 안전을 확인하세요.`)) return;
+    if (!window.confirm(`${enumLabel(MODE_LABEL, requestedMode)} 모드로 변경할까요? 주변 안전을 확인하세요.`)) return;
     session.modeChangePending = true;
     updateModeButtons();
     try {
       await api("/api/v1/mode", { method: "POST", body: JSON.stringify({ mode: requestedMode }) });
-      setText("action-message", `${requestedMode} 모드 요청을 전송했습니다.`);
+      setText("action-message", `${enumLabel(MODE_LABEL, requestedMode)} 모드 요청을 전송했습니다.`);
       await refreshRobotState();
     } catch (error) {
       setText("action-message", `모드 변경 실패: ${error.message}`);
@@ -584,7 +600,7 @@ elements["hardware-refresh"]?.addEventListener("click", async () => {
   } catch (error) {
     setText("hardware-note", `장치 점검 요청 실패: ${error.message}`);
   } finally {
-    setEnabled("hardware-refresh", isAdmin());
+    setEnabled("hardware-refresh", isAdmin(), "관리자 권한 필요");
   }
 });
 
@@ -647,7 +663,7 @@ async function applyNetworkMode(mode, prompt) {
       setText("network-note", payload.detail || "Host Agent가 없어 적용하지 못했습니다.");
       return;
     }
-    setText("network-note", payload.ok ? `${mode} 를 적용했습니다.` : (payload.detail || "적용이 거부되었습니다."));
+    setText("network-note", payload.ok ? `${enumLabel(NETWORK_MODE_LABEL, mode)} 모드를 적용했습니다.` : (payload.detail || "적용이 거부되었습니다."));
     const status = await api("/api/v1/host/network");
     renderHostNetwork(status);
   } catch (error) {
