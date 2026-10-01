@@ -13,6 +13,7 @@ from core_common.capability import Capability
 from core_features.calibration import CalibrationSessionManager
 from core_features.command.arbitration import Mode, ModeMachine, SourceRegistry
 from core_features.command.manager import CommandManager
+from core_features.line_follow.clearance import self_mask_from_config
 from core.teleop_config import teleop_timeout_ms
 from core_features.docking.agent import DockAgent
 from core_features.docking.database import DockDatabase, DockError, DockInstance, DockType
@@ -168,6 +169,7 @@ def _line_follow_config(raw: dict[str, Any]) -> LineFollowConfig:
             "obstacle_corridor_half_width_m", defaults.obstacle_corridor_half_width_m)),
         obstacle_path_horizon_m=float(raw.get(
             "obstacle_path_horizon_m", defaults.obstacle_path_horizon_m)),
+        lidar_self_mask=self_mask_from_config(raw.get("lidar_self_mask")),
         obstacle_release_s=float(raw.get("obstacle_release_s", defaults.obstacle_release_s)),
         obstacle_escalate_s=float(raw.get("obstacle_escalate_s", defaults.obstacle_escalate_s)),
         max_angular_follows_manual=raw.get(
