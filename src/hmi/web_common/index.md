@@ -44,8 +44,8 @@
 
 ## 최근 기록
 
+- 2026-10-01 · uncommitted · test(web_common): D-395 G1 단일 언어 계약 시험
 - 2026-10-01 · uncommitted · D-390 Pilot simulation surface registry
 - 2026-10-01 · uncommitted · fix(web_common): D-359 리뷰 P2-5 — 테마 선택지 단일 출처, 고정 표면은 사유를 적는다
 - 2026-10-01 · uncommitted · test(web_common): D-359 리뷰 P2-4 — 사유 없는 비활성 목록은 경로와 자리 수로 묶는다
 - 2026-10-01 · uncommitted · fix(web): D-359 리뷰 P1-2/P2-3 — 비모달 열기를 openLiveDialog로 공유
-- 2026-10-01 · uncommitted · fix(web): D-359 리뷰 P1-1/P2-2 — 한글 없는 열거값 표시도 린트가 본다
