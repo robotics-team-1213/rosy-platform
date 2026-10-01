@@ -32,8 +32,8 @@
 
 ## 최근 기록
 
+- 2026-10-01 · uncommitted · feat(emotion): 부팅 카드 Rosy 정체성 점
 - 2026-10-01 · 15770a9c · feat(face): 정보 카드 MODE 행 CALIBRATING
 - 2026-10-01 · uncommitted · feat(emotion): D-394 DisplayProfile·주행 카드·kind 디스패치
 - 2026-10-01 · uncommitted · feat(emotion): D-385 부팅 카드 숨쉼
 - 2026-09-30 · uncommitted · docs(harness): ROS-SIM blocker를 실제 조건으로 정정
-- 2026-09-29 · uncommitted · fix(face): ASSIST REQ renders as a warn-filled chip (P4 round)
