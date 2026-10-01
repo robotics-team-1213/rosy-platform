@@ -20,8 +20,9 @@ Rules kept here, not in the node:
   and on every change.
 - Every decision gets exactly one result: at once when rejected, otherwise
   when its 3 s check passes or ends.
-- The Nav2 goal cancel and replan on LOCALIZED is CORE's (it owns the goal):
-  the state message of that transition carries `"cancel_nav_goal": true`.
+- The Nav2 goal cancel and replan on LOCALIZED is CORE's: it owns the goal and
+  acts on the LOCALIZED state and the accepted result. The state payload stays
+  `{status, pose, stamp}` (contract §1).
 """
 from __future__ import annotations
 
@@ -77,7 +78,6 @@ class LocAssist:
         self._report, self._reported_s = None, -math.inf
         self._state_s, self._state_key = -math.inf, None
         self._pending = None                # request id whose 3 s check is running
-        self._cancel_nav = False
 
     # --- inputs -------------------------------------------------------------
     def on_amcl_pose(self, pose):
@@ -182,8 +182,6 @@ class LocAssist:
     # --- outputs ------------------------------------------------------------
     def _after(self, step, now_s):
         out = []
-        if 'cancel_nav_goal' in step.actions:
-            self._cancel_nav = True
         state = self.machine.state
         if self._pending is not None and state is LocState.LOCALIZED:
             out.append(self._result(self._pending, True, None))
@@ -198,7 +196,7 @@ class LocAssist:
     def _key(self):
         m = self.machine
         return (m.state.value, m.reason, m.request_id if m.state is LocState.CANDIDATES else None,
-                self._cancel_nav, self.pose is None)
+                self.pose is None)
 
     def _state_if_changed(self, now_s):
         return [self._state(now_s)] if self._key() != self._state_key else []
@@ -213,12 +211,7 @@ class LocAssist:
         payload = {'status': status.model_dump(mode='json'),
                    'pose': None if self.pose is None else dict(zip(('x', 'y', 'yaw'), self.pose)),
                    'stamp': float(now_s)}
-        if self._cancel_nav:
-            payload['cancel_nav_goal'] = True
         self._state_key, self._state_s = self._key(), now_s
-        if self._cancel_nav:                # once: the next state no longer asks
-            self._cancel_nav = False
-            self._state_key = self._key()
         return 'state', payload
 
     def _candidates(self, now_s):

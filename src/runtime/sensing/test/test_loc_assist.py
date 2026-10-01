@@ -143,8 +143,8 @@ def test_decision_inject_three_seconds_then_localized():
     result = one(done, 'result')
     assert result == {'request_id': 'r-1', 'accepted': True, 'reason': None, 'state': 'LOCALIZED'}
     state = one(done, 'state')
-    assert state['status']['state'] == 'LOCALIZED' and state['cancel_nav_goal'] is True
-    assert 'cancel_nav_goal' not in one(a.tick(6.2), 'state')
+    assert state['status']['state'] == 'LOCALIZED'
+    assert set(state) == {'status', 'pose', 'stamp'}   # contract §1; CORE cancels Nav2 itself
     assert kinds(a.tick(8.), 'candidates') == []
 
 
