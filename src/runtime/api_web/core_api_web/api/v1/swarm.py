@@ -8,7 +8,7 @@ from core_api_web.api.v1.common import (
     enter_navigation_mode,
     operator,
     require_calibration_owner,
-    require_localized,
+    localized_start,
     viewer,
 )
 from core_api_web.api.deps import AuthContext, get_services, CoreServicesLike
@@ -38,7 +38,6 @@ def swarm_follow(body: SwarmFollowParams, auth: AuthContext = Depends(operator),
                  svc: CoreServicesLike = Depends(get_services)):
     """추종 시작. 목표는 NAVIGATION 모드에서만 바퀴에 닿는다 (D-2, SWM-001)."""
     require_calibration_owner(svc, auth, "swarm follow")
-    require_localized(svc)  # D-395 §2: autonomy only from LOCALIZED
     # 아무것도 바꾸기 전에 두 문을 다 통과시킨다. follow() 는 상태를 바꾸고
     # 이벤트를 내므로, 그 뒤에 모드 전이가 409 로 막히면 운영자는 거절을 받는데
     # 로봇은 참조 프레임 하나에 달려나갈 준비가 된 채로 남는다.
@@ -53,13 +52,14 @@ def swarm_follow(body: SwarmFollowParams, auth: AuthContext = Depends(operator),
         raise ApiError("MODE_CONFLICT", 409,
                        f"cannot follow from {svc.modes.mode.value}")
 
-    status = svc.swarm.follow(body, source=f"api:{auth.role}")
-    try:
-        enter_navigation_mode(svc, auth)
-    except ApiError:
-        # 여기까지 올 일은 없어야 하지만, 왔다면 무장된 채로 두지 않는다.
-        svc.swarm.cancel(source="api", reason="mode_conflict")
-        raise
+    with localized_start(svc):  # D-395 §2: autonomy only from LOCALIZED
+        status = svc.swarm.follow(body, source=f"api:{auth.role}")
+        try:
+            enter_navigation_mode(svc, auth)
+        except ApiError:
+            # 여기까지 올 일은 없어야 하지만, 왔다면 무장된 채로 두지 않는다.
+            svc.swarm.cancel(source="api", reason="mode_conflict")
+            raise
     return {**svc.swarm.state_payload(), "role": status.role.value}
 
 

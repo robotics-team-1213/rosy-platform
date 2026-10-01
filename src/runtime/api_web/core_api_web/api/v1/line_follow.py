@@ -13,7 +13,7 @@ from core_api_web.api.v1.common import (
     enter_navigation_mode,
     operator,
     require_calibration_owner,
-    require_localized,
+    localized_start,
     viewer,
 )
 from core_common.domain.tasks import TaskKind
@@ -100,11 +100,11 @@ def set_line_follow_mode(body: LineFollowModeRequest,
 
     # D-344 §7: 차선 추종은 Nav2 가 아니라 구동을 요구한다. 증거 검사는 LineFollowManager 가 한다.
     TaskKind.MOVE.require(svc.capability)
-    require_localized(svc)
-    svc.nav.cancel(source=f"line_follow:{auth.role}")
-    svc.command.clear_navigation()
-    enter_navigation_mode(svc, auth)
-    status = svc.line_follow.set_mode(selected, hold_s=body.hold_s)
+    with localized_start(svc):
+        svc.nav.cancel(source=f"line_follow:{auth.role}")
+        svc.command.clear_navigation()
+        enter_navigation_mode(svc, auth)
+        status = svc.line_follow.set_mode(selected, hold_s=body.hold_s)
     svc.state.set_line_follow(status)
     return _status(svc)
 

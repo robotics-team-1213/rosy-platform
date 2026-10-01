@@ -450,3 +450,54 @@ def test_a_pre_d395_robot_is_unaffected(core):
     for path in ("/api/v1/docking/dock", "/api/v1/swarm/follow"):
         response = client.post(path, headers=OPERATOR, json={})
         assert response.status_code != 409 or response.json()["error"]["code"] != "NOT_LOCALIZED"
+
+
+# --- review item 4: an odom pose is not a trusted LOCALIZED pose --------------------
+
+
+def test_localized_in_the_odom_frame_is_refused(core):
+    client, services = core
+    _ready_for_goal(services)
+    services.localization.on_state(_state("LOCALIZED", frame="map"))
+    services.localization.tick(odom_owns_pose=True)
+    refused = client.post("/api/v1/navigation/goal", headers=OPERATOR,
+                          json={"x": 1.0, "y": 2.0, "yaw": 0.0})
+    assert refused.status_code == 409
+    assert refused.json()["error"]["code"] == "NOT_LOCALIZED"
+    assert refused.json()["error"]["detail"]["pose_frame"] == "odom"
+    assert refused.json()["error"]["detail"]["state"] == "LOCALIZED"
+
+
+# --- review item 2: the halt and a start are ordered, not interleaved -------------
+
+
+def test_a_halt_arriving_between_the_check_and_the_start_cancels_the_start(core):
+    """The state drops to SUSPECT after `require_localized` passed but before the
+    goal is sent. The halt must wait for the start and then fold it, never run
+    first and let the goal through afterwards."""
+    import threading
+
+    client, services = core
+    _ready_for_goal(services)
+    services.localization.on_state(_state("LOCALIZED"))
+    original = services.nav.resolve_goal
+    halt_thread: dict = {}
+
+    def resolve_then_lose_localization(**kwargs):
+        worker = threading.Thread(
+            target=services.localization.on_state, args=(_state("SUSPECT"),), daemon=True)
+        worker.start()
+        worker.join(timeout=0.3)
+        halt_thread["finished_before_start"] = not worker.is_alive()
+        halt_thread["worker"] = worker
+        return original(**kwargs)
+
+    services.nav.resolve_goal = resolve_then_lose_localization
+    response = client.post("/api/v1/navigation/goal", headers=OPERATOR,
+                           json={"x": 1.0, "y": 2.0, "yaw": 0.0})
+    halt_thread["worker"].join(timeout=5.0)
+
+    assert response.status_code == 200
+    assert halt_thread["finished_before_start"] is False   # the halt waited for the start
+    assert services.nav.nav_state.value == "CANCELED"       # and then folded it
+    assert services.modes.mode.value == "IDLE"
