@@ -34,9 +34,6 @@ REQUIRED = ("site_name", "tls_host", "port", "ca_pem", "role", "credential_id", 
 _EXPIRES_AT = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?Z$")
 _PEM_BLOCK = re.compile(
     r"-----BEGIN CERTIFICATE-----(?P<body>[A-Za-z0-9+/=\s]*?)-----END CERTIFICATE-----")
-_DNS_NAME = re.compile(
-    r"^(?=.{1,253}$)[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?"
-    r"(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*$")
 # DER encoding of OID 2.5.29.19 (id-ce-basicConstraints).
 _BASIC_CONSTRAINTS_OID = bytes.fromhex("0603551d13")
 
@@ -88,7 +85,7 @@ def validate(record: object) -> str | None:
 
     manual_host = record.get("manual_host")
     if manual_host is not None and not (
-            isinstance(manual_host, str) and (_is_ip(manual_host) or _DNS_NAME.match(manual_host))):
+            isinstance(manual_host, str) and _is_ip(manual_host)):   # IP literal only (D-391 1)
         return "bad_manual_host"
     # Unknown top-level fields are ignored on purpose (forward compatible).
     return None

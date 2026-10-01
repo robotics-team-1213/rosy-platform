@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "doc": "D-391 1 site-link record vectors. Machine source for every stored site connection (core_common site_link, Rosy Cam settings store, FleetAgent config loader). A record is one JSON object with site_name, tls_host, port, ca_pem, role, credential_id, expires_at and exactly one of credential (the secret itself) or credential_ref (where the client keeps it). No IP is stored as identity: tls_host is an mDNS .local host name, never an IP literal, and is the TLS SNI and host-name check. manual_host (optional; IP or host name; null means absent) is the D-391 manual fallback used only when mDNS finds nothing. ca_pem holds one or more PEM CERTIFICATE blocks and every block must be a CA (basicConstraints cA=TRUE); a leaf alone or a leaf in the bundle is leaf_not_ca. port is an integer 1-65535 (bool and string are bad_port). role is a device_kind client role (fleet is a server, not a client role). expires_at is ISO-8601 UTC with a literal Z and optional fractional seconds; offsets are rejected. Unknown top-level fields are accepted and ignored (forward compatible, same rule as unknown TXT keys). Each invalid case has exactly one fault and expects that reason from `reasons`. Certificate bodies are wrapped at 44 characters so no base64 run reaches the repository secret scan's 50-character high-entropy threshold; PEM parsers ignore line length. The certificates are public fixture material; their private keys were discarded at authoring time.",
+  "doc": "D-391 1 site-link record vectors. Machine source for every stored site connection (core_common site_link, Rosy Cam settings store, FleetAgent config loader). A record is one JSON object with site_name, tls_host, port, ca_pem, role, credential_id, expires_at and exactly one of credential (the secret itself) or credential_ref (where the client keeps it). No IP is stored as identity: tls_host is an mDNS .local host name, never an IP literal, and is the TLS SNI and host-name check. manual_host (optional; IP or host name; null means absent) is the D-391 manual fallback used only when mDNS finds nothing. ca_pem holds one or more PEM CERTIFICATE blocks and every block must be a CA (basicConstraints cA=TRUE); a leaf alone or a leaf in the bundle is leaf_not_ca. port is an integer 1-65535 (bool and string are bad_port). role is a device_kind client role (fleet is a server, not a client role). expires_at is ISO-8601 UTC with a literal Z and optional fractional seconds; offsets are rejected. Unknown top-level fields are accepted and ignored (forward compatible, same rule as unknown TXT keys). Each invalid case has exactly one fault and expects that reason from `reasons`. Certificate bodies are wrapped at 44 characters so no base64 run reaches the repository secret scan's 50-character high-entropy threshold; PEM parsers ignore line length. The certificates are public fixture material; their private keys were discarded at authoring time. manual_host is an IPv4 or IPv6 literal only (the IP from a rosyov:// link, dialled without DNS when mDNS finds nothing; D-391 1); a host name or ip:port is bad_manual_host.",
   "reasons": [
     "missing_field",
     "bad_value",
@@ -70,7 +70,7 @@
       }
     },
     {
-      "id": "manual_host_name_allowed",
+      "id": "manual_host_name_rejected",
       "record": {
         "site_name": "Rosy Lab",
         "tls_host": "fixture-site.local",
@@ -83,7 +83,43 @@
         "manual_host": "fixture-site.local"
       },
       "expect": {
+        "valid": false,
+        "reason": "bad_manual_host"
+      }
+    },
+    {
+      "id": "manual_host_ipv6_allowed",
+      "record": {
+        "site_name": "Rosy Lab",
+        "tls_host": "fixture-site.local",
+        "port": 8443,
+        "ca_pem": "-----BEGIN CERTIFICATE-----\nMIIBQjCB6aADAgECAgEBMAoGCCqGSM49BAMCMB8xHTAb\nBgNVBAMMFFJvc3kgZml4dHVyZSBzaXRlIENBMB4XDTI2\nMTAwMTAwMDAwMFoXDTQ2MTAwMTAwMDAwMFowHzEdMBsG\nA1UEAwwUUm9zeSBmaXh0dXJlIHNpdGUgQ0EwWTATBgcq\nhkjOPQIBBggqhkjOPQMBBwNCAARXItk85x1uKrxNWhpq\nGHQjQfgC+Jg04HWOv/jlORmuXDH0Py4BymIG3ah74k/Z\nKoaOaCfjdr7dxB7NDBgS6K8coxYwFDASBgNVHRMBAf8E\nCDAGAQH/AgEAMAoGCCqGSM49BAMCA0gAMEUCIQC8lNvj\nrSYy+JDnJVLQO3R3nRWA6xxyjVTp2R3MwYsXHAIgBo+3\n27dhrJk+P2ajGR6svOWJVpmVNLilScAchDBPW8I=\n-----END CERTIFICATE-----\n",
+        "role": "overhead-camera",
+        "credential_id": "cam-7f3a",
+        "expires_at": "2027-03-30T00:00:00Z",
+        "credential_ref": "keystore:rosy-site/cam-7f3a",
+        "manual_host": "fd00::20"
+      },
+      "expect": {
         "valid": true
+      }
+    },
+    {
+      "id": "manual_host_ip_port_rejected",
+      "record": {
+        "site_name": "Rosy Lab",
+        "tls_host": "fixture-site.local",
+        "port": 8443,
+        "ca_pem": "-----BEGIN CERTIFICATE-----\nMIIBQjCB6aADAgECAgEBMAoGCCqGSM49BAMCMB8xHTAb\nBgNVBAMMFFJvc3kgZml4dHVyZSBzaXRlIENBMB4XDTI2\nMTAwMTAwMDAwMFoXDTQ2MTAwMTAwMDAwMFowHzEdMBsG\nA1UEAwwUUm9zeSBmaXh0dXJlIHNpdGUgQ0EwWTATBgcq\nhkjOPQIBBggqhkjOPQMBBwNCAARXItk85x1uKrxNWhpq\nGHQjQfgC+Jg04HWOv/jlORmuXDH0Py4BymIG3ah74k/Z\nKoaOaCfjdr7dxB7NDBgS6K8coxYwFDASBgNVHRMBAf8E\nCDAGAQH/AgEAMAoGCCqGSM49BAMCA0gAMEUCIQC8lNvj\nrSYy+JDnJVLQO3R3nRWA6xxyjVTp2R3MwYsXHAIgBo+3\n27dhrJk+P2ajGR6svOWJVpmVNLilScAchDBPW8I=\n-----END CERTIFICATE-----\n",
+        "role": "overhead-camera",
+        "credential_id": "cam-7f3a",
+        "expires_at": "2027-03-30T00:00:00Z",
+        "credential_ref": "keystore:rosy-site/cam-7f3a",
+        "manual_host": "192.168.1.20:8443"
+      },
+      "expect": {
+        "valid": false,
+        "reason": "bad_manual_host"
       }
     },
     {

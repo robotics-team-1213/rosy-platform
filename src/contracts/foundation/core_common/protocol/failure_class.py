@@ -71,7 +71,9 @@ def classify(*, ws_close: int | None = None, reason: str | None = None,
 
     if ws_close is not None:
         if ws_close == 4400:
-            return "busy" if (reason or "") in CLOSE_4400_RETRY_REASONS else "protocol_mismatch"
+            # Compared after trim + casefold so every client reads a reason the same way (D-370 D3).
+            normalized = (reason or "").strip().casefold()
+            return "busy" if normalized in CLOSE_4400_RETRY_REASONS else "protocol_mismatch"
         return WS_CLOSE.get(ws_close, WS_FALLBACK)
     if http_status is not None:
         if http_status in HTTP_STATUS:
