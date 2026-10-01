@@ -122,6 +122,8 @@ export function createFieldMap(options) {
   // 구분한다(로봇 삼각 vs 십자+원) — Law 1. 확정은 클릭과 같은 confirm·API를 탄다.
   let cross = null;
   let targetReadoutTimer = null;
+  let goal = null;  // D-396: 마지막으로 보낸 내비게이션 목표 (world 좌표)
+  window.addEventListener("rosy:goal-clear", () => { goal = null; paint(); });
   const CROSS_STEP = 12;
   if (canvas && !canvas.hasAttribute("tabindex")) canvas.tabIndex = 0;
   const state = { occupancy: null, path: [], costmap: null, raster: null, lastNav: null, mapState: "loading" };
@@ -235,6 +237,17 @@ export function createFieldMap(options) {
       ctx.moveTo(cross.x, cross.y + 5);
       ctx.lineTo(cross.x, cross.y + 14);
       ctx.stroke();
+      ctx.restore();
+    }
+    // D-396: 목표 마커 — 경로 색 다이아몬드. 로봇 삼각형(pose)과 구분된다.
+    if (goal && state.occupancy) {
+      const goalPoint = frame.worldToCanvas(goal.x, goal.y, canvas.width, canvas.height);
+      ctx.save();
+      ctx.translate(goalPoint.x, goalPoint.y);
+      ctx.rotate(Math.PI / 4);
+      ctx.strokeStyle = cssColor("route");
+      ctx.lineWidth = 2;
+      ctx.strokeRect(-5, -5, 10, 10);
       ctx.restore();
     }
     const pose = getPose?.();
@@ -372,6 +385,9 @@ export function createFieldMap(options) {
       setAction?.(`${label} ${world.x.toFixed(2)}, ${world.y.toFixed(2)} 요청을 CORE가 받았습니다. 실제 적용 상태는 로봇 readback으로 확인하세요.`);
       if (!locating) {
         window.dispatchEvent(new CustomEvent("rosy:goal", { detail: { x: world.x, y: world.y } }));
+        // D-396: 목표를 지도에도 기억한다 — paint() 에서 마커로 그린다.
+        goal = { x: world.x, y: world.y };
+        paint();
       }
     } catch (error) {
       setAction?.(`${label} 전송 실패: ${error.message}`);

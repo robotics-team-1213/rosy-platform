@@ -723,6 +723,17 @@ class ActionStore:
                         "result_observed_at": result_observed_at, "result": dict(result)},
                 created_at=now,
             )
+            if outcome == "CANCELED" and action["state"] != "HOLD":
+                reason = "ROS_PHASE_CANCELED_ACTION_INCOMPLETE"
+                connection.execute(
+                    "UPDATE omx_actions SET state='HOLD', reason=?, updated_at=? WHERE action_id=?",
+                    (reason, now, action_id),
+                )
+                self._append_event(
+                    connection, action_id=action_id, attempt_id=attempt_id, state="HOLD",
+                    event_type="ACTION_HELD", actor_id="system", detail={"reason": reason},
+                    created_at=now,
+                )
             updated = connection.execute(
                 "SELECT * FROM omx_action_phases WHERE action_id=? AND attempt_id=? AND phase_id=?",
                 (action_id, attempt_id, phase_id),

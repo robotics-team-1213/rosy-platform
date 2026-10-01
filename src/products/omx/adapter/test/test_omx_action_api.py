@@ -329,7 +329,10 @@ def test_phase_cancel_ack_requires_terminal_goal_result_before_next_phase(tmp_pa
         result={"status": "canceled"}, peer_uid=1001,
     )
     assert terminal["state"] == "CANCELED"
-    assert store.get_action(grant.action_id)["state"] == "ACCEPTED"
+    action = store.get_action(grant.action_id)
+    assert action["state"] == "HOLD"
+    assert action["reason"] == "ROS_PHASE_CANCELED_ACTION_INCOMPLETE"
+    assert store.history(grant.action_id)[-1]["event_type"] == "ACTION_HELD"
 
 
 def test_action_cancel_routes_active_ros_phase_and_never_uses_broad_driver_cancel(tmp_path):

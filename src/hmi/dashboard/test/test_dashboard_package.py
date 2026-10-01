@@ -102,6 +102,22 @@ def test_event_severity_is_colored():
     assert '[data-severity="warn"]' in css
 
 
+def test_the_map_draws_a_goal_marker():
+    """D-396: 지도에서 보낸 목표를 다이아몬드 마커로 그린다."""
+    map_js = (ROOT / "map.js").read_text(encoding="utf-8")
+    assert "goal" in map_js
+    assert "rosy:goal-clear" in map_js  # 내비게이션 종료 시 지운다
+    assert "strokeRect" in map_js  # 다이아몬드 모양
+    assert "cssColor(\"route\")" in map_js  # 경로 색 토큰
+
+
+def test_skeleton_pulse_replaces_the_dash():
+    """D-396: 값이 없으면 '--' 대신 스켈레톤 펄스."""
+    js = (ROOT / "app.js").read_text(encoding="utf-8")
+    assert "data-pending" in js
+    assert "skeleton" in (ROOT / "console-detail.css").read_text(encoding="utf-8")
+
+
 def test_the_state_render_feeds_swarm_to_the_formation_cell():
     shell = (ROOT / "app.js").read_text(encoding="utf-8")
     telemetry = (ROOT / "telemetry.js").read_text(encoding="utf-8")

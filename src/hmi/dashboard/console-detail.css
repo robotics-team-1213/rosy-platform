@@ -76,6 +76,18 @@
   letter-spacing: var(--track-label);
 }
 
+/* D-396: 스켈레톤 로딩 — 데이터 도착 전 값 자리는 조용히 숨쉰다 */
+@keyframes skeleton-pulse {
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 0.7; }
+}
+.telemetry-grid strong[data-pending],
+.navigation-line b[data-pending],
+.hero-state strong[data-pending] {
+  color: var(--muted);
+  animation: skeleton-pulse 1.6s ease-in-out infinite;
+}
+
 /* D-396: 이벤트 심각도 — 위험은 채움, 주의는 색, info 는 뮤트 */
 .event-severity[data-severity="crit"] {
   background: var(--status-crit);
