@@ -144,7 +144,7 @@ SIZE_VERDICTS = {
         "2026-10-01 at 887 after idempotent per-attempt phase projection joined the Mission event transaction",
     ),
     "contracts/foundation/core_common/protocol/schemas.py": (
-        1_137,
+        1_153,
         "accept: the D-18 single contract source — every envelope, event and capability model in one "
         "importable place; per-domain schema files would fork the version pin that "
         "test_protocol_version_alignment guards. Re-judged 2026-09-30 at 1000 lines after the bounded "
@@ -157,7 +157,9 @@ SIZE_VERDICTS = {
         " Re-judged 2026-10-01 at 1119 lines: D-400 SafetyPolicyStatus joins the state contract; "
         "the single contract source still outweighs a split (same verdict)."
         " Re-judged 2026-10-01 at 1137 lines: the typed shadow sub-blocks (ShadowRecordRef, "
-        "ShadowEvalStats) joined SafetyPolicyStatus; same verdict.",
+        "ShadowEvalStats) joined SafetyPolicyStatus; same verdict."
+        " Re-judged 2026-10-02 at 1153 lines: D-407 LineStuckStatus (the typed stuck block on "
+        "LineFollowStatus, v1.72) joined; the logic stays in line_follow/stuck_recovery.py; same verdict.",
     ),
     "site/fleet/fleet/server/task_store.py": (
         1060,
