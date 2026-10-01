@@ -7,6 +7,7 @@ with openssl (the same tool signing.py shells out to).
 from __future__ import annotations
 
 import datetime as dt
+import hashlib
 import importlib.util
 import io
 import json
@@ -121,21 +122,29 @@ class FakeGh:
         return json.loads(self.releases[tag]["assets"]["rollout.json"])
 
 
-def status(phase="idle", current="2026.10.01-021", candidate=None, last=None) -> dict:
-    return {"schema": 1, "updated_at": "2026-10-01T15:00:00Z", "hostname": CANARY,
+def status(phase="idle", current="2026.10.01-021", candidate=None, last=None, hostname=CANARY) -> dict:
+    return {"schema": 1, "updated_at": "2026-10-01T15:00:00Z", "hostname": hostname,
             "current_release": current, "candidate": candidate, "phase": phase, "reason": "",
             "last_result": last}
 
 
-COMMITTED = status("committed", RELEASE_ID, None,
-                   {"release_id": RELEASE_ID, "outcome": "committed", "at": "Z", "detail": "healthy"})
+def result(outcome, release_id=RELEASE_ID, at="2026-10-01T15:00:30Z", detail="healthy") -> dict:
+    return {"release_id": release_id, "outcome": outcome, "at": at, "detail": detail}
+
+
+COMMITTED = status("committed", RELEASE_ID, None, result("committed"))
+# T2's rosy_auto_update.py status --json before its first run (no status.json yet).
+NOT_RUN_YET = {"phase": None, "reason": "the updater has not run yet"}
 
 
 class FakeSsh:
-    def __init__(self, statuses=(COMMITTED,), hostname=CANARY, others=None):
+    """The first canary status poll is the publisher's baseline, taken before the release exists."""
+
+    def __init__(self, statuses=(status(), COMMITTED), hostname=CANARY, others=None, on_poll=None):
         self.statuses = list(statuses)
         self.hostname = hostname
         self.others = others or {}
+        self.on_poll = on_poll
         self.calls: list[list[str]] = []
 
     def __call__(self, argv):
@@ -147,6 +156,8 @@ class FakeSsh:
         assert command == "sudo -n python3 /opt/rosy/native-runtime/rosy_auto_update.py status --json"
         if host != CANARY_IP:
             return 0, json.dumps(self.others.get(host, status())), ""
+        if self.on_poll is not None:
+            self.on_poll(len(self.status_polls()))
         item = self.statuses.pop(0) if len(self.statuses) > 1 else self.statuses[0]
         if item is None:
             return 255, "", "ssh: connect to host port 22: Connection timed out"
@@ -173,9 +184,16 @@ def keys(tmp_path, monkeypatch):
     return {"private": private, "public": public}
 
 
-def _tarball(path: Path, release_id=RELEASE_ID, revision=REVISION) -> Path:
+def _tarball(path: Path, private: Path, release_id=RELEASE_ID, revision=REVISION, tamper=False) -> Path:
+    """A signed release tarball shaped like build_payload_release.py pack: no top-level directory."""
     files = {"manifest.json": json.dumps({"release_id": release_id}) + "\n",
-             "source-revision.txt": revision + "\n", "SHA256SUMS": "", "SHA256SUMS.sig": ""}
+             "source-revision.txt": revision + "\n", "install/.rosy-release": release_id + "\n"}
+    sums = "".join(f"{hashlib.sha256(text.encode()).hexdigest()}  {name}\n"
+                   for name, text in sorted(files.items())).encode()
+    files["SHA256SUMS"] = sums.decode()
+    files["SHA256SUMS.sig"] = signing.sign_checksums(sums, private)
+    if tamper:
+        files["manifest.json"] = json.dumps({"release_id": release_id, "x": 1}) + "\n"
     path.parent.mkdir(parents=True, exist_ok=True)
     with tarfile.open(path, "w:gz") as tar:
         for name, text in files.items():
@@ -187,8 +205,8 @@ def _tarball(path: Path, release_id=RELEASE_ID, revision=REVISION) -> Path:
 
 
 @pytest.fixture
-def tarball(tmp_path):
-    return _tarball(tmp_path / "out" / f"{RELEASE_ID}.tar.gz")
+def tarball(tmp_path, keys):
+    return _tarball(tmp_path / "out" / f"{RELEASE_ID}.tar.gz", keys["private"])
 
 
 def _run(args, keys, tmp_path, gh, ssh, clock=None):
@@ -328,8 +346,8 @@ def test_a_canary_hostname_outside_the_pattern_is_refused(tarball, keys, tmp_pat
 
 def test_the_tarball_must_carry_a_matching_manifest_and_full_revision(tmp_path, keys):
     gh, ssh = FakeGh(), FakeSsh()
-    other = _tarball(tmp_path / "a" / f"{RELEASE_ID}.tar.gz", release_id="2026.10.01-099")
-    short = _tarball(tmp_path / "b" / f"{RELEASE_ID}.tar.gz", revision="abc")
+    other = _tarball(tmp_path / "a" / f"{RELEASE_ID}.tar.gz", keys["private"], release_id="2026.10.01-099")
+    short = _tarball(tmp_path / "b" / f"{RELEASE_ID}.tar.gz", keys["private"], revision="abc")
 
     assert _publish(other, keys, tmp_path, gh, ssh) != 0
     assert _publish(short, keys, tmp_path, gh, ssh) != 0
@@ -373,7 +391,7 @@ def test_canary_commit_sets_canary_ok_and_reuploads(tarball, keys, tmp_path, cap
     flags, files = FakeGh._parse(upload[4:])
     assert upload[3] == TAG and flags["--clobber"] == [True]
     assert [Path(f).name for f in files] == ["rollout.json", "rollout.json.sig"]
-    assert len(ssh.status_polls()) == 5 and clock.t == 4 * 30
+    assert len(ssh.status_polls()) == 5 and clock.t == 3 * 30  # the first poll is the baseline
     out = capsys.readouterr().out
     for phase in ("staged", "applying", "unreachable", "committed"):
         assert phase in out
@@ -382,8 +400,7 @@ def test_canary_commit_sets_canary_ok_and_reuploads(tarball, keys, tmp_path, cap
 @pytest.mark.parametrize("outcome", ["rolled_back", "refused"])
 def test_canary_rollback_or_refusal_withdraws(tarball, keys, tmp_path, outcome):
     gh = FakeGh()
-    failed = status("rolled_back", "2026.10.01-021", None,
-                    {"release_id": RELEASE_ID, "outcome": outcome, "at": "Z", "detail": "core not ready"})
+    failed = status("rolled_back", "2026.10.01-021", None, result(outcome, detail="core not ready"))
 
     assert _publish(tarball, keys, tmp_path, gh, FakeSsh(statuses=[status(), failed])) != 0
 
@@ -404,19 +421,19 @@ def test_canary_timeout_withdraws(tarball, keys, tmp_path):
     assert final["withdrawn"] is True and final["canary_ok"] is False
     assert "10 min" in final["reason"] and "held" in final["reason"]
     assert 600 <= clock.t <= 630
-    assert len(ssh.status_polls()) == 21
+    assert len(ssh.status_polls()) == 1 + 21  # baseline, then the watch
 
 
 @pytest.mark.parametrize("canary_status", [
     # an older release's commit is not this release's
     status("committed", RELEASE_ID, None,
-           {"release_id": "2026.10.01-021", "outcome": "committed", "at": "Z", "detail": ""}),
+           result("committed", "2026.10.01-021")),
     # this release committed but the robot is not on it any more
     status("idle", "2026.10.01-021", None,
-           {"release_id": RELEASE_ID, "outcome": "committed", "at": "Z", "detail": ""}),
+           result("committed")),
     # an older release rolled back: not a failure of this one
     status("rolled_back", "2026.10.01-021", None,
-           {"release_id": "2026.10.01-020", "outcome": "rolled_back", "at": "Z", "detail": ""}),
+           result("rolled_back", "2026.10.01-020")),
 ])
 def test_only_this_release_decides_the_canary(tarball, keys, tmp_path, canary_status):
     gh = FakeGh()
@@ -539,3 +556,309 @@ def test_withdraw_needs_a_reason(keys, tmp_path):
     with pytest.raises(SystemExit) as raised:
         _run(["--release-id", RELEASE_ID, "--withdraw"], keys, tmp_path, FakeGh(), FakeSsh())
     assert raised.value.code == 2
+
+
+# --- review fixes (H1, M1, M4, M5, L1-L3, L6, L7) ---------------------------------
+
+def _uploads(gh):
+    return [c for c in gh.calls if c[1:3] == ["release", "upload"]]
+
+
+def _rewrite_remote(gh, keys, **changes):
+    rollout = json.loads(gh.releases[TAG]["assets"]["rollout.json"])
+    rollout.update(changes)
+    data = tool.rollout_bytes(rollout)
+    gh.releases[TAG]["assets"].update(
+        {"rollout.json": data, "rollout.json.sig": signing.sign_checksums(data, keys["private"]).encode()})
+
+
+def test_a_watch_never_undoes_a_withdraw_made_meanwhile(tarball, keys, tmp_path, capsys):
+    """H1: someone withdraws by hand while this process watches; the commit that follows must not
+    put canary_ok=true over it."""
+    gh = FakeGh()
+
+    def withdraw_by_hand(poll_number):
+        if poll_number == 2:  # after the baseline and the first watch poll
+            _rewrite_remote(gh, keys, withdrawn=True, reason="withdrawn by hand")
+
+    ssh = FakeSsh(statuses=[status(), status("staged", candidate=RELEASE_ID), COMMITTED], on_poll=withdraw_by_hand)
+
+    assert _publish(tarball, keys, tmp_path, gh, ssh) == 3
+
+    final = _verified(gh, keys)
+    assert final["withdrawn"] is True and final["reason"] == "withdrawn by hand"
+    assert final["canary_ok"] is False
+    assert _uploads(gh) == []
+    assert "withdrawn meanwhile" in capsys.readouterr().out
+
+
+def test_a_watch_that_fails_keeps_a_withdraw_made_meanwhile(tarball, keys, tmp_path):
+    gh = FakeGh()
+
+    def withdraw_by_hand(poll_number):
+        if poll_number == 2:
+            _rewrite_remote(gh, keys, withdrawn=True, reason="withdrawn by hand")
+
+    failed = status("rolled_back", last=result("rolled_back"))
+    ssh = FakeSsh(statuses=[status(), status("staged", candidate=RELEASE_ID), failed], on_poll=withdraw_by_hand)
+
+    assert _publish(tarball, keys, tmp_path, gh, ssh) != 0
+    assert _verified(gh, keys)["reason"] == "withdrawn by hand"
+    assert _uploads(gh) == []
+
+
+def test_a_remote_rollout_that_changed_otherwise_is_not_overwritten(tarball, keys, tmp_path, capsys):
+    gh = FakeGh()
+
+    def change_wave(poll_number):
+        if poll_number == 2:
+            _rewrite_remote(gh, keys, wave_delay_s=900)
+
+    ssh = FakeSsh(statuses=[status(), status("staged", candidate=RELEASE_ID), COMMITTED], on_poll=change_wave)
+
+    assert _publish(tarball, keys, tmp_path, gh, ssh) != 0
+    assert _uploads(gh) == []
+    assert _verified(gh, keys)["wave_delay_s"] == 900
+    assert "changed" in capsys.readouterr().err
+
+
+def test_a_running_publish_holds_a_lock_per_release(tarball, keys, tmp_path, capsys):
+    lock = tarball.parent / f"publish-{RELEASE_ID}" / ".lock"
+    lock.parent.mkdir(parents=True)
+    lock.write_text("4242\n", encoding="ascii")
+    gh = FakeGh()
+
+    assert _publish(tarball, keys, tmp_path, gh, FakeSsh()) != 0
+    assert gh.releases == {}
+    assert ".lock" in capsys.readouterr().err
+    assert lock.read_text(encoding="ascii") == "4242\n"  # someone else's lock is left alone
+
+    for args in (["--canary", CANARY_IP, "--resume"], ["--withdraw", "--reason", "x"]):
+        other = FakeGh()
+        _signed_release(other, keys, tmp_path)
+        code = _run(["--release-id", RELEASE_ID, "--out-dir", str(tarball.parent), *args],
+                    keys, tmp_path, other, FakeSsh())
+        assert code != 0 and _uploads(other) == []
+
+
+def test_the_lock_is_removed_after_a_run(tarball, keys, tmp_path):
+    assert _publish(tarball, keys, tmp_path, FakeGh(), FakeSsh()) == 0
+    assert not (tarball.parent / f"publish-{RELEASE_ID}" / ".lock").exists()
+
+
+def test_a_stale_commit_of_a_reused_id_is_not_a_canary_success(tarball, keys, tmp_path):
+    """M1: the canary already reports a commit of this id from before the publish."""
+    old = status("committed", RELEASE_ID, None, result("committed", at="2026-10-01T09:00:00Z"))
+    fresh_but_unchanged = [old, dict(old)]  # baseline, then the same last_result
+    gh = FakeGh()
+
+    _publish(tarball, keys, tmp_path, gh, FakeSsh(statuses=[status(), old]), "--canary-timeout-min", "1")
+    assert _verified(gh, keys)["canary_ok"] is False
+
+    gh = FakeGh()
+    _publish(tarball, keys, tmp_path, gh, FakeSsh(statuses=fresh_but_unchanged), "--canary-timeout-min", "1")
+    assert _verified(gh, keys)["canary_ok"] is False
+
+
+def test_an_unchanged_last_result_is_not_a_canary_success(tarball, keys, tmp_path):
+    """M1: same at as published_at, but it was already there before the release was created."""
+    before = status("committed", RELEASE_ID, None, result("committed", at="2026-10-01T15:00:00Z"))
+    gh = FakeGh()
+
+    _publish(tarball, keys, tmp_path, gh, FakeSsh(statuses=[before]), "--canary-timeout-min", "1")
+
+    assert _verified(gh, keys)["canary_ok"] is False
+
+
+def test_a_stale_rollback_of_a_reused_id_does_not_withdraw(tarball, keys, tmp_path):
+    old = status("idle", "2026.10.01-021", None, result("rolled_back", at="2026-10-01T09:00:00Z"))
+    gh = FakeGh()
+
+    assert _publish(tarball, keys, tmp_path, gh, FakeSsh(statuses=[status(), old, COMMITTED])) == 0
+    assert _verified(gh, keys)["canary_ok"] is True
+
+
+def test_a_new_commit_after_an_old_one_is_a_success(tarball, keys, tmp_path):
+    old = status("committed", RELEASE_ID, None, result("committed", at="2026-10-01T09:00:00Z"))
+    gh = FakeGh()
+
+    assert _publish(tarball, keys, tmp_path, gh, FakeSsh(statuses=[old, old, COMMITTED])) == 0
+    assert _verified(gh, keys)["canary_ok"] is True
+
+
+def test_a_commit_within_the_clock_skew_counts(tarball, keys, tmp_path):
+    skewed = status("committed", RELEASE_ID, None, result("committed", at="2026-10-01T14:59:00Z"))
+    gh = FakeGh()
+
+    assert _publish(tarball, keys, tmp_path, gh, FakeSsh(statuses=[status(), skewed])) == 0
+    assert _verified(gh, keys)["canary_ok"] is True
+
+
+def test_a_status_from_another_host_is_not_the_canary(tarball, keys, tmp_path):
+    """L2."""
+    other = status("committed", RELEASE_ID, None, result("committed"), hostname="rosy-pinky-9dfk")
+    gh = FakeGh()
+
+    _publish(tarball, keys, tmp_path, gh, FakeSsh(statuses=[status(), other]), "--canary-timeout-min", "1")
+
+    final = _verified(gh, keys)
+    assert final["canary_ok"] is False and "did not commit" in final["reason"]
+
+
+def test_a_not_run_yet_status_keeps_waiting(tarball, keys, tmp_path):
+    gh = FakeGh()
+
+    assert _publish(tarball, keys, tmp_path, gh, FakeSsh(statuses=[NOT_RUN_YET, NOT_RUN_YET, COMMITTED])) == 0
+
+
+@pytest.mark.parametrize("phase", ["failed", "error"])
+def test_a_failed_or_error_phase_for_this_release_withdraws_early(tarball, keys, tmp_path, phase):
+    """L3."""
+    gh = FakeGh()
+    clock = FakeClock()
+    broken = dict(status(phase, candidate=RELEASE_ID), reason="sha256 mismatch")
+
+    assert _publish(tarball, keys, tmp_path, gh, FakeSsh(statuses=[status(), broken]), clock=clock) != 0
+
+    final = _verified(gh, keys)
+    assert final["withdrawn"] is True and phase in final["reason"] and "sha256 mismatch" in final["reason"]
+    assert clock.t == 0
+
+
+def test_an_error_phase_for_another_candidate_does_not_withdraw(tarball, keys, tmp_path):
+    gh = FakeGh()
+    other = status("error", candidate=None)
+
+    assert _publish(tarball, keys, tmp_path, gh, FakeSsh(statuses=[status(), other, COMMITTED])) == 0
+
+
+def _all_output(capsys, tmp_path) -> str:
+    captured = capsys.readouterr()
+    evidence = "".join(p.read_text(encoding="utf-8") for p in (tmp_path / "evidence").rglob("*.jsonl"))
+    return captured.out + captured.err + evidence
+
+
+def test_a_missing_private_key_is_named_without_its_path(tarball, keys, tmp_path, capsys):
+    """M4."""
+    keys["private"].unlink()
+
+    assert _publish(tarball, keys, tmp_path, FakeGh(), FakeSsh()) != 0
+
+    text = _all_output(capsys, tmp_path)
+    assert "rosy-release-2026-01" in text
+    for needle in (str(keys["private"]), str(keys["private"].parent), "appdata"):
+        assert needle not in text
+
+
+def test_a_signer_failure_does_not_leak_the_key_path(tarball, keys, tmp_path, capsys):
+    keys["private"].write_text("not a key\n", encoding="ascii")
+    gh = FakeGh()
+
+    assert _publish(tarball, keys, tmp_path, gh, FakeSsh()) != 0
+
+    assert gh.releases == {}
+    text = _all_output(capsys, tmp_path)
+    assert "rosy-release-2026-01" in text
+    assert str(keys["private"].parent) not in text and "appdata" not in text
+
+
+def test_withdraw_falls_back_to_the_local_signed_rollout(keys, tmp_path, capsys):
+    """M5: a half-finished --clobber upload left rollout.json and its .sig from different versions."""
+    gh = FakeGh()
+    _signed_release(gh, keys, tmp_path, canary_ok=True)
+    work = tmp_path / "w" / f"publish-{RELEASE_ID}"
+    work.mkdir(parents=True)
+    local = gh.releases[TAG]["assets"]["rollout.json"]
+    (work / "rollout.json").write_bytes(local)
+    (work / "rollout.json.sig").write_bytes(gh.releases[TAG]["assets"]["rollout.json.sig"])
+    gh.releases[TAG]["assets"]["rollout.json"] = local.replace(b'"canary_ok": true', b'"canary_ok": false')
+
+    code = _run(["--release-id", RELEASE_ID, "--out-dir", str(tmp_path / "w"), "--withdraw", "--reason", "bad"],
+                keys, tmp_path, gh, FakeSsh())
+
+    assert code == 0
+    final = _verified(gh, keys)
+    assert final["withdrawn"] is True and final["canary_ok"] is True
+    assert "local" in capsys.readouterr().out
+
+
+def test_withdraw_without_a_verifiable_copy_anywhere_fails(keys, tmp_path):
+    gh = FakeGh()
+    _signed_release(gh, keys, tmp_path)
+    gh.releases[TAG]["assets"]["rollout.json"] += b" "
+
+    code = _run(["--release-id", RELEASE_ID, "--out-dir", str(tmp_path / "w"), "--withdraw", "--reason", "bad"],
+                keys, tmp_path, gh, FakeSsh())
+
+    assert code != 0 and _uploads(gh) == []
+
+
+@pytest.mark.parametrize("statuses, expected", [
+    ([status(), COMMITTED], "canary_ok"),
+    ([status(), status("rolled_back", last=result("rolled_back"))], "--withdraw"),
+])
+def test_a_failed_final_upload_prints_the_recovery_command(tarball, keys, tmp_path, capsys, statuses, expected):
+    gh = FakeGh()
+    gh.fail_upload = True
+
+    assert _publish(tarball, keys, tmp_path, gh, FakeSsh(statuses=statuses)) != 0
+
+    err = capsys.readouterr().err
+    work = tarball.parent / f"publish-{RELEASE_ID}"
+    assert f"gh release upload {TAG} --repo {REPO} --clobber" in err
+    assert str(work / "rollout.json") in err and str(work / "rollout.json.sig") in err
+    assert expected in err
+
+
+def test_ctrl_c_prints_the_resume_and_withdraw_commands(tarball, keys, tmp_path, capsys):
+    """L1."""
+    clock = FakeClock()
+
+    def interrupted(_seconds):
+        raise KeyboardInterrupt
+
+    code = tool.main(["--tarball", str(tarball), "--canary", CANARY_IP, "--public-key", str(keys["public"]),
+                      "--evidence-dir", str(tmp_path / "evidence")],
+                     gh_runner=FakeGh(), ssh_runner=FakeSsh(statuses=[status()]), now=clock.now,
+                     monotonic=clock.monotonic, sleep=interrupted)
+
+    assert code == 130
+    err = capsys.readouterr().err
+    assert f"--release-id {RELEASE_ID}" in err and "--resume" in err and f"--canary {CANARY_IP}" in err
+    assert "--withdraw --reason" in err
+    assert not (tarball.parent / f"publish-{RELEASE_ID}" / ".lock").exists()
+
+
+@pytest.mark.parametrize("flag, value", [
+    ("--repo", "livsbittt/rosy-os;x"), ("--repo", "noslash"), ("--repo", "a/b/c"),
+    ("--key-name", "../evil"), ("--key-name", "a b"),
+])
+def test_repo_and_key_name_are_validated(tarball, keys, tmp_path, flag, value):
+    """L6."""
+    with pytest.raises(SystemExit) as raised:
+        _publish(tarball, keys, tmp_path, FakeGh(), FakeSsh(), flag, value)
+    assert raised.value.code == 2
+
+
+def test_a_tarball_whose_release_signature_fails_is_not_published(tmp_path, keys, capsys):
+    """L7."""
+    bad = _tarball(tmp_path / "bad" / f"{RELEASE_ID}.tar.gz", keys["private"], tamper=True)
+    gh = FakeGh()
+
+    assert _publish(bad, keys, tmp_path, gh, FakeSsh()) != 0
+
+    assert gh.releases == {}
+    assert "CHECKSUM_MISMATCH" in capsys.readouterr().err
+    work = bad.parent / f"publish-{RELEASE_ID}"
+    assert not work.exists() or [p.name for p in work.iterdir() if p.name.startswith(".verify")] == []
+
+
+def test_a_tarball_signed_by_another_key_is_not_published(tmp_path, keys):
+    other_key = tmp_path / "other.pem"
+    subprocess.run(["openssl", "genpkey", "-algorithm", "ed25519", "-out", str(other_key)],
+                   check=True, capture_output=True)
+    bad = _tarball(tmp_path / "bad" / f"{RELEASE_ID}.tar.gz", other_key)
+    gh = FakeGh()
+
+    assert _publish(bad, keys, tmp_path, gh, FakeSsh()) != 0
+    assert gh.releases == {}

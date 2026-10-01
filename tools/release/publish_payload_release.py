@@ -6,20 +6,25 @@ Takes the signed tarball prepare_payload_release.py made and does what the robot
     python tools/release/publish_payload_release.py --release-id <id> --canary 192.168.1.202 --resume
     python tools/release/publish_payload_release.py --release-id <id> --withdraw --reason "canary drove badly"
 
-1. rollout: tarball sha256, `source-revision.txt` and `manifest.json` from the tarball, the canary's
-   hostname (`ssh rosy@<ip> hostname`, must match ^rosy-[a-z0-9-]+$). `rollout.json` is sorted-key
-   LF UTF-8 JSON (docs/plans/2026-10-01-d406-robot-auto-update.md, schema 1).
-2. sign: `signing.sign_checksums` with %LOCALAPPDATA%/Rosy/signing/<key>.private.pem, then verified
-   against the repo public key before anything is uploaded.
-3. release: `gh release create payload-<id> --target <source_revision>` with the tarball, rollout.json and
+1. check: the tarball's own release signature (signing.verify_release_files on a temporary extract),
+   `manifest.json` and `source-revision.txt`.
+2. rollout: tarball sha256, source revision, the canary's hostname (`ssh rosy@<ip> hostname`, must match
+   ^rosy-[a-z0-9-]+$). `rollout.json` is sorted-key LF UTF-8 JSON
+   (docs/plans/2026-10-01-d406-robot-auto-update.md, schema 1).
+3. sign: `signing.sign_checksums` with the operator's private key <key-name>, then verified against the
+   repo public key before anything is uploaded.
+4. release: `gh release create payload-<id> --target <source_revision>` with the tarball, rollout.json and
    rollout.json.sig. An existing tag is refused unless --resume.
-4. canary: `rosy_auto_update.py status --json` over ssh every 30 s for --canary-timeout-min. A commit of
-   this id sets canary_ok=true; a rollback or refusal of this id, or the timeout, sets withdrawn=true.
-   Either way rollout.json is re-signed and re-uploaded (`gh release upload --clobber`).
+5. canary: `rosy_auto_update.py status --json` over ssh every 30 s for --canary-timeout-min. Only a result
+   newer than the one the canary reported before the release (and not older than published_at) counts.
+   A commit of this id sets canary_ok=true; a rollback or refusal of this id, a failed/error phase for
+   it, or the timeout sets withdrawn=true. Before re-uploading, the remote rollout is downloaded again:
+   one withdrawn meanwhile stays withdrawn, and one that changed otherwise is never overwritten.
 
 --resume re-attaches to an existing release (its rollout.json, signature checked). --withdraw withdraws
-one by hand. Every phase is printed and appended to <evidence-dir>/<YYYY-MM-DD>/rollout.jsonl.
-Standard library plus the repo's signing.py. No token or key is ever printed.
+one by hand. One process per release id (a lock file in the work folder). Every phase is printed and
+appended to <evidence-dir>/<YYYY-MM-DD>/rollout.jsonl. Standard library plus the repo's signing.py.
+No token, key or private-key path is ever printed.
 """
 
 from __future__ import annotations
@@ -34,6 +39,7 @@ import re
 import subprocess
 import sys
 import tarfile
+import tempfile
 import time
 from typing import Callable
 
@@ -44,11 +50,16 @@ if str(RELEASE_TOOLS) not in sys.path:
 import signing  # noqa: E402
 
 REPO = "livsbittt/rosy-os"
+REPO_NAME = re.compile(r"[\w.-]+/[\w.-]+")
+KEY_NAME = re.compile(r"[\w.-]+")
 CANARY_HOSTNAME = re.compile(r"rosy-[a-z0-9-]+")
 REVISION = re.compile(r"[0-9a-f]{40}")
 STATUS_COMMAND = "sudo -n python3 /opt/rosy/native-runtime/rosy_auto_update.py status --json"
 POLL_S = 30
+#: Robot and PC clocks are NTP-synced; allow this much when comparing a robot's result time to published_at.
+CLOCK_SKEW_S = 120
 DEFAULT_EVIDENCE = Path("X:/DevTemp/rosy-rollout-evidence")
+SCRIPT = r"python tools\release\publish_payload_release.py"
 
 Runner = Callable[[list[str]], tuple[int, str, str]]
 
@@ -68,10 +79,24 @@ class PublishError(RuntimeError):
     pass
 
 
+class RolloutUnverified(PublishError):
+    """The remote rollout.json does not verify (tampered, or a half-finished --clobber upload)."""
+
+
 # --- rollout.json --------------------------------------------------------------
 
 def utc_stamp(moment: dt.datetime) -> str:
     return moment.astimezone(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def parse_stamp(value: object) -> dt.datetime | None:
+    if not isinstance(value, str):
+        return None
+    try:
+        moment = dt.datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return moment if moment.tzinfo is not None else None
 
 
 def build_rollout(release_id: str, tarball_sha256: str, source_revision: str, published_at: str,
@@ -87,13 +112,26 @@ def rollout_bytes(rollout: dict) -> bytes:
     return (json.dumps(rollout, sort_keys=True, indent=2, ensure_ascii=True) + "\n").encode("utf-8")
 
 
+def _rejections(rejections) -> str:
+    return "; ".join(f"{r.code} {r.field}: {r.detail}" for r in rejections)
+
+
 def sign_rollout(data: bytes, private_key: Path, public_key: Path,
-                 signer: Callable[[bytes, Path], str] = signing.sign_checksums) -> str:
-    """Sign, then verify against the public key the robots trust before anything leaves this PC."""
-    signature = signer(data, private_key)
+                 signer: Callable[[bytes, Path], str] = signing.sign_checksums, key_name: str = "release key") -> str:
+    """Sign, then verify against the public key the robots trust before anything leaves this PC.
+
+    A signer error (openssl names the key file in it) is replaced by one that names only the key.
+    """
+    try:
+        signature = signer(data, private_key)
+    except signing.SigningToolMissing:
+        raise
+    except Exception:  # noqa: BLE001 - the message would carry the private key path
+        raise PublishError(f"signing rollout.json with key {key_name} failed: "
+                           "openssl could not use that private key") from None
     rejections = signing.verify_signature(data, signature, public_key)
     if rejections:
-        raise PublishError("rollout.json self-verify failed: " + "; ".join(f"{r.code}: {r.detail}" for r in rejections))
+        raise PublishError("rollout.json self-verify failed: " + _rejections(rejections))
     return signature
 
 
@@ -117,6 +155,23 @@ def read_tarball_identity(tarball: Path) -> tuple[str, str]:
     return release_id, revision
 
 
+def verify_tarball(tarball: Path, public_key: Path, work_dir: Path) -> None:
+    """The release signature over SHA256SUMS and every file, on a temporary extract (the robot checks it too)."""
+    work_dir.mkdir(parents=True, exist_ok=True)
+    temporary = Path(tempfile.mkdtemp(prefix=".verify-", dir=work_dir))
+    try:
+        with tarfile.open(tarball, "r:gz") as tar:
+            for member in tar:
+                if member.issym() or member.islnk():
+                    raise PublishError(f"{tarball.name} has a link member {member.name!r}")
+            tar.extractall(temporary, filter="tar")
+        rejections = signing.verify_release_files(temporary, public_key)
+        if rejections:
+            raise PublishError(f"{tarball.name} release signature does not verify: {_rejections(rejections)}")
+    finally:
+        prepare._remove_tree(temporary)
+
+
 # --- runners ---------------------------------------------------------------------
 
 def run_gh(argv: list[str]) -> tuple[int, str, str]:
@@ -129,19 +184,22 @@ def run_gh(argv: list[str]) -> tuple[int, str, str]:
 
 class Publisher:
     # Plain class, not @dataclass: the tests load this file by path without a sys.modules entry.
-    def __init__(self, *, release_id: str, repo: str, work_dir: Path, private_key: Path, public_key: Path,
-                 local_appdata: Path, evidence_dir: Path, gh: Runner, ssh: Runner,
+    def __init__(self, *, release_id: str, repo: str, work_dir: Path, key_name: str, private_key: Path,
+                 public_key: Path, local_appdata: Path, evidence_dir: Path, gh: Runner, ssh: Runner,
                  now: Callable[[], dt.datetime], monotonic: Callable[[], float], sleep: Callable[[float], None]):
         self.release_id = release_id
         self.tag = f"payload-{release_id}"
         self.repo = repo
         self.work_dir = work_dir
+        self.key_name = key_name
         self.private_key = private_key
         self.public_key = public_key
         self.local_appdata = local_appdata
         self.evidence_dir = evidence_dir
         self._gh, self._ssh = gh, ssh
         self.now, self.monotonic, self.sleep = now, monotonic, sleep
+        #: The rollout.json bytes this process last put on GitHub (or found there on --resume).
+        self.last_uploaded: bytes | None = None
 
     # -- output and audit --
     def log(self, event: str, message: str, **fields) -> None:
@@ -166,42 +224,54 @@ class Publisher:
         refs = json.loads(self.gh("api", f"repos/{self.repo}/git/matching-refs/tags/{self.tag}") or "[]")
         return any(item.get("ref") == f"refs/tags/{self.tag}" for item in refs)
 
-    def write_signed(self, rollout: dict) -> list[Path]:
+    def write_signed(self, rollout: dict) -> tuple[bytes, list[Path]]:
         data = rollout_bytes(rollout)
-        signature = sign_rollout(data, self.private_key, self.public_key)
+        signature = sign_rollout(data, self.private_key, self.public_key, key_name=self.key_name)
         self.work_dir.mkdir(parents=True, exist_ok=True)
         path, sig = self.work_dir / "rollout.json", self.work_dir / "rollout.json.sig"
         path.write_bytes(data)
         sig.write_bytes(signature.encode("ascii"))
-        return [path, sig]
+        return data, [path, sig]
 
     def create(self, rollout: dict, tarball: Path, canary: str) -> None:
-        files = self.write_signed(rollout)
+        data, files = self.write_signed(rollout)
         notes = (f"ROSY native payload {self.release_id} from {rollout['source_revision'][:12]}. "
                  f"Signed rollout (D-406): canary {canary} first, the rest after canary_ok.")
         self.gh("release", "create", self.tag, "--repo", self.repo, "--target", rollout["source_revision"],
                 "--title", self.tag, "--notes", notes, str(tarball), *map(str, files))
+        self.last_uploaded = data
         self.log("release-created", f"{self.tag} on {self.repo} at {rollout['source_revision']}",
                  tarball_sha256=rollout["tarball_sha256"], canary=canary)
 
     def upload(self, rollout: dict) -> None:
-        files = self.write_signed(rollout)
+        _data, files = self.write_signed(rollout)
         self.gh("release", "upload", self.tag, "--repo", self.repo, "--clobber", *map(str, files))
 
-    def download(self) -> dict:
+    def upload_command(self) -> str:
+        files = " ".join(f'"{self.work_dir / name}"' for name in ("rollout.json", "rollout.json.sig"))
+        return f"gh release upload {self.tag} --repo {self.repo} --clobber {files}"
+
+    def _verified(self, data: bytes, signature: str, where: str) -> dict:
+        rejections = signing.verify_signature(data, signature, self.public_key)
+        if rejections:
+            raise RolloutUnverified(f"{where} rollout.json does not verify: {_rejections(rejections)}")
+        rollout = json.loads(data.decode("utf-8"))
+        if not isinstance(rollout, dict) or rollout.get("schema") != 1 or rollout.get("release_id") != self.release_id:
+            raise PublishError(f"{where} rollout.json is not schema 1 for {self.release_id}")
+        return rollout
+
+    def download(self) -> tuple[dict, bytes]:
         target = self.work_dir / "downloaded"
         self.gh("release", "download", self.tag, "--repo", self.repo, "--pattern", "rollout.json",
                 "--pattern", "rollout.json.sig", "--dir", str(target), "--clobber")
         data = (target / "rollout.json").read_bytes()
         signature = (target / "rollout.json.sig").read_text(encoding="ascii")
-        rejections = signing.verify_signature(data, signature, self.public_key)
-        if rejections:
-            raise PublishError(f"{self.tag} rollout.json does not verify: "
-                               + "; ".join(f"{r.code}: {r.detail}" for r in rejections))
-        rollout = json.loads(data.decode("utf-8"))
-        if rollout.get("schema") != 1 or rollout.get("release_id") != self.release_id:
-            raise PublishError(f"{self.tag} rollout.json is not schema 1 for {self.release_id}")
-        return rollout
+        return self._verified(data, signature, f"{self.tag} (GitHub)"), data
+
+    def local_copy(self) -> tuple[dict, bytes]:
+        data = (self.work_dir / "rollout.json").read_bytes()
+        signature = (self.work_dir / "rollout.json.sig").read_text(encoding="ascii")
+        return self._verified(data, signature, f"local {self.work_dir}"), data
 
     # -- ssh --
     def ssh(self, host: str, command: str) -> tuple[int, str, str]:
@@ -227,7 +297,20 @@ class Publisher:
         return parsed if isinstance(parsed, dict) else None
 
     # -- canary --
-    def watch_canary(self, host: str, name: str, timeout_min: int) -> tuple[bool, str]:
+    @staticmethod
+    def last_result(state: dict | None) -> dict | None:
+        last = (state or {}).get("last_result")
+        return last if isinstance(last, dict) else None
+
+    def watch_canary(self, host: str, name: str, timeout_min: int, published_at: str,
+                     baseline: dict | None) -> tuple[bool, str]:
+        """Only a result that is not the baseline and not older than published_at - skew decides."""
+        not_before = parse_stamp(published_at) - dt.timedelta(seconds=CLOCK_SKEW_S)
+
+        def fresh(stamp) -> bool:
+            moment = parse_stamp(stamp)
+            return moment is not None and moment >= not_before
+
         deadline = self.monotonic() + timeout_min * 60
         seen = None
         phase = "unreachable"
@@ -235,16 +318,20 @@ class Publisher:
             state = self.status(host)
             if state is None:
                 phase, key, line = "unreachable", ("unreachable",), f"{name} ({host}) unreachable or status unreadable"
+            elif state.get("hostname") != name:
+                phase = "not-the-canary"
+                key = (phase, state.get("hostname"))
+                line = f"{host} status is from {state.get('hostname')!r}, not {name} ({state.get('reason') or '-'})"
             else:
                 phase = str(state.get("phase"))
-                last = state.get("last_result") if isinstance(state.get("last_result"), dict) else {}
+                last = self.last_result(state) or {}
                 key = (phase, state.get("current_release"), state.get("candidate"),
-                       last.get("release_id"), last.get("outcome"))
+                       last.get("release_id"), last.get("outcome"), last.get("at"))
                 line = (f"{name} phase={phase} current={state.get('current_release')} "
                         f"candidate={state.get('candidate')} reason={state.get('reason') or '-'}")
                 if last:
-                    line += f" last={last.get('release_id')}:{last.get('outcome')}"
-                if last.get("release_id") == self.release_id:
+                    line += f" last={last.get('release_id')}:{last.get('outcome')}@{last.get('at')}"
+                if last.get("release_id") == self.release_id and last != baseline and fresh(last.get("at")):
                     outcome = last.get("outcome")
                     if outcome == "committed" and state.get("current_release") == self.release_id:
                         self.log("canary-phase", line, phase=phase)
@@ -252,6 +339,10 @@ class Publisher:
                     if outcome in ("rolled_back", "refused"):
                         self.log("canary-phase", line, phase=phase)
                         return False, f"canary {name} {outcome} {self.release_id}: {last.get('detail') or '-'}"
+                if (phase in ("failed", "error") and state.get("candidate") == self.release_id
+                        and fresh(state.get("updated_at"))):
+                    self.log("canary-phase", line, phase=phase)
+                    return False, f"canary {name} {phase} on {self.release_id}: {state.get('reason') or '-'}"
             if key != seen:
                 self.log("canary-phase", line, phase=phase)
                 seen = key
@@ -259,15 +350,33 @@ class Publisher:
                 return False, f"canary {name} did not commit within {timeout_min} min (last phase: {phase})"
             self.sleep(POLL_S)
 
-    def finish(self, rollout: dict, ok: bool, reason: str, robots: list[str]) -> int:
+    def finish(self, ok: bool, reason: str, robots: list[str], out_dir: Path) -> int:
+        """Re-read the remote rollout first: never undo a withdraw, never overwrite a change made meanwhile."""
+        remote, data = self.download()
+        if remote["withdrawn"]:
+            self.log("withdrawn", f"{self.tag} was withdrawn meanwhile ({remote['reason']}); left as it is",
+                     reason=remote["reason"])
+            return 3
+        if data != self.last_uploaded:
+            raise PublishError(f"{self.tag} rollout.json changed on GitHub since this process uploaded it; "
+                               "not overwriting it. Read it, then rerun with --resume or --withdraw")
         if ok:
-            rollout = {**rollout, "canary_ok": True}
-            self.upload(rollout)
+            target, state = {**remote, "canary_ok": True}, "canary_ok=true"
+        else:
+            target, state = {**remote, "withdrawn": True, "reason": reason}, "withdrawn=true"
+        try:
+            self.upload(target)
+        except PublishError:
+            print(f"recovery: {self.work_dir} holds rollout.json signed with {state}. Upload it with\n"
+                  f"  {self.upload_command()}", file=sys.stderr)
+            if not ok:
+                print(f"or withdraw again:\n  {SCRIPT} --release-id {self.release_id} --out-dir \"{out_dir}\" "
+                      f"--withdraw --reason \"{reason}\"", file=sys.stderr)
+            raise
+        if ok:
             self.log("canary-ok", f"{reason}; rollout.json canary_ok=true uploaded")
-            self.show_others(rollout, robots)
+            self.show_others(target, robots)
             return 0
-        rollout = {**rollout, "withdrawn": True, "reason": reason}
-        self.upload(rollout)
         self.log("withdrawn", f"{reason}; rollout.json withdrawn=true uploaded", reason=reason)
         return 3
 
@@ -286,6 +395,21 @@ class Publisher:
                       f"reason={state.get('reason') or '-'}", flush=True)
 
 
+# --- lock --------------------------------------------------------------------------
+
+def take_lock(work_dir: Path) -> Path:
+    work_dir.mkdir(parents=True, exist_ok=True)
+    lock = work_dir / ".lock"
+    try:
+        descriptor = os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+    except FileExistsError:
+        raise PublishError(f"another publish of this release holds {lock}; stop it (Ctrl+C) first, "
+                           "or delete the file if no publish is running") from None
+    with os.fdopen(descriptor, "w", encoding="ascii") as handle:
+        handle.write(f"{os.getpid()}\n")
+    return lock
+
+
 # --- main ------------------------------------------------------------------------
 
 def _positive_wave(text: str) -> int:
@@ -300,6 +424,14 @@ def _positive_minutes(text: str) -> int:
     if value < 1:
         raise argparse.ArgumentTypeError("must be at least 1")
     return value
+
+
+def _matching(pattern: re.Pattern, what: str) -> Callable[[str], str]:
+    def check(text: str) -> str:
+        if not pattern.fullmatch(text):
+            raise argparse.ArgumentTypeError(f"{text!r} is not {what}")
+        return text
+    return check
 
 
 def main(argv: list[str] | None = None, *, gh_runner: Runner = run_gh, ssh_runner: Runner | None = None,
@@ -320,8 +452,8 @@ def main(argv: list[str] | None = None, *, gh_runner: Runner = run_gh, ssh_runne
     parser.add_argument("--resume", action="store_true", help="re-attach to an existing release")
     parser.add_argument("--withdraw", action="store_true", help="withdraw an existing release (needs --reason)")
     parser.add_argument("--reason", help="why, for --withdraw")
-    parser.add_argument("--repo", default=REPO)
-    parser.add_argument("--key-name", default="rosy-release-2026-01")
+    parser.add_argument("--repo", type=_matching(REPO_NAME, "OWNER/NAME"), default=REPO)
+    parser.add_argument("--key-name", type=_matching(KEY_NAME, "a key name"), default="rosy-release-2026-01")
     parser.add_argument("--public-key", type=Path, help="default deploy/robot/pinky_pro/release/public-keys/<key>.pem")
     parser.add_argument("--wave-delay-s", type=_positive_wave, default=600)
     parser.add_argument("--canary-timeout-min", type=_positive_minutes, default=30)
@@ -354,26 +486,23 @@ def main(argv: list[str] | None = None, *, gh_runner: Runner = run_gh, ssh_runne
 
     local_appdata = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local"))
     publisher = Publisher(
-        release_id=release_id, repo=args.repo, work_dir=out_dir / f"publish-{release_id}",
+        release_id=release_id, repo=args.repo, work_dir=out_dir / f"publish-{release_id}", key_name=args.key_name,
         private_key=local_appdata / "Rosy" / "signing" / f"{args.key_name}.private.pem",
         public_key=args.public_key or RELEASE_TOOLS / "public-keys" / f"{args.key_name}.pem",
         local_appdata=local_appdata, evidence_dir=args.evidence_dir, gh=gh_runner,
         ssh=ssh_runner or prepare.run_ssh, now=now, monotonic=monotonic, sleep=sleep)
+    lock = None
     try:
-        for key in (publisher.private_key, publisher.public_key):
-            if not key.is_file():
-                raise PublishError(f"signing key not found: {key}")
+        lock = take_lock(publisher.work_dir)
+        if not publisher.private_key.is_file():
+            raise PublishError(f"private signing key {args.key_name} not found in the operator signing folder")
+        if not publisher.public_key.is_file():
+            raise PublishError(f"public key not found: {publisher.public_key}")
         if args.withdraw:
-            rollout = publisher.download()
-            if rollout["withdrawn"]:
-                print(f"{publisher.tag} is already withdrawn: {rollout['reason']}")
-                return 0
-            publisher.upload({**rollout, "withdrawn": True, "reason": args.reason.strip()})
-            publisher.log("withdrawn", f"withdrawn by hand: {args.reason.strip()}", reason=args.reason.strip())
-            return 0
+            return withdraw(publisher, args.reason.strip())
 
         if args.resume:
-            rollout = publisher.download()
+            rollout, publisher.last_uploaded = publisher.download()
             publisher.log("resume", f"re-attached to {publisher.tag}: canary_ok={rollout['canary_ok']} "
                                     f"withdrawn={rollout['withdrawn']}")
             if rollout["withdrawn"]:
@@ -386,24 +515,37 @@ def main(argv: list[str] | None = None, *, gh_runner: Runner = run_gh, ssh_runne
             canary = publisher.hostname(args.canary)
             if canary not in rollout["canary"]:
                 raise PublishError(f"{args.canary} is {canary}, not a canary of this rollout {rollout['canary']}")
+            baseline = None  # unknown after a restart; published_at alone bounds what counts
         else:
             if not tarball.is_file():
                 raise PublishError(f"signed tarball not found: {tarball}")
             tarball_id, revision = read_tarball_identity(tarball)
+            verify_tarball(tarball, publisher.public_key, publisher.work_dir)
             if publisher.tag_exists():
                 raise PublishError(f"tag {publisher.tag} already exists on {args.repo}; "
                                    "pass --resume to re-attach, or use a new release id")
             canary = publisher.hostname(args.canary)
+            before = publisher.status(args.canary)
+            baseline = publisher.last_result(before) if (before or {}).get("hostname") == canary else None
             rollout = build_rollout(tarball_id, signing.sha256_file(tarball), revision,
                                     utc_stamp(now()), canary, args.wave_delay_s)
             publisher.log("rollout", f"{rollout['tarball']} sha256 {rollout['tarball_sha256']}, "
-                                     f"canary {canary}, wave delay {args.wave_delay_s}s")
+                                     f"canary {canary}, wave delay {args.wave_delay_s}s, "
+                                     f"canary last result before: {baseline}")
             publisher.create(rollout, tarball, canary)
 
         publisher.log("canary-watch", f"watching {canary} ({args.canary}) every {POLL_S}s "
                                       f"for up to {args.canary_timeout_min} min")
-        ok, reason = publisher.watch_canary(args.canary, canary, args.canary_timeout_min)
-        return publisher.finish(rollout, ok, reason, args.robot)
+        ok, reason = publisher.watch_canary(args.canary, canary, args.canary_timeout_min,
+                                            rollout["published_at"], baseline)
+        return publisher.finish(ok, reason, args.robot, out_dir)
+    except KeyboardInterrupt:
+        print(f"\ninterrupted. {publisher.tag} is left as it is on GitHub; robots other than the canary wait.\n"
+              f"continue watching:\n  {SCRIPT} --release-id {release_id} --out-dir \"{out_dir}\" "
+              f"--canary {args.canary or '<canary-ip>'} --resume\n"
+              f"or withdraw it:\n  {SCRIPT} --release-id {release_id} --out-dir \"{out_dir}\" "
+              "--withdraw --reason \"<why>\"", file=sys.stderr)
+        return 130
     # ValueError covers json.JSONDecodeError and UnicodeDecodeError; EOFError is a truncated gzip.
     except (PublishError, signing.SigningToolMissing, RuntimeError, OSError, EOFError, ValueError,
             KeyError, tarfile.TarError) as error:
@@ -413,6 +555,26 @@ def main(argv: list[str] | None = None, *, gh_runner: Runner = run_gh, ssh_runne
         except OSError:
             pass
         return 1
+    finally:
+        if lock is not None:
+            lock.unlink(missing_ok=True)
+
+
+def withdraw(publisher: Publisher, reason: str) -> int:
+    """Withdraw by hand. A remote rollout that does not verify (a half-finished --clobber upload)
+    falls back to the copy this PC signed last in the work folder."""
+    try:
+        rollout, _data = publisher.download()
+    except RolloutUnverified as error:
+        print(f"warning: {error}", file=sys.stderr)
+        rollout, _data = publisher.local_copy()
+        print(f"using the local signed rollout.json in {publisher.work_dir}", flush=True)
+    if rollout["withdrawn"]:
+        print(f"{publisher.tag} is already withdrawn: {rollout['reason']}")
+        return 0
+    publisher.upload({**rollout, "withdrawn": True, "reason": reason})
+    publisher.log("withdrawn", f"withdrawn by hand: {reason}", reason=reason)
+    return 0
 
 
 if __name__ == "__main__":
