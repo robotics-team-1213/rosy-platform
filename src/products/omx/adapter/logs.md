@@ -197,3 +197,10 @@
 - gate 변화: 기존 gate 유지; DEVICE/FIELD 승격 없음.
 - 결정: D-390 부록.
 - 교훈: 파일 쓰기 완료 전 들어온 interruption과 logical closure 경계를 구분한다.
+
+## 2026-10-02 · 38dcb8fe · feat(omx): CELL_TRANSFER analytic top-down planner (D-402, plan C2)
+- 변경: 커밋 e244b602, 4ef93a96, 38dcb8fe. `config/omx_f_kinematics.yaml`(open_manipulator 5.1.2 `0a4af6a9…` `omx_f.urdf` 값, 드리프트 시험), `kinematics.py`(URDF 체인 FK, 해석 수직하향 IK: elbow-up, q2+q3+q4=+π/2, yaw/180° 손목 후보, 타입 있는 거절), `pose_plan.py`(`CellPlanningProfile`, `CellTransferRequest`, `CellTransferPlan`, `AnalyticCellTransferPlanner`, `validate_cell_transfer_plan`), `deploy/robot/omx/sim/cell_profile.yaml`(명목상 시뮬 한계). `ActionRunner`는 `CELL_TRANSFER`를 phase runner로만 실행하고 직접 경로는 `PICK_PLACE` 외 종류를 journal 전에 거절. `PickPlaceRunner`는 `CellTransferPlan`을 받고 그 그리퍼 관절을 start-state 검사에서 뺀다.
+- 증거: adapter suite 247 passed, 5 skipped(기준 190 passed); known_failures 0 new; architecture 76 passed, 1 skipped; flake8 0. 생성된 네 phase를 실제 `ArmCommandOwner`가 모두 수락. 도달 고리(프로필 한계, yaw 0, +x): z 0.005 m에서 joint1 축 반경 0.05–0.281 m, z 0.10 m에서 0.05–0.254 m(내경은 특이점 반경).
+- gate 변화: SOURCE 증거 추가, ROS-SIM HOLD 유지(C3). DEVICE/FIELD PARKED.
+- 결정: D-402, D-403 §9. Fleet grant schema에 `CELL_TRANSFER`는 넣지 않음(C4).
+- 교훈: URDF `end_effector_joint`의 y −0.0016 m 오프셋 때문에 손목점이 yaw에 따라 달라진다. joint1은 TCP가 아니라 손목점에서 구한다.
