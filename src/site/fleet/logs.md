@@ -941,3 +941,9 @@
 - 변경: `test/test_fleet_console_browser.py`에 옵트인 시험 5개 — 승인(형식 오류는 보내지 않음, `CODE_MISMATCH` 남은 입력 2회 뒤 성공, 대화상자 동안 전체 정지 살아 있음, 지문·자격 ID 등폭, 화면 어디에도 코드 없음, 1366·390·320 가로 넘침 없음), 거절…·폐기…의 이름 묻는 확인과 Escape 뒤 포커스 복귀, viewer·단일 토큰은 버튼 없음(각자 안내), 페어링 없는 Fleet은 안내 한 줄 + 6 s 동안 `pending` 1회만. `ROSY_CAMERA_SCREENSHOT_DIR`이 있으면 구역 캡처를 저장한다. 화면: 행 버튼을 한 줄로 묶고, 시각을 현지 분 단위(`formatWhen`)로, 30rem 아래에서는 지문·자격 ID 이름표를 값 위로 올려 값이 묶음 중간에서 끊기지 않게 했다.
 - 증거: 브라우저 `-k camera_` 8 passed, 전체 `test_fleet_console_browser.py` 57 passed + 1 failed(`test_the_console_renders_what_swarm_control_says` — UI 앞 커밋 dc082f3a에서도 같은 실패, 이 작업과 무관). `node --test src/site/fleet/test/web/*.test.mjs` 69 passed. `src/site/fleet/test/` 1047 passed, 6 skipped(180 s). `src/hmi/web_common/test/` + `test/test_web_dialog_contract.py` 204 passed, 24 skipped.
 - gate 변화: 없음(LOCAL). 실물 폰·실제 Fleet 화면 캡처는 DEVICE 단계.
+
+## 2026-10-01 · uncommitted · fix(pairing): 같은 자격 ID의 confirm 재시도는 120 s 안에서 멱등
+
+- 변경: rosy-84 Rosy Cam 클라이언트 보안 리뷰 권고. 첫 confirm 응답이 사라지면 폰은 자격이 살아났는지 알 수 없어 버리고, 그 자리는 운용자가 폐기할 때까지 막혔다. 이제 같은 요청·같은 poll 비밀·같은 `credential_id`로 승인 뒤 120 s 안에 다시 confirm하면, 그 자격이 여전히 active일 때만 같은 200을 돌려준다(감사 행은 처음 한 번). 다른 ID·창 밖·폐기 뒤는 지금처럼 410. 함께: 모델 감시기 분할(625fad86) 뒤 낡은 `watch.py` 크기 판정 행을 지웠다(콘솔 병합이 되살린 행).
+- 증거: `test_pairing_state.py` 31 passed(신규 2건), `test/architecture/test_module_structure.py` 33 passed.
+- gate 변화: 없음.

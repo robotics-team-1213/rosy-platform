@@ -273,6 +273,10 @@ class PairingService:
     @_locked
     def confirm(self, request_id: str, authorization: str | None, credential_id: str) -> dict:
         entry = self._phone_entry(request_id, authorization)
+        if entry.state == "confirmed" and self._repeat_confirm(entry, credential_id):
+            # The phone lost the first reply: answer the same 200 so it can tell the
+            # credential is live instead of discarding it (rosy-84 client review).
+            return {"state": "confirmed", "credential_id": credential_id}
         if entry.state in _CLOSED:
             raise PairingError(410, "PAIRING_REQUEST_CLOSED", f"pairing request is {entry.state}")
         if entry.state != "delivered":
@@ -286,6 +290,17 @@ class PairingService:
                          target=entry.credential_id, device_kind=OVERHEAD_CAMERA)
         self._close(entry, "confirmed", self._monotonic())
         return {"state": "confirmed", "credential_id": credential_id}
+
+    def _repeat_confirm(self, entry: _Request, credential_id: str) -> bool:
+        """Same id, still inside the confirm window, and the credential is still active."""
+        if entry.credential_id is None or entry.approved_at is None:
+            return False
+        if not hmac.compare_digest(credential_id.encode(), entry.credential_id.encode()):
+            return False
+        if self._monotonic() - entry.approved_at >= CONFIRM_DEADLINE_S:
+            return False
+        return any(row["credential_id"] == entry.credential_id and row["state"] == "active"
+                   for row in self.store.credential_rows())
 
     # -- console ----------------------------------------------------------
 
