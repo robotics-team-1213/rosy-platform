@@ -94,6 +94,9 @@ UNITS = (
     "rosy-hw-probe.path",
     "rosy-hw-test.service",
     "rosy-hw-test.path",
+    # D-406: the idle-time updater; only the timer is enabled.
+    "rosy-auto-update.service",
+    "rosy-auto-update.timer",
 )
 # Of those, the ones customize-rootfs.sh enables. A unit the sync adds is
 # enabled only if it is here, as a fresh image would have it.
@@ -110,6 +113,7 @@ ENABLED_UNITS = frozenset({
     "rosy-hw-probe.service",
     "rosy-hw-probe.path",
     "rosy-hw-test.path",
+    "rosy-auto-update.timer",
 })
 
 # Never offered for a live restart, even when active and changed: the boot

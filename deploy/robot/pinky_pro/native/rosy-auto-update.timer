@@ -1,0 +1,12 @@
+[Unit]
+Description=Check for a ROSY payload update every 10 minutes (D-406)
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=10min
+# Two robots booted together must not hit GitHub, or apply, in lockstep.
+RandomizedDelaySec=2min
+Persistent=true
+
+[Install]
+WantedBy=timers.target
