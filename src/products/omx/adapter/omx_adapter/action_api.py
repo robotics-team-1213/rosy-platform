@@ -295,6 +295,10 @@ class UnixActionServer:
                     connection, _ = listener.accept()
                 except TimeoutError:
                     continue
+                except OSError:
+                    if self._stop.is_set():
+                        break
+                    raise
                 with connection:
                     connection.settimeout(2.0)
                     try:
