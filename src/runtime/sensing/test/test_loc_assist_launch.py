@@ -85,3 +85,11 @@ def test_launch_parameters_evaluate_to_typed_values():
     params = evaluate_parameters(context, node._Node__parameters)[0]
     assert params['use_sim_time'] is False and params['search_budget_s'] == 3.0
     assert params['map_yaml'] == '' and params['lane_rules_file'] == ''
+
+
+def test_the_gazebo_localization_rig_follows_d395_not_the_removed_global_recovery():
+    """tools/gz is not CI; this keeps the rig from silently testing what no longer exists."""
+    rig = text(SENSING / 'tools' / 'gz' / 'localization_rig.py')
+    assert "'recoveries'" not in rig
+    assert "component == 'loc_assist'" in rig
+    assert "'/localization/decision'" in rig and "'/localization/candidates'" in rig

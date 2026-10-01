@@ -840,3 +840,8 @@
 - 변경: `sensing/loc_state.py` `LocalizationStateMachine(max_gap_s=.5)`가 `InjectionCheck`에 넘긴다(순수 기본값 0.5 s 유지). `LocAssist(max_gap_s=...)`, `loc_assist_node` 매개변수 `max_gap_s` 기본 1.0. 공유 WSL(부하 ~9) 스모크에서 주입 직후 0.5 s 넘는 실행기 정지가 맞는 주입을 `stale_scan`으로 떨어뜨렸다. 10 Hz LiDAR는 1 s 창에서도 초당 ~10번 적합도를 준다.
 - 증거: 새 시험 2개(0.8 s 정지는 통과, 1.1 s 침묵은 실패; 상태 기계가 값을 검증에 전달). `test_loc_assist.py`·`test_loc_state.py`·`test_loc_verify.py`·`test_loc_e2e.py` 60 passed.
 - gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · fix(tools): Gazebo localization rig를 D-395 흐름으로 (P2-3 후속)
+- 변경: `tools/gz/localization_rig.py` — 지워진 전역 복구(`recoveries`)를 기대하던 판정을 바꿨다. 새 구성 요소 `LOCALIZATION_COMPONENT=loc_assist`(LocAssistNode)를 `monitor` 옆에 띄우고, 리그가 Fleet·운영자 대역이 된다: 후보가 정확히 하나면 그 자세로 `source: human` 결정을 보낸다(지상 실측은 고르지 않는다, 채점만). 후보가 둘 이상이면 "Fleet 중재기 필요"로 실패. 스캔 공백 판정은 "새 후보 요청이 생기지 않음"으로 바꿨다.
+- 증거: `test_loc_assist_launch.py`에 리그 텍스트 계약 1개(9 passed). Gazebo 미로 실행은 하지 않았다(도메인 228 격리 박스 필요).
+- gate 변화: 없음.

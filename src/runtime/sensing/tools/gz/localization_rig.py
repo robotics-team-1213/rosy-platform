@@ -1,4 +1,11 @@
-"""Domain-228-only Gazebo localization acceptance rig (never a robot entrypoint)."""
+"""Domain-228-only Gazebo localization acceptance rig (never a robot entrypoint).
+
+D-395 P2-3: localization_node no longer injects a unique global match or
+re-initialises AMCL. Run the `loc_assist` component beside `monitor`; this rig
+stands in for Fleet + operator: when loc_assist reports exactly one candidate it
+sends a `human` decision for that pose (ground truth never chooses). More than
+one candidate fails the run: the maze then needs the real arbiter, not this rig.
+"""
 import json
 import math
 import os
@@ -48,6 +55,10 @@ def main():
             self.create_subscription(String, '/localization/status', self.on_status, 10)
             self.create_subscription(RosPath, '/route', self.on_route, 10)
             self.create_subscription(String, '/goal_node/state', self.on_goal_state, 10)
+            self.decision_pub = self.create_publisher(String, '/localization/decision', 5)
+            self.create_subscription(String, '/localization/candidates', self.on_candidates, 10)
+            self.create_subscription(String, '/localization/result', self.on_result, 10)
+            self.requests = []
             self.status = {}
             self.truth = None
             self.output = Twist()
@@ -85,6 +96,23 @@ def main():
         def on_goal_state(self, msg):
             self.goal_state = msg.data
 
+        def on_candidates(self, msg):
+            report = json.loads(msg.data)
+            if self.done or report['request_id'] in self.requests:
+                return                      # a 2 s re-report of a request already answered
+            self.requests.append(report['request_id'])
+            if len(report['candidates']) != 1:
+                return self.finish(False, f"{len(report['candidates'])} candidates: needs the Fleet arbiter")
+            c = report['candidates'][0]
+            now = self.get_clock().now().nanoseconds * 1e-9
+            self.decision_pub.publish(String(data=json.dumps({'received_s': now, 'decision': {
+                'request_id': report['request_id'], 'source': 'human',
+                'pose': {'x': c['x'], 'y': c['y'], 'yaw': c['yaw']}}})))
+            self.events.append({'decision': report['request_id'], 'sim_s': now})
+
+        def on_result(self, msg):
+            self.events.append({'result': json.loads(msg.data)})
+
         def on_scan(self, msg):
             if self.static_frame != msg.header.frame_id:
                 t = TransformStamped()
@@ -108,7 +136,7 @@ def main():
 
         def change(self, phase, now, **extra):
             if phase == 'scan_outage':
-                self.recoveries_before_outage = self.status['recoveries']
+                self.requests_before_outage = len(self.requests)
             self.events.append({'phase': phase, 'sim_s': now, 'route_count': self.route_count, **extra})
             print(json.dumps(self.events[-1]), flush=True)
             self.phase, self.phase_start = phase, now
@@ -240,8 +268,8 @@ def main():
                 if ready and error and error[0] < .07 and error[1] < .15 and not self.route_empty:
                     if self.route_count < 2:
                         return self.finish(False, 'No recovered route was observed')
-                    if self.status['recoveries'] != self.recoveries_before_outage:
-                        return self.finish(False, 'Transient scan outage unnecessarily reset the global filter')
+                    if len(self.requests) != self.requests_before_outage:
+                        return self.finish(False, 'Transient scan outage unnecessarily asked for new candidates')
                     return self.finish(True, 'Initial localization, motion, translation/yaw teleport recovery and scan outage passed')
                 if elapsed > 60.:
                     return self.finish(False, 'Scan restoration did not recover')
@@ -257,6 +285,9 @@ def main():
     elif component == 'monitor':
         from control.localization_node import LocalizationNode
         node = LocalizationNode()
+    elif component == 'loc_assist':
+        from control.loc_assist_node import LocAssistNode
+        node = LocAssistNode()
     elif component == 'goal':
         from control.goal_node import GoalNode
         node = GoalNode()
