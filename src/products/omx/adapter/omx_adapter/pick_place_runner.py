@@ -22,6 +22,7 @@ from .manipulation_plan import (
     ResolvedPickPlacePlan,
 )
 from .phase_recorder import ActionPhaseRecorder
+from .pose_plan import CellTransferPlan
 from .ros_goal_contract import RosGoalEvent
 
 
@@ -59,7 +60,7 @@ class PickPlaceRunner:
         self,
         recorder: ActionPhaseRecorder,
         grant: FleetActionGrant,
-        plan: ResolvedPickPlacePlan,
+        plan: ResolvedPickPlacePlan | CellTransferPlan,
         *,
         command_for_phase: Callable[[PlannedMotionPhase], TrajectoryCommand],
         goal_port: PhaseGoalPort,
@@ -95,8 +96,13 @@ class PickPlaceRunner:
         self._cancel_ack_recorded = False
         self._last_command_state_sequence = -1
 
-        if not isinstance(plan, ResolvedPickPlacePlan):
-            raise ValueError("plan must be a validated ResolvedPickPlacePlan")
+        if not isinstance(plan, (ResolvedPickPlacePlan, CellTransferPlan)):
+            raise ValueError("plan must be a validated ResolvedPickPlacePlan or CellTransferPlan")
+        # CELL_TRANSFER (simulation, D-402 §3d): gripper joints stop at the object
+        # width, so gripper_contract readback judges them, not start-state values.
+        self._unchecked_joints = frozenset(
+            plan.gripper_joint_names if isinstance(plan, CellTransferPlan) else ()
+        )
         if not callable(current_execution_state) or not callable(monotonic):
             raise ValueError("fresh execution-state and monotonic clock providers are required")
         if isinstance(max_joint_state_age_s, bool):
@@ -108,8 +114,8 @@ class PickPlaceRunner:
         if not math.isfinite(max_state_age) or max_state_age <= 0:
             raise ValueError("max_joint_state_age_s must be positive and finite")
         tolerances = dict(start_state_tolerances)
-        if set(tolerances) != set(plan.phases[0].joint_names):
-            raise ValueError("start-state tolerances must cover exactly the planned joints")
+        if set(tolerances) != set(plan.phases[0].joint_names) - self._unchecked_joints:
+            raise ValueError("start-state tolerances must cover exactly the checked planned joints")
         normalized_tolerances = {}
         for name, value in tolerances.items():
             if isinstance(value, bool):
@@ -139,7 +145,7 @@ class PickPlaceRunner:
             return None if self._current_phase is None else self._current_phase.phase_id
 
     def _command_digest(self, command: TrajectoryCommand, phase: PlannedMotionPhase,
-                        plan: ResolvedPickPlacePlan,
+                        plan: ResolvedPickPlacePlan | CellTransferPlan,
                         state: ExecutionStateSnapshot) -> str:
         document = {
             "command_id": command.command_id,
@@ -187,6 +193,8 @@ class PickPlaceRunner:
                 or state.planning_scene_revision != phase.planning_scene_revision):
             raise ValueError("phase start state calibration, transform, or planning scene changed")
         for name, expected in zip(phase.joint_names, phase.start_state_positions):
+            if name in self._unchecked_joints:
+                continue
             if abs(state.joint_positions[name] - expected) > self.start_state_tolerances[name]:
                 raise ValueError("phase start state is outside the planned tolerance")
 

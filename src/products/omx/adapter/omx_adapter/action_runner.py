@@ -15,6 +15,12 @@ from .local_stop import LocalStopBlocked
 from .phase_recorder import ActionPhaseRecorder
 
 
+# Kinds the ordered phase runner may execute, and the only kind the direct
+# driver path admits. CELL_TRANSFER runs through the phase runner only (D-402 §3).
+PHASE_RUNNER_KINDS = frozenset({"PICK_PLACE", "CELL_TRANSFER"})
+DIRECT_DRIVER_KINDS = frozenset({"PICK_PLACE"})
+
+
 def action_grant_digest(value: FleetActionGrant | Mapping[str, object]) -> str:
     grant = (value if isinstance(value, FleetActionGrant)
              else FleetActionGrant.model_validate(value))
@@ -158,6 +164,11 @@ class ActionRunner:
         principal_id = self._principal(peer_uid)
         if not self.enabled:
             raise PermissionError("local Action capability is disabled")
+        use_phase_runner = (grant.action_kind in PHASE_RUNNER_KINDS
+                            and self.phase_runner_factory is not None)
+        if not use_phase_runner and grant.action_kind not in DIRECT_DRIVER_KINDS:
+            # Fail closed before any journal row: unknown kinds never reach the driver.
+            raise PermissionError(f"action kind {grant.action_kind!r} has no admitted executor")
         self._validate(grant)
         request = grant.model_dump(mode="json")
         created = self.store.create_action(
@@ -182,7 +193,7 @@ class ActionRunner:
                 raise
             return self._receipt(current, created=False)
 
-        if grant.action_kind == "PICK_PLACE" and self.phase_runner_factory is not None:
+        if use_phase_runner:
             identity = (grant.action_id, grant.attempt_id)
             try:
                 recorder = self._phase_recorder_for_validated_grant(
