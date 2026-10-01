@@ -9,6 +9,7 @@ from dataclasses import dataclass, replace
 from typing import Callable, Optional
 
 from core_common.protocol.detections import DETECTION_MAX_AGE_S, DetectionEvidence
+from core_features.safety.shadow import ShadowLog, ShadowVerdict
 
 
 def finite_velocity(linear: float, angular: float) -> bool:
@@ -85,6 +86,37 @@ class SafetyDecision:
     angular_limit: float
     disposition: str = 'allow'
     reason: str = ''
+
+
+_DISPOSITIONS = ('allow', 'limit', 'stop')
+
+
+def decision_valid(decision: object, request: SafetyRequest, elapsed: float) -> bool:
+    """True when ``decision`` is a well-formed, current answer to ``request`` (any disposition)."""
+    return not (not isinstance(decision, SafetyDecision) or not math.isfinite(elapsed) or not 0 <= elapsed <= .01
+                or type(decision.command_id) is not int or decision.command_id != request.command_id
+                or not isinstance(decision.source, str) or decision.source != request.source
+                or not isinstance(decision.calibration_revision, str)
+                or decision.calibration_revision != request.calibration_revision
+                or not finite_velocity(decision.observed_at, decision.expires_at)
+                or not decision.observed_at <= request.now <= request.now + elapsed <= decision.expires_at
+                or not 0 < decision.expires_at - decision.observed_at <= .5
+                or not finite_velocity(decision.linear_limit, decision.angular_limit)
+                or min(decision.linear_limit, decision.angular_limit) < 0
+                or not isinstance(decision.disposition, str) or decision.disposition not in _DISPOSITIONS
+                or not isinstance(decision.reason, str) or len(decision.reason) > 128)
+
+
+def check_decision(decision: object, request: SafetyRequest, elapsed: float) -> str:
+    """'' when ``decision`` is a valid, current answer to ``request`` that permits motion;
+    otherwise the policy_reason CORE reports. One rule for enforce and shadow (D-400).
+    A stop returns the policy's own reason (or 'policy_stop'); any validation failure returns
+    'policy_invalid'. Callers that must tell stop from invalid read decision.disposition, not this string."""
+    if not decision_valid(decision, request, elapsed):
+        return 'policy_invalid'
+    if decision.disposition == 'stop':
+        return decision.reason or 'policy_stop'
+    return ''
 
 
 @dataclass(frozen=True)
@@ -277,20 +309,28 @@ class SafetyManager:
         #: 들어오든 같은 자리를 지나므로, 중단해야 할 활동은 여기에 붙는다.
         self.estop_listeners: list = []
         self.policy_listeners: list = []
+        #: D-400: 'off' | 'shadow' | 'enforce'. Set by the binding, never by config here.
+        self.policy_mode: str = 'enforce' if policy_required else 'off'
+        self.shadow: Optional[ShadowLog] = None
+        self.shadow_record_errors = 0
+        self._shadow_policy = None
+        self._shadow_revision = ''
 
     def bind_policy(self, evaluator, calibration_revision: str) -> None:
         """Bind a bounded, synchronous in-process evaluator; no ROS transport."""
+        if self.shadow is not None:
+            raise ValueError("shadow and enforce bindings are exclusive (D-400)")
         if not callable(evaluator) or not isinstance(calibration_revision, str) or not calibration_revision:
             raise ValueError('A policy evaluator and calibration revision are required')
         self._policy = evaluator
         self._policy_revision = calibration_revision
         self._actuation = None
         self.policy_required = True
+        self.policy_mode = 'enforce'
         for listener in list(self.policy_listeners):
             listener()
 
-    def bind_control_policy(self, policy) -> None:
-        """Consume absorbed Control decisions without importing ROS or publishing."""
+    def _control_evaluator(self, policy):
         evaluate = getattr(policy, "evaluate", None)
         revision = getattr(policy, "revision", None)
         if not callable(evaluate) or not isinstance(revision, str) or not revision:
@@ -311,7 +351,19 @@ class SafetyManager:
                                   snapshot.observed_at, snapshot.expires_at,
                                   abs(result.linear), abs(result.angular), disposition, result.reason)
 
-        self.bind_policy(_evaluate, revision)
+        return _evaluate, revision
+
+    def bind_control_policy(self, policy) -> None:
+        """Consume absorbed Control decisions without importing ROS or publishing."""
+        self.bind_policy(*self._control_evaluator(policy))
+
+    def bind_shadow_control_policy(self, policy) -> None:
+        """D-400 shadow: judge every candidate, record it, never change the output."""
+        if self.shadow is not None or self.policy_required or self._policy is not None:
+            raise ValueError("shadow and enforce bindings are exclusive (D-400)")
+        self._shadow_policy, self._shadow_revision = self._control_evaluator(policy)
+        self.shadow = ShadowLog()
+        self.policy_mode = 'shadow'
 
     def _simulation_actuation_enabled(self):
         # The partition name and domain number live in the sim profile (D-182).
@@ -320,6 +372,8 @@ class SafetyManager:
 
     def bind_simulation_actuation(self, calibration, *, simulation_clock_enabled):
         """Opt-in only when the sim profile has enabled actuation, never hardware."""
+        if self.shadow is not None:
+            raise ValueError("shadow and enforce bindings are exclusive (D-400)")
         revision = getattr(calibration, "revision", None)
         if (revision != self._policy_revision or not callable(simulation_clock_enabled)):
             raise ValueError('Actuation requires the bound policy revision and simulation clock')
@@ -331,6 +385,38 @@ class SafetyManager:
         self.policy_required = True
         for listener in list(self.policy_listeners):
             listener()
+
+    def shadow_evaluate(self, command_id: int, source: str, linear: float, angular: float,
+                        now: float, output: tuple[float, float]) -> None:
+        """Record what enforce would have done. Touches no e-stop, mode or policy_reason (D-400)."""
+        if self.shadow is None:
+            return
+        decision, elapsed, valid = None, 0.0, None   # elapsed stays 0.0 if the clock itself fails (nan would skew percentiles)
+        try:
+            request = SafetyRequest(command_id, source, self._shadow_revision, now, linear, angular)
+            started = self._policy_clock()
+            decision = self._shadow_policy(request)
+            elapsed = self._policy_clock() - started
+            valid = decision_valid(decision, request, elapsed)
+        except Exception:  # noqa: BLE001 - policy failure is a verdict, never an exception (D-400)
+            valid = None
+        try:
+            if valid is None:
+                verdict, limited, reason = 'unavailable', (0., 0.), 'policy_failed'
+            elif not valid:
+                verdict, limited, reason = 'unavailable', (0., 0.), 'policy_invalid'
+            elif decision.disposition == 'stop':
+                verdict, limited, reason = 'stop', (0., 0.), decision.reason or 'policy_stop'
+            else:
+                verdict = 'allow' if (decision.linear_limit >= abs(linear) and
+                                      decision.angular_limit >= abs(angular)) else 'limit'
+                limited = (max(-decision.linear_limit, min(decision.linear_limit, linear)),
+                           max(-decision.angular_limit, min(decision.angular_limit, angular)))
+                reason = decision.reason
+            self.shadow.record(ShadowVerdict(now, source, (linear, angular), output, verdict, limited,
+                                             reason, elapsed * 1000.0))
+        except Exception:  # noqa: BLE001 - a recorder bug must never change cmd_vel (D-400 non-interference)
+            self.shadow_record_errors += 1
 
     def evaluate_candidate(self, command_id: int, source: str, linear: float,
                            angular: float, now: float, scope: str = 'nav') -> Optional[tuple[float, float]]:
@@ -349,22 +435,11 @@ class SafetyManager:
             self.policy_reason = 'policy_failed'
             return None
         self.policy_reason = 'policy_invalid'
-        if (not isinstance(decision, SafetyDecision) or evaluator is not self._policy
-                or revision != self._policy_revision or not math.isfinite(elapsed) or not 0 <= elapsed <= .01):
+        if evaluator is not self._policy or revision != self._policy_revision:
             return None
-        if (type(decision.command_id) is not int or decision.command_id != command_id
-                or not isinstance(decision.source, str) or decision.source != source
-                or not isinstance(decision.calibration_revision, str) or decision.calibration_revision != revision
-                or not finite_velocity(decision.observed_at, decision.expires_at)
-                or not decision.observed_at <= now <= now + elapsed <= decision.expires_at
-                or not 0 < decision.expires_at - decision.observed_at <= .5
-                or not finite_velocity(decision.linear_limit, decision.angular_limit)
-                or min(decision.linear_limit, decision.angular_limit) < 0
-                or not isinstance(decision.disposition, str) or decision.disposition not in ('allow', 'limit', 'stop')
-                or not isinstance(decision.reason, str) or len(decision.reason) > 128):
-            return None
-        if decision.disposition == 'stop':
-            self.policy_reason = decision.reason or 'policy_stop'
+        why = check_decision(decision, request, elapsed)
+        if why:
+            self.policy_reason = why
             return None
         self.policy_reason = ''
         limited = (max(-decision.linear_limit, min(decision.linear_limit, linear)),

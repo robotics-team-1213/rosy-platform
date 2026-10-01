@@ -42,8 +42,8 @@
 
 ## 최근 기록
 
+- 2026-10-02 · uncommitted · test(omx): verify planned-start tolerance budget
+- 2026-10-02 · uncommitted · fix(omx): center final state check on planned start
+- 2026-10-02 · uncommitted · fix(omx): make start tolerance ceiling owner-controlled
+- 2026-10-02 · uncommitted · fix(omx): close final-owner joint-state sequence race
 - 2026-10-02 · 31ada4b4 · fix(omx): C2 independent review fixes (D-402)
-- 2026-10-02 · 38dcb8fe · feat(omx): CELL_TRANSFER analytic top-down planner (D-402, plan C2)
-- 2026-10-01 · uncommitted · fix(omx): fence recording closure and isolate storage faults
-- 2026-10-01 · uncommitted · feat(omx): record SIM demonstrations and export LeRobot v3
-- 2026-10-01 · uncommitted · test(omx): Fleet generation-stop terminal reconciliation

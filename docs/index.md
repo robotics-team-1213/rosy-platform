@@ -266,8 +266,8 @@
 
 ## 최근 기록
 
+- 2026-10-02 · uncommitted · merge: D-395 2단계 통합 — main 재병합, 계약 v1.72
+- 2026-10-02 · uncommitted · merge: D-395 2단계 갈래 A·B·C 통합
+- 2026-10-02 · uncommitted · docs(adr): D-395 개정 5 — 실기 항목은 로봇이 돌아올 때까지 미룬다
+- 2026-10-02 · uncommitted · follow-preview Gazebo evidence
 - 2026-10-01 · uncommitted · docs(api-ref): v1.70 보강 — odom 프레임 거부, 내부 시작 게이트
-- 2026-10-01 · uncommitted · docs(api-ref): v1.70 보강 — LOCALIZED 이탈 정지, 도킹·follow 게이트
-- 2026-10-01 · uncommitted · docs(api-ref): v1.70 — D-395 2단계 CORE 경로·capability·이벤트
-- 2026-10-01 · uncommitted · docs(adr): D-395 개정 4 — 2단계 결정과 Fleet 감시 한계
-- 2026-10-01 · uncommitted · fix(pilot): preserve recording errors and reconcile API minor

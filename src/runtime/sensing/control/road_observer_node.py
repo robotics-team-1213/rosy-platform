@@ -25,6 +25,7 @@ from .sensing.perception.camera_homography import (
 )
 from .sensing.perception.camera_ground import simulation_ground_plane
 from .sensing.perception.follow_preview import FrameEvidence
+from .sensing.perception.visual_tags import detect_visual_tags
 from .sensing.perception.road import (
     RoadObservation,
     RoadPerceptionConfig,
@@ -70,7 +71,7 @@ class RoadObserverNode(Node):
         self.declare_parameter('dashboard_preview_max_width', 640)
         self.declare_parameter('dashboard_preview_jpeg_quality', 72)
         self.declare_parameter('dashboard_preview_max_bytes', 512000)
-        self.declare_parameter('dashboard_source', 'PINKY')
+        self.declare_parameter('dashboard_source', 'ROSY')
         self.declare_parameter('require_camera_controls_stable', True)
         self.declare_parameter('camera_homography_path', '')
         self.declare_parameter('camera_homography_enabled', False)
@@ -333,6 +334,7 @@ class RoadObserverNode(Node):
                 objects=self._preview_evidence.for_frame('objects', stamp),
                 road_state=self._preview_evidence.for_frame('road_state', stamp),
                 line=self._preview_evidence.for_frame('line', stamp),
+                tags=detect_visual_tags(frame),
             )
             ok, encoded = cv2.imencode('.jpg', preview, [
                 cv2.IMWRITE_JPEG_QUALITY,

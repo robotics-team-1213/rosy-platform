@@ -227,7 +227,12 @@ class PickPlaceRunner:
         self._last_command_state_sequence = state.sequence
         # Rebind only after an explicit bounded start-state and revision match;
         # ArmCommandOwner checks this sequence again at the final dispatch edge.
-        return replace(command, source_state_sequence=state.sequence), state
+        return replace(
+            command,
+            source_state_sequence=state.sequence,
+            expected_start_state_positions=dict(zip(phase.joint_names, phase.start_state_positions)),
+            start_state_tolerances=self.start_state_tolerances,
+        ), state
 
     def start(self) -> dict[str, object]:
         """Persist and submit only the first phase of a fresh attempt."""

@@ -51,6 +51,7 @@ class ArmCommandConfig:
     position_limits: Mapping[str, tuple[float, float]] | None = None
     velocity_limits: Mapping[str, float] | None = None
     acceleration_limits: Mapping[str, float] | None = None
+    max_start_state_tolerances: Mapping[str, float] | None = None
     allowed_owners: tuple[str, ...] = ()
     calibration_revision: str = ""
     max_joint_state_age_s: float = 0.5
@@ -99,6 +100,25 @@ class ArmCommandConfig:
                 for name in names
             }
             object.__setattr__(self, field_name, MappingProxyType(checked))
+        if self.max_start_state_tolerances is not None:
+            configured_tolerances = dict(self.max_start_state_tolerances)
+            if set(configured_tolerances) != set(names):
+                raise ValueError("max_start_state_tolerances must exactly match joint_names")
+            checked_tolerances: dict[str, float] = {}
+            for name in names:
+                value = configured_tolerances[name]
+                if isinstance(value, bool):
+                    raise ValueError(f"max_start_state_tolerances[{name}] must be finite and non-negative")
+                try:
+                    value = float(value)
+                except (TypeError, ValueError) as exc:
+                    raise ValueError(
+                        f"max_start_state_tolerances[{name}] must be finite and non-negative"
+                    ) from exc
+                if not math.isfinite(value) or value < 0:
+                    raise ValueError(f"max_start_state_tolerances[{name}] must be finite and non-negative")
+                checked_tolerances[name] = value
+            object.__setattr__(self, "max_start_state_tolerances", MappingProxyType(checked_tolerances))
         owners = tuple(self.allowed_owners)
         if not owners or len(set(owners)) != len(owners) or not set(owners) <= KNOWN_OWNERS:
             raise ValueError("allowed_owners must be a non-empty unique subset of known owners")
@@ -162,6 +182,8 @@ class TrajectoryCommand:
     joint_names: tuple[str, ...] | None = None
     trajectory_points: tuple[JointTrajectoryPoint, ...] | None = None
     phase_id: str | None = None
+    expected_start_state_positions: Mapping[str, float] | None = None
+    start_state_tolerances: Mapping[str, float] | None = None
 
     def __post_init__(self) -> None:
         for field_name in (
@@ -193,6 +215,31 @@ class TrajectoryCommand:
         if set(names) != set(normalized):
             raise ValueError("joint_names must exactly match command positions")
         object.__setattr__(self, "joint_names", names)
+        expected_start = self.expected_start_state_positions
+        tolerances = self.start_state_tolerances
+        if (expected_start is None) != (tolerances is None):
+            raise ValueError("expected start positions and tolerances must be provided together")
+        if expected_start is not None and tolerances is not None:
+            expected_start = dict(expected_start)
+            tolerances = dict(tolerances)
+            if set(expected_start) != set(names) or set(tolerances) != set(names):
+                raise ValueError("start-state positions and tolerances must match joint_names")
+            for name in names:
+                expected_value = expected_start[name]
+                tolerance = tolerances[name]
+                if isinstance(expected_value, bool) or isinstance(tolerance, bool):
+                    raise ValueError("start-state positions and tolerances must be finite numbers")
+                try:
+                    expected_value = float(expected_value)
+                    tolerance = float(tolerance)
+                except (TypeError, ValueError) as exc:
+                    raise ValueError("start-state positions and tolerances must be finite numbers") from exc
+                if not math.isfinite(expected_value) or not math.isfinite(tolerance) or tolerance < 0:
+                    raise ValueError("start-state positions and tolerances must be finite numbers")
+                expected_start[name] = expected_value
+                tolerances[name] = tolerance
+            object.__setattr__(self, "expected_start_state_positions", MappingProxyType(expected_start))
+            object.__setattr__(self, "start_state_tolerances", MappingProxyType(tolerances))
         points = self.trajectory_points
         if points is None:
             points = (JointTrajectoryPoint(
@@ -284,6 +331,10 @@ class ArmCommandOwner:
             command.duration_s,
             command.source_state_sequence,
             command.calibration_revision,
+            tuple(sorted(command.expected_start_state_positions.items()))
+            if command.expected_start_state_positions is not None else None,
+            tuple(sorted(command.start_state_tolerances.items()))
+            if command.start_state_tolerances is not None else None,
         )
 
     def _decision(
@@ -384,10 +435,26 @@ class ArmCommandOwner:
                 return self._decision(False, "owner_not_allowed", command_id)
             if command.calibration_revision != self.config.calibration_revision:
                 return self._decision(False, "calibration_mismatch", command_id)
-            if command.source_state_sequence != self._joint_state.sequence:
+            if command.source_state_sequence > self._joint_state.sequence:
                 return self._decision(False, "joint_state_sequence_mismatch", command_id)
             if command.source_state_sequence <= self._last_command_state_sequence:
                 return self._decision(False, "joint_state_not_advanced", command_id)
+            if command.expected_start_state_positions is None:
+                if command.source_state_sequence != self._joint_state.sequence:
+                    return self._decision(False, "joint_state_sequence_mismatch", command_id)
+            else:
+                maximum_tolerances = self.config.max_start_state_tolerances
+                if maximum_tolerances is None:
+                    return self._decision(False, "start_state_tolerance_policy_missing", command_id)
+                if any(command.start_state_tolerances[name] > maximum_tolerances[name]
+                       for name in command.joint_names):
+                    return self._decision(False, "start_state_tolerance_exceeds_policy", command_id)
+                if any(
+                    abs(self._joint_state.positions[name] - command.expected_start_state_positions[name])
+                    > command.start_state_tolerances[name]
+                    for name in command.joint_names
+                ):
+                    return self._decision(False, "start_state_outside_tolerance", command_id)
             if command.duration_s > self.config.max_goal_duration_s:
                 return self._decision(False, "duration_limit", command_id)
             if set(command.positions) != set(self.config.joint_names):
@@ -423,7 +490,7 @@ class ArmCommandOwner:
             except Exception:
                 self._enter_hold("action_submission_failed")
                 return self._decision(False, "action_submission_failed", command_id)
-            self._last_command_state_sequence = command.source_state_sequence
+            self._last_command_state_sequence = self._joint_state.sequence
             self._active = (command, handle, now)
             self._state = "active"
             return self._decision(True, "submitted", command_id)

@@ -63,14 +63,17 @@ def test_selected_boundaries_target_and_objects_are_visible(monkeypatch):
         'strategy': 'both', 'error': .3, 'confidence': .85,
         'target_px': [205, 130], 'target_m': [.25, -.06],
         'boundaries': [
-            {'side': 'left', 'ends_px': [[40, 180], [100, 80]]},
-            {'side': 'right', 'ends_px': [[270, 180], [210, 80]]}],
+            {'side': 'left', 'selected': True, 'ends_px': [[40, 220], [100, 80]]},
+            {'side': 'right', 'selected': True, 'ends_px': [[270, 220], [210, 80]]}],
         'candidates': [{'rejected': True, 'reason': 'transverse',
                         'ends_px': [[100, 110], [180, 110]]}],
     }, objects={'image_size': [320, 240], 'quality': {'valid': True},
                 'regions': [{'b': [225, 50, 290, 105], 'n': 1, 'k': 'f'}]})
     assert any('FOLLOW RIGHT' in t for t in texts)
     assert any('85%' in t for t in texts)
+    assert 'LEFT LANE' in texts and 'RIGHT LANE' in texts
+    assert 'FOLLOW PATH' in texts
+    assert any('OBJ 1' in t and 'UNKNOWN' in t for t in texts)
     assert any('unranged' in t for t in texts)
     assert any('transverse' in t for t in texts)
     assert np.any(np.all(image == (60, 220, 60), axis=2))
@@ -117,3 +120,24 @@ def test_prediction_is_hidden_on_stop_or_invalid_calibration(patch):
     state = dict(level='TRACK', d=0., phi=0., kappa=0., w=.185)
     state.update(patch)
     assert predicted_road(state) is None
+
+
+def test_tag_label_never_becomes_a_robot_name_or_a_metric_range(monkeypatch):
+    texts = []
+    monkeypatch.setattr(cv2, 'putText', lambda img, text, *a, **kw: texts.append(text))
+    draw_follow_evidence(np.zeros((240, 320, 3), np.uint8), scale=1,
+                         tags=[{'tag_id': 7, 'corners_px': [[20, 50], [60, 50], [60, 90], [20, 90]]}])
+    assert any('TAG 7' in t for t in texts)
+    assert not any('ROBOT' in t or 'PERSON' in t or 'DOCK' in t for t in texts)
+
+
+def test_multiple_boundaries_without_selection_cannot_be_labelled_selected(monkeypatch):
+    texts = []
+    monkeypatch.setattr(cv2, 'putText', lambda img, text, *a, **kw: texts.append(text))
+    draw_follow_evidence(np.zeros((240, 320, 3), np.uint8), scale=1, keep={
+        'strategy': 'none', 'reason': 'junction', 'boundaries': [
+            {'side': 'left', 'ends_px': [[40, 180], [100, 80]]},
+            {'side': 'right', 'ends_px': [[270, 180], [210, 80]]}]})
+    assert any('LEFT LANE: UNSEEN' in t for t in texts)
+    assert any('RIGHT LANE: UNSEEN' in t for t in texts)
+    assert 'FOLLOW PATH' not in texts

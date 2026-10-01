@@ -867,3 +867,9 @@
 - 변경: `control/loc_assist_node.py`. `camera/front` 구독을 LOCALIZED에 들어가면 없애고 나오면 다시 만든다(`sync_camera`, 틱마다; 저장소에 스로틀된 카메라 토픽은 없다). 작업 스레드 본문을 `search_job`으로 빼고, 페인트 지도 적재와 탐색 사이에 `stopping` 플래그를 본다(main이 풀 종료 전에 세움). 작업 스레드는 로그를 남기지 않고 메모를 돌려주며 `finish_search`가 실행기 스레드에서 남긴다. 사각형·페인트 증거 시각을 코어에 `evidence_s`로 넘긴다. 검증 중 중복 결정은 debug 로그만.
 - 증거: `test_loc_assist_node_ros.py` 2개(WSL Jazzy: 카메라 구독 생성·제거·재생성, 정지 플래그가 탐색을 건너뜀) — WSL ROS 시험 55 passed. 호스트 sensing 2224 passed, 104 skipped; 아키텍처 76 passed(`control` 41237로 재판정).
 - gate 변화: 없음.
+
+## 2026-10-02 · uncommitted · feat(perception): visible lane candidates and object labels
+- 변경: LEFT/RIGHT LANE 선택 경계, CURRENT LANE와 인접 차로 후보, FOLLOW PATH 목표 안내를 구분. 폭·방향·중첩 구간으로 후보를 제한하고 중복 경계 조각을 합침. 전경 영역에 UNKNOWN/DARK와 거리 미확인 표시, 실제 ArUco 픽셀에 TAG 번호를 표시. 진단 전용 선택·차폭·카메라 지면 출처 정보를 추가하고 주행 관측 ground enum은 유지.
+- 증거: 추종·keeper·topology·tag·observer wiring 집중 시험 113 passed. 다차선 11 사례, 표식 픽셀 및 무효 입력, GAZEBO 주행 serializer 회귀 포함. docs/plans/2026-10-02-lane-object-preview-design.md.
+- 한계: 후보는 현재 프레임의 관측이며 전체 도로 차선 수·자동 차선 변경·객체 종류/추적/미래 궤적을 뜻하지 않음. 실기 설치는 전원 꺼짐으로 미확인.
+- gate 변화: 없음. SOURCE/LOCAL 표시 개선 검증; DEVICE/FIELD 미승격.

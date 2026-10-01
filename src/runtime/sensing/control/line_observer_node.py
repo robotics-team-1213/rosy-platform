@@ -35,7 +35,7 @@ from .sensing.perception.lane import (
 )
 from .sensing.perception.lane_bev import LaneEdgeFollower, pose_if_fresh
 from .sensing.perception.lane_boundaries import LaneBoundaryTracker
-from .sensing.perception.lane_keep import LaneKeeper
+from .sensing.perception.lane_keep import LaneKeeper, denoise_white_mask
 from .sensing.perception.lane_debug import next_publish_due, render_debug
 from .sensing.perception.paint_localizer import PaintMap
 from .sensing.perception.route_camera import RouteCameraFollower
@@ -78,6 +78,10 @@ class LineObserverNode(Node):
         # pursuit from a paint-localised pose (B). 'route_ab' is their
         # hybrid: A's manoeuvres placed by B's paint-localised pose. All
         # need lane_graph_path/route/route_start; fail closed without them.
+        # D-408: keep-mode paint source: threshold (default) | denoise | learned (+ denoise fallback).
+        self.declare_parameter('paint_source', 'threshold', _READ_ONLY)
+        self.declare_parameter('learned_lane_pointer', '', _READ_ONLY)
+        self.declare_parameter('learned_paint_stale_s', 0.6, _READ_ONLY)
         self.declare_parameter('camera_lane_mode', 'line', _READ_ONLY)
         self.declare_parameter('lane_half_width_m', 0.0925)
         self.declare_parameter('camera_roi_bottom_fraction', 1.0)
@@ -136,6 +140,7 @@ class LineObserverNode(Node):
         self._lane_keeper = LaneKeeper(
             camera_x_offset_m=float(self.get_parameter('camera_x_offset_m').value),
             corner_turning=bool(self.get_parameter('lane_corner_turning').value))
+        self._paint_worker = self._build_paint_worker()
         self._route_follower = None
         camera_lane_mode = str(self.get_parameter('camera_lane_mode').value)
         if camera_lane_mode in ('route_a', 'route_b', 'route_ab'):
@@ -319,6 +324,41 @@ class LineObserverNode(Node):
                 self.get_logger().warning(f'invalid IR line sample: {exc}')
         self._publish('IR_LINE', observation)
 
+    def destroy_node(self):
+        if self._paint_worker is not None:
+            self._paint_worker.close()
+        return super().destroy_node()
+
+    def _build_paint_worker(self):
+        """D-408: the learned paint source runs the lane model off the camera thread."""
+        source = str(self.get_parameter('paint_source').value)
+        if source not in ('threshold', 'denoise', 'learned'):
+            raise ValueError(f"paint_source must be threshold, denoise or learned, got {source!r}")
+        if source != 'learned':
+            return None
+        from .sensing.perception.learned.paint_worker import LearnedPaintWorker
+        from .sensing.perception.learned.runner import ModelSlot, add_learned_site
+        add_learned_site()
+        pointer = str(self.get_parameter('learned_lane_pointer').value)
+        if not pointer:
+            self.get_logger().warning('paint_source learned without learned_lane_pointer: denoise only')
+        return LearnedPaintWorker(ModelSlot(pointer) if pointer else None,
+                                  stale_s=float(self.get_parameter('learned_paint_stale_s').value),
+                                  warn=self.get_logger().warning)
+
+    def _paint_for(self, frame, ground):
+        """(paint mask or None, source actually used) for one keep frame (D-408)."""
+        source = str(self.get_parameter('paint_source').value)
+        if source == 'threshold' or ground is None:
+            return None, 'threshold'
+        if source == 'learned' and self._paint_worker is not None:
+            self._paint_worker.submit(frame)
+            mask, _summary = self._paint_worker.latest(frame.shape[:2])
+            if mask is not None:
+                return mask, 'learned'
+        return denoise_white_mask(frame, ground.horizon_row), (
+            'denoise' if source == 'denoise' else 'denoise_fallback')
+
     def _on_camera(self, msg: Image) -> None:
         observation = None
         frame = None
@@ -358,11 +398,14 @@ class LineObserverNode(Node):
                         or not 0.0 <= image_stamp - self._keep_last_stamp <= KEEP_MAX_FRAME_GAP_S):
                     self._lane_keeper.reset()
                 self._keep_last_stamp = image_stamp
+                ground = self._ground(frame.shape[1], frame.shape[0])
+                paint, paint_used = self._paint_for(frame, ground)
                 observation = self._lane_keeper.update(
-                    frame, self._ground(frame.shape[1], frame.shape[0]),
+                    frame, ground, paint_mask=paint,
                     lane_half_width_m=float(self.get_parameter('lane_half_width_m').value))
-                bundle = dict(self._lane_keeper.last,
+                bundle = dict(self._lane_keeper.last, paint_source_used=paint_used,
                               image_size=[frame.shape[1], frame.shape[0]],
+                              camera_geometry_source=str(self.get_parameter('camera_ground_source').value).upper(),
                               ground=self._ground_label(),
                               stamp=float(msg.header.stamp.sec)
                               + float(msg.header.stamp.nanosec) * 1e-9)
