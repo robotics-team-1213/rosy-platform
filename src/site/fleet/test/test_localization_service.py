@@ -303,26 +303,116 @@ def test_the_overhead_sighting_counts_when_the_flag_is_on_and_only_when_fresh():
     assert r1.suspects == ["fleet_monitor"]
 
 
-def test_the_ladder_logs_pending_missions_and_raises_needs_human(caplog):
+def test_the_ladder_sends_missions_then_raises_needs_human(caplog):
     clock = FakeClock()
     r1 = FakeRobot("r1", state=state("r1", "CANDIDATES", "odom"))   # no report: never decided
     svc = service(r1, clock=clock)
     with caplog.at_level(logging.INFO, logger="fleet.localization"):
         ticks(svc, clock, 10.0)
-        assert svc.view("r1")["rung"] is None
+        assert svc.view("r1")["rung"] is None and r1.missions == []
         ticks(svc, clock, 1.0)
         assert svc.view("r1")["rung"] == "rotate"
-        assert "rotate_in_place" in caplog.text and "pending P2-7" in caplog.text
+        assert r1.missions == [("rotate_in_place", 0.0, 30.0, None)]
         ticks(svc, clock, 15.0)
         assert svc.view("r1")["rung"] == "homing"
-        assert "to_square" in caplog.text
+        # No candidate report, so no square target: straight to the lane mission.
+        assert r1.missions[1:] == [("lane_to_stopline", 0.6, 40.0, None)]
+        assert svc.view("r1")["last_mission"] == {"kind": "lane_to_stopline", "rung": "homing",
+                                                  "held": [], "result": "sent"}
         ticks(svc, clock, 35.0)
     assert svc.view("r1")["needs_human"] is True
-    assert not any(c[0] == "localization_mission" for c in r1.calls)
+    assert len(r1.missions) == 2                                    # needs_human sends nothing
 
     r1._state = state("r1", "LOCALIZED")
     ticks(svc, clock, 0.5)
     assert svc.view("r1")["needs_human"] is False
+
+
+def test_homing_tries_to_square_first_and_falls_back_when_core_refuses_it():
+    clock = FakeClock()
+    r1 = FakeRobot("r1", state=state("r1", "CANDIDATES", "odom"))
+    r1.candidates = report("r1", OFF)
+    r1.decision_error = RobotApiError("r1", 409, "STALE_REQUEST", "keep the ladder running")
+
+    calls = []
+    original = r1.localization_mission
+
+    async def mission(kind, **kwargs):
+        calls.append(kind)
+        if kind == "to_square":
+            raise RobotApiError("r1", 409, "unsupported", "follow-up")
+        return await original(kind, **kwargs)
+
+    r1.localization_mission = mission
+    svc = service(r1, clock=clock)
+    ticks(svc, clock, 26.0)
+    assert calls == ["rotate_in_place", "to_square", "lane_to_stopline"]
+    [lane] = [m for m in r1.missions if m[0] == "lane_to_stopline"]
+    assert lane[3] is None                                       # only to_square carries a target
+    assert svc.view("r1")["last_mission"]["kind"] == "lane_to_stopline"
+
+
+def test_the_square_target_is_the_square_nearest_the_first_candidate():
+    target = service_logic.square_target(report("r1", OFF), [A, B])
+    assert target == {"square": [A[0], A[1]], "candidate_index": 0, "request_id": "r1-1"}
+    assert service_logic.square_target(None, [A, B]) is None
+    assert service_logic.square_target(report("r1", OFF), []) is None
+
+
+@pytest.mark.parametrize("code", ["busy", "path_not_clear", "localized", "estop", "calibration_lease"])
+def test_a_refused_mission_is_recorded_not_retried(code):
+    clock = FakeClock()
+    r1 = FakeRobot("r1", state=state("r1", "CANDIDATES", "odom"))
+    r1.mission_error = RobotApiError("r1", 409, code, "refused")
+    svc = service(r1, clock=clock)
+    ticks(svc, clock, 12.0)
+    assert [m[0] for m in r1.missions] == ["rotate_in_place"]
+    assert svc.view("r1")["last_mission"]["result"] == code
+
+
+def test_legacy_and_localized_robots_never_get_a_mission():
+    clock = FakeClock()
+    legacy = FakeRobot("r1", state={"robot_id": "r1", "pose": {"x": 0, "y": 0, "yaw": 0},
+                                    "localization": None})
+    localized = FakeRobot("r2", state=state("r2", "LOCALIZED"))
+    svc = service(legacy, localized, clock=clock)
+    ticks(svc, clock, 70.0)
+    assert legacy.missions == [] and localized.missions == []
+
+
+def test_traffic_is_held_before_every_mission():
+    clock = FakeClock()
+    r1 = FakeRobot("r1", state=state("r1", "CANDIDATES", "odom"))
+    order = []
+    original = r1.localization_mission
+
+    async def hold(robot_id):
+        order.append(("hold", robot_id))
+        return ["r2"]
+
+    async def mission(kind, **kwargs):
+        order.append(("mission", kind))
+        return await original(kind, **kwargs)
+
+    r1.localization_mission = mission
+    svc = service(r1, clock=clock, traffic_hold=hold)
+    ticks(svc, clock, 26.0)
+    assert order == [("hold", "r1"), ("mission", "rotate_in_place"),
+                     ("hold", "r1"), ("mission", "lane_to_stopline")]
+    assert svc.view("r1")["last_mission"]["held"] == ["r2"]
+
+
+def test_a_failed_traffic_hold_sends_no_mission():
+    clock = FakeClock()
+    r1 = FakeRobot("r1", state=state("r1", "CANDIDATES", "odom"))
+
+    async def hold(robot_id):
+        raise RuntimeError("navigation goal cancellation was not confirmed")
+
+    svc = service(r1, clock=clock, traffic_hold=hold)
+    ticks(svc, clock, 12.0)
+    assert r1.missions == []
+    assert svc.view("r1")["last_mission"]["result"] == "traffic_hold_failed"
 
 
 def test_an_offline_robot_is_skipped_and_a_removed_one_forgotten():
@@ -363,3 +453,15 @@ def test_one_hung_robot_does_not_stall_the_others():
     run(drive())
 
     assert len(ok.decisions) == 1
+
+
+def test_the_cli_wiring_holds_traffic_through_the_console():
+    from types import SimpleNamespace
+    from fleet.server.localization_service import build_localization_service
+
+    async def hold(robot_id):
+        return []
+
+    console = SimpleNamespace(clients=lambda: {}, hold_for_localization=hold)
+    svc = build_localization_service(console, None, lane_rules=LANE_RULES)
+    assert svc._traffic_hold is hold

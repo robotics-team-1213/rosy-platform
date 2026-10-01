@@ -1134,3 +1134,9 @@
 - 증거: 로봇 시계가 ±1 h 어긋나도 새 보고는 증거(1.5 s 뒤 SUSPECT), 바뀌지 않은 보고는 Fleet 시간 1 s 뒤 낡아 SUSPECT 없음(재읽기가 처음 본 시각을 갱신하는 변이로 확인).
 - gate 변화: 없음(SOURCE/LOCAL).
 - 결정: D-395 개정 3(시계 비동기).
+
+## 2026-10-02 · uncommitted · feat(fleet): D-395 P2-7 사다리가 미션을 보낸다, 미션 전 교통 정지
+
+- 변경: `HttpRobotClient.localization_mission` 이 `POST /api/v1/localization/mission` 을 보낸다(자리표시 제거), `FakeRobot` 은 `missions`·`mission_error`. `LocalizationService` 사다리: 10 s `rotate_in_place`, 25 s `to_square`(사각형 목표가 있을 때, CORE 가 `unsupported` 면) → `lane_to_stopline`, 60 s `needs_human`. 거부는 `last_mission` 에 기록하고 재시도하지 않는다. LOCALIZED·레거시(null) 로봇에는 보내지 않는다. 미션 전 `FleetConsole.hold_for_localization` — 미확정 로봇의 keep-out(`trust.blocks`, 신뢰 자세가 없으면 트랙 전체)에 걸린 Fleet 목표를 취소하고 `LOCALIZATION_UNTRUSTED` 로 대기열에 넣어 그 로봇이 LOCALIZED 가 되면 다시 낸다. 정지가 실패하면 미션을 보내지 않는다. `service_logic.MISSION_LIMITS`·`square_target`; view 의 `pending_missions` → `rung_missions`.
+- 증거: `test_localization_service.py` (사다리 미션·대체·거부·레거시·교통 정지·배선), `test_server_traffic.py` +4, `test_transport_localization.py`.
+- gate 변화: console.py 1076 → 1096 (D-362 1000+ 등급, 판정 갱신).

@@ -32,9 +32,13 @@ REPORT_FRESH_S = 1.0
 LADDER_ROTATE_S = 10.0
 LADDER_HOMING_S = 25.0
 LADDER_HUMAN_S = 60.0
-#: Missions each rung would request once CORE's executor lands (lane B, P2-7).
+#: Missions each rung asks CORE for, in order (P2-7): `to_square` first when a square is
+#: known, `lane_to_stopline` when CORE refuses it as `unsupported` or no square is known.
 RUNG_MISSIONS = {"rotate": ("rotate_in_place",), "homing": ("to_square", "lane_to_stopline"),
                  "needs_human": ()}
+#: (max_distance_m, max_time_s) per mission; within CORE's caps (1.0 m, 120 s, nudge 0.10 m).
+MISSION_LIMITS = {"rotate_in_place": (0.0, 30.0), "lane_to_stopline": (0.6, 40.0),
+                  "to_square": (1.0, 60.0)}
 
 Observation = tuple[float, float, Optional[float]]     # x, y, yaw (None: position only)
 
@@ -49,6 +53,18 @@ def parse_reference_squares(rules: Mapping) -> tuple[list[cues.Slot], list[tuple
         squares.append((x, y))
         slots.append(cues.Slot(x, y, math.radians(float(entry.get("heading_axis_deg", 0.0)))))
     return slots, squares
+
+
+def square_target(report: Optional[CandidateReport],
+                  squares: Sequence[tuple[float, float]]) -> Optional[dict]:
+    """`to_square` target: the square nearest the robot's first candidate (map frame), or None
+    without a report or squares. CORE drives toward it; arrival and the camera decide (rev. 1)."""
+    if report is None or not report.candidates or not squares:
+        return None
+    first = report.candidates[0]
+    square = min(squares, key=lambda s: math.dist(s, (first.x, first.y)))
+    return {"square": [square[0], square[1]], "candidate_index": 0,
+            "request_id": report.request_id}
 
 
 def disagrees(reported: cues.Pose, observed: Observation) -> bool:
@@ -160,7 +176,7 @@ class Ladder:
         rung = self._rung.get(robot_id)
         return {"rung": rung, "needs_human": rung == "needs_human",
                 "candidates_for_s": None if since is None else round(now - since, 1),
-                "pending_missions": list(RUNG_MISSIONS.get(rung, ()))}
+                "rung_missions": list(RUNG_MISSIONS.get(rung, ()))}
 
     def forget(self, robot_id: str) -> None:
         self._since.pop(robot_id, None)

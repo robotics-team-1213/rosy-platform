@@ -780,6 +780,26 @@ class FleetConsole:
         self._yielding.pop(robot_id, None)
         return result
 
+    async def hold_for_localization(self, mover: str) -> list[str]:
+        """D-395 P2-7: before CORE moves an unlocalized `mover`, stop the Fleet-driven robots
+        its keep-out reaches (`trust.blocks`, the whole track when it was never trusted).
+        Each held goal waits as LOCALIZATION_UNTRUSTED behind the mover until it is trusted."""
+        held, last = [], self._trusted.get(mover)
+        for robot_id in list(self._order):
+            goal = self._goals.get(robot_id)
+            here = self._pose_of(robot_id)
+            route = ([here] if here is not None else []) + list(self._claims.get(robot_id) or [])
+            if robot_id == mover or goal is None or not trust.blocks(route, last):
+                continue
+            if not self._cancel_confirmed(await self._client(robot_id).navigation_cancel()):
+                raise RuntimeError("navigation goal cancellation was not confirmed")
+            self._goals.pop(robot_id, None)
+            self._claims.pop(robot_id, None)
+            self._queued[robot_id] = {**goal, "blocked_by": mover, "waiting_on": [mover],
+                                      "reason": "LOCALIZATION_UNTRUSTED"}
+            held.append(robot_id)
+        return held
+
     # --- pinned-address holds (D-361 3) ------------------------------------------
 
     def hold_robot(self, robot_id: str, reason: str) -> None:

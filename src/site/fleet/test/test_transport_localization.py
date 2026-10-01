@@ -1,4 +1,4 @@
-"""D-395 Phase 2 client routes (contract §2): candidates, decision, suspect; mission is P2-7."""
+"""D-395 Phase 2 client routes (contract §2): candidates, decision, suspect, mission (P2-7)."""
 
 import asyncio
 import json
@@ -94,12 +94,23 @@ def test_suspect_refuses_a_reason_over_64_chars_before_sending():
     assert seen == []
 
 
-def test_mission_is_a_p2_7_stub_and_sends_nothing():
+def test_mission_posts_the_request():
     seen = []
-    with pytest.raises(NotImplementedError, match="P2-7"):
-        run(_client(_recording(seen)).localization_mission("rotate_in_place", max_distance_m=0.0,
-                                                           max_time_s=10.0))
-    assert seen == []
+    body = {"kind": "rotate_in_place", "state": "running", "reason": None}
+    got = run(_client(_recording(seen, status=202, body=body)).localization_mission(
+        "rotate_in_place", max_distance_m=0.0, max_time_s=30.0))
+    assert got == body
+    assert seen == [{"method": "POST", "path": "/api/v1/localization/mission", "auth": "Bearer op-token",
+                     "body": {"kind": "rotate_in_place", "max_distance_m": 0.0, "max_time_s": 30.0,
+                              "target": None}}]
+
+
+def test_a_refused_mission_surfaces_the_robots_code():
+    body = {"error": {"code": "path_not_clear", "message": "front clearance 0.20 m < 0.25 m"}}
+    with pytest.raises(RobotApiError) as exc:
+        run(_client(_recording([], status=409, body=body)).localization_mission(
+            "nudge_forward", max_distance_m=0.05, max_time_s=10.0))
+    assert exc.value.status == 409 and exc.value.code == "path_not_clear"
 
 
 def test_the_fake_robot_records_the_localization_calls():
@@ -111,5 +122,9 @@ def test_the_fake_robot_records_the_localization_calls():
     run(robot.localization_decision(decision))
     run(robot.localization_suspect("fleet_monitor"))
     assert robot.decisions == [decision] and robot.suspects == ["fleet_monitor"]
-    with pytest.raises(NotImplementedError):
-        run(robot.localization_mission("rotate_in_place", max_distance_m=0.0, max_time_s=1.0))
+    run(robot.localization_mission("rotate_in_place", max_distance_m=0.0, max_time_s=1.0))
+    assert robot.missions == [("rotate_in_place", 0.0, 1.0, None)]
+    robot.mission_error = RobotApiError("rosy_02", 409, "unsupported", "follow-up")
+    with pytest.raises(RobotApiError):
+        run(robot.localization_mission("to_square", max_distance_m=0.5, max_time_s=1.0))
+    assert robot.missions[-1][0] == "to_square"

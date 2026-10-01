@@ -124,6 +124,10 @@ class FakeRobot:
         self.suspects: list[str] = []
         #: Raised by `localization_decision` (e.g. RobotApiError 409 STALE_REQUEST).
         self.decision_error: Optional[BaseException] = None
+        #: D-395 P2-7: `(kind, max_distance_m, max_time_s, target)` per mission request.
+        self.missions: list[tuple] = []
+        #: Raised by `localization_mission` (e.g. RobotApiError 409 unsupported).
+        self.mission_error: Optional[BaseException] = None
 
     def _record(self, *call) -> None:
         self.calls.append(call)
@@ -207,7 +211,11 @@ class FakeRobot:
 
     async def localization_mission(self, kind: str, *, max_distance_m: float, max_time_s: float,
                                    target: Optional[dict] = None) -> dict:
-        raise NotImplementedError("localization missions are P2-7")
+        self._record("localization_mission", kind)
+        self.missions.append((kind, max_distance_m, max_time_s, target))
+        if self.mission_error is not None:
+            raise self.mission_error
+        return {"kind": kind, "state": "running", "reason": None}
 
     async def pose_stream(self) -> AsyncIterator[str]:
         self.pose_opens += 1
