@@ -277,7 +277,10 @@ class ControlSensorAdapter:
         except Exception:
             destroy = getattr(node, "destroy_node", None)
             if callable(destroy):
-                destroy()
+                try:
+                    destroy()
+                except Exception:
+                    pass  # a cleanup failure must not replace the original error
             raise
 
         self.node = node
@@ -344,16 +347,20 @@ class ControlSensorAdapter:
         return True
 
 
+_CALIBRATION_RETIRED = ("control.sensor_adapter.calibration is retired (D-400 3); enforce needs an accepted "
+                        "calibration-store record (D-400 plan 3) — remove the block")
 _CALIBRATION_IGNORED = "control.sensor_adapter.calibration is ignored (D-400 3); use the calibration store"
 
 
 def build_control_adapter(raw_config: Mapping[str, Any] | None, *, parameters: Mapping[str, Any],
                           policy_required: bool = False,
-                          **factories: Any) -> tuple["ControlSensorAdapter", list[str]]:
+                          sensor_node_factory: Optional[Callable[..., Any]] = None,
+                          policy_factory: Optional[Callable[..., Any]] = None,
+                          namespace: str | None = None) -> tuple["ControlSensorAdapter", list[str]]:
     """D-400 assembly: resolved parameters replace the overlay, the calibration
-    block is ignored, and a shadow that cannot start runs with the policy off.
-    Config errors (bad mode, bad types, shadow + safety.control_policy_required)
-    still raise in every mode."""
+    block is retired, and a shadow that cannot start runs with the policy off.
+    Config errors (bad mode, bad types, shadow + safety.control_policy_required,
+    an enforce calibration block) still raise; unknown keywords are a TypeError."""
     raw = dict(raw_config or {})
     calibration = raw.pop("calibration", None)
     raw["parameters"] = dict(parameters)
@@ -361,14 +368,21 @@ def build_control_adapter(raw_config: Mapping[str, Any] | None, *, parameters: M
     if config.mode == "shadow" and policy_required:
         raise ValueError("control_policy_required is enforce-only; shadow never binds a deciding policy")
     notes: list[str] = []
-    if isinstance(calibration, Mapping) and calibration.get("required") is True:
-        notes.append(_CALIBRATION_IGNORED)
+    if calibration is not None:
+        required = calibration.get("required", False) if isinstance(calibration, Mapping) else True
+        if config.mode == "enforce":
+            if required is not False:  # True, a non-bool or a non-mapping block
+                raise ValueError(_CALIBRATION_RETIRED)
+        elif required:
+            notes.append(_CALIBRATION_IGNORED)
     try:
-        return ControlSensorAdapter(raw, **factories), notes
+        return ControlSensorAdapter(raw, sensor_node_factory=sensor_node_factory,
+                                    policy_factory=policy_factory, namespace=namespace), notes
     except Exception as exc:
         if config.mode != "shadow":
             raise
+        reason = f"{type(exc).__name__}: {exc}"
         off = ControlSensorAdapter({"mode": "off"})
-        off.mode_error = str(exc)
-        notes.append(f"shadow sensor adapter failed, running with the policy off: {exc}")
+        off.mode_error = reason
+        notes.append(f"shadow sensor adapter failed, running with the policy off: {reason}")
         return off, notes
