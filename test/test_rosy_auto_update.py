@@ -2259,3 +2259,105 @@ def test_escalation_reasons_name_the_remedy(device, host, hub, keys):
     result = up.run()
     assert result["phase"] == "held"
     assert "release-hold" in result["reason"]
+
+
+# --- verification review 2 (REQUEST CHANGES, 2 HIGH) ------------------------------------
+
+
+def _switched_then_timed_out(h, argv):
+    h.links = {"current": NEXT, "previous": CURRENT}
+    return subprocess.CompletedProcess([], 124, "", "TIMEOUT")
+
+
+def test_a_rollback_that_gave_up_then_an_operator_rollback_fails_the_release(device, host, hub, keys):
+    # HIGH 1 (the reviewer's probe): our rollback never moved current, so the
+    # operator's later rollback is an operator rollback (N9).
+    hub.publish(keys, NEXT)
+    host.overrides["activate"] = _switched_then_timed_out
+    host.overrides["rollback"] = lambda h, argv: subprocess.CompletedProcess(
+        [], 1, json.dumps({"ok": False, "error": "NATIVE_RELEASE_BUSY: x"}), "")
+    up = updater(host, hub)
+    for _ in range(6):
+        up.run()
+    assert state(device)["last_result"]["outcome"] == "rollback_failed"
+    assert NEXT not in (state(device).get("self_rolled_back") or {})
+
+    del host.overrides["activate"], host.overrides["rollback"]
+    host.links = {"current": CURRENT, "previous": NEXT}  # rosy-release-push.ps1 -Rollback
+    host.t += dt.timedelta(minutes=5)
+    up.run()
+
+    assert state(device)["failed"][NEXT]["detail"] == "operator rolled back"
+    assert kinds(host).count("activate") == 1
+
+
+def test_a_definitive_rollback_error_is_not_a_self_rollback(device, host, hub, keys):
+    # HIGH 1
+    hub.publish(keys, NEXT)
+    host.overrides["activate"] = _switched_then_timed_out
+    host.overrides["rollback"] = lambda h, argv: subprocess.CompletedProcess(
+        [], 1, json.dumps({"ok": False, "error": "SIGNATURE_INVALID: previous does not verify"}), "")
+
+    updater(host, hub).run()
+
+    assert host.links["current"] == NEXT
+    assert NEXT not in (state(device).get("self_rolled_back") or {})
+
+
+def test_a_failing_rollback_tail_still_backs_off(device, host, hub, keys):
+    # HIGH 2 (the reviewer's probe): moved away but the tail failed; the apply
+    # error must still be counted so the loop is bounded.
+    hub.publish(keys, NEXT)
+    host.overrides["activate"] = _switched_then_timed_out
+    host.overrides["ready"] = lambda h, argv: (subprocess.CompletedProcess([], 1, "", "x")
+                                              if h.links["current"] == CURRENT else None)
+    up = updater(host, hub)
+    for _ in range(6):
+        host.t += dt.timedelta(minutes=5)
+        up.run()
+
+    assert kinds(host).count("activate") <= 3
+    assert state(device)["apply_errors"][NEXT]["attempts"] >= 1
+    assert NEXT in state(device)["self_rolled_back"]  # it did move current away
+
+
+def test_release_hold_acknowledges_a_rollback_failure(device, host, hub, keys):
+    # MEDIUM
+    hub.publish(keys, NEXT)
+    host.overrides["ready"] = lambda h, argv: (subprocess.CompletedProcess([], 1, "", "x")
+                                              if h.links["current"] == NEXT else None)
+    host.overrides["rollback"] = lambda h, argv: subprocess.CompletedProcess(
+        [], 1, json.dumps({"ok": False, "error": "NATIVE_RELEASE_BUSY: x"}), "")
+    up = updater(host, hub)
+    for _ in range(6):
+        up.run()
+    sticky = up.run()
+    assert sticky["phase"] == "failed" and "release-hold" in sticky["reason"]
+
+    up.release_hold()
+
+    assert state(device).get("last_result") is None
+    assert up.run()["phase"] != "failed"
+
+
+def test_stale_self_rollback_entries_are_pruned(device, host, hub, keys):
+    # LOW
+    hub.publish(keys, NEXT)
+    write_json(device / "var/lib/rosy/updates/state.json", {
+        "self_rolled_back": {CURRENT: _z(T0), NEWER: _z(T0), "2026.10.01-030": _z(T0), NEXT: _z(T0)},
+        "failed": {NEWER: {"at": _z(T0), "detail": "x"}},
+        "withdrawn": {"2026.10.01-030": {"at": _z(T0), "reason": "x"}},
+    })
+    up = updater(host, hub)
+    up.hold("agent", "x", 1)
+
+    up.run()
+
+    assert set(state(device)["self_rolled_back"]) == {NEXT}
+
+
+def test_the_precheck_busy_exit_matches_native_release():
+    # LOW: the activator's "busy" code and the updater's precheck exit are one value.
+    from deploy.robot.pinky_pro.native import native_release
+
+    assert native_release.PRECHECK_BUSY_EXIT == upd.PRECHECK_BUSY_EXIT == 3

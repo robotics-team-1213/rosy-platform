@@ -550,8 +550,16 @@ class Updater:
         existed = path.exists() or path.is_symlink()
         path.unlink(missing_ok=True)
         state = self._load_state()
-        if state.get("apply_errors"):
-            state["apply_errors"] = {}
+        changed = bool(state.get("apply_errors"))
+        state["apply_errors"] = {}
+        if (state.get("last_result") or {}).get("outcome") == "rollback_failed":
+            # Verification review 2, MEDIUM: release-hold is also the acknowledgement of a
+            # rollback that could not run (the operator accepts the release as it is).
+            self._history("rollback_failure_acknowledged", state["last_result"].get("release_id"),
+                          "cleared by release-hold")
+            state["last_result"] = None
+            changed = True
+        if changed:
             self._save_state(state)
         self._history("hold_released", None, "hold removed" if existed else "no hold was set")
         return existed
@@ -1053,7 +1061,7 @@ class Updater:
         if mark_failed:
             self._mark_failed(state, release_id, why)  # recorded now: never retried, even mid-rollback
         problems = []
-        gave_up = False
+        gave_up = refused = False
         if self.host.current_release() == release_id:
             rolled = self.host.run(["bash", self._native("rollback-release.sh")], ACTIVATE_TIMEOUT_S)
             kind, error = _outcome(rolled)
@@ -1070,15 +1078,20 @@ class Updater:
                 problems.append(f"rollback could not run after {ROLLBACK_MAX_RETRIES} retries ({error}); operator "
                                 "action required: rosy-release-push.ps1 -Rollback")
             elif kind == "definitive":
+                refused = True
                 problems.append(f"rollback: {error}")
+        # Verification review 2, HIGH 1: only a rollback that really moved current away
+        # is ours; one that gave up or was refused leaves the release current, and a later
+        # operator rollback of it is an operator rollback (N9).
+        moved = not gave_up and not refused and self.host.current_release() != release_id
         if not problems:
             problems = self._rollback_tail(release_id)
-        if not mark_failed:
-            # Verification review HIGH: our own rollback leaves previous above current;
-            # that is not an operator rollback (N9) and the release stays retryable (N7).
+        if not mark_failed and moved:
+            # previous is now above current: not an operator rollback (N9), and the
+            # release stays retryable (N7). HIGH 2: the apply error is counted even
+            # when the tail had problems, so backoff and escalation bound the loop.
             state.setdefault("self_rolled_back", {})[release_id] = _z(self.host.now())
-            if not problems:
-                self._apply_error(state, release_id, why)
+            self._apply_error(state, release_id, why)
         note = applying.get("note")
         state["applying"] = None
         detail = why if not problems else f"{why}; rollback incomplete: {'; '.join(problems)}"
@@ -1349,10 +1362,17 @@ class Updater:
             # Verification review L2: still on the release that could not be rolled back;
             # say so on every run until a person changes current.
             return self._finish(state, "failed", f"{current} could not be rolled back; operator action required: "
-                                "rosy-release-push.ps1 -Rollback", current)
+                                "rosy-release-push.ps1 -Rollback, or accept it with rosy_auto_update.py "
+                                "release-hold", current)
         failed = state.setdefault("failed", {})
         # Review H4: a release we committed that is now above current was rolled back
         # on purpose by an operator; never apply it again.
+        withdrawn_ids = state.get("withdrawn") or {}
+        mine = state.get("self_rolled_back") or {}
+        for item in list(mine):
+            # Verification review 2, LOW: an entry only matters while it explains previous.
+            if item == current or item in failed or item in withdrawn_ids:
+                del mine[item]
         previous = self.host.previous_release()
         rolled_back = [item for item in state.get("committed") or [] if item > current]
         if previous is not None and previous > current and previous not in (state.get("self_rolled_back") or {}):

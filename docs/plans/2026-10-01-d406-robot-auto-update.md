@@ -43,7 +43,7 @@ All files live under `/var/lib/rosy/updates/` (root 0755; files 0644 except wher
  "last_result": {"release_id": "...", "outcome": "committed|rolled_back|refused|rollback_failed", "at": "<Z>", "detail": "..."}}
 ```
 - `stuck` (T2 re-review N5): an interrupted apply whose CORE is active but has not written status-inputs for 30 min. The updater does not roll back on its own; the reason names the remedy (`rosy-release-push.ps1 -Rollback`). Not committed.
-- `rollback_failed` (verification review L2): a rollback that could not run after 5 retries. While that release is still current, every run reports `phase: failed` with the remedy, and nothing newer is applied.
+- `rollback_failed` (verification review L2): a rollback that could not run after 5 retries. While that release is still current, every run reports `phase: failed` with the remedy, and nothing newer is applied. `rosy_auto_update.py release-hold` acknowledges it (clears `last_result`) when the operator keeps that release.
 
 - **`stuck`** (added 2026-10-02, review N5) means an apply is still journaled while CORE is active but has not written status-inputs for more than 30 min since the apply started. It is never auto-rolled back; an operator acts. The canary watch treats it as not committed, so the watch keeps waiting and withdraws at its timeout.
 
