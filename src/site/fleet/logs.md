@@ -972,3 +972,10 @@
 - 결정: 스캔 행에는 robot_id·device_uid가 없다. 그래서 같은 로봇 판정은 등록부가 이미 쓰는 발견 이름(등록 로봇), 인증된 HELLO의 `device_name`, 그 둘이 없으면 base_url 자체의 `.local` 이름(파일 로봇)으로만 한다. 신원이 없는 로봇은 이름으로 짐작하지 않는다. 실제 이동은 기존 "새 주소로 옮기기"가 토큰으로 robot_id·hostname·serial·device_uid를 다시 확인한다. 스캔 행에 넷마스크가 없어 "스캔된 망"은 스캔 주소마다 /24로 잡는다(`site_networks` 인자는 사이트 호스트 인터페이스를 알게 되면 더한다 — 지금은 배선하지 않음: Fleet은 컨테이너 안이라 호스트 인터페이스를 모른다). 포트만 다르면 주소 변경으로 보지 않는다(파일 로봇의 https:8443 대 광고 8080). `.local`은 풀지 않고(D-370 5.3) 스캔의 IP를 제안으로만 싣는다. 응답에 토큰·경로·userinfo가 없다. API 참조에 행을 더했다.
 - 증거: 새 `test_address_drift.py` 14, `test_address_drift_api.py` 4 — 모듈 없음으로 적색 확인 뒤 18 passed.
 - gate 변화: 없음(LOCAL).
+
+## 2026-10-01 · uncommitted · feat(console): 오프라인 로봇 카드에 고정 주소 까닭, 사이트 망 변경 경보
+
+- 변경: 점검 #3 — 새 순수 모듈 `web/address-drift.js`(`addressReason`·`renumberBanner`·`addressMap`)가 판정을 문장으로 옮긴다. 오프라인 로봇 카드에 "고정 주소 X이(가) 지금 망에 없습니다 — …", 등록 로봇이 다른 주소에 하나로 보이고 등록부가 `address_changed`면 "같은 로봇이 Y에 보입니다 — 새 주소로 옮기기…"와 카드 버튼(기존 로봇별 이동 흐름 `enrollment.confirmMove`를 그대로 부름, viewer는 "운용자 권한이 필요합니다", 공용 토큰은 "이름 있는 운용자 계정이 필요합니다"), 이름이 여러 주소면 신원 충돌 문장(행동 없음). robots.yaml의 `.local` 로봇은 "이름이라 Fleet이 따라가지 않습니다 — 스캔에서 Y에 보입니다 … robots.yaml을 고치세요"로 제안만 한다. 모든 고정 로봇이 스캔 망 밖이면 로봇 목록 위에 `role="alert"` 경보 "사이트 망 주소가 바뀐 것 같습니다 …". `console.js`가 발견과 같은 주기로 읽고 바뀌었을 때만 다시 그린다. 정적 허용 목록에 모듈을 더했고, 넓은 창 격자에 경보 행을 넣어 아래 행을 하나씩 내렸다.
+- 결정: 예시 주소 `192.168.1.20`을 콘솔·서버 문구에서 뺐다. 수동 등록은 사설 IPv4만 받으므로 문서용 192.0.2.x를 예로 들면 그 예가 거절된다 — 자리표시는 "로봇 화면의 IP:8080", 오류 문구는 "로봇 화면에 보이는 IPv4 주소"로 바꿨다. `deploy/site/robots.yaml.example`은 이미 192.0.2.10이다.
+- 증거: 새 `test/web/address-drift.test.mjs` 7(모듈 없음 적색 → 자리표시 `192.168.1.20` 남음 적색 → 녹색), `test_address_drift_api.py` 정적 자산·셸 배선 1 추가. `node --test src/site/fleet/test/web/*.test.mjs` 76 passed, `src/hmi/web_common/test/` + 콘솔 시험 224 passed, 24 skipped.
+- gate 변화: 없음(LOCAL).

@@ -122,3 +122,18 @@ def test_static_local_name_gets_a_suggestion_not_a_resolution(caplog):
     assert console.registered_endpoints["rosy_01"] == "http://rosy-a.local:8080"
     assert any("rosy_01" in r.getMessage() and "10.16.36.20:8080" in r.getMessage()
                for r in caplog.records)
+
+
+def test_console_serves_the_address_module_and_wires_the_banner():
+    endpoint = RobotEndpoint("rosy_01", "http://192.168.1.10:8080", "rest")
+    console = FleetConsole([endpoint], [FakeRobot("rosy_01")])
+    client = TestClient(create_app(console, console_token="viewer"))
+    module = client.get("/console/assets/address-drift.js")
+    assert module.status_code == 200
+    assert "export function addressReason" in module.text
+    page = client.get("/console").text
+    assert 'id="address-banner"' in page and 'role="alert"' in page
+    shell = client.get("/console/assets/console.js").text
+    assert "/api/fleet/discovery/addresses" in shell
+    roster = client.get("/console/assets/roster.js").text
+    assert "addressReason(" in roster and "새 주소로 옮기기…" in roster

@@ -73,6 +73,9 @@
       <div class="roster-block">
         <h2 id="roster-heading">등록 로봇</h2>
         <ui-button id="roster-toggle" kind="quiet" type="button" aria-expanded="false" aria-controls="roster">전체 로봇 보기</ui-button>
+        <div id="address-drift" class="address-drift" hidden>
+          <p id="address-banner" class="enroll-alarm" role="alert" hidden></p>
+        </div>
         <div id="roster" class="roster"><p class="hint" role="status">로봇 목록 불러오는 중</p></div>
       </div>
 
@@ -138,7 +141,7 @@
             <div id="enroll-controls" hidden>
               <div class="enroll-address">
                 <label for="enroll-address">주소로 추가</label>
-                <input class="ui-field" id="enroll-address" inputmode="decimal" autocomplete="off" placeholder="192.168.1.20:8080">
+                <input class="ui-field" id="enroll-address" inputmode="decimal" autocomplete="off" placeholder="로봇 화면의 IP:8080">
                 <ui-button id="enroll-address-add" kind="quiet" type="button">추가</ui-button>
               </div>
               <div id="enroll-result" class="enroll-result" aria-live="polite"></div>

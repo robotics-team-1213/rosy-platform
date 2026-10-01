@@ -7,8 +7,9 @@ import { createSignals } from "./signals.js";
 import { createVisionView } from "./vision-view.js";
 import { createFieldView } from "./field-view.js";
 import { createMapFitView } from "./map-fit-view.js";
-import { applyRoleToControls } from "./authorization.js";
-import { DISCOVERY_LABELS, createEnrollmentPanel } from "./enrollment.js";
+import { OPERATOR_REASON, applyRoleToControls } from "./authorization.js";
+import { DISCOVERY_LABELS, canManage, createEnrollmentPanel } from "./enrollment.js";
+import { addressMap, renumberBanner } from "./address-drift.js";
 import { createCameraPairingPanel } from "./camera-pairing.js";
 import { createPollGate } from "./poll-gate.js";
 import { confirmIrreversible, openLiveDialog } from "/common/ui.js";
@@ -94,6 +95,7 @@ const view = {
   dispatchControl: null,
   stateUnavailable: false,
   stateLoaded: false,
+  addresses: {},  // robot_id -> GET /api/fleet/discovery/addresses 행(고정 주소 판정)
 };
 
 function log(text, kind) {
@@ -339,6 +341,7 @@ async function refreshDiscovery() {
   try {
     const snapshot = await call("/api/fleet/discovery");
     discoveryGate.ok();
+    await refreshAddresses();
     // 검색기 임대(45 s)가 끊기면 발견과 새 주소로 옮기기가 멈춘다 — 대기와 구별해 경보한다.
     if (snapshot.scanner_state === "expired") {
       if (!scannerLost) log("발견 검색기 끊김 — 새 로봇 발견·새 주소로 옮기기 불가", "bad");
@@ -377,6 +380,27 @@ async function refreshDiscovery() {
         "발견 상태 확인 불가", "발견 목록을 확인할 수 없습니다. Fleet 연결을 확인하세요.");
     }
   }
+}
+
+// 고정 주소 판정은 발견과 같은 주기로 읽는다. 못 읽으면 까닭 줄을 지운다(짐작하지 않는다).
+let addressText = "";
+async function refreshAddresses() {
+  let payload = null;
+  try {
+    payload = await call("/api/fleet/discovery/addresses");
+  } catch (_err) {
+    payload = null;
+  }
+  const banner = el("address-banner");
+  const text = renumberBanner(payload);
+  banner.hidden = !text;
+  if (text && banner.textContent !== text) banner.textContent = text;
+  el("address-drift").hidden = !text;
+  const next = JSON.stringify(payload?.robots || []);
+  if (next === addressText) return;
+  addressText = next;
+  view.addresses = addressMap(payload);
+  render();
 }
 
 async function refreshAuthorization() {
@@ -579,7 +603,14 @@ const mapView = createMapView({
 
 // Fleet 분해 3: 명렬 카드와 큐는 roster.js 팩토리가 그린다.
 const roster = createRoster({ el, view, log, call, render,
-  streamEvidence: mapView.streamEvidence, isOperator: () => auth.role === "operator" });
+  streamEvidence: mapView.streamEvidence, isOperator: () => auth.role === "operator",
+  moveAddress: async (robotId) => {
+    await enrollment.confirmMove(robotId);
+    await refreshAddresses();
+  },
+  moveAddressBlocked: () => (auth.role !== "operator" ? OPERATOR_REASON
+    : canManage({ role: auth.role, principal_id: auth.principal }) ? ""
+      : "이름 있는 운용자 계정이 필요합니다") });
 el("roster-toggle").addEventListener("click", () => {
   view.showAllRobots = !view.showAllRobots;
   render();

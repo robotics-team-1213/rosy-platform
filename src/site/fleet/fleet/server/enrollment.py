@@ -81,14 +81,14 @@ def normalize_code(text: object) -> str:
 def parse_manual_address(text: object) -> str:
     """Private LAN IPv4[:port] only; `.local`, hostnames and public addresses are refused."""
     if not isinstance(text, str) or not text.strip():
-        raise EnrollmentError("bad_address", 400, "enter a private IPv4 address like 192.168.1.20")
+        raise EnrollmentError("bad_address", 400, "enter the robot's private LAN IPv4 address, optionally with :port")
     host, _, port_text = text.strip().partition(":")
     try:
         ip = ipaddress.ip_address(host)
         port = int(port_text) if port_text else DEFAULT_PORT
     except ValueError:
         raise EnrollmentError("bad_address", 400,
-                              "enter a private IPv4 address like 192.168.1.20") from None
+                              "enter the robot's private LAN IPv4 address, optionally with :port") from None
     if (ip.version != 4 or not any(ip in net for net in _RFC1918)
             or not 1 <= port <= 65535):
         raise EnrollmentError("bad_address", 400, "only private LAN IPv4 addresses are accepted")

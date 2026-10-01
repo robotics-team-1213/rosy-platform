@@ -38,7 +38,7 @@ export function parseAddress(text) {
 
 export const MESSAGES = {
   bad_format: "코드는 ABCD-EFGH 같은 8자입니다(0·1·I·L·O 없음).",
-  bad_address: "사설 IPv4 주소만 받습니다(예: 192.168.1.20 또는 192.168.1.20:8080).",
+  bad_address: "사설 IPv4 주소만 받습니다 — 로봇 화면에 보이는 IPv4 주소를 적으세요(포트를 바꿨으면 :포트를 붙입니다).",
   code_rejected: "코드가 틀렸거나, 이미 쓰였거나, 만료됐습니다. 선택한 행의 이름이 로봇 화면의 이름과 같은지 확인하세요.",
   code_burned: "이 로봇의 화면 코드가 폐기됐습니다 — 로봇 전원을 다시 넣거나 관리자 등록 코드를 받으세요.",
   rate_limited: "시도가 너무 많습니다. 잠시 뒤 다시 입력하세요.",
@@ -357,5 +357,12 @@ export function createEnrollmentPanel({ headers, identity, log, dialogs }) {
     event.target.value = formatCode(event.target.value);
   });
 
-  return { refresh, decorateDiscoveryRow, resetPolling: () => gate.reset() };
+  const rowFor = (robotId) => (state.listing?.robots || []).find((row) => row.robot_id === robotId)
+    || { robot_id: robotId };
+
+  return {
+    refresh, decorateDiscoveryRow, resetPolling: () => gate.reset(),
+    // 로봇 카드의 지름길: 등록 패널의 "새 주소로 옮기기"와 같은 확인·같은 요청.
+    confirmMove: (robotId) => act("move", rowFor(robotId)),
+  };
 }

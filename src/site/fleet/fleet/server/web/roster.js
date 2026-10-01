@@ -4,6 +4,7 @@
 // D-359 §5.2 — 카드의 짧은 값은 공용 <ui-tag>다. 주행(nav)·도착(ok)은 색이 아니라
 // ink인 active, 나머지는 태그의 warn/crit 어휘 그대로다.
 import { MODE_LABEL, enumLabel } from "/common/core_ui_logic.js";
+import { addressReason } from "./address-drift.js";
 
 const TAG_STATUS = { nav: "active", ok: "active", warn: "warn", crit: "crit" };
 
@@ -20,7 +21,8 @@ function blockWith(button, reason) {
   else button.removeAttribute("reason");
 }
 
-export function createRoster({ el, view, log, call, render, streamEvidence, isOperator }) {
+export function createRoster({ el, view, log, call, render, streamEvidence, isOperator,
+  moveAddress = null, moveAddressBlocked = () => "" }) {
   function needsAttention(robot) {
     const state = robot.state;
     const evidence = streamEvidence(view.formation, robot.robot_id);
@@ -159,6 +161,18 @@ export function createRoster({ el, view, log, call, render, streamEvidence, isOp
       node.appendChild(why);
     }
 
+    // 점검 2026-10-01 — 사이트 망이 바뀌면 오프라인만으로는 까닭을 모른다. 고정 주소가
+    // 지금 망에 있는지는 서버가 판정하고(GET /api/fleet/discovery/addresses), 여기는 옮겨 적는다.
+    const address = !view.stateUnavailable && !robot.online
+      ? addressReason(view.addresses?.[robot.robot_id]) : null;
+    if (address) {
+      const why = document.createElement("p");
+      why.className = "hint";
+      why.dataset.addressReason = view.addresses[robot.robot_id].status;
+      why.textContent = address.text;
+      node.appendChild(why);
+    }
+
     const actions = document.createElement("div");
     actions.className = "robot-actions";
     const aim = document.createElement("ui-button");
@@ -243,6 +257,17 @@ export function createRoster({ el, view, log, call, render, streamEvidence, isOp
       actions.append(fallback);
     }
     actions.append(aim, cancel);
+    if (address?.action === "move" && moveAddress) {
+      // 기존 로봇별 "새 주소로 옮기기"를 그대로 부른다 — 확인 뒤 서버가 토큰으로 신원을 다시 읽는다.
+      const move = document.createElement("ui-button");
+      move.setAttribute("kind", "quiet");
+      move.type = "button";
+      move.dataset.moveRobotId = robot.robot_id;
+      move.textContent = "새 주소로 옮기기…";
+      blockWith(move, moveAddressBlocked());
+      move.addEventListener("click", () => moveAddress(robot.robot_id));
+      actions.append(move);
+    }
     node.appendChild(actions);
     if (goalSafetyReason) {
       const why = document.createElement("p");
