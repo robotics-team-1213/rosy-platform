@@ -55,4 +55,5 @@ python tools/device_twin/run_twin.py --list
 - Only ROS is fake; everything around it is real. No hardware is checked: motors, LiDAR, camera, udev devices and the LED or display units.
 - The container shares the WSL2 kernel. `ProtectKernel*`, device policy and cgroup behaviour are close to the robot's but not the same.
 - The twin creates `/etc/modprobe.d` and `/etc/udev/rules.d`, which the robot's Ubuntu already has. `rosy-auto-update.service` names both in `ReadWritePaths=` without `-`.
+- A container restart keeps the kernel, so `/proc/sys/kernel/random/boot_id` does not change across the twin's "power cut". `/run` is a tmpfs, so the claim still vanishes as it would on a real reboot.
 - A twin pass is HOST-level evidence, not DEVICE evidence.
