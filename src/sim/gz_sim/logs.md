@@ -147,6 +147,17 @@
 - 증거: 새 Chromium 브라우저 시험을 변경 전 실패, 변경 후 통과로 확인했다. 기존 viewer v2 계약과 합쳐 59 passed (Windows). 1280×800 라이브·지난 결과 캡처는 `X:\\DevTemp\\rosy-uiux-d306\\`에만 저장했고 가로 넘침·페이지 오류가 없었다.
 - gate 변화: LOCAL 키보드 조작 근거를 추가했다. Gazebo 카메라·인지의 실제 실행과 DEVICE/FIELD 수용은 이 시험으로 증명하지 않는다.
 
+## 2026-09-30 · faa60733 · D-359 US-002 레인 라이브 뷰 어둡게 고정 표시
+
+- 변경: `scripts/lane_live_view.html`의 `<html>`에 `data-theme="dark" data-theme-pin="dark"`(자체 팔레트, tokens.css 비사용). `surfaces.yaml` `themes: [dark]`.
+- 증거: `python -m pytest src/sim/gz_sim/test/test_lane_live_view.py -q` 통과.
+- gate 변화: 없음.
+
+## 2026-09-30 · aeb31356 · D-359 US-005 lane_live_view @media 범위 문법
+
+- 변경: `scripts/lane_live_view.html` `max-width: 1000px/640px` → `(width <= 1000px)`·`(width <= 640px)`. 개발 도구라 세 단으로 옮기지 않고 surfaces.yaml `lane-live-view.breakpoints`에 이유와 함께 적었다.
+- 증거: `test_lane_live_view.py`·`test_web_budgets.py` 통과.
+- gate 변화: 없음.
 ## 2026-09-30 · uncommitted · feat(sim): map_v2_fleet real-profile world and Pinky camera launch (D-353 5)
 
 - 변경: `launch/map_v2_fleet_real.launch.py` 추가. 320x240, 기울기 8°, hfov 1.0334 rad(fx 281.6), 렌즈 높이 0.067 m(`cam_mount_z` 0.05307), 8 fps로 `map_v2_fleet_real.world`(카펫 텍스처, 0.66 회색 테이프, 흰 0.30 m 벽, 파란 이음새 테이프)를 띄운다. line_observer는 `line_follow.yaml` 장치 기본값에 GAZEBO 선언 지오메트리(0.067 m, 8°, 1.0334 rad, x 0.03317 m)만 덮어쓴다. `launch_sim.launch.xml`에 `camera_hfov`, `cam_mount_z` 인자(기본 1.1519, 0.0495)를 추가했다. 기존 `map_v2_fleet_lane.launch.py`와 25° 월드는 바꾸지 않았다.

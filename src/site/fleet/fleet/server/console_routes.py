@@ -6,14 +6,17 @@ console.py 의 gather/scatter 를 그대로 드러내는 읽기와 위임이다.
 
 from __future__ import annotations
 
+import hashlib
+import json
 from typing import Optional
 
-from fastapi import HTTPException, Request
+from fastapi import HTTPException, Request, Response
 from pydantic import BaseModel
 
 from fleet.hub.hub import HubError
 from fleet.server.http_errors import http_error
 from fleet.server.site_auth import SitePrincipal
+from fleet.server.site_lanes import site_lanes_payload
 from fleet.server.signals import SignalApiError
 from fleet.swarm.transport import RobotApiError
 
@@ -41,7 +44,7 @@ class SignalCommandRequest(BaseModel):
 
 
 def install_console_routes(app, *, console, sightings, require_viewer,
-                           read_guard, operator_guard) -> None:
+                           read_guard, operator_guard, site_lanes=None) -> None:
     @app.get("/api/fleet/state", dependencies=read_guard, tags=["fleet"])
     async def fleet_state() -> dict:
         return await console.snapshot()
@@ -59,6 +62,22 @@ def install_console_routes(app, *, console, sightings, require_viewer,
             raise HTTPException(status_code=404, detail={"code": "NO_SITE_MAP",
                                                          "message": "no site camera geometry configured"})
         return site_map
+
+    # D-375: lane geometry for the console map-fit overlay. Drawn only, never driven. The files
+    # and sources are fixed for the process, so the body (~100 kB) is built once at start-up.
+    lanes_body = site_lanes_payload(site_lanes or {}, sightings.sources if sightings is not None else ())
+    lanes_json = json.dumps(lanes_body, separators=(",", ":")).encode() if lanes_body else b""
+    lanes_etag = f'"{hashlib.sha256(lanes_json).hexdigest()[:32]}"'
+
+    @app.get("/api/fleet/site-lanes", dependencies=read_guard, tags=["sightings"])
+    async def fleet_site_lanes(request: Request) -> Response:
+        if lanes_body is None:
+            raise HTTPException(status_code=404, detail={"code": "NO_SITE_LANES",
+                                                         "message": "no site lane graph configured"})
+        headers = {"Cache-Control": "private, no-cache", "ETag": lanes_etag}
+        if request.headers.get("If-None-Match") == lanes_etag:
+            return Response(status_code=304, headers=headers)
+        return Response(lanes_json, media_type="application/json", headers=headers)
 
     @app.get("/api/fleet/map", dependencies=read_guard, tags=["fleet"])
     async def fleet_map() -> dict:

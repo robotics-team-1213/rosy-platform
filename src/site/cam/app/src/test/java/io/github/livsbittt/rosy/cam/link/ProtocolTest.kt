@@ -36,6 +36,10 @@ class ProtocolTest {
         for (i in 0 until fatal.length()) {
             assertTrue(fatal.getString(i), Protocol.isIncompatibleClose(Protocol.CLOSE_BAD_PROTO, fatal.getString(i)))
         }
+        for (reason in listOf("receiver busy", "hello timeout", "timed out waiting for hello", "busy: proto mismatch", "timeout")) {
+            assertTrue(reason, Protocol.isIncompatibleClose(Protocol.CLOSE_BAD_PROTO, reason))
+        }
+        assertFalse(Protocol.isIncompatibleClose(Protocol.CLOSE_BAD_PROTO, " No Hello "))
         assertFalse(Protocol.isIncompatibleClose(Protocol.CLOSE_TRY_AGAIN, "proto must be 'rosy-overhead/1'"))
     }
 

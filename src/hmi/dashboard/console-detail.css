@@ -26,7 +26,7 @@
 /* 식별자는 제목 아래가 아니라 옆이다 — 한 줄에서 이름과 계보를 같이 읽는다. */
 .hero-copy h1 em {
   min-width: 0;
-  color: var(--muted);
+  color: var(--ink-quiet);
   font: var(--weight-regular) var(--text-label)/var(--leading-flat) var(--mono);
   letter-spacing: var(--track-state);
   overflow: hidden;
@@ -42,11 +42,11 @@
   border-left: 1px solid var(--surface-line);
 }
 .hero-label { flex: none; }
-.hero-state strong, .hero-safety strong { font-size: var(--text-value); font-weight: var(--weight-label); letter-spacing: 0.02em; }
-.hero-state .sequence, .hero-safety > span:last-child { color: var(--muted); font: var(--weight-regular) var(--text-micro)/var(--leading-label) var(--mono); }
+.hero-state strong, .hero-safety strong { font-size: var(--text-value); font-weight: var(--weight-label); letter-spacing: var(--track-wide); }
+.hero-state .sequence, .hero-safety > span:last-child { color: var(--ink-quiet); font: var(--weight-regular) var(--text-micro)/var(--leading-label) var(--mono); }
 .hero-safety.safe strong { color: var(--nominal); }
 .hero-safety.danger strong { color: var(--status-crit); }
-.hero-safety.unverified strong { color: var(--muted); }
+.hero-safety.unverified strong { color: var(--ink-quiet); }
 /* 편대 역할 — 계기 셋의 네 번째 칸. 대형에 속해 있을 때만 나타난다(D-280:
    빈 상태는 말하지 않는다). 색은 쓰지 않는다 — 역할은 경보가 아니고,
    리더·팔로워는 단어로 충분히 다르다(D-82 예산 안 씀). */
@@ -57,8 +57,8 @@
   border-left: 1px solid var(--surface-line);
 }
 .hero-formation[hidden] { display: none; }
-.hero-formation strong { font-size: var(--text-value); font-weight: var(--weight-label); letter-spacing: 0.02em; }
-.hero-formation > span:last-child { color: var(--muted); font: var(--weight-regular) var(--text-micro)/var(--leading-label) var(--mono); }
+.hero-formation strong { font-size: var(--text-value); font-weight: var(--weight-label); letter-spacing: var(--track-wide); }
+.hero-formation > span:last-child { color: var(--ink-quiet); font: var(--weight-regular) var(--text-micro)/var(--leading-label) var(--mono); }
 
 /* ---- 영역 셋 --------------------------------------------------------------
    폭은 역할이 정한다. 감지는 숫자 세 칸이 들어갈 만큼, 조작은 되돌릴 수 없는
@@ -106,7 +106,7 @@
   padding-bottom: var(--space-2);
   border-bottom: 1px solid var(--surface-line);
 }
-.region-head h2 { margin: 0; color: var(--paper); font-size: var(--text-label); letter-spacing: 0.14em; }
+.region-head h2 { margin: 0; color: var(--ink); font-size: var(--text-label); letter-spacing: var(--track-label); }
 .region-head span {
   min-width: 0;
   color: var(--nominal-quiet);
@@ -165,12 +165,12 @@
 }
 .capability-item span { min-width: 0; overflow: hidden; font-size: var(--text-label); text-overflow: ellipsis; white-space: nowrap; }
 .capability-item b { font: var(--weight-regular) var(--text-micro)/var(--leading-flat) var(--mono); letter-spacing: var(--track-state); }
-.capability-item small { grid-column: 1 / -1; color: var(--paper); font-size: var(--text-label); line-height: var(--leading-body); }
+.capability-item small { grid-column: 1 / -1; color: var(--ink); font-size: var(--text-label); line-height: var(--leading-body); }
 /* 가용은 정상이므로 색이 없다. 제약과 차단만 색을 쓴다(D-82). */
 .capability-item[data-state="constrained"] b { color: var(--status-warn); }
 .capability-item[data-state="blocked"] b { color: var(--status-crit); }
 /* CORE-only은 설정이지 고장이 아니다 — 차단이어도 색을 쓰지 않는다(D-161, D-82). */
-.capability-item[data-cause="runtime"] b { color: var(--muted); }
+.capability-item[data-cause="runtime"] b { color: var(--ink-quiet); }
 
 /* ---- 관측 — 지도가 영역을 전부 쓴다 ---------------------------------------
    보조 요소는 전부 지도 위로 올린다. 흐름에 두면 툴바 두 줄·범례·안내가
@@ -203,18 +203,18 @@
   display: grid;
   place-items: center;
   margin: 0;
-  color: var(--muted);
+  color: var(--ink-quiet);
   font: var(--weight-regular) var(--text-label)/var(--leading-copy) var(--mono);
   letter-spacing: var(--track-wide);
 }
-.vision-reticle { position: absolute; z-index: 3; inset: 0; pointer-events: none; opacity: 0.42; }
-.vision-reticle i { position: absolute; display: block; background: var(--nominal); }
+.vision-reticle { position: absolute; z-index: 3; inset: 0; pointer-events: none; }
+.vision-reticle i { position: absolute; display: block; background: var(--ink-quiet); }
 .vision-reticle i:first-child { left: 50%; top: 42%; width: 1px; height: 16%; }
 .vision-reticle i:last-child { left: 46%; top: 50%; width: 8%; height: 1px; }
 .vision-meta { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; margin: 0; background: var(--surface-line); }
 .vision-meta div { min-width: 0; padding: var(--space-1) var(--space-2); background: var(--ground); }
 .vision-meta dt { color: var(--nominal-quiet); font: var(--weight-regular) var(--text-micro)/var(--leading-control) var(--mono); }
-.vision-meta dd { margin: var(--space-1) 0 0; overflow: hidden; color: var(--paper); font: var(--weight-strong) var(--text-micro)/var(--leading-control) var(--mono); text-overflow: ellipsis; white-space: nowrap; }
+.vision-meta dd { margin: var(--space-1) 0 0; overflow: hidden; color: var(--ink); font: var(--weight-strong) var(--text-micro)/var(--leading-control) var(--mono); text-overflow: ellipsis; white-space: nowrap; }
 .map-stage {
   position: relative;
   flex: 1;
@@ -231,7 +231,7 @@
   display: grid;
   place-items: center;
   margin: 0;
-  color: var(--muted);
+  color: var(--ink-quiet);
   font: var(--weight-regular) var(--text-label)/var(--leading-copy) var(--mono);
   pointer-events: none;
 }
@@ -246,7 +246,7 @@
 }
 .map-toolbar { display: flex; gap: var(--space-1); margin: 0; padding: var(--space-1); }
 /* 안내는 클릭 모드 툴바를 설명하는 글이다 — 그 아래 붙여 둔다. */
-.map-hint { max-width: 28ch; margin: 0; padding: var(--space-2); color: var(--paper); font-size: var(--text-label); line-height: 1.45; }
+.map-hint { max-width: 28ch; margin: 0; padding: var(--space-2); color: var(--ink); font-size: var(--text-label); line-height: 1.45; }
 /* 범례는 지도의 색을 설명한다 — 지도 위가 제자리다. */
 .map-legend {
   position: absolute;
@@ -259,7 +259,7 @@
   margin: 0;
   padding: var(--space-1) var(--space-2);
   list-style: none;
-  color: var(--muted);
+  color: var(--ink-quiet);
   font: var(--weight-regular) var(--text-micro)/var(--leading-body) var(--mono);
 }
 .map-legend li { display: flex; align-items: center; gap: var(--space-2); }
@@ -270,7 +270,7 @@
 .map-legend [data-swatch="unknown"]::before { background: var(--raster-unknown); }
 .map-legend [data-swatch="cost"]::before { background: var(--status-warn); }
 .map-legend [data-swatch="path"]::before { background: var(--series-primary); }
-.map-legend [data-swatch="robot"]::before { background: var(--paper); }
+.map-legend [data-swatch="robot"]::before { background: var(--ink); }
 
 /* ---- 조작 — 크기가 위험도다(Law 3) ----------------------------------------
    되돌릴 수 없는 것이 가장 크고 맨 위이며 언제나 같은 자리에 있다.
@@ -310,7 +310,7 @@
 }
 .line-follow-modes ui-button { border-right: 1px solid var(--surface-line); }
 .line-follow-modes ui-button:last-child { border-right: 0; }
-.line-follow-message { min-height: 1.4em; margin: 0; color: var(--paper); font: var(--weight-regular) var(--text-label)/var(--leading-body) var(--body); }
+.line-follow-message { min-height: 1.4em; margin: 0; color: var(--ink); font: var(--weight-regular) var(--text-label)/var(--leading-body) var(--body); }
 
 /* 사실 격자는 감지 영역(272px)에 산다 — 두 단으로 좁힌다(D-201). 칸 규칙은
    운용·점검 어디서든 같은 모양이다. */
@@ -321,7 +321,6 @@
 
 .traffic-policy-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2); }
 .traffic-policy-grid label { display: grid; gap: var(--space-1); color: var(--nominal-quiet); font: var(--weight-regular) var(--text-micro)/var(--leading-control) var(--mono); }
-.traffic-policy-grid input, .traffic-policy-grid select { min-width: 0; min-height: var(--target-secondary); border: 1px solid var(--surface-line); border-radius: var(--radius-control); color: var(--paper); background: var(--ground); padding: 0 var(--space-2); }
 .traffic-policy-actions, .simulation-signal-controls { display: flex; align-items: center; gap: var(--space-1); }
 .traffic-policy-actions ui-button { flex: 1; }
 .simulation-signal-controls span { margin-right: auto; color: var(--nominal-quiet); font: var(--weight-regular) var(--text-micro)/var(--leading-control) var(--mono); }
@@ -346,11 +345,13 @@
   line-height: var(--leading-body);
   cursor: pointer;
 }
-.bench-confirmation input { width: 20px; height: 20px; flex: none; margin: 0; accent-color: var(--focus-ring); }
 .teleop-pad { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--space-1); }
 .teleop-pad ui-button { touch-action: none; user-select: none; }
+/* D-359: 한글 라벨은 keep-all로 어절째 붙어 있어 화살표와 한 줄이면 320px 조작 열의
+   4칸을 넘친다(1366×600). 화살표 아래 라벨로 쌓는다 — 사유가 붙은 비활성 모양과 같다. */
+.teleop-pad ui-button { flex-direction: column; gap: 0; }
 
-.teleop-message, .action-message { min-height: 1.4em; margin: 0; color: var(--paper); font: var(--weight-regular) var(--text-label)/var(--leading-body) var(--body); }
+.teleop-message, .action-message { min-height: 1.4em; margin: 0; color: var(--ink); font: var(--weight-regular) var(--text-label)/var(--leading-body) var(--body); }
 
 /* ===========================================================================
    4. 점검 — 절차 문법(concept 16 §7.2)
@@ -381,8 +382,8 @@
   background: var(--surface-flat);
   scroll-margin-top: calc(var(--topbar-height) + var(--space-3));
 }
-.inspect .panel h2 { font-size: var(--text-title); letter-spacing: normal; text-transform: none; color: var(--paper); }
-.inspect .panel h3 { font-size: var(--text-body); letter-spacing: normal; text-transform: none; color: var(--paper); }
+.inspect .panel h2 { font-size: var(--text-title); letter-spacing: 0; text-transform: none; color: var(--ink); }
+.inspect .panel h3 { font-size: var(--text-body); letter-spacing: 0; text-transform: none; color: var(--ink); }
 
 .system-identity { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3) var(--space-5); }
 .system-identity div { min-width: 0; padding-bottom: var(--space-2); border-bottom: 1px solid var(--surface-line); }
@@ -396,7 +397,7 @@
 .meter header b { font-size: var(--text-title); }
 /* 게이지는 여유로 읽힌다 — 임계를 넘기 전까지 중립이다(D-82). */
 .meter-rail { height: 4px; margin: var(--space-3) 0 var(--space-2); border-radius: var(--radius-flag); background: var(--gauge-track); overflow: hidden; }
-.meter-rail i { display: block; width: var(--meter, 0%); height: 100%; background: var(--paper); }
+.meter-rail i { display: block; width: var(--meter, 0%); height: 100%; background: var(--ink); }
 .meter footer { overflow: hidden; color: var(--nominal-quiet); font: var(--weight-regular) var(--text-micro)/var(--leading-body) var(--mono); text-overflow: ellipsis; white-space: nowrap; }
 .temperature-card {
   display: flex;
@@ -425,12 +426,12 @@
   background: var(--surface-raised);
 }
 /* 절차에는 번호가 있다 — 이 카드가 몇 번째인지가 곧 순서다. */
-.host-card[data-step]::before { content: attr(data-step); color: var(--nominal-quiet); font: var(--weight-regular) var(--text-micro)/var(--leading-flat) var(--mono); letter-spacing: 0.14em; }
+.host-card[data-step]::before { content: attr(data-step); color: var(--nominal-quiet); font: var(--weight-regular) var(--text-micro)/var(--leading-flat) var(--mono); letter-spacing: var(--track-label); }
 .host-card > header, .settings-card > header { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-2); }
 .host-card h3, .settings-card h3 { margin: 0; font: var(--weight-label) var(--text-body)/var(--leading-label) var(--body); }
 /* 값이 오지 않은 카드는 흐려지고 그렇게 말한다. 아무 말 없는 정상 카드처럼
    보이면 안 된다. */
-.host-card[data-available="false"] { border-style: dashed; opacity: 0.72; }
+.host-card[data-available="false"] { border-style: dashed; color: var(--ink-quiet); }
 .host-card[data-available="false"] .host-facts,
 .host-card[data-available="false"] .device-list { display: none; }
 .host-card[data-available="false"] .host-note { color: var(--status-warn); }
@@ -443,10 +444,9 @@
 .host-actions ui-button { flex: 1 1 auto; }
 .host-card form { display: grid; gap: var(--space-2); }
 
-/* D-247 장치 카드 — 한 줄에 장치 하나. 상태 칩은 공용 [data-status] 어휘를
-   그대로 쓴다: 정상=OK(평상 글자색), 버스·드라이버 없음=WARNING(주의 글자),
-   응답 없음=ERROR(위험 채움), 사람 확인·측정 안 함=속성 없음(칩 기본색).
-   새 색은 없다. */
+/* D-247 장치 카드 — 한 줄에 장치 하나. 상태 칩은 공용 <ui-tag status>다:
+   정상=active(평상 글자색), 버스·드라이버 없음=warn, 응답 없음=crit(채움),
+   사람 확인·측정 안 함=neutral. 새 색은 없다. */
 .device-list { display: grid; gap: var(--space-2); margin: 0; padding: 0; list-style: none; }
 .device-row {
   display: grid;
@@ -463,7 +463,7 @@
 .device-actions { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
 .device-test { color: var(--nominal-quiet); font: var(--weight-regular) var(--text-micro)/var(--leading-body) var(--mono); }
 /* 오래된 측정은 흐리다 — 판정은 서버가 내린 `stale`이다(D-72 S4). */
-.host-card[data-stale="true"] .device-list { opacity: 0.72; }
+.host-card[data-stale="true"] .device-list { color: var(--ink-quiet); }
 
 .ros-network-facts {
   display: grid;
@@ -499,26 +499,26 @@
 .ros-graph-layout { display: grid; grid-template-columns: minmax(0, 2fr) minmax(230px, 0.72fr); gap: var(--space-3); }
 .graph-stage, .risk-tape { border: 1px solid var(--surface-line); border-radius: var(--radius-control); background: var(--ground); }
 .graph-stage { position: relative; min-height: 330px; padding: var(--space-5) var(--space-2) var(--space-2); }
-.graph-legend { position: absolute; top: var(--space-2); left: var(--space-4); display: flex; align-items: center; gap: var(--space-2); color: var(--nominal-quiet); font: var(--weight-regular) var(--text-micro)/var(--leading-flat) var(--mono); letter-spacing: 0.1em; }
+.graph-legend { position: absolute; top: var(--space-2); left: var(--space-4); display: flex; align-items: center; gap: var(--space-2); color: var(--nominal-quiet); font: var(--weight-regular) var(--text-micro)/var(--leading-flat) var(--mono); letter-spacing: var(--track-label); }
 .graph-legend i { width: 32px; height: 1px; background: var(--surface-line); }
 .ros-graph-map { width: 100%; height: 300px; }
-.graph-edge { stroke: var(--muted-line); stroke-width: 1; }
+.graph-edge { stroke: var(--line-quiet); stroke-width: 1; }
 .graph-edge.publishes { stroke: var(--series-primary); }
 .graph-edge.subscribes { stroke-dasharray: 4 4; }
 .graph-node { fill: var(--ground-raise); stroke: var(--surface-line); stroke-width: 1; }
 .graph-node.foreign { fill: var(--status-crit-a10); stroke: var(--status-crit); }
 .graph-topic { fill: var(--series-primary); stroke: var(--ground); stroke-width: 3; }
-.graph-node-label, .graph-topic-label, .graph-empty { fill: var(--paper); font: var(--weight-regular) var(--text-label) var(--mono); text-anchor: middle; }
-.graph-topic-label { fill: var(--muted); text-anchor: end; }
-.graph-empty { fill: var(--muted); }
+.graph-node-label, .graph-topic-label, .graph-empty { fill: var(--ink); font: var(--weight-regular) var(--text-label) var(--mono); text-anchor: middle; }
+.graph-topic-label { fill: var(--ink-quiet); text-anchor: end; }
+.graph-empty { fill: var(--ink-quiet); }
 
 .risk-tape { padding: var(--space-4); }
 .risk-tape h3 { margin: 0 0 var(--space-3); font: var(--weight-label) var(--text-body)/var(--leading-label) var(--body); }
 .risk-tape ul { display: grid; gap: var(--space-2); min-height: 150px; margin: 0; padding: 0; list-style: none; }
 .risk-tape li { padding: var(--space-2); border-left: 2px solid var(--status-crit); background: var(--status-crit-a07); }
 .risk-tape li strong, .risk-tape li span { display: block; }
-.risk-tape li strong { color: var(--status-crit); font: var(--weight-regular) var(--text-micro)/var(--leading-flat) var(--mono); letter-spacing: 0.08em; }
-.risk-tape li span { margin-top: var(--space-1); color: var(--paper); font: var(--weight-regular) var(--text-label)/1.45 var(--mono); }
+.risk-tape li strong { color: var(--status-crit); font: var(--weight-regular) var(--text-micro)/var(--leading-flat) var(--mono); letter-spacing: var(--track-label); }
+.risk-tape li span { margin-top: var(--space-1); color: var(--ink); font: var(--weight-regular) var(--text-label)/1.45 var(--mono); }
 /* 위험이 없을 때는 색도 테두리도 쓰지 않는다 — 정상에는 색이 없다. */
 .risk-tape li.risk-clear { color: var(--nominal); border-left-color: var(--surface-line); background: transparent; font: var(--weight-regular) var(--text-label)/var(--leading-copy) var(--mono); }
 .risk-tape li.risk-unavailable { color: var(--nominal-quiet); border-left-color: var(--surface-line); background: transparent; font: var(--weight-regular) var(--text-label)/var(--leading-copy) var(--mono); }
@@ -574,32 +574,32 @@
    전제하는 화면이 아니라는 뜻이다.
    ======================================================================== */
 
-@media (max-width: 1080px) {
-  /* 폭이 줄어도 셋의 자리는 그대로다. 조작을 아래 줄로 돌려 봤더니 그 칸이
-     제 내용만큼(412px) 가져가고 지도가 37px로 눌렸다 — 자리를 옮기는 것은
-     공간 문법을 버리는 것이고, 얻는 것도 없었다. 레일만 좁힌다. */
-  .regions { grid-template-columns: 216px minmax(0, 1fr) 272px; }
-  .region { padding: var(--space-2) var(--space-3) var(--space-3); }
-  .telemetry-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .map-hint { max-width: 188px; }
-  .ros-network-facts { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .ros-graph-layout { grid-template-columns: 1fr; }
-  .event-list { grid-template-columns: 1fr; }
+/* D-359 §6 — 세 단. 3분할 고정 프레임은 wide이면서 높이가 40rem 이상인 창의 약속이다.
+   낮은 창은 프레임을 풀고 흐르며 스크롤한다. 열은 폭만 따른다: 낮은 wide(1366×600)는
+   세 열을 지키고, medium·compact만 영역을 세로로 쌓는다(US-008 — 전에는 한 조건이었다). */
+@media (width < 64rem), (height < 40rem) {
+  .console { height: auto; overflow: visible; }
+  .region { overflow: visible; }
+  .region-observe { min-height: 60vh; }
+  body[data-view="operate"] .page-footer { display: flex; }
+}
+@media (width < 64rem) {
+  .regions { grid-template-columns: 1fr; grid-template-rows: none; }
+  .region { grid-column: auto; grid-row: auto; }
+  .region-act { border-top: 1px solid var(--surface-line); }
 }
 
-@media (max-width: 720px) {
-  .console { height: auto; overflow: visible; }
-  .regions { grid-template-columns: 1fr; grid-template-rows: none; }
-  .region { grid-column: auto; grid-row: auto; overflow: visible; }
-  .region-observe { min-height: 60vh; }
-  .region-act { border-top: 1px solid var(--surface-line); }
-  body[data-view="operate"] .page-footer { display: flex; }
+@media (width < 64rem) {
+  /* 쌓인 영역 — 레일 폭 대신 영역 안쪽 격자만 줄인다. */
+  .region { padding: var(--space-2) var(--space-3) var(--space-3); }
+  .ros-graph-layout { grid-template-columns: 1fr; }
+  .event-list { grid-template-columns: 1fr; }
   .topbar { min-height: 66px; padding: 0 var(--space-4); }
   /* console은 이 폭에서 height:auto다 — 상단 바가 늘어나도 뷰 계약은 깨지지
      않는다. 좁은 폭에서는 목적지 줄이 아래로 내려온다. */
   .topbar-status { flex-wrap: wrap; justify-content: flex-end; }
-  .clock, .status-badge span, .whoami-badge span { display: none; }
-  .status-badge { justify-content: center; }
+  .clock, #connection-badge > span, .whoami-badge span { display: none; }
+  #connection-badge { justify-content: center; }
   .hero-strip { flex-wrap: wrap; padding: 0 var(--space-4); }
   .status-summary { flex: 1 0 100%; flex-wrap: wrap; padding: var(--space-2) 0; border-left: 0; }
   .summary-reason { white-space: normal; }
@@ -644,6 +644,6 @@
 }
 .hitl-escalation p {
   margin: 0 0 var(--space-4) 0;
-  color: var(--paper);
+  color: var(--ink);
   font-size: var(--text-body);
 }

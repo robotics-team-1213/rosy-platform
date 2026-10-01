@@ -86,6 +86,11 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
                          help="HTTPS private key; mount as a runtime secret")
     console.add_argument("--sightings-config", default=None, type=Path,
                          help="source/map/calibration sighting config (secret values stay in env)")
+    console.add_argument("--site-lane-graph", action="append", default=None, metavar="[MAP_ID=]PATH",
+                         help="lane_graph.yaml drawn over the ceiling camera by the D-375 map-fit "
+                              "view; without MAP_ID it applies to every map. Display only")
+    console.add_argument("--site-lane-paint", action="append", default=None, metavar="[MAP_ID=]PATH",
+                         help="lane paint STL (Vision's --map-paint file) drawn by the same view")
     console.add_argument("--sightings-db", default=None, type=Path,
                          help="SQLite path for latest sightings and acceptance audit")
     console.add_argument("--events-db", default=None, type=Path,
@@ -439,6 +444,16 @@ def run_console(args: argparse.Namespace) -> None:
                                        fleet_name=console.fleet_name, discovery=discovery)
         enrollment.load()
         roster.sync()
+    from fleet.server.site_lanes import parse_lane_graph_flags, unmatched_map_ids
+
+    try:
+        site_lanes = parse_lane_graph_flags(getattr(args, "site_lane_graph", None),
+                                            getattr(args, "site_lane_paint", None))
+    except ValueError as exc:
+        sys.exit(str(exc))
+    for map_id in unmatched_map_ids(site_lanes, sighting_service.sources if sighting_service is not None else ()):
+        print(f"warning: --site-lane-graph/--site-lane-paint map id {map_id!r} matches no sighting "
+              "source; that lane entry is served to no camera", file=sys.stderr, flush=True)
     vision_preview_secret_env = getattr(args, "vision_preview_secret_env", None)
     vision_preview_secret = (os.environ.get(vision_preview_secret_env)
                              if vision_preview_secret_env else None)
@@ -453,7 +468,7 @@ def run_console(args: argparse.Namespace) -> None:
                      start_task_dispatcher=not mission_api,
                      vision_lease_secret=vision_preview_secret,
                      vision_sources=vision_sources, enrollment=enrollment,
-                     robot_credential_key=robot_key_text)
+                     robot_credential_key=robot_key_text, site_lanes=site_lanes)
     signals_note = f", {len(signal_eps)} signals" if signal_console is not None else ""
     print(f"fleet console: http://{args.host}:{args.port}/console  "
           f"({len(console.robot_ids)} robots{signals_note})",

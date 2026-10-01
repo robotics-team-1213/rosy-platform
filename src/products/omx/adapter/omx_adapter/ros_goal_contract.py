@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+from array import array
 from dataclasses import dataclass
 from typing import Literal
 from uuid import UUID
@@ -26,13 +27,17 @@ def canonical_ros_goal_id(value: object) -> str:
     try:
         if isinstance(value, str):
             parsed = UUID(value)
-        elif isinstance(value, (bytes, bytearray, tuple, list)):
+        elif isinstance(value, (bytes, bytearray, tuple, list, array)):
             raw = bytes(value)
+        else:
+            view = memoryview(value)
+            if view.ndim != 1 or view.itemsize != 1 or view.format not in {"B", "b"}:
+                raise ValueError("ROS goal UUID must be a one-dimensional byte array")
+            raw = view.tobytes()
+        if not isinstance(value, str):
             if len(raw) != 16:
                 raise ValueError("ROS goal UUID must contain exactly 16 bytes")
             parsed = UUID(bytes=raw)
-        else:
-            raise ValueError("ROS goal UUID must be text or 16 bytes")
     except (ValueError, TypeError, AttributeError) as exc:
         raise ValueError("ROS goal UUID is invalid") from exc
     if parsed.int == 0:

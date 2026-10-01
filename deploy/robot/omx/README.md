@@ -184,3 +184,22 @@ test, and stops its launch on exit. It rejects serial/video device grants.
 The test checks action result/cancel, a competing policy owner, and the
 absence of a subscriber to the old leader trajectory topic. This is one
 container's ROS-SIM evidence, not a native systemd or physical stop test.
+
+## Pilot에서 OMX-AI Gazebo 연습 (D-390)
+
+작업 PC의 개발용 컨테이너에서만 실행한다. 정본 vendor 이미지는 위 절차대로 먼저 만들고, 저장소 루트에서 Pilot HTTP layer를 만든다.
+
+```powershell
+docker build -f deploy/robot/omx/Dockerfile.pilot -t rosy-omx-pilot:local deploy/robot/omx
+$omxCheckout = (Resolve-Path .).Path
+docker run --rm --name rosy-omx-pilot-sim --network bridge `
+  -p 127.0.0.1:8088:8088 `
+  --mount "type=bind,source=$omxCheckout,target=/repo,readonly" `
+  rosy-omx-pilot:local bash /repo/deploy/robot/omx/run_pilot_sim.sh
+```
+
+로컬 CLI에서 docker exec rosy-omx-pilot-sim cat /run/rosy-omx-pilot/pairing-code 로 일회용 pairing code를 확인하고 `http://127.0.0.1:8088/pilot`로 접속한다. 관절 버튼 한 번에 0.02 rad, 0.4초 goal 하나만 낸다. 조종권 lease는 10초이며 서버가 갱신 실패·반납을 보면 취소를 요청한다. 취소 응답만으로 정지를 주장하지 않는다. 이 실행은 localhost publish, localhost ROS discovery, read-only checkout을 사용하고 serial/video 장치를 넘기지 않는다. 중단은 Ctrl-C다.
+
+새 컨테이너를 띄운 뒤 실제 ROS goal과 관절 readback을 자동 확인하려면, 다른 터미널에서 `python deploy/robot/omx/probe_pilot_sim_http.py rosy-omx-pilot-sim`를 실행한다. 이 probe는 일회용 코드를 소비하므로 같은 실행에서 브라우저 페어링을 다시 하려면 컨테이너를 재시작해야 한다. 출력에는 코드와 토큰을 표시하지 않는다.
+
+현재 vendor Gazebo launch에는 작업대 카메라가 없어 `camera:false`다. 학습용 영상·연습 기록 API는 준비 중이며 화면에 그렇게 표시한다. 실물 OMX profile은 여전히 비활성이다.

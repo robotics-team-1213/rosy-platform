@@ -7,19 +7,19 @@ export function createSignals({ el, view, log, call, refreshState }) {
   const SIGNAL_MODE_TAG = {
     failsafe: { text: "failsafe", cls: "crit" },
     manual: { text: "manual", cls: "" },
-    cycle: { text: "cycle", cls: "nav" },
+    cycle: { text: "cycle", cls: "active" },
     hold: { text: "hold", cls: "" },
     all_red: { text: "all_red", cls: "warn" },
     flash_red: { text: "flash_red", cls: "warn" },
   };
 
-  function command(signalId, body) {
+  function command(signalId, body, label) {
     return call(`/api/fleet/signals/${encodeURIComponent(signalId)}/command`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     }).then(() => {
-      log(`${signalId} 명령 하달 (${body.mode})`, "good");
+      log(`${signalId} 명령 하달 (${label})`, "good");
       refreshState();
     }).catch((err) => {
       log(`${signalId} 명령 거절 — ${err.message}`, "bad");
@@ -40,8 +40,9 @@ export function createSignals({ el, view, log, call, refreshState }) {
     spacer.className = "spacer";
     head.append(signalName, spacer);
     const info = SIGNAL_MODE_TAG[row.mode] || { text: row.mode || "—", cls: "" };
-    const tag = document.createElement("span");
-    tag.className = `tag ${!row.online ? "crit" : info.cls}`;
+    // D-359 §5.2 — 공용 <ui-tag>. cls가 곧 status 어휘다(active·warn·crit).
+    const tag = document.createElement("ui-tag");
+    tag.setAttribute("status", (!row.online ? "crit" : info.cls) || "neutral");
     tag.textContent = !row.online ? "오프라인" : info.text;
     head.appendChild(tag);
     node.appendChild(head);
@@ -82,8 +83,9 @@ export function createSignals({ el, view, log, call, refreshState }) {
       button.type = "button";
       button.textContent = label;
       button.disabled = !row.online;
+      if (!row.online) button.setAttribute("reason", "오프라인");
       if (kind) button.classList.add(kind);
-      button.addEventListener("click", () => command(row.signal_id, body_));
+      button.addEventListener("click", () => command(row.signal_id, body_, label));
       return button;
     };
     actions.append(
