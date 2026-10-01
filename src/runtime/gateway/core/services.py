@@ -556,10 +556,8 @@ class CoreServices:
             host_root=os.environ.get("ROSY_HOST_ROOT", "/"),
             data_path=waypoints_path.parent,
         )
-        localization, loc_mission = wire_assist(
-            events, lambda: identity.robot_id, nav=nav, line_follow=line_follow, command=command,
-            state=state, modes=modes, swarm=swarm, docking=docking, safety=safety,
-            traffic_policy=traffic_policy)
+        localization, loc_mission = wire_assist(events, lambda: identity.robot_id, nav=nav, line_follow=line_follow,
+            command=command, state=state, modes=modes, swarm=swarm, docking=docking, safety=safety, traffic_policy=traffic_policy)
         fleet_agent = FleetAgent(state, events, config, identity)
         fleet_agent.start()
 
