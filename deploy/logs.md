@@ -1696,3 +1696,40 @@
 - 변경: `deploy/site/fleet-mdns.py`의 자체 판정(shlex+사전 비교)을 `core_common.protocol.discovery_txt`의 `_rosy-fleet._tcp` 부분 사본으로 바꿨다: `parse_txt_pairs`, `_lan_ipv4`, `classify_fleet`(수락이면 None, 아니면 벡터의 거절 이유). `mdns-bridge.py`와 같은 "Copy of core_common.protocol.discovery_txt" 머리말. 형제 모듈로 나눠 두 스크립트가 함께 쓰는 안은 택하지 않았다 — 사이트 후보 목록(`build_candidate.py`·`verify_candidate.py`·`test_site_candidate.py`)과 README 설치 절차에 새 파일을 더해야 하고, 시험·`tools/overhead_pairing_bench.py`가 스크립트를 파일 경로로 불러와 sys.path 처리도 필요해진다.
 - 증거: `test/test_site_fleet_mdns.py` 신규 벡터 이유 시험(Fleet 사례 6건: 이유까지 core_common과 같음) — 수정 전 6건 빨강(판정 함수 없음), 수정 후 초록. 기존 수락/거절 벡터 루프는 전후 모두 초록 — 벡터 결과가 바뀐 사례 없음. 벡터 밖 차이: `0.0.0.0` 등 multicast/unspecified 주소를 이제 거절(core_common과 같음).
 - gate 변화: 없음. 사이트 호스트에는 다음 후보 설치 때 간다.
+
+
+## 2026-10-01 · uncommitted · fix(sd): ERASE 프롬프트 type-ahead, 아티팩트 다운로더, D-383 긴급 카드 쓰기
+
+- 변경: (1) `prepare-rosy-sd.ps1`의 ERASE 프롬프트가 먼저 콘솔 입력 버퍼를 비우고(`Clear-TypeAhead`), 빈 줄·입력 끝은 불일치가 아니라 `no console input`으로 멈춘다. 2026-09-30 `-Detach` 창에서 앞 단계 중 눌린 Enter가 0.9초 만에 프롬프트에 답해 `typed: ''`로 실패했다. (2) `tools/release/download_artifact.py`: Actions 아티팩트 병렬 range 다운로드(진행·재개·크기 확인·안전 압축 해제). (3) D-383 `write-card.ps1 -Emergency -EmergencyReason`: 전체 readback만 건너뛰고 증거에 검증 안 됨을 남기며, `verify-emergency-card.ps1` 후속 readback과 표준 재공급으로 메운다.
+- 증거: test_sd_writer_contract.py·test_sd_write_card_entrypoint.py·test_media_readback.py·test_download_artifact.py (호스트 fixture만, 실제 디스크 없음). 새 게이트마다 변이 증명.
+- gate 변화: 없음. 실제 카드에서의 긴급 쓰기·후속 readback은 아직 안 해 봤다.
+
+## 2026-10-01 · uncommitted · fix(sd): 모터 커미셔닝 SSH가 Rosy 운영자 키를 쓴다 (D-383 결정 6)
+
+- 변경: `enable-motor-commissioning.ps1`이 `rosy-release-push.ps1`처럼 `-KeyPath`·`-KnownHosts`·`-RosyUser`(기본은 `%LOCALAPPDATA%\Rosy` 운영자 키·known_hosts, `rosy`)를 ssh에 넘기고, 파일이 없으면 로봇에 닿기 전에 멈춘다. 새 카드에서 기본 `~/.ssh` 별칭만 써서 `No ED25519 host key is known`으로 실패했었다. D-383 결정 4에 부팅한 긴급 카드의 장치 위 검증(SHA256SUMS·`dpkg --verify`)을 적었다.
+- 증거: test_motor_commissioning_ssh.py 5 passed, 변이 4종 모두 실패로 잡힘. 로봇 접속 없음.
+- gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · docs(adr): 긴급 카드 쓰기 결정을 D-383에서 D-385로 개명
+
+- 변경: main 병합 시점에 D-383은 편대 역할 계기 ADR로, D-384는 docs/d384-road-state-and-behaviour 예약으로 잡혀 있었다. 이 작업의 결정(긴급 카드 쓰기, 모터 커미셔닝 SSH)을 다음 빈 번호 D-385로 개명하고 코드 주석·시험·문서를 함께 바꿨다. 앞 항목의 D-383 표기는 역사 기록으로 둔다.
+- 증거: rosy_harness lint 오류 0. 본문은 docs/adr/D-385-emergency-card-write-skips-only-readback.md.
+- gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · docs(adr): 긴급 카드 쓰기 결정을 D-385에서 D-389로 개명
+
+- 변경: main에 D-385(feat/expressive-rosy)가 들어와, main 532b9813이 adr_gaps에 예약한 D-389로 개명하고 그 예약을 지웠다. 코드 주석·시험·문서도 바꿨다. 앞 항목의 D-383/D-385 표기는 역사 기록으로 둔다.
+- 증거: rosy_harness lint 오류 0. 본문은 docs/adr/D-389-emergency-card-write-skips-only-readback.md.
+- gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · fix(sd,release): D-389 독립 리뷰 반영 — 긴급 resume 이력 검사, 다운로더 점검
+
+- 변경: `-Emergency -ResumeAfterWrite`는 `-PlanPath`를 요구하고 같은 plan의 진행 파일 이력이 깨끗할 때만 된다(마지막 전체 쓰기가 Imager 정상 종료, 그 뒤 쓰기 실패·readback 불일치·이미지 오류 없음). 긴급 receipt 단계는 `complete-unverified`, 이유에 백슬래시 금지, 끊긴 쓰기 안내에 `unverified-no-bundle` 추가. 후속 readback 허용을 fixture FAT 파티션 안의 bundle로 증명. 다운로더는 `IncompleteRead`를 재시도하고, 기존 출력도 새 다운로드처럼 크기·zip CRC로 점검하며, symlink 항목을 거부한다.
+- 증거: 새 시험 전부 통과, 게이트별 변이 16종 모두 실패로 잡힘(호스트 fixture만, 카드·로봇 접근 없음).
+- gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · fix(sd): 긴급 resume은 plan의 시도 색인을 읽는다 (D-389 검증)
+
+- 변경: plan을 쓰는 모든 쓰기·resume이 -LogPath와 상관없이 <plan>.attempts.jsonl에 시작(진행 파일 경로)·끝(card_state, kind) 줄을 덧붙인다. 긴급 resume은 이 색인이 가리키는 진행 파일만 읽고, 색인이 없거나 적힌 로그가 없거나 읽을 수 없으면 거부한다.
+- 증거: test_sd_writer_contract.py 긴급 resume 시험 11 passed(다른 폴더 로그의 불일치, 사라진 로그, 색인 없음 포함), 변이 4종 모두 실패로 잡힘.
+- gate 변화: 없음.

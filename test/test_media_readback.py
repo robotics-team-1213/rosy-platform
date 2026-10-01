@@ -428,6 +428,55 @@ def test_an_unexpected_extra_boot_entry_fails(tmp_path):
     assert "unexpected entry: autorun.inf" in completed.stderr
 
 
+def _plant_provisioning(card, device):
+    # What the writer adds after the image: rosy-config.yaml next to the image files.
+    root = card.cluster_offset(2) + 7 * 32
+    extra = b"".join(_lfn_entries("rosy-config.yaml")) + _dir_entry(b"ROSY-C~1YAM", 0x20, 8, 5)
+    device[root:root + len(extra)] = extra
+    card.put(device, 8, b"a: 1\n")
+
+
+def _run_provisioned(image: Path, device: Path):
+    return subprocess.run(
+        [sys.executable, str(VERIFY), "--image", str(image), "--device", str(device),
+         "--allow-boot-extra", "rosy-provision", "--allow-boot-extra", "rosy-config.yaml"],
+        capture_output=True, text=True, check=False,
+    )
+
+
+def test_the_emergency_follow_up_names_the_writers_boot_files_and_verifies(tmp_path):
+    # D-389: a provisioned emergency card carries the bundle and settings file.
+    (compressed, raw_device), _card = _card_pair(tmp_path, _plant_provisioning)
+
+    assert _run(compressed, raw_device).returncode == 1  # the standard readback refuses them
+    completed = _run_provisioned(compressed, raw_device)
+
+    assert completed.returncode == 0, completed.stderr
+    boot = json.loads(completed.stdout)["boot_partition"]
+    assert boot["provisioning_extras"] == ["rosy-config.yaml"]
+    assert boot["windows_extras"] == ["System Volume Information", "System Volume Information/WPSettings.dat"]
+
+
+def test_the_emergency_follow_up_still_refuses_other_extras_and_changed_files(tmp_path):
+    def plant_and_corrupt(card, device):
+        _plant_provisioning(card, device)
+        device[card.cluster_offset(5)] ^= 0x01
+
+    (compressed, raw_device), _card = _card_pair(tmp_path, plant_and_corrupt)
+    assert "overlays/rpi-overlay.dtbo" in _run_provisioned(compressed, raw_device).stderr
+
+    def plant_autorun(card, device):
+        root = card.cluster_offset(2) + 7 * 32
+        extra = b"".join(_lfn_entries("autorun.inf")) + _dir_entry(b"AUTORUN INF", 0x20, 8, 4)
+        device[root:root + len(extra)] = extra
+        card.put(device, 8, b"evil")
+
+    second = tmp_path / "second"
+    second.mkdir()
+    (compressed, raw_device), _card = _card_pair(second, plant_autorun)
+    assert "unexpected entry: autorun.inf" in _run_provisioned(compressed, raw_device).stderr
+
+
 def test_the_root_filesystem_is_still_byte_exact(tmp_path):
     def corrupt(card, device):
         device[ROOTFS_OFFSET + 100] ^= 0x01

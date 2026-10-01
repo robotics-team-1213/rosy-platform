@@ -58,7 +58,7 @@ def validate(record: object) -> str | None:
         return "bad_tls_host"
     if _is_ip(tls_host):
         return "ip_as_tls_host"
-    if not HOSTNAME.match(tls_host.lower()):
+    if not HOSTNAME.fullmatch(tls_host.lower()):
         return "bad_tls_host"
 
     port = record["port"]
@@ -85,7 +85,8 @@ def validate(record: object) -> str | None:
 
     manual_host = record.get("manual_host")
     if manual_host is not None and not (
-            isinstance(manual_host, str) and _is_ip(manual_host)):   # IP literal only (D-391 1)
+            isinstance(manual_host, str) and "%" not in manual_host and _is_ip(manual_host)):
+        # IP literal only (D-391 1); an IPv6 zone id cannot be dialled from a phone.
         return "bad_manual_host"
     # Unknown top-level fields are ignored on purpose (forward compatible).
     return None
@@ -100,7 +101,7 @@ def _is_ip(value: str) -> bool:
 
 
 def _is_utc_timestamp(value: object) -> bool:
-    if not isinstance(value, str) or not _EXPIRES_AT.match(value):
+    if not isinstance(value, str) or not _EXPIRES_AT.fullmatch(value):
         return False
     try:
         datetime.strptime(value[:19] + "+0000", "%Y-%m-%dT%H:%M:%S%z")
