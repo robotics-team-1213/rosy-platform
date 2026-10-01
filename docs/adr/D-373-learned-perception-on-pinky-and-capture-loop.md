@@ -1,0 +1,84 @@
+## D-373 학습 인식 두 번째 바퀴 — Pinky 이미지 탑재, 불일치 캡처, 섀도 자동 반영
+
+**Status:** Proposed (2026-09-30). 잇는 결정:
+
+- [D-356](D-356-perception-learning-loop-and-model-delivery.md)(Proposed): 학습은 저장소 밖이다. manifest 약속, 접수, 데이터 세대 전달, 섀도 전용 추론은 저장소 안이다.
+- D-225: 변경은 세 계층이다. 이미지(재굽기), 부트·호스트(유닛), 페이로드(`install/`, 서명 전환).
+- D-189·D-192: pip 런타임과 `/var/lib/rosy` 배치. 유닛마다 `StateDirectory=rosy/<unit>`을 쓴다.
+- D-136·D-152: 원본 영상은 로봇 안에만 둔다. 고화질 원본은 로봇 안 60 s 링버퍼에만 두고, 주행하지 않을 때만 올린다.
+- D-185: 최신 값만 의미 있는 구독은 KEEP_LAST 1. 실행기는 `executor_choice`로 고른다.
+- D-62: 꺼진 기능은 조용히 무시하지 않고 꺼졌다고 말한다.
+- D-205: 학습 모델의 주행 선택은 P3 재생 게이트 뒤다. 이 결정은 그 선을 넘지 않는다.
+
+**Context:**
+
+1. D-356 첫 바퀴는 모델 계약, 접수, 전달 도구, 섀도 노드, 녹화 CLI를 만들었다. 그러나 장치 이미지에 onnxruntime이 없다. `/var/lib/rosy/models`를 만드는 곳도 없다. 전달 도구는 존재하지 않는 SSH 사용자(`pinky`)와 sudo 없는 쓰기를 가정했다.
+2. 장치 제품 런타임은 systemd다. 카메라 노드는 `rosy-camera.service`(`User=rosy-camera`, `ProtectSystem=strict`)가 `camera_preview.launch.py`로 띄운다. D-356의 노드는 어느 유닛에도 연결되지 않았다.
+3. 앞 카메라는 원본 `Image`만 낸다. 원본을 계속 녹화하면 D-136 영상 예산을 어기고, 4 GiB 할당량이 30여 분이면 찬다.
+4. 학습에 필요한 것은 모든 주행이 아니다. 규칙 기반과 학습 모델이 어긋난 장면이다. 지금은 그 장면을 골라 남길 수단이 없다.
+5. 새 모델을 로봇에 반영하려면 사람이 intake와 deliver를 차례로 쳐야 한다.
+
+**Decision:**
+
+1. **이미지 계층(SD 재굽기)에 학습 인식 런타임을 넣는다.**
+   - `onnxruntime`과 의존 wheel은 따로 된 해시 고정 파일 `learned-perception-requirements.txt`에 둔다(cp312, aarch64와 x86_64). `inputs.lock.yaml`에 `learned_perception_runtime` 항목(파일 sha256, 설치 위치)을 따로 둔다. 카메라 런타임(D-288)과 같은 방식이다.
+   - **페이로드 런타임 id(D-189)는 바꾸지 않는다.** id는 `device-python-requirements.txt` 전체의 sha256이고, 이 파일은 그대로다. 그래서 이미 구운 카드도 새 페이로드를 계속 받는다. 런타임 기록이나 호환 목록도 새로 만들지 않는다.
+   - 설치 위치는 전용 prefix `/opt/rosy/learned-perception/site-packages`(`pip --target`, `root:root 0755`)다. 학습 백엔드(`learned/runner.py`)만 `onnxruntime` import 직전에 이 경로를 `sys.path` **끝에** 붙인다. apt의 numpy·protobuf·packaging이 모든 서비스에서 계속 우선한다(8kcn 확인: apt protobuf 4.21.12, packaging 24.0).
+   - `/var/lib/rosy/models`는 `root:rosy-camera 0750`이다. 카메라 유닛은 읽기만 한다. 쓰기는 운영자 전달(`rosy` + `sudo -n`)만 한다. `customize-rootfs.sh`와 `tmpfiles-rosy-state.conf` 두 곳에서 같은 규칙으로 만든다.
+   - 녹화는 카메라 유닛의 `StateDirectory` 아래 `/var/lib/rosy/camera/recordings`에 둔다. 새 쓰기 경로를 열지 않는다.
+   - 재굽기 전 벤치 장치에는 같은 해시 파일, 같은 prefix, 같은 디렉터리 규칙을 적용하는 스크립트 하나로 설치하고, 설치를 기록한다. 스크립트는 `/usr/local`과 카드의 런타임 기록을 건드리지 않는다.
+2. **페이로드 계층에서 섀도 노드와 캡처를 켠다.** `camera_preview.launch.py`에 `learned_shadow`와 `capture` 인자를 둔다. 기본값은 둘 다 꺼짐이다. 켜졌는데 런타임이나 모델이 없으면 노드는 `perception/learned/status`에 이유를 1 Hz로 알린다(D-62). 주행 경로는 여전히 이 결과를 읽지 않는다.
+3. **앞 카메라 압축 토픽은 캡처용이다.** `camera_detect_node`가 이미 가진 프레임을 JPEG으로 `camera/front/compressed`에 낸다. 기본 꺼짐이고 `capture`가 켤 때만 낸다. 로봇 밖으로 나가지 않는다(D-136). 녹화는 원본 대신 이 토픽을 기록한다.
+4. **캡처는 불일치 스냅샷이다.**
+   - rosbag2 snapshot 모드로 최근 60 s를 메모리 링버퍼에 둔다(D-136).
+   - 트리거 조건: 섀도와 규칙 기반의 차선 오차 차이가 임계값을 연속 N프레임 넘을 때, 또는 한쪽만 차선을 볼 때. 운영자 요청도 트리거다. 재트리거에는 쿨다운이 있다.
+   - 스냅샷 하나가 세션 하나이고, `session.json`에 트리거 사유와 두 판단값을 남긴다.
+   - 할당량 규칙은 D-356을 따른다. 수거 전 세션은 지우지 않는다.
+   - 수거는 로봇이 주행 중이 아닐 때만 한다.
+5. **사이트 PC가 새 모델을 섀도까지 자동 반영한다.** (감시 대상은 결정 8이 HF commit에서 store `models/inbox/`로 바꿨다. HF는 선택 백엔드다.)
+   - `rosy-model-watch` 타이머가 HF model 저장소의 새 commit을 본다. 새 commit이 있으면 intake를 돌리고, 통과하면 설정된 로봇에 섀도로 전달한다.
+   - 상태 파일로 같은 commit을 두 번 처리하지 않는다.
+   - HF 토큰은 사이트 비밀 파일로만 읽는다.
+   - **자동 반영의 끝은 섀도다.** 주행 활성화는 자동화하지 않는다.
+6. **전달 도구는 실제 장치 규칙을 따른다.** SSH 사용자 `rosy`, 운영자 키와 known_hosts(BatchMode)를 쓴다. 모든 쓰기는 `sudo -n install`로 소유권과 권한을 정해서 한다. 로봇 주소는 저장소에 쓰지 않는다.
+
+7. **여러 학습자와 여러 운영자가 같은 루프를 쓴다.**
+   - **학습자:** 저장소에 바로 열리는 Colab 노트북을 둔다. 입력 칸만 채우면 기준 모델로 학습부터 업로드까지 끝난다. 자기 모델로 바꿔 끼울 수도 있다.
+   - **학습자 신원:** 각자 자기 HF 토큰을 쓴다. 저장소는 팀 HF 조직 소유다. manifest의 `trainer`에는 HF 사용자 이름과 노트북 commit이 자동으로 들어간다.
+   - **섀도 결정 규칙:** 여러 학습자가 같은 모델 저장소에 올리면, intake를 통과한 가장 새 commit이 섀도가 된다. 누가 올렸는지는 기록으로 남는다.
+   - **운영자 SSH:** 운영자마다 자기 SSH 키를 쓴다. 로봇 주소, 키 경로, 저장소 이름은 저장소가 아니라 각자의 사용자 설정 파일 하나에 둔다.
+   - **운영자 도구:** 명령은 `rosy_ml` 하나다. `init`이 설정을 만들고, `doctor`가 키, known_hosts, 토큰, 런타임, 로봇 접속을 점검해 무엇이 빠졌는지 알려 준다.
+   - **동시 작업과 감사:** 로봇 쪽 모델 포인터 변경(push, rollback)은 로봇 안의 잠금 하나로 직렬화한다. 누가, 언제, 어떤 revision을 넣고 빼는지 로봇의 `history.jsonl`에 남긴다.
+   - **사이트 PC 설치:** 사이트 PC의 자동 반영은 설치 스크립트 하나로 켠다. 읽기 전용 HF 토큰과 사이트 전용 SSH 키를 쓴다.
+
+8. **데이터셋과 모델의 정본은 store 폴더다(D-356의 HF 정본을 바꾼다).**
+   - store는 경로 하나다. 지금은 사이트 PC의 로컬 폴더이고, 나중에는 NAS 마운트나 Google Drive 동기화·Colab 마운트 경로를 같은 구조로 가리킨다. 백엔드를 바꿀 때 코드는 바뀌지 않는다.
+   - 구조:
+     - `datasets/<name>/<content_sha>/`
+     - `models/inbox/<폴더>/`: 학습자가 넣는 곳
+     - `models/accepted/<revision>/`
+     - `models/rejected/<폴더>/`
+   - 버전은 HF commit 대신 **내용 해시**로 고정한다. 폴더 안 파일의 상대 경로와 sha256을 정렬해 해시한 값이다. 한 번 쓴 버전 폴더는 바꾸지 않는다.
+   - 사이트 PC의 자동 반영은 `models/inbox/`를 감시한다. 완성 표식이 있는 폴더만 intake에 넣는다. 통과하면 `accepted`로, 떨어지면 `rejected`로 옮긴다.
+   - HF는 쓸 수 있는 사람을 위한 선택 백엔드로 남는다. HF 계정이 없어도 전체 루프가 돈다.
+
+9. **닫힌 role 목록에 `wall`을 더한다(D-356 목록 확장).**
+   - 흰 벽과 흰 테이프를 가르는 것이 학습 데이터의 첫 목표다.
+   - `wall`은 차선도 주행 가능 영역도 아니다. 후처리는 차선 중심 계산에서 `wall` 화소를 빼고, 프레임마다 섀도 결과(`perception/learned/shadow`)에 벽 비율 `wall_fraction`을 낸다. `ignore`와 달리 평가와 라벨에서 따로 센다.
+   - 추출은 프레임마다 그 프레임의 기록 시각 이하에서 가장 늦은 `scan`을 곁 데이터로 붙인다(미래 누설 없음, D-356 보강의 시각 규칙). LiDAR 투영 벽 라벨(D-379)의 입력이다.
+   - 기본 클래스 목록(D-379와 합의):
+     - 0 floor/`background`
+     - 1 lane_line/`lane_marking`
+     - 2 wall/`wall`
+     - 3 drivable/`drivable`
+     - 4 stop_line/`stop_line`
+     - 5 crosswalk/`ignore`
+
+**Consequences:** 섀도 결과와 불일치 스냅샷이 쌓이면 D-356 데이터셋 도구의 입력이 되고, 나중에 D-205 P3 재생 게이트의 재료가 된다. onnxruntime과 디렉터리 규칙은 다음 이미지 릴리스부터 SD에 들어간다. 그 전의 벤치 장치는 기록된 수동 설치다. 페이로드 런타임 id가 그대로이므로 어느 카드도 페이로드 갱신에서 끊기지 않는다. 런타임이 없는 카드에서 섀도를 켜면 노드는 돌지 않고 `status`에 이유를 낸다. Pi 5에서의 지연과 CPU는 첫 장치 실측 전까지 모른다. 지연 예산(8 fps의 한 주기 125 ms)을 넘으면 노드는 프레임을 건너뛰고, 그 비율을 `status`에 낸다.
+
+**Validation:**
+
+- 호스트 pytest: 트리거 정책, 전달 스크립트, watcher 상태.
+- WSL ROS 실행 증거: 섀도, 스냅샷, 수거.
+- 이미지 계약 시험: 해시 고정, 디렉터리 규칙.
+- 장치: 벤치 설치, 지연·CPU 실측, 섀도 배포, 첫 스냅샷 수거. 장치 합격은 이 목록을 실물에서 확인한 뒤다.

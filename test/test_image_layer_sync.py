@@ -1,0 +1,1073 @@
+"""D-388: a payload push brings the image layer up to the active release.
+
+sync-image-layer.py ships in the release's deploy/robot/native and copies the
+allowlisted files (native-runtime scripts, rosy units, udev rules, modprobe
+options) from /opt/rosy/current to where a fresh image puts them. Every test
+runs against a fake device root and a recording runner: nothing here calls a
+real systemctl or udevadm.
+"""
+
+from __future__ import annotations
+
+import datetime as dt
+import hashlib
+import importlib.util
+import json
+import os
+from pathlib import Path
+import re
+import shutil
+import subprocess
+
+import pytest
+
+from signing import sign_checksums
+
+
+ROOT = Path(__file__).resolve().parents[1]
+NATIVE = ROOT / "deploy" / "robot" / "pinky_pro" / "native"
+SCRIPT = NATIVE / "sync-image-layer.py"
+INSTALLER = NATIVE / "install-native-runtime.sh"
+PAYLOAD_BUILDER = ROOT / "deploy" / "robot" / "pinky_pro" / "image" / "build-native-payload.sh"
+CUSTOMIZE = ROOT / "deploy" / "robot" / "pinky_pro" / "image" / "customize-rootfs.sh"
+BASH = shutil.which("bash")
+OLD_ID = "2026.09.27-010"
+NEW_ID = "2026.09.30-008"
+needs_bash = pytest.mark.skipif(BASH is None, reason="bash is required to run the installer")
+
+
+def _load():
+    spec = importlib.util.spec_from_file_location("sync_image_layer", SCRIPT)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+sync_mod = _load()
+
+
+class Runner:
+    def __init__(self, active: set[str] = frozenset()) -> None:
+        self.calls: list[list[str]] = []
+        self.active = set(active)
+
+    def __call__(self, argv: list[str]) -> subprocess.CompletedProcess[str]:
+        self.calls.append(list(argv))
+        code = 0
+        if argv[:2] == ["systemctl", "is-active"]:
+            code = 0 if argv[-1] in self.active else 3
+        return subprocess.CompletedProcess(argv, code, "", "")
+
+    def mutating(self) -> list[list[str]]:
+        # is-active / is-enabled only read state.
+        return [call for call in self.calls if call[:2] not in (["systemctl", "is-active"], ["systemctl", "is-enabled"])]
+
+
+_INSTALLED: list[Path] = []
+
+
+def _install(destination: Path) -> None:
+    """Copy what install-native-runtime.sh produced; the real run is slow on Windows."""
+    if not _INSTALLED:
+        import atexit
+        import tempfile
+
+        scratch = tempfile.mkdtemp(prefix="rosy-native-")
+        atexit.register(shutil.rmtree, scratch, True)
+        once = Path(scratch) / "native"
+        completed = subprocess.run([BASH, INSTALLER.as_posix(), once.as_posix()],
+                                   capture_output=True, text=True, cwd=ROOT)
+        assert completed.returncode == 0, completed.stderr
+        _INSTALLED.append(once)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(_INSTALLED[0], destination)
+
+
+def _fresh_image_layer(device: Path, native: Path) -> None:
+    """What customize-rootfs.sh leaves outside the release, from one native copy."""
+    shutil.copytree(native, device / "opt/rosy/native-runtime")
+    units = device / "etc/systemd/system"
+    units.mkdir(parents=True)
+    for unit in sync_mod.UNITS:
+        shutil.copy2(native / unit, units / unit)
+    for folder, destination in (("udev", "etc/udev/rules.d"), ("modprobe", "etc/modprobe.d")):
+        (device / destination).mkdir(parents=True)
+        for source in (native / "image-layer" / folder).iterdir():
+            shutil.copy2(source, device / destination / source.name)
+
+
+def _links(device: Path, release_id: str):
+    link = device / "opt/rosy/current"
+
+    def is_link(path: Path) -> bool:
+        return Path(path) == link
+
+    def readlink(path: Path) -> str:
+        return f"releases/{release_id}"
+
+    return is_link, readlink
+
+
+def _tree(device: Path) -> dict[str, str]:
+    return {
+        path.relative_to(device).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest()
+        for path in device.rglob("*") if path.is_file()
+    }
+
+
+def _sync(device: Path, release_id: str, runner: Runner, *, dry_run: bool, verified: list | None = None):
+    is_link, readlink = _links(device, release_id)
+    return sync_mod.sync(device, dry_run=dry_run, verify=(verified.append if verified is not None else (lambda _: None)),
+                         runner=runner, is_link=is_link, readlink=readlink)
+
+
+@pytest.fixture
+def device(tmp_path: Path) -> Path:
+    """A robot flashed with OLD_ID that has just activated NEW_ID from this repo."""
+    if BASH is None:
+        pytest.skip("bash is required to run the installer")
+    device = tmp_path / "device"
+    new_native = device / "opt/rosy/releases" / NEW_ID / "deploy/robot/native"
+    _install(new_native)
+    _fresh_image_layer(device, new_native)
+    # Drift the image layer back to what an older image carried (2026-09-30).
+    (device / "etc/systemd/system/rosy-io.service").write_text("[Service]\nExecStart=/bin/old\n", encoding="utf-8")
+    (device / "opt/rosy/native-runtime/mapping_approval.py").unlink()
+    (device / "etc/udev/rules.d/99-rosy-lamp.rules").unlink()
+    (device / "etc/systemd/system/rosy-hw-test.path").unlink()
+    (device / "etc/systemd/system/rosy-camera.service").unlink()
+    # Files the sync must never touch.
+    for relative in ("etc/rosy/runtime.env", "boot/firmware/config.txt", "etc/sudoers.d/60-rosy-operator",
+                     "usr/local/share/rosy/python-runtime.sha256", "etc/systemd/system/unrelated.service",
+                     sync_mod.LOCK_FILE):
+        path = device / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("keep\n", encoding="utf-8")
+    return device
+
+
+# --- the allowlist is what a fresh image installs --------------------------------
+
+
+def test_unit_allowlist_is_what_build_native_payload_puts_in_systemd():
+    text = PAYLOAD_BUILDER.read_text(encoding="utf-8")
+    copied = re.findall(r'cp "\$NATIVE_RUNTIME_SOURCE/([^"]+)" "\$OVERLAY/etc/systemd/system/"', text)
+
+    assert copied
+    assert sorted(copied) == sorted(sync_mod.UNITS)
+
+
+def test_units_the_sync_enables_are_the_ones_customize_rootfs_enables():
+    text = CUSTOMIZE.read_text(encoding="utf-8")
+    block = re.search(r'systemctl --root "\$ROOT" enable (.*?)\n\s*#', text, re.S).group(1)
+    enabled = set(re.findall(r"[\w@.-]+\.(?:service|timer|path|target)", block))
+
+    assert sync_mod.ENABLED_UNITS == enabled & set(sync_mod.UNITS)
+
+
+@needs_bash
+def test_udev_and_modprobe_allowlist_is_what_the_image_overlay_carries(tmp_path):
+    text = PAYLOAD_BUILDER.read_text(encoding="utf-8")
+    rules = set(re.findall(r'="\$WORKSPACE/deploy/robot/pinky_pro/udev/([^"]+\.rules)"', text))
+    confs = set(re.findall(r'="\$WORKSPACE/deploy/robot/pinky_pro/modprobe/([^"]+\.conf)"', text))
+    native = tmp_path / "native"
+    _install(native)
+
+    entries, _ = sync_mod.allowlist(native)
+    udev = {Path(e["destination"]).name for e in entries if e["kind"] == "udev"}
+    modprobe = {Path(e["destination"]).name for e in entries if e["kind"] == "modprobe"}
+
+    assert rules and udev == rules
+    assert confs and modprobe == confs
+    for name in rules:
+        assert (native / "image-layer/udev" / name).read_bytes() == (ROOT / "deploy/robot/pinky_pro/udev" / name).read_bytes()
+
+
+@needs_bash
+def test_native_runtime_mapping_is_exactly_what_the_installer_installs(tmp_path):
+    native = tmp_path / "release-native"
+    image_copy = tmp_path / "device/opt/rosy/native-runtime"
+    _install(native)
+    _install(image_copy)
+
+    entries, _ = sync_mod.allowlist(native)
+    runtime = {e["destination"] for e in entries if e["kind"] == "runtime"}
+    installed = {
+        "opt/rosy/native-runtime/" + path.relative_to(image_copy).as_posix()
+        for path in image_copy.rglob("*") if path.is_file()
+    }
+
+    assert runtime == installed
+    assert "opt/rosy/native-runtime/sync-image-layer.py" in runtime
+    assert "opt/rosy/native-runtime/image-layer/udev/99-rosy-motor.rules" in runtime
+
+
+@needs_bash
+def test_a_fresh_image_is_already_in_sync(tmp_path):
+    device = tmp_path / "device"
+    native = device / "opt/rosy/releases" / NEW_ID / "deploy/robot/native"
+    _install(native)
+    _fresh_image_layer(device, native)
+    runner = Runner(active={"rosy-core.service", "rosy-io.service"})
+
+    result = _sync(device, NEW_ID, runner, dry_run=False)
+
+    assert result["changed"] == [] and result["new"] == []
+    assert result["restart_units"] == [] and result["backup_dir"] is None
+    assert runner.mutating() == []
+
+
+# --- dry run, apply, backup, idempotency -----------------------------------------
+
+
+def test_dry_run_reports_the_plan_and_writes_nothing(device):
+    before = _tree(device)
+    runner = Runner(active={"rosy-io.service", "rosy-navigation.service"})
+
+    result = _sync(device, NEW_ID, runner, dry_run=True)
+
+    assert result["ok"] and result["dry_run"] and result["release_id"] == NEW_ID
+    assert result["changed"] == ["/etc/systemd/system/rosy-io.service"]
+    assert set(result["new"]) == {
+        "/opt/rosy/native-runtime/mapping_approval.py",
+        "/etc/udev/rules.d/99-rosy-lamp.rules",
+        "/etc/systemd/system/rosy-hw-test.path",
+        "/etc/systemd/system/rosy-camera.service",
+    }
+    assert "/etc/systemd/system/rosy-core.service" in result["unchanged"]
+    # rosy-navigation's ExecCondition runs the new mapping_approval.py.
+    assert "rosy-navigation.service" in result["units_affected"]
+    assert result["restart_units"] == ["rosy-io.service", "rosy-navigation.service"]
+    assert _tree(device) == before
+    assert runner.mutating() == []
+    assert not (device / sync_mod.BACKUP_ROOT).exists()
+
+
+def test_apply_backs_up_installs_reloads_and_enables_like_the_image(device):
+    runner = Runner(active={"rosy-io.service", "rosy-core.service"})
+    old_io = (device / "etc/systemd/system/rosy-io.service").read_bytes()
+    now = dt.datetime(2026, 9, 30, 12, 0, 0, tzinfo=dt.timezone.utc)
+    is_link, readlink = _links(device, NEW_ID)
+
+    result = sync_mod.sync(device, dry_run=False, verify=lambda _: None, runner=runner,
+                           is_link=is_link, readlink=readlink)
+    native = device / "opt/rosy/releases" / NEW_ID / "deploy/robot/native"
+    sources = {entry["destination"]: entry["source"] for entry in sync_mod.allowlist(native)[0]}
+
+    assert len(result["changed"]) + len(result["new"]) == 5
+    for shown in result["changed"] + result["new"]:
+        relative = shown.lstrip("/")
+        assert (device / relative).read_bytes() == sources[relative].read_bytes(), shown
+    backup = device / result["backup_dir"].lstrip("/")
+    assert backup.name.endswith("-" + NEW_ID)
+    assert (backup / "etc/systemd/system/rosy-io.service").read_bytes() == old_io
+    manifest = json.loads((backup / sync_mod.BACKUP_MANIFEST).read_text(encoding="utf-8"))
+    assert manifest["complete"] is True and manifest["release_id"] == NEW_ID
+    recorded = {entry["path"]: entry for entry in manifest["files"]}
+    assert recorded["/etc/systemd/system/rosy-io.service"]["backup"] == "etc/systemd/system/rosy-io.service"
+    assert recorded["/opt/rosy/native-runtime/mapping_approval.py"]["state"] == "new"
+    assert runner.mutating() == [
+        ["systemctl", "daemon-reload"],
+        # A new .path starts now, not at the next boot.
+        ["systemctl", "enable", "--now", "rosy-hw-test.path"],
+        ["udevadm", "control", "--reload"],
+    ]
+    # rosy-camera.service is shipped but not enabled by the image.
+    assert result["enabled"] == ["rosy-hw-test.path"]
+    assert result["restart_units"] == ["rosy-io.service"]
+
+
+def test_a_new_enabled_service_is_enabled_but_not_started(device):
+    (device / "etc/systemd/system/rosy-login-code.service").unlink()
+    runner = Runner()
+
+    _sync(device, NEW_ID, runner, dry_run=False)
+
+    assert ["systemctl", "enable", "rosy-login-code.service"] in runner.calls
+    assert ["systemctl", "enable", "--now", "rosy-login-code.service"] not in runner.calls
+
+
+class FailingRunner(Runner):
+    def __init__(self, fail_prefix: list[str], **kwargs) -> None:
+        super().__init__(**kwargs)
+        self.fail_prefix = fail_prefix
+
+    def __call__(self, argv):
+        completed = super().__call__(argv)
+        if argv[:len(self.fail_prefix)] == self.fail_prefix:
+            return subprocess.CompletedProcess(argv, 1, "", "boom")
+        return completed
+
+
+def test_a_failed_reload_command_is_retried_by_the_next_run(device):
+    with pytest.raises(sync_mod.SyncError, match="IMAGE_LAYER_COMMAND"):
+        _sync(device, NEW_ID, FailingRunner(["systemctl", "enable"]), dry_run=False)
+    assert (device / sync_mod.PENDING_FILE).is_file()
+    # Every file is already in place, so only pending.json says work is left.
+    dry = _sync(device, NEW_ID, Runner(active={"rosy-io.service"}), dry_run=True)
+    assert dry["changed"] == [] and dry["new"] == [] and dry["pending"]
+    runner = Runner(active={"rosy-io.service", "rosy-navigation.service"})
+
+    again = _sync(device, NEW_ID, runner, dry_run=False)
+
+    assert runner.mutating() == [
+        ["systemctl", "daemon-reload"],
+        ["systemctl", "enable", "--now", "rosy-hw-test.path"],
+        ["udevadm", "control", "--reload"],
+    ]
+    assert again["restart_units"] == ["rosy-io.service", "rosy-navigation.service"]
+    assert not (device / sync_mod.PENDING_FILE).exists()
+    third = Runner(active={"rosy-io.service"})
+    assert _sync(device, NEW_ID, third, dry_run=False)["restart_units"] == []
+    assert third.mutating() == []
+
+
+def _older_release(device: Path) -> Path:
+    """OLD_ID as a pre-D-388 release: no image-layer/, no mapping_approval.py,
+    no rosy-hw-test.path, no rosy_blackbox.py, and the old rosy-io.service."""
+    new = device / "opt/rosy/releases" / NEW_ID / "deploy/robot/native"
+    old = device / "opt/rosy/releases" / OLD_ID / "deploy/robot/native"
+    shutil.copytree(new, old)
+    shutil.rmtree(old / "image-layer")
+    for name in ("mapping_approval.py", "rosy-hw-test.path", "rosy_blackbox.py", "sync-image-layer.py"):
+        (old / name).unlink()
+    (old / "rosy-io.service").write_text("[Service]\nExecStart=/bin/old\n", encoding="utf-8")
+    return old
+
+
+def test_a_rollback_undoes_what_the_newer_sync_added_and_replaced(device):
+    _older_release(device)
+    blackbox = device / "opt/rosy/native-runtime/rosy_blackbox.py"
+    blackbox.write_text("# image copy\n", encoding="utf-8")
+    image_copy = blackbox.read_bytes()
+    _sync(device, NEW_ID, Runner(), dry_run=False)
+    assert blackbox.read_bytes() != image_copy
+    runner = Runner(active={"rosy-io.service", "rosy-hw-test.path"})
+
+    result = _sync(device, OLD_ID, runner, dry_run=False)
+
+    assert set(result["removed"]) == {
+        "/opt/rosy/native-runtime/mapping_approval.py",
+        "/etc/systemd/system/rosy-hw-test.path",
+        "/etc/udev/rules.d/99-rosy-lamp.rules",
+    }
+    for shown in result["removed"]:
+        assert not (device / shown.lstrip("/")).exists()
+    assert result["restored"] == ["/opt/rosy/native-runtime/rosy_blackbox.py"]
+    assert blackbox.read_bytes() == image_copy
+    assert (device / "etc/systemd/system/rosy-io.service").read_text(encoding="utf-8") == "[Service]\nExecStart=/bin/old\n"
+    calls = runner.mutating()
+    assert calls[0] == ["systemctl", "disable", "--now", "rosy-hw-test.path"]
+    assert ["systemctl", "daemon-reload"] in calls and ["udevadm", "control", "--reload"] in calls
+    assert "rosy-io.service" in result["restart_units"]
+    # The removed files are in this run's backup, and a second run is a no-op.
+    backup = device / result["backup_dir"].lstrip("/")
+    assert (backup / "etc/systemd/system/rosy-hw-test.path").is_file()
+    again = Runner()
+    assert _sync(device, OLD_ID, again, dry_run=False)["removed"] == []
+    assert again.mutating() == []
+
+
+def test_a_rollback_leaves_a_file_someone_changed_after_the_sync(device):
+    _older_release(device)
+    _sync(device, NEW_ID, Runner(), dry_run=False)
+    edited = device / "opt/rosy/native-runtime/mapping_approval.py"
+    edited.write_text("# hand fix\n", encoding="utf-8")
+
+    result = _sync(device, OLD_ID, Runner(), dry_run=False)
+
+    assert edited.read_text(encoding="utf-8") == "# hand fix\n"
+    assert {"path": "/opt/rosy/native-runtime/mapping_approval.py",
+            "reason": "changed since the sync that installed it"} in result["skipped"]
+
+
+def test_a_rollback_never_removes_what_no_sync_recorded(device):
+    _older_release(device)
+    # Image-installed, absent from OLD_ID, never touched by a sync.
+    stray = device / "opt/rosy/native-runtime/sync-image-layer.py"
+
+    result = _sync(device, OLD_ID, Runner(), dry_run=False)
+
+    assert stray.is_file() and result["removed"] == []
+
+
+# --- second review: manifest trust, pending limits, record chains, corruption --------
+
+
+def test_runs_in_the_same_second_keep_their_order_whatever_the_release_id(device, monkeypatch):
+    monkeypatch.setattr(sync_mod, "_stamp", lambda now=None: "20261001T000000Z")
+    _older_release(device)
+    _sync(device, NEW_ID, Runner(), dry_run=False)
+    _sync(device, OLD_ID, Runner(), dry_run=False)
+
+    names = sorted(path.name for path in (device / sync_mod.BACKUP_ROOT).iterdir() if path.is_dir())
+
+    # OLD_ID sorts before NEW_ID by name, but ran second.
+    assert names == [f"000000-20261001T000000Z-{NEW_ID}", f"000001-20261001T000000Z-{OLD_ID}"]
+
+
+def test_a_clock_that_goes_backwards_does_not_reorder_runs(device, monkeypatch):
+    # No RTC on the Pinky: each run's clock reads earlier than the last.
+    stamps = iter(["20261001T120000Z", "20261001T110000Z", "20261001T100000Z"])
+    monkeypatch.setattr(sync_mod, "_stamp", lambda now=None: next(stamps))
+    _variant(device, "2026.10.01-001", "# C\n")
+    _variant(device, "2026.10.01-002", "# D\n")
+    _variant(device, "2026.10.01-003", None)
+    extra = device / "opt/rosy/native-runtime/extra_tool.py"
+    _sync(device, "2026.10.01-001", Runner(), dry_run=False)   # C adds X
+    _sync(device, "2026.10.01-002", Runner(), dry_run=False)   # D changes X
+
+    result = _sync(device, "2026.10.01-003", Runner(), dry_run=False)  # B lacks X
+
+    assert result["removed"] == ["/opt/rosy/native-runtime/extra_tool.py"]
+    assert not extra.exists()
+
+
+def _unflag_last_manifest(device: Path) -> Path:
+    """What a power loss between the installs and files_applied leaves."""
+    folder = sorted(path for path in (device / sync_mod.BACKUP_ROOT).iterdir() if path.is_dir())[-1]
+    manifest = folder / sync_mod.BACKUP_MANIFEST
+    data = json.loads(manifest.read_text(encoding="utf-8"))
+    data.update(files_applied=False, complete=False)
+    manifest.write_text(json.dumps(data), encoding="utf-8")
+    (device / sync_mod.PENDING_FILE).unlink(missing_ok=True)
+    return folder
+
+
+def test_a_run_cut_off_after_every_install_is_reconciled_as_applied(device):
+    _older_release(device)
+    _sync(device, NEW_ID, Runner(), dry_run=False)
+    _unflag_last_manifest(device)
+    # The dry run only reports; the next apply settles it.
+    assert _sync(device, NEW_ID, Runner(), dry_run=True)["reconciled"][0]["outcome"] == "unreconciled"
+    runner = Runner(active={"rosy-io.service"})
+
+    again = _sync(device, NEW_ID, runner, dry_run=False)
+
+    assert [entry["outcome"] for entry in again["reconciled"]] == ["applied"]
+    # The reloads and enables the cut-off run never ran are run now.
+    assert ["systemctl", "daemon-reload"] in runner.mutating()
+    assert ["systemctl", "enable", "--now", "rosy-hw-test.path"] in runner.mutating()
+    assert "rosy-io.service" in again["restart_units"]
+    # And the history is intact: a rollback removes what that run added.
+    rollback = _sync(device, OLD_ID, Runner(), dry_run=False)
+    assert "/opt/rosy/native-runtime/mapping_approval.py" in rollback["removed"]
+
+
+def test_a_run_cut_off_part_way_is_undone_from_its_backups(device):
+    before = _tree(device)
+    _sync(device, NEW_ID, Runner(), dry_run=False)
+    folder = _unflag_last_manifest(device)
+    # The power failed before mapping_approval.py was written; the replaced
+    # rosy-io.service and the other new files had landed.
+    (device / "opt/rosy/native-runtime/mapping_approval.py").unlink()
+    runner = Runner()
+
+    result = sync_mod.reconcile(device, dry_run=False)
+
+    assert result[0][0]["outcome"] == "undone"
+    assert "/etc/systemd/system/rosy-io.service" in result[0][0]["paths"]
+    assert "/opt/rosy/native-runtime/mapping_approval.py" not in result[0][0]["paths"]
+    assert result[1]["daemon_reload"] and result[1]["udev_reload"]
+    # ...and the reloads are owed durably, before the manifest was marked.
+    owed = json.loads((device / sync_mod.PENDING_FILE).read_text(encoding="utf-8"))
+    assert owed["daemon_reload"] and owed["udev_reload"]
+    after = {k: v for k, v in _tree(device).items() if not k.startswith(sync_mod.BACKUP_ROOT)}
+    assert after == {k: v for k, v in before.items() if not k.startswith(sync_mod.BACKUP_ROOT)}
+    assert json.loads((folder / sync_mod.BACKUP_MANIFEST).read_text(encoding="utf-8"))["abandoned"] is True
+    # Settled once: a second pass does nothing.
+    assert sync_mod.reconcile(device, dry_run=False)[0] == []
+    assert runner.calls == []
+
+
+def test_owed_work_survives_an_install_failure_right_after_reconciliation(device, monkeypatch):
+    _sync(device, NEW_ID, Runner(), dry_run=False)
+    _unflag_last_manifest(device)
+    # Something for this run to install, which then fails. rosy-core.service is
+    # not in the cut-off run's manifest, so that run still reconciles as applied.
+    (device / "etc/systemd/system/rosy-core.service").write_text("# drift\n", encoding="utf-8")
+
+    def broken(source, destination, mode):
+        raise OSError("disk full")
+
+    real = sync_mod._install
+    monkeypatch.setattr(sync_mod, "_install", broken)
+    with pytest.raises(OSError):
+        _sync(device, NEW_ID, Runner(), dry_run=False)
+    monkeypatch.setattr(sync_mod, "_install", real)
+
+    owed = json.loads((device / sync_mod.PENDING_FILE).read_text(encoding="utf-8"))
+    assert owed["daemon_reload"] and "rosy-hw-test.path" in owed["enable"]
+    runner = Runner()
+    _sync(device, NEW_ID, runner, dry_run=False)
+    assert ["systemctl", "enable", "--now", "rosy-hw-test.path"] in runner.mutating()
+    assert not (device / sync_mod.PENDING_FILE).exists()
+
+
+def test_owed_work_survives_a_crash_between_pending_and_the_manifest_flag(device, monkeypatch):
+    _sync(device, NEW_ID, Runner(), dry_run=False)
+    folder = _unflag_last_manifest(device)
+    real = sync_mod._write_json
+
+    def crash_on_flag(path, payload):
+        if Path(path).name == sync_mod.BACKUP_MANIFEST and payload.get("files_applied") is True:
+            raise KeyboardInterrupt("power lost")
+        real(path, payload)
+
+    monkeypatch.setattr(sync_mod, "_write_json", crash_on_flag)
+    with pytest.raises(KeyboardInterrupt):
+        _sync(device, NEW_ID, Runner(), dry_run=False)
+    monkeypatch.setattr(sync_mod, "_write_json", real)
+
+    # The owed work was durable before the flag; the manifest is still unflagged.
+    owed = json.loads((device / sync_mod.PENDING_FILE).read_text(encoding="utf-8"))
+    assert "rosy-hw-test.path" in owed["enable"]
+    assert json.loads((folder / sync_mod.BACKUP_MANIFEST).read_text(encoding="utf-8"))["files_applied"] is False
+    runner = Runner()
+    again = _sync(device, NEW_ID, runner, dry_run=False)
+    assert [entry["outcome"] for entry in again["reconciled"]] == ["applied"]
+    assert ["systemctl", "enable", "--now", "rosy-hw-test.path"] in runner.mutating()
+    assert not (device / sync_mod.PENDING_FILE).exists()
+
+
+def test_a_legacy_folder_without_a_serial_is_never_reconciled(device):
+    # Pre-serial folders: an undone run there was never marked abandoned.
+    legacy = device / sync_mod.BACKUP_ROOT / f"20260930T120000Z-{NEW_ID}"
+    legacy.mkdir(parents=True)
+    kept = device / "opt/rosy/native-runtime/rosy_config.py"
+    (legacy / sync_mod.BACKUP_MANIFEST).write_text(json.dumps({
+        "files_applied": False, "complete": False, "release_id": NEW_ID,
+        "files": [{"path": "/opt/rosy/native-runtime/rosy_config.py", "state": "new",
+                   "sha256": hashlib.sha256(kept.read_bytes()).hexdigest(), "backup": None}],
+    }), encoding="utf-8")
+    shown = f"/{sync_mod.BACKUP_ROOT}/{legacy.name}/{sync_mod.BACKUP_MANIFEST}"
+
+    dry = _sync(device, NEW_ID, Runner(), dry_run=True)
+    result = _sync(device, NEW_ID, Runner(), dry_run=False)
+
+    assert dry["legacy_ignored"] == [shown] and result["legacy_ignored"] == [shown]
+    assert result["reconciled"] == []
+    assert kept.is_file()
+
+
+def test_an_undone_run_is_marked_abandoned_and_never_reconciled(device, monkeypatch):
+    def broken(source, destination, mode):
+        raise OSError("disk full")
+
+    real = sync_mod._install
+    monkeypatch.setattr(sync_mod, "_install", broken)
+    with pytest.raises(OSError):
+        _sync(device, NEW_ID, Runner(), dry_run=False)
+    monkeypatch.setattr(sync_mod, "_install", real)
+
+    assert sync_mod.reconcile(device, dry_run=False)[0] == []
+
+
+def test_a_manifest_whose_disable_failed_does_not_shadow_the_history(device, monkeypatch):
+    # One second for every run, so only files_applied can tell the runs apart.
+    monkeypatch.setattr(sync_mod, "_stamp", lambda now=None: "20261001T000000Z")
+    _older_release(device)
+    _sync(device, NEW_ID, Runner(), dry_run=False)
+    with pytest.raises(sync_mod.SyncError, match="disable"):
+        _sync(device, OLD_ID, FailingRunner(["systemctl", "disable"]), dry_run=False)
+
+    result = _sync(device, OLD_ID, Runner(), dry_run=False)
+
+    assert "/opt/rosy/native-runtime/mapping_approval.py" in result["removed"]
+    assert "/etc/systemd/system/rosy-hw-test.path" in result["removed"]
+
+
+def test_an_undone_install_does_not_shadow_the_history_and_re_enables_the_unit(device, monkeypatch):
+    _older_release(device)
+    _sync(device, NEW_ID, Runner(), dry_run=False)
+    real = sync_mod._install
+
+    def broken(source, destination, mode):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(sync_mod, "_install", broken)
+    runner = Runner(active={"rosy-hw-test.path"})
+    with pytest.raises(OSError):
+        _sync(device, OLD_ID, runner, dry_run=False)
+    monkeypatch.setattr(sync_mod, "_install", real)
+
+    # The disable is undone: the unit is enabled and started again.
+    tail = runner.mutating()[-2:]
+    assert tail == [["systemctl", "enable", "rosy-hw-test.path"], ["systemctl", "start", "rosy-hw-test.path"]]
+    assert (device / "etc/systemd/system/rosy-hw-test.path").is_file()
+    result = _sync(device, OLD_ID, Runner(), dry_run=False)
+    assert "/etc/systemd/system/rosy-hw-test.path" in result["removed"]
+
+
+def test_a_manifest_whose_files_landed_but_commands_failed_still_counts(device):
+    _older_release(device)
+    with pytest.raises(sync_mod.SyncError):
+        _sync(device, NEW_ID, FailingRunner(["udevadm"]), dry_run=False)
+
+    result = _sync(device, OLD_ID, Runner(), dry_run=False)
+
+    assert "/opt/rosy/native-runtime/mapping_approval.py" in result["removed"]
+
+
+def test_a_pending_enable_for_a_unit_the_rollback_removes_is_dropped(device):
+    _older_release(device)
+    with pytest.raises(sync_mod.SyncError):
+        _sync(device, NEW_ID, FailingRunner(["systemctl", "enable"]), dry_run=False)
+    assert "rosy-hw-test.path" in json.loads((device / sync_mod.PENDING_FILE).read_text(encoding="utf-8"))["enable"]
+    runner = FailingRunner(["systemctl", "enable"])
+
+    result = _sync(device, OLD_ID, runner, dry_run=False)
+
+    assert "/etc/systemd/system/rosy-hw-test.path" in result["removed"]
+    assert not any(call[1] == "enable" for call in runner.mutating())
+    assert not (device / sync_mod.PENDING_FILE).exists()
+
+
+def test_pending_commands_are_parked_after_three_failed_attempts(device):
+    for attempt in range(3):
+        with pytest.raises(sync_mod.SyncError):
+            _sync(device, NEW_ID, FailingRunner(["udevadm"]), dry_run=False)
+    assert json.loads((device / sync_mod.PENDING_FILE).read_text(encoding="utf-8"))["attempts"] == 3
+    runner = FailingRunner(["udevadm"])
+
+    result = _sync(device, NEW_ID, runner, dry_run=False)
+
+    assert result["ok"] and result["pending_parked"]
+    assert Path(result["pending_parked"]).name.startswith("pending.parked-")
+    assert Path(result["pending_parked"]).is_file()
+    assert not (device / sync_mod.PENDING_FILE).exists()
+    assert runner.mutating() == []
+
+
+def _variant(device: Path, release_id: str, extra: str | None) -> None:
+    source = device / "opt/rosy/releases" / NEW_ID / "deploy/robot/native"
+    target = device / "opt/rosy/releases" / release_id / "deploy/robot/native"
+    shutil.copytree(source, target)
+    if extra is not None:
+        (target / "extra_tool.py").write_text(extra, encoding="utf-8")
+
+
+def test_a_path_added_then_changed_is_removed_not_restored_to_the_first_copy(device):
+    # A (the image) -> C adds X -> D changes X -> B does not carry X.
+    _variant(device, "2026.10.01-001", "# C\n")
+    _variant(device, "2026.10.01-002", "# D\n")
+    _variant(device, "2026.10.01-003", None)
+    extra = device / "opt/rosy/native-runtime/extra_tool.py"
+    _sync(device, "2026.10.01-001", Runner(), dry_run=False)
+    _sync(device, "2026.10.01-002", Runner(), dry_run=False)
+    assert extra.read_text(encoding="utf-8") == "# D\n"
+
+    result = _sync(device, "2026.10.01-003", Runner(), dry_run=False)
+
+    assert result["removed"] == ["/opt/rosy/native-runtime/extra_tool.py"]
+    assert not extra.exists()
+    assert _sync(device, "2026.10.01-003", Runner(), dry_run=True)["removed"] == []
+
+
+def test_a_path_changed_twice_is_restored_to_the_image_copy(device):
+    extra = device / "opt/rosy/native-runtime/extra_tool.py"
+    extra.write_text("# image\n", encoding="utf-8")
+    _variant(device, "2026.10.01-001", "# C\n")
+    _variant(device, "2026.10.01-002", "# D\n")
+    _variant(device, "2026.10.01-003", None)
+    _sync(device, "2026.10.01-001", Runner(), dry_run=False)
+    _sync(device, "2026.10.01-002", Runner(), dry_run=False)
+
+    result = _sync(device, "2026.10.01-003", Runner(), dry_run=False)
+
+    assert result["restored"] == ["/opt/rosy/native-runtime/extra_tool.py"]
+    assert extra.read_text(encoding="utf-8") == "# image\n"
+
+
+def test_a_corrupt_pending_file_is_quarantined_and_the_run_continues(device):
+    pending = device / sync_mod.PENDING_FILE
+    pending.parent.mkdir(parents=True, exist_ok=True)
+    pending.write_text("{not json", encoding="utf-8")
+
+    dry = _sync(device, NEW_ID, Runner(), dry_run=True)
+    assert dry["pending_quarantined"] and pending.is_file()
+    result = _sync(device, NEW_ID, Runner(), dry_run=False)
+
+    assert result["ok"] and result["new"]
+    assert Path(result["pending_quarantined"]).name.startswith("pending.corrupt-")
+    assert Path(result["pending_quarantined"]).read_text(encoding="utf-8") == "{not json"
+    assert not pending.exists()
+
+
+def test_a_corrupt_manifest_is_reported(device):
+    broken = device / sync_mod.BACKUP_ROOT / "20260101T000000Z-2026.09.30-001"
+    broken.mkdir(parents=True)
+    (broken / sync_mod.BACKUP_MANIFEST).write_text("[truncated", encoding="utf-8")
+
+    result = _sync(device, NEW_ID, Runner(), dry_run=True)
+
+    assert result["corrupt_manifests"] == [
+        f"/{sync_mod.BACKUP_ROOT}/20260101T000000Z-2026.09.30-001/{sync_mod.BACKUP_MANIFEST}"]
+
+
+def test_boot_oneshots_and_network_units_are_never_offered_for_a_live_restart(device):
+    for unit in ("rosy-network.service", "rosy-config.service", "rosy-release-recover.service",
+                 "rosy-sd-provision.service"):
+        (device / "etc/systemd/system" / unit).write_text("[Service]\n# old\n", encoding="utf-8")
+    runner = Runner(active={"rosy-io.service", "rosy-network.service", "rosy-config.service",
+                            "rosy-release-recover.service", "rosy-sd-provision.service"})
+
+    result = _sync(device, NEW_ID, runner, dry_run=True)
+
+    assert result["restart_units"] == ["rosy-io.service"]
+    assert result["next_boot_units"] == [
+        "rosy-config.service", "rosy-network.service",
+        "rosy-release-recover.service", "rosy-sd-provision.service",
+    ]
+
+
+def test_a_second_run_is_a_no_op(device):
+    _sync(device, NEW_ID, Runner(), dry_run=False)
+    backups = sorted((device / sync_mod.BACKUP_ROOT).iterdir())
+    before = _tree(device)
+    runner = Runner(active={"rosy-io.service"})
+
+    again = _sync(device, NEW_ID, runner, dry_run=False)
+
+    assert again["changed"] == [] and again["new"] == []
+    assert again["restart_units"] == [] and again["commands"] == [] and again["backup_dir"] is None
+    assert runner.calls == []
+    assert sorted((device / sync_mod.BACKUP_ROOT).iterdir()) == backups
+    assert _tree(device) == before
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX modes")
+def test_a_mode_drift_counts_as_a_change(device):
+    _sync(device, NEW_ID, Runner(), dry_run=False)
+    script = device / "opt/rosy/native-runtime/rosy-boot-status.py"
+    os.chmod(script, 0o644)
+
+    result = _sync(device, NEW_ID, Runner(), dry_run=True)
+
+    assert result["changed"] == ["/opt/rosy/native-runtime/rosy-boot-status.py"]
+
+
+def test_a_failed_install_puts_every_file_back(device, monkeypatch):
+    before = _tree(device)
+    real = sync_mod._install
+    calls = {"n": 0}
+
+    def flaky(source, destination, mode):
+        calls["n"] += 1
+        if calls["n"] == 3:
+            raise OSError("disk full")
+        real(source, destination, mode)
+
+    monkeypatch.setattr(sync_mod, "_install", flaky)
+    runner = Runner()
+
+    with pytest.raises(OSError):
+        _sync(device, NEW_ID, runner, dry_run=False)
+
+    after = {k: v for k, v in _tree(device).items() if not k.startswith(sync_mod.BACKUP_ROOT)}
+    assert after == before
+    assert runner.mutating() == []
+
+
+# --- refusals ------------------------------------------------------------------------
+
+
+def test_refuses_when_current_is_not_a_symlink(device):
+    (device / "opt/rosy/current").mkdir(parents=True)
+
+    with pytest.raises(sync_mod.SyncError, match="not a symlink"):
+        sync_mod.sync(device, dry_run=True, verify=lambda _: None, runner=Runner())
+
+
+@pytest.mark.parametrize("target", [
+    "../../tmp/evil", "/opt/rosy/releases/2026.09.30-008", "releases/not-a-release",
+    "releases/2026.09.30-008/deploy", "native-runtime",
+])
+def test_refuses_when_current_leaves_the_release_store(device, target):
+    before = _tree(device)
+    link = device / "opt/rosy/current"
+
+    with pytest.raises(sync_mod.SyncError, match="IMAGE_LAYER_CURRENT"):
+        sync_mod.sync(device, dry_run=False, verify=lambda _: None, runner=Runner(),
+                      is_link=lambda path: Path(path) == link, readlink=lambda _: target)
+    assert _tree(device) == before
+
+
+def test_refuses_a_release_shaped_directory_outside_the_release_store(device):
+    # Named like a release and complete, but not under /opt/rosy/releases.
+    outside = device / "opt" / NEW_ID
+    shutil.copytree(device / "opt/rosy/releases" / NEW_ID, outside)
+    before = _tree(device)
+    link = device / "opt/rosy/current"
+
+    with pytest.raises(sync_mod.SyncError, match="does not point into"):
+        sync_mod.sync(device, dry_run=False, verify=lambda _: None, runner=Runner(),
+                      is_link=lambda path: Path(path) == link, readlink=lambda _: f"../{NEW_ID}")
+    assert _tree(device) == before
+
+
+def test_refuses_a_release_that_does_not_verify(device):
+    before = _tree(device)
+
+    def reject(release_id):
+        raise ValueError(f"SIGNATURE_INVALID: {release_id}")
+
+    is_link, readlink = _links(device, NEW_ID)
+    with pytest.raises(ValueError, match="SIGNATURE_INVALID"):
+        sync_mod.sync(device, dry_run=False, verify=reject, runner=Runner(),
+                      is_link=is_link, readlink=readlink)
+    assert _tree(device) == before
+
+
+def test_verifies_the_release_current_names(device):
+    verified: list[str] = []
+
+    _sync(device, NEW_ID, Runner(), dry_run=True, verified=verified)
+
+    assert verified == [NEW_ID]
+
+
+@pytest.mark.parametrize("relative", [
+    "etc/rosy/runtime.env", "etc/rosy/defaults.yaml", "boot/firmware/config.txt", "usr/local/bin/x",
+    "lib/modules/6.8.0/extra/rp1_ws281x_pwm.ko", "etc/sudoers.d/60-rosy-operator", "etc/passwd",
+    "etc/systemd/system/../../rosy/runtime.env", "/etc/systemd/system/rosy-io.service",
+    "opt/rosy/current/x", "etc/systemd/journald.conf.d/60-rosy.conf",
+])
+def test_never_writes_outside_the_four_image_directories(relative):
+    with pytest.raises(sync_mod.SyncError, match="IMAGE_LAYER_DESTINATION"):
+        sync_mod.check_destination(relative)
+
+
+def test_apply_touches_only_allowlisted_paths_and_its_backup(device):
+    before = _tree(device)
+
+    _sync(device, NEW_ID, Runner(), dry_run=False)
+
+    after = _tree(device)
+    touched = {path for path in set(before) | set(after) if before.get(path) != after.get(path)}
+    allowed = sync_mod.ALLOWED_PREFIXES + (sync_mod.BACKUP_ROOT + "/",)
+    assert touched and all(path.startswith(allowed) for path in touched), sorted(touched)
+    for keep in ("etc/rosy/runtime.env", "boot/firmware/config.txt", "etc/sudoers.d/60-rosy-operator",
+                 "usr/local/share/rosy/python-runtime.sha256", "etc/systemd/system/unrelated.service"):
+        assert after[keep] == before[keep]
+
+
+def _symlinks_work(tmp_path: Path) -> bool:
+    try:
+        (tmp_path / "probe-link").symlink_to(tmp_path, target_is_directory=True)
+    except (OSError, NotImplementedError):
+        return False
+    return True
+
+
+def test_a_masked_unit_is_skipped_not_unmasked(device, tmp_path):
+    if not _symlinks_work(tmp_path):
+        pytest.skip("symlinks are not available")
+    unit = device / "etc/systemd/system/rosy-io.service"
+    unit.unlink()
+    unit.symlink_to("/dev/null")
+
+    result = _sync(device, NEW_ID, Runner(), dry_run=False)
+
+    assert unit.is_symlink()
+    assert {"path": "/etc/systemd/system/rosy-io.service",
+            "reason": "destination is a symlink (masked?)"} in result["skipped"]
+
+
+def test_real_current_symlink_is_resolved(device, tmp_path):
+    if not _symlinks_work(tmp_path):
+        pytest.skip("symlinks are not available")
+    (device / "opt/rosy/current").symlink_to(f"releases/{NEW_ID}", target_is_directory=True)
+
+    release_id, _ = sync_mod.resolve_current(device)
+
+    assert release_id == NEW_ID
+
+
+def test_an_older_release_without_image_layer_files_skips_them(device):
+    shutil.rmtree(device / "opt/rosy/releases" / NEW_ID / "deploy/robot/native/image-layer")
+
+    result = _sync(device, NEW_ID, Runner(), dry_run=True)
+
+    reasons = {entry["path"]: entry["reason"] for entry in result["skipped"]}
+    assert reasons["/etc/udev/rules.d"] == "release has no image-layer/udev"
+    assert reasons["/etc/modprobe.d"] == "release has no image-layer/modprobe"
+    assert not any(path.startswith("/etc/udev/") for path in result["new"] + result["changed"])
+
+
+# --- the real CLI against a signed release -------------------------------------------
+
+
+def _signed_release(tmp_path: Path, device: Path) -> Path:
+    from build_payload_release import build_release
+
+    private = tmp_path / "keys/test.key"
+    public = device / sync_mod.DEFAULT_PUBLIC_KEY
+    private.parent.mkdir(parents=True)
+    public.parent.mkdir(parents=True, exist_ok=True)
+    subprocess.run(["openssl", "genpkey", "-algorithm", "ed25519", "-out", str(private)],
+                   check=True, capture_output=True)
+    subprocess.run(["openssl", "pkey", "-in", str(private), "-pubout", "-out", str(public)],
+                   check=True, capture_output=True)
+    payload = tmp_path / "payload"
+    for relative, content in {
+        "install/.rosy-release": NEW_ID + "\n",
+        "rosy-packages.txt": "core\n",
+        "source-revision.txt": "b" * 40 + "\n",
+        "python-runtime.sha256": "1" * 64 + "\n",
+    }.items():
+        (payload / relative).parent.mkdir(parents=True, exist_ok=True)
+        (payload / relative).write_text(content, encoding="utf-8")
+    _install(payload / "deploy/robot/native")
+    release = device / "opt/rosy/releases" / NEW_ID
+    if release.exists():
+        shutil.rmtree(release)
+    build_release(payload, NEW_ID, release, signing_key_id=public.stem)
+    sums = (release / "SHA256SUMS").read_bytes()
+    (release / "SHA256SUMS.sig").write_text(sign_checksums(sums, private) + "\n", encoding="ascii")
+    return release
+
+
+def _main(device: Path, *argv: str, runner: Runner) -> tuple[int, dict]:
+    import contextlib
+    import io
+
+    is_link, readlink = _links(device, NEW_ID)
+    out = io.StringIO()
+    with contextlib.redirect_stdout(out):
+        code = sync_mod.main(["--root", str(device), *argv], runner=runner, is_link=is_link, readlink=readlink)
+    return code, json.loads(out.getvalue().strip().splitlines()[-1])
+
+
+def test_cli_verifies_the_signed_release_then_syncs(device, tmp_path):
+    release = _signed_release(tmp_path, device)
+
+    code, plan = _main(device, "--dry-run", runner=Runner())
+    assert code == 0, plan
+    assert plan["release_id"] == NEW_ID and plan["new"]
+    code, applied = _main(device, runner=Runner())
+    assert code == 0, applied
+    assert applied["backup_dir"]
+    # The sync imported native_release/signing from the release: no bytecode left there.
+    assert not list(release.rglob("__pycache__"))
+
+
+def test_cli_refuses_a_tampered_release_and_writes_nothing(device, tmp_path):
+    release = _signed_release(tmp_path, device)
+    unit = release / "deploy/robot/native/rosy-io.service"
+    unit.write_text(unit.read_text(encoding="utf-8") + "# tampered\n", encoding="utf-8")
+    before = _tree(device)
+
+    code, result = _main(device, runner=Runner())
+
+    assert code == 1 and result["ok"] is False
+    assert _tree(device) == before
+
+
+# --- robots in the field verify with their image's OLD native_release.py -------------
+
+GIT = shutil.which("git")
+# Images on robots today, with the source commit each image was built from.
+OLD_VERIFIERS = {
+    "2026.09.27-010": ("8b67c909", "deploy/robot/native/native_release.py", "deploy/release/signing.py"),
+    "2026.09.30-009": ("5c0ce600", "deploy/robot/pinky_pro/native/native_release.py",
+                       "deploy/robot/pinky_pro/release/signing.py"),
+}
+
+
+def _python_native(destination: Path) -> None:
+    """install-native-runtime.sh in pure Python, so this runs without bash."""
+    shutil.copytree(NATIVE, destination, ignore=shutil.ignore_patterns("__pycache__", "install-native-runtime.sh"))
+    shutil.copyfile(ROOT / "deploy/robot/pinky_pro/release/signing.py", destination / "signing.py")
+    for folder, pattern in (("udev", "*.rules"), ("modprobe", "*.conf")):
+        (destination / "image-layer" / folder).mkdir(parents=True)
+        for source in (ROOT / "deploy/robot/pinky_pro" / folder).glob(pattern):
+            shutil.copyfile(source, destination / "image-layer" / folder / source.name)
+
+
+def _old_manager(tmp_path: Path, sha: str, verifier: str, signing: str):
+    """Load an old image's native_release.py with that image's signing.py."""
+    import sys
+
+    folder = tmp_path / f"old-{sha}"
+    folder.mkdir()
+    for path, name in ((verifier, "native_release.py"), (signing, "signing.py")):
+        shown = subprocess.run([GIT, "show", f"{sha}:{path}"], cwd=ROOT, capture_output=True)
+        if shown.returncode != 0:
+            pytest.skip(f"{sha} is not in this clone (shallow?)")
+        (folder / name).write_bytes(shown.stdout)
+    saved = sys.modules.pop("signing", None)
+    sys.path.insert(0, str(folder))
+    try:
+        spec = importlib.util.spec_from_file_location(f"native_release_{sha}", folder / "native_release.py")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+    finally:
+        sys.path.remove(str(folder))
+        sys.modules.pop("signing", None)
+        if saved is not None:
+            sys.modules["signing"] = saved
+    return module.NativeReleaseManager
+
+
+@pytest.mark.skipif(GIT is None, reason="git is required to read the old verifiers")
+@pytest.mark.parametrize("image", sorted(OLD_VERIFIERS))
+def test_an_old_image_verifier_accepts_the_new_payload(tmp_path, image):
+    from build_payload_release import build_release
+
+    sha, verifier, signing = OLD_VERIFIERS[image]
+    manager_type = _old_manager(tmp_path, sha, verifier, signing)
+    device = tmp_path / "device"
+    private = tmp_path / "keys/test.key"
+    public = device / sync_mod.DEFAULT_PUBLIC_KEY
+    private.parent.mkdir(parents=True)
+    public.parent.mkdir(parents=True)
+    subprocess.run(["openssl", "genpkey", "-algorithm", "ed25519", "-out", str(private)],
+                   check=True, capture_output=True)
+    subprocess.run(["openssl", "pkey", "-in", str(private), "-pubout", "-out", str(public)],
+                   check=True, capture_output=True)
+    payload = tmp_path / "payload"
+    for relative, content in {
+        "install/.rosy-release": NEW_ID + "\n",
+        "rosy-packages.txt": "core\n",
+        "source-revision.txt": "b" * 40 + "\n",
+        "python-runtime.sha256": "1" * 64 + "\n",
+    }.items():
+        (payload / relative).parent.mkdir(parents=True, exist_ok=True)
+        (payload / relative).write_text(content, encoding="utf-8")
+    _python_native(payload / "deploy/robot/native")
+    release = device / "opt/rosy/releases" / NEW_ID
+    build_release(payload, NEW_ID, release, signing_key_id=public.stem)
+    sums = (release / "SHA256SUMS").read_bytes()
+    (release / "SHA256SUMS.sig").write_text(sign_checksums(sums, private) + "\n", encoding="ascii")
+    listed = {entry["path"] for entry in json.loads((release / "manifest.json").read_text(encoding="utf-8"))["files"]}
+    assert "deploy/robot/native/image-layer/udev/99-rosy-lamp.rules" in listed
+    assert "deploy/robot/native/image-layer/modprobe/rosy-ws281x.conf" in listed
+    assert "deploy/robot/native/sync-image-layer.py" in listed
+
+    manifest = manager_type(root=device, public_key=public).verify(NEW_ID)
+
+    assert manifest["release_id"] == NEW_ID
+
+
+# --- the payload carries the image-layer sources -------------------------------------
+
+
+@needs_bash
+def test_payload_release_carries_udev_and_modprobe_and_old_verify_accepts_it(tmp_path):
+    from deploy.robot.pinky_pro.native.native_release import NativeReleaseManager
+
+    device = tmp_path / "device"
+    device.mkdir()
+    release = _signed_release(tmp_path, device)
+    manifest = json.loads((release / "manifest.json").read_text(encoding="utf-8"))
+    listed = {entry["path"] for entry in manifest["files"]}
+
+    for name in ("99-rosy-motor.rules", "99-rosy-display.rules", "99-rosy-lamp.rules"):
+        assert f"deploy/robot/native/image-layer/udev/{name}" in listed
+    assert "deploy/robot/native/image-layer/modprobe/rosy-ws281x.conf" in listed
+    assert "deploy/robot/native/sync-image-layer.py" in listed
+    assert not any(Path(path).name in {"manifest.json", "SHA256SUMS", "SHA256SUMS.sig"} for path in listed)
+    # The robot's image-resident native_release.py hashes every non-metadata file.
+    key = device / sync_mod.DEFAULT_PUBLIC_KEY
+    NativeReleaseManager(root=device, public_key=key).verify(NEW_ID)

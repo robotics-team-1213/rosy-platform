@@ -268,5 +268,5 @@
 - 2026-10-01 · uncommitted · docs(reference): API Ref 군집 소켓 표에서 `?token=` 표기 제거
 - 2026-10-01 · uncommitted · docs(reference): 사이트 LAN 발견 프로필 — Fleet health 채택 규칙 완화
 - 2026-10-01 · uncommitted · docs(adr): D-391 사이트 연결 기록 모양과 기기 연결 서버 자리 제안
+- 2026-10-01 · uncommitted · docs(logs): D-373 병합 기록 정정 — 시각 허용치와 학습 런타임 계획
 - 2026-10-01 · uncommitted · docs(adr): D-392 모델 도구 메시지 계약
-- 2026-10-01 · 4483e7a8 · docs(api,adr): 보정 lease 소유·회수·배터리 복귀

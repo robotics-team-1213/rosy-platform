@@ -24,6 +24,10 @@ Jazzy. This directory is copied into every offline ROSY release payload.
 - Navigation requires both hardware and navigation approval markers.
 - `/etc/rosy/runtime.env` is device-specific and secret-free. The checked-in
   `rosy-runtime.env` is a template, not a usable identity.
+- `rosy-camera.service` also reads the optional `/etc/rosy/learned-perception.env`
+  (D-373; template `learned-perception.env.example`, both off). The launch file parses
+  `ROSY_LEARNED_SHADOW` / `ROSY_CAPTURE` strictly; keep the values off the `ExecStart` line.
+  The unit is image layer: a card baked earlier needs the unit hand-installed.
 - Docker and Compose are forbidden in these units.
 - `native_release.py` verifies the signed manifest and exact native payload before
   stopping runtime services. Activation retains `previous`, journals the switch,
