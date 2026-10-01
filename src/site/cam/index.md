@@ -14,6 +14,7 @@
 | D-370 | 앱과 표면은 한 역할씩 맡는다 — 역할·이름·아이콘·화면 소유를 한 표로 고정하고, 발견·기기 연결·실패 어휘는 공유 벡터로 하나로 맞춘다 |
 | D-374 | 앱의 폴더·패키지·식별자·표시 이름은 역할 이름 하나에서 나온다 — 역할 id(kebab)·snake·compact·표시 네 표기; 와이어 계약 이름(mDNS 종류, `rosy-overhead/1`, `/api/fleet`·`/api/vision`, `rosyov://`, 웹 경로, 설정·저장소 키, compose 서비스)은 바꾸지 않는다 |
 | D-377 | 앱 이름 규칙: Rosy + 영어 한 단어 — 표시 이름 `Rosy <Word>`, id·폴더 끝 `<word>`, 패키지 `rosy_<word>`, Android `io.github.livsbittt.rosy.<word>`, Gradle `rosy-<word>`, 아이콘 `<word>.svg`; Rosy Cam·Vision·Console·Robot·Pilot |
+| D-391 | 앱은 사이트 연결을 같은 모양(이름·CA·자격, IP 없음)으로 저장하고, 기기 연결 서버는 Fleet "기기 연결"이 맡는다 |
 
 ## 계획·결과 문서
 
@@ -31,8 +32,8 @@
 
 ## 최근 기록
 
+- 2026-10-01 · 137564eb · test(cam): D-391 공유 벡터(failure-classes·site-link)를 Kotlin 시험이 읽는다
 - 2026-10-01 · 6588c4a8 · fix(cam): D-391 태블릿 실기·독립 리뷰 반영
 - 2026-10-01 · f908c2d5 · feat(cam): D-391 사이트 연결 기록 + 접속마다 mDNS로 tls_host 찾기
 - 2026-10-01 · uncommitted · fix(cam): 4400 재시도 범위를 합의한 전환 예외로 좁힘
 - 2026-10-01 · 35140f13 · fix(cam): 보안 리뷰 반영(인증서 고정) + 바쁜 수신기에서 멈추지 않음
-- 2026-10-01 · 9c69e38f · fix(cam): review fixes for the ultra-wide lens
