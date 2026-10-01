@@ -114,12 +114,13 @@ def front_clearance(services, sample, *, received_at: float) -> None:
         if config.obstacle_mode == "path":
             points = _scan_points(
                 sample, forward_deg=config.lidar_forward_deg,
-                max_range=config.obstacle_path_horizon_m + config.obstacle_corridor_half_width_m)
+                max_range=config.obstacle_path_horizon_m + config.obstacle_corridor_half_width_m,
+                self_mask=config.lidar_self_mask)
             services.line_follow.observe_scan_points(points, received_at=received_at)
             return
         distance = _front_clearance(
             sample, forward_deg=config.lidar_forward_deg,
-            half_angle_deg=config.obstacle_half_angle_deg)
+            half_angle_deg=config.obstacle_half_angle_deg, self_mask=config.lidar_self_mask)
     except (KeyError, TypeError, ValueError):
         return
     services.line_follow.observe_clearance(distance, received_at=received_at)

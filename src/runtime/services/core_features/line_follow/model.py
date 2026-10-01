@@ -76,6 +76,8 @@ class LineFollowConfig:
     obstacle_mode: str = "sector"
     obstacle_corridor_half_width_m: float = 0.09
     obstacle_path_horizon_m: float = 0.40
+    # LiDAR returns of the robot's own body (clearance.self_mask_from_config), per robot.
+    lidar_self_mask: tuple = ()
     # path: 막힘이 풀리려면 이만큼 계속 비어 있어야 한다(의도 호가 바뀌며 서다 가다 떨지 않게).
     obstacle_release_s: float = 0.2
     # 앞 물체 정지가 이만큼 이어지면 nav.line_obstacle_hold 사건을 한 번 낸다(운전자가 풀어야 함).
