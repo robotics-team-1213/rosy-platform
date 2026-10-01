@@ -1733,3 +1733,9 @@
 - 변경: plan을 쓰는 모든 쓰기·resume이 -LogPath와 상관없이 <plan>.attempts.jsonl에 시작(진행 파일 경로)·끝(card_state, kind) 줄을 덧붙인다. 긴급 resume은 이 색인이 가리키는 진행 파일만 읽고, 색인이 없거나 적힌 로그가 없거나 읽을 수 없으면 거부한다.
 - 증거: test_sd_writer_contract.py 긴급 resume 시험 11 passed(다른 폴더 로그의 불일치, 사라진 로그, 색인 없음 포함), 변이 4종 모두 실패로 잡힘.
 - gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · fix(release): 비밀 검사가 SHA·HEAD 코드 스팬의 리비전을 출처 데이터로 본다
+
+- 변경: secret_scan의 무결성 문맥에 `sha`·`head`를 `source`와 같은 규칙(바로 뒤가 코드 스팬일 때만)으로 넣었다. 조사 노트가 상류 트리를 "고정 SHA `<40-hex>`"·"HEAD `<40-hex>`"로 적은 두 줄(docs/logs.md:4077, gemini 조사 계획 5행)이 main을 적색으로 만들었다. logs는 append-only라 호출 지점 수정이 불가능해 규칙 쪽을 좁게 넓혔다. 맨 단어(`sha_token = <hex>`, `head <hex>`, `SHA: <hex>`, `shadow`)는 여전히 보고된다.
+- 증거: test_release_boundary_guards.py 112 passed(새 시험 6개), 변이 2종(sha/head 제거·코드 스팬 조건 제거) 모두 실패로 잡힘. 같은 커밋에서 크기 판정 fleet 20655·schemas.py 1092를 재판정했다(test_module_structure 통과).
+- gate 변화: 없음.

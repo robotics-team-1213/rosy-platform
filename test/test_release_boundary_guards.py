@@ -418,6 +418,30 @@ def test_scanner_ignores_public_provenance_paths_and_absorption_hashes():
     )
 
 
+# Built at runtime so this file does not trip the repository scan itself.
+_REV = "".join(("c51cbab6", "e6efffff", "8738ecf9", "ce41ba85", "034d9654"))
+
+
+@pytest.mark.parametrize("line", [
+    f"- 증거: 조사 고정 SHA `{_REV}`; gate 변화 없음.",
+    f"> 기본 브랜치 `main`, 조사 시점 HEAD `{_REV}`. 저장소는 공개.",
+])
+def test_scanner_excuses_a_revision_cited_as_sha_or_head_code_span(line):
+    """Pinned upstream trees in research notes are public provenance."""
+    assert not scan_text("docs/notes.md", line)
+
+
+@pytest.mark.parametrize("line", [
+    f"sha_token = {_REV}",
+    f"head {_REV}",
+    f"SHA: {_REV}",
+    f"shadow `{_REV}`",
+])
+def test_scanner_still_reports_sha_or_head_without_a_code_span(line):
+    """Only the code-span form is excused; the bare words dismiss nothing."""
+    assert scan_text("docs/notes.md", line), f"dismissed: {line!r}"
+
+
 # --- a call is not a literal, but a literal inside one still is -------------
 
 
