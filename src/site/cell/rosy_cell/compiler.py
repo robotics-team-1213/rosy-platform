@@ -87,7 +87,9 @@ def compile_job(recipe: Recipe, cell: CellConfig, *, tol_m: float) -> Job:
     station = Pose(*cell.station_pose(recipe.pick_station))
     sheet_station = Pose(*cell.station_pose(recipe.slip_sheet_station)) if recipe.slip_sheet_station else None
     steps: list[Step] = []
-    for slot in recipe.pallets:
+    # depalletize is the exact reverse: last pallet filled is emptied first; pallet_done follows each emptied pallet
+    slots = recipe.pallets if recipe.mode == "palletize" else tuple(reversed(recipe.pallets))
+    for slot in slots:
         frame, plan = cell.frames[slot.frame], plans[slot.id]
         sheets = {s.below_layer: s for s in plan.slip_sheets}
         centre = (slot.pallet.length / 2, slot.pallet.width / 2)

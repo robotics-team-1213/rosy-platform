@@ -76,11 +76,30 @@ def test_depalletize_is_the_reverse_of_palletize():
     job = compile_job(recipe, cell, **TOL)
     assert len(job.steps) == 62
     first = job.steps[0]
-    assert (first.kind, first.item, first.layer) == ("pick", "box", 1)
-    # top layer comes off nearest-first: A layer 1 nearest (0.015,0.025): 0.215^2 + 0.025^2 = 0.04685
-    assert (first.target.x, first.target.y, first.target.z) == pytest.approx((0.215, 0.025, 0.042))
+    # the last pallet filled (B) is emptied first
+    assert (first.kind, first.item, first.pallet, first.layer) == ("pick", "box", "B", 1)
+    # B's top layer comes off nearest-first. Robot at (-0.2, 0.15) in B's frame; mirrored layer 1 nearest is
+    # (0.015,0.075): 0.215^2 + 0.075^2 = 0.05185 -> base (0.2+0.015, -0.15+0.075, 0.042)
+    assert (first.target.x, first.target.y, first.target.z) == pytest.approx((0.215, -0.075, 0.042))
     assert job.steps[1].target.y == pytest.approx(0.2)
     assert (job.steps[14].item, job.steps[14].kind) == ("slip_sheet", "pick")
+    assert [(s.kind, s.pallet) for s in job.steps if s.kind == "pallet_done"] == [
+        ("pallet_done", "B"),
+        ("pallet_done", "A"),
+    ]
+    assert job.steps[30].pallet == "B" and job.steps[31].pallet == "A"
+
+
+def test_depalletize_transfers_are_palletize_transfers_reversed():
+    pal = compile_job(*_inputs(), **TOL).steps
+    dep = compile_job(*_inputs(recipe_edit=("mode: palletize", "mode: depalletize")), **TOL).steps
+
+    def moves(steps):
+        pairs = [s for s in steps if s.kind != "pallet_done"]
+        return [(a.item, a.pallet, a.layer, a.target, b.target) for a, b in zip(pairs[::2], pairs[1::2])]
+
+    swapped = [(item, pallet, layer, dst, src) for item, pallet, layer, src, dst in moves(pal)]
+    assert moves(dep) == swapped[::-1]
 
 
 def test_compile_refuses_missing_frame_station_and_tall_stack():
