@@ -229,9 +229,126 @@ def _peer_case(peer_state, peer_frame="map"):
     return r1
 
 
-def test_a_localized_peer_carries_the_decision():
-    r1 = _peer_case("LOCALIZED")
-    assert len(r1.decisions) == 1 and [c.value for c in r1.decisions[0].cues] == ["peers"]
+def test_a_peer_fleet_first_saw_localized_is_not_an_anchor():
+    """Unknown provenance (a direct injection, a Fleet or CORE restart): not a peer."""
+    assert _peer_case("LOCALIZED").decisions == []
+
+
+def seen_from(observer, target):
+    """`target` (map) as a base_link point of a robot at `observer`."""
+    dx, dy = target[0] - observer[0], target[1] - observer[1]
+    c, s = math.cos(observer[2]), math.sin(observer[2])
+    return (c * dx + s * dy, -s * dx + c * dy)
+
+
+class Localizing(FakeRobot):
+    """CANDIDATES at `pose` with its mirror; accepts a decision and is then LOCALIZED at
+    the decided candidate (the robot's 3 s check passes)."""
+
+    def __init__(self, robot_id, pose, objects=(), request_id=None):
+        super().__init__(robot_id, state=state(robot_id, "CANDIDATES", "odom"))
+        self.candidates = report(robot_id, pose, objects=objects, request_id=request_id)
+
+    async def localization_decision(self, decision):
+        out = await super().localization_decision(decision)
+        c = self.candidates.candidates[decision.candidate_index]
+        self._state = state(self.robot_id, "LOCALIZED", pose=(c.x, c.y, c.yaw))
+        self.candidates = None
+        return out
+
+    def search(self, pose, objects=(), request_id="again"):
+        """Back to CANDIDATES (a pickup) with a new report."""
+        self._state = state(self.robot_id, "CANDIDATES", "odom")
+        self.candidates = report(self.robot_id, pose, objects=objects, request_id=request_id)
+
+
+X_OFF = (-0.9, -0.509, 0.0)               # sees A at 1.06 m; its twin is 2.4 m from A
+Z_OFF = (0.9, -0.2, math.pi)              # sees X_OFF only (A is 2.27 m away)
+
+
+def test_an_anchored_chain_localizes_through_peers():
+    """slot -> peers from the slot anchor -> peers from that anchor."""
+    clock = FakeClock()
+    a = Localizing("a", ON_A)
+    x = Localizing("x", X_OFF, objects=[seen_from(X_OFF, ON_A)])
+    z = Localizing("z", Z_OFF, objects=[seen_from(Z_OFF, X_OFF)])
+    svc = service(a, x, z, clock=clock)
+    ticks(svc, clock, 15.0)
+    assert [[c.value for c in r.decisions[0].cues] for r in (a, x, z)] == [["slot"], ["peers"], ["peers"]]
+    assert all(r.decisions[0].candidate_index == 0 for r in (a, x, z))
+    assert svc.anchors() == {"a", "x", "z"}
+
+
+def test_a_robot_that_leaves_localized_loses_its_anchor():
+    clock = FakeClock()
+    a = Localizing("a", ON_A)
+    svc = service(a, clock=clock)
+    ticks(svc, clock, 5.0)
+    assert svc.anchors() == {"a"}
+    a._state = state("a", "SUSPECT", "map", pose=ON_A)
+    ticks(svc, clock, 0.5)
+    a._state = state("a", "LOCALIZED", pose=ON_A)          # back without a Fleet decision
+    x = Localizing("x", X_OFF, objects=[seen_from(X_OFF, ON_A)])
+    svc._clients = lambda: {"a": a, "x": x}
+    ticks(svc, clock, 5.0)
+    assert svc.anchors() == set() and x.decisions == []
+
+
+def test_an_anchor_whose_pose_jumps_while_localized_loses_its_anchor():
+    """A pose injected straight into AMCL keeps the robot LOCALIZED; the jump shows it."""
+    clock = FakeClock()
+    a = Localizing("a", ON_A)
+    svc = service(a, clock=clock)
+    ticks(svc, clock, 5.0)
+    a._state = state("a", "LOCALIZED", pose=(ON_A[0], ON_A[1] - 0.05, ON_A[2]))   # driving
+    ticks(svc, clock, 0.5)
+    assert svc.anchors() == {"a"}
+    a._state = state("a", "LOCALIZED", pose=mirror(ON_A))
+    ticks(svc, clock, 0.5)
+    assert svc.anchors() == set()
+
+
+def test_a_decision_that_ends_elsewhere_does_not_anchor():
+    """LOCALIZED away from the decided pose was not that decision."""
+    clock = FakeClock()
+    a = Localizing("a", ON_A)
+    original = a.localization_decision
+
+    async def decide(decision):
+        out = await original(decision)
+        a._state = state("a", "LOCALIZED", pose=mirror(ON_A))
+        return out
+
+    a.localization_decision = decide
+    svc = service(a, clock=clock)
+    ticks(svc, clock, 5.0)
+    assert len(a.decisions) == 1 and svc.anchors() == set()
+
+
+R2_TRUE = (-0.70, 0.15, math.pi)          # S1 layout a: off-slot, 0.66 m from r1 on A
+
+
+def test_s1_a_mirror_locked_peer_gives_its_observer_no_lead():
+    """S1 p7a1/p7a3: r2, LOCALIZED by peers from r1, is injected at its twin and stays
+    LOCALIZED. r1 is picked up and re-searches; it sees the real r2, which its own twin
+    places exactly on r2's mirror-locked pose. Before: twin peers +1 led the slot by 0.5."""
+    clock = FakeClock()
+    r1 = Localizing("r1", ON_A)
+    r2 = Localizing("r2", R2_TRUE, objects=[seen_from(R2_TRUE, ON_A)])
+    svc = service(r1, r2, clock=clock)
+    ticks(svc, clock, 10.0)
+    assert [[c.value for c in r.decisions[0].cues] for r in (r1, r2)] == [["slot"], ["peers"]]
+    assert svc.anchors() == {"r1", "r2"}
+
+    r2._state = state("r2", "LOCALIZED", pose=mirror(R2_TRUE))     # the injected fault
+    r1.search(ON_A, objects=[seen_from(ON_A, R2_TRUE)])            # the pickup pulse
+    ticks(svc, clock, 5.0)
+    assert "r2" not in svc.anchors()
+    decision = r1.decisions[-1]
+    assert len(r1.decisions) == 2 and decision.candidate_index == 0          # the truth
+    assert [c.value for c in decision.cues] == ["slot"]
+    assert decision.evidence["cues"]["peers"] == 0.0
+    assert decision.evidence["totals"][1] == pytest.approx(0.99)           # the twin: scan fit only
 
 
 @pytest.mark.parametrize("peer_state, frame", [("SUSPECT", "map"), ("CANDIDATES", "odom"),

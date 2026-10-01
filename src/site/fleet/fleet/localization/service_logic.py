@@ -27,6 +27,15 @@ SUSPECT_YAW_RAD = math.radians(60.0)
 SUSPECT_REPORTS = 2
 SUSPECT_WINDOW_S = 15.0
 SUSPECT_REASON = "fleet_monitor"
+#: Anchor provenance (S1 finding 3): a LOCALIZED pose that moves more than
+#: JUMP_M + JUMP_SPEED_MPS * dt, or turns more than JUMP_YAW_RAD + JUMP_RATE_RADPS * dt,
+#: between two polls was re-set, not driven (0.5 m / 86 degrees at the 0.5 s poll).
+JUMP_M = 0.25
+JUMP_SPEED_MPS = 0.5
+JUMP_YAW_RAD = 0.5
+JUMP_RATE_RADPS = 2.0
+#: Cues from the world itself; `peers` anchors only because Context.peers holds anchors.
+WORLD_CUES = ("paint", "slot", "square")
 #: A peer observation is an object this close to the peer's reported pose or its mirror.
 PEER_EVIDENCE_M = 0.25
 #: A candidate report is evidence for this long after Fleet first saw it (Fleet's clock).
@@ -78,6 +87,14 @@ def disagrees(reported: cues.Pose, observed: Observation) -> bool:
     if math.dist(reported[:2], observed[:2]) > SUSPECT_DIST_M:
         return True
     return observed[2] is not None and abs(cues.wrap(reported[2] - observed[2])) > SUSPECT_YAW_RAD
+
+
+def jumped(before: cues.Pose, after: cues.Pose, dt: float) -> bool:
+    """A LOCALIZED pose moved further between two polls than a Pinky can drive: the
+    signature of a pose injected while LOCALIZED (S1 forced mirror), not motion."""
+    dt = max(dt, 0.0)
+    return (math.dist(before[:2], after[:2]) > JUMP_M + JUMP_SPEED_MPS * dt
+            or abs(cues.wrap(after[2] - before[2])) > JUMP_YAW_RAD + JUMP_RATE_RADPS * dt)
 
 
 def clear_leader(report: CandidateReport, context: Context, now: float,
