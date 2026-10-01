@@ -50,6 +50,21 @@
 /* 편대 역할 — 계기 셋의 네 번째 칸. 대형에 속해 있을 때만 나타난다(D-280:
    빈 상태는 말하지 않는다). 색은 쓰지 않는다 — 역할은 경보가 아니고,
    리더·팔로워는 단어로 충분히 다르다(D-82 예산 안 씀). */
+/* D-396: 목표 좌표 — 내비게이션 줄의 오른쪽, 뮤트색 모노 */
+.navigation-goal {
+  color: var(--muted);
+  font: var(--weight-regular) var(--text-micro)/var(--leading-flat) var(--mono);
+  letter-spacing: var(--track-state);
+  margin-left: var(--space-2);
+}
+
+/* D-396: 텔레오퍼레이션 속도 — 패드 아래 한 줄, 누르는 동안만 보인다 */
+.teleop-speed {
+  color: var(--muted);
+  font: var(--weight-label) var(--text-label)/var(--leading-flat) var(--mono);
+  letter-spacing: var(--track-state);
+}
+
 .hero-formation {
   display: flex;
   align-items: baseline;

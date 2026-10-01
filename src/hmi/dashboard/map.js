@@ -370,6 +370,9 @@ export function createFieldMap(options) {
         body: JSON.stringify({ x: world.x, y: world.y, yaw }),
       });
       setAction?.(`${label} ${world.x.toFixed(2)}, ${world.y.toFixed(2)} 요청을 CORE가 받았습니다. 실제 적용 상태는 로봇 readback으로 확인하세요.`);
+      if (!locating) {
+        window.dispatchEvent(new CustomEvent("rosy:goal", { detail: { x: world.x, y: world.y } }));
+      }
     } catch (error) {
       setAction?.(`${label} 전송 실패: ${error.message}`);
     }

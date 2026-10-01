@@ -313,6 +313,15 @@ SIZE_VERDICTS = {
         "without reopening phase state (D-386). The hard-tier "
         "zero-growth rule prevents silent expansion",
     ),
+    "hmi/dashboard/app.js": (
+        803,
+        "split: the shell's session/auth/refresh cycle, the Escape e-stop handler, the goal "
+        "tracking, the mode bindings and the formation cell wiring grew with D-383/D-385/D-396 "
+        "— the natural seam is the D-362 P1 module split that already moved telemetry, teleop "
+        "and the state socket out; the remaining event bindings and the rosy:goal listener "
+        "belong in a sibling module (D-338 pattern). Owner dashboard, scheduled for the "
+        "D-362 P2 round.",
+    ),
 }
 
 WORKSPACE_REF_PATTERNS = (

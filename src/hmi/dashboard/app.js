@@ -94,6 +94,7 @@ const visionPreview = createVisionPreview({
   authHeaders,
   hasToken: () => !!session.token,
   isHidden: () => document.hidden,
+  lastGoal: null,
 });
 const stopVisionPreview = (message) => visionPreview.stop(message);
 const startVisionPreview = () => visionPreview.start();
@@ -116,6 +117,18 @@ function renderRobotState(state) {
   setText("battery-value", percent(state.battery?.percent), "—", state.evidence?.battery);
   setText("battery-voltage", metricNumber(state.battery?.voltage) === null ? "voltage —" : `${number(state.battery.voltage, 2)} V`, "—", state.evidence?.battery);
   setText("navigation-state", state.navigation, "—", state.evidence?.navigation);
+  // D-396: 목표 좌표 — 지도에서 보냈던 목표를 기억했다가 내비게이션이 살아 있는
+  // 동안 표시한다. 내비게이션이 끝나면 지운다.
+  const navGoal = elements["navigation-goal"];
+  if (navGoal) {
+    const active = ["PLANNING", "NAVIGATING"].includes(state.navigation);
+    if (active && session.lastGoal) {
+      navGoal.textContent = `→ (${session.lastGoal.x.toFixed(1)}, ${session.lastGoal.y.toFixed(1)})`;
+    } else {
+      navGoal.textContent = "";
+      if (!active) session.lastGoal = null;
+    }
+  }
   setText("map-id", `map ${state.map_id || "—"}`);
   setText("state-age", state.timestamp ? new Date(state.timestamp).toLocaleTimeString("ko-KR") : "—");
   setText("hero-message", state.online === false ? "로봇이 오프라인 상태를 보고했습니다." : "로봇 런타임과 상태 스트림이 연결되었습니다.");
@@ -550,6 +563,11 @@ elements["emergency-stop"].addEventListener("click", async () => {
   } catch (error) {
     setText("action-message", `정지 명령 실패: ${error.message}`);
   }
+});
+
+// D-396: 지도에서 보낸 목표를 기억한다 — 내비게이션 줄에 표시용.
+window.addEventListener("rosy:goal", (event) => {
+  session.lastGoal = event.detail;
 });
 
 // D-396: Escape 키 = 즉시 비상정지 — 확인창 없음. 위급 순간의 장벽은

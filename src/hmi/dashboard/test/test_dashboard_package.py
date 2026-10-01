@@ -55,6 +55,25 @@ def test_escape_key_stops_the_robot_immediately():
     assert "window.confirm" not in handler, f"Escape 핸들러에 confirm 이 있다: {handler[:200]}"
 
 
+def test_the_navigation_line_shows_the_goal():
+    """D-396: 지도에서 보낸 목표를 내비게이션 줄에 표시한다."""
+    html = (ROOT / "index.html").read_text(encoding="utf-8")
+    assert 'id="navigation-goal"' in html
+    js = (ROOT / "app.js").read_text(encoding="utf-8")
+    assert "rosy:goal" in js  # 지도에서 목표 이벤트를 받는다
+    assert "session.lastGoal" in js  # 목표를 기억한다
+    assert "PLANNING" in js and "NAVIGATING" in js  # 활성 상태에서만 표시
+
+
+def test_the_teleop_pad_shows_commanded_speed():
+    """D-396: 텔레오퍼레이션 중 명령 속도를 패드 아래 표시한다."""
+    html = (ROOT / "index.html").read_text(encoding="utf-8")
+    assert 'id="teleop-speed"' in html
+    teleop = (ROOT / "teleop.js").read_text(encoding="utf-8")
+    assert "teleop-speed" in teleop
+    assert "m/s" in teleop and "rad/s" in teleop
+
+
 def test_the_state_render_feeds_swarm_to_the_formation_cell():
     shell = (ROOT / "app.js").read_text(encoding="utf-8")
     telemetry = (ROOT / "telemetry.js").read_text(encoding="utf-8")
