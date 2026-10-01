@@ -303,14 +303,15 @@ SIZE_VERDICTS = {
         "splitting probe sequence from reporting would sever one diagnostic narrative (X5)",
     ),
     "products/omx/adapter/omx_adapter/action_store.py": (
-        1_176,
+        1_187,
         "accept: one owner for the durable local Action, per-attempt ROS phase journal, and semantic "
         "workflow terminal gate; they share SQLite transactions, identity fences, and restart-to-UNKNOWN "
         "recovery. ROS-free and host-testable. Re-judged 2026-10-01 at 1109 after the durable gripper "
         "evidence gate and restart-to-HOLD journal recovery; recovery updates share the same SQLite "
         "transaction so the Action, phase, and possible-held-object state cannot split. Re-judged "
         "2026-10-01 at 1176 for late ROS UUID and exact-cancel intent journaling after UNKNOWN/HOLD "
-        "without reopening phase state (D-386). The hard-tier "
+        "without reopening phase state (D-386). Re-judged 2026-10-01 at 1187 after the "
+        "canceled-action hold joined (peer's change). The hard-tier "
         "zero-growth rule prevents silent expansion",
     ),
     "hmi/dashboard/app.js": (
