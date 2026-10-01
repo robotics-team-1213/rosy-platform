@@ -4225,6 +4225,11 @@
 - 증거: `test_module_structure.py` 33 passed.
 - gate 변화: 없음.
 
+## 2026-10-01 · uncommitted · docs(plan): D-395 2단계 세 갈래 인터페이스 계약
+- 변경: `docs/plans/2026-10-01-d395-phase2-interfaces.md` — 사용자 2단계 승인(2026-10-01)에 따라 로봇(sensing)·CORE·Fleet 세 갈래가 함께 쓸 계약을 고정. ROS 토픽(`localization/state|candidates|decision|suspect|result`, String JSON), CORE 새 경로(`GET /localization/candidates`, `POST /localization/decision|suspect|mission`), 새 capability `LOCALIZE_ASSIST`, API Ref v1.70 핀 목록, Fleet 서비스·감시·사다리 시간, 교통정리·bays가 믿지 않는 자세, D-395 이전 로봇(`localization: null`)은 현행 유지+경고. 실제 로봇(S3)은 공유 로봇 공지·대기 규칙을 따른다.
+- 증거: 없음(계획 문서).
+- gate 변화: 없음.
+
 ## 2026-10-01 · uncommitted · feat(omx): record SIM demonstrations and export LeRobot v3
 - 변경: D-390 부록·API v1.69·Pilot 기록 패널·SIM 카메라·원본 recorder·오프라인 exporter. ROS 수락 전에 목표를 등록하고, recording I/O는 별도 writer로 분리.
 - 증거: adapter/Pilot/network 259 passed, 28 skipped; quick tier 95 passed; Chromium recording retry/outcome/stale/dispose 1 passed; 실제 LeRobot 0.4.4 reader 3 passed. Gazebo 원본 15프레임 및 동일 원본 export 재독출 PASS. docs/validation/omx-demonstration-lerobot-2026-10-01/README.md 참조.

@@ -269,5 +269,5 @@
 - 2026-10-01 · uncommitted · fix(pilot): preserve recording errors and reconcile API minor
 - 2026-10-01 · uncommitted · fix(omx): fence recording closure and isolate storage faults
 - 2026-10-01 · uncommitted · feat(omx): record SIM demonstrations and export LeRobot v3
+- 2026-10-01 · uncommitted · docs(plan): D-395 2단계 세 갈래 인터페이스 계약
 - 2026-10-01 · uncommitted · chore(architecture): `control` 크기 판정 재판정 (D-395 1단계)
-- 2026-10-01 · uncommitted · chore(architecture): `fleet` 크기 판정 재판정 (D-395 중재기)
