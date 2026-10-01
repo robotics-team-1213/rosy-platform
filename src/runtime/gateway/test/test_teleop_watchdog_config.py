@@ -8,7 +8,7 @@ from unittest import mock
 
 import pytest
 
-from core.services import TELEOP_TIMEOUT_MS_RANGE, teleop_timeout_ms
+from core.teleop_config import TELEOP_TIMEOUT_MS_RANGE, teleop_timeout_ms
 from core_common import config as config_module
 from core_common.config import load_config
 from core_features.command.arbitration import ModeMachine, SourceRegistry

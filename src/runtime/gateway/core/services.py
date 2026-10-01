@@ -13,6 +13,7 @@ from core_common.capability import Capability
 from core_features.calibration import CalibrationSessionManager
 from core_features.command.arbitration import Mode, ModeMachine, SourceRegistry
 from core_features.command.manager import CommandManager
+from core.teleop_config import teleop_timeout_ms
 from core_features.docking.agent import DockAgent
 from core_features.docking.database import DockDatabase, DockError, DockInstance, DockType
 from core_features.docking.detector import select_detector
@@ -249,21 +250,6 @@ def _seeded_dock_database(raw: dict[str, Any]) -> DockDatabase:
         database.add(DockInstance.model_validate(item))
     return database
 
-
-#: SAF-002 watchdog bounds: below 100 ms a 10 Hz teleop client trips it between
-#: two commands; above 2 s a lost link keeps the wheels turning too long.
-TELEOP_TIMEOUT_MS_RANGE = (100, 2000)
-
-
-def teleop_timeout_ms(safety_cfg) -> int:
-    """`safety.teleop_timeout_ms` (SAF-002 "설정 가능"), validated; 500 when absent."""
-    raw = (safety_cfg or {}).get("teleop_timeout_ms", 500)
-    if isinstance(raw, bool) or not isinstance(raw, (int, float)) or raw != int(raw):
-        raise ValueError(f"safety.teleop_timeout_ms must be a whole number of ms, got {raw!r}")
-    low, high = TELEOP_TIMEOUT_MS_RANGE
-    if not low <= int(raw) <= high:
-        raise ValueError(f"safety.teleop_timeout_ms must be within {low}-{high} ms, got {raw}")
-    return int(raw)
 
 @dataclass
 class CoreServices:
