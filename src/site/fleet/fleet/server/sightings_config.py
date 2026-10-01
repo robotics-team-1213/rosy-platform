@@ -18,8 +18,9 @@ _REQUIRED = {
 }
 _ALLOWED = _REQUIRED | {
     "phone_token_env", "fleet_base_url", "processor_revision",
-    "corner_world_m", "robot_markers", "heading_edge",
+    "corner_world_m", "robot_markers", "heading_edge", "credential",
 }
+CREDENTIAL_KINDS = ("static", "paired")
 _ENV_NAME = re.compile(r"^[A-Z_][A-Z0-9_]*$")
 
 
@@ -48,6 +49,15 @@ def load_sighting_sources(path: Path | str, *, environ: Mapping[str, str] | None
             raise ValueError(f"sources[{index}] missing fields: {', '.join(sorted(missing))}")
         if unknown:
             raise ValueError(f"sources[{index}] has unknown fields: {', '.join(sorted(unknown))}")
+        credential = row.get("credential", "static")
+        if credential not in CREDENTIAL_KINDS:
+            raise ValueError(f"sources[{index}].credential must be static or paired")
+        # D-341 6. Fleet never reads the phone token; an implicit static source keeps the
+        # pre-D-341 shape (Vision still requires its phone_token_env), an explicit one is checked.
+        if credential == "paired" and "phone_token_env" in row:
+            raise ValueError(f"sources[{index}] is paired and must not set phone_token_env")
+        if "credential" in row and credential == "static" and "phone_token_env" not in row:
+            raise ValueError(f"sources[{index}] is static and needs phone_token_env")
         env_name = row["token_env"]
         if not isinstance(env_name, str) or not _ENV_NAME.fullmatch(env_name):
             raise ValueError(f"sources[{index}].token_env must name an uppercase environment variable")
@@ -96,6 +106,7 @@ def load_sighting_sources(path: Path | str, *, environ: Mapping[str, str] | None
             corner_marker_ids=tuple(corner_ids),
             corner_world_m=corner_world_m,
             robot_markers=tuple(markers.items()),
+            credential=credential,
         ))
     if len({source.source_id for source in sources}) != len(sources):
         raise ValueError("sighting source ids must be unique")

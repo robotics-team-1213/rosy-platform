@@ -13,20 +13,23 @@ import yaml
 from rosy_vision.project import CameraMap
 
 _REQUIRED = {
-    "source_id", "phone_token_env", "token_env", "fleet_base_url", "robot_ids",
+    "source_id", "token_env", "fleet_base_url", "robot_ids",
     "map_id", "calibration_revision", "processor_revision", "corner_marker_ids",
     "corner_world_m", "robot_markers",
 }
-_ALLOWED = _REQUIRED | {"heading_edge"}
+_ALLOWED = _REQUIRED | {"heading_edge", "phone_token_env", "credential"}
+CREDENTIAL_KINDS = ("static", "paired")
 _ENV_NAME = re.compile(r"^[A-Z_][A-Z0-9_]*$")
 
 
 @dataclass(frozen=True)
 class VisionSourceConfig:
     camera: CameraMap
-    phone_token: str
+    # None for a ``paired`` source: its phone credential comes from Fleet pairing (D-341 6, 12).
+    phone_token: str | None
     sighting_token: str
     fleet_base_url: str
+    credential: str = "static"
 
 
 def load_vision_sources(path: Path | str, *, environ: Mapping[str, str] | None = None
@@ -56,8 +59,16 @@ def load_vision_sources(path: Path | str, *, environ: Mapping[str, str] | None =
             raise ValueError(f"sources[{index}] missing fields: {', '.join(sorted(missing))}")
         if unknown:
             raise ValueError(f"sources[{index}] has unknown fields: {', '.join(sorted(unknown))}")
+        credential = row.get("credential", "static")
+        if credential not in CREDENTIAL_KINDS:
+            raise ValueError(f"sources[{index}].credential must be static or paired")
+        if credential == "paired" and "phone_token_env" in row:
+            raise ValueError(f"sources[{index}] is paired and must not set phone_token_env")
+        if credential == "static" and "phone_token_env" not in row:
+            raise ValueError(f"sources[{index}] is static and needs phone_token_env")
+        secret_fields = ("phone_token_env", "token_env") if credential == "static" else ("token_env",)
         secrets = []
-        for field in ("phone_token_env", "token_env"):
+        for field in secret_fields:
             env_name = row[field]
             if not isinstance(env_name, str) or not _ENV_NAME.fullmatch(env_name):
                 raise ValueError(f"sources[{index}].{field} must name an uppercase environment variable")
@@ -94,5 +105,7 @@ def load_vision_sources(path: Path | str, *, environ: Mapping[str, str] | None =
         if camera.source_id in source_ids:
             raise ValueError("vision source ids must be unique")
         source_ids.add(camera.source_id)
-        configs.append(VisionSourceConfig(camera, secrets[0], secrets[1], row["fleet_base_url"]))
+        phone_token = secrets[0] if credential == "static" else None
+        configs.append(VisionSourceConfig(camera, phone_token, secrets[-1], row["fleet_base_url"],
+                                          credential))
     return configs

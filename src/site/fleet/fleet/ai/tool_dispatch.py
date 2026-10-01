@@ -14,6 +14,7 @@ from core_common.protocol.schemas import (
     MissionFeedbackContext,
     MissionFeedbackTurnScope,
 )
+from fleet.ai.model_tool_catalog import MODEL_TOOL_CATALOG, ToolEffectClass
 from fleet.server.proposal_store import ProposalRejected
 
 
@@ -156,9 +157,8 @@ class MissionFeedbackToolDispatcher:
     def dispatch(self, *, scope: MissionFeedbackTurnScope | Mapping[str, Any],
                  call_id: str, tool_name: str,
                  arguments: Mapping[str, Any]) -> ER2ToolResult:
-        valid_name = tool_name if tool_name in {
-            "get_mission_status", "propose_replan",
-        } else "unsupported"
+        definition = MODEL_TOOL_CATALOG.get(tool_name)
+        valid_name = tool_name if definition is not None else "unsupported"
         try:
             trusted_scope = (scope if isinstance(scope, MissionFeedbackTurnScope)
                              else MissionFeedbackTurnScope.model_validate(scope))
@@ -167,7 +167,7 @@ class MissionFeedbackToolDispatcher:
         if (not isinstance(call_id, str) or not call_id or call_id != call_id.strip()
                 or len(call_id) > 128 or any(ord(char) < 32 for char in call_id)):
             return self._result(valid_name, "rejected", "INVALID_CALL_ID")
-        if tool_name not in {"get_mission_status", "propose_replan"}:
+        if definition is None or not definition.feedback_enabled:
             return self._result(valid_name, "rejected", "TOOL_NOT_ALLOWED")
         try:
             authorized = (self.authorization_check is not None
@@ -186,7 +186,7 @@ class MissionFeedbackToolDispatcher:
             return self._result(tool_name, "rejected", "TURN_SCOPE_FORBIDDEN")
         context, mission = current
 
-        if tool_name == "get_mission_status":
+        if definition.effect_class is ToolEffectClass.READ_ONLY:
             if arguments:
                 return self._result(tool_name, "rejected", "INVALID_TOOL_ARGUMENTS")
             return self._result(

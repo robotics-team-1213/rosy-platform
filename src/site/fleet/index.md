@@ -69,8 +69,8 @@
 
 ## 최근 기록
 
-- 2026-10-01 · uncommitted · refactor(enrollment): D-391 4.1 device_kind 상수 사용
-- 2026-10-01 · uncommitted · fix(relay): 첫 메시지 인증 뒤 늦게 오는 4401을 레인 이유로 드러낸다
-- 2026-10-01 · uncommitted · fix(swarm): D-370 S7 — Fleet→CORE WS는 첫 메시지 인증, URL에 토큰 없음
-- 2026-10-01 · uncommitted · fix(fleet): D-375 맵 자동 맞춤 버튼을 경기장 도구 줄에 합친다
-- 2026-10-01 · uncommitted · fix(fleet): D-375 지도 맞춤 뷰를 D-359 캔버스·사유 계약 아래로
+- 2026-10-01 · uncommitted · test(console): D-341 카메라 연결 승인 브라우저 계약과 화면 다듬기
+- 2026-10-01 · uncommitted · feat(console): D-341 "기기 연결" 패널에 카메라 연결 승인 구역
+- 2026-10-01 · uncommitted · feat(console): D-341 카메라 연결 승인 구역의 순수 규칙(camera-pairing.js)
+- 2026-10-01 · uncommitted · fix(pairing): 보안 리뷰 반영 — 익명 요청은 감사 표에 쓰지 않음, 동기화는 https+CA 필수
+- 2026-10-01 · uncommitted · fix(pairing): 상태 기계를 잠금 하나로 직렬화, 크기 판정 재기록

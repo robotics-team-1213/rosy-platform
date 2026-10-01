@@ -56,3 +56,31 @@ def test_loader_rejects_missing_or_reused_credentials(tmp_path):
            "ROSY_FLEET_CEILING_NORTH": "shared"}
     with pytest.raises(ValueError, match="distinct"):
         load_vision_sources(path, environ=env)
+
+
+ENV = {"ROSY_PHONE_CEILING_NORTH": "phone-secret", "ROSY_FLEET_CEILING_NORTH": "vision-secret"}
+
+
+def test_sources_default_to_static_with_a_phone_token(tmp_path):
+    config = load_vision_sources(_write(tmp_path / "c.yaml", [_source()]), environ=ENV)[0]
+    assert (config.credential, config.phone_token) == ("static", "phone-secret")
+
+
+def test_paired_source_has_no_phone_token(tmp_path):
+    row = _source(credential="paired")
+    del row["phone_token_env"]
+    config = load_vision_sources(_write(tmp_path / "c.yaml", [row]), environ=ENV)[0]
+    assert (config.credential, config.phone_token) == ("paired", None)
+    assert config.sighting_token == "vision-secret"
+
+
+def test_static_without_phone_token_and_paired_with_one_refuse_start(tmp_path):
+    """D-341 6: static requires phone_token_env, paired forbids it."""
+    static = _source(credential="static")
+    del static["phone_token_env"]
+    with pytest.raises(ValueError, match="phone_token_env"):
+        load_vision_sources(_write(tmp_path / "c.yaml", [static]), environ=ENV)
+    with pytest.raises(ValueError, match="paired"):
+        load_vision_sources(_write(tmp_path / "c.yaml", [_source(credential="paired")]), environ=ENV)
+    with pytest.raises(ValueError, match="static or paired"):
+        load_vision_sources(_write(tmp_path / "c.yaml", [_source(credential="qr")]), environ=ENV)

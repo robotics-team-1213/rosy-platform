@@ -26,9 +26,46 @@ class SshConfigError(ValueError):
     pass
 
 
+# Network-level ssh failures, one exit code each. They sit above deliver.py's own
+# codes (3, 75, 76), intake's 4 and watch.py's 5 and 6, and below ssh's 255.
+DNS_EXIT, UNREACHABLE_EXIT, HOSTKEY_EXIT = 77, 78, 79
+KIND_EXIT = {"dns": DNS_EXIT, "unreachable": UNREACHABLE_EXIT, "hostkey": HOSTKEY_EXIT}
+EXIT_KIND = {code: kind for kind, code in KIND_EXIT.items()}
+TIMEOUT_RC = 124  # what deliver._run reports for a subprocess timeout
+_KIND_PATTERNS = (  # hostkey first: its text can also mention the host name
+    ("hostkey", ("host key verification failed", "remote host identification has changed",
+                 "host key for", "no ed25519 host key is known", "no ecdsa host key is known",
+                 "no rsa host key is known")),
+    ("dns", ("could not resolve hostname", "name or service not known",
+             "temporary failure in name resolution", "nodename nor servname")),
+    ("unreachable", ("connection refused", "connection timed out", "operation timed out",
+                     "no route to host", "network is unreachable", "connection reset",
+                     "connection closed by")),
+)
+
+
+def classify(returncode: int, stderr: str | None, *, timeout_is_network: bool = True) -> str | None:
+    """dns | unreachable | hostkey for a failed ssh/scp, else None (a remote command failure).
+
+    Only ssh's own exit 255 and a subprocess timeout can be a network failure; a remote
+    command's exit code never is."""
+    if returncode == TIMEOUT_RC:  # a long transfer step that ran out is not a dead link
+        return "unreachable" if timeout_is_network else None
+    if returncode != 255:
+        return None
+    text = (stderr or "").lower()
+    for kind, needles in _KIND_PATTERNS:
+        if any(n in text for n in needles):
+            return kind
+    return None
+
+
 def add_arguments(parser) -> None:
     parser.add_argument("--identity", help=f"operator private key (env {KEY_ENV})")
     parser.add_argument("--known-hosts", help=f"pinned known_hosts file (env {KH_ENV})")
+    parser.add_argument("--host-key-alias", help="look up and pin the host key under this "
+                        "name (the robot id) instead of the address, so a renumbered "
+                        "network keeps the pin")
 
 
 def resolve(identity, known_hosts, *, env=None, platform=None) -> tuple[str, str]:
@@ -51,9 +88,13 @@ def resolve(identity, known_hosts, *, env=None, platform=None) -> tuple[str, str
     return identity, known_hosts
 
 
-def options(identity: str, known_hosts: str) -> list[str]:
-    """Arguments shared by ssh and scp, placed before '--'."""
-    return ["-i", identity, "-o", "BatchMode=yes", "-o", "IdentitiesOnly=yes",
+def options(identity: str, known_hosts: str, alias: str | None = None) -> list[str]:
+    """Arguments shared by ssh and scp, placed before '--'.
+
+    alias: the key is looked up (and, with StrictHostKeyChecking=yes, only ever checked)
+    under this name, so the pin follows the robot and not its address."""
+    keyed = ["-o", f"HostKeyAlias={alias}"] if alias else []
+    return [*keyed, "-i", identity, "-o", "BatchMode=yes", "-o", "IdentitiesOnly=yes",
             "-o", f"UserKnownHostsFile={known_hosts}", "-o", "StrictHostKeyChecking=yes",
             # a dead link fails in bounded time instead of hanging the caller
             "-o", "ConnectTimeout=10", "-o", "ServerAliveInterval=15",

@@ -44,7 +44,7 @@ No public REST path, shared robot wire envelope, ROS interface, capability activ
 - Read: `docs/adr/D-358-er2-feedback-outbox-and-replan-fencing.md`
 - Read: `docs/adr/D-369-control-authority-and-stop-evidence.md`
 - Read: `docs/adr/D-376-omx-pick-place-planning-and-execution-boundary.md`
-- Inspect: `src/site/fleet/fleet/ai/er2_standard.py`, `src/site/fleet/fleet/ai/tool_dispatch.py`, `src/site/fleet/fleet/ai/model_turn_store.py`, `src/contracts/foundation/core_common/protocol/schemas.py`
+- Inspect: `src/site/fleet/fleet/ai/er2_standard.py`, `src/site/fleet/fleet/ai/tool_dispatch.py`, `src/site/fleet/fleet/server/mission_model_turn_store.py`, `src/contracts/foundation/core_common/protocol/schemas.py`
 - Test: `src/site/fleet/test/test_er2_standard.py`, `src/site/fleet/test/test_er2_tool_dispatch.py`, `src/site/fleet/test/test_mission_model_turn_store.py`, `src/site/fleet/test/test_mission_feedback_loop.py`
 
 **Steps:**
@@ -81,10 +81,10 @@ No public REST path, shared robot wire envelope, ROS interface, capability activ
 
 **Steps:**
 
-1. Add failing adapter tests for function-call parsing to `ModelToolCall`, preserving opaque provider `call_id` and turn-local ordinal.
-2. Add failing tests proving function declarations are rendered from the server-owned catalog and still contain only `propose_pick_place`, `get_mission_status`, and `propose_replan` for the corresponding existing flows.
+1. Add failing adapter tests for feedback calls (`get_mission_status`, `propose_replan`) normalized into `ModelToolCall`, preserving opaque provider call ID and turn-local ordinal. Preserve D-331's one-shot `propose_pick_place` candidate parser; it is not dispatched as a callback and gets no function-result round-trip.
+2. Add failing tests proving current Interactions declarations and arguments remain unchanged. Task 4 moves those declarations into the server-owned catalog.
 3. Normalize only after provider response validation and before dispatcher invocation. Keep provider native objects, signatures and required replay material in bounded turn memory only as D-357 requires.
-4. Map canonical results back to Gemini `function_result` with the exact provider call correlation; do not claim Action success, placement, or stop based on the result.
+4. Map canonical results for dispatched feedback calls back to Gemini `function_result` with exact provider call correlation. The one-shot candidate flow has no provider result round-trip. Neither path may claim Action success, placement, or stop based on model output.
 5. Run `python -m pytest src/site/fleet/test/test_er2_standard.py -q`.
 
 **Exit:** Existing Gemini request shape, `store=false`, model ID, tool names, provider budgets, and candidate semantics are unchanged; calls are normalized before any Fleet effect.
@@ -111,7 +111,7 @@ No public REST path, shared robot wire envelope, ROS interface, capability activ
 
 **Files:**
 
-- Modify: `src/site/fleet/fleet/ai/model_turn_store.py`
+- Modify: `src/site/fleet/fleet/server/mission_model_turn_store.py`
 - Modify: `src/site/fleet/fleet/ai/tool_dispatch.py`
 - Test: `src/site/fleet/test/test_mission_model_turn_store.py`
 - Test: `src/site/fleet/test/test_er2_tool_dispatch.py`
@@ -177,3 +177,10 @@ No public REST path, shared robot wire envelope, ROS interface, capability activ
 4. FIELD: require a supervised fixed workcell, one semantic `PICK_PLACE`, operator-admission record, independent goal evidence, stop/recovery drills, and rollback acceptance.
 
 **Exit:** Each gate is recorded only from its own evidence. No source/test/simulation result is promoted to device or field acceptance.
+
+## Execution record
+
+- Completed through Task 4 (P0–P3): current-boundary inventory, canonical messages, Gemini boundary mapping, and a closed Fleet catalog projected into provider schemas and enforced by the feedback dispatcher.
+- P3 tests reject unknown and low-level actuation names, preserve closed schemas, and verify read-only versus candidate-writing classifications. The `propose_pick_place` one-shot candidate path remains separate from feedback function-result calls.
+- Verification on 2026-10-01: 108 focused tests passed; changed Python files pass flake8; harness lint reports 0 errors and 24 repository `last_verified` drift warnings. No ROS-SIM, ARTIFACT, DEVICE, or FIELD gate was run.
+- Remaining: Task 5 must close per-call durable result/dedupe semantics and explicit UNKNOWN handling; Task 6 provider-shaped conformance fixtures; Task 7 module docs and final gates; Task 8 stays gated on its named environments.

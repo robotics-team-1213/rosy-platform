@@ -14,6 +14,8 @@ from typing import Any
 import httpx
 
 from .candidate import ER2ProposalError, ImageObservation, PickPlaceProposalCandidate
+from .model_tool_contract import ModelToolCall, ModelToolResult
+from .model_tool_catalog import MODEL_TOOL_CATALOG, provider_tool_schemas
 from core_common.protocol.schemas import (
     ER2_FEEDBACK_CONTEXT_MAX_BYTES, ER2_MAX_ESTIMATED_TURN_COST_USD,
     ER2_MAX_FUNCTION_CALLS_PER_TURN, ER2_REPLAY_MAX_BYTES, ER2_REPLAY_MAX_STEPS,
@@ -33,61 +35,8 @@ class ER2RequestError(RuntimeError):
     """The remote ER 2 request failed; no candidate is returned."""
 
 
-_TOOL = {
-    "type": "function",
-    "name": TOOL_NAME,
-    "description": (
-        "Propose one pick-and-place target selection for Fleet review. This function "
-        "does not move a robot. Select one point or box in the supplied image for each item."
-    ),
-    "parameters": {
-        "type": "object",
-        "properties": {
-            "target": {
-                "type": "object",
-                "properties": {
-                    "label": {"type": "string"},
-                    "point_yx_1000": {"type": "array", "items": {"type": "integer"},
-                                      "minItems": 2, "maxItems": 2},
-                    "box_yxyx_1000": {"type": "array", "items": {"type": "integer"},
-                                      "minItems": 4, "maxItems": 4},
-                },
-                "required": ["label"],
-                "additionalProperties": False,
-            },
-            "destination": {
-                "type": "object",
-                "properties": {
-                    "label": {"type": "string"},
-                    "point_yx_1000": {"type": "array", "items": {"type": "integer"},
-                                      "minItems": 2, "maxItems": 2},
-                    "box_yxyx_1000": {"type": "array", "items": {"type": "integer"},
-                                      "minItems": 4, "maxItems": 4},
-                },
-                "required": ["label"],
-                "additionalProperties": False,
-            },
-        },
-        "required": ["target", "destination"],
-        "additionalProperties": False,
-    },
-}
-
-_FEEDBACK_TOOLS = [
-    {"type": "function", "name": "get_mission_status",
-     "description": (
-         "Read current Fleet evidence and bounded manipulation phase progress for the already scoped "
-         "Mission. This tool cannot issue device commands."
-     ),
-     "parameters": {"type": "object", "properties": {}, "additionalProperties": False}},
-    {"type": "function", "name": "propose_replan",
-     "description": "Submit a non-executable replan candidate for Fleet review.",
-     "parameters": {"type": "object", "properties": {
-         "based_on_event_id": {"type": "integer", "minimum": 0},
-         "rationale": {"type": "string", "maxLength": 512},
-     }, "required": ["based_on_event_id", "rationale"],
-         "additionalProperties": False}},
-]
+_TOOL = MODEL_TOOL_CATALOG[TOOL_NAME].provider_schema()
+_FEEDBACK_TOOLS = provider_tool_schemas()
 
 
 @dataclass(frozen=True)
@@ -222,7 +171,7 @@ class GeminiER2StandardAdapter:
             if len(steps) > ER2_REPLAY_MAX_STEPS:
                 raise ER2ProposalError("Gemini ER 2 feedback returned too many steps")
             model_steps: list[dict[str, Any]] = []
-            calls: list[tuple[dict[str, Any], str, str, Mapping[str, Any]]] = []
+            calls: list[ModelToolCall] = []
             for model_step in steps:
                 if not isinstance(model_step, Mapping):
                     raise ER2ProposalError("Gemini ER 2 feedback step is invalid")
@@ -241,7 +190,23 @@ class GeminiER2StandardAdapter:
                     if call_id in seen_call_ids:
                         raise ER2ProposalError("Gemini ER 2 feedback repeated a function call ID")
                     seen_call_ids.add(call_id)
-                    calls.append((step, name, call_id, arguments))
+                    if (not isinstance(turn_id, str) or not turn_id.strip()
+                            or turn_id != turn_id.strip()):
+                        raise ER2ProposalError(
+                            "Gemini ER 2 feedback function calls require a durable turn ID"
+                        )
+                    try:
+                        calls.append(ModelToolCall(
+                            provider_call_id=call_id,
+                            tool_name=name,
+                            arguments=dict(arguments),
+                            turn_id=turn_id,
+                            ordinal=function_calls - 1,
+                        ))
+                    except (TypeError, ValueError) as exc:
+                        raise ER2ProposalError(
+                            "Gemini ER 2 feedback function call is invalid"
+                        ) from exc
                 elif step.get("type") == "text" and not isinstance(step.get("text"), str):
                     raise ER2ProposalError("Gemini ER 2 feedback text step is invalid")
             if not calls:
@@ -258,23 +223,25 @@ class GeminiER2StandardAdapter:
                     raise ER2ProposalError("Gemini ER 2 feedback returned no final text")
                 return final_text[:4_000]
             replay.extend(model_steps)
-            for _step, name, call_id, arguments in calls:
+            for call in calls:
                 remaining_s = deadline - time.monotonic()
                 if remaining_s <= 0:
                     raise ER2RequestError(
                         "Gemini ER 2 feedback turn deadline exceeded before tool dispatch"
                     )
-                if (name == "propose_replan" and turn_id is not None
+                if (call.tool_name == "propose_replan"
                         and callable(getattr(dispatcher, "dispatch_replan", None))):
                     dispatch = dispatcher.dispatch_replan(
-                        scope=scope, turn_id=turn_id, call_id=call_id,
-                        arguments=dict(arguments), candidate_adapter=self,
+                        scope=scope, turn_id=call.turn_id,
+                        call_id=call.provider_call_id,
+                        arguments=call.arguments, candidate_adapter=self,
                         egress_policy=egress_policy,
                     )
                 else:
                     dispatch = asyncio.to_thread(
-                        dispatcher.dispatch, scope=scope, call_id=call_id,
-                        tool_name=name, arguments=dict(arguments),
+                        dispatcher.dispatch, scope=scope,
+                        call_id=call.provider_call_id,
+                        tool_name=call.tool_name, arguments=call.arguments,
                     )
                 try:
                     result = await asyncio.wait_for(dispatch, timeout=remaining_s)
@@ -282,13 +249,15 @@ class GeminiER2StandardAdapter:
                     raise ER2RequestError(
                         "Gemini ER 2 feedback turn deadline exceeded during tool dispatch"
                     ) from exc
-                result_json = result.model_dump(mode="json")
+                model_result = ModelToolResult.from_effect_result(call, result)
+                result_json = model_result.to_provider_payload()
                 result_bytes = json.dumps(result_json, sort_keys=True,
                                           separators=(",", ":"), allow_nan=False).encode()
                 if len(result_bytes) > ER2_TOOL_RESULT_MAX_BYTES:
                     raise ER2ProposalError("Fleet feedback tool result exceeds 4 KiB")
-                replay.append({"type": "function_result", "call_id": call_id,
-                               "name": name, "result": result_json})
+                replay.append({"type": "function_result",
+                               "call_id": call.provider_call_id,
+                               "name": call.tool_name, "result": result_json})
             replay_size = len(json.dumps(replay, sort_keys=True, separators=(",", ":"),
                                          ensure_ascii=False, allow_nan=False).encode("utf-8"))
             if replay_size > ER2_REPLAY_MAX_BYTES:
