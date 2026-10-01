@@ -3893,6 +3893,14 @@
 - 결정: revision ID에서 변환값을 추정하거나 pixel 좌표를 joint 값으로 쓰지 않는다. profile-specific ROS mapping은 해당 pose/phase 계약이 선택될 때까지 대기한다.
 - gate 변화: 없음. ROS-SIM 경로 증거와 물리/production profile 수용은 분리한다.
 
+## 2026-09-30 · uncommitted · docs(deployment): D-373 Pinky first-deploy and SD runbook for learned perception
+
+- 변경: `docs/deployment/learned-perception-pinky.md` 신규. 계층 표(이미지·유닛·페이로드·운영자 설정), 새 SD 경로(`build-pinky-image.yml` → 서명·검증 → `prepare-rosy-sd.ps1`/`write-card.ps1` readback → `rosy_ml doctor`), 벤치 카드 경로(`install-learned-perception.sh --dry-run` → 실행, 기록 줄, `NATIVE_PYTHON_RUNTIME` 거절과 `compatible_predecessors`), 페이로드·유닛 손 설치·스위치 켜기, 첫 섀도 배포와 측정(125 ms 예산, `skip_ratio`, `measure-resident-cpu.sh` A/B, `docs/validation/` 기록), 캡처·수거·추출·초벌 라벨, 되돌리기. 운영자 안내와 두 스킬은 링크만 한다. `docs/deployment/AGENTS.md` 표에 등록.
+- 증거: `test/test_learned_perception_pinky_runbook.py` — 주소·토큰 없음, 상대 링크와 백틱 저장소 경로 존재, A–G 절, 유닛·launch·토픽·상태 키·`rosy_ml` 명령이 코드와 일치(2026-09-30 Windows).
+- gate 변화: 없음. 런북 절차 자체는 장치에서 한 번도 돌지 않았다.
+- 결정: 없음(D-373 이행 문서).
+- 교훈: 없음.
+
 ## 2026-09-30 · uncommitted · docs(adr): D-374 앱 이름 규칙 — 폴더·패키지·식별자를 역할 이름 하나에서
 - 변경: D-374(Proposed)와 단계 계획 `docs/plans/2026-09-30-app-identity-rename-plan.md` 추가. 사용자 결정("모든 앱을 규칙대로, 식별자까지")으로 D-370 2항의 "식별자 그대로"를 대체한다. 역할 id = D-370 영어 이름 − `Rosy`(kebab), snake는 폴더·패키지·실행 파일, compact는 Android id. 새 이름: `ceiling-camera`(`src/site/ceiling_camera`, `io.github.livsbittt.rosy.ceilingcamera`), `site-vision`(`src/site/site_vision`), `site-console`(`src/site/site_console` 자산 패키지, Fleet 서비스 `fleet`은 유지), `robot-dashboard`(`src/hmi/robot_dashboard`), `pilot`(레지스트리 id만).
 - 증거: main `15a4302f` 읽기 전용 조사(계획 부록 A, 파일:줄 인용). 앱 폴더를 고치는 열린 브랜치 13개(부록 B). D-362 P0-1·P1이 조사 도중 main에 착지(`b67c9dfc`, `13803932`).
@@ -4000,6 +4008,12 @@
 - gate 변화: 없음(SOURCE 문서만). 두 ADR 모두 Proposed 그대로.
 - 결정: 없음(착지·번호 정리만). D-341 본문의 옛 이름(`src/site/overhead`, `overhead` CLI)은 D-374·D-377 표로 읽는다.
 
+## 2026-10-01 · uncommitted · merge(perception): main 을 feat/d373-learning-loop-lap2 에 병합하고 D-373 후속 정리
+- 변경: main 병합 둘(5e76dbe7, a4454366). `extract.py` 는 main 의 mp4+sidecar 입력과 브랜치의 MCAP 기능(압축 카메라 우선, 잘린 MCAP 생존, namespace 접미 일치)을 함께 두고 두 부류 시계 규칙 하나를 쓴다(stamp 달린 증거는 같은 stamp ±1 ms·촬영 이후·log+0.5 s 이내, 나머지는 log time 이하 최신; D-356 보강 문구 갱신, rosy-bc 세션과 합의). 학습 런타임은 별도 잠금 파일과 전용 prefix 로 옮겨 페이로드 런타임 id 를 main 의 a66f224a 로 되돌렸다(d2d6ac1f). 배치 closure 에 두 노드 등록, D-356·D-373 ADR 문장 정정(c703a559). 학습·CVAT 빌드의 `ignore_index`(7277b7fd). 섀도 추론 빈도 상한·스레드·띠 전용 softmax(2cedf136).
+- 증거: 각 커밋의 시험과 최종 검증 실행(루트·sensing·perception pytest, WSL launch). 루트 `test/test_web_dialog_contract.py::test_confirm_lives_only_in_the_pinned_files_and_counts` 는 main 에서도 실패한다.
+- gate 변화: 없음(SOURCE). 장치 실행은 D-373 Validation 그대로 남는다.
+- 결정: D-373 결정 1 개정·9 문장 정정, D-356 보강 시계 규칙.
+
 ## 2026-10-01 · uncommitted · docs(adr): D-178 기준선 rosy_vision 잠정 행 추가, overhead 행 제거
 
 - 변경: D-374(2af26662)가 `overhead`를 `ceiling_camera`와 `site_vision`(D-377 명명 `rosy_vision`)으로 나눈 뒤 기준선 표가 집합 동일성에서 어긋났다 — 새 패키지 누락(rosy_vision)과 삭제 패키지 잔존(overhead)이 같이 걸려 있었으나 core 단계 적색이 이 시험을 가려왔다. `rosy_vision` 잠정 행(5·4·4·3·4 = 82, A · 자기 시험 소유 site/vision/test)을 추가하고 `overhead` 행을 지웠으며, 분포 서술에 2026-10-01 행 교체 기록을 덧붙였다.
@@ -4062,3 +4076,39 @@
 - 경계: Spot의 OpenAPI operation 추출은 Rosy capability grant가 아니며, 샘플의 model-routed stop은 독립 로컬 stop/E-stop 증거가 아니다. `POLICY_DISPATCH_ENABLED=False` 유지.
 - 증거: 조사 고정 SHA `c51cbab6e6efffff8738ecf9ce41ba85034d9654`; ROS-SIM/ARTIFACT/DEVICE/FIELD gate 변화 없음.
 - gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · docs(logs): D-373 병합 기록 정정 — 시각 허용치와 학습 런타임 계획
+- 변경: 위 "merge(perception): main 을 feat/d373-learning-loop-lap2 에 병합" 항목을 바로잡는다. (1) stamp 일치 허용치는 ±1 ms가 아니라 1 µs이고, `line/observation`은 `source`가 `CAMERA_LINE`인 것만 이미지 증거다(d050b821). (2) 병합 때 세운 `NATIVE_PYTHON_RUNTIME`·`compatible_predecessors` 계획(요구사항 파일 끝에 블록을 붙이고 옛 런타임을 호환 목록에 올림)은 되돌렸다. 학습 런타임은 따로 된 `learned-perception-requirements.txt`와 전용 prefix `/opt/rosy/learned-perception/site-packages`에 설치하고, 페이로드 런타임 id는 main의 a66f224a 그대로다(d2d6ac1f).
+- 증거: 해당 커밋의 시험(`test_dataset_extract.py`, `test_bench_learned_perception.py`, `test_python_runtime_id.py`).
+- gate 변화: 없음(기록 정정).
+
+## 2026-10-01 · uncommitted · docs(adr): D-391 사이트 연결 기록 모양과 기기 연결 서버 자리 제안
+
+- 변경: 앱 공통 구조 점검(main 20d43df0, 읽기 전용) 결과 발견·전송은 모였고 연결 설정·기기 연결 서버가 남았다. D-391 Proposed(처음 D-387, docs/ota-roadmap-adr·Pilot OMX 초안과 번호가 겹쳐 D-391로 옮김): 클라이언트가 같은 필드(이름·CA·자격, IP 없음)로 사이트 연결을 저장하고 `site-link.v1.json` 벡터로 시험한다, 사이트 호스트 설정 원천은 `/run/rosy-config/` 하나 + 일관성 검사 도구, 기기 연결 서버는 Fleet(공통 조각 → pairing/v1 → 패널 → Rosy Cam 클라이언트 → Vision 동기화), 공개 상태 확장은 로봇 이미지가 관대한 탐침을 가진 뒤.
+- 증거: 점검 보고(파일·줄 인용), health 탐침 정확 일치 확인(`fleet_agent/discovery.py:49`, `deploy/site/fleet-mdns.py:123`).
+- gate 변화: 없음(SOURCE 문서만).
+- 결정: 없음(제안). 담당은 병행 세션 결정 회차에서 정한다.
+
+## 2026-10-01 · uncommitted · docs(reference): 사이트 LAN 발견 프로필 — Fleet health 채택 규칙 완화
+
+- 변경: `site-lan-discovery-profile.md` 33행. `/healthz`가 정확히 `{"status":"ok"}`가 아니라 1024바이트 이하 JSON 객체에 `status == "ok"`, `role`이 있으면 `fleet`, 모르는 키 무시로 적었다(D-370 공개 상태 모양 대비).
+- 증거: `test/test_site_fleet_mdns.py` health 시험, `test/test_discovery_txt_profile_parity.py`.
+- gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · docs(reference): API Ref 군집 소켓 표에서 `?token=` 표기 제거
+
+- 변경: `ROSY API & Protocol Reference.md` §군집 소켓 표의 `WS /ws/swarm/pose?token=`·`/ws/swarm/reference?token=`를 경로만으로 고치고 "인증은 AUTH-101 첫 메시지 방식(Fleet도 D-370 S7부터)" 한 줄을 더했다. AUTH-101의 `?token=` 한시 수락 문구는 그대로.
+- 증거: `src/site/fleet/test/test_transport.py`.
+- gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · docs(adr): D-384 개정 4 — 재생 비교와 URDF 형상 사전값
+- 변경: 124745Z R0의 도로 쪽 불합격 3항목(on_paint 0.186, 직선 |err| 0.392, NIS 꼬리)을 추정기 과제로 명시. LaneKeeper d421c86a 재생에서 도로·추정기 수치가 main과 같음. 횡단보도 정지 구간의 on_paint 오판과 참고용 on_lane_paint 지표(D-379 crosswalk/stop_line 클래스 전까지 기준 아님) 기록. URDF 형상 사전값(IR ±0.020 m, 카메라 높이 0.063 m, LiDAR 정면 180°, 바퀴 0.028/0.0971 m)을 재생·시뮬 사전값으로만 기록.
+- 증거: X:\DevTemp\rosy-ml-work\d384-replay-d421 재생 출력(main·d421, 2258 프레임), rosy-bc 세션 합의.
+- gate 변화: 없음(로봇 설정 변경 없음).
+
+## 2026-10-01 · uncommitted · docs(adr): D-393 제안 — Nav2 AMCL `update_min_d` 0.02와 목표 허용오차
+- 변경: `docs/adr/D-393-nav-amcl-update-min-d-and-goal-tolerance.md` 신규(Proposed), ADR Log에 D-393 행. 기기 AMCL은 `navigation/params/nav2_params.yaml`(0.15)을 쓰고 sensing `localization.yaml`(0.005)은 기기 경로가 아님을 파일 경로로 기록. 허용오차 0.25 m / 0.25 rad, 운용 규칙, 적용 전 게이트 기재
+- 증거: sim 전용(Gazebo Harmonic, 1대, 행당 n=1, WSL 부하 30–60). 평가 스크립트·출력은 저장소 밖 `X:\DevTemp\rosy-ml-work\nav-eval\`. 실물 재생은 추정
+- gate 변화: 없음(로봇 설정·params 변경 없음).
+- 결정: D-393 Proposed
+- 교훈: 없음

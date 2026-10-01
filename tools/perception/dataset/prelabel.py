@@ -42,6 +42,7 @@ DEFAULT_PALETTE = ((0, 0, 0), (230, 25, 75), (60, 180, 75), (255, 225, 25), (0, 
 
 def resolve_classes(yaml_classes, model_classes) -> list[dict]:
     """classes.yaml must describe the model's classes; fill missing colours."""
+    build.label_to_index([dict(c, color=None) for c in yaml_classes])  # closed roles, one background
     got = [(c["index"], c["name"], c["role"]) for c in yaml_classes]
     want = [(c.index, c.name, c.role) for c in model_classes]
     if sorted(got) != sorted(want):

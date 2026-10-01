@@ -1,0 +1,615 @@
+{
+  "version": 1,
+  "doc": "D-391 1 site-link record vectors. Machine source for every stored site connection (core_common site_link, Rosy Cam settings store, FleetAgent config loader). A record is one JSON object with site_name, tls_host, port, ca_pem, role, credential_id, expires_at and exactly one of credential (the secret itself) or credential_ref (where the client keeps it). No IP is stored as identity: tls_host is an mDNS .local host name, never an IP literal, and is the TLS SNI and host-name check. manual_host (optional; IP or host name; null means absent) is the D-391 manual fallback used only when mDNS finds nothing. ca_pem holds one or more PEM CERTIFICATE blocks and every block must be a CA (basicConstraints cA=TRUE); a leaf alone or a leaf in the bundle is leaf_not_ca. port is an integer 1-65535 (bool and string are bad_port). role is a device_kind client role (fleet is a server, not a client role). expires_at is ISO-8601 UTC with a literal Z and optional fractional seconds; offsets are rejected. Unknown top-level fields are accepted and ignored (forward compatible, same rule as unknown TXT keys). Each invalid case has exactly one fault and expects that reason from `reasons`. Certificate bodies are wrapped at 44 characters so no base64 run reaches the repository secret scan's 50-character high-entropy threshold; PEM parsers ignore line length. The certificates are public fixture material; their private keys were discarded at authoring time. manual_host is an IPv4 or IPv6 literal only (the IP from a rosyov:// link, dialled without DNS when mDNS finds nothing; D-391 1); a host name or ip:port is bad_manual_host.",
+  "reasons": [
+    "missing_field",
+    "bad_value",
+    "ip_as_tls_host",
+    "bad_tls_host",
+    "bad_ca_pem",
+    "leaf_not_ca",
+    "bad_port",
+    "unknown_role",
+    "bad_expires_at",
+    "missing_credential",
+    "credential_conflict",
+    "bad_manual_host"
+  ],
+  "roles": [
+    "overhead-camera",
+    "robot"
+  ],
+  "cases": [
+    {
+      "id": "overhead_camera_with_credential_ref",
+      "record": {
+        "site_name": "Rosy Lab",
+        "tls_host": "fixture-site.local",
+        "port": 8443,
+        "ca_pem": "-----BEGIN CERTIFICATE-----\nMIIBQjCB6aADAgECAgEBMAoGCCqGSM49BAMCMB8xHTAb\nBgNVBAMMFFJvc3kgZml4dHVyZSBzaXRlIENBMB4XDTI2\nMTAwMTAwMDAwMFoXDTQ2MTAwMTAwMDAwMFowHzEdMBsG\nA1UEAwwUUm9zeSBmaXh0dXJlIHNpdGUgQ0EwWTATBgcq\nhkjOPQIBBggqhkjOPQMBBwNCAARXItk85x1uKrxNWhpq\nGHQjQfgC+Jg04HWOv/jlORmuXDH0Py4BymIG3ah74k/Z\nKoaOaCfjdr7dxB7NDBgS6K8coxYwFDASBgNVHRMBAf8E\nCDAGAQH/AgEAMAoGCCqGSM49BAMCA0gAMEUCIQC8lNvj\nrSYy+JDnJVLQO3R3nRWA6xxyjVTp2R3MwYsXHAIgBo+3\n27dhrJk+P2ajGR6svOWJVpmVNLilScAchDBPW8I=\n-----END CERTIFICATE-----\n",
+        "role": "overhead-camera",
+        "credential_id": "cam-7f3a",
+        "expires_at": "2027-03-30T00:00:00Z",
+        "credential_ref": "keystore:rosy-site/cam-7f3a"
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "id": "robot_with_inline_credential",
+      "record": {
+        "site_name": "Rosy Lab",
+        "tls_host": "fixture-site.local",
+        "port": 8443,
+        "ca_pem": "-----BEGIN CERTIFICATE-----\nMIIBQjCB6aADAgECAgEBMAoGCCqGSM49BAMCMB8xHTAb\nBgNVBAMMFFJvc3kgZml4dHVyZSBzaXRlIENBMB4XDTI2\nMTAwMTAwMDAwMFoXDTQ2MTAwMTAwMDAwMFowHzEdMBsG\nA1UEAwwUUm9zeSBmaXh0dXJlIHNpdGUgQ0EwWTATBgcq\nhkjOPQIBBggqhkjOPQMBBwNCAARXItk85x1uKrxNWhpq\nGHQjQfgC+Jg04HWOv/jlORmuXDH0Py4BymIG3ah74k/Z\nKoaOaCfjdr7dxB7NDBgS6K8coxYwFDASBgNVHRMBAf8E\nCDAGAQH/AgEAMAoGCCqGSM49BAMCA0gAMEUCIQC8lNvj\nrSYy+JDnJVLQO3R3nRWA6xxyjVTp2R3MwYsXHAIgBo+3\n27dhrJk+P2ajGR6svOWJVpmVNLilScAchDBPW8I=\n-----END CERTIFICATE-----\n",
+        "role": "robot",
+        "credential_id": "robot-rosy-a",
+        "expires_at": "2027-03-30T00:00:00Z",
+        "credential": "fixture-one-time-credential"
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "id": "manual_host_ip_allowed",
+      "record": {
+        "site_name": "Rosy Lab",
+        "tls_host": "fixture-site.local",
+        "port": 8443,
+        "ca_pem": "-----BEGIN CERTIFICATE-----\nMIIBQjCB6aADAgECAgEBMAoGCCqGSM49BAMCMB8xHTAb\nBgNVBAMMFFJvc3kgZml4dHVyZSBzaXRlIENBMB4XDTI2\nMTAwMTAwMDAwMFoXDTQ2MTAwMTAwMDAwMFowHzEdMBsG\nA1UEAwwUUm9zeSBmaXh0dXJlIHNpdGUgQ0EwWTATBgcq\nhkjOPQIBBggqhkjOPQMBBwNCAARXItk85x1uKrxNWhpq\nGHQjQfgC+Jg04HWOv/jlORmuXDH0Py4BymIG3ah74k/Z\nKoaOaCfjdr7dxB7NDBgS6K8coxYwFDASBgNVHRMBAf8E\nCDAGAQH/AgEAMAoGCCqGSM49BAMCA0gAMEUCIQC8lNvj\nrSYy+JDnJVLQO3R3nRWA6xxyjVTp2R3MwYsXHAIgBo+3\n27dhrJk+P2ajGR6svOWJVpmVNLilScAchDBPW8I=\n-----END CERTIFICATE-----\n",
+        "role": "overhead-camera",
+        "credential_id": "cam-7f3a",
+        "expires_at": "2027-03-30T00:00:00Z",
+        "credential_ref": "keystore:rosy-site/cam-7f3a",
+        "manual_host": "192.168.1.20"
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "id": "manual_host_name_rejected",
+      "record": {
+        "site_name": "Rosy Lab",
+        "tls_host": "fixture-site.local",
+        "port": 8443,
+        "ca_pem": "-----BEGIN CERTIFICATE-----\nMIIBQjCB6aADAgECAgEBMAoGCCqGSM49BAMCMB8xHTAb\nBgNVBAMMFFJvc3kgZml4dHVyZSBzaXRlIENBMB4XDTI2\nMTAwMTAwMDAwMFoXDTQ2MTAwMTAwMDAwMFowHzEdMBsG\nA1UEAwwUUm9zeSBmaXh0dXJlIHNpdGUgQ0EwWTATBgcq\nhkjOPQIBBggqhkjOPQMBBwNCAARXItk85x1uKrxNWhpq\nGHQjQfgC+Jg04HWOv/jlORmuXDH0Py4BymIG3ah74k/Z\nKoaOaCfjdr7dxB7NDBgS6K8coxYwFDASBgNVHRMBAf8E\nCDAGAQH/AgEAMAoGCCqGSM49BAMCA0gAMEUCIQC8lNvj\nrSYy+JDnJVLQO3R3nRWA6xxyjVTp2R3MwYsXHAIgBo+3\n27dhrJk+P2ajGR6svOWJVpmVNLilScAchDBPW8I=\n-----END CERTIFICATE-----\n",
+        "role": "overhead-camera",
+        "credential_id": "cam-7f3a",
+        "expires_at": "2027-03-30T00:00:00Z",
+        "credential_ref": "keystore:rosy-site/cam-7f3a",
+        "manual_host": "fixture-site.local"
+      },
+      "expect": {
+        "valid": false,
+        "reason": "bad_manual_host"
+      }
+    },
+    {
+      "id": "manual_host_ipv6_allowed",
+      "record": {
+        "site_name": "Rosy Lab",
+        "tls_host": "fixture-site.local",
+        "port": 8443,
+        "ca_pem": "-----BEGIN CERTIFICATE-----\nMIIBQjCB6aADAgECAgEBMAoGCCqGSM49BAMCMB8xHTAb\nBgNVBAMMFFJvc3kgZml4dHVyZSBzaXRlIENBMB4XDTI2\nMTAwMTAwMDAwMFoXDTQ2MTAwMTAwMDAwMFowHzEdMBsG\nA1UEAwwUUm9zeSBmaXh0dXJlIHNpdGUgQ0EwWTATBgcq\nhkjOPQIBBggqhkjOPQMBBwNCAARXItk85x1uKrxNWhpq\nGHQjQfgC+Jg04HWOv/jlORmuXDH0Py4BymIG3ah74k/Z\nKoaOaCfjdr7dxB7NDBgS6K8coxYwFDASBgNVHRMBAf8E\nCDAGAQH/AgEAMAoGCCqGSM49BAMCA0gAMEUCIQC8lNvj\nrSYy+JDnJVLQO3R3nRWA6xxyjVTp2R3MwYsXHAIgBo+3\n27dhrJk+P2ajGR6svOWJVpmVNLilScAchDBPW8I=\n-----END CERTIFICATE-----\n",
+        "role": "overhead-camera",
+        "credential_id": "cam-7f3a",
+        "expires_at": "2027-03-30T00:00:00Z",
+        "credential_ref": "keystore:rosy-site/cam-7f3a",
+        "manual_host": "fd00::20"
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "id": "manual_host_ip_port_rejected",
+      "record": {
+        "site_name": "Rosy Lab",
+        "tls_host": "fixture-site.local",
+        "port": 8443,
+        "ca_pem": "-----BEGIN CERTIFICATE-----\nMIIBQjCB6aADAgECAgEBMAoGCCqGSM49BAMCMB8xHTAb\nBgNVBAMMFFJvc3kgZml4dHVyZSBzaXRlIENBMB4XDTI2\nMTAwMTAwMDAwMFoXDTQ2MTAwMTAwMDAwMFowHzEdMBsG\nA1UEAwwUUm9zeSBmaXh0dXJlIHNpdGUgQ0EwWTATBgcq\nhkjOPQIBBggqhkjOPQMBBwNCAARXItk85x1uKrxNWhpq\nGHQjQfgC+Jg04HWOv/jlORmuXDH0Py4BymIG3ah74k/Z\nKoaOaCfjdr7dxB7NDBgS6K8coxYwFDASBgNVHRMBAf8E\nCDAGAQH/AgEAMAoGCCqGSM49BAMCA0gAMEUCIQC8lNvj\nrSYy+JDnJVLQO3R3nRWA6xxyjVTp2R3MwYsXHAIgBo+3\n27dhrJk+P2ajGR6svOWJVpmVNLilScAchDBPW8I=\n-----END CERTIFICATE-----\n",
+        "role": "overhead-camera",
+        "credential_id": "cam-7f3a",
+        "expires_at": "2027-03-30T00:00:00Z",
+        "credential_ref": "keystore:rosy-site/cam-7f3a",
+        "manual_host": "192.168.1.20:8443"
+      },
+      "expect": {
+        "valid": false,
+        "reason": "bad_manual_host"
+      }
+    },
+    {
+      "id": "manual_host_null_is_absent",
+      "record": {
+        "site_name": "Rosy Lab",
+        "tls_host": "fixture-site.local",
+        "port": 8443,
+        "ca_pem": "-----BEGIN CERTIFICATE-----\nMIIBQjCB6aADAgECAgEBMAoGCCqGSM49BAMCMB8xHTAb\nBgNVBAMMFFJvc3kgZml4dHVyZSBzaXRlIENBMB4XDTI2\nMTAwMTAwMDAwMFoXDTQ2MTAwMTAwMDAwMFowHzEdMBsG\nA1UEAwwUUm9zeSBmaXh0dXJlIHNpdGUgQ0EwWTATBgcq\nhkjOPQIBBggqhkjOPQMBBwNCAARXItk85x1uKrxNWhpq\nGHQjQfgC+Jg04HWOv/jlORmuXDH0Py4BymIG3ah74k/Z\nKoaOaCfjdr7dxB7NDBgS6K8coxYwFDASBgNVHRMBAf8E\nCDAGAQH/AgEAMAoGCCqGSM49BAMCA0gAMEUCIQC8lNvj\nrSYy+JDnJVLQO3R3nRWA6xxyjVTp2R3MwYsXHAIgBo+3\n27dhrJk+P2ajGR6svOWJVpmVNLilScAchDBPW8I=\n-----END CERTIFICATE-----\n",
+        "role": "overhead-camera",
+        "credential_id": "cam-7f3a",
+        "expires_at": "2027-03-30T00:00:00Z",
+        "credential_ref": "keystore:rosy-site/cam-7f3a",
+        "manual_host": null
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "id": "expires_at_fractional_seconds",
+      "record": {
+        "site_name": "Rosy Lab",
+        "tls_host": "fixture-site.local",
+        "port": 8443,
+        "ca_pem": "-----BEGIN CERTIFICATE-----\nMIIBQjCB6aADAgECAgEBMAoGCCqGSM49BAMCMB8xHTAb\nBgNVBAMMFFJvc3kgZml4dHVyZSBzaXRlIENBMB4XDTI2\nMTAwMTAwMDAwMFoXDTQ2MTAwMTAwMDAwMFowHzEdMBsG\nA1UEAwwUUm9zeSBmaXh0dXJlIHNpdGUgQ0EwWTATBgcq\nhkjOPQIBBggqhkjOPQMBBwNCAARXItk85x1uKrxNWhpq\nGHQjQfgC+Jg04HWOv/jlORmuXDH0Py4BymIG3ah74k/Z\nKoaOaCfjdr7dxB7NDBgS6K8coxYwFDASBgNVHRMBAf8E\nCDAGAQH/AgEAMAoGCCqGSM49BAMCA0gAMEUCIQC8lNvj\nrSYy+JDnJVLQO3R3nRWA6xxyjVTp2R3MwYsXHAIgBo+3\n27dhrJk+P2ajGR6svOWJVpmVNLilScAchDBPW8I=\n-----END CERTIFICATE-----\n",
+        "role": "overhead-camera",
+        "credential_id": "cam-7f3a",
+        "expires_at": "2027-03-30T00:00:00.250Z",
+        "credential_ref": "keystore:rosy-site/cam-7f3a"
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "id": "unknown_top_level_field_ignored",
+      "record": {
+        "site_name": "Rosy Lab",
+        "tls_host": "fixture-site.local",
+        "port": 8443,
+        "ca_pem": "-----BEGIN CERTIFICATE-----\nMIIBQjCB6aADAgECAgEBMAoGCCqGSM49BAMCMB8xHTAb\nBgNVBAMMFFJvc3kgZml4dHVyZSBzaXRlIENBMB4XDTI2\nMTAwMTAwMDAwMFoXDTQ2MTAwMTAwMDAwMFowHzEdMBsG\nA1UEAwwUUm9zeSBmaXh0dXJlIHNpdGUgQ0EwWTATBgcq\nhkjOPQIBBggqhkjOPQMBBwNCAARXItk85x1uKrxNWhpq\nGHQjQfgC+Jg04HWOv/jlORmuXDH0Py4BymIG3ah74k/Z\nKoaOaCfjdr7dxB7NDBgS6K8coxYwFDASBgNVHRMBAf8E\nCDAGAQH/AgEAMAoGCCqGSM49BAMCA0gAMEUCIQC8lNvj\nrSYy+JDnJVLQO3R3nRWA6xxyjVTp2R3MwYsXHAIgBo+3\n27dhrJk+P2ajGR6svOWJVpmVNLilScAchDBPW8I=\n-----END CERTIFICATE-----\n",
+        "role": "overhead-camera",
+        "credential_id": "cam-7f3a",
+        "expires_at": "2027-03-30T00:00:00Z",
+        "credential_ref": "keystore:rosy-site/cam-7f3a",
+        "note": "written by a newer client"
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "id": "tls_host_upper_case_letters",
+      "record": {
+        "site_name": "Rosy Lab",
+        "tls_host": "Fixture-Site.local",
+        "port": 8443,
+        "ca_pem": "-----BEGIN CERTIFICATE-----\nMIIBQjCB6aADAgECAgEBMAoGCCqGSM49BAMCMB8xHTAb\nBgNVBAMMFFJvc3kgZml4dHVyZSBzaXRlIENBMB4XDTI2\nMTAwMTAwMDAwMFoXDTQ2MTAwMTAwMDAwMFowHzEdMBsG\nA1UEAwwUUm9zeSBmaXh0dXJlIHNpdGUgQ0EwWTATBgcq\nhkjOPQIBBggqhkjOPQMBBwNCAARXItk85x1uKrxNWhpq\nGHQjQfgC+Jg04HWOv/jlORmuXDH0Py4BymIG3ah74k/Z\nKoaOaCfjdr7dxB7NDBgS6K8coxYwFDASBgNVHRMBAf8E\nCDAGAQH/AgEAMAoGCCqGSM49BAMCA0gAMEUCIQC8lNvj\nrSYy+JDnJVLQO3R3nRWA6xxyjVTp2R3MwYsXHAIgBo+3\n27dhrJk+P2ajGR6svOWJVpmVNLilScAchDBPW8I=\n-----END CERTIFICATE-----\n",
+        "role": "overhead-camera",
+        "credential_id": "cam-7f3a",
+        "expires_at": "2027-03-30T00:00:00Z",
+        "credential_ref": "keystore:rosy-site/cam-7f3a"
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "id": "missing_site_name",
+      "record": {
+        "tls_host": "fixture-site.local",
+        "port": 8443,
+        "ca_pem": "-----BEGIN CERTIFICATE-----\nMIIBQjCB6aADAgECAgEBMAoGCCqGSM49BAMCMB8xHTAb\nBgNVBAMMFFJvc3kgZml4dHVyZSBzaXRlIENBMB4XDTI2\nMTAwMTAwMDAwMFoXDTQ2MTAwMTAwMDAwMFowHzEdMBsG\nA1UEAwwUUm9zeSBmaXh0dXJlIHNpdGUgQ0EwWTATBgcq\nhkjOPQIBBggqhkjOPQMBBwNCAARXItk85x1uKrxNWhpq\nGHQjQfgC+Jg04HWOv/jlORmuXDH0Py4BymIG3ah74k/Z\nKoaOaCfjdr7dxB7NDBgS6K8coxYwFDASBgNVHRMBAf8E\nCDAGAQH/AgEAMAoGCCqGSM49BAMCA0gAMEUCIQC8lNvj\nrSYy+JDnJVLQO3R3nRWA6xxyjVTp2R3MwYsXHAIgBo+3\n27dhrJk+P2ajGR6svOWJVpmVNLilScAchDBPW8I=\n-----END CERTIFICATE-----\n",
+        "role": "overhead-camera",
+        "credential_id": "cam-7f3a",
+        "expires_at": "2027-03-30T00:00:00Z",
+        "credential_ref": "keystore:rosy-site/cam-7f3a"
+      },
+      "expect": {
+        "valid": false,
+        "reason": "missing_field"
+      }
+    },
+    {
+      "id": "missing_ca_pem",
+      "record": {
+        "site_name": "Rosy Lab",
+        "tls_host": "fixture-site.local",
+        "port": 8443,
+        "role": "overhead-camera",
+        "credential_id": "cam-7f3a",
+        "expires_at": "2027-03-30T00:00:00Z",
+        "credential_ref": "keystore:rosy-site/cam-7f3a"
+      },
+      "expect": {
+        "valid": false,
+        "reason": "missing_field"
+      }
+    },
+    {
+      "id": "missing_expires_at",
+      "record": {
+        "site_name": "Rosy Lab",
+        "tls_host": "fixture-site.local",
+        "port": 8443,
+        "ca_pem": "-----BEGIN CERTIFICATE-----\nMIIBQjCB6aADAgECAgEBMAoGCCqGSM49BAMCMB8xHTAb\nBgNVBAMMFFJvc3kgZml4dHVyZSBzaXRlIENBMB4XDTI2\nMTAwMTAwMDAwMFoXDTQ2MTAwMTAwMDAwMFowHzEdMBsG\nA1UEAwwUUm9zeSBmaXh0dXJlIHNpdGUgQ0EwWTATBgcq\nhkjOPQIBBggqhkjOPQMBBwNCAARXItk85x1uKrxNWhpq\nGHQjQfgC+Jg04HWOv/jlORmuXDH0Py4BymIG3ah74k/Z\nKoaOaCfjdr7dxB7NDBgS6K8coxYwFDASBgNVHRMBAf8E\nCDAGAQH/AgEAMAoGCCqGSM49BAMCA0gAMEUCIQC8lNvj\nrSYy+JDnJVLQO3R3nRWA6xxyjVTp2R3MwYsXHAIgBo+3\n27dhrJk+P2ajGR6svOWJVpmVNLilScAchDBPW8I=\n-----END CERTIFICATE-----\n",
+        "role": "overhead-camera",
+        "credential_id": "cam-7f3a",
+        "credential_ref": "keystore:rosy-site/cam-7f3a"
+      },
+      "expect": {
+        "valid": false,
+        "reason": "missing_field"
+      }
+    },
+    {
+      "id": "empty_site_name",
+      "record": {
+        "site_name": "",
+        "tls_host": "fixture-site.local",
+        "port": 8443,
+        "ca_pem": "-----BEGIN CERTIFICATE-----\nMIIBQjCB6aADAgECAgEBMAoGCCqGSM49BAMCMB8xHTAb\nBgNVBAMMFFJvc3kgZml4dHVyZSBzaXRlIENBMB4XDTI2\nMTAwMTAwMDAwMFoXDTQ2MTAwMTAwMDAwMFowHzEdMBsG\nA1UEAwwUUm9zeSBmaXh0dXJlIHNpdGUgQ0EwWTATBgcq\nhkjOPQIBBggqhkjOPQMBBwNCAARXItk85x1uKrxNWhpq\nGHQjQfgC+Jg04HWOv/jlORmuXDH0Py4BymIG3ah74k/Z\nKoaOaCfjdr7dxB7NDBgS6K8coxYwFDASBgNVHRMBAf8E\nCDAGAQH/AgEAMAoGCCqGSM49BAMCA0gAMEUCIQC8lNvj\nrSYy+JDnJVLQO3R3nRWA6xxyjVTp2R3MwYsXHAIgBo+3\n27dhrJk+P2ajGR6svOWJVpmVNLilScAchDBPW8I=\n-----END CERTIFICATE-----\n",
+        "role": "overhead-camera",
+        "credential_id": "cam-7f3a",
+        "expires_at": "2027-03-30T00:00:00Z",
+        "credential_ref": "keystore:rosy-site/cam-7f3a"
+      },
+      "expect": {
+        "valid": false,
+        "reason": "bad_value"
+      }
+    },
+    {
+      "id": "credential_id_not_string",
+      "record": {
+        "site_name": "Rosy Lab",
+        "tls_host": "fixture-site.local",
+        "port": 8443,
+        "ca_pem": "-----BEGIN CERTIFICATE-----\nMIIBQjCB6aADAgECAgEBMAoGCCqGSM49BAMCMB8xHTAb\nBgNVBAMMFFJvc3kgZml4dHVyZSBzaXRlIENBMB4XDTI2\nMTAwMTAwMDAwMFoXDTQ2MTAwMTAwMDAwMFowHzEdMBsG\nA1UEAwwUUm9zeSBmaXh0dXJlIHNpdGUgQ0EwWTATBgcq\nhkjOPQIBBggqhkjOPQMBBwNCAARXItk85x1uKrxNWhpq\nGHQjQfgC+Jg04HWOv/jlORmuXDH0Py4BymIG3ah74k/Z\nKoaOaCfjdr7dxB7NDBgS6K8coxYwFDASBgNVHRMBAf8E\nCDAGAQH/AgEAMAoGCCqGSM49BAMCA0gAMEUCIQC8lNvj\nrSYy+JDnJVLQO3R3nRWA6xxyjVTp2R3MwYsXHAIgBo+3\n27dhrJk+P2ajGR6svOWJVpmVNLilScAchDBPW8I=\n-----END CERTIFICATE-----\n",
+        "role": "overhead-camera",
+        "credential_id": 7,
+        "expires_at": "2027-03-30T00:00:00Z",
+        "credential_ref": "keystore:rosy-site/cam-7f3a"
+      },
+      "expect": {
+        "valid": false,
+        "reason": "bad_value"
+      }
+    },
+    {
+      "id": "ipv4_as_tls_host",
+      "record": {
+        "site_name": "Rosy Lab",
+        "tls_host": "192.168.1.20",
+        "port": 8443,
+        "ca_pem": "-----BEGIN CERTIFICATE-----\nMIIBQjCB6aADAgECAgEBMAoGCCqGSM49BAMCMB8xHTAb\nBgNVBAMMFFJvc3kgZml4dHVyZSBzaXRlIENBMB4XDTI2\nMTAwMTAwMDAwMFoXDTQ2MTAwMTAwMDAwMFowHzEdMBsG\nA1UEAwwUUm9zeSBmaXh0dXJlIHNpdGUgQ0EwWTATBgcq\nhkjOPQIBBggqhkjOPQMBBwNCAARXItk85x1uKrxNWhpq\nGHQjQfgC+Jg04HWOv/jlORmuXDH0Py4BymIG3ah74k/Z\nKoaOaCfjdr7dxB7NDBgS6K8coxYwFDASBgNVHRMBAf8E\nCDAGAQH/AgEAMAoGCCqGSM49BAMCA0gAMEUCIQC8lNvj\nrSYy+JDnJVLQO3R3nRWA6xxyjVTp2R3MwYsXHAIgBo+3\n27dhrJk+P2ajGR6svOWJVpmVNLilScAchDBPW8I=\n-----END CERTIFICATE-----\n",
+        "role": "overhead-camera",
+        "credential_id": "cam-7f3a",
+        "expires_at": "2027-03-30T00:00:00Z",
+        "credential_ref": "keystore:rosy-site/cam-7f3a"
+      },
+      "expect": {
+        "valid": false,
+        "reason": "ip_as_tls_host"
+      }
+    },
+    {
+      "id": "ipv6_as_tls_host",
+      "record": {
+        "site_name": "Rosy Lab",
+        "tls_host": "fe80::1",
+        "port": 8443,
+        "ca_pem": "-----BEGIN CERTIFICATE-----\nMIIBQjCB6aADAgECAgEBMAoGCCqGSM49BAMCMB8xHTAb\nBgNVBAMMFFJvc3kgZml4dHVyZSBzaXRlIENBMB4XDTI2\nMTAwMTAwMDAwMFoXDTQ2MTAwMTAwMDAwMFowHzEdMBsG\nA1UEAwwUUm9zeSBmaXh0dXJlIHNpdGUgQ0EwWTATBgcq\nhkjOPQIBBggqhkjOPQMBBwNCAARXItk85x1uKrxNWhpq\nGHQjQfgC+Jg04HWOv/jlORmuXDH0Py4BymIG3ah74k/Z\nKoaOaCfjdr7dxB7NDBgS6K8coxYwFDASBgNVHRMBAf8E\nCDAGAQH/AgEAMAoGCCqGSM49BAMCA0gAMEUCIQC8lNvj\nrSYy+JDnJVLQO3R3nRWA6xxyjVTp2R3MwYsXHAIgBo+3\n27dhrJk+P2ajGR6svOWJVpmVNLilScAchDBPW8I=\n-----END CERTIFICATE-----\n",
+        "role": "overhead-camera",
+        "credential_id": "cam-7f3a",
+        "expires_at": "2027-03-30T00:00:00Z",
+        "credential_ref": "keystore:rosy-site/cam-7f3a"
+      },
+      "expect": {
+        "valid": false,
+        "reason": "ip_as_tls_host"
+      }
+    },
+    {
+      "id": "tls_host_not_local",
+      "record": {
+        "site_name": "Rosy Lab",
+        "tls_host": "fleet.example.com",
+        "port": 8443,
+        "ca_pem": "-----BEGIN CERTIFICATE-----\nMIIBQjCB6aADAgECAgEBMAoGCCqGSM49BAMCMB8xHTAb\nBgNVBAMMFFJvc3kgZml4dHVyZSBzaXRlIENBMB4XDTI2\nMTAwMTAwMDAwMFoXDTQ2MTAwMTAwMDAwMFowHzEdMBsG\nA1UEAwwUUm9zeSBmaXh0dXJlIHNpdGUgQ0EwWTATBgcq\nhkjOPQIBBggqhkjOPQMBBwNCAARXItk85x1uKrxNWhpq\nGHQjQfgC+Jg04HWOv/jlORmuXDH0Py4BymIG3ah74k/Z\nKoaOaCfjdr7dxB7NDBgS6K8coxYwFDASBgNVHRMBAf8E\nCDAGAQH/AgEAMAoGCCqGSM49BAMCA0gAMEUCIQC8lNvj\nrSYy+JDnJVLQO3R3nRWA6xxyjVTp2R3MwYsXHAIgBo+3\n27dhrJk+P2ajGR6svOWJVpmVNLilScAchDBPW8I=\n-----END CERTIFICATE-----\n",
+        "role": "overhead-camera",
+        "credential_id": "cam-7f3a",
+        "expires_at": "2027-03-30T00:00:00Z",
+        "credential_ref": "keystore:rosy-site/cam-7f3a"
+      },
+      "expect": {
+        "valid": false,
+        "reason": "bad_tls_host"
+      }
+    },
+    {
+      "id": "tls_host_with_port",
+      "record": {
+        "site_name": "Rosy Lab",
+        "tls_host": "fixture-site.local:8443",
+        "port": 8443,
+        "ca_pem": "-----BEGIN CERTIFICATE-----\nMIIBQjCB6aADAgECAgEBMAoGCCqGSM49BAMCMB8xHTAb\nBgNVBAMMFFJvc3kgZml4dHVyZSBzaXRlIENBMB4XDTI2\nMTAwMTAwMDAwMFoXDTQ2MTAwMTAwMDAwMFowHzEdMBsG\nA1UEAwwUUm9zeSBmaXh0dXJlIHNpdGUgQ0EwWTATBgcq\nhkjOPQIBBggqhkjOPQMBBwNCAARXItk85x1uKrxNWhpq\nGHQjQfgC+Jg04HWOv/jlORmuXDH0Py4BymIG3ah74k/Z\nKoaOaCfjdr7dxB7NDBgS6K8coxYwFDASBgNVHRMBAf8E\nCDAGAQH/AgEAMAoGCCqGSM49BAMCA0gAMEUCIQC8lNvj\nrSYy+JDnJVLQO3R3nRWA6xxyjVTp2R3MwYsXHAIgBo+3\n27dhrJk+P2ajGR6svOWJVpmVNLilScAchDBPW8I=\n-----END CERTIFICATE-----\n",
+        "role": "overhead-camera",
+        "credential_id": "cam-7f3a",
+        "expires_at": "2027-03-30T00:00:00Z",
+        "credential_ref": "keystore:rosy-site/cam-7f3a"
+      },
+      "expect": {
+        "valid": false,
+        "reason": "bad_tls_host"
+      }
+    },
+    {
+      "id": "ca_pem_not_pem",
+      "record": {
+        "site_name": "Rosy Lab",
+        "tls_host": "fixture-site.local",
+        "port": 8443,
+        "ca_pem": "not a certificate",
+        "role": "overhead-camera",
+        "credential_id": "cam-7f3a",
+        "expires_at": "2027-03-30T00:00:00Z",
+        "credential_ref": "keystore:rosy-site/cam-7f3a"
+      },
+      "expect": {
+        "valid": false,
+        "reason": "bad_ca_pem"
+      }
+    },
+    {
+      "id": "ca_pem_bad_base64",
+      "record": {
+        "site_name": "Rosy Lab",
+        "tls_host": "fixture-site.local",
+        "port": 8443,
+        "ca_pem": "-----BEGIN CERTIFICATE-----\n!!!!\n-----END CERTIFICATE-----\n",
+        "role": "overhead-camera",
+        "credential_id": "cam-7f3a",
+        "expires_at": "2027-03-30T00:00:00Z",
+        "credential_ref": "keystore:rosy-site/cam-7f3a"
+      },
+      "expect": {
+        "valid": false,
+        "reason": "bad_ca_pem"
+      }
+    },
+    {
+      "id": "ca_pem_is_leaf",
+      "record": {
+        "site_name": "Rosy Lab",
+        "tls_host": "fixture-site.local",
+        "port": 8443,
+        "ca_pem": "-----BEGIN CERTIFICATE-----\nMIIBWzCCAQCgAwIBAgIBAjAKBggqhkjOPQQDAjAfMR0w\nGwYDVQQDDBRSb3N5IGZpeHR1cmUgc2l0ZSBDQTAeFw0y\nNjEwMDEwMDAwMDBaFw00NjEwMDEwMDAwMDBaMB0xGzAZ\nBgNVBAMMEmZpeHR1cmUtc2l0ZS5sb2NhbDBZMBMGByqG\nSM49AgEGCCqGSM49AwEHA0IABPgjQgqKpj5LwHJ83z1k\nlUTp9SRO7aLU2cVaEkXwXwylUZtgkcRwv6ndPNRn0bpT\nQV6iEK/hVqhaNxEK52ipSVSjLzAtMAwGA1UdEwEB/wQC\nMAAwHQYDVR0RBBYwFIISZml4dHVyZS1zaXRlLmxvY2Fs\nMAoGCCqGSM49BAMCA0kAMEYCIQC5nPO+oVFvkA3q31cu\n3iLtBliu3CLY669azksnWB5H7QIhAOVaVA3LQUG2vD2j\nSiLrGytvY1N/Qdk7QQLj303AyFtc\n-----END CERTIFICATE-----\n",
+        "role": "overhead-camera",
+        "credential_id": "cam-7f3a",
+        "expires_at": "2027-03-30T00:00:00Z",
+        "credential_ref": "keystore:rosy-site/cam-7f3a"
+      },
+      "expect": {
+        "valid": false,
+        "reason": "leaf_not_ca"
+      }
+    },
+    {
+      "id": "ca_pem_leaf_then_ca_bundle",
+      "record": {
+        "site_name": "Rosy Lab",
+        "tls_host": "fixture-site.local",
+        "port": 8443,
+        "ca_pem": "-----BEGIN CERTIFICATE-----\nMIIBWzCCAQCgAwIBAgIBAjAKBggqhkjOPQQDAjAfMR0w\nGwYDVQQDDBRSb3N5IGZpeHR1cmUgc2l0ZSBDQTAeFw0y\nNjEwMDEwMDAwMDBaFw00NjEwMDEwMDAwMDBaMB0xGzAZ\nBgNVBAMMEmZpeHR1cmUtc2l0ZS5sb2NhbDBZMBMGByqG\nSM49AgEGCCqGSM49AwEHA0IABPgjQgqKpj5LwHJ83z1k\nlUTp9SRO7aLU2cVaEkXwXwylUZtgkcRwv6ndPNRn0bpT\nQV6iEK/hVqhaNxEK52ipSVSjLzAtMAwGA1UdEwEB/wQC\nMAAwHQYDVR0RBBYwFIISZml4dHVyZS1zaXRlLmxvY2Fs\nMAoGCCqGSM49BAMCA0kAMEYCIQC5nPO+oVFvkA3q31cu\n3iLtBliu3CLY669azksnWB5H7QIhAOVaVA3LQUG2vD2j\nSiLrGytvY1N/Qdk7QQLj303AyFtc\n-----END CERTIFICATE-----\n-----BEGIN CERTIFICATE-----\nMIIBQjCB6aADAgECAgEBMAoGCCqGSM49BAMCMB8xHTAb\nBgNVBAMMFFJvc3kgZml4dHVyZSBzaXRlIENBMB4XDTI2\nMTAwMTAwMDAwMFoXDTQ2MTAwMTAwMDAwMFowHzEdMBsG\nA1UEAwwUUm9zeSBmaXh0dXJlIHNpdGUgQ0EwWTATBgcq\nhkjOPQIBBggqhkjOPQMBBwNCAARXItk85x1uKrxNWhpq\nGHQjQfgC+Jg04HWOv/jlORmuXDH0Py4BymIG3ah74k/Z\nKoaOaCfjdr7dxB7NDBgS6K8coxYwFDASBgNVHRMBAf8E\nCDAGAQH/AgEAMAoGCCqGSM49BAMCA0gAMEUCIQC8lNvj\nrSYy+JDnJVLQO3R3nRWA6xxyjVTp2R3MwYsXHAIgBo+3\n27dhrJk+P2ajGR6svOWJVpmVNLilScAchDBPW8I=\n-----END CERTIFICATE-----\n",
+        "role": "overhead-camera",
+        "credential_id": "cam-7f3a",
+        "expires_at": "2027-03-30T00:00:00Z",
+        "credential_ref": "keystore:rosy-site/cam-7f3a"
+      },
+      "expect": {
+        "valid": false,
+        "reason": "leaf_not_ca"
+      }
+    },
+    {
+      "id": "port_zero",
+      "record": {
+        "site_name": "Rosy Lab",
+        "tls_host": "fixture-site.local",
+        "port": 0,
+        "ca_pem": "-----BEGIN CERTIFICATE-----\nMIIBQjCB6aADAgECAgEBMAoGCCqGSM49BAMCMB8xHTAb\nBgNVBAMMFFJvc3kgZml4dHVyZSBzaXRlIENBMB4XDTI2\nMTAwMTAwMDAwMFoXDTQ2MTAwMTAwMDAwMFowHzEdMBsG\nA1UEAwwUUm9zeSBmaXh0dXJlIHNpdGUgQ0EwWTATBgcq\nhkjOPQIBBggqhkjOPQMBBwNCAARXItk85x1uKrxNWhpq\nGHQjQfgC+Jg04HWOv/jlORmuXDH0Py4BymIG3ah74k/Z\nKoaOaCfjdr7dxB7NDBgS6K8coxYwFDASBgNVHRMBAf8E\nCDAGAQH/AgEAMAoGCCqGSM49BAMCA0gAMEUCIQC8lNvj\nrSYy+JDnJVLQO3R3nRWA6xxyjVTp2R3MwYsXHAIgBo+3\n27dhrJk+P2ajGR6svOWJVpmVNLilScAchDBPW8I=\n-----END CERTIFICATE-----\n",
+        "role": "overhead-camera",
+        "credential_id": "cam-7f3a",
+        "expires_at": "2027-03-30T00:00:00Z",
+        "credential_ref": "keystore:rosy-site/cam-7f3a"
+      },
+      "expect": {
+        "valid": false,
+        "reason": "bad_port"
+      }
+    },
+    {
+      "id": "port_too_large",
+      "record": {
+        "site_name": "Rosy Lab",
+        "tls_host": "fixture-site.local",
+        "port": 65536,
+        "ca_pem": "-----BEGIN CERTIFICATE-----\nMIIBQjCB6aADAgECAgEBMAoGCCqGSM49BAMCMB8xHTAb\nBgNVBAMMFFJvc3kgZml4dHVyZSBzaXRlIENBMB4XDTI2\nMTAwMTAwMDAwMFoXDTQ2MTAwMTAwMDAwMFowHzEdMBsG\nA1UEAwwUUm9zeSBmaXh0dXJlIHNpdGUgQ0EwWTATBgcq\nhkjOPQIBBggqhkjOPQMBBwNCAARXItk85x1uKrxNWhpq\nGHQjQfgC+Jg04HWOv/jlORmuXDH0Py4BymIG3ah74k/Z\nKoaOaCfjdr7dxB7NDBgS6K8coxYwFDASBgNVHRMBAf8E\nCDAGAQH/AgEAMAoGCCqGSM49BAMCA0gAMEUCIQC8lNvj\nrSYy+JDnJVLQO3R3nRWA6xxyjVTp2R3MwYsXHAIgBo+3\n27dhrJk+P2ajGR6svOWJVpmVNLilScAchDBPW8I=\n-----END CERTIFICATE-----\n",
+        "role": "overhead-camera",
+        "credential_id": "cam-7f3a",
+        "expires_at": "2027-03-30T00:00:00Z",
+        "credential_ref": "keystore:rosy-site/cam-7f3a"
+      },
+      "expect": {
+        "valid": false,
+        "reason": "bad_port"
+      }
+    },
+    {
+      "id": "port_as_string",
+      "record": {
+        "site_name": "Rosy Lab",
+        "tls_host": "fixture-site.local",
+        "port": "8443",
+        "ca_pem": "-----BEGIN CERTIFICATE-----\nMIIBQjCB6aADAgECAgEBMAoGCCqGSM49BAMCMB8xHTAb\nBgNVBAMMFFJvc3kgZml4dHVyZSBzaXRlIENBMB4XDTI2\nMTAwMTAwMDAwMFoXDTQ2MTAwMTAwMDAwMFowHzEdMBsG\nA1UEAwwUUm9zeSBmaXh0dXJlIHNpdGUgQ0EwWTATBgcq\nhkjOPQIBBggqhkjOPQMBBwNCAARXItk85x1uKrxNWhpq\nGHQjQfgC+Jg04HWOv/jlORmuXDH0Py4BymIG3ah74k/Z\nKoaOaCfjdr7dxB7NDBgS6K8coxYwFDASBgNVHRMBAf8E\nCDAGAQH/AgEAMAoGCCqGSM49BAMCA0gAMEUCIQC8lNvj\nrSYy+JDnJVLQO3R3nRWA6xxyjVTp2R3MwYsXHAIgBo+3\n27dhrJk+P2ajGR6svOWJVpmVNLilScAchDBPW8I=\n-----END CERTIFICATE-----\n",
+        "role": "overhead-camera",
+        "credential_id": "cam-7f3a",
+        "expires_at": "2027-03-30T00:00:00Z",
+        "credential_ref": "keystore:rosy-site/cam-7f3a"
+      },
+      "expect": {
+        "valid": false,
+        "reason": "bad_port"
+      }
+    },
+    {
+      "id": "port_as_bool",
+      "record": {
+        "site_name": "Rosy Lab",
+        "tls_host": "fixture-site.local",
+        "port": true,
+        "ca_pem": "-----BEGIN CERTIFICATE-----\nMIIBQjCB6aADAgECAgEBMAoGCCqGSM49BAMCMB8xHTAb\nBgNVBAMMFFJvc3kgZml4dHVyZSBzaXRlIENBMB4XDTI2\nMTAwMTAwMDAwMFoXDTQ2MTAwMTAwMDAwMFowHzEdMBsG\nA1UEAwwUUm9zeSBmaXh0dXJlIHNpdGUgQ0EwWTATBgcq\nhkjOPQIBBggqhkjOPQMBBwNCAARXItk85x1uKrxNWhpq\nGHQjQfgC+Jg04HWOv/jlORmuXDH0Py4BymIG3ah74k/Z\nKoaOaCfjdr7dxB7NDBgS6K8coxYwFDASBgNVHRMBAf8E\nCDAGAQH/AgEAMAoGCCqGSM49BAMCA0gAMEUCIQC8lNvj\nrSYy+JDnJVLQO3R3nRWA6xxyjVTp2R3MwYsXHAIgBo+3\n27dhrJk+P2ajGR6svOWJVpmVNLilScAchDBPW8I=\n-----END CERTIFICATE-----\n",
+        "role": "overhead-camera",
+        "credential_id": "cam-7f3a",
+        "expires_at": "2027-03-30T00:00:00Z",
+        "credential_ref": "keystore:rosy-site/cam-7f3a"
+      },
+      "expect": {
+        "valid": false,
+        "reason": "bad_port"
+      }
+    },
+    {
+      "id": "role_fleet_is_not_a_client_role",
+      "record": {
+        "site_name": "Rosy Lab",
+        "tls_host": "fixture-site.local",
+        "port": 8443,
+        "ca_pem": "-----BEGIN CERTIFICATE-----\nMIIBQjCB6aADAgECAgEBMAoGCCqGSM49BAMCMB8xHTAb\nBgNVBAMMFFJvc3kgZml4dHVyZSBzaXRlIENBMB4XDTI2\nMTAwMTAwMDAwMFoXDTQ2MTAwMTAwMDAwMFowHzEdMBsG\nA1UEAwwUUm9zeSBmaXh0dXJlIHNpdGUgQ0EwWTATBgcq\nhkjOPQIBBggqhkjOPQMBBwNCAARXItk85x1uKrxNWhpq\nGHQjQfgC+Jg04HWOv/jlORmuXDH0Py4BymIG3ah74k/Z\nKoaOaCfjdr7dxB7NDBgS6K8coxYwFDASBgNVHRMBAf8E\nCDAGAQH/AgEAMAoGCCqGSM49BAMCA0gAMEUCIQC8lNvj\nrSYy+JDnJVLQO3R3nRWA6xxyjVTp2R3MwYsXHAIgBo+3\n27dhrJk+P2ajGR6svOWJVpmVNLilScAchDBPW8I=\n-----END CERTIFICATE-----\n",
+        "role": "fleet",
+        "credential_id": "cam-7f3a",
+        "expires_at": "2027-03-30T00:00:00Z",
+        "credential_ref": "keystore:rosy-site/cam-7f3a"
+      },
+      "expect": {
+        "valid": false,
+        "reason": "unknown_role"
+      }
+    },
+    {
+      "id": "role_unknown",
+      "record": {
+        "site_name": "Rosy Lab",
+        "tls_host": "fixture-site.local",
+        "port": 8443,
+        "ca_pem": "-----BEGIN CERTIFICATE-----\nMIIBQjCB6aADAgECAgEBMAoGCCqGSM49BAMCMB8xHTAb\nBgNVBAMMFFJvc3kgZml4dHVyZSBzaXRlIENBMB4XDTI2\nMTAwMTAwMDAwMFoXDTQ2MTAwMTAwMDAwMFowHzEdMBsG\nA1UEAwwUUm9zeSBmaXh0dXJlIHNpdGUgQ0EwWTATBgcq\nhkjOPQIBBggqhkjOPQMBBwNCAARXItk85x1uKrxNWhpq\nGHQjQfgC+Jg04HWOv/jlORmuXDH0Py4BymIG3ah74k/Z\nKoaOaCfjdr7dxB7NDBgS6K8coxYwFDASBgNVHRMBAf8E\nCDAGAQH/AgEAMAoGCCqGSM49BAMCA0gAMEUCIQC8lNvj\nrSYy+JDnJVLQO3R3nRWA6xxyjVTp2R3MwYsXHAIgBo+3\n27dhrJk+P2ajGR6svOWJVpmVNLilScAchDBPW8I=\n-----END CERTIFICATE-----\n",
+        "role": "drone",
+        "credential_id": "cam-7f3a",
+        "expires_at": "2027-03-30T00:00:00Z",
+        "credential_ref": "keystore:rosy-site/cam-7f3a"
+      },
+      "expect": {
+        "valid": false,
+        "reason": "unknown_role"
+      }
+    },
+    {
+      "id": "expires_at_with_offset",
+      "record": {
+        "site_name": "Rosy Lab",
+        "tls_host": "fixture-site.local",
+        "port": 8443,
+        "ca_pem": "-----BEGIN CERTIFICATE-----\nMIIBQjCB6aADAgECAgEBMAoGCCqGSM49BAMCMB8xHTAb\nBgNVBAMMFFJvc3kgZml4dHVyZSBzaXRlIENBMB4XDTI2\nMTAwMTAwMDAwMFoXDTQ2MTAwMTAwMDAwMFowHzEdMBsG\nA1UEAwwUUm9zeSBmaXh0dXJlIHNpdGUgQ0EwWTATBgcq\nhkjOPQIBBggqhkjOPQMBBwNCAARXItk85x1uKrxNWhpq\nGHQjQfgC+Jg04HWOv/jlORmuXDH0Py4BymIG3ah74k/Z\nKoaOaCfjdr7dxB7NDBgS6K8coxYwFDASBgNVHRMBAf8E\nCDAGAQH/AgEAMAoGCCqGSM49BAMCA0gAMEUCIQC8lNvj\nrSYy+JDnJVLQO3R3nRWA6xxyjVTp2R3MwYsXHAIgBo+3\n27dhrJk+P2ajGR6svOWJVpmVNLilScAchDBPW8I=\n-----END CERTIFICATE-----\n",
+        "role": "overhead-camera",
+        "credential_id": "cam-7f3a",
+        "expires_at": "2027-03-30T09:00:00+09:00",
+        "credential_ref": "keystore:rosy-site/cam-7f3a"
+      },
+      "expect": {
+        "valid": false,
+        "reason": "bad_expires_at"
+      }
+    },
+    {
+      "id": "expires_at_date_only",
+      "record": {
+        "site_name": "Rosy Lab",
+        "tls_host": "fixture-site.local",
+        "port": 8443,
+        "ca_pem": "-----BEGIN CERTIFICATE-----\nMIIBQjCB6aADAgECAgEBMAoGCCqGSM49BAMCMB8xHTAb\nBgNVBAMMFFJvc3kgZml4dHVyZSBzaXRlIENBMB4XDTI2\nMTAwMTAwMDAwMFoXDTQ2MTAwMTAwMDAwMFowHzEdMBsG\nA1UEAwwUUm9zeSBmaXh0dXJlIHNpdGUgQ0EwWTATBgcq\nhkjOPQIBBggqhkjOPQMBBwNCAARXItk85x1uKrxNWhpq\nGHQjQfgC+Jg04HWOv/jlORmuXDH0Py4BymIG3ah74k/Z\nKoaOaCfjdr7dxB7NDBgS6K8coxYwFDASBgNVHRMBAf8E\nCDAGAQH/AgEAMAoGCCqGSM49BAMCA0gAMEUCIQC8lNvj\nrSYy+JDnJVLQO3R3nRWA6xxyjVTp2R3MwYsXHAIgBo+3\n27dhrJk+P2ajGR6svOWJVpmVNLilScAchDBPW8I=\n-----END CERTIFICATE-----\n",
+        "role": "overhead-camera",
+        "credential_id": "cam-7f3a",
+        "expires_at": "2027-03-30",
+        "credential_ref": "keystore:rosy-site/cam-7f3a"
+      },
+      "expect": {
+        "valid": false,
+        "reason": "bad_expires_at"
+      }
+    },
+    {
+      "id": "expires_at_impossible_date",
+      "record": {
+        "site_name": "Rosy Lab",
+        "tls_host": "fixture-site.local",
+        "port": 8443,
+        "ca_pem": "-----BEGIN CERTIFICATE-----\nMIIBQjCB6aADAgECAgEBMAoGCCqGSM49BAMCMB8xHTAb\nBgNVBAMMFFJvc3kgZml4dHVyZSBzaXRlIENBMB4XDTI2\nMTAwMTAwMDAwMFoXDTQ2MTAwMTAwMDAwMFowHzEdMBsG\nA1UEAwwUUm9zeSBmaXh0dXJlIHNpdGUgQ0EwWTATBgcq\nhkjOPQIBBggqhkjOPQMBBwNCAARXItk85x1uKrxNWhpq\nGHQjQfgC+Jg04HWOv/jlORmuXDH0Py4BymIG3ah74k/Z\nKoaOaCfjdr7dxB7NDBgS6K8coxYwFDASBgNVHRMBAf8E\nCDAGAQH/AgEAMAoGCCqGSM49BAMCA0gAMEUCIQC8lNvj\nrSYy+JDnJVLQO3R3nRWA6xxyjVTp2R3MwYsXHAIgBo+3\n27dhrJk+P2ajGR6svOWJVpmVNLilScAchDBPW8I=\n-----END CERTIFICATE-----\n",
+        "role": "overhead-camera",
+        "credential_id": "cam-7f3a",
+        "expires_at": "2027-02-30T00:00:00Z",
+        "credential_ref": "keystore:rosy-site/cam-7f3a"
+      },
+      "expect": {
+        "valid": false,
+        "reason": "bad_expires_at"
+      }
+    },
+    {
+      "id": "no_credential_nor_ref",
+      "record": {
+        "site_name": "Rosy Lab",
+        "tls_host": "fixture-site.local",
+        "port": 8443,
+        "ca_pem": "-----BEGIN CERTIFICATE-----\nMIIBQjCB6aADAgECAgEBMAoGCCqGSM49BAMCMB8xHTAb\nBgNVBAMMFFJvc3kgZml4dHVyZSBzaXRlIENBMB4XDTI2\nMTAwMTAwMDAwMFoXDTQ2MTAwMTAwMDAwMFowHzEdMBsG\nA1UEAwwUUm9zeSBmaXh0dXJlIHNpdGUgQ0EwWTATBgcq\nhkjOPQIBBggqhkjOPQMBBwNCAARXItk85x1uKrxNWhpq\nGHQjQfgC+Jg04HWOv/jlORmuXDH0Py4BymIG3ah74k/Z\nKoaOaCfjdr7dxB7NDBgS6K8coxYwFDASBgNVHRMBAf8E\nCDAGAQH/AgEAMAoGCCqGSM49BAMCA0gAMEUCIQC8lNvj\nrSYy+JDnJVLQO3R3nRWA6xxyjVTp2R3MwYsXHAIgBo+3\n27dhrJk+P2ajGR6svOWJVpmVNLilScAchDBPW8I=\n-----END CERTIFICATE-----\n",
+        "role": "overhead-camera",
+        "credential_id": "cam-7f3a",
+        "expires_at": "2027-03-30T00:00:00Z"
+      },
+      "expect": {
+        "valid": false,
+        "reason": "missing_credential"
+      }
+    },
+    {
+      "id": "credential_and_ref_both",
+      "record": {
+        "site_name": "Rosy Lab",
+        "tls_host": "fixture-site.local",
+        "port": 8443,
+        "ca_pem": "-----BEGIN CERTIFICATE-----\nMIIBQjCB6aADAgECAgEBMAoGCCqGSM49BAMCMB8xHTAb\nBgNVBAMMFFJvc3kgZml4dHVyZSBzaXRlIENBMB4XDTI2\nMTAwMTAwMDAwMFoXDTQ2MTAwMTAwMDAwMFowHzEdMBsG\nA1UEAwwUUm9zeSBmaXh0dXJlIHNpdGUgQ0EwWTATBgcq\nhkjOPQIBBggqhkjOPQMBBwNCAARXItk85x1uKrxNWhpq\nGHQjQfgC+Jg04HWOv/jlORmuXDH0Py4BymIG3ah74k/Z\nKoaOaCfjdr7dxB7NDBgS6K8coxYwFDASBgNVHRMBAf8E\nCDAGAQH/AgEAMAoGCCqGSM49BAMCA0gAMEUCIQC8lNvj\nrSYy+JDnJVLQO3R3nRWA6xxyjVTp2R3MwYsXHAIgBo+3\n27dhrJk+P2ajGR6svOWJVpmVNLilScAchDBPW8I=\n-----END CERTIFICATE-----\n",
+        "role": "overhead-camera",
+        "credential_id": "cam-7f3a",
+        "expires_at": "2027-03-30T00:00:00Z",
+        "credential_ref": "keystore:rosy-site/cam-7f3a",
+        "credential": "fixture-one-time-credential"
+      },
+      "expect": {
+        "valid": false,
+        "reason": "credential_conflict"
+      }
+    },
+    {
+      "id": "manual_host_garbage",
+      "record": {
+        "site_name": "Rosy Lab",
+        "tls_host": "fixture-site.local",
+        "port": 8443,
+        "ca_pem": "-----BEGIN CERTIFICATE-----\nMIIBQjCB6aADAgECAgEBMAoGCCqGSM49BAMCMB8xHTAb\nBgNVBAMMFFJvc3kgZml4dHVyZSBzaXRlIENBMB4XDTI2\nMTAwMTAwMDAwMFoXDTQ2MTAwMTAwMDAwMFowHzEdMBsG\nA1UEAwwUUm9zeSBmaXh0dXJlIHNpdGUgQ0EwWTATBgcq\nhkjOPQIBBggqhkjOPQMBBwNCAARXItk85x1uKrxNWhpq\nGHQjQfgC+Jg04HWOv/jlORmuXDH0Py4BymIG3ah74k/Z\nKoaOaCfjdr7dxB7NDBgS6K8coxYwFDASBgNVHRMBAf8E\nCDAGAQH/AgEAMAoGCCqGSM49BAMCA0gAMEUCIQC8lNvj\nrSYy+JDnJVLQO3R3nRWA6xxyjVTp2R3MwYsXHAIgBo+3\n27dhrJk+P2ajGR6svOWJVpmVNLilScAchDBPW8I=\n-----END CERTIFICATE-----\n",
+        "role": "overhead-camera",
+        "credential_id": "cam-7f3a",
+        "expires_at": "2027-03-30T00:00:00Z",
+        "credential_ref": "keystore:rosy-site/cam-7f3a",
+        "manual_host": "not a host!"
+      },
+      "expect": {
+        "valid": false,
+        "reason": "bad_manual_host"
+      }
+    }
+  ]
+}

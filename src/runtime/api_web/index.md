@@ -28,8 +28,8 @@
 
 ## 최근 기록
 
+- 2026-10-01 · uncommitted · docs(api): WS 인증은 첫 메시지가 기본 — Fleet도 D-370 S7부터
 - 2026-10-01 · 76c70e20 · merge(main) + API Ref v1.68 로 재번호, 검증 틈 시험 3건
 - 2026-10-01 · 4f54dc54 · fix(core): 리뷰 반영 — 시작 조건, 차단 확대
 - 2026-10-01 · 1ae6b239 · fix(core): 보정 차단을 navigation·docking·swarm 까지, IDLE 은 열어 둔다
 - 2026-10-01 · 1a1a2c3a · docs(api): API Ref v1.67 과 버전 핀
-- 2026-10-01 · a527920a · feat(api): /api/v1/calibration/session 과 CALIBRATION_ACTIVE 차단

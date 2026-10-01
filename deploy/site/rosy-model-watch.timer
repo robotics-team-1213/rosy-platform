@@ -1,0 +1,10 @@
+[Unit]
+Description=Check the HF model repo for new perception models every 10 minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitInactiveSec=10min
+Unit=rosy-model-watch.service
+
+[Install]
+WantedBy=timers.target

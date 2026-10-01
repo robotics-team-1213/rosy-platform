@@ -1,0 +1,28 @@
+# /etc/rosy/model-watch.yaml (root:rosy-model-watch 0640). D-373 decisions 5 and 8.
+# No secrets here. HF is optional: only `backend: hf` reads a token, from
+# /etc/rosy/site/secrets/hf_token (HF_TOKEN_FILE).
+backend: inbox
+# The store folder (source of truth for datasets and models). A local folder now;
+# later the mount point of a NAS share or a Google Drive for desktop folder with the
+# same layout: change this path, nothing else. install-model-watch.sh makes it
+# writable for the service (a unit drop-in) and creates the layout.
+store: /srv/rosy/store
+robots:
+  - name: <robot-name>
+    host: <robot-ip>
+ssh:
+  # the site host's own key, authorized for rosy on each robot (not the operator key)
+  identity: /etc/rosy/model-watch/site-ed25519
+  known_hosts: /etc/rosy/model-watch/known_hosts
+intake_out: /var/lib/rosy-model-watch/models
+state_file: /var/lib/rosy-model-watch/state.json
+# Intake replays data/teleop/learning/*.mp4 under this directory.
+replay_root: /var/lib/rosy-model-watch/replay
+max_new_per_run: 1
+max_attempts: 5
+push_timeout_s: 600
+# Optional HF backend instead of the store inbox (needs huggingface_hub in the venv):
+# backend: hf
+# repo: <hf-org>/<model-repo>
+# since: <40-hex commit sha>   # skip this commit and everything older
+# history_limit: 20

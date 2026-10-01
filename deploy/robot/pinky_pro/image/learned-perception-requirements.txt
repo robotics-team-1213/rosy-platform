@@ -1,0 +1,26 @@
+# D-373 learned-perception runtime: shadow lane inference in rosy-camera.
+# Hash-locked for cp312 aarch64 and x86_64 (aarch64 hash first), pinned in
+# inputs.lock.yaml learned_perception_runtime. customize-rootfs.sh (image) and
+# deploy/robot/pinky_pro/dev/install-learned-perception.sh (bench card) install
+# exactly this file with --require-hashes --no-deps --only-binary=:all:
+# --target /opt/rosy/learned-perception/site-packages: a dedicated prefix
+# appended to sys.path only by the learned backend (learned/runner.py); it
+# never shadows system packages (apt python3-numpy, python3-protobuf,
+# python3-packaging keep precedence). It is NOT part of the payload Python
+# runtime id (D-189: sha256 of device-python-requirements.txt), so it never cuts
+# flashed robots off payload updates.
+# onnxruntime 1.30.0 Requires-Dist: flatbuffers, numpy>=1.21.6, packaging,
+# protobuf>=4.25.8 (sympy and ml_dtypes are extras). numpy is NOT pinned here:
+# apt python3-numpy (noble 1.26.4) is what apt's cv2 was built against.
+# Resolved 2026-09-30 by a --require-hashes --no-deps --only-binary=:all:
+# download for onnxruntime==1.30.0 on both platforms.
+onnxruntime==1.30.0 \
+    --hash=sha256:6c32a000d5139a38ba9349030b0032e3331acb559d596b22738d9d2b343a2b83 \
+    --hash=sha256:fa688e7891a6aa206636fe7372e27ee75fd17713289f6b4fc7b190e0a7de9328
+flatbuffers==25.12.19 \
+    --hash=sha256:7634f50c427838bb021c2d66a3d1168e9d199b0607e6329399f04846d42e20b4
+packaging==26.3 \
+    --hash=sha256:d7193f7c8e4e93f444fde0262bf90af30e16fa0ad0ad44cb553c87339b23cd1c
+protobuf==7.36.2 \
+    --hash=sha256:e11e1f0180583a2af89db6a2ecd9e8dc40aa6d2988ca175bfd0e6d12ea72d74e \
+    --hash=sha256:89f23aa53c24553a2416fd4fd1ec06f74fa42b14b546d8883128813f775bbfd2

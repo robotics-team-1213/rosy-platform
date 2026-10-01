@@ -96,6 +96,41 @@ def test_local_source_is_a_path(tmp_path):
     assert intake.resolve_source(str(tmp_path), workdir=tmp_path / "w") == tmp_path
 
 
+def _inbox(tmp_path, name="m1", ready=True):
+    sys.path.insert(0, str(ROOT / "tools" / "perception"))
+    import store
+    folder = tmp_path / "store" / "models" / "inbox" / name
+    folder.mkdir(parents=True)
+    (folder / "model_manifest.json").write_text("{}", encoding="utf-8")
+    if ready:
+        (folder / "READY").write_text(store.content_sha(folder), encoding="utf-8")
+    return folder
+
+
+def test_store_inbox_source_is_the_ready_inbox_folder(tmp_path):
+    folder = _inbox(tmp_path)
+    assert intake.resolve_source("store-inbox:m1", store=tmp_path / "store") == folder
+
+
+@pytest.mark.parametrize("src, ready, store_given", [
+    ("store-inbox:m1", False, True),      # half-synced: no READY
+    ("store-inbox:m1", True, False),      # no store configured
+    ("store-inbox:../x", True, True),     # never outside the inbox
+])
+def test_store_inbox_source_refusals(tmp_path, src, ready, store_given):
+    _inbox(tmp_path, ready=ready)
+    with pytest.raises(ValueError):
+        intake.resolve_source(src, store=(tmp_path / "store") if store_given else None)
+
+
+def test_failed_store_inbox_report_goes_under_out_not_the_inbox(tmp_path):
+    folder = _inbox(tmp_path)
+    rc, report = intake.run("store-inbox:m1", out=tmp_path / "out", store=tmp_path / "store")
+    assert rc == 1 and report["verdict"] == "fail" and not report["transient"]
+    assert sorted(p.name for p in folder.parent.iterdir()) == ["m1"]
+    assert list((tmp_path / "out" / "_failed").glob("*intake_report.json"))
+
+
 class _Ev:
     visible, error, confidence, class_fractions = False, None, 0.0, {"a": 1.0}
 
@@ -124,6 +159,68 @@ def test_replay_separates_nan_from_other_errors(monkeypatch):
     assert stats["frames"] == 4 and stats["nan_frames"] == 1 and stats["error_frames"] == 1
     verdict, reasons = intake.judge(dict(GOOD, error_frames=1), GATE)
     assert verdict == "fail" and "error" in reasons[0].lower()
+
+
+def test_infrastructure_errors_are_marked_transient(tmp_path, monkeypatch):
+    """watch.py retries these later; only a real gate verdict is final."""
+    folder = tmp_path / "m"
+    folder.mkdir()
+    monkeypatch.setattr(intake, "load_manifest", lambda f: (_ for _ in ()).throw(OSError("disk")))
+    rc, report = intake.run(str(folder), out=tmp_path / "out")
+    assert rc == 1 and report["transient"] is True
+
+    def offline(**kw):
+        raise OSError("HF unreachable")  # requests/HF HTTP errors are OSError subclasses
+
+    rc, report = intake.run(f"hf:org/m@{'a' * 40}", out=tmp_path / "out", downloader=offline)
+    assert rc == 1 and report["transient"] is True
+
+
+def test_failed_hf_report_goes_under_out_never_cwd(tmp_path, monkeypatch):
+    cwd = tmp_path / "cwd"
+    cwd.mkdir()
+    monkeypatch.chdir(cwd)
+
+    def offline(**kw):
+        raise OSError("HF unreachable")
+
+    for source in (f"hf:org/m@{'a' * 40}", "hf:org/m@main"):  # download error, bad spec
+        rc, _ = intake.run(source, out=tmp_path / "out", downloader=offline)
+        assert rc == 1
+    assert list(cwd.iterdir()) == []
+    failed = sorted(p.name for p in (tmp_path / "out" / "_failed").iterdir())
+    assert failed == [f"org__m@{'a' * 40}.intake_report.json", "org__m@main.intake_report.json"]
+
+
+def test_no_replay_frames_is_a_transient_setup_error(tmp_path, monkeypatch):
+    """An empty or wrong replay_root is the site's problem, not the model's."""
+    folder = tmp_path / "m"
+    folder.mkdir()
+    fake = type("M", (), {"model_revision": "lane-seg-20260930-abcd1234", "files": ()})()
+    monkeypatch.setattr(intake, "load_manifest", lambda f: fake)
+    monkeypatch.setattr(intake, "verify_files", lambda m: None)
+    monkeypatch.setattr(intake.LaneSegModel, "open", classmethod(lambda cls, f: object()))
+    rc, report = intake.run(str(folder), out=tmp_path / "out", root=tmp_path / "empty")
+    assert rc == 1 and report["verdict"] == "fail"
+    assert report["transient"] is True
+    assert any("replay" in r for r in report["reasons"])
+
+
+def test_count_replay_frames_sources(tmp_path):
+    (tmp_path / "data" / "teleop" / "learning").mkdir(parents=True)
+    assert intake.replay_videos({"replay_sources": ["data/teleop/learning/*.mp4"]}, tmp_path) == []
+    clip = tmp_path / "data" / "teleop" / "learning" / "a.mp4"
+    clip.write_bytes(b"")
+    assert intake.replay_videos({"replay_sources": ["data/teleop/learning/*.mp4"]},
+                                tmp_path) == [clip]
+
+
+def test_gate_failures_are_final(tmp_path):
+    folder = tmp_path / "m"
+    folder.mkdir()
+    (folder / "model_manifest.json").write_text("{}", encoding="utf-8")
+    rc, report = intake.run(str(folder), out=tmp_path / "out")
+    assert rc == 1 and report["transient"] is False
 
 
 def test_io_failure_still_writes_fail_report(tmp_path, monkeypatch):
@@ -162,6 +259,23 @@ def test_bad_folder_fails_with_report(tmp_path, capsys):
     report = json.loads((tmp_path / "m.intake_report.json").read_text(encoding="utf-8"))
     assert report["verdict"] == "fail" and report["reasons"]
     assert not (tmp_path / "out").exists()
+
+
+def test_run_returns_report_and_uses_injected_downloader(tmp_path):
+    """model/watch.py calls run() in-process with its own (token-carrying) downloader."""
+    seen = {}
+
+    def downloader(**kw):
+        seen.update(kw)
+        d = Path(kw["local_dir"])
+        d.mkdir(parents=True)
+        (d / "model_manifest.json").write_text("{}", encoding="utf-8")
+        return str(d)
+
+    rc, report = intake.run(f"hf:org/m@{'a' * 40}", out=tmp_path / "out",
+                            downloader=downloader)
+    assert rc == 1 and report["verdict"] == "fail" and report["reasons"]
+    assert seen["repo_id"] == "org/m" and seen["revision"] == "a" * 40
 
 
 # ---- end to end: tiny ONNX model + synthetic video (venv only) ----
@@ -287,3 +401,69 @@ def test_export_validates_classes_before_export(tmp_path, monkeypatch):
                           "--classes", str(classes), "--dataset-repo", "r",
                           "--dataset-revision", "s", "--camera-profile-revision", "c",
                           "--trainer", "t"])
+
+
+def _qdq_onnx(path: Path):
+    """The tiny conv behind QuantizeLinear/DequantizeLinear, as quantize_static makes it."""
+    onnx = pytest.importorskip("onnx")
+    from onnx import TensorProto, helper, numpy_helper
+    w = np.zeros((4, 3, 1, 1), np.float32)
+    w[1, :, 0, 0] = 10.0 / 3
+    b = np.array([0.0, -5.0, 0.0, 0.0], np.float32)
+    inits = [numpy_helper.from_array(w, "w"), numpy_helper.from_array(b, "b"),
+             numpy_helper.from_array(np.array(1 / 255, np.float32), "s"),
+             numpy_helper.from_array(np.array(0, np.uint8), "z")]
+    nodes = [helper.make_node("QuantizeLinear", ["x", "s", "z"], ["xq"]),
+             helper.make_node("DequantizeLinear", ["xq", "s", "z"], ["xd"]),
+             helper.make_node("Conv", ["xd", "w", "b"], ["logits"])]
+    graph = helper.make_graph(
+        nodes, "tiny_qdq",
+        [helper.make_tensor_value_info("x", TensorProto.FLOAT, [1, 3, 240, 320])],
+        [helper.make_tensor_value_info("logits", TensorProto.FLOAT, [1, 4, 240, 320])], inits)
+    model = helper.make_model(graph, opset_imports=[helper.make_opsetid("", 17)])
+    model.ir_version = 8
+    onnx.save(model, str(path))
+
+
+def test_graph_precision_reads_qdq_nodes(tmp_path):
+    _tiny_onnx(tmp_path / "f.onnx")
+    _qdq_onnx(tmp_path / "q.onnx")
+    assert intake.graph_precision(tmp_path / "f.onnx") == "fp32"
+    assert intake.graph_precision(tmp_path / "q.onnx") == "int8"
+
+
+@pytest.mark.parametrize("graph, declared, word", [("qdq", "fp32", "int8"), ("fp32", "int8", "fp32")])
+def test_intake_refuses_a_precision_label_that_contradicts_the_graph(tmp_path, graph, declared, word):
+    import export_cell
+    raw = tmp_path / "raw.onnx"
+    (_qdq_onnx if graph == "qdq" else _tiny_onnx)(raw)
+    folder = tmp_path / "m"
+    export_cell.write_manifest(
+        folder, onnx_path=raw, classes=[("bg", "background"), ("lane", "lane_marking")],
+        color="rgb", scale=1 / 255, mean=[0, 0, 0], std=[1, 1, 1], dataset_repo="org/ds",
+        dataset_revision="a" * 40, camera_profile_revision="cam-1", trainer="t",
+        date="20261001", precision=declared)
+    rc, report = intake.run(str(folder), out=tmp_path / "out", root=tmp_path)
+    assert rc != 0 and report["verdict"] == "fail" and not report["transient"]
+    assert any("precision" in r and word in r for r in report["reasons"]), report["reasons"]
+
+
+def test_a_missing_package_is_a_config_error_not_transient(tmp_path, monkeypatch):
+    """Review 2026-10-01: ImportError (onnx or onnxruntime missing) is the site's
+    environment, not a network hiccup: exit CONFIG_EXIT, never retried as transient."""
+    import export_cell
+    raw = tmp_path / "raw.onnx"
+    raw.write_bytes(b"not-really-onnx")
+    folder = tmp_path / "m"
+    export_cell.write_manifest(
+        folder, onnx_path=raw, classes=[("bg", "background"), ("lane", "lane_marking")],
+        color="rgb", scale=1 / 255, mean=[0, 0, 0], std=[1, 1, 1], dataset_repo="org/ds",
+        dataset_revision="a" * 40, camera_profile_revision="cam-1", trainer="t", date="20261001")
+
+    def no_onnx(path):
+        raise ImportError("No module named 'onnx'")
+    monkeypatch.setattr(intake, "graph_precision", no_onnx)
+    rc, report = intake.run(str(folder), out=tmp_path / "out", root=tmp_path)
+    assert rc == intake.CONFIG_EXIT == 4
+    assert report["config_error"] is True and report["transient"] is False
+    assert "onnx" in report["reasons"][0]

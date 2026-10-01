@@ -263,3 +263,9 @@
 - 변경: main 이 v1.67 을 D-390(OMX-AI Gazebo Pilot)에 먼저 썼다. 보정 변경을 v1.68 로 옮겼다 — 헤더, main v1.67 행 위의 새 변경 이력 행, 본문 표기, app.py·schemas.py·핀 시험(test_mission_progress·test_task_contract_docs·test_line_follow_contract_docs)·guard·D-321 부록. pilot sw.js 캐시 `-9`(calibration.js 유지), styles.css 는 main 의 arm/sim 블록과 보정 판 블록을 둘 다 둔다. 틈 시험: engage 실패 후 나가기는 IDLE 없음(modeHeld 고정), guard HTTP 500 은 FAILED, 비소유자 `slam/save` 는 열림.
 - 증거: gateway·api_web·services·guard·release-push·핀 1969 passed, 실패 1(test_module_criteria C6, main 에서도 실패). ROSY_RUN_BROWSER_TESTS=1 pilot 전체 + dashboard 칩 71 passed. rosy_harness lint 0 errors.
 - gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · docs(api): WS 인증은 첫 메시지가 기본 — Fleet도 D-370 S7부터
+
+- 변경: `core_api_web/api/AGENTS.md`의 "WebSocket auth is `?token=`"을 첫 메시지 `{"type":"auth","token":...}` 우선(대시보드·Pilot·Fleet), `?token=`은 `contract_version` 관문 전까지 수락으로 고쳤다. 코드 변경 없음 — `ws.py:_authorize`는 그대로.
+- 증거: Fleet 쪽 `src/site/fleet/test/test_transport.py` 첫 프레임 시험.
+- gate 변화: 없음.

@@ -79,14 +79,15 @@ def test_invalid_yaml_is_a_robots_file_error_not_a_yaml_error(tmp_path):
         load_robots(p)
 
 
-def test_ws_url_switches_scheme_and_carries_the_token():
-    assert ws_url("http://10.0.0.11:8080", "/ws/swarm/pose", "t") == "ws://10.0.0.11:8080/ws/swarm/pose?token=t"
-    assert ws_url("https://rosy-01.local", "/ws/events", "t") == "wss://rosy-01.local/ws/events?token=t"
+def test_ws_url_switches_scheme_and_never_carries_a_token():
+    # D-370 S7: the token goes in the first WS frame, never in the URL.
+    assert ws_url("http://10.0.0.11:8080", "/ws/swarm/pose") == "ws://10.0.0.11:8080/ws/swarm/pose"
+    assert ws_url("https://rosy-01.local", "/ws/events") == "wss://rosy-01.local/ws/events"
 
 
 def test_ws_url_appends_extra_query():
-    got = ws_url("http://h:1", "/ws/events", "t", types="nav.*,swarm.*")
-    assert got == "ws://h:1/ws/events?token=t&types=nav.%2A%2Cswarm.%2A"
+    got = ws_url("http://h:1", "/ws/events", types="nav.*,swarm.*")
+    assert got == "ws://h:1/ws/events?types=nav.%2A%2Cswarm.%2A"
 
 
 def test_an_undecodable_file_is_a_robots_file_error(tmp_path):
@@ -135,11 +136,11 @@ def test_write_normalizes_the_trailing_slash_so_the_round_trip_is_stable(tmp_pat
 
 
 def test_ws_url_upper_case_https_is_still_secure_and_unknown_schemes_are_refused():
-    assert ws_url("HTTPS://rosy.local", "/ws/events", "t").startswith("wss://")
+    assert ws_url("HTTPS://rosy.local", "/ws/events").startswith("wss://")
     with pytest.raises(ValueError):
-        ws_url("ftp://rosy.local", "/ws/events", "t")
+        ws_url("ftp://rosy.local", "/ws/events")
     with pytest.raises(ValueError):
-        ws_url("10.0.0.11:8080", "/ws/events", "t")
+        ws_url("10.0.0.11:8080", "/ws/events")
 
 
 @pytest.mark.parametrize("body", ["", "robots: []\n"])

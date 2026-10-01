@@ -1539,6 +1539,31 @@
 - 결정: 없음.
 - 교훈: 없음.
 
+## 2026-09-30 · uncommitted · feat(image): D-373 learned-perception runtime and models directory
+
+- 변경: `device-python-requirements.txt` 끝에 표식 블록(onnxruntime 1.30.0, flatbuffers 25.12.19, packaging 26.3, protobuf 7.36.2; cp312 aarch64·x86_64 해시)을 붙이고 `inputs.lock.yaml` `requirements_sha256`을 바꿨다. numpy는 고정하지 않는다 — apt python3-numpy 1.26.4 위에 numpy 2를 얹으면 apt cv2가 깨진다. `/var/lib/rosy/models root:rosy-camera 0750`을 `customize-rootfs.sh`와 `tmpfiles-rosy-state.conf`에 같은 규칙으로 넣었다. 녹화는 카메라 유닛 `StateDirectory=rosy/camera` 아래라 규칙을 두지 않는다. 벤치 설치 `pinky_pro/dev/install-learned-perception.sh`는 같은 파일의 블록과 같은 tmpfiles 줄을 읽어 설치하고, 블록을 뺀 파일 sha(이전 이미지 기록)일 때만 `python-runtime.sha256`을 새 값으로 바꾸며 `/var/log/rosy/bench-installs.log`에 남긴다.
+- 증거: 블록을 `pip download --require-hashes --no-deps --only-binary=:all:`로 cp312 aarch64·x86_64 각각 받음(2026-09-30 Windows). 계약 시험 녹색, tmpfiles 모드·핀 버전 변이는 붉음 확인 후 복구.
+- gate 변화: 없음. ARTIFACT/DEVICE HOLD — aarch64 이미지 빌드와 Pi 5에서의 import·지연·CPU는 미실측.
+- 결정: D-373 결정 1.
+- 교훈: 이 블록 이후로 빌드한 릴리스는 이전 카드에서 `NATIVE_PYTHON_RUNTIME`으로 거절된다. 재굽기 전 벤치 카드는 벤치 설치가 먼저다.
+
+## 2026-09-30 · uncommitted · fix(native): D-373 old releases stay activatable on the superset runtime
+
+- 변경: `inputs.lock.yaml` `python_runtime.compatible_predecessors: [2b003fd4…]`(이 파일의 엄격한 부분집합인 런타임 기록). 이미지(`customize-rootfs.sh`)와 벤치 설치가 카드에 `python-runtime-compatible.sha256`로 쓴다. `native_release.check_python_runtime`은 릴리스 런타임이 카드 기록과 같거나 카드가 적은 선행 런타임일 때 받는다 — 옛 릴리스는 새 상위집합 런타임에서 돈다, 반대는 없다. 릴리스 안의 어떤 파일도 허용 범위를 넓히지 못한다(카드가 권위). 요구사항 블록에 packaging 26.3이 apt python3-packaging을 가리는 이유를 적었다(`requirements_sha256` 재고정).
+- 운영: D-373 이후 빌드한 릴리스를 활성화하기 전에 기존 카드는 `pinky_pro/dev/install-learned-perception.sh`를 돌리거나 재굽기한다. 그 뒤 D-373 이전 릴리스로의 활성화·롤백은 허용된다. 벤치 설치 전 카드에서 새 릴리스는 여전히 `NATIVE_PYTHON_RUNTIME`으로 거절된다.
+- 증거: `test_native_release_activation.py`(옛→새 카드 수락, 새→옛 거절, 미등록 거절, 형식 오류 기록은 정확 일치만), `test_bench_learned_perception.py`(pre-block sha 고정). 2026-09-30 Windows.
+- gate 변화: 없음. DEVICE HOLD.
+- 결정: D-373 결정 1 리뷰 후속.
+- 교훈: 이미지 런타임 sha 한 값 일치 규칙은 상위집합 런타임 추가 때 롤백을 막는다. 부분집합 관계는 카드 쪽 기록으로만 선언한다.
+
+## 2026-09-30 · uncommitted · feat(native): D-373 operator switch for learned shadow and capture
+
+- 변경: `rosy-camera.service`에 `EnvironmentFile=-/etc/rosy/learned-perception.env`(선택). `camera_preview.launch.py`의 `learned_shadow`·`capture` 기본값을 `ROSY_LEARNED_SHADOW`·`ROSY_CAPTURE`에서 엄격하게 읽는다(`true`/`false`만, 그 밖은 꺼짐 + launch 경고). `EnvironmentVariable` 치환 대신 launch 파일 안의 파서를 쓴 이유: 치환은 잘못된 값을 `IfCondition`까지 그대로 넘겨 launch가 실패한다. 예시 `native/learned-perception.env.example`(둘 다 false, `.gitattributes` LF 고정 — CRLF면 systemd가 `false\r`로 읽는다). 하드닝·쓰기 경로는 그대로. 유닛은 이미지 계층이라 기존 카드는 릴리스 사본에서 손 설치한다(런북 D절). 첫 배포 런북 `docs/deployment/learned-perception-pinky.md`.
+- 증거: `test/test_native_systemd_contract.py`(선택 EnvironmentFile, 하드닝 불변, ExecStart에 스위치 없음, 예시 둘 다 false), WSL Jazzy `src/runtime/sensing/test/test_camera_preview_launch.py` 18 passed(환경 없음=꺼짐, `true`=켜짐, 잘못된 값 7종=꺼짐+경고, 명시 인자 우선), `test/test_learned_perception_pinky_runbook.py`(2026-09-30).
+- gate 변화: 없음. DEVICE HOLD — 유닛 손 설치, 스위치 재시작, 섀도 지연·CPU, 첫 캡처 수거는 실물 미확인.
+- 결정: D-373 결정 2(페이로드 스위치)의 장치 쪽 켜는 수단.
+- 교훈: 이미지 계층 유닛에 새 지시어를 넣으면 기존 카드는 페이로드만으로 받지 못한다. 런북에 손 설치와 확인 명령(`systemctl cat`)을 같이 적는다.
+
 ## 2026-09-30 · uncommitted · feat(native): D-375 부팅 표시가 운용 모드를 램프와 LCD에 표시
 
 - 변경: `rosy-boot-status.py`가 핸드오버의 `robot_mode`를 검증(모르는 값은 나머지를 버리지 않고 없음)해 boot-status.json에 옮긴다. `rosy-boot-display.py`는 `robot_state.lamp_pattern()`으로 패턴을 고르고, 모드 전환은 소리 없이 패턴만 바꾸며, LCD 상태줄에 ` - MODE` 접미를 붙인다.
@@ -1564,6 +1589,20 @@
 - 변경: `rosy-boot-status.py`가 `nav_state`를 같은 규칙으로 검증·복사. `rosy-boot-display.py`는 `lamp_pattern()`에 nav를 넘기고, `_announce`가 패턴 기반으로 EMERGENCY 진입음(2.5 kHz×4, 유지 무음, 해제 시 ready 차임)을 낸다.
 - 증거: test_boot_display.py (blocked 행·진입/유지/해제 소리). 변이 증명: 진입음 제거 시 빨강.
 - gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · fix(image): D-373 learned-perception runtime in its own file and prefix; payload runtime id unchanged
+
+- 변경: 위 2026-09-30 D-373 항목 둘(`device-python-requirements.txt` 끝 블록, `compatible_predecessors`)을 바로잡는다. 블록을 `image/learned-perception-requirements.txt`로 옮기고 `inputs.lock.yaml`에 `learned_perception_runtime`(sha256, `target`)을 따로 두었다. `device-python-requirements.txt`와 `python_runtime`은 main 바이트 그대로(a66f224a…, `test_python_runtime_id.py`), `native_release.py`의 호환 목록과 카드의 `python-runtime-compatible.sha256`는 되돌렸다. `customize-rootfs.sh`와 `dev/install-learned-perception.sh`는 `pip --require-hashes --no-deps --only-binary=:all: --target /opt/rosy/learned-perception/site-packages`로 설치하고, `learned/runner.py`가 import 직전에 그 경로를 `sys.path` 끝에 붙인다. 벤치 스크립트는 `/usr/local`과 런타임 기록을 쓰지 않는다.
+- 이유: 페이로드 런타임 id는 요구사항 파일 전체의 sha256이라 블록을 붙이면 구운 카드 전부가 재플래시 전까지 페이로드를 못 받는다. `/usr/local` 설치는 apt python3-protobuf 4.21.12·python3-packaging 24.0(8kcn 실측)을 모든 서비스에서 가린다.
+- 증거: `test/test_bench_learned_perception.py`(별도 잠금 항목, 같은 prefix·플래그, `/usr/local`·런타임 기록 미사용, dry-run 출력), `test/test_python_runtime_id.py`, `src/runtime/sensing/test/test_learned_runner.py`(prefix는 끝에 붙고 시스템 패키지가 우선). 2026-10-01 Windows.
+- gate 변화: 없음. ARTIFACT/DEVICE HOLD — 이미지 빌드 미실행.
+- 결정: D-373 결정 1 개정.
+
+## 2026-10-01 · uncommitted · docs(site): D-373 모델 watcher와 store 기록
+- 변경: 이 브랜치 커밋 기준. 사이트 PC의 `deploy/site/rosy-model-watch.service`·`.timer`가 `tools/perception/model/watch.py`를 돌린다(067d4119). 기본 백엔드는 store inbox(`models/inbox/<폴더>/` + READY)이고 HF는 `backend: hf`일 때만 쓴다(68ad0405, f6820e6e). 통과한 모델은 `models/accepted/<revision>/`, 떨어진 것은 `models/rejected/`로 옮기고 설정된 로봇에 섀도로만 전달한다. `deploy/site/install-model-watch.sh`가 설치하고 사이트 전용 SSH 키를 쓴다(b0cf35c6, aaad6da7). 설정 예시는 `deploy/site/model-watch.yaml.example`. store 구조와 `content_sha`는 `tools/perception/store.py`(b50b1118).
+- 증거: `tools/perception/test/test_model_watch.py`, `test_model_watch_inbox.py`, `test_site_install_model_watch.py`, `test_site_model_watch_units.py`, `test_store.py`(호스트 pytest). 사이트 PC 설치 실행 증거는 없다.
+- gate 변화: 없음. 사이트 설치·첫 자동 섀도 전달은 미실행.
+- 결정: D-373 결정 5·7·8.
 
 ## 2026-10-01 · uncommitted · fix(release,test): main CI deployment 단계 적색 5건 — 핀·등록부·스캐너 면제 정리
 
@@ -1606,6 +1645,58 @@
 - 변경: HTTP 401/403 은 REJECTED(토큰 문제), 그 밖 HTTP 는 FAILED, 무응답은 UNREACHABLE. 응답 필드는 도우미로 읽어 StrictMode 중단 대신 UNEXPECTED REPLY 경고, owner 없는 세션도 거부. SKILL 은 `-ApiToken` 보다 ROSY_API_TOKEN·DPAPI 를 권한다.
 - 증거: test/test_calibration_guard.py 15 passed, test_release_push_entrypoint 통과.
 - gate 변화: 없음.
+## 2026-10-01 · uncommitted · feat(release): 페이로드 푸시가 이미지 계층을 활성 릴리스 사본으로 맞춘다 (D-385)
+
+- 변경: 릴리스 `deploy/robot/native/`에 `sync-image-layer.py` 추가(검증된 `/opt/rosy/current`에서 native-runtime·rosy 유닛 18개·udev·modprobe 허용 목록만, 드라이런·백업·원자 설치·실패 시 복원·멱등, 재시작 안 함). `install-native-runtime.sh`가 udev·modprobe를 `image-layer/`로 실어 페이로드에 들어간다. `rosy-release-push.ps1`이 활성화·롤백 뒤 드라이런→적용→바뀐 활성 `rosy-*` 유닛 재시작→CORE 재확인, `-SkipImageLayerSync`.
+- 증거: `python -m pytest test/test_image_layer_sync.py test/test_release_push_entrypoint.py -q` (Windows). 변이 증명 16건 모두 빨강→초록. mask 유닛·POSIX 모드 시험은 Windows에서 건너뜀(CI Linux).
+- gate 변화: 없음. DEVICE HOLD — 실기 드라이런·적용·재시작 미실행.
+- 결정: D-385.
+- 교훈: 이미지 상주 스크립트를 못 바꾸는 로봇에는 새 동작을 릴리스에 싣고 PC 쪽에서 부른다. `docs/solutions/workflow-issues/payload-push-leaves-the-image-layer-stale-2026-10-01.md`.
+
+## 2026-10-01 · uncommitted · fix(release): D-385 독립 리뷰 반영
+
+- 변경: 끝나지 않은 적용은 `pending.json`으로 다음 실행이 명령·재시작 후보를 되살림. 롤백은 동기화 → 재시작 → CORE 준비 순서. 롤백 때 백업 매니페스트로 앞선 동기화가 추가한 파일은 지우고(유닛은 `disable --now`) 바꾼 파일은 되돌림(그 뒤 손댄 파일은 그대로). `rosy-network`·`rosy-config`·`rosy-release-recover`·`rosy-sd-provision`은 재시작 후보에서 빼고 다음 부팅 적용으로 알림. 새 `.path`·`.timer`는 `enable --now`. 옛 이미지 검증기(8b67c909·5c0ce600)가 새 페이로드를 받아들이는 순수 파이썬 시험.
+- 증거: `python -m pytest test/test_image_layer_sync.py test/test_release_push_entrypoint.py -q` (Windows). 새 방어 각각 변이 증명 빨강→초록.
+- gate 변화: 없음. DEVICE HOLD — 벤치 로봇 푸시·드라이런·적용·재시작·`-Rollback`은 2026-10-02 예정.
+- 결정: D-385 개정.
+- 교훈: 파일을 먼저 깔고 명령을 뒤에 돌리는 적용은 "파일이 같다"만으로 끝났다고 볼 수 없다. 밀린 명령을 따로 남겨야 재실행이 이어받는다.
+
+## 2026-10-01 · uncommitted · fix(release): D-388 2차 리뷰 반영과 번호 이동
+
+- 변경: 앞선 두 항목의 D-383·D-385(이미지 계층 동기화)는 D-388이 됐다(D-375 → D-383 → D-385 → D-388; 예약 해제). 매니페스트 `files_applied`로 반영된 기록만 믿음, 기록 연쇄를 기원까지 거슬러 판정, 사라진 유닛의 밀린 enable 버림, 밀린 명령 3회 실패 시 보관, 정리용 disable도 되돌림 범위, 깨진 `pending.json` 격리·깨진 매니페스트 보고, 같은 초의 실행 순서를 릴리스 id와 무관한 일련번호로 고정. 푸시 스크립트가 보관·격리·깨진 매니페스트를 경고.
+- 증거: `python -m pytest test/test_image_layer_sync.py test/test_release_push_entrypoint.py -q` (Windows). 새 방어 각각 변이 증명 빨강→초록.
+- gate 변화: 없음. DEVICE HOLD — 벤치 로봇 검증은 2026-10-02 예정.
+- 결정: D-388.
+- 교훈: 백업 폴더 이름이 실행 순서를 정한다면, 이름에서 순서 외의 값(릴리스 id)이 순서를 뒤집지 못하게 해야 한다.
+
+## 2026-10-01 · uncommitted · fix(release): D-388 3차 리뷰 반영(RTC 없음, 전원 끊김)
+
+- 변경: 백업 폴더는 `<일련번호>-<UTC>-<release>`, 일련번호는 잠금 안에서 전체 최대값 + 1로 실행 순서를 정하고 시각은 표시용. 적용 시작 때 `files_applied`도 `abandoned`도 아닌 매니페스트를 맞춤(모두 기록대로면 적용으로 표시하고 못 돌린 reload·enable을 밀린 명령에 더함, 아니면 백업으로 되돌리고 `abandoned`). 예외로 되돌린 실행은 바로 `abandoned`.
+- 증거: `python -m pytest test/test_image_layer_sync.py -q` (Windows). 거꾸로 가는 시계, 설치 뒤 끊긴 실행, 설치 중 끊긴 실행 시험. 새 방어 각각 변이 증명 빨강→초록.
+- gate 변화: 없음. DEVICE HOLD — 벤치 로봇 검증은 2026-10-02 예정.
+- 결정: D-388.
+- 교훈: RTC 없는 기기에서 시각은 순서의 근거가 될 수 없다. 순서는 잠금 안의 일련번호로 매긴다.
+
+## 2026-10-01 · uncommitted · fix(release): D-388 맞춤 뒤 밀린 일 보존, 옛 이름 폴더 무시
+
+- 변경: 끊긴 실행을 맞추면서 생긴 reload·enable·재시작 후보를 매니페스트 표시 전에 `pending.json`에 fsync로 남김(모든 JSON 쓰기 fsync). 일련번호 없는 폴더는 맞추지 않고 `legacy_ignored`로 알림.
+- 증거: `python -m pytest test/test_image_layer_sync.py -q` (Windows). 맞춤 직후 설치 실패, 두 쓰기 사이 끊김, 옛 이름 폴더 시험. 새 방어 각각 변이 증명 빨강→초록.
+- gate 변화: 없음. DEVICE HOLD — 벤치 로봇 검증은 2026-10-02 예정.
+- 결정: D-388.
+- 교훈: "표시"와 "남은 일"을 따로 쓰면 둘 사이가 끊길 수 있다. 남은 일을 먼저 영속하고 표시는 나중에.
+
+## 2026-10-01 · uncommitted · fix(site): D-370 S7 준비 — fleet-mdns.py health 탐침이 확장 모양을 받는다
+
+- 변경: `deploy/site/fleet-mdns.py`의 `/healthz` 판정을 `check_health_body`로 뺐다(FleetAgent와 같은 규칙). 1024바이트 이하 JSON 객체, `status == "ok"`, `role`이 있으면 광고 TXT `role`(`fleet`)과 같아야 하고 모르는 키는 무시한다. 프로필 `docs/reference/site-lan-discovery-profile.md` 33행 문구도 맞췄다.
+- 증거: `test/test_site_fleet_mdns.py` 신규 health 시험(사이트·Agent 매개변수) 수정 전 빨강, 수정 후 초록.
+- gate 변화: 없음. Fleet·Vision `/healthz` 출력은 그대로 — 옛 로봇 이미지가 정확 비교를 하므로 서버 확장은 새 이미지 배포 뒤로 미룬다.
+
+## 2026-10-01 · uncommitted · refactor(site): fleet-mdns.py TXT 판정을 core_common discovery_txt 사본으로
+
+- 변경: `deploy/site/fleet-mdns.py`의 자체 판정(shlex+사전 비교)을 `core_common.protocol.discovery_txt`의 `_rosy-fleet._tcp` 부분 사본으로 바꿨다: `parse_txt_pairs`, `_lan_ipv4`, `classify_fleet`(수락이면 None, 아니면 벡터의 거절 이유). `mdns-bridge.py`와 같은 "Copy of core_common.protocol.discovery_txt" 머리말. 형제 모듈로 나눠 두 스크립트가 함께 쓰는 안은 택하지 않았다 — 사이트 후보 목록(`build_candidate.py`·`verify_candidate.py`·`test_site_candidate.py`)과 README 설치 절차에 새 파일을 더해야 하고, 시험·`tools/overhead_pairing_bench.py`가 스크립트를 파일 경로로 불러와 sys.path 처리도 필요해진다.
+- 증거: `test/test_site_fleet_mdns.py` 신규 벡터 이유 시험(Fleet 사례 6건: 이유까지 core_common과 같음) — 수정 전 6건 빨강(판정 함수 없음), 수정 후 초록. 기존 수락/거절 벡터 루프는 전후 모두 초록 — 벡터 결과가 바뀐 사례 없음. 벡터 밖 차이: `0.0.0.0` 등 multicast/unspecified 주소를 이제 거절(core_common과 같음).
+- gate 변화: 없음. 사이트 호스트에는 다음 후보 설치 때 간다.
+
 
 ## 2026-10-01 · uncommitted · fix(sd): ERASE 프롬프트 type-ahead, 아티팩트 다운로더, D-383 긴급 카드 쓰기
 

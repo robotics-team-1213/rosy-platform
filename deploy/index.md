@@ -31,6 +31,7 @@
 | D-319 | SETUP 뒤 현장 입회 하에 모터 구동 준비를 자동화한다 |
 | D-321 | 현장 보정과 G4 실측을 한 세션으로 모으고 지도 생성은 승인 뒤에 시작한다 |
 | D-325 | 기존 Pinky 배포는 변경에 맞는 가장 작은 산출물을 선택한다 |
+| D-373 | 학습 인식 두 번째 바퀴 — onnxruntime·모델 디렉터리는 Pinky 이미지 계층, 섀도·캡처는 기본 꺼진 페이로드, 불일치 60 s 스냅샷, 사이트 PC가 새 모델을 섀도까지 자동 반영; 정본은 store 폴더(로컬→NAS·Drive), HF는 선택 |
 | D-389 | 긴급 카드 쓰기(`write-card.ps1 -Emergency -EmergencyReason`)는 전체 readback만 건너뛰고 서명·시리얼·plan·ERASE 게이트와 MBR 점검은 지킨다; receipt·진행 파일·상태가 검증 안 됨을 적고, 후속 readback(`verify-emergency-card.ps1`)이나 표준 재기록으로 메운다 |
 
 ## 계획·결과 문서
