@@ -67,8 +67,8 @@
 
 ## 최근 기록
 
+- 2026-10-02 · uncommitted · fix(native): 부팅 복구 게이트에 PrivateTmp — 활성화 중 전원 차단 뒤 CORE가 영영 뜨지 않던 결함
 - 2026-10-02 · 84e45d05 · test(d406): device twin — systemd 컨테이너로 자동 업데이트 끝까지 검증
 - 2026-10-02 · 5f3226bf · fix(native): D-406 T2 검증 리뷰 반영 — 자기 되돌림과 운영자 되돌림 구분, silent_since, rollback_failed
 - 2026-10-02 · 088a6a9a · fix(native): D-406 T2 재리뷰 반영 — CORE 상태 fail-closed, 확정 코드 목록, 적용 backoff, 활성화기 precheck
 - 2026-10-02 · 8198ec47 · fix(release): D-406 T3 재리뷰 반영 — 철회 우선, 로컬 대체본 업로드, known_hosts 정책 하나
-- 2026-10-02 · 0904824d · fix(release): D-406 T3 카나리 조기 철회는 `failed`만, `error`는 계속 지켜본다

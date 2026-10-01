@@ -1919,3 +1919,9 @@
 - gate 변화: 없음. twin 통과는 HOST 증거이고 DEVICE 증거가 아니다.
 - 결정: D-406
 - 교훈: 저널이 있을 때만 타는 부팅 경로는 실제 sandbox 아래에서 한 번은 돌려 봐야 한다. 단위 시험은 tempfile을 쓸 수 있는 호스트에서 돌았다.
+
+## 2026-10-02 · uncommitted · fix(native): 부팅 복구 게이트에 PrivateTmp — 활성화 중 전원 차단 뒤 CORE가 영영 뜨지 않던 결함
+
+- 변경: `rosy-release-recover.service`에 `PrivateTmp=yes`. recover가 이전 릴리스를 다시 검증할 때(`native_release.verify` → `signing`의 `tempfile`) `ProtectSystem=strict` 아래 임시 디렉터리가 읽기 전용이라 "No usable temporary directory"로 실패했고, `rosy-core.service`·`rosy-runtime.target`·`rosy-auto-update.service`가 이 게이트를 Requires 하므로 로봇이 뜨지 않았다. D-406 이전부터 있던 결함으로 수동 push에도 해당한다. 같이: `rosy-auto-update.service`의 `/etc/udev/rules.d`·`/etc/modprobe.d`를 선택적(`-`) ReadWritePaths로.
+- 증거: D-406 기기 쌍둥이(systemd 255 컨테이너) 시나리오 h3 — 활성화 도중 컨테이너 전원 차단 뒤 recover 실패·CORE 미기동 재현, 쌍둥이 진단용 PrivateTmp로 복구 성공. 계약 시험 `test_units_that_verify_releases_get_a_writable_private_tmp`(빨강 확인 뒤 초록). 관련 시험 421 passed.
+- gate 변화: 없음(기기 확인 필요).

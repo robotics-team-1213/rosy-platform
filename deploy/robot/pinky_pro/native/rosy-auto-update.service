@@ -52,4 +52,4 @@ StateDirectoryMode=0755
 # installs. No CapabilityBoundingSet=, ProtectProc= or PrivatePIDs=: the health
 # check reads other units' /proc/<pid>/cwd.
 ReadWritePaths=/opt/rosy /var/lib/rosy/releases /run
-ReadWritePaths=/etc/systemd/system /etc/udev/rules.d /etc/modprobe.d
+ReadWritePaths=/etc/systemd/system -/etc/udev/rules.d -/etc/modprobe.d
