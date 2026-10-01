@@ -40,6 +40,21 @@ def test_the_mode_control_speaks_korean():
     assert 'setText("robot-mode", state.mode)' not in js
 
 
+def test_escape_key_stops_the_robot_immediately():
+    """D-396: Escape 키 = 즉시 비상정지 — 확인창 없음, 입력 필드 무시."""
+    js = (ROOT / "app.js").read_text(encoding="utf-8")
+    assert 'event.key !== "Escape"' in js
+    assert '"INPUT" || tag === "TEXTAREA"' in js  # 입력 필드 가드
+    assert 'estop === true' in js  # 이미 정지 상태면 재발동 안 함
+    assert 'safety/stop' in js  # 실제 API 호출
+    # Escape 핸들러 블록에 confirm 이 없다 — 위급 순간의 장벽은 위험하다
+    start = js.find('event.key !== "Escape"')
+    end = js.find("});", start)
+    handler = js[start:end] if start >= 0 and end > start else ""
+    assert handler, "Escape 핸들러를 찾을 수 없다"
+    assert "window.confirm" not in handler, f"Escape 핸들러에 confirm 이 있다: {handler[:200]}"
+
+
 def test_the_state_render_feeds_swarm_to_the_formation_cell():
     shell = (ROOT / "app.js").read_text(encoding="utf-8")
     telemetry = (ROOT / "telemetry.js").read_text(encoding="utf-8")

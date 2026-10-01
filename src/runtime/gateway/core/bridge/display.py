@@ -122,15 +122,18 @@ def drive_due(mode: Any, now: float, last_pub: Optional[float],
     return last_pub is None or (now - last_pub) >= every_s
 
 
-def drive_payload(snapshot, *, hold_s: float = DRIVE_HOLD_S) -> dict[str, Any]:
+def drive_payload(snapshot, *, hold_s: float = DRIVE_HOLD_S,
+                  goal_x: float = None, goal_y: float = None) -> dict[str, Any]:
     """The `display/info` body of the drive card (`kind: "drive"`).
 
     웨이크 카드(``info_payload``)와 같은 반올림 계약: 속도는 0.01 m/s, 배터리는
     0.1 % / 0.01 V. 결측은 None — 주행 중 0.00 m/s 는 '멈춤'으로 읽히고,
-    카드 한 장이 거짓말할 수 있는 지점이 여기다.
+    카드 한 장이 거짓말할 수 있는 지점이 여기다. 목표 좌표는 NAVIGATION
+    중에만 실린다(다른 모드에서는 None).
     """
     battery = snapshot.battery
     velocity = snapshot.velocity
+    navigating = snapshot.mode.value == "NAVIGATION"
     return {
         "kind": "drive",
         "robot_id": snapshot.robot_id,
@@ -144,5 +147,7 @@ def drive_payload(snapshot, *, hold_s: float = DRIVE_HOLD_S) -> dict[str, Any]:
                             if battery.voltage is not None else None),
         "charging": snapshot.battery_status.charging,
         "estop": snapshot.safety.estop,
+        "goal_x": round(goal_x, 2) if goal_x is not None and navigating else None,
+        "goal_y": round(goal_y, 2) if goal_y is not None and navigating else None,
         "hold_s": round(hold_s, 1),
     }

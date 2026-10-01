@@ -552,6 +552,26 @@ elements["emergency-stop"].addEventListener("click", async () => {
   }
 });
 
+// D-396: Escape 키 = 즉시 비상정지 — 확인창 없음. 위급 순간의 장벽은
+// 위험하다. 입력 필드에서는 발동하지 않는다(검색 취소·폼 이스케이프).
+// 이미 정지 상태면 재발동하지 않는다.
+document.addEventListener("keydown", (event) => {
+  if (event.key !== "Escape") return;
+  const tag = event.target?.tagName;
+  if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+  if (event.target?.isContentEditable) return;
+  if (event.repeat) return;
+  if (session.robotState?.safety?.estop === true) return;
+  if (!session.hasToken()) return;
+  stopTeleop("Escape 키로 비상정지를 요청했습니다.");
+  api("/api/v1/safety/stop", { method: "POST" })
+    .then(async () => {
+      setText("action-message", "비상정지가 활성화되었습니다 (Escape).");
+      await refreshRobotState();
+    })
+    .catch((error) => setText("action-message", `정지 명령 실패: ${error.message}`));
+});
+
 elements["release-stop"].addEventListener("click", async () => {
   if (!window.confirm("주변 안전을 확인했고 정지를 해제할까요?")) return;
   try {

@@ -644,3 +644,9 @@
 - 증거: `test_pinky_lidar_forward_device.py` 순서 테스트, `test_lidar_mount_source.py` 거부·어댑터 비교.
 - gate 변화: SOURCE/LOCAL. DEVICE HOLD.
 - 결정: D-397 Proposed(D-47 addendum 개정).
+
+## 2026-10-01 · uncommitted · feat(bridge): 주행 카드에 내비게이션 목표 좌표
+
+- 변경: drive_payload 가 goal_x·goal_y 를 실는다(NAVIGATION 중에만, 소수점 2자리). ros_bridge 가 nav.current_goal 에서 좌표를 가져온다.
+- 증거: test_bridge_display.py 목표 좌표 2건.
+- gate 변화: 없음.
