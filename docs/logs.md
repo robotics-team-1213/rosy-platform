@@ -4157,4 +4157,5 @@
 
 ## 2026-10-01 · uncommitted · docs(adr): D-361 "새 주소로 옮기기"는 화면 코드로 새 주소에서 재페어링
 - 변경: D-361에 날짜 붙은 개정을 더했다. 평문 HTTP는 새 주소를 인증하지 못하므로, 옮기기는 저장된 토큰을 먼저 보내지 않고 로봇 화면 코드로 새 주소에서 교환한 새 토큰으로 신원을 확인한 뒤에만 고정 주소와 토큰을 바꾼다. 옛 토큰은 확인 뒤 logout, 실패하면 감사와 콘솔 안내. 전체 옮기기는 두지 않는다. 구현: `src/site/fleet/fleet/server/enrollment.py` (`feat/fleet-robot-address-drift`).
+- 증거: `src/site/fleet/test/test_enrollment_service.py` — 신원 확인 전 새 주소에 저장 토큰·Authorization 0회(기록하는 가짜 로봇).
 - gate 변화: 없음(LOCAL).
