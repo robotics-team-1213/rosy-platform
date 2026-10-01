@@ -94,13 +94,24 @@ data class SiteLink(
             )
         }
 
-        /** The failing field, or null when [link] may be saved and dialled. */
+        /**
+         * The failing field, or null when [link] may be saved and dialled. `tls_host` must be one label plus
+         * `.local` (D-391 1, same rule as the shared site-link vector): it is only ever found through mDNS.
+         */
         fun validate(link: SiteLink): String? {
             if (link.tlsHost == null && link.manualHost == null) return "host"
-            link.tlsHost?.let { if (isIpLiteral(it)) return "tls_host" }
+            link.tlsHost?.let { if (!isTlsHost(it)) return "tls_host" }
             link.manualHost?.let { if (!isIpLiteral(it)) return "manual_host" }
             if (link.role != ROLE) return "role"
             return PairingUri.validate(link.dialHost, link.port, link.token, link.source, link.secure, link.caPin)
         }
+
+        /** A pairing as the settings form or a deep link would save it; null when it may be saved. */
+        fun entryReason(pairing: PairingUri): String? = validate(from(pairing))
+
+        private val TLS_HOST = Regex("^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.local$")
+
+        /** One label + `.local`, compared lower-case with a trailing root dot trimmed (D-370 TXT rule). */
+        fun isTlsHost(host: String): Boolean = TLS_HOST.matches(host.trim().lowercase().trimEnd('.'))
     }
 }

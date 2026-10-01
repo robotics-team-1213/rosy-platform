@@ -85,6 +85,30 @@ class SiteLinkPrefsTest {
     }
 
     @Test
+    fun anOldNonLocalNameIsRejectedSoTheOperatorRePairs() {
+        // D-391 1 decision (2026-10-01): a DNS name is no longer a tls_host. An old IP still migrates to manual_host.
+        val old = legacy("site-pc.example.org")
+        assertNull(K.decode(old))
+        assertEquals("site-pc.example.org", K.rejectedHost(old))
+
+        assertEquals("192.168.1.102", K.decode(legacy("192.168.1.102"))!!.manualHost)
+        assertNull(K.rejectedHost(legacy("192.168.1.102")))
+        assertNull(K.rejectedHost(legacy("perpros.local")))
+        assertNull("nothing stored is not a rejected pairing", K.rejectedHost(emptyMap()))
+    }
+
+    @Test
+    fun aNewFormatRecordWithANonLocalTlsHostIsRejectedToo() {
+        // Written by a build before the .local rule.
+        val stored = mapOf(
+            K.TLS_HOST to "site-pc.example.org", K.CA_PIN to pin, K.ROLE to SiteLink.ROLE,
+            K.PORT to 443, K.TOKEN to "tok", K.SOURCE to "overhead-1", K.SECURE to true,
+        )
+        assertNull(K.decode(stored))
+        assertEquals("site-pc.example.org", K.rejectedHost(stored))
+    }
+
+    @Test
     fun invalidOrIncompleteRecordsReadAsNothing() {
         assertNull(K.decode(emptyMap()))
         assertNull(K.decode(legacy("192.168.1.5:8443")))

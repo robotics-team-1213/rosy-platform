@@ -55,6 +55,17 @@ object SiteLinkPrefs {
     }
 
     /**
+     * The host of a stored pairing that [decode] refuses, so the screen can say "re-pair" instead of "never
+     * paired". Typical case: a record saved before D-391 1 with a non-`.local` name (a DNS host is no longer
+     * a `tls_host`; an IP becomes `manual_host` and stays valid). Null when nothing is stored or it is valid.
+     */
+    fun rejectedHost(values: Map<String, Any?>): String? {
+        if (decode(values) != null) return null
+        val stored = listOf(LEGACY_HOST, TLS_HOST, MANUAL_HOST).firstNotNullOfOrNull { values[it] as? String }
+        return stored?.takeIf { values[TOKEN] != null || values[PORT] != null }
+    }
+
+    /**
      * Every key a write touches: the value to store, or null to remove it. The old `host`/`pin` keys are always
      * removed, and an absent optional field removes its key (a new pairing without a pin must not keep the
      * previous site's pin).

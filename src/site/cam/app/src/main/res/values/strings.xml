@@ -111,6 +111,8 @@
     <string name="invalid_token">토큰을 입력하세요</string>
     <string name="invalid_source">이름은 영문·숫자·_·- 1–32자여야 합니다</string>
     <string name="invalid_tls">TLS 값은 0 또는 1이어야 합니다</string>
+    <string name="invalid_tls_host">사이트 이름은 .local 이어야 합니다 (예: rosy-site.local). 이름 대신 IP 주소를 넣으면 수동 주소로 저장합니다.</string>
+    <string name="target_rejected">저장된 연결(%1$s)은 더 이상 쓸 수 없습니다 — 사이트 이름은 .local 이어야 합니다. 현장 PC의 페어링 QR로 다시 연결하세요.</string>
     <string name="invalid_pin">인증서 지문(pin)이 올바르지 않거나 TLS 없이 왔습니다 — 현장 PC에서 페어링 QR을 다시 받으세요</string>
     <string name="settings_pin">인증서 고정: %1$s…</string>
     <string name="settings_pin_dropped">TLS를 꺼서 인증서 고정(pin)을 지웠습니다 — 다시 고정하려면 현장 PC의 페어링 QR을 다시 적용하세요</string>

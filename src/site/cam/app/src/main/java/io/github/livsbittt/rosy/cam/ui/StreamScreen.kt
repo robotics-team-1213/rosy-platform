@@ -55,6 +55,8 @@ import io.github.livsbittt.rosy.cam.settings.SiteLink
 fun StreamScreen(
     state: StreamState,
     siteLink: SiteLink?,
+    /** Host of a stored pairing that is no longer valid (non-.local name, D-391 1); the operator must re-pair. */
+    rejectedHost: String?,
     lan: LanSnapshot?,
     localError: String?,
     onStart: () -> Unit,
@@ -95,7 +97,7 @@ fun StreamScreen(
             }
         }
 
-        StatusPanel(state, siteLink, lan, localError, onStop, onOpenSettings)
+        StatusPanel(state, siteLink, rejectedHost, lan, localError, onStop, onOpenSettings)
 
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
             // Opens read-only while the camera runs; the settings screen says how to unlock it.
@@ -130,6 +132,7 @@ fun StreamScreen(
 private fun StatusPanel(
     state: StreamState,
     siteLink: SiteLink?,
+    rejectedHost: String?,
     lan: LanSnapshot?,
     localError: String?,
     onStop: () -> Unit,
@@ -163,6 +166,10 @@ private fun StatusPanel(
             },
             style = MaterialTheme.typography.bodyMedium,
         )
+        // A pairing saved under the old rules that D-391 no longer accepts: say "re-pair", not "never paired".
+        if (siteLink == null && rejectedHost != null) {
+            CritMessage(stringResource(R.string.target_rejected, rejectedHost))
+        }
         if (state.running && !state.previewOnly) {
             when (val route = state.route) {
                 is SiteRoute.Discovered -> stringResource(

@@ -33,6 +33,11 @@ class SettingsStore(context: Context) {
         .catch { e -> if (e is IOException) emit(emptyPreferences()) else throw e }
         .map(::decode)
 
+    /** Host of a stored pairing that is no longer valid (must be re-paired), or null. */
+    val rejectedHost: Flow<String?> = store.data
+        .catch { e -> if (e is IOException) emit(emptyPreferences()) else throw e }
+        .map { prefs -> SiteLinkPrefs.rejectedHost(prefs.asMap().mapKeys { (key, _) -> key.name }) }
+
     /** Saved lens setting; null until the operator picks one (then [LensChoice.DEFAULT] applies). */
     val lens: Flow<LensChoice?> = store.data
         .catch { e -> if (e is IOException) emit(emptyPreferences()) else throw e }

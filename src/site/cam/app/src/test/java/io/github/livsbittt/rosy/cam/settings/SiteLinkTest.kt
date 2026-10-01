@@ -210,6 +210,24 @@ class SiteLinkTest {
     }
 
     @Test
+    fun tlsHostMustBeASingleLabelLocalName() {
+        // D-391 1 decision (2026-10-01): same rule as the shared site-link vector.
+        val base = SiteLink(null, "rosy-site.local", 443, pin, "t", "overhead-1", secure = true)
+        for (bad in listOf("site.example.org", "rosy-site", "a.b.local", "-x.local", "localhost")) {
+            assertEquals(bad, "tls_host", SiteLink.validate(base.copy(tlsHost = bad)))
+        }
+        assertNull(SiteLink.validate(base.copy(tlsHost = "Rosy-Site.local.")))
+    }
+
+    @Test
+    fun entryReasonGuardsTheSettingsFieldAndDeepLinks() {
+        assertEquals("tls_host", SiteLink.entryReason(PairingUri("site.example.org", 443, "t", "overhead-1", true, pin)))
+        // An IP is still accepted: it becomes the manual address.
+        assertNull(SiteLink.entryReason(PairingUri("192.168.1.10", 443, "t", "overhead-1", true, pin)))
+        assertNull(SiteLink.entryReason(PairingUri("perpros.local", 18448, "t", "overhead-1", true, pin)))
+    }
+
+    @Test
     fun ipLiteralDetection() {
         assertTrue(SiteLink.isIpLiteral("10.16.36.7"))
         assertTrue(SiteLink.isIpLiteral("::1"))
