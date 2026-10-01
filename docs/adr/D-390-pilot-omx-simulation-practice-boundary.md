@@ -33,3 +33,9 @@
 - **DEVICE/FIELD:** 이 결정으로 승격하지 않는다. 물리 정지·실물 팔·카메라·보정·복구 증거가 없는 동안 실물 운전 capability는 닫힌다.
 
 **관련 결정:** [D-18](D-18-rosy-core.md), [D-273](D-273-omx-camera-stream-and-arm-control-order.md), [D-282](D-282-per-hardware-ros-ownership-and-control-boundaries.md), [D-299](D-299-omx-lerobot-development-and-command-ownership.md), [D-323](D-323-rosy-pilot-teleop-app.md), [D-336](D-336-fleet-omx-local-ipc-boundary.md), [D-366](D-366-pilot-multidevice-roadmap.md), [D-369](D-369-control-authority-and-stop-evidence.md), [D-386](D-386-omx-async-goal-acceptance-and-phase-state.md).
+
+## 2026-10-01 부록: SIM 시연 원본과 LeRobot 오프라인 export
+
+사용자가 시연 기록·LeRobot 데이터셋 연계를 우선했다. D-390의 단일 소유자와 SIM 전용 경계를 유지하며, 영상/과거 JointState/ROS 수락 UUID가 있는 절대 목표를 source stamp로 묶어 기록한다. 정확한 ROS 이름과 rad, gripper rad를 omx_sim_ros로 보존하고 native omx_follower 단위로 자동 변환하지 않는다. LeRobot 0.4.4를 별도 오프라인 환경에 고정하고 finalize 후 실제 reader 재독출을 요구한다. 불완전 기록은 export하지 않는다. 명령 성공과 운용자가 지정한 과제 결과를 구분한다. 저장 위치는 서버 설정만 받으며 원본/해시를 보존한다. 학습된 정책 실행·Hub 게시·실물 profile 활성화는 별도 결정이다.
+
+근거와 실행 순서: [시연 설계·계획](../plans/2026-10-01-omx-demonstration-lerobot-design.md), [공식 예제 조사](../plans/2026-10-01-omx-lerobot-examples-research.md).

@@ -1812,3 +1812,17 @@
 - 변경: 실제 Compose 스택 페어링 실측에서 발견. `site-cameras.yaml.example`의 페어링 예시(`ceiling_south`)를 그대로 켜면 그 `token_env`가 Compose `ROSY_CREDENTIAL_PATHS`에 없어 Fleet·Vision이 기동을 거절한다. 예시 주석에 비밀 파일·두 서비스의 `ROSY_CREDENTIAL_PATHS` 추가가 필요하다는 것과, 카메라 하나로 시험할 때는 `ceiling_north`를 `credential: paired`로 바꾸면 된다는 것을 적었다.
 - 증거: 예시 시험·배포 배선 시험 통과; 실측은 `ceiling_north` paired로 18/18.
 - gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · feat(omx): record SIM demonstrations and export LeRobot v3
+- 변경: D-390 부록·API v1.69·Pilot 기록 패널·SIM 카메라·원본 recorder·오프라인 exporter. ROS 수락 전에 목표를 등록하고, recording I/O는 별도 writer로 분리.
+- 증거: adapter/Pilot/network 259 passed, 28 skipped; quick tier 95 passed; Chromium recording retry/outcome/stale/dispose 1 passed; 실제 LeRobot 0.4.4 reader 3 passed. Gazebo 원본 15프레임 및 동일 원본 export 재독출 PASS. docs/validation/omx-demonstration-lerobot-2026-10-01/README.md 참조.
+- gate 변화: 물리·ARTIFACT/FIELD 승격 없음. 짧은 SIM 시연/데이터 형식 증거만 추가.
+- 결정: D-390 부록; D-18 typed API와 reference 동시 갱신.
+- 교훈: LeRobot 0.4.4는 explicit timestamp를 거부; source ns를 int64로 유지. Windows shared recording mount는 프레임 누락을 만들 수 있으므로 Linux volume 사용.
+
+## 2026-10-01 · uncommitted · fix(omx): fence recording closure and isolate storage faults
+- 변경: 리뷰의 중요 문제 3개 해소 — recording 오류로 lease watcher 종료 금지, hidden 중 늦은 seat 획득 즉시 반납, 종료 저장 중 interruption을 manifest에 반영.
+- 증거: 리뷰 수정 race/runtime/recorder 21 passed; Chromium 2 passed; 최종 adapter/foundation/assets/network 624 passed, 6 skipped. 최종 tree와 같은 해시의 실제 Gazebo 12프레임→LeRobot 재독출 PASS; 같은 실행 lease 만료 incomplete. 독립 리뷰 재검토 완료.
+- gate 변화: 기존 gate 유지; DEVICE/FIELD 승격 없음.
+- 결정: D-390 부록.
+- 교훈: 파일 쓰기 완료 전 들어온 interruption과 logical closure 경계를 구분한다.

@@ -1,4 +1,4 @@
-# OMX-AI Workcell Deployment Preparation
+﻿# OMX-AI Workcell Deployment Preparation
 
 This directory builds a separate ROS 2 Jazzy workstation OCI image for a fixed
 OMX-AI workcell. `stack.lock.yaml` pins the official ROBOTIS source set to
@@ -173,6 +173,7 @@ repository root in PowerShell:
 
 ```powershell
 $omxCheckout = (Resolve-Path .).Path
+$omxRevision = git rev-parse HEAD
 docker run --rm --network none `
   --mount "type=bind,source=$omxCheckout,target=/repo,readonly" `
   rosy-omx-workstation:native-action-only-local `
@@ -190,11 +191,14 @@ container's ROS-SIM evidence, not a native systemd or physical stop test.
 작업 PC의 개발용 컨테이너에서만 실행한다. 정본 vendor 이미지는 위 절차대로 먼저 만들고, 저장소 루트에서 Pilot HTTP layer를 만든다.
 
 ```powershell
-docker build -f deploy/robot/omx/Dockerfile.pilot -t rosy-omx-pilot:local deploy/robot/omx
+docker build -f deploy/robot/omx/Dockerfile.pilot -t rosy-omx-pilot:local .
 $omxCheckout = (Resolve-Path .).Path
+$omxRevision = git rev-parse HEAD
 docker run --rm --name rosy-omx-pilot-sim --network bridge `
   -p 127.0.0.1:8088:8088 `
   --mount "type=bind,source=$omxCheckout,target=/repo,readonly" `
+  --mount type=volume,source=rosy-omx-pilot-recordings,target=/recordings `
+  -e "ROSY_SIM_SOURCE_REVISION=$omxRevision" `
   rosy-omx-pilot:local bash /repo/deploy/robot/omx/run_pilot_sim.sh
 ```
 
@@ -202,4 +206,27 @@ docker run --rm --name rosy-omx-pilot-sim --network bridge `
 
 새 컨테이너를 띄운 뒤 실제 ROS goal과 관절 readback을 자동 확인하려면, 다른 터미널에서 `python deploy/robot/omx/probe_pilot_sim_http.py rosy-omx-pilot-sim`를 실행한다. 이 probe는 일회용 코드를 소비하므로 같은 실행에서 브라우저 페어링을 다시 하려면 컨테이너를 재시작해야 한다. 출력에는 코드와 토큰을 표시하지 않는다.
 
-현재 vendor Gazebo launch에는 작업대 카메라가 없어 `camera:false`다. 학습용 영상·연습 기록 API는 준비 중이며 화면에 그렇게 표시한다. 실물 OMX profile은 여전히 비활성이다.
+고정 SDF 작업대 카메라는 headless OGRE2로 실제 RGB 320×240 영상을 10 simulation FPS로 만든다. 이 영상·과거 관절 상태·ROS가 수락한 목표를 Pilot의 시연 기록 패널로 저장한다. Linux 볼륨을 사용한다. Windows 공유 폴더에 프레임을 직접 쓰면 ROS callback/기록이 지연될 수 있으며 프레임 누락·신선도 실패로 불완전해진다. writer는 별도 스레드이고 조작의 0.5초 신선도 검사는 그대로다. 초기 headless renderer 준비를 위해 vendor broadcaster의 switch-timeout만 60초로 고정하며 실행 중 watchdog은 바꾸지 않는다.
+
+### 기록과 오프라인 변환
+
+- Pilot에서 과제를 입력하고 기록 시작 → 관절 조작 → 과제 결과(성공/실패) 선택 → 기록 종료.
+- 과제 결과 미선택·영상 누락·HOLD·취소·lease 만료/반납은 incomplete다. 이런 원본은 export를 거부한다.
+- pairing code와 토큰은 export하지 않는다. 원본 manifest/JSONL/PNG는 학습 데이터이므로 로컬에 보관한다.
+- 실제 자동 확인: python deploy/robot/omx/probe_pilot_recording.py rosy-omx-pilot-sim.
+  성공 기록과 lease 만료에 의한 불완전 기록을 검사하고 코드/토큰은 출력하지 않는다.
+- 원본 가져오기: docker cp rosy-omx-pilot-sim:/recordings/<episode-id> X:/DevTemp/rosy-omx-recordings/.
+  Windows 자료·export 출력은 X:에 둔다. 컨테이너를 삭제해도 이름 있는 recording volume은 유지된다.
+
+별도 Python 3.12 CPU 환경에 torch 2.7.1+cpu / torchvision 0.22.1+cpu를 공식 CPU wheel index로 먼저 설치하고 requirements-lerobot-export.txt를 설치한다. 실제 검증한 transitive inventory는 검증 문서에 기록한다. ROS 런타임에 LeRobot을 설치하지 않는다.
+
+PowerShell 실행 예:
+
+```powershell
+$env:PYTHONPATH = (Get-Location).Path + '/src/products/omx/adapter'
+X:/DevTemp/rosy-omx-lerobot-044/Scripts/python.exe -m omx_adapter.lerobot_export `
+  X:/DevTemp/rosy-omx-recordings/<episode-id> X:/DevTemp/rosy-omx-export/<new-output> `
+  --repo-id rosy-local/omx-sim
+```
+
+export 결과가 verified이고 실제 reader가 모든 frame을 재독출한 경우에만 데이터셋 연계 검증이다. 원본 복사와 해시는 rosy_provenance에 남는다. robot_type=omx_sim_ros, ROS joint 순서와 rad를 유지한다. native OMX follower의 body normalization/degree·gripper 0~100으로 자동 변환하지 않는다. 학습·정책 실행·Hub 업로드·실물 활성화는 별도다.

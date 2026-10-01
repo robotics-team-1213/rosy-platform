@@ -67,8 +67,8 @@
 
 ## 최근 기록
 
+- 2026-10-01 · uncommitted · fix(omx): fence recording closure and isolate storage faults
+- 2026-10-01 · uncommitted · feat(omx): record SIM demonstrations and export LeRobot v3
 - 2026-10-01 · uncommitted · docs(site): 두 번째 카메라 자리의 배선 안내
 - 2026-10-01 · uncommitted · test(site): `site-firewall.py`를 실제 iptables-nft로 검증 (컨테이너)
 - 2026-10-01 · uncommitted · merge(site): main의 D-341 페어링 배선과 인터페이스 바인드 합치기 — 사이트 설정 파일은 site.env 하나
-- 2026-10-01 · uncommitted · fix(site): 재검증 반영 — 컨테이너 직행 트래픽 차단, 라벨로 닫기, 바인드 탐침 정밀화
-- 2026-10-01 · uncommitted · fix(site): 보안 리뷰 반영 — 필터를 Docker 앞 mangle로, 원자 적용·실패 시 닫힘, 설정은 Compose에서
