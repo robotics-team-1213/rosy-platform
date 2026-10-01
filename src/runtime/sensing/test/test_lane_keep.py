@@ -453,7 +453,8 @@ def test_node_wires_keep_mode_on_the_labelled_ground():
     uses_ground = text.split("def _camera_mode_uses_ground", 1)[1].split("def ", 1)[0]
     assert "'keep'" in uses_ground
     assert "self._lane_keeper.update(" in text
-    assert "frame, self._ground(frame.shape[1], frame.shape[0])" in text
+    assert "ground = self._ground(frame.shape[1], frame.shape[0])" in text
+    assert "frame, ground, paint_mask=paint," in text   # D-408 paint source
     assert "corner_turning=bool(self.get_parameter('lane_corner_turning').value)" in text
 
 

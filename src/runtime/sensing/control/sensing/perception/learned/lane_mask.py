@@ -92,3 +92,19 @@ def lane_evidence(logits: np.ndarray, classes: tuple[ClassSpec, ...]) -> LaneMas
     row_coverage = float(target.any(axis=1).mean())
     confidence = float(np.clip(row_coverage * band_conf[target].mean(), 0.0, 1.0))
     return LaneMaskEvidence(True, error, confidence, fractions, wall_fraction)
+
+
+def lane_marking_mask(logits: np.ndarray, classes, size: tuple[int, int] | None = None) -> np.ndarray:
+    """uint8 0/1 mask of pixels whose argmax class has the lane_marking role (D-408).
+
+    size (width, height) resizes it with nearest neighbour to the camera frame, so the
+    lane keeper reads the same pixel grid as its ground plane."""
+    if logits.ndim != 4 or logits.shape[0] != 1 or logits.shape[1] != len(classes):
+        raise ValueError(f"logits shape {logits.shape} does not match {len(classes)} classes")
+    if not np.isfinite(logits).all():
+        raise NonFiniteLogits("non-finite logits")
+    labels = logits[0].argmax(axis=0)
+    mask = np.isin(labels, [c.index for c in classes if c.role == "lane_marking"]).astype(np.uint8)
+    if size is not None and (mask.shape[1], mask.shape[0]) != tuple(size):
+        mask = cv2.resize(mask, tuple(size), interpolation=cv2.INTER_NEAREST)
+    return mask

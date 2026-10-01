@@ -198,3 +198,24 @@ def extract_lines(points: np.ndarray, rng: np.random.Generator):
             drop = piece | ((along >= lo) & (along <= hi) & (across <= FLANK_INNER_M))
         remaining = remaining[~drop]
     return lines, blobs
+
+
+#: D-408 OpenCV fallback: carpet glare reads as scattered single-pixel sparkle that the white
+#: threshold joins into false diagonal lines (8kcn 2026-10-01 replay: on-line 36 -> 20).
+DENOISE_MEDIAN_PX = 5
+DENOISE_OPEN_PX = 3
+DENOISE_MIN_AREA_PX = 40
+
+
+def denoise_white_mask(bgr: np.ndarray, horizon_row: float) -> np.ndarray:
+    """floor_white_mask with glare suppression: a median blur before the threshold, a small
+    opening after it, and blobs smaller than a tape fragment dropped."""
+    img = cv2.medianBlur(bgr, DENOISE_MEDIAN_PX) if DENOISE_MEDIAN_PX > 1 else bgr
+    mask = floor_white_mask(img, horizon_row).astype(np.uint8)
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (DENOISE_OPEN_PX, DENOISE_OPEN_PX))
+    mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
+    count, labels, stats, _ = cv2.connectedComponentsWithStats(mask, connectivity=8)
+    keep = np.zeros(count, bool)
+    keep[1:] = stats[1:, cv2.CC_STAT_AREA] >= DENOISE_MIN_AREA_PX
+    return keep[labels].astype(np.uint8)
+

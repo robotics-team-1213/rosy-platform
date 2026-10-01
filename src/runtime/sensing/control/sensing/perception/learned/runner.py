@@ -18,7 +18,7 @@ from pathlib import Path
 
 import numpy as np
 
-from .lane_mask import LaneMaskEvidence, lane_evidence, preprocess
+from .lane_mask import LaneMaskEvidence, lane_evidence, lane_marking_mask, preprocess
 from .manifest import MANIFEST_NAME, ManifestError, ModelManifest, load_manifest, verify_files
 
 
@@ -99,6 +99,16 @@ class LaneSegModel:
         evidence = lane_evidence(logits, self.manifest.classes)
         return InferResult(evidence, (time.perf_counter() - t0) * 1000.0,
                            self.manifest.model_revision)
+
+    def infer_with_mask(self, bgr: np.ndarray) -> tuple[InferResult, np.ndarray]:
+        """Shadow evidence plus the lane_marking mask at the frame's size, from one
+        inference: the D-408 learned paint input of the lane keeper."""
+        t0 = time.perf_counter()
+        logits = self._session.run(preprocess(bgr, self.manifest.input))
+        evidence = lane_evidence(logits, self.manifest.classes)
+        mask = lane_marking_mask(logits, self.manifest.classes, size=(bgr.shape[1], bgr.shape[0]))
+        return (InferResult(evidence, (time.perf_counter() - t0) * 1000.0, self.manifest.model_revision),
+                mask)
 
 
 class ModelSlot:

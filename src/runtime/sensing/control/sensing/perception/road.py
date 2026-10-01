@@ -37,7 +37,7 @@ class RoadPreviewConfig:
     max_width: int = 640
     jpeg_quality: int = 72
     max_bytes: int = 512_000
-    source: str = "PINKY"
+    source: str = "ROSY"
 
     def __post_init__(self) -> None:
         fps = float(self.fps)

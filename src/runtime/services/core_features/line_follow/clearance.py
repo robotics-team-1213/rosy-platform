@@ -16,10 +16,38 @@ import math
 from typing import Any, Iterator, Mapping, Optional, Sequence
 
 Point = tuple[float, float]
+#: (from_deg, to_deg, max_range_m) in the robot frame (0 = forward, + = left): returns of the
+#: robot's own body. A mask only reaches SELF_MASK_MAX_RANGE_M, so it never hides a real
+#: obstacle further out (8kcn: a fixed part at -52..-66 deg, 0.11-0.165 m, 2026-10-01).
+SelfMask = tuple[tuple[float, float, float], ...]
+SELF_MASK_MAX_RANGE_M = 0.30
 
 
-def _returns(sample: Mapping[str, Any], forward_deg: float) -> Iterator[tuple[float, float]]:
-    """(로봇 정면 기준 각 rad, 거리) — 유효 표본만."""
+def self_mask_from_config(raw) -> SelfMask:
+    """`line_follow.lidar_self_mask`: a list of {from_deg, to_deg, max_range_m}; [] or None = none."""
+    if raw in (None, []):
+        return ()
+    if not isinstance(raw, list):
+        raise ValueError("line_follow.lidar_self_mask must be a list")
+    out = []
+    for item in raw:
+        if not isinstance(item, dict) or set(item) != {"from_deg", "to_deg", "max_range_m"}:
+            raise ValueError("lidar_self_mask entries need exactly from_deg, to_deg, max_range_m")
+        lo, hi, reach = (float(item[k]) for k in ("from_deg", "to_deg", "max_range_m"))
+        if not (-180.0 <= lo < hi <= 180.0) or not 0.0 < reach <= SELF_MASK_MAX_RANGE_M:
+            raise ValueError(f"lidar_self_mask entry out of range: {item!r}")
+        out.append((lo, hi, reach))
+    return tuple(out)
+
+
+def _masked(angle: float, distance: float, mask: SelfMask) -> bool:
+    deg = math.degrees(angle)
+    return any(lo <= deg <= hi and distance <= reach for lo, hi, reach in mask)
+
+
+def _returns(sample: Mapping[str, Any], forward_deg: float,
+             self_mask: SelfMask = ()) -> Iterator[tuple[float, float]]:
+    """(로봇 정면 기준 각 rad, 거리) — 유효 표본만, 자기 몸 반사(self_mask)는 뺀다."""
     ranges = sample.get("ranges") or []
     count = len(ranges)
     if count < 2:
@@ -38,25 +66,28 @@ def _returns(sample: Mapping[str, Any], forward_deg: float) -> Iterator[tuple[fl
         if not math.isfinite(distance) or not low <= distance <= high:
             continue
         angle = angle_min + index * step - forward
-        yield math.atan2(math.sin(angle), math.cos(angle)), distance
+        angle = math.atan2(math.sin(angle), math.cos(angle))
+        if self_mask and _masked(angle, distance, self_mask):
+            continue
+        yield angle, distance
 
 
 def front_clearance(sample: Mapping[str, Any], *, forward_deg: float = 0.0,
-                    half_angle_deg: float = 20.0) -> Optional[float]:
+                    half_angle_deg: float = 20.0, self_mask: SelfMask = ()) -> Optional[float]:
     """정면 ±half_angle_deg 안 유효 거리의 최솟값. 유효 표본이 없으면 None(= 아무것도 안 보임)."""
     half = math.radians(float(half_angle_deg))
     best: Optional[float] = None
-    for offset, distance in _returns(sample, forward_deg):
+    for offset, distance in _returns(sample, forward_deg, self_mask):
         if abs(offset) <= half and (best is None or distance < best):
             best = distance
     return best
 
 
 def scan_points(sample: Mapping[str, Any], *, forward_deg: float = 0.0,
-                max_range: float = math.inf) -> tuple[Point, ...]:
+                max_range: float = math.inf, self_mask: SelfMask = ()) -> tuple[Point, ...]:
     """유효 표본을 로봇 좌표(x 앞, y 왼쪽, REP-103) 점으로. max_range 밖은 버린다."""
     return tuple((distance * math.cos(offset), distance * math.sin(offset))
-                 for offset, distance in _returns(sample, forward_deg)
+                 for offset, distance in _returns(sample, forward_deg, self_mask)
                  if distance <= max_range)
 
 

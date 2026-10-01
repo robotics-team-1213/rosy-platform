@@ -211,3 +211,24 @@
 - gate 변화: 없음. SOURCE GO 유지, ROS-SIM HOLD(C3).
 - 결정: D-402 §3·§5·§6. C4 작업으로 남김: `action_store.py`의 완료 journal 이름 `PICK_PLACE_ACTION_COMPLETED`와 `result_source='pick-place-workflow'`는 종류 중립이 아니다. `CELL_TRANSFER` 완료 경로를 열 때 함께 바꾼다.
 - 교훈: 계획이 스스로 내세운 값(`gripper_joint_names`)으로 안전 검사를 줄이지 않는다. 제외 집합은 수락된 프로필에서 온다.
+
+## 2026-10-02 · uncommitted · fix(omx): close final-owner joint-state sequence race
+- Change: Bind validated start positions and per-joint tolerances to each PickPlaceRunner command. After the durable phase-intent write, the final ArmCommandOwner compares the latest fresh joint-state sample against that binding; it consumes the latest sequence only when all joints remain in tolerance. Missing evidence and out-of-tolerance drift remain fail-closed. D-386 now defines this final-dispatch rule. Vendor probe startup preflight is 180 seconds, one generation case, and stop-on-first-failure.
+- Evidence: Regression tests failed before the fields existed; afterward, owner/runner tests passed. Full OMX adapter suite: 171 passed, 4 skipped. Changed Python files passed flake8 and py_compile. Vendor Gazebo attempt ended before Fleet grant because the controller was not observed active in the former 45-second preflight; launch log later showed activation and a joint3 command-limit warning. No ROS goal was sent. Current Jazzy in-process rerun skipped at collection because rclpy was unavailable to the selected interpreter.
+- Gate: SOURCE GO. ROS-SIM HOLD; new 180-second vendor retry remains pending. ARTIFACT HOLD; DEVICE/FIELD PARKED. No hardware stop, E-stop, grasp/place, or field claim.
+
+
+## 2026-10-02 · uncommitted · fix(omx): make start tolerance ceiling owner-controlled
+- Change: Add trusted per-joint max_start_state_tolerances to ArmCommandConfig. Tolerance-qualified submissions fail closed when policy is absent or a command asks for a wider bound. Vendor probe verifies read-only /repo, loopback-only networking, and no serial/video grants itself.
+- Evidence: New missing-policy, oversized-tolerance, malformed-map, negative, and non-finite config tests. Full OMX adapter suite: 176 passed, 4 skipped. Flake8 and Python compilation passed. The first complete Jazzy ROS callback rerun remained skipped at collection because rclpy was unavailable to the selected interpreter; no ROS-SIM claim is made.
+- Gate: SOURCE GO; ROS-SIM HOLD. This review fix does not change ARTIFACT HOLD or DEVICE/FIELD PARKED.
+
+## 2026-10-02 · uncommitted · fix(omx): center final state check on planned start
+- Change: Bind the planned phase start positions, not the measured validation sample, as the final owner reference. The owner compares latest readback to the original planned start tolerance and consumes only the latest sequence, avoiding a second allowance after journaling. Probe refuses ttyACM, ttyUSB, and ttyS device grants as well as serial/by-id and video devices.
+- Evidence: Regression reproduces measured state at +0.009 followed by dispatch readback +0.011 against a +0.010 planned bound; dispatch rejects. Runner regression verifies planned start remains the owner reference. Focused owner/runner suite: 58 passed. Full OMX adapter suite rerun pending.
+- Gate: SOURCE GO; ROS-SIM HOLD; ARTIFACT HOLD; DEVICE/FIELD PARKED.
+
+## 2026-10-02 · uncommitted · test(omx): verify planned-start tolerance budget
+- Change: Record the measured runner/owner regression result after centering final admission on the planned phase start.
+- Evidence: Full OMX adapter suite 178 passed, 4 skipped; flake8, py_compile, and git diff checks passed. The in-process Jazzy test was skipped because rclpy was unavailable to the selected interpreter. Vendor retry remains unrun.
+- Gate: SOURCE GO; ROS-SIM HOLD; ARTIFACT HOLD; DEVICE/FIELD PARKED.
