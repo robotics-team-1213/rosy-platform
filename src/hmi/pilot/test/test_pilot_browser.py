@@ -281,26 +281,54 @@ def test_camera_keeps_aspect_and_controls_never_cover_it(base_url, viewport):
     assert m["videoArea"] > 0.2, f"영상이 너무 작다: {m}"
 
 
+CONTROL_BOXES = """(() => {
+  const box = (s) => { const r = document.querySelector(s).getBoundingClientRect();
+    return {x: r.x, y: r.y, w: r.width, h: r.height}; };
+  return {stick: box('[data-drive-stick]'), pedal: box('[data-drive-pedal=forward]'),
+          vw: innerWidth, vh: innerHeight};
+})()"""
+
+
 @pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
                     reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
-def test_zoom_cycles_and_always_reports_crop(tablet_page):
-    """D-363 §5: 맞춤 → 1.2× → 1.4× → 가득 → 전체화면 → 맞춤. 1.0× 을 넘으면 잘림을 늘 보인다."""
-    base_url, page, errors = tablet_page
-    _enter_drive(page, base_url)
-    page.wait_for_function("document.querySelector('[data-drive-frame]').naturalWidth > 0")
-    seen = []
-    for step in range(6):
-        label = page.inner_text("[data-drive-zoom]")
-        crop = page.locator("[data-drive-fact=zoom]:not([hidden])")
-        seen.append((label, crop.inner_text() if crop.count() else ""))
-        if step < 5:
-            page.click("[data-drive-zoom]")
-            page.wait_for_timeout(200)
+@pytest.mark.parametrize("viewport", [(2000, 1200), (1200, 2000)])
+def test_zoom_cycles_and_always_reports_crop(base_url, viewport):
+    """D-363 §5: 맞춤 → 1.2× → 1.4× → 가득 → 전체화면 → 맞춤. 1.0× 을 넘으면 잘림을 늘 보인다.
+
+    어느 배율에서도 스틱과 페달은 화면 안에 손가락 크기로 남는다(세로 전체화면 포함).
+    """
+    with playwright_sync.sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        page = browser.new_page(viewport={"width": viewport[0], "height": viewport[1]})
+        errors: list[str] = []
+        page.on("pageerror", lambda exc: errors.append(str(exc)))
+        page.set_default_timeout(10_000)
+        try:
+            _enter_drive(page, base_url)
+            page.wait_for_function("document.querySelector('[data-drive-frame]').naturalWidth > 0")
+            seen, boxes = [], []
+            for step in range(6):
+                label = page.inner_text("[data-drive-zoom]")
+                crop = page.locator("[data-drive-fact=zoom]:not([hidden])")
+                seen.append((label, crop.inner_text() if crop.count() else ""))
+                boxes.append((label, page.evaluate(CONTROL_BOXES)))
+                if step < 5:
+                    page.click("[data-drive-zoom]")
+                    page.wait_for_timeout(200)
+            stored_zoom = page.evaluate("JSON.parse(localStorage.getItem('rosy.pilot.input')).zoom")
+        finally:
+            browser.close()
+    for label, m in boxes:
+        for name in ("stick", "pedal"):
+            r = m[name]
+            assert r["w"] > 100, (viewport, label, name, r)
+            assert r["x"] >= 0 and r["y"] >= 0 and r["x"] + r["w"] <= m["vw"] + 1 \
+                and r["y"] + r["h"] <= m["vh"] + 1, (viewport, label, name, r)
     assert seen[0] == ("확대 맞춤", "")
     assert seen[-1][0] == "확대 맞춤", seen                      # 한 바퀴 돌면 맞춤
     assert all("잘림" in crop for label, crop in seen[1:5]), seen
     assert seen[4][0] == "전체화면", seen
-    assert page.evaluate("JSON.parse(localStorage.getItem('rosy.pilot.input')).zoom") == 1
+    assert stored_zoom == 1
     assert errors == [], errors
 
 
@@ -346,4 +374,242 @@ def test_auto_intent_strip_shows_target_and_core_steer(tablet_page):
     assert page.inner_text("[data-intent-steer]") == "멈춤"
     page.mouse.up()
     page.wait_for_selector("[data-drive-intent][hidden]", state="attached", timeout=5_000)
+    assert errors == [], errors
+
+
+def _arm_auto(page, base_url):
+    """주행 진입 → 차선 추종 흉내(TRACKING) → 차선 자동 켜기. 모드 기록을 비운다."""
+    import json
+    import urllib.request
+    _enter_drive(page, base_url)
+    req = urllib.request.Request(
+        base_url + "/__test__/line-follow",
+        data=json.dumps({"state": "TRACKING", "error": 0.1, "confidence": 0.9, "linear": 0.03,
+                         "angular": 0.0, "reason": "tracking"}).encode(),
+        headers={"Content-Type": "application/json"}, method="POST")
+    urllib.request.urlopen(req).read()
+    page.click("[data-drive-auto]")
+    page.wait_for_selector("[data-drive-go]", state="visible")
+    dev_server.LINE_FOLLOW_MODE_LOG.clear()
+
+
+def _wait_for_modes(page, *expected):
+    for _ in range(50):
+        if dev_server.LINE_FOLLOW_MODE_LOG[-len(expected):] == list(expected):
+            return
+        page.wait_for_timeout(100)
+    raise AssertionError(f"line-follow mode log {dev_server.LINE_FOLLOW_MODE_LOG}, expected tail {expected}")
+
+
+GO_ACTIVE = "document.querySelector('[data-drive-go]').classList.contains('active')"
+
+
+@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
+                    reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
+def test_go_releases_on_cancel_and_leave(tablet_page):
+    """D-344: 진행은 누르는 동안만 — 손가락이 버튼을 벗어나거나 시스템이 터치를 취소하면 CORE 에 OFF."""
+    base_url, page, errors = tablet_page
+    _arm_auto(page, base_url)
+    go = page.locator("[data-drive-go]").bounding_box()
+    stick = page.locator("[data-drive-stick]").bounding_box()
+
+    # 벗어남(pointerleave)
+    page.mouse.move(go["x"] + go["width"] / 2, go["y"] + go["height"] / 2)
+    page.mouse.down()
+    page.wait_for_function(GO_ACTIVE)
+    page.mouse.move(stick["x"] - 40, stick["y"] - 40)
+    _wait_for_modes(page, "CAMERA_LINE", "OFF")
+    page.mouse.up()
+    page.wait_for_function(f"!({GO_ACTIVE})")
+    page.wait_for_timeout(300)
+
+    # 취소(pointercancel)
+    dev_server.LINE_FOLLOW_MODE_LOG.clear()
+    page.mouse.move(go["x"] + go["width"] / 2, go["y"] + go["height"] / 2)
+    page.mouse.down()
+    page.wait_for_function(GO_ACTIVE)
+    page.dispatch_event("[data-drive-go]", "pointercancel")
+    _wait_for_modes(page, "CAMERA_LINE", "OFF")
+    page.wait_for_function(f"!({GO_ACTIVE})")
+    page.mouse.up()
+    assert errors == [], errors
+
+
+@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
+                    reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
+def test_stick_takes_over_auto(tablet_page):
+    """자동 진행 중 스틱을 잡으면 자동이 즉시 풀린다(CORE 에 PUT mode OFF) — 손이 우선이다."""
+    base_url, page, errors = tablet_page
+    _arm_auto(page, base_url)
+    page.dispatch_event("[data-drive-go]", "pointerdown")        # 진행을 누른 채(실제 포인터는 스틱에)
+    page.wait_for_function(GO_ACTIVE)
+    stick = page.locator("[data-drive-stick]").bounding_box()
+    page.mouse.move(stick["x"] + stick["width"] / 2, stick["y"] + stick["height"] / 2)
+    page.mouse.down()
+    _wait_for_modes(page, "CAMERA_LINE", "OFF")
+    page.wait_for_function(f"!({GO_ACTIVE})")
+    page.mouse.up()
+    assert page.inner_text("[data-drive-motion]") == "대기"
+    assert errors == [], errors
+
+
+@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
+                    reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
+def test_reenter_resets_auto_mode(tablet_page):
+    """주행 화면은 같은 section 에 다시 마운트된다 — 나갔다 들어오면 수동(페달)으로 시작한다."""
+    base_url, page, errors = tablet_page
+    _arm_auto(page, base_url)
+    assert page.get_attribute("[data-drive-auto]", "aria-pressed") == "true"
+    page.click("[data-drive-exit]")
+    page.wait_for_selector("[data-drive-enter]")
+    page.click("[data-drive-enter]")
+    page.wait_for_selector("[data-drive-stick]")
+    state = page.evaluate("""(() => {
+      const drive = document.querySelector('[data-screen=drive]');
+      return {auto: drive.dataset.autoMode, pressed: document.querySelector('[data-drive-auto]').getAttribute('aria-pressed')};
+    })()""")
+    assert state == {"auto": "off", "pressed": "false"}, state
+    assert page.locator("[data-drive-pedal=forward]").is_visible()
+    assert not page.locator("[data-drive-go]").is_visible()
+    assert errors == [], errors
+
+
+def _calibrating(owner_id: str) -> dict:
+    return {"kind": "CALIBRATING", "session_id": "cal-1", "calibration_kind": "drive",
+            "label": "주행 보정", "owner": {"id": owner_id, "role": "operator", "label": "보정 노트북"},
+            "started_at": "2026-10-01T09:00:00+00:00", "remaining_s": 27.0}
+
+
+@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
+                    reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
+def test_calibration_banner_locks_drive_for_other_tokens_and_keeps_estop(tablet_page):
+    """D-321 부록: 보정 중이면 띠가 뜨고, 남의 보정이면 주행 조작이 사유와 함께 잠긴다."""
+    base_url, page, errors = tablet_page
+    shots = Path(os.environ.get("ROSY_SHOT_DIR", "X:/DevTemp/calibration-mode"))
+    shots.mkdir(parents=True, exist_ok=True)
+    log = f"{base_url}/__test__/teleop"
+    _enter_drive(page, base_url)
+    try:
+        page.request.post(f"{base_url}/__test__/activity", data=_calibrating("someone-else"))
+        page.wait_for_selector("[data-drive-calibration]:not([hidden])")
+        assert page.inner_text("[data-drive-calibration-title]") == "보정 중 — 주행 보정"
+        reason = page.inner_text("[data-drive-calibration-reason]")
+        assert "보정 노트북" in reason and "비상 정지" in reason
+        assert page.locator("[data-drive-fact=activity]").is_visible()
+        page.wait_for_selector("[data-drive-controls][data-locked]")
+        assert page.evaluate("""[...document.querySelectorAll('[data-drive-controls] ui-button')]
+                                .every((b) => b.disabled)""")
+        estop = page.locator("ui-topbar ui-button[data-estop]")
+        assert estop.is_visible() and not estop.evaluate("(b) => b.disabled")
+        page.screenshot(path=str(shots / "pilot-calibration-locked.png"))
+
+        # 잠긴 동안에는 스틱을 밀어도 teleop 을 한 번도 보내지 않는다.
+        before = len(page.request.get(log).json())
+        box = page.locator("[data-drive-stick]").bounding_box()
+        page.mouse.move(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
+        page.mouse.down()
+        page.mouse.move(box["x"] + box["width"] / 2, box["y"] + 5, steps=3)
+        page.keyboard.down("ArrowUp")
+        page.wait_for_timeout(600)
+        page.keyboard.up("ArrowUp")
+        page.mouse.up()
+        assert len(page.request.get(log).json()) == before, "잠긴 조작부가 명령을 보냈다"
+
+        # 이 기기(whoami id dev-1)가 보정 주인이면 띠는 그대로, 조작은 풀린다.
+        page.request.post(f"{base_url}/__test__/activity", data=_calibrating("dev-1"))
+        page.wait_for_selector("[data-drive-controls]:not([data-locked])")
+        assert page.locator("[data-drive-calibration]").is_visible()
+        assert "이 기기" in page.inner_text("[data-drive-calibration-reason]")
+        page.screenshot(path=str(shots / "pilot-calibration-owner.png"))
+
+        page.request.post(f"{base_url}/__test__/activity", data="null",
+                          headers={"Content-Type": "application/json"})
+        page.wait_for_selector("[data-drive-calibration]", state="hidden")
+        assert not page.locator("[data-drive-fact=activity]").is_visible()
+    finally:
+        dev_server.STATE["activity"] = None
+    assert errors == [], errors
+
+
+@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
+                    reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
+def test_leaving_while_locked_never_posts_idle_over_the_owner(tablet_page):
+    """D-321 부록: 남의 보정으로 잠긴 화면이 나가도 /mode IDLE 로 주인의 주행을 끊지 않는다."""
+    base_url, page, errors = tablet_page
+    _enter_drive(page, base_url)
+    try:
+        page.request.post(f"{base_url}/__test__/activity", data=_calibrating("someone-else"))
+        page.wait_for_selector("[data-drive-controls][data-locked]")
+        before = len(page.request.get(f"{base_url}/__test__/mode-log").json())
+        page.click("[data-drive-exit]")
+        page.wait_for_timeout(500)
+        assert page.request.get(f"{base_url}/__test__/mode-log").json()[before:] == []
+    finally:
+        dev_server.STATE["activity"] = None
+    assert errors == [], errors
+
+
+@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
+                    reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
+def test_owner_leaving_still_returns_the_mode_to_idle(tablet_page):
+    base_url, page, errors = tablet_page
+    _enter_drive(page, base_url)
+    try:
+        page.request.post(f"{base_url}/__test__/activity", data=_calibrating("dev-1"))
+        page.wait_for_selector("[data-drive-calibration]:not([hidden])")
+        page.wait_for_selector("[data-drive-controls]:not([data-locked])")
+        before = len(page.request.get(f"{base_url}/__test__/mode-log").json())
+        page.click("[data-drive-exit]")
+        page.wait_for_timeout(500)
+        assert page.request.get(f"{base_url}/__test__/mode-log").json()[before:] == ["IDLE"]
+    finally:
+        dev_server.STATE["activity"] = None
+    assert errors == [], errors
+
+
+@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
+                    reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
+def test_owner_sees_checking_while_whoami_retries_then_gets_control(tablet_page):
+    """whoami 가 실패하는 동안 '보정 확인 중'으로 잠그고, 재시도가 성공하면 주인에게 조작을 돌려준다."""
+    base_url, page, errors = tablet_page
+    page.request.post(f"{base_url}/__test__/activity", data=_calibrating("dev-1"))
+    try:
+        page.goto(f"{base_url}/pilot")
+        page.wait_for_selector("form[data-pilot-token-form] ui-field input")
+        page.fill("form[data-pilot-token-form] ui-field input", "devtoken")
+        page.click("form[data-pilot-token-form] ui-button")
+        page.wait_for_selector("[data-drive-enter]")
+        page.request.post(f"{base_url}/__test__/whoami-fail", data={"count": 2})
+        page.click("[data-drive-enter]")
+        page.wait_for_function(
+            "document.querySelector('[data-drive-calibration-reason]')?.textContent.startsWith('보정 확인 중')")
+        assert page.locator("[data-drive-controls][data-locked]").count() == 1
+        page.wait_for_selector("[data-drive-controls]:not([data-locked])", timeout=30_000)
+        assert "이 기기" in page.inner_text("[data-drive-calibration-reason]")
+    finally:
+        dev_server.STATE["activity"] = None
+        dev_server.WHOAMI_FAILURES["remaining"] = 0
+    assert errors == [], errors
+
+
+@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
+                    reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
+def test_exit_after_a_failed_engage_posts_no_idle(tablet_page):
+    """modeHeld 고정: MANUAL 을 잡지 못한 화면은 나가면서 IDLE 을 보내지 않는다(잠금이 없어도)."""
+    base_url, page, errors = tablet_page
+    page.goto(f"{base_url}/pilot")
+    page.wait_for_selector("form[data-pilot-token-form] ui-field input")
+    page.fill("form[data-pilot-token-form] ui-field input", "devtoken")
+    page.click("form[data-pilot-token-form] ui-button")
+    page.wait_for_selector("[data-drive-enter]")
+    page.request.post(f"{base_url}/__test__/mode-refuse", data={"count": 1})
+    try:
+        before = len(page.request.get(f"{base_url}/__test__/mode-log").json())
+        page.click("[data-drive-enter]")
+        page.wait_for_selector("[data-drive-blocked]:not([hidden])")
+        page.click("[data-drive-exit]")
+        page.wait_for_timeout(500)
+        assert page.request.get(f"{base_url}/__test__/mode-log").json()[before:] == []
+    finally:
+        dev_server.MODE_REFUSALS["remaining"] = 0
     assert errors == [], errors

@@ -5,7 +5,7 @@ import pytest
 from PIL import ImageChops
 from pathlib import Path
 
-from emotion.info_screen import DEFAULT_SIZE, _BG, _CRIT, _FG, _WARN, battery_color, hold_duration, render
+from emotion.info_screen import DEFAULT_SIZE, _BG, _CRIT, _FG, _WARN, battery_color, hold_duration, render, render_boot
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -179,6 +179,18 @@ class TestRender:
         colors = {color for _count, color in image.getcolors(maxcolors=1 << 16)}
         assert _CRIT not in colors and _WARN not in colors, sorted(colors)
 
+    def test_calibration_marks_the_mode_row_as_a_caution_and_keeps_estop(self):
+        # D-321 addendum: the robot face says CALIBRATING (ASCII font) on the MODE row.
+        normal = render(self._payload())
+        calibrating = render(self._payload(activity="CALIBRATING"))
+        row = calibrating.crop((88, 138, 320, 164))
+        colors = {color for _count, color in row.getcolors(maxcolors=1 << 16)}
+        assert _WARN in colors, sorted(colors)
+        assert ImageChops.difference(normal, calibrating).getbbox() is not None
+        both = render(self._payload(activity="CALIBRATING", estop=True))
+        health = both.crop((88, 186, 320, 212))
+        assert _CRIT in {color for _count, color in health.getcolors(maxcolors=1 << 16)}
+
     def test_hitl_request_changes_the_health_row_but_never_overrides_estop(self):
         normal = render(self._payload())
         hitl = render(self._payload(hitl_requested=True))
@@ -202,3 +214,25 @@ class TestRender:
         assert image.crop(strip).getcolors(maxcolors=1 << 16) == [
             ((strip[2] - strip[0]) * (strip[3] - strip[1]), _BG),
         ]
+
+
+class TestBootCardBreathesWhileWaiting:
+    """D-385: 기다리는 동안 무대 제목이 두 밝기로 숨쉬고, 끝난 상태는 고요하다."""
+
+    def _card(self, stage, frame):
+        return render_boot({"stage": stage, "device_name": "rosy"}, frame=frame)
+
+    def test_the_waiting_title_alternates_two_brightness_steps(self):
+        from PIL import ImageChops
+
+        bright = self._card("BOOTING", frame=0)
+        dark = self._card("BOOTING", frame=1)
+
+        assert ImageChops.difference(bright, dark).getbbox() is not None
+
+    def test_an_arrived_or_failed_card_holds_still(self):
+        from PIL import ImageChops
+
+        for stage in ("CORE_READY", "FAILED:rosy-core", "SETUP"):
+            steady = ImageChops.difference(self._card(stage, frame=0), self._card(stage, frame=1))
+            assert steady.getbbox() is None, stage

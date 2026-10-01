@@ -304,13 +304,13 @@ async def test_replacing_a_half_open_old_connection_does_not_stall_the_new_one()
 
 
 @run_async
-async def test_a_peer_that_never_sends_hello_is_closed_4400(monkeypatch):
+async def test_a_peer_that_never_sends_hello_is_closed_retryable(monkeypatch):
     monkeypatch.setattr("rosy_vision.ingest.HELLO_TIMEOUT_S", 0.2)
     async with _Harness() as h:
         ws = await h.connect()
         with pytest.raises(ConnectionClosed) as exc:
             await asyncio.wait_for(ws.recv(), timeout=2)
-        assert exc.value.rcvd.code == protocol.CLOSE_BAD_PROTO
+        assert exc.value.rcvd.code == protocol.CLOSE_HELLO_TIMEOUT
 
 
 @run_async
@@ -365,3 +365,44 @@ def test_marker_report_expires_so_status_falls_back_to_empty(monkeypatch):
     assert server._marker_status(src) == ([30, 31], ["rosy_01"])
     now[0] += ingest_module.MARKER_REPORT_TTL_S + 0.1
     assert server._marker_status(src) == ([], [])
+
+
+@run_async
+async def test_hello_lens_is_recorded_per_source_and_older_hellos_report_none():
+    async with _Harness(tokens={"overhead-1": TOKEN, "overhead-2": "token-2"}) as h:
+        wide = await h.connect()
+        await wide.send(json.dumps({**_hello(), "lens": {"kind": "wide", "focal_mm": 2.2, "hfov_deg": 104.1}}))
+        await wide.recv()
+        old = await h.connect("token-2")
+        await old.send(json.dumps(_hello("overhead-2")))
+        await old.recv()
+        assert h.server.source_lens("overhead-1") == {"kind": "wide", "focal_mm": 2.2, "hfov_deg": 104.1}
+        assert h.server.source_lens("overhead-2") is None
+        assert h.server.source_lens("overhead-3") is None
+        await wide.close()
+        await old.close()
+
+
+@run_async
+async def test_malformed_hello_lens_is_ignored_not_closed():
+    async with _Harness() as h:
+        conn = await h.connect()
+        await conn.send(json.dumps({**_hello(), "lens": {"kind": "fisheye", "focal_mm": 1.0, "hfov_deg": 170}}))
+        assert json.loads(await conn.recv()) == protocol.make_config()
+        assert h.server.source_lens("overhead-1") is None
+        await conn.close()
+
+
+@run_async
+async def test_connect_log_reprs_and_caps_phone_supplied_text(caplog):
+    caplog.set_level("INFO", logger="rosy_vision.ingest")
+    async with _Harness() as h:
+        conn = await h.connect()
+        await conn.send(json.dumps({**_hello(), "device": "evil\nFAKE LOG LINE " + "x" * 200}))
+        await conn.recv()
+        await conn.close()
+    line = next(r.getMessage() for r in caplog.records if "connected" in r.getMessage())
+    assert "\n" not in line
+    assert r"evil\nFAKE" in line
+    # 64 characters: "evil\nFAKE LOG LINE " (19) plus 45 x.
+    assert "x" * 45 in line and "x" * 46 not in line

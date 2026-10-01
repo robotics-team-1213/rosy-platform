@@ -21,6 +21,7 @@ from sensor_msgs.msg import CompressedImage, Image
 from std_msgs.msg import String, UInt16MultiArray
 
 from . import executor_choice
+from .calibrated_values import calibrated
 from .sensing.perception.camera_ground import nominal_ground_plane, simulation_ground_plane
 from .sensing.perception.image_frame import image_msg_to_frame
 from .sensing.perception.lane import (
@@ -44,6 +45,8 @@ from .sensing.perception.route_map import RouteMapFollower
 #: Fixed at startup: the edge follower and the odom subscription are built
 #: from these once, so a later change would silently run the wrong pipeline.
 _READ_ONLY = ParameterDescriptor(read_only=True)
+#: 'keep' mode: a gap between camera frames longer than this resets the keeper.
+KEEP_MAX_FRAME_GAP_S = 0.5
 
 
 class LineObserverNode(Node):
@@ -125,6 +128,7 @@ class LineObserverNode(Node):
         self._between_keeper = LaneBetweenKeeper(
             default_lane_width_fraction=float(
                 self.get_parameter('camera_between_lane_width_fraction').value))
+        self._keep_last_stamp = None
         self._lane_keeper = LaneKeeper(
             camera_x_offset_m=float(self.get_parameter('camera_x_offset_m').value),
             corner_turning=bool(self.get_parameter('lane_corner_turning').value))
@@ -160,6 +164,10 @@ class LineObserverNode(Node):
             self._ir_calibration_revision = self._ir_calibration.revision
 
         self.observation_pub = self.create_publisher(String, 'line/observation', 10)
+        # D-364: the keep lane keeper's decision bundle (strategy, boundaries,
+        # target) per frame, for the pilot overlay and exact closed-loop replay.
+        # Observation only; CORE does not read it.
+        self._keep_debug_pub = self.create_publisher(String, 'line/keep_debug', 10)
         self.create_subscription(
             UInt16MultiArray, 'ir_sensor/range', self._on_ir, qos_profile_sensor_data)
         self.create_subscription(
@@ -226,6 +234,10 @@ class LineObserverNode(Node):
                     f'nominal camera profile unreadable ({exc}); no NOMINAL ground',
                     throttle_duration_sec=5.0)
                 self._nominal_profile_cache = {}
+            # An operator-accepted camera_profile record wins over the file (D-47 addendum).
+            self._nominal_profile_cache, source = calibrated(
+                'camera_profile', self._nominal_profile_cache, static_source=path or 'no profile file')
+            self.get_logger().info(f'camera profile from {source}')
         return self._nominal_profile_cache
 
     def _camera_mode_uses_ground(self) -> bool:
@@ -308,6 +320,7 @@ class LineObserverNode(Node):
                 and not self._camera_controls_stable):
             self._publish('CAMERA_LINE', None, stamp=(
                 float(msg.header.stamp.sec) + float(msg.header.stamp.nanosec) * 1e-9))
+            self._keep_last_stamp = None
             return
         try:
             frame = image_msg_to_frame(msg)
@@ -329,9 +342,22 @@ class LineObserverNode(Node):
                     washed_fraction=float(self.get_parameter('camera_washed_fraction').value),
                 )
             elif mode == 'keep':
+                # A camera gap (or the first keep frame of this node) starts
+                # the keeper afresh: sides and steering remembered from before
+                # the gap may belong to another place.
+                image_stamp = (float(msg.header.stamp.sec)
+                               + float(msg.header.stamp.nanosec) * 1e-9)
+                if (self._keep_last_stamp is None
+                        or not 0.0 <= image_stamp - self._keep_last_stamp <= KEEP_MAX_FRAME_GAP_S):
+                    self._lane_keeper.reset()
+                self._keep_last_stamp = image_stamp
                 observation = self._lane_keeper.update(
                     frame, self._ground(frame.shape[1], frame.shape[0]),
                     lane_half_width_m=float(self.get_parameter('lane_half_width_m').value))
+                bundle = dict(self._lane_keeper.last,
+                              stamp=float(msg.header.stamp.sec)
+                              + float(msg.header.stamp.nanosec) * 1e-9)
+                self._keep_debug_pub.publish(String(data=json.dumps(bundle, default=float)))
             elif mode in ('lane', 'edge_left', 'centre', 'route_a', 'route_b', 'route_ab'):
                 ground = self._ground(frame.shape[1], frame.shape[0])
                 lane_kwargs = dict(

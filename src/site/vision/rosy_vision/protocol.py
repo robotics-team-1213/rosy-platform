@@ -12,7 +12,10 @@ docs/adr/D-261-overhead-camera-app-skeleton.md.
 
 from __future__ import annotations
 
+import base64
+import hashlib
 import re
+import ssl
 import struct
 from dataclasses import dataclass
 from urllib.parse import parse_qs, quote, urlsplit
@@ -25,12 +28,17 @@ _HEADER_STRUCT = struct.Struct("<4sIIHHHH")
 _MAGIC = b"ROF1"
 VALID_ROTATIONS = (0, 90, 180, 270)
 SOURCE_PATTERN = re.compile(r"^[A-Za-z0-9_-]{1,32}$")
+PIN_PREFIX = "sha256/"
+PIN_PATTERN = re.compile(r"^sha256/[A-Za-z0-9_-]{43}$")
 
 DEFAULT_CONFIG = {"fps": 3, "width": 1280, "jpeg_quality": 70, "max_bytes": 200000}
 
 CLOSE_BAD_PROTO = 4400
 CLOSE_UNAUTHORIZED = 4401
 CLOSE_REPLACED = 4409
+# No hello in time. A busy receiver must not look like a protocol mismatch (D-375
+# live test): standard 1013 try again later, so the app reconnects with backoff.
+CLOSE_HELLO_TIMEOUT = 1013
 
 
 class ProtocolError(ValueError):
@@ -105,7 +113,7 @@ def validate_hello(message: dict) -> None:
     if message.get("proto") != PROTO:
         raise HelloError("proto", f"proto must be {PROTO!r}")
     source = message.get("source")
-    if not isinstance(source, str) or not SOURCE_PATTERN.match(source):
+    if not isinstance(source, str) or not SOURCE_PATTERN.fullmatch(source):
         raise HelloError("source", f"source must match {SOURCE_PATTERN.pattern}")
     sensor = message.get("sensor")
     if not isinstance(sensor, dict):
@@ -117,6 +125,32 @@ def validate_hello(message: dict) -> None:
         raise HelloError("sensor", "sensor.width and sensor.height must be positive integers")
     if rotation_deg not in VALID_ROTATIONS:
         raise HelloError("sensor", f"sensor.rotation_deg must be in {VALID_ROTATIONS}")
+
+
+LENS_KINDS = ("wide", "standard")
+
+
+def _bounded(value: object, upper: float) -> bool:
+    """True for a real number in (0, upper). Safe for huge ints, inf and NaN (all compare False)."""
+    return isinstance(value, (int, float)) and not isinstance(value, bool) and 0 < value < upper
+
+
+def parse_hello_lens(message: dict) -> dict | None:
+    """Return the optional ``hello.lens`` as ``{"kind", "focal_mm", "hfov_deg"}``, or None.
+
+    The field is additive and informational (camera lens, for a later calibration
+    choice): a missing or malformed lens never rejects the hello, so it is not
+    part of :func:`validate_hello`. Extra keys inside ``lens`` are ignored.
+    """
+    lens = message.get("lens") if isinstance(message, dict) else None
+    if not isinstance(lens, dict):
+        return None
+    kind = lens.get("kind")
+    focal_mm = lens.get("focal_mm")
+    hfov_deg = lens.get("hfov_deg")
+    if kind not in LENS_KINDS or not _bounded(focal_mm, 1000) or not _bounded(hfov_deg, 180):
+        return None
+    return {"kind": kind, "focal_mm": float(focal_mm), "hfov_deg": float(hfov_deg)}
 
 
 def make_config(
@@ -132,18 +166,54 @@ def make_config(
     }
 
 
-def pairing_uri(host: str, port: int, token: str, source: str, *, secure: bool = False) -> str:
+def cert_pin(der: bytes) -> str:
+    """``sha256/<base64url, no padding>`` of a certificate's DER bytes (not its SPKI; D-341 9).
+
+    The phone accepts a ``wss://`` chain only when one certificate in the chain the server
+    sends hashes to this pin (see :func:`pem_last_cert_pin`).
+    """
+    digest = hashlib.sha256(der).digest()
+    return PIN_PREFIX + base64.urlsafe_b64encode(digest).rstrip(b"=").decode("ascii")
+
+
+def pem_cert_pins(pem_text: str) -> list[str]:
+    """Pins of every certificate in a PEM bundle, in file order (leaf first for a served chain)."""
+    blocks = re.findall(
+        r"-----BEGIN CERTIFICATE-----.+?-----END CERTIFICATE-----", pem_text, flags=re.DOTALL
+    )
+    if not blocks:
+        raise ValueError("no PEM certificate found")
+    return [cert_pin(ssl.PEM_cert_to_DER_cert(block)) for block in blocks]
+
+
+def pem_last_cert_pin(pem_text: str) -> str:
+    """Pin the **last** certificate of a PEM bundle.
+
+    Given the file the TLS server serves (``site.crt``), that is the site CA when the file
+    carries leaf + CA, and the leaf itself otherwise. Either works with the phone's check;
+    a CA pin survives leaf re-issue, a leaf pin does not.
+    """
+    return pem_cert_pins(pem_text)[-1]
+
+
+def pairing_uri(
+    host: str, port: int, token: str, source: str, *, secure: bool = False, pin: str | None = None
+) -> str:
     """Build a ``rosyov://`` pairing URI that :func:`parse_pairing_uri` round-trips."""
+    if pin is not None and (not secure or not PIN_PATTERN.fullmatch(pin)):
+        raise PairingError("pin", "pin needs tls=1 and the form sha256/<43 base64url chars>")
     suffix = "&tls=1" if secure else ""
+    if pin is not None:
+        suffix += f"&pin={quote(pin, safe='/')}"
     return f"rosyov://{host}:{port}/?t={quote(token, safe='')}&s={quote(source, safe='')}{suffix}"
 
 
 def parse_pairing_uri(uri: str) -> dict:
     """Parse a ``rosyov://`` pairing URI.
 
-    Returns ``{"host", "port", "token", "source", "ws_url"}``. Raises
+    Returns ``{"host", "port", "token", "source", "secure", "pin", "ws_url"}``. Raises
     :class:`PairingError` with ``reason`` in
-    ``{"scheme", "port", "token", "source"}`` matching vectors.json.
+    ``{"scheme", "port", "token", "source", "tls", "pin"}`` matching vectors.json.
     """
     split = urlsplit(uri)
     if split.scheme != "rosyov":
@@ -169,13 +239,18 @@ def parse_pairing_uri(uri: str) -> dict:
         raise PairingError("tls", "tls must be 0 or 1")
     source = source_values[0]
     secure = tls_values[0] == "1"
-    if not SOURCE_PATTERN.match(source):
+    if not SOURCE_PATTERN.fullmatch(source):
         raise PairingError("source", f"source must match {SOURCE_PATTERN.pattern}")
+    pin_values = query.get("pin")
+    pin = pin_values[0] if pin_values else None
+    if pin is not None and (not secure or not PIN_PATTERN.fullmatch(pin)):
+        raise PairingError("pin", "pin needs tls=1 and the form sha256/<43 base64url chars>")
     return {
         "host": host,
         "port": port,
         "token": token_values[0],
         "source": source,
         "secure": secure,
+        "pin": pin,
         "ws_url": f"{'wss' if secure else 'ws'}://{host}:{port}{WS_PATH}",
     }

@@ -10,6 +10,7 @@ import logging
 from typing import Any, Optional
 
 from core_common.capability import Capability
+from core_features.calibration import CalibrationSessionManager
 from core_features.command.arbitration import Mode, ModeMachine, SourceRegistry
 from core_features.command.manager import CommandManager
 from core_features.docking.agent import DockAgent
@@ -278,6 +279,8 @@ class CoreServices:
     runtime_probe: HostRuntimeProbe
     maps: MapSnapshotStore
     audit: FileAuditLog
+    # D-321 addendum: attended calibration lease (visible on every screen, fences drive writes).
+    calibration: CalibrationSessionManager
     adapter_registry: AdapterRegistry = field(default_factory=AdapterRegistry)
     started_at: float = field(default_factory=time.time)
     # Optional absorbed Control worker, owned by the RosyCoreNode lifecycle.
@@ -360,6 +363,8 @@ class CoreServices:
             stale_after.update({str(k): float(v) for k, v in evidence_cfg.items()})
         state = StateManager(robot_id, stale_after_s=stale_after,
                              sources_configured=runtime_mode != "core")
+        calibration = CalibrationSessionManager(events)
+        state.set_activity_provider(calibration.activity)
         registry = SourceRegistry(config.get("command_sources"))
         modes = ModeMachine()
         command = CommandManager(registry, modes, safety, events=events, readiness=readiness)
@@ -516,6 +521,17 @@ class CoreServices:
             except Exception:
                 logging.getLogger(__name__).exception("docking stop on mode exit failed")
             command.clear_docking()
+        def mirror_mode(old: Mode, new: Mode) -> None:
+            """D-380 fix: the snapshot's mode is every reader's mode.
+
+            The e-stop path (SAF-001) transitions the machine without going
+            through POST /mode, and before this listener the StateManager kept
+            the previous mode through a stop and a release — the dashboard chip,
+            /robot/state and the boot display's hand-over all said MANUAL while
+            the machine held EMERGENCY. One listener, every path.
+            """
+            state.set_mode(RobotMode(new.value))
+        modes.change_listeners.append(mirror_mode)
         modes.change_listeners.append(leave_docking)
         def reflect_stop():
             state.set_estop(True)
@@ -549,7 +565,8 @@ class CoreServices:
                    readiness=readiness,
                    power=power, battery=battery, docking=docking, swarm=swarm,
                    runtime_probe=runtime_probe, maps=MapSnapshotStore(),
-                   audit=audit, adapter_registry=adapter_registry,
+                   audit=audit, calibration=calibration,
+                   adapter_registry=adapter_registry,
                    dock_feed=dock_feed)
 
     def inventory(self) -> dict[str, Any]:

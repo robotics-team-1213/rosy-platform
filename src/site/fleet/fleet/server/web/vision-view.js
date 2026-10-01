@@ -35,6 +35,47 @@ export function frameBadge({ ok, status, frameState, ageMs, rectified }) {
   return { state: "no-frame", label: "영상 수신 대기", kind: "neutral", detail: `Vision 응답 ${status}` };
 }
 
+// 화면 보정(D-318)은 렌즈마다 다르다. Vision 이 알려 준 렌즈(X-Source-Lens)로 저장 키를 나눈다.
+// 렌즈를 알리지 않는 옛 앱은 예전 키(source 만)를 그대로 쓴다.
+const RECTIFICATION_PREFIX = "rosy-camera-rectification:";
+const LENS_NAMES = { wide: "초광각", standard: "기본 렌즈" };
+
+// "kind=wide;focal_mm=2.2;hfov_deg=104.1" → { kind, focal_mm, hfov_deg } 또는 null.
+export function parseLensHeader(value) {
+  if (!value) return null;
+  const fields = Object.fromEntries(value.split(";").map((part) => part.split("=").map((item) => item.trim())));
+  if (!Object.hasOwn(LENS_NAMES, fields.kind)) return null;
+  return { kind: fields.kind, focal_mm: Number(fields.focal_mm), hfov_deg: Number(fields.hfov_deg) };
+}
+
+export function rectificationKey(source, lensKind) {
+  return lensKind ? `${RECTIFICATION_PREFIX}${source}@${lensKind}` : `${RECTIFICATION_PREFIX}${source}`;
+}
+
+// 저장된 보정값 찾기. 렌즈 이전의 예전 키는 기본 렌즈로 찍은 것이라 "standard" 로 복사한다.
+// 예전 키는 지우지 않는다: 렌즈를 알리지 않는 옛 앱으로 되돌려도 그 값을 그대로 쓴다.
+// 지금 렌즈의 값이 없고 다른 렌즈의 값만 있으면 적용하지 않고 경고를 돌려준다.
+// → { saved: string|null, warning: string|null }
+export function resolveSavedProfile(storage, source, lensKind) {
+  const key = rectificationKey(source, lensKind);
+  const legacyKey = rectificationKey(source, null);
+  let saved = storage.getItem(key);
+  if (lensKind && saved === null) {
+    const legacy = storage.getItem(legacyKey);
+    if (legacy !== null && lensKind === "standard") {
+      storage.setItem(key, legacy);
+      saved = legacy;
+    }
+  }
+  if (!lensKind || saved !== null) return { saved, warning: null };
+  const others = Object.keys(LENS_NAMES).filter((kind) => kind !== lensKind
+    && storage.getItem(rectificationKey(source, kind)) !== null);
+  if (storage.getItem(legacyKey) !== null && !others.includes("standard")) others.push("standard");
+  if (!others.length) return { saved: null, warning: null };
+  return { saved: null, warning: `저장한 화면 보정은 ${LENS_NAMES[others[0]]}용입니다. `
+    + `지금 카메라는 ${LENS_NAMES[lensKind]}라 기본값으로 보여 줍니다. 이 렌즈에 맞게 다시 맞추세요.` };
+}
+
 export function createVisionView({ el, call, auth }) {
   const select = el("vision-source");
   const frame = el("vision-frame");
@@ -62,6 +103,8 @@ export function createVisionView({ el, call, auth }) {
   let draggingPointerId = null;
   // D-360: 검토 중인 경기장 제안(정규 좌표 네 점). 수락 전에는 조정값에 들어가지 않는다.
   let proposalCorners = null;
+  // 선택한 source 가 마지막 프레임에서 알린 렌즈 종류(wide/standard). 옛 앱이면 null.
+  let currentLens = null;
   const proposalPolygon = el("vision-proposal-polygon");
   const frameListeners = [];
 
@@ -134,7 +177,7 @@ export function createVisionView({ el, call, auth }) {
     if (!source) return;
     const profile = readProfile();
     try {
-      localStorage.setItem(`rosy-camera-rectification:${source}`, JSON.stringify(profile));
+      localStorage.setItem(rectificationKey(source, currentLens), JSON.stringify(profile));
       if (announce) adjustmentState.textContent = "조정값을 이 브라우저에 저장했습니다.";
     } catch {
       if (announce) adjustmentState.textContent = "브라우저 저장을 사용할 수 없습니다. 이 화면에서만 적용됩니다.";
@@ -170,8 +213,10 @@ export function createVisionView({ el, call, auth }) {
   function loadProfile(source) {
     let profile = DEFAULT_RECTIFICATION;
     try {
-      const saved = localStorage.getItem(`rosy-camera-rectification:${source}`);
+      const { saved, warning } = source ? resolveSavedProfile(localStorage, source, currentLens)
+        : { saved: null, warning: null };
       if (saved) profile = { ...DEFAULT_RECTIFICATION, ...JSON.parse(saved) };
+      if (warning) adjustmentState.textContent = warning;
     } catch {
       adjustmentState.textContent = "저장한 값을 읽지 못해 기본 조정값을 사용합니다.";
     }
@@ -243,6 +288,13 @@ export function createVisionView({ el, call, auth }) {
         cache: "no-store",
       });
       if (source !== select.value) return;
+      const lens = parseLensHeader(response.headers.get("X-Source-Lens"));
+      if (response.ok && (lens?.kind ?? null) !== currentLens) {
+        // 렌즈가 바뀌면 그 렌즈의 보정값으로 바꾸고, 다음 프레임부터 새 값으로 요청한다.
+        currentLens = lens?.kind ?? null;
+        loadProfile(source);
+        lease = null;
+      }
       const rectified = response.headers.get("X-Frame-Rectified") === "true";
       const badge = frameBadge({
         ok: response.ok, status: response.status, rectified,
@@ -271,7 +323,7 @@ export function createVisionView({ el, call, auth }) {
       frame.dataset.state = "online";
       frame.dataset.editing = String(viewMode === "raw");
       cornerOverlay.toggleAttribute("hidden", viewMode !== "raw");
-      el("vision-meta").textContent = `${source} · sequence ${response.headers.get("X-Frame-Seq") || "?"} · age ${response.headers.get("X-Frame-Age-Ms") || "?"} ms · ${rectified ? "화면 보정" : "원본"}`;
+      el("vision-meta").textContent = `${source} · sequence ${response.headers.get("X-Frame-Seq") || "?"} · age ${response.headers.get("X-Frame-Age-Ms") || "?"} ms · ${rectified ? "화면 보정" : "원본"}${lens ? ` · ${LENS_NAMES[lens.kind]} ${lens.focal_mm} mm` : ""}`;
       const seq = response.headers.get("X-Frame-Seq");
       for (const listener of frameListeners) listener({ image, rectified, source, seq, url: nextUrl });
     } catch (error) {
@@ -283,6 +335,7 @@ export function createVisionView({ el, call, auth }) {
   }
 
   function reset() {
+    currentLens = null;
     lease = null;
     leaseExpiresAt = 0;
     lastSourcesAt = 0;
@@ -296,6 +349,7 @@ export function createVisionView({ el, call, auth }) {
   select.addEventListener("change", () => {
     lease = null;
     proposalCorners = null;
+    currentLens = null;
     loadProfile(select.value);
     showState("카메라 전환", "neutral", "선택한 영상의 최신 프레임을 기다립니다.");
     refreshFrame();
@@ -355,7 +409,7 @@ export function createVisionView({ el, call, auth }) {
       const profile = readProfile();
       updateCornerOverlay();
       try {
-        localStorage.setItem(`rosy-camera-rectification:${source}`, JSON.stringify(profile));
+        localStorage.setItem(rectificationKey(source, currentLens), JSON.stringify(profile));
         adjustmentState.textContent = "조정값을 이 브라우저에 저장했습니다.";
       } catch {
         adjustmentState.textContent = "브라우저 저장을 사용할 수 없습니다. 이 화면에서만 적용됩니다.";
@@ -372,7 +426,7 @@ export function createVisionView({ el, call, auth }) {
   }
   el("vision-reset-adjustments").addEventListener("click", () => {
     const source = select.value;
-    if (source) localStorage.removeItem(`rosy-camera-rectification:${source}`);
+    if (source) localStorage.removeItem(rectificationKey(source, currentLens));
     loadProfile(source);
     adjustmentState.textContent = "기본 조정값으로 초기화했습니다.";
     lease = null;
@@ -383,7 +437,8 @@ export function createVisionView({ el, call, auth }) {
     refreshSources().then(refreshFrame);
   });
   // D-360: Vision 제안은 frame 과 같은 lease 로 same-origin 에서 읽는다. Fleet 은 중계하지 않는다.
-  async function fetchFieldProposal() {
+  // D-375 지도 맞춤(map-proposal)도 같은 lease·같은 규칙이다.
+  async function fetchFieldProposal(view = "field-proposal") {
     const source = select.value;
     if (!source || auth.locked || !auth.token) throw new Error("카메라를 먼저 선택하세요.");
     if (!lease || Date.now() >= leaseExpiresAt) {
@@ -397,17 +452,31 @@ export function createVisionView({ el, call, auth }) {
       });
       leaseExpiresAt = Date.now() + 45000;
     }
-    const path = lease.frame_path.replace(/\/frame$/, "/field-proposal");
+    const path = lease.frame_path.replace(/\/frame$/, `/${view}`);
     const response = await fetch(path, {
       headers: { Authorization: `Bearer ${lease.lease}` }, cache: "no-store",
     });
-    if (response.status === 429) throw new Error("잠시 뒤 다시 찾으세요(초당 1회).");
+    if (response.status === 404 && view === "map-proposal" && !response.headers.get("X-Frame-State")) {
+      const text = await response.text().catch(() => "");
+      if (text.includes("not configured")) {
+        throw new Error("Vision에 차선 페인트 지도가 설정되지 않았습니다(vision --map-paint).");
+      }
+      throw new Error("최신 프레임이 없어 맞출 수 없습니다.");
+    }
+    if (response.status === 429) {
+      // 속도 제한·계산 중. 지도 맞춤은 이 표시로 Retry-After 뒤 다시 묻는다(오류로 보이지 않는다).
+      const error = new Error("잠시 뒤 다시 찾으세요(초당 1회).");
+      error.busy = true;
+      error.retryAfterMs = 1000 * (Number(response.headers.get("Retry-After")) || 1);
+      throw error;
+    }
     if (response.status === 422) throw new Error("프레임을 해석하지 못했습니다. 잠시 뒤 다시 찾으세요.");
     if (!response.ok) {
       throw new Error(response.headers.get("X-Frame-State") === "stale"
         ? "최신 프레임이 없어 찾을 수 없습니다." : `Vision 응답 ${response.status}`);
     }
-    return { source, body: await response.json() };
+    // D-375: "previous" 는 계산 중이라 돌려준 지난 결과다. 지도 맞춤은 이것을 수락하게 하지 않는다.
+    return { source, body: await response.json(), proposalState: response.headers.get("X-Proposal-State") };
   }
 
   // 제안을 원본 위 점선 사각형으로 보여 준다. 검토하려면 원본 조정 화면으로 바꾼다.
@@ -427,6 +496,9 @@ export function createVisionView({ el, call, auth }) {
 
   return {
     refreshSources, refreshFrame, reset, fetchFieldProposal, showProposal, acceptCorners,
+    fetchMapProposal: () => fetchFieldProposal("map-proposal"),
+    // 지도 맞춤 행렬은 원본 프레임 픽셀 기준이라 화면 보정 미리보기에서는 원본으로 바꾼다.
+    showRaw: () => { if (viewMode !== "raw") selectViewMode("raw"); },
     currentSource: () => select.value,
     currentCorners: () => readProfile().corners,
     onFrame: (listener) => frameListeners.push(listener),

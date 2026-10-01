@@ -7,11 +7,11 @@ adr_log: docs/reference/ROSY ADR Log.md
 
 # IDs absent from the ADR log on purpose. Remove an entry once the ADR is written.
 adr_gaps:
-  D-375: "reserved by branch feat/overhead-map-auto-register (overhead map registration from lane paint, proposal); remove when its ADR lands"
-  D-378: "reserved by branch docs/d378-real-drive-lane-traffic (real-drive lane traffic doc plan); remove when its ADR lands"
-  D-379: "reserved by branch feat/d379-learning-data-pipeline (learning data pipeline); remove when its ADR lands"
+  D-387: "reserved by branch docs/ota-roadmap-adr (operator-approved rollout of all update layers); remove when its ADR lands"
+  D-388: "reserved by branch feat/release-image-layer-sync (payload push syncs the image layer; renumbered from D-375/D-383/D-385); remove when its ADR lands"
+  D-389: "reserved by branch fix/card-write-confirm-and-artifact-download (emergency card write skips only the readback; renumbered from D-385); remove when its ADR lands"
+  D-391: "reserved by branch docs/d390-site-link-and-device-pairing (site-link record shape and Fleet device-link ownership; renumbered D-387 -> D-390 -> D-391); remove when it lands"
   D-373: "reserved by branch feat/d373-learning-loop-lap2 (learned perception on the Pinky image, snapshot capture, auto shadow delivery); remove when its ADR lands"
-  D-341: "reserved by branch docs/d341-overhead-console-pairing (overhead console-approved pairing, also on feat/pilot-teleop); remove once it lands"
   D-29: "unused; the vision accelerator shield design only proposed the number"
   D-324: "unused; the Pinky artifact-selection ADR was first written as D-324 and renumbered to D-325 to avoid a same-day collision (commit 45f9470b, 2026-09-29). Remove if another session lands an ADR as D-324"
   D-35: "reserved for the swarm formation HOLD decision pending the sim bench"

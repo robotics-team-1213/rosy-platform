@@ -15,6 +15,8 @@
  *   caution  orange, 0.5 Hz blink, until stopped
  *   manual   white, breathing, 3 s period, at most 25 % brightness (D-380)
  *   navigating  cyan, breathing, 4 s period, at most 25 % brightness (D-380)
+ *   blocked  cyan, 2 Hz blink, until stopped — navigating's colour at failed's
+ *            urgency: the goal cannot proceed (D-381)
  *   docking  magenta, 1 Hz blink, until stopped (D-380)
  *   emergency  red, 4 Hz blink, until stopped — four times faster than
  *            failed's 1 Hz, so the two reds never read alike (D-380)
@@ -108,6 +110,11 @@ static int frame(const char *pattern, long elapsed_ms, ws2811_led_t *color)
         *color = rgb(0, level, level);
         return 0;
     }
+    if (strcmp(pattern, "blocked") == 0) {
+        /* D-381: the navigating cyan, but blinking fast — trying and cannot. */
+        *color = (elapsed_ms % 500) < 250 ? rgb(0, DIM, DIM) : 0;
+        return 0;
+    }
     if (strcmp(pattern, "docking") == 0) {
         /* D-380: magenta blink at failed's rate, never its colour. */
         *color = (elapsed_ms % 1000) < 500 ? rgb(DIM, 0, DIM / 2) : 0;
@@ -135,7 +142,7 @@ static int frame(const char *pattern, long elapsed_ms, ws2811_led_t *color)
 static int known(const char *pattern)
 {
     static const char *names[] = {"booting", "ready", "failed", "caution", "manual",
-                                  "navigating", "docking", "emergency", "test", "off"};
+                                  "navigating", "blocked", "docking", "emergency", "test", "off"};
     for (size_t i = 0; i < sizeof(names) / sizeof(names[0]); i++) {
         if (strcmp(pattern, names[i]) == 0) {
             return 1;
@@ -147,7 +154,7 @@ static int known(const char *pattern)
 int main(int argc, char **argv)
 {
     if (argc != 2 || !known(argv[1])) {
-        fprintf(stderr, "usage: lamp_pattern booting|ready|failed|caution|manual|navigating|docking|emergency|test|off\n");
+        fprintf(stderr, "usage: lamp_pattern booting|ready|failed|caution|manual|navigating|blocked|docking|emergency|test|off\n");
         return 64;
     }
     const char *pattern = argv[1];

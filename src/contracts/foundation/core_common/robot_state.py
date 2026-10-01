@@ -64,6 +64,15 @@ OPERATING_MODES = frozenset(ROBOT_MODES - {"IDLE"})
 MODE_LAMP = {"MANUAL": "manual", "NAVIGATION": "navigating", "DOCKING": "docking",
              "EMERGENCY": "emergency"}
 
+#: D-381: CORE's NavigationState (protocol.schemas). Only BLOCKED and FAILED change
+#: what the lamp says; the others are transient or end states of one goal.
+NAV_STATES = frozenset({"IDLE", "PLANNING", "NAVIGATING", "ARRIVED", "CANCELED", "FAILED", "BLOCKED"})
+NAV_STUCK = frozenset({"BLOCKED", "FAILED"})
+
+#: D-383: the swarm role (SwarmRole) as this table sees it — leader/follower ride
+#: beside the mode for the LCD and the dashboard's fourth gauge cell.
+SWARM_ROLES = frozenset({"leader", "follower"})
+
 #: D-247 decision 7: why the robot cannot move, per runtime mode. Empty: the mode holds nothing.
 MOTION_REASON = {
     "core": "모터가 꺼진 CORE 전용 모드입니다. 관리자가 모터 모드로 올려야 움직입니다.",
@@ -128,6 +137,26 @@ def valid_robot_mode(value: Any) -> Optional[str]:
     return value if isinstance(value, str) and value in ROBOT_MODES else None
 
 
+def valid_nav_state(value: Any) -> Optional[str]:
+    """D-381: a known NavigationState name, or None. Same rule as the mode."""
+    return value if isinstance(value, str) and value in NAV_STATES else None
+
+
+def valid_swarm_role(value: Any) -> Optional[str]:
+    """D-383: leader or follower, or None. ``none`` and anything else read as absent."""
+    return value if isinstance(value, str) and value in SWARM_ROLES else None
+
+
+def role_suffix(swarm_role: Any) -> str:
+    """D-383: ``" - LEADER"`` for a formation role on the LCD state line, else empty.
+
+    ASCII like ``mode_suffix``: the boot card font has no Hangul, and the enum
+    word is what the dashboard shows next to its Korean label anyway.
+    """
+    role = valid_swarm_role(swarm_role)
+    return f" - {role.upper()}" if role else ""
+
+
 def mode_suffix(robot_mode: Any) -> str:
     """D-380: ``" - MANUAL"`` for an operating mode (the LCD state line), else empty.
 
@@ -139,13 +168,18 @@ def mode_suffix(robot_mode: Any) -> str:
     return f" - {mode}" if mode in OPERATING_MODES else ""
 
 
-def lamp_pattern(state: Any, robot_mode: Any = None) -> str:
-    """D-380: the one lamp pattern for a health state and CORE's mode.
+def lamp_pattern(state: Any, robot_mode: Any = None, nav_state: Any = None) -> str:
+    """D-380/D-381: the one lamp pattern for a health state, CORE's mode and its navigation.
 
-    Priority: FAILED > EMERGENCY > CAUTION > BOOTING > DOCKING > NAVIGATION >
-    MANUAL > READY. A mode reaches the lamp only through CORE's 10 s hand-over
-    (``status-inputs.json``), so a robot whose CORE is down never keeps showing
-    a stale mode — the health patterns alone answer for it.
+    Priority: FAILED > EMERGENCY > CAUTION > BOOTING > DOCKING > BLOCKED >
+    NAVIGATING > MANUAL > READY. A mode reaches the lamp only through CORE's 10 s
+    hand-over (``status-inputs.json``), so a robot whose CORE is down never keeps
+    showing a stale mode — the health patterns alone answer for it.
+
+    D-381: inside NAVIGATION, a goal that is BLOCKED or FAILED blinks the same
+    cyan ("blocked") instead of breathing — the robot says "I am trying and
+    cannot", not "I am moving". The other nav states are transient ends of one
+    goal and do not change the pattern.
     """
     mode = valid_robot_mode(robot_mode)
     if state == FAILED:
@@ -156,8 +190,14 @@ def lamp_pattern(state: Any, robot_mode: Any = None) -> str:
         return "caution"
     if state == BOOTING:
         return "booting"
-    if mode in MODE_LAMP:
-        return MODE_LAMP[mode]
+    if mode == "DOCKING":
+        return "docking"
+    if mode == "NAVIGATION" and valid_nav_state(nav_state) in NAV_STUCK:
+        return "blocked"
+    if mode == "NAVIGATION":
+        return "navigating"
+    if mode == "MANUAL":
+        return "manual"
     return "ready"
 
 

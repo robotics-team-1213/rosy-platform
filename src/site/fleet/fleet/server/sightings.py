@@ -85,6 +85,10 @@ class SightingService:
         self._latest: dict[str, dict] = store.load_latest() if store is not None else {}
 
     @property
+    def sources(self) -> tuple[SightingSource, ...]:
+        return tuple(self._sources)
+
+    @property
     def enabled(self) -> bool:
         return bool(self._sources)
 

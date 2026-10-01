@@ -20,6 +20,13 @@ data class OverheadConfig(
     }
 }
 
+/**
+ * Optional additive `hello.lens` (2026-09-30): which lens the frames come from, for a later
+ * calibration choice. Receivers ignore unknown hello fields, so older ones just skip it.
+ * [focalMm] and [hfovDeg] go on the wire rounded to 0.1.
+ */
+data class HelloLens(val kind: String, val focalMm: Double, val hfovDeg: Double)
+
 /** Text messages from the adapter. */
 sealed interface ServerMessage {
     data class Config(val config: OverheadConfig) : ServerMessage
@@ -42,6 +49,23 @@ object Protocol {
     const val CLOSE_UNAUTHORIZED = 4401
     const val CLOSE_REPLACED = 4409
 
+    /** RFC 6455 "Try Again Later": the receiver is overloaded; always retryable. */
+    const val CLOSE_TRY_AGAIN = 1013
+
+    /** D-341 11: the receiver cannot tell whether the credential is valid (e.g. Fleet down); retryable, not an auth failure. */
+    const val CLOSE_CREDENTIAL_UNKNOWN = 4503
+
+    // Transition exception, remove one release after every site runs 1013 receivers (D-341 §11).
+    private val TRANSIENT_4400 = setOf("", "no hello")
+
+    /**
+     * Close 4400 is an incompatibility (wrong `proto`, hello schema) for every reason except exactly
+     * "" or "no hello" (trimmed, case-insensitive), which pre-1013 receivers sent when their hello timer
+     * fired; those retry. Validation messages never match. Shared cases: vectors `close_4400_reasons`.
+     */
+    fun isIncompatibleClose(code: Int, reason: String): Boolean =
+        code == CLOSE_BAD_PROTO && reason.trim().lowercase() !in TRANSIENT_4400
+
     fun hello(
         source: String,
         appVersion: String,
@@ -49,6 +73,7 @@ object Protocol {
         sensorWidth: Int,
         sensorHeight: Int,
         rotationDeg: Int,
+        lens: HelloLens? = null,
     ): String = JSONObject()
         .put("type", "hello")
         .put("proto", PROTO)
@@ -62,7 +87,20 @@ object Protocol {
                 .put("height", sensorHeight)
                 .put("rotation_deg", rotationDeg),
         )
+        .apply {
+            if (lens != null) {
+                put(
+                    "lens",
+                    JSONObject()
+                        .put("kind", lens.kind)
+                        .put("focal_mm", round1(lens.focalMm))
+                        .put("hfov_deg", round1(lens.hfovDeg)),
+                )
+            }
+        }
         .toString()
+
+    private fun round1(value: Double): Double = Math.round(value * 10.0) / 10.0
 
     fun parseServerMessage(text: String): ServerMessage {
         val obj = try {

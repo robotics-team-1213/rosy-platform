@@ -120,12 +120,18 @@
         <div class="hero-state">
           <span class="hero-label">CURRENT MODE</span>
           <strong id="robot-mode"></strong>
+          <ui-tag status="warn" id="calibration-chip" data-calibration-chip hidden></ui-tag>
           <span id="state-sequence" class="sequence">SEQ</span>
         </div>
         <div class="hero-safety" id="safety-indicator">
           <span class="hero-label">SAFETY CIRCUIT</span>
           <strong id="safety-label">UNKNOWN</strong>
           <span id="safety-source">확인 전</span>
+        </div>
+        <div class="hero-formation" id="hero-formation" hidden>
+          <span class="hero-label">FORMATION ROLE</span>
+          <strong id="robot-role"></strong>
+          <span id="robot-formation"></span>
         </div>
       </section>
 

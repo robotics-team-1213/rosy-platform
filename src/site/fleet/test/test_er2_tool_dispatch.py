@@ -71,6 +71,35 @@ def test_get_mission_status_reads_only_the_durable_turn_mission(tmp_path):
     assert client.app.state.mission_service.get(mission_id)["status"] == "RUNNING"
 
 
+def test_get_mission_status_includes_only_durable_read_only_phase_projection(tmp_path):
+    client, mission_id = _running_mission(tmp_path)
+    mission = client.app.state.mission_service.get(mission_id)
+    client.app.state.mission_service.store.record_action_phase_summaries(
+        mission_id, action_id=mission["action_id"], attempt_id=mission["attempt_id"],
+        authority_epoch=mission["authority_epoch"],
+        dispatch_generation=mission["dispatch_generation"], phases=[{
+            "phase_id": "approach", "ordinal": 0, "state": "RUNNING",
+            "journal_event_id": 2,
+            "observed_at": datetime.now(timezone.utc).isoformat(),
+        }],
+    )
+
+    result = _dispatcher(client).dispatch(
+        scope=_scope(client, mission_id), call_id="call-phase-status",
+        tool_name="get_mission_status", arguments={},
+    )
+
+    assert result.status == "accepted"
+    assert result.payload["active_phase"] == "approach"
+    assert result.payload["phases"] == [{
+        "phase_id": "approach", "ordinal": 0, "state": "RUNNING",
+        "last_event_id": result.payload["phases"][0]["last_event_id"],
+        "observed_at": result.payload["phases"][0]["observed_at"],
+    }]
+    assert "driver_goal_id" not in str(result.payload)
+    assert "trajectory" not in str(result.payload)
+
+
 def test_tool_dispatch_denies_cross_principal_workcell_and_model_selected_ids(tmp_path):
     client, mission_id = _running_mission(tmp_path)
     dispatcher = _dispatcher(client)

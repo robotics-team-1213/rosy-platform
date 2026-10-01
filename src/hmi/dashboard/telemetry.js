@@ -55,7 +55,15 @@ export function renderRobotInfo(info) {
   renderSafetyHero();
   const name = info.robot_name || info.name || "Rosy";
   setText("robot-name", name);
-  setText("robot-id", `${info.robot_id || "—"} / ${info.hardware_model || "unknown model"} / ${info.runtime_mode || "core"}`);
+  // 계보줄: 누구인지·무엇으로 돌아가는지를 한 줄로. 버전은 정체성의 일부다 —
+  // "지금 뭘 돌리고 있나"는 운용 첫 화면에서 답해야 한다(D-280).
+  const lineage = [
+    info.robot_id || "—",
+    info.hardware_model || "unknown model",
+    info.software_version ? `v${info.software_version}` : null,
+    info.runtime_mode || "core",
+  ].filter(Boolean);
+  setText("robot-id", lineage.join(" / "));
   fillIdentityForm(info);
 }
 
@@ -225,6 +233,20 @@ export function renderSafetyHero() {
   elements["safety-indicator"].className = `hero-safety ${hero.tone}`;
   setText("safety-label", hero.label);
   setText("safety-source", hero.source);
+}
+
+/* 편대 역할 — 대형에 속해 있을 때만 계기 셋에 네 번째 칸으로 나타난다.
+   role은 스냅샷의 swarm.role(leader/follower/none)이고 formation은 대형 이름.
+   none이면 칸 전체가 사라진다: 편대 밖 로봇에게 이 칸은 잡음이다. */
+export function renderFormationHero(swarm = {}) {
+  const cell = elements["hero-formation"];
+  const role = swarm?.role;
+  if (!cell) return;
+  const known = role === "leader" || role === "follower";
+  cell.hidden = !known;
+  if (!known) return;
+  setText("robot-role", role === "leader" ? "리더" : "팔로워");
+  setText("robot-formation", swarm?.formation || "");
 }
 
 export function renderCapabilityPanels(capabilities) {

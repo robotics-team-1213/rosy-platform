@@ -28,8 +28,8 @@
 
 ## 최근 기록
 
-- 2026-09-30 · uncommitted · docs(adr): D-375 에서 D-380 으로 개명
-- 2026-09-30 · uncommitted · feat(host): D-375 status-inputs 핸드오버에 robot_mode 추가
-- 2026-09-30 · uncommitted · fix(api): 계약 문구 v1.60 — 세 번째 연속 핀 누락 마무리
-- 2026-09-30 · ff6938e4 · D-359 US-002 device 패널 목록에 system.display
-- 2026-09-30 · uncommitted · fix(api): 계약 문구 v1.59 — D-348 회차가 놓친 버전 핀 마무리
+- 2026-10-01 · 76c70e20 · merge(main) + API Ref v1.68 로 재번호, 검증 틈 시험 3건
+- 2026-10-01 · 4f54dc54 · fix(core): 리뷰 반영 — 시작 조건, 차단 확대
+- 2026-10-01 · 1ae6b239 · fix(core): 보정 차단을 navigation·docking·swarm 까지, IDLE 은 열어 둔다
+- 2026-10-01 · 1a1a2c3a · docs(api): API Ref v1.67 과 버전 핀
+- 2026-10-01 · a527920a · feat(api): /api/v1/calibration/session 과 CALIBRATION_ACTIVE 차단

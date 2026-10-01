@@ -157,6 +157,19 @@ ui-button[kind="toggle"][data-active="true"] {
   font-weight: var(--weight-strong);
 }
 
+/* 누르는 동안만 도는 자동 진행(D-344): 대기는 초록 테두리, 누르는 동안은 초록 채움. */
+ui-button[kind="toggle"][tone="good"] {
+  color: var(--status-good);
+  border-color: var(--status-good);
+}
+
+ui-button[kind="toggle"][tone="good"].active {
+  color: var(--button-primary-ink);
+  background: var(--status-good);
+  border-color: transparent;
+  font-weight: var(--weight-strong);
+}
+
 ui-button[data-size="secondary"] { min-height: var(--target-secondary); }
 ui-button[data-size="primary"] { min-height: var(--target-primary); }
 ui-button[data-size="irreversible"] { min-height: var(--target-irreversible); }

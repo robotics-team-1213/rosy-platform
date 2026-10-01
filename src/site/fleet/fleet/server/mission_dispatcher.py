@@ -8,7 +8,9 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Mapping
 
-from core_common.protocol.schemas import DeviceActionReceipt, FleetActionGrant
+from core_common.protocol.schemas import (
+    DeviceActionPhaseReceipt, DeviceActionReceipt, FleetActionGrant,
+)
 
 from .local_action_transport import (
     DeviceActionTransport,
@@ -161,6 +163,12 @@ class MissionDispatcher:
         )
         if actual != expected:
             raise ValueError("local Action receipt does not match its Fleet grant")
+        if receipt.phase_summaries is None:
+            raise ValueError("v2 PICK_PLACE receipt is missing phase summaries")
+        if receipt.state.value == "SUCCEEDED" and (
+                [phase.ordinal for phase in receipt.phase_summaries] != [0, 1, 2, 3]
+                or any(phase.state != "SUCCEEDED" for phase in receipt.phase_summaries)):
+            raise ValueError("successful PICK_PLACE receipt requires four successful phases")
         return receipt
 
     def _reconcile(self, mission: Mapping[str, Any]) -> dict[str, Any]:
@@ -224,6 +232,18 @@ class MissionDispatcher:
 
     def _apply_receipt(self, grant: FleetActionGrant,
                        receipt: DeviceActionReceipt) -> dict[str, Any]:
+        try:
+            phases = [DeviceActionPhaseReceipt.model_validate(phase).model_dump(mode="json")
+                      for phase in (receipt.phase_summaries or ())]
+            self.mission_service.store.record_action_phase_summaries(
+                grant.mission_id, action_id=grant.action_id,
+                attempt_id=grant.attempt_id, authority_epoch=grant.authority_epoch,
+                dispatch_generation=grant.dispatch_generation, phases=phases,
+            )
+        except Exception:
+            return self._record_outcome(
+                grant, "UNKNOWN", {"reason": "LOCAL_ACTION_PHASE_READBACK_CONFLICT"},
+            )
         state = receipt.state.value
         if state in _TERMINAL:
             outcome = "SUCCEEDED" if state == "SUCCEEDED" else state

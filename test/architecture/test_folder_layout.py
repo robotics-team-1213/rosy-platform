@@ -139,8 +139,9 @@ def test_capture_markdown_is_only_the_data_readme():
     assert (data / "teleop").is_dir()
     assert (data / "drive").is_dir()
     learning = data / "teleop" / "learning"
+    # New sessions land here too (gitignored, D-379); the seven tracked clips must stay.
     clips = sorted(path.name for path in learning.glob("*.mp4"))
-    assert clips == [
+    assert set(clips) >= {
         "teleop_20260919_151213_part01.mp4",
         "teleop_20260919_151213_part02.mp4",
         "teleop_20260919_151213_part03.mp4",
@@ -148,5 +149,5 @@ def test_capture_markdown_is_only_the_data_readme():
         "teleop_20260919_151213_part05.mp4",
         "teleop_20260919_151213_part06.mp4",
         "teleop_20260919_151213_part07.mp4",
-    ]
+    }
     assert not (ROOT / "video").exists()

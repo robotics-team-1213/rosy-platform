@@ -1,4 +1,4 @@
-﻿"""core_api_web.api.v1.host ??Host Agent 由대젅??(?ㅽ듃?뚰겕쨌由대━?ㅒ룹빱誘몄뀛??? ?μ튂 愿痢?D-247)."""
+"""core_api_web.api.v1.host — Host Agent 릴레이 (네트워크·릴리스·커미셔닝)와 장치 관측(D-247)."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from typing import Any, Optional
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
-from core_api_web.api.v1.common import admin, viewer
+from core_api_web.api.v1.common import admin, require_calibration_owner, viewer
 from core_api_web.api.deps import AuthContext, get_services, CoreServicesLike
 from core_api_web.api.host_agent_client import HostAgentClient, TIMEOUT, UNAVAILABLE
 from core_common import robot_state
@@ -18,12 +18,12 @@ from core_common.protocol.schemas import HostStatusEvidence
 from . import host_hardware as _host_hardware
 
 
-# --- Network / Release / Commissioning (WP-5, ?ㅺ퀎 짠10.2/짠10.3) --------------
+# --- Network / Release / Commissioning (WP-5, 설계 §10.2/§10.3) --------------
 #
-# CORE ???몄뒪??沅뚰븳???놁쑝誘濡??????붾㈃???곗씠?곕뒗 ?꾨? Host Agent ?먯꽌 ?⑤떎.
-# ?먯씠?꾪듃媛 ?녿뒗 ?곹깭(媛쒕컻 ?λ퉬, ?쒕퉬??誘멸린?????덉쇅媛 ?꾨땲???뺤긽?곸쑝濡?
-# ?덉쓣 ???덈뒗 ?곹깭?대ŉ, 洹몃븣 **?녿뒗 媛믪쓣 洹몃윺??븯寃?梨꾩슦吏 ?딅뒗??** 鍮?移몄?
-# ?댁쁺?먯뿉寃?"?댁긽 ?놁쓬" ?쇰줈 ?쏀엳怨? 吏?대궦 媛믪? ?ъ떎濡??쏀엺??
+# CORE 는 호스트 권한이 없으므로 이 세 화면의 데이터는 전부 Host Agent 에서 온다.
+# 에이전트가 없는 상태(개발 장비, 서비스 미기동)는 예외가 아니라 정상적으로
+# 있을 수 있는 상태이며, 그때 **없는 값을 그럴듯하게 채우지 않는다.** 빈 칸은
+# 운영자에게 "이상 없음" 으로 읽히고, 지어낸 값은 사실로 읽힌다.
 
 host_router = APIRouter(prefix="/api/v1/host", tags=["host"])
 host_router.include_router(_host_hardware.hardware_router)
@@ -51,30 +51,30 @@ def _status_evidence(reply) -> HostStatusEvidence:
     base = {"stale_after_s": HOST_STATUS_STALE_AFTER_S}
     if reply.code in {UNAVAILABLE, TIMEOUT}:
         return HostStatusEvidence(evidence=EvidenceState.DISCONNECTED,
-                                  reason="Host Agent???곌껐?섏? ?딆븯嫄곕굹 ?묐떟???쒓컙 ?덉뿉 ?ㅼ? ?딆븯?듬땲??", **base)
+                                  reason="Host Agent에 연결되지 않았거나 응답이 시간 안에 오지 않았습니다.", **base)
     if not reply.reachable or not reply.ok:
-        return HostStatusEvidence(reason="Host Agent媛 ?꾩쟾???곹깭 議고쉶 寃곌낵瑜?二쇱? ?딆븯?듬땲??", **base)
+        return HostStatusEvidence(reason="Host Agent가 완전한 상태 조회 결과를 주지 않았습니다.", **base)
     try:
         observed = datetime.fromisoformat(reply.observed_at) if reply.observed_at else None
     except (TypeError, ValueError):
         observed = None
     if observed is None or observed.tzinfo is None or observed.utcoffset().total_seconds() != 0:
-        return HostStatusEvidence(reason="Host Agent ?먮낯 議고쉶 ?꾨즺 ?쒓컖???놁뒿?덈떎.", **base)
+        return HostStatusEvidence(reason="Host Agent 원본 조회 완료 시각이 없습니다.", **base)
     age = (datetime.now(timezone.utc) - observed).total_seconds()
     if age < 0:
-        return HostStatusEvidence(reason="Host Agent ?먮낯 ?쒓컖??CORE ?쒓컖蹂대떎 誘몃옒?낅땲??", **base)
+        return HostStatusEvidence(reason="Host Agent 원본 시각이 CORE 시각보다 미래입니다.", **base)
     state = EvidenceState.DELAYED if age > HOST_STATUS_STALE_AFTER_S else EvidenceState.FRESH
     return HostStatusEvidence(evidence=state, observed_at=reply.observed_at,
                               age_s=round(age, 1),
-                              reason="Host Agent ?먮낯 議고쉶媛 吏?곕릺?덉뒿?덈떎." if state is EvidenceState.DELAYED
-                              else "Host Agent ?먮낯 議고쉶 ?꾨즺 ?쒓컖???뺤씤?덉뒿?덈떎.", **base)
+                              reason="Host Agent 원본 조회가 지연되었습니다." if state is EvidenceState.DELAYED
+                              else "Host Agent 원본 조회 완료 시각을 확인했습니다.", **base)
 
 
 def _relay(reply, *, absent_detail: str, status_read: bool = False) -> dict:
     """Turn an agent reply into a card payload that cannot mislead.
 
     ``available`` is the field the dashboard keys on. When it is false the
-    card shows why instead of showing empty fields ??an unreachable agent and
+    card shows why instead of showing empty fields — an unreachable agent and
     a healthy device with nothing to report look identical otherwise.
     """
     evidence = _status_evidence(reply) if status_read else None
@@ -104,9 +104,9 @@ def _relay(reply, *, absent_detail: str, status_read: bool = False) -> dict:
 
 @host_router.get("/network")
 def host_network(_: AuthContext = Depends(viewer), svc: CoreServicesLike = Depends(get_services)):
-    """?꾩옱 ?ㅽ듃?뚰겕 紐⑤뱶? ?꾨떖?? SSID ???쒖떆?섎릺 secret ? ?덈? ?ｌ? ?딅뒗??"""
+    """현재 네트워크 모드와 도달성. SSID 는 표시하되 secret 은 절대 싣지 않는다."""
     reply = _agent(svc).request("network.status", role="viewer")
-    return _relay(reply, absent_detail="Host Agent ???곌껐?????놁뼱 ?ㅽ듃?뚰겕 ?곹깭瑜??????놁뒿?덈떎.",
+    return _relay(reply, absent_detail="Host Agent 에 연결할 수 없어 네트워크 상태를 알 수 없습니다.",
                   status_read=True)
 
 
@@ -144,7 +144,7 @@ def host_network_apply(
         params={"profile_id": body.profile_id},
         idempotency_key=body.idempotency_key,
     )
-    return _relay(reply, absent_detail="Host Agent ???곌껐?????놁뼱 ?ㅽ듃?뚰겕 ?꾨줈?뚯씪??諛붽씀吏 紐삵뻽?듬땲??")
+    return _relay(reply, absent_detail="Host Agent 에 연결할 수 없어 네트워크 프로파일을 바꾸지 못했습니다.")
 
 
 @host_router.post("/network/mode")
@@ -162,7 +162,7 @@ def host_network_mode(
         params={"mode": body.mode},
         idempotency_key=body.idempotency_key,
     )
-    return _relay(reply, absent_detail="Host Agent ???곌껐?????놁뼱 ?ㅽ듃?뚰겕 紐⑤뱶瑜?諛붽씀吏 紐삵뻽?듬땲??")
+    return _relay(reply, absent_detail="Host Agent 에 연결할 수 없어 네트워크 모드를 바꾸지 못했습니다.")
 
 
 def _without_secrets(payload: dict) -> dict:
@@ -193,27 +193,36 @@ def host_network_connect(
         idempotency_key=body.idempotency_key,
     )
     return _without_secrets(
-        _relay(reply, absent_detail="Host Agent ???곌껐?????놁뼱 Wi-Fi???곌껐?섏? 紐삵뻽?듬땲??")
+        _relay(reply, absent_detail="Host Agent 에 연결할 수 없어 Wi-Fi에 연결하지 못했습니다.")
     )
 
 
 @host_router.get("/release")
 def host_release(_: AuthContext = Depends(viewer), svc: CoreServicesLike = Depends(get_services)):
-    """current / previous / staged ? 留덉?留??ㅽ뙣 ?ъ쑀."""
+    """current / previous / staged 와 마지막 실패 사유."""
     reply = _agent(svc).request("release.status", role="viewer")
-    return _relay(reply, absent_detail="Host Agent ???곌껐?????놁뼱 由대━???곹깭瑜??????놁뒿?덈떎.",
+    return _relay(reply, absent_detail="Host Agent 에 연결할 수 없어 릴리스 상태를 알 수 없습니다.",
                   status_read=True)
 
 
 class HostActionRequest(BaseModel):
-    """?뚭눼??紐낅졊??怨듯넻 ?낅젰.
+    """파괴적 명령의 공통 입력.
 
-    `confirmed` ????쒕낫?쒖쓽 ?ы솗?몄씠 ?ㅼ젣濡??덉뿀?뚯쓣 ?삵븳?? 湲곕낯媛믪씠 False ??
-    寃껋씠 ?듭떖?대떎 ??鍮좊쑉由щ㈃ ?ㅽ뻾?섏? ?딄퀬 嫄곕??쒕떎.
+    `confirmed` 는 대시보드의 재확인이 실제로 있었음을 뜻한다. 기본값이 False 인
+    것이 핵심이다 — 빠뜨리면 실행되지 않고 거부된다.
     """
 
     confirmed: bool = False
     idempotency_key: str | None = None
+    # D-321 addendum: install/rollback/reboot restart CORE and end a running
+    # calibration. Another token must say so explicitly to go ahead.
+    override_calibration: bool = False
+
+
+def _calibration_fence(svc: CoreServicesLike, auth: AuthContext, body: HostActionRequest,
+                       action: str) -> None:
+    if not body.override_calibration:
+        require_calibration_owner(svc, auth, f"{action} (set override_calibration to end it)")
 
 
 class ReleaseInstallRequest(HostActionRequest):
@@ -226,6 +235,7 @@ def host_release_install(
     auth: AuthContext = Depends(admin),
     svc: CoreServicesLike = Depends(get_services),
 ):
+    _calibration_fence(svc, auth, body, "release install")
     reply = _agent(svc).request(
         "release.install",
         role="administrator",
@@ -234,7 +244,7 @@ def host_release_install(
         params={"release_id": body.release_id},
         idempotency_key=body.idempotency_key,
     )
-    return _relay(reply, absent_detail="Host Agent ???곌껐?????놁뼱 ?ㅼ튂瑜??쒖옉?섏? 紐삵뻽?듬땲??")
+    return _relay(reply, absent_detail="Host Agent 에 연결할 수 없어 설치를 시작하지 못했습니다.")
 
 
 @host_router.post("/release/rollback")
@@ -243,6 +253,7 @@ def host_release_rollback(
     auth: AuthContext = Depends(admin),
     svc: CoreServicesLike = Depends(get_services),
 ):
+    _calibration_fence(svc, auth, body, "release rollback")
     reply = _agent(svc).request(
         "release.rollback",
         role="administrator",
@@ -250,7 +261,7 @@ def host_release_rollback(
         confirmed=body.confirmed,
         idempotency_key=body.idempotency_key,
     )
-    return _relay(reply, absent_detail="Host Agent ???곌껐?????놁뼱 濡ㅻ갚???쒖옉?섏? 紐삵뻽?듬땲??")
+    return _relay(reply, absent_detail="Host Agent 에 연결할 수 없어 롤백을 시작하지 못했습니다.")
 
 
 @host_router.post("/release/clear-hold")
@@ -259,7 +270,7 @@ def host_release_clear_hold(
     auth: AuthContext = Depends(admin),
     svc: CoreServicesLike = Depends(get_services),
 ):
-    """RECOVERY HOLD ?댁젣. ???以묒뿉??install ??嫄곕??섎?濡?蹂꾨룄???섎룄???됱쐞??"""
+    """RECOVERY HOLD 해제. 홀드 중에는 install 이 거부되므로 별도의 의도적 행위다."""
     reply = _agent(svc).request(
         "release.clear_hold",
         role="administrator",
@@ -267,7 +278,7 @@ def host_release_clear_hold(
         confirmed=body.confirmed,
         idempotency_key=body.idempotency_key,
     )
-    return _relay(reply, absent_detail="Host Agent ???곌껐?????놁뼱 ??쒕? ?댁젣?섏? 紐삵뻽?듬땲??")
+    return _relay(reply, absent_detail="Host Agent 에 연결할 수 없어 홀드를 해제하지 못했습니다.")
 
 
 @host_router.post("/reboot")
@@ -277,6 +288,7 @@ def host_reboot(
     svc: CoreServicesLike = Depends(get_services),
 ):
     """Relay Host Agent system.reboot. CORE does not call reboot itself (D-22)."""
+    _calibration_fence(svc, auth, body, "reboot")
     reply = _agent(svc).request(
         "system.reboot",
         role="administrator",
@@ -284,7 +296,7 @@ def host_reboot(
         confirmed=body.confirmed,
         idempotency_key=body.idempotency_key,
     )
-    return _relay(reply, absent_detail="Host Agent ???곌껐?????놁뼱 ?щ??낇븯吏 紐삵뻽?듬땲??")
+    return _relay(reply, absent_detail="Host Agent 에 연결할 수 없어 재부팅하지 못했습니다.")
 
 
 # D-247 7's sentences live in the D-260 rule table, which the boot display shares.
@@ -293,27 +305,27 @@ MOTION_REASON = robot_state.MOTION_REASON
 
 @host_router.get("/commissioning")
 def host_commissioning(_: AuthContext = Depends(viewer), svc: CoreServicesLike = Depends(get_services)):
-    """runtime mode ? hardware ?ъ듅???ъ쑀.
+    """runtime mode 와 hardware 재승인 사유.
 
-    runtime mode ??CORE 媛 ?ㅼ뒪濡??덈떎 ???먭린媛 臾댁뾿?쇰줈 湲곕룞?덈뒗吏???몄뒪?몄뿉
-    臾살? ?딆븘???쒕떎. 洹몃옒????移대뱶???먯씠?꾪듃媛 ?놁뼱???덈컲? ?뺤쭅?섍쾶 梨꾩슫??
+    runtime mode 는 CORE 가 스스로 안다 — 자기가 무엇으로 기동했는지는 호스트에
+    묻지 않아도 된다. 그래서 이 카드는 에이전트가 없어도 절반은 정직하게 채운다.
     """
     mode = (svc.config or {}).get("runtime", {}).get("mode", "core")
     if mode == "core":
         detail = (
-            "UART쨌紐⑦꽣 誘몄듅???곹깭?낅땲?? ?닿쾬? ?뺤긽?대ŉ, ?밴꺽? 蹂꾨룄 ?꾩옣 ?덉쟾 "
-            "?덉감瑜??곕쫭?덈떎."
+            "UART·모터 미승인 상태입니다. 이것은 정상이며, 승격은 별도 현장 안전 "
+            "절차를 따릅니다."
         )
     elif mode == "motor":
         detail = (
-            "紐⑦꽣 踰ㅼ튂 紐⑤뱶?낅땲?? LiDAR???꾩쭅 爰쇱졇 ?덉쑝硫?hardware 紐⑤뱶??"
-            "蹂꾨룄 ?섎씫???꾩슂?⑸땲?? 諛고꽣由?ADC, IMU, SLAM, Fleet???놁뒿?덈떎."
+            "모터 벤치 모드입니다. LiDAR는 아직 꺼져 있으며 hardware 모드는 "
+            "별도 수락이 필요합니다. 배터리 ADC, IMU, SLAM, Fleet는 없습니다."
         )
     else:
         detail = (
-            f"?꾩옱 {mode} 紐⑤뱶濡?湲곕룞?섏뼱 ?덉뒿?덈떎. 紐⑦꽣? LiDAR? Nav2????"
-            "?щ씪?댁뒪???덉뒿?덈떎. 諛고꽣由??꾩븬(ADC), IMU, SLAM, Fleet??"
-            "?꾩슦吏 ?딆뒿?덈떎."
+            f"현재 {mode} 모드로 기동되어 있습니다. 모터와 LiDAR와 Nav2는 이 "
+            "슬라이스에 있습니다. 배터리 전압(ADC), IMU, SLAM, Fleet는 "
+            "띄우지 않습니다."
         )
     return {
         "runtime_mode": mode,
@@ -366,7 +378,7 @@ def _battery_reading(snapshot: Any) -> tuple[Optional[float], Optional[float]]:
 
 @host_router.get("/status-summary")
 def host_status_summary(auth: AuthContext = Depends(viewer), svc: CoreServicesLike = Depends(get_services)):
-    """?댁슜 ?붾㈃ ?붿빟以?D-260 5): 濡쒕큸 ?곹깭 ?섎굹, ?댁쑀, ?μ튂 ?붿빟, 諛고꽣由?룹삩?? ????"""
+    """운용 화면 요약줄(D-260 5): 로봇 상태 하나, 이유, 장치 요약, 배터리·온도, 할 일."""
     cfg = (svc.config or {}).get("hardware_probe", {}) or {}
     boot = read_boot_status(str(cfg.get("boot_status_path", BOOT_STATUS_FILE)))
     # CORE is answering, so a missing indicator file is not "booting": the stage
@@ -430,6 +442,20 @@ def _robot_mode(svc: CoreServicesLike) -> Optional[str]:
     return robot_state.valid_robot_mode(getattr(mode, "value", mode))
 
 
+def _nav_state(svc: CoreServicesLike) -> Optional[str]:
+    """D-381: CORE's live NavigationState, same duck-typing and same absence rule."""
+    snapshot = getattr(getattr(svc, "state", None), "snapshot", None)
+    nav = getattr(snapshot() if callable(snapshot) else None, "navigation", None)
+    return robot_state.valid_nav_state(getattr(nav, "value", nav))
+
+
+def _swarm_role(svc: CoreServicesLike) -> Optional[str]:
+    """D-383: the live swarm role (leader/follower), same rules as the mode."""
+    snapshot = getattr(getattr(svc, "state", None), "snapshot", None)
+    swarm = getattr(snapshot() if callable(snapshot) else None, "swarm", None)
+    return robot_state.valid_swarm_role(getattr(swarm, "role", None))
+
+
 def status_inputs(svc: CoreServicesLike) -> dict[str, Any]:
     """What the root side cannot know: the live warning threshold, the overlaid device states and the live robot mode."""
     hardware = host_hardware(None, svc)
@@ -437,7 +463,8 @@ def status_inputs(svc: CoreServicesLike) -> dict[str, Any]:
                for row in (hardware["devices"] if hardware.get("available") else [])]
     return {"schema": 1, "written_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
             "battery_warning_percent": _warning_percent(svc), "devices": devices,
-            "robot_mode": _robot_mode(svc)}
+            "robot_mode": _robot_mode(svc), "nav_state": _nav_state(svc),
+            "swarm_role": _swarm_role(svc)}
 
 
 def write_status_inputs(svc: CoreServicesLike) -> None:

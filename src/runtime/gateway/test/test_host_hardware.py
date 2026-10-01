@@ -645,7 +645,9 @@ def test_the_script_renders_six_states_and_the_motion_reason():
     assert "session.motionReason = reason" in script
     assert 'setEnabled("hardware-refresh", isAdmin())' in script
     # No raw colour for the chips: they reuse the shared [data-status] vocabulary.
-    css = (WEB / "styles.css").read_text(encoding="utf-8")
+    # D-362 P1: the device-card section lives in console-detail.css now.
+    css = "\n".join((WEB / name).read_text(encoding="utf-8")
+                    for name in ("styles.css", "console-detail.css"))
     device_rules = css.split("D-247 장치 카드")[1].split("\n\n")[0]
     assert "#" not in device_rules.split("*/", 1)[1] and "rgb" not in device_rules
 

@@ -182,6 +182,7 @@ async def _authorize(websocket: WebSocket, min_role: str = "viewer",
         return None
     if query_token is not None:
         await websocket.accept()
+    websocket.state.token_id = auth.token_id
     websocket.state.token_guard = asyncio.create_task(_watch_token(websocket, svc, auth.token_id))
     return svc
 
@@ -265,6 +266,7 @@ async def ws_swarm_reference(websocket: WebSocket):
     svc = await _authorize(websocket, min_role="operator")
     if svc is None:
         return
+    token_id = getattr(websocket.state, "token_id", None)
     try:
         while True:
             raw = await websocket.receive_text()
@@ -274,6 +276,11 @@ async def ws_swarm_reference(websocket: WebSocket):
                 continue
             reference = _reference_from(frame)
             if reference is None:
+                continue
+            if svc.calibration.blocking(token_id) is not None:
+                # D-321 addendum: a leader pose from anyone but the calibration
+                # owner must not steer a follower during the lease. Drop the
+                # frame (like a malformed one); SWM-004 holds on silence.
                 continue
             try:
                 svc.swarm.on_reference_pose(reference)

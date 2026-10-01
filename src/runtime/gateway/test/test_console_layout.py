@@ -12,6 +12,7 @@ import re
 WEB_ROOT = Path(__file__).resolve().parents[3] / "hmi" / "dashboard"
 INDEX = WEB_ROOT / "index.html"
 STYLES = WEB_ROOT / "styles.css"
+DETAIL = WEB_ROOT / "console-detail.css"
 APP = WEB_ROOT / "app.js"
 
 
@@ -20,7 +21,9 @@ def html() -> str:
 
 
 def css() -> str:
-    return STYLES.read_text(encoding="utf-8")
+    # D-362 P1 split the surface CSS; console-detail.css links after styles.css,
+    # so the cascade these rules live in is both files together.
+    return "\n".join(path.read_text(encoding="utf-8") for path in (STYLES, DETAIL))
 
 
 def test_the_two_grammars_live_in_separate_containers():
@@ -107,7 +110,9 @@ def test_the_view_switch_is_wired_and_defaults_to_operate():
     app = APP.read_text(encoding="utf-8")
     assert 'showView("operate")' in app, "기본 뷰를 운용으로 두지 않는다"
     assert 'elements["view-inspect"].addEventListener' in app
-    assert 'document.body.dataset.view' in app, "꼬리말 규칙이 기대는 페이지 상태가 없다"
+    # D-362 P1: the renderer module owns writing the body's view state.
+    telemetry = (WEB_ROOT / "telemetry.js").read_text(encoding="utf-8")
+    assert 'document.body.dataset.view' in telemetry, "꼬리말 규칙이 기대는 페이지 상태가 없다"
 
 
 def test_the_map_controls_ride_on_the_map_instead_of_stealing_its_height():

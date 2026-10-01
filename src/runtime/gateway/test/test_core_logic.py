@@ -78,6 +78,30 @@ class TestArbitration:
         assert m.release_emergency()[0]
         assert m.mode is Mode.IDLE
 
+    def test_release_emergency_runs_the_change_listeners(self):
+        # D-380 fix: release bypassed the listener contract transition() honours,
+        # so the state mirror (and docking cleanup) never saw EMERGENCY -> IDLE.
+        m = ModeMachine()
+        seen = []
+        m.change_listeners.append(lambda old, new: seen.append((old, new)))
+        m.transition(Mode.EMERGENCY)
+        seen.clear()  # only the release is under test here
+
+        assert m.release_emergency()[0]
+
+        assert seen == [(Mode.EMERGENCY, Mode.IDLE)]
+
+    def test_a_failing_change_listener_neither_blocks_the_release_nor_hides_it(self):
+        m = ModeMachine()
+        seen = []
+        m.change_listeners.append(lambda old, new: (_ for _ in ()).throw(RuntimeError("boom")))
+        m.change_listeners.append(lambda old, new: seen.append((old, new)))
+        m.transition(Mode.EMERGENCY)
+        seen.clear()  # only the release is under test here
+
+        assert m.release_emergency()[0] and m.mode is Mode.IDLE
+        assert seen == [(Mode.EMERGENCY, Mode.IDLE)]  # one listener's failure skips only itself
+
     def test_docking_reserved_disabled(self):
         reg = SourceRegistry({"manual": 3, "navigation": 5})
         assert reg.priority_of("docking") is None

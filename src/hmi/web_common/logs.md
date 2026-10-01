@@ -375,6 +375,11 @@
 - gate 변화: 없음.
 - 결정: D-377. 경로 `/common/icons/<id>.svg`는 D-374 3항 예외대로 링크하는 HTML과 같은 커밋에서 바뀐다.
 
+## 2026-09-30 · 12f322f9 · feat(web_common): toggle 의 good 톤 변형
+- 변경: `components.css` 에 `ui-button[kind="toggle"][tone="good"]` — 대기는 `--status-good` 테두리·글자, `.active` 는 `--status-good` 채움과 `--button-primary-ink` 글자. Pilot 의 "진행"(누르는 동안만 도는 차선 추종, D-344)이 쓴다. 표면 재도색 대신 공용 변형으로 둔다.
+- 증거: `src/hmi/web_common/test` 통과(원시 색 없음), Pilot 스크린샷 `X:\DevTemp\pilot-polish\after4-drive-auto-*.png`.
+- gate 변화: 없음.
+
 ## 2026-10-01 · uncommitted · fix(web): D-359 리뷰 P1-1/P2-2 — 한글 없는 열거값 표시도 린트가 본다
 
 - 변경: `test_operator_copy.py`에 `enum_text_problems()` — 텍스트 싱크(`.textContent =`, `tag(`, `setText(`, `setStatus(`, `el(`, `setChip(`, `pill(`, `setAttribute("reason"|…)`)로 가는 순수 열거값 리터럴(`"OFFLINE"`)과, 한국어 템플릿에 날것으로 들어간 mode/state 구멍(`${requestedMode}`)을 잡는다. 비교·인덱스·메서드 인자 위치는 프로토콜 키로 본다. 예외 표 `ENUM_TEXT_ALLOWLIST`(사유 필수, 낡은 항목 실패). `core_ui_logic.js`에 `NETWORK_MODE_LABEL`.
@@ -406,3 +411,8 @@
 - gate 변화: 새 시험 파일 `test_theme_choices.py`(변이: Fleet 이름 바꿈·theme.js에 테마 추가가 실패), 레지스트리 `theme_reason` 검사(변이: `test_a_theme_drift_is_caught`).
 - 결정: D-359 §2.5·§3.3.
 - 교훈: 없음.
+
+## 2026-10-01 · uncommitted · D-390 Pilot simulation surface registry
+- Change: Register the existing Pilot surface on the isolated OMX simulation port 8088 and its sim-arm-practice role. The sim server reads the common asset manifest.
+- Evidence: surface registry and Pilot API tests 15 passed.
+- Gate: no new product surface acceptance.

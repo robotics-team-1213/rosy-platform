@@ -70,8 +70,8 @@
 
 ## 최근 기록
 
-- 2026-09-30 · e3eb2561 · feat(line-follow): LiDAR 점을 path 판정에 넘기고 수동 한도를 차선 추종에 연결
-- 2026-09-30 · uncommitted · fix(bridge): display charging이 실제로 켜지게 — 죽은 getattr 제거 (C6)
-- 2026-09-30 · uncommitted · feat(display): display/info에 charging 상태 추가 (D-350·D-351)
-- 2026-09-29 · uncommitted · feat(api): /system/capabilities에 lifecycle 블록 (D-347, v1.58)
-- 2026-09-29 · uncommitted · docs(core): 24b6d4bb 브리지 판정 추출의 모듈 기록 보수
+- 2026-10-01 · ce7a3413 · test(host): host-card 가짜 서비스에 idle 보정 lease
+- 2026-10-01 · a527920a · feat(core): 보정 lease 배선과 만료 타이머
+- 2026-10-01 · uncommitted · fix(test): status-inputs 키 집합에 swarm_role 추가 (D-383 뒤치움)
+- 2026-10-01 · uncommitted · feat(bridge): D-385 set_emotion 클라이언트와 표정 래치
+- 2026-10-01 · 0af2f6a2 · fix(core): 장착 해석기가 경고 플래그를 돌려준다 (F9)

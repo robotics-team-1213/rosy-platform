@@ -107,6 +107,31 @@ class OverheadLinkTest {
     }
 
     @Test
+    fun reconnectSendsAFreshHelloWithTheNewLensAtOnce() {
+        val first = ServerSide()
+        val second = ServerSide()
+        server.enqueue(MockResponse().withWebSocketUpgrade(first))
+        server.enqueue(MockResponse().withWebSocketUpgrade(second))
+        val l = newLink()
+        l.lens = HelloLens("standard", 5.4, 67.8)
+        l.start()
+        val hello1 = JSONObject(first.texts.poll(5, TimeUnit.SECONDS)!!)
+        assertEquals("standard", hello1.getJSONObject("lens").getString("kind"))
+        awaitStatus(l) { it.state == LinkState.STREAMING }
+
+        l.lens = HelloLens("wide", 2.2, 104.1)
+        val started = System.nanoTime()
+        l.reconnect()
+        val hello2 = JSONObject(second.texts.poll(5, TimeUnit.SECONDS)!!)
+        // No backoff delay: a lens change is not a failure.
+        assertTrue(System.nanoTime() - started < TimeUnit.MILLISECONDS.toNanos(900))
+        assertEquals("wide", hello2.getJSONObject("lens").getString("kind"))
+        assertEquals(2.2, hello2.getJSONObject("lens").getDouble("focal_mm"), 0.0)
+        val status = awaitStatus(l) { it.state == LinkState.STREAMING }
+        assertEquals(null, status.error)
+    }
+
+    @Test
     fun appliesConfigAndDropsFramesAboveMaxBytes() {
         val side = ServerSide()
         server.enqueue(MockResponse().withWebSocketUpgrade(side))
@@ -155,6 +180,31 @@ class OverheadLinkTest {
     }
 
     @Test
+    fun connectFailureForcesAFreshBrowse() {
+        // Tablet 2026-10-01: Android's NSD cache can keep a dead advertiser resolvable for minutes; the app's
+        // own 30 s cache must still be dropped by a failed connect so the next attempt browses again.
+        val port = server.port
+        server.shutdown()
+        var browses = 0
+        val browser = SiteBrowser { _, match ->
+            browses++
+            listOf(SiteSighting("Rosy site", "rosy-site.local", port, listOf(java.net.InetAddress.getByName("127.0.0.1")))).filter(match)
+        }
+        // Pinned: mDNS is only used for a pinned link (review m3). The port is closed, so no TLS happens.
+        val pin = "sha256/" + "A".repeat(43)
+        val site = io.github.livsbittt.rosy.cam.settings.SiteLink(null, "rosy-site.local", port, pin, "t", "overhead-1", secure = true)
+        val resolver = SiteResolver(site, browser)
+        val l = OverheadLink(site.toPairing(), appVersion = "0.1.0", device = "jvm-test", resolver = resolver).also { link = it }
+        l.start()
+        awaitStatus(l) { it.error is LinkError.Network }
+        l.stop()
+        val afterFailure = browses
+        resolver.resolve()
+        assertEquals("a failed connect must drop the cached address", afterFailure + 1, browses)
+        server = MockWebServer().also { it.start() }
+    }
+
+    @Test
     fun protocolMismatchCloseStopsRetrying() {
         val side = ServerSide()
         server.enqueue(MockResponse().withWebSocketUpgrade(side))
@@ -167,6 +217,28 @@ class OverheadLinkTest {
         assertEquals(LinkState.DISCONNECTED, status.state)
         assertNoReconnect("4400")
         assertFalse(l.admitFrame())
+    }
+
+    @Test
+    fun noHelloTimeoutAndTryAgainLaterRetryInsteadOfStopping() {
+        // 2026-10-01 device test: Vision's loop was blocked, its hello timer closed with 4400 "no hello".
+        for ((code, reason) in listOf(Protocol.CLOSE_BAD_PROTO to "no hello", Protocol.CLOSE_TRY_AGAIN to "busy")) {
+            val first = ServerSide()
+            val second = ServerSide()
+            server.enqueue(MockResponse().withWebSocketUpgrade(first))
+            server.enqueue(MockResponse().withWebSocketUpgrade(second))
+            val l = newLink()
+            l.start()
+            first.opened.poll(5, TimeUnit.SECONDS)!!.close(code, reason)
+
+            val lost = awaitStatus(l) { it.error is LinkError.Busy }
+            assertFalse(lost.stopped)
+            assertEquals(LinkError.Busy(code, reason), lost.error)
+            // First backoff step is 1 s, then the link reconnects on its own.
+            assertNotNull(second.opened.poll(5, TimeUnit.SECONDS))
+            awaitStatus(l) { it.state == LinkState.STREAMING }
+            l.stop()
+        }
     }
 
     @Test

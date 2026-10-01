@@ -20,6 +20,8 @@ node --check /rosy/src/hmi/pilot/vision.js && echo "vision OK"
 node --check /rosy/src/hmi/pilot/app.js && echo "app OK"
 node --check /rosy/src/hmi/pilot/screens/connect.js && echo "connect OK"
 node --check /rosy/src/hmi/pilot/screens/drive.js && echo "drive OK"
+node --check /rosy/src/hmi/pilot/screens/drive-auto.js && echo "drive-auto OK"
+node --check /rosy/src/hmi/pilot/screens/drive-view.js && echo "drive-view OK"
 echo "== 한글 확인 =="
 grep -c "운전 토큰" /rosy/src/hmi/pilot/screens/connect.js || echo "connect 한글 없음!"
 grep -c "sequence" /rosy/src/hmi/pilot/vision.js

@@ -178,13 +178,17 @@ def render(payload: dict, size: tuple[int, int] = DEFAULT_SIZE) -> Image.Image:
         rows[2] = ("HEALTH", "E-STOP")
     elif payload.get("hitl_requested"):
         rows[2] = ("HEALTH", "ASSIST REQ")
+    # D-321 addendum: a calibration lease replaces the mode value. The LCD font is
+    # ASCII-only (D-221), so the machine word stands in for "보정 중".
+    if payload.get("activity") == "CALIBRATING":
+        rows[0] = ("MODE", "CALIBRATING")
 
     for index, (label, value) in enumerate(rows):
         y = 142 + index * 24
         draw.text((16, y), label, font=_font(14), fill=_MUTED)
         if value == "E-STOP":
             _draw_alarm(draw, (92, y), value, _font(16))
-        elif value == "ASSIST REQ":
+        elif value in ("ASSIST REQ", "CALIBRATING"):
             _draw_caution(draw, (92, y), value, _font(16))
         else:
             value_font, value = _fit(draw, value, 16, width - 108)
@@ -364,14 +368,31 @@ def _fit(draw: ImageDraw.ImageDraw, text: str, size: int, width: int):
     return font, text
 
 
-def render_boot(payload: dict, size: tuple[int, int] = DEFAULT_SIZE) -> Image.Image:
-    """Boot card: name, release, stage (failed unit), address, battery, AP (and its QR)."""
+def _dim(color: tuple[int, int, int]) -> tuple[int, int, int]:
+    """D-385: 무대 제목의 어두운 국면 — 같은 색, 45 % 밝기. 숨쉼의 한 단계다."""
+    return tuple(int(component * 0.45) for component in color)
+
+
+def render_boot(payload: dict, size: tuple[int, int] = DEFAULT_SIZE,
+                frame: int = 0) -> Image.Image:
+    """Boot card: name, release, stage (failed unit), address, battery, AP (and its QR).
+
+    D-385: while the stage is still waiting (BOOTING·PROVISIONED) the stage title
+    breathes — two brightness steps at the caller's frame rate (0.5 Hz on the
+    device). Finished states (CORE_READY·FAILED·SETUP) hold still: an arrived
+    robot does not fidget.
+    """
     width, _height = size
     image = Image.new("RGB", size, _BG)
     draw = ImageDraw.Draw(image)
     matrix = ap_qr(payload)
     qr_left, qr_bottom = _draw_qr(draw, matrix, width) if matrix else (width, 0)
-    for slot, text, color in boot_lines(payload):
+    lines = boot_lines(payload)
+    kind = str(payload.get("stage") or "BOOTING").split(":", 1)[0]
+    if frame % 2 == 1 and kind in ("BOOTING", "PROVISIONED"):
+        lines = [(slot, text, _dim(color) if slot == "stage" else color)
+                 for slot, text, color in lines]
+    for slot, text, color in lines:
         y, font_size = _BOOT_LAYOUT[slot]
         if slot == "release":
             font, text = _fit(draw, text, font_size, width // 2 - 16)

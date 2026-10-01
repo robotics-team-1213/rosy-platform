@@ -63,8 +63,8 @@
 
 ## 최근 기록
 
-- 2026-09-30 · 40757d69 · fix(camera): 교정 검사기를 import 못 해도 덮어쓰기만 건너뛴다(재검토 R4)
-- 2026-09-30 · uncommitted · fix(camera,control): IR 교정 덮어쓰기를 전용 경로·검증으로, 도구 문턱 인자(검토 반영)
-- 2026-09-30 · 6f00a74d · fix(camera): 기기 IR 교정 덮어쓰기 파일을 line_observer 에 싣는다
-- 2026-09-30 · 7e467a4b · feat(control): 읽기 전용 IR 차선 교정 도구와 좌·우 부호 확인
-- 2026-09-30 · uncommitted · feat(ros-sim): planning 슬라이스 통과 — goal_node 합성 지도·TF 그래프 검증
+- 2026-10-01 · fff5825f · feat(perception): D-384 도로 상태 추정기와 섀도 노드
+- 2026-10-01 · 00cdb647 · fix(sensing): calibration_store_root 선언 (M4)
+- 2026-10-01 · 79b7681a · feat(sensing): 카메라 외부 파라미터 단계와 바퀴 오도메트리 맞춤 (D-47 부록)
+- 2026-10-01 · uncommitted · refactor(control): keep 앞단을 lane_keep_lines.py 로 분리(파일 예산)
+- 2026-09-30 · uncommitted · feat(recording): 녹화기가 LiDAR `scan` 도 기록한다(D-379)

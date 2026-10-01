@@ -16,6 +16,7 @@ import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -25,31 +26,54 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import io.github.livsbittt.rosy.cam.PIN_PREVIEW
 import io.github.livsbittt.rosy.cam.R
+import io.github.livsbittt.rosy.cam.camera.LensCandidate
+import io.github.livsbittt.rosy.cam.camera.LensChoice
+import io.github.livsbittt.rosy.cam.camera.LensProbe
+import io.github.livsbittt.rosy.cam.camera.LensSelector
 import io.github.livsbittt.rosy.cam.settings.PairingUri
 import io.github.livsbittt.rosy.cam.settings.OverheadServerDiscovery
 import io.github.livsbittt.rosy.cam.settings.OverheadServiceRecord
 import io.github.livsbittt.rosy.cam.settings.RobotCoreServiceRecord
+import io.github.livsbittt.rosy.cam.settings.SiteLink
 
 /** Manual pairing entry, validated with the same rules as the rosyov:// deep link. */
 @Composable
 fun SettingsScreen(
-    current: PairingUri?,
+    currentLink: SiteLink?,
     locked: Boolean,
-    onSave: (PairingUri) -> Unit,
+    lens: LensChoice,
+    onLens: (LensChoice) -> Unit,
+    /**
+     * The pairing; when it came from the mDNS list, that service's name (`site_name`); and whether it is a fresh
+     * pairing (a link applied or a receiver picked) rather than an edit of the saved one. Only a fresh pairing
+     * records the Wi-Fi subnet for diagnosis (review m6).
+     */
+    onSave: (PairingUri, String?, Boolean) -> Unit,
     onBack: () -> Unit,
 ) {
+    val current = remember(currentLink) { currentLink?.toPairing() }
+    var siteName by remember(currentLink) { mutableStateOf(currentLink?.siteName) }
+    var freshPairing by remember(currentLink) { mutableStateOf(false) }
     var link by remember { mutableStateOf("") }
     var host by remember(current) { mutableStateOf(current?.host ?: "") }
     var port by remember(current) { mutableStateOf(current?.port?.toString() ?: "") }
     var token by remember(current) { mutableStateOf(current?.token ?: "") }
     var source by remember(current) { mutableStateOf(current?.source ?: "overhead-1") }
     var secure by remember(current) { mutableStateOf(current?.secure ?: false) }
+    // Only a rosyov:// link sets the pin; it is not typed by hand and is dropped when TLS is unchecked.
+    var pin by remember(current) { mutableStateOf(current?.pin) }
+    var pinDropped by remember(current) { mutableStateOf(false) }
     var invalid by remember { mutableStateOf<String?>(null) }
     var saved by remember { mutableStateOf(false) }
     var overheadServices by remember { mutableStateOf(emptyList<OverheadServiceRecord>()) }
@@ -58,7 +82,7 @@ fun SettingsScreen(
     var wifiConnected by remember { mutableStateOf(false) }
     var scanGeneration by remember { mutableStateOf(0) }
     val context = LocalContext.current
-    val discovery = remember(context, scanGeneration) {
+    val discovery = remember(context, scanGeneration, locked) {
         OverheadServerDiscovery(context) { overhead, robots, active, onWifi ->
             overheadServices = overhead
             robotServices = robots
@@ -66,7 +90,17 @@ fun SettingsScreen(
             wifiConnected = onWifi
         }
     }
-    LaunchedEffect(discovery) { discovery.start() }
+    // No scan while the camera runs: the stream's own re-discovery needs the one NSD resolve slot on
+    // Android < 14, and settings are read-only then anyway (review m8).
+    LaunchedEffect(discovery) { if (!locked) discovery.start() }
+    var backCameras by remember { mutableStateOf<List<LensCandidate>?>(null) }
+    LaunchedEffect(Unit) {
+        backCameras = try {
+            LensProbe.backCameras(context)
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
     DisposableEffect(discovery) { onDispose { discovery.stop() } }
 
     Column(
@@ -83,8 +117,10 @@ fun SettingsScreen(
         if (locked) {
             Text(stringResource(R.string.settings_locked), style = MaterialTheme.typography.bodyLarge)
         }
+        LensSection(lens, backCameras, running = locked, onLens = onLens)
         Text(stringResource(R.string.settings_mdns_intro), style = MaterialTheme.typography.bodyMedium)
         OutlinedButton(
+            enabled = !locked,
             onClick = {
                 discovery.stop()
                 overheadServices = emptyList()
@@ -103,7 +139,9 @@ fun SettingsScreen(
             )
         }
         if (scanning) Text(stringResource(R.string.settings_mdns_scanning))
-        if (!wifiConnected) {
+        if (locked) {
+            Text(stringResource(R.string.settings_mdns_paused), style = MaterialTheme.typography.bodySmall)
+        } else if (!wifiConnected) {
             Text(stringResource(R.string.settings_mdns_wifi_required), color = RosyColors.StatusWarn)
         } else {
             Text(stringResource(R.string.settings_mdns_overhead_heading), style = MaterialTheme.typography.titleSmall)
@@ -118,6 +156,8 @@ fun SettingsScreen(
                             host = service.tlsHost
                             port = service.port.toString()
                             secure = true
+                            siteName = service.name
+                            freshPairing = true
                             invalid = null
                             saved = false
                         },
@@ -154,11 +194,15 @@ fun SettingsScreen(
             onClick = {
                 when (val parsed = PairingUri.parse(link)) {
                     is PairingUri.Parsed.Valid -> {
+                        if (parsed.pairing.host != host) siteName = null
                         host = parsed.pairing.host
                         port = parsed.pairing.port.toString()
                         token = parsed.pairing.token
                         source = parsed.pairing.source
                         secure = parsed.pairing.secure
+                        pin = parsed.pairing.pin
+                        pinDropped = false
+                        freshPairing = true
                         invalid = null
                     }
                     is PairingUri.Parsed.Invalid -> invalid = parsed.reason
@@ -170,7 +214,15 @@ fun SettingsScreen(
             Text(stringResource(R.string.settings_link_apply))
         }
 
-        Field(host, { host = it; saved = false }, R.string.settings_host, invalid == "host")
+        Field(host, { host = it; siteName = null; saved = false }, R.string.settings_host, invalid == "host")
+        // D-391 1: the saved IP is only the labelled fallback; the name is looked up through mDNS on each connect.
+        currentLink?.manualHost?.let { manual ->
+            Text(
+                stringResource(if (currentLink.tlsHost == null) R.string.settings_manual_only else R.string.settings_manual_host, manual),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
         Field(port, { port = it; saved = false }, R.string.settings_port, invalid == "port", KeyboardType.Number)
         OutlinedTextField(
             value = token,
@@ -184,8 +236,28 @@ fun SettingsScreen(
         )
         Field(source, { source = it; saved = false }, R.string.settings_source, invalid == "source")
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Checkbox(checked = secure, onCheckedChange = { secure = it; saved = false })
+            Checkbox(
+                checked = secure,
+                onCheckedChange = {
+                    secure = it
+                    if (!it && pin != null) {
+                        pin = null
+                        pinDropped = true
+                    }
+                    saved = false
+                },
+            )
             Text(stringResource(R.string.settings_tls))
+        }
+        if (secure) {
+            Text(
+                pin?.let { stringResource(R.string.settings_pin, it.take(PIN_PREVIEW)) }
+                    ?: stringResource(R.string.settings_pin_none),
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
+        if (pinDropped && pin == null) {
+            Text(stringResource(R.string.settings_pin_dropped), color = RosyColors.StatusWarn)
         }
 
         invalid?.let { CritMessage(invalidText(it)) }
@@ -198,10 +270,10 @@ fun SettingsScreen(
                 onClick = {
                     val trimmedHost = host.trim()
                     val portNumber = port.trim().toIntOrNull() ?: -1
-                    val reason = PairingUri.validate(trimmedHost, portNumber, token, source.trim())
+                    val reason = PairingUri.validate(trimmedHost, portNumber, token, source.trim(), secure, pin)
                     invalid = reason
                     if (reason == null) {
-                        onSave(PairingUri(trimmedHost, portNumber, token, source.trim(), secure))
+                        onSave(PairingUri(trimmedHost, portNumber, token, source.trim(), secure, pin), siteName, freshPairing)
                         saved = true
                     }
                 },
@@ -210,6 +282,43 @@ fun SettingsScreen(
             }
         }
     }
+}
+
+/** 화각: wide/standard radio, the lens each one binds, and the no-ultra-wide fallback note. */
+@Composable
+private fun LensSection(
+    lens: LensChoice,
+    backCameras: List<LensCandidate>?,
+    running: Boolean,
+    onLens: (LensChoice) -> Unit,
+) {
+    val res = LocalContext.current.resources
+    Text(stringResource(R.string.settings_lens_heading), style = MaterialTheme.typography.titleSmall)
+    Column(Modifier.selectableGroup()) {
+        for (choice in LensChoice.entries) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .selectable(selected = lens == choice, role = Role.RadioButton, onClick = { onLens(choice) })
+                    .padding(vertical = 4.dp),
+            ) {
+                RadioButton(selected = lens == choice, onClick = null)
+                Text(
+                    stringResource(if (choice == LensChoice.WIDE) R.string.settings_lens_wide else R.string.settings_lens_standard),
+                    modifier = Modifier.padding(start = 8.dp),
+                )
+            }
+        }
+    }
+    backCameras?.let { LensSelector.pick(it, lens) }?.let { pick ->
+        LensText.line(res, pick)?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
+    }
+    Text(
+        stringResource(if (running) R.string.settings_lens_running else R.string.settings_lens_intro),
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
 }
 
 @Composable
@@ -240,6 +349,7 @@ fun invalidText(reason: String): String = stringResource(
         "port" -> R.string.invalid_port
         "token" -> R.string.invalid_token
         "tls" -> R.string.invalid_tls
+        "pin" -> R.string.invalid_pin
         else -> R.string.invalid_source
     },
 )

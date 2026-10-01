@@ -36,11 +36,15 @@ PILOT_MIME = {
     "link.js": "application/javascript",
     "drivers/registry.js": "application/javascript",
     "drivers/pinky_core.js": "application/javascript",
-    "recent.js": "application/javascript",
+    "drivers/omx_sim.js": "application/javascript",
     "autonomy.js": "application/javascript",
+    "calibration.js": "application/javascript",
     "screens/connect.js": "application/javascript",
     "screens/drive.js": "application/javascript",
+    "screens/drive-auto.js": "application/javascript",
+    "screens/drive-view.js": "application/javascript",
     "screens/inputs.js": "application/javascript",
+    "screens/arm.js": "application/javascript",
     "input-state.js": "application/javascript",
     "vision.js": "application/javascript",
     "manifest.webmanifest": "application/manifest+json",
@@ -67,7 +71,8 @@ CAPABILITIES = {
     "runtime": {"hardware": True, "evidence": True, "drive": True,
                 "navigation": False, "maps": False},
 }
-STATE = {"mode": "IDLE", "velocity": {"linear": 0.0, "angular": 0.0}, "battery": {"percent": 84, "volts": 7.6}}
+STATE = {"mode": "IDLE", "velocity": {"linear": 0.0, "angular": 0.0}, "battery": {"percent": 84, "volts": 7.6},
+         "activity": None}
 
 #: 시뮬/개발용 canned 프레임 — 토큰 색 원 하나(실 카메라가 없는 자리 표시).
 _buf = __import__("io").BytesIO()
@@ -82,7 +87,15 @@ FRAME_SEQ = 4
 def robot_state(request: Request):
     if _role(request) is None:
         return JSONResponse({"detail": "unauthorized"}, status_code=401)
-    return {"mode": STATE["mode"], "velocity": STATE["velocity"], "battery": STATE["battery"]}
+    return {"mode": STATE["mode"], "velocity": STATE["velocity"], "battery": STATE["battery"],
+            "activity": STATE["activity"]}
+
+
+@app.post("/__test__/activity")
+async def set_activity(request: Request):
+    """시험이 보정 세션 표시(D-321 부록)를 정한다. 본문이 null 이면 보정 끝."""
+    STATE["activity"] = await request.json()
+    return {"activity": STATE["activity"]}
 
 
 @app.get("/api/v1/vision/front/status")
@@ -134,11 +147,41 @@ def common_asset(asset_name: str):
                         headers={"Cache-Control": "no-cache"})
 
 
+#: 시험 훅: whoami 를 앞으로 N 번 503 으로 실패시킨다(보정 확인 중 표시·재시도).
+WHOAMI_FAILURES = {"remaining": 0}
+#: 시험이 읽는다: POST /mode 로 들어온 mode 값의 순서.
+MODE_LOG: list[str] = []
+
+
+@app.post("/__test__/whoami-fail")
+async def whoami_fail(request: Request):
+    WHOAMI_FAILURES["remaining"] = int((await request.json()).get("count", 0))
+    return WHOAMI_FAILURES
+
+
+#: 시험 훅: 다음 POST /mode MANUAL N 번을 409 로 거절한다(engage 실패).
+MODE_REFUSALS = {"remaining": 0}
+
+
+@app.post("/__test__/mode-refuse")
+async def mode_refuse(request: Request):
+    MODE_REFUSALS["remaining"] = int((await request.json()).get("count", 0))
+    return MODE_REFUSALS
+
+
+@app.get("/__test__/mode-log")
+def mode_log():
+    return MODE_LOG
+
+
 @app.get("/api/v1/auth/whoami")
 def whoami(request: Request):
     role = _role(request)
     if role is None:
         return JSONResponse({"detail": "unauthorized"}, status_code=401)
+    if WHOAMI_FAILURES["remaining"] > 0:
+        WHOAMI_FAILURES["remaining"] -= 1
+        return JSONResponse({"detail": "busy"}, status_code=503)
     return {"id": "dev-1", "role": role, "label": "개발 운전자",
             "source": "dev", "created_at": "", "expires_at": None}
 
@@ -155,7 +198,12 @@ async def set_mode(request: Request):
     if _role(request) is None:
         return JSONResponse({"detail": "unauthorized"}, status_code=401)
     body = await request.json()
+    if body.get("mode") == "MANUAL" and MODE_REFUSALS["remaining"] > 0:
+        MODE_REFUSALS["remaining"] -= 1
+        return JSONResponse({"error": {"code": "CALIBRATION_ACTIVE", "message": "refused"}},
+                            status_code=409)
     STATE["mode"] = body.get("mode", "IDLE")
+    MODE_LOG.append(STATE["mode"])
     return {"mode": STATE["mode"]}
 
 
@@ -251,6 +299,8 @@ if __name__ == "__main__":
 LINE_FOLLOW = {"mode": "OFF", "state": "OFF", "source": None, "error": None, "confidence": 0.0,
                "linear": 0.0, "angular": 0.0, "reason": "mode_off", "clearance_m": None}
 LINE_FOLLOW_SCRIPT = {}
+#: 시험이 읽는다: PUT /line-follow/mode 로 들어온 mode 값의 순서(같은 프로세스의 uvicorn 스레드).
+LINE_FOLLOW_MODE_LOG: list[str] = []
 
 
 @app.post("/__test__/line-follow")
@@ -274,6 +324,7 @@ async def line_follow_mode(request: Request):
     if _role(request) is None:
         return JSONResponse({"detail": "unauthorized"}, status_code=401)
     mode = (await request.json()).get("mode", "OFF")
+    LINE_FOLLOW_MODE_LOG.append(mode)
     LINE_FOLLOW.update({"mode": mode, "state": "WAITING" if mode != "OFF" else "OFF",
                         "reason": "no_observation" if mode != "OFF" else "mode_off",
                         "error": None, "linear": 0.0, "angular": 0.0})

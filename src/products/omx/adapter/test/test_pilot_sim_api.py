@@ -1,0 +1,109 @@
+"""The Pilot HTTP boundary cannot bypass one simulated workcell owner."""
+
+from pathlib import Path
+import time
+
+from fastapi.testclient import TestClient
+
+from omx_adapter.pilot_sim_api import create_pilot_sim_app
+
+
+ROOT = Path(__file__).resolve().parents[5]
+PILOT = ROOT / "src" / "hmi" / "pilot"
+COMMON = ROOT / "src" / "hmi" / "web_common"
+PREFIX = "/api/v1/sim/omx"
+
+
+class FakeRuntime:
+    instance_id = "omx_01"
+    joint_names = ("joint1", "joint2", "gripper_joint_1")
+    gripper = "gripper_joint_1"
+    calls = None
+
+    def __init__(self):
+        self.calls = []
+
+    def snapshot(self):
+        return {"sequence": 8, "positions": {name: 0.0 for name in self.joint_names},
+                "owner_state": "ready", "camera": {"available": False}}
+
+    def submit(self, jog):
+        self.calls.append(jog)
+        return {"command_id": jog.request_id, "state": "LOCAL_ACCEPTED"}
+
+    def goal(self, command_id):
+        return {"command_id": command_id, "state": "LOCAL_ACCEPTED"}
+
+    def cancel(self, command_id):
+        return {"command_id": command_id, "state": "CANCEL_REQUESTED"}
+
+    def cancel_active(self):
+        self.calls.append("cancel_active")
+
+    def on_watchdog(self):
+        pass
+
+
+def _client():
+    runtime = FakeRuntime()
+    app = create_pilot_sim_app(runtime=runtime, pilot_root=PILOT,
+                               common_root=COMMON, pairing_code="ABCD-EFGH")
+    return TestClient(app), runtime
+
+
+def _paired(client):
+    response = client.post(f"{PREFIX}/pair", json={"code": "ABCD-EFGH"})
+    assert response.status_code == 201
+    return {"Authorization": f"Bearer {response.json()['token']}"}
+
+
+def _jog(seat_id, **changes):
+    return {"instance_id": "omx_01", "seat_id": seat_id, "request_id": "req-1",
+            "joint": "joint1", "delta_rad": 0.02, "duration_s": 0.4,
+            "state_sequence": 8, "expires_at_ms": int(time.time() * 1000) + 1000, **changes}
+
+
+def test_serves_pilot_and_only_allowlisted_assets():
+    client, _ = _client()
+    assert client.get("/pilot").status_code == 200
+    assert client.get("/pilot/assets/app.js").status_code == 200
+    assert client.get("/pilot/assets/screens/arm.js").status_code == 200
+    assert client.get("/pilot/assets/secret.env").status_code == 404
+    assert client.get("/common/tokens.css").status_code == 200
+    assert client.get(f"{PREFIX}/target").json()["kind"] == "omx_sim"
+
+
+def test_pairing_is_one_time_and_command_needs_active_seat():
+    client, runtime = _client()
+    assert client.post(f"{PREFIX}/goals", json=_jog("no-seat")).status_code == 401
+    assert client.post(f"{PREFIX}/goals", json=_jog("no-seat")).json()["error"]["code"] == "UNAUTHORIZED"
+    headers = _paired(client)
+    assert client.post(f"{PREFIX}/pair", json={"code": "ABCD-EFGH"}).status_code == 403
+    assert client.post(f"{PREFIX}/goals", headers=headers,
+                       json=_jog("no-seat")).status_code == 409
+    seat = client.post(f"{PREFIX}/seat", headers=headers).json()["seat_id"]
+    jog = _jog(seat)
+    accepted = client.post(f"{PREFIX}/goals", headers=headers, json=jog)
+    assert accepted.status_code == 202
+    assert accepted.json()["state"] == "LOCAL_ACCEPTED"
+    assert len(runtime.calls) == 1
+    assert client.post(f"{PREFIX}/goals", headers=headers, json=jog).status_code == 202
+    assert len(runtime.calls) == 1
+    conflict = client.post(f"{PREFIX}/goals", headers=headers,
+                           json={**jog, "delta_rad": 0.03})
+    assert conflict.status_code == 409
+
+
+def test_seat_release_and_validation_fail_closed():
+    client, runtime = _client()
+    headers = _paired(client)
+    seat = client.post(f"{PREFIX}/seat", headers=headers).json()["seat_id"]
+    assert client.post(f"{PREFIX}/goals", headers=headers,
+                       json={**_jog(seat), "instance_id": "wrong"}).status_code == 409
+    assert client.post(f"{PREFIX}/goals", headers=headers,
+                       json={**_jog(seat), "delta_rad": 2.0}).status_code == 400
+    assert client.post(f"{PREFIX}/goals", headers=headers,
+                       json={**_jog(seat), "expires_at_ms": int(time.time() * 1000) + 100000}).status_code == 409
+    assert client.delete(f"{PREFIX}/seat/{seat}", headers=headers).status_code == 204
+    assert client.post(f"{PREFIX}/goals", headers=headers, json=_jog(seat)).status_code == 409
+    assert runtime.calls == ["cancel_active"]

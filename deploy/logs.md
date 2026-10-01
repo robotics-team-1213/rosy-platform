@@ -1550,3 +1550,59 @@
 - 변경: 병합 시점에 main 이 D-375 를 feat/overhead-map-auto-register 예약으로 adr_gaps 에 넣은 것이 확인됐다(선례 D-324→D-325). 이 작업의 결정 번호를 다음 빈 번호 D-380 으로 개명하고 코드 주석·시험·설계 문서의 D-375 표기를 함께 바꿨다. 앞선 항목의 D-375 표기는 역사 기록으로 그대로 둔다.
 - 증거: rosy_harness lint 오류 0. 본문 참조는 docs/adr/D-380-lamp-mode-patterns-from-core-status-inputs.md.
 - gate 변화: 없음.
+
+## 2026-09-30 · c261839d · build(site): 지도 맞춤용 트랙 파일을 이미지에 넣음
+
+- 변경: Vision 이미지에 `road_lines.stl`, Fleet 이미지에 `lane_graph.yaml`·`road_lines.stl`(`/opt/rosy/maps/map_v2_fleet/`, 읽기 전용). compose: vision `--map-paint`, fleet `--site-lane-graph`/`--site-lane-paint`. dockerignore는 두 파일만 연다. README "Map auto-fit overlay (D-375)".
+- 증거: `test/test_site_map_fit_deploy.py`; `docker compose config` 통과; scratch COPY 빌드로 dockerignore 통과 확인. 전체 이미지 빌드·배포는 하지 않음.
+- gate 변화: 없음.
+- 결정: D-375.
+- 교훈: 없음.
+
+## 2026-10-01 · uncommitted · feat(native): D-381 blocked 패턴과 비상정지 진입음
+
+- 변경: `rosy-boot-status.py`가 `nav_state`를 같은 규칙으로 검증·복사. `rosy-boot-display.py`는 `lamp_pattern()`에 nav를 넘기고, `_announce`가 패턴 기반으로 EMERGENCY 진입음(2.5 kHz×4, 유지 무음, 해제 시 ready 차임)을 낸다.
+- 증거: test_boot_display.py (blocked 행·진입/유지/해제 소리). 변이 증명: 진입음 제거 시 빨강.
+- gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · fix(release,test): main CI deployment 단계 적색 5건 — 핀·등록부·스캐너 면제 정리
+
+- 변경: core 단계 적색이 이 단계를 건너뛰게 해왔다 — core가 초록이 되자 가려져 있던 5건이 드러났다(전부 최근 병합들이 같은 커밋에 함께 갱신했어야 할 고정 목록). (1) D-184 예외 목록에 `test_line_follow_obstacle_path.py` 추가(e3eb2561의 신규 시험, `core_features.line_follow.clearance` 구동). (2) D-218 `PINNED_CONFIRMS`에 교통 정책 적용 확인의 app.js→telemetry.js 이동 반영(13803932, D-362 P1). (3) D-196 로봇 리터럴 백로그에 `runtime/services/core_features/line_follow/clearance.py`·`runtime/sensing/tools/device/ir_line_calibrate.py` 추가. (4) `secret_scan.py` `KNOWN_FIXTURES`에 D-189 런타임 id 핀 등록 — 그 hex는 저장소가 추적하는 `device-python-requirements.txt`의 sha256이며 시험이 저장소에서 재계산하는 공개 다이제스트다. (5) D-178 기준선 행 교체는 docs 모듈 로그에 기록.
+- 증거: 해당 다섯 시험 파일 82 passed (2026-10-01 Windows). 루트 `test/` 전체 회귀는 별도 확인.
+- gate 변화: 없음.
+- 교훈: 고정 목록 계약은 선행 단계가 붉으면 통째로 건너뛴다 — 그 단계의 빚은 다음 초록 커밋으로 이월되므로, 큰 적색을 고친 커밋은 곧바로 다음 단계까지 돌아갔는지 봐야 한다.
+
+## 2026-10-01 · uncommitted · feat(native): D-383 LCD 상태줄에 편대 역할
+
+- 변경: rosy-boot-status.py 가 swarm_role 를 같은 규칙으로 검증·복사, rosy-boot-display.py 상태줄이 role_suffix 를 끝에 붙인다("Ready - NAVIGATION - LEADER").
+- 증거: test_boot_display.py·test_boot_status_indicator.py. 실기 확인은 다음 릴리스 때.
+- gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · feat(native): D-385 기다리는 카드에 프레임 위상
+
+- 변경: rosy-boot-display.py 가 BOOTING·PROVISIONED 중 view 에 frame(1 s 위상)을 실어 다시 그림 키에 태운다 — 0.5 Hz 숨쉼, CORE_READY 는 기존처럼 무변경 무재그림.
+- 증거: test_boot_display.py (대기 중 재그림·ready 정지). 실기는 다음 릴리스.
+- gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · D-390 OMX Pilot development container
+- Change: Add a development-only Pilot layer over the locked OMX Gazebo image and a local probe. Publish HTTP only to 127.0.0.1, deny serial/video grants, keep the one-time code in a 0600 container file.
+- Evidence: local image sha256:e94662607c72a7cea83c9449178099c4c9476afab0519275ce0da82a88f3da9a; Gazebo action and readback report in docs/validation/pilot-omx-gazebo-2026-10-01/.
+- Gate: local x86_64 ROS-SIM only; ARTIFACT/DEVICE/FIELD unchanged.
+
+## 2026-10-01 · 7d0f3f89 · fix(deploy): 사이트 빌드 컨텍스트는 이미지가 복사하는 것만
+
+- 변경: `Dockerfile.{vision,fleet}.dockerignore` — 맨 `!src`·`!deploy`는 BuildKit의 상위 디렉터리 일치로 트리 전체를 다시 넣었다(vision 컨텍스트 2330개 파일). 잎 glob만 남기고 `__pycache__`·`.pytest_cache`를 뺐다.
+- 증거: scratch `COPY .` 빌드로 vision 73개·fleet 251개 확인; `test_site_map_fit_deploy.py`가 COPY 원본 포함·다른 트리 제외·맨 디렉터리 금지를 동작으로 검사.
+- gate 변화: 없음.
+- 결정: 없음.
+- 교훈: dockerignore의 `!dir`은 그 아래 전부다 — 허용 목록은 잎 glob으로만 쓴다.
+
+## 2026-10-01 · d5953646 · feat(deploy): 릴리스 push·dev sync 보정 guard
+- 변경: `pinky_pro/rosy-calibration-guard.ps1`(읽기 전용 GET, 세션 있으면 exit 3). `rosy-release-push.ps1`·`dev/sync-core-dev.ps1` 가 원격 단계 전에 부르고 `-Force` 없으면 거부. 토큰 없음·CORE 무응답은 경고만. rosy-release-push SKILL 에 절차 추가(cfacfcd9 경로 수정).
+- 증거: test/test_calibration_guard.py 10 passed(localhost 가짜 CORE), test_release_push_entrypoint·test_core_dev_sync 통과. 로봇에는 닿지 않았다.
+- gate 변화: 없음.
+
+## 2026-10-01 · 2f59263f · fix(deploy): 보정 guard — 401/403 구분, 예상 밖 응답은 경고
+- 변경: HTTP 401/403 은 REJECTED(토큰 문제), 그 밖 HTTP 는 FAILED, 무응답은 UNREACHABLE. 응답 필드는 도우미로 읽어 StrictMode 중단 대신 UNEXPECTED REPLY 경고, owner 없는 세션도 거부. SKILL 은 `-ApiToken` 보다 ROSY_API_TOKEN·DPAPI 를 권한다.
+- 증거: test/test_calibration_guard.py 15 passed, test_release_push_entrypoint 통과.
+- gate 변화: 없음.

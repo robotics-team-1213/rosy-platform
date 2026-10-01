@@ -34,6 +34,20 @@ class ActionPhaseRecorder:
             accepted=accepted, driver_goal_id=driver_goal_id,
         )
 
+    def record_late_acceptance(self, *, phase_id: str,
+                               driver_goal_id: str) -> dict[str, Any]:
+        return self._store.record_late_phase_acceptance(
+            self.action_id, self.attempt_id, phase_id=phase_id,
+            driver_goal_id=driver_goal_id,
+        )
+
+    def record_late_cancel_request(self, *, phase_id: str,
+                                   driver_goal_id: str) -> dict[str, Any]:
+        return self._store.record_late_phase_cancel_request(
+            self.action_id, self.attempt_id, phase_id=phase_id,
+            driver_goal_id=driver_goal_id,
+        )
+
     def record_submission(self, *, phase_id: str, accepted: bool | None,
                           driver_goal_id: str | None) -> dict[str, Any]:
         return self._store.record_phase_submission(
@@ -73,6 +87,32 @@ class ActionPhaseRecorder:
     def hold(self, *, reason: str) -> dict[str, Any]:
         return self._store.hold_action(
             self.action_id, self.attempt_id, reason=reason,
+        )
+
+    def record_workflow_state(self, *, workflow_state: str,
+                              object_may_be_held: bool,
+                              evidence_refs: Mapping[str, object]) -> dict[str, Any]:
+        return self._store.record_workflow_state(
+            self.action_id, self.attempt_id, workflow_state=workflow_state,
+            object_may_be_held=object_may_be_held, evidence_refs=evidence_refs,
+        )
+
+    def complete_pick_place(self, *, result_observed_at: str,
+                            result: Mapping[str, object]) -> dict[str, Any]:
+        return self._store.complete_pick_place(
+            self.action_id, self.attempt_id,
+            result_observed_at=result_observed_at, result=result,
+        )
+
+    def latest_workflow_state(self) -> str | None:
+        return self._store.latest_workflow_state(self.action_id, self.attempt_id)
+
+    def parent(self) -> dict[str, Any] | None:
+        return self._store.get_action(self.action_id)
+
+    def mark_action_running(self, *, driver_goal_id: str) -> dict[str, Any]:
+        return self._store.mark_running(
+            self.action_id, self.attempt_id, driver_goal_id=driver_goal_id,
         )
 
     def phases(self) -> list[dict[str, Any]]:

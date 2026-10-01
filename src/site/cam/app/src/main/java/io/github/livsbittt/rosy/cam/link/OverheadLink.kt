@@ -2,7 +2,9 @@ package io.github.livsbittt.rosy.cam.link
 
 import android.util.Log
 import io.github.livsbittt.rosy.cam.settings.PairingUri
+import java.security.cert.X509Certificate
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -15,6 +17,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import okhttp3.Dns
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -30,8 +33,14 @@ sealed interface LinkError {
     /** Upgrade refused with 401 or close 4401: token is unknown or not allowed for this source. */
     data object Unauthorized : LinkError
 
-    /** Close 4400: the adapter speaks another protocol version. Retrying cannot help. */
+    /** Close 4400 with an incompatibility reason: the adapter speaks another protocol version. Retrying cannot help. */
     data object ProtocolMismatch : LinkError
+
+    /** Close 1013, or a pre-1013 receiver's 4400 with an empty reason or "no hello": the receiver was busy; retry with backoff. */
+    data class Busy(val code: Int, val reason: String) : LinkError
+
+    /** Close 4503 (D-341 11): the site cannot check the credential right now. Retry; never a re-pair prompt. */
+    data object CredentialUnknown : LinkError
 
     /** Close 4409: another connection with the same source replaced this one. */
     data object Replaced : LinkError
@@ -45,7 +54,7 @@ sealed interface LinkError {
 data class LinkStatus(
     val state: LinkState = LinkState.DISCONNECTED,
     val error: LinkError? = null,
-    /** True after 4400/4409: the link gave up and waits for the operator. */
+    /** True after 4400 (incompatibility only), 4401 or 4409: the link gave up and waits for the operator. */
     val stopped: Boolean = false,
     val sentFps: Double = 0.0,
     val kbps: Double = 0.0,
@@ -79,13 +88,17 @@ data class SensorInfo(val width: Int, val height: Int, val rotationDeg: Int)
  *   analysis and encoding but not time spent in the OkHttp writer, kernel send buffer or
  *   network. The adapter's `captured_at = received - age_ms` is therefore later than the true
  *   capture time by that transmit delay.
- * - Reconnects with [Backoff]; close 4400 or 4409 stops retrying.
+ * - Reconnects with [Backoff]; 4400 stops only for an incompatibility reason;
+ *   4401 and 4409 stop.
+ * - With a [resolver], the URL host is the site's `tls_host` and each connect looks its address up through
+ *   mDNS ([SiteDns]); a failed connect drops the cached address so the next one browses again (D-391 1).
  */
 class OverheadLink(
     private val pairing: PairingUri,
     private val appVersion: String,
     private val device: String,
-    private val client: OkHttpClient = defaultClient(),
+    private val resolver: SiteResolver? = null,
+    private val client: OkHttpClient = defaultClient(pairing.pin, resolver?.let { SiteDns(pairing.host, it) }),
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val lock = Any()
@@ -96,9 +109,24 @@ class OverheadLink(
     private val _status = MutableStateFlow(LinkStatus())
     val status: StateFlow<LinkStatus> = _status.asStateFlow()
 
+    /** One non-fatal pin mismatch per discovered route between successful opens (review M3). */
+    private val pinRetryAvailable = AtomicBoolean(true)
+
+    private val _peerLeaf = MutableStateFlow<X509Certificate?>(null)
+
+    /**
+     * Leaf certificate of the last opened `wss://` session; it already passed the link's trust (the pinned CA).
+     * Null before the first TLS open and on plain `ws://`.
+     */
+    val peerLeaf: StateFlow<X509Certificate?> = _peerLeaf.asStateFlow()
+
     /** Set by the camera after each encode; published with the 1 s counters. */
     @Volatile
     var sentQuality: Int? = null
+
+    /** Optional hello.lens; a change takes effect on the next hello (see [reconnect]). */
+    @Volatile
+    var lens: HelloLens? = null
 
     @Volatile
     var sensor: SensorInfo = OverheadConfig.DEFAULT.let { SensorInfo(it.width, it.height, 0) }
@@ -146,6 +174,24 @@ class OverheadLink(
         ws?.close(1000, "stopped")
         scope.cancel()
         _status.update { it.copy(state = LinkState.DISCONNECTED, sentFps = 0.0, kbps = 0.0) }
+    }
+
+    /**
+     * Drops the current connection and connects again at once so the next `hello` carries the
+     * current [sensor] and [lens] (after a lens change). No backoff: this is not a failure.
+     */
+    fun reconnect() {
+        val ws: WebSocket?
+        synchronized(lock) {
+            if (!running) return
+            reconnectJob?.cancel()
+            reconnectJob = null
+            ws = socket
+            socket = null
+            generation++
+        }
+        ws?.close(1000, "lens changed")
+        connect()
     }
 
     /**
@@ -244,8 +290,13 @@ class OverheadLink(
                 webSocket.close(1000, "stale")
                 return
             }
+            // The pinned trust manager records the leaf it verified; OkHttp's handshake list is empty with it.
+            val leaf = (response.handshake?.peerCertificates?.firstOrNull() as? X509Certificate)
+                ?: (client.x509TrustManager as? PinnedTrustManager)?.lastTrustedLeaf
+            if (response.handshake != null && leaf != null) _peerLeaf.value = leaf
+            pinRetryAvailable.set(true)
             val s = sensor
-            webSocket.send(Protocol.hello(pairing.source, appVersion, device, s.width, s.height, s.rotationDeg))
+            webSocket.send(Protocol.hello(pairing.source, appVersion, device, s.width, s.height, s.rotationDeg, lens))
             backoff.reset()
             Log.i(TAG, "connected to ${pairing.wsUrl}")
             _status.update { it.copy(state = LinkState.STREAMING, error = null, stopped = false) }
@@ -289,26 +340,49 @@ class OverheadLink(
             } else {
                 LinkError.Network(t.message ?: t.javaClass.simpleName, NetworkFailure.classify(t))
             }
-            onLost(gen, error, fatal = false)
+            // A pin mismatch cannot heal by retrying: the site certificate changed or this is not the site
+            // (D-341 10). It can only happen before any HTTP response, so a response rules it out.
+            val pinFailed = response == null && error is LinkError.Network && error.kind == NetworkFailure.TLS_PIN
+            // A pin mismatch on an address that mDNS supplied may be one spoofed advert, not the site: browse
+            // again once, and stop only if the fresh route fails the pin too (review M3).
+            val viaDiscovery = resolver?.route?.value is SiteRoute.Discovered
+            val fatal = pinFailed && !(viaDiscovery && pinRetryAvailable.getAndSet(false))
+            // The site may have moved: the next attempt browses again instead of reusing the cached address.
+            if (response == null) resolver?.invalidate()
+            onLost(gen, error, fatal = fatal)
         }
 
         private fun handleClose(code: Int, reason: String) {
-            when (code) {
-                Protocol.CLOSE_BAD_PROTO -> onLost(gen, LinkError.ProtocolMismatch, fatal = true)
-                Protocol.CLOSE_UNAUTHORIZED -> onLost(gen, LinkError.Unauthorized, fatal = true)
-                Protocol.CLOSE_REPLACED -> onLost(gen, LinkError.Replaced, fatal = true)
-                else -> onLost(gen, LinkError.Closed(code, reason), fatal = false)
-            }
+            val (error, fatal) = closeOutcome(code, reason)
+            onLost(gen, error, fatal)
         }
     }
 
     companion object {
         private const val TAG = "OverheadLink"
 
-        fun defaultClient(): OkHttpClient = OkHttpClient.Builder()
+        /** What a server close means for the link: the error to show and whether to stop retrying. */
+        internal fun closeOutcome(code: Int, reason: String): Pair<LinkError, Boolean> = when (code) {
+            Protocol.CLOSE_BAD_PROTO ->
+                if (Protocol.isIncompatibleClose(code, reason)) LinkError.ProtocolMismatch to true
+                else LinkError.Busy(code, reason) to false
+            Protocol.CLOSE_TRY_AGAIN -> LinkError.Busy(code, reason) to false
+            Protocol.CLOSE_CREDENTIAL_UNKNOWN -> LinkError.CredentialUnknown to false
+            Protocol.CLOSE_UNAUTHORIZED -> LinkError.Unauthorized to true
+            Protocol.CLOSE_REPLACED -> LinkError.Replaced to true
+            else -> LinkError.Closed(code, reason) to false
+        }
+
+        /**
+         * [pin] set: trust only the paired site certificate (see [PinnedTrustManager]); null: system trust.
+         * [dns] set: name lookups go through it (the site's `tls_host` via mDNS, [SiteDns]).
+         */
+        fun defaultClient(pin: String? = null, dns: Dns? = null): OkHttpClient = OkHttpClient.Builder()
             .connectTimeout(5, TimeUnit.SECONDS)
             .readTimeout(0, TimeUnit.MILLISECONDS)
             .pingInterval(10, TimeUnit.SECONDS)
+            .pinnedTo(pin)
+            .apply { if (dns != null) dns(dns) }
             .build()
     }
 }

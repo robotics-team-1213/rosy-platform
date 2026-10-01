@@ -146,8 +146,9 @@ git mv src/site/overhead src/site/site_vision
 git mv src/site/site_vision/overhead src/site/site_vision/site_vision
 git mv src/site/site_vision/resource/overhead src/site/site_vision/resource/site_vision
 git mv src/site/site_vision/protocol/vectors.json test/fixtures/protocol/overhead-ingest.v1.json
-git mv src/site/ceiling_camera/app/src/main/java/io/github/livsbittt/rosy/overhead src/site/ceiling_camera/app/src/main/java/io/github/livsbittt/rosy/ceilingcamera
-git mv src/site/ceiling_camera/app/src/test/java/io/github/livsbittt/rosy/overhead src/site/ceiling_camera/app/src/test/java/io/github/livsbittt/rosy/ceilingcamera
+J=src/site/ceiling_camera/app/src; P=io/github/livsbittt/rosy
+git mv $J/main/java/$P/overhead $J/main/java/$P/ceilingcamera
+git mv $J/test/java/$P/overhead $J/test/java/$P/ceilingcamera
 git mv src/hmi/web_common/icons/overhead-camera-app.svg src/hmi/web_common/icons/ceiling-camera.svg
 ```
 (빈 `src/site/site_vision/protocol/`은 지운다.) 모듈 기록: `site_vision`이 `index.md`·`logs.md`·`progress.md`·`AGENTS.md`를 이어받는다. `ceiling_camera`에는 새 네 파일을 만든다. 새 `logs.md` 첫 항목은 "이력은 `src/site/site_vision/logs.md`의 2026-09-30 이전 항목"을 가리킨다.
