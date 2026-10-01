@@ -2,11 +2,11 @@
 module: rosy_cell
 logical_modules: []
 owner: SITE
-last_verified: { commit: "014acdf6", date: 2026-10-01 }
+last_verified: { commit: "c0900cff", date: 2026-10-01 }
 gates:
   SOURCE:
     state: GO
-    evidence: "123 passed at 014acdf6 (2026-10-01 Windows); ROS-free; no Motion Intent, IK or reachability"
+    evidence: "140 passed at c0900cff (2026-10-01 Windows); ROS-free; cell/2 + carry_z; no Motion Intent, IK or reachability"
     cmd: "python -m pytest src/site/cell/test -q"
   LOCAL:
     state: N/A
