@@ -335,3 +335,47 @@ def test_a_robot_without_localization_keeps_todays_behaviour_and_warns():
     row = [r for r in snapshot["robots"] if r["robot_id"] == "rosy_02"][0]
     assert row["localization"]["legacy"] is True
     assert row["localization"]["label"] == "위치 상태 미보고"
+
+
+def test_a_mission_held_behind_an_untrusted_robot_drops_its_claim():
+    """Review fix: like ROUTE_CONFLICT, a cancelled mission must not keep claiming the corridor."""
+    mover = _mover()
+    other = FakeRobot("rosy_02", state=_standing("rosy_02", (0.0, 0.3), _loc()))
+    console = _console(mover, other)
+    run(console.snapshot())
+    console._claims["rosy_01"] = _line(-2.0, 0, 2.0, 0)        # an earlier mission's claim
+    other._state = _standing("rosy_02", (0.0, 0.3), _loc("SUSPECT", "map"))
+
+    result = run(console.goal("rosy_01", 2.0, 0.0))
+
+    assert result["reason"] == "LOCALIZATION_UNTRUSTED"
+    assert "rosy_01" not in console._claims
+
+
+def test_an_untrusted_mover_is_queued_without_sending_the_goal():
+    """Decision (review of lane C): CORE would refuse a goal from an unlocalized robot anyway."""
+    mover = _mover()
+    mover._state = _standing("rosy_01", (-2.0, 0.0), _loc("CANDIDATES", "odom"))
+    console = _console(mover)
+    run(console.snapshot())
+
+    result = run(console.goal("rosy_01", 2.0, 0.0))
+
+    assert result["queued"] is True and result["dispatch_attempted"] is False
+    assert result["reason"] == "LOCALIZATION_UNTRUSTED" and result["blocked_by"] == "rosy_01"
+    assert _goal_calls(mover) == 0
+    run(console.snapshot())
+    assert _goal_calls(mover) == 0                                 # still unlocalized: waits
+
+    mover._state = _standing("rosy_01", (-2.0, 0.0), _loc())
+    run(console.snapshot())
+    assert _goal_calls(mover) == 1 and "rosy_01" not in console._queued
+
+
+def test_a_legacy_mover_is_dispatched_as_today():
+    mover = _mover()
+    mover._state = _standing("rosy_01", (-2.0, 0.0))
+    console = _console(mover)
+    run(console.snapshot())
+    assert "queued" not in run(console.goal("rosy_01", 2.0, 0.0))
+    assert _goal_calls(mover) == 1

@@ -341,6 +341,15 @@ class FleetConsole:
                     "cancel_confirmed": False, "blocked_by": yielding["for"],
                     "waiting_on": [yielding["for"]], "reason": "YIELDED"}
         client = self._client(robot_id)
+        if trust.classify(self._seen.get(robot_id)) == trust.UNTRUSTED:
+            # D-395: an unlocalized robot gets no goal (CORE would refuse it); it waits for LOCALIZED.
+            self._claims.pop(robot_id, None)
+            self._queued[robot_id] = self._task_mission(
+                x, y, yaw, task_id=task_id, attempt_id=attempt_id, attempt_seq=attempt_seq,
+                blocked_by=robot_id, waiting_on=[robot_id], reason="LOCALIZATION_UNTRUSTED")
+            return {"accepted": False, "queued": True, "dispatch_attempted": False,
+                    "cancel_confirmed": False, "blocked_by": robot_id, "waiting_on": [robot_id],
+                    "reason": "LOCALIZATION_UNTRUSTED"}
         if attempt_id is None:
             result = await client.navigation_goal(x, y, yaw)
         else:
@@ -381,6 +390,7 @@ class FleetConsole:
             if not self._cancel_confirmed(cancel_receipt):
                 raise RuntimeError("navigation goal cancellation was not confirmed")
             self._goals.pop(robot_id, None)
+            self._claims.pop(robot_id, None)
             self._queued[robot_id] = self._task_mission(
                 x, y, yaw, task_id=task_id, attempt_id=attempt_id, attempt_seq=attempt_seq,
                 blocked_by=untrusted, waiting_on=[untrusted], reason="LOCALIZATION_UNTRUSTED",
@@ -718,7 +728,10 @@ class FleetConsole:
         if mission.get("reason") in ("YIELDING", "NO_YIELD_SPACE"):
             return self._route_still_occupied(mission)
         if mission.get("reason") == "LOCALIZATION_UNTRUSTED":
-            return self._untrusted_blocks(mission["blocked_by"], mission.get("route") or [])
+            # No route: the mover itself was unlocalized; any route: a robot in its way is.
+            return (trust.classify(self._seen.get(mission["blocked_by"])) == trust.UNTRUSTED
+                    if "route" not in mission
+                    else self._untrusted_blocks(mission["blocked_by"], mission["route"]))
         blocker = mission["blocked_by"]
         # 앞이 아직 못 나갔으면 그 뒤도 못 나간다. 점유만 보면, 대기열에 들어간 순간
         # 점유가 없는 블로커를 "끝났다"고 읽고 뒤가 먼저 튀어 나간다.
