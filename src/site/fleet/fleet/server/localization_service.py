@@ -112,6 +112,8 @@ class LocalizationService:
         self._last_report: dict[str, object] = {}
         #: robot_id -> (rung, Fleet time of the busy refusal) still to be retried.
         self._busy_rung: dict[str, tuple[str, float]] = {}
+        #: robot_id -> mission kinds CORE refused as `unsupported` in this ladder episode.
+        self._unsupported: dict[str, set] = {}
         #: robot_id -> ((request_id, stamp), Fleet monotonic time first seen).
         self._report_seen: dict[str, tuple] = {}
         self._known: set[str] = set()
@@ -163,6 +165,8 @@ class LocalizationService:
         for rid, state in states.items():
             status = trust.status_of(state)
             rung = self._ladder.update(rid, status.state if status else None, now)
+            if rid not in self._ladder.robots():
+                self._unsupported.pop(rid, None)          # the ladder episode ended
             retry = self._busy_rung.get(rid)
             if rung is None and retry is not None and retry[0] == self._ladder.view(rid, now)["rung"]                     and now - retry[1] >= service_logic.BUSY_RETRY_S:
                 rung = retry[0]
@@ -266,7 +270,11 @@ class LocalizationService:
         if status is None or status.state is LocState.LOCALIZED:
             return          # legacy (null) or LOCALIZED robots never get a mission
         target = service_logic.square_target(self._last_report.get(rid), self._squares)
-        kinds = [k for k in service_logic.RUNG_MISSIONS[rung] if k != "to_square" or target is not None]
+        refused = self._unsupported.setdefault(rid, set())
+        kinds = [k for k in service_logic.RUNG_MISSIONS[rung]
+                 if k not in refused and (k != "to_square" or target is not None)]
+        if not kinds:
+            return
         try:
             held = list(await self._traffic_hold(rid)) if self._traffic_hold is not None else []
         except Exception as exc:
@@ -291,6 +299,7 @@ class LocalizationService:
                     self._busy_rung[rid] = (rung, now)
                 if exc.code != "unsupported":
                     return
+                refused.add(kind)          # final for this ladder episode (S1: 13-20 re-asks)
             except Exception as exc:
                 record["result"] = "unreachable"
                 logger.warning("localization: mission %s to %s failed: %s", kind, rid, exc)
@@ -322,5 +331,6 @@ class LocalizationService:
             self._last_mission.pop(rid, None)
             self._last_report.pop(rid, None)
             self._busy_rung.pop(rid, None)
+            self._unsupported.pop(rid, None)
             self._report_seen.pop(rid, None)
         self._known = current

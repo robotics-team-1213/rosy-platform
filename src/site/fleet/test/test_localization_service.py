@@ -425,6 +425,43 @@ def test_homing_tries_to_square_first_and_falls_back_when_core_refuses_it():
     assert svc.view("r1")["last_mission"]["kind"] == "lane_to_stopline"
 
 
+def test_an_unsupported_kind_is_not_asked_again_in_the_same_ladder_episode():
+    """S1: while the rotate still ran, Fleet alternated to_square (unsupported) and
+    lane_to_stopline (busy) every ~2.4 s. unsupported is final until LOCALIZED."""
+    clock = FakeClock()
+    r1 = FakeRobot("r1", state=state("r1", "CANDIDATES", "odom"))
+    r1.candidates = report("r1", OFF)
+    r1.decision_error = RobotApiError("r1", 409, "STALE_REQUEST", "keep the ladder running")
+    calls = []
+    busy = {"lane": True}
+    original = r1.localization_mission
+
+    async def mission(kind, **kwargs):
+        calls.append(kind)
+        if kind == "to_square":
+            raise RobotApiError("r1", 409, "unsupported", "follow-up")
+        if kind == "lane_to_stopline" and busy["lane"]:
+            raise RobotApiError("r1", 409, "busy", "rotate_in_place is running")
+        return await original(kind, **kwargs)
+
+    r1.localization_mission = mission
+    svc = service(r1, clock=clock)
+    ticks(svc, clock, 46.0)
+    assert calls == ["rotate_in_place", "to_square", "lane_to_stopline"]
+    ticks(svc, clock, 6.0)                                   # busy retries: the lane mission only
+    assert calls.count("to_square") == 1 and calls.count("lane_to_stopline") >= 3
+    busy["lane"] = False
+    ticks(svc, clock, 2.5)
+    assert calls[-1] == "lane_to_stopline" and calls.count("to_square") == 1
+
+    r1._state = state("r1", "LOCALIZED")                     # the episode ends
+    ticks(svc, clock, 0.5)
+    r1._state = state("r1", "CANDIDATES", "odom")            # a new one tries to_square again
+    calls.clear()
+    ticks(svc, clock, 46.5)
+    assert "to_square" in calls
+
+
 def test_the_square_target_is_the_square_nearest_the_first_candidate():
     target = service_logic.square_target(report("r1", OFF), [A, B])
     assert target == {"square": [A[0], A[1]], "candidate_index": 0, "request_id": "r1-1"}
