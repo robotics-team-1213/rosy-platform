@@ -256,6 +256,14 @@ SIZE_VERDICTS = {
         670,
         "accept: one scan entry over the release tree — the rules and the walker are the same concern (X5)",
     ),
+    "deploy/robot/pinky_pro/native/sync-image-layer.py": (
+        876,
+        "split: D-388 image-layer sync — the allowlist/plan, the backup-record history (records, "
+        "cleanup, crash reconcile) and the apply/pending transaction are separate seams; move the "
+        "record history into a sibling module in deploy/robot/pinky_pro/native once the 2026-10-02 bench "
+        "run has exercised it on a robot, so the split does not land untested on device; owner deploy, "
+        "covered by test/test_image_layer_sync.py",
+    ),
     "deploy/robot/pinky_pro/native/rosy-hw-probe.py": (
         641,
         "accept: single-entry hardware probe CLI the commissioning runbook drives top-to-bottom — "

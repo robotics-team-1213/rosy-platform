@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "doc": "D-370 5.5 + D-391 4.1 shared client failure classes. Machine source for every client-side failure classifier (core_common failure_class, Rosy Cam NetworkFailure/ProblemGuide, web_common link code). The vector maps one input to one class only; each client keeps its own states on top (Pilot example: forbidden -> FORBIDDEN, auth_final -> OFFLINE, conflict -> BLOCKED, every other class -> RETRYING). Exactly one input kind per case: {ws_close, reason?}, {http_status}, {transport}, {discovery}. WS 4400 follows the D-341 11 transition rule: a pre-1013 receiver closes a hello timeout as 4400 with reason 'no hello' or an empty reason, so a 4400 whose reason is in close_4400_retry_reasons (a missing reason counts as empty) is retryable and maps to busy (retry later), never auth_retry (the credential is not in doubt); every other 4400 reason is protocol_mismatch. The retry list is the same as overhead-ingest.v1.json close_4400_reasons.retry. Transport TLS failures (handshake or pin mismatch) are both tls_untrusted: the client cannot tell a wrong CA from a middlebox, and both need the site CA checked. Inputs not listed in ws_close/http_status tables use `fallback`.",
+  "classes": [
+    "unreachable", "refused", "unknown_host", "tls_untrusted", "auth_final", "auth_retry",
+    "forbidden", "protocol_mismatch", "busy", "conflict", "not_discovered"
+  ],
+  "close_4400_retry_reasons": ["", "no hello"],
+  "fallback": {
+    "ws_close": "unreachable",
+    "http_4xx": "protocol_mismatch",
+    "http_5xx": "busy"
+  },
+  "cases": [
+    {"id": "ws_4400_bad_proto", "input": {"ws_close": 4400, "reason": "bad proto"}, "expect": "protocol_mismatch"},
+    {"id": "ws_4400_fatal_receiver_reason", "input": {"ws_close": 4400, "reason": "proto must be 'rosy-overhead/1'"}, "expect": "protocol_mismatch"},
+    {"id": "ws_4400_no_hello_is_retry_later", "input": {"ws_close": 4400, "reason": "no hello"}, "expect": "busy"},
+    {"id": "ws_4400_empty_reason_is_retry_later", "input": {"ws_close": 4400, "reason": ""}, "expect": "busy"},
+    {"id": "ws_4400_missing_reason_is_retry_later", "input": {"ws_close": 4400}, "expect": "busy"},
+    {"id": "ws_4400_receiver_busy", "input": {"ws_close": 4400, "reason": "receiver busy"}, "expect": "protocol_mismatch"},
+    {"id": "ws_4401_unknown_or_revoked", "input": {"ws_close": 4401}, "expect": "auth_final"},
+    {"id": "ws_4403_forbidden", "input": {"ws_close": 4403}, "expect": "forbidden"},
+    {"id": "ws_4409_replaced_by_same_source", "input": {"ws_close": 4409}, "expect": "conflict"},
+    {"id": "ws_4503_credential_state_unknown", "input": {"ws_close": 4503}, "expect": "auth_retry"},
+    {"id": "ws_1013_try_again_later", "input": {"ws_close": 1013}, "expect": "busy"},
+    {"id": "ws_1006_abnormal_fallback", "input": {"ws_close": 1006}, "expect": "unreachable"},
+    {"id": "http_401", "input": {"http_status": 401}, "expect": "auth_final"},
+    {"id": "http_403", "input": {"http_status": 403}, "expect": "forbidden"},
+    {"id": "http_409", "input": {"http_status": 409}, "expect": "conflict"},
+    {"id": "http_429", "input": {"http_status": 429}, "expect": "busy"},
+    {"id": "http_503", "input": {"http_status": 503}, "expect": "busy"},
+    {"id": "http_404_fallback", "input": {"http_status": 404}, "expect": "protocol_mismatch"},
+    {"id": "http_500_fallback", "input": {"http_status": 500}, "expect": "busy"},
+    {"id": "transport_timeout", "input": {"transport": "timeout"}, "expect": "unreachable"},
+    {"id": "transport_no_route", "input": {"transport": "no_route"}, "expect": "unreachable"},
+    {"id": "transport_connection_refused", "input": {"transport": "connection_refused"}, "expect": "refused"},
+    {"id": "transport_dns_failure", "input": {"transport": "dns_failure"}, "expect": "unknown_host"},
+    {"id": "transport_tls_handshake", "input": {"transport": "tls_handshake"}, "expect": "tls_untrusted"},
+    {"id": "transport_tls_pin_mismatch", "input": {"transport": "tls_pin_mismatch"}, "expect": "tls_untrusted"},
+    {"id": "discovery_no_match", "input": {"discovery": "no_match_within_timeout"}, "expect": "not_discovered"}
+  ]
+}

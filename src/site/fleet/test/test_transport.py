@@ -147,11 +147,45 @@ def test_line_follow_mode_uses_put_and_only_forwards_ir_or_stop():
         run(client.line_follow_mode("CAMERA_LINE"))
 
 
-def test_socket_urls_point_at_the_robot():
+def test_socket_urls_point_at_the_robot_without_the_token():
     c = _client(lambda r: httpx.Response(200, json={}))
-    assert c.pose_url() == "ws://robot:8080/ws/swarm/pose?token=op-token"
-    assert c.reference_url() == "ws://robot:8080/ws/swarm/reference?token=op-token"
-    assert c.events_url(["nav.*", "swarm.*"]) == "ws://robot:8080/ws/events?token=op-token&types=nav.%2A%2Cswarm.%2A"
+    assert c.pose_url() == "ws://robot:8080/ws/swarm/pose"
+    assert c.reference_url() == "ws://robot:8080/ws/swarm/reference"
+    assert c.events_url(["nav.*", "swarm.*"]) == "ws://robot:8080/ws/events?types=nav.%2A%2Cswarm.%2A"
+
+
+def test_every_socket_sends_the_auth_frame_first_and_keeps_the_token_out_of_urls_and_logs(caplog):
+    """D-370 S7: first-message auth (CORE ws.py _first_message_token), like dashboard and Pilot."""
+    websockets = pytest.importorskip("websockets")
+    token = "secret-op-token-7f3a"
+    seen = []
+
+    async def main():
+        async def handler(ws):
+            first = await asyncio.wait_for(ws.recv(), timeout=2)
+            seen.append((ws.request.path, first))
+            await ws.send('{"type": "pose"}')
+            await ws.close()
+
+        async with websockets.serve(handler, "127.0.0.1", 0) as server:
+            port = server.sockets[0].getsockname()[1]
+            client = HttpRobotClient(RobotEndpoint("rosy_09", f"http://127.0.0.1:{port}", token))
+            try:
+                assert [f async for f in client.pose_stream()] == ['{"type": "pose"}']
+                assert [e async for e in client.events(["nav.*"])] == [{"type": "pose"}]
+                sink = await client.open_reference_sink()
+                await sink.close()
+            finally:
+                await client.aclose()
+
+    with caplog.at_level(logging.DEBUG):
+        run(asyncio.wait_for(main(), timeout=10))
+    assert [path for path, _ in seen] == [
+        "/ws/swarm/pose", "/ws/events?types=nav.%2A", "/ws/swarm/reference"]
+    assert all(json.loads(first) == {"type": "auth", "token": token} for _, first in seen)
+    # The fake robot's own server log may echo the frame; the Fleet side must not.
+    assert not [r for r in caplog.records
+                if token in r.getMessage() and not r.name.startswith("websockets.server")]
 
 
 def test_frame_text_conversion_passes_str_decodes_bytes_and_drops_garbage():
@@ -283,7 +317,7 @@ def test_operational_client_ignores_proxy_environment(monkeypatch):
 
 
 def test_robot_sockets_ignore_proxy_environment(monkeypatch):
-    """D-361 9: the token-bearing WS URLs must not go through an environment proxy."""
+    """D-361 9: robot sockets carry the token in their first frame; no environment proxy."""
     import websockets
 
     seen = []
@@ -309,3 +343,28 @@ def test_robot_sockets_ignore_proxy_environment(monkeypatch):
 
     run(drive())
     assert len(seen) == 3 and all("proxy" in kw and kw["proxy"] is None for kw in seen)
+
+
+def test_a_reference_socket_refused_after_the_auth_frame_names_the_refusal():
+    # CORE accepts first and then closes 4401 on a wrong first-message token.
+    websockets = pytest.importorskip("websockets")
+
+    async def main():
+        async def handler(ws):
+            await ws.recv()                                  # the auth frame
+            await ws.close(code=4401, reason="unauthorized")
+
+        async with websockets.serve(handler, "127.0.0.1", 0) as server:
+            port = server.sockets[0].getsockname()[1]
+            client = HttpRobotClient(RobotEndpoint("rosy_09", f"http://127.0.0.1:{port}", "t"))
+            try:
+                sink = await client.open_reference_sink()
+                reason = await asyncio.wait_for(sink.wait_closed(), 5)
+                assert isinstance(reason, RobotApiError) and reason.code == "WS_4401"
+                with pytest.raises(RobotApiError) as exc:
+                    await sink.send('{"type": "pose"}')
+                assert exc.value.code == "WS_4401"
+                await sink.close()
+            finally:
+                await client.aclose()
+    run(main())

@@ -47,6 +47,8 @@ class FakeSink:
         self.fail_on_send = fail_on_send
         #: 잡혀 있으면 send 가 여기서 기다린다 — 느린 팔로워를 흉내낸다.
         self.gate: Optional[asyncio.Event] = None
+        self.peer_closed = asyncio.Event()
+        self.close_reason: Optional[BaseException] = None
 
     async def send(self, frame: str) -> None:
         if self.gate is not None:
@@ -57,6 +59,16 @@ class FakeSink:
 
     async def close(self) -> None:
         self.closed = True
+        self.peer_closed.set()
+
+    async def wait_closed(self) -> BaseException:
+        await self.peer_closed.wait()
+        return self.close_reason or ConnectionError("reference socket closed by robot")
+
+    def close_from_robot(self, reason: Optional[BaseException] = None) -> None:
+        """The robot closes the socket (e.g. 4401 after first-message auth)."""
+        self.close_reason = reason
+        self.peer_closed.set()
 
 
 class FakeRobot:

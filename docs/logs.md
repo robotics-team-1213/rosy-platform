@@ -4082,6 +4082,25 @@
 - 증거: 해당 커밋의 시험(`test_dataset_extract.py`, `test_bench_learned_perception.py`, `test_python_runtime_id.py`).
 - gate 변화: 없음(기록 정정).
 
+## 2026-10-01 · uncommitted · docs(adr): D-391 사이트 연결 기록 모양과 기기 연결 서버 자리 제안
+
+- 변경: 앱 공통 구조 점검(main 20d43df0, 읽기 전용) 결과 발견·전송은 모였고 연결 설정·기기 연결 서버가 남았다. D-391 Proposed(처음 D-387, docs/ota-roadmap-adr·Pilot OMX 초안과 번호가 겹쳐 D-391로 옮김): 클라이언트가 같은 필드(이름·CA·자격, IP 없음)로 사이트 연결을 저장하고 `site-link.v1.json` 벡터로 시험한다, 사이트 호스트 설정 원천은 `/run/rosy-config/` 하나 + 일관성 검사 도구, 기기 연결 서버는 Fleet(공통 조각 → pairing/v1 → 패널 → Rosy Cam 클라이언트 → Vision 동기화), 공개 상태 확장은 로봇 이미지가 관대한 탐침을 가진 뒤.
+- 증거: 점검 보고(파일·줄 인용), health 탐침 정확 일치 확인(`fleet_agent/discovery.py:49`, `deploy/site/fleet-mdns.py:123`).
+- gate 변화: 없음(SOURCE 문서만).
+- 결정: 없음(제안). 담당은 병행 세션 결정 회차에서 정한다.
+
+## 2026-10-01 · uncommitted · docs(reference): 사이트 LAN 발견 프로필 — Fleet health 채택 규칙 완화
+
+- 변경: `site-lan-discovery-profile.md` 33행. `/healthz`가 정확히 `{"status":"ok"}`가 아니라 1024바이트 이하 JSON 객체에 `status == "ok"`, `role`이 있으면 `fleet`, 모르는 키 무시로 적었다(D-370 공개 상태 모양 대비).
+- 증거: `test/test_site_fleet_mdns.py` health 시험, `test/test_discovery_txt_profile_parity.py`.
+- gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · docs(reference): API Ref 군집 소켓 표에서 `?token=` 표기 제거
+
+- 변경: `ROSY API & Protocol Reference.md` §군집 소켓 표의 `WS /ws/swarm/pose?token=`·`/ws/swarm/reference?token=`를 경로만으로 고치고 "인증은 AUTH-101 첫 메시지 방식(Fleet도 D-370 S7부터)" 한 줄을 더했다. AUTH-101의 `?token=` 한시 수락 문구는 그대로.
+- 증거: `src/site/fleet/test/test_transport.py`.
+- gate 변화: 없음.
+
 ## 2026-10-01 · uncommitted · docs(adr): D-384 개정 4 — 재생 비교와 URDF 형상 사전값
 - 변경: 124745Z R0의 도로 쪽 불합격 3항목(on_paint 0.186, 직선 |err| 0.392, NIS 꼬리)을 추정기 과제로 명시. LaneKeeper d421c86a 재생에서 도로·추정기 수치가 main과 같음. 횡단보도 정지 구간의 on_paint 오판과 참고용 on_lane_paint 지표(D-379 crosswalk/stop_line 클래스 전까지 기준 아님) 기록. URDF 형상 사전값(IR ±0.020 m, 카메라 높이 0.063 m, LiDAR 정면 180°, 바퀴 0.028/0.0971 m)을 재생·시뮬 사전값으로만 기록.
 - 증거: X:\DevTemp\rosy-ml-work\d384-replay-d421 재생 출력(main·d421, 2258 프레임), rosy-bc 세션 합의.

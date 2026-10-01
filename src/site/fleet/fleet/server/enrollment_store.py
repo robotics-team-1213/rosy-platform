@@ -17,6 +17,7 @@ import time
 from contextlib import closing
 from pathlib import Path
 
+from core_common.protocol.device_kind import ROBOT
 from cryptography.exceptions import InvalidTag
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
@@ -196,7 +197,7 @@ class EnrollmentStore:
                 connection.execute("DELETE FROM robot_enrollments WHERE robot_id=?", (robot_id,))
 
     def audit(self, *, action: str, outcome: str, principal_id: str | None,
-              target: str | None, device_kind: str = "robot") -> None:
+              target: str | None, device_kind: str = ROBOT) -> None:
         with closing(self._connect()) as connection:
             with connection:
                 connection.execute(
@@ -220,8 +221,8 @@ class EnrollmentStore:
             pending = connection.execute(
                 "SELECT robot_id FROM robot_enrollments WHERE state='pending_logout'").fetchall()
             removed = connection.execute(
-                "SELECT target FROM device_pairing_audit WHERE device_kind='robot' "
-                "AND action='unenroll' AND target IS NOT NULL").fetchall()
+                "SELECT target FROM device_pairing_audit WHERE device_kind=? "
+                "AND action='unenroll' AND target IS NOT NULL", (ROBOT,)).fetchall()
         return {row[0] for row in pending} | {row[0] for row in removed}
 
 

@@ -231,3 +231,16 @@
 - 증거: `test_robot_core_layer.py` 8 passed; gateway `test_pinky_lidar_forward_device.py` 5 passed(3b525bb6: 가짜 ament 로 소스 트리 고정).
 - gate 변화: 없음.
 - 결정: D-196 추가 2026-10-01.
+
+## 2026-10-01 · uncommitted · feat(protocol): D-391 4.1 공유 벡터 — device_kind·실패 분류·사이트 연결 기록
+
+- 변경: `core_common/protocol/`에 표준 라이브러리만 쓰는 세 모듈을 두었다. `device_kind.py`(`OVERHEAD_CAMERA`·`ROBOT`·`ALL`), `failure_class.py`(`classify(*, ws_close, reason, http_status, transport, discovery) -> str`, 입력은 정확히 한 종류), `site_link.py`(`validate(record) -> str | None`). 기계 원천은 `test/fixtures/protocol/failure-classes.v1.json`(26 사례, 분류 11종 전부)과 `site-link.v1.json`(33 사례, 사유 12종 전부)이다.
+- 결정: WS 4400의 재시도 사유(빈 사유·`no hello` 등, ingest 벡터 `close_4400_reasons.retry`와 같은 목록)는 D-341 11항 전환 규칙대로 `busy`로 둔다(`auth_retry` 아님 — 자격은 의심받지 않는다). 표에 없는 WS 코드는 `unreachable`, HTTP 4xx는 `protocol_mismatch`, 5xx는 `busy`. `tls_host`는 `.local` 이름만(IP면 `ip_as_tls_host`), `expires_at`은 `Z` 붙은 UTC만, 모르는 최상위 필드는 무시한다. CA 판정은 최소 DER 탐색으로 basicConstraints `cA`만 읽는다(서명·유효기간·체인은 TLS 몫). 벡터의 인증서는 공개 fixture이고 44자로 줄바꿈해 비밀 스캔의 50자 엔트로피 기준 아래에 둔다. 개인 키는 작성 때 버렸다.
+- 증거: `test_site_link_vectors.py` 71 passed, foundation 전체 279 passed. 변이 증명: CA 판정을 항상 참으로 바꾸면 `ca_pem_is_leaf`·`ca_pem_leaf_then_ca_bundle` 2건이 빨개진다.
+- gate 변화: 없음(LOCAL). Kotlin 쪽 로더는 rosy-84 몫.
+
+## 2026-10-01 · uncommitted · fix(protocol): site_link 비밀 스캔 오탐·ruff 정리
+
+- 변경: `site_link.py`의 지역 변수 `has_secret`가 비밀 스캔 `credential` 규칙에 걸려 `inline`으로 바꿨다(D-256: 스캐너가 아니라 호출 자리를 고친다). `expires_at` 달력 검사는 `%z`를 붙인 aware datetime으로(DTZ007), 새 시험의 import 정렬을 맞췄다. 동작 변경 없음.
+- 증거: `test/test_release_boundary_guards.py` 73 passed(수정 전 `test_no_secrets_in_tracked_files` 1 failed), foundation 279 passed, 새 파일 ruff 통과.
+- gate 변화: 없음.

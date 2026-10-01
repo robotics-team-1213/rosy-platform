@@ -10,8 +10,24 @@ import subprocess
 from pathlib import Path
 
 from core_common.protocol.discovery_txt import (
-    FLEET as SERVICE_TYPE, HOSTNAME, Accepted, classify, parse_txt_pairs,
+    FLEET as SERVICE_TYPE, HOSTNAME, REQUIRED, Accepted, classify, parse_txt_pairs,
 )
+
+HEALTH_MAX_BYTES = 1024
+
+
+def check_health_body(body: bytes) -> None:
+    """Accept {"status":"ok"} and the D-370 extended shape; ignore unknown keys.
+
+    A present ``role`` must match the role Fleet advertises in its DNS-SD TXT.
+    """
+    try:
+        payload = json.loads(body) if len(body) <= HEALTH_MAX_BYTES else None
+    except ValueError:
+        payload = None
+    if (not isinstance(payload, dict) or payload.get("status") != "ok"
+            or ("role" in payload and payload["role"] != REQUIRED[SERVICE_TYPE]["role"])):
+        raise ValueError("unexpected Fleet health response")
 
 
 def parse_avahi(output: str) -> list[dict]:
@@ -45,9 +61,7 @@ def probe_health(candidate: dict, expected_hostname: str, ca_file: Path) -> None
             response.begin()
             if response.status != 200:
                 raise ValueError("Fleet HTTPS health probe failed")
-            body = response.read(1025)
-            if len(body) > 1024 or json.loads(body) != {"status": "ok"}:
-                raise ValueError("unexpected Fleet health response")
+            check_health_body(response.read(HEALTH_MAX_BYTES + 1))
 
 
 def locate_fleet(expected_hostname: str, ca_file: Path, *,

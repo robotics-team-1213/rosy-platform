@@ -117,6 +117,42 @@ def test_verification_uses_pinned_hostname_and_ca_before_returning_endpoint(monk
     assert calls == [("192.168.1.20", 8443, "fleet-a.local", ca_file)]
 
 
+# D-370 S7 prerequisite: /healthz may grow {"status","role","proto","contract_version"};
+# both probes accept the old body and the extended shape, and nothing looser.
+HEALTH_ACCEPTED = (
+    b'{"status":"ok"}',
+    b'{"status":"ok","role":"fleet","proto":"site-v1","contract_version":"1"}',
+    b'{"status":"ok","future_field":[1,2]}',
+)
+HEALTH_REJECTED = (
+    b'{"status":"ok","role":"overhead-camera"}',
+    b'{"status":"ok","role":null}',
+    b'{"status":"degraded","role":"fleet"}',
+    b'{"status":"down"}',
+    b'{"role":"fleet"}',
+    b'["status","ok"]',
+    b'"ok"',
+    b'not json',
+    b'{"status":"ok","pad":"' + b"x" * 1024 + b'"}',
+)
+
+
+@pytest.mark.parametrize("loader", (_module, _robot_module), ids=("site", "agent"))
+def test_health_probes_accept_old_and_extended_ok_bodies(loader):
+    module = loader()
+    for body in HEALTH_ACCEPTED:
+        module.check_health_body(body)
+
+
+@pytest.mark.parametrize("loader", (_module, _robot_module), ids=("site", "agent"))
+@pytest.mark.parametrize("body", HEALTH_REJECTED, ids=(
+    "wrong_role", "null_role", "degraded", "down", "no_status", "array", "string",
+    "not_json", "oversize"))
+def test_health_probes_reject_wrong_role_status_shape_or_size(loader, body):
+    with pytest.raises(ValueError, match="unexpected Fleet health response"):
+        loader().check_health_body(body)
+
+
 # D-370 5.1: the site script copy and FleetAgent are held to the shared TXT vectors.
 import json  # noqa: E402
 
@@ -137,3 +173,39 @@ def test_site_locator_and_agent_accept_exactly_the_fleet_vectors(case):
     line = avahi_line(case)
     assert bool(_module().parse_avahi(line)) is accepted
     assert bool(_robot_module().parse_avahi(line)) is accepted
+
+
+FLEET_CASES = [case for case in VECTORS["cases"] if case["service_type"] == "_rosy-fleet._tcp"]
+
+
+@pytest.mark.parametrize("case", FLEET_CASES, ids=lambda case: case["id"])
+def test_site_locator_classifier_copy_gives_the_vector_reason(case):
+    """The vendored copy must reject for the same reason as core_common, not just reject."""
+    result = _module().classify_fleet(case["host"], case["address"], case["port"],
+                                      [tuple(item.split("=", 1)) for item in case["txt"]])
+    assert result == (None if case["expect"]["accepted"] else case["expect"]["reason"])
+
+
+_BASE_TXT = [("product", "rosy"), ("role", "fleet"), ("proto", "fleet-v1"), ("tls", "required")]
+_EXTRA_INPUTS = [
+    ("site.local", "0.0.0.0", 8443, _BASE_TXT),
+    ("site.local", "224.0.0.251", 8443, _BASE_TXT),
+    ("site.local", "8.8.8.8", 8443, _BASE_TXT),
+    ("bad host!", "192.168.1.10", 8443, _BASE_TXT),
+    ("site.local", "192.168.1.10", 0, _BASE_TXT),
+    ("site.local", "192.168.1.10", 8443, _BASE_TXT + [("role", "robot")]),
+    ("site.local", "192.168.1.10", 8443, [("product", "rosy")]),
+    ("site.local", None, 8443, _BASE_TXT),
+]
+
+
+@pytest.mark.parametrize("inputs", [(c["host"], c["address"], c["port"],
+                                     [tuple(i.split("=", 1)) for i in c["txt"]])
+                                    for c in FLEET_CASES] + _EXTRA_INPUTS)
+def test_site_locator_copy_agrees_with_core_common_outside_the_vectors_too(inputs):
+    """Drift guard: the vendored copy must give core_common's verdict, not only the fixture's."""
+    from core_common.protocol.discovery_txt import classify
+    host, address, port, txt = inputs
+    real = classify("_rosy-fleet._tcp", host, address, port, txt)
+    expected = getattr(real, "reason", None)
+    assert _module().classify_fleet(host, address, port, txt) == expected
