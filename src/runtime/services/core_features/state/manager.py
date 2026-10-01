@@ -84,6 +84,12 @@ class StateManager:
         self._hitl_requested: bool = False
         self._capabilities_degraded: list[str] = []
         self._activity_provider: Optional[Callable[[], Optional[dict]]] = None
+        self._localization_provider: Optional[Callable[[], object]] = None
+
+    def set_localization_provider(self, provider: Optional[Callable[[], object]]) -> None:
+        """D-395 P2-1: read live, so the stale timeout and the odom frame flag apply."""
+        with self._lock:
+            self._localization_provider = provider
 
     def set_hitl_requested(self, requested: bool) -> None:
         with self._lock:
@@ -213,6 +219,8 @@ class StateManager:
         provider = self._activity_provider
         raw_activity = provider() if provider is not None else None
         activity = RobotActivity.model_validate(raw_activity) if raw_activity else None
+        localization_provider = self._localization_provider
+        localization = localization_provider() if localization_provider is not None else None
         with self._lock:
             self._seq += 1
             now = self._clock()
@@ -249,4 +257,5 @@ class StateManager:
                 hitl_requested=self._hitl_requested,
                 capabilities_degraded=list(self._capabilities_degraded),
                 activity=activity,
+                localization=localization,
             )

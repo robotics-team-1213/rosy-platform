@@ -56,7 +56,8 @@ def _load(raw: str) -> Optional[dict]:
 
 class LocalizationAssist:
     def __init__(self, events, robot_id: Callable[[], str], *,
-                 monotonic: Callable[[], float] = time.monotonic) -> None:
+                 monotonic: Callable[[], float] = time.monotonic,
+                 on_localized: Optional[Callable[[], None]] = None) -> None:
         self._events = events
         self._robot_id = robot_id
         self._monotonic = monotonic
@@ -66,7 +67,7 @@ class LocalizationAssist:
         self.publish_decision: Optional[Callable[[dict], None]] = None
         self.publish_suspect: Optional[Callable[[dict], None]] = None
         #: CORE's navigation cancel path, run on LOCALIZED (D-395 §7).
-        self.on_localized: Optional[Callable[[], None]] = None
+        self.on_localized = on_localized
         self._lock = threading.Lock()
         self._status: Optional[LocalizationStatus] = None
         self._status_at = 0.0

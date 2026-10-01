@@ -129,11 +129,17 @@ class RosBridge:
         # `_raw` 만 구독한다 — `costmap`(OccupancyGrid) 쪽은 타입이 안 맞아 영원히 무음이다. 근거는 bridge/AGENTS.md.
         node.create_subscription(Costmap, "local_costmap/costmap_raw", self._on_local_costmap, 10)
         node.create_subscription(Costmap, "global_costmap/costmap_raw", self._on_global_costmap, 10)
+        # D-395 P2-1: sensing loc_assist_node JSON (contract docs/plans/2026-10-01-d395-phase2-interfaces.md §1).
+        node.create_subscription(String, "localization/state", self._on_loc_state, _LATCHED)
+        node.create_subscription(String, "localization/candidates", self._on_loc_candidates, _LATCHED)
+        node.create_subscription(String, "localization/result", self._on_loc_result, 10)
 
         self.power_mode_pub = node.create_publisher(String, "power/mode", _LATCHED)
         self.display_info_pub = node.create_publisher(String, "display/info", 10)
         self.dock_exemption_pub = node.create_publisher(
             Bool, "docking/collision_exemption", _LATCHED)
+        self.loc_decision_pub = node.create_publisher(String, "localization/decision", 5)
+        self.loc_suspect_pub = node.create_publisher(String, "localization/suspect", 5)
         self._led_client = node.create_client(SetLed, "set_led")
         # D-385: 모드별 표정 — 정책은 core_features.command.emotion_map, 노드는 감정 서버.
         self._emotion_client = node.create_client(Emotion, "set_emotion")
@@ -212,6 +218,11 @@ class RosBridge:
             publish_exemption=lambda on: self.dock_exemption_pub.publish(Bool(data=on)),
             odom_pose=lambda: self._last_odom_pose, info=self._node.get_logger().info)
         self._svc.docking.executor = self.docking_executor
+        # D-395 P2-4: `received_s` on the ROS clock; decisions and suspects go out as JSON.
+        loc = self._svc.localization
+        loc.clock = lambda: self._node.get_clock().now().nanoseconds / 1e9
+        loc.publish_decision = lambda body: self.loc_decision_pub.publish(String(data=json.dumps(body)))
+        loc.publish_suspect = lambda body: self.loc_suspect_pub.publish(String(data=json.dumps(body)))
         self._node.get_logger().info("ros_bridge ready (cmd_vel sole publisher @50Hz)")
 
     def _on_odom(self, msg: Odometry) -> None:
@@ -261,6 +272,15 @@ class RosBridge:
         except (TypeError, ValueError, json.JSONDecodeError) as exc:
             self._node.get_logger().warning(
                 f"ignored dock observation: {exc}", throttle_duration_sec=5.0)
+
+    def _on_loc_state(self, msg: String) -> None:
+        self._svc.localization.on_state(msg.data)
+
+    def _on_loc_candidates(self, msg: String) -> None:
+        self._svc.localization.on_candidates(msg.data)
+
+    def _on_loc_result(self, msg: String) -> None:
+        self._svc.localization.on_result(msg.data)
 
     def _on_camera_preview(self, msg: CompressedImage) -> None:
         observation.camera_preview(
@@ -351,6 +371,8 @@ class RosBridge:
             self._map_pose_ts = time.monotonic()
         except tf2_ros.TransformException:
             pass
+        # D-395 P2-1: the frame flag follows the same freshness rule as `_on_odom`.
+        self._svc.localization.tick(odometry.odom_owns_pose(self._map_pose_ts, time.monotonic()))
         snapshot = self._svc.state.snapshot()
         # 로봇 모드가 IDLE이 아니면 절전 진입을 막는다 (PWR-001 안전 인터록).
         self._svc.power.on_robot_mode(snapshot.mode)
