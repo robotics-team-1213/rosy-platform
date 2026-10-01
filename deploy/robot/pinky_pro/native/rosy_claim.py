@@ -18,6 +18,7 @@ Standard library only; it runs from /opt/rosy/native-runtime as root.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import datetime as _dt
 import json
 import os
@@ -26,9 +27,13 @@ import re
 import secrets
 import shutil
 import sys
+import time
 
 CLAIM_DIR = "run/rosy-claim"
 CLAIM_FILE = "claim.json"
+#: Serialises the stale check, the rename aside and the mkdir across parties (D-406 review M9).
+LOCK_FILE = "run/rosy-claim.lock"
+LOCK_WAIT_S = 10.0
 BOOT_ID = "proc/sys/kernel/random/boot_id"
 MAX_TTL_S = 24 * 3600
 #: A claim directory without a readable claim.json is the winner's mkdir-to-write
@@ -41,10 +46,47 @@ HOLDER = re.compile(r"^[A-Za-z0-9._@:-]{1,64}$")
 class ClaimBusy(RuntimeError):
     """Someone else holds a live claim. ``claim`` is theirs (None if unreadable)."""
 
-    def __init__(self, claim: dict | None) -> None:
+    def __init__(self, claim: dict | None, message: str | None = None) -> None:
         holder = (claim or {}).get("holder")
-        super().__init__(f"CLAIM_BUSY: held by {holder or 'an unknown holder'}")
+        super().__init__(message or f"CLAIM_BUSY: held by {holder or 'an unknown holder'}")
         self.claim = claim
+
+
+@contextlib.contextmanager
+def _claim_lock(root: Path, wait_s: float = LOCK_WAIT_S):
+    """Exclusive lock on /run/rosy-claim.lock, polled for up to ``wait_s``."""
+    path = root / LOCK_FILE
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a+b") as handle:
+        deadline = time.monotonic() + wait_s
+        while True:
+            try:
+                handle.seek(0)
+                if os.name == "posix":
+                    import fcntl
+
+                    fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                else:
+                    import msvcrt
+
+                    msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+                break
+            except OSError:
+                if time.monotonic() >= deadline:
+                    raise ClaimBusy(None, "CLAIM_BUSY: the claim lock is held by another party") from None
+                time.sleep(0.05)
+        try:
+            yield
+        finally:
+            handle.seek(0)
+            if os.name == "posix":
+                import fcntl
+
+                fcntl.flock(handle, fcntl.LOCK_UN)
+            else:
+                import msvcrt
+
+                msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
 
 
 def _z(moment: _dt.datetime) -> str:
@@ -129,7 +171,7 @@ def _write_claim(path: Path, claim: dict) -> None:
 
 
 def acquire(root: Path, holder: str, purpose: str, ttl_s: float, *,
-            now: _dt.datetime | None = None) -> dict:
+            now: _dt.datetime | None = None, lock_wait_s: float = LOCK_WAIT_S) -> dict:
     """Take the claim or raise ClaimBusy. A stale claim is moved aside first."""
     if not HOLDER.fullmatch(holder or ""):
         raise ValueError("CLAIM_HOLDER_INVALID: 1-64 of [A-Za-z0-9._@:-]")
@@ -140,6 +182,12 @@ def acquire(root: Path, holder: str, purpose: str, ttl_s: float, *,
     moment = _now(now)
     current_boot = boot_id(root)
     path = root / CLAIM_DIR
+    with _claim_lock(root, lock_wait_s):
+        return _acquire_locked(path, holder, purpose, ttl_s, moment, current_boot)
+
+
+def _acquire_locked(path: Path, holder: str, purpose: str, ttl_s: float,
+                    moment: _dt.datetime, current_boot: str | None) -> dict:
     for _attempt in range(2):
         try:
             os.mkdir(path, 0o755)
@@ -168,10 +216,25 @@ def acquire(root: Path, holder: str, purpose: str, ttl_s: float, *,
 def release(root: Path, holder: str) -> bool:
     """Drop the claim if ``holder`` holds it. False when absent or someone else's."""
     path = root / CLAIM_DIR
-    existing = _read(path)
-    if existing is None or existing.get("holder") != holder:
-        return False
-    return _move_aside(path)
+    with _claim_lock(root):
+        existing = _read(path)
+        if existing is None or existing.get("holder") != holder:
+            return False
+        return _move_aside(path)
+
+
+def refresh(root: Path, holder: str, ttl_s: float, *, now: _dt.datetime | None = None) -> bool:
+    """Push ``holder``'s claim expiry to now + ttl. False when it is not theirs (D-406 review M8)."""
+    if isinstance(ttl_s, bool) or not 0 < ttl_s <= MAX_TTL_S:
+        raise ValueError(f"CLAIM_TTL_INVALID: ttl must be in (0, {MAX_TTL_S}] seconds")
+    path = root / CLAIM_DIR
+    with _claim_lock(root):
+        existing = _read(path)
+        if existing is None or existing.get("holder") != holder:
+            return False
+        existing["expires_at"] = _z(_now(now) + _dt.timedelta(seconds=ttl_s))
+        _write_claim(path, existing)
+        return True
 
 
 def check(root: Path, *, now: _dt.datetime | None = None) -> dict | None:

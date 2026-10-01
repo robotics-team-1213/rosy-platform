@@ -111,7 +111,8 @@ def test_only_one_party_wins_a_stale_takeover(device, monkeypatch):
         if str(destination).count("rosy-claim.stale.") and not getattr(racing_rename, "done", False):
             racing_rename.done = True
             real_rename(source, str(destination) + "-peer")
-            claim_mod.acquire(device, "peer", "peer", 1800, now=later)
+            # A peer that does not use the lock (the contract's bare mkdir) wins the name.
+            claim_mod._acquire_locked(device / "run" / "rosy-claim", "peer", "peer", 1800, later, BOOT)
             raise FileNotFoundError(source)
         return real_rename(source, destination)
 
@@ -185,3 +186,29 @@ def test_cli_acquire_busy_release(device, capsys):
     assert json.loads((device / "run/rosy-claim/claim.json").read_text(encoding="utf-8"))["holder"] == "push-pc"
     assert claim_mod.main(["--root", str(device), "release", "--holder", "push-pc"]) == 0
     assert json.loads(capsys.readouterr().out) == {"ok": True, "released": True}
+
+
+def test_refresh_extends_only_the_holders_claim(device):
+    # M8 (review): a long run keeps its claim alive at each journal step.
+    claim_mod.acquire(device, "rosy-auto-update", "update", 60, now=T0)
+    later = T0 + dt.timedelta(seconds=50)
+
+    assert claim_mod.refresh(device, "someone-else", 600, now=later) is False
+    assert claim_mod.refresh(device, "rosy-auto-update", 600, now=later) is True
+
+    on_disk = json.loads((_claim_dir(device) / "claim.json").read_text(encoding="utf-8"))
+    assert on_disk["expires_at"] == "2026-10-01T12:10:50Z"
+    assert on_disk["acquired_at"] == "2026-10-01T12:00:00Z"
+
+
+def test_takeover_is_serialised_by_the_claim_lock(device):
+    # M9 (review): the stale check, rename and mkdir run under /run/rosy-claim.lock.
+    claim_mod.acquire(device, "push-pc", "release push", 60, now=T0)
+    later = T0 + dt.timedelta(seconds=120)
+    with claim_mod._claim_lock(device, wait_s=1.0):
+        with pytest.raises(claim_mod.ClaimBusy, match="lock"):
+            claim_mod.acquire(device, "rosy-auto-update", "update", 1800, now=later, lock_wait_s=0.2)
+    assert json.loads((_claim_dir(device) / "claim.json").read_text(encoding="utf-8"))["holder"] == "push-pc"
+
+    assert claim_mod.acquire(device, "rosy-auto-update", "update", 1800, now=later)["holder"] == "rosy-auto-update"
+    assert (device / "run" / "rosy-claim.lock").is_file()
