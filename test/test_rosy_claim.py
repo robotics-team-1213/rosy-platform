@@ -177,7 +177,11 @@ def test_cli_acquire_busy_release(device, capsys):
     assert claim_mod.main(["--root", str(device), "show"]) == 0
     assert json.loads(capsys.readouterr().out)["claim"]["holder"] == "push-pc"
 
+    assert claim_mod.main(["--root", str(device), "status"]) == 0  # T3 calls it "status"
+    assert json.loads(capsys.readouterr().out)["claim"]["holder"] == "push-pc"
+
     assert claim_mod.main(["--root", str(device), "release", "--holder", "other"]) == 3
-    capsys.readouterr()
+    assert json.loads(capsys.readouterr().out)["released"] is False
+    assert json.loads((device / "run/rosy-claim/claim.json").read_text(encoding="utf-8"))["holder"] == "push-pc"
     assert claim_mod.main(["--root", str(device), "release", "--holder", "push-pc"]) == 0
     assert json.loads(capsys.readouterr().out) == {"ok": True, "released": True}

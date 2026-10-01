@@ -10,7 +10,7 @@ behind, may be cleared by exactly one party: ``rename`` to
 
     python3 rosy_claim.py acquire --holder H --purpose P --ttl-s N   # exit 3 = busy
     python3 rosy_claim.py release --holder H                         # exit 3 = not ours
-    python3 rosy_claim.py show
+    python3 rosy_claim.py show                                       # alias: status
 
 Standard library only; it runs from /opt/rosy/native-runtime as root.
 """
@@ -195,7 +195,7 @@ def main(argv: list[str] | None = None) -> int:
     take.add_argument("--ttl-s", type=float, required=True)
     drop = sub.add_parser("release")
     drop.add_argument("--holder", required=True)
-    sub.add_parser("show")
+    sub.add_parser("show", aliases=["status"])
     args = parser.parse_args(argv)
     try:
         if args.command == "acquire":
