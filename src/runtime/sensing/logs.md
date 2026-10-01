@@ -813,3 +813,10 @@
 - 변경: 최종 리뷰 지적 반영. (중요) `InjectionCheck`가 공백을 fit이 없는 틱에서만 봐서, 3.6 s 침묵 뒤 스캔 한 번으로 3 s 유지가 통과됐다 → 스캔이 오든 안 오든 마지막 스캔 뒤 0.5 s가 지나면 `stale_scan`. (경미) UNKNOWN·SUSPECT처럼 request_id가 없을 때 `None` 결정이 일치로 통과하던 것을 `stale_request`로 거부.
 - 증거: 새 시험 2개와 `test_loc_verify.py`·`test_loc_state.py`·`test_loc_e2e.py` 통과.
 - gate 변화: 없음(SOURCE/LOCAL).
+
+## 2026-10-01 · uncommitted · feat(perception): explain camera following and foreground evidence
+- 변경: `follow-road-v2` 미리보기에 동일 촬영 시각의 차선 경계·선택 목표·방향·제외 이유·전경 영역을 연결. keep 외 카메라 모드는 CAMERA_LINE 오차·신뢰도만 표시. 기존 road_state가 유효하면 별도 shadow 평면도에 근거리 도로 추정을 표시하며 STOP·보정 의심·입력 부재는 이유/사용 불가로 표시한다. 바운디드 캐시·타이머를 사용하고 기존 JPEG 전송 제한과 CORE 최종 명령 경계를 유지한다.
+- 증거: sensing 전체 2189 passed, 102 skipped (493.36 s); 마지막 표시 변경은 추종·도로·wiring·keep 집중 회귀 107 passed로 재검증. CORE preview/차선 계약 8 passed. harness lint 0 errors, 24 기존 검증 시점 경고. 녹화 영상 3프레임 변경 전후 렌더링은 X:/DevTemp/rosy-follow-preview/comparison.png; nominal 재생 지면 사용, 객체 거리는 unranged. 재생 road_state STOP에는 예측을 그리지 않았다.
+- 한계: 객체 박스는 F/D 분할 영역이며 종류·지속 track ID·객체 이동 예측은 아니다. 목표 점선은 모터 궤적이 아니다. road_state 구독은 노드를 활성화하지 않으며 미실행 시 예측 없음. ROS-SIM·ARTIFACT·DEVICE·FIELD를 승격하지 않는다.
+- 설계/실행: docs/plans/2026-10-01-follow-preview-design.md, docs/plans/2026-10-01-follow-preview.md.
+- gate 변화: 없음(SOURCE/LOCAL 기존 GO 유지; ROS-SIM·ARTIFACT·DEVICE·FIELD 미승격).

@@ -362,6 +362,8 @@ class LineObserverNode(Node):
                     frame, self._ground(frame.shape[1], frame.shape[0]),
                     lane_half_width_m=float(self.get_parameter('lane_half_width_m').value))
                 bundle = dict(self._lane_keeper.last,
+                              image_size=[frame.shape[1], frame.shape[0]],
+                              ground=self._ground_label(),
                               stamp=float(msg.header.stamp.sec)
                               + float(msg.header.stamp.nanosec) * 1e-9)
                 self._keep_debug_pub.publish(String(data=json.dumps(bundle, default=float)))

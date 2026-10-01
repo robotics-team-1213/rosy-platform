@@ -49,6 +49,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          # Runner only (throwaway disk): no fsync per unpacked file and no
+          # man-db rebuild per apt transaction. The image build never sees this.
+          echo force-unsafe-io | sudo tee /etc/dpkg/dpkg.cfg.d/90-rosy-ci-unsafe-io > /dev/null
+          sudo rm -f /var/lib/man-db/auto-update
           sudo apt-get update -qq
           sudo apt-get install -y -qq \
             build-essential cmake curl gpg python3-yaml

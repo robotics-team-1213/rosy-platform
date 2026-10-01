@@ -1833,3 +1833,35 @@
 - gate 변화: 기존 gate 유지; DEVICE/FIELD 승격 없음.
 - 결정: D-390 부록.
 - 교훈: 파일 쓰기 완료 전 들어온 interruption과 logical closure 경계를 구분한다.
+
+## 2026-10-01 · uncommitted · perf(release): rosdep apt 패키지를 한 트랜잭션으로 — payload 빌드 7분 9초→4분 49초
+
+- 변경: `build-native-payload.sh`가 `rosdep install --simulate`로 계획을 받아 `rosdep_apt_batch.py`(패키지 이름 아닌 것은 거부)로 apt 패키지를 모으고, rosdep과 같은 플래그로 `apt-get install -y` 한 번에 설치한 뒤 rosdep을 그대로 다시 돌려 남은 것이 없음을 확인한다. 전에는 rosdep이 키마다 `apt-get install`을 따로 실행했다(22회, 트리거 30회, ~958 패키지). 워크플로는 일회용 runner에서만 dpkg `force-unsafe-io`와 man-db auto-update 끄기를 둔다(이미지 빌드 경로는 무관, 시험으로 고정).
+- 증거: 같은 소스 측정 빌드 run 36867742962(id 2026.10.01-901, 설치하지 않는 측정용) 대 021 run 36865620181: "Build native payload tree" 323 s→172 s, 잡 전체 429 s→289 s. `ros-packages.txt`(342)·`deb-packages.txt`(2524)·`required-ros-packages.txt`·`rosy-packages.txt`·`python-runtime.sha256` 동일. `test/test_payload_build_speed.py` 6 passed(파서 거부 변형으로 빨강 확인), 관련 빌드 계약 시험 265 passed. 선행 단계(75→78 s)는 dpkg 설정으로 줄지 않았다.
+- gate 변화: 없음.
+- 교훈: 빌드 시간 대부분은 colcon(40 s)이 아니라 의존성 설치였다. 시간을 줄이기 전에 단계별 로그 타임스탬프로 어디에 쓰이는지부터 잰다. 교훈 문서 `docs/solutions/workflow-issues/release-cycle-time-one-release-per-deployment-2026-10-01.md`, `docs/solutions/runtime-errors/payload-activation-left-core-on-the-old-release-2026-10-01.md`.
+## 2026-10-01 · f8db47f5 · feat(release): 서명 안 된 페이로드를 push 직전까지 한 명령으로 — `prepare_payload_release.py`
+
+- 변경: `tools/release/prepare_payload_release.py`를 추가했다. 스킬 `rosy-release-push` 3–5단계의 손 작업을 한 명령으로 묶는다. 순서는 (1) `--run`의 `rosy-native-payload-unsigned-<id>-<sha>` 아티팩트 이름을 API 목록에서 찾아 `download_artifact.py`로 받고, zip에서 `<id>.unsigned.tar.gz`만 꺼낸다(`--artifact-dir`면 생략). (2) 타르볼 안의 `required-ros-packages.txt`가 모두 `rosy-packages.txt`에 있는지 본다. 둘 다 ROSY 패키지 이름이다. (3) 각 `--robot`에 읽기 전용 SSH로 `dpkg-query -W 'ros-jazzy-*'`(TAB 구분)를 실행해 `ros-packages.txt`(`name=version`)와 비교한다. 양쪽에 설치된 패키지는 버전이 같아야 하고, 로봇의 빈 버전은 미설치로 본다. 비교 0건도 실패다. 로봇마다 한 줄 판정을 낸다. (4) 임시 폴더에 풀고 rename으로 `<out>/x/<id>`에 놓는다. 이미 있으면 거절한다. (5) `sign_image_release.py`로 서명하고 `build_payload_release.py pack --modes-from`으로 묶는다. (6) `rosy-release-push.ps1` 줄을 dry run 먼저 출력한다. push는 하지 않는다. SSH 실행기와 sign/pack 실행기는 주입할 수 있다. 스킬 3–5단계를 이 도구로 바꾸고 손 명령은 대체 경로로 남겼다.
+- 증거: `test/test_prepare_payload_release.py` 19 passed(점 파일 보존, 기존·부분 폴더 거절, 깨진 타르볼 뒤 잔재 없음, `name=version`·TAB 파싱과 빈 버전, 불일치·0건 비교 실패, required 검사, push 줄 출력, 불일치 시 서명 전 중단). 변이 4종이 모두 빨강이었다: 릴리스 파싱을 TAB으로(7 failed), `split()`으로(7 failed), 빈 로봇 버전 유지(5 failed), 0건 비교 통과(1 failed). 실측(2026-10-01 Windows, run 36865620181, 릴리스 2026.10.01-021, 8kcn 192.168.1.202 읽기 전용): 98.4 MB zip 다운로드 99.4 s(`gh run download` 기준 2분 12초), ABI 1.6 s(공통 314개 일치, 릴리스 전용 28개), 추출 6.3 s, 서명 8.8 s(2278 파일), pack 11.4 s(2590 멤버, `install/.colcon_install_layout`·`SHA256SUMS.sig` 포함), 합계 128 s. 결과물은 `X:\DevTemp\rosy-release-021-prep-check`. push는 하지 않았다.
+- gate 변화: 없음.
+- 교훈: 두 목록은 구분자가 다르다(`=`와 TAB). 비교 건수가 0이면 통과가 아니라 파싱 실패로 본다.
+
+## 2026-10-01 · uncommitted · fix(release): `prepare_payload_release.py` 독립 리뷰 반영 — rc 패키지 제외, 오류 처리, 인용
+
+- 변경: (1) 잘린 타르볼(EOFError), 깨진 manifest JSON, UTF-8이 아닌 목록(ValueError)을 traceback 없이 `error:`로 끝낸다. (2) 로봇 조회를 `dpkg-query -W -f='${db:Status-Abbrev}\t${binary:Package}\t${Version}\n' 'ros-jazzy-*'`로 바꾸고 상태가 `ii`인 줄만 설치로 센다. `rc`(삭제, 설정만 남음) 패키지는 옛 버전을 그대로 내므로 비교에서 뺀다. 원격 셸에는 작은따옴표만 지나간다. (3) `-o UserKnownHostsFile="<경로>"`로 인용한다. (4) 출력하는 PowerShell 경로를 늘 작은따옴표로 감싸고 `'`는 `''`로 쓴다. (5) `--run`에 `--release-id`가 있으면 내려받기 전에, 없으면 아티팩트 이름을 정한 직후 내려받기 전에 기존 `x/<id>`를 거절한다. (6) 서명·pack 실패 메시지가 다시 돌리기 전에 지울 `x/<id>`를 알려 준다. (7) 심볼릭·하드 링크 멤버가 있으면 풀기 전에 거절한다. 스킬 3·4단계 설명을 맞췄다.
+- 증거: `test/test_prepare_payload_release.py` 30 passed. 변이 8종이 모두 빨강이었다: rc 줄 유지(6 failed), known_hosts 인용 제거, `''` 미적용, 링크 허용(2 failed), EOFError 미포착, ValueError 미포착, 내려받기 전 검사 제거, 이름 확정 뒤 검사 제거(각 1 failed). 새 조회를 192.168.1.202에 읽기 전용으로 한 번 실행했다: `ii` 319줄, `un` 3줄, 판정은 앞 실측과 같은 공통 314개 일치.
+- gate 변화: 없음.
+## 2026-10-01 · uncommitted · fix(release): 보정 가드가 IP로 불릴 때 호스트명 자격 증명을 찾는다
+
+- 변경: `rosy-calibration-guard.ps1`은 `-ApiToken`·`ROSY_API_TOKEN`이 없고 `<Robot>.credential.xml`도 없으면 push와 같은 비대화형 ssh(`rosy@<ip> hostname`, `%LOCALAPPDATA%\Rosy\ssh\rosy-operator-ed25519`, `%LOCALAPPDATA%\Rosy\known_hosts`, `BatchMode=yes`, `StrictHostKeyChecking=yes`, `ConnectTimeout=<TimeoutSec>`)로 장치 호스트명을 묻고, 답이 정확히 한 줄이며 대소문자 구분 `^rosy-[a-z0-9-]+$`일 때만 `<hostname>.credential.xml`을 쓴다. 다른 로봇의 파일은 이 주소에 절대 시도하지 않는다. IP 이름 파일이 있으면 ssh를 부르지 않는다. 조회가 실패하면 예전처럼 경고만 하되 SKIPPED 문구에 찾아본 파일과 조회 실패 이유를 적는다. `-RosyUser`·`-KeyPath`·`-KnownHosts`·`-SshExe`를 주입 가능하게 했고 `rosy-release-push.ps1`이 자기 값을 그대로 넘긴다. known_hosts 경로에 공백·큰따옴표가 있으면 조회하지 않는다(5.1이 native 인자의 큰따옴표를 망가뜨림). 스킬 `rosy-release-push` 5단계 갱신.
+- 증거: 2026-10-01 관찰 — `rosy-release-push.ps1 -Robot 192.168.1.201`이 `192.168.1.201.credential.xml`만 찾아 "CALIBRATION CHECK SKIPPED"를 내고 진행했다. 실제 파일은 `rosy-pinky-9dfk.credential.xml`. `python -m pytest test/test_calibration_guard.py test/test_release_push_entrypoint.py -q` 69 passed(가드 27, 새 11: 호스트명 자격 증명 사용·활성 세션 거절, 나쁜 답 5종, ssh 실패, ssh 없음 시 파일명 표시, IP 파일 우선·ssh 미호출, push 전달). 변형 9종 모두 빨강(정규식 제거, 대소문자 무시, 여러 줄 허용, 종료 코드 무시, IP 파일 우선 제거, 파일명 누락, 조회 제거, BatchMode 제거, push 전달 제거). 가짜 ssh(.ps1)와 localhost 가짜 CORE만 사용, 로봇 접속 없음(Windows).
+- gate 변화: 없음.
+- 교훈: 자격 증명 파일 이름 규칙과 그것을 찾는 쪽의 키가 다르면 안전 점검이 조용히 건너뛰어진다. 건너뜀 경고에는 무엇을 찾았는지를 적는다.
+
+## 2026-10-01 · uncommitted · fix(release): 보정 가드 리뷰 반영 — 호스트명 주장을 호스트 키로 증명, ssh 시간 상한
+
+- 변경: 독립 리뷰(COMMENT) 반영. M1: 로봇이 답한 호스트명은 그 로봇의 `rosy` 계정이 꾸밀 수 있으므로, `<hostname>.credential.xml`을 쓰기 전에 같은 엄격 옵션에 `-o HostKeyAlias=<별칭>`을 더한 두 번째 ssh(`true`)가 성공해야 한다. 별칭은 known_hosts의 평문 항목 중 `<name>`, `<name>.local`, `<name>.lan` 순으로 처음 있는 것(실제 항목이 `rosy-pinky-9dfk.local` 형태). 항목이 없거나 키가 맞지 않으면 토큰을 쓰지 않고 이유를 SKIPPED에 적는다. M2: 모든 ssh에 `-n -o ServerAliveInterval=2 -o ServerAliveCountMax=2`, 그리고 `System.Diagnostics.Process`로 띄워 호출당 `TimeoutSec + 5`초 벽시계 상한, 넘으면 `taskkill /T /F`로 프로세스 트리를 죽인다. 명령줄은 가드가 직접 만든다(공백 인자만 한 번 따옴표, 큰따옴표 든 인자는 거절). `-SshExe`는 native 실행 파일이어야 한다. M3: 가드 시험의 가짜 ssh를 원시 명령줄을 기록하는 `.cmd`로 바꿨다. L4: ssh와 무관한 가드 시험은 존재하지 않는 `-SshExe`를 넘긴다. `test_release_push_entrypoint.py`는 autouse 픽스처로 `LOCALAPPDATA`를 임시 폴더로 돌리고 `ROSY_API_TOKEN`을 지운다. L2: `sync-core-dev.ps1`이 `-RosyUser $PiUser`를 넘긴다. SKILL 5단계에 잔여 위험(known_hosts 신뢰, 호스트 키를 공유하는 복제 이미지는 구별 불가, 평문 항목 없는 로봇은 경고 후 건너뜀) 기록.
+- 증거: `python -m pytest test/test_calibration_guard.py test/test_release_push_entrypoint.py -q` 78 passed(가드 36), `test/test_core_dev_sync.py` 34 passed. 변형 23종 모두 빨강(앞 커밋 9종 재확인 + 별칭 검사 생략, 별칭 종료 코드 무시, known_hosts 항목 불요, HostKeyAlias 누락, `-n` 누락, keepalive 누락, 벽시계 상한 없음, 래퍼만 죽임, RosyUser 검사 제거, 공백 경로 검사 제거, 명시 CredentialPath 무시, ConnectTimeout 고정, 공백 인자 미인용, sync 사용자 미전달). 대소문자 변형은 별칭 조회가 먼저 막아 처음엔 살아남았다 — 시험 known_hosts에 대문자 항목을 넣어 답 검사만으로 막히게 고친 뒤 빨강. 로컬 known_hosts 확인: 9dfk·8kcn 호스트 키는 서로 다르다. 가짜 ssh와 localhost 가짜 CORE만 사용, 로봇 접속 없음(Windows).
+- gate 변화: 없음.
+- 교훈: 상대가 스스로 밝힌 이름으로 비밀을 고를 때는 그 이름을 상대가 꾸밀 수 없는 것(호스트 키)으로 증명한다. 겹겹 방어가 있으면 변형 하나가 다른 층에 가려 살아남는다 — 층마다 따로 막히는 시험 입력을 만든다.
