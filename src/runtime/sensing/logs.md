@@ -777,3 +777,8 @@
 - 변경: `slot_candidates`가 지도 전체 `clear_poses`를 만들지 않고 슬롯 상자 칸만 발자국 검사한다. 두 탐색이 `clear=`로 한 번 만든 마스크를 함께 쓸 수 있다. 전역 탐색 비용(지도 칸 × 72 방향)은 2단계에서 Pi로 재고 풀링 격자나 시간 예산으로 묶는다는 요구를 모듈 설명에 적었다. 기준을 넘는 형제 정밀화를 버리지 않고, 잘못된 `reference_squares`는 사각형 id를 단 ValueError, `distinct`는 창 밖에서 멈춘다. `footprint_clear` 창이 부풀린 반경(+res/√2)을 덮지 못하던 결함도 고쳤다.
 - 증거: test_loc_candidates.py, test_localization_search.py, test_localization.py, test_localization_gate.py 35 passed, 1 skipped.
 - gate 변화: 없음(SOURCE, 호스트 전용).
+
+## 2026-10-01 · uncommitted · feat(localization): 지도에 없는 LiDAR 물체를 base_link 물체로 묶음 (D-395 4.2절)
+- 변경: `sensing/loc_objects.py` `unmapped_objects` — 지도 벽(`near`)으로 설명되지 않는 반환을 6 cm 간격으로 묶어 중심을 base_link (앞, 왼쪽)으로 낸다. 대칭 맵에서는 거울 가설도 같은 반환을 설명하므로 목록은 가설과 무관하다. 스캔은 고리라서 ±π 이음매(뒤집힌 마운트에서는 로봇 정면)에 걸친 물체를 하나로 합친다(계획에 없던 보강).
+- 증거: `test_loc_objects.py` 4 passed(빈 트랙 0개, 다른 로봇 1개·8 cm 안, 정면 이음매 1개, 거울 가설에서 같은 목록).
+- gate 변화: 없음(SOURCE/LOCAL).
