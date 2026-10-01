@@ -194,3 +194,13 @@
 - Change: Add trusted per-joint max_start_state_tolerances to ArmCommandConfig. Tolerance-qualified submissions fail closed when policy is absent or a command asks for a wider bound. Vendor probe verifies read-only /repo, loopback-only networking, and no serial/video grants itself.
 - Evidence: New missing-policy, oversized-tolerance, malformed-map, negative, and non-finite config tests. Full OMX adapter suite: 176 passed, 4 skipped. Flake8 and Python compilation passed. The first complete Jazzy ROS callback rerun remained skipped at collection because rclpy was unavailable to the selected interpreter; no ROS-SIM claim is made.
 - Gate: SOURCE GO; ROS-SIM HOLD. This review fix does not change ARTIFACT HOLD or DEVICE/FIELD PARKED.
+
+## 2026-10-02 · uncommitted · fix(omx): center final state check on planned start
+- Change: Bind the planned phase start positions, not the measured validation sample, as the final owner reference. The owner compares latest readback to the original planned start tolerance and consumes only the latest sequence, avoiding a second allowance after journaling. Probe refuses ttyACM, ttyUSB, and ttyS device grants as well as serial/by-id and video devices.
+- Evidence: Regression reproduces measured state at +0.009 followed by dispatch readback +0.011 against a +0.010 planned bound; dispatch rejects. Runner regression verifies planned start remains the owner reference. Focused owner/runner suite: 58 passed. Full OMX adapter suite rerun pending.
+- Gate: SOURCE GO; ROS-SIM HOLD; ARTIFACT HOLD; DEVICE/FIELD PARKED.
+
+## 2026-10-02 · uncommitted · test(omx): verify planned-start tolerance budget
+- Change: Record the measured runner/owner regression result after centering final admission on the planned phase start.
+- Evidence: Full OMX adapter suite 178 passed, 4 skipped; flake8, py_compile, and git diff checks passed. The in-process Jazzy test was skipped because rclpy was unavailable to the selected interpreter. Vendor retry remains unrun.
+- Gate: SOURCE GO; ROS-SIM HOLD; ARTIFACT HOLD; DEVICE/FIELD PARKED.

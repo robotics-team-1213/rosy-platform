@@ -21,7 +21,11 @@ for network_interface in /sys/class/net/*; do
     exit 2
   fi
 done
-if [[ -d /dev/serial/by-id ]] || compgen -G '/dev/video*' >/dev/null; then
+if [[ -d /dev/serial/by-id ]] \
+  || compgen -G '/dev/ttyACM*' >/dev/null \
+  || compgen -G '/dev/ttyUSB*' >/dev/null \
+  || compgen -G '/dev/ttyS*' >/dev/null \
+  || compgen -G '/dev/video*' >/dev/null; then
   echo "vendor simulation probe refuses serial or video device grants" >&2
   exit 2
 fi

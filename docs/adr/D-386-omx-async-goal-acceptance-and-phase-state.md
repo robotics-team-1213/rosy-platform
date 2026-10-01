@@ -50,15 +50,17 @@ The source contracts do not yet compose into a real ROS phase run:
    within explicit configured start-state tolerances for the planned path. A
    caller may not make a stale path appear fresh by copying a newer sequence
    number into it. Missing, stale, or out-of-tolerance state holds the Action.
-  The final local command owner repeats this check at the dispatch boundary. If
-  the state sequence advances while the phase intent is durably journaled, the
-  command must carry the validated start positions and explicit per-joint
-  tolerances; the owner admits only a fresh latest state still inside those
-  bounds and consumes that latest sequence for the next-phase freshness fence.
-  It does not rewrite the planned source sequence. Missing tolerance evidence,
-  a future sequence, or any out-of-tolerance joint remains fail-closed. The
-  command owner also enforces a per-joint maximum tolerance from its trusted
-  workcell configuration; a caller-supplied tolerance cannot widen that bound.
+    The final local command owner repeats this check at the dispatch boundary.
+    If the state sequence advances while the phase intent is durably journaled,
+    the command must carry the planned phase start positions and explicit
+    per-joint tolerances. The owner admits only a fresh latest state still
+    inside those same bounds and consumes that latest sequence for the next
+    phase freshness fence. It does not rewrite the planned source sequence or
+    use the measured state as a new tolerance center. Missing tolerance
+    evidence, a future sequence, or any out-of-tolerance joint remains
+    fail-closed. The command owner also enforces a per-joint maximum tolerance
+    from its trusted workcell configuration; a caller-supplied tolerance cannot
+    widen that bound.
 4. Keep the capability disabled until the ROS callback state machine, stop race,
    and per-phase state validation pass ROS-free fault tests and the pinned
    vendor ROS-SIM. This decision does not select a production planner, configure

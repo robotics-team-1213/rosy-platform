@@ -103,3 +103,11 @@ Verification: full Windows OMX adapter tests **171 passed, 4 skipped**; changed 
 A code review found that the first sequence-race patch trusted the tolerance carried by TrajectoryCommand. The owner now requires a trusted per-joint max_start_state_tolerances workcell setting whenever tolerance evidence is used. It rejects missing policy and rejects any command tolerance wider than the configured maximum; the command can narrow, but never widen, that bound. The Fleet-to-ROS contract fixture configures the explicit 0.01 rad test bound. Owner tests cover missing policy, oversized requests, malformed policy maps, negative values, and non-finite values.
 
 The vendor probe now enforces its documented sandbox at runtime: /repo must be mounted read-only, /sys/class/net must expose only loopback, and serial/video device grants are rejected. The probe itself remains unrerun after the controller-readiness HOLD.
+
+## 2026-10-02 review follow-up: keep the tolerance centered on the planned start
+
+The runner now sends the planned phase start positions as the final owner's comparison reference, while separately checking the current measured snapshot against that same planned start before journaling. This prevents a state already near the tolerance edge from receiving a second full allowance during the journal/dispatch window. Regression coverage demonstrates a measured +0.009 state followed by +0.011 dispatch readback against a +0.010 planned limit is rejected, and checks the runner preserves the planned start reference. The vendor probe also rejects explicit ttyACM, ttyUSB, and ttyS device paths in addition to serial/by-id and video grants.
+
+### Final review regression result
+
+Windows host verification after the planned-start reference fix: full OMX adapter suite **178 passed, 4 skipped**; changed Python modules passed flake8 and py_compile. The pinned Jazzy callback suite was not counted in this rerun because rclpy was unavailable to the selected interpreter. The vendor Gazebo retry remains unrun.

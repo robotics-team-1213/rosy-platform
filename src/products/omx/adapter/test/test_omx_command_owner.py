@@ -288,6 +288,28 @@ def test_newer_joint_state_outside_start_tolerance_is_rejected():
     assert action.commands == []
 
 
+def test_dispatch_rejects_additional_drift_after_phase_start_tolerance_edge():
+    clock = [100.01]
+    owner, action = owner_at(clock)
+    owner.observe_joint_state(make_state(
+        sequence=10, positions={"joint_1": 0.009, "joint_2": -0.1},
+    ))
+    owner.observe_joint_state(make_state(
+        sequence=11, received_at=100.01,
+        positions={"joint_1": 0.011, "joint_2": -0.1},
+    ))
+    command = make_command(
+        expected_start_state_positions={"joint_1": 0.0, "joint_2": -0.1},
+        start_state_tolerances={"joint_1": 0.01, "joint_2": 0.01},
+    )
+
+    result = owner.submit(command)
+
+    assert not result.accepted
+    assert result.reason == "start_state_outside_tolerance"
+    assert action.commands == []
+
+
 def test_command_cannot_raise_start_tolerance_above_owner_policy():
     clock = [100.01]
     owner, action = owner_at(clock)

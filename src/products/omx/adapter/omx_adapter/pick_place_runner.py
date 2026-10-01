@@ -207,7 +207,7 @@ class PickPlaceRunner:
         return replace(
             command,
             source_state_sequence=state.sequence,
-            expected_start_state_positions=state.joint_positions,
+            expected_start_state_positions=dict(zip(phase.joint_names, phase.start_state_positions)),
             start_state_tolerances=self.start_state_tolerances,
         ), state
 
