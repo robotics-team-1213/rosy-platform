@@ -45,4 +45,5 @@ def wire_assist(events, robot_id: Callable[[], str], *, nav, line_follow, comman
         on_lost=autonomy_halt(nav=nav, line_follow=line_follow, command=command, state=state,
                               modes=modes, swarm=swarm, docking=docking))
     state.set_localization_provider(assist.status)
+    docking.localization_ok = assist.autonomy_allowed
     return assist
