@@ -1819,3 +1819,10 @@
 - 증거: 9dfk(2026.10.01-019 push): push가 `current release: 019`·`CORE readiness: PASS`를 냈지만 CORE PID 1078의 cwd는 `releases/2026.09.30-009`, openapi v1.63, 저널에 `Stopping rosy-core` 없음. 같은 로봇에서 재현: `stop target; start target` → CORE PID 9030→9030(active 유지). `stop target core io camera; start target` → stop 직후 inactive, PID 9030→9825. 생성된 확인 명령을 PowerShell 5.1→ssh로 9dfk에 실행 → `CORE_RELEASE_OK /opt/rosy/releases/2026.10.01-019`. `test_native_release_activation.py`·`test_release_push_entrypoint.py` 48 passed. 가드는 변형(카메라 빠짐, 확인 단계 제거, 재시작 보고 제거)으로 빨강 확인.
 - gate 변화: 없음.
 - 교훈: 타깃 하나만 stop하는 것은 PartOf 유닛의 멈춤을 기다리지 않는다. 릴리스 전환 뒤에는 readiness 통과가 아니라 CORE 프로세스가 새 릴리스에서 도는지를 본다.
+
+## 2026-10-01 · uncommitted · perf(release): rosdep apt 패키지를 한 트랜잭션으로 — payload 빌드 7분 9초→4분 49초
+
+- 변경: `build-native-payload.sh`가 `rosdep install --simulate`로 계획을 받아 `rosdep_apt_batch.py`(패키지 이름 아닌 것은 거부)로 apt 패키지를 모으고, rosdep과 같은 플래그로 `apt-get install -y` 한 번에 설치한 뒤 rosdep을 그대로 다시 돌려 남은 것이 없음을 확인한다. 전에는 rosdep이 키마다 `apt-get install`을 따로 실행했다(22회, 트리거 30회, ~958 패키지). 워크플로는 일회용 runner에서만 dpkg `force-unsafe-io`와 man-db auto-update 끄기를 둔다(이미지 빌드 경로는 무관, 시험으로 고정).
+- 증거: 같은 소스 측정 빌드 run 36867742962(id 2026.10.01-901, 설치하지 않는 측정용) 대 021 run 36865620181: "Build native payload tree" 323 s→172 s, 잡 전체 429 s→289 s. `ros-packages.txt`(342)·`deb-packages.txt`(2524)·`required-ros-packages.txt`·`rosy-packages.txt`·`python-runtime.sha256` 동일. `test/test_payload_build_speed.py` 6 passed(파서 거부 변형으로 빨강 확인), 관련 빌드 계약 시험 265 passed. 선행 단계(75→78 s)는 dpkg 설정으로 줄지 않았다.
+- gate 변화: 없음.
+- 교훈: 빌드 시간 대부분은 colcon(40 s)이 아니라 의존성 설치였다. 시간을 줄이기 전에 단계별 로그 타임스탬프로 어디에 쓰이는지부터 잰다. 교훈 문서 `docs/solutions/workflow-issues/release-cycle-time-one-release-per-deployment-2026-10-01.md`, `docs/solutions/runtime-errors/payload-activation-left-core-on-the-old-release-2026-10-01.md`.

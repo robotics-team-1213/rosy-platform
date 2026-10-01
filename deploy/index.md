@@ -67,8 +67,8 @@
 
 ## 최근 기록
 
+- 2026-10-01 · uncommitted · perf(release): rosdep apt 패키지를 한 트랜잭션으로 — payload 빌드 7분 9초→4분 49초
 - 2026-10-01 · uncommitted · fix(release): 활성화가 CORE를 멈추지 않던 결함 — PartOf 유닛을 함께 멈추고, push가 CORE 릴리스를 확인
 - 2026-10-01 · uncommitted · docs(site): 두 번째 카메라 자리의 배선 안내
 - 2026-10-01 · uncommitted · test(site): `site-firewall.py`를 실제 iptables-nft로 검증 (컨테이너)
 - 2026-10-01 · uncommitted · merge(site): main의 D-341 페어링 배선과 인터페이스 바인드 합치기 — 사이트 설정 파일은 site.env 하나
-- 2026-10-01 · uncommitted · fix(site): 재검증 반영 — 컨테이너 직행 트래픽 차단, 라벨로 닫기, 바인드 탐침 정밀화
