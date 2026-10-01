@@ -35,7 +35,9 @@ ZERO_EPSILON = 0.001
 # and 0.0135 rad/s in CORE state. Keep command purity separate from measured
 # motion/stop thresholds so idle ticks cannot prove movement or prevent a stop.
 MEASURED_LINEAR_EPSILON = 0.002
-MEASURED_ANGULAR_EPSILON = 0.02
+# One encoder tick at rest reads 0.0134 rad/s and two ticks 0.027 rad/s on a stationary
+# Pinky (9dfk G4 run, 2026-10-01): the stop threshold must sit above two ticks.
+MEASURED_ANGULAR_EPSILON = 0.03
 DIRECTIONS = ("forward", "reverse", "cw", "ccw")
 CAUSES = ("button_release", "command_loss")
 HEX_40 = re.compile(r"[0-9a-f]{40}\Z")

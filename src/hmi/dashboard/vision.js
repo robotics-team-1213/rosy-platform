@@ -1,5 +1,7 @@
 // 전방 카메라 미리보기 (D-262 첫 분해). 자격·전송은 셸의 api 를 빌리고,
 // 주기·시퀀스·중단 상태는 이 모듈이 가진다. map.js 와 같은 팩토리 모양이다.
+// D-398 — 증거 말·나이 뒤처리는 공용 어휘 표에서 온다.
+import { EVIDENCE_LABEL, evidenceAgeText } from "/common/core_ui_logic.js";
 
 export function createVisionPreview({
   elements, setText, api, authHeaders, hasToken, isHidden, onFrame, onUnavailable,
@@ -35,7 +37,7 @@ export function createVisionPreview({
     setText("vision-empty", message);
     if (stale) {
       renderEvidence("delayed", hasNumber(status.age_ms)
-        ? `지연 · ${Math.max(0, Math.round(Number(status.age_ms) / 1000))}초` : "지연", "STALE");
+        ? `${EVIDENCE_LABEL.delayed}${evidenceAgeText(Math.max(0, Number(status.age_ms) / 1000))}` : EVIDENCE_LABEL.delayed, "STALE");
     } else renderEvidence("unavailable", "수신 대기", "WAITING");
     setText("vision-source", status.source || "—");
     setText("vision-resolution", status.width && status.height

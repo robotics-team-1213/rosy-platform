@@ -217,3 +217,10 @@
 - gate 변화: 없음.
 - 결정: D-359 §5.1·§5.3·§5.5.
 - 교훈: 없음.
+
+
+## 2026-10-01 · uncommitted · D-398 장미색 범위·정지·어휘 정리
+
+- 변경: 드라이브 스틱 활성/knob을 --brand-rose → --focus-ring으로(인터랙션 색, D-277). transition 2건(프레임 opacity·intent left) 제거로 D-220 회복. '대기'를 MODE_LABEL.IDLE로(screens/drive·drive-view·drive-auto), sw.js SHELL에 /common/core_ui_logic.js 추가(test_shell_assets가 따라감). vision.js '프레임 지연(STALE)' → '카메라 프레임 지연'(영어 열거값 노출 제거).
+- 근거: D-398. pilot 시험 통과.
+- gate 변화: 없음(LOCAL HOLD 그대로).

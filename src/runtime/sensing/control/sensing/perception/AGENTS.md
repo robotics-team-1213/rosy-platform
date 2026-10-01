@@ -16,6 +16,8 @@ Camera and lane evidence (D-209, D-228). This folder answers what is visible. It
 | `road.py` | Road observation |
 | `scene_context.py` | Closed scene profiles |
 | `image_frame.py` | Shared `sensor_msgs/Image` to ndarray decode, used by `line_observer_node` and the learned node |
+| `paint_hypothesis.py` | D-395 `paint_score`: how well a pose hypothesis explains the camera's paint points (same distance score as `paint_localizer`) |
+| `reference_square.py` | D-395 reference square (red ring, blue core): `SquareObservation(bearing_rad, range_m, confidence)` contract, `SquareDetector` protocol, `HsvSquareDetector` rule backend |
 
 ## Subdirectories
 

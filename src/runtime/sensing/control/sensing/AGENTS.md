@@ -15,6 +15,10 @@ Pure logic (no ROS) for scan geometry, filtering, and footprint (D-229). Camera 
 | `perception/` | Camera and lane evidence. Import `control.sensing.perception`, not this package root. See `perception/AGENTS.md` |
 | `dock_tag.py` | ArUco dock tag → relative pose; optional `CameraMount` gives base_link pose and tag yaw. Picks the ArUco API by `hasattr` (OpenCV 4.6 on the device, 4.7+ on hosts). Not perception |
 | `dock_observer.py` | One camera frame → one `dock/observation` wire payload |
+| `loc_candidates.py` | D-395 pose hypotheses: `global_candidates` (every distinct pose, mirror included), `slot_candidates` (reference square axis and axis+180), `merge`; base/sensor transforms through `Mount` |
+| `loc_objects.py` | D-395 `unmapped_objects`: unexplained lidar returns as base_link objects (other robots); clusters wrap across the scan seam |
+| `loc_verify.py` | D-395 `InjectionCheck`: 0.5 s settle + 3 s of fit ≥ 0.85; cannot reject a mirror on a symmetric map |
+| `loc_state.py` | D-395 `LocalizationStateMachine` UNKNOWN/CANDIDATES/LOCALIZED/SUSPECT; a decision needs a scan-asymmetric cue (or a human) and lapses 5 s after receipt; autonomy only when LOCALIZED |
 
 ## For AI Agents
 

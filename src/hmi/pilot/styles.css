@@ -11,7 +11,7 @@ html { min-width: 320px; background: var(--ground-deep); }
 
 body {
   margin: 0;
-  min-height: 100vh;
+  min-height: 100dvh;
   overflow-x: hidden;
   color: var(--ink);
   background: var(--ground);
@@ -128,7 +128,6 @@ body[data-pilot-screen="drive"] .pilot-main {
   min-height: 0;
   object-fit: contain;          /* 원본 비율, 잘림 없음 — 남는 곳은 검은 띠 */
   object-position: center;
-  transition: opacity 150ms ease-out;
 }
 
 [data-drive-frame][src] { opacity: 1; }
@@ -300,7 +299,9 @@ body[data-pilot-screen="drive"] .pilot-main {
   cursor: grab;
   backdrop-filter: blur(4px);
 }
-[data-drive-stick].active { border-color: var(--brand-rose); cursor: grabbing; }
+/* D-277: 장미색은 이름 식별에만 쓴다 — 조종 인터랙션은 계열 파랑(포커스 링과
+   같은 상호작용 색, DESIGN.md "포커스는 상태가 아니라 상호작용이다"). */
+[data-drive-stick].active { border-color: var(--focus-ring); cursor: grabbing; }
 
 [data-drive-stick-knob] {
   position: absolute;
@@ -308,7 +309,7 @@ body[data-pilot-screen="drive"] .pilot-main {
   width: 38%;
   aspect-ratio: 1;
   border-radius: 50%;
-  background: color-mix(in srgb, var(--brand-rose) 85%, var(--ground-deep));
+  background: color-mix(in srgb, var(--focus-ring) 85%, var(--ground-deep));
   box-shadow: 0 2px 10px color-mix(in srgb, var(--ground-deep) 70%, transparent);
   transform: translate(-50%, -50%);
   pointer-events: none;
@@ -320,7 +321,7 @@ body[data-pilot-screen="drive"] .pilot-main {
   top: calc(var(--topbar-height) + 4.5rem);
   right: var(--space-3);
   width: min(20rem, calc(100vw - var(--space-3) * 2));
-  max-height: calc(100vh - var(--topbar-height) - 16rem);
+  max-height: calc(100dvh - var(--topbar-height) - 16rem);
   overflow-y: auto;
   padding: var(--space-3);
   display: grid;
@@ -552,7 +553,6 @@ body[data-pilot-screen="drive"] ui-brand small { display: none; }
   transform: translate(-50%, -50%);
   background: var(--status-good);
   box-shadow: 0 0 0 2px var(--ground-deep);
-  transition: left 180ms ease-out;
 }
 [data-intent-steer] {
   min-width: 8.5em;
@@ -567,7 +567,6 @@ body[data-pilot-screen="drive"] ui-brand small { display: none; }
 [data-drive-intent][data-state="hold"] [data-intent-target] { background: var(--status-warn); }
 [data-drive-intent][data-state="guard"] [data-intent-steer],
 [data-drive-intent][data-state="hold"] [data-intent-steer] { color: var(--status-warn); }
-@media (prefers-reduced-motion: reduce) { [data-intent-target] { transition: none; } }
 
 [data-screen="arm"] { max-width: 48rem; margin: 0 auto; padding: var(--space-4); }
 [data-screen="arm"] label { display: block; margin-block: var(--space-3); }

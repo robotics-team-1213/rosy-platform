@@ -19,6 +19,7 @@ Python package root for the fleet seed: operator CLI plus `formation/` (pure geo
 | Directory | Purpose |
 |-----------|---------|
 | `formation/` | Pure FOR-001/002 geometry and slot assignment (see `formation/AGENTS.md`) |
+| `localization/` | D-395 arbiter: pure cue scoring and held-margin decisions (see `localization/AGENTS.md`) |
 | `swarm/` | Endpoints, HTTP/WS transport, relay, arming, FOR-004 session (see `swarm/AGENTS.md`) |
 
 ## For AI Agents

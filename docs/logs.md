@@ -4196,3 +4196,31 @@
 - 증거: 계획의 코드는 임시 사본에서 모두 실행했다 — 신규 시험 전부 통과, 이 워크트리에 넣고 sensing 전체 2152 passed(시간 예산 시험 제외), fleet·foundation·게이트웨이 프로토콜·아키텍처는 예상된 크기 판정과 main에 이미 있던 실패만. 그 뒤 코드는 지웠고 이 커밋은 문서만이다.
 - gate 변화: 없음(문서). D-395는 Proposed 그대로.
 - 결정: D-395 Proposed(설계 승인).
+
+
+## 2026-10-01 · uncommitted · D-398 ADR + 감사 정합 문서
+
+- 변경: docs/adr/D-398 신규 + ADR 로그 추가. DESIGN.md에 표면 문법 절·증거 어휘 공용 표·D-277 원문 문구·D-280 매체 규칙 수집, 팔레트 게이트 문단에 범위 게이트 언급. PRODUCT.md 컴포넌트 수 실측 정정('13종' → 엘리먼트 16종+클래스 부품). CONCEPTS.md에 실행 모드·기능의 운용자 한국어 어휘 등재(DESIGN.md 인용 근거가 실제로 존재하게). D-396 계획 문서 수치 정정·진행 갱신.
+- 근거: 2026-10-01 전 레이어 감사(ADR·DESIGN·PRODUCT·CONCEPTS·tokens·등록부·9 표면·시험).
+- gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · docs(adr): D-395 개정 3 — 비대칭 단서 필수, 수신 기준 유효 시간
+- 변경: 1단계 착수 때 정한 기본값을 D-395 개정 3으로 기록. 거울 가설도 스캔 적합도가 같아 3 s 검증이 거울을 못 거르므로 결정에는 비대칭 단서가 하나 이상 있어야 하고(사람 예외), 유효 시간은 절대 시각 대신 받은 때부터 5 s다. ADR Log 상태 갱신.
+- 증거: `src/runtime/sensing/test/test_loc_state.py` 19 passed.
+- gate 변화: 없음(Proposed).
+
+## 2026-10-01 · uncommitted · docs(api): API Ref v1.69 — 스냅샷 `localization`과 §7.9 D-395 모델
+- 변경: 헤더 v1.69, §6.1 `localization`(state·pose_frame·confidence·reason·needs_human·request_id), §7.9 `CandidateReport`·`LocalizationDecision`(`cues`, 수신 기준 `ttl_s`; 스키마만, 전송 경로는 2단계), 변경 이력 행. 핀 셋(헤더·`app.py`·`test_line_follow_contract_docs.py`)을 함께 옮겼다. `test_module_structure.py`의 `schemas.py` 판정을 1095로 재판정(accept 유지).
+- 증거: `test_protocol_version_alignment.py`, `test_line_follow_contract_docs.py`, `test_localization_contracts.py`의 참조서 시험.
+- gate 변화: 없음.
+- 결정: D-395 Proposed(개정 3), D-18, D-347, PRT-006.
+
+## 2026-10-01 · uncommitted · chore(architecture): `fleet` 크기 판정 재판정 (D-395 중재기)
+- 변경: `test_module_structure.py`의 `fleet` 판정 줄 수를 D-395 `fleet/localization/` 추가 뒤 실측값 23543으로 옮기고 사유를 덧붙였다. 판정(split, 미예정) 그대로.
+- 증거: `test_module_structure.py`.
+- gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · chore(architecture): `control` 크기 판정 재판정 (D-395 1단계)
+- 변경: `test_module_structure.py`의 `control` 판정 줄 수를 D-395 sensing 순수 모듈 추가 뒤 실측값 40547로 옮기고 사유를 덧붙였다. 판정(split, P1a) 그대로.
+- 증거: `test_module_structure.py` 33 passed.
+- gate 변화: 없음.

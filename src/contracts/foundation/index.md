@@ -33,8 +33,8 @@
 
 ## 최근 기록
 
+- 2026-10-01 · uncommitted · feat(protocol): D-395 위치 확정 모델과 스냅샷 `localization` (API Ref v1.69)
 - 2026-10-01 · edca9b2e · feat(geometry): calibration_store 중심값과 운영자 층 (D-397)
 - 2026-10-01 · uncommitted · feat(protocol): D-341 rosy-pair/1 공유 벡터와 순수 로직
 - 2026-10-01 · uncommitted · fix(protocol): D-391 site-link 경계 규칙 — fullmatch, IPv6 zone 거절
 - 2026-10-01 · uncommitted · fix(protocol): D-391 벡터 — 4400 사유 정규화, manual_host는 IP만
-- 2026-10-01 · uncommitted · fix(protocol): site_link 비밀 스캔 오탐·ruff 정리

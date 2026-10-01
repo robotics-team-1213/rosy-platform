@@ -269,3 +269,9 @@
 - 증거: `test_calibration_store.py` 세 종류 순서·거부 테스트, `tools/calibration/test/test_urdf_nominal.py` 드리프트.
 - gate 변화: SOURCE/LOCAL. DEVICE HOLD(배포 전 사용자 승인).
 - 결정: D-397 Proposed, D-47 addendum 개정.
+
+## 2026-10-01 · uncommitted · feat(protocol): D-395 위치 확정 모델과 스냅샷 `localization` (API Ref v1.69)
+- 변경: `core_common/protocol/localization.py` — `LocState`, `PoseFrame`(map|odom), `Cue`, `DecisionSource`, `LocalizationStatus`, `LocCandidate`, `RobotPoint`, `SquareSighting`, `CandidateReport`, `LocalizationDecision`(인덱스 또는 직접 좌표 정확히 하나, `candidate` 출처는 인덱스와만, `cues`, 받은 때부터 재는 `ttl_s` 기본 5 s — D-395 개정 3에 따라 계획의 절대 `expires_at` 대신). `StateSnapshot.localization` 선택 필드(D-395 이전 로봇은 null). 모두 추가 전용(API-002, PRT-006).
+- 증거: `test_localization_contracts.py` 18 passed, `test_protocol_schemas.py`, `test_protocol_version_alignment.py`, `test_line_follow_contract_docs.py`.
+- gate 변화: 없음(SOURCE). 아직 아무 경로도 이 모델을 보내거나 받지 않는다.
+- 결정: D-395 Proposed(개정 3), D-18, D-347.

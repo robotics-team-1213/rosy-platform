@@ -1812,3 +1812,10 @@
 - 변경: 실제 Compose 스택 페어링 실측에서 발견. `site-cameras.yaml.example`의 페어링 예시(`ceiling_south`)를 그대로 켜면 그 `token_env`가 Compose `ROSY_CREDENTIAL_PATHS`에 없어 Fleet·Vision이 기동을 거절한다. 예시 주석에 비밀 파일·두 서비스의 `ROSY_CREDENTIAL_PATHS` 추가가 필요하다는 것과, 카메라 하나로 시험할 때는 `ceiling_north`를 `credential: paired`로 바꾸면 된다는 것을 적었다.
 - 증거: 예시 시험·배포 배선 시험 통과; 실측은 `ceiling_north` paired로 18/18.
 - gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · fix(release): 활성화가 CORE를 멈추지 않던 결함 — PartOf 유닛을 함께 멈추고, push가 CORE 릴리스를 확인
+
+- 변경: `native_release.py`의 stop이 `rosy-runtime.target`만이 아니라 PartOf 유닛(`rosy-core`·`rosy-io`·`rosy-camera`)을 함께 이름으로 멈춘다(start는 타깃만). 타깃은 이 유닛들 `After=`라 멈춤 job이 즉시 끝나고, io·camera가 `After=rosy-core`라 CORE의 멈춤 job은 그 뒤를 기다린다. systemctl은 요청한 job만 기다리므로 곧바로 온 start가 CORE의 대기 중 멈춤을 no-op start로 대체해, CORE가 옛 릴리스를 계속 서비스했고 readiness는 그 옛 CORE로 통과했다. `rosy-release-push.ps1`은 활성화·롤백 직후 `core-release-check` 단계를 둔다: CORE MainPID의 cwd가 `readlink -f /opt/rosy/current`와 다르면 `systemctl restart rosy-core.service`하고 경고한다. 로봇에 깔린 활성화기는 고친 판이 image-layer sync(활성화 뒤)로만 오기 때문이다.
+- 증거: 9dfk(2026.10.01-019 push): push가 `current release: 019`·`CORE readiness: PASS`를 냈지만 CORE PID 1078의 cwd는 `releases/2026.09.30-009`, openapi v1.63, 저널에 `Stopping rosy-core` 없음. 같은 로봇에서 재현: `stop target; start target` → CORE PID 9030→9030(active 유지). `stop target core io camera; start target` → stop 직후 inactive, PID 9030→9825. 생성된 확인 명령을 PowerShell 5.1→ssh로 9dfk에 실행 → `CORE_RELEASE_OK /opt/rosy/releases/2026.10.01-019`. `test_native_release_activation.py`·`test_release_push_entrypoint.py` 48 passed. 가드는 변형(카메라 빠짐, 확인 단계 제거, 재시작 보고 제거)으로 빨강 확인.
+- gate 변화: 없음.
+- 교훈: 타깃 하나만 stop하는 것은 PartOf 유닛의 멈춤을 기다리지 않는다. 릴리스 전환 뒤에는 readiness 통과가 아니라 CORE 프로세스가 새 릴리스에서 도는지를 본다.

@@ -1066,3 +1066,32 @@
 - Change: Added a cross-module ROS 2 Jazzy contract fixture that admits a Fleet Mission, dispatches its version-2 grant over UDS with `SO_PEERCRED`, and observes the local Action receipt and asynchronous ROS goal callback. Fleet reports the Mission as accepted/running while the parent Action remains nonterminal; no `GOAL_PREDICATE_CONFIRMED` event is emitted. Restart recovery changes the parent action to `UNKNOWN`, and replaying the same grant does not send a second ROS goal.
 - Evidence: In the pinned local OMX Pilot image, the integration test passed (1). It uses an in-process ActionServer and bounded no-op goal; it is a ROS contract fixture, not a vendor Gazebo or physical grasp/place run. Provider dispatch remains disabled.
 - Gate: No gate promotion. ROS-SIM remains HOLD; ARTIFACT HOLD; DEVICE/FIELD PARKED.
+
+
+## 2026-10-01 · uncommitted · D-398 관측 상태 어휘·빈 로그·역할 토큰 정리
+
+- 변경: classifySightings의 state 'stale' → 'delayed'(닫힌 증거 네 상태로 수렴; map-view 소비처 동반 수정), streamEvidence 나이 뒤처리 'N초' → 'N초 전'(DESIGN.md 규격). roster.js '정보 없음'을 EVIDENCE_LABEL.unavailable로, 죽은 s{index} 클래스 제거. index.html 빈 로그 .log-empty → 공용 ui-empty. styles.css ground-soft/card → surface-flat/raised, min-height 100vh → 100dvh.
+- 근거: D-398. site-layer.test.mjs·fleet 시험 통과, test_fleet_console_browser pin 갱신, test_console_camera_pairing의 낡은 문자열 핀을 allSettled 실제에 맞게 갱신(HEAD에서도 깨져 있던 것).
+- gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · feat(fleet): D-395 위치 중재 채점 단서 (순수)
+- 변경: 새 하위 패키지 `fleet/localization/` — `cues.py`: 다른 LOCALIZED 로봇 일치(+1)/시야 안인데 안 보임(−1), 슬롯(10 cm / 20°, 축 앞뒤 모두), 마지막 정상 자세(픽업 뒤 0), 300 ms보다 신선한 오버헤드 sighting, 기준 사각형(맞으면 +1, 없는 곳에 보이거나 보여야 할 곳에 없으면 −1). 입력이 없으면 0. 비대칭 단서만 결정을 실을 수 있다(개정 3). `test_boundaries.py`가 이 폴더의 전송·asyncio·server import를 막는다.
+- 증거: `test_localization_cues.py` + `test_boundaries.py` 33 passed.
+- gate 변화: 없음(SOURCE/LOCAL).
+- 결정: D-395 Proposed(개정 3, 1단계).
+
+## 2026-10-01 · uncommitted · feat(fleet): D-395 위치 중재기 — 뚜렷한 격차가 2 s 유지될 때만 결정
+- 변경: `fleet/localization/arbiter.py` — `Weights`(초기값: scan 1, paint 2, peers 2, slot 1.5, last_good 0.5, overhead 0.5, square 3; S1에서 조정), `Context`, `score()`, `Arbiter.observe()`: 1등이 2등을 1.0 이상 앞서고 같은 request_id·같은 1등으로 2 s 유지되면 `LocalizationDecision`(source candidate, 근거 점수, 수신 기준 `ttl_s` 5 s)을 한 번만 낸다. 개정 3: 1등을 가른 비대칭 단서(paint/peers/slot/square)를 `cues`에 담고, 없으면 결정하지 않는다(후보가 하나여도). last_good·overhead는 혼자 결정하지 못한다. `fleet` 크기 판정을 23543으로 재판정.
+- 증거: `test_localization_arbiter.py` + cues + boundaries 52 passed — 사각형마다 거울 사례(슬롯·사각형 관측, 거울을 앞에 둔 경우 포함), 페인트·다른 로봇으로 해소, 단서 없음·마지막 자세만·픽업 뒤·단서 없는 단일 후보는 결정 없음, 유지 시간·1등 교체·격차 붕괴 시 재시작, 로봇별 독립.
+- gate 변화: 없음(SOURCE/LOCAL). 서비스 루프·전송은 2단계.
+- 결정: D-395 Proposed(개정 3, 1단계).
+
+## 2026-10-01 · uncommitted · test(fleet): API Ref 버전 핀 v1.69 (D-395 1단계)
+- 변경: `test_task_contract_docs.py`(2곳)·`test_mission_progress.py`의 참조서 버전 핀을 v1.69로 옮겼다. 계획이 세 핀만 셌는데 Fleet 시험에도 같은 핀이 있었다.
+- 증거: 두 파일 22 passed.
+- gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · fix(fleet): D-395 중재기 — 결정을 싣는 단서는 양(+)의 증거이고 모든 후보를 이겨야 한다
+- 변경: 최종 리뷰(1aeada8d) 지적 반영. (치명) 시야 안인데 스캔에 안 잡힌 로봇 때문에 참이 peers −1, 거울이 0이면 0이 −1을 이겼다는 것만으로 peers가 단서로 이름 붙어 거울로 결정할 수 있었다 → 단서는 1등 값이 0보다 크고 다른 모든 후보보다 커야 이름 붙는다. (중요) 2등만 이기면 됐기에, 쌍둥이는 같은 값인데 세 번째 후보가 2등일 때 페인트가 이름 붙고 실제로는 last_good·overhead가 격차를 채웠다 → 모든 후보 기준. (경미) 같은 request_id에 한 번만 결정하던 것을 (request_id, stamp)로 바꿔, 결정이 잃어버리거나 거부되면 로봇이 새 stamp로 다시 보고해 재결정받는다.
+- 증거: 새 시험 3개(숨은 로봇, 세 번째 후보가 2등, 새 stamp 재결정)와 기존 중재기·단서·종단 시험 통과.
+- gate 변화: 없음(SOURCE/LOCAL).

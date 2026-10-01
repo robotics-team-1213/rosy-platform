@@ -648,7 +648,7 @@ ui-shell {
   display: flex;
   flex-direction: column;
   flex: 1;
-  min-height: 100vh;
+  min-height: 100dvh;
   color: var(--ink);
   background: var(--ground);
   font-family: var(--body);
