@@ -2,6 +2,7 @@
 
 설정 계층:
 1. config/rosy_default.yaml (패키지 기본값)
+1b. <robot package>/config/core.yaml (robot.model 의 로봇 사실, 있으면 병합 — D-196)
 2. ~/.rosy/rosy.yaml (로봇 로컬 오버라이드) — 있으면 병합
 3. 환경변수 ROSY_CONFIG (명시적 경로) — 최우선
 
@@ -68,6 +69,32 @@ def dev_auth_enabled() -> bool:
     return os.environ.get("ROSY_DEV_AUTH", "").strip() == "1"
 
 
+def _robot_package_layer(config: dict[str, Any], overlay: Any) -> dict[str, Any]:
+    """The robot package's `core.yaml` (D-196): robot facts CORE needs, e.g. its
+    LiDAR forward angle. The model is ROSY_ROBOT, else the overlay's
+    robot.model, else the default's; a robot package without the file (or not
+    found) adds nothing, and the profile loader reports a missing package."""
+    from core_common.profile import DEFAULT_ROBOT, robot_config_dir
+
+    overlay_robot = overlay.get("robot") if isinstance(overlay, dict) else None
+    model = (os.environ.get("ROSY_ROBOT", "").strip()
+             or (overlay_robot.get("model") if isinstance(overlay_robot, dict) else None)
+             or (config.get("robot") or {}).get("model") or DEFAULT_ROBOT)
+    if not re.fullmatch(r"[a-z][a-z0-9_]*", str(model)):
+        return {}  # ROSY_ROBOT is rejected below; a bad overlay model fails in the profile loader
+    try:
+        path = robot_config_dir(str(model)) / "core.yaml"
+    except ConfigError:
+        return {}
+    if not path.is_file():
+        return {}
+    with open(path, encoding="utf-8") as f:
+        layer = yaml.safe_load(f) or {}
+    if not isinstance(layer, dict):
+        raise ConfigError(f"{path} must be a mapping")
+    return layer
+
+
 def load_config(explicit_path: Optional[str] = None) -> dict[str, Any]:
     """기본값 → 로컬 오버라이드 → 명시적 경로 순으로 병합해 반환한다."""
 
@@ -89,7 +116,8 @@ def load_config(explicit_path: Optional[str] = None) -> dict[str, Any]:
     if override_path.exists():
         with open(override_path, encoding="utf-8") as f:
             overlay = yaml.safe_load(f) or {}
-            config = _deep_merge(config, overlay)
+    config = _deep_merge(config, _robot_package_layer(config, overlay))
+    config = _deep_merge(config, overlay)
     overlay_robot = overlay.get("robot") if isinstance(overlay, dict) else None
     overlay_named = isinstance(overlay_robot, dict) and "name" in overlay_robot
 

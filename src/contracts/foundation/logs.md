@@ -218,3 +218,9 @@
 - 변경: `RobotActivity`·`ActivityOwner` 모델과 `StateSnapshot.activity: Optional[RobotActivity] = None`. 보정 lease 가 살아 있을 때만 객체, 아니면 null.
 - 증거: test_calibration_session.py 의 robot/state·/ws/state 시험, test_protocol_version_alignment 통과.
 - gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · fix(core_common): robot package core.yaml config layer (D-196)
+
+- 변경: `load_config` 가 rosy_default 위, 로컬 오버레이/ROSY_CONFIG 아래에 로봇 패키지의 `config/core.yaml` 을 병합한다(모델: ROSY_ROBOT > 오버레이 robot.model > 기본값). 파일이 없거나 패키지를 못 찾으면 아무것도 더하지 않는다. 첫 사용: Pinky Pro `line_follow.lidar_forward_deg: 180`.
+- 증거: gateway `test_pinky_lidar_forward_device.py` 5 passed; gateway+foundation+profile+test/ 6 failed 4763 passed — 5개는 기준 0476060b 에서도 같은 내용으로 실패(known_failures.txt 미등재), 1개(test_pinky_user_validation ssh timeout)는 단독 재실행 통과(부하 flaky). services 265 passed.
+- gate 변화: 없음.
