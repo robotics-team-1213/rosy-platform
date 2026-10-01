@@ -430,6 +430,30 @@ def test_unreadable_config_fails_closed(device, host, hub, keys):
     assert hub.requests == []
 
 
+def test_config_api_base_points_the_updater_at_another_server(device, host, hub, keys):
+    hub.publish(keys, NEXT, canary=())
+    write_json(device / "var/lib/rosy/updates/config.json",
+               {"enabled": True, "repo": REPO, "api_base": hub.base + "/"})
+
+    # The CLI default; the config key must win over it (device twin, tests).
+    result = upd.Updater(host, api_base=upd.API_BASE).run()
+
+    assert hub.list_requests(), "the release list was not requested from config api_base"
+    assert result["candidate"] == NEXT
+
+
+@pytest.mark.parametrize("api_base", ["ftp://example.test", "http://", 42, "http://host/ path"])
+def test_invalid_config_api_base_fails_closed(device, host, hub, keys, api_base):
+    hub.publish(keys, NEXT, canary=())
+    write_json(device / "var/lib/rosy/updates/config.json", {"enabled": True, "repo": REPO, "api_base": api_base})
+
+    result = upd.Updater(host, api_base=hub.base).run()
+
+    assert result["phase"] == "error"
+    assert "CONFIG_INVALID" in result["reason"]
+    assert hub.requests == []
+
+
 def test_api_request_carries_user_agent_and_etag(device, host, hub, keys):
     hub.publish(keys, NEXT, canary=())
     up = updater(host, hub)

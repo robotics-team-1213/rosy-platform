@@ -1911,3 +1911,11 @@
 - gate 변화: 없음. DEVICE HOLD.
 - 결정: D-406
 - 교훈: 두 규칙이 같은 흔적(previous > current)을 보면 누가 그 흔적을 남겼는지 기록해 둔다. 경과 시간은 "그 상태를 처음 본 때"부터 잰다.
+## 2026-10-02 · 84e45d05 · test(d406): device twin — systemd 컨테이너로 자동 업데이트 끝까지 검증
+
+- 변경: `tools/device_twin/`(배포물에 들어가지 않음). ubuntu:24.04 systemd 컨테이너에 실제 native runtime·rosy 유닛(`git archive HEAD`), 일회용 Ed25519 키로 `build_payload_release.py`+`sign_image_release.py`가 만든 릴리스, ExecStart만 바꾼 가짜 ROS(가짜 CORE는 `/api/v1`, schema 2 status-inputs, `twin-control`로 바쁨 상태), 가짜 GitHub(ETag/304)와 가짜 `gh`, 실제 `publish_payload_release.py`를 그 위에서 돌리는 래퍼. 업데이터에 `config.json`의 `api_base` 키 추가(기본 `https://api.github.com`, 잘못된 값은 CONFIG_INVALID, 시험 포함).
+- 증거: `python tools/device_twin/run_twin.py --scenario all`(통합 브랜치 4a185386 병합 뒤) 12개 중 11 PASS: 활성화 결함 재현과 수정 확인, 발행→카나리 커밋→canary_ok, 바쁨·hold·봉인·claim 부적격, 나쁜 릴리스 롤백·image layer 원복·철회, 철회 릴리스 미적용, SIGKILL·전원 차단 뒤 재개 커밋, `systemd-analyze verify`, 샌드박스에서 `/proc/<pid>/cwd` 읽기. 보고서 `X:/DevTemp/d406-twin/report.md`. 호스트 시험 `test_rosy_auto_update.py`·`test_rosy_claim.py`·`test_publish_payload_release.py` 311 passed, 1 skipped.
+- 결함(제품, 고치지 않음): (h3) 활성화 중 전원 차단 뒤 `rosy-release-recover.service`가 실패한다. `ProtectSystem=strict`에 `PrivateTmp`가 없어 `signing.verify_signature`의 임시 디렉터리를 못 만든다. CORE와 업데이터 모두 이 유닛을 Requires 하므로 런타임이 안 뜨고 업데이터도 못 돈다. twin에서 `PrivateTmp=yes`를 붙이면 복구된다.
+- gate 변화: 없음. twin 통과는 HOST 증거이고 DEVICE 증거가 아니다.
+- 결정: D-406
+- 교훈: 저널이 있을 때만 타는 부팅 경로는 실제 sandbox 아래에서 한 번은 돌려 봐야 한다. 단위 시험은 tempfile을 쓸 수 있는 호스트에서 돌았다.
