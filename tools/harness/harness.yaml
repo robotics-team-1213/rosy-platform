@@ -10,8 +10,6 @@ adr_gaps:
   D-29: "unused; the vision accelerator shield design only proposed the number"
   D-324: "unused; the Pinky artifact-selection ADR was first written as D-324 and renumbered to D-325 to avoid a same-day collision (commit 45f9470b, 2026-09-29). Remove if another session lands an ADR as D-324"
   D-35: "reserved for the swarm formation HOLD decision pending the sim bench"
-  D-405: "reserved by branch feat/overhead-markerless-tracking (overhead markerless tracking, display only); D-407 landed first. Remove when D-405 lands"
-  D-406: "reserved by branch feat/d406-device (robots self-update from signed GitHub releases when idle); D-407 landed first. Remove when D-406 lands"
   D-400: "reserved by branch docs/core-safety-policy-shadow (CORE safety policy off/shadow/enforce, Proposed); D-401 landed first. Remove when D-400 lands"
   D-223: "skipped: the surface keyboard-vocabulary ADR moved to D-224 during a concurrent-session numbering collision (2026-09-25)"
   D-204: "reserved by docs/plans/2026-09-24-role-surfaces-panel-composition-design.md; the ADR is written on branch feat/role-surfaces-s1 and merges separately; remove once it lands"

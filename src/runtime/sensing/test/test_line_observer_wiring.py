@@ -1,11 +1,30 @@
 """D-143 ROS wrapper stays a sensing-only evidence publisher."""
 
 from pathlib import Path
+import ast
+from types import SimpleNamespace
+
+import pytest
 
 import yaml
 
 
 ROOT = Path(__file__).parents[1]
+
+
+@pytest.mark.parametrize('geometry', ['NOMINAL', 'GAZEBO', 'HOMOGRAPHY'])
+def test_camera_geometry_source_keeps_the_motion_observation_wire_contract(geometry):
+    from control.sensing.perception.lane import LaneObservation, line_observation_payload
+    tree = ast.parse((ROOT / 'control/line_observer_node.py').read_text(encoding='utf-8'))
+    method = next(n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name == '_ground_label')
+    namespace = {}
+    exec(compile(ast.Module(body=[method], type_ignores=[]), '<ground-label>', 'exec'), namespace)
+    node = SimpleNamespace(get_parameter=lambda _: SimpleNamespace(value=geometry))
+    # Sim/geometry provenance belongs in debug evidence; the motor observation
+    # accepts only the NOMINAL restriction marker or no marker.
+    payload = line_observation_payload('CAMERA_LINE', 1.0, LaneObservation(0, .9),
+                                       ground=namespace['_ground_label'](node))
+    assert payload['visible'] and payload['confidence'] == .9
 
 
 def test_line_observer_has_both_inputs_and_one_normalized_output():

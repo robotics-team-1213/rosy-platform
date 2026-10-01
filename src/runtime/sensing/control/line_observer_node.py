@@ -405,6 +405,7 @@ class LineObserverNode(Node):
                     lane_half_width_m=float(self.get_parameter('lane_half_width_m').value))
                 bundle = dict(self._lane_keeper.last, paint_source_used=paint_used,
                               image_size=[frame.shape[1], frame.shape[0]],
+                              camera_geometry_source=str(self.get_parameter('camera_ground_source').value).upper(),
                               ground=self._ground_label(),
                               stamp=float(msg.header.stamp.sec)
                               + float(msg.header.stamp.nanosec) * 1e-9)

@@ -155,4 +155,15 @@ LOCAL·ROS-SIM까지만 주장 가능하다. 실물은 승인 뒤다.
    - **후속 과제(제안):** LOCALIZED 로봇도 `localization/state`(그리고 CORE 스냅샷 `localization`)에 `unmapped_objects`를 주기적으로 싣는다. Fleet 감시는 LOCALIZED 로봇끼리의 관찰로 서로를 확인한다: 로봇 A의 보고 자세에서 본 물체가 로봇 B의 보고 자세와 25 cm 넘게 1.5 s 어긋나고 B 쪽 거울 자리와는 맞으면 B를 SUSPECT로 돌린다. API Ref MINOR 추가가 필요하며 2단계 통합 뒤 별도 변경으로 한다.
 6. **사다리 시간과 재시도.** 사다리 시계는 CANDIDATES에 처음 들어간 때 시작해 LOCALIZED에서만 멈춘다. 결정 거부로는 다시 시작하지 않는다(거부가 되풀이돼도 60 s에 `needs_human`에 닿게). 실패한 결정 POST는 재시도하지 않고, 로봇이 2 s마다 새 stamp로 다시 보고할 때 새로 결정한다. 확인 동작·귀환 임무는 P2-7 전까지 기록만 남기고 보내지 않는다.
 
+**개정 5 (2026-10-02, 실기 항목은 로봇이 돌아올 때까지 미룬다, 사용자 결정):**
+
+로봇이 지금 없어서 실제 로봇이 필요한 항목은 미룬다. 그동안은 로봇 없이 할 수 있는 것(Gazebo S1·S2, P2-7 구현, 개정 4 5항 후속)을 먼저 한다. 아래 항목이 모두 닫히기 전에는 장치에서 `enable_loc_assist`를 켜지 않고 실기 S3를 하지 않는다.
+
+1. **Pi 탐색 시간 실측.** 후보 탐색이 개발 PC(WSL)에서 4.7–6.5 s로 예산 3 s를 넘었다. Pi 5에서 같은 지도·2 cm 격자로 재고, 예산을 넘으면 더 거친 격자나 시간 예산 중단을 넣는다. 로봇은 움직이지 않는 측정이지만 공유 로봇이므로 다른 세션에 알린 뒤 한다.
+2. **기준 사각형 테이프 실측.** `lane_rules.yaml` `reference_squares`의 중심·크기·`heading_axis_deg`는 콘솔 사진에서 읽은 값(±3 cm)이다. 매트에서 줄자로 재어 고치고 sim 월드를 다시 만든다(D-397 규칙대로 캘리브레이션 세션이 최종 값을 정한다).
+3. **실제 카메라의 사각형·페인트 검출.** HSV 사각형 검출과 `camera_paint_points`는 합성 영상과 실제 프레임 한 장(8kcn 2026-09-30, 0.43 m, 신뢰 0.91)으로만 확인했다. 실주행 녹화로 보이는 거리·조명·카펫 조건을 재고, 그 전에는 `square`·`paint` 가중을 S1 값 이상으로 올리지 않는다.
+4. **장치의 들어 올림 신호.** 장치 그래프에는 지금 `safety/pickup` 발행자가 없다. CORE 선택 센서 작업자가 BNO055 IMU로 `safety/pickup`·`safety/tilt`를 낼 수 있지만 기본 꺼짐(`control.sensor_adapter.enabled: false`)이다. 켜는 것은 로봇 설정 변경이므로 실측과 함께 정한다. 그 전에는 들어 올림 뒤 SUSPECT가 적합도 지속 하락에만 기대므로 실기에서 사람이 로봇을 옮기지 않는다.
+5. **장치 기본값과 릴리스.** `hardware.launch.py`의 `enable_loc_assist`는 1–4가 닫힌 뒤 켠다. 켜는 릴리스는 배포 전 공유 로봇 공지·대기 규칙을 따른다.
+6. **실기 S3.** 위 항목과 S1 통과 뒤, 두 대를 저속으로 S1 시나리오대로 돌린다. 로봇을 움직이기 전에 공지하고, 다른 세션이 주행 중이면 기다린다.
+
 **References:** `docs/adr/D-257-site-lane-map-and-overhead-sightings.md`, `docs/adr/D-393-nav-amcl-update-min-d-and-goal-tolerance.md`, `docs/adr/D-375-overhead-map-registration-from-lane-paint-proposal.md`, `docs/adr/D-360-overhead-field-auto-detection-proposal.md`, `src/runtime/api_web/core_api_web/api/v1/navigation.py`, `src/runtime/gateway/core/bridge/ros_bridge.py`, `src/runtime/sensing/control/localization_node.py`, `src/site/fleet/fleet/swarm/transport.py`, D-2, D-267, D-269, D-321, D-356, D-369, [D-346](D-346-commit-time-collision-defenses.md).

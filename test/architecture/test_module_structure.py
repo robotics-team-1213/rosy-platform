@@ -215,7 +215,7 @@ SIZE_VERDICTS = {
         "accept: sim-only read-only viewer server (HTTP handler + ROS subscriptions); the pure logic already lives in live_view_model.py and the page in lane_live_view.html, covered by test_lane_live_view*.py and test_live_view_model.py (X5)",
     ),
     "control": (
-        41_131,
+        41_145,
         f"split: deploy closure needs only sensing + safety provider (P1a); {CONTROL_SPLIT} "
         "(re-judged 2026-09-30 at 33090 after D-356 added the ROS-free learned perception backend "
         "(sensing/perception/learned), the shadow node and the recording CLI; the learned backend sits "
@@ -247,8 +247,12 @@ SIZE_VERDICTS = {
         "joined — they move with the P1a split, verdict unchanged; re-judged 2026-10-01 at "
         "40803 for the bounded, observation-only follow_preview module and camera-stamp joins "
         "(docs/plans/2026-10-01-follow-preview-design.md): rendering stays in perception, ROS I/O "
-        "stays in observer wrappers, and the P1a sensing/safety split remains required; re-judged "
-        "2026-10-02 at 41131 for the D-408 paint sources (denoise_white_mask in lane_keep_lines.py, "
+        "stays in observer wrappers, and the P1a sensing/safety split remains required; "
+        "re-judged 2026-10-02 at 40961 for the observation-only lane_topology and visual_tags "
+        "modules plus explicit boundary/object annotations "
+        "(docs/plans/2026-10-02-lane-object-preview-design.md): no new driving authority, "
+        "all move with the existing perception split — verdict unchanged; re-judged "
+        "2026-10-02 at 41145 for the D-408 paint sources (denoise_white_mask in lane_keep_lines.py, "
         "learned/paint_worker.py, the lane-mask helper) — ROS-free inside sensing/perception, they "
         "move with the P1a split, verdict unchanged)",
     ),

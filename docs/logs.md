@@ -4255,3 +4255,14 @@
 - 변경: 2단계 구현에서 정한 것을 D-395 개정 4로 기록. D-395 이전 로봇(`localization: null`)은 현행 유지+카드 경고, LOCALIZED 관문(시작 거부·이탈 시 자율 주행 정지, 수동 조종 허용), `LOCALIZE_ASSIST`는 운용자 역할로 부여(토큰별 grant는 후속), 천장 카메라 단서 기본 꺼짐(D-257 개정 수용 전), 사다리 시계·재시도 규칙. 남은 한계: 다른 로봇 관찰은 CANDIDATES 로봇의 보고에만 실려, 모든 로봇이 LOCALIZED인 동안 Fleet 상시 감시가 비어 있다 → LOCALIZED 로봇도 `unmapped_objects`를 싣는 후속 계약 확장 제안. ADR Log 상태 갱신.
 - 증거: 2단계 갈래 B(CORE)·C(Fleet) 구현 보고.
 - gate 변화: 없음(Proposed).
+
+## 2026-10-02 · uncommitted · follow-preview Gazebo evidence
+- 변경: docs/validation/follow-preview-gazebo-2026-10-02.md에 실제 Gazebo 카메라→추종 증거→CORE 콘솔 표시 검증을 기록.
+- 검증: 주행 구간 228 프레임/57 preview, 차선 없음 76 프레임/19 preview, follow/observer focused 25 passed. road shadow STOP이므로 예측 경로는 숨김; 유효 예측의 ROS-SIM 성공은 주장하지 않음.
+- 한계: 로봇 전원 꺼짐으로 실기 설치 보류, 전체 CI 실패는 별도 기록. 실기·FIELD 관문 변화 없음.
+- gate 변화: ROS-SIM 표시 검증 기록. DEVICE/FIELD 관문 변화 없음.
+
+## 2026-10-02 · uncommitted · docs(adr): D-395 개정 5 — 실기 항목은 로봇이 돌아올 때까지 미룬다
+- 변경: 사용자 결정(로봇 없음)으로 실기가 필요한 항목을 D-395 개정 5에 묶었다: Pi 탐색 시간 실측(WSL 4.7–6.5 s > 예산 3 s), 기준 사각형 테이프 실측(현재 사진 유래 ±3 cm), 실제 카메라 사각형·페인트 검출 범위, 장치 들어 올림 신호(BNO055 센서 작업자 기본 꺼짐), 장치 `enable_loc_assist` 기본값과 릴리스, 실기 S3. 모두 닫히기 전에는 장치에서 켜지 않는다. 그동안 Gazebo S1·S2, P2-7, 개정 4 5항 후속을 먼저 한다.
+- 증거: 2단계 갈래 A 보고(WSL 탐색 시간, 장치 그래프 pickup 없음).
+- gate 변화: 없음(Proposed).

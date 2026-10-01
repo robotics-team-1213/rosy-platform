@@ -266,8 +266,8 @@
 
 ## 최근 기록
 
+- 2026-10-02 · uncommitted · docs(adr): D-395 개정 5 — 실기 항목은 로봇이 돌아올 때까지 미룬다
+- 2026-10-02 · uncommitted · follow-preview Gazebo evidence
 - 2026-10-01 · uncommitted · docs(adr): D-395 개정 4 — 2단계 결정과 Fleet 감시 한계
 - 2026-10-01 · uncommitted · fix(pilot): preserve recording errors and reconcile API minor
 - 2026-10-01 · uncommitted · fix(omx): fence recording closure and isolate storage faults
-- 2026-10-01 · uncommitted · feat(omx): record SIM demonstrations and export LeRobot v3
-- 2026-10-01 · uncommitted · docs(plan): D-395 2단계 세 갈래 인터페이스 계약

@@ -25,6 +25,7 @@ from .sensing.perception.camera_homography import (
 )
 from .sensing.perception.camera_ground import simulation_ground_plane
 from .sensing.perception.follow_preview import FrameEvidence
+from .sensing.perception.visual_tags import detect_visual_tags
 from .sensing.perception.road import (
     RoadObservation,
     RoadPerceptionConfig,
@@ -333,6 +334,7 @@ class RoadObserverNode(Node):
                 objects=self._preview_evidence.for_frame('objects', stamp),
                 road_state=self._preview_evidence.for_frame('road_state', stamp),
                 line=self._preview_evidence.for_frame('line', stamp),
+                tags=detect_visual_tags(frame),
             )
             ok, encoded = cv2.imencode('.jpg', preview, [
                 cv2.IMWRITE_JPEG_QUALITY,

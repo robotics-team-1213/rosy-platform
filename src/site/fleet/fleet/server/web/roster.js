@@ -8,6 +8,24 @@ import { addressReason } from "./address-drift.js";
 
 const TAG_STATUS = { nav: "active", ok: "active", warn: "warn", crit: "crit" };
 
+// console_view._error_of 는 닿지 못한 예외를 클래스 이름(code)으로 싣는다. 운용자 말은
+// 한국어 평문이다 — 아는 코드만 옮기고 모르는 값은 받은 그대로 보인다(2026-10-02 회차).
+const REACH_LABEL = Object.freeze({
+  ConnectError: "접속 실패",
+  ConnectTimeout: "접속 시간 초과",
+  TimeoutException: "응답 시간 초과",
+  ReadTimeout: "응답 시간 초과",
+});
+
+// D-405 — 카드 측정 라벨의 얼굴은 아이콘이다. 한국어 이름은 sr-only·title로 남는다.
+// 색은 currentColor(.facts span의 ink-quiet를 상속), 크기는 공용 .ui-icon.
+const FACT_ICONS = Object.freeze({
+  pose: '<svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="7"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>',
+  yaw: '<svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9"/><path d="m15.5 8.5-2.1 4.9-4.9 2.1 2.1-4.9z"/></svg>',
+  battery: '<svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="3" y="8" width="15" height="8" rx="1.5"/><path d="M21 10.5v3M6.5 10.5v3M10 10.5v3M13.5 10.5v3"/></svg>',
+  safety: '<svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 3l7 3v5c0 4.4-3 7.5-7 9-4-1.5-7-4.6-7-9V6z"/></svg>',
+});
+
 function tag(text, cls) {
   const node = document.createElement("ui-tag");
   node.setAttribute("status", TAG_STATUS[cls] || "neutral");
@@ -74,8 +92,8 @@ export function createRoster({ el, view, log, call, render, streamEvidence, isOp
     const pose = state.pose;
     const nav = navTag(state);
     const estop = state.safety?.estop;
-    const safetyLabel = !robot.online ? "—" : view.stateUnavailable ? EVIDENCE_LABEL.unavailable : estop === true ? "E-STOP"
-      : estop === false ? "OK" : EVIDENCE_LABEL.unavailable;
+    const safetyLabel = !robot.online ? "—" : view.stateUnavailable ? EVIDENCE_LABEL.unavailable : estop === true ? "비상 정지"
+      : estop === false ? "정상" : EVIDENCE_LABEL.unavailable;
     const goalSafetyReason = view.stateUnavailable
       ? "Fleet 상태를 확인할 수 없어 목표를 보낼 수 없습니다."
       : estop === true
@@ -116,17 +134,23 @@ export function createRoster({ el, view, log, call, render, streamEvidence, isOp
     const battery = state.battery && typeof state.battery.percent === "number"
       ? `${Math.round(state.battery.percent)}%` : "—";
     const rows = [
-      ["POSE", pose ? `${pose.x.toFixed(2)}, ${pose.y.toFixed(2)}` : "—"],
-      ["YAW", pose ? `${(pose.yaw * 180 / Math.PI).toFixed(0)}°` : "—"],
-      ["BATTERY", battery],
-      ["SAFETY", safetyLabel],
+      ["위치", FACT_ICONS.pose, pose ? `${pose.x.toFixed(2)}, ${pose.y.toFixed(2)}` : "—"],
+      ["방향", FACT_ICONS.yaw, pose ? `${(pose.yaw * 180 / Math.PI).toFixed(0)}°` : "—"],
+      ["배터리", FACT_ICONS.battery, battery],
+      ["안전", FACT_ICONS.safety, safetyLabel],
     ];
-    rows.forEach(([label, value]) => {
+    rows.forEach(([label, icon, value]) => {
       const cellEl = document.createElement("div");
       const labelEl = document.createElement("span");
-      labelEl.textContent = label;
+      // D-405 — 라벨의 얼굴은 아이콘, 한국어 이름은 스크린리더와 title에 남는다.
+      labelEl.title = label;
+      labelEl.innerHTML = icon;
+      const srLabel = document.createElement("span");
+      srLabel.className = "sr-only";
+      srLabel.textContent = label;
+      labelEl.appendChild(srLabel);
       let valueEl;
-      if (label === "SAFETY" && value === "E-STOP") {
+      if (label === "안전" && value === "비상 정지") {
         // D-202 — 위험은 채움이다. 정지 사실은 카드의 다른 측정값과 같은
         // 무게로 읽히면 안 된다. 공용 어휘인 crit 태그를 재사용한다.
         valueEl = tag(value, "crit");
@@ -156,11 +180,17 @@ export function createRoster({ el, view, log, call, render, streamEvidence, isOp
       node.appendChild(why);
     }
 
+    // 한 원인은 한 번 말한다(D-359 §5.3) — 카드 상태 줄이 원인을 이미 말하면
+    // 버튼 사유는 "위 사유"로 이 줄을 가리킨다.
+    const offlineWhyId = !view.stateUnavailable && !robot.online && robot.error
+      ? `robot-why-${robot.robot_id}` : null;
     if (!view.stateUnavailable && !robot.online && robot.error) {
       const why = document.createElement("p");
       why.className = "hint";
       why.textContent = robot.error.reachable
-        ? `로봇이 거절: ${robot.error.code}` : `닿지 않음: ${robot.error.code}`;
+        ? `로봇이 거절: ${robot.error.code}`
+        : `닿지 않음: ${REACH_LABEL[robot.error.code] ?? robot.error.code}`;
+      why.id = offlineWhyId;
       node.appendChild(why);
     }
 
@@ -179,20 +209,23 @@ export function createRoster({ el, view, log, call, render, streamEvidence, isOp
     const actions = document.createElement("div");
     actions.className = "robot-actions";
     const aim = document.createElement("ui-button");
-    aim.setAttribute("kind", "quiet");
+    // D-406 — 목표 받기는 토글이다. 눌림(aria-pressed)이 계열 파랑 채움으로 보여
+    // "지금 지도를 찍으면 이 로봇이 움직인다"가 색으로 말해진다.
+    aim.setAttribute("kind", "toggle");
     aim.type = "button";
     aim.dataset.goalRobotId = robot.robot_id;
     aim.textContent = view.selected === robot.robot_id ? "지도를 찍으세요" : "목표 지정";
-    if (view.selected === robot.robot_id) aim.classList.add("arming");
+    aim.setAttribute("aria-pressed", view.selected === robot.robot_id ? "true" : "false");
     const currentLineFollow = state.line_follow || {};
     const lineFollowActive = currentLineFollow.mode === "CAMERA_LINE" || currentLineFollow.mode === "IR_LINE";
     // D-359 §5.3 — 사유는 비활성과 같은 조건에서 첫 번째로 걸린 것을 말한다.
     blockWith(aim, view.stateUnavailable ? "Fleet 상태 확인 불가"
-      : !robot.online ? "로봇 오프라인"
+      : !robot.online ? (offlineWhyId ? "위 사유" : "로봇 오프라인")
         : !view.map ? "지도 없음"
           : estop === true ? "비상정지 중"
             : estop !== false ? "안전 상태 확인 불가"
               : lineFollowActive ? "라인 추종 중" : "");
+    if (offlineWhyId) aim.setAttribute("aria-describedby", offlineWhyId);
     aim.addEventListener("click", () => {
       view.selected = view.selected === robot.robot_id ? null : robot.robot_id;
       view.cursor = view.selected && view.map
@@ -211,7 +244,8 @@ export function createRoster({ el, view, log, call, render, streamEvidence, isOp
     cancel.type = "button";
     cancel.textContent = "취소";
     blockWith(cancel, view.stateUnavailable ? "Fleet 상태 확인 불가"
-      : !robot.online ? "로봇 오프라인" : "");
+      : !robot.online ? (offlineWhyId ? "위 사유" : "로봇 오프라인") : "");
+    if (offlineWhyId) cancel.setAttribute("aria-describedby", offlineWhyId);
     cancel.addEventListener("click", async () => {
       try {
         const pending = view.pendingTasks[robot.robot_id];
@@ -306,8 +340,27 @@ export function createRoster({ el, view, log, call, render, streamEvidence, isOp
     let warningCount = 0;
     let criticalCount = 0;
 
+    const queueItem = (robotId, text) => {
+      const li = document.createElement("li");
+      const name = document.createElement("b");
+      name.textContent = robotId;
+      li.append(name, document.createTextNode(text));
+      return li;
+    };
+
     for (const r of view.stateUnavailable ? [] : view.robots) {
-      if (!r.state) continue;
+      // 2026-10-02 관제 회차 — 로봇 전원이 닿지 않아도 이 큐는 비어 있었다.
+      // "예외가 먼저" 문법이 가장 흔한 예외(연결 끊김)에 침묵하면 신뢰가 사라진다.
+      if (!r.online) {
+        warnList.appendChild(queueItem(r.robot_id, `: ${EVIDENCE_LABEL.disconnected}`));
+        warningCount++;
+        continue;
+      }
+      if (!r.state) {
+        warnList.appendChild(queueItem(r.robot_id, ": 상태 확인 불가"));
+        warningCount++;
+        continue;
+      }
       if (r.state.hitl_requested) {
         // 개입 요청은 이름으로 알린다(Law 0). 원격 조종은 이 서버에 없는
         // 능력이다 — 못 하는 조작을 모의 버튼으로 걸어 두면 경보가 거짓말을

@@ -22,7 +22,12 @@ from .manipulation_plan import (
     ResolvedPickPlacePlan,
 )
 from .phase_recorder import ActionPhaseRecorder
+from .pose_plan import CellPlanningProfile, CellTransferPlan, validate_cell_transfer_plan
 from .ros_goal_contract import RosGoalEvent
+
+
+# CELL_TRANSFER phases whose gripper start value is not compared (object in hand).
+_AFTER_GRASP_PHASES = frozenset({"transfer", "release"})
 
 
 class PhaseGoalPort(Protocol):
@@ -59,7 +64,7 @@ class PickPlaceRunner:
         self,
         recorder: ActionPhaseRecorder,
         grant: FleetActionGrant,
-        plan: ResolvedPickPlacePlan,
+        plan: ResolvedPickPlacePlan | CellTransferPlan,
         *,
         command_for_phase: Callable[[PlannedMotionPhase], TrajectoryCommand],
         goal_port: PhaseGoalPort,
@@ -71,6 +76,7 @@ class PickPlaceRunner:
         max_joint_state_age_s: float,
         monotonic: Callable[[], float] = time.monotonic,
         now: Callable[[], datetime] | None = None,
+        cell_profile: CellPlanningProfile | None = None,
     ) -> None:
         self.recorder = recorder
         self.grant = grant
@@ -95,9 +101,24 @@ class PickPlaceRunner:
         self._cancel_ack_recorded = False
         self._last_command_state_sequence = -1
 
-        if not isinstance(plan, ResolvedPickPlacePlan):
-            raise ValueError("plan must be a validated ResolvedPickPlacePlan")
-        if not callable(current_execution_state) or not callable(monotonic):
+        if not isinstance(plan, (ResolvedPickPlacePlan, CellTransferPlan)):
+            raise ValueError("plan must be a validated ResolvedPickPlacePlan or CellTransferPlan")
+        if not callable(monotonic):
+            raise ValueError("fresh execution-state and monotonic clock providers are required")
+        # CELL_TRANSFER (simulation, D-402 §3d): after grasp the gripper stops at the
+        # object width, so in transfer/release gripper_contract readback judges it,
+        # not the start-state value. approach/grasp check it like any joint. The
+        # skipped set is the accepted profile's gripper, never the plan's own claim.
+        self._unchecked_joints: frozenset[str] = frozenset()
+        if isinstance(plan, CellTransferPlan):
+            if not isinstance(cell_profile, CellPlanningProfile):
+                raise ValueError("a CellTransferPlan requires the accepted cell_profile")
+            validate_cell_transfer_plan(
+                plan, cell_profile, kinematics_revision=cell_profile.kinematics_revision,
+                now_monotonic_s=monotonic(),
+            )
+            self._unchecked_joints = frozenset({cell_profile.gripper_joint})
+        if not callable(current_execution_state):
             raise ValueError("fresh execution-state and monotonic clock providers are required")
         if isinstance(max_joint_state_age_s, bool):
             raise ValueError("max_joint_state_age_s must be positive and finite")
@@ -139,7 +160,7 @@ class PickPlaceRunner:
             return None if self._current_phase is None else self._current_phase.phase_id
 
     def _command_digest(self, command: TrajectoryCommand, phase: PlannedMotionPhase,
-                        plan: ResolvedPickPlacePlan,
+                        plan: ResolvedPickPlacePlan | CellTransferPlan,
                         state: ExecutionStateSnapshot) -> str:
         document = {
             "command_id": command.command_id,
@@ -187,6 +208,8 @@ class PickPlaceRunner:
                 or state.planning_scene_revision != phase.planning_scene_revision):
             raise ValueError("phase start state calibration, transform, or planning scene changed")
         for name, expected in zip(phase.joint_names, phase.start_state_positions):
+            if name in self._unchecked_joints and phase.phase_id in _AFTER_GRASP_PHASES:
+                continue
             if abs(state.joint_positions[name] - expected) > self.start_state_tolerances[name]:
                 raise ValueError("phase start state is outside the planned tolerance")
 
