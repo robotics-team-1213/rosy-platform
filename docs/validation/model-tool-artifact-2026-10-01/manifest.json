@@ -1,0 +1,87 @@
+{
+  "schema": "rosy.model-tool-evidence-manifest.v1",
+  "manifest_id": "model-tool-ros-sim-2026-10-01",
+  "artifact_kind": "simulation_evidence_only",
+  "gate": {
+    "artifact": "HOLD",
+    "reason": "Local unsigned simulation images and a partial dependency inventory do not establish a publishable production artifact."
+  },
+  "source": {
+    "repository": "Rosy OS",
+    "revision": "a3ee19a27794a6a107804462945d3c4ac25f6bdf",
+    "working_tree_test_change": "src/products/omx/adapter/test/test_omx_ros_runtime.py timeout fault-injection test",
+    "tool_catalog_path": "src/site/fleet/fleet/ai/model_tool_catalog.py",
+    "tool_catalog_sha256": "e5b379eb7755a2b0c1608fa40f27bc22571137d7df2f6bbe28d8aa4f18a8e1b7"
+  },
+  "model_adapter": {
+    "provider": "google",
+    "model_id": "gemini-robotics-er-2-preview",
+    "adapter_path": "src/site/fleet/fleet/ai/er2_standard.py",
+    "provider_enabled": false,
+    "requests_made": 0,
+    "credentials_injected": false,
+    "credential_source": "none"
+  },
+  "capability_boundary": {
+    "model_effects": ["scoped_read", "typed_candidate_proposal"],
+    "device_action_authority": false,
+    "ros_goal_authority": false,
+    "cancel_or_stop_authority": false,
+    "physical_estop_authority": false,
+    "device_local_owner_remains_ros_command_owner": true
+  },
+  "simulation": {
+    "runtime": "ROS 2 Jazzy",
+    "architecture": "linux/amd64",
+    "network": "Docker network none; ROS localhost-only domain 75",
+    "device_grants": [],
+    "vendor_stack_lock": {
+      "path": "deploy/robot/omx/stack.lock.yaml",
+      "sha256": "464437b43770209607a8cbb049619176d2b784c5166396d0f72b3f14f859fcca"
+    },
+    "pilot_image": {
+      "reference": "rosy-omx-pilot:local",
+      "image_id": "sha256:e94662607c72a7cea83c9449178099c4c9476afab0519275ce0da82a88f3da9a",
+      "registry_digest": null,
+      "signed": false
+    },
+    "vendor_base_image": {
+      "reference": "rosy-omx-workstation:native-action-only-local",
+      "image_id": "sha256:b47034e436119cea97c2922a1b4af9bd6596975ac8acbb4cece3a19d2fe1e9f0",
+      "registry_digest": null
+    }
+  },
+  "dependencies": {
+    "inventory_status": "partial",
+    "direct_pilot_python_packages": {
+      "fastapi": "0.116.1",
+      "uvicorn": "0.35.0",
+      "pydantic": "2.11.7"
+    },
+    "ros_vendor_sources": "Pinned by deploy/robot/omx/stack.lock.yaml",
+    "operating_system_and_transitive_packages": "Captured only by local image ID; no SBOM or registry provenance is available."
+  },
+  "data_policy": {
+    "approved_provider_data_classes": [],
+    "provider_payload_created": false,
+    "raw_prompt_or_image_retention": "none; no provider request was made",
+    "simulation_logs": "ephemeral container output; container removed after run; no raw camera images involved"
+  },
+  "evidence": {
+    "vendor_sim_action_test": "test_omx_ros_runtime_vendor_sim.py",
+    "ros_callback_timeout_test": "test_omx_ros_runtime.py::test_runtime_timeout_latches_hold_and_late_cancel_result_does_not_reopen_owner",
+    "source_fault_matrix": [
+      "timeout holds local owner and requests cancellation",
+      "late cancel ACK and terminal CANCELED do not clear HOLD",
+      "restart recovery retains ambiguous Action as UNKNOWN without replay",
+      "stop-generation race cancels the exact late-accepted goal",
+      "four-phase command journaling and per-phase gates"
+    ],
+    "not_demonstrated": [
+      "Gemini provider request or Fleet-to-device Action grant runtime handoff",
+      "camera-based object pose, contact/grasp, and physical place evidence",
+      "signed/published production artifact",
+      "device E-stop/standstill, DEVICE, or FIELD acceptance"
+    ]
+  }
+}

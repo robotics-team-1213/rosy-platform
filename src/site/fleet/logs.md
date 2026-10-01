@@ -1049,6 +1049,12 @@
 - 증거: `address-drift.test.mjs` 2(옛 토큰 문장, IP 확인 문장·고정 주소 문장) export 없음 적색 뒤 81 passed. 브라우저: 옮기기 대화상자의 후보 주소·IP 확인 줄이 보이고 등록 대화상자에서는 숨음(요소 없음 적색 확인), 등록·해제·옮기기 5 passed. `src/hmi/web_common/test/` + 대화상자 계약 녹색. 캡처 `move-code-dialog-1920.png` 다시 찍음.
 - gate 변화: 없음(LOCAL).
 
+## 2026-10-01 · uncommitted · docs(fleet): D-392 Task 8 ROS-SIM/artifact evidence boundary
+
+- 변경: D-392 구현 계획의 Task 8에 pinned Jazzy timeout/cancel callback 실험과 local simulation manifest/checksum을 추가했다. Fleet-to-device Mission grant handoff와 ER 2 provider request는 실행하지 않았고 tool catalog의 후보 전용 권한은 그대로다.
+- 증거: `docs/validation/model-tool-ros-sim-2026-10-01/README.md`, `docs/validation/model-tool-artifact-2026-10-01/manifest.json`. Fleet의 provider/tool suites는 기존 1,128 passed/6 skipped evidence이며 이번 차례에는 provider 활성화 변경이 없다.
+- gate 변화: ROS-SIM partial/HOLD, ARTIFACT HOLD, DEVICE/FIELD PARKED. Local image ID·source hashes는 production signature/SBOM/device/field 증거가 아니다.
+
 ## 2026-10-01 · uncommitted · fix(console): 로그인은 느린 상태 수집을 기다리지 않고 바로 풀린다
 
 - 변경: 실제 Compose 스택 페어링 실측에서 발견. 닿지 않는 로봇이 하나 있으면 `/api/fleet/state`가 5.1 s 걸리고, 콘솔은 세션(역할)이 이미 확인됐는데도 그동안 "토큰 필요"·운용자 버튼 잠금을 유지했다. 이제 세션이 확인되면 바로 역할을 적용하고 상태 표시를 "상태 확인 중"으로 바꾸며, 상태·발행 제어·발견·카메라 연결·대형 갱신을 나란히(Promise.allSettled) 돌려 느린 하나가 나머지를 막지 않는다. 401은 기존처럼 call()이 잠근다.

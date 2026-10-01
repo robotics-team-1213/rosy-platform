@@ -13,11 +13,12 @@ gates:
     cmd: "PYTHONPATH=src/products/omx/adapter python -m omx_adapter.cli src/products/omx/profile/config/omx.disabled.yaml"
   ROS-SIM:
     state: HOLD
-    evidence: "2026-10-01 Pilot OMX Gazebo simulation: joint1 and gripper goals reached ROS SUCCEEDED with joint readback movement; manual cancel reached ROS CANCELED (docs/validation/pilot-omx-gazebo-2026-10-01/README.md). Earlier two-instance vendor evidence remains at docs/validation/omx-two-instance-ros-sim-2026-09-26/README.md. D-386 asynchronous phase and fresh state/path source checks have ROS-free tests, but their modified callbacks and four-phase PickPlace scenario were not exercised in the Pilot probe."
-    blocker: "Run D-386 response-timeout/late-response and pinned four-phase fault scenarios against ROS 2 Jazzy on the intended workstation. Pilot simulation has no camera or recording and has not exercised lease expiry, restart recovery, independent stop, ARM64 or physical hardware. Gripper target accuracy, camera timing/calibration, E-stop, ARTIFACT, DEVICE and FIELD remain unverified."
+    evidence: "2026-10-01 Pilot OMX Gazebo: joint1/gripper goals reached ROS SUCCEEDED with joint readback; manual cancel reached ROS CANCELED. Direct pinned vendor action callback test passed (1); a Jazzy in-process ROS ActionServer timeout fault test passed (2 total ROS runtime tests), proving timeout HOLD, cancel ACK/terminal CANCELED, and no owner replay. OMX action/store/PICK_PLACE host regression passed 37, skipped 1. Evidence and limits: docs/validation/model-tool-ros-sim-2026-10-01/README.md. These runs did not exercise Fleet grant handoff, vendor-Gazebo generation/restart races, or four-phase pick/place with object/contact evidence."
+    blocker: "Full gate still requires a Fleet Mission admission/grant-to-device-owner simulator harness, a pending vendor goal fenced by generation change, restart recovery to UNKNOWN/HOLD without replay, and four-phase execution with fresh state and independent simulated object/gripper evidence. Simulator has no camera/contact evidence and does not prove independent stop, ARM64, or physical hardware."
   ARTIFACT:
     state: HOLD
-    blocker: "A local workstation image ID exists, but no immutable published artifact digest or dependency inventory exists; source lock is not an artifact"
+    evidence: "Simulation-only immutable evidence manifest and detached SHA-256 record local Pilot/base image IDs, vendor source lock, tool catalog SHA-256, direct Python pins, disabled ER 2/provider credentials, no approved egress data classes, and retention boundaries: docs/validation/model-tool-artifact-2026-10-01/. Manifest is unsigned/local and the OS/transitive dependency inventory is partial."
+    blocker: "No signed/published production artifact digest, complete SBOM, or provider deployment/secret-injection configuration is available. Simulation manifest does not qualify as a releasable runtime artifact."
   DEVICE:
     state: PARKED
     blocker: "No OMX-AI, leader/follower OpenRB, or workcell camera is connected for physical acceptance"
@@ -30,4 +31,5 @@ plans:
   - docs/plans/2026-09-29-er2-semantic-actions-mission-implementation.md
   - docs/plans/2026-09-30-omx-pick-place-local-execution.md
   - docs/plans/2026-10-01-pilot-omx-gazebo-practice.md
+  - docs/plans/2026-10-01-model-tool-contract-implementation.md
 ---

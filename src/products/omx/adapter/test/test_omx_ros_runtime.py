@@ -10,7 +10,7 @@ import pytest
 rclpy = pytest.importorskip("rclpy", reason="requires the ROS 2 Jazzy runtime")
 
 from control_msgs.action import FollowJointTrajectory  # noqa: E402
-from rclpy.action import ActionServer  # noqa: E402
+from rclpy.action import ActionServer, CancelResponse  # noqa: E402
 from rclpy.executors import MultiThreadedExecutor  # noqa: E402
 from rclpy.node import Node  # noqa: E402
 from sensor_msgs.msg import JointState  # noqa: E402
@@ -160,6 +160,131 @@ def test_runtime_subscribes_to_feedback_and_submits_through_one_ros_action_clien
             "GOAL_ACCEPTED", "RUNNING_FEEDBACK", "TERMINAL_RESULT",
         ]
     finally:
+        executor.shutdown(timeout_sec=2.0)
+        spinning.result(timeout=3.0)
+        runtime.destroy()
+        action_server.destroy()
+        for node in (server_node, feedback_node, owner_node):
+            node.destroy_node()
+        rclpy.shutdown()
+
+
+def test_runtime_timeout_latches_hold_and_late_cancel_result_does_not_reopen_owner():
+    rclpy.init()
+    server_node = Node("omx_test_timeout_server")
+    feedback_node = Node("omx_test_timeout_feedback")
+    owner_node = Node("omx_test_timeout_owner")
+    server_goal_received = threading.Event()
+    server_cancelled = threading.Event()
+    goal_events = []
+
+    def execute(goal_handle):
+        server_goal_received.set()
+        # Keep the accepted ROS goal alive past the local owner's deadline.
+        time.sleep(1.2)
+        if goal_handle.is_cancel_requested:
+            server_cancelled.set()
+            goal_handle.canceled()
+        else:
+            goal_handle.succeed()
+        result = FollowJointTrajectory.Result()
+        result.error_code = FollowJointTrajectory.Result.SUCCESSFUL
+        return result
+
+    action_name = "/test/omx/timeout/arm_controller/follow_joint_trajectory"
+    action_server = ActionServer(
+        server_node, FollowJointTrajectory, action_name,
+        execute_callback=execute,
+        cancel_callback=lambda _goal_handle: CancelResponse.ACCEPT,
+    )
+    feedback_topic = "/test/omx/timeout/joint_states"
+    feedback_publisher = feedback_node.create_publisher(JointState, feedback_topic, 1)
+    config = ArmCommandConfig(
+        enabled=True,
+        workcell_id="test_workcell",
+        instance_id="test_instance",
+        joint_names=("joint1",),
+        position_limits={"joint1": (-1.0, 1.0)},
+        allowed_owners=("moveit",),
+        calibration_revision="cal-test",
+        max_joint_state_age_s=0.5,
+        max_goal_duration_s=0.6,
+        action_timeout_s=0.8,
+    )
+    runtime = RosArmCommandRuntime(
+        owner_node, config,
+        joint_state_topic=feedback_topic,
+        trajectory_action=action_name,
+        poll_period_s=0.01,
+        on_goal_event=goal_events.append,
+    )
+    executor = MultiThreadedExecutor(num_threads=4)
+    for node in (server_node, feedback_node, owner_node):
+        executor.add_node(node)
+    spinner = ThreadPoolExecutor(max_workers=1)
+    spinning = spinner.submit(executor.spin)
+    publisher_stop = threading.Event()
+
+    def publish_fresh_state():
+        while not publisher_stop.is_set():
+            message = JointState()
+            message.name = ["joint1"]
+            message.position = [0.0]
+            feedback_publisher.publish(message)
+            publisher_stop.wait(0.03)
+
+    publisher = threading.Thread(target=publish_fresh_state, daemon=True)
+    publisher.start()
+    try:
+        deadline = time.monotonic() + 5.0
+        while time.monotonic() < deadline:
+            if runtime.action_port.server_is_ready() and runtime.latest_joint_state is not None:
+                break
+            time.sleep(0.01)
+        assert runtime.action_port.server_is_ready()
+        assert runtime.latest_joint_state is not None
+        state = runtime.latest_joint_state
+        command = TrajectoryCommand(
+            workcell_id=config.workcell_id,
+            instance_id=config.instance_id,
+            command_id="timeout-command",
+            session_id=runtime.owner.session_id,
+            owner="moveit",
+            positions={"joint1": 0.1},
+            duration_s=0.6,
+            source_state_sequence=state.sequence,
+            calibration_revision=config.calibration_revision,
+        )
+        assert runtime.submit(command).accepted
+        assert server_goal_received.wait(5.0)
+
+        deadline = time.monotonic() + 3.0
+        while time.monotonic() < deadline and runtime.owner.state != "hold":
+            time.sleep(0.01)
+        assert runtime.owner.state == "hold"
+        assert runtime.owner.poll().reason == "action_timeout"
+        assert runtime.last_terminal_decision.reason == "action_timeout"
+        assert runtime.submit(command).reason == "hold_latched"
+
+        deadline = time.monotonic() + 5.0
+        while time.monotonic() < deadline and not server_cancelled.is_set():
+            time.sleep(0.01)
+        assert server_cancelled.is_set()
+        handle = runtime.action_port.last_handle
+        assert handle is not None
+        deadline = time.monotonic() + 3.0
+        while time.monotonic() < deadline and handle.status is None:
+            time.sleep(0.01)
+        assert handle.done()
+        assert handle.cancel_acknowledged is True
+        assert handle.status == 5  # ROS action CANCELED; not physical standstill evidence.
+        assert runtime.owner.state == "hold"
+        assert runtime.owner.poll().reason == "action_timeout"
+        assert runtime.submit(command).reason == "hold_latched"
+        assert [event.kind for event in goal_events].count("TERMINAL_RESULT") == 1
+    finally:
+        publisher_stop.set()
+        publisher.join(timeout=1.0)
         executor.shutdown(timeout_sec=2.0)
         spinning.result(timeout=3.0)
         runtime.destroy()
