@@ -7,7 +7,7 @@ import pytest
 from core.safety_params import SafetyParams, resolve_safety_params
 
 BASE = dict(lidar_forward_deg=181.5, lidar_source="calibration record r1 sha256 abc",
-            caps=(0.2, 0.8, 0.15, 0.6, 0.2, 0.8))
+            caps=((0.2, 0.8), (0.15, 0.6), (0.2, 0.8)))
 
 
 def test_lidar_and_envelope_come_from_core_values():
@@ -16,7 +16,11 @@ def test_lidar_and_envelope_come_from_core_values():
     assert params.parameters["lidar_yaw_offset"] == pytest.approx(math.radians(181.5))
     assert params.parameters["safety_max_linear"] == 0.2
     assert params.parameters["safety_max_angular"] == 0.8
-    assert params.sources["lidar_yaw_offset"] == "line_follow: calibration record r1 sha256 abc"
+    assert params.sources["lidar_yaw_offset"] == (
+        "unused while lidar_use_tf (TF = URDF nominal); "
+        "line_follow uses: calibration record r1 sha256 abc")
+    assert params.sources["lidar_use_tf"] == "worker default"
+    assert params.sources["cliff_enable"] == "worker default"
     assert params.sources["safety_max_linear"] == "core speed caps"
     assert params.sources["imu_roll0"] == "worker default"
 
@@ -35,6 +39,15 @@ def test_overlay_wins_and_is_recorded():
     ({"safety_max_angular": 0.5}, "below the CORE speed cap"),
     ({"lidar_yaw_offset": 3.3}, "line_follow"),
     ({"safety_max_linear": True}, "finite number"),
+    ({"safety_max_linear": 1.5}, r"must be in \(0, 1.0\]"),
+    ({"safety_max_angular": 3.5}, r"must be in \(0, 3.0\]"),
+    ({"imu_roll0": True}, "finite number"),
+    ({"cmd_linear_sign": float("nan")}, "finite number"),
+    ({"cliff_raw_max": 800.0}, "must be an int"),
+    ({"cliff_clear_raw": True}, "must be an int"),
+    ({"cliff_mode": "medium"}, "must be one of"),
+    ({"cliff_enable": 1}, "must be a bool"),
+    ({"lidar_use_tf": "no"}, "must be a bool"),
     ({"safety_max_angular": float("nan")}, "finite number"),
     ({"safety_max_linear": float("inf")}, "finite number"),
 ])
@@ -43,15 +56,17 @@ def test_overlay_refusals(overlay, message):
         resolve_safety_params(**BASE, overlay=overlay)
 
 
-@pytest.mark.parametrize("caps", [(), (0.2, 0.8, 0.15), (0.2,)])
-def test_caps_must_be_non_empty_pairs(caps):
+@pytest.mark.parametrize("caps", [
+    (), ((0.2,),), ((0.2, 0.8, 0.1),), ([0.2, 0.8],), ((0.2, float("nan")),),
+    ((float("inf"), 0.8),), ((True, 0.8),)])
+def test_caps_must_be_finite_pairs(caps):
     with pytest.raises(ValueError, match="caps"):
         resolve_safety_params(**{**BASE, "caps": caps}, overlay={})
 
 
-@pytest.mark.parametrize("caps", [(0.2, float("nan")), (float("inf"), 0.8), (True, 0.8)])
-def test_caps_must_be_finite_numbers(caps):
-    with pytest.raises(ValueError, match="caps"):
+@pytest.mark.parametrize("caps", [((1.5, 0.8),), ((0.2, 3.5),), ((0.0, 0.8),)])
+def test_caps_outside_worker_bounds_are_refused(caps):
+    with pytest.raises(ValueError, match="CORE speed cap"):
         resolve_safety_params(**{**BASE, "caps": caps}, overlay={})
 
 
@@ -84,3 +99,34 @@ def test_revision_is_deterministic_and_tracks_values():
     assert a.revision == b.revision
     assert a.revision != c.revision
     assert len(a.revision) == 16
+
+
+def test_overlay_types_are_coerced_for_the_worker():
+    params = resolve_safety_params(**BASE, overlay={
+        "imu_roll0": 1, "safety_max_linear": 1, "cliff_raw_max": 700, "cliff_mode": "high"})
+
+    assert type(params.parameters["imu_roll0"]) is float
+    assert type(params.parameters["safety_max_linear"]) is float
+    assert params.parameters["cliff_raw_max"] == 700
+    assert params.parameters["cliff_mode"] == "high"
+
+
+def test_lidar_offset_source_when_tf_is_off():
+    params = resolve_safety_params(**BASE, overlay={"lidar_use_tf": False})
+
+    assert params.parameters["lidar_use_tf"] is False
+    assert params.sources["lidar_yaw_offset"] == "line_follow: calibration record r1 sha256 abc"
+    assert params.sources["lidar_use_tf"] == "operator overlay"
+
+
+@pytest.mark.parametrize("source", ["", None, 3])
+def test_lidar_source_must_be_non_empty_str(source):
+    with pytest.raises(ValueError, match="lidar_source"):
+        resolve_safety_params(**{**BASE, "lidar_source": source}, overlay={})
+
+
+def test_revision_ignores_source_text():
+    a = resolve_safety_params(**BASE, overlay={})
+    b = resolve_safety_params(**{**BASE, "lidar_source": "hand value"}, overlay={})
+
+    assert a.revision == b.revision
