@@ -15,6 +15,7 @@ import os
 import shutil
 import subprocess
 import threading
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -81,7 +82,13 @@ def _ps(script: Path, args: list[str], env: dict) -> subprocess.CompletedProcess
     return subprocess.run(command, capture_output=True, text=True, timeout=90, env=env)
 
 
+NO_SSH = "rosy-no-such-ssh-for-test"
+
+
 def _guard(port: int, env: dict, *extra: str) -> subprocess.CompletedProcess:
+    # Tests that are not about ssh must never start the real one.
+    if "-SshExe" not in extra:
+        extra = (*extra, "-SshExe", NO_SSH)
     return _ps(GUARD, ["-Robot", "127.0.0.1", "-ApiPort", str(port), "-Action", "the test", *extra], env)
 
 
@@ -198,11 +205,22 @@ def test_skill_prefers_environment_or_dpapi_over_a_command_line_token():
 # guard used to look only for <ip>.credential.xml and silently skipped the
 # check. It now asks the robot its hostname over the push's own strict ssh.
 
-FAKE_SSH = r"""
-Add-Content -Path $env:ROSY_FAKE_LOG -Value ($args -join ' ')
-if ($env:ROSY_FAKE_HOSTNAME) { $env:ROSY_FAKE_HOSTNAME -split '\|' }
-exit [int]$env:ROSY_FAKE_EXIT
-"""
+# A native fake: the guard starts ssh as a process (it has to bound its
+# wall-clock time), so a .cmd that logs its raw command line exercises the
+# real Windows argument quoting. It answers the `hostname` call from a file
+# and the HostKeyAlias check with its own exit code.
+FAKE_SSH = "\r\n".join([
+    "@echo off",
+    '>>"%ROSY_FAKE_LOG%" echo(%*',
+    'echo(%* | findstr /c:"HostKeyAlias=" >nul',
+    "if not errorlevel 1 exit /b %ROSY_FAKE_ALIAS_EXIT%",
+    "if defined ROSY_FAKE_SLEEP ping -n %ROSY_FAKE_SLEEP% 127.0.0.1 >nul",
+    'if exist "%ROSY_FAKE_ANSWER%" type "%ROSY_FAKE_ANSWER%"',
+    "exit /b %ROSY_FAKE_EXIT%",
+    "",
+])
+HOST = "rosy-pinky-9dfk"
+HOST_KEY = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFakeHostKeyForGuardTests0000000000000000000"
 
 
 def _store_credential(tmp_path: Path, name: str, token: str = TOKEN) -> Path:
@@ -216,42 +234,102 @@ def _store_credential(tmp_path: Path, name: str, token: str = TOKEN) -> Path:
     return path
 
 
-def _fake_ssh(tmp_path: Path, env: dict, hostname: str = "", exit_code: int = 0) -> tuple[Path, Path]:
-    fake = tmp_path / "fake-ssh.ps1"
-    fake.write_text(FAKE_SSH, encoding="ascii")
+def _known_hosts(tmp_path: Path, *names: str) -> Path:
+    path = tmp_path / "Rosy" / "known_hosts"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("".join(f"{name} {HOST_KEY}\n" for name in names), encoding="ascii")
+    return path
+
+
+def _fake_ssh(tmp_path: Path, env: dict, hostname: str = "", exit_code: int = 0,
+              alias_exit: int = 0, sleep: int = 0) -> tuple[Path, Path]:
+    fake = tmp_path / "fake-ssh.cmd"
+    fake.write_bytes(FAKE_SSH.encode("ascii"))
     log = tmp_path / "ssh.log"
+    answer = tmp_path / "answer.txt"
+    if hostname:
+        answer.write_text(hostname.replace("|", "\n") + "\n", encoding="ascii")
     env["ROSY_FAKE_LOG"] = str(log)
-    env["ROSY_FAKE_HOSTNAME"] = hostname
+    env["ROSY_FAKE_ANSWER"] = str(answer)
     env["ROSY_FAKE_EXIT"] = str(exit_code)
+    env["ROSY_FAKE_ALIAS_EXIT"] = str(alias_exit)
+    if sleep:
+        env["ROSY_FAKE_SLEEP"] = str(sleep)
     return fake, log
 
 
-def test_ip_resolves_to_the_hostname_credential_over_strict_ssh(fake_core, tmp_path):
-    _store_credential(tmp_path, "rosy-pinky-9dfk")
+def _calls(log: Path) -> list[str]:
+    return [line.strip() for line in log.read_text(encoding="ascii").splitlines()] if log.exists() else []
+
+
+def _resolvable(tmp_path: Path, **fake) -> tuple[dict, Path, Path]:
+    """A robot at 127.0.0.1 named rosy-pinky-9dfk, its credential and host key stored."""
+    _store_credential(tmp_path, HOST)
+    _known_hosts(tmp_path, "127.0.0.1", HOST + ".local")
     env = _env(tmp_path)
-    fake, log = _fake_ssh(tmp_path, env, "rosy-pinky-9dfk")
+    fake, log = _fake_ssh(tmp_path, env, fake.pop("hostname", HOST), **fake)
+    return env, fake, log
+
+
+def test_ip_resolves_to_the_hostname_credential_over_strict_ssh(fake_core, tmp_path):
+    env, fake, log = _resolvable(tmp_path)
     done = _guard(fake_core["port"], env, "-SshExe", str(fake))
     out = done.stdout + done.stderr
     assert done.returncode == 0, out
     assert fake_core["auth"] == [f"Bearer {TOKEN}"], out
     assert "no active calibration session" in done.stdout and "SKIPPED" not in out
-    call = log.read_text(encoding="utf-8").strip()
-    assert call.endswith("rosy@127.0.0.1 hostname"), call
-    for option in ("BatchMode=yes", "StrictHostKeyChecking=yes", "ConnectTimeout=",
-                   "UserKnownHostsFile=" + str(tmp_path / "Rosy" / "known_hosts"),
-                   "-i " + str(tmp_path / "Rosy" / "ssh" / "rosy-operator-ed25519")):
-        assert option in call, call
-    assert '"' not in call
+    calls = _calls(log)
+    assert len(calls) == 2, calls
+    lookup, alias = calls
+    assert lookup.endswith("rosy@127.0.0.1 hostname"), lookup
+    assert alias.endswith("rosy@127.0.0.1 true"), alias
+    for call in calls:
+        for option in ("-n ", "BatchMode=yes", "StrictHostKeyChecking=yes", "ConnectTimeout=5",
+                       "ServerAliveInterval=2", "ServerAliveCountMax=2",
+                       "UserKnownHostsFile=" + str(tmp_path / "Rosy" / "known_hosts"),
+                       "-i " + str(tmp_path / "Rosy" / "ssh" / "rosy-operator-ed25519")):
+            assert option in call, call
+        assert '"' not in call  # no argument here needs quoting
+    assert "HostKeyAlias" not in lookup
+    # The real entry is rosy-pinky-9dfk.local: the alias is the stored entry
+    # derived from the claimed name, never the IP.
+    assert f"HostKeyAlias={HOST}.local" in alias
 
 
 def test_hostname_credential_still_refuses_an_active_session(fake_core, tmp_path):
     fake_core["reply"] = ACTIVE
-    _store_credential(tmp_path, "rosy-pinky-9dfk")
-    env = _env(tmp_path)
-    fake, _ = _fake_ssh(tmp_path, env, "rosy-pinky-9dfk")
+    env, fake, _ = _resolvable(tmp_path)
     done = _guard(fake_core["port"], env, "-SshExe", str(fake))
     assert done.returncode == 3, done.stdout + done.stderr
     assert fake_core["auth"] == [f"Bearer {TOKEN}"]
+
+
+def test_a_claimed_hostname_without_its_host_key_gets_no_token(fake_core, tmp_path):
+    # A compromised rosy account can print another robot's name; only that
+    # robot's host key can pass the HostKeyAlias check.
+    env, fake, log = _resolvable(tmp_path, alias_exit=255)
+    done = _guard(fake_core["port"], env, "-SshExe", str(fake))
+    out = done.stdout + done.stderr
+    flat = "".join(out.split())
+    assert done.returncode == 0, out
+    assert fake_core["auth"] == [], out
+    assert "CALIBRATION CHECK SKIPPED" in out
+    assert f"HostKeyAlias={HOST}.local" in _calls(log)[-1]
+    assert f"hostkeyof127.0.0.1doesnotmatchtheknown_hostsentryfor{HOST}.local" in flat.lower(), out
+
+
+def test_a_claimed_hostname_missing_from_known_hosts_gets_no_token(fake_core, tmp_path):
+    _store_credential(tmp_path, HOST)
+    _known_hosts(tmp_path, "127.0.0.1", "rosy-pinky-8kcn.local")
+    env = _env(tmp_path)
+    fake, log = _fake_ssh(tmp_path, env, HOST)
+    done = _guard(fake_core["port"], env, "-SshExe", str(fake))
+    out = done.stdout + done.stderr
+    flat = "".join(out.split())
+    assert done.returncode == 0, out
+    assert fake_core["auth"] == [], out
+    assert len(_calls(log)) == 1, "no alias check without a known_hosts entry to check against"
+    assert f"known_hostshasnoentryfor{HOST}" in flat, out
 
 
 @pytest.mark.parametrize("answer", [
@@ -264,29 +342,44 @@ def test_hostname_credential_still_refuses_an_active_session(fake_core, tmp_path
 def test_a_bad_hostname_answer_is_not_used(fake_core, tmp_path, answer):
     for name in ("rosy-pinky-9dfk", "rosy-pinky-9dfk.local", "pinky-9dfk", "rosy-other"):
         _store_credential(tmp_path, name)
+    # Every answer has a matching known_hosts entry, so only the answer check
+    # (not the host-key alias lookup) can stop it.
+    _known_hosts(tmp_path, "127.0.0.1", "rosy-pinky-9dfk", "ROSY-PINKY-9DFK", "rosy-pinky-9dfk.local",
+                 "pinky-9dfk", "rosy-other", "rosy-pinky-9dfk;x")
     env = _env(tmp_path)
-    fake, _ = _fake_ssh(tmp_path, env, answer)
+    fake, log = _fake_ssh(tmp_path, env, answer)
     done = _guard(fake_core["port"], env, "-SshExe", str(fake))
     out = done.stdout + done.stderr
     assert done.returncode == 0, out
     assert fake_core["auth"] == [], out
     assert "CALIBRATION CHECK SKIPPED" in out
+    assert len(_calls(log)) == 1, "a rejected answer must not reach the alias check"
 
 
 def test_a_failed_ssh_answer_is_not_used(fake_core, tmp_path):
-    _store_credential(tmp_path, "rosy-pinky-9dfk")
-    env = _env(tmp_path)
-    fake, _ = _fake_ssh(tmp_path, env, "rosy-pinky-9dfk", exit_code=255)
+    env, fake, _ = _resolvable(tmp_path, exit_code=255)
     done = _guard(fake_core["port"], env, "-SshExe", str(fake))
     out = done.stdout + done.stderr
     assert done.returncode == 0, out
     assert fake_core["auth"] == [], out
-    assert "CALIBRATION CHECK SKIPPED" in out
+    assert "CALIBRATION CHECK SKIPPED" in out and "ssh exited 255" in out
+
+
+def test_a_hanging_ssh_is_killed_at_the_wall_clock_limit(fake_core, tmp_path):
+    env, fake, _ = _resolvable(tmp_path, sleep=60)
+    started = time.monotonic()
+    done = _guard(fake_core["port"], env, "-SshExe", str(fake), "-TimeoutSec", "1")
+    elapsed = time.monotonic() - started
+    out = done.stdout + done.stderr
+    assert done.returncode == 0, out
+    assert fake_core["auth"] == [], out
+    assert "CALIBRATION CHECK SKIPPED" in out and "timed out" in out
+    assert elapsed < 30, f"the guard waited {elapsed:.0f}s for a hanging ssh"
 
 
 def test_no_ssh_skips_and_names_the_files_it_looked_for(fake_core, tmp_path):
-    _store_credential(tmp_path, "rosy-pinky-9dfk")   # another robot's file: never tried
-    done = _guard(fake_core["port"], _env(tmp_path), "-SshExe", "rosy-no-such-ssh-for-test")
+    _store_credential(tmp_path, HOST)   # another robot's file: never tried
+    done = _guard(fake_core["port"], _env(tmp_path), "-SshExe", NO_SSH)
     out = done.stdout + done.stderr
     flat = "".join(out.split())  # warnings wrap at the console width
     assert done.returncode == 0, out
@@ -294,36 +387,94 @@ def test_no_ssh_skips_and_names_the_files_it_looked_for(fake_core, tmp_path):
     assert "CALIBRATION CHECK SKIPPED" in out
     assert "127.0.0.1.credential.xml" in flat
     assert "hostname" in out.lower()
-    assert "rosy-pinky-9dfk.credential.xml" not in flat
+    assert f"{HOST}.credential.xml" not in flat
 
 
 def test_ip_named_credential_wins_without_any_ssh_call(fake_core, tmp_path):
     _store_credential(tmp_path, "127.0.0.1")
-    _store_credential(tmp_path, "rosy-pinky-9dfk", token="other-robot-token-0002")
+    _store_credential(tmp_path, HOST, token="other-robot-token-0002")
+    _known_hosts(tmp_path, "127.0.0.1", HOST + ".local")
     env = _env(tmp_path)
-    fake, log = _fake_ssh(tmp_path, env, "rosy-pinky-9dfk")
+    fake, log = _fake_ssh(tmp_path, env, HOST)
     done = _guard(fake_core["port"], env, "-SshExe", str(fake))
     assert done.returncode == 0, done.stdout + done.stderr
     assert fake_core["auth"] == [f"Bearer {TOKEN}"]
     assert not log.exists(), "ssh was called although the IP-named credential exists"
 
 
+def test_an_explicit_credential_path_switches_the_lookup_off(fake_core, tmp_path):
+    env, fake, log = _resolvable(tmp_path)
+    missing = tmp_path / "elsewhere.credential.xml"
+    done = _guard(fake_core["port"], env, "-SshExe", str(fake), "-CredentialPath", str(missing))
+    out = done.stdout + done.stderr
+    assert done.returncode == 0, out
+    assert fake_core["auth"] == [] and not log.exists(), out
+    assert "elsewhere.credential.xml" in "".join(out.split())
+
+
+def test_an_odd_rosy_user_is_refused_before_ssh(fake_core, tmp_path):
+    env, fake, log = _resolvable(tmp_path)
+    done = _guard(fake_core["port"], env, "-SshExe", str(fake), "-RosyUser", "Rosy;x")
+    out = done.stdout + done.stderr
+    assert done.returncode == 0, out
+    assert fake_core["auth"] == [] and not log.exists(), out
+    assert "RosyUser" in out
+
+
+def test_a_known_hosts_path_with_whitespace_is_refused_before_ssh(fake_core, tmp_path):
+    env, fake, log = _resolvable(tmp_path)
+    spaced = tmp_path / "known hosts"
+    spaced.write_text(f"{HOST}.local {HOST_KEY}\n", encoding="ascii")
+    done = _guard(fake_core["port"], env, "-SshExe", str(fake), "-KnownHosts", str(spaced))
+    out = done.stdout + done.stderr
+    assert done.returncode == 0, out
+    assert fake_core["auth"] == [] and not log.exists(), out
+    assert "whitespace" in out
+
+
+def test_connect_timeout_follows_timeout_sec(fake_core, tmp_path):
+    env, fake, log = _resolvable(tmp_path)
+    done = _guard(fake_core["port"], env, "-SshExe", str(fake), "-TimeoutSec", "3")
+    assert done.returncode == 0, done.stdout + done.stderr
+    calls = _calls(log)
+    assert calls and all("ConnectTimeout=3 " in call for call in calls), calls
+
+
+def test_a_key_path_with_a_space_reaches_native_ssh_as_one_argument(fake_core, tmp_path):
+    env, fake, log = _resolvable(tmp_path)
+    key = tmp_path / "operator key"
+    done = _guard(fake_core["port"], env, "-SshExe", str(fake), "-KeyPath", str(key))
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert fake_core["auth"] == [f"Bearer {TOKEN}"]
+    # The raw command line: quoted once, exactly as a Windows native exe parses it.
+    assert all(f'-i "{key}" ' in call for call in _calls(log)), _calls(log)
+
+
 def test_release_push_passes_its_ssh_settings_to_the_guard(fake_core, tmp_path):
     fake_core["reply"] = ACTIVE
-    _store_credential(tmp_path, "rosy-pinky-9dfk")
+    _store_credential(tmp_path, HOST)
+    known = _known_hosts(tmp_path, "127.0.0.1", HOST + ".local")
+    custom_known = tmp_path / "custom_known_hosts"
+    custom_known.write_bytes(known.read_bytes())
     env = _env(tmp_path)
-    fake, log = _fake_ssh(tmp_path, env, "rosy-pinky-9dfk")
+    fake, log = _fake_ssh(tmp_path, env, HOST)
     key = tmp_path / "custom-key"
-    known = tmp_path / "custom_known_hosts"
     done = _ps(PUSH, ["-Robot", "127.0.0.1", "-Rollback", "-ApiPort", str(fake_core["port"]),
                       "-SshExe", str(fake), "-ScpExe", str(fake), "-KeyPath", str(key),
-                      "-KnownHosts", str(known), "-RosyUser", "rosyop"], env)
+                      "-KnownHosts", str(custom_known), "-RosyUser", "rosyop"], env)
     out = done.stdout + done.stderr
     assert done.returncode != 0, out
     assert "calibration session is active" in out
-    calls = log.read_text(encoding="utf-8").splitlines()
-    assert len(calls) == 1 and calls[0].endswith("rosyop@127.0.0.1 hostname"), calls
-    assert "-i " + str(key) in calls[0] and "UserKnownHostsFile=" + str(known) in calls[0]
+    calls = _calls(log)
+    assert len(calls) == 2 and calls[0].endswith("rosyop@127.0.0.1 hostname"), calls
+    for call in calls:
+        assert "-i " + str(key) in call and "UserKnownHostsFile=" + str(custom_known) in call
+
+
+def test_dev_overlay_sync_passes_its_user_to_the_guard():
+    text = SYNC.read_text(encoding="utf-8")
+    call = text[text.index("rosy-calibration-guard.ps1"):text.index("if ($LASTEXITCODE -eq 3)")]
+    assert "-RosyUser $PiUser" in call
 
 
 def test_server_error_is_reported_as_failed_not_rejected(fake_core, tmp_path):

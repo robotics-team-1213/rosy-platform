@@ -53,50 +53,153 @@ function Read-StoredToken([string]$Path) {
     }
 }
 
-# Ask the robot its hostname with the release push's ssh settings: key auth
-# only (BatchMode), known host keys only, short connect timeout. Returns the
-# hostname, or "" with $script:hostnameNote saying why not.
+# --- device hostname lookup ---------------------------------------------------
+# Every ssh here uses the release push's settings: key auth only (BatchMode),
+# known host keys only, no stdin (-n), a connect timeout, keepalives that drop
+# a dead session, and a wall-clock limit after which the process tree is
+# killed, so this soft guard can never hang a push. ssh is started as a
+# process (not with &) because only that can be bounded; the command line is
+# built here, so an argument may hold whitespace but never a double quote.
 $script:hostnameNote = ""
+$script:sshPath = ""
+$sshWallClockMs = ($TimeoutSec + 5) * 1000
+
+function Format-NativeArgument([string]$Value) {
+    if ($Value -notmatch '\s') { return $Value }
+    return '"' + $Value + '"'
+}
+
+function Invoke-BoundedSsh([string[]]$Arguments) {
+    $info = New-Object System.Diagnostics.ProcessStartInfo
+    $info.FileName = $script:sshPath
+    $info.Arguments = ($Arguments | ForEach-Object { Format-NativeArgument $_ }) -join " "
+    $info.UseShellExecute = $false
+    $info.CreateNoWindow = $true
+    $info.RedirectStandardInput = $true
+    $info.RedirectStandardOutput = $true
+    $info.RedirectStandardError = $true
+    $process = [System.Diagnostics.Process]::Start($info)
+    try {
+        $process.StandardInput.Close()
+        $stdout = $process.StandardOutput.ReadToEndAsync()
+        [void]$process.StandardError.ReadToEndAsync()
+        if (-not $process.WaitForExit($sshWallClockMs)) {
+            # Kill the whole tree: a wrapper (.cmd) would otherwise leave its
+            # child holding the output pipes.
+            $previous = $ErrorActionPreference
+            try {
+                $ErrorActionPreference = "Continue"
+                & taskkill.exe /T /F /PID $process.Id *> $null
+            } finally {
+                $ErrorActionPreference = $previous
+            }
+            try { if (-not $process.HasExited) { $process.Kill() } } catch { }
+            return @{ timed_out = $true; exit_code = $null; lines = @() }
+        }
+        $process.WaitForExit()
+        $text = ""
+        if ($stdout.Wait(2000)) { $text = $stdout.Result }
+        $lines = @($text -split "`r?`n" | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+        return @{ timed_out = $false; exit_code = $process.ExitCode; lines = $lines }
+    } finally {
+        $process.Dispose()
+    }
+}
+
+function Get-SshArguments([string]$RemoteCommand, [string]$HostKeyAlias = "") {
+    $arguments = @("-n", "-i", $KeyPath, "-o", "UserKnownHostsFile=$KnownHosts",
+                   "-o", "StrictHostKeyChecking=yes", "-o", "BatchMode=yes",
+                   "-o", "ConnectTimeout=$TimeoutSec", "-o", "ServerAliveInterval=2",
+                   "-o", "ServerAliveCountMax=2")
+    if ($HostKeyAlias) { $arguments += @("-o", "HostKeyAlias=$HostKeyAlias") }
+    return $arguments + @("${RosyUser}@${Robot}", $RemoteCommand)
+}
+
+# Ask the robot its hostname. Returns it, or "" with $script:hostnameNote
+# saying why not.
 function Resolve-DeviceHostname {
-    if ($RosyUser -notmatch '^[a-z_][a-z0-9_-]*$') {
+    if ($RosyUser -cnotmatch '^[a-z_][a-z0-9_-]*\z') {
         $script:hostnameNote = "RosyUser '$RosyUser' is not a plain user name"
         return ""
     }
-    # ssh splits an unquoted -o value on whitespace, and PowerShell 5.1 mangles
-    # embedded double quotes on the way to a native exe: refuse such a path.
+    # ssh splits an unquoted -o value on whitespace: refuse such a path.
     if ($KnownHosts -match '[\s"]') {
         $script:hostnameNote = "known_hosts path '$KnownHosts' contains whitespace or quotes"
         return ""
     }
-    if (-not (Get-Command $SshExe -ErrorAction SilentlyContinue)) {
-        $script:hostnameNote = "ssh executable '$SshExe' not found"
+    if ($KeyPath -match '"') {
+        $script:hostnameNote = "key path '$KeyPath' contains a double quote"
         return ""
     }
-    $sshArgs = @("-i", $KeyPath, "-o", "UserKnownHostsFile=$KnownHosts", "-o", "StrictHostKeyChecking=yes",
-                 "-o", "BatchMode=yes", "-o", "ConnectTimeout=$TimeoutSec", "${RosyUser}@${Robot}", "hostname")
-    $previous = $ErrorActionPreference
+    $command = Get-Command $SshExe -CommandType Application -ErrorAction SilentlyContinue |
+        Select-Object -First 1
+    if (-not $command) {
+        $script:hostnameNote = "native ssh executable '$SshExe' not found"
+        return ""
+    }
+    $script:sshPath = $command.Path
     try {
-        $ErrorActionPreference = "Continue"
-        $global:LASTEXITCODE = 0
-        $lines = @(& $SshExe @sshArgs 2>$null | ForEach-Object { ([string]$_).Trim() } | Where-Object { $_ })
-        $code = $LASTEXITCODE
+        $reply = Invoke-BoundedSsh (Get-SshArguments "hostname")
     } catch {
         $script:hostnameNote = "ssh failed: $($_.Exception.Message)"
         return ""
-    } finally {
-        $ErrorActionPreference = $previous
     }
-    if ($code -ne 0) {
-        $script:hostnameNote = "ssh exited $code"
+    if ($reply.timed_out) {
+        $script:hostnameNote = "ssh timed out after $($sshWallClockMs / 1000)s and was killed"
+        return ""
+    }
+    if ($reply.exit_code -ne 0) {
+        $script:hostnameNote = "ssh exited $($reply.exit_code)"
         return ""
     }
     # Case-sensitive and anchored: Windows file names are case-insensitive, so
     # only an exact lowercase device name may pick a credential file.
+    $lines = @($reply.lines)
     if ($lines.Count -ne 1 -or $lines[0] -cnotmatch '^rosy-[a-z0-9-]+\z') {
         $script:hostnameNote = "the robot's hostname answer is not a ROSY device name"
         return ""
     }
     return $lines[0]
+}
+
+# The hostname answer comes from the robot's rosy account; a compromised one
+# could name another robot to receive its token. Accept the name only when
+# this address also proves that robot's host key: an ssh with HostKeyAlias
+# set to the known_hosts entry for the name. Entries carry a suffix in
+# practice (rosy-pinky-9dfk.local), so the alias is the first plain entry of
+# <name>, <name>.local, <name>.lan. Hashed entries are not matched (skip).
+function Test-DeviceHostKey([string]$DeviceHost) {
+    $names = @()
+    if (Test-Path -LiteralPath $KnownHosts) {
+        foreach ($line in [IO.File]::ReadAllLines($KnownHosts)) {
+            $fields = $line.Trim() -split '\s+'
+            if ($fields.Count -lt 3 -or $fields[0].StartsWith("#") -or $fields[0].StartsWith("@")) { continue }
+            $names += @($fields[0] -split ',')
+        }
+    }
+    $alias = $null
+    foreach ($candidate in @($DeviceHost, "$DeviceHost.local", "$DeviceHost.lan")) {
+        if ($names -ccontains $candidate) { $alias = $candidate; break }
+    }
+    if (-not $alias) {
+        $script:hostnameNote = ("known_hosts has no entry for $DeviceHost, $DeviceHost.local or " +
+                                "$DeviceHost.lan to prove the claimed hostname")
+        return $false
+    }
+    try {
+        $reply = Invoke-BoundedSsh (Get-SshArguments "true" $alias)
+    } catch {
+        $script:hostnameNote = "host key check for ${alias} failed: $($_.Exception.Message)"
+        return $false
+    }
+    if ($reply.timed_out -or $reply.exit_code -ne 0) {
+        $result = "timed out"
+        if (-not $reply.timed_out) { $result = "ssh exited $($reply.exit_code)" }
+        $script:hostnameNote = ("host key of $Robot does not match the known_hosts entry for " +
+                                "$alias ($result); the claimed hostname $DeviceHost is not trusted")
+        return $false
+    }
+    return $true
 }
 
 $token = $ApiToken
@@ -118,7 +221,11 @@ if (-not $token) {
         if ($deviceHost -and $deviceHost -ne $Robot) {
             $byHostname = Join-Path $env:LOCALAPPDATA ("Rosy\api\{0}.credential.xml" -f $deviceHost)
             $lookedFor.Add($byHostname)
-            $token = Read-StoredToken $byHostname
+            if (-not (Test-Path -LiteralPath $byHostname)) {
+                $script:hostnameNote = "the robot answered $deviceHost, which has no stored credential"
+            } elseif (Test-DeviceHostKey $deviceHost) {
+                $token = Read-StoredToken $byHostname
+            }
         }
     }
 }

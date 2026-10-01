@@ -82,9 +82,16 @@ Verified twice on 2026-09-26: releases 013 and 014 on a Pinky Pro running image 
      (`<robot>` exactly as passed to `-Robot`). `rotate-core-api-credential.ps1` names the file
      after the device hostname (`rosy-pinky-9dfk.credential.xml`), so for an IP the guard
      runs `ssh <user>@<ip> hostname` with the push's own `-SshExe`/`-KeyPath`/`-KnownHosts`
-     (`BatchMode=yes`, `StrictHostKeyChecking=yes`) and uses `<hostname>.credential.xml`
-     only when the answer is exactly one line matching `^rosy-[a-z0-9-]+$`. It never tries
-     another robot's file against this address. HTTP 401/403 means the token is wrong, not that CORE is down. An active session **refuses** the push (`REFUSED ... would
+     (`-n`, `BatchMode=yes`, `StrictHostKeyChecking=yes`, `ConnectTimeout=<TimeoutSec>`,
+     keepalives, and a wall-clock limit of `TimeoutSec + 5` s per call, after which ssh is
+     killed). The answer must be exactly one line matching `^rosy-[a-z0-9-]+$`. That name
+     is then proven by the device's host key: a second ssh with `HostKeyAlias=` set to the
+     first known_hosts entry of `<name>`, `<name>.local` or `<name>.lan` (plain entries
+     only) must succeed before `<hostname>.credential.xml` is used. It never tries
+     another robot's file against this address. Residual risk: this trusts known_hosts.
+     Robots that share a host key (a cloned image whose keys were never regenerated)
+     cannot be told apart, and a robot whose name has no plain known_hosts entry is
+     skipped (warned), not checked. HTTP 401/403 means the token is wrong, not that CORE is down. An active session **refuses** the push (`REFUSED ... would
      interrupt a running calibration`) — wait for it, ask its owner to end it, or pass
      `-Force` only when you know the calibration is abandoned. No token or no answer only
      warns: `CALIBRATION CHECK SKIPPED` lists the credential files it looked for and why
