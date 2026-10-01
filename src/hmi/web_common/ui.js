@@ -4,12 +4,13 @@
 const KINDS = ["primary", "quiet", "irreversible", "segment", "toggle"];
 const BUTTON_SIZES = ["secondary", "primary", "irreversible"];
 const KIND_SIZES = { primary: "primary", irreversible: "irreversible" };
+let reasonSerial = 0;
 
 class UiButton extends HTMLElement {
   static formAssociated = true;
 
   static get observedAttributes() {
-    return ["disabled", "kind", "size"];
+    return ["disabled", "kind", "size", "reason"];
   }
 
   constructor() {
@@ -70,6 +71,17 @@ class UiButton extends HTMLElement {
     this.setAttribute("type", value || "button");
   }
 
+  /** D-359 §5.3 — 왜 누를 수 없는지. 빈 값은 속성을 지운다. title은 사유가 아니다
+   *  (터치에서 보이지 않는다). */
+  get reason() {
+    return this.getAttribute("reason") || "";
+  }
+
+  set reason(value) {
+    if (value) this.setAttribute("reason", String(value));
+    else this.removeAttribute("reason");
+  }
+
   _sync() {
     const kind = this.getAttribute("kind");
     const size = this.getAttribute("size") || KIND_SIZES[kind] || "secondary";
@@ -79,6 +91,46 @@ class UiButton extends HTMLElement {
     const off = this.disabled;
     this.tabIndex = off ? -1 : 0;
     this.setAttribute("aria-disabled", off ? "true" : "false");
+    this._syncReason();
+  }
+
+  // 사유는 버튼 안의 <small data-reason>이다(toggle·irreversible의 small 세부와 같은
+  // 자리). 이름에서 빠지도록 aria-hidden이고, aria-describedby가 설명으로 읽는다.
+  // 화면이 textContent로 글자를 갈아도 사유가 따라 붙도록 자식 목록을 지켜본다.
+  _syncReason() {
+    const text = (this.getAttribute("reason") || "").trim();
+    const node = this._reasonNode;
+    if (!text) {
+      this._reasonWatch?.disconnect();
+      if (node) {
+        node.remove();
+        this._describe(node.id, false);
+      }
+      return;
+    }
+    if (!node) {
+      this._reasonNode = document.createElement("small");
+      this._reasonNode.dataset.reason = "";
+      this._reasonNode.id = `ui-reason-${++reasonSerial}`;
+      this._reasonNode.setAttribute("aria-hidden", "true");
+    }
+    const reason = this._reasonNode;
+    if (reason.textContent !== text) reason.textContent = text;
+    if (reason.parentNode !== this) this.append(reason);
+    this._describe(reason.id, true);
+    if (!this._reasonWatch) {
+      this._reasonWatch = new MutationObserver(() => {
+        if (this.getAttribute("reason") && reason.parentNode !== this) this.append(reason);
+      });
+    }
+    this._reasonWatch.observe(this, { childList: true });
+  }
+
+  _describe(id, on) {
+    const ids = (this.getAttribute("aria-describedby") || "").split(/\s+/).filter((item) => item && item !== id);
+    if (on) ids.push(id);
+    if (ids.length) this.setAttribute("aria-describedby", ids.join(" "));
+    else this.removeAttribute("aria-describedby");
   }
 }
 
@@ -256,3 +308,261 @@ for (const [name, ctor] of [
 ]) {
   if (!customElements.get(name)) customElements.define(name, ctor);
 }
+
+// D-371 — 목록 행의 되돌릴 수 없는 행동은 조용한 `삭제…`로 시작해 여기로 온다.
+// 대화상자가 대상을 이름으로 묻고(D-218 어휘), 위험 채움은 실행 버튼 하나뿐이다.
+// 취소·Esc는 false, 실행은 true. 닫히면 포커스는 누른 행 버튼으로 돌아간다. 목록은
+// 대화상자가 열린 동안 폴링으로 다시 그려질 수 있어 opener는 함수로도 받는다
+// (닫힐 때 불러 지금 화면에 있는 그 행의 버튼을 찾는다).
+export function confirmIrreversible({ message, action, opener = document.activeElement }) {
+  const dialog = document.createElement("dialog");
+  dialog.className = "ui-confirm";
+  const text = document.createElement("p");
+  text.id = `ui-confirm-${++reasonSerial}`;
+  text.textContent = message;
+  dialog.setAttribute("aria-labelledby", text.id);
+  const actions = document.createElement("ui-actions");
+  const cancel = document.createElement("ui-button");
+  cancel.setAttribute("kind", "quiet");
+  cancel.textContent = "취소";
+  cancel.addEventListener("click", () => dialog.close("cancel"));
+  const run = document.createElement("ui-button");
+  run.setAttribute("kind", "irreversible");
+  run.textContent = action;
+  run.addEventListener("click", () => dialog.close("confirm"));
+  actions.append(cancel, run);
+  dialog.append(text, actions);
+  return new Promise((resolve) => {
+    openLiveDialog(dialog, { initialFocus: cancel, opener, onClose: (value) => resolve(value === "confirm") });
+  });
+}
+
+// 모든 대화상자는 비모달이다(2026-09-30 US-010 측정: showModal()은 문서 전체를 inert로
+// 만들어 비상 정지까지 막았다 — D-280 원칙 2 위반). 그래서 모달은 여기서 흉내 낸다:
+// * `[data-always-live]`(각 표면 마크업이 정지 컨트롤에 단다)와 대화상자만 살리고
+//   나머지 가지에 inert를 건다. 폴링이 새로 붙인 노드도 MutationObserver가 다시 건다.
+// * 스크림(`--scrim`)은 정지 컨트롤 자리에 구멍을 낸다(clip-path) — 보이고 눌린다.
+// * Esc는 취소, Tab은 대화상자 안의 컨트롤 → 보이는 정지 컨트롤을 돈다. 정지에는
+//   단축키가 없으므로 새로 만들지 않고 포커스 순환에 넣었다.
+// * 정지를 누르면 정지는 제 할 일을 하고 대화상자는 취소("cancel")로 닫힌다.
+// * 마크업에 있던 대화상자는 열린 동안 body 끝으로 옮겨(조상의 쌓임 맥락을 벗어남)
+//   닫히면 제자리로 돌아간다. 만들어 넘긴 대화상자는 닫히면 지운다.
+// aria-modal은 달지 않는다: 달면 보조기기가 살아 있는 정지를 못 찾는다(inert가 나머지를 숨긴다).
+// 닫기는 dialog.close(value)로 한다. onClose(returnValue, { byStop })가 정리 뒤에 불린다.
+const ALWAYS_LIVE = "[data-always-live]";
+const DIALOG_FOCUSABLE = "input:not([type=hidden]), select, textarea, button, ui-button, a[href], [tabindex]:not([tabindex='-1'])";
+
+export function openLiveDialog(dialog, { initialFocus = null, opener = document.activeElement, onClose } = {}) {
+  dialog.classList.add("ui-live-dialog");
+  const home = dialog.isConnected ? { parent: dialog.parentNode, next: dialog.nextSibling } : null;
+  const scrim = document.createElement("div");
+  scrim.className = "ui-confirm-scrim";
+  scrim.setAttribute("aria-hidden", "true");
+
+  const inerted = new Set();
+  let byStop = false;
+  const liveNodes = () => [...document.querySelectorAll(ALWAYS_LIVE)];
+  const shown = (node) => node.getClientRects().length > 0 && !node.disabled;
+  // 살릴 노드(정지·대화상자)의 조상 사슬만 타고 내려가며 곁가지를 inert로 만든다.
+  const seal = () => {
+    const keep = [...liveNodes(), dialog];
+    const walk = (parent) => {
+      for (const child of parent.children) {
+        const holds = keep.some((node) => child === node || child.contains(node));
+        if (holds && inerted.has(child)) { child.inert = false; inerted.delete(child); }
+        if (holds) { if (!keep.includes(child)) walk(child); continue; }
+        if (child === scrim || child.inert) continue;
+        child.inert = true;
+        inerted.add(child);
+      }
+    };
+    walk(document.body);
+  };
+  // 스크림은 화면 전체를 덮되, 보이는 정지 컨트롤 상자마다 evenodd 구멍을 낸다.
+  const punch = () => {
+    const holes = liveNodes().filter((node) => node.getClientRects().length > 0).map((node) => {
+      const r = node.getBoundingClientRect();
+      return `0 0, ${r.left}px ${r.top}px, ${r.right}px ${r.top}px, ${r.right}px ${r.bottom}px, ${r.left}px ${r.bottom}px, ${r.left}px ${r.top}px`;
+    });
+    scrim.style.clipPath = holes.length
+      ? `polygon(evenodd, 0 0, 100% 0, 100% 100%, 0 100%, ${holes.join(", ")}, 0 0)`
+      : "";
+  };
+  const observer = new MutationObserver(() => { seal(); punch(); });
+  const onKey = (event) => {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      dialog.close("cancel");
+      return;
+    }
+    if (event.key !== "Tab") return;
+    const ring = [...dialog.querySelectorAll(DIALOG_FOCUSABLE)].filter(shown).concat(liveNodes().filter(shown));
+    if (!ring.length) return;
+    const at = ring.findIndex((node) => node === document.activeElement || node.contains(document.activeElement));
+    event.preventDefault();
+    const step = event.shiftKey ? -1 : 1;
+    ring[at < 0 ? 0 : (at + step + ring.length) % ring.length].focus();
+  };
+  // 캡처 단계에서 표시만 하고 막지 않는다 — 정지 자신의 click 처리기는 그대로 돈다.
+  const onClick = (event) => {
+    if (!event.target.closest?.(ALWAYS_LIVE)) return;
+    byStop = true;
+    dialog.close("cancel");
+  };
+
+  dialog.addEventListener("close", () => {
+    observer.disconnect();
+    document.removeEventListener("keydown", onKey, true);
+    document.removeEventListener("click", onClick, true);
+    removeEventListener("resize", punch);
+    removeEventListener("scroll", punch, true);
+    for (const node of inerted) node.inert = false;
+    inerted.clear();
+    scrim.remove();
+    if (home?.parent.isConnected) home.parent.insertBefore(dialog, home.next?.parentNode === home.parent ? home.next : null);
+    else dialog.remove();
+    if (!byStop) {
+      const back = typeof opener === "function" ? opener() : opener;
+      if (back?.isConnected && typeof back.focus === "function") back.focus();
+    }
+    onClose?.(dialog.returnValue, { byStop });
+  }, { once: true });
+  document.body.append(scrim, dialog);
+  seal();
+  punch();
+  observer.observe(document.body, { childList: true, subtree: true });
+  document.addEventListener("keydown", onKey, true);
+  document.addEventListener("click", onClick, true);
+  addEventListener("resize", punch);
+  addEventListener("scroll", punch, { capture: true, passive: true });
+  dialog.returnValue = "";
+  dialog.show();
+  (initialFocus || [...dialog.querySelectorAll(DIALOG_FOCUSABLE)].find(shown))?.focus();
+}
+
+// D-359 §4 — 캔버스 색·글꼴. 캔버스는 CSS 변수를 못 쓰므로 여기서 한 번 풀어
+// 캐시한다. 토큰은 hex·oklch·color-mix 무엇이든 될 수 있어서 글자로 파싱하지
+// 않는다: 숨은 탐침 요소의 계산된 color(Chromium은 color-mix를 `color(srgb …)`나
+// `oklab(…)`으로 준다)를 1×1 캔버스에 칠해 sRGB 바이트로 되읽는다.
+// 테마가 바뀌면(`rosy:theme`) 캐시를 비운다 — 다시 그리는 일은 각 캔버스가 한다.
+// 캔버스 파일은 `window.RosyPalette`로 부른다(camera-capture.js는 Node에서도
+// import되므로 이 모듈을 정적으로 끌어올 수 없다, D-75 번들러 없음).
+const colourCache = new Map();
+const fontCache = new Map();
+let colourProbe = null;
+let colourRaster = null;
+
+function probeElement() {
+  if (!colourProbe || !colourProbe.isConnected) {
+    colourProbe = document.createElement("span");
+    colourProbe.hidden = true;
+    colourProbe.setAttribute("aria-hidden", "true");
+    colourProbe.dataset.rosyColourProbe = "";
+    document.documentElement.append(colourProbe);
+  }
+  return colourProbe;
+}
+
+function rasterContext() {
+  if (!colourRaster) {
+    const canvas = document.createElement("canvas");
+    canvas.width = 1;
+    canvas.height = 1;
+    colourRaster = canvas.getContext("2d", { willReadFrequently: true });
+  }
+  return colourRaster;
+}
+
+/** `--token` 또는 CSS 색 → [r, g, b, a] (r·g·b 0–255, a 0–1). 못 풀면 투명. */
+export function readColour(name) {
+  if (colourCache.has(name)) return colourCache.get(name);
+  const isToken = name.startsWith("--");
+  let rgba = [0, 0, 0, 0];
+  const declared = isToken
+    ? getComputedStyle(document.documentElement).getPropertyValue(name).trim()
+    : name;
+  if (declared) {
+    const probe = probeElement();
+    probe.style.color = "";
+    probe.style.color = isToken ? `var(${name})` : name;
+    const resolved = getComputedStyle(probe).color;
+    const ctx = rasterContext();
+    ctx.clearRect(0, 0, 1, 1);
+    ctx.fillStyle = resolved;
+    ctx.fillRect(0, 0, 1, 1);
+    const [r, g, b, a] = ctx.getImageData(0, 0, 1, 1).data;
+    rgba = [r, g, b, Math.round((a / 255) * 1000) / 1000];
+  }
+  colourCache.set(name, rgba);
+  return rgba;
+}
+
+/** 이름 배열이나 {키: 이름} 표를 받아 같은 키의 [r, g, b, a] 표를 준다. */
+export function readPalette(names) {
+  const entries = Array.isArray(names) ? names.map((name) => [name, name]) : Object.entries(names);
+  const palette = {};
+  for (const [key, name] of entries) palette[key] = readColour(name);
+  return palette;
+}
+
+/** 캔버스 fillStyle/strokeStyle 용 `rgba(…)` 글자. */
+export function cssColor(name) {
+  const [r, g, b, a] = readColour(name);
+  return `rgba(${r}, ${g}, ${b}, ${a})`;
+}
+
+/** `--body`·`--mono` 글꼴로 된 캔버스 font. 글자는 12px 아래로 내려가지 않는다. */
+export function canvasFont(size, family = "body") {
+  if (!fontCache.has(family)) {
+    const stack = getComputedStyle(document.documentElement).getPropertyValue(`--${family}`).trim();
+    fontCache.set(family, stack || (family === "mono" ? "monospace" : "sans-serif"));
+  }
+  return `${Math.max(12, Math.round(Number(size) || 12))}px ${fontCache.get(family)}`;
+}
+
+export function clearPalette() {
+  colourCache.clear();
+  fontCache.clear();
+}
+
+document.addEventListener("rosy:theme", clearPalette);
+window.RosyPalette = { readColour, readPalette, cssColor, canvasFont, clear: clearPalette };
+
+// D-359 US-008 — 자간 토큰은 라틴 대문자 라벨용이다. 한글은 음절 하나가 이미 한
+// 글자 칸이라 0.06–0.12em을 더하면 "점유  지도"처럼 띄어 읽힌다. 페이지가 모두
+// lang="ko"라 :lang()으로는 가를 수 없고 글자는 실행 중에 바뀐다. 그래서 자기
+// 글자(직계 텍스트 노드)에 한글이 있는 요소에 `data-hangul`을 달고,
+// components.css가 그 요소의 자간 토큰과 letter-spacing을 0으로 둔다.
+// 섞인 글("COLUMN 종대")도 0이다 — 한 요소 안에서 글자별 자간은 CSS로 못 준다.
+const HANGUL = /[ᄀ-ᇿ㄰-㆏가-힯]/;
+
+function markHangul(element) {
+  if (!(element instanceof Element)) return;
+  let hangul = false;
+  for (const node of element.childNodes) {
+    if (node.nodeType === Node.TEXT_NODE && HANGUL.test(node.data)) {
+      hangul = true;
+      break;
+    }
+  }
+  if (element.hasAttribute("data-hangul") !== hangul) element.toggleAttribute("data-hangul", hangul);
+}
+
+function markHangulTree(root) {
+  if (!(root instanceof Element)) return;
+  markHangul(root);
+  for (const element of root.querySelectorAll("*")) markHangul(element);
+}
+
+const hangulObserver = new MutationObserver((records) => {
+  for (const record of records) {
+    if (record.type === "characterData") {
+      markHangul(record.target.parentElement);
+      continue;
+    }
+    markHangul(record.target);
+    for (const node of record.addedNodes) markHangulTree(node);
+  }
+});
+hangulObserver.observe(document.documentElement, { childList: true, characterData: true, subtree: true });
+markHangulTree(document.documentElement);

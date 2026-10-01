@@ -28,7 +28,10 @@ stamp (when the image was captured) and the bag log time (when the recorder got 
                       MOTION_WINDOW_S before the frame's log time and the current cmd_vel
 Which side message a frame gets (two classes, agreed with the D-356/D-373 owner):
   stamped evidence (STAMPED_TOPICS) is published after inference on a given image, so it
-    attaches to the frame whose header stamp equals the payload stamp within STAMP_TOL_NS,
+    attaches to the frame whose header stamp equals the payload stamp within STAMP_TOL_NS
+    (1 us: the payload stamp is float seconds, ~240 ns resolution at epoch; real CAMERA_LINE
+    stamps match within 256 ns while IR_LINE stamps fall 0.05-0.78 ms away), only from the
+    source named in STAMPED_SOURCES (line/observation: CAMERA_LINE, the one extract.py keeps),
     and only when it is logged after that frame's capture (header stamp) and at most
     EVIDENCE_WINDOW_S after the frame's log time. The lower bound is the capture, not the
     frame's log time: on 8kcn 45 of 2258 observations reach the recorder 37-61 us before
@@ -59,7 +62,9 @@ SCAN_TOPIC = "scan"
 PIX_FMT = "yuv420p"
 # Evidence stamped with its source image's header stamp (see the module docstring).
 STAMPED_TOPICS = ("line/observation", SHADOW_TOPIC)
-STAMP_TOL_NS = 1_000_000         # payload stamp vs frame header stamp
+STAMP_TOL_NS = 1_000             # payload stamp vs frame header stamp
+# Only this payload "source" is a frame's stamped evidence (IR_LINE shares the topic).
+STAMPED_SOURCES = {"line/observation": "CAMERA_LINE"}
 EVIDENCE_WINDOW_S = 0.5          # evidence log time may trail its frame's by this much
 # Chosen by the D-356 codec study (2026-09-30 addendum): H.265 for archive, H.264 when a
 # player or decoder without HEVC must read it. accurate_rnd halves the BGR->YUV rounding
@@ -219,10 +224,13 @@ def payload_stamp_ns(value):
     return int(round(stamp * 1e9))
 
 
-def stamped_index(times, series):
-    """Sorted [(payload stamp ns, log ns, value)] of the messages that carry a stamp."""
+def stamped_index(times, series, source=None):
+    """Sorted [(payload stamp ns, log ns, value)] of the messages that carry a stamp
+    (and, when given, the payload "source")."""
     out = []
     for log_ns, value in zip(times, series):
+        if source is not None and not (isinstance(value, dict) and value.get("source") == source):
+            continue
         ps = payload_stamp_ns(value)
         if ps is not None:
             out.append((ps, log_ns, value))
@@ -250,7 +258,7 @@ def sidecar_rows(frames, side, max_gap_s: float, scans=None):
     stamped = {}
     for name in STAMPED_TOPICS:
         if name in side:
-            index = stamped_index(*side[name])
+            index = stamped_index(*side[name], source=STAMPED_SOURCES.get(name))
             stamped[name] = (index, [e[0] for e in index])
     for i, f in enumerate(frames):
         values, dts = {}, {}

@@ -45,17 +45,26 @@ import io.github.livsbittt.rosy.cam.settings.PairingUri
 import io.github.livsbittt.rosy.cam.settings.OverheadServerDiscovery
 import io.github.livsbittt.rosy.cam.settings.OverheadServiceRecord
 import io.github.livsbittt.rosy.cam.settings.RobotCoreServiceRecord
+import io.github.livsbittt.rosy.cam.settings.SiteLink
 
 /** Manual pairing entry, validated with the same rules as the rosyov:// deep link. */
 @Composable
 fun SettingsScreen(
-    current: PairingUri?,
+    currentLink: SiteLink?,
     locked: Boolean,
     lens: LensChoice,
     onLens: (LensChoice) -> Unit,
-    onSave: (PairingUri) -> Unit,
+    /**
+     * The pairing; when it came from the mDNS list, that service's name (`site_name`); and whether it is a fresh
+     * pairing (a link applied or a receiver picked) rather than an edit of the saved one. Only a fresh pairing
+     * records the Wi-Fi subnet for diagnosis (review m6).
+     */
+    onSave: (PairingUri, String?, Boolean) -> Unit,
     onBack: () -> Unit,
 ) {
+    val current = remember(currentLink) { currentLink?.toPairing() }
+    var siteName by remember(currentLink) { mutableStateOf(currentLink?.siteName) }
+    var freshPairing by remember(currentLink) { mutableStateOf(false) }
     var link by remember { mutableStateOf("") }
     var host by remember(current) { mutableStateOf(current?.host ?: "") }
     var port by remember(current) { mutableStateOf(current?.port?.toString() ?: "") }
@@ -73,7 +82,7 @@ fun SettingsScreen(
     var wifiConnected by remember { mutableStateOf(false) }
     var scanGeneration by remember { mutableStateOf(0) }
     val context = LocalContext.current
-    val discovery = remember(context, scanGeneration) {
+    val discovery = remember(context, scanGeneration, locked) {
         OverheadServerDiscovery(context) { overhead, robots, active, onWifi ->
             overheadServices = overhead
             robotServices = robots
@@ -81,7 +90,9 @@ fun SettingsScreen(
             wifiConnected = onWifi
         }
     }
-    LaunchedEffect(discovery) { discovery.start() }
+    // No scan while the camera runs: the stream's own re-discovery needs the one NSD resolve slot on
+    // Android < 14, and settings are read-only then anyway (review m8).
+    LaunchedEffect(discovery) { if (!locked) discovery.start() }
     var backCameras by remember { mutableStateOf<List<LensCandidate>?>(null) }
     LaunchedEffect(Unit) {
         backCameras = try {
@@ -109,6 +120,7 @@ fun SettingsScreen(
         LensSection(lens, backCameras, running = locked, onLens = onLens)
         Text(stringResource(R.string.settings_mdns_intro), style = MaterialTheme.typography.bodyMedium)
         OutlinedButton(
+            enabled = !locked,
             onClick = {
                 discovery.stop()
                 overheadServices = emptyList()
@@ -127,7 +139,9 @@ fun SettingsScreen(
             )
         }
         if (scanning) Text(stringResource(R.string.settings_mdns_scanning))
-        if (!wifiConnected) {
+        if (locked) {
+            Text(stringResource(R.string.settings_mdns_paused), style = MaterialTheme.typography.bodySmall)
+        } else if (!wifiConnected) {
             Text(stringResource(R.string.settings_mdns_wifi_required), color = RosyColors.StatusWarn)
         } else {
             Text(stringResource(R.string.settings_mdns_overhead_heading), style = MaterialTheme.typography.titleSmall)
@@ -142,6 +156,8 @@ fun SettingsScreen(
                             host = service.tlsHost
                             port = service.port.toString()
                             secure = true
+                            siteName = service.name
+                            freshPairing = true
                             invalid = null
                             saved = false
                         },
@@ -178,6 +194,7 @@ fun SettingsScreen(
             onClick = {
                 when (val parsed = PairingUri.parse(link)) {
                     is PairingUri.Parsed.Valid -> {
+                        if (parsed.pairing.host != host) siteName = null
                         host = parsed.pairing.host
                         port = parsed.pairing.port.toString()
                         token = parsed.pairing.token
@@ -185,6 +202,7 @@ fun SettingsScreen(
                         secure = parsed.pairing.secure
                         pin = parsed.pairing.pin
                         pinDropped = false
+                        freshPairing = true
                         invalid = null
                     }
                     is PairingUri.Parsed.Invalid -> invalid = parsed.reason
@@ -196,7 +214,15 @@ fun SettingsScreen(
             Text(stringResource(R.string.settings_link_apply))
         }
 
-        Field(host, { host = it; saved = false }, R.string.settings_host, invalid == "host")
+        Field(host, { host = it; siteName = null; saved = false }, R.string.settings_host, invalid == "host")
+        // D-391 1: the saved IP is only the labelled fallback; the name is looked up through mDNS on each connect.
+        currentLink?.manualHost?.let { manual ->
+            Text(
+                stringResource(if (currentLink.tlsHost == null) R.string.settings_manual_only else R.string.settings_manual_host, manual),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
         Field(port, { port = it; saved = false }, R.string.settings_port, invalid == "port", KeyboardType.Number)
         OutlinedTextField(
             value = token,
@@ -247,7 +273,7 @@ fun SettingsScreen(
                     val reason = PairingUri.validate(trimmedHost, portNumber, token, source.trim(), secure, pin)
                     invalid = reason
                     if (reason == null) {
-                        onSave(PairingUri(trimmedHost, portNumber, token, source.trim(), secure, pin))
+                        onSave(PairingUri(trimmedHost, portNumber, token, source.trim(), secure, pin), siteName, freshPairing)
                         saved = true
                     }
                 },

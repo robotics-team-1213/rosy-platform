@@ -266,8 +266,11 @@ def test_field_view_review_fixes_are_served():
     # The unconfigured notice hides the empty-map card only in the no-site-map state.
     assert '.map-stage[data-site-map="none"][data-map-state="unavailable"]' in styles
     assert ".map-stage:has(> .field-mismatch:not([hidden])) > .map-empty" not in styles
-    # Tablet header: three rows between 40rem and 70rem.
-    assert "@media (min-width: 40.0625rem) and (max-width: 70rem)" in styles
+    # Tablet header (D-359 §6.4 supersedes the 40–70rem three-row grid): below the
+    # registered 90rem breakpoint the token, role and theme fold behind the 설정 toggle,
+    # so the token input never covers the wordmark and the stop keeps its own column.
+    assert "@media (width < 90rem)" in styles and '"brand pill clock more estop"' in styles
+    assert 'id="topbar-more"' in page and 'id="topbar-extra"' in page
     assert 'id="map-layer-hint"' in page and 'id="field-storage-state"' in page
 
 

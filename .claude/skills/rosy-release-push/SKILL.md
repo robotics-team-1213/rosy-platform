@@ -64,11 +64,19 @@ Verified twice on 2026-09-26: releases 013 and 014 on a Pinky Pro running image 
    - **Automatic rollback:** a CORE that fails its 45 s readiness check is rolled back by
      `activate-release.sh`.
    - **Manual rollback:** `-Rollback`.
+   - **Calibration guard (D-321 addendum):** before the first remote step the script asks
+     CORE `GET /api/v1/calibration/session`. Give it a token through `ROSY_API_TOKEN` or the
+     DPAPI device credential (`%LOCALAPPDATA%\Rosy\api\<robot>.credential.xml`); use
+     `-ApiToken` only as a last resort, because a command-line token lands in shell history
+     and the process list. HTTP 401/403 means the token is wrong, not that CORE is down. An active session **refuses** the push (`REFUSED ... would
+     interrupt a running calibration`) — wait for it, ask its owner to end it, or pass
+     `-Force` only when you know the calibration is abandoned. No token or no answer only
+     warns. `-PrintCommands` skips the check.
 6. **Image-layer sync (automatic, D-388).** After `CORE readiness: PASS` the push runs
    `/opt/rosy/releases/<id>/deploy/robot/native/sync-image-layer.py` twice under `sudo -n`.
    `--dry-run` prints the JSON plan (`changed`, `new`, `unchanged`, `skipped`), then the
    apply runs.
-   - The apply backs up every replaced file to `/var/lib/rosy/image-layer-backup/<UTC>-<id>/`
+   - The apply backs up every replaced file to `/var/lib/rosy/image-layer-backup/<serial>-<UTC>-<id>/`
      with a `backup-manifest.json`, and installs atomically. It then runs `daemon-reload` and
      `udevadm control --reload`, and enables new units the image enables (`.path`/`.timer`
      with `--now`).
@@ -99,6 +107,9 @@ Verified twice on 2026-09-26: releases 013 and 014 on a Pinky Pro running image 
    - Scripts go to `/opt/rosy/native-runtime/`, units to `/etc/systemd/system/`.
    - Then run `systemctl daemon-reload`, `udevadm control --reload`, and enable any new
      `.path` or `.service` units.
+   - Any `systemctl restart` of `rosy-core`/`rosy-runtime.target` ends a calibration drive:
+     run `deploy/robot/pinky_pro/rosy-calibration-guard.ps1 -Robot <robot-ip>` first
+     (exit 3 = a session is active).
    - Reload a module whose options changed (`modprobe -r` then `modprobe`).
    - To undo an automatic sync, copy the files back from its backup directory and run the
      same reloads.

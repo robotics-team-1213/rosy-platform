@@ -11,7 +11,9 @@ import {
   percent,
   rate,
   setEnabled,
+  setOff,
   setMeter,
+  setTagState,
   setText,
   svgText,
 } from "./dom.js";
@@ -75,7 +77,9 @@ export function updateLineFollowButtons() {
   const emergency = session.robotState?.safety?.estop === true;
   document.querySelectorAll("[data-line-mode]").forEach((button) => {
     const enabling = button.dataset.lineMode !== "OFF";
-    button.disabled = lineFollow.pending || (enabling && (!navigationAvailable || emergency));
+    // 요청 중(lineFollow.pending)은 짧은 잠금이라 사유 없이 끈다.
+    setOff(button, lineFollow.pending || (enabling && (!navigationAvailable || emergency)),
+      !enabling || lineFollow.pending ? "" : emergency ? "비상정지 중" : "내비게이션을 쓸 수 없음");
   });
 }
 
@@ -89,7 +93,7 @@ export function renderLineFollow(status = {}) {
   setText("line-follow-angular", `${number(status.angular || 0, 3)} rad/s`);
   setText("line-follow-reason", status.reason || "mode_off");
   document.querySelectorAll("[data-line-mode]").forEach((button) => {
-    button.classList.toggle("active", button.dataset.lineMode === mode);
+    button.setAttribute("aria-pressed", String(button.dataset.lineMode === mode));
   });
   updateLineFollowButtons();
 }
@@ -116,10 +120,11 @@ let trafficPolicyPending = false;
 
 function updateTrafficPolicyControls() {
   setEnabled("traffic-policy-stage", !trafficPolicyPending);
-  setEnabled("traffic-policy-apply", !trafficPolicyPending && Boolean(trafficPolicyReadback?.staged));
+  setEnabled("traffic-policy-apply", !trafficPolicyPending && Boolean(trafficPolicyReadback?.staged),
+    trafficPolicyPending ? "" : "저장된 검토본 없음");
   const signalAvailable = trafficPolicyReadback?.simulation_signal?.available === true;
   document.querySelectorAll("[data-simulation-signal]").forEach((button) => {
-    button.disabled = trafficPolicyPending || !signalAvailable;
+    setOff(button, trafficPolicyPending || !signalAvailable, trafficPolicyPending ? "" : "시뮬레이션 신호 없음");
     button.dataset.active = String(
       button.dataset.simulationSignal === trafficPolicyReadback?.simulation_signal?.colour,
     );
@@ -250,12 +255,12 @@ export function renderCapabilityPanels(capabilities) {
   const slamOn = capabilities?.slam === true;
   const slamChip = elements["slam-capability"];
   if (slamChip) {
-    slamChip.dataset.mode = slamOn ? "AVAILABLE" : "HOLD";
+    setTagState(slamChip, "mode", slamOn ? "AVAILABLE" : "HOLD");
     slamChip.textContent = slamOn ? "AVAILABLE" : "HOLD";
   }
-  setEnabled("slam-start", slamOn);
-  setEnabled("slam-stop", slamOn);
-  setEnabled("slam-save", slamOn);
+  setEnabled("slam-start", slamOn, "SLAM을 쓸 수 없음");
+  setEnabled("slam-stop", slamOn, "SLAM을 쓸 수 없음");
+  setEnabled("slam-save", slamOn, "SLAM을 쓸 수 없음");
 }
 
 export function renderInventory(inventory) {

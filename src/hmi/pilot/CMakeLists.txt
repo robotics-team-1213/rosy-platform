@@ -11,6 +11,7 @@ install(FILES
   app.js
   client.js
   autonomy.js
+  calibration.js
   input-state.js
   vision.js
   manifest.webmanifest
