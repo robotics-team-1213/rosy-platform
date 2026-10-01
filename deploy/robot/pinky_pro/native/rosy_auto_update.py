@@ -77,7 +77,13 @@ REPO = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 RELEASE_ID = re.compile(r"^[0-9]{4}\.[0-9]{2}\.[0-9]{2}-[0-9]{3}$")
 TAG = re.compile(r"^payload-([0-9]{4}\.[0-9]{2}\.[0-9]{2}-[0-9]{3})$")
 PHASES = ("idle", "staged", "waiting", "held", "ineligible", "applying", "committed",
-          "rolled_back", "failed", "disabled", "error")
+          "rolled_back", "failed", "disabled", "error", "stuck")
+# Re-review N3: the only native_release errors that say "this release can never work here".
+DEFINITIVE = re.compile(
+    r"^(NATIVE_MANIFEST_[A-Z_]+|NATIVE_TARGET_MISMATCH|NATIVE_PYTHON_RUNTIME"
+    r"|SIGNATURE_(INVALID|MISSING|MALFORMED)|CHECKSUM_[A-Z_]+):"
+    r"|candidate failed health check")
+PRECHECK_REFUSED = "NATIVE_PRECHECK_REFUSED"
 
 # Device paths, relative to the root (tests pass a temporary one).
 UPDATES = "var/lib/rosy/updates"
@@ -134,6 +140,12 @@ BACKOFF_MAX_S = 6 * 3600
 # Review M5: per-release staging errors back off; three definitive ones fail the id.
 STAGE_BACKOFF_BASE_S = 600
 STAGE_MAX_DEFINITIVE = 3
+# Re-review N7, N12, N5, N6.
+APPLY_MAX_TRANSIENT = 3
+ROLLBACK_MAX_RETRIES = 5
+STUCK_AFTER_S = 30 * 60
+PRUNE_MIN_AGE_S = 3600
+RELEASE_LOCK = "var/lib/rosy/releases/native-release.lock"
 DISK_MARGIN_BYTES = 512 * 1024 * 1024
 HISTORY_MAX_BYTES = 1024 * 1024
 
@@ -157,6 +169,10 @@ class Definitive(UpdateError):
 
 class RunBusy(UpdateError):
     """Another run holds the run lock; this one writes nothing."""
+
+
+class Deferred(UpdateError):
+    """A resume must wait (the robot is not idle); the journal stays as it is."""
 
 
 def _z(moment: _dt.datetime) -> str:
@@ -206,7 +222,9 @@ def _outcome(result: subprocess.CompletedProcess) -> tuple[str, str]:
         return "transient", _tail(result.stderr) or "no JSON result"
     if "NATIVE_RELEASE_BUSY" in error:
         return "busy", error
-    return "definitive", error
+    if error.startswith(PRECHECK_REFUSED):
+        return "refused", error
+    return ("definitive" if DEFINITIVE.search(error) else "transient"), error
 
 
 def _reason_class(reason: str) -> str:
@@ -526,6 +544,10 @@ class Updater:
         path = self.updates / "hold.json"
         existed = path.exists() or path.is_symlink()
         path.unlink(missing_ok=True)
+        state = self._load_state()
+        if state.get("apply_errors"):
+            state["apply_errors"] = {}
+            self._save_state(state)
         self._history("hold_released", None, "hold removed" if existed else "no hold was set")
         return existed
 
@@ -624,6 +646,18 @@ class Updater:
         elif charging is not True and not percent >= BATTERY_MIN:
             problems.append(f"battery {percent!r}% is below {BATTERY_MIN:g}% and not charging")
         return problems
+
+    def precheck(self) -> list[str]:
+        """What native_release runs right before it stops the runtime: hold, seal, one fresh sample."""
+        reasons = []
+        kind, detail = self._hold()
+        if kind in {"active", "invalid"}:
+            reasons.append(detail)
+        reasons += self._sealed(self.host.current_release())
+        claim = rosy_claim.check(self.root, now=self.host.now())
+        if claim is not None and claim.get("holder") != CLAIM_HOLDER:
+            reasons.append(f"claim held by {claim.get('holder')}")
+        return reasons + self._inputs_problems()
 
     def eligibility(self, *, own_claim_ok: bool = False, waive_inputs: bool = False) -> dict:
         """Read-only: may this robot apply now? Two status samples, two different writes."""
@@ -951,24 +985,38 @@ class Updater:
         notes = self._baseline_notes(baseline) + ([state["applying"]["note"]] if state["applying"].get("note") else [])
         try:
             self._journal(state, "core-release-check")
+            self._recheck_waived(state)
             self._core_release_check()
             self._journal(state, "image-layer-sync")
             result = self._sync(str(Path(self.release_path(release_id)) / RELEASE_SYNC))
             self._journal(state, "restart")
+            self._recheck_waived(state)
             self._restart(result)
             self._journal(state, "health")
             self._health(release_id, baseline)
+        except Deferred as exc:
+            return self._finish(state, "ineligible", f"finishing {release_id} deferred: {exc}", release_id)
         except UpdateError as exc:
             return self._roll_back(state, release_id, "; ".join([str(exc), *notes]))
         except Exception as exc:  # noqa: BLE001 - a bug after activation must still roll back
             return self._roll_back(state, release_id, "; ".join([f"UNEXPECTED: {exc!r}", *notes]))
         state["applying"] = None
         state["staged"] = None
+        (state.get("apply_errors") or {}).pop(release_id, None)
         committed = [item for item in state.get("committed") or [] if item != release_id]
         state["committed"] = (committed + [release_id])[-20:]
         self._result(state, release_id, "committed", "; ".join(["healthy for 60 s", *notes]))
         self._prune(state)
         return self._finish(state, "committed", f"{release_id} is healthy", release_id)
+
+    def _recheck_waived(self, state: dict) -> None:
+        """Re-review N4: a waived resume whose CORE is back needs the normal idleness check."""
+        if state["applying"].get("note") != CORE_DOWN_NOTE or self._core_down():
+            return
+        report = self.eligibility(own_claim_ok=True)
+        if not report["eligible"]:
+            raise Deferred("; ".join(report["reasons"]))
+        state["applying"].pop("note", None)
 
     def _rollback_tail(self, release_id: str) -> list[str]:
         """Bring the image layer and CORE back to whatever release is current now."""
@@ -1002,14 +1050,23 @@ class Updater:
         if self.host.current_release() == release_id:
             rolled = self.host.run(["bash", self._native("rollback-release.sh")], ACTIVATE_TIMEOUT_S)
             kind, error = _outcome(rolled)
-            if kind in ("busy", "transient"):
-                self._save_state(state)
-                return self._finish(state, "error", f"ROLLBACK_PENDING: {error}; retrying on the next run",
-                                    release_id)
-            if kind == "definitive":
+            if kind != "ok":
+                self._recover_native()  # re-review N8: a dead rollback may leave the journal too
+            if kind in ("busy", "transient", "refused"):
+                applying["rollback_attempts"] = applying.get("rollback_attempts", 0) + 1
+                if applying["rollback_attempts"] <= ROLLBACK_MAX_RETRIES:  # the first try + 5 retries
+                    self._save_state(state)
+                    return self._finish(state, "error", f"ROLLBACK_PENDING: {error}; retrying on the next run",
+                                        release_id)
+                # Re-review N12: stop retrying and ask a person.
+                problems.append(f"rollback could not run after {ROLLBACK_MAX_RETRIES} retries ({error}); operator "
+                                "action required: rosy-release-push.ps1 -Rollback")
+            elif kind == "definitive":
                 problems.append(f"rollback: {error}")
         if not problems:
             problems = self._rollback_tail(release_id)
+        if not mark_failed and not problems:
+            self._apply_error(state, release_id, why)
         note = applying.get("note")
         state["applying"] = None
         detail = why if not problems else f"{why}; rollback incomplete: {'; '.join(problems)}"
@@ -1025,21 +1082,45 @@ class Updater:
             return
         recovered = self.host.run(["python3", "-B", self._native("native_release.py"), "--root", str(self.root),
                                    "--public-key", self._dev(TRUSTED_KEY), "recover"], ACTIVATE_TIMEOUT_S)
+        kind, error = _outcome(recovered)
+        if kind != "ok":
+            self._history("native_recover_failed", None, error)
+            return
         started = self._systemctl("start", "rosy-runtime.target", timeout=RESTART_TIMEOUT_S)
-        self._history("native_recovered", None,
-                      f"recover exit {recovered.returncode}, runtime start exit {started.returncode}")
+        self._history("native_recovered", None, f"runtime start exit {started.returncode}")
+
+    def _release_claim(self) -> None:
+        try:
+            rosy_claim.release(self.root, CLAIM_HOLDER)
+        except (rosy_claim.ClaimBusy, OSError) as exc:
+            self._history("claim_release_failed", None, str(exc))
+
+    def _apply_error(self, state: dict, release_id: str, message: str) -> None:
+        """Re-review N7: transient apply failures back off like staging errors."""
+        record = state.setdefault("apply_errors", {}).setdefault(release_id, {"attempts": 0})
+        record["attempts"] += 1
+        record["last"] = message
+        delay = min(STAGE_BACKOFF_BASE_S * 2 ** (record["attempts"] - 1), BACKOFF_MAX_S)
+        record["retry_after"] = _z(self.host.now() + _dt.timedelta(seconds=delay))
 
     def _prune(self, state: dict) -> None:
         """Keep current, previous and the staged release; drop every other release directory (review M5)."""
-        keep = {self.host.current_release(), self.host.previous_release(), state.get("staged")} - {None}
-        if not keep:
+        current = self.host.current_release()
+        if current is None:
             return
+        keep = {current, self.host.previous_release(), state.get("staged")} - {None}
         pruned = []
-        for path in sorted((self.root / RELEASES).iterdir()):
-            if path.name in keep or not RELEASE_ID.fullmatch(path.name) or path.is_symlink() or not path.is_dir():
-                continue
-            shutil.rmtree(path, ignore_errors=True)
-            pruned.append(path.name)
+        try:
+            with self._locked_file(self.root / RELEASE_LOCK):
+                cutoff = self.host.now().timestamp() - PRUNE_MIN_AGE_S
+                for path in sorted((self.root / RELEASES).iterdir()):
+                    if (path.name in keep or not RELEASE_ID.fullmatch(path.name) or path.is_symlink()
+                            or not path.is_dir() or path.stat().st_mtime > cutoff):
+                        continue
+                    shutil.rmtree(path, ignore_errors=True)
+                    pruned.append(path.name)
+        except OSError:
+            return  # native_release is busy: prune next time
         if pruned:
             self._history("pruned", None, " ".join(pruned))
 
@@ -1066,14 +1147,21 @@ class Updater:
                 return self._finish(state, "ineligible", f"robot became busy: {'; '.join(busy)}", release_id)
             self._save_state(state)
             self._finish(state, "applying", f"activating {release_id} (from {current})", release_id)
-            activated = self.host.run(["bash", self._native("activate-release.sh"), release_id],
-                                      ACTIVATE_TIMEOUT_S)
+            # Re-review N1: native_release runs our precheck after its verify and right
+            # before it stops the runtime, so hold/seal/idleness are judged at that moment.
+            precheck = f"python3 -B {shlex.quote(self._native('rosy_auto_update.py'))} --root " \
+                       f"{shlex.quote(str(self.root))} precheck"
+            activated = self.host.run(["env", f"ROSY_ACTIVATE_PRECHECK={precheck}", "bash",
+                                       self._native("activate-release.sh"), release_id], ACTIVATE_TIMEOUT_S)
             kind, error = _outcome(activated)
             if kind == "ok":
                 return self._settle(state, release_id)
             if kind == "busy":
                 state["applying"] = None
                 return self._finish(state, "waiting", f"{error}; retrying on the next run", release_id)
+            if kind == "refused":
+                state["applying"] = None
+                return self._finish(state, "ineligible", f"robot became busy: {error}", release_id)
             # Review H3: a dead activation may have left native_release's journal.
             self._recover_native()
             definitive = kind == "definitive"
@@ -1081,17 +1169,27 @@ class Updater:
                 return self._roll_back(state, release_id, f"activation: {error}", mark_failed=definitive)
             state["applying"] = None
             if not definitive:
+                self._apply_error(state, release_id, f"activation: {error}")
                 return self._finish(state, "error", f"ACTIVATION_TRANSIENT: {error}; retrying on the next run",
                                     release_id)
             self._mark_failed(state, release_id, f"activation: {error}")
             self._result(state, release_id, "refused", f"activation: {error}")
             return self._finish(state, "failed", f"activation refused: {error}", release_id)
         finally:
-            rosy_claim.release(self.root, CLAIM_HOLDER)
+            self._release_claim()
 
-    def _core_running(self) -> bool:
-        return (self._systemctl("is-active", "--quiet", "rosy-core.service").returncode == 0
-                and self._main_pid("rosy-core.service") > 0)
+    def _core_down(self) -> bool:
+        """True only when systemd says CORE is stopped (or crash-looping) with no main process.
+
+        Re-review N2: fail closed. A failed call or an unreadable answer means running.
+        """
+        shown = self._systemctl("show", "-p", "ActiveState,SubState,MainPID", "rosy-core.service")
+        if shown.returncode != 0:
+            return False
+        values = dict(line.split("=", 1) for line in shown.stdout.splitlines() if "=" in line)
+        active, sub, pid = values.get("ActiveState"), values.get("SubState"), values.get("MainPID")
+        stopped = active in ("inactive", "failed") or (active == "activating" and sub == "auto-restart")
+        return stopped and pid == "0"
 
     def _resume(self, state: dict) -> dict:
         """A run died mid-apply (power loss, kill): finish it, once the robot is free again."""
@@ -1104,16 +1202,27 @@ class Updater:
         # Review H1: nothing restarts while the robot is held, sealed or busy. Coordinator
         # decision: with rosy-core not running nothing can command motion (CORE is the only
         # cmd_vel publisher, D-2), so idleness is waived; hold, seal and claim still apply.
-        core_down = not self._core_running()
+        core_down = self._core_down()
         report = self.eligibility(own_claim_ok=True, waive_inputs=core_down)
         if not report["eligible"]:
+            started = parse_z(applying.get("started_at"))
+            silent = any(("stale" in reason or "missing" in reason or "not rewritten" in reason)
+                         for reason in report["reasons"])
+            if (not report["held"] and not core_down and silent and started is not None
+                    and (self.host.now() - started).total_seconds() > STUCK_AFTER_S):
+                # Re-review N5: no automatic rollback; a person has to look.
+                return self._finish(state, "stuck", "CORE active but not writing status; operator action required",
+                                    release_id)
             phase = "held" if report["held"] else "ineligible"
             return self._finish(state, phase, f"finishing {release_id} (step {step}) waits: "
                                 + "; ".join(report["reasons"]), release_id)
+        # Re-review N15: the note describes this resume only.
         if core_down:
             applying["note"] = CORE_DOWN_NOTE
             self._history("idleness_waived", release_id, CORE_DOWN_NOTE)
-        rosy_claim.release(self.root, CLAIM_HOLDER)  # our own claim from the dead run
+        else:
+            applying.pop("note", None)
+        self._release_claim()  # our own claim from the dead run
         try:
             rosy_claim.acquire(self.root, CLAIM_HOLDER, f"finish auto-update to {release_id}", CLAIM_TTL_S,
                                now=self.host.now())
@@ -1127,8 +1236,15 @@ class Updater:
                                        mark_failed=applying.get("mark_failed", True))
             if step == "activate":
                 self._recover_native()
-            if self.host.current_release() == release_id:
+            current = self.host.current_release()
+            if current == release_id:
                 return self._settle(state, release_id)
+            if step == "activate" and current == applying.get("previous"):
+                # Re-review N11: the switch never happened; nothing to blame on the release.
+                state["applying"] = None
+                self._apply_error(state, release_id, "activation interrupted before the switch")
+                return self._finish(state, "waiting", f"an interrupted activation of {release_id} never "
+                                    "switched; retrying after a backoff", release_id)
             # Boot recovery (or the activator) already restored the old release.
             problems = self._rollback_tail(release_id) if step != "activate" else []
             why = "; ".join(filter(None, ["interrupted; the previous release is current", applying.get("note")]))
@@ -1138,26 +1254,25 @@ class Updater:
             self._result(state, release_id, "rolled_back", detail)
             return self._finish(state, "rolled_back" if not problems else "failed", detail, release_id)
         finally:
-            rosy_claim.release(self.root, CLAIM_HOLDER)
+            self._release_claim()
 
     # the timer entry -----------------------------------------------------------------
 
+    @staticmethod
     @contextlib.contextmanager
-    def _run_lock(self):
-        self.updates.mkdir(parents=True, exist_ok=True)
-        with (self.updates / ".run.lock").open("a+b") as handle:
+    def _locked_file(path: Path):
+        """Non-blocking exclusive lock (flock; msvcrt on a Windows test host). OSError when busy."""
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a+b") as handle:
             handle.seek(0)
-            try:
-                if os.name == "posix":
-                    import fcntl
+            if os.name == "posix":
+                import fcntl
 
-                    fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
-                else:
-                    import msvcrt
+                fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            else:
+                import msvcrt
 
-                    msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
-            except OSError as exc:
-                raise RunBusy("RUN_BUSY: another updater run is active") from exc
+                msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
             try:
                 yield
             finally:
@@ -1170,6 +1285,18 @@ class Updater:
                     import msvcrt
 
                     msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+
+    @contextlib.contextmanager
+    def _run_lock(self):
+        try:
+            lock = self._locked_file(self.updates / ".run.lock")
+            lock.__enter__()
+        except OSError as exc:
+            raise RunBusy("RUN_BUSY: another updater run is active") from exc
+        try:
+            yield
+        finally:
+            lock.__exit__(None, None, None)
 
     def run(self) -> dict:
         try:
@@ -1203,10 +1330,14 @@ class Updater:
         failed = state.setdefault("failed", {})
         # Review H4: a release we committed that is now above current was rolled back
         # on purpose by an operator; never apply it again.
-        for committed in state.get("committed") or []:
-            if committed > current and committed not in failed:
-                self._mark_failed(state, committed, "operator rolled back")
-                self._history("operator_rolled_back", committed, f"current is {current}")
+        previous = self.host.previous_release()
+        rolled_back = [item for item in state.get("committed") or [] if item > current]
+        if previous is not None and previous > current:
+            rolled_back.append(previous)  # re-review N9: previous above current was rolled away from
+        for item in rolled_back:
+            if item not in failed:
+                self._mark_failed(state, item, "operator rolled back")
+                self._history("operator_rolled_back", item, f"current is {current}")
         self._expire_hold()
         backoff = parse_z(state.get("backoff_until"))
         if backoff is not None and self.host.now() < backoff:
@@ -1247,6 +1378,14 @@ class Updater:
         waiting = self._gate(rollout)
         if waiting:
             return self._finish(state, "waiting", waiting, release_id)
+        attempts = (state.get("apply_errors") or {}).get(release_id) or {}
+        if attempts.get("attempts", 0) >= APPLY_MAX_TRANSIENT:
+            return self._finish(state, "held", "repeated transient apply failures; operator action required",
+                                release_id)
+        retry = parse_z(attempts.get("retry_after"))
+        if retry is not None and self.host.now() < retry:
+            return self._finish(state, "waiting", f"apply backoff after {attempts.get('last')}; "
+                                f"next attempt after {_z(retry)}", release_id)
         report = self.eligibility()
         if not report["eligible"]:
             phase = "held" if report["held"] else "ineligible"
@@ -1277,6 +1416,7 @@ def main(argv: list[str] | None = None) -> int:
     hold.add_argument("--reason", required=True)
     hold.add_argument("--hours", type=float, required=True)
     sub.add_parser("release-hold")
+    sub.add_parser("precheck")
     check = sub.add_parser("eligibility")
     check.add_argument("--json", action="store_true")
     args = parser.parse_args(argv)
@@ -1302,6 +1442,10 @@ def main(argv: list[str] | None = None) -> int:
             print(str(exc), file=sys.stderr)
             return 2
         return 0
+    if args.command == "precheck":
+        reasons = updater.precheck()
+        print("; ".join(reasons) if reasons else "ok")
+        return 3 if reasons else 0
     if args.command == "release-hold":
         print(json.dumps({"ok": True, "released": updater.release_hold()}))
         return 0

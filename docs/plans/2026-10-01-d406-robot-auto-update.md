@@ -38,10 +38,12 @@ All files live under `/var/lib/rosy/updates/` (root 0755; files 0644 except wher
 `status.json`:
 ```json
 {"schema": 1, "updated_at": "<Z>", "hostname": "rosy-pinky-8kcn", "current_release": "2026.10.01-021",
- "candidate": "2026.10.01-022", "phase": "idle|staged|waiting|held|ineligible|applying|committed|rolled_back|failed|disabled|error",
+ "candidate": "2026.10.01-022", "phase": "idle|staged|waiting|held|ineligible|applying|committed|rolled_back|failed|disabled|error|stuck",
  "reason": "human-readable why",
  "last_result": {"release_id": "...", "outcome": "committed|rolled_back|refused", "at": "<Z>", "detail": "..."}}
 ```
+
+- **`stuck`** (added 2026-10-02, review N5) means an apply is still journaled while CORE is active but has not written status-inputs for more than 30 min since the apply started. It is never auto-rolled back; an operator acts. The canary watch treats it as not committed, so the watch keeps waiting and withdraws at its timeout.
 
 - **Device CLI** (root, at `/opt/rosy/native-runtime/rosy_auto_update.py`):
   - `run`: the timer entry.

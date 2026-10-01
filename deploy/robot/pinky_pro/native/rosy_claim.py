@@ -10,6 +10,7 @@ behind, may be cleared by exactly one party: ``rename`` to
 
     python3 rosy_claim.py acquire --holder H --purpose P --ttl-s N   # exit 3 = busy
     python3 rosy_claim.py release --holder H                         # exit 3 = not ours
+    python3 rosy_claim.py refresh --holder H --ttl-s N               # exit 3 = not ours or no claim
     python3 rosy_claim.py show                                       # alias: status
 
 Standard library only; it runs from /opt/rosy/native-runtime as root.
@@ -26,7 +27,6 @@ from pathlib import Path
 import re
 import secrets
 import shutil
-import sys
 import time
 
 CLAIM_DIR = "run/rosy-claim"
@@ -53,8 +53,9 @@ class ClaimBusy(RuntimeError):
 
 
 @contextlib.contextmanager
-def _claim_lock(root: Path, wait_s: float = LOCK_WAIT_S):
-    """Exclusive lock on /run/rosy-claim.lock, polled for up to ``wait_s``."""
+def _claim_lock(root: Path, wait_s: float | None = None):
+    """Exclusive lock on /run/rosy-claim.lock, polled for up to ``wait_s`` (default LOCK_WAIT_S)."""
+    wait_s = LOCK_WAIT_S if wait_s is None else wait_s
     path = root / LOCK_FILE
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a+b") as handle:
@@ -171,7 +172,7 @@ def _write_claim(path: Path, claim: dict) -> None:
 
 
 def acquire(root: Path, holder: str, purpose: str, ttl_s: float, *,
-            now: _dt.datetime | None = None, lock_wait_s: float = LOCK_WAIT_S) -> dict:
+            now: _dt.datetime | None = None, lock_wait_s: float | None = None) -> dict:
     """Take the claim or raise ClaimBusy. A stale claim is moved aside first."""
     if not HOLDER.fullmatch(holder or ""):
         raise ValueError("CLAIM_HOLDER_INVALID: 1-64 of [A-Za-z0-9._@:-]")
@@ -225,16 +226,31 @@ def release(root: Path, holder: str) -> bool:
 
 def refresh(root: Path, holder: str, ttl_s: float, *, now: _dt.datetime | None = None) -> bool:
     """Push ``holder``'s claim expiry to now + ttl. False when it is not theirs (D-406 review M8)."""
+    try:
+        _refresh(root, holder, ttl_s, now)
+    except (ClaimBusy, ClaimMissing):
+        return False
+    return True
+
+
+class ClaimMissing(RuntimeError):
+    """There is no claim to refresh."""
+
+
+def _refresh(root: Path, holder: str, ttl_s: float, now: _dt.datetime | None) -> dict:
+    """The refreshed claim; ClaimMissing or ClaimBusy otherwise. Under the claim lock."""
     if isinstance(ttl_s, bool) or not 0 < ttl_s <= MAX_TTL_S:
         raise ValueError(f"CLAIM_TTL_INVALID: ttl must be in (0, {MAX_TTL_S}] seconds")
     path = root / CLAIM_DIR
     with _claim_lock(root):
         existing = _read(path)
-        if existing is None or existing.get("holder") != holder:
-            return False
+        if existing is None:
+            raise ClaimMissing("CLAIM_MISSING")
+        if existing.get("holder") != holder:
+            raise ClaimBusy(existing)
         existing["expires_at"] = _z(_now(now) + _dt.timedelta(seconds=ttl_s))
         _write_claim(path, existing)
-        return True
+        return existing
 
 
 def check(root: Path, *, now: _dt.datetime | None = None) -> dict | None:
@@ -258,10 +274,19 @@ def main(argv: list[str] | None = None) -> int:
     take.add_argument("--ttl-s", type=float, required=True)
     drop = sub.add_parser("release")
     drop.add_argument("--holder", required=True)
+    extend = sub.add_parser("refresh")
+    extend.add_argument("--holder", required=True)
+    extend.add_argument("--ttl-s", type=float, required=True)
     sub.add_parser("show", aliases=["status"])
     args = parser.parse_args(argv)
     try:
-        if args.command == "acquire":
+        if args.command == "refresh":
+            # No claim at all is exit 3 (CLAIM_MISSING): a holder that lost its claim must stop.
+            try:
+                result, code = {"ok": True, "claim": _refresh(args.root, args.holder, args.ttl_s, None)}, 0
+            except ClaimMissing:
+                result, code = {"ok": False, "error": "CLAIM_MISSING", "claim": None}, 3
+        elif args.command == "acquire":
             result, code = {"ok": True, "claim": acquire(args.root, args.holder, args.purpose, args.ttl_s)}, 0
         elif args.command == "release":
             # Nothing to release is fine; someone else's claim is refused (exit 3).
@@ -271,7 +296,7 @@ def main(argv: list[str] | None = None) -> int:
         else:
             result, code = {"ok": True, "claim": check(args.root)}, 0
     except ClaimBusy as exc:
-        result, code = {"ok": False, "error": "CLAIM_BUSY", "claim": exc.claim}, 3
+        result, code = {"ok": False, "error": "CLAIM_BUSY", "claim": exc.claim, "detail": str(exc)}, 3
     except (ValueError, OSError) as exc:
         result, code = {"ok": False, "error": str(exc)}, 2
     print(json.dumps(result, sort_keys=True))

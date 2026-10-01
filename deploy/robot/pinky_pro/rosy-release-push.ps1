@@ -313,6 +313,7 @@ function Get-ClaimArguments([string]$Action, [string]$Holder, [int]$ClaimTtl = 1
     $helper = "/opt/rosy/native-runtime/rosy_claim.py"
     $call = "$helper $Action --holder $Holder"
     if ($Action -eq "acquire") { $call += " --purpose push --ttl-s $ClaimTtl" }
+    if ($Action -eq "refresh") { $call += " --ttl-s $ClaimTtl" }
     return @(
         "sudo", "-n", "sh", "-c",
         "'if [ -f $helper ]; then exec python3 $call; fi; echo ROSY_CLAIM_HELPER_MISSING; exit 4'"
@@ -336,11 +337,15 @@ function Get-RemoteCommandPlan {
     )
     $target = "${RosyUser}@${Robot}"
     # ssh parses a "-o Key=Value" argument the way it parses an ssh_config
-    # line: an unquoted Value is split on whitespace. A KnownHosts path under
-    # "C:\Program Files\..." would otherwise be cut at the first space even
-    # though it arrives here as a single argv element, so the value itself is
-    # quoted.
-    $sshOptions = @("-o", "UserKnownHostsFile=`"$KnownHosts`"", "-o", "StrictHostKeyChecking=yes")
+    # line: an unquoted Value is split on whitespace. Quoting it here does not
+    # help: Windows PowerShell 5.1 passes UserKnownHostsFile="C:\a b\k" on the
+    # command line as is, and the C runtime strips those quotes before ssh
+    # sees the value (test_known_hosts_policy.py). So a path ssh would split,
+    # or one with a quote, is refused (same policy as rosy-update-hold.ps1).
+    if ($KnownHosts -match "[\s`"']") {
+        Fail "KnownHosts path contains a space or a quote, which ssh -o would split: $KnownHosts. Pass -KnownHosts <path without spaces>."
+    }
+    $sshOptions = @("-o", "UserKnownHostsFile=$KnownHosts", "-o", "StrictHostKeyChecking=yes")
     $plan = New-Object System.Collections.ArrayList
 
     function Add-Step($list, [string]$Kind, [string]$Executable, [string[]]$Arguments,
@@ -392,6 +397,8 @@ function Get-RemoteCommandPlan {
 
     Add-Step $plan "ssh" $SshExe (@("-i", $KeyPath) + $sshOptions + @($target, "mkdir", "-p", $RemoteStagingDir))
     Add-Step $plan "scp" $ScpExe (@("-i", $KeyPath) + $sshOptions + @($TarballPath, "${target}:${remoteTarball}"))
+    # The upload is the long part: restart the claim's TTL after it.
+    Add-Step $plan "ssh" $SshExe ($claimSsh + (Get-ClaimArguments "refresh" $ClaimHolder $ClaimTtl)) "claim-refresh"
     Add-Step $plan "scp" $ScpExe (@("-i", $KeyPath) + $sshOptions + @($UnpackScript, "${target}:${remoteUnpack}"))
     Add-Step $plan "ssh" $SshExe (@("-i", $KeyPath) + $sshOptions + @($target, "chmod", "+x", $remoteUnpack))
     Add-Step $plan "ssh" $SshExe (@("-i", $KeyPath) + $sshOptions + @($target, "sudo", "-n", $remoteUnpack, $ReleaseId, $remoteTarball, $RemoteReleasesDir))
@@ -456,6 +463,7 @@ $claimed = $false
 foreach ($step in $plan) {
     $arguments = $step.arguments
     if ($step.role -eq "claim-release") { continue }  # runs in the finally block below
+    if ($step.role -eq "claim-refresh" -and -not $claimed) { continue }
     if ($step.role -like "image-layer-*" -and $imageLayerSkipped) { continue }
     if ($step.role -eq "image-layer-restart") {
         $restartedUnits = @($imageLayer.restart_units | Where-Object { $_ -match '^rosy-[A-Za-z0-9-]+\.(service|path|timer)$' })
@@ -484,12 +492,25 @@ foreach ($step in $plan) {
         }
         if ($result.exit_code -eq 3 -or $answer -match "CLAIM_BUSY") {
             $claimed = $false
+            if ($answer.Contains('"holder": "' + $claimHolder + '"')) {
+                $releaseStep = @($plan | Where-Object { $_.role -eq "claim-release" })[0]
+                Fail ("Release push refused: the claim on $Robot is held by this PC ($claimHolder), probably " +
+                      "left by an interrupted push. If no other push from here is running, release it with:`n" +
+                      "  $($releaseStep.display)`nthen push again.")
+            }
             Fail "Release push refused: $Robot is claimed by another job (D-406 claim): $answer"
         }
         if ($result.exit_code -ne 0) {
             Fail "Release push refused: the claim helper failed (exit $($result.exit_code)) on ${Robot}: $answer"
         }
         if ($result.output) { Write-Host ($result.output -join [Environment]::NewLine) }
+        continue
+    }
+    if ($step.role -eq "claim-refresh") {
+        # An older helper has no refresh; the claim then keeps its sized TTL.
+        if ($result.exit_code -ne 0) {
+            Write-Warning "could not refresh the claim on $Robot (exit $($result.exit_code)); it keeps its $claimTtl s TTL. $($result.output -join ' ')"
+        }
         continue
     }
     if ($step.role -eq "image-layer-dry-run" -and $result.exit_code -eq 3 -and

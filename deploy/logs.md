@@ -1888,3 +1888,18 @@
 - 변경: T2가 일시적 문제(네트워크, 활성화기 시간 초과, busy)는 `error`, 확정 실패는 `failed`(`last_result`가 이 id의 `rolled_back`/`refused`)로 보고하게 바뀌었다. 발행 명령은 이 후보의 `failed`(최근 `updated_at`)나 기준 결과 뒤의 `rolled_back`/`refused`일 때만 바로 철회하고, `error`는 시간 초과까지 계속 지켜본다.
 - 증거: `test/test_publish_payload_release.py` 63 passed. 변이 4종 모두 빨강: `error`도 조기 철회, `failed` 조기 철회 제거, 다른 후보의 `failed`로 철회, 오래된 `failed`로 철회.
 - gate 변화: 없음.
+
+## 2026-10-02 · 8198ec47 · fix(release): D-406 T3 재리뷰 반영 — 철회 우선, 로컬 대체본 업로드, known_hosts 정책 하나
+
+- 변경: 커밋 8f633400, 8198ec47. (1) N1: `--withdraw`가 로컬 서명본으로 대체했으면 그 사본이 이미 철회 상태여도 늘 올린다. 이미 철회라 아무것도 안 하는 경우는 GitHub 사본이 서명 검증을 통과했을 때뿐이다. (2) N2: 내려받기 전에 `downloaded/`를 비우고, 자산이 없으면 서명 불일치와 같이 다룬다. (3) N4: 마지막 업로드 뒤 한 번 더 내려받아, 철회가 보이면 그대로 두고 우리가 올린 바이트와 다르면 다시 철회를 올린다. 철회가 늘 이긴다. (4) N7: 잠금 파일의 PID가 없는 프로세스면 stale이라고 말하고 지우는 명령을 준다(Windows는 OpenProcess로 확인, 신호를 보내지 않는다). (5) N8: hostname이 없는 상태는 "updater has not run yet (no status.json)". (6) N9: 수동 철회의 업로드가 실패해도 복구 명령을 출력한다. (7) N3: Windows PowerShell 5.1은 `UserKnownHostsFile="C:\a b\k"`를 그대로 넘기고, 받는 프로그램의 C 런타임이 따옴표를 벗긴 뒤 ssh가 공백에서 나눈다(`test/test_known_hosts_policy.py`가 raw `.cmd` 가짜와 C 런타임 프로그램으로 확인). 그래서 push도 hold처럼 따옴표 없이 넘기고 공백·따옴표가 든 경로는 거절한다. (8) N5: busy인 claim의 holder가 이 PC 자신이면 정확한 release 명령을 출력한다. tarball 업로드 직후 `rosy_claim.py refresh --holder <H> --ttl-s <TTL>`로 claim을 늘린다(실패는 경고만).
+- 증거: 관련 묶음 376 passed, 3 skipped, `test/known_failures.py` 0 new. 변이: 발행 12종 중 10종 바로 빨강, 2종(경합 중 보이는 철회 유지, stale 판정)은 시험이 다시 올린 업로드·임시 경로 이름에 가려 초록 → 시험을 좁혀 빨강. push 7종 모두 빨강.
+- gate 변화: 없음.
+- 남은 일: T2 `rosy_claim.py`(d87d329f)에 `refresh()` 함수는 있으나 CLI 하위 명령이 없다. 그 전까지 push의 refresh는 경고만 내고 claim은 크기로 정한 TTL을 유지한다.
+
+## 2026-10-02 · 088a6a9a · fix(native): D-406 T2 재리뷰 반영 — CORE 상태 fail-closed, 확정 코드 목록, 적용 backoff, 활성화기 precheck
+
+- 변경: 재리뷰(COMMENT) N1~N16과 T3의 refresh CLI. N1 `native_release.py activate`가 검증 뒤·런타임 정지 직전에 `ROSY_ACTIVATE_PRECHECK` 명령(업데이터의 새 `precheck`: hold, 봉인, 다른 claim, status-inputs 한 표본)을 돌리고, 0이 아니면 `NATIVE_PRECHECK_REFUSED`로 아무것도 바꾸지 않는다(4672715a). 업데이터는 이를 부적격으로 기록한다. ADR R4를 이에 맞췄다(a623a1bf). N2 CORE 정지 판정은 `systemctl show -p ActiveState,SubState,MainPID`가 inactive/failed(또는 activating+auto-restart)이고 MainPID 0일 때만, 호출 실패는 동작 중으로 본다. N3 확정 실패는 NATIVE_MANIFEST_*, NATIVE_TARGET_MISMATCH, NATIVE_PYTHON_RUNTIME, 서명·체크섬 거부, candidate 건강 실패뿐이다. N7 일시 적용 실패는 backoff, 3회면 held(release-hold가 지운다). N4 면제된 재개라도 CORE가 다시 돌면 재시작 전에 유휴 판정, 아니면 미룬다. N5 CORE가 돌지만 30분 넘게 status를 쓰지 않으면 phase `stuck`. N6 정리는 native-release.lock 아래, 1시간 넘은 디렉터리만, current 없으면 하지 않는다. N8 실패한 rollback도 native 저널을 recover. N9 previous가 current보다 높으면 운영자 되돌림. N10 recover가 성공했을 때만 런타임 시작. N11 전환 전에 끊긴 활성화는 실패로 남기지 않고 다시 한다. N12 rollback 재시도 5회 뒤 failed와 운영자 안내. N13 claim 해제 오류는 history에 남기고 삼킨다. N15 면제 메모를 재개마다 갱신. N16 안 쓰는 import 제거. T3용 `rosy_claim.py refresh --holder H --ttl-s N`(claim lock 아래; 0 갱신, 3 CLAIM_BUSY 또는 CLAIM_MISSING, 2 잘못된 인자)(a7030f71).
+- 증거: 업데이터·claim·native activation 시험 250 passed, 1 skipped. 관련 묶음 629 passed, 10 skipped, `python test/known_failures.py` 새 실패 0. 변이 38종 모두 빨강: 재리뷰 33종(native_release.py 3종은 CRLF 작업본이라 따로 돌림), 처음 살아남은 1종(`_main`의 env precheck 배선)은 CLI 시험을 더해 빨강, refresh CLI 4종. 로봇에는 손대지 않았다.
+- gate 변화: 없음. DEVICE HOLD.
+- 결정: D-406
+- 교훈: "확정 실패"는 종료 코드나 JSON 유무가 아니라 알려진 오류 코드 목록으로 정한다. 모르는 실패는 일시 실패로 보고 횟수로 사람을 부른다.
