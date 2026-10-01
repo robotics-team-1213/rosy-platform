@@ -13,6 +13,7 @@ what a real push would send without touching a network.
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 import shutil
 import subprocess
@@ -84,8 +85,9 @@ def test_print_commands_verifies_locally_and_builds_the_full_push_plan(release):
     assert json.loads(result["verification"]["rejections_json"]) == []
 
     plan = result["plan"]
-    # D-388: four image-layer sync steps follow CORE readiness.
-    assert [step["kind"] for step in plan] == ["ssh", "scp", "scp", "ssh", "ssh", "ssh", "ssh"] + ["ssh"] * 4
+    # The core-release check follows activation; D-388: four image-layer sync
+    # steps follow CORE readiness.
+    assert [step["kind"] for step in plan] == ["ssh", "scp", "scp", "ssh", "ssh", "ssh", "ssh", "ssh"] + ["ssh"] * 4
     # scp sends the tarball, then the unpack helper.
     assert plan[1]["arguments"][-1].endswith(f"{RELEASE_ID}.tar.gz")
     assert Path(plan[2]["arguments"][-2]) == UNPACK_SCRIPT
@@ -101,7 +103,8 @@ def test_print_commands_verifies_locally_and_builds_the_full_push_plan(release):
     # readiness probe sources the unit's env file (for ROSY_API_PORT, which a
     # plain non-login ssh command otherwise never sees) then reuses the
     # existing on-device bounded probe unchanged.
-    ready_args = plan[6]["arguments"]
+    assert plan[6]["role"] == "core-release-check"
+    ready_args = plan[7]["arguments"]
     assert ready_args[-3:-1] == ["bash", "-lc"]
     assert "/etc/rosy/runtime.env" in ready_args[-1]
     assert "wait-core-ready.py" in ready_args[-1]
@@ -120,7 +123,7 @@ def test_rollback_plan_skips_the_release_and_only_rolls_back_and_waits(release):
     assert result["rollback"] is True
     assert result["verification"] is None
     plan = result["plan"]
-    assert len(plan) == 1 + 3 + 1  # D-388: rollback, image-layer sync, then readiness
+    assert len(plan) == 1 + 3 + 1 + 1  # rollback, D-388 image-layer sync, core-release check, readiness
     assert plan[0]["arguments"][-1] == "/opt/rosy/native-runtime/rollback-release.sh"
     assert "sudo" in plan[0]["arguments"] and "-n" in plan[0]["arguments"]
     ready_args = plan[-1]["arguments"]
@@ -294,7 +297,7 @@ def test_rollback_plan_resyncs_the_image_layer_from_the_release_that_becomes_cur
     plan = json.loads(completed.stdout)["plan"]
     # The sync runs BEFORE the readiness check: if the newer release's units do
     # not work with the older one, CORE only becomes ready after the sync.
-    assert [step["role"] for step in plan] == ["", *IMAGE_LAYER_ROLES[:3], ""]
+    assert [step["role"] for step in plan] == ["", *IMAGE_LAYER_ROLES[:3], "core-release-check", ""]
     assert "rollback-release.sh" in plan[0]["arguments"][-1]
     assert "wait-core-ready.py" in plan[-1]["arguments"][-1]
     assert not any("wait-core-ready.py" in " ".join(step["arguments"]) for step in plan[:-1])
@@ -319,10 +322,11 @@ def test_skip_image_layer_sync_leaves_the_old_plan(release, rollback):
 
     assert completed.returncode == 0, completed.stderr
     plan = json.loads(completed.stdout)["plan"]
-    assert len(plan) == (2 if rollback else 7)
+    assert len(plan) == (3 if rollback else 8)
     if rollback:
-        assert "wait-core-ready.py" in plan[1]["arguments"][-1]
-    assert not any(step["role"] for step in plan)
+        assert "wait-core-ready.py" in plan[2]["arguments"][-1]
+    # The core-release check is not part of the image-layer sync: it stays.
+    assert [step["role"] for step in plan if step["role"]] == ["core-release-check"]
 
 
 FAKE_SSH = r"""
@@ -339,18 +343,27 @@ if ($all -match 'sync-image-layer') {
     '{"ok": true, "release_id": "R", "changed": ["/etc/systemd/system/rosy-io.service"], "new": [], "unchanged": [], "skipped": [], "restart_units": ["rosy-io.service", "evil;reboot"], "backup_dir": "/var/lib/rosy/image-layer-backup/x", "modprobe_changed": [], "active_targets_affected": [], "next_boot_units": ["rosy-network.service"], "pending_parked": "/var/lib/rosy/image-layer-backup/pending.parked-x.json", "pending_quarantined": null, "corrupt_manifests": ["/var/lib/rosy/image-layer-backup/y/backup-manifest.json"]}'
     exit 0
 }
+if ($all -match 'CORE_RELEASE_OK') {
+    if ($env:ROSY_FAKE_CORE -eq 'stale') { 'CORE_RELEASE_STALE pid=7 cwd=/opt/rosy/releases/P want=/opt/rosy/releases/R'; 'CORE_RESTARTED /opt/rosy/releases/R' }
+    elseif ($env:ROSY_FAKE_CORE -eq 'dead') { 'CORE_RELEASE_STALE pid=7 cwd=/opt/rosy/releases/P want=/opt/rosy/releases/R'; 'CORE_RESTART_FAILED' }
+    elseif ($env:ROSY_FAKE_CORE -eq 'silent') { }
+    else { 'CORE_RELEASE_OK /opt/rosy/releases/R' }
+    exit 0
+}
 if ($all -match 'release.sh') { '{"ok": true, "release_id": "R", "previous": "P"}' }
 exit 0
 """
 
 
-def _fake_run(tmp_path, monkeypatch, args: list[str], *, missing: bool = False):
+def _fake_run(tmp_path, monkeypatch, args: list[str], *, missing: bool = False, core: str = ""):
     fake = tmp_path / "fake-ssh.ps1"
     fake.write_text(FAKE_SSH, encoding="ascii")
     log = tmp_path / "ssh.log"
     monkeypatch.setenv("ROSY_FAKE_LOG", str(log))
     if missing:
         monkeypatch.setenv("ROSY_FAKE_SYNC_MISSING", "1")
+    if core:
+        monkeypatch.setenv("ROSY_FAKE_CORE", core)
     completed = _run(["-Robot", "rosy-e4us.local", "-SshExe", str(fake), "-ScpExe", str(fake), *args])
     lines = log.read_text(encoding="utf-8").splitlines() if log.exists() else []
     return completed, lines
@@ -365,10 +378,11 @@ def test_a_push_restarts_only_the_active_rosy_units_the_apply_changed(release, t
         "-Tarball", str(tarball), "-PublicKeyPath", str(release["public_key"])])
 
     assert completed.returncode == 0, completed.stdout + completed.stderr
-    restarts = [line for line in calls if "systemctl restart" in line]
+    restarts = [line for line in calls if "systemctl restart" in line and "CORE_RELEASE" not in line]
     assert len(restarts) == 1 and restarts[0].endswith("systemctl restart rosy-io.service")
     assert sum("wait-core-ready.py" in line for line in calls) == 2
     assert "restarted: rosy-io.service" in completed.stdout
+    assert "CORE runs the activated release: /opt/rosy/releases/R" in completed.stdout
     assert "image-layer backup: /var/lib/rosy/image-layer-backup/x" in completed.stdout
     assert "takes effect next boot (not restarted): rosy-network.service" in completed.stdout
     assert not any("rosy-network" in line for line in restarts)
@@ -385,7 +399,7 @@ def test_a_rollback_to_a_release_without_the_sync_warns_and_skips_it(tmp_path, m
 
     assert completed.returncode == 0, completed.stdout + completed.stderr
     assert "image-layer sync skipped" in completed.stdout + completed.stderr
-    assert not any("systemctl restart" in line for line in calls)
+    assert not any("systemctl restart" in line and "CORE_RELEASE" not in line for line in calls)
     assert sum("IMAGE_LAYER_SYNC_MISSING" in line for line in calls) == 1
     # Readiness is still checked, after the skipped sync.
     assert "wait-core-ready.py" in calls[-1]
@@ -455,3 +469,148 @@ def test_the_unpack_helper_refuses_a_different_release_with_the_same_id():
     assert "RELEASE_CONFLICT" in text
     assert "cmp -s" in text
     assert 'mv -T -- "$TMP" "$TARGET"' in text
+
+
+def _core_release_check(plan: list[dict]) -> dict:
+    (step,) = [step for step in plan if step["role"] == "core-release-check"]
+    return step
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+@pytest.mark.parametrize("rollback", [False, True])
+def test_core_is_checked_against_the_new_release_right_after_the_switch(release, rollback):
+    # 2026-10-01 9dfk: the activator returned and readiness passed while CORE
+    # still ran the old release. The fixed activator arrives only with the
+    # image-layer sync AFTER activation, so the push itself must check: CORE's
+    # main process must run from /opt/rosy/current, else restart rosy-core.
+    if rollback:
+        completed = _run(["-Robot", "rosy-e4us.local", "-Rollback", "-PrintCommands"])
+    else:
+        completed = _print_push(release)
+
+    assert completed.returncode == 0, completed.stderr
+    plan = json.loads(completed.stdout)["plan"]
+    roles = [step["role"] for step in plan]
+    check = roles.index("core-release-check")
+    if rollback:
+        # After the image-layer sync: CORE restarted into the older release
+        # before its units are back may not start.
+        assert roles[check - 3:check] == IMAGE_LAYER_ROLES[:3]
+    else:
+        # Right after the switch, before the readiness check it protects.
+        assert plan[check - 1]["arguments"][-2] == "/opt/rosy/native-runtime/activate-release.sh"
+    assert "wait-core-ready.py" in plan[check + 1]["arguments"][-1]
+    args = _core_release_check(plan)["arguments"]
+    assert args[-5:-1] == ["sudo", "-n", "sh", "-c"]
+    script = args[-1]
+    for needle in ("MainPID", "rosy-core.service", "/proc/", "/cwd", "readlink -f /opt/rosy/current",
+                   "systemctl restart rosy-core.service", "CORE_RELEASE_OK", "CORE_RESTARTED"):
+        assert needle in script, needle
+    # PowerShell 5.1 eats embedded double quotes on the way to a native exe.
+    assert '"' not in script
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+def test_a_stale_core_after_the_switch_is_restarted_and_reported(tmp_path, monkeypatch):
+    completed, calls = _fake_run(tmp_path, monkeypatch, ["-Rollback"], missing=True, core="stale")
+
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    flat = "".join((completed.stdout + completed.stderr).split())
+    assert "COREwasstillrunning" in flat and "restartedrosy-core" in flat
+    # Readiness is checked after the restart.
+    check = next(i for i, line in enumerate(calls) if "CORE_RELEASE_OK" in line)
+    assert any("wait-core-ready.py" in line for line in calls[check + 1:])
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+def test_a_core_already_on_the_new_release_is_left_alone(tmp_path, monkeypatch):
+    completed, _calls = _fake_run(tmp_path, monkeypatch, ["-Rollback"], missing=True)
+
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    assert "CORE runs the activated release" in completed.stdout
+    assert "still running" not in completed.stdout + completed.stderr
+
+
+@pytest.mark.skipif(POWERSHELL is None or TAR is None, reason="PowerShell and tar are required")
+@pytest.mark.parametrize("rollback", [False, True])
+def test_a_core_that_does_not_come_back_after_the_restart_fails_the_push_by_name(
+        tmp_path, monkeypatch, release, rollback):
+    args = ["-Rollback"]
+    if not rollback:
+        tarball = tmp_path / "packed.tar.gz"
+        subprocess.run([TAR, "-czf", tarball.name, "-C", str(release["dir"]), "."], check=True, cwd=tmp_path)
+        args = ["-Tarball", str(tarball), "-PublicKeyPath", str(release["public_key"])]
+    completed, calls = _fake_run(tmp_path, monkeypatch, args, missing=True, core="dead")
+
+    assert completed.returncode != 0
+    flat = "".join((completed.stdout + completed.stderr).split())
+    assert "COREdidnotstart" in flat
+    assert ("journalctl-urosy-core" if rollback else "-Rollback") in flat
+    # Nothing runs after a CORE that is down.
+    assert "CORE_RELEASE_OK" in calls[-1]
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+def test_a_check_that_prints_no_marker_fails_the_push(tmp_path, monkeypatch):
+    completed, _calls = _fake_run(tmp_path, monkeypatch, ["-Rollback"], missing=True, core="silent")
+
+    assert completed.returncode != 0
+    flat = "".join((completed.stdout + completed.stderr).split())
+    assert "couldnotconfirmthatCORErunstheactivatedrelease" in flat
+
+
+SH = shutil.which("sh")
+FAKE_SYSTEMCTL = """#!/bin/sh
+case $1 in
+  show) echo $FAKE_PID ;;
+  restart) [ -n "$FAKE_RESTART_FAIL" ] && exit 1; echo restart >> "$FAKE_LOG" ;;
+esac
+"""
+FAKE_READLINK = """#!/bin/sh
+if [ "$1" = -f ]; then v=$FAKE_WANT; else v=$FAKE_CWD; fi
+[ -n "$v" ] || exit 1
+echo "$v"
+"""
+
+
+@pytest.fixture(scope="module")
+def check_script():
+    if POWERSHELL is None:
+        pytest.skip("PowerShell is required")
+    completed = _run(["-Robot", "rosy-e4us.local", "-Rollback", "-PrintCommands"])
+    assert completed.returncode == 0, completed.stderr
+    script = _core_release_check(json.loads(completed.stdout)["plan"])["arguments"][-1]
+    assert script.startswith("'") and script.endswith("'")
+    return script[1:-1]
+
+
+@pytest.mark.skipif(SH is None, reason="sh is required")
+@pytest.mark.parametrize("pid, cwd, want, restart_fail, expected", [
+    ("42", "/opt/rosy/releases/B", "/opt/rosy/releases/B", "", "CORE_RELEASE_OK /opt/rosy/releases/B"),
+    ("42", "/opt/rosy/releases/A", "/opt/rosy/releases/B", "", "CORE_RESTARTED"),
+    ("42", "/opt/rosy/releases/B (deleted)", "/opt/rosy/releases/B", "", "CORE_RESTARTED"),
+    ("0", "", "/opt/rosy/releases/B", "", "CORE_RESTARTED"),
+    ("", "", "/opt/rosy/releases/B", "", "CORE_RESTARTED"),
+    ("42", "", "", "", "CORE_RESTARTED"),
+    ("42", "/opt/rosy/releases/A", "/opt/rosy/releases/B", "1", "CORE_RESTART_FAILED"),
+])
+def test_the_remote_check_script_decides_from_the_core_process_cwd(
+        tmp_path, check_script, pid, cwd, want, restart_fail, expected):
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    for name, body in (("systemctl", FAKE_SYSTEMCTL), ("readlink", FAKE_READLINK)):
+        (bin_dir / name).write_text(body, encoding="ascii", newline="\n")
+        (bin_dir / name).chmod(0o755)
+    log = tmp_path / "restart.log"
+    env = dict(os.environ, FAKE_PID=pid, FAKE_CWD=cwd, FAKE_WANT=want, FAKE_RESTART_FAIL=restart_fail,
+               FAKE_LOG=str(log), PATH=str(bin_dir) + os.pathsep + os.environ.get("PATH", ""))
+
+    completed = subprocess.run([SH, "-c", check_script], capture_output=True, text=True, env=env, timeout=30)
+
+    assert completed.returncode == 0, completed.stderr
+    assert completed.stderr == ""
+    lines = completed.stdout.splitlines()
+    assert lines[-1].startswith(expected), completed.stdout
+    assert log.exists() == (expected == "CORE_RESTARTED")
+    if not expected.startswith("CORE_RELEASE_OK"):
+        assert lines[0].startswith("CORE_RELEASE_STALE"), completed.stdout
