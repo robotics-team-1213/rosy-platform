@@ -35,6 +35,7 @@ plans:
 - SOURCE/LOCAL은 JVM 단위 시험과 debug APK 빌드 범위에서 GO다. DEVICE는 새 APK 설치·재페어링 전이라 PARKED다.
 - 2026-10-01 D-391 공유 벡터(`feat/cam-d391-shared-vectors`): Kotlin 시험이 `failure-classes.v1.json`(28)·`site-link.v1.json`(42)을 모두 돌린다. `tls_host`는 `.local` 이름만 받고, 시스템 DNS 경로는 없앴다. 닫힘 4403은 최종이다(재페어링 안내 없음). JVM 시험 250 passed.
 - 2026-10-01 D-391 E1/E2(`feat/cam-site-link-mdns`, main 미병합): 저장은 사이트 연결 기록(`SiteLink`)이고 IP를 다이얼 대상으로 저장하지 않는다. 접속마다 mDNS로 `tls_host`를 찾고(→ `manual_host` "수동 주소" → `not_discovered`), SNI·호스트명 검사는 `tls_host`다. 태블릿 실기와 독립 리뷰(M1–M3, m1–m9)를 반영해 JVM 시험 235 passed. 태블릿(Android 11)에서 이름 재발견과 `not_discovered` 진단을 확인했다.
+- 2026-10-01 D-341 페어링 클라이언트 1단계(`feat/cam-rosy-pair-client`, main 미병합): `pairing/`에 `rosy-pair/1` 코드·커밋·CA 지문·pairable 규칙, 요청·공개·결과·응답 모양, 상태 기계(`PairingClient`, 가짜 transport)가 있다. `pairing.v1.json`(rosy-00 93336f48과 바이트 동일)의 모든 사례를 Kotlin이 돌린다. JVM 시험 281 passed. HTTP·UI는 2단계다.
 
 ## 다음 gate
 
