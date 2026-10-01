@@ -17,8 +17,8 @@ Takes the signed tarball prepare_payload_release.py made and does what the robot
    rollout.json.sig. An existing tag is refused unless --resume.
 5. canary: `rosy_auto_update.py status --json` over ssh every 30 s for --canary-timeout-min. Only a result
    newer than the one the canary reported before the release (and not older than published_at) counts.
-   A commit of this id sets canary_ok=true; a rollback or refusal of this id, a failed/error phase for
-   it, or the timeout sets withdrawn=true. Before re-uploading, the remote rollout is downloaded again:
+   A commit of this id sets canary_ok=true; a rollback or refusal of this id, a "failed" phase for it
+   ("error" is transient and keeps the watch going), or the timeout sets withdrawn=true. Before re-uploading, the remote rollout is downloaded again:
    one withdrawn meanwhile stays withdrawn, and one that changed otherwise is never overwritten.
 
 --resume re-attaches to an existing release (its rollout.json, signature checked). --withdraw withdraws
@@ -339,7 +339,9 @@ class Publisher:
                     if outcome in ("rolled_back", "refused"):
                         self.log("canary-phase", line, phase=phase)
                         return False, f"canary {name} {outcome} {self.release_id}: {last.get('detail') or '-'}"
-                if (phase in ("failed", "error") and state.get("candidate") == self.release_id
+                # "failed" is T2's verdict on a candidate; "error" is transient (network, activator
+                # timeout, busy) and only the timeout turns it into a withdraw.
+                if (phase == "failed" and state.get("candidate") == self.release_id
                         and fresh(state.get("updated_at"))):
                     self.log("canary-phase", line, phase=phase)
                     return False, f"canary {name} {phase} on {self.release_id}: {state.get('reason') or '-'}"

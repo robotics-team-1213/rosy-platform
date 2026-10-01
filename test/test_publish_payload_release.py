@@ -711,18 +711,53 @@ def test_a_not_run_yet_status_keeps_waiting(tarball, keys, tmp_path):
     assert _publish(tarball, keys, tmp_path, gh, FakeSsh(statuses=[NOT_RUN_YET, NOT_RUN_YET, COMMITTED])) == 0
 
 
-@pytest.mark.parametrize("phase", ["failed", "error"])
-def test_a_failed_or_error_phase_for_this_release_withdraws_early(tarball, keys, tmp_path, phase):
-    """L3."""
+def test_a_failed_phase_for_this_release_withdraws_early(tarball, keys, tmp_path):
+    """L3: "failed" is T2's definitive outcome for a candidate."""
     gh = FakeGh()
     clock = FakeClock()
-    broken = dict(status(phase, candidate=RELEASE_ID), reason="sha256 mismatch")
+    broken = dict(status("failed", candidate=RELEASE_ID), reason="sha256 mismatch")
 
     assert _publish(tarball, keys, tmp_path, gh, FakeSsh(statuses=[status(), broken]), clock=clock) != 0
 
     final = _verified(gh, keys)
-    assert final["withdrawn"] is True and phase in final["reason"] and "sha256 mismatch" in final["reason"]
+    assert final["withdrawn"] is True and "failed" in final["reason"] and "sha256 mismatch" in final["reason"]
     assert clock.t == 0
+
+
+def test_an_error_phase_for_this_release_keeps_watching(tarball, keys, tmp_path):
+    """T2 reports transient problems (network, activator timeout, busy) as "error": not a verdict."""
+    gh = FakeGh()
+    transient = dict(status("error", candidate=RELEASE_ID), reason="github unreachable")
+
+    assert _publish(tarball, keys, tmp_path, gh, FakeSsh(statuses=[status(), transient, transient, COMMITTED])) == 0
+    assert _verified(gh, keys)["canary_ok"] is True
+
+
+def test_an_error_phase_that_never_clears_withdraws_only_at_the_timeout(tarball, keys, tmp_path):
+    gh = FakeGh()
+    clock = FakeClock()
+    transient = dict(status("error", candidate=RELEASE_ID), reason="activator timeout")
+
+    assert _publish(tarball, keys, tmp_path, gh, FakeSsh(statuses=[status(), transient]),
+                    "--canary-timeout-min", "2", clock=clock) != 0
+
+    final = _verified(gh, keys)
+    assert "did not commit within 2 min" in final["reason"] and "error" in final["reason"]
+    assert clock.t >= 120
+
+
+def test_a_failed_phase_for_another_candidate_does_not_withdraw(tarball, keys, tmp_path):
+    gh = FakeGh()
+    other = dict(status("failed", candidate="2026.10.01-021"), reason="old failure")
+
+    assert _publish(tarball, keys, tmp_path, gh, FakeSsh(statuses=[status(), other, COMMITTED])) == 0
+
+
+def test_a_stale_failed_phase_of_a_reused_id_does_not_withdraw(tarball, keys, tmp_path):
+    gh = FakeGh()
+    stale = dict(status("failed", candidate=RELEASE_ID), updated_at="2026-10-01T09:00:00Z")
+
+    assert _publish(tarball, keys, tmp_path, gh, FakeSsh(statuses=[status(), stale, COMMITTED])) == 0
 
 
 def test_an_error_phase_for_another_candidate_does_not_withdraw(tarball, keys, tmp_path):
