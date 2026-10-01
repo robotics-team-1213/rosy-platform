@@ -286,3 +286,9 @@
 - 변경: `docking/dock`·`swarm/follow` 에 `require_localized` — D-395 로봇이 LOCALIZED 가 아니면 409 `NOT_LOCALIZED`, `localization` null 로봇은 그대로.
 - 증거: `src/runtime/gateway/test/test_localization_api.py` 게이트·pre-D-395 시험.
 - gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · fix(api): D-395 리뷰 — 시작은 localization 잠금 안에서, odom 프레임 거부
+
+- 변경: `common.localized_start` — `require_localized` 검사와 시작(goal·home·line-follow·dock·swarm follow)을 `localization.gate` 안에서. `require_localized` 는 `pose_frame: odom` 이면 LOCALIZED 라도 409 `NOT_LOCALIZED`. 도킹 `NOT_LOCALIZED` → 409 매핑.
+- 증거: `src/runtime/gateway/test/test_localization_api.py`.
+- gate 변화: 없음.

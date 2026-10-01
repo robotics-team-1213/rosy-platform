@@ -301,3 +301,9 @@
 - 변경: `LocalizationAssist.on_lost` — 상태가 LOCALIZED 에서 SUSPECT·CANDIDATES·UNKNOWN(`state_stale` 포함)으로 내려가면 한 번 호출. 새 `localization/halt.py` `autonomy_halt`: swarm 취소(`reason: localization`), 도킹 취소, line-follow OFF, `nav.cancel`, NAVIGATION → IDLE. MANUAL 은 건드리지 않는다. `wire_assist` 가 CORE 조립을 맡는다.
 - 증거: `test/test_localization_assist.py` +5 (변이: 훅 제거 → 8 빨강).
 - gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · fix(localization,docking): D-395 리뷰 — 내부 시작 게이트, 결과 검증, 잠금
+
+- 변경: `LocalizationAssist.autonomy_allowed()`(LOCALIZED + map, 또는 D-395 이전 로봇)와 `gate`(RLock: 상태 반영·이탈 정지와 모든 시작이 같은 잠금). `localization/result` 는 모델 검증(`request_id` 규칙, `reason` ≤ 64), 64 KiB 넘는 메시지는 버림, 거부 로그는 예외 타입과 오류 종류만. `DockingManager.localization_ok` — `dock()` 거부(`NOT_LOCALIZED`), 배터리 복귀는 대기로 남아 LOCALIZED 가 되면 틱이 이어 간다. `wire_assist` 가 바인딩.
+- 증거: `test/test_localization_assist.py` +20, `test/test_docking_localization_gate.py` 5.
+- gate 변화: 없음.

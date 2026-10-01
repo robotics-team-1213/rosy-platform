@@ -668,3 +668,9 @@
 - 변경: `services.py` 가 `wire_assist` 로 LocalizationAssist 를 조립한다(LOCALIZED 진입 → Nav2 취소, 이탈 → 자율 주행 정지).
 - 증거: `test/test_localization_api.py` +7 (Nav2·line-follow·swarm·도킹 정지, state_stale, teleop 유지, 도킹·follow 게이트, pre-D-395 무영향).
 - gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · fix(bridge): D-395 리뷰 — SAF-005 귀환 게이트, 시작·정지 순서
+
+- 변경: `battery_policy.py` — `RETURN_HOME` 은 `localization.gate` 안에서 `autonomy_allowed()` 를 보고, 아니면 보낼 수 없는 귀환과 같이 e-stop. `localization` 없는 서비스는 그대로.
+- 증거: `test/test_bridge_battery_policy.py` +2, `test/test_localization_api.py` +2 (odom 프레임 거부, 검사와 시작 사이에 끼어든 정지가 시작 뒤에 접는다 — 잠금 제거 변이로 빨강 확인).
+- gate 변화: 없음.

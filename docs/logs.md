@@ -4239,3 +4239,8 @@
 - 변경: §8 `localization.state` 와 `swarm.aborted`(`reason: localization`), ERR-102 `NOT_LOCALIZED` 대상에 `docking/dock`·`swarm/follow`, v1.70 변경 이력 행.
 - 증거: `test_event_catalogue.py`.
 - gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · docs(api-ref): v1.70 보강 — odom 프레임 거부, 내부 시작 게이트
+- 변경: ERR-102 `NOT_LOCALIZED` 에 `pose_frame: odom`, 시작·정지 잠금 순서, 배터리 자동 도킹 대기와 SAF-005 귀환 e-stop. v1.70 변경 이력 행 보강.
+- 증거: `test_event_catalogue.py`, `test_protocol_version_alignment.py`.
+- gate 변화: 없음.
