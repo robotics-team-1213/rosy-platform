@@ -417,3 +417,34 @@ def test_the_cli_activation_runs_the_environment_precheck(native_case, monkeypat
     assert code == 1
     assert result["ok"] is False and result["error"].startswith("NATIVE_PRECHECK_REFUSED")
     assert not (root / "opt/rosy/current").exists()
+
+
+def test_only_the_precheck_busy_exit_is_a_refusal(monkeypatch):
+    # Verification review M2: exit 3 is "robot busy"; any other exit is a failed precheck.
+    import sys
+
+    from deploy.robot.pinky_pro.native.native_release import PRECHECK_ENV, _env_precheck
+
+    python = sys.executable.replace("\\", "/")
+    monkeypatch.setenv(PRECHECK_ENV, f'"{python}" -c "import sys; sys.exit(1)"')
+    with pytest.raises(ValueError, match="^NATIVE_PRECHECK_FAILED: exit 1"):
+        _env_precheck()()
+    monkeypatch.setenv(PRECHECK_ENV, f'"{python}" -c "import sys; sys.exit(3)"')
+    with pytest.raises(ValueError, match="^NATIVE_PRECHECK_REFUSED"):
+        _env_precheck()()
+    monkeypatch.setenv(PRECHECK_ENV, '"/definitely/not/a/program"')
+    with pytest.raises(ValueError, match="^NATIVE_PRECHECK_FAILED: precheck could not run"):
+        _env_precheck()()
+
+
+def test_a_precheck_that_hangs_times_out_as_failed(monkeypatch):
+    # Verification review L6
+    import sys
+
+    from deploy.robot.pinky_pro.native import native_release
+
+    python = sys.executable.replace("\\", "/")
+    monkeypatch.setattr(native_release, "PRECHECK_TIMEOUT_S", 1)
+    monkeypatch.setenv(native_release.PRECHECK_ENV, f'"{python}" -c "import time; time.sleep(30)"')
+    with pytest.raises(ValueError, match="^NATIVE_PRECHECK_FAILED: precheck could not run"):
+        native_release._env_precheck()()

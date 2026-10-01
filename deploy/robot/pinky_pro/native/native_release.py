@@ -408,6 +408,8 @@ class NativeReleaseManager:
 
 PRECHECK_ENV = "ROSY_ACTIVATE_PRECHECK"
 PRECHECK_TIMEOUT_S = 60
+#: The precheck's "the robot is busy" answer. Any other failure is NATIVE_PRECHECK_FAILED.
+PRECHECK_BUSY_EXIT = 3
 
 
 def _env_precheck() -> Callable[[], None] | None:
@@ -420,11 +422,13 @@ def _env_precheck() -> Callable[[], None] | None:
         try:
             result = subprocess.run(shlex.split(command), capture_output=True, text=True,
                                     timeout=PRECHECK_TIMEOUT_S, check=False)
-        except (OSError, subprocess.SubprocessError) as exc:
-            raise ValueError(f"NATIVE_PRECHECK_REFUSED: precheck could not run: {exc}") from exc
-        if result.returncode != 0:
-            detail = " ".join((result.stdout + " " + result.stderr).split())[-300:]
+        except (OSError, ValueError, subprocess.SubprocessError) as exc:
+            raise ValueError(f"NATIVE_PRECHECK_FAILED: precheck could not run: {exc}") from exc
+        detail = " ".join((result.stdout + " " + result.stderr).split())[-300:]
+        if result.returncode == PRECHECK_BUSY_EXIT:
             raise ValueError(f"NATIVE_PRECHECK_REFUSED: {detail}")
+        if result.returncode != 0:
+            raise ValueError(f"NATIVE_PRECHECK_FAILED: exit {result.returncode}: {detail}")
 
     return precheck
 

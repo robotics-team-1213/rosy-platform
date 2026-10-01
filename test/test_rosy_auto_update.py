@@ -1854,6 +1854,7 @@ def test_core_active_but_silent_for_30_minutes_is_stuck(device, host, hub, keys)
     # N5: no auto-rollback; tell the operator.
     _resume_case(device, host, hub, keys)
     _stale_inputs(device, host)
+    assert updater(host, hub).run()["phase"] == "ineligible"  # silent_since = T0
     host.t = T0 + dt.timedelta(minutes=29)
     assert updater(host, hub).run()["phase"] == "ineligible"
 
@@ -1861,7 +1862,8 @@ def test_core_active_but_silent_for_30_minutes_is_stuck(device, host, hub, keys)
     result = updater(host, hub).run()
 
     assert result["phase"] == "stuck"
-    assert result["reason"] == "CORE active but not writing status; operator action required"
+    assert result["reason"].startswith("CORE active but not writing status; operator action required")
+    assert "rosy-release-push.ps1 -Rollback" in result["reason"]  # L3
     assert state(device)["applying"]["release_id"] == NEXT
     assert not RESTARTING & set(kinds(host))
 
@@ -1919,7 +1921,8 @@ def test_repeated_transient_apply_failures_back_off_then_hold(device, host, hub,
     result = up.run()
 
     assert result["phase"] == "held"
-    assert result["reason"] == "repeated transient apply failures; operator action required"
+    assert result["reason"] == upd.ESCALATED_REASON
+    assert result["reason"].startswith("repeated transient apply failures; operator action required")
     assert kinds(host).count("activate") == 3
     assert NEXT not in state(device).get("failed", {})
 
@@ -2075,7 +2078,7 @@ def test_rollback_pending_gives_up_after_five_retries(device, host, hub, keys):
     assert "operator" in results[5]["reason"]
     assert state(device).get("applying") is None
     assert kinds(host).count("rollback") == 6
-    assert phases[6] == "idle"  # no further rollback attempts
+    assert phases[6] == "failed"  # stays visible (L2), no further rollback attempts
 
 
 def test_a_claim_release_error_does_not_crash_the_run(device, host, hub, keys, monkeypatch):
@@ -2091,3 +2094,144 @@ def test_a_claim_release_error_does_not_crash_the_run(device, host, hub, keys, m
 
     assert result["phase"] == "committed"
     assert any(entry["event"] == "claim_release_failed" for entry in history(device))
+
+
+# --- verification review (REQUEST CHANGES) ---------------------------------------------
+
+
+def test_a_self_rollback_is_not_mistaken_for_an_operator_rollback(device, host, hub, keys):
+    # HIGH: N9 must not catch our own unmarked rollback (N7); the release is retried.
+    hub.publish(keys, NEXT)
+
+    def switched_then_timed_out(h, argv):
+        h.links = {"current": NEXT, "previous": CURRENT}
+        return subprocess.CompletedProcess([], 124, "", "TIMEOUT")
+
+    host.overrides["activate"] = switched_then_timed_out
+    up = updater(host, hub)
+    up.run()
+    assert host.links == {"current": CURRENT, "previous": NEXT}
+    assert NEXT not in state(device).get("failed", {})
+
+    del host.overrides["activate"]
+    host.t += dt.timedelta(hours=1)
+    result = up.run()
+
+    assert NEXT not in state(device).get("failed", {}), state(device).get("failed")
+    assert result["phase"] == "committed", result
+    assert NEXT not in state(device).get("self_rolled_back", {})  # cleared by the commit
+
+
+def test_stuck_is_measured_from_the_first_silent_resume(device, host, hub, keys):
+    # M1: an old journal is not stuck the moment it is first seen silent.
+    _resume_case(device, host, hub, keys)
+    journal(device, "image-layer-sync", started_at=_z(T0 - dt.timedelta(hours=2)))
+    _stale_inputs(device, host)
+    up = updater(host, hub)
+
+    assert up.run()["phase"] == "ineligible"
+    assert state(device)["applying"]["silent_since"] == _z(T0)
+    host.t = T0 + dt.timedelta(minutes=29)
+    assert up.run()["phase"] == "ineligible"
+    host.t = T0 + dt.timedelta(minutes=31)
+    assert up.run()["phase"] == "stuck"
+
+
+def test_silent_since_restarts_after_a_held_resume(device, host, hub, keys):
+    # M1: silence, then a hold, then silence again is a new silent period.
+    _resume_case(device, host, hub, keys)
+    _stale_inputs(device, host)
+    up = updater(host, hub)
+    assert up.run()["phase"] == "ineligible"
+    assert state(device)["applying"]["silent_since"] == _z(T0)
+
+    up.hold("agent", "x", 1)
+    host.t = T0 + dt.timedelta(minutes=5)
+    assert up.run()["phase"] == "held"
+    assert "silent_since" not in state(device)["applying"]
+
+    up.release_hold()
+    host.t = T0 + dt.timedelta(minutes=31)
+    assert up.run()["phase"] == "ineligible"  # not stuck: silent only since now
+    assert state(device)["applying"]["silent_since"] == _z(host.t)
+
+
+def test_silent_since_is_cleared_by_an_eligible_resume(device, host, hub, keys):
+    # M1: an eligible (waived, then deferred) resume ends the silent period.
+    _resume_case(device, host, hub, keys)
+    _stale_inputs(device, host)
+    up = updater(host, hub)
+    assert up.run()["phase"] == "ineligible"
+    assert state(device)["applying"]["silent_since"] == _z(T0)
+
+    _core_down_until_restarted(host, fresh_after_restart=False)
+    host.t = T0 + dt.timedelta(minutes=5)
+    result = up.run()
+    assert result["phase"] == "ineligible" and "deferred" in result["reason"]
+    assert "silent_since" not in state(device)["applying"]
+
+    host.t = T0 + dt.timedelta(minutes=31)
+    assert up.run()["phase"] == "ineligible"  # CORE back but silent: a new period, not stuck
+
+
+@pytest.mark.parametrize("error", [
+    "NATIVE_PRECHECK_FAILED: exit 1: Traceback (most recent call last)",
+    "NATIVE_PRECHECK_FAILED: precheck could not run: timed out after 60 seconds",
+], ids=["crashed", "timeout"])
+def test_a_precheck_that_failed_is_an_apply_error_not_busy(device, host, hub, keys, error):
+    # M2
+    hub.publish(keys, NEXT)
+    host.overrides["activate"] = lambda h, argv: subprocess.CompletedProcess(
+        [], 1, json.dumps({"ok": False, "error": error}), "")
+
+    result = updater(host, hub).run()
+
+    assert result["phase"] == "error"
+    assert "precheck" in result["reason"].lower()
+    assert state(device)["apply_errors"][NEXT]["attempts"] == 1
+    assert NEXT not in state(device).get("failed", {})
+
+
+def test_runtime_mismatch_is_definitive(device, host, hub, keys):
+    # L1
+    hub.publish(keys, NEXT)
+    host.overrides["activate"] = lambda h, argv: subprocess.CompletedProcess(
+        [], 1, json.dumps({"ok": False, "error": "NATIVE_RUNTIME_MISMATCH: core-only native systemd"}), "")
+    assert updater(host, hub).run()["phase"] == "failed"
+    assert NEXT in state(device)["failed"]
+
+
+def test_rollback_failure_stays_visible(device, host, hub, keys):
+    # L2: after the N12 cap the robot keeps saying so until a person fixes it.
+    hub.publish(keys, NEXT)
+    host.overrides["ready"] = lambda h, argv: (subprocess.CompletedProcess([], 1, "", "x")
+                                              if h.links["current"] == NEXT else None)
+    host.overrides["rollback"] = lambda h, argv: subprocess.CompletedProcess(
+        [], 1, json.dumps({"ok": False, "error": "NATIVE_RELEASE_BUSY: x"}), "")
+    up = updater(host, hub)
+    for _ in range(6):
+        up.run()
+    assert state(device)["last_result"]["outcome"] == "rollback_failed"
+
+    result = up.run()
+
+    assert result["phase"] == "failed"
+    assert result["last_result"]["outcome"] == "rollback_failed"
+    assert "rosy-release-push.ps1 -Rollback" in result["reason"]
+    assert kinds(host).count("rollback") == 6
+
+    host.links = {"current": CURRENT, "previous": NEXT}  # the operator rolled back
+    assert up.run()["phase"] == "idle"
+
+
+def test_escalation_reasons_name_the_remedy(device, host, hub, keys):
+    # L3
+    hub.publish(keys, NEXT)
+    host.overrides["activate"] = lambda h, argv: subprocess.CompletedProcess([], 124, "", "TIMEOUT")
+    up = updater(host, hub)
+    for _ in range(3):
+        up.run()
+        host.t += dt.timedelta(hours=7)
+    result = up.run()
+    assert result["phase"] == "held"
+    assert "release-hold" in result["reason"]
