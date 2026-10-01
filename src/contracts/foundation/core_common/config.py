@@ -13,6 +13,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import re
 from pathlib import Path
@@ -20,7 +21,10 @@ from typing import Any, Optional
 
 import yaml
 
+_LOG = logging.getLogger(__name__)
+
 DEFAULT_CONFIG_NAME = "rosy_default.yaml"
+ROBOT_CORE_CONFIG_NAME = "core.yaml"
 DEV_AUTH_CONFIG_NAME = "rosy_dev_auth.yaml"
 LOCAL_CONFIG_PATH = Path.home() / ".rosy" / "rosy.yaml"
 RUNTIME_MODES = frozenset({"core", "motor", "hardware"})
@@ -72,8 +76,10 @@ def dev_auth_enabled() -> bool:
 def _robot_package_layer(config: dict[str, Any], overlay: Any) -> dict[str, Any]:
     """The robot package's `core.yaml` (D-196): robot facts CORE needs, e.g. its
     LiDAR forward angle. The model is ROSY_ROBOT, else the overlay's
-    robot.model, else the default's; a robot package without the file (or not
-    found) adds nothing, and the profile loader reports a missing package."""
+    robot.model, else the default's. A robot package that exists must ship the
+    file (ConfigError otherwise: a silently missing layer would point the
+    Pinky Pro obstacle stop at the rear). An unknown model or missing package
+    adds nothing and logs one warning; the profile loader then refuses it."""
     from core_common.profile import DEFAULT_ROBOT, robot_config_dir
 
     overlay_robot = overlay.get("robot") if isinstance(overlay, dict) else None
@@ -83,11 +89,13 @@ def _robot_package_layer(config: dict[str, Any], overlay: Any) -> dict[str, Any]
     if not re.fullmatch(r"[a-z][a-z0-9_]*", str(model)):
         return {}  # ROSY_ROBOT is rejected below; a bad overlay model fails in the profile loader
     try:
-        path = robot_config_dir(str(model)) / "core.yaml"
-    except ConfigError:
+        path = robot_config_dir(str(model)) / ROBOT_CORE_CONFIG_NAME
+    except ConfigError as exc:
+        _LOG.warning("robot package CORE config layer skipped for model %r: %s", model, exc)
         return {}
     if not path.is_file():
-        return {}
+        raise ConfigError(f"robot package {model!r} has no {path}; every robot package must ship "
+                          f"{ROBOT_CORE_CONFIG_NAME} (an empty mapping is fine)")
     with open(path, encoding="utf-8") as f:
         layer = yaml.safe_load(f) or {}
     if not isinstance(layer, dict):
