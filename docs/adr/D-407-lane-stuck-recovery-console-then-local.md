@@ -46,3 +46,19 @@
 ## 잇는 결정
 
 D-2(단일 cmd_vel), D-143(차선 추종), D-321 부록(보정 세션), D-342(수동 한도 계단), D-344 §8·§11(hold·앞물체 정지), D-379(학습 자료), D-397(URDF 기본값·로봇별 교정).
+
+## 구현 메모 (2026-10-02, CORE 쪽, feat/d407-stuck-recovery-core)
+
+Status 는 Proposed 그대로다. CORE 쪽만 구현했고 Fleet 콘솔 화면(판단 요청 목록과 다섯 답)과 FleetAgent 의 답 중계는 다음 단계다. 막힘 사건은 다른 사건처럼 FleetAgent 사건 버퍼로 이미 올라간다.
+
+- 상태기계: `src/runtime/services/core_features/line_follow/stuck_recovery.py`(ROS 없음). 관리자 연결은 `stuck_wiring.py`(mixin), CORE 입력 묶기는 `src/runtime/gateway/core/line_follow_wiring.py`(관제 연결 = `FleetAgent.connected`, 보정 lease, `safety.manual_linear`, 미리보기 순서번호). 묶이지 않은 입력은 닫힌 쪽(연결 없음, 보정 중, 선속도 한도 0)으로 읽어 막힘을 열지 않는다.
+- 후진은 차선 추종 결정(`LineFollowDecision`, 음의 선속도)으로 나가 기존 line → traffic gate → CommandManager 경로를 탄다(D-2). 교통 정책이 ENFORCED 에서 HOLD 면 후진도 0 이다.
+- 답: `POST /api/v1/line-follow/stuck/decision {stuck_id, decision}`(Operator 이상, API Ref v1.72). 상태: `GET /api/v1/line-follow` 의 `stuck`. 사건 `nav.line_stuck_opened/asked/answered/local_attempt/local_result/closed`.
+- 설정: `line_follow.recovery_*`(기본 `recovery_local_enabled: false`), 몸 기하 `body_lidar_x_m`·`body_rear_x_m`·`body_rotation_radius_m` 는 로봇 패키지 `core.yaml` 에 URDF 공칭값(geometry.yaml, drift 시험)으로만 둔다. 없으면 후진하지 않는다.
+- 해석과 차이:
+  - 후진 거리는 시간으로 잰다(`recovery_back_m / 속도`). 오도메트리 폐루프가 아니다.
+  - 뒤 여유는 self-mask 적용 LiDAR 점의 뒤 직진 띠(`obstacle_corridor_half_width_m`)에서 몸 뒤끝(caster.rear_x_m)까지다. LiDAR `range_min` 안은 보이지 않으므로 `range_min - (LiDAR 에서 몸 뒤끝까지)` 가 `recovery_rear_clear_m` 보다 크면 후진을 거부한다(`rear_blind`). Pinky C1(range_min 약 0.15 m, 뒤끝까지 0.059 m)은 사각 0.091 m 라 지금 설정으로는 후진하지 않는다. 실기에서 켜기 전에 사각 처리(값 조정 또는 지나온 길 신뢰 규칙)를 사용자가 정해야 한다.
+  - 실패한 시도 뒤 시도가 남으면 관제를 다시 15 s 기다리지 않고 바로 다음 후진을 한다. 시도를 다 쓰거나 거부·중단되면 HOLD 로 남아 관제 답만 기다린다.
+  - `BACK_AND_RETRY` 도 `recovery_local_enabled` 와 최대 시도 수를 따른다(로컬 복구의 전제인 self-mask 측정이 같으므로).
+  - 막힘 중 앞이 스스로 비면(`obstacle_ahead` 가 풀리면) 사건을 `cleared` 로 닫는다.
+  - D-379 녹화 구간 표시는 아직 없다. 사건의 시각으로 구간을 찾을 수 있다.

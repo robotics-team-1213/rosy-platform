@@ -294,3 +294,9 @@
 - 변경: `SafetyManager.check_decision`/`decision_valid` 분리, `shadow.py` `ShadowLog`(락, 판정 단위 전이 이벤트, 1 s 반복, 최소 0.2 s 간격, suppressed/dropped 카운터), 그림자·집행 바인딩 상호 배타와 `shadow_evaluate`(예외 비전파), `CommandManager`가 그림자를 `announce_pending`에서 바퀴 출력 뒤에 판정, 네비게이션·도킹의 `policy_off`(모드 진입마다 첫 0 아닌 출력), `StateManager.set_safety_policy_provider`.
 - 증거: 전체 시험(gateway+services+foundation+api_web+test/) `5 failed, 5919 passed, 249 skipped, 31 warnings, 4 errors in 3428.70s`; `known_failures.py`는 exit 1: 9건 모두 이 브랜치가 건드리지 않은 시험이며(main 4804d417에서도 test_module_separation, test_release_boundary_guards, test_robot_literals, test_dashboard_drive 4건이 같게 실패, test_module_criteria C6와 test_behavior_test_ownership은 main이 이후 고쳤고 이 브랜치는 그 이전 기준) 이 브랜치 기인 실패는 0건.
 - gate 변화: 없음. SOURCE만. 그림자는 어느 로봇에서도 켜지 않았다(기본 off).
+
+## 2026-10-02 · feat/d407-stuck-recovery-core · feat(line_follow): D-407 막힘 복구 상태기계와 관리자 연결
+
+- 변경: `line_follow/stuck_recovery.py`(ROS 없는 상태기계: 열림·관제 요청·답 5종·15 s 시간초과·후진·1 s 정지·재판단·최대 시도), `stuck_wiring.py`(관리자 mixin: self-mask 점에서 몸 기준 앞 띠·뒤·회전 여유, 후진은 관리자 자신의 결정으로), `clearance.body_clearances`, `LineFollowConfig.recovery_*`·`body_*`. `set_mode`(OFF·E-Stop·IDLE)와 운전자 hold 끊김이 막힘을 닫는다.
+- 증거: `test_line_stuck_recovery.py` 31 passed(서비스), `test_line_follow_stuck.py` 12 passed(게이트웨이).
+- gate 변화: 없음. SOURCE만. 로컬 복구는 기본 꺼짐이고 어느 로봇에서도 켜지 않았다.
