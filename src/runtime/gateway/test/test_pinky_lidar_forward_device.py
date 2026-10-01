@@ -7,6 +7,8 @@ way rosy-core.service does: the image's runtime.env, ROSY_DEPLOYMENT=device, no
 ROSY_CONFIG, HOME=/var/lib/rosy/core with the first-boot overlay (card
 credential only) in ~/.rosy/rosy.yaml.
 """
+import sys
+import types
 from pathlib import Path
 
 import pytest
@@ -17,10 +19,31 @@ from core.services import _line_follow_config
 from core_common import config as config_module
 from core_common.calibration_store import CalibrationStore
 from core_common.config import load_config
+from core_common.profile import robot_config_dir
 
 REPO = Path(__file__).resolve().parents[4]
 RUNTIME_ENV = REPO / "deploy" / "robot" / "pinky_pro" / "native" / "rosy-runtime.env"
 DEFAULT = REPO / "src" / "contracts" / "foundation" / "config" / "rosy_default.yaml"
+
+
+@pytest.fixture(autouse=True)
+def no_ament_share(monkeypatch):
+    """ament importable but knowing no package, so the source tree decides: a stale
+    installed pinky_pro (or core_common) share on a sourced ROS box cannot leak in."""
+    package = types.ModuleType("ament_index_python")
+    packages = types.ModuleType("ament_index_python.packages")
+
+    class PackageNotFoundError(KeyError):
+        pass
+
+    def missing(name):
+        raise PackageNotFoundError(name)
+
+    packages.PackageNotFoundError = PackageNotFoundError
+    packages.get_package_share_directory = missing
+    package.packages = packages
+    monkeypatch.setitem(sys.modules, "ament_index_python", package)
+    monkeypatch.setitem(sys.modules, "ament_index_python.packages", packages)
 
 
 def _device_env(monkeypatch):
@@ -48,6 +71,8 @@ def _first_boot_overlay(tmp_path, extra=None):
 def test_pinky_pro_device_core_line_follow_watches_the_front(monkeypatch, tmp_path):
     _device_env(monkeypatch)
     monkeypatch.setattr(config_module, "LOCAL_CONFIG_PATH", _first_boot_overlay(tmp_path))
+    assert config_module._find_default_config() == DEFAULT
+    assert robot_config_dir("pinky_pro") == REPO / "src" / "products" / "pinky_pro" / "profile" / "config"
     config = load_config()
     assert config["robot"]["model"] == "pinky_pro"
     assert config["runtime"]["deployment"] == "device"
