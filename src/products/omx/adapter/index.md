@@ -39,8 +39,8 @@
 
 ## 최근 기록
 
+- 2026-10-02 · uncommitted · fix(omx): close final-owner joint-state sequence race
 - 2026-10-01 · uncommitted · test(omx): Fleet generation-stop terminal reconciliation
 - 2026-10-01 · uncommitted · test(omx): join Fleet grant to a ROS 2 ActionServer goal
 - 2026-10-01 · uncommitted · fix(pilot-sim): serve calibration.js on the sim port
 - 2026-10-01 · uncommitted · test(omx): pinned Jazzy timeout/cancel callback fault coverage
-- 2026-10-01 · uncommitted · D-390 Pilot simulation action bridge

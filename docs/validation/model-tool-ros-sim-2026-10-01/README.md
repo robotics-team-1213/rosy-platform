@@ -52,3 +52,12 @@ Next ROS-SIM closure joins the now-tested Fleet-to-UDS grant/receipt boundary to
 - A separate attempt to join the path to the running vendor Gazebo controller was halted after controller readiness repeatedly timed out and its launch reported joint3 command values outside the configured limit. No goal from that attempt was sent or treated as positive evidence.
 
 The overall ROS-SIM gate remains **HOLD**. The vendor Gazebo pending-goal generation-fence case and four-phase execution with independent simulated object/gripper evidence remain open; ARTIFACT remains HOLD, and DEVICE/FIELD remain PARKED.
+
+## 2026-10-02 final-dispatch start-state tolerance check
+
+- D-386 now states that the final local command owner must repeat start-state validation after the durable phase-intent write. If the sequence advances during that write, admission requires the command-bound validated start positions and per-joint tolerances; the owner compares them to the latest fresh joint state and consumes its sequence for the next-phase freshness fence. Missing tolerance evidence or any out-of-tolerance joint stays fail-closed. The planned source sequence is never rewritten to make an old path appear fresh.
+- Tests: command-owner tests cover a sequence advance within tolerance, an out-of-tolerance advance, and missing tolerance evidence. PickPlaceRunner tests verify it carries validated positions/tolerances. Full Windows OMX adapter suite: **171 passed, 4 skipped**; changed Python lint and compile checks passed.
+- Vendor Gazebo Fleet-stop probe was attempted once in the pinned Pilot image, with no device grants and a read-only checkout. It failed its `arm_controller` readiness preflight before creating the Fleet grant. The launch log showed the arm controller activating after the test's prior 45-second preflight expired, and also emitted a `joint3` command-limit warning. No ROS goal was submitted in that attempt. The probe timeout is now 180 seconds and it runs only the generation-change case with stop-on-first-failure; this timeout adjustment has not been rerun.
+- A follow-up in-process Jazzy check could not collect the ROS-dependent test because `rclpy` was unavailable to the selected `python3`; it is not counted as a pass. No vendor retry was made after the preflight failure.
+
+ROS-SIM remains **HOLD**. These source tests do not demonstrate vendor Gazebo goal acceptance/cancellation, physical stop, E-stop, device, or field acceptance. ARTIFACT remains HOLD; DEVICE/FIELD remain PARKED.

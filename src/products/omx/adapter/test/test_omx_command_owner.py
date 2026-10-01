@@ -67,9 +67,9 @@ def make_config(**changes):
     return replace(config, **changes)
 
 
-def make_state(*, sequence=10, received_at=100.0, calibration_revision="cal-7"):
+def make_state(*, sequence=10, received_at=100.0, calibration_revision="cal-7", positions=None):
     return JointStateSnapshot(
-        positions={"joint_1": 0.1, "joint_2": -0.1},
+        positions=positions or {"joint_1": 0.1, "joint_2": -0.1},
         sequence=sequence,
         received_at=received_at,
         calibration_revision=calibration_revision,
@@ -231,6 +231,60 @@ def test_duplicate_command_id_is_idempotent_but_cannot_change_payload():
     assert duplicate.reason == "duplicate_ignored"
     assert not reused.accepted and reused.reason == "command_id_reused"
     assert len(action.commands) == 1
+
+
+def test_newer_joint_state_inside_explicit_start_tolerance_can_close_dispatch_race():
+    clock = [100.01]
+    owner, action = owner_at(clock)
+    owner.observe_joint_state(make_state(sequence=10))
+    command = make_command(
+        expected_start_state_positions={"joint_1": 0.1, "joint_2": -0.1},
+        start_state_tolerances={"joint_1": 0.01, "joint_2": 0.01},
+    )
+    owner.observe_joint_state(make_state(
+        sequence=11, received_at=100.01,
+        positions={"joint_1": 0.105, "joint_2": -0.095},
+    ))
+
+    result = owner.submit(command)
+
+    assert result.accepted
+    assert result.reason == "submitted"
+    assert owner._last_command_state_sequence == 11
+    assert action.commands == [command]
+
+
+def test_newer_joint_state_outside_start_tolerance_is_rejected():
+    clock = [100.01]
+    owner, action = owner_at(clock)
+    owner.observe_joint_state(make_state(sequence=10))
+    owner.observe_joint_state(make_state(
+        sequence=11, received_at=100.01,
+        positions={"joint_1": 0.12, "joint_2": -0.1},
+    ))
+    command = make_command(
+        expected_start_state_positions={"joint_1": 0.1, "joint_2": -0.1},
+        start_state_tolerances={"joint_1": 0.01, "joint_2": 0.01},
+    )
+
+    result = owner.submit(command)
+
+    assert not result.accepted
+    assert result.reason == "start_state_outside_tolerance"
+    assert action.commands == []
+
+
+def test_advanced_state_without_explicit_start_tolerance_stays_fail_closed():
+    clock = [100.01]
+    owner, action = owner_at(clock)
+    owner.observe_joint_state(make_state(sequence=10))
+    owner.observe_joint_state(make_state(sequence=11, received_at=100.01))
+
+    result = owner.submit(make_command())
+
+    assert not result.accepted
+    assert result.reason == "joint_state_sequence_mismatch"
+    assert action.commands == []
 
 
 @pytest.mark.parametrize(

@@ -200,6 +200,9 @@ def test_first_phase_journals_acceptance_then_correlated_terminal_without_autoad
     runner.advance()
     assert len(port.submissions) == 2
     assert port.submissions[0][0].source_state_sequence == 9
+    expected_start = dict(zip(JOINTS, _plan().phases[0].start_state_positions))
+    assert dict(port.submissions[0][0].expected_start_state_positions) == expected_start
+    assert dict(port.submissions[0][0].start_state_tolerances) == {name: 0.01 for name in JOINTS}
     assert port.submissions[1][0].source_state_sequence == 10
     assert recorder.phases()[1]["state"] == "ACCEPTED"
     assert store.get_action("action-1")["state"] == "RUNNING"

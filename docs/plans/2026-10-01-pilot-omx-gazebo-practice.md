@@ -89,3 +89,11 @@
 ## 완료 조건
 
 Pilot에서 `omx_sim`을 선택해 제한된 관절·그리퍼 명령을 낼 수 있고, ROS goal의 수락과 실제 완료를 구분해 표시하며, 명령 이탈·취소·재시작에 HOLD/readback이 작동하고, 카메라·동작 기록의 출처가 검증된다. 같은 테스트에서 Pinky 주행이 회귀하지 않아야 한다. 이 완료는 OMX 실물 조종의 승인이나 AI 학습 성능을 뜻하지 않는다.
+
+## 2026-10-02 final-dispatch sequence-race closure
+
+D-386's final-owner check is now implemented. `TrajectoryCommand` carries the validated start positions and explicit per-joint tolerances bound to the fresh execution snapshot. After the phase intent is journaled, `ArmCommandOwner` compares its latest fresh state against those bounds; it admits a sequence advance only inside tolerance, consumes the latest sequence for future freshness checks, and preserves the original planned source sequence. Missing tolerance evidence and out-of-range movement stay fail-closed. Focused owner/runner tests went red before implementation and now cover allowed in-tolerance advance, rejected out-of-tolerance advance, missing evidence, and runner propagation.
+
+The pinned Pilot vendor Gazebo Fleet-stop attempt stopped before Fleet grant admission because the arm controller did not appear active within the former 45-second preflight. Launch output later showed arm controller activation and a joint3 command-limit warning. No goal was sent. The probe now has a bounded 180-second startup window and runs only the generation-change case with `-x`; this adjustment still needs one vendor rerun. ROS-SIM remains HOLD, as do ARTIFACT; DEVICE/FIELD remain PARKED.
+
+Verification: full Windows OMX adapter tests **171 passed, 4 skipped**; changed Python modules compiled; flake8 passed. A fresh in-process Jazzy rerun did not execute because the selected interpreter could not import `rclpy`; earlier pinned-image pass evidence remains in the validation report and does not validate this change. The vendor simulation retry is therefore still pending.

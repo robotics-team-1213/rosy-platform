@@ -1,4 +1,4 @@
-# omx_adapter logs
+﻿# omx_adapter logs
 
 추가만 한다. 형식: [module harness 설계](../../../docs/plans/2026-09-15-module-harness-design.md) §4.2.
 2026-09-22 이전 이력은 `git log -- src/apps/omx_adapter`를 본다.
@@ -183,3 +183,8 @@
 - Change: When an exact ROS phase result is terminal `CANCELED`, `ActionStore` now atomically records the phase result and holds the incomplete parent Action with reason `ROS_PHASE_CANCELED_ACTION_INCOMPLETE`. The Fleet-to-ROS ActionServer regression trips the Fleet generation fence while a goal is pending, sends stop over the authenticated UDS, waits for ROS terminal CANCELED, reconciles the device receipt to Mission HOLD, and confirms an old grant cannot replay a second goal.
 - Evidence: The regression was first run red on the Windows ROS-free unit test (parent stayed ACCEPTED), then green after the journal fix. In pinned `rosy-omx-pilot:local` (`sha256:e94662607c72a7cea83c9449178099c4c9476afab0519275ce0da82a88f3da9a`), Fleet-to-ROS plus Action API suites passed **18** tests. The generation-stop case uses an in-process ROS 2 ActionServer, not vendor Gazebo; it does not establish standstill, independent E-stop, or hardware safety.
 - Gate: SOURCE and ROS callback contract evidence only. Full ROS-SIM remains HOLD pending vendor Gazebo pending-goal fencing and four-phase evidence; ARTIFACT remains HOLD; DEVICE/FIELD remain PARKED.
+
+## 2026-10-02 · uncommitted · fix(omx): close final-owner joint-state sequence race
+- Change: Bind validated start positions and per-joint tolerances to each PickPlaceRunner command. After the durable phase-intent write, the final ArmCommandOwner compares the latest fresh joint-state sample against that binding; it consumes the latest sequence only when all joints remain in tolerance. Missing evidence and out-of-tolerance drift remain fail-closed. D-386 now defines this final-dispatch rule. Vendor probe startup preflight is 180 seconds, one generation case, and stop-on-first-failure.
+- Evidence: Regression tests failed before the fields existed; afterward, owner/runner tests passed. Full OMX adapter suite: 171 passed, 4 skipped. Changed Python files passed flake8 and py_compile. Vendor Gazebo attempt ended before Fleet grant because the controller was not observed active in the former 45-second preflight; launch log later showed activation and a joint3 command-limit warning. No ROS goal was sent. Current Jazzy in-process rerun skipped at collection because rclpy was unavailable to the selected interpreter.
+- Gate: SOURCE GO. ROS-SIM HOLD; new 180-second vendor retry remains pending. ARTIFACT HOLD; DEVICE/FIELD PARKED. No hardware stop, E-stop, grasp/place, or field claim.
