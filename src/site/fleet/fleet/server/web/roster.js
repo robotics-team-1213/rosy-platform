@@ -3,7 +3,7 @@
 
 // D-359 §5.2 — 카드의 짧은 값은 공용 <ui-tag>다. 주행(nav)·도착(ok)은 색이 아니라
 // ink인 active, 나머지는 태그의 warn/crit 어휘 그대로다.
-import { MODE_LABEL, enumLabel } from "/common/core_ui_logic.js";
+import { MODE_LABEL, enumLabel, EVIDENCE_LABEL } from "/common/core_ui_logic.js";
 import { addressReason } from "./address-drift.js";
 
 const TAG_STATUS = { nav: "active", ok: "active", warn: "warn", crit: "crit" };
@@ -59,7 +59,7 @@ export function createRoster({ el, view, log, call, render, streamEvidence, isOp
 
   function card(robot, index) {
     const node = document.createElement("article");
-    node.className = `robot s${index % view.colors.length}`;
+    node.className = "robot";
     node.dataset.robotId = robot.robot_id;
     if (!view.stateUnavailable && !robot.online) node.classList.add("offline");
     if (view.selected === robot.robot_id) node.classList.add("selected");
@@ -71,8 +71,8 @@ export function createRoster({ el, view, log, call, render, streamEvidence, isOp
     const pose = state.pose;
     const nav = navTag(state);
     const estop = state.safety?.estop;
-    const safetyLabel = !robot.online ? "—" : view.stateUnavailable ? "정보 없음" : estop === true ? "E-STOP"
-      : estop === false ? "OK" : "정보 없음";
+    const safetyLabel = !robot.online ? "—" : view.stateUnavailable ? EVIDENCE_LABEL.unavailable : estop === true ? "E-STOP"
+      : estop === false ? "OK" : EVIDENCE_LABEL.unavailable;
     const goalSafetyReason = view.stateUnavailable
       ? "Fleet 상태를 확인할 수 없어 목표를 보낼 수 없습니다."
       : estop === true

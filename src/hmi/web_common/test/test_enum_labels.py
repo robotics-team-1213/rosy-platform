@@ -49,6 +49,23 @@ def test_mode_words_are_the_sanctioned_ones():
         "대기", "수동", "내비게이션"]
 
 
+def test_evidence_words_are_the_closed_four_states():
+    """D-398 — 증거 어휘 표는 닫힌 네 상태와 키가 같고, 나이 뒤처리는 규격 규칙을 지킨다."""
+    labels = _run("logic.EVIDENCE_LABEL")
+    assert sorted(labels) == ["delayed", "disconnected", "fresh", "unavailable"]
+    assert labels["fresh"] == "최신"
+    assert labels["delayed"] == "지연"
+    assert labels["disconnected"] == "연결 끊김"
+    assert labels["unavailable"] == "정보 없음"
+    assert all(any("가" <= ch <= "힣" for ch in word) for word in labels.values()), labels
+
+
+def test_evidence_age_text_is_the_canonical_suffix():
+    assert _run("[logic.evidenceAgeText(4), logic.evidenceAgeText(1.26),"
+                " logic.evidenceAgeText(null), logic.evidenceAgeText(-1), logic.evidenceAgeText('x')]") == [
+        " · 4초 전", " · 1.3초 전", "", "", ""]
+
+
 def test_enum_label_shows_an_unknown_value_as_received_and_a_missing_one_as_fallback():
     assert _run("[logic.enumLabel(logic.MODE_LABEL, 'IDLE'), logic.enumLabel(logic.MODE_LABEL, 'NEW_MODE'),"
                 " logic.enumLabel(logic.MODE_LABEL, ''), logic.enumLabel(logic.MODE_LABEL, null, '확인 중'),"

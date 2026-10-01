@@ -104,7 +104,7 @@ function log(text, kind) {
   const now = new Date().toTimeString().slice(0, 8);
   line.textContent = `${now}  ${text}`;
   const box = el("log");
-  box.querySelector(".log-empty")?.remove();
+  box.querySelector("ui-empty")?.remove();
   box.prepend(line);
   while (box.childElementCount > LOG_MAX) box.lastElementChild.remove();
 }

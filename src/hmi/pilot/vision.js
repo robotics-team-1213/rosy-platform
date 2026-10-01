@@ -39,7 +39,7 @@ export function createVisionPreview({
         seq = null;
         release();
         hasFrame = false;
-        onUnavailable(status.body?.stale === true ? "프레임 지연(STALE)" : "카메라 프레임 수신 대기");
+        onUnavailable(status.body?.stale === true ? "카메라 프레임 지연" : "카메라 프레임 수신 대기");
         return;
       }
       if (status.body.sequence === seq) {

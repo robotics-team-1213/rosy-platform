@@ -1067,6 +1067,13 @@
 - Evidence: In the pinned local OMX Pilot image, the integration test passed (1). It uses an in-process ActionServer and bounded no-op goal; it is a ROS contract fixture, not a vendor Gazebo or physical grasp/place run. Provider dispatch remains disabled.
 - Gate: No gate promotion. ROS-SIM remains HOLD; ARTIFACT HOLD; DEVICE/FIELD PARKED.
 
+
+## 2026-10-01 · uncommitted · D-398 관측 상태 어휘·빈 로그·역할 토큰 정리
+
+- 변경: classifySightings의 state 'stale' → 'delayed'(닫힌 증거 네 상태로 수렴; map-view 소비처 동반 수정), streamEvidence 나이 뒤처리 'N초' → 'N초 전'(DESIGN.md 규격). roster.js '정보 없음'을 EVIDENCE_LABEL.unavailable로, 죽은 s{index} 클래스 제거. index.html 빈 로그 .log-empty → 공용 ui-empty. styles.css ground-soft/card → surface-flat/raised, min-height 100vh → 100dvh.
+- 근거: D-398. site-layer.test.mjs·fleet 시험 통과, test_fleet_console_browser pin 갱신, test_console_camera_pairing의 낡은 문자열 핀을 allSettled 실제에 맞게 갱신(HEAD에서도 깨져 있던 것).
+- gate 변화: 없음.
+
 ## 2026-10-01 · uncommitted · feat(fleet): D-395 위치 중재 채점 단서 (순수)
 - 변경: 새 하위 패키지 `fleet/localization/` — `cues.py`: 다른 LOCALIZED 로봇 일치(+1)/시야 안인데 안 보임(−1), 슬롯(10 cm / 20°, 축 앞뒤 모두), 마지막 정상 자세(픽업 뒤 0), 300 ms보다 신선한 오버헤드 sighting, 기준 사각형(맞으면 +1, 없는 곳에 보이거나 보여야 할 곳에 없으면 −1). 입력이 없으면 0. 비대칭 단서만 결정을 실을 수 있다(개정 3). `test_boundaries.py`가 이 폴더의 전송·asyncio·server import를 막는다.
 - 증거: `test_localization_cues.py` + `test_boundaries.py` 33 passed.
