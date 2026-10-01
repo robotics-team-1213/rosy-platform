@@ -64,6 +64,12 @@ All files live under `/var/lib/rosy/updates/` (root 0755; files 0644 except wher
   - `docking_state` (string or null), `line_follow_mode`, `line_follow_state` (strings)
   - `swarm_active` (bool), `estop` (bool), `activity_kind` (null or string, e.g. `"CALIBRATING"`)
 - **Values** come from the same snapshot that `GET /api/v1/robot/state` returns.
+- **Every added key may be null.** Null means unknown, and an unknown value makes the robot ineligible; it is never treated as idle.
+  - `velocity_*` are null unless the velocity channel is fresh.
+  - `battery_percent` is null unless the battery channel is fresh, and `battery_charging` is null whenever `battery_percent` is null.
+  - NaN and Inf are written as null.
+  - Free strings longer than 64 chars are written as null.
+- **The reader (T2) must evaluate null-ineligibility first.** A null `battery_percent` is ineligible even if `battery_charging` is true. A null `estop`, `swarm_active`, `line_follow_*` or `velocity_*` is ineligible.
 - **Readers:**
   - `rosy-boot-status.py` must accept schema 1 and 2.
   - T2 requires schema >= 2 and treats the file as stale after 60 s.
