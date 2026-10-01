@@ -96,12 +96,17 @@ class RosyCoreNode(Node):
         self.core.control_adapter = self.control_adapter
         if self.control_adapter.enabled:
             self.control_adapter.bind_safety(self.core.safety)
-        # D-47 addendum: one LiDAR mount for line_follow (accepted store record > hand value;
-        # the adapter binding is only compared).
+        # D-47 addendum / D-397: one LiDAR mount for line_follow (operator overlay >
+        # accepted store record > URDF-nominal hand value; the adapter binding is only compared).
         from core.lidar_mount import resolve_lidar_forward_deg
+        from core_common.config import local_overlay
+        try:
+            operator_deg = (local_overlay().get("line_follow") or {}).get("lidar_forward_deg")
+        except Exception:  # noqa: BLE001 - load_config already read this file; never block CORE start
+            operator_deg = None
         forward_deg, forward_source, forward_warn = resolve_lidar_forward_deg(
             config.get("line_follow", {}) or {}, hand_default=self.core.line_follow.config.lidar_forward_deg,
-            adapter_parameters=self.control_adapter.bound_parameters)
+            adapter_parameters=self.control_adapter.bound_parameters, operator_deg=operator_deg)
         self.core.line_follow.use_lidar_forward(forward_deg, forward_source)
         log = self.get_logger().warning if forward_warn else self.get_logger().info
         log(f"line_follow LiDAR forward {forward_deg:.2f} deg from {forward_source}")

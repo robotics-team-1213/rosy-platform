@@ -14,7 +14,7 @@ def robot_contract(namespace: str) -> dict:
         "base_frame": f"{namespace}/base_footprint",
         "wheel_joints": ("l_wheel_joint", "r_wheel_joint"),
         "wheel_radius": 0.028,
-        "wheel_distance": 0.0961,
+        "wheel_distance": 0.0971,   # URDF nominal contact separation (D-397 geometry.yaml)
         "max_linear_speed": 0.2,
         "max_angular_speed": 0.8,
     }

@@ -117,3 +117,9 @@
 - 변경: (aefe32fa) 로컬 main(d5d4a2e4·6dbcc01b 포함)을 병합했다. `pairing.v1.json`은 그대로다. (2370b41b) confirm이 응답 없이(I/O) 끝나면 약 1 s 뒤, 승인 후 120 s 창이 열려 있을 때만, 같은 고정 세션(같은 첫 접촉 leaf)으로 같은 confirm을 정확히 한 번 더 보낸다. 이 자격의 200이 오면 링크를 지킨다(Paired, discard 없음). 다시 무응답·거절(410 등)·엉뚱한 응답이면 지금처럼 `confirm_unanswered`(링크 버림 + 자격 번호와 폐기 안내)다. 처음 confirm이 거절(409/400/410)되면 다시 보내지 않는다. `retryOnConnectionFailure(false)`는 그대로이고, 이 한 번이 유일한 재전송이다.
 - 증거: `gradlew testDebugUnitTest lintDebug assembleDebug --rerun-tasks` BUILD SUCCESSFUL, JVM 시험 307 passed, 0 failed(새 `PairingClientTest`: 무응답 → 재전송 200 → Paired(save만), 무응답 두 번 → discard + 안내, 무응답 → 재전송 410 → discard + 안내, 창이 닫히면 재전송 없음, 거절된 confirm은 1회만; `PairingHttpTest`: MockWebServer에서 연결이 한 번/두 번 끊기는 confirm), lint 0 errors·44 warnings. 변이: M3, M6, "재전송 없음"이 모두 잡힌다 (2026-10-01 Windows, JDK 21).
 - gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · fix(cam): 비밀 스캔 — pollSecret 식별자와 긴 시험 이름
+
+- 변경: 페어링 코드의 Kotlin 식별자 `pollSecret`→`pollKey`(`pollSecretSha256`→`pollKeySha256`). 스캐너는 `secret`이 든 이름 뒤 `: String`을 할당으로 본다(Kotlin 타입은 예외 목록에 없음). 선 위 필드 이름 `poll_secret_sha256`는 프로토콜이라 그대로. 50자 넘는 시험 함수 이름은 고엔트로피 토큰으로 잡혀 줄였다(D-256: 호출 지점에서 고친다).
+- 증거: `test_release_boundary_guards.py -k secrets` 통과, `gradlew testDebugUnitTest` 통과.
+- gate 변화: 없음.

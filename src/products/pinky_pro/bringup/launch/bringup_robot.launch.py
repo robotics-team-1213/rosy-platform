@@ -57,8 +57,11 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument('enable_lidar', default_value='true',
                               description='Enable the serial LiDAR driver'),
-        DeclareLaunchArgument('wheel_radius', default_value='0.027'),
-        DeclareLaunchArgument('wheel_separation', default_value='0.0961'),
+        # Operator override (m). 0 keeps the URDF nominal of the parameter files
+        # (D-397), refined by an accepted wheel_odometry calibration record;
+        # a positive value wins over both.
+        DeclareLaunchArgument('wheel_radius', default_value='0.0'),
+        DeclareLaunchArgument('wheel_separation', default_value='0.0'),
         DeclareLaunchArgument('motor_device', default_value='/dev/ttyAMA4'),
         DeclareLaunchArgument('motor_baudrate', default_value='1000000'),
         DeclareLaunchArgument('motor_ids', default_value='[1, 2]'),
@@ -110,8 +113,12 @@ def generate_launch_description():
                     'use_sim_time': use_sim_time,
                 }, os.path.join(bringup_share, 'config', 'pinky_pro_adapter.yaml'),
                    os.path.join(bringup_share, 'config', 'rosy_params.yaml'), {
-                    'wheel_radius': LaunchConfiguration('wheel_radius'),
-                    'wheel_separation': LaunchConfiguration('wheel_separation'),
+                    'wheel_radius_override': ParameterValue(
+                        LaunchConfiguration('wheel_radius'), value_type=float
+                    ),
+                    'wheel_separation_override': ParameterValue(
+                        LaunchConfiguration('wheel_separation'), value_type=float
+                    ),
                     'cmd_vel_timeout_s': LaunchConfiguration('cmd_vel_timeout_s'),
                     'drive_enabled': ParameterValue(
                         LaunchConfiguration('drive_enabled'), value_type=bool

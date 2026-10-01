@@ -7,6 +7,7 @@ way rosy-core.service does: the image's runtime.env, ROSY_DEPLOYMENT=device, no
 ROSY_CONFIG, HOME=/var/lib/rosy/core with the first-boot overlay (card
 credential only) in ~/.rosy/rosy.yaml.
 """
+import math
 import sys
 import types
 from pathlib import Path
@@ -94,6 +95,33 @@ def test_operator_overlay_still_wins(monkeypatch, tmp_path):
     overlay = _first_boot_overlay(tmp_path, {"line_follow": {"lidar_forward_deg": 182.0}})
     monkeypatch.setattr(config_module, "LOCAL_CONFIG_PATH", overlay)
     assert load_config()["line_follow"]["lidar_forward_deg"] == 182.0
+
+
+def test_order_urdf_nominal_then_record_then_operator_overlay(monkeypatch, tmp_path):
+    """D-397: core.yaml's URDF nominal 180 < an accepted lidar_mount record < the operator overlay."""
+    from core_common.config import local_overlay
+    _device_env(monkeypatch)
+    store = CalibrationStore(tmp_path / "store")
+
+    def resolved():
+        config = load_config()
+        operator = (local_overlay().get("line_follow") or {}).get("lidar_forward_deg")
+        return resolve_lidar_forward_deg(config["line_follow"], hand_default=0.0, store=store,
+                                         robot="rosy_18", operator_deg=operator)
+
+    monkeypatch.setattr(config_module, "LOCAL_CONFIG_PATH", _first_boot_overlay(tmp_path))
+    deg, source, _ = resolved()
+    assert deg == 180.0 and "hand value" in source
+    rid = store.add("rosy_18", "lidar_mount", {"lidar_yaw_offset": math.radians(181.9)}, method="t/1")
+    store.set_status("rosy_18", "lidar_mount", rid, "accepted", actor="operator")
+    deg, source, _ = resolved()
+    assert deg == pytest.approx(181.9) and rid in source
+    overlay = tmp_path / "op" / "rosy.yaml"
+    overlay.parent.mkdir()
+    overlay.write_text(yaml.safe_dump({"line_follow": {"lidar_forward_deg": 183.0}}), encoding="utf-8")
+    monkeypatch.setattr(config_module, "LOCAL_CONFIG_PATH", overlay)
+    deg, source, warn = resolved()
+    assert deg == 183.0 and "operator overlay" in source and warn is False
 
 
 @pytest.mark.parametrize("how", ["env", "overlay"])

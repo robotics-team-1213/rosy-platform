@@ -4,13 +4,18 @@ Lidar sits on top of the chassis, so a live scan is walls, not the body.
 """
 import math
 
-# pinky.urdf.xacro, metres, base_link origin.
-WHEEL_Y = 0.04055
-WHEEL_R = 0.028
+# URDF nominal (D-397: src/products/pinky_pro/profile/config/geometry.yaml, from
+# rosy.urdf.xacro; drift-tested), metres, base_link origin. A calibrated
+# robot_radius refines the circumradius below (use_radius).
+WHEEL_Y = 0.04055                 # wheels.joint_y_m
+WHEEL_R = 0.028                   # wheels.radius_m
 CASTER_X = 0.0585
-CASTER_EXTRA = 0.011 + 0.0065
-LIDAR_X = -0.017
-FRONT_X = 0.0295
+CASTER_EXTRA = 0.011 + 0.0065     # CASTER_X + CASTER_EXTRA = -caster.rear_x_m
+LIDAR_X = -0.017                  # lidar.x_m
+FRONT_X = 0.0295                  # ir.mid.x_m
+# Swept body radius for in-place rotation: footprint.rotation_radius_m (collision
+# meshes, 0.0826) rounded up to the millimetre.
+ROTATION_RADIUS = 0.083
 
 RADIUS_LO = 0.040
 RADIUS_HI = 0.150

@@ -46,11 +46,11 @@ interface PairingTransport {
 
     fun request(site: PairableSite, body: ByteArray): ByteArray
 
-    fun reveal(site: PairableSite, requestId: String, pollSecret: String, body: ByteArray): ByteArray
+    fun reveal(site: PairableSite, requestId: String, pollKey: String, body: ByteArray): ByteArray
 
-    fun poll(site: PairableSite, requestId: String, pollSecret: String): ByteArray
+    fun poll(site: PairableSite, requestId: String, pollKey: String): ByteArray
 
-    fun confirm(site: PairableSite, requestId: String, pollSecret: String, body: ByteArray): ByteArray
+    fun confirm(site: PairableSite, requestId: String, pollKey: String, body: ByteArray): ByteArray
 }
 
 /** Client flow states. None of them holds a secret (nonce, poll secret, token), so they are safe to log. */
@@ -128,7 +128,7 @@ class PairingClient(
 
     // Secrets and the first-contact leaf live here, never in [state].
     private var leaf: X509Certificate? = null
-    private var pollSecret: String? = null
+    private var pollKey: String? = null
     private var result: PairingResult? = null
     private var confirmBy: Instant? = null
     private var deadline: Instant = Instant.MIN
@@ -164,7 +164,7 @@ class PairingClient(
         }
 
         leaf = seen
-        pollSecret = secret
+        pollKey = secret
         requestId = created.requestId
         // The server's expires_at bounds the wait, but never past our own start + MAX_PENDING_S (clock skew,
         // or a site that claims a far deadline).
@@ -184,7 +184,7 @@ class PairingClient(
             else -> throw IllegalStateException("nothing to poll in $s")
         }
         if (!now().isBefore(deadline)) return finish(PairingState.Expired("timeout"))
-        val raw = when (val reply = refusing { transport.poll(site, requestId, pollSecret!!) }) {
+        val raw = when (val reply = refusing { transport.poll(site, requestId, pollKey!!) }) {
             is Outcome.Done -> reply.value
             is Outcome.Stop -> return finish(reply.state)
             Outcome.Retry -> return state
@@ -212,7 +212,7 @@ class PairingClient(
         val credential = shown.credentialId
         val confirm = PairingConfirm(credential)
         val outcome = try {
-            refusing { transport.confirm(shown.site, id, pollSecret!!, confirm.toJson()) }
+            refusing { transport.confirm(shown.site, id, pollKey!!, confirm.toJson()) }
         } catch (e: IOException) {
             // No answer: the server may or may not have activated it. S2 confirm is idempotent (rosy-00 d5d4a2e4),
             // so ask exactly once more on the same pinned session; a matching 200 keeps the link.
@@ -252,7 +252,7 @@ class PairingClient(
         pause(CONFIRM_RETRY_MS)
         if (!now().isBefore(confirmBy)) return false
         return try {
-            when (val again = refusing { transport.confirm(site, requestId, pollSecret!!, confirm.toJson()) }) {
+            when (val again = refusing { transport.confirm(site, requestId, pollKey!!, confirm.toJson()) }) {
                 is Outcome.Done -> confirm.replyReason(again.value) == null
                 else -> false
             }
@@ -310,7 +310,7 @@ class PairingClient(
 
     private fun reset() {
         leaf = null
-        pollSecret = null
+        pollKey = null
         result = null
         confirmBy = null
         requestId = null

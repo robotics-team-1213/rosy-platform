@@ -18,7 +18,7 @@ def test_single_robot_ros_contract_matches_core_boundary():
     assert contract["base_frame"] == "rosy_01/base_footprint"
     assert contract["wheel_joints"] == ("l_wheel_joint", "r_wheel_joint")
     assert contract["wheel_radius"] == 0.028
-    assert contract["wheel_distance"] == 0.0961
+    assert contract["wheel_distance"] == 0.0971
 
 
 def test_namespace_is_required_and_bounded():
