@@ -212,3 +212,36 @@ def test_takeover_is_serialised_by_the_claim_lock(device):
 
     assert claim_mod.acquire(device, "rosy-auto-update", "update", 1800, now=later)["holder"] == "rosy-auto-update"
     assert (device / "run" / "rosy-claim.lock").is_file()
+
+
+def test_cli_refresh(device, capsys):
+    # T3's push: rosy_claim.py refresh --holder H --ttl-s N
+    assert claim_mod.main(["--root", str(device), "refresh", "--holder", "push-pc", "--ttl-s", "600"]) == 3
+    missing = json.loads(capsys.readouterr().out)
+    assert missing == {"ok": False, "error": "CLAIM_MISSING", "claim": None}
+
+    claim_mod.acquire(device, "push-pc", "release push", 60)
+    before = json.loads((_claim_dir(device) / "claim.json").read_text(encoding="utf-8"))["expires_at"]
+    assert claim_mod.main(["--root", str(device), "refresh", "--holder", "push-pc", "--ttl-s", "1800"]) == 0
+    refreshed = json.loads(capsys.readouterr().out)
+    assert refreshed["ok"] is True and refreshed["claim"]["holder"] == "push-pc"
+    assert refreshed["claim"]["expires_at"] > before
+
+    assert claim_mod.main(["--root", str(device), "refresh", "--holder", "other", "--ttl-s", "600"]) == 3
+    busy = json.loads(capsys.readouterr().out)
+    assert busy["ok"] is False and busy["error"] == "CLAIM_BUSY" and busy["claim"]["holder"] == "push-pc"
+
+    assert claim_mod.main(["--root", str(device), "refresh", "--holder", "push-pc", "--ttl-s", "0"]) == 2
+    capsys.readouterr()
+    with pytest.raises(SystemExit) as caught:
+        claim_mod.main(["--root", str(device), "refresh", "--holder", "push-pc"])
+    assert caught.value.code == 2
+
+
+def test_cli_refresh_waits_for_the_claim_lock(device, capsys, monkeypatch):
+    claim_mod.acquire(device, "push-pc", "release push", 60)
+    monkeypatch.setattr(claim_mod, "LOCK_WAIT_S", 0.2)
+    with claim_mod._claim_lock(device, wait_s=1.0):
+        assert claim_mod.main(["--root", str(device), "refresh", "--holder", "push-pc", "--ttl-s", "600"]) == 3
+    busy = json.loads(capsys.readouterr().out)
+    assert busy["error"] == "CLAIM_BUSY" and "lock" in busy["detail"]
