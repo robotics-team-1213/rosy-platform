@@ -797,3 +797,8 @@
 - 변경: `sensing/perception/paint_hypothesis.py` `paint_score` — 카메라의 바닥 페인트 점(base_link)을 가설 자세로 지도에 놓고 페인트 입자 필터와 같은 거리 점수(exp(−평균 거리/5 mm), 3 cm 상한)를 낸다. 점이 10개 미만이면 None(증거 없음).
 - 증거: `test_paint_hypothesis.py` 7 passed — map_v2_fleet 여섯 자세에서 참 > 0.9, 거울 < 0.1.
 - gate 변화: 없음(SOURCE/LOCAL). 실제 카메라 차선 마스크 연결은 2단계.
+
+## 2026-10-01 · uncommitted · feat(perception): 기준 사각형 HSV 검출기, 출력 계약 고정 (D-395 개정 1 6항)
+- 변경: `sensing/perception/reference_square.py` — 출력 계약 `SquareObservation(bearing_rad, range_m, confidence)`(base_link, 왼쪽 +), `SquareDetector` 프로토콜, 규칙 백엔드 `HsvSquareDetector`(파란 중심 연결 요소 + 둘레 빨간 고리 비율, 거리는 지면 평면에서 중심 행). 지면 평면이 없으면 결과 없음, 신뢰 거리 밖이면 방위만. 학습 클래스 `reference_square`가 같은 `detect(bgr, ground)` 뒤로 바꿔 들어올 수 있다. sensing·perception AGENTS 표에 D-395 모듈 행 추가.
+- 증거: `test_reference_square.py` 11 passed — 합성 영상(카펫·벽·11.8° 피치), 0.3–0.6 m에서 방위 3°·거리 3 cm, 카펫·흰 페인트·고리 없는 파랑·중심 없는 빨강은 0개. 합성 영상은 검출기와 같은 믿음이므로 실제 프레임 1장도 돌렸다: 8kcn 20260930T133221Z 프레임 78(320×240, 피치 11.2°, 높이 0.0627 m 가정)에서 1개, 방위 왼쪽 10.2°, 거리 0.43 m, 신뢰 0.91. 한 장이라 가시 거리·조명 범위는 여전히 미검증(2단계 P2-8).
+- gate 변화: 없음(SOURCE/LOCAL).
