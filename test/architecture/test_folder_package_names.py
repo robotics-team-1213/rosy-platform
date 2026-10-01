@@ -28,6 +28,7 @@ FOLDER_TO_PACKAGE = {
     "runtime/sensing": "control",
     "runtime/services": "core_features",
     "site/vision": "rosy_vision",  # D-377: app package rosy_<word> in folder <word>
+    "site/cell": "rosy_cell",
 }
 
 

@@ -59,6 +59,11 @@ modules:
     tests: [src/site/vision/test]
     functional_kind: pytest
     functional: [src/site/vision/test]
+  - name: rosy_cell
+    path: src/site/cell
+    tests: [src/site/cell/test]
+    functional_kind: pytest
+    functional: [src/site/cell/test]
   # D-374: Android JVM tests need a JDK/Gradle, so the host functional surface is the
   # registry/icon/role contract tests; `gradlew testDebugUnitTest` runs in android.yml.
   - name: cam

@@ -88,6 +88,10 @@ jobs:
       - name: Test (Rosy Vision receiver)
         run: python3 -m pytest src/site/vision/test -q
 
+      # Rosy Cell 코어는 ROS·네트워크 없이 돈다(D-399 Application). 기본 이름 겹침이 없도록 따로 돈다.
+      - name: Test (Rosy Cell core)
+        run: python3 -m pytest src/site/cell/test -q
+
       # 멀티 인스턴스 런치는 로봇마다 포트·HOME·설정을 갈라야 한다. 그 계약은 런치
       # 파일을 실제로 실행해야 검증되므로 ROS 오버레이가 필요하다. ros_gz_sim share 가
       # 없는 러너에서는 테스트가 스스로 skip 한다 — 조용히 통과하는 것이 아니라
