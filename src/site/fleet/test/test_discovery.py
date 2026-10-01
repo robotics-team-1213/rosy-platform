@@ -139,7 +139,6 @@ def test_console_raises_an_alarm_when_the_scanner_lease_expires():
     assert "scanner_age_s" in block and "rosy-mdns-bridge" in block
 
 
-
 def test_only_rfc1918_scan_addresses_are_accepted():
     """Review 2026-10-01: is_private also admits link-local, documentation, benchmark and CGNAT."""
     store = DiscoveryStore(clock=lambda: 100.0)
@@ -165,4 +164,3 @@ def test_move_target_is_rfc1918_even_if_a_row_slipped_in(tmp_path):
     discovery._clock = lambda: 100.0
     row = {"discovery_name": "rosy-pinky-8kcn", "hostname": "rosy-pinky-8kcn", "address": MOVED}
     assert service._current_other_address(row) is None
-

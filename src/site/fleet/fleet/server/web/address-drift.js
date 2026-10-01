@@ -18,7 +18,8 @@ export function addressReason(entry) {
   const file = entry.origin === "static";
   if (entry.status === "outside_scanned_subnets") {
     return {
-      text: `고정 주소 ${entry.pinned}이(가) 지금 망에 없습니다 — `
+      // /24로 어림한 판정이라 단정하지 않는다(address_drift.py docstring).
+      text: `고정 주소 ${entry.pinned}이(가) 지금 망에 없을 수 있습니다 — `
         + (file ? "robots.yaml의 base_url을 확인하세요." : "로봇이 발견 목록에 다시 보이면 새 주소로 옮길 수 있습니다."),
       action: null,
     };
@@ -46,11 +47,15 @@ export function addressReason(entry) {
   return { text: `같은 로봇이 ${seen[0]}에 보입니다 — 등록부가 주소 바뀜을 확인하면 옮길 수 있습니다.`, action: null };
 }
 
-export const RENUMBER_BANNER = "사이트 망 주소가 바뀐 것 같습니다 — 고정된 로봇 주소가 모두 지금 스캔된 망 밖입니다. "
-  + "같은 로봇이 새 주소에 보이면 확인 후 옮기고, 파일 로봇은 robots.yaml을 고치세요.";
+export const RENUMBER_BANNER = "사이트 망 주소가 바뀌었을 수 있습니다 — IP로 고정된 로봇 주소가 모두 지금 스캔된 망 밖입니다. "
+  + "같은 로봇이 새 주소에 보이면 로봇 화면 코드로 옮기고, 파일 로봇은 robots.yaml을 확인하세요.";
 
-export function renumberBanner(payload) {
-  return payload?.all_outside ? RENUMBER_BANNER : null;
+// 이름(.local)으로 고정된 로봇이 지금 연결돼 있으면 망 전체가 바뀐 것은 아니다 — 띄우지 않는다.
+export function renumberBanner(payload, robots = []) {
+  if (!payload?.all_outside) return null;
+  const online = new Set(robots.filter((robot) => robot.online).map((robot) => robot.robot_id));
+  const named = (payload.robots || []).filter((entry) => entry.pinned_is_name);
+  return named.some((entry) => online.has(entry.robot_id)) ? null : RENUMBER_BANNER;
 }
 
 // "새 주소로 옮기기 (전체)" 대상: 서버가 옮길 수 있다고 한 등록 로봇만(새 주소가 하나, 등록부 address_changed).

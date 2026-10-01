@@ -17,7 +17,7 @@ const entry = (over) => ({
 test("a pinned address outside every scanned subnet says so instead of a bare offline", () => {
   const reason = addressReason(entry({}));
   assert.equal(reason.action, null);
-  assert.match(reason.text, /^고정 주소 192\.0\.2\.10:8080이\(가\) 지금 망에 없습니다/);
+  assert.match(reason.text, /^고정 주소 192\.0\.2\.10:8080이\(가\) 지금 망에 없을 수 있습니다/);
   const file = addressReason(entry({ origin: "static" }));
   assert.match(file.text, /robots\.yaml/);
 });
@@ -54,9 +54,15 @@ test("in-subnet and unknown robots get no address line", () => {
   assert.equal(addressReason(undefined), null);
 });
 
-test("the renumber banner follows the server's all_outside flag only", () => {
+test("the renumber hint follows all_outside unless a name-pinned robot is online", () => {
   assert.equal(renumberBanner({ all_outside: true, robots: [] }), RENUMBER_BANNER);
-  assert.match(RENUMBER_BANNER, /^사이트 망 주소가 바뀐 것 같습니다/);
+  assert.match(RENUMBER_BANNER, /^사이트 망 주소가 바뀌었을 수 있습니다/);
+  const payload = { all_outside: true, robots: [entry({}),
+    entry({ robot_id: "rosy_01", origin: "static", pinned: "rosy-a.local:8080", pinned_is_name: true,
+      status: "unknown", in_subnet: null })] };
+  assert.equal(renumberBanner(payload, [{ robot_id: "rosy_01", online: false }]), RENUMBER_BANNER);
+  assert.equal(renumberBanner(payload, [{ robot_id: "rosy_01", online: true }]), null);
+  assert.equal(renumberBanner(payload, [{ robot_id: "rosy_09", online: true }]), RENUMBER_BANNER);
   assert.equal(renumberBanner({ all_outside: false }), null);
   assert.equal(renumberBanner(null), null);
   assert.deepEqual(Object.keys(addressMap({ robots: [entry({}), entry({ robot_id: "rosy_01" })] })),

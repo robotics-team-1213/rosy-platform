@@ -1011,3 +1011,9 @@
 - 변경: 리뷰 MEDIUM — 공유 분류기의 `is_private`는 링크 로컬은 막지만 문서용(192.0.2.0/24)·벤치마크(198.18.0.0/15)·0.0.0.0을 사설로 본다. `server/discovery.py`에 `is_rfc1918()`(수동 주소 `parse_manual_address`와 같은 세 대역)을 두고 `replace_scan`이 그 밖의 행을 기존 `bad_address`로 거절한다. `enrollment._current_other_address`도 같은 검사를 한 번 더 한다(앞 커밋). 공유 `discovery_txt` 분류기는 다른 클라이언트의 벡터가 걸려 있어 건드리지 않았다.
 - 증거: `test_discovery.py` 2 추가 — 169.254/192.0.2/198.18/100.64/0.0.0.0/공인/멀티캐스트 거절, RFC 1918 세 대역 수용(192.0.2.5에서 적색 확인), 스캔 행에 문서용 주소가 들어 있어도 옮기기 대상이 아님. 발견·등록 API 시험 38 passed.
 - gate 변화: 없음(LOCAL).
+
+## 2026-10-01 · uncommitted · fix(discovery): 망 밖 판정은 힌트로 말하고, 이름 고정은 경보를 세우지도 막지도 않는다
+
+- 변경: 리뷰 MEDIUM·LOW — (1) 카드 문구 "…지금 망에 없을 수 있습니다", 경보 "사이트 망 주소가 바뀌었을 수 있습니다 — IP로 고정된 …"로 단정을 뺐다. (2) `all_outside`는 IP 고정이 하나 이상이고 그것이 모두 망 밖일 때만 켜진다. 이름(`.local`) 고정은 서버 판정에서 빠지고, 콘솔(`renumberBanner(payload, robots)`)이 이름 고정 로봇 중 하나라도 지금 연결돼 있으면 경보를 띄우지 않는다. (3) 스캔 행은 등록부가 쓰는 발견(TXT) 이름으로만 맞춘다 — avahi 호스트 이름에서 `.local`을 뗀 값은 더 이상 신원이 아니다. (4) `address_drift.py` docstring에 /24 가정과 그 한계(더 넓은 접두사의 사이트에서 틀릴 수 있음, 그래서 힌트)를 적었다. 앞 커밋의 `test_discovery.py` 빈 줄 lint도 고쳤다.
+- 증거: `test_address_drift.py` 2(이름 고정과 경보, 호스트 이름 불일치) 적색 확인 뒤 녹색, `address-drift.test.mjs` 문구·억제 2 적색 확인 뒤 10 passed.
+- gate 변화: 없음(LOCAL).

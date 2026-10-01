@@ -402,7 +402,7 @@ async function refreshAddresses() {
   }
   addressPayload = payload;
   const banner = el("address-banner");
-  const text = renumberBanner(payload);
+  const text = renumberBanner(payload, view.robots);
   banner.hidden = !text;
   if (text && banner.textContent !== text) banner.textContent = text;
   const targets = bulkMoveTargets(payload);

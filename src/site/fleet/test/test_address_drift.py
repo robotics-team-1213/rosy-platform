@@ -107,12 +107,25 @@ def test_local_name_is_not_resolved_and_the_scan_address_is_only_a_suggestion():
     assert entry["movable"] is False
 
 
-def test_local_name_not_in_the_scan_is_unknown_and_blocks_the_banner():
+def test_name_pins_neither_raise_nor_block_the_banner():
+    # The console suppresses the banner when a name-pinned robot is online; the server counts
+    # only IP pins, and needs at least one.
     pinned = {"rosy_01": "http://rosy-a.local:8080", "rosy_02": "http://192.168.1.11:8080"}
     result = classify_addresses(pinned, [_row("rosy-x", "10.16.36.20")],
                                 names={"rosy_01": "rosy-a"})
     assert _by_id(result)["rosy_01"]["status"] == "unknown"
-    assert result["all_outside"] is False
+    assert result["all_outside"] is True
+    only_names = classify_addresses({"rosy_01": "http://rosy-a.local:8080"},
+                                    [_row("rosy-x", "10.16.36.20")], names={"rosy_01": "rosy-a"})
+    assert only_names["all_outside"] is False
+
+
+def test_rows_match_by_discovery_name_not_by_hostname():
+    # The register keys on the TXT/discovery name; an avahi host name alone is not identity.
+    result = classify_addresses({"rosy_09": "http://192.168.1.202:8080"},
+                                [_row("rosy-x", "10.16.36.20", hostname="rosy-pinky-8kcn.local")],
+                                names={"rosy_09": "rosy-pinky-8kcn"})
+    assert _by_id(result)["rosy_09"]["status"] == "outside_scanned_subnets"
 
 
 def test_port_change_alone_is_not_an_address_change():

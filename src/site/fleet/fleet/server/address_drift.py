@@ -2,12 +2,15 @@
 
 Fleet -> CORE is plain HTTP, so the address stays pinned (D-361 3, D-370 5.3). This module
 only explains: it never resolves a `.local` name and never follows a new address. A scan
-row carries no robot_id or device_uid, so the identity here is the robot's discovery name
-(the same key the enrollment register matches on); "새 주소로 옮기기" then re-verifies
-robot_id, hostname, serial and device_uid over the token before anything moves.
+row carries no robot_id or device_uid, so the identity here is the row's discovery (TXT)
+name, the same key the enrollment register matches on; an avahi host name is not used.
+"새 주소로 옮기기" re-pairs with the robot's screen code and compares robot_id, hostname,
+serial and device_uid before anything moves.
 
-Scan rows carry no netmask. A scanned subnet is the /24 around each scanned address plus
-any `site_networks` the caller knows (the site host's interfaces).
+Assumption: scan rows carry no netmask, so a "scanned subnet" is the /24 around each
+scanned address plus any `site_networks` the caller knows (the site host's interfaces,
+not wired today). A site on a wider prefix (say a /22) can read as "outside" for a pin
+that is in fact reachable, so every result is a hint for the operator, never an action.
 """
 
 from __future__ import annotations
@@ -37,12 +40,8 @@ def _ip(host: str):
 
 
 def _row_names(row: dict) -> set[str]:
-    names = {str(row.get("name") or "").lower()}
-    host = str(row.get("hostname") or "").lower().rstrip(".")
-    if host:
-        names.add(host.removesuffix(".local"))
-    names.discard("")
-    return names
+    name = str(row.get("name") or "").lower()
+    return {name} if name else set()
 
 
 def classify_addresses(pinned: dict[str, str], rows: list[dict] | None, *,
@@ -53,7 +52,9 @@ def classify_addresses(pinned: dict[str, str], rows: list[dict] | None, *,
     `names`: robot_id -> lowercase discovery name for robots with a known identity.
     `movable`: robot_ids the enrollment register holds at `address_changed`.
     Each robot gets one status: `in_scanned_subnet`, `outside_scanned_subnets`,
-    `seen_at_other_address` or `unknown`. `all_outside` is the site-renumber banner.
+    `seen_at_other_address` or `unknown`. `all_outside` (the site-renumber hint) needs at
+    least one IP pin and every IP pin outside the scanned subnets; name pins do not count
+    here, and the console suppresses the hint when a name-pinned robot is online.
     """
     networks = [ipaddress.ip_network(net, strict=False) for net in site_networks]
     for row in rows or ():
@@ -88,5 +89,6 @@ def classify_addresses(pinned: dict[str, str], rows: list[dict] | None, *,
             "movable": (robot_id in movable and status == "seen_at_other_address"
                         and len(seen) == 1 and not at_pinned),
         })
+    ip_pins = [entry for entry in robots if not entry["pinned_is_name"]]
     return {"robots": robots,
-            "all_outside": bool(robots) and all(entry["in_subnet"] is False for entry in robots)}
+            "all_outside": bool(ip_pins) and all(entry["in_subnet"] is False for entry in ip_pins)}
