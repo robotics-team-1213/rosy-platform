@@ -1167,3 +1167,16 @@
 - 변경: `FleetConsole.hold_for_localization` 이 bay 로 가는 길(현재 자리→bay)이 미확정 로봇의 keep-out 을 지나는 양보를 취소하고 `_yielding` 에서 지운다. 대형(팔로워 또는 리더)이 keep-out 안에 있으면(신뢰 자세가 없으면 언제나) `formation_stop()` 으로 대형 전체를 멈춘다 — 세션에 로봇별 정지가 없다. 반환 목록에 `"formation"`.
 - 증거: `test_server_traffic.py` +2.
 - gate 변화: console.py 1096 → 1111 (판정 갱신).
+
+## 2026-10-02 · uncommitted · fix(fleet): D-395 S1 벤치 — 앵커 peer, 못 본 peer 는 0, 보고 수로 세는 감시, unsupported 는 최종
+
+- 변경: [S1 벤치 결과](../../docs/plans/2026-10-02-d395-s1-bench-results.md) 발견 3·7 과 사다리 재요청을 고쳤다.
+  - **앵커 peer (안전).** 트랙이 180° 대칭이라 함께 뒤집힌 로봇들은 서로 맞아 보인다. peer 는 앵커를 퍼뜨릴 뿐 대칭을 깨지 못한다. S1 에서 미러 고정된 r2 가 r1 의 쌍둥이 자세에 `peers` +1 을 줬고, margin 1.0 만이 번짐을 막았다. 이제 Fleet 이 로봇별 출처를 기록한다. `slot`/`square`/`paint`, `source: human`, 또는 앵커에서만 온 `peers` 로 실린 Fleet 결정의 자세에서 LOCALIZED 가 된 로봇만 앵커이고, `Context.peers` 에는 앵커만 들어간다(감시는 LOCALIZED 전부를 계속 본다). 처음부터 LOCALIZED 로 본 로봇, 결정 자세와 다른 곳(> 25 cm / 60°)에서 LOCALIZED 가 된 로봇은 다시 위치를 잡을 때까지 앵커가 아니다. LOCALIZED 를 벗어나거나, LOCALIZED 인 채 자세가 폴 사이에 0.25 m + 0.5 m/s·dt 또는 0.5 rad + 2 rad/s·dt 넘게 뛰면(Fleet 을 거치지 않은 주입) 출처가 지워진다. 읽기 실패 폴은 출처를 유지한다.
+  - **`peers` 단서.** 시야 안인데 못 본 peer 는 −1 이 아니라 0. 객체를 하나도 보고하지 않은 관찰자는 0. S1 에서 −1 하나로 쌍둥이가 6번 2.0 앞섰다.
+  - **감시.** 1.5 s 연속 대신 서로 다른 신선한 불일치 보고 2건(15 s 창, 사이에 일치 보고 없음). 같은 보고를 다시 읽어도 한 번. 보고가 4–7 s 간격으로 와서 예전 규칙은 한 번도 터지지 않았다.
+  - **사다리.** CORE 가 `unsupported` 로 거절한 종류는 LOCALIZED 가 될 때까지 다시 묻지 않고, homing 은 곧바로 `lane_to_stopline` 으로 간다. busy 재시도도 남은 종류만 묻는다(S1: 런마다 `to_square` 거절 13–20회).
+  - 계약 문서 §3 갱신. ADR 은 손대지 않았다(rev. 6 은 컨트롤러가 쓴다).
+- 증거: `test_localization_service.py`(앵커 연쇄, 출처 없는 peer 불사용, SUSPECT·자세 점프·다른 자세 LOCALIZED 시 앵커 해제, S1 재현 — 미러 peer 가 리드를 못 준다, S1 보고 간격 4/5.5/7 s 감시, unsupported 최종), `test_localization_cues.py`, `test_localization_arbiter.py`. 앵커 필터를 빼면 S1 재현을 포함한 3건이 실패함을 확인. `python -m pytest src/site/fleet/test -q` 1312 passed, 7 skipped (2026-10-02 Windows).
+- gate 변화: 없음. S1 재실행(Gazebo) 전이다.
+- 결정: D-395 rev. 6 대기
+- 교훈: 대칭 지도에서 상대 단서는 출처가 확인된 기준점에서만 증거다.

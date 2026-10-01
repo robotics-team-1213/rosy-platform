@@ -71,8 +71,8 @@
 
 ## 최근 기록
 
+- 2026-10-02 · uncommitted · fix(fleet): D-395 S1 벤치 — 앵커 peer, 못 본 peer 는 0, 보고 수로 세는 감시, unsupported 는 최종
 - 2026-10-02 · uncommitted · fix(fleet): D-395 P2-7 리뷰 — 미션 전 정지가 양보·대형도 멈춘다
 - 2026-10-02 · uncommitted · fix(fleet): D-395 P2-7 리뷰 — 사다리가 끝까지 간다, busy 는 다시 묻는다
 - 2026-10-02 · uncommitted · feat(fleet): D-395 P2-7 사다리가 미션을 보낸다, 미션 전 교통 정지
 - 2026-10-02 · uncommitted · 관제 콘솔 회차 2 — D-405/D-406 아이콘 크롬·카메라 설치 묶음·목표 토글
-- 2026-10-02 · uncommitted · 관제 콘솔 회차 — 예외 큐 신뢰·지도 위계·카드 문구 정리

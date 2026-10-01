@@ -1,8 +1,8 @@
 """Fleet localization service (D-395 Phase 2 P2-6, contract §3): poll, arbitrate, post.
 
 Every 0.5 s it reads each robot's `/robot/state`. For a robot in CANDIDATES it reads
-`/localization/candidates`, builds the arbiter `Context` (LOCALIZED map-frame peers,
-the reference squares and slots from `lane_rules.yaml`, and an overhead sighting no
+`/localization/candidates`, builds the arbiter `Context` (anchored LOCALIZED map-frame
+peers, see `_track_provenance`, the reference squares and slots from `lane_rules.yaml`, and an overhead sighting no
 older than 300 ms) and posts the arbiter's decision. It also runs the §9 monitor
 (`POST /localization/suspect`) and times the escalation ladder.
 
