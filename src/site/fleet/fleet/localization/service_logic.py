@@ -24,6 +24,10 @@ SUSPECT_DIST_M = 0.25
 SUSPECT_YAW_RAD = math.radians(60.0)
 SUSPECT_HOLD_S = 1.5
 SUSPECT_REASON = "fleet_monitor"
+#: A peer observation is an object this close to the peer's reported pose or its mirror.
+PEER_EVIDENCE_M = 0.25
+#: A candidate report stamped longer than this before Fleet fetched it gives no evidence.
+REPORT_FRESH_S = 1.0
 #: Contract §3 ladder: seconds in CANDIDATES before each rung.
 LADDER_ROTATE_S = 10.0
 LADDER_HOMING_S = 25.0
@@ -64,42 +68,62 @@ def clear_leader(report: CandidateReport, context: Context, now: float,
     return (c.x, c.y, c.yaw)
 
 
+def mirror(pose: cues.Pose) -> cues.Pose:
+    """The 180-degree twin of a pose on the symmetric track (about the map origin)."""
+    return (-pose[0], -pose[1], cues.wrap(pose[2] + math.pi))
+
+
 def peer_observations(report: CandidateReport, observer: cues.Pose,
                       peers: Mapping[str, cues.Pose]) -> dict[str, Observation]:
-    """Where `report`'s unmapped objects, placed from `observer`, put each LOCALIZED peer in view.
+    """Unambiguous evidence `report` gives about each LOCALIZED peer, objects placed from `observer`.
 
-    The nearest object to a peer's reported pose is that peer's observed position. No
-    objects at all is no observation (occlusion is not modelled)."""
+    Seen: an object within `PEER_EVIDENCE_M` of the peer's reported pose (observed there).
+    Seen elsewhere (the mirror-lock signature): no object near the reported pose and exactly
+    one within `PEER_EVIDENCE_M` of its 180-degree mirror (observed at that object). Anything
+    else (no objects, objects elsewhere, a hidden peer) is no evidence (review of lane C)."""
     placed = [cues.to_map(observer, (o.x, o.y)) for o in report.unmapped_objects]
-    if not placed:
-        return {}
     out = {}
     for robot_id, pose in peers.items():
-        if math.dist(observer[:2], pose[:2]) > cues.PEER_VIEW_M:
+        near = [p for p in placed if math.dist(p, pose[:2]) <= PEER_EVIDENCE_M]
+        if near:
+            nearest = min(near, key=lambda p: math.dist(p, pose[:2]))
+            out[robot_id] = (nearest[0], nearest[1], None)
             continue
-        nearest = min(placed, key=lambda p: math.dist(p, pose[:2]))
-        out[robot_id] = (nearest[0], nearest[1], None)
+        twin = mirror(pose)
+        at_mirror = [p for p in placed if math.dist(p, twin[:2]) <= PEER_EVIDENCE_M]
+        if len(at_mirror) == 1:
+            out[robot_id] = (at_mirror[0][0], at_mirror[0][1], None)
     return out
 
 
 @dataclass
 class Monitor:
-    """§9: disagreement held for `hold_s` -> suspect, once; agreement or no evidence resets."""
+    """§9: disagreement held for `hold_s` -> suspect, once; agreement resets.
+
+    A tick without evidence keeps the hold (robots re-report every 2 s and a report goes
+    stale after 1 s), but a hold with no disagreement for `hold_s` expires."""
     hold_s: float = SUSPECT_HOLD_S
     _since: dict = field(default_factory=dict)
+    _last: dict = field(default_factory=dict)
 
     def update(self, robot_id: str, disagreeing: Optional[bool], now: float) -> bool:
+        if disagreeing is None:
+            if now - self._last.get(robot_id, now) > self.hold_s:
+                self.forget(robot_id)
+            return False
         if not disagreeing:
-            self._since.pop(robot_id, None)
+            self.forget(robot_id)
             return False
         since = self._since.setdefault(robot_id, now)
+        self._last[robot_id] = now
         if now - since >= self.hold_s:
-            self._since.pop(robot_id, None)
+            self.forget(robot_id)
             return True
         return False
 
     def forget(self, robot_id: str) -> None:
         self._since.pop(robot_id, None)
+        self._last.pop(robot_id, None)
 
 
 @dataclass

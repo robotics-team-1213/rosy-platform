@@ -94,10 +94,40 @@ def test_the_monitor_needs_1_5_s_of_continuous_disagreement():
     assert not m.update("r", True, 1.0)
     assert not m.update("r", False, 1.2)            # agreement resets
     assert not m.update("r", True, 1.5)
-    assert not m.update("r", None, 2.0)             # no evidence resets too
-    assert not m.update("r", True, 2.5)
-    assert m.update("r", True, 4.0)
-    assert not m.update("r", True, 4.5)             # fired once; a new hold starts
+    assert not m.update("r", None, 2.0)             # a gap in evidence (stale report) keeps the hold
+    assert m.update("r", True, 3.0)
+    assert not m.update("r", True, 3.5)             # fired once; a new hold starts
+    assert not m.update("r", None, 5.5)             # no evidence for > 1.5 s: the hold expires
+    assert not m.update("r", True, 6.0)
+    assert not m.update("r", True, 7.0)
+    assert m.update("r", True, 7.5)
+
+
+def _report_at(objects, observer=None):
+    return report("r2", observer or ON_A, objects=objects)
+
+
+def test_a_peer_is_seen_only_by_an_object_within_25_cm_of_its_reported_pose():
+    seen = service_logic.peer_observations(_report_at([(0.5, 0.1)]), ON_A, {"r1": (-1.26, -0.01, 0.0)})
+    assert seen["r1"][:2] == pytest.approx((-1.16, -0.01)) and seen["r1"][2] is None
+    assert not service_logic.disagrees((-1.26, -0.01, 0.0), seen["r1"])
+
+
+def test_an_unrelated_object_is_no_evidence_about_a_hidden_peer():
+    # The peer is hidden; the only object is 0.8 m away from it and from its mirror.
+    assert service_logic.peer_observations(_report_at([(0.3, 0.8)]), ON_A,
+                                           {"r1": (-1.26, -0.01, 0.0)}) == {}
+    assert service_logic.peer_observations(_report_at([]), ON_A, {"r1": (-1.26, -0.01, 0.0)}) == {}
+
+
+def test_the_mirror_signature_is_one_object_at_the_mirror_and_none_at_the_reported_pose():
+    reported = (1.26, 0.01, math.pi)                     # mirror of (-1.26, -0.01, 0)
+    seen = service_logic.peer_observations(_report_at([(0.5, 0.0)]), ON_A, {"r1": reported})
+    assert seen["r1"][:2] == pytest.approx((-1.26, -0.01))
+    assert service_logic.disagrees(reported, seen["r1"])
+    # Two objects at the mirror: ambiguous, no evidence.
+    assert service_logic.peer_observations(_report_at([(0.5, 0.0), (0.5, 0.1)]), ON_A,
+                                           {"r1": reported}) == {}
 
 
 def test_the_ladder_rungs_and_their_reset():
@@ -175,15 +205,25 @@ def test_only_localized_map_frame_peers_are_context(peer_state, frame):
     assert _peer_case(peer_state, frame).decisions == []
 
 
-def _mirror_locked(clock, **kwargs):
-    """r1 says it is LOCALIZED at the mirror of where it is; r2 on slot A sees it 0.5 m ahead."""
+class Reporting(FakeRobot):
+    """Re-stamps its report on every read, `lag_s` behind the service clock."""
+
+    def __init__(self, robot_id, clock, pose, objects, lag_s=0.0):
+        super().__init__(robot_id, state=state(robot_id, "CANDIDATES", "odom"))
+        self.clock, self.pose, self.objects, self.lag_s = clock, pose, objects, lag_s
+
+    async def localization_candidates(self):
+        self._record("localization_candidates")
+        return report(self.robot_id, self.pose, objects=self.objects, stamp=self.clock() - self.lag_s)
+
+
+def _mirror_locked(clock, objects=((0.5, 0.0),), lag_s=0.0, **kwargs):
+    """r1 says it is LOCALIZED at the 180-degree mirror of where it is; r2 on slot A sees it
+    0.5 m ahead. With the peers cue, r1's wrong pose would pull r2 to its own mirror."""
     truth = (-1.26, -0.01, 0.0)                          # ON_A faces -y: 0.5 m ahead is here
-    # 0.6 m off: in view of r2's true pose, out of view (> 2 m) of its mirror candidate, so
-    # judging r2's pose with the peers cue would hand the lead to the mirror.
-    reported = (-1.26, -0.61, 0.0)
+    reported = (1.26, 0.01, math.pi)
     r1 = FakeRobot("r1", state=state("r1", "LOCALIZED", pose=reported))
-    r2 = FakeRobot("r2", state=state("r2", "CANDIDATES", "odom"))
-    r2.candidates = report("r2", ON_A, objects=[(0.5, 0.0)])
+    r2 = Reporting("r2", clock, ON_A, list(objects), lag_s)
     return truth, r1, r2, service(r1, r2, clock=clock, **kwargs)
 
 
@@ -200,6 +240,22 @@ def test_an_agreeing_peer_observation_never_marks_suspect():
     clock = FakeClock()
     truth, r1, _, svc = _mirror_locked(clock)
     r1._state = state("r1", "LOCALIZED", pose=truth)
+    ticks(svc, clock, 5.0)
+    assert r1.suspects == []
+
+
+def test_a_hidden_peer_and_an_unrelated_object_never_mark_suspect():
+    """Review fix: the nearest object used to count as the peer however far away it was."""
+    clock = FakeClock()
+    truth, r1, _, svc = _mirror_locked(clock, objects=[(0.3, 0.8)])
+    r1._state = state("r1", "LOCALIZED", pose=truth)
+    ticks(svc, clock, 5.0)
+    assert r1.suspects == []
+
+
+def test_a_report_stamped_more_than_1_s_before_its_fetch_is_no_evidence():
+    clock = FakeClock()
+    _, r1, _, svc = _mirror_locked(clock, lag_s=1.2)
     ticks(svc, clock, 5.0)
     assert r1.suspects == []
 

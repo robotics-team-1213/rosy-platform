@@ -170,7 +170,9 @@ class LocalizationService:
         leader = service_logic.clear_leader(
             report, Context(slots=self._slots, squares=self._squares,
                             last_good=context.last_good, sighting=context.sighting), now)
-        if leader is not None:
+        # Stamp versus Fleet's fetch time (wall clock; assumes the robot clock is NTP-synced).
+        fresh = self._wall() - report.stamp <= service_logic.REPORT_FRESH_S
+        if leader is not None and fresh:
             for peer, seen in service_logic.peer_observations(report, leader, peers).items():
                 observations.setdefault(peer, []).append(seen)
         decision = self._arbiter.observe(report, context, now)
