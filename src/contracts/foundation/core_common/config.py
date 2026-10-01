@@ -100,6 +100,13 @@ def _robot_package_layer(config: dict[str, Any], overlay: Any) -> dict[str, Any]
         layer = yaml.safe_load(f) or {}
     if not isinstance(layer, dict):
         raise ConfigError(f"{path} must be a mapping")
+    for key, value in layer.items():
+        # _deep_merge replaces a default section with whatever the layer holds,
+        # so an empty `line_follow:` (None) would wipe every default under it.
+        if value is None:
+            raise ConfigError(f"{path}: top-level key {key!r} is empty (null)")
+        if isinstance(config.get(key), dict) and not isinstance(value, dict):
+            raise ConfigError(f"{path}: top-level key {key!r} must be a mapping like the default")
     return layer
 
 

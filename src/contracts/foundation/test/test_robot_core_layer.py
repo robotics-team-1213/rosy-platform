@@ -53,5 +53,25 @@ def test_unknown_model_warns_once_naming_model_and_path(monkeypatch, robot_share
     assert "no_such_robot" in message and "products" in message
 
 
+@pytest.mark.parametrize("text, words", [
+    ("line_follow:\n", "'line_follow' is empty"),
+    ("line_follow: 180\n", "'line_follow' must be a mapping"),
+    ("robot:\n  model: robo\nsafety: []\n", "'safety' must be a mapping"),
+])
+def test_layer_may_not_wipe_a_default_section(monkeypatch, robot_share, text, words):
+    (robot_share / "core.yaml").write_text(text, encoding="utf-8")
+    monkeypatch.setenv("ROSY_ROBOT", "robo")
+    with pytest.raises(ConfigError) as caught:
+        load_config()
+    assert words in str(caught.value) and str(robot_share / "core.yaml") in str(caught.value)
+
+
+def test_layer_values_merge_under_the_defaults(monkeypatch, robot_share):
+    (robot_share / "core.yaml").write_text("line_follow:\n  lidar_forward_deg: 90.0\n", encoding="utf-8")
+    monkeypatch.setenv("ROSY_ROBOT", "robo")
+    line_follow = load_config()["line_follow"]
+    assert line_follow["lidar_forward_deg"] == 90.0 and line_follow["obstacle_stop_m"] == 0.20
+
+
 def test_pinky_pro_layer_is_shipped(no_ament_share):
     assert load_config()["line_follow"]["lidar_forward_deg"] == 180.0
