@@ -1,4 +1,4 @@
-"""D-396: geometry.yaml is the URDF evaluated, and every Pinky Pro default equals it.
+"""D-397: geometry.yaml is the URDF evaluated, and every Pinky Pro default equals it.
 
 The first test regenerates geometry.yaml from the xacro and fails on any
 difference, so the URDF and the profile config cannot drift. The rest pin each
@@ -30,9 +30,10 @@ def test_checked_in_geometry_matches_the_urdf():
     assert urdf_nominal.main(["--check"]) == 0
 
 
-def test_header_names_the_urdf_source_and_its_blob():
+def test_header_names_the_urdf_source_without_hashes():
     text = urdf_nominal.OUTPUT.read_text(encoding="utf-8")
-    assert "src/sim/description/urdf/rosy.urdf.xacro git blob " + urdf_nominal.git_blob(urdf_nominal.URDF) in text
+    assert "src/sim/description/urdf/rosy.urdf.xacro" in text
+    assert not re.search(r"[0-9a-f]{40}", text), "no hashes: the secret scan rejects 40-hex strings"
     assert "upstream import 6455b1a9" in text
 
 
@@ -217,3 +218,81 @@ def test_body_and_ir_consumers():
     assert _number(node, r"declare_parameter\('ir_half_span_m', ([0-9.]+)\)") == G["ir"]["half_span_m"]
     replay = _module_constants(REPO / "tools" / "perception" / "road_replay.py", "IR_HALF_SPAN_M")
     assert replay["IR_HALF_SPAN_M"] == G["ir"]["half_span_m"]
+
+
+# --- the extractor fails closed -------------------------------------------------------
+
+def _xacro(tmp_path, body, top=""):
+    path = tmp_path / "robot.xacro"
+    path.write_text(f"""<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">{top}
+  <xacro:macro name="insert_robot" params="namespace is_sim:=false">
+    <link name="base_footprint"/>
+    <link name="base_link"/>
+    <joint name="j" type="fixed"><parent link="base_footprint"/><child link="base_link"/>
+      <origin xyz="0 0 0.028" rpy="0 0 0"/></joint>
+{body}
+  </xacro:macro>
+</robot>
+""", encoding="utf-8")
+    return path
+
+
+def _expand(path):
+    return urdf_nominal.expand(path, args={"namespace": ""})
+
+
+def test_minimal_xacro_expands(tmp_path):
+    links, joints = _expand(_xacro(tmp_path, ""))
+    assert [j["xyz"] for j in joints] == [(0.0, 0.0, 0.028)]
+
+
+@pytest.mark.parametrize("top,body", [
+    ('<xacro:property name="r" value="0.03"/>', ""),
+    ("", '<xacro:insert_block name="blk"/>'),
+    ("", '<xacro:element xacro:name="link"/>'),
+    ("", '<xacro:include filename="$(find other)/urdf/x.xacro"/>'),
+    ("", '<xacro:not_a_macro/>'),
+    ('<xacro:macro name="m" params="a"><link name="m_${a}"/></xacro:macro>', '<xacro:m a="1" b="2"/>'),
+    ('<xacro:macro name="m" params="a"><link name="m_${a}"/></xacro:macro>', '<xacro:m/>'),
+    ("", '<link name="x"><collision><geometry><mesh filename="package://description/meshes/collision/'
+         'base_link.stl" scale="0.001 0.001 0.001"/></geometry></collision></link>'),
+    ("", '<link name="x"><visual><xacro:property name="p" value="1"/></visual></link>'),
+    ("", '<joint name="k" type="fixed"><parent link="base_link"/><child link="y"/>'
+         '<xacro:property name="p" value="1"/></joint>'),
+])
+def test_unsupported_xacro_is_an_error_not_a_guess(tmp_path, top, body):
+    path = _xacro(tmp_path, body, top)
+    with pytest.raises(ValueError):
+        links, joints = _expand(path)
+        for link in links:
+            for spec in link["collisions"]:
+                urdf_nominal._shape_points(spec)
+
+
+def test_joint_origin_inside_a_branch_is_honoured(tmp_path):
+    body = ('<link name="y"/><joint name="k" type="fixed"><parent link="base_link"/><child link="y"/>'
+            '<xacro:unless value="${is_sim}"><origin xyz="0.1 0 0" rpy="0 0 0"/></xacro:unless>'
+            '<xacro:if value="${is_sim}"><origin xyz="0.2 0 0" rpy="0 0 0"/></xacro:if></joint>')
+    _, joints = _expand(_xacro(tmp_path, body))
+    assert joints[-1]["xyz"] == (0.1, 0.0, 0.0)
+
+
+def test_a_comment_only_urdf_edit_keeps_the_values(tmp_path):
+    copy = tmp_path / "rosy.urdf.xacro"
+    text = urdf_nominal.URDF.read_text(encoding="utf-8")
+    copy.write_text(text.replace("<link name=\"base_footprint\"/>",
+                                 "<!-- a new comment -->\n        <link name=\"base_footprint\"/>"), encoding="utf-8")
+    assert urdf_nominal.expand(copy) == urdf_nominal.expand()
+
+
+def test_ascii_stl_with_a_long_name_and_garbage(tmp_path):
+    ascii_stl = tmp_path / "a.stl"
+    ascii_stl.write_text("solid " + "n" * 600 + "\n facet normal 0 0 1\n  outer loop\n"
+                         "   vertex 0 0 0\n   vertex 1 0 0\n   vertex 0 1 0\n  endloop\n endfacet\nendsolid\n",
+                         encoding="ascii")
+    assert urdf_nominal._stl_points(ascii_stl) == [(0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (0.0, 1.0, 0.0)]
+    garbage = tmp_path / "b.stl"
+    garbage.write_bytes(b"not an stl at all" * 10)
+    with pytest.raises(ValueError, match="neither a binary nor an ASCII STL"):
+        urdf_nominal._stl_points(garbage)

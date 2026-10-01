@@ -1,4 +1,4 @@
-"""Pinky Pro NOMINAL geometry from the URDF, without ROS (D-396).
+"""Pinky Pro NOMINAL geometry from the URDF, without ROS (D-397).
 
 Evaluates the fixed-joint chain of src/sim/description/urdf/rosy.urdf.xacro
 (Pinky Pro upstream import 6455b1a9, D-16) with the arg defaults of
@@ -9,8 +9,10 @@ store). test_urdf_nominal.py regenerates the file and fails on any drift.
 
 The xacro subset handled here is the one the file uses: macro params and
 their defaults, xacro:arg defaults, ${...} with pi and + - * /, ==,
-xacro:if/unless, a nested macro call, and fixed/continuous joint origins.
-Anything else fails loudly instead of being guessed. Stdlib only: Windows CI
+xacro:if/unless, the two known includes, calls to macros they define, the
+inertia helpers inside links, and fixed/continuous joint origins. Anything else
+(xacro:property, insert_block, element, an unknown include, macro or param, a
+mesh scale other than 1 1 1) raises instead of being guessed. Stdlib only: Windows CI
 has no ROS xacro.
 
     python tools/calibration/urdf_nominal.py            # rewrite geometry.yaml
@@ -20,7 +22,6 @@ from __future__ import annotations
 
 import argparse
 import ast
-import hashlib
 import math
 import operator
 import re
@@ -37,11 +38,15 @@ OUTPUT = REPO / "src" / "products" / "pinky_pro" / "profile" / "config" / "geome
 XACRO = "{http://www.ros.org/wiki/xacro}"
 XACRO_ALT = "{http://ros.org/wiki/xacro}"
 UPSTREAM_IMPORT = "6455b1a9"
-ADR = "D-396"
+ADR = "D-397"
 _OPS = {ast.Add: operator.add, ast.Sub: operator.sub, ast.Mult: operator.mul,
         ast.Div: operator.truediv, ast.USub: operator.neg, ast.UAdd: operator.pos}
 _EXPR = re.compile(r"\$\{([^}]*)\}")
-_ARG = re.compile(r"\$\(arg ([A-Za-z_][A-Za-z0-9_]*)\)")
+# The only includes the extractor follows; anything else fails.
+INCLUDES = {f"$(find description)/urdf/{name}": DESCRIPTION / "urdf" / name
+            for name in ("common/insert_inertia.urdf.xacro", "rosy_gz.urdf.xacro")}
+# xacro tags allowed inside a <link>: branches plus the inertia helpers (not geometry).
+LINK_XACRO = ("if", "unless", "box_inertia", "sphere_inertia", "cylinder_inertia")
 
 
 def _tag(element):
@@ -113,7 +118,8 @@ def expand(path=URDF, *, args=None, is_sim=False):
     """Expanded links and joints of insert_robot as ([links], [joints]) of plain dicts."""
     args = dict(arg_defaults() if args is None else args)
     root = ET.parse(path).getroot()
-    macros = {m.get("name"): m for m in root if _tag(m) == XACRO + "macro"}
+    macros = {}
+    _register(root, macros)
     top = macros["insert_robot"]
     env = {"pi": math.pi}
     for name, default in _params(top.get("params")):
@@ -131,6 +137,34 @@ def expand(path=URDF, *, args=None, is_sim=False):
     return links, joints
 
 
+def _register(root, macros):
+    for el in root:
+        tag = _tag(el)
+        if not isinstance(tag, str):
+            continue
+        if tag == XACRO + "macro":
+            macros[el.get("name")] = el
+        elif tag == XACRO + "include":
+            _include(el, macros)
+        elif tag.startswith(XACRO) and tag != XACRO + "arg":
+            raise ValueError(f"unsupported top-level xacro tag {tag[len(XACRO):]!r}")
+
+
+def _include(el, macros):
+    filename = el.get("filename", "")
+    if filename not in INCLUDES:
+        raise ValueError(f"unknown xacro include {filename!r}")
+    _register(ET.parse(INCLUDES[filename]).getroot(), macros)
+
+
+def _check_xacro(element, allowed):
+    """Fail closed: any xacro tag below `element` outside `allowed` is an error."""
+    for el in element.iter():
+        tag = _tag(el)
+        if isinstance(tag, str) and tag.startswith(XACRO) and tag[len(XACRO):] not in allowed:
+            raise ValueError(f"unsupported xacro tag {tag[len(XACRO):]!r} inside <{element.tag}>")
+
+
 def _walk(parent, env, macros, links, joints):
     for el in parent:
         tag = _tag(el)
@@ -142,24 +176,36 @@ def _walk(parent, env, macros, links, joints):
             if _truthy(_substitute(el.get("value"), env)) == (tag == XACRO + "if"):
                 _walk(el, env, macros, links, joints)
         elif tag == XACRO + "include":
+            _include(el, macros)
+        elif tag == XACRO + "arg":
             continue
         elif tag.startswith(XACRO):
             name = tag[len(XACRO):]
             if name not in macros:
-                continue  # inertia helpers from an include: not geometry
+                raise ValueError(f"unknown xacro macro or tag {name!r}")
+            spec = _params(macros[name].get("params"))
+            extra = set(el.attrib) - {pname for pname, _ in spec}
+            if extra:
+                raise ValueError(f"xacro:{name} called with unknown params {sorted(extra)}")
             inner = dict(env)
-            for pname, default in _params(macros[name].get("params")):
+            for pname, default in spec:
                 raw = el.get(pname)
+                if raw is None and default is None:
+                    raise ValueError(f"xacro:{name} missing param {pname!r}")
                 value = _substitute(raw, env) if raw is not None else default
                 inner[pname] = _literal(value) if isinstance(value, str) else value
             _walk(macros[name], inner, macros, links, joints)
         elif tag == "link":
+            _check_xacro(el, LINK_XACRO)
             links.append(_link(el, env))
         elif tag == "joint":
+            _check_xacro(el, ("if", "unless"))
+            flat = ET.Element("joint")
+            _flatten(el, env, flat)
             joints.append({"name": _substitute(el.get("name"), env), "type": el.get("type"),
-                           "parent": _substitute(el.find("parent").get("link"), env),
-                           "child": _substitute(el.find("child").get("link"), env),
-                           **_origin(el.find("origin"), env)})
+                           "parent": _substitute(flat.find("parent").get("link"), env),
+                           "child": _substitute(flat.find("child").get("link"), env),
+                           **_origin(flat.find("origin"), env)})
 
 
 def _origin(el, env):
@@ -183,6 +229,8 @@ def _link(el, env):
                 raw = shape.get(key)
                 spec[key] = (raw if key == "filename" else
                              tuple(float(v) for v in raw.split()) if key == "size" else float(raw))
+        if shape.tag == "mesh" and shape.get("scale", "1 1 1").split() != ["1", "1", "1"]:
+            raise ValueError(f"mesh scale {shape.get('scale')!r} unsupported (link {el.get('name')})")
         collisions.append(spec)
     return {"name": _substitute(el.get("name"), env), "collisions": collisions}
 
@@ -252,10 +300,15 @@ def _pitch(m):
 
 def _stl_points(path):
     data = Path(path).read_bytes()
-    if data[:5] == b"solid" and b"facet" in data[:400]:
-        return [tuple(float(v) for v in line.split()[1:4])
-                for line in data.decode("ascii", "replace").splitlines() if line.strip().startswith("vertex")]
-    count = struct.unpack("<I", data[80:84])[0]
+    count = struct.unpack("<I", data[80:84])[0] if len(data) >= 84 else -1
+    if len(data) != 84 + 50 * count:  # not binary by size: must be ASCII STL, whatever its name length
+        if not data.lstrip().startswith(b"solid"):
+            raise ValueError(f"{path}: neither a binary nor an ASCII STL")
+        points = [tuple(float(v) for v in line.split()[1:4])
+                  for line in data.decode("ascii", "replace").splitlines() if line.strip().startswith("vertex")]
+        if not points:
+            raise ValueError(f"{path}: ASCII STL without vertices")
+        return points
     points = []
     for i in range(count):
         values = struct.unpack("<12f", data[84 + 50 * i: 84 + 50 * i + 48])
@@ -354,12 +407,6 @@ def nominal(args=None):
     }
 
 
-def git_blob(path):
-    """`git hash-object` of the file with LF line endings (stable across checkouts)."""
-    data = Path(path).read_bytes().replace(b"\r\n", b"\n")
-    return hashlib.sha1(b"blob %d\0" % len(data) + data).hexdigest()
-
-
 def _fmt(value):
     if isinstance(value, str):
         return value
@@ -385,9 +432,10 @@ def render(table=None):
         "# GENERATED by tools/calibration/urdf_nominal.py - do not edit; regenerate with",
         "#   python tools/calibration/urdf_nominal.py",
         f"# Pinky Pro NOMINAL geometry ({ADR}): the fixed-joint chain of",
-        f"#   {rel(URDF)} git blob {git_blob(URDF)}",
+        f"#   {rel(URDF)}",
         f"#   (Pinky Pro upstream import {UPSTREAM_IMPORT}, D-16) with the arg defaults of",
-        f"#   {rel(ROBOT_URDF)} git blob {git_blob(ROBOT_URDF)}.",
+        f"#   {rel(ROBOT_URDF)}. Only the values matter: test_urdf_nominal.py",
+        "#   regenerates this file and fails if any value differs.",
         "# URDF nominal (upstream CAD, not measured); refined per robot by an accepted",
         "# calibration record (D-47 addendum store); an operator overlay wins over both.",
         "# Frame: base_footprint on the floor, x forward, y left; height_m is above the floor.",
