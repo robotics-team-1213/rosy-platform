@@ -318,7 +318,65 @@ def test_apply_writes_only_the_public_values_for_the_host_units(tmp_path):
     host = FakeHost(config=_config(bind="127.0.0.1", port="9443", lan_iface=""))
     assert module.main(["apply", "--env-file", str(env), "--public-env", str(public)], run=host) == 0
     assert public.read_text(encoding="utf-8") == \
-        "ROSY_SITE_TLS_HOST=site-pc.local\nROSY_SITE_HTTPS_PORT=9443\n"
+        "ROSY_SITE_TLS_HOST=site-pc.local\nROSY_SITE_HTTPS_PORT=9443\nROSY_SITE_PAIRING=0\n"
+
+
+OVERLAY = "/opt/rosy/candidate/deploy/site/compose.pairing.yaml"
+
+
+@pytest.mark.parametrize("pairing, written", [("1", "1"), ("0", "0"), ("", "0")])
+def test_pairing_keys_are_tolerated_and_the_switch_reaches_the_advertise_unit(tmp_path, pairing, written):
+    """D-341: the overhead unit reads ROSY_SITE_PAIRING from site-public.env."""
+    module = _module()
+    env = tmp_path / "site.env"
+    env.write_text(f"ROSY_SITE_BIND_ADDRESS=127.0.0.1\nROSY_SITE_PAIRING={pairing}\n"
+                   f"ROSY_SITE_PAIRING_COMPOSE={'-f ' + OVERLAY if pairing == '1' else ''}\n",
+                   encoding="utf-8")
+    public = tmp_path / "run/site-public.env"
+    host = FakeHost(config=_config(bind="127.0.0.1", lan_iface=""))
+    assert module.main(["apply", "--env-file", str(env), "--public-env", str(public)], run=host) == 0
+    assert f"ROSY_SITE_PAIRING={written}\n" in public.read_text(encoding="utf-8")
+    assert module.main(["check", "--env-file", str(env)], run=host) == 0
+
+
+def test_compose_config_sees_the_pairing_overlay_the_stack_passes(tmp_path):
+    module = _module()
+    env = tmp_path / "site.env"
+    env.write_text(f"ROSY_SITE_BIND_ADDRESS=0.0.0.0\nROSY_SITE_PAIRING=1\nROSY_SITE_PAIRING_COMPOSE=-f {OVERLAY}\n",
+                   encoding="utf-8")
+    host = FakeHost()
+    module.main(["check", "--env-file", str(env), "--compose-file", "compose.yaml"], run=host)
+    argv = host.calls[0][0]
+    assert argv[argv.index("-f"):argv.index("config")] == ["-f", "compose.yaml", "-f", OVERLAY]
+    stack = (ROOT / "deploy/site/rosy-site-stack.service").read_text(encoding="utf-8")
+    assert "compose.yaml $ROSY_SITE_PAIRING_COMPOSE up" in stack  # same word list, same order
+
+
+@pytest.mark.parametrize("value", ["--profile x", "-f", "-f a.yaml up"])
+def test_overlay_key_must_be_only_compose_file_pairs(tmp_path, capsys, value):
+    module = _module()
+    env = tmp_path / "site.env"
+    env.write_text(f"ROSY_SITE_PAIRING_COMPOSE={value}\n", encoding="utf-8")
+    assert module.main(["check", "--env-file", str(env)], run=FakeHost()) == 2
+    assert "-f <compose file>" in capsys.readouterr().err
+
+
+def test_real_compose_publishes_the_same_proxy_binding_with_the_pairing_overlay(tmp_path):
+    import shutil
+    import subprocess
+
+    if shutil.which("docker") is None or subprocess.run(
+            ["docker", "compose", "version"], capture_output=True, check=False).returncode != 0:
+        pytest.skip("docker compose not installed")
+    module = _module()
+    env = tmp_path / "site.env"
+    dirs = "".join(f"{key}={tmp_path}\n" for key in ("ROSY_SITE_CONFIG_DIR", "ROSY_SITE_SECRETS_DIR"))
+    env.write_text(dirs + "ROSY_SITE_BIND_ADDRESS=0.0.0.0\nROSY_SITE_LAN_IFACE=wlan0\n"
+                   "ROSY_SITE_TLS_HOST=site-pc.local\n", encoding="utf-8")
+    overlay = ["-f", str(ROOT / "deploy/site/compose.pairing.yaml")]
+    settings = module.compose_settings(module.compose_config(
+        env, ROOT / "deploy/site/compose.yaml", "rosy-fw-test", module._run, overlay))
+    assert (settings["bind"], settings["port"], settings["lan_iface"]) == ("0.0.0.0", 8443, "wlan0")
 
 
 def test_strict_certificate_check_accepts_the_profile_and_names_the_failure(tmp_path):

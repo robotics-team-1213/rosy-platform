@@ -1,0 +1,95 @@
+# D-341 camera pairing overlay. Off unless the stack is started with it:
+#   docker compose ... -f compose.yaml -f compose.pairing.yaml
+# rosy-site-stack.service adds it from ROSY_SITE_PAIRING_COMPOSE in site.env (README, Camera pairing).
+# Compose replaces `command` and the ROSY_CREDENTIAL_PATHS value as a whole, so both are repeated
+# from compose.yaml with the pairing parts appended; test_site_pairing_deploy.py keeps them in step.
+services:
+  fleet:
+    command:
+      - --
+      - python3
+      - -m
+      - fleet.cli
+      - console
+      - --robots
+      - /run/rosy-config/robots.yaml
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8090"
+      - --web-common
+      - /opt/rosy/web-common
+      - --token-env
+      - ROSY_SITE_REGISTRY_TOKEN
+      - --discovery-token-env
+      - ROSY_SITE_DISCOVERY_TOKEN
+      - --vision-preview-secret-env
+      - ROSY_VISION_PREVIEW_SECRET
+      - --users-file
+      - /run/rosy-config/site-users.yaml
+      - --sightings-config
+      - /run/rosy-config/site-cameras.yaml
+      - --sightings-db
+      - /var/lib/rosy/fleet.sqlite3
+      - --events-db
+      - /var/lib/rosy/fleet.sqlite3
+      - --tasks-db
+      - /var/lib/rosy/fleet.sqlite3
+      - --robot-credential-key-file
+      - /run/secrets/robot_credential_key
+      - --tls-cert
+      - /run/secrets/site_cert
+      - --tls-key
+      - /run/secrets/site_key
+      # D-375 console map-fit overlay (display only); files baked in the image, read-only.
+      - --site-lane-graph
+      - /opt/rosy/maps/map_v2_fleet/lane_graph.yaml
+      - --site-lane-paint
+      - /opt/rosy/maps/map_v2_fleet/road_lines.stl
+      # D-341 2: the pairing routes exist only with the site CA (never the leaf) and a TLS host.
+      - --pairing-ca
+      - /run/secrets/site_ca
+      - --pairing-tls-host
+      - "${ROSY_SITE_TLS_HOST:?set ROSY_SITE_TLS_HOST}"
+      - --pairing-sync-token-env
+      - ROSY_SITE_PAIRING_SYNC_TOKEN
+    environment:
+      ROSY_CREDENTIAL_PATHS: '{"ROSY_SITE_REGISTRY_TOKEN":"/run/secrets/registry_token","ROSY_FLEET_CEILING_NORTH_TOKEN":"/run/secrets/fleet_sighting_token","ROSY_SITE_DISCOVERY_TOKEN":"/run/secrets/discovery_token","ROSY_VISION_PREVIEW_SECRET":"/run/secrets/vision_preview_secret","ROSY_SITE_PAIRING_SYNC_TOKEN":"/run/secrets/pairing_sync_token"}'
+    secrets:
+      - pairing_sync_token
+
+  vision:
+    command:
+      - --
+      - python3
+      - -m
+      - rosy_vision.cli
+      - vision
+      - --config
+      - /run/rosy-config/site-cameras.yaml
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8095"
+      - --tls-cert
+      - /run/secrets/site_cert
+      - --tls-key
+      - /run/secrets/site_key
+      # D-375 map-proposal (lane paint in map metres); baked in the image, read-only.
+      - --map-paint
+      - /opt/rosy/maps/map_v2_fleet/road_lines.stl
+      # D-341 12: Vision reads issued credentials from Fleet over verified HTTPS, with its own token.
+      - --pairing-sync-url
+      - https://fleet:8090
+      - --pairing-sync-ca
+      - /run/secrets/site_ca
+      - --pairing-sync-token-env
+      - ROSY_SITE_PAIRING_SYNC_TOKEN
+    environment:
+      ROSY_CREDENTIAL_PATHS: '{"ROSY_PHONE_CEILING_NORTH":"/run/secrets/phone_ingress_token","ROSY_FLEET_CEILING_NORTH_TOKEN":"/run/secrets/fleet_sighting_token","ROSY_VISION_PREVIEW_SECRET":"/run/secrets/vision_preview_secret","ROSY_SITE_PAIRING_SYNC_TOKEN":"/run/secrets/pairing_sync_token"}'
+    secrets:
+      - pairing_sync_token
+
+secrets:
+  pairing_sync_token:
+    file: ${ROSY_SITE_SECRETS_DIR:?set ROSY_SITE_SECRETS_DIR}/pairing_sync_token

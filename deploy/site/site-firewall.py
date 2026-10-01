@@ -44,8 +44,14 @@ class ConfigError(ValueError):
     """The site env cannot produce a working, interface-scoped bind (exit 2)."""
 
 
-def check_env_keys(path: Path) -> None:
-    """Backstop: only plain KEY=VALUE lines, so systemd and Compose read the same file."""
+def check_env_keys(path: Path) -> dict[str, str]:
+    """Backstop: only plain KEY=VALUE lines, so systemd and Compose read the same file.
+
+    Returns the values as systemd's EnvironmentFile= reads them (a matching quote pair is
+    syntax). Only the D-341 pairing keys are used from it, as systemd hands them to the stack
+    and advertise units; everything else comes from Compose.
+    """
+    values = {}
     for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
         stripped = line.strip()
         if not stripped or stripped.startswith("#"):
@@ -54,11 +60,28 @@ def check_env_keys(path: Path) -> None:
         if not KEY.fullmatch(key):
             raise ConfigError(f"{path}:{number}: {stripped!r} is not a plain KEY=VALUE line "
                               "(no 'export', spaces or lowercase in the key)")
+        value = stripped.split("=", 1)[1].strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in "'\"":
+            value = value[1:-1]
+        values[key] = value
+    return values
 
 
-def compose_config(env_file: Path, compose_file: Path, project: str, run) -> dict:
+def overlay_files(env: dict[str, str]) -> list[str]:
+    """The extra `-f <file>` words rosy-site-stack.service appends ($ROSY_SITE_PAIRING_COMPOSE)."""
+    words = env.get("ROSY_SITE_PAIRING_COMPOSE", "").split()
+    if len(words) % 2 or any(flag != "-f" for flag in words[::2]):
+        raise ConfigError("ROSY_SITE_PAIRING_COMPOSE must be empty or `-f <compose file>` pairs, "
+                          f"not {' '.join(words)!r}")
+    return words
+
+
+def compose_config(env_file: Path, compose_file: Path, project: str, run,
+                   overlay: list[str] | None = None) -> dict:
+    """`docker compose config` over the same -f files the stack unit passes (base + overlay)."""
     code, out, err = run(["docker", "compose", "--project-name", project, "--env-file",
-                          str(env_file), "-f", str(compose_file), "config", "--format", "json"])
+                          str(env_file), "-f", str(compose_file), *(overlay or []),
+                          "config", "--format", "json"])
     if code != 0:
         raise ConfigError(f"docker compose config failed: {err.strip() or out.strip()}")
     return json.loads(out)
@@ -300,9 +323,10 @@ def verify_site_certificate(cert: Path, key: Path, ca: Path, tls_host: str) -> N
 
 
 def write_public_env(settings: dict, path: Path) -> None:
-    """The two public values the host units need (bridge, advertisers), as Compose resolved them."""
+    """The public values the host units need (bridge, advertisers), as Compose resolved them."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    text = f"ROSY_SITE_TLS_HOST={settings['tls_host']}\nROSY_SITE_HTTPS_PORT={settings['port']}\n"
+    text = (f"ROSY_SITE_TLS_HOST={settings['tls_host']}\nROSY_SITE_HTTPS_PORT={settings['port']}\n"
+            f"ROSY_SITE_PAIRING={settings.get('pairing', '0')}\n")
     with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=path.parent, delete=False) as out:
         out.write(text)
     Path(out.name).chmod(0o644)
@@ -324,9 +348,10 @@ def main(argv: list[str] | None = None, run=_run) -> int:
                         help="check: also verify the site certificate strictly against tls_host")
     args = parser.parse_args(argv)
     try:
-        check_env_keys(args.env_file)
+        env = check_env_keys(args.env_file)
         settings = compose_settings(compose_config(args.env_file, args.compose_file,
-                                                   args.project_name, run))
+                                                   args.project_name, run, overlay_files(env)))
+        settings["pairing"] = "1" if env.get("ROSY_SITE_PAIRING") == "1" else "0"
         plan = site_plan(settings)
         if args.command == "check" and args.verify_certs:
             secrets = settings["secrets"]

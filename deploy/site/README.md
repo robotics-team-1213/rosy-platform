@@ -413,12 +413,11 @@ robot CORE `_rosy._tcp` record is a different API and is shown as a robot
 discovery result, not as a camera-stream target.
 
 See [D-341](../../docs/adr/D-341-overhead-console-approved-pairing.md)
-(Proposed) for console-approved camera pairing: a named operator approves a
+(Accepted as design) for console-approved camera pairing: a named operator approves a
 discovered camera's request by typing its 6-digit confirmation code, and the
 installer confirms that the phone and console show the same site fingerprint
 and credential ID. Only then is the per-camera token active and the site CA
-pinned in the app. Discovery alone still grants nothing. Until D-341 is
-implemented, and as the rollback path if pairing fails at a site, use a
+pinned in the app. Discovery alone still grants nothing. As the rollback path when pairing is off or fails at a site, use a
 `static` source with the manual `rosyov://...&tls=1` link, which still needs
 the site CA installed in Android's user credentials.
 
@@ -441,6 +440,59 @@ site address names no other host (a port-only `:8443` address passes). Only the
 first Caddyfile site block's addresses are read. IP SANs are not checked: they
 go stale on renumber, and an IP SAN is needed only for a `manual_host`
 fallback link, which this preflight does not cover.
+
+### Camera pairing (D-341)
+
+Off by default: with nothing below set, the stack, the DNS-SD record and the phone behave as before
+(`credential: static` and the manual `rosyov://` link). Pairing is one switch, `ROSY_SITE_PAIRING=1`,
+plus its overlay key, both in the one `/etc/rosy/site/site.env`; `site_preflight.py` checks that the
+switch, the overlay, the advertisement and the sync token agree.
+
+1. **Sync token.** Vision reads the credentials Fleet issued over `https://fleet:8090`, authenticated
+   by its own token (D-341 12). Make it a new random value, distinct from every other secret in
+   `secrets/` (`discovery-token.template.txt` shows the shape; this one is
+   `pairing-sync-token.template.txt`):
+   `umask 077; openssl rand -hex 32 > "$ROSY_SITE_SECRETS_DIR/pairing_sync_token"`.
+   Only Fleet and Vision mount it. The preflight refuses a missing, empty or duplicated token.
+2. **Cameras.** In `site-cameras.yaml` give each pairable source `credential: paired` and drop its
+   `phone_token_env`. A `credential: static` source keeps its fixed token and manual link; both kinds
+   can live in one file (see `site-cameras.yaml.example`).
+3. **Fleet and Vision.** In `/etc/rosy/site/site.env` set
+   `ROSY_SITE_PAIRING=1` and
+   `ROSY_SITE_PAIRING_COMPOSE=-f /opt/rosy/candidate/deploy/site/compose.pairing.yaml`.
+   `rosy-site-stack.service` appends that word list after `-f compose.yaml` (an empty value adds
+   nothing). The overlay gives Fleet `--pairing-ca /run/secrets/site_ca` (the CA, never the leaf),
+   `--pairing-tls-host ${ROSY_SITE_TLS_HOST}` and the sync token, and gives Vision
+   `--pairing-sync-url https://fleet:8090`, `--pairing-sync-ca /run/secrets/site_ca` and the same
+   token. Vision refuses a plain `http` URL or a missing CA.
+4. **Advertisement.** Nothing more to set: `ROSY_SITE_PAIRING` is set once in
+   `/etc/rosy/site/site.env`; `site-firewall.py apply` copies it into
+   `/run/rosy-site/site-public.env` for the advertise unit (restart `rosy-site-firewall` after a
+   change). `rosy-overhead-advertise.service` runs `fleet-mdns.py publish --role overhead --pair=${ROSY_SITE_PAIRING}`,
+   which adds TXT `pair=rosy-pair/1` to `_rosy-overhead._tcp` (D-341 14). Never advertise it without
+   step 3: the pairing routes answer 404 when Fleet runs without `--pairing-ca`, and the phone would
+   offer a request that cannot succeed. Apps that predate the key ignore it.
+
+Run `python3 deploy/site/site_preflight.py` (it reads `/etc/rosy/site/site.env`), then
+`sudo systemctl restart rosy-site-firewall rosy-site-stack rosy-overhead-advertise`. The
+`pairing_consistent` check fails when `ROSY_SITE_PAIRING` is not `1`, `0` or empty,
+when the overlay is named without the switch (or the switch without the overlay), when the unit
+advertises `pair` while pairing is off (or omits it while on), and when `pairing_sync_token` is
+missing or equals another secret.
+
+**What the phone sees.** The app offers **사이트에 연결 요청** only for a site whose record carries
+`pair=rosy-pair/1`; otherwise it shows the manual/deep-link path. Nothing is granted by discovery. The
+phone and the console compare a 6-digit code and the site fingerprint before the credential turns
+active.
+
+**Operator flow.** In the Fleet console open **기기 연결**, then **카메라 연결 승인** (D-391 4):
+pick the request, choose a free paired source, and type the 6-digit code the phone shows (the console
+never shows the code). The console then shows the site fingerprint and credential ID; the installer
+checks the phone shows the same two values and taps 일치 within 120 s, and only then is the credential
+active. To revoke a camera, use 폐기… on its row in the same panel; Vision drops it at its next credential sync. To turn pairing
+off, clear `ROSY_SITE_PAIRING` and `ROSY_SITE_PAIRING_COMPOSE` in `site.env` and restart the same
+three units; sources
+fall back to `credential: static` with the manual link.
 
 ## Prepare an Ubuntu host
 
