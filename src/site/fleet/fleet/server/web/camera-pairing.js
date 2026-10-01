@@ -78,6 +78,15 @@ export function formatClock(seconds) {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 }
 
+// 서버 시각(ISO)을 이 브라우저의 현지 분 단위로. 읽지 못하면 받은 그대로 둔다.
+export function formatWhen(iso) {
+  if (!iso) return "—";
+  const when = new Date(iso);
+  if (Number.isNaN(when.getTime())) return String(iso);
+  const two = (n) => String(n).padStart(2, "0");
+  return `${when.getFullYear()}-${two(when.getMonth() + 1)}-${two(when.getDate())} ${two(when.getHours())}:${two(when.getMinutes())}`;
+}
+
 export function requestText(row) {
   return [
     row.state === "revealed" ? "폰 화면에 코드가 떠 있습니다" : "폰이 아직 코드를 띄우지 않았습니다",
@@ -104,8 +113,8 @@ export function credentialText(row) {
     : CREDENTIAL_LABELS[row.state] || "확인 필요";
   return [
     state,
-    `${row.device_label} · 승인 ${row.approved_by} · ${row.approved_at}`,
-    `만료 ${row.expires_at}`,
+    `${row.device_label} · 승인 ${row.approved_by} · ${formatWhen(row.approved_at)}`,
+    `만료 ${formatWhen(row.expires_at)}`,
   ];
 }
 
@@ -181,6 +190,13 @@ export function createCameraPairingPanel({ headers, identity, locked, log, dialo
     return node;
   }
 
+  function actionRow(buttons) {
+    const row = document.createElement("div");
+    row.className = "camera-actions";
+    row.append(...buttons);
+    return row;
+  }
+
   // 폴링이 목록을 다시 그려도 키보드 포커스는 같은 행의 같은 버튼으로 돌아간다.
   function keepFocus(list, attr, draw) {
     const active = document.activeElement;
@@ -235,11 +251,10 @@ export function createCameraPairingPanel({ headers, identity, locked, log, dialo
         }
         item.querySelector("small").title = row.state;
         item.append(remainingNode(row));
-        for (const { action, reason } of requestActions(row, manage, sources)) {
-          item.append(action === "approve"
-            ? button("승인…", () => openApprove(row), action, reason)
-            : button("거절…", () => reject(row), action, reason));
-        }
+        const actions = requestActions(row, manage, sources).map(({ action, reason }) => (action === "approve"
+          ? button("승인…", () => openApprove(row), action, reason)
+          : button("거절…", () => reject(row), action, reason)));
+        if (actions.length) item.append(actionRow(actions));
         return item;
       });
       if (!rows.length) {
@@ -284,9 +299,8 @@ export function createCameraPairingPanel({ headers, identity, locked, log, dialo
           small.textContent = line;
           item.append(small);
         }
-        for (const action of credentialActions(row, manage)) {
-          item.append(button("폐기…", () => revoke(row), action));
-        }
+        const actions = credentialActions(row, manage).map((action) => button("폐기…", () => revoke(row), action));
+        if (actions.length) item.append(actionRow(actions));
         return item;
       });
       if (!rows.length) {

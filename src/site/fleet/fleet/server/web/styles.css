@@ -591,10 +591,17 @@ main {
 .camera-link h5 { margin: var(--space-3) 0 0; font-size: var(--text-label); font-weight: var(--weight-label); }
 .camera-id { font-family: var(--mono); letter-spacing: var(--track-wide); overflow-wrap: anywhere; }
 .camera-list li { align-items: flex-start; }
+.camera-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 .camera-confirm { margin: var(--space-3) 0; padding: var(--space-3); border: 1px solid var(--line-30); border-radius: var(--radius-panel); }
 .camera-confirm p { margin: var(--space-1) 0; }
 .camera-confirm-values { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: var(--space-1) var(--space-3); align-items: baseline; margin: var(--space-2) 0; }
 .camera-confirm-values dt { color: var(--ink-quiet); }
 .camera-confirm-values dd { margin: 0; font-family: var(--mono); font-size: var(--text-title); font-weight: var(--weight-emphasis); letter-spacing: var(--track-wide); overflow-wrap: anywhere; }
+/* 좁은 창: 이름표를 값 위에 둬 값이 한 줄로 남는다(묶음 중간에서 끊지 않는다). */
+@media (width < 30rem) {
+  .camera-confirm-values { grid-template-columns: minmax(0, 1fr); }
+  .camera-confirm-values dd + dt { margin-top: var(--space-1); }
+  .camera-confirm-values dd { font-size: var(--text-value); }
+}
 #camera-approve-dialog label { display: block; margin-top: var(--space-2); }
 

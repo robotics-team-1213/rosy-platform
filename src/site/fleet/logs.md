@@ -920,3 +920,9 @@
 - 결정: 라우트가 없는 Fleet(평문 404)은 "이 Fleet에는 카메라 연결 승인이 설정되지 않았습니다."만 보이고 다음 로그인까지 묻지 않는다. 대기 목록은 패널이 화면에 있고 탭이 보일 때만 2.5 s마다, 자격 목록은 세 번에 한 번과 조작 직후. 단일 콘솔 토큰(`site-console`)은 버튼 없이 403 사유 문장을 미리 보인다. 꺼진 승인 버튼은 `reason`으로 까닭(코드 아직 없음·빈 자리 없음)을 말한다. 웹 공통 가드: `IRREVERSIBLE_VERBS`에 "거절"을 더했고, 모달 스캔 명단에 `camera-pairing.js`를 더했다. `fleet` 크기 판정 22055로 재기록.
 - 증거: 새 `test_console_camera_pairing.py` 6(실제 라우트의 응답 모양, 단일 토큰 403, 페어링 없는 404, 쪽 id·자리·역할 잠금, 셸 배선 — id·hidden 변이로 적색 확인), `camera-pairing.test.mjs` 10. `src/hmi/web_common/test/` + `test/test_web_dialog_contract.py` + `test/architecture` 녹색, 단 main에서 온 `tools/perception/model/watch.py` 630줄 판정 없음 1건(이 브랜치 변경 아님).
 - gate 변화: 없음(LOCAL).
+
+## 2026-10-01 · uncommitted · test(console): D-341 카메라 연결 승인 브라우저 계약과 화면 다듬기
+
+- 변경: `test/test_fleet_console_browser.py`에 옵트인 시험 5개 — 승인(형식 오류는 보내지 않음, `CODE_MISMATCH` 남은 입력 2회 뒤 성공, 대화상자 동안 전체 정지 살아 있음, 지문·자격 ID 등폭, 화면 어디에도 코드 없음, 1366·390·320 가로 넘침 없음), 거절…·폐기…의 이름 묻는 확인과 Escape 뒤 포커스 복귀, viewer·단일 토큰은 버튼 없음(각자 안내), 페어링 없는 Fleet은 안내 한 줄 + 6 s 동안 `pending` 1회만. `ROSY_CAMERA_SCREENSHOT_DIR`이 있으면 구역 캡처를 저장한다. 화면: 행 버튼을 한 줄로 묶고, 시각을 현지 분 단위(`formatWhen`)로, 30rem 아래에서는 지문·자격 ID 이름표를 값 위로 올려 값이 묶음 중간에서 끊기지 않게 했다.
+- 증거: 브라우저 `-k camera_` 8 passed, 전체 `test_fleet_console_browser.py` 57 passed + 1 failed(`test_the_console_renders_what_swarm_control_says` — UI 앞 커밋 dc082f3a에서도 같은 실패, 이 작업과 무관). `node --test src/site/fleet/test/web/*.test.mjs` 69 passed. `src/site/fleet/test/` 1047 passed, 6 skipped(180 s). `src/hmi/web_common/test/` + `test/test_web_dialog_contract.py` 204 passed, 24 skipped.
+- gate 변화: 없음(LOCAL). 실물 폰·실제 Fleet 화면 캡처는 DEVICE 단계.

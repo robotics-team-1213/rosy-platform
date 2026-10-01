@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 
 import {
   CONFIRM_PROMPT, MESSAGES, PENDING_POLL_MS, UNAVAILABLE, canApprove, credentialActions, credentialText,
-  formatClock, freeSources, messageFor, queueHealthText, normalizePairingCode, pairingCodeError, remainingSeconds,
+  formatClock, formatWhen, freeSources, messageFor, queueHealthText, normalizePairingCode, pairingCodeError, remainingSeconds,
   requestActions, requestText,
 } from "../../fleet/server/web/camera-pairing.js";
 
@@ -112,4 +112,13 @@ test("a jammed queue shows as one quiet line of counts since Fleet start; zero s
   const line = queueHealthText({ refused_requests: 4, commit_mismatches: 1, unauthenticated_requests: 9 });
   assert.equal(line, "Fleet 시작 뒤: 한도로 거절된 요청 4건 · 확인값이 맞지 않아 닫힌 요청 1건");
   assert.doesNotMatch(line, /refused|commit|mismatch/i);
+});
+
+test("times read as local minutes, and an unreadable time is passed through", () => {
+  assert.match(formatWhen("2027-03-30T08:00:00+00:00"), /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/);
+  assert.equal(formatWhen("not a time"), "not a time");
+  assert.equal(formatWhen(null), "—");
+  const row = { credential_id: "cred-1", source_id: "s", state: "active", device_label: "d",
+    approved_by: "alice", approved_at: "2026-10-01T09:01:00Z", expires_at: "2027-03-30T09:01:00Z", expired: false };
+  assert.doesNotMatch(credentialText(row).join(" "), /T09:01:00/);
 });
