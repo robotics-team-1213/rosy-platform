@@ -761,7 +761,10 @@ close code: `4401` 은 토큰이 없거나 틀린 것(`/ws/state` 와 동일), `
 | `presence.cleared` | info | 로봇 | `{range}` |
 | `power.lidar_changed` | info | 로봇 | `{spinning, reason, spinup_s}` (PWR-005 STANDBY LiDAR 정지) |
 | `map.saved` | info | 로봇 | `{map_id}` |
-| `localization.initialpose` | info | 로봇 | `{x, y, yaw}` — 운영자가 AMCL 자세를 놓았다. 누가 놓았는지는 envelope 의 `source` 에 있다 |
+| `localization.initialpose` | info | 로봇 | `{x, y, yaw, source}` — 운영자가 자세를 놓았다. `source` 는 결정 출처로 이 경로에서는 늘 `human`(v1.70). D-395 로봇에서는 `localization/decision` 으로 가 로봇의 3 s 검증을 거친다. 누가 놓았는지는 envelope 의 `source` 에 있다 |
+| `localization.state` | info | 로봇 | `{state, previous, pose_frame, reason, request_id}` — D-395 상태가 바뀌었다(v1.70). `previous` 는 처음이면 `null`. 상태 토픽이 3 s 끊기면 `UNKNOWN`(`reason: state_stale`) |
+| `localization.candidates` | info | 로봇 | `{request_id, count, pickup}` — 새 `request_id` 의 후보 보고가 왔다(v1.70). 2 s 재보고는 다시 내지 않는다 |
+| `localization.result` | info | 로봇 | `{request_id, accepted, reason, state, source, cues}` — 로봇이 결정을 받았거나 거부했다(v1.70). `source`·`cues` 는 CORE 가 그 `request_id` 로 보낸 결정의 것이고, 모르면 `null`·`[]` |
 | `docking.started` | info | 로봇 | `{dock_id}` (DNC-003) |
 | `docking.docked` | info | 로봇 | `{dock_id}` |
 | `docking.charging` / `docking.charge_lost` | info | 로봇 | `{dock_id}` — 독립된 두 소스로 확인한 충전 상태 (D-28) |

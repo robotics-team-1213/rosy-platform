@@ -104,7 +104,7 @@ def initialpose(body: InitialPoseRequest, auth: AuthContext = Depends(operator),
     svc.events.publish(
         "localization.initialpose",
         source=f"api:{auth.role}",
-        data={"x": body.x, "y": body.y, "yaw": body.yaw},
+        data={"x": body.x, "y": body.y, "yaw": body.yaw, "source": "human"},
     )
     return {"accepted": True}
 
