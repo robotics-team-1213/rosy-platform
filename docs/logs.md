@@ -4196,3 +4196,9 @@
 - 증거: 계획의 코드는 임시 사본에서 모두 실행했다 — 신규 시험 전부 통과, 이 워크트리에 넣고 sensing 전체 2152 passed(시간 예산 시험 제외), fleet·foundation·게이트웨이 프로토콜·아키텍처는 예상된 크기 판정과 main에 이미 있던 실패만. 그 뒤 코드는 지웠고 이 커밋은 문서만이다.
 - gate 변화: 없음(문서). D-395는 Proposed 그대로.
 - 결정: D-395 Proposed(설계 승인).
+
+## 2026-10-01 · uncommitted · docs(adr): D-398 CORE 안전 정책 off·shadow·enforce 설계
+- 변경: `docs/plans/2026-10-01-core-safety-policy-shadow-design.md`, `docs/adr/D-398-core-safety-policy-off-shadow-enforce.md`(Proposed), ADR Log 행. 발견: `control.sensor_adapter`가 어느 로봇에서도 꺼져 있고, 꺼져 있으면 `evaluate_candidate`가 명령을 통과시킨다(`rosy_default.yaml:35`의 "정지 상태" 주석은 사실이 아님). 설계: 그림자 모드로 판정만 기록 → Gazebo·실주행 근거 → 로봇별 집행. 파라미터는 D-47 addendum 저장소 하나(URDF NOMINAL < 승인 레코드 < 운영자), 집행 중 짧은 끊김 HOLD·긴 끊김 래치, 워커 이름 `core_safety_worker`, D-66 이미지 개정.
+- 증거: 코드 읽기만(설계 문서). `python tools/harness/rosy_harness.py lint` 오류 0.
+- gate 변화: 없음(문서). 코드·설정 미변경.
+- 결정: D-398 Proposed(설계 사용자 승인). 그림자 실주행·집행은 로봇별 별도 승인.
