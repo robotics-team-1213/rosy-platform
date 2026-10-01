@@ -4251,6 +4251,18 @@
 - 결정: D-390 부록, D-18.
 - 교훈: 독립 기능 시험과 전체 부하 실행을 구분한다.
 
+## 2026-10-01 · uncommitted · docs(adr): D-398 CORE 안전 정책 off·shadow·enforce 설계
+- 변경: `docs/plans/2026-10-01-core-safety-policy-shadow-design.md`, `docs/adr/D-398-core-safety-policy-off-shadow-enforce.md`(Proposed), ADR Log 행. 발견: `control.sensor_adapter`가 어느 로봇에서도 꺼져 있고, 꺼져 있으면 `evaluate_candidate`가 명령을 통과시킨다(`rosy_default.yaml:35`의 "정지 상태" 주석은 사실이 아님). 설계: 그림자 모드로 판정만 기록 → Gazebo·실주행 근거 → 로봇별 집행. 파라미터는 D-47 addendum 저장소 하나(URDF NOMINAL < 승인 레코드 < 운영자), 집행 중 짧은 끊김 HOLD·긴 끊김 래치, 워커 이름 `core_safety_worker`, D-66 이미지 개정.
+- 증거: 코드 읽기만(설계 문서). `python tools/harness/rosy_harness.py lint` 오류 0.
+- gate 변화: 없음(문서). 코드·설정 미변경.
+- 결정: D-398 Proposed(설계 사용자 승인). 그림자 실주행·집행은 로봇별 별도 승인.
+
+## 2026-10-01 · uncommitted · docs(adr): D-398 → D-400 번호 변경 (동시 세션 충돌)
+- 변경: 브랜치 `docs/core-safety-policy-shadow`의 CORE 안전 정책 ADR을 D-398에서 D-400으로 옮겼다. ADR 파일·ADR Log 행·설계·계획·소스 주석의 번호를 바꿨다. 위의 2026-10-01 D-398 항목(이 브랜치 커밋 42b77772)은 같은 결정이다.
+- 증거: 다른 세션(rosy-b7 알림)이 main 체크아웃에 `D-398-evidence-words-single-source-and-scope-gates.md`를 쓰고 있었고 D-399도 쓰는 중. 이 브랜치는 아직 main에 없어 옮기는 쪽이 싸다.
+- gate 변화: 없음.
+- 결정: 이 브랜치의 ADR 번호는 D-400.
+
 ## 2026-10-01 · uncommitted · docs(adr): D-395 개정 4 — 2단계 결정과 Fleet 감시 한계
 - 변경: 2단계 구현에서 정한 것을 D-395 개정 4로 기록. D-395 이전 로봇(`localization: null`)은 현행 유지+카드 경고, LOCALIZED 관문(시작 거부·이탈 시 자율 주행 정지, 수동 조종 허용), `LOCALIZE_ASSIST`는 운용자 역할로 부여(토큰별 grant는 후속), 천장 카메라 단서 기본 꺼짐(D-257 개정 수용 전), 사다리 시계·재시도 규칙. 남은 한계: 다른 로봇 관찰은 CANDIDATES 로봇의 보고에만 실려, 모든 로봇이 LOCALIZED인 동안 Fleet 상시 감시가 비어 있다 → LOCALIZED 로봇도 `unmapped_objects`를 싣는 후속 계약 확장 제안. ADR Log 상태 갱신.
 - 증거: 2단계 갈래 B(CORE)·C(Fleet) 구현 보고.
