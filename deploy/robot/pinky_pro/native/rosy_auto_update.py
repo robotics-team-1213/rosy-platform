@@ -77,10 +77,15 @@ PHASES = ("idle", "staged", "waiting", "held", "ineligible", "applying", "commit
           "rolled_back", "failed", "disabled", "error", "stuck")
 # Re-review N3: the only native_release errors that say "this release can never work here".
 DEFINITIVE = re.compile(
-    r"^(NATIVE_MANIFEST_[A-Z_]+|NATIVE_TARGET_MISMATCH|NATIVE_PYTHON_RUNTIME"
+    r"^(NATIVE_MANIFEST_[A-Z_]+|NATIVE_TARGET_MISMATCH|NATIVE_RUNTIME_MISMATCH|NATIVE_PYTHON_RUNTIME"
     r"|SIGNATURE_(INVALID|MISSING|MALFORMED)|CHECKSUM_[A-Z_]+):"
     r"|candidate failed health check")
-PRECHECK_REFUSED = "NATIVE_PRECHECK_REFUSED"
+PRECHECK_REFUSED = "NATIVE_PRECHECK_REFUSED"  # only the precheck's busy exit; FAILED is transient
+PRECHECK_BUSY_EXIT = 3
+ESCALATED_REASON = ("repeated transient apply failures; operator action required: "
+                    "rosy_auto_update.py release-hold (rosy-update-hold.ps1 -Release) after fixing the cause")
+STUCK_REASON = ("CORE active but not writing status; operator action required: check rosy-core, "
+                "or roll back with rosy-release-push.ps1 -Rollback")
 
 # Device paths, relative to the root (tests pass a temporary one).
 UPDATES = "var/lib/rosy/updates"
@@ -992,6 +997,7 @@ class Updater:
         state["applying"] = None
         state["staged"] = None
         (state.get("apply_errors") or {}).pop(release_id, None)
+        (state.get("self_rolled_back") or {}).pop(release_id, None)
         committed = [item for item in state.get("committed") or [] if item != release_id]
         state["committed"] = (committed + [release_id])[-20:]
         self._result(state, release_id, "committed", "; ".join(["healthy for 60 s", *notes]))
@@ -1036,6 +1042,7 @@ class Updater:
         if mark_failed:
             self._mark_failed(state, release_id, why)  # recorded now: never retried, even mid-rollback
         problems = []
+        gave_up = False
         if self.host.current_release() == release_id:
             rolled = self.host.run(["bash", self._native("rollback-release.sh")], ACTIVATE_TIMEOUT_S)
             kind, error = _outcome(rolled)
@@ -1048,20 +1055,25 @@ class Updater:
                     return self._finish(state, "error", f"ROLLBACK_PENDING: {error}; retrying on the next run",
                                         release_id)
                 # Re-review N12: stop retrying and ask a person.
+                gave_up = True
                 problems.append(f"rollback could not run after {ROLLBACK_MAX_RETRIES} retries ({error}); operator "
                                 "action required: rosy-release-push.ps1 -Rollback")
             elif kind == "definitive":
                 problems.append(f"rollback: {error}")
         if not problems:
             problems = self._rollback_tail(release_id)
-        if not mark_failed and not problems:
-            self._apply_error(state, release_id, why)
+        if not mark_failed:
+            # Verification review HIGH: our own rollback leaves previous above current;
+            # that is not an operator rollback (N9) and the release stays retryable (N7).
+            state.setdefault("self_rolled_back", {})[release_id] = _z(self.host.now())
+            if not problems:
+                self._apply_error(state, release_id, why)
         note = applying.get("note")
         state["applying"] = None
         detail = why if not problems else f"{why}; rollback incomplete: {'; '.join(problems)}"
         if note and note not in detail:
             detail = f"{detail}; {note}"
-        self._result(state, release_id, "rolled_back", detail)
+        self._result(state, release_id, "rollback_failed" if gave_up else "rolled_back", detail)
         self._prune(state)
         return self._finish(state, "rolled_back" if not problems else "failed", detail, release_id)
 
@@ -1194,17 +1206,22 @@ class Updater:
         core_down = self._core_down()
         report = self.eligibility(own_claim_ok=True, waive_inputs=core_down)
         if not report["eligible"]:
-            started = parse_z(applying.get("started_at"))
-            silent = any(("stale" in reason or "missing" in reason or "not rewritten" in reason)
-                         for reason in report["reasons"])
-            if (not report["held"] and not core_down and silent and started is not None
-                    and (self.host.now() - started).total_seconds() > STUCK_AFTER_S):
-                # Re-review N5: no automatic rollback; a person has to look.
-                return self._finish(state, "stuck", "CORE active but not writing status; operator action required",
-                                    release_id)
+            silent = (not report["held"] and not core_down
+                      and any(("stale" in reason or "missing" in reason or "not rewritten" in reason)
+                              for reason in report["reasons"]))
+            if not silent:
+                applying.pop("silent_since", None)
+            else:
+                # Verification review M1: measured from the first resume that saw the silence.
+                applying.setdefault("silent_since", _z(self.host.now()))
+                since = parse_z(applying["silent_since"])
+                if since is not None and (self.host.now() - since).total_seconds() > STUCK_AFTER_S:
+                    # Re-review N5: no automatic rollback; a person has to look.
+                    return self._finish(state, "stuck", STUCK_REASON, release_id)
             phase = "held" if report["held"] else "ineligible"
             return self._finish(state, phase, f"finishing {release_id} (step {step}) waits: "
                                 + "; ".join(report["reasons"]), release_id)
+        applying.pop("silent_since", None)
         # Re-review N15: the note describes this resume only.
         if core_down:
             applying["note"] = CORE_DOWN_NOTE
@@ -1314,12 +1331,18 @@ class Updater:
         current = self.host.current_release()
         if current is None:
             raise UpdateError("CURRENT_UNKNOWN: /opt/rosy/current does not name a release")
+        last = state.get("last_result") or {}
+        if last.get("outcome") == "rollback_failed" and last.get("release_id") == current:
+            # Verification review L2: still on the release that could not be rolled back;
+            # say so on every run until a person changes current.
+            return self._finish(state, "failed", f"{current} could not be rolled back; operator action required: "
+                                "rosy-release-push.ps1 -Rollback", current)
         failed = state.setdefault("failed", {})
         # Review H4: a release we committed that is now above current was rolled back
         # on purpose by an operator; never apply it again.
         previous = self.host.previous_release()
         rolled_back = [item for item in state.get("committed") or [] if item > current]
-        if previous is not None and previous > current:
+        if previous is not None and previous > current and previous not in (state.get("self_rolled_back") or {}):
             rolled_back.append(previous)  # re-review N9: previous above current was rolled away from
         for item in rolled_back:
             if item not in failed:
@@ -1367,8 +1390,7 @@ class Updater:
             return self._finish(state, "waiting", waiting, release_id)
         attempts = (state.get("apply_errors") or {}).get(release_id) or {}
         if attempts.get("attempts", 0) >= APPLY_MAX_TRANSIENT:
-            return self._finish(state, "held", "repeated transient apply failures; operator action required",
-                                release_id)
+            return self._finish(state, "held", ESCALATED_REASON, release_id)
         retry = parse_z(attempts.get("retry_after"))
         if retry is not None and self.host.now() < retry:
             return self._finish(state, "waiting", f"apply backoff after {attempts.get('last')}; "
@@ -1432,7 +1454,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "precheck":
         reasons = updater.precheck()
         print("; ".join(reasons) if reasons else "ok")
-        return 3 if reasons else 0
+        return PRECHECK_BUSY_EXIT if reasons else 0
     if args.command == "release-hold":
         print(json.dumps({"ok": True, "released": updater.release_hold()}))
         return 0

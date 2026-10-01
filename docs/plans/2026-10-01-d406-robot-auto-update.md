@@ -38,10 +38,12 @@ All files live under `/var/lib/rosy/updates/` (root 0755; files 0644 except wher
 `status.json`:
 ```json
 {"schema": 1, "updated_at": "<Z>", "hostname": "rosy-pinky-8kcn", "current_release": "2026.10.01-021",
- "candidate": "2026.10.01-022", "phase": "idle|staged|waiting|held|ineligible|applying|committed|rolled_back|failed|disabled|error",
+ "candidate": "2026.10.01-022", "phase": "idle|staged|waiting|held|ineligible|applying|committed|rolled_back|failed|disabled|error|stuck",
  "reason": "human-readable why",
- "last_result": {"release_id": "...", "outcome": "committed|rolled_back|refused", "at": "<Z>", "detail": "..."}}
+ "last_result": {"release_id": "...", "outcome": "committed|rolled_back|refused|rollback_failed", "at": "<Z>", "detail": "..."}}
 ```
+- `stuck` (T2 re-review N5): an interrupted apply whose CORE is active but has not written status-inputs for 30 min. The updater does not roll back on its own; the reason names the remedy (`rosy-release-push.ps1 -Rollback`). Not committed.
+- `rollback_failed` (verification review L2): a rollback that could not run after 5 retries. While that release is still current, every run reports `phase: failed` with the remedy, and nothing newer is applied.
 
 - **Device CLI** (root, at `/opt/rosy/native-runtime/rosy_auto_update.py`):
   - `run`: the timer entry.
