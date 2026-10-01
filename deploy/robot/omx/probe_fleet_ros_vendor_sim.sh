@@ -10,6 +10,17 @@ test -r /repo/src/products/omx/adapter/test/test_omx_fleet_ros_actionserver.py |
   echo "read-only /repo checkout is required" >&2
   exit 2
 }
+mount_options=$(findmnt -n -o OPTIONS --target /repo)
+if ! grep -Eq '(^|,)ro(,|$)' <<<"$mount_options"; then
+  echo "vendor simulation probe requires /repo to be mounted read-only" >&2
+  exit 2
+fi
+for network_interface in /sys/class/net/*; do
+  if [[ "${network_interface##*/}" != "lo" ]]; then
+    echo "vendor simulation probe requires a network-none container" >&2
+    exit 2
+  fi
+done
 if [[ -d /dev/serial/by-id ]] || compgen -G '/dev/video*' >/dev/null; then
   echo "vendor simulation probe refuses serial or video device grants" >&2
   exit 2

@@ -79,6 +79,7 @@ def test_fleet_mission_reaches_ros_goal_once_without_claiming_semantic_completio
     config = ArmCommandConfig(
         enabled=True, workcell_id=workcell_id, instance_id=instance_id,
         joint_names=("joint1",), position_limits={"joint1": (-0.1, 0.1)},
+        max_start_state_tolerances={"joint1": 0.01},
         allowed_owners=("rule_based",), calibration_revision="cal-1",
         max_joint_state_age_s=0.5 if vendor_sim else 30.0,
         max_goal_duration_s=4.0, action_timeout_s=30.0,

@@ -97,3 +97,9 @@ D-386's final-owner check is now implemented. `TrajectoryCommand` carries the va
 The pinned Pilot vendor Gazebo Fleet-stop attempt stopped before Fleet grant admission because the arm controller did not appear active within the former 45-second preflight. Launch output later showed arm controller activation and a joint3 command-limit warning. No goal was sent. The probe now has a bounded 180-second startup window and runs only the generation-change case with `-x`; this adjustment still needs one vendor rerun. ROS-SIM remains HOLD, as do ARTIFACT; DEVICE/FIELD remain PARKED.
 
 Verification: full Windows OMX adapter tests **171 passed, 4 skipped**; changed Python modules compiled; flake8 passed. A fresh in-process Jazzy rerun did not execute because the selected interpreter could not import `rclpy`; earlier pinned-image pass evidence remains in the validation report and does not validate this change. The vendor simulation retry is therefore still pending.
+
+## 2026-10-02 review follow-up: owner-controlled tolerance ceiling
+
+A code review found that the first sequence-race patch trusted the tolerance carried by TrajectoryCommand. The owner now requires a trusted per-joint max_start_state_tolerances workcell setting whenever tolerance evidence is used. It rejects missing policy and rejects any command tolerance wider than the configured maximum; the command can narrow, but never widen, that bound. The Fleet-to-ROS contract fixture configures the explicit 0.01 rad test bound. Owner tests cover missing policy, oversized requests, malformed policy maps, negative values, and non-finite values.
+
+The vendor probe now enforces its documented sandbox at runtime: /repo must be mounted read-only, /sys/class/net must expose only loopback, and serial/video device grants are rejected. The probe itself remains unrerun after the controller-readiness HOLD.

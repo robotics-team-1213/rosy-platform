@@ -56,7 +56,9 @@ The source contracts do not yet compose into a real ROS phase run:
   tolerances; the owner admits only a fresh latest state still inside those
   bounds and consumes that latest sequence for the next-phase freshness fence.
   It does not rewrite the planned source sequence. Missing tolerance evidence,
-  a future sequence, or any out-of-tolerance joint remains fail-closed.
+  a future sequence, or any out-of-tolerance joint remains fail-closed. The
+  command owner also enforces a per-joint maximum tolerance from its trusted
+  workcell configuration; a caller-supplied tolerance cannot widen that bound.
 4. Keep the capability disabled until the ROS callback state machine, stop race,
    and per-phase state validation pass ROS-free fault tests and the pinned
    vendor ROS-SIM. This decision does not select a production planner, configure
