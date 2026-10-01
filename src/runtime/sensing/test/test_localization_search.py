@@ -33,6 +33,8 @@ def test_clear_poses_keeps_the_footprint_off_walls_and_unknown():
     clear = MapAgreement(grid, .02, (0., 0.)).clear_poses(.1)
     assert clear[25, 25]
     assert not clear[25, 36]      # 8 cm from the wall: inside radius + half a cell
+    assert not clear[25, 35]      # 10 cm: last cell still inside the inflated footprint
+    assert clear[25, 34]          # 12 cm: first free cell beyond it, pins the radius to one cell
     assert not clear[10, 12]      # unknown is never free
 
 
@@ -58,3 +60,8 @@ def test_global_results_are_best_first_and_global_match_reports_the_first():
 def test_global_results_name_the_reason_for_an_empty_answer():
     m = MapAgreement(np.zeros((20, 20), dtype=np.int8), .02, (0., 0.))
     assert m.global_results([1.] * 10, np.linspace(-1., 1., 10), .1) == ([], "insufficient-scan")
+
+
+def test_global_results_name_no_footprint_clear_candidate_on_an_all_occupied_grid():
+    m = MapAgreement(np.full((20, 20), 100, dtype=np.int8), .02, (0., 0.))
+    assert m.global_results([1.] * 40, np.linspace(-1., 1., 40), .1) == ([], "no-footprint-clear-candidate")
