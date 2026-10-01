@@ -4201,3 +4201,9 @@
 - 변경: 1단계 착수 때 정한 기본값을 D-395 개정 3으로 기록. 거울 가설도 스캔 적합도가 같아 3 s 검증이 거울을 못 거르므로 결정에는 비대칭 단서가 하나 이상 있어야 하고(사람 예외), 유효 시간은 절대 시각 대신 받은 때부터 5 s다. ADR Log 상태 갱신.
 - 증거: `src/runtime/sensing/test/test_loc_state.py` 19 passed.
 - gate 변화: 없음(Proposed).
+
+## 2026-10-01 · uncommitted · docs(api): API Ref v1.69 — 스냅샷 `localization`과 §7.9 D-395 모델
+- 변경: 헤더 v1.69, §6.1 `localization`(state·pose_frame·confidence·reason·needs_human·request_id), §7.9 `CandidateReport`·`LocalizationDecision`(`cues`, 수신 기준 `ttl_s`; 스키마만, 전송 경로는 2단계), 변경 이력 행. 핀 셋(헤더·`app.py`·`test_line_follow_contract_docs.py`)을 함께 옮겼다. `test_module_structure.py`의 `schemas.py` 판정을 1095로 재판정(accept 유지).
+- 증거: `test_protocol_version_alignment.py`, `test_line_follow_contract_docs.py`, `test_localization_contracts.py`의 참조서 시험.
+- gate 변화: 없음.
+- 결정: D-395 Proposed(개정 3), D-18, D-347, PRT-006.

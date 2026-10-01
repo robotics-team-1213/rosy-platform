@@ -142,7 +142,7 @@ SIZE_VERDICTS = {
         "2026-10-01 at 887 after idempotent per-attempt phase projection joined the Mission event transaction",
     ),
     "contracts/foundation/core_common/protocol/schemas.py": (
-        1_092,
+        1_095,
         "accept: the D-18 single contract source — every envelope, event and capability model in one "
         "importable place; per-domain schema files would fork the version pin that "
         "test_protocol_version_alignment guards. Re-judged 2026-09-30 at 1000 lines after the bounded "
@@ -151,7 +151,7 @@ SIZE_VERDICTS = {
         "LineFollowStatus.clearance_m (D-344 §11, one field); re-judged 2026-10-01 at 1067 for the "
         "bounded UDS v2 phase receipt and read-only Mission phase progress schemas, which remain in the "
         "single contract source guarded by protocol alignment. The hard-tier zero-growth rule prevents "
-        "silent expansion. ROS-free, host-testable (X5); re-judged 2026-10-01 at 1092 for the calibration-session RobotActivity/ActivityOwner models on robot state (still accept)",
+        "silent expansion. ROS-free, host-testable (X5); re-judged 2026-10-01 at 1092 for the calibration-session RobotActivity/ActivityOwner models on robot state (still accept); re-judged 2026-10-01 at 1095 for the D-395 StateSnapshot.localization field and its import — the models live in protocol/localization.py (still accept)",
     ),
     "site/fleet/fleet/server/task_store.py": (
         1060,

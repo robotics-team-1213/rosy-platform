@@ -269,3 +269,8 @@
 - 변경: `core_api_web/api/AGENTS.md`의 "WebSocket auth is `?token=`"을 첫 메시지 `{"type":"auth","token":...}` 우선(대시보드·Pilot·Fleet), `?token=`은 `contract_version` 관문 전까지 수락으로 고쳤다. 코드 변경 없음 — `ws.py:_authorize`는 그대로.
 - 증거: Fleet 쪽 `src/site/fleet/test/test_transport.py` 첫 프레임 시험.
 - gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · docs(api): 계약 버전 핀 v1.69 (D-395 1단계)
+- 변경: `app.py` 독스트링·FastAPI description의 계약 버전 v1.68 → v1.69(D-347 세 핀 중 하나). 코드 경로 변화 없음.
+- 증거: `test_protocol_version_alignment.py`.
+- gate 변화: 없음.

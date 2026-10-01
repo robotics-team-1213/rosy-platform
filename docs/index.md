@@ -265,8 +265,8 @@
 
 ## 최근 기록
 
+- 2026-10-01 · uncommitted · docs(api): API Ref v1.69 — 스냅샷 `localization`과 §7.9 D-395 모델
 - 2026-10-01 · uncommitted · docs(adr): D-395 개정 3 — 비대칭 단서 필수, 수신 기준 유효 시간
 - 2026-10-01 · uncommitted · docs(plan): D-395 Fleet 보조 위치 확정 구현 계획
 - 2026-10-01 · uncommitted · docs(adr): D-395 개정 2 — 출발 슬롯은 방향 축만, 부호는 LiDAR 적합
 - 2026-10-01 · uncommitted · docs(adr): D-395 개정 1 — 바닥 기준 사각형 2개를 귀환 기준점·출발 슬롯으로
-- 2026-10-01 · uncommitted · fix(test): proposal_store.py 크기 판정 행 복구
