@@ -34,8 +34,8 @@
 
 ## 최근 기록
 
+- 2026-10-01 · uncommitted · test(vision): D-341 합성 종단 시험 — 요청부터 회수 4401까지
 - 2026-10-01 · uncommitted · feat(vision): D-341 3단계 — 페어링 자격 동기화와 회수 닫기
 - 2026-10-01 · 2d6d268b · fix(vision): 재연결 전 계산을 이전 결과로 남기지 않는다
 - 2026-10-01 · uncommitted · test(vision): 4400 재시도 목록을 전환 예외로 고정
 - 2026-10-01 · 4ae81b6e · fix(vision): 사이트 CA pin만 발급(D-341 9), 패턴 fullmatch
-- 2026-10-01 · 14253f8e · fix(vision): bound hello.lens numbers, safe connect log

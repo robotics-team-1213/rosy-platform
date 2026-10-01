@@ -248,3 +248,10 @@
 - 결정: 동기화는 이벤트 루프 밖 스레드에서 돌고, 루프에는 `call_soon_threadsafe`로 닫기 검사만 올린다(2026-10-01 굶주림 교훈). 닫기가 늦어도 회수된 자격의 프레임은 다음 동기화 직후부터 버려진다. 상태 불명은 이미 붙은 paired 연결도 `4503`으로 닫는다(회수가 전파되지 못하는 동안 계속 받지 않는다). 업그레이드에서 paired source가 있고 상태 불명이면 모르는 bearer도 `503`이다(그 순간에는 페어링 자격과 구분할 수 없다).
 - 증거: 새 시험 `test_pairing_sync.py` 14(호출 스레드가 GIL을 쥔 채 도는 동안에도 동기화가 5회 이상), `test_ingest_paired_credentials.py` 9(실제 2 s 동기화 스레드로 회수 후 5 s 안에 `4401`), `test_vision_config.py` 3, `test_vision_cli.py` 7, `test_protocol.py` 1 단언 — 구현 전 실패 확인 뒤 녹색. `src/site/vision/test/` 223 passed(2026-10-01 Windows).
 - gate 변화: 없음(LOCAL).
+
+## 2026-10-01 · uncommitted · test(vision): D-341 합성 종단 시험 — 요청부터 회수 4401까지
+
+- 변경: 새 `test/test_pairing_e2e.py`. 시험의 tmp 폴더에 일회용 CA·leaf(SAN `rosy-e2e.local`·`localhost`·127.0.0.1, AKI/SKI 포함)를 만들고, Fleet(실제 `create_app` + uvicorn TLS, 자기 스레드)과 Vision(`_vision_ingest`로 같은 `site-cameras.yaml`에서 만든 수신기 + 실제 2 s `PairingSync` 스레드)을 127.0.0.1에 띄운다. 합성 폰이 첫 연결 leaf를 검증 없이 기록(SAN에 `tls_host` 확인)하고 그 leaf로만 요청→공개→(운용자 코드 입력 승인)→1회 수령→받은 CA로 leaf 체인 확인·지문 대조→확인→받은 CA 하나만 믿는 WSS로 hello·프레임을 보낸다. 이어서 Fleet 정지 → 오래된 목록으로 살아 있는 연결 `4503`, 재접속 `503` → 같은 DB로 Fleet 재기동 → 재접속 성공 → 콘솔 회수 → `4401`(5 s 안), 재접속 `401`.
+- 결정: 일반 시험 묶음에 둔다(Windows 벤치 PC에서 약 10 s, 3회 반복 9.5–9.9 s). Vision의 상태 불명 한도만 600 s → 3 s로 줄였다. 전체 소요 시간 단언은 부하 때 흔들릴 수 있어 두지 않고, 회수 5 s 단언만 둔다. 개인 키는 tmp에만 생기고 커밋되지 않는다.
+- 증거: `python -m pytest -q -p no:cacheprovider src/site/vision/test/test_pairing_e2e.py` 1 passed(13.4 s 포함 수집). 처음 실행은 Python 3.14의 엄격한 X.509 검사(AKI 없음)로 실패해 시험용 인증서에 키 식별자를 더했다.
+- gate 변화: 없음(LOCAL). Compose 스택 종단(D-341 LOCAL 표의 Compose 항목)과 DEVICE는 별도.
