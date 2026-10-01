@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 import json
+import math
 from typing import Any, Optional
 
 from fastapi import APIRouter, Depends
@@ -460,32 +461,45 @@ def _swarm_role(snapshot: Any) -> Optional[str]:
 
 
 def _number(value: Any) -> Optional[float]:
-    return float(value) if isinstance(value, (int, float)) and not isinstance(value, bool) else None
+    """A finite float; NaN/Inf would be written as non-JSON and pass no bound."""
+    if not isinstance(value, (int, float)) or isinstance(value, bool) or not math.isfinite(value):
+        return None
+    return float(value)
 
 
 def _flag(value: Any) -> Optional[bool]:
     return value if isinstance(value, bool) else None
 
 
+#: A free state string longer than this is not a state name; the file stays small.
+MAX_STATUS_NAME = 64
+
+
 def _name(value: Any) -> Optional[str]:
     value = getattr(value, "value", value)
-    return value if isinstance(value, str) else None
+    return value if isinstance(value, str) and len(value) <= MAX_STATUS_NAME else None
 
 
 def _idleness_inputs(snapshot: Any) -> dict[str, Any]:
     """D-406: what the device updater judges idleness from.
 
     Every value is typed or null: an unknown is never written as a resting default,
-    because the updater reads null as "not eligible". The battery follows the
-    status summary's rule (a channel that is not fresh has no reading).
+    because the updater reads null as "not eligible". Sensor-derived values are
+    freshness-gated: velocity only while its evidence is fresh (a silent odometry
+    keeps its last 0.0, a false idle), the battery by the status summary's rule,
+    and the charging flag (a dock latch) only beside a battery reading. Docking,
+    line follow, swarm, E-stop and activity are CORE's own state, marked on change.
     """
-    velocity = getattr(snapshot, "velocity", None)
+    velocity_fresh = _evidence_of(snapshot, "velocity") == "fresh"
+    velocity = getattr(snapshot, "velocity", None) if velocity_fresh else None
     line_follow = getattr(snapshot, "line_follow", None)
+    percent = _number(_battery_reading(snapshot)[0])
+    charging = getattr(getattr(snapshot, "battery_status", None), "charging", None)
     return {
         "velocity_linear": _number(getattr(velocity, "linear", None)),
         "velocity_angular": _number(getattr(velocity, "angular", None)),
-        "battery_percent": _battery_reading(snapshot)[0],
-        "battery_charging": _flag(getattr(getattr(snapshot, "battery_status", None), "charging", None)),
+        "battery_percent": percent,
+        "battery_charging": _flag(charging) if percent is not None else None,
         "docking_state": _name(getattr(getattr(snapshot, "docking", None), "state", None)),
         "line_follow_mode": _name(getattr(line_follow, "mode", None)),
         "line_follow_state": _name(getattr(line_follow, "state", None)),

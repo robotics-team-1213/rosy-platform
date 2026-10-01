@@ -375,6 +375,13 @@ class SnapshotState:
         return self.value
 
 
+def _evidence(**channels) -> dict:
+    """StateSnapshot.evidence with the given channel judgements (e.g. velocity="fresh")."""
+    from core_common.protocol.evidence import ValueEvidence
+
+    return {channel: ValueEvidence(evidence=judged) for channel, judged in channels.items()}
+
+
 def _schema_2_written(tmp_path: Path, snapshot, devices=()) -> dict:
     config = _m1_config(tmp_path)
     _hardware(tmp_path, list(devices))
@@ -398,7 +405,8 @@ def test_schema_2_copies_the_idleness_inputs_from_the_state_snapshot(tmp_path):
         line_follow=s.LineFollowStatus(mode="FOLLOW", state="TRACKING"),
         activity=s.RobotActivity(session_id="c1", calibration_kind="camera", label="교정",
                                  owner=s.ActivityOwner(id="t"), started_at="2026-10-01T00:00:00+00:00",
-                                 remaining_s=30.0))
+                                 remaining_s=30.0),
+        evidence=_evidence(velocity="fresh", battery="fresh"))
 
     written = _schema_2_written(tmp_path, snapshot)
 
@@ -416,11 +424,12 @@ def test_schema_2_copies_the_idleness_inputs_from_the_state_snapshot(tmp_path):
 def test_schema_2_of_a_resting_robot_is_idle_and_unknown_battery_is_null(tmp_path):
     from core_common.protocol import schemas as s
 
-    written = _schema_2_written(tmp_path, s.StateSnapshot(robot_id="rosy_01"))
+    snapshot = s.StateSnapshot(robot_id="rosy_01", evidence=_evidence(velocity="fresh"))
+    written = _schema_2_written(tmp_path, snapshot)
 
     assert {key: written[key] for key in SCHEMA_2_KEYS} == {
         "velocity_linear": 0.0, "velocity_angular": 0.0,
-        "battery_percent": None, "battery_charging": False,
+        "battery_percent": None, "battery_charging": None,
         "docking_state": "UNDOCKED", "line_follow_mode": "OFF", "line_follow_state": "OFF",
         "swarm_active": False, "estop": False, "activity_kind": None}
 
@@ -457,6 +466,64 @@ def test_a_battery_reading_that_is_not_fresh_is_written_as_unknown(tmp_path):
     assert written["battery_percent"] is None
 
 
+@pytest.mark.parametrize("judged", ["delayed", "disconnected", "unavailable", None])
+def test_a_velocity_that_is_not_fresh_is_written_as_unknown(tmp_path, judged):
+    # A silent odometry keeps its last 0.0: that is not a measured stop, and an
+    # updater reading it as one would restart a moving robot (false idle).
+    from core_common.protocol import schemas as s
+
+    evidence = {} if judged is None else _evidence(velocity=judged)
+    snapshot = s.StateSnapshot(robot_id="rosy_01", evidence=evidence)
+
+    written = _schema_2_written(tmp_path, snapshot)
+
+    assert written["velocity_linear"] is None and written["velocity_angular"] is None
+
+
+@pytest.mark.parametrize("value", [float("nan"), float("inf"), float("-inf")])
+def test_a_non_finite_number_is_written_as_unknown(tmp_path, value):
+    # json.dumps would write NaN/Infinity, which is not JSON and compares false to every bound.
+    from core_common.protocol import schemas as s
+
+    snapshot = s.StateSnapshot(robot_id="rosy_01", velocity=s.Velocity(linear=value, angular=value),
+                               battery=s.Battery(percent=value),
+                               evidence=_evidence(velocity="fresh", battery="fresh"))
+
+    written = _schema_2_written(tmp_path, snapshot)
+
+    assert written["velocity_linear"] is None and written["velocity_angular"] is None
+    assert written["battery_percent"] is None
+
+
+@pytest.mark.parametrize("percent,judged", [(None, "fresh"), (80.0, "delayed")])
+def test_charging_is_unknown_whenever_the_battery_is(tmp_path, percent, judged):
+    # The charging flag is a dock latch: without a battery reading it proves nothing.
+    from core_common.protocol import schemas as s
+
+    snapshot = s.StateSnapshot(robot_id="rosy_01", battery=s.Battery(percent=percent),
+                               battery_status=s.BatteryStatus(charging=True),
+                               evidence=_evidence(battery=judged))
+
+    written = _schema_2_written(tmp_path, snapshot)
+
+    assert written["battery_percent"] is None and written["battery_charging"] is None
+
+
+@pytest.mark.parametrize("length,kept", [(64, True), (65, False)])
+def test_a_free_string_longer_than_64_is_written_as_unknown(tmp_path, length, kept):
+    from core_common.protocol import schemas as s
+
+    text = "X" * length
+    snapshot = s.StateSnapshot(robot_id="rosy_01", line_follow=s.LineFollowStatus(mode=text, state=text))
+    snapshot.docking.state = text  # a duck-typed manager could hand any string over
+
+    written = _schema_2_written(tmp_path, snapshot)
+    expected = text if kept else None
+
+    assert (written["line_follow_mode"], written["line_follow_state"], written["docking_state"]) == (
+        expected, expected, expected)
+
+
 @pytest.mark.parametrize("bad", [
     {"velocity": SimpleNamespace(linear="fast", angular=True)},
     {"battery_status": SimpleNamespace(charging="yes")},
@@ -465,28 +532,38 @@ def test_a_battery_reading_that_is_not_fresh_is_written_as_unknown(tmp_path):
     {"activity": SimpleNamespace(kind=5)},
 ])
 def test_a_malformed_snapshot_field_is_written_as_unknown_not_coerced(tmp_path, bad):
-    snapshot = SimpleNamespace(mode=None, navigation=None, swarm=None, battery=None, evidence={}, **{
+    # Fresh evidence and a battery reading, so each bad field meets its own type guard.
+    snapshot = SimpleNamespace(mode=None, navigation=None, swarm=None,
+                               battery=SimpleNamespace(percent=50.0, voltage=None),
+                               evidence=_evidence(velocity="fresh", battery="fresh"), **{
         key: None for key in ("velocity", "battery_status", "docking", "line_follow", "safety", "activity")})
     for key, value in bad.items():
         setattr(snapshot, key, value)
 
     written = _schema_2_written(tmp_path, snapshot)
 
-    assert {key: written[key] for key in SCHEMA_2_KEYS} == dict.fromkeys(SCHEMA_2_KEYS)
+    assert {key: written[key] for key in SCHEMA_2_KEYS} == {**dict.fromkeys(SCHEMA_2_KEYS), "battery_percent": 50.0}
 
 
-def test_schema_2_stays_well_under_the_reader_cap(tmp_path):
+def test_schema_2_stays_well_under_the_reader_cap_and_the_reader_takes_it(tmp_path):
+    # Worst case the root reader accepts: 64 devices with 64-character ids.
     from core_common.protocol import schemas as s
 
     status = _native("rosy_boot_status_d406a", "rosy-boot-status.py")
-    devices = [_device(f"device.{index:02d}", "no_response", label="장치" * 8) for index in range(64)]
+    devices = [_device(f"{index:02d}" + "d" * 62, "no_response", label="장치" * 8) for index in range(64)]
+    snapshot = s.StateSnapshot(robot_id="rosy_01", mode=s.RobotMode.IDLE,
+                               swarm=s.SwarmStatus(role=s.SwarmRole.FOLLOWER))
 
-    _schema_2_written(tmp_path, s.StateSnapshot(robot_id="rosy_01"), devices)
+    _schema_2_written(tmp_path, snapshot, devices)
     path = tmp_path / "run/rosy/status-inputs.json"
 
     assert path.stat().st_size < status.MAX_STATUS_INPUTS_BYTES // 2
     if os.name == "posix":
         assert path.stat().st_mode & 0o777 == 0o644
+    assert status._core_inputs(tmp_path, datetime.now(timezone.utc)) == {
+        "battery_warning_percent": 20.0,
+        "devices": [{"id": device["id"], "state": "no_response", "product": True} for device in devices],
+        "robot_mode": "IDLE", "nav_state": "IDLE", "swarm_role": "follower"}
 
 
 @pytest.mark.parametrize("mutate", [
