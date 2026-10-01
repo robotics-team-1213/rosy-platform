@@ -131,7 +131,7 @@ Fleet 의 로봇 토큰은 operator 토큰이다(`robots.yaml` 의 `token`, 또�
 | `MAP_MISMATCH` | 409 | Goal의 map_id 불일치 (MAP-002) | 로봇 |
 | `MAPPING_ACTIVE` | 409 | 매핑 세션 중 명령 거부 (NAV-005) | 로봇 |
 | `DOCKING_ACTIVE` | 409 | 도킹/언도킹이 주행을 쥐고 있다 (DNC-003, §8.1 DOCKING > NAVIGATION) | 로봇 |
-| `NOT_LOCALIZED` | 409 | D-395 로봇이 `LOCALIZED` 가 아니어서 자율 주행 시작을 거부함: `navigation/goal`·`home`(`/do` 포함), `line-follow/mode`(OFF 제외). `detail: {state, pose_frame, reason}`. `localization` 이 `null` 인 로봇(D-395 이전)에는 적용하지 않는다 (v1.70) | 로봇 |
+| `NOT_LOCALIZED` | 409 | D-395 로봇이 `LOCALIZED` 가 아니어서 자율 주행 시작을 거부함: `navigation/goal`·`home`(`/do` 포함), `line-follow/mode`(OFF 제외), `docking/dock`, `swarm/follow`. `detail: {state, pose_frame, reason}`. `localization` 이 `null` 인 로봇(D-395 이전)에는 적용하지 않는다 (v1.70) | 로봇 |
 | `STALE_REQUEST` | 409 | `POST /localization/decision` 의 `request_id` 가 로봇의 열린 요청이 아님을 CORE 가 이미 안다. 열린 요청이 없을 때 `candidate` 결정도 같다 (v1.70) | 로봇 |
 | `NO_CANDIDATES` | 404 | `GET /localization/candidates` — 로봇이 `CANDIDATES` 가 아니거나 열린 요청의 보고가 아직 없음 (v1.70) | 로봇 |
 | `CALIBRATION_ACTIVE` | 409 | 다른 토큰이 보정 세션 lease 를 쥐고 있어 구동 쓰기를 거부함: `teleop`, `/mode`(IDLE 제외), `line-follow/mode`(OFF 제외)·`hold`, `navigation/goal`·`home`, `docking/dock`·`undock`, `swarm/follow`. 멈추기만 하는 것(`safety/stop`, `/mode` IDLE, line-follow OFF, 각종 cancel)은 막지 않는다. `detail: {session}` 은 `GET /calibration/session` 의 세션과 같다. `POST /calibration/session` 이 이미 세션이 있을 때도 같은 코드 (D-321 부록, v1.68). D-395 경로 `POST /localization/decision`·`suspect` 에서는 같은 코드를 **423** 으로 낸다(v1.70, 계약 `docs/plans/2026-10-01-d395-phase2-interfaces.md` §2) | 로봇 |
@@ -777,7 +777,7 @@ close code: `4401` 은 토큰이 없거나 틀린 것(`/ws/state` 와 동일), `
 | `power.lidar_changed` | info | 로봇 | `{spinning, reason, spinup_s}` (PWR-005 STANDBY LiDAR 정지) |
 | `map.saved` | info | 로봇 | `{map_id}` |
 | `localization.initialpose` | info | 로봇 | `{x, y, yaw, source}` — 운영자가 자세를 놓았다. `source` 는 결정 출처로 이 경로에서는 늘 `human`(v1.70). D-395 로봇에서는 `localization/decision` 으로 가 로봇의 3 s 검증을 거친다. 누가 놓았는지는 envelope 의 `source` 에 있다 |
-| `localization.state` | info | 로봇 | `{state, previous, pose_frame, reason, request_id}` — D-395 상태가 바뀌었다(v1.70). `previous` 는 처음이면 `null`. 상태 토픽이 3 s 끊기면 `UNKNOWN`(`reason: state_stale`) |
+| `localization.state` | info | 로봇 | `{state, previous, pose_frame, reason, request_id}` — D-395 상태가 바뀌었다(v1.70). `previous` 는 처음이면 `null`. 상태 토픽이 3 s 끊기면 `UNKNOWN`(`reason: state_stale`). `previous: LOCALIZED` 에서 벗어나면 CORE 가 자율 주행을 기존 정지 경로로 멈춘다: swarm follow 취소(`swarm.aborted`, `reason: localization`), 도킹 취소, line-follow OFF, Nav2 취소(`nav.canceled`), NAVIGATION → IDLE. MANUAL(teleop)은 그대로 |
 | `localization.candidates` | info | 로봇 | `{request_id, count, pickup}` — 새 `request_id` 의 후보 보고가 왔다(v1.70). 2 s 재보고는 다시 내지 않는다 |
 | `localization.result` | info | 로봇 | `{request_id, accepted, reason, state, source, cues}` — 로봇이 결정을 받았거나 거부했다(v1.70). `source`·`cues` 는 CORE 가 그 `request_id` 로 보낸 결정의 것이고, 모르면 `null`·`[]` |
 | `docking.started` | info | 로봇 | `{dock_id}` (DNC-003) |
@@ -799,7 +799,7 @@ close code: `4401` 은 토큰이 없거나 틀린 것(`/ws/state` 와 동일), `
 | `pairing.requested/approved/revoked` | warning | Fleet | `{robot_id}` |
 | `swarm.role_assigned` | info | 로봇 | `{role, formation, target_robot_id, reference_source, by}` |
 | `swarm.hold` | warning | 로봇 | `{reason, formation, stream_timeout_ms, reference_map_id, map_id}` — `reason`: `reference stream lost`(+`stream_timeout_ms`) \| `map_mismatch`(+`reference_map_id`, `map_id`) |
-| `swarm.aborted` | warning | 로봇 | `{formation, reason, robots, by}` — `reason`: `canceled` \| `estop` \| `docking` \| `stuck` \| `manual` \| `navigation_canceled` |
+| `swarm.aborted` | warning | 로봇 | `{formation, reason, robots, by}` — `reason`: `canceled` \| `estop` \| `docking` \| `stuck` \| `manual` \| `navigation_canceled` \| `localization`(D-395 로봇이 `LOCALIZED` 를 벗어남, v1.70) |
 | `swarm.succession` | warning | 로봇 | `{leader, dead, role, by}` — 명단이 공유된 대형에서 리더(`dead`)를 잃은 팔로워가 follow 를 끝내고 낸다. `leader` 는 `next_leader` 규칙이 고른 다음 리더(없으면 `null`), `role` 은 이 로봇의 새 역할, `by`: `followers` |
 
 ---
@@ -1742,7 +1742,7 @@ fake credentials and clocks; device and field acceptance remain separate gates.
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
-| v1.70 | 2026-10-01 | Additive (D-395 2단계 lane B, feat/d395-p2-core-api): 스냅샷 `localization` 을 CORE 가 실제로 채움(`localization/state`, `pose_frame` 은 CORE 가 odom 을 대신 쓰는 동안 `odom`, 3 s 무응답이면 `UNKNOWN`/`state_stale`); 새 경로 `GET /localization/candidates`, `POST /localization/decision`, `POST /localization/suspect`(§5.3, §7.9); 토큰 capability `NAVIGATE`·`LOCALIZE_ASSIST`(§2 AUTH-102, 역할에서 정해짐, Fleet operator 토큰이 가짐); 새 에러 `NOT_LOCALIZED`·`STALE_REQUEST`·`NO_CANDIDATES`, D-395 경로의 lease 거부는 423; 이벤트 `localization.state`·`localization.candidates`·`localization.result` 추가, `localization.initialpose` 에 `source` 추가(§8). **행동 변화:** D-395 로봇(`localization` 이 null 아님)에서 `navigation/goal`·`home`·`line-follow/mode`(OFF 제외)는 `LOCALIZED` 가 아니면 409, 레거시 `localization/initialpose` 는 `/initialpose` 대신 `source: human` 결정으로 가며 응답 모양은 같다; `LOCALIZED` 진입이나 결정 수락 시 진행 중 Nav2 목표를 취소한다. D-395 이전 로봇은 전부 예전 그대로 |
+| v1.70 | 2026-10-01 | Additive (D-395 2단계 lane B, feat/d395-p2-core-api): 스냅샷 `localization` 을 CORE 가 실제로 채움(`localization/state`, `pose_frame` 은 CORE 가 odom 을 대신 쓰는 동안 `odom`, 3 s 무응답이면 `UNKNOWN`/`state_stale`); 새 경로 `GET /localization/candidates`, `POST /localization/decision`, `POST /localization/suspect`(§5.3, §7.9); 토큰 capability `NAVIGATE`·`LOCALIZE_ASSIST`(§2 AUTH-102, 역할에서 정해짐, Fleet operator 토큰이 가짐); 새 에러 `NOT_LOCALIZED`·`STALE_REQUEST`·`NO_CANDIDATES`, D-395 경로의 lease 거부는 423; 이벤트 `localization.state`·`localization.candidates`·`localization.result` 추가, `localization.initialpose` 에 `source` 추가(§8). **행동 변화:** D-395 로봇(`localization` 이 null 아님)에서 `navigation/goal`·`home`·`line-follow/mode`(OFF 제외)는 `LOCALIZED` 가 아니면 409, 레거시 `localization/initialpose` 는 `/initialpose` 대신 `source: human` 결정으로 가며 응답 모양은 같다; `LOCALIZED` 진입이나 결정 수락 시 진행 중 Nav2 목표를 취소한다; `LOCALIZED` 를 벗어나면(3 s 무응답 포함) swarm follow·도킹·line-follow·Nav2 를 멈추고 NAVIGATION 을 IDLE 로 내린다(MANUAL 은 그대로); `docking/dock`·`swarm/follow` 도 `LOCALIZED` 가 아니면 409 `NOT_LOCALIZED`. D-395 이전 로봇은 전부 예전 그대로 |
 | v1.69 | 2026-10-01 | Additive (D-395 1단계, feat/d395-phase1): 상태 스냅샷(`/robot/state`·`/ws/state`)·하트비트 `localization` `{state, pose_frame, confidence, reason, needs_human, request_id}`(D-395 이전 로봇은 null); §7.9 `CandidateReport`·`LocalizationDecision`(`cues`, 수신 기준 `ttl_s`) 모델(스키마만, 전송 경로 없음). 기존 필드 변화 없음 |
 | v1.68 | 2026-10-01 | Additive (D-321 부록, feat/calibration-session-mode): 보정 세션 lease `GET/POST /api/v1/calibration/session`, `POST …/{id}/heartbeat`, `DELETE …/{id}`; 상태 스냅샷(`/robot/state`·`/ws/state`) `activity` (보정 중이면 `{kind: CALIBRATING, session_id, calibration_kind, label, owner, started_at, remaining_s}`, 아니면 null); 에러 `CALIBRATION_ACTIVE`(다른 토큰의 teleop·`/mode`(IDLE 제외)·line-follow 모드(OFF 제외)·hold·navigation goal/home·docking dock/undock·swarm follow 409); 이벤트 `calibration.session_started/ended/expired`. E-Stop 은 막지 않는다. 기존 필드 변화 없음 |
 | v1.67 | 2026-10-01 | Additive (D-390): 격리된 OMX-AI Gazebo Pilot 전용 `/api/v1/sim/omx/*` 목표·상태·조종권 계약. 실물과 Fleet 경계는 불변. 카메라·녹화는 미구현으로 명시. |

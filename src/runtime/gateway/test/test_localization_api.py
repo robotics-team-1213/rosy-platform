@@ -365,3 +365,88 @@ def test_lane_keep_start_is_not_gated_on_a_pre_d395_robot(core):
     client, _services = core
     response = client.put("/api/v1/line-follow/mode", headers=OPERATOR, json={"mode": "CAMERA_LINE"})
     assert response.status_code != 409 or response.json()["error"]["code"] != "NOT_LOCALIZED"
+
+
+# --- gap 6: leaving LOCALIZED stops autonomous motion -----------------------------
+
+
+def test_leaving_localized_cancels_navigation_and_leaves_navigation_mode(core):
+    client, services = core
+    _ready_for_goal(services)
+    services.localization.on_state(_state("LOCALIZED"))
+    assert client.post("/api/v1/navigation/goal", headers=OPERATOR,
+                       json={"x": 1.0, "y": 2.0, "yaw": 0.0}).status_code == 200
+    services.localization.on_state(_state("SUSPECT"))
+    assert services.nav.nav_state.value == "CANCELED"
+    assert services.modes.mode.value == "IDLE"
+    [event] = [e for e in _types(services, "localization.state") if e.data["state"] == "SUSPECT"]
+    assert event.data["previous"] == "LOCALIZED"
+
+
+def test_leaving_localized_stops_line_follow(core):
+    _client, services = core
+    from core_api_web.api.deps import LineFollowMode
+    services.localization.on_state(_state("LOCALIZED"))
+    services.line_follow.set_mode(LineFollowMode.CAMERA_LINE)
+    assert services.line_follow.active
+    services.localization.on_state(_state("CANDIDATES", request_id="req-1"))
+    assert not services.line_follow.active
+    assert services.line_follow.mode is LineFollowMode.OFF
+
+
+def test_leaving_localized_stops_swarm_and_docking(core):
+    _client, services = core
+    calls = []
+    services.swarm.cancel = lambda source="api", reason="canceled": calls.append(("swarm", reason))
+    services.docking.cancel = lambda: calls.append(("docking", None))
+    services.localization.on_state(_state("LOCALIZED"))
+    services.localization.on_state(_state("UNKNOWN"))
+    assert ("swarm", "localization") in calls and ("docking", None) in calls
+
+
+def test_a_stale_state_topic_stops_autonomy(core):
+    _client, services = core
+    clock = _Clock()
+    services.localization._monotonic = clock
+    cancels = []
+    services.nav.cancel = lambda source="api", **_: cancels.append(source)
+    services.localization.on_state(_state("LOCALIZED"))
+    cancels.clear()                       # entering LOCALIZED cancels too; not this test
+    clock.now += 3.5
+    services.localization.tick(odom_owns_pose=False)
+    assert cancels == ["localization"]
+
+
+def test_manual_teleop_survives_leaving_localized(core):
+    client, services = core
+    services.state.set_velocity(0.0, 0.0)
+    services.localization.on_state(_state("LOCALIZED"))
+    assert client.post("/api/v1/mode", json={"mode": "MANUAL"}, headers=OPERATOR).status_code == 200
+    services.localization.on_state(_state("SUSPECT"))
+    assert services.modes.mode.value == "MANUAL"
+    drive = client.post("/api/v1/teleop", json={"linear": 0.1, "angular": 0.0}, headers=OPERATOR)
+    assert drive.status_code == 200, drive.json()
+
+
+def test_docking_and_swarm_follow_start_are_refused_unless_localized(core_client):
+    client, services = core_client(capabilities={"docking": {"supported": True}})
+    services.localization.on_state(_state("SUSPECT"))
+    follow = {"target_robot_id": "rosy_02"}
+    for path, body in (("/api/v1/docking/dock", {"dock": None}), ("/api/v1/swarm/follow", follow)):
+        refused = client.post(path, headers=OPERATOR, json=body)
+        assert refused.status_code == 409, (path, refused.json())
+        assert refused.json()["error"]["code"] == "NOT_LOCALIZED", path
+
+
+def test_a_pre_d395_robot_is_unaffected(core):
+    client, services = core
+    _ready_for_goal(services)
+    assert client.post("/api/v1/navigation/goal", headers=OPERATOR,
+                       json={"x": 1.0, "y": 2.0, "yaw": 0.0}).status_code == 200
+    for _ in range(3):
+        services.localization.tick(odom_owns_pose=True)
+    assert services.nav.nav_state.value != "CANCELED"
+    assert services.modes.mode.value == "NAVIGATION"
+    for path in ("/api/v1/docking/dock", "/api/v1/swarm/follow"):
+        response = client.post(path, headers=OPERATOR, json={})
+        assert response.status_code != 409 or response.json()["error"]["code"] != "NOT_LOCALIZED"

@@ -228,3 +228,37 @@ def test_a_malformed_result_is_ignored(assist):
 def test_suspect_is_published(assist):
     assist.suspect("fleet_monitor")
     assert assist.suspects == [{"reason": "fleet_monitor"}]
+
+
+# --- gap 6: leaving LOCALIZED stops autonomy ------------------------------------
+
+
+@pytest.fixture
+def lost(assist):
+    calls: list[str] = []
+    assist.on_lost = lambda: calls.append("halt")
+    assist.lost_calls = calls
+    return assist
+
+
+@pytest.mark.parametrize("after", ["SUSPECT", "CANDIDATES", "UNKNOWN"])
+def test_leaving_localized_halts_once(lost, after):
+    lost.on_state(_state("LOCALIZED"))
+    lost.on_state(_state(after, request_id="req-1" if after == "CANDIDATES" else None))
+    lost.on_state(_state(after, request_id="req-1" if after == "CANDIDATES" else None))
+    assert lost.lost_calls == ["halt"]
+
+
+def test_a_stale_state_topic_halts_with_its_reason(lost):
+    lost.on_state(_state("LOCALIZED"))
+    lost.mono.now += STATE_STALE_S + 0.1
+    lost.tick(odom_owns_pose=False)
+    assert lost.lost_calls == ["halt"]
+    assert lost.events.named("localization.state")[-1]["reason"] == "state_stale"
+
+
+def test_states_that_were_never_localized_do_not_halt(lost):
+    lost.on_state(_state("UNKNOWN"))
+    lost.on_state(_state("CANDIDATES", request_id="req-1"))
+    lost.on_state(_state("SUSPECT"))
+    assert lost.lost_calls == []

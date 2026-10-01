@@ -20,7 +20,7 @@ from core_features.docking.detector import select_detector
 from core_features.docking.feed import DockObservationFeed
 from core_features.docking.manager import DockingConfig, DockingManager
 from core_features.fleet_agent.agent import FleetAgent
-from core_features.localization import LocalizationAssist
+from core_features.localization import LocalizationAssist, wire_assist
 from core_common.domain.adapters import AdapterRegistry
 
 from core_common.domain.capabilities import runtime_capability_data, runtime_truth
@@ -555,9 +555,8 @@ class CoreServices:
             host_root=os.environ.get("ROSY_HOST_ROOT", "/"),
             data_path=waypoints_path.parent,
         )
-        localization = LocalizationAssist(events, robot_id=lambda: identity.robot_id,
-                                          on_localized=lambda: nav.cancel(source="localization"))
-        state.set_localization_provider(localization.status)
+        localization = wire_assist(events, lambda: identity.robot_id, nav=nav, line_follow=line_follow,
+                                   command=command, state=state, modes=modes, swarm=swarm, docking=docking)
         fleet_agent = FleetAgent(state, events, config, identity)
         fleet_agent.start()
 

@@ -265,8 +265,8 @@
 
 ## 최근 기록
 
+- 2026-10-01 · uncommitted · docs(api-ref): v1.70 보강 — LOCALIZED 이탈 정지, 도킹·follow 게이트
 - 2026-10-01 · uncommitted · docs(api-ref): v1.70 — D-395 2단계 CORE 경로·capability·이벤트
 - 2026-10-01 · uncommitted · docs(plan): D-395 2단계 세 갈래 인터페이스 계약
 - 2026-10-01 · uncommitted · chore(architecture): `control` 크기 판정 재판정 (D-395 1단계)
 - 2026-10-01 · uncommitted · chore(architecture): `fleet` 크기 판정 재판정 (D-395 중재기)
-- 2026-10-01 · uncommitted · docs(api): API Ref v1.69 — 스냅샷 `localization`과 §7.9 D-395 모델

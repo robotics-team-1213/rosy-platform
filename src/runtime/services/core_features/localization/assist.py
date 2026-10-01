@@ -57,7 +57,8 @@ def _load(raw: str) -> Optional[dict]:
 class LocalizationAssist:
     def __init__(self, events, robot_id: Callable[[], str], *,
                  monotonic: Callable[[], float] = time.monotonic,
-                 on_localized: Optional[Callable[[], None]] = None) -> None:
+                 on_localized: Optional[Callable[[], None]] = None,
+                 on_lost: Optional[Callable[[], None]] = None) -> None:
         self._events = events
         self._robot_id = robot_id
         self._monotonic = monotonic
@@ -68,6 +69,8 @@ class LocalizationAssist:
         self.publish_suspect: Optional[Callable[[dict], None]] = None
         #: CORE's navigation cancel path, run on LOCALIZED (D-395 §7).
         self.on_localized = on_localized
+        #: CORE's stop paths, run when the state leaves LOCALIZED (D-395 §2: autonomy only there).
+        self.on_lost = on_lost
         self._lock = threading.Lock()
         self._status: Optional[LocalizationStatus] = None
         self._status_at = 0.0
@@ -144,6 +147,8 @@ class LocalizationAssist:
         })
         if status.state is LocState.LOCALIZED:
             self._cancel_navigation()
+        elif previous is LocState.LOCALIZED:
+            self._run(self.on_lost, "autonomy stop on leaving LOCALIZED")
 
     def on_candidates(self, raw: str) -> None:
         data = _load(raw)
@@ -186,13 +191,16 @@ class LocalizationAssist:
             self._cancel_navigation()
 
     def _cancel_navigation(self) -> None:
-        hook = self.on_localized
+        self._run(self.on_localized, "navigation cancel on localization")
+
+    @staticmethod
+    def _run(hook: Optional[Callable[[], None]], what: str) -> None:
         if hook is None:
             return
         try:
             hook()
-        except Exception:  # a failed cancel must not stop the state feed
-            _log.exception("navigation cancel on localization failed")
+        except Exception:  # a failed stop must not stop the state feed
+            _log.exception("%s failed", what)
 
     # --- CORE -> robot ------------------------------------------------------
 

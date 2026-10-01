@@ -295,3 +295,9 @@
 - 변경: 새 `core_features/localization/assist.py` — 로봇 sensing 노드 JSON 파싱, 정직한 `pose_frame`(CORE 가 odom 대체 중이면 odom, odom→map 승격 없음), 3 s 무응답이면 UNKNOWN(`state_stale`), CandidateReport `robot_id` 를 CORE 신원으로, STALE 판정, `localization.state|candidates|result` 이벤트. `state/manager.py` 는 localization provider 를 live 로 읽는다.
 - 증거: `test/test_localization_assist.py` 24.
 - gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · feat(localization): D-395 LOCALIZED 이탈 시 자율 주행 정지
+
+- 변경: `LocalizationAssist.on_lost` — 상태가 LOCALIZED 에서 SUSPECT·CANDIDATES·UNKNOWN(`state_stale` 포함)으로 내려가면 한 번 호출. 새 `localization/halt.py` `autonomy_halt`: swarm 취소(`reason: localization`), 도킹 취소, line-follow OFF, `nav.cancel`, NAVIGATION → IDLE. MANUAL 은 건드리지 않는다. `wire_assist` 가 CORE 조립을 맡는다.
+- 증거: `test/test_localization_assist.py` +5 (변이: 훅 제거 → 8 빨강).
+- gate 변화: 없음.

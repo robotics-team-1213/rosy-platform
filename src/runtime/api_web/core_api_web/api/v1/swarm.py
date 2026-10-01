@@ -8,6 +8,7 @@ from core_api_web.api.v1.common import (
     enter_navigation_mode,
     operator,
     require_calibration_owner,
+    require_localized,
     viewer,
 )
 from core_api_web.api.deps import AuthContext, get_services, CoreServicesLike
@@ -37,6 +38,7 @@ def swarm_follow(body: SwarmFollowParams, auth: AuthContext = Depends(operator),
                  svc: CoreServicesLike = Depends(get_services)):
     """추종 시작. 목표는 NAVIGATION 모드에서만 바퀴에 닿는다 (D-2, SWM-001)."""
     require_calibration_owner(svc, auth, "swarm follow")
+    require_localized(svc)  # D-395 §2: autonomy only from LOCALIZED
     # 아무것도 바꾸기 전에 두 문을 다 통과시킨다. follow() 는 상태를 바꾸고
     # 이벤트를 내므로, 그 뒤에 모드 전이가 409 로 막히면 운영자는 거절을 받는데
     # 로봇은 참조 프레임 하나에 달려나갈 준비가 된 채로 남는다.

@@ -662,3 +662,9 @@
 - 변경: `ros_bridge.py` 가 `localization/state`·`candidates`(transient-local)·`result` 를 구독하고 `localization/decision`·`suspect`(reliable, depth 5)를 발행한다. `received_s` 는 ROS 시계. `_tick_state` 가 `_on_odom` 과 같은 신선도 규칙으로 frame 플래그를 넘긴다. `services.py` 가 `LocalizationAssist` 를 만들어 StateManager 에 live provider 로 걸고, LOCALIZED 진입·결정 수락 때 `nav.cancel(source="localization")` 을 부른다.
 - 증거: `test/test_localization_api.py` 30, `test_bridge_timers.py`(구독 3·발행 2·latch 2 추가), `test_event_catalogue.py`.
 - gate 변화: 없음(장치·sim 미검증; lane A 노드와의 통합은 P2-8).
+
+## 2026-10-01 · uncommitted · feat(services): D-395 LOCALIZED 이탈 정지 조립
+
+- 변경: `services.py` 가 `wire_assist` 로 LocalizationAssist 를 조립한다(LOCALIZED 진입 → Nav2 취소, 이탈 → 자율 주행 정지).
+- 증거: `test/test_localization_api.py` +7 (Nav2·line-follow·swarm·도킹 정지, state_stale, teleop 유지, 도킹·follow 게이트, pre-D-395 무영향).
+- gate 변화: 없음.

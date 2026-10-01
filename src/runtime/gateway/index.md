@@ -70,8 +70,8 @@
 
 ## 최근 기록
 
+- 2026-10-01 · uncommitted · feat(services): D-395 LOCALIZED 이탈 정지 조립
 - 2026-10-01 · uncommitted · feat(bridge,services): D-395 P2-1 스냅샷 localization 채움
 - 2026-10-01 · uncommitted · feat(bridge,display): 주행 카드 도킹 상태 + hello 인사
 - 2026-10-01 · uncommitted · feat(bridge): 주행 카드에 내비게이션 목표 좌표
 - 2026-10-01 · edca9b2e · feat(core): LiDAR 정면 — 운영자 오버레이가 레코드를 이긴다 (D-397)
-- 2026-10-01 · uncommitted · feat(bridge): idle 시계와 주행 카드 충전 플래그
