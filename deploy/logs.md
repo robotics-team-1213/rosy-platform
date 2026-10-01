@@ -1933,3 +1933,11 @@
 - gate 변화: 없음. DEVICE HOLD.
 - 결정: D-406
 - 교훈: "누가 흔적을 남겼나" 기록은 그 행동이 실제로 일어났을 때만 쓴다. 시도만 하고 실패한 행동을 기록하면 다른 규칙의 판단을 가린다.
+
+## 2026-10-02 · 6d281ae7 · fix(native): D-406 T2 최종 검증 묶음 — release-hold를 run lock 아래로, 확인 내용 보고
+
+- 변경: MEDIUM `release-hold`가 업데이터 run lock을 잡는다. 실행 중이면 state.json을 덮어쓰지 않고 RUN_BUSY(CLI 종료 4, "실행이 끝난 뒤 다시")로 거절한다. LOW 1 확정 오류로 거절된 rollback도 `rollback_failed`로 남겨, 포기한 rollback처럼 고정 표시되고 release-hold로 확인할 수 있다. LOW 2 release-hold가 `acknowledged_rollback_failure`와 `cleared_apply_errors`를 돌려주고, `rosy-update-hold.ps1 -Release`가 이를 읽기 쉽게 보인다(옛 장치의 답은 그대로 출력). LOW 3 current보다 낮고 previous가 아닌 `self_rolled_back` 항목을 지운다. LOW 4 실패 기록 없는 경로의 확인을 끝까지 시험했다(일시 전환 → rollback 못 함 → release-hold → 재활성화 없음 → 운영자 되돌림 시 실패 처리). size verdict 1515줄(+10), 판정은 그대로.
+- 증거: 관련 묶음과 T3·twin 시험 843 passed, 10 skipped, `python test/known_failures.py` 새 실패 0. 변이 9종 모두 빨강. 로봇에는 손대지 않았다.
+- gate 변화: 없음. DEVICE HOLD(다음은 두 대 장치 검증).
+- 결정: D-406
+- 교훈: 상태 파일을 쓰는 운영 명령은 업데이터 실행과 같은 잠금을 잡는다. 바쁘면 조용히 덮어쓰지 말고 다시 하라고 말한다.
