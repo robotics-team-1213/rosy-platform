@@ -1,15 +1,16 @@
 [Unit]
 Description=Publish ROSY LAN mDNS observations to site Fleet
 Wants=avahi-daemon.service
-After=network-online.target avahi-daemon.service
+After=network-online.target avahi-daemon.service rosy-site-firewall.service
 
 [Service]
 Type=oneshot
 User=rosy-mdns
 Group=rosy-mdns
-# The same site env Compose reads: ROSY_SITE_TLS_HOST and ROSY_SITE_HTTPS_PORT, no LAN address.
-EnvironmentFile=/etc/rosy/site/site.env
-ExecStart=/usr/bin/python3 /opt/rosy/site/mdns-bridge.py --tls-host ${ROSY_SITE_TLS_HOST} --port ${ROSY_SITE_HTTPS_PORT} --ca-file /etc/rosy/site/secrets/site-ca.crt --token-file /etc/rosy/site/secrets/discovery_token
+# Only ROSY_SITE_TLS_HOST and ROSY_SITE_HTTPS_PORT, written from `docker compose config` by
+# site-firewall.py apply (rosy-site-firewall.service); no LAN address.
+EnvironmentFile=/run/rosy-site/site-public.env
+ExecStart=/usr/bin/python3 /opt/rosy/site/mdns-bridge.py --ca-file /etc/rosy/site/secrets/site-ca.crt --token-file /etc/rosy/site/secrets/discovery_token
 NoNewPrivileges=yes
 ProtectSystem=strict
 ProtectHome=yes

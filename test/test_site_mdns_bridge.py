@@ -212,7 +212,58 @@ def test_tls_host_is_a_certificate_name_not_an_address(name, ok):
 
 def test_bridge_unit_targets_tls_host_and_loopback_only():
     unit = (ROOT / "deploy/site/rosy-mdns-bridge.service").read_text(encoding="utf-8")
-    assert "EnvironmentFile=/etc/rosy/site/site.env" in unit
-    assert "--tls-host ${ROSY_SITE_TLS_HOST} --port ${ROSY_SITE_HTTPS_PORT}" in unit
+    assert "EnvironmentFile=/run/rosy-site/site-public.env" in unit
+    assert "/etc/rosy/site/site.env" not in unit and "${" not in unit  # only the two public values
     assert "ROSY_SITE_DISCOVERY_URL" not in unit and "--url" not in unit
     assert "IPAddressDeny=any" in unit and "IPAddressAllow=localhost" in unit
+    for name in ("rosy-fleet-advertise.service", "rosy-overhead-advertise.service"):
+        advertise = (ROOT / "deploy/site" / name).read_text(encoding="utf-8")
+        assert "EnvironmentFile=-/run/rosy-site/site-public.env" in advertise
+        assert "/etc/rosy/site/.env" not in advertise
+
+
+def _run_main(module, monkeypatch, tmp_path, token, *args, env=None):
+    token_file = tmp_path / "discovery_token"
+    token_file.write_bytes(token)
+    posted = []
+    monkeypatch.setattr(module.subprocess, "run",
+                        lambda *a, **k: subprocess.CompletedProcess(a[0], 0, stdout="", stderr=""))
+    monkeypatch.setattr(module, "post_scan", lambda devices, **kwargs: posted.append(kwargs) or 200)
+    for key in ("ROSY_SITE_TLS_HOST", "ROSY_SITE_HTTPS_PORT"):
+        monkeypatch.delenv(key, raising=False)
+    for key, value in (env or {}).items():
+        monkeypatch.setenv(key, value)
+    monkeypatch.setattr("sys.argv", ["mdns-bridge.py", "--ca-file", str(tmp_path / "ca.crt"),
+                                     "--token-file", str(token_file), *args])
+    module.main()
+    return posted
+
+
+def test_tls_host_and_port_come_from_the_environment_with_the_compose_default(tmp_path, monkeypatch):
+    module = _module()
+    posted = _run_main(module, monkeypatch, tmp_path, b"scanner-secret\n",
+                       env={"ROSY_SITE_TLS_HOST": "Site-PC.local."})
+    assert (posted[0]["tls_host"], posted[0]["port"]) == ("site-pc.local", 8443)
+    posted = _run_main(module, monkeypatch, tmp_path, b"scanner-secret",
+                       env={"ROSY_SITE_TLS_HOST": "site-pc.local", "ROSY_SITE_HTTPS_PORT": "9443"})
+    assert posted[0]["port"] == 9443
+
+
+@pytest.mark.parametrize("token", [b"", b"abc\r\nX-Injected: 1", b"two words", b"tab\there",
+                                   "caf\u00e9".encode("utf-8"), b"nul\x00byte"])
+def test_token_with_control_or_non_printable_bytes_is_refused(tmp_path, monkeypatch, token):
+    module = _module()
+    with pytest.raises(SystemExit) as exit_info:
+        _run_main(module, monkeypatch, tmp_path, token, env={"ROSY_SITE_TLS_HOST": "site-pc.local"})
+    assert exit_info.value.code == 2
+
+
+def test_bridge_keeps_strict_x509_verification(tmp_path):
+    """A CA without key usage / key identifiers fails, on every Python version."""
+    ca_file = _site_pki(tmp_path, "site-pc.local", strict=False)
+    port, seen, thread = _proxy(tmp_path)
+    with pytest.raises(ssl.SSLCertVerificationError):
+        _module().post_scan([], tls_host="site-pc.local", port=port, ca_file=ca_file,
+                            token="scanner-secret")
+    thread.join(5)
+    assert "head" not in seen

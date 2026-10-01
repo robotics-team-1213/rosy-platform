@@ -7,6 +7,7 @@ import argparse
 import http.client
 import ipaddress
 import json
+import os
 import re
 import shlex
 import socket
@@ -18,6 +19,7 @@ from pathlib import Path
 HOSTNAME = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.local$")
 TLS_HOST = re.compile(r"^(?=.{1,253}$)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?"
                       r"(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$")
+TOKEN = re.compile(r"[\x21-\x7e]+")  # goes into an HTTP header: no CR/LF or control bytes
 LOOPBACK = ("127.0.0.1", "::1")
 SCAN_PATH = "/api/fleet/discovery/scan"
 # Copy of core_common.protocol.discovery_txt for _rosy._tcp (this script cannot import it);
@@ -79,6 +81,8 @@ def post_scan(devices: list[dict], *, tls_host: str, port: int, ca_file: Path,
             f"Authorization: Bearer {token}\r\nContent-Type: application/json\r\n"
             f"Content-Length: {len(body)}\r\nConnection: close\r\n\r\n")
     context = ssl.create_default_context(cafile=str(ca_file))
+    # Default from Python 3.13; set here so Ubuntu 24.04 (3.12) verifies the same way.
+    context.verify_flags |= ssl.VERIFY_X509_STRICT
     raw, error = None, None
     for address in LOOPBACK:  # 127.0.0.1 for a 127.0.0.1/0.0.0.0 bind, ::1 for "::"
         try:
@@ -99,21 +103,23 @@ def post_scan(devices: list[dict], *, tls_host: str, port: int, ca_file: Path,
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--tls-host", required=True,
-                        help="site certificate DNS name (ROSY_SITE_TLS_HOST)")
-    parser.add_argument("--port", required=True, type=int,
-                        help="published site HTTPS port (ROSY_SITE_HTTPS_PORT)")
+    # The unit gets both values from /run/rosy-site/site-public.env (written by
+    # site-firewall.py apply from `docker compose config`); the port defaults to 8443 as in Compose.
+    parser.add_argument("--tls-host", default=os.environ.get("ROSY_SITE_TLS_HOST", ""),
+                        help="site certificate DNS name (default: $ROSY_SITE_TLS_HOST)")
+    parser.add_argument("--port", default=os.environ.get("ROSY_SITE_HTTPS_PORT") or "8443",
+                        help="published site HTTPS port (default: $ROSY_SITE_HTTPS_PORT or 8443)")
     parser.add_argument("--ca-file", required=True, type=Path)
     parser.add_argument("--token-file", required=True, type=Path)
     args = parser.parse_args()
     tls_host = args.tls_host.strip().lower().rstrip(".")
     if not valid_tls_host(tls_host):
         parser.error("--tls-host must be the DNS name in the site certificate, not an IP")
-    if not 1 <= args.port <= 65535:
+    if not args.port.isdigit() or not 1 <= int(args.port) <= 65535:
         parser.error("--port must be a TCP port")
     token = args.token_file.read_text(encoding="utf-8").strip()
-    if not token:
-        parser.error("scanner token file is empty")
+    if not TOKEN.fullmatch(token):
+        parser.error("scanner token file must hold one printable ASCII token without spaces")
     # Avahi failure raises here, before any POST: Fleet keeps the last good scan until
     # its lease expires and then shows the scanner offline.
     result = subprocess.run(["avahi-browse", "-r", "-t", "-p", "-k", "_rosy._tcp"],
@@ -121,7 +127,7 @@ def main() -> None:
     devices = parse_avahi(result.stdout)
     if len(devices) > 64:
         raise SystemExit("too many ROSY services; refusing scan")
-    status = post_scan(devices, tls_host=tls_host, port=args.port, ca_file=args.ca_file,
+    status = post_scan(devices, tls_host=tls_host, port=int(args.port), ca_file=args.ca_file,
                        token=token)
     if status != 200:
         raise SystemExit(f"Fleet rejected discovery scan (HTTP {status})")
