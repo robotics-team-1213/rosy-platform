@@ -37,7 +37,7 @@ SCRIPT_IRREVERSIBLE = re.compile(
     r"""|kind\s*=\s*\\?["']irreversible|kind\s*:\s*["']irreversible["']|\.kind\s*=\s*["']irreversible["']"""
 )
 #: Row actions that cannot be undone from the same row. Add a verb here when a new one ships.
-IRREVERSIBLE_VERBS = ("삭제", "등록 해제", "폐기", "초기화")
+IRREVERSIBLE_VERBS = ("삭제", "등록 해제", "폐기", "초기화", "거절")
 BARE_VERB = re.compile(
     r"""(?<!action:\s)(?<!action:)(["'`])(?:""" + "|".join(map(re.escape, IRREVERSIBLE_VERBS)) + r""")\1""")
 

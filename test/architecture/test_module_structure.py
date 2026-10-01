@@ -76,7 +76,7 @@ CONTROL_SPLIT = "docs/plans/2026-09-22-control-package-split-design.md"
 #: P6 verdicts: path (relative to src/) or package name -> (lines at verdict, verdict).
 SIZE_VERDICTS = {
     "fleet": (
-        21_871,
+        22_435,
         "split: server HTTP boundary, console, signals and the mission-control stores are separate owners "
         "today; group them into subpackages rather than one flat server/ tree (B2); owner fleet, unscheduled "
         "(re-judged 2026-09-29 at 11164 after mission_store joined the server tree; re-judged 2026-09-30 at "
@@ -98,7 +98,9 @@ SIZE_VERDICTS = {
         "site-link fixes landed in console and transport, then at 21476 when D-341 camera pairing "
         "joined as its own modules (server/pairing.py state, pairing_store.py digests, "
         "pairing_routes.py) plus tests (21871 once merged with main's other console work); app.py only "
-        "gained the install call; verdict unchanged. "
+        "gained the install call; verdict unchanged; re-judged again when the pairing security "
+        "fixes and the console camera-approval section (web/camera-pairing.js under the D-362 "
+        "web budget, its node and host tests) joined; verdict unchanged. "
         "Split remains unscheduled (docs/plans/2026-09-30-er2-mission-feedback-loop.md)",
     ),
     "site/fleet/fleet/server/enrollment.py": (
