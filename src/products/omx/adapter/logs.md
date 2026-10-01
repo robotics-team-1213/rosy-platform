@@ -204,3 +204,10 @@
 - gate 변화: SOURCE 증거 추가, ROS-SIM HOLD 유지(C3). DEVICE/FIELD PARKED.
 - 결정: D-402, D-403 §9. Fleet grant schema에 `CELL_TRANSFER`는 넣지 않음(C4).
 - 교훈: URDF `end_effector_joint`의 y −0.0016 m 오프셋 때문에 손목점이 yaw에 따라 달라진다. joint1은 TCP가 아니라 손목점에서 구한다.
+
+## 2026-10-02 · 31ada4b4 · fix(omx): C2 independent review fixes (D-402)
+- 변경: 커밋 189e780f, 31ada4b4. 그리퍼 start-state는 approach·grasp에서 검사하고 transfer·release에서만 뺀다. 계획기는 그리퍼가 열림 허용오차 밖이면 `GRIPPER_NOT_OPEN`으로 거절한다. `PickPlaceRunner`는 `CellTransferPlan`에 수락 프로필(`cell_profile`)을 요구하고 `validate_cell_transfer_plan`을 부르며, 제외 집합은 계획이 아니라 프로필의 그리퍼 관절이다. `planning_limit_fraction: 0.8`로 한계의 80%에서 시간 매개화(owner는 전체 한계로 검사). 복귀는 시작 home의 q5로 돌아간다. yaw는 π를 법으로만 맞는다는 점을 docstring과 D-402 §5에 적었다. `ActionRunner`는 종류별 phase runner factory 맵을 쓴다. phase 최대 시간 30 → 40 s, owner `action_timeout_s` 45 s.
+- 증거: adapter suite 258 passed, 5 skipped; known_failures 0 new. 무작위 배치 800개(실현 가능 550): 비grasp 최장 phase p50 16.2 s, p90 28.1 s, p95 35.2 s, max 63.3 s; 30 s 상한은 8.7%, 40 s는 3.1% 거절. 리뷰 probe 재실행: 점 사이 quintic 보간 최대 가속도 0.62 rad/s²(전체 한계 0.5의 1.25배; 0.8 비율 전 약 1.65배), 그리퍼 −0.1 시작은 거절됨.
+- gate 변화: 없음. SOURCE GO 유지, ROS-SIM HOLD(C3).
+- 결정: D-402 §3·§5·§6. C4 작업으로 남김: `action_store.py`의 완료 journal 이름 `PICK_PLACE_ACTION_COMPLETED`와 `result_source='pick-place-workflow'`는 종류 중립이 아니다. `CELL_TRANSFER` 완료 경로를 열 때 함께 바꾼다.
+- 교훈: 계획이 스스로 내세운 값(`gripper_joint_names`)으로 안전 검사를 줄이지 않는다. 제외 집합은 수락된 프로필에서 온다.
