@@ -4172,3 +4172,9 @@
 - 변경: 보안 재리뷰를 반영해 D-361 2026-10-01 개정을 고쳤다. 고정 주소에서 아직 답하면 409 `still_at_pinned_address`, robot_id·hostname·serial 비교는 인증이 아닌 일관성 검사(device_uid 제외), 신원은 로봇 화면의 코드·IP를 보는 운용자가 묶고 진짜 인증은 로봇 키(이후 과제), 옛 토큰은 어디에도 보내지 않고 대시보드에서 회수.
 - 증거: `src/site/fleet/test/test_enrollment_service.py` 옮기기 시험.
 - gate 변화: 없음(LOCAL).
+
+## 2026-10-01 · uncommitted · fix(test): proposal_store.py 크기 판정 행 복구
+
+- 변경: `feat/fleet-robot-address-drift` 착지 때 rosy-00의 병합 스크립트가 `test/architecture/test_module_structure.py` 충돌을 브랜치 쪽으로 통째로 풀어, rosy-84가 d064a26e에서 넣은 `proposal_store.py` 판정 행(accept, 730)을 지웠다. 그 행을 원문 그대로 되살렸다. 스크립트는 이제 이 파일 충돌에서 멈춘다.
+- 증거: `test_module_structure.py` 33 passed.
+- gate 변화: 없음.
