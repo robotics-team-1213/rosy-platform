@@ -520,11 +520,54 @@ def test_feedback_adapter_uses_async_candidate_dispatch_with_the_durable_turn_id
     assert len(dispatcher.calls) == 1
     assert dispatcher.calls[0]["turn_id"] == "turn-abc"
     assert dispatcher.calls[0]["call_id"] == "replan-call"
+    assert dispatcher.calls[0]["model_tool_call"].to_mapping() == {
+        "provider_call_id": "replan-call", "tool_name": "propose_replan",
+        "arguments": {"based_on_event_id": 19,
+                      "rationale": "Goal evidence says the object is not in the tray."},
+        "turn_id": "turn-abc", "ordinal": 0,
+    }
     assert dispatcher.calls[0]["candidate_adapter"].__class__ is GeminiER2StandardAdapter
     assert [request["store"] for request in requests] == [False, False]
     replan_tool = next(tool for tool in requests[0]["tools"]
                        if tool.get("name") == "propose_replan")
     assert replan_tool["parameters"]["required"] == ["based_on_event_id", "rationale"]
+
+
+def test_ambiguous_tool_result_aborts_turn_without_provider_function_result():
+    requests = []
+
+    async def handler(request):
+        requests.append(json.loads(request.content))
+        return httpx.Response(200, json={"steps": [{
+            "type": "function_call", "id": "call-unknown",
+            "name": "propose_replan",
+            "arguments": {"based_on_event_id": 19, "rationale": "Check again."},
+        }]})
+
+    class Dispatcher:
+        def dispatch(self, **_kwargs):
+            raise AssertionError("replan must use the async dispatcher")
+
+        async def dispatch_replan(self, **_kwargs):
+            return ER2ToolResult(
+                tool_name="propose_replan", status="unavailable",
+                reason_code="TOOL_CALL_OUTCOME_UNKNOWN",
+            )
+
+    scope, context, egress = _feedback_scope_and_context("STATUS_AND_REPLAN")
+
+    async def scenario():
+        async with GeminiER2StandardAdapter(
+            api_key="test-secret", transport=httpx.MockTransport(handler)
+        ) as adapter:
+            await adapter.reason_about_mission(
+                scope=scope, context=context, dispatcher=Dispatcher(),
+                egress_policy=egress, turn_id="turn-unknown",
+            )
+
+    with pytest.raises(ER2RequestError, match="outcome is ambiguous"):
+        asyncio.run(scenario())
+    assert len(requests) == 1
 
 
 def test_feedback_turn_without_egress_approval_never_calls_transport():

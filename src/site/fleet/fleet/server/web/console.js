@@ -302,6 +302,7 @@ function disarmGoal(reason) {
 }
 
 const discoveryLabels = DISCOVERY_LABELS;
+let scannerLost = false;
 const enrollment = createEnrollmentPanel({
   headers: authHeaders,
   identity: () => ({ role: auth.role, principal_id: auth.principal }),
@@ -317,10 +318,10 @@ const cameraPairing = createCameraPairingPanel({
   dialogs: { confirmIrreversible, openLiveDialog },
 });
 
-function showDiscoveryUnavailable(label, message) {
+function showDiscoveryUnavailable(label, message, level = "warn") {
   const status = el("discovery-status");
   status.textContent = label;
-  status.setAttribute("status", "warn");
+  status.setAttribute("status", level);
   const list = el("discovery-list");
   if (list.childElementCount === 1 && list.firstElementChild?.dataset.unavailable === "true" &&
       list.firstElementChild.textContent === message) return;
@@ -338,6 +339,17 @@ async function refreshDiscovery() {
   try {
     const snapshot = await call("/api/fleet/discovery");
     discoveryGate.ok();
+    // 검색기 임대(45 s)가 끊기면 발견과 새 주소로 옮기기가 멈춘다 — 대기와 구별해 경보한다.
+    if (snapshot.scanner_state === "expired") {
+      if (!scannerLost) log("발견 검색기 끊김 — 새 로봇 발견·새 주소로 옮기기 불가", "bad");
+      scannerLost = true;
+      showDiscoveryUnavailable("검색기 끊김",
+        `마지막 스캔 ${snapshot.scanner_age_s}초 전. 새 로봇 발견과 새 주소로 옮기기를 할 수 없습니다. ` +
+        "현장 PC의 rosy-mdns-bridge.timer와 사이트 프록시를 확인하세요.", "crit");
+      return;
+    }
+    if (scannerLost && snapshot.scanner_online) log("발견 검색기 다시 연결됨", "good");
+    scannerLost = false;
     const status = el("discovery-status");
     status.textContent = snapshot.scanner_online
       ? `${snapshot.devices.length}대 발견` : "검색기 연결 대기";

@@ -93,13 +93,16 @@ object SiteLinkRecord {
         }
     }
 
-    /** `bad_ca_pem` unless every block parses; `leaf_not_ca` if any block is not a CA (basicConstraints cA). */
-    private fun caPemReason(pem: Any?): String? {
+    /**
+     * `bad_ca_pem` unless every block parses; `leaf_not_ca` if any block is not a CA (basicConstraints cA).
+     * Also the rosy-pair/1 result's `site_ca_pem` rule (pairing.py calls site_link._ca_pem_reason).
+     */
+    internal fun caPemReason(pem: Any?): String? {
         val certs = caCertificates(pem) ?: return "bad_ca_pem"
         return if (certs.all { it.basicConstraints >= 0 }) null else "leaf_not_ca"
     }
 
-    private fun isUtcTimestamp(value: Any?): Boolean {
+    internal fun isUtcTimestamp(value: Any?): Boolean {
         if (value !is String || !EXPIRES_AT.matches(value)) return false
         return try {
             // java.time accepts year 0000 (proleptic); Python's datetime does not (MINYEAR 1).
@@ -134,6 +137,7 @@ object SiteLinkRecord {
             manualHost = manual,
             role = record["role"] as String,
             expiresAt = record["expires_at"] as String,
+            credentialId = record["credential_id"] as String,
         )
     }
 }

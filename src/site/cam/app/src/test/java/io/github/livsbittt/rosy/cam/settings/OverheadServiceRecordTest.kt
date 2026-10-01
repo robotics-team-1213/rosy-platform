@@ -81,4 +81,14 @@ class OverheadServiceRecordTest {
     )
 
     private fun String.bytes() = toByteArray(UTF_8)
+
+    @Test
+    fun onlyAPlainIpLiteralIsAPairingDialTarget() {
+        assertEquals("192.168.1.102", OverheadServiceRecord.dialAddress("192.168.1.102"))
+        assertEquals("fd00::1", OverheadServiceRecord.dialAddress("fd00::1"))
+        // A scoped link-local address (zone id) or a name never gets the "연결 요청" button.
+        assertNull(OverheadServiceRecord.dialAddress("fe80::1%wlan0"))
+        assertNull(OverheadServiceRecord.dialAddress("site-a.local"))
+        assertNull(OverheadServiceRecord.dialAddress(null))
+    }
 }

@@ -1222,10 +1222,14 @@ credential, separate from site users, CORE REST, and FleetAgent pairing.
 | Method | Path | Authority | Result |
 |---|---|---|---|
 | POST | `/api/fleet/discovery/scan` | host scanner Bearer only | Replace the short-lived discovery scan; 401 invalid credential, 400 invalid observation |
-| GET | `/api/fleet/discovery` | site viewer+ | `{scanner_online, devices[]}` with status `registration_pending`, `pairing_pending`, `verified_online`, or `conflict` |
+| GET | `/api/fleet/discovery` | site viewer+ | `{scanner_online, scanner_state, scanner_age_s, devices[]}` with status `registration_pending`, `pairing_pending`, `verified_online`, or `conflict` |
 
 The scan expires after 45 seconds. Empty successful scans remove prior rows;
 scanner failure sends nothing and later reads report `scanner_online=false`.
+`scanner_state` is `never_seen` (no scan since Fleet started, `scanner_age_s`
+null), `online`, or `expired` (the lease ran out; `scanner_age_s` is the age
+of the last scan in whole seconds). The console raises an alarm on `expired`
+because discovery and move-address stop until the scanner returns.
 Advertisement data is not identity evidence. `verified_online` requires an
 existing `robots.yaml` endpoint and an online authenticated FleetAgent HELLO
 with a device UID and matching device name while the advertised stage is

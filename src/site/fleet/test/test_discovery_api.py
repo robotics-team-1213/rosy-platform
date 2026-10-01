@@ -61,7 +61,8 @@ def test_cli_enables_discovery_only_with_dedicated_environment_token(tmp_path, m
     response = TestClient(captured["app"]).get("/api/fleet/discovery",
                                                headers={"Authorization": "Bearer viewer-secret"})
     assert response.status_code == 200
-    assert response.json() == {"devices": [], "scanner_online": False}
+    assert response.json() == {"devices": [], "scanner_online": False,
+                               "scanner_state": "never_seen", "scanner_age_s": None}
 
 
 def test_authenticated_hello_promotes_only_the_matching_discovery_row():

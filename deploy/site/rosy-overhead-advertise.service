@@ -1,14 +1,17 @@
 [Unit]
 Description=Advertise the ROSY overhead camera ingress through Avahi DNS-SD
 Wants=network-online.target avahi-daemon.service
-After=network-online.target avahi-daemon.service
+After=network-online.target avahi-daemon.service rosy-site-firewall.service
 
 [Service]
 Type=oneshot
 Environment=ROSY_SITE_HTTPS_PORT=8443
 Environment=ROSY_SITE_TLS_HOST=
-EnvironmentFile=-/etc/rosy/site/.env
-ExecStart=/usr/bin/python3 /opt/rosy/site/fleet-mdns.py publish --role overhead --port ${ROSY_SITE_HTTPS_PORT} --tls-host ${ROSY_SITE_TLS_HOST} --output /etc/avahi/services/rosy-overhead.service
+# D-341: 1 adds TXT pair=rosy-pair/1; only with Fleet pairing on (README, Camera pairing).
+Environment=ROSY_SITE_PAIRING=0
+# Port, tls_host and the pairing switch as Compose resolved them (site-firewall.py apply).
+EnvironmentFile=-/run/rosy-site/site-public.env
+ExecStart=/usr/bin/python3 /opt/rosy/site/fleet-mdns.py publish --role overhead --port ${ROSY_SITE_HTTPS_PORT} --tls-host ${ROSY_SITE_TLS_HOST} --pair=${ROSY_SITE_PAIRING} --output /etc/avahi/services/rosy-overhead.service
 NoNewPrivileges=yes
 ProtectHome=yes
 PrivateTmp=yes

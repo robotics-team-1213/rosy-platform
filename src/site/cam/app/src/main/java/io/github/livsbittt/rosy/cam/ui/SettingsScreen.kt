@@ -61,6 +61,8 @@ fun SettingsScreen(
      */
     onSave: (PairingUri, String?, Boolean) -> Unit,
     onBack: () -> Unit,
+    /** D-341: a receiver that advertises `pair=rosy-pair/1` was picked for a console-approved request. */
+    onPairRequest: (OverheadServiceRecord) -> Unit = {},
 ) {
     val current = remember(currentLink) { currentLink?.toPairing() }
     var siteName by remember(currentLink) { mutableStateOf(currentLink?.siteName) }
@@ -164,6 +166,22 @@ fun SettingsScreen(
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         Text(stringResource(R.string.settings_mdns_overhead, service.name, service.tlsHost, service.port))
+                    }
+                }
+            }
+
+            // D-341 2, 14: only a TLS receiver advertising pair=rosy-pair/1 (and resolved to an address) gets a button.
+            Text(stringResource(R.string.pairing_request), style = MaterialTheme.typography.titleSmall)
+            Text(stringResource(R.string.pairing_request_intro), style = MaterialTheme.typography.bodySmall)
+            val pairable = overheadServices.filter { it.pairable && it.address != null }
+            if (pairable.isEmpty()) {
+                if (!scanning) {
+                    Text(stringResource(R.string.pairing_request_none), style = MaterialTheme.typography.bodySmall)
+                }
+            } else {
+                pairable.forEach { service ->
+                    Button(onClick = { onPairRequest(service) }, modifier = Modifier.fillMaxWidth()) {
+                        Text(stringResource(R.string.pairing_request_site, service.name))
                     }
                 }
             }

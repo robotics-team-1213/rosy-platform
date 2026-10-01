@@ -26,8 +26,11 @@ REQUIRED_DEPLOYMENT_FILES = (
     "robots.yaml.example", "site-cameras.yaml.example", "site-users.yaml.example",
     "mdns-bridge.py", "rosy-mdns-bridge.service", "rosy-mdns-bridge.timer",
     "fleet-mdns.py", "rosy-fleet-advertise.service", "rosy-overhead-advertise.service",
-    "rosy-site-stack.service",
+    "rosy-site-stack.service", "site-firewall.py", "rosy-site-firewall.service",
+    "rosy-site-firewall-failclosed.service", "rosy-site-firewall-check.service",
+    "rosy-site-firewall-check.timer",
     "discovery-token.template.txt", "site_db.py", "candidate_signing.py",
+    "compose.pairing.yaml", "pairing-sync-token.template.txt",
     "sign_candidate.py", "verify_candidate.py",
 )
 REQUIRED_DOCUMENT_FILES = ("docs/reference/site-lan-discovery-profile.md",)

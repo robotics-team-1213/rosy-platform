@@ -28,6 +28,20 @@ class SiteLinkPrefsTest {
     }
 
     @Test
+    fun aPairedLinkKeepsItsCredentialIdAndAPastedOneClearsIt() {
+        val paired = SiteLink(
+            "Rosy Lab", "fixture-site.local", 8443, pin, "t".repeat(43), "ceiling_north", secure = true,
+            expiresAt = "2027-03-30T00:00:00Z", credentialId = "cred-0a1b2c3d4e5f",
+        )
+        val stored = write(emptyMap(), paired)
+        assertEquals("cred-0a1b2c3d4e5f", stored[K.CREDENTIAL_ID])
+        assertEquals(paired, K.decode(stored))
+        // A later manual save writes no credential_id, so the old one does not linger beside a new token.
+        val pasted = paired.copy(token = "other", credentialId = null)
+        assertFalse(write(stored, pasted).containsKey(K.CREDENTIAL_ID))
+    }
+
+    @Test
     fun oldIpMigratesToManualHostAndTheWriteDropsTheOldKeys() {
         val old = legacy("192.168.1.102")
         val link = K.decode(old)!!

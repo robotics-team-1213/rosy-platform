@@ -1751,3 +1751,50 @@
 - 변경: 리뷰(APPROVE WITH FIXES) 1–4번. 유닛 파일의 줄 이음(`\`)을 먼저 합치고, `ExecStart=`의 `-@+!:` 접두를 떼고, 빈 `ExecStart=`는 명령을 비우며, `${VAR}`와 `$VAR` 둘 다 펼친다. env 파일은 `export `를 떼고 짝이 맞는 따옴표만 벗긴다. Caddyfile은 첫 블록만이 아니라 모든 최상위 사이트 블록의 호스트를 보며 스니펫 `(name) {`은 건너뛴다.
 - 증거: 신규 시험 4건, `test_site_preflight.py`·`test_site_fleet_mdns.py` 함께 통과.
 - gate 변화: 없음.
+
+## 2026-10-01 · 536077d2 · feat(site): D-341 TXT pair는 요청할 때만 광고하고 사전 점검이 스위치를 확인한다
+- 변경: `fleet-mdns.py publish --pair[=1]`이 `_rosy-overhead._tcp`에 `pair=rosy-pair/1`을 더한다(기본 꺼짐, `--pair=0`·`--pair=`도 꺼짐, fleet 역할에는 거부). overhead 유닛은 `--pair=${ROSY_SITE_PAIRING}`(기본 `Environment=ROSY_SITE_PAIRING=0`), 스택 유닛은 `$ROSY_SITE_PAIRING_COMPOSE`(괄호 없는 `$VAR`는 비면 단어 0개)를 `-f compose.yaml` 뒤에 붙인다. `site_preflight.py`에 `pairing_consistent` 검사 추가: `.env`와 `site.env`의 스위치 일치(`1` 또는 빈 값), 오버레이와 스위치 일치, 유닛의 TXT 광고와 스위치 일치, `pairing_sync_token`이 있고 다른 비밀과 다름. `pair` 키는 공유 벡터 `discovery-txt.v1.json`에 이미 선택 키라서 벡터는 바꾸지 않았다.
+- 증거: test_site_fleet_mdns.py·test_site_preflight.py 129 passed(새 시험 먼저 실패 확인). 호스트·컨테이너·기기 접근 없음(LOCAL만).
+- gate 변화: 없음(배포 없음).
+- 결정: 켜는 스위치는 하나(`ROSY_SITE_PAIRING=1`)지만 Compose 쪽은 오버레이 파일이 필요해 `site.env`에 `ROSY_SITE_PAIRING_COMPOSE`가 따로 있고, 불일치는 사전 점검이 잡는다.
+- 교훈: 없음
+
+## 2026-10-01 · 39dd2ad2 · feat(site): D-341 페어링 오버레이 `compose.pairing.yaml`과 카메라 자격 예시
+- 변경: `compose.yaml`은 그대로 두고(rosy-84 병행 작업) `compose.pairing.yaml` 추가. Compose는 `command`와 `ROSY_CREDENTIAL_PATHS` 값을 통째로 바꾸므로 기존 값을 반복하고 Fleet에 `--pairing-ca /run/secrets/site_ca`·`--pairing-tls-host`·`--pairing-sync-token-env`, Vision에 `--pairing-sync-url https://fleet:8090`·`--pairing-sync-ca`·같은 토큰 env를 붙인다. 새 비밀 `pairing_sync_token`(템플릿 `pairing-sync-token.template.txt`)은 Fleet·Vision만 마운트하고 다른 비밀과 파일이 다르다(D-302). 후보 빌드·검증 목록, `.env.example`(별도 블록), `site-cameras.yaml.example`(`credential: static`/`paired`) 갱신.
+- 증거: test/test_site_pairing_deploy.py(오버레이 == 기존 + 페어링 인자, https+CA, 구분되는 비밀, 기본 compose에 pairing 없음), src/site/vision/test/test_site_cameras_example.py(예시가 Vision·Fleet 로더로 읽힘), test_site_candidate*.py 27 passed, test_release_boundary_guards.py 통과(비밀 검사 지적 1건은 변수명 변경으로 해결).
+- gate 변화: 없음.
+- 교훈: 비밀 검사는 `secret = ...` 같은 할당 줄도 credential로 본다. 시험 변수명에 `secret`을 피한다.
+
+## 2026-10-01 · uncommitted · docs(site): README "Camera pairing (D-341)" 소절
+- 변경: 켜는 법(토큰 생성, 카메라 `credential: paired`, 오버레이, 광고), 폰이 보는 것(`pair` TXT가 있을 때만 사이트에 연결 요청), 콘솔 흐름(기기 연결, 카메라 연결 승인), 폐기, 사전 점검이 확인하는 항목을 새 소절로 추가. 콘솔의 승인·폐기 화면은 D-391 5 항목으로 아직 main에 없음을 적었다.
+- 증거: test_site_pairing_deploy.py가 소절 핵심 문구를 확인.
+- gate 변화: 없음.
+- 교훈: 없음
+
+## 2026-10-01 · uncommitted · fix(site): 사이트 바인드는 인터페이스를 따른다 — 와일드카드 바인드, 인터페이스 방화벽, 루프백 발견 브리지
+
+- 변경: 점검(2026-10-01) #1·#4. 사이트 망이 192.168.1.0/24에서 10.16.36.0/24로 바뀌자 `compose.yaml`의 `${ROSY_SITE_BIND_ADDRESS}:8443`(README가 LAN IP를 적게 했다)이 "cannot assign requested address"로 떠지지 않아 관제·카메라·로봇·발견 브리지가 함께 멈췄다. (1) LAN 설정은 `ROSY_SITE_BIND_ADDRESS=0.0.0.0`(IPv6는 `::`) + `ROSY_SITE_LAN_IFACE`, 기본값 `127.0.0.1` 유지. compose는 그대로(기본값만), `.env.example`에 `ROSY_SITE_LAN_IFACE`. (2) `site/site-firewall.py` + `rosy-site-firewall.service`(After·PartOf·WantedBy docker): `DOCKER-USER` 맨 앞에서 conntrack 원래 목적 포트(`--ctstate DNAT --ctdir ORIGINAL --ctorigdstport`)를 자체 체인 `ROSY-SITE-INGRESS`로 보내 `-i <iface> -j RETURN`, 나머지 `DROP`. IP·서브넷은 쓰지 않는다. `apply`는 멱등(바뀐 인터페이스·옛 포트 점프 정리), `--dry-run`은 규칙만 출력. (3) `rosy-site-stack.service` `ExecStartPre`가 `site-firewall.py check`: 이 호스트에 없는 리터럴 IP, 인터페이스 없는 LAN 바인드, 설치 안 된 필터면 이유를 남기고 기동 거부(D-391 3항 일관성 검사가 나중에 흡수할 수 있다). (4) `mdns-bridge.py`는 `--url` 대신 `--tls-host`·`--port`로 루프백(`127.0.0.1`, 이어서 `::1`)에 TLS SNI·호스트명 검사·Host를 `tls_host`로 두고 사이트 CA로 확인해 보낸다. 유닛은 `site.env`를 읽고 `IPAddressAllow=localhost`만 허용, `mdns-bridge.env`(`ROSY_SITE_DISCOVERY_URL`)는 은퇴. Avahi 실패 시 아무것도 보내지 않는 규칙 유지. 후보 목록(`build_candidate.py`·`verify_candidate.py`)에 새 두 파일. README "LAN access", 런북 2항.
+- 증거: `python -m pytest test/test_site_firewall.py test/test_site_mdns_bridge.py test/test_site_candidate.py test/test_site_task_queue_deploy.py test/test_site_map_fit_deploy.py test/test_site_fleet_mdns.py test/test_site_fabric_roles.py -q` 녹색(가짜 iptables로 멱등·점검 실패 4종·IP 미사용, 실제 루프백 TLS 서버로 SNI·Host·인증서 이름 불일치 거절). 변이: SNI를 연결 주소로 바꾸면 루프백 시험이 빨강. `docker compose -f deploy/site/compose.yaml config`(가짜 env) `host_ip: 0.0.0.0`/기본 `127.0.0.1`. 스택 기동·실제 iptables 적용 없음(2026-10-01 Windows).
+- gate 변화: 없음. 사이트 호스트에서 `apply`·재부팅·망 변경 재현은 미실행.
+- 결정: 루프백 + `tls_host` SNI. 호스트에서 `https://<tls_host>`를 푸는 안은 DNS·nss-mdns가 LAN을 따라가 오래된 기록·바뀐 서브넷·꺼진 Wi-Fi에서 실패하므로 택하지 않았다. 리터럴 LAN IP 바인드는 루프백을 듣지 않아 브리지와 함께 쓸 수 없다(경고만 하고 허용).
+- 교훈: Docker 공개 포트를 인터페이스 IP에 묶으면 망 변경이 스택 전체 정지가 된다. 노출 범위는 바인드 주소가 아니라 `DOCKER-USER`의 인터페이스 이름으로 정한다.
+
+## 2026-10-01 · uncommitted · fix(site): 보안 리뷰 반영 — 필터를 Docker 앞 mangle로, 원자 적용·실패 시 닫힘, 설정은 Compose에서
+
+- 변경: 독립 보안 리뷰(APPROVE WITH FIXES, MEDIUM). M1: `DOCKER-USER` 필터는 dockerd가 `0.0.0.0` 프록시를 되살린 뒤에야 깔리고, 실패·중간 상태(`-F` 뒤 `-A`)에서 포트가 열려 있었다. 이제 `mangle PREROUTING`(DNAT 전, 공개 포트가 그대로 dport)의 점프 `-p tcp --dport <port> -j ROSY-SITE-INGRESS` → 체인은 `lo`·각 LAN 인터페이스 RETURN, `-m addrtype --dst-type LOCAL -j DROP`. 체인은 `iptables-restore -w --noflush` 한 트랜잭션(체인 선언이 원자적으로 비우고 채움), 점프는 새것을 먼저 넣고 옛것을 지운다. `rosy-site-firewall.service`는 `After=network-pre.target`, `Before=docker.service rosy-site-stack.service`, `WantedBy=multi-user.target docker.service`, `OnFailure=rosy-site-firewall-failclosed.service`(`compose stop proxy`). `rosy-site-firewall-check.timer`가 5분마다 `check`, 실패면 journal 오류와 같은 닫힘. M2: 바인드·포트·인터페이스·`tls_host`를 `docker compose config --format json`(`x-rosy-site` 확장)에서 읽어 `export`·인라인 주석·`${VAR}`가 Compose와 같게 풀린다. `^[A-Z_][A-Z0-9_]*$`가 아닌 키는 exit 2. m1: `::`와 빈 host_ip는 거절(필터·발견 모두 IPv4). m3: 없는 인터페이스는 경고(브리지 LAN은 `br0`). m4: 리터럴 IP 바인드는 `ROSY_SITE_ALLOW_LITERAL_BIND=1` 없이는 exit 2. m6·n2: `apply`가 `/run/rosy-site/site-public.env`(tls_host·port만)를 쓰고, 브리지·광고 유닛 둘이 이것만 읽는다(옛 `/etc/rosy/site/.env` 참조 제거, 포트 기본 8443). m7: 브리지가 `VERIFY_X509_STRICT`를 명시, 스택 preflight `check --verify-certs`가 메모리 TLS 핸드셰이크로 엄격 검증, README "Site certificate profile"(확장 표, `openssl verify -x509_strict` 관문, CA 재발급은 모든 카메라 재페어링). n1: 토큰 파일은 출력 가능한 ASCII 한 토큰만. m5: README "Upgrading from a literal-IP bind".
+- 증거: `test/test_site_firewall.py`(restore 페이로드 원문, 멱등—두 번째는 읽기만, 인터페이스·포트 교체 순서 restore→-I→-D, 점검 거절 4종, restore 실패 시 점프 없음, env 키 4종 exit 2, 실제 `docker compose config`로 export·주석·`${BASE}443` 해석, 엄격 인증서 수락·이름 불일치·확장 없는 CA 거절, 유닛 순서), `test_site_mdns_bridge.py`(환경 기본값, 토큰 6종 거절, 엄격 X.509) 포함 사이트 배포 시험 171 passed. 변이 3종(`--noflush` 제거, 키 검사 제거, `lo` 제거) 모두 빨강. 실제 iptables·스택 실행 없음(2026-10-01 Windows).
+- gate 변화: 없음. 사이트 호스트에서 부팅 순서·실패 닫힘·`iptables-nft` 출력 형식 확인은 미실행.
+- 결정: `::`는 지원하지 않는다(필터를 ip6tables로 이중화하는 대신). 콘솔 경보는 방화벽 점검에 붙이지 않았다(journal과 포트 닫힘) — Fleet 변경 범위 밖.
+- 교훈: 방화벽 도우미는 보호 대상보다 먼저, 원자적으로, 실패하면 닫히게 설치한다. 설정 파서는 하나(Compose)만 둔다.
+
+## 2026-10-01 · uncommitted · fix(site): 재검증 반영 — 컨테이너 직행 트래픽 차단, 라벨로 닫기, 바인드 탐침 정밀화
+
+- 변경: 재검증(APPROVE WITH FIXES, LOW). m1-r: `ROSY-SITE-INGRESS` 끝에 `-i br+ -j RETURN`, `-i docker0 -j RETURN`, 무조건 `-j DROP`을 더해 Docker 28 미만에서 LAN 밖 인터페이스로 컨테이너 IP에 직접 라우팅된 패킷도 버린다. 공개 포트가 8443이 아니면 컨테이너 포트 점프 `--dport 8443 -m addrtype ! --dst-type LOCAL`을 하나 더 둔다(로컬 목적지는 제외해 호스트의 다른 8443 서비스는 건드리지 않음). `check`가 두 점프를 모두 확인하고 `docker version`이 28 미만이면 경고, README에 Docker Engine 28 이상 권고. m2-r: `rosy-site-firewall-failclosed.service`가 Compose 파싱 없이 라벨(`com.docker.compose.project=$ROSY_SITE_PROJECT`, `service=proxy`)로 프록시를 멈춘다. 시험이 `ROSY_SITE_PROJECT`를 스택 유닛의 `--project-name`과 같게 묶는다. README "Recovering after the port was closed"(스택은 active (exited)로 남으니 `check` 통과 뒤 `systemctl restart rosy-site-stack`, 인터페이스 변경 뒤 방화벽 유닛을 재시작하지 않으면 5분 점검이 포트를 닫음). n1-r: `address_assigned`는 `EADDRNOTAVAIL`만 "할당 안 됨"으로 보고 다른 소켓 오류는 자체 문구로 exit 2.
+- 증거: `test/test_site_firewall.py` 36 passed(페이로드 원문, 포트 교체 시 restore→-I→-I→-D·두 번째 적용 무변경, 점검 거절 6종(컨테이너 포트 점프·마지막 DROP 누락 포함), 엔진 27/28/읽기 불가 경고, EACCES 노출, 실패 닫힘 유닛 라벨·프로젝트 일치). 실제 iptables·스택 실행 없음(2026-10-01 Windows).
+- gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · merge(site): main의 D-341 페어링 배선과 인터페이스 바인드 합치기 — 사이트 설정 파일은 site.env 하나
+
+- 변경: main(6dbcc01b, d5d4a2e4)을 fix/site-bind-follows-interface에 병합. (1) `rosy-site-stack.service`는 `ExecStartPre=site-firewall.py check --verify-certs`와 main의 `$ROSY_SITE_PAIRING_COMPOSE` 덧붙임(ExecStart·ExecStop)을 함께 둔다. (2) `site-firewall.py`는 site.env의 `ROSY_SITE_PAIRING_COMPOSE`(`-f <파일>` 쌍만 허용, 그 밖은 exit 2)를 스택과 같은 순서로 `docker compose config`에 넘겨 오버레이 포함 바인딩을 읽고, `ROSY_SITE_PAIRING`(1이면 1, 그 밖 0)을 `/run/rosy-site/site-public.env`에 쓴다. `rosy-overhead-advertise.service`는 그 파일에서 `--pair=${ROSY_SITE_PAIRING}`을 받는다(유닛 기본 0). 실패 닫힘은 같은 프로젝트 라벨이라 오버레이와 무관. (3) `site_preflight.py`는 `DEFAULT_ENV_FILE=/etc/rosy/site/site.env` 하나만 두고 `pairing_consistent`가 두 키를 그 파일에서 읽는다(`--site-env`는 선택적 덮어쓰기, 오버레이·토큰 검사는 그대로, `0`도 꺼짐으로 받음). README "Camera pairing"·`.env.example`에서 `/etc/rosy/site/.env` 안내를 지웠다(rosy-00 확인: `.env`는 의도가 아니었다).
+- 증거: `test_site_firewall.py`(페어링 키 허용·site-public.env 전달 3종, 오버레이 `-f` 순서, 잘못된 오버레이 값 3종 exit 2, 실제 Compose로 오버레이 포함 바인딩), `test_site_preflight.py`(한 파일 모델로 켬·끔·0·불일치 3종), `test_site_pairing_deploy.py` 통과. 2026-10-01 Windows, 실제 스택·iptables 없음.
+- gate 변화: 없음.
