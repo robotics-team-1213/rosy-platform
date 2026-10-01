@@ -9,9 +9,8 @@ import {
 } from "./map-fit.js";
 import { warpImage } from "./field-view.js";
 
-function tone(name, fallback) {
-  return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback;
-}
+// D-359 §4 — 색·글꼴은 ui.js(window.RosyPalette)가 토큰에서 푼다(테마를 따른다).
+const tone = (name) => window.RosyPalette.cssColor(name);
 function storageGet(key) {
   try { return localStorage.getItem(key); } catch { return null; }
 }
@@ -91,10 +90,10 @@ export function createMapFitView({ el, view, call, visionView, onChanged = () =>
   }
 
   function colour(kind) {
-    if (kind === "proposal") return tone("--series-goal", "#12bb81");
-    if (kind === "previous") return tone("--muted", "#9aa0a6");
-    if (kind === "rejected") return tone("--status-warn", "#feb432");
-    return tone("--series-primary", "#49affd");
+    if (kind === "proposal") return tone("--series-goal");
+    if (kind === "previous") return tone("--ink-quiet");
+    if (kind === "rejected") return tone("--status-warn");
+    return tone("--series-primary");
   }
 
   // 지도 → 화면에 디코드된 원본 픽셀. Vision 응답의 image 크기와 디코드 크기가 다르면 비례로 맞춘다.
@@ -150,7 +149,7 @@ export function createMapFitView({ el, view, call, visionView, onChanged = () =>
     canvas.width = layout.width;
     canvas.height = layout.height;
     const ctx = canvas.getContext("2d");
-    ctx.fillStyle = tone("--ground-deep", "#000");
+    ctx.fillStyle = tone("--ground-deep");
     ctx.fillRect(0, 0, layout.width, layout.height);
     const { mapToShown, shownToMap } = displayMatrices(fit, image);
     const canvasToShown = multiply3(mapToShown, layout.canvasToMap);
@@ -168,7 +167,7 @@ export function createMapFitView({ el, view, call, visionView, onChanged = () =>
       .map(([x, y]) => project(shownToMap, x, y)).filter(Boolean)
       .map(([x, y]) => project(layout.mapToCanvas, x, y)).filter(Boolean);
     ctx.save();
-    ctx.strokeStyle = tone("--paper", "#fff");
+    ctx.strokeStyle = tone("--ink");
     ctx.lineWidth = 1;
     ctx.setLineDash([3, 3]);
     if (footprint.length === 4) {
@@ -178,13 +177,13 @@ export function createMapFitView({ el, view, call, visionView, onChanged = () =>
       ctx.stroke();
     }
     ctx.setLineDash([]);
-    ctx.fillStyle = tone("--paper", "#fff");
-    ctx.font = `12px ${tone("--mono", "monospace")}`;
+    ctx.fillStyle = tone("--ink");
+    ctx.font = window.RosyPalette.canvasFont(12, "mono");
     ctx.textBaseline = "top";
     ctx.fillText("북 +y ↑   동 +x →", 6, 6);
     ctx.restore();
     caption.textContent = `위에서 본 지도 좌표(m) · ${KIND_LABEL[fit.kind]} · 카메라 영상을 지도 평면으로 편 위에 `
-      + "차선 페인트(채움)와 중심선(점선), 카메라 시야(흰 점선) · 페인트가 겹치면 맞음 · 표시 전용, 관측·주행에 쓰지 않음";
+      + "차선 페인트(채움)와 중심선(점선), 카메라 시야(가는 점선) · 페인트가 겹치면 맞음 · 표시 전용, 관측·주행에 쓰지 않음";
     canvas.setAttribute("aria-label", caption.textContent);
   }
 
@@ -249,6 +248,7 @@ export function createMapFitView({ el, view, call, visionView, onChanged = () =>
     const generation = ++fitGeneration;
     pending = null; // 지난 제안이 실패한 새 맞춤 뒤에 남지 않게
     detectButton.setAttribute("disabled", "");
+    detectButton.setAttribute("reason", "맞추는 중");
     state.textContent = "Vision에서 차선 페인트를 사이트 지도에 맞추는 중입니다…";
     state.dataset.tone = "neutral";
     guidance.hidden = true;
@@ -263,7 +263,10 @@ export function createMapFitView({ el, view, call, visionView, onChanged = () =>
         state.dataset.tone = "warn";
       }
     } finally {
-      if (generation === fitGeneration) detectButton.removeAttribute("disabled");
+      if (generation === fitGeneration) {
+        detectButton.removeAttribute("disabled");
+        detectButton.removeAttribute("reason");
+      }
     }
     render();
   });
@@ -309,6 +312,7 @@ export function createMapFitView({ el, view, call, visionView, onChanged = () =>
   function reset() {
     fitGeneration += 1; // 진행 중인 맞춤의 늦은 결과가 초기화를 덮지 않게
     detectButton.removeAttribute("disabled");
+    detectButton.removeAttribute("reason");
     lanes = null;
     lanesAt = 0;
     pending = null;
