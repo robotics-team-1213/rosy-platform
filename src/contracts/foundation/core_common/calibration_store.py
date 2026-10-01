@@ -386,12 +386,18 @@ def resolve(kind, fallback, *, fallback_source, robot=None, root=None, store=Non
     key. source is a one-line string to log: which record (id, sha) or which
     static file, plus the overridden keys. Any store failure, and an accepted
     record whose values fail check_values, falls back to the static values and
-    says why."""
+    says why. An override whose result fails check_values (the same
+    plausibility a record must pass) is refused with a warning."""
     override = {k: v for k, v in (override or {}).items() if v is not None}
     values, source = _resolve_record(kind, fallback, fallback_source=fallback_source, robot=robot,
                                      root=root, store=store, nominal=nominal)
     if override:
-        values = {**values, **override}
+        merged = {**values, **override}
+        why = check_values(kind, merged, nominal=nominal)
+        if why:
+            _LOG.warning("operator override %s for %s refused: %s", sorted(override), kind, why)
+            return values, source + f"; operator override {', '.join(sorted(override))} refused: {why}"
+        values = merged
         source += f"; operator override {', '.join(sorted(override))}"
     return values, source
 

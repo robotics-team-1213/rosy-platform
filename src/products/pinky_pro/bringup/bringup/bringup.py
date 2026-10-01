@@ -100,7 +100,8 @@ class Rosy(Node):
             self.get_parameter('wheel_radius').value,
             self.get_parameter('wheel_separation').value,
             override={key: self.get_parameter(f'{key}_override').value
-                      for key in ('wheel_radius', 'wheel_separation')})
+                      for key in ('wheel_radius', 'wheel_separation')},
+            log=self.get_logger().warning)
         self.get_logger().info(
             f"wheel_radius {wheels['wheel_radius']} wheel_separation {wheels['wheel_separation']} "
             f"from {wheel_source}")

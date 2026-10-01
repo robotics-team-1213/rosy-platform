@@ -75,3 +75,18 @@ def test_zero_or_missing_override_is_not_an_override(tmp_path):
         values, source = calibrated_wheels(0.028, 0.0971, root=tmp_path, robot=ROBOT, override=override)
         assert values == {'wheel_radius': 0.0266, 'wheel_separation': 0.0953}
         assert 'operator override' not in source
+
+
+@pytest.mark.parametrize('bad', [float('nan'), -0.03, True, 'x'])
+def test_unusable_override_is_dropped_and_logged(tmp_path, bad):
+    logged = []
+    values, source = calibrated_wheels(0.028, 0.0971, root=tmp_path, robot=ROBOT,
+                                       override={'wheel_radius': bad}, log=logged.append)
+    assert values == {'wheel_radius': 0.028, 'wheel_separation': 0.0971}
+    assert 'operator override' not in source and len(logged) == 1 and 'dropped' in logged[0]
+
+
+def test_implausible_override_is_refused(tmp_path):
+    values, source = calibrated_wheels(0.028, 0.0971, root=tmp_path, robot=ROBOT,
+                                       override={'wheel_radius': 0.040})   # +43 %
+    assert values['wheel_radius'] == 0.028 and 'refused' in source

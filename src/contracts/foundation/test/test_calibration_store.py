@@ -306,3 +306,15 @@ def test_measured_robots_pass_the_urdf_centred_checks():
         assert check_values("wheel_odometry", {"wheel_radius": r, "wheel_separation": b}) is None
     for deg in (181.0, 182.0):
         assert check_values("lidar_mount", {"lidar_yaw_offset": math.radians(deg)}) is None
+
+
+@pytest.mark.parametrize("kind,override", [
+    ("lidar_mount", {"lidar_yaw_offset": math.radians(40.0)}),
+    ("wheel_odometry", {"wheel_radius": 0.040}),
+    ("camera_profile", {"pitch_rad": 1.2}),
+])
+def test_implausible_operator_override_is_refused(tmp_path, kind, override):
+    nominal, _measured, _operator = URDF_NOMINAL[kind]
+    values, source = resolve(kind, nominal, fallback_source="geometry.yaml", robot=ROBOT,
+                             store=CalibrationStore(tmp_path), override=override)
+    assert values == nominal and "refused" in source

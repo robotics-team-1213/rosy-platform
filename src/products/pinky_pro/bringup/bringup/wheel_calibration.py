@@ -7,15 +7,24 @@ one, or without core_common in the image, the parameters stand. An accepted
 record outside the URDF nominal +-10 %, or holding a bool or non-number, is
 refused by the store's check_values and the parameters stand. A positive
 ``override`` value (the bringup launch arguments wheel_radius /
-wheel_separation; 0 or None = not set) wins over both. The returned source
-line (which bringup logs) says which applied. ROS-free.
+wheel_separation; 0 or None = not set) wins over both, provided it passes
+the same plausibility check as a record; a NaN or negative override is
+dropped and reported through ``log``. The returned source line (which
+bringup logs) says which applied. ROS-free.
 """
+import math
 
 
-def calibrated_wheels(wheel_radius, wheel_separation, *, override=None, root=None, robot=None):
+def calibrated_wheels(wheel_radius, wheel_separation, *, override=None, root=None, robot=None,
+                      log=None):
     static = {'wheel_radius': float(wheel_radius), 'wheel_separation': float(wheel_separation)}
-    chosen = {k: float(v) for k, v in (override or {}).items()
-              if k in static and v is not None and float(v) > 0.0}
+    chosen = {}
+    for key, value in (override or {}).items():
+        number = float(value) if isinstance(value, (int, float)) and not isinstance(value, bool) else math.nan
+        if key in static and math.isfinite(number) and number > 0.0:
+            chosen[key] = number
+        elif value not in (None, 0, 0.0) and log is not None:
+            log(f'wheel override {key}={value!r} dropped: not a positive finite number')
     try:
         from core_common.calibration_store import resolve
     except ImportError:
