@@ -82,7 +82,7 @@ data class SiteLink(
             val sameSite = previous != null && previous.caPin != null && previous.caPin == pairing.pin
             return SiteLink(
                 siteName = siteName ?: previous?.siteName?.takeIf { sameSite },
-                tlsHost = if (ip) previous?.tlsHost?.takeIf { sameSite } else host.lowercase().trimEnd('.'),
+                tlsHost = if (ip) previous?.tlsHost?.takeIf { sameSite } else normalizeHost(host),
                 port = pairing.port,
                 caPin = pairing.pin,
                 token = pairing.token,
@@ -94,13 +94,32 @@ data class SiteLink(
             )
         }
 
-        /** The failing field, or null when [link] may be saved and dialled. */
+        /**
+         * The failing field, or null when [link] may be saved and dialled. `tls_host` must be one label plus
+         * `.local` (D-391 1, same rule as the shared site-link vector): it is only ever found through mDNS.
+         * This checks the stored, canonical form (lower case, no trailing dot or spaces); user input is made
+         * canonical by [from], so only [entryReason] is tolerant.
+         */
         fun validate(link: SiteLink): String? {
             if (link.tlsHost == null && link.manualHost == null) return "host"
-            link.tlsHost?.let { if (isIpLiteral(it)) return "tls_host" }
+            link.tlsHost?.let { if (!isTlsHost(it)) return "tls_host" }
             link.manualHost?.let { if (!isIpLiteral(it)) return "manual_host" }
             if (link.role != ROLE) return "role"
             return PairingUri.validate(link.dialHost, link.port, link.token, link.source, link.secure, link.caPin)
         }
+
+        /**
+         * A pairing as the settings form or a deep link would save it; null when it may be saved. Tolerant of
+         * case, spaces and a trailing root dot, because [from] makes the host canonical first.
+         */
+        fun entryReason(pairing: PairingUri): String? = validate(from(pairing))
+
+        private val TLS_HOST = Regex("^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.local$")
+
+        /** Exactly the canonical form: one lower-case label + `.local`, no trailing dot or spaces. */
+        fun isTlsHost(host: String): Boolean = TLS_HOST.matches(host)
+
+        /** Canonical host as stored: trimmed, lower-cased, trailing root dot removed (D-370 TXT rule). */
+        fun normalizeHost(host: String): String = host.trim().lowercase().trimEnd('.')
     }
 }

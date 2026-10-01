@@ -391,7 +391,7 @@ def test_approach_stops_at_window_upper_edge():
 
 def test_approach_overshoot_below_window_stops_with_event():
     _, out = run(at(S.APPROACH), inputs(junction=JN, stop_line=0.149))
-    assert out.state is S.STOP_AT_LINE and out.events == ("nav.road_stop_line_overshoot",)
+    assert out.state is S.STOP_AT_LINE and out.events == ("road_stop_line_overshoot",)
 
 
 def test_approach_junction_gone_returns_to_lane():
@@ -609,7 +609,7 @@ def test_cross_arc_timeout_boundary():
     late = dataclasses.replace(TURN, travelled_m=0.6501)
     _, out = run(at(S.CROSS, path_choice="left"), inputs(turn=late))
     assert out.state is S.FAULT and out.speed_cap_mps == 0.0
-    assert out.events == ("nav.road_turn_timeout",)
+    assert out.events == ("road_turn_timeout",)
 
 
 def test_cross_static_obstacle_stops_without_overtaking():

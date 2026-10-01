@@ -214,7 +214,7 @@ fun SettingsScreen(
             Text(stringResource(R.string.settings_link_apply))
         }
 
-        Field(host, { host = it; siteName = null; saved = false }, R.string.settings_host, invalid == "host")
+        Field(host, { host = it; siteName = null; saved = false }, R.string.settings_host, invalid == "host" || invalid == "tls_host")
         // D-391 1: the saved IP is only the labelled fallback; the name is looked up through mDNS on each connect.
         currentLink?.manualHost?.let { manual ->
             Text(
@@ -270,7 +270,9 @@ fun SettingsScreen(
                 onClick = {
                     val trimmedHost = host.trim()
                     val portNumber = port.trim().toIntOrNull() ?: -1
+                    // Field rules first, then the site-link rules (D-391 1: a name must be <label>.local).
                     val reason = PairingUri.validate(trimmedHost, portNumber, token, source.trim(), secure, pin)
+                        ?: SiteLink.entryReason(PairingUri(trimmedHost, portNumber, token, source.trim(), secure, pin))
                     invalid = reason
                     if (reason == null) {
                         onSave(PairingUri(trimmedHost, portNumber, token, source.trim(), secure, pin), siteName, freshPairing)
@@ -350,6 +352,7 @@ fun invalidText(reason: String): String = stringResource(
         "token" -> R.string.invalid_token
         "tls" -> R.string.invalid_tls
         "pin" -> R.string.invalid_pin
+        "tls_host" -> R.string.invalid_tls_host
         else -> R.string.invalid_source
     },
 )
