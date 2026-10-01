@@ -965,3 +965,10 @@
 - 변경: 점검(2026-10-01) #4 연쇄 — 발견 브리지가 끊긴 뒤 45 s가 지나면 새 로봇 발견과 새 주소로 옮기기가 멈추는데, 관제는 처음부터 스캔이 없을 때와 같은 노란 "검색기 연결 대기"만 보였다. `server/discovery.py` `snapshot()`이 `scanner_state`(`never_seen`·`online`·`expired`)와 `scanner_age_s`를 더한다(`scanner_online`은 그대로). `web/console.js` 발견 패널이 `expired`면 `crit` "검색기 끊김", 마지막 스캔 나이와 멈춘 기능, `rosy-mdns-bridge` 확인 안내를 보이고, 끊김·복귀를 한 번씩 이벤트 로그에 남긴다. 등록 코드(`enrollment.py`·`enrollment.js`)는 건드리지 않았다(feat/d341-fleet-pairing-server와 겹침 회피). API 참조 `/api/fleet/discovery` 행 갱신.
 - 증거: `test_discovery.py` 상태 시험(never_seen → online 45 s → expired), 콘솔 경보 소스 계약, `test_discovery_api.py` 응답 모양, `test/test_fleet_console_browser.py`의 Chromium 시험(`ROSY_RUN_BROWSER_TESTS=1`, 경보 crit·로그 1회·복귀) 통과. `python -m pytest src/site/fleet/test -q` 986 passed, 6 skipped (2026-10-01 Windows).
 - gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · feat(discovery): 고정 주소가 지금 망에 있는지 로봇마다 판정한다
+
+- 변경: 점검(2026-10-01, "192.168.1.x 가정 없음") #2 — 사이트 Wi-Fi가 192.168.1.x에서 10.16.36.x로 바뀌자 로봇이 까닭 없이 오프라인으로만 보였다. 새 순수 모듈 `server/address_drift.py` `classify_addresses()`가 로스터의 고정 base_url을 최근 스캔과 대조해 `in_scanned_subnet`·`outside_scanned_subnets`·`seen_at_other_address`·`unknown`(스캔 없음·검색기 꺼짐·`.local` 이름이 스캔에 없음)으로 나누고, 모든 고정 로봇이 스캔된 망 밖이면 `all_outside`를 켠다. 새 `GET /api/fleet/discovery/addresses`(viewer+)가 이것에 출처(`static`·`enrolled`)와 `movable`(등록부가 `address_changed`이고 새 주소가 하나)을 붙인다. 스캔을 받을 때 robots.yaml 로봇이 모든 스캔 망 밖이거나 다른 주소에 보이면 경고 로그를 한 번 남긴다.
+- 결정: 스캔 행에는 robot_id·device_uid가 없다. 그래서 같은 로봇 판정은 등록부가 이미 쓰는 발견 이름(등록 로봇), 인증된 HELLO의 `device_name`, 그 둘이 없으면 base_url 자체의 `.local` 이름(파일 로봇)으로만 한다. 신원이 없는 로봇은 이름으로 짐작하지 않는다. 실제 이동은 기존 "새 주소로 옮기기"가 토큰으로 robot_id·hostname·serial·device_uid를 다시 확인한다. 스캔 행에 넷마스크가 없어 "스캔된 망"은 스캔 주소마다 /24로 잡는다(`site_networks` 인자는 사이트 호스트 인터페이스를 알게 되면 더한다 — 지금은 배선하지 않음: Fleet은 컨테이너 안이라 호스트 인터페이스를 모른다). 포트만 다르면 주소 변경으로 보지 않는다(파일 로봇의 https:8443 대 광고 8080). `.local`은 풀지 않고(D-370 5.3) 스캔의 IP를 제안으로만 싣는다. 응답에 토큰·경로·userinfo가 없다. API 참조에 행을 더했다.
+- 증거: 새 `test_address_drift.py` 14, `test_address_drift_api.py` 4 — 모듈 없음으로 적색 확인 뒤 18 passed.
+- gate 변화: 없음(LOCAL).

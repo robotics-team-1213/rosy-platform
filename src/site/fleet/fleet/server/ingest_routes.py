@@ -7,17 +7,49 @@
 from __future__ import annotations
 
 import hmac
+import logging
 import sqlite3
 from hashlib import sha256
 from typing import Optional
+from urllib.parse import urlsplit
 
 from fastapi import Header, HTTPException, Query
 
 from core_common.protocol.policy_evidence import PolicyEvidencePayload
 from core_common.protocol.schemas import DiscoveryScanPayload
 from core_common.protocol.sightings import SiteSightingPayload
+from fleet.server.address_drift import classify_addresses
 from fleet.server.policy_evidence import PolicyEvidenceError, status_code_for
 from fleet.server.sightings import SightingError
+
+_LOG = logging.getLogger(__name__)
+
+
+def address_reasons(*, console, hub, discovery, enrollment) -> dict:
+    """Each pinned robot vs the latest scan (D-361 3, D-370 5.3); explains, never follows."""
+    identities = hub.registry.identity_snapshot() if hub is not None else {}
+    enrolled = enrollment.enrolled_names() if enrollment is not None else {}
+    snapshot = discovery.snapshot(console.registered_endpoints, identities, enrolled)
+    pinned = console.registered_endpoints
+    listing = enrollment.listing() if enrollment is not None else None
+    static_ids = set(listing["static_robot_ids"]) if listing is not None else set(pinned)
+    movable = {row["robot_id"] for row in (listing or {}).get("robots", ())
+               if row["state"] == "address_changed" and row.get("hold") != "conflict"}
+    names = {robot_id: name for name, robot_id in enrolled.items()}
+    for robot_id in static_ids & set(pinned):
+        # A static robot's identity: its authenticated HELLO name, else its own `.local` name.
+        host = (urlsplit(pinned[robot_id]).hostname or "").lower()
+        device_name = (identities.get(robot_id) or {}).get("device_name")
+        if device_name:
+            names[robot_id] = str(device_name).lower()
+        elif host.endswith(".local"):
+            names[robot_id] = host.removesuffix(".local")
+    result = classify_addresses(pinned, snapshot["devices"] if snapshot["scanner_online"] else None,
+                                names=names, movable=movable)
+    for entry in result["robots"]:
+        entry["origin"] = "static" if entry["robot_id"] in static_ids else "enrolled"
+    result["scanner_state"] = snapshot["scanner_state"]
+    return result
 
 
 def install_discovery_routes(app, *, console, hub, discovery, discovery_token,
@@ -41,7 +73,41 @@ def install_discovery_routes(app, *, console, hub, discovery, discovery_token,
         if enrollment is not None and enrollment.available:
             await enrollment.on_discovery(discovery.rows())
             await enrollment.settle_holds()
+        _warn_static_drift()
         return {"accepted": True}
+
+    warned: set[tuple[str, str]] = set()
+
+    def _warn_static_drift() -> None:
+        """robots.yaml endpoints are never rewritten here; the log names the stale one once."""
+        current = set()
+        for entry in address_reasons(console=console, hub=hub, discovery=discovery,
+                                     enrollment=enrollment)["robots"]:
+            if entry["origin"] != "static":
+                continue
+            if entry["status"] == "outside_scanned_subnets":
+                key = (entry["robot_id"], entry["status"])
+                message = ("static robot %s pinned at %s is outside every scanned subnet; "
+                           "robots.yaml base_url may be stale")
+                args = (entry["robot_id"], entry["pinned"])
+            elif entry["status"] == "seen_at_other_address":
+                key = (entry["robot_id"], ",".join(entry["seen_addresses"]))
+                message = ("static robot %s pinned at %s is seen at %s; not followed (D-370 5.3) "
+                           "- confirm and edit robots.yaml")
+                args = (entry["robot_id"], entry["pinned"], ", ".join(entry["seen_addresses"]))
+            else:
+                continue
+            current.add(key)
+            if key not in warned:
+                _LOG.warning(message, *args)
+        warned.clear()
+        warned.update(current)
+
+    @app.get("/api/fleet/discovery/addresses", dependencies=read_guard,
+             tags=["fleet-discovery"])
+    def discovery_addresses() -> dict:
+        return address_reasons(console=console, hub=hub, discovery=discovery,
+                               enrollment=enrollment)
 
     @app.get("/api/fleet/discovery", dependencies=read_guard,
              tags=["fleet-discovery"])
