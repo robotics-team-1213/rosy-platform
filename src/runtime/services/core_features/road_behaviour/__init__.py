@@ -8,8 +8,8 @@ from core_features.road_behaviour.machine import (
 )
 from core_features.road_behaviour.model import (
     EVENT_OBSTACLE_HOLD,
-    EVENT_STOP_LINE_OVERSHOOT,
-    EVENT_TURN_TIMEOUT,
+    NOTICE_STOP_LINE_OVERSHOOT,
+    NOTICE_TURN_TIMEOUT,
     BehaviourInputs,
     BehaviourMemory,
     BehaviourOutput,
@@ -32,8 +32,8 @@ from core_features.road_behaviour.table import (
 
 __all__ = [
     "EVENT_OBSTACLE_HOLD",
-    "EVENT_STOP_LINE_OVERSHOOT",
-    "EVENT_TURN_TIMEOUT",
+    "NOTICE_STOP_LINE_OVERSHOOT",
+    "NOTICE_TURN_TIMEOUT",
     "BehaviourInputs",
     "BehaviourMemory",
     "BehaviourOutput",
