@@ -203,6 +203,98 @@ def test_legacy_initialpose_becomes_a_human_decision_the_robot_accepts(stack):
     assert injection.pose == (0.5, 0.25, 1.0) and injection.source == "human"
 
 
+# --- D-395 S1 finding 6: which clock each localization time runs on ------------------
+#
+# The robot node stamps everything on its node (ROS) clock: sim seconds under
+# `use_sim_time`, system (epoch) time on the device. CORE's bridge has two clocks:
+# the ROS clock of its own node (same setting, so the robot's clock) and the line
+# clock (`traffic_gate.line_clock`: the ROS clock under use_sim_time, else
+# `time.monotonic`). The stale window runs on the line clock; `received_s` must run
+# on the ROS clock, because the robot counts its ttl from it.
+
+#: (robot ROS clock at start, CORE line clock at start) per setup.
+_SETUPS = {"sim": (10.0, None), "device": (1.79e9, 5000.0)}
+
+
+@pytest.fixture(params=sorted(_SETUPS))
+def clocked(stack, request):
+    robot_now, mono = _SETUPS[request.param]
+    stack.robot.now = robot_now
+    line = SimpleNamespace(now=mono)
+    # ros_bridge: loc.clock = the node ROS clock; loc.bind_clock(line_clock).
+    stack.services.localization.clock = lambda: stack.robot.now
+    if mono is None:                       # use_sim_time: the line clock is the ROS clock
+        stack.services.localization.bind_clock(lambda: stack.robot.now)
+    else:
+        stack.services.localization.bind_clock(lambda: line.now)
+    stack.line = line
+    return stack
+
+
+def _advance(stack, seconds: float) -> None:
+    stack.robot.now += seconds
+    if stack.line.now is not None:
+        stack.line.now += seconds
+
+
+def test_received_s_is_within_the_robots_bad_receipt_rule(clocked):
+    from control.loc_assist import RECEIPT_AHEAD_S
+    _to_candidates(clocked)
+    resp = clocked.client.post("/api/v1/localization/initialpose", headers=OPERATOR,
+                               json={"x": 0.5, "y": 0.25, "yaw": 1.0})
+    assert resp.status_code == 200
+    [raw] = clocked.sent["decision"]
+    payload = json.loads(raw)
+    robot = clocked.robot
+    assert payload["received_s"] - robot.now <= RECEIPT_AHEAD_S
+    topics = robot.wire(robot.core.on_decision(robot.now, payload))
+    assert "result" not in topics, topics.get("result")
+    assert [i.source for i in robot.injected] == ["human"]
+
+
+def test_a_receipt_on_the_device_line_clock_would_be_refused(stack):
+    """Why `received_s` is not the line clock: monotonic is not the robot's epoch clock."""
+    robot_now, mono = _SETUPS["device"]
+    stack.robot.now = robot_now
+    _to_candidates(stack)
+    stack.services.localization.clock = lambda: mono
+    stack.client.post("/api/v1/localization/initialpose", headers=OPERATOR,
+                      json={"x": 0.5, "y": 0.25, "yaw": 1.0})
+    [raw] = stack.sent["decision"]
+    robot = stack.robot
+    topics = robot.wire(robot.core.on_decision(robot.now, json.loads(raw)))
+    [result] = [json.loads(r) for r in topics["result"]]
+    assert result["accepted"] is False and robot.injected == []
+
+
+def test_the_stale_window_runs_on_the_line_clock(clocked):
+    _localize_through_fleet(clocked)
+    robot = clocked.robot
+    _advance(clocked, 0.5)                 # the robot's state cadence: one heartbeat
+    heartbeat = robot.wire(robot.core.tick(robot.now))
+    assert heartbeat.get("state"), "the robot re-publishes its state on its own clock"
+    _relay(clocked.services, heartbeat)
+    status = clocked.services.localization.status
+    _advance(clocked, 2.9)
+    assert status().state.value == "LOCALIZED"
+    _advance(clocked, 0.2)
+    assert status().reason == "state_stale"
+
+
+def test_the_bridge_binds_the_line_clock_and_stamps_receipts_on_the_ros_clock():
+    import ast
+    source = (Path(__file__).resolve().parents[1] / "core" / "bridge" / "ros_bridge.py").read_text(
+        encoding="utf-8")
+    tree = ast.parse(source)
+    binds = [ast.unparse(n.args[0]) for n in ast.walk(tree) if isinstance(n, ast.Call)
+             and getattr(n.func, "attr", None) == "bind_clock"
+             and ast.unparse(n.func.value) == "loc"]
+    assert binds == ["self._line_clock"]
+    stamps = [ast.unparse(n.value) for n in ast.walk(tree) if isinstance(n, ast.Assign)
+              and [ast.unparse(t) for t in n.targets] == ["loc.clock"]]
+    assert stamps == ["lambda: self._node.get_clock().now().nanoseconds / 1000000000.0"]
+
+
 def test_fleet_mission_runs_in_core_and_the_robot_searches_after_it(stack):
     """P2-7: C asks B for a rotate; B drives and ends it; A searches again after the end."""
     from fleet.swarm.transport import RobotApiError

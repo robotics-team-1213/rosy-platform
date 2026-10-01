@@ -222,8 +222,14 @@ class RosBridge:
             odom_pose=lambda: self._last_odom_pose, info=self._node.get_logger().info)
         self._svc.docking.executor = self.docking_executor
         # D-395 P2-4: `received_s` on the ROS clock; decisions and suspects go out as JSON.
+        # It must be the robot node's clock (its ttl counts from it): both nodes share
+        # use_sim_time, so this is sim time in sim and epoch time on the device, where
+        # the line clock (monotonic) would read as long expired.
         loc = self._svc.localization
         loc.clock = lambda: self._node.get_clock().now().nanoseconds / 1e9
+        # D-395 S1 finding 6: the state_stale window runs on the line clock, so a
+        # Gazebo below RTF ~0.17 no longer flaps the robot's 0.5 s state stale.
+        loc.bind_clock(self._line_clock)
         loc.publish_decision = lambda body: self.loc_decision_pub.publish(String(data=json.dumps(body)))
         loc.publish_suspect = lambda body: self.loc_suspect_pub.publish(String(data=json.dumps(body)))
         self._svc.loc_mission.publish = (
