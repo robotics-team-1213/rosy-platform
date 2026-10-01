@@ -25,7 +25,8 @@ def test_site_candidate_is_commit_tagged_and_contains_sbom_and_image_hash(tmp_pa
                  "rosy-overhead-advertise.service",
                  "rosy-site-stack.service", "candidate_signing.py", "sign_candidate.py",
                  "verify_candidate.py",
-                 "discovery-token.template.txt", "site_db.py"):
+                 "discovery-token.template.txt", "site_db.py",
+                 "compose.pairing.yaml", "pairing-sync-token.template.txt"):
         (site / name).write_text(f"fixture:{name}", encoding="utf-8")
     (site / "rosy-site-stack.service").write_text(
         "Requires=docker.service\n"
@@ -92,6 +93,7 @@ def test_site_candidate_is_commit_tagged_and_contains_sbom_and_image_hash(tmp_pa
         "rosy-site-stack.service", "verify_candidate.py",
         "candidate_signing.py", "sign_candidate.py",
         "discovery-token.template.txt", "site_db.py",
+                 "compose.pairing.yaml", "pairing-sync-token.template.txt",
     }
     stack_unit = (output / "deploy" / "site" / "rosy-site-stack.service").read_text(
         encoding="utf-8")
@@ -140,6 +142,7 @@ def test_site_candidate_refuses_non_amd64_images_and_output_inside_checkout(tmp_
                  "rosy-overhead-advertise.service",
                  "candidate_signing.py", "sign_candidate.py", "verify_candidate.py",
                  "discovery-token.template.txt", "site_db.py",
+                 "compose.pairing.yaml", "pairing-sync-token.template.txt",
                  "Dockerfile.fleet", "Dockerfile.vision", "Dockerfile.proxy"):
         (site / name).write_text("fixture", encoding="utf-8")
     (site / "rosy-site-stack.service").write_text("fixture", encoding="utf-8")
