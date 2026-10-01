@@ -4042,6 +4042,11 @@
 - 증거: rosy_harness lint 오류 0.
 - gate 변화: 없음.
 
+## 2026-10-01 · uncommitted · docs(adr): D-394 화면 카드 계약과 장치 프로파일
+
+- 변경: ADR D-394(파일+로그 행). 재사용 단위=페이로드 계약, 전자잉크 렌더러 예약.
+- 증거: rosy_harness lint 오류 0.
+- gate 변화: 없음.
 ## 2026-10-01 · uncommitted · docs(adr): D-390 Pilot OMX-AI Gazebo 연습 경계와 실행 계획
 
 - 변경: D-323·D-366의 확장 의도와 현재 Pinky 전용 Pilot 세션/라우팅, OMX의 Fleet UDS·ROS action 경계 사이의 실제 차이를 D-390로 결정했다. 시뮬레이션 전용 same-origin API, 로컬 단일 팔 owner, 영상·시연 데이터 출처, 실물 비활성 경계를 고정하고 단계별 구현 계획을 추가했다.
@@ -4056,7 +4061,7 @@
 
 ## 2026-10-01 · uncommitted · docs(deployment): 현장 천장 카메라·관제 운영 가이드
 
-- 변경: `docs/deployment/site-ceiling-camera-console-runbook.md` 추가. 현장 PC 스택(fullchain, 지도 맞춤 옵션, mDNS 광고), 이름·CA 고정 페어링(D-341 §9, D-391), 카메라 위치 기준, 관제 맵 자동 맞춤(D-375)·경기장 뷰 대체(D-360), 로봇 등록·운전 모드·G4/G5, 규칙 점검표, 폰·관제 문제 해결표.
+- 변경: `docs/deployment/site-ceiling-camera-console-runbook.md` 추가. 현장 PC 스택(fullchain, 지도 맞춤 옵션, mDNS 광고), 이름·CA 고정 페어링(D-341 §9, D-394), 카메라 위치 기준, 관제 맵 자동 맞춤(D-375)·경기장 뷰 대체(D-360), 로봇 등록·운전 모드·G4/G5, 규칙 점검표, 폰·관제 문제 해결표.
 - 증거: 2026-09-30~10-01 현장 벤치(S21·Lenovo 태블릿, rosy-cam 스택)에서 실측한 수치와 실제 앱·관제 문구를 옮겼다. 절차 문서라 실행 코드는 바꾸지 않았다.
 - gate 변화: 없음.
 
@@ -4082,9 +4087,9 @@
 - 증거: 해당 커밋의 시험(`test_dataset_extract.py`, `test_bench_learned_perception.py`, `test_python_runtime_id.py`).
 - gate 변화: 없음(기록 정정).
 
-## 2026-10-01 · uncommitted · docs(adr): D-391 사이트 연결 기록 모양과 기기 연결 서버 자리 제안
+## 2026-10-01 · uncommitted · docs(adr): D-394 사이트 연결 기록 모양과 기기 연결 서버 자리 제안
 
-- 변경: 앱 공통 구조 점검(main 20d43df0, 읽기 전용) 결과 발견·전송은 모였고 연결 설정·기기 연결 서버가 남았다. D-391 Proposed(처음 D-387, docs/ota-roadmap-adr·Pilot OMX 초안과 번호가 겹쳐 D-391로 옮김): 클라이언트가 같은 필드(이름·CA·자격, IP 없음)로 사이트 연결을 저장하고 `site-link.v1.json` 벡터로 시험한다, 사이트 호스트 설정 원천은 `/run/rosy-config/` 하나 + 일관성 검사 도구, 기기 연결 서버는 Fleet(공통 조각 → pairing/v1 → 패널 → Rosy Cam 클라이언트 → Vision 동기화), 공개 상태 확장은 로봇 이미지가 관대한 탐침을 가진 뒤.
+- 변경: 앱 공통 구조 점검(main 20d43df0, 읽기 전용) 결과 발견·전송은 모였고 연결 설정·기기 연결 서버가 남았다. D-394 Proposed(처음 D-387, docs/ota-roadmap-adr·Pilot OMX 초안과 번호가 겹쳐 D-394로 옮김): 클라이언트가 같은 필드(이름·CA·자격, IP 없음)로 사이트 연결을 저장하고 `site-link.v1.json` 벡터로 시험한다, 사이트 호스트 설정 원천은 `/run/rosy-config/` 하나 + 일관성 검사 도구, 기기 연결 서버는 Fleet(공통 조각 → pairing/v1 → 패널 → Rosy Cam 클라이언트 → Vision 동기화), 공개 상태 확장은 로봇 이미지가 관대한 탐침을 가진 뒤.
 - 증거: 점검 보고(파일·줄 인용), health 탐침 정확 일치 확인(`fleet_agent/discovery.py:49`, `deploy/site/fleet-mdns.py:123`).
 - gate 변화: 없음(SOURCE 문서만).
 - 결정: 없음(제안). 담당은 병행 세션 결정 회차에서 정한다.
@@ -4112,3 +4117,29 @@
 - gate 변화: 없음(로봇 설정·params 변경 없음).
 - 결정: D-393 Proposed
 - 교훈: 없음
+
+## 2026-10-01 · uncommitted · docs(adr): D-396 UI/UX 목표 체계와 실행 계획
+
+- 변경: ADR D-396(파일+로그 행)와 docs/plans/2026-10-01-ui-ux-consistency-goals.md. 실측으로 G2(빈 contracts 강제)와 G5(baseline 추적)의 강제 시험이 이미 존재함을 확인.
+- 증거: rosy_harness lint 오류 0.
+- gate 변화: 없음.
+## 2026-10-01 · uncommitted · docs(adr): D-396 제안 — Fleet 보조 위치 확정
+- 변경: `docs/adr/D-396-fleet-assisted-localization.md`와 `docs/plans/2026-10-01-fleet-assisted-localization-design.md` 신규(Proposed), ADR Log에 D-396 행. D-257 5항(sighting은 위치 추정에 안 들어감)과 D-393 3항(대칭 맵 global localization 금지·운영자 재초기화)의 개정을 제안만 하고 원문은 고치지 않았다. 코드·로봇 설정·API 참조서 변경 없음.
+- 증거: 문서 변경뿐. 인용한 코드 위치(`navigation.py:89-109`, `ros_bridge.py:214-218,576`, `transport.py:108-127`, `localization_node.py:45,94,115`, `nav2_params.yaml:40-45`)는 저장소에서 직접 확인. D-341 5항은 승인자 규칙이라 sighting 금지 반복으로 인용하지 않았다.
+- gate 변화: 없음(설계 제안, 실행 대상 없음).
+- 결정: D-396 Proposed
+- 교훈: 없음
+
+## 2026-10-01 · uncommitted · docs(adr): D-391 3항 개정 — 일관성 검사는 IP SAN을 보지 않는다
+- 변경: `docs/adr/D-391-site-link-record-and-device-link-owner.md` 3항의 검사 목록에서 "광고 IP가 SAN에 있는지"를 뺐다. IP SAN은 호스트가 재할당되면 낡고, `manual_host` 수동 되돌림 링크에만 필요하므로 검사 범위 밖으로 적었다. 검사 대상은 DNS SAN `tls_host`, `site_cert` leaf + CA, `.local` 이름, TXT·Caddy 호스트 일치.
+- 증거: 문서 개정만. 구현은 `deploy/site/site_preflight.py`(같은 브랜치 feat/d391-site-preflight)와 그 시험.
+- gate 변화: 없음.
+- 결정: D-391 3항 개정(IP SAN 비검사)
+- 교훈: 없음
+
+## 2026-10-01 · uncommitted · fix(perception): model-watch 로봇을 이름으로 부르고 호스트 키를 로봇 id로 핀, 실패를 눈에 보이게
+
+- 변경: 현장 네트워크가 바뀌면(로봇이 192.168.1.x에서 10.16.36.x로) IP로 적은 `host`와 IP 키 known_hosts 때문에 `rosy-model-watch`가 조용히 실패하던 틈을 막는다. (1) 예제 설정·문서는 `host: <hostname>.local`(mDNS, D-154 `rosy-pinky-<4자>`)이고 IP는 비권장. (2) `operator_ssh.options(alias=)`가 `-o HostKeyAlias=<robot id>`를 넣고 deliver/harvest `--host-key-alias`, watch와 `rosy_ml`이 로봇 이름을 넘긴다. 엄격 검사는 그대로. 주소로만 핀된 known_hosts는 doctor/init이 알리고 `rosy_ml repin ROBOT`이 복사한다. (3) 종료 코드 77(이름 풀이 실패)·78(거부·시간 초과·경로 없음)·79(호스트 키 불명·불일치)와 stderr 한 줄, watch는 닿지 못한 로봇의 코드로 끝나 유닛이 failed로 보이고 타이머는 계속 돈다. 네트워크 실패는 시도 횟수를 쓰지 않는다. state `robot_failures`(종류, 시각, 연속 횟수)를 `rosy_ml status`/`store-status --watch-config`가 보여 주고 doctor는 호스트마다 이름을 풀어 본다. 연결 단계의 시간 초과는 이제 1이 아니라 78이다(`test_timeout_is_a_failed_step` 기대값 정정). D-373 개정 1, 배포 문서 갱신.
+- 증거: `python -m pytest tools/perception/test -q -p no:cacheprovider`, 신규 `test_model_watch_host.py`(모의 ssh/DNS, 네트워크 없음).
+- gate 변화: 없음(SOURCE). 실제 로봇 mDNS 이름과 사이트 PC 해석, systemd에서 failed 표시와 타이머 재실행은 장치·사이트 PC에서 미확인.
+- 결정: D-373 개정 1

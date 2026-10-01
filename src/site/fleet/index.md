@@ -69,8 +69,8 @@
 
 ## 최근 기록
 
+- 2026-10-01 · uncommitted · feat(fleet): D-392 P3 폐쇄형 모델 도구 카탈로그
 - 2026-10-01 · uncommitted · feat(fleet): D-392 P0–P2 모델 도구 call/result 경계
 - 2026-10-01 · uncommitted · refactor(enrollment): D-391 4.1 device_kind 상수 사용
 - 2026-10-01 · uncommitted · fix(relay): 첫 메시지 인증 뒤 늦게 오는 4401을 레인 이유로 드러낸다
 - 2026-10-01 · uncommitted · fix(swarm): D-370 S7 — Fleet→CORE WS는 첫 메시지 인증, URL에 토큰 없음
-- 2026-10-01 · uncommitted · fix(fleet): D-375 맵 자동 맞춤 버튼을 경기장 도구 줄에 합친다

@@ -1,7 +1,8 @@
 """rosy_ml: the operator CLI for the learned-perception loop (D-373 decision 7).
 
   rosy_ml init --robot NAME=HOST [...]   write your per-user config (paths only)
-  rosy_ml doctor [ROBOT]                 check key, known_hosts, robot, sudo, runtime, store
+  rosy_ml doctor [ROBOT]                 check key, known_hosts, host name, robot, sudo, runtime, store
+  rosy_ml repin ROBOT                    copy the robot's address-keyed host key under its id
   rosy_ml store-status [--init]          datasets and model inbox/accepted/rejected counts
   rosy_ml status [ROBOT]                 shadow pointer, installed revisions, history
   rosy_ml deliver ROBOT REVISION         push an intake-passed model to the shadow slot (holds the robot)
@@ -16,12 +17,19 @@ $XDG_CONFIG_HOME/rosy/ml.yaml, ~/.config/rosy/ml.yaml. It names robots, key
 and known_hosts paths, the store folder (D-373 decision 8: a local path, a NAS
 mount or a Google Drive folder, same layout), optionally an HF repo, and token
 *files*; never a token itself.
-Robots are addressed by name; the host lives only in your config.
+Robots are addressed by name; the host lives only in your config. Use a host
+*name* (`<hostname>.local`, mDNS) rather than an IP: the site network renumbers. The
+host key is pinned under the robot name (ssh HostKeyAlias), never under the address;
+an old address-keyed pin is shown by doctor/init and moved by `rosy_ml repin ROBOT`
+(it never rewrites known_hosts on its own).
 
 The commands wrap model/deliver.py, dataset/harvest.py and model/intake.py;
 they add no behaviour of their own. Exit codes are those of the wrapped tool;
 doctor exits 0 only if every required check passes, 1 otherwise; 2 is a bad
-config or argument."""
+config or argument. Network failures of deliver/rollback/release-hold/status exit 77
+(host name does not resolve), 78 (refused, timed out, no route) or 79 (host key unknown
+or changed), see model/deliver.py. status and store-status with --watch-config (or a
+`state_file:` in the config) also show each robot's last watcher failure."""
 
 from __future__ import annotations
 
@@ -32,6 +40,7 @@ import getpass
 import importlib.util
 import json
 import os
+import ipaddress
 import socket
 import subprocess
 import sys
@@ -126,6 +135,8 @@ def config_from_watch(watch_cfg: dict, hostname: str | None = None) -> dict:
     cfg = {"operator": f"site:{hostname or socket.gethostname()}",
            "robots": {r["name"]: r["host"] for r in watch_cfg["robots"]},
            "ssh": dict(watch_cfg["ssh"]), "intake_out": watch_cfg["intake_out"]}
+    if watch_cfg.get("state_file"):
+        cfg["state_file"] = watch_cfg["state_file"]
     if watch_cfg.get("backend", "inbox") == "hf":
         cfg["hf_repo"] = watch_cfg["repo"]
         cfg["hf_token_file"] = watch_cfg.get("hf_token_file") or SITE_TOKEN_FILE
@@ -135,8 +146,73 @@ def config_from_watch(watch_cfg: dict, hostname: str | None = None) -> dict:
     return _check(cfg)
 
 
-def _ssh_argv(cfg: dict) -> list[str]:
-    return ["--identity", cfg["ssh"]["identity"], "--known-hosts", cfg["ssh"]["known_hosts"]]
+def _ssh_argv(cfg: dict, name: str) -> list[str]:
+    """Key, known_hosts and the host-key alias (the robot id) for one robot."""
+    return ["--identity", cfg["ssh"]["identity"], "--known-hosts", cfg["ssh"]["known_hosts"],
+            "--host-key-alias", name]
+
+
+def _is_ip(host: str) -> bool:
+    try:
+        ipaddress.ip_address(host)
+    except ValueError:
+        return False
+    return True
+
+
+def _known(runner, kh: str, key: str) -> list[str]:
+    """The known_hosts lines (marker-free) ssh-keygen finds for key (an alias or a host)."""
+    try:
+        r = runner(["ssh-keygen", "-F", key, "-f", kh], check=False, capture_output=True,
+                   text=True, timeout=10)
+    except (OSError, subprocess.TimeoutExpired):
+        return []
+    if r.returncode != 0:
+        return []
+    return [ln for ln in (r.stdout or "").splitlines()
+            if ln.strip() and not ln.startswith(("#", "@"))]
+
+
+def _pin_hint(name: str) -> str:
+    return f"rosy_ml repin {name}"
+
+
+def _repin(cfg: dict, name: str, runner) -> int:
+    """Copy the host key found under the robot's address to the robot id (explicit; the
+    old entry stays). Strict checking is untouched: this only re-labels a key that was
+    already pinned."""
+    host, kh = _host(cfg, name), cfg["ssh"]["known_hosts"]
+    if _known(runner, kh, name):
+        print(f"✓ {name}: host key already pinned under {name}")
+        return 0
+    found = [ln.split(" ", 1)[1] for ln in _known(runner, kh, host) if " " in ln]
+    if not found:
+        print(f"✗ {name}: no host key pinned for {host!r} in {kh} — fix: record the robot's "
+              "key from a trusted network under its id "
+              f"(ssh-keyscan -t ed25519 <address> with the address replaced by {name!r})")
+        return 1
+    path = Path(kh)
+    text = path.read_text(encoding="utf-8")
+    sep = "" if not text or text.endswith("\n") else "\n"
+    path.write_text(text + sep + "".join(f"{name} {rest}\n" for rest in found),
+                    encoding="utf-8", newline="\n")
+    print(f"✓ {name}: pinned {len(found)} host key(s) under {name} (copied from {host!r}; "
+          "the old entry is left in place)")
+    return 0
+
+
+def _failure_lines(cfg: dict, robots: list[str]) -> list[str]:
+    """The watcher's last network failure per robot, from its state file (if any)."""
+    path = cfg.get("state_file")
+    if not path or not Path(path).is_file():
+        return []
+    try:
+        failures = json.loads(Path(path).read_text(encoding="utf-8")).get("robot_failures") or {}
+    except (OSError, ValueError):
+        return [f"! cannot read the watcher state {path}"]
+    return [f"✗ {name}: last watcher failure: {f.get('kind')} (exit {f.get('exit')}) at "
+            f"{f.get('at')}, {f.get('count')} in a row"
+            for name in robots if isinstance(f := failures.get(name), dict)]
 
 
 def _host(cfg: dict, name: str) -> str:
@@ -148,7 +224,7 @@ def _host(cfg: dict, name: str) -> str:
 
 # --- init -----------------------------------------------------------------------------------
 
-def _init(args) -> int:
+def _init(args, runner=subprocess.run) -> int:
     import yaml
     path = config_path()
     if path.exists() and not args.force:
@@ -180,6 +256,13 @@ def _init(args) -> int:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(yaml.safe_dump(cfg, sort_keys=False), encoding="utf-8")
     print(f"wrote {path}; next: rosy_ml doctor")
+    for name, host in robots.items():
+        if _is_ip(host):
+            print(f"! {name}: {host} is an IP; it breaks when the network renumbers — "
+                  "use the robot's host name (<hostname>.local) instead")
+        if not _known(runner, known_hosts, name) and _known(runner, known_hosts, host):
+            print(f"! {name}: its host key is pinned under the address only — "
+                  f"fix: {_pin_hint(name)}")
     return 0
 
 
@@ -214,7 +297,7 @@ class _Report:
         return ok
 
 
-def _doctor(cfg, robots, runner, connect, find_spec) -> int:
+def _doctor(cfg, robots, runner, connect, find_spec, resolve=socket.getaddrinfo) -> int:
     rep = _Report()
     rep.line(True, f"config readable (operator {cfg['operator']})")
     key, kh = Path(cfg["ssh"]["identity"]), cfg["ssh"]["known_hosts"]
@@ -225,21 +308,29 @@ def _doctor(cfg, robots, runner, connect, find_spec) -> int:
         rep.line(False, f"SSH key {key} is readable by others", f"chmod 600 {key}")
     else:
         rep.line(True, f"SSH key {key}")
-    opts = operator_ssh.options(str(key), kh)
 
-    def remote(host, command, timeout=20):
+    def remote(host, command, name, timeout=20):
+        opts = operator_ssh.options(str(key), kh, name)
         try:
             return runner(["ssh", *opts, "--", f"rosy@{host}", command], check=False,
                           capture_output=True, text=True, timeout=timeout)
         except (OSError, subprocess.TimeoutExpired) as exc:
             return subprocess.CompletedProcess([], 1, "", str(exc))
 
-    def in_known_hosts(host):
-        try:
-            return runner(["ssh-keygen", "-F", host, "-f", kh], check=False,
-                          capture_output=True, text=True, timeout=10).returncode == 0
-        except (OSError, subprocess.TimeoutExpired):
-            return Path(kh).is_file() and host in Path(kh).read_text(encoding="utf-8")
+    def in_known_hosts(name, host):
+        """The key must be under the robot id; an address-only pin is a failure with its fix."""
+        if _known(runner, kh, name):
+            return True
+        if _known(runner, kh, host):
+            raise LookupError(f"pinned under the address only; fix: {_pin_hint(name)} "
+                              "(copies it under the id; the address changes, the id does not)")
+        return False
+
+    def resolves(host):
+        if _is_ip(host):
+            return True
+        resolve(host, 22)
+        return True
 
     def tcp22(host):
         try:
@@ -250,11 +341,20 @@ def _doctor(cfg, robots, runner, connect, find_spec) -> int:
 
     for name in robots:
         host = cfg["robots"][name]
-        rep.check(f"{name}: {host} in known_hosts", lambda: in_known_hosts(host),
-                  f"record the robot's host key once from a trusted network into {kh} "
-                  "(see .claude/skills/rosy-device-access/SKILL.md)")
-        reachable = rep.check(f"{name}: TCP 22 reachable", lambda: tcp22(host),
-                              "robot off, wrong address in your config, or not on this network")
+        if _is_ip(host):
+            rep.line(False, f"{name}: host is an IP; it breaks when the network renumbers",
+                     "set the robot's host name (<hostname>.local) in your config",
+                     required=False)
+        resolved = rep.check(f"{name}: host name resolves", lambda: resolves(host),
+                             "the name does not resolve here: wrong name in your config, robot "
+                             "off, or mDNS (avahi / Bonjour) blocked on this network")
+        rep.check(f"{name}: host key pinned under {name} (in known_hosts)",
+                  lambda: in_known_hosts(name, host),
+                  f"record the robot's host key once from a trusted network into {kh} under "
+                  f"the name {name} (see .claude/skills/rosy-device-access/SKILL.md)")
+        reachable = resolved and rep.check(
+            f"{name}: TCP 22 reachable", lambda: tcp22(host),
+            "robot off, wrong host name in your config, or not on this network")
         checks = [
             ("ssh as rosy (BatchMode)", "true", lambda r: r.returncode == 0,
              "your key is not in rosy's authorized_keys on this robot, or known_hosts is stale"),
@@ -277,10 +377,11 @@ def _doctor(cfg, robots, runner, connect, find_spec) -> int:
             if not reachable:
                 rep.line(False, f"{name}: {label} (skipped: not reachable)")
                 continue
-            rep.check(f"{name}: {label}", lambda: good(remote(host, command)), hint)
+            rep.check(f"{name}: {label}", lambda: good(remote(host, command, name)), hint)
         if reachable:
             try:
-                text = remote(host, f"sudo -n cat {MODELS_DIR}/hold 2>/dev/null || true").stdout
+                text = remote(host, f"sudo -n cat {MODELS_DIR}/hold 2>/dev/null || true",
+                              name).stdout
                 hold = json.loads(text) if (text or "").strip() else None
             except Exception:  # noqa: BLE001 - a malformed hold file is still a hold
                 hold = {"by": "?"}
@@ -293,6 +394,8 @@ def _doctor(cfg, robots, runner, connect, find_spec) -> int:
                 rep.line(False, f"{name}: held by {who}{since} (site auto delivery paused){stale}",
                          f"when done testing: rosy_ml release-hold {name}", required=False)
 
+    for line in _failure_lines(cfg, robots):
+        print(line)
     if cfg.get("store"):
         _doctor_store(rep, store.Store(cfg["store"]))
     else:
@@ -350,6 +453,8 @@ def _doctor_store(rep: _Report, st) -> None:
 
 
 def _store_status(cfg: dict, init: bool) -> int:
+    for line in _failure_lines(cfg, list(cfg["robots"])):
+        print(line)
     if not cfg.get("store"):
         print("✗ no store configured — fix: rosy_ml init --store <path> --force "
               "(or add `store: <path>` to your config)")
@@ -379,7 +484,7 @@ def _store_status(cfg: dict, init: bool) -> int:
 # --- main -----------------------------------------------------------------------------------
 
 def main(argv=None, *, runner=subprocess.run, connect=socket.create_connection,
-         find_spec=importlib.util.find_spec) -> int:
+         find_spec=importlib.util.find_spec, resolve=socket.getaddrinfo) -> int:
     try:
         sys.stdout.reconfigure(errors="replace")
     except (AttributeError, ValueError):
@@ -404,6 +509,10 @@ def main(argv=None, *, runner=subprocess.run, connect=socket.create_connection,
     p = sub.add_parser("status")
     p.add_argument("robot", nargs="?")
     p.add_argument("--history", type=int, default=10)
+    p.add_argument("--watch-config", help="read the site watcher's config (and its failures)")
+    p = sub.add_parser("repin")
+    p.add_argument("robot")
+    p.add_argument("--watch-config", help="read the site watcher's config")
     p = sub.add_parser("deliver")
     p.add_argument("robot")
     p.add_argument("revision")
@@ -414,14 +523,15 @@ def main(argv=None, *, runner=subprocess.run, connect=socket.create_connection,
     p.add_argument("--dest")
     p.add_argument("--assume-idle", action="store_true")
     sub.add_parser("intake").add_argument("source")
-    sub.add_parser("store-status").add_argument("--init", action="store_true",
-                                                help="create the layout folders")
+    p = sub.add_parser("store-status")
+    p.add_argument("--init", action="store_true", help="create the layout folders")
+    p.add_argument("--watch-config", help="read the site watcher's config (and its failures)")
     args = ap.parse_args(argv)
 
     if args.cmd == "init":
-        return _init(args)
+        return _init(args, runner)
     try:
-        if args.cmd == "doctor" and args.watch_config:
+        if getattr(args, "watch_config", None):
             import watch
             cfg = config_from_watch(watch.load_config(args.watch_config))
         else:
@@ -436,25 +546,29 @@ def main(argv=None, *, runner=subprocess.run, connect=socket.create_connection,
         print(f"✗ config — fix: {exc}")
         return 2
     if args.cmd == "doctor":
-        return _doctor(cfg, robots, runner, connect, find_spec)
+        return _doctor(cfg, robots, runner, connect, find_spec, resolve)
+    if args.cmd == "repin":
+        return _repin(cfg, args.robot, runner)
     if args.cmd == "store-status":
         return _store_status(cfg, args.init)
-    ssh = _ssh_argv(cfg)
     if args.cmd in ("status", "deliver", "rollback", "release-hold"):
         import deliver
         if args.cmd == "status":
             rc = 0
+            for line in _failure_lines(cfg, robots):
+                print(line)
             for name, host in zip(robots, hosts):
                 print(f"== {name}")
-                rc = max(rc, deliver.main(["status", host, *ssh, "--history",
+                rc = max(rc, deliver.main(["status", host, *_ssh_argv(cfg, name), "--history",
                                            str(args.history)], runner=runner))
             return rc
         head = (["push", hosts[0], args.revision, "--models", str(cfg["intake_out"])]
                 if args.cmd == "deliver" else [args.cmd, hosts[0]])
-        return deliver.main([*head, *ssh, "--operator", cfg["operator"]], runner=runner)
+        return deliver.main([*head, *_ssh_argv(cfg, robots[0]), "--operator", cfg["operator"]],
+                            runner=runner)
     if args.cmd == "harvest":
         import harvest
-        argv = [hosts[0], *ssh]
+        argv = [hosts[0], *_ssh_argv(cfg, robots[0])]
         if cfg.get("core_token_file"):
             argv += ["--core-token-file", cfg["core_token_file"]]
         if args.dest:
