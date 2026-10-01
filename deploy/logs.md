@@ -1838,3 +1838,35 @@
 - 변경: (1) 잘린 타르볼(EOFError), 깨진 manifest JSON, UTF-8이 아닌 목록(ValueError)을 traceback 없이 `error:`로 끝낸다. (2) 로봇 조회를 `dpkg-query -W -f='${db:Status-Abbrev}\t${binary:Package}\t${Version}\n' 'ros-jazzy-*'`로 바꾸고 상태가 `ii`인 줄만 설치로 센다. `rc`(삭제, 설정만 남음) 패키지는 옛 버전을 그대로 내므로 비교에서 뺀다. 원격 셸에는 작은따옴표만 지나간다. (3) `-o UserKnownHostsFile="<경로>"`로 인용한다. (4) 출력하는 PowerShell 경로를 늘 작은따옴표로 감싸고 `'`는 `''`로 쓴다. (5) `--run`에 `--release-id`가 있으면 내려받기 전에, 없으면 아티팩트 이름을 정한 직후 내려받기 전에 기존 `x/<id>`를 거절한다. (6) 서명·pack 실패 메시지가 다시 돌리기 전에 지울 `x/<id>`를 알려 준다. (7) 심볼릭·하드 링크 멤버가 있으면 풀기 전에 거절한다. 스킬 3·4단계 설명을 맞췄다.
 - 증거: `test/test_prepare_payload_release.py` 30 passed. 변이 8종이 모두 빨강이었다: rc 줄 유지(6 failed), known_hosts 인용 제거, `''` 미적용, 링크 허용(2 failed), EOFError 미포착, ValueError 미포착, 내려받기 전 검사 제거, 이름 확정 뒤 검사 제거(각 1 failed). 새 조회를 192.168.1.202에 읽기 전용으로 한 번 실행했다: `ii` 319줄, `un` 3줄, 판정은 앞 실측과 같은 공통 314개 일치.
 - gate 변화: 없음.
+
+## 2026-10-02 · a44f9e00 · feat(native): 로봇 쪽 자동 업데이터 `rosy_auto_update.py`·claim·유닛 (D-406 T2)
+
+- 변경: `native/rosy_auto_update.py`(stdlib, CLI `run`/`status`/`hold`/`release-hold`/`eligibility`)를 추가했다. 한 번 실행은 GitHub Releases를 ETag로 읽고(304는 캐시, 403/429는 Retry-After만큼 쉼), 지금보다 큰 `payload-<id>` 가운데 자산 셋이 있고 실패 기록이 없으며 서명된 `rollout.json`이 맞고 철회되지 않은 가장 높은 id를 고른다. 바쁠 때도 스테이징(sha256, `rosy-release-unpack.sh`, `native_release.py verify`)은 하고 `current`는 건드리지 않는다. 카나리이거나 `canary_ok`와 대기 시간이 지났고, hold·봉인 승인·live claim이 없고, status-inputs schema ≥ 2가 10 s 간격 두 표본 모두 유휴(null·NaN은 모름 = 부적격, 계약 b63cb7f2)이고, 배터리 40% 이상이거나 충전 중일 때만 claim을 잡고 적용한다: activate → core-release 확인 → 새 릴리스의 sync → 재시작(자기 유닛 제외) → 건강 60 s. 실패하면 rollback, 되돌아간 릴리스의 sync, ready 확인 뒤 id를 실패로 남겨 다시 시도하지 않는다. `NATIVE_RELEASE_BUSY`는 다음 실행에 다시 한다. `native/rosy_claim.py`(mkdir 원자 claim, 만료·다른 boot는 rename으로 한 쪽만 치움, CLI acquire/release/show·status)를 추가했다. `rosy-release-unpack.sh`를 `native/`로 옮겨 push와 업데이터가 같은 사본을 쓴다(push 동작 같음). `rosy-auto-update.service`(root oneshot, Nice=19, IOSchedulingClass=idle, ProtectSystem=strict)·`.timer`(부팅 5분, 10분마다, 2분 분산)를 `UNITS`·`ENABLED_UNITS`(타이머만)·`build-native-payload.sh`·`customize-rootfs.sh`에 넣었다. sandbox 계약은 이 유닛의 쓰기를 선언하고, `/run`과 기본 OS의 `/etc/systemd/system`·`/etc/udev/rules.d`·`/etc/modprobe.d`를 시작 때 있는 경로로 센다.
+- 증거: `test/test_rosy_auto_update.py` 117 passed, `test/test_rosy_claim.py` 17 passed. 관련 묶음(image-layer sync, systemd 계약, push·unpack, payload build, image customization, native activation, device surface, ubuntu runtime, 위 둘) 524 passed, 9 skipped, `python test/known_failures.py` 새 실패 0. 변이: 업데이터 61종 가운데 59종이 첫 실행에서 빨강, 살아남은 2종(숫자 아닌 battery_percent, 7일 넘는 손으로 쓴 hold)은 시험을 더해 빨강. claim 10종, 계약·패리티 9종 모두 빨강(프로그램 소스 목록 삭제 1종은 경로 리터럴이 없어 초록, 가드가 아님). 로봇에는 손대지 않았다.
+- gate 변화: 없음. DEVICE는 T1·T3 병합 뒤 두 대 검증 전까지 HOLD.
+- 결정: D-406
+- 교훈: 변이 실행을 중간에 죽이면 마지막 변이가 파일에 남는다. 다시 쓰기 전에 원본 문자열이 그대로 있는지 확인한다.
+
+## 2026-10-02 · 05d58d0a · fix(native): 업데이터 건강 판정을 적용 전 기준선과 비교 (D-406 T2)
+
+- 변경: 활성화 직전에 rosy-core/io/camera 가운데 active인 유닛과 그 cwd, 이미 failed인 rosy-* 유닛을 적용 저널(`state.json`의 `applying.baseline`)에 남긴다. 건강 판정은 rosy-core를 늘 요구하고, io·camera는 적용 전에 돌던 경우에만 새 릴리스 cwd에서 active여야 한다. failed 유닛은 적용 중 새로 생긴 것만 실패로 본다. 건너뛴 유닛과 이미 있던 실패는 `last_result.detail`에 적는다. 조정자 결정(질문 3): 카메라가 이미 꺼진 로봇이 업데이트마다 되돌리지 않게 한다.
+- 증거: `test/test_rosy_auto_update.py` 123 passed. 새 시험: 적용 전 카메라 꺼짐 → 커밋, 적용 전 켜짐·뒤 꺼짐 → 되돌림, 이미 failed인 유닛 → 커밋, 그 옆에 새로 failed → 되돌림, 적용 전 꺼진 CORE도 요구, 꺼져 있던 io의 cwd 미검사. 변이 7종 모두 빨강.
+- gate 변화: 없음.
+- 결정: D-406
+- 교훈: 건강 판정은 절대 상태가 아니라 적용 전과의 차이로 본다. 원래 꺼져 있던 장치가 릴리스 실패로 기록되면 안 된다.
+
+## 2026-10-02 · 9a1ae36f · fix(native): D-406 T2 독립 리뷰 반영 — 안전한 재개, 일시·확정 실패 구분, 스테이징 한도
+
+- 변경: 리뷰(REQUEST CHANGES) 전 항목. H1 끊긴 적용의 재개는 hold·봉인·두 표본 유휴를 확인한 뒤에만 재시작 단계를 한다(아니면 `applying`을 둔 채 held/ineligible). H2 저널이 rollback에 닿았으면 계속 되돌리기만 한다(새 릴리스가 current일 때만 rollback 스크립트, 그 뒤 늘 sync·재시작·core·ready). activate 뒤 단계에서 옛 릴리스가 current면 그 릴리스를 다시 sync한다. H3 활성화기·verify의 124/127·JSON 결과 없음은 일시 실패로 보고 실패 기록을 하지 않는다. native 저널이 남았으면 `native_release.py recover`와 `systemctl start rosy-runtime.target`. H4 커밋한 id를 남기고, current보다 높으면 운영자 되돌림으로 실패 처리한다. M1 서로 다른 두 쓰기, 각 25 s 이내, 12 s 간격. M2 활성화기 직전 한 번 더 읽고, 남는 틈을 ADR R4에 적었다. M3 RUN_BUSY는 아무것도 쓰지 않는다. M4 철회는 영구 기록. M5 릴리스별 스테이징 backoff, 확정 실패 3회면 실패, 디스크 확인(tarball×2+512 MiB), current·previous·staged 외 릴리스 디렉터리 정리. M6 읽을 수 없거나 깨진 승인 표지는 hold. M7 BUSY·일시 실패한 rollback은 저널에 남겨 다음 실행이 다시 한다. M8 claim TTL 50분(TimeoutStartSec 45분보다 길게), 저널 단계마다 갱신. M9 claim 넘겨받기를 `/run/rosy-claim.lock`으로 직렬화. L1 확정 문제(서명·철회)일 때만 더 낮은 릴리스로 넘어간다. L2 docking 허용 목록, `line_follow_state`는 OFF. L3 OverflowError. L4 phase·이유 분류가 바뀔 때만 history, 1 MiB에서 회전. L5 `Persistent=` 제거(OnCalendar 전용). L6 시간 초과 시 프로세스 그룹 종료. L7 downloads의 잔여 디렉터리 정리. L8 `Requires=rosy-release-recover.service`, releases 경로 필수, `CapabilityBoundingSet`·`ProtectProc`·`PrivatePIDs` 금지 시험. L9 비활성이어도 진행 중 적용은 마무리. 활성화 뒤 예기치 않은 예외도 되돌린다.
+- 증거: `test/test_rosy_auto_update.py`·`test/test_rosy_claim.py` 190 passed, 1 skipped(이 Windows 호스트는 symlink를 만들 수 없음). 관련 묶음 583 passed, 10 skipped, `python test/known_failures.py` 새 실패 0. 리뷰 변이 38종 모두 빨강(처음 살아남은 1종 — 신선도 60 s — 은 서로 다른 두 쓰기가 각각 26 s 늦은 시험을 더해 빨강). 로봇에는 손대지 않았다.
+- gate 변화: 없음. DEVICE HOLD.
+- 결정: D-406
+- 교훈: 끊긴 트랜잭션을 재개하는 경로도 처음 적용과 같은 적격성 문을 지나야 한다. 프로세스 종료 코드만으로 "확정 실패"를 판정하지 않는다 — JSON 판정이 있을 때만 확정이다.
+
+## 2026-10-02 · b909ed5b · fix(native): 재개 시 rosy-core가 멈춰 있으면 유휴 판정 면제 (D-406 T2)
+
+- 변경: 조정자 결정(H1 질문). `applying` 저널을 재개할 때 rosy-core.service가 active가 아니거나 MainPID가 없으면 움직임을 명령할 주체가 없다(CORE가 유일한 cmd_vel 발행자, D-2). 그때는 status-inputs 두 표본 판정을 면제하고, hold·봉인 승인·claim 검사는 그대로 한다. "core not running; idleness check waived"를 history와 `last_result.detail`에 남긴다. CORE가 돌고 있으면 전처럼 전체 판정을 한다.
+- 증거: `test/test_rosy_auto_update.py`·`test/test_rosy_claim.py` 195 passed, 1 skipped. 새 시험: CORE 정지·hold 없음 → 재개해 커밋, CORE 정지·hold → held, CORE 정지·claim → ineligible, CORE 동작·오래된 입력 → ineligible, active지만 MainPID 0 → 정지로 본다. 변이 5종 모두 빨강(처음 살아남은 MainPID 무시 1종은 시험을 더해 빨강).
+- gate 변화: 없음.
+- 결정: D-406
+- 교훈: 면제는 위험의 원천이 없을 때만 준다. 여기서 원천은 CORE 하나뿐이라 그 상태를 직접 확인한다.

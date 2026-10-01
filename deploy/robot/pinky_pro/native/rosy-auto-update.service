@@ -1,0 +1,55 @@
+[Unit]
+Description=ROSY auto-update from signed GitHub Releases when idle (D-406)
+# Started only by rosy-auto-update.timer. A run checks GitHub, stages a newer
+# signed payload, and applies it only when the rollout and the robot allow it;
+# every outcome lands in /var/lib/rosy/updates/status.json, so the run itself
+# always exits 0 and never leaves a failed rosy-* unit behind.
+Wants=network-online.target
+# rosy-release-recover creates /var/lib/rosy/releases (its StateDirectory) and is
+# the boot gate; an updater on a robot held in recovery must not run.
+Requires=rosy-release-recover.service
+After=network-online.target rosy-release-recover.service rosy-core.service
+# The timer may fire again while a long download is running.
+StartLimitIntervalSec=0
+
+[Service]
+Type=oneshot
+# -I: no PYTHONPATH, no user site; the script adds its own directory.
+ExecStart=/usr/bin/python3 -I -B /opt/rosy/native-runtime/rosy_auto_update.py run
+# Download + unpack + verify + activation + 60 s health; each step is bounded
+# inside the program, this bounds the whole run.
+TimeoutStartSec=45min
+# Staging runs while the robot works (D-406 3.3): stay out of its way.
+Nice=19
+IOSchedulingClass=idle
+UMask=0022
+Environment=PYTHONNOUSERSITE=1
+
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+SystemCallArchitectures=native
+# GitHub over IPv4/IPv6; systemctl talks to systemd over a UNIX socket.
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+# Its own state (config, hold, state, status, history, downloads) and the
+# image-layer backups sync-image-layer.py keeps; both root 0755.
+StateDirectory=rosy/updates rosy/image-layer-backup
+StateDirectoryMode=0755
+# The release store and links (unpack, activate, rollback), native-release.lock
+# and the activation journal (created 0700 by the required rosy-release-recover,
+# never re-moded here), /run for /run/rosy-claim, and what sync-image-layer.py
+# installs. No CapabilityBoundingSet=, ProtectProc= or PrivatePIDs=: the health
+# check reads other units' /proc/<pid>/cwd.
+ReadWritePaths=/opt/rosy /var/lib/rosy/releases /run
+ReadWritePaths=/etc/systemd/system /etc/udev/rules.d /etc/modprobe.d

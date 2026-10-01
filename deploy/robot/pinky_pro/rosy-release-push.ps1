@@ -103,7 +103,7 @@ $KnownHosts = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromP
 
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..\..")).ProviderPath
 $signingDir = Join-Path $repoRoot "deploy\robot\pinky_pro\release"
-$unpackScript = Join-Path $PSScriptRoot "rosy-release-unpack.sh"
+$unpackScript = Join-Path $PSScriptRoot "native\rosy-release-unpack.sh"
 
 # --- local, network-free steps: resolve the release and verify its signature -
 

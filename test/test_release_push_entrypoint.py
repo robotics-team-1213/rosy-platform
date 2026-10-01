@@ -22,7 +22,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "deploy" / "robot" / "pinky_pro" / "rosy-release-push.ps1"
-UNPACK_SCRIPT = ROOT / "deploy" / "robot" / "pinky_pro" / "rosy-release-unpack.sh"
+UNPACK_SCRIPT = ROOT / "deploy" / "robot" / "pinky_pro" / "native" / "rosy-release-unpack.sh"
 POWERSHELL = shutil.which("powershell") or shutil.which("pwsh")
 TAR = shutil.which("tar")
 RELEASE_ID = "2026.09.25-001"
