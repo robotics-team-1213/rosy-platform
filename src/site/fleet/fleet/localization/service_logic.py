@@ -28,10 +28,14 @@ SUSPECT_REASON = "fleet_monitor"
 PEER_EVIDENCE_M = 0.25
 #: A candidate report is evidence for this long after Fleet first saw it (Fleet's clock).
 REPORT_FRESH_S = 1.0
-#: Contract §3 ladder: seconds in CANDIDATES before each rung.
+#: Seconds in CANDIDATES before each rung. Contract §3 said 10/25/60 s; P2-7 moved homing
+#: after the rotate's limit (10 + 30 s) and needs_human after the lane mission's (45 + 40 s),
+#: so each mission can finish before the next rung (review of P2-7).
 LADDER_ROTATE_S = 10.0
-LADDER_HOMING_S = 25.0
-LADDER_HUMAN_S = 60.0
+LADDER_HOMING_S = 45.0
+LADDER_HUMAN_S = 120.0
+#: A rung CORE refused as `busy` is asked again this often until CORE takes it.
+BUSY_RETRY_S = 2.0
 #: Missions each rung asks CORE for, in order (P2-7): `to_square` first when a square is
 #: known, `lane_to_stopline` when CORE refuses it as `unsupported` or no square is known.
 RUNG_MISSIONS = {"rotate": ("rotate_in_place",), "homing": ("to_square", "lane_to_stopline"),

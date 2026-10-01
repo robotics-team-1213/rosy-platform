@@ -138,11 +138,20 @@ def test_the_ladder_rungs_and_their_reset():
     assert ladder.update("r", LocState.CANDIDATES, 11.0) is None      # exactly 10 s: not yet
     assert ladder.update("r", LocState.CANDIDATES, 11.5) == "rotate"
     assert ladder.update("r", LocState.SUSPECT, 20.0) is None         # a rejection keeps the clock
-    assert ladder.update("r", LocState.CANDIDATES, 26.5) == "homing"
-    assert ladder.update("r", LocState.CANDIDATES, 61.5) == "needs_human"
-    assert ladder.view("r", 61.5)["needs_human"] is True
-    assert ladder.update("r", LocState.LOCALIZED, 62.0) is None
-    assert ladder.view("r", 62.0)["needs_human"] is False
+    assert ladder.update("r", LocState.CANDIDATES, 46.5) == "homing"
+    assert ladder.update("r", LocState.CANDIDATES, 121.5) == "needs_human"
+    assert ladder.view("r", 121.5)["needs_human"] is True
+    assert ladder.update("r", LocState.LOCALIZED, 122.0) is None
+    assert ladder.view("r", 122.0)["needs_human"] is False
+
+
+def test_each_rung_starts_after_the_previous_mission_can_have_ended():
+    """Review fix: rotate (sent at 10 s, at most 30 s) ends before homing; homing ends
+    before needs_human, so the ladder can complete."""
+    rotate_d, rotate_t = service_logic.MISSION_LIMITS["rotate_in_place"]
+    lane_d, lane_t = service_logic.MISSION_LIMITS["lane_to_stopline"]
+    assert service_logic.LADDER_ROTATE_S + rotate_t < service_logic.LADDER_HOMING_S
+    assert service_logic.LADDER_HOMING_S + lane_t < service_logic.LADDER_HUMAN_S
 
 
 # --- the service ------------------------------------------------------------------------
@@ -313,13 +322,13 @@ def test_the_ladder_sends_missions_then_raises_needs_human(caplog):
         ticks(svc, clock, 1.0)
         assert svc.view("r1")["rung"] == "rotate"
         assert r1.missions == [("rotate_in_place", 0.0, 30.0, None)]
-        ticks(svc, clock, 15.0)
+        ticks(svc, clock, 35.0)
         assert svc.view("r1")["rung"] == "homing"
         # No candidate report, so no square target: straight to the lane mission.
         assert r1.missions[1:] == [("lane_to_stopline", 0.6, 40.0, None)]
         assert svc.view("r1")["last_mission"] == {"kind": "lane_to_stopline", "rung": "homing",
                                                   "held": [], "result": "sent"}
-        ticks(svc, clock, 35.0)
+        ticks(svc, clock, 75.0)
     assert svc.view("r1")["needs_human"] is True
     assert len(r1.missions) == 2                                    # needs_human sends nothing
 
@@ -345,7 +354,7 @@ def test_homing_tries_to_square_first_and_falls_back_when_core_refuses_it():
 
     r1.localization_mission = mission
     svc = service(r1, clock=clock)
-    ticks(svc, clock, 26.0)
+    ticks(svc, clock, 46.0)
     assert calls == ["rotate_in_place", "to_square", "lane_to_stopline"]
     [lane] = [m for m in r1.missions if m[0] == "lane_to_stopline"]
     assert lane[3] is None                                       # only to_square carries a target
@@ -359,7 +368,7 @@ def test_the_square_target_is_the_square_nearest_the_first_candidate():
     assert service_logic.square_target(report("r1", OFF), []) is None
 
 
-@pytest.mark.parametrize("code", ["busy", "path_not_clear", "localized", "estop", "calibration_lease"])
+@pytest.mark.parametrize("code", ["path_not_clear", "localized", "estop", "calibration_lease"])
 def test_a_refused_mission_is_recorded_not_retried(code):
     clock = FakeClock()
     r1 = FakeRobot("r1", state=state("r1", "CANDIDATES", "odom"))
@@ -396,7 +405,7 @@ def test_traffic_is_held_before_every_mission():
 
     r1.localization_mission = mission
     svc = service(r1, clock=clock, traffic_hold=hold)
-    ticks(svc, clock, 26.0)
+    ticks(svc, clock, 46.0)
     assert order == [("hold", "r1"), ("mission", "rotate_in_place"),
                      ("hold", "r1"), ("mission", "lane_to_stopline")]
     assert svc.view("r1")["last_mission"]["held"] == ["r2"]
@@ -465,3 +474,23 @@ def test_the_cli_wiring_holds_traffic_through_the_console():
     console = SimpleNamespace(clients=lambda: {}, hold_for_localization=hold)
     svc = build_localization_service(console, None, lane_rules=LANE_RULES)
     assert svc._traffic_hold is hold
+
+
+def test_a_busy_refusal_is_retried_on_later_polls():
+    """Review fix: homing found the rotate still running; it must go out once CORE is free."""
+    clock = FakeClock()
+    r1 = FakeRobot("r1", state=state("r1", "CANDIDATES", "odom"))
+    r1.mission_error = RobotApiError("r1", 409, "busy", "mission rotate_in_place is running")
+    svc = service(r1, clock=clock)
+    ticks(svc, clock, 11.0)
+    assert [m[0] for m in r1.missions] == ["rotate_in_place"]
+    ticks(svc, clock, 1.0)                                    # within the retry interval
+    assert len(r1.missions) == 1
+    ticks(svc, clock, 2.0)
+    assert [m[0] for m in r1.missions] == ["rotate_in_place"] * 2
+    r1.mission_error = None
+    ticks(svc, clock, 2.5)
+    assert svc.view("r1")["last_mission"]["result"] == "sent"
+    sent = len(r1.missions)
+    ticks(svc, clock, 5.0)
+    assert len(r1.missions) == sent                           # accepted: no more retries

@@ -11,9 +11,10 @@ enter robot localization; D-395 only *proposes* to amend that, and the amendment
 not accepted. `overhead_cue=True` (CLI `--localization-overhead-cue`) feeds sightings
 to the arbiter and the monitor for sim/bench work; leave it off on a live site.
 
-Ladder missions (P2-7): at 10 s `rotate_in_place`, at 25 s `to_square` (when a square
-is known; CORE refuses it as `unsupported` today) then `lane_to_stopline`, at 60 s
-`needs_human` (console badge "위치 확인 필요"). CORE drives every mission; Fleet only
+Ladder missions (P2-7): at 10 s `rotate_in_place`, at 45 s `to_square` (when a square
+is known; CORE refuses it as `unsupported` today) then `lane_to_stopline`, at 120 s
+`needs_human` (console badge "위치 확인 필요"). A rung CORE answers `busy` (the previous
+mission still running) is asked again every 2 s while the ladder stays on it. CORE drives every mission; Fleet only
 asks (D-2, D-369). Before a mission Fleet holds the robots near the mover through the
 console's traffic keep-out (`traffic_hold`), and it never asks a LOCALIZED robot or one
 that predates D-395.
@@ -109,6 +110,8 @@ class LocalizationService:
         self._last_decision: dict[str, dict] = {}
         self._last_mission: dict[str, dict] = {}
         self._last_report: dict[str, object] = {}
+        #: robot_id -> (rung, Fleet time of the busy refusal) still to be retried.
+        self._busy_rung: dict[str, tuple[str, float]] = {}
         #: robot_id -> ((request_id, stamp), Fleet monotonic time first seen).
         self._report_seen: dict[str, tuple] = {}
         self._known: set[str] = set()
@@ -160,8 +163,12 @@ class LocalizationService:
         for rid, state in states.items():
             status = trust.status_of(state)
             rung = self._ladder.update(rid, status.state if status else None, now)
+            retry = self._busy_rung.get(rid)
+            if rung is None and retry is not None and retry[0] == self._ladder.view(rid, now)["rung"]                     and now - retry[1] >= service_logic.BUSY_RETRY_S:
+                rung = retry[0]
             if rung is not None:
-                await self._climb(rid, clients[rid], rung, status)
+                self._busy_rung.pop(rid, None)
+                await self._climb(rid, clients[rid], rung, status, now)
 
     # --- steps ----------------------------------------------------------------------
 
@@ -248,7 +255,7 @@ class LocalizationService:
         except Exception as exc:
             logger.warning("localization: suspect to %s failed: %s", rid, exc)
 
-    async def _climb(self, rid: str, client: RobotClient, rung: str, status) -> None:
+    async def _climb(self, rid: str, client: RobotClient, rung: str, status, now: float) -> None:
         """One ladder rung: ask CORE for the rung's mission, or raise needs_human."""
         if rung == "needs_human":
             logger.warning("localization: %s still unlocalized after %.0f s: needs_human (위치 확인 필요)",
@@ -278,6 +285,8 @@ class LocalizationService:
             except RobotApiError as exc:
                 record["result"] = exc.code
                 logger.info("localization: %s refused %s: %s %s", rid, kind, exc.code, exc)
+                if exc.code == "busy":
+                    self._busy_rung[rid] = (rung, now)
                 if exc.code != "unsupported":
                     return
             except Exception as exc:
@@ -310,5 +319,6 @@ class LocalizationService:
             self._last_decision.pop(rid, None)
             self._last_mission.pop(rid, None)
             self._last_report.pop(rid, None)
+            self._busy_rung.pop(rid, None)
             self._report_seen.pop(rid, None)
         self._known = current
