@@ -911,6 +911,21 @@ class PoseSample(BaseModel):
     map_id: Optional[str] = None
 
 
+class LineStuckStatus(BaseModel):
+    """D-407 open lane stuck: the console answers it by ``stuck_id``."""
+
+    stuck_id: str
+    cause: str                            # obstacle_ahead | lane_lost
+    phase: str                            # ASKING | WAITING_CONSOLE | BACKING | SETTLING
+    held_s: float = 0.0
+    attempts: int = 0
+    max_attempts: int = 0
+    local_enabled: bool = False
+    ask_remaining_s: Optional[float] = None   # None = console answer only, no local fallback
+    last_answer: Optional[str] = None
+    decisions: list[str] = Field(default_factory=list)
+
+
 class LineFollowStatus(BaseModel):
     """Selected line source and the last fail-closed control decision (D-143)."""
 
@@ -924,6 +939,7 @@ class LineFollowStatus(BaseModel):
     angular: float = 0.0
     reason: str = "mode_off"
     clearance_m: Optional[float] = None   # D-344 §11: 정면 LiDAR 최소 거리(없으면 None)
+    stuck: Optional[LineStuckStatus] = None  # D-407: open stuck (None = not stuck)
 
 
 class TrafficPolicyStatus(BaseModel):

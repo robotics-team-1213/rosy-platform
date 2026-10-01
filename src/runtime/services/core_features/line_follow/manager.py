@@ -10,6 +10,7 @@ from typing import Callable, Optional
 
 from core_common.protocol.schemas import LineFollowStatus
 from core_features.line_follow.clearance import Point, path_clearance
+from core_features.line_follow.stuck_wiring import StuckRecoveryMixin
 from core_features.line_follow.model import (  # noqa: F401 — re-exported
     LineFollowConfig,
     LineFollowDecision,
@@ -21,7 +22,7 @@ from core_features.decision.contract import DecisionRequest
 from core_features.decision.lane import FOLLOW, LANE_ACTIONS, STOP, lane_recovery_rule
 
 
-class LineFollowManager:
+class LineFollowManager(StuckRecoveryMixin):
     def __init__(self, events, *, config: Optional[LineFollowConfig] = None,
                  clock: Callable[[], float] = time.monotonic,
                  angular_ceiling: Optional[Callable[[], float]] = None) -> None:
@@ -57,6 +58,7 @@ class LineFollowManager:
         self._path_evaluated = False
         self._blocked_since: Optional[float] = None
         self._escalated = False
+        self._init_recovery()  # D-407 (stuck_wiring.py)
 
     def bind_clock(self, clock: Callable[[], float]) -> None:
         """Use the bridge's line clock for defaults (mode change, loss start)."""
@@ -102,6 +104,8 @@ class LineFollowManager:
                 self._hold_s = float(hold_s)
                 self._hold_until = self._clock() + self._hold_s
             previous = self._mode
+            self._recovery.reset("mode_off" if selected is LineFollowMode.OFF
+                                 else "mode_changed", self._clock())
             self._generation += 1
             self._mode = selected
             self._observation = None
@@ -360,7 +364,7 @@ class LineFollowManager:
         with self._lock:
             self._path_evaluated = False
             try:
-                return self._tick_locked(current)
+                return self._apply_recovery(current, self._tick_locked(current))
             finally:
                 if not self._path_evaluated:
                     # 풀림 지연은 연속으로 잰 틱만 센다 — LiDAR 끊김·계단 정지·OFF 틱이 끼면 처음부터.
@@ -377,6 +381,7 @@ class LineFollowManager:
             self._hold_s = None
             self._hold_until = None
             self._loss_started_at = None
+            self._recovery.reset("driver_released", current)
             self._events.publish(
                 "nav.line_driver_released", source="line_follow_manager",
                 data={"mode": previous.value},
