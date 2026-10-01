@@ -1,0 +1,19 @@
+# Rosy Cell demo recipe for the OMX-F Gazebo workcell (C3). 2 pallets x 2 layers x 4 blocks + 2 slip sheets.
+# Block: 40 x 30 x 30 mm foam, 20 g (<= 50 g). The gripper squeezes the 30 mm width; the 42 mm
+# finger pads lie along the 40 mm length. OMX-F finger mesh (open_manipulator 5.1.2): jaw gap
+# ~0 at gripper_joint_1 = 0, ~29 mm at 0.2 rad, ~50 mm at 0.4 rad, fingertip 2.5 mm past the TCP.
+# gap 15 mm leaves room for a finger (~10 mm thick) between neighbours; neighbours are still
+# NOT protected by the planner (D-402 §7).
+schema: rosy_cell.recipe/1
+name: omx-sim-foam-two-layer
+mode: palletize
+box: {length: 0.04, width: 0.03, height: 0.03, mass_kg: 0.02}
+pallets:
+  - {id: A, frame: pallet_a, length: 0.10, width: 0.08, max_stack_height: 0.07, max_load_kg: 0.5}
+  - {id: B, frame: pallet_b, length: 0.10, width: 0.08, max_stack_height: 0.07, max_load_kg: 0.5}
+pick_station: infeed
+gap: 0.015
+slip_sheet: {thickness: 0.002, station: sheets}
+layers:
+  - {pattern: grid}
+  - {pattern: grid, mirrored: true, slip_sheet_below: true}
