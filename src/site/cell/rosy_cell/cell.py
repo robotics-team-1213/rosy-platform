@@ -102,8 +102,8 @@ def _home(value: object, field: str) -> Pose:
 
 def _revision(value: object, field: str) -> str:
     s = fields.text(value, field)
-    if not s.strip():
-        raise FieldError(f"{field} must not be empty")
+    if not s or s != s.strip():
+        raise FieldError(f"{field} must be non-empty without leading or trailing whitespace")
     return s
 
 

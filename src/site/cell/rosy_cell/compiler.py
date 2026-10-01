@@ -79,22 +79,20 @@ def _check(recipe: Recipe, cell: CellConfig, tol_m: float) -> dict[str, StackPla
     return plans
 
 
-def carry_z(recipe: Recipe, cell: CellConfig) -> float:
+def carry_z(recipe: Recipe, cell: CellConfig, *, tol_m: float) -> float:
     """Highest surface over the whole Job + box height + approach clearance (D-402 §6).
 
     Surfaces: the top of every pallet's full stack (all four footprint corners, so a tilted frame is
     covered) and every station pose the recipe uses. Home is not an obstacle and is not included.
+    Runs the same checks as compile_job, so it raises CompileError for an unusable recipe/cell pair.
     """
+    return _carry_z(recipe, cell, _check(recipe, cell, tol_m))
+
+
+def _carry_z(recipe: Recipe, cell: CellConfig, plans: dict[str, StackPlan]) -> float:
     tops: list[float] = []
     for slot in recipe.pallets:
-        frame = cell.frames[slot.frame]
-        plan = build_stack(
-            recipe.box,
-            slot.pallet,
-            recipe.layers,
-            gap=recipe.gap,
-            slip_sheet_thickness=recipe.slip_sheet_thickness or 0.0,
-        )
+        frame, plan = cell.frames[slot.frame], plans[slot.id]
         for x in (0.0, slot.pallet.length):
             for y in (0.0, slot.pallet.width):
                 tops.append(frame.to_base((x, y, plan.height))[2])
@@ -131,7 +129,7 @@ def compile_job(recipe: Recipe, cell: CellConfig, *, tol_m: float) -> Job:
                 if sheet_pose:
                     steps += _transfer(sheet_pose, sheet_station, "slip_sheet", slot.id, n, clearance)
         steps.append(Step("pallet_done", "", slot.id, None, None, None))
-    ceiling = carry_z(recipe, cell)
+    ceiling = _carry_z(recipe, cell, plans)
     # carry_z covers every surface a step touches, so a violation means a defect in the compiler itself
     problems = [
         f"{s.kind} {s.item} on pallet {s.pallet}: approach_z {s.approach_z:.3f} above carry_z {ceiling:.3f}"

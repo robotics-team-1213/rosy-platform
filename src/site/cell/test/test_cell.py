@@ -24,6 +24,8 @@ def test_fixture_builds_frames_and_stations():
         ("kinematics_revision: fixture-urdf-1\n", "", "kinematics_revision"),
         ("kinematics_revision: fixture-urdf-1", "kinematics_revision: ''", "kinematics_revision"),
         ("kinematics_revision: fixture-urdf-1", "kinematics_revision: 7", "kinematics_revision"),
+        ("kinematics_revision: fixture-urdf-1", "kinematics_revision: ' fixture-urdf-1'", "kinematics_revision"),
+        ("kinematics_revision: fixture-urdf-1", "kinematics_revision: 'fixture-urdf-1 '", "kinematics_revision"),
         ("home: {x: 0.1,", "home: {x: .nan,", "home.x"),
         ("home: {x: 0.1, y: 0.0, z: 0.15", "home: {x: 0.1, y: 0.0, z: .inf", "home.z"),
         ("z: 0.15, yaw: 0.0}", "z: 0.15, yaw: '0'}", "home.yaw"),
