@@ -629,6 +629,8 @@ def test_idle_robot_is_eligible(device, host, hub):
     {"velocity_linear": float("nan")},
     {"velocity_angular": float("-inf")},
     {"velocity_linear": "0"},
+    {"battery_percent": "80", "battery_charging": True},
+    {"battery_percent": True, "battery_charging": True},
     {"swarm_role": "leader"},
     {"swarm_role": "follower"},
     {"schema": 1},
@@ -756,6 +758,18 @@ def test_hand_written_invalid_hold_fails_closed(device, host, hub, payload):
     report = updater(host, hub).eligibility()
 
     assert report["eligible"] is False and report["held"] is True
+    assert "release-hold" in report["reasons"][0]
+
+
+def test_over_long_hold_never_expires_on_its_own(device, host, hub):
+    # Treated as invalid (fail closed), not as a hold that lapses after its 8 days.
+    write_json(device / "var/lib/rosy/updates/hold.json",
+               {"holder": "a", "reason": "r", "created_at": _z(T0), "expires_at": _z(T0 + dt.timedelta(days=8))})
+    host.t = T0 + dt.timedelta(days=9)
+
+    report = updater(host, hub).eligibility()
+
+    assert report["held"] is True and "7 days" in report["reasons"][0]
 
 
 def test_release_hold_clears_it(device, host, hub):
