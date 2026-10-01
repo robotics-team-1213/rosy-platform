@@ -135,6 +135,41 @@ def test_apply_replaces_a_changed_interface_atomically_and_moves_the_port():
     module.check(plan, run=host)
 
 
+class NftHost(FakeHost):
+    """iptables-nft 1.8.10 lists `-p tcp --dport N` back as `-p tcp -m tcp --dport N`."""
+
+    def __call__(self, argv, stdin=None):
+        if argv[0] == "iptables" and argv[4] == "-I" and argv[7:9] == ["-p", "tcp"]:
+            argv = [*argv[:9], "-m", "tcp", *argv[9:]]
+        return super().__call__(argv, stdin)
+
+
+def test_parser_reads_real_iptables_nft_listings():
+    """`-S` text captured from iptables v1.8.10 (nf_tables), ubuntu:24.04, 2026-10-01."""
+    module = _module()
+    assert module.chain_listing(["lan0"]) == [
+        "-N ROSY-SITE-INGRESS",
+        "-A ROSY-SITE-INGRESS -i lo -j RETURN",
+        "-A ROSY-SITE-INGRESS -i lan0 -j RETURN",
+        "-A ROSY-SITE-INGRESS -m addrtype --dst-type LOCAL -j DROP",
+        "-A ROSY-SITE-INGRESS -i br+ -j RETURN",
+        "-A ROSY-SITE-INGRESS -i docker0 -j RETURN",
+        "-A ROSY-SITE-INGRESS -j DROP"]
+    hook = ("-P PREROUTING ACCEPT\n"
+            "-A PREROUTING -p tcp -m tcp --dport 8443 -m addrtype ! --dst-type LOCAL -j ROSY-SITE-INGRESS\n"
+            "-A PREROUTING -p tcp -m tcp --dport 18448 -j ROSY-SITE-INGRESS\n")
+    assert {module._key(line) for line in module._jumps(hook)} == set(module.jump_rules(18448))
+    # apply/check against that format: idempotent, and a port change deletes the listed line.
+    host = NftHost()
+    module.apply(_plan(module, port="18448", lan_iface="lan0"), run=host)
+    assert host.chains["PREROUTING"] == hook.splitlines()[1:]
+    plan = _plan(module, port="18450", lan_iface="lan0")
+    assert module.apply(plan, run=host)[-1] == (
+        "iptables -w -t mangle -D PREROUTING -p tcp -m tcp --dport 18448 -j ROSY-SITE-INGRESS")
+    assert module.apply(plan, run=host) == []
+    module.check(plan, run=host)
+
+
 @pytest.mark.parametrize("damage", ["no_chain", "wrong_iface", "no_jump", "jump_after_accept",
                                     "no_container_port_jump", "no_final_drop"])
 def test_check_refuses_a_missing_or_bypassed_filter(damage):

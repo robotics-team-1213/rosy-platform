@@ -89,7 +89,7 @@ class LidarGuardTest(unittest.TestCase):
 
     def test_single_corner_beam_is_not_discarded_by_percentile_or_narrow_cone(self):
         ranges = [.5] * 720
-        # 190-degree nose plus a 30-degree corner contact.
+        # 180-degree nose (URDF nominal) plus a 40-degree corner contact.
         ranges[440] = .09
         scan = SimpleNamespace(ranges=ranges, angle_min=0.0,
                                angle_increment=math.pi / 360, range_max=40.0)

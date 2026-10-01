@@ -41,6 +41,7 @@
 | D-333 | ER 2 조작 후보의 Mission 승인, 장치 Action 수락, 정지와 목표 증거를 분리한다 |
 | D-334 | ER 2의 도구 목록과 진행 조회를 Fleet 원장 경계에 둔다 |
 | D-336 | Fleet와 OMX 제어 owner 사이 첫 연결은 같은 호스트의 local IPC로 제한한다 |
+| D-392 | 모델 도구 호출은 provider 중립 메시지 계약과 Fleet 소유 allowlist를 따른다 |
 
 ## 계획·결과 문서
 
@@ -58,6 +59,7 @@
 - [2026-09-29-er2-semantic-actions-mission-implementation.md](../../../docs/plans/2026-09-29-er2-semantic-actions-mission-implementation.md)
 - [2026-09-29-fleet-mission-control-arbitration-implementation.md](../../../docs/plans/2026-09-29-fleet-mission-control-arbitration-implementation.md)
 - [2026-09-29-policy-evidence-contract.md](../../../docs/plans/2026-09-29-policy-evidence-contract.md)
+- [2026-10-01-model-tool-contract-implementation.md](../../../docs/plans/2026-10-01-model-tool-contract-implementation.md)
 
 ## 교훈 (docs/solutions)
 

@@ -63,8 +63,12 @@ class Rosy(Node):
         
         self.get_logger().info('Initializing Rosy Bringup Node with Dynamixel...')
         
-        self.declare_parameter('wheel_radius', 0.027)
-        self.declare_parameter('wheel_separation', 0.0961)
+        # URDF nominal (D-397 geometry.yaml); an accepted wheel_odometry record
+        # refines it, and the *_override launch values (0 = none) win over both.
+        self.declare_parameter('wheel_radius', 0.028)
+        self.declare_parameter('wheel_separation', 0.0971)
+        self.declare_parameter('wheel_radius_override', 0.0)
+        self.declare_parameter('wheel_separation_override', 0.0)
         self.declare_parameter('cmd_vel_timeout_s', 0.5)
         self.declare_parameter('frame_prefix', '')  # P0-3 (A-2): namespace 기반 프레임 식별
         self.declare_parameter('motor_device', DEFAULT_SERIAL_PORT_NAME)
@@ -91,9 +95,13 @@ class Rosy(Node):
         # Keep the board-specific boundary explicit.  This validates the
         # complete ROS parameter set before any SDK object opens a UART; the
         # existing driver validations remain as a second, device-side guard.
-        # D-47 addendum: an operator-accepted wheel_odometry record wins over the parameters.
-        wheels, wheel_source = calibrated_wheels(self.get_parameter('wheel_radius').value,
-                                                 self.get_parameter('wheel_separation').value)
+        # D-47 addendum / D-397: URDF nominal < accepted wheel_odometry record < operator override.
+        wheels, wheel_source = calibrated_wheels(
+            self.get_parameter('wheel_radius').value,
+            self.get_parameter('wheel_separation').value,
+            override={key: self.get_parameter(f'{key}_override').value
+                      for key in ('wheel_radius', 'wheel_separation')},
+            log=self.get_logger().warning)
         self.get_logger().info(
             f"wheel_radius {wheels['wheel_radius']} wheel_separation {wheels['wheel_separation']} "
             f"from {wheel_source}")
