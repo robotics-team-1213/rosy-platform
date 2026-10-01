@@ -85,3 +85,9 @@
 - 증거: `gradlew testDebugUnitTest --rerun-tasks` BUILD SUCCESSFUL, JVM 시험 244 passed, 0 failed(`failure-classes.v1.json` 28 사례, `site-link.v1.json` 35 사례, `.local` 규칙·딥링크·옛 기록 거절 시험) (2026-10-01 Windows, JDK 21).
 - gate 변화: 없음.
 - 결정: 앞 항목의 열린 후속 셋은 닫혔다. (1)·(3)은 벡터를 바꿔 앱에 맞췄고, (2)는 앱을 벡터에 맞췄다.
+
+## 2026-10-01 · f449f157 · fix(cam): D-391 벡터 리뷰 반영, 닫힘 4403은 최종(재페어링 안내 없음)
+
+- 변경: 리뷰 반영. (1) `SiteLinkPrefs.read`는 저장 기록을 검증 없이 만든 뒤, `SiteLink.validate`가 `tls_host`일 때만 `rejectedHost`를 낸다. `.local` 호스트에 pin만 틀린 기록은 거절 호스트로 보고하지 않는다. (2) `expires_at` 0년을 거절한다(Python과 같다). (3) `SiteLink.validate`는 저장된 정규형(소문자, 끝 점·공백 없음)만 받는다. 관대한 정규화는 입력(`entryReason`→`from`)과 읽기에서만 한다. (4) 벡터 시험은 정확한 개수 대신 "사례가 있다"를 확인하고, 모든 ws_close 사례에서 `closeOutcome`의 정지/재시도가 분류와 맞는지 본다. (5) `.local`이 아닌 이름에 유효한 IP `manual_host`가 있으면 이름만 버리고 IP로 계속 붙는다. 화면은 이름으로 다시 페어링하라는 약한 안내를 띄운다. IP가 없을 때만 강한 재페어링 문구를 띄운다. (6) `SiteLinkRecord` KDoc에 두 가지를 적었다. `CertificateFactory` 파싱이 Python DER 검사보다 엄격한 것은 의도다. `toSiteLink`는 첫 CA 하나만 pin한다(D-341 §9). rosy-00 결정: 닫힘 4403(자격은 유효하나 허용되지 않음)은 최종이다. `LinkError.Forbidden`으로 멈추고 "이 카메라는 이 사이트에서 송출 권한이 없습니다 — 관리자에게 확인하세요"를 띄우며, 설정·재페어링 버튼은 없다. 재페어링 안내는 4401에만 남는다. 이어서 main 346e9c76을 병합해 `site-link.v1.json` 42 사례를 받았다(끝 줄바꿈, IPv6 zone id, 0년, pathLen 없는 CA, CA 뒤 leaf, 뒤쪽 잔여 문자). 코드 변경 없이 모두 통과했다.
+- 증거: `gradlew testDebugUnitTest --rerun-tasks` BUILD SUCCESSFUL, JVM 시험 250 passed, 0 failed(`failure-classes.v1.json` 28·`site-link.v1.json` 42 사례 전부) (2026-10-01 Windows, JDK 21).
+- gate 변화: 없음.
