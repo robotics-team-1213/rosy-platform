@@ -19,6 +19,7 @@ from core_common.protocol.schemas import (
     PowerStatus,
     RobotActivity,
     RobotMode,
+    SafetyPolicyStatus,
     SafetySummary,
     StateSnapshot,
     SwarmStatus,
@@ -84,6 +85,7 @@ class StateManager:
         self._hitl_requested: bool = False
         self._capabilities_degraded: list[str] = []
         self._activity_provider: Optional[Callable[[], Optional[dict]]] = None
+        self._safety_policy_provider: Optional[Callable[[], Optional[dict]]] = None
 
     def set_hitl_requested(self, requested: bool) -> None:
         with self._lock:
@@ -93,6 +95,11 @@ class StateManager:
         """D-321 addendum: the calibration lease is read live, so `remaining_s` ticks."""
         with self._lock:
             self._activity_provider = provider
+
+    def set_safety_policy_provider(self, provider: Optional[Callable[[], Optional[dict]]]) -> None:
+        """D-400: the safety policy/shadow block, read live on every snapshot."""
+        with self._lock:
+            self._safety_policy_provider = provider
 
     def set_capabilities_degraded(self, modules: list[str]) -> None:
         with self._lock:
@@ -213,6 +220,16 @@ class StateManager:
         provider = self._activity_provider
         raw_activity = provider() if provider is not None else None
         activity = RobotActivity.model_validate(raw_activity) if raw_activity else None
+        # D-400: the shadow block is diagnostics; a failing or malformed provider
+        # must never take the state API down, so it degrades to null.
+        safety_policy = None
+        safety_provider = self._safety_policy_provider
+        if safety_provider is not None:
+            try:
+                raw_policy = safety_provider()
+                safety_policy = SafetyPolicyStatus.model_validate(raw_policy) if raw_policy else None
+            except Exception:
+                safety_policy = None
         with self._lock:
             self._seq += 1
             now = self._clock()
@@ -249,4 +266,5 @@ class StateManager:
                 hitl_requested=self._hitl_requested,
                 capabilities_degraded=list(self._capabilities_degraded),
                 activity=activity,
+                safety_policy=safety_policy,
             )

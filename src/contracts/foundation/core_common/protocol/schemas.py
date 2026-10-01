@@ -1005,6 +1005,29 @@ class RobotActivity(BaseModel):
     remaining_s: float
 
 
+class SafetyShadowStatus(BaseModel):
+    """D-400 shadow counters (v1.71 additive)."""
+
+    counts: dict[str, int]
+    last_stop: Optional[dict] = None          # {t (CORE monotonic s), reason, source}
+    last_unavailable: Optional[dict] = None
+    eval_ms: dict
+    dropped_events: int = 0
+    suppressed_events: int = 0
+    record_errors: int = 0
+
+
+class SafetyPolicyStatus(BaseModel):
+    """D-400: the safety policy mode CORE runs, and why (v1.71 additive)."""
+
+    mode: str
+    mode_effective: str
+    mode_error: str = ""
+    revision: str = ""
+    sources: dict[str, str] = Field(default_factory=dict)
+    shadow: Optional[SafetyShadowStatus] = None
+
+
 class StateSnapshot(BaseModel):
     """로봇 상태 스냅샷 — /ws/state payload와 동일 (API Ref §6.1)."""
 
@@ -1036,6 +1059,7 @@ class StateSnapshot(BaseModel):
     activity: Optional[RobotActivity] = None
     #: v1.69 additive (D-395): state and pose frame; null from robots before D-395.
     localization: Optional[LocalizationStatus] = None
+    safety_policy: Optional[SafetyPolicyStatus] = None  # D-400, v1.71 additive
 
 
 class HeartbeatPayload(BaseModel):
