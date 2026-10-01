@@ -353,19 +353,45 @@ def test_latest_is_at_or_before_and_within_the_gap():
 
 
 @needs_tools
-def test_extract_session_uses_header_stamps_and_only_past_side_data(tmp_path):
-    sess = _write_session(tmp_path)
-    out = tmp_path / "frames"
-    assert extract.main([str(sess), "--out", str(out),
-                         "--min-interval", "0", "--max-hamming", "-1"]) == 0
-    rows = [json.loads(l) for l in (out / "frames.jsonl").read_text().splitlines()]
-    # t is the header stamp, 1 ms before the bag log time
-    assert [r["t"] for r in rows] == pytest.approx(FRAME_S, abs=1e-9)
-    assert [r["log_ns"] for r in rows] == [_ns(t + 0.001) for t in FRAME_S]
-    assert "line/observation" not in rows[0]["side"]
-    for i, r in enumerate(rows[1:], start=1):
-        assert r["side"]["line/observation"]["error"] == pytest.approx((i - 1) / 10)
-        assert r["side"]["cmd_vel"]["linear"]["x"] <= FRAME_S[i] + 0.001
+def test_extract_session_uses_header_stamps_and_the_two_class_clock_rule(tmp_path):
+    """extract.py on the MCAP session and on its mp4 + sidecar gives each frame the
+    same side data: stamped evidence of its own image, other topics from the past."""
+    obs = {3: (0.004, 0.005),     # payload stamp 5 ms off every frame stamp -> nothing
+           1: (0.0005, 0.0),      # logged after the capture, 0.5 ms before the image
+           2: (0.6, 0.0)}         # logged 0.599 s after the frame's log time -> nothing
+    sess, stem = _convert(tmp_path, obs=obs)
+    got = {}
+    for kind, src in (("mcap", sess), ("video", stem.with_suffix(".mp4"))):
+        out = tmp_path / ("frames_" + kind)
+        assert extract.main([str(src), "--out", str(out),
+                             "--min-interval", "0", "--max-hamming", "-1"]) == 0
+        got[kind] = [json.loads(l) for l in (out / "frames.jsonl").read_text().splitlines()]
+    for rows in got.values():
+        # t is the header stamp, 1 ms before the bag log time
+        assert [r["t"] for r in rows] == pytest.approx(FRAME_S, abs=1e-9)
+        assert [r["log_ns"] for r in rows] == [_ns(t + 0.001) for t in FRAME_S]
+        for i, r in enumerate(rows):
+            # this fixture's line/observation has no source: not CAMERA_LINE, never
+            # evidence of an image (audit 2026-10-01); the shadow result is
+            assert r["side"].get("line/observation") is None
+            for topic, key in (("perception/learned/shadow", "error_delta"),):
+                value = r["side"].get(topic)
+                if i in (2, 3):
+                    assert value is None, (i, topic)
+                else:
+                    assert value[key] == pytest.approx(i / 10), (i, topic)
+            cmd = r["side"]["cmd_vel"]["linear"]  # MCAP: the Twist; sidecar: m/s
+            assert (cmd["x"] if isinstance(cmd, dict) else cmd) <= FRAME_S[i] + 0.001
+            assert r["dt"]["cmd_vel"] <= 0
+        assert rows[0]["dt"]["perception/learned/shadow"] > 0
+        assert -0.001 < rows[1]["dt"]["perception/learned/shadow"] < 0
+    strip = ("line/observation", "perception/learned/shadow")
+    for m, v in zip(got["mcap"], got["video"]):
+        for topic in strip:
+            a, b = m["side"].get(topic), v["side"].get(topic)
+            assert (a is None) == (b is None)
+            if a is not None:
+                assert {k: b[k] for k in a} == a  # the sidecar adds only stamp_ns
 
 
 def test_output_stem_and_rate(tmp_path):

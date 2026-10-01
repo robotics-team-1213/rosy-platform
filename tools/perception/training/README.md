@@ -3,10 +3,28 @@
 학습은 Colab이든 GPU PC든 어디서 돌려도 된다. 로봇 쪽과의 약속은 **입력과 출력**뿐이다.
 이 폴더의 `export_cell.py`와 `check_manifest.py`가 그 약속의 실물이다.
 Colab에서 셀 단위로 따라 하는 절차는 [COLAB.md](COLAB.md)에 있다.
+바로 실행하는 Colab 노트북(기준 모델 학습부터 넘기기까지)은 [rosy_lane_training.ipynb](rosy_lane_training.ipynb)다(D-373).
+노트북은 개발 PC에서 셀을 차례로 실행하는 **로컬 stub 실행으로만** 확인했다. 실제 Colab 런타임에서는 아직 돌려 보지 않았다.
+
+**HF는 선택이다.** 데이터셋과 모델의 정본은 **store 폴더**다(D-373 결정 8). store는 경로 하나이고
+(지금은 사이트 PC의 로컬 폴더, 나중에는 NAS나 Google Drive를 같은 구조로), 구조는 다음과 같다.
+
+```
+<store>/datasets/<name>/<content_sha>/   데이터셋, 한 번 쓰면 바꾸지 않는다
+<store>/models/inbox/<폴더>/             학습자가 넘기는 곳
+<store>/models/accepted/<revision>/      intake 통과
+<store>/models/rejected/<폴더>/          intake 탈락 (REJECTED.txt)
+```
+
+`content_sha`는 폴더 안 파일의 상대 경로(`/` 구분)와 sha256을 `relpath\0sha256\n` 줄로 만들어 정렬한 뒤
+sha256한 값이다(`tools/perception/store.py`). OS 찌꺼기(`.DS_Store`, `Thumbs.db`, `desktop.ini`)와
+`READY`는 빼고 센다.
 
 ## 입력
 
-- HF dataset 저장소(private)와 **commit SHA(40자 hex)**. 태그는 움직이므로 SHA로 고정한다.
+- 데이터셋 ref `store:<name>@<content_sha>`(64자 hex). 내용 해시라 바뀌지 않는다. 받은 폴더의
+  `content_sha`를 다시 계산해 ref와 다르면 학습하지 않는다(노트북 3단계가 한다).
+  HF를 쓰는 팀은 HF dataset 저장소와 **commit SHA(40자 hex)**를 쓴다. 태그는 움직이므로 받지 않는다.
 - 데이터셋 레이아웃. 파일 경로를 추측하지 말고 **`frames[].image` / `frames[].mask` 경로만
   따라간다**(디렉터리를 훑거나 이름을 조립하지 않는다). 두 가지 배치가 있다:
 
@@ -16,7 +34,7 @@ manifest.json
 images/<session>/<session>__<index:06d>.jpg
 masks/<session>/<session>__<index:06d>.png
 
-# HF에 올라간 배치 (publish.py, shard당 최대 1000 frame, manifest 경로도 같이 바뀐다)
+# store(또는 HF)에 올라간 배치 (publish.py, shard당 최대 1000 frame, manifest 경로도 같이 바뀐다)
 manifest.json
 images/shard_0000/<...>.jpg
 masks/shard_0000/<...>.png
@@ -40,7 +58,7 @@ masks/shard_0000/<...>.png
 
 ## 출력
 
-HF model 저장소(private)의 **한 commit**에 두 파일이 있어야 한다.
+store `models/inbox/`의 **한 폴더**에 두 파일과 `READY`가 있어야 한다(HF 백엔드면 한 commit에 두 파일).
 
 - `model.onnx` — opset 17, 고정 입력 `1x3x240x320`, 입력 이름 `x`, 출력 이름 `logits`
   (`1xCx240x320` logit).
@@ -53,12 +71,16 @@ HF model 저장소(private)의 **한 commit**에 두 파일이 있어야 한다.
 | `files[]` | `name`, `sha256`, `precision` (`fp32`/`int8`) |
 | `input` | `shape`, `layout: nchw`, `color` (`rgb`/`bgr`), `scale`, `mean[3]`, `std[3]` |
 | `output` | `layout: nchw_logits`, `classes[]` = `{index, name, role}` |
-| `dataset` | `repo`, `revision` (입력으로 받은 SHA) |
+| `dataset` | `repo`, `revision`: store면 `store:<name>`과 `content_sha`, HF면 저장소 이름과 commit SHA |
 | `camera_profile_revision` | 학습 영상의 CameraProfile |
 | `metrics` | 검증 split의 클래스별 IoU |
 | `trainer` | 코드 저장소·commit 또는 노트북 식별자 |
 
-`role`은 닫힌 목록이다: `background`, `lane_marking`, `drivable`, `stop_line`, `ignore`.
+`role`은 닫힌 목록이다: `background`, `lane_marking`, `drivable`, `stop_line`, `ignore`, `wall`.
+`wall`(D-373 결정 9)은 차선도 주행 가능 영역도 아니다. 후처리는 차선 중심 계산에서 `wall` 화소를 빼고,
+섀도 결과에 가까운 영역(아래 40 %)의 벽 비율 `wall_fraction`을 낸다. `ignore`와 달리 평가와 라벨에서 따로 센다.
+팀 기본 클래스 목록: 0 floor/`background`, 1 lane_line/`lane_marking`, 2 wall/`wall`, 3 drivable/`drivable`,
+4 stop_line/`stop_line`, 5 crosswalk/`ignore`(노트북 입력 칸의 기본값, 데이터셋과 다르면 노트북이 멈춘다).
 후처리는 이름이 아니라 role을 읽는다. `lane_marking`이 하나도 없으면 접수를 거부한다.
 `classes`는 출력 채널 순서 그대로 적는다(index는 0부터 빈틈없이).
 
@@ -80,7 +102,7 @@ export(model, "out/model_folder",
        classes=[("background", "background"), ("lane", "lane_marking"),
                 ("road", "drivable"), ("stop", "stop_line")],   # 채널 순서대로 (name, role)
        color="rgb", scale=1 / 255, mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225],
-       dataset_repo="org/rosy-lane-ds", dataset_revision="<40-hex commit SHA>",
+       dataset_repo="store:rosy-lane", dataset_revision="<64-hex content_sha>",
        camera_profile_revision="<rev>", trainer="colab:<notebook or repo@commit>",
        val_iou={"lane": 0.61, "road": 0.93})
 ```
@@ -101,6 +123,13 @@ python check_manifest.py out/model_folder      # OK lane-seg-YYYYMMDD-xxxxxxxx �
 
 ## 넘기기
 
-1. 폴더 전체를 HF **private model 저장소**에 push한다(한 commit에 두 파일).
-2. 그 commit의 **40자 hex SHA**를 넘긴다. 태그·브랜치 이름은 받지 않는다(mutable).
-3. 접수(intake)는 `hf:<org/repo>@<sha>`로 받아 재생 보고서를 만들고, 통과하면 섀도 배포된다.
+1. `handover.package(model_folder, <store>/models/inbox)`로 넣는다. `<model_revision>__<UTC>/`
+   폴더에 manifest와 manifest가 이름을 댄 파일만 복사하고, **마지막에** `READY`(내용 = 폴더의
+   `content_sha`)를 쓴다. store를 마운트하지 않았으면 `handover.package_zip(model_folder, out.zip)`으로
+   같은 폴더를 zip으로 만들어 운영자에게 주고, 운영자는 inbox에 그대로 푼다.
+2. 사이트 PC는 `READY`가 폴더 내용과 맞는 폴더만 가져간다(동기화 중인 폴더는 무시). intake를 통과하면
+   `models/accepted/<revision>/`으로 옮기고 섀도 배포한다. 탈락하면 `models/rejected/<폴더>/`로 옮기고
+   `REJECTED.txt`에 이유를 쓴다.
+3. 손으로 접수하려면 `rosy_ml intake store-inbox:<폴더>`(또는 폴더 경로).
+4. (선택) HF를 쓰는 팀: 폴더를 HF private model 저장소에 한 commit으로 올리고 **40자 hex SHA**를
+   넘긴다. 접수는 `hf:<org/repo>@<sha>`다. 사이트 PC는 `backend: hf`일 때만 HF를 본다.

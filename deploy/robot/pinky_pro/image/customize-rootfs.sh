@@ -59,6 +59,9 @@ CAMERA_SOURCES_SHA="$(lock_value camera_runtime sources_sha256)"
 CAMERA_PYTHON_REQUIREMENTS="$(dirname "$0")/$(lock_value camera_runtime python_requirements)"
 CAMERA_PYTHON_SHA="$(lock_value camera_runtime python_requirements_sha256)"
 CAMERA_INSTALLER="$(dirname "$0")/install-camera-stack.sh"
+LEARNED_REQUIREMENTS="$(dirname "$0")/$(lock_value learned_perception_runtime requirements)"
+LEARNED_REQUIREMENTS_SHA="$(lock_value learned_perception_runtime requirements_sha256)"
+LEARNED_TARGET="$(lock_value learned_perception_runtime target)"
 CORE_PROBE="$(dirname "$0")/probe-core-runtime.py"
 IO_PROBE="$(dirname "$0")/probe-io-runtime.py"
 DISPLAY_PROBE="$(dirname "$0")/probe-display-runtime.py"
@@ -77,6 +80,11 @@ BOOT_OVERLAY="$(dirname "$0")/../configure-boot-overlay-pi5.sh"
 [[ "$PYTHON_REQUIREMENTS_SHA" =~ ^[0-9a-f]{64}$ ]] || fail "CORE Python requirements SHA-256 is invalid"
 [[ "$(sha256sum "$PYTHON_REQUIREMENTS" | awk '{print $1}')" == "$PYTHON_REQUIREMENTS_SHA" ]] \
     || fail "CORE Python requirements do not match inputs.lock.yaml"
+[[ -f "$LEARNED_REQUIREMENTS" && "$LEARNED_REQUIREMENTS_SHA" =~ ^[0-9a-f]{64}$ ]] \
+    || fail "learned-perception requirements lock is missing or invalid"
+[[ "$(sha256sum "$LEARNED_REQUIREMENTS" | awk '{print $1}')" == "$LEARNED_REQUIREMENTS_SHA" ]] \
+    || fail "learned-perception requirements do not match inputs.lock.yaml"
+[[ "$LEARNED_TARGET" == /opt/rosy/* ]] || fail "learned-perception target must be under /opt/rosy"
 for pair in "$CAMERA_SOURCES:$CAMERA_SOURCES_SHA" "$CAMERA_PYTHON_REQUIREMENTS:$CAMERA_PYTHON_SHA"; do
     camera_file="${pair%%:*}"
     camera_sha="${pair#*:}"
@@ -223,6 +231,21 @@ chmod -R a+rX "$ROOT/tmp/rosy-core-probe"  # the probe runs as rosy-core
 install -d -m 0755 "$ROOT/usr/local/share/rosy"
 printf '%s\n' "$PYTHON_REQUIREMENTS_SHA" > "$ROOT/usr/local/share/rosy/python-runtime.sha256"
 chmod 0644 "$ROOT/usr/local/share/rosy/python-runtime.sha256"
+# D-373 decision 1: the learned-perception runtime goes into its own prefix
+# (pip --target), which only the learned backend appends to sys.path, so apt's
+# numpy, protobuf and packaging keep precedence for every service. It is not
+# part of the payload runtime id recorded above.
+install -d -m 0755 -o root -g root "$ROOT$(dirname "$LEARNED_TARGET")" "$ROOT$LEARNED_TARGET"
+cp "$LEARNED_REQUIREMENTS" "$ROOT/tmp/rosy-core-probe/learned-perception-requirements.txt"
+(umask 022 && chroot "$ROOT" python3 -m pip install --no-cache-dir --upgrade \
+    --require-hashes --no-deps --only-binary=:all: --target "$LEARNED_TARGET" \
+    -r /tmp/rosy-core-probe/learned-perception-requirements.txt) \
+    || fail "learned-perception runtime did not install from the hash lock"
+chroot "$ROOT" env PYTHONNOUSERSITE=1 python3 -B -c \
+    "import sys; sys.path.append('$LEARNED_TARGET'); import onnxruntime" \
+    || fail "onnxruntime does not import from $LEARNED_TARGET"
+printf '%s\n' "$LEARNED_REQUIREMENTS_SHA" > "$ROOT/usr/local/share/rosy/learned-perception-runtime.sha256"
+chmod 0644 "$ROOT/usr/local/share/rosy/learned-perception-runtime.sha256"
 
 # D-288: install the pinned official PiSP userspace before taking the final
 # package inventory. This requires an ARM64 build and never touches a device SD.
@@ -341,6 +364,7 @@ mkdir -p "$RELEASE" "$ROOT/etc/rosy/trusted-release-keys" "$ROOT/etc/cloud/cloud
 # D-189 D4: the same layout tmpfiles-rosy-state.conf enforces at every boot.
 install -d -m 0755 -o root -g root "$ROOT/var/lib/rosy"
 chroot "$ROOT" install -d -m 2750 -o rosy-io -g rosy-core /var/lib/rosy/maps
+chroot "$ROOT" install -d -m 0750 -o root -g rosy-camera /var/lib/rosy/models  # D-373
 cp -a "$PAYLOAD/." "$RELEASE/"
 cp -a "$PAYLOAD/image-overlay/." "$ROOT/"
 rm -rf -- "$RELEASE/image-overlay"

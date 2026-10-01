@@ -84,7 +84,8 @@ def test_print_commands_verifies_locally_and_builds_the_full_push_plan(release):
     assert json.loads(result["verification"]["rejections_json"]) == []
 
     plan = result["plan"]
-    assert [step["kind"] for step in plan] == ["ssh", "scp", "scp", "ssh", "ssh", "ssh", "ssh"]
+    # D-388: four image-layer sync steps follow CORE readiness.
+    assert [step["kind"] for step in plan] == ["ssh", "scp", "scp", "ssh", "ssh", "ssh", "ssh"] + ["ssh"] * 4
     # scp sends the tarball, then the unpack helper.
     assert plan[1]["arguments"][-1].endswith(f"{RELEASE_ID}.tar.gz")
     assert Path(plan[2]["arguments"][-2]) == UNPACK_SCRIPT
@@ -119,10 +120,10 @@ def test_rollback_plan_skips_the_release_and_only_rolls_back_and_waits(release):
     assert result["rollback"] is True
     assert result["verification"] is None
     plan = result["plan"]
-    assert len(plan) == 2
+    assert len(plan) == 1 + 3 + 1  # D-388: rollback, image-layer sync, then readiness
     assert plan[0]["arguments"][-1] == "/opt/rosy/native-runtime/rollback-release.sh"
     assert "sudo" in plan[0]["arguments"] and "-n" in plan[0]["arguments"]
-    ready_args = plan[1]["arguments"]
+    ready_args = plan[-1]["arguments"]
     assert ready_args[-3:-1] == ["bash", "-lc"]
     assert "wait-core-ready.py" in ready_args[-1]
 
@@ -260,6 +261,147 @@ def test_release_dir_is_still_accepted_for_a_print_commands_preview(release):
     completed = _print_push(release)
 
     assert completed.returncode == 0, completed.stderr
+
+
+IMAGE_LAYER_ROLES = ["image-layer-dry-run", "image-layer-apply", "image-layer-restart", "image-layer-core-ready"]
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+def test_push_plan_syncs_the_image_layer_from_the_new_release_after_readiness(release):
+    # D-388: dry run, apply, restart what changed, re-check CORE.
+    completed = _print_push(release)
+
+    assert completed.returncode == 0, completed.stderr
+    plan = json.loads(completed.stdout)["plan"]
+    assert [step["role"] for step in plan[-4:]] == IMAGE_LAYER_ROLES
+    assert "wait-core-ready.py" in plan[-5]["arguments"][-1]  # after the first readiness check
+    script = f"/opt/rosy/releases/{RELEASE_ID}/deploy/robot/native/sync-image-layer.py"
+    dry_run, apply, restart, ready = plan[-4:]
+    assert dry_run["arguments"][-6:] == ["sudo", "-n", "python3", "-B", script, "--dry-run"]
+    assert apply["arguments"][-5:] == ["sudo", "-n", "python3", "-B", script]
+    assert restart["arguments"][-4:] == ["sudo", "-n", "systemctl", "restart"]
+    assert "<active units the apply changed>" in restart["display"]
+    assert "wait-core-ready.py" in ready["arguments"][-1]
+    for step in plan[-4:]:
+        assert "StrictHostKeyChecking=yes" in step["arguments"]
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+def test_rollback_plan_resyncs_the_image_layer_from_the_release_that_becomes_current():
+    completed = _run(["-Robot", "rosy-e4us.local", "-Rollback", "-PrintCommands"])
+
+    assert completed.returncode == 0, completed.stderr
+    plan = json.loads(completed.stdout)["plan"]
+    # The sync runs BEFORE the readiness check: if the newer release's units do
+    # not work with the older one, CORE only becomes ready after the sync.
+    assert [step["role"] for step in plan] == ["", *IMAGE_LAYER_ROLES[:3], ""]
+    assert "rollback-release.sh" in plan[0]["arguments"][-1]
+    assert "wait-core-ready.py" in plan[-1]["arguments"][-1]
+    assert not any("wait-core-ready.py" in " ".join(step["arguments"]) for step in plan[:-1])
+    dry_run, apply = plan[1]["arguments"], plan[2]["arguments"]
+    assert dry_run[-5:-1] == ["sudo", "-n", "sh", "-c"] and apply[-5:-1] == ["sudo", "-n", "sh", "-c"]
+    # current first; the release rolled away from only if current predates D-388.
+    assert dry_run[-1].index("/opt/rosy/current/deploy/robot/native/sync-image-layer.py") < \
+        dry_run[-1].index("/opt/rosy/previous/deploy/robot/native/sync-image-layer.py")
+    assert "--dry-run" in dry_run[-1] and "--dry-run" not in apply[-1]
+    assert "IMAGE_LAYER_SYNC_MISSING" in dry_run[-1]
+    # PowerShell 5.1 eats embedded double quotes on the way to a native exe.
+    assert '"' not in dry_run[-1] and '"' not in apply[-1]
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+@pytest.mark.parametrize("rollback", [False, True])
+def test_skip_image_layer_sync_leaves_the_old_plan(release, rollback):
+    if rollback:
+        completed = _run(["-Robot", "rosy-e4us.local", "-Rollback", "-PrintCommands", "-SkipImageLayerSync"])
+    else:
+        completed = _print_push(release, "rosy-e4us.local", "-SkipImageLayerSync")
+
+    assert completed.returncode == 0, completed.stderr
+    plan = json.loads(completed.stdout)["plan"]
+    assert len(plan) == (2 if rollback else 7)
+    if rollback:
+        assert "wait-core-ready.py" in plan[1]["arguments"][-1]
+    assert not any(step["role"] for step in plan)
+
+
+FAKE_SSH = r"""
+$all = $args -join ' '
+Add-Content -Path $env:ROSY_FAKE_LOG -Value $all
+if ($env:ROSY_FAKE_SYNC_MISSING -and $all -match 'IMAGE_LAYER_SYNC_MISSING') {
+    'IMAGE_LAYER_SYNC_MISSING'; exit 3
+}
+if ($all -match '--dry-run') {
+    '{"ok": true, "release_id": "R", "changed": ["/etc/systemd/system/rosy-io.service"], "new": [], "unchanged": [], "skipped": [], "restart_units": ["rosy-io.service"]}'
+    exit 0
+}
+if ($all -match 'sync-image-layer') {
+    '{"ok": true, "release_id": "R", "changed": ["/etc/systemd/system/rosy-io.service"], "new": [], "unchanged": [], "skipped": [], "restart_units": ["rosy-io.service", "evil;reboot"], "backup_dir": "/var/lib/rosy/image-layer-backup/x", "modprobe_changed": [], "active_targets_affected": [], "next_boot_units": ["rosy-network.service"], "pending_parked": "/var/lib/rosy/image-layer-backup/pending.parked-x.json", "pending_quarantined": null, "corrupt_manifests": ["/var/lib/rosy/image-layer-backup/y/backup-manifest.json"]}'
+    exit 0
+}
+if ($all -match 'release.sh') { '{"ok": true, "release_id": "R", "previous": "P"}' }
+exit 0
+"""
+
+
+def _fake_run(tmp_path, monkeypatch, args: list[str], *, missing: bool = False):
+    fake = tmp_path / "fake-ssh.ps1"
+    fake.write_text(FAKE_SSH, encoding="ascii")
+    log = tmp_path / "ssh.log"
+    monkeypatch.setenv("ROSY_FAKE_LOG", str(log))
+    if missing:
+        monkeypatch.setenv("ROSY_FAKE_SYNC_MISSING", "1")
+    completed = _run(["-Robot", "rosy-e4us.local", "-SshExe", str(fake), "-ScpExe", str(fake), *args])
+    lines = log.read_text(encoding="utf-8").splitlines() if log.exists() else []
+    return completed, lines
+
+
+@pytest.mark.skipif(POWERSHELL is None or TAR is None, reason="PowerShell and tar are required")
+def test_a_push_restarts_only_the_active_rosy_units_the_apply_changed(release, tmp_path, monkeypatch):
+    tarball = tmp_path / "packed.tar.gz"
+    subprocess.run([TAR, "-czf", tarball.name, "-C", str(release["dir"]), "."], check=True, cwd=tmp_path)
+
+    completed, calls = _fake_run(tmp_path, monkeypatch, [
+        "-Tarball", str(tarball), "-PublicKeyPath", str(release["public_key"])])
+
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    restarts = [line for line in calls if "systemctl restart" in line]
+    assert len(restarts) == 1 and restarts[0].endswith("systemctl restart rosy-io.service")
+    assert sum("wait-core-ready.py" in line for line in calls) == 2
+    assert "restarted: rosy-io.service" in completed.stdout
+    assert "image-layer backup: /var/lib/rosy/image-layer-backup/x" in completed.stdout
+    assert "takes effect next boot (not restarted): rosy-network.service" in completed.stdout
+    assert not any("rosy-network" in line for line in restarts)
+    # Warnings wrap at the console width; compare without whitespace.
+    flat = "".join((completed.stdout + completed.stderr).split())
+    assert "pending_parked:/var/lib/rosy/image-layer-backup/pending.parked-x.json" in flat
+    assert "unreadableandwasignored:/var/lib/rosy/image-layer-backup/y/backup-manifest.json" in flat
+    assert "syncpending_quarantined" not in flat  # null is not warned about
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+def test_a_rollback_to_a_release_without_the_sync_warns_and_skips_it(tmp_path, monkeypatch):
+    completed, calls = _fake_run(tmp_path, monkeypatch, ["-Rollback"], missing=True)
+
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    assert "image-layer sync skipped" in completed.stdout + completed.stderr
+    assert not any("systemctl restart" in line for line in calls)
+    assert sum("IMAGE_LAYER_SYNC_MISSING" in line for line in calls) == 1
+    # Readiness is still checked, after the skipped sync.
+    assert "wait-core-ready.py" in calls[-1]
+
+
+def test_restart_runs_only_rosy_units_the_apply_reported():
+    text = SCRIPT.read_text(encoding="utf-8")
+
+    assert "$imageLayer.restart_units" in text
+    assert "'^rosy-[A-Za-z0-9-]+\\.(service|path|timer)$'" in text
+    assert 'Write-Host "restarted: ' in text
+
+
+def test_the_push_script_stays_ascii():
+    # Windows PowerShell 5.1 reads a BOM-less script as the ANSI code page.
+    SCRIPT.read_bytes().decode("ascii")
 
 
 def test_the_script_never_disables_host_key_checking():

@@ -31,6 +31,7 @@
 | D-319 | SETUP 뒤 현장 입회 하에 모터 구동 준비를 자동화한다 |
 | D-321 | 현장 보정과 G4 실측을 한 세션으로 모으고 지도 생성은 승인 뒤에 시작한다 |
 | D-325 | 기존 Pinky 배포는 변경에 맞는 가장 작은 산출물을 선택한다 |
+| D-373 | 학습 인식 두 번째 바퀴 — onnxruntime·모델 디렉터리는 Pinky 이미지 계층, 섀도·캡처는 기본 꺼진 페이로드, 불일치 60 s 스냅샷, 사이트 PC가 새 모델을 섀도까지 자동 반영; 정본은 store 폴더(로컬→NAS·Drive), HF는 선택 |
 
 ## 계획·결과 문서
 
@@ -67,6 +68,6 @@
 
 - 2026-10-01 · uncommitted · refactor(site): fleet-mdns.py TXT 판정을 core_common discovery_txt 사본으로
 - 2026-10-01 · uncommitted · fix(site): D-370 S7 준비 — fleet-mdns.py health 탐침이 확장 모양을 받는다
-- 2026-10-01 · 2f59263f · fix(deploy): 보정 guard — 401/403 구분, 예상 밖 응답은 경고
-- 2026-10-01 · d5953646 · feat(deploy): 릴리스 push·dev sync 보정 guard
-- 2026-10-01 · 7d0f3f89 · fix(deploy): 사이트 빌드 컨텍스트는 이미지가 복사하는 것만
+- 2026-10-01 · uncommitted · fix(release): D-388 맞춤 뒤 밀린 일 보존, 옛 이름 폴더 무시
+- 2026-10-01 · uncommitted · fix(release): D-388 3차 리뷰 반영(RTC 없음, 전원 끊김)
+- 2026-10-01 · uncommitted · fix(release): D-388 2차 리뷰 반영과 번호 이동
