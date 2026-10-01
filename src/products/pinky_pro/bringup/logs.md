@@ -56,3 +56,9 @@
 - 변경: 승인된 wheel_odometry 레코드가 0.027/0.0961 ±10 % 밖이거나 bool·문자열이면 파라미터를 유지하고 이유를 로그한다.
 - 증거: test_wheel_calibration.py 7 passed (2026-10-01 Windows).
 - gate 변화: 없음.
+
+## 2026-10-01 · feat/urdf-nominal-geometry · feat(bringup): 바퀴 기본값을 URDF NOMINAL로, launch 인자는 운영자 덮어쓰기 (D-397)
+- 변경: `rosy_params.yaml`·`pinky_pro_adapter.yaml`·adapter `DEFAULTS`·노드 기본값 0.027/0.0961 → 0.028/0.0971. launch `wheel_radius`/`wheel_separation` 기본 0.0(없음) → `*_override` 파라미터, 양수는 승인 레코드를 이기고 NaN·음수는 버리고 경고.
+- 증거: `test_wheel_calibration.py`(순서, 0·NaN·음수, 비현실 값 거부), `test/test_bringup_motor_contracts.py`.
+- gate 변화: SOURCE/LOCAL. DEVICE HOLD — 레코드 없는 로봇은 오도메트리가 약 3.7 % 바뀐다. 8kcn·9dfk 레코드는 배포 전/함께 승인.
+- 결정: D-397 Proposed.

@@ -173,3 +173,9 @@
 - 변경: 다른 세션이 main 작업 트리에서 D-362(코드 유형별 파일 크기 예산)를 쓰고 있어, 이 모듈 기록의 D-362(운전자 실시간 영상, 옛 D-346)는 D-368 로 읽는다. 위 기록은 덧붙이기 전용이라 고치지 않는다.
 - 증거: `docs/adr/D-368-pilot-live-driver-video.md`, ADR Log 행·코드·시험이 새 번호를 쓴다.
 - gate 변화: 없음(번호만).
+
+## 2026-10-01 · feat/urdf-nominal-geometry · feat(sim): 카메라를 URDF 사슬에 맞춘다 (D-397)
+- 변경: `map_v2_fleet_real` `cam_mount_z` 0.05307 → 0.0495, 높이 0.067 → 0.06343(NOMINAL 프로필). `map_v2_fleet_lane` line_observer `camera_x_offset_m` 0.034 → 0.028481(25° URDF 사슬, dock observer와 같은 값).
+- 증거: `test_map_v2_fleet_launch.py`, `test_map_v2_fleet_real_launch.py`, `test_urdf_nominal.py`.
+- gate 변화: ROS-SIM HOLD — 랩을 다시 돌아야 한다.
+- 결정: D-397 Proposed.
