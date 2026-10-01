@@ -36,6 +36,8 @@ from fleet.swarm.transport import RobotApiError, RobotClient
 logger = logging.getLogger("fleet.localization")
 
 POLL_S = 0.5
+#: Each robot call is bounded so one stalled CORE cannot hold up the others (review of lane C).
+CALL_TIMEOUT_S = 1.0
 
 
 def load_lane_rules(path: Optional[Path]) -> dict:
@@ -82,7 +84,8 @@ class LocalizationService:
                  slots: Sequence[cues.Slot] = (), squares: Sequence[tuple[float, float]] = (),
                  sightings=None, overhead_cue: bool = False, arbiter: Optional[Arbiter] = None,
                  clock: Callable[[], float] = time.monotonic,
-                 wall: Callable[[], float] = time.time, poll_s: float = POLL_S) -> None:
+                 wall: Callable[[], float] = time.time, poll_s: float = POLL_S,
+                 call_timeout_s: float = CALL_TIMEOUT_S) -> None:
         self._clients = clients
         self._slots = tuple(slots)
         self._squares = tuple(squares)
@@ -92,6 +95,7 @@ class LocalizationService:
         self._clock = clock
         self._wall = wall          # sighting captured_at is site wall time
         self._poll_s = poll_s
+        self._timeout_s = call_timeout_s
         self._monitor = Monitor()
         self._ladder = Ladder()
         self._last_good: dict[str, cues.Pose] = {}
@@ -128,7 +132,7 @@ class LocalizationService:
         clients = dict(self._clients())
         self._forget_removed(set(clients))
         ids = sorted(clients)
-        results = await asyncio.gather(*(clients[rid].state() for rid in ids),
+        results = await asyncio.gather(*(self._bounded(clients[rid].state()) for rid in ids),
                                        return_exceptions=True)
         states = {rid: r for rid, r in zip(ids, results) if isinstance(r, dict)}
         localized = {rid: p for rid, s in states.items()
@@ -136,10 +140,10 @@ class LocalizationService:
         self._last_good.update(localized)
 
         observations: dict[str, list] = {}
-        for rid, state in states.items():
-            status = trust.status_of(state)
-            if status is not None and status.state is LocState.CANDIDATES:
-                await self._arbitrate(rid, clients[rid], localized, observations, now)
+        await asyncio.gather(*(
+            self._arbitrate(rid, clients[rid], localized, observations, now)
+            for rid, state in states.items()
+            if (status := trust.status_of(state)) is not None and status.state is LocState.CANDIDATES))
         await self._watch(localized, observations, now)
         for rid, state in states.items():
             status = trust.status_of(state)
@@ -149,10 +153,13 @@ class LocalizationService:
 
     # --- steps ----------------------------------------------------------------------
 
+    async def _bounded(self, call):
+        return await asyncio.wait_for(call, self._timeout_s)
+
     async def _arbitrate(self, rid: str, client: RobotClient, localized: Mapping[str, cues.Pose],
                          observations: dict, now: float) -> None:
         try:
-            report = await client.localization_candidates()
+            report = await self._bounded(client.localization_candidates())
         except Exception as exc:
             logger.debug("localization: %s candidates unreadable: %s", rid, exc)
             return
@@ -184,7 +191,7 @@ class LocalizationService:
         record = {"request_id": decision.request_id, "candidate_index": decision.candidate_index,
                   "cues": [c.value for c in decision.cues], "result": "sent"}
         try:
-            await client.localization_decision(decision)
+            await self._bounded(client.localization_decision(decision))
             logger.info("localization: %s decision %s candidate %s cues %s", rid,
                         decision.request_id, decision.candidate_index, record["cues"])
         except RobotApiError as exc:
@@ -200,6 +207,7 @@ class LocalizationService:
         for rid in list(self._known):
             if rid not in localized:
                 self._monitor.forget(rid)
+        suspects = []
         for rid, pose in localized.items():
             seen = list(observations.get(rid, ()))
             sighting = self._sighting(rid, now)
@@ -207,7 +215,8 @@ class LocalizationService:
                 seen.append((sighting.x, sighting.y, sighting.yaw))
             disagreeing = any(service_logic.disagrees(pose, o) for o in seen) if seen else None
             if self._monitor.update(rid, disagreeing, now):
-                await self._post_suspect(rid)
+                suspects.append(rid)
+        await asyncio.gather(*(self._post_suspect(rid) for rid in suspects))
 
     async def _post_suspect(self, rid: str) -> None:
         client = self._clients().get(rid)
@@ -217,7 +226,7 @@ class LocalizationService:
                        rid, service_logic.SUSPECT_DIST_M, math.degrees(service_logic.SUSPECT_YAW_RAD),
                        service_logic.SUSPECT_HOLD_S)
         try:
-            await client.localization_suspect(service_logic.SUSPECT_REASON)
+            await self._bounded(client.localization_suspect(service_logic.SUSPECT_REASON))
         except Exception as exc:
             logger.warning("localization: suspect to %s failed: %s", rid, exc)
 

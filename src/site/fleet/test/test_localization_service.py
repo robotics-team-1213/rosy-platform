@@ -4,6 +4,7 @@ Fake robots and a fake clock; every tick is one 0.5 s poll."""
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import math
 from pathlib import Path
@@ -320,3 +321,30 @@ def test_an_offline_robot_is_skipped_and_a_removed_one_forgotten():
     clients.clear()
     ticks(svc, clock, 0.5)
     assert svc.view("r1") is None
+
+
+class Hanging(FakeRobot):
+    """Never answers the candidates read (a robot whose CORE stalls)."""
+
+    async def localization_candidates(self):
+        self._record("localization_candidates")
+        await asyncio.Event().wait()
+
+
+def test_one_hung_robot_does_not_stall_the_others():
+    """Review fix: each robot's calls are bounded and run side by side."""
+    clock = FakeClock()
+    stuck_state = FakeRobot("r0", state=state("r0", "CANDIDATES", "odom"))
+    stuck_state.state_gate = asyncio.Event()                 # state() never returns
+    stuck_candidates = Hanging("r1", state=state("r1", "CANDIDATES", "odom"))
+    ok = FakeRobot("r2", state=state("r2", "CANDIDATES", "odom"))
+    ok.candidates = report("r2", ON_A)
+    svc = service(stuck_state, stuck_candidates, ok, clock=clock, call_timeout_s=0.05)
+
+    async def drive():
+        for _ in range(8):
+            await asyncio.wait_for(svc.tick(), 1.0)
+            clock.advance(0.5)
+    run(drive())
+
+    assert len(ok.decisions) == 1
