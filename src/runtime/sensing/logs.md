@@ -867,3 +867,9 @@
 - 변경: `control/loc_assist_node.py`. `camera/front` 구독을 LOCALIZED에 들어가면 없애고 나오면 다시 만든다(`sync_camera`, 틱마다; 저장소에 스로틀된 카메라 토픽은 없다). 작업 스레드 본문을 `search_job`으로 빼고, 페인트 지도 적재와 탐색 사이에 `stopping` 플래그를 본다(main이 풀 종료 전에 세움). 작업 스레드는 로그를 남기지 않고 메모를 돌려주며 `finish_search`가 실행기 스레드에서 남긴다. 사각형·페인트 증거 시각을 코어에 `evidence_s`로 넘긴다. 검증 중 중복 결정은 debug 로그만.
 - 증거: `test_loc_assist_node_ros.py` 2개(WSL Jazzy: 카메라 구독 생성·제거·재생성, 정지 플래그가 탐색을 건너뜀) — WSL ROS 시험 55 passed. 호스트 sensing 2224 passed, 104 skipped; 아키텍처 76 passed(`control` 41237로 재판정).
 - gate 변화: 없음.
+
+## 2026-10-02 · uncommitted · feat(localization): D-395 P2-7 미션 뒤 재탐색
+
+- 변경: `LocAssist.on_mission` — CORE `localization/mission` 이 `running` 이면 탐색하지 않고, `done`·`aborted` 면 바로 한 번 탐색한다(CANDIDATES 에서도 이동·재시도 시간을 기다리지 않음). `loc_assist_node` 가 그 토픽을 구독한다.
+- 증거: `test/test_loc_assist.py` +3.
+- gate 변화: 없음.
