@@ -32,7 +32,7 @@ class SiteLinkTest {
     @Test
     fun everySharedVectorCase() {
         val cases = vector.getJSONArray("cases")
-        assertEquals(33, cases.length())
+        assertEquals(35, cases.length())
         val failures = mutableListOf<String>()
         for (i in 0 until cases.length()) {
             val case = cases.getJSONObject(i)
@@ -77,15 +77,15 @@ class SiteLinkTest {
     }
 
     @Test
-    fun aHostNameManualHostIsNotADialTargetForTheApp() {
-        // Shared rule: manual_host may be an IP or a name. The app dials it without DNS, so a name is dropped.
-        val case = (0 until vector.getJSONArray("cases").length()).map { vector.getJSONArray("cases").getJSONObject(it) }
-            .first { it.getString("id") == "manual_host_name_allowed" }
-        val link = SiteLinkRecord.toSiteLink(case.getJSONObject("record").toRecord(), "camera-token", "overhead-1")!!
-        assertNull(link.manualHost)
-        val ip = (0 until vector.getJSONArray("cases").length()).map { vector.getJSONArray("cases").getJSONObject(it) }
-            .first { it.getString("id") == "manual_host_ip_allowed" }
-        assertEquals("192.168.1.20", SiteLinkRecord.toSiteLink(ip.getJSONObject("record").toRecord(), "t", "overhead-1")!!.manualHost)
+    fun anIpManualHostCarriesOverToTheAppLink() {
+        // Shared rule since 464b0c88: manual_host is an IPv4/IPv6 literal, the same as the app's own record.
+        val cases = (0 until vector.getJSONArray("cases").length()).map { vector.getJSONArray("cases").getJSONObject(it) }
+        for ((id, ip) in listOf("manual_host_ip_allowed" to "192.168.1.20", "manual_host_ipv6_allowed" to "fd00::20")) {
+            val record = cases.first { it.getString("id") == id }.getJSONObject("record").toRecord()
+            val link = SiteLinkRecord.toSiteLink(record, "t", "overhead-1")!!
+            assertEquals(ip, link.manualHost)
+            assertNull(SiteLink.validate(link))
+        }
     }
 
     @Test

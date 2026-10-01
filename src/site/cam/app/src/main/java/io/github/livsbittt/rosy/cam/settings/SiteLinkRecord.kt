@@ -33,9 +33,6 @@ object SiteLinkRecord {
 
     private val REQUIRED = listOf("site_name", "tls_host", "port", "ca_pem", "role", "credential_id", "expires_at")
     private val TLS_HOST = Regex("^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.local$")
-    private val DNS_NAME = Regex(
-        "^(?=.{1,253}$)[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*$",
-    )
     private val EXPIRES_AT = Regex("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,9})?Z$")
     private val EXPIRES_AT_SECONDS = DateTimeFormatter.ofPattern("uuuu-MM-dd'T'HH:mm:ss").withResolverStyle(ResolverStyle.STRICT)
     private val PEM_BLOCK = Regex("-----BEGIN CERTIFICATE-----([A-Za-z0-9+/=\\s]*?)-----END CERTIFICATE-----")
@@ -67,10 +64,9 @@ object SiteLinkRecord {
         val credential = if (inline) record["credential"] else record["credential_ref"]
         if (credential !is String || credential.isEmpty()) return "bad_value"
 
+        // An IPv4/IPv6 literal only: the manual address is dialled without DNS (a name or "ip:port" is bad).
         val manualHost = record["manual_host"]
-        if (manualHost != null && !(manualHost is String && (SiteLink.isIpLiteral(manualHost) || DNS_NAME.matches(manualHost)))) {
-            return "bad_manual_host"
-        }
+        if (manualHost != null && !(manualHost is String && SiteLink.isIpLiteral(manualHost))) return "bad_manual_host"
         return null
     }
 
@@ -114,13 +110,12 @@ object SiteLinkRecord {
      * for another role (a `robot` record is FleetAgent's, not this app's).
      *
      * Field mapping: `ca_pem` becomes the pin of its first CA certificate (the D-341 9 pin the link trusts);
-     * `tls_host` is lower-cased; an IP `manual_host` is kept, a host-name `manual_host` is dropped because the
-     * app dials the manual address without DNS (D-391 1 fallback, review M1).
+     * `tls_host` is lower-cased; `manual_host` (an IP literal by the shared rule) is kept as is.
      */
     fun toSiteLink(record: Map<String, Any?>, token: String, source: String): SiteLink? {
         if (validate(record) != null || record["role"] != SiteLink.ROLE) return null
         val ca = caCertificates(record["ca_pem"])?.firstOrNull() ?: return null
-        val manual = (record["manual_host"] as? String)?.takeIf { SiteLink.isIpLiteral(it) }
+        val manual = record["manual_host"] as? String
         return SiteLink(
             siteName = record["site_name"] as String,
             tlsHost = (record["tls_host"] as String).lowercase(),

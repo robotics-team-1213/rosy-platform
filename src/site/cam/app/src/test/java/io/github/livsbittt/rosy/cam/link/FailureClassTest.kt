@@ -59,7 +59,7 @@ class FailureClassTest {
     @Test
     fun everyVectorCase() {
         val cases = vector.getJSONArray("cases")
-        assertEquals(26, cases.length())
+        assertEquals(28, cases.length())
         val failures = mutableListOf<String>()
         for (i in 0 until cases.length()) {
             val case = cases.getJSONObject(i)
