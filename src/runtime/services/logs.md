@@ -289,3 +289,9 @@
 - 변경: emotion_map.emotion_for 이 idle_seconds 를 받아 IDLE 5분 이상이면 basic 대신 bored. 모드가 바뀌면 대기 시계 리셋 — 심심함은 대기의 누적이다.
 - 증거: test_emotion_map.py 6신규 (변이: bored→basic 되돌리면 빨강).
 - gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · feat(localization,state): D-395 P2-1 LocalizationAssist
+
+- 변경: 새 `core_features/localization/assist.py` — 로봇 sensing 노드 JSON 파싱, 정직한 `pose_frame`(CORE 가 odom 대체 중이면 odom, odom→map 승격 없음), 3 s 무응답이면 UNKNOWN(`state_stale`), CandidateReport `robot_id` 를 CORE 신원으로, STALE 판정, `localization.state|candidates|result` 이벤트. `state/manager.py` 는 localization provider 를 live 로 읽는다.
+- 증거: `test/test_localization_assist.py` 24.
+- gate 변화: 없음.

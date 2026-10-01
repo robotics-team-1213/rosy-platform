@@ -4229,3 +4229,8 @@
 - 변경: `docs/plans/2026-10-01-d395-phase2-interfaces.md` — 사용자 2단계 승인(2026-10-01)에 따라 로봇(sensing)·CORE·Fleet 세 갈래가 함께 쓸 계약을 고정. ROS 토픽(`localization/state|candidates|decision|suspect|result`, String JSON), CORE 새 경로(`GET /localization/candidates`, `POST /localization/decision|suspect|mission`), 새 capability `LOCALIZE_ASSIST`, API Ref v1.70 핀 목록, Fleet 서비스·감시·사다리 시간, 교통정리·bays가 믿지 않는 자세, D-395 이전 로봇(`localization: null`)은 현행 유지+경고. 실제 로봇(S3)은 공유 로봇 공지·대기 규칙을 따른다.
 - 증거: 없음(계획 문서).
 - gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · docs(api-ref): v1.70 — D-395 2단계 CORE 경로·capability·이벤트
+- 변경: API Ref v1.70. §2 AUTH-102 토큰 capability 표, ERR-102 `NOT_LOCALIZED`·`STALE_REQUEST`·`NO_CANDIDATES`·D-395 lease 423, §5.3 새 경로 3개와 initialpose·goal·home·line-follow 행, §6.1 스냅샷이 실제로 채워짐·frame 정직성·state_stale, §7.9 전송 경로 열림, §8 `localization.state|candidates|result` 와 initialpose `source`, 변경 이력 행. 핀: `app.py` ×2, `test/test_line_follow_contract_docs.py`, `src/site/fleet/test/test_task_contract_docs.py` ×2, `test_mission_progress.py`.
+- 증거: `test_protocol_version_alignment.py`, `test_event_catalogue.py`, 핀 시험.
+- gate 변화: 없음.

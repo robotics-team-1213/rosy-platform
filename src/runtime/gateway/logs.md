@@ -656,3 +656,9 @@
 - 변경: drive_payload 에 docking_state 를 실었다(DOCKING 중 DockState 값). ros_bridge._reconcile_emotion 이 CORE 기동 직후 10초간 hello 표정을 먼저 보낸다.
 - 증거: test_bridge_display.py 도킹 상태 + 기존 전표 통과.
 - gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · feat(bridge,services): D-395 P2-1 스냅샷 localization 채움
+
+- 변경: `ros_bridge.py` 가 `localization/state`·`candidates`(transient-local)·`result` 를 구독하고 `localization/decision`·`suspect`(reliable, depth 5)를 발행한다. `received_s` 는 ROS 시계. `_tick_state` 가 `_on_odom` 과 같은 신선도 규칙으로 frame 플래그를 넘긴다. `services.py` 가 `LocalizationAssist` 를 만들어 StateManager 에 live provider 로 걸고, LOCALIZED 진입·결정 수락 때 `nav.cancel(source="localization")` 을 부른다.
+- 증거: `test/test_localization_api.py` 30, `test_bridge_timers.py`(구독 3·발행 2·latch 2 추가), `test_event_catalogue.py`.
+- gate 변화: 없음(장치·sim 미검증; lane A 노드와의 통합은 P2-8).
