@@ -68,6 +68,9 @@ from signing import verify_signature  # noqa: E402
 
 
 API_BASE = "https://api.github.com"
+# config.json "api_base": another GitHub-compatible API (the device twin's fake
+# GitHub). Content is still trusted only through the release key signatures.
+API_BASE_URL = re.compile(r"^https?://[A-Za-z0-9.:\[\]-]+(/[A-Za-z0-9._~/-]*)?$")
 USER_AGENT = "rosy-auto-update/1 (D-406)"
 DEFAULT_REPO = "livsbittt/rosy-os"
 REPO = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
@@ -383,11 +386,16 @@ class Updater:
     def __init__(self, host: Host, *, api_base: str | None = None, http: Http | None = None) -> None:
         self.host = host
         self.root = host.root
-        self.api_base = (api_base or API_BASE).rstrip("/")
-        # Plain http only when the API itself is (a local test server).
-        schemes = ("https", "http") if self.api_base.startswith("http://") else ("https",)
-        self.http = http or Http(schemes)
+        self._own_http = http is None
+        self.http = http
+        self._use_api_base(api_base or API_BASE)
         self.updates = self.root / UPDATES
+
+    def _use_api_base(self, api_base: str) -> None:
+        self.api_base = api_base.rstrip("/")
+        # Plain http only when the API itself is (a local test server).
+        if self._own_http:
+            self.http = Http(("https", "http") if self.api_base.startswith("http://") else ("https",))
 
     # paths and commands -------------------------------------------------------
 
@@ -465,7 +473,7 @@ class Updater:
     def _config(self) -> dict:
         path = self.updates / "config.json"
         if not path.exists() and not path.is_symlink():
-            return {"enabled": True, "repo": DEFAULT_REPO}
+            return {"enabled": True, "repo": DEFAULT_REPO, "api_base": None}
         try:
             data = _read_json(path, 64 * 1024)
         except (OSError, ValueError) as exc:
@@ -476,7 +484,10 @@ class Updater:
         repo = data.get("repo", DEFAULT_REPO)
         if not isinstance(enabled, bool) or not isinstance(repo, str) or not REPO.fullmatch(repo):
             raise UpdateError("CONFIG_INVALID: enabled must be a bool and repo owner/name")
-        return {"enabled": enabled, "repo": repo}
+        api_base = data.get("api_base")
+        if api_base is not None and not (isinstance(api_base, str) and API_BASE_URL.fullmatch(api_base)):
+            raise UpdateError("CONFIG_INVALID: api_base must be an http(s)://host[:port][/path] URL")
+        return {"enabled": enabled, "repo": repo, "api_base": api_base}
 
     def _hold(self) -> tuple[str, str]:
         """("none" | "active" | "expired" | "invalid", detail). Read-only."""
@@ -1184,6 +1195,8 @@ class Updater:
         config = self._config()
         if not config["enabled"]:
             return self._finish(state, "disabled", "config.json has enabled=false")
+        if config.get("api_base"):
+            self._use_api_base(config["api_base"])
         current = self.host.current_release()
         if current is None:
             raise UpdateError("CURRENT_UNKNOWN: /opt/rosy/current does not name a release")
