@@ -297,6 +297,20 @@ function Get-ImageLayerSyncArguments([string]$ReleaseId, [switch]$DryRun) {
     )
 }
 
+function Get-ClaimArguments([string]$Action, [string]$Holder) {
+    # D-387/D-406 claim: the push and the robot's auto-updater never run at the
+    # same time. The helper ships in native-runtime from D-406 on; an older
+    # robot has none, so the wrapper says so instead of failing. Single quotes
+    # only: PowerShell 5.1 eats embedded double quotes.
+    $helper = "/opt/rosy/native-runtime/rosy_claim.py"
+    $call = "$helper $Action --holder $Holder"
+    if ($Action -eq "acquire") { $call += " --purpose push --ttl-s 1800" }
+    return @(
+        "sudo", "-n", "sh", "-c",
+        "'if [ -f $helper ]; then exec python3 $call; fi; echo ROSY_CLAIM_HELPER_MISSING; exit 4'"
+    )
+}
+
 function ConvertTo-DisplayLine([string]$Executable, [string[]]$Arguments) {
     $quoted = $Arguments | ForEach-Object {
         if ($_ -match '[\s"]') { '"' + ($_ -replace '"', '\"') + '"' } else { $_ }
@@ -310,7 +324,7 @@ function Get-RemoteCommandPlan {
         [switch]$Rollback, [string]$ReleaseId, [string]$TarballPath, [string]$UnpackScript,
         [string]$RemoteStagingDir, [string]$RemoteReleasesDir,
         [string]$ActivateWrapper, [string]$RollbackWrapper, [string]$CoreReadyProbe,
-        [string]$SshExe, [string]$ScpExe, [switch]$SkipImageLayerSync
+        [string]$SshExe, [string]$ScpExe, [switch]$SkipImageLayerSync, [string]$ClaimHolder
     )
     $target = "${RosyUser}@${Robot}"
     # ssh parses a "-o Key=Value" argument the way it parses an ssh_config
@@ -346,6 +360,11 @@ function Get-RemoteCommandPlan {
         }
     }
 
+    # The claim brackets every other step; the execution loop runs the release
+    # in its finally block, so a failed step still lets the claim go.
+    $claimSsh = @("-i", $KeyPath) + $sshOptions + @($target)
+    Add-Step $plan "ssh" $SshExe ($claimSsh + (Get-ClaimArguments "acquire" $ClaimHolder)) "claim-acquire"
+
     if ($Rollback) {
         # D-388: sync the image layer back to the release that became current
         # BEFORE the readiness check. If the newer release's units or scripts
@@ -356,6 +375,7 @@ function Get-RemoteCommandPlan {
         if (-not $SkipImageLayerSync) { Add-ImageLayerSteps $plan "" -NoReadyCheck }
         Add-Step $plan "ssh" $SshExe (@("-i", $KeyPath) + $sshOptions + @($target) + (Get-CoreReleaseCheckArguments)) "core-release-check"
         Add-Step $plan "ssh" $SshExe (@("-i", $KeyPath) + $sshOptions + @($target) + (Get-CoreReadyArguments $CoreReadyProbe))
+        Add-Step $plan "ssh" $SshExe ($claimSsh + (Get-ClaimArguments "release" $ClaimHolder)) "claim-release"
         return $plan
     }
 
@@ -371,14 +391,19 @@ function Get-RemoteCommandPlan {
     Add-Step $plan "ssh" $SshExe (@("-i", $KeyPath) + $sshOptions + @($target) + (Get-CoreReleaseCheckArguments)) "core-release-check"
     Add-Step $plan "ssh" $SshExe (@("-i", $KeyPath) + $sshOptions + @($target) + (Get-CoreReadyArguments $CoreReadyProbe))
     if (-not $SkipImageLayerSync) { Add-ImageLayerSteps $plan $ReleaseId }
+    Add-Step $plan "ssh" $SshExe ($claimSsh + (Get-ClaimArguments "release" $ClaimHolder)) "claim-release"
     return $plan
 }
+
+# The claim holder travels inside a single-quoted remote shell line: keep only
+# characters that need no quoting there.
+$claimHolder = "push-$env:USERNAME@$env:COMPUTERNAME" -replace '[^A-Za-z0-9._@-]', '_'
 
 $plan = Get-RemoteCommandPlan -Robot $Robot -RosyUser $RosyUser -KeyPath $KeyPath -KnownHosts $KnownHosts `
     -Rollback:$Rollback -ReleaseId $releaseId -TarballPath $tarballPath -UnpackScript $unpackScript `
     -RemoteStagingDir $RemoteStagingDir -RemoteReleasesDir $RemoteReleasesDir `
     -ActivateWrapper $ActivateWrapper -RollbackWrapper $RollbackWrapper -CoreReadyProbe $CoreReadyProbe `
-    -SshExe $SshExe -ScpExe $ScpExe -SkipImageLayerSync:$SkipImageLayerSync
+    -SshExe $SshExe -ScpExe $ScpExe -SkipImageLayerSync:$SkipImageLayerSync -ClaimHolder $claimHolder
 
 if ($PrintCommands) {
     $result = [ordered]@{
@@ -416,8 +441,11 @@ function Read-LastJsonLine($Output) {
     }
 }
 
+$claimed = $false
+
 foreach ($step in $plan) {
     $arguments = $step.arguments
+    if ($step.role -eq "claim-release") { continue }  # runs in the finally block below
     if ($step.role -like "image-layer-*" -and $imageLayerSkipped) { continue }
     if ($step.role -eq "image-layer-restart") {
         $restartedUnits = @($imageLayer.restart_units | Where-Object { $_ -match '^rosy-[A-Za-z0-9-]+\.(service|path|timer)$' })
@@ -432,6 +460,18 @@ foreach ($step in $plan) {
     $display = ConvertTo-DisplayLine $step.executable $arguments
     Write-Host "+ $display"
     $result = Invoke-NativeCapture $step.executable $arguments
+    if ($step.role -eq "claim-acquire") {
+        if (($result.output -join " ") -match "ROSY_CLAIM_HELPER_MISSING") {
+            Write-Warning "$Robot has no rosy_claim.py (native-runtime older than D-406): pushing without the claim; its auto-updater, if any, is not excluded."
+            continue
+        }
+        if ($result.exit_code -ne 0) {
+            Fail "Release push refused: $Robot is claimed by another job (D-406 claim, exit $($result.exit_code)): $($result.output -join [Environment]::NewLine)"
+        }
+        $claimed = $true
+        if ($result.output) { Write-Host ($result.output -join [Environment]::NewLine) }
+        continue
+    }
     if ($step.role -eq "image-layer-dry-run" -and $result.exit_code -eq 3 -and
             ($result.output -join " ") -match "IMAGE_LAYER_SYNC_MISSING") {
         Write-Warning "image-layer sync skipped: neither current nor previous release carries sync-image-layer.py."
@@ -515,6 +555,15 @@ foreach ($step in $plan) {
 Write-Host "done."
 
 } finally {
+    # $claimed exists only once the execution loop started.
+    if ((Test-Path variable:claimed) -and $claimed) {
+        $claimRelease = @($plan | Where-Object { $_.role -eq "claim-release" })[0]
+        Write-Host "+ $($claimRelease.display)"
+        $released = Invoke-NativeCapture $claimRelease.executable $claimRelease.arguments
+        if ($released.exit_code -ne 0) {
+            Write-Warning "could not release the claim on $Robot (exit $($released.exit_code)); it expires after 30 min. $($released.output -join ' ')"
+        }
+    }
     foreach ($directory in $tempDirsToClean) {
         Remove-Item -LiteralPath $directory -Recurse -Force -ErrorAction SilentlyContinue
     }
