@@ -885,3 +885,13 @@
 - 변경: `LocAssist` 는 `running` 을 받은 시각을 들고, `MISSION_PAUSE_S`(CORE 최장 미션 120 s + 10 s) 가 지나면 끝 메시지가 없어도(유실·CORE 재시작) 다시 탐색한다.
 - 증거: `test/test_loc_assist.py` +1.
 - gate 변화: 없음.
+
+## 2026-10-02 · 5016499f · fix(localization): D-395 S1 결과 1·2 (e62d110b, 64d8197b, 5016499f) — 3 s 검증의 지연된 map->odom, 전체 스캔 피어 객체
+
+- 원인(결과 1): AMCL 은 map->odom 을 스캔 시각 + `transform_tolerance`(시뮬 1.0 s, 실기 0.3 s)로 찍는다. `loc_assist_node.on_scan` 이 스캔 시각으로 map->센서를 조회해서, `/initialpose` 뒤 약 1 s 동안 주입 전 보정으로 적합도를 계산했고(0.013–0.019) 0.5 s 안정 시간 직후 `fit_low` 로 떨어졌다. Gazebo 프로브(`X:\DevTemp\rosy-d395-f1\base_b\probe_r1.txt`): 주입 +0.04–0.94 s 동안 스캔 시각 조회는 옛 자세, +1.06 s 에 바뀜; 주입 자세 자체의 적합도는 내내 0.97–0.99. 같은 자세 재결정이 통과한 것은 AMCL 이 이미 그 자세였기 때문.
+- 변경: odom->센서는 스캔 시각, map->odom 은 최신으로 합성(`lookup_transform_full`, `RobotTransformBuffer` 에 같은 접두 규칙 추가). AMCL 이 적용하지 않은 자세나 틀린 자세는 여전히 거부.
+- 변경(결과 2): `search(..., object_scan=)` — 탐색은 `scan_stride` 그대로, `unmapped_objects` 는 전체 640 빔. 전체 스캔이 남기는 차체 반사(정사각형 A 에서 base_link 7 cm)는 로봇 반경 안이라 버린다. 호스트 비용: `unmapped_objects` 0.15 → 0.24 ms/탐색(탐색 ~1.3 s 대비 무시). Pi 측정은 D-395 rev. 5 대로 보류.
+- 증거: `test_loc_assist_node_ros.py` +2(WSL: 수정 전 올바른 주입이 `inject_rejected` 로 실패 확인, 수정 후 통과; 30 cm 틀린 주입은 거부), `test_loc_assist.py` +5(2.35 m 피어: stride 4 는 객체 0, 전체 스캔은 1; 빈 트랙 3 자세 객체 0; 차체 반사 제거). 호스트 sensing 2282 passed, 104 skipped; WSL loc 시험 60 passed.
+- Gazebo 재실행(WSL, GZ_PARTITION rosy_f1, ROS_DOMAIN_ID 95, 시나리오 a, 부하 23–68): 수정 전 기준 `base_b` 는 두 로봇 모두 첫 결정 거부. `fix_a1`·`fix_a2` 에서 r1(slot)은 첫 결정 통과. r2 의 남은 거부는 진짜였다: 첫 결정은 P2-7 `rotate_in_place` 회전 중에 주입돼 주입 자세 적합도도 0.18–0.39, `fix_a1` 두 번째는 후보 yaw 가 약 4° 틀려 0.8. 피어 객체는 r1 16/16, r2 35/35 보고에서 보였다(`fix_a2`). 원시 로그 `X:\DevTemp\rosy-d395-f1\`.
+- 남은 것: Fleet 이 회전 미션 중에도 결정을 보낸다(결과 아님, Fleet 레인). `localization_node` 도 스캔 시각 map 조회라 재국지화 뒤 ~1 s 늦게 반응한다(확인 지연만, 수정 안 함).
+- gate 변화: 없음.
