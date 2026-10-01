@@ -177,8 +177,15 @@ class LocAssistNode(Node):
         machine = self.core.machine
         if self.field is None or (machine.check is None and not machine.autonomy_allowed):
             return
+        # odom->sensor at the scan stamp, then AMCL's *latest* map->odom. AMCL stamps
+        # map->odom transform_tolerance ahead (1.0 s in sim, 0.3 s on the device), so a
+        # map lookup at the scan stamp returns the correction from ~1 s earlier: for that
+        # long after /initialpose the 3 s check scored the pre-injection pose (fit ~0.01)
+        # and failed at its 0.5 s settle (S1 finding 1). settle_s covers AMCL's own
+        # processing of /initialpose; a pose AMCL never applied still fails.
         try:
-            tf = self.tf.lookup_transform('map', msg.header.frame_id, rclpy.time.Time.from_msg(msg.header.stamp))
+            tf = self.tf.lookup_transform_full('map', rclpy.time.Time(), msg.header.frame_id,
+                                               rclpy.time.Time.from_msg(msg.header.stamp), 'odom')
         except Exception:
             return                          # no fit this scan; a long gap fails the check on tick
         tr = tf.transform.translation
