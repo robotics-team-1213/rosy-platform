@@ -394,10 +394,30 @@ def test_stale_hold_defaults_to_two_seconds():
 
 def test_packaged_default_merged_with_legacy_enabled_overlay_is_enforce():
     import yaml
+    from core_common.config import _deep_merge
     default_path = (Path(__file__).resolve().parents[3] / "contracts" / "foundation" / "config" /
                     "rosy_default.yaml")
-    block = yaml.safe_load(default_path.read_text(encoding="utf-8"))["control"]["sensor_adapter"]
+    default = yaml.safe_load(default_path.read_text(encoding="utf-8"))
 
-    merged = {**block, "enabled": True}
+    merged = _deep_merge(default, {"control": {"sensor_adapter": {"enabled": True}}})
 
-    assert ControlSensorConfig.from_mapping(merged).mode == "enforce"
+    assert ControlSensorConfig.from_mapping(merged["control"]["sensor_adapter"]).mode == "enforce"
+
+
+def test_shadow_adapter_does_not_bind_safety_before_its_own_binding():
+    sensor = FakeSensorNode()
+    adapter = ControlSensorAdapter(
+        {"mode": "shadow"}, sensor_node_factory=lambda **kwargs: sensor,
+        **_provider_factories()
+    )
+
+    class Safety:
+        def __init__(self):
+            self.calls = []
+
+        def bind_control_policy(self, policy):
+            self.calls.append(policy)
+
+    safety = Safety()
+    assert adapter.bind_safety(safety) is False
+    assert safety.calls == []

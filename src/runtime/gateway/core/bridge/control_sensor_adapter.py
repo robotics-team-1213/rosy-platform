@@ -60,7 +60,6 @@ class ControlSensorConfig:
     """
 
     mode: str = "off"
-    enabled: bool = False
     stale_hold_s: float = _DEFAULT_STALE_HOLD_S
     required: tuple[str, ...] = _DEFAULT_REQUIRED
     max_age: float = 0.5
@@ -75,7 +74,6 @@ class ControlSensorConfig:
             raise ValueError("control sensor adapter config must be a mapping")
 
         mode = _parse_mode(raw)
-        enabled = mode != "off"
 
         stale_hold_s = raw.get("stale_hold_s", _DEFAULT_STALE_HOLD_S)
         if (type(stale_hold_s) not in (int, float) or not math.isfinite(float(stale_hold_s)) or
@@ -129,9 +127,13 @@ class ControlSensorConfig:
             raise ValueError("control sensor adapter calibration path must be a string")
         calibration = tuple(calibration_raw.items())
 
-        return cls(mode=mode, enabled=enabled, stale_hold_s=float(stale_hold_s),
+        return cls(mode=mode, stale_hold_s=float(stale_hold_s),
                    required=required, max_age=float(max_age),
                    parameters=parameters, calibration=calibration)
+
+    @property
+    def enabled(self) -> bool:
+        return self.mode != "off"
 
     @property
     def parameter_overrides(self) -> dict[str, Any]:
@@ -304,6 +306,9 @@ class ControlSensorAdapter:
     def bind_safety(self, safety: Any) -> bool:
         """Bind the worker policy to CORE's safety consumer when enabled."""
         if not self.enabled:
+            return False
+        # D-398: shadow binds through bind_shadow_control_policy (plan Task 7); until then it never enforces.
+        if self.config.mode != "enforce":
             return False
         if self.policy is None or not callable(getattr(safety, "bind_control_policy", None)):
             raise ValueError("enabled sensor adapter cannot bind its policy")
