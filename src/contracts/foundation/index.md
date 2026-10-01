@@ -33,8 +33,8 @@
 
 ## 최근 기록
 
+- 2026-10-01 · uncommitted · fix(protocol): D-391 site-link 경계 규칙 — fullmatch, IPv6 zone 거절
 - 2026-10-01 · uncommitted · fix(protocol): D-391 벡터 — 4400 사유 정규화, manual_host는 IP만
 - 2026-10-01 · uncommitted · fix(protocol): site_link 비밀 스캔 오탐·ruff 정리
 - 2026-10-01 · uncommitted · feat(protocol): D-391 4.1 공유 벡터 — device_kind·실패 분류·사이트 연결 기록
 - 2026-10-01 · 078d0978 · fix(core_common): robot core.yaml layer fails closed (review of 9966e57b)
-- 2026-10-01 · uncommitted · fix(core_common): robot package core.yaml config layer (D-196)

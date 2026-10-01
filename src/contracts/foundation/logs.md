@@ -250,3 +250,9 @@
 - 변경: rosy-84 Kotlin 대조에서 나온 두 차이. ① 4400 사유는 공백 제거·casefold 뒤 비교한다(" No Hello " → busy, "NO HELLO extra" → protocol_mismatch 사례 추가). ② `manual_host`는 IPv4/IPv6 리터럴만 받는다(D-391 1항 "rosyov 링크의 IP, DNS 없이 연결"과 일치) — 이름·`ip:port`는 `bad_manual_host`, IPv6 허용 사례 추가.
 - 증거: foundation 시험 329 passed; Kotlin 쪽은 rosy-84 브랜치 `feat/cam-d391-shared-vectors`가 같은 벡터로 대조.
 - gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · fix(protocol): D-391 site-link 경계 규칙 — fullmatch, IPv6 zone 거절
+
+- 변경: rosy-84 Kotlin 독립 리뷰가 찾은 차이. `tls_host`·`expires_at` 정규식을 `match`(`$`가 끝 줄바꿈을 허용)에서 `fullmatch`로 바꿨다. `manual_host`에 IPv6 zone id(`%`)가 있으면 `bad_manual_host`(폰에서 다이얼 불가). 사례 7건 추가: 끝 줄바꿈 두 건·zone id(옛 코드에서 통과하던 결함), 0년 날짜·pathLen 없는 CA·CA 뒤 leaf 묶음·END 뒤 쓰레기(기존 동작 고정, 런타임 공통).
+- 증거: foundation 336 passed; 새 사례 중 3건은 옛 `site_link.py`에서 실패함을 직접 대조. 새 CA 인증서는 공개 인증서만 저장, 키는 버렸다.
+- gate 변화: 없음.
