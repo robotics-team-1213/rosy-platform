@@ -1,4 +1,4 @@
-"""cell.yaml (schema rosy_cell.cell/1) -> CellConfig. Frames are kept as taught points and rebuilt here."""
+"""cell.yaml (schema rosy_cell.cell/2) -> CellConfig. Frames are kept as taught points and rebuilt here."""
 
 from __future__ import annotations
 
@@ -12,16 +12,27 @@ from .fields import FieldError
 from .geometry import Frame, FrameError
 from .recipe import content_hash
 
-_REQUIRED = ("schema", "frame_rules", "frames", "stations", "approach_clearance_m")
+_REQUIRED = ("schema", "frame_rules", "frames", "stations", "home", "kinematics_revision", "approach_clearance_m")
 _RULES = ("min_span_m", "min_angle_deg", "max_tilt_deg")
 _POINTS = ("origin", "x_point", "plane_point")
 _STATION = ("frame", "x", "y", "z", "yaw")
+_HOME = ("x", "y", "z", "yaw")
 
 
 class CellError(ValueError):
     def __init__(self, problems: list[str]) -> None:
         super().__init__("; ".join(problems))
         self.problems = tuple(problems)
+
+
+@dataclass(frozen=True)
+class Pose:
+    """A TCP pose in the robot base frame (x, y, z in m, yaw in rad)."""
+
+    x: float
+    y: float
+    z: float
+    yaw: float
 
 
 @dataclass(frozen=True)
@@ -37,6 +48,8 @@ class Station:
 class CellConfig:
     frames: Mapping[str, Frame]
     stations: Mapping[str, Station]
+    home: Pose  # tool-down TCP pose in the base frame; a pose, not a frame, and not an obstacle
+    kinematics_revision: str
     approach_clearance_m: float
     content_hash: str
 
@@ -82,6 +95,18 @@ def _stations(value: object, field: str) -> dict[str, Station]:
     return out
 
 
+def _home(value: object, field: str) -> Pose:
+    d = fields.mapping(value, field, _HOME)
+    return Pose(*(fields.number(d[k], f"{field}.{k}") for k in _HOME))
+
+
+def _revision(value: object, field: str) -> str:
+    s = fields.text(value, field)
+    if not s.strip():
+        raise FieldError(f"{field} must not be empty")
+    return s
+
+
 def load_cell(text: str) -> CellConfig:
     try:
         data = fields.parse(text, "cell config")
@@ -103,6 +128,8 @@ def load_cell(text: str) -> CellConfig:
     rules = read("frame_rules", _rules)
     taught = read("frames", _taught)
     stations = read("stations", _stations)
+    home = read("home", _home)
+    revision = read("kinematics_revision", _revision)
     clearance = read("approach_clearance_m", fields.positive)
 
     frames: dict[str, Frame] = {}
@@ -122,4 +149,4 @@ def load_cell(text: str) -> CellConfig:
         problems += [f"station {k}: unknown frame {s.frame!r}" for k, s in stations.items() if s.frame not in taught]
     if problems:
         raise CellError(problems)
-    return CellConfig(MappingProxyType(frames), MappingProxyType(stations), clearance, content_hash(data))
+    return CellConfig(MappingProxyType(frames), MappingProxyType(stations), home, revision, clearance, content_hash(data))
