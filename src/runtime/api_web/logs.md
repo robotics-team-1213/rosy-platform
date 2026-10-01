@@ -274,3 +274,8 @@
 - 변경: `status_inputs()`가 schema 2를 쓴다. schema-1 키는 그대로 두고 `velocity_linear`·`velocity_angular`·`battery_percent`·`battery_charging`·`docking_state`·`line_follow_mode`·`line_follow_state`·`swarm_active`·`estop`·`activity_kind`를 더했다. 모든 상태 키는 `GET /robot/state`와 같은 StateSnapshot 한 장에서 읽는다(`_snapshot`, 쓰기 한 번에 한 번). 모르는 값·형식이 틀린 값은 null이고 쉬는 기본값으로 채우지 않는다. 배터리는 요약줄 규칙대로 신선하지 않으면 null. root `rosy-boot-status.py`는 schema 1·2(int만)를 받고 출력은 그대로다.
 - 증거: test_host_status_summary.py 53 passed 1 skipped. gateway 1611 passed 1 failed(test_module_criteria C6, 변경 전에도 실패·bridge 파일), api_web 73 passed, 루트 boot_status·boot_display·native_systemd_contract 287 passed. 변이 증명 7종(쓰기 schema 1, 읽기 schema 1만, int 검사 제거, bool 강제, 배터리 신선도 무시, 스냅샷 두 번, 문자열 강제) 모두 빨강.
 - gate 변화: 없음.
+
+## 2026-10-02 · 7322d1e2 · fix(host): D-406 T1 리뷰 반영 — 속도 신선도, 유한수, 충전 플래그
+- 변경: 독립 리뷰(REQUEST CHANGES) 반영. `velocity_*`는 velocity 증거가 fresh일 때만 쓰고 아니면 둘 다 null(끊긴 오도메트리의 마지막 0.0은 멈춤이 아니다). `_number`가 NaN·Inf를 null로. `battery_percent`가 null이면 `battery_charging`도 null(도크 래치). 64자를 넘는 자유 문자열(`docking_state`, `line_follow_*`)은 null. 크기 시험은 64자 id 64행 최악 경우로 쓰고 root 읽기기로 읽어 결과를 단언한다. 안전·도킹은 변화 시에만 찍히므로 게이트하지 않는다.
+- 증거: test_host_status_summary.py 64 passed 1 skipped. gateway 1622 passed 1 failed(C6, 기존). api_web 73 passed, 루트 boot·systemd·architecture 363 passed. 변이 증명 14종(신규 6: 속도 무게이트, 증거 없음 통과, 유한 검사 제거, 충전 분리, 길이 상한 제거·off-by-one; 기존 7 재확인; 숫자 형 검사 제거) 모두 빨강.
+- gate 변화: 없음.
