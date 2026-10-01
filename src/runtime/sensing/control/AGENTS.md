@@ -20,6 +20,8 @@ The package's Python code: executable ROS node wrappers at the top level and the
 | `watch_node.py` | Graph health: required nodes, exclusive topic ownership, foreign-node detection → `/robot/ok|health|interrupt` |
 | `watch.py` | Pure graph-inspect logic (ROS-free), covered by `test_watch.py` |
 | `line_observer_node.py` | Normalised white-line evidence from IR reflectance or camera frames; modes include the lane-network followers (`route_a`/`route_b`/`route_ab` over `sensing/route_*`, fail-closed without `lane_graph_path`/`route`/`route_start`) and an optional `line/debug` overlay |
+| `loc_assist.py` | D-395 P2-3 ROS-free `LocAssist` core: search timing, `localization/state`/`candidates`/`result` payloads, per-source injection covariance; `search`, `pooled_grid`, `lane_rules_near` |
+| `loc_assist_node.py` | D-395 P2-3 ROS adapter for `LocAssist`; `initialpose` only for an accepted decision. Off on the device (`enable_loc_assist`), on in gz_multi nav |
 | `dock_observer_node.py` | Camera frames → `dock/observation` via `sensing/dock_observer`; owns no motion. Only the Gazebo camera (`camera_geometry_source` GAZEBO under `use_sim_time`) may use the declared height/pitch/hfov/offset; any other source fails closed (every frame publishes not-visible) |
 
 ## Subdirectories
