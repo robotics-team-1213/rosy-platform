@@ -11,12 +11,33 @@ LCD는 이 이미지를 회전/리사이즈해 출력하므로 여기서는 GIF 
 from __future__ import annotations
 
 import math
+from dataclasses import dataclass
 
 from PIL import Image, ImageDraw, ImageFont
 
 from . import wifi_qr
 
-DEFAULT_SIZE = (320, 240)
+
+@dataclass(frozen=True)
+class DisplayProfile:
+    """D-394: 한 장치의 화면이 무엇인지. 카드 모델(페이로드)은 장치를 모른다.
+
+    재사용 단위는 페이로드 계약이고, 이 프로파일은 그리는 쪽이 알아야 할 전부다:
+    크기와, 움직임을 그려도 되는가. 전자잉크(``animation=False``)는 부분 갱신이
+    느려 숨쉬지 않는다 — 렌더러는 프레임을 무시하고 고정 프레임을 그린다. 색은
+    모듈의 토큰 사본(D-82/D-194)이 유일한 출처다: 장치마다 팔레트를 새로 정의하지
+    않는다.
+    """
+
+    name: str
+    size: tuple[int, int]
+    animation: bool = True
+
+
+#: Pinky Pro의 ST7789 — 320x240 가로, 숨쉬는 카드를 그릴 수 있다.
+PINKY_ST7789 = DisplayProfile("pinky-st7789", (320, 240))
+DEFAULT_PROFILE = PINKY_ST7789
+DEFAULT_SIZE = DEFAULT_PROFILE.size
 DEFAULT_HOLD_S = 15.0
 
 
@@ -203,6 +224,69 @@ def render(payload: dict, size: tuple[int, int] = DEFAULT_SIZE) -> Image.Image:
     return image
 
 
+# --- D-394: drive card -----------------------------------------------------
+#
+# 주행 카드는 운용 중에 20 s 마다 얼굴 위로 잠깐 지나간다(CORE의 drive_due).
+# 웨이크 카드가 "로봇 전체 진단"이라면 주행 카드는 "지금 이 동작"이다:
+# 큰 모드 단어 하나, 속도 한 줄, 배터리 한 줄. 읽는 사람은 1 m 밖에서
+# 로봇을 따라가는 중이다 — 세 글자 이상 읽게 하면 이미 지나갔다.
+
+
+def render_drive(payload: dict, size: tuple[int, int] = DEFAULT_SIZE) -> Image.Image:
+    """주행 카드: 모드(큰 글자) · 속도 · 내비게이션 · 배터리. 값이 없으면 '--'."""
+    width, height = size
+    image = Image.new("RGB", size, _BG)
+    draw = ImageDraw.Draw(image)
+
+    robot_id = str(payload.get("robot_id") or "rosy")
+    robot_font, robot_id = _fit(draw, robot_id, 18, width - 32)
+    draw.text((16, 10), robot_id, font=robot_font, fill=_MUTED)
+
+    mode = str(payload.get("mode") or "--")
+    if payload.get("estop"):
+        _draw_alarm(draw, (16, 40), "E-STOP", _font(52))
+    else:
+        mode_font, mode = _fit(draw, mode, 52, width - 32)
+        draw.text((16, 40), mode, font=mode_font, fill=_CRIT if mode == "EMERGENCY" else _FG)
+
+    speed = payload.get("speed")
+    speed_text = f"{float(speed):.2f} m/s" if isinstance(speed, (int, float)) else "-- m/s"
+    draw.text((16, 108), "SPEED", font=_font(14), fill=_MUTED)
+    draw.text((92, 104), speed_text, font=_font(20), fill=_FG)
+    draw.text((16, 136), "NAV", font=_font(14), fill=_MUTED)
+    nav_font, nav = _fit(draw, str(payload.get("navigation") or "--"), 16, width - 108)
+    draw.text((92, 136), nav, font=nav_font, fill=_FG)
+
+    # 배터리: 웨이크 카드와 같은 게이지 규약 — 결측은 경보가 아니라 침묵이다.
+    raw_percent = battery_measurement(payload.get("battery_percent"), percent=True)
+    percent = raw_percent if raw_percent is not None else 0.0
+    color = battery_color(percent) if raw_percent is not None else _MUTED
+    bar_x, bar_y, bar_w, bar_h = 16, height - 44, width - 32, 18
+    draw.rounded_rectangle((bar_x, bar_y, bar_x + bar_w, bar_y + bar_h),
+                           radius=6, outline=_MUTED, width=2)
+    filled = int(bar_w * max(0.0, min(100.0, percent)) / 100.0)
+    if filled > 4:
+        draw.rounded_rectangle((bar_x, bar_y, bar_x + filled, bar_y + bar_h),
+                               radius=6, fill=color)
+    if raw_percent is not None:
+        draw.text((width - 16, bar_y - 24), f"{percent:.0f}%", font=_font(16),
+                  fill=color, anchor="rs")
+
+    return image
+
+
+def render_card(payload: dict, size: tuple[int, int] = DEFAULT_SIZE,
+                profile: DisplayProfile = DEFAULT_PROFILE) -> Image.Image:
+    """D-394: display/info 의 단일 입구 — kind 가 카드를 고른다.
+
+    CORE 는 ``kind`` 필드로 카드를 구분한다(없으면 웨이크 카드, 호환).
+    다른 장치의 렌더러도 이 디스패치와 같은 계약을 따른다.
+    """
+    if payload.get("kind") == "drive":
+        return render_drive(payload, profile.size)
+    return render(payload, profile.size)
+
+
 # --- D-190: boot card -----------------------------------------------------
 #
 # rosy-boot-display.service draws this outside CORE (D-161) from the boot
@@ -374,13 +458,14 @@ def _dim(color: tuple[int, int, int]) -> tuple[int, int, int]:
 
 
 def render_boot(payload: dict, size: tuple[int, int] = DEFAULT_SIZE,
-                frame: int = 0) -> Image.Image:
+                frame: int = 0, profile: DisplayProfile = DEFAULT_PROFILE) -> Image.Image:
     """Boot card: name, release, stage (failed unit), address, battery, AP (and its QR).
 
     D-385: while the stage is still waiting (BOOTING·PROVISIONED) the stage title
     breathes — two brightness steps at the caller's frame rate (0.5 Hz on the
     device). Finished states (CORE_READY·FAILED·SETUP) hold still: an arrived
-    robot does not fidget.
+    robot does not fidget. D-394: a profile without animation (e-ink) ignores
+    the frame entirely.
     """
     width, _height = size
     image = Image.new("RGB", size, _BG)
@@ -389,7 +474,7 @@ def render_boot(payload: dict, size: tuple[int, int] = DEFAULT_SIZE,
     qr_left, qr_bottom = _draw_qr(draw, matrix, width) if matrix else (width, 0)
     lines = boot_lines(payload)
     kind = str(payload.get("stage") or "BOOTING").split(":", 1)[0]
-    if frame % 2 == 1 and kind in ("BOOTING", "PROVISIONED"):
+    if profile.animation and frame % 2 == 1 and kind in ("BOOTING", "PROVISIONED"):
         lines = [(slot, text, _dim(color) if slot == "stage" else color)
                  for slot, text, color in lines]
     for slot, text, color in lines:

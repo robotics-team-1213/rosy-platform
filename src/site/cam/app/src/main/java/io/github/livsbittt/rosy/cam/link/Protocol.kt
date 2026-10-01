@@ -49,6 +49,9 @@ object Protocol {
     const val CLOSE_UNAUTHORIZED = 4401
     const val CLOSE_REPLACED = 4409
 
+    /** D-341 11: the credential is valid but not allowed (this source, this site). Final: retry cannot help. */
+    const val CLOSE_FORBIDDEN = 4403
+
     /** RFC 6455 "Try Again Later": the receiver is overloaded; always retryable. */
     const val CLOSE_TRY_AGAIN = 1013
 
@@ -56,7 +59,8 @@ object Protocol {
     const val CLOSE_CREDENTIAL_UNKNOWN = 4503
 
     // Transition exception, remove one release after every site runs 1013 receivers (D-341 §11).
-    private val TRANSIENT_4400 = setOf("", "no hello")
+    // Equal to failure-classes.v1.json close_4400_retry_reasons (FailureClassTest asserts it).
+    internal val TRANSIENT_4400 = setOf("", "no hello")
 
     /**
      * Close 4400 is an incompatibility (wrong `proto`, hello schema) for every reason except exactly

@@ -2,7 +2,7 @@
 module: cam
 logical_modules: []
 owner: SITE
-last_verified: { commit: "6588c4a8", date: 2026-10-01 }
+last_verified: { commit: "f449f157", date: 2026-10-01 }
 gates:
   SOURCE:
     state: GO
@@ -20,7 +20,7 @@ gates:
     state: PARKED
   FIELD:
     state: PARKED
-adrs: [D-261, D-341, D-370, D-374, D-377]
+adrs: [D-261, D-341, D-370, D-374, D-377, D-391]
 plans:
   - docs/plans/2026-09-26-overhead-camera-android-app-design.md
   - docs/plans/2026-09-30-app-identity-rename-plan.md
@@ -33,6 +33,7 @@ plans:
 - 와이어 이름(`rosy-overhead/1`, `/overhead/v1/frames`, `ROF1`, `_rosy-overhead._tcp`, `rosyov://`, `OverheadLink`·`OverheadServiceRecord`·`OverheadServerDiscovery`)은 그대로다.
 - 이전 이력(2026-09-30 이전)은 `src/site/vision/logs.md`에 있다.
 - SOURCE/LOCAL은 JVM 단위 시험과 debug APK 빌드 범위에서 GO다. DEVICE는 새 APK 설치·재페어링 전이라 PARKED다.
+- 2026-10-01 D-391 공유 벡터(`feat/cam-d391-shared-vectors`): Kotlin 시험이 `failure-classes.v1.json`(28)·`site-link.v1.json`(42)을 모두 돌린다. `tls_host`는 `.local` 이름만 받고, 시스템 DNS 경로는 없앴다. 닫힘 4403은 최종이다(재페어링 안내 없음). JVM 시험 250 passed.
 - 2026-10-01 D-391 E1/E2(`feat/cam-site-link-mdns`, main 미병합): 저장은 사이트 연결 기록(`SiteLink`)이고 IP를 다이얼 대상으로 저장하지 않는다. 접속마다 mDNS로 `tls_host`를 찾고(→ `manual_host` "수동 주소" → `not_discovered`), SNI·호스트명 검사는 `tls_host`다. 태블릿 실기와 독립 리뷰(M1–M3, m1–m9)를 반영해 JVM 시험 235 passed. 태블릿(Android 11)에서 이름 재발견과 `not_discovered` 진단을 확인했다.
 
 ## 다음 gate

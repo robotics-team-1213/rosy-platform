@@ -347,7 +347,7 @@ def test_timeout_is_a_failed_step(tmp_path):
         raise subprocess.TimeoutExpired(cmd, kw["timeout"])
 
     assert deliver.main(["push", "robot", rev, "--models", str(models), *SSH],
-                        runner=hang) == 1
+                        runner=hang) == 78   # the connect-phase timeout is "unreachable"
     assert len(calls) == 1
 
 

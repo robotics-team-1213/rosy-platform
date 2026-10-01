@@ -94,7 +94,9 @@ SIZE_VERDICTS = {
         "projection joined the existing Fleet mission journal and read-only status surface (19468), and the "
         "D-375 console map-fit overlay joined as its own modules (server/site_lanes.py, web/map-fit.js pure, "
         "web/map-fit-view.js DOM, each under the D-362 budget); verdict unchanged; re-judged "
-        "2026-10-01 at 21476: main had reached 20655, then D-341 camera pairing joined as its own "
+        "2026-10-01 at 20655 after the D-359 theme/palette, D-375 map-fit view and D-391/D-370 site-link "
+        "fixes landed in console and transport (still split, unscheduled); re-judged "
+        "2026-10-01 at 21476: D-341 camera pairing joined as its own "
         "modules (server/pairing.py state, pairing_store.py digests, pairing_routes.py) plus tests, "
         "app.py only gained the install call; verdict unchanged. Split remains "
         "unscheduled (docs/plans/2026-09-30-er2-mission-feedback-loop.md)",
@@ -120,7 +122,7 @@ SIZE_VERDICTS = {
         "2026-10-01 at 887 after idempotent per-attempt phase projection joined the Mission event transaction",
     ),
     "contracts/foundation/core_common/protocol/schemas.py": (
-        1_067,
+        1_092,
         "accept: the D-18 single contract source — every envelope, event and capability model in one "
         "importable place; per-domain schema files would fork the version pin that "
         "test_protocol_version_alignment guards. Re-judged 2026-09-30 at 1000 lines after the bounded "
@@ -129,7 +131,7 @@ SIZE_VERDICTS = {
         "LineFollowStatus.clearance_m (D-344 §11, one field); re-judged 2026-10-01 at 1067 for the "
         "bounded UDS v2 phase receipt and read-only Mission phase progress schemas, which remain in the "
         "single contract source guarded by protocol alignment. The hard-tier zero-growth rule prevents "
-        "silent expansion. ROS-free, host-testable (X5)",
+        "silent expansion. ROS-free, host-testable (X5); re-judged 2026-10-01 at 1092 for the calibration-session RobotActivity/ActivityOwner models on robot state (still accept)",
     ),
     "site/fleet/fleet/server/task_store.py": (
         1060,

@@ -109,14 +109,20 @@ only match certificates the proxy sends, so the proxy must serve leaf + CA. Cadd
 serves the whole `site_cert` file, so build it once with
 `cat site.crt site-ca.crt > site-fullchain.crt` and point the `site_cert`
 secret at `site-fullchain.crt`. Then print the link and QR on the site host:
-`ROSY_OVERHEAD_TOKEN=<phone-token> rosy-vision pair-link --host <fqdn-or-ip>
+`ROSY_OVERHEAD_TOKEN=<phone-token> rosy-vision pair-link --host <tls_host>
 --port <published-8443> --source ceiling_north --pin-ca <secrets>/site-ca.crt
 --pin-cert <secrets>/site-fullchain.crt`. Both options are required: the
 command refuses (exit 2, with this recipe) unless the served file carries that
 CA above the leaf. `rosy-vision receive --tls-cert` pins the CA of a leaf + CA
 file and otherwise prints the link without a pin and says why. The app still
 accepts a leaf pin from links printed before this rule, for compatibility only.
-An IP host needs that IP in the certificate SAN.
+The link host is the `tls_host` name by default (`<name>.local` or the site FQDN); an IP
+is only a fallback (D-391). An IP host is stored on the phone as a "수동 주소", breaks when
+the site subnet changes, needs that IP in the certificate SAN, and makes `pair-link` print
+a WARNING. `rosy-vision receive` puts `<hostname>.local` (or `--tls-host`) in the link and
+prints the route-probe address only as an `IP fallback: <robot-ip>` diagnostic line.
+`--tls-host` accepts only `<name>.local`; for a site FQDN or an IP pass `--advertise-host`.
+When `--host` is a specific bind address, `receive` still links the name and says: "link host is <name>.local (D-391); use --advertise-host <ip> to pair by IP (fallback, needs an IP SAN)".
 Treat the URI as a credential: do not paste it into tickets, logs, or shell
 history. Use the QR/pairing screen over a trusted local channel.
 
@@ -253,6 +259,26 @@ pinned in the app. Discovery alone still grants nothing. Until D-341 is
 implemented, and as the rollback path if pairing fails at a site, use a
 `static` source with the manual `rosyov://...&tls=1` link, which still needs
 the site CA installed in Android's user credentials.
+
+### Preflight (D-391 3)
+
+Run the consistency check on the Ubuntu host before `docker compose up`; it
+exits non-zero and prints a reason and fix hint per failed check:
+
+```sh
+python3 /opt/rosy/site/site_preflight.py --site-cert <secrets>/site.crt
+python3 /opt/rosy/site/site_preflight.py --site-cert <secrets>/site.crt --json
+```
+
+It reads `ROSY_SITE_TLS_HOST` (flag `--tls-host`, else the shell, else
+`/etc/rosy/site/.env`) and checks: `site_cert` is a leaf (not a CA) followed by
+a CA; the leaf has a DNS SAN equal to `tls_host` (exact, case-insensitive, a
+wildcard does not count); `tls_host` is a `<name>.local` name; the
+`--tls-host` that the advertise units publish equals it; and the Caddyfile
+site address names no other host (a port-only `:8443` address passes). Only the
+first Caddyfile site block's addresses are read. IP SANs are not checked: they
+go stale on renumber, and an IP SAN is needed only for a `manual_host`
+fallback link, which this preflight does not cover.
 
 ## Prepare an Ubuntu host
 
@@ -665,10 +691,20 @@ service user. It prints the remaining steps:
   site can be revoked without touching anyone else's access.
 - **Host keys.** Record each robot's host key in
   `/etc/rosy/model-watch/known_hosts` from a trusted network
-  (`StrictHostKeyChecking=yes`).
+  (`StrictHostKeyChecking=yes`), **under the robot id** (the config's `name`),
+  not the address: `ssh-keyscan -t ed25519 <hostname>.local | sed 's/^[^ ]* /<robot-id> /'
+  >> /etc/rosy/model-watch/known_hosts`. The watcher passes
+  `-o HostKeyAlias=<robot-id>`, so the pin follows the robot when the network is
+  renumbered. A mismatch is still refused (exit 79); nothing is auto-accepted.
+  An older address-keyed entry is reported by `rosy_ml doctor --watch-config`,
+  which prints the one command that copies it under the id:
+  `rosy_ml repin --watch-config /etc/rosy/model-watch.yaml <robot-id>`
+  (it never rewrites `known_hosts` on its own).
 - **Config.** `sudoedit /etc/rosy/model-watch.yaml`: robots, `store`,
-  `replay_root`. The config names robot addresses and so stays out of the
-  checkout.
+  `replay_root`. A robot's `host` is its mDNS name `<hostname>.local`
+  (avahi, `rosy-pinky-<4 chars>`), not an IP: the site network renumbers and
+  an IP then fails silently for hours. An IP still works but doctor flags it.
+  The config names robot hosts and so stays out of the checkout.
 - **Store access.** People and tools that write the store (publish.py,
   trainers dropping into `models/inbox/`) need write access to it: members of
   the `rosy-model-watch` group on a local store, or the share's own
@@ -699,7 +735,20 @@ Exit codes in the journal: `0` finished with nothing waiting on a retry (a
 failed intake or a held robot is a recorded outcome), `1` an intake
 infrastructure error, a store move or a robot push failed and will be retried,
 `2` config or state file error, `5` the listing failed (store missing or
-unreadable, or the HF listing failed) and nothing was recorded. The state
+unreadable, or the HF listing failed) and nothing was recorded, `6` intake
+cannot run on this host (venv package missing). A robot that cannot be reached
+makes the run exit with its own code and the unit show `failed` (the timer keeps
+firing every 10 minutes): `77` its host name did not resolve (DNS / mDNS, or the
+name in the config is wrong), `78` connection refused, timed out or no route
+(robot off or on another network), `79` its host key is unknown or changed
+(never auto-accepted: check the robot, then re-pin it). The journal has one line
+per robot, e.g. `pinky-a: dns failure (exit 77, 3 in a row): ...`. A network
+failure spends no delivery attempt, so a long outage never turns into
+`gave_up`. The last failure per robot (kind, exit, time, consecutive count) is
+kept in `state.json` under `robot_failures`, cleared when the robot answers
+again, and shown by `rosy_ml status --watch-config /etc/rosy/model-watch.yaml`
+and `rosy_ml store-status --watch-config ...`. `rosy_ml doctor --watch-config`
+resolves every configured host and reports the ones that do not. The state
 lives in `/var/lib/rosy-model-watch/state.json`; deleting an entry makes the
 next run process it again.
 

@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 from contextlib import AsyncExitStack
+import ipaddress
 import json
 import logging
 import os
@@ -22,6 +23,7 @@ import time
 from pathlib import Path
 from typing import Sequence
 
+from core_common.protocol.discovery_txt import HOSTNAME
 from rosy_vision import protocol
 from rosy_vision.ingest import STATUS_INTERVAL_S, IngestServer
 from rosy_vision.map_register import load_map_paint
@@ -46,6 +48,43 @@ def _detect_advertise_host(host: str) -> str:
         return socket.gethostname()
     finally:
         sock.close()
+
+
+def _is_ip(host: str) -> bool:
+    try:
+        ipaddress.ip_address(host.strip("[]"))
+    except ValueError:
+        return False
+    return True
+
+
+def _warn_ip_host(host: str) -> None:
+    """Pairing links carry a name by default (D-391); an IP is only a bench / manual fallback."""
+    print(
+        f"WARNING: {host} is an IP address. The phone stores it as a \"수동 주소\" (manual_host) fallback "
+        "that is used only when mDNS cannot find the site, and it breaks when the site subnet changes. "
+        "The site certificate also needs this IP as an IP SAN. "
+        "Recommended: --host <tls_host>.local (D-391, D-341 13).",
+        file=sys.stderr,
+    )
+
+
+def _link_host(args: argparse.Namespace) -> str:
+    """Host the pairing link carries: an explicit --advertise-host, else a ``.local`` name (D-391)."""
+    if args.advertise_host:
+        return args.advertise_host
+    if args.tls_host:
+        name = args.tls_host.lower()
+        if not HOSTNAME.fullmatch(name):
+            raise ValueError(f"--tls-host {args.tls_host!r} must be <name>.local; "
+                             "use --advertise-host for a site FQDN or an IP")
+        return name
+    raw = socket.gethostname()
+    name = f"{raw}.local".lower()
+    if not HOSTNAME.fullmatch(name):
+        raise ValueError(f"hostname {raw!r} cannot be a .local name: underscores and dots are not allowed "
+                         "in a .local name; pass --tls-host <name>.local")
+    return name
 
 
 def _print_pairing(uri: str) -> None:
@@ -119,6 +158,8 @@ def _pair_link(args: argparse.Namespace) -> int:
     except (OSError, ValueError) as exc:
         print(f"pair-link: {exc}", file=sys.stderr)
         return 2
+    if _is_ip(args.host):
+        _warn_ip_host(args.host)
     uri = protocol.pairing_uri(args.host, args.port, token, args.source, secure=True, pin=pin)
     print(f"pin: {pin}  (site CA; the phone shows the first 19 characters when it saves the link)")
     _print_pairing(uri)
@@ -160,13 +201,26 @@ async def _run_receive(args: argparse.Namespace) -> int:
         token = secrets.token_urlsafe(24)
         print(f"${args.token_env} is not set; generated a token for this run only")
 
+    try:
+        link_host = _link_host(args)
+    except ValueError as exc:
+        print(f"receive: {exc}", file=sys.stderr)
+        return 2
     server = IngestServer({args.source_name: token})
     ws_server = await server.start(args.host, args.port, ssl_context=_server_ssl_context(args.tls_cert, args.tls_key))
-    advertise_host = args.advertise_host or _detect_advertise_host(args.host)
     pin = _receive_pin(args.tls_cert) if args.tls_cert else None
-    uri = protocol.pairing_uri(advertise_host, args.port, token, args.source_name,
+    uri = protocol.pairing_uri(link_host, args.port, token, args.source_name,
                                secure=bool(args.tls_cert), pin=pin)
     print(f"listening on {args.host}:{args.port}{protocol.WS_PATH}")
+    if _is_ip(link_host):
+        _warn_ip_host(link_host)
+    else:
+        probe = _detect_advertise_host(args.host)
+        print(f"IP fallback: {probe if _is_ip(probe) else 'unknown (no route)'}  "
+              "(diagnostic only; not in the link)")
+        if not args.advertise_host and args.host not in ("0.0.0.0", "::", ""):
+            print(f"link host is {link_host} (D-391); use --advertise-host <ip> to pair by IP "
+                  "(fallback, needs an IP SAN)")
     _print_pairing(uri)
 
     stats_file = args.stats_jsonl.open("a", encoding="utf-8") if args.stats_jsonl else None
@@ -294,7 +348,10 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         "--source-name", default="overhead-1", help="source name shown in the printed pairing URI"
     )
     receive.add_argument("--stats-jsonl", type=Path, default=None)
-    receive.add_argument("--advertise-host", default=None)
+    receive.add_argument("--advertise-host", default=None,
+                         help="explicit host for the pairing link (an IP is a manual fallback, D-391)")
+    receive.add_argument("--tls-host", default=None,
+                         help="<name>.local for the pairing link; default is this host's name + .local")
     receive.add_argument("--save-latest", type=Path, default=None, metavar="DIR")
     receive.add_argument("--tls-cert", type=Path, default=None)
     receive.add_argument("--tls-key", type=Path, default=None)
@@ -319,7 +376,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         "pair-link",
         help="print a pinned wss pairing link (and QR) for a site TLS proxy; the token comes from --token-env",
     )
-    link.add_argument("--host", required=True, help="address the phone dials: site FQDN or IP in the cert SAN")
+    link.add_argument("--host", required=True, help="tls_host the phone dials (<name>.local or site FQDN); an IP is a manual fallback and warns")
     link.add_argument("--port", type=int, required=True, help="published TLS port, e.g. the proxy's 8443")
     link.add_argument("--source", required=True, help="camera source id from site-cameras.yaml")
     link.add_argument("--token-env", default="ROSY_OVERHEAD_TOKEN")

@@ -44,6 +44,15 @@ android {
                 "rosy.discovery.vectors",
                 rootProject.file("../../../test/fixtures/protocol/discovery-txt.v1.json").absolutePath,
             )
+            // D-391 shared vectors, also read by core_common failure_class / site_link.
+            it.systemProperty(
+                "rosy.failure.vectors",
+                rootProject.file("../../../test/fixtures/protocol/failure-classes.v1.json").absolutePath,
+            )
+            it.systemProperty(
+                "rosy.sitelink.vectors",
+                rootProject.file("../../../test/fixtures/protocol/site-link.v1.json").absolutePath,
+            )
             // D-370 icon sources; LauncherIconParityTest compares the launcher drawables to them.
             it.systemProperty(
                 "rosy.icons.dir",

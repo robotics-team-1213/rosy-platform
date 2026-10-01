@@ -26,7 +26,7 @@ Moved out of `src/site/overhead/android` on 2026-09-30 (D-374 stage 1), then ren
 ### Working In This Directory
 
 - Wire names follow the wire, not the app (D-374 3항, D-377 4항): keep `OverheadLink`, `OverheadServiceRecord`, `OverheadServerDiscovery`, `rosy-overhead/1`, `/overhead/v1/frames`, `ROF1`, `_rosy-overhead._tcp`, `rosyov://` and the `rosy.overhead.vectors` test property unchanged.
-- Shared vectors: `test/fixtures/protocol/overhead-ingest.v1.json` (also read by `src/site/vision/test/test_protocol.py`) and `test/fixtures/protocol/discovery-txt.v1.json`. Do not edit one side only.
+- Shared vectors: `test/fixtures/protocol/overhead-ingest.v1.json` (also read by `src/site/vision/test/test_protocol.py`) `test/fixtures/protocol/discovery-txt.v1.json`, and the D-391 `failure-classes.v1.json` / `site-link.v1.json` (also read by `core_common` `failure_class.py` / `site_link.py`). Do not edit one side only.
 - The launcher icon is a copy of `src/hmi/web_common/icons/cam.svg` (D-370 3항); `LauncherIconParityTest` checks it.
 - Harness (D-61): read `progress.md` and `index.md` first. After a change, append `logs.md`, overwrite `progress.md` if a gate moved, then run `python tools/harness/rosy_harness.py generate` from the repo root.
 

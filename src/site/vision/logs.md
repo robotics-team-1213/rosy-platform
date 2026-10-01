@@ -261,3 +261,16 @@
 - 변경: `test/architecture/test_app_roles.py`의 Vision 경계가 sighting 쓰기 말고도 D-341 12항의 `/api/fleet/pairing/v1/credentials` 읽기를 허용한다(다른 Fleet 경로는 여전히 금지). `test_module_structure.py`에 `ingest.py` 671줄 판정(accept: 한 연결 표를 공유하는 한 소유자, digest 저장·동기화 스레드는 `pairing_sync.py`)과 `fleet` 패키지 재판정(21476)을 적었다. 비밀 스캔이 이름만 보고 잡은 호출 자리를 고쳤다(`cli.py` `known_tokens`, 종단 시험 `poll_auth=`, Fleet 시험 `shared_secret`) — 스캐너는 그대로(D-256).
 - 증거: `test/architecture/` 75 passed + 남은 1 failed는 main에 이미 있던 `schemas.py` 1092줄 판정. `test/test_release_boundary_guards.py` 72 passed + 남은 1 failed는 main의 `docs/logs.md:4077`·`docs/plans/2026-10-01-gemini-robotics-samples-research.md:5`(이 브랜치 파일 아님). vision 224 passed, foundation 389 passed.
 - gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · fix(vision): 페어링 링크는 이름(tls_host)을 기본으로, IP는 경고하는 예비로
+
+- 변경: `cli.py` — `receive`는 링크 호스트를 `--advertise-host` > `--tls-host` > `<hostname>.local`로 정하고(D-391 `.local` 규칙으로 검증), 8.8.8.8 경로 탐지 IP는 `IP fallback:` 진단 줄로만 낸다. `pair-link --host <ip>`는 "수동 주소"·서브넷 변경·IP SAN을 설명하는 WARNING을 stderr에 내고 종료 코드 0을 유지한다. `deploy/site/README.md`·사이트 runbook §3에 "이름 기본, IP는 예비"를 적었다.
+- 증거: `python -m pytest src/site/vision/test -q` (아래 결과), 새 시험 `test_overhead_link_host_name_first.py`.
+- gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · fix(vision): receive 링크 호스트 안내와 오류 문구 보강
+
+- 변경: 특정 `--host` 주소로 바인드해도 링크는 이름이며 "link host is <name>.local (D-391); use --advertise-host <ip> to pair by IP (fallback, needs an IP SAN)"라고 한 줄 알린다. `--tls-host`는 `<name>.local`만 받고(FQDN은 `--advertise-host`) 오류가 그쪽을 가리킨다. 호스트명 오류는 원래 `gethostname()` 값과 밑줄·점 불가를 말하고, 경로 탐지 실패는 `IP fallback: unknown (no route)`로 쓴다.
+- 증거: `python -m pytest src/site/vision/test -q` 206 passed (2026-10-01 Windows).
+- gate 변화: 없음.
+

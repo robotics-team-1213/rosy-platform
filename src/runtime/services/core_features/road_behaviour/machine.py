@@ -21,8 +21,8 @@ from typing import Optional
 
 from core_features.road_behaviour.model import (
     EVENT_OBSTACLE_HOLD,
-    EVENT_STOP_LINE_OVERSHOOT,
-    EVENT_TURN_TIMEOUT,
+    NOTICE_STOP_LINE_OVERSHOOT,
+    NOTICE_TURN_TIMEOUT,
     JUNCTION_STATES,
     BehaviourInputs,
     BehaviourMemory,
@@ -269,7 +269,7 @@ def _transition(mem, inp, p, static, mover, events) -> tuple:
         line = inp.stop_line_distance.value
         if line <= p.d_stop_max:
             if line < p.d_stop_min:
-                events.append(EVENT_STOP_LINE_OVERSHOOT)
+                events.append(NOTICE_STOP_LINE_OVERSHOOT)
             return S.STOP_AT_LINE, 0.0, "stop_at_line", choice, False
         return S.APPROACH, p.v_app, "approach", choice, False
 
@@ -299,7 +299,7 @@ def _transition(mem, inp, p, static, mover, events) -> tuple:
     if turn.target_lane_acquired:
         return S.LANE_FOLLOW, p.v_cross, "turn_complete", None, True
     if turn.travelled_m > p.arc_timeout_factor * turn.arc_length_m:
-        events.append(EVENT_TURN_TIMEOUT)
+        events.append(NOTICE_TURN_TIMEOUT)
         return S.FAULT, 0.0, "turn_target_lane_not_acquired", None, False
     return S.CROSS, p.v_cross, "cross", mem.path_choice, False
 

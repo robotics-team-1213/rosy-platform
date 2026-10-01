@@ -18,6 +18,8 @@ enum class Problem {
     /** D-370 5.3 `conflict`: the site name is advertised from more than one address. */
     SITE_CONFLICT,
     UNAUTHORIZED,
+    /** Close 4403: valid credential, not allowed here. Final; the site operator must allow it (no re-pair). */
+    FORBIDDEN,
     REPLACED,
     PROTOCOL_MISMATCH,
     BUSY,
@@ -90,6 +92,8 @@ object ProblemGuide {
             }
             LinkError.Unauthorized -> Guidance(Problem.UNAUTHORIZED, NextStep.OPEN_SETTINGS, "HTTP 401 / close 4401", retrying)
             LinkError.Replaced -> Guidance(Problem.REPLACED, NextStep.OPEN_SETTINGS, "close 4409", retrying)
+            // Re-pairing cannot help: the token is fine, the site does not allow this camera (rosy-00, 2026-10-01).
+            LinkError.Forbidden -> Guidance(Problem.FORBIDDEN, NextStep.NONE, "close 4403", retrying)
             LinkError.ProtocolMismatch -> Guidance(Problem.PROTOCOL_MISMATCH, NextStep.NONE, "close 4400", retrying)
             LinkError.CredentialUnknown -> Guidance(Problem.SITE_CHECKING, NextStep.NONE, "close 4503", retrying)
             is LinkError.Busy -> Guidance(Problem.BUSY, NextStep.NONE, "close ${error.code} ${error.reason}".trim(), retrying)

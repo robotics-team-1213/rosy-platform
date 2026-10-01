@@ -894,3 +894,10 @@
 - 변경: `server/pairing.py`의 공개 메서드를 `threading.RLock` 하나로 감쌌다. FastAPI의 동기 라우트(승인·거절·회수·조회·목록)는 스레드 풀에서 돌아, 같은 요청에 동시 승인이 들어오면 자격이 두 개 생길 수 있었다. `test/architecture/test_module_structure.py`의 `fleet` 패키지 판정을 21476줄로 다시 적었다(main이 이미 20655로 넘었고, 페어링은 자기 모듈 셋). 비밀 스캔이 이름만 보고 잡은 시험 변수 `shared` → `shared_secret`.
 - 증거: 새 `test_concurrent_approvals_issue_exactly_one_credential`(8개 스레드가 장벽 뒤 같은 코드로 승인) — 잠금 전 3회 연속 실패, 잠금 뒤 3회 통과. 페어링 시험 43 passed. 잠금 전 `src/site/fleet/test/` 1037 passed, 6 skipped(164 s); 잠금 뒤 전체 결과는 커밋 기록 참조.
 - gate 변화: 없음.
+
+## 2026-10-01 - D-392 P3 closed model-tool catalog
+
+- Added a Fleet-owned closed catalog for `get_mission_status`, `propose_replan`, and the D-331 one-shot `propose_pick_place` candidate tool. Provider declarations are projections from that catalog; dispatch accepts only feedback-enabled entries and derives authority from the persisted turn scope.
+- All catalog entries are explicitly non-device-action tools. Unknown and low-level motion, gripper, Action, cancel, stop, E-stop, rearm, and dynamic OpenAPI names are absent. Tool schemas are returned as fresh objects with closed argument sets.
+- Verification: 108 focused tests passed; flake8 and `git diff --check` passed. Harness lint: 0 errors, 24 existing `last_verified` drift warnings. SOURCE/LOCAL only; no ROS-SIM, ARTIFACT, DEVICE, or FIELD gate.
+

@@ -181,7 +181,8 @@ def main(argv=None) -> int:
         print(f"refused: unsafe host or user {args.host!r} {args.user!r}", file=sys.stderr)
         return 2
     try:
-        opts = operator_ssh.options(*operator_ssh.resolve(args.identity, args.known_hosts))
+        opts = operator_ssh.options(*operator_ssh.resolve(args.identity, args.known_hosts),
+                                    args.host_key_alias)
     except operator_ssh.SshConfigError as exc:
         print(f"refused: {exc}", file=sys.stderr)
         return 2

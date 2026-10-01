@@ -70,8 +70,8 @@
 
 ## 최근 기록
 
+- 2026-10-01 · uncommitted · test(gateway): D-359 콘솔 프레임·비활성 사유 시험을 현재 계약에 맞춤
 - 2026-10-01 · ce7a3413 · test(host): host-card 가짜 서비스에 idle 보정 lease
 - 2026-10-01 · a527920a · feat(core): 보정 lease 배선과 만료 타이머
+- 2026-10-01 · uncommitted · feat(bridge): D-394 주행 카드 drive_due·drive_payload
 - 2026-10-01 · uncommitted · fix(test): status-inputs 키 집합에 swarm_role 추가 (D-383 뒤치움)
-- 2026-10-01 · uncommitted · feat(bridge): D-385 set_emotion 클라이언트와 표정 래치
-- 2026-10-01 · 0af2f6a2 · fix(core): 장착 해석기가 경고 플래그를 돌려준다 (F9)
