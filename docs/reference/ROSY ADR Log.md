@@ -401,3 +401,4 @@
 | D-403 | Fleet Cell Job 경로: Rosy Cell Job → Fleet 제안(재컴파일 검증)·승인 → Step마다 `CELL_TRANSFER` Action 하나, 정지 세대 의미, D-330 §2 하달 보류는 simulation에서만 ROS-SIM 정지 세대 시험 후 개방, 셀 해시 검사는 OMX owner | Proposed |
 | D-404 | OMX 셋업·티칭 API(시뮬 우선): D-390 pairing·seat·제한 jog + 읽기 전용 TCP(FK) 조회, 마법사는 팔로워 FK 저장, 장치 셀 수락, 실물 장치 API는 닫힘 | Proposed |
 | D-407 | 차선 자율 막힘 복구: 앞물체·차선 상실이 이어지면 관제에 판단 요청(WAIT·RESUME·BACK_AND_RETRY·MANUAL·ABORT), 답이 없으면 뒤 여유 확인 후 짧은 후진과 재판단(최대 2회, 기본 꺼짐) | Proposed |
+| D-408 | 차선 추종 페인트 입력: 학습 모델 바닥 차선(수평선 아래) 기본, 실패 시 프레임 단위 OpenCV 반사 제거 예비, 밝기 문턱은 진단용; 재학습 클래스 재정의; 장치 기본값 불변 | Proposed |
