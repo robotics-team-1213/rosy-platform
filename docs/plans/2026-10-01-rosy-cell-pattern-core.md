@@ -19,6 +19,8 @@ The package does no ROS, I/O, motion or IK. Reachability is the device's job (ro
 
 **Parent:** [roadmap](2026-10-01-rosy-layered-architecture-roadmap.md) P1 (Rosy Cell ADR) and P2.
 
+**Precondition:** D-399 is on local `main` (roadmap P0). Otherwise `adrs: [D-399]` fails harness lint (unknown ADR).
+
 ---
 
 ## Conventions used by every task
@@ -68,7 +70,7 @@ The package does no ROS, I/O, motion or IK. Reachability is the device's job (ro
   1. Rosy Cell is a D-399 Application at `src/site/cell`, package `rosy_cell`, display name "Rosy Cell" (D-377).
   2. Two files. `cell.yaml` (schema `rosy_cell.cell/1`) holds taught three-point frames as raw points plus thresholds, stations, and `approach_clearance_m`. `recipe.yaml` (schema `rosy_cell.recipe/1`) holds box, pallets→frame ids, mode, approach side, gap, layers and slip sheet.
   3. Both files get a content hash (sha256 of canonical JSON). A Job records both hashes, and a device must refuse a Job whose cell hash is not the one it was validated against.
-  4. A Job is an ordered list of Steps: `pick`, `place` (item `box` or `slip_sheet`, target pose in the robot base frame, `approach_z`) and `pallet_done`. Steps go to the device's Action Gateway; Rosy Cell never sends a Motion Intent and never decides IK or reachability.
+  4. A Job is an ordered list of Steps: `pick`, `place` (item `box` or `slip_sheet`, target pose in the robot base frame, `approach_z`) and `pallet_done`. Rosy Cell submits the Job to Fleet as a Mission; Fleet admits it (D-330) and dispatches the Steps to the device (D-336). Rosy Cell never calls the device directly, never sends a Motion Intent and never decides IK or reachability (D-399 §5).
   5. v1 patterns are `grid` (better of 0° and 90°), `split` (0° columns plus a 90° strip) and `mirrored` on any layer for interlock. Also in v1: slip sheets below any layer, several pallets filled in order, and depalletize (the exact reverse).
   6. Thresholds come from config, and geometry defaults come from URDF (D-397 rule).
   Add Alternatives (MoveIt Task Constructor in-app, ROBOTIS "task constructor tab", vendor palletizing UIs) and an Evidence boundary (SOURCE only). **Related decisions:** D-376, D-377, D-386, D-397, D-399.
@@ -94,10 +96,10 @@ git commit -m "docs(adr): D-<n> Rosy Cell application — cell/recipe split, has
 ### Task 2: Package scaffold and registration
 
 **Files:**
-- Create: `src/site/cell/package.xml`, `src/site/cell/setup.py`, `src/site/cell/setup.cfg`, `src/site/cell/resource/rosy_cell` (empty), `src/site/cell/rosy_cell/__init__.py`, `src/site/cell/test/conftest.py`, `src/site/cell/test/test_package.py`, `src/site/cell/AGENTS.md`, `src/site/cell/progress.md`, `src/site/cell/logs.md`
+- Create: `src/site/cell/package.xml`, `src/site/cell/setup.py`, `src/site/cell/setup.cfg`, `src/site/cell/resource/rosy_cell` (empty), `src/site/cell/rosy_cell/__init__.py`, `src/site/cell/test/conftest.py`, `src/site/cell/test/test_cell_package.py`, `src/site/cell/AGENTS.md`, `src/site/cell/progress.md`, `src/site/cell/logs.md`
 - Modify: `tools/harness/harness.yaml`, `test/architecture/test_folder_package_names.py`, `test/architecture/test_target_layout.py`
 
-- [ ] **Step 1: Write the failing test** `src/site/cell/test/test_package.py`
+- [ ] **Step 1: Write the failing test** `src/site/cell/test/test_cell_package.py`
 
 ```python
 from rosy_cell import SCHEMA_CELL, SCHEMA_RECIPE
@@ -289,6 +291,18 @@ Add the ADR id from Task 1 to `adrs:` in `progress.md`.
 
 In `test/architecture/test_folder_package_names.py`, add `"site/cell": "rosy_cell",` to `FOLDER_TO_PACKAGE`, next to `"site/vision"`. In `test/architecture/test_target_layout.py`, add `"site/cell": "site/cell",` to `TARGET`, next to `"site/vision": "site/vision"`.
 
+In `.github/workflows/ci.yml`, right after the `Test (Rosy Vision receiver)` step, add:
+
+```yaml
+      # Rosy Cell 코어는 ROS·네트워크 없이 돈다(D-399 Application). 기본 이름 겹침이 없도록 따로 돈다.
+      - name: Test (Rosy Cell core)
+        run: python3 -m pytest src/site/cell/test -q
+```
+
+In `src/AGENTS.md`, make three edits: add `rosy_cell` to the ament_python list; change `site (Fleet, Rosy Vision, Rosy Cam, Games)` to `site (Fleet, Rosy Vision, Rosy Cell, Rosy Cam, Games)`; and add a row `| site/cell | rosy_cell (D-377 app rule rosy_<word>) |` under the `site/vision` row of the folder→package table. In `src/site/AGENTS.md`, add a row `| cell/ | ROS package rosy_cell (Rosy Cell, D-377, D-399 Application): palletizing recipes and taught cell frames compiled into a Job; submits to Fleet, never to a device |` under `vision/`.
+
+Add these three files to the Step 6 `git add` line.
+
 - [ ] **Step 5: Run the tests.**
 
 ```bash
@@ -305,7 +319,7 @@ Expected: `1 passed`, `known_failures.py` exit 0 (no NEW), lint `0 error(s)`. If
 ```bash
 python tools/harness/rosy_harness.py generate
 git status --short   # stage only the files listed in this task plus src/site/cell/index.md and STATUS.md if generate changed them
-git add src/site/cell tools/harness/harness.yaml test/architecture/test_folder_package_names.py test/architecture/test_target_layout.py
+git add src/site/cell tools/harness/harness.yaml test/architecture/test_folder_package_names.py test/architecture/test_target_layout.py .github/workflows/ci.yml src/AGENTS.md src/site/AGENTS.md
 git commit -m "feat(cell): rosy_cell ament_python scaffold and harness registration"
 ```
 
@@ -313,7 +327,7 @@ git commit -m "feat(cell): rosy_cell ament_python scaffold and harness registrat
 
 ### Task 3: Taught frames (`geometry.py`)
 
-**Files:** Create `src/site/cell/rosy_cell/geometry.py`, Test `src/site/cell/test/test_geometry.py`
+**Files:** Create `src/site/cell/rosy_cell/geometry.py`, Test `src/site/cell/test/test_cell_frame.py`
 
 - [ ] **Step 1: Write the failing test**
 
@@ -358,7 +372,7 @@ def test_degenerate_teaching_is_rejected(x_point, plane_point):
         Frame.from_three_points((0, 0, 0), x_point, plane_point, **RULES)
 ```
 
-- [ ] **Step 2: Run it.** `python -m pytest src/site/cell/test/test_geometry.py -q -p no:cacheprovider`. Expected: FAIL, `ModuleNotFoundError: No module named 'rosy_cell.geometry'`.
+- [ ] **Step 2: Run it.** `python -m pytest src/site/cell/test/test_cell_frame.py -q -p no:cacheprovider`. Expected: FAIL, `ModuleNotFoundError: No module named 'rosy_cell.geometry'`.
 - [ ] **Step 3: Implement**
 
 ```python
@@ -438,7 +452,7 @@ class Frame:
 ```
 
 - [ ] **Step 4: Run it.** `python -m pytest src/site/cell/test -q -p no:cacheprovider`. Expected: `7 passed` (6 new).
-- [ ] **Step 5: Commit.** `git add src/site/cell/rosy_cell/geometry.py src/site/cell/test/test_geometry.py`, then `git commit -m "feat(cell): three-point taught frame"`.
+- [ ] **Step 5: Commit.** `git add src/site/cell/rosy_cell/geometry.py src/site/cell/test/test_cell_frame.py`, then `git commit -m "feat(cell): three-point taught frame"`.
 
 ### Task 4: Box, pallet and grid patterns (`load.py`, `pattern.py`)
 
@@ -548,6 +562,7 @@ class Placement:
 
 def footprint(box: Box, yaw: float) -> tuple[float, float]:
     """(extent along pallet x, extent along pallet y) for a box at yaw 0 or pi/2."""
+    # yaw is 0 or pi/2 by contract; |sin| > 0.5 just tells the two apart without float equality
     return (box.width, box.length) if abs(math.sin(yaw)) > 0.5 else (box.length, box.width)
 
 
@@ -1295,8 +1310,9 @@ Check the expected numbers:
 ```python
 """Recipe + cell config -> Job: ordered pick/place Steps in the robot base frame.
 
-Steps are what the device's Action Gateway receives (D-399). The device plans, checks
-reachability and owns the final command; this module never does.
+Rosy Cell submits the Job to Fleet as a Mission; Fleet dispatches the Steps to the device
+(D-399 §5, D-336). The device plans, checks reachability and owns the final command; this
+module never does.
 """
 
 from __future__ import annotations

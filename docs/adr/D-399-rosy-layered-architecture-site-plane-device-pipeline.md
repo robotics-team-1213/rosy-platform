@@ -72,7 +72,7 @@ DRIVERS              Pinky Pro HW · Dynamixel OMX-F (+ OMX-L 읽기) · Future 
 
 **추론 위치**
 - 반응형 정책의 추론은 **장치 미들웨어와 같은 호스트**에서 한다. 고정 OMX 작업대라면 그 작업대 PC다.
-- 다른 호스트(사이트 GPU, LAN 추론 서버)에서 추론하려면 후속 ADR 1이 D-231 §4를 명시적으로 개정해야 한다. 그 ADR은 전송 경로도 정해야 한다. D-121이 CORE의 Cyclone을 `lo`로 묶고 있고, DDS 브리지는 D-282 §5에 따라 별도 ADR이 필요하다.
+- 다른 호스트(사이트 GPU, LAN 추론 서버)에서 추론하려면 후속 ADR 1이 D-231 §4를 명시적으로 개정해야 한다. 그 ADR은 전송 경로도 정해야 한다. 로봇의 Cyclone 프로필은 loopback이고(compose·`rosy_env.sh`가 설정하며 D-121은 CORE가 `CYCLONEDDS_URI`를 정하지 않는다고 기록한다), DDS 브리지는 D-282 §5에 따라 별도 ADR이 필요하다.
 
 **LeRobot 개발/녹화 모드**
 - 이 모드에서는 LeRobot이 버스를 단독으로 소유한다(D-299 §2). 이 구조 밖의 별도 모드다.

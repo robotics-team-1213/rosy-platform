@@ -8,19 +8,20 @@
 
 | 항목 | 결정 | 출처 |
 |---|---|---|
-| 층 배치 | Application(사이트) → Site Control Plane(Fleet) → 장치별 Device Runtime → Drivers | D-399 §1 |
+| 층 배치 | Application(사이트) → Fleet → 장치별 장치 미들웨어(D-296 이름) → Drivers | D-399 §1 |
 | CORE의 뜻 | 장치 런타임 이름. Mission·Task는 Fleet | D-399 §1, D-12, D-70 |
 | 미들웨어 | 장치 내부 CycloneDDS, 사이트↔장치 REST/WSS/UDS. Zenoh는 격리해서만 | D-399 §3, D-117 |
 | AI | 숙고형은 사이트 제안, 반응형 정책은 장치의 엔벌로프 스킬 | D-399 §2 |
 | LeRobot | 운영 모드에서는 추론 엔진뿐이고 ROS owner가 버스를 소유. 녹화/개발 모드에서만 LeRobot이 버스 소유 | D-299 |
 | 경로 계획 | MoveIt 2 채택. 위에서 수직으로 잡는 5축 IK 필요 | 이 대화의 사용자 결정, 후속 ADR |
 | 팔레타이징 범위 | 단일 SKU, 격자/혼합(split)/미러 인터락, 슬립시트, 다중 팔레트, 디팔레타이징 | 사용자 결정 |
-| 앱 | Rosy Cell, `src/site/cell`, 패키지 `rosy_cell` (D-377) | D-399 §5 |
+| 앱 | Rosy Cell, `src/site/cell`, 패키지 `rosy_cell` (D-377). Job은 Fleet에 Mission으로 제출하고, Step 하달은 Fleet이 한다 | D-399 §5, D-336 |
+| OMX-F 사양 | 5축+그리퍼, 가반하중 풀리치 100 g / 일반 250 g (ai.robotis.com/omx/hardware_omx.html, 2026-10-01 확인). `open_manipulator` jazzy 5.1.3에 `omx_f` MoveIt 설정(KDL `position_only_ik: True`) | ROBOTIS 1차 출처 |
 
 ## 단계
 
 ```text
-P0 D-399 착지 ─┬─ P1 ADR: Rosy Cell · Motion Intent ── P2 Rosy Cell 코어(SOURCE)
+P0 D-399 착지 ─┬─ P1 ADR: Rosy Cell · Motion Intent · OMX 장치/티칭 API ── P2 Rosy Cell 코어(SOURCE)
                │                                             │
                ├─ P3 ADR+구현: MoveIt / OMX-F Gazebo ────────┼─ P4 OMX Step 실행 API(ROS-SIM)
                │                                             │        │
@@ -36,18 +37,21 @@ P0 D-399 착지 ─┬─ P1 ADR: Rosy Cell · Motion Intent ── P2 Rosy Cell
 - 게이트: `python tools/harness/rosy_harness.py lint` 오류 0, `python -m pytest test/architecture -q` known_failures 대비 NEW 0.
 - 브랜치: `docs/d399-layered-architecture`.
 
-### P1. ADR 두 개 (Proposed)
+### P1. ADR 세 개 (Proposed)
 
 1. **Rosy Cell 애플리케이션**
    - 셀 설정(`cell.yaml`: 3점 프레임, 스테이션, 접근 여유)과 레시피(`recipe.yaml`)를 분리한다.
    - 레시피는 검증할 때 셀 설정의 해시를 고정한다. 셀 설정이 바뀌면 그 레시피는 재검증 전까지 실행할 수 없다.
    - Job = Step 목록(`pick`/`place`/`pallet_done`).
-   - 사이트에 둔다. 장치에는 Step만 제출한다.
+   - 사이트에 둔다. Rosy Cell은 Job을 **Fleet에 Mission으로 제출**하고, Fleet이 승인(D-330)한 뒤 Step을 장치에 하달한다. Rosy Cell이 장치에 직접 제출하지 않는다(D-399 §5, D-336 §2).
 2. **Motion Intent 공통 스키마와 장치별 Arbiter 우선순위 표**
    - Step(사이트 → 장치)과 Motion Intent(장치 안의 스킬 → Arbiter)를 구분한다.
-   - 공통 상위 등급은 EMERGENCY, SAFETY, MANUAL이고, 그 아래는 장치별로 정한다.
+   - D-399가 고정한 것은 정지 계열(EMERGENCY, SAFETY)이 모든 동작 출처보다 위라는 것뿐이다. MANUAL 위치와 진행 중 OMX phase 선점(D-376 §6)은 이 ADR이 정한다.
+3. **OMX 장치·티칭 API**
+   - D-282 §5가 요구하는 OMX 원격 API 계약이다. 셋업·티칭(관절 jog, 리더 팔, 포인트 저장)과 도달성 조회를 다룬다. lease, 인증, 데드맨, 녹화 모드에서의 거부를 함께 정한다.
+   - P3의 도달성 서비스와 P5의 셋업 마법사가 이 ADR에 의존한다.
 
-번호는 쓰기 직전에 `rosy-land-on-main`의 ADR 번호 절차로 정한다.
+번호는 쓰기 직전에 `rosy-land-on-main`의 ADR 번호 절차로 정한다. **P2는 P0가 main에 들어간 뒤 시작한다.** `progress.md`의 `adrs: [D-399]`가 harness lint의 unknown-ADR 검사를 통과하려면 D-399가 main에 있어야 하기 때문이다.
 
 ### P2. Rosy Cell 코어 (ROS 없음, SOURCE)
 
@@ -70,7 +74,7 @@ P0 D-399 착지 ─┬─ P1 ADR: Rosy Cell · Motion Intent ── P2 Rosy Cell
 
 ### P4. OMX Step 실행 API (ROS-SIM)
 
-- D-336 UDS Action API에 Rosy Cell Step 제출 경로를 추가한다. 함께 갖출 것은 다음과 같다.
+- Fleet이 Rosy Cell Mission의 Step을 D-336 UDS Action API로 OMX owner에 하달하는 경로를 추가한다. UDS의 호출자는 계속 Fleet 서비스 UID 하나뿐이다. 함께 갖출 것은 다음과 같다.
   - lease
   - Job 해시 확인
   - 일시정지/재개/취소
