@@ -91,6 +91,10 @@ class LineObserverNode(Node):
         # the evidence is labelled NOMINAL so CORE accepts it only under a driver hold.
         self.declare_parameter('allow_nominal_ground', False, _READ_ONLY)
         self.declare_parameter('nominal_camera_profile_path', '', _READ_ONLY)
+        # D-397 operator layer: a finite value wins over the URDF-nominal file and an
+        # accepted camera_profile record; NaN (default) = no override.
+        self.declare_parameter('camera_pitch_rad_override', math.nan, _READ_ONLY)
+        self.declare_parameter('camera_height_m_override', math.nan, _READ_ONLY)
         self.declare_parameter('gazebo_camera_height_m', 0.0)
         self.declare_parameter('gazebo_camera_pitch_rad', 0.0)
         self.declare_parameter('gazebo_camera_hfov_rad', 0.0)
@@ -235,8 +239,11 @@ class LineObserverNode(Node):
                     throttle_duration_sec=5.0)
                 self._nominal_profile_cache = {}
             # An operator-accepted camera_profile record wins over the file (D-47 addendum).
+            override = {key: float(self.get_parameter(f'camera_{key}_override').value)
+                        for key in ('pitch_rad', 'height_m')}
             self._nominal_profile_cache, source = calibrated(
-                'camera_profile', self._nominal_profile_cache, static_source=path or 'no profile file')
+                'camera_profile', self._nominal_profile_cache, static_source=path or 'no profile file',
+                override={k: v for k, v in override.items() if math.isfinite(v)})
             self.get_logger().info(f'camera profile from {source}')
         return self._nominal_profile_cache
 
