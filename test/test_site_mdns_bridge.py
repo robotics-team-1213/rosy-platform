@@ -75,13 +75,17 @@ import threading  # noqa: E402
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def _site_pki(tmp_path, tls_host):
-    """A site CA and a leaf whose only SAN is tls_host (no IP SAN), as PEM files."""
+def _site_pki(tmp_path, tls_host, *, strict=True):
+    """A site CA and a leaf whose only SAN is tls_host (no IP SAN), as PEM files.
+
+    strict=True follows README "Site certificate profile"; False drops key usage and key
+    identifiers, which OpenSSL's X509_STRICT rejects.
+    """
     pytest.importorskip("cryptography")
     from cryptography import x509
     from cryptography.hazmat.primitives import hashes, serialization
     from cryptography.hazmat.primitives.asymmetric import ec
-    from cryptography.x509.oid import NameOID
+    from cryptography.x509.oid import ExtendedKeyUsageOID, NameOID
 
     now = datetime.datetime.now(datetime.timezone.utc)
 
@@ -92,15 +96,22 @@ def _site_pki(tmp_path, tls_host):
                    .public_key(key.public_key()).serial_number(x509.random_serial_number())
                    .not_valid_before(now - datetime.timedelta(minutes=5))
                    .not_valid_after(now + datetime.timedelta(days=1))
-                   .add_extension(x509.BasicConstraints(ca=ca, path_length=None), critical=True)
-                   .add_extension(x509.SubjectKeyIdentifier.from_public_key(key.public_key()),
-                                  critical=False)
-                   .add_extension(x509.AuthorityKeyIdentifier.from_issuer_public_key(
-                       signer.public_key()), critical=False)
-                   .add_extension(x509.KeyUsage(
-                       digital_signature=not ca, key_cert_sign=ca, crl_sign=ca,
-                       content_commitment=False, key_encipherment=False, data_encipherment=False,
-                       key_agreement=False, encipher_only=False, decipher_only=False), critical=True))
+                   .add_extension(x509.BasicConstraints(ca=ca, path_length=0 if ca else None),
+                                  critical=True))
+        if strict:
+            builder = (builder
+                       .add_extension(x509.SubjectKeyIdentifier.from_public_key(key.public_key()),
+                                      critical=False)
+                       .add_extension(x509.AuthorityKeyIdentifier.from_issuer_public_key(
+                           signer.public_key()), critical=False)
+                       .add_extension(x509.KeyUsage(
+                           digital_signature=not ca, key_cert_sign=ca, crl_sign=ca,
+                           content_commitment=False, key_encipherment=False,
+                           data_encipherment=False, key_agreement=False, encipher_only=False,
+                           decipher_only=False), critical=True))
+            if not ca:
+                builder = builder.add_extension(
+                    x509.ExtendedKeyUsage([ExtendedKeyUsageOID.SERVER_AUTH]), critical=False)
         if san:
             builder = builder.add_extension(x509.SubjectAlternativeName([x509.DNSName(san)]),
                                             critical=False)

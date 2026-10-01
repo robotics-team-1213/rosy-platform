@@ -1,3 +1,10 @@
+# Host-side settings for site-firewall.py, read through `docker compose config` so the env
+# file has one parser (Compose's). Not used by any container.
+x-rosy-site:
+  lan_iface: "${ROSY_SITE_LAN_IFACE:-}"
+  allow_literal_bind: "${ROSY_SITE_ALLOW_LITERAL_BIND:-}"
+  tls_host: "${ROSY_SITE_TLS_HOST:-}"
+
 services:
   fleet:
     image: rosy-site-fleet:${ROSY_SITE_IMAGE_TAG:-local}
@@ -139,7 +146,7 @@ services:
     user: "10001:10001"
     ports:
       # 127.0.0.1 (default) or the 0.0.0.0 wildcard; LAN exposure is limited by interface in
-      # DOCKER-USER (site-firewall.py), so no LAN IP is ever written here.
+      # mangle PREROUTING (site-firewall.py), so no LAN IP is ever written here.
       - "${ROSY_SITE_BIND_ADDRESS:-127.0.0.1}:${ROSY_SITE_HTTPS_PORT:-8443}:8443"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro

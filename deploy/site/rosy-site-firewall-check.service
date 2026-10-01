@@ -1,0 +1,9 @@
+[Unit]
+Description=Check that the ROSY site HTTPS port is still limited to the LAN interface
+After=rosy-site-firewall.service
+# A missing or bypassed filter is logged at error level and closes the port.
+OnFailure=rosy-site-firewall-failclosed.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /opt/rosy/candidate/deploy/site/site-firewall.py check --env-file /etc/rosy/site/site.env --compose-file /opt/rosy/candidate/deploy/site/compose.yaml

@@ -1,53 +1,82 @@
 #!/usr/bin/env python3
 """Run on the Ubuntu site host as root: keep the published HTTPS port on the LAN interface.
 
-Docker-published ports are DNAT-forwarded and skip INPUT (and ufw), so the filter lives
-in Docker's DOCKER-USER chain. It matches the inbound interface *name*, never an address
-or subnet, so the site LAN can change its addresses without a restart or a rule edit.
+The filter sits in mangle PREROUTING, ahead of Docker's DNAT, where the published host
+port is still the destination port. Its own chain returns loopback and the named LAN
+interfaces and drops every other packet addressed to this host. It matches interface
+*names*, never an address or subnet, so the site LAN can renumber without an edit.
 
-  site-firewall.py apply --env-file /etc/rosy/site/site.env [--dry-run]
-  site-firewall.py check --env-file /etc/rosy/site/site.env
+  site-firewall.py apply [--dry-run]     # rosy-site-firewall.service, before Docker
+  site-firewall.py check [--verify-certs] # stack preflight and the periodic check timer
 
-`apply` is idempotent (rosy-site-firewall.service runs it after Docker starts).
-`check` changes nothing; rosy-site-stack.service runs it before Compose and refuses to
-start when the bind address cannot work or the LAN filter is missing.
+The bind address, port, LAN interfaces and tls_host come from `docker compose config`,
+so this script reads site.env exactly as Compose does.
 """
 
 from __future__ import annotations
 
 import argparse
-import errno
 import ipaddress
+import json
 import re
 import shlex
 import socket
+import ssl
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 CHAIN = "ROSY-SITE-INGRESS"
-PARENT = "DOCKER-USER"
+TABLE = "mangle"
+HOOK = "PREROUTING"
+PROXY_PORT = 8443  # the container port Compose publishes
+KEY = re.compile(r"^[A-Z_][A-Z0-9_]*$")
 IFACE = re.compile(r"^(?:[A-Za-z0-9_.-]{1,15}|[A-Za-z0-9_.-]{1,14}\+)$")
 GUIDE = "see deploy/site/README.md, 'LAN access'"
+DEFAULT_ENV = Path("/etc/rosy/site/site.env")
+DEFAULT_COMPOSE = Path("/opt/rosy/candidate/deploy/site/compose.yaml")
+DEFAULT_PUBLIC_ENV = Path("/run/rosy-site/site-public.env")
 
 
 class ConfigError(ValueError):
-    """The site env cannot produce a working, interface-scoped bind."""
+    """The site env cannot produce a working, interface-scoped bind (exit 2)."""
 
 
-def read_env(path: Path) -> dict[str, str]:
-    """KEY=VALUE lines as Compose's --env-file reads them (comments and blanks skipped)."""
-    values = {}
-    for line in path.read_text(encoding="utf-8").splitlines():
-        line = line.strip()
-        if not line or line.startswith("#") or "=" not in line:
+def check_env_keys(path: Path) -> None:
+    """Backstop: only plain KEY=VALUE lines, so systemd and Compose read the same file."""
+    for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
             continue
-        key, value = line.split("=", 1)
-        value = value.strip()
-        if len(value) >= 2 and value[0] == value[-1] and value[0] in "'\"":
-            value = value[1:-1]
-        values[key.strip()] = value
-    return values
+        key = stripped.split("=", 1)[0].strip() if "=" in stripped else ""
+        if not KEY.fullmatch(key):
+            raise ConfigError(f"{path}:{number}: {stripped!r} is not a plain KEY=VALUE line "
+                              "(no 'export', spaces or lowercase in the key)")
+
+
+def compose_config(env_file: Path, compose_file: Path, project: str, run) -> dict:
+    code, out, err = run(["docker", "compose", "--project-name", project, "--env-file",
+                          str(env_file), "-f", str(compose_file), "config", "--format", "json"])
+    if code != 0:
+        raise ConfigError(f"docker compose config failed: {err.strip() or out.strip()}")
+    return json.loads(out)
+
+
+def compose_settings(config: dict) -> dict:
+    """The proxy's published binding and the site values, as Compose resolved them."""
+    ports = [entry for entry in config["services"]["proxy"].get("ports", [])
+             if entry.get("target") == PROXY_PORT]
+    if len(ports) != 1:
+        raise ConfigError(f"the proxy must publish container port {PROXY_PORT} exactly once")
+    extension = config.get("x-rosy-site") or {}
+    secrets = config.get("secrets") or {}
+    return {"bind": ports[0].get("host_ip") or "", "port": int(ports[0]["published"]),
+            "lan_iface": extension.get("lan_iface") or "",
+            "allow_literal_bind": extension.get("allow_literal_bind") == "1",
+            "tls_host": extension.get("tls_host") or "",
+            "secrets": {name: secrets[name]["file"] for name in ("site_cert", "site_key", "site_ca")
+                        if name in secrets}}
 
 
 def address_assigned(address: str) -> bool:
@@ -56,119 +85,127 @@ def address_assigned(address: str) -> bool:
     with socket.socket(family, socket.SOCK_STREAM) as probe:
         try:
             probe.bind((address, 0))
-        except OSError as error:
-            if error.errno == errno.EADDRNOTAVAIL:
-                return False
-            raise
+        except OSError:
+            return False
     return True
 
 
-def site_plan(env: dict[str, str], *, assigned=address_assigned) -> dict:
-    """The bind mode, port and LAN interfaces; ConfigError says why a start would fail."""
-    bind = env.get("ROSY_SITE_BIND_ADDRESS", "").strip() or "127.0.0.1"
+def iface_exists(name: str) -> bool:
+    return Path("/sys/class/net", name).exists()
+
+
+def site_plan(settings: dict, *, assigned=address_assigned, exists=iface_exists) -> dict:
+    """Mode, port and interfaces; ConfigError says why a start would fail."""
+    bind, port = settings["bind"], settings["port"]
+    if not bind:
+        raise ConfigError("the proxy would publish on every IPv4 and IPv6 address; set "
+                          f"ROSY_SITE_BIND_ADDRESS to 127.0.0.1 or 0.0.0.0; {GUIDE}")
     try:
         ip = ipaddress.ip_address(bind)
     except ValueError:
         raise ConfigError(f"ROSY_SITE_BIND_ADDRESS={bind!r} is not an IP address; "
                           f"use 127.0.0.1 (local/tunnel) or 0.0.0.0 (LAN); {GUIDE}") from None
-    raw_port = env.get("ROSY_SITE_HTTPS_PORT", "").strip() or "8443"
-    if not raw_port.isdigit() or not 1 <= int(raw_port) <= 65535:
-        raise ConfigError(f"ROSY_SITE_HTTPS_PORT={raw_port!r} is not a TCP port")
+    if ip.version == 6 and not ip.is_loopback:
+        raise ConfigError(f"ROSY_SITE_BIND_ADDRESS={bind} is not supported: the LAN filter and "
+                          f"robot discovery are IPv4; use 0.0.0.0; {GUIDE}")
     mode = "loopback" if ip.is_loopback else "wildcard" if ip.is_unspecified else "address"
-    if mode == "address" and not assigned(bind):
-        raise ConfigError(
-            f"ROSY_SITE_BIND_ADDRESS={bind} is not assigned on this host (did the site LAN "
-            "change?); Docker would fail with 'cannot assign requested address' and take the "
-            "console, cameras, robots and discovery down together. Set "
-            f"ROSY_SITE_BIND_ADDRESS=0.0.0.0 and ROSY_SITE_LAN_IFACE=<interface>; {GUIDE}")
-    ifaces = [item.strip() for item in env.get("ROSY_SITE_LAN_IFACE", "").split(",")
-              if item.strip()]
-    bad = [item for item in ifaces if not IFACE.fullmatch(item)]
+    if mode == "address":
+        if not assigned(bind):
+            raise ConfigError(
+                f"ROSY_SITE_BIND_ADDRESS={bind} is not assigned on this host (did the site LAN "
+                "change?); Docker would fail with 'cannot assign requested address' and take the "
+                "console, cameras, robots and discovery down together. Set "
+                f"ROSY_SITE_BIND_ADDRESS=0.0.0.0 and ROSY_SITE_LAN_IFACE=<interface>; {GUIDE}")
+        if not settings["allow_literal_bind"]:
+            raise ConfigError(
+                f"ROSY_SITE_BIND_ADDRESS={bind} pins the proxy to one LAN address: it breaks when "
+                "the site LAN changes and the discovery bridge cannot reach it on loopback. Use "
+                f"0.0.0.0, or set ROSY_SITE_ALLOW_LITERAL_BIND=1 to accept that; {GUIDE}")
+    ifaces = [item.strip() for item in settings["lan_iface"].split(",") if item.strip()]
+    bad = [item for item in ifaces if not IFACE.fullmatch(item) or item == "lo"]
     if bad:
         raise ConfigError(f"ROSY_SITE_LAN_IFACE has an invalid interface name: {bad[0]!r}")
     if mode != "loopback" and not ifaces:
         raise ConfigError(
-            f"ROSY_SITE_BIND_ADDRESS={bind} publishes port {raw_port} beyond loopback, but "
-            "ROSY_SITE_LAN_IFACE is empty; name the LAN interface (e.g. wlan0 or eth0) so "
-            f"other interfaces are dropped; {GUIDE}")
-    return {"bind": bind, "mode": mode, "family": ip.version, "port": int(raw_port),
-            "ifaces": ifaces}
-
-
-def jump_rule(port: int) -> list[str]:
-    """Inbound connections DNAT-ed from the published host port (any container port)."""
-    return ["-p", "tcp", "-m", "conntrack", "--ctstate", "DNAT", "--ctdir", "ORIGINAL",
-            "--ctorigdstport", str(port), "-j", CHAIN]
+            f"ROSY_SITE_BIND_ADDRESS={bind} publishes port {port} beyond loopback, but "
+            "ROSY_SITE_LAN_IFACE is empty; name the LAN interface (e.g. wlan0, eth0, or br0 "
+            f"for a bridged LAN) so other interfaces are dropped; {GUIDE}")
+    warnings = [f"interface {name} does not exist now; the filter still admits it by name "
+                "(a bridged LAN needs the bridge name, e.g. br0)"
+                for name in ifaces if not name.endswith("+") and not exists(name)]
+    return {"bind": bind, "mode": mode, "port": port, "ifaces": ifaces, "warnings": warnings}
 
 
 def chain_rules(ifaces: list[str]) -> list[list[str]]:
-    return [["-i", iface, "-j", "RETURN"] for iface in ifaces] + [["-j", "DROP"]]
+    """Loopback (the discovery bridge) and the LAN pass; anything else to this host drops.
+
+    Traffic to container addresses (Docker bridges with br_netfilter) is not LOCAL and passes.
+    """
+    return ([["-i", name, "-j", "RETURN"] for name in ["lo", *ifaces]]
+            + [["-m", "addrtype", "--dst-type", "LOCAL", "-j", "DROP"]])
 
 
 def chain_listing(ifaces: list[str]) -> list[str]:
-    """`iptables -S CHAIN` text for the wanted chain (simple matches print verbatim)."""
+    """`iptables -t mangle -S CHAIN` text for the wanted chain."""
     return [f"-N {CHAIN}"] + [f"-A {CHAIN} " + " ".join(rule) for rule in chain_rules(ifaces)]
 
 
-def fresh_commands(plan: dict) -> list[list[str]]:
-    """The full install on a host without our chain; what --dry-run prints."""
-    tool = "ip6tables" if plan["family"] == 6 else "iptables"
-    commands = [[tool, "-w", "-N", CHAIN], [tool, "-w", "-F", CHAIN]]
-    commands += [[tool, "-w", "-A", CHAIN, *rule] for rule in chain_rules(plan["ifaces"])]
-    commands.append([tool, "-w", "-I", PARENT, "1", *jump_rule(plan["port"])])
-    return commands
+def restore_payload(ifaces: list[str]) -> str:
+    """One iptables-restore --noflush transaction; declaring the chain flushes it atomically."""
+    lines = [f"*{TABLE}", f":{CHAIN} - [0:0]"]
+    lines += [f"-A {CHAIN} " + " ".join(rule) for rule in chain_rules(ifaces)]
+    return "\n".join([*lines, "COMMIT", ""])
 
 
-def _run(argv: list[str]) -> tuple[int, str]:
-    result = subprocess.run(argv, capture_output=True, text=True, check=False)
-    return result.returncode, result.stdout
+def jump_rule(port: int) -> list[str]:
+    return ["-p", "tcp", "--dport", str(port), "-j", CHAIN]
+
+
+def _run(argv: list[str], stdin: str | None = None) -> tuple[int, str, str]:
+    result = subprocess.run(argv, input=stdin, capture_output=True, text=True, check=False)
+    return result.returncode, result.stdout, result.stderr
 
 
 def _port_of(line: str) -> str | None:
     tokens = line.split()
-    return tokens[tokens.index("--ctorigdstport") + 1] if "--ctorigdstport" in tokens else None
+    return tokens[tokens.index("--dport") + 1] if "--dport" in tokens else None
 
 
 def _jumps(listing: str) -> list[str]:
     return [line for line in listing.splitlines()
-            if line.startswith(f"-A {PARENT} ") and line.split()[-2:] == ["-j", CHAIN]]
+            if line.startswith(f"-A {HOOK} ") and line.split()[-2:] == ["-j", CHAIN]]
 
 
-def _parent_listing(tool: str, run) -> str:
-    code, listing = run([tool, "-w", "-S", PARENT])
+def _hook_listing(run) -> str:
+    code, listing, err = run(["iptables", "-w", "-t", TABLE, "-S", HOOK])
     if code != 0:
-        raise RuntimeError(f"{tool} has no {PARENT} chain: start Docker first; a Docker "
-                           "nftables firewall backend is not supported by this helper")
+        raise RuntimeError(f"cannot read {TABLE} {HOOK}: {err.strip()}")
     return listing
 
 
-def apply(plan: dict, run=_run) -> list[list[str]]:
-    """Make the live rules match the plan; returns the mutating commands it ran."""
+def apply(plan: dict, run=_run) -> list[str]:
+    """Make the live rules match the plan; returns the changes it made."""
     if plan["mode"] == "loopback":
         return []
-    tool = "ip6tables" if plan["family"] == 6 else "iptables"
     done = []
+    code, current, _ = run(["iptables", "-w", "-t", TABLE, "-S", CHAIN])
+    if code != 0 or current.splitlines() != chain_listing(plan["ifaces"]):
+        code, _, err = run(["iptables-restore", "-w", "--noflush"], restore_payload(plan["ifaces"]))
+        if code != 0:
+            raise RuntimeError(f"iptables-restore failed: {err.strip()}")
+        done.append("iptables-restore -w --noflush")
 
     def mutate(*argv: str) -> None:
-        command = [tool, "-w", *argv]
-        code, _ = run(command)
+        command = ["iptables", "-w", "-t", TABLE, *argv]
+        code, _, err = run(command)
         if code != 0:
-            raise RuntimeError("failed: " + shlex.join(command))
-        done.append(command)
+            raise RuntimeError(f"failed: {shlex.join(command)}: {err.strip()}")
+        done.append(shlex.join(command))
 
-    listing = _parent_listing(tool, run)
-    code, current = run([tool, "-w", "-S", CHAIN])
-    if code != 0:
-        mutate("-N", CHAIN)
-        current = f"-N {CHAIN}\n"
-    if current.splitlines() != chain_listing(plan["ifaces"]):
-        mutate("-F", CHAIN)
-        for rule in chain_rules(plan["ifaces"]):
-            mutate("-A", CHAIN, *rule)
-    jumps = _jumps(listing)
+    jumps = _jumps(_hook_listing(run))
     port = str(plan["port"])
     if not any(_port_of(line) == port for line in jumps):
-        mutate("-I", PARENT, "1", *jump_rule(plan["port"]))
+        mutate("-I", HOOK, "1", *jump_rule(plan["port"]))
     kept = False
     for line in jumps:  # a changed port leaves an old jump; drop it and any duplicate
         if _port_of(line) == port and not kept:
@@ -182,53 +219,113 @@ def check(plan: dict, run=_run) -> None:
     """Raise unless the live rules already match the plan (changes nothing)."""
     if plan["mode"] == "loopback":
         return
-    tool = "ip6tables" if plan["family"] == 6 else "iptables"
     hint = "run: systemctl restart rosy-site-firewall.service"
-    listing = _parent_listing(tool, run)
-    code, current = run([tool, "-w", "-S", CHAIN])
+    code, current, _ = run(["iptables", "-w", "-t", TABLE, "-S", CHAIN])
     if code != 0 or current.splitlines() != chain_listing(plan["ifaces"]):
-        raise RuntimeError(f"{CHAIN} does not allow only {','.join(plan['ifaces'])}; {hint}")
-    port = str(plan["port"])
-    lines, jumps = listing.splitlines(), _jumps(listing)
+        raise RuntimeError(f"{CHAIN} does not admit only lo,{','.join(plan['ifaces'])}; {hint}")
+    lines = _hook_listing(run).splitlines()
+    jumps, port = _jumps("\n".join(lines)), str(plan["port"])
     jump = next((index for index, line in enumerate(lines)
                  if line in jumps and _port_of(line) == port), None)
-    early_return = next((index for index, line in enumerate(lines)
-                         if line == f"-A {PARENT} -j RETURN"), None)
-    if jump is None or (early_return is not None and early_return < jump):
-        raise RuntimeError(f"{PARENT} does not send port {port} to {CHAIN}; {hint}")
+    bypass = next((index for index, line in enumerate(lines)
+                   if line in (f"-A {HOOK} -j ACCEPT", f"-A {HOOK} -j RETURN")), None)
+    if jump is None or (bypass is not None and bypass < jump):
+        raise RuntimeError(f"{TABLE} {HOOK} does not send port {port} to {CHAIN}; {hint}")
 
 
-def main(argv: list[str] | None = None) -> int:
+def verify_site_certificate(cert: Path, key: Path, ca: Path, tls_host: str) -> None:
+    """In-memory TLS handshake with VERIFY_X509_STRICT, as the bridge and phones verify."""
+    if not tls_host:
+        raise ConfigError("ROSY_SITE_TLS_HOST is empty; it must be the certificate DNS name")
+    server = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    server.load_cert_chain(str(cert), str(key))
+    client = ssl.create_default_context(cafile=str(ca))
+    client.verify_flags |= ssl.VERIFY_X509_STRICT
+    pipes = [ssl.MemoryBIO() for _ in range(4)]
+    tls_client = client.wrap_bio(pipes[0], pipes[1], server_hostname=tls_host)
+    tls_server = server.wrap_bio(pipes[2], pipes[3], server_side=True)
+    done = {"client": False, "server": False}
+    for _ in range(10):
+        for name, side in (("client", tls_client), ("server", tls_server)):
+            if done[name]:
+                continue
+            try:
+                side.do_handshake()
+                done[name] = True
+            except ssl.SSLWantReadError:
+                pass
+            except ssl.SSLCertVerificationError as error:
+                raise ConfigError(f"site certificate fails strict verification for {tls_host}: "
+                                  f"{error.verify_message}; see deploy/site/README.md, "
+                                  "'Site certificate profile'") from None
+            except ssl.SSLError as error:
+                if name == "client":
+                    raise ConfigError(f"site TLS handshake failed: {error}") from None
+                done[name] = True  # the server sees the client's alert; the client decides
+        pipes[2].write(pipes[1].read())
+        pipes[0].write(pipes[3].read())
+        if done["client"]:
+            return
+    raise ConfigError("site certificate check did not complete")
+
+
+def write_public_env(settings: dict, path: Path) -> None:
+    """The two public values the host units need (bridge, advertisers), as Compose resolved them."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    text = f"ROSY_SITE_TLS_HOST={settings['tls_host']}\nROSY_SITE_HTTPS_PORT={settings['port']}\n"
+    with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=path.parent, delete=False) as out:
+        out.write(text)
+    Path(out.name).chmod(0o644)
+    Path(out.name).replace(path)
+
+
+def main(argv: list[str] | None = None, run=_run) -> int:
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("command", choices=("apply", "check"))
-    parser.add_argument("--env-file", type=Path, required=True)
+    parser.add_argument("--env-file", type=Path, default=DEFAULT_ENV)
+    parser.add_argument("--compose-file", type=Path, default=DEFAULT_COMPOSE)
+    parser.add_argument("--project-name", default="rosy-site")
+    parser.add_argument("--public-env", type=Path, default=DEFAULT_PUBLIC_ENV,
+                        help="apply writes ROSY_SITE_TLS_HOST and ROSY_SITE_HTTPS_PORT here")
     parser.add_argument("--dry-run", action="store_true",
-                        help="print the rules a fresh host would get; touch nothing")
+                        help="apply: print the iptables-restore payload and the jump; touch nothing")
+    parser.add_argument("--verify-certs", action="store_true",
+                        help="check: also verify the site certificate strictly against tls_host")
     args = parser.parse_args(argv)
     try:
-        plan = site_plan(read_env(args.env_file))
-    except (ConfigError, OSError) as error:
+        check_env_keys(args.env_file)
+        settings = compose_settings(compose_config(args.env_file, args.compose_file,
+                                                   args.project_name, run))
+        plan = site_plan(settings)
+        if args.command == "check" and args.verify_certs:
+            secrets = settings["secrets"]
+            verify_site_certificate(Path(secrets["site_cert"]), Path(secrets["site_key"]),
+                                    Path(secrets["site_ca"]), settings["tls_host"])
+    except (ConfigError, OSError, KeyError, ValueError) as error:
         print(f"rosy-site preflight: {error}", file=sys.stderr)
         return 2
-    if plan["mode"] == "loopback":
-        print(f"bind {plan['bind']}:{plan['port']} is loopback-only; no LAN filter needed")
-        return 0
-    if plan["mode"] == "address":
-        print(f"warning: ROSY_SITE_BIND_ADDRESS={plan['bind']} pins the proxy to one "
-              "address and breaks when the site LAN changes; prefer 0.0.0.0", file=sys.stderr)
+    for warning in plan["warnings"]:
+        print(f"warning: {warning}", file=sys.stderr)
     try:
         if args.dry_run:
-            for command in fresh_commands(plan):
-                print(shlex.join(command))
+            if plan["mode"] == "loopback":
+                print(f"# bind {plan['bind']}:{plan['port']} is loopback-only; no LAN filter")
+            else:
+                print("# iptables-restore -w --noflush <<EOF")
+                print(restore_payload(plan["ifaces"]) + "# EOF")
+                print(shlex.join(["iptables", "-w", "-t", TABLE, "-I", HOOK, "1",
+                                  *jump_rule(plan["port"])]))
         elif args.command == "apply":
-            changed = apply(plan)
-            print(f"port {plan['port']} allowed only on {','.join(plan['ifaces'])}"
-                  f" ({len(changed)} rule change(s))")
+            changed = apply(plan, run)
+            write_public_env(settings, args.public_env)
+            where = "loopback only" if plan["mode"] == "loopback" else ",".join(plan["ifaces"])
+            print(f"port {plan['port']}: {where} ({len(changed)} change(s))")
         else:
-            check(plan)
-            print(f"port {plan['port']} is limited to {','.join(plan['ifaces'])}")
-    except RuntimeError as error:
+            check(plan, run)
+            print(f"port {plan['port']} is limited to "
+                  f"{'loopback' if plan['mode'] == 'loopback' else ','.join(plan['ifaces'])}")
+    except (RuntimeError, OSError) as error:
         print(f"rosy-site firewall: {error}", file=sys.stderr)
         return 1
     return 0

@@ -1,0 +1,8 @@
+[Unit]
+Description=Close the ROSY site HTTPS port after a failed firewall apply or check
+Wants=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/docker compose --project-name rosy-site --env-file /etc/rosy/site/site.env -f /opt/rosy/candidate/deploy/site/compose.yaml stop proxy
