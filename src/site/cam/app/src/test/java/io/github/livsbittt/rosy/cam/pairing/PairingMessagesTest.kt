@@ -72,6 +72,13 @@ class PairingMessagesTest {
     }
 
     @Test
+    fun noncesAreRedactedWhenPrinted() {
+        val nonce = Pairing.newSecret()
+        assertFalse(PairingReveal(nonce).toString().contains(nonce))
+        assertFalse(PairingCreated("pr-1", nonce, "2026-10-01T00:05:00Z").toString().contains(nonce))
+    }
+
+    @Test
     fun aJsonNullResultFieldIsMissing() {
         val result = validResult().put("token", JSONObject.NULL)
         assertEquals("missing_field", PairingResult.validate(result))

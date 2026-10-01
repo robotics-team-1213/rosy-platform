@@ -129,7 +129,10 @@ class HttpPairingTransport(
         private val BASE_SEGMENTS = BASE.trim('/').split('/')
         private val JSON = "application/json".toMediaType()
 
-        /** A pairing reply is a few KiB (the result carries one CA PEM); more is refused unread. */
+        /**
+         * A pairing reply is a few KiB (the result carries one CA PEM). `peekBody` silently truncates a longer body
+         * at this size; the cut JSON then fails to parse and ends the attempt as an invalid reply.
+         */
         private const val MAX_REPLY_BYTES = 64L * 1024
 
         /** S2 refusals are FastAPI `{"detail": {"code": …}}`; a bare `{"code": …}` is read too. */

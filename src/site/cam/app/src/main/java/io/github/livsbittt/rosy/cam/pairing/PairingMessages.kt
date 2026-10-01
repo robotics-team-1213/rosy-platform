@@ -91,6 +91,9 @@ data class PairingRequest(
 
 /** `POST …/requests/{id}/reveal` body: the nonce whose digest the request committed to. */
 data class PairingReveal(val clientNonce: String) {
+    /** Never prints the nonce. */
+    override fun toString(): String = "PairingReveal(clientNonce=<redacted>)"
+
     fun toJson(): ByteArray = JSONObject().put("client_nonce", clientNonce).toString().toByteArray(UTF_8)
 
     companion object {
@@ -167,6 +170,9 @@ data class PairingResult(
 
 /** `201` reply to the request: the id to poll, the server's nonce for the code, and the pending deadline. */
 data class PairingCreated(val requestId: String, val serverNonce: String, val expiresAt: String) {
+    /** Never prints the server nonce. */
+    override fun toString(): String = "PairingCreated(requestId=$requestId, serverNonce=<redacted>, expiresAt=$expiresAt)"
+
     companion object {
         /** The id goes into URL paths, so it is held to a path-safe pattern (S2 issues `pr-` + 16 base64url). */
         val REQUEST_ID_PATTERN = Regex("^[A-Za-z0-9_-]{1,64}$")
@@ -237,7 +243,8 @@ data class PairingConfirm(val credentialId: String) {
 internal object PairingJson {
     /**
      * One JSON object and nothing after it, from strict UTF-8; null otherwise. org.json is more lenient than
-     * Python's json (unquoted keys, single quotes) and rejects duplicate keys that Python would take last-wins.
+     * Python's json (unquoted keys, single quotes). On duplicate keys Android's built-in org.json keeps the last
+     * value, as Python does; the JVM test library (reference org.json) throws instead, which reads as `not_object`.
      */
     fun readObject(raw: ByteArray): JSONObject? {
         val text = try {
