@@ -116,6 +116,17 @@ SIZE_VERDICTS = {
         "same handshake and connection map (the digest store and sync thread live in pairing_sync.py). "
         "ROS-free, host-testable (X5)",
     ),
+    "site/fleet/fleet/server/proposal_store.py": (
+        730,
+        "accept: one owner (the durable non-executable candidate ledger — proposal create, the fenced ER2 "
+        "feedback replan candidate, recoverable resolution and the model tool-call result journal share one "
+        "SQLite file, one schema/migration block and BEGIN IMMEDIATE transactions that must commit "
+        "together with the Mission draft in finalize_resolution), ROS-free, host-testable (X5). Crossed "
+        "600 on 2026-10-01 (557 -> 730) when atomic candidate fencing (3a19b560) and the canonical model "
+        "tool-call journal (1e519cca) joined; the journal (fleet_model_tool_call_results, "
+        "begin/complete/mark_unknown) is the only separable seam, so revisit it as a split if the store "
+        "grows past 800",
+    ),
     "site/fleet/fleet/server/mission_store.py": (
         887,
         "accept: one owner (the Fleet Mission SQLite ledger — missions, attempts, progress snapshots, "
