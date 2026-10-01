@@ -1029,3 +1029,10 @@
 - 변경: `fleet` 합계를 23166에서 23237로, `enrollment.py` 판정을 610에서 664로 다시 적고 각 문장 끝에 까닭(옮기기가 같은 교환·결속 검사 위의 화면 코드 재페어링이 됨, 전체 옮기기 삭제)을 붙였다. 판정은 그대로다.
 - 증거: 판정 시험에서 남은 실패는 `proposal_store.py`(730줄, D-392 다른 세션) 판정 없음 1건뿐 — main에서도 실패, 이 브랜치가 다루지 않는다. `src/site/fleet/test/` 1134 passed, 6 skipped. 브라우저 61 중 60 passed(`test_the_console_renders_what_swarm_control_says`는 main에서도 같은 시간 초과). 바뀐 파일 secret_scan 0건.
 - gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · fix(enrollment): 옛 토큰은 어디에도 보내지 않고, 고정 주소에서 아직 답하면 옮기지 않는다
+
+- 변경: 보안 재리뷰 HIGH(중계 공격) — 같은 이름을 광고한 중계자가 운용자의 코드를 진짜 로봇의 `auth/pair`로 넘기고 `whoami`·`system/info` 답을 되돌리면 모든 비교가 맞아, Fleet이 중계자로 옮기고 logout으로 옛 토큰까지 건넸다. (a) 옮긴 뒤의 옛 토큰 logout을 지웠다. 옛 토큰은 어디에도 가지 않고, 감사는 늘 `old_token_not_revoked`, 응답은 `old_token_revoked: false`. (b) 새 주소에 닿기 전에 고정 주소(등록 때 확인됨, 정지 요청이 이미 같은 토큰으로 가는 곳)에 `system/info`를 한 번 읽어, 같은 robot_id로 답하면 409 `still_at_pinned_address`(감사 포함)로 거절하고 새 주소에는 아무것도 보내지 않는다. 고정 주소에 다른 기기·무응답·401이면 계속한다. 재리뷰 MEDIUM — 비교는 robot_id·hostname·serial_number뿐이고 이것이 인증이 아니라 일관성 검사임을 docstring과 D-361 개정에 적었다(신원을 묶는 것은 로봇 화면의 코드와 IP를 보는 사람, 진짜 인증은 로봇이 쥔 키 — 이후 과제). `device_uid`는 CORE `system/info`가 주지 않아 저장값이 늘 비므로 비교에서 뺐다(CORE 변경 없음).
+- 결정: 고정 주소 탐침은 저장 토큰을 그 주소로 한 번 더 보낸다. 그 주소가 DHCP로 다른 기기에 갔다면 그 기기가 토큰을 본다 — 그러나 `address_changed` 동안의 정지 요청이 이미 같은 토큰을 같은 주소로 보내므로(D-361 3) 새 노출 경로는 아니다.
+- 증거: `test_enrollment_service.py` 다시 씀 — 성공 경로 새 주소 요청은 pair→whoami→system/info뿐, 옛 토큰은 새 주소에 0회·logout 0회, `old_token_not_revoked` 감사, 고정 주소에서 아직 답하면 409이고 새 주소 요청 0, 고정 주소에 다른 robot_id면 옮김, 일관성 필드(robot_id·hostname·serial)별 불일치, device_uid는 비교 안 함, 성공·불일치·틀린 코드 경로에서 화면 코드(대소문자·하이픈 네 형태)가 감사 행과 로그 레코드 어디에도 없음. logout 남음·탐침 없음으로 6 적색 확인 뒤 99 passed(등록·API·저장소·주소 시험).
+- gate 변화: 없음(LOCAL).

@@ -4159,3 +4159,8 @@
 - 변경: D-361에 날짜 붙은 개정을 더했다. 평문 HTTP는 새 주소를 인증하지 못하므로, 옮기기는 저장된 토큰을 먼저 보내지 않고 로봇 화면 코드로 새 주소에서 교환한 새 토큰으로 신원을 확인한 뒤에만 고정 주소와 토큰을 바꾼다. 옛 토큰은 확인 뒤 logout, 실패하면 감사와 콘솔 안내. 전체 옮기기는 두지 않는다. 구현: `src/site/fleet/fleet/server/enrollment.py` (`feat/fleet-robot-address-drift`).
 - 증거: `src/site/fleet/test/test_enrollment_service.py` — 신원 확인 전 새 주소에 저장 토큰·Authorization 0회(기록하는 가짜 로봇).
 - gate 변화: 없음(LOCAL).
+
+## 2026-10-01 · uncommitted · docs(adr): D-361 개정 보강 — 옮기기 비교는 일관성 검사, 옛 토큰은 보내지 않음, 고정 주소 탐침
+- 변경: 보안 재리뷰를 반영해 D-361 2026-10-01 개정을 고쳤다. 고정 주소에서 아직 답하면 409 `still_at_pinned_address`, robot_id·hostname·serial 비교는 인증이 아닌 일관성 검사(device_uid 제외), 신원은 로봇 화면의 코드·IP를 보는 운용자가 묶고 진짜 인증은 로봇 키(이후 과제), 옛 토큰은 어디에도 보내지 않고 대시보드에서 회수.
+- 증거: `src/site/fleet/test/test_enrollment_service.py` 옮기기 시험.
+- gate 변화: 없음(LOCAL).

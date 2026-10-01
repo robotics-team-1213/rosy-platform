@@ -6,8 +6,11 @@ in the register and adds the robot to the one roster. The browser never reaches 
 robot and never sees the token. The address is pinned at enrollment; when the same
 name shows up elsewhere Fleet sends only stop requests to the pinned address.
 Moving to a new address is a re-pairing there with the robot's screen code: plain HTTP
-cannot authenticate the new address, so the stored token goes to it only after the
-identity read with the new token matches the register (D-361 3, 2026-10-01 note).
+cannot authenticate the new address, so the stored token never goes to it (D-361 3,
+2026-10-01 note). The fields compared after the exchange (robot_id, hostname,
+serial_number from `system/info`, readable by any viewer) are a consistency check, not
+authentication; what binds identity is the operator reading the code and the IP off the
+robot's own screen. Real authentication needs a robot-held key (TLS or nonce signing).
 No request is ever retried automatically.
 """
 
@@ -542,9 +545,16 @@ class EnrollmentService:
     async def move_address(self, robot_id: str, *, code: object, principal_id: str) -> dict:
         """Re-pair at the new address with the robot's screen code (D-361 3, 2026-10-01).
 
-        The code exchange carries no existing credential. Only when `whoami`/`system/info`, read
-        with the token the new address just issued, match every stored binding key does the
-        stored (old) token go there, and then only to log it out.
+        1. Probe the pinned address (verified at enrollment; stop requests already go there
+           with this token). If the robot still answers there, refuse: a name seen elsewhere
+           is then not this robot moving — the usual shape of a relay.
+        2. Exchange the code at the new address with no existing credential.
+        3. Compare robot_id, hostname and serial_number read with the new token. This is a
+           consistency check, not authentication (any viewer can read them, and a relay can
+           pass them on); the operator's check of the code and IP on the robot's screen binds.
+        4. Rebind to the new token. The old token is never sent anywhere: a site token cannot
+           revoke itself, so the audit records `old_token_not_revoked` and the operator
+           revokes it on the robot dashboard or lets it expire.
         """
         self._require_available()
         normalized = normalize_code(code)
@@ -559,6 +569,11 @@ class EnrollmentService:
         new_address = self._current_other_address(row)
         if new_address is None:
             raise EnrollmentError("no_new_address", 409, "no single new address is in the scan")
+        if await self._still_at_pinned(row):
+            self._store.audit(action="move_address", outcome="still_at_pinned_address",
+                              principal_id=principal_id, target=robot_id)
+            raise EnrollmentError("still_at_pinned_address", 409,
+                                  "the robot still answers at its pinned address; nothing to move")
         async with self._http(new_address) as http:
             paired = await self._exchange(http, normalized, principal_id, new_address,
                                           action="move_address")
@@ -576,7 +591,6 @@ class EnrollmentService:
                 self._store.audit(action="move_address", outcome="store_failed",
                                   principal_id=principal_id, target=robot_id)
                 raise self._consumed("store_failed") from None
-            old_token = self._tokens.get(robot_id)
             self._store.rebind(robot_id, seal(self._key, token, slot="rest", robot_id=robot_id,
                                               token_id=record["token_id"]),
                                address=new_address, state="active", **record)
@@ -588,16 +602,32 @@ class EnrollmentService:
             self._console().release_robot(robot_id)
             self._store.audit(action="move_address", outcome="moved", principal_id=principal_id,
                               target=robot_id)
-            # The identity is verified now; the old token goes there only to be revoked.
-            revoked = old_token is not None and await self._logout(http, old_token)
-        if not revoked:
-            self._store.audit(action="move_address", outcome="old_token_not_revoked",
-                              principal_id=principal_id, target=robot_id)
+        # Never sent anywhere, so never revoked by Fleet (a relay could pass step 3).
+        self._store.audit(action="move_address", outcome="old_token_not_revoked",
+                          principal_id=principal_id, target=robot_id)
         listed = next(item for item in self.listing()["robots"] if item["robot_id"] == robot_id)
-        return {**listed, "old_token_revoked": revoked}
+        return {**listed, "old_token_revoked": False}
+
+    async def _still_at_pinned(self, row: dict) -> bool:
+        """True when the pinned address still answers `system/info` as this robot."""
+        token = self._tokens.get(row["robot_id"])
+        if token is None:
+            return False
+        async with self._http(row["address"]) as http:
+            try:
+                response = await http.get("/api/v1/system/info",
+                                          headers={"Authorization": f"Bearer {token}"})
+                info = response.json() if response.status_code == 200 else None
+            except (httpx.HTTPError, ValueError):
+                return False
+        return isinstance(info, dict) and info.get("robot_id") == row["robot_id"]
 
     async def _verify_moved(self, http: httpx.AsyncClient, paired: dict, row: dict) -> dict:
-        """The identity read with the NEW token must equal the register row; returns token fields."""
+        """Consistency check with the NEW token against the register row; returns token fields.
+
+        device_uid is not compared: CORE's system/info does not return it, so the stored value
+        is always None and the comparison would be decoration.
+        """
         received_at = self._clock()
         role = paired.get("role")
         if role != "operator":
@@ -610,8 +640,7 @@ class EnrollmentService:
             raise self._consumed("verify_failed") from None
         same = (isinstance(info, dict) and info.get("robot_id") == row["robot_id"]
                 and str(info.get("hostname") or "").lower() == row["hostname"]
-                and info.get("serial_number") == row["serial_number"]
-                and (row["device_uid"] is None or info.get("device_uid") == row["device_uid"]))
+                and info.get("serial_number") == row["serial_number"])
         if not same:
             raise EnrollmentError(
                 "identity_mismatch", 409,

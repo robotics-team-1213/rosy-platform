@@ -177,6 +177,7 @@ def test_move_address_takes_the_screen_code_and_answers_without_secrets(tmp_path
                                    discovery_token=DISCOVERY))
     client.post("/api/fleet/enrollment/robots", headers=_headers(OPERATOR),
                 json={"discovery_name": NAME, "code": CODE})
+    del network.cores[PINNED]  # the robot left its pinned address
     client.post("/api/fleet/discovery/scan", headers=_headers(DISCOVERY),
                 json={"devices": [scan_row(moved_at)]})
     path = "/api/fleet/enrollment/robots/rosy_09/move-address"
@@ -184,6 +185,6 @@ def test_move_address_takes_the_screen_code_and_answers_without_secrets(tmp_path
     assert client.post(path, headers=_headers(OPERATOR), json={"code": CODE, "x": 1}).status_code == 422
     response = client.post(path, headers=_headers(OPERATOR), json={"code": CODE})
     assert response.status_code == 200, response.text
-    assert response.json()["address"] == moved_at and response.json()["old_token_revoked"] is True
+    assert response.json()["address"] == moved_at and response.json()["old_token_revoked"] is False
     for secret in (ISSUED, REISSUED, CODE):
         assert secret not in response.text
