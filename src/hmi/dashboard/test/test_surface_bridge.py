@@ -71,7 +71,7 @@ def test_the_bridge_stays_a_quiet_topbar_link_and_owns_its_states():
     assert ".surface-bridge a:hover" in css
     assert ".surface-bridge a:focus-visible" in css
     assert "var(--target-secondary)" in css
-    mobile = css.split("@media (max-width: 720px)", 1)[1]
+    mobile = css.split("@media (width < 64rem) {", 1)[1]
     assert "flex-wrap: wrap" in mobile, "좁은 폭에서는 목적지 줄이 아래로 내려간다"
 
 

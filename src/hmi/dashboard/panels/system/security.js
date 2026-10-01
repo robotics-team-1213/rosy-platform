@@ -1,8 +1,11 @@
+import { confirmIrreversible } from "/common/ui.js";
+// D-359 §5.3 — 끌 때 이유를 같이 준다. 켜거나 짧은 요청 중 잠금이면 이유를 지운다.
+function setOff(control, off, reason = "") { control.disabled = Boolean(off); if (off && reason) control.setAttribute("reason", reason); else control.removeAttribute("reason"); }
 // Admin-only credential and safety policy controls. Generated credentials are
 // rendered once in a live status node and are never persisted by this module.
 function el(tag, cls, text) { const node = document.createElement(tag); if (cls) node.className = cls; if (text !== undefined) node.textContent = text; return node; }
 function numberField(labelText, name, max = 100, min = 0.01) {
-  const label = el("label", "ui-field-label", labelText); const input = el("input");
+  const label = el("label", "ui-field-label", labelText); const input = el("input", "ui-field");
   input.type = "number"; input.min = String(min); input.max = String(max); input.step = "any"; input.name = name; label.append(input);
   return {label, input};
 }
@@ -20,9 +23,9 @@ export function mount(root, ctx) {
   const tokenSection = el("section", "ui-readback"); tokenSection.append(el("h3", "", "접근 토큰"));
   const tokenForm = el("form", "ui-form");
   const roleLabel = el("label", "ui-field-label", "역할");
-  const role = el("select"); role.name = "role"; roleLabel.append(role);
+  const role = el("select", "ui-field"); role.name = "role"; roleLabel.append(role);
   for (const value of ["viewer", "operator", "administrator"]) { const option = el("option", "", value); option.value = value; role.append(option); }
-  const label = el("input"); label.name = "label"; label.maxLength = 64; label.setAttribute("aria-label", "토큰 이름표"); label.placeholder = "이름표";
+  const label = el("input", "ui-field"); label.name = "label"; label.maxLength = 64; label.setAttribute("aria-label", "토큰 이름표"); label.placeholder = "이름표";
   const add = el("ui-button", "", "새 토큰 생성"); add.setAttribute("kind", "primary"); add.type = "submit"; tokenForm.append(roleLabel, label, add);
   const tokenList = el("ul", "diagnostic-list"); tokenList.setAttribute("aria-label", "접근 토큰 목록");
   tokenList.hidden = true;
@@ -36,9 +39,9 @@ export function mount(root, ctx) {
   const safetyForm = el("form", "ui-form");
   const fields = [numberField("수동 선속도 (m/s)", "manual_linear", 10, 0), numberField("수동 각속도 (rad/s)", "manual_angular", 20, 0),
     numberField("배터리 경고 (%)", "battery_warning_percent"), numberField("배터리 위험 (%)", "battery_critical_percent"), numberField("배터리 심각 (%)", "battery_deep_percent")];
-  const fleet = el("select"); fleet.name = "fleet_loss_policy"; fleet.setAttribute("aria-label", "연결 끊김 정책");
+  const fleet = el("select", "ui-field"); fleet.name = "fleet_loss_policy"; fleet.setAttribute("aria-label", "연결 끊김 정책");
   for (const value of ["STOP", "HOLD", "RETURN_HOME", "CONTINUE"]) { const option = el("option", "", value); option.value = value; fleet.append(option); }
-  const batteryPolicy = el("select"); batteryPolicy.name = "battery_critical_policy"; batteryPolicy.setAttribute("aria-label", "배터리 위험 정책");
+  const batteryPolicy = el("select", "ui-field"); batteryPolicy.name = "battery_critical_policy"; batteryPolicy.setAttribute("aria-label", "배터리 위험 정책");
   for (const value of ["STOP", "RETURN_HOME"]) { const option = el("option", "", value); option.value = value; batteryPolicy.append(option); }
   const fleetLabel = el("label", "ui-field-label", "연결 끊김 정책"); fleetLabel.append(fleet);
   const batteryLabel = el("label", "ui-field-label", "배터리 위험 정책"); batteryLabel.append(batteryPolicy);
@@ -55,7 +58,7 @@ export function mount(root, ctx) {
     add.disabled = tokenMutationPending;
     for (const button of tokenList.querySelectorAll("ui-button")) {
       const token = tokens.find((item) => String(item.id) === button.closest("li")?.dataset.tokenId);
-      button.disabled = tokenMutationPending || token?.current === true;
+      setOff(button, tokenMutationPending || token?.current === true, tokenMutationPending ? "" : "지금 쓰는 토큰");
     }
   }
   function syncSafetyControls() { safetyControls.forEach((control) => { control.disabled = safetyPending; }); }
@@ -66,9 +69,13 @@ export function mount(root, ctx) {
     for (const token of tokens) {
       const row = el("li", ""); row.dataset.tokenId = token.id;
       row.append(el("span", "", [token.label || token.id, token.role, token.source, token.current ? "이 기기" : ""].filter(Boolean).join(" · ")));
-      const remove = el("ui-button", "", "삭제"); remove.setAttribute("kind", "irreversible"); remove.type = "button"; remove.disabled = token.current === true;
+      // D-371 — 목록 행은 조용한 `삭제…`다. 위험 채움은 확인 대화상자의 실행 버튼에만 있다.
+      const remove = el("ui-button", "", "삭제…"); remove.setAttribute("kind", "quiet"); remove.type = "button"; setOff(remove, token.current === true, "지금 쓰는 토큰");
       remove.addEventListener("click", async () => {
-        if (remove.disabled || tokenMutationPending || !window.confirm("이 토큰을 삭제할까요? 되돌릴 수 없습니다.")) return;
+        if (remove.disabled || tokenMutationPending) return;
+        const confirmed = await confirmIrreversible({message: `"${token.label || token.id}" 토큰을 삭제할까요? 되돌릴 수 없습니다.`, action: "토큰 삭제",
+          opener: () => (remove.isConnected ? remove : tokenList.querySelector(`li[data-token-id="${CSS.escape(String(token.id))}"] ui-button`))});
+        if (!confirmed || tokenMutationPending) return;
         tokenMutationPending = true; syncTokenControls();
         setStatus(tokenActionStatus, `${token.label || token.id} 토큰을 삭제하는 중입니다.`);
         try {

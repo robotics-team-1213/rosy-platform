@@ -1,0 +1,8 @@
+# Development simulator HTTP layer. Build after the locked workstation image.
+FROM rosy-omx-workstation:native-action-only-local
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends python3-venv \
+    && rm -rf /var/lib/apt/lists/* \
+    && python3 -m venv --system-site-packages /opt/rosy-pilot-venv \
+    && /opt/rosy-pilot-venv/bin/pip install --no-cache-dir \
+      'fastapi==0.116.1' 'uvicorn==0.35.0' 'pydantic==2.11.7'
+ENV PATH="/opt/rosy-pilot-venv/bin:${PATH}"

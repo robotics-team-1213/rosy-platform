@@ -9,7 +9,7 @@ from typing import Any, Optional
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
-from core_api_web.api.v1.common import admin, viewer
+from core_api_web.api.v1.common import admin, require_calibration_owner, viewer
 from core_api_web.api.deps import AuthContext, get_services, CoreServicesLike
 from core_api_web.api.host_agent_client import HostAgentClient, TIMEOUT, UNAVAILABLE
 from core_common import robot_state
@@ -214,6 +214,15 @@ class HostActionRequest(BaseModel):
 
     confirmed: bool = False
     idempotency_key: str | None = None
+    # D-321 addendum: install/rollback/reboot restart CORE and end a running
+    # calibration. Another token must say so explicitly to go ahead.
+    override_calibration: bool = False
+
+
+def _calibration_fence(svc: CoreServicesLike, auth: AuthContext, body: HostActionRequest,
+                       action: str) -> None:
+    if not body.override_calibration:
+        require_calibration_owner(svc, auth, f"{action} (set override_calibration to end it)")
 
 
 class ReleaseInstallRequest(HostActionRequest):
@@ -226,6 +235,7 @@ def host_release_install(
     auth: AuthContext = Depends(admin),
     svc: CoreServicesLike = Depends(get_services),
 ):
+    _calibration_fence(svc, auth, body, "release install")
     reply = _agent(svc).request(
         "release.install",
         role="administrator",
@@ -243,6 +253,7 @@ def host_release_rollback(
     auth: AuthContext = Depends(admin),
     svc: CoreServicesLike = Depends(get_services),
 ):
+    _calibration_fence(svc, auth, body, "release rollback")
     reply = _agent(svc).request(
         "release.rollback",
         role="administrator",
@@ -277,6 +288,7 @@ def host_reboot(
     svc: CoreServicesLike = Depends(get_services),
 ):
     """Relay Host Agent system.reboot. CORE does not call reboot itself (D-22)."""
+    _calibration_fence(svc, auth, body, "reboot")
     reply = _agent(svc).request(
         "system.reboot",
         role="administrator",

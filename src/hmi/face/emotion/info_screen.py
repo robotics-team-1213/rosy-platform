@@ -40,8 +40,8 @@ def hold_duration(raw: object) -> float:
 # 정상에는 색이 없다: 배터리가 넉넉할 때는 잉크로 쓴다. 초록을 쓰면 화면
 # 대부분이 색을 갖게 되고 임계 경보가 눈에 띌 대비 예산이 남지 않는다.
 _BG = (16, 18, 20)          # --ground   #101214
-_FG = (238, 238, 239)       # --paper    #eeeeef
-_MUTED = (148, 153, 160)    # --muted    #9499a0
+_FG = (238, 238, 239)       # --ink        #eeeeef
+_MUTED = (148, 153, 160)    # --ink-quiet  #9499a0
 _NOMINAL = _FG              # --nominal  정상은 잉크다
 _WARN = (254, 180, 50)      # --status-warn #feb432
 _CRIT = (196, 9, 33)        # --status-crit #c40921
@@ -178,13 +178,17 @@ def render(payload: dict, size: tuple[int, int] = DEFAULT_SIZE) -> Image.Image:
         rows[2] = ("HEALTH", "E-STOP")
     elif payload.get("hitl_requested"):
         rows[2] = ("HEALTH", "ASSIST REQ")
+    # D-321 addendum: a calibration lease replaces the mode value. The LCD font is
+    # ASCII-only (D-221), so the machine word stands in for "보정 중".
+    if payload.get("activity") == "CALIBRATING":
+        rows[0] = ("MODE", "CALIBRATING")
 
     for index, (label, value) in enumerate(rows):
         y = 142 + index * 24
         draw.text((16, y), label, font=_font(14), fill=_MUTED)
         if value == "E-STOP":
             _draw_alarm(draw, (92, y), value, _font(16))
-        elif value == "ASSIST REQ":
+        elif value in ("ASSIST REQ", "CALIBRATING"):
             _draw_caution(draw, (92, y), value, _font(16))
         else:
             value_font, value = _fit(draw, value, 16, width - 108)

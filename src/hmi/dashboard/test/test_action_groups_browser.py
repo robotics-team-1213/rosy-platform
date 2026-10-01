@@ -234,7 +234,7 @@ def test_group_switch_sends_terminal_zero_before_unmount_and_never_resumes_motio
             calls_after_return = page.evaluate("window.__timeline.filter((item) => item.path === '/api/v1/teleop').length")
             page.wait_for_timeout(250)
             calls_later = page.evaluate("window.__timeline.filter((item) => item.path === '/api/v1/teleop').length")
-            teleop_active = page.locator("[data-panel='console.teleop'] ui-button.active").count()
+            teleop_active = page.locator("[data-panel='console.teleop'] ui-button[aria-pressed='true']").count()
             new_stop_group = page.locator("[role='tab'][aria-selected='true']").inner_text()
             assert zero_index < unmount_index
             assert after_dock["timeline"][zero_index]["body"] == {"linear": 0, "angular": 0}
@@ -344,13 +344,13 @@ def test_real_operation_panels_block_switch_during_start_and_while_active():
             page.wait_for_function("document.getElementById('shell-notice').textContent.includes('요청이 처리 중')")
             assert page.locator("#action-group-line_follow").is_visible()
             page.evaluate("window.__deferred.find((item) => item.path === '/api/v1/line-follow/mode').resolve({mode:'IR_LINE',state:'WAITING'})")
-            page.wait_for_function('document.querySelector(`[data-panel="console.line_follow"] dd`)?.textContent === "IR_LINE"')
+            page.wait_for_function('document.querySelector(`[data-panel="console.line_follow"] dd`)?.title === "IR_LINE"')
             page.get_by_role("tab", name="도킹").click()
             page.wait_for_function("document.getElementById('shell-notice').textContent.includes('추종을 중지')")
             assert page.locator("#action-group-line_follow").is_visible()
             page.evaluate("window.__deferOps = false")
             page.locator("[data-panel='console.line_follow'] ui-button").filter(has_text="추종 중지").click()
-            page.wait_for_function('document.querySelector(`[data-panel="console.line_follow"] dd`)?.textContent === "OFF"')
+            page.wait_for_function('document.querySelector(`[data-panel="console.line_follow"] dd`)?.title === "OFF"')
             page.get_by_role("tab", name="도킹").click()
             page.wait_for_selector("#action-group-docking:not([hidden])")
 
@@ -361,7 +361,7 @@ def test_real_operation_panels_block_switch_during_start_and_while_active():
             page.wait_for_function("document.getElementById('shell-notice').textContent.includes('요청이 처리 중')")
             assert page.locator("#action-group-docking").is_visible()
             page.evaluate("window.__deferred.find((item) => item.path === '/api/v1/docking/dock').resolve({state:'DOCKING'})")
-            page.wait_for_function('document.querySelectorAll(`[data-panel="console.docking"] dd`)[1]?.textContent === "DOCKING"')
+            page.wait_for_function('document.querySelectorAll(`[data-panel="console.docking"] dd`)[1]?.title === "DOCKING"')
             page.get_by_role("tab", name="운전").click()
             page.wait_for_function("document.getElementById('shell-notice').textContent.includes('도킹 작업이 끝나거나')")
             assert page.locator("#action-group-docking").is_visible()

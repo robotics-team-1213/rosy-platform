@@ -35,6 +35,6 @@
 
 - 2026-10-01 · uncommitted · fix(protocol): site_link 비밀 스캔 오탐·ruff 정리
 - 2026-10-01 · uncommitted · feat(protocol): D-391 4.1 공유 벡터 — device_kind·실패 분류·사이트 연결 기록
+- 2026-10-01 · a527920a · feat(protocol): StateSnapshot.activity (v1.67 additive)
+- 2026-10-01 · uncommitted · D-390 OMX Pilot simulation wire contract
 - 2026-10-01 · uncommitted · feat(robot_state): D-383 swarm_role 축 — LCD 역할 접미
-- 2026-10-01 · uncommitted · feat(robot_state): D-381 nav_state 축 — blocked 세부 패턴
-- 2026-09-30 · uncommitted · docs(adr): D-375 에서 D-380 으로 개명

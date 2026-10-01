@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>ROSY UI 어휘 — 스타일 갤러리</title>
   <link rel="stylesheet" href="/common/tokens.css">
+  <script src="/common/theme.js"></script>
   <link rel="stylesheet" href="/common/components.css">
   <link rel="stylesheet" href="/styleguide/assets/styleguide.css">
   <script type="module" src="/common/ui.js"></script>
@@ -69,20 +70,46 @@
       <div class="demo demo-row">
         <ui-button kind="primary" type="button">주 버튼</ui-button>
         <ui-button kind="quiet" type="button">조용한 버튼</ui-button>
-        <ui-button kind="irreversible" type="button">전체 정지</ui-button>
+        <ui-button kind="irreversible" type="button" data-always-live>전체 정지</ui-button>
       </div>
       <p class="gate">게이트: <code>test_irreversible_actions_are_a_fill_not_text</code>,
       <code>test_a_danger_fill_carries_ink_not_dark_text</code></p>
     </section>
 
     <section class="entry">
+      <h2>확인 대화상자</h2>
+      <p class="rule">목록 행의 <code>삭제…</code>가 여는 <code>confirmIrreversible</code>. 대상을 이름으로 묻고,
+      위험 채움은 실행 버튼 하나다. 비모달이라 비상 정지(<code>data-always-live</code>)는 열려 있는 동안에도
+      막 위에서 보이고 눌린다(D-371). 아래는 고정 그림이다.</p>
+      <div class="demo demo-wide dialog-demo">
+        <dialog class="ui-confirm" open aria-labelledby="dialog-demo-text">
+          <p id="dialog-demo-text">"operator-tablet" 토큰을 삭제할까요? 되돌릴 수 없습니다.</p>
+          <ui-actions>
+            <ui-button kind="quiet" type="button">취소</ui-button>
+            <ui-button kind="irreversible" type="button">토큰 삭제</ui-button>
+          </ui-actions>
+        </dialog>
+      </div>
+      <p class="gate">게이트: <code>test_stop_always_live</code>,
+      <code>test_device_estop_stays_live_over_the_delete_dialog</code></p>
+    </section>
+
+    <section class="entry">
       <h2>필드</h2>
-      <p class="rule">파인 면. 바닥은 터치 바닥 이상, 포커스는 상태색 아닌 링.</p>
-      <div class="demo demo-wide">
+      <p class="rule">파인 면. 바닥은 터치 바닥 이상, 포커스는 상태색 아닌 링.
+      제품 화면은 네이티브 <code>input</code>·<code>select</code>에 <code>class="ui-field"</code>를 단다(D-359 §5.1).
+      체크는 <code>label.ui-check</code>가 44px 누름 면이다. <code>&lt;ui-field&gt;</code> 감싸개도 같은 얼굴이다.</p>
+      <div class="demo demo-wide ui-form">
+        <label class="ui-field-label">이름표<input class="ui-field" placeholder="bay 7 태블릿"></label>
+        <label class="ui-field-label">정책<select class="ui-field"><option>정지 유지</option><option>도크 복귀</option></select></label>
+        <label class="ui-check"><input class="ui-field" type="checkbox" checked>이 기기 기억</label>
+        <label class="ui-field-label">읽기 전용<input class="ui-field" value="rosy_01" readonly></label>
         <ui-field placeholder="목표 좌표 X" aria-label="필드 예"></ui-field>
       </div>
       <p class="gate">게이트: <code>test_touch_targets_clear_the_floor</code>,
-      <code>test_focus_is_interaction_not_status</code></p>
+      <code>test_focus_is_interaction_not_status</code>,
+      <code>test_product_fields_carry_the_shared_field_class</code>,
+      <code>test_fields_clear_the_secondary_target_on_every_surface</code></p>
     </section>
 
     <section class="entry" id="type-and-interaction">
@@ -96,16 +123,23 @@
       <div class="demo demo-row">
         <ui-button kind="quiet" type="button">키보드로 포커스</ui-button>
         <ui-button kind="primary" type="button" disabled>사용할 수 없음</ui-button>
+        <ui-button kind="primary" type="button" disabled reason="운용자 권한이 필요합니다">목표 보내기</ui-button>
+        <ui-button kind="toggle" type="button" aria-pressed="true">눌림</ui-button>
       </div>
+      <p class="rule">모든 종류가 hover·active·focus-visible·비활성을 공용으로 받는다. 비활성 사유는
+      <code>reason</code> 속성 — 버튼 안에 보이는 짧은 글자로 그려지고 <code>aria-describedby</code>로 이어진다.
+      <code>title</code>만으로는 사유가 아니다. 눌림은 <code>aria-pressed="true"</code>다.</p>
       <p class="gate">게이트: <code>test_shared_type_and_interaction_tokens_are_closed_and_keep_current_metrics</code>,
       <code>test_shared_components_consume_type_and_interaction_tokens</code></p>
     </section>
 
     <section class="entry">
       <h2>태그</h2>
-      <p class="rule">상태 어휘는 중립·주의·위험 셋뿐. 뱃지·기계 태그·모드 칩·이벤트 심각도가 같은 셋을 쓴다.</p>
+      <p class="rule">상태 어휘는 중립·진행·주의·위험. 진행(active)은 색이 아니라 ink다.
+      뱃지·기계 태그·모드 칩·이벤트 심각도가 같은 <code>&lt;ui-tag status&gt;</code>를 쓴다(D-359 §5.2).</p>
       <div class="demo demo-row">
         <ui-tag>NEUTRAL</ui-tag>
+        <ui-tag status="active">RUNNING</ui-tag>
         <ui-tag status="warn">CAUTION</ui-tag>
         <ui-tag status="crit">DANGER</ui-tag>
       </div>

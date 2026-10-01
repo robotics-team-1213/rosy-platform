@@ -22,6 +22,12 @@ class _Handler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(REPO), **kwargs)
 
+    def translate_path(self, path):
+        # The dashboard serves web_common under /common/ (operations.js imports the label maps).
+        if path.startswith("/common/"):
+            path = "/src/hmi/web_common/" + path[len("/common/"):]
+        return super().translate_path(path)
+
     def log_message(self, _format, *_args):
         pass
 
@@ -225,7 +231,7 @@ def test_host_status_cards_render_only_server_evidence_and_block_untrusted_actio
                 assert section.locator("details").first.get_attribute("open") is None
                 assert section.locator("details").nth(1).is_hidden()
                 assert section.locator("details").nth(2).is_hidden()
-            assert "Host Agent 연결을 확인" in page.locator("section.ui-readback").nth(0).inner_text()
+            assert "호스트 에이전트 연결을 확인" in page.locator("section.ui-readback").nth(0).inner_text()
             assert "관리자 권한을 확인" in page.locator("section.ui-readback").nth(1).inner_text()
             assert errors == []
             page.evaluate("window.__unmount()")

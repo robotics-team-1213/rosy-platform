@@ -16,6 +16,7 @@ import {
 import {mountInputs} from "./inputs.js";
 import {slewCommand} from "../stick.js";
 import {mountAutoMode} from "./drive-auto.js";
+import {calibrationView} from "../calibration.js";
 import {el, mountDriveView, buildStage, buildControls} from "./drive-view.js";
 import {createCameraCapture, classifyOperation, saveCameraFile} from "/common/evidence.js";
 
@@ -29,6 +30,9 @@ export function mountDrive(root, {onExit} = {}) {
   const profile = gate.profile ?? {};
   const element = {};
   let engaged = false;
+  // 이 화면이 실제로 MANUAL 을 잡았는가(engage 가 200). 잡은 적 없는 화면이 나가면서
+  // IDLE 을 보내면 남(보정 주인)의 주행을 끊는다.
+  let modeHeld = false;
 
   const drive = root;
   root.replaceChildren(buildStage(), buildControls(profile));
@@ -46,8 +50,56 @@ export function mountDrive(root, {onExit} = {}) {
     view: "[data-drive-view]", zoomFact: "[data-drive-fact=zoom]",
     go: "[data-drive-go]", autoToggle: "[data-drive-auto]",
     intent: "[data-drive-intent]", intentTarget: "[data-intent-target]",
-    intentSteer: "[data-intent-steer]",
+    intentSteer: "[data-intent-steer]", controls: "[data-drive-controls]",
+    calibration: "[data-drive-calibration]", calibrationTitle: "[data-drive-calibration-title]",
+    calibrationReason: "[data-drive-calibration-reason]", activity: "[data-drive-fact=activity]",
   })) element[key] = root.querySelector(selector);
+
+  // --- 보정 세션(D-321 부록): 누가 보정 중인지 보이고, 남의 보정이면 주행 조작을 잠근다 -----
+  // 비상 정지(상단 막대)는 이 화면 밖에 있고 잠그지 않는다. 409 CALIBRATION_ACTIVE 가 최종 판정이다.
+  let myTokenId = null;
+  let identityPending = true;
+  let calibrationLocked = false;
+  let lastActivity = null;
+  let whoamiTimer = null;
+  // 이 기기의 토큰 id. 실패하면 늘어나는 간격(1→2→4→8 s, 최대 15 s)으로 다시 묻는다.
+  // 401/403 은 토큰 문제라 다시 물어도 같다 — 그때는 멈추고 "남의 보정" 잠금으로 둔다.
+  function askWhoami(delayMs = 1000) {
+    whoami().then((me) => {
+      if (me?.status === 200) {
+        myTokenId = me.body?.id ?? null;
+        identityPending = false;
+      } else if (me?.status === 401 || me?.status === 403) {
+        identityPending = false;
+      } else {
+        throw new Error(`whoami ${me?.status}`);
+      }
+      renderActivity(lastActivity);
+    }).catch(() => {
+      whoamiTimer = setTimeout(() => askWhoami(Math.min(delayMs * 2, 15000)), delayMs);
+    });
+  }
+  askWhoami();
+  function renderActivity(activity) {
+    lastActivity = activity ?? null;
+    const view = calibrationView(lastActivity, myTokenId, identityPending);
+    element.calibration.hidden = !view.active;
+    element.activity.hidden = !view.active;
+    element.calibrationTitle.textContent = view.text;
+    element.calibrationReason.textContent = view.active
+      ? `${view.reason}${view.remaining == null ? "" : ` · 유지 ${view.remaining}초`}` : "";
+    element.calibration.dataset.locked = String(view.locked);
+    const lock = view.active && view.locked;
+    if (lock === calibrationLocked) return;
+    calibrationLocked = lock;
+    if (lock) {
+      releaseAll();
+      auto?.release("calibration");
+    }
+    element.controls.toggleAttribute("data-locked", lock);
+    element.controls.setAttribute("aria-disabled", String(lock));
+    for (const button of element.controls.querySelectorAll("ui-button")) button.disabled = lock;
+  }
 
   // --- 상태 채널: /ws/state(auth 첫 프레임) + REST teleop -------------------
   const session = createDeviceSession({
@@ -68,6 +120,7 @@ export function mountDrive(root, {onExit} = {}) {
       const percent = frame?.battery?.percent;
       if (percent !== undefined && percent !== null) element.battery.textContent = `${Math.round(percent)}%`;
       if (frame?.mode) element.mode.textContent = frame.mode;
+      if (frame && "activity" in frame) renderActivity(frame.activity);
     },
     onConflict: (detail) => {
       releaseAll();
@@ -152,6 +205,7 @@ export function mountDrive(root, {onExit} = {}) {
     stick.classList.remove("active");
   }
   stick.addEventListener("pointerdown", (event) => {
+    if (calibrationLocked) return;
     takeover();
     stickPointer = event.pointerId;
     stick.setPointerCapture(event.pointerId);
@@ -177,6 +231,7 @@ export function mountDrive(root, {onExit} = {}) {
     };
     node.addEventListener("pointerdown", (event) => {
       event.preventDefault();
+      if (calibrationLocked) return;
       set(true);
     });
     for (const name of ["pointerup", "pointercancel", "pointerleave"]) {
@@ -257,7 +312,7 @@ export function mountDrive(root, {onExit} = {}) {
     const tickAt = performance.now();
     const dt = (tickAt - lastTickAt) / 1000;
     lastTickAt = tickAt;
-    if (!engaged) return;
+    if (!engaged || calibrationLocked) return;
     const source = currentCommandSource() ?? keySource() ?? gamepadSource();
     if (source && auto.active()) takeover();   // 키·게임패드 개입도 자동을 끈다
     if (auto.active()) return;                  // 자동 중에는 수동 명령을 보내지 않는다(CORE 모드 충돌 방지)
@@ -318,6 +373,7 @@ export function mountDrive(root, {onExit} = {}) {
     const percent = state.body?.battery?.percent;
     if (percent !== undefined && percent !== null) element.battery.textContent = `${Math.round(percent)}%`;
     if (state.body?.mode) element.mode.textContent = state.body.mode;
+    renderActivity(state.body?.activity);
     const velocity = state.body?.velocity;
     if (velocity) {
       element.speed.textContent = Math.abs(Number(velocity.linear ?? 0)).toFixed(2);
@@ -377,6 +433,7 @@ export function mountDrive(root, {onExit} = {}) {
       const button = el("ui-button", PRESET_LABEL[name], {type: "button", "data-preset": name});
       button.setAttribute("kind", "segment");
       button.setAttribute("aria-pressed", String(config.preset === name));
+      button.disabled = calibrationLocked;
       button.addEventListener("click", () => {
         saveInputConfig({preset: name});
         renderInputs();
@@ -399,6 +456,7 @@ export function mountDrive(root, {onExit} = {}) {
     const response = await gate.engage(postJson).catch(() => null);
     if (response?.status === 200) {
       engaged = true;
+      modeHeld = true;
       session.resume();
       return;
     }
@@ -426,7 +484,11 @@ export function mountDrive(root, {onExit} = {}) {
     releaseAll();
     session.hidden();
     session.close?.();
-    gate.disengage(postJson).catch(() => {});
+    // D-321 부록: 잡은 적 없거나 남의 보정으로 잠긴 화면은 모드를 돌려놓지 않는다 — /mode IDLE 은
+    // 누구에게나 열려 있어서, 그대로 보내면 보정 주인의 MANUAL 을 끊는다.
+    if (modeHeld && !calibrationLocked) gate.disengage(postJson).catch(() => {});
+    modeHeld = false;
+    clearTimeout(whoamiTimer);
     vision.stop();
     window.removeEventListener("keydown", onKey);
     window.removeEventListener("keyup", onKey);

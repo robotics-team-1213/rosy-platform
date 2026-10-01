@@ -35,7 +35,7 @@
 ## 최근 기록
 
 - 2026-10-01 · uncommitted · fix(fleet_agent): D-370 S7 준비 — Fleet health 탐침이 확장 모양을 받는다
-- 2026-10-01 · uncommitted · feat(command): D-385 모드→표정 정책 emotion_map
-- 2026-10-01 · uncommitted · fix(fleet_agent): D-382 F10·I4 — 구독 해제와 이벤트 seq 사본
-- 2026-10-01 · uncommitted · fix(command): release_emergency 도 리스너 계약을 지킨다
-- 2026-09-30 · uncommitted · refactor(line_follow): 데이터 모델을 model.py 로 분리(파일 예산)
+- 2026-10-01 · 6d94e88f · docs(road_behaviour): D-384 도로 주행 행동 항목의 커밋 기록
+- 2026-10-01 · uncommitted · feat(road_behaviour): D-384 도로 주행 행동 상태 기계(ROS-free, 명령 없음)
+- 2026-10-01 · 22017f42 · fix(core): 만료 이벤트를 lock 밖에서 발행
+- 2026-10-01 · a527920a · feat(core): D-321 부록 보정 세션 lease

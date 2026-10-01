@@ -2,6 +2,8 @@
 // 한 줄만 부른다. 이력 버퍼는 셸이 쥐고 팩토리에 넘긴다. map.js·vision.js와
 // 같은 팩토리 모양이다.
 
+import { setTagState } from "./dom.js";
+
 export function createRosNetwork({
   elements, setText, metricNumber, rate, svgText, history,
 }) {
@@ -91,7 +93,7 @@ export function createRosNetwork({
     const throughput = runtime.network?.throughput || {};
     const status = graph.status || "UNAVAILABLE";
     setText("ros-graph-status", status);
-    elements["ros-graph-status"]?.setAttribute("data-status", status);
+    setTagState(elements["ros-graph-status"], "status", status);
     setText("ros-domain-id", graph.domain_id);
     setText("ros-namespace", graph.namespace);
     const isolationLabels = {

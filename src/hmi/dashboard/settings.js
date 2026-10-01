@@ -13,9 +13,12 @@ import {
   number,
   setEnabled,
   setFieldMessage,
+  setTagState,
   setText,
 } from "./dom.js";
 import { api, expiryLabel, session, sourceLabel } from "./client.js";
+import { confirmIrreversible } from "/common/ui.js";
+import { DOCK_STATE_LABEL, enumLabel } from "/common/core_ui_logic.js";
 
 const hooks = {
   // 신원을 바꾸면 헤더의 이름도 따라가야 한다. 그것은 셸의 영역이다.
@@ -84,9 +87,12 @@ export function renderTokens(payload) {
     remove.setAttribute("kind", "quiet");
     remove.type = "button";
     remove.dataset.tokenAction = "delete";
-    remove.textContent = "삭제";
+    remove.textContent = "삭제…"; // D-371: 행은 조용하고, 위험 채움은 확인 대화상자에만 있다.
     // CORE refuses to delete the token in use; log out from the header instead.
-    remove.disabled = item.current === true;
+    if (item.current === true) {
+      remove.disabled = true;
+      remove.setAttribute("reason", "지금 쓰는 토큰");
+    }
     actions.append(remove);
     row.append(title, meta, actions);
     list.append(row);
@@ -103,7 +109,7 @@ export function renderDockingStatus(payload) {
   session.dockingSupported = supported;
   const chip = elements["dock-capability"];
   if (chip) {
-    chip.dataset.mode = supported ? "AVAILABLE" : "HOLD";
+    setTagState(chip, "mode", supported ? "AVAILABLE" : "HOLD");
     chip.textContent = supported ? "AVAILABLE" : "HOLD";
   }
   const state = payload.state || "UNDOCKED";
@@ -112,13 +118,13 @@ export function renderDockingStatus(payload) {
   const error = payload.error ? ` · ${payload.error}` : "";
   const hold = supported
     ? ""
-    : "이 프로필은 도킹 명령을 지원하지 않습니다. 등록과 teach만 저장됩니다. ";
+    : "이 로봇은 도킹 기능이 없어 도킹 명령을 보낼 수 없습니다. 등록과 teach만 저장됩니다. ";
   setText(
     "dock-status-note",
-    `${hold}상태 ${state} · 도크 ${dockId}${phase}${error}`,
+    `${hold}상태 ${enumLabel(DOCK_STATE_LABEL, state)} · 도크 ${dockId}${phase}${error}`,
   );
-  setEnabled("dock-undock", supported);
-  setEnabled("dock-cancel", supported);
+  setEnabled("dock-undock", supported, "도킹 미지원");
+  setEnabled("dock-cancel", supported, "도킹 미지원");
 }
 
 export function renderDocks(payload) {
@@ -154,13 +160,19 @@ export function renderDocks(payload) {
     go.type = "button";
     go.dataset.dockAction = "dock";
     go.textContent = "도킹";
-    go.disabled = !session.dockingSupported;
+    if (!session.dockingSupported) {
+      go.disabled = true;
+      go.setAttribute("reason", "도킹 미지원");
+    }
     const remove = document.createElement("ui-button");
     remove.setAttribute("kind", "quiet");
     remove.type = "button";
     remove.dataset.dockAction = "delete";
-    remove.textContent = "삭제";
-    remove.disabled = session.role !== "administrator";
+    remove.textContent = "삭제…";
+    if (session.role !== "administrator") {
+      remove.disabled = true;
+      remove.setAttribute("reason", "관리자 권한 필요");
+    }
     actions.append(teach, go, remove);
     row.append(title, meta, actions);
     list.append(row);
@@ -208,7 +220,7 @@ export function renderWaypoints(payload) {
     remove.setAttribute("kind", "quiet");
     remove.type = "button";
     remove.dataset.waypointAction = "delete";
-    remove.textContent = "삭제";
+    remove.textContent = "삭제…";
     actions.append(go, remove);
     row.append(title, meta, actions);
     list.append(row);
@@ -264,20 +276,20 @@ elements["waypoint-list"]?.addEventListener("click", async (event) => {
   const action = button.dataset.waypointAction;
   try {
     if (action === "delete") {
-      if (!window.confirm(`${name} 웨이포인트를 삭제할까요?`)) return;
+      if (!await confirmIrreversible({message: `"${name}" 웨이포인트를 삭제할까요?`, action: "웨이포인트 삭제", opener: button})) return;
       await api(`/api/v1/waypoints/${encodeURIComponent(name)}`, { method: "DELETE" });
       setFieldMessage("waypoint-message", `${name} 을(를) 삭제했습니다.`);
       await refreshWaypoints();
       return;
     }
     if (action === "home") {
-      if (!window.confirm("Home으로 복귀할까요? NAVIGATION 모드로 들어갑니다.")) return;
+      if (!window.confirm("Home으로 복귀할까요? 내비게이션 모드로 들어갑니다.")) return;
       await api("/api/v1/navigation/home", { method: "POST" });
       setFieldMessage("waypoint-message", "Home 복귀를 요청했습니다.");
       await hooks.refreshRobotState();
       return;
     }
-    if (!window.confirm(`${name} 으로 이동할까요? NAVIGATION 모드로 들어갑니다.`)) return;
+    if (!window.confirm(`${name} 으로 이동할까요? 내비게이션 모드로 들어갑니다.`)) return;
     await api("/api/v1/navigation/goal", {
       method: "POST",
       body: JSON.stringify({ waypoint: name }),
@@ -392,7 +404,7 @@ elements["dock-list"]?.addEventListener("click", async (event) => {
   const action = button.dataset.dockAction;
   try {
     if (action === "delete") {
-      if (!window.confirm(`${id} 도크를 삭제할까요?`)) return;
+      if (!await confirmIrreversible({message: `"${id}" 도크를 삭제할까요?`, action: "도크 삭제", opener: button})) return;
       await api(`/api/v1/docking/docks/${encodeURIComponent(id)}`, { method: "DELETE" });
       setFieldMessage("dock-message", `${id} 을(를) 삭제했습니다.`);
       await refreshDocks();
@@ -499,7 +511,8 @@ elements["token-list"]?.addEventListener("click", async (event) => {
   const row = event.target.closest("li[data-token-id]");
   if (!button || !row) return;
   const tokenId = row.dataset.tokenId;
-  if (!window.confirm("이 토큰을 삭제할까요? 되돌릴 수 없습니다.")) return;
+  const tokenName = row.querySelector("span")?.textContent.split(" · ")[0] || tokenId;
+  if (!await confirmIrreversible({message: `"${tokenName}" 토큰을 삭제할까요? 되돌릴 수 없습니다.`, action: "토큰 삭제", opener: button})) return;
   try {
     await api(`/api/v1/system/tokens/${encodeURIComponent(tokenId)}`, { method: "DELETE" });
     setFieldMessage("token-message", "토큰을 삭제했습니다.");

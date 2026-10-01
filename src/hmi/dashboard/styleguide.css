@@ -10,7 +10,7 @@ body {
   margin: 0;
   padding: var(--space-5) var(--space-4) var(--space-6);
   background: var(--ground);
-  color: var(--paper);
+  color: var(--ink);
   font-family: var(--body);
   font-size: var(--text-body);
   line-height: var(--leading-copy);
@@ -28,7 +28,7 @@ h1 {
   margin: 0 0 var(--space-2);
 }
 
-.intro { color: var(--muted); margin: 0; }
+.intro { color: var(--ink-quiet); margin: 0; }
 
 main {
   max-width: 720px;
@@ -50,7 +50,7 @@ h2 {
 }
 
 .rule {
-  color: var(--muted);
+  color: var(--ink-quiet);
   margin: 0 0 var(--space-3);
 }
 
@@ -66,6 +66,8 @@ h2 {
 .demo-wide { display: flex; width: 100%; }
 .demo-row { flex-wrap: wrap; }
 .type-demo { align-items: baseline; flex-wrap: wrap; }
+/* 확인 대화상자 고정 그림 — 제품의 고정 가운데 배치를 풀어 칸 안에 둔다. */
+.dialog-demo dialog.ui-confirm { position: static; z-index: auto; margin: 0; }
 
 .gate {
   color: var(--nominal-quiet);
@@ -76,7 +78,7 @@ h2 {
 
 .gate code {
   font-family: var(--mono);
-  color: var(--muted);
+  color: var(--ink-quiet);
 }
 
 /* ---- 어휘 데모 ------------------------------------------------------- */
@@ -125,7 +127,7 @@ h2 {
 .demo-btn {
   border: 0;
   border-radius: var(--radius-button);
-  color: var(--paper);
+  color: var(--ink);
   font-family: var(--body);
   font-size: var(--text-label);
   padding: 0 var(--space-4);
@@ -145,7 +147,7 @@ h2 {
 
 .demo-btn.irreversible {
   background: var(--status-crit);
-  color: var(--paper);
+  color: var(--ink-on-crit);
   min-height: var(--target-irreversible);
 }
 
@@ -154,7 +156,7 @@ h2 {
   background: var(--field-bg);
   border: 0;
   border-bottom: 1px solid var(--field-line);
-  color: var(--paper);
+  color: var(--ink);
   font-family: var(--body);
   font-size: var(--text-body);
   padding: var(--space-2) var(--space-3);
@@ -180,7 +182,7 @@ h2 {
 .demo-tag.crit {
   background: var(--status-crit);
   border-color: var(--status-crit);
-  color: var(--paper);
+  color: var(--ink-on-crit);
 }
 
 .demo-map {
@@ -193,7 +195,7 @@ h2 {
   background: var(--scrim);
   border: 1px solid var(--surface-line);
   border-radius: var(--radius-control);
-  color: var(--paper);
+  color: var(--ink);
   font-size: var(--text-micro);
   letter-spacing: var(--track-label);
   padding: var(--space-1) var(--space-3);
@@ -207,23 +209,23 @@ h2 {
   width: 100%;
 }
 
-.demo-triage small { color: var(--muted); margin-left: auto; }
+.demo-triage small { color: var(--ink-quiet); margin-left: auto; }
 
 .demo-dot {
   width: var(--space-2);
   height: var(--space-2);
   border-radius: var(--radius-flag);
-  background: var(--muted-line);
+  background: var(--line-quiet);
 }
 
 .demo-dot.warn { background: var(--status-warn); }
 
 .demo-evidence { color: var(--nominal-quiet); font-size: var(--text-label); }
 
-.demo-evidence.delayed { color: var(--muted); }
+.demo-evidence.delayed { color: var(--ink-quiet); }
 
 .demo-evidence.unavailable {
-  color: var(--muted);
+  color: var(--ink-quiet);
   border: 1px dashed var(--line-30);
   padding: var(--space-1) var(--space-3);
 }

@@ -140,7 +140,12 @@ export function buildStage() {
   const track = el("span", null, {"data-intent-track": ""});
   track.append(el("i", null, {"data-intent-centre": ""}), el("i", null, {"data-intent-target": ""}));
   intent.append(track, el("span", "", {"data-intent-steer": ""}));
-  view.append(frame, empty, intent);
+  // 보정 중 띠(D-321 부록): 영상 위쪽. 다른 토큰의 보정이면 잠금 사유까지 여기 적는다.
+  const calibration = el("div", null, {role: "status", "aria-live": "polite",
+                                        "data-drive-calibration": "", hidden: ""});
+  calibration.append(el("ui-text", "", {scale: "value", "data-drive-calibration-title": ""}),
+                     el("ui-status", "", {state: "warning", "data-drive-calibration-reason": ""}));
+  view.append(frame, empty, intent, calibration);
   stage.append(view, buildHud(), blocked);
   return stage;
 }
@@ -163,6 +168,7 @@ function buildHud() {
     el("span", "—", {"data-drive-fact": "latency"}),
     el("span", "—", {"data-drive-fact": "mode"}),
     el("span", "—", {"data-drive-fact": "battery"}),
+    el("span", "보정 중", {"data-drive-fact": "activity", hidden: ""}),
   );
   hud.append(gauge, motion, cap, zoom, facts);
   return hud;

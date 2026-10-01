@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ko">
+<html lang="ko" data-theme="dark" data-theme-pin="dark">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -45,12 +45,12 @@
       <ul id="markers" class="chips" aria-label="보이는 마커"></ul>
       <p id="lost" class="lost" hidden>유실</p>
       <img id="frame" alt="천장 프레임" hidden>
-      <p id="stair1">계단 1 아직 (FIELD GO 아님)</p>
+      <p id="stair1">계단 1 아직 · 경기장 준비 전</p>
     </aside>
   </main>
   <p class="halt-row">
-    <ui-button id="halt" kind="irreversible" type="button">정지</ui-button>
-    <span>스페이스도 양쪽을 세운다</span>
+    <ui-button id="halt" kind="irreversible" data-always-live type="button">정지</ui-button>
+    <span>스페이스 키로도 두 로봇을 세웁니다</span>
     <span id="halt-status" role="status" aria-live="polite"></span>
   </p>
   </ui-shell>

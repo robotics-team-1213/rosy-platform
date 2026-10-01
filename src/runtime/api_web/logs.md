@@ -189,6 +189,12 @@
 - gate 변화: 없음.
 - 교훈: v1.57 정렬 때와 같은 누락이 재발했다 — 범프 회차 체크리스트에 핀 3곳이 들어가야 한다.
 
+## 2026-09-30 · ff6938e4 · D-359 US-002 device 패널 목록에 system.display
+
+- 변경: `test_ui_route.py`의 기본 표면 패널 id 집합에 `system.display`(화면 테마)를 더했다. 서버 코드는 바뀌지 않는다 — panels.yaml 레지스트리가 새 패널을 싣는다.
+- 증거: `python -m pytest src/runtime/api_web/test -q` 통과.
+- gate 변화: 없음.
+
 ## 2026-09-30 · uncommitted · fix(api): 계약 문구 v1.60 — 세 번째 연속 핀 누락 마무리
 
 - 변경: D-354 필드 제안 회차가 API Ref을 v1.60으로 올리면서 핀 3곳(app.py docstring·FastAPI description·line-follow 핀)을 다시 놓쳤다. D-347의 같은 변경 단위 규칙대로 세 곳을 맞췄다.
@@ -226,6 +232,36 @@
 
 - 변경: _swarm_role()가 snapshot().swarm.role 를 검색·검증해 핸드오버에 실었다. none·모르는 값은 없음.
 - 증거: test_host_status_summary.py 40 passed (키 셋·none 부재 포함).
+- gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · D-390 Pilot asset and API version alignment
+- Change: Serve the new OMX driver and arm screen modules through the existing Pilot asset allowlist; update API description to v1.67.
+- Evidence: Pilot driver/link/route tests 26 passed and API version alignment tests 4 passed.
+- Gate: CORE command ownership unchanged.
+
+## 2026-10-01 · a527920a · feat(api): /api/v1/calibration/session 과 CALIBRATION_ACTIVE 차단
+- 변경: `v1/calibration.py`(GET/POST session, POST heartbeat, DELETE). `common.require_calibration_owner()` 를 `/mode`·`/teleop`·`/line-follow/mode`(OFF 제외)·`/line-follow/hold` 에 걸었다 — 다른 토큰은 409 `CALIBRATION_ACTIVE`, E-Stop 은 보지 않는다. `deps` 재수출에 `CalibrationSessionError`, `CoreServicesLike.calibration`.
+- 증거: test_calibration_session.py 13 passed(수명, 만료, 비소유자 409, owner teleop D-342 한도, E-Stop, robot/state·ws activity).
+- gate 변화: 없음.
+
+## 2026-10-01 · 1a1a2c3a · docs(api): API Ref v1.67 과 버전 핀
+- 변경: app.py 가 calibration 라우터를 포함하고, docstring·description 핀을 v1.64(낡음) → v1.67 로. pilot 자산 allowlist 에 `calibration.js`(5db3391d).
+- 증거: test_protocol_version_alignment, test_line_follow_contract_docs, test_task_contract_docs, test_pilot_route 통과.
+- gate 변화: 없음.
+
+## 2026-10-01 · 1ae6b239 · fix(core): 보정 차단을 navigation·docking·swarm 까지, IDLE 은 열어 둔다
+- 변경: 리뷰가 찾은 구멍 — 비소유자가 `navigation/goal`·`home`, `docking/dock`·`undock`, `swarm/follow` 로 여전히 구동할 수 있었다. `enter_navigation_mode` 가 lease 를 먼저 보고(goal·home·swarm·line-follow), dock·undock·swarm follow 는 첫 줄에서 본다. `/mode` IDLE 은 멈춤뿐이라 e-stop 처럼 누구에게나 연다. 만료가 lock 안에서 발행하므로 lease lock 을 RLock 으로.
+- 증거: test_calibration_session.py 15 passed(새 docking·IDLE 시험, 비소유자 409 목록 확장). 전체 core 도메인 2318 passed; 실패 3건은 main 에도 있는 test_core_node_teardown·test_module_criteria C6(D-385 ros_bridge getattr), 부하 때만 나는 test_line_follow_api IR 증거 stale(단독 통과).
+- gate 변화: 없음.
+
+## 2026-10-01 · 4f54dc54 · fix(core): 리뷰 반영 — 시작 조건, 차단 확대
+- 변경: `POST /calibration/session` 은 IDLE·MANUAL 이고 navigation·mapping·도킹·line-follow·swarm 이 없을 때만 연다(409 MODE_CONFLICT). `/ws/swarm/reference` 는 lease 중 비소유자 프레임을 버린다(4f54dc54). 1ff0ba6b: 비소유자의 `PUT /safety/limits`, initialpose, SLAM start/stop/reset, `/power/mode` 409, host release install·rollback·reboot 는 `override_calibration: true` 없이는 409. `/power/wake`·`/slam/save` 는 연다.
+- 증거: test_calibration_session.py 42 passed(시작 조건, reference 버림, 한도·host·pose·slam·power, viewer e-stop, cancel 열림, /api/v1/do 차단, 16 스레드 동시 시작 1건만). gateway·api_web·services 1955 passed, 새 실패 0 — test_module_criteria C6 는 main 의 D-385 ros_bridge getattr 에서 온 기존 실패.
+- gate 변화: 없음.
+
+## 2026-10-01 · 76c70e20 · merge(main) + API Ref v1.68 로 재번호, 검증 틈 시험 3건
+- 변경: main 이 v1.67 을 D-390(OMX-AI Gazebo Pilot)에 먼저 썼다. 보정 변경을 v1.68 로 옮겼다 — 헤더, main v1.67 행 위의 새 변경 이력 행, 본문 표기, app.py·schemas.py·핀 시험(test_mission_progress·test_task_contract_docs·test_line_follow_contract_docs)·guard·D-321 부록. pilot sw.js 캐시 `-9`(calibration.js 유지), styles.css 는 main 의 arm/sim 블록과 보정 판 블록을 둘 다 둔다. 틈 시험: engage 실패 후 나가기는 IDLE 없음(modeHeld 고정), guard HTTP 500 은 FAILED, 비소유자 `slam/save` 는 열림.
+- 증거: gateway·api_web·services·guard·release-push·핀 1969 passed, 실패 1(test_module_criteria C6, main 에서도 실패). ROSY_RUN_BROWSER_TESTS=1 pilot 전체 + dashboard 칩 71 passed. rosy_harness lint 0 errors.
 - gate 변화: 없음.
 
 ## 2026-10-01 · uncommitted · docs(api): WS 인증은 첫 메시지가 기본 — Fleet도 D-370 S7부터

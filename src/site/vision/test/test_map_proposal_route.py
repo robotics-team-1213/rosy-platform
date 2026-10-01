@@ -13,7 +13,7 @@ import pytest
 
 from core_common.protocol.vision_preview import VisionLeaseSigner
 from rosy_vision import map_worker, protocol
-from rosy_vision.ingest import IngestServer, LatestFrame
+from rosy_vision.ingest import IngestServer, LatestFrame, _MapRun
 from rosy_vision.map_register import RegistrationResult, load_map_paint
 from rosy_vision.protocol import FrameHeader
 from map_paint_frames import STL, render, similarity
@@ -117,6 +117,58 @@ def test_one_viewer_is_rate_limited_per_second(track_jpeg, paint):
     assert _get(server, PATH, lease).status_code == 200  # served from the cached run
     limited = _get(server, PATH, lease)
     assert limited.status_code == 429 and limited.headers["Retry-After"] == "1"
+
+
+def test_a_read_during_a_run_gets_the_last_successful_result_not_busy(track_jpeg, paint):
+    server = _server(track_jpeg, paint)
+    first = _get(server, PATH, _lease(server))
+    assert first.status_code == 200 and first.headers["X-Proposal-State"] == "current"
+    done = server._map_cache["ceiling-north"]
+    # A newer frame is being registered for another reader (single flight, not finished).
+    newer = LatestFrame(header=FrameHeader(seq=10, age_ms=0, width=1280, height=720, rotation_deg=0),
+                        jpeg=track_jpeg, captured_at=time.time(), received_at=time.time())
+    server._sources["ceiling-north"].latest = newer
+    server._map_cache["ceiling-north"] = _MapRun(frame=newer)
+
+    response = _get(server, PATH, _lease(server, principal="other"))
+
+    assert response.status_code == 200
+    assert response.headers["X-Proposal-State"] == "previous"
+    body = json.loads(response.body)
+    assert body["frame_seq"] == 9 and body["accepted"] is True
+    assert server._map_done["ceiling-north"] is done
+    # Nothing finished yet for this source: still 429 with Retry-After.
+    server._map_done.clear()
+    busy = _get(server, PATH, _lease(server, principal="third"))
+    assert busy.status_code == 429 and busy.headers["Retry-After"] == "1"
+
+
+def test_a_run_from_before_a_reconnect_is_never_served_as_previous(track_jpeg, paint):
+    import threading
+    from concurrent.futures import ThreadPoolExecutor
+
+    gate = threading.Event()
+
+    def blocking(jpeg):
+        gate.wait(5.0)
+        return RegistrationResult(None, False, "old connection", 1.0, (1280, 720))
+
+    server = _server(track_jpeg, paint)
+    server._map_executor = ThreadPoolExecutor(max_workers=1)
+    server._map_job = blocking
+    old = server._sources["ceiling-north"].latest
+
+    async def scenario():
+        task = asyncio.create_task(server._map_proposal_response("ceiling-north", old))
+        await asyncio.sleep(0.1)
+        # The phone reconnects mid-run: the handler drops the source's caches.
+        server._map_cache.pop("ceiling-north", None)
+        server._map_done.pop("ceiling-north", None)
+        gate.set()
+        return await task
+
+    asyncio.run(scenario())
+    assert "ceiling-north" not in server._map_done
 
 
 def test_corrupt_jpeg_is_a_consistent_422(paint):

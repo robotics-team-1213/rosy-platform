@@ -32,6 +32,7 @@ def test_pilot_assets_allowlist_blocks_the_rest():
     assert client.get("/pilot/assets/client.js").status_code == 200
     assert client.get("/pilot/assets/recent.js").status_code == 404   # 쓰지 않는 모듈은 지웠다(allowlist 밖)
     assert client.get("/pilot/assets/autonomy.js").status_code == 200
+    assert client.get("/pilot/assets/calibration.js").status_code == 200
     assert client.get("/pilot/assets/screens/connect.js").status_code == 200
     assert client.get("/pilot/assets/screens/drive.js").status_code == 200
     assert client.get("/pilot/assets/screens/drive-auto.js").status_code == 200
