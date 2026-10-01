@@ -53,3 +53,7 @@ After label placement was adjusted to keep LEFT/RIGHT titles and overlapping obj
 Integration initially tripped the P6 package growth gate (40958 vs 40803+150 lines). The added pure lane-topology/tag modules remain with the existing perception split and add no writer authority; after caption placement was finalized the required split verdict was explicitly re-judged at 40961 without widening the allowance.
 
 Post-merge focused preview plus quick gate: **116 passed / 23 warnings**. Final caption-placement and P6 rerun: **54 passed**. Saved same-stamp final rendering: `X:\DevTemp\rosy-follow-v3\camera-final.png`, with source evidence in `replay-evidence.json`; this is HOST_REPLAY_OF_GAZEBO, not a live physical camera.
+
+Remote CI at `1063cd12` (run `36895230123`) compiled and linted successfully but stopped on the newly introduced fullscreen `100vh`, caught by the D-359 design gate: 1 failed / 2671 passed / 37 skipped. Fullscreen was corrected to `100dvh`; its design gate passed all 5 tests. Later CI steps did not run, so this result does not supersede the earlier deployment/architecture failures with a green full-CI claim. Native unsigned payload run `36895288093` succeeded for `2026.10.02-023` at `1063cd12`; it predates this CSS correction and is not the final deployment candidate.
+
+The corrected dynamic-height camera fullscreen was also exercised in Chromium: **1 passed / 11 deselected**, including exit and focus return (27.82 seconds).
