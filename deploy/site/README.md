@@ -254,6 +254,26 @@ implemented, and as the rollback path if pairing fails at a site, use a
 `static` source with the manual `rosyov://...&tls=1` link, which still needs
 the site CA installed in Android's user credentials.
 
+### Preflight (D-391 3)
+
+Run the consistency check on the Ubuntu host before `docker compose up`; it
+exits non-zero and prints a reason and fix hint per failed check:
+
+```sh
+python3 /opt/rosy/site/site_preflight.py --site-cert <secrets>/site.crt
+python3 /opt/rosy/site/site_preflight.py --site-cert <secrets>/site.crt --json
+```
+
+It reads `ROSY_SITE_TLS_HOST` (flag `--tls-host`, else the shell, else
+`/etc/rosy/site/.env`) and checks: `site_cert` is a leaf (not a CA) followed by
+a CA; the leaf has a DNS SAN equal to `tls_host` (exact, case-insensitive, a
+wildcard does not count); `tls_host` is a `<name>.local` name; the
+`--tls-host` that the advertise units publish equals it; and the Caddyfile
+site address names no other host (a port-only `:8443` address passes). Only the
+first Caddyfile site block's addresses are read. IP SANs are not checked: they
+go stale on renumber, and an IP SAN is needed only for a `manual_host`
+fallback link, which this preflight does not cover.
+
 ## Prepare an Ubuntu host
 
 Install Docker Engine and the Compose plugin from the approved Ubuntu package
