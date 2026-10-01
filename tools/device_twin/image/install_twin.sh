@@ -8,9 +8,9 @@ CTX="$1"
 # shellcheck disable=SC1091
 . "$CTX/twin.env"   # FACTORY_RELEASE PYTHON_RUNTIME API_BASE REPO API_PORT
 
-REPO="$(mktemp -d)"
-tar -xf "$CTX/repo.tar" -C "$REPO"
-NATIVE="$REPO/deploy/robot/pinky_pro/native"
+SRC="$(mktemp -d)"
+tar -xf "$CTX/repo.tar" -C "$SRC"
+NATIVE="$SRC/deploy/robot/pinky_pro/native"
 
 # Accounts, as customize-rootfs.sh creates them.
 groupadd --gid 960 rosy-core && useradd --uid 960 --gid 960 --system --no-create-home --shell /usr/sbin/nologin rosy-core
@@ -30,6 +30,9 @@ install -d -m 0755 /etc/modprobe.d /etc/udev/rules.d
 # The immutable native runtime, exactly as the image installs it.
 mkdir -p /opt/rosy/releases
 bash "$NATIVE/install-native-runtime.sh" /opt/rosy/native-runtime
+# The udev rules and modprobe options the image overlay installs (build-native-payload.sh).
+install -m 0644 "$SRC"/deploy/robot/pinky_pro/udev/*.rules /etc/udev/rules.d/
+install -m 0644 "$SRC"/deploy/robot/pinky_pro/modprobe/*.conf /etc/modprobe.d/
 
 # The real rosy units (sync-image-layer.py UNITS), plus the image-only first-boot gate as a stub.
 for unit in rosy-release-recover.service rosy-sd-provision.service rosy-core.service rosy-runtime.target \
@@ -77,7 +80,10 @@ python3 -B /opt/rosy/native-runtime/native_release.py \
 # auto-update timer stays disabled: scenarios start the service by hand.
 systemctl enable rosy-release-recover.service rosy-runtime.target rosy-first-boot.service
 # Container noise that has no robot counterpart.
-systemctl mask systemd-udevd.service systemd-udevd-control.socket systemd-udevd-kernel.socket \
+# systemd-udevd stays: sync-image-layer.py runs `udevadm control --reload`. The
+# container has its own network namespace, so it gets no host uevents; the
+# coldplug trigger is masked so it never re-runs rules on the WSL VM's devices.
+systemctl mask systemd-udev-trigger.service systemd-udev-settle.service \
     getty@tty1.service console-getty.service systemd-networkd-wait-online.service 2>/dev/null || true
 
 # Twin tools (not part of any release or of the native runtime).
@@ -87,4 +93,4 @@ install -m 0755 "$CTX/twin/image/sandbox_probe.py" /opt/twin/sandbox_probe.py
 # The probe unit is the real rosy-auto-update.service with only ExecStart swapped.
 sed 's#^ExecStart=.*#ExecStart=/usr/bin/python3 -I -B /opt/twin/sandbox_probe.py#' \
     /etc/systemd/system/rosy-auto-update.service > /etc/systemd/system/twin-sandbox-probe.service
-rm -rf "$REPO"
+rm -rf "$SRC"

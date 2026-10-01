@@ -6,7 +6,7 @@ FROM ubuntu:24.04 AS base
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update \
  && apt-get install -y --no-install-recommends systemd systemd-sysv dbus python3 openssl tar curl \
-      iproute2 sudo ca-certificates \
+      iproute2 sudo ca-certificates udev kmod \
  && rm -rf /var/lib/apt/lists/*
 
 FROM base AS twin

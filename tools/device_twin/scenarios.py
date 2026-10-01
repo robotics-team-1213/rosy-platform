@@ -137,14 +137,17 @@ class Scenarios:
         rollout, ok = gh.remote_rollout(R["B"])
         self.r.check("publish tool exited 0 and set canary_ok=true (signed)", code == 0 and ok
                      and rollout["canary_ok"] is True and rollout["withdrawn"] is False, f"exit {code}")
-        status = self.updater("(second run)")
+        # canary_ok re-uploaded rollout.json (a new asset size, so a new list ETag): the
+        # next run gets a 200, the one after it a 304.
+        self.updater("(second run)")
+        status = self.updater("(third run)")
         requests = [json.loads(line) for line in
                     (self.build.store / "requests.jsonl").read_text(encoding="utf-8").splitlines()]
         listing = [item for item in requests if "/releases" in item["path"]]
         self.note("fake GitHub list requests", "\n".join(json.dumps(item) for item in listing))
-        self.r.check("second run: idle, current B", status.get("phase") == "idle"
+        self.r.check("later run: idle, current B", status.get("phase") == "idle"
                      and status.get("current_release") == R["B"], status.get("reason"))
-        self.r.check("second run sent If-None-Match and got 304", bool(listing) and listing[-1]["status"] == 304
+        self.r.check("later run sent If-None-Match and got 304", bool(listing) and listing[-1]["status"] == 304
                      and bool(listing[-1]["if_none_match"]), listing[-1] if listing else None)
         self.ev(f"cat {UPDATES}/history.jsonl")
 
