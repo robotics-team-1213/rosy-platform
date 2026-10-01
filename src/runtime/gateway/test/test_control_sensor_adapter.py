@@ -358,3 +358,35 @@ def test_enabled_adapter_without_provider_fails_closed_with_install_hint():
     with patch("importlib.metadata.entry_points", return_value=()):
         with pytest.raises(ValueError, match="control slice"):
             ControlSensorAdapter({"enabled": True})
+
+
+@pytest.mark.parametrize("raw, mode, enabled", [
+    ({}, "off", False),
+    ({"mode": "off"}, "off", False),
+    ({"mode": "shadow"}, "shadow", True),
+    ({"mode": "enforce"}, "enforce", True),
+    ({"enabled": True}, "enforce", True),
+    ({"enabled": False}, "off", False),
+])
+def test_mode_parsing_and_enabled_compat(raw, mode, enabled):
+    config = ControlSensorConfig.from_mapping(raw)
+
+    assert config.mode == mode
+    assert config.enabled is enabled
+
+
+@pytest.mark.parametrize("raw, message", [
+    ({"mode": False}, "quote"),            # YAML 1.1 reads bare off as False
+    ({"mode": "on"}, "off, shadow or enforce"),
+    ({"mode": "shadow", "enabled": True}, "not both"),
+    ({"mode": "shadow", "stale_hold_s": 0}, "stale_hold_s"),
+    ({"mode": "shadow", "stale_hold_s": 5.5}, "stale_hold_s"),
+    ({"mode": "shadow", "stale_hold_s": True}, "stale_hold_s"),
+])
+def test_mode_and_stale_hold_reject_invalid_values(raw, message):
+    with pytest.raises(ValueError, match=message):
+        ControlSensorConfig.from_mapping(raw)
+
+
+def test_stale_hold_defaults_to_two_seconds():
+    assert ControlSensorConfig.from_mapping({"mode": "shadow"}).stale_hold_s == 2.0

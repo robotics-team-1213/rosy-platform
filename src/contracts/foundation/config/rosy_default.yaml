@@ -32,7 +32,10 @@ adapters:
 
 control:
   sensor_adapter:
-    enabled: false                # explicit opt-in; CORE remains stationary until enabled
+    mode: "off"                   # D-398: off = no policy, CORE passes commands through
+                                  # shadow = judge and record, never change cmd_vel
+                                  # enforce = limit/stop by the policy. Quote "off" (YAML 1.1 bool)
+    stale_hold_s: 2.0             # enforce: gaps shorter than this HOLD, longer latch (D-398 4)
     required: [lidar, imu, ir]
     max_age: 0.5                   # policy evidence lease, seconds
     parameters: {}                 # validated ROS SafetyNode overrides

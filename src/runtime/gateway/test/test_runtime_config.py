@@ -30,7 +30,8 @@ def test_packaged_default_keeps_sensor_adapter_and_calibration_opt_in():
     )
     sensor = config["control"]["sensor_adapter"]
 
-    assert sensor["enabled"] is False
+    assert sensor["mode"] == "off"
+    assert "enabled" not in sensor
     assert sensor["calibration"]["required"] is False
     assert sensor["calibration"]["data_root"] == "/var/lib/rosy"
 

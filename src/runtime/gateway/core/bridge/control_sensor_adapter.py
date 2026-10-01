@@ -21,6 +21,8 @@ from typing import Any, Callable, Optional
 
 
 _DEFAULT_REQUIRED = ("lidar", "imu", "ir")
+_MODES = ("off", "shadow", "enforce")
+_DEFAULT_STALE_HOLD_S = 2.0
 _COMMAND_AUTHORITY_FIELDS = ("pub", "raw_zero_pub", "estop_pub", "decision_pub")
 _CALIBRATION_CONTEXT_FIELDS = frozenset({
     "robot_id", "hardware_model", "geometry_revision", "sensor_revision", "data_generation",
@@ -29,6 +31,23 @@ _CALIBRATION_PARAMETER_FIELDS = frozenset({
     "cliff_raw_max", "cliff_clear_raw", "cliff_mode", "cmd_linear_sign",
     "imu_roll0", "imu_pitch0", "lidar_yaw_offset",
 })
+
+
+def _parse_mode(raw: Mapping[str, Any]) -> str:
+    """D-398: mode off | shadow | enforce; the legacy enabled bool maps to enforce/off."""
+    if "mode" in raw and "enabled" in raw:
+        raise ValueError("control sensor adapter takes mode or enabled, not both")
+    if "mode" not in raw:
+        enabled = raw.get("enabled", False)
+        if type(enabled) is not bool:
+            raise ValueError("control sensor adapter enabled must be a boolean")
+        return "enforce" if enabled else "off"
+    mode = raw["mode"]
+    if type(mode) is not str:
+        raise ValueError('control sensor adapter mode must be a string; quote it in YAML ("off")')
+    if mode not in _MODES:
+        raise ValueError("control sensor adapter mode must be off, shadow or enforce")
+    return mode
 
 
 @dataclass(frozen=True)
@@ -40,7 +59,9 @@ class ControlSensorConfig:
     startup contract after validation.
     """
 
+    mode: str = "off"
     enabled: bool = False
+    stale_hold_s: float = _DEFAULT_STALE_HOLD_S
     required: tuple[str, ...] = _DEFAULT_REQUIRED
     max_age: float = 0.5
     parameters: tuple[tuple[str, Any], ...] = ()
@@ -53,9 +74,13 @@ class ControlSensorConfig:
         if not isinstance(raw, Mapping):
             raise ValueError("control sensor adapter config must be a mapping")
 
-        enabled = raw.get("enabled", False)
-        if type(enabled) is not bool:
-            raise ValueError("control sensor adapter enabled must be a boolean")
+        mode = _parse_mode(raw)
+        enabled = mode != "off"
+
+        stale_hold_s = raw.get("stale_hold_s", _DEFAULT_STALE_HOLD_S)
+        if (type(stale_hold_s) not in (int, float) or not math.isfinite(float(stale_hold_s)) or
+                not 0.0 < float(stale_hold_s) <= 5.0):
+            raise ValueError("control sensor adapter stale_hold_s must be in (0, 5]")
 
         required_raw = raw.get("required", _DEFAULT_REQUIRED)
         if not isinstance(required_raw, (tuple, list)) or not required_raw:
@@ -104,7 +129,8 @@ class ControlSensorConfig:
             raise ValueError("control sensor adapter calibration path must be a string")
         calibration = tuple(calibration_raw.items())
 
-        return cls(enabled=enabled, required=required, max_age=float(max_age),
+        return cls(mode=mode, enabled=enabled, stale_hold_s=float(stale_hold_s),
+                   required=required, max_age=float(max_age),
                    parameters=parameters, calibration=calibration)
 
     @property
