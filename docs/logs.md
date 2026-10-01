@@ -4154,3 +4154,7 @@
 - 변경: c3263f7c 뒤 `tools/perception/model/watch.py`가 630줄로 D-362 600줄 예산을 넘었다(test_over_budget_code_has_a_recorded_verdict). 판정 행을 더하지 않고, I/O 없는 상태 전이 함수 13개(`new_state`…`supersede`, `STATE_VERSION`)를 `watch_core.py`(140줄)로 옮겼다. `watch.py`(516줄)가 같은 이름을 다시 내보내므로 호출자와 시험은 그대로 `watch.<name>`을 쓴다. 동작 변경 없음.
 - 증거: tools/perception/test 484 passed, 39 skipped; test_module_structure 예산 시험.
 - gate 변화: 없음(SOURCE). 사이트 설치는 체크아웃 전체를 쓰므로 새 파일도 함께 간다.
+## 2026-10-01 · uncommitted · docs(plan): 기록 ER2 model-tool 후속 ROS-SIM 부분 검증
+- 변경: model-tool 구현 계획 Task 8에 OMX Pilot Gazebo 부분 실행 결과와 남은 ROS-SIM 시나리오를 분리 기록하고 검증 노트를 추가했다. provider tool이 Device Action을 직접 실행했다는 뜻으로 해석되지 않도록 Fleet Mission admission/grant 연결은 미검증으로 명시했다.
+- 증거: 고정 amd64 Pilot 이미지에서 `joint1`/그리퍼 action SUCCEEDED 및 관절 readback 변화, 명시 취소 CANCELED. Fleet 116 passed, OMX action/PICK_PLACE 48 passed. Jazzy direct vendor callback pytest 1 passed(무이동 goal, readback, 경쟁 owner 거절, 취소 terminal).
+- gate 변화: OMX ROS-SIM 제어경로 보조 증거만 추가. model-tool 통합 ROS-SIM, ARTIFACT, DEVICE, FIELD는 HOLD/PARKED.
