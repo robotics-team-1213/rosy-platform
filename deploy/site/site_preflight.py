@@ -28,6 +28,8 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 DEFAULT_ENV_FILE = "/etc/rosy/site/.env"
+DEFAULT_SITE_ENV = "/etc/rosy/site/site.env"          # what the stack unit hands Compose
+DEFAULT_SECRETS_DIR = "/etc/rosy/site/secrets"
 DEFAULT_UNITS = ("rosy-overhead-advertise.service", "rosy-fleet-advertise.service")
 FULLCHAIN_FIX = ("build it with `cat site.crt site-ca.crt > site-fullchain.crt` and point the "
                  "site_cert secret at that file (deploy/site/README.md)")
@@ -247,13 +249,13 @@ def read_env_file(path: Path) -> dict[str, str]:
     return values
 
 
-def published_tls_host(unit: Path, env_file: dict[str, str]) -> tuple[bool, str | None]:
-    """Return (is_overhead_advertise, tls_host the unit's ExecStart would publish).
+def _exec_words(unit: Path, env_file: dict[str, str]) -> list[str]:
+    """The unit's final ExecStart as systemd would expand it.
 
     Parsed from the unit: ``Environment=KEY=VALUE`` lines set defaults, an
     ``EnvironmentFile=`` line overlays ``env_file`` at its position, and each
     ExecStart word is expanded like systemd (``${VAR}``; an empty value yields
-    an empty word). Only ``--tls-host X`` / ``--tls-host=X`` is read.
+    an empty word).
     """
     env: dict[str, str] = {}
     words: list[str] = []
@@ -273,6 +275,15 @@ def published_tls_host(unit: Path, env_file: dict[str, str]) -> tuple[bool, str 
             words = [re.sub(r"\$\{(\w+)\}|\$(\w+)",
                             lambda m: env.get(m.group(1) or m.group(2), ""), word)
                      for word in shlex.split(command)]
+    return words
+
+
+def published_tls_host(unit: Path, env_file: dict[str, str]) -> tuple[bool, str | None]:
+    """Return (is_overhead_advertise, tls_host the unit's ExecStart would publish).
+
+    Only ``--tls-host X`` / ``--tls-host=X`` is read.
+    """
+    words = _exec_words(unit, env_file)
     overhead = any(words[i:i + 2] == ["--role", "overhead"] for i in range(len(words)))
     for index, word in enumerate(words):
         if word == "--tls-host":
@@ -307,6 +318,68 @@ def check_txt_tls_host(units: list[Path], env_file: dict[str, str], tls_host: st
     if problems:
         return _check(check_id, False, "; ".join(problems) + f"; configured tls_host is {wanted}", fix)
     return _check(check_id, True, f"{seen} advertise unit(s) publish TXT tls_host={wanted}")
+
+
+def published_pair(unit: Path, env_file: dict[str, str]) -> tuple[bool, bool]:
+    """Return (is_overhead_advertise, whether the unit would publish TXT pair=rosy-pair/1)."""
+    words = _exec_words(unit, env_file)
+    overhead = any(words[i:i + 2] == ["--role", "overhead"] for i in range(len(words)))
+    pair = any(word == "--pair" or word == "--pair=1" for word in words)
+    return overhead, pair
+
+
+def check_pairing(units: list[Path], env_file: dict[str, str], site_env: dict[str, str],
+                  secrets_dir: Path) -> dict:
+    """D-341: one switch (ROSY_SITE_PAIRING=1) must mean Fleet pairing, the TXT key and a token."""
+    check_id = "pairing_consistent"
+    fix = ("set ROSY_SITE_PAIRING=1 in both /etc/rosy/site/.env and /etc/rosy/site/site.env plus "
+           "ROSY_SITE_PAIRING_COMPOSE=-f <candidate>/deploy/site/compose.pairing.yaml in site.env, "
+           "create secrets/pairing_sync_token (deploy/site/README.md, Camera pairing), then restart "
+           "rosy-site-stack and rosy-overhead-advertise; or clear all of them to turn pairing off")
+    problems = []
+    values = {".env": env_file.get("ROSY_SITE_PAIRING", ""),
+              "site.env": site_env.get("ROSY_SITE_PAIRING", "")}
+    for name, value in values.items():
+        if value not in ("", "1"):
+            problems.append(f"{name} has ROSY_SITE_PAIRING={value!r}; use 1 or leave it empty")
+    if values[".env"] != values["site.env"]:
+        problems.append("ROSY_SITE_PAIRING in .env and site.env disagree "
+                        f"(.env={values['.env'] or 'empty'}, site.env={values['site.env'] or 'empty'})")
+    enabled = values["site.env"] == "1"
+    overlay = "compose.pairing.yaml" in site_env.get("ROSY_SITE_PAIRING_COMPOSE", "")
+    if overlay != enabled:
+        problems.append("ROSY_SITE_PAIRING_COMPOSE "
+                        + ("lacks compose.pairing.yaml, so Fleet would not run pairing" if enabled
+                           else "names compose.pairing.yaml but ROSY_SITE_PAIRING is not 1"))
+    for unit in units:
+        try:
+            overhead, advertised = published_pair(unit, env_file)
+        except (OSError, ValueError) as exc:
+            problems.append(f"{unit.name} cannot be read: {exc}")
+            continue
+        if overhead and advertised != (values[".env"] == "1"):
+            problems.append(f"{unit.name} " + ("would advertise pair=rosy-pair/1 but pairing is off"
+                                              if advertised else "does not advertise pair=rosy-pair/1"))
+    if enabled:
+        try:
+            token = (secrets_dir / "pairing_sync_token").read_text(encoding="utf-8").strip()
+        except OSError:
+            token = ""
+        if not token:
+            problems.append(f"{secrets_dir / 'pairing_sync_token'} is missing or empty")
+        else:
+            for name in ("registry_token", "phone_ingress_token", "fleet_sighting_token",
+                         "discovery_token", "vision_preview_secret", "robot_credential_key"):
+                try:
+                    other = (secrets_dir / name).read_text(encoding="utf-8").strip()
+                except OSError:
+                    continue
+                if other == token:
+                    problems.append(f"pairing_sync_token must be distinct, but equals {name}")
+    if problems:
+        return _check(check_id, False, "; ".join(problems), fix)
+    return _check(check_id, True, "pairing on: Fleet overlay, TXT pair and sync token agree"
+                  if enabled else "pairing off: nothing advertised, no overlay")
 
 
 def caddy_site_hosts(text: str) -> list[str] | None:
@@ -375,6 +448,8 @@ def run_checks(args: argparse.Namespace) -> list[dict]:
     units = [Path(u) for u in (args.unit or [HERE / name for name in DEFAULT_UNITS])]
     return [*site_cert_checks, check_tls_host_local(tls_host),
             check_txt_tls_host(units, env_file, tls_host),
+            check_pairing(units, env_file, read_env_file(Path(args.site_env)),
+                          Path(args.secrets_dir or secrets or DEFAULT_SECRETS_DIR)),
             check_caddy_host(Path(args.caddyfile or HERE / "Caddyfile"), tls_host)]
 
 
@@ -389,6 +464,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--site-cert", help="site_cert fullchain file (default $ROSY_SITE_SECRETS_DIR/site.crt)")
     parser.add_argument("--env-file", default=DEFAULT_ENV_FILE,
                         help=f"stand-in for the units' EnvironmentFile (default {DEFAULT_ENV_FILE}; may be absent)")
+    parser.add_argument("--site-env", default=DEFAULT_SITE_ENV,
+                        help=f"the env file the stack unit hands Compose (default {DEFAULT_SITE_ENV}; may be absent)")
+    parser.add_argument("--secrets-dir",
+                        help="secrets directory (default $ROSY_SITE_SECRETS_DIR, else " + DEFAULT_SECRETS_DIR + ")")
     parser.add_argument("--unit", action="append",
                         help="advertise unit file; repeatable (default: the two units beside this script)")
     parser.add_argument("--caddyfile", help="Caddyfile (default: the one beside this script)")

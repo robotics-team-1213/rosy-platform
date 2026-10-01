@@ -154,8 +154,47 @@
               </dialog>
             </div>
           </section>
-          <section id="camera-link" aria-labelledby="camera-link-heading" hidden>
-            <h4 id="camera-link-heading">카메라 연결 요청</h4>
+          <!-- D-341 3–5·11: 콘솔은 6자리 코드를 모른다. 운용자가 폰 화면의 코드를 입력하고,
+               설치자가 폰과 이 화면의 사이트 지문·자격 ID를 맞춰 본다. -->
+          <section id="camera-link" class="camera-link" aria-labelledby="camera-link-heading" data-role-lock>
+            <div class="robot-head">
+              <h4 id="camera-link-heading">카메라 연결 승인</h4>
+            </div>
+            <p class="hint">폰의 Rosy Cam이 보낸 연결 요청입니다. 폰 화면에 뜬 숫자 6자리를 입력해 승인합니다.</p>
+            <p id="camera-link-unavailable" class="hint" role="status" hidden>이 Fleet에는 카메라 연결 승인이 설정되지 않았습니다.</p>
+            <ui-status id="camera-role-lock" class="role-lock-note" state="forbidden" hidden>운용자 권한이 필요합니다</ui-status>
+            <div id="camera-link-controls" hidden>
+              <p id="camera-identity-note" class="hint" hidden>이름 있는 운용자 계정으로만 카메라 연결을 승인·거절·폐기할 수 있습니다 — 공용 관제 토큰으로는 할 수 없습니다(site-users.yaml).</p>
+              <p class="hint">이 사이트의 지문 <code id="camera-site-fingerprint" class="camera-id">—</code></p>
+              <p id="camera-queue-health" class="hint" hidden></p>
+              <div id="camera-result" class="enroll-result" aria-live="polite"></div>
+              <section id="camera-confirm" class="camera-confirm" aria-labelledby="camera-confirm-title" hidden>
+                <p id="camera-confirm-title"><b>폰 화면과 이 지문·자격 ID가 같은지 확인하세요</b></p>
+                <p id="camera-confirm-device" class="hint"></p>
+                <dl class="camera-confirm-values">
+                  <dt>사이트 지문</dt><dd id="camera-confirm-fingerprint"></dd>
+                  <dt>자격 ID</dt><dd id="camera-confirm-credential"></dd>
+                </dl>
+                <p id="camera-confirm-clock"></p>
+                <ui-button id="camera-confirm-close" kind="quiet" type="button">닫기</ui-button>
+              </section>
+              <h5 id="camera-requests-heading">대기 중인 요청</h5>
+              <ul id="camera-requests" class="enrolled-list camera-list" aria-labelledby="camera-requests-heading"></ul>
+              <h5 id="camera-credentials-heading">연결된 카메라</h5>
+              <ul id="camera-credentials" class="enrolled-list camera-list" aria-labelledby="camera-credentials-heading"></ul>
+              <dialog id="camera-approve-dialog" aria-labelledby="camera-approve-title">
+                <p id="camera-approve-title">카메라 <b id="camera-approve-target"></b> 연결 승인</p>
+                <label for="camera-approve-source">카메라 자리</label>
+                <select class="ui-field" id="camera-approve-source"></select>
+                <label for="camera-approve-code">폰 화면의 숫자 6자리</label>
+                <input class="ui-field" id="camera-approve-code" inputmode="numeric" autocomplete="off" maxlength="7">
+                <div id="camera-approve-error" class="enroll-result" aria-live="polite"></div>
+                <div class="enroll-dialog-actions">
+                  <ui-button id="camera-approve-submit" kind="primary" type="button">승인</ui-button>
+                  <ui-button id="camera-approve-cancel" kind="quiet" type="button">취소</ui-button>
+                </div>
+              </dialog>
+            </div>
           </section>
         </section>
       </div>

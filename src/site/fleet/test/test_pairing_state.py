@@ -415,3 +415,36 @@ def test_request_repr_hides_nonces_and_poll_digest(tmp_path):
     entry = service._requests[created["request_id"]]
     text = repr(entry)
     assert created["server_nonce"] not in text and entry.poll_sha256 not in text
+
+
+def test_a_repeated_confirm_with_the_same_id_is_idempotent_inside_the_window(tmp_path):
+    # rosy-84 client review: if the first 200 is lost, the phone must learn the credential is live.
+    service, store, clock = _service(tmp_path)
+    phone, created, approval = _approved(service, clock)
+    request_id, cred = created["request_id"], approval["credential_id"]
+    service.poll(request_id, phone.bearer)
+    first = service.confirm(request_id, phone.bearer, cred)
+    clock.advance(2)
+    again = service.confirm(request_id, phone.bearer, cred)
+    assert again == first == {"state": "confirmed", "credential_id": cred}
+    assert [row["action"] for row in store.audit_rows()].count("confirm") == 1
+
+
+def test_a_repeated_confirm_is_refused_after_the_window_a_revoke_or_with_another_id(tmp_path):
+    service, store, clock = _service(tmp_path)
+    phone, created, approval = _approved(service, clock)
+    request_id, cred = created["request_id"], approval["credential_id"]
+    service.poll(request_id, phone.bearer)
+    service.confirm(request_id, phone.bearer, cred)
+    assert _status(lambda: service.confirm(request_id, phone.bearer, "cred-other")).status == 410
+    assert _status(lambda: service.confirm(request_id, "Bearer wrong", cred)).status == 401
+    service.revoke(cred, principal_id="alice")
+    assert _status(lambda: service.confirm(request_id, phone.bearer, cred)).status == 410
+
+    service2, _, clock2 = _service(tmp_path / "late")
+    phone2, created2, approval2 = _approved(service2, clock2)
+    service2.poll(created2["request_id"], phone2.bearer)
+    service2.confirm(created2["request_id"], phone2.bearer, approval2["credential_id"])
+    clock2.advance(121)
+    assert _status(lambda: service2.confirm(created2["request_id"], phone2.bearer,
+                                            approval2["credential_id"])).status == 410
