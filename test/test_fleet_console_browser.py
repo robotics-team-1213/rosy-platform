@@ -691,6 +691,45 @@ def test_discovery_read_loss_removes_old_device_addresses_and_recovers(console_u
         browser.close()
 
 
+def test_expired_scanner_lease_raises_an_alarm_and_clears_on_return(console_url):
+    """2026-10-01 audit #4: a lost scanner stops move-address; the panel must say so loudly."""
+    from playwright.sync_api import sync_playwright
+
+    online = {"scanner_online": True, "scanner_state": "online", "scanner_age_s": 3, "devices": [{
+        "name": "rosy-a", "address": "192.0.2.10", "port": 8000,
+        "stage": "ready", "status": "pairing_pending",
+    }]}
+    api = {
+        "/api/fleet/state": SNAPSHOT,
+        "/api/fleet/map": MAP_GRID,
+        "/api/fleet/formation": FORMATION,
+        "/api/fleet/discovery": {"scanner_online": False, "scanner_state": "never_seen",
+                                 "scanner_age_s": None, "devices": []},
+    }
+    with sync_playwright() as playwright:
+        browser, page, errors = _open_console(playwright, api)
+        page.goto(console_url, wait_until="networkidle")
+        page.wait_for_function("() => document.querySelector('#discovery-status')?.textContent === '검색기 연결 대기'")
+        assert page.get_attribute("#discovery-status", "status") == "warn"
+
+        api["/api/fleet/discovery"] = {"scanner_online": False, "scanner_state": "expired",
+                                       "scanner_age_s": 61, "devices": []}
+        page.wait_for_function("() => document.querySelector('#discovery-status')?.textContent === '검색기 끊김'",
+                               timeout=7000)
+        assert page.get_attribute("#discovery-status", "status") == "crit"
+        assert "마지막 스캔 61초 전" in page.inner_text("#discovery-list")
+        assert "새 주소로 옮기기" in page.inner_text("#discovery-list")
+        assert page.inner_text("#log").count("발견 검색기 끊김") == 1
+
+        api["/api/fleet/discovery"] = online
+        page.wait_for_function("() => document.querySelector('#discovery-list')?.textContent.includes('192.0.2.10')",
+                               timeout=7000)
+        assert page.get_attribute("#discovery-status", "status") == "neutral"
+        assert "발견 검색기 다시 연결됨" in page.inner_text("#log")
+        assert errors == []
+        browser.close()
+
+
 def test_map_surface_explains_missing_map_and_recovers_without_stale_canvas(console_url):
     """The map area must explain why it cannot be used instead of showing a blank slab."""
     from playwright.sync_api import sync_playwright

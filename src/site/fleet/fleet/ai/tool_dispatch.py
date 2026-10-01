@@ -14,8 +14,9 @@ from core_common.protocol.schemas import (
     MissionFeedbackContext,
     MissionFeedbackTurnScope,
 )
+from fleet.ai.model_tool_contract import ModelToolCall, ModelToolResult
 from fleet.ai.model_tool_catalog import MODEL_TOOL_CATALOG, ToolEffectClass
-from fleet.server.proposal_store import ProposalRejected
+from fleet.server.proposal_store import ProposalConflict, ProposalRejected
 
 
 def _json_size(value: object) -> int | None:
@@ -46,16 +47,52 @@ class MissionFeedbackToolDispatcher:
     async def dispatch_replan(self, *, scope: MissionFeedbackTurnScope | Mapping[str, Any],
                               turn_id: str, call_id: str,
                               arguments: Mapping[str, Any], candidate_adapter: Any,
-                              egress_policy: Any) -> ER2ToolResult:
+                              egress_policy: Any,
+                              model_tool_call: ModelToolCall | None = None) -> ER2ToolResult:
         """Acquire one trusted post-action frame, ask ER 2 for selectors, then fence write."""
+        if model_tool_call is not None and (
+                model_tool_call.turn_id != turn_id
+                or model_tool_call.provider_call_id != call_id
+                or model_tool_call.tool_name != "propose_replan"
+                or model_tool_call.arguments != dict(arguments)):
+            return self._result("propose_replan", "rejected", "TOOL_CALL_SCOPE_MISMATCH")
+        call_started = False
         checked = self.dispatch(
             scope=scope, call_id=call_id, tool_name="propose_replan",
             arguments=arguments,
         )
-        if checked.reason_code != "REPLAN_OBSERVATION_UNAVAILABLE":
+        if model_tool_call is not None:
+            # The synchronous validation above confirms the trusted scope and
+            # authorization before a durable call identity is claimed. Persist
+            # every known result, including early policy/fence rejections.
+            if checked.reason_code not in {"TURN_SCOPE_INVALID", "PRINCIPAL_NOT_AUTHORIZED"}:
+                try:
+                    claim = self.proposal_store.begin_model_tool_call(model_tool_call)
+                except ProposalConflict:
+                    return self._result("propose_replan", "rejected", "PROVIDER_CALL_ID_REUSE")
+                except ProposalRejected as exc:
+                    return self._result("propose_replan", "rejected", exc.code)
+                if claim["state"] == "COMPLETED":
+                    return self._effect_result(ModelToolResult.model_validate(claim["result"]))
+                if claim["state"] == "UNKNOWN":
+                    return self._result("propose_replan", "unavailable",
+                                        "TOOL_CALL_OUTCOME_UNKNOWN")
+                if not claim["created"]:
+                    return self._result("propose_replan", "unavailable",
+                                        "TOOL_CALL_IN_PROGRESS")
+                call_started = True
+                if checked.reason_code != "REPLAN_OBSERVATION_UNAVAILABLE":
+                    self._complete_call_effect(model_tool_call, checked)
+                    return checked
+            else:
+                return checked
+        elif checked.reason_code != "REPLAN_OBSERVATION_UNAVAILABLE":
             return checked
         if self.post_action_observation_source is None:
+            if call_started and model_tool_call is not None:
+                self._complete_call_effect(model_tool_call, checked)
             return checked
+        candidate_invoked = False
         try:
             trusted_scope = (scope if isinstance(scope, MissionFeedbackTurnScope)
                              else MissionFeedbackTurnScope.model_validate(scope))
@@ -64,19 +101,40 @@ class MissionFeedbackToolDispatcher:
                 raise ValueError("invalid turn id")
             validate_egress = getattr(egress_policy, "validate_for", None)
             if not callable(validate_egress):
-                return self._result("propose_replan", "rejected", "REPLAN_EGRESS_NOT_APPROVED")
+                result = self._result("propose_replan", "rejected",
+                                      "REPLAN_EGRESS_NOT_APPROVED")
+                if call_started and model_tool_call is not None:
+                    self._complete_call_effect(model_tool_call, result)
+                return result
             try:
                 validate_egress(scope=trusted_scope, task_class="PICK_PLACE")
             except Exception:
-                return self._result("propose_replan", "rejected", "REPLAN_EGRESS_NOT_APPROVED")
+                result = self._result("propose_replan", "rejected",
+                                      "REPLAN_EGRESS_NOT_APPROVED")
+                if call_started and model_tool_call is not None:
+                    self._complete_call_effect(model_tool_call, result)
+                return result
             approved = getattr(egress_policy, "approved_data_classes", frozenset())
             if "camera_observation" not in approved:
-                return self._result("propose_replan", "rejected", "REPLAN_EGRESS_NOT_APPROVED")
+                result = self._result("propose_replan", "rejected",
+                                      "REPLAN_EGRESS_NOT_APPROVED")
+                if call_started and model_tool_call is not None:
+                    self._complete_call_effect(model_tool_call, result)
+                return result
             current = self._current_context(trusted_scope)
             if current is None:
+                if call_started and model_tool_call is not None:
+                    self._complete_call_result(
+                        model_tool_call, outcome="rejected", reason_code="TURN_SCOPE_STALE",
+                    )
                 return self._result("propose_replan", "rejected", "TURN_SCOPE_STALE")
             feedback, _mission = current
             if feedback.action_observed_at is None:
+                if call_started and model_tool_call is not None:
+                    self._complete_call_result(
+                        model_tool_call, outcome="unavailable",
+                        reason_code="REPLAN_OBSERVATION_UNAVAILABLE",
+                    )
                 return self._result("propose_replan", "unavailable",
                                     "REPLAN_OBSERVATION_UNAVAILABLE")
             capture = self.post_action_observation_source.capture_after(
@@ -116,19 +174,32 @@ class MissionFeedbackToolDispatcher:
             )
             if (checked.status != "unavailable"
                     or checked.reason_code != "REPLAN_OBSERVATION_UNAVAILABLE"):
+                if call_started and model_tool_call is not None:
+                    self._complete_call_effect(model_tool_call, checked)
                 return checked
             try:
                 validate_egress(scope=trusted_scope, task_class="PICK_PLACE")
             except Exception:
+                if call_started and model_tool_call is not None:
+                    self._complete_call_result(
+                        model_tool_call, outcome="rejected",
+                        reason_code="REPLAN_EGRESS_NOT_APPROVED",
+                    )
                 return self._result("propose_replan", "rejected", "REPLAN_EGRESS_NOT_APPROVED")
             approved = getattr(egress_policy, "approved_data_classes", frozenset())
             if "camera_observation" not in approved:
+                if call_started and model_tool_call is not None:
+                    self._complete_call_result(
+                        model_tool_call, outcome="rejected",
+                        reason_code="REPLAN_EGRESS_NOT_APPROVED",
+                    )
                 return self._result("propose_replan", "rejected", "REPLAN_EGRESS_NOT_APPROVED")
             request_id = "feedback-" + hashlib.sha256(
                 f"{turn_id}:{call_id}".encode("utf-8"),
             ).hexdigest()
             instruction = (feedback.task_summary[:1400]
                            + "; Replan rationale: " + arguments["rationale"][:512])[:2000]
+            candidate_invoked = True
             pending = candidate_adapter.propose_pick_place(
                 request_id=request_id, instruction=instruction,
                 observation=observation,
@@ -139,7 +210,7 @@ class MissionFeedbackToolDispatcher:
                 raise ValueError("proposal provenance did not match captured frame")
             saved = self.proposal_store.create_feedback_candidate_fenced(
                 turn_id=turn_id, candidate=candidate.to_candidate_record(),
-                observation=observation_scope,
+                observation=observation_scope, tool_call=model_tool_call,
             )
             return self._result(
                 "propose_replan", "accepted", "CANDIDATE_RECORDED",
@@ -149,14 +220,59 @@ class MissionFeedbackToolDispatcher:
                          "executable": False},
             )
         except ProposalRejected as exc:
+            if call_started and model_tool_call is not None:
+                self._complete_call_result(
+                    model_tool_call, outcome="rejected", reason_code=exc.code,
+                )
             return self._result("propose_replan", "rejected", exc.code)
+        except ProposalConflict:
+            if call_started and model_tool_call is not None:
+                self._complete_call_result(
+                    model_tool_call, outcome="rejected", reason_code="PROVIDER_CALL_ID_REUSE",
+                )
+            return self._result("propose_replan", "rejected", "PROVIDER_CALL_ID_REUSE")
+        except asyncio.CancelledError:
+            if call_started and model_tool_call is not None:
+                self.proposal_store.mark_model_tool_call_unknown(model_tool_call)
+            raise
         except Exception:
+            if call_started and model_tool_call is not None:
+                if candidate_invoked:
+                    self.proposal_store.mark_model_tool_call_unknown(model_tool_call)
+                    return self._result("propose_replan", "unavailable",
+                                        "TOOL_CALL_OUTCOME_UNKNOWN")
+                self._complete_call_result(
+                    model_tool_call, outcome="unavailable",
+                    reason_code="REPLAN_OBSERVATION_UNAVAILABLE",
+                )
             return self._result("propose_replan", "unavailable",
                                 "REPLAN_OBSERVATION_UNAVAILABLE")
 
+    def _complete_call_result(self, call: ModelToolCall, *, outcome: str,
+                              reason_code: str) -> None:
+        self.proposal_store.complete_model_tool_call(
+            call, result=ModelToolResult.for_call(
+                call, outcome=outcome, reason_code=reason_code, payload={},
+            ),
+        )
+
+    def _complete_call_effect(self, call: ModelToolCall, effect: ER2ToolResult) -> None:
+        self.proposal_store.complete_model_tool_call(
+            call, result=ModelToolResult.from_effect_result(call, effect),
+        )
+
+    @staticmethod
+    def _effect_result(result: ModelToolResult) -> ER2ToolResult:
+        return ER2ToolResult(
+            tool_name=result.tool_name, status=result.outcome,
+            reason_code=result.reason_code, event_id=result.event_id,
+            proposal_id=result.proposal_id, payload=result.payload,
+        )
+
     def dispatch(self, *, scope: MissionFeedbackTurnScope | Mapping[str, Any],
                  call_id: str, tool_name: str,
-                 arguments: Mapping[str, Any]) -> ER2ToolResult:
+                 arguments: Mapping[str, Any],
+                 model_tool_call: ModelToolCall | None = None) -> ER2ToolResult:
         definition = MODEL_TOOL_CATALOG.get(tool_name)
         valid_name = tool_name if definition is not None else "unsupported"
         try:
@@ -180,20 +296,50 @@ class MissionFeedbackToolDispatcher:
                 or _json_size(dict(arguments)) is None
                 or _json_size(dict(arguments)) > ER2_TOOL_ARGUMENT_MAX_BYTES):
             return self._result(tool_name, "rejected", "INVALID_TOOL_ARGUMENTS")
+        if model_tool_call is not None and (
+                model_tool_call.provider_call_id != call_id
+                or model_tool_call.tool_name != tool_name
+                or model_tool_call.arguments != dict(arguments)):
+            return self._result(tool_name, "rejected", "TOOL_CALL_SCOPE_MISMATCH")
+        if (model_tool_call is not None
+                and definition.effect_class is ToolEffectClass.CANDIDATE_WRITING):
+            return self._result(tool_name, "rejected", "ASYNC_TOOL_DISPATCH_REQUIRED")
+        if model_tool_call is not None:
+            try:
+                claim = self.proposal_store.begin_model_tool_call(model_tool_call)
+            except ProposalConflict:
+                return self._result(tool_name, "rejected", "PROVIDER_CALL_ID_REUSE")
+            except ProposalRejected as exc:
+                return self._result(tool_name, "rejected", exc.code)
+            if claim["state"] == "COMPLETED":
+                return self._effect_result(ModelToolResult.model_validate(claim["result"]))
+            if claim["state"] == "UNKNOWN":
+                return self._result(tool_name, "unavailable", "TOOL_CALL_OUTCOME_UNKNOWN")
+            if not claim["created"]:
+                return self._result(tool_name, "unavailable", "TOOL_CALL_IN_PROGRESS")
 
         current = self._current_context(trusted_scope)
         if current is None:
-            return self._result(tool_name, "rejected", "TURN_SCOPE_FORBIDDEN")
+            result = self._result(tool_name, "rejected", "TURN_SCOPE_FORBIDDEN")
+            if model_tool_call is not None:
+                self._complete_call_effect(model_tool_call, result)
+            return result
         context, mission = current
 
         if definition.effect_class is ToolEffectClass.READ_ONLY:
             if arguments:
-                return self._result(tool_name, "rejected", "INVALID_TOOL_ARGUMENTS")
-            return self._result(
+                result = self._result(tool_name, "rejected", "INVALID_TOOL_ARGUMENTS")
+                if model_tool_call is not None:
+                    self._complete_call_effect(model_tool_call, result)
+                return result
+            result = self._result(
                 tool_name, "accepted", "STATUS_CURRENT",
                 event_id=context.snapshot_event_id,
                 payload=context.model_dump(mode="json"),
             )
+            if model_tool_call is not None:
+                self._complete_call_effect(model_tool_call, result)
+            return result
 
         if (set(arguments) != {"based_on_event_id", "rationale"}
                 or type(arguments.get("based_on_event_id")) is not int

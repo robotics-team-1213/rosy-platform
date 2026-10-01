@@ -896,6 +896,18 @@
 - 증거: 집중 테스트 108 passed, flake8·`git diff --check` 통과. Harness lint는 0 errors, 기존 `last_verified` 차이 경고 24건. SOURCE/LOCAL만; ROS-SIM·ARTIFACT·DEVICE·FIELD gate는 미실행.
 - gate 변화: 없음.
 
+## 2026-10-01 · uncommitted · feat(fleet): D-392 P4 per-call 멱등성과 UNKNOWN 결과 저널
+
+- 변경: Fleet 공유 SQLite에 provider call ID·tool 이름·순번·canonical 인수 digest를 기록한다. 동일 call 재실행은 저장 결과를 반환하고, 내용이 바뀐 ID 재사용은 충돌로 거부한다. 프로세스 재시작 때 미완료 call은 UNKNOWN으로 닫아 자동 replay를 막는다.
+- 원자성: `propose_replan` 후보와 상관된 accepted `ModelToolResult`를 같은 SQLite 트랜잭션으로 저장한다. 결과 저장 실패 시 후보도 rollback한다. UNKNOWN/IN_PROGRESS는 Gemini function result로 회신하지 않고 바깥 model turn을 UNKNOWN으로 끝낸다.
+- 증거: call journal·candidate fence·dispatcher·ER2 adapter·turn store·feedback suite 76 passed; Fleet 전체 1035 passed, 6 skipped. flake8, `git diff --check` 통과.
+- gate 변화: 없음. SOURCE/LOCAL만; ROS-SIM·ARTIFACT·DEVICE·FIELD 미실행.
+
+## 2026-10-01 · uncommitted · fix(fleet): D-392 P4 early result journaling
+- Change: dispatch_replan claims each validated canonical call once and journals early policy rejections. Reusing a provider call ID with changed arguments returns a conflict.
+- Evidence: regression covers saved/replayed REPLAN_NOT_ALLOWED and provider call ID collision; focused tests pass.
+- gate 변화: none. SOURCE/LOCAL only; ROS-SIM, ARTIFACT, DEVICE, and FIELD were not run.
+
 ## 2026-10-01 · uncommitted · feat(pairing): D-341 2단계 — Fleet `pairing/v1` 서버 상태와 API
 
 - 변경: `server/pairing.py`(메모리 대기 표 `pending → revealed → approved → delivered → confirmed`, `rejected`·`expired`; 기동마다 새 HMAC 키, 공개 뒤 `server_nonce` 폐기·코드 HMAC만 보관; 대기 300 s·사이트 전체 16건·30건/분·조회 2 s·본문 4 KiB·틀린 코드 3회 거절·승인 후 120 s 확인 없으면 자동 회수, 한도는 429 + `Retry-After`이고 기존 대기를 밀어내지 않는다), `server/pairing_store.py`(`device_credentials`: digest·source·상태·만료만, 원문·nonce·코드 열 없음; 감사는 `device_pairing_audit` 재사용, 모든 쓰기가 `device_kind='overhead-camera'`를 명시), `server/pairing_routes.py`(`/api/fleet/pairing/v1/...` 10개 라우트: 폰 요청·공개·조회·확인, 콘솔 대기·요약·승인·거절·회수, Vision 자격 목록). `enrollment_store.py`는 감사 표 생성·이전·추가를 모듈 함수로 꺼내 두 저장소가 같이 쓴다. `create_app(pairing=, pairing_sync_token=)` — 동기화 비밀은 console·discovery·preview·로봇 REST/Agent·sighting·policy evidence·사용자 digest·로봇 등록 키와 겹치면 기동 거절(`site_auth.assert_pairing_sync_token_isolated`). `sightings_config.py`: source별 `credential: static|paired`. CLI `--pairing-ca`·`--pairing-tls-host`·`--pairing-sync-token-env` — `--tls-cert`·`--tasks-db` 없으면 기동 거절, CA 자리에 leaf면 거절.
@@ -946,4 +958,10 @@
 
 - 변경: rosy-84 Rosy Cam 클라이언트 보안 리뷰 권고. 첫 confirm 응답이 사라지면 폰은 자격이 살아났는지 알 수 없어 버리고, 그 자리는 운용자가 폐기할 때까지 막혔다. 이제 같은 요청·같은 poll 비밀·같은 `credential_id`로 승인 뒤 120 s 안에 다시 confirm하면, 그 자격이 여전히 active일 때만 같은 200을 돌려준다(감사 행은 처음 한 번). 다른 ID·창 밖·폐기 뒤는 지금처럼 410. 함께: 모델 감시기 분할(625fad86) 뒤 낡은 `watch.py` 크기 판정 행을 지웠다(콘솔 병합이 되살린 행).
 - 증거: `test_pairing_state.py` 31 passed(신규 2건), `test/architecture/test_module_structure.py` 33 passed.
+- gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · feat(discovery): 검색기 임대가 끊기면 관제가 경보한다
+
+- 변경: 점검(2026-10-01) #4 연쇄 — 발견 브리지가 끊긴 뒤 45 s가 지나면 새 로봇 발견과 새 주소로 옮기기가 멈추는데, 관제는 처음부터 스캔이 없을 때와 같은 노란 "검색기 연결 대기"만 보였다. `server/discovery.py` `snapshot()`이 `scanner_state`(`never_seen`·`online`·`expired`)와 `scanner_age_s`를 더한다(`scanner_online`은 그대로). `web/console.js` 발견 패널이 `expired`면 `crit` "검색기 끊김", 마지막 스캔 나이와 멈춘 기능, `rosy-mdns-bridge` 확인 안내를 보이고, 끊김·복귀를 한 번씩 이벤트 로그에 남긴다. 등록 코드(`enrollment.py`·`enrollment.js`)는 건드리지 않았다(feat/d341-fleet-pairing-server와 겹침 회피). API 참조 `/api/fleet/discovery` 행 갱신.
+- 증거: `test_discovery.py` 상태 시험(never_seen → online 45 s → expired), 콘솔 경보 소스 계약, `test_discovery_api.py` 응답 모양, `test/test_fleet_console_browser.py`의 Chromium 시험(`ROSY_RUN_BROWSER_TESTS=1`, 경보 crit·로그 1회·복귀) 통과. `python -m pytest src/site/fleet/test -q` 986 passed, 6 skipped (2026-10-01 Windows).
 - gate 변화: 없음.

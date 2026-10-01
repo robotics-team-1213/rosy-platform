@@ -3,6 +3,8 @@ Description=ROSY Site Fleet, Vision, and HTTPS proxy stack
 Requires=docker.service
 After=docker.service network-online.target
 Wants=network-online.target
+Wants=rosy-site-firewall.service
+After=rosy-site-firewall.service
 
 [Service]
 # Unbraced $VAR expands to zero words when empty: pairing off adds nothing (D-341).
@@ -10,6 +12,10 @@ EnvironmentFile=-/etc/rosy/site/site.env
 Type=oneshot
 RemainAfterExit=yes
 WorkingDirectory=/opt/rosy/candidate/deploy/site
+# Refuse to start on a bind address this host no longer owns, a LAN bind without its
+# interface filter, or a site certificate that fails strict verification for tls_host.
+# site-firewall.py reads the pairing overlay key itself, so it sees the same -f files.
+ExecStartPre=/usr/bin/python3 /opt/rosy/candidate/deploy/site/site-firewall.py check --verify-certs --env-file /etc/rosy/site/site.env --compose-file /opt/rosy/candidate/deploy/site/compose.yaml
 ExecStart=/usr/bin/docker compose --project-name rosy-site --env-file /etc/rosy/site/site.env -f /opt/rosy/candidate/deploy/site/compose.yaml $ROSY_SITE_PAIRING_COMPOSE up -d --no-build
 ExecStop=/usr/bin/docker compose --project-name rosy-site --env-file /etc/rosy/site/site.env -f /opt/rosy/candidate/deploy/site/compose.yaml $ROSY_SITE_PAIRING_COMPOSE down
 TimeoutStartSec=180

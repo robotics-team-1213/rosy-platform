@@ -71,9 +71,19 @@ class DiscoveryStore:
 
     def snapshot(self, registered: dict[str, str], paired: dict[str, dict],
                  enrolled: dict[str, str] | None = None) -> dict:
-        """`enrolled` maps a lowercase discovery name to its enrolled robot_id (D-361 8)."""
-        if self._seen_at is None or self._clock() - self._seen_at > self._ttl_s:
-            return {"devices": [], "scanner_online": False}
+        """`enrolled` maps a lowercase discovery name to its enrolled robot_id (D-361 8).
+
+        `scanner_state` is `never_seen` (no scan since Fleet started), `online`, or `expired`
+        (the lease ran out: discovery and move-address stop until the scanner returns).
+        """
+        if self._seen_at is None:
+            return {"devices": [], "scanner_online": False, "scanner_state": "never_seen",
+                    "scanner_age_s": None}
+        elapsed = self._clock() - self._seen_at
+        age_s = int(elapsed)
+        if elapsed > self._ttl_s:
+            return {"devices": [], "scanner_online": False, "scanner_state": "expired",
+                    "scanner_age_s": age_s}
         enrolled = enrolled or {}
         counts = {}
         for row in self._rows:
@@ -111,4 +121,4 @@ class DiscoveryStore:
             devices.append({**row, "robot_id": robot_id, "status": status,
                             "enrollable": status == "registration_pending"})
         return {"devices": sorted(devices, key=lambda item: (item["name"], item["address"])),
-                "scanner_online": True}
+                "scanner_online": True, "scanner_state": "online", "scanner_age_s": age_s}
