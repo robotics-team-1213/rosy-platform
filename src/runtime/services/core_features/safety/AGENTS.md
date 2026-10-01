@@ -13,6 +13,7 @@ SAF-001–005: e-stop, teleop timeout, speed limits, battery policy hooks. ROS-f
 |------|-------------|
 | `__init__.py` | Package marker |
 | `manager.py` | `SafetyManager`, `TeleopWatchdog`, `SpeedLimits`, `BatteryPolicy` |
+| `shadow.py` | D-398 그림자 기록: `ShadowVerdict`, `ShadowLog`(카운터·전이 이벤트·1 Hz 묶음·eval_ms). 정책이 아니라 기록이라 `manager.py`와 나눈다 |
 
 ## Subdirectories
 
