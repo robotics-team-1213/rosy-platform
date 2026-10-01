@@ -49,6 +49,13 @@ class Recipe:
 
 
 def content_hash(data: object) -> str:
+    """sha256 of canonical JSON (sorted keys, no spaces) over the parsed YAML values.
+
+    The hash sees parsed values, not text: `gap: 0` (int) and `gap: 0.0` (float) hash
+    differently. That can only reject a Job whose file is numerically the same (a false
+    reject), never accept a changed one, so it errs in the safe direction. The loaders call
+    it only after validation, so the data is JSON-serialisable.
+    """
     return hashlib.sha256(json.dumps(data, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
 
 

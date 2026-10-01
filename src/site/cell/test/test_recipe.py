@@ -84,3 +84,9 @@ def test_all_field_problems_are_reported_together():
         load_recipe(text)
     joined = " | ".join(err.value.problems)
     assert "box.length" in joined and "gap" in joined and "layers[1].mirrored" in joined, joined
+
+
+def test_hash_is_over_parsed_values_so_int_and_float_differ():
+    # documented false reject (safe direction): `gap: 0` and `gap: 0.0` parse to int and float
+    text = FIXTURE.read_text(encoding="utf-8")
+    assert load_recipe(text).content_hash != load_recipe(text.replace("gap: 0.0", "gap: 0", 1)).content_hash

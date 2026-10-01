@@ -69,3 +69,11 @@ def test_empty_frames_is_a_cell_error():
 def test_non_mapping_or_unparsable_text_is_a_cell_error(text):
     with pytest.raises(CellError):
         load_cell(text)
+
+
+def test_frames_and_stations_are_read_only():
+    cell = load_cell(FIXTURE.read_text(encoding="utf-8"))
+    with pytest.raises(TypeError):
+        cell.frames["pallet_a"] = cell.frames["base"]
+    with pytest.raises(TypeError):
+        cell.stations["infeed"] = cell.stations["sheets"]

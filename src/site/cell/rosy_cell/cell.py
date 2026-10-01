@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
+from types import MappingProxyType
 from typing import Any
 
 from . import SCHEMA_CELL, fields
@@ -119,4 +120,4 @@ def load_cell(text: str) -> CellConfig:
         problems += [f"station {k}: unknown frame {s.frame!r}" for k, s in stations.items() if s.frame not in taught]
     if problems:
         raise CellError(problems)
-    return CellConfig(frames, stations, clearance, content_hash(data))
+    return CellConfig(MappingProxyType(frames), MappingProxyType(stations), clearance, content_hash(data))
