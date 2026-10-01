@@ -236,8 +236,9 @@ def test_real_compose_resolves_export_comments_and_interpolation(tmp_path):
         pytest.skip("docker CLI not installed")
     module = _module()
     env = tmp_path / "site.env"
-    env.write_text(f"ROSY_SITE_CONFIG_DIR={tmp_path}\nROSY_SITE_SECRETS_DIR={tmp_path}\nBASE=9\n"
-                   "ROSY_SITE_HTTPS_PORT=${BASE}443\nROSY_SITE_BIND_ADDRESS=0.0.0.0 # LAN\n"
+    dirs = "".join(f"{key}={tmp_path}\n" for key in ("ROSY_SITE_CONFIG_DIR", "ROSY_SITE_SECRETS_DIR"))
+    env.write_text(dirs + "BASE=9\nROSY_SITE_HTTPS_PORT=${BASE}443\n"
+                   "ROSY_SITE_BIND_ADDRESS=0.0.0.0 # LAN\n"
                    "ROSY_SITE_LAN_IFACE=wlan0 # Wi-Fi\nROSY_SITE_TLS_HOST=site-pc.local\n",
                    encoding="utf-8")
     probe = subprocess.run(["docker", "compose", "version"], capture_output=True, check=False)
