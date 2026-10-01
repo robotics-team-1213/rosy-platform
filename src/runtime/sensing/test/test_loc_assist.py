@@ -296,3 +296,23 @@ def test_search_on_the_fleet_map_finds_the_slot_pose_and_its_objects():
     assert all(len(o) == 2 for o in objects)
     again, _, same = search(field(), clear, SQUARES, ranges, angles, .105, MOUNT)
     assert same is clear and len(again) == len(found)
+
+
+def test_a_wider_scan_gap_survives_an_executor_stall_but_not_a_lost_lidar():
+    """Node default max_gap_s 1.0: a 0.8 s stall right after the injection (WSL, a loaded Pi)
+    must not fail a correct pose; a 10 Hz lidar still gives ~10 fits per second."""
+    a = core(max_gap_s=1.)
+    candidates_ready(a)
+    a.on_decision(2., decision('r-1', 2.))
+    assert kinds(a.tick(2.8), 'result') == []
+    hold(a, 2.8, 4.0)
+    assert one(a.tick(5.1), 'result')['reason'] == 'inject_rejected'   # 1.1 s silence
+
+
+def test_the_machine_passes_the_gap_to_its_check():
+    from control.sensing.loc_state import LocalizationStateMachine
+    machine = LocalizationStateMachine(lambda: 'x', max_gap_s=1.)
+    machine.offer([TRUTH], 0.)
+    machine.decide('x', 0., candidate_index=0, cues=['slot'])
+    assert machine.check.max_gap_s == 1.
+    assert LocalizationStateMachine(lambda: 'y').__dict__['_check_args'].get('max_gap_s', .5) == .5

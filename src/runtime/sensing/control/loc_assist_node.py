@@ -46,6 +46,9 @@ PARAMETERS = [
     ('map_yaml', ''), ('lane_rules_file', ''), ('search_resolution', .02), ('wall_tolerance', .04),
     ('robot_radius', URDF_RADIUS), ('scan_stride', 4), ('candidate_minimum_fit', .9),
     ('search_budget_s', 3.), ('retry_s', 5.), ('rereport_s', 2.), ('hold_s', 3.), ('minimum_fit', .85),
+    # Scan silence the 3 s check tolerates: 1 s rides out executor stalls under load
+    # (WSL, a loaded Pi) while a 10 Hz lidar still feeds ~10 fits per second.
+    ('max_gap_s', 1.),
     ('square_period_s', .5), ('sighting_max_age_s', 1.),
     ('camera_ground_source', 'PINKY'), ('allow_simulation_ground', False),
     ('allow_nominal_ground', False), ('nominal_camera_profile_path', ''), ('camera_x_offset_m', 0.),
@@ -67,7 +70,7 @@ class LocAssistNode(Node):
         boot = time.strftime('%H%M%S')
         self.core = LocAssist(lambda: f'{boot}-{next(ids)}', rereport_s=self.p('rereport_s'),
                               retry_s=self.p('retry_s'), hold_s=self.p('hold_s'),
-                              min_fit=self.p('minimum_fit'))
+                              min_fit=self.p('minimum_fit'), max_gap_s=self.p('max_gap_s'))
         self.field = self.clear = self.scan = None
         self.generation = 0
         self.squares = self._squares()

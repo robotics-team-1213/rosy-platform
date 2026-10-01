@@ -64,8 +64,8 @@
 
 ## 최근 기록
 
+- 2026-10-01 · uncommitted · fix(localization): 3 s 검증의 스캔 공백 허용을 매개변수로, 노드는 1.0 s (D-395 P2-3 후속)
 - 2026-10-01 · uncommitted · fix(localization): state에서 `cancel_nav_goal` 키 제거 (D-395 P2-3 후속)
 - 2026-10-01 · uncommitted · feat(launch): loc_assist 배선 — sim 켬, 기기 끔 (D-395 P2-3)
 - 2026-10-01 · uncommitted · feat(localization): loc_assist_node ROS 어댑터, localization_node의 자체 주입 제거 (D-395 P2-3)
 - 2026-10-01 · uncommitted · feat(localization): LocAssist 순수 코어 — 상태·후보·결과·주입 (D-395 P2-3)
-- 2026-10-01 · uncommitted · fix(localization): 3 s 검증의 공백 판정과 열린 요청 없는 결정 (D-395 리뷰)

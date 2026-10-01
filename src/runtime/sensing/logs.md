@@ -835,3 +835,8 @@
 - 변경: `control/loc_assist.py` — `localization/state`는 계약 1절대로 `{status, pose, stamp}`만 싣는다. Nav2 목표 취소·재계획은 CORE(lane B)가 LOCALIZED 전이와 수락 결과에서 스스로 한다.
 - 증거: `test_loc_assist.py` 28 passed(상태 키 집합 단정으로 바꿈, 먼저 실패 확인).
 - gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · fix(localization): 3 s 검증의 스캔 공백 허용을 매개변수로, 노드는 1.0 s (D-395 P2-3 후속)
+- 변경: `sensing/loc_state.py` `LocalizationStateMachine(max_gap_s=.5)`가 `InjectionCheck`에 넘긴다(순수 기본값 0.5 s 유지). `LocAssist(max_gap_s=...)`, `loc_assist_node` 매개변수 `max_gap_s` 기본 1.0. 공유 WSL(부하 ~9) 스모크에서 주입 직후 0.5 s 넘는 실행기 정지가 맞는 주입을 `stale_scan`으로 떨어뜨렸다. 10 Hz LiDAR는 1 s 창에서도 초당 ~10번 적합도를 준다.
+- 증거: 새 시험 2개(0.8 s 정지는 통과, 1.1 s 침묵은 실패; 상태 기계가 값을 검증에 전달). `test_loc_assist.py`·`test_loc_state.py`·`test_loc_verify.py`·`test_loc_e2e.py` 60 passed.
+- gate 변화: 없음.

@@ -65,9 +65,9 @@ def _moved(a, b, metres, radians):
 
 class LocAssist:
     def __init__(self, new_request_id, *, rereport_s=2., state_period_s=.5, retry_s=5.,
-                 moved_m=.05, moved_rad=.17, hold_s=3., min_fit=.85, fit_drop_s=1.):
+                 moved_m=.05, moved_rad=.17, hold_s=3., min_fit=.85, fit_drop_s=1., max_gap_s=.5):
         self.machine = LocalizationStateMachine(new_request_id, hold_s=hold_s, min_fit=min_fit,
-                                                fit_drop_s=fit_drop_s)
+                                                fit_drop_s=fit_drop_s, max_gap_s=max_gap_s)
         self.rereport_s, self.state_period_s, self.retry_s = rereport_s, state_period_s, retry_s
         self.moved_m, self.moved_rad = moved_m, moved_rad
         self.pose = self.fit = None
