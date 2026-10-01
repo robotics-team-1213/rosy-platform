@@ -40,15 +40,18 @@ gripper:
   closed: 0.0
 
 # One ROS goal per phase; a phase that needs longer is rejected, never split (D-402 §6).
-# Derived from the trapezoid timing of the worst-case layout in the planner tests
-# (pick (0.05, -0.21) / place (0.05, 0.21), carry_z 0.12 m, measured 2026-10-01:
-# approach 12.95 s, transfer 24.39 s, release 14.83 s) plus ~25% margin; grasp is one
-# 1.0 rad gripper stroke (3.0 s at 0.5 rad/s, 0.5 rad/s^2) plus 1.0 s.
+# Rejection is the safe outcome: no partial plan, the Job holds for the operator.
+# Basis (measured 2026-10-02 with planning_limit_fraction 0.8, 800 random layouts:
+# home (0.12, 0, 0.12), pick/place uniform in the 0.08-0.25 m ring at z 0.01-0.06 m,
+# random yaw, carry_z 0.11 m): over the 550 geometrically feasible layouts the longest
+# non-grasp phase is p50 16.2 s, p90 28.1 s, p95 35.2 s, max 63.3 s. A 30 s cap rejected
+# 48/550 (8.7%); 40 s rejects 17/550 (3.1%), the slow tail being wrist swings near the
+# singularity radius. Grasp is one 1.0 rad stroke: 3.5 s at 0.4 rad/s, 0.4 rad/s^2, + 0.5 s.
 phase_max_duration_s:
-  approach: 30.0
+  approach: 40.0
   grasp: 4.0
-  transfer: 30.0
-  release: 30.0
+  transfer: 40.0
+  release: 40.0
 
 # TCP box in link0. Radial reach at table height is ~0.28 m (L1 0.1205 + L2 0.162,
 # wrist 0.1206 above TCP); above z 0.22 m the reachable radius collapses below 0.1 m.
@@ -86,4 +89,4 @@ owner:
   # Same as the Pilot simulation owner (pilot_sim_server.py).
   max_joint_state_age_s: 0.5
   # Longest phase plus 5 s for ROS acceptance/feedback latency.
-  action_timeout_s: 35.0
+  action_timeout_s: 45.0
