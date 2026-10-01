@@ -15,6 +15,12 @@ from .local_stop import LocalStopBlocked
 from .phase_recorder import ActionPhaseRecorder
 
 
+# Kinds the ordered phase runner may execute, and the only kind the direct
+# driver path admits. CELL_TRANSFER runs through the phase runner only (D-402 §3).
+PHASE_RUNNER_KINDS = frozenset({"PICK_PLACE", "CELL_TRANSFER"})
+DIRECT_DRIVER_KINDS = frozenset({"PICK_PLACE"})
+
+
 def action_grant_digest(value: FleetActionGrant | Mapping[str, object]) -> str:
     grant = (value if isinstance(value, FleetActionGrant)
              else FleetActionGrant.model_validate(value))
@@ -83,6 +89,9 @@ class ActionRunner:
                  phase_runner_factory: Callable[
                      [FleetActionGrant, ActionPhaseRecorder], PhaseExecution
                  ] | None = None,
+                 phase_runner_factories: Mapping[str, Callable[
+                     [FleetActionGrant, ActionPhaseRecorder], PhaseExecution
+                 ]] | None = None,
                  enabled: bool = False,
                  now: Callable[[], datetime] | None = None) -> None:
         self.store = store
@@ -94,7 +103,18 @@ class ActionRunner:
         self.current_fence = current_fence
         self.capability_current = capability_current
         self.submission_fence = submission_fence
-        self.phase_runner_factory = phase_runner_factory
+        # One factory per kind: the PICK_PLACE runner never executes CELL_TRANSFER.
+        # ``phase_runner_factory`` is the existing PICK_PLACE factory.
+        factories = dict(phase_runner_factories or {})
+        if not set(factories) <= PHASE_RUNNER_KINDS:
+            raise ValueError("phase_runner_factories keys must be phase runner kinds")
+        if phase_runner_factory is not None:
+            if "PICK_PLACE" in factories:
+                raise ValueError("PICK_PLACE phase runner factory is given twice")
+            factories["PICK_PLACE"] = phase_runner_factory
+        if any(not callable(factory) for factory in factories.values()):
+            raise ValueError("phase runner factories must be callable")
+        self.phase_runner_factories = factories
         self._phase_runners: dict[tuple[str, str], object] = {}
         if not isinstance(enabled, bool):
             raise ValueError("enabled must be boolean")
@@ -158,6 +178,11 @@ class ActionRunner:
         principal_id = self._principal(peer_uid)
         if not self.enabled:
             raise PermissionError("local Action capability is disabled")
+        phase_runner_factory = self.phase_runner_factories.get(grant.action_kind)
+        use_phase_runner = phase_runner_factory is not None
+        if not use_phase_runner and grant.action_kind not in DIRECT_DRIVER_KINDS:
+            # Fail closed before any journal row: unknown kinds never reach the driver.
+            raise PermissionError(f"action kind {grant.action_kind!r} has no admitted executor")
         self._validate(grant)
         request = grant.model_dump(mode="json")
         created = self.store.create_action(
@@ -182,13 +207,13 @@ class ActionRunner:
                 raise
             return self._receipt(current, created=False)
 
-        if grant.action_kind == "PICK_PLACE" and self.phase_runner_factory is not None:
+        if use_phase_runner:
             identity = (grant.action_id, grant.attempt_id)
             try:
                 recorder = self._phase_recorder_for_validated_grant(
                     grant, peer_uid=peer_uid,
                 )
-                phase_runner = self.phase_runner_factory(grant, recorder)
+                phase_runner = phase_runner_factory(grant, recorder)
                 start = getattr(phase_runner, "start", None)
                 cancel_current = getattr(phase_runner, "cancel_current", None)
                 if not callable(start) or not callable(cancel_current):

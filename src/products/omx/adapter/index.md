@@ -19,6 +19,8 @@
 | D-376 | OMX PICK_PLACE planning stays local and trajectory execution stays with the Action owner |
 | D-386 | OMX phases bind asynchronous ROS goal acceptance and fresh execution state |
 | D-390 | Pilot의 OMX-AI 연습은 시뮬레이션 전용 장치 API를 거쳐 로컬 팔 명령 소유자에 연결한다 |
+| D-402 | OMX 모션 플래너 v1: 장치 로컬 해석 5축 수직하향 IK(고정 open_manipulator URDF), `CELL_TRANSFER`·simulation 한정으로 D-376 §2·§3 HOLD를 좁게 개방, 충돌 장면 없음, owner만 제출, MoveIt은 같은 Protocol의 두 번째 구현 |
+| D-403 | Fleet Cell Job 경로: Rosy Cell Job → Fleet 제안(재컴파일 검증)·승인 → Step마다 `CELL_TRANSFER` Action 하나, 정지 세대 의미, D-330 §2 하달 보류는 simulation에서만 ROS-SIM 정지 세대 시험 후 개방, 셀 해시 검사는 OMX owner |
 
 ## 계획·결과 문서
 
@@ -40,8 +42,8 @@
 
 ## 최근 기록
 
+- 2026-10-02 · 31ada4b4 · fix(omx): C2 independent review fixes (D-402)
+- 2026-10-02 · 38dcb8fe · feat(omx): CELL_TRANSFER analytic top-down planner (D-402, plan C2)
 - 2026-10-01 · uncommitted · fix(omx): fence recording closure and isolate storage faults
 - 2026-10-01 · uncommitted · feat(omx): record SIM demonstrations and export LeRobot v3
 - 2026-10-01 · uncommitted · test(omx): Fleet generation-stop terminal reconciliation
-- 2026-10-01 · uncommitted · test(omx): join Fleet grant to a ROS 2 ActionServer goal
-- 2026-10-01 · uncommitted · fix(pilot-sim): serve calibration.js on the sim port
