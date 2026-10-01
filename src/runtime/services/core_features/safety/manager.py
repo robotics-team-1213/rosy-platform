@@ -326,6 +326,7 @@ class SafetyManager:
         self._policy_revision = calibration_revision
         self._actuation = None
         self.policy_required = True
+        self.policy_mode = 'enforce'
         for listener in list(self.policy_listeners):
             listener()
 
@@ -355,7 +356,6 @@ class SafetyManager:
     def bind_control_policy(self, policy) -> None:
         """Consume absorbed Control decisions without importing ROS or publishing."""
         self.bind_policy(*self._control_evaluator(policy))
-        self.policy_mode = 'enforce'
 
     def bind_shadow_control_policy(self, policy) -> None:
         """D-400 shadow: judge every candidate, record it, never change the output."""
