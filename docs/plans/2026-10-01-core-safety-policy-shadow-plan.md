@@ -1605,3 +1605,23 @@ git commit -m "docs(records): D-400 plan 1 module logs, ADR implementation note"
 - **설계 대응:** 3.1 → Task 1·7, 3.2 → Task 2–5·8(ROS 토픽은 계획 2), 3.3 → Task 6·9(새 저장소 종류는 계획 3), 3.4 → 계획 3, 3.5-1·2 → Task 1·9, 3.5-3 → 계획 2, 3.5-4 → Task 5·8(대시보드는 계획 2), 3.5-5 → 계획 2, 3.6 → 계획 2.
 - **설계와 달라진 점(Task 10 Step 3에서 ADR에 적는다):** overlay 허용 키에 `cliff_enable` 추가(Gazebo), "그림자 구성 실패 → off"를 워커 시작 실패로 좁힘.
 - **이름 일관성:** `bind_shadow_control_policy`, `shadow_evaluate`, `policy_mode`, `ShadowLog.record/drain/snapshot`, `build_control_adapter`, `resolve_safety_params`, `SafetyParams.parameters/sources/revision`, `safety_policy_block`, `SafetyPolicyStatus`, `set_safety_policy_provider` — 태스크 사이 동일.
+
+---
+
+## 실행 중 변경 기록 (태스크별 리뷰 반영)
+
+아래 표의 결정이 위 태스크 본문보다 우선한다. Task 10 Step 3의 ADR 구현 메모에 이 표를 요약해 옮긴다.
+
+| 태스크 | 결정 | 이유 |
+|---|---|---|
+| 1 | 기본 yaml에 `mode`를 두지 않는다(주석만). 없으면 off | 옛 overlay의 `enabled:`와 deep-merge되면 "not both"로 CORE가 못 뜬다 |
+| 1 | `enabled`는 `mode`에서 계산되는 property | 두 값이 어긋날 수 없게 |
+| 1→7 | Task 7 전까지 `bind_safety`는 `enforce`에서만 바인딩 | 중간 커밋에서 `shadow`가 집행하지 않게 |
+| 2→4 | `decision_valid`(bool)와 `check_decision`(사유) 분리. 그림자는 `disposition`으로 분류 | 정책의 stop 사유가 `policy_failed`여도 stop으로 센다 |
+| 3 | `ShadowLog`에 락, 이벤트는 판정 단위 전이 + 1 s 반복 + 최소 0.2 s 간격, `suppressed`(변화 수)·`dropped_events`·`suppressed_events`, 페이로드 `{verdict, reason, source, t, commanded, output, limited, suppressed}`, 시계 역행 시 첫 기록 취급 | API 스레드 동시 읽기, allow↔limit 50 Hz 흔들림이 EventBus 1000칸을 밀어내지 않게, 분석에 시각·실제 출력 필요 |
+| 4 | 그림자/집행 바인딩은 상호 배타(`bind_policy`에서 검사), 그림자 이중 바인딩 거부, `shadow_evaluate`는 어떤 예외도 밖으로 내지 않는다(`shadow_record_errors`) | 상태가 "shadow"인데 집행 중인 경우를 없앤다, 비간섭 |
+| 5 | **그림자 평가는 `announce_pending`에서(바퀴 뒤)** 한다. `_policy_output`은 후보만 저장 | 정책 평가 비용이 출력 지연이 되지 않게 — 비간섭의 더 강한 형태 |
+| 5 | `policy_off`는 `navigation`과 `docking` 출처, 모드가 바뀔 때마다 재무장, 첫 0 아닌 출력에서 낸다(모드 진입 순간이 아님) | 도킹도 자율 주행. 라인 추종은 `policy_required` 없이 시작하지 않으므로 해당 없음 |
+| 5 | `announce_pending`은 워치독 알림을 먼저, 각 발행을 개별 보호(`announce_errors`) | 한 발행 실패가 SAF-002 알림·다른 이벤트를 막지 않게 |
+| 8 | §8에 `commanded`는 프로필 클립 뒤 값, `t`는 CORE monotonic 초라고 적는다 | 필드 이름이 원 요청값처럼 읽힌다 |
+| 7 | `build_control_adapter(policy_required=)` — `shadow` + `control_policy_required`는 설정 오류 | 설계 3.1 규칙에 태스크가 없었다 |
