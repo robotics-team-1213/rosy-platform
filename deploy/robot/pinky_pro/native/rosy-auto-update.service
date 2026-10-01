@@ -5,6 +5,9 @@ Description=ROSY auto-update from signed GitHub Releases when idle (D-406)
 # every outcome lands in /var/lib/rosy/updates/status.json, so the run itself
 # always exits 0 and never leaves a failed rosy-* unit behind.
 Wants=network-online.target
+# rosy-release-recover creates /var/lib/rosy/releases (its StateDirectory) and is
+# the boot gate; an updater on a robot held in recovery must not run.
+Requires=rosy-release-recover.service
 After=network-online.target rosy-release-recover.service rosy-core.service
 # The timer may fire again while a long download is running.
 StartLimitIntervalSec=0
@@ -44,8 +47,9 @@ RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
 StateDirectory=rosy/updates rosy/image-layer-backup
 StateDirectoryMode=0755
 # The release store and links (unpack, activate, rollback), native-release.lock
-# and the activation journal (rosy-release-recover.service creates that
-# directory 0700 on every boot, so it is optional here and never re-moded),
-# /run for /run/rosy-claim, and what sync-image-layer.py installs.
-ReadWritePaths=/opt/rosy -/var/lib/rosy/releases /run
+# and the activation journal (created 0700 by the required rosy-release-recover,
+# never re-moded here), /run for /run/rosy-claim, and what sync-image-layer.py
+# installs. No CapabilityBoundingSet=, ProtectProc= or PrivatePIDs=: the health
+# check reads other units' /proc/<pid>/cwd.
+ReadWritePaths=/opt/rosy /var/lib/rosy/releases /run
 ReadWritePaths=/etc/systemd/system /etc/udev/rules.d /etc/modprobe.d

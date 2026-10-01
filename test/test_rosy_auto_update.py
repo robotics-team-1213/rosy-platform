@@ -78,6 +78,7 @@ class FakeGitHub:
         self.requests: list[tuple[str, dict]] = []
         self.etag = '"v1"'
         self.status: int | None = None  # forced status for the list endpoint
+        self.asset_status: dict[str, int] = {}  # forced status per asset key
         self.extra_headers: dict[str, str] = {}
         handler = self._handler()
         self.server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), handler)
@@ -112,6 +113,10 @@ class FakeGitHub:
                     self.end_headers()
                     self.wfile.write(body)
                     return
+                if self.path.startswith("/dl/") and self.path[4:] in hub.asset_status:
+                    self.send_response(hub.asset_status[self.path[4:]])
+                    self.end_headers()
+                    return
                 if self.path.startswith("/dl/") and self.path[4:] in hub.assets:
                     body = hub.assets[self.path[4:]]
                     self.send_response(200)
@@ -144,7 +149,8 @@ class FakeGitHub:
             key = f"{release_id}/{name}"
             self.assets[key] = body
             if name != skip_asset:
-                assets.append({"name": name, "browser_download_url": f"{self.base}/dl/{key}"})
+                assets.append({"name": name, "size": len(body),
+                               "browser_download_url": f"{self.base}/dl/{key}"})
         self.releases = [r for r in self.releases if r["tag_name"] != f"payload-{release_id}"]
         self.releases.append({"tag_name": f"payload-{release_id}", "draft": draft,
                               "prerelease": prerelease, "assets": assets})
@@ -180,7 +186,7 @@ def idle_inputs(moment: dt.datetime, **changes) -> dict:
         "robot_mode": "IDLE", "nav_state": "IDLE", "swarm_role": None,
         "velocity_linear": 0.0, "velocity_angular": 0.0,
         "battery_percent": 80.0, "battery_charging": False,
-        "docking_state": None, "line_follow_mode": "OFF", "line_follow_state": "IDLE",
+        "docking_state": None, "line_follow_mode": "OFF", "line_follow_state": "OFF",
         "swarm_active": False, "estop": False, "activity_kind": None,
     }
     data.update(changes)
@@ -200,6 +206,7 @@ class FakeHost(upd.Host):
         self.second_sample_changes: dict | None = None
         self.core_restarts = 0
         self.stale_core = False
+        self.free = 64 * 1024 ** 3
         self.t = T0
 
     # clock: CORE rewrites status-inputs every 10 s, so moving the clock rewrites it.
@@ -234,6 +241,12 @@ class FakeHost(upd.Host):
 
     def current_release(self) -> str | None:
         return self.links["current"]
+
+    def previous_release(self) -> str | None:
+        return self.links["previous"]
+
+    def free_bytes(self, path: Path) -> int:
+        return self.free
 
     def process_cwd(self, pid: int) -> str | None:
         release = self.links["current"]
@@ -288,6 +301,17 @@ class FakeHost(upd.Host):
     def _ready(self, argv):
         return self._ok()
 
+    def _recover(self, argv):
+        journal = self.root / "var/lib/rosy/releases/native-activation.json"
+        if journal.exists():
+            data = json.loads(journal.read_text(encoding="utf-8"))
+            self.links = {"current": data["old_current"], "previous": data["candidate"]}
+            journal.unlink()
+        return self._ok(json.dumps({"ok": True}))
+
+    def _start(self, argv):
+        return self._ok()
+
     def _mainpid(self, argv):
         return self._ok({"rosy-core.service": "101\n", "rosy-io.service": "102\n",
                          "rosy-camera.service": "103\n"}.get(argv[-1], "0\n"))
@@ -314,6 +338,10 @@ def kind_of(argv: list[str]) -> str:
             return kind
     if "native_release.py" in joined and "verify" in argv:
         return "verify"
+    if "native_release.py" in joined and "recover" in argv:
+        return "recover"
+    if argv[:2] == ["systemctl", "start"]:
+        return "start"
     if argv[:2] == ["systemctl", "show"]:
         return "mainpid"
     if argv[:2] == ["systemctl", "restart"]:
@@ -1115,5 +1143,538 @@ def test_the_service_is_a_low_priority_root_oneshot_with_network():
 def test_the_timer_runs_every_ten_minutes_spread_out():
     lines = _unit("rosy-auto-update.timer")
     for directive in ("OnBootSec=5min", "OnUnitActiveSec=10min", "RandomizedDelaySec=2min",
-                      "Persistent=true", "WantedBy=timers.target"):
+                      "WantedBy=timers.target"):
         assert directive in lines, directive
+    assert not any(line.startswith("Persistent=") for line in lines)  # no effect without OnCalendar (L5)
+
+
+def test_the_service_requires_recovery_and_keeps_proc_readable():
+    # L8: /var/lib/rosy/releases comes from rosy-release-recover (StateDirectory), which
+    # the unit requires and follows; nothing may hide other processes' /proc/<pid>/cwd.
+    lines = _unit("rosy-auto-update.service")
+    assert "Requires=rosy-release-recover.service" in lines
+    assert any(line.startswith("After=") and "rosy-release-recover.service" in line for line in lines)
+    assert not any("-/var/lib/rosy/releases" in line for line in lines)
+    for forbidden in ("CapabilityBoundingSet=", "ProtectProc=", "PrivatePIDs=", "ProcSubset="):
+        assert not any(line.startswith(forbidden) for line in lines), forbidden
+
+
+def test_claim_ttl_outlasts_the_unit_timeout():
+    # M8: the claim must not expire while the run that holds it may still be running.
+    timeout = next(line.split("=", 1)[1] for line in _unit("rosy-auto-update.service")
+                   if line.startswith("TimeoutStartSec="))
+    assert timeout.endswith("min")
+    assert upd.CLAIM_TTL_S >= int(timeout[:-3]) * 60
+
+
+# --- independent review (REQUEST CHANGES) ------------------------------------------------
+
+
+def journal(device: Path, step: str, release_id: str = NEXT, **extra) -> None:
+    applying = {"release_id": release_id, "previous": CURRENT, "step": step, "started_at": _z(T0),
+                "boot_id": BOOT, "baseline": {"active": {u: None for u in upd.HEALTH_UNITS}, "failed": []}}
+    applying.update(extra)
+    write_json(device / "var/lib/rosy/updates/state.json", {"applying": applying})
+
+
+def switched(device: Path, host: FakeHost) -> None:
+    (device / "opt/rosy/releases" / NEXT / "deploy/robot/native").mkdir(parents=True, exist_ok=True)
+    host.links = {"current": NEXT, "previous": CURRENT}
+
+
+RESTARTING = {"sync", "restart", "rollback", "activate", "start"}
+
+
+def test_resume_waits_for_a_hold_before_any_restart(device, host, hub, keys):
+    # H1
+    hub.publish(keys, NEXT)
+    switched(device, host)
+    journal(device, "health")
+    up = updater(host, hub)
+    up.hold("agent", "G5", 2)
+
+    result = up.run()
+
+    assert result["phase"] == "held"
+    assert not RESTARTING & set(kinds(host)) and "mainpid" not in kinds(host)
+    assert state(device)["applying"]["release_id"] == NEXT
+
+    up.release_hold()
+    assert up.run()["phase"] == "committed"
+
+
+@pytest.mark.parametrize("cause", ["moving", "sealed", "same_sample"])
+def test_resume_waits_until_the_robot_is_idle(device, host, hub, keys, cause):
+    # H1 (+ M1 in the resume path)
+    hub.publish(keys, NEXT)
+    switched(device, host)
+    journal(device, "image-layer-sync")
+    if cause == "moving":
+        host.inputs_changes = {"velocity_linear": 0.3}
+        host.write_inputs()
+    elif cause == "sealed":
+        write_json(device / "etc/rosy/approvals/hardware.approved", {"release_id": NEXT})
+    else:
+        host.write_inputs = lambda: None
+
+    result = updater(host, hub).run()
+
+    assert result["phase"] in {"held", "ineligible"}
+    assert not RESTARTING & set(kinds(host))
+    assert state(device)["applying"]["step"] == "image-layer-sync"
+
+
+def test_resume_after_rollback_step_never_commits(device, host, hub, keys):
+    # H2: the journal reached rollback with the new release still current.
+    hub.publish(keys, NEXT)
+    switched(device, host)
+    journal(device, "rollback", why="HEALTH: x")
+
+    result = updater(host, hub).run()
+
+    assert result["phase"] == "rolled_back"
+    assert host.links["current"] == CURRENT
+    order = kinds(host)
+    assert order.index("rollback") < order.index("sync") < order.index("ready")
+    assert NEXT in state(device)["failed"]
+    assert state(device).get("applying") is None
+
+
+def test_resume_after_rollback_step_with_old_release_current_still_syncs(device, host, hub, keys):
+    # H2: rollback-release.sh already ran; only the tail is left.
+    hub.publish(keys, NEXT)
+    (device / "opt/rosy/releases" / NEXT).mkdir(parents=True)
+    host.links = {"current": CURRENT, "previous": NEXT}
+    journal(device, "rollback", why="HEALTH: x")
+
+    result = updater(host, hub).run()
+
+    assert result["phase"] == "rolled_back"
+    assert "rollback" not in kinds(host)
+    sync = [argv for argv in host.calls if kind_of(argv) == "sync"]
+    assert sync and CURRENT in sync[0][-1]
+    assert "ready" in kinds(host)
+
+
+def test_resume_after_boot_recovery_mid_sync_resyncs_the_current_release(device, host, hub, keys):
+    # H2: current != release_id and the step was later than activate.
+    hub.publish(keys, NEXT)
+    (device / "opt/rosy/releases" / NEXT).mkdir(parents=True)
+    journal(device, "image-layer-sync")
+
+    result = updater(host, hub).run()
+
+    assert result["phase"] == "rolled_back"
+    sync = [argv for argv in host.calls if kind_of(argv) == "sync"]
+    assert sync and CURRENT in sync[0][-1]
+    assert "activate" not in kinds(host)
+
+
+@pytest.mark.parametrize("outcome", [
+    subprocess.CompletedProcess([], 124, "", "TIMEOUT after 900s"),
+    subprocess.CompletedProcess([], 127, "", "cannot run bash"),
+    subprocess.CompletedProcess([], 1, "Traceback (most recent call last)", "boom"),
+], ids=["timeout", "missing", "no-json"])
+def test_transient_activation_failure_is_not_marked_failed(device, host, hub, keys, outcome):
+    # H3
+    hub.publish(keys, NEXT)
+    host.overrides["activate"] = lambda h, argv: outcome
+
+    result = updater(host, hub).run()
+
+    assert result["phase"] == "error"
+    assert NEXT not in state(device).get("failed", {})
+    assert state(device).get("applying") is None
+    del host.overrides["activate"]
+    assert updater(host, hub).run()["phase"] == "committed"
+
+
+def test_activation_failure_with_a_native_journal_recovers_and_restarts_runtime(device, host, hub, keys):
+    # H3
+    hub.publish(keys, NEXT)
+
+    def killed_midway(h, argv):
+        write_json(device / "var/lib/rosy/releases/native-activation.json",
+                   {"schema_version": 1, "operation": "activate", "candidate": NEXT,
+                    "old_current": CURRENT, "old_previous": None, "phase": "switched"})
+        h.links = {"current": NEXT, "previous": CURRENT}
+        return subprocess.CompletedProcess([], 124, "", "TIMEOUT")
+
+    host.overrides["activate"] = killed_midway
+
+    result = updater(host, hub).run()
+
+    order = kinds(host)
+    assert order.index("recover") < order.index("start")
+    start = next(argv for argv in host.calls if kind_of(argv) == "start")
+    assert start == ["systemctl", "start", "rosy-runtime.target"]
+    assert host.links["current"] == CURRENT
+    assert NEXT not in state(device).get("failed", {})
+    assert result["phase"] == "error"
+
+
+def test_transient_activation_failure_that_left_the_new_release_current_rolls_back_unmarked(
+        device, host, hub, keys):
+    # H3: no native journal, yet the switch happened: roll back but keep the id retryable.
+    hub.publish(keys, NEXT)
+
+    def switched_then_timed_out(h, argv):
+        h.links = {"current": NEXT, "previous": CURRENT}
+        return subprocess.CompletedProcess([], 124, "", "TIMEOUT")
+
+    host.overrides["activate"] = switched_then_timed_out
+
+    result = updater(host, hub).run()
+
+    assert host.links["current"] == CURRENT
+    assert "rollback" in kinds(host)
+    assert NEXT not in state(device).get("failed", {})
+    assert result["last_result"]["outcome"] == "rolled_back"
+
+
+def test_staging_verify_timeout_is_transient(device, host, hub, keys):
+    # H3
+    hub.publish(keys, NEXT)
+    host.overrides["verify"] = lambda h, argv: subprocess.CompletedProcess([], 124, "", "TIMEOUT")
+
+    result = updater(host, hub).run()
+
+    assert result["phase"] == "error"
+    assert NEXT not in state(device).get("failed", {})
+
+
+def test_operator_rollback_of_a_committed_release_is_respected(device, host, hub, keys):
+    # H4
+    hub.publish(keys, NEXT)
+    up = updater(host, hub)
+    assert up.run()["phase"] == "committed"
+    assert NEXT in state(device)["committed"]
+    host.links = {"current": CURRENT, "previous": NEXT}  # rosy-release-push.ps1 -Rollback
+    host.calls.clear()
+
+    result = up.run()
+
+    assert result["phase"] == "idle"
+    assert state(device)["failed"][NEXT]["detail"] == "operator rolled back"
+    assert "activate" not in kinds(host)
+
+
+def test_two_samples_must_be_two_different_writes(device, host, hub):
+    # M1: CORE stopped writing, so the second sample is the same file.
+    host.write_inputs = lambda: None
+    report = updater(host, hub).eligibility()
+    assert report["eligible"] is False
+    assert any("second sample" in reason for reason in report["reasons"])
+
+
+def test_samples_older_than_25_seconds_are_stale(device, host, hub):
+    # M1: two distinct writes, each 26 s old when read (CORE lagging, not stopped).
+    def lagging():
+        write_json(device / "run/rosy/status-inputs.json", idle_inputs(host.t - dt.timedelta(seconds=26)))
+
+    host.write_inputs = lagging
+    lagging()
+    report = updater(host, hub).eligibility()
+    assert report["eligible"] is False
+    assert any("stale" in reason for reason in report["reasons"])
+
+
+def test_inputs_are_checked_again_right_before_activation(device, host, hub, keys):
+    # M2: the robot started moving after eligibility passed.
+    hub.publish(keys, NEXT)
+    seen = {"n": 0}
+
+    def started_moving(h, argv):
+        seen["n"] += 1
+        h.inputs_changes = {"robot_mode": "MANUAL"}
+        h.write_inputs()
+        return None
+
+    host.overrides["failed"] = started_moving  # the baseline lists failed units before activation
+
+    result = updater(host, hub).run()
+
+    assert seen["n"] >= 1
+    assert result["phase"] == "ineligible"
+    assert "activate" not in kinds(host)
+    assert state(device).get("applying") is None
+    assert not (device / "run/rosy-claim").exists()
+
+
+def test_run_busy_writes_nothing(device, host, hub, keys):
+    # M3
+    hub.publish(keys, NEXT)
+    up = updater(host, hub)
+    write_json(device / "var/lib/rosy/updates/status.json", {"phase": "sentinel"})
+    write_json(device / "var/lib/rosy/updates/state.json", {"sentinel": True})
+    with up._run_lock():
+        result = updater(host, hub).run()
+
+    assert "RUN_BUSY" in result["reason"]
+    assert status(device) == {"phase": "sentinel"}
+    assert state(device) == {"sentinel": True}
+    assert hub.requests == []
+
+
+def test_a_withdrawal_is_remembered(device, host, hub, keys):
+    # M4
+    hub.publish(keys, NEXT, withdrawn=True, rollout_overrides={"reason": "bad canary"})
+    up = updater(host, hub)
+    assert up.run()["phase"] == "idle"
+    assert NEXT in state(device)["withdrawn"]
+
+    hub.publish(keys, NEXT, withdrawn=False)
+    result = up.run()
+
+    assert result["phase"] == "idle"
+    assert "activate" not in kinds(host) and "unpack" not in kinds(host)
+
+
+def test_definitive_stage_errors_back_off_and_fail_after_three(device, host, hub, keys):
+    # M5
+    hub.publish(keys, NEXT, sha="0" * 64)
+    up = updater(host, hub)
+    for attempt in range(1, 4):
+        result = up.run()
+        assert result["phase"] == "error"
+        downloads = sum(path.endswith(".tar.gz") for path, _ in hub.requests)
+        assert downloads == attempt
+        # inside the backoff: no new download
+        up.run()
+        assert sum(path.endswith(".tar.gz") for path, _ in hub.requests) == attempt
+        host.t += dt.timedelta(hours=7)
+    assert NEXT in state(device)["failed"]
+    assert up.run()["phase"] == "idle"
+
+
+def test_network_stage_errors_back_off_but_never_fail(device, host, hub, keys):
+    # M5
+    hub.publish(keys, NEXT)
+    hub.asset_status[f"{NEXT}/{NEXT}.tar.gz"] = 503
+    up = updater(host, hub)
+    for _ in range(4):
+        assert up.run()["phase"] == "error"
+        host.t += dt.timedelta(hours=7)
+    assert NEXT not in state(device).get("failed", {})
+    assert state(device)["stage_errors"][NEXT]["attempts"] == 4
+
+
+def test_not_enough_disk_is_refused_before_downloading(device, host, hub, keys):
+    # M5: tarball size x 2 + 512 MiB
+    hub.publish(keys, NEXT)
+    host.free = 512 * 1024 * 1024
+    result = updater(host, hub).run()
+    assert result["phase"] == "error" and "DISK" in result["reason"]
+    assert not any(path.endswith(".tar.gz") for path, _ in hub.requests)
+
+
+def test_old_and_failed_release_directories_are_pruned_after_commit(device, host, hub, keys):
+    # M5
+    releases = device / "opt/rosy/releases"
+    for old in ("2026.09.30-001", "2026.09.30-002"):
+        (releases / old).mkdir()
+    host.links["previous"] = "2026.09.30-002"
+    (releases / ".tmp-2026.10.01-099-1").mkdir()
+    hub.publish(keys, NEXT)
+
+    assert updater(host, hub).run()["phase"] == "committed"
+
+    left = sorted(path.name for path in releases.iterdir())
+    assert left == [".tmp-2026.10.01-099-1", CURRENT, NEXT]  # current=NEXT, previous=CURRENT
+
+
+@pytest.mark.parametrize("content", [b"{not json", b"[1, 2]", b"x" * (70 * 1024), b'{"release_id": 5}'],
+                         ids=["corrupt", "not-object", "oversize", "bad-id"])
+def test_an_unreadable_approval_marker_holds(device, host, hub, content):
+    # M6
+    path = device / "etc/rosy/approvals/hardware.approved"
+    path.parent.mkdir(parents=True)
+    path.write_bytes(content)
+    report = updater(host, hub).eligibility()
+    assert report["held"] is True and report["eligible"] is False
+
+
+def test_a_symlinked_approval_marker_holds(device, host, hub, tmp_path):
+    # M6
+    target = tmp_path / "elsewhere.json"
+    target.write_text(json.dumps({"release_id": "2026.09.30-001"}), encoding="utf-8")
+    link = device / "etc/rosy/approvals/navigation.approved"
+    link.parent.mkdir(parents=True)
+    try:
+        os.symlink(target, link)
+    except OSError:
+        pytest.skip("this host cannot create symlinks")
+    assert updater(host, hub).eligibility()["held"] is True
+
+
+@pytest.mark.parametrize("outcome", [
+    subprocess.CompletedProcess([], 1, json.dumps({"ok": False, "error": "NATIVE_RELEASE_BUSY: x"}), ""),
+    subprocess.CompletedProcess([], 124, "", "TIMEOUT"),
+], ids=["busy", "timeout"])
+def test_a_rollback_that_cannot_run_now_is_retried(device, host, hub, keys, outcome):
+    # M7
+    hub.publish(keys, NEXT)
+    host.overrides["ready"] = lambda h, argv: (subprocess.CompletedProcess([], 1, "", "x")
+                                              if h.links["current"] == NEXT else None)
+    host.overrides["rollback"] = lambda h, argv: outcome
+    up = updater(host, hub)
+
+    result = up.run()
+
+    assert result["phase"] == "error"
+    assert state(device)["applying"]["step"] == "rollback"
+    assert host.links["current"] == NEXT
+
+    del host.overrides["rollback"]
+    final = up.run()
+    assert final["phase"] == "rolled_back"
+    assert host.links["current"] == CURRENT
+    assert state(device).get("applying") is None
+
+
+def test_the_claim_is_refreshed_at_each_journal_step(device, host, hub, keys):
+    # M8
+    hub.publish(keys, NEXT)
+    seen = {}
+
+    def slow_sync(h, argv):
+        h.t += dt.timedelta(seconds=2000)
+        return None
+
+    def capture(h, argv):
+        seen["claim"] = json.loads((device / "run/rosy-claim/claim.json").read_text(encoding="utf-8"))
+        seen["t"] = h.t
+        return None
+
+    host.overrides["sync"] = slow_sync
+    host.overrides["restart"] = capture
+
+    assert updater(host, hub).run()["phase"] == "committed"
+    expires = upd.parse_z(seen["claim"]["expires_at"])
+    assert expires >= seen["t"] + dt.timedelta(seconds=upd.CLAIM_TTL_S - 1)
+
+
+def test_rollout_network_errors_do_not_fall_through_to_a_lower_release(device, host, hub, keys):
+    # L1
+    hub.publish(keys, NEXT, canary=())
+    hub.publish(keys, NEWER)
+    hub.asset_status[f"{NEWER}/rollout.json"] = 502
+
+    result = updater(host, hub).run()
+
+    assert result["phase"] == "error"
+    assert result["candidate"] == NEWER
+    assert not (device / "opt/rosy/releases" / NEXT).exists()
+
+
+@pytest.mark.parametrize("changes,eligible", [
+    ({"docking_state": "UNDOCKED"}, True),
+    ({"docking_state": "DOCKED"}, True),
+    ({"docking_state": "CHARGING"}, True),
+    ({"docking_state": "DOCK_FAILED"}, False),
+    ({"docking_state": "SOMETHING_NEW"}, False),
+    ({"line_follow_state": "TRACKING"}, False),
+    ({"line_follow_state": "WAITING"}, False),
+    ({"velocity_linear": 10 ** 400}, False),
+    ({"battery_percent": 10 ** 400}, False),
+], ids=lambda value: str(value)[:40])
+def test_docking_allowlist_line_follow_state_and_overflow(device, host, hub, changes, eligible):
+    # L2, L3
+    host.inputs_changes = changes
+    host.write_inputs()
+    assert updater(host, hub).eligibility()["eligible"] is eligible
+
+
+def test_history_records_only_changes_of_phase_or_reason_class(device, host, hub, keys):
+    # L4
+    hub.publish(keys, NEXT)
+    write_json(device / "run/rosy/status-inputs.json", idle_inputs(T0 - dt.timedelta(seconds=100)))
+    host.write_inputs = lambda: None
+    up = updater(host, hub)
+    up.run()
+    host.t += dt.timedelta(seconds=60)
+    up.run()
+
+    ineligible = [entry for entry in history(device) if entry["event"] == "ineligible"]
+    assert len(ineligible) == 1
+
+
+def test_history_rotates_at_its_size_limit(device, host, hub, monkeypatch):
+    # L4
+    monkeypatch.setattr(upd, "HISTORY_MAX_BYTES", 400)
+    up = updater(host, hub)
+    for index in range(10):
+        up.hold("agent", f"reason {index}", 1)
+    path = device / "var/lib/rosy/updates/history.jsonl"
+    assert path.stat().st_size <= 400 + 300
+    assert (device / "var/lib/rosy/updates/history.jsonl.1").is_file()
+
+
+def test_real_host_kills_the_whole_process_group_on_timeout(tmp_path):
+    # L6: a grandchild of a timed-out command must not survive it.
+    marker = tmp_path / "grandchild.pid"
+    script = (
+        "import subprocess, sys, time\n"
+        "p = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(30)'])\n"
+        f"open(r'{marker}', 'w').write(str(p.pid))\n"
+        "time.sleep(30)\n"
+    )
+    result = upd.Host(tmp_path).run([sys.executable, "-c", script], timeout=3)
+    assert result.returncode == 124
+    pid = int(marker.read_text())
+    deadline = dt.datetime.now() + dt.timedelta(seconds=5)
+    while dt.datetime.now() < deadline and _alive(pid):
+        pass
+    assert not _alive(pid)
+
+
+def _alive(pid: int) -> bool:
+    if os.name == "nt":
+        listed = subprocess.run(["tasklist", "/FI", f"PID eq {pid}", "/NH"], capture_output=True, text=True)
+        return str(pid) in listed.stdout
+    try:
+        os.kill(pid, 0)
+    except OSError:
+        return False
+    return True
+
+
+def test_a_stray_directory_in_downloads_does_not_block_staging(device, host, hub, keys):
+    # L7
+    stray = device / "var/lib/rosy/updates/downloads/junk"
+    stray.mkdir(parents=True)
+    (stray / "file").write_text("x", encoding="utf-8")
+    hub.publish(keys, NEXT)
+    up = updater(host, hub)
+    up.hold("agent", "x", 1)
+
+    assert up.run()["phase"] == "held"
+    assert not stray.exists()
+
+
+def test_disabled_while_applying_still_finishes_the_apply(device, host, hub, keys):
+    # L9
+    hub.publish(keys, NEXT)
+    switched(device, host)
+    journal(device, "health")
+    write_json(device / "var/lib/rosy/updates/config.json", {"enabled": False, "repo": REPO})
+
+    result = updater(host, hub).run()
+
+    assert result["phase"] == "committed"
+    assert hub.requests == []
+
+
+def test_unexpected_exception_after_activation_rolls_back(device, host, hub, keys):
+    hub.publish(keys, NEXT)
+
+    def explode(h, argv):
+        raise RuntimeError("bug in a helper")
+
+    host.overrides["restart"] = lambda h, argv: explode(h, argv) if h.links["current"] == NEXT else None
+
+    result = updater(host, hub).run()
+
+    assert result["phase"] == "rolled_back"
+    assert "UNEXPECTED" in result["last_result"]["detail"]
+    assert host.links["current"] == CURRENT

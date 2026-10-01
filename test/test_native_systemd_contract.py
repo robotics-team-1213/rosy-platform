@@ -715,6 +715,10 @@ def test_required_writable_paths_exist_when_the_unit_starts(unit):
     for required in _words(directives, "Requires"):
         if required.endswith(".service") and (NATIVE / required).is_file():
             created |= {f"/run/{entry}" for entry in _words(_directives(required), "RuntimeDirectory")}
+            # D-406: a required unit this one is also ordered after has created its
+            # StateDirectory (rosy-release-recover's /var/lib/rosy/releases).
+            if required in _words(directives, "After"):
+                created |= {f"/var/lib/{entry}" for entry in _words(_directives(required), "StateDirectory")}
     for entry in _words(directives, "ReadWritePaths"):
         if entry.startswith("-"):
             continue

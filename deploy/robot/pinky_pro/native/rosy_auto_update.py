@@ -43,6 +43,7 @@ import os
 from pathlib import Path
 import re
 import shlex
+import shutil
 import socket
 import stat
 import subprocess
@@ -83,26 +84,33 @@ TRUSTED_KEY = "etc/rosy/trusted-release-keys/rosy-release-2026-01.pem"
 APPROVALS = ("etc/rosy/approvals/hardware.approved", "etc/rosy/approvals/navigation.approved")
 STATUS_INPUTS = "run/rosy/status-inputs.json"
 RUNTIME_ENV = "etc/rosy/runtime.env"
+NATIVE_JOURNAL = "var/lib/rosy/releases/native-activation.json"
 RELEASE_SYNC = "deploy/robot/native/sync-image-layer.py"
 
 # Status inputs (same reading rules as rosy-boot-status.py).
 MAX_STATUS_INPUTS_BYTES = 16 * 1024
-STATUS_INPUTS_FRESH_S = 60.0
-SAMPLE_GAP_S = 10.0
+# Review M1: CORE rewrites the file every 10 s, so a sample older than 25 s means
+# CORE missed two writes; 12 s between samples always spans a new write.
+STATUS_INPUTS_FRESH_S = 25.0
+SAMPLE_GAP_S = 12.0
 REQUIRED_INPUTS = ("written_at", "robot_mode", "nav_state", "swarm_role", "velocity_linear",
                    "velocity_angular", "battery_percent", "battery_charging", "docking_state",
                    "line_follow_mode", "line_follow_state", "swarm_active", "estop", "activity_kind")
 NOT_NULL_INPUTS = ("velocity_linear", "velocity_angular", "battery_percent", "line_follow_mode",
                    "line_follow_state", "swarm_active", "estop")
 NAV_IDLE = frozenset({"IDLE", "ARRIVED", "CANCELED", "FAILED"})
-DOCKING_BUSY = frozenset({"DOCKING", "UNDOCKING"})
+# Review L2: allowlists. DockState (core_common schemas) and LineFollowStatus.state,
+# which is "OFF" whenever the mode is OFF; anything else (or new) is not idle.
+DOCKING_IDLE = frozenset({"UNDOCKED", "DOCKED", "CHARGING", None})
+LINE_FOLLOW_IDLE = frozenset({"OFF"})
 LINEAR_EPS = 0.01   # m/s
 ANGULAR_EPS = 0.02  # rad/s
 BATTERY_MIN = 40.0
 
 MAX_HOLD_HOURS = 168.0
 CLAIM_HOLDER = "rosy-auto-update"
-CLAIM_TTL_S = 30 * 60
+# Review M8: longer than the unit's TimeoutStartSec=45min, and refreshed at every journal step.
+CLAIM_TTL_S = 50 * 60
 HEALTH_UNITS = ("rosy-core.service", "rosy-io.service", "rosy-camera.service")
 HEALTH_HOLD_S = 60.0
 HEALTH_POLL_S = 5.0
@@ -119,6 +127,11 @@ DOWNLOAD_TIMEOUT_S = 60.0
 BACKOFF_DEFAULT_S = 3600
 BACKOFF_MIN_S = 60
 BACKOFF_MAX_S = 6 * 3600
+# Review M5: per-release staging errors back off; three definitive ones fail the id.
+STAGE_BACKOFF_BASE_S = 600
+STAGE_MAX_DEFINITIVE = 3
+DISK_MARGIN_BYTES = 512 * 1024 * 1024
+HISTORY_MAX_BYTES = 1024 * 1024
 
 # Every subprocess is bounded (seconds).
 UNPACK_TIMEOUT_S = 900
@@ -132,6 +145,14 @@ SYSTEMCTL_TIMEOUT_S = 30
 
 class UpdateError(RuntimeError):
     """A refusal or failure with a reason for status.json; never a crash."""
+
+
+class Definitive(UpdateError):
+    """A problem that another attempt cannot change (signature, content, withdrawal)."""
+
+
+class RunBusy(UpdateError):
+    """Another run holds the run lock; this one writes nothing."""
 
 
 def _z(moment: _dt.datetime) -> str:
@@ -161,7 +182,32 @@ def _number(value: object) -> bool:
 
 
 def _finite(value: object) -> bool:
-    return _number(value) and math.isfinite(value)
+    try:
+        return _number(value) and math.isfinite(value)
+    except OverflowError:  # an int too large for a float
+        return False
+
+
+def _outcome(result: subprocess.CompletedProcess) -> tuple[str, str]:
+    """("ok" | "busy" | "transient" | "definitive", error) for a native_release.py command.
+
+    Only a JSON result naming an error is definitive. A timeout (124), a missing
+    program (127) or output without a JSON result says nothing about the release.
+    """
+    data = _last_json(result.stdout)
+    if result.returncode == 0 and data is not None and data.get("ok") is True:
+        return "ok", ""
+    error = data.get("error") if data is not None else None
+    if result.returncode in (124, 127) or not isinstance(error, str) or not error:
+        return "transient", _tail(result.stderr) or "no JSON result"
+    if "NATIVE_RELEASE_BUSY" in error:
+        return "busy", error
+    return "definitive", error
+
+
+def _reason_class(reason: str) -> str:
+    """The reason with its numbers blurred: '12 s old' and '73 s old' are one class."""
+    return re.sub(r"[0-9]+", "#", reason or "")
 
 
 # --- the device and the network ------------------------------------------------
@@ -193,6 +239,16 @@ class Host:
             return None
         return name if RELEASE_ID.fullmatch(name) else None
 
+    def previous_release(self) -> str | None:
+        try:
+            name = Path(os.readlink(self.root / "opt/rosy/previous")).name
+        except OSError:
+            return None
+        return name if RELEASE_ID.fullmatch(name) else None
+
+    def free_bytes(self, path: Path) -> int:
+        return shutil.disk_usage(path).free
+
     def process_cwd(self, pid: int) -> str | None:
         try:
             return os.readlink(self.root / "proc" / str(pid) / "cwd")
@@ -200,13 +256,40 @@ class Host:
             return None
 
     def run(self, argv: list[str], timeout: float) -> subprocess.CompletedProcess:
+        """Run bounded; on timeout kill the whole process group, not just the child (review L6)."""
+        posix = os.name == "posix"
         try:
-            return subprocess.run(argv, capture_output=True, text=True, errors="replace",
-                                  timeout=timeout, check=False, stdin=subprocess.DEVNULL)
-        except subprocess.TimeoutExpired:
-            return subprocess.CompletedProcess(argv, 124, "", f"TIMEOUT after {timeout:g}s")
+            process = subprocess.Popen(
+                argv, stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.DEVNULL,
+                text=True, errors="replace", start_new_session=posix,
+                creationflags=0 if posix else subprocess.CREATE_NEW_PROCESS_GROUP)
         except OSError as exc:
             return subprocess.CompletedProcess(argv, 127, "", f"cannot run {argv[0]}: {exc}")
+        try:
+            stdout, stderr = process.communicate(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            self._kill_tree(process)
+            try:
+                stdout, stderr = process.communicate(timeout=10)
+            except subprocess.TimeoutExpired:
+                stdout, stderr = "", ""
+            return subprocess.CompletedProcess(argv, 124, stdout or "",
+                                               f"{stderr or ''}\nTIMEOUT after {timeout:g}s")
+        return subprocess.CompletedProcess(argv, process.returncode, stdout, stderr)
+
+    @staticmethod
+    def _kill_tree(process: subprocess.Popen) -> None:
+        if os.name == "posix":
+            import signal
+
+            with contextlib.suppress(OSError):
+                os.killpg(process.pid, signal.SIGKILL)
+        else:
+            with contextlib.suppress(OSError, subprocess.SubprocessError):
+                subprocess.run(["taskkill", "/F", "/T", "/PID", str(process.pid)],
+                               capture_output=True, timeout=10, check=False)
+        with contextlib.suppress(OSError):
+            process.kill()
 
 
 class Http:
@@ -338,6 +421,10 @@ class Updater:
         line = json.dumps({"at": _z(self.host.now()), "event": event, "release_id": release_id,
                            "detail": detail, "boot_id": self.host.boot_id()}, sort_keys=True)
         path = self.updates / "history.jsonl"
+        # Review L4: one generation of history is kept beside the live file.
+        with contextlib.suppress(OSError):
+            if path.stat().st_size >= HISTORY_MAX_BYTES:
+                os.replace(path, path.with_name("history.jsonl.1"))
         with path.open("a", encoding="utf-8", newline="\n") as handle:
             handle.write(line + "\n")
             handle.flush()
@@ -354,7 +441,7 @@ class Updater:
             "current_release": current, "candidate": candidate, "phase": phase, "reason": reason,
             "last_result": state.get("last_result"),
         }
-        signature = [phase, candidate, reason]
+        signature = [phase, candidate, _reason_class(reason)]
         if state.get("last_status") != signature:
             self._history(phase, candidate, reason)
             state["last_status"] = signature
@@ -370,6 +457,7 @@ class Updater:
         state.setdefault("failed", {})[release_id] = {"at": _z(self.host.now()), "detail": detail}
         if state.get("staged") == release_id:
             state["staged"] = None
+        (state.get("stage_errors") or {}).pop(release_id, None)
 
     # config and hold ---------------------------------------------------------------
 
@@ -438,21 +526,41 @@ class Updater:
     # eligibility ---------------------------------------------------------------------
 
     def _sealed(self, current: str | None) -> list[str]:
+        # Review M6: a marker that exists but cannot be read as {"release_id": str}
+        # might be a seal; it holds like one.
         reasons = []
         for marker in APPROVALS:
-            try:
-                data = _read_json(self.root / marker, 64 * 1024)
-            except (OSError, ValueError):
+            path = self.root / marker
+            name = Path(marker).name
+            if path.is_symlink():
+                reasons.append(f"approval marker {name} is a symlink")
                 continue
-            if isinstance(data, dict) and current is not None and data.get("release_id") == current:
-                reasons.append(f"sealed approval {Path(marker).name} names the current release {current}")
+            if not path.exists():
+                continue
+            try:
+                data = _read_json(path, 64 * 1024)
+            except (OSError, ValueError):
+                reasons.append(f"approval marker {name} is unreadable or oversize")
+                continue
+            if not isinstance(data, dict) or not isinstance(data.get("release_id"), str):
+                reasons.append(f"approval marker {name} is corrupt")
+            elif current is not None and data["release_id"] == current:
+                reasons.append(f"sealed approval {name} names the current release {current}")
         return reasons
 
     def _inputs_problems(self) -> list[str]:
+        return self._sample()[0]
+
+    def _sample(self) -> tuple[list[str], _dt.datetime | None]:
+        """(problems, written_at) for one read of status-inputs.json."""
         try:
             data = _read_json(self.root / STATUS_INPUTS, MAX_STATUS_INPUTS_BYTES)
         except (OSError, ValueError, UnicodeDecodeError):
-            return ["status-inputs.json missing, unreadable or over 16 KiB"]
+            return ["status-inputs.json missing, unreadable or over 16 KiB"], None
+        problems = self._judge_inputs(data)
+        return problems, (parse_z(data["written_at"]) if not problems else None)
+
+    def _judge_inputs(self, data: object) -> list[str]:
         if not isinstance(data, dict):
             return ["status-inputs.json is not an object"]
         schema = data.get("schema")
@@ -484,7 +592,9 @@ class Updater:
             problems.append(f"navigation is {data['nav_state']}")
         if data["line_follow_mode"] != "OFF":
             problems.append(f"line follow is {data['line_follow_mode']}")
-        if data["docking_state"] in DOCKING_BUSY:
+        if data["line_follow_state"] not in LINE_FOLLOW_IDLE:
+            problems.append(f"line follow state is {data['line_follow_state']}")
+        if data["docking_state"] not in DOCKING_IDLE:
             problems.append(f"docking is {data['docking_state']}")
         if data["swarm_active"] is not False:
             problems.append("swarm is active")
@@ -503,8 +613,8 @@ class Updater:
             problems.append(f"battery {percent!r}% is below {BATTERY_MIN:g}% and not charging")
         return problems
 
-    def eligibility(self) -> dict:
-        """Read-only: may this robot apply now? Takes two status samples 10 s apart."""
+    def eligibility(self, *, own_claim_ok: bool = False) -> dict:
+        """Read-only: may this robot apply now? Two status samples, two different writes."""
         current = self.host.current_release()
         reasons: list[str] = []
         kind, detail = self._hold()
@@ -513,13 +623,16 @@ class Updater:
         reasons += self._sealed(current)
         held = bool(reasons)
         claim = rosy_claim.check(self.root, now=self.host.now())
-        if claim is not None:
+        if claim is not None and not (own_claim_ok and claim.get("holder") == CLAIM_HOLDER):
             reasons.append(f"claim held by {claim.get('holder')} ({claim.get('purpose')})")
         if not held:
-            problems = self._inputs_problems()
+            problems, first = self._sample()
             if not problems:
                 self.host.sleep(SAMPLE_GAP_S)
-                problems = [f"second sample: {item}" for item in self._inputs_problems()]
+                problems, second = self._sample()
+                problems = [f"second sample: {item}" for item in problems]
+                if not problems and not (second is not None and first is not None and second > first):
+                    problems = ["second sample: status-inputs was not rewritten (CORE is not updating it)"]
             reasons += problems
         return {"eligible": not reasons, "held": held, "reasons": reasons,
                 "current_release": current, "checked_at": _z(self.host.now())}
@@ -571,7 +684,10 @@ class Updater:
             wanted = {"tarball": f"{release_id}.tar.gz", "rollout": "rollout.json", "sig": "rollout.json.sig"}
             if not all(isinstance(urls.get(name), str) for name in wanted.values()):
                 continue
-            releases.append({"release_id": release_id, **{key: urls[name] for key, name in wanted.items()}})
+            size = next((asset.get("size") for asset in item.get("assets") or []
+                         if isinstance(asset, dict) and asset.get("name") == wanted["tarball"]), None)
+            releases.append({"release_id": release_id, **{key: urls[name] for key, name in wanted.items()},
+                             "size": size if _number(size) and size >= 0 else None})
         state["etag"] = found.get("etag")
         state["releases"] = releases
         return releases
@@ -587,16 +703,16 @@ class Updater:
         try:
             text = signature.decode("ascii")
         except UnicodeDecodeError as exc:
-            raise UpdateError("ROLLOUT_SIGNATURE: not ASCII") from exc
+            raise Definitive("ROLLOUT_SIGNATURE: not ASCII") from exc
         rejections = verify_signature(raw, text, self.root / TRUSTED_KEY)
         if rejections:
-            raise UpdateError(f"ROLLOUT_SIGNATURE: {rejections[0].code}")
+            raise Definitive(f"ROLLOUT_SIGNATURE: {rejections[0].code}")
         try:
             rollout = json.loads(raw.decode("utf-8"))
         except (UnicodeDecodeError, ValueError) as exc:
-            raise UpdateError("ROLLOUT_INVALID: not JSON") from exc
+            raise Definitive("ROLLOUT_INVALID: not JSON") from exc
         if not isinstance(rollout, dict) or rollout.get("schema") != 1:
-            raise UpdateError("ROLLOUT_INVALID: schema 1 object required")
+            raise Definitive("ROLLOUT_INVALID: schema 1 object required")
         canary = rollout.get("canary")
         checks = (
             rollout.get("release_id") == release_id,
@@ -611,20 +727,65 @@ class Updater:
             and rollout["wave_delay_s"] >= 0,
         )
         if not all(checks):
-            raise UpdateError("ROLLOUT_INVALID: fields do not match the contract or this release")
+            raise Definitive("ROLLOUT_INVALID: fields do not match the contract or this release")
         return rollout
 
     # staging --------------------------------------------------------------------------
 
     def _stage(self, state: dict, release: dict, rollout: dict) -> None:
+        """Stage with per-release backoff; three definitive failures fail the id (review M5)."""
         release_id = release["release_id"]
         if state.get("staged") == release_id and Path(self.release_path(release_id)).is_dir():
             return
-        if not Path(self.release_path(release_id)).is_dir():
-            downloads = self.updates / "downloads"
+        errors = state.setdefault("stage_errors", {})
+        record = errors.get(release_id)
+        retry = parse_z((record or {}).get("retry_after"))
+        if retry is not None and self.host.now() < retry:
+            raise UpdateError(f"STAGE_BACKOFF: {release_id} last failed ({record.get('last')}); "
+                              f"next attempt after {_z(retry)}")
+        try:
+            self._stage_once(state, release, rollout)
+        except UpdateError as exc:
+            if release_id not in (state.get("failed") or {}):
+                self._stage_error(state, release_id, str(exc), isinstance(exc, Definitive))
+            raise
+        errors.pop(release_id, None)
+        state["staged"] = release_id
+        self._save_state(state)
+        self._history("staged", release_id, "downloaded, unpacked and verified")
+
+    def _stage_error(self, state: dict, release_id: str, message: str, definitive: bool) -> None:
+        record = state.setdefault("stage_errors", {}).setdefault(release_id, {"attempts": 0, "definitive": 0})
+        record["attempts"] += 1
+        record["definitive"] += int(definitive)
+        record["last"] = message
+        delay = min(STAGE_BACKOFF_BASE_S * 2 ** (record["attempts"] - 1), BACKOFF_MAX_S)
+        record["retry_after"] = _z(self.host.now() + _dt.timedelta(seconds=delay))
+        if record["definitive"] >= STAGE_MAX_DEFINITIVE:
+            self._mark_failed(state, release_id, f"staging failed {STAGE_MAX_DEFINITIVE} times: {message}")
+
+    def _clean_downloads(self) -> Path:
+        downloads = self.updates / "downloads"
+        try:
             downloads.mkdir(parents=True, exist_ok=True)
             for leftover in downloads.iterdir():
-                leftover.unlink(missing_ok=True)
+                if leftover.is_dir() and not leftover.is_symlink():
+                    shutil.rmtree(leftover)
+                else:
+                    leftover.unlink()
+        except OSError as exc:
+            raise UpdateError(f"DOWNLOADS_UNCLEAN: cannot clear {downloads}: {exc}") from exc
+        return downloads
+
+    def _stage_once(self, state: dict, release: dict, rollout: dict) -> None:
+        release_id = release["release_id"]
+        if not Path(self.release_path(release_id)).is_dir():
+            size = release.get("size") or 0
+            need = 2 * size + DISK_MARGIN_BYTES
+            free = self.host.free_bytes(self.root / RELEASES)
+            if free < need:
+                raise UpdateError(f"DISK_LOW: {free} bytes free, {need} needed for {release_id}")
+            downloads = self._clean_downloads()
             part = downloads / f"{release_id}.tar.gz.part"
             tarball = downloads / f"{release_id}.tar.gz"
             try:
@@ -634,23 +795,24 @@ class Updater:
                 raise
             if digest != rollout["tarball_sha256"]:
                 part.unlink(missing_ok=True)
-                raise UpdateError(f"TARBALL_SHA256_MISMATCH: {release_id} got {digest}")
+                raise Definitive(f"TARBALL_SHA256_MISMATCH: {release_id} got {digest}")
             os.replace(part, tarball)
             unpacked = self.host.run(["bash", self._native("rosy-release-unpack.sh"), release_id,
                                       str(tarball), self._dev(RELEASES)], UNPACK_TIMEOUT_S)
             tarball.unlink(missing_ok=True)  # the script removes it on success
             if unpacked.returncode != 0:
-                raise UpdateError(f"UNPACK_FAILED: {_tail(unpacked.stderr or unpacked.stdout)}")
+                error = f"UNPACK_FAILED: {_tail(unpacked.stderr or unpacked.stdout)}"
+                raise UpdateError(error) if unpacked.returncode in (124, 127) else Definitive(error)
         verified = self.host.run(["python3", "-B", self._native("native_release.py"), "--root", str(self.root),
                                   "--public-key", self._dev(TRUSTED_KEY), "verify", "--release-id", release_id],
                                  VERIFY_TIMEOUT_S)
-        if verified.returncode != 0:
-            detail = (_last_json(verified.stdout) or {}).get("error") or _tail(verified.stderr)
-            self._mark_failed(state, release_id, f"verify: {detail}")
-            raise UpdateError(f"VERIFY_FAILED: {release_id}: {detail}")
-        state["staged"] = release_id
-        self._save_state(state)
-        self._history("staged", release_id, "downloaded, unpacked and verified")
+        kind, error = _outcome(verified)
+        if kind == "definitive":
+            # Review H3: only a JSON verdict from the verifier fails the release.
+            self._mark_failed(state, release_id, f"verify: {error}")
+            raise UpdateError(f"VERIFY_FAILED: {release_id}: {error}")
+        if kind != "ok":
+            raise UpdateError(f"VERIFY_TRANSIENT: {release_id}: {error}")
 
     def _gate(self, rollout: dict) -> str | None:
         if self.host.hostname() in rollout["canary"]:
@@ -764,8 +926,11 @@ class Updater:
             self.host.sleep(HEALTH_POLL_S)
 
     def _journal(self, state: dict, step: str) -> None:
+        """Record the step before doing it, and keep the claim alive for the next one (review M8)."""
         state["applying"]["step"] = step
         self._save_state(state)
+        with contextlib.suppress(OSError, ValueError, rosy_claim.ClaimBusy):
+            rosy_claim.refresh(self.root, CLAIM_HOLDER, CLAIM_TTL_S, now=self.host.now())
 
     def _settle(self, state: dict, release_id: str) -> dict:
         """Everything after activation; commit, or roll back on any failure."""
@@ -783,36 +948,85 @@ class Updater:
             self._health(release_id, baseline)
         except UpdateError as exc:
             return self._roll_back(state, release_id, "; ".join([str(exc), *notes]))
+        except Exception as exc:  # noqa: BLE001 - a bug after activation must still roll back
+            return self._roll_back(state, release_id, "; ".join([f"UNEXPECTED: {exc!r}", *notes]))
         state["applying"] = None
         state["staged"] = None
+        committed = [item for item in state.get("committed") or [] if item != release_id]
+        state["committed"] = (committed + [release_id])[-20:]
         self._result(state, release_id, "committed", "; ".join(["healthy for 60 s", *notes]))
+        self._prune(state)
         return self._finish(state, "committed", f"{release_id} is healthy", release_id)
 
-    def _roll_back(self, state: dict, release_id: str, why: str) -> dict:
-        self._journal(state, "rollback")
-        self._history("rollback_started", release_id, why)
+    def _rollback_tail(self, release_id: str) -> list[str]:
+        """Bring the image layer and CORE back to whatever release is current now."""
+        # The release now current may predate D-388; fall back to the copy in the
+        # release rolled away from (it syncs from current all the same).
+        current = self.host.current_release() or ""
+        script = Path(self.release_path(current)) / RELEASE_SYNC
+        if not script.is_file():
+            script = Path(self.release_path(release_id)) / RELEASE_SYNC
         problems = []
-        rolled = self.host.run(["bash", self._native("rollback-release.sh")], ACTIVATE_TIMEOUT_S)
-        if rolled.returncode != 0:
-            problems.append(f"rollback: {(_last_json(rolled.stdout) or {}).get('error') or _tail(rolled.stderr)}")
-        else:
-            # The release now current may predate D-388; fall back to the copy in
-            # the release rolled away from (it syncs from current all the same).
-            current = self.host.current_release() or ""
-            script = Path(self.release_path(current)) / RELEASE_SYNC
-            if not script.is_file():
-                script = Path(self.release_path(release_id)) / RELEASE_SYNC
-            for step in (lambda: self._restart(self._sync(str(script))), self._core_release_check, self._ready):
-                try:
-                    step()
-                except UpdateError as exc:
-                    problems.append(str(exc))
-        self._mark_failed(state, release_id, why)
+        for step in (lambda: self._restart(self._sync(str(script))), self._core_release_check, self._ready):
+            try:
+                step()
+            except UpdateError as exc:
+                problems.append(str(exc))
+            except Exception as exc:  # noqa: BLE001 - finish the other steps
+                problems.append(f"UNEXPECTED: {exc!r}")
+        return problems
+
+    def _roll_back(self, state: dict, release_id: str, why: str, mark_failed: bool = True) -> dict:
+        """Roll back. A rollback that cannot run now stays journaled and is retried (review M7)."""
+        applying = state["applying"]
+        first = applying.get("step") != "rollback"
+        applying.update(why=why, mark_failed=mark_failed)
+        self._journal(state, "rollback")
+        if first:
+            self._history("rollback_started", release_id, why)
+        if mark_failed:
+            self._mark_failed(state, release_id, why)  # recorded now: never retried, even mid-rollback
+        problems = []
+        if self.host.current_release() == release_id:
+            rolled = self.host.run(["bash", self._native("rollback-release.sh")], ACTIVATE_TIMEOUT_S)
+            kind, error = _outcome(rolled)
+            if kind in ("busy", "transient"):
+                self._save_state(state)
+                return self._finish(state, "error", f"ROLLBACK_PENDING: {error}; retrying on the next run",
+                                    release_id)
+            if kind == "definitive":
+                problems.append(f"rollback: {error}")
+        if not problems:
+            problems = self._rollback_tail(release_id)
         state["applying"] = None
         detail = why if not problems else f"{why}; rollback incomplete: {'; '.join(problems)}"
         self._result(state, release_id, "rolled_back", detail)
-        phase = "rolled_back" if not problems else "failed"
-        return self._finish(state, phase, detail, release_id)
+        self._prune(state)
+        return self._finish(state, "rolled_back" if not problems else "failed", detail, release_id)
+
+    def _recover_native(self) -> None:
+        """An activation that died mid-way left native_release's journal: recover, restart the runtime."""
+        if not (self.root / NATIVE_JOURNAL).exists():
+            return
+        recovered = self.host.run(["python3", "-B", self._native("native_release.py"), "--root", str(self.root),
+                                   "--public-key", self._dev(TRUSTED_KEY), "recover"], ACTIVATE_TIMEOUT_S)
+        started = self._systemctl("start", "rosy-runtime.target", timeout=RESTART_TIMEOUT_S)
+        self._history("native_recovered", None,
+                      f"recover exit {recovered.returncode}, runtime start exit {started.returncode}")
+
+    def _prune(self, state: dict) -> None:
+        """Keep current, previous and the staged release; drop every other release directory (review M5)."""
+        keep = {self.host.current_release(), self.host.previous_release(), state.get("staged")} - {None}
+        if not keep:
+            return
+        pruned = []
+        for path in sorted((self.root / RELEASES).iterdir()):
+            if path.name in keep or not RELEASE_ID.fullmatch(path.name) or path.is_symlink() or not path.is_dir():
+                continue
+            shutil.rmtree(path, ignore_errors=True)
+            pruned.append(path.name)
+        if pruned:
+            self._history("pruned", None, " ".join(pruned))
 
     def apply(self, release_id: str, state: dict) -> dict:
         """Activate ``release_id`` under the claim. Refuses anything not newer than current."""
@@ -829,37 +1043,51 @@ class Updater:
             state["applying"] = {"release_id": release_id, "previous": current, "step": "activate",
                                  "started_at": _z(self.host.now()), "boot_id": self.host.boot_id(),
                                  "baseline": self._baseline()}
+            # Review M2: one more look right before anything stops. What is left is the
+            # moment between this read and the activator stopping the runtime (ADR R4).
+            busy = self._inputs_problems()
+            if busy:
+                state["applying"] = None
+                return self._finish(state, "ineligible", f"robot became busy: {'; '.join(busy)}", release_id)
             self._save_state(state)
             self._finish(state, "applying", f"activating {release_id} (from {current})", release_id)
             activated = self.host.run(["bash", self._native("activate-release.sh"), release_id],
                                       ACTIVATE_TIMEOUT_S)
-            if activated.returncode != 0:
-                error = (_last_json(activated.stdout) or {}).get("error") or _tail(activated.stderr)
-                if "NATIVE_RELEASE_BUSY" in error:
-                    state["applying"] = None
-                    return self._finish(state, "waiting", f"{error}; retrying on the next run", release_id)
-                if self.host.current_release() == release_id:
-                    return self._roll_back(state, release_id, f"activation: {error}")
+            kind, error = _outcome(activated)
+            if kind == "ok":
+                return self._settle(state, release_id)
+            if kind == "busy":
                 state["applying"] = None
-                self._mark_failed(state, release_id, f"activation: {error}")
-                self._result(state, release_id, "refused", f"activation: {error}")
-                return self._finish(state, "failed", f"activation refused: {error}", release_id)
-            return self._settle(state, release_id)
+                return self._finish(state, "waiting", f"{error}; retrying on the next run", release_id)
+            # Review H3: a dead activation may have left native_release's journal.
+            self._recover_native()
+            definitive = kind == "definitive"
+            if self.host.current_release() == release_id:
+                return self._roll_back(state, release_id, f"activation: {error}", mark_failed=definitive)
+            state["applying"] = None
+            if not definitive:
+                return self._finish(state, "error", f"ACTIVATION_TRANSIENT: {error}; retrying on the next run",
+                                    release_id)
+            self._mark_failed(state, release_id, f"activation: {error}")
+            self._result(state, release_id, "refused", f"activation: {error}")
+            return self._finish(state, "failed", f"activation refused: {error}", release_id)
         finally:
             rosy_claim.release(self.root, CLAIM_HOLDER)
 
     def _resume(self, state: dict) -> dict:
-        """A run died mid-apply (power loss, kill): finish it or record the loss."""
+        """A run died mid-apply (power loss, kill): finish it, once the robot is free again."""
         applying = state["applying"]
         release_id = str(applying.get("release_id"))
-        self._history("apply_interrupted", release_id, f"step {applying.get('step')}")
-        if self.host.current_release() != release_id:
-            # Boot recovery (or the activator) already restored the old release.
-            state["applying"] = None
-            self._mark_failed(state, release_id, "interrupted; the previous release is current")
-            self._result(state, release_id, "rolled_back", "interrupted; the previous release is current")
-            return self._finish(state, "rolled_back", "an interrupted apply left the previous release current",
-                                release_id)
+        step = applying.get("step")
+        if not applying.get("interrupted_logged"):
+            applying["interrupted_logged"] = True
+            self._history("apply_interrupted", release_id, f"step {step}")
+        # Review H1: nothing restarts while the robot is held, sealed or busy.
+        report = self.eligibility(own_claim_ok=True)
+        if not report["eligible"]:
+            phase = "held" if report["held"] else "ineligible"
+            return self._finish(state, phase, f"finishing {release_id} (step {step}) waits: "
+                                + "; ".join(report["reasons"]), release_id)
         rosy_claim.release(self.root, CLAIM_HOLDER)  # our own claim from the dead run
         try:
             rosy_claim.acquire(self.root, CLAIM_HOLDER, f"finish auto-update to {release_id}", CLAIM_TTL_S,
@@ -868,7 +1096,22 @@ class Updater:
             return self._finish(state, "ineligible", f"claim held by {(exc.claim or {}).get('holder')}",
                                 release_id)
         try:
-            return self._settle(state, release_id)
+            # Review H2: a journal that reached rollback is only ever rolled back further.
+            if step == "rollback":
+                return self._roll_back(state, release_id, applying.get("why") or "interrupted rollback",
+                                       mark_failed=applying.get("mark_failed", True))
+            if step == "activate":
+                self._recover_native()
+            if self.host.current_release() == release_id:
+                return self._settle(state, release_id)
+            # Boot recovery (or the activator) already restored the old release.
+            problems = self._rollback_tail(release_id) if step != "activate" else []
+            why = "interrupted; the previous release is current"
+            state["applying"] = None
+            self._mark_failed(state, release_id, why)
+            detail = why if not problems else f"{why}; rollback incomplete: {'; '.join(problems)}"
+            self._result(state, release_id, "rolled_back", detail)
+            return self._finish(state, "rolled_back" if not problems else "failed", detail, release_id)
         finally:
             rosy_claim.release(self.root, CLAIM_HOLDER)
 
@@ -878,36 +1121,65 @@ class Updater:
     def _run_lock(self):
         self.updates.mkdir(parents=True, exist_ok=True)
         with (self.updates / ".run.lock").open("a+b") as handle:
-            if os.name == "posix":
-                import fcntl
+            handle.seek(0)
+            try:
+                if os.name == "posix":
+                    import fcntl
 
-                try:
                     fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
-                except OSError as exc:
-                    raise UpdateError("RUN_BUSY: another updater run is active") from exc
-            yield
+                else:
+                    import msvcrt
+
+                    msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+            except OSError as exc:
+                raise RunBusy("RUN_BUSY: another updater run is active") from exc
+            try:
+                yield
+            finally:
+                handle.seek(0)
+                if os.name == "posix":
+                    import fcntl
+
+                    fcntl.flock(handle, fcntl.LOCK_UN)
+                else:
+                    import msvcrt
+
+                    msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
 
     def run(self) -> dict:
-        state = self._load_state()
         try:
             with self._run_lock():
+                # Review M3: state is read only under the lock, and a busy run writes nothing.
                 state = self._load_state()
-                return self._run(state)
-        except UpdateError as exc:
-            return self._finish(state, "error", str(exc), state.get("candidate"))
-        except Exception as exc:  # noqa: BLE001 - the oneshot must record, not crash
-            return self._finish(state, "error", f"UNEXPECTED: {exc!r}", state.get("candidate"))
+                try:
+                    return self._run(state)
+                except UpdateError as exc:
+                    return self._finish(state, "error", str(exc), state.get("candidate"))
+                except Exception as exc:  # noqa: BLE001 - the oneshot must record, not crash
+                    return self._finish(state, "error", f"UNEXPECTED: {exc!r}", state.get("candidate"))
+        except RunBusy as exc:
+            return {"schema": 1, "updated_at": _z(self.host.now()), "hostname": self.host.hostname(),
+                    "current_release": self.host.current_release(), "candidate": None, "phase": "error",
+                    "reason": str(exc), "last_result": None}
 
     def _run(self, state: dict) -> dict:
+        # Review L9: an apply in flight is finished (or rolled back) even when disabled.
+        if state.get("applying"):
+            return self._resume(state)
         state["candidate"] = None
         config = self._config()
         if not config["enabled"]:
             return self._finish(state, "disabled", "config.json has enabled=false")
-        if state.get("applying"):
-            return self._resume(state)
         current = self.host.current_release()
         if current is None:
             raise UpdateError("CURRENT_UNKNOWN: /opt/rosy/current does not name a release")
+        failed = state.setdefault("failed", {})
+        # Review H4: a release we committed that is now above current was rolled back
+        # on purpose by an operator; never apply it again.
+        for committed in state.get("committed") or []:
+            if committed > current and committed not in failed:
+                self._mark_failed(state, committed, "operator rolled back")
+                self._history("operator_rolled_back", committed, f"current is {current}")
         self._expire_hold()
         backoff = parse_z(state.get("backoff_until"))
         if backoff is not None and self.host.now() < backoff:
@@ -917,18 +1189,25 @@ class Updater:
             releases = self._releases(state, config["repo"])
         finally:
             self._save_state(state)
-        failed = state.get("failed") or {}
+        withdrawn = state.setdefault("withdrawn", {})
         candidates = sorted((item for item in releases
-                             if item["release_id"] > current and item["release_id"] not in failed),
+                             if item["release_id"] > current and item["release_id"] not in failed
+                             and item["release_id"] not in withdrawn),
                             key=lambda item: item["release_id"], reverse=True)
         skipped = []
         for release in candidates:
             try:
                 rollout = self._rollout(release)
-            except UpdateError as exc:
+            except Definitive as exc:
+                # Review L1: only a definitive problem lets a lower release go first.
                 skipped.append(f"{release['release_id']}: {exc}")
                 continue
+            except UpdateError as exc:
+                state["candidate"] = release["release_id"]
+                return self._finish(state, "error", str(exc), release["release_id"])
             if rollout["withdrawn"]:
+                # Review M4: a withdrawal is permanent on this robot.
+                withdrawn[release["release_id"]] = {"at": _z(self.host.now()), "reason": rollout.get("reason")}
                 skipped.append(f"{release['release_id']}: withdrawn ({rollout.get('reason')})")
                 continue
             break
