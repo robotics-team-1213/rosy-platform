@@ -77,7 +77,7 @@
     dashboard_preview_max_width: 640
     dashboard_preview_jpeg_quality: 72
     dashboard_preview_max_bytes: 512000
-    dashboard_source: PINKY
+    dashboard_source: ROSY          # preview label (product name; real camera)
     require_camera_controls_stable: true
     # Metric range remains unavailable until an independently validated
     # profile is explicitly enabled for the current session.
