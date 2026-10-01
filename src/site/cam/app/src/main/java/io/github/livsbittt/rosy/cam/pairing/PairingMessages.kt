@@ -30,7 +30,7 @@ data class PairingRequest(
     val deviceLabel: String,
     val appVersion: String,
     val clientCommit: String,
-    val pollSecretSha256: String,
+    val pollKeySha256: String,
 ) {
     fun toJson(): ByteArray = JSONObject()
         .put("proto", Pairing.PROTO)
@@ -38,7 +38,7 @@ data class PairingRequest(
         .put("device_label", deviceLabel)
         .put("app_version", appVersion)
         .put("client_commit", clientCommit)
-        .put("poll_secret_sha256", pollSecretSha256)
+        .put("poll_secret_sha256", pollKeySha256)
         .toString()
         .toByteArray(UTF_8)
 
