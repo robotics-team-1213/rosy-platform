@@ -136,6 +136,8 @@ def load_recipe(text: str) -> Recipe:
             problems.append("at least one pallet is required")
         ids = [slot.id for slot in pallets]
         problems += [f"duplicate pallet id {i!r}" for i in sorted({i for i in ids if ids.count(i) > 1})]
+        taught = [slot.frame for slot in pallets]
+        problems += [f"duplicate pallet frame {f!r}" for f in sorted({f for f in taught if taught.count(f) > 1})]
     if layers is not None:
         if not layers:
             problems.append("at least one layer is required")

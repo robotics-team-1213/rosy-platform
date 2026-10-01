@@ -49,7 +49,9 @@ class CellConfig:
 
 def _rules(value: object, field: str) -> dict[str, float]:
     d = fields.mapping(value, field, _RULES)
-    return {k: fields.positive(d[k], f"{field}.{k}") for k in _RULES}
+    rules = {k: fields.positive(d[k], f"{field}.{k}") for k in _RULES[:2]}
+    rules["max_tilt_deg"] = fields.non_negative(d["max_tilt_deg"], f"{field}.max_tilt_deg")  # 0 = must be level
+    return rules
 
 
 def _id(value: object, field: str) -> str:

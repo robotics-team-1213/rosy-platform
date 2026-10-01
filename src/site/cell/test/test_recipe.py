@@ -38,6 +38,8 @@ def test_fixture_loads_with_a_stable_hash():
         ("gap: 0.0", "gap: .nan", "gap"),
         ("gap: 0.0", "gap: -0.01", "gap"),
         ("gap: 0.0", "gap: 'none'", "gap"),
+        pytest.param("gap: 0.0", "gap: 1" + "0" * 400, "gap", id="gap-int-too-large-for-float"),
+        ("frame: pallet_b", "frame: pallet_a", "duplicate pallet frame 'pallet_a'"),
         # slip sheet thickness
         ("thickness: 0.002", "thickness: -0.03", "slip_sheet.thickness"),
         ("thickness: 0.002", "thickness: 0", "slip_sheet.thickness"),

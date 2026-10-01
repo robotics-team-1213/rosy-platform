@@ -27,6 +27,13 @@ def test_fixture_builds_frames_and_stations():
         ("approach_clearance_m: 0.05", "approach_clearance_m: .nan", "approach_clearance_m"),
         ("approach_clearance_m: 0.05", "approach_clearance_m: .inf", "approach_clearance_m"),
         ("approach_clearance_m: 0.05", "approach_clearance_m: '0.05'", "approach_clearance_m"),
+        pytest.param(
+            "approach_clearance_m: 0.05",
+            "approach_clearance_m: 1" + "0" * 400,
+            "approach_clearance_m",
+            id="clearance-int-too-large-for-float",
+        ),
+        ("min_angle_deg: 10.0", "min_angle_deg: 0", "frame_rules.min_angle_deg"),
         ("max_tilt_deg: 5.0", "max_tilt_deg: .nan", "frame_rules.max_tilt_deg"),
         ("min_span_m: 0.02", "min_span_m: 0", "frame_rules.min_span_m"),
         ("min_angle_deg: 10.0", "min_angle_deg: .inf", "frame_rules.min_angle_deg"),
@@ -77,3 +84,9 @@ def test_frames_and_stations_are_read_only():
         cell.frames["pallet_a"] = cell.frames["base"]
     with pytest.raises(TypeError):
         cell.stations["infeed"] = cell.stations["sheets"]
+
+
+def test_zero_max_tilt_is_allowed():
+    # the fixture frames are taught flat (tilt 0), so a zero tilt budget still loads
+    cell = load_cell(FIXTURE.read_text(encoding="utf-8").replace("max_tilt_deg: 5.0", "max_tilt_deg: 0", 1))
+    assert cell.frames["pallet_a"].tilt_deg() == pytest.approx(0.0)

@@ -57,9 +57,13 @@ def number(value: object, field: str) -> float:
     # bool is an int subclass; YAML `yes`/`true` must not become 1.0
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise FieldError(f"{field} must be a number, got {value!r}")
-    if not math.isfinite(value):
+    try:
+        n = float(value)
+    except OverflowError:  # an int beyond float range (YAML `1000...0`)
+        raise FieldError(f"{field} is too large to be a number") from None
+    if not math.isfinite(n):
         raise FieldError(f"{field} must be finite, got {value!r}")
-    return float(value)
+    return n
 
 
 def positive(value: object, field: str) -> float:
