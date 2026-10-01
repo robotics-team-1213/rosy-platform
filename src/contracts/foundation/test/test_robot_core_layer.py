@@ -66,6 +66,14 @@ def test_layer_may_not_wipe_a_default_section(monkeypatch, robot_share, text, wo
     assert words in str(caught.value) and str(robot_share / "core.yaml") in str(caught.value)
 
 
+def test_malformed_layer_refuses_to_load_naming_the_file(monkeypatch, robot_share):
+    (robot_share / "core.yaml").write_text("line_follow: {lidar_forward_deg: [180\n", encoding="utf-8")
+    monkeypatch.setenv("ROSY_ROBOT", "robo")
+    with pytest.raises(ConfigError) as caught:
+        load_config()
+    assert str(robot_share / "core.yaml") in str(caught.value) and "not valid YAML" in str(caught.value)
+
+
 def test_layer_values_merge_under_the_defaults(monkeypatch, robot_share):
     (robot_share / "core.yaml").write_text("line_follow:\n  lidar_forward_deg: 90.0\n", encoding="utf-8")
     monkeypatch.setenv("ROSY_ROBOT", "robo")

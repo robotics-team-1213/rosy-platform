@@ -96,8 +96,11 @@ def _robot_package_layer(config: dict[str, Any], overlay: Any) -> dict[str, Any]
     if not path.is_file():
         raise ConfigError(f"robot package {model!r} has no {path}; every robot package must ship "
                           f"{ROBOT_CORE_CONFIG_NAME} (an empty mapping is fine)")
-    with open(path, encoding="utf-8") as f:
-        layer = yaml.safe_load(f) or {}
+    try:
+        with open(path, encoding="utf-8") as f:
+            layer = yaml.safe_load(f) or {}
+    except yaml.YAMLError as exc:
+        raise ConfigError(f"{path} is not valid YAML: {exc}") from exc
     if not isinstance(layer, dict):
         raise ConfigError(f"{path} must be a mapping")
     for key, value in layer.items():
