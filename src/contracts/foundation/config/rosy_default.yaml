@@ -32,9 +32,10 @@ adapters:
 
 control:
   sensor_adapter:
-    mode: "off"                   # D-398: off = no policy, CORE passes commands through
-                                  # shadow = judge and record, never change cmd_vel
-                                  # enforce = limit/stop by the policy. Quote "off" (YAML 1.1 bool)
+    # mode: "off"                 # D-398: unset = off (no policy, CORE passes commands through).
+    #                             # shadow = judge and record, never change cmd_vel; enforce = limit/stop.
+    #                             # Set it (quoted) in the robot overlay. Not set here so an older overlay
+    #                             # with `enabled:` still merges (mode and enabled together are rejected).
     stale_hold_s: 2.0             # enforce: gaps shorter than this HOLD, longer latch (D-398 4)
     required: [lidar, imu, ir]
     max_age: 0.5                   # policy evidence lease, seconds

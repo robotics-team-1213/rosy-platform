@@ -390,3 +390,14 @@ def test_mode_and_stale_hold_reject_invalid_values(raw, message):
 
 def test_stale_hold_defaults_to_two_seconds():
     assert ControlSensorConfig.from_mapping({"mode": "shadow"}).stale_hold_s == 2.0
+
+
+def test_packaged_default_merged_with_legacy_enabled_overlay_is_enforce():
+    import yaml
+    default_path = (Path(__file__).resolve().parents[3] / "contracts" / "foundation" / "config" /
+                    "rosy_default.yaml")
+    block = yaml.safe_load(default_path.read_text(encoding="utf-8"))["control"]["sensor_adapter"]
+
+    merged = {**block, "enabled": True}
+
+    assert ControlSensorConfig.from_mapping(merged).mode == "enforce"

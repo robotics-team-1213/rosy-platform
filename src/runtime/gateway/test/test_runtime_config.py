@@ -6,6 +6,7 @@ import xml.etree.ElementTree as ET
 import yaml
 
 import core_common.config as config_module
+from core.bridge.control_sensor_adapter import ControlSensorConfig
 from core_common.config import ConfigError, patch_local_config
 from core_common.identity import RobotIdentity
 from core_common.identity import SOFTWARE_VERSION
@@ -30,8 +31,9 @@ def test_packaged_default_keeps_sensor_adapter_and_calibration_opt_in():
     )
     sensor = config["control"]["sensor_adapter"]
 
-    assert sensor["mode"] == "off"
+    assert "mode" not in sensor
     assert "enabled" not in sensor
+    assert ControlSensorConfig.from_mapping(sensor).mode == "off"
     assert sensor["calibration"]["required"] is False
     assert sensor["calibration"]["data_root"] == "/var/lib/rosy"
 
