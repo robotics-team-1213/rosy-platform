@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
 import {
-  RENUMBER_BANNER, addressMap, addressReason, renumberBanner,
+  RENUMBER_BANNER, addressMap, addressReason, bulkConfirmMessage, bulkMoveTargets, renumberBanner,
+  runBulkMove,
 } from "../../fleet/server/web/address-drift.js";
 
 const WEB = new URL("../../fleet/server/web/", import.meta.url);
@@ -67,4 +68,45 @@ test("no console text shows a 192.168.1.x example address", () => {
     const text = readFileSync(new URL(name, WEB), "utf8");
     assert.doesNotMatch(text, /192\.168\.1\.\d/, name);
   }
+});
+
+const moved = (robot_id, seen, over = {}) => entry({ robot_id, status: "seen_at_other_address",
+  seen_addresses: [seen], movable: true, ...over });
+
+test("bulk move targets only enrolled robots the server marked movable", () => {
+  const payload = { robots: [
+    moved("rosy_09", "10.16.36.20:8080"),
+    moved("rosy_10", "10.16.36.21:8080", { movable: false }),
+    moved("rosy_01", "10.16.36.22:8080", { origin: "static", movable: false }),
+    entry({ robot_id: "rosy_11" }),
+  ] };
+  assert.deepEqual(bulkMoveTargets(payload).map((e) => e.robot_id), ["rosy_09"]);
+  assert.deepEqual(bulkMoveTargets(null), []);
+});
+
+test("the bulk confirmation names every robot and its new address and asks", () => {
+  const message = bulkConfirmMessage([moved("rosy_09", "10.16.36.20:8080"), moved("rosy_10", "10.16.36.21:8080")]);
+  assert.match(message, /"rosy_09" → 10\.16\.36\.20:8080/);
+  assert.match(message, /"rosy_10" → 10\.16\.36\.21:8080/);
+  assert.match(message, /2대/);
+  assert.match(message, /까요\?/);
+  assert.match(message, /신원/);
+});
+
+test("bulk move runs the per-robot move once each, in order, and reports each result", async () => {
+  const calls = [];
+  const move = async (robotId) => {
+    calls.push(robotId);
+    if (robotId === "rosy_10") {
+      const error = new Error("HTTP 409");
+      error.detail = { code: "identity_mismatch" };
+      throw error;
+    }
+  };
+  const results = await runBulkMove([moved("rosy_09", "10.16.36.20:8080"), moved("rosy_10", "10.16.36.21:8080"),
+    moved("rosy_12", "10.16.36.23:8080")], move);
+  assert.deepEqual(calls, ["rosy_09", "rosy_10", "rosy_12"]);
+  assert.deepEqual(results.map((r) => [r.robot_id, r.ok]), [["rosy_09", true], ["rosy_10", false], ["rosy_12", true]]);
+  assert.equal(results[0].lines[0], "rosy_09: 10.16.36.20:8080(으)로 옮김");
+  assert.match(results[1].lines[0], /^rosy_10: 새 주소의 기기가 등록된 로봇과 다릅니다/);
 });

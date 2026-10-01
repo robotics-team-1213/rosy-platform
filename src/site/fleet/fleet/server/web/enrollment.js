@@ -364,5 +364,8 @@ export function createEnrollmentPanel({ headers, identity, log, dialogs }) {
     refresh, decorateDiscoveryRow, resetPolling: () => gate.reset(),
     // 로봇 카드의 지름길: 등록 패널의 "새 주소로 옮기기"와 같은 확인·같은 요청.
     confirmMove: (robotId) => act("move", rowFor(robotId)),
+    // "새 주소로 옮기기 (전체)"가 한 대씩 부르는 같은 요청. 확인은 부른 쪽이 한 번 받았다.
+    moveAddress: (robotId) => call(
+      `/api/fleet/enrollment/robots/${encodeURIComponent(robotId)}/move-address`, { method: "POST" }),
   };
 }

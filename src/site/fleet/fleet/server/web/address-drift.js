@@ -3,6 +3,8 @@
 // 옮기기는 기존 로봇별 "새 주소로 옮기기"(서버가 토큰으로 신원을 다시 확인)만 부른다.
 // DOM 없는 순수 함수만 둔다(node 시험 대상).
 
+import { messageFor } from "./enrollment.js";
+
 export function addressMap(payload) {
   const out = {};
   for (const entry of payload?.robots || []) out[entry.robot_id] = entry;
@@ -49,4 +51,33 @@ export const RENUMBER_BANNER = "사이트 망 주소가 바뀐 것 같습니다 
 
 export function renumberBanner(payload) {
   return payload?.all_outside ? RENUMBER_BANNER : null;
+}
+
+// "새 주소로 옮기기 (전체)" 대상: 서버가 옮길 수 있다고 한 등록 로봇만(새 주소가 하나, 등록부 address_changed).
+export function bulkMoveTargets(payload) {
+  return (payload?.robots || []).filter((entry) => entry.movable && entry.origin === "enrolled");
+}
+
+// 한 번의 확인으로 여러 대를 옮기므로 대상과 새 주소를 모두 적는다. 신원 확인은 줄지 않는다.
+export function bulkConfirmMessage(targets) {
+  const pairs = targets.map((entry) => `"${entry.robot_id}" → ${entry.seen_addresses[0]}`).join(", ");
+  return `${pairs} — 로봇 ${targets.length}대를 새 주소로 옮길까요? 로봇마다 Fleet이 새 주소에서 신원을 `
+    + "다시 확인하고, 다른 기기가 답하면 그 로봇만 옮기지 않고 새 코드가 필요해집니다.";
+}
+
+// 한 대씩 차례로, 로봇별 이동과 같은 요청(move)으로 보낸다. 한 대가 실패해도 나머지는 간다.
+// move(robot_id)는 실패하면 { detail }을 가진 오류를 던진다.
+export async function runBulkMove(targets, move) {
+  const results = [];
+  for (const entry of targets) {
+    try {
+      await move(entry.robot_id);
+      results.push({ robot_id: entry.robot_id, ok: true,
+        lines: [`${entry.robot_id}: ${entry.seen_addresses[0]}(으)로 옮김`] });
+    } catch (err) {
+      const [first, ...rest] = messageFor(err?.detail || {});
+      results.push({ robot_id: entry.robot_id, ok: false, lines: [`${entry.robot_id}: ${first}`, ...rest] });
+    }
+  }
+  return results;
 }

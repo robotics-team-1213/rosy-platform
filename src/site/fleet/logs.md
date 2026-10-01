@@ -979,3 +979,10 @@
 - 결정: 예시 주소 `192.168.1.20`을 콘솔·서버 문구에서 뺐다. 수동 등록은 사설 IPv4만 받으므로 문서용 192.0.2.x를 예로 들면 그 예가 거절된다 — 자리표시는 "로봇 화면의 IP:8080", 오류 문구는 "로봇 화면에 보이는 IPv4 주소"로 바꿨다. `deploy/site/robots.yaml.example`은 이미 192.0.2.10이다.
 - 증거: 새 `test/web/address-drift.test.mjs` 7(모듈 없음 적색 → 자리표시 `192.168.1.20` 남음 적색 → 녹색), `test_address_drift_api.py` 정적 자산·셸 배선 1 추가. `node --test src/site/fleet/test/web/*.test.mjs` 76 passed, `src/hmi/web_common/test/` + 콘솔 시험 224 passed, 24 skipped.
 - gate 변화: 없음(LOCAL).
+
+## 2026-10-01 · uncommitted · feat(console): "새 주소로 옮기기 (전체)…"
+
+- 변경: 점검 #5 — 로봇 목록 위 경보 묶음에 "새 주소로 옮기기 (전체)…" 버튼. 대상은 서버가 `movable`로 판정한 등록 로봇(새 주소가 하나, 등록부 `address_changed`, 충돌 아님)뿐이다. `confirmIrreversible` 한 번에 로봇별 `"robot_id" → 새 주소`를 모두 적고 묻고, 확인하면 `address-drift.js` `runBulkMove`가 기존 `POST /api/fleet/enrollment/robots/{id}/move-address`를 한 대씩 차례로 부른다(`enrollment.moveAddress`). 한 대가 실패해도 나머지는 가고, 결과는 로봇마다 한 줄(실패는 등록 패널과 같은 분류 문장)과 이벤트 로그 "n/m대 옮김".
+- 결정: 로봇별 이동은 화면 코드를 요구하지 않는다 — 이름 있는 운용자의 감사되는 확인 뒤 Fleet이 기존 토큰으로 새 주소의 `system/info`를 읽고 robot_id·hostname·serial·device_uid가 다르면 그 로봇을 `needs_new_code`로 둔다(D-361 3). 전체 옮기기는 같은 요청을 로봇마다 그대로 보내므로 신원 확인·감사·권한(`require_named_operator`)이 하나도 줄지 않는다. 새 서버 경로는 만들지 않았다. 파일(robots.yaml) 로봇은 대상이 아니다(런타임에 파일을 고치지 않는다 — 제안 문장만).
+- 증거: `address-drift.test.mjs` 3 추가(대상 필터, 확인 문장이 대상·주소를 모두 말하고 묻는다, 순서대로 한 번씩·실패 뒤 계속·로봇별 문장) — export 없음 적색 뒤 녹색, `test_address_drift_api.py` 배선 1 추가. node 79 passed, 주소 시험 20 passed, `src/hmi/web_common/test/` + 대화상자 계약 녹색.
+- gate 변화: 없음(LOCAL).
