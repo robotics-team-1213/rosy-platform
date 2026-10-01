@@ -695,3 +695,11 @@
 - gate 변화: 없음.
 - 결정: D-359 §5.3. 정리 패스는 동작·시험 하네스를 바꾸지 않는다.
 - 교훈: 패널 모듈의 import 그래프는 운영 서버뿐 아니라 패널 단위 하네스가 제공하는 경로 안에 있어야 한다.
+
+## 2026-10-01 · uncommitted · fix(dashboard): D-359 차선 추종 모드 값은 title에 원래 열거값을 둔다
+
+- 변경: `panels/console/line-follow.js`의 모드 `dd`가 한국어 라벨과 함께 `title`에 원래 열거값(`IR_LINE`·`OFF` 등)을 둔다(DESIGN.md 운용자 말: 열거값은 title에만). `test_action_groups_browser.py`는 `title`로 상태 도착을 기다린다.
+- 증거: 7.6 회귀에서 `test_real_operation_panels_block_switch_during_start_and_while_active`가 단독 재실행에서도 `textContent === "IR_LINE"` 대기로 실패. 수정 후 해당 파일 + `test/test_role_menu_panels_browser.py` 30 passed, 호스트 340 passed.
+- gate 변화: 없음.
+- 결정: D-359 §5, US-009 P2-2 후속.
+- 교훈: 화면 글자를 한국어로 바꿀 때 열거값을 title로 옮기지 않으면 상태를 읽는 시험·도구가 기댈 곳이 사라진다.

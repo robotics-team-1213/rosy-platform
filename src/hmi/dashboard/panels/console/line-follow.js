@@ -33,7 +33,9 @@ export function mount(root, ctx) {
   function setStatus(target, text) { if (target.textContent !== text) target.textContent = text; }
   function render() {
     if (statusKnown && current) {
-      facts.replaceChildren(el("dt", "", "모드"), el("dd", "", enumLabel(LINE_MODE_LABEL, current.mode || "OFF")),
+      const modeFact = el("dd", "", enumLabel(LINE_MODE_LABEL, current.mode || "OFF"));
+      modeFact.title = current.mode || "OFF";
+      facts.replaceChildren(el("dt", "", "모드"), modeFact,
         el("dt", "", "상태"), el("dd", "", current.state || "OFF"),
         el("dt", "", "센서"), el("dd", "", current.source || "—"),
         el("dt", "", "추종 오차"), el("dd", "", current.error == null ? "—" : Number(current.error).toFixed(3)),
