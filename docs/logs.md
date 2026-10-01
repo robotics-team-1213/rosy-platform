@@ -4212,3 +4212,8 @@
 - 변경: `test_module_structure.py`의 `fleet` 판정 줄 수를 D-395 `fleet/localization/` 추가 뒤 실측값 23543으로 옮기고 사유를 덧붙였다. 판정(split, 미예정) 그대로.
 - 증거: `test_module_structure.py`.
 - gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · chore(architecture): `control` 크기 판정 재판정 (D-395 1단계)
+- 변경: `test_module_structure.py`의 `control` 판정 줄 수를 D-395 sensing 순수 모듈 추가 뒤 실측값 40547로 옮기고 사유를 덧붙였다. 판정(split, P1a) 그대로.
+- 증거: `test_module_structure.py` 33 passed.
+- gate 변화: 없음.

@@ -802,3 +802,9 @@
 - 변경: `sensing/perception/reference_square.py` — 출력 계약 `SquareObservation(bearing_rad, range_m, confidence)`(base_link, 왼쪽 +), `SquareDetector` 프로토콜, 규칙 백엔드 `HsvSquareDetector`(파란 중심 연결 요소 + 둘레 빨간 고리 비율, 거리는 지면 평면에서 중심 행). 지면 평면이 없으면 결과 없음, 신뢰 거리 밖이면 방위만. 학습 클래스 `reference_square`가 같은 `detect(bgr, ground)` 뒤로 바꿔 들어올 수 있다. sensing·perception AGENTS 표에 D-395 모듈 행 추가.
 - 증거: `test_reference_square.py` 11 passed — 합성 영상(카펫·벽·11.8° 피치), 0.3–0.6 m에서 방위 3°·거리 3 cm, 카펫·흰 페인트·고리 없는 파랑·중심 없는 빨강은 0개. 합성 영상은 검출기와 같은 믿음이므로 실제 프레임 1장도 돌렸다: 8kcn 20260930T133221Z 프레임 78(320×240, 피치 11.2°, 높이 0.0627 m 가정)에서 1개, 방위 왼쪽 10.2°, 거리 0.43 m, 신뢰 0.91. 한 장이라 가시 거리·조명 범위는 여전히 미검증(2단계 P2-8).
 - gate 변화: 없음(SOURCE/LOCAL).
+
+## 2026-10-01 · uncommitted · test(localization): D-395 1단계 호스트 종단 시험 — 두 로봇, 사람 입력 0
+- 변경: `test/test_loc_e2e.py` — 체크인된 map_v2_fleet 지도 위 모의 로봇 2대가 순수 모듈(후보·물체·상태 기계·3 s 검증·페인트 점수)과 D-395 선 모델(`CandidateReport`/`LocalizationDecision`)과 Fleet 중재기를 거쳐 위치를 확정한다. 사각형 A 위(카메라 없음, 슬롯 사전)와 슬롯 밖(카메라 없음, 먼저 확정된 로봇이 단서)을 동시에 켬, 거울을 첫 후보로 강제한 외톨이 로봇(슬롯 밖·사각형 B, 페인트로 해소), 단서 없는 외톨이는 결정 없음(음성 대조). 결정은 개정 3대로 `cues`와 수신 기준 `ttl_s`를 거친다. `control` 크기 판정을 40547로 재판정.
+- 증거: `test_loc_e2e.py` 4 passed, 슬롯 가중 0 돌연변이에서 첫 사례 실패 확인(커밋 안 함), 아키텍처 시험 33 passed.
+- gate 변화: SOURCE/LOCAL GO. ROS-SIM(S1)·DEVICE 해당 없음 — 노드·launch·API 배선은 2단계.
+- 결정: D-395 Proposed(개정 3, 1단계 완료).

@@ -215,7 +215,7 @@ SIZE_VERDICTS = {
         "accept: sim-only read-only viewer server (HTTP handler + ROS subscriptions); the pure logic already lives in live_view_model.py and the page in lane_live_view.html, covered by test_lane_live_view*.py and test_live_view_model.py (X5)",
     ),
     "control": (
-        39_914,
+        40_547,
         f"split: deploy closure needs only sensing + safety provider (P1a); {CONTROL_SPLIT} "
         "(re-judged 2026-09-30 at 33090 after D-356 added the ROS-free learned perception backend "
         "(sensing/perception/learned), the shadow node and the recording CLI; the learned backend sits "
@@ -241,7 +241,10 @@ SIZE_VERDICTS = {
         "(perception/road_state.py + road_state_model.py) and its shadow node — it sits inside "
         "sensing/perception and moves with it — verdict unchanged; re-judged 2026-10-01 at 39914 when "
         "main (38903) merged into the D-373 branch: both additions stay inside the control package and "
-        "move with the P1a split — verdict unchanged)",
+        "move with the P1a split — verdict unchanged; re-judged 2026-10-01 at 40547 when the "
+        "D-395 ROS-free localization candidates, objects, injection check and state machine "
+        "(sensing/loc_*.py) and the paint-hypothesis and reference-square cues (sensing/perception) "
+        "joined — they move with the P1a split, verdict unchanged)",
     ),
     # --- D-362 newly-covered files (web assets in src/ packages, ops roots). ---
     "runtime/sensing/web/diagnostic.html": (
