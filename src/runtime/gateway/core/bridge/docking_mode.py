@@ -51,9 +51,13 @@ def route_nav_cmd_vel(svc, twist) -> bool:
     NAVIGATION: the nav slot. DOCKING: the docking slot, but only while a
     staging dock drives to its staging pose through Nav2 — any other Nav2
     output during docking (a stale goal, a swarm goal) must not move the
-    robot. Line following owns the nav slot while it is active.
+    robot. Line following owns the nav slot while it is active, and so does a
+    D-395 P2-7 rotate/nudge mission.
     """
     if svc.line_follow.active:
+        return False
+    mission = svc.loc_mission
+    if mission is not None and mission.owns_wheels:
         return False
     mode = svc.modes.mode
     if mode is Mode.NAVIGATION:

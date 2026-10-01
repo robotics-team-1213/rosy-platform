@@ -252,6 +252,8 @@ EXPECTED_PUBLISHERS = [
     # D-395 P2-4 (contract §1): reliable, depth 5.
     ("localization/decision", 5),
     ("localization/suspect", 5),
+    # D-395 P2-7: mission start/end for the sensing node's search-after-mission.
+    ("localization/mission", 5),
 ]
 
 #: Five, not four. The fourth is behind the optional `slam_toolbox` import and

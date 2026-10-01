@@ -15,7 +15,7 @@ Repo convention: like `line/observation` and `dock/observation`, payloads are on
 | `localization/decision` | CORE → sensing | `{"decision": LocalizationDecision, "received_s": float}`; `received_s` is CORE's monotonic-free ROS clock at receipt | reliable, depth 5 |
 | `localization/suspect` | CORE → sensing | `{"reason": str}` (Fleet monitor, §9) | reliable, depth 5 |
 | `localization/result` | sensing → CORE | `{"request_id": str, "accepted": bool, "reason": str \| null, "state": LocState}` for every decision | reliable, depth 10 |
-| `localization/mission` | CORE mission executor → nobody (log) | reserved for P2-7 | — |
+| `localization/mission` | CORE mission executor → sensing `loc_assist_node` (P2-7) | `{"kind": str, "state": "running" \| "done" \| "aborted", "reason": str \| null}` on start and end; the node searches no more while running and searches at once after every end | reliable, depth 5 |
 
 `/initialpose` is published only by the sensing node's `inject_pose` action (through the existing CORE bridge path is **not** used any more for Fleet decisions). The legacy human `POST /api/v1/localization/initialpose` becomes a `LocalizationDecision(source=human, pose=...)` published on `localization/decision` (lane B), so every injection passes the same 3 s check (lane A).
 
@@ -29,7 +29,7 @@ Repo convention: like `line/observation` and `dock/observation`, payloads are on
 | `POST /api/v1/localization/suspect` **new** | `{"reason": str}` (≤ 64 chars) | `LOCALIZE_ASSIST` |
 | `POST /api/v1/localization/initialpose` (existing) | unchanged body `{x, y, yaw}`; now routed as `source: human` | `NAVIGATE` (unchanged) |
 | `POST /api/v1/localization/mission` **new, lane B P2-7** | `{"kind": "rotate_in_place" \| "nudge_forward" \| "to_square" \| "lane_to_stopline", "max_distance_m": float, "max_time_s": float, "target": {...} \| null}` → `202` / `409 {"code": "path_not_clear" \| "busy" \| "estop" \| "calibration_lease" \| "localized"}` | `LOCALIZE_ASSIST` |
-| `GET /api/v1/localization/mission` **new** | `{"kind", "state": "running" \| "done" \| "aborted", "reason"}` | Viewer |
+| `GET /api/v1/localization/mission` **new** | `{"kind", "state": "idle" \| "running" \| "done" \| "aborted", "reason"}` (P2-7 adds `idle` before the first mission; API Ref v1.72) | Viewer |
 
 Events (catalogue rows added by lane B with emitters): `localization.state` (state changes), `localization.candidates` (new request id), `localization.result` (decision accepted/rejected, with `source` and `cues`), `localization.initialpose` (existing; now carries `source`).
 

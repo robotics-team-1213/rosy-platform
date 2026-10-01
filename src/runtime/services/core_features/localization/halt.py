@@ -10,11 +10,12 @@ emits its own existing event; the `localization.state` event carries the reason.
 
 from __future__ import annotations
 
-from typing import Callable
+from typing import Callable, Optional
 
-from core_common.protocol.schemas import RobotMode
+from core_common.protocol.schemas import NavigationState, RobotMode
 from core_features.command.arbitration import Mode
 from core_features.localization.assist import LocalizationAssist
+from core_features.localization.mission import LocalizationMission
 
 SOURCE = "localization"
 
@@ -36,14 +37,36 @@ def autonomy_halt(*, nav, line_follow, command, state, modes, swarm, docking) ->
 
 
 def wire_assist(events, robot_id: Callable[[], str], *, nav, line_follow, command, state,
-                modes, swarm, docking) -> LocalizationAssist:
-    """CORE's composition: LOCALIZED cancels Nav2 (re-plan), leaving it halts autonomy,
-    and the snapshot reads the status live."""
+                modes, swarm, docking, safety, traffic_policy) -> tuple[LocalizationAssist,
+                                                                        LocalizationMission]:
+    """CORE's composition: LOCALIZED cancels Nav2 (re-plan) and ends a P2-7 mission,
+    leaving it halts autonomy, and the snapshot reads the status live."""
+    mission: Optional[LocalizationMission] = None
+
+    def on_localized() -> None:
+        nav.cancel(source=SOURCE)
+        if mission is not None:
+            mission.end("localized")
+
     assist = LocalizationAssist(
-        events, robot_id=robot_id,
-        on_localized=lambda: nav.cancel(source=SOURCE),
+        events, robot_id=robot_id, on_localized=on_localized,
         on_lost=autonomy_halt(nav=nav, line_follow=line_follow, command=command, state=state,
                               modes=modes, swarm=swarm, docking=docking))
     state.set_localization_provider(assist.status)
     docking.localization_ok = assist.autonomy_allowed
-    return assist
+
+    def busy() -> Optional[str]:
+        if line_follow.active:
+            return "line follow is active"
+        if docking.active:
+            return "docking is active"
+        if swarm.active:
+            return "swarm follow is active"
+        if nav.nav_state in (NavigationState.PLANNING, NavigationState.NAVIGATING):
+            return "a navigation goal is active"
+        return None
+
+    mission = LocalizationMission(events, command=command, modes=modes, state=state, safety=safety,
+                                  line_follow=line_follow, traffic_policy=traffic_policy,
+                                  localization=assist, busy=busy)
+    return assist, mission

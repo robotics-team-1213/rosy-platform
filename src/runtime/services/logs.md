@@ -307,3 +307,9 @@
 - 변경: `LocalizationAssist.autonomy_allowed()`(LOCALIZED + map, 또는 D-395 이전 로봇)와 `gate`(RLock: 상태 반영·이탈 정지와 모든 시작이 같은 잠금). `localization/result` 는 모델 검증(`request_id` 규칙, `reason` ≤ 64), 64 KiB 넘는 메시지는 버림, 거부 로그는 예외 타입과 오류 종류만. `DockingManager.localization_ok` — `dock()` 거부(`NOT_LOCALIZED`), 배터리 복귀는 대기로 남아 LOCALIZED 가 되면 틱이 이어 간다. `wire_assist` 가 바인딩.
 - 증거: `test/test_localization_assist.py` +20, `test/test_docking_localization_gate.py` 5.
 - gate 변화: 없음.
+
+## 2026-10-02 · uncommitted · feat(localization): D-395 P2-7 확인 기동·귀환 미션 실행기
+
+- 변경: 새 `localization/mission.py` `LocalizationMission` — `LOCALIZED` 가 아닐 때만 `rotate_in_place`(오도메트리 한 바퀴, 0.3 rad/s), `nudge_forward`(≤ 0.10 m, 0.03 m/s, 정면 0.25 m 정지), `lane_to_stopline`(카메라 line-follow 를 이 미션에 한해 LOCALIZED 관문 없이, 세션 속도 0.04 m/s, 정지선 0.12 m·거리·시간에서 끝). `to_square` 는 `unsupported`(map 프레임 없이 차선 경로가 없다, 후속). 바퀴는 NAVIGATION 모드의 nav 슬롯(`set_nav_twist`)으로만 — 50 Hz `select_output` 이 최종 중재. 끝(완료·시간·장애물·e-stop·LOCALIZED·센서 끊김·모드 이탈)은 명령을 지우고 IDLE 로, `localization.mission` 이벤트와 `publish`(ROS `localization/mission`). 시작은 `assist.gate` 안에서 검사·출발. `wire_assist` 가 미션을 만들고 LOCALIZED 진입 훅이 미션을 끝낸다(반환값 `(assist, mission)`).
+- 증거: `gateway/test/test_localization_mission.py` 30.
+- gate 변화: 없음.
