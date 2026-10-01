@@ -24,8 +24,8 @@ Per robot, in parallel (one thread each):
 A candidate is never applied or accepted here: tools/calibration/store_cli.py
 accept is the operator's step. The LiDAR mount yaw is never assumed: the
 clearance guard uses --lidar-yaw-deg, else the robot's accepted lidar_mount
-record in the PC store, else robot.yaml with a warning (its 190 deg is suspect:
-motion and camera say ~181-182 deg on 8kcn and 9dfk).
+record in the PC store, else robot.yaml with a warning (the URDF nominal 180 deg
+since D-397; motion and camera say ~181-182 deg on 8kcn and 9dfk).
 """
 from __future__ import annotations
 

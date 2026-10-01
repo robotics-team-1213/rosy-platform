@@ -95,14 +95,14 @@ class HttpPairingTransport(
     override fun request(site: PairableSite, body: ByteArray): ByteArray =
         call(Request.Builder().url(url("requests")).post(body.toRequestBody(JSON)).build())
 
-    override fun reveal(site: PairableSite, requestId: String, pollSecret: String, body: ByteArray): ByteArray =
-        call(authorized(url("requests", requestId, "reveal"), pollSecret).post(body.toRequestBody(JSON)).build())
+    override fun reveal(site: PairableSite, requestId: String, pollKey: String, body: ByteArray): ByteArray =
+        call(authorized(url("requests", requestId, "reveal"), pollKey).post(body.toRequestBody(JSON)).build())
 
-    override fun poll(site: PairableSite, requestId: String, pollSecret: String): ByteArray =
-        call(authorized(url("requests", requestId), pollSecret).get().build())
+    override fun poll(site: PairableSite, requestId: String, pollKey: String): ByteArray =
+        call(authorized(url("requests", requestId), pollKey).get().build())
 
-    override fun confirm(site: PairableSite, requestId: String, pollSecret: String, body: ByteArray): ByteArray =
-        call(authorized(url("requests", requestId, "confirm"), pollSecret).post(body.toRequestBody(JSON)).build())
+    override fun confirm(site: PairableSite, requestId: String, pollKey: String, body: ByteArray): ByteArray =
+        call(authorized(url("requests", requestId, "confirm"), pollKey).post(body.toRequestBody(JSON)).build())
 
     private fun url(vararg segments: String): HttpUrl = HttpUrl.Builder()
         .scheme("https")
@@ -114,8 +114,8 @@ class HttpPairingTransport(
         }
         .build()
 
-    private fun authorized(url: HttpUrl, pollSecret: String): Request.Builder =
-        Request.Builder().url(url).header("Authorization", "Bearer $pollSecret").header("Cache-Control", "no-store")
+    private fun authorized(url: HttpUrl, pollKey: String): Request.Builder =
+        Request.Builder().url(url).header("Authorization", "Bearer $pollKey").header("Cache-Control", "no-store")
 
     /** The reply body of a 2xx; anything else becomes [PairingRefused] with the S2 code and Retry-After. */
     private fun call(request: Request): ByteArray = client.newCall(request).execute().use { response ->

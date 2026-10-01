@@ -58,3 +58,5 @@ Camera extrinsics are per robot (device id) and per accepted run, never one glob
 **Related:** [D-321](D-321-attended-calibration-g4-mapping.md) (attended calibration session; protocol v1 is run attended), [D-364](D-364-lane-keeping-perception-and-replay-bench.md) §3 (NOMINAL camera profile, now the seed of `camera_profile`), [D-379](D-379-learning-data-pipeline-auto-labels-local-store.md) (auto-label geometry: LiDAR yaw from `robot.yaml`/argument; the robot-side camera fit uses the same wall-edge criterion as its pitch fit, adding roll, height and separate contact/top terms).
 
 ---
+
+**2026-10-01 cross-reference (D-397, Proposed):** [D-397](D-397-pinky-geometry-urdf-nominal-calibration-refines.md) amends this addendum: the static fallback is now the URDF nominal (`geometry.yaml`), and an operator layer sits **above** accepted records (CORE local-overlay `line_follow.lidar_forward_deg`, bringup launch `wheel_radius`/`wheel_separation`, line_observer `camera_*_override`), subject to the same `check_values` plausibility.

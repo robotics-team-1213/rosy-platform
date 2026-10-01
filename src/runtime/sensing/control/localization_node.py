@@ -15,6 +15,7 @@ from sensor_msgs.msg import LaserScan
 from std_msgs.msg import String, Bool
 from std_srvs.srv import Empty
 from tf2_ros import TransformListener
+from .sensing.body import URDF_RADIUS
 from .sensing.localization import MapAgreement, Confidence, planar_yaw
 
 
@@ -29,7 +30,7 @@ class LocalizationNode(Node):
                             ('minimum_agreement', .85), ('wall_tolerance', .04),
                             ('position_stddev', .035), ('yaw_stddev', .12),
                             ('stable_scans', 10), ('recovery_interval', 30.),
-                            ('robot_radius', .076), ('global_minimum_agreement', .9),
+                            ('robot_radius', URDF_RADIUS), ('global_minimum_agreement', .9),
                             ('global_minimum_margin', .04)]:
             self.declare_parameter(name, value)
         self.field = self.scan = self.pose = None

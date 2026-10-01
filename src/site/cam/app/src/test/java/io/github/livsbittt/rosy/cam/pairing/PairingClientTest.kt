@@ -67,10 +67,10 @@ class PairingClientTest {
                 .put("expires_at", expiresAt).toString().toByteArray(UTF_8)
         }
 
-        override fun reveal(site: PairableSite, requestId: String, pollSecret: String, body: ByteArray): ByteArray {
+        override fun reveal(site: PairableSite, requestId: String, pollKey: String, body: ByteArray): ByteArray {
             sent += String(body, UTF_8)
             refuse()
-            assertEquals(pollDigest, Pairing.sha256Text(pollSecret))
+            assertEquals(pollDigest, Pairing.sha256Text(pollKey))
             val nonce = JSONObject(String(body, UTF_8)).getString("client_nonce")
             if (Pairing.commit(nonce) != commit) throw PairingRefused(400, "COMMIT_MISMATCH")
             code = Pairing.confirmationCode(Pairing.ROLE, requestId, Pairing.derSha256(serverLeaf.encoded), nonce, serverNonce)
@@ -90,17 +90,17 @@ class PairingClientTest {
             .put("site_ca_pem", caPem).put("token", token).put("credential_id", credentialId)
             .put("expires_at", "2027-03-30T00:00:00Z")
 
-        override fun poll(site: PairableSite, requestId: String, pollSecret: String): ByteArray {
+        override fun poll(site: PairableSite, requestId: String, pollKey: String): ByteArray {
             refuse()
             pollThrows?.let { throw it }
-            if (Pairing.sha256Text(pollSecret) != pollDigest) throw PairingRefused(401, "POLL_SECRET_INVALID")
+            if (Pairing.sha256Text(pollKey) != pollDigest) throw PairingRefused(401, "POLL_SECRET_INVALID")
             if (state == "delivered") throw PairingRefused(410, "PAIRING_RESULT_GONE")
             if (state != "approved") return JSONObject().put("state", state).toString().toByteArray(UTF_8)
             state = "delivered"
             return JSONObject().put("state", "approved").put("result", result()).toString().toByteArray(UTF_8)
         }
 
-        override fun confirm(site: PairableSite, requestId: String, pollSecret: String, body: ByteArray): ByteArray {
+        override fun confirm(site: PairableSite, requestId: String, pollKey: String, body: ByteArray): ByteArray {
             confirmCalls++
             refuse()
             if (confirmCalls > 1) retryRefusal?.let { throw it }
@@ -265,7 +265,7 @@ class PairingClientTest {
     }
 
     @Test
-    fun anUnansweredConfirmIsResentOnceAndAMatching200KeepsTheLink() {
+    fun unansweredConfirmIsResentOnce_match200KeepsLink() {
         val fake = FakeSite().apply { lostReplies = 1 }
         val pairing = client(fake)
         toFingerprint(fake, pairing)
