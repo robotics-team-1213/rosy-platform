@@ -10,11 +10,11 @@ Resolution order, first hit wins (D-397: URDF nominal < accepted record < operat
   3. the hand value ``line_follow.lidar_forward_deg``: the robot
      package's core.yaml, which is the URDF nominal 180 deg (geometry.yaml).
 
-``lidar_yaw_offset`` bound through the control sensor adapter (D-47) is only
-compared: it is the safety node's robot.yaml value (the URDF nominal 180 deg
-since D-397, 190 deg before), not a measurement, so it must not silently
-override the line_follow value. A disagreement above 3 deg is reported in the
-source line and sets the warn flag, which the caller uses for the log level. ROS-free.
+Since D-400 the resolved angle is fed into the safety worker (core/safety_params.py), so
+production no longer passes ``adapter_parameters``; the comparison with a bound
+``lidar_yaw_offset`` (D-47) is kept for tests and legacy callers. A disagreement above
+3 deg is reported in the source line and sets the warn flag, which the caller uses for
+the log level. ROS-free.
 """
 from __future__ import annotations
 

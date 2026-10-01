@@ -35,7 +35,7 @@
 ## 최근 기록
 
 - 2026-10-02 · uncommitted · feat(localization): D-395 P2-7 확인 기동·귀환 미션 실행기
+- 2026-10-01 · uncommitted · feat(core_features): D-400 shadow verdicts without touching the output
 - 2026-10-01 · uncommitted · fix(localization,docking): D-395 리뷰 — 내부 시작 게이트, 결과 검증, 잠금
 - 2026-10-01 · uncommitted · feat(localization): D-395 LOCALIZED 이탈 시 자율 주행 정지
 - 2026-10-01 · uncommitted · feat(localization,state): D-395 P2-1 LocalizationAssist
-- 2026-10-01 · uncommitted · feat(command): 대기 5분 후 bored 표정

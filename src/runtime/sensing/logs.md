@@ -868,6 +868,12 @@
 - 증거: `test_loc_assist_node_ros.py` 2개(WSL Jazzy: 카메라 구독 생성·제거·재생성, 정지 플래그가 탐색을 건너뜀) — WSL ROS 시험 55 passed. 호스트 sensing 2224 passed, 104 skipped; 아키텍처 76 passed(`control` 41237로 재판정).
 - gate 변화: 없음.
 
+## 2026-10-02 · uncommitted · feat(perception): visible lane candidates and object labels
+- 변경: LEFT/RIGHT LANE 선택 경계, CURRENT LANE와 인접 차로 후보, FOLLOW PATH 목표 안내를 구분. 폭·방향·중첩 구간으로 후보를 제한하고 중복 경계 조각을 합침. 전경 영역에 UNKNOWN/DARK와 거리 미확인 표시, 실제 ArUco 픽셀에 TAG 번호를 표시. 진단 전용 선택·차폭·카메라 지면 출처 정보를 추가하고 주행 관측 ground enum은 유지.
+- 증거: 추종·keeper·topology·tag·observer wiring 집중 시험 113 passed. 다차선 11 사례, 표식 픽셀 및 무효 입력, GAZEBO 주행 serializer 회귀 포함. docs/plans/2026-10-02-lane-object-preview-design.md.
+- 한계: 후보는 현재 프레임의 관측이며 전체 도로 차선 수·자동 차선 변경·객체 종류/추적/미래 궤적을 뜻하지 않음. 실기 설치는 전원 꺼짐으로 미확인.
+- gate 변화: 없음. SOURCE/LOCAL 표시 개선 검증; DEVICE/FIELD 미승격.
+
 ## 2026-10-02 · uncommitted · feat(localization): D-395 P2-7 미션 뒤 재탐색
 
 - 변경: `LocAssist.on_mission` — CORE `localization/mission` 이 `running` 이면 탐색하지 않고, `done`·`aborted` 면 바로 한 번 탐색한다(CANDIDATES 에서도 이동·재시도 시간을 기다리지 않음). `loc_assist_node` 가 그 토픽을 구독한다.

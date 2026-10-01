@@ -1135,6 +1135,21 @@
 - gate 변화: 없음(SOURCE/LOCAL).
 - 결정: D-395 개정 3(시계 비동기).
 
+## 2026-10-02 · uncommitted · 관제 콘솔 회차 — 예외 큐 신뢰·지도 위계·카드 문구 정리
+- 변경: roster.js fillQueues가 오프라인 로봇(`연결 끊김`, EVIDENCE_LABEL.disconnected)과 온라인이지만 상태가 없는 로봇(`상태 확인 불가`)을 '주의 요망' 큐에 올린다. 로봇 전원이 닿지 않아도 예외 레인이 침묵하지 않는다(2026-10-02 회차 계측: 3대 오프라인에 큐 0건·패널 hidden이었음).
+- 변경: 카드 문구 — 닿지 못한 예외의 클래스 이름 코드(ConnectError 등)를 한국어로 옮기는 REACH_LABEL을 두고(모르는 값은 받은 그대로), 사실 라벨 POSE/YAW/BATTERY/SAFETY와 안전값 OK/E-STOP을 위치/방향/배터리/안전·정상/비상 정지로 바꾼다. 버튼마다 반복되던 같은 사유("로봇 오프라인" ×2)는 카드 상태 줄을 aria-describedby로 가리키는 "위 사유"로 한 번만 말한다(D-359 §5.3 한 원인은 한 번 말한다).
+- 변경: styles.css — 110rem 이상에서 지도 패널 내부 격자를 1fr:1fr에서 1.6fr:1fr로. 1920 관제 PC에서 현장 지도가 374px(로스터 1058px)로 목표를 찍는 표면이 폰 폭이 되던 위계 역전을 바로잡는다. 재측정 460px/카메라 288px.
+- 근거: D-280(아는 만큼 말한다·중요한 것이 먼저 보인다), D-359 §5.3, 운용자 말 한국어 평문 규칙. 2026-10-02 로컬 렌더 계측 회차(fleet console 8097, 로봇 3대 도달 불가 상태).
+- gate 변화: 없음.
+- 최종 증거: fleet 1213 passed 7 skipped; web_common 209 passed 24 skipped(문구·팔레트·반응형 계약 포함); 브라우저 재캡처 페이지 오류 0, 예외 큐 3건·지도 460px·"위 사유" 렌더 확인.
+
+## 2026-10-02 · uncommitted · 관제 콘솔 회차 2 — D-405/D-406 아이콘 크롬·카메라 설치 묶음·목표 토글
+- 변경: 테마 trio(어둡게·밝게·시스템)·설정 토글·영상 새로고침을 아이콘으로(한국어 이름은 sr-only·title 유지), 카드 측정 라벨(위치·방향·배터리·안전)을 아이콘+sr-only로(label 척도 크기). 목표 받기 버튼을 quiet에서 toggle+aria-pressed로(눌림 = 계열 파랑, .arming 클래스 제거).
+- 변경: 카메라 구역을 운용 무대(영상·선택·새로고침)와 details#camera-install-tools 설치·보정 묶음(기본 접힘)으로 분리. 높이 함수 4곳 vh→dvh.
+- 근거: D-405(아이콘 우선 크롬), D-406(운용/설치 분리 v1 + 목표 토글 위계), 사용자 지시 2026-10-02(위계 산만함·역할별 컴포넌트화).
+- gate 변화: 없음.
+- 최종 증거: fleet 1213 passed 7 skipped; web_common 209 passed(문구·dvh 게이트 포함); 브라우저 재캡처 페이지 오류 0 — 테마 3종·설정·새로고침 아이콘 렌더, 묶음 접힘 확인, 폰 390 문서 3431→3172px.
+
 ## 2026-10-02 · uncommitted · feat(fleet): D-395 P2-7 사다리가 미션을 보낸다, 미션 전 교통 정지
 
 - 변경: `HttpRobotClient.localization_mission` 이 `POST /api/v1/localization/mission` 을 보낸다(자리표시 제거), `FakeRobot` 은 `missions`·`mission_error`. `LocalizationService` 사다리: 10 s `rotate_in_place`, 25 s `to_square`(사각형 목표가 있을 때, CORE 가 `unsupported` 면) → `lane_to_stopline`, 60 s `needs_human`. 거부는 `last_mission` 에 기록하고 재시도하지 않는다. LOCALIZED·레거시(null) 로봇에는 보내지 않는다. 미션 전 `FleetConsole.hold_for_localization` — 미확정 로봇의 keep-out(`trust.blocks`, 신뢰 자세가 없으면 트랙 전체)에 걸린 Fleet 목표를 취소하고 `LOCALIZATION_UNTRUSTED` 로 대기열에 넣어 그 로봇이 LOCALIZED 가 되면 다시 낸다. 정지가 실패하면 미션을 보내지 않는다. `service_logic.MISSION_LIMITS`·`square_target`; view 의 `pending_missions` → `rung_missions`.

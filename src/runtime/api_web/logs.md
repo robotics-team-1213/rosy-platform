@@ -311,3 +311,9 @@
 - 변경: `v1/localization.py` 에 `POST /mission`(`LOCALIZE_ASSIST`, 202 또는 409 `localized`·`busy`·`estop`·`path_not_clear`·`calibration_lease`·`unsupported`, 범위 위반 400, D-395 이전 501, readiness HOLD 503)과 `GET /mission`(Viewer). `MissionRefused` 는 `deps` 재수출 면으로. `app.py` 계약 버전 v1.72 ×2.
 - 증거: `gateway/test/test_localization_mission.py` (권한·lease·거부 코드).
 - gate 변화: 없음.
+
+## 2026-10-02 · uncommitted · chore(api): D-395 P2-7 계약 버전 v1.72 → v1.73
+
+- 변경: 통합 브랜치가 main 을 받으며 v1.72 를 가져갔다(D-400 이 v1.71). P2-7 행과 `app.py` ×2·핀 네 곳을 v1.73 으로.
+- 증거: `test/test_line_follow_contract_docs.py`, `src/site/fleet/test/test_task_contract_docs.py`, `test_mission_progress.py`.
+- gate 변화: 없음.

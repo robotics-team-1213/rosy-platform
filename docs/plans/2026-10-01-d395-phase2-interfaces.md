@@ -29,7 +29,7 @@ Repo convention: like `line/observation` and `dock/observation`, payloads are on
 | `POST /api/v1/localization/suspect` **new** | `{"reason": str}` (≤ 64 chars) | `LOCALIZE_ASSIST` |
 | `POST /api/v1/localization/initialpose` (existing) | unchanged body `{x, y, yaw}`; now routed as `source: human` | `NAVIGATE` (unchanged) |
 | `POST /api/v1/localization/mission` **new, lane B P2-7** | `{"kind": "rotate_in_place" \| "nudge_forward" \| "to_square" \| "lane_to_stopline", "max_distance_m": float, "max_time_s": float, "target": {...} \| null}` → `202` / `409 {"code": "path_not_clear" \| "busy" \| "estop" \| "calibration_lease" \| "localized"}` | `LOCALIZE_ASSIST` |
-| `GET /api/v1/localization/mission` **new** | `{"kind", "state": "idle" \| "running" \| "done" \| "aborted", "reason"}` (P2-7 adds `idle` before the first mission; API Ref v1.72) | Viewer |
+| `GET /api/v1/localization/mission` **new** | `{"kind", "state": "idle" \| "running" \| "done" \| "aborted", "reason"}` (P2-7 adds `idle` before the first mission; API Ref v1.73) | Viewer |
 
 Events (catalogue rows added by lane B with emitters): `localization.state` (state changes), `localization.candidates` (new request id), `localization.result` (decision accepted/rejected, with `source` and `cues`), `localization.initialpose` (existing; now carries `source`).
 

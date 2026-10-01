@@ -21,6 +21,16 @@
   border: 0;
 }
 
+/* D-405 — 인라인 아이콘의 공용 크기·색. 새 크기 척도를 만들지 않고 글자 척도의
+ * value 단계를 재사용한다. 색은 currentColor(자리의 글자 토큰을 상속한다).
+ * 아이콘 폰트·외부 에셋은 쓰지 않는다(D-75 정신) — 인라인 SVG만. */
+.ui-icon {
+  display: inline-block;
+  width: var(--text-value);
+  height: var(--text-value);
+  flex: none;
+}
+
 .skip-link {
   position: fixed;
   z-index: 1000;

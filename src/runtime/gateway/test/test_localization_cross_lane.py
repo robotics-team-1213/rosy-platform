@@ -201,3 +201,42 @@ def test_legacy_initialpose_becomes_a_human_decision_the_robot_accepts(stack):
     assert "result" not in topics, topics.get("result")
     [injection] = robot.injected
     assert injection.pose == (0.5, 0.25, 1.0) and injection.source == "human"
+
+
+def test_fleet_mission_runs_in_core_and_the_robot_searches_after_it(stack):
+    """P2-7: C asks B for a rotate; B drives and ends it; A searches again after the end."""
+    from fleet.swarm.transport import RobotApiError
+
+    _to_candidates(stack)
+    services, robot = stack.services, stack.robot
+    mission = services.loc_mission
+    published = []
+    mission.publish = lambda body: published.append(json.dumps(body))   # as ros_bridge does
+    clock = SimpleNamespace(now=100.0)
+    mission._clock = lambda: clock.now
+    sample = {"ranges": [2.0] * 360, "angle_min": 0.0, "angle_max": 6.2657,
+              "range_min": 0.05, "range_max": 8.0}
+    mission.observe_scan(sample)
+    mission.observe_odom(0.0, 0.0, 0.0)
+    robot_id = services.localization.candidates().robot_id
+
+    started = _fleet_call(stack, robot_id, lambda client: client.localization_mission(
+        "rotate_in_place", max_distance_m=0.0, max_time_s=30.0))
+    assert started["state"] == "running"
+    with pytest.raises(RobotApiError) as refused:
+        _fleet_call(stack, robot_id, lambda client: client.localization_mission(
+            "to_square", max_distance_m=1.0, max_time_s=60.0, target={"square": [0.86, -0.52]}))
+    assert refused.value.status == 409 and refused.value.code == "unsupported"
+
+    robot.core.on_mission(robot.now, json.loads(published[0]))
+    assert not robot.core.search_due(robot.now, (0.0, 0.0, 0.0))     # moving: no search
+    yaw = 0.0
+    for _ in range(45):
+        clock.now += 0.05
+        yaw += 0.15
+        mission.observe_odom(0.0, 0.0, yaw)
+        mission.observe_scan(sample)
+        mission.tick()
+    assert mission.status() == {"kind": "rotate_in_place", "state": "done", "reason": "done"}
+    robot.core.on_mission(robot.now, json.loads(published[-1]))
+    assert robot.core.search_due(robot.now, (0.0, 0.0, 0.1))         # fresh candidates now

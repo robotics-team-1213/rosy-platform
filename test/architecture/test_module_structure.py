@@ -75,8 +75,15 @@ CONTROL_SPLIT = "docs/plans/2026-09-22-control-package-split-design.md"
 
 #: P6 verdicts: path (relative to src/) or package name -> (lines at verdict, verdict).
 SIZE_VERDICTS = {
+    "core_features": (
+        10_101,
+        "accept: CORE's ROS-free feature layer (D-125/D-126) is already split by owner into subpackages "
+        "(command, safety, line_follow, docking, navigation, localization, ...), each host-tested; the "
+        "package total is the layer, not one owner (X1). Crossed 10000 on 2026-10-02 at 10101 when "
+        "D-395 P2-7 added localization/mission.py (the mission executor, its own module under budget)",
+    ),
     "fleet": (
-        24_204,
+        24_403,
         "split: server HTTP boundary, console, signals and the mission-control stores are separate owners "
         "today; group them into subpackages rather than one flat server/ tree (B2); owner fleet, unscheduled "
         "(re-judged 2026-09-29 at 11164 after mission_store joined the server tree; re-judged 2026-09-30 at "
@@ -112,6 +119,10 @@ SIZE_VERDICTS = {
         "server module (server/localization_service.py), its pure monitor/ladder and pose trust in "
         "fleet/localization (service_logic.py, trust.py), the client routes in transport.py and a pure "
         "web/localization-badge.js, plus tests; verdict unchanged. "
+        "Re-judged 2026-10-02 at 24403 when D-395 P2-7 joined (the ladder sends missions from "
+        "server/localization_service.py, the pre-mission traffic hold in console.py, pure "
+        "MISSION_LIMITS/square_target in fleet/localization, the mission client in transport.py) on "
+        "top of main's D-405/D-406 console work; verdict unchanged. "
         "Split remains unscheduled (docs/plans/2026-09-30-er2-mission-feedback-loop.md)",
     ),
     "site/fleet/fleet/server/proposal_store.py": (
@@ -148,7 +159,7 @@ SIZE_VERDICTS = {
         "2026-10-01 at 887 after idempotent per-attempt phase projection joined the Mission event transaction",
     ),
     "contracts/foundation/core_common/protocol/schemas.py": (
-        1_095,
+        1_137,
         "accept: the D-18 single contract source — every envelope, event and capability model in one "
         "importable place; per-domain schema files would fork the version pin that "
         "test_protocol_version_alignment guards. Re-judged 2026-09-30 at 1000 lines after the bounded "
@@ -157,7 +168,11 @@ SIZE_VERDICTS = {
         "LineFollowStatus.clearance_m (D-344 §11, one field); re-judged 2026-10-01 at 1067 for the "
         "bounded UDS v2 phase receipt and read-only Mission phase progress schemas, which remain in the "
         "single contract source guarded by protocol alignment. The hard-tier zero-growth rule prevents "
-        "silent expansion. ROS-free, host-testable (X5); re-judged 2026-10-01 at 1092 for the calibration-session RobotActivity/ActivityOwner models on robot state (still accept); re-judged 2026-10-01 at 1095 for the D-395 StateSnapshot.localization field and its import — the models live in protocol/localization.py (still accept)",
+        "silent expansion. ROS-free, host-testable (X5); re-judged 2026-10-01 at 1092 for the calibration-session RobotActivity/ActivityOwner models on robot state (still accept); re-judged 2026-10-01 at 1095 for the D-395 StateSnapshot.localization field and its import — the models live in protocol/localization.py (still accept)"
+        " Re-judged 2026-10-01 at 1119 lines: D-400 SafetyPolicyStatus joins the state contract; "
+        "the single contract source still outweighs a split (same verdict)."
+        " Re-judged 2026-10-01 at 1137 lines: the typed shadow sub-blocks (ShadowRecordRef, "
+        "ShadowEvalStats) joined SafetyPolicyStatus; same verdict.",
     ),
     "site/fleet/fleet/server/task_store.py": (
         1060,
@@ -225,7 +240,7 @@ SIZE_VERDICTS = {
         "accept: sim-only read-only viewer server (HTTP handler + ROS subscriptions); the pure logic already lives in live_view_model.py and the page in lane_live_view.html, covered by test_lane_live_view*.py and test_live_view_model.py (X5)",
     ),
     "control": (
-        41_491,
+        41_649,
         f"split: deploy closure needs only sensing + safety provider (P1a); {CONTROL_SPLIT} "
         "(re-judged 2026-09-30 at 33090 after D-356 added the ROS-free learned perception backend "
         "(sensing/perception/learned), the shadow node and the recording CLI; the learned backend sits "
@@ -264,7 +279,13 @@ SIZE_VERDICTS = {
         "paint points (control/loc_assist*.py, sensing/perception/paint_hypothesis.py) — same subjects, "
         "verdict unchanged; re-judged 2026-10-02 at 41491 on the D-395 Phase 2 integration branch "
         "when lane A (loc_assist) met main's follow_preview additions — same subjects, "
-        "verdict unchanged)",
+        "verdict unchanged; "
+        "re-judged 2026-10-02 at 40961 for the observation-only lane_topology and visual_tags "
+        "modules plus explicit boundary/object annotations "
+        "(docs/plans/2026-10-02-lane-object-preview-design.md): no new driving authority, "
+        "all move with the existing perception split — verdict unchanged; re-judged 2026-10-02 at 41649 "
+        "on the D-395 Phase 2 integration branch when main's lane_topology/visual_tags met lane A's "
+        "loc_assist — same subjects, verdict unchanged)",
     ),
     # --- D-362 newly-covered files (web assets in src/ packages, ops roots). ---
     "runtime/sensing/web/diagnostic.html": (

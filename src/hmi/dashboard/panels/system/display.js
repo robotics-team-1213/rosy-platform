@@ -15,14 +15,20 @@ export function mount(el) {
   group.setAttribute("role", "group");
   group.setAttribute("aria-labelledby", title.id);
   const current = window.RosyTheme ? window.RosyTheme.get() : "dark";
-  for (const { value, label } of window.RosyTheme?.choices || []) {
+  for (const { value, label, icon } of window.RosyTheme?.choices || []) {
     const button = document.createElement("ui-button");
     button.setAttribute("kind", "segment");
     button.setAttribute("type", "button");
     // theme.js가 누름을 받아 RosyTheme.set을 부르고 aria-pressed를 맞춘다.
     button.dataset.themeChoice = value;
     button.setAttribute("aria-pressed", value === current ? "true" : "false");
-    button.textContent = label;
+    // D-405 — 얼굴은 아이콘, 한국어 이름은 sr-only·title로 남는다.
+    button.title = label;
+    button.innerHTML = icon || "";
+    const name = document.createElement("span");
+    name.className = "sr-only";
+    name.textContent = label;
+    button.append(name);
     group.append(button);
   }
 
