@@ -9,11 +9,14 @@ cmd_vel has reached the wheels (SAF-002 ordering).
 
 from __future__ import annotations
 
+import threading
 from collections import deque
 from dataclasses import dataclass
 
 VERDICTS = ("allow", "limit", "stop", "unavailable")
 _REPEAT_EVERY_S = 1.0
+_MIN_EVENT_INTERVAL_S = 0.2
+# announce_pending drains every 20 ms cycle; 64 is a net for a skipped announce
 _PENDING_MAX = 64
 
 
@@ -34,39 +37,66 @@ def _pair(values: tuple[float, float]) -> list[float]:
 
 
 def _quantile(sorted_values: list[float], q: float) -> float:
+    """Nearest-rank on the sorted window; biased high for even n (conservative for the 10 ms budget gate)."""
     return sorted_values[min(len(sorted_values) - 1, int(q * len(sorted_values)))]
 
 
 class ShadowLog:
+    """Thread contract: record/drain on the cmd_vel executor thread, snapshot from any thread.
+
+    An event is a change of verdict (reason is payload, not key) or a repeat
+    after 1 s, and never more often than every 0.2 s. A verdict change that
+    arrives too soon is counted as suppressed and emitted later if it is still
+    current; the next event carries the count since the previous one.
+    """
+
     def __init__(self, window: int = 512) -> None:
+        if window < 1:
+            raise ValueError("window must be >= 1")
+        self._lock = threading.Lock()
         self._counts = {name: 0 for name in VERDICTS}
         self._last: dict[str, dict] = {}
         self._eval_ms: deque[float] = deque(maxlen=window)
         self._pending: deque[dict] = deque(maxlen=_PENDING_MAX)
-        self._state: str | None = None
-        self._state_reason = ""
+        self._emitted_verdict: str | None = None
         self._emitted_at = float("-inf")
+        self._suppressed = 0
+        self._suppressed_total = 0
+        self._dropped = 0
 
     def record(self, verdict: ShadowVerdict) -> None:
-        self._counts[verdict.verdict] += 1
-        self._eval_ms.append(verdict.eval_ms)
-        if verdict.verdict in ("stop", "unavailable"):
-            self._last[verdict.verdict] = {"t": verdict.t, "reason": verdict.reason, "source": verdict.source}
-        changed = (verdict.verdict, verdict.reason) != (self._state, self._state_reason)
-        if changed or verdict.t - self._emitted_at >= _REPEAT_EVERY_S:
-            self._state, self._state_reason, self._emitted_at = verdict.verdict, verdict.reason, verdict.t
+        with self._lock:
+            self._counts[verdict.verdict] += 1
+            self._eval_ms.append(verdict.eval_ms)
+            if verdict.verdict in ("stop", "unavailable"):
+                self._last[verdict.verdict] = {"t": verdict.t, "reason": verdict.reason, "source": verdict.source}
+            since = verdict.t - self._emitted_at
+            if verdict.verdict == self._emitted_verdict and since < _REPEAT_EVERY_S:
+                return
+            if since < _MIN_EVENT_INTERVAL_S:
+                self._suppressed += 1
+                self._suppressed_total += 1
+                return
+            if len(self._pending) == _PENDING_MAX:
+                self._dropped += 1
             self._pending.append({"verdict": verdict.verdict, "reason": verdict.reason,
-                                  "source": verdict.source, "commanded": _pair(verdict.commanded),
-                                  "limited": _pair(verdict.limited)})
+                                  "source": verdict.source, "t": round(verdict.t, 3),
+                                  "commanded": _pair(verdict.commanded), "output": _pair(verdict.output),
+                                  "limited": _pair(verdict.limited), "suppressed": self._suppressed})
+            self._emitted_verdict, self._emitted_at, self._suppressed = verdict.verdict, verdict.t, 0
 
     def drain(self) -> list[dict]:
-        pending = list(self._pending)
-        self._pending.clear()
-        return pending
+        with self._lock:
+            pending, self._pending = self._pending, deque(maxlen=_PENDING_MAX)
+        return list(pending)
 
     def snapshot(self) -> dict:
-        ordered = sorted(self._eval_ms)
+        with self._lock:
+            window = list(self._eval_ms)
+            counts, last = dict(self._counts), dict(self._last)
+            dropped, suppressed = self._dropped, self._suppressed_total
+        ordered = sorted(window)
         eval_ms = ({"p50": _quantile(ordered, .5), "p99": _quantile(ordered, .99), "n": len(ordered)}
                    if ordered else {"p50": None, "p99": None, "n": 0})
-        return {"counts": dict(self._counts), "last_stop": self._last.get("stop"),
-                "last_unavailable": self._last.get("unavailable"), "eval_ms": eval_ms}
+        return {"counts": counts, "last_stop": last.get("stop"), "last_unavailable": last.get("unavailable"),
+                "eval_ms": eval_ms, "dropped_events": dropped, "suppressed_events": suppressed}
