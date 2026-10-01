@@ -1,6 +1,6 @@
-"""D-395 G1: 단일 디자인 언어 — 공유 자산 밖의 정의를 붉게 만든다.
+"""D-396 G1: 단일 디자인 언어 — 공유 자산 밖의 정의를 붉게 만든다.
 
-공용화의 압력은 두 계약으로 만든다(ADR D-395 1):
+공용화의 압력은 두 계약으로 만든다(ADR D-396 1):
 
 1. **커스텀 엘리먼트는 web_common 만 정의한다.** 서피스 JS에서
    `customElements.define` 을 찾으면 위반 — 공유 컴포넌트가 필요하면
@@ -76,7 +76,7 @@ def test_no_surface_defines_custom_elements():
             if _DEFINE.search(text):
                 violations.append(f"{surface_id}: {source.relative_to(REPO)}")
     assert not violations, (
-        "커스텀 엘리먼트 정의는 web_common/ui.js 만 한다 (D-395 G1): "
+        "커스텀 엘리먼트 정의는 web_common/ui.js 만 한다 (D-396 G1): "
         + ", ".join(violations)
     )
 
@@ -95,6 +95,6 @@ def test_no_surface_redeclares_tokens_at_root():
                     violations.append(f"{surface_id}: {rel} 재선언 {declared}")
     assert not violations, (
         ":root/[data-theme] 의 --토큰 선언은 web_common/tokens.css 만 한다 "
-        "(지역 변수는 컴포넌트 스코프 안; 예외는 raw_colours 로 선언; D-395 G1): "
+        "(지역 변수는 컴포넌트 스코프 안; 예외는 raw_colours 로 선언; D-396 G1): "
         + "; ".join(violations)
     )

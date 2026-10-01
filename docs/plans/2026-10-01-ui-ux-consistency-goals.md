@@ -1,6 +1,6 @@
-# UI/UX 공용화·일관성 목표 — 실행 계획 (D-395)
+# UI/UX 공용화·일관성 목표 — 실행 계획 (D-396)
 
-결정: [ADR D-395](../adr/D-395-uiux-consistency-goal-system.md). 이 문서는 여섯 목표의 실행 순서와 완료 기준을 추적한다.
+결정: [ADR D-396](../adr/D-396-uiux-consistency-goal-system.md). 이 문서는 여섯 목표의 실행 순서와 완료 기준을 추적한다.
 
 ## 현재 자산 (2026-10-01 기준)
 
