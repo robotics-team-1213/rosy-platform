@@ -29,3 +29,5 @@ deploy/robot/udev/*.rules text eol=lf
 deploy/robot/modprobe/*.conf text eol=lf
 docs/validation/pinky-vendor-boot-2026-09-24/config.txt -text
 docs/validation/pinky-vendor-boot-2026-09-24/cmdline.txt -text
+docs/validation/model-tool-artifact-2026-10-01/manifest.json text eol=lf
+docs/validation/model-tool-artifact-2026-10-01/manifest.sha256 text eol=lf
