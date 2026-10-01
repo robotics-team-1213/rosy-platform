@@ -1095,3 +1095,15 @@
 - 변경: 최종 리뷰(1aeada8d) 지적 반영. (치명) 시야 안인데 스캔에 안 잡힌 로봇 때문에 참이 peers −1, 거울이 0이면 0이 −1을 이겼다는 것만으로 peers가 단서로 이름 붙어 거울로 결정할 수 있었다 → 단서는 1등 값이 0보다 크고 다른 모든 후보보다 커야 이름 붙는다. (중요) 2등만 이기면 됐기에, 쌍둥이는 같은 값인데 세 번째 후보가 2등일 때 페인트가 이름 붙고 실제로는 last_good·overhead가 격차를 채웠다 → 모든 후보 기준. (경미) 같은 request_id에 한 번만 결정하던 것을 (request_id, stamp)로 바꿔, 결정이 잃어버리거나 거부되면 로봇이 새 stamp로 다시 보고해 재결정받는다.
 - 증거: 새 시험 3개(숨은 로봇, 세 번째 후보가 2등, 새 stamp 재결정)와 기존 중재기·단서·종단 시험 통과.
 - gate 변화: 없음(SOURCE/LOCAL).
+
+## 2026-10-01 · uncommitted · feat(fleet): D-395 2단계 C 레인 — 위치 확정 클라이언트·서비스·감시·사다리, 교통/bays 신뢰 (P2-2, P2-6)
+- 변경: 계약(`docs/plans/2026-10-01-d395-phase2-interfaces.md` §2·§3) 그대로.
+  - `RobotClient`/`HttpRobotClient`/`FakeRobot`에 `localization_candidates()`(404면 None), `localization_decision()`, `localization_suspect()`(≤ 64자). `localization_mission()`은 P2-7 전까지 `NotImplementedError` 자리표시.
+  - 새 `server/localization_service.py`: 0.5 s마다 상태를 읽고 CANDIDATES 로봇의 후보를 읽어 `Context`(LOCALIZED·map 프레임 다른 로봇, `lane_rules.yaml` `reference_squares`의 사각형·슬롯, 플래그가 켜졌을 때만 300 ms 이하 sighting)로 중재해 결정을 POST한다. 감시: LOCALIZED 로봇이 관측과 25 cm 또는 60° 넘게 1.5 s 어긋나면 `suspect {"reason":"fleet_monitor"}`. 다른 로봇 관측은 CANDIDATES 로봇의 지도 밖 물체를 peers 단서 없이 뚜렷이 앞선 후보 자세로 놓아 만든다(관측 대상 로봇이 관측자 자세를 고르지 않게). 사다리: CANDIDATES 진입부터 LOCALIZED까지 10 s → `rotate_in_place`, 25 s → `to_square`/`lane_to_stopline`을 "pending P2-7"로 로그만, 60 s → `needs_human`. 거부된 결정은 시계를 되돌리지 않는다(거부 고리가 사람에게 닿도록). 순수 로직은 `fleet/localization/service_logic.py`.
+  - **오버헤드 sighting 단서는 기본 꺼짐**: D-257 개정이 Accepted가 아니다. `--localization-overhead-cue`로만 켜고 코드·시작 로그에 그렇게 적었다.
+  - P2-2 `fleet/localization/trust.py` + `console.py`: `localization`이 있고 `odom`이거나 LOCALIZED가 아니면 그 pose를 쓰지 않고, 마지막 신뢰 자세 둘레 0.45 m를 막는 장애물(없으면 트랙 전체 차단)로 본다. 막힌 미션은 `LOCALIZATION_UNTRUSTED`로 대기하고 bays로 보내지 않는다. `localization: null`은 오늘 동작 그대로이고 행에 "위치 상태 미보고".
+  - `app.py` lifespan이 서비스를 다른 루프처럼 띄운다. CLI: 기본 켜짐(`--no-localization-service`), `--localization-lane-rules`(기본 map_v2_fleet). 콘솔 카드에 위치 배지(`web/localization-badge.js` 순수, `ui-tag` 어휘: 확정 중립, 미확정·미보고 warn, "위치 확인 필요" crit + 최우선 큐 행).
+  - `fleet` 크기 판정 24204, `console.py` 1063으로 재판정(판정 불변).
+- 증거: fleet pytest 전체 통과, node `test/web/*.test.mjs` 86 passed(새 5). 새 시험: `test_transport_localization.py` 11, `test_localization_trust.py` 14, `test_localization_service.py` 18(stamp당 한 번·새 stamp 재결정, LOCALIZED·map 로봇만 peers, 감시 1.5 s, 카메라 플래그 꺼짐/켜짐·신선도, 사다리 10/25/60 s, 오프라인·제거), `test_server_traffic.py`·`test_server_bays.py` P2-2 6, CLI 2, app lifespan 1. 감시 시험 3개는 변이로 확인했다.
+- gate 변화: 없음(SOURCE/LOCAL). Fleet 동작 변경은 사용자 승인(2단계). S1 벤치(P2-8)는 세 레인 통합 뒤.
+- 결정: D-395 Proposed(개정 3), 계약 §3 레거시 정책.

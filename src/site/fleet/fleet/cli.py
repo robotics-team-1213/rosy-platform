@@ -97,9 +97,8 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     console.add_argument("--localization-overhead-cue", action="store_true", default=False,
                          help="D-395: feed overhead sightings to the localization arbiter and "
                               "monitor. Off by default: the D-257 amendment is not accepted")
-    console.add_argument("--localization-lane-rules", default=default_lane_rules(), type=Path,
-                         help="lane_rules.yaml with reference_squares (default: map_v2_fleet "
-                              "in this checkout)")
+    console.add_argument("--localization-lane-rules", default=None, type=Path,
+                         help="lane_rules.yaml with reference_squares (default: map_v2_fleet)")
     console.add_argument("--sightings-db", default=None, type=Path,
                          help="SQLite path for latest sightings and acceptance audit")
     console.add_argument("--events-db", default=None, type=Path,
@@ -478,7 +477,12 @@ def run_console(args: argparse.Namespace) -> None:
     pairing_service, pairing_sync_token = _build_pairing(
         args, tls_cert=tls_cert, tasks_db=tasks_db, sighting_service=sighting_service,
         site_name=console.fleet_name)
-    localization_service = _build_localization_service(args, console, sighting_service)
+    from fleet.server.localization_service import build_localization_service
+
+    localization_service = build_localization_service(
+        console, sighting_service, enabled=getattr(args, "localization_service", True),
+        overhead_cue=getattr(args, "localization_overhead_cue", False),
+        lane_rules=getattr(args, "localization_lane_rules", None))
     app = create_app(console, console_token=console_token, web_common=args.web_common,
                      hub=hub, sightings=sighting_service, task_service=task_service,
                      mission_service=mission_service, proposal_store=proposal_store,
@@ -498,27 +502,6 @@ def run_console(args: argparse.Namespace) -> None:
     tls_options = ({"ssl_certfile": str(tls_cert), "ssl_keyfile": str(tls_key)}
                    if tls_cert is not None else {})
     uvicorn.run(app, host=args.host, port=args.port, log_level="warning", **tls_options)
-
-
-def default_lane_rules() -> Optional[Path]:
-    """map_v2_fleet's lane_rules.yaml when Fleet runs from a source checkout, else None."""
-    path = (Path(__file__).resolve().parents[3] / "runtime" / "sensing" / "map" / "map_v2_fleet"
-            / "lane_rules.yaml")
-    return path if path.is_file() else None
-
-
-def _build_localization_service(args: argparse.Namespace, console, sighting_service):
-    """D-395 P2-6: on unless --no-localization-service; the overhead cue stays off by default."""
-    if not getattr(args, "localization_service", True):
-        return None
-    from fleet.localization.service_logic import parse_reference_squares
-    from fleet.server.localization_service import LocalizationService, load_lane_rules
-
-    slots, squares = parse_reference_squares(
-        load_lane_rules(getattr(args, "localization_lane_rules", None)))
-    return LocalizationService(console.clients, slots=slots, squares=squares,
-                               sightings=sighting_service,
-                               overhead_cue=bool(getattr(args, "localization_overhead_cue", False)))
 
 
 def _build_pairing(args: argparse.Namespace, *, tls_cert, tasks_db, sighting_service, site_name):

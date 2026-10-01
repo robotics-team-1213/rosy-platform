@@ -50,6 +50,25 @@ def load_lane_rules(path: Optional[Path]) -> dict:
     return rules if isinstance(rules, dict) else {}
 
 
+def default_lane_rules() -> Optional[Path]:
+    """map_v2_fleet's lane_rules.yaml when Fleet runs from a source checkout, else None."""
+    path = (Path(__file__).resolve().parents[4] / "runtime" / "sensing" / "map" / "map_v2_fleet"
+            / "lane_rules.yaml")
+    return path if path.is_file() else None
+
+
+def build_localization_service(console, sightings, *, enabled: bool = True,
+                               overhead_cue: bool = False,
+                               lane_rules: Optional[Path] = None) -> Optional["LocalizationService"]:
+    """CLI wiring: on unless disabled; the overhead cue stays off unless asked for."""
+    if not enabled:
+        return None
+    slots, squares = service_logic.parse_reference_squares(
+        load_lane_rules(lane_rules if lane_rules is not None else default_lane_rules()))
+    return LocalizationService(console.clients, slots=slots, squares=squares,
+                               sightings=sightings, overhead_cue=bool(overhead_cue))
+
+
 def _pose(state: Mapping) -> Optional[cues.Pose]:
     pose = state.get("pose") or {}
     try:
