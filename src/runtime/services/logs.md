@@ -317,3 +317,9 @@
 - 변경: 새 `localization/mission.py` `LocalizationMission` — `LOCALIZED` 가 아닐 때만 `rotate_in_place`(오도메트리 한 바퀴, 0.3 rad/s), `nudge_forward`(≤ 0.10 m, 0.03 m/s, 정면 0.25 m 정지), `lane_to_stopline`(카메라 line-follow 를 이 미션에 한해 LOCALIZED 관문 없이, 세션 속도 0.04 m/s, 정지선 0.12 m·거리·시간에서 끝). `to_square` 는 `unsupported`(map 프레임 없이 차선 경로가 없다, 후속). 바퀴는 NAVIGATION 모드의 nav 슬롯(`set_nav_twist`)으로만 — 50 Hz `select_output` 이 최종 중재. 끝(완료·시간·장애물·e-stop·LOCALIZED·센서 끊김·모드 이탈)은 명령을 지우고 IDLE 로, `localization.mission` 이벤트와 `publish`(ROS `localization/mission`). 시작은 `assist.gate` 안에서 검사·출발. `wire_assist` 가 미션을 만들고 LOCALIZED 진입 훅이 미션을 끝낸다(반환값 `(assist, mission)`).
 - 증거: `gateway/test/test_localization_mission.py` 30.
 - gate 변화: 없음.
+
+## 2026-10-02 · uncommitted · fix(localization): D-395 P2-7 리뷰 — 못 보는 정면은 막힘, 회전 가드, 모든 종류 LiDAR 끊김
+
+- 변경: `line_follow/clearance.py` 새 `front_sector`(정면 최단 유효 거리·유효 빔·빔 수; inf·NaN·`range_min` 미만은 무효 빔으로 셈, self-mask 반사는 빔에서 뺌). `nudge_forward` 는 정면 ±20° 에 유효 빔이 5 개 미만이거나 무효 빔이 30 % 를 넘으면 거부·정지(`range_min` 안 물체는 그렇게 보인다). `lidar_self_mask` 를 넘긴다. `rotate_in_place` 는 전체 스캔에 0.20 m 안 유효 반사가 있거나 스캔이 낡으면 거부. LiDAR 끊김(0.5 s)은 모든 종류를 `obstacle_sensor_stale` 로 끝낸다. `end()` 의 nav 슬롯 지우기는 한 번(지우면 시험이 빨개진다). `bind_clock` — 브리지가 line clock(use_sim_time 이면 ROS 시계)을 준다.
+- 증거: `gateway/test/test_localization_mission.py` +14 (변이: `end()` 의 `clear_navigation` 삭제 → 7 빨강).
+- gate 변화: 없음.

@@ -9,9 +9,13 @@ the nav slot of `CommandManager` (`set_nav_twist`), the same slot Nav2 and line
 follow write. `select_output` (the 50 Hz final arbiter) still applies E-stop,
 the readiness HOLD, the speed clip and the bound control policy. Kinds:
 
-- `rotate_in_place`: up to one turn at `rotate_angular`, measured by odometry.
+- `rotate_in_place`: up to one turn at `rotate_angular`, measured by odometry; refused
+  when any valid return of the whole scan is closer than `rotate_clearance_m`.
 - `nudge_forward`: up to `max_distance_m` (<= `nudge_max_m`) by odometry, refused
-  and ended when the front LiDAR sector is closer than `min_front_clearance_m`.
+  and ended when the front LiDAR sector is closer than `min_front_clearance_m`, or
+  when the sector cannot be measured: fewer than `min_front_beams` valid beams, or
+  more than `max_blind_share` of them inf, NaN or below `range_min` (an object
+  closer than the LiDAR sees looks like that). Self-masked returns do not count.
 - `lane_to_stopline`: CORE's camera line follow, started here without the
   LOCALIZED gate of `PUT /line-follow/mode` (this kind only), capped to
   `lane_linear` through the safety session speed. Line follow keeps its own
@@ -20,7 +24,7 @@ the readiness HOLD, the speed clip and the bound control policy. Kinds:
   to a square; a straight crawl on a bearing would leave the lanes (follow-up).
 
 Every mission ends on done, timeout, an obstacle, E-stop, LOCALIZED, odometry or
-LiDAR going stale, or a cancel (any mode change out of NAVIGATION, line follow
+LiDAR going stale (every kind), or a cancel (any mode change out of NAVIGATION, line follow
 OFF). The end stops motion, gives NAVIGATION back to IDLE and is published on
 `localization/mission`, which makes the robot node search again.
 """
@@ -38,7 +42,7 @@ from core_common.protocol.localization import LocState
 from core_common.protocol.schemas import RobotMode
 from core_features.command.arbitration import Mode
 from core_features.command.manager import Twist
-from core_features.line_follow.clearance import front_clearance
+from core_features.line_follow.clearance import front_sector
 from core_features.line_follow.model import LineFollowMode
 
 ROTATE, NUDGE, LANE, SQUARE = "rotate_in_place", "nudge_forward", "lane_to_stopline", "to_square"
@@ -47,7 +51,6 @@ UNSUPPORTED = {SQUARE: "to_square needs a lane route to the square without a map
                        "not implemented (D-395 P2-7 follow-up), use lane_to_stopline"}
 #: End reasons that count as a completed mission; every other reason is `aborted`.
 DONE_REASONS = frozenset({"done", "stop_line", "localized"})
-_STALE = object()
 _log = logging.getLogger(__name__)
 
 
@@ -66,6 +69,9 @@ class MissionConfig:
     lane_linear: float = 0.04            # m/s, half the line-follow cruise
     min_front_clearance_m: float = 0.25
     front_half_angle_deg: float = 20.0
+    min_front_beams: int = 5              # valid beams the nudge sector needs
+    max_blind_share: float = 0.3          # inf/NaN/below-range share that blocks a nudge
+    rotate_clearance_m: float = 0.20      # nothing this close anywhere before a turn
     stop_line_m: float = 0.12            # the traffic policy's stop distance
     max_time_s: float = 120.0
     max_distance_m: float = 1.0
@@ -107,8 +113,13 @@ class LocalizationMission:
         self._odom: Optional[tuple[float, float, float]] = None
         self._odom_at: Optional[float] = None
         self._scan: Optional[tuple[Any, float]] = None
-        self._front: tuple[Any, Optional[float]] = (None, None)
+        self._front: tuple[Any, Any] = (None, None)
         modes.change_listeners.append(self._on_mode_change)
+
+    def bind_clock(self, clock: Callable[[], float]) -> None:
+        """The bridge's line clock: the ROS (sim) clock under `use_sim_time`, else monotonic."""
+        with self._lock:
+            self._clock = clock
 
     # --- inputs (bridge) ------------------------------------------------------
 
@@ -163,12 +174,9 @@ class LocalizationMission:
                                       else f"mode is {self._modes.mode.value}")
             if reason:
                 raise MissionRefused("busy", reason)
-            front = self._front_clearance(now)
-            if front is _STALE:
-                raise MissionRefused("path_not_clear", "no fresh LiDAR scan")
-            if kind != ROTATE and front is not None and front < cfg.min_front_clearance_m:
-                raise MissionRefused("path_not_clear",
-                                     f"front clearance {front:.2f} m < {cfg.min_front_clearance_m} m")
+            blocked = self._blocked(kind, now)
+            if blocked is not None:
+                raise MissionRefused("path_not_clear", blocked)
             self._command.clear_navigation()
             ok, why = self._modes.transition(Mode.NAVIGATION, expect=Mode.IDLE)
             if not ok:
@@ -226,15 +234,14 @@ class LocalizationMission:
             return "timeout"
         if now - (self._odom_at if self._odom_at is not None else run.started_at) > cfg.sensor_stale_s:
             return "odometry_stale"
+        if self._scan is None or now - self._scan[1] > cfg.sensor_stale_s:
+            return "obstacle_sensor_stale"
         if run.kind == ROTATE:
             return "done" if run.turned_rad >= cfg.rotate_max_rad else None
         if run.travelled_m >= run.max_distance_m:
             return "done"
         if run.kind == NUDGE:
-            front = self._front_clearance(now)
-            if front is _STALE:
-                return "obstacle_sensor_stale"
-            return "obstacle" if front is not None and front < cfg.min_front_clearance_m else None
+            return "obstacle" if self._blocked(NUDGE, now) is not None else None
         if not self._line_follow.active:
             return "cancelled"
         if self._line_follow.status().state == "LOST":
@@ -252,7 +259,6 @@ class LocalizationMission:
             if run is None:
                 return
             self._run = None
-            self._command.clear_navigation()
             if run.kind == LANE:
                 if self._line_follow.active:
                     self._state.set_line_follow(self._line_follow.stop())
@@ -270,16 +276,28 @@ class LocalizationMission:
 
     # --- helpers -----------------------------------------------------------------
 
-    def _front_clearance(self, now: float):
-        """Nearest return in the front sector; None = nothing there; `_STALE` = no fresh scan."""
-        if self._scan is None or now - self._scan[1] > self.config.sensor_stale_s:
-            return _STALE
+    def _blocked(self, kind: str, now: float) -> Optional[str]:
+        """Why the LiDAR does not show this kind's path clear, or None."""
+        cfg = self.config
+        if self._scan is None or now - self._scan[1] > cfg.sensor_stale_s:
+            return "no fresh LiDAR scan"
         sample = self._scan[0]
         if self._front[0] is not sample:
-            distance = front_clearance(sample, forward_deg=self._line_follow.config.lidar_forward_deg,
-                                       half_angle_deg=self.config.front_half_angle_deg)
-            self._front = (sample, distance)
-        return self._front[1]
+            config = self._line_follow.config
+            look = {"forward_deg": config.lidar_forward_deg, "self_mask": config.lidar_self_mask}
+            self._front = (sample, (front_sector(sample, half_angle_deg=cfg.front_half_angle_deg, **look),
+                                    front_sector(sample, half_angle_deg=180.0, **look)[0]))
+        (front, valid, beams), nearest = self._front[1]
+        if kind == ROTATE:
+            if nearest is not None and nearest < cfg.rotate_clearance_m:
+                return f"a return at {nearest:.2f} m < {cfg.rotate_clearance_m} m around the robot"
+            return None
+        if kind == NUDGE and (valid < cfg.min_front_beams
+                              or beams - valid > cfg.max_blind_share * max(beams, 1)):
+            return f"front sector not measurable ({valid} of {beams} beams valid)"
+        if front is not None and front < cfg.min_front_clearance_m:
+            return f"front clearance {front:.2f} m < {cfg.min_front_clearance_m} m"
+        return None
 
     def _announce(self, phase: str, run: _Run, reason: Optional[str], now: float) -> None:
         self._events.publish("localization.mission", source="localization", data={

@@ -72,6 +72,42 @@ def _returns(sample: Mapping[str, Any], forward_deg: float,
         yield angle, distance
 
 
+def front_sector(sample: Mapping[str, Any], *, forward_deg: float = 0.0, half_angle_deg: float = 20.0,
+                 self_mask: SelfMask = ()) -> tuple[Optional[float], int, int]:
+    """(nearest valid range, valid beams, beams) in the front ±half_angle_deg sector.
+
+    Unlike `front_clearance`, a beam that is inf, NaN or below `range_min` is counted as a
+    beam without a valid range: something closer than the LiDAR can see looks exactly like
+    that. Self-masked returns (the robot's own body) are not beams of the sector at all."""
+    ranges = sample.get("ranges") or []
+    count = len(ranges)
+    if count < 2:
+        return None, 0, 0
+    angle_min, angle_max = float(sample["angle_min"]), float(sample["angle_max"])
+    low = float(sample.get("range_min") or 0.0)
+    high = float(sample.get("range_max") or math.inf)
+    step, forward = (angle_max - angle_min) / (count - 1), math.radians(float(forward_deg))
+    half = math.radians(float(half_angle_deg))
+    best, valid, beams = None, 0, 0
+    for index, value in enumerate(ranges):
+        angle = angle_min + index * step - forward
+        angle = math.atan2(math.sin(angle), math.cos(angle))
+        if abs(angle) > half:
+            continue
+        try:
+            distance = float(value)
+        except (TypeError, ValueError):
+            distance = math.nan
+        ok = math.isfinite(distance) and low <= distance <= high
+        if ok and self_mask and _masked(angle, distance, self_mask):
+            continue
+        beams += 1
+        if ok:
+            valid += 1
+            best = distance if best is None or distance < best else best
+    return best, valid, beams
+
+
 def front_clearance(sample: Mapping[str, Any], *, forward_deg: float = 0.0,
                     half_angle_deg: float = 20.0, self_mask: SelfMask = ()) -> Optional[float]:
     """정면 ±half_angle_deg 안 유효 거리의 최솟값. 유효 표본이 없으면 None(= 아무것도 안 보임)."""

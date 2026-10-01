@@ -211,6 +211,7 @@ class RosBridge:
             bool(node.get_parameter("use_sim_time").value),
             lambda: self._node.get_clock().now().nanoseconds / 1e9)
         self._svc.line_follow.bind_clock(self._line_clock)
+        self._svc.loc_mission.bind_clock(self._line_clock)
         # The dock observation feed is stamped on the same clock, so the
         # docking manager judges tag freshness and phase timeouts on it too.
         self._svc.docking.bind_clock(self._line_clock)

@@ -33,13 +33,13 @@ def _state(state="CANDIDATES", frame="map", request_id="req-1") -> str:
                        "pose": None, "stamp": 1.0})
 
 
-def _scan(services, front_m: float = 2.0) -> dict:
-    """360 one-degree beams at 2 m, `front_m` within 10 degrees of the robot's front."""
+def _scan(services, front_m: float = 2.0, *, within_deg: float = 10.0, rest_m: float = 2.0) -> dict:
+    """360 one-degree beams at `rest_m`, `front_m` within `within_deg` of the robot's front."""
     forward = services.line_follow.config.lidar_forward_deg
     ranges = []
     for i in range(360):
         offset = (i - forward + 180.0) % 360.0 - 180.0
-        ranges.append(front_m if abs(offset) <= 10.0 else 2.0)
+        ranges.append(front_m if abs(offset) <= within_deg else rest_m)
     return {"ranges": ranges, "angle_min": 0.0, "angle_max": math.radians(359.0),
             "range_min": 0.05, "range_max": 8.0}
 
@@ -340,3 +340,86 @@ def test_leaving_localized_halt_does_not_run_while_missions_are_idle(core):
     services.localization.on_state(_state("SUSPECT"))
     assert _start(client).status_code == 202          # SUSPECT: missions allowed
     assert services.modes.mode.value == "NAVIGATION"
+
+
+# --- review fixes: blind spots, rotate guard, cleared slot, staleness for every kind -----
+
+
+@pytest.mark.parametrize("front_m", [math.inf, 0.03, math.nan])
+def test_nudge_treats_a_front_it_cannot_measure_as_blocked(core, front_m):
+    """inf, NaN or below range_min (0.05 here) across the front: something may be too close to see."""
+    client, services = core
+    services.loc_mission.observe_scan(_scan(services, front_m=front_m, within_deg=25.0))
+    refused = _start(client, "nudge_forward", 0.05)
+    assert refused.status_code == 409 and _code(refused) == "path_not_clear"
+
+
+def test_nudge_stops_when_the_front_goes_blind_mid_run(core):
+    client, services = core
+    assert _start(client, "nudge_forward", 0.10).status_code == 202
+    _step(services, odom=(0.01, 0.0, 0.0))
+    services.loc_mission.observe_scan(_scan(services, front_m=math.inf, within_deg=25.0))
+    services.loc_mission.tick()
+    assert client.get(PATH, headers=VIEWER).json()["reason"] == "obstacle"
+    assert services.command._nav_twist is None
+
+
+def test_nudge_ignores_its_own_body_in_the_self_mask(core):
+    import dataclasses
+    client, services = core
+    services.loc_mission.observe_scan(_scan(services, front_m=0.10, within_deg=4.0))
+    assert _code(_start(client, "nudge_forward", 0.05)) == "path_not_clear"     # not masked: blocked
+    lf = services.line_follow
+    lf._config = dataclasses.replace(lf.config, lidar_self_mask=((-5.0, 5.0, 0.12),))
+    services.loc_mission.observe_scan(_scan(services, front_m=0.10, within_deg=4.0))
+    assert _start(client, "nudge_forward", 0.05).status_code == 202
+
+
+def test_rotate_is_refused_with_anything_within_20_cm(core):
+    client, services = core
+    sample = _scan(services)
+    sample["ranges"][90] = 0.15                         # beside the robot, not in front
+    services.loc_mission.observe_scan(sample)
+    refused = _start(client)
+    assert refused.status_code == 409 and _code(refused) == "path_not_clear"
+    sample = {**sample, "ranges": [*sample["ranges"][:90], 0.30, *sample["ranges"][91:]]}
+    services.loc_mission.observe_scan(sample)           # each scan is a new sample
+    assert _start(client).status_code == 202
+
+
+@pytest.mark.parametrize("kind,distance", [("rotate_in_place", 0.0), ("lane_to_stopline", 0.3)])
+def test_a_stale_lidar_ends_every_kind(core, kind, distance):
+    client, services = core
+    assert _start(client, kind, distance).status_code == 202
+    for _ in range(12):                                  # odometry fresh, LiDAR silent
+        services.clock.now += 0.05
+        services.loc_mission.observe_odom(0.0, 0.0, 0.0)
+        services.loc_mission.tick()
+    assert client.get(PATH, headers=VIEWER).json()["reason"] == "obstacle_sensor_stale"
+    assert services.command._nav_twist is None
+
+
+@pytest.mark.parametrize("end", ["done", "timeout", "localized", "estop", "cancelled"])
+def test_every_end_clears_the_velocity_slot(core, end):
+    client, services = core
+    from core_features.command.arbitration import Mode
+    assert _start(client).status_code == 202
+    _step(services, odom=(0.0, 0.0, 0.1))
+    assert services.command._nav_twist is not None
+    services.loc_mission.end(end)
+    assert services.command._nav_twist is None
+    if services.modes.mode is Mode.IDLE:               # the slot, not just the mode, is empty
+        services.modes.transition(Mode.NAVIGATION)
+        assert services.command.select_output().angular == 0.0
+
+
+def test_the_bridge_ticks_missions_on_the_line_clock():
+    """Under use_sim_time the line clock is the ROS clock; the mission must run on it too."""
+    import ast
+    from pathlib import Path
+    source = (Path(__file__).resolve().parents[1] / "core" / "bridge" / "ros_bridge.py").read_text(
+        encoding="utf-8")
+    calls = [node for node in ast.walk(ast.parse(source)) if isinstance(node, ast.Call)
+             and getattr(node.func, "attr", None) == "bind_clock"
+             and "loc_mission" in ast.unparse(node.func)]
+    assert [ast.unparse(c.args[0]) for c in calls] == ["self._line_clock"]

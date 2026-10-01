@@ -692,3 +692,9 @@
 - 변경: `services.py` 가 `wire_assist` 의 미션을 `loc_mission` 으로 든다. `ros_bridge.py`: 새 발행 `localization/mission`(신뢰, 깊이 5), `_on_odom` → `observe_odom`, 20 Hz line-follow 타이머 첫 줄에서 `loc_mission.tick()`(타이머 수 그대로). `observation.front_clearance` 가 LiDAR 표본을 미션에도 넘긴다(정면 여유는 미션이 필요할 때만 잰다). `docking_mode.route_nav_cmd_vel` 은 회전·전진 미션 중 Nav2 출력을 버린다. 직접 속성 접근(C6 새 reach 없음); 가짜 서비스 두 곳에 `loc_mission=None`.
 - 증거: `test/test_localization_mission.py` 30, `test_bridge_timers.py` 발행 목록 +1.
 - gate 변화: 없음.
+
+## 2026-10-02 · uncommitted · fix(bridge): D-395 P2-7 미션도 line clock 으로
+
+- 변경: `ros_bridge.py` 가 `loc_mission.bind_clock(self._line_clock)` — `use_sim_time` 이면 미션 시간 한도·센서 신선도가 sim 초로 잰다.
+- 증거: `test/test_localization_mission.py::test_the_bridge_ticks_missions_on_the_line_clock`.
+- gate 변화: 없음.
