@@ -27,4 +27,5 @@
 
 ## 최근 기록
 
+- 2026-10-01 · 014acdf6 · feat(cell): rosy_cell 코어와 리뷰 수정
 - 2026-10-01 · uncommitted · feat(cell): rosy_cell package scaffold

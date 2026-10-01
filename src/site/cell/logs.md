@@ -7,3 +7,10 @@
 - 변경: ament_python 패키지 `rosy_cell`(`src/site/cell`), schema id 상수.
 - 증거: `python -m pytest src/site/cell/test -q` 1 passed
 - gate 변화: SOURCE HOLD 시작.
+
+## 2026-10-01 · 014acdf6 · feat(cell): rosy_cell 코어와 리뷰 수정
+
+- 변경: ROS-free 코어 모듈 `geometry`(3점 Frame, `from_base`), `load`(Box, Pallet), `pattern`(grid, split, mirrored), `stack`(층, 슬립 시트), `sequence`(먼 쪽 우선 순서), `fields`(필드 이름을 밝히는 타입 읽기), `recipe`, `cell`, `compiler`(Job of `pick`/`place`/`pallet_done` Step, 로봇 베이스 좌표).
+- 리뷰 수정: 레시피 `approach` 삭제, 적재 순서는 티칭한 팔레트 좌표계에서 로봇 베이스로부터 먼 박스부터; 디팔레타이즈는 팔레트 순서까지 역순; `split_block` 빈 방향 열 제외; NaN/inf·bool·문자열 숫자·큰 정수·잘못된 컨테이너·모르는 키를 `RecipeError`/`CellError`로 거절하고 문제를 모아 보고; 슬립 시트 두께 양수; 중복 팔레트 좌표계 거절; `max_tilt_deg: 0` 허용; 로봇 베이스가 팔레트 바닥 영역 안이면 컴파일 거절; `CellConfig` 매핑 읽기 전용; 해시가 파싱 값 기준(0 ≠ 0.0)임을 문서화. D-401 갱신.
+- 증거: `python -m pytest src/site/cell/test -q -p no:cacheprovider` 123 passed; `test/architecture` 76 passed 1 skipped, `known_failures` 0 new; harness lint 0 error(s). Windows, ROS-free; Motion Intent, IK, 도달성 없음.
+- gate 변화: SOURCE HOLD → GO.
