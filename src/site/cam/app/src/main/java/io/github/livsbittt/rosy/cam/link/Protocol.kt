@@ -49,6 +49,9 @@ object Protocol {
     const val CLOSE_UNAUTHORIZED = 4401
     const val CLOSE_REPLACED = 4409
 
+    /** D-341 11: the credential is valid but not allowed (this source, this site). Final: retry cannot help. */
+    const val CLOSE_FORBIDDEN = 4403
+
     /** RFC 6455 "Try Again Later": the receiver is overloaded; always retryable. */
     const val CLOSE_TRY_AGAIN = 1013
 

@@ -6,9 +6,13 @@ import java.net.NoRouteToHostException
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
 import javax.net.ssl.SSLHandshakeException
+import io.github.livsbittt.rosy.cam.ui.NextStep
+import io.github.livsbittt.rosy.cam.ui.Problem
+import io.github.livsbittt.rosy.cam.ui.ProblemGuide
 import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -59,7 +63,8 @@ class FailureClassTest {
     @Test
     fun everyVectorCase() {
         val cases = vector.getJSONArray("cases")
-        assertEquals(28, cases.length())
+        // The vector declares no count; it only grows, so require cases rather than an exact number.
+        assertTrue("failure-classes vector has no cases", cases.length() > 0)
         val failures = mutableListOf<String>()
         for (i in 0 until cases.length()) {
             val case = cases.getJSONObject(i)
@@ -67,6 +72,55 @@ class FailureClassTest {
             if (got != case.getString("expect")) failures += "${case.getString("id")}: expected ${case.getString("expect")}, got $got"
         }
         assertTrue(failures.joinToString("\n"), failures.isEmpty())
+    }
+
+    /**
+     * What the link does for each class of a WS close (OverheadLink.closeOutcome): true = stop for good.
+     * `forbidden` (4403) is final by rosy-00's decision (2026-10-01): the credential is valid but not allowed,
+     * so retrying cannot help. It stops without a re-pair prompt (see [forbiddenStopsWithoutARePairPrompt]).
+     */
+    private val closeBehaviour = mapOf(
+        FailureClass.AUTH_FINAL to true,
+        FailureClass.PROTOCOL_MISMATCH to true,
+        FailureClass.CONFLICT to true,
+        FailureClass.FORBIDDEN to true,
+        FailureClass.AUTH_RETRY to false,
+        FailureClass.BUSY to false,
+        FailureClass.UNREACHABLE to false,
+    )
+
+    @Test
+    fun closeBehaviourAgreesWithTheClassOfEveryWsCase() {
+        val cases = vector.getJSONArray("cases")
+        var checked = 0
+        val failures = mutableListOf<String>()
+        for (i in 0 until cases.length()) {
+            val case = cases.getJSONObject(i)
+            val input = case.getJSONObject("input")
+            if (!input.has("ws_close")) continue
+            val code = input.getInt("ws_close")
+            val reason = if (input.has("reason")) input.getString("reason") else ""
+            val expected = closeBehaviour[case.getString("expect")]
+                ?: error("${case.getString("id")}: no behaviour row for class ${case.getString("expect")}")
+            val (_, fatal) = OverheadLink.closeOutcome(code, reason)
+            if (fatal != expected) failures += "${case.getString("id")}: class ${case.getString("expect")} expects fatal=$expected, link says $fatal"
+            checked++
+        }
+        assertTrue(failures.joinToString("\n"), failures.isEmpty())
+        assertTrue("no ws_close cases", checked > 0)
+    }
+
+    @Test
+    fun forbiddenStopsWithoutARePairPrompt() {
+        val (error, fatal) = OverheadLink.closeOutcome(Protocol.CLOSE_FORBIDDEN, "")
+        assertEquals(LinkError.Forbidden, error)
+        assertTrue(fatal)
+        val guidance = ProblemGuide.forLink(error, stopped = true, wifiConnected = true)
+        assertEquals(Problem.FORBIDDEN, guidance.problem)
+        assertEquals("no settings / re-pair button for 4403", NextStep.NONE, guidance.step)
+        assertFalse(ProblemGuide.stopsCameraFirst(Problem.FORBIDDEN, running = true))
+        // Re-pair stays only for auth_final (4401).
+        assertEquals(NextStep.OPEN_SETTINGS, ProblemGuide.forLink(LinkError.Unauthorized, true, true).step)
     }
 
     @Test

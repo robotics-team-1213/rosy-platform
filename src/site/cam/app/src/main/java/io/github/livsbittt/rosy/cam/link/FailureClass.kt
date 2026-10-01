@@ -35,7 +35,7 @@ object FailureClass {
     fun forClose(code: Int, reason: String? = null): String = when (code) {
         Protocol.CLOSE_BAD_PROTO -> if (Protocol.isIncompatibleClose(code, reason.orEmpty())) PROTOCOL_MISMATCH else BUSY
         Protocol.CLOSE_UNAUTHORIZED -> AUTH_FINAL
-        CLOSE_FORBIDDEN -> FORBIDDEN
+        Protocol.CLOSE_FORBIDDEN -> FORBIDDEN
         Protocol.CLOSE_REPLACED -> CONFLICT
         Protocol.CLOSE_CREDENTIAL_UNKNOWN -> AUTH_RETRY
         Protocol.CLOSE_TRY_AGAIN -> BUSY
@@ -83,7 +83,4 @@ object FailureClass {
 
     /** Discovery outcome to class; only `no_match_within_timeout` exists (D-391 1). */
     fun forDiscovery(outcome: String): String? = if (outcome == "no_match_within_timeout") NOT_DISCOVERED else null
-
-    /** D-341 11 close 4403: the credential is valid but not allowed for this source. */
-    private const val CLOSE_FORBIDDEN = 4403
 }

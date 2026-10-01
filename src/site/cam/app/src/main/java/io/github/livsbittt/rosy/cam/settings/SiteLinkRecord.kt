@@ -20,6 +20,11 @@ import java.util.Base64
  * The app does not store this shape: [SiteLink] keeps a CA pin instead of `ca_pem` and the token itself instead
  * of `credential`/`credential_ref` (see [toSiteLink]). This is the validator for a record received from the
  * site (the D-391 4항 4단계 pairing client) before it becomes a [SiteLink].
+ *
+ * Intentionally stricter than Python on certificates: each `ca_pem` block goes through the platform
+ * `CertificateFactory`, so a block must be a complete, parseable X.509 certificate. Python only walks the DER
+ * far enough to read basicConstraints. A malformed block that Python would still classify can therefore be
+ * `bad_ca_pem` here; every vector case agrees.
  */
 object SiteLinkRecord {
     val REASONS = listOf(
@@ -97,8 +102,8 @@ object SiteLinkRecord {
     private fun isUtcTimestamp(value: Any?): Boolean {
         if (value !is String || !EXPIRES_AT.matches(value)) return false
         return try {
-            LocalDateTime.parse(value.substring(0, 19), EXPIRES_AT_SECONDS)
-            true
+            // java.time accepts year 0000 (proleptic); Python's datetime does not (MINYEAR 1).
+            LocalDateTime.parse(value.substring(0, 19), EXPIRES_AT_SECONDS).year >= 1
         } catch (e: DateTimeParseException) {
             false
         }
@@ -109,8 +114,10 @@ object SiteLinkRecord {
      * or the secret behind `credential_ref`) and its `source` name. Null for an invalid record, or a valid one
      * for another role (a `robot` record is FleetAgent's, not this app's).
      *
-     * Field mapping: `ca_pem` becomes the pin of its first CA certificate (the D-341 9 pin the link trusts);
-     * `tls_host` is lower-cased; `manual_host` (an IP literal by the shared rule) is kept as is.
+     * Field mapping: `ca_pem` becomes the pin of its first CA certificate only. D-341 §9 pins a single site
+     * CA, and [io.github.livsbittt.rosy.cam.link.PinnedTrustManager] trusts exactly that one; further CAs in
+     * a bundle are not pinned. `tls_host` is lower-cased; `manual_host` (an IP literal by the shared rule) is
+     * kept as is.
      */
     fun toSiteLink(record: Map<String, Any?>, token: String, source: String): SiteLink? {
         if (validate(record) != null || record["role"] != SiteLink.ROLE) return null

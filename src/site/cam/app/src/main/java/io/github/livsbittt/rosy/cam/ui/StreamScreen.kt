@@ -57,6 +57,8 @@ fun StreamScreen(
     siteLink: SiteLink?,
     /** Host of a stored pairing that is no longer valid (non-.local name, D-391 1); the operator must re-pair. */
     rejectedHost: String?,
+    /** Non-.local name dropped from a stored pairing that still dials its manual IP; re-pairing is advised. */
+    droppedTlsHost: String?,
     lan: LanSnapshot?,
     localError: String?,
     onStart: () -> Unit,
@@ -97,7 +99,7 @@ fun StreamScreen(
             }
         }
 
-        StatusPanel(state, siteLink, rejectedHost, lan, localError, onStop, onOpenSettings)
+        StatusPanel(state, siteLink, rejectedHost, droppedTlsHost, lan, localError, onStop, onOpenSettings)
 
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
             // Opens read-only while the camera runs; the settings screen says how to unlock it.
@@ -133,6 +135,7 @@ private fun StatusPanel(
     state: StreamState,
     siteLink: SiteLink?,
     rejectedHost: String?,
+    droppedTlsHost: String?,
     lan: LanSnapshot?,
     localError: String?,
     onStop: () -> Unit,
@@ -169,6 +172,15 @@ private fun StatusPanel(
         // A pairing saved under the old rules that D-391 no longer accepts: say "re-pair", not "never paired".
         if (siteLink == null && rejectedHost != null) {
             CritMessage(stringResource(R.string.target_rejected, rejectedHost))
+        }
+        // Salvaged: the old name is gone but the manual IP still dials. A soft note, not the re-pair alarm.
+        val salvagedIp = siteLink?.manualHost
+        if (droppedTlsHost != null && salvagedIp != null) {
+            Text(
+                stringResource(R.string.target_salvaged, droppedTlsHost, salvagedIp),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
         if (state.running && !state.previewOnly) {
             when (val route = state.route) {
@@ -319,6 +331,7 @@ private fun ProblemMessage(
         Problem.NOT_DISCOVERED -> notDiscoveredText(lan, siteLink?.pairingSubnet)
         Problem.SITE_CONFLICT -> stringResource(R.string.problem_site_conflict, siteLink?.tlsHost ?: "")
         Problem.UNAUTHORIZED -> stringResource(R.string.problem_unauthorized)
+        Problem.FORBIDDEN -> stringResource(R.string.problem_forbidden)
         Problem.REPLACED -> stringResource(R.string.problem_replaced, pairing?.source ?: "")
         Problem.PROTOCOL_MISMATCH -> stringResource(R.string.problem_protocol_mismatch)
         Problem.BUSY -> stringResource(R.string.problem_busy)

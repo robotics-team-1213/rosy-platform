@@ -48,6 +48,7 @@
     <string name="target_route_manual">주소: 수동 주소 %1$s (자동 찾기로 못 찾음)</string>
     <string name="target_route_manual_only">주소: 수동 주소 %1$s (자동 찾기 쓰지 않음)</string>
     <string name="problem_unauthorized">토큰이 맞지 않습니다 — 현장 PC의 페어링 QR로 다시 연결하세요.</string>
+    <string name="problem_forbidden">이 카메라는 이 사이트에서 송출 권한이 없습니다 — 관리자에게 확인하세요. 연결을 멈췄습니다.</string>
     <string name="problem_replaced">다른 카메라가 같은 이름(%1$s)으로 연결해 이 연결을 멈췄습니다 — 다른 폰을 끄거나 연결 설정에서 이름을 바꾸세요.</string>
     <string name="problem_protocol_mismatch">앱과 수신기의 버전이 맞지 않아 연결을 멈췄습니다 — 둘을 같은 버전으로 맞추세요.</string>
     <string name="problem_busy">수신기가 바빠서 연결을 받지 못했습니다 — 잠시 뒤 다시 연결합니다.</string>
@@ -113,6 +114,7 @@
     <string name="invalid_tls">TLS 값은 0 또는 1이어야 합니다</string>
     <string name="invalid_tls_host">사이트 이름은 .local 이어야 합니다 (예: rosy-site.local). 이름 대신 IP 주소를 넣으면 수동 주소로 저장합니다.</string>
     <string name="target_rejected">저장된 연결(%1$s)은 더 이상 쓸 수 없습니다 — 사이트 이름은 .local 이어야 합니다. 현장 PC의 페어링 QR로 다시 연결하세요.</string>
+    <string name="target_salvaged">저장된 사이트 이름(%1$s)은 .local 이 아니어서 수동 주소 %2$s 로만 연결합니다. 주소가 바뀌어도 따라가려면 현장 PC의 페어링 QR로 이름을 다시 받으세요.</string>
     <string name="invalid_pin">인증서 지문(pin)이 올바르지 않거나 TLS 없이 왔습니다 — 현장 PC에서 페어링 QR을 다시 받으세요</string>
     <string name="settings_pin">인증서 고정: %1$s…</string>
     <string name="settings_pin_dropped">TLS를 꺼서 인증서 고정(pin)을 지웠습니다 — 다시 고정하려면 현장 PC의 페어링 QR을 다시 적용하세요</string>

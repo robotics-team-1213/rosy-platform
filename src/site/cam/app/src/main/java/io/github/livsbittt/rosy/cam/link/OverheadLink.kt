@@ -45,6 +45,12 @@ sealed interface LinkError {
     /** Close 4409: another connection with the same source replaced this one. */
     data object Replaced : LinkError
 
+    /**
+     * Close 4403 (D-341 11, rosy-00 decision 2026-10-01): the credential is valid but this camera is not allowed
+     * here. Final, but not a re-pair case: an operator must grant it on the site side.
+     */
+    data object Forbidden : LinkError
+
     data class InvalidConfig(val field: String) : LinkError
     /** Transport failure before or during the session; [kind] drives the operator guidance. */
     data class Network(val detail: String, val kind: NetworkFailure = NetworkFailure.OTHER) : LinkError
@@ -370,6 +376,7 @@ class OverheadLink(
             Protocol.CLOSE_CREDENTIAL_UNKNOWN -> LinkError.CredentialUnknown to false
             Protocol.CLOSE_UNAUTHORIZED -> LinkError.Unauthorized to true
             Protocol.CLOSE_REPLACED -> LinkError.Replaced to true
+            Protocol.CLOSE_FORBIDDEN -> LinkError.Forbidden to true
             else -> LinkError.Closed(code, reason) to false
         }
 

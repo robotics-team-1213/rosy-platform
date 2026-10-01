@@ -28,15 +28,13 @@ private val Context.camDataStore: DataStore<Preferences> by preferencesDataStore
 class SettingsStore(context: Context) {
     private val store = context.applicationContext.camDataStore
 
-    /** The saved site link, or null when nothing valid is saved yet. */
-    val siteLink: Flow<SiteLink?> = store.data
+    /** The stored record as read: the usable link, plus a salvaged or rejected host for the screen. */
+    val stored: Flow<SiteLinkPrefs.Stored> = store.data
         .catch { e -> if (e is IOException) emit(emptyPreferences()) else throw e }
-        .map(::decode)
+        .map { prefs -> SiteLinkPrefs.read(values(prefs)) }
 
-    /** Host of a stored pairing that is no longer valid (must be re-paired), or null. */
-    val rejectedHost: Flow<String?> = store.data
-        .catch { e -> if (e is IOException) emit(emptyPreferences()) else throw e }
-        .map { prefs -> SiteLinkPrefs.rejectedHost(prefs.asMap().mapKeys { (key, _) -> key.name }) }
+    /** The saved site link, or null when nothing usable is saved yet. */
+    val siteLink: Flow<SiteLink?> = stored.map { it.link }
 
     /** Saved lens setting; null until the operator picks one (then [LensChoice.DEFAULT] applies). */
     val lens: Flow<LensChoice?> = store.data
@@ -69,7 +67,7 @@ class SettingsStore(context: Context) {
         store.edit { prefs ->
             val current = decode(prefs) ?: return@edit
             if (current != expected || current.tlsHost != null) return@edit
-            val learned = current.copy(tlsHost = tlsHost, siteName = siteName ?: current.siteName)
+            val learned = current.copy(tlsHost = SiteLink.normalizeHost(tlsHost), siteName = siteName ?: current.siteName)
             if (SiteLink.validate(learned) == null) write(prefs, learned)
         }
     }
@@ -87,8 +85,9 @@ class SettingsStore(context: Context) {
         }
     }
 
-    private fun decode(prefs: Preferences): SiteLink? =
-        SiteLinkPrefs.decode(prefs.asMap().mapKeys { (key, _) -> key.name })
+    private fun values(prefs: Preferences): Map<String, Any?> = prefs.asMap().mapKeys { (key, _) -> key.name }
+
+    private fun decode(prefs: Preferences): SiteLink? = SiteLinkPrefs.decode(values(prefs))
 
     private companion object {
         val LENS = stringPreferencesKey("lens")

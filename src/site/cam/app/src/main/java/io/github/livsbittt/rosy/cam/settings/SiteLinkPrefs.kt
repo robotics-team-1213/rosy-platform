@@ -25,44 +25,58 @@ object SiteLinkPrefs {
     const val SOURCE = "source"
     const val SECURE = "secure"
 
-    /** The saved link from stored [values] (key name to value), or null when none or invalid. */
-    fun decode(values: Map<String, Any?>): SiteLink? {
+    /**
+     * What a stored record reads as.
+     *
+     * - [link]: the usable link, or null.
+     * - [droppedTlsHost]: the link was salvaged. Its stored `tls_host` is not a `.local` name (D-391 1), but it has
+     *   a valid IP `manual_host`, so the name is dropped and the link dials that IP. The screen shows a soft
+     *   "re-pair by name" note.
+     * - [rejectedHost]: nothing usable is left because the host is the failing field (a non-`.local` name and
+     *   no IP). The screen asks to re-pair. Any other fault (bad pin, missing token…) sets neither.
+     */
+    data class Stored(val link: SiteLink?, val droppedTlsHost: String? = null, val rejectedHost: String? = null)
+
+    /** Reads stored [values] (key name to value). */
+    fun read(values: Map<String, Any?>): Stored {
+        val raw = raw(values) ?: return Stored(null)
+        if (SiteLink.validate(raw) == null) return Stored(raw)
+        if (SiteLink.validate(raw) != "tls_host") return Stored(null)
+        val host = raw.tlsHost.orEmpty()
+        val salvaged = raw.copy(tlsHost = null).takeIf { it.manualHost != null && SiteLink.validate(it) == null }
+        return if (salvaged != null) Stored(salvaged, droppedTlsHost = host) else Stored(null, rejectedHost = host)
+    }
+
+    /** The saved link from stored [values], or null when none or not usable. */
+    fun decode(values: Map<String, Any?>): SiteLink? = read(values).link
+
+    /** The host of a stored pairing refused only because of that host (see [Stored.rejectedHost]). */
+    fun rejectedHost(values: Map<String, Any?>): String? = read(values).rejectedHost
+
+    /** The record as stored, unvalidated; `tls_host` made canonical. Null when port, token or source is missing. */
+    private fun raw(values: Map<String, Any?>): SiteLink? {
         fun text(key: String): String? = values[key] as? String
         val port = values[PORT] as? Int ?: return null
         val token = text(TOKEN) ?: return null
         val source = text(SOURCE) ?: return null
         val secure = values[SECURE] as? Boolean ?: false
         // An old key present means an app before D-391 wrote last; it wins over any site-link keys.
+        // SiteLink.from makes the host canonical, the same path as entry (SiteLink.entryReason).
         val legacyHost = text(LEGACY_HOST)
-        val link = if (legacyHost != null) {
-            SiteLink.from(PairingUri(legacyHost, port, token, source, secure, text(LEGACY_PIN)))
-        } else {
-            SiteLink(
-                siteName = text(SITE_NAME),
-                tlsHost = text(TLS_HOST),
-                port = port,
-                caPin = text(CA_PIN),
-                token = token,
-                source = source,
-                secure = secure,
-                manualHost = text(MANUAL_HOST),
-                role = text(ROLE) ?: SiteLink.ROLE,
-                expiresAt = text(EXPIRES_AT),
-                pairingSubnet = text(PAIRING_SUBNET),
-            )
-        }
-        return link.takeIf { SiteLink.validate(it) == null }
-    }
-
-    /**
-     * The host of a stored pairing that [decode] refuses, so the screen can say "re-pair" instead of "never
-     * paired". Typical case: a record saved before D-391 1 with a non-`.local` name (a DNS host is no longer
-     * a `tls_host`; an IP becomes `manual_host` and stays valid). Null when nothing is stored or it is valid.
-     */
-    fun rejectedHost(values: Map<String, Any?>): String? {
-        if (decode(values) != null) return null
-        val stored = listOf(LEGACY_HOST, TLS_HOST, MANUAL_HOST).firstNotNullOfOrNull { values[it] as? String }
-        return stored?.takeIf { values[TOKEN] != null || values[PORT] != null }
+        if (legacyHost != null) return SiteLink.from(PairingUri(legacyHost, port, token, source, secure, text(LEGACY_PIN)))
+        return SiteLink(
+            siteName = text(SITE_NAME),
+            tlsHost = text(TLS_HOST)?.let(SiteLink::normalizeHost),
+            port = port,
+            caPin = text(CA_PIN),
+            token = token,
+            source = source,
+            secure = secure,
+            manualHost = text(MANUAL_HOST),
+            role = text(ROLE) ?: SiteLink.ROLE,
+            expiresAt = text(EXPIRES_AT),
+            pairingSubnet = text(PAIRING_SUBNET),
+        )
     }
 
     /**
