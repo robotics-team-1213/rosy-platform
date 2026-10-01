@@ -1,4 +1,4 @@
-# ROSY ADR Log
+﻿# ROSY ADR Log
 ## Architecture Decision Records
 
 **Document ID:** ROSY-ADR-001
