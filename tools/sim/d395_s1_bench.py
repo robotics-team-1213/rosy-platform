@@ -52,6 +52,8 @@ SCENARIOS = {
     # (b) r1 on square B facing the other way (-x), r2 on square A.
     "b": {"spawn": [(0.86, -0.52, math.pi), (-1.26, 0.49, HALF_PI)],
           "goal": (0.40, -0.52, math.pi), "drop": (-0.75, 0.30, 0.0)},
+    # (l) one robot off-slot with no asymmetric cue: only the P2-7 ladder can help.
+    "l": {"spawn": [(-0.70, 0.15, math.pi)]},
 }
 
 
@@ -70,13 +72,17 @@ class Bench:
         self.env = dict(os.environ, GZ_PARTITION=args.partition, ROS_DOMAIN_ID=str(args.domain),
                         RMW_IMPLEMENTATION="rmw_cyclonedds_cpp", ROS_AUTOMATIC_DISCOVERY_RANGE="LOCALHOST",
                         CYCLONEDDS_URI=f"file://{dds}")
-        self.base = {R1: f"http://127.0.0.1:{args.api_port}", R2: f"http://127.0.0.1:{args.api_port + 1}"}
+        self.robots = [f"rosy_{i + 1:02d}" for i in range(len(SCENARIOS[args.scenario]["spawn"]))]
+        self.base = {rid: f"http://127.0.0.1:{args.api_port + i}" for i, rid in enumerate(self.robots)}
         self.t0 = time.monotonic()
         self.procs = []
-        self.seq = {R1: None, R2: None}
+        self.seq = dict.fromkeys(self.robots)
         self.events = []
         self.scores = []
-        self.states = {R1: None, R2: None}
+        self.states = dict.fromkeys(self.robots)
+        self.missions = dict.fromkeys(self.robots)
+        #: (wall t, robot, x, y, yaw) Gazebo truth every ~2 s: mission motion and drift.
+        self.trail = []
         self.timeline = []
         self.record = {"scenario": args.scenario, "args": vars(args), "phases": {}}
         #: (wall t, sim s, rtf) every ~2 s: the host may run Gazebo far below real time, so
@@ -141,6 +147,10 @@ class Bench:
             if sim:
                 self.clock_samples.append((t, int(sim.group(1)) + int(sim.group(2) or 0) * 1e-9,
                                            float(rtf.group(1)) if rtf else None))
+            for rid in self.robots:
+                pose = self.truth(rid)
+                if pose is not None:
+                    self.trail.append((t, rid, *pose))
             self.stopping.wait(2.0)
 
     def load(self):
@@ -148,7 +158,7 @@ class Bench:
 
     def teleport(self, rid, pose):
         x, y, yaw = pose
-        req = (f'name: "{rid}", position: {{x: {x}, y: {y}, z: 0.02}}, '
+        req = (f'name: "{rid}", position: {{x: {x}, y: {y}, z: 0.1}}, '
                f'orientation: {{x: 0, y: 0, z: {math.sin(yaw / 2)}, w: {math.cos(yaw / 2)}}}')
         out = self.run_quiet(["gz", "service", "-s", f"/world/{WORLD}/set_pose", "--reqtype", "gz.msgs.Pose",
                               "--reptype", "gz.msgs.Boolean", "--timeout", "3000", "--req", req])
@@ -165,7 +175,7 @@ class Bench:
     def poll(self):
         """One poll: state of both robots, new localization events, scores for CANDIDATES."""
         snaps = {}
-        for rid in (R1, R2):
+        for rid in self.robots:
             code, state = self.http(rid, "GET", "/api/v1/robot/state")
             snaps[rid] = state if code == 200 else None
             loc = (state or {}).get("localization") if code == 200 else None
@@ -174,7 +184,12 @@ class Bench:
                 self.note("state", robot=rid, loc=loc, pose=(state or {}).get("pose"))
                 self.states[rid] = key
             self.pull_events(rid)
-        for rid in (R1, R2):
+            code, mission = self.http(rid, "GET", "/api/v1/localization/mission")
+            mission = mission if code == 200 else None
+            if mission != self.missions[rid]:      # P2-7 ladder missions (rotate, lane_to_stopline)
+                self.note("mission", robot=rid, code=code, mission=mission, truth=self.truth(rid))
+                self.missions[rid] = mission
+        for rid in self.robots:
             loc = (snaps[rid] or {}).get("localization") or {}
             if loc.get("state") == "CANDIDATES":
                 self.score(rid, snaps)
@@ -256,7 +271,7 @@ class Bench:
                 **judge(reported, truth)}
 
     def both_localized(self, snaps):
-        return all(self.loc_state(snaps, rid) == "LOCALIZED" for rid in (R1, R2))
+        return all(self.loc_state(snaps, rid) == "LOCALIZED" for rid in self.robots)
 
     def first_time(self, rid, state, after=0.0):
         for row in self.timeline:
@@ -270,7 +285,7 @@ class Bench:
         sc = SCENARIOS[self.args.scenario]
         poses = ";".join(f"{x},{y},{yaw}" for x, y, yaw in sc["spawn"])
         self.record["load_before"] = self.load()
-        self.spawn(["ros2", "launch", "gz_sim", "gz_multi.launch.py", "robots:=2",
+        self.spawn(["ros2", "launch", "gz_sim", "gz_multi.launch.py", f"robots:={len(self.robots)}",
                     f"world_name:={WORLD}.world", "mode:=nav", "core:=true", "headless:=true",
                     "loc_assist:=true", "seed_initialpose:=false", f"api_port_base:={self.args.api_port}",
                     f"spawn_poses:={poses}"], "launch.log")
@@ -291,16 +306,28 @@ class Bench:
                     str(Path(self.args.ws) / "src/runtime/sensing/map/map_v2_fleet/lane_rules.yaml")],
                    "fleet.log")
         self.note("power_on", spawn=sc["spawn"], load=self.load())
+        for item in self.args.loc_param:     # tuning runs: loc_assist parameters read per call
+            threading.Thread(target=self.set_loc_param, args=tuple(item.split("=", 1)), daemon=True).start()
         snaps, done = self.wait(self.both_localized, self.args.localize_timeout)
         if done:   # settle: hold LOCALIZED 5 s, then judge
             snaps, _ = self.wait(lambda s: not self.both_localized(s), 5.0)
         phase = {"done": done, "rtf": self.rtf(), "load": self.load()}
-        for rid in (R1, R2):
+        for rid in self.robots:
             phase[rid] = {"t_state": self.first_any_state(rid), "t_candidates": self.first_time(rid, "CANDIDATES"),
                           "t_localized": self.first_time(rid, "LOCALIZED"), **self.verdict(rid, snaps)}
         self.record["phases"]["power_on"] = phase
-        self.note("power_on_done", **{k: v for k, v in phase.items() if k in (R1, R2, "done")})
+        self.note("power_on_done", **{k: v for k, v in phase.items() if k in (*self.robots, "done")})
         return done
+
+    def set_loc_param(self, name, value):
+        """`ros2 param set` on every loc_assist node as soon as it exists (races the first search)."""
+        for rid in self.robots:
+            while not self.stopping.is_set():
+                out = self.run_quiet(["ros2", "param", "set", f"/{rid}/loc_assist", name, value], 30.0)
+                if "Set parameter successful" in out:
+                    self.note("loc_param", robot=rid, name=name, value=value)
+                    break
+                self.stopping.wait(2.0)
 
     def first_any_state(self, rid):
         for row in self.timeline:
@@ -423,7 +450,7 @@ class Bench:
 
     def save(self):
         self.record.update(timeline=self.timeline, events=self.events, scores=self.scores,
-                           search_s=self.search_times(), clock=self.clock_samples)
+                           search_s=self.search_times(), clock=self.clock_samples, trail=self.trail)
         (self.out / "run.json").write_text(json.dumps(self.record, indent=1, default=str), encoding="utf-8")
 
     def search_times(self):
@@ -445,6 +472,8 @@ def main(argv=None):
     p.add_argument("--fleet-port", type=int, default=18990)
     p.add_argument("--localize-timeout", type=float, default=240.0)
     p.add_argument("--drive-timeout", type=float, default=180.0)
+    p.add_argument("--loc-param", action="append", default=[], metavar="NAME=VALUE",
+                   help="tuning: set a loc_assist parameter on both robots after launch")
     args = p.parse_args(argv)
     bench = Bench(args)
     try:

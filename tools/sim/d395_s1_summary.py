@@ -62,9 +62,14 @@ def main(argv):
         stale = sum(1 for row in run.get("timeline", ()) if row.get("what") == "state"
                     and (row.get("loc") or {}).get("reason") == "state_stale")
         print(f"- CORE state_stale transitions: {stale}")
+        missions = [(row["t"], row.get("robot"), (row.get("mission") or {}).get("kind"),
+                     (row.get("mission") or {}).get("state")) for row in run.get("timeline", ())
+                    if row.get("what") == "mission" and row.get("mission")]
+        if missions:
+            print(f"- ladder missions (t, robot, kind, state): {missions}")
         p = phases.get("power_on")
         if p:
-            for rid in ("rosy_01", "rosy_02"):
+            for rid in sorted(k for k in p if k.startswith("rosy_")):
                 r = p.get(rid, {})
                 print(f"- power-on {rid}: candidates {fmt(r.get('t_candidates'), clock)}, LOCALIZED "
                       f"{fmt(r.get('t_localized'), clock)}, {verdict(r)}")

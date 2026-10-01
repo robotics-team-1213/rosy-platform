@@ -185,25 +185,28 @@ def test_slam_start_waits_for_sensor_startup_in_wall_time():
     assert timers[0].actions
 
 
-def _loc_assist_includes(actions):
+def _loc_assist_includes(actions, context):
     """D-395 P2-3: the per-robot loc_assist launch rides in the delayed nav actions."""
     from launch.actions import IncludeLaunchDescription
     found = []
     for timer in (a for a in actions if isinstance(a, TimerAction)):
         for action in timer.actions:
             if isinstance(action, IncludeLaunchDescription):
-                location = action.launch_description_source.location
-                if str(location).endswith("loc_assist.launch.py"):
+                # Before execution `.location` is str() of the substitutions (an object repr
+                # on Jazzy), so read the substitution list and perform it.
+                source = action.launch_description_source
+                location = _text(source._LaunchDescriptionSource__location, context)
+                if location.endswith("loc_assist.launch.py"):
                     found.append(action)
     return found
 
 
 def test_nav_mode_starts_loc_assist_per_robot_unless_turned_off():
     mod = _module()
-    actions, _ = _setup(mod, robots="2", core="false", mode="nav")
-    assert len(_loc_assist_includes(actions)) == 2
-    actions, _ = _setup(mod, robots="2", core="false", mode="nav", loc_assist="false")
-    assert _loc_assist_includes(actions) == []
+    actions, context = _setup(mod, robots="2", core="false", mode="nav")
+    assert len(_loc_assist_includes(actions, context)) == 2
+    actions, context = _setup(mod, robots="2", core="false", mode="nav", loc_assist="false")
+    assert _loc_assist_includes(actions, context) == []
 
 
 def _named(actions, context, executable):

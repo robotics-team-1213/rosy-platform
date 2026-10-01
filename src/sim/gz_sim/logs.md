@@ -204,3 +204,10 @@
 - gate 변화: 없음. ROS-SIM S1 결과는 `docs/plans/2026-10-02-d395-s1-bench-results.md`.
 - 결정: 없음
 - 교훈: 다른 패키지 자산을 쓰는 카탈로그 월드는 merge-install에서만 돌았다 — 격리 설치에서 한 번은 띄워 본다.
+
+## 2026-10-02 · uncommitted · test(sim): loc_assist 포함 시험이 실제로 경로를 읽게 한다
+- 변경: `test_gz_multi_core._loc_assist_includes`가 `launch_description_source.location`(실행 전에는 치환 객체의 repr 문자열)을 읽어 항상 0개를 세던 것을, 치환 목록을 perform해 경로로 비교하도록 고쳤다.
+- 증거: WSL Jazzy `test_gz_multi_core.py` 11 passed(이전: 이 시험 1건 실패, 통합 브랜치 기준선에서도 실패). 변이: `if loc_assist:`를 `if False:`로 바꾸면 이 시험 실패.
+- gate 변화: 없음
+- 결정: 없음
+- 교훈: 런치 그래프 시험에서 문자열 비교는 실행 전 값인지 먼저 확인한다 — repr에 대한 `endswith`는 언제나 거짓이다.
