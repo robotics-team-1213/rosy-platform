@@ -1925,3 +1925,11 @@
 - 변경: `rosy-release-recover.service`에 `PrivateTmp=yes`. recover가 이전 릴리스를 다시 검증할 때(`native_release.verify` → `signing`의 `tempfile`) `ProtectSystem=strict` 아래 임시 디렉터리가 읽기 전용이라 "No usable temporary directory"로 실패했고, `rosy-core.service`·`rosy-runtime.target`·`rosy-auto-update.service`가 이 게이트를 Requires 하므로 로봇이 뜨지 않았다. D-406 이전부터 있던 결함으로 수동 push에도 해당한다. 같이: `rosy-auto-update.service`의 `/etc/udev/rules.d`·`/etc/modprobe.d`를 선택적(`-`) ReadWritePaths로.
 - 증거: D-406 기기 쌍둥이(systemd 255 컨테이너) 시나리오 h3 — 활성화 도중 컨테이너 전원 차단 뒤 recover 실패·CORE 미기동 재현, 쌍둥이 진단용 PrivateTmp로 복구 성공. 계약 시험 `test_units_that_verify_releases_get_a_writable_private_tmp`(빨강 확인 뒤 초록). 관련 시험 421 passed.
 - gate 변화: 없음(기기 확인 필요).
+
+## 2026-10-02 · 30390e1c · fix(native): D-406 T2 검증 리뷰 2 반영 — current가 실제로 옮겨졌을 때만 자기 되돌림, 꼬리 실패도 backoff
+
+- 변경: 통합 브랜치(`feat/d406-robot-auto-update`: twin의 `api_base` 설정, recover PrivateTmp, size verdict)를 먼저 병합했다(충돌 없음). HIGH 1 `self_rolled_back`은 우리 rollback이 current를 실제로 옮겼을 때만 남긴다. 재시도 한도에 닿았거나(gave up) 확정 오류로 거절된 rollback은 남기지 않는다. 그래서 그 뒤 운영자가 `-Rollback`하면 그 릴리스는 "operator rolled back"으로 실패 처리된다. HIGH 2 실패 기록 없는 rollback이 current를 옮겼으면 꼬리(sync·core·ready)가 실패해도 적용 오류를 센다. backoff와 escalation이 반복을 끊는다. MEDIUM `release-hold`가 `rollback_failed` 결과를 확인 처리(last_result 지움, history 한 줄)하고, 고정 이유와 계획서에 적었다. LOW 지금 current이거나 실패·철회된 id는 `self_rolled_back`에서 지운다. LOW native_release와 업데이터의 precheck 바쁨 종료 코드가 같음을 시험으로 묶었다. `rosy_auto_update.py` size verdict를 1505줄(+33)로 다시 판정했다(판정은 그대로: 장치 검증 뒤 분리).
+- 증거: 관련 묶음 655 passed, 10 skipped, `python test/known_failures.py` 새 실패 0. 병합으로 들어온 T3·twin 시험(architecture, known_hosts, publish, push claim, update hold) 181 passed(size verdict 갱신 뒤). 리뷰어 probe 두 개 통과: 운영자 되돌림 → 실패 처리, 6회 실행에 활성화 2회. 변이 9종 모두 빨강. 로봇에는 손대지 않았다.
+- gate 변화: 없음. DEVICE HOLD.
+- 결정: D-406
+- 교훈: "누가 흔적을 남겼나" 기록은 그 행동이 실제로 일어났을 때만 쓴다. 시도만 하고 실패한 행동을 기록하면 다른 규칙의 판단을 가린다.
