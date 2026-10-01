@@ -64,6 +64,11 @@ export function teleopActive() {
 }
 
 function sendTeleop(linear, angular, keepalive = false) {
+  const speedReadout = document.getElementById("teleop-speed");
+  if (speedReadout) {
+    speedReadout.textContent = linear === 0 && angular === 0
+      ? "" : `${linear.toFixed(2)} m/s · ${angular.toFixed(2)} rad/s`;
+  }
   return api("/api/v1/teleop", {
     method: "POST",
     body: JSON.stringify({ linear, angular }),

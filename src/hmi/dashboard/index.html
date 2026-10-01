@@ -154,7 +154,9 @@
             <article><span>BATTERY</span><strong id="battery-value"></strong><small id="battery-voltage">voltage</small></article>
           </div>
           <div class="navigation-line">
-            <span>NAVIGATION</span><b id="navigation-state"></b><small id="map-id">map</small>
+            <span>NAVIGATION</span><b id="navigation-state"></b>
+            <small id="navigation-goal" class="navigation-goal"></small>
+            <small id="map-id">map</small>
           </div>
         </section>
         <section class="panel capability-panel" aria-labelledby="capability-heading">
@@ -314,6 +316,7 @@
               <ui-button kind="toggle" type="button" data-teleop="backward" data-linear="-0.03" data-angular="0" aria-label="후진">↓<small>후진</small></ui-button>
               <ui-button kind="toggle" type="button" data-teleop="right" data-linear="0" data-angular="-0.1" aria-label="우회전">→<small>우회전</small></ui-button>
             </div>
+            <span id="teleop-speed" class="teleop-speed" aria-label="명령 속도"></span>
             <p id="teleop-message" class="teleop-message" role="status" aria-live="assertive">수동 모드에서 버튼을 누르고 있는 동안만 움직입니다.</p>
           </div>
           <p id="action-message" class="action-message" role="status" aria-live="assertive">제어 명령 대기 중</p>
