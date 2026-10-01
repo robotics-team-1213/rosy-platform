@@ -449,3 +449,12 @@ def test_a_mission_message_without_a_known_state_is_ignored():
     a.on_mission(2., {"state": "flying"})
     a.on_mission(2., "not a dict")
     assert not a.search_due(2., ODOM)
+
+
+def test_a_lost_mission_end_stops_pausing_the_search_after_the_longest_mission():
+    """CORE caps a mission at 120 s; a lost end message or a CORE restart must not pause
+    the search forever: the pause lapses 10 s after that."""
+    a = core()
+    a.on_mission(0., {"kind": "lane_to_stopline", "state": "running", "reason": None})
+    assert not a.search_due(130., ODOM)
+    assert a.search_due(130.1, ODOM)
