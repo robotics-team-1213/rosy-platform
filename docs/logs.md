@@ -4108,8 +4108,7 @@
 
 ## 2026-10-01 · uncommitted · docs(adr): D-393 제안 — Nav2 AMCL `update_min_d` 0.02와 목표 허용오차
 - 변경: `docs/adr/D-393-nav-amcl-update-min-d-and-goal-tolerance.md` 신규(Proposed), ADR Log에 D-393 행. 기기 AMCL은 `navigation/params/nav2_params.yaml`(0.15)을 쓰고 sensing `localization.yaml`(0.005)은 기기 경로가 아님을 파일 경로로 기록. 허용오차 0.25 m / 0.25 rad, 운용 규칙, 적용 전 게이트 기재
-- 증거: sim 전용(Gazebo Harmonic, 1대, 행당 n=1, WSL 부하 30–60). 평가 스크립트·출력은 저장소 밖 `X:\DevTemposy-ml-work
-av-eval\`. 실물 재생은 추정
+- 증거: sim 전용(Gazebo Harmonic, 1대, 행당 n=1, WSL 부하 30–60). 평가 스크립트·출력은 저장소 밖 `X:\DevTemp\rosy-ml-work\nav-eval\`. 실물 재생은 추정
 - gate 변화: 없음(로봇 설정·params 변경 없음).
 - 결정: D-393 Proposed
 - 교훈: 없음
