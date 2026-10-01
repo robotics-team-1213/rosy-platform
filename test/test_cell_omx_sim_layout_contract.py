@@ -70,10 +70,10 @@ def test_demo_is_two_pallets_two_layers_with_slip_sheets(demo):
     assert recipe.box.mass_kg <= 0.05
 
 
-def _world_models():
+def _world_models(name):
     import xml.etree.ElementTree as ET
 
-    world = ET.parse(ROOT / "src/sim/gz_sim/worlds/omx_cell_workcell.sdf").getroot().find("world")
+    world = ET.parse(ROOT / "src/sim/gz_sim/worlds" / name).getroot().find("world")
     models = {}
     for model in world.findall("model"):
         pose = [float(v) for v in model.findtext("pose").split()]
@@ -83,10 +83,11 @@ def _world_models():
     return models
 
 
-def test_gazebo_world_matches_the_demo_cell(demo):
+@pytest.mark.parametrize("world", ["omx_cell_workcell.sdf", "omx_cell_workcell_sim_aid.sdf"])
+def test_gazebo_world_matches_the_demo_cell(demo, world):
     """World == robot base (vendor spawn at the origin), so poses compare directly."""
     cell, recipe, _ = demo
-    models = _world_models()
+    models = _world_models(world)
     for slot, name in ((recipe.pallets[0], "pallet_a"), (recipe.pallets[1], "pallet_b")):
         (cx, cy, cz, *_), (sx, sy, sz) = models[name]
         frame = cell.frames[slot.frame]

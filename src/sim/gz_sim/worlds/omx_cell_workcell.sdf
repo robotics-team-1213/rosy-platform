@@ -15,13 +15,14 @@
   No physical calibration; the block is the only free object used by C3.
 
   No camera: with the headless software-rendered (LIBGL_ALWAYS_SOFTWARE) 320x240 workcell
-  camera the real-time factor measured 0.06 on the C3 host; without it 0.6 (2026-10-02).
+  camera the real-time factor measured 0.06 on the C3 host; without it 0.3-0.7 (2026-10-02).
+  Physics step 2 ms (pilot world: 1 ms) to raise RTF: the owner's action timeout is wall time.
 -->
 
 <sdf version="1.9">
   <world name="omx_cell_workcell">
     <physics name="physics" type="ignored">
-      <max_step_size>0.001</max_step_size><real_time_factor>1</real_time_factor>
+      <max_step_size>0.002</max_step_size><real_time_factor>1</real_time_factor>
     </physics>
     <plugin filename="gz-sim-physics-system" name="gz::sim::systems::Physics"/>
     <plugin filename="gz-sim-user-commands-system" name="gz::sim::systems::UserCommands"/>
