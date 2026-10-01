@@ -90,6 +90,7 @@ from .lane_keep_lines import (  # noqa: F401 — re-exported for callers and tes
     WALL_CARPET_PERCENTILE,
     WALL_STEP_ROWS,
     _validate_positive,
+    denoise_white_mask,
     extract_lines,
     floor_white_mask,
 )
@@ -252,7 +253,10 @@ class LaneKeeper:
         return (round(column, 1), round(row, 1))
 
     def update(self, bgr: np.ndarray, ground, *, lane_half_width_m: float = 0.0925,
-               **_ignored) -> LaneObservation | None:
+               paint_mask: np.ndarray | None = None, **_ignored) -> LaneObservation | None:
+        """paint_mask (D-408): an HxW 0/1 paint mask from another source (learned model,
+        OpenCV glare filter) used in place of floor_white_mask; rows above the horizon
+        margin are dropped from it."""
         _validate_positive("lane_half_width_m", lane_half_width_m)
         if not isinstance(bgr, np.ndarray) or bgr.ndim not in (2, 3) or bgr.size == 0:
             raise ValueError("camera frame must be a non-empty grayscale or BGR array")
@@ -264,7 +268,13 @@ class LaneKeeper:
             return None
         half = float(lane_half_width_m)
         height, width = bgr.shape[:2]
-        mask = floor_white_mask(bgr, ground.horizon_row)
+        if paint_mask is None:
+            mask = floor_white_mask(bgr, ground.horizon_row)
+        else:
+            if not isinstance(paint_mask, np.ndarray) or paint_mask.shape != bgr.shape[:2]:
+                raise ValueError("paint_mask must be an array of the frame's height x width")
+            mask = (paint_mask > 0).astype(np.uint8)
+            mask[:max(0, min(height, int(math.ceil(ground.horizon_row)) + HORIZON_MARGIN_PX))] = 0
         view = self._birds_eye(ground, width, height)
         grid = view.sample(mask)
         observable = int(view.observable.sum())
