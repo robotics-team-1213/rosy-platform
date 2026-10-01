@@ -77,7 +77,7 @@ ssh rosy@rosy-01.local
 목록에서 `rosy-01`의 IPv4 주소를 찾고 다음처럼 접속한다.
 
 ```powershell
-ssh rosy@192.168.1.42
+ssh rosy@<robot-ip>
 ```
 
 Pi에서 네트워크를 직접 진단할 때는 다음 항목을 따로 확인한다.
@@ -150,7 +150,7 @@ http://rosy-01.local:8080/dashboard
 이름으로 접속되지 않으면 검증 스크립트가 출력한 `wlan0` IPv4 주소를 쓴다.
 
 ```text
-http://192.168.1.42:8080/dashboard
+http://<robot-ip>:8080/dashboard
 ```
 
 FastAPI가 HTML/CSS/JavaScript를 직접 제공하므로 Pi에 별도 Node.js 서버는

@@ -76,7 +76,7 @@ CONTROL_SPLIT = "docs/plans/2026-09-22-control-package-split-design.md"
 #: P6 verdicts: path (relative to src/) or package name -> (lines at verdict, verdict).
 SIZE_VERDICTS = {
     "fleet": (
-        20_655,
+        21_871,
         "split: server HTTP boundary, console, signals and the mission-control stores are separate owners "
         "today; group them into subpackages rather than one flat server/ tree (B2); owner fleet, unscheduled "
         "(re-judged 2026-09-29 at 11164 after mission_store joined the server tree; re-judged 2026-09-30 at "
@@ -93,13 +93,26 @@ SIZE_VERDICTS = {
         "B2 subpackage regroup; re-judged 2026-10-01 at 20399: the same-host OMX phase receipt "
         "projection joined the existing Fleet mission journal and read-only status surface (19468), and the "
         "D-375 console map-fit overlay joined as its own modules (server/site_lanes.py, web/map-fit.js pure, "
-        "web/map-fit-view.js DOM, each under the D-362 budget); verdict unchanged. Split remains "
-        "unscheduled (docs/plans/2026-09-30-er2-mission-feedback-loop.md); re-judged 2026-10-01 at 20655 after the D-359 theme/palette, D-375 map-fit view and D-391/D-370 site-link fixes landed in console and transport (still split, unscheduled)",
+        "web/map-fit-view.js DOM, each under the D-362 budget); verdict unchanged; re-judged "
+        "2026-10-01 at 20655 after the D-359 theme/palette, D-375 map-fit view and D-391/D-370 "
+        "site-link fixes landed in console and transport, then at 21476 when D-341 camera pairing "
+        "joined as its own modules (server/pairing.py state, pairing_store.py digests, "
+        "pairing_routes.py) plus tests (21871 once merged with main's other console work); app.py only "
+        "gained the install call; verdict unchanged. "
+        "Split remains unscheduled (docs/plans/2026-09-30-er2-mission-feedback-loop.md)",
     ),
     "site/fleet/fleet/server/enrollment.py": (
         610,
         "accept: one owner (D-361 robot enrollment — exchange, binding, pinned-address gate, unenroll and "
         "pending logout share one state machine over the register), ROS-free, host-testable (X5)",
+    ),
+    "site/vision/rosy_vision/ingest.py": (
+        671,
+        "accept: one owner (the rosy-overhead/1 receive endpoint — handshake, per-source connection "
+        "lifecycle, latest-frame store and the direct preview/proposal reads share one connection map); "
+        "crossed 600 on 2026-10-01 when D-341 paired-credential admission and revoke closing joined the "
+        "same handshake and connection map (the digest store and sync thread live in pairing_sync.py). "
+        "ROS-free, host-testable (X5)",
     ),
     "site/fleet/fleet/server/mission_store.py": (
         887,
@@ -279,6 +292,12 @@ SIZE_VERDICTS = {
         "2026-10-01 at 1176 for late ROS UUID and exact-cancel intent journaling after UNKNOWN/HOLD "
         "without reopening phase state (D-386). The hard-tier "
         "zero-growth rule prevents silent expansion",
+    ),
+    "tools/perception/model/watch.py": (
+        630,
+        "accept: the model watcher's scan loop, drift detection and alert paths are one "
+        "cohesion — splitting them would scatter the state machine. Re-judged 2026-10-01 "
+        "at 630 after the training-dataset watch paths joined (host verdict, no device).",
     ),
 }
 

@@ -27,6 +27,7 @@ from core_common.protocol.discovery_txt import HOSTNAME
 from rosy_vision import protocol
 from rosy_vision.ingest import STATUS_INTERVAL_S, IngestServer
 from rosy_vision.map_register import load_map_paint
+from rosy_vision.pairing_sync import PairedCredentials, PairingSync
 from rosy_vision.publish import SightingPublishError, SightingPublisher
 from rosy_vision.vision_config import load_vision_sources
 from rosy_vision.worker import VisionWorker
@@ -249,18 +250,47 @@ async def _run_receive(args: argparse.Namespace) -> int:
         await ws_server.wait_closed()
 
 
+def _vision_ingest(args: argparse.Namespace, configs, *, environ=os.environ):
+    """Build the ingest server and the D-341 sync settings, refusing unsafe secret reuse.
+
+    Returns ``(ingest, sync)`` where ``sync`` is ``{"url", "token", "ca_file"}`` when the
+    config has ``paired`` sources, else None.
+    """
+    known_tokens = {config.sighting_token for config in configs}
+    known_tokens |= {config.phone_token for config in configs if config.phone_token is not None}
+    preview_secret = environ.get("ROSY_VISION_PREVIEW_SECRET")
+    if preview_secret and preview_secret in known_tokens:
+        raise ValueError("vision preview secret must differ from phone and sighting credentials")
+    paired_sources = [config.camera.source_id for config in configs if config.credential == "paired"]
+    sync_url = getattr(args, "pairing_sync_url", None)
+    sync_env = getattr(args, "pairing_sync_token_env", None)
+    sync = None
+    if paired_sources:
+        if not sync_url or not sync_env:
+            raise ValueError("paired sources need --pairing-sync-url and --pairing-sync-token-env "
+                             "(D-341 12: Vision reads issued credentials from Fleet)")
+        token = environ.get(sync_env)
+        if not token:
+            raise ValueError(f"pairing sync token environment variable {sync_env} is required")
+        if token in known_tokens or token == preview_secret:
+            raise ValueError("pairing sync token must differ from phone, sighting and preview secrets")
+        ca_file = getattr(args, "pairing_sync_ca", None)
+        sync = {"url": sync_url, "token": token, "ca_file": str(ca_file) if ca_file else None}
+    elif sync_url or sync_env:
+        raise ValueError("--pairing-sync-* is set but site-cameras.yaml has no credential: paired source")
+    ingest = IngestServer(
+        {config.camera.source_id: config.phone_token for config in configs
+         if config.phone_token is not None},
+        preview_signer=VisionLeaseSigner(preview_secret) if preview_secret else None,
+        map_paint=load_map_paint(args.map_paint) if args.map_paint else None,
+        paired=PairedCredentials(paired_sources) if paired_sources else None,
+    )
+    return ingest, sync
+
+
 async def _run_vision(args: argparse.Namespace) -> int:
     configs = load_vision_sources(args.config)
-    preview_secret = os.environ.get("ROSY_VISION_PREVIEW_SECRET")
-    if preview_secret and any(
-            preview_secret in {config.phone_token, config.sighting_token} for config in configs):
-        raise ValueError("vision preview secret must differ from phone and sighting credentials")
-    preview_signer = VisionLeaseSigner(preview_secret) if preview_secret else None
-    ingest = IngestServer(
-        {config.camera.source_id: config.phone_token for config in configs},
-        preview_signer=preview_signer,
-        map_paint=load_map_paint(args.map_paint) if args.map_paint else None,
-    )
+    ingest, sync_settings = _vision_ingest(args, configs)
     workers = []
     async with AsyncExitStack() as stack:
         for config in configs:
@@ -277,6 +307,14 @@ async def _run_vision(args: argparse.Namespace) -> int:
                                        ssl_context=_server_ssl_context(args.tls_cert, args.tls_key))
         print(f"vision pipeline listening on {args.host}:{args.port}{protocol.WS_PATH} "
               f"for {len(workers)} configured sources", flush=True)
+        sync = None
+        if sync_settings is not None:
+            loop = asyncio.get_running_loop()
+            # Own thread (2026-10-01 starvation lesson); only enforcement hops onto the loop.
+            sync = PairingSync(ingest.paired, **sync_settings,
+                               on_cycle=lambda: loop.call_soon_threadsafe(
+                                   ingest.enforce_paired_credentials))
+            sync.start()
         try:
             while True:
                 for worker in workers:
@@ -290,6 +328,8 @@ async def _run_vision(args: argparse.Namespace) -> int:
                         logger.error("vision frame failed error_type=%s", type(exc).__name__)
                 await asyncio.sleep(0.03)
         finally:
+            if sync is not None:
+                sync.stop()
             ws_server.close()
             await ws_server.wait_closed()
             ingest.close_map_worker()
@@ -322,6 +362,12 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     vision.add_argument("--port", type=int, default=8095)
     vision.add_argument("--tls-cert", type=Path, default=None)
     vision.add_argument("--tls-key", type=Path, default=None)
+    vision.add_argument("--pairing-sync-url", default=None,
+                        help="Fleet backend base URL for D-341 paired credentials, e.g. https://fleet:8090")
+    vision.add_argument("--pairing-sync-token-env", default=None,
+                        help="environment variable holding Vision's dedicated pairing sync token")
+    vision.add_argument("--pairing-sync-ca", type=Path, default=None,
+                        help="CA PEM that verifies Fleet's TLS certificate (the site CA)")
     vision.add_argument("--map-paint", type=Path, default=None,
                         help="site map lane paint STL in map metres (e.g. road_lines.stl); "
                              "enables the D-375 map-proposal view")

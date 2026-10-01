@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import hashlib
 import hmac
 import json
 import logging
@@ -44,9 +45,14 @@ from core_common.protocol.vision_preview import (
 from rosy_vision.field_detect import DETECTOR_VERSION, FieldDetection, detect_field_jpeg
 from rosy_vision import map_worker
 from rosy_vision.map_register import REGISTER_VERSION, MapPaint, RegistrationResult
+from rosy_vision.pairing_sync import PairedCredentials
 from rosy_vision.rectify import rectify_jpeg
 
 logger = logging.getLogger(__name__)
+# websockets logs every handshake header at DEBUG, the phone's Authorization included.
+# The server gets its own logger pinned at INFO so no log level ever records a bearer.
+_WS_LOGGER = logging.getLogger(__name__ + ".websocket")
+_WS_LOGGER.setLevel(logging.INFO)
 
 STATUS_INTERVAL_S = 1.0
 # A marker report older than this is not repeated in ``status`` (worker stopped
@@ -77,6 +83,9 @@ _FIELD_DETECT_INTERVAL_S = 1.0
 # process (never on this event loop's threads): one run in flight per source, the next
 # at least this long after the last one finished, one worker for all sources.
 _MAP_REGISTER_INTERVAL_S = 1.0
+# D-341 11: an upgrade refused because the paired-credential state is unknown asks the phone
+# to come back after one sync interval.
+_PAIRING_RETRY_AFTER_S = 2
 
 
 @dataclass
@@ -162,6 +171,9 @@ class _Source:
     markers: tuple[tuple[int, ...], tuple[str, ...], float] | None = None
     # Optional hello.lens ({"kind", "focal_mm", "hfov_deg"}); None for older apps.
     lens: dict | None = None
+    # D-341: SHA-256 of a paired phone's bearer (never the bearer) and its credential id.
+    credential_digest: bytes | None = None
+    credential_id: str | None = None
 
 
 class IngestServer:
@@ -169,10 +181,19 @@ class IngestServer:
 
     def __init__(self, source_tokens: Mapping[str, str], config: dict | None = None,
                  *, preview_signer: VisionLeaseSigner | None = None,
-                 preview_max_age_s: float = 1.0, map_paint: MapPaint | None = None) -> None:
-        if not source_tokens:
-            raise ValueError("at least one source token is required")
+                 preview_max_age_s: float = 1.0, map_paint: MapPaint | None = None,
+                 paired: PairedCredentials | None = None) -> None:
+        if not source_tokens and paired is None:
+            raise ValueError("at least one source token or paired source is required")
         tokens = dict(source_tokens)
+        if paired is not None:
+            for source in paired.sources:
+                if not protocol.SOURCE_PATTERN.fullmatch(source):
+                    raise ValueError(f"invalid source name {source!r}")
+            if paired.sources & set(tokens):
+                raise ValueError("a source cannot be both static and paired")
+        # D-341 12: paired sources authenticate by Fleet-synced digest, never a stored token.
+        self.paired = paired
         for source, token in tokens.items():
             if not isinstance(source, str) or not protocol.SOURCE_PATTERN.fullmatch(source):
                 raise ValueError(f"invalid source name {source!r}")
@@ -209,6 +230,7 @@ class IngestServer:
             max_size=self.config["max_bytes"] + protocol.HEADER_SIZE + _MAX_SIZE_MARGIN,
             max_queue=RECEIVE_QUEUE_FRAMES,
             ssl=ssl_context,
+            logger=_WS_LOGGER,
         )
 
     def close_map_worker(self) -> None:
@@ -260,9 +282,17 @@ class IngestServer:
         authorized = False
         for token in self.source_tokens.values():
             authorized |= hmac.compare_digest(auth or "", f"Bearer {token}")
-        if not authorized:
-            return connection.respond(401, "unauthorized\n")
-        return None
+        if authorized:
+            return None
+        if self.paired is not None:
+            verdict = self.paired.check_any(_bearer_digest(auth))
+            if verdict == "ok":
+                return None
+            if verdict == "unavailable":
+                # Retryable (D-341 11): the phone keeps its credential and backs off.
+                return _http_response(503, b"credential state unavailable\n",
+                                      extra={"Retry-After": str(_PAIRING_RETRY_AFTER_S)})
+        return connection.respond(401, "unauthorized\n")
 
     async def _preview_response(self, path: str, authorization: str | None) -> Response:
         """Serve one authorized latest-frame read directly from Vision, never from Fleet."""
@@ -463,19 +493,33 @@ class IngestServer:
             return
 
         source_name = hello["source"]
-        expected = self.source_tokens.get(source_name)
         auth = connection.request.headers.get("Authorization")
-        if expected is None or not hmac.compare_digest(auth or "", f"Bearer {expected}"):
-            await connection.close(protocol.CLOSE_UNAUTHORIZED, "token is not authorized for source")
-            return
+        credential_digest = credential_id = None
+        if self.paired is not None and source_name in self.paired.sources:
+            credential_digest = _bearer_digest(auth)
+            verdict, credential_id = self.paired.check(source_name, credential_digest)
+            if verdict == "unavailable":
+                await connection.close(protocol.CLOSE_CREDENTIAL_UNKNOWN,
+                                       "credential state unavailable; retry")
+                return
+            if verdict != "ok":
+                await connection.close(protocol.CLOSE_UNAUTHORIZED, "token is not authorized for source")
+                return
+        else:
+            expected = self.source_tokens.get(source_name)
+            if expected is None or not hmac.compare_digest(auth or "", f"Bearer {expected}"):
+                await connection.close(protocol.CLOSE_UNAUTHORIZED, "token is not authorized for source")
+                return
         replaced = self._sources.get(source_name)
-        src = _Source(name=source_name, connection=connection, lens=protocol.parse_hello_lens(hello))
+        src = _Source(name=source_name, connection=connection, lens=protocol.parse_hello_lens(hello),
+                      credential_digest=credential_digest, credential_id=credential_id)
         sensor = hello["sensor"]
         # app_version/device are free text from the phone: repr and cap them in the log.
-        logger.info("source %s connected app=%r device=%r sensor=%sx%s rot=%s lens=%s",
+        logger.info("source %s connected app=%r device=%r sensor=%sx%s rot=%s lens=%s credential=%s",
                     source_name, str(hello.get("app_version"))[:64], str(hello.get("device"))[:64],
                     sensor["width"], sensor["height"], sensor["rotation_deg"],
-                    _lens_text(src.lens) if src.lens else "unreported")
+                    _lens_text(src.lens) if src.lens else "unreported",
+                    credential_id or "static")
         self._sources[source_name] = src
         self._field_cache.pop(source_name, None)
         self._map_cache.pop(source_name, None)
@@ -507,14 +551,37 @@ class IngestServer:
             self._drop_if_current(source_name, connection)
 
     @staticmethod
-    async def _close_replaced(connection: ServerConnection) -> None:
+    async def _close_replaced(connection: ServerConnection, code: int = protocol.CLOSE_REPLACED,
+                              reason: str = "replaced by new connection") -> None:
         try:
-            await asyncio.wait_for(
-                connection.close(protocol.CLOSE_REPLACED, "replaced by new connection"),
-                _REPLACED_CLOSE_TIMEOUT_S,
-            )
+            await asyncio.wait_for(connection.close(code, reason), _REPLACED_CLOSE_TIMEOUT_S)
         except (asyncio.TimeoutError, websockets.exceptions.ConnectionClosed):
             connection.transport.abort()
+
+    def _paired_verdict(self, src: _Source) -> str:
+        if src.credential_digest is None or self.paired is None:
+            return "ok"
+        return self.paired.check(src.name, src.credential_digest)[0]
+
+    def enforce_paired_credentials(self) -> None:
+        """Close paired connections whose credential left the synced list (D-341 11).
+
+        Runs on the event loop after every sync cycle (the sync thread schedules it).
+        Revoked or unknown -> 4401 (final); state unknown -> 4503 (retry). Never awaits
+        the close inline, like a replaced connection.
+        """
+        for src in list(self._sources.values()):
+            verdict = self._paired_verdict(src)
+            if verdict == "ok":
+                continue
+            code, reason = ((protocol.CLOSE_UNAUTHORIZED, "credential revoked")
+                            if verdict == "unknown" else
+                            (protocol.CLOSE_CREDENTIAL_UNKNOWN, "credential state unavailable; retry"))
+            logger.info("source %s closed code=%d credential=%s", src.name, code, src.credential_id)
+            self._drop_if_current(src.name, src.connection)
+            task = asyncio.create_task(self._close_replaced(src.connection, code, reason))
+            self._closing.add(task)
+            task.add_done_callback(self._closing.discard)
 
     def _drop_if_current(self, source_name: str, connection: ServerConnection) -> None:
         current = self._sources.get(source_name)
@@ -543,6 +610,8 @@ class IngestServer:
                 return
 
     def _handle_frame(self, src: _Source, message: bytes) -> None:
+        if src.credential_digest is not None and self._paired_verdict(src) != "ok":
+            return  # revoked or unknown since the last sync: never keep its frames
         now = time.time()
         try:
             header = protocol.parse_header(message)
@@ -579,6 +648,11 @@ async def _receive_hello(connection: ServerConnection):
         if not receive.done():
             receive.cancel()
 
+def _bearer_digest(authorization: str | None) -> bytes:
+    bearer = authorization[len("Bearer "):] if authorization and authorization.startswith("Bearer ") else ""
+    return hashlib.sha256(bearer.encode("utf-8")).digest()
+
+
 def _lens_text(lens: dict) -> str:
     return f"kind={lens['kind']};focal_mm={lens['focal_mm']:g};hfov_deg={lens['hfov_deg']:g}"
 
@@ -590,7 +664,8 @@ def _lens_header(lens: dict | None) -> dict[str, str]:
 
 def _http_response(status: int, body: bytes, *, extra: Mapping[str, str] | None = None) -> Response:
     reason = {200: "OK", 401: "Unauthorized", 404: "Not Found",
-              422: "Unprocessable Content", 429: "Too Many Requests"}[status]
+              422: "Unprocessable Content", 429: "Too Many Requests",
+              503: "Service Unavailable"}[status]
     headers = Headers({"Content-Length": str(len(body)), "X-Content-Type-Options": "nosniff",
                        "Cache-Control": "no-store", **dict(extra or {})})
     return Response(status, reason, headers, body)

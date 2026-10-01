@@ -416,3 +416,9 @@
 - Change: Register the existing Pilot surface on the isolated OMX simulation port 8088 and its sim-arm-practice role. The sim server reads the common asset manifest.
 - Evidence: surface registry and Pilot API tests 15 passed.
 - Gate: no new product surface acceptance.
+
+## 2026-10-01 · uncommitted · test(web_common): D-396 G1 단일 언어 계약 시험
+
+- 변경: test/test_single_language.py — 서피스 JS/HTML 의 customElements.define 금지, 서피스 CSS 의 :root/[data-theme] --토큰 선언 금지(raw_colours :root 예외는 등록부 선언으로 존중 — 게시판 피치 색).
+- 증거: 변이 증명 2종(pilot 에 :root 토큰·인라인 커스텀 엘리먼트 주입 시 각각 빨강).
+- gate 변화: 없음.

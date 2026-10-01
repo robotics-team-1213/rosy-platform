@@ -104,6 +104,13 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
                                "dispatch; existing Fleet operator commands remain available"))
     console.add_argument("--goal-evidence-config", default=None, type=Path,
                          help="optional scoped goal-evidence producer registry YAML")
+    console.add_argument("--pairing-ca", default=None, type=Path,
+                         help="site CA PEM (never a leaf) handed to paired cameras; enables the "
+                              "D-341 pairing routes, needs --tls-cert and --tasks-db")
+    console.add_argument("--pairing-tls-host", default=None,
+                         help="site TLS host name (<name>.local) the paired phone checks")
+    console.add_argument("--pairing-sync-token-env", default=None,
+                         help="environment variable holding Vision's dedicated credential-list token")
     return parser.parse_args(argv)
 
 
@@ -459,6 +466,9 @@ def run_console(args: argparse.Namespace) -> None:
                              if vision_preview_secret_env else None)
     if vision_preview_secret_env and not vision_preview_secret:
         sys.exit("vision preview secret environment variable is required")
+    pairing_service, pairing_sync_token = _build_pairing(
+        args, tls_cert=tls_cert, tasks_db=tasks_db, sighting_service=sighting_service,
+        site_name=console.fleet_name)
     app = create_app(console, console_token=console_token, web_common=args.web_common,
                      hub=hub, sightings=sighting_service, task_service=task_service,
                      mission_service=mission_service, proposal_store=proposal_store,
@@ -468,7 +478,8 @@ def run_console(args: argparse.Namespace) -> None:
                      start_task_dispatcher=not mission_api,
                      vision_lease_secret=vision_preview_secret,
                      vision_sources=vision_sources, enrollment=enrollment,
-                     robot_credential_key=robot_key_text, site_lanes=site_lanes)
+                     robot_credential_key=robot_key_text, site_lanes=site_lanes,
+                     pairing=pairing_service, pairing_sync_token=pairing_sync_token)
     signals_note = f", {len(signal_eps)} signals" if signal_console is not None else ""
     print(f"fleet console: http://{args.host}:{args.port}/console  "
           f"({len(console.robot_ids)} robots{signals_note})",
@@ -476,6 +487,46 @@ def run_console(args: argparse.Namespace) -> None:
     tls_options = ({"ssl_certfile": str(tls_cert), "ssl_keyfile": str(tls_key)}
                    if tls_cert is not None else {})
     uvicorn.run(app, host=args.host, port=args.port, log_level="warning", **tls_options)
+
+
+def _build_pairing(args: argparse.Namespace, *, tls_cert, tasks_db, sighting_service, site_name):
+    """D-341 2: pairing exists only on a TLS Fleet with a site CA and a durable store."""
+    pairing_ca = getattr(args, "pairing_ca", None)
+    sync_env = getattr(args, "pairing_sync_token_env", None)
+    if pairing_ca is None:
+        if sync_env is not None:
+            sys.exit("--pairing-sync-token-env requires --pairing-ca")
+        return None, None
+    if tls_cert is None:
+        sys.exit("--pairing-ca requires --tls-cert: pairing routes exist only over TLS (D-341 2)")
+    if tasks_db is None:
+        sys.exit("--pairing-ca requires --tasks-db for credential digests and the pairing audit")
+    tls_host = getattr(args, "pairing_tls_host", None)
+    if not tls_host:
+        sys.exit("--pairing-ca requires --pairing-tls-host (the <name>.local in the site certificate)")
+    from core_common.protocol.pairing import der_sha256
+    from fleet.server.pairing import PairingService
+    from fleet.server.pairing_store import PairingStore
+
+    sources = ({source.source_id: source.credential for source in sighting_service.sources}
+               if sighting_service is not None else {})
+    if "paired" not in sources.values():
+        print("warning: D-341 pairing is on but no sighting source is credential: paired; "
+              "requests can be listed but not approved", file=sys.stderr)
+    try:
+        leaf_sha256 = der_sha256(Path(tls_cert).read_text(encoding="utf-8-sig"))
+        site_ca_pem = Path(pairing_ca).read_text(encoding="utf-8-sig")
+        service = PairingService(PairingStore(tasks_db), leaf_cert_sha256=leaf_sha256,
+                                 site_ca_pem=site_ca_pem, tls_host=tls_host,
+                                 site_name=site_name, sources=sources)
+    except (OSError, UnicodeDecodeError, ValueError) as exc:
+        sys.exit(f"D-341 pairing configuration refused: {exc}")
+    sync_token = None
+    if sync_env is not None:
+        sync_token = os.environ.get(sync_env)
+        if not sync_token:
+            sys.exit(f"pairing sync token environment variable {sync_env} is required")
+    return service, sync_token
 
 
 def _relax_retired_sighting_targets(sources, *, known: set, retired: set):

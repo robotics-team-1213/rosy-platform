@@ -57,7 +57,9 @@ Config (YAML):
   backend: inbox                          # optional: inbox (default) | hf
   store: /srv/rosy/store                  # backend inbox: the store folder (local, NAS, Drive)
   repo: org/lane-seg                      # backend hf: the HF model repo
-  robots: [{name: pinky-005, host: <robot-ip>, user: rosy}]   # user optional
+  robots: [{name: <robot-id>, host: <hostname>.local, user: rosy}]   # user optional
+      # host is a name (mDNS); an IP works but is not recommended: the network renumbers.
+      # The host key is pinned in known_hosts under `name` (ssh HostKeyAlias), not the host.
   ssh: {identity: <site key>, known_hosts: <pinned file>}     # both required
   intake_out: /var/lib/rosy-model-watch/models
   state_file: /var/lib/rosy-model-watch/state.json
@@ -79,7 +81,15 @@ reported a configuration error (a Python package such as onnx missing from the
 watcher's venv): the run stops at once, nothing is recorded and no attempt is
 spent, so the timer retries every run until the venv is fixed. A robot push that
 fails with deliver.py's own code (3, 75, 76) is logged with that code; the
-watcher's exit stays one of these."""
+watcher's exit stays one of these, except for a network failure to a robot:
+77 its host name did not resolve (DNS / mDNS), 78 connection refused, timed out or no
+route, 79 host key unknown or changed. These are deliver.py's codes (operator_ssh.py);
+the run exits with the code of the first robot (config order) that failed this way, so
+the unit shows failed and the timer keeps firing. A network failure spends no attempt
+(the robot stays pending, never gave_up) and is recorded per robot in the state file
+under robot_failures {kind, exit, at, count}; the next successful contact clears it.
+`rosy_ml status --watch-config` shows it. A robot that is up to date but cannot be
+read also exits with its code (it used to be a silent message)."""
 
 from __future__ import annotations
 
@@ -101,10 +111,10 @@ for _p in (MODEL_DIR, MODEL_DIR.parent):
 import store  # noqa: E402
 
 DEFAULT_CONFIG = "/etc/rosy/model-watch.yaml"
-STATE_VERSION = 1
 _REPO = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*")
 _NAME = re.compile(r"[A-Za-z0-9._][A-Za-z0-9._-]*")
 _SHA = re.compile(r"[0-9a-f]{40}")
+import operator_ssh  # noqa: E402  (tools/perception, on sys.path above)
 from deliver import HELD_EXIT, LOCK_BUSY_EXIT as BUSY_EXIT  # noqa: E402  no attempt used
 # 5, not 3: deliver.py's 3 (history not written) and harvest.py's 4 (not idle) stay distinct.
 LIST_FAILED_EXIT = 5
@@ -112,121 +122,24 @@ BACKENDS = ("inbox", "hf")
 INBOX_KEY = "store-inbox"
 
 
-# --- pure core ------------------------------------------------------------------------------
+# --- pure core (watch_core.py) ---------------------------------------------------------------
 
-def new_state(repo: str) -> dict:
-    return {"version": STATE_VERSION, "repo": repo, "next_order": 0, "commits": {},
-            "shadow": {}}
-
-
-def apply_result(state: dict, sha: str, result: dict) -> dict:
-    """A new state whose record for sha is result; the commit keeps its order
-    (first-seen, which is oldest-first chronology) or gets the next one."""
-    commits = dict(state.get("commits") or {})
-    nxt = state.get("next_order", 0)
-    order = (commits.get(sha) or {}).get("order")
-    if order is None:
-        order, nxt = nxt, nxt + 1
-    commits[sha] = {"order": order, **{k: v for k, v in result.items() if k != "order"}}
-    return {**state, "commits": commits, "next_order": nxt}
-
-
-def skip_old(commits: list[str], state: dict, *, since: str | None, fresh: bool) -> dict:
-    """Record commits that are never processed. commits: newest first (HF order)."""
-    if since:
-        if since in commits:
-            old, reason = commits[commits.index(since):], "since"
-        elif since in (state.get("commits") or {}):
-            return state  # recorded on an earlier run; it has left the listed window
-        else:
-            raise ValueError(f"since {since} is not among the last {len(commits)} commits")
-    elif fresh:
-        old, reason = commits[1:], "bootstrap"
-    else:
-        return state
-    for sha in reversed(old):
-        if sha not in (state.get("commits") or {}):
-            state = apply_result(state, sha, {"intake": "skipped", "reason": reason})
-    return state
-
-
-def plan_run(commits: list[str], state: dict, limit: int, max_attempts: int) -> list[str]:
-    """Commits to run intake on: unseen, or an earlier infrastructure error with
-    attempts left. Oldest first, at most limit. commits: newest first."""
-    seen = state.get("commits") or {}
-
-    def due(sha):
-        rec = seen.get(sha)
-        return rec is None or (rec.get("intake") == "error"
-                               and rec.get("attempts", 0) < max_attempts)
-    return [sha for sha in reversed(commits) if due(sha)][:max(limit, 0)]
-
-
-def newest_passed(state: dict) -> str | None:
-    passed = [(rec["order"], sha) for sha, rec in (state.get("commits") or {}).items()
-              if rec.get("intake") == "pass" and rec.get("model_revision")]
-    return max(passed)[1] if passed else None
-
-
-def supersede_older(state: dict) -> dict:
-    """Pending robot entries on any passed commit but the newest are superseded:
-    the newest passed model is the only one ever pushed (newest wins)."""
-    newest = newest_passed(state)
-    for sha, rec in (state.get("commits") or {}).items():
-        if sha == newest or rec.get("intake") != "pass":
-            continue
-        for robot, entry in (rec.get("robots") or {}).items():
-            if entry.get("status") == "pending":
-                state = supersede(state, sha, robot)
-    return state
-
-
-def ensure_targets(state: dict, robots: list[str]) -> dict:
-    """Robots with no entry on the newest passed commit (added to the config
-    later) become pending for it. Older commits are never back-filled."""
-    passed = [(rec["order"], sha) for sha, rec in (state.get("commits") or {}).items()
-              if rec.get("intake") == "pass"]
-    if not passed:
-        return state
-    sha = max(passed)[1]
-    missing = [r for r in robots if r not in (state["commits"][sha].get("robots") or {})]
-    for robot in missing:
-        state = _set_robot(state, sha, robot, {"status": "pending", "attempts": 0})
-    return state
-
-
-def delivery_decision(rev: str, observed: dict) -> str:
-    """held | ok | push, from the robot's real hold file and shadow pointer."""
-    if observed.get("hold"):
-        return "held"
-    if observed.get("shadow") == rev:
-        return "ok"
-    return "push"
-
-
-def _set_robot(state: dict, sha: str, robot: str, entry: dict) -> dict:
-    rec = state["commits"][sha]
-    robots = {**(rec.get("robots") or {}), robot: entry}
-    return {**state, "commits": {**state["commits"], sha: {**rec, "robots": robots}}}
-
-
-def record_delivery(state: dict, sha: str, robot: str, *, error: str | None,
-                    max_attempts: int) -> dict:
-    prev = state["commits"][sha]["robots"][robot]
-    attempts = prev.get("attempts", 0) + 1
-    if error is None:
-        state = _set_robot(state, sha, robot, {"status": "ok", "attempts": attempts})
-        shadow = {**(state.get("shadow") or {}),
-                  robot: {"sha": sha, "order": state["commits"][sha]["order"]}}
-        return {**state, "shadow": shadow}
-    status = "gave_up" if attempts >= max_attempts else "pending"
-    return _set_robot(state, sha, robot,
-                      {"status": status, "attempts": attempts, "last_error": error})
-
-
-def supersede(state: dict, sha: str, robot: str) -> dict:
-    prev = state["commits"][sha]["robots"][robot]
-    return _set_robot(state, sha, robot, {**prev, "status": "superseded"})
+from watch_core import (  # noqa: E402,F401  re-exported for callers and tests
+    STATE_VERSION,
+    new_state,
+    record_failure,
+    clear_failure,
+    apply_result,
+    skip_old,
+    plan_run,
+    newest_passed,
+    supersede_older,
+    ensure_targets,
+    delivery_decision,
+    _set_robot,
+    record_delivery,
+    supersede,
+)
 
 
 # --- files ----------------------------------------------------------------------------------
@@ -347,6 +260,7 @@ def default_deliverer(cfg: dict):
         import deliver
         return deliver.main(["push", robot["host"], rev, "--models", str(cfg["intake_out"]),
                              "--user", robot.get("user", "rosy"),
+                             "--host-key-alias", robot["name"],
                              "--identity", cfg["ssh"]["identity"],
                              "--known-hosts", cfg["ssh"]["known_hosts"],
                              "--timeout", str(cfg["push_timeout_s"]),
@@ -360,7 +274,8 @@ def default_observer(cfg: dict):
         import deliver
         return deliver.observe(robot["host"], user=robot.get("user", "rosy"),
                                identity=cfg["ssh"]["identity"],
-                               known_hosts=cfg["ssh"]["known_hosts"])
+                               known_hosts=cfg["ssh"]["known_hosts"],
+                               host_key_alias=robot["name"])
     return read
 
 
@@ -527,6 +442,18 @@ def main(argv=None, *, list_commits=hf_list_commits, intake_fn=None, deliver_fn=
     state = supersede_older(ensure_targets(state, list(robots)))
     save_state(cfg["state_file"], state)
     sha = newest_passed(state)
+    net_exits: list[int] = []  # network failures this run, in config order
+
+    def net_failure(state: dict, name: str, kind: str, detail: str) -> dict:
+        code = operator_ssh.KIND_EXIT[kind]
+        net_exits.append(code)
+        state = record_failure(state, name, kind, code, _now())
+        n = state["robot_failures"][name]["count"]
+        print(f"model-watch: {name}: {kind} failure (exit {code}, {n} in a row): {detail}",
+              file=sys.stderr)
+        save_state(cfg["state_file"], state)
+        return state
+
     for name in robots if sha else ():
         rev = state["commits"][sha]["model_revision"]
         entry = state["commits"][sha]["robots"][name]
@@ -534,7 +461,13 @@ def main(argv=None, *, list_commits=hf_list_commits, intake_fn=None, deliver_fn=
             continue
         try:
             decision = delivery_decision(rev, observe_fn(robots[name]))
+            if name in (state.get("robot_failures") or {}):  # reachable again
+                state = clear_failure(state, name)
+                save_state(cfg["state_file"], state)
         except Exception as exc:  # noqa: BLE001 - one robot never blocks the others
+            if getattr(exc, "kind", None) in operator_ssh.KIND_EXIT:
+                state = net_failure(state, name, exc.kind, str(exc))
+                continue  # no attempt spent: the robot is not reachable, not broken
             if entry["status"] == "ok":  # up to date when last seen: nothing to retry
                 print(f"{name}: cannot read the robot ({exc}); last delivered {rev}")
                 continue
@@ -556,6 +489,10 @@ def main(argv=None, *, list_commits=hf_list_commits, intake_fn=None, deliver_fn=
                 code, error = 1, f"{type(exc).__name__}: {exc}"
             else:
                 error = None if code == 0 else f"deliver exit {code}"
+            if code in operator_ssh.EXIT_KIND:  # deliver already logged the ssh line
+                state = net_failure(state, name, operator_ssh.EXIT_KIND[code],
+                                    "see the ssh line above")
+                continue
             if code == HELD_EXIT:  # an operator took the hold after we looked
                 print(f"{_short(sha)}: {rev} -> {name}: held by an operator (rosy_ml release-hold)")
                 save_state(cfg["state_file"], state)
@@ -570,6 +507,8 @@ def main(argv=None, *, list_commits=hf_list_commits, intake_fn=None, deliver_fn=
         print(f"{_short(sha)}: {rev} -> {name} shadow: {outcome}"
               + (f" ({error})" if error else ""))
         retry_later |= error is not None
+    if net_exits:
+        return net_exits[0]
     return 1 if retry_later else 0
 
 
