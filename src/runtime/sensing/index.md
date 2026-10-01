@@ -64,8 +64,8 @@
 
 ## 최근 기록
 
+- 2026-10-01 · uncommitted · feat(map): map_v2_fleet 바닥 기준 사각형 2개를 맵 데이터와 sim 월드에 기록 (D-395 개정 1)
 - 2026-10-01 · edca9b2e · feat(control): 기하 기본값을 URDF NOMINAL로 (D-397)
 - 2026-10-01 · fff5825f · feat(perception): D-384 도로 상태 추정기와 섀도 노드
 - 2026-10-01 · 00cdb647 · fix(sensing): calibration_store_root 선언 (M4)
 - 2026-10-01 · 79b7681a · feat(sensing): 카메라 외부 파라미터 단계와 바퀴 오도메트리 맞춤 (D-47 부록)
-- 2026-10-01 · uncommitted · feat(sensing): D-373 두 번째 바퀴 — 캡처·스냅샷·상태·압축 카메라·launch 스위치·wall·scan

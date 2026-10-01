@@ -5,6 +5,7 @@
   STL Y-up mm -> ROS Z-up m by R_x(+90 deg); no reshaping.
   Lane paint is visual-only; the perimeter ring is the only collision.
   dock_tag_7: the stage-3 parking marker (visual-only wedge face).
+  reference_square_A/B: floor reference squares from lane_rules.yaml (visual-only).
   Line colour: bright. Orientation vs the physical mat: see README.md.
 -->
 <sdf version="1.6">
@@ -36,6 +37,40 @@
         <visual name="visual">
           <geometry><plane><normal>0 0 1</normal><size>100 100</size></plane></geometry>
           <material><ambient>0.2 0.2 0.2 1</ambient><diffuse>0.2 0.2 0.2 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="reference_square_A">
+      <static>true</static>
+      <pose>-1.260 0.490 0 0 0 0</pose>
+      <link name="link">
+        <visual name="outline">
+          <pose>0 0 0.002 0 0 0</pose>
+          <geometry><plane><normal>0 0 1</normal><size>0.130 0.170</size></plane></geometry>
+          <material><ambient>0.8 0.1 0.1 1</ambient><diffuse>0.8 0.1 0.1 1</diffuse></material>
+        </visual>
+        <visual name="fill">
+          <pose>0 0 0.0025 0 0 0</pose>
+          <geometry><plane><normal>0 0 1</normal><size>0.070 0.110</size></plane></geometry>
+          <material><ambient>0.1 0.2 0.8 1</ambient><diffuse>0.1 0.2 0.8 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="reference_square_B">
+      <static>true</static>
+      <pose>0.860 -0.520 0 0 0 0</pose>
+      <link name="link">
+        <visual name="outline">
+          <pose>0 0 0.002 0 0 0</pose>
+          <geometry><plane><normal>0 0 1</normal><size>0.130 0.140</size></plane></geometry>
+          <material><ambient>0.8 0.1 0.1 1</ambient><diffuse>0.8 0.1 0.1 1</diffuse></material>
+        </visual>
+        <visual name="fill">
+          <pose>0 0 0.0025 0 0 0</pose>
+          <geometry><plane><normal>0 0 1</normal><size>0.080 0.090</size></plane></geometry>
+          <material><ambient>0.1 0.2 0.8 1</ambient><diffuse>0.1 0.2 0.8 1</diffuse></material>
         </visual>
       </link>
     </model>

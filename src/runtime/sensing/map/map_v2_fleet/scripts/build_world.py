@@ -13,9 +13,12 @@ import math
 import struct
 from pathlib import Path
 
+import yaml
+
 HERE = Path(__file__).resolve().parent
 BUNDLE = HERE.parent
 SOURCE = BUNDLE / "260919 MAP FILE.STL"
+RULES = BUNDLE / "lane_rules.yaml"
 MESH_URI = "model://control/map/map_v2_fleet/meshes/road_lines.stl"
 COLOURS = {
     # (floor, paint): dark = black tape on white mat, bright = white tape on dark floor
@@ -40,6 +43,13 @@ DOCK_TAG_BOTTOM_X = -0.78
 DOCK_TAG_DIFFUSE = "0.6 0.6 0.6 1"
 DOCK_TAG_PX_PER_CELL = 40
 TEXTURE_URI = "model://control/map/map_v2_fleet/textures/dock_tag_7.png"
+
+#: D-395 rev. 1 floor reference squares (lane_rules.yaml `reference_squares`):
+#: flat visual-only patches, red outline under a blue fill, just above the
+#: lane paint (mesh at z 0.001). No collision, so the Nav2 map is unchanged.
+SQUARE_COLOURS = {"red": "0.8 0.1 0.1 1", "blue": "0.1 0.2 0.8 1"}
+SQUARE_OUTLINE_Z = 0.002
+SQUARE_FILL_Z = 0.0025
 
 WALL_MATERIAL = "<ambient>0.30 0.35 0.45 1</ambient><diffuse>0.30 0.35 0.45 1</diffuse>"
 
@@ -161,6 +171,30 @@ def write_carpet_texture(path: Path) -> None:
     path.write_bytes(data.tobytes())
 
 
+def _reference_squares_xml() -> str:
+    squares = yaml.safe_load(RULES.read_text(encoding="utf-8"))["reference_squares"]
+    models = []
+    for sq in squares:
+        x, y = sq["centre"]
+        parts = ((sq["size"], sq["outline_colour"], SQUARE_OUTLINE_Z, "outline"),
+                 (sq["fill_size"], sq["fill_colour"], SQUARE_FILL_Z, "fill"))
+        visuals = "".join(f"""        <visual name="{name}">
+          <pose>0 0 {z} 0 0 0</pose>
+          <geometry><plane><normal>0 0 1</normal><size>{size[0]:.3f} {size[1]:.3f}</size></plane></geometry>
+          <material><ambient>{SQUARE_COLOURS[colour]}</ambient><diffuse>{SQUARE_COLOURS[colour]}</diffuse></material>
+        </visual>
+""" for size, colour, z, name in parts)
+        models.append(f"""    <model name="reference_square_{sq["id"]}">
+      <static>true</static>
+      <pose>{x:.3f} {y:.3f} 0 0 0 0</pose>
+      <link name="link">
+{visuals}      </link>
+    </model>
+
+""")
+    return "".join(models)
+
+
 def _carpet_xml() -> str:
     nx, ny = CARPET_TILES
     tiles = []
@@ -238,6 +272,7 @@ def world_xml(scene, line_colour: str, profile: str = "default") -> str:
   STL Y-up mm -> ROS Z-up m by R_x(+90 deg); no reshaping.
   Lane paint is visual-only; the perimeter ring is the only collision.
   dock_tag_7: the stage-3 parking marker (visual-only wedge face).
+  reference_square_A/B: floor reference squares from lane_rules.yaml (visual-only).
   Line colour: {line_colour}. Orientation vs the physical mat: see README.md.{note}
 -->
 <sdf version="1.6">
@@ -273,7 +308,7 @@ def world_xml(scene, line_colour: str, profile: str = "default") -> str:
       </link>
     </model>
 
-{extra}    <model name="road_lines">
+{extra}{_reference_squares_xml()}    <model name="road_lines">
       <static>true</static>
       <pose>0 0 0.001 0 0 0</pose>
       <link name="link">

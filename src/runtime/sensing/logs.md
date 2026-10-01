@@ -749,3 +749,9 @@
 - 증거: sensing 전체 스위트, `test_urdf_nominal.py` 소비자 드리프트, `test_lane_keep.py`(stray 기준 30 → 25°, 짝 < 5°).
 - gate 변화: SOURCE/LOCAL. DEVICE HOLD — 전방 섹터 10° 회전, 시작 캘리브레이션 인증서 무효(재실행), 기기 calib 스냅샷의 190° 확인 필요.
 - 결정: D-397 Proposed.
+
+## 2026-10-01 · uncommitted · feat(map): map_v2_fleet 바닥 기준 사각형 2개를 맵 데이터와 sim 월드에 기록 (D-395 개정 1)
+- 변경: `map/map_v2_fleet/lane_rules.yaml`에 `reference_squares`(A·B, 중심·크기·색·출처·불확실성), `scripts/build_world.py`가 두 월드(`map_v2_fleet`, `map_v2_fleet_real`)에 평평한 시각 전용 패치(충돌 없음, 페인트 위 z 0.002/0.0025)를 생성, README 한계에 AMCL 180° 모호성 해소 단서 기록. 좌표는 영상 유래 ±3 cm, 테이프 실측 대기. `lane_graph.py`는 새 키를 무시한다(`lane_graph.yaml` 불변).
+- 증거: `test_map_v2_fleet_reference_squares.py`(신규; 필드, 180° 회전 최소 거리 ≥ 0.3 m = 0.40 m, 월드 일치·충돌 없음), `test_map_v2_fleet_scene.py`(생성기 출력 = 체크인 월드), dock_marker·lane_graph·track_world·gz_map_export 통과.
+- gate 변화: SOURCE/LOCAL. ROS-SIM 미실행(Gazebo에서 렌더 확인 안 함), DEVICE 해당 없음.
+- 결정: D-395 Proposed(개정 1).
