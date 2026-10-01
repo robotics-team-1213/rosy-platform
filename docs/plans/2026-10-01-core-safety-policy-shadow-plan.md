@@ -647,22 +647,54 @@ from core_features.safety.shadow import ShadowLog, ShadowVerdict
         try:
             decision = self._shadow_policy(request)
             elapsed = self._policy_clock() - started
-            why = check_decision(decision, request, elapsed)
+            valid = decision_valid(decision, request, elapsed)
         except Exception:
-            decision, elapsed, why = None, self._policy_clock() - started, 'policy_failed'
-        if why == '':
+            decision, elapsed, valid = None, self._policy_clock() - started, None
+        if valid is None:
+            verdict, limited, reason = 'unavailable', (0., 0.), 'policy_failed'
+        elif not valid:
+            verdict, limited, reason = 'unavailable', (0., 0.), 'policy_invalid'
+        elif decision.disposition == 'stop':
+            verdict, limited, reason = 'stop', (0., 0.), decision.reason or 'policy_stop'
+        else:
             verdict = 'allow' if (decision.linear_limit >= abs(linear) and
                                   decision.angular_limit >= abs(angular)) else 'limit'
             limited = (max(-decision.linear_limit, min(decision.linear_limit, linear)),
                        max(-decision.angular_limit, min(decision.angular_limit, angular)))
             reason = decision.reason
-        elif why in ('policy_invalid', 'policy_failed'):
-            verdict, limited, reason = 'unavailable', (0., 0.), why
-        else:
-            verdict, limited, reason = 'stop', (0., 0.), why
         self.shadow.record(ShadowVerdict(now, source, (linear, angular), output, verdict, limited,
                                          reason, elapsed * 1000.0))
 ```
+
+(e) Task 2 리뷰 반영 — 판정 분류는 문자열이 아니라 `disposition`으로 한다. 정책이 `stop`의 사유로 `'policy_failed'`를 내도 `stop`으로 센다. 그러려고 `check_decision`의 조건 사슬을 `decision_valid(decision: object, request, elapsed) -> bool`로 옮기고, `check_decision`은 그것을 감싼다(집행 경로의 동작은 그대로):
+
+```python
+def decision_valid(decision: object, request: SafetyRequest, elapsed: float) -> bool:
+    """True when ``decision`` is a well-formed, current answer to ``request`` (any disposition)."""
+    return not (<Task 2의 check_decision if 조건 사슬 그대로>)
+
+
+def check_decision(decision: object, request: SafetyRequest, elapsed: float) -> str:
+    ...  # Task 2 docstring 그대로
+    if not decision_valid(decision, request, elapsed):
+        return 'policy_invalid'
+    if decision.disposition == 'stop':
+        return decision.reason or 'policy_stop'
+    return ''
+```
+
+`test_safety_shadow_evaluate.py`에 하나 더한다:
+
+```python
+def test_stop_reason_that_looks_like_a_failure_is_still_a_stop():
+    safety, _ = _safety(FakePolicy(reason="policy_failed"))   # not in the limit list -> disposition stop
+
+    safety.shadow_evaluate(1, "navigation", 0.1, 0.0, 10.0, output=(0.1, 0.0))
+
+    assert safety.shadow.snapshot()["counts"]["stop"] == 1
+```
+
+`test_safety_decision_check.py`의 기존 시험은 그대로 통과해야 한다(분할이 동작을 바꾸지 않는다는 증거).
 
 - [ ] **Step 4: 통과와 회귀 확인**
 
