@@ -360,3 +360,31 @@ def test_pending_listing_shows_no_code_or_secret(tmp_path):
     for secret in (phone.poll, phone.client_nonce, created["server_nonce"],
                    phone.code(created["request_id"], created["server_nonce"])):
         assert secret not in text
+
+
+def test_concurrent_approvals_issue_exactly_one_credential(tmp_path):
+    """Sync FastAPI routes run on a thread pool: the state machine must serialise them."""
+    import threading
+
+    service, store, _clock = _service(tmp_path)
+    phone, created = _revealed(service)
+    code = phone.code(created["request_id"], created["server_nonce"])
+    barrier = threading.Barrier(8)
+    outcomes = []
+
+    def approve():
+        barrier.wait()
+        try:
+            service.approve(created["request_id"], code=code, source_id="ceiling_north",
+                            principal_id="alice")
+            outcomes.append("approved")
+        except PairingError as exc:
+            outcomes.append(exc.code)
+
+    threads = [threading.Thread(target=approve) for _ in range(8)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    assert outcomes.count("approved") == 1
+    assert len(store.credential_rows()) == 1

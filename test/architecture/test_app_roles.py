@@ -26,11 +26,13 @@ CAMERA_FORBIDDEN = {
     "cmd_vel": re.compile(r"cmd_vel"),
     "estop": re.compile(r"estop", re.IGNORECASE),
 }
-# 2. Rosy Vision: no CORE API, no robot command, and to Fleet only the sighting write.
+# 2. Rosy Vision: no CORE API, no robot command, and to Fleet only the sighting write plus
+#    the D-341 12 read of paired-camera credential digests.
 VISION_FORBIDDEN = {
     "CORE API": re.compile(r"/api/v1/"),
     "cmd_vel": re.compile(r"cmd_vel"),
-    "Fleet route other than sightings": re.compile(r"/api/fleet/(?!sightings\b)"),
+    "Fleet route other than sightings": re.compile(
+        r"/api/fleet/(?!sightings\b)(?!pairing/v1/credentials\b)"),
 }
 # 3. Fleet vision routes pass the video-route regex of test_no_video_relay because they
 #    only issue a lease; the browser fetches frames from Vision directly (D-318).

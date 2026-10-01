@@ -202,10 +202,10 @@ def _vision_ingest(args: argparse.Namespace, configs, *, environ=os.environ):
     Returns ``(ingest, sync)`` where ``sync`` is ``{"url", "token", "ca_file"}`` when the
     config has ``paired`` sources, else None.
     """
-    secrets_in_use = {config.sighting_token for config in configs}
-    secrets_in_use |= {config.phone_token for config in configs if config.phone_token is not None}
+    known_tokens = {config.sighting_token for config in configs}
+    known_tokens |= {config.phone_token for config in configs if config.phone_token is not None}
     preview_secret = environ.get("ROSY_VISION_PREVIEW_SECRET")
-    if preview_secret and preview_secret in secrets_in_use:
+    if preview_secret and preview_secret in known_tokens:
         raise ValueError("vision preview secret must differ from phone and sighting credentials")
     paired_sources = [config.camera.source_id for config in configs if config.credential == "paired"]
     sync_url = getattr(args, "pairing_sync_url", None)
@@ -218,7 +218,7 @@ def _vision_ingest(args: argparse.Namespace, configs, *, environ=os.environ):
         token = environ.get(sync_env)
         if not token:
             raise ValueError(f"pairing sync token environment variable {sync_env} is required")
-        if token in secrets_in_use or token == preview_secret:
+        if token in known_tokens or token == preview_secret:
             raise ValueError("pairing sync token must differ from phone, sighting and preview secrets")
         ca_file = getattr(args, "pairing_sync_ca", None)
         sync = {"url": sync_url, "token": token, "ca_file": str(ca_file) if ca_file else None}

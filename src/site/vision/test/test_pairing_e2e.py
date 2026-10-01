@@ -163,15 +163,15 @@ class SyntheticPhone:
         assert TLS_HOST in names.get_values_for_type(x509.DNSName), "SAN lacks the advertised tls_host"
         return sha256(self.leaf_der).hexdigest()
 
-    def call(self, method: str, path: str, body: dict | None = None, *, bearer: str | None = None):
+    def call(self, method: str, path: str, body: dict | None = None, *, poll_auth: str | None = None):
         connection = http.client.HTTPSConnection("127.0.0.1", self.port, timeout=5,
                                                  context=self._context())
         try:
             connection.connect()
             assert connection.sock.getpeercert(binary_form=True) == self.leaf_der, "leaf changed"
             headers = {"Content-Type": "application/json"}
-            if bearer:
-                headers["Authorization"] = "Bearer " + bearer
+            if poll_auth:
+                headers["Authorization"] = "Bearer " + poll_auth
             connection.request(method, path, body=json.dumps(body) if body is not None else None,
                                headers=headers)
             response = connection.getresponse()
@@ -306,7 +306,7 @@ async def _scenario(tmp_path: Path, monkeypatch) -> None:
         assert status == 201, created
         request_id = created["request_id"]
         status, _ = await asyncio.to_thread(phone.call, "POST", f"{BASE}/requests/{request_id}/reveal",
-                                            {"client_nonce": phone.client_nonce}, bearer=phone.poll)
+                                            {"client_nonce": phone.client_nonce}, poll_auth=phone.poll)
         assert status == 200
         code = pairing.confirmation_code(role=pairing.ROLE, request_id=request_id,
                                          leaf_cert_sha256=leaf_sha256,
@@ -324,13 +324,13 @@ async def _scenario(tmp_path: Path, monkeypatch) -> None:
 
         # 4: one-time pickup, CA chain + fingerprint check, then confirm.
         status, polled = await asyncio.to_thread(phone.call, "GET", f"{BASE}/requests/{request_id}",
-                                                 bearer=phone.poll)
+                                                 poll_auth=phone.poll)
         assert status == 200 and polled["state"] == "approved"
         phone.accept_result(polled["result"], approval["site_ca_fingerprint"])
         assert polled["result"]["credential_id"] == approval["credential_id"]
         status, confirmed = await asyncio.to_thread(
             phone.call, "POST", f"{BASE}/requests/{request_id}/confirm",
-            {"credential_id": approval["credential_id"]}, bearer=phone.poll)
+            {"credential_id": approval["credential_id"]}, poll_auth=phone.poll)
         assert status == 200, confirmed
 
         # 5: WSS pinned to the received CA; Vision picks the credential up on its next sync.

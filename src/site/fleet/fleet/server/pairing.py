@@ -16,11 +16,13 @@ import hmac
 import json
 import math
 import secrets
+import threading
 import time
 from collections import deque
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from functools import wraps
 from hashlib import sha256
 
 from core_common.protocol import discovery_txt, pairing, site_link
@@ -83,6 +85,15 @@ def _iso(wall: float) -> str:
     return datetime.fromtimestamp(wall, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+def _locked(method):
+    """Sync FastAPI routes run on a thread pool; one lock serialises the state machine."""
+    @wraps(method)
+    def wrapper(self, *args, **kwargs):
+        with self._lock:
+            return method(self, *args, **kwargs)
+    return wrapper
+
+
 class PairingService:
     """The only Fleet write path without a site credential; side effects are bounded memory."""
 
@@ -117,6 +128,7 @@ class PairingService:
         self._code_key = secrets.token_bytes(32)  # fresh at every start (D-341 8)
         self._requests: dict[str, _Request] = {}
         self._recent: deque[float] = deque()
+        self._lock = threading.RLock()
         for credential_id in store.revoke_all_pending(reason="fleet_restart"):
             store.audit(action="expire", outcome="revoked_on_restart", principal_id=None,
                         target=credential_id, device_kind=OVERHEAD_CAMERA)
@@ -135,6 +147,7 @@ class PairingService:
         entry.client_commit = None
         entry.code_mac = None
 
+    @_locked
     def sweep(self) -> None:
         now = self._monotonic()
         for request_id, entry in list(self._requests.items()):
@@ -176,6 +189,7 @@ class PairingService:
 
     # -- phone ------------------------------------------------------------
 
+    @_locked
     def create(self, raw: bytes) -> dict:
         reason = pairing.validate_request_bytes(raw)
         if reason is not None:
@@ -204,6 +218,7 @@ class PairingService:
         return {"request_id": request_id, "server_nonce": server_nonce,
                 "expires_at": _iso(entry.created_wall + PENDING_LIFETIME_S)}
 
+    @_locked
     def reveal(self, request_id: str, authorization: str | None, raw: bytes) -> dict:
         reason = pairing.validate_reveal_bytes(raw)
         if reason is not None:
@@ -228,6 +243,7 @@ class PairingService:
         entry.state = "revealed"
         return {"state": "revealed"}
 
+    @_locked
     def poll(self, request_id: str, authorization: str | None) -> dict:
         entry = self._phone_entry(request_id, authorization)
         now = self._monotonic()
@@ -249,6 +265,7 @@ class PairingService:
         entry.state = "delivered"
         return {"state": "approved", "result": result}
 
+    @_locked
     def confirm(self, request_id: str, authorization: str | None, credential_id: str) -> dict:
         entry = self._phone_entry(request_id, authorization)
         if entry.state in _CLOSED:
@@ -267,6 +284,7 @@ class PairingService:
 
     # -- console ----------------------------------------------------------
 
+    @_locked
     def approve(self, request_id: str, *, code: str, source_id: str, principal_id: str) -> dict:
         entry = self._entry(request_id)
         if entry.state in _CLOSED:
@@ -315,6 +333,7 @@ class PairingService:
                 "site_ca_fingerprint": self.site_ca_fingerprint, "expires_at": entry.expires_at,
                 "confirm_within_s": int(CONFIRM_DEADLINE_S)}
 
+    @_locked
     def reject(self, request_id: str, *, principal_id: str) -> dict:
         entry = self._entry(request_id)
         if entry.state in _CLOSED:
@@ -326,6 +345,7 @@ class PairingService:
                          target=request_id, device_kind=OVERHEAD_CAMERA)
         return {"request_id": request_id, "state": "rejected"}
 
+    @_locked
     def revoke(self, credential_id: str, *, principal_id: str) -> dict:
         self.sweep()
         row = self.store.get(credential_id)
@@ -340,6 +360,7 @@ class PairingService:
                 self._close(entry, "rejected", self._monotonic())
         return {"credential_id": credential_id, "state": "revoked"}
 
+    @_locked
     def pending_listing(self) -> dict:
         self.sweep()
         now = self._monotonic()
@@ -358,6 +379,7 @@ class PairingService:
             "site_ca_fingerprint": self.site_ca_fingerprint,
         }
 
+    @_locked
     def credentials_summary(self) -> dict:
         self.sweep()
         wall = self._wall()
@@ -372,6 +394,7 @@ class PairingService:
 
     # -- Vision -----------------------------------------------------------
 
+    @_locked
     def sync_listing(self) -> list[dict]:
         """Active, unexpired credentials as digests only (D-341 12)."""
         self.sweep()

@@ -255,3 +255,9 @@
 - 결정: 일반 시험 묶음에 둔다(Windows 벤치 PC에서 약 10 s, 3회 반복 9.5–9.9 s). Vision의 상태 불명 한도만 600 s → 3 s로 줄였다. 전체 소요 시간 단언은 부하 때 흔들릴 수 있어 두지 않고, 회수 5 s 단언만 둔다. 개인 키는 tmp에만 생기고 커밋되지 않는다.
 - 증거: `python -m pytest -q -p no:cacheprovider src/site/vision/test/test_pairing_e2e.py` 1 passed(13.4 s 포함 수집). 처음 실행은 Python 3.14의 엄격한 X.509 검사(AKI 없음)로 실패해 시험용 인증서에 키 식별자를 더했다.
 - gate 변화: 없음(LOCAL). Compose 스택 종단(D-341 LOCAL 표의 Compose 항목)과 DEVICE는 별도.
+
+## 2026-10-01 · uncommitted · chore(vision): D-341 저장소 가드 정리 — 역할 경계·크기 판정·비밀 스캔
+
+- 변경: `test/architecture/test_app_roles.py`의 Vision 경계가 sighting 쓰기 말고도 D-341 12항의 `/api/fleet/pairing/v1/credentials` 읽기를 허용한다(다른 Fleet 경로는 여전히 금지). `test_module_structure.py`에 `ingest.py` 671줄 판정(accept: 한 연결 표를 공유하는 한 소유자, digest 저장·동기화 스레드는 `pairing_sync.py`)과 `fleet` 패키지 재판정(21476)을 적었다. 비밀 스캔이 이름만 보고 잡은 호출 자리를 고쳤다(`cli.py` `known_tokens`, 종단 시험 `poll_auth=`, Fleet 시험 `shared_secret`) — 스캐너는 그대로(D-256).
+- 증거: `test/architecture/` 75 passed + 남은 1 failed는 main에 이미 있던 `schemas.py` 1092줄 판정. `test/test_release_boundary_guards.py` 72 passed + 남은 1 failed는 main의 `docs/logs.md:4077`·`docs/plans/2026-10-01-gemini-robotics-samples-research.md:5`(이 브랜치 파일 아님). vision 224 passed, foundation 389 passed.
+- gate 변화: 없음.

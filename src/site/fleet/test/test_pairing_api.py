@@ -230,8 +230,8 @@ def test_sync_token_must_differ_from_every_other_site_secret(tmp_path, clash):
         from fleet.server.discovery import DiscoveryStore
         kwargs.update(discovery=DiscoveryStore(), discovery_token=SYNC, console_token="c-" + "tok")
     elif clash == "preview":
-        shared = SYNC * 4  # the preview signer needs at least 32 bytes
-        kwargs.update(vision_lease_secret=shared, pairing_sync_token=shared)
+        shared_secret = SYNC * 4  # the preview signer needs at least 32 bytes
+        kwargs.update(vision_lease_secret=shared_secret, pairing_sync_token=shared_secret)
     elif clash == "robot":
         endpoints = [RobotEndpoint(robot_id="rosy_01", base_url="http://127.0.0.1:8080", token=SYNC)]
         console = FleetConsole(endpoints, [FakeRobot("rosy_01")])
