@@ -4042,13 +4042,11 @@
 - 증거: rosy_harness lint 오류 0.
 - gate 변화: 없음.
 
-<<<<<<< HEAD
-## 2026-10-01 · uncommitted · docs(adr): D-391 화면 카드 계약과 장치 프로파일
+## 2026-10-01 · uncommitted · docs(adr): D-394 화면 카드 계약과 장치 프로파일
 
-- 변경: ADR D-391(파일+로그 행). 재사용 단위=페이로드 계약, 전자잉크 렌더러 예약.
+- 변경: ADR D-394(파일+로그 행). 재사용 단위=페이로드 계약, 전자잉크 렌더러 예약.
 - 증거: rosy_harness lint 오류 0.
 - gate 변화: 없음.
-=======
 ## 2026-10-01 · uncommitted · docs(adr): D-390 Pilot OMX-AI Gazebo 연습 경계와 실행 계획
 
 - 변경: D-323·D-366의 확장 의도와 현재 Pinky 전용 Pilot 세션/라우팅, OMX의 Fleet UDS·ROS action 경계 사이의 실제 차이를 D-390로 결정했다. 시뮬레이션 전용 same-origin API, 로컬 단일 팔 owner, 영상·시연 데이터 출처, 실물 비활성 경계를 고정하고 단계별 구현 계획을 추가했다.
@@ -4063,7 +4061,7 @@
 
 ## 2026-10-01 · uncommitted · docs(deployment): 현장 천장 카메라·관제 운영 가이드
 
-- 변경: `docs/deployment/site-ceiling-camera-console-runbook.md` 추가. 현장 PC 스택(fullchain, 지도 맞춤 옵션, mDNS 광고), 이름·CA 고정 페어링(D-341 §9, D-391), 카메라 위치 기준, 관제 맵 자동 맞춤(D-375)·경기장 뷰 대체(D-360), 로봇 등록·운전 모드·G4/G5, 규칙 점검표, 폰·관제 문제 해결표.
+- 변경: `docs/deployment/site-ceiling-camera-console-runbook.md` 추가. 현장 PC 스택(fullchain, 지도 맞춤 옵션, mDNS 광고), 이름·CA 고정 페어링(D-341 §9, D-394), 카메라 위치 기준, 관제 맵 자동 맞춤(D-375)·경기장 뷰 대체(D-360), 로봇 등록·운전 모드·G4/G5, 규칙 점검표, 폰·관제 문제 해결표.
 - 증거: 2026-09-30~10-01 현장 벤치(S21·Lenovo 태블릿, rosy-cam 스택)에서 실측한 수치와 실제 앱·관제 문구를 옮겼다. 절차 문서라 실행 코드는 바꾸지 않았다.
 - gate 변화: 없음.
 
@@ -4089,9 +4087,9 @@
 - 증거: 해당 커밋의 시험(`test_dataset_extract.py`, `test_bench_learned_perception.py`, `test_python_runtime_id.py`).
 - gate 변화: 없음(기록 정정).
 
-## 2026-10-01 · uncommitted · docs(adr): D-391 사이트 연결 기록 모양과 기기 연결 서버 자리 제안
+## 2026-10-01 · uncommitted · docs(adr): D-394 사이트 연결 기록 모양과 기기 연결 서버 자리 제안
 
-- 변경: 앱 공통 구조 점검(main 20d43df0, 읽기 전용) 결과 발견·전송은 모였고 연결 설정·기기 연결 서버가 남았다. D-391 Proposed(처음 D-387, docs/ota-roadmap-adr·Pilot OMX 초안과 번호가 겹쳐 D-391로 옮김): 클라이언트가 같은 필드(이름·CA·자격, IP 없음)로 사이트 연결을 저장하고 `site-link.v1.json` 벡터로 시험한다, 사이트 호스트 설정 원천은 `/run/rosy-config/` 하나 + 일관성 검사 도구, 기기 연결 서버는 Fleet(공통 조각 → pairing/v1 → 패널 → Rosy Cam 클라이언트 → Vision 동기화), 공개 상태 확장은 로봇 이미지가 관대한 탐침을 가진 뒤.
+- 변경: 앱 공통 구조 점검(main 20d43df0, 읽기 전용) 결과 발견·전송은 모였고 연결 설정·기기 연결 서버가 남았다. D-394 Proposed(처음 D-387, docs/ota-roadmap-adr·Pilot OMX 초안과 번호가 겹쳐 D-394로 옮김): 클라이언트가 같은 필드(이름·CA·자격, IP 없음)로 사이트 연결을 저장하고 `site-link.v1.json` 벡터로 시험한다, 사이트 호스트 설정 원천은 `/run/rosy-config/` 하나 + 일관성 검사 도구, 기기 연결 서버는 Fleet(공통 조각 → pairing/v1 → 패널 → Rosy Cam 클라이언트 → Vision 동기화), 공개 상태 확장은 로봇 이미지가 관대한 탐침을 가진 뒤.
 - 증거: 점검 보고(파일·줄 인용), health 탐침 정확 일치 확인(`fleet_agent/discovery.py:49`, `deploy/site/fleet-mdns.py:123`).
 - gate 변화: 없음(SOURCE 문서만).
 - 결정: 없음(제안). 담당은 병행 세션 결정 회차에서 정한다.
@@ -4119,4 +4117,3 @@
 - gate 변화: 없음(로봇 설정·params 변경 없음).
 - 결정: D-393 Proposed
 - 교훈: 없음
->>>>>>> main

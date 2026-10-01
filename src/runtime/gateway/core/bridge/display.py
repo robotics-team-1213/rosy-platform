@@ -23,7 +23,7 @@ _ROUTE_PROBE_TARGET = ("8.8.8.8", 80)
 #: 정보 창이 열려 있는 동안 display/info 재발행 간격 (s).
 REPUBLISH_S = 1.0
 
-#: D-391: 주행 카드 케이던스. 운용 중에만, 얼굴 위로 잠깐 — 20 s 마다 5 s 동안.
+#: D-394: 주행 카드 케이던스. 운용 중에만, 얼굴 위로 잠깐 — 20 s 마다 5 s 동안.
 DRIVE_EVERY_S = 20.0
 DRIVE_HOLD_S = 5.0
 
@@ -107,7 +107,7 @@ def resolve_api_address(port: Any, *, hostname: Callable[[], str] = socket.getho
     return api_address(port, probe(), hostname())
 
 
-# --- D-391: drive card ------------------------------------------------------
+# --- D-394: drive card ------------------------------------------------------
 
 
 def drive_due(mode: Any, now: float, last_pub: Optional[float],

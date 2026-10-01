@@ -445,7 +445,7 @@ class RosBridge:
                 command.command, command.r, command.g, command.b))
 
     def _maybe_publish_drive(self, now: float) -> None:
-        """D-391: 운용 중에는 20 s 마다 주행 카드가 얼굴 위로 잠깐 지나간다."""
+        """D-394: 운용 중에는 20 s 마다 주행 카드가 얼굴 위로 잠깐 지나간다."""
         snapshot = self._svc.state.snapshot()
         mode = getattr(snapshot.mode, "value", snapshot.mode)
         if not display.drive_due(mode, now, self._drive_last_pub):

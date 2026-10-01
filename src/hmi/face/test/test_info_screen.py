@@ -242,7 +242,7 @@ class TestBootCardBreathesWhileWaiting:
 
 
 class TestDisplayProfile:
-    """D-391: 프로파일은 그리는 쪽이 알아야 할 전부다 — 전자잉크는 숨쉬지 않는다."""
+    """D-394: 프로파일은 그리는 쪽이 알아야 할 전부다 — 전자잉크는 숨쉬지 않는다."""
 
     def test_the_default_profile_is_pinky(self):
         assert PINKY_ST7789.size == (320, 240)
@@ -260,7 +260,7 @@ class TestDisplayProfile:
 
 
 class TestDriveCard:
-    """D-391: 주행 카드 — 큰 모드 단어, 속도, 내비게이션, 배터리."""
+    """D-394: 주행 카드 — 큰 모드 단어, 속도, 내비게이션, 배터리."""
 
     def _drive(self, **over):
         payload = {"kind": "drive", "robot_id": "rosy_01", "mode": "MANUAL",

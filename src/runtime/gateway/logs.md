@@ -610,12 +610,11 @@
 - gate 변화: 없음.
 - 교훈: 핸드오버에 필드를 더하는 커밋은 그 필드의 소비자 시험이 사는 *모든* 시험실을 찾아 갱신해야 한다 — 이번에도 한쪽(루트 test/)만 녹색이어서 다른 쪽(gateway)이 다음 push 에서 붉었다.
 
-<<<<<<< HEAD
-## 2026-10-01 · uncommitted · feat(bridge): D-391 주행 카드 drive_due·drive_payload
+## 2026-10-01 · uncommitted · feat(bridge): D-394 주행 카드 drive_due·drive_payload
 
 - 변경: bridge/display.py 에 DRIVE_EVERY_S/DRIVE_HOLD_S·drive_due(운용 중에만, 20 s)·drive_payload(kind: drive, 웨이크 카드와 같은 반올림 계약, 결측 속도 None). ros_bridge 상태 틱이 기존 display/info 퍼블리셔로 발행한다(구조 변화 없음).
 - 증거: test_bridge_display.py (변이: EMERGENCY 제외 시 빨강). 게이트웨이 관련 212 passed.
-=======
+- gate 변화: 없음.
 ## 2026-10-01 · a527920a · feat(core): 보정 lease 배선과 만료 타이머
 - 변경: `CoreServices.calibration` 을 만들고 상태 스냅샷 provider 로 건다. `ros_bridge._tick_power` 가 `calibration.expire_due()` 를 불러 아무도 상태를 읽지 않아도 만료 이벤트가 난다. 새 시험 `test/test_calibration_session.py`. 15770a9c: `display.info_payload` 가 `activity` 를 싣는다(LCD).
 - 증거: test_calibration_session.py 13 passed, test_bridge_display 통과, test_event_catalogue·test_module_criteria 통과(릴레이 함수·getattr 도달을 만들지 않도록 고침).
@@ -624,5 +623,4 @@
 ## 2026-10-01 · ce7a3413 · test(host): host-card 가짜 서비스에 idle 보정 lease
 - 변경: host install/rollback/reboot 가 `svc.calibration` 을 읽게 되어 SimpleNamespace 가짜가 AttributeError 5건. 스텁 메서드가 아니라 실제 `CalibrationSessionManager`(idle)를 넣었다.
 - 증거: test_host_cards·host_hardware·host_status_summary 162 passed.
->>>>>>> main
 - gate 변화: 없음.

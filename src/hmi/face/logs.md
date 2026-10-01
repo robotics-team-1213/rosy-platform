@@ -167,14 +167,12 @@
 - 증거: test_info_screen.py TestBootCardBreathesWhileWaiting (변이: 밝기 단계 제거 시 빨강).
 - gate 변화: 없음.
 
-<<<<<<< HEAD
-## 2026-10-01 · uncommitted · feat(emotion): D-391 DisplayProfile·주행 카드·kind 디스패치
+## 2026-10-01 · uncommitted · feat(emotion): D-394 DisplayProfile·주행 카드·kind 디스패치
 
 - 변경: info_screen.py 에 DisplayProfile(PINKY_ST7789, animation 게이트 — 전자잉크는 프레임 무시)·render_drive(큰 모드 단어·속도·NAV·배터리 게이지)·render_card(kind 디스패치 단일 입구). emotion_server 는 render_card 로 갈아탔다(호환: kind 없으면 웨이크 카드).
 - 증거: test_info_screen.py TestDisplayProfile·TestDriveCard (픽셀 비교; 변이: 디스패치 절단 시 빨강).
-=======
+- gate 변화: 없음.
 ## 2026-10-01 · 15770a9c · feat(face): 정보 카드 MODE 행 CALIBRATING
 - 변경: `display/info` 의 `activity == "CALIBRATING"` 이면 MODE 값을 주의 칩 `CALIBRATING` 으로. LCD 글꼴은 ASCII 뿐(D-221)이라 "보정 중" 대신 기계어. E-STOP HEALTH 행은 그대로 우선.
 - 증거: face 시험·test_bridge_display 177 passed; 렌더 X:\DevTemp\calibration-mode\face-info-calibrating.png.
->>>>>>> main
 - gate 변화: 없음.

@@ -20,7 +20,7 @@ from . import wifi_qr
 
 @dataclass(frozen=True)
 class DisplayProfile:
-    """D-391: 한 장치의 화면이 무엇인지. 카드 모델(페이로드)은 장치를 모른다.
+    """D-394: 한 장치의 화면이 무엇인지. 카드 모델(페이로드)은 장치를 모른다.
 
     재사용 단위는 페이로드 계약이고, 이 프로파일은 그리는 쪽이 알아야 할 전부다:
     크기와, 움직임을 그려도 되는가. 전자잉크(``animation=False``)는 부분 갱신이
@@ -224,7 +224,7 @@ def render(payload: dict, size: tuple[int, int] = DEFAULT_SIZE) -> Image.Image:
     return image
 
 
-# --- D-391: drive card -----------------------------------------------------
+# --- D-394: drive card -----------------------------------------------------
 #
 # 주행 카드는 운용 중에 20 s 마다 얼굴 위로 잠깐 지나간다(CORE의 drive_due).
 # 웨이크 카드가 "로봇 전체 진단"이라면 주행 카드는 "지금 이 동작"이다:
@@ -277,7 +277,7 @@ def render_drive(payload: dict, size: tuple[int, int] = DEFAULT_SIZE) -> Image.I
 
 def render_card(payload: dict, size: tuple[int, int] = DEFAULT_SIZE,
                 profile: DisplayProfile = DEFAULT_PROFILE) -> Image.Image:
-    """D-391: display/info 의 단일 입구 — kind 가 카드를 고른다.
+    """D-394: display/info 의 단일 입구 — kind 가 카드를 고른다.
 
     CORE 는 ``kind`` 필드로 카드를 구분한다(없으면 웨이크 카드, 호환).
     다른 장치의 렌더러도 이 디스패치와 같은 계약을 따른다.
@@ -464,7 +464,7 @@ def render_boot(payload: dict, size: tuple[int, int] = DEFAULT_SIZE,
     D-385: while the stage is still waiting (BOOTING·PROVISIONED) the stage title
     breathes — two brightness steps at the caller's frame rate (0.5 Hz on the
     device). Finished states (CORE_READY·FAILED·SETUP) hold still: an arrived
-    robot does not fidget. D-391: a profile without animation (e-ink) ignores
+    robot does not fidget. D-394: a profile without animation (e-ink) ignores
     the frame entirely.
     """
     width, _height = size

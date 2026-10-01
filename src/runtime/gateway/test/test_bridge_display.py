@@ -152,7 +152,7 @@ def test_the_republish_interval_is_one_second():
     assert display.REPUBLISH_S == 1.0
 
 
-# --- D-391: the drive card ---------------------------------------------------
+# --- D-394: the drive card ---------------------------------------------------
 
 
 def test_the_drive_card_is_due_only_while_operating_and_slowly():
