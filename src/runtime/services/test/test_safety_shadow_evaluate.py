@@ -2,6 +2,8 @@
 
 from types import SimpleNamespace
 
+import pytest
+
 from core_features.safety.manager import BatteryPolicy, SafetyManager, SpeedLimits
 
 
@@ -61,18 +63,100 @@ def test_allow_verdict_when_limits_cover_the_command():
     assert event["limited"] == event["commanded"]
 
 
-def test_stop_and_failure_never_latch():
-    for policy, verdict in ((FakePolicy(reason="pickup"), "stop"),
-                            (FakePolicy(raises=True), "unavailable"),
-                            (FakePolicy(none=True), "unavailable")):
-        safety, _ = _safety(policy)
-        safety.policy_reason = "untouched"
+@pytest.mark.parametrize("policy,verdict", [(FakePolicy(reason="pickup"), "stop"),
+                                            (FakePolicy(raises=True), "unavailable"),
+                                            (FakePolicy(none=True), "unavailable")])
+def test_stop_and_failure_never_latch(policy, verdict):
+    safety, _ = _safety(policy)
+    safety.policy_reason = "untouched"
 
-        safety.shadow_evaluate(1, "navigation", 0.1, 0.0, 10.0, output=(0.1, 0.0))
+    safety.shadow_evaluate(1, "navigation", 0.1, 0.0, 10.0, output=(0.1, 0.0))
 
-        assert safety.estop is False
-        assert safety.policy_reason == "untouched"
-        assert safety.shadow.snapshot()["counts"][verdict] == 1
+    assert safety.estop is False
+    assert safety.policy_reason == "untouched"
+    assert safety.policy_required is False and safety.policy_mode == "shadow"
+    assert safety.shadow.snapshot()["counts"][verdict] == 1
+
+
+def test_stop_verdict_records_zero_limited_and_last_stop():
+    safety, _ = _safety(FakePolicy(reason="pickup"))
+
+    safety.shadow_evaluate(1, "navigation", 0.1, 0.0, 10.0, output=(0.1, 0.0))
+
+    (event,) = safety.shadow.drain()
+    assert event["limited"] == [0.0, 0.0]
+    assert safety.shadow.snapshot()["last_stop"]["reason"] == "pickup"
+
+
+def test_mismatched_calibration_revision_is_unavailable():
+    class Other(FakePolicy):
+        def evaluate(self, linear, angular, now, allow_bounded_sweep=False):
+            snapshot, result = super().evaluate(linear, angular, now)
+            snapshot.calibration_revision = "other"
+            return snapshot, result
+
+    safety, _ = _safety(Other())
+
+    safety.shadow_evaluate(1, "navigation", 0.1, 0.0, 10.0, output=(0.1, 0.0))
+
+    snap = safety.shadow.snapshot()
+    assert snap["counts"]["unavailable"] == 1
+    assert snap["last_unavailable"]["reason"] == "policy_invalid"
+
+
+def test_eval_time_is_recorded():
+    safety, _ = _safety(FakePolicy())
+
+    safety.shadow_evaluate(1, "navigation", 0.1, 0.0, 10.0, output=(0.1, 0.0))
+
+    assert safety.shadow.snapshot()["eval_ms"]["n"] == 1
+
+
+def test_a_failing_clock_never_escapes():
+    safety, _ = _safety(FakePolicy())
+    calls = []
+
+    def clock():
+        calls.append(1)
+        if len(calls) == 2:
+            raise RuntimeError("clock")
+        return 1.0
+
+    safety._policy_clock = clock
+
+    safety.shadow_evaluate(1, "navigation", 0.1, 0.0, 10.0, output=(0.1, 0.0))   # must not raise
+
+    snap = safety.shadow.snapshot()
+    assert sum(snap["counts"].values()) == 1 or safety.shadow_record_errors == 1
+    assert snap["counts"]["unavailable"] == 1
+
+
+def test_shadow_then_enforce_is_refused():
+    safety, _ = _safety(FakePolicy())
+
+    with pytest.raises(ValueError, match="exclusive"):
+        safety.bind_control_policy(FakePolicy())
+
+    assert safety.policy_mode == "shadow" and safety.policy_required is False
+
+
+def test_enforce_then_shadow_is_refused():
+    safety = SafetyManager(SpeedLimits(), BatteryPolicy())
+    safety.bind_control_policy(FakePolicy())
+
+    with pytest.raises(ValueError, match="exclusive"):
+        safety.bind_shadow_control_policy(FakePolicy())
+
+    assert safety.policy_mode == "enforce" and safety.shadow is None
+
+
+def test_shadow_on_a_required_manager_is_refused():
+    safety = SafetyManager(SpeedLimits(), BatteryPolicy(), policy_required=True)
+
+    with pytest.raises(ValueError, match="exclusive"):
+        safety.bind_shadow_control_policy(FakePolicy())
+
+    assert safety.shadow is None
 
 
 def test_over_budget_evaluation_is_unavailable():
@@ -85,6 +169,7 @@ def test_over_budget_evaluation_is_unavailable():
     snap = safety.shadow.snapshot()
     assert snap["counts"]["unavailable"] == 1
     assert snap["last_unavailable"]["reason"] == "policy_invalid"
+    assert snap["eval_ms"]["p50"] == pytest.approx(20.0)
 
 
 def test_without_a_shadow_binding_nothing_is_recorded():

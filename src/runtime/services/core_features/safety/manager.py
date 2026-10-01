@@ -352,11 +352,15 @@ class SafetyManager:
 
     def bind_control_policy(self, policy) -> None:
         """Consume absorbed Control decisions without importing ROS or publishing."""
+        if self.shadow is not None:
+            raise ValueError("shadow and enforce bindings are exclusive (D-400)")
         self.bind_policy(*self._control_evaluator(policy))
         self.policy_mode = 'enforce'
 
     def bind_shadow_control_policy(self, policy) -> None:
         """D-400 shadow: judge every candidate, record it, never change the output."""
+        if self.policy_required or self._policy is not None:
+            raise ValueError("shadow and enforce bindings are exclusive (D-400)")
         self._shadow_policy, self._shadow_revision = self._control_evaluator(policy)
         self.shadow = ShadowLog()
         self.policy_mode = 'shadow'
@@ -385,27 +389,28 @@ class SafetyManager:
         """Record what enforce would have done. Touches no e-stop, mode or policy_reason (D-400)."""
         if self.shadow is None:
             return
-        request = SafetyRequest(command_id, source, self._shadow_revision, now, linear, angular)
-        started = self._policy_clock()
+        decision, elapsed, valid = None, 0.0, None   # elapsed stays 0.0 if the clock itself fails (nan would skew percentiles)
         try:
+            request = SafetyRequest(command_id, source, self._shadow_revision, now, linear, angular)
+            started = self._policy_clock()
             decision = self._shadow_policy(request)
             elapsed = self._policy_clock() - started
             valid = decision_valid(decision, request, elapsed)
-        except Exception:
-            decision, elapsed, valid = None, self._policy_clock() - started, None
-        if valid is None:
-            verdict, limited, reason = 'unavailable', (0., 0.), 'policy_failed'
-        elif not valid:
-            verdict, limited, reason = 'unavailable', (0., 0.), 'policy_invalid'
-        elif decision.disposition == 'stop':
-            verdict, limited, reason = 'stop', (0., 0.), decision.reason or 'policy_stop'
-        else:
-            verdict = 'allow' if (decision.linear_limit >= abs(linear) and
-                                  decision.angular_limit >= abs(angular)) else 'limit'
-            limited = (max(-decision.linear_limit, min(decision.linear_limit, linear)),
-                       max(-decision.angular_limit, min(decision.angular_limit, angular)))
-            reason = decision.reason
+        except Exception:  # noqa: BLE001 - policy failure is a verdict, never an exception (D-400)
+            valid = None
         try:
+            if valid is None:
+                verdict, limited, reason = 'unavailable', (0., 0.), 'policy_failed'
+            elif not valid:
+                verdict, limited, reason = 'unavailable', (0., 0.), 'policy_invalid'
+            elif decision.disposition == 'stop':
+                verdict, limited, reason = 'stop', (0., 0.), decision.reason or 'policy_stop'
+            else:
+                verdict = 'allow' if (decision.linear_limit >= abs(linear) and
+                                      decision.angular_limit >= abs(angular)) else 'limit'
+                limited = (max(-decision.linear_limit, min(decision.linear_limit, linear)),
+                           max(-decision.angular_limit, min(decision.angular_limit, angular)))
+                reason = decision.reason
             self.shadow.record(ShadowVerdict(now, source, (linear, angular), output, verdict, limited,
                                              reason, elapsed * 1000.0))
         except Exception:  # noqa: BLE001 - a recorder bug must never change cmd_vel (D-400 non-interference)
