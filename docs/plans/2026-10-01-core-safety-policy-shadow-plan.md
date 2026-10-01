@@ -1628,4 +1628,9 @@ git commit -m "docs(records): D-400 plan 1 module logs, ADR implementation note"
 | 7 | `build_control_adapter(policy_required=)` — `shadow` + `control_policy_required`는 설정 오류 | 설계 3.1 규칙에 태스크가 없었다 |
 | 6 | **워커는 `lidar_use_tf`(기본 True)일 때 `lidar_yaw_offset`을 쓰지 않고 TF(= URDF NOMINAL 180°)를 쓴다.** 계획 1은 TF를 유지하고 `sources`에 "unused while lidar_use_tf"로 정직하게 적는다. 라인 추종(승인 레코드)과 안전 정책(TF)의 LiDAR 정면을 하나로 만드는 일 — TF를 레코드로 다듬거나 워커가 값을 쓰게 하기 — 은 계획 2(Gazebo에서 CORE 그래프의 TF 존재부터 확인) | `lidar_use_tf=False`는 장착 평행이동(footprint 증거)도 잃는다. 어느 쪽도 호스트 시험만으로 고를 수 없다 |
 | 6 | 리졸버가 워커의 선언 타입·상한(선속 (0,1], 각속 (0,3])을 검사, revision은 파라미터만으로, `caps`는 (선속, 각속) 쌍, `cliff_enable`·`lidar_use_tf` overlay 허용 | 틀린 값이 워커 안에서 조용히 모든 판정을 무효로 만들지 않게 |
+| 7 | `enforce` + `calibration.required: true`는 설정 오류("retired"), shadow/off는 경고 후 무시. 팩토리 인자는 명시적(오타는 모든 모드에서 TypeError), `mode_error`는 "예외 종류: 메시지" | D-47의 "보정되었거나 시작 거부"를 조용히 잃지 않게. 프로그래밍 오류가 그림자 off로 숨지 않게 |
+| 8 | API v1.71(main이 v1.70이라 +1). `mode`·`mode_effective`·판정 값은 소문자 평문 문자열(설정 값과 같음, Enum 아님) — 캐싱 규칙 예외로 문서화. `last_stop`·`eval_ms`는 타입 모델, 여분 키 무시. 공급자 실패는 null + 예외 종류가 바뀔 때 한 번 로그 | 오래된 Fleet hub가 새 값 때문에 heartbeat 전체를 버리지 않게 |
+| 9 | `configured_mode`는 `calibration` 키를 뺀 뒤 해석 | shadow에서 낡은 `required: true` 블록이 시작을 막지 않게(build_control_adapter와 같은 규칙) |
+| 9 | **D-313 IR 라인 추종 대체 경로는 계획 3까지 쓸 수 없다**(`api/v1/line_follow.py`가 `adapter.calibration_revision`을 요구하는데, 보정 블록을 읽지 않으므로 항상 None → `IR_FALLBACK_NOT_READY`) | 어느 로봇도 어댑터를 켜지 않아 현장 영향 없음. 계획 3의 저장소 레코드가 이 값을 대신해야 한다 |
+| 9 | enforce도 봉투로 CORE 속도 상한과 라인 추종 LiDAR 각을 받는다. 프로필 상한이 워커 범위(선속 1.0·각속 3.0)를 넘으면 shadow/enforce에서 시작 거부 | Pinky(0.2/0.8)는 해당 없음. 다른 로봇은 설정 오류로 드러난다 |
 | 6 | 그림자 해석 주의: 봉투를 올리면 빠른 명령이 정책에 닿지만 워커의 정지/해제 거리는 속도에 비례하지 않는다. 속도에서의 그림자 "allow"는 그 속도로 집행해도 안전하다는 증거가 아니다 | G-sim·G-dev 판정 기준에 반영 |
