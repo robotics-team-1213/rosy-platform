@@ -643,7 +643,8 @@ def test_the_script_renders_six_states_and_the_motion_reason():
     # D-262: the reason now flows through the onCommissioningRendered callback.
     assert 'onCommissioningRendered(payload.motion_reason || "")' in script
     assert "session.motionReason = reason" in script
-    assert 'setEnabled("hardware-refresh", isAdmin())' in script
+    # D-359 §5.3: a disabled control states why (reason attribute).
+    assert 'setEnabled("hardware-refresh", isAdmin(), "관리자 권한 필요")' in script
     # No raw colour for the chips: they reuse the shared [data-status] vocabulary.
     # D-362 P1: the device-card section lives in console-detail.css now.
     css = "\n".join((WEB / name).read_text(encoding="utf-8")

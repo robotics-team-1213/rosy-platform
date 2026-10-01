@@ -82,10 +82,14 @@ def test_a_hidden_view_does_not_take_layout():
 
 def test_the_console_does_not_scroll():
     """위치가 기억이다. 콘솔이 스크롤하면 그 약속이 깨진다."""
-    rule = re.search(r"\.console\s*\{([^}]*)\}", css())
-    assert rule, ".console 규칙이 없다"
-    body = rule.group(1)
-    assert "100vh" in body and "--topbar-height" in body, "콘솔 높이가 뷰포트에 묶여 있지 않다"
+    # D-359 §6.5: 고정 프레임은 넓고 충분히 높은 창에서만이다(그 밖은 흐르며 스크롤).
+    # 그 조건 안의 .console이 뷰포트(dvh)에 묶이고 넘침을 숨겨야 한다.
+    frame = re.search(
+        r"@media\s*\(width >= 64rem\)\s*and\s*\(height >= 40rem\)\s*\{\s*\.console\s*\{([^}]*)\}",
+        css())
+    assert frame, "넓고 높은 창의 .console 고정 프레임 규칙이 없다"
+    body = frame.group(1)
+    assert "100dvh" in body and "--topbar-height" in body, "콘솔 높이가 뷰포트에 묶여 있지 않다"
     assert "overflow: hidden" in body
     # 꼬리말은 스크롤하는 점검 뷰의 것이다 — 운용에서 64px을 가져가면 그만큼
     # 지도가 줄어든다. 클래스 셀렉터여야 한다(`#page-footer`는 존재하지 않는다).

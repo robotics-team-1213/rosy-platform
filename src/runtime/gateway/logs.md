@@ -624,3 +624,11 @@
 - 변경: host install/rollback/reboot 가 `svc.calibration` 을 읽게 되어 SimpleNamespace 가짜가 AttributeError 5건. 스텁 메서드가 아니라 실제 `CalibrationSessionManager`(idle)를 넣었다.
 - 증거: test_host_cards·host_hardware·host_status_summary 162 passed.
 - gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · test(gateway): D-359 콘솔 프레임·비활성 사유 시험을 현재 계약에 맞춤
+
+- 변경: `test_console_layout.py::test_the_console_does_not_scroll`은 D-359 §6.5의 고정 프레임 조건(`@media (width >= 64rem) and (height >= 40rem)`) 안의 `.console`이 `100dvh`·`--topbar-height`·`overflow: hidden`인지 본다. `test_host_hardware.py`는 `setEnabled("hardware-refresh", isAdmin(), "관리자 권한 필요")`(D-359 §5.3 비활성 사유)를 기대한다.
+- 증거: origin/main f0b20f02 CI 적신 2건(rosy-0d 보고) 재현 후 수정. `src/runtime/gateway/test` 1578 passed; 남은 3건(core_node_teardown, event_catalogue의 road_behaviour 이벤트명, module_criteria C6 ros_bridge)은 D-359와 무관.
+- gate 변화: 없음.
+- 결정: D-359 §5.3·§6.5. 시험 의도(넓은 창에서 콘솔은 스크롤하지 않는다, 관리자 전용 버튼)는 그대로다.
+- 교훈: UI 계약을 바꾸는 가지는 `src/runtime/gateway/test` 전체도 회귀 목록에 넣는다(대시보드 정적 자산을 읽는 시험이 거기 있다).
