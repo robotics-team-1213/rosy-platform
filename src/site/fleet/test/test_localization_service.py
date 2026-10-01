@@ -207,24 +207,28 @@ def test_only_localized_map_frame_peers_are_context(peer_state, frame):
 
 
 class Reporting(FakeRobot):
-    """Re-stamps its report on every read, `lag_s` behind the service clock."""
+    """Re-stamps its report on every read with its own clock, `skew_s` off Fleet's (D-395
+    rev. 3: the clocks are not synced). `restamp=False`: the re-report stopped arriving."""
 
-    def __init__(self, robot_id, clock, pose, objects, lag_s=0.0):
+    def __init__(self, robot_id, clock, pose, objects, skew_s=0.0, restamp=True):
         super().__init__(robot_id, state=state(robot_id, "CANDIDATES", "odom"))
-        self.clock, self.pose, self.objects, self.lag_s = clock, pose, objects, lag_s
+        self.clock, self.pose, self.objects = clock, pose, objects
+        self.skew_s, self.restamp, self._stamp = skew_s, restamp, None
 
     async def localization_candidates(self):
         self._record("localization_candidates")
-        return report(self.robot_id, self.pose, objects=self.objects, stamp=self.clock() - self.lag_s)
+        if self.restamp or self._stamp is None:
+            self._stamp = self.clock() + self.skew_s
+        return report(self.robot_id, self.pose, objects=self.objects, stamp=self._stamp)
 
 
-def _mirror_locked(clock, objects=((0.5, 0.0),), lag_s=0.0, **kwargs):
+def _mirror_locked(clock, objects=((0.5, 0.0),), skew_s=0.0, restamp=True, **kwargs):
     """r1 says it is LOCALIZED at the 180-degree mirror of where it is; r2 on slot A sees it
     0.5 m ahead. With the peers cue, r1's wrong pose would pull r2 to its own mirror."""
     truth = (-1.26, -0.01, 0.0)                          # ON_A faces -y: 0.5 m ahead is here
     reported = (1.26, 0.01, math.pi)
     r1 = FakeRobot("r1", state=state("r1", "LOCALIZED", pose=reported))
-    r2 = Reporting("r2", clock, ON_A, list(objects), lag_s)
+    r2 = Reporting("r2", clock, ON_A, list(objects), skew_s, restamp)
     return truth, r1, r2, service(r1, r2, clock=clock, **kwargs)
 
 
@@ -254,9 +258,20 @@ def test_a_hidden_peer_and_an_unrelated_object_never_mark_suspect():
     assert r1.suspects == []
 
 
-def test_a_report_stamped_more_than_1_s_before_its_fetch_is_no_evidence():
+@pytest.mark.parametrize("skew_s", [-3600.0, 3600.0])
+def test_a_fresh_report_is_evidence_whatever_the_robot_clock_says(skew_s):
+    """Freshness is counted from Fleet's first sighting of the report, never the robot clock."""
     clock = FakeClock()
-    _, r1, _, svc = _mirror_locked(clock, lag_s=1.2)
+    _, r1, _, svc = _mirror_locked(clock, skew_s=skew_s)
+    ticks(svc, clock, 2.0)
+    assert r1.suspects == ["fleet_monitor"]
+
+
+def test_an_unchanged_report_goes_stale_1_s_after_fleet_first_saw_it():
+    """Re-fetching the same (request_id, stamp) keeps its first-seen time: a robot whose
+    re-reports stopped arriving gives evidence for 1 s only, too short for the 1.5 s hold."""
+    clock = FakeClock()
+    _, r1, _, svc = _mirror_locked(clock, restamp=False)
     ticks(svc, clock, 5.0)
     assert r1.suspects == []
 

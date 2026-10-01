@@ -100,6 +100,8 @@ class LocalizationService:
         self._ladder = Ladder()
         self._last_good: dict[str, cues.Pose] = {}
         self._last_decision: dict[str, dict] = {}
+        #: robot_id -> ((request_id, stamp), Fleet monotonic time first seen).
+        self._report_seen: dict[str, tuple] = {}
         self._known: set[str] = set()
 
     # --- console --------------------------------------------------------------------
@@ -177,8 +179,13 @@ class LocalizationService:
         leader = service_logic.clear_leader(
             report, Context(slots=self._slots, squares=self._squares,
                             last_good=context.last_good, sighting=context.sighting), now)
-        # Stamp versus Fleet's fetch time (wall clock; assumes the robot clock is NTP-synced).
-        fresh = self._wall() - report.stamp <= service_logic.REPORT_FRESH_S
+        # D-395 rev. 3: clocks are not synced, so freshness runs on Fleet's clock from the
+        # first time Fleet saw this report; a re-fetch of the same report keeps that time.
+        key = (report.request_id, report.stamp)
+        seen = self._report_seen.get(rid)
+        if seen is None or seen[0] != key:
+            seen = self._report_seen[rid] = (key, now)
+        fresh = now - seen[1] <= service_logic.REPORT_FRESH_S
         if leader is not None and fresh:
             for peer, seen in service_logic.peer_observations(report, leader, peers).items():
                 observations.setdefault(peer, []).append(seen)
@@ -262,4 +269,5 @@ class LocalizationService:
             self._ladder.forget(rid)
             self._last_good.pop(rid, None)
             self._last_decision.pop(rid, None)
+            self._report_seen.pop(rid, None)
         self._known = current

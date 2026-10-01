@@ -26,7 +26,7 @@ SUSPECT_HOLD_S = 1.5
 SUSPECT_REASON = "fleet_monitor"
 #: A peer observation is an object this close to the peer's reported pose or its mirror.
 PEER_EVIDENCE_M = 0.25
-#: A candidate report stamped longer than this before Fleet fetched it gives no evidence.
+#: A candidate report is evidence for this long after Fleet first saw it (Fleet's clock).
 REPORT_FRESH_S = 1.0
 #: Contract §3 ladder: seconds in CANDIDATES before each rung.
 LADDER_ROTATE_S = 10.0
