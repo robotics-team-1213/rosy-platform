@@ -24,3 +24,14 @@ def test_accepted_record_overrides_the_file_and_is_named(tmp_path):
                                 root=tmp_path, robot=ROBOT)
     assert values['pitch_rad'] == 0.20 and values['fx'] == 281.6
     assert rid in source
+
+
+def test_operator_override_wins_over_the_accepted_record(tmp_path):
+    """D-397 order: URDF nominal file < accepted camera_profile record < operator override."""
+    store = CalibrationStore(tmp_path)
+    rid = store.add(ROBOT, 'camera_profile', {**FILE, 'pitch_rad': 0.20}, method='t/1')
+    store.set_status(ROBOT, 'camera_profile', rid, 'accepted', actor='operator')
+    values, source = calibrated('camera_profile', FILE, static_source='camera_nominal.yaml',
+                                root=tmp_path, robot=ROBOT, override={'pitch_rad': 0.15})
+    assert values['pitch_rad'] == 0.15 and values['fx'] == 281.6
+    assert rid in source and 'operator override pitch_rad' in source

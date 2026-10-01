@@ -632,3 +632,9 @@
 - gate 변화: 없음.
 - 결정: D-359 §5.3·§6.5. 시험 의도(넓은 창에서 콘솔은 스크롤하지 않는다, 관리자 전용 버튼)는 그대로다.
 - 교훈: UI 계약을 바꾸는 가지는 `src/runtime/gateway/test` 전체도 회귀 목록에 넣는다(대시보드 정적 자산을 읽는 시험이 거기 있다).
+
+## 2026-10-01 · edca9b2e · feat(core): LiDAR 정면 — 운영자 오버레이가 레코드를 이긴다 (D-397)
+- 변경: `core/lidar_mount.py` 순서가 운영자 오버레이(`line_follow.lidar_forward_deg`) > 승인 `lidar_mount` 레코드 > core.yaml URDF NOMINAL 180. 오버레이도 150–210°를 통과해야 하고(아니면 경고·무시), 어댑터 비교 경고는 남는다. `node.py`가 `local_overlay()`로 운영자 값을 넘긴다.
+- 증거: `test_pinky_lidar_forward_device.py` 순서 테스트, `test_lidar_mount_source.py` 거부·어댑터 비교.
+- gate 변화: SOURCE/LOCAL. DEVICE HOLD.
+- 결정: D-397 Proposed(D-47 addendum 개정).

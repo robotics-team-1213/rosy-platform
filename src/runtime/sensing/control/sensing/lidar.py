@@ -2,14 +2,16 @@
 
 rplidar_link is yaw=π vs base_link, so scan 0 is the back.
 lidar_yaw_offset is the scan-frame angle of the nose.
-Live US↔lidar (nose ±40deg, close wall): best heading ≈ 180deg, not 165.
+NOSE_YAW is the URDF nominal (geometry.yaml lidar.forward_deg, D-397), refined
+per robot by an accepted lidar_mount calibration record (D-47 addendum store).
 A HUD that looked −15deg off was LCD polar L/R (now −sin, left=left).
 Robot yaw 0 = front, +CCW = left:  wrap(scan_angle - lidar_yaw_offset).
 """
 import math
 
-# +CCW from back. 10deg from π so the front cone matches the nose sonar.
-MOUNT_YAW_DEG = 10.0
+# +CCW from back. URDF nominal: rplidar_link yaw pi, so 0 here. The former
+# +10deg sonar heuristic is gone: LiDAR travel and camera walls measure 181-182deg.
+MOUNT_YAW_DEG = 0.0
 NOSE_YAW = math.pi + math.radians(MOUNT_YAW_DEG)
 
 
