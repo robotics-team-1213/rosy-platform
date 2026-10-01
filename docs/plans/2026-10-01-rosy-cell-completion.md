@@ -29,9 +29,9 @@
 ## 하위 단계
 
 ```text
-C1 ADR 세트 ─┬─ C2 OMX 해석 IK 플래너(SOURCE) ── C3 Gazebo 단일 pick/place(ROS-SIM) ─┐
-             ├─ C4 Fleet↔OMX Cell 경로(SOURCE→ROS-SIM) ─────────────────────────────┼─ C6 종단 수용
-             └─ C5 Rosy Cell 서버·UI(SOURCE, 브라우저) ─────────────────────────────┘
+C1 ADR 세트 ── C2a rosy_cell cell/2 + carry_z ─┬─ C2 OMX 해석 IK 플래너(SOURCE) ── C3 Gazebo 단일 pick/place(ROS-SIM) ─┐
+                                               ├─ C4 Fleet↔OMX Cell 경로(SOURCE→ROS-SIM) ─────────────────────────────┼─ C6 종단 수용
+                                               └─ C5 Rosy Cell 서버·UI(SOURCE, 브라우저) ─────────────────────────────┘
 ```
 
 ### C1. ADR 세트 (Proposed, D-402·D-403·D-404)
@@ -53,7 +53,25 @@ C1 ADR 세트 ─┬─ C2 OMX 해석 IK 플래너(SOURCE) ── C3 Gazebo 단�
    - Rosy Cell 마법사는 팔로워 FK 포즈를 포인트로 저장한다. 실물 장치 API는 닫힌 채로 둔다(D-282 §5).
 - 게이트: 독립 리뷰 approve, lint 0. 세 ADR을 한 브랜치에서 리뷰받고 main에 넣는다.
 
+### C2a. `rosy_cell` cell/2와 carry_z (SOURCE, C2 안에서 가장 먼저)
+- `rosy_cell.cell/2` 로더를 만든다.
+  - 필수 값: `home` 포즈(수직하향), `kinematics_revision`(D-404 §5).
+  - `/1`은 실행용으로 받지 않는다.
+- `rosy_cell.compiler.carry_z(recipe, cell)` 함수 하나를 만든다.
+  - 값: Job 전체에서 가장 높은 적재물·팔레트·스테이션 윗면 + 박스 높이 + `approach_clearance_m`.
+  - Fleet(C4)은 이 함수를 호출하고, 계산을 다시 구현하지 않는다(D-402 §6, D-403 §2).
+- 시험:
+  - `/2` 필수 필드 누락 거절
+  - `carry_z` 손 계산 재현
+  - 해시가 `home`·`kinematics_revision`에 반응함
+
 ### C2. OMX 해석 IK 플래너 (SOURCE)
+- `deploy/robot/omx/sim/cell_profile.yaml`(schema `rosy.omx-sim-cell-profile.v1`)을 만든다. 담는 값:
+  - 보수적인 명시 관절 위치·속도·가속도 한계
+  - phase별 최대 시간
+  - 그리퍼 열림·닫힘 목표
+  - 작업 영역, Cartesian 간격, 특이점 반경
+  - 실제 OMX-F 한계를 고정하기 전까지 보호는 명목상이다(D-402 §4).
 - 위치: `src/products/omx/adapter/omx_adapter/`.
   - 새 모듈은 `kinematics.py`(FK/IK)와 `pose_plan.py`다.
   - `pose_plan.py`는 `CellTransferPlanProvider`와 `CellTransferPlan`을 구현하고, `CellPlanningProfile`이 `deploy/robot/omx/sim/cell_profile.yaml`을 읽는다.
@@ -79,8 +97,9 @@ C1 ADR 세트 ─┬─ C2 OMX 해석 IK 플래너(SOURCE) ── C3 Gazebo 단�
   - 팔레트 2개, 2층, 스테이션이 이 고리 안에 들어가는지 Gazebo에서 측정한다.
   - 들어가지 않으면 데모 배치(팔레트·박스 크기, 층수)를 줄인다.
 
-### C4. Fleet↔OMX Cell 경로
+### C4. Fleet↔OMX Cell 경로 (C2a 이후)
 - grant 스키마에 Cell Action 종류를 추가하고, Fleet 제안 resolver가 Job을 Step으로 푼다.
+  - 재컴파일은 C2a의 `cell/2` 로더와 `rosy_cell.compiler.carry_z`를 그대로 호출한다.
 - 하달기를 `simulation` 프로필에서 켠다.
 - OMX 쪽 `UnixActionServer` + `LocalActionPort` 운영 연결이 `PickPlaceRunner`를 C2 플래너로 구동하게 한다.
 - 정지 세대 producer/consumer 시험을 만든다. D-330 §2의 개방 조건이다.
@@ -92,7 +111,7 @@ C1 ADR 세트 ─┬─ C2 OMX 해석 IK 플래너(SOURCE) ── C3 Gazebo 단�
   - 레시피 편집기: 2D 층 미리보기, 검증 결과
   - 실행: Fleet 제안 제출, 진행·HOLD 표시
 - Step 순서는 Rosy Cell 서버가 정하지 않는다. 순서와 하달은 Fleet이 한다(D-12).
-- 셀 schema를 `rosy_cell.cell/2`로 올린다. 필수 `home`(수직하향)과 `kinematics_revision`을 담는다(D-404 §5).
+- 마법사에 `home` 티칭 단계를 둔다. 저장은 C2a의 `cell/2` 형식으로 한다(schema 변경은 C2a 몫).
 - seat 갱신은 브라우저 생존 신호가 있을 때만 한다(D-404 §3).
 
 ### C6. 종단 수용 (ROS-SIM)

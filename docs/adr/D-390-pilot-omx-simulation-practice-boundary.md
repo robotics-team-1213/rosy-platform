@@ -7,7 +7,7 @@
 - Rosy Cell 서버를 두 번째 클라이언트로 둔다. 셋업 중계를 하고, 클라이언트별 일회용 pairing code를 쓴다.
 - 읽기 전용 `/tcp`, 그리고 seat를 가진 클라이언트의 셀 수락을 더한다.
 
-[D-403](D-403-fleet-cell-job-route-cell-transfer.md) §8은 이 API와 D-336 UDS를 한 owner 프로세스에 두도록 정한다. §3의 작업대별 단일 writer와 §5의 실물 분리는 그대로다.
+[D-403](D-403-fleet-cell-job-route-cell-transfer.md) §8은 이 API와 D-336 UDS를 한 owner 프로세스에 두도록 정한다. §3의 작업대별 단일 writer와 §5의 실물 분리는 그대로다. 이 개정은 D-403과 D-404가 Accepted가 되면 효력이 생긴다. 그 전에는 원문이 그대로 적용된다.
 
 ## 배경과 확인한 차이
 

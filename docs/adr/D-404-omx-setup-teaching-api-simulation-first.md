@@ -45,7 +45,7 @@
    - 기록 필드: `x, y, z, yaw`, `tool_down_error_rad`, `state_sequence`, `kinematics_revision`, `instance_id`, 티칭 시각.
    - 프레임 3점에는 xyz만 쓴다. 스테이션·공통 포즈는 `tool_down_error_rad`가 셀 설정 임계값 이하일 때만 받는다. 임계값은 코드 기본값이 아니라 설정에서 온다.
    - 셀에는 수직하향 `home` 포즈가 반드시 있어야 한다. 모든 transfer가 home에서 시작한다(D-402 §6).
-   - **셀 schema를 `rosy_cell.cell/2`로 올린다(C5 작업).** `/2`는 `kinematics_revision`과 필수 `home`을 담는다. 두 값은 셀 해시에 들어가므로, URDF가 바뀌면 이전 셀과 그 셀로 만든 Job이 모두 해시 불일치로 무효가 된다(D-401 §3). 로더는 `/1`을 실행용으로 받지 않는다.
+   - **셀 schema를 `rosy_cell.cell/2`로 올린다(계획 C2a 작업, 마법사 UI는 C5).** `/2`는 `kinematics_revision`과 필수 `home`을 담는다. 두 값은 셀 해시에 들어가므로, URDF가 바뀌면 이전 셀과 그 셀로 만든 Job이 모두 해시 불일치로 무효가 된다(D-401 §3). 로더는 `/1`을 실행용으로 받지 않는다.
 6. **장치가 셀을 수락한다.** D-403 §9의 해시 검사가 이 값을 쓴다.
    - seat를 가진 클라이언트가 `PUT {PREFIX}/cell`로 정규화한 `cell` 문서를 보낸다.
    - 장치는 D-401 §3 규칙(정규화 JSON의 sha256)으로 해시를 다시 계산한다. `kinematics_revision`이 자기 값과 같은지 확인한 뒤 owner 로컬 journal에 "수락한 셀"로 기록한다. `GET {PREFIX}/cell`로 다시 읽을 수 있다.

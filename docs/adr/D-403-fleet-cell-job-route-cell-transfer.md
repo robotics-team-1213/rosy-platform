@@ -30,7 +30,7 @@
      - `item`, `pallet`, `layer`, `frame: robot_base`
      - `home`, `pick`, `place`: 각각 `{x, y, z, yaw}`
      - `pick_approach_z`, `place_approach_z`
-     - `carry_z`(D-402 §6)
+     - `carry_z`(D-402 §6). Fleet은 재컴파일할 때 `rosy_cell.compiler.carry_z(recipe, cell)`을 호출해 이 값을 얻고, 계산을 다시 구현하지 않는다. 여유는 `cell.yaml`의 `approach_clearance_m`이다.
    - schema는 `action_kind`로 구분하는 합집합이다. `PICK_PLACE` 모델은 그대로 두어 기존 digest가 바뀌지 않는다.
 3. **제안·승인 주체.**
    - Rosy Cell은 자기 **사이트 서비스 principal**로 `POST /api/fleet/proposals`를 호출해 제안한다. 이 principal은 제안과 해석(resolve)만 할 수 있다. Rosy Cell은 운영자 자격 증명을 갖지 않는다.

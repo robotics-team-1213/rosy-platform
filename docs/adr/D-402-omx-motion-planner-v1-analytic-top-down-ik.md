@@ -41,7 +41,7 @@
    - (a) `action_runner.py` 185행의 phase runner 분기를 `CELL_TRANSFER`까지 넓힌다. `CELL_TRANSFER`는 phase runner로만 실행한다.
    - (b) 직접 `driver.submit` 경로는 기존 종류가 아니면 모두 fail closed로 막는다. 모르는 종류는 거절한다.
    - (c) `PickPlaceRunner`가 `CellTransferPlan`을 받게 한다. 새 `validate_cell_transfer_plan`을 둔다.
-   - (d) `pick_place_runner.py`의 start-state 검사에서 그리퍼 관절을 제외한다. 허용오차 맵은 팔 관절만 덮는다. 집음 이후 그리퍼는 물체 폭에서 멈추므로, 관절값 비교로는 의미 있는 판정이 안 된다. 그리퍼 상태는 8항의 readback으로만 판정한다.
+   - (d) `pick_place_runner.py`의 start-state 검사에서 그리퍼 관절을 제외한다. 허용오차 맵은 팔 관절만 덮는다. 집음 이후 그리퍼는 물체 폭에서 멈추므로, 관절값 비교로는 의미 있는 판정이 안 된다. 그리퍼 상태는 8항의 readback으로만 판정한다. 이는 D-386 §3을 시뮬레이션 한정으로 좁히는 것이며, D-386 머리에 개정 문단을 단다.
 4. **시뮬 프로필 파일이 한계의 출처다.**
    - 경로는 `deploy/robot/omx/sim/cell_profile.yaml`(schema `rosy.omx-sim-cell-profile.v1`)이다. 내용 해시가 `profile_revision`이 된다.
    - 담는 값:
@@ -64,7 +64,9 @@
      - `home` 포즈와 pick·place 포즈(`robot_base`, x, y, z, yaw, 수직하향)
      - 각 `approach_z`
      - 운반 높이 `carry_z`
-   - **`carry_z`:** Action이 명시적으로 싣는다. Fleet이 재컴파일한 Job·셀 데이터(D-403 §2)에서 계산하며, Job 전체에서 가장 높은 적재물·팔레트·스테이션 윗면 + 박스 높이 + 여유다(TCP 높이). 계획기는 `carry_z ≥ max(approach_z)`인지와 작업 영역 안인지만 확인한다.
+   - **`carry_z`:** Action이 명시적으로 싣는다.
+     - 값: Job 전체에서 가장 높은 적재물·팔레트·스테이션 윗면 + 박스 높이 + `cell.yaml`의 `approach_clearance_m`(TCP 높이).
+     - 계산은 `rosy_cell` 함수 하나 `rosy_cell.compiler.carry_z(recipe, cell)`만 한다. Fleet은 재컴파일할 때 이 함수를 호출하고, 다시 구현하지 않는다(D-403 §2). 계획기는 `carry_z ≥ max(approach_z)`인지와 작업 영역 안인지만 확인한다.
    - **home:** 모든 transfer는 셀에 티칭된 `home`(수직하향)에서 시작한다. 시작 상태가 home의 IK 해에서 허용오차 밖이면 거절한다.
    - **이동 규칙:** 수평 이동은 항상 수직 상승 → `carry_z`에서 이동 → 수직 하강이다. 현재 자세에서 대각선 직선으로 가지 않는다.
    - 네 phase(phase마다 ROS goal 하나):
