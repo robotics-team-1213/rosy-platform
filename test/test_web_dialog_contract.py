@@ -42,7 +42,6 @@ PINNED_CONFIRMS = {
     "telemetry.js": 1,  # 교통 정책 적용 확인 — D-362 P1 분할로 app.js에서 이동
     "console.js": 3,   # Fleet 목표 지정, 전체 정지, 정지 래치 재허가
     "roster.js": 1,    # 카메라 고장 뒤 IR 추적 선택 확인
-    "enrollment.js": 1,  # 등록된 로봇 새 주소로 옮기기 확인 (등록 해제는 D-371 confirmIrreversible)
 }
 
 

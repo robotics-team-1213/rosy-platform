@@ -1017,3 +1017,9 @@
 - 변경: 리뷰 MEDIUM·LOW — (1) 카드 문구 "…지금 망에 없을 수 있습니다", 경보 "사이트 망 주소가 바뀌었을 수 있습니다 — IP로 고정된 …"로 단정을 뺐다. (2) `all_outside`는 IP 고정이 하나 이상이고 그것이 모두 망 밖일 때만 켜진다. 이름(`.local`) 고정은 서버 판정에서 빠지고, 콘솔(`renumberBanner(payload, robots)`)이 이름 고정 로봇 중 하나라도 지금 연결돼 있으면 경보를 띄우지 않는다. (3) 스캔 행은 등록부가 쓰는 발견(TXT) 이름으로만 맞춘다 — avahi 호스트 이름에서 `.local`을 뗀 값은 더 이상 신원이 아니다. (4) `address_drift.py` docstring에 /24 가정과 그 한계(더 넓은 접두사의 사이트에서 틀릴 수 있음, 그래서 힌트)를 적었다. 앞 커밋의 `test_discovery.py` 빈 줄 lint도 고쳤다.
 - 증거: `test_address_drift.py` 2(이름 고정과 경보, 호스트 이름 불일치) 적색 확인 뒤 녹색, `address-drift.test.mjs` 문구·억제 2 적색 확인 뒤 10 passed.
 - gate 변화: 없음(LOCAL).
+
+## 2026-10-01 · uncommitted · fix(console): 옮기기는 로봇마다 화면 코드 대화상자, 전체 옮기기 삭제, 카드·기기 연결 여백
+
+- 변경: 리뷰 HIGH의 화면 쪽 — "새 주소로 옮기기 (전체)" 버튼과 `runBulkMove`·`bulkConfirmMessage`를 지웠다. 경보 묶음은 옮길 수 있는 로봇(`movableRobots`)마다 "rosy_09 → 새 주소"와 "새 주소로 옮기기…"를 한 줄씩 보인다. 그 지름길, 로봇 카드의 지름길, 등록 패널 행의 "새 주소로 옮기기…"(기존 `window.confirm` 삭제)가 모두 등록 대화상자(`openLiveDialog`, `ui-field`, 등록과 같은 `ABCD-EFGH` 형식 검사, 429 잠금)를 옮기기 모드로 연다. 대상 줄은 "로봇 rosy_09 → 10.16.36.20:8080 화면의 코드", 실행 버튼은 "옮기기". 성공은 `moveDoneLines`("…(으)로 옮김 — 새 토큰으로 다시 묶었습니다", 옛 토큰을 회수하지 못했으면 "로봇 대시보드에서 이전 사이트 토큰을 회수하세요"), 다른 기기면 "등록된 토큰은 보내지 않았습니다 …". 화면 결함: 기기 연결의 마지막 줄과 "신호등" 머리가 5 px로 붙어 있던 것을 넓은 격자에서 `.signals` 위 여백으로 띄웠다. 로봇 카드는 줄어들지 않게 `flex-shrink: 0`을 걸었다 — 캡처에서 rosy_09가 잘려 보인 것은 카드가 아니라 D-201(한 화면에 들어감)이 요구하는 로봇 목록 스크롤 칸의 경계다. `test/test_web_dialog_contract.py`의 `window.confirm` 고정 목록에서 `enrollment.js` 1을 뺐다.
+- 증거: `address-drift.test.mjs` — 옮길 로봇 목록, 전체 옮기기·`window.confirm` 없음과 본문 `{ code }`, 옛 토큰 문장, 신원 불일치 문장(export 없음 적색 뒤 80 passed). 브라우저 시험을 다시 썼다: 경보 목록 2줄, 지름길 → 코드 대화상자 → 형식 오류는 요청 0 → `{"code": "7KXM-P3QA"}` 한 번, 옛 토큰 안내, 행 버튼도 같은 대화상자, 대화상자 동안 전체 정지 살아 있음, 카드 내용이 줄지 않고 스크롤로 끝까지 보임, 기기 연결 마지막 줄과 신호등 머리 사이 8 px 이상(여백 없이 적색 확인), 390 px 넘침 없음, viewer는 두 지름길 꺼짐. 캡처는 X:/DevTemp/…/console-addr/.
+- gate 변화: 없음(LOCAL).

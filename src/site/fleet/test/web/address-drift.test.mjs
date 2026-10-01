@@ -3,9 +3,9 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
 import {
-  RENUMBER_BANNER, addressMap, addressReason, bulkConfirmMessage, bulkMoveTargets, renumberBanner,
-  runBulkMove,
+  RENUMBER_BANNER, addressMap, addressReason, movableRobots, renumberBanner,
 } from "../../fleet/server/web/address-drift.js";
+import { MESSAGES, moveDoneLines } from "../../fleet/server/web/enrollment.js";
 
 const WEB = new URL("../../fleet/server/web/", import.meta.url);
 
@@ -79,40 +79,36 @@ test("no console text shows a 192.168.1.x example address", () => {
 const moved = (robot_id, seen, over = {}) => entry({ robot_id, status: "seen_at_other_address",
   seen_addresses: [seen], movable: true, ...over });
 
-test("bulk move targets only enrolled robots the server marked movable", () => {
+test("the banner lists only enrolled robots the server marked movable", () => {
   const payload = { robots: [
     moved("rosy_09", "10.16.36.20:8080"),
     moved("rosy_10", "10.16.36.21:8080", { movable: false }),
     moved("rosy_01", "10.16.36.22:8080", { origin: "static", movable: false }),
     entry({ robot_id: "rosy_11" }),
   ] };
-  assert.deepEqual(bulkMoveTargets(payload).map((e) => e.robot_id), ["rosy_09"]);
-  assert.deepEqual(bulkMoveTargets(null), []);
+  assert.deepEqual(movableRobots(payload).map((e) => e.robot_id), ["rosy_09"]);
+  assert.deepEqual(movableRobots(null), []);
 });
 
-test("the bulk confirmation names every robot and its new address and asks", () => {
-  const message = bulkConfirmMessage([moved("rosy_09", "10.16.36.20:8080"), moved("rosy_10", "10.16.36.21:8080")]);
-  assert.match(message, /"rosy_09" → 10\.16\.36\.20:8080/);
-  assert.match(message, /"rosy_10" → 10\.16\.36\.21:8080/);
-  assert.match(message, /2대/);
-  assert.match(message, /까요\?/);
-  assert.match(message, /신원/);
+test("there is no bulk move: every move asks for that robot's screen code", () => {
+  for (const name of ["index.html", "console.js", "address-drift.js", "enrollment.js"]) {
+    const text = readFileSync(new URL(name, WEB), "utf8");
+    assert.doesNotMatch(text, /\(전체\)|runBulkMove|address-move-all/, name);
+  }
+  const panel = readFileSync(new URL("enrollment.js", WEB), "utf8");
+  assert.doesNotMatch(panel, /window\.confirm/);
+  assert.match(panel, /move-address`;[\s\S]{0,120}method: "POST", body: \{ code: input\.value \}/);
 });
 
-test("bulk move runs the per-robot move once each, in order, and reports each result", async () => {
-  const calls = [];
-  const move = async (robotId) => {
-    calls.push(robotId);
-    if (robotId === "rosy_10") {
-      const error = new Error("HTTP 409");
-      error.detail = { code: "identity_mismatch" };
-      throw error;
-    }
-  };
-  const results = await runBulkMove([moved("rosy_09", "10.16.36.20:8080"), moved("rosy_10", "10.16.36.21:8080"),
-    moved("rosy_12", "10.16.36.23:8080")], move);
-  assert.deepEqual(calls, ["rosy_09", "rosy_10", "rosy_12"]);
-  assert.deepEqual(results.map((r) => [r.robot_id, r.ok]), [["rosy_09", true], ["rosy_10", false], ["rosy_12", true]]);
-  assert.equal(results[0].lines[0], "rosy_09: 10.16.36.20:8080(으)로 옮김");
-  assert.match(results[1].lines[0], /^rosy_10: 새 주소의 기기가 등록된 로봇과 다릅니다/);
+test("a finished move says whether the old site token was revoked", () => {
+  const row = { robot_id: "rosy_09", address: "10.16.36.20:8080", old_token_revoked: true };
+  assert.deepEqual(moveDoneLines(row), ["rosy_09: 10.16.36.20:8080(으)로 옮김 — 새 토큰으로 다시 묶었습니다."]);
+  const left = moveDoneLines({ ...row, old_token_revoked: false });
+  assert.equal(left.length, 2);
+  assert.match(left[1], /이전 사이트 토큰을 회수하지 못했습니다 — 로봇 대시보드/);
+});
+
+test("a different device at the new address is reported without implying a leak", () => {
+  assert.match(MESSAGES.identity_mismatch, /등록된 토큰은 보내지 않았습니다/);
+  assert.doesNotMatch(MESSAGES.identity_mismatch, /다른 기기에 갔을 수/);
 });

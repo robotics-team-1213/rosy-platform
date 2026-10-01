@@ -1,9 +1,7 @@
 // 고정 주소가 지금 망에 있는지(GET /api/fleet/discovery/addresses)를 운용자 문장으로 옮긴다.
 // Fleet → CORE는 평문이라 주소를 따라가지 않는다(D-361 3, D-370 5.3). 여기는 까닭을 말하고,
-// 옮기기는 기존 로봇별 "새 주소로 옮기기"(서버가 토큰으로 신원을 다시 확인)만 부른다.
+// 옮기기는 등록 패널의 "새 주소로 옮기기…"(로봇 화면 코드로 새 주소에서 재페어링)만 연다.
 // DOM 없는 순수 함수만 둔다(node 시험 대상).
-
-import { messageFor } from "./enrollment.js";
 
 export function addressMap(payload) {
   const out = {};
@@ -58,31 +56,8 @@ export function renumberBanner(payload, robots = []) {
   return named.some((entry) => online.has(entry.robot_id)) ? null : RENUMBER_BANNER;
 }
 
-// "새 주소로 옮기기 (전체)" 대상: 서버가 옮길 수 있다고 한 등록 로봇만(새 주소가 하나, 등록부 address_changed).
-export function bulkMoveTargets(payload) {
+// 경보 묶음에 나열할 로봇: 서버가 옮길 수 있다고 한 등록 로봇만(새 주소가 하나, 등록부 address_changed).
+// 한 번에 여러 대를 옮기지 않는다 — 옮기기마다 그 로봇의 화면 코드가 필요하다(D-361 2026-10-01).
+export function movableRobots(payload) {
   return (payload?.robots || []).filter((entry) => entry.movable && entry.origin === "enrolled");
-}
-
-// 한 번의 확인으로 여러 대를 옮기므로 대상과 새 주소를 모두 적는다. 신원 확인은 줄지 않는다.
-export function bulkConfirmMessage(targets) {
-  const pairs = targets.map((entry) => `"${entry.robot_id}" → ${entry.seen_addresses[0]}`).join(", ");
-  return `${pairs} — 로봇 ${targets.length}대를 새 주소로 옮길까요? 로봇마다 Fleet이 새 주소에서 신원을 `
-    + "다시 확인하고, 다른 기기가 답하면 그 로봇만 옮기지 않고 새 코드가 필요해집니다.";
-}
-
-// 한 대씩 차례로, 로봇별 이동과 같은 요청(move)으로 보낸다. 한 대가 실패해도 나머지는 간다.
-// move(robot_id)는 실패하면 { detail }을 가진 오류를 던진다.
-export async function runBulkMove(targets, move) {
-  const results = [];
-  for (const entry of targets) {
-    try {
-      await move(entry.robot_id);
-      results.push({ robot_id: entry.robot_id, ok: true,
-        lines: [`${entry.robot_id}: ${entry.seen_addresses[0]}(으)로 옮김`] });
-    } catch (err) {
-      const [first, ...rest] = messageFor(err?.detail || {});
-      results.push({ robot_id: entry.robot_id, ok: false, lines: [`${entry.robot_id}: ${first}`, ...rest] });
-    }
-  }
-  return results;
 }

@@ -69,8 +69,8 @@
 
 ## 최근 기록
 
+- 2026-10-01 · uncommitted · fix(console): 옮기기는 로봇마다 화면 코드 대화상자, 전체 옮기기 삭제, 카드·기기 연결 여백
 - 2026-10-01 · uncommitted · fix(discovery): 망 밖 판정은 힌트로 말하고, 이름 고정은 경보를 세우지도 막지도 않는다
 - 2026-10-01 · uncommitted · fix(discovery): 스캔 주소는 RFC 1918만 받는다
 - 2026-10-01 · uncommitted · fix(enrollment)!: 새 주소로 옮기기는 화면 코드로 새 주소에서 재페어링한다
 - 2026-10-01 · uncommitted · test(console): 주소 까닭·전체 옮기기 브라우저 계약
-- 2026-10-01 · uncommitted · chore(architecture): fleet 크기 판정 23166으로 재기록

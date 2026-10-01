@@ -139,12 +139,12 @@ def test_console_serves_the_address_module_and_wires_the_banner():
     assert "addressReason(" in roster and "새 주소로 옮기기…" in roster
 
 
-def test_bulk_move_button_is_wired_to_the_per_robot_move(tmp_path):
+def test_each_move_is_wired_to_the_screen_code_dialog(tmp_path):
     client, _store = _enrolled_app(tmp_path)
     page = client.get("/console").text
-    assert 'id="address-move-all"' in page and "새 주소로 옮기기 (전체)…" in page
+    assert 'id="address-movable"' in page and "address-move-all" not in page
     shell = client.get("/console/assets/console.js").text
-    assert "runBulkMove(targets, enrollment.moveAddress)" in shell
-    assert "confirmIrreversible({\n    message: bulkConfirmMessage(targets)" in shell.replace("\r\n", "\n")
+    assert "enrollment.openMove(" in shell and "runBulkMove" not in shell
     panel = client.get("/console/assets/enrollment.js").text
-    assert "/move-address`, { method: \"POST\" })" in panel
+    assert "window.confirm" not in panel
+    assert "openLiveDialog(dialog" in panel

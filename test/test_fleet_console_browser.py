@@ -2135,8 +2135,14 @@ def _address_api():
     return api
 
 
-def test_offline_robots_say_why_and_bulk_move_reuses_the_per_robot_move(console_url):
-    """점검 2026-10-01 #2/#3/#5 — 사이트 망 변경 경보, 카드 까닭, 전체 옮기기는 로봇별 요청."""
+def _shot(page, name):
+    if ADDRESS_SHOTS:
+        Path(ADDRESS_SHOTS).mkdir(parents=True, exist_ok=True)
+        page.screenshot(path=str(Path(ADDRESS_SHOTS) / name), full_page=True)
+
+
+def test_offline_robots_say_why_and_each_move_asks_for_the_screen_code(console_url):
+    """점검 2026-10-01 #2/#3/#5 + 리뷰: 경보는 옮길 로봇을 나열하고, 옮기기는 로봇마다 화면 코드."""
     from playwright.sync_api import sync_playwright
 
     moves = []
@@ -2144,59 +2150,72 @@ def test_offline_robots_say_why_and_bulk_move_reuses_the_per_robot_move(console_
         browser, page, errors = _open_console(playwright, _address_api())
 
         def move(route):
-            moves.append(urlparse(route.request.url).path)
-            if "rosy_10" in route.request.url:
-                route.fulfill(status=409, json={"detail": {"code": "identity_mismatch",
-                                                           "message": "x"}})
-            else:
-                route.fulfill(status=200, json={"robot_id": "rosy_09", "state": "active"})
+            moves.append((urlparse(route.request.url).path, route.request.post_data_json))
+            route.fulfill(status=200, json={"robot_id": "rosy_09", "address": "10.16.36.20:8080",
+                                            "state": "active", "old_token_revoked": False})
 
         page.route("**/api/fleet/enrollment/robots/*/move-address", move)
         page.goto(console_url, wait_until="networkidle")
         banner = page.locator("#address-banner")
         banner.wait_for()
-        assert banner.inner_text().startswith("사이트 망 주소가 바뀐 것 같습니다")
+        assert banner.inner_text().startswith("사이트 망 주소가 바뀌었을 수 있습니다")
         page.wait_for_function(
             "() => document.querySelectorAll('#roster p[data-address-reason]').length === 3")
+        listed = page.locator("#address-movable li")
+        assert listed.count() == 2
+        assert "rosy_09 → 10.16.36.20:8080" in listed.nth(0).inner_text()
         card = page.locator('#roster article[data-robot-id="rosy_09"]')
         assert "같은 로봇이 10.16.36.20:8080에 보입니다 — 새 주소로 옮기기…" in card.inner_text()
-        assert card.locator('ui-button[data-move-robot-id="rosy_09"]').inner_text() == "새 주소로 옮기기…"
         static = page.locator('#roster article[data-robot-id="rosy_01"]').inner_text()
-        assert "고정 주소 192.0.2.10:8443이(가) 지금 망에 없습니다" in static and "robots.yaml" in static
-        if ADDRESS_SHOTS:
-            Path(ADDRESS_SHOTS).mkdir(parents=True, exist_ok=True)
-            page.screenshot(path=str(Path(ADDRESS_SHOTS) / "roster-renumbered-1920.png"), full_page=True)
+        assert "고정 주소 192.0.2.10:8443이(가) 지금 망에 없을 수 있습니다" in static
+        # Cards keep their content height; the roster column scrolls (D-201 fits the viewport),
+        # and scrolling brings a card's reason line and its move shortcut fully into view.
+        assert page.evaluate("""() => [...document.querySelectorAll('#roster article')]
+            .every((card) => card.scrollHeight <= card.clientHeight + 1)""")
+        assert page.evaluate("""() => {
+            const button = document.querySelector('#roster ui-button[data-move-robot-id="rosy_10"]');
+            button.scrollIntoView({block: 'nearest'});
+            const r = button.getBoundingClientRect();
+            const box = document.querySelector('#roster').getBoundingClientRect();
+            return r.top >= box.top - 1 && r.bottom <= box.bottom + 1; }""")
+        # The camera section's last line keeps clear of the next heading (it read as overlapping).
+        assert page.evaluate("""() => {
+            const line = document.querySelector('#camera-link-unavailable').getBoundingClientRect();
+            const head = document.querySelector('#signals-heading').getBoundingClientRect();
+            return line.bottom + 8 <= head.top; }""")
+        page.evaluate("document.querySelector('#roster').scrollTop = 0")
+        _shot(page, "roster-renumbered-1920.png")
+        assert not page.locator("text=(전체)").count()
 
-        bulk = page.locator("#address-move-all")
-        assert bulk.inner_text() == "새 주소로 옮기기 (전체)…"
-        bulk.click()
-        dialog = page.locator("dialog.ui-confirm")
+        listed.nth(0).locator("ui-button").click()
+        dialog = page.locator("#enroll-dialog")
         dialog.wait_for()
-        text = dialog.locator("p").inner_text()
-        assert '"rosy_09" → 10.16.36.20:8080' in text and '"rosy_10" → 10.16.36.21:8080' in text
+        assert "rosy_09 → 10.16.36.20:8080" in page.locator("#enroll-target").inner_text()
+        assert page.locator("#enroll-submit").inner_text() == "옮기기"
         assert page.locator("#estop").is_enabled()
-        if ADDRESS_SHOTS:
-            page.screenshot(path=str(Path(ADDRESS_SHOTS) / "bulk-confirm-1920.png"), full_page=False)
-        page.keyboard.press("Escape")
-        page.wait_for_function("!document.querySelector('dialog.ui-confirm')")
-        assert moves == []
-        bulk.click()
-        page.locator('dialog.ui-confirm ui-button[kind="irreversible"]').click()
-        page.wait_for_function(
-            "() => document.querySelectorAll('#address-move-result p').length >= 2")
-        assert moves == ["/api/fleet/enrollment/robots/rosy_09/move-address",
-                         "/api/fleet/enrollment/robots/rosy_10/move-address"]
-        result = page.locator("#address-move-result").inner_text()
-        assert "rosy_09: 10.16.36.20:8080(으)로 옮김" in result
-        assert "rosy_10: 새 주소의 기기가 등록된 로봇과 다릅니다" in result
-        kinds = page.eval_on_selector_all("#address-move-result p", "ps => ps.map(p => p.dataset.kind)")
-        assert kinds[0] == "good" and kinds[1] == "bad"
-        if ADDRESS_SHOTS:
-            page.locator(".address-drift").screenshot(path=str(Path(ADDRESS_SHOTS) / "bulk-result.png"))
-            page.set_viewport_size({"width": 390, "height": 844})
-            page.wait_for_timeout(300)
-            assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
-            page.screenshot(path=str(Path(ADDRESS_SHOTS) / "roster-renumbered-390.png"), full_page=True)
+        page.locator("#enroll-code").fill("7kxm" + "p3q")
+        page.locator("#enroll-submit").click()
+        assert moves == []  # format refused before anything is sent
+        page.locator("#enroll-code").fill("7kxm" + "p3qa")
+        _shot(page, "move-code-dialog-1920.png")
+        page.locator("#enroll-submit").click()
+        page.wait_for_function("() => document.querySelector('#enroll-result')?.textContent.includes('옮김')")
+        assert moves == [("/api/fleet/enrollment/robots/rosy_09/move-address", {"code": "7KXM-" + "P3QA"})]
+        result = page.locator("#enroll-result").inner_text()
+        assert "이전 사이트 토큰을 회수하지 못했습니다" in result
+
+        # The enrolled-list action opens the same code dialog (no window.confirm).
+        row_move = page.locator('#enrolled-list li[data-robot-id="rosy_10"] ui-button[data-action="move"]')
+        assert row_move.inner_text() == "새 주소로 옮기기…"
+        row_move.click()
+        page.locator("#enroll-dialog").wait_for()
+        assert "rosy_10" in page.locator("#enroll-target").inner_text()
+        page.locator("#enroll-cancel").click()
+        assert len(moves) == 1
+        page.set_viewport_size({"width": 390, "height": 844})
+        page.wait_for_timeout(300)
+        assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
+        _shot(page, "roster-renumbered-390.png")
         assert not errors
         browser.close()
 
@@ -2211,11 +2230,9 @@ def test_viewer_sees_reasons_but_no_live_move_buttons(console_url):
         page.locator("#address-banner").wait_for()
         page.wait_for_function(
             "() => document.querySelectorAll('#roster p[data-address-reason]').length === 3")
-        bulk = page.locator("#address-move-all")
-        assert bulk.get_attribute("reason") == "운용자 권한이 필요합니다"
-        assert bulk.is_disabled()
-        card_move = page.locator('ui-button[data-move-robot-id="rosy_09"]')
-        assert card_move.is_disabled()
-        assert card_move.get_attribute("reason") == "운용자 권한이 필요합니다"
+        for selector in ('#address-movable ui-button', 'ui-button[data-move-robot-id="rosy_09"]'):
+            button = page.locator(selector).first
+            assert button.is_disabled(), selector
+            assert button.get_attribute("reason") == "운용자 권한이 필요합니다", selector
         assert not errors
         browser.close()

@@ -9,9 +9,7 @@ import { createFieldView } from "./field-view.js";
 import { createMapFitView } from "./map-fit-view.js";
 import { OPERATOR_REASON, applyRoleToControls } from "./authorization.js";
 import { DISCOVERY_LABELS, canManage, createEnrollmentPanel } from "./enrollment.js";
-import {
-  addressMap, bulkConfirmMessage, bulkMoveTargets, renumberBanner, runBulkMove,
-} from "./address-drift.js";
+import { addressMap, movableRobots, renumberBanner } from "./address-drift.js";
 import { createCameraPairingPanel } from "./camera-pairing.js";
 import { createPollGate } from "./poll-gate.js";
 import { confirmIrreversible, openLiveDialog } from "/common/ui.js";
@@ -312,6 +310,7 @@ const enrollment = createEnrollmentPanel({
   identity: () => ({ role: auth.role, principal_id: auth.principal }),
   log,
   dialogs: { confirmIrreversible, openLiveDialog },
+  onMoved: () => refreshAddresses(),
 });
 // D-341: 같은 "기기 연결" 패널의 카메라 연결 승인 구역. 대기 목록은 모듈이 2.5 s마다 묻는다.
 const cameraPairing = createCameraPairingPanel({
@@ -386,13 +385,25 @@ async function refreshDiscovery() {
 
 // 고정 주소 판정은 발견과 같은 주기로 읽는다. 못 읽으면 까닭 줄을 지운다(짐작하지 않는다).
 let addressText = "";
-let addressPayload = null;
-let bulkMoving = false;
 function moveAddressBlocked() {
   return auth.role !== "operator" ? OPERATOR_REASON
     : canManage({ role: auth.role, principal_id: auth.principal }) ? ""
       : "이름 있는 운용자 계정이 필요합니다";
 }
+
+function moveButton(entry) {
+  const node = document.createElement("ui-button");
+  node.setAttribute("kind", "quiet");
+  node.type = "button";
+  node.dataset.moveRobotId = entry.robot_id;
+  node.textContent = "새 주소로 옮기기…";
+  const reason = moveAddressBlocked();
+  node.disabled = Boolean(reason);
+  if (reason) node.setAttribute("reason", reason);
+  node.addEventListener("click", () => enrollment.openMove(entry.robot_id, entry.seen_addresses[0]));
+  return node;
+}
+
 async function refreshAddresses() {
   let payload = null;
   try {
@@ -400,26 +411,26 @@ async function refreshAddresses() {
   } catch (_err) {
     payload = null;
   }
-  addressPayload = payload;
   const banner = el("address-banner");
   const text = renumberBanner(payload, view.robots);
   banner.hidden = !text;
   if (text && banner.textContent !== text) banner.textContent = text;
-  const targets = bulkMoveTargets(payload);
-  const bulk = el("address-move-all");
-  bulk.hidden = targets.length === 0;
-  if (!bulkMoving) {
-    const reason = moveAddressBlocked();
-    bulk.disabled = Boolean(reason);
-    if (reason) bulk.setAttribute("reason", reason);
-    else bulk.removeAttribute("reason");
+  // 옮길 수 있는 로봇마다 한 줄과 그 로봇의 지름길. 옮기기마다 그 로봇의 화면 코드를 묻는다.
+  const movable = movableRobots(payload);
+  const next = JSON.stringify([payload?.robots || [], auth.role, auth.principal]);
+  if (next !== addressText) {
+    addressText = next;
+    el("address-movable").replaceChildren(...movable.map((entry) => {
+      const item = document.createElement("li");
+      const label = document.createElement("span");
+      label.textContent = `${entry.robot_id} → ${entry.seen_addresses[0]}`;
+      item.append(label, moveButton(entry));
+      return item;
+    }));
+    view.addresses = addressMap(payload);
+    render();
   }
-  el("address-drift").hidden = !text && targets.length === 0 && !el("address-move-result").childElementCount;
-  const next = JSON.stringify(payload?.robots || []);
-  if (next === addressText) return;
-  addressText = next;
-  view.addresses = addressMap(payload);
-  render();
+  el("address-drift").hidden = !text && movable.length === 0;
 }
 
 async function refreshAuthorization() {
@@ -623,44 +634,9 @@ const mapView = createMapView({
 // Fleet 분해 3: 명렬 카드와 큐는 roster.js 팩토리가 그린다.
 const roster = createRoster({ el, view, log, call, render,
   streamEvidence: mapView.streamEvidence, isOperator: () => auth.role === "operator",
-  moveAddress: async (robotId) => {
-    await enrollment.confirmMove(robotId);
-    await refreshAddresses();
-  },
+  moveAddress: (robotId) => enrollment.openMove(robotId, view.addresses[robotId]?.seen_addresses?.[0]),
   moveAddressBlocked });
 
-// "새 주소로 옮기기 (전체)" — 확인 한 번, 요청은 로봇별 이동과 같은 것을 한 대씩. 결과는 로봇마다.
-el("address-move-all").addEventListener("click", async () => {
-  const targets = bulkMoveTargets(addressPayload);
-  if (bulkMoving || !targets.length || moveAddressBlocked()) return;
-  const confirmed = await confirmIrreversible({
-    message: bulkConfirmMessage(targets),
-    action: "새 주소로 옮기기",
-    opener: () => el("address-move-all"),
-  });
-  if (!confirmed) return;
-  const bulk = el("address-move-all");
-  bulkMoving = true;
-  bulk.disabled = true;
-  bulk.setAttribute("reason", "옮기는 중");
-  try {
-    const results = await runBulkMove(targets, enrollment.moveAddress);
-    const box = el("address-move-result");
-    // 로봇마다 한 줄 이상. 성공 줄까지 경고색으로 칠하지 않도록 줄마다 결과를 단다.
-    box.replaceChildren(...results.flatMap((result) => result.lines.map((line) => {
-      const p = document.createElement("p");
-      p.textContent = line;
-      p.dataset.kind = result.ok ? "good" : "bad";
-      return p;
-    })));
-    const moved = results.filter((result) => result.ok).length;
-    log(`새 주소로 옮기기(전체): ${moved}/${results.length}대 옮김`, moved === results.length ? "good" : "bad");
-  } finally {
-    bulkMoving = false;
-  }
-  await enrollment.refresh();
-  await refreshAddresses();
-});
 el("roster-toggle").addEventListener("click", () => {
   view.showAllRobots = !view.showAllRobots;
   render();
