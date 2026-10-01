@@ -161,6 +161,12 @@
 - Evidence: adapter suite 163 passed/3 skipped on Windows; Gazebo joint, gripper and cancel probe in docs/validation/pilot-omx-gazebo-2026-10-01/.
 - Gate: ROS-SIM control slice observed; camera, recording, restart recovery and DEVICE/FIELD remain HOLD.
 
+## 2026-10-01 · uncommitted · test(omx): pinned Jazzy timeout/cancel callback fault coverage
+
+- Change: Added an isolated ROS 2 ActionServer fault test that keeps an accepted trajectory goal active beyond the configured owner timeout, accepts the owner's cancellation request, and returns a terminal CANCELED result. The test asserts timeout HOLD is preserved and a repeated command is refused after cancel ACK and terminal result. This is not standstill/E-stop evidence.
+- Evidence: In `rosy-omx-pilot:local` (`sha256:e94662607c72a7cea83c9449178099c4c9476afab0519275ce0da82a88f3da9a`), pinned vendor callback test passed (1); ROS callback suite passed (2). Windows ROS-free Action/store/PICK_PLACE regression passed 37, skipped 1. Report: `docs/validation/model-tool-ros-sim-2026-10-01/README.md`.
+- Gate: ROS-SIM remains HOLD: no Fleet Mission/grant runtime handoff, vendor-Gazebo generation/restart race, or four-phase object/gripper-evidence run. Simulation-only manifest is unsigned and dependency inventory is incomplete. ARTIFACT HOLD; DEVICE/FIELD PARKED; capability disabled.
+
 ## 2026-10-01 · uncommitted · fix(pilot-sim): serve calibration.js on the sim port
 - Change: `pilot_sim_api.PILOT_ASSETS` lacked `calibration.js`, which main's Pilot `app.js` now imports (c04de23a), so `/pilot` on port 8088 never mounted and `test_pilot_sim_browser.py` timed out on `[data-sim-code]`. Added it to match the CORE allowlist in `core_api_web/api/app.py`.
 - Evidence: `ROSY_RUN_BROWSER_TESTS=1 python -m pytest src/products/omx/adapter/test/test_pilot_sim_browser.py` 1 passed; adapter suite 168 passed, 3 skipped (2026-10-01 Windows).

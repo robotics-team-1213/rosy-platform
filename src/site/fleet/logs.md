@@ -1048,3 +1048,9 @@
 - 변경: 보안 재리뷰 HIGH (c) — 옮기기 모드의 등록 대화상자에 "새 주소 후보"와 그 주소(등폭, 제목 크기)를 보이고, "코드를 넣기 전에 이 주소가 로봇 화면에 보이는 IP와 같은지 확인하세요(LCD 정보 화면의 이름 아래 주소 줄). 다르면 옮기지 마세요 …"를 붙였다 — 로봇 LCD 정보 화면(`src/hmi/face/emotion/info_screen.py`)이 이름 아래에 `IP:포트` 주소 줄을 보이므로 그 말로 맞췄다. 등록 모드에서는 숨는다. 409 `still_at_pinned_address` 문장 "로봇이 아직 원래 주소에서 응답합니다 — 옮길 필요가 없습니다."를 더했다. 옮긴 뒤 문장은 늘 "이전 사이트 토큰은 Fleet이 회수하지 않습니다 — 로봇 대시보드에서 회수하거나 만료되게 두세요."(Fleet이 옛 토큰을 보내지 않으므로).
 - 증거: `address-drift.test.mjs` 2(옛 토큰 문장, IP 확인 문장·고정 주소 문장) export 없음 적색 뒤 81 passed. 브라우저: 옮기기 대화상자의 후보 주소·IP 확인 줄이 보이고 등록 대화상자에서는 숨음(요소 없음 적색 확인), 등록·해제·옮기기 5 passed. `src/hmi/web_common/test/` + 대화상자 계약 녹색. 캡처 `move-code-dialog-1920.png` 다시 찍음.
 - gate 변화: 없음(LOCAL).
+
+## 2026-10-01 · uncommitted · docs(fleet): D-392 Task 8 ROS-SIM/artifact evidence boundary
+
+- 변경: D-392 구현 계획의 Task 8에 pinned Jazzy timeout/cancel callback 실험과 local simulation manifest/checksum을 추가했다. Fleet-to-device Mission grant handoff와 ER 2 provider request는 실행하지 않았고 tool catalog의 후보 전용 권한은 그대로다.
+- 증거: `docs/validation/model-tool-ros-sim-2026-10-01/README.md`, `docs/validation/model-tool-artifact-2026-10-01/manifest.json`. Fleet의 provider/tool suites는 기존 1,128 passed/6 skipped evidence이며 이번 차례에는 provider 활성화 변경이 없다.
+- gate 변화: ROS-SIM partial/HOLD, ARTIFACT HOLD, DEVICE/FIELD PARKED. Local image ID·source hashes는 production signature/SBOM/device/field 증거가 아니다.

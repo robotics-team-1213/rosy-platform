@@ -68,8 +68,8 @@
 - pilot ROS-SIM: OMX 관절·그리퍼·취소의 Gazebo action/readback은 docs/validation/pilot-omx-gazebo-2026-10-01/에서 확인. 그리퍼 정밀 도달·카메라·기록, lease 이탈/재시작, Pinky 이전 재측정은 남음
 - pilot ARTIFACT: share/pilot 설치를 이미지에서 본 기록이 없다
 - pilot DEVICE: 실기 Pinky 에서 페달 hold-해제가 실제 정지로 이어지는 확인 전
-- omx_adapter ROS-SIM: Run D-386 response-timeout/late-response and pinned four-phase fault scenarios against ROS 2 Jazzy on the intended workstation. Pilot simulation has no camera or recording and has not exercised lease expiry, restart recovery, independent stop, ARM64 or physical hardware. Gripper target accuracy, camera timing/calibration, E-stop, ARTIFACT, DEVICE and FIELD remain unverified.
-- omx_adapter ARTIFACT: A local workstation image ID exists, but no immutable published artifact digest or dependency inventory exists; source lock is not an artifact
+- omx_adapter ROS-SIM: Full gate still requires a Fleet Mission admission/grant-to-device-owner simulator harness, a pending vendor goal fenced by generation change, restart recovery to UNKNOWN/HOLD without replay, and four-phase execution with fresh state and independent simulated object/gripper evidence. Simulator has no camera/contact evidence and does not prove independent stop, ARM64, or physical hardware.
+- omx_adapter ARTIFACT: No signed/published production artifact digest, complete SBOM, or provider deployment/secret-injection configuration is available. Simulation manifest does not qualify as a releasable runtime artifact.
 - interfaces ARTIFACT: io 이미지에 포함된다(deploy/robot/pinky_pro/image/ 빌더 `COPY src/interfaces`, `--packages-select`에 포함). 서명 manifest·OCI archive·immutable registry digest 발행 전
 - interfaces DEVICE: Pi OS Lite bench Device의 install-pi.sh 설치, verify-pi.sh, device-readback.sh --json 증거 없음
 - pinky_pro ARTIFACT: required-ros-packages.txt에 pinky_pro를 올린 뒤의 이미지 빌드와 package inventory(ros2 pkg prefix pinky_pro) 증거 없음
