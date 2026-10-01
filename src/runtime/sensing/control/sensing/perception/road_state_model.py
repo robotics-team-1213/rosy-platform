@@ -67,7 +67,9 @@ class WallSeg:
 class RoadStateParams:
     lane_width_m: float = 0.185
     near_x_m: float = 0.33
-    ir_x_m: float = 0.0
+    # IR bar ahead of base_link: URDF nominal (D-396 geometry.yaml ir.mid.x_m),
+    # refined once the IR geometry is measured on the robot.
+    ir_x_m: float = 0.0295
     # process noise (D-384: measured odometry error)
     q_d_per_m: float = 0.08
     q_phi_per_rad: float = 0.03

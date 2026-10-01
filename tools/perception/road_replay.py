@@ -79,7 +79,7 @@ from control.sensing.perception.road_state import (  # noqa: E402
 HALF = lane_replay.LANE_HALF_WIDTH_M
 LOOKAHEAD_M = 0.25
 STRAIGHT_MAX_RATE = 0.1        # rad/s
-IR_HALF_SPAN_M, IR_MAX_AGE_S = 0.012, 0.2
+IR_HALF_SPAN_M, IR_MAX_AGE_S = 0.020, 0.2   # half span: URDF nominal (D-396 geometry.yaml)
 KEEP_MAX_FRAME_GAP_S = 0.5     # as line_observer_node: a camera gap restarts the keeper
 DROPOUTS_M = (0.05, 0.10)
 CHECKPOINT_EVERY, DROPOUT_MAX_S = 8, 4.0

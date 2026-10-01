@@ -15,8 +15,8 @@ floor and 0.017 m behind base. The height is the URDF value, not a tape
 measurement of the real robot. The mount yaw is the robot's accepted
 lidar_mount record in the PC calibration store (data/calibration/<device>/,
 D-47 addendum 2026-10-01), else 180 deg (the URDF pi and the device's
-line_follow hand value). robot.yaml's 190 deg is not used: motion and camera
-measure ~181-182 deg. autolabel.py --lidar-yaw-deg overrides both.
+line_follow hand value). robot.yaml is not read for it (it held 190 deg until
+D-396). All numbers here are the URDF nominal of geometry.yaml (D-396, drift-tested). autolabel.py --lidar-yaw-deg overrides both.
 """
 from __future__ import annotations
 

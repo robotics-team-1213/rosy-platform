@@ -17,7 +17,7 @@ copy and put that back. sync copies only record files that are missing
 
 accept refuses implausible values with the same check the runtime applies
 (lidar_mount within 150-210 deg, or within 15 deg of --hand-deg when given; wheels within 10 %
-of 0.027 m / 0.0961 m; camera pitch/height in range). Accepting is the
+of the URDF nominal 0.028 m / 0.0971 m (D-396); camera pitch/height in range). Accepting is the
 operator's decision; nothing else accepts a record. accept, reject and pin
 happen on the PC mirror only; the robot store receives them through sync
 (a sync that finds decisions on both sides refuses).

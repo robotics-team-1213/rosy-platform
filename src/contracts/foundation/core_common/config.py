@@ -46,6 +46,20 @@ def overlay_path() -> Path:
     return Path(env) if env else LOCAL_CONFIG_PATH
 
 
+def local_overlay() -> dict[str, Any]:
+    """The operator's local overlay alone (the layer load_config merges last), {} if absent.
+
+    Lets a consumer tell an operator-set value from the robot package's
+    URDF-nominal one (D-396: URDF nominal < accepted calibration record <
+    operator overlay)."""
+    path = Path(os.environ.get("ROSY_CONFIG", "")) if os.environ.get("ROSY_CONFIG") else LOCAL_CONFIG_PATH
+    if not path.exists():
+        return {}
+    with open(path, encoding="utf-8") as f:
+        data = yaml.safe_load(f) or {}
+    return data if isinstance(data, dict) else {}
+
+
 def _deep_merge(base: dict, override: dict) -> dict:
     merged = dict(base)
     for key, value in override.items():

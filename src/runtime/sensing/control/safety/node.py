@@ -18,7 +18,7 @@ from sensor_msgs.msg import Imu, LaserScan, Range
 from std_msgs.msg import Bool, Float32, String, UInt16MultiArray, Float32MultiArray
 
 from ..sensing.filt import IrMedian, MedianLp
-from ..sensing.body import URDF_RADIUS, use_radius
+from ..sensing.body import ROTATION_RADIUS, URDF_RADIUS, use_radius
 from ..sensing.lidar import NOSE_YAW
 from ..sensing.localization import lease_ready
 from ..sensing.pose import planar_pose
@@ -414,7 +414,8 @@ class SafetyNode(Node, Bumper, Hazard, Gate, Scale, Evidence, Obstacles):
             self.blocked = lidar_blocked(travel[0], travel[0], previous_front, 0., .010, True)
             self.rear_blocked = lidar_blocked(travel[1], travel[1], previous_rear, 0., .010, True)
             can_rev = not self.rear_blocked
-        body_radius = max(self.robot_r, .083) if self.get_parameter('footprint_guard_enabled').value else self.robot_r
+        body_radius = (max(self.robot_r, ROTATION_RADIUS) if self.get_parameter('footprint_guard_enabled').value
+                       else self.robot_r)
         flat = self.get_parameter('rotation_footprint_xy').value or []
         rotation_estimate = self.calibration_lease.rotation_envelope(time.monotonic(), body_radius,
             list(zip(flat[::2], flat[1::2])))
@@ -422,7 +423,7 @@ class SafetyNode(Node, Bumper, Hazard, Gate, Scale, Evidence, Obstacles):
         can_rotate = lidar_can_rotate(
             (self.lidar_front, self.lidar_rear, self.lidar_left, self.lidar_right,
              self.lidar_rear_left, self.lidar_rear_right),
-            max(self.robot_r, .083) if self.get_parameter('footprint_guard_enabled').value else self.robot_r,
+            body_radius,
             lidar_ok, getattr(self, 'lidar_rotation_clearance', None), sweep_radius=swept_radius)
         pivot_margin = None
         if rotation_estimate is not None:

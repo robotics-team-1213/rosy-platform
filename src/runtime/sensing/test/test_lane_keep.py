@@ -260,7 +260,8 @@ def test_a_short_true_boundary_is_kept_by_its_partner():
     image = _segment(_render([(HALF, 0.0)]), -0.0925, 0.0, 0.28, 0.36)
     image = _segment(image, 0.12 - 0.30 * 0.7, 0.7, 0.30, 0.43)
     obs, last = _keep(image)
-    assert any(c["heading_deg"] > 30 for c in last["candidates"]), "the stray must be fitted"
+    # At the URDF-nominal lens height (0.0634 m, D-396) the 35 deg stray fits at ~30 deg.
+    assert any(c["heading_deg"] > 25 for c in last["candidates"]), "the stray must be fitted"
     assert last["strategy"] == "both" and abs(obs.error) < 0.15
     assert any(b["side"] == "right" and abs(b["heading_deg"]) < 10 for b in last["boundaries"])
     assert not _conflicts(last)

@@ -1,15 +1,18 @@
 """One source for the LiDAR mount yaw that CORE line_follow uses (D-47 addendum 2026-10-01).
 
-Resolution order, first hit wins:
-  1. the calibration store's current accepted ``lidar_mount`` record
+Resolution order, first hit wins (D-396: URDF nominal < accepted record < operator overlay):
+  1. the operator's local overlay ``line_follow.lidar_forward_deg``
+     (~/.rosy/rosy.yaml or ROSY_CONFIG), passed in as ``operator_deg``;
+  2. the calibration store's current accepted ``lidar_mount`` record
      (core_common/calibration_store.py; accepted by an operator, never
      automatic), when its value is a finite real inside 150-210 deg or within
      15 deg of the hand value (check_values); otherwise it is logged and skipped;
-  2. the hand value ``line_follow.lidar_forward_deg``.
+  3. the hand value ``line_follow.lidar_forward_deg``: the Pinky Pro robot
+     package's core.yaml, which is the URDF nominal 180 deg (geometry.yaml).
 
 ``lidar_yaw_offset`` bound through the control sensor adapter (D-47) is only
-compared: it is the safety node's hand-tuned 190 deg today, which motion and
-camera measurements contradict (~181-182 deg), so it must not silently
+compared: it is the safety node's robot.yaml value (the URDF nominal 180 deg
+since D-396, 190 deg before), not a measurement, so it must not silently
 override the line_follow value. A disagreement above 3 deg is reported in the
 source line and sets the warn flag, which the caller uses for the log level. ROS-free.
 """
@@ -30,11 +33,14 @@ def _angle_gap(a, b):
 def resolve_lidar_forward_deg(line_follow: Mapping[str, Any], *, hand_default: float,
                               adapter_parameters: Optional[Mapping[str, Any]] = None,
                               store: Optional[CalibrationStore] = None,
-                              robot: Optional[str] = None) -> tuple[float, str, bool]:
+                              robot: Optional[str] = None,
+                              operator_deg: Any = None) -> tuple[float, str, bool]:
     """(forward angle in the scan frame in degrees, source line to log, warn).
 
     warn is True when something needs an operator's attention: an unreadable
     store, a skipped accepted record, or an adapter disagreement."""
+    if isinstance(operator_deg, (int, float)) and not isinstance(operator_deg, bool) and math.isfinite(operator_deg):
+        return float(operator_deg) % 360.0, "operator overlay line_follow.lidar_forward_deg (wins over any record)", False
     hand = float(line_follow.get("lidar_forward_deg", hand_default))
     notes = []
     try:

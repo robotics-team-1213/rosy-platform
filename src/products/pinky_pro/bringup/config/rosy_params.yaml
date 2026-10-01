@@ -1,7 +1,8 @@
 bringup:
   ros__parameters:
-    wheel_radius: 0.027
-    wheel_separation: 0.0961
+    # URDF nominal (D-396 geometry.yaml), refined per robot by an accepted wheel_odometry calibration record (D-47 addendum store).
+    wheel_radius: 0.028
+    wheel_separation: 0.0971
     cmd_vel_timeout_s: 0.5
     max_linear_mps: 0.20
     max_angular_rps: 0.80

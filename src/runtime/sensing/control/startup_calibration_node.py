@@ -28,6 +28,7 @@ from tf2_ros import TransformListener
 from .calibration_sequence import CalibrationSequence
 from .calibration_camera import CalibrationCamera
 from .control.calibration import StationaryBaseline, wrap
+from .sensing.body import URDF_RADIUS
 from .sensing.lidar import NOSE_YAW, is_robot_scan, sector_range
 from .sensing.lidar_mount import nose_from_quaternion
 from .sensing.range_filter import CalibrationRangeFilter
@@ -66,7 +67,7 @@ class StartupCalibrationNode(Node, CalibrationSequence, CalibrationRotation, Cal
         self.declare_parameter('calibration_us_max_range', 3.0)
         self.declare_parameter('calibration_round_trip', False)
         self.declare_parameter('calibration_distance_m', .03)
-        self.declare_parameter('robot_radius', .076)
+        self.declare_parameter('robot_radius', URDF_RADIUS)
         self.declare_parameter('rotation_footprint_xy', [], ParameterDescriptor(dynamic_typing=True))
         self.declare_parameter('result_path', str(Path.home() / '.local/state/control/calibration.json'))
         # Base intrinsics for the stationary camera step (calibration_camera.py); '' refuses the step.

@@ -5,7 +5,7 @@ R1 needs line_observer_node in keep mode (camera_lane_mode: keep): only that
 mode publishes line/keep_debug, the LaneKeeper bundle this node estimates
 from. In any other lane mode this node receives no boundaries and stays STOP.
 IR evidence is OFF until the IR bar spacing is measured
-(ir_geometry_measured; ir_half_span_m 0.012 is a placeholder).
+(ir_geometry_measured; ir_half_span_m 0.020 is the URDF nominal, D-396).
 
 Subscribes:
   odom                        nav_msgs/Odometry; pose deltas drive the prediction
@@ -74,7 +74,8 @@ class RoadStateNode(Node):
         self.declare_parameter('ground_profile_id', '')
         self.declare_parameter('camera_pitch_deg', 0.0)
         # IR bar: lateral offset of an outer sensor from the centre one.
-        self.declare_parameter('ir_half_span_m', 0.012)   # placeholder, not measured
+        # URDF nominal (D-396 geometry.yaml ir.half_span_m), not measured on the robot.
+        self.declare_parameter('ir_half_span_m', 0.020)
         self.declare_parameter('ir_geometry_measured', False)
         self.declare_parameter('ir_calibrated', False)
         self.declare_parameter('ir_max_age_s', 0.2)

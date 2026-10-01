@@ -1,20 +1,28 @@
-"""Wheel geometry from the versioned calibration store (D-47 addendum 2026-10-01).
+"""Wheel geometry: URDF nominal < accepted calibration record < operator override.
 
-The operator-accepted ``wheel_odometry`` record wins over the bringup
-parameters (rosy_params.yaml: 0.027 / 0.0961, the seed); without one, or
-without core_common in the image, the parameters stand. An accepted record
-outside 0.027 m / 0.0961 m +-10 %, or holding a bool or non-number, is
-refused by the store's check_values and the parameters stand; the returned
-source line (which bringup logs) says so. ROS-free.
+The bringup parameters are the URDF nominal (rosy_params.yaml: 0.028 / 0.0971,
+D-396 geometry.yaml). The operator-accepted ``wheel_odometry`` record in the
+versioned calibration store (D-47 addendum 2026-10-01) refines them; without
+one, or without core_common in the image, the parameters stand. An accepted
+record outside the URDF nominal +-10 %, or holding a bool or non-number, is
+refused by the store's check_values and the parameters stand. A positive
+``override`` value (the bringup launch arguments wheel_radius /
+wheel_separation; 0 or None = not set) wins over both. The returned source
+line (which bringup logs) says which applied. ROS-free.
 """
 
 
-def calibrated_wheels(wheel_radius, wheel_separation, *, root=None, robot=None):
+def calibrated_wheels(wheel_radius, wheel_separation, *, override=None, root=None, robot=None):
     static = {'wheel_radius': float(wheel_radius), 'wheel_separation': float(wheel_separation)}
+    chosen = {k: float(v) for k, v in (override or {}).items()
+              if k in static and v is not None and float(v) > 0.0}
     try:
         from core_common.calibration_store import resolve
     except ImportError:
-        return static, 'bringup parameters (calibration store unavailable)'
+        source = 'bringup parameters (calibration store unavailable)'
+        if chosen:
+            source += f"; operator override {', '.join(sorted(chosen))}"
+        return {**static, **chosen}, source
     values, source = resolve('wheel_odometry', static, fallback_source='bringup parameters',
-                             root=root, robot=robot)
+                             root=root, robot=robot, override=chosen)
     return {k: float(values[k]) for k in static}, source

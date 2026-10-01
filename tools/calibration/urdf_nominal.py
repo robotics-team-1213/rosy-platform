@@ -1,4 +1,4 @@
-"""Pinky Pro NOMINAL geometry from the URDF, without ROS (D-394).
+"""Pinky Pro NOMINAL geometry from the URDF, without ROS (D-396).
 
 Evaluates the fixed-joint chain of src/sim/description/urdf/rosy.urdf.xacro
 (Pinky Pro upstream import 6455b1a9, D-16) with the arg defaults of
@@ -37,7 +37,7 @@ OUTPUT = REPO / "src" / "products" / "pinky_pro" / "profile" / "config" / "geome
 XACRO = "{http://www.ros.org/wiki/xacro}"
 XACRO_ALT = "{http://ros.org/wiki/xacro}"
 UPSTREAM_IMPORT = "6455b1a9"
-ADR = "D-394"
+ADR = "D-396"
 _OPS = {ast.Add: operator.add, ast.Sub: operator.sub, ast.Mult: operator.mul,
         ast.Div: operator.truediv, ast.USub: operator.neg, ast.UAdd: operator.pos}
 _EXPR = re.compile(r"\$\{([^}]*)\}")

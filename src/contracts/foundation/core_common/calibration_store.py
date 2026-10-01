@@ -18,7 +18,9 @@ path here accepts on its own.
 
 Runtime consumers call ``resolve``: the current record's values, or the
 static fallback (robot.yaml, camera_nominal.yaml, rosy_params.yaml, ...) when
-there is none, together with a source line to log.
+there is none, together with a source line to log. The static values are the
+URDF nominal (D-396, products/pinky_pro/profile/config/geometry.yaml), so the
+order is URDF nominal < accepted record < operator override.
 """
 from __future__ import annotations
 
@@ -37,12 +39,15 @@ KINDS = ("camera_profile", "wheel_odometry", "lidar_mount")
 STATUSES = ("candidate", "accepted", "rejected")
 DEFAULT_ROOT = "/var/lib/rosy/calibration"
 _LOG = logging.getLogger(__name__)
-# Plausibility at runtime and at accept (check_values). Pinky Pro numbers: the
-# C1 nose sits near scan angle 180 deg; bringup seeds 0.027 m / 0.0961 m.
-LIDAR_YAW_WINDOW_DEG = (150.0, 210.0)
+# Plausibility at runtime and at accept (check_values), centred on the Pinky Pro
+# URDF nominal (D-396, geometry.yaml; drift-tested in tools/calibration/test/
+# test_urdf_nominal.py): the C1 nose at scan angle 180 deg (rplidar_link yaw pi),
+# wheel radius 0.028 m and contact separation 0.0971 m. A record refines them.
+LIDAR_NOMINAL_DEG = 180.0
+LIDAR_YAW_WINDOW_DEG = (LIDAR_NOMINAL_DEG - 30.0, LIDAR_NOMINAL_DEG + 30.0)
 LIDAR_YAW_TOLERANCE_DEG = 15.0
-NOMINAL_WHEEL_RADIUS_M = 0.027
-NOMINAL_WHEEL_SEPARATION_M = 0.0961
+NOMINAL_WHEEL_RADIUS_M = 0.028
+NOMINAL_WHEEL_SEPARATION_M = 0.0971
 WHEEL_TOLERANCE = 0.10
 # Robot: /var/lib/rosy/calibration root:rosy-calib; group-writable, setgid dirs.
 DIR_MODE = 0o2775
@@ -334,7 +339,7 @@ def check_values(kind, values, *, nominal=None):
     LIDAR_YAW_WINDOW_DEG or within LIDAR_YAW_TOLERANCE_DEG of
     nominal["lidar_forward_deg"] (the hand value). wheel_odometry: radius and
     separation finite reals within WHEEL_TOLERANCE of nominal (default the
-    bringup seed). camera_profile: pitch_rad and height_m finite reals in a
+    URDF nominal). camera_profile: pitch_rad and height_m finite reals in a
     physical range."""
     if not isinstance(values, dict):
         return "values are not a mapping"
@@ -371,12 +376,27 @@ def check_values(kind, values, *, nominal=None):
     return f"unknown kind {kind!r}"
 
 
-def resolve(kind, fallback, *, fallback_source, robot=None, root=None, store=None, nominal=None):
-    """(values, source) for a runtime consumer: the current accepted record or the fallback.
+def resolve(kind, fallback, *, fallback_source, robot=None, root=None, store=None, nominal=None,
+            override=None):
+    """(values, source) for a runtime consumer: URDF nominal < accepted record < operator override.
 
-    source is a one-line string to log: which record (id, sha) or which static
-    file. Any store failure, and an accepted record whose values fail
-    check_values, falls back to the static values and says why."""
+    fallback is the static (URDF nominal) values; the current accepted record
+    replaces them; ``override`` (keys an operator set explicitly, e.g. a launch
+    argument or the CORE local overlay; None/empty = none) replaces both, key by
+    key. source is a one-line string to log: which record (id, sha) or which
+    static file, plus the overridden keys. Any store failure, and an accepted
+    record whose values fail check_values, falls back to the static values and
+    says why."""
+    override = {k: v for k, v in (override or {}).items() if v is not None}
+    values, source = _resolve_record(kind, fallback, fallback_source=fallback_source, robot=robot,
+                                     root=root, store=store, nominal=nominal)
+    if override:
+        values = {**values, **override}
+        source += f"; operator override {', '.join(sorted(override))}"
+    return values, source
+
+
+def _resolve_record(kind, fallback, *, fallback_source, robot, root, store, nominal):
     try:
         store = store or CalibrationStore(root)
         rec = store.current(robot or default_robot(), kind)
