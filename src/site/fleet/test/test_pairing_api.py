@@ -242,3 +242,14 @@ def test_sync_token_must_differ_from_every_other_site_secret(tmp_path, clash):
                                                                       "role": "operator"}})
     with pytest.raises(ValueError, match="pairing sync"):
         create_app(console, **kwargs)
+
+
+def test_confirm_with_a_non_ascii_credential_id_is_a_400_not_a_500(tmp_path):
+    # Security review finding 3: compare_digest on non-ASCII str raised TypeError (500).
+    client, *_ = _app(tmp_path)
+    phone = Phone()
+    created = client.post(f"{BASE}/requests", content=phone.request_bytes()).json()
+    confirm = client.post(f"{BASE}/requests/{created['request_id']}/confirm",
+                          json={"credential_id": "céd-한"},
+                          headers={"Authorization": phone.bearer})
+    assert confirm.status_code == 400

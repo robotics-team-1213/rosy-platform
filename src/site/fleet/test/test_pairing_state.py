@@ -58,7 +58,10 @@ def test_request_has_no_side_effect_but_one_pending_row_in_memory(tmp_path):
     assert pairing.SECRET_PATTERN.fullmatch(created["server_nonce"])
     assert store.credential_rows() == []
     assert [row["state"] for row in service.pending_listing()["requests"]] == ["pending"]
-    assert [row["action"] for row in store.audit_rows()] == ["request"]
+    # Unauthenticated requests are counted in memory and never reach the audit table,
+    # so anonymous traffic cannot evict operator rows (security review finding 1).
+    assert store.audit_rows() == []
+    assert service.pending_listing()["unauthenticated_requests"] == 1
 
 
 def test_fleet_restart_forgets_pending_requests(tmp_path):
@@ -388,3 +391,27 @@ def test_concurrent_approvals_issue_exactly_one_credential(tmp_path):
         thread.join()
     assert outcomes.count("approved") == 1
     assert len(store.credential_rows()) == 1
+
+
+
+def test_anonymous_request_flood_never_evicts_audit_rows_and_refusals_are_counted(tmp_path):
+    service, store, _ = _service(tmp_path)
+    store.audit(action="approve", outcome="ok", principal_id="op", target="cred-x",
+                device_kind="overhead-camera")
+    refused = 0
+    for _ in range(40):
+        try:
+            service.create(Phone().request_bytes())
+        except Exception:
+            refused += 1
+    assert [row["action"] for row in store.audit_rows()] == ["approve"]
+    listing = service.pending_listing()
+    assert listing["refused_requests"] == refused > 0
+
+
+def test_request_repr_hides_nonces_and_poll_digest(tmp_path):
+    service, _, _ = _service(tmp_path)
+    created = service.create(Phone().request_bytes())
+    entry = service._requests[created["request_id"]]
+    text = repr(entry)
+    assert created["server_nonce"] not in text and entry.poll_sha256 not in text

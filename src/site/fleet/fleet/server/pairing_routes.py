@@ -18,6 +18,7 @@ from hashlib import sha256
 from core_common.protocol import pairing as pairing_protocol
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.responses import JSONResponse
+from starlette.concurrency import run_in_threadpool
 from pydantic import BaseModel, ConfigDict, Field
 
 from .pairing import PairingError, PairingService
@@ -36,7 +37,7 @@ class ApproveBody(BaseModel):
 class ConfirmBody(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    credential_id: str = Field(min_length=1, max_length=64)
+    credential_id: str = Field(pattern=r"^[A-Za-z0-9_-]{1,64}$")
 
 
 def _refusal(exc: PairingError) -> HTTPException:
@@ -84,7 +85,8 @@ def install_pairing_routes(app: FastAPI, service: PairingService, *, sync_token:
     @app.post(f"{BASE}/requests", status_code=201, tags=["fleet-pairing"])
     async def pairing_request(request: Request) -> dict:
         try:
-            return service.create(await _capped_body(request))
+            # The service takes a lock and writes SQLite: keep it off the event loop.
+            return await run_in_threadpool(service.create, await _capped_body(request))
         except PairingError as exc:
             raise _refusal(exc) from None
 
@@ -92,7 +94,8 @@ def install_pairing_routes(app: FastAPI, service: PairingService, *, sync_token:
     async def pairing_reveal(request_id: str, request: Request,
                              authorization: str | None = Header(default=None)) -> dict:
         try:
-            return service.reveal(request_id, authorization, await _capped_body(request))
+            raw = await _capped_body(request)
+            return await run_in_threadpool(service.reveal, request_id, authorization, raw)
         except PairingError as exc:
             raise _refusal(exc) from None
 
@@ -117,7 +120,8 @@ def install_pairing_routes(app: FastAPI, service: PairingService, *, sync_token:
             raise HTTPException(status_code=400, detail={
                 "code": "PAIRING_CONFIRM_INVALID", "message": "confirm body is {credential_id}"})
         try:
-            return service.confirm(request_id, authorization, body.credential_id)
+            return await run_in_threadpool(service.confirm, request_id, authorization,
+                                           body.credential_id)
         except PairingError as exc:
             raise _refusal(exc) from None
 

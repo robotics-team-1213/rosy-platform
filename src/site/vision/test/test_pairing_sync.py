@@ -129,3 +129,13 @@ def test_sync_needs_a_url_and_token_or_a_fetcher():
         PairingSync(PairedCredentials(["ceiling_north"]))
     with pytest.raises(ValueError):
         PairingSync(PairedCredentials(["ceiling_north"]), url="ftp://fleet:8090", token="x")
+
+
+@pytest.mark.parametrize("url, ca_file", [
+    ("http://fleet:8090", "site-ca.crt"),     # plain HTTP: the sync token would cross the LAN in clear
+    ("https://fleet:8090", None),             # no pinned site CA: a spoofer's cert would be accepted
+])
+def test_sync_refuses_http_or_an_unpinned_ca(url, ca_file):
+    # Security review finding 2: either gap lets a LAN spoofer serve its own digest list.
+    with pytest.raises(ValueError):
+        PairingSync(PairedCredentials({"ceiling_north"}), url=url, token="t" * 43, ca_file=ca_file)

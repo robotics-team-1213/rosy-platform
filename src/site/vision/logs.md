@@ -261,3 +261,10 @@
 - 변경: `test/architecture/test_app_roles.py`의 Vision 경계가 sighting 쓰기 말고도 D-341 12항의 `/api/fleet/pairing/v1/credentials` 읽기를 허용한다(다른 Fleet 경로는 여전히 금지). `test_module_structure.py`에 `ingest.py` 671줄 판정(accept: 한 연결 표를 공유하는 한 소유자, digest 저장·동기화 스레드는 `pairing_sync.py`)과 `fleet` 패키지 재판정(21476)을 적었다. 비밀 스캔이 이름만 보고 잡은 호출 자리를 고쳤다(`cli.py` `known_tokens`, 종단 시험 `poll_auth=`, Fleet 시험 `shared_secret`) — 스캐너는 그대로(D-256).
 - 증거: `test/architecture/` 75 passed + 남은 1 failed는 main에 이미 있던 `schemas.py` 1092줄 판정. `test/test_release_boundary_guards.py` 72 passed + 남은 1 failed는 main의 `docs/logs.md:4077`·`docs/plans/2026-10-01-gemini-robotics-samples-research.md:5`(이 브랜치 파일 아님). vision 224 passed, foundation 389 passed.
 - gate 변화: 없음.
+
+
+## 2026-10-01 · uncommitted · fix(pairing): Vision 자격 동기화는 https와 사이트 CA 고정이 필수
+
+- 변경: 보안 리뷰 2번. 평문 `http://`나 CA 없는 동기화 URL은 기동 때 거절한다. 둘 중 하나라도 허용하면 LAN의 위장 서버가 동기화 토큰을 읽고 자기 digest 목록을 내 운용자 승인 없이 카메라 자격을 살릴 수 있었다(D-341 9·12항).
+- 증거: `test_pairing_sync.py` 신규 매개변수 시험 2건, Vision 시험 전체 통과.
+- gate 변화: 없음.

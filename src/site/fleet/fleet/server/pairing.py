@@ -64,11 +64,11 @@ class _Request:
     request_id: str
     device_label: str
     app_version: str
-    poll_sha256: str
+    poll_sha256: str = field(repr=False)
     created: float
     created_wall: float
-    client_commit: str | None
-    server_nonce: str | None
+    client_commit: str | None = field(repr=False)
+    server_nonce: str | None = field(repr=False)
     state: str = "pending"
     closed_at: float | None = None
     last_poll: float | None = None
@@ -128,6 +128,9 @@ class PairingService:
         self._code_key = secrets.token_bytes(32)  # fresh at every start (D-341 8)
         self._requests: dict[str, _Request] = {}
         self._recent: deque[float] = deque()
+        self._unauthenticated_requests = 0
+        self._refused_requests = 0
+        self._commit_mismatches = 0
         self._lock = threading.RLock()
         for credential_id in store.revoke_all_pending(reason="fleet_restart"):
             store.audit(action="expire", outcome="revoked_on_restart", principal_id=None,
@@ -199,10 +202,12 @@ class PairingService:
         self.sweep()
         now = self._monotonic()
         if len(self._recent) >= MAX_REQUESTS_PER_MINUTE:
+            self._refused_requests += 1
             wait = max(1, math.ceil(60.0 - (now - self._recent[0])))
             raise PairingError(429, "PAIRING_RATE_LIMITED", "too many pairing requests on this site",
                                retry_after=wait)
         if sum(entry.state in _LIVE for entry in self._requests.values()) >= MAX_LIVE_REQUESTS:
+            self._refused_requests += 1
             raise PairingError(429, "PAIRING_PENDING_FULL", "too many pending pairing requests",
                                retry_after=10)
         request_id = "pr-" + secrets.token_urlsafe(12)
@@ -213,8 +218,9 @@ class PairingService:
                          client_commit=body["client_commit"], server_nonce=server_nonce)
         self._requests[request_id] = entry
         self._recent.append(now)
-        self.store.audit(action="request", outcome="pending", principal_id=None,
-                         target=request_id, device_kind=OVERHEAD_CAMERA)
+        # Unauthenticated events are counted in memory, never written to the audit
+        # table: anonymous requests must not be able to evict operator rows.
+        self._unauthenticated_requests += 1
         return {"request_id": request_id, "server_nonce": server_nonce,
                 "expires_at": _iso(entry.created_wall + PENDING_LIFETIME_S)}
 
@@ -231,8 +237,7 @@ class PairingService:
         client_nonce = json.loads(raw.decode("utf-8"))["client_nonce"]
         if not hmac.compare_digest(pairing.commit(client_nonce), entry.client_commit):
             self._close(entry, "rejected", self._monotonic())
-            self.store.audit(action="reveal", outcome="commit_mismatch", principal_id=None,
-                             target=request_id, device_kind=OVERHEAD_CAMERA)
+            self._commit_mismatches += 1
             raise PairingError(400, "COMMIT_MISMATCH", "revealed nonce does not match the commit")
         code = pairing.confirmation_code(role=pairing.ROLE, request_id=request_id,
                                          leaf_cert_sha256=self.leaf_cert_sha256,
@@ -272,7 +277,7 @@ class PairingService:
             raise PairingError(410, "PAIRING_REQUEST_CLOSED", f"pairing request is {entry.state}")
         if entry.state != "delivered":
             raise PairingError(409, "NOT_DELIVERED", "the result has not been collected")
-        if not hmac.compare_digest(credential_id, entry.credential_id):
+        if not hmac.compare_digest(credential_id.encode(), entry.credential_id.encode()):
             raise PairingError(409, "CREDENTIAL_MISMATCH", "credential id does not match")
         if not self.store.activate(entry.credential_id):
             self._close(entry, "rejected", self._monotonic())
@@ -377,6 +382,10 @@ class PairingService:
                                 "has_credential": self._source_has_credential(source)}
                                for source in self.paired_source_ids],
             "site_ca_fingerprint": self.site_ca_fingerprint,
+            # Since Fleet start: a jammed queue is visible to the operator (D-341 7).
+            "unauthenticated_requests": self._unauthenticated_requests,
+            "refused_requests": self._refused_requests,
+            "commit_mismatches": self._commit_mismatches,
         }
 
     @_locked
