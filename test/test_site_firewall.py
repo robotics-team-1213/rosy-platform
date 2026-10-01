@@ -183,3 +183,33 @@ def test_units_apply_after_docker_and_check_before_compose():
     check = stack.index("ExecStartPre=/usr/bin/python3 /opt/rosy/candidate/deploy/site/"
                         "site-firewall.py check --env-file /etc/rosy/site/site.env")
     assert check < stack.index("ExecStart=/usr/bin/docker compose")
+
+
+def test_compose_and_env_never_require_a_lan_ip():
+    import ipaddress
+    import re
+
+    compose = (ROOT / "deploy/site/compose.yaml").read_text(encoding="utf-8")
+    env = (ROOT / "deploy/site/.env.example").read_text(encoding="utf-8")
+    assert '- "${ROSY_SITE_BIND_ADDRESS:-127.0.0.1}:${ROSY_SITE_HTTPS_PORT:-8443}:8443"' in compose
+    assert "ROSY_SITE_BIND_ADDRESS:?" not in compose
+    settings = dict(line.split("=", 1) for line in env.splitlines() if line and not line.startswith("#"))
+    assert settings["ROSY_SITE_BIND_ADDRESS"] == "127.0.0.1"
+    assert settings["ROSY_SITE_LAN_IFACE"] == ""
+    for text in (compose, env):
+        for literal in re.findall(r"\b\d{1,3}(?:\.\d{1,3}){3}\b", text):
+            ip = ipaddress.ip_address(literal)
+            assert ip.is_loopback or ip.is_unspecified, literal
+
+
+def test_lan_docs_bind_the_wildcard_and_scope_by_interface():
+    readme = (ROOT / "deploy/site/README.md").read_text(encoding="utf-8")
+    runbook = (ROOT / "docs/deployment/site-ceiling-camera-console-runbook.md").read_text(encoding="utf-8")
+    lan = readme[readme.index("## LAN access"):readme.index("## Contract path")]
+    assert "| `ROSY_SITE_BIND_ADDRESS` | `127.0.0.1` (default) | `0.0.0.0` |" in lan
+    assert "rosy-site-firewall.service" in lan and "DOCKER-USER" in lan and "--dry-run" in lan
+    assert "needs no IP SAN" in lan
+    assert "to the interface address" not in readme and "approved interface address" not in readme
+    assert "ROSY_SITE_DISCOVERY_URL=" not in readme  # the bridge reads tls_host + port from site.env
+    assert "ROSY_SITE_BIND_ADDRESS=0.0.0.0" in runbook and "ROSY_SITE_LAN_IFACE" in runbook
+    assert "rosy-site-firewall.service" in runbook and "검색기 끊김" in runbook

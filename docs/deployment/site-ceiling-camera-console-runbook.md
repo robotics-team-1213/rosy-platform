@@ -25,15 +25,20 @@ Rosy Cam --wss(사이트 CA 고정, tls_host 확인)--> 프록시 :8443 --> Visi
    cat site.crt site-ca.crt > site-fullchain.crt   # site_cert 시크릿이 이 파일을 가리키게 한다
    ```
 
-   인증서 SAN에는 `tls_host`(예: `site-pc.local`)가 있어야 한다. IP로도 붙일 계획이면 그 IP SAN도 넣는다.
-3. `deploy/site/compose.yaml`는 트랙 파일을 이미지에 넣는다. 다음 옵션으로 지도 맞춤과 차선 겹침을 켠다.
+   인증서 SAN에는 `tls_host`(예: `site-pc.local`)가 있어야 한다. 폰·브라우저·발견 브리지는 이 이름으로 인증서를 확인하므로 IP SAN은 필요 없다. 수동 IP 링크(3항 2번)를 쓸 때만 그 IP SAN을 더한다.
+3. **LAN 공개는 IP가 아니라 인터페이스로 한다** (`deploy/site/README.md` "LAN access"). 사이트 망이 192.168.1.0/24에서 10.16.36.0/24로 바뀐 날(2026-10-01), 옛 IP에 묶인 프록시가 "cannot assign requested address"로 못 떠서 관제·카메라·로봇·발견이 한꺼번에 멈췄다.
+   - 사이트 환경 파일(`/etc/rosy/site/site.env`): `ROSY_SITE_BIND_ADDRESS=0.0.0.0`, `ROSY_SITE_LAN_IFACE=<LAN 인터페이스, 예: wlan0>`. LAN IP를 적지 않는다. 이 PC만 쓸 때(SSH 터널)는 기본값 `127.0.0.1` 그대로 둔다.
+   - `rosy-site-firewall.service`를 설치하고 켠다. Docker 공개 포트는 ufw를 거치지 않으므로, 이 유닛이 `DOCKER-USER`에서 공개 포트를 `ROSY_SITE_LAN_IFACE`로 들어온 연결만 받고 나머지 인터페이스는 버린다. 인터페이스 이름으로만 거르므로 주소가 바뀌어도 고칠 것이 없다. 미리 보기: `sudo python3 /opt/rosy/candidate/deploy/site/site-firewall.py apply --env-file /etc/rosy/site/site.env --dry-run`.
+   - 스택 유닛이 기동 전에 점검한다. 이 PC에 없는 IP로 묶였거나 LAN 공개인데 인터페이스 필터가 없으면 이유를 남기고 뜨지 않는다(`journalctl -u rosy-site-stack`).
+   - 발견 브리지(`rosy-mdns-bridge`)는 같은 `site.env`의 `ROSY_SITE_TLS_HOST`·`ROSY_SITE_HTTPS_PORT`로 이 PC의 루프백(`127.0.0.1`)에 스캔을 보낸다. 옛 `mdns-bridge.env`(`ROSY_SITE_DISCOVERY_URL`)는 지운다. 브리지가 45초 넘게 스캔을 못 보내면 관제 **기기 연결 → 로봇 등록**에 빨간 **검색기 끊김**이 뜨고, 그동안 새 로봇 발견과 **새 주소로 옮기기**가 안 된다.
+4. `deploy/site/compose.yaml`는 트랙 파일을 이미지에 넣는다. 다음 옵션으로 지도 맞춤과 차선 겹침을 켠다.
    - Fleet: `--site-lane-graph …/lane_graph.yaml --site-lane-paint …/road_lines.stl`
    - Vision: `--map-paint …/road_lines.stl`
 
    다른 트랙은 `ROSY_SITE_CONFIG_DIR` 아래에 파일을 두고 경로만 바꾼다.
-4. `site-cameras.yaml`의 `corner_world_m`은 실제 경기장 크기(m)로 쓴다. 예: 2.81 × 1.26 m 트랙은 ±1.405, ±0.63.
-5. **mDNS 광고:** Ubuntu 현장 PC에서는 `rosy-overhead-advertise.service`(avahi)가 `_rosy-overhead._tcp`를 광고한다. TXT에는 `role=overhead-camera`, `proto=rosy-overhead/1`, `tls=required`, `tls_host`가 들어간다. 광고가 없으면 폰이 사이트를 찾지 못한다. 방화벽은 UDP 5353 수신을 허용한다.
-6. 확인: `https://<tls_host>:<포트>/healthz`가 `{"status":"ok"}`를 돌려준다.
+5. `site-cameras.yaml`의 `corner_world_m`은 실제 경기장 크기(m)로 쓴다. 예: 2.81 × 1.26 m 트랙은 ±1.405, ±0.63.
+6. **mDNS 광고:** Ubuntu 현장 PC에서는 `rosy-overhead-advertise.service`(avahi)가 `_rosy-overhead._tcp`를 광고한다. TXT에는 `role=overhead-camera`, `proto=rosy-overhead/1`, `tls=required`, `tls_host`가 들어간다. 광고가 없으면 폰이 사이트를 찾지 못한다. 방화벽은 UDP 5353 수신을 허용한다.
+7. 확인: `https://<tls_host>:<포트>/healthz`가 `{"status":"ok"}`를 돌려준다.
 
 ## 3. Rosy Cam 설치와 페어링
 
@@ -126,7 +131,7 @@ Rosy Cam --wss(사이트 CA 고정, tls_host 확인)--> 프록시 :8443 --> Visi
 | 폰 안내 | 원인 | 조치 |
 |---|---|---|
 | "사이트가 이 Wi-Fi에서 보이지 않습니다 — 같은 이름의 다른 Wi-Fi일 수 있습니다" + "지금 Wi-Fi는 …인데 페어링 때는 …였습니다" | 폰이 이름만 같은 다른 공유기나 핫스팟에 붙었다 | 현장 PC와 같은 공유기에 붙인다. 같은 이름을 쓰는 핫스팟이 있으면 이름을 바꾸거나 끈다 |
-| "사이트가 자동 찾기(mDNS)에 보이지 않습니다" + "주소 범위가 페어링 때와 같습니다" | 현장 PC가 mDNS 광고를 하지 않는다 (광고 서비스 꺼짐, UDP 5353 차단) | 현장 PC의 광고 서비스와 방화벽을 확인한다 (2항 5번) |
+| "사이트가 자동 찾기(mDNS)에 보이지 않습니다" + "주소 범위가 페어링 때와 같습니다" | 현장 PC가 mDNS 광고를 하지 않는다 (광고 서비스 꺼짐, UDP 5353 차단) | 현장 PC의 광고 서비스와 방화벽을 확인한다 (2항 6번) |
 | "Wi-Fi에 연결되어 있지 않습니다" | 폰의 Wi-Fi가 실제로 끊겼다 (아이콘만 켜져 있을 수 있음) | Wi-Fi를 다시 붙인다 |
 | "주소: 수동 주소 … (자동 찾기로 못 찾음)"에서 계속 실패 | mDNS가 못 찾아 예비 IP로 붙는 중인데 그 IP도 틀렸다 | 이름 링크로 다시 페어링한다 (수동 주소가 지워진다) |
 | 보안 연결(TLS) 실패 / 인증서 지문 불일치 | 프록시가 CA를 함께 주지 않거나, 사이트 CA가 바뀌었거나, 다른 PC다 | fullchain 파일을 쓰고, 새 CA면 새 링크로 다시 페어링한다 |
