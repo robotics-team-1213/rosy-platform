@@ -19,12 +19,9 @@ Stand-ins, recorded in the output and the evidence README (C4 replaces them):
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import math
 import os
-import re
-import subprocess
 import sys
 import threading
 import time
@@ -45,64 +42,7 @@ OPEN_TOL_RAD = 0.05
 SENSOR_REVISION = f"omx-sim-gripper-joint-position-v1:contact>{CONTACT_RAD}:open+-{OPEN_TOL_RAD}"
 
 
-def _refuse_second_owner() -> None:
-    mine = {os.getpid(), os.getppid()}
-    for proc in Path("/proc").iterdir():
-        if not proc.name.isdigit() or int(proc.name) in mine:
-            continue
-        try:
-            argv = (proc / "cmdline").read_bytes().split(b"\0")
-        except OSError:
-            continue
-        cmd = b" ".join(argv).decode(errors="ignore")
-        if b"python" in argv[0] and ("pilot_sim_server" in cmd or "probe_cell_transfer" in cmd):
-            raise RuntimeError(f"another arm owner process is running (pid {proc.name}): {cmd[:80]}")
-
-
-def model_pose(name: str, attempts: int = 5) -> dict:
-    # `gz model -p` sometimes prints nothing under load (its service request times out); retry.
-    for _ in range(attempts):
-        out = subprocess.run(["gz", "model", "-m", name, "-p"], capture_output=True, text=True,
-                             timeout=60).stdout
-        triples = [g.split() for g in re.findall(r"\[([^\]]+)\]", out)]
-        triples = [[float(v) for v in t] for t in triples if len(t) == 3]
-        if len(triples) >= 2:
-            break
-        time.sleep(1.0)
-    else:
-        raise RuntimeError(f"gz model pose for {name} not found after {attempts} attempts")
-    (x, y, z), (roll, pitch, yaw) = triples[-2], triples[-1]
-    return {"x": x, "y": y, "z": z, "roll": roll, "pitch": pitch, "yaw": yaw}
-
-
-def sim_aid(action: str) -> dict:
-    """Command the world's labelled DetachableJoint SIM AID and wait for its state echo.
-
-    A one-shot `gz topic -p` was lost before discovery (run12: the block stayed attached
-    through homing), so publish through gz-transport after the subscriber connects.
-    """
-    from gz.msgs10.empty_pb2 import Empty
-    from gz.msgs10.stringmsg_pb2 import StringMsg
-    from gz.transport13 import Node as GzNode
-
-    node = GzNode()
-    states: list[str] = []
-    node.subscribe(StringMsg, "/c3_sim_aid/state", lambda msg: states.append(msg.data))
-    publisher = node.advertise(f"/c3_sim_aid/{action}", Empty)
-    deadline = time.monotonic() + 15.0
-    while not publisher.has_connections() and time.monotonic() < deadline:
-        time.sleep(0.1)
-    sent = time.time()
-    publisher.publish(Empty())
-    want = "attached" if action == "attach" else "detached"
-    while want not in states and time.monotonic() < deadline:
-        time.sleep(0.1)
-    return {"command": action, "sent_wall": sent, "connected": publisher.has_connections(),
-            "state_echo": states[-1] if states else None, "confirmed": want in states}
-
-
-def sha256_lf(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes().replace(b"\r\n", b"\n")).hexdigest()
+from cell_sim_tools import model_pose, refuse_second_owner, sha256_lf, sim_aid  # noqa: E402
 
 
 def main() -> int:
@@ -124,6 +64,8 @@ def main() -> int:
     parser.add_argument("--sim-aid", choices=("none", "detachable-joint"), default="none",
                         help="SIM AID: attach block to link5 after the gripper readback proves a hold, "
                              "detach before release (friction grasp failed, see README)")
+    parser.add_argument("--arm-start-tolerance", type=float, default=None,
+                        help="stand-in: widen the arm joints' start-state tolerance (rad) for all phases")
     parser.add_argument("--journal-dir", default="/dev/shm/rosy-cell-c3",
                         help="SQLite phase journal; tmpfs because a /tmp write took 0.64 s inside the "
                              "ROS callback (run7) and starved the joint-state subscription")
@@ -134,7 +76,7 @@ def main() -> int:
         raise RuntimeError("C3 probe requires localhost-only ROS discovery")
     if Path("/dev/serial/by-id").exists() or list(Path("/dev").glob("video*")):
         raise RuntimeError("C3 probe refuses hardware device grants")
-    _refuse_second_owner()
+    refuse_second_owner()
 
     import rclpy
     from rclpy.callback_groups import ReentrantCallbackGroup
@@ -407,6 +349,12 @@ def main() -> int:
         starts = {phase.phase_id: dict(zip(phase.joint_names, phase.start_state_positions))
                   for phase in plan.phases}
         tolerances = profile.start_state_tolerances()
+        if args.arm_start_tolerance is not None:
+            # STAND-IN (labelled in evidence): the grip squeeze deflects joint4/joint5 by 0.02-0.33 rad
+            # (runs 10/11/13/14), past the profile's 0.02 rad start tolerance for transfer.
+            tolerances = {name: (args.arm_start_tolerance if name in ARM_JOINTS else value)
+                          for name, value in tolerances.items()}
+            evidence["stand_ins"]["arm_start_tolerance_rad"] = args.arm_start_tolerance
 
         class RebindingPort:
             """C3 stand-in, not production: PickPlaceRunner binds source_state_sequence before its
@@ -480,7 +428,7 @@ def main() -> int:
             submission_fence=ProbeFence(),
             phase_gate=lambda phase_id: gates[phase_id],
             current_fence=lambda epoch, gen: (epoch, gen) == (grant.authority_epoch, grant.dispatch_generation),
-            current_execution_state=snapshot, start_state_tolerances=profile.start_state_tolerances(),
+            current_execution_state=snapshot, start_state_tolerances=tolerances,
             max_joint_state_age_s=profile.max_joint_state_age_s, cell_profile=profile,
         )
 
@@ -558,6 +506,9 @@ def main() -> int:
                         # Triggered only by a gripper readback that already proved a hold.
                         evidence["sim_aid"]["attach_after_hold"] = sim_aid("attach")
                         evidence["sim_aid"]["block_pose_at_attach"] = model_pose(args.block_model)
+                        if not evidence["sim_aid"]["attach_after_hold"]["confirmed"]:
+                            recorder.hold(reason="SIM_AID_ATTACH_UNCONFIRMED")
+                            raise RuntimeError("sim aid attach was not confirmed")
                 except GripperReadbackError as exc:
                     record["hold_rejected"] = str(exc)
                     recorder.hold(reason="GRIPPER_HOLD_NOT_PROVEN")
