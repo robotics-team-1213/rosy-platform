@@ -36,7 +36,7 @@ def test_road_observer_binds_map_scene_and_fail_closed_ground_profile():
     assert params["dashboard_preview_fps"] == 2.0
     assert params["dashboard_preview_max_width"] == 640
     assert params["dashboard_preview_max_bytes"] == 512000
-    assert params["dashboard_source"] == "PINKY"
+    assert params["dashboard_source"] == "ROSY"
     assert params["require_camera_controls_stable"] is True
 
 
