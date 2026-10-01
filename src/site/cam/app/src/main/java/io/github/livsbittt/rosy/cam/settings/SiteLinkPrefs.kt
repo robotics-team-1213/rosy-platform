@@ -20,6 +20,7 @@ object SiteLinkPrefs {
     const val ROLE = "role"
     const val EXPIRES_AT = "expires_at"
     const val PAIRING_SUBNET = "pairing_subnet"
+    const val CREDENTIAL_ID = "credential_id"
     const val PORT = "port"
     const val TOKEN = "token"
     const val SOURCE = "source"
@@ -76,6 +77,7 @@ object SiteLinkPrefs {
             role = text(ROLE) ?: SiteLink.ROLE,
             expiresAt = text(EXPIRES_AT),
             pairingSubnet = text(PAIRING_SUBNET),
+            credentialId = text(CREDENTIAL_ID),
         )
     }
 
@@ -93,6 +95,7 @@ object SiteLinkPrefs {
         CA_PIN to link.caPin,
         EXPIRES_AT to link.expiresAt,
         PAIRING_SUBNET to link.pairingSubnet,
+        CREDENTIAL_ID to link.credentialId,
         ROLE to link.role,
         PORT to link.port,
         TOKEN to link.token,

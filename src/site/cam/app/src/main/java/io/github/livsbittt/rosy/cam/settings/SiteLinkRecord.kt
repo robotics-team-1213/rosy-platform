@@ -137,6 +137,7 @@ object SiteLinkRecord {
             manualHost = manual,
             role = record["role"] as String,
             expiresAt = record["expires_at"] as String,
+            credentialId = record["credential_id"] as String,
         )
     }
 }

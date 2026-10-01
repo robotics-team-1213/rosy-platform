@@ -1,10 +1,20 @@
 package io.github.livsbittt.rosy.cam.settings
 
 import android.net.nsd.NsdServiceInfo
+import io.github.livsbittt.rosy.cam.pairing.Pairing
 import java.nio.charset.StandardCharsets
 
-/** Public, non-secret mDNS data for the camera's Rosy Vision receiver. */
-data class OverheadServiceRecord(val serviceName: String, val tlsHost: String, val port: Int) {
+/**
+ * Public, non-secret mDNS data for the camera's Rosy Vision receiver. [address] is the resolved IP (dialled for
+ * a pairing request only, with SNI [tlsHost]); [pairable] is the D-341 14 rule (TXT `pair=rosy-pair/1`).
+ */
+data class OverheadServiceRecord(
+    val serviceName: String,
+    val tlsHost: String,
+    val port: Int,
+    val address: String? = null,
+    val pairable: Boolean = false,
+) {
     val name: String get() = serviceName
     companion object {
         const val SERVICE_TYPE = "_rosy-overhead._tcp."
@@ -12,7 +22,13 @@ data class OverheadServiceRecord(val serviceName: String, val tlsHost: String, v
 
         fun parse(info: NsdServiceInfo): OverheadServiceRecord? {
             val txt = info.attributes.mapValues { (_, value) -> value?.toString(StandardCharsets.UTF_8)?.toByteArray(StandardCharsets.UTF_8) }
-            return parse(info.serviceType, info.serviceName, info.port, txt)
+            val record = parse(info.serviceType, info.serviceName, info.port, txt) ?: return null
+            @Suppress("DEPRECATION")
+            val address = info.host?.hostAddress
+            return record.copy(
+                address = address,
+                pairable = Pairing.pairable(info.serviceType, null, address, info.port, txt) == null,
+            )
         }
 
         fun parse(serviceType: String, serviceName: String, tlsHost: String, port: Int, attributes: Map<String, ByteArray?>): OverheadServiceRecord? {
