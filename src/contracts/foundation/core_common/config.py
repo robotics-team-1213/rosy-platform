@@ -81,7 +81,7 @@ def _robot_package_layer(config: dict[str, Any], overlay: Any) -> dict[str, Any]
     LiDAR forward angle. The model is ROSY_ROBOT, else the overlay's
     robot.model, else the default's. A robot package that exists must ship the
     file (ConfigError otherwise: a silently missing layer would point the
-    Pinky Pro obstacle stop at the rear). An unknown model or missing package
+    default robot's obstacle stop at the rear). An unknown model or missing package
     adds nothing and logs one warning; the profile loader then refuses it."""
     from core_common.profile import DEFAULT_ROBOT, robot_config_dir
 
