@@ -112,6 +112,7 @@ def _setup(mod, **overrides):
         "robots": "3", "prefix": "rosy", "world_name": "rosy_factory.world", "mode": "none",
         "headless": "true", "spawn_spacing": "1.5", "core": "true", "api_port_base": "8080",
         "inflation_radius": "", "spawn_x": "", "spawn_y": "", "map": "", "loc_assist": "true",
+        "spawn_poses": "", "seed_initialpose": "true",
         **overrides,
     })
     try:
@@ -203,3 +204,39 @@ def test_nav_mode_starts_loc_assist_per_robot_unless_turned_off():
     assert len(_loc_assist_includes(actions)) == 2
     actions, _ = _setup(mod, robots="2", core="false", mode="nav", loc_assist="false")
     assert _loc_assist_includes(actions) == []
+
+
+def _named(actions, context, executable):
+    return [a for a in actions
+            if isinstance(a, Node) and _text(a.node_executable, context) == executable]
+
+
+def _spawn_pose(node, context):
+    # Node.cmd exists only after execute(); the declared arguments are on the action.
+    args = [_text(a, context) for a in node._Node__arguments]
+    return tuple(float(args[args.index(flag) + 1]) for flag in ("-x", "-y", "-Y"))
+
+
+def test_spawn_poses_default_keeps_the_catalog_row_at_yaw_zero():
+    mod = _module()
+    actions, context = _setup(mod, robots="2", core="false")
+    poses = [_spawn_pose(n, context) for n in _named(actions, context, "create")]
+    assert [p[2] for p in poses] == [0.0, 0.0]
+    assert poses[1][0] - poses[0][0] == pytest.approx(1.5)
+    assert poses[0][1] == poses[1][1]
+
+
+def test_spawn_poses_place_each_robot_and_seed_its_yaw():
+    """D-395 S1: on-square, off-slot and mirror placements need a pose per robot."""
+    mod = _module()
+    actions, context = _setup(mod, robots="2", core="false", mode="nav",
+                              spawn_poses="-1.26,0.49,1.5708; 0.3,-0.3,3.1416")
+    poses = [_spawn_pose(n, context) for n in _named(actions, context, "create")]
+    assert poses == [(-1.26, 0.49, 1.5708), (0.3, -0.3, 3.1416)]
+    assert len(_named(actions, context, "seed_initialpose.py")) == 2
+
+
+def test_seed_initialpose_false_leaves_amcl_unseeded():
+    mod = _module()
+    actions, context = _setup(mod, robots="2", core="false", mode="nav", seed_initialpose="false")
+    assert _named(actions, context, "seed_initialpose.py") == []

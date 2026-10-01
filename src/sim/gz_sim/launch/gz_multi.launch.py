@@ -27,7 +27,8 @@ import tempfile
 _LAUNCH_DIR = os.path.dirname(os.path.abspath(__file__))
 if _LAUNCH_DIR not in sys.path:
     sys.path.insert(0, _LAUNCH_DIR)
-from world_profiles import resolve_asset_path, resolve_world, resolve_world_path, spawn_xy
+from world_profiles import (parse_spawn_poses, resolve_asset_path, resolve_world, resolve_world_path,
+                            spawn_xy, world_share_parent)
 
 from ament_index_python.packages import get_package_share_directory
 
@@ -306,6 +307,7 @@ def _launch_setup(context):
         spawn_spacing=_optional_float(spawn_spacing_raw),
         map_yaml=map_yaml.strip() or None,
     )
+    spawn_poses = parse_spawn_poses(LaunchConfiguration("spawn_poses").perform(context), robots)
     spawn_x = profile.spawn_x
     spawn_y = profile.spawn_y
     spacing = profile.spawn_spacing
@@ -331,7 +333,8 @@ def _launch_setup(context):
             "GZ_SIM_RESOURCE_PATH",
             os.path.join(rosy_desc_share, "..")
             + ":" + os.path.join(rosy_gz_share, "models")
-            + ":" + os.path.join(os.environ.get("HOME", ""), ".gazebo", "models"),
+            + ":" + os.path.join(os.environ.get("HOME", ""), ".gazebo", "models")
+            + world_share_parent(profile, get_package_share_directory),
         )
     ]
 
@@ -382,7 +385,7 @@ def _launch_setup(context):
         )
 
         # 2) spawn — spawn_x/spawn_y 에서 x축으로 spacing 간격 배치
-        x, y = spawn_xy(i, spawn_x, spawn_y, spacing)
+        x, y, spawn_yaw = spawn_poses[i - 1] if spawn_poses else (*spawn_xy(i, spawn_x, spawn_y, spacing), 0.)
         group_actions.append(
             Node(
                 package="ros_gz_sim",
@@ -392,7 +395,7 @@ def _launch_setup(context):
                 arguments=[
                     "-name", ns,
                     "-topic", f"{ns}/robot_description",
-                    "-x", str(x), "-y", str(y), "-z", "0.1",
+                    "-x", str(x), "-y", str(y), "-z", "0.1", "-Y", str(spawn_yaw),
                 ],
                 parameters=[{"use_sim_time": True}],
             )
@@ -497,7 +500,7 @@ def _launch_setup(context):
         if mode_actions:
             group_actions.append(TimerAction(period=15.0, actions=mode_actions))
 
-        if mode == "nav":
+        if mode == "nav" and LaunchConfiguration("seed_initialpose").perform(context).lower() == "true":
             group_actions.append(
                 Node(
                     package="gz_sim",
@@ -509,7 +512,7 @@ def _launch_setup(context):
                         "use_sim_time": True,
                         "x": x,
                         "y": y,
-                        "yaw": 0.0,
+                        "yaw": spawn_yaw,
                     }],
                 )
             )
@@ -583,6 +586,8 @@ def generate_launch_description():
         DeclareLaunchArgument("spawn_spacing", default_value="",
                               description="로봇 간 x축 배치 간격 (m). 비우면 월드 프로필 값 "
                                           "(config/worlds.yaml), 그것도 없으면 1.5"),
+        DeclareLaunchArgument("spawn_poses", default_value="", description="'x,y,yaw_rad;..' 로봇별"),
+        DeclareLaunchArgument("seed_initialpose", default_value="true", description="false: AMCL 시드 없음"),
         DeclareLaunchArgument("core", default_value="false",
                               description="로봇별 core 기동 (포트 api_port_base + i - 1)"),
         DeclareLaunchArgument("map", default_value="",

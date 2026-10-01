@@ -197,3 +197,10 @@
 - 변경: 인자 `loc_assist`(기본 true). `mode:=nav`에서 로봇마다 control의 `loc_assist.launch.py`를 namespace·sim 시간·map과 함께 Nav2와 같은 15 s 지연 묶음에 넣는다. seed_initialpose는 그대로이며 근거가 아니다(전원 투입 UNKNOWN). 카메라는 이 런치에 브리지되지 않아 사각형 관측은 없다. 파일 595줄(예산 600).
 - 증거: `test_gz_multi_core.py`에 `loc_assist` 설정과 nav 모드 포함·끔 시험 추가. WSL에는 현재 패키지 이름으로 빌드된 작업공간이 없어 이 런치 그래프 시험은 skip(공유 share 없음) — 미검증으로 남긴다.
 - gate 변화: 없음. ROS-SIM은 P2-8.
+
+## 2026-10-02 · uncommitted · feat(sim): gz_multi 로봇별 스폰 자세·AMCL 시드 끔·월드 패키지 자원 경로 (D-395 S1)
+- 변경: 인자 `spawn_poses`(`x,y,yaw_rad;...` 로봇별, 비면 지금처럼 spawn_x/y/spacing·yaw 0)와 `seed_initialpose`(기본 true; false면 정답 자세를 AMCL에 미리 주지 않는다, D-395 전원 투입 UNKNOWN). 스폰 yaw를 `create -Y`와 시드에 같이 넣는다. `world_profiles.parse_spawn_poses`·`world_share_parent`: package:// 월드(map_v2_fleet)의 `model://control/...` 메시는 colcon 기본(격리) 설치에서 description/.. 로 안 풀려 Gazebo가 월드를 못 읽었다 — 그 패키지 share 부모를 GZ_SIM_RESOURCE_PATH에 더한다. 파일 600줄(예산 600).
+- 증거: WSL Jazzy `python3 -m pytest src/sim/gz_sim/test/test_gz_multi_core.py src/sim/gz_sim/test/test_world_profiles.py -q` 20 passed, 1 failed — 실패는 `test_nav_mode_starts_loc_assist_per_robot_unless_turned_off`로 기준(feat/d395-p2-integration 67cb5064) 파일에서도 같은 실패(0 == 2). 새 시험 3건은 `-Y` 제거·시드 조건 제거 변이에서 실패 확인. Windows `test_world_profiles.py` 10 passed. 실제 실행: S1 벤치에서 두 로봇이 지정 자세로 스폰(Gazebo 정답과 일치).
+- gate 변화: 없음. ROS-SIM S1 결과는 `docs/plans/2026-10-02-d395-s1-bench-results.md`.
+- 결정: 없음
+- 교훈: 다른 패키지 자산을 쓰는 카탈로그 월드는 merge-install에서만 돌았다 — 격리 설치에서 한 번은 띄워 본다.
