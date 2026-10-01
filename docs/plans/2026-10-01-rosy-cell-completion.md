@@ -37,13 +37,16 @@ C1 ADR 세트 ─┬─ C2 OMX 해석 IK 플래너(SOURCE) ── C3 Gazebo 단�
 ### C1. ADR 세트 (Proposed, D-402·D-403·D-404)
 
 1. **OMX 모션 플래너 v1** (D-376 개정) → [D-402](../adr/D-402-omx-motion-planner-v1-analytic-top-down-ik.md). 기존 phase 타입은 재사용하고 포즈 입력 변형 `CellTransferPlanProvider`/`CellTransferPlan`을 둔다.
-   - 플래너는 장치 로컬이다. 입력은 base-frame TCP 포즈(x, y, z, yaw, 수직하향)와 `approach_z`이고, 출력은 4단계 관절 궤적(approach, grasp, transfer, release)이다.
-   - 기하는 고정된 `open_manipulator` URDF 값에서 온다(D-397 규칙).
-   - 도달성 검사(관절 한계, 작업 영역)를 둔다. 충돌 장면은 없고, 안전은 `approach_z` 경유와 작업 영역 경계로 확보한다.
-   - 제출은 계속 owner만 한다. MoveIt은 같은 Protocol의 후속 구현이다.
+   - 플래너는 장치 로컬이다.
+     - 입력: base-frame `home`·pick·place 포즈(x, y, z, yaw, 공구 축 = −z_base), `approach_z`, `carry_z`
+     - 출력: 4단계 관절 궤적(approach, grasp, transfer, release)
+     - 수평 이동은 항상 상승 → `carry_z` → 하강이다.
+   - 기하는 고정된 `open_manipulator` URDF 값에서 온다(D-397 규칙). 한계·시간은 `deploy/robot/omx/sim/cell_profile.yaml`에서 온다. URDF ±2π는 보호가 아니고, 실제 OMX-F 한계를 고정하기 전까지 보호는 명목상이다.
+   - 충돌 장면이 없다. 이미 놓인 박스·같은 높이 이웃·들고 있는 박스·낮게 지나가는 링크는 **보호하지 않는다**. 그래서 시뮬레이션 전용이다.
+   - 제출은 계속 owner만 한다. `CELL_TRANSFER`는 phase runner로만 실행한다. MoveIt은 같은 Protocol의 후속 구현이다.
 2. **Fleet Cell Job 경로** → [D-403](../adr/D-403-fleet-cell-job-route-cell-transfer.md)
-   - 새 Action 종류는 `CELL_TRANSFER`로 확정했다. 내용은 pick 포즈, place 포즈, `approach_z`, item, job/recipe/cell 해시다.
-   - Rosy Cell은 Job을 Fleet 제안으로 제출한다. Fleet이 Step으로 풀어 승인하고 하달한다.
+   - 새 Action 종류는 `CELL_TRANSFER`로 확정했다. 내용은 다음과 같다: `home`·pick·place 포즈, `approach_z`, `carry_z`, item, job/recipe/cell 해시, step index.
+   - Rosy Cell은 자기 서비스 principal로 Job을 Fleet 제안으로 제출한다. Fleet이 재컴파일해 Step으로 풀고, 이름 있는 사람 운영자가 승인하면 하달한다. 목표 증거는 `sim_model_pose`와 그리퍼 readback이다.
    - 하달기는 `simulation` 프로필에서만 켠다. D-330 §2의 개방 조건은 ROS-SIM 정지 세대 시험이고, D-336 UDS와 같은 호스트 조건은 유지한다.
 3. **OMX 셋업·티칭 API (시뮬 우선)** → [D-404](../adr/D-404-omx-setup-teaching-api-simulation-first.md)
    - 티칭은 D-390 `pilot_sim_api`의 seat와 jog를 쓰고, 여기에 읽기 전용 TCP(FK) 조회를 더한다.
@@ -51,7 +54,14 @@ C1 ADR 세트 ─┬─ C2 OMX 해석 IK 플래너(SOURCE) ── C3 Gazebo 단�
 - 게이트: 독립 리뷰 approve, lint 0. 세 ADR을 한 브랜치에서 리뷰받고 main에 넣는다.
 
 ### C2. OMX 해석 IK 플래너 (SOURCE)
-- 위치: `src/products/omx/adapter/omx_adapter/`. 새 모듈은 `kinematics.py`(FK/IK)와 `pose_plan.py`(`PickPlacePlanProvider` 구현)다.
+- 위치: `src/products/omx/adapter/omx_adapter/`.
+  - 새 모듈은 `kinematics.py`(FK/IK)와 `pose_plan.py`다.
+  - `pose_plan.py`는 `CellTransferPlanProvider`와 `CellTransferPlan`을 구현하고, `CellPlanningProfile`이 `deploy/robot/omx/sim/cell_profile.yaml`을 읽는다.
+  - 기존 `PickPlacePlanProvider`는 RGB-D 전용으로 그대로 둔다.
+- 같은 단계의 코드 변경(D-402 §3):
+  - `action_runner.py`의 phase runner 분기를 `CELL_TRANSFER`까지 넓힌다.
+  - 직접 제출은 모르는 종류를 거절한다.
+  - `pick_place_runner.py`가 `CellTransferPlan`을 받고, start-state 검사에서 그리퍼 관절을 제외한다.
 - URDF 치수는 고정 버전의 xacro에서 추출한 값을 시험 고정값으로 둔다. 고정 버전이 바뀌면 드리프트 시험이 깨진다.
 - 시험:
   - FK∘IK 왕복
@@ -64,6 +74,10 @@ C1 ADR 세트 ─┬─ C2 OMX 해석 IK 플래너(SOURCE) ── C3 Gazebo 단�
 - `omx_pilot_workcell` 월드에 팔레트, 블록 스테이션, 슬립시트 스테이션을 추가한다.
 - C2 플래너 → owner → `/arm_controller` 경로로 블록 하나를 옮긴다. 그리퍼 readback은 `gripper_contract`를 따른다.
 - 그리퍼가 0.011 rad 어긋나는 영향을 측정한다. 폼 블록 파지가 성공하는지 본다.
+- **도달 범위 실측.**
+  - 추정값: 작업대 높이에서 joint2 축으로부터 반경 약 0.28 m 이하의 고리다. 근거는 L1 ≈ 0.1205, L2 = 0.162 m, 손목이 TCP 위 약 0.12 m라는 점이다.
+  - 팔레트 2개, 2층, 스테이션이 이 고리 안에 들어가는지 Gazebo에서 측정한다.
+  - 들어가지 않으면 데모 배치(팔레트·박스 크기, 층수)를 줄인다.
 
 ### C4. Fleet↔OMX Cell 경로
 - grant 스키마에 Cell Action 종류를 추가하고, Fleet 제안 resolver가 Job을 Step으로 푼다.
@@ -78,9 +92,11 @@ C1 ADR 세트 ─┬─ C2 OMX 해석 IK 플래너(SOURCE) ── C3 Gazebo 단�
   - 레시피 편집기: 2D 층 미리보기, 검증 결과
   - 실행: Fleet 제안 제출, 진행·HOLD 표시
 - Step 순서는 Rosy Cell 서버가 정하지 않는다. 순서와 하달은 Fleet이 한다(D-12).
+- 셀 schema를 `rosy_cell.cell/2`로 올린다. 필수 `home`(수직하향)과 `kinematics_revision`을 담는다(D-404 §5).
+- seat 갱신은 브라우저 생존 신호가 있을 때만 한다(D-404 §3).
 
 ### C6. 종단 수용 (ROS-SIM)
-- 레시피 2층, 슬립시트, 팔레트 2개를 정식 경로로 끝까지 실행한다.
+- 레시피 2층, 슬립시트, 팔레트 2개를 정식 경로로 끝까지 실행한다. 배치는 C3에서 실측한 도달 고리(약 ≤ 0.28 m) 안에 맞춘다. 맞지 않아 데모 배치를 줄였으면 줄인 배치로 수용하고 그 사실을 증거에 적는다.
 - 증거 bundle에 남길 것: 레시피·셀 해시, Fleet 원장, OMX phase 기록, 그리퍼 readback, 카메라 영상, 최종 블록 위치 오차.
 
 ## 운영 규칙

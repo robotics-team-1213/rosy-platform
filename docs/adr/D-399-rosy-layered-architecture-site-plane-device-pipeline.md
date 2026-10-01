@@ -123,6 +123,7 @@ DRIVERS              Pinky Pro HW · Dynamixel OMX-F (+ OMX-L 읽기) · Future 
 1. **반응형 정책 엔벌로프 스킬 계약.** LeRobot 추론 → Motion Intent, 종료 조건, 녹화 모드와의 관계, LeRobotDataset 변환 매핑을 정한다. 같은 호스트 밖에서 추론하려면 이 ADR이 D-231 §4를 개정해야 한다.
 2. **장치 Lifecycle·Fault 계약.** Fleet 집계 형식도 포함한다.
 3. **OMX 경로 계획에 MoveIt 2 채택.** D-376 HOLD를 해제하는 조건, 5축 수직하향 IK, Gazebo+MoveIt 런치를 정한다.
+   - **보강 (2026-10-01, D-402):** 시뮬레이션 실행은 [D-402](D-402-omx-motion-planner-v1-analytic-top-down-ik.md)의 해석 IK로 먼저 한다. MoveIt 2 채택은 같은 플래너 인터페이스의 두 번째 구현으로 나중에 정한다.
 4. **Rosy Cell 애플리케이션.** 셀 설정과 레시피, Step 계약, 셋업·티칭 경로를 정한다(OMX 장치 API ADR 포함 또는 선행).
 5. **Motion Intent 공통 스키마와 장치별 Arbiter 우선순위 표.** MANUAL의 phase 선점 규칙도 정한다.
 
