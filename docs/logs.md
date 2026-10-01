@@ -4285,3 +4285,8 @@
 - 변경: `feat/d395-p2-integration` 에 B(CORE)→C(Fleet)→A(로봇 노드) 순으로 병합. main 이 D-390 으로 v1.70 을 먼저 썼으므로 갈래 B 계약은 API Ref **v1.71** 로 재번호(헤더, 변경 이력 행, D-395 절 언급, `app.py` ×2, Fleet·line-follow 핀; 인터페이스 계획서의 "v1.70" 은 계획 당시 기록으로 둔다). 갈래 간 계약 시험 `src/runtime/gateway/test/test_localization_cross_lane.py`(A 의 실제 payload → B 중계·앱 → C 클라이언트·Arbiter → B 결정 → A `on_decision`, suspect, 레거시 initialpose) 추가 — 불일치 없음. 배포 closure 등록부에 `loc_assist_node` 추가(A 가 `hardware.launch.py` 에 연결). control 크기 판정 41649 재측정, roster.js 는 main 의 오프라인 경고 뒤에 D-395 위치 확인 필요 항목.
 - 증거: sensing 2243 passed/104 skipped, gateway·api_web·services·foundation 2553 passed/30 skipped, Fleet 1278 passed/7 skipped, node web 86/86, harness lint 0 errors. `test/` 전체는 1500 s 안에 끝나지 않아 실패 지점만 재실행: `test_module_separation`(control→core_common, main 에서도 실패; A 의 `loc_assist.py` 가 계약 모델로 한 줄 추가), `test_module_scorecard`, `test_release_boundary_guards`, `test_dashboard_drive`(Playwright) 는 main 에서도 실패.
 - gate 변화: 없음. 장치 항목은 D-395 개정 5 대로 대기.
+
+## 2026-10-02 · uncommitted · merge: D-395 2단계 통합 — main 재병합, 계약 v1.72
+- 변경: 통합 브랜치에 최신 main 재병합. main 이 D-400 으로 v1.71 을 먼저 써서 D-395 2단계 계약을 API Ref **v1.72** 로 다시 올림(헤더, 변경 이력 행 v1.72→v1.71→v1.70 순, D-395 절 언급, `app.py` ×2, Fleet·line-follow 핀). `StateManager` 는 D-400 `safety_policy` 와 D-395 `localization` 공급자를 둘 다 둔다.
+- 증거: 재병합 뒤 빠른 검사(아래 보고).
+- gate 변화: 없음.

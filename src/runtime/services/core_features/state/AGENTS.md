@@ -12,7 +12,7 @@ CORE-001 immutable snapshots (~10 Hz). Thread-safe; API and WS read `snapshot()`
 | File | Description |
 |------|-------------|
 | `__init__.py` | Package marker |
-| `manager.py` | `StateManager`: pose, velocity, battery, mode, nav, power, health, safety, swarm |
+| `manager.py` | `StateManager`: pose, velocity, battery, mode, nav, power, health, safety, swarm. `set_safety_policy_provider(fn)` (D-400) fills `StateSnapshot.safety_policy`; a provider failure yields null, never a failed snapshot |
 
 ## Subdirectories
 
