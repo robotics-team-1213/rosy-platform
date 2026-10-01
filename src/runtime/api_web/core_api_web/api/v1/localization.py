@@ -8,15 +8,18 @@ The legacy `POST /localization/initialpose` stays in navigation.py.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Optional
 
 from fastapi import APIRouter, Body, Depends
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, ValidationError
 
-from core_api_web.api.deps import AuthContext, CoreServicesLike, get_services
+from core_api_web.api.deps import (AuthContext, CoreServicesLike, MissionRefused, NavigationError,
+                                   get_services)
 from core_api_web.api.errors import ApiError
 from core_api_web.api.grants import LOCALIZE_ASSIST, NAVIGATE, check_grant, require_grant
+from core_api_web.api.v1.common import viewer
+from core_common.domain.tasks import TaskKind
 from core_common.protocol.localization import DecisionSource, LocalizationDecision
 
 localization_router = APIRouter(prefix="/api/v1/localization", tags=["localization"])
@@ -83,6 +86,47 @@ def decision(body: Any = Body(...), auth: AuthContext = Depends(assist),
         svc.events.publish("localization.initialpose", source=f"api:{auth.role}", data={
             "x": parsed.pose.x, "y": parsed.pose.y, "yaw": parsed.pose.yaw, "source": "human"})
     return JSONResponse(status_code=202, content={"request_id": parsed.request_id})
+
+
+class MissionRequest(BaseModel):
+    kind: str = Field(min_length=1, max_length=32)
+    max_distance_m: float
+    max_time_s: float
+    target: Optional[dict[str, Any]] = None
+
+
+def _mission(svc: CoreServicesLike):
+    mission = getattr(svc, "loc_mission", None)
+    if mission is None:
+        raise ApiError("CAPABILITY_NOT_SUPPORTED", 501, "this runtime has no localization missions")
+    return mission
+
+
+@localization_router.post("/mission", status_code=202)
+def start_mission(body: MissionRequest, auth: AuthContext = Depends(assist),
+                  svc: CoreServicesLike = Depends(get_services)):
+    """D-395 P2-7: CORE drives a check manoeuvre or homing mission (Fleet never drives)."""
+    reporting_assist(svc)
+    mission = _mission(svc)
+    if svc.calibration.blocking(auth.token_id) is not None:
+        raise ApiError("calibration_lease", 409, "a calibration lease is in progress")
+    TaskKind.MOVE.require(svc.capability)
+    try:
+        svc.nav.require_ready()
+    except NavigationError as exc:
+        raise ApiError(exc.code, 503, str(exc)) from exc
+    try:
+        started = mission.start(body.kind, body.max_distance_m, body.max_time_s, body.target)
+    except ValueError as exc:
+        raise ApiError("VALIDATION_ERROR", 400, str(exc)) from exc
+    except MissionRefused as exc:
+        raise ApiError(exc.code, 409, str(exc)) from exc
+    return JSONResponse(status_code=202, content=started)
+
+
+@localization_router.get("/mission")
+def mission_status(_: AuthContext = Depends(viewer), svc: CoreServicesLike = Depends(get_services)):
+    return _mission(svc).status()
 
 
 @localization_router.post("/suspect", status_code=202)

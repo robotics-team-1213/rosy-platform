@@ -131,6 +131,7 @@ def test_path_points_rotate_with_the_mount():
 class _Services:
     def __init__(self, forward_deg):
         self.line_follow = LineFollowManager(object(), config=LineFollowConfig(obstacle_mode="sector"))
+        self.loc_mission = None
         self.line_follow.use_lidar_forward(forward_deg, "test")
         self.seen = []
         self.line_follow.observe_clearance = lambda d, received_at: self.seen.append(d)

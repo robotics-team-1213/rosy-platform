@@ -208,7 +208,7 @@ def test_bridge_feeds_points_in_path_mode_and_distance_in_sector_mode():
             config=LineFollowConfig(obstacle_mode=mode),
             observe_scan_points=lambda points, received_at: calls.append(("points", len(points))),
             observe_clearance=lambda distance, received_at: calls.append(("distance", distance)))
-        return SimpleNamespace(line_follow=line)
+        return SimpleNamespace(line_follow=line, loc_mission=None)
 
     bridge_observation.front_clearance(services("path"), sample, received_at=1.0)
     bridge_observation.front_clearance(services("sector"), sample, received_at=1.0)

@@ -140,6 +140,8 @@ class RosBridge:
             Bool, "docking/collision_exemption", _LATCHED)
         self.loc_decision_pub = node.create_publisher(String, "localization/decision", 5)
         self.loc_suspect_pub = node.create_publisher(String, "localization/suspect", 5)
+        # D-395 P2-7: mission start/end; the sensing node searches again after an end.
+        self.loc_mission_pub = node.create_publisher(String, "localization/mission", 5)
         self._led_client = node.create_client(SetLed, "set_led")
         # D-385: 모드별 표정 — 정책은 core_features.command.emotion_map, 노드는 감정 서버.
         self._emotion_client = node.create_client(Emotion, "set_emotion")
@@ -209,6 +211,7 @@ class RosBridge:
             bool(node.get_parameter("use_sim_time").value),
             lambda: self._node.get_clock().now().nanoseconds / 1e9)
         self._svc.line_follow.bind_clock(self._line_clock)
+        self._svc.loc_mission.bind_clock(self._line_clock)
         # The dock observation feed is stamped on the same clock, so the
         # docking manager judges tag freshness and phase timeouts on it too.
         self._svc.docking.bind_clock(self._line_clock)
@@ -223,6 +226,8 @@ class RosBridge:
         loc.clock = lambda: self._node.get_clock().now().nanoseconds / 1e9
         loc.publish_decision = lambda body: self.loc_decision_pub.publish(String(data=json.dumps(body)))
         loc.publish_suspect = lambda body: self.loc_suspect_pub.publish(String(data=json.dumps(body)))
+        self._svc.loc_mission.publish = (
+            lambda body: self.loc_mission_pub.publish(String(data=json.dumps(body))))
         self._node.get_logger().info("ros_bridge ready (cmd_vel sole publisher @50Hz)")
 
     def _on_odom(self, msg: Odometry) -> None:
@@ -234,6 +239,7 @@ class RosBridge:
         self._svc.state.set_velocity(sample["linear_x"], sample["angular_z"])
         self._last_odom_pose = (sample["x"], sample["y"], sample["yaw"])
         self._svc.nav.on_pose_progress(sample["x"], sample["y"])
+        self._svc.loc_mission.observe_odom(sample["x"], sample["y"], sample["yaw"])
 
     def _on_battery(self, msg: Float32) -> None:
         self._voltage_topic_seen = True
@@ -287,6 +293,8 @@ class RosBridge:
             self._svc, msg, warn=self._node.get_logger().warning)
 
     def _tick_line_follow(self) -> None:
+        # D-395 P2-7 mission ends and rotate/nudge twists ride this 20 Hz timer.
+        self._svc.loc_mission.tick()
         if not self._svc.line_follow.active:
             return
         now = self._line_clock()

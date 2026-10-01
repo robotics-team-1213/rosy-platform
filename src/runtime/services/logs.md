@@ -311,3 +311,15 @@
 - 변경: `SafetyManager.check_decision`/`decision_valid` 분리, `shadow.py` `ShadowLog`(락, 판정 단위 전이 이벤트, 1 s 반복, 최소 0.2 s 간격, suppressed/dropped 카운터), 그림자·집행 바인딩 상호 배타와 `shadow_evaluate`(예외 비전파), `CommandManager`가 그림자를 `announce_pending`에서 바퀴 출력 뒤에 판정, 네비게이션·도킹의 `policy_off`(모드 진입마다 첫 0 아닌 출력), `StateManager.set_safety_policy_provider`.
 - 증거: 전체 시험(gateway+services+foundation+api_web+test/) `5 failed, 5919 passed, 249 skipped, 31 warnings, 4 errors in 3428.70s`; `known_failures.py`는 exit 1: 9건 모두 이 브랜치가 건드리지 않은 시험이며(main 4804d417에서도 test_module_separation, test_release_boundary_guards, test_robot_literals, test_dashboard_drive 4건이 같게 실패, test_module_criteria C6와 test_behavior_test_ownership은 main이 이후 고쳤고 이 브랜치는 그 이전 기준) 이 브랜치 기인 실패는 0건.
 - gate 변화: 없음. SOURCE만. 그림자는 어느 로봇에서도 켜지 않았다(기본 off).
+
+## 2026-10-02 · uncommitted · feat(localization): D-395 P2-7 확인 기동·귀환 미션 실행기
+
+- 변경: 새 `localization/mission.py` `LocalizationMission` — `LOCALIZED` 가 아닐 때만 `rotate_in_place`(오도메트리 한 바퀴, 0.3 rad/s), `nudge_forward`(≤ 0.10 m, 0.03 m/s, 정면 0.25 m 정지), `lane_to_stopline`(카메라 line-follow 를 이 미션에 한해 LOCALIZED 관문 없이, 세션 속도 0.04 m/s, 정지선 0.12 m·거리·시간에서 끝). `to_square` 는 `unsupported`(map 프레임 없이 차선 경로가 없다, 후속). 바퀴는 NAVIGATION 모드의 nav 슬롯(`set_nav_twist`)으로만 — 50 Hz `select_output` 이 최종 중재. 끝(완료·시간·장애물·e-stop·LOCALIZED·센서 끊김·모드 이탈)은 명령을 지우고 IDLE 로, `localization.mission` 이벤트와 `publish`(ROS `localization/mission`). 시작은 `assist.gate` 안에서 검사·출발. `wire_assist` 가 미션을 만들고 LOCALIZED 진입 훅이 미션을 끝낸다(반환값 `(assist, mission)`).
+- 증거: `gateway/test/test_localization_mission.py` 30.
+- gate 변화: 없음.
+
+## 2026-10-02 · uncommitted · fix(localization): D-395 P2-7 리뷰 — 못 보는 정면은 막힘, 회전 가드, 모든 종류 LiDAR 끊김
+
+- 변경: `line_follow/clearance.py` 새 `front_sector`(정면 최단 유효 거리·유효 빔·빔 수; inf·NaN·`range_min` 미만은 무효 빔으로 셈, self-mask 반사는 빔에서 뺌). `nudge_forward` 는 정면 ±20° 에 유효 빔이 5 개 미만이거나 무효 빔이 30 % 를 넘으면 거부·정지(`range_min` 안 물체는 그렇게 보인다). `lidar_self_mask` 를 넘긴다. `rotate_in_place` 는 전체 스캔에 0.20 m 안 유효 반사가 있거나 스캔이 낡으면 거부. LiDAR 끊김(0.5 s)은 모든 종류를 `obstacle_sensor_stale` 로 끝낸다. `end()` 의 nav 슬롯 지우기는 한 번(지우면 시험이 빨개진다). `bind_clock` — 브리지가 line clock(use_sim_time 이면 ROS 시계)을 준다.
+- 증거: `gateway/test/test_localization_mission.py` +14 (변이: `end()` 의 `clear_navigation` 삭제 → 7 빨강).
+- gate 변화: 없음.

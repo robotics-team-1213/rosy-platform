@@ -64,8 +64,8 @@
 
 ## 최근 기록
 
+- 2026-10-02 · uncommitted · fix(localization): D-395 P2-7 리뷰 — 미션 중 탐색 멈춤은 130 s 뒤 풀린다
+- 2026-10-02 · uncommitted · feat(localization): D-395 P2-7 미션 뒤 재탐색
 - 2026-10-02 · uncommitted · feat(perception): visible lane candidates and object labels
 - 2026-10-02 · uncommitted · fix(localization): lane A 리뷰 — 카메라 구독은 LOCALIZED 밖에서만, 종료 플래그, 작업 스레드 로그 없음 (D-395 P2-3)
 - 2026-10-02 · uncommitted · fix(localization): lane A 리뷰 — 픽업 epoch, 검증 중 재보고·중복 결정, received_s 필수, 증거 시각 (D-395 P2-3)
-- 2026-10-01 · uncommitted · feat(localization): 카메라 페인트 점으로 후보별 paint_score (D-395 P2-3 후속)
-- 2026-10-01 · uncommitted · fix(tools): Gazebo localization rig를 D-395 흐름으로 (P2-3 후속)

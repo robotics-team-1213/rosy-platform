@@ -873,3 +873,15 @@
 - 증거: 추종·keeper·topology·tag·observer wiring 집중 시험 113 passed. 다차선 11 사례, 표식 픽셀 및 무효 입력, GAZEBO 주행 serializer 회귀 포함. docs/plans/2026-10-02-lane-object-preview-design.md.
 - 한계: 후보는 현재 프레임의 관측이며 전체 도로 차선 수·자동 차선 변경·객체 종류/추적/미래 궤적을 뜻하지 않음. 실기 설치는 전원 꺼짐으로 미확인.
 - gate 변화: 없음. SOURCE/LOCAL 표시 개선 검증; DEVICE/FIELD 미승격.
+
+## 2026-10-02 · uncommitted · feat(localization): D-395 P2-7 미션 뒤 재탐색
+
+- 변경: `LocAssist.on_mission` — CORE `localization/mission` 이 `running` 이면 탐색하지 않고, `done`·`aborted` 면 바로 한 번 탐색한다(CANDIDATES 에서도 이동·재시도 시간을 기다리지 않음). `loc_assist_node` 가 그 토픽을 구독한다.
+- 증거: `test/test_loc_assist.py` +3.
+- gate 변화: 없음.
+
+## 2026-10-02 · uncommitted · fix(localization): D-395 P2-7 리뷰 — 미션 중 탐색 멈춤은 130 s 뒤 풀린다
+
+- 변경: `LocAssist` 는 `running` 을 받은 시각을 들고, `MISSION_PAUSE_S`(CORE 최장 미션 120 s + 10 s) 가 지나면 끝 메시지가 없어도(유실·CORE 재시작) 다시 탐색한다.
+- 증거: `test/test_loc_assist.py` +1.
+- gate 변화: 없음.

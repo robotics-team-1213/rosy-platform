@@ -11,9 +11,13 @@ enter robot localization; D-395 only *proposes* to amend that, and the amendment
 not accepted. `overhead_cue=True` (CLI `--localization-overhead-cue`) feeds sightings
 to the arbiter and the monitor for sim/bench work; leave it off on a live site.
 
-Ladder missions (`rotate_in_place`, `to_square`/`lane_to_stopline`) are logged as
-"pending P2-7" and never sent: CORE's mission executor is lane B P2-7. Only the last
-rung, `needs_human`, is visible: the console badge reads "위치 확인 필요".
+Ladder missions (P2-7): at 10 s `rotate_in_place`, at 45 s `to_square` (when a square
+is known; CORE refuses it as `unsupported` today) then `lane_to_stopline`, at 120 s
+`needs_human` (console badge "위치 확인 필요"). A rung CORE answers `busy` (the previous
+mission still running) is asked again every 2 s while the ladder stays on it. CORE drives every mission; Fleet only
+asks (D-2, D-369). Before a mission Fleet holds the robots near the mover through the
+console's traffic keep-out (`traffic_hold`), and it never asks a LOCALIZED robot or one
+that predates D-395.
 """
 
 from __future__ import annotations
@@ -23,7 +27,7 @@ import logging
 import math
 import time
 from pathlib import Path
-from typing import Callable, Mapping, Optional, Sequence
+from typing import Awaitable, Callable, Mapping, Optional, Sequence
 
 import yaml
 
@@ -68,7 +72,8 @@ def build_localization_service(console, sightings, *, enabled: bool = True,
     slots, squares = service_logic.parse_reference_squares(
         load_lane_rules(lane_rules if lane_rules is not None else default_lane_rules()))
     return LocalizationService(console.clients, slots=slots, squares=squares,
-                               sightings=sightings, overhead_cue=bool(overhead_cue))
+                               sightings=sightings, overhead_cue=bool(overhead_cue),
+                               traffic_hold=getattr(console, "hold_for_localization", None))
 
 
 def _pose(state: Mapping) -> Optional[cues.Pose]:
@@ -85,7 +90,8 @@ class LocalizationService:
                  sightings=None, overhead_cue: bool = False, arbiter: Optional[Arbiter] = None,
                  clock: Callable[[], float] = time.monotonic,
                  wall: Callable[[], float] = time.time, poll_s: float = POLL_S,
-                 call_timeout_s: float = CALL_TIMEOUT_S) -> None:
+                 call_timeout_s: float = CALL_TIMEOUT_S,
+                 traffic_hold: Optional[Callable[[str], Awaitable[Sequence[str]]]] = None) -> None:
         self._clients = clients
         self._slots = tuple(slots)
         self._squares = tuple(squares)
@@ -96,10 +102,16 @@ class LocalizationService:
         self._wall = wall          # sighting captured_at is site wall time
         self._poll_s = poll_s
         self._timeout_s = call_timeout_s
+        #: Holds the robots near a mover before its mission (console traffic keep-out).
+        self._traffic_hold = traffic_hold
         self._monitor = Monitor()
         self._ladder = Ladder()
         self._last_good: dict[str, cues.Pose] = {}
         self._last_decision: dict[str, dict] = {}
+        self._last_mission: dict[str, dict] = {}
+        self._last_report: dict[str, object] = {}
+        #: robot_id -> (rung, Fleet time of the busy refusal) still to be retried.
+        self._busy_rung: dict[str, tuple[str, float]] = {}
         #: robot_id -> ((request_id, stamp), Fleet monotonic time first seen).
         self._report_seen: dict[str, tuple] = {}
         self._known: set[str] = set()
@@ -111,7 +123,8 @@ class LocalizationService:
         if robot_id not in self._known:
             return None
         return {**self._ladder.view(robot_id, self._clock()),
-                "last_decision": self._last_decision.get(robot_id)}
+                "last_decision": self._last_decision.get(robot_id),
+                "last_mission": self._last_mission.get(robot_id)}
 
     # --- loop -----------------------------------------------------------------------
 
@@ -150,8 +163,12 @@ class LocalizationService:
         for rid, state in states.items():
             status = trust.status_of(state)
             rung = self._ladder.update(rid, status.state if status else None, now)
+            retry = self._busy_rung.get(rid)
+            if rung is None and retry is not None and retry[0] == self._ladder.view(rid, now)["rung"]                     and now - retry[1] >= service_logic.BUSY_RETRY_S:
+                rung = retry[0]
             if rung is not None:
-                self._report_rung(rid, rung)
+                self._busy_rung.pop(rid, None)
+                await self._climb(rid, clients[rid], rung, status, now)
 
     # --- steps ----------------------------------------------------------------------
 
@@ -170,6 +187,7 @@ class LocalizationService:
         if report.robot_id != rid:
             logger.warning("localization: %s reported candidates for %s; ignored", rid, report.robot_id)
             return
+        self._last_report[rid] = report
         peers = {o: p for o, p in localized.items() if o != rid}
         context = Context(peers=[p[:2] for p in peers.values()], slots=self._slots,
                           squares=self._squares, last_good=self._last_good.get(rid),
@@ -237,14 +255,44 @@ class LocalizationService:
         except Exception as exc:
             logger.warning("localization: suspect to %s failed: %s", rid, exc)
 
-    def _report_rung(self, rid: str, rung: str) -> None:
-        missions = service_logic.RUNG_MISSIONS[rung]
-        if missions:
-            logger.info("localization: %s ladder %s: would request %s (pending P2-7, not sent)",
-                        rid, rung, " / ".join(missions))
-        else:
+    async def _climb(self, rid: str, client: RobotClient, rung: str, status, now: float) -> None:
+        """One ladder rung: ask CORE for the rung's mission, or raise needs_human."""
+        if rung == "needs_human":
             logger.warning("localization: %s still unlocalized after %.0f s: needs_human (위치 확인 필요)",
                            rid, self._ladder.human_s)
+            return
+        if status is None or status.state is LocState.LOCALIZED:
+            return          # legacy (null) or LOCALIZED robots never get a mission
+        target = service_logic.square_target(self._last_report.get(rid), self._squares)
+        kinds = [k for k in service_logic.RUNG_MISSIONS[rung] if k != "to_square" or target is not None]
+        try:
+            held = list(await self._traffic_hold(rid)) if self._traffic_hold is not None else []
+        except Exception as exc:
+            logger.warning("localization: %s mission skipped, traffic hold failed: %s", rid, exc)
+            self._last_mission[rid] = {"kind": kinds[0], "rung": rung, "held": [],
+                                       "result": "traffic_hold_failed"}
+            return
+        for kind in kinds:
+            distance, limit = service_logic.MISSION_LIMITS[kind]
+            record = {"kind": kind, "rung": rung, "held": held, "result": "sent"}
+            self._last_mission[rid] = record
+            try:
+                await self._bounded(client.localization_mission(
+                    kind, max_distance_m=distance, max_time_s=limit,
+                    target=target if kind == "to_square" else None))
+                logger.info("localization: %s ladder %s: %s sent (held %s)", rid, rung, kind, held)
+                return
+            except RobotApiError as exc:
+                record["result"] = exc.code
+                logger.info("localization: %s refused %s: %s %s", rid, kind, exc.code, exc)
+                if exc.code == "busy":
+                    self._busy_rung[rid] = (rung, now)
+                if exc.code != "unsupported":
+                    return
+            except Exception as exc:
+                record["result"] = "unreachable"
+                logger.warning("localization: mission %s to %s failed: %s", kind, rid, exc)
+                return
 
     def _sighting(self, rid: str, now: float) -> Optional[cues.Sighting]:
         """A fresh (<= 300 ms) overhead sighting, only while the D-257 flag is on."""
@@ -269,5 +317,8 @@ class LocalizationService:
             self._ladder.forget(rid)
             self._last_good.pop(rid, None)
             self._last_decision.pop(rid, None)
+            self._last_mission.pop(rid, None)
+            self._last_report.pop(rid, None)
+            self._busy_rung.pop(rid, None)
             self._report_seen.pop(rid, None)
         self._known = current

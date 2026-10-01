@@ -121,6 +121,7 @@ class LocAssistNode(Node):
         self.create_subscription(Bool, 'safety/pickup', self.on_pickup, 1)
         self.create_subscription(String, 'localization/decision', self.on_decision, 5)
         self.create_subscription(String, 'localization/suspect', self.on_suspect, 5)
+        self.create_subscription(String, 'localization/mission', self.on_mission, 5)
         self.sync_camera()
         self.create_timer(.1, self.tick)
 
@@ -214,6 +215,11 @@ class LocAssistNode(Node):
         payload = self._json(msg, 'localization/suspect')
         if payload is not None:
             self.publish(self.core.on_suspect(self.now(), payload))
+
+    def on_mission(self, msg):
+        payload = self._json(msg, 'localization/mission')
+        if payload is not None:
+            self.core.on_mission(self.now(), payload)
 
     def on_camera(self, msg):
         now = self.now()

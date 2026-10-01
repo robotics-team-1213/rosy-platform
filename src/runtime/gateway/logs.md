@@ -685,3 +685,16 @@
 - 변경: CI 빨강(36877526967 등 3회 연속, 2026-10-01 14:28 원격 푸시부터)의 원인인 C6 reach 8종을 전부 삭제로 수정. snapshot.mode/navigation/docking 은 StateSnapshot 이 보장하는 선언 멤버(schemas.py)라 직접 접근으로 바꾸고, docking_state 는 pin 된 모드-맥락 계약(도킹 중에만 실린다)대로 고침. self._svc.nav.current_goal 은 NavigationManager 에 선언된 적이 없는 멤버 — 주행 카드의 목표 좌표는 태어나서 한 번도 값이 실린 적 없었다(죽은 reach). 읽기를 지우고 판정을 문서에 남긴다. 시험 stub 의 docking.state 를 실제 DockState enum 으로(문자열 이중 모양 제거).
 - 근거: docs/plans/2026-09-06-module-split-criteria.md 행 추가(판정: 전부 Seam lie — deletion). test_module_criteria·test_bridge_display·test_bridge_reconcile·test_bridge_timers·test_emotion_map·test_goal_tracker 87 passed, flake8 초록.
 - gate 변화: 없음. 목표 좌표 표시는 NavigationManager 가 current_goal 을 선언하는 커밋에서 돌아온다(직접 접근 + 실측 시험 동반).
+
+
+## 2026-10-02 · uncommitted · feat(bridge): D-395 P2-7 미션 조립과 배선
+
+- 변경: `services.py` 가 `wire_assist` 의 미션을 `loc_mission` 으로 든다. `ros_bridge.py`: 새 발행 `localization/mission`(신뢰, 깊이 5), `_on_odom` → `observe_odom`, 20 Hz line-follow 타이머 첫 줄에서 `loc_mission.tick()`(타이머 수 그대로). `observation.front_clearance` 가 LiDAR 표본을 미션에도 넘긴다(정면 여유는 미션이 필요할 때만 잰다). `docking_mode.route_nav_cmd_vel` 은 회전·전진 미션 중 Nav2 출력을 버린다. 직접 속성 접근(C6 새 reach 없음); 가짜 서비스 두 곳에 `loc_mission=None`.
+- 증거: `test/test_localization_mission.py` 30, `test_bridge_timers.py` 발행 목록 +1.
+- gate 변화: 없음.
+
+## 2026-10-02 · uncommitted · fix(bridge): D-395 P2-7 미션도 line clock 으로
+
+- 변경: `ros_bridge.py` 가 `loc_mission.bind_clock(self._line_clock)` — `use_sim_time` 이면 미션 시간 한도·센서 신선도가 sim 초로 잰다.
+- 증거: `test/test_localization_mission.py::test_the_bridge_ticks_missions_on_the_line_clock`.
+- gate 변화: 없음.

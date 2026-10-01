@@ -75,8 +75,15 @@ CONTROL_SPLIT = "docs/plans/2026-09-22-control-package-split-design.md"
 
 #: P6 verdicts: path (relative to src/) or package name -> (lines at verdict, verdict).
 SIZE_VERDICTS = {
+    "core_features": (
+        10_101,
+        "accept: CORE's ROS-free feature layer (D-125/D-126) is already split by owner into subpackages "
+        "(command, safety, line_follow, docking, navigation, localization, ...), each host-tested; the "
+        "package total is the layer, not one owner (X1). Crossed 10000 on 2026-10-02 at 10101 when "
+        "D-395 P2-7 added localization/mission.py (the mission executor, its own module under budget)",
+    ),
     "fleet": (
-        24_204,
+        24_403,
         "split: server HTTP boundary, console, signals and the mission-control stores are separate owners "
         "today; group them into subpackages rather than one flat server/ tree (B2); owner fleet, unscheduled "
         "(re-judged 2026-09-29 at 11164 after mission_store joined the server tree; re-judged 2026-09-30 at "
@@ -112,6 +119,10 @@ SIZE_VERDICTS = {
         "server module (server/localization_service.py), its pure monitor/ladder and pose trust in "
         "fleet/localization (service_logic.py, trust.py), the client routes in transport.py and a pure "
         "web/localization-badge.js, plus tests; verdict unchanged. "
+        "Re-judged 2026-10-02 at 24403 when D-395 P2-7 joined (the ladder sends missions from "
+        "server/localization_service.py, the pre-mission traffic hold in console.py, pure "
+        "MISSION_LIMITS/square_target in fleet/localization, the mission client in transport.py) on "
+        "top of main's D-405/D-406 console work; verdict unchanged. "
         "Split remains unscheduled (docs/plans/2026-09-30-er2-mission-feedback-loop.md)",
     ),
     "site/fleet/fleet/server/proposal_store.py": (
@@ -176,7 +187,7 @@ SIZE_VERDICTS = {
         "accept: legacy comparison-graph publisher pinned by test_module_separation; no new work (X3)",
     ),
     "site/fleet/fleet/server/console.py": (
-        1076,
+        1111,
         "accept: one owner (FleetConsole gather/scatter), host-testable (X5). Re-judged 2026-09-30 at 1013: "
         "D-361 roster mutation and pinned-address holds change the gather/traffic tables in place, so they "
         "stay with their owner; the roster policy itself lives in roster.py; re-judged 2026-09-30 at 1021 "
@@ -184,7 +195,11 @@ SIZE_VERDICTS = {
         "P2-2: untrusted poses change the same gather/traffic tables (_seen, _queued) in place, so the "
         "LOCALIZATION_UNTRUSTED queue reason stays with its owner while the trust rules live in "
         "fleet/localization/trust.py — verdict unchanged; re-judged at 1076 when the lane C review queued an "
-        "unlocalized mover instead of dispatching it (same queue table) — verdict unchanged",
+        "unlocalized mover instead of dispatching it (same queue table) — verdict unchanged; re-judged "
+        "2026-10-02 at 1096 for D-395 P2-7: the pre-mission traffic hold cancels and queues goals in "
+        "the same _goals/_claims/_queued tables (hold_for_localization) — verdict unchanged; re-judged "
+        "2026-10-02 at 1111 when the P2-7 review made the hold also cancel crossing yields "
+        "(_yielding) and stop a formation near the mover — same tables, verdict unchanged",
     ),
     "runtime/sensing/control/sensing/perception/lane.py": (
         765,

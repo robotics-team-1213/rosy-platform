@@ -418,3 +418,43 @@ def test_the_camera_is_wanted_only_outside_localized():
     assert not a.camera_wanted
     a.on_suspect(6., {'reason': 'fleet_monitor'})
     assert a.camera_wanted
+
+
+# --- D-395 P2-7: CORE missions ---------------------------------------------------
+
+
+def test_no_search_runs_while_a_core_mission_moves_the_robot():
+    a = core()
+    a.on_mission(0., {"kind": "rotate_in_place", "state": "running", "reason": None})
+    assert not a.search_due(0., ODOM)                 # power-on wants one, but the robot is moving
+    a.on_mission(1., {"kind": "rotate_in_place", "state": "done", "reason": "done"})
+    assert a.search_due(1., ODOM)
+
+
+def test_a_mission_end_searches_candidates_again_without_waiting_for_a_move():
+    a = core()
+    candidates_ready(a)
+    assert not a.search_due(1.5, (.01, 0., 0.))       # CANDIDATES: neither moved nor waited
+    a.on_mission(1.5, {"kind": "nudge_forward", "state": "running", "reason": None})
+    a.on_mission(2., {"kind": "nudge_forward", "state": "aborted", "reason": "obstacle"})
+    assert a.search_due(2., (.01, 0., 0.))            # fresh candidates after every mission end
+    a.search_started(2., (.01, 0., 0.))
+    a.search_finished(2.5, (.01, 0., 0.), [TRUTH, MIRROR])
+    assert not a.search_due(3., (.01, 0., 0.))        # one search per end
+
+
+def test_a_mission_message_without_a_known_state_is_ignored():
+    a = core()
+    candidates_ready(a)
+    a.on_mission(2., {"state": "flying"})
+    a.on_mission(2., "not a dict")
+    assert not a.search_due(2., ODOM)
+
+
+def test_a_lost_mission_end_stops_pausing_the_search_after_the_longest_mission():
+    """CORE caps a mission at 120 s; a lost end message or a CORE restart must not pause
+    the search forever: the pause lapses 10 s after that."""
+    a = core()
+    a.on_mission(0., {"kind": "lane_to_stopline", "state": "running", "reason": None})
+    assert not a.search_due(130., ODOM)
+    assert a.search_due(130.1, ODOM)

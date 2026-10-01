@@ -281,9 +281,11 @@ class HttpRobotClient:
 
     async def localization_mission(self, kind: str, *, max_distance_m: float, max_time_s: float,
                                    target: Optional[dict] = None) -> dict:
-        raise NotImplementedError(
-            "POST /api/v1/localization/mission is lane B P2-7 (CORE mission executor); "
-            "Fleet logs ladder mission requests as pending until it lands")
+        """Ask CORE to run a check manoeuvre or homing mission (P2-7); CORE drives, Fleet
+        never does (D-2, D-369). A 409 refusal arrives as `RobotApiError` with the code."""
+        return await self._post("/api/v1/localization/mission", {
+            "kind": kind, "max_distance_m": max_distance_m, "max_time_s": max_time_s,
+            "target": target})
 
     async def aclose(self) -> None:
         if self._owns_http:

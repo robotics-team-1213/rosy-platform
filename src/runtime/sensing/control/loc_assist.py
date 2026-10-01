@@ -48,6 +48,9 @@ MAX_CANDIDATES, MAX_OBJECTS, MAX_SIGHTINGS = 8, 16, 4
 STILL_M, STILL_RAD = .005, .02
 #: CORE and this node read the same robot clock; more than this ahead is not jitter.
 RECEIPT_AHEAD_S = .5
+#: CORE's longest mission (120 s) plus a margin: a running mission whose end never arrives
+#: (lost message, CORE restart) stops pausing the search after this (P2-7).
+MISSION_PAUSE_S = 130.
 
 
 @dataclass(frozen=True)
@@ -81,6 +84,7 @@ class LocAssist:
         self._report, self._reported_s = None, -math.inf
         self._state_s, self._state_key = -math.inf, None
         self._pending = None                # request id whose 3 s check is running
+        self._mission = None                # since when a CORE mission moves the robot (P2-7)
 
     # --- inputs -------------------------------------------------------------
     def on_amcl_pose(self, pose):
@@ -101,6 +105,15 @@ class LocAssist:
             self._wanted = True
         self.held = bool(active)
         return out
+
+    def on_mission(self, now_s, payload):
+        """CORE's `localization/mission` (D-395 P2-7): no search while a mission moves
+        the robot; every end asks for one at once, so Fleet gets fresh candidates."""
+        state = payload.get('state') if isinstance(payload, dict) else None
+        if state == 'running':
+            self._mission = float(now_s)
+        elif state in ('done', 'aborted'):
+            self._mission, self._wanted = None, True
 
     def on_suspect(self, now_s, payload):
         reason = payload.get('reason') if isinstance(payload, dict) else None
@@ -159,15 +172,16 @@ class LocAssist:
     # --- search -------------------------------------------------------------
     def search_due(self, now_s, odom):
         """Whether the node should start a candidate search now (odom: current (x, y, yaw))."""
-        if self._searching is not None or self.held or self.machine.check is not None:
+        moving = self._mission is not None and now_s - self._mission <= MISSION_PAUSE_S
+        if self._searching is not None or self.held or self.machine.check is not None or moving:
             return False
         waited = now_s - self._searched_at >= self.retry_s
         state = self.machine.state
         if state in (LocState.UNKNOWN, LocState.SUSPECT):
             return self._wanted or waited
         if state is LocState.CANDIDATES:
-            return waited and odom is not None and self._searched_odom is not None and _moved(
-                odom, self._searched_odom, self.moved_m, self.moved_rad)
+            return self._wanted or (waited and odom is not None and self._searched_odom is not None
+                                    and _moved(odom, self._searched_odom, self.moved_m, self.moved_rad))
         return False
 
     @property
