@@ -78,3 +78,10 @@
 - gate 변화: 없음.
 - 결정: 분류와 동작은 따로 둔다. `NetworkFailure.TLS_PIN`은 앱 내부 종류로 남지만 분류는 `tls_untrusted`다.
 - 열린 후속: (1) 앱은 4400 사유를 trim·소문자로 비교한다(Python은 정확 일치). 벡터에 해당 사례는 없다. (2) 앱 `SiteLink.validate`는 `.local`이 아닌 `tls_host`도 받는다(설정 화면에서 입력한 DNS 이름, review m4의 시스템 DNS 경로). 공유 규칙은 `bad_tls_host`다. (3) 공유 기록의 `manual_host`는 이름도 되지만, 앱 저장 모양은 IP만 받는다.
+
+## 2026-10-01 · be9ac996 · fix(cam): D-391 tls_host는 .local 이름만, 공유 벡터 갱신(464b0c88) 반영
+
+- 변경: (be9ac996) 코디네이터 결정에 따라 `SiteLink.validate`는 한 레이블 + `.local`이 아닌 `tls_host`를 거절한다(공유 벡터와 같은 규칙). 설정 화면 저장과 `rosyov://` 딥링크도 `SiteLink.entryReason`으로 같은 검사를 하고, "사이트 이름은 .local 이어야 합니다"를 보인다. IP는 여전히 수동 주소로 받는다. review m4의 시스템 DNS 경로를 없앴다. `.local`이 아닌 이름은 수동 주소나 `not_discovered`로 간다. 저장값은 옛 IP면 그대로 `manual_host`로 옮기고, 옛 기록이든 새 형식이든 `.local`이 아닌 이름이면 읽지 않는다. `SiteLinkPrefs.rejectedHost`가 그 이름을 알려 주고, 송출 화면은 "다시 페어링하세요"를 띄운다. 저장 형식은 그대로다. (54881d1f) main 464b0c88을 병합했다. rosy-00이 4400 사유를 trim·casefold하고, `manual_host`를 IP 리터럴로 좁혔다. `SiteLinkRecord`는 이름·`ip:port` `manual_host`를 `bad_manual_host`로 거절한다.
+- 증거: `gradlew testDebugUnitTest --rerun-tasks` BUILD SUCCESSFUL, JVM 시험 244 passed, 0 failed(`failure-classes.v1.json` 28 사례, `site-link.v1.json` 35 사례, `.local` 규칙·딥링크·옛 기록 거절 시험) (2026-10-01 Windows, JDK 21).
+- gate 변화: 없음.
+- 결정: 앞 항목의 열린 후속 셋은 닫혔다. (1)·(3)은 벡터를 바꿔 앱에 맞췄고, (2)는 앱을 벡터에 맞췄다.
