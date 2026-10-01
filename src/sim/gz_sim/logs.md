@@ -174,7 +174,7 @@
 - 증거: `docs/adr/D-368-pilot-live-driver-video.md`, ADR Log 행·코드·시험이 새 번호를 쓴다.
 - gate 변화: 없음(번호만).
 
-## 2026-10-01 · feat/urdf-nominal-geometry · feat(sim): 카메라를 URDF 사슬에 맞춘다 (D-397)
+## 2026-10-01 · edca9b2e · feat(sim): 카메라를 URDF 사슬에 맞춘다 (D-397)
 - 변경: `map_v2_fleet_real` `cam_mount_z` 0.05307 → 0.0495, 높이 0.067 → 0.06343(NOMINAL 프로필). `map_v2_fleet_lane` line_observer `camera_x_offset_m` 0.034 → 0.028481(25° URDF 사슬, dock observer와 같은 값).
 - 증거: `test_map_v2_fleet_launch.py`, `test_map_v2_fleet_real_launch.py`, `test_urdf_nominal.py`.
 - gate 변화: ROS-SIM HOLD — 랩을 다시 돌아야 한다.

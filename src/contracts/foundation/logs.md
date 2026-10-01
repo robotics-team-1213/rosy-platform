@@ -264,7 +264,7 @@
 - 증거: `test_pairing_vectors.py` 53 passed(모듈 작성 전 수집 단계 실패 확인). foundation 전체·비밀 스캔은 커밋 기록 참조 — `test_no_secrets_in_tracked_files`의 `docs/logs.md:4077`·`docs/plans/2026-10-01-gemini-robotics-samples-research.md:5` 실패와 `fleet` 크기 판정 실패는 main에 이미 있던 것이다(이 변경 파일 아님).
 - gate 변화: 없음(LOCAL). Kotlin 로더는 Rosy Cam 세션 몫.
 
-## 2026-10-01 · feat/urdf-nominal-geometry · feat(geometry): calibration_store 중심값과 운영자 층 (D-397)
+## 2026-10-01 · edca9b2e · feat(geometry): calibration_store 중심값과 운영자 층 (D-397)
 - 변경: `calibration_store` 바퀴 기준 0.027/0.0961 → URDF NOMINAL 0.028/0.0971(±10 %), `LIDAR_NOMINAL_DEG` 180, 창 180 ± 30. `resolve(..., override=)` — URDF NOMINAL < 승인 레코드 < 운영자 덮어쓰기, 덮어쓰기도 `check_values`를 통과해야 하고 실패하면 경고·거부. `config.local_overlay()`가 운영자 오버레이만 읽는다(`overlay_path()`).
 - 증거: `test_calibration_store.py` 세 종류 순서·거부 테스트, `tools/calibration/test/test_urdf_nominal.py` 드리프트.
 - gate 변화: SOURCE/LOCAL. DEVICE HOLD(배포 전 사용자 승인).

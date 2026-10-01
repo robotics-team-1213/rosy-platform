@@ -744,7 +744,7 @@
 - 결정: D-384 Proposed (rev 3)
 - 교훈: 멈춘 로봇의 같은 화면을 매 프레임 새 증거로 넣으면 비평행 쌍이 곡률로 흡수돼 φ가 뒤집힌다 — 움직인 화면만 새 증거다
 
-## 2026-10-01 · feat/urdf-nominal-geometry · feat(control): 기하 기본값을 URDF NOMINAL로 (D-397)
+## 2026-10-01 · edca9b2e · feat(control): 기하 기본값을 URDF NOMINAL로 (D-397)
 - 변경: `lidar.py` `MOUNT_YAW_DEG` 10 → 0(NOSE_YAW π), `robot.yaml`/`auto_calib.yaml` `lidar_yaw_offset`·`scan_yaw_offset` 3.316 → π. `body.ROTATION_RADIUS` 0.083이 `.083` 리터럴을, `URDF_RADIUS`가 `.076` 리터럴을 대신한다(값 그대로). road_state `ir_x_m` 0 → 0.0295, `ir_half_span_m` 0.012 → 0.020. line_observer `camera_*_override`(NaN = 없음) 운영자 층.
 - 증거: sensing 전체 스위트, `test_urdf_nominal.py` 소비자 드리프트, `test_lane_keep.py`(stray 기준 30 → 25°, 짝 < 5°).
 - gate 변화: SOURCE/LOCAL. DEVICE HOLD — 전방 섹터 10° 회전, 시작 캘리브레이션 인증서 무효(재실행), 기기 calib 스냅샷의 190° 확인 필요.
