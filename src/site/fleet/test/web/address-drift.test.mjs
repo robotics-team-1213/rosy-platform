@@ -5,7 +5,7 @@ import { readFileSync } from "node:fs";
 import {
   RENUMBER_BANNER, addressMap, addressReason, movableRobots, renumberBanner,
 } from "../../fleet/server/web/address-drift.js";
-import { MESSAGES, moveDoneLines } from "../../fleet/server/web/enrollment.js";
+import { MESSAGES, MOVE_CHECK, moveDoneLines } from "../../fleet/server/web/enrollment.js";
 
 const WEB = new URL("../../fleet/server/web/", import.meta.url);
 
@@ -100,12 +100,15 @@ test("there is no bulk move: every move asks for that robot's screen code", () =
   assert.match(panel, /move-address`;[\s\S]{0,120}method: "POST", body: \{ code: input\.value \}/);
 });
 
-test("a finished move says whether the old site token was revoked", () => {
-  const row = { robot_id: "rosy_09", address: "10.16.36.20:8080", old_token_revoked: true };
-  assert.deepEqual(moveDoneLines(row), ["rosy_09: 10.16.36.20:8080(으)로 옮김 — 새 토큰으로 다시 묶었습니다."]);
-  const left = moveDoneLines({ ...row, old_token_revoked: false });
-  assert.equal(left.length, 2);
-  assert.match(left[1], /이전 사이트 토큰을 회수하지 못했습니다 — 로봇 대시보드/);
+test("a finished move always tells the operator to revoke the old site token", () => {
+  const lines = moveDoneLines({ robot_id: "rosy_09", address: "10.16.36.20:8080", old_token_revoked: false });
+  assert.equal(lines[0], "rosy_09: 10.16.36.20:8080(으)로 옮김 — 새 토큰으로 다시 묶었습니다.");
+  assert.match(lines[1], /이전 사이트 토큰은 Fleet이 회수하지 않습니다 — 로봇 대시보드에서 회수하거나 만료되게 두세요/);
+});
+
+test("the move dialog asks for an IP check against the robot's own screen", () => {
+  assert.match(MOVE_CHECK, /로봇 화면에 보이는 IP와 같은지 확인하세요/);
+  assert.equal(MESSAGES.still_at_pinned_address, "로봇이 아직 원래 주소에서 응답합니다 — 옮길 필요가 없습니다.");
 });
 
 test("a different device at the new address is reported without implying a leak", () => {

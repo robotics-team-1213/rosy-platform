@@ -1080,6 +1080,7 @@ def test_robot_enrollment_panel_enrolls_by_screen_code(console_url):
         page.goto(console_url, wait_until="networkidle")
         page.get_by_role("heading", name="로봇 등록", exact=True).wait_for()
         page.locator("#discovery-list ui-button", has_text="등록").first.click()
+        assert not page.locator("#enroll-move-check").is_visible()
         page.locator("#enroll-code").fill("7kxm" + "p3qa")
         page.locator("#enroll-submit").click()
         page.wait_for_function(
@@ -2192,6 +2193,10 @@ def test_offline_robots_say_why_and_each_move_asks_for_the_screen_code(console_u
         dialog.wait_for()
         assert "rosy_09 → 10.16.36.20:8080" in page.locator("#enroll-target").inner_text()
         assert page.locator("#enroll-submit").inner_text() == "옮기기"
+        check = page.locator("#enroll-move-check")
+        assert check.is_visible()
+        assert page.locator("#enroll-move-address").inner_text() == "10.16.36.20:8080"
+        assert "로봇 화면에 보이는 IP와 같은지 확인하세요" in check.inner_text()
         assert page.locator("#estop").is_enabled()
         page.locator("#enroll-code").fill("7kxm" + "p3q")
         page.locator("#enroll-submit").click()
@@ -2202,7 +2207,7 @@ def test_offline_robots_say_why_and_each_move_asks_for_the_screen_code(console_u
         page.wait_for_function("() => document.querySelector('#enroll-result')?.textContent.includes('옮김')")
         assert moves == [("/api/fleet/enrollment/robots/rosy_09/move-address", {"code": "7KXM-" + "P3QA"})]
         result = page.locator("#enroll-result").inner_text()
-        assert "이전 사이트 토큰을 회수하지 못했습니다" in result
+        assert "로봇 대시보드에서 회수하거나 만료되게 두세요" in result
 
         # The enrolled-list action opens the same code dialog (no window.confirm).
         row_move = page.locator('#enrolled-list li[data-robot-id="rosy_10"] ui-button[data-action="move"]')

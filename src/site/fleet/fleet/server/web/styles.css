@@ -586,6 +586,10 @@ main {
 .address-drift { display: grid; gap: var(--space-2); margin: var(--space-2) 0; }
 .address-drift[hidden] { display: none; }
 .address-drift .enroll-alarm { margin: 0; }
+.enroll-move-check[hidden] { display: none; }
+.enroll-move-check p { margin: var(--space-1) 0; }
+.enroll-move-address-label { font-size: var(--text-label); color: var(--ink-quiet); }
+.enroll-move-address { font-family: var(--mono); font-size: var(--text-title); font-weight: var(--weight-label); color: var(--ink); }
 .address-movable { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-2); }
 .address-movable li { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
 .address-movable li span { font-family: var(--mono); font-size: var(--text-label); }

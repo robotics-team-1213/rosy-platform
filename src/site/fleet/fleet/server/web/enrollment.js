@@ -54,6 +54,7 @@ export const MESSAGES = {
   not_enrolled: "등록된 로봇이 아닙니다.",
   address_unchanged: "주소가 바뀐 로봇이 아닙니다.",
   no_new_address: "새 주소가 하나로 보이지 않습니다 — 발견 목록을 확인하세요.",
+  still_at_pinned_address: "로봇이 아직 원래 주소에서 응답합니다 — 옮길 필요가 없습니다.",
   identity_mismatch: "새 주소의 기기가 등록된 로봇과 다릅니다 — 등록된 토큰은 보내지 않았습니다. 발견 목록의 이름과 로봇 화면의 이름이 같은지 확인하세요.",
   ROBOT_BUSY: "진행 중인 목표나 교통 대기가 있습니다 — 먼저 취소하세요.",
   ACTIVE_TASKS: "끝나지 않은 작업이 있습니다 — 먼저 취소하세요.",
@@ -61,14 +62,19 @@ export const MESSAGES = {
   OPERATOR_IDENTITY_REQUIRED: "이름 있는 운영자 계정으로만 등록·해제할 수 있습니다.",
 };
 
-// 새 주소로 옮긴 뒤의 문장. 옛 토큰을 확인된 새 주소에서 회수하지 못했으면 운용자가 할 일을 말한다.
+// 새 주소로 옮긴 뒤의 문장. Fleet은 옛 토큰을 어디에도 보내지 않으므로(중계 방어) 회수는 사람 몫이다.
 export function moveDoneLines(row) {
   const lines = [`${row.robot_id}: ${row.address}(으)로 옮김 — 새 토큰으로 다시 묶었습니다.`];
-  if (row.old_token_revoked === false) {
-    lines.push("이전 사이트 토큰을 회수하지 못했습니다 — 로봇 대시보드에서 이전 사이트 토큰을 회수하세요.");
+  if (row.old_token_revoked !== true) {
+    lines.push("이전 사이트 토큰은 Fleet이 회수하지 않습니다 — 로봇 대시보드에서 회수하거나 만료되게 두세요.");
   }
   return lines;
 }
+
+// 평문 HTTP라 Fleet은 새 주소가 그 로봇인지 증명하지 못한다. 로봇 LCD 정보 화면의 주소 줄
+// (`IP:포트`, hmi/face info_screen)과 맞춰 보는 사람이 신원을 묶는다(D-361 2026-10-01 개정).
+export const MOVE_CHECK = "코드를 넣기 전에 이 주소가 로봇 화면에 보이는 IP와 같은지 확인하세요"
+  + "(LCD 정보 화면의 이름 아래 주소 줄). 다르면 옮기지 마세요 — 같은 이름을 다른 기기가 광고하고 있을 수 있습니다.";
 
 export const CONSUMED_REASONS = {
   role_too_low: "원인: 코드 역할이 operator보다 낮습니다.",
@@ -260,6 +266,12 @@ export function createEnrollmentPanel({ headers, identity, log, dialogs, onMoved
     state.target = target;
     el("enroll-target").textContent = label;
     el("enroll-submit").textContent = target.move ? "옮기기" : "등록";
+    const check = el("enroll-move-check");
+    if (check) {
+      check.hidden = !target.move;
+      el("enroll-move-address").textContent = target.address || "";
+      el("enroll-move-note").textContent = MOVE_CHECK;
+    }
     el("enroll-code").value = "";
     const dialog = el("enroll-dialog");
     // D-280 원칙 2 — showModal()은 #estop까지 inert로 만든다. 비모달로 열고 정지는 살린다.
@@ -267,7 +279,7 @@ export function createEnrollmentPanel({ headers, identity, log, dialogs, onMoved
   }
 
   function openMove(robotId, address) {
-    openDialog({ move: robotId }, address ? `${robotId} → ${address}` : robotId);
+    openDialog({ move: robotId, address }, address ? `${robotId} → ${address}` : robotId);
   }
 
   async function act(action, row) {
