@@ -41,6 +41,19 @@ def test_layout_is_not_invariant_under_180_deg_rotation(squares):
     assert nearest == pytest.approx(0.40, abs=0.02)
 
 
+def test_a_square_fixes_the_heading_axis_but_not_its_sign(squares):
+    """A robot placed on a square faces along the road, either way (user, 2026-10-01).
+
+    The rules carry only the axis; the start candidates are axis and axis + 180,
+    and the scan fit picks one. Flipping the heading swaps the front and rear wall
+    distances along the axis, so the scan tells them apart only when the square
+    is off-centre along that axis."""
+    for s in squares:
+        assert s["heading_axis_deg"] in (0, 90)
+        along = s["centre"][0] if s["heading_axis_deg"] == 0 else s["centre"][1]
+        assert abs(along) > 0.3   # front/rear walls differ by 2*|along| > 0.6 m
+
+
 @pytest.mark.parametrize("world_path", WORLDS, ids=lambda p: p.name)
 def test_world_has_flat_visual_only_patches_matching_the_rules(world_path, squares):
     world = ET.parse(world_path).getroot().find("world")
