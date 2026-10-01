@@ -69,8 +69,8 @@
 
 ## 최근 기록
 
+- 2026-10-01 · uncommitted · fix(fleet): D-375 맵 자동 맞춤 버튼을 경기장 도구 줄에 합친다
 - 2026-10-01 · uncommitted · fix(fleet): D-375 지도 맞춤 뷰를 D-359 캔버스·사유 계약 아래로
 - 2026-10-01 · 8fac2428 · fix(console): D-375 지도 맞춤 독립 리뷰 반영
 - 2026-10-01 · uncommitted · fix(hub): D-382 F6 독립 리뷰 반영 — 밀려난 소켓 닫기, 세션 인자 키워드 전용
 - 2026-10-01 · uncommitted · fix(hub): D-382 F6 — 소켓을 로봇 하나에 묶고 짝 토큰을 상수 시간으로 비교
-- 2026-10-01 · 952d5d80 · fix(fleet): lens profile review fixes
