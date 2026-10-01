@@ -1,7 +1,7 @@
 # CORE 안전 정책 — 그림자 모드로 켜고, 근거를 모아 집행한다
 
 - 날짜: 2026-10-01
-- 상태: 설계 승인(사용자, 2026-10-01). 구현 전. ADR: [D-398](../adr/D-398-core-safety-policy-off-shadow-enforce.md) (Proposed)
+- 상태: 설계 승인(사용자, 2026-10-01). 구현 전. ADR: [D-400](../adr/D-400-core-safety-policy-off-shadow-enforce.md) (Proposed)
 - 브랜치: `docs/core-safety-policy-shadow`
 - 잇는 결정: D-47(센서 어댑터 보정 바인딩)과 2026-10-01 addendum(보정 저장소), D-397(URDF NOMINAL < 승인 레코드 < 운영자), D-66(CORE 이미지 슬라이스), D-149/D-208(단일 최종 발행자), D-344 §11·§12(라인 추종 전방 정지·IR guard), D-379(실주행 녹화)
 

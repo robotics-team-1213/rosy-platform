@@ -1,4 +1,4 @@
-"""D-398: one validation rule for enforce and shadow (check_decision)."""
+"""D-400: one validation rule for enforce and shadow (check_decision)."""
 
 from dataclasses import replace
 

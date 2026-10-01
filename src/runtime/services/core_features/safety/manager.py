@@ -92,7 +92,7 @@ _DISPOSITIONS = ('allow', 'limit', 'stop')
 
 def check_decision(decision: object, request: SafetyRequest, elapsed: float) -> str:
     """'' when ``decision`` is a valid, current answer to ``request`` that permits motion;
-    otherwise the policy_reason CORE reports. One rule for enforce and shadow (D-398).
+    otherwise the policy_reason CORE reports. One rule for enforce and shadow (D-400).
     A stop returns the policy's own reason (or 'policy_stop'); any validation failure returns
     'policy_invalid'. Callers that must tell stop from invalid read decision.disposition, not this string."""
     if (not isinstance(decision, SafetyDecision) or not math.isfinite(elapsed) or not 0 <= elapsed <= .01

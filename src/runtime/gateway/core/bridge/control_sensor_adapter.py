@@ -34,7 +34,7 @@ _CALIBRATION_PARAMETER_FIELDS = frozenset({
 
 
 def _parse_mode(raw: Mapping[str, Any]) -> str:
-    """D-398: mode off | shadow | enforce; the legacy enabled bool maps to enforce/off."""
+    """D-400: mode off | shadow | enforce; the legacy enabled bool maps to enforce/off."""
     if "mode" in raw and "enabled" in raw:
         raise ValueError("control sensor adapter takes mode or enabled, not both")
     if "mode" not in raw:
@@ -307,7 +307,7 @@ class ControlSensorAdapter:
         """Bind the worker policy to CORE's safety consumer when enabled."""
         if not self.enabled:
             return False
-        # D-398: shadow binds through bind_shadow_control_policy (plan Task 7); until then it never enforces.
+        # D-400: shadow binds through bind_shadow_control_policy (plan Task 7); until then it never enforces.
         if self.config.mode != "enforce":
             return False
         if self.policy is None or not callable(getattr(safety, "bind_control_policy", None)):

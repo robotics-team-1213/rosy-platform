@@ -4202,3 +4202,9 @@
 - 증거: 코드 읽기만(설계 문서). `python tools/harness/rosy_harness.py lint` 오류 0.
 - gate 변화: 없음(문서). 코드·설정 미변경.
 - 결정: D-398 Proposed(설계 사용자 승인). 그림자 실주행·집행은 로봇별 별도 승인.
+
+## 2026-10-01 · uncommitted · docs(adr): D-398 → D-400 번호 변경 (동시 세션 충돌)
+- 변경: 브랜치 `docs/core-safety-policy-shadow`의 CORE 안전 정책 ADR을 D-398에서 D-400으로 옮겼다. ADR 파일·ADR Log 행·설계·계획·소스 주석의 번호를 바꿨다. 위의 2026-10-01 D-398 항목(이 브랜치 커밋 42b77772)은 같은 결정이다.
+- 증거: 다른 세션(rosy-b7 알림)이 main 체크아웃에 `D-398-evidence-words-single-source-and-scope-gates.md`를 쓰고 있었고 D-399도 쓰는 중. 이 브랜치는 아직 main에 없어 옮기는 쪽이 싸다.
+- gate 변화: 없음.
+- 결정: 이 브랜치의 ADR 번호는 D-400.

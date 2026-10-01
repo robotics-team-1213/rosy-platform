@@ -8,7 +8,7 @@
 
 **Tech Stack:** Python 3.12, pytest(호스트, ROS 없음), pydantic(`StateSnapshot`), PyYAML.
 
-- 설계: [2026-10-01-core-safety-policy-shadow-design.md](2026-10-01-core-safety-policy-shadow-design.md), ADR [D-398](../adr/D-398-core-safety-policy-off-shadow-enforce.md)
+- 설계: [2026-10-01-core-safety-policy-shadow-design.md](2026-10-01-core-safety-policy-shadow-design.md), ADR [D-400](../adr/D-400-core-safety-policy-off-shadow-enforce.md)
 - 브랜치: `docs/core-safety-policy-shadow` (worktree `.worktrees/safety-shadow`). 구현은 같은 브랜치에서 이어 간다. main 합류는 `rosy-land-on-main` 스킬 절차.
 
 ---
@@ -148,7 +148,7 @@ dataclass 필드(`enabled` 위):
 
 ```python
 def _parse_mode(raw: Mapping[str, Any]) -> str:
-    """D-398: mode off | shadow | enforce; the legacy enabled bool maps to enforce/off."""
+    """D-400: mode off | shadow | enforce; the legacy enabled bool maps to enforce/off."""
     if "mode" in raw and "enabled" in raw:
         raise ValueError("control sensor adapter takes mode or enabled, not both")
     if "mode" not in raw:
@@ -168,10 +168,10 @@ def _parse_mode(raw: Mapping[str, Any]) -> str:
 
 ```yaml
   sensor_adapter:
-    mode: "off"                   # D-398: off = no policy, CORE passes commands through
+    mode: "off"                   # D-400: off = no policy, CORE passes commands through
                                   # shadow = judge and record, never change cmd_vel
                                   # enforce = limit/stop by the policy. Quote "off" (YAML 1.1 bool)
-    stale_hold_s: 2.0             # enforce: gaps shorter than this HOLD, longer latch (D-398 4)
+    stale_hold_s: 2.0             # enforce: gaps shorter than this HOLD, longer latch (D-400 4)
 ```
 
 `test_runtime_config.py:33`의 `assert sensor["enabled"] is False`를:
@@ -190,7 +190,7 @@ Expected: PASS (기존 `{"enabled": True}` 시험들도 그대로 통과 — 하
 
 ```bash
 git add src/runtime/gateway/core/bridge/control_sensor_adapter.py src/contracts/foundation/config/rosy_default.yaml src/runtime/gateway/test/test_runtime_config.py src/runtime/gateway/test/test_control_sensor_adapter.py
-git commit -m "feat(core): sensor adapter mode off/shadow/enforce and stale_hold_s (D-398 1)"
+git commit -m "feat(core): sensor adapter mode off/shadow/enforce and stale_hold_s (D-400 1)"
 ```
 
 ---
@@ -206,7 +206,7 @@ git commit -m "feat(core): sensor adapter mode off/shadow/enforce and stale_hold
 - [ ] **Step 1: 실패하는 시험 쓰기** — `src/runtime/services/test/test_safety_decision_check.py`:
 
 ```python
-"""D-398: one validation rule for enforce and shadow (check_decision)."""
+"""D-400: one validation rule for enforce and shadow (check_decision)."""
 
 from dataclasses import replace
 
@@ -261,7 +261,7 @@ _DISPOSITIONS = ('allow', 'limit', 'stop')
 
 def check_decision(decision, request: SafetyRequest, elapsed: float) -> str:
     """'' when ``decision`` is a valid, current answer to ``request`` that permits motion;
-    otherwise the policy_reason CORE reports. One rule for enforce and shadow (D-398)."""
+    otherwise the policy_reason CORE reports. One rule for enforce and shadow (D-400)."""
     if (not isinstance(decision, SafetyDecision) or not math.isfinite(elapsed) or not 0 <= elapsed <= .01
             or type(decision.command_id) is not int or decision.command_id != request.command_id
             or not isinstance(decision.source, str) or decision.source != request.source
@@ -302,7 +302,7 @@ Expected: PASS 전부(기존 시험 수정 없음)
 
 ```bash
 git add src/runtime/services/core_features/safety/manager.py src/runtime/services/test/test_safety_decision_check.py
-git commit -m "refactor(safety): extract check_decision so shadow and enforce share one rule (D-398)"
+git commit -m "refactor(safety): extract check_decision so shadow and enforce share one rule (D-400)"
 ```
 
 ---
@@ -319,7 +319,7 @@ git commit -m "refactor(safety): extract check_decision so shadow and enforce sh
 - [ ] **Step 1: 실패하는 시험 쓰기** — `src/runtime/services/test/test_safety_shadow_log.py`:
 
 ```python
-"""D-398 shadow verdict log: counters, transition events, 1 Hz repeat cap."""
+"""D-400 shadow verdict log: counters, transition events, 1 Hz repeat cap."""
 
 from core_features.safety.shadow import ShadowLog, ShadowVerdict
 
@@ -381,7 +381,7 @@ Expected: FAIL — `ModuleNotFoundError: No module named 'core_features.safety.s
 - [ ] **Step 3: 구현** — `src/runtime/services/core_features/safety/shadow.py`:
 
 ```python
-"""D-398 shadow mode: record what the safety policy would have done. ROS-free.
+"""D-400 shadow mode: record what the safety policy would have done. ROS-free.
 
 The policy is evaluated on every non-zero candidate but never changes the
 output, the e-stop or the mode. This module only keeps the record: counters,
@@ -456,7 +456,7 @@ class ShadowLog:
 `safety/AGENTS.md` Key Files 표에 한 행:
 
 ```markdown
-| `shadow.py` | D-398 그림자 기록: `ShadowVerdict`, `ShadowLog`(카운터·전이 이벤트·1 Hz 묶음·eval_ms). 정책이 아니라 기록이라 `manager.py`와 나눈다 |
+| `shadow.py` | D-400 그림자 기록: `ShadowVerdict`, `ShadowLog`(카운터·전이 이벤트·1 Hz 묶음·eval_ms). 정책이 아니라 기록이라 `manager.py`와 나눈다 |
 ```
 
 - [ ] **Step 4: 통과 확인**
@@ -468,7 +468,7 @@ Expected: PASS (4)
 
 ```bash
 git add src/runtime/services/core_features/safety/shadow.py src/runtime/services/test/test_safety_shadow_log.py src/runtime/services/core_features/safety/AGENTS.md
-git commit -m "feat(safety): ShadowLog records would-be policy verdicts (D-398 2)"
+git commit -m "feat(safety): ShadowLog records would-be policy verdicts (D-400 2)"
 ```
 
 ---
@@ -484,7 +484,7 @@ git commit -m "feat(safety): ShadowLog records would-be policy verdicts (D-398 2
 - [ ] **Step 1: 실패하는 시험 쓰기** — `src/runtime/services/test/test_safety_shadow_evaluate.py`:
 
 ```python
-"""D-398: shadow evaluation judges like enforce but changes nothing."""
+"""D-400: shadow evaluation judges like enforce but changes nothing."""
 
 from types import SimpleNamespace
 
@@ -588,7 +588,7 @@ from core_features.safety.shadow import ShadowLog, ShadowVerdict
 (b) `__init__`의 `self.policy_listeners: list = []` 아래:
 
 ```python
-        #: D-398: 'off' | 'shadow' | 'enforce'. Set by the binding, never by config here.
+        #: D-400: 'off' | 'shadow' | 'enforce'. Set by the binding, never by config here.
         self.policy_mode: str = 'enforce' if policy_required else 'off'
         self.shadow: Optional[ShadowLog] = None
         self._shadow_policy = None
@@ -628,7 +628,7 @@ from core_features.safety.shadow import ShadowLog, ShadowVerdict
         self.policy_mode = 'enforce'
 
     def bind_shadow_control_policy(self, policy) -> None:
-        """D-398 shadow: judge every candidate, record it, never change the output."""
+        """D-400 shadow: judge every candidate, record it, never change the output."""
         self._shadow_policy, self._shadow_revision = self._control_evaluator(policy)
         self.shadow = ShadowLog()
         self.policy_mode = 'shadow'
@@ -708,7 +708,7 @@ Expected: 600 미만
 
 ```bash
 git add src/runtime/services/core_features/safety/manager.py src/runtime/services/test/test_safety_shadow_evaluate.py
-git commit -m "feat(safety): shadow binding evaluates without e-stop, mode or reason side effects (D-398 1-2)"
+git commit -m "feat(safety): shadow binding evaluates without e-stop, mode or reason side effects (D-400 1-2)"
 ```
 
 ---
@@ -724,7 +724,7 @@ git commit -m "feat(safety): shadow binding evaluates without e-stop, mode or re
 - [ ] **Step 1: 실패하는 시험 쓰기** — `src/runtime/services/test/test_command_shadow.py`:
 
 ```python
-"""D-398: shadow never changes cmd_vel; events leave only via announce_pending."""
+"""D-400: shadow never changes cmd_vel; events leave only via announce_pending."""
 
 from types import SimpleNamespace
 
@@ -840,7 +840,7 @@ Expected: FAIL — 그림자 이벤트·`policy_off`가 나오지 않는다
 (a) `__init__`의 `self._input_epoch = 0` 아래:
 
 ```python
-        #: D-398: one safety.policy_off per entry into NAVIGATION while the policy is off.
+        #: D-400: one safety.policy_off per entry into NAVIGATION while the policy is off.
         self._unguarded_noted = False
         self._pending_unguarded: Optional[str] = None
 ```
@@ -863,7 +863,7 @@ Expected: FAIL — 그림자 이벤트·`policy_off`가 나오지 않는다
             self._modes.transition(Mode.EMERGENCY)
             return ZERO
         result = Twist(*output)
-        # D-398 shadow: judged after the real output is fixed; it can only record.
+        # D-400 shadow: judged after the real output is fixed; it can only record.
         self._safety.shadow_evaluate(command_id, source, linear, angular, now,
                                      output=(result.linear, result.angular))
         if self._safety.policy_mode == 'off' and source == 'navigation' and not self._unguarded_noted:
@@ -927,7 +927,7 @@ Expected: PASS
 
 ```bash
 git add src/runtime/services/core_features/command/manager.py src/runtime/services/test/test_command_shadow.py
-git commit -m "feat(command): shadow observes the final output; policy_off once per navigation entry (D-398 2)"
+git commit -m "feat(command): shadow observes the final output; policy_off once per navigation entry (D-400 2)"
 ```
 
 ---
@@ -943,7 +943,7 @@ git commit -m "feat(command): shadow observes the final output; policy_off once 
 - [ ] **Step 1: 실패하는 시험 쓰기** — `src/runtime/gateway/test/test_safety_params.py`:
 
 ```python
-"""D-398 3: safety worker parameters from CORE's own sources."""
+"""D-400 3: safety worker parameters from CORE's own sources."""
 
 import math
 
@@ -1003,7 +1003,7 @@ Expected: FAIL — `ModuleNotFoundError: No module named 'core.safety_params'`
 - [ ] **Step 3: 구현** — `src/runtime/gateway/core/safety_params.py`:
 
 ```python
-"""Safety-policy worker parameters from CORE's own sources (D-398 3). ROS-free.
+"""Safety-policy worker parameters from CORE's own sources (D-400 3). ROS-free.
 
 - lidar_yaw_offset: the angle line_follow already resolved (core/lidar_mount.py:
   URDF nominal < accepted lidar_mount record < operator overlay), so lane
@@ -1013,7 +1013,7 @@ Expected: FAIL — `ModuleNotFoundError: No module named 'core.safety_params'`
 - control.sensor_adapter.parameters (operator overlay): wins key by key, only
   for the keys below. lidar_yaw_offset is set through line_follow, never here.
 - The other measured keys stay the worker's defaults in this plan; their
-  calibration-store kinds arrive with enforcement (D-398 plan 3).
+  calibration-store kinds arrive with enforcement (D-400 plan 3).
 """
 from __future__ import annotations
 
@@ -1068,7 +1068,7 @@ Expected: PASS
 
 ```bash
 git add src/runtime/gateway/core/safety_params.py src/runtime/gateway/test/test_safety_params.py
-git commit -m "feat(core): safety policy parameters from line_follow LiDAR and CORE caps (D-398 3)"
+git commit -m "feat(core): safety policy parameters from line_follow LiDAR and CORE caps (D-400 3)"
 ```
 
 ---
@@ -1121,7 +1121,7 @@ def test_build_passes_resolved_parameters_and_ignores_the_calibration_block():
 
     assert adapter.config.mode == "shadow"
     assert created[0]["parameter_overrides"] == {"lidar_yaw_offset": 3.17, "cliff_enable": False}
-    assert notes == ["control.sensor_adapter.calibration is ignored (D-398 3); use the calibration store"]
+    assert notes == ["control.sensor_adapter.calibration is ignored (D-400 3); use the calibration store"]
 
 
 def test_shadow_construction_failure_falls_back_to_off():
@@ -1169,7 +1169,7 @@ Expected: FAIL — `ImportError: cannot import name 'build_control_adapter'`
 (a) `ControlSensorAdapter.__init__`의 `self._parameters: dict[str, Any] = {}` 아래:
 
 ```python
-        #: D-398: why a configured shadow fell back to off ('' when it did not).
+        #: D-400: why a configured shadow fell back to off ('' when it did not).
         self.mode_error = ""
 ```
 
@@ -1177,7 +1177,7 @@ Expected: FAIL — `ImportError: cannot import name 'build_control_adapter'`
 
 ```python
     def bind_safety(self, safety: Any) -> bool:
-        """Bind the worker policy to CORE's safety consumer: shadow records, enforce limits (D-398)."""
+        """Bind the worker policy to CORE's safety consumer: shadow records, enforce limits (D-400)."""
         if not self.enabled:
             return False
         if self.policy is None:
@@ -1194,13 +1194,13 @@ Expected: FAIL — `ImportError: cannot import name 'build_control_adapter'`
 (c) 파일 끝에:
 
 ```python
-_CALIBRATION_IGNORED = "control.sensor_adapter.calibration is ignored (D-398 3); use the calibration store"
+_CALIBRATION_IGNORED = "control.sensor_adapter.calibration is ignored (D-400 3); use the calibration store"
 
 
 def build_control_adapter(raw_config: Mapping[str, Any] | None, *, parameters: Mapping[str, Any],
                           policy_required: bool = False,
                           **factories: Any) -> tuple["ControlSensorAdapter", list[str]]:
-    """D-398 assembly: resolved parameters replace the overlay, the calibration
+    """D-400 assembly: resolved parameters replace the overlay, the calibration
     block is ignored, and a shadow that cannot start runs with the policy off.
     Config errors (bad mode, bad types, shadow + safety.control_policy_required)
     still raise in every mode."""
@@ -1233,7 +1233,7 @@ Expected: PASS
 
 ```bash
 git add src/runtime/gateway/core/bridge/control_sensor_adapter.py src/runtime/gateway/test/test_control_sensor_adapter.py
-git commit -m "feat(core): adapter binds by mode; shadow start failure runs with the policy off (D-398 1)"
+git commit -m "feat(core): adapter binds by mode; shadow start failure runs with the policy off (D-400 1)"
 ```
 
 ---
@@ -1256,7 +1256,7 @@ Run: `git fetch -q; git show main:"docs/reference/ROSY API & Protocol Reference.
 - [ ] **Step 1: 실패하는 시험 쓰기** — `src/runtime/services/test/test_state_safety_policy.py`:
 
 ```python
-"""D-398: robot state carries the safety policy block when a provider is set."""
+"""D-400: robot state carries the safety policy block when a provider is set."""
 
 from core_common.protocol.schemas import SafetyPolicyStatus, StateSnapshot
 
@@ -1304,7 +1304,7 @@ Expected: FAIL — `ImportError: cannot import name 'SafetyPolicyStatus'`
 
 ```python
 class SafetyShadowStatus(BaseModel):
-    """D-398 shadow counters (v1.69 additive)."""
+    """D-400 shadow counters (v1.69 additive)."""
     counts: dict[str, int]
     last_stop: Optional[dict] = None
     last_unavailable: Optional[dict] = None
@@ -1312,7 +1312,7 @@ class SafetyShadowStatus(BaseModel):
 
 
 class SafetyPolicyStatus(BaseModel):
-    """D-398: the safety policy mode CORE runs, and why (v1.69 additive)."""
+    """D-400: the safety policy mode CORE runs, and why (v1.69 additive)."""
     mode: str
     mode_effective: str
     mode_error: str = ""
@@ -1324,7 +1324,7 @@ class SafetyPolicyStatus(BaseModel):
 `StateSnapshot`의 `activity: Optional[RobotActivity] = None` 아래:
 
 ```python
-    safety_policy: Optional[SafetyPolicyStatus] = None  # D-398, v1.69 additive
+    safety_policy: Optional[SafetyPolicyStatus] = None  # D-400, v1.69 additive
 ```
 
 - [ ] **Step 4: StateManager 공급자** — `activity` 공급자와 같은 모양으로(86–95행, 213–215행, 251행):
@@ -1349,7 +1349,7 @@ class SafetyPolicyStatus(BaseModel):
 - [ ] **Step 5: 크기 판정 갱신** — `schemas.py` 줄 수를 재고, `test/architecture/test_module_structure.py:144`의 숫자를 그 값으로, 사유 끝에 한 문장을 덧붙인다:
 
 ```python
-        "... Re-judged 2026-10-01 at <새 줄 수> lines: D-398 SafetyPolicyStatus joins the state "
+        "... Re-judged 2026-10-01 at <새 줄 수> lines: D-400 SafetyPolicyStatus joins the state "
         "contract; the single contract source still outweighs a split (same verdict)."
 ```
 
@@ -1357,11 +1357,11 @@ Run: `python -c "import pathlib;print(len(pathlib.Path('src/contracts/foundation
 
 - [ ] **Step 6: API Ref** —
   - 헤더 `**Version:** v1.69`.
-  - §6.1 `GET /robot/state` 필드 표에 행: `| safety_policy | object? | D-398. mode(off/shadow/enforce), mode_effective(그림자 구성 실패 시 off), mode_error, revision, sources(키별 출처), shadow{counts, last_stop, last_unavailable, eval_ms{p50,p99,n}}. 공급자가 없으면 null | v1.69 |`
+  - §6.1 `GET /robot/state` 필드 표에 행: `| safety_policy | object? | D-400. mode(off/shadow/enforce), mode_effective(그림자 구성 실패 시 off), mode_error, revision, sources(키별 출처), shadow{counts, last_stop, last_unavailable, eval_ms{p50,p99,n}}. 공급자가 없으면 null | v1.69 |`
   - §8 이벤트 표(`safety.watchdog` 행 아래)에 두 행:
     - `| \`safety.shadow_verdict\` | info | 로봇 | \`{verdict, reason, source, commanded, limited}\` |`
     - `| \`safety.policy_off\` | warning | 로봇 | \`{source}\` |`
-  - §11 변경 이력에 `| v1.69 | 2026-10-01 | Additive: state \`safety_policy\`, events \`safety.shadow_verdict\`·\`safety.policy_off\` (D-398) |`
+  - §11 변경 이력에 `| v1.69 | 2026-10-01 | Additive: state \`safety_policy\`, events \`safety.shadow_verdict\`·\`safety.policy_off\` (D-400) |`
   - `app.py` 1행 주석과 110행 버전 문자열, 위에 적은 시험 세 곳의 버전 핀을 v1.69로.
 
 - [ ] **Step 7: 통과 확인**
@@ -1373,7 +1373,7 @@ Expected: PASS
 
 ```bash
 git add src/contracts/foundation/core_common/protocol/schemas.py src/runtime/services/core_features/state/manager.py src/runtime/services/test/test_state_safety_policy.py test/architecture/test_module_structure.py "docs/reference/ROSY API & Protocol Reference.md" src/runtime/api_web/core_api_web/app.py test/test_line_follow_contract_docs.py src/site/fleet/test/test_task_contract_docs.py src/site/fleet/test/test_mission_progress.py
-git commit -m "feat(state): safety_policy block and shadow/policy_off events, API v1.69 (D-398 2)"
+git commit -m "feat(state): safety_policy block and shadow/policy_off events, API v1.69 (D-400 2)"
 ```
 
 ---
@@ -1392,7 +1392,7 @@ git commit -m "feat(state): safety_policy block and shadow/policy_off events, AP
 - [ ] **Step 1: 실패하는 시험 쓰기** — `src/runtime/gateway/test/test_safety_policy_status.py`:
 
 ```python
-"""D-398: the state block node.py publishes, built without ROS."""
+"""D-400: the state block node.py publishes, built without ROS."""
 
 from types import SimpleNamespace
 
@@ -1429,7 +1429,7 @@ Expected: FAIL — `ModuleNotFoundError`
 - [ ] **Step 3: 구현** — `src/runtime/gateway/core/safety_policy_status.py`:
 
 ```python
-"""The robot-state safety_policy block (D-398, API v1.69). ROS-free."""
+"""The robot-state safety_policy block (D-400, API v1.69). ROS-free."""
 from __future__ import annotations
 
 from typing import Any, Optional
@@ -1496,7 +1496,7 @@ def safety_policy_block(configured_mode: str, adapter: Any, params: Optional[Any
 - [ ] **Step 4: 통과와 구조 시험 확인**
 
 Run: `python -m pytest src/runtime/gateway/test/test_safety_policy_status.py src/runtime/gateway/test/test_module_criteria.py src/runtime/gateway/test/test_lidar_mount_source.py src/runtime/gateway/test/test_pinky_lidar_forward_device.py test/architecture/test_module_structure.py -q`
-Expected: PASS. `test_lidar_mount_source.py`가 `node.py` 소스에서 `adapter_parameters=`를 찾는다면 FAIL한다 — 그 단언을 "LiDAR 해석이 어댑터보다 먼저, `use_lidar_forward`가 같은 `forward_deg`로" 바꾸고 이유(D-398: 어댑터가 값을 받으므로 비교 대상이 없다)를 시험 docstring에 적는다.
+Expected: PASS. `test_lidar_mount_source.py`가 `node.py` 소스에서 `adapter_parameters=`를 찾는다면 FAIL한다 — 그 단언을 "LiDAR 해석이 어댑터보다 먼저, `use_lidar_forward`가 같은 `forward_deg`로" 바꾸고 이유(D-400: 어댑터가 값을 받으므로 비교 대상이 없다)를 시험 docstring에 적는다.
 
 Run: `python -m py_compile src/runtime/gateway/core/node.py`
 Expected: 출력 없음
@@ -1505,7 +1505,7 @@ Expected: 출력 없음
 
 ```bash
 git add src/runtime/gateway/core/node.py src/runtime/gateway/core/safety_policy_status.py src/runtime/gateway/test/test_safety_policy_status.py
-git commit -m "feat(core): node assembles LiDAR -> safety params -> adapter -> binding -> state (D-398)"
+git commit -m "feat(core): node assembles LiDAR -> safety params -> adapter -> binding -> state (D-400)"
 ```
 
 (`test_lidar_mount_source.py`를 고쳤다면 같은 커밋에 더한다.)
@@ -1516,7 +1516,7 @@ git commit -m "feat(core): node assembles LiDAR -> safety params -> adapter -> b
 
 **Files:**
 - Modify: `src/runtime/gateway/logs.md`, `src/runtime/services/logs.md`, `src/contracts/foundation/logs.md` (각 모듈 `logs.md`; 경로는 `tools/harness/harness.yaml`의 모듈 목록으로 확인)
-- Modify: `docs/adr/D-398-core-safety-policy-off-shadow-enforce.md` (구현 메모 한 단락)
+- Modify: `docs/adr/D-400-core-safety-policy-off-shadow-enforce.md` (구현 메모 한 단락)
 - Modify: `docs/plans/2026-10-01-core-safety-policy-shadow-design.md` 3.3절 (overlay 허용 키에 `cliff_enable`, 워커 기본값 여섯 키)
 - Generated: `docs/index.md`, 모듈 `index.md`, `STATUS.md`
 
@@ -1532,13 +1532,13 @@ Expected: exit 0. exit 1(`NEW`)이면 그 실패는 이 브랜치 것으로 보�
 - [ ] **Step 2: 모듈 기록** — 각 `logs.md`에 같은 형식으로 한 항목(예: gateway):
 
 ```markdown
-## 2026-10-01 · uncommitted · feat(core): D-398 safety policy mode and shadow assembly
+## 2026-10-01 · uncommitted · feat(core): D-400 safety policy mode and shadow assembly
 - 변경: `control.sensor_adapter.mode` off/shadow/enforce(`enabled` 호환), `build_control_adapter`(그림자 시작 실패 → off, `calibration` 블록 무시), `safety_params.py`(LiDAR = line_follow 값, 봉투 = CORE 속도 상한, overlay 허용 목록), `node.py` 조립 순서, 상태 `safety_policy` 공급자.
 - 증거: <Step 1의 pytest 요약 줄>; `known_failures.py` exit 0.
 - gate 변화: 없음. SOURCE만. 그림자는 어느 로봇에서도 켜지 않았다(기본 off).
 ```
 
-- [ ] **Step 3: ADR 구현 메모** — D-398 끝에:
+- [ ] **Step 3: ADR 구현 메모** — D-400 끝에:
 
 ```markdown
 **Implementation note (plan 1, 2026-10-01):** Source only, default `off`. A shadow falls back to off only when the worker cannot start (provider, worker checks); an invalid mode or overlay key is a config error in every mode. The six non-geometric measured keys stay worker defaults until plan 3 adds their store kinds; overlay keys are those six, the two envelope keys and `cliff_enable` (Gazebo has no IR).
@@ -1565,7 +1565,7 @@ Expected: `clean`
 
 ```bash
 git add <Step 2·3·4에서 바뀐 경로만, git status --short에서 하나씩>
-git commit -m "docs(records): D-398 plan 1 module logs, ADR implementation note"
+git commit -m "docs(records): D-400 plan 1 module logs, ADR implementation note"
 ```
 
 - [ ] **Step 7: 독립 검토** — 같은 컨텍스트에서 자기 승인하지 않는다. `oh-my-claudecode:code-reviewer`(또는 `superpowers:requesting-code-review`)에 이 계획과 `git diff main...HEAD`를 넘긴다. 검토 관점: (1) 그림자가 출력·e-stop·모드를 바꾸는 경로가 하나라도 있는가, (2) 이벤트가 `select_output` 안에서 나가는가, (3) import 방향·크기 예산·C6, (4) `enforce` 동작이 이 변경 전과 같은가.

@@ -1,4 +1,4 @@
-"""D-398 shadow verdict log: counters, transition events, 1 Hz repeat cap."""
+"""D-400 shadow verdict log: counters, transition events, 1 Hz repeat cap."""
 
 from core_features.safety.shadow import ShadowLog, ShadowVerdict
 

@@ -1,4 +1,4 @@
-"""D-398 shadow mode: record what the safety policy would have done. ROS-free.
+"""D-400 shadow mode: record what the safety policy would have done. ROS-free.
 
 The policy is evaluated on every non-zero candidate but never changes the
 output, the e-stop or the mode. This module only keeps the record: counters,
