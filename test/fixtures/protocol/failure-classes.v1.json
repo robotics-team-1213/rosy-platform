@@ -5,7 +5,7 @@
     "unreachable", "refused", "unknown_host", "tls_untrusted", "auth_final", "auth_retry",
     "forbidden", "protocol_mismatch", "busy", "conflict", "not_discovered"
   ],
-  "close_4400_retry_reasons": ["", "no hello", "hello timeout", "timed out waiting for hello", "receiver busy"],
+  "close_4400_retry_reasons": ["", "no hello"],
   "fallback": {
     "ws_close": "unreachable",
     "http_4xx": "protocol_mismatch",
@@ -17,7 +17,7 @@
     {"id": "ws_4400_no_hello_is_retry_later", "input": {"ws_close": 4400, "reason": "no hello"}, "expect": "busy"},
     {"id": "ws_4400_empty_reason_is_retry_later", "input": {"ws_close": 4400, "reason": ""}, "expect": "busy"},
     {"id": "ws_4400_missing_reason_is_retry_later", "input": {"ws_close": 4400}, "expect": "busy"},
-    {"id": "ws_4400_receiver_busy", "input": {"ws_close": 4400, "reason": "receiver busy"}, "expect": "busy"},
+    {"id": "ws_4400_receiver_busy", "input": {"ws_close": 4400, "reason": "receiver busy"}, "expect": "protocol_mismatch"},
     {"id": "ws_4401_unknown_or_revoked", "input": {"ws_close": 4401}, "expect": "auth_final"},
     {"id": "ws_4403_forbidden", "input": {"ws_close": 4403}, "expect": "forbidden"},
     {"id": "ws_4409_replaced_by_same_source", "input": {"ws_close": 4409}, "expect": "conflict"},

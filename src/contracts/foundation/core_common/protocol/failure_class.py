@@ -20,7 +20,7 @@ CLASSES = (
 # hello timeout as 4400 with one of these reasons; that close is retryable.
 # Same list as overhead-ingest.v1.json close_4400_reasons.retry.
 CLOSE_4400_RETRY_REASONS = (
-    "", "no hello", "hello timeout", "timed out waiting for hello", "receiver busy",
+    "", "no hello",
 )
 
 WS_CLOSE = {
