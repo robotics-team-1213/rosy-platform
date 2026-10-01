@@ -662,9 +662,30 @@ from core_features.safety.shadow import ShadowLog, ShadowVerdict
             limited = (max(-decision.linear_limit, min(decision.linear_limit, linear)),
                        max(-decision.angular_limit, min(decision.angular_limit, angular)))
             reason = decision.reason
-        self.shadow.record(ShadowVerdict(now, source, (linear, angular), output, verdict, limited,
-                                         reason, elapsed * 1000.0))
+        try:
+            self.shadow.record(ShadowVerdict(now, source, (linear, angular), output, verdict, limited,
+                                             reason, elapsed * 1000.0))
+        except Exception:  # noqa: BLE001 - a recorder bug must never change cmd_vel (D-400 non-interference)
+            self.shadow_record_errors += 1
 ```
+
+(Task 3 리뷰 M4: `record`는 `select_output` 안에서 불린다. 예외가 새면 `cmd_vel_cycle`이 ZERO를 내 그림자가 출력을 바꾼다. `__init__`에 `self.shadow_record_errors = 0`을 두고, `test_safety_shadow_evaluate.py`에 시험을 더한다:)
+
+```python
+def test_a_failing_recorder_never_escapes():
+    safety, _ = _safety(FakePolicy())
+
+    class Broken:
+        def record(self, verdict):
+            raise KeyError("boom")
+
+    safety.shadow = Broken()
+    safety.shadow_evaluate(1, "navigation", 0.1, 0.0, 10.0, output=(0.1, 0.0))   # must not raise
+
+    assert safety.shadow_record_errors == 1
+```
+
+Task 8의 상태 블록에 `shadow_record_errors`를 `shadow` 안에 함께 보인다(`safety_policy_block`이 `snapshot()` 결과에 더한다).
 
 (e) Task 2 리뷰 반영 — 판정 분류는 문자열이 아니라 `disposition`으로 한다. 정책이 `stop`의 사유로 `'policy_failed'`를 내도 `stop`으로 센다. 그러려고 `check_decision`의 조건 사슬을 `decision_valid(decision: object, request, elapsed) -> bool`로 옮기고, `check_decision`은 그것을 감싼다(집행 경로의 동작은 그대로):
 
@@ -798,8 +819,9 @@ def test_shadow_events_leave_only_through_announce_pending():
     command.announce_pending()
     shadow = [e for e in events.published if e[0] == "safety.shadow_verdict"]
     assert shadow == [("safety.shadow_verdict", "info",
-                       {"verdict": "stop", "reason": "pickup", "source": "navigation",
-                        "commanded": [0.1, 0.0], "limited": [0.0, 0.0]})]
+                       {"verdict": "stop", "reason": "pickup", "source": "navigation", "t": 10.0,
+                        "commanded": [0.1, 0.0], "output": [0.1, 0.0], "limited": [0.0, 0.0],
+                        "suppressed": 0})]
 
 
 def test_policy_off_is_announced_once_per_navigation_entry():
@@ -1266,7 +1288,8 @@ def test_state_model_accepts_the_safety_policy_block():
              "sources": {"lidar_yaw_offset": "line_follow: hand value"},
              "shadow": {"counts": {"allow": 3, "limit": 1, "stop": 0, "unavailable": 0},
                         "last_stop": None, "last_unavailable": None,
-                        "eval_ms": {"p50": 0.4, "p99": 1.1, "n": 4}}}
+                        "eval_ms": {"p50": 0.4, "p99": 1.1, "n": 4},
+                        "dropped_events": 0, "suppressed_events": 2, "record_errors": 0}}
 
     status = SafetyPolicyStatus.model_validate(block)
 
@@ -1306,9 +1329,12 @@ Expected: FAIL — `ImportError: cannot import name 'SafetyPolicyStatus'`
 class SafetyShadowStatus(BaseModel):
     """D-400 shadow counters (v1.69 additive)."""
     counts: dict[str, int]
-    last_stop: Optional[dict] = None
+    last_stop: Optional[dict] = None          # {t (monotonic s), reason, source}
     last_unavailable: Optional[dict] = None
     eval_ms: dict
+    dropped_events: int = 0
+    suppressed_events: int = 0
+    record_errors: int = 0
 
 
 class SafetyPolicyStatus(BaseModel):
@@ -1357,9 +1383,9 @@ Run: `python -c "import pathlib;print(len(pathlib.Path('src/contracts/foundation
 
 - [ ] **Step 6: API Ref** —
   - 헤더 `**Version:** v1.69`.
-  - §6.1 `GET /robot/state` 필드 표에 행: `| safety_policy | object? | D-400. mode(off/shadow/enforce), mode_effective(그림자 구성 실패 시 off), mode_error, revision, sources(키별 출처), shadow{counts, last_stop, last_unavailable, eval_ms{p50,p99,n}}. 공급자가 없으면 null | v1.69 |`
+  - §6.1 `GET /robot/state` 필드 표에 행: `| safety_policy | object? | D-400. mode(off/shadow/enforce), mode_effective(그림자 구성 실패 시 off), mode_error, revision, sources(키별 출처), shadow{counts, last_stop, last_unavailable, eval_ms{p50,p99,n}, dropped_events, suppressed_events, record_errors}. 시각 t는 CORE monotonic 초(벽시계 아님). 공급자가 없으면 null | v1.69 |`
   - §8 이벤트 표(`safety.watchdog` 행 아래)에 두 행:
-    - `| \`safety.shadow_verdict\` | info | 로봇 | \`{verdict, reason, source, commanded, limited}\` |`
+    - `| \`safety.shadow_verdict\` | info | 로봇 | \`{verdict, reason, source, t, commanded, output, limited, suppressed}\` |` (판정이 바뀔 때·같은 판정 1 s마다, 최대 5/s. 억제된 전이 수는 다음 이벤트의 `suppressed`)
     - `| \`safety.policy_off\` | warning | 로봇 | \`{source}\` |`
   - §11 변경 이력에 `| v1.69 | 2026-10-01 | Additive: state \`safety_policy\`, events \`safety.shadow_verdict\`·\`safety.policy_off\` (D-400) |`
   - `app.py` 1행 주석과 110행 버전 문자열, 위에 적은 시험 세 곳의 버전 핀을 v1.69로.
@@ -1415,9 +1441,9 @@ def test_block_carries_the_shadow_snapshot():
     adapter = SimpleNamespace(config=SimpleNamespace(mode="shadow"), mode_error="")
     shadow = SimpleNamespace(snapshot=lambda: {"counts": {"allow": 1}})
 
-    block = safety_policy_block("shadow", adapter, None, shadow=shadow)
+    block = safety_policy_block("shadow", adapter, None, shadow=shadow, record_errors=2)
 
-    assert block["shadow"] == {"counts": {"allow": 1}}
+    assert block["shadow"] == {"counts": {"allow": 1}, "record_errors": 2}
     assert block["revision"] == "" and block["sources"] == {}
 ```
 
@@ -1436,12 +1462,13 @@ from typing import Any, Optional
 
 
 def safety_policy_block(configured_mode: str, adapter: Any, params: Optional[Any],
-                        shadow: Optional[Any]) -> dict:
+                        shadow: Optional[Any], record_errors: int = 0) -> dict:
     return {"mode": configured_mode, "mode_effective": adapter.config.mode,
             "mode_error": adapter.mode_error,
             "revision": params.revision if params is not None else "",
             "sources": dict(params.sources) if params is not None else {},
-            "shadow": shadow.snapshot() if shadow is not None else None}
+            "shadow": ({**shadow.snapshot(), "record_errors": record_errors}
+                       if shadow is not None else None)}
 ```
 
 `node.py` 73–112행을 다음으로 바꾼다(`os.environ` data_root 블록은 삭제 — 어댑터가 `calibration`을 읽지 않는다):
@@ -1486,7 +1513,8 @@ def safety_policy_block(configured_mode: str, adapter: Any, params: Optional[Any
         log = self.get_logger().warning if forward_warn else self.get_logger().info
         log(f"line_follow LiDAR forward {forward_deg:.2f} deg from {forward_source}")
         self.core.state.set_safety_policy_provider(lambda: safety_policy_block(
-            configured_mode, self.control_adapter, params, self.core.safety.shadow))
+            configured_mode, self.control_adapter, params, self.core.safety.shadow,
+            self.core.safety.shadow_record_errors))
 ```
 
 주의 두 가지:
