@@ -241,7 +241,7 @@ ui-button, a { -webkit-tap-highlight-color: transparent; }
 }
 .auth-drawer.open { display: grid; gap: var(--space-4); }
 .auth-drawer h2 { margin: 0 0 var(--space-2); font: var(--weight-label) var(--text-title)/var(--leading-control) var(--body); }
-.auth-drawer p { margin: 0; color: var(--ink-quiet); font-size: var(--text-body); line-height: 1.55; }
+.auth-drawer p { margin: 0; color: var(--ink-quiet); font-size: var(--text-body); line-height: var(--leading-copy); }
 .auth-drawer label { display: block; margin-bottom: var(--space-2); }
 .auth-row { display: flex; gap: var(--space-2); }
 .auth-row input { flex: 1; }
@@ -423,7 +423,7 @@ body[data-view="operate"] .page-footer { display: none; }
 }
 /* 맥락은 "또 무엇이 잘못됐나"를 말한다. 제목은 끝까지 보이고 설명은 자리가
    남는 만큼만 보인다 — DOM에는 남으므로 화면 낭독기는 전문을 읽는다. */
-.triage-context li { display: flex; gap: var(--space-2); max-width: 36ch; color: var(--ink); font-size: var(--text-label); line-height: 1.35; white-space: nowrap; }
+.triage-context li { display: flex; gap: var(--space-2); max-width: 36ch; color: var(--ink); font-size: var(--text-label); line-height: var(--leading-label); white-space: nowrap; }
 .triage-context b { flex-shrink: 0; font-weight: var(--weight-label); }
 .triage-context span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .triage-context:empty { display: none; }

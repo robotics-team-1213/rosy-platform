@@ -429,3 +429,9 @@
 - 변경: core_ui_logic.js에 EVIDENCE_LABEL·evidenceAgeText() 추가(증거 한국어와 ' · N초 전' 규격의 단일 출처). test_token_parity.py가 RGBA 4-튜플·소문자 이름 사본도 비교. test_design_scope_gates.py 신규 — 정지(D-220)·장미색 부정(D-277)·역할 우선(ground-soft/card 두 쌍)·100vh 금지.
 - 근거: D-398(2026-10-01 전 레이어 감사). 게이트 4종은 실제 파일에 위반을 심어 전부 붉어지는 것을 확인(돌연변이 증명). web_common·dashboard·fleet·pilot·face 시험 통과.
 - gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · D-398 후속 — 표면 줄 간격 예외 폐쇄
+
+- 변경: test_surface_typography_focus_contracts 의 줄 간격 예외 화이트리스트({1.15,1.35,1.45,1.55,1.6,1.7})를 폐쇄 — 표면 CSS 의 줄 간격은 --leading-* 토큰만 쓴다. 폐쇄 직후 font: 단축형 /1.45 잔존을 적발(수리됨)해 게이트가 실제로 걷어 낸다는 증명이 됐다.
+- 근거: D-398 후속. web_common 209 passed.
+- gate 변화: 없음.

@@ -73,7 +73,7 @@ body {
 .field-storage-state { color: var(--status-warn); }
 .layer-hint { margin: 0; font-size: var(--text-micro); }
 
-.brand { display: flex; flex-direction: column; line-height: 1.15; }
+.brand { display: flex; flex-direction: column; line-height: var(--leading-dense); }
 .brand b { font-weight: var(--weight-strong); font-size: var(--text-value); letter-spacing: var(--track-wide); }
 .brand small { font-family: var(--mono); font-size: var(--text-micro); color: var(--ink-quiet); letter-spacing: var(--track-label); }
 
@@ -111,7 +111,7 @@ body {
 }
 .dispatch-control > div { display: grid; gap: var(--space-1); min-width: 0; }
 .dispatch-control strong { color: var(--ink); }
-.dispatch-control small { color: var(--ink-quiet); line-height: 1.45; }
+.dispatch-control small { color: var(--ink-quiet); line-height: var(--leading-body); }
 #dispatch-rearm[hidden] { display: none; }
 
 /* ui-button의 display 규칙보다 hidden 속성이 우선해야 빈 목록에서 토글이 사라진다. */
@@ -210,7 +210,6 @@ main {
   background: var(--panel-fill);
   border: 1px solid var(--line-10);
   border-radius: var(--radius-panel);
-  box-shadow: 0 24px 60px var(--shade-28);
   padding: var(--space-4) var(--space-4) var(--space-4);
 }
 
@@ -296,6 +295,9 @@ main {
   background: var(--surface-raised);
   padding: var(--space-3) var(--space-4);
 }
+.robot.s0 { border-left-color: var(--robot-1); }
+.robot.s1 { border-left-color: var(--robot-2); }
+.robot.s2 { border-left-color: var(--robot-3); }
 /* 로봇 정체색은 클래스로 돈다 — CSP 아래에서 style 속성은 적용되지 않는다. 지도의
    삼각형도 같은 순서로 색을 고르므로 카드의 띠와 지도의 로봇이 맞물린다. */
 .robot.selected { background: var(--ground); border-color: var(--line-30); }
@@ -359,7 +361,7 @@ main {
   color: var(--ink-quiet);
   max-height: 11rem;
   overflow-y: auto;
-  line-height: 1.7;
+  line-height: var(--leading-copy);
 }
 /* D-398 — 빈 로그는 공용 ui-empty 다(DESIGN.md 빈 목록 규칙). 국면 배치만 여기 있다. */
 .log ui-empty { margin: auto 0; }
@@ -374,7 +376,7 @@ main {
   border-left: 2px solid var(--line-14);
   color: var(--ink-quiet);
   font-size: var(--text-micro);
-  line-height: 1.6;
+  line-height: var(--leading-copy);
 }
 .note summary { cursor: pointer; min-height: var(--target-secondary); display: list-item; padding-block: var(--space-2); }
 .note summary:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
@@ -395,7 +397,6 @@ main {
     background: var(--panel-fill);
     border: 1px solid var(--line-10);
     border-radius: var(--radius-panel);
-    box-shadow: 0 24px 60px var(--shade-28);
     padding: var(--space-4);
   }
   .ops-block { order: 1; }

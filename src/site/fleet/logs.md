@@ -1103,3 +1103,11 @@
 - 결정: D-18, D-390 부록.
 - 교훈: 병행 MINOR 추가는 두 변경의 이력과 정본 pin을 함께 맞춘다.
 - 최종 증거: 병합 후 Fleet task/mission + OMX/foundation 회귀 627 passed, 6 skipped; quick 95 passed; OMX Chromium 2 passed.
+
+
+## 2026-10-01 · uncommitted · D-398 후속 — 정체 띠 완성·음영 제거·줄 간격 토큰화
+
+- 변경: roster 카드의 정체 띠를 완성한다 — s{index} 클래스(.s0/.s1/.s2)에 --robot-1..3 사다리 색을 붙여 지도 삼각형과 맞물린다(기존 주석이 문서화한 의도의 CSS 절반이 유실돼 있었다. 2026-10-01 감사에서 죽은 클래스로 오진돼 지웠던 것을 되살린다). 패널 음영 2곳 제거(음영은 떠 있는 대화상자에만). 원시 줄 간격 4곳(1.15/1.45/1.7/1.6)을 --leading-* 토큰으로.
+- 변경: test_fleet_console_browser 첫 시험의 인라인 라우트에 /api/fleet/session 폴백 추가 — 세션 404 로 콘솔이 잠긴 채 폴링을 시작하지 않아 지도·명단이 영영 로딩에 남는 기존 빨강(HEAD 484bb15a 에서도 실패).
+- 근거: D-398 후속 정리. fleet 시험 1291 passed, 브라우저 4건 통과(첫 시험 포함).
+- gate 변화: 없음.
