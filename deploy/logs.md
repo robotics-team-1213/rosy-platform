@@ -1755,3 +1755,9 @@
 - gate 변화: 없음. 사이트 호스트에서 부팅 순서·실패 닫힘·`iptables-nft` 출력 형식 확인은 미실행.
 - 결정: `::`는 지원하지 않는다(필터를 ip6tables로 이중화하는 대신). 콘솔 경보는 방화벽 점검에 붙이지 않았다(journal과 포트 닫힘) — Fleet 변경 범위 밖.
 - 교훈: 방화벽 도우미는 보호 대상보다 먼저, 원자적으로, 실패하면 닫히게 설치한다. 설정 파서는 하나(Compose)만 둔다.
+
+## 2026-10-01 · uncommitted · fix(site): 재검증 반영 — 컨테이너 직행 트래픽 차단, 라벨로 닫기, 바인드 탐침 정밀화
+
+- 변경: 재검증(APPROVE WITH FIXES, LOW). m1-r: `ROSY-SITE-INGRESS` 끝에 `-i br+ -j RETURN`, `-i docker0 -j RETURN`, 무조건 `-j DROP`을 더해 Docker 28 미만에서 LAN 밖 인터페이스로 컨테이너 IP에 직접 라우팅된 패킷도 버린다. 공개 포트가 8443이 아니면 컨테이너 포트 점프 `--dport 8443 -m addrtype ! --dst-type LOCAL`을 하나 더 둔다(로컬 목적지는 제외해 호스트의 다른 8443 서비스는 건드리지 않음). `check`가 두 점프를 모두 확인하고 `docker version`이 28 미만이면 경고, README에 Docker Engine 28 이상 권고. m2-r: `rosy-site-firewall-failclosed.service`가 Compose 파싱 없이 라벨(`com.docker.compose.project=$ROSY_SITE_PROJECT`, `service=proxy`)로 프록시를 멈춘다. 시험이 `ROSY_SITE_PROJECT`를 스택 유닛의 `--project-name`과 같게 묶는다. README "Recovering after the port was closed"(스택은 active (exited)로 남으니 `check` 통과 뒤 `systemctl restart rosy-site-stack`, 인터페이스 변경 뒤 방화벽 유닛을 재시작하지 않으면 5분 점검이 포트를 닫음). n1-r: `address_assigned`는 `EADDRNOTAVAIL`만 "할당 안 됨"으로 보고 다른 소켓 오류는 자체 문구로 exit 2.
+- 증거: `test/test_site_firewall.py` 36 passed(페이로드 원문, 포트 교체 시 restore→-I→-I→-D·두 번째 적용 무변경, 점검 거절 6종(컨테이너 포트 점프·마지막 DROP 누락 포함), 엔진 27/28/읽기 불가 경고, EACCES 노출, 실패 닫힘 유닛 라벨·프로젝트 일치). 실제 iptables·스택 실행 없음(2026-10-01 Windows).
+- gate 변화: 없음.
