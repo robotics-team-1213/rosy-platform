@@ -4056,6 +4056,13 @@
 - 증거: 문서 계약 시험 1 passed, 버전 핀 시험 통과, rosy_harness lint 0 errors.
 - gate 변화: 없음.
 
+## 2026-10-01 · uncommitted · docs(adr): D-392 모델 도구 메시지 계약
+
+- 변경: 공식 `google-gemini/robotics-samples`를 조사해 ER 2 notebook mock과 Live API Spot의 실제 FastAPI/Boston Dynamics 도구 경로를 구분 기록하고, provider 중립 ModelToolCall/Result와 Fleet allowlist 결정을 D-392로 추가. 후속 구현 단계를 실행 계획으로 작성.
+- 경계: Spot의 OpenAPI operation 추출은 Rosy capability grant가 아니며, 샘플의 model-routed stop은 독립 로컬 stop/E-stop 증거가 아니다. `POLICY_DISPATCH_ENABLED=False` 유지.
+- 증거: 조사 고정 SHA `c51cbab6e6efffff8738ecf9ce41ba85034d9654`; ROS-SIM/ARTIFACT/DEVICE/FIELD gate 변화 없음.
+- gate 변화: 없음.
+
 ## 2026-10-01 · uncommitted · docs(adr): D-391 사이트 연결 기록 모양과 기기 연결 서버 자리 제안
 
 - 변경: 앱 공통 구조 점검(main 20d43df0, 읽기 전용) 결과 발견·전송은 모였고 연결 설정·기기 연결 서버가 남았다. D-391 Proposed(처음 D-387, docs/ota-roadmap-adr·Pilot OMX 초안과 번호가 겹쳐 D-391로 옮김): 클라이언트가 같은 필드(이름·CA·자격, IP 없음)로 사이트 연결을 저장하고 `site-link.v1.json` 벡터로 시험한다, 사이트 호스트 설정 원천은 `/run/rosy-config/` 하나 + 일관성 검사 도구, 기기 연결 서버는 Fleet(공통 조각 → pairing/v1 → 패널 → Rosy Cam 클라이언트 → Vision 동기화), 공개 상태 확장은 로봇 이미지가 관대한 탐침을 가진 뒤.
