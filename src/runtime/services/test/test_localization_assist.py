@@ -257,6 +257,48 @@ def test_a_stale_state_topic_halts_with_its_reason(lost):
     assert lost.events.named("localization.state")[-1]["reason"] == "state_stale"
 
 
+# --- D-395 S1 finding 6: the stale window runs on the robot node's clock -----------
+
+
+class _SlowSim:
+    """Wall time and a sim clock that runs at `rtf` of it (Gazebo below real time)."""
+
+    def __init__(self, rtf: float) -> None:
+        self.wall, self.sim, self.rtf = 1000.0, 0.0, rtf
+
+    def advance_wall(self, seconds: float) -> None:
+        self.wall += seconds
+        self.sim += seconds * self.rtf
+
+
+def test_bind_clock_runs_the_stale_window_on_a_slow_sim_clock(lost):
+    """RTF 0.1: the robot publishes every 0.5 sim s = 5 s wall; that is not stale."""
+    sim = _SlowSim(rtf=0.1)
+    lost.mono.now = sim.wall          # the wall clock the window used before the bind
+    lost.bind_clock(lambda: sim.sim)
+    lost.on_state(_state("LOCALIZED"))
+    for _ in range(10):
+        sim.advance_wall(5.0)
+        lost.mono.now = sim.wall
+        lost.tick(odom_owns_pose=False)
+        assert lost.status().state is LocState.LOCALIZED
+        lost.on_state(_state("LOCALIZED"))
+    assert lost.lost_calls == []
+
+
+def test_a_real_silence_is_still_stale_on_the_bound_clock(lost):
+    sim = _SlowSim(rtf=0.1)
+    lost.bind_clock(lambda: sim.sim)
+    lost.on_state(_state("LOCALIZED"))
+    sim.advance_wall(29.0)            # 2.9 sim s: still fresh
+    lost.tick(odom_owns_pose=False)
+    assert lost.status().state is LocState.LOCALIZED
+    sim.advance_wall(2.0)             # 3.1 sim s of silence
+    lost.tick(odom_owns_pose=False)
+    assert lost.status().reason == "state_stale"
+    assert lost.lost_calls == ["halt"]
+
+
 def test_states_that_were_never_localized_do_not_halt(lost):
     lost.on_state(_state("UNKNOWN"))
     lost.on_state(_state("CANDIDATES", request_id="req-1"))
