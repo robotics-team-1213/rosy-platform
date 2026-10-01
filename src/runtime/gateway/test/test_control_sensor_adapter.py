@@ -184,6 +184,11 @@ def test_core_node_owns_adapter_before_bridge_and_closes_it_with_executor():
 
     assert "build_control_adapter" in init_source
     assert init_source.index("self.control_adapter") < init_source.index("self.bridge =")
+    order = ["resolve_lidar_forward_deg(", "resolve_safety_params(", "build_control_adapter(",
+             ".bind_safety(", "use_lidar_forward(", "set_safety_policy_provider("]
+    positions = [init_source.index(token, init_source.index("local_overlay")) for token in order]
+    assert positions == sorted(positions)
+    assert "adapter_parameters=" not in path.read_text(encoding="utf-8")
     assert "self.control_adapter.attach(executor)" in run_source
     assert "self.control_adapter.detach(executor)" in run_source
     assert "self.control_adapter.close()" in shutdown_source

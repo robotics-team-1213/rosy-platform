@@ -78,6 +78,8 @@ class RosyCoreNode(Node):
         if not isinstance(control_cfg, dict):
             raise ValueError("control configuration must be a mapping")
         sensor_cfg = control_cfg.get("sensor_adapter", {}) or {}
+        if not isinstance(sensor_cfg, dict):
+            raise ValueError("control.sensor_adapter must be a mapping")
         configured_mode = ControlSensorConfig.from_mapping(
             {k: v for k, v in sensor_cfg.items() if k != "calibration"}).mode
         # D-47 addendum / D-397 / D-400: one LiDAR mount for line_follow and the safety
