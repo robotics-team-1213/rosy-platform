@@ -4129,3 +4129,10 @@
 - gate 변화: 없음(설계 제안, 실행 대상 없음).
 - 결정: D-396 Proposed
 - 교훈: 없음
+
+## 2026-10-01 · uncommitted · docs(adr): D-391 3항 개정 — 일관성 검사는 IP SAN을 보지 않는다
+- 변경: `docs/adr/D-391-site-link-record-and-device-link-owner.md` 3항의 검사 목록에서 "광고 IP가 SAN에 있는지"를 뺐다. IP SAN은 호스트가 재할당되면 낡고, `manual_host` 수동 되돌림 링크에만 필요하므로 검사 범위 밖으로 적었다. 검사 대상은 DNS SAN `tls_host`, `site_cert` leaf + CA, `.local` 이름, TXT·Caddy 호스트 일치.
+- 증거: 문서 개정만. 구현은 `deploy/site/site_preflight.py`(같은 브랜치 feat/d391-site-preflight)와 그 시험.
+- gate 변화: 없음.
+- 결정: D-391 3항 개정(IP SAN 비검사)
+- 교훈: 없음
