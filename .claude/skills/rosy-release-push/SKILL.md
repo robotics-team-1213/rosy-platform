@@ -165,7 +165,10 @@ published here.
   the other robots apply after `published_at + wave_delay_s` (default 600 s). A rollback or
   refusal of this id, or no commit within `--canary-timeout-min` (default 30), re-signs it
   with `withdrawn=true` and exits non-zero. If the PC stops mid-watch, the others wait;
-  rerun with `--release-id <id> --canary <ip> --resume`.
+  rerun with `--release-id <id> --canary <ip> --resume` (Ctrl+C prints that command and the
+  `--withdraw` one). Only one publish per release id runs at a time (`publish-<id>\.lock`
+  in the work folder). Before its final upload the watch re-reads the rollout on GitHub:
+  a release withdrawn meanwhile stays withdrawn.
 - **Withdraw by hand:** `--release-id <id> --withdraw --reason "<why>"`. Robots that already
   applied it stay on it; roll them back with a newer release or `-Rollback`.
 - **Hold** a robot before a test, drive or seal, and release it after:

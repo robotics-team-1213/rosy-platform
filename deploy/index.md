@@ -67,8 +67,8 @@
 
 ## 최근 기록
 
+- 2026-10-02 · 56d292a2 · fix(release): D-406 T3 독립 리뷰 반영 — 철회 보존, 기준 결과, 키 경로, claim 판정
 - 2026-10-02 · 9970f2e0 · feat(release): D-406 T3 운영 PC — 발행·카나리·철회, hold 명령, push claim
 - 2026-10-01 · uncommitted · fix(release): `prepare_payload_release.py` 독립 리뷰 반영 — rc 패키지 제외, 오류 처리, 인용
 - 2026-10-01 · f8db47f5 · feat(release): 서명 안 된 페이로드를 push 직전까지 한 명령으로 — `prepare_payload_release.py`
 - 2026-10-01 · uncommitted · perf(release): rosdep apt 패키지를 한 트랜잭션으로 — payload 빌드 7분 9초→4분 49초
-- 2026-10-01 · uncommitted · fix(release): 활성화가 CORE를 멈추지 않던 결함 — PartOf 유닛을 함께 멈추고, push가 CORE 릴리스를 확인
