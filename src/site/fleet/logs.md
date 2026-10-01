@@ -1005,3 +1005,9 @@
 - 결정: 옛 동작의 "다른 기기면 `needs_new_code`"는 없앴다 — 저장된 토큰이 새지 않았으므로 그 토큰은 여전히 유효하고, 고정 주소로는 정지만 간다. D-361에 날짜 붙은 개정, `docs/logs.md`에 한 줄. 콘솔은 다음 단계에서 코드 대화상자로 바꾼다(이 커밋만으로는 콘솔의 옮기기가 422).
 - 증거: `test_enrollment_service.py` 옮기기 시험을 바꿈 — 기록하는 가짜 로봇(`Network.raw`/`carried`)으로 신원 확인 전 새 주소에 Authorization·저장 토큰이 0회, 성공 경로 요청 순서 pair→whoami→system/info→logout, 다른 기기·결속 키별 불일치에서 저장 토큰 0회, 틀린 코드는 pair 한 번뿐, 형식 오류는 요청 0, 옛 토큰 회수 실패 기록. `test_enrollment_api.py` 본문 없는 옮기기 422·응답에 비밀 없음. `code` 인자 없음으로 10+1 적색 확인 뒤 87 passed.
 - gate 변화: 없음(LOCAL).
+
+## 2026-10-01 · uncommitted · fix(discovery): 스캔 주소는 RFC 1918만 받는다
+
+- 변경: 리뷰 MEDIUM — 공유 분류기의 `is_private`는 링크 로컬은 막지만 문서용(192.0.2.0/24)·벤치마크(198.18.0.0/15)·0.0.0.0을 사설로 본다. `server/discovery.py`에 `is_rfc1918()`(수동 주소 `parse_manual_address`와 같은 세 대역)을 두고 `replace_scan`이 그 밖의 행을 기존 `bad_address`로 거절한다. `enrollment._current_other_address`도 같은 검사를 한 번 더 한다(앞 커밋). 공유 `discovery_txt` 분류기는 다른 클라이언트의 벡터가 걸려 있어 건드리지 않았다.
+- 증거: `test_discovery.py` 2 추가 — 169.254/192.0.2/198.18/100.64/0.0.0.0/공인/멀티캐스트 거절, RFC 1918 세 대역 수용(192.0.2.5에서 적색 확인), 스캔 행에 문서용 주소가 들어 있어도 옮기기 대상이 아님. 발견·등록 API 시험 38 passed.
+- gate 변화: 없음(LOCAL).

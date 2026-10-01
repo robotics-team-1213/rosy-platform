@@ -137,3 +137,32 @@ def test_console_raises_an_alarm_when_the_scanner_lease_expires():
     assert '"검색기 끊김"' in block and '"crit"' in block
     assert 'log("발견 검색기 끊김' in block and '"bad")' in block
     assert "scanner_age_s" in block and "rosy-mdns-bridge" in block
+
+
+
+def test_only_rfc1918_scan_addresses_are_accepted():
+    """Review 2026-10-01: is_private also admits link-local, documentation, benchmark and CGNAT."""
+    store = DiscoveryStore(clock=lambda: 100.0)
+    for address in ("169.254.1.2", "192.0.2.5", "198.18.0.1", "100.64.0.1", "0.0.0.0",
+                    "8.8.8.8", "224.0.0.1"):
+        try:
+            store.replace_scan([dict(name="rosy-a", address=address, port=8080, network="sta")])
+        except ValueError:
+            pass
+        else:
+            raise AssertionError(f"accepted {address}")
+    for address in ("10.16.36.20", "172.16.0.9", "192.168.1.10"):
+        store.replace_scan([dict(name="rosy-a", address=address, port=8080, network="sta")])
+        assert store.rows()[0]["address"] == address
+
+
+def test_move_target_is_rfc1918_even_if_a_row_slipped_in(tmp_path):
+    from enrollment_fakes import MOVED, build, scan_row
+
+    service, network, console, discovery, store, _ = build(tmp_path, {})
+    discovery._rows = [dict(scan_row(), address="192.0.2.7")]
+    discovery._seen_at = 100.0
+    discovery._clock = lambda: 100.0
+    row = {"discovery_name": "rosy-pinky-8kcn", "hostname": "rosy-pinky-8kcn", "address": MOVED}
+    assert service._current_other_address(row) is None
+

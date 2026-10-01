@@ -23,7 +23,7 @@ def is_rfc1918(address: object) -> bool:
 
 _ROW_ERRORS = {
     "bad_host": "invalid discovery hostname",
-    "bad_address": "discovery address must be a private LAN IPv4 address",
+    "bad_address": "discovery address must be an RFC 1918 LAN IPv4 address",
     "bad_port": "invalid discovery port",
 }
 
@@ -63,6 +63,8 @@ class DiscoveryStore:
                 if result.reason == "ap_mode":
                     continue
                 raise ValueError(_ROW_ERRORS[result.reason])
+            if not is_rfc1918(address):
+                raise ValueError(_ROW_ERRORS["bad_address"])
             ip = ipaddress.ip_address(address)
             stage = device.get("stage", "")
             release = device.get("release", "")

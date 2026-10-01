@@ -69,8 +69,8 @@
 
 ## 최근 기록
 
+- 2026-10-01 · uncommitted · fix(discovery): 스캔 주소는 RFC 1918만 받는다
 - 2026-10-01 · uncommitted · fix(enrollment)!: 새 주소로 옮기기는 화면 코드로 새 주소에서 재페어링한다
 - 2026-10-01 · uncommitted · test(console): 주소 까닭·전체 옮기기 브라우저 계약
 - 2026-10-01 · uncommitted · chore(architecture): fleet 크기 판정 23166으로 재기록
 - 2026-10-01 · uncommitted · feat(console): "새 주소로 옮기기 (전체)…"
-- 2026-10-01 · uncommitted · feat(console): 오프라인 로봇 카드에 고정 주소 까닭, 사이트 망 변경 경보
