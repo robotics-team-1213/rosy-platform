@@ -2,8 +2,8 @@
 
 The service in `fleet.server.localization_service` polls robots and posts; this
 module only decides: the reference squares and slots from `lane_rules.yaml`, the
-§9 monitor (a LOCALIZED robot observed > 25 cm or > 60 degrees away for 1.5 s is
-suspect), the escalation ladder timers (10 s, 25 s, 60 s in CANDIDATES), and the
+§9 monitor (a LOCALIZED robot observed > 25 cm or > 60 degrees away in 2 distinct
+reports within 15 s, none agreeing between them, is suspect), the escalation ladder timers (10 s, 25 s, 60 s in CANDIDATES), and the
 peer observations a candidate report gives of LOCALIZED robots. No transport, no
 asyncio; time is passed in.
 """
@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
-from typing import Mapping, Optional, Sequence
+from typing import Hashable, Mapping, Optional, Sequence
 
 from core_common.protocol.localization import CandidateReport, LocState
 
@@ -22,7 +22,10 @@ from fleet.localization.arbiter import MARGIN, Context, Weights, score
 #: D-395 §9 monitor thresholds (initial values, tuned in S1).
 SUSPECT_DIST_M = 0.25
 SUSPECT_YAW_RAD = math.radians(60.0)
-SUSPECT_HOLD_S = 1.5
+#: S1 finding 7: SUSPECT after this many distinct fresh disagreeing reports, with no
+#: agreeing report between them, inside this window (replaces the 1.5 s hold).
+SUSPECT_REPORTS = 2
+SUSPECT_WINDOW_S = 15.0
 SUSPECT_REASON = "fleet_monitor"
 #: A peer observation is an object this close to the peer's reported pose or its mirror.
 PEER_EVIDENCE_M = 0.25
@@ -118,32 +121,36 @@ def peer_observations(report: CandidateReport, observer: cues.Pose,
 
 @dataclass
 class Monitor:
-    """§9: disagreement held for `hold_s` -> suspect, once; agreement resets.
+    """§9: `reports` distinct disagreeing reports within `window_s`, no agreeing one between.
 
-    A tick without evidence keeps the hold (robots re-report every 2 s and a report goes
-    stale after 1 s), but a hold with no disagreement for `hold_s` expires."""
-    hold_s: float = SUSPECT_HOLD_S
-    _since: dict = field(default_factory=dict)
-    _last: dict = field(default_factory=dict)
+    S1 finding 7: reports arrive 4-7 s apart under load, so wall-time continuity never
+    held. Evidence is keyed by its report (or sighting); a key counts once however often
+    it is re-read while fresh. Within one poll a disagreement wins over an agreement
+    (a missed mirror lock is worse than a needless SUSPECT). Firing resets the count."""
+    reports: int = SUSPECT_REPORTS
+    window_s: float = SUSPECT_WINDOW_S
+    _streak: dict = field(default_factory=dict)      # robot -> times of counted disagreements
+    _counted: dict = field(default_factory=dict)     # robot -> {evidence key: time counted}
 
-    def update(self, robot_id: str, disagreeing: Optional[bool], now: float) -> bool:
-        if disagreeing is None:
-            if now - self._last.get(robot_id, now) > self.hold_s:
-                self.forget(robot_id)
-            return False
-        if not disagreeing:
-            self.forget(robot_id)
-            return False
-        since = self._since.setdefault(robot_id, now)
-        self._last[robot_id] = now
-        if now - since >= self.hold_s:
-            self.forget(robot_id)
+    def update(self, robot_id: str, evidence: Sequence[tuple[Hashable, bool]], now: float) -> bool:
+        counted = self._counted.setdefault(robot_id, {})
+        for key in [k for k, t in counted.items() if now - t > self.window_s]:
+            del counted[key]
+        streak = [t for t in self._streak.get(robot_id, ()) if now - t <= self.window_s]
+        for key, disagreeing in sorted(evidence, key=lambda e: e[1]):     # agreements first
+            if key in counted:
+                continue
+            counted[key] = now
+            streak = streak + [now] if disagreeing else []
+        if len(streak) >= self.reports:
+            self._streak[robot_id] = []
             return True
+        self._streak[robot_id] = streak
         return False
 
     def forget(self, robot_id: str) -> None:
-        self._since.pop(robot_id, None)
-        self._last.pop(robot_id, None)
+        self._streak.pop(robot_id, None)
+        self._counted.pop(robot_id, None)
 
 
 @dataclass

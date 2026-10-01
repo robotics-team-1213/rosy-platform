@@ -89,19 +89,44 @@ def test_disagreement_is_25_cm_or_60_degrees():
     assert service_logic.disagrees((0, 0, 0), (0, 0, math.radians(61)))
 
 
-def test_the_monitor_needs_1_5_s_of_continuous_disagreement():
+def test_the_monitor_counts_two_distinct_disagreeing_reports():
+    """S1 finding 7: count reports, not wall-time continuity."""
     m = Monitor()
-    assert not m.update("r", True, 0.0)
-    assert not m.update("r", True, 1.0)
-    assert not m.update("r", False, 1.2)            # agreement resets
-    assert not m.update("r", True, 1.5)
-    assert not m.update("r", None, 2.0)             # a gap in evidence (stale report) keeps the hold
-    assert m.update("r", True, 3.0)
-    assert not m.update("r", True, 3.5)             # fired once; a new hold starts
-    assert not m.update("r", None, 5.5)             # no evidence for > 1.5 s: the hold expires
-    assert not m.update("r", True, 6.0)
-    assert not m.update("r", True, 7.0)
-    assert m.update("r", True, 7.5)
+    assert not m.update("r", [("a", True)], 0.0)
+    assert not m.update("r", [("a", True)], 0.5)    # the same report again is not a second one
+    assert not m.update("r", [], 3.0)               # a gap in evidence keeps the count
+    assert m.update("r", [("b", True)], 5.0)
+    assert not m.update("r", [("c", True)], 6.0)    # fired; the count starts again
+    assert m.update("r", [("d", True)], 7.0)
+
+
+def test_an_agreeing_report_between_two_disagreeing_ones_resets_the_count():
+    m = Monitor()
+    assert not m.update("r", [("a", True)], 0.0)
+    assert not m.update("r", [("b", False)], 2.0)
+    assert not m.update("r", [("c", True)], 4.0)
+    assert m.update("r", [("d", True)], 6.0)
+
+
+def test_two_disagreeing_reports_more_than_15_s_apart_are_not_enough():
+    m = Monitor()
+    assert not m.update("r", [("a", True)], 0.0)
+    assert not m.update("r", [("b", True)], 15.5)
+    assert m.update("r", [("c", True)], 20.0)       # b and c are inside one window
+
+
+def test_disagreement_wins_over_agreement_in_the_same_tick():
+    """Two observers in one poll: a missed mirror lock is worse than a needless SUSPECT."""
+    m = Monitor()
+    assert not m.update("r", [("a", True), ("b", False)], 0.0)
+    assert m.update("r", [("c", True)], 0.5)
+
+
+def test_forget_drops_the_count():
+    m = Monitor()
+    assert not m.update("r", [("a", True)], 0.0)
+    m.forget("r")
+    assert not m.update("r", [("b", True)], 1.0)
 
 
 def _report_at(objects, observer=None):
@@ -241,12 +266,40 @@ def _mirror_locked(clock, objects=((0.5, 0.0),), skew_s=0.0, restamp=True, **kwa
     return truth, r1, r2, service(r1, r2, clock=clock, **kwargs)
 
 
-def test_a_peer_observation_alone_marks_a_mirror_locked_robot_suspect_after_1_5_s():
+def test_a_peer_observation_alone_marks_a_mirror_locked_robot_suspect_on_the_second_report():
     clock = FakeClock()
     _, r1, _, svc = _mirror_locked(clock)
-    ticks(svc, clock, 1.5)                               # observed at 0.0, 0.5, 1.0
+    ticks(svc, clock, 0.5)                               # first report
     assert r1.suspects == []
-    ticks(svc, clock, 0.5)                               # 1.5 s of disagreement
+    ticks(svc, clock, 0.5)                               # a second, distinct report
+    assert r1.suspects == ["fleet_monitor"]
+
+
+class Periodic(Reporting):
+    """Re-reports only every `period_s` of Fleet time (S1: reports 4-7 s apart at RTF ~0.4)."""
+
+    def __init__(self, *args, period_s, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.period_s, self._last = period_s, None
+
+    async def localization_candidates(self):
+        self._record("localization_candidates")
+        if self._last is None or self.clock() - self._last >= self.period_s:
+            self._last, self._stamp = self.clock(), self.clock()
+        return report(self.robot_id, self.pose, objects=self.objects, stamp=self._stamp)
+
+
+@pytest.mark.parametrize("period_s", [4.0, 5.5, 7.0])
+def test_the_monitor_fires_at_the_s1_report_cadence(period_s):
+    """S1 finding 7: twelve disagreeing reports 3.8-6.7 s apart never held 1.5 s of
+    continuity. Two distinct fresh reports are enough now."""
+    clock = FakeClock()
+    truth, r1, _, svc = _mirror_locked(clock)
+    r2 = Periodic("r2", clock, ON_A, [(0.5, 0.0)], period_s=period_s)
+    svc = service(r1, r2, clock=clock)
+    ticks(svc, clock, period_s - 0.5)                    # only the first report so far
+    assert r1.suspects == []
+    ticks(svc, clock, 1.0)
     assert r1.suspects == ["fleet_monitor"]
 
 
@@ -272,13 +325,13 @@ def test_a_fresh_report_is_evidence_whatever_the_robot_clock_says(skew_s):
     """Freshness is counted from Fleet's first sighting of the report, never the robot clock."""
     clock = FakeClock()
     _, r1, _, svc = _mirror_locked(clock, skew_s=skew_s)
-    ticks(svc, clock, 2.0)
+    ticks(svc, clock, 1.0)                               # two re-stamped reports
     assert r1.suspects == ["fleet_monitor"]
 
 
 def test_an_unchanged_report_goes_stale_1_s_after_fleet_first_saw_it():
-    """Re-fetching the same (request_id, stamp) keeps its first-seen time: a robot whose
-    re-reports stopped arriving gives evidence for 1 s only, too short for the 1.5 s hold."""
+    """Re-fetching the same (request_id, stamp) keeps its first-seen time and counts once:
+    a robot whose re-reports stopped arriving gives one report, never the two needed."""
     clock = FakeClock()
     _, r1, _, svc = _mirror_locked(clock, restamp=False)
     ticks(svc, clock, 5.0)
@@ -306,10 +359,21 @@ def test_the_overhead_sighting_counts_when_the_flag_is_on_and_only_when_fresh():
         sightings.see("r1", 1.0, 0.0, 0.0, age_s=0.4)   # older than 300 ms: not a cue
         ticks(svc, clock, 0.5)
     assert r1.suspects == []
-    for _ in range(4):
+    for _ in range(2):
         sightings.see("r1", 0.0, 0.0, math.radians(90))  # fresh, 90 degrees off
         ticks(svc, clock, 0.5)
     assert r1.suspects == ["fleet_monitor"]
+
+
+def test_one_overhead_sighting_re_read_counts_once():
+    clock = FakeClock()
+    sightings = FakeSightings(clock)
+    r1 = FakeRobot("r1", state=state("r1", "LOCALIZED", pose=(0.0, 0.0, 0.0)))
+    svc = service(r1, clock=clock, sightings=sightings, overhead_cue=True)
+    sightings.see("r1", 0.0, 0.0, math.radians(90), age_s=0.0)
+    ticks(svc, clock, 0.5)
+    ticks(svc, clock, 0.5)                               # the same row, 0.5 s old, read again
+    assert r1.suspects == []
 
 
 def test_the_ladder_sends_missions_then_raises_needs_human(caplog):

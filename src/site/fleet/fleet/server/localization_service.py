@@ -206,7 +206,7 @@ class LocalizationService:
         fresh = now - seen[1] <= service_logic.REPORT_FRESH_S
         if leader is not None and fresh:
             for peer, seen in service_logic.peer_observations(report, leader, peers).items():
-                observations.setdefault(peer, []).append(seen)
+                observations.setdefault(peer, []).append(((rid, *key), seen))
         decision = self._arbiter.observe(report, context, now)
         if decision is not None:
             await self._post_decision(rid, client, decision)
@@ -228,7 +228,8 @@ class LocalizationService:
         self._last_decision[rid] = record
 
     async def _watch(self, localized: Mapping[str, cues.Pose], observations: Mapping[str, list],
-               now: float) -> None:
+                     now: float) -> None:
+        """`observations`: robot -> [(evidence key, observed pose)]; a key is one report."""
         for rid in list(self._known):
             if rid not in localized:
                 self._monitor.forget(rid)
@@ -237,9 +238,10 @@ class LocalizationService:
             seen = list(observations.get(rid, ()))
             sighting = self._sighting(rid, now)
             if sighting is not None:
-                seen.append((sighting.x, sighting.y, sighting.yaw))
-            disagreeing = any(service_logic.disagrees(pose, o) for o in seen) if seen else None
-            if self._monitor.update(rid, disagreeing, now):
+                seen.append((("overhead", round(sighting.captured_at, 3)),
+                             (sighting.x, sighting.y, sighting.yaw)))
+            evidence = [(key, service_logic.disagrees(pose, o)) for key, o in seen]
+            if self._monitor.update(rid, evidence, now):
                 suspects.append(rid)
         await asyncio.gather(*(self._post_suspect(rid) for rid in suspects))
 
@@ -247,9 +249,9 @@ class LocalizationService:
         client = self._clients().get(rid)
         if client is None:
             return
-        logger.warning("localization: %s observed > %.2f m / %.0f deg off for %.1f s; suspect",
+        logger.warning("localization: %s observed > %.2f m / %.0f deg off in %d reports; suspect",
                        rid, service_logic.SUSPECT_DIST_M, math.degrees(service_logic.SUSPECT_YAW_RAD),
-                       service_logic.SUSPECT_HOLD_S)
+                       service_logic.SUSPECT_REPORTS)
         try:
             await self._bounded(client.localization_suspect(service_logic.SUSPECT_REASON))
         except Exception as exc:
