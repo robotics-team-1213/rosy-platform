@@ -288,6 +288,8 @@ def search(field, clear, squares, ranges, angles, radius, mount, minimum_fit=.9,
         object_ranges, object_angles = (ranges, angles) if object_scan is None else object_scan
         objects = unmapped_objects(field, sensor_from_base((first.x, first.y, first.yaw), mount),
                                    object_ranges, object_angles, mount)
+        # Every beam also keeps chassis returns: no peer is inside this robot's own radius.
+        objects = [o for o in objects if math.hypot(*o) > radius]
     return found, objects, clear
 
 

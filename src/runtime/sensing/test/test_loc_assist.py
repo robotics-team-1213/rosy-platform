@@ -314,6 +314,19 @@ def test_peer_objects_come_from_the_full_scan_while_the_search_is_strided():
     assert math.dist(objects[0], (c * dx + s * dy, -s * dx + c * dy)) < .08
 
 
+def test_returns_inside_the_robot_body_are_not_peer_objects():
+    """Gazebo fix_a1: on square A every full-scan report carried an object 7 cm from
+    base_link (a chassis/wall return the stride used to thin to one beam). No peer
+    can be inside this robot's own radius."""
+    truth = (-1.26, .49, -math.pi / 2)
+    ranges, angles = scan(truth, beams=640)
+    ranges = ranges.copy()
+    ranges[200:206] = .07                                   # a self-hit cluster
+    _, objects, _ = search(field(), None, SQUARES, ranges[::4], angles[::4], .105, MOUNT,
+                           object_scan=(ranges, angles))
+    assert objects == []
+
+
 @pytest.mark.parametrize('pose', [(.86, -.52, math.pi), (-1.26, .49, math.pi / 2), (-.7, .15, math.pi)])
 def test_the_full_scan_finds_no_objects_on_an_empty_track(pose):
     full = scan(pose, beams=640)
