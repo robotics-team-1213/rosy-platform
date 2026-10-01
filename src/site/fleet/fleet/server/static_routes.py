@@ -25,6 +25,7 @@ CONSOLE_ASSETS = {
     "field-layers.js": "application/javascript",
     "field-view.js": "application/javascript",
     "formation.js": "application/javascript",
+    "localization-badge.js": "application/javascript",
     "map-fit.js": "application/javascript",
     "map-fit-view.js": "application/javascript",
     "map-view.js": "application/javascript",
