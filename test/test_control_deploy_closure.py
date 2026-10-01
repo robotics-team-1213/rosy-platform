@@ -47,6 +47,10 @@ DEPLOYED_CONTROL_EXECUTABLES = {
     # publishes a velocity command (learned output is never read by driving).
     "learned_lane_node",
     "capture_trigger_node",
+    # D-395 P2-3: localization state, candidates and the checked initialpose; in the
+    # closure through hardware.launch.py behind enable_loc_assist (default off on
+    # the device). It publishes no velocity command.
+    "loc_assist_node",
 }
 
 #: Control executables that can own the final command (D-149 standalone exception).
