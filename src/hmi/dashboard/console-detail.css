@@ -296,7 +296,7 @@
 }
 .map-toolbar { display: flex; gap: var(--space-1); margin: 0; padding: var(--space-1); }
 /* 안내는 클릭 모드 툴바를 설명하는 글이다 — 그 아래 붙여 둔다. */
-.map-hint { max-width: 28ch; margin: 0; padding: var(--space-2); color: var(--ink); font-size: var(--text-label); line-height: 1.45; }
+.map-hint { max-width: 28ch; margin: 0; padding: var(--space-2); color: var(--ink); font-size: var(--text-label); line-height: var(--leading-body); }
 /* 범례는 지도의 색을 설명한다 — 지도 위가 제자리다. */
 .map-legend {
   position: absolute;
@@ -568,7 +568,7 @@
 .risk-tape li { padding: var(--space-2); border-left: 2px solid var(--status-crit); background: var(--status-crit-a07); }
 .risk-tape li strong, .risk-tape li span { display: block; }
 .risk-tape li strong { color: var(--status-crit); font: var(--weight-regular) var(--text-micro)/var(--leading-flat) var(--mono); letter-spacing: var(--track-label); }
-.risk-tape li span { margin-top: var(--space-1); color: var(--ink); font: var(--weight-regular) var(--text-label)/1.45 var(--mono); }
+.risk-tape li span { margin-top: var(--space-1); color: var(--ink); font: var(--weight-regular) var(--text-label)/var(--leading-copy) var(--mono); }
 /* 위험이 없을 때는 색도 테두리도 쓰지 않는다 — 정상에는 색이 없다. */
 .risk-tape li.risk-clear { color: var(--nominal); border-left-color: var(--surface-line); background: transparent; font: var(--weight-regular) var(--text-label)/var(--leading-copy) var(--mono); }
 .risk-tape li.risk-unavailable { color: var(--nominal-quiet); border-left-color: var(--surface-line); background: transparent; font: var(--weight-regular) var(--text-label)/var(--leading-copy) var(--mono); }

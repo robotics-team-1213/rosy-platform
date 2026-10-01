@@ -745,3 +745,9 @@
 - 변경: console-detail.css의 var(--muted/--paper/--radius-1) → --ink-quiet/--ink-on-crit/--radius-control(존재하지 않는 토큰 참조였음). skeleton 펄스·액션 페이드 제거로 D-220 회복 — 기다림은 조용한 뮤트 대시, 숨김은 점프 컷(레거시 시험 핀 2건 갱신, 깨져 있던 디밍 계약 시험도 초록). overview·pose-evidence·operations·triage·telemetry·vision이 EVIDENCE_LABEL/evidenceAgeText로 말을 만든다. styleguide.css의 죽은 .demo-* 부품 재구현 삭제(견본은 실제 ui-* 요소).
 - 근거: D-398. dashboard·web_common 시험 통과.
 - gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · D-398 후속 — 원시 줄 간격 토큰화
+
+- 변경: styles.css 2곳(1.55→--leading-copy, 1.35→--leading-label), console-detail.css 2곳(1.45→--leading-body, font 단축형 /1.45→--leading-copy). 표면 줄 간격은 이제 토큰만.
+- 근거: D-398 후속. web_common 타이포 계약 시험이 폐쇄 화이트리스트로 잔존을 적발(변이 증명).
+- gate 변화: 없음.
