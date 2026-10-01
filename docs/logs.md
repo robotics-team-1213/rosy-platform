@@ -4055,3 +4055,10 @@
 - 변경: API Ref v1.67 과 D-321 부록에 — 소유는 토큰 단위, 회수된 토큰의 lease 는 ttl 까지 남음(Admin DELETE), SAF-005 RETURN_HOME 은 lease 를 일부러 무시, 시작 조건과 전체 차단 목록, host `override_calibration`, Pilot 이탈 규칙. 272151b6: main 이 추가한 test_mission_progress 핀 v1.66 → v1.67.
 - 증거: 문서 계약 시험 1 passed, 버전 핀 시험 통과, rosy_harness lint 0 errors.
 - gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · docs(adr): D-392 모델 도구 메시지 계약
+
+- 변경: 공식 `google-gemini/robotics-samples`를 조사해 ER 2 notebook mock과 Live API Spot의 실제 FastAPI/Boston Dynamics 도구 경로를 구분 기록하고, provider 중립 ModelToolCall/Result와 Fleet allowlist 결정을 D-392로 추가. 후속 구현 단계를 실행 계획으로 작성.
+- 경계: Spot의 OpenAPI operation 추출은 Rosy capability grant가 아니며, 샘플의 model-routed stop은 독립 로컬 stop/E-stop 증거가 아니다. `POLICY_DISPATCH_ENABLED=False` 유지.
+- 증거: 조사 고정 SHA `c51cbab6e6efffff8738ecf9ce41ba85034d9654`; ROS-SIM/ARTIFACT/DEVICE/FIELD gate 변화 없음.
+- gate 변화: 없음.

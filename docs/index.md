@@ -265,8 +265,8 @@
 
 ## 최근 기록
 
+- 2026-10-01 · uncommitted · docs(adr): D-392 모델 도구 메시지 계약
 - 2026-10-01 · 4483e7a8 · docs(api,adr): 보정 lease 소유·회수·배터리 복귀
 - 2026-10-01 · e8028fb0 · docs(adr): D-321 부록 — 보정 세션 표시와 차단
 - 2026-10-01 · uncommitted · docs(deployment): 현장 천장 카메라·관제 운영 가이드
 - 2026-10-01 · uncommitted · D-390 Pilot OMX simulation implementation and evidence
-- 2026-10-01 · uncommitted · docs(adr): D-390 Pilot OMX-AI Gazebo 연습 경계와 실행 계획
