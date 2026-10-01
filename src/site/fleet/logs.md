@@ -856,3 +856,10 @@
 - gate 변화: `test_canvas_palette_contract.py`가 map-fit-view.js도 본다.
 - 결정: D-359 §4·§5.3, D-375.
 - 교훈: 병합으로 새 캔버스 파일이 오면 `test_every_canvas_script_on_a_web_surface_is_under_the_contract`가 잡는다 — 목록에 넣고 판정을 통과시킨다.
+
+## 2026-10-01 · uncommitted · fix(fleet): D-375 맵 자동 맞춤 버튼을 경기장 도구 줄에 합친다
+- 변경: main 병합 뒤 `index.html`의 지도 맞춤 버튼이 경기장 자동 찾기 아래에 자기 줄을 하나 더 차지해, 1920×1080 콘솔 문서가 5px 스크롤됐다(`test_console_fits_the_declared_viewport`, D-201). 두 제안 도구가 `.field-tools` 한 줄을 나눠 쓰고, 상태 문구는 경기장→지도 맞춤 순서로 그 아래에 둔다. 한 줄에 "제안 버리기"가 둘이 되지 않게 지도 쪽은 `맞춤 제안 버리기`로 바꿨다.
+- 증거: `ROSY_RUN_BROWSER_TESTS=1 python -m pytest test/test_fleet_console_browser.py -q` 52 passed, 1 failed(이미 알려진 `test_the_console_renders_what_swarm_control_says`) (2026-10-01 Windows). 캡처 X:\DevTemp\fleet_console_fit.png.
+- gate 변화: 없음.
+- 결정: D-201, D-375.
+- 교훈: 없음.

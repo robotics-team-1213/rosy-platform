@@ -220,21 +220,20 @@
           <p id="vision-message" role="status">관제 사용자 인증 후 카메라를 선택하세요.</p>
         </div>
         <p class="hint" id="vision-meta">화면에 보이는 카메라의 최신 프레임입니다. 실제 시야 범위는 현장 설치에서 확인해야 합니다.</p>
-        <!-- D-360: 경기장 제안은 운용자가 수락해야 조정값이 된다. 관측·주행에는 쓰지 않는다. -->
+        <!-- D-360: 경기장 제안은 운용자가 수락해야 조정값이 된다. 관측·주행에는 쓰지 않는다.
+             D-375: 차선 페인트로 카메라→지도 맞춤을 제안받는다. 수락해도 이 브라우저의 표시 초안일 뿐이다.
+             두 제안 도구는 한 줄을 나눠 쓴다 — 예외 문법은 한 화면에 다 보인다(D-201). -->
         <div class="field-tools">
           <ui-button kind="quiet" id="field-detect" type="button">경기장 자동 찾기</ui-button>
           <ui-button kind="quiet" id="field-accept" type="button" hidden>제안 수락</ui-button>
           <ui-button kind="quiet" id="field-dismiss" type="button" hidden>제안 버리기</ui-button>
+          <ui-button kind="quiet" id="map-fit-detect" type="button">맵 자동 맞춤</ui-button>
+          <ui-button kind="quiet" id="map-fit-accept" type="button" hidden>맞춤 수락</ui-button>
+          <ui-button kind="quiet" id="map-fit-dismiss" type="button" hidden>맞춤 제안 버리기</ui-button>
+          <ui-button kind="quiet" id="map-fit-clear" type="button" hidden>저장한 맞춤 지우기</ui-button>
         </div>
         <p class="hint" id="field-proposal-state" role="status">경기장 윤곽을 Vision이 제안합니다. 제안은 확인 전까지 적용되지 않습니다.</p>
         <p class="hint field-storage-state" id="field-storage-state" role="status" hidden></p>
-        <!-- D-375: 차선 페인트로 카메라→지도 맞춤을 제안받는다. 수락해도 이 브라우저의 표시 초안일 뿐이다. -->
-        <div class="field-tools">
-          <ui-button kind="quiet" id="map-fit-detect" type="button">맵 자동 맞춤</ui-button>
-          <ui-button kind="quiet" id="map-fit-accept" type="button" hidden>맞춤 수락</ui-button>
-          <ui-button kind="quiet" id="map-fit-dismiss" type="button" hidden>제안 버리기</ui-button>
-          <ui-button kind="quiet" id="map-fit-clear" type="button" hidden>저장한 맞춤 지우기</ui-button>
-        </div>
         <p class="hint map-fit-state" id="map-fit-state" role="status">Vision이 차선 페인트로 카메라를 사이트 지도에 맞춰 봅니다. 확인 전까지 적용되지 않고, 관측·주행에는 쓰지 않습니다.</p>
         <p class="map-fit-guidance" id="map-fit-guidance" role="status" hidden></p>
         <figure class="field-rectified map-fit-figure" id="map-fit-figure" hidden>
