@@ -2,6 +2,8 @@
 
 **Status:** Accepted (2026-09-29, 제어권·정지·복구 구조 결정). 새 Mission/OMX API, 자동 정책 dispatch, 사이트 정지 가용성, 물리 E-stop, DEVICE/FIELD 수용을 승인하지 않는다.
 
+**부분 개정 (D-403, 2026-10-01, 시뮬레이션 한정):** [D-403](D-403-fleet-cell-job-route-cell-transfer.md)(Proposed, 사용자 승인)은 §2의 Mission dispatch 보류를 `simulation` 프로필에서만 푼다. 조건은 고정 이미지에서 D-403 §7의 ROS-SIM 정지 세대 producer/consumer 시험을 통과하는 것이다. 그 밖의 프로필에서는 §2 보류가 그대로이고, §1·§3–§5는 바꾸지 않는다. 이 개정은 D-403이 Accepted가 되면 효력이 생긴다. 그 전에는 위 원문이 그대로 적용된다.
+
 ### Context
 
 D-326은 모델을 Fleet의 실행권 없는 후보 생산자로, D-327은 조작 Action을 장치 로컬 owner의 책임으로, D-328은 Mission/Step 원장을 Fleet 책임으로 뒀다. [정합성 검토](../plans/2026-09-29-er2-adr-consistency-review.md)는 이 소유권들이 양립하지만 발행 경쟁과 정지 후 재발행을 막을 공통 제어 경계가 없다고 확인했다.

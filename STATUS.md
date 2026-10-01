@@ -11,6 +11,7 @@
 | [fleet](src/site/fleet/progress.md) | FLEET | bed604ef (2026-09-30) | GO | GO | HOLD | PARKED | PARKED | PARKED |
 | [games](src/site/games/progress.md) | GAMES | bed604ef (2026-09-30) | GO | GO | N/A | N/A | PARKED | PARKED |
 | [rosy_vision](src/site/vision/progress.md) | SITE | a8199fd9 (2026-09-30) | GO | GO | N/A | N/A | PARKED | PARKED |
+| [rosy_cell](src/site/cell/progress.md) | SITE | 13614bc0 (2026-10-01) | GO | N/A | HOLD | N/A | PARKED | PARKED |
 | [cam](src/site/cam/progress.md) | SITE | 2370b41b (2026-10-01) | GO | GO | N/A | N/A | PARKED | PARKED |
 | [gz_sim](src/sim/gz_sim/progress.md) | SIM | uncommitted (2026-09-21) | GO | GO | GO | N/A | N/A | N/A |
 | [navigation](src/runtime/navigation/progress.md) | NAV | dc89264 (2026-09-17) | GO | GO | HOLD | HOLD | HOLD | PARKED |
@@ -27,7 +28,7 @@
 | [web_common](src/hmi/web_common/progress.md) | CORE | 0409c371 (2026-09-30) | GO | GO | N/A | N/A | N/A | N/A |
 | [dashboard](src/hmi/dashboard/progress.md) | 화면 | e7cdf490 (2026-09-29) | GO | GO | N/A | HOLD | N/A | N/A |
 | [pilot](src/hmi/pilot/progress.md) | 화면 | 434ceb0b (2026-09-29) | GO | HOLD | HOLD | HOLD | HOLD | N/A |
-| [omx_adapter](src/products/omx/adapter/progress.md) | OMX workcell | 979c0785 (2026-10-01) | GO | GO | HOLD | HOLD | PARKED | PARKED |
+| [omx_adapter](src/products/omx/adapter/progress.md) | OMX workcell | 31ada4b4 (2026-10-02) | GO | GO | HOLD | HOLD | PARKED | PARKED |
 | [interfaces](src/contracts/interfaces/progress.md) | 장치 | dc89264 (2026-09-17) | GO | GO | N/A | HOLD | HOLD | PARKED |
 | [pinky_pro](src/products/pinky_pro/profile/progress.md) | 로봇 통합 | uncommitted (2026-09-24) | GO | GO | GO | HOLD | HOLD | PARKED |
 | [omx](src/products/omx/profile/progress.md) | OMX workcell | uncommitted (2026-09-26) | GO | GO | HOLD | HOLD | PARKED | PARKED |
@@ -47,6 +48,7 @@
 - control ARTIFACT: 서명된 ARM64 manifest·immutable digest 발행 전. 흡수된 코드는 deploy가 소유하는 OS 이미지에 번들된다
 - control DEVICE: Pi bench Device 설치와 device-readback.sh --json 증거 없음. Control sensor adapter 활성화는 Device 보정 generation에 묶인다(D-47)
 - fleet ROS-SIM: D-87: 현재 트리의 colcon install/setup.bash가 없다. 2026-09-17 WSL Task 14 로그는 설계 입력이며 GO가 아니다 (D-89)
+- rosy_cell ROS-SIM: needs roadmap P3/P4 (MoveIt OMX-F Gazebo, device Step API)
 - navigation ROS-SIM: Nav2/SLAM Toolbox 실물 launch 미재실행. 현재는 ament_lint와 조합 계약 시험뿐 — ROS 2 Jazzy 환경에서 hardware.launch.py/gz_*.launch.xml 재실행 필요
 - navigation ARTIFACT: ARM64 로봇 이미지에 포함되나(Dockerfile/compose) 서명 manifest와 immutable digest 발행 전
 - navigation DEVICE: Pi bench Device 설치와 device-readback.sh --json 증거 없음

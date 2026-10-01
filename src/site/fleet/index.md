@@ -71,8 +71,8 @@
 
 ## 최근 기록
 
+- 2026-10-01 · uncommitted · D-398 후속 — 정체 띠 완성·음영 제거·줄 간격 토큰화
 - 2026-10-01 · uncommitted · docs(api): align Fleet contract pins to v1.70
 - 2026-10-01 · uncommitted · fix(fleet): D-395 중재기 — 결정을 싣는 단서는 양(+)의 증거이고 모든 후보를 이겨야 한다
 - 2026-10-01 · uncommitted · test(fleet): API Ref 버전 핀 v1.69 (D-395 1단계)
 - 2026-10-01 · uncommitted · feat(fleet): D-395 위치 중재기 — 뚜렷한 격차가 2 s 유지될 때만 결정
-- 2026-10-01 · uncommitted · feat(fleet): D-395 위치 중재 채점 단서 (순수)

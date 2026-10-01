@@ -661,3 +661,9 @@
 - 변경: `control.sensor_adapter.mode` off/shadow/enforce(`enabled` 호환, property), `build_control_adapter`(그림자 워커 시작 실패 → off + `mode_error`, 설정 오류는 모든 모드에서 예외, enforce는 `calibration.required` 거부·shadow/off는 경고 후 무시, shadow+`control_policy_required` 거부), `safety_params.py`(LiDAR = line_follow 값, 봉투 = CORE 속도 상한 쌍, overlay 허용 키·워커 타입/범위 검사, revision = 파라미터만), `safety_policy_status.py`(상태 `safety_policy` 블록), `node.py` 조립 순서(LiDAR → 안전 파라미터 → 어댑터 → 바인딩 → 상태 공급자).
 - 증거: 전체 시험(gateway+services+foundation+api_web+test/) `5 failed, 5919 passed, 249 skipped, 31 warnings, 4 errors in 3428.70s`; `known_failures.py`는 exit 1: 9건 모두 이 브랜치가 건드리지 않은 시험이며(main 4804d417에서도 test_module_separation, test_release_boundary_guards, test_robot_literals, test_dashboard_drive 4건이 같게 실패, test_module_criteria C6와 test_behavior_test_ownership은 main이 이후 고쳤고 이 브랜치는 그 이전 기준) 이 브랜치 기인 실패는 0건.
 - gate 변화: 없음. SOURCE만. 그림자는 어느 로봇에서도 켜지 않았다(기본 off).
+
+## 2026-10-02 · uncommitted · fix(bridge): D-394 주행 카드 reach 셋 삭제(C6) — 죽은 current_goal 판정
+
+- 변경: CI 빨강(36877526967 등 3회 연속, 2026-10-01 14:28 원격 푸시부터)의 원인인 C6 reach 8종을 전부 삭제로 수정. snapshot.mode/navigation/docking 은 StateSnapshot 이 보장하는 선언 멤버(schemas.py)라 직접 접근으로 바꾸고, docking_state 는 pin 된 모드-맥락 계약(도킹 중에만 실린다)대로 고침. self._svc.nav.current_goal 은 NavigationManager 에 선언된 적이 없는 멤버 — 주행 카드의 목표 좌표는 태어나서 한 번도 값이 실린 적 없었다(죽은 reach). 읽기를 지우고 판정을 문서에 남긴다. 시험 stub 의 docking.state 를 실제 DockState enum 으로(문자열 이중 모양 제거).
+- 근거: docs/plans/2026-09-06-module-split-criteria.md 행 추가(판정: 전부 Seam lie — deletion). test_module_criteria·test_bridge_display·test_bridge_reconcile·test_bridge_timers·test_emotion_map·test_goal_tracker 87 passed, flake8 초록.
+- gate 변화: 없음. 목표 좌표 표시는 NavigationManager 가 current_goal 을 선언하는 커밋에서 돌아온다(직접 접근 + 실측 시험 동반).

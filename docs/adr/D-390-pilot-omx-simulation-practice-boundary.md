@@ -2,6 +2,13 @@
 
 **Status:** Accepted (2026-10-01, 설계·실행 순서 결정). API·Pilot·Gazebo 통합 구현, ROS-SIM 수용, 실물 OMX 원격 조종, DEVICE/FIELD 수용은 포함하지 않는다.
 
+**부분 개정 (D-403·D-404, 2026-10-01, 시뮬레이션 한정):** [D-404](D-404-omx-setup-teaching-api-simulation-first.md)(Proposed, 사용자 승인)가 이 시뮬레이션 API를 두 방향으로 넓힌다.
+
+- Rosy Cell 서버를 두 번째 클라이언트로 둔다. 셋업 중계를 하고, 클라이언트별 일회용 pairing code를 쓴다.
+- 읽기 전용 `/tcp`, 그리고 seat를 가진 클라이언트의 셀 수락을 더한다.
+
+[D-403](D-403-fleet-cell-job-route-cell-transfer.md) §8은 이 API와 D-336 UDS를 한 owner 프로세스에 두도록 정한다. §3의 작업대별 단일 writer와 §5의 실물 분리는 그대로다. 이 개정은 D-403과 D-404가 Accepted가 되면 효력이 생긴다. 그 전에는 원문이 그대로 적용된다.
+
 ## 배경과 확인한 차이
 
 - D-323·D-366은 Pilot의 장치별 드라이버 확장점을 정했지만, 현행 `app.js`는 `pinky_core`만 등록하고 `connect.js`·`drive.js`는 그 종류를 직접 선택한다. `link.js`는 `/ws/state`와 `/api/v1/teleop`의 `{linear, angular}` 주행 명령을 한 상태 기계에 묶는다. `client.js`의 인증·capability 경로와 `vision.js`의 전방 카메라 경로도 Pinky CORE의 같은 origin을 전제한다. 따라서 드라이버 파일 하나만 추가해서 OMX 팔을 조종할 수 없다.

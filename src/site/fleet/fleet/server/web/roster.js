@@ -59,7 +59,10 @@ export function createRoster({ el, view, log, call, render, streamEvidence, isOp
 
   function card(robot, index) {
     const node = document.createElement("article");
-    node.className = "robot";
+    // D-82 로봇 사다리 — 지도 삼각형과 같은 색 순서(view.robots 인덱스)로 카드의
+    // 정체 띠가 돈다. CSS 의 .s0/.s1/.s2 가 --robot-1..3 을 붙인다. 표시 순서가
+    // 예외 우선으로 바뀌어도 색은 로봇에 붙어 있다.
+    node.className = `robot s${index % view.colors.length}`;
     node.dataset.robotId = robot.robot_id;
     if (!view.stateUnavailable && !robot.online) node.classList.add("offline");
     if (view.selected === robot.robot_id) node.classList.add("selected");

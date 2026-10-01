@@ -5,7 +5,7 @@
 
 ## Purpose
 
-ROS 2 colcon workspace. Package names are unchanged. Directories group source by role: contracts (messages and shared schemas), runtime (gateway, events, services, API web, navigation, sensing), products (Pinky Pro and OMX source), drivers (chip drivers), site (Fleet, Rosy Vision, Rosy Cam, Games), hmi (dashboard and shared interfaces), and sim. These are source groupings only; ROS package identity, running process, final writer, and deployment closure are separate facts under D-315. Build with colcon build --symlink-install from this directory. ament_python: core, core_common, core_events, core_features, core_api_web, control, emotion, games, omx_adapter, fleet, rosy_vision, bringup, led. ament_cmake: interfaces, pinky_pro, omx, navigation, description, gz_sim, lamp_control, imu_bno055, sensor_adc, dashboard, pilot.
+ROS 2 colcon workspace. Package names are unchanged. Directories group source by role: contracts (messages and shared schemas), runtime (gateway, events, services, API web, navigation, sensing), products (Pinky Pro and OMX source), drivers (chip drivers), site (Fleet, Rosy Vision, Rosy Cell, Rosy Cam, Games), hmi (dashboard and shared interfaces), and sim. These are source groupings only; ROS package identity, running process, final writer, and deployment closure are separate facts under D-315. Build with colcon build --symlink-install from this directory. ament_python: core, core_common, core_events, core_features, core_api_web, control, emotion, games, omx_adapter, fleet, rosy_vision, rosy_cell, bringup, led. ament_cmake: interfaces, pinky_pro, omx, navigation, description, gz_sim, lamp_control, imu_bno055, sensor_adc, dashboard, pilot.
 
 ## Key Files
 
@@ -44,6 +44,7 @@ Folders carry the role name; ROS package names stay (D-231). Where they differ, 
 | `runtime/sensing` | `control` |
 | `runtime/services` | `core_features` |
 | `site/vision` | `rosy_vision` (D-377 app rule `rosy_<word>`) |
+| `site/cell` | `rosy_cell` (D-377 app rule `rosy_<word>`) |
 
 ### Placement Rules
 

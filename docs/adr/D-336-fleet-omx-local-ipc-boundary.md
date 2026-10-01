@@ -2,6 +2,8 @@
 
 **Status:** Accepted (2026-09-29, SOURCE/LOCAL 연결 경계만). 실제 호스트 배치, 설치 서비스, OMX capability, 원격 장치 API, ROS graph 연결, 물리 정지·DEVICE/FIELD 수용을 승인하지 않는다.
 
+**부분 개정 (D-403, 2026-10-01, 시뮬레이션 한정):** [D-403](D-403-fleet-cell-job-route-cell-transfer.md)(Proposed, 사용자 승인) §8은 `simulation` 프로필에서만 §1·§3의 native systemd 서비스 인스턴스 전제에서 벗어난다. owner를 `rosy-omx-workstation` 컨테이너에서 실행하고, socket을 bind-mount로 노출한다. 다음은 그대로다: 같은 Linux 커널, `SO_PEERCRED` UID allowlist(owner 쪽에서 관측한 UID), 64 KiB framing, §4–§5(호스트 간 HOLD). 이 개정은 D-403이 Accepted가 되면 효력이 생긴다. 그 전에는 원문이 그대로 적용된다.
+
 ### Context
 
 D-281은 Site Fleet과 OMX가 같은 Ubuntu 호스트나 서로 다른 호스트에 놓일 수 있다고 두지만 OMX 원격 작업 요청·상태 API를 열지 않았다. D-246은 장치 제어·안전 owner의 native 실행을 기본으로 둔다. 현재 `deploy/robot/omx`는 ROS 2 Jazzy amd64 개발/ROS-SIM 이미지와 비활성 interactive shell이며, `omx_adapter`는 in-process `RosArmCommandRuntime`, 별도 SQLite `ActionStore`, evidence-only `PickPlaceTransaction`을 제공한다. 이들은 한 실행 서비스로 연결되지 않았고 원격 API·local IPC·물리 stop 입력도 없다. 채워진 실장치 host inventory, OMX serial identity, gripper/driver 수용 자료도 없다.
