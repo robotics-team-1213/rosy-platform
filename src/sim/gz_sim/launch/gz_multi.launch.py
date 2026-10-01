@@ -296,6 +296,7 @@ def _launch_setup(context):
     core = LaunchConfiguration("core").perform(context).lower() in ("true", "1")
     api_port_base = int(LaunchConfiguration("api_port_base").perform(context))
     map_yaml = LaunchConfiguration("map").perform(context)
+    loc_assist = LaunchConfiguration("loc_assist").perform(context).lower() in ("true", "1")
     spawn_spacing_raw = LaunchConfiguration("spawn_spacing").perform(context)
     profile = resolve_world(
         world_name,
@@ -439,6 +440,10 @@ def _launch_setup(context):
                     launch_arguments=nav_args.items(),
                 )
             )
+            if loc_assist:  # D-395 P2-3: power-on is UNKNOWN; the seeded AMCL pose is not evidence
+                mode_actions.append(IncludeLaunchDescription(PythonLaunchDescriptionSource(os.path.join(
+                    get_package_share_directory("control"), "launch", "loc_assist.launch.py")),
+                    launch_arguments={"namespace": ns, "use_sim_time": "true", "map_yaml": map_yaml}.items()))
         elif mode in ("slam", "slam_nav"):
             slam_cfg = os.path.join(bridge_dir, f"mapper_{ns}.yaml")
             with open(slam_cfg, "w", encoding="utf-8") as f:
@@ -582,6 +587,8 @@ def generate_launch_description():
                               description="로봇별 core 기동 (포트 api_port_base + i - 1)"),
         DeclareLaunchArgument("map", default_value="",
                               description="mode:=nav 맵 yaml. 비면 월드 카탈로그"),
+        DeclareLaunchArgument("loc_assist", default_value="true", choices=["true", "false"],
+                              description="mode:=nav 에서 로봇별 D-395 loc_assist_node"),
         DeclareLaunchArgument("api_port_base", default_value="8080",
                               description="첫 로봇의 core API 포트"),
         OpaqueFunction(function=_launch_setup),

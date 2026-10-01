@@ -824,3 +824,9 @@
 - 변경: `control/localization_node.py` — 유일 해 전역 매치의 자체 `initialpose` 발행(기각안 B)과 `reinitialize_global_localization` 전역 재초기화를 지웠다(대칭 트랙에서 둘 다 거울을 우연히 고르고, 재초기화는 3 s 검증 중 입자를 흩는다). 준비 판정의 "확정"은 이제 `localization/state`의 LOCALIZED다. 상태 JSON의 `recoveries`·`global_candidate`와 `localization.yaml`의 `recovery_interval`·`global_minimum_*`은 사라졌다. `tools/gz/localization_rig.py`의 전역 복구 시나리오는 이 기능을 전제하므로 더는 맞지 않는다(수동 도구, 고치지 않음).
 - 증거: sensing 호스트 전체 2197 passed(이 변경 뒤 실패 2건 — 실행기 수·hotpath 이름 — 을 고쳐 재실행 통과), 아키텍처 76 passed(`control` 41059로 재판정). WSL Jazzy 스모크(가짜 지도·스캔·TF로 노드 구동): UNKNOWN → 후보 2개 보고 → 결정 → `initialpose`(공분산 0.05²) → 3 s 뒤 LOCALIZED·결과 수락. 부하 평균 ~9인 공유 WSL에서 몇 번은 주입 직후 0.5 s 넘는 실행기 정지로 `stale_scan` 실패(환경, 1단계 `InjectionCheck`의 0.5 s 공백 규칙대로).
 - gate 변화: 없음(SOURCE/LOCAL). ROS-SIM은 P2-8 Gazebo S1.
+
+## 2026-10-01 · uncommitted · feat(launch): loc_assist 배선 — sim 켬, 기기 끔 (D-395 P2-3)
+- 변경: `launch/loc_assist.launch.py`(인자 `loc_assist` 기본 true, `namespace`, `use_sim_time`, `map_yaml`, `lane_rules_file`, `search_budget_s`; 움직임 출력 없음). `localization.launch.py`가 이를 포함한다(localization_node의 준비가 LOCALIZED를 기다리므로). 기기 `hardware.launch.py`는 `enable_loc_assist` 기본 false, Gazebo `gz_multi` nav 모드는 `loc_assist` 기본 true. `nav2_params.yaml`의 `set_initial_pose`는 그대로.
+- 결정: 기기 기본 꺼짐. 이유 (1) 전역 탐색이 Pi·사이트 지도에서 측정되지 않았다(`loc_candidates.py` 비용 메모가 기기 투입 전 측정을 요구; WSL x86·부하 ~9에서 120빔 2 cm 탐색 4.7–6.5 s로 예산 3 s 초과), (2) CORE가 결정을 아직 중계하지 않는다(lane B), (3) 기기 그래프에는 `safety/pickup` 발행자가 없다(레거시 safety_node만 발행).
+- 증거: `test_loc_assist_launch.py` 8 passed(Windows 7 + 1 skip, WSL Jazzy에서 launch 매개변수 평가 포함 전부 통과), `test_os_control_graph.py`(WSL, LocAssistNode가 rosy_01/rosy_02 이름공간을 따름) 통과.
+- gate 변화: 없음(SOURCE/LOCAL). ROS-SIM은 P2-8.

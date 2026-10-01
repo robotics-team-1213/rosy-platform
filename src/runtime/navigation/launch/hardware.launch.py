@@ -155,6 +155,10 @@ def generate_launch_description():
         DeclareLaunchArgument("enable_battery", default_value="false"),
         DeclareLaunchArgument("enable_lidar", default_value="true"),
         DeclareLaunchArgument("enable_line_follow", default_value="false"),
+        # D-395 P2-3: off on the device until the candidate search is measured on
+        # the Pi with the site map (loc_candidates.py cost note) and CORE relays
+        # decisions (lane B). Gazebo turns it on in gz_multi.
+        DeclareLaunchArgument("enable_loc_assist", default_value="false"),
         DeclareLaunchArgument("line_camera_enabled", default_value="true"),
         DeclareLaunchArgument("line_ir_enabled", default_value="true"),
         DeclareLaunchArgument("camera_backend", default_value="auto"),
@@ -216,6 +220,17 @@ def generate_launch_description():
                 "camera_device": LaunchConfiguration("camera_device"),
                 "ir_interface": LaunchConfiguration("ir_interface"),
                 "line_follow_config": LaunchConfiguration("line_follow_config"),
+            }.items(),
+        ),
+        IncludeLaunchDescription(
+            PythonLaunchDescriptionSource(
+                os.path.join(control_share, "launch", "loc_assist.launch.py")
+            ),
+            condition=IfCondition(LaunchConfiguration("enable_loc_assist")),
+            launch_arguments={
+                "namespace": namespace,
+                "use_sim_time": use_sim_time,
+                "map_yaml": LaunchConfiguration("map"),
             }.items(),
         ),
         OpaqueFunction(function=_include_nav2),
