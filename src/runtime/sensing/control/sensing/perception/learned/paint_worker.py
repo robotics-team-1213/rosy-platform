@@ -23,7 +23,7 @@ class LearnedPaintWorker:
         self._slot, self._stale_s, self._warn, self._clock = slot, float(stale_s), warn, clock
         self._lock = threading.Lock()
         self._wake = threading.Event()
-        self._pending: np.ndarray | None = None
+        self._pending: tuple[float, np.ndarray] | None = None   # (submitted_at, frame)
         self._result: tuple[float, np.ndarray, dict] | None = None   # (done_at, mask, summary)
         self._closed = False
         self.last_error: str | None = None
@@ -34,11 +34,12 @@ class LearnedPaintWorker:
     def submit(self, frame: np.ndarray) -> None:
         """Offer the newest frame; an older frame still waiting is replaced."""
         with self._lock:
-            self._pending = frame
+            self._pending = (self._clock(), frame)
         self._wake.set()
 
     def latest(self, shape: tuple[int, int]) -> tuple[np.ndarray | None, dict | None]:
-        """The newest mask of this frame size no older than stale_s, else (None, None)."""
+        """The newest mask of this frame size whose frame was submitted no more than stale_s
+        ago (inference time counts toward the age), else (None, None)."""
         with self._lock:
             result = self._result
         if result is None:
@@ -51,9 +52,10 @@ class LearnedPaintWorker:
     def step(self) -> None:
         """Run one pending inference now (the worker loop body; tests call it directly)."""
         with self._lock:
-            frame, self._pending = self._pending, None
-        if frame is None:
+            pending, self._pending = self._pending, None
+        if pending is None:
             return
+        submitted_at, frame = pending
         model = self._slot.poll() if self._slot is not None else None
         if model is None:
             self.last_error = f"no model ({getattr(self._slot, 'last_error', None)})"
@@ -67,11 +69,13 @@ class LearnedPaintWorker:
         self.last_error = None
         summary = {"model_revision": result.model_revision, "latency_ms": round(result.latency_ms, 1)}
         with self._lock:
-            self._result = (self._clock(), mask, summary)
+            self._result = (submitted_at, mask, summary)
 
-    def close(self) -> None:
+    def close(self, timeout: float = 1.0) -> None:
         self._closed = True
         self._wake.set()
+        if self._thread is not None:
+            self._thread.join(timeout)
 
     def _run(self) -> None:
         while not self._closed:

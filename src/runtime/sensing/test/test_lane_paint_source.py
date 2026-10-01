@@ -25,10 +25,21 @@ def test_an_external_paint_mask_drives_the_keeper_like_the_white_threshold():
 def test_paint_above_the_horizon_is_ignored_and_a_wrong_size_is_refused():
     image = _render([(HALF, 0.0), (-HALF, 0.0)])
     mask = floor_white_mask(image, GROUND.horizon_row).copy()
-    mask[: int(GROUND.horizon_row)] = 1                      # a learned model painting the walls
+    mask[: int(GROUND.horizon_row) + 3] = 1                  # a learned model painting the walls
     keeper = _keeper()
+    seen = []
+    build = keeper._birds_eye
+
+    def spy(*args, **kwargs):                                # record the mask the keeper samples
+        view = build(*args, **kwargs)
+        sample = view.sample
+        view.sample = lambda m: (seen.append(m.copy()), sample(m))[1]
+        return view
+
+    keeper._birds_eye = spy
     keeper.update(image, GROUND, lane_half_width_m=HALF, paint_mask=mask)
     assert keeper.last["strategy"] == "both"
+    assert seen and seen[0][: int(GROUND.horizon_row) + 3].sum() == 0
     with pytest.raises(ValueError):
         _keeper().update(image, GROUND, lane_half_width_m=HALF, paint_mask=mask[:-1])
 
@@ -73,14 +84,24 @@ def test_learned_worker_serves_a_fresh_mask_and_refuses_stale_or_mismatched_ones
     now = [100.0]
     worker = LearnedPaintWorker(_Slot(_Model()), stale_s=0.6, clock=lambda: now[0], start=False)
     frame = np.zeros((240, 320, 3), np.uint8)
-    assert worker.latest((240, 320)) == (None, None)
+    assert worker.latest((240, 320))[0] is None
     worker.submit(frame)
     worker.step()
     mask, summary = worker.latest((240, 320))
     assert mask is not None and summary["model_revision"] == "m1"
-    assert worker.latest((120, 160)) == (None, None)        # another frame size
+    assert worker.latest((120, 160))[0] is None             # another frame size
     now[0] += 0.7
-    assert worker.latest((240, 320)) == (None, None)        # too old: the caller falls back
+    assert worker.latest((240, 320))[0] is None             # too old: the caller falls back
+
+
+def test_learned_mask_age_counts_from_the_frame_not_from_the_inference():
+    now = [100.0]
+    worker = LearnedPaintWorker(_Slot(_Model()), stale_s=0.6, clock=lambda: now[0], start=False)
+    worker.submit(np.zeros((240, 320, 3), np.uint8))
+    now[0] += 0.5                                            # inference took 0.5 s
+    worker.step()
+    now[0] += 0.2                                            # 0.7 s after the frame
+    assert worker.latest((240, 320))[0] is None
 
 
 @pytest.mark.parametrize("slot", [None, _Slot(None), _Slot(_Model(fail=True))])
@@ -89,7 +110,7 @@ def test_learned_worker_without_a_usable_model_yields_no_mask(slot):
     worker = LearnedPaintWorker(slot, warn=warnings.append, start=False)
     worker.submit(np.zeros((240, 320, 3), np.uint8))
     worker.step()
-    assert worker.latest((240, 320)) == (None, None)
+    assert worker.latest((240, 320))[0] is None
     assert worker.last_error
 
 

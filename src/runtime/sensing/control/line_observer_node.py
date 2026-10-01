@@ -324,6 +324,11 @@ class LineObserverNode(Node):
                 self.get_logger().warning(f'invalid IR line sample: {exc}')
         self._publish('IR_LINE', observation)
 
+    def destroy_node(self):
+        if self._paint_worker is not None:
+            self._paint_worker.close()
+        return super().destroy_node()
+
     def _build_paint_worker(self):
         """D-408: the learned paint source runs the lane model off the camera thread."""
         source = str(self.get_parameter('paint_source').value)
