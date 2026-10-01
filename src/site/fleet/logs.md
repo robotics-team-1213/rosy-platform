@@ -1072,3 +1072,9 @@
 - 증거: `test_localization_cues.py` + `test_boundaries.py` 33 passed.
 - gate 변화: 없음(SOURCE/LOCAL).
 - 결정: D-395 Proposed(개정 3, 1단계).
+
+## 2026-10-01 · uncommitted · feat(fleet): D-395 위치 중재기 — 뚜렷한 격차가 2 s 유지될 때만 결정
+- 변경: `fleet/localization/arbiter.py` — `Weights`(초기값: scan 1, paint 2, peers 2, slot 1.5, last_good 0.5, overhead 0.5, square 3; S1에서 조정), `Context`, `score()`, `Arbiter.observe()`: 1등이 2등을 1.0 이상 앞서고 같은 request_id·같은 1등으로 2 s 유지되면 `LocalizationDecision`(source candidate, 근거 점수, 수신 기준 `ttl_s` 5 s)을 한 번만 낸다. 개정 3: 1등을 가른 비대칭 단서(paint/peers/slot/square)를 `cues`에 담고, 없으면 결정하지 않는다(후보가 하나여도). last_good·overhead는 혼자 결정하지 못한다. `fleet` 크기 판정을 23543으로 재판정.
+- 증거: `test_localization_arbiter.py` + cues + boundaries 52 passed — 사각형마다 거울 사례(슬롯·사각형 관측, 거울을 앞에 둔 경우 포함), 페인트·다른 로봇으로 해소, 단서 없음·마지막 자세만·픽업 뒤·단서 없는 단일 후보는 결정 없음, 유지 시간·1등 교체·격차 붕괴 시 재시작, 로봇별 독립.
+- gate 변화: 없음(SOURCE/LOCAL). 서비스 루프·전송은 2단계.
+- 결정: D-395 Proposed(개정 3, 1단계).

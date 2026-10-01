@@ -71,8 +71,8 @@
 
 ## 최근 기록
 
+- 2026-10-01 · uncommitted · feat(fleet): D-395 위치 중재기 — 뚜렷한 격차가 2 s 유지될 때만 결정
 - 2026-10-01 · uncommitted · feat(fleet): D-395 위치 중재 채점 단서 (순수)
 - 2026-10-01 · uncommitted · test(fleet): exercise grant receipt through the ROS ActionServer callback
 - 2026-10-01 · uncommitted · fix(console): 로그인은 느린 상태 수집을 기다리지 않고 바로 풀린다
 - 2026-10-01 · uncommitted · docs(fleet): D-392 Task 8 ROS-SIM/artifact evidence boundary
-- 2026-10-01 · uncommitted · fix(console): 옮기기 대화상자가 새 주소 후보를 크게 보이고 로봇 화면의 IP와 맞춰 보게 한다

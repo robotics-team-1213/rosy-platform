@@ -4207,3 +4207,8 @@
 - 증거: `test_protocol_version_alignment.py`, `test_line_follow_contract_docs.py`, `test_localization_contracts.py`의 참조서 시험.
 - gate 변화: 없음.
 - 결정: D-395 Proposed(개정 3), D-18, D-347, PRT-006.
+
+## 2026-10-01 · uncommitted · chore(architecture): `fleet` 크기 판정 재판정 (D-395 중재기)
+- 변경: `test_module_structure.py`의 `fleet` 판정 줄 수를 D-395 `fleet/localization/` 추가 뒤 실측값 23543으로 옮기고 사유를 덧붙였다. 판정(split, 미예정) 그대로.
+- 증거: `test_module_structure.py`.
+- gate 변화: 없음.
