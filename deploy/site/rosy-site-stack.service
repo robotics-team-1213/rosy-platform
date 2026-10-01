@@ -8,6 +8,8 @@ Wants=network-online.target
 Type=oneshot
 RemainAfterExit=yes
 WorkingDirectory=/opt/rosy/candidate/deploy/site
+# Refuse to start on a bind address this host no longer owns or a LAN bind without its interface filter.
+ExecStartPre=/usr/bin/python3 /opt/rosy/candidate/deploy/site/site-firewall.py check --env-file /etc/rosy/site/site.env
 ExecStart=/usr/bin/docker compose --project-name rosy-site --env-file /etc/rosy/site/site.env -f /opt/rosy/candidate/deploy/site/compose.yaml up -d --no-build
 ExecStop=/usr/bin/docker compose --project-name rosy-site --env-file /etc/rosy/site/site.env -f /opt/rosy/candidate/deploy/site/compose.yaml down
 TimeoutStartSec=180

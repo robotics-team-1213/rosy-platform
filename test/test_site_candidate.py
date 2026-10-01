@@ -23,7 +23,8 @@ def test_site_candidate_is_commit_tagged_and_contains_sbom_and_image_hash(tmp_pa
                  "mdns-bridge.py", "rosy-mdns-bridge.service", "rosy-mdns-bridge.timer",
                  "fleet-mdns.py", "rosy-fleet-advertise.service",
                  "rosy-overhead-advertise.service",
-                 "rosy-site-stack.service", "candidate_signing.py", "sign_candidate.py",
+                 "rosy-site-stack.service", "site-firewall.py", "rosy-site-firewall.service",
+                 "candidate_signing.py", "sign_candidate.py",
                  "verify_candidate.py",
                  "discovery-token.template.txt", "site_db.py"):
         (site / name).write_text(f"fixture:{name}", encoding="utf-8")
@@ -89,7 +90,8 @@ def test_site_candidate_is_commit_tagged_and_contains_sbom_and_image_hash(tmp_pa
         "site-users.yaml.example", "mdns-bridge.py", "rosy-mdns-bridge.service",
         "rosy-mdns-bridge.timer", "fleet-mdns.py", "rosy-fleet-advertise.service",
         "rosy-overhead-advertise.service",
-        "rosy-site-stack.service", "verify_candidate.py",
+        "rosy-site-stack.service", "site-firewall.py", "rosy-site-firewall.service",
+        "verify_candidate.py",
         "candidate_signing.py", "sign_candidate.py",
         "discovery-token.template.txt", "site_db.py",
     }
@@ -137,7 +139,7 @@ def test_site_candidate_refuses_non_amd64_images_and_output_inside_checkout(tmp_
                  "robots.yaml.example", "site-cameras.yaml.example", "site-users.yaml.example",
                  "mdns-bridge.py", "rosy-mdns-bridge.service", "rosy-mdns-bridge.timer",
                  "fleet-mdns.py", "rosy-fleet-advertise.service",
-                 "rosy-overhead-advertise.service",
+                 "rosy-overhead-advertise.service", "site-firewall.py", "rosy-site-firewall.service",
                  "candidate_signing.py", "sign_candidate.py", "verify_candidate.py",
                  "discovery-token.template.txt", "site_db.py",
                  "Dockerfile.fleet", "Dockerfile.vision", "Dockerfile.proxy"):

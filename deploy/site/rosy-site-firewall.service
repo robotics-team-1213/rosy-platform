@@ -1,0 +1,14 @@
+[Unit]
+Description=Allow the ROSY site HTTPS port only on the LAN interface (DOCKER-USER)
+Requires=docker.service
+After=docker.service
+PartOf=docker.service
+Before=rosy-site-stack.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/bin/python3 /opt/rosy/candidate/deploy/site/site-firewall.py apply --env-file /etc/rosy/site/site.env
+
+[Install]
+WantedBy=docker.service
