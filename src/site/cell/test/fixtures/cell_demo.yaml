@@ -1,0 +1,10 @@
+schema: rosy_cell.cell/1
+frame_rules: {min_span_m: 0.02, min_angle_deg: 10.0, max_tilt_deg: 5.0}
+frames:
+  base: {origin: [0, 0, 0], x_point: [0.1, 0, 0], plane_point: [0, 0.1, 0]}
+  pallet_a: {origin: [0.2, 0, 0], x_point: [0.3, 0, 0], plane_point: [0.2, 0.1, 0]}
+  pallet_b: {origin: [0.2, -0.15, 0], x_point: [0.3, -0.15, 0], plane_point: [0.2, -0.05, 0]}
+stations:
+  infeed: {frame: base, x: 0.0, y: 0.2, z: 0.02, yaw: 0.0}
+  sheets: {frame: base, x: -0.1, y: 0.2, z: 0.002, yaw: 0.0}
+approach_clearance_m: 0.05
