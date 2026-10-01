@@ -9,6 +9,7 @@ export function mountArm(root, target, driver) {
   let disposed = false;
   let refreshing = false;
   let recording = null;
+  let recordingError = "";
   let previewUrl = "";
   let connectionGeneration = 0;
 
@@ -103,7 +104,7 @@ export function mountArm(root, target, driver) {
   async function refreshRecording() {
     recording = await request("/recordings");
     if (disposed) return;
-    $("[data-sim-record-status]").textContent = `${recording.status} · ${recording.frame_count} 프레임${recording.issues.length ? ` · ${recording.issues.join(", ")}` : ""}`;
+    $("[data-sim-record-status]").textContent = recordingError || `${recording.status} · ${recording.frame_count} 프레임${recording.issues.length ? ` · ${recording.issues.join(", ")}` : ""}`;
     $("[data-sim-record-start]").disabled = recording.status === "recording" || !state?.ready;
     $("[data-sim-record-stop]").disabled = recording.status !== "recording";
     const camera = await request("/camera");
@@ -122,15 +123,23 @@ export function mountArm(root, target, driver) {
   $("[data-sim-record-start]").addEventListener("click", async () => {
     try {
       recording = await request("/recordings", {method: "POST", body: JSON.stringify({seat_id: seat, task: $("[data-sim-task]").value.trim()})});
+      recordingError = "";
       await refresh();
-    } catch (error) { $("[data-sim-record-status]").textContent = `기록 시작 실패 · ${error.message}`; }
+    } catch (error) {
+      recordingError = `기록 시작 실패 · ${error.message}`;
+      $("[data-sim-record-status]").textContent = recordingError;
+    }
   });
   $("[data-sim-record-stop]").addEventListener("click", async () => {
     if (recording?.status !== "recording") return;
     try {
       recording = await request(`/recordings/${encodeURIComponent(recording.episode_id)}/stop`, {method: "POST", body: JSON.stringify({seat_id: seat, outcome: $("[data-sim-outcome]").value})});
+      recordingError = "";
       await refresh();
-    } catch (error) { $("[data-sim-record-status]").textContent = `기록 종료 실패 · ${error.message}`; }
+    } catch (error) {
+      recordingError = `기록 종료 실패 · ${error.message}`;
+      $("[data-sim-record-status]").textContent = recordingError;
+    }
   });
   function release() {
     connectionGeneration++;

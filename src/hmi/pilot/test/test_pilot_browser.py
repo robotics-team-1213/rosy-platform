@@ -60,6 +60,8 @@ def test_omx_recording_retry_outcome_stale_camera_and_disposal(tablet_page):
     page.fill("[data-sim-task]", "관절 이동 시연")
     page.click("[data-sim-record-start]")
     page.wait_for_function("document.querySelector('[data-sim-record-status]').textContent.includes('기록 시작 실패')")
+    page.wait_for_timeout(1200)
+    assert "기록 시작 실패" in page.inner_text("[data-sim-record-status]")
     page.click("[data-sim-record-start]")
     page.wait_for_function("document.querySelector('[data-sim-record-status]').textContent.includes('recording')")
     page.select_option("[data-sim-outcome]", "success")
