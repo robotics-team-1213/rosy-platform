@@ -4,10 +4,10 @@
 
 ## 현재 자산 (2026-10-01 기준)
 
-- 단일 출처: `web_common/tokens.css`, `ui.js`(13 컴포넌트), `components.css`, `theme.js`, `template.html`
+- 단일 출처: `web_common/tokens.css`, `ui.js`(커스텀 엘리먼트 16종 + 클래스 부품 — 실측, D-398 정정), `components.css`, `theme.js`, `template.html`, `core_ui_logic.js`(열거·증거 어휘)
 - 등록부: `surfaces.yaml` — 9 서피스(web 7 · lcd 1 · native 1), 문법 4종
-- 계약: token_parity · shared_controls · typography_focus · dialog · responsive_tiers · 앱 이름(D-377) · 역할 소유(D-370)
-- 안내서: `DESIGN.md`(D-359 §8)
+- 계약: token_parity · shared_controls · typography_focus · dialog · responsive_tiers · 범위 게이트 4종(D-398: 정지·장미색·역할 우선·dvh) · 앱 이름(D-377) · 역할 소유(D-370)
+- 안내서: `DESIGN.md`(D-359 §8, 표면 문법 절 포함)
 - 장치 계약: D-394(화면 카드=페이로드, 장치=프로파일)
 
 ## 실행 순서
@@ -20,6 +20,7 @@
 | 4 | G3 | D-394 완료 상태 기록(추가 코드 없음 — 계약 시험이 이미 측정) | ✅ 기록 |
 | 5 | G4 | `manual-drive` transitional 소유 추적 표 유지(Pilot 이행은 외부 일정) | 기록(아래) |
 | 6 | G6 | 랜딩 절차에 이미 녹아 있음(ADR 동반) — 관행 유지 | 상시 |
+| 7 | G1 승격 첫 적용 | D-398 — 증거 어휘 `EVIDENCE_LABEL`·`evidenceAgeText()`를 `core_ui_logic.js`로 승격, 감사 P0 네 곳 수정, 범위 게이트 4종(`test_design_scope_gates.py`) 추가 | ✅ 2026-10-01 |
 
 ## G1 세부 — 승격 압력의 계약화
 

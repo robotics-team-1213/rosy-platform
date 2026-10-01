@@ -159,13 +159,14 @@ D-280 다섯 원칙은 시각에서 이렇게 묶인다.
 - 주 명령은 초록이 아니라 가장 대비가 큰 중립(ink 채움)이다
 - 평평한 면은 보고하고, 솟은 면은 조작한다
 - 움직임 없음. 상태 변화는 선과 면으로만 보인다
+- 접점마다 같은 화면을 복제하지 않고 같은 성격을 매체에 맞게(D-280): 로봇 얼굴 LCD는 표정으로 조금 더 큰 표현 자유가 있고(D-280 P4·D-385), 비웹 표면은 등록부의 `token_copy` 사본이 이 체계를 따른다(D-345)
 
 ## Colors
 
 색은 뜻의 예산이다. 한 화면에서 색이 적을수록 색이 뜻하는 바가 강하다. 의미 집합은 [D-82](docs/adr/D-82-oklch.md)가, 대비 바닥은 [D-202](docs/adr/D-202-danger-is-a-fill-alarm-text-contrast-contract.md)·[D-214](docs/adr/D-214-text-contrast-floor.md)가 정한다. 값은 OKLCH에서 생성했다.
 
 ### Primary
-- **ROSY 장미(Rosy Rose)** (`brand-rose`): 워드마크와 현재 위치 표식 선택자에만 쓴다. 상태·포커스·데이터 계열에 쓰지 않는다. 옅은 바탕은 파생 `--brand-rose-wash`다.
+- **ROSY 장미(Rosy Rose)** (`brand-rose`): 워드마크와 현재 선택된 역할 메뉴(위치 표식)에만 쓴다 — D-277 원문의 두 자리다. 상태·포커스·데이터 계열·인터랙션에 쓰지 않고, 조작 상태는 `--focus-ring`이다. 옅은 바탕은 파생 `--brand-rose-wash`다.
 
 ### Secondary
 - **계열 파랑(Series Blue)** (`series-primary`, `series-secondary`): 경로·계열 정체성. 차가운 띠에만 있다. 두 값은 색상이 아니라 밝기로 갈린다. 포커스 링(`--focus-ring`)과 켜진 토글도 이 색이다 — 포커스는 상태가 아니라 상호작용이기 때문이다.
@@ -195,7 +196,7 @@ D-280 다섯 원칙은 시각에서 이렇게 묶인다.
 - 새 블록은 dark와 **같은 키 집합**을 모두 정의하고 자기 `color-scheme`을 가진다. 값만 둔다.
 - 선택지는 [`theme.js`](src/hmi/web_common/theme.js)의 `CHOICES`에 `{ value, label }` **한 줄**을 `system` 앞에 더한다. 이것이 선택지의 단일 출처다(`RosyTheme.choices`): 로봇 `/device` 화면 패널은 여기서 버튼을 그린다. Fleet `설정`의 버튼은 첫 그림 전에 있어야 해서 `index.html` 정적 마크업이고, `test_theme_choices.py`가 같은 순서·값·이름인지 대조하므로 시험이 알려 주는 대로 한 줄을 맞춘다.
 - 그 밖의 파일은 고치지 않는다. 고쳐야 한다면 어딘가 팔레트 이름을 역할 대신 쓰고 있다는 뜻이다.
-- `python -m pytest src/hmi/web_common/test -q`를 돌린다. 팔레트 게이트(`test_palette_gates.py`)가 테마마다 돈다: 글자 대비 ≥ 4.5:1, 위험 채움 위 `ink-on-crit` 대비, 주의·위험 색약 대비, 장미 대 위험 거리, status 따뜻한 띠·series 차가운 띠, 래스터 단조, 로봇 사다리.
+- `python -m pytest src/hmi/web_common/test -q`를 돌린다. 팔레트 게이트(`test_palette_gates.py`)가 테마마다 돈다: 글자 대비 ≥ 4.5:1, 위험 채움 위 `ink-on-crit` 대비, 주의·위험 색약 대비, 장미 대 위험 거리, status 따뜻한 띠·series 차가운 띠, 래스터 단조, 로봇 사다리. 범위 게이트(`test_design_scope_gates.py`, D-398)가 정지(D-220)·장미색 범위(D-277)·역할 우선·`100vh` 금지를 지킨다.
 - 바꾸면 안 되는 것: D-82 의미 집합, D-277 장미색 범위, **주 명령 = ink 채움**, **위험 채움 위 글자 = `ink-on-crit`**(테마와 무관하게 밝다).
 
 **The One Block Rule.** 테마 하나는 팔레트 블록 하나다. 표면 파일에 테마 분기가 생기면 구조가 틀린 것이다.
@@ -279,6 +280,17 @@ D-280 다섯 원칙은 시각에서 이렇게 묶인다.
 
 **The Risk Ladder Rule.** 44 → 48 → 58은 위험 사다리다. 덜 위험한 조작을 더 크게 만들지 않는다.
 
+## 표면 문법
+
+모든 웹 표면은 `ui-shell`의 `grammar` 네 가지 중 하나로 시작한다(D-292 §5, [`template.html`](src/hmi/web_common/template.html)). 문법은 화면의 읽는 순서와 첫 화면이 무엇인지를 정한다.
+
+- **spatial** — 로봇 콘솔. 감각→관찰→조작 세 지역(`robot`, 견본 `web-common`)
+- **exception** — 사이트 관제. 예외가 먼저, 지도·대형은 뒤(`console`)
+- **focal** — 경기 보드·조종. 하나의 초점(공, 주행 무대)이 화면을 지배(`game-board`, `pilot`)
+- **procedure** — 점검·진단. 단계가 순서대로(`control-diagnostic`)
+
+등록부(`surfaces.yaml`)의 `grammar` 칸이 [`ui.js`](src/hmi/web_common/ui.js)의 `GRAMMARS`와 같은지 계약 시험이 대조한다. 웹이 아닌 다섯째 문법 **intent**(로봇 얼굴, concept 16 §7.4)은 LCD 표면이 소유한다.
+
 ## Components
 
 모든 부품은 [`components.css`](src/hmi/web_common/components.css)가 그리고 [`ui.js`](src/hmi/web_common/ui.js)가 정의한다. 그림자 DOM을 쓰지 않는다. 견본은 [`styleguide.html`](src/hmi/dashboard/styleguide.html)이다.
@@ -325,6 +337,7 @@ D-280 다섯 원칙은 시각에서 이렇게 묶인다.
 
 - **운용자가 읽는 글은 한국어 평문이다.** 용어는 [`CONCEPTS.md`](CONCEPTS.md)를 따른다: 실행 모드(profile 아님), 기능·도킹 기능(capability 아님), 하드웨어 실행 모드, 내비게이션, 호스트 에이전트. `test_operator_copy.py`가 대시보드·Fleet·games의 한글 문자열에서 `profile|capability|hardware 모드|Navigation|프로필`과 맨 열거값(`IDLE`·`MANUAL`·`RUNNING`·`HOLDING`·`UNDOCKED`·`WAITING`·`STALE` 등)을 막는다.
 - **열거값은 `title`에만 둔다.** 보이는 글은 공용 표의 한국어이고 원래 값은 `title`·`data-*`에 남는다. 공용 표는 [`core_ui_logic.js`](src/hmi/web_common/core_ui_logic.js)의 `MODE_LABEL`(대기·수동·내비게이션·도킹·비상 정지), `NAVIGATION_LABEL`, `DOCK_STATE_LABEL`과 `enumLabel()`이다 — 로봇 대시보드와 Fleet이 `/common/`에서 같은 파일을 싣는다. 모르는 값은 받은 그대로 보인다.
+- **증거 어휘도 공용 표다.** 네 상태의 한국어(최신·지연·연결 끊김·정보 없음)와 나이 뒤처리(` · N초 전`)는 [`core_ui_logic.js`](src/hmi/web_common/core_ui_logic.js)의 `EVIDENCE_LABEL`·`evidenceAgeText()`가 단일 출처다(D-398). 주어를 앞에 붙인 문장(`릴레이 끊김`·`위치 지연`)은 이 표를 참조해 조립한다.
 - **증거가 있는 값은 증거와 함께 말한다.** 지연은 `지연 · N초 전`, 끊김은 `연결 끊김`, 모름은 `정보 없음`이고 `data-evidence`를 단다. 카드에 홀로 붙는 알약은 무엇의 증거인지 말한다(`릴레이 끊김`).
 - **한 원인은 한 번 말한다.** 같은 원인이 여러 버튼을 막으면 원인과 다음 할 일은 묶음 상태 한 줄에 두고, 버튼 사유는 짧은 `위 사유`로 `aria-describedby`가 그 줄을 가리킨다.
 - **빈 목록·읽기 실패는 `ui-empty`다.** 목록 밖 한 줄로 두고(목록은 숨김), 지도 같은 무대에서는 무대 위에 얹고 다시 시도를 곁에 둔다.

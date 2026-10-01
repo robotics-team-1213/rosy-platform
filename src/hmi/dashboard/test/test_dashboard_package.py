@@ -84,12 +84,15 @@ def test_the_connection_banner_alerts_when_disconnected():
     assert 'kind === "online"' in client  # online 일 때만 숨김
 
 
-def test_the_action_message_fades_after_five_seconds():
-    """D-396: 액션 메시지는 5초 후 조용히 사라진다."""
+def test_the_action_message_clears_after_five_seconds():
+    """D-396 + D-220: 액션 메시지는 5초 후 점프 컷으로 사라진다 — 전이로 흐려지지 않는다."""
     js = (ROOT / "app.js").read_text(encoding="utf-8")
     assert "announceAction" in js
     assert "data-faded" in js
     assert "5000" in js  # 5초
+    css = (ROOT / "console-detail.css").read_text(encoding="utf-8")
+    assert ".action-message[data-faded]" in css  # 숨김은 점프 컷
+    assert "transition:" not in css  # D-220 정지 계약
 
 
 def test_event_severity_is_colored():
@@ -111,11 +114,14 @@ def test_the_map_draws_a_goal_marker():
     assert "cssColor(\"route\")" in map_js  # 경로 색 토큰
 
 
-def test_skeleton_pulse_replaces_the_dash():
-    """D-396: 값이 없으면 '--' 대신 스켈레톤 펄스."""
+def test_a_pending_value_reads_quiet_ink_without_motion():
+    """D-396 + D-220: 값이 없으면 '--' 대신 조용한 뮤트 대시 — 펄스는 없다(정지 계약)."""
     js = (ROOT / "app.js").read_text(encoding="utf-8")
     assert "data-pending" in js
-    assert "skeleton" in (ROOT / "console-detail.css").read_text(encoding="utf-8")
+    css = (ROOT / "console-detail.css").read_text(encoding="utf-8")
+    assert "strong[data-pending]" in css
+    assert "var(--ink-quiet)" in css
+    assert "@keyframes" not in css  # D-220 — 움직임 예산 0
 
 
 def test_the_state_render_feeds_swarm_to_the_formation_cell():

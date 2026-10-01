@@ -1066,3 +1066,10 @@
 - Change: Added a cross-module ROS 2 Jazzy contract fixture that admits a Fleet Mission, dispatches its version-2 grant over UDS with `SO_PEERCRED`, and observes the local Action receipt and asynchronous ROS goal callback. Fleet reports the Mission as accepted/running while the parent Action remains nonterminal; no `GOAL_PREDICATE_CONFIRMED` event is emitted. Restart recovery changes the parent action to `UNKNOWN`, and replaying the same grant does not send a second ROS goal.
 - Evidence: In the pinned local OMX Pilot image, the integration test passed (1). It uses an in-process ActionServer and bounded no-op goal; it is a ROS contract fixture, not a vendor Gazebo or physical grasp/place run. Provider dispatch remains disabled.
 - Gate: No gate promotion. ROS-SIM remains HOLD; ARTIFACT HOLD; DEVICE/FIELD PARKED.
+
+
+## 2026-10-01 · uncommitted · D-398 관측 상태 어휘·빈 로그·역할 토큰 정리
+
+- 변경: classifySightings의 state 'stale' → 'delayed'(닫힌 증거 네 상태로 수렴; map-view 소비처 동반 수정), streamEvidence 나이 뒤처리 'N초' → 'N초 전'(DESIGN.md 규격). roster.js '정보 없음'을 EVIDENCE_LABEL.unavailable로, 죽은 s{index} 클래스 제거. index.html 빈 로그 .log-empty → 공용 ui-empty. styles.css ground-soft/card → surface-flat/raised, min-height 100vh → 100dvh.
+- 근거: D-398. site-layer.test.mjs·fleet 시험 통과, test_fleet_console_browser pin 갱신, test_console_camera_pairing의 낡은 문자열 핀을 allSettled 실제에 맞게 갱신(HEAD에서도 깨져 있던 것).
+- gate 변화: 없음.
