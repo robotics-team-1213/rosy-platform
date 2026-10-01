@@ -813,3 +813,8 @@
 - 변경: 최종 리뷰 지적 반영. (중요) `InjectionCheck`가 공백을 fit이 없는 틱에서만 봐서, 3.6 s 침묵 뒤 스캔 한 번으로 3 s 유지가 통과됐다 → 스캔이 오든 안 오든 마지막 스캔 뒤 0.5 s가 지나면 `stale_scan`. (경미) UNKNOWN·SUSPECT처럼 request_id가 없을 때 `None` 결정이 일치로 통과하던 것을 `stale_request`로 거부.
 - 증거: 새 시험 2개와 `test_loc_verify.py`·`test_loc_state.py`·`test_loc_e2e.py` 통과.
 - gate 변화: 없음(SOURCE/LOCAL).
+
+## 2026-10-01 · uncommitted · feat(localization): LocAssist 순수 코어 — 상태·후보·결과·주입 (D-395 P2-3)
+- 변경: `control/loc_assist.py` `LocAssist` — `loc_assist_node`가 할 판단을 ROS 없이 모았다(계약 `docs/plans/2026-10-01-d395-phase2-interfaces.md` 1절). 전원 투입·SUSPECT·픽업 뒤 내려놓음에 탐색, 3 s 검증 중이나 들린 동안은 탐색 안 함, 탐색 중 움직였으면 결과 버림, CANDIDATES는 움직이고 `retry_s`(5 s)가 지나야 재탐색. 후보는 2 s마다 새 stamp로 재보고, 상태는 2 Hz와 변화마다. 결정마다 결과 하나(거부는 즉시, 주입은 3 s 검증이 끝날 때). 출처별 공분산 candidate 0.05 m/0.1 rad, human 0.15/0.3, overhead 0.10/0.2, homing_ref 0.05/0.1. Nav2 목표 취소·재계획은 목표 주인인 CORE가 하고, LOCALIZED 전이의 상태 메시지에 `"cancel_nav_goal": true`를 한 번 싣는다. `search`(슬롯+전역 후보 8개, 첫 후보에서 지도 밖 물체, clear 마스크 재사용), `pooled_grid`(5 mm 지도를 2 cm로 max-pool), `lane_rules_near`.
+- 증거: `test_loc_assist.py` 28 passed.
+- gate 변화: 없음(SOURCE/LOCAL).
