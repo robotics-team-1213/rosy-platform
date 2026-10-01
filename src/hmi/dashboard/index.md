@@ -37,8 +37,8 @@
 
 ## 최근 기록
 
+- 2026-10-02 · uncommitted · fix(console): fullscreen uses dynamic viewport height
 - 2026-10-02 · uncommitted · feat(console): camera fullscreen and lane/object legend
 - 2026-10-01 · uncommitted · D-398 후속 — 원시 줄 간격 토큰화
 - 2026-10-01 · uncommitted · D-398 죽은 토큰 참조·펄스·페이드 정리
 - 2026-10-01 · uncommitted · feat(console): 지도 목표 마커 + 스켈레톤 펄스
-- 2026-10-01 · uncommitted · feat(console): Escape 키 즉시 비상정지

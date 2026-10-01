@@ -757,3 +757,8 @@
 - 증거: 실제 브라우저 확대/초점·수신 대기·범례·모바일 overflow 3 passed; viewport/layout 브라우저 10 passed. 기존 camera capture 5 passed.
 - 한계: 저장된 테스트 영상/브라우저 검증과 로봇 실시간 배포는 별도. 전원이 꺼진 로봇에는 아직 반영하지 않음.
 - gate 변화: 없음. LOCAL 브라우저 증거 추가; DEVICE/FIELD 미승격.
+
+## 2026-10-02 · uncommitted · fix(console): fullscreen uses dynamic viewport height
+- 변경: 확대 카메라 높이를 100dvh로 수정해 모바일 주소창 변경과 D-359 높이 규칙을 반영.
+- 증거: 원격 CI 36895230123이 새 100vh를 적발. design scope gate 5 passed로 수정 확인. 기존 테스트만 통과한 상태를 전체 CI 성공으로 취급하지 않음.
+- gate 변화: 없음. 전체 CI 및 실기 관문은 별도.
