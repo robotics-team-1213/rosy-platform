@@ -22,7 +22,15 @@ import androidx.compose.ui.res.stringResource
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
+import androidx.compose.runtime.LaunchedEffect
 import io.github.livsbittt.rosy.cam.camera.LensChoice
+import io.github.livsbittt.rosy.cam.pairing.HttpPairingTransport
+import io.github.livsbittt.rosy.cam.pairing.PairableSite
+import io.github.livsbittt.rosy.cam.pairing.PairingClient
+import io.github.livsbittt.rosy.cam.pairing.PairingSession
+import io.github.livsbittt.rosy.cam.pairing.PairingState
+import io.github.livsbittt.rosy.cam.pairing.SettingsPairingStore
+import io.github.livsbittt.rosy.cam.ui.PairingScreen
 import io.github.livsbittt.rosy.cam.service.StreamService
 import io.github.livsbittt.rosy.cam.settings.PairingUri
 import io.github.livsbittt.rosy.cam.settings.SettingsStore
@@ -111,6 +119,7 @@ class MainActivity : ComponentActivity() {
         val lan = rememberLan()
         val lens by settings.lens.collectAsStateWithLifecycle(initialValue = null)
         var showSettings by remember { mutableStateOf(false) }
+        var pairingSite by remember { mutableStateOf<PairableSite?>(null) }
         var localError by remember { mutableStateOf<String?>(null) }
         val scope = rememberCoroutineScope()
         val permissionDenied = stringResource(R.string.error_camera_permission)
@@ -139,7 +148,35 @@ class MainActivity : ComponentActivity() {
             if (needed.isEmpty()) StreamService.start(this) else permissions.launch(needed.toTypedArray())
         }
 
-        if (showSettings) {
+        val site = pairingSite
+        if (site != null) {
+            // One session per attempt; "다시 요청" starts the same session again on a fresh request.
+            val session = remember(site) {
+                PairingSession(
+                    PairingClient(HttpPairingTransport(site), deviceLabel(), BuildConfig.VERSION_NAME, SettingsPairingStore(settings)),
+                    scope,
+                )
+            }
+            LaunchedEffect(session) { session.start(site) }
+            val pairingState by session.state.collectAsStateWithLifecycle()
+            val busy by session.busy.collectAsStateWithLifecycle()
+            PairingScreen(
+                site = site,
+                state = pairingState,
+                busy = busy,
+                onAnswer = session::answer,
+                onCancel = {
+                    session.cancel()
+                    pairingSite = null
+                },
+                onRetry = { session.start(site) },
+                onClose = {
+                    session.cancel()
+                    pairingSite = null
+                    if (pairingState is PairingState.Paired) showSettings = false
+                },
+            )
+        } else if (showSettings) {
             SettingsScreen(
                 currentLink = siteLink,
                 locked = state.running,
@@ -151,6 +188,9 @@ class MainActivity : ComponentActivity() {
                     scope.launch { settings.save(p, siteName, subnet) }
                 },
                 onBack = { showSettings = false },
+                onPairRequest = { record ->
+                    pairingSite = PairableSite(record.name, record.tlsHost, record.port, record.address)
+                },
             )
         } else {
             StreamScreen(
@@ -209,6 +249,10 @@ class MainActivity : ComponentActivity() {
         }
     }
 }
+
+/** The phone's model as the console's device label: printable, at most 64 characters (rosy-pair/1 request). */
+private fun deviceLabel(): String =
+    Build.MODEL.orEmpty().filterNot { it.code < 32 || it.code == 127 }.trim().take(64).ifBlank { "Rosy Cam" }
 
 private const val KEY_PENDING_PAIRING = "pending_pairing"
 private const val KEY_DEEP_LINK_INVALID = "deep_link_invalid"
