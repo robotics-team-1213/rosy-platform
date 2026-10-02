@@ -2021,3 +2021,20 @@
 - gate 변화: 없음
 - 결정: D-418, D-161, D-388
 - 교훈: `Before=`로 소켓보다 앞에 서려는 단위는 기본 의존(`After=basic.target`)과 부딪혀 순환이 된다. systemd는 이 순환을 `sockets.target` 작업을 지워서 끊으므로 조용히 큰 사고가 된다. 쌍둥이에서 대조군 drop-in으로 순환을 재현해야 수정이 증명된다.
+
+## 2026-10-03 · 27025b10 · fix(native,api): D-418 2차 검토 — 앞서 간 시계, CORE의 실제 기한
+
+- 변경(HIGH): 시계가 한 번 1년 앞섰던 기록(`clock.json`) 때문에 5분 비밀번호가 실제로 30일 넘게 켜져 있고, 키가 영구히 지워졌다(검토 probe로 재현). 이제 비밀번호는 `system.now()`로 만든 `expires_at`(벽시계)과 `password.json`에 넣은 `CLOCK_BOOTTIME` 기한·boot id 가운데 먼저 오는 쪽으로 꺼진다. boot id가 다르면 바로 끈다.
+- 변경(HIGH): 키 기준 시각은 시계보다 2일 넘게 앞선 기록이나 시각을 버리고 다시 쓴다. timesyncd가 동기를 알리면(`/run/systemd/timesync/synchronized`) 시계를 그대로 쓴다. 60 s 이상 오를 때만 쓰고(SD 마모), 쓰기 실패는 기록만 하고 값은 돌려준다. 시계가 뒤로 간 경우의 보호는 그대로 둔다.
+- 변경(MEDIUM): 요청에 `answer_by`(CORE가 잠금 대기 뒤 실제로 기다리기를 멈추는 epoch 초)를 넣었다. 도우미는 `answer_by - 1 s`를 넘긴 비밀번호를 되돌린다. CORE는 아직 살아 있는(30 s 이내) `password_off` 요청을 덮어쓰지 않고, 같은 기한 안에서 처리되기를 기다린다.
+- 변경(LOW): 답 파일을 못 쓰면 켠 비밀번호를 다시 끈다(사유 `undelivered`). `GET /password`에 `lock_pending`을 추가했고(스키마·API 문서·계획 계약), 잠금 실패를 `password_deny` 이력으로 남긴다. 요청은 이름 바꾸기로 먼저 가져간 뒤 읽으므로, 그 사이 CORE가 쓴 요청이 읽히지 않고 지워지는 일이 없다.
+- 변경(쌍둥이): 단계마다 시간 제한을 둔다(`Twin.step_timeout`, ssh 시나리오 90 s, 클라이언트 ssh 60 s). 멈춘 단계는 이름이 붙은 FAIL로 남고, ssh 저널·`ss -tnp`·sshd 프로세스·대기 작업을 증거로 모으며, 시나리오는 계속된다. `sshd -t`가 거부 drop-in을 받아들이는지도 확인한다.
+- 증거: `test_ssh_access.py`, native systemd 계약, 이미지 층 동기화, `test_host_ssh.py`, 프로토콜 버전, 이벤트 목록, contracts foundation을 함께 돌려 897 passed, 7 skipped(Windows). 검토 probe에서는 6분·1시간·10시간·30일 뒤 모두 꺼짐.
+- 증거(변이): 이번 변이 17종(도우미 13, CORE 4)이 모두 빨강이다. R1(비밀번호 만료를 기준 시각으로 되돌림)은 1년 앞선 시험만으로는 2일 규칙에 가려 살아남았고, 1일 앞선 시험을 함께 고르니 죽었다.
+- 증거(쌍둥이, HEAD 27025b10): ssh PASS 37/37, ssh_socket PASS 40/40, STEP TIMEOUT 0회. b는 `--work X:/DevTemp/d406-twin-d418`에서 PASS다.
+- 원인(통합 실행의 b FAIL): `twin_publish.py`가 `LOCALAPPDATA`에 `d406-twin`이 없으면 거부한다. `--work X:/DevTemp/d418-twin-int`의 publish 로그가 `refusing: LOCALAPPDATA must point at the twin folder`였다. 코드 결함이 아니라 작업 폴더 이름 문제다.
+- 원인(통합 실행의 ssh_socket 멈춤): 이번에는 재현되지 않았다. 그 로그를 보면 ssh 호출 전의 `docker exec`(sed, 그리고 900 s 제한의 `ev`)에서 약 12분이 먼저 멈췄다. 호스트나 Docker가 느렸던 것으로 보이지만 증명하지는 못했다. 이제는 단계 제한과 진단이 남는다.
+- 미증명: 실기 부팅. 로봇이 timesyncd가 아니라 chrony를 쓰면 동기 표시 파일이 없다. 그때는 2일 규칙만 적용된다.
+- gate 변화: 없음
+- 결정: D-418, D-161, D-388
+- 교훈: 시간을 한 방향으로만 미는 보호(high-water)는 반대 방향 고장(시계가 앞섬)을 영구 상태로 만든다. 비밀번호처럼 짧은 수명은 NTP가 건드리지 않는 부팅 시계로 묶고, 긴 수명의 하한 기록에는 상한과 리셋이 필요하다.
