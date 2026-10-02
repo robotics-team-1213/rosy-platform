@@ -11,8 +11,12 @@ below real time.
 from __future__ import annotations
 
 import json
+import re
 import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from d395_truth import judge  # noqa: E402
 
 
 def to_sim(clock, t):
@@ -28,6 +32,31 @@ def to_sim(clock, t):
 def results(run):
     rows = [e["event"]["data"] for e in run.get("events", ()) if e["event"].get("type") == "localization.result"]
     return [(r.get("accepted"), r.get("reason"), tuple(r.get("cues") or ())) for r in rows]
+
+
+DECISION = re.compile(r"localization: (rosy_\d+) decision (\S+) candidate (\d+) cues (\[.*?\])")
+
+
+def decisions(run, path):
+    """Every decision Fleet posted (fleet.log), judged at the decided candidate against the
+    Gazebo truth sampled nearest the bench's last read of that report: (robot, request id,
+    cues, judge dict or None when the report or truth was not captured)."""
+    log = Path(path) / "fleet.log"
+    text = log.read_text(encoding="utf-8", errors="replace") if log.exists() else ""
+    reports = {}
+    for row in run.get("scores", ()):
+        reports[(row["robot"], row["request_id"])] = row
+    out = []
+    for rid, request_id, index, cues in DECISION.findall(text):
+        row = reports.get((rid, request_id))
+        verdict = None
+        if row is not None and int(index) < len(row["candidates"]):
+            c = row["candidates"][int(index)]
+            trail = [(abs(t - row["t"]), (x, y, yaw)) for t, r, x, y, yaw in run.get("trail", ()) if r == rid]
+            if trail:
+                verdict = judge((c["x"], c["y"], c["yaw"]), min(trail)[1])
+        out.append((rid, request_id, cues, verdict))
+    return out
 
 
 def rtf_range(run):
@@ -59,12 +88,19 @@ def main(argv):
         res = results(run)
         print(f"- results: {sum(1 for a, _, _ in res if a)} accepted, rejects "
               f"{[r for a, r, _ in res if not a]}, cues {sorted({c for _, _, cs in res for c in cs})}")
+        posted = decisions(run, path)
+        mirrors = [d[:3] for d in posted if d[3] is not None and d[3]["mirror"]]
+        print(f"- Fleet decisions: {len(posted)} ({sum(1 for d in posted if d[3] and d[3]['ok'])} at the "
+              f"truth, {sum(1 for d in posted if d[3] is None)} unjudged), MIRROR decisions: {mirrors or 0}")
         stale = sum(1 for row in run.get("timeline", ()) if row.get("what") == "state"
                     and (row.get("loc") or {}).get("reason") == "state_stale")
         print(f"- CORE state_stale transitions: {stale}")
         missions = [(row["t"], row.get("robot"), (row.get("mission") or {}).get("kind"),
                      (row.get("mission") or {}).get("state")) for row in run.get("timeline", ())
                     if row.get("what") == "mission" and row.get("mission")]
+        # The bench notes every changed body (elapsed_s ticks); keep each robot's state changes.
+        last = {}
+        missions = [m for m in missions if last.get(m[1]) != m[2:] and not last.update({m[1]: m[2:]})]
         if missions:
             print(f"- ladder missions (t, robot, kind, state): {missions}")
         p = phases.get("power_on")

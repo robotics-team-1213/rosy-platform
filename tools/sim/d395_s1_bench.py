@@ -52,6 +52,11 @@ SCENARIOS = {
     # (b) r1 on square B facing the other way (-x), r2 on square A.
     "b": {"spawn": [(0.86, -0.52, math.pi), (-1.26, 0.49, HALF_PI)],
           "goal": (0.40, -0.52, math.pi), "drop": (-0.75, 0.30, 0.0)},
+    # (d) pickup during a drive that moves: both squares hug the outer wall, where RPP's padded
+    # sim footprint reports a collision ahead and never moves (S1 finding 5, re-run a1-a3), so
+    # r1 starts off-slot in the open middle and drives 0.4 m south; r2 on square A anchors it.
+    "d": {"spawn": [(-0.70, 0.15, math.pi), (-1.26, 0.49, HALF_PI)],
+          "goal": (-0.70, -0.25, -HALF_PI), "drop": (-0.75, 0.30, 0.0)},
     # (l) one robot off-slot with no asymmetric cue: only the P2-7 ladder can help.
     "l": {"spawn": [(-0.70, 0.15, math.pi)]},
 }
