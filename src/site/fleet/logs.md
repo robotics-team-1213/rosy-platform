@@ -1289,3 +1289,71 @@
 - 근거: D-415(사용자 지시 — "로그도 볼 수 있게, 디버그 생각할 수 있게"). 계측: 로그 21px→144px, 진단 0→4 항목, 신호등 빈 상태 안내.
 - gate 변화: 없음.
 - 최종 증거: web_common 209 passed; fleet 문법·앱·큐·태스크 54 passed; 브라우저 — 로그 패널(min 144/max 432px)·지우기 버튼·진단('3대 · 갱신됨')·신호등 빈 상태 표시, 페이지 오류 0.
+
+## 2026-10-02 · bcce15c9d · fix(hub): 닫힌 소켓에 보내지 않음; 판단 요청 패널 뒤 여유 "비어 있음"/"알 수 없음"
+
+- 변경: `/ws/robots` 는 연결이 끊긴 뒤 답을 보내지 않는다(이유를 info 로). 판단 요청 보드가 `rear_state` 를 옮기고 패널은 `비어 있음`·`알 수 없음`(클래스 `stuck-fact-unknown`)을 구분한다(9300adf1d).
+- 증거: `test_hub_server.py`(거부된 사건 뒤에도 heartbeat 응답), `test_line_stuck_api.py`, `web/line-stuck.test.mjs` 초록.
+- gate 변화: 없음.
+
+## 2026-10-02 · uncommitted · test(fleet): replay late OMX success without clearing Mission HOLD
+- Change: replayed a lost submit receipt across independently reopened Fleet and OMX SQLite stores. Fleet reuses the persisted Action/attempt, records late success while retaining HOLD and object/workcell claims, and only confirms the goal after independent post-action camera and gripper evidence.
+- Evidence: `test/test_platform_cell_replay.py`; Fleet suite 1371 passed/7 skipped; OMX ActionStore 23 passed; replay/Skill boundary tests 10 passed.
+- Gate: SOURCE/LOCAL only; no ROS-SIM, Gazebo, device, or field promotion.
+
+## 2026-10-02 · uncommitted · test(fleet): track Mission event watermark across replay
+- Change: extend the two-ledger restart replay to verify four phase snapshots plus one terminal event, then a separate goal-confirmation event.
+- Evidence: targeted Mission, dispatcher, service, progress, task, OMX ActionStore, and replay suites: 77 passed; known-failure comparison: 0 new, 0 known.
+- Gate: SOURCE/LOCAL only; remaining interruption fixtures and expiry/occupancy cases are still open.
+
+## 2026-10-02 · uncommitted · verify(fleet): platform cell replay watermark
+- 변경: record platform cell replay watermark verification.
+- Evidence: replay test 1 passed; Fleet UI/API group 109 passed; formation 22 passed; four web suites 29 passed. Harness contract failure isolated to append-only history check.
+- Gate: SOURCE/LOCAL only; remaining interruption fixtures and expiry/occupancy cases are still open.
+
+## 2026-10-02 · uncommitted · verify(fleet): platform cell final regression
+- Change: record final checks after reconciling the parallel watermark evidence entry.
+- Evidence: replay 1 passed; Fleet UI/API and formation 131 passed; web suites 29 passed; harness contracts 57 passed with 24 known staleness warnings.
+- Gate: SOURCE/LOCAL only; interruption fixtures and expiry/occupancy cases remain open.
+
+## 2026-10-02 · uncommitted · fix(fleet): a legacy-null pose is never a last trusted pose (D-395 S2 Finding 1)
+- Change: `trust.trusted_xy` returns a pose only for LOCALIZED + map; the console stores no trusted pose from a `localization: null` snapshot. A robot first read null and then CANDIDATES has no trusted pose and blocks the whole track. A robot that reported localization and then goes null is untrusted (badge not legacy) until null for 30 s (`trust.LAPSED_GRACE_S`); then legacy again with its stale trusted pose dropped. Contract §3 records both rules.
+- Evidence: `test_localization_trust.py`, `test_server_traffic.py` (S2 sequence, null→LOCALIZED, LOCALIZED→CANDIDATES keep-out, lapsed robot, grace reset, true legacy); Fleet suite 1380 passed/7 skipped.
+- Gate: SOURCE/LOCAL only; the S2 bench must be rerun on the ROS box.
+
+## 2026-10-02 · 7e121603 · feat(fleet): D-417 전체 주행 취소(래치 없음)와 래치를 말하는 전체 비상 정지
+- 변경: 새 `POST /api/fleet/cancel-all`(operator, `server/cancel_all.py`) — 대기 작업 `CANCELED`/`FLEET_CANCEL_ALL`(행위자 = 운용자, 발행 래치·세대 그대로) → 열린 대형 해제 → 로봇마다(로봇끼리 동시) `swarm/cancel` → `navigation/cancel` → `line-follow/mode OFF`, 단계마다 계속. 로봇별 `cancelled`/`failed`/`unreachable`, `evidence: CORE_REPLY_ONLY`. 발행된 작업은 바꾸지 않고 `awaiting_core_result` 로 보인다(CORE `nav.canceled` 투영이 바꾼다). `DriveCancelFence` 가 디스패처 목표 호출을 감싸 취소와 겹친 발행은 다시 취소하고 `UNKNOWN`/`FLEET_CANCEL_ALL_DURING_DISPATCH`. 허브 `scatter_swarm_cancel`. `task_store` 취소 사유 인자(두 SELECT 를 합쳐 −5줄), `console.py` 불변. 운용 화면 발행 상태 줄에 "전체 주행 취소"(confirm, 로봇별 결과 기록), 상단 버튼 "전체 비상 정지 / 래치 · 로봇별 관리자 해제"(두 문서). FLEET SRS CTR-002 개정, API Ref v1.80(§10.2, §10.8, 핀 4곳).
+- 결정: D-417 Proposed(처음 D-414 로 썼으나 다른 세션의 D-414·D-415·D-416 과 겹쳐 옮김). 권고에서 벗어난 점: 발행된 작업은 Fleet 이 `CANCELED` 로 쓰지 않는다(상태 기계·D-170/D-293), 감사 예외는 비상 정지 하나로 둔다.
+- 증거: `src/site/fleet/test` + `test/architecture/test_module_structure.py` + 버전 핀·대화상자 계약 1431 passed/7 skipped, `test/known_failures.py` 새 실패 0. `test_cancel_all.py` 20(겹침 울타리는 울타리를 끈 변이 탐침에서 적색 확인). 옵트인 Chromium 전체 49 passed/18 failed — 18 개는 깨끗한 main(13e6d5e4)에서도 똑같이 실패(D-410 설치 문서 이관 뒤 index.html 을 보는 시험들, 넓은 머리 줄 시험 포함); 이 가지의 새 시험(전체 주행 취소·비상 정지 이름·모바일 머리)은 통과. Windows 호스트 SOURCE/LOCAL 증거뿐 — Gazebo·실물 정지 readback 미실행.
+- 크기: fleet 26543 으로 재판정(+203, 새 모듈 중심).
+- gate 변화: 없음.
+- 교훈: 래치 없는 정지 경로에는 "막 집힌 발행" 창이 남는다 — 발행 쪽에서 await 뒤에 다시 확인하는 울타리로 닫는다(docs/solutions 의 await 뒤 재확인 패턴).
+
+## 2026-10-02 · d3b0444b · fix(fleet): D-417 검토 반영 — CORE 확인된 취소가 로봇 점유를 푼다
+- 원인: 발행된 작업은 취소 뒤 `UNKNOWN`/`CORE_CANCEL_RESULT_PENDING` 으로 남아 `robot:` 점유를 쥐었다. `UNKNOWN` 을 대조하는 운용자 경로가 없어(작업 취소는 대기 작업만) 그 로봇은 새 작업을 영영 못 받았다.
+- 변경: (4256f34b) `server/cancel_all_store.py` — 창마다 기록(id·운용자·연/닫은 시각·로봇·취소한 대기 작업)과 진행 중 작업 표시. `task_results` 가 표시된 작업의 상관 `nav.canceled` 를 `HOLD`/`FLEET_CANCEL_ALL` 로 옮겨 점유를 푼다(표시 없으면 예전 그대로, 사건 없으면 작업·점유 그대로). 울타리: 목표 호출이 예외여도 재취소, 그 로봇을 위해 베이로 간 로봇도 취소, 명시 거절은 `FAILED`, Fleet 대기열에 남은 것은 `CANCELED`. `awaiting_core_result` 는 `ACCEPTED`/`RUNNING` + 창 이후 `UNKNOWN`. `console.cancel` 은 주소 미확인 로봇의 점유를 지우지 않는다. 주소 관문 거부는 `sent: false`. 화면은 실패 단계마다 코드, 0/0 은 경고. (d3b0444b) ADR·API Ref 문구와 D-416 연결.
+- 증거: `src/site/fleet/test` + `test_module_structure.py` + `test_web_dialog_contract.py` 1438 passed/7 skipped, known_failures 새 실패 0. `test_cancel_all.py` 31(탐침: 제출→발행→전체 주행 취소→`nav.canceled`→새 작업 발행; 사건 없는 경우). 옵트인 Chromium 전체 주행 취소 1 passed. Windows 호스트 증거뿐.
+- 크기: fleet 26793 재판정.
+- gate 변화: 없음.
+- 교훈: "UNKNOWN 이면 정직하다"는 그 UNKNOWN 을 푸는 길이 있을 때만 참이다 — 없으면 정직한 상태가 자원을 영원히 쥔다. 상태를 남기기 전에 그 상태의 출구를 찾는다.
+
+## 2026-10-02 · e223af71 · fix(fleet): D-417 재검토 — 표시를 목표 호출 전에, 시도·출처·유예로 맞춘다
+- 원인: (재현 탐침 `probe_ca.py`) 창 안에서 발행된 작업에 창의 취소가 먼저 닿으면 CORE `nav.canceled` 가 표시보다 먼저 와 `UNKNOWN`/`CORE_CANCEL_RESULT_PENDING` 이 되고, 재취소는 CORE 가 이미 쉬고 있어 사건을 다시 내지 않았다 — 점유가 영원히 남았다. 또 표시가 `task_id` 만 보아 나중의 무관한 취소(운용자·막힘·안전)도 `HOLD(FLEET_CANCEL_ALL)` 이 됐다.
+- 변경: 창이 열려 있으면 울타리가 목표 호출 전에 표시. 표시하는 쪽(울타리·창 닫기)이 창 안에서 이미 취소된 같은 시도를 같은 트랜잭션에서 `HOLD` 로 정리. 표시는 `(task_id, attempt_id)`·출처(window/fence), 기록에 `navigation/cancel` 응답 로봇. 투영은 시도 일치 + `data.source` 가 `api:*`(있을 때) + 창이 열려 있거나 닫힌 지 `HOLD_GRACE_S`(30 s) 안이고 로봇 응답 또는 울타리 재취소일 때만 `HOLD`. `HOLD(FLEET_CANCEL_ALL)` 뒤 늦은 상관 사건·발행 응답은 로그. 울타리 태거는 창별(`window(tag)`), `except (Exception, CancelledError)`, 표는 `FleetTaskStore` 가 생성(색인 `(task_id, attempt_id)`), 닫힌 지 30일 넘은 기록 정리(작업 일지에는 정리 규칙이 없다), 기록 실패 시 `record_error: CANCEL_ALL_RECORD_UNAVAILABLE` 과 미완 작업 대체.
+- 증거: 탐침 — 고치기 전 "A final UNKNOWN CORE_CANCEL_RESULT_PENDING / A next dispatch -> None / B -> HOLD", 고친 뒤 "A final HOLD FLEET_CANCEL_ALL / A next dispatch -> ACCEPTED / B -> UNKNOWN CORE_CANCEL_RESULT_PENDING". `test_cancel_all.py` 41. `src/site/fleet/test` + `test_module_structure.py` + `test_web_dialog_contract.py` 1448 passed/7 skipped, known_failures 새 실패 0. Windows 호스트 증거뿐.
+- 크기: fleet 26953 재판정, `task_store.py` 1057(상한 1060).
+- gate 변화: 없음.
+- 교훈: 비동기 증거(사건)와 그 증거를 해석할 표시는 어느 쪽이 먼저 와도 같은 결과가 나와야 한다 — 표시를 미리 달고, 늦게 단 표시는 이미 온 증거를 다시 읽는다.
+
+## 2026-10-02 · uncommitted · docs(adr): 전체 주행 취소 ADR D-417 → D-421
+- 변경: 다른 세션이 main 에서 D-417(콘솔 밀도 정리)을 잡아 이 가지의 전체 주행 취소 ADR 을 D-421 로 옮겼다(D-418 origin/main, D-419 SAF-003, D-420 Pinky 장치 동작). 파일 이름, ADR Log 행, FLEET SRS CTR-002 링크, API Ref, DESIGN.md, 코드·시험 주석. ADR 안의 Pinky 장치 동작 ADR 참조는 D-416 → D-420. 위의 기록들에 적힌 D-417 은 당시 번호다(고치지 않는다).
+- 증거: 아래 커밋의 시험 기록.
+- gate 변화: 없음.
+
+## 2026-10-02 · uncommitted · feat(fleet): D-421 전체 주행 취소를 main d5b3bd10 위에 다시 얹음
+- 변경: 가지 `feat/d414-fleet-cancel-all`(옛 main 13e6d5e4 기반)의 이 기능 변경만 새 가지 `feat/d421-fleet-cancel-all` 로 옮겼다(main 의 D-414~D-418·D-420 콘솔·장치 작업 위). API Ref 는 main 이 이미 v1.80 이라 v1.81(핀 4곳). 콘솔 확인 수 핀은 main 의 2(D-414 비상 정지 확인 없음) + 전체 주행 취소 1 = 3. `adr_gaps` 의 D-421 예약 제거.
+- 판단: main 의 브라우저 시험 파일은 옛 비상 정지 확인 시험을 지우며 `DELAYED_FORMATION`·`HOLDING_FORMATION`·`UNREACHABLE_SNAPSHOT` 정의까지 잃었다(쓰는 시험은 남음). 이 가지의 같은 자리 정의를 살려 두었다.
+- 위 기록들의 D-414·D-417 은 당시 번호다. main dae5479c 위로 다시 얹으며 비상 정지는 main 의 글자 없는 팔각 아이콘을 따랐다 — 위 기록의 "전체 비상 정지 / 래치 · 로봇별 관리자 해제" 글자는 이제 접근 이름·	itle "전체 비상 정지 (래치 · 로봇별 관리자 해제)" 이다(모바일 머리 시험 갱신).
+- 증거: src/site/fleet/test 1414 passed/7 skipped, 	est/architecture 81 passed/1 skipped, known_failures 새 실패 0; 버전 핀·대화상자 계약 7 passed; 옵트인 Chromium 전체 주행 취소·비상 정지 한 번 누름 등 4 passed. 	est_holding_formation_enables_resume_and_warns 는 main 의 신호등 문구(signals.yaml)와 시험이 어긋나 실패한다 — 이 가지와 무관(main 에서는 HOLDING_FORMATION 정의가 없어 그 전에 실패했다).
+- 크기: fleet 27134 재판정(main 26498).
+- gate 변화: 없음.

@@ -453,10 +453,15 @@ class MissionStore:
             if ((row["status"] != "RUNNING" and not reconciling_hold)
                     or row["action_id"] != action_id or row["attempt_id"] != attempt_id):
                 raise MissionConflict("Action result does not match the active Mission attempt")
-            target_state = "ACTION_SUCCEEDED" if outcome == "SUCCEEDED" else "HOLD"
+            late_success_requires_goal = reconciling_hold and outcome == "SUCCEEDED"
+            target_state = ("HOLD" if late_success_requires_goal else
+                            "ACTION_SUCCEEDED" if outcome == "SUCCEEDED" else "HOLD")
+            reason = ("LATE_SUCCESS_REQUIRES_INDEPENDENT_GOAL_EVIDENCE"
+                      if late_success_requires_goal else
+                      None if outcome == "SUCCEEDED" else f"ACTION_{outcome}")
             connection.execute(
                 "UPDATE fleet_missions SET status=?, reason=?, updated_at=? WHERE mission_id=?",
-                (target_state, None if outcome == "SUCCEEDED" else f"ACTION_{outcome}", now, mission_id),
+                (target_state, reason, now, mission_id),
             )
             connection.execute(
                 "UPDATE fleet_missions SET reconciliation_pending=? WHERE mission_id=?",
@@ -641,7 +646,11 @@ class MissionStore:
                                      (mission_id,)).fetchone()
             if row is None:
                 raise KeyError(mission_id)
-            if row["status"] != "ACTION_SUCCEEDED":
+            late_success_held = (
+                row["status"] == "HOLD"
+                and row["reason"] == "LATE_SUCCESS_REQUIRES_INDEPENDENT_GOAL_EVIDENCE"
+            )
+            if row["status"] != "ACTION_SUCCEEDED" and not late_success_held:
                 raise MissionConflict("independent goal evidence requires terminal Action success")
             detail = evidence.to_dict()
             self._event(

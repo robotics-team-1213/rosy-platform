@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 
 import {
   CAUSE_LABEL, DECISIONS, PHASE_LABEL, confirmText, decisionButtons, needsConfirm, outcomeText,
-  pendingStucks, refusalText, stuckFacts,
+  pendingStucks, rearText, refusalText, stuckFacts,
 } from "../../fleet/server/web/line-stuck.js";
 
 const STUCK = {
@@ -56,6 +56,21 @@ test("facts show clearances in metres, unknowns as a dash, and the preview seq",
   assert.equal(facts.attempts, "0/2");
   assert.equal(facts.preview, "#812");
   assert.ok(!stuckFacts({ ...STUCK, preview_seq: null }).some(([key]) => key === "preview"));
+});
+
+test("an empty rear band reads 비어 있음, an unknown one 알 수 없음 (D-407 re-run C)", () => {
+  assert.equal(rearText({ rear_clearance_m: 0.31, rear_state: "clear" }), "0.31 m");
+  assert.equal(rearText({ rear_clearance_m: null, rear_state: "clear" }), "비어 있음");
+  assert.equal(rearText({ rear_clearance_m: null, rear_state: "unknown" }), "알 수 없음");
+  assert.equal(rearText({ rear_clearance_m: null }), "알 수 없음");
+  const rear = stuckFacts({ ...STUCK, rear_clearance_m: null, rear_state: "unknown" })
+    .find(([key]) => key === "rear");
+  assert.equal(rear[2], "알 수 없음");
+  assert.equal(rear[3], "stuck-fact-unknown");
+  const empty = stuckFacts({ ...STUCK, rear_clearance_m: null, rear_state: "clear" })
+    .find(([key]) => key === "rear");
+  assert.equal(empty[2], "비어 있음");
+  assert.equal(empty[3], undefined);
 });
 
 test("causes and phases read as operator Korean", () => {

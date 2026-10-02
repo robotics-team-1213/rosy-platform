@@ -1239,7 +1239,7 @@ class UiSurfaceManifest(BaseModel):
     revision: str
 
 
-# --- D-418 로봇 SSH 접속 (API Ref §5.8, v1.80 additive) ----------------------
+# --- D-418 로봇 SSH 접속 (API Ref §5.8, v1.82 additive) ----------------------
 #
 # administrator 전용 /api/v1/host/ssh/... 의 본문과 응답. CORE 는 이 모양을 검사한
 # 뒤 root rosy-ssh-access 에 넘기고, 그 도우미가 같은 규칙을 따로 다시 검사한다.

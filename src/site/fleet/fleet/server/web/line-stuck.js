@@ -61,13 +61,25 @@ export function needsConfirm(decision) {
   return CONFIRMED.has(decision);
 }
 
-/** Fact rows for one stuck: [key, label, value]. */
+/** Rear clearance text: a distance, or "비어 있음" (band empty) vs "알 수 없음" (CORE could not
+ * tell), from rear_state. A null distance alone cannot tell those apart. */
+export function rearText(stuck) {
+  if (typeof stuck.rear_clearance_m === "number" && Number.isFinite(stuck.rear_clearance_m)) {
+    return metres(stuck.rear_clearance_m);
+  }
+  if (stuck.rear_state === "clear") return "비어 있음";
+  if (stuck.rear_state === "blocked") return "막힘";
+  return "알 수 없음";
+}
+
+/** Fact rows for one stuck: [key, label, value, cssClass?]. */
 export function stuckFacts(stuck) {
   const attempts = `${stuck.attempts ?? 0}/${stuck.max_attempts ?? 0}`;
   const held = typeof stuck.held_s === "number" ? `${Math.round(stuck.held_s)} s` : "—";
+  const rear = rearText(stuck);
   const rows = [
     ["front", "앞 여유", metres(stuck.front_clearance_m)],
-    ["rear", "뒤 여유", metres(stuck.rear_clearance_m)],
+    ["rear", "뒤 여유", rear, rear === "알 수 없음" ? "stuck-fact-unknown" : undefined],
     ["turn", "회전 여유", metres(stuck.turn_clearance_m)],
     ["held", "멈춘 시간", held],
     ["attempts", "후진 시도", attempts],
@@ -230,13 +242,14 @@ export function createLineStuckPanel({ el, view, call, log, isOperator }) {
 
     const facts = document.createElement("dl");
     facts.className = "stuck-facts";
-    for (const [key, label, value] of stuckFacts(stuck)) {
+    for (const [key, label, value, tone] of stuckFacts(stuck)) {
       const cell = document.createElement("div");
       cell.dataset.fact = key;
       const dt = document.createElement("dt");
       dt.textContent = label;
       const dd = document.createElement("dd");
       dd.textContent = value;
+      if (tone) dd.classList.add(tone);
       cell.append(dt, dd);
       facts.append(cell);
     }

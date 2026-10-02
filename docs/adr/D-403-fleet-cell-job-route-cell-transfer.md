@@ -1,6 +1,6 @@
 ## D-403 Rosy Cell Job은 Fleet 제안으로 들어가 Step마다 `CELL_TRANSFER` Action 하나로 하달된다
 
-**Status:** Proposed (2026-10-01, 경로·계약 결정; 시뮬레이션 한정 D-330 §2 개방은 사용자 승인 2026-10-01). Mission 하달기는 `simulation` 프로필에서만, 정지 세대 producer/consumer 시험을 통과한 뒤에만 연다. 실물 OMX, 호스트 간 하달, DEVICE/FIELD 수용은 포함하지 않는다. wire 이름·필드는 D-18에 따라 C4에서 API Reference·공유 schema·생산자/소비자 시험과 함께 확정한다.
+**Status:** Accepted (2026-10-02, 사용자 승인; 시뮬레이션 범위. C3/C3b Gazebo 증거 `docs/validation/rosy-cell-gazebo-c3-2026-10-02/`. 실물 OMX·DEVICE·FIELD는 계속 닫혀 있다. 이전 기록: Proposed (2026-10-01, 경로·계약 결정; 시뮬레이션 한정 D-330 §2 개방은 사용자 승인 2026-10-01). Mission 하달기는 `simulation` 프로필에서만, 정지 세대 producer/consumer 시험을 통과한 뒤에만 연다. 실물 OMX, 호스트 간 하달, DEVICE/FIELD 수용은 포함하지 않는다. wire 이름·필드는 D-18에 따라 C4에서 API Reference·공유 schema·생산자/소비자 시험과 함께 확정한다.
 
 ## 배경
 

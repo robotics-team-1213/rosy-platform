@@ -76,7 +76,7 @@ CONTROL_SPLIT = "docs/plans/2026-09-22-control-package-split-design.md"
 #: P6 verdicts: path (relative to src/) or package name -> (lines at verdict, verdict).
 SIZE_VERDICTS = {
     "fleet": (
-        26_340,
+        27_134,
         "split: server HTTP boundary, console, signals and the mission-control stores are separate owners "
         "today; group them into subpackages rather than one flat server/ tree (B2); owner fleet, unscheduled "
         "(re-judged 2026-09-29 at 11164 after mission_store joined the server tree; re-judged 2026-09-30 at "
@@ -135,7 +135,12 @@ SIZE_VERDICTS = {
         "journal, proposal finalization and service/operator admission path (docs/plans/"
         "2026-10-02-platform-architecture-v02-migration.md); these remain Fleet-owned durable records, "
         "while device dispatch and manipulation ownership stay in later tasks. This re-judgment resets "
-        "the package growth baseline; the existing +150 allowance still blocks silent growth",
+        "the package growth baseline; the existing +150 allowance still blocks silent growth. "
+        "Re-judged 2026-10-02 at 27134 (main d5b3bd10 at 26498) when D-421 cancel-all joined as its "
+        "own modules: server/cancel_all.py (fanout, per-robot verdict, dispatch-overlap fence) and "
+        "server/cancel_all_store.py (durable window record and attempt tags read by the CORE event "
+        "projection in task_results.py), one route, the hub swarm-cancel scatter and ~35 console.js "
+        "lines; console.py did not grow and task_store.py stays under its 1060 ceiling; verdict unchanged",
     ),
     "site/fleet/fleet/server/proposal_store.py": (
         730,
@@ -204,7 +209,7 @@ SIZE_VERDICTS = {
         "accept: legacy comparison-graph publisher pinned by test_module_separation; no new work (X3)",
     ),
     "site/fleet/fleet/server/console.py": (
-        1111,
+        1138,
         "accept: one owner (FleetConsole gather/scatter), host-testable (X5). Re-judged 2026-09-30 at 1013: "
         "D-361 roster mutation and pinned-address holds change the gather/traffic tables in place, so they "
         "stay with their owner; the roster policy itself lives in roster.py; re-judged 2026-09-30 at 1021 "
@@ -216,7 +221,9 @@ SIZE_VERDICTS = {
         "2026-10-02 at 1096 for D-395 P2-7: the pre-mission traffic hold cancels and queues goals in "
         "the same _goals/_claims/_queued tables (hold_for_localization) — verdict unchanged; re-judged "
         "2026-10-02 at 1111 when the P2-7 review made the hold also cancel crossing yields "
-        "(_yielding) and stop a formation near the mover — same tables, verdict unchanged",
+        "(_yielding) and stop a formation near the mover — same tables, verdict unchanged; re-judged "
+        "2026-10-02 at 1138 for D-395 S2 Finding 1: the lapsed-robot null grace (_loc_null_since) is "
+        "kept beside _seen/_trusted, which it updates in the same gather — verdict unchanged",
     ),
     "runtime/sensing/control/sensing/perception/lane.py": (
         765,
@@ -259,7 +266,7 @@ SIZE_VERDICTS = {
         "accept: sim-only read-only viewer server (HTTP handler + ROS subscriptions); the pure logic already lives in live_view_model.py and the page in lane_live_view.html, covered by test_lane_live_view*.py and test_live_view_model.py (X5)",
     ),
     "core_features": (
-        10_849,
+        11_061,
         "accept: the ROS-free CORE feature managers (command, safety, docking, line_follow, "
         "traffic_policy, navigation, swarm, ...) are already one subpackage per feature, each "
         "under the file budget; the package total is a sum of independent owners, not one "
@@ -268,7 +275,9 @@ SIZE_VERDICTS = {
         "next +150; split by feature into separate packages only if a feature gains its own "
         "deploy unit. Re-judged 2026-10-02 at 10849 when main's D-395 P2-7 localization mission "
         "(core_features/localization) merged in beside D-407; same verdict, each feature still its "
-        "own subpackage under the file budget",
+        "own subpackage under the file budget. Re-judged 2026-10-02 at 11061 when the D-407 console "
+        "re-run fixes landed (FleetAgent single receive loop, stuck event fields; main had reached "
+        "10977); same verdict",
     ),
     "control": (
         42_013,

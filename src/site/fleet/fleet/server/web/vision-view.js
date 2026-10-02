@@ -277,7 +277,10 @@ export function createVisionView({ el, call, auth }) {
   async function refreshFrame() {
     if (busy) return;
     if (auth.locked || !auth.token) {
+      // D-415 — 인증 안 됐으면 로그인 안내로 바로 연결한다.
       showState("인증 대기", "neutral", NO_SOURCE);
+      const hint = el("vision-meta");
+      if (hint) hint.textContent = "관제 토큰을 입력하면 카메라 영상이 나타납니다.";
       return;
     }
     if (Date.now() - lastSourcesAt > 30000) await refreshSources();
@@ -337,7 +340,7 @@ export function createVisionView({ el, call, auth }) {
       frame.dataset.state = "online";
       frame.dataset.editing = String(viewMode === "raw");
       cornerOverlay.toggleAttribute("hidden", viewMode !== "raw");
-      el("vision-meta").textContent = `${source} · sequence ${response.headers.get("X-Frame-Seq") || "?"} · age ${response.headers.get("X-Frame-Age-Ms") || "?"} ms · ${rectified ? "화면 보정" : "원본"}${lens ? ` · ${LENS_NAMES[lens.kind]} ${lens.focal_mm} mm` : ""}`;
+      el("vision-meta").textContent = `${new Date().toLocaleTimeString("ko-KR", { hour12: false })} · ${source} · sequence ${response.headers.get("X-Frame-Seq") || "?"} · age ${response.headers.get("X-Frame-Age-Ms") || "?"} ms · ${rectified ? "화면 보정" : "원본"}${lens ? ` · ${LENS_NAMES[lens.kind]} ${lens.focal_mm} mm` : ""}`;
       const seq = response.headers.get("X-Frame-Seq");
       for (const listener of frameListeners) listener({ image, rectified, source, seq, url: nextUrl });
     } catch (error) {

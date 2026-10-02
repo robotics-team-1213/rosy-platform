@@ -379,7 +379,7 @@ def test_ssh_uses_the_operator_key_and_strict_host_checking(tarball, keys, tmp_p
         assert argv[0] == "ssh" and f"rosy@{CANARY_IP}" in argv
         assert str(appdata / "ssh" / "rosy-operator-ed25519") in argv
         for option in ("IdentitiesOnly=yes", "BatchMode=yes", "StrictHostKeyChecking=yes", "ConnectTimeout=5",
-                       f'UserKnownHostsFile="{appdata / "known_hosts"}"'):
+                       f'UserKnownHostsFile={appdata / "known_hosts"}'):
             assert option in argv
 
 

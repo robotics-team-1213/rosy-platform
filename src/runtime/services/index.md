@@ -34,8 +34,8 @@
 
 ## 최근 기록
 
+- 2026-10-02 · 4a5a65083 · fix(fleet_agent): 검토 반영 — WELCOME 뒤에만 연결, 사건 잃지 않기
+- 2026-10-02 · bcce15c9d · fix(fleet_agent): hub 답을 모두 읽는 수신 루프, 재연결 기록, 관제 grace
 - 2026-10-02 · 7e699e452 · fix(line_follow): D-407 지나온 길 유효 기간
 - 2026-10-02 · e83a955d · fix(line_follow): D-407 Gazebo 후속 — 재막힘 시도 이어 세기, 몸 폭 뒤 띠
 - 2026-10-02 · b9f1b277 · feat(localization): D-395 S1 R1 — LOCALIZED 물체를 스냅샷으로 넘긴다
-- 2026-10-02 · f93d922d · fix(line_follow): D-407 검토 반영과 뒤 사각 규칙
-- 2026-10-02 · 776173dc · feat(line_follow): D-407 막힘 복구 상태기계와 관리자 연결
