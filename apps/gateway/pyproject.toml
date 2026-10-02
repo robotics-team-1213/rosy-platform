@@ -7,7 +7,7 @@ name = "rosy-app-gateway"
 version = "0.1.0"
 description = "ROSY site gateway application composition"
 requires-python = ">=3.12"
-dependencies = ["PyYAML>=6"]
+dependencies = ["PyYAML>=6", "rosy-palletizing==0.1.0", "rosy-execution==0.1.0"]
 
 [project.scripts]
 rosy-site-gateway = "rosy_gateway.compose:main"
