@@ -75,13 +75,6 @@ CONTROL_SPLIT = "docs/plans/2026-09-22-control-package-split-design.md"
 
 #: P6 verdicts: path (relative to src/) or package name -> (lines at verdict, verdict).
 SIZE_VERDICTS = {
-    "core_features": (
-        10_101,
-        "accept: CORE's ROS-free feature layer (D-125/D-126) is already split by owner into subpackages "
-        "(command, safety, line_follow, docking, navigation, localization, ...), each host-tested; the "
-        "package total is the layer, not one owner (X1). Crossed 10000 on 2026-10-02 at 10101 when "
-        "D-395 P2-7 added localization/mission.py (the mission executor, its own module under budget)",
-    ),
     "fleet": (
         26_340,
         "split: server HTTP boundary, console, signals and the mission-control stores are separate owners "

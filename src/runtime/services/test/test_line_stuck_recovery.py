@@ -36,7 +36,8 @@ def _machine(**overrides):
 
 def _inp(now, **kw):
     base = dict(now=now, cause="obstacle_ahead", scan_age_s=0.05, geometry_known=True,
-                rear_m=0.30, rear_blind_m=0.0, console_linked=True, linear_ceiling=0.15)
+                rear_m=0.30, rear_blind_m=0.0, console_linked=True, linear_ceiling=0.15,
+                trail_age_s=1.0)
     base.update(kw)
     return StuckInput(**base)
 
@@ -430,3 +431,34 @@ def test_forward_trail_net_since():
     for i in range(20):
         trail.record(i * 0.05, 0.05, 0.0)
     assert trail.net_since(0.5, 1.0) == pytest.approx(0.05 * 0.5, abs=1e-6)
+
+
+# ---- trail max age: decision 2026-10-02 ----------------------------------------------
+@pytest.mark.parametrize("age, ok", [(29.0, True), (30.0, True), (31.0, False), (None, False)])
+def test_trail_only_counts_while_its_last_forward_command_is_recent(age, ok):
+    machine, bus = _machine()
+    action = machine.step(_inp(0.0, console_linked=False, rear_blind_m=0.09, trail_m=0.10,
+                               trail_yaw_deg=0.0, trail_age_s=age))
+    assert (action.kind == "back") is ok
+    if ok:
+        assert bus.named("nav.line_stuck_local_attempt")[-1]["trail_age_s"] == age
+    else:
+        refused = bus.named("nav.line_stuck_local_result")[-1]
+        assert refused["reason"] == "rear_blind" and refused["trail_age_s"] == age
+
+
+def test_trail_age_is_not_rechecked_while_backing():
+    machine, _ = _machine()
+    machine.step(_inp(0.0, console_linked=False, rear_blind_m=0.09, trail_m=0.10,
+                      trail_yaw_deg=0.0, trail_age_s=29.5))
+    assert machine.step(_inp(1.0, rear_blind_m=0.09, trail_m=0.07, trail_yaw_deg=0.0,
+                             trail_age_s=30.5)).kind == "back"
+
+
+def test_forward_trail_last_forward_at():
+    trail = ForwardTrail()
+    assert trail.last_forward_at() is None
+    trail.record(1.0, 0.05, 0.0)
+    trail.record(1.05, 0.0, 0.0)
+    trail.record(1.10, -0.03, 0.0)
+    assert trail.last_forward_at() == 1.0

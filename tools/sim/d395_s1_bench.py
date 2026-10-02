@@ -62,6 +62,11 @@ SCENARIOS = {
 }
 
 
+def last_trail_pose(trail, rid):
+    """Newest (x, y, yaw) of `rid` in the truth trail of (t, robot, x, y, yaw) rows, or None."""
+    return next((tuple(row[2:5]) for row in reversed(list(trail)) if row[1] == rid), None)
+
+
 class Bench:
     def __init__(self, args):
         self.args = args
@@ -355,7 +360,9 @@ class Bench:
     def pickup_during_drive(self):
         sc = SCENARIOS[self.args.scenario]
         start = self.t()
-        before = self.truth(R1)
+        # A `gz model` timeout gives None, and then the travel check never fires (run 4 d3 drove
+        # 0.30 m and was lifted only after the window), so fall back to the newest trail sample.
+        before = self.truth(R1) or last_trail_pose(self.trail, R1)
         x, y, yaw = sc["goal"]
         moved, codes, sent_at = False, [], -math.inf
         end = time.monotonic() + self.args.drive_timeout

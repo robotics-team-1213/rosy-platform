@@ -337,3 +337,18 @@ def test_estop_closes_the_stuck_with_reason_estop(core_client):
     services.safety.trigger_estop("test")
     closed = [e for e in seen if e.type == "nav.line_stuck_closed"]
     assert closed and closed[-1].data["reason"] == "estop"
+
+
+def test_trail_expires_while_waiting_for_the_console():
+    """Decision 2026-10-02: standing still for the console ages the trail past 30 s."""
+    m, events = _manager(linked=True)
+    _drive(m, 0.0, 3.0, front=1.0, range_min=0.15)
+    _drive(m, 3.0, 8.5, front=0.15, range_min=0.15)
+    stuck_id = m.status().stuck.stuck_id
+    m.stuck_decision(stuck_id, "WAIT", by="operator", now=8.5)
+    _drive(m, 8.5, 20.0, front=0.15, range_min=0.15)
+    assert m.stuck_decision(stuck_id, "BACK_AND_RETRY", by="operator", now=20.0) == "back"
+    m.stuck_decision(stuck_id, "WAIT", by="operator", now=20.0)
+    _drive(m, 20.0, 40.0, front=0.15, range_min=0.15)            # last forward ~3 s, now 40 s
+    with pytest.raises(AnswerRefused, match="rear_blind"):
+        m.stuck_decision(stuck_id, "BACK_AND_RETRY", by="operator", now=40.0)

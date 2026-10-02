@@ -24,6 +24,10 @@ verified, and re-pulling it would repeat the transfer) and the run stops.
 Timeouts: --timeout (600 s) per scp/checksum step, --status-timeout (60 s) for
 the listing, the mark and the CORE query. A timeout fails that session.
 
+D-407 §6: with a CORE token, lane stucks (nav.line_stuck_opened/closed in CORE's
+event history) that overlap a session are written to its local stuck_markers.json
+(stuck_markers.py); a failure there only warns.
+
 Exit codes: 0 all fetched, 1 some session failed, 2 bad arguments, 4 robot
 moving or not proven idle (nothing further transferred)."""
 import argparse
@@ -43,6 +47,12 @@ if str(_PERCEPTION) not in sys.path:
     sys.path.insert(0, str(_PERCEPTION))
 
 import operator_ssh  # noqa: E402
+
+_DATASET = Path(__file__).resolve().parent
+if str(_DATASET) not in sys.path:
+    sys.path.insert(0, str(_DATASET))
+
+import stuck_markers  # noqa: E402
 
 # session.json keys, as written by control/recording.py (not imported: keep
 # this tool usable without the sensing tree on sys.path).
@@ -201,7 +211,9 @@ def main(argv=None) -> int:
         except OSError as exc:
             print(f"refused: cannot read CORE token file: {exc}", file=sys.stderr)
             return 2
-    state_url = (args.core_url or f"http://{args.host}:8080").rstrip("/") + "/api/v1/robot/state"
+    core_base = (args.core_url or f"http://{args.host}:8080").rstrip("/")
+    state_url = core_base + "/api/v1/robot/state"
+    events = None
 
     def probe() -> tuple[bool, str]:
         if args.assume_idle:
@@ -259,6 +271,18 @@ def main(argv=None) -> int:
             failed += 1
             continue
         print(f"harvested {name}")
+        if token is not None:
+            # D-407 §6: mark lane stucks inside this session (CORE event history, wall clock).
+            try:
+                if events is None:
+                    events = stuck_markers.fetch_events(core_base, token, args.status_timeout)
+                session = by_name[name]
+                hits = stuck_markers.for_session(stuck_markers.pair(events),
+                                                 session.get("started_at"), session.get("ended_at"))
+                if stuck_markers.write(local, hits):
+                    print(f"{name}: {len(hits)} lane stuck marker(s)")
+            except (OSError, ValueError) as exc:
+                print(f"{name}: stuck markers skipped: {exc}", file=sys.stderr)
         if not idle:
             return EXIT_NOT_IDLE
     return 1 if failed else 0

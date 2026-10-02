@@ -268,8 +268,8 @@
 
 ## 최근 기록
 
+- 2026-10-02 · uncommitted · docs(logs): D-395 개정 9 항목의 증거 경로 정정
+- 2026-10-02 · uncommitted · docs(adr): D-395 개정 9 — S1 Gazebo 통과
+- 2026-10-02 · uncommitted · docs(plans): D-395 S1 네 번째 실행, 합의된 조용한 시간대 (test/d395-s1-run4, main d366bc6f)
 - 2026-10-02 · uncommitted · feat(platform): start Fleet Cell Job submission boundary
 - 2026-10-02 · d9e70f71 · docs(test): close Task 3 latest-main verification follow-up
-- 2026-10-02 · 184185f92 · docs(platform): record latest-main verification boundary
-- 2026-10-02 · uncommitted · test(sim): D-407 차선 막힘 복구 Gazebo 검증
-- 2026-10-02 · 9da93450 · refactor(platform): extract palletizing process behind legacy imports
