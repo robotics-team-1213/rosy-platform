@@ -10,6 +10,8 @@ not FAILED); the operator reconciles it. Everything that differs by Action kind 
 from __future__ import annotations
 
 import hashlib
+import logging
+import time
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Mapping
@@ -24,6 +26,13 @@ from .task_store import FleetTaskStore
 
 _IN_FLIGHT = {"PREPARED", "SUBMITTING", "ACCEPTED", "RUNNING", "CANCEL_REQUESTED"}
 _ACTOR = "mission-dispatcher"
+_LOG = logging.getLogger(__name__)
+# GetAction readback (1b A3). A transport failure is retried with backoff before the outcome is
+# called UNKNOWN. Basis: one UDS exchange is bounded at 0.25 s (D-336 client) and the grant TTL is
+# 15 s; 5 failures spaced 0.5+1+2+4 s span ~8 s plus the reads themselves, so a briefly busy or
+# restarting owner is not declared UNKNOWN, while a dead owner is within about one grant lifetime.
+READBACK_FAILURE_LIMIT = 5
+READBACK_BACKOFF_S = (0.5, 1.0, 2.0, 4.0)
 
 
 class StepJobDispatcher:
@@ -34,6 +43,7 @@ class StepJobDispatcher:
                  grant_revisions: Mapping[str, Mapping[str, str]], *, deployment_profile: str,
                  now: Callable[[], datetime] | None = None, grant_ttl_s: float = 15.0,
                  on_step_action_succeeded: Callable[[Mapping[str, Any], int], object] | None = None,
+                 monotonic: Callable[[], float] = time.monotonic,
                  ) -> None:
         if not open_kinds(deployment_profile):
             raise ValueError(f"step-ledger dispatch is closed for profile {deployment_profile!r} (D-403 §7)")
@@ -53,14 +63,36 @@ class StepJobDispatcher:
         self.now = now or (lambda: datetime.now(timezone.utc))
         self.grant_ttl_s = float(grant_ttl_s)
         self.on_step_action_succeeded = on_step_action_succeeded
+        self.monotonic = monotonic
+        self._readback: dict[str, tuple[int, float]] = {}  # action_id -> (failures, next read at)
 
     def dispatch_next(self) -> dict[str, Any] | None:
-        running = self.store.next_job("RUNNING")
-        if running is not None:
-            return self._reconcile(running)
-        job = self.store.next_job("READY")
+        """One cycle over every Job (1b B1): read back each in-flight or unresolved Job under its
+        own backoff, then submit every actionable READY Job. No Job blocks another; a READY Job on
+        an unconfigured instance or a closed kind is skipped and left untouched."""
+        outcomes = [self._reconcile(job) for job in
+                    self.store.jobs("RUNNING") + self.store.next_unresolved() if self._due(job)]
+        outcomes += [self._submit(job) for job in self.store.jobs("READY")]
+        acted = [item for item in outcomes if item is not None and item["state"] not in _SKIPPED]
+        skipped = [item for item in outcomes if item is not None]
+        return acted[0] if acted else (skipped[0] if skipped else None)
+
+    def reconcile(self, mission_id: str) -> dict[str, Any]:
+        """Operator readback of one Job now, ignoring the backoff window."""
+        job = self.store.get(mission_id)
         if job is None:
-            return None
+            raise KeyError(mission_id)
+        step = job["steps"][job["current_step_index"]] if job["current_step_index"] < len(job["steps"]) else None
+        if step is None or step["grant"] is None or job["status"] not in {"RUNNING", "HOLD"}:
+            return self._view(job, job["current_step_index"], job["status"])
+        self._readback.pop(step["action_id"], None)
+        return self._reconcile(job)
+
+    def _due(self, job: Mapping[str, Any]) -> bool:
+        action_id = job["steps"][job["current_step_index"]]["action_id"]
+        return self._readback.get(action_id, (0, 0.0))[1] <= self.monotonic()
+
+    def _submit(self, job: Mapping[str, Any]) -> dict[str, Any] | None:
         index = job["current_step_index"]
         step = job["steps"][index]
         if not dispatch_open(self.deployment_profile, step["action_kind"]):
@@ -70,15 +102,16 @@ class StepJobDispatcher:
             return self._view(job, index, "NOT_CONFIGURED")
         try:
             grant = self._grant(job, step)
+            started = self.store.start_step(job["mission_id"], step_index=index, action_id=grant.action_id,
+                                            attempt_id=grant.attempt_id, grant=grant.model_dump(mode="json"),
+                                            now=self.now())
+        except MissionConflict:
+            return self._view(self.store.get(job["mission_id"]), index, None)
         except (KeyError, TypeError, ValueError):
+            # Nothing was started or sent (1b B3): release the claims with the reason.
             held = self.store.hold(job["mission_id"], reason="ACTION_GRANT_INVALID", claim_phase=None,
                                    actor_id=_ACTOR, event_key=f"grant-invalid:{index}", not_submitted=True)
             return self._view(held, index, "HOLD")
-        try:
-            started = self.store.start_step(job["mission_id"], step_index=index, action_id=grant.action_id,
-                                            attempt_id=grant.attempt_id, grant=grant.model_dump(mode="json"))
-        except MissionConflict:
-            return self._view(self.store.get(job["mission_id"]), index, None)
         if started["status"] != "RUNNING":
             return self._view(started, index, started["status"])
         control = self.task_store.dispatch_control()
@@ -130,9 +163,17 @@ class StepJobDispatcher:
         try:
             receipt = self.transport.get(grant)
         except Exception:
+            failures = self._readback.get(grant.action_id, (0, 0.0))[0] + 1
+            if failures < READBACK_FAILURE_LIMIT:
+                delay = READBACK_BACKOFF_S[min(failures, len(READBACK_BACKOFF_S)) - 1]
+                self._readback[grant.action_id] = (failures, self.monotonic() + delay)
+                return self._view(job, index, "READBACK_RETRY", grant)
+            self._readback.pop(grant.action_id, None)
             return self._outcome(job, index, grant, "UNKNOWN", "LOCAL_ACTION_READBACK_UNKNOWN", {})
+        self._readback.pop(grant.action_id, None)
         if receipt is None:
-            return self._outcome(job, index, grant, "UNKNOWN", "LOCAL_ACTION_NOT_FOUND_AFTER_SUBMIT", {})
+            # GetAction 404: the owner never journaled this attempt, so nothing ran.
+            return self._outcome(job, index, grant, "NOT_FOUND", "LOCAL_ACTION_NOT_FOUND_AFTER_SUBMIT", {})
         return self._apply(job, index, grant, receipt)
 
     def _apply(self, job: Mapping[str, Any], index: int, grant, receipt: object) -> dict[str, Any]:
@@ -177,12 +218,19 @@ class StepJobDispatcher:
         step = job["steps"][index]
         action_id = grant.action_id if grant is not None else step["action_id"]
         attempt_id = grant.attempt_id if grant is not None else step["attempt_id"]
+        if job["status"] == "HOLD" and outcome == "UNKNOWN":
+            return self._view(job, index, "HOLD", grant)  # still unresolved; keep reading back
         event_id = event_id or "dispatch:" + hashlib.sha256(
             f"{action_id}:{attempt_id}:{outcome}:{reason}".encode("utf-8")).hexdigest()
-        recorded = self.store.record_action_result(
-            job["mission_id"], step_index=index, event_id=event_id, action_id=action_id,
-            attempt_id=attempt_id, outcome=outcome, reason=reason, result=result,
-        )
+        try:
+            recorded = self.store.record_action_result(
+                job["mission_id"], step_index=index, event_id=event_id, action_id=action_id,
+                attempt_id=attempt_id, outcome=outcome, reason=reason, result=result,
+            )
+        except MissionConflict:
+            # 1b B6: a reused event id or a moved attempt is not retried forever; an operator looks.
+            _LOG.exception("Cell Job %s step %s result could not be recorded", job["mission_id"], index)
+            return self._view(self.store.get(job["mission_id"]), index, "RESULT_CONFLICT", grant)
         if outcome == "SUCCEEDED" and self.on_step_action_succeeded is not None:
             self.on_step_action_succeeded(recorded, index)
         return self._view(recorded, index, recorded["status"], grant)
@@ -196,4 +244,6 @@ class StepJobDispatcher:
                 "action_id": grant.action_id if grant is not None else None}
 
 
-__all__ = ["StepJobDispatcher"]
+_SKIPPED = {"NOT_OPEN", "NOT_CONFIGURED"}
+
+__all__ = ["READBACK_FAILURE_LIMIT", "StepJobDispatcher"]

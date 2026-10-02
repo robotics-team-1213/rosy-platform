@@ -161,7 +161,8 @@ def test_unknown_submit_outcome_holds_pins_claims_and_never_resubmits(tmp_path):
     assert _claims(tasks) == ["UNKNOWN"]
     restarted = StepJobDispatcher(store, tasks, transport, {"omx_01": "omx_01_control"}, REVISIONS,
                                   deployment_profile="simulation")
-    assert restarted.dispatch_next() is None and len(transport.submissions) == 1
+    restarted.dispatch_next()  # 1b A3: the held Job is read back, never resubmitted
+    assert len(transport.submissions) == 1 and transport.lookups
 
 
 def test_success_without_every_phase_is_not_success(tmp_path):
@@ -238,3 +239,87 @@ def test_every_configured_instance_needs_simulation_grant_revisions(tmp_path):
     with pytest.raises(ValueError, match="revisions"):
         StepJobDispatcher(None, None, Transport(), {"omx_01": "omx_01_control"}, {},
                           deployment_profile="simulation")
+
+
+def _job_on(store, generation, mission_id, workcell, instance, pallet):
+    from test_cell_job_store import _submission
+    submission = _submission()
+    submission.update(workcell_id=workcell, instance_id=instance,
+                      resources=[["workcell", workcell], ["pallet", pallet]])
+    for step in submission["steps"]:
+        step["inputs"]["pallet_id"] = pallet
+    submission["ledger_markers"] = [{"after_step_ordinal": 2, "pallet_id": pallet}]
+    store.create(mission_id=mission_id, proposal_principal_id="cell-service",
+                 request_key=f"req-{mission_id}", request_digest="d" * 64, submission=submission)
+    return store.admit(mission_id, actor_id="operator-1", expected_generation=generation)
+
+
+def _two_workcells(tmp_path, *, configured=("omx_01", "omx_02")):
+    path, tasks, _, enabled = _stores(tmp_path)
+    store = CellJobStore(path)
+    instances = {"omx_00": "omx_00_control", "omx_01": "omx_01_control", "omx_02": "omx_02_control"}
+    for mission_id, workcell in (("job-head", "omx_00"), ("job-b", "omx_01"), ("job-c", "omx_02")):
+        _job_on(store, enabled["generation"], mission_id, workcell, instances[workcell], f"pallet-{workcell}")
+    transport = Transport()
+    configured_instances = {wc: instances[wc] for wc in configured}
+    revisions = {instance: REVISIONS["omx_01_control"] for instance in configured_instances.values()}
+    dispatcher = StepJobDispatcher(store, tasks, transport, configured_instances, revisions,
+                                   deployment_profile="simulation")
+    return store, transport, dispatcher
+
+
+def test_an_unconfigured_head_does_not_starve_other_ready_jobs(tmp_path):
+    # 1b B1: the oldest READY Job is on an unconfigured instance; the others still go.
+    store, transport, dispatcher = _two_workcells(tmp_path)
+    result = dispatcher.dispatch_next()
+    assert result["state"] == "ACCEPTED"
+    assert sorted(grant.mission_id for grant in transport.submissions) == ["job-b", "job-c"]
+    assert store.get("job-head")["status"] == "READY"
+
+
+def test_an_in_flight_job_does_not_block_a_ready_job(tmp_path):
+    store, transport, dispatcher = _two_workcells(tmp_path, configured=("omx_01",))
+    dispatcher.dispatch_next()  # job-b RUNNING
+    dispatcher.omx_instances["omx_02"] = "omx_02_control"
+    dispatcher.grant_revisions["omx_02_control"] = REVISIONS["omx_01_control"]
+    dispatcher.dispatch_next()  # reads job-b back and submits job-c in the same cycle
+    assert [grant.mission_id for grant in transport.submissions] == ["job-b", "job-c"]
+    assert transport.lookups == [transport.submissions[0].action_id]
+
+
+def test_a_start_step_value_error_holds_with_grant_invalid_and_sends_nothing(tmp_path, monkeypatch):
+    # 1b B3.
+    store, tasks, transport, dispatcher = _setup(tmp_path)
+
+    def broken(*args, **kwargs):
+        raise ValueError("CELL_TRANSFER payload does not match the persisted PlanBundle step")
+
+    monkeypatch.setattr(store, "start_step", broken)
+    assert dispatcher.dispatch_next()["state"] == "HOLD"
+    job = store.get("cell-mission-1")
+    assert job["reason"] == "ACTION_GRANT_INVALID" and transport.submissions == []
+    assert _claims(tasks) == []
+
+
+def test_the_store_judges_grant_currency_with_the_dispatcher_clock(tmp_path):
+    # 1b B4: one clock. A dispatcher clock an hour ahead makes a grant the store must accept.
+    from datetime import timedelta
+    later = datetime.now(timezone.utc) + timedelta(hours=1)
+    store, _, transport, dispatcher = _setup(tmp_path, now=lambda: later)
+    assert dispatcher.dispatch_next()["state"] == "ACCEPTED"
+    assert transport.submissions[0].issued_at == later
+
+
+def test_a_result_conflict_is_reported_once_and_not_retried(tmp_path, monkeypatch, caplog):
+    # 1b B6.
+    from fleet.server.mission_store import MissionConflict
+    store, _, transport, dispatcher = _setup(tmp_path)
+    dispatcher.dispatch_next()
+    transport.on_get = lambda grant: _receipt(grant, "SUCCEEDED", 10)
+
+    def conflict(*args, **kwargs):
+        raise MissionConflict("Cell Job event identity was reused with different evidence")
+
+    monkeypatch.setattr(store, "record_action_result", conflict)
+    assert dispatcher.dispatch_next()["state"] == "RESULT_CONFLICT"
+    assert "could not be recorded" in caplog.text

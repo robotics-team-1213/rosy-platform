@@ -76,7 +76,7 @@ CONTROL_SPLIT = "docs/plans/2026-09-22-control-package-split-design.md"
 #: P6 verdicts: path (relative to src/) or package name -> (lines at verdict, verdict).
 SIZE_VERDICTS = {
     "fleet": (
-        27_870,
+        28_160,
         "split: server HTTP boundary, console, signals and the mission-control stores are separate owners "
         "today; group them into subpackages rather than one flat server/ tree (B2); owner fleet, unscheduled "
         "(re-judged 2026-09-29 at 11164 after mission_store joined the server tree; re-judged 2026-09-30 at "
@@ -150,14 +150,20 @@ SIZE_VERDICTS = {
         "Re-judged 2026-10-02 at 27870 (C4b G3/G5, D-403 §3/§5/§7): the production Cell Job compiler "
         "adapter (server/cell_compiler.py), the per-kind step dispatch table (server/step_action_kinds.py) "
         "and the step-ledger dispatcher (server/step_dispatcher.py) joined as their own modules, the "
-        "deployment_profile gate in app.py; verdict unchanged",
+        "deployment_profile gate in app.py; verdict unchanged. Re-judged 2026-10-03 at 28160 (C4b 1b): "
+        "the Cell Job claim lifecycle (HELD phase, latch hook), GetAction readback with backoff and the "
+        "operator recovery routes (server/cell_job_routes.py); verdict unchanged",
     ),
     "site/fleet/fleet/server/cell_job_store.py": (
-        617,
+        824,
         "accept: one owner (2026-10-02, C4b G3) for the ordered step ledger: Job, step, claim phase and "
         "event rows change in one SQLite transaction (submit promotes claims, outcomes return or pin "
         "them, hold and replay checks share the event key). Split the read model (_get/next_job) out "
-        "if a second step kind (D-420 Pinky multi-step) adds more than its kind-table entry",
+        "if a second step kind (D-420 Pinky multi-step) adds more than its kind-table entry. "
+        "Re-judged 2026-10-03 at 824 (C4b 1b): the claim lifecycle (HELD, site-stop hook), readback "
+        "from HOLD and operator resume/cancel joined because each changes Job, step and claim rows in "
+        "one transaction. Split: move resume/cancel/hold_for_site_stop into a recovery module when "
+        "D-420 v2 adds the CANCELLED status (schema change), before any further growth",
     ),
     "site/fleet/fleet/server/proposal_store.py": (
         730,
