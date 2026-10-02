@@ -45,6 +45,14 @@ class BodyStopMixin:
         """New session: no status fields, no remembered points, odometry restarts."""
         self._clear_gap()
         self._forget_near()
+        self._odometry_hold = False
+
+    def odometry_lost(self) -> None:
+        """The wheel output could not be integrated (wheels_sent failed): positions of the
+        remembered points are unknown. Forget them and hold until the next fresh scan."""
+        with self._lock:
+            self._forget_near()
+            self._odometry_hold = True
 
     def _forget_near(self) -> None:
         self._odom = (0.0, 0.0, 0.0)
@@ -120,6 +128,7 @@ class BodyStopMixin:
 
     def _remember_near(self, now: float) -> None:
         """At each scan: keep earlier near returns that are now inside range_min (invisible)."""
+        self._odometry_hold = False           # a fresh scan after odometry_lost
         self._integrate(now)
         c = self._config
         range_min = self._range_min
@@ -175,6 +184,12 @@ class BodyStopMixin:
         never moves closer, so stop and resume are the body margin (no override, no hysteresis).
         """
         c = self._config
+        if self._odometry_hold:
+            # Remembered points were dropped with unknown odometry: hold until a fresh scan.
+            self._gap_resume = c.obstacle_body_margin_m
+            self._gap_status = {"body_gap_m": 0.0, "stop_gap_m": c.obstacle_body_margin_m,
+                                "clearance_source": "odometry_lost"}
+            return 0.0, now, c.obstacle_body_margin_m, c.obstacle_body_margin_m
         envelope = self._envelope()
         if envelope is None:
             self._gap_resume = c.obstacle_body_margin_m

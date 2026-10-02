@@ -229,15 +229,27 @@ def nav_costmap(services, kind: str, msg, *, warn: Warn) -> None:
         warn(f"ignored {kind} costmap: {exc}")
 
 
-def wheels_sent(services, out) -> None:
+def wheels_sent(services, out) -> Optional[str]:
     """D-422: the twist the one cmd_vel publisher just sent feeds the line-follow near-point
     memory. It belongs to line follow only while line follow is active, the mode is
-    NAVIGATION and nothing stops the wheels; anything else makes it forget (re-review HIGH 1)."""
+    NAVIGATION and nothing stops the wheels; anything else makes it forget (re-review HIGH 1).
+
+    Never raises (it runs inside the 50 Hz final publisher). On any error the odometry is
+    unknown: line follow forgets the memory and holds until its next fresh scan
+    (`odometry_lost`). Returns the error text for the caller's throttled warning, else None."""
     line = services.line_follow
-    modes = services.modes
-    owned = bool(line.active and modes.mode is Mode.NAVIGATION and not modes.is_emergency
-                 and not services.safety.estop)
-    line.note_wheels(out.linear, out.angular, owned=owned)
+    try:
+        modes = services.modes
+        owned = bool(line.active and modes.mode is Mode.NAVIGATION and not modes.is_emergency
+                     and not services.safety.estop)
+        line.note_wheels(out.linear, out.angular, owned=owned)
+        return None
+    except Exception as exc:  # noqa: BLE001 - the final publisher must keep running
+        try:
+            line.odometry_lost()
+        except Exception as inner:  # noqa: BLE001
+            return f"line-follow wheel odometry failed: {exc}; odometry_lost failed: {inner}"
+        return f"line-follow wheel odometry failed (memory erased, holding): {exc}"
 
 
 def us_range(services, msg, *, received_at: float) -> None:

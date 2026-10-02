@@ -640,3 +640,43 @@ def test_prefilter_keeps_points_near_the_end_of_a_long_half_turn():
     got = body_path_gap(point, linear=0.07, angular=-0.256, horizon_m=2.0, **body)
     want = _reference_gap(point, 0.07, -0.256, 2.0)
     assert want is not None and got == pytest.approx(want, abs=0.006)
+
+
+def test_wheels_sent_never_raises_and_holds_line_follow_until_a_fresh_scan():
+    """A failure inside the 50 Hz final publisher must not stop it; the odometry is unknown,
+    so the memory goes and line follow holds until its next scan."""
+    from types import SimpleNamespace
+
+    from core.bridge.observation import wheels_sent
+
+    m, t = _remembering_manager()
+
+    class BrokenModes:
+        @property
+        def mode(self):
+            raise RuntimeError("modes unavailable")
+
+    services = SimpleNamespace(line_follow=m, modes=BrokenModes(),
+                               safety=SimpleNamespace(estop=False))
+    problem = wheels_sent(services, SimpleNamespace(linear=0.04, angular=0.0))
+    assert problem is not None and "modes unavailable" in problem
+    with m._lock:
+        assert m._near_memory == () and m._near_prev == ()
+    decision = m.tick(t)                                                 # no new scan yet
+    assert m.status().clearance_source == "odometry_lost" and decision.linear == 0.0
+    _, status = _step(m, [], t=t + 0.1, range_min=RANGE_MIN)            # the next scan
+    assert status.state == "TRACKING"
+
+
+def test_wheels_sent_survives_a_failing_odometry_lost():
+    from types import SimpleNamespace
+
+    from core.bridge.observation import wheels_sent
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("boom")
+
+    line = SimpleNamespace(active=True, note_wheels=boom, odometry_lost=boom)
+    services = SimpleNamespace(line_follow=line, modes=SimpleNamespace(mode=None, is_emergency=False),
+                               safety=SimpleNamespace(estop=False))
+    assert "boom" in wheels_sent(services, SimpleNamespace(linear=0.0, angular=0.0))

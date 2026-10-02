@@ -375,7 +375,14 @@ class RosBridge:
         msg.angular.z = out.angular
         self.cmd_vel_pub.publish(msg)
         # D-422: line follow's near-point memory integrates exactly what reached the wheels.
-        observation.wheels_sent(self._svc, out)
+        # wheels_sent never raises; a failure erases the memory and holds line follow until
+        # its next scan, and is warned at most every 5 s here.
+        problem = observation.wheels_sent(self._svc, out)
+        if problem is not None:
+            now = time.monotonic()
+            if now - getattr(self, "_wheels_warned_at", -1e9) >= 5.0:
+                self._wheels_warned_at = now
+                self._node.get_logger().warning(problem)
 
     def _tick_state(self) -> None:
         try:
