@@ -769,3 +769,9 @@
 - 근거: D-405; D-359 높이 계약(dvh).
 - gate 변화: 없음.
 - 최종 증거: web_common 209 passed(dvh 게이트 포함); dashboard 회귀 포함 1291 passed 65 skipped.
+
+## 2026-10-02 · uncommitted · D-409 잔존 높이 함수 dvh 교정
+- 변경: console-detail.css clamp(190px, 31vh→31dvh, 290px)·.region-observe min-height 60vh→60dvh, shell/shell.css clamp(9rem, 24vh→24dvh, 14rem)·max-height 24vh→24dvh — D-405 잔존 목록 소진.
+- 근거: D-359 높이 계약, D-409 결정 3.
+- gate 변화: 없음.
+- 최종 증거: web_common+dashboard 287 passed 82 skipped(dvh 게이트 포함).

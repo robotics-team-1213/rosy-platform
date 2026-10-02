@@ -76,6 +76,8 @@ class LineFollowConfig:
     obstacle_mode: str = "sector"
     obstacle_corridor_half_width_m: float = 0.09
     obstacle_path_horizon_m: float = 0.40
+    # LiDAR returns of the robot's own body (clearance.self_mask_from_config), per robot.
+    lidar_self_mask: tuple = ()
     # path: 막힘이 풀리려면 이만큼 계속 비어 있어야 한다(의도 호가 바뀌며 서다 가다 떨지 않게).
     obstacle_release_s: float = 0.2
     # 앞 물체 정지가 이만큼 이어지면 nav.line_obstacle_hold 사건을 한 번 낸다(운전자가 풀어야 함).
@@ -93,8 +95,26 @@ class LineFollowConfig:
     ir_guard_edge_error: float = 0.3
     ir_guard_turn: float = 0.5
     ir_guard_speed_scale: float = 0.5
+    # D-407 막힘 복구. 관제에 묻고 recovery_ask_s 안에 답이 없으면(또는 관제 연결이 없으면)
+    # 로컬 후진·재판단. 로컬 복구는 로봇별로 켠다(self-mask 측정 뒤).
+    recovery_local_enabled: bool = False
+    recovery_ask_s: float = 15.0
+    recovery_back_m: float = 0.08
+    recovery_back_speed: float = 0.03      # 실제 속도 = min(D-342 수동 선속도 한도, 이 값)
+    recovery_rear_clear_m: float = 0.06    # 몸 뒤끝 기준, 후진 전·중
+    recovery_max_attempts: int = 2
+    recovery_settle_s: float = 1.0
+    # 사용자 결정 2026-10-02: LiDAR 가 못 보는 뒤 띠(range_min, self-mask)는 마지막 전진 명령까지
+    # recovery_trail_s 동안 앞으로 recovery_back_m 이상 왔고 누적 |yaw| 가 이 값 이하일 때만 들어간다.
+    recovery_trail_s: float = 5.0
+    recovery_trail_yaw_deg: float = 10.0
+    # D-397 URDF 몸 기하(base_footprint, x 앞): 없으면 뒤 여유를 잴 수 없어 후진하지 않는다.
+    body_lidar_x_m: Optional[float] = None
+    body_rear_x_m: Optional[float] = None
+    body_rotation_radius_m: Optional[float] = None
 
     def __post_init__(self) -> None:
+        self._check_recovery()
         values = (self.cruise_speed, self.max_linear, self.steering_gain,
                   self.max_angular, self.min_confidence,
                   self.stale_after_s, self.lost_after_s)
@@ -148,6 +168,33 @@ class LineFollowConfig:
                 and (not isinstance(self.ir_calibration_revision, str)
                      or not re.fullmatch(r"[0-9a-f]{64}", self.ir_calibration_revision))):
             raise ValueError("IR calibration revision must be a lowercase SHA-256 digest")
+
+    def _check_recovery(self) -> None:
+        if type(self.recovery_local_enabled) is not bool:
+            raise ValueError("recovery_local_enabled must be a boolean")
+        timing = (self.recovery_ask_s, self.recovery_back_m, self.recovery_back_speed,
+                  self.recovery_rear_clear_m, self.recovery_settle_s, self.recovery_trail_s,
+                  self.recovery_trail_yaw_deg)
+        if not all(_finite(value) and value > 0 for value in timing):
+            raise ValueError("line-follow recovery times and distances must be positive and finite")
+        if self.recovery_trail_s > 30.0 or self.recovery_trail_yaw_deg > 45.0:
+            raise ValueError("recovery_trail_s is capped at 30 s and recovery_trail_yaw_deg at 45")
+        if self.recovery_back_m > 0.20 or self.recovery_back_speed > 0.05:
+            raise ValueError("recovery_back_m is capped at 0.20 m and recovery_back_speed at 0.05 m/s")
+        if (type(self.recovery_max_attempts) is not int
+                or not 0 <= self.recovery_max_attempts <= 5):
+            raise ValueError("recovery_max_attempts must be an integer in [0, 5]")
+        body = (self.body_lidar_x_m, self.body_rear_x_m, self.body_rotation_radius_m)
+        if any(value is not None and not _finite(value) for value in body):
+            raise ValueError("line-follow body geometry must be finite or unset")
+        if self.body_rear_x_m is not None and not -0.5 < self.body_rear_x_m < 0.0:
+            raise ValueError("body_rear_x_m must be behind base_footprint (-0.5, 0)")
+        if self.body_rotation_radius_m is not None and not 0.0 < self.body_rotation_radius_m <= 0.5:
+            raise ValueError("body_rotation_radius_m must be in (0, 0.5]")
+
+    @property
+    def body_geometry_known(self) -> bool:
+        return self.body_lidar_x_m is not None and self.body_rear_x_m is not None
 
 
 @dataclass(frozen=True)

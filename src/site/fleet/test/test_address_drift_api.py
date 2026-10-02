@@ -143,8 +143,9 @@ def test_each_move_is_wired_to_the_screen_code_dialog(tmp_path):
     client, _store = _enrolled_app(tmp_path)
     page = client.get("/console").text
     assert 'id="address-movable"' in page and "address-move-all" not in page
-    shell = client.get("/console/assets/console.js").text
-    assert "enrollment.openMove(" in shell and "runBulkMove" not in shell
+    # D-410 — 등록 패널(이동·해제 조작 포함)은 설치 화면이, 안내 배너는 운용 화면이 가진다.
+    shell = client.get("/console/assets/install.js").text
+    assert "createEnrollmentPanel({" in shell and "runBulkMove" not in shell
     panel = client.get("/console/assets/enrollment.js").text
     assert "window.confirm" not in panel
     assert "openLiveDialog(dialog" in panel

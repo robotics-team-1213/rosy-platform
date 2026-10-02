@@ -48,9 +48,10 @@ class Step:
 
 
 class LocalizationStateMachine:
-    def __init__(self, new_request_id, hold_s=3., settle_s=.5, min_fit=.85, fit_drop_s=1.):
+    def __init__(self, new_request_id, hold_s=3., settle_s=.5, min_fit=.85, fit_drop_s=1., max_gap_s=.5):
         self._new_id = new_request_id
-        self._check_args = dict(hold_s=hold_s, settle_s=settle_s, min_fit=min_fit)
+        # max_gap_s: the longest scan silence the 3 s check tolerates (InjectionCheck).
+        self._check_args = dict(hold_s=hold_s, settle_s=settle_s, min_fit=min_fit, max_gap_s=max_gap_s)
         self.min_fit, self.fit_drop_s = float(min_fit), float(fit_drop_s)
         self.state, self.reason = LocState.UNKNOWN, None
         self.request_id, self.candidates = None, ()

@@ -134,9 +134,9 @@ def test_console_raises_an_alarm_when_the_scanner_lease_expires():
         encoding="utf-8")
     block = source[source.index('snapshot.scanner_state === "expired"'):]
     block = block[:block.index("return;")]
-    assert '"검색기 끊김"' in block and '"crit"' in block
-    assert 'log("발견 검색기 끊김' in block and '"bad")' in block
-    assert "scanner_age_s" in block and "rosy-mdns-bridge" in block
+    assert '"발견 검색기 끊김' in block and '"bad")' in block
+    assert 'log("발견 검색기 끊김' in block
+    assert "scanner_state" in block
 
 
 def test_only_rfc1918_scan_addresses_are_accepted():

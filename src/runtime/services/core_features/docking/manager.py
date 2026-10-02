@@ -89,6 +89,9 @@ class DockingManager:
         self._lock = threading.RLock()
 
         self.executor: Optional[DockingExecutor] = None
+        #: D-395: may docking drive (LOCALIZED, map frame)? CORE binds the localization
+        #: assist; a robot without D-395 keeps this default.
+        self.localization_ok: Callable[[], bool] = lambda: True
 
         self._state = DockState.UNDOCKED
         self._phase: Optional[DockPhase] = None
@@ -203,6 +206,8 @@ class DockingManager:
         # 아무것도 따르지 않는다 — 먼저 끄게 한다.
         if self._line_follow_active():
             raise DockError("LINE_FOLLOW_ACTIVE", "stop line following first")
+        if not self.localization_ok():
+            raise DockError("NOT_LOCALIZED", "robot localization is not LOCALIZED")
 
         if dock_id is None:
             dock = self._db.only()
@@ -337,6 +342,8 @@ class DockingManager:
             return False
         if self._state is not DockState.UNDOCKED:
             return False
+        if not self.localization_ok():
+            return False  # D-395: stays pending; the tick retries once LOCALIZED
 
         # 진행 중이던 주행을 접는다. 임무는 포기되고, 그 사실은 이벤트로 남는다.
         if self.executor is not None:

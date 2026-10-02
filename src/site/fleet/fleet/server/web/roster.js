@@ -5,6 +5,7 @@
 // ink인 active, 나머지는 태그의 warn/crit 어휘 그대로다.
 import { MODE_LABEL, enumLabel, EVIDENCE_LABEL } from "/common/core_ui_logic.js";
 import { addressReason } from "./address-drift.js";
+import { localizationTag, localizationUrgent, untrustedQueuedReason } from "./localization-badge.js";
 
 const TAG_STATUS = { nav: "active", ok: "active", warn: "warn", crit: "crit" };
 
@@ -47,7 +48,7 @@ export function createRoster({ el, view, log, call, render, streamEvidence, isOp
     return view.stateUnavailable || !robot.online || !state || state.safety?.estop !== false
       || state.hitl_requested === true || Boolean(state.capabilities_degraded?.length)
       || state.navigation === "FAILED" || Boolean(robot.queued) || Boolean(robot.yielding)
-      || (evidence !== null && evidence.cls !== "");
+      || (evidence !== null && evidence.cls !== "") || localizationUrgent(robot.localization);
   }
   function navTag(state) {
     const nav = state && state.navigation;
@@ -69,6 +70,7 @@ export function createRoster({ el, view, log, call, render, streamEvidence, isOp
     if (queued.reason === "YIELDING") {
       return `${who} 가 비켜서기를 기다리는 중 — 물러나면 자동 출발합니다`;
     }
+    if (queued.reason === "LOCALIZATION_UNTRUSTED") return untrustedQueuedReason(who);
     if (queued.reason === "YIELDED") {
       return `${who} 가 지나가기를 기다리는 중 — 지나가면 제 미션으로 돌아갑니다`;
     }
@@ -127,6 +129,14 @@ export function createRoster({ el, view, log, call, render, streamEvidence, isOp
       relay.dataset.evidence = evidence.evidence;
       head.appendChild(relay);
     }
+    const loc = view.stateUnavailable ? null : localizationTag(robot.localization);
+    if (loc) {
+      // D-395: 위치 확정 상태. 서버 문구를 그대로 쓰고 열거값은 title에만 둔다.
+      const locTag = tag(loc.text, loc.cls);
+      locTag.title = loc.title;
+      locTag.dataset.localization = "";
+      head.appendChild(locTag);
+    }
     node.appendChild(head);
 
     const facts = document.createElement("div");
@@ -134,13 +144,15 @@ export function createRoster({ el, view, log, call, render, streamEvidence, isOp
     const battery = state.battery && typeof state.battery.percent === "number"
       ? `${Math.round(state.battery.percent)}%` : "—";
     const rows = [
-      ["위치", FACT_ICONS.pose, pose ? `${pose.x.toFixed(2)}, ${pose.y.toFixed(2)}` : "—"],
-      ["방향", FACT_ICONS.yaw, pose ? `${(pose.yaw * 180 / Math.PI).toFixed(0)}°` : "—"],
-      ["배터리", FACT_ICONS.battery, battery],
-      ["안전", FACT_ICONS.safety, safetyLabel],
+      ["pose", "위치", FACT_ICONS.pose, pose ? `${pose.x.toFixed(2)}, ${pose.y.toFixed(2)}` : "—"],
+      ["yaw", "방향", FACT_ICONS.yaw, pose ? `${(pose.yaw * 180 / Math.PI).toFixed(0)}°` : "—"],
+      ["battery", "배터리", FACT_ICONS.battery, battery],
+      ["safety", "안전", FACT_ICONS.safety, safetyLabel],
     ];
-    rows.forEach(([label, icon, value]) => {
+    rows.forEach(([key, label, icon, value]) => {
       const cellEl = document.createElement("div");
+      // D-409 — 컴팩트에서 위치·방향은 지도가 말한다. 칸에 이름을 달아 표면이 접는다.
+      cellEl.dataset.fact = key;
       const labelEl = document.createElement("span");
       // D-405 — 라벨의 얼굴은 아이콘, 한국어 이름은 스크린리더와 title에 남는다.
       labelEl.title = label;
@@ -361,7 +373,11 @@ export function createRoster({ el, view, log, call, render, streamEvidence, isOp
         warningCount++;
         continue;
       }
-      if (r.state.hitl_requested) {
+      if (localizationUrgent(r.localization)) {
+        // D-395 사다리 끝: Fleet이 스스로 위치를 못 잡았다. 사람만 풀 수 있다.
+        critList.appendChild(queueItem(r.robot_id, ": 위치 확인 필요 — 로봇 위치를 직접 지정하세요"));
+        criticalCount++;
+      } else if (r.state.hitl_requested) {
         // 개입 요청은 이름으로 알린다(Law 0). 원격 조종은 이 서버에 없는
         // 능력이다 — 못 하는 조작을 모의 버튼으로 걸어 두면 경보가 거짓말을
         // 한다(D-218, F-20). 진짜 개입은 그 로봇의 대시보드에서 일어난다.

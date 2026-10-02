@@ -231,3 +231,25 @@ def test_a_pose_inside_a_wall_yields_no_bay():
 
 def test_no_map_means_no_bay():
     assert bays.best_bay(None, _line(0, 0, 2, 0), (1.0, 0.0), keep_out_m=0.45) is None
+
+
+# --- D-395 P2-2: an untrusted robot is not moved to a bay ---------------------------------
+
+
+def test_an_untrusted_robot_in_the_way_is_not_sent_to_a_bay():
+    """Its map pose is not trusted, so a bay goal would be planned from a wrong pose.
+    Fleet keeps it as a 0.45 m obstacle and the mission waits instead."""
+    from fakes import run
+    from test_server_yield import SimRobot, _console, _goals
+
+    grid = payload(ALCOVE)
+    left = SimRobot("rosy_01", (0.4, 0.6), grid)
+    right = SimRobot("rosy_02", (2.2, 0.6), grid)
+    console = _console(left, right)
+    run(console.snapshot())                                       # both trusted (legacy) here
+    right._state = {**right._state, "localization": {"state": "SUSPECT", "pose_frame": "map"}}
+
+    result = run(console.goal("rosy_01", 2.2, 0.6))
+
+    assert result["queued"] is True and result["reason"] == "LOCALIZATION_UNTRUSTED"
+    assert _goals(right) == []

@@ -75,8 +75,15 @@ CONTROL_SPLIT = "docs/plans/2026-09-22-control-package-split-design.md"
 
 #: P6 verdicts: path (relative to src/) or package name -> (lines at verdict, verdict).
 SIZE_VERDICTS = {
+    "core_features": (
+        10_101,
+        "accept: CORE's ROS-free feature layer (D-125/D-126) is already split by owner into subpackages "
+        "(command, safety, line_follow, docking, navigation, localization, ...), each host-tested; the "
+        "package total is the layer, not one owner (X1). Crossed 10000 on 2026-10-02 at 10101 when "
+        "D-395 P2-7 added localization/mission.py (the mission executor, its own module under budget)",
+    ),
     "fleet": (
-        23_543,
+        24_945,
         "split: server HTTP boundary, console, signals and the mission-control stores are separate owners "
         "today; group them into subpackages rather than one flat server/ tree (B2); owner fleet, unscheduled "
         "(re-judged 2026-09-29 at 11164 after mission_store joined the server tree; re-judged 2026-09-30 at "
@@ -108,6 +115,20 @@ SIZE_VERDICTS = {
         "move; verdict unchanged. "
         "Re-judged 2026-10-01 at 23543 when the D-395 localization arbiter joined as its own pure "
         "subpackage (fleet/localization: cues.py, arbiter.py); verdict unchanged. "
+        "Re-judged 2026-10-01 at 24204 when D-395 Phase 2 lane C joined: the service loop as its own "
+        "server module (server/localization_service.py), its pure monitor/ladder and pose trust in "
+        "fleet/localization (service_logic.py, trust.py), the client routes in transport.py and a pure "
+        "web/localization-badge.js, plus tests; verdict unchanged. "
+        "Re-judged 2026-10-02 at 24403 when D-395 P2-7 joined (the ladder sends missions from "
+        "server/localization_service.py, the pre-mission traffic hold in console.py, pure "
+        "MISSION_LIMITS/square_target in fleet/localization, the mission client in transport.py) on "
+        "top of main's D-405/D-406 console work; verdict unchanged. "
+        "Re-judged 2026-10-02 at 24565 when the service learned "
+        "to stay quiet during a CORE mission (server/localization_service.py, the mission-status "
+        "client in transport.py); verdict unchanged. "
+        "Re-judged 2026-10-02 at 24945 when D-410 split the console into two documents "
+        "(web/install.html + web/install.js entry now own device enrollment and camera "
+        "calibration; index.html/console.js shed the install wiring); verdict unchanged. "
         "Split remains unscheduled (docs/plans/2026-09-30-er2-mission-feedback-loop.md)",
     ),
     "site/fleet/fleet/server/proposal_store.py": (
@@ -144,7 +165,7 @@ SIZE_VERDICTS = {
         "2026-10-01 at 887 after idempotent per-attempt phase projection joined the Mission event transaction",
     ),
     "contracts/foundation/core_common/protocol/schemas.py": (
-        1_095,
+        1_153,
         "accept: the D-18 single contract source — every envelope, event and capability model in one "
         "importable place; per-domain schema files would fork the version pin that "
         "test_protocol_version_alignment guards. Re-judged 2026-09-30 at 1000 lines after the bounded "
@@ -153,7 +174,13 @@ SIZE_VERDICTS = {
         "LineFollowStatus.clearance_m (D-344 §11, one field); re-judged 2026-10-01 at 1067 for the "
         "bounded UDS v2 phase receipt and read-only Mission phase progress schemas, which remain in the "
         "single contract source guarded by protocol alignment. The hard-tier zero-growth rule prevents "
-        "silent expansion. ROS-free, host-testable (X5); re-judged 2026-10-01 at 1092 for the calibration-session RobotActivity/ActivityOwner models on robot state (still accept); re-judged 2026-10-01 at 1095 for the D-395 StateSnapshot.localization field and its import — the models live in protocol/localization.py (still accept)",
+        "silent expansion. ROS-free, host-testable (X5); re-judged 2026-10-01 at 1092 for the calibration-session RobotActivity/ActivityOwner models on robot state (still accept); re-judged 2026-10-01 at 1095 for the D-395 StateSnapshot.localization field and its import — the models live in protocol/localization.py (still accept)"
+        " Re-judged 2026-10-01 at 1119 lines: D-400 SafetyPolicyStatus joins the state contract; "
+        "the single contract source still outweighs a split (same verdict)."
+        " Re-judged 2026-10-01 at 1137 lines: the typed shadow sub-blocks (ShadowRecordRef, "
+        "ShadowEvalStats) joined SafetyPolicyStatus; same verdict."
+        " Re-judged 2026-10-02 at 1153 lines: D-407 LineStuckStatus (the typed stuck block on "
+        "LineFollowStatus, v1.74) joined; the logic stays in line_follow/stuck_recovery.py; same verdict.",
     ),
     "site/fleet/fleet/server/task_store.py": (
         1060,
@@ -168,11 +195,19 @@ SIZE_VERDICTS = {
         "accept: legacy comparison-graph publisher pinned by test_module_separation; no new work (X3)",
     ),
     "site/fleet/fleet/server/console.py": (
-        1021,
+        1111,
         "accept: one owner (FleetConsole gather/scatter), host-testable (X5). Re-judged 2026-09-30 at 1013: "
         "D-361 roster mutation and pinned-address holds change the gather/traffic tables in place, so they "
         "stay with their owner; the roster policy itself lives in roster.py; re-judged 2026-09-30 at 1021 "
-        "under the D-362 zero-allowance tier — verdict unchanged",
+        "under the D-362 zero-allowance tier — verdict unchanged; re-judged 2026-10-01 at 1063 for D-395 "
+        "P2-2: untrusted poses change the same gather/traffic tables (_seen, _queued) in place, so the "
+        "LOCALIZATION_UNTRUSTED queue reason stays with its owner while the trust rules live in "
+        "fleet/localization/trust.py — verdict unchanged; re-judged at 1076 when the lane C review queued an "
+        "unlocalized mover instead of dispatching it (same queue table) — verdict unchanged; re-judged "
+        "2026-10-02 at 1096 for D-395 P2-7: the pre-mission traffic hold cancels and queues goals in "
+        "the same _goals/_claims/_queued tables (hold_for_localization) — verdict unchanged; re-judged "
+        "2026-10-02 at 1111 when the P2-7 review made the hold also cancel crossing yields "
+        "(_yielding) and stop a formation near the mover — same tables, verdict unchanged",
     ),
     "runtime/sensing/control/sensing/perception/lane.py": (
         765,
@@ -214,8 +249,20 @@ SIZE_VERDICTS = {
         709,
         "accept: sim-only read-only viewer server (HTTP handler + ROS subscriptions); the pure logic already lives in live_view_model.py and the page in lane_live_view.html, covered by test_lane_live_view*.py and test_live_view_model.py (X5)",
     ),
+    "core_features": (
+        10_849,
+        "accept: the ROS-free CORE feature managers (command, safety, docking, line_follow, "
+        "traffic_policy, navigation, swarm, ...) are already one subpackage per feature, each "
+        "under the file budget; the package total is a sum of independent owners, not one "
+        "tangled module. First judged 2026-10-02 at 10104 when D-407 lane stuck recovery joined "
+        "as its own modules (line_follow/stuck_recovery.py, stuck_wiring.py). Re-judge on the "
+        "next +150; split by feature into separate packages only if a feature gains its own "
+        "deploy unit. Re-judged 2026-10-02 at 10849 when main's D-395 P2-7 localization mission "
+        "(core_features/localization) merged in beside D-407; same verdict, each feature still its "
+        "own subpackage under the file budget",
+    ),
     "control": (
-        40_961,
+        42_013,
         f"split: deploy closure needs only sensing + safety provider (P1a); {CONTROL_SPLIT} "
         "(re-judged 2026-09-30 at 33090 after D-356 added the ROS-free learned perception backend "
         "(sensing/perception/learned), the shadow node and the recording CLI; the learned backend sits "
@@ -247,11 +294,26 @@ SIZE_VERDICTS = {
         "joined — they move with the P1a split, verdict unchanged; re-judged 2026-10-01 at "
         "40803 for the bounded, observation-only follow_preview module and camera-stamp joins "
         "(docs/plans/2026-10-01-follow-preview-design.md): rendering stays in perception, ROS I/O "
-        "stays in observer wrappers, and the P1a sensing/safety split remains required; "
+        "stays in observer wrappers, and the P1a sensing/safety split remains required; re-judged 2026-10-01 at 41059 when the "
+        "D-395 P2-3 robot node joined: the ROS-free LocAssist core (control/loc_assist.py) and its thin ROS "
+        "adapter (control/loc_assist_node.py) stay with the sensing nodes and move with the P1a split, "
+        "verdict unchanged; re-judged 2026-10-02 at 41237 after the lane A review fixes and the camera "
+        "paint points (control/loc_assist*.py, sensing/perception/paint_hypothesis.py) — same subjects, "
+        "verdict unchanged; re-judged 2026-10-02 at 41491 on the D-395 Phase 2 integration branch "
+        "when lane A (loc_assist) met main's follow_preview additions — same subjects, "
+        "verdict unchanged; "
         "re-judged 2026-10-02 at 40961 for the observation-only lane_topology and visual_tags "
         "modules plus explicit boundary/object annotations "
         "(docs/plans/2026-10-02-lane-object-preview-design.md): no new driving authority, "
-        "all move with the existing perception split — verdict unchanged)",
+        "all move with the existing perception split — verdict unchanged; re-judged 2026-10-02 at 41649 "
+        "on the D-395 Phase 2 integration branch when main's lane_topology/visual_tags met lane A's "
+        "loc_assist — same subjects, verdict unchanged; re-judged 2026-10-02 at 41145 for the D-408 "
+        "paint sources (denoise_white_mask in lane_keep_lines.py, learned/paint_worker.py, the lane-mask "
+        "helper) — ROS-free inside sensing/perception, they move with the P1a split, verdict unchanged; "
+        "re-judged 2026-10-02 at 41833 on the D-395 Phase 2 integration branch with D-408 and loc_assist "
+        "together — same subjects, verdict unchanged; re-judged 2026-10-02 at 42013 when D-395 S1 R1 "
+        "made LOCALIZED robots report unmapped objects (control/loc_assist*.py) — same subjects, "
+        "verdict unchanged)",
     ),
     # --- D-362 newly-covered files (web assets in src/ packages, ops roots). ---
     "runtime/sensing/web/diagnostic.html": (

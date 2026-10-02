@@ -70,8 +70,8 @@
 
 ## 최근 기록
 
-- 2026-10-02 · uncommitted · fix(bridge): D-394 주행 카드 reach 셋 삭제(C6) — 죽은 current_goal 판정
-- 2026-10-01 · uncommitted · feat(bridge,display): 주행 카드 도킹 상태 + hello 인사
-- 2026-10-01 · uncommitted · feat(bridge): 주행 카드에 내비게이션 목표 좌표
-- 2026-10-01 · edca9b2e · feat(core): LiDAR 정면 — 운영자 오버레이가 레코드를 이긴다 (D-397)
-- 2026-10-01 · uncommitted · feat(bridge): idle 시계와 주행 카드 충전 플래그
+- 2026-10-02 · b9f1b277 · test(localization): D-395 S1 R1 — LOCALIZED 물체 세 갈래 왕복
+- 2026-10-02 · caa0d51d · fix(api): D-407 검토 반영 — MANUAL 답은 POST /mode 규칙, 답 감사에 토큰
+- 2026-10-02 · 7a44f39d · feat(core): D-407 막힘 답 API와 CORE 배선
+- 2026-10-02 · 00b806cb · fix(bridge): 지역화 시간을 로봇 노드 시계에 맞춤 (D-395 S1 finding 6)
+- 2026-10-02 · uncommitted · fix(bridge): D-395 P2-7 미션도 line clock 으로

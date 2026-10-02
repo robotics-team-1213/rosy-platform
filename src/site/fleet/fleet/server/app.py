@@ -104,7 +104,8 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                mission_model_turn_worker=None,
                post_action_observation_source=None,
                site_lanes: Optional[Mapping] = None,
-               pairing=None, pairing_sync_token: Optional[str] = None) -> FastAPI:
+               pairing=None, pairing_sync_token: Optional[str] = None,
+               localization_service=None) -> FastAPI:
     mission_configured = mission_service is not None or proposal_store is not None
     if (mission_service is None) != (proposal_store is None):
         raise ValueError("Mission API requires both MissionService and ProposalStore")
@@ -207,6 +208,10 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                 not isinstance(source, str) or not source for source in vision_sources):
             raise ValueError("vision preview sources must be unique non-empty ids")
 
+    if localization_service is not None:
+        # D-395 P2-6: the console badge reads the service's ladder (needs_human).
+        console.set_localization_view(localization_service.view)
+
     if pairing_sync_token is not None and pairing is None:
         raise ValueError("pairing sync credential requires D-341 pairing (--pairing-ca with --tls-cert)")
 
@@ -218,6 +223,9 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         goal_evidence_worker = None
         mission_feedback_scheduler = None
         mission_model_turn_worker_task = None
+        localization_task = None
+        if localization_service is not None:
+            localization_task = asyncio.create_task(localization_service.run())
         if task_service is not None and start_task_dispatcher:
             dispatcher = asyncio.create_task(_task_dispatch_loop(console, task_service))
         if proposal_store is not None:
@@ -241,7 +249,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         finally:
             for background in (dispatcher, mission_worker, proposal_expiry,
                                goal_evidence_worker, mission_feedback_scheduler,
-                               mission_model_turn_worker_task):
+                               mission_model_turn_worker_task, localization_task):
                 if background is not None:
                     background.cancel()
                     try:
@@ -271,6 +279,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     app.state.mission_dispatcher = mission_dispatcher
     app.state.proposal_store = proposal_store
     app.state.omx_instances = configured_omx
+    app.state.localization_service = localization_service
     if task_service is not None:
         if hub is not None:
             hub.set_event_callback(task_service.project_core_event)

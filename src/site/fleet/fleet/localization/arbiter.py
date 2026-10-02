@@ -86,6 +86,20 @@ class Arbiter:
     weights: Weights = field(default_factory=Weights)
     _leads: dict = field(default_factory=dict)
     _decided: dict = field(default_factory=dict)
+    #: robot -> request id of its last report in which an asymmetric cue favoured the leader.
+    _favoured: dict = field(default_factory=dict)
+
+    def pending(self, robot_id: str, request_id: Optional[str]) -> bool:
+        """True while the arbiter may still decide `request_id` for this robot, or just did:
+        a lead is held, an asymmetric cue favours one candidate (margin or not), or a
+        decision went out for it. The ladder waits meanwhile (S1 re-run R2)."""
+        if request_id is None:
+            return False
+        lead = self._leads.get(robot_id)
+        decided = self._decided.get(robot_id)
+        return ((lead is not None and lead.request_id == request_id)
+                or self._favoured.get(robot_id) == request_id
+                or (decided is not None and decided[0] == request_id))
 
     def observe(self, report: CandidateReport, context: Context,
                 now: float) -> Optional[LocalizationDecision]:
@@ -98,6 +112,10 @@ class Arbiter:
         gap = scores[best]["total"] - scores[order[1]]["total"] if len(order) > 1 else math.inf
         lead = self._leads.get(robot)
         carried = _carried(scores, best)
+        if carried:
+            self._favoured[robot] = report.request_id
+        else:
+            self._favoured.pop(robot, None)
         if gap < self.margin or not carried:
             self._leads.pop(robot, None)
             return None

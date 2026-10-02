@@ -60,6 +60,7 @@ def make_config(**changes):
         position_limits={"joint_1": (-1.0, 1.0), "joint_2": (-0.5, 0.5)},
         allowed_owners=("leader_teleop", "moveit", "rule_based"),
         calibration_revision="cal-7",
+        max_start_state_tolerances={"joint_1": 0.01, "joint_2": 0.01},
         max_joint_state_age_s=0.5,
         max_goal_duration_s=2.0,
         action_timeout_s=3.0,
@@ -67,9 +68,9 @@ def make_config(**changes):
     return replace(config, **changes)
 
 
-def make_state(*, sequence=10, received_at=100.0, calibration_revision="cal-7"):
+def make_state(*, sequence=10, received_at=100.0, calibration_revision="cal-7", positions=None):
     return JointStateSnapshot(
-        positions={"joint_1": 0.1, "joint_2": -0.1},
+        positions=positions or {"joint_1": 0.1, "joint_2": -0.1},
         sequence=sequence,
         received_at=received_at,
         calibration_revision=calibration_revision,
@@ -125,6 +126,19 @@ def test_disabled_owner_never_submits_an_action():
 def test_enabled_policy_rejects_incomplete_or_ambiguous_limits(changes):
     with pytest.raises(ValueError):
         replace(make_config(), **changes)
+
+
+@pytest.mark.parametrize(
+    "tolerances",
+    [
+        {"joint_1": 0.01},
+        {"joint_1": -0.01, "joint_2": 0.01},
+        {"joint_1": float("nan"), "joint_2": 0.01},
+    ],
+)
+def test_enabled_policy_rejects_invalid_start_tolerance_bounds(tolerances):
+    with pytest.raises(ValueError, match="max_start_state_tolerances"):
+        replace(make_config(), max_start_state_tolerances=tolerances)
 
 
 def test_enabled_owner_requires_fresh_feedback_and_allows_one_active_writer():
@@ -231,6 +245,115 @@ def test_duplicate_command_id_is_idempotent_but_cannot_change_payload():
     assert duplicate.reason == "duplicate_ignored"
     assert not reused.accepted and reused.reason == "command_id_reused"
     assert len(action.commands) == 1
+
+
+def test_newer_joint_state_inside_explicit_start_tolerance_can_close_dispatch_race():
+    clock = [100.01]
+    owner, action = owner_at(clock)
+    owner.observe_joint_state(make_state(sequence=10))
+    command = make_command(
+        expected_start_state_positions={"joint_1": 0.1, "joint_2": -0.1},
+        start_state_tolerances={"joint_1": 0.01, "joint_2": 0.01},
+    )
+    owner.observe_joint_state(make_state(
+        sequence=11, received_at=100.01,
+        positions={"joint_1": 0.105, "joint_2": -0.095},
+    ))
+
+    result = owner.submit(command)
+
+    assert result.accepted
+    assert result.reason == "submitted"
+    assert owner._last_command_state_sequence == 11
+    assert action.commands == [command]
+
+
+def test_newer_joint_state_outside_start_tolerance_is_rejected():
+    clock = [100.01]
+    owner, action = owner_at(clock)
+    owner.observe_joint_state(make_state(sequence=10))
+    owner.observe_joint_state(make_state(
+        sequence=11, received_at=100.01,
+        positions={"joint_1": 0.12, "joint_2": -0.1},
+    ))
+    command = make_command(
+        expected_start_state_positions={"joint_1": 0.1, "joint_2": -0.1},
+        start_state_tolerances={"joint_1": 0.01, "joint_2": 0.01},
+    )
+
+    result = owner.submit(command)
+
+    assert not result.accepted
+    assert result.reason == "start_state_outside_tolerance"
+    assert action.commands == []
+
+
+def test_dispatch_rejects_additional_drift_after_phase_start_tolerance_edge():
+    clock = [100.01]
+    owner, action = owner_at(clock)
+    owner.observe_joint_state(make_state(
+        sequence=10, positions={"joint_1": 0.009, "joint_2": -0.1},
+    ))
+    owner.observe_joint_state(make_state(
+        sequence=11, received_at=100.01,
+        positions={"joint_1": 0.011, "joint_2": -0.1},
+    ))
+    command = make_command(
+        expected_start_state_positions={"joint_1": 0.0, "joint_2": -0.1},
+        start_state_tolerances={"joint_1": 0.01, "joint_2": 0.01},
+    )
+
+    result = owner.submit(command)
+
+    assert not result.accepted
+    assert result.reason == "start_state_outside_tolerance"
+    assert action.commands == []
+
+
+def test_command_cannot_raise_start_tolerance_above_owner_policy():
+    clock = [100.01]
+    owner, action = owner_at(clock)
+    owner.observe_joint_state(make_state(sequence=10))
+    owner.observe_joint_state(make_state(sequence=11, received_at=100.01))
+    command = make_command(
+        expected_start_state_positions={"joint_1": 0.1, "joint_2": -0.1},
+        start_state_tolerances={"joint_1": 0.5, "joint_2": 0.01},
+    )
+
+    result = owner.submit(command)
+
+    assert not result.accepted
+    assert result.reason == "start_state_tolerance_exceeds_policy"
+    assert action.commands == []
+
+
+def test_tolerance_evidence_requires_owner_policy():
+    clock = [100.01]
+    owner, action = owner_at(clock, make_config(max_start_state_tolerances=None))
+    owner.observe_joint_state(make_state(sequence=10))
+    command = make_command(
+        expected_start_state_positions={"joint_1": 0.1, "joint_2": -0.1},
+        start_state_tolerances={"joint_1": 0.01, "joint_2": 0.01},
+    )
+
+    result = owner.submit(command)
+
+    assert not result.accepted
+    assert result.reason == "start_state_tolerance_policy_missing"
+    assert action.commands == []
+
+
+def test_advanced_state_without_explicit_start_tolerance_stays_fail_closed():
+    clock = [100.01]
+    owner, action = owner_at(clock)
+    owner.observe_joint_state(make_state(sequence=10))
+    owner.observe_joint_state(make_state(sequence=11, received_at=100.01))
+
+    result = owner.submit(make_command())
+
+    assert not result.accepted
+    assert result.reason == "joint_state_sequence_mismatch"
+    assert action.commands == []
 
 
 @pytest.mark.parametrize(

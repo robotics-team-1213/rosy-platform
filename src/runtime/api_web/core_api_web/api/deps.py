@@ -31,6 +31,8 @@ from core_features.command.arbitration import Mode
 from core_features.diagnostics.collector import worst
 from core_features.docking.database import DockError, DockInstance, DockType
 from core_features.line_follow import LineFollowMode
+from core_features.line_follow.stuck_recovery import AnswerRefused as LineStuckRefused
+from core_features.localization import MissionRefused
 from core_features.maps import valid_costmap_scope
 from core_features.navigation.manager import NavigationError
 from core_features.swarm import SwarmError
@@ -47,6 +49,8 @@ __all__ = [
     "DockInstance",
     "DockType",
     "LineFollowMode",
+    "LineStuckRefused",
+    "MissionRefused",
     "valid_costmap_scope",
     "worst",
     "SwarmError",
@@ -81,6 +85,7 @@ class CoreServicesLike(Protocol):
     inventory: Any
     maps: Any
     line_follow: Any
+    localization: Any
     modes: Any
     nav: Any
     power: Any

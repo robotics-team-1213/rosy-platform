@@ -14,12 +14,14 @@ from core_features.calibration import CalibrationSessionManager
 from core_features.command.arbitration import Mode, ModeMachine, SourceRegistry
 from core_features.command.manager import CommandManager
 from core.teleop_config import teleop_timeout_ms
+from core.line_follow_wiring import _line_follow_config, bind_stuck_recovery  # noqa: F401 (tests import the parser here)
 from core_features.docking.agent import DockAgent
 from core_features.docking.database import DockDatabase, DockError, DockInstance, DockType
 from core_features.docking.detector import select_detector
 from core_features.docking.feed import DockObservationFeed
 from core_features.docking.manager import DockingConfig, DockingManager
 from core_features.fleet_agent.agent import FleetAgent
+from core_features.localization import LocalizationAssist, LocalizationMission, wire_assist
 from core_common.domain.adapters import AdapterRegistry
 
 from core_common.domain.capabilities import runtime_capability_data, runtime_truth
@@ -31,7 +33,7 @@ from core_common.identity import RobotIdentity
 from core_features.maps import MapSnapshotStore
 from core_features.navigation.manager import NavigationManager
 from core_features.navigation.readiness import NavigationReadinessGate
-from core_features.line_follow import LineFollowConfig, LineFollowManager
+from core_features.line_follow import LineFollowManager
 from core_features.traffic_policy import (
     SignalObserverMonitor,
     SignalObserverPoller,
@@ -146,41 +148,6 @@ def _power_config(raw: dict[str, Any]) -> PowerConfig:
     )
 
 
-def _line_follow_config(raw: dict[str, Any]) -> LineFollowConfig:
-    """Parse the operator-tunable D-143 policy with validation in one place."""
-    defaults = LineFollowConfig()
-    return LineFollowConfig(
-        cruise_speed=float(raw.get("cruise_speed", defaults.cruise_speed)),
-        max_linear=float(raw.get("max_linear", defaults.max_linear)),
-        steering_gain=float(raw.get("steering_gain", defaults.steering_gain)),
-        max_angular=float(raw.get("max_angular", defaults.max_angular)),
-        min_confidence=float(raw.get("min_confidence", defaults.min_confidence)),
-        stale_after_s=float(raw.get("stale_after_s", defaults.stale_after_s)),
-        lost_after_s=float(raw.get("lost_after_s", defaults.lost_after_s)),
-        ir_calibration_revision=raw.get("ir_calibration_revision") or None,
-        obstacle_stop_m=float(raw.get("obstacle_stop_m", defaults.obstacle_stop_m)),
-        obstacle_resume_m=float(raw.get("obstacle_resume_m", defaults.obstacle_resume_m)),
-        obstacle_half_angle_deg=float(raw.get("obstacle_half_angle_deg", defaults.obstacle_half_angle_deg)),
-        lidar_forward_deg=float(raw.get("lidar_forward_deg", defaults.lidar_forward_deg)),
-        clearance_stale_s=float(raw.get("clearance_stale_s", defaults.clearance_stale_s)),
-        obstacle_mode=str(raw.get("obstacle_mode", defaults.obstacle_mode)),
-        obstacle_corridor_half_width_m=float(raw.get(
-            "obstacle_corridor_half_width_m", defaults.obstacle_corridor_half_width_m)),
-        obstacle_path_horizon_m=float(raw.get(
-            "obstacle_path_horizon_m", defaults.obstacle_path_horizon_m)),
-        obstacle_release_s=float(raw.get("obstacle_release_s", defaults.obstacle_release_s)),
-        obstacle_escalate_s=float(raw.get("obstacle_escalate_s", defaults.obstacle_escalate_s)),
-        max_angular_follows_manual=raw.get(
-            "max_angular_follows_manual", defaults.max_angular_follows_manual),
-        lane_auto_min_manual_angular=float(raw.get(
-            "lane_auto_min_manual_angular", defaults.lane_auto_min_manual_angular)),
-        ir_guard_enabled=raw.get("ir_guard_enabled", defaults.ir_guard_enabled),
-        ir_guard_edge_error=float(raw.get("ir_guard_edge_error", defaults.ir_guard_edge_error)),
-        ir_guard_turn=float(raw.get("ir_guard_turn", defaults.ir_guard_turn)),
-        ir_guard_speed_scale=float(raw.get("ir_guard_speed_scale", defaults.ir_guard_speed_scale)),
-    )
-
-
 def _traffic_policy_config(raw: dict[str, Any]) -> TrafficPolicyConfig:
     """Parse revision-bound traffic policy without weakening its bounds."""
     defaults = TrafficPolicyConfig()
@@ -289,6 +256,8 @@ class CoreServices:
     control_adapter: Any = field(default=None, repr=False)
     # control's dock/observation evidence (ros_bridge ingests, docking reads).
     dock_feed: DockObservationFeed = field(default_factory=DockObservationFeed)
+    localization: Optional[LocalizationAssist] = None  # D-395 P2-1 (ros_bridge ingests)
+    loc_mission: Optional[LocalizationMission] = None  # D-395 P2-7 (ros_bridge ticks)
 
     @classmethod
     def build(cls, config: dict[str, Any], profile: RobotProfile,
@@ -553,9 +522,13 @@ class CoreServices:
             host_root=os.environ.get("ROSY_HOST_ROOT", "/"),
             data_path=waypoints_path.parent,
         )
+        localization, loc_mission = wire_assist(events, lambda: identity.robot_id, nav=nav, line_follow=line_follow,
+            command=command, state=state, modes=modes, swarm=swarm, docking=docking, safety=safety, traffic_policy=traffic_policy)
         fleet_agent = FleetAgent(state, events, config, identity)
         fleet_agent.start()
-        
+        bind_stuck_recovery(line_follow, safety=safety, calibration=calibration,
+                            fleet_agent=fleet_agent, vision=vision)
+
         return cls(config=config, identity=identity, profile=profile, capability=capability, fleet_agent=fleet_agent,
                    events=events, state=state, registry=registry, modes=modes,
                    command=command, safety=safety, advisory_feed=advisory_feed,
@@ -569,7 +542,7 @@ class CoreServices:
                    runtime_probe=runtime_probe, maps=MapSnapshotStore(),
                    audit=audit, calibration=calibration,
                    adapter_registry=adapter_registry,
-                   dock_feed=dock_feed)
+                   dock_feed=dock_feed, localization=localization, loc_mission=loc_mission)
 
     def inventory(self) -> dict[str, Any]:
         cap001 = self.capability.to_dict()

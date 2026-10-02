@@ -30,6 +30,7 @@ from typing import Any, Callable, Optional, Sequence
 from core_common.succession import next_leader
 from fleet.formation.geometry import DEFAULT_SPACING, Formation
 from fleet.hub.hub import HubError, SiteHub
+from fleet.localization import trust
 from fleet.server import bays, traffic
 from fleet.server.console_view import (
     _error_of, _formation_stream_evidence, _shown, _stream_evidence,  # noqa: F401
@@ -105,6 +106,10 @@ class FleetConsole:
         #: 마지막으로 본 로봇의 pose 와 주행 상태. 길을 막고 선 로봇을 찾으려면 좌표가
         #: 있어야 하는데, 로봇 상태는 스냅샷으로 들어온다.
         self._seen: dict[str, dict] = {}
+        #: D-395 P2-2: last pose traffic may use, per robot (`trust.trusted_xy`).
+        self._trusted: dict[str, tuple] = {}
+        #: robot_id -> the localization service's view (needs_human), set by app.py.
+        self._localization_view: Optional[Callable[[str], Optional[dict]]] = None
         #: Robots whose pinned address is unverified (D-361 3): stop-only, kept as a
         #: blocked obstacle in traffic, alarmed when they were moving.
         self._held: dict[str, dict] = {}
@@ -181,7 +186,7 @@ class FleetConsole:
         self._agent_pairing_tokens.pop(robot_id, None)
         self._hub.drop(robot_id)
         for table in (self._goals, self._claims, self._queued, self._yielding, self._seen,
-                      self._held):
+                      self._held, self._trusted):
             table.pop(robot_id, None)
         return client
 
@@ -194,6 +199,13 @@ class FleetConsole:
         self._rest_tokens[robot_id] = endpoint.token
         self._hub.set_client(robot_id, client)
         return old
+
+    def clients(self) -> dict[str, RobotClient]:
+        """The live roster's clients (the localization service polls these)."""
+        return dict(self._clients)
+
+    def set_localization_view(self, view: Optional[Callable[[str], Optional[dict]]]) -> None:
+        self._localization_view = view
 
     def _client(self, robot_id: str) -> RobotClient:
         client = self._clients.get(robot_id)
@@ -233,6 +245,9 @@ class FleetConsole:
             row["yielding"] = self._yielding.get(row["robot_id"])
             hold = self._held.get(row["robot_id"])
             row["held"] = hold["reason"] if hold is not None else None
+            view = self._localization_view
+            row["localization"] = trust.badge(
+                row["state"], view(row["robot_id"]) if view is not None else None)
         online = sum(1 for r in robots if r["online"])
         if self._signals is not None:
             # 신호등 갱신은 로봇 gather 뒤에서, 그리고 실패해도 로봇 상태를 흔들지 않는다.
@@ -326,6 +341,15 @@ class FleetConsole:
                     "cancel_confirmed": False, "blocked_by": yielding["for"],
                     "waiting_on": [yielding["for"]], "reason": "YIELDED"}
         client = self._client(robot_id)
+        if trust.classify(self._seen.get(robot_id)) == trust.UNTRUSTED:
+            # D-395: an unlocalized robot gets no goal (CORE would refuse it); it waits for LOCALIZED.
+            self._claims.pop(robot_id, None)
+            self._queued[robot_id] = self._task_mission(
+                x, y, yaw, task_id=task_id, attempt_id=attempt_id, attempt_seq=attempt_seq,
+                blocked_by=robot_id, waiting_on=[robot_id], reason="LOCALIZATION_UNTRUSTED")
+            return {"accepted": False, "queued": True, "dispatch_attempted": False,
+                    "cancel_confirmed": False, "blocked_by": robot_id, "waiting_on": [robot_id],
+                    "reason": "LOCALIZATION_UNTRUSTED"}
         if attempt_id is None:
             result = await client.navigation_goal(x, y, yaw)
         else:
@@ -358,6 +382,22 @@ class FleetConsole:
 
         await self._observe()
         intended = self._intended_route(robot_id, route, x, y)
+        untrusted = next((rid for rid in self._order
+                          if rid != robot_id and self._untrusted_blocks(rid, intended)), None)
+        if untrusted is not None:
+            # D-395 P2-2: an unlocalized robot is a wide obstacle, never sent to a bay.
+            cancel_receipt = await self._client(robot_id).navigation_cancel()
+            if not self._cancel_confirmed(cancel_receipt):
+                raise RuntimeError("navigation goal cancellation was not confirmed")
+            self._goals.pop(robot_id, None)
+            self._claims.pop(robot_id, None)
+            self._queued[robot_id] = self._task_mission(
+                x, y, yaw, task_id=task_id, attempt_id=attempt_id, attempt_seq=attempt_seq,
+                blocked_by=untrusted, waiting_on=[untrusted], reason="LOCALIZATION_UNTRUSTED",
+                route=list(intended))
+            return {"accepted": False, "queued": True, "dispatch_attempted": True,
+                    "cancel_confirmed": True, "blocked_by": untrusted,
+                    "waiting_on": [untrusted], "reason": "LOCALIZATION_UNTRUSTED"}
         grid = bays.Grid.from_payload(await self.map())
         standing = self._standing_in_the_way(robot_id, intended, grid, (x, y))
         if standing:
@@ -431,7 +471,8 @@ class FleetConsole:
         out = []
         here = self._pose_of(mover)
         for robot_id in self._order:
-            if robot_id == mover or robot_id in self._claims:
+            if (robot_id == mover or robot_id in self._claims
+                    or trust.classify(self._seen.get(robot_id)) == trust.UNTRUSTED):
                 continue
             pose = self._pose_of(robot_id)
             if pose is None:
@@ -523,8 +564,17 @@ class FleetConsole:
             state = row.get("state") or {}
             if state:
                 self._seen[row["robot_id"]] = state
+                trusted = trust.trusted_xy(state)
+                if trusted is not None:
+                    self._trusted[row["robot_id"]] = trusted
+
+    def _untrusted_blocks(self, robot_id: str, route: Sequence) -> bool:
+        return (trust.classify(self._seen.get(robot_id)) == trust.UNTRUSTED
+                and trust.blocks(route, self._trusted.get(robot_id)))
 
     def _pose_of(self, robot_id: str) -> Optional[tuple]:
+        if trust.classify(self._seen.get(robot_id)) == trust.UNTRUSTED:
+            return self._trusted.get(robot_id)        # D-395 P2-2: skip the untrusted pose
         pose = (self._seen.get(robot_id) or {}).get("pose") or {}
         try:
             return float(pose["x"]), float(pose["y"])
@@ -677,6 +727,11 @@ class FleetConsole:
         """
         if mission.get("reason") in ("YIELDING", "NO_YIELD_SPACE"):
             return self._route_still_occupied(mission)
+        if mission.get("reason") == "LOCALIZATION_UNTRUSTED":
+            # No route: the mover itself was unlocalized; any route: a robot in its way is.
+            return (trust.classify(self._seen.get(mission["blocked_by"])) == trust.UNTRUSTED
+                    if "route" not in mission
+                    else self._untrusted_blocks(mission["blocked_by"], mission["route"]))
         blocker = mission["blocked_by"]
         # 앞이 아직 못 나갔으면 그 뒤도 못 나간다. 점유만 보면, 대기열에 들어간 순간
         # 점유가 없는 블로커를 "끝났다"고 읽고 뒤가 먼저 튀어 나간다.
@@ -724,6 +779,41 @@ class FleetConsole:
         self._queued.pop(robot_id, None)
         self._yielding.pop(robot_id, None)
         return result
+
+    async def hold_for_localization(self, mover: str) -> list[str]:
+        """D-395 P2-7: before CORE moves an unlocalized `mover`, stop the Fleet-driven robots
+        its keep-out reaches (`trust.blocks`, the whole track when it was never trusted).
+        Each held goal waits as LOCALIZATION_UNTRUSTED behind the mover until it is trusted; a
+        yield whose way to its bay crosses the keep-out is cancelled, and so is a formation
+        with a robot in it (stopped whole: its session has no per-robot hold)."""
+        held, last = [], self._trusted.get(mover)
+        for robot_id in list(self._order):
+            goal = self._goals.get(robot_id)
+            here = self._pose_of(robot_id)
+            route = ([here] if here is not None else []) + list(self._claims.get(robot_id) or [])
+            if robot_id == mover or goal is None or not trust.blocks(route, last):
+                continue
+            if not self._cancel_confirmed(await self._client(robot_id).navigation_cancel()):
+                raise RuntimeError("navigation goal cancellation was not confirmed")
+            self._goals.pop(robot_id, None)
+            self._claims.pop(robot_id, None)
+            self._queued[robot_id] = {**goal, "blocked_by": mover, "waiting_on": [mover],
+                                      "reason": "LOCALIZATION_UNTRUSTED"}
+            held.append(robot_id)
+        for robot_id, yielding in list(self._yielding.items()):     # on the way to a bay
+            here, bay = self._pose_of(robot_id), (yielding["bay"]["x"], yielding["bay"]["y"])
+            if robot_id == mover or not trust.blocks(([here] if here else []) + [bay], last):
+                continue
+            if not self._cancel_confirmed(await self._client(robot_id).navigation_cancel()):
+                raise RuntimeError("navigation goal cancellation was not confirmed")
+            self._yielding.pop(robot_id, None)
+            held.append(robot_id)
+        riders = self._formation_members() | ({self._formation_leader} - {None})
+        if riders and (last is None or any(p is not None and trust.blocks([p], last)
+                                           for p in map(self._pose_of, riders))):
+            await self.formation_stop()
+            held.append("formation")
+        return held
 
     # --- pinned-address holds (D-361 3) ------------------------------------------
 
