@@ -13,6 +13,7 @@ import json
 import math
 import os
 import time
+import traceback
 from typing import Optional
 
 import rclpy
@@ -494,6 +495,11 @@ class RosBridge:
         # D-321 addendum: a lapsed calibration lease emits its expiry even when
         # no screen is reading /robot/state. Rides this timer; commands nothing.
         self._svc.calibration.expire_due()
+        if self._svc.fleet_loss is not None:  # SAF-003 (D-419): 5 Hz, off the 50 Hz cmd path
+            try:
+                self._svc.fleet_loss.tick()
+            except Exception:  # a monitor fault must not stop the power timer
+                self._node.get_logger().error(f"fleet_loss tick failed:\n{traceback.format_exc()}")
         status = power.status()
         self._svc.state.set_power(status)
 

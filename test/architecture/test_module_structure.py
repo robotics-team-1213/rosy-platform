@@ -288,7 +288,7 @@ SIZE_VERDICTS = {
         "accept: sim-only read-only viewer server (HTTP handler + ROS subscriptions); the pure logic already lives in live_view_model.py and the page in lane_live_view.html, covered by test_lane_live_view*.py and test_live_view_model.py (X5)",
     ),
     "core_features": (
-        11_801,
+        12_140,
         "accept: the ROS-free CORE feature managers (command, safety, docking, line_follow, "
         "traffic_policy, navigation, swarm, ...) are already one subpackage per feature, each "
         "under the file budget; the package total is a sum of independent owners, not one "
@@ -302,9 +302,13 @@ SIZE_VERDICTS = {
         "10977); same verdict. Re-judged 2026-10-02 at 11430 when D-422 body-referenced "
         "obstacle stop joined as line_follow/body_stop.py (mixin) and clearance.py geometry; "
         "same verdict. Re-judged 2026-10-02 at 11596 for the D-422 review fixes (near-point "
-        "memory, motion envelope, exact straight sweep) inside body_stop.py/clearance.py; same verdict. "
-        "Re-judged 2026-10-03 at 11801 for D-424 (localization/mission.py body-referenced rotate and "
-        "nudge checks, watched turn, mission_config); same verdict",
+        "memory, motion envelope, exact straight sweep) inside body_stop.py/clearance.py; same verdict. Re-judged 2026-10-03 at 12140 when D-419 "
+        "SAF-003 landed beside D-422 as its own module (safety/fleet_loss.py, the FleetLossMonitor), "
+        "the Fleet-goal hooks in navigation/manager.py, and FleetAgent's reply deadline, link "
+        "freshness and backoff merged into the D-407 single receive loop in "
+        "fleet_agent/agent.py; same verdict. D-424 merged on top (within the allowance) "
+        "(localization/mission.py body-referenced rotate and nudge checks, watched turn, "
+        "mission_config); same verdict",
     ),
     "control": (
         43_055,

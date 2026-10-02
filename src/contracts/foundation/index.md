@@ -36,7 +36,7 @@
 ## 최근 기록
 
 - 2026-10-03 · uncommitted · feat(protocol): publish strict Cell goal submission contract
+- 2026-10-02 · uncommitted · config: SAF-003 판정 시간 5 s, 하트비트 답 시한 (D-419)
+- 2026-10-02 · uncommitted · config: SAF-003 주석의 ADR 번호
+- 2026-10-02 · 8dd300c52 · config: `safety.fleet_loss_timeout_s` (D-415)
 - 2026-10-02 · uncommitted · feat(contracts): additive D-403 CELL_TRANSFER grant
-- 2026-10-02 · f341e9fd · feat(core_common): D-411 A 녹화 계약·CORE 가드·읽기 전용 저장소
-- 2026-10-02 · dbe014f4 · feat(contracts): D-395 LOCALIZED 로봇의 `unmapped_objects` (API v1.74)
-- 2026-10-02 · 34bac08a · feat(core_common): D-395 `CHECKING` 사유

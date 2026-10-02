@@ -83,7 +83,8 @@ safety:
     - [6.40, 0]
   battery_full_voltage: 8.4      # 전압→퍼센트 선형 변환 (HWA Profile 참조)
   battery_empty_voltage: 6.4
-  fleet_loss_policy: STOP         # SAF-003
+  fleet_loss_policy: STOP         # SAF-003 STOP|HOLD|RETURN_HOME|CONTINUE (D-419)
+  fleet_loss_timeout_s: 5.0       # SAF-003: 마지막 허브 수신부터 이만큼 끊기면 정책 적용 (4–60 s, >= 1 + fleet.heartbeat_reply_timeout_s + 1)
   stuck_timeout_s: 30             # NAV-006
   manual_linear: 0.15
   manual_angular: 0.60
@@ -242,4 +243,5 @@ recording:
   pilot_root: "/var/lib/rosy/pilot-recordings"   # D-411 A; CORE reads only. Tests and Gazebo override it
 
 fleet:
-  enabled: false                  # P4-2에서 활성화 (PRT)
+  enabled: false                  # 읽히지 않는다 (D-419): FleetAgent 는 pairing_token + hub_url|discovery 로 켜진다
+  heartbeat_reply_timeout_s: 2.0  # D-419: 하트비트(1 Hz) 답(ERROR 답 포함)이 이 안에 없으면 소켓을 끊는다 (0.5–10 s; 어기면 Fleet 링크가 있는 로봇만 기동 실패)
