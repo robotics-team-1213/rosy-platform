@@ -139,6 +139,14 @@ def test_a_starting_recording_is_active_owned_and_busy(rig):
     assert guard.owner() == "tok-a" and stopped(events) == []
 
 
+def test_the_guard_uses_the_shared_state_sets():
+    from pathlib import Path
+    from core_common.domain import pilot_recording as guard_module
+    src = Path(guard_module.__file__).read_text(encoding="utf-8")
+    assert "ACTIVE_STATES, STOPPABLE_STATES" in src
+    assert '("starting", "recording")' not in src
+
+
 def test_stop_while_starting_is_allowed_and_audited(rig):
     guard, calls, events, _ = rig
     _starting(guard, calls)

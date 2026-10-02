@@ -16,7 +16,8 @@ from std_msgs.msg import Bool, String
 from std_srvs.srv import SetBool
 
 from core_common.protocol.recording import (
-    ACTIVE_TOPIC, FETCHED_TOPIC, PILOT_RECORDING_ROOT, SET_ACTIVE_SERVICE, STATUS_TOPIC)
+    ACTIVE_STATES, ACTIVE_TOPIC, FETCHED_TOPIC, PILOT_RECORDING_ROOT, SET_ACTIVE_SERVICE,
+    STATUS_TOPIC)
 from . import executor_choice
 from .pilot_recording import DEFAULT_QUOTA_BYTES, DEFAULT_RESERVE_BYTES, PilotRecorder
 from .pilot_recording import recording_device
@@ -96,7 +97,7 @@ class PilotRecorderNode(Node):
         status = self._recorder.status()
         self._status_pub.publish(String(data=json.dumps(status)))
         # From `starting`: the camera's JPEG copy must flow before rosbag2 subscribes.
-        self._active_pub.publish(Bool(data=status['state'] in ('starting', 'recording', 'stopping')))
+        self._active_pub.publish(Bool(data=status['state'] in ACTIVE_STATES))
 
     def destroy_node(self):
         self._recorder.shutdown()

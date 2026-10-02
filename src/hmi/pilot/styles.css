@@ -338,8 +338,13 @@ body[data-pilot-screen="drive"] .pilot-main {
 [data-drive-fact=recording][data-state=recording],
 [data-drive-fact=recording][data-state=stopping] { color: var(--status-warn); }
 [data-drive-fact=recording][data-state=refused] { color: var(--status-crit); }
-/* 녹화 준비 중: 아직 기록하지 않는다 — 흐리게 보이지만 눌러 취소할 수 있다(disabled 아님) */
-[data-robot-record][data-state=starting] { opacity: 0.6; }
+/* 녹화 준비 중: 아직 기록하지 않는다. 켜진(누르면 취소) 버튼이라 흐리게(opacity) 하지 않고
+   조용한 잉크와 점선으로 구분한다. --ink-quiet 은 바탕 대비 어두운 테마 6.5:1, 밝은 테마 6.6:1
+   (card-2 위 4.9:1) — 4.5:1 이상. */
+ui-button[data-robot-record][data-state="starting"] {
+  color: var(--ink-quiet);
+  border: 1px dashed var(--ink-quiet);
+}
 [data-drive-fact=recording][hidden] { display: none; }
 [data-recordings-sheet] {
   position: absolute;

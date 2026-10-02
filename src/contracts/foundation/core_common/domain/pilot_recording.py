@@ -24,7 +24,7 @@ import threading
 import time
 from typing import Callable, Optional
 
-from core_common.protocol.recording import ACTIVE_STATES, RecorderStatus
+from core_common.protocol.recording import ACTIVE_STATES, STOPPABLE_STATES, RecorderStatus
 
 STATUS_STALE_S = 3.0
 LINK_GRACE_S = 5.0
@@ -33,9 +33,7 @@ STOP_RETRY_S = 3.0
 _REFUSAL_STATUS = {"RECORDING_BUSY": 409, "RECORDING_QUOTA_FULL": 507, "RECORDING_DISK_FULL": 507,
                    "RECORDING_NOT_ACTIVE": 409, "RECORDER_UNAVAILABLE": 503}
 _ACTIVE = ACTIVE_STATES
-#: A session the owner (or an admin) may stop, and that link loss or a seat change ends.
-#: `starting` counts: the writer is already running.
-_STOPPABLE = ("starting", "recording")
+_STOPPABLE = STOPPABLE_STATES   # `starting` counts: the writer is already running
 _log = logging.getLogger(__name__)
 
 

@@ -53,6 +53,8 @@ export function errorText(code, action) {
 // label 은 HUD 버튼 글자(짧게), ariaLabel 은 그 버튼이 하는 일, detail 은 그 옆 칩.
 // starting: 로봇의 기록기가 돌지만 아직 첫 파일을 열지 않았다(몇 초) — 켜져 있고 멈출 수 있지만
 // 기록은 아직 없으므로 시간을 세지 않는다. 운전은 "로봇 녹화 중지"(= recording)가 보인 뒤에.
+// 상태 묶음의 정본은 core_common.protocol.recording 의 ACTIVE_STATES(starting·recording·stopping:
+// 진행 중)와 STOPPABLE_STATES(starting·recording: 멈출 수 있음)다.
 export function recordingView(active) {
   const off = {recording: false, available: true, busy: false, starting: false,
                label: "로봇 녹화", ariaLabel: "로봇 녹화", detail: "", reason: ""};

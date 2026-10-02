@@ -104,6 +104,7 @@ def test_a_starting_recorder_names_its_session():
                                 bytes=0, max_duration_s=600, quota_free_bytes=10)
     assert status.state == "starting"
     assert rec.ACTIVE_STATES == ("starting", "recording", "stopping")
+    assert rec.STOPPABLE_STATES == ("starting", "recording")
     with pytest.raises(ValidationError):
         rec.RecorderStatus(state="starting", id=None, elapsed_s=0.0, bytes=0, max_duration_s=600,
                            quota_free_bytes=10)
