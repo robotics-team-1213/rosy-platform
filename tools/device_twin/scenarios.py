@@ -54,7 +54,7 @@ class Scenarios:
         self.r: Result | None = None
 
     # evidence helpers ----------------------------------------------------------------
-    def ev(self, command: str, *, check: bool = False, timeout: float = 900) -> str:
+    def ev(self, command: str, *, check: bool = False, timeout: float | None = None) -> str:
         done = self.twin.x(command, timeout=timeout, check=check)
         text = (done.stdout + (f"\n[stderr] {done.stderr.strip()}" if done.stderr.strip() else "")).strip()
         self.r.evidence.append((command, text[-3000:]))
@@ -457,9 +457,12 @@ class Scenarios:
         client = "rosy-twin-sshclient"
         run(["docker", "rm", "-f", client], check=False)
         run(["docker", "run", "-d", "--name", client, "--network", NET, IMAGE_BASE, "sleep", "infinity"])
+        # Per-step bound: a hung step is reported by name (and diagnosed) instead of ending the scenario.
+        self.twin.step_timeout = 90
         try:
             self._ssh(client, socket_only)
         finally:
+            self.twin.step_timeout = None
             run(["docker", "rm", "-f", client], check=False)
 
     def _ssh(self, client: str, socket_only: bool) -> None:
@@ -469,8 +472,23 @@ class Scenarios:
         ssh_opts = ("-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=5 "
                     "-o LogLevel=ERROR")
 
+        def diagnose(step: str) -> None:
+            text = t.out("journalctl -u ssh.service -u ssh.socket -n 30 --no-pager -o short-monotonic; ss -tnp; "
+                         "ps -eo pid,etime,stat,wchan:20,cmd | grep -E '[s]shd|[r]osy-ssh'; "
+                         "systemctl list-jobs --no-pager", check=False, timeout=60)
+            self.note(f"STEP TIMEOUT diagnostics: {step}", text)
+
         def on_client(command: str) -> subprocess.CompletedProcess:
-            return run(["docker", "exec", client, "bash", "-c", command], check=False, timeout=120)
+            # coreutils timeout inside the client, and a bound on docker exec itself.
+            argv = ["docker", "exec", client, "timeout", "60", "bash", "-c", command]
+            try:
+                done = run(argv, check=False, timeout=90)
+            except subprocess.TimeoutExpired:
+                done = subprocess.CompletedProcess(argv, 124, "", "docker exec did not return in 90 s")
+            if done.returncode == 124:
+                log(f"  STEP TIMEOUT on the client: {command[:160]}")
+                diagnose(command[:160])
+            return done
 
         def login_key(name: str) -> int:
             return on_client(f"ssh -i /root/{name} {ssh_opts} -o BatchMode=yes -o PreferredAuthentications=publickey "
@@ -552,6 +570,16 @@ class Scenarios:
         self.r.check("boot: rosy's shadow field is * and no password drop-in",
                      shadow() == "*" and not password_dropin(), shadow())
         self.r.check("sshd -t accepts the managed-keys drop-in", t.x("sshd -t", check=False).returncode == 0)
+        # The deny drop-in the helper writes when usermod cannot lock the password (D-418 review).
+        t.x("python3 -I -B -c \"import importlib.util as u; "
+            "s = u.spec_from_file_location('h', '/opt/rosy/native-runtime/rosy-ssh-access.py'); "
+            "m = u.module_from_spec(s); s.loader.exec_module(m); "
+            "open('/etc/ssh/sshd_config.d/60-rosy-temp-password.conf', 'w').write(m.PASSWORD_DENY_TEXT)\"")
+        deny_ok = t.x("sshd -t", check=False).returncode == 0
+        deny_says = sshd_says("rosy", "10.1.2.3", "passwordauthentication")
+        t.x("rm -f /etc/ssh/sshd_config.d/60-rosy-temp-password.conf")
+        self.r.check("sshd -t accepts the deny drop-in, and it refuses rosy's password from a private address",
+                     deny_ok and deny_says.endswith("no"), deny_says)
         rosy_files = sshd_says("rosy", "10.1.2.3", "authorizedkeysfile")
         root_files = sshd_says("root", "10.1.2.3", "authorizedkeysfile")
         self.r.check("the managed file is read for rosy only, beside the card's .ssh/authorized_keys",
@@ -662,7 +690,7 @@ class Scenarios:
         self.r.check("after the reboot the enrolled key still logs in", login_key("k3") == 0)
         status = request("password_status")
         self.r.check("password status after the reboot: off",
-                     status.get("result") == {"enabled": False, "expires_at": None}, status)
+                     status.get("result") == {"enabled": False, "expires_at": None, "lock_pending": False}, status)
         self.ev("cat /var/lib/rosy/ssh/history.jsonl")
 
         verify = {}
