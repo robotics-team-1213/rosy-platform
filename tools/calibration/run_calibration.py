@@ -63,7 +63,12 @@ RATE_HZ = 10.0
 BODY = PINKY_PRO
 PIVOT_MARGIN_M = BODY.margin_m
 SHORTEST_STRAIGHT_M = 0.05        # a shorter straight measures nothing useful: wait, then skip it
-CLEARANCE_WAIT_S = 3.0            # how long a blocked step waits (sending zero) before it is skipped
+CLEARANCE_WAIT_S = 3.0
+# D-424 follow-up: a running pivot ends on an evidence gap (no return, an unseen base sector,
+# an unknown band) only after this many consecutive 10 Hz ticks; a near return ends it at once.
+# 4 scans at 10 Hz, the same as the mission's rotate_coverage_debounce_ticks 8 (20 Hz ticks):
+# longest gap run in 43,625 real C1 scans was 3.
+PIVOT_GAP_DEBOUNCE_TICKS = 4            # how long a blocked step waits (sending zero) before it is skipped
 SCAN_STALE_S = 0.5
 MAX_REPEATS = 2
 # Repeat rule: per-straight wheel-radius estimates and per-pivot turn gains of one run.
@@ -178,6 +183,11 @@ def clearance_reason(sample, step: Step, lidar_yaw_deg, fresh=True, *, body=BODY
     if room > 0.0:
         return None
     return f"clearance: the {'rear' if step.linear < 0 else 'front'} stop gap is reached"
+
+
+def pivot_kind(sample, lidar_yaw_deg, *, body=BODY, self_mask=()):
+    """RobotBody.rotation_check kind for a pivot on this scan (None = clear)."""
+    return body.rotation_check(_view(sample, lidar_yaw_deg, body, self_mask), PIVOT_MARGIN_M)[0]
 
 
 def plan_step(sample, step: Step, lidar_yaw_deg, fresh=True, *, body=BODY, self_mask=()):
@@ -325,6 +335,7 @@ def drive(core: Core, steps, lidar_yaw_deg, log, stop_event=None, *, body=BODY, 
                 step = planned
             log(f"{step.name}: v={step.linear:+.3f} w={step.angular:+.2f} {step.seconds:.1f}s")
             end = time.monotonic() + step.seconds
+            gap_ticks = 0
             while time.monotonic() < end:
                 tick = time.monotonic()
                 if stop_event is not None and stop_event.is_set():
@@ -335,9 +346,18 @@ def drive(core: Core, steps, lidar_yaw_deg, log, stop_event=None, *, body=BODY, 
                 if reason and (step.linear or step.angular):
                     if scan_problem(sample, fresh):
                         return f"{step.name}: {reason}"
+                    if step.linear == 0.0 and pivot_kind(sample, lidar_yaw_deg, **look) != "near":
+                        # D-424 follow-up: one flickering scan (an unseen sector, no return)
+                        # ends a pivot only after PIVOT_GAP_DEBOUNCE_TICKS in a row.
+                        gap_ticks += 1
+                        if gap_ticks < PIVOT_GAP_DEBOUNCE_TICKS:
+                            core.teleop(step.linear, step.angular)
+                            tick_wait(tick)
+                            continue
                     log(f"{step.name}: ended early, {reason}")
                     adjustments.append({"step": step.name, "action": "ended_early", "note": reason})
                     break
+                gap_ticks = 0
                 core.teleop(step.linear, step.angular)   # zero during rests keeps the deadman fed
                 tick_wait(tick)
         return None
@@ -349,12 +369,15 @@ def drive(core: Core, steps, lidar_yaw_deg, log, stop_event=None, *, body=BODY, 
 
 # --- repeat rule ----------------------------------------------------------------
 
-def repeat_reason(run, adjustments=(), moving_steps=None):
+def repeat_reason(run, adjustments=(), steps=()):
     """Why the run must be repeated (None = accept the run for the candidate). D-424 review
-    M5: a run whose moving steps were all skipped is never a success, whatever was recorded."""
-    skipped = sum(1 for a in adjustments if a.get("action") == "skipped")
-    if moving_steps and skipped >= moving_steps:
-        return f"every moving step was skipped for clearance ({skipped} of {moving_steps})"
+    M5 and follow-up: a run that skipped every straight, or every pivot, for clearance is
+    never a success, whatever was recorded (`steps` = the protocol that was driven)."""
+    skipped = {a.get("step") for a in adjustments if a.get("action") == "skipped"}
+    for kind, chosen in (("straight", [s for s in steps if s.linear]),
+                         ("pivot", [s for s in steps if s.angular and not s.linear])):
+        if chosen and all(s.name in skipped for s in chosen):
+            return f"every {kind} step was skipped for clearance ({len(chosen)} of {len(chosen)})"
     recs = [r for r in run["records"] if "error" not in r]
     radii = [r["ds"] / ((r["phi_l"] + r["phi_r"]) / 2) for r in recs
              if r["kind"] == "straight" and abs(r["phi_l"] + r["phi_r"]) > 1.0]
@@ -446,7 +469,7 @@ def _run_robot(name, host, code, args, results, stop_event, live, state, log):
         sessions.append(local)
         import analyze_session as AS
         run = AS.analyse_run(local, yaw, AS.load_profile())
-        why = repeat_reason(run, adjustments, sum(1 for s in steps if s.linear or s.angular))
+        why = repeat_reason(run, adjustments, steps)
         log(f"attempt {attempt}: {'accepted run' if why is None else 'repeat: ' + why}")
         if why is None:
             break
