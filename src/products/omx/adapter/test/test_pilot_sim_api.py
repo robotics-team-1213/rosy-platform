@@ -95,6 +95,8 @@ def test_serves_pilot_and_only_allowlisted_assets():
     assert client.get("/pilot").status_code == 200
     assert client.get("/pilot/assets/app.js").status_code == 200
     assert client.get("/pilot/assets/screens/arm.js").status_code == 200
+    for asset in ("controls.js", "arm-stick.js", "screens/compose.js", "widgets/joint_jog.js"):  # D-411 B
+        assert client.get(f"/pilot/assets/{asset}").status_code == 200, asset
     assert client.get("/pilot/assets/secret.env").status_code == 404
     assert client.get("/common/tokens.css").status_code == 200
     assert client.get(f"{PREFIX}/target").json()["kind"] == "omx_sim"

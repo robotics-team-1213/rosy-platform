@@ -1,36 +1,49 @@
-// OMX-AI Gazebo practice. Every press submits one bounded trajectory goal.
+// OMX-AI Gazebo practice (D-390, D-411 B). The target's rosy.controls/1 descriptor decides the
+// widgets; every input submits one bounded trajectory goal and the next only after it settles.
+import {readControls, fallbackOmxControls} from "../controls.js";
+import {composeControls} from "./compose.js";
+import {mountJointJog} from "../widgets/joint_jog.js";
+
+const TERMINAL = ["SUCCEEDED", "REJECTED", "CANCELED", "UNKNOWN_HOLD"];
+const GOAL_POLL_MS = 250;   // a settled goal is seen before the 1 s heartbeat (sequential jog)
+
 export function mountArm(root, target, driver) {
   const tokenKey = `rosy.pilot.omx-sim.${location.origin}`;
   let token = sessionStorage.getItem(tokenKey) || "";
   let seat = "";
   let state = null;
   let active = "";
-  let joint = target.joints[0];
   let disposed = false;
   let refreshing = false;
   let recording = null;
   let recordingError = "";
   let previewUrl = "";
   let connectionGeneration = 0;
+  let pollTimer = null;
+  const listeners = new Set();
 
-  root.innerHTML = `<h2>OMX-AI Gazebo 연습</h2>
-    <p>시뮬레이션 전용 · 실제 로봇과 연결되지 않습니다.</p>
+  root.innerHTML = `<header class="arm-head"><h2>OMX-AI Gazebo 연습</h2>
+      <p>시뮬레이션 전용 · 실제 로봇과 연결되지 않습니다.</p></header>
     <div data-sim-pair><label>화면에 표시된 페어링 코드 <input class="ui-field" data-sim-code autocomplete="off"></label>
       <ui-button kind="primary" type="button" data-sim-connect>연결</ui-button></div>
-    <p data-sim-status role="status">연결 대기</p>
-    <div data-sim-controls hidden>
-      <label>관절 <select class="ui-field" data-sim-joint></select></label>
-      <div class="sim-jog"><ui-button kind="quiet" type="button" data-sim-delta="-0.02">− 0.02 rad</ui-button>
-        <ui-button kind="quiet" type="button" data-sim-delta="0.02">+ 0.02 rad</ui-button></div>
-      <p>그리퍼</p><div class="sim-jog"><ui-button kind="quiet" type="button" data-sim-gripper="-0.02">닫기</ui-button>
-        <ui-button kind="quiet" type="button" data-sim-gripper="0.02">열기</ui-button></div>
-      <ui-button kind="quiet" type="button" data-sim-cancel>진행 중 명령 취소</ui-button>
-      <pre data-sim-readback></pre>
+    <p data-sim-status role="status" aria-live="polite">연결 대기</p>
+    <div class="arm-console" data-sim-controls hidden>
+      <section class="arm-view" aria-label="작업 공간">
+        <figure class="arm-camera" ${target.recording ? "" : "hidden"}>
+          <img data-sim-camera alt="Gazebo 작업 공간" width="320" height="240" hidden>
+          <figcaption data-sim-camera-status role="status">영상 확인 중</figcaption>
+        </figure>
+        <pre data-sim-readback aria-label="관절 readback"></pre>
+      </section>
+      <div class="arm-controls" data-sim-widgets></div>
+      <div class="arm-actions">
+        <ui-button kind="quiet" type="button" data-sim-cancel disabled reason="진행 중 명령 없음"
+          aria-describedby="arm-cancel-help">진행 중 명령 취소</ui-button>
+        <p class="arm-hint" id="arm-cancel-help">취소하면 시뮬레이션 팔이 보류(HOLD) 상태가 됩니다. 평소에는 손을 떼면 됩니다.</p>
+      </div>
       <section data-sim-record-panel ${target.recording ? "" : "hidden"}>
         <h3>시연 기록</h3>
         <p>영상·관절 상태·수락된 조작 목표를 기록합니다. 결과는 직접 선택하세요.</p>
-        <img data-sim-camera alt="Gazebo 작업 공간" width="320" height="240" hidden>
-        <p data-sim-camera-status role="status">영상 확인 중</p>
         <label>연습 과제 <input class="ui-field" data-sim-task maxlength="300" placeholder="예: 물체를 향해 관절을 이동"></label>
         <ui-button kind="primary" type="button" data-sim-record-start>기록 시작</ui-button>
         <label>과제 결과 <select class="ui-field" data-sim-outcome><option value="unspecified">결과 선택</option>
@@ -42,19 +55,27 @@ export function mountArm(root, target, driver) {
   const $ = (selector) => root.querySelector(selector);
   const controls = $("[data-sim-controls]");
   const status = $("[data-sim-status]");
-  const select = $("[data-sim-joint]");
-  for (const name of target.joints) select.add(new Option(name, name));
-  select.addEventListener("change", () => { joint = select.value; });
+  const cancel = $("[data-sim-cancel]");
 
+  function notify(update) {
+    cancel.disabled = !active;
+    if (active) cancel.removeAttribute("reason"); else cancel.setAttribute("reason", "진행 중 명령 없음");
+    for (const listener of [...listeners]) listener(update);
+  }
   async function request(path, options = {}) {
     return driver.request(path, {token, ...options});
   }
   function showError(error) {
     status.textContent = `조작 보류 · ${error.message}`;
-    controls.querySelectorAll("[data-sim-delta], [data-sim-gripper]").forEach((button) => {
+    controls.querySelectorAll("[data-sim-widgets] ui-button, [data-sim-widgets] input").forEach((button) => {
       button.disabled = true;
       button.setAttribute("reason", "조작 보류");
     });
+    notify({state: null, settled: null, error});
+  }
+  function schedulePoll() {
+    clearTimeout(pollTimer);
+    pollTimer = active && !disposed ? setTimeout(() => refresh({goalOnly: true}), GOAL_POLL_MS) : null;
   }
   async function connect() {
     if (disposed || document.hidden) return;
@@ -79,27 +100,30 @@ export function mountArm(root, target, driver) {
       showError(error);
     }
   }
-  async function refresh() {
+  async function refresh({goalOnly = false} = {}) {
     if (!seat || disposed || refreshing) return;
     refreshing = true;
+    let failed = false;
     try {
       state = await request("/state");
       if (disposed) return;
+      let settled = null;
       if (active) {
         const goal = await request(`/goals/${encodeURIComponent(active)}`);
+        if (disposed) return;
         status.textContent = `명령 ${goal.state}${goal.reason ? ` · ${goal.reason}` : ""}`;
-        if (["SUCCEEDED", "REJECTED", "CANCELED", "UNKNOWN_HOLD"].includes(goal.state)) active = "";
+        if (TERMINAL.includes(goal.state)) { settled = {commandId: active, state: goal.state}; active = ""; }
       } else status.textContent = state.ready ? "조작 가능" : `조작 보류 · ${state.owner_state}`;
       $("[data-sim-readback]").textContent = JSON.stringify({sequence: state.state_sequence,
         age_ms: state.joint_age_ms, joints: state.positions, goal: active || null}, null, 2);
-      controls.querySelectorAll("[data-sim-delta], [data-sim-gripper]").forEach((button) => {
-        button.disabled = !state.ready || Boolean(active);
-        if (!button.disabled) button.removeAttribute("reason");
-        else button.setAttribute("reason", active ? "명령 진행 중" : "조작 보류");
-      });
-      if (target.recording) await refreshRecording();
-    } catch (error) { state = null; showError(error); }
-    finally { refreshing = false; }
+      notify({state, settled, error: null});
+      if (target.recording && !goalOnly) await refreshRecording();
+    } catch (error) { failed = true; state = null; showError(error); }
+    finally {
+      refreshing = false;
+      // A goal submitted while this refresh ran is polled from here (its own refresh was skipped).
+      if (!failed) schedulePoll();
+    }
   }
   async function refreshRecording() {
     recording = await request("/recordings");
@@ -156,23 +180,37 @@ export function mountArm(root, target, driver) {
     }
   }
   document.addEventListener("visibilitychange", visibilityChanged);
-  async function jog(name, delta) {
-    if (!seat || !state?.ready || active || !state.positions || !(name in state.positions)) return;
-    const requestId = crypto.randomUUID();
-    try {
-      const goal = await request("/goals", {method: "POST", body: JSON.stringify({
-        instance_id: target.instance_id, seat_id: seat, request_id: requestId,
-        joint: name, delta_rad: delta, duration_s: 0.4,
-        state_sequence: state.state_sequence, expires_at_ms: Date.now() + 5000,
-      })});
-      active = goal.command_id;
-      await refresh();
-    } catch (error) { showError(error); }
-  }
+
+  // What widgets see: the latest readback, one goal at a time, and terminal states.
+  const session = {
+    target,
+    state: () => state,
+    busy: () => Boolean(active),
+    onUpdate(listener) { listeners.add(listener); return () => listeners.delete(listener); },
+    // Resolves to the accepted command id, or null when nothing was sent or it was refused.
+    async submitJog(name, delta, durationS = 0.4) {
+      if (!seat || !state?.ready || active || !state.positions || !(name in state.positions)) return null;
+      try {
+        const goal = await request("/goals", {method: "POST", body: JSON.stringify({
+          instance_id: target.instance_id, seat_id: seat, request_id: crypto.randomUUID(),
+          joint: name, delta_rad: delta, duration_s: durationS,
+          state_sequence: state.state_sequence, expires_at_ms: Date.now() + 5000,
+        })});
+        if (disposed) return null;
+        active = goal.command_id;
+        status.textContent = `명령 ${goal.state}`;
+        notify({state, settled: null, error: null});
+        if (!refreshing) schedulePoll();
+        return active;
+      } catch (error) { showError(error); return null; }
+    },
+    async submitGripper() { return null; },   // D-411 C
+  };
+  const items = readControls(target.controls) ?? fallbackOmxControls(target);
+  const disposeWidgets = composeControls($("[data-sim-widgets]"), items, {joint_jog: mountJointJog}, session);
+
   $("[data-sim-connect]").addEventListener("click", connect);
-  root.querySelectorAll("[data-sim-delta]").forEach((button) => button.addEventListener("click", () => jog(joint, Number(button.dataset.simDelta))));
-  root.querySelectorAll("[data-sim-gripper]").forEach((button) => button.addEventListener("click", () => jog(target.gripper, Number(button.dataset.simGripper))));
-  $("[data-sim-cancel]").addEventListener("click", async () => {
+  cancel.addEventListener("click", async () => {
     if (!active) return;
     try { await request(`/goals/${encodeURIComponent(active)}/cancel?seat_id=${encodeURIComponent(seat)}`, {method: "POST"}); await refresh(); }
     catch (error) { showError(error); }
@@ -186,6 +224,9 @@ export function mountArm(root, target, driver) {
   return () => {
     disposed = true;
     clearInterval(interval);
+    clearTimeout(pollTimer);
+    disposeWidgets();
+    listeners.clear();
     document.removeEventListener("visibilitychange", visibilityChanged);
     if (previewUrl) URL.revokeObjectURL(previewUrl);
     release();

@@ -49,6 +49,8 @@ PILOT_MIME = {
     "screens/inputs.js": "application/javascript",
     "screens/robot-recording.js": "application/javascript",
     "screens/arm.js": "application/javascript",
+    "screens/compose.js": "application/javascript",
+    "widgets/joint_jog.js": "application/javascript",
     "input-state.js": "application/javascript",
     "vision.js": "application/javascript",
     "manifest.webmanifest": "application/manifest+json",
@@ -190,11 +192,35 @@ def whoami(request: Request):
             "source": "dev", "created_at": "", "expires_at": None}
 
 
+#: D-411 B rosy.controls/1 — CORE 와 같은 기본(base_velocity 하나, 최대값 = manual 한도).
+#: 시험 훅 POST /__test__/controls: {"extra": item} 항목 덧붙임, {"omit": true} 키 생략(구 CORE),
+#: {"items": []} 빈 목록, {} 기본 복원.
+_BASE_CONTROL = {"id": "base", "kind": "base_velocity", "label": "주행", "max_linear": 0.15,
+                 "max_angular": 0.6, "pivot": True, "fine": True, "autonomy": ["line"]}
+CONTROLS: dict = {"items": [_BASE_CONTROL], "omit": False}
+
+
+@app.post("/__test__/controls")
+async def controls_script(request: Request):
+    body = await request.json()
+    if not body:
+        CONTROLS.update(items=[_BASE_CONTROL], omit=False)
+    if "items" in body:
+        CONTROLS["items"] = list(body["items"])
+    if "extra" in body:
+        CONTROLS["items"] = [*CONTROLS["items"], body["extra"]]
+    if "omit" in body:
+        CONTROLS["omit"] = bool(body["omit"])
+    return CONTROLS
+
+
 @app.get("/api/v1/system/capabilities")
 def capabilities(request: Request):
     if _role(request) is None:
         return JSONResponse({"detail": "unauthorized"}, status_code=401)
-    return CAPABILITIES
+    if CONTROLS["omit"]:
+        return CAPABILITIES
+    return {**CAPABILITIES, "controls": {"schema": "rosy.controls/1", "items": CONTROLS["items"]}}
 
 
 @app.post("/api/v1/mode")

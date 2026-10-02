@@ -25,6 +25,7 @@ install(FILES
 install(DIRECTORY
   drivers
   screens
+  widgets
   icons
   DESTINATION share/${PROJECT_NAME}
 )

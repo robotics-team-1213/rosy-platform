@@ -46,7 +46,11 @@ class Runtime:
         pass
 
     def controls(self):
-        return {"schema": "rosy.controls/1", "items": []}
+        # D-411 B: the screen draws what the target announces (an empty list = no controls).
+        return {"schema": "rosy.controls/1", "items": [{
+            "id": "arm", "kind": "joint_jog", "label": "팔", "max_step_rad": 0.05, "duration_s": 0.4,
+            "command": "bounded_goal", "joints": [{"name": "joint1", "lower": -1.0, "upper": 1.0},
+                                                  {"name": "gripper_joint_1", "lower": -0.01, "upper": 0.019}]}]}
 
 
 def test_sim_pilot_pair_and_jog_rendered():
@@ -81,6 +85,8 @@ def test_sim_pilot_pair_and_jog_rendered():
                 assert len(runtime.jogs) == 1
                 assert runtime.jogs[0].joint == "joint1"
                 assert runtime.jogs[0].delta_rad == 0.02
+                assert runtime.jogs[0].duration_s == 0.4
+                assert page.locator("[data-arm-pad]").is_visible()
                 assert errors == []
             finally:
                 browser.close()

@@ -30,7 +30,7 @@ export function profileFromBaseVelocity(control) {
 // SIM servers before v1.76 have no `controls`: the legacy screen jogged every joint and the
 // gripper by 0.02 rad, so that is the fallback (limits unknown → null).
 export function fallbackOmxControls(target) {
-  const names = [...(target?.joints ?? []), ...(target?.gripper ? [target.gripper] : [])];
+  const names = [...new Set([...(target?.joints ?? []), ...(target?.gripper ? [target.gripper] : [])])];
   return [{id: "arm", kind: "joint_jog", label: "팔", max_step_rad: 0.02, duration_s: 0.4,
            command: "bounded_goal", joints: names.map((name) => ({name, lower: null, upper: null}))}];
 }

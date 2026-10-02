@@ -237,6 +237,8 @@ def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
         "screens/inputs.js": "application/javascript",
         "screens/robot-recording.js": "application/javascript",
         "screens/arm.js": "application/javascript",
+        "screens/compose.js": "application/javascript",
+        "widgets/joint_jog.js": "application/javascript",
         "input-state.js": "application/javascript",
         "vision.js": "application/javascript",
         "manifest.webmanifest": "application/manifest+json",

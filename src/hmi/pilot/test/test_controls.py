@@ -78,3 +78,8 @@ def test_omx_fallback_keeps_the_legacy_gripper_jog():
     (jog,) = out
     assert jog["kind"] == "joint_jog" and jog["max_step_rad"] == 0.02
     assert [j["name"] for j in jog["joints"]] == ["joint1", "joint2", "gripper_joint_1"]
+
+
+def test_omx_fallback_lists_a_joint_once():
+    out = _run_js("console.log(JSON.stringify(m.fallbackOmxControls({joints: ['joint1'], gripper: 'joint1'})))")
+    assert [j["name"] for j in out[0]["joints"]] == ["joint1"]

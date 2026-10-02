@@ -27,9 +27,11 @@ const STATE_POLL_MS = 500;
 const DEG = 180 / Math.PI;
 const PRESET_LABEL = {low: "저", mid: "중", high: "고"};
 
-export function mountDrive(root, {onExit} = {}) {
+// `profile` comes from the device's base_velocity control (D-411 B); `unsupported` lists the
+// controls this screen cannot draw — shown, never fatal.
+export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}) {
   const gate = driverFor("pinky_core");
-  const profile = gate.profile ?? {};
+  const profile = given ?? gate.profile ?? {};
   const element = {};
   let engaged = false;
   // 이 화면이 실제로 MANUAL 을 잡았는가(engage 가 200). 잡은 적 없는 화면이 나가면서
@@ -38,6 +40,13 @@ export function mountDrive(root, {onExit} = {}) {
 
   const drive = root;
   root.replaceChildren(buildStage(), buildControls(profile));
+  if (unsupported.length) {
+    const notes = el("div", null, {"data-drive-unsupported": ""});
+    for (const control of unsupported) {
+      notes.append(el("p", `지원하지 않는 조작부 · ${control.label || control.kind}`, {"data-control-unsupported": ""}));
+    }
+    root.querySelector("[data-drive-stage]").append(notes);
+  }
   for (const [key, selector] of Object.entries({
     stage: "[data-drive-stage]", frame: "[data-drive-frame]", empty: "[data-drive-empty]",
     hud: "[data-drive-hud]", stick: "[data-drive-stick]", knob: "[data-drive-stick-knob]",
