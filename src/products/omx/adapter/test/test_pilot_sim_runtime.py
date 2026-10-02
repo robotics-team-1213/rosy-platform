@@ -201,10 +201,29 @@ def test_gripper_goal_faster_than_the_gripper_speed_is_rejected():
     arm = Arm()
     runtime = _gripper_runtime(arm, gripper_velocity=0.1)
     runtime.snapshot()
-    # 0.09 rad in 0.8 s = 0.1125 rad/s > 0.1; the same move over 1.0 s = 0.09 rad/s is admitted.
-    assert runtime.submit_gripper(grip(0.09))["reason"] == "gripper_velocity_limit"
+    # 0.095 rad in 0.2 s needs 0.475 rad/s; the bound is 0.1 x 0.2 s + 0.05 rad slack = 0.07 rad.
+    assert runtime.submit_gripper(grip(0.095, duration_s=0.2))["reason"] == "gripper_velocity_limit"
     assert not arm.commands
-    assert runtime.submit_gripper(grip(0.09, request_id="slow", duration_s=1.0))["state"] == "LOCAL_ACCEPTED"
+    assert runtime.submit_gripper(grip(0.095, request_id="slow", duration_s=0.5))["state"] == "LOCAL_ACCEPTED"
+
+
+def test_gripper_speed_check_tolerates_small_readback_drift_but_not_more():
+    """The client sizes a goal at max_velocity from one readback; the readback drifts before dispatch."""
+    from omx_adapter.pilot_sim_gripper import GRIPPER_TOLERANCE_RAD
+    arm = Arm()
+    arm.owner.config = ArmCommandConfig(
+        enabled=True, workcell_id="sim", instance_id="instance", joint_names=("joint1", "gripper_joint_1"),
+        position_limits={"joint1": (-1, 1), "gripper_joint_1": (-0.1, 1.1)},
+        allowed_owners=("pilot_sim",), calibration_revision="sim")
+    runtime = PilotSimRuntime(arm, gripper_open=1.0, gripper_closed=0.0, gripper_velocity=0.5, gripper_preload=0.05)
+    _readback(arm, 8, gripper_joint_1=-0.003)     # sized from 0.000: 0.5 rad in 1.0 s at exactly 0.5 rad/s
+    runtime.snapshot()
+    assert runtime.submit_gripper(grip(0.5, duration_s=1.0))["state"] == "LOCAL_ACCEPTED"
+    _terminal(runtime, "grip")
+    _readback(arm, 9, gripper_joint_1=0.5 - 0.5 - GRIPPER_TOLERANCE_RAD - 0.01)   # drifted beyond the slack
+    runtime.snapshot()
+    assert runtime.submit_gripper(grip(0.5, sequence=9, request_id="far", duration_s=1.0))["reason"] == (
+        "gripper_velocity_limit")
 
 
 def test_gripper_goal_obeys_the_single_active_goal_rule():
@@ -234,7 +253,7 @@ def test_jog_no_longer_admits_the_gripper_joint():
 def test_snapshot_reports_gripper_state():
     snap = _gripper_runtime().snapshot()
     assert snap["gripper"] == {"joint": "gripper_joint_1", "position": 0.0, "state": "closed",
-                               "open": 0.1, "closed": 0.0}
+                               "open": 0.1, "closed": 0.0, "hold_target": None}
     assert "gripper" not in PilotSimRuntime(Arm()).snapshot()
 
 
@@ -248,7 +267,8 @@ def test_snapshot_gripper_is_unknown_on_stale_readback_or_hold():
         positions={"joint1": 0.0, "gripper_joint_1": 0.0}, sequence=9,
         received_at=time.monotonic() - 5, calibration_revision="sim")
     assert runtime.snapshot()["gripper"] == {"joint": "gripper_joint_1", "position": None,
-                                             "state": "unknown", "open": 0.1, "closed": 0.0}
+                                             "state": "unknown", "open": 0.1, "closed": 0.0,
+                                             "hold_target": None}
 
 
 def test_the_watchdog_samples_gripper_motion_between_state_polls():
@@ -418,3 +438,84 @@ def test_server_builds_admission_from_the_cell_profile_and_two_second_goals():
             in source)
     assert "gripper_velocity=gripper_velocity, gripper_preload=cell.gripper_preload_rad" in source
     assert "(-3.0, 3.0)" not in source and "(-0.5, 0.5)" not in source
+
+
+def test_a_holding_close_is_reissued_once_at_stall_plus_preload():
+    """Gazebo 2026-10-03: after SUCCEEDED the JTC keeps the close's own last point (full stall error);
+    the first arm jog then relaxed the grip (0.359 -> 0.377 rad). One hold goal makes them equal."""
+    arm = Arm()
+    runtime = _gripper_runtime(arm)
+    _hold_an_object(arm, runtime)
+    assert runtime.snapshot()["gripper"]["hold_target"] == pytest.approx(0.05)
+    runtime.on_watchdog()
+    hold = arm.commands[-1]
+    assert hold.command_id == "hold-grip" and hold.positions == {"joint1": 0.0, "gripper_joint_1": pytest.approx(0.05)}
+    assert hold.duration_s == 0.2                       # 0.02 rad at 0.5 rad/s -> the 0.2 s minimum
+    assert runtime.snapshot()["owner_state"] == "active"
+    assert runtime.snapshot()["gripper"]["state"] == "holding"   # still the close goal's grasp
+    _terminal(runtime, "hold-grip")
+    runtime.on_watchdog()
+    assert len(arm.commands) == 2                       # once, not on every watchdog tick
+
+
+def test_no_hold_goal_after_a_close_on_nothing_or_an_open():
+    arm = Arm()
+    runtime = _gripper_runtime(arm)
+    _hold_an_object(arm, runtime, stall=0.01)
+    runtime.on_watchdog()
+    assert [command.command_id for command in arm.commands] == ["grip"]
+    arm = Arm()
+    runtime = _gripper_runtime(arm)
+    runtime.snapshot()
+    runtime.submit_gripper(grip(0.08))
+    _readback(arm, 9, gripper_joint_1=0.08)
+    _terminal(runtime, "grip")
+    runtime.on_watchdog()
+    assert [command.command_id for command in arm.commands] == ["grip"]
+
+
+def test_the_hold_waits_for_the_owner_and_a_fresh_readback():
+    arm = Arm()
+    runtime = _gripper_runtime(arm)
+    _hold_an_object(arm, runtime)
+    arm.owner.state = "active"
+    runtime.on_watchdog()
+    arm.owner.state = "ready"
+    arm.latest_joint_state = JointStateSnapshot(positions={"joint1": 0.0, "gripper_joint_1": 0.07}, sequence=11,
+                                                received_at=time.monotonic() - 5, calibration_revision="sim")
+    runtime.on_watchdog()
+    assert len(arm.commands) == 1
+    _readback(arm, 12, gripper_joint_1=0.07)
+    runtime.on_watchdog()
+    assert arm.commands[-1].command_id == "hold-grip"
+
+
+def test_without_a_terminal_readback_the_first_fresh_one_is_the_stall():
+    arm = Arm()
+    runtime = _gripper_runtime(arm)
+    _readback(arm, 8, gripper_joint_1=0.1)
+    runtime.snapshot()
+    runtime.submit_gripper(grip(0.0, duration_s=1.0))
+    arm.latest_joint_state = None                        # nothing at the terminal callback
+    _terminal(runtime, "grip")
+    assert runtime._gripper_stall is None
+    _readback(arm, 9, gripper_joint_1=0.07)
+    runtime.on_watchdog()                                # samples the stall, then issues the hold
+    assert runtime._gripper_stall == 0.07
+    assert arm.commands[-1].positions["gripper_joint_1"] == pytest.approx(0.05)
+
+
+def test_failed_terminal_reason_format_is_status_and_result_code():
+    """Pinned: probe_pilot_sim_http.terminal_facts parses exactly this format."""
+    runtime = _gripper_runtime()
+    runtime.snapshot()
+    runtime.submit_gripper(grip(0.05))
+    _terminal(runtime, "grip", status=4, result_code=-5)
+    assert runtime.goal("grip")["reason"] == "terminal_status_4_result_-5"
+    runtime = PilotSimRuntime(Arm())
+    runtime.snapshot()
+    runtime.submit(jog())
+    runtime.on_goal_event(RosGoalEvent(kind="TERMINAL_RESULT", command_id="request", phase_id=None,
+                                       goal_id=str(uuid4()), observed_at_monotonic_s=time.monotonic(),
+                                       sequence=1, status=6))
+    assert runtime.goal("request")["reason"] == "terminal_status_6_result_None"

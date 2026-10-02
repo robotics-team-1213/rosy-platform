@@ -15,7 +15,9 @@ from core_common.protocol.controls import (
     BOUNDED_JOG_MAX_STEP_RAD, ControlsDescriptor, GripperControl, GripperPresets, JointJogControl,
     JointRange,
 )
-from core_common.protocol.omx_sim import OmxSimGripperGoal, OmxSimJog
+from core_common.protocol.omx_sim import (
+    GRIPPER_GOAL_MAX_DURATION_S, GRIPPER_GOAL_MIN_DURATION_S, OmxSimGripperGoal, OmxSimJog,
+)
 
 from .command_owner import TrajectoryCommand
 from .kinematics import DEFAULT_KINEMATICS_PATH
@@ -101,6 +103,7 @@ class PilotSimRuntime:
         self.gripper_preload = None if gripper_preload is None else float(gripper_preload)
         self._gripper_goal: tuple[str, float] | None = None   # (command_id, target)
         self._gripper_stall: float | None = None              # readback when that goal SUCCEEDED
+        self._hold_pending = False                            # re-issue the squeeze after a holding close
         self._gripper_samples: collections.deque = collections.deque(maxlen=32)
         self.camera_available = False
         self.capture = None
@@ -153,6 +156,21 @@ class PilotSimRuntime:
         with self._lock:
             if not self._gripper_samples or self._gripper_samples[-1][0] != state.sequence:
                 self._gripper_samples.append((state.sequence, state.received_at, state.positions[self.gripper]))
+            # No readback at the terminal callback: the first fresh one afterwards is the stall.
+            if (self._gripper_stall is None and self._gripper_goal is not None
+                    and self._goals.get(self._gripper_goal[0], {}).get("state") == "SUCCEEDED"
+                    and 0 <= time.monotonic() - state.received_at <= self.arm.owner.config.max_joint_state_age_s):
+                self._record_stall(state.positions[self.gripper])
+
+    def _record_stall(self, position: float | None) -> None:
+        self._gripper_stall = position
+        closed = self._gripper_spec[1]
+        # After SUCCEEDED the controller keeps commanding the close goal's own last point (JTC
+        # set_success_trajectory_point), i.e. the full stall error. A holding close is re-issued
+        # once at stall + preload so the idle squeeze equals the bounded squeeze of later arm goals.
+        self._hold_pending = (position is not None and self._gripper_goal is not None
+                              and abs(self._gripper_goal[1] - closed) <= GRIPPER_TOLERANCE_RAD
+                              and abs(position - closed) > GRIPPER_TOLERANCE_RAD)
 
     def _gripper_snapshot(self, state) -> dict:
         open_, closed = self._gripper_spec
@@ -166,9 +184,11 @@ class PilotSimRuntime:
             if self._gripper_goal is not None and self._gripper_goal[0] in self._goals:
                 command_id, target = self._gripper_goal
                 goal = {"target": target, "state": self._goals[command_id]["state"]}
+            hold_target = self._held_gripper_target()
         return {"joint": self.gripper, "position": position, "open": open_, "closed": closed,
                 "state": gripper_state(position=position, fresh=position is not None, closed=closed,
-                                       goal=goal, moved_recently=moved)}
+                                       goal=goal, moved_recently=moved),
+                "hold_target": hold_target}
 
     def controls(self) -> dict:
         """rosy.controls/1 for this SIM workcell (D-411 B, C). Bounded goals only (D-390 §2).
@@ -239,7 +259,8 @@ class PilotSimRuntime:
             offered_lower, offered_upper = self._offered[self.gripper]
             if not offered_lower <= goal.position <= offered_upper:
                 return "gripper_limit"
-            if abs(goal.position - readback) / goal.duration_s > self.gripper_velocity:
+            # Bounded slack: the readback the client sized the goal from may have drifted a little.
+            if abs(goal.position - readback) - GRIPPER_TOLERANCE_RAD > self.gripper_velocity * goal.duration_s:
                 return "gripper_velocity_limit"
             target[self.gripper] = goal.position
             return ""
@@ -251,6 +272,7 @@ class PilotSimRuntime:
             if result["state"] != "REJECTED":
                 self._gripper_goal = (goal.request_id, goal.position)
                 self._gripper_stall = None
+                self._hold_pending = False
             return result
 
     def _dispatch(self, request_id: str, instance_id: str, state_sequence: int, duration_s: float,
@@ -277,6 +299,11 @@ class PilotSimRuntime:
             reason = place(target, config.position_limits)
             if reason:
                 return {"command_id": request_id, "state": "REJECTED", "reason": reason}
+            return self._send(request_id, state, target, duration_s)
+
+    def _send(self, request_id: str, state, target: dict, duration_s: float) -> dict:
+        with self._lock:
+            config = self.arm.owner.config
             command = TrajectoryCommand(
                 workcell_id=config.workcell_id, instance_id=config.instance_id,
                 command_id=request_id, session_id=self.arm.owner.session_id,
@@ -351,7 +378,7 @@ class PilotSimRuntime:
                     if self._gripper_goal is not None and self._gripper_goal[0] == event.command_id:
                         # The stall position a holding squeeze is bounded from (never closed itself).
                         state = self.arm.latest_joint_state
-                        self._gripper_stall = None if state is None else state.positions.get(self.gripper)
+                        self._record_stall(None if state is None else state.positions.get(self.gripper))
                 elif event.status == 5:
                     receipt.update(state="CANCELED", ros_goal_id=event.goal_id)
                 else:
@@ -373,8 +400,27 @@ class PilotSimRuntime:
                     # Storage failures must never erase the controller's outcome.
                     self._interrupt_capture("capture_io_or_source_error")
 
+    def _issue_hold(self) -> None:
+        """One goal that moves only the gripper target to stall + preload (D-411 C review L1)."""
+        with self._lock:
+            if not self._hold_pending or self._active is not None or self.arm.owner.state != "ready":
+                return
+            state = self.arm.latest_joint_state
+            if state is None or not 0 <= time.monotonic() - state.received_at <= self.arm.owner.config.max_joint_state_age_s:
+                return
+            self._hold_pending = False
+            held = self._held_gripper_target()
+            if held is None:
+                return
+            target = dict(state.positions)
+            target[self.gripper] = held
+            duration = min(max(abs(held - state.positions[self.gripper]) / self.gripper_velocity,
+                               GRIPPER_GOAL_MIN_DURATION_S), GRIPPER_GOAL_MAX_DURATION_S)
+            self._send(f"hold-{self._gripper_goal[0]}", state, target, duration)
+
     def on_watchdog(self) -> None:
         self._sample_gripper()
+        self._issue_hold()
         with self._lock:
             if self._active and self.arm.owner.state == "hold":
                 reason = getattr(getattr(self.arm, "last_terminal_decision", None), "reason", "owner_hold")
