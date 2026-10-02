@@ -4466,3 +4466,27 @@
 - 변경: main `cc76161f5` 통합 뒤 D-413 Task 3 계획과 palletizing progress 증거를 갱신했다. 이 main 변경에서 앞선 snapshot의 Fleet size-verdict allowance mismatch가 해소됐다.
 - 증거: 비선별 architecture 81 passed/1 skipped, quick tier 95 passed/24 기존 warnings, known-failure 비교 둘 다 0 new/0 known. Wheel 호환 11, Cell 143, API 매핑 7 passed.
 - gate 변화: Task 3 SOURCE GO 유지. ROS/Gazebo, release artifact, device, field 증거는 남아 있으며 이번 후속 변경은 Fleet runtime 동작을 바꾸지 않았다.
+
+## 2026-10-02 · uncommitted · feat(platform): start Fleet Cell Job submission boundary
+
+- 변경: 실행 계층에 주입형 process compiler port를 두고 후보 Job 재컴파일, PlanBundle hash/ordered transfer 검사, pallet ledger marker 및 workcell/pallet claim 생성을 추가했다. 공유 계약은 additive `FleetCellTransferGrant`로 정의하고 기존 `PICK_PLACE`를 그대로 뒀다. transfer Skill 입력에 티칭된 `home_pose_base`를 포함했다.
+- 증거: compiler-port 시험 6 passed, installed palletizing wheel 호환+Cell submission 17 passed, core_common schema suite 424 passed/1 skipped, Fleet API Reference contract test 1 passed, CI YAML parse 및 `git diff --check` 통과.
+- 경계: Fleet proposal/admission route, versioned ordered-step journal, independent step goal evidence, dispatcher integration은 남아 있다. 새 schema만으로 Fleet/device dispatch는 켜지지 않는다.
+- gate 변화: Task 4 IN PROGRESS; Task 3 SOURCE GO 유지, ROS-SIM HOLD, DEVICE/FIELD PARKED.
+
+## 2026-10-02 · uncommitted · docs(plans): D-395 S1 네 번째 실행, 합의된 조용한 시간대 (test/d395-s1-run4, main d366bc6f)
+- 변경: `docs/plans/2026-10-02-d395-s1-bench-results.md` 에 "Run 4 2026-10-02 (quiet slot)" 절 추가(앞 절은 그대로). 벤치 결함 수정은 별도 커밋 8e024801b: (d) 출발 자세의 `gz model` 이 시간 초과면 정답 궤적의 최신 표본을 쓴다(`test/test_d395_s1_bench.py`).
+- 증거: WSL Jazzy Gazebo 15회(GZ_PARTITION rosy_d395d, ROS_DOMAIN_ID 99), 14:01–16:08 KST, 다른 Rosy sim 없음. 그래도 Windows CPU 91–96 %, 비-Rosy 컨테이너 164 %로 2대 평균 RTF 0.105–0.155, 부하 시작 6–15·최고 44–66. a 3/3, (d 배치) 전원 투입 5/6(d4 는 사다리 벽시계 회전 탓에 올바른 결정이 벤치 한도 약 2 s 전), b 3/3, c 6/6 탐지(주입 3.1–4.1 sim s 뒤 `fleet_monitor`, 펄스 없음, "pose jumped" 6/6, ≤0.8 cm/0.3° 재확정, b 배치 2.35 m 포함), d 4회 완전 통과(0.126–0.136 m 주행 중 들어 올림, 정지·SUSPECT·6.3–7.5 sim s 재확정·재개 없음; d3 는 0.304 m 주행 뒤 정지 상태에서 들어 올림, 벤치 결함), l 3/3 needs_human. 거울 결정 0/35, 확정 오차 ≤1.2 cm/1.2°, 사람 입력 0. `needs_human` 뒤에도 중재 계속: 8/9 에서 104–212 s 뒤 올바른 확정. 원시 로그 `X:\DevTemp\rosy-d395-s1d\`. 종료 후 파티션 프로세스 0, 포트 해제.
+- gate 변화: 없음. S1 은 개정 8 로 통과(ROS-SIM, 2대). 실기 S3 는 사용자 승인 뒤.
+- 결정: 없음. 기본값·시스템 코드 변경 없음. 남은 것은 사다리 벽시계(R2/T3/U4): 시간만 쓰고 안전 문제는 아니다.
+- 교훈: 측정 도구의 "None 이면 조건 불성립" 은 조용히 시험 내용을 바꾼다 — 출발 자세를 못 읽은 (d) 는 주행 중이 아니라 도착 뒤에 들어 올렸다.
+
+## 2026-10-02 · uncommitted · docs(adr): D-395 개정 9 — S1 Gazebo 통과
+- 변경: 다른 세션과 조율한 조용한 시간대(13:54–16:09 KST)의 S1 네 번째 실행 15회를 기록하고 S1을 닫았다. 확정 오차 ≤1.2 cm / 1.2°, 거울 결정 0/35, 강제 거울 탐지 6/6(3.1–4.1 sim s), 실제 주행 중 들어 옮김 4회 완전 통과. 남은 단계는 S2(4대 sim), 실기(개정 5)·S3, D-257·D-393 개정 수락(사용자 승인).
+- 증거: `docs/plans/2026-10-02-d395-s1-bench-results.md` Run 4, `X:\DevTemposy-d395-s1d\`.
+- gate 변화: 없음(Proposed). ROS-SIM S1 통과.
+
+## 2026-10-02 · uncommitted · docs(logs): D-395 개정 9 항목의 증거 경로 정정
+- 변경: 바로 앞 "D-395 개정 9 — S1 Gazebo 통과" 항목의 원시 로그 경로가 `DevTemposy-d395-s1d`로 깨져 기록됐다. 올바른 경로는 `X:\DevTemp\rosy-d395-s1d\`다.
+- 증거: 해당 폴더.
+- gate 변화: 없음.

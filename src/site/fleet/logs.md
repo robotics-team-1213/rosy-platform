@@ -1268,3 +1268,9 @@
 - gate 변화: 없음.
 - 크기: fleet 25643(판정 25494+150 안, 여유 1줄 — 다음 증가는 다시 판정해야 한다).
 - 증거: 병합 뒤 `src/site/fleet/test` 1364 passed/7 skipped; 옵트인 Chromium `-k line_stuck` 3 passed; `src/runtime/gateway/test` + `test/architecture` 1926 passed/17 skipped, known_failures 새 실패 0; harness lint 0 errors.
+
+## 2026-10-02 · uncommitted · D-413 Task 4 Cell Job journal and approval boundary
+- 변경: connected the compiler port, service-only Cell Job proposal flow, distinct named-operator approval, and versioned ordered-step SQLite journal. Existing PICK_PLACE Mission tables remain unchanged. Persisted grants are checked against PlanBundle inputs, job/recipe/cell digests, authority epoch, and dispatch generation. Action success does not advance a step or release resources without independent goal and post-action gripper evidence; unknown outcomes remain HOLD.
+- Contract: API Reference v1.79. Re-judged Fleet at 26340 lines and protocol schemas.py at 1239; existing growth limits remain active.
+- 증거: Fleet suite completed with 1370 passed, 7 skipped, and one failure from the prior v1.77 reference pin. After updating that pin, test_mission_progress.py passed (16). Cell Job API/store/site-user: 11 passed; existing Mission API/store/service: 26 passed; task/API/dispatch contracts: 39 passed; protocol/compiler port: 23 passed; size verdict: 1 passed. Windows host SOURCE/LOCAL evidence only.
+- gate 변화: dispatcher/UDS/OMX submission and authenticated external goal-evidence producer wiring remain unimplemented. This is a Task 4 checkpoint, not device or ROS-SIM acceptance.

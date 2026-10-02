@@ -1,6 +1,6 @@
 ## D-395 Fleet 보조 위치 확정 — 로봇이 후보를 내고 Fleet이 중재하며, 대칭 맵에서도 사람 입력 없이 map 자세를 얻는다
 
-**Status:** Proposed (2026-10-01). 설계만 정한다. 코드·로봇 설정·params·API 참조서는 바꾸지 않는다. 구현은 아래 Validation의 S1 이후 단계를 사용자가 승인한 뒤 별도 변경으로 한다. 개정 1(2026-10-01, 바닥 기준 사각형을 귀환 기준점·출발 슬롯으로 사용)과 개정 2(슬롯 방향은 축만, 부호는 LiDAR 적합), 개정 3(비대칭 단서 필수, 받은 때부터 재는 유효 시간), 개정 4(2단계 결정과 감시 한계), 개정 5(실기 항목 보류), 개정 6(S1 결과: 닻을 내린 이웃만 단서), 개정 7(S1 재실행, LOCALIZED 로봇끼리 확인), 개정 8(부하에서도 버티는 닻 규칙, 사람 확인은 표시)이 아래 결정보다 우선한다. 이 ADR은 D-257 5항과 D-393 3항의 일부를 **개정하자고 제안**한다(아래 "개정 제안"). 제안이 Accepted되기 전에는 두 ADR의 해당 문구가 그대로 유효하다.
+**Status:** Proposed (2026-10-01). 설계만 정한다. 코드·로봇 설정·params·API 참조서는 바꾸지 않는다. 구현은 아래 Validation의 S1 이후 단계를 사용자가 승인한 뒤 별도 변경으로 한다. 개정 1(2026-10-01, 바닥 기준 사각형을 귀환 기준점·출발 슬롯으로 사용)과 개정 2(슬롯 방향은 축만, 부호는 LiDAR 적합), 개정 3(비대칭 단서 필수, 받은 때부터 재는 유효 시간), 개정 4(2단계 결정과 감시 한계), 개정 5(실기 항목 보류), 개정 6(S1 결과: 닻을 내린 이웃만 단서), 개정 7(S1 재실행, LOCALIZED 로봇끼리 확인), 개정 8(부하에서도 버티는 닻 규칙, 사람 확인은 표시), 개정 9(S1 Gazebo 통과)가 아래 결정보다 우선한다. 이 ADR은 D-257 5항과 D-393 3항의 일부를 **개정하자고 제안**한다(아래 "개정 제안"). 제안이 Accepted되기 전에는 두 ADR의 해당 문구가 그대로 유효하다.
 
 설계 전문: [2026-10-01-fleet-assisted-localization-design.md](../plans/2026-10-01-fleet-assisted-localization-design.md).
 
@@ -255,5 +255,23 @@ S1 세 번째 실행(결과 문서 "Run 3")은 호스트 과부하로 공정한 
    - 거부나 연결 오류는 전달되지 않은 것이므로 기억하지 않는다.
 3. **`needs_human`은 멈춤이 아니라 표시다.** Fleet은 표시를 띄운 뒤에도 중재를 계속하고, LOCALIZED가 되면 표시를 지운다. 세 번째 실행에서 표시가 뜬 7회 중 5회가 그 뒤 올바르게 확정됐다.
 4. **다음 S1은 부하가 낮을 때 한다.** 다른 세션의 sim 컨테이너가 멈춘 때나 전용 장치에서 한다. 사다리와 감시의 벽시계 기준은 부하가 낮으면 문제가 되지 않는다.
+
+**개정 9 (2026-10-02, S1 Gazebo 통과):**
+
+다른 세션과 조율한 조용한 시간대(13:54–16:09 KST)에서 S1 네 번째 실행을 했다(결과 문서 "Run 4"). 모두 15회이며, 사람 입력 없이 S1을 통과했다.
+- 확정 자세는 모두 참 자세 1.2 cm / 1.2° 안이었다.
+- Fleet 결정 35개 중 거울 결정은 0개였다.
+- 시나리오별 결과는 다음과 같다.
+  - 사각형 A 출발과 슬롯 밖 출발: 3/3(같은 배치 6회 중 5회. 1회는 벤치 시간 제한)
+  - 두 사각형 출발: 3/3, 모두 첫 결정에 확정
+  - 강제 거울: 6/6 탐지. 주입 뒤 3.1–4.1 sim s에 SUSPECT가 됐고 참 자세에 재확정했다. 모두 개정 8의 점프 규칙이 작동했다.
+  - 실제 주행 중 들어 옮김: 4회 완전 통과. 정지 뒤 SUSPECT, 들린 동안 움직임 없음, 6–8 sim s에 재확정, 재주행 없음.
+  - 외톨이 로봇: 예상대로 `needs_human`.
+- 이 시간대에도 다른 프로젝트 컨테이너 때문에 두 대 실행의 sim 속도는 0.1–0.16배였다. 이 속도에서는 벽시계 사다리가 슬롯 밖 로봇의 확정을 늦추지만(약 42 sim s), 안전 문제는 아니다.
+
+**S1은 닫는다.** 남은 단계는 다음과 같다.
+- S2(4대): sim, 승인 불필요.
+- 개정 5의 실기 항목과 S3: 로봇이 돌아오면 한다.
+- D-257·D-393 개정 수락 제안: 사용자 승인이 필요하다.
 
 **References:** `docs/adr/D-257-site-lane-map-and-overhead-sightings.md`, `docs/adr/D-393-nav-amcl-update-min-d-and-goal-tolerance.md`, `docs/adr/D-375-overhead-map-registration-from-lane-paint-proposal.md`, `docs/adr/D-360-overhead-field-auto-detection-proposal.md`, `src/runtime/api_web/core_api_web/api/v1/navigation.py`, `src/runtime/gateway/core/bridge/ros_bridge.py`, `src/runtime/sensing/control/localization_node.py`, `src/site/fleet/fleet/swarm/transport.py`, D-2, D-267, D-269, D-321, D-356, D-369, [D-346](D-346-commit-time-collision-defenses.md).

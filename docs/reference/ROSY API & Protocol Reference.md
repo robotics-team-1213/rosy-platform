@@ -2,7 +2,7 @@
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.77
+**Version:** v1.79
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -805,8 +805,8 @@ close code: `4401` 은 토큰이 없거나 틀린 것(`/ws/state` 와 동일), `
 | `nav.line_stuck_opened` | warning | 로봇 | `{stuck_id, cause, front_clearance_m, rear_clearance_m, turn_clearance_m, rear_blind_m, last_lane, preview_seq, restuck_of, attempts}` — D-407 §1 막힘 열림: `cause` 는 `obstacle_ahead`(앞물체 정지가 `obstacle_escalate_s` 이상) 또는 `lane_lost`. 여유는 로봇별 self-mask 적용, 앞은 LiDAR 기준 경로 띠, 뒤는 URDF 몸 뒤끝 기준, 회전은 회전 반경 밖; `rear_blind_m` 은 LiDAR `range_min` 때문에 안 보이는 뒤 거리. 같은 막힘에 한 번 (v1.74) |
 | `nav.line_stuck_asked` | info | 로봇 | `{stuck_id, cause, console_linked, local_fallback_s, attempts, reason, decisions}` — D-407 §2·§3 관제 판단 요청(FleetAgent 가 중계). `local_fallback_s` 가 null 이면 로컬 복구로 넘어가지 않고 관제 답만 기다린다(`reason`: `opened`·`console_wait`·`local_disabled`·`local_refused`·`local_aborted`·`attempts_exhausted`) (v1.74) |
 | `nav.line_stuck_answered` | info | 로봇 | `{stuck_id, decision, by, token_id, accepted, reason}` — D-407 §2 관제 답. `by` 는 역할, `token_id` 는 답한 토큰. 거부된 답(`stuck_id_mismatch`, 거부 사유)도 남는다 (v1.74) |
-| `nav.line_stuck_local_attempt` | warning | 로봇 | `{stuck_id, attempt, trigger, back_m, speed_mps, rear_clearance_m, rear_blind_m, trail_m}` — D-407 §4 로컬 후진 시작. `rear_blind_m` 은 LiDAR `range_min` 과 몸 뒤끝을 넘는 self-mask 창이 가리는 뒤 깊이, `trail_m` 은 방금 앞으로 지나온 거리(사용자 결정 2026-10-02: 사각 띠는 그 안에서만 들어간다)(`trigger`: `ask_timeout`·`no_console`·`retry`·`console`) (v1.74) |
-| `nav.line_stuck_local_result` | info | 로봇 | `{stuck_id, attempt, result, reason, lane_visible, front_clear, rear_clearance_m, rear_blind_m, trail_m, trail_yaw_deg}` — D-407 §4 결과: `recovered`·`still_stuck`·`refused`(시작 전)·`aborted`(후진 중 뒤 여유·scan stale·관제 WAIT) (v1.74) |
+| `nav.line_stuck_local_attempt` | warning | 로봇 | `{stuck_id, attempt, trigger, back_m, speed_mps, rear_clearance_m, rear_blind_m, trail_m, trail_age_s}` — D-407 §4 로컬 후진 시작. `rear_blind_m` 은 LiDAR `range_min` 과 몸 뒤끝을 넘는 self-mask 창이 가리는 뒤 깊이, `trail_m` 은 방금 앞으로 지나온 거리(사용자 결정 2026-10-02: 사각 띠는 그 안에서만 들어간다)(`trigger`: `ask_timeout`·`no_console`·`retry`·`console`) (v1.74) |
+| `nav.line_stuck_local_result` | info | 로봇 | `{stuck_id, attempt, result, reason, lane_visible, front_clear, rear_clearance_m, rear_blind_m, trail_m, trail_yaw_deg, trail_age_s}` — D-407 §4 결과: `recovered`·`still_stuck`·`refused`(시작 전)·`aborted`(후진 중 뒤 여유·scan stale·관제 WAIT) (v1.74) |
 | `nav.line_stuck_closed` | info | 로봇 | `{stuck_id, cause, reason, attempts, held_s}` — D-407 막힘 닫힘(`cleared`·`recovered`·`console_resume`·`console_manual`·`console_abort`·`mode_off`·`mode_changed`·`driver_released`·`estop`) (v1.74) |
 | `nav.traffic_policy_staged` | info | 로봇 | `{actor, policy_revision}` — D-151 traffic policy 변경 대기 |
 | `nav.traffic_policy_applied` | info | 로봇 | `{actor, policy_revision, mode}` — D-151 대기 정책 적용(정지 상태에서만) |
@@ -1266,13 +1266,15 @@ CORE safety request. An `UNKNOWN` task is shown as requiring manual CORE status
 verification; the UI never turns a command receipt into completion.
 
 The site Compose configuration loads an individual `site-users.yaml` registry.
-Each row binds a unique `principal_id` and role (`viewer`, `operator`, or
-`policy-admin`) to a SHA-256 digest of one high-entropy bearer token. The raw
+Each row binds a unique `principal_id` and role (`viewer`, `operator`,
+`policy-admin`, or `service`) to a SHA-256 digest of one high-entropy bearer token. The raw
 token is delivered separately and is never stored in that file. `viewer` may
 read Fleet state, evidence, and task history. `operator` may also request,
-cancel, and stop work. `policy-admin` may not issue robot commands; no policy
-mutation endpoint exists yet. The separate `/registry` endpoint continues to
-use its own server-side credential.
+cancel, and stop work. A `service` principal may create and resolve `cell_job`
+proposals only; it cannot admit work. Cell Job admission requires a different
+named `operator` principal. `policy-admin` may not issue robot commands; no
+policy mutation endpoint exists yet. The separate `/registry` endpoint
+continues to use its own server-side credential.
 
 Authenticated `POST /api/fleet/*` requests other than source-authenticated
 `POST /api/fleet/sightings` and read-only mDNS observation
@@ -1522,6 +1524,15 @@ digest, camera, optical frame, calibration, transform revision, and capture
 time. Image evidence is not a 3D pose, grasp, reachability decision, or
 permission to bypass the local planner.
 
+D-403 adds the separate additive `FleetCellTransferGrant` variant with
+`action_kind: CELL_TRANSFER`; it does not alter or widen `FleetActionGrant`.
+Its bounded `cell_transfer` body binds `job_id`, recipe/cell SHA-256 revisions,
+ordered `step_index`, item/pallet/layer, `frame: robot_base`, and finite `home`,
+`pick`, and `place` poses with pick/place approach heights and `carry_z`. The
+carry height must cover both approaches. This schema describes one atomic
+pick-plus-place unit. It does not enable Fleet dispatch or certify that any
+receiver executes the variant; the D-403 simulation gate remains in force.
+
 `DeviceActionState` is the durable local Action journal state: `PREPARED`,
 `SUBMITTING`, `ACCEPTED`, `RUNNING`, `CANCEL_REQUESTED`, `UNKNOWN`, `SUCCEEDED`,
 `FAILED`, or `HOLD`. A successful transport response or `SUCCEEDED` Action
@@ -1575,14 +1586,20 @@ Resolved Mission metadata is limited to 64 KiB and rejects the same secret/image
 
 | Method | Path | Role | Meaning |
 |---|---|---|---|
-| POST | `/api/fleet/proposals` | Operator | Store one immutable, idempotent candidate under `(principal_id, request_key)`; performs no model call, Mission creation, claim, or device submission. |
-| GET | `/api/fleet/proposals/{proposal_id}` | Viewer | Read the caller-owned candidate and resolution status. |
-| POST | `/api/fleet/proposals/{proposal_id}/resolve` | Operator | Recheck the exact current observation/capability through the server-injected resolver; on one unambiguous match, create a `PROPOSED` Mission draft. |
+| POST | `/api/fleet/proposals` | Operator; `service` for `cell_job` only | Store one immutable, idempotent candidate under `(principal_id, request_key)`; performs no model call or device submission. A cell service cannot submit ER 2 candidates; operators cannot submit Cell Jobs. |
+| GET | `/api/fleet/proposals/{proposal_id}` | Viewer | Read the caller-owned candidate and resolution status; a named operator may inspect a Cell Job proposal. |
+| POST | `/api/fleet/proposals/{proposal_id}/resolve` | Operator; `service` for `cell_job` only | Recheck current evidence/capability through the injected resolver or recompile a Cell Job through the process compiler port; create a proposal-only Mission draft and ordered steps. |
 | GET | `/api/fleet/missions/{mission_id}` | Viewer | Read caller-owned candidate, Mission state, and Fleet Mission event history. |
 | POST | `/api/fleet/missions/{mission_id}/admit` | Named Operator | Recheck evidence and revisions, then atomically acquire the shared workcell/object claims at `expected_generation`. |
+| GET | `/api/fleet/cell-jobs/{mission_id}` | Viewer | Read the resolved Cell Job, ordered step states, and Fleet journal events; a named operator may inspect another principal's Cell Job. |
 
 `POST /api/fleet/proposals` accepts `request_key`, `workcell_id`, `instance_id`,
-and an ER 2 selector candidate. Its authenticated owner and request scope are
+and either an ER 2 selector candidate or a service-owned `cell_job` candidate.
+The Cell Job candidate contains `recipe`, `cell`, `recipe_sha256`,
+`cell_sha256`, and submitted compiled `job`; its metadata limit is 64 KiB
+(ER 2 remains 32 KiB). Fleet recompiles with the injected process compiler and
+rejects a Job or digest mismatch. Recipe/Cell calculations remain outside
+Fleet. Its authenticated owner and request scope are
 stored by Fleet; duplicate same-content requests return the existing proposal,
 while reuse with a changed candidate or workcell/instance returns `409
 REQUEST_CONFLICT`. The API does not call ER 2. Candidate records allow only
@@ -1603,14 +1620,21 @@ separately identified `PROPOSED` successor Mission with
 still requires the ordinary admission gate. Image bytes are used for model
 reasoning only and are never persisted in proposal metadata.
 
-Resolution is available only when a trusted current-observation and capability
+ER 2 resolution is available only when a trusted current-observation and capability
 resolver is explicitly injected into the Site Fleet app. It receives the stored
 candidate, requested workcell/instance, and current time; it must verify image
 digest, camera/frame, capture time, calibration/transform/config revisions,
 freshness, unique target and destination, and capability. Missing resolver,
 stale or ambiguous evidence, or changed revisions fail closed. Resolution
 stores a target/goal predicate and shared resources in the Fleet Mission journal;
-it does not submit a device Action.
+it does not submit a device Action. Cell Job resolution stores canonical
+PlanBundle data as ordered `CELL_TRANSFER` rows in the versioned `cell_jobs`
+journal; the legacy single-step `PICK_PLACE` table and digest are unchanged.
+Admission recompiles and compares the ordered plan, then atomically claims the
+workcell and every pallet for the complete Job. Only step zero becomes `READY`;
+later steps remain `WAITING` until the prior step receives independent goal
+confirmation. The Cell Job journal is not connected to a device dispatcher in
+this source slice.
 
 Admission requires a configured named operator credential; the development
 fallback principal is refused. The server re-resolves the candidate and compares
@@ -1620,7 +1644,9 @@ generation or any existing navigation/direct-action/workcell/object claim
 returns `409` with no new claim. General mutation audit failure returns `503`
 before proposal or admission mutation. The synchronous admission response reports
 `physical_submission: NOT_CONNECTED`: admission itself is only a claim transaction.
-If the separately configured, explicitly enabled background dispatcher is running,
+For Cell Jobs, the approving operator must have a different principal ID from
+the service proposer. Changed compilation, changed generation, or resource
+conflict leaves the Job unadmitted and creates no claim. If the separately configured, explicitly enabled background dispatcher is running,
 it may later submit one fenced local Action. Neither response proves ROS goal
 completion, software stop, driver standstill, object placement, or physical E-stop
 state.
@@ -1802,6 +1828,9 @@ fake credentials and clocks; device and field acceptance remain separate gates.
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.79 | 2026-10-02 | Additive (D-407, fix/d407-trail-age-and-recording-marker): `nav.line_stuck_local_attempt`·`nav.line_stuck_local_result` 에 `trail_age_s`(지나온 길의 마지막 전진 명령 뒤 경과, 단조 초). 사각 띠 후진은 그 값이 `line_follow.recovery_trail_max_age_s`(30 s) 이하일 때만 — 넘으면 `rear_blind`. 기존 필드 변화 없음 |
+| v1.78 | 2026-10-02 | Additive (D-403 / D-413 Task 4): define separate `FleetCellTransferGrant` and bounded `CELL_TRANSFER` body for one recipe/cell-bound pick/place pair. Existing `PICK_PLACE` schema, payload and digest remain unchanged; Fleet dispatch stays gated on simulation evidence. |
+| v1.79 | 2026-10-02 | Additive (D-403 / D-413 Task 4): scope a `service` principal to Cell Job proposals/resolution, require a distinct named operator for admission, expose ordered Cell Job status, and persist ordered `CELL_TRANSFER` steps. Existing `PICK_PLACE` records remain unchanged; device dispatch and independent goal evidence remain gated. |
 | v1.77 | 2026-10-02 | Additive (D-407 Fleet 쪽, feat/d407-console-stuck-decisions): Site Fleet 새 경로 `GET /api/fleet/line-stuck`(viewer+)·`POST /api/fleet/robots/{robot_id}/line-stuck/decision`(operator), `GET /api/fleet/state` 로봇 행에 선택 필드 `line_stuck`(§10.8). Fleet 은 CORE 거부를 그대로 409 로 옮긴다. 로봇 계약(`/api/v1/*`)·이벤트·FleetAgent 프로토콜 변경 없음 |
 | v1.76 | 2026-10-02 | Additive (D-407 Gazebo 후속, fix/d407-sim-findings): `nav.line_stuck_opened` 에 `restuck_of`·`attempts` — `recovered` 로 닫힌 뒤 `line_follow.recovery_restuck_s`(20 s) 안이거나 순 전진 `recovery_restuck_m`(0.30 m) 전에 다시 막히면 같은 막힘으로 시도 수를 이어 센다(다 쓰면 곧바로 관제 답만 기다림). `nav.line_stuck_local_result` 에 판정한 scan 의 `rear_clearance_m`·`rear_blind_m`·`trail_m`·`trail_yaw_deg`. `nav.line_stuck_closed` 사유 `estop`. 뒤 띠 폭은 URDF 몸 반폭(`body_half_width_m`) + `recovery_rear_lateral_margin_m`(0.02). 기존 필드 변화 없음 |
 | v1.75 | 2026-10-02 | Additive (D-395 개정 4 5항 후속, S1 R1, feat/d395-localized-objects): 상태 스냅샷·하트비트 `localization` 에 선택 필드 `unmapped_objects[≤16]` `{x, y}`(base_link)·`objects_stamp`(로봇 시각 s). `LOCALIZED` 로봇이 전체 스캔의 지도 밖 물체를 상태(2 Hz)마다 싣고, 밖에서는 빈 목록이다. CORE 는 그대로 넘기고 `pose_frame: odom`·`state_stale` 에서 비운다. Fleet 감시가 닻 로봇의 관찰로 다른 `LOCALIZED` 로봇의 거울 잠금을 잡는다. 기존 필드 변화 없음 |

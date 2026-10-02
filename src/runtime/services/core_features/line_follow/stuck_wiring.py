@@ -149,12 +149,14 @@ class StuckRecoveryMixin:
                 config.lidar_self_mask, lidar_x_m=lidar_x, rear_x_m=rear_x,
                 half_width_m=self._rear_half_width()))
         trail_m, trail_yaw = self._trail.measure(now, config.recovery_trail_s)
+        last_forward = self._trail.last_forward_at()
         recovered_at = self._recovery.recovered_at
         moved = None if recovered_at is None else self._trail.net_since(recovered_at, now)
         return StuckInput(
             now=now, cause=cause, lane_visible=lane, front_clear=front_clear,
             front_band_m=front, rear_m=seen["rear_m"] if known else None, turn_m=seen["turn_m"],
             rear_blind_m=blind, trail_m=trail_m, trail_yaw_deg=trail_yaw,
+            trail_age_s=None if last_forward is None else round(now - last_forward, 3),
             scan_age_s=None if self._body_at is None else now - self._body_at,
             lidar_expected=self._clearance_at is not None,
             moved_since_recovery_m=moved,

@@ -6,7 +6,7 @@ import re
 import sqlite3
 from collections.abc import Iterable
 
-_RESOURCE_KINDS = {"robot", "workcell", "object"}
+_RESOURCE_KINDS = {"robot", "workcell", "object", "pallet"}
 _OWNER_KINDS = {"task", "mission", "direct_action"}
 _IDENTIFIER = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$")
 

@@ -23,6 +23,24 @@ def test_site_users_load_principal_roles_by_sha256_token_digest(tmp_path):
     }
 
 
+def test_site_users_accept_service_role_for_non_operator_automation(tmp_path):
+    token = "cell-service-token"
+    config = tmp_path / "site-users.yaml"
+    config.write_text(
+        "users:\n"
+        "  - principal_id: rosy-cell-service\n"
+        "    role: service\n"
+        f"    token_sha256: {sha256(token.encode()).hexdigest()}\n",
+        encoding="utf-8",
+    )
+
+    users = load_site_users(config)
+
+    assert users[sha256(token.encode()).hexdigest()] == {
+        "principal_id": "rosy-cell-service", "role": "service",
+    }
+
+
 @pytest.mark.parametrize(
     "entry",
     [
