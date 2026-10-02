@@ -1320,3 +1320,8 @@
 - Change: `trust.trusted_xy` returns a pose only for LOCALIZED + map; the console stores no trusted pose from a `localization: null` snapshot. A robot first read null and then CANDIDATES has no trusted pose and blocks the whole track. A robot that reported localization and then goes null is untrusted (badge not legacy) until null for 30 s (`trust.LAPSED_GRACE_S`); then legacy again with its stale trusted pose dropped. Contract §3 records both rules.
 - Evidence: `test_localization_trust.py`, `test_server_traffic.py` (S2 sequence, null→LOCALIZED, LOCALIZED→CANDIDATES keep-out, lapsed robot, grace reset, true legacy); Fleet suite 1380 passed/7 skipped.
 - Gate: SOURCE/LOCAL only; the S2 bench must be rerun on the ROS box.
+
+## 2026-10-02 · uncommitted · test(fleet): retain ownership after grant expiry while Action is running
+- Change: add an expired-grant replay where a running local Action remains authoritative after both stores reopen; assert no resubmit, HOLD, retained DISPATCHING claims, and rejection of a conflicting Mission admission.
+- Evidence: `test/test_platform_cell_replay.py` 2 passed.
+- Gate: SOURCE/LOCAL only; stop/cancel interruptions and independent physical-occupancy evidence remain open.

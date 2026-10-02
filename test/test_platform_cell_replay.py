@@ -4,10 +4,12 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
+import pytest
+
 from core_common.protocol.schemas import FleetActionGrant
 from fleet.server.mission_dispatcher import MissionDispatcher
 from fleet.server.mission_service import MissionService
-from fleet.server.mission_store import MissionStore
+from fleet.server.mission_store import MissionConflict, MissionStore
 from fleet.server.task_store import FleetTaskStore
 
 
@@ -192,3 +194,101 @@ def test_late_success_after_site_restart_keeps_unknown_mission_held(tmp_path):
     assert [event["event_type"] for event in after_goal["events"]] == [
         "GOAL_PREDICATE_CONFIRMED",
     ]
+
+
+def test_expired_grant_does_not_release_running_action_claim_after_restart(tmp_path):
+    scenario = json.loads((FIXTURES / "expired-grant-running-action.json").read_text(
+        encoding="utf-8"))
+    path = tmp_path / "fleet.sqlite3"
+    task_store, service, mission = _ready_mission(path)
+    action_path = tmp_path / "omx.sqlite3"
+    action_store = ActionStore(action_path)
+    now = datetime.now(timezone.utc)
+
+    class LostRunningReceiptTransport:
+        def __init__(self):
+            self.grant = None
+            self.submissions = []
+            self.lookups = []
+
+        def submit(self, grant):
+            self.grant = FleetActionGrant.model_validate(grant)
+            self.submissions.append(self.grant)
+            created = action_store.create_action(
+                workcell_id=grant.workcell_id, instance_id=grant.instance_id,
+                principal_id="operator-1", request_key=grant.attempt_id,
+                action_id=grant.action_id, action_kind=grant.action_kind,
+                configuration_revision=grant.config_revision,
+                observation_id=grant.source_evidence.observation_id,
+                owner_generation=grant.dispatch_generation,
+                payload={"request_digest": grant.request_digest},
+            )
+            assert created["created"] is True
+            attempt = action_store.begin_submission(
+                grant.action_id, expected_generation=grant.dispatch_generation,
+                attempt_id=grant.attempt_id,
+            )
+            action_store.record_submission(
+                grant.action_id, attempt["attempt_id"], accepted=True,
+                driver_goal_id="ros-goal-running",
+            )
+            raise TimeoutError("accepted running Action outlived the lost receipt")
+
+        def get(self, grant):
+            self.lookups.append((grant.action_id, grant.attempt_id))
+            assert grant == self.grant
+            assert grant.expires_at < now
+            local = ActionStore(action_path).get_action(grant.action_id)
+            assert local["state"] == "ACCEPTED"
+            receipt = _receipt(grant, state="RUNNING", journal_event_id=2)
+            receipt["phase_summaries"] = []
+            return receipt
+
+    transport = LostRunningReceiptTransport()
+    dispatcher = MissionDispatcher(
+        service, task_store, transport, {"omx-1": "omx-1-control"},
+        now=lambda: now, grant_ttl_s=1.0,
+    )
+    initial = dispatcher.dispatch_next()
+    original = service.get(mission["mission_id"])["action_grant"]
+    assert initial["state"] == "UNKNOWN"
+    now = datetime.fromtimestamp(
+        datetime.fromisoformat(original["expires_at"].replace("Z", "+00:00")).timestamp() + 1.0,
+        tz=timezone.utc,
+    )
+
+    restarted_tasks = FleetTaskStore(path)
+    restarted_service = MissionService(MissionStore(path))
+    result = MissionDispatcher(
+        restarted_service, restarted_tasks, transport, {"omx-1": "omx-1-control"},
+        now=lambda: now,
+    ).dispatch_next()
+    current = restarted_service.get(mission["mission_id"])
+    claims = restarted_tasks.resource_claims(resource_kind="object", resource_id="block-1")
+
+    assert result["state"] == scenario["expected"]["mission_state"]
+    assert current["status"] == "HOLD"
+    assert result["reason"] == scenario["expected"]["reason"]
+    assert len(transport.submissions) == scenario["expected"]["automatic_resubmit_count"] + 1
+    assert len(transport.lookups) == 1
+    assert claims and all(
+        claim["phase"] == scenario["expected"]["resource_claim_phase"]
+        for claim in claims
+    )
+
+    conflict = restarted_service.propose(
+        mission_id="mission-2", principal_id="operator-1", request_key="request-2",
+        workcell_id="omx-1", instance_id="omx-1-control", action_kind="PICK_PLACE",
+        plan=_plan(),
+        goal_predicate={"predicate_id": "block-in-tray-2",
+                        "condition": "object_in_destination", "object_id": "block-1",
+                        "destination_id": "tray-1", "evidence_source": "camera_observation"},
+    )
+    assert conflict["mission"]["status"] == "PROPOSED"
+    with pytest.raises(MissionConflict):
+        restarted_service.admit(
+            "mission-2", actor_id="operator-1",
+            expected_generation=restarted_tasks.dispatch_control()["generation"],
+            resources=[("workcell", "omx-1"), ("object", "block-1"),
+                       ("object", "tray-1")],
+        )

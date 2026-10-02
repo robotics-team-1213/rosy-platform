@@ -230,6 +230,8 @@ Cell compiler port, additive `CELL_TRANSFER` ??, `service` ???? ?? operator ?? ?
 
 **Progress (2026-10-02):** Added a persistent two-ledger replay fixture and integration test for a local successful Action whose submit receipt is lost before Fleet records it. Reopening Fleet and OMX SQLite stores keeps the same attempt, does not resubmit, and now retains `HOLD` and resource claims until independent post-action camera/gripper evidence confirms the goal. The test also checks journal phase rows and verifies that event watermarks advance across reconciliation and goal confirmation. Separate interruption fixtures and expiry/occupancy cases remain open; this is a Task 7 checkpoint, not completion.
 
+**Progress (2026-10-02, follow-up):** Added a second persistent replay fixture where Fleet's short-lived grant expires while the local Action remains accepted/running and the submit receipt is lost. After reopening both ledgers, Fleet reads the same Action, does not resubmit, remains `HOLD`, retains the `DISPATCHING` object/workcell claims, and rejects a second Mission's conflicting admission. The replay suite passes 2 tests. Stop/cancel interruption variants and independent physical-occupancy evidence remain open; Task 7 is still in progress.
+
 ## Task 8: 정식 경로의 Gazebo 종단 수용
 
 **Modify/Reuse:** `deploy/robot/omx/probe_fleet_ros_vendor_sim.sh`, `src/sim/gz_sim/worlds/omx_pilot_workcell.sdf`, 기존 C3/C4 harness와 Cell fixture.

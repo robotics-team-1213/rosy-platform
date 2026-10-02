@@ -74,8 +74,8 @@
 
 ## 최근 기록
 
+- 2026-10-02 · uncommitted · test(fleet): retain ownership after grant expiry while Action is running
 - 2026-10-02 · uncommitted · fix(fleet): a legacy-null pose is never a last trusted pose (D-395 S2 Finding 1)
 - 2026-10-02 · uncommitted · verify(fleet): platform cell final regression
 - 2026-10-02 · uncommitted · verify(fleet): platform cell replay watermark
 - 2026-10-02 · uncommitted · test(fleet): track Mission event watermark across replay
-- 2026-10-02 · uncommitted · test(fleet): replay late OMX success without clearing Mission HOLD
