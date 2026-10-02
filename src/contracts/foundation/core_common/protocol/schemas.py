@@ -1312,3 +1312,5 @@ class SshPasswordIssued(BaseModel):
 class SshPasswordStatus(BaseModel):
     enabled: bool
     expires_at: Optional[str] = Field(default=None, pattern=SSH_TIME_PATTERN)
+    #: usermod could not lock the password; sshd refuses it by a drop-in until the retry locks it.
+    lock_pending: bool = False

@@ -39,6 +39,7 @@ import contextlib
 from datetime import datetime, timedelta, timezone
 import hashlib
 import json
+import math
 import os
 from pathlib import Path
 import re
@@ -47,6 +48,7 @@ import stat
 import subprocess
 import sys
 import tempfile
+import time
 from typing import Any, Iterator, Optional
 
 sys.dont_write_bytecode = True
@@ -55,6 +57,8 @@ SCHEMA = 1
 USER = "rosy"
 #: CORE's side of the hand-over, in its own RuntimeDirectory (/run/rosy).
 REQUEST = "run/rosy/ssh-access.request"
+#: The request is renamed here before it is read, so one CORE writes meanwhile is never removed unread.
+CLAIMED = "run/rosy/.ssh-access.request.claimed"
 RESPONSE = "run/rosy/ssh-access.response"
 STATE_DIR = "var/lib/rosy/ssh"
 AUTHORIZED = STATE_DIR + "/authorized_keys"
@@ -64,6 +68,13 @@ PASSWORD_STATE = STATE_DIR + "/password.json"
 #: The newest time this program has seen (the Pi has no RTC: an offline boot may start in the past).
 CLOCK = STATE_DIR + "/clock.json"
 HISTORY_MAX_BYTES = 1 << 20
+#: A mark further ahead of the clock than this is a clock that ran ahead, not time that passed.
+MARK_AHEAD_LIMIT = timedelta(days=2)
+#: The mark is rewritten only when it rises this much (SD card wear).
+MARK_STEP = timedelta(seconds=60)
+BOOT_ID = "proc/sys/kernel/random/boot_id"
+#: systemd-timesyncd's flag file; present once NTP synchronized the clock this boot.
+NTP_SYNCED = "run/systemd/timesync/synchronized"
 LOCK = STATE_DIR + "/.lock"
 KEYS_DROPIN = "etc/ssh/sshd_config.d/50-rosy-managed-keys.conf"
 PASSWORD_DROPIN = "etc/ssh/sshd_config.d/60-rosy-temp-password.conf"
@@ -97,13 +108,14 @@ MAX_BY = 128
 #: A request older than this (a path unit started late, a leftover file) does nothing.
 REQUEST_MAX_AGE_S = 30.0
 REQUEST_FUTURE_SKEW_S = 5.0
-#: CORE waits this long (ssh_handoff.WAIT_S). A password answered later would only sit in
-#: /run/rosy, so it is rolled back instead; one second of margin covers writing the answer.
+#: CORE waits at most this long (ssh_handoff.WAIT_S) and writes when it stops waiting as
+#: `answer_by` (epoch seconds). A password answered later than answer_by - ANSWER_MARGIN_S would
+#: only sit in /run/rosy, so it is rolled back instead; the margin covers writing the answer.
 CORE_WAIT_S = 10.0
-LATE_AFTER_S = CORE_WAIT_S - 1.0
+ANSWER_MARGIN_S = 1.0
 #: Requests written while this run works (CORE's password_off after a timeout) are answered before it exits.
 MAX_REQUESTS_PER_RUN = 8
-HEADER_KEYS = {"schema", "request_id", "action", "requested_at", "by"}
+HEADER_KEYS = {"schema", "request_id", "action", "requested_at", "answer_by", "by"}
 ACTIONS = {
     "list": set(),
     "add": {"public_key", "label", "expires_days"},
@@ -299,6 +311,10 @@ def read_request(path: Path, now: float) -> Optional[dict]:
     age = now - requested.timestamp()
     if not -REQUEST_FUTURE_SKEW_S <= age <= REQUEST_MAX_AGE_S:
         return None
+    answer_by = data["answer_by"]
+    if type(answer_by) not in (int, float) or not math.isfinite(answer_by) \
+            or not 0 <= answer_by - requested.timestamp() <= CORE_WAIT_S + 2:
+        return None
     return data
 
 
@@ -313,6 +329,18 @@ class System:
 
     def now(self) -> datetime:
         return datetime.now(timezone.utc)
+
+    def boot_time(self) -> float:
+        """Seconds since boot, suspend included; NTP never steps it."""
+        clock = getattr(time, "CLOCK_BOOTTIME", None)
+        return time.clock_gettime(clock) if clock is not None else time.monotonic()
+
+    def boot_id(self) -> str:
+        raw = _read_bytes(self.path(BOOT_ID), 128)
+        return (raw or b"").decode("ascii", "replace").strip()
+
+    def ntp_synced(self) -> bool:
+        return self.path(NTP_SYNCED).exists()
 
     def _run(self, argv: list[str], stdin: Optional[str] = None) -> subprocess.CompletedProcess:
         try:
@@ -434,24 +462,34 @@ def record(system: System, event: str, **fields: Any) -> None:
 
 
 def trusted_now(system: System, seen: tuple[datetime, ...] = ()) -> datetime:
-    """max(clock, the newest time seen before): expiries never run backwards when the clock is behind.
+    """The time key expiry counts from: the clock, raised to the newest time seen before.
 
-    Persisted in /var/lib/rosy/ssh/clock.json and raised on every run. A clock that ran
-    ahead raises it too; that only expires things early (fail closed).
+    The Pi has no RTC, so an offline boot may start in the past; the mark in clock.json
+    keeps key expiry from running backwards then. A mark (or a seen time) more than
+    MARK_AHEAD_LIMIT ahead of the clock is a clock that once ran ahead: it is ignored and
+    reset, so it never deletes keys. Once NTP synchronized the clock, the mark is the clock.
+    Written only when it rises MARK_STEP or is reset; a failed write is logged, never fatal.
+    Temporary passwords do not use it: they expire by the wall clock or the boot clock.
     """
-    path = system.path(CLOCK)
+    now = system.now().astimezone(timezone.utc).replace(microsecond=0)
     stored = None
-    raw = _read_bytes(path, 4096)
+    raw = _read_bytes(system.path(CLOCK), 4096)
     if raw is not None:
         try:
             stored = parse_stamp(json.loads(raw.decode("utf-8"))["high_water"])
         except (ValueError, KeyError, TypeError, UnicodeDecodeError):
             log(f"/{CLOCK} 를 읽을 수 없어 새로 씁니다")
-    newest = max((system.now().astimezone(timezone.utc).replace(microsecond=0),) + seen)
-    if stored is None or newest > stored:
-        write_atomic(path, json.dumps({"high_water": stamp(newest)}) + "\n", 0o600)
-        return newest
-    return stored
+    if system.ntp_synced():
+        floor = now
+    else:
+        limit = now + MARK_AHEAD_LIMIT
+        floor = max([now] + [moment for moment in (stored, *seen) if moment is not None and moment <= limit])
+    if stored is None or floor >= stored + MARK_STEP or floor < stored:
+        try:
+            write_atomic(system.path(CLOCK), json.dumps({"high_water": stamp(floor)}) + "\n", 0o600)
+        except OSError as exc:
+            log(f"/{CLOCK} 를 쓰지 못했습니다: {exc}")
+    return floor
 
 
 # --- keys ------------------------------------------------------------------------
@@ -559,19 +597,32 @@ def revoke_key(system: System, request: dict) -> tuple[int, None]:
 
 
 def password_state(system: System) -> dict:
+    """{enabled, expires_at, lock_pending, ...}; `lock_pending` while a failed lock waits for its retry."""
     raw = _read_bytes(system.path(PASSWORD_STATE), 4096)
     try:
         data = json.loads((raw or b"{}").decode("utf-8"))
+        pending = data.get("lock_pending") is True
         if data.get("enabled") is True:
             parse_stamp(data["expires_at"])
-            return data
+            return {**data, "lock_pending": pending}
     except (ValueError, KeyError, TypeError, AttributeError, UnicodeDecodeError):
-        pass
-    return {"enabled": False, "expires_at": None}
+        pending = False
+    return {"enabled": False, "expires_at": None, "lock_pending": pending}
 
 
-def _write_off_state(system: System) -> None:
-    write_atomic(system.path(PASSWORD_STATE), json.dumps({"enabled": False, "expires_at": None}) + "\n", 0o600)
+def _write_off_state(system: System, *, lock_pending: bool = False) -> None:
+    state = {"enabled": False, "expires_at": None, **({"lock_pending": True} if lock_pending else {})}
+    write_atomic(system.path(PASSWORD_STATE), json.dumps(state) + "\n", 0o600)
+
+
+def password_expired(system: System, state: dict) -> bool:
+    """By the wall clock, or by the boot clock (which NTP never steps), or because it is another boot."""
+    if parse_stamp(state["expires_at"]) <= system.now():
+        return True
+    boot_id, deadline = state.get("boot_id"), state.get("boot_deadline")
+    if not isinstance(boot_id, str) or type(deadline) not in (int, float):
+        return False
+    return boot_id != system.boot_id() or system.boot_time() >= deadline
 
 
 def _write_deny_dropin(system: System) -> None:
@@ -588,7 +639,8 @@ def lock_or_deny(system: System) -> None:
         failure = exc
     log(f"lock failed, denying the password in sshd instead: {failure}")
     for step, action in (("deny drop-in", lambda: _write_deny_dropin(system)),
-                         ("state", lambda: _write_off_state(system)),
+                         ("state", lambda: _write_off_state(system, lock_pending=True)),
+                         ("history", lambda: record(system, "password_deny", detail=str(failure)[:160])),
                          ("reload", system.reload_sshd),
                          ("retry timer", lambda: system.expire_timer(True))):
         try:
@@ -619,7 +671,10 @@ def password_off(system: System, reason: str, by: Optional[str] = None, *, force
 def password_on(system: System, request: dict) -> tuple[int, dict]:
     minutes = bounded_int(request["minutes"], *PASSWORD_MINUTES, "minutes")
     password = generate_password()
-    expires = trusted_now(system) + timedelta(minutes=minutes)
+    # The wall clock, not the key mark: a mark from a clock that ran ahead must not stretch it.
+    # The boot clock bounds it too, whatever the wall clock does.
+    expires = system.now() + timedelta(minutes=minutes)
+    boot_id, boot_deadline = system.boot_id(), system.boot_time() + minutes * 60
     try:
         system.set_password(USER, password)
         write_atomic(system.path(PASSWORD_DROPIN), PASSWORD_DROPIN_TEXT, 0o644)
@@ -627,7 +682,8 @@ def password_on(system: System, request: dict) -> tuple[int, dict]:
         if not ok:
             raise HelperError(f"sshd -t 가 설정을 거부했습니다: {detail}")
         write_atomic(system.path(PASSWORD_STATE),
-                     json.dumps({"enabled": True, "expires_at": stamp(expires), "by": request["by"]},
+                     json.dumps({"enabled": True, "expires_at": stamp(expires), "by": request["by"],
+                                 "boot_id": boot_id, "boot_deadline": boot_deadline},
                                 ensure_ascii=False) + "\n", 0o600)
         # The expiry check before sshd reads the block: a password is never live without it.
         system.expire_timer(True)
@@ -655,8 +711,8 @@ def password_rollback(system: System) -> None:
 
 def expire_password(system: System) -> None:
     state = password_state(system)
-    stale_dropin = not state["enabled"] and system.path(PASSWORD_DROPIN).exists()
-    if stale_dropin or (state["enabled"] and parse_stamp(state["expires_at"]) <= trusted_now(system)):
+    stale = not state["enabled"] and (system.path(PASSWORD_DROPIN).exists() or state["lock_pending"])
+    if stale or (state["enabled"] and password_expired(system, state)):
         password_off(system, "expired")
 
 
@@ -694,10 +750,6 @@ def housekeeping(system: System, *, boot: bool = False) -> bool:
     return ok
 
 
-def _requested_at(request: dict) -> float:
-    return datetime.fromisoformat(str(request["requested_at"]).replace("Z", "+00:00")).timestamp()
-
-
 def handle(system: System, request: dict) -> dict:
     action = request["action"]
     try:
@@ -709,7 +761,7 @@ def handle(system: System, request: dict) -> dict:
             status, result = revoke_key(system, request)
         elif action == "password_on":
             status, result = password_on(system, request)
-            if system.now().timestamp() - _requested_at(request) > LATE_AFTER_S:
+            if system.now().timestamp() > request["answer_by"] - ANSWER_MARGIN_S:
                 # CORE has stopped waiting: the password would only sit in /run/rosy.
                 password_off(system, "late", request["by"], force=True)
                 raise HelperError(f"{CORE_WAIT_S:.0f} s 안에 답하지 못해 비밀번호를 되돌렸습니다")
@@ -718,7 +770,8 @@ def handle(system: System, request: dict) -> dict:
             status, result = 204, None
         else:
             state = password_state(system)
-            status, result = 200, {"enabled": state["enabled"], "expires_at": state["expires_at"]}
+            status, result = 200, {"enabled": state["enabled"], "expires_at": state["expires_at"],
+                                   "lock_pending": state["lock_pending"]}
         error, message = None, ""
     except Invalid as exc:
         status, result, error, message = 422, None, "SSH_INVALID", str(exc)
@@ -754,20 +807,37 @@ def main(argv: Optional[list[str]] = None, *, system: Optional[System] = None) -
             path = system.path(REQUEST)
             if not os.path.lexists(path):
                 break
-            request = read_request(path, system.now().timestamp())
-            # Consumed before it is applied: a second trigger never repeats it. An invalid or
-            # stale one goes too, so it never wakes the path unit again.
+            # Claimed by a rename, then read and removed: consumed before it is applied, so a
+            # second trigger never repeats it, and one CORE writes meanwhile stays for the next
+            # turn. An invalid or stale one goes too, so it never wakes the path unit again.
+            claimed = system.path(CLAIMED)
             try:
-                path.unlink()
+                os.replace(path, claimed)
             except OSError as exc:
-                log(f"request not removed: {exc}")
+                log(f"request not claimed: {exc}")
                 break
+            request = read_request(claimed, system.now().timestamp())
+            try:
+                claimed.unlink()
+            except OSError as exc:
+                log(f"claimed request not removed: {exc}")
             if request is None:
                 print(json.dumps({"ssh_access": "ignored"}), flush=True)
                 continue
             response = handle(system, request)
-            write_atomic(system.path(RESPONSE), json.dumps(response, ensure_ascii=False, sort_keys=True) + "\n",
-                         0o640, system.core_group())
+            try:
+                write_atomic(system.path(RESPONSE),
+                             json.dumps(response, ensure_ascii=False, sort_keys=True) + "\n", 0o640,
+                             system.core_group())
+            except OSError as exc:
+                log(f"response not written: {exc}")
+                if request["action"] == "password_on" and response["status"] == 200:
+                    # Nobody will receive it: off again.
+                    try:
+                        password_off(system, "undelivered", request["by"], force=True)
+                    except (HelperError, OSError) as off_exc:
+                        log(f"password off after an undelivered answer: {off_exc}")
+                continue
             print(json.dumps({"ssh_access": request["action"], "status": response["status"],
                               "error": response["error"]}), flush=True)
     return 0

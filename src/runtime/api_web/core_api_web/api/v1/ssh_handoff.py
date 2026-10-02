@@ -24,6 +24,8 @@ REQUEST_FILE = "/run/rosy/ssh-access.request"
 RESPONSE_FILE = "/run/rosy/ssh-access.response"
 #: The contract's bound on how long CORE waits for the helper.
 WAIT_S = 10.0
+#: rosy-ssh-access ignores a request older than this (REQUEST_MAX_AGE_S): a pending one past it is dead.
+REQUEST_MAX_AGE_S = 30.0
 POLL_S = 0.05
 MAX_RESPONSE_BYTES = 64 * 1024
 ACTIONS = ("list", "add", "revoke", "password_on", "password_off", "password_status")
@@ -38,12 +40,15 @@ class HandoffUnavailable(RuntimeError):
 
 
 def build_request(action: str, by: str, params: dict[str, Any], *, request_id: Optional[str] = None,
-                  now: Optional[datetime] = None) -> dict[str, Any]:
+                  now: Optional[datetime] = None, wait_s: float = WAIT_S) -> dict[str, Any]:
+    """`answer_by` (epoch seconds) is when CORE stops waiting: the helper rolls back a password it
+    could only answer later, since nobody would read it."""
     if action not in ACTIONS:
         raise ValueError(f"unknown action {action!r}")
     moment = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
     return {"schema": SCHEMA, "request_id": request_id or secrets.token_hex(8), "action": action,
-            "requested_at": moment.strftime("%Y-%m-%dT%H:%M:%SZ"), "by": by, **params}
+            "requested_at": moment.strftime("%Y-%m-%dT%H:%M:%SZ"), "answer_by": moment.timestamp() + wait_s,
+            "by": by, **params}
 
 
 def write_request(path: str, request: dict[str, Any]) -> None:
@@ -100,6 +105,28 @@ def read_response(path: str, request_id: str) -> Optional[dict[str, Any]]:
     return {"status": status, "error": error, "message": message[:300], "result": result}
 
 
+def _pending_password_off(path: str) -> bool:
+    """A password_off this module left after a password_on timeout, not yet consumed and still live."""
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0) | getattr(os, "O_CLOEXEC", 0)
+    try:
+        descriptor = os.open(path, flags)
+    except OSError:
+        return False
+    try:
+        raw = os.read(descriptor, 4096)
+    except OSError:
+        return False
+    finally:
+        os.close(descriptor)
+    try:
+        data = json.loads(raw.decode("utf-8"))
+        requested = datetime.strptime(data["requested_at"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+    except (UnicodeDecodeError, ValueError, KeyError, TypeError):
+        return False
+    age = time.time() - requested.timestamp()
+    return data.get("action") == "password_off" and -5.0 <= age <= REQUEST_MAX_AGE_S
+
+
 def _unlink(path: str) -> None:
     try:
         os.unlink(path)
@@ -113,15 +140,20 @@ def exchange(action: str, by: str, params: dict[str, Any], *, request_path: str 
              sleep: Callable[[float], None] = time.sleep) -> dict[str, Any]:
     """Write one request and return the helper's validated answer; HandoffUnavailable otherwise.
 
-    One exchange at a time: the caller holds a lock (there is one request file).
+    One exchange at a time: the caller holds a lock (there is one request file). `wait_s` is
+    the whole wait, including one for a pending password_off, which is never overwritten.
     """
-    request = build_request(action, by, params)
+    deadline = clock() + wait_s
+    while _pending_password_off(request_path):
+        if clock() >= deadline:
+            raise HandoffUnavailable("이전 비밀번호 끄기 요청을 rosy-ssh-access 가 아직 처리하지 않았습니다")
+        sleep(poll_s)
+    request = build_request(action, by, params, wait_s=max(0.0, deadline - clock()))
     _unlink(response_path)  # an answer to an earlier, abandoned request
     try:
         write_request(request_path, request)
     except OSError as exc:
         raise HandoffUnavailable("요청 파일을 쓰지 못했습니다") from exc
-    deadline = clock() + wait_s
     while True:
         answer = read_response(response_path, request["request_id"])
         if answer is not None:
