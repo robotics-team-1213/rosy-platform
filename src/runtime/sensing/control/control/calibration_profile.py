@@ -174,9 +174,12 @@ class ProfileLease:
                 return report
         return None
 
-    def rotation_estimate_required(self):
-        """An expired learned envelope must not silently fall back to bootstrap."""
-        return self._rotation_required
+    def rotation_estimate_required(self, now):
+        """A live applied profile that carries an envelope must be judged by it: missing or
+        mismatched while live means no rotation. D-424: once the lease expires the gate falls
+        back to the URDF rotation radius (never below it) instead of latching until a new
+        calibration."""
+        return bool(self._rotation_required and self.live(now))
 
     def report(self, now):
         return {'schema_version': 1, 'applied': self.live(now),

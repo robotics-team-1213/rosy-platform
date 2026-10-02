@@ -12,4 +12,4 @@ class RotationClearanceTest(unittest.TestCase):
         self.assertTrue(rotation_clearance_allowed(False, True, True, .02, (.2,)*6))
         for margin in (None, .005, float('nan')):
             self.assertFalse(rotation_clearance_allowed(True, True, True, margin, (.2,)*6))
-        self.assertFalse(rotation_clearance_allowed(True, True, True, .02, (.2,float('inf'))))
+        self.assertTrue(rotation_clearance_allowed(True, True, True, .02, (.2,float('inf'))))   # D-424

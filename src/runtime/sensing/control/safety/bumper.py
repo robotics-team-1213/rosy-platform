@@ -1,7 +1,7 @@
 """Subject: contact sensing. Lidar sectors + US. Publish ranges."""
 import math
 import time
-from ..control.lidar_guard import scan_body_clearance, rotation_scan_observed
+from ..control.lidar_guard import rotation_scan_observed
 from ..control.footprint_guard import translation_clearance
 
 from sensor_msgs.msg import LaserScan, Range
@@ -9,7 +9,8 @@ from std_msgs.msg import Float32
 from rclpy.time import Time
 from tf2_ros import TransformException
 
-from ..sensing.body import ignore_m, use_radius
+from ..sensing.body import BODY, footprint_bounds, ignore_m, use_radius
+from ..control.lidar_guard import strip_ranges
 from ..sensing.lidar import find_frontiers, is_robot_scan, opening_max, sector_range, wrap_pi
 from ..control.route import line_route
 from ..control.lidar_guard import directional_lidar_limits
@@ -101,6 +102,7 @@ class Bumper:
         kw = dict(pctl=0.0, ignore_below=lo, max_r=12.0)
         self.lidar_front = sector_range(msg, yaw, self.half_w, **kw)
         self.lidar_rear = sector_range(msg, wrap_pi(yaw + math.pi), self.half_w, **kw)
+        # D-424: front/rear bumpers judge the URDF body strip in base_footprint, below.
         side = math.radians(70.0)
         side_w = math.radians(28.0)
         self.lidar_left = sector_range(msg, wrap_pi(yaw + side), side_w, **kw)
@@ -113,20 +115,37 @@ class Bumper:
         self.lidar_rotation_observed = rotation_scan_observed(msg.ranges, msg.angle_increment,
             max(lo,msg.range_min), min(12.,msg.range_max))
         self.translation_clearance = None
+        # D-424: every return beyond the chassis cut `lo` is an obstacle point in base_footprint
+        # (also below range_min: a near return can only shorten a gap); returns inside the URDF
+        # body outline are the robot. A beam without a return is unknown out to range_min.
         if bool(self.get_parameter('lidar_use_tf').value):
             mount = tf.transform.translation
+            mount_xy = (mount.x, mount.y)
             rotation = math.atan2(2*(q.w*q.z+q.x*q.y),1-2*(q.y*q.y+q.z*q.z))
-            self.lidar_rotation_clearance = scan_body_clearance(
-                msg.ranges, msg.angle_min, msg.angle_increment,
-                mount.x, mount.y, rotation, max(lo,msg.range_min), min(12.,msg.range_max))
-            points = []
-            for i, distance in enumerate(msg.ranges):
-                if math.isfinite(distance) and max(lo, msg.range_min) < distance <= min(12., msg.range_max):
-                    angle = msg.angle_min + i*msg.angle_increment + rotation
-                    points.append((mount.x+distance*math.cos(angle), mount.y+distance*math.sin(angle)))
+        else:
+            mount_xy = (BODY.lidar_x_m, BODY.lidar_y_m)
+            rotation = -yaw                     # scan angle - nose yaw = robot-frame angle
+        far = min(12., msg.range_max)
+        points, unknown = [], []
+        for i, distance in enumerate(msg.ranges):
+            angle = msg.angle_min + i*msg.angle_increment + rotation
+            if not math.isfinite(distance) or distance <= 0.0:
+                if msg.range_min > 0.0:
+                    unknown.append((mount_xy[0]+msg.range_min*math.cos(angle),
+                                    mount_xy[1]+msg.range_min*math.sin(angle)))
+                continue
+            if lo < distance <= far:
+                point = (mount_xy[0]+distance*math.cos(angle), mount_xy[1]+distance*math.sin(angle))
+                if not BODY.contains(*point):
+                    points.append(point)
+        us_covers = self.observations.fresh('us', time.monotonic()) if hasattr(self, 'observations') else False
+        self.lidar_front, self.lidar_rear = strip_ranges(points, unknown, mount=mount_xy,
+                                                         ultrasonic_covers=us_covers)
+        if bool(self.get_parameter('lidar_use_tf').value):
+            self.lidar_rotation_clearance = min((math.hypot(x, y) for x, y in points), default=math.inf)
             self.lidar_rotation_points = points
             if self.get_parameter('footprint_guard_enabled').value:
-                self.translation_clearance = translation_clearance(points, (.077, .043, .077))
+                self.translation_clearance = translation_clearance(points, footprint_bounds())
         cap = float(getattr(self, 'open_max', 0.40) or 0.40)
         self.open_range, self.open_yaw = opening_max(
             msg, yaw, math.radians(70.0), max_r=cap
