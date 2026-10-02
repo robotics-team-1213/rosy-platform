@@ -57,8 +57,10 @@ Status 는 Proposed 그대로다. CORE 쪽만 구현했고 Fleet 콘솔 화면(�
 - 설정: `line_follow.recovery_*`(기본 `recovery_local_enabled: false`), 몸 기하 `body_lidar_x_m`·`body_rear_x_m`·`body_rotation_radius_m` 는 로봇 패키지 `core.yaml` 에 URDF 공칭값(geometry.yaml, drift 시험)으로만 둔다. 없으면 후진하지 않는다.
 - 해석과 차이:
   - 후진 거리는 시간으로 잰다(`recovery_back_m / 속도`). 오도메트리 폐루프가 아니다.
-  - 뒤 여유는 self-mask 적용 LiDAR 점의 뒤 직진 띠(`obstacle_corridor_half_width_m`)에서 몸 뒤끝(caster.rear_x_m)까지다. LiDAR `range_min` 안은 보이지 않으므로 `range_min - (LiDAR 에서 몸 뒤끝까지)` 가 `recovery_rear_clear_m` 보다 크면 후진을 거부한다(`rear_blind`). Pinky C1(range_min 약 0.15 m, 뒤끝까지 0.059 m)은 사각 0.091 m 라 지금 설정으로는 후진하지 않는다. 실기에서 켜기 전에 사각 처리(값 조정 또는 지나온 길 신뢰 규칙)를 사용자가 정해야 한다.
+  - 뒤 여유는 self-mask 적용 LiDAR 점의 뒤 직진 띠(`obstacle_corridor_half_width_m`)에서 몸 뒤끝(caster.rear_x_m)까지다. LiDAR 가 못 보는 뒤 띠(사각)는 `range_min - (LiDAR 에서 몸 뒤끝까지)` 와, 몸 뒤끝을 넘어 뒤 띠에 닿는 self-mask 창이 가리는 깊이 중 큰 값이다. scan 이 `range_min` 을 주지 않으면 사각을 모르는 것으로 보고 후진하지 않는다.
+  - **사용자 결정 (2026-10-02): 방금 지나온 공간은 허용한다.** 사각이 `recovery_rear_clear_m` 보다 깊으면, CORE 가 실제로 낸(교통 게이트 뒤) 차선 추종 명령을 단조 시계로 적분해, 마지막 전진 명령까지 `recovery_trail_s`(기본 5 s) 동안 앞으로 순 `recovery_back_m` 이상 왔고 누적 |yaw| 가 `recovery_trail_yaw_deg`(기본 10°) 이하일 때만 후진한다. 후진 거리는 그 순 전진 거리를 넘지 않는다(후진·이전 시도는 순 거리에서 빠진다). 제자리 회전, 기록 없음, 기록이 1 s 넘게 끊김, 모드 변경 뒤에는 `rear_blind` 로 거부한다. 보이는 뒤 여유(사각 밖)는 후진 전·중 계속 `recovery_rear_clear_m` 보다 커야 한다. 해석: 막힘이 열릴 때는 이미 `obstacle_escalate_s` 넘게 서 있으므로, 창은 벽시계 최근 5 s 가 아니라 마지막 전진 명령에서 끝나는 5 s 다. 그 뒤로 로봇이 서 있던 동안 사각에 무언가 들어왔을 가능성은 이 규칙이 막지 않는다.
   - 실패한 시도 뒤 시도가 남으면 관제를 다시 15 s 기다리지 않고 바로 다음 후진을 한다. 시도를 다 쓰거나 거부·중단되면 HOLD 로 남아 관제 답만 기다린다.
   - `BACK_AND_RETRY` 도 `recovery_local_enabled` 와 최대 시도 수를 따른다(로컬 복구의 전제인 self-mask 측정이 같으므로).
   - 막힘 중 앞이 스스로 비면(`obstacle_ahead` 가 풀리면) 사건을 `cleared` 로 닫는다.
   - D-379 녹화 구간 표시는 아직 없다. 사건의 시각으로 구간을 찾을 수 있다.
+- 독립 검토 반영(2026-10-02): 막힘 원인을 보고 상태가 아니라 래치(`_escalated`·`_lost_latched`)로 판단(일시 HOLD 가 막힘을 `cleared` 로 닫고 시도를 되살리던 결함), 받아들인 답은 증거 개정을 올려 미리 계산된 후진을 막고, MANUAL·ABORT 는 관리자 잠금 안에서 차선 추종을 끈 뒤 `POST /mode` 와 같은 전이(보정 lease, navigation·swarm 취소)를 쓴다. 답 사건에 토큰 id, LiDAR 정지를 쓰는데 scan 이 없으면 RESUME 거부, 설정 형 검사, sector 모드의 몸 점은 막힘 근처에서만 계산.
