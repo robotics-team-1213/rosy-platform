@@ -4441,3 +4441,9 @@
 - 변경: S1 세 번째 실행(호스트 과부하로 공정하지 않음, 거울 결정 0, 거울 탐지 1/1, 실제 주행 중 들어 옮김 2/2)의 결과를 기록. 닻 점프 기준의 dt를 1 s로 묶고 거울 서명은 dt와 무관하게 닻을 뺀다(안전). 호출 제한 2.5 s, 시간 초과 결정은 15 s 안 그 자세 도달 시 출처 인정. `needs_human`은 표시이고 중재는 계속된다. 다음 S1은 부하가 낮을 때.
 - 증거: `docs/plans/2026-10-02-d395-s1-bench-results.md` Run 3, 브랜치 fix/d395-anchor-jump-timing.
 - gate 변화: 없음(Proposed).
+## 2026-10-02 · uncommitted · test(sim): D-407 차선 막힘 복구 Gazebo 검증
+
+- 변경: `docs/validation/d407-gazebo-stuck-recovery-2026-10-02/`(result.md, evidence/run_sim.sh)와 `tools/sim/d407_stuck_scenarios.py`(ROS 없는 REST 시나리오 구동기, 가짜 Fleet hub)를 더했다. CORE 코드는 바꾸지 않았다.
+- 증거: map_v2_fleet_real keep, 한 대. 모서리 obstacle_ahead 후진 0.080/0.0805 m → 2회 → WAITING_CONSOLE, 회전교차로 lane_lost 후진 0.077–0.082 m → recovered, 관제 답 다섯(stale/닫힌 id 409 포함), hold 끊김·e-stop 중 0 확인. 원시 기록은 X:\DevTemp\d407-gz.
+- 발견: FleetAgent 를 켜면 CORE 시작이 죽어(services.py:528, agent.py:49) ASKING 15 s 경로를 시험할 수 없다. 복귀 뒤 같은 자리 재막힘이 시도 수를 되살려 끝없이 반복한다. 뒤 띠(±0.09)가 옆 벽과 LiDAR 잡음 한 장으로 후진을 거부·중단한다.
+- gate 변화: 없음. ROS-SIM 부분 증거이며 D-407 은 Proposed 그대로다.
