@@ -37,10 +37,15 @@ def test_switches_default_from_the_unit_environment():
     assert d["shadow_pointer"] == "/var/lib/rosy/models/shadow"
     assert d["learned_max_rate_hz"] == ("env", "ROSY_LEARNED_MAX_HZ", "3.0")
     assert d["recording_root"] == "/var/lib/rosy/camera/recordings"
+    # D-423: the advisory object detector, off unless ROSY_OBJECT_DET=true.
+    assert d["object_det"] == ("env", "ROSY_OBJECT_DET")
+    assert d["object_det_pointer"] == "/var/lib/rosy/models/object_det/active"
+    assert d["object_det_max_rate_hz"] == ("env", "ROSY_OBJECT_DET_MAX_HZ", "2.0")
 
 
 def test_new_actions_are_gated_by_their_switch():
     assert "condition=IfCondition(learned_shadow)" in SRC
+    assert "condition=IfCondition(object_det)" in SRC
     assert SRC.count("condition=IfCondition(capture)") == 2  # trigger node + recorder
     assert "'publish_compressed': ParameterValue(capture, value_type=bool)" in SRC
     assert "'--snapshot'" in SRC
@@ -107,7 +112,8 @@ def _started(args):
 BASE = ["camera_detect_node", "line_observer_node", "road_observer_node"]
 
 
-SWITCH_ENV = ("ROSY_LEARNED_SHADOW", "ROSY_CAPTURE", "ROSY_LEARNED_MAX_HZ")
+SWITCH_ENV = ("ROSY_LEARNED_SHADOW", "ROSY_CAPTURE", "ROSY_LEARNED_MAX_HZ", "ROSY_OBJECT_DET",
+              "ROSY_OBJECT_DET_MAX_HZ")
 
 
 @pytest.fixture
@@ -213,3 +219,17 @@ def test_learned_rate_garbage_keeps_the_default_and_says_so(no_switch_env, launc
     no_switch_env.setenv("ROSY_LEARNED_MAX_HZ", garbage)
     assert _max_rate() == 3.0
     assert "ROSY_LEARNED_MAX_HZ" in " ".join(r.getMessage() for r in launch_warnings)
+
+
+def test_introspection_object_det_only(no_switch_env):
+    assert _started({"object_det": "true"}) == BASE + ["object_detector_node"]
+
+
+def test_env_true_turns_object_det_on(no_switch_env):
+    no_switch_env.setenv("ROSY_OBJECT_DET", "true")
+    assert _started({}) == BASE + ["object_detector_node"]
+
+
+def test_object_det_gets_its_pointer_and_rate():
+    assert "'pointer': LaunchConfiguration('object_det_pointer')" in SRC
+    assert "'max_rate_hz': ParameterValue(LaunchConfiguration('object_det_max_rate_hz')" in SRC

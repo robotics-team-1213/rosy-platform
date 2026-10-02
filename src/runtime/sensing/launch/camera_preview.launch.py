@@ -12,7 +12,11 @@ On the device both default from ROSY_LEARNED_SHADOW / ROSY_CAPTURE, which
 rosy-camera.service reads from the optional /etc/rosy/learned-perception.env.
 Only "true" and "false" count; anything else is off, with a warning (D-62).
 learned_max_rate_hz (ROSY_LEARNED_MAX_HZ, default 3.0; 0 = every frame) caps
-how often learned_lane_node infers: a Pi 5 at the full 8 fps was ~175 % CPU."""
+how often learned_lane_node infers: a Pi 5 at the full 8 fps was ~175 % CPU.
+
+D-423: object_det:=true (ROSY_OBJECT_DET, default off) starts object_detector_node,
+advisory detections on vision/detections from object_det_pointer, at most
+object_det_max_rate_hz (ROSY_OBJECT_DET_MAX_HZ, default 2.0). CORE never reads it."""
 
 import os
 
@@ -57,6 +61,7 @@ def generate_launch_description():
     config = os.path.join(get_package_share_directory('control'), 'config')
     namespace = LaunchConfiguration('namespace')
     learned_shadow = LaunchConfiguration('learned_shadow')
+    object_det = LaunchConfiguration('object_det')
     capture = LaunchConfiguration('capture')
     recording_root = LaunchConfiguration('recording_root')
     line_params = [os.path.join(config, 'line_follow.yaml')]
@@ -74,6 +79,11 @@ def generate_launch_description():
         DeclareLaunchArgument('learned_max_rate_hz',
                               default_value=_env_rate('ROSY_LEARNED_MAX_HZ', '3.0')),
         DeclareLaunchArgument('capture', default_value=_env_switch('ROSY_CAPTURE')),
+        DeclareLaunchArgument('object_det', default_value=_env_switch('ROSY_OBJECT_DET')),
+        DeclareLaunchArgument('object_det_pointer',
+                              default_value='/var/lib/rosy/models/object_det/active'),
+        DeclareLaunchArgument('object_det_max_rate_hz',
+                              default_value=_env_rate('ROSY_OBJECT_DET_MAX_HZ', '2.0')),
         DeclareLaunchArgument('recording_root',
                               default_value='/var/lib/rosy/camera/recordings'),
         LogInfo(msg=f'IR calibration overlay: {overlay_note}'),
@@ -100,6 +110,14 @@ def generate_launch_description():
             condition=IfCondition(learned_shadow),
             parameters=[{'pointer': LaunchConfiguration('shadow_pointer'),
                          'max_rate_hz': ParameterValue(LaunchConfiguration('learned_max_rate_hz'),
+                                                       value_type=float)}],
+        ),
+        Node(
+            package='control', executable='object_detector_node', namespace=namespace,
+            output='screen', respawn=True, respawn_delay=2.0,
+            condition=IfCondition(object_det),
+            parameters=[{'pointer': LaunchConfiguration('object_det_pointer'),
+                         'max_rate_hz': ParameterValue(LaunchConfiguration('object_det_max_rate_hz'),
                                                        value_type=float)}],
         ),
         Node(
