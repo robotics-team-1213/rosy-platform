@@ -74,8 +74,8 @@
 
 ## 최근 기록
 
+- 2026-10-02 · uncommitted · fix(fleet): require durable Action success when recovering goal HOLD
 - 2026-10-02 · uncommitted · test(fleet): retain ownership after grant expiry while Action is running
 - 2026-10-02 · uncommitted · feat(fleet): D-421 전체 주행 취소를 main d5b3bd10 위에 다시 얹음
 - 2026-10-02 · uncommitted · docs(adr): 전체 주행 취소 ADR D-417 → D-421
 - 2026-10-02 · e223af71 · fix(fleet): D-417 재검토 — 표시를 목표 호출 전에, 시도·출처·유예로 맞춘다
-- 2026-10-02 · d3b0444b · fix(fleet): D-417 검토 반영 — CORE 확인된 취소가 로봇 점유를 푼다

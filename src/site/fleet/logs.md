@@ -1362,3 +1362,9 @@
 - Change: add an expired-grant replay where a running local Action remains authoritative after both stores reopen; assert no resubmit, HOLD, retained DISPATCHING claims, and rejection of a conflicting Mission admission.
 - Evidence: `test/test_platform_cell_replay.py` 2 passed.
 - Gate: SOURCE/LOCAL only; stop/cancel interruptions and independent physical-occupancy evidence remain open.
+
+
+## 2026-10-02 · uncommitted · fix(fleet): require durable Action success when recovering goal HOLD
+- Change: verify exact Action/attempt terminal proof inside completion transaction and authenticated producer callback; retain claims for non-success outcomes. Add restart replay fixtures for accepted, cancel-acknowledged and release-command states plus stale/conflicting goal evidence.
+- Evidence: focused Mission, Action, provenance and replay suites 101 passed; changed Python files pass flake8.
+- Gate: SOURCE/LOCAL only. Actual CELL_TRANSFER CellJob recovery and ROS-SIM acceptance remain open; Task 7 is IN PROGRESS.
