@@ -350,7 +350,8 @@ class LocAssistNode(Node):
             odom = self.odom()
             if odom is not None and self.core.search_due(now, odom):
                 if self.core.settle_timed_out:
-                    self.get_logger().warning('robot never settled (odom twist) within the cap; searching anyway')
+                    self.get_logger().warning(f'search after the settle cap ({self.core.settle_timed_out}): '
+                                              'the robot was not seen still; searching anyway')
                 self.start_search(now, odom)
 
     # --- outputs ------------------------------------------------------------

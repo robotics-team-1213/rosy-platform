@@ -1,6 +1,7 @@
 """D-395 P2-3 node-level checks in isolated ROS Jazzy (skipped on a host without rclpy)."""
 import json
 import math
+import time
 
 import pytest
 
@@ -55,10 +56,11 @@ def test_the_node_feeds_the_namespaced_odom_twist_to_the_settle_gate(node):
     turning = Odometry()
     turning.twist.twist.angular.z = .3
     node.on_odom(turning)
-    now = node.now()
-    assert not node.core.search_due(now + .6, ODOM)
+    assert not node.core.search_due(node.now(), ODOM)
     node.on_odom(Odometry())
-    assert node.core.search_due(node.now() + .6, ODOM)
+    time.sleep(.6)
+    node.on_odom(Odometry())                    # still for 0.6 s, and the twist is fresh
+    assert node.core.search_due(node.now(), ODOM)
 
 
 def test_a_stop_between_the_paint_load_and_the_search_skips_the_search():

@@ -19,11 +19,21 @@ TRUTH = PoseCandidate(-1.26, .49, -math.pi / 2, .97, 'slot:A')
 MIRROR = PoseCandidate(1.26, -.49, math.pi / 2, .97, 'global')
 
 
-def core(**kwargs):
-    """A core whose robot has stood still since before t=0 (odom twist zero)."""
+def core(odom_stream=True, **kwargs):
+    """A core whose robot has stood still since before t=0.
+
+    `odom_stream`: a still odom twist arrives at every `search_due` call, as a
+    live 20-50 Hz odom would. Settle-gate tests pass False and feed twists."""
     ids = itertools.count(1)
     a = LocAssist(lambda: f"r-{next(ids)}", **kwargs)
     a.on_twist(-10., 0., 0.)
+    if odom_stream:
+        due = a.search_due
+
+        def streamed(now_s, odom):
+            a.on_twist(now_s, 0., 0.)
+            return due(now_s, odom)
+        a.search_due = streamed
     return a
 
 
@@ -541,56 +551,82 @@ def test_a_lost_mission_end_stops_pausing_the_search_after_the_longest_mission()
 # --- S1 re-run R3: search only once the robot is still ------------------------
 
 
+def still_core():
+    a = core(odom_stream=False)
+    a.on_twist(-.1, 0., 0.)
+    return a
+
+
 def test_a_still_robot_searches_at_once():
-    a = core()
-    assert a.search_due(0., ODOM) and not a.settle_timed_out
+    a = still_core()
+    a.on_twist(0., 0., 0.)
+    assert a.search_due(0., ODOM) and a.settle_timed_out is None
 
 
 def test_a_turning_robot_defers_the_search_until_half_a_second_still():
     """d1/d2: the search ran on the rotation's `done` while the robot still turned 1-3 deg."""
-    a = core()
+    a = still_core()
     a.on_mission(0., {"kind": "rotate_in_place", "state": "running", "reason": None})
     a.on_twist(1., 0., .3)
     a.on_mission(1., {"kind": "rotate_in_place", "state": "done", "reason": "done"})
     assert not a.search_due(1., ODOM)                 # done, but still turning
     a.on_twist(1.2, 0., .019)                         # below 0.02 rad/s: still from here
+    a.on_twist(1.6, 0., 0.)
     assert not a.search_due(1.6, ODOM)
     a.on_twist(1.65, .009, 0.)
-    assert a.search_due(1.7, ODOM) and not a.settle_timed_out
+    assert a.search_due(1.7, ODOM) and a.settle_timed_out is None
 
 
 def test_any_motion_restarts_the_still_window():
-    a = core()
+    a = still_core()
     a.on_twist(0., .01, 0.)                           # 0.01 m/s is not still
     a.on_twist(.1, 0., 0.)
     a.on_twist(.4, 0., .02)                           # 0.02 rad/s is not still
     a.on_twist(.5, 0., 0.)
+    a.on_twist(.9, 0., 0.)
     assert not a.search_due(.9, ODOM)
+    a.on_twist(1., 0., 0.)
     assert a.search_due(1., ODOM)
 
 
 def test_a_robot_that_never_settles_searches_after_five_seconds():
-    a = core()
+    a = still_core()
     a.on_twist(0., 0., .5)
     assert not a.search_due(0., ODOM)
+    a.on_twist(4.9, 0., .5)
     assert not a.search_due(4.9, ODOM)
-    assert a.search_due(5., ODOM) and a.settle_timed_out
+    assert a.search_due(5., ODOM) and a.settle_timed_out == 'never_settled'
     a.search_started(5., ODOM)
     a.search_finished(5.5, ODOM, [])
+    a.on_twist(10.5, 0., .5)
     assert not a.search_due(10.5, ODOM)               # retry due again: the cap restarts here
+    a.on_twist(15.4, 0., .5)
     assert not a.search_due(15.4, ODOM)
-    assert a.search_due(15.5, ODOM) and a.settle_timed_out
+    assert a.search_due(15.5, ODOM) and a.settle_timed_out == 'never_settled'
 
 
 def test_without_any_odom_the_cap_still_releases_the_search():
     a = LocAssist(lambda: "r-1")
     assert not a.search_due(0., ODOM)
-    assert a.search_due(5., ODOM) and a.settle_timed_out
+    assert a.search_due(5., ODOM) and a.settle_timed_out == 'no_fresh_odom'
+
+
+def test_a_still_reading_followed_by_silence_is_unknown_not_still():
+    """Odom lost after a still twist: the old reading must not pass as still."""
+    a = still_core()
+    a.on_twist(.4, 0., 0.)                            # still since -0.1, then silence
+    assert a.search_due(.9, ODOM)                     # 0.5 s old: still fresh enough
+    a.search_started(.9, ODOM)
+    a.search_finished(1., ODOM, [])
+    assert not a.search_due(6., ODOM)                 # retry due, last twist 5.6 s old
+    assert not a.search_due(10.9, ODOM)
+    assert a.search_due(11., ODOM) and a.settle_timed_out == 'no_fresh_odom'
 
 
 @pytest.mark.parametrize('when', ['pickup', 'suspect'])
 def test_the_set_down_and_suspect_searches_also_wait_for_stillness(when):
-    a = core()
+    a = still_core()
+    a.on_twist(1., 0., 0.)
     candidates_ready(a)
     if when == 'pickup':
         a.on_pickup(2., True)
@@ -604,5 +640,7 @@ def test_the_set_down_and_suspect_searches_also_wait_for_stillness(when):
     a.on_twist(t, .05, 0.)
     assert not a.search_due(t + .2, ODOM)
     a.on_twist(t + .3, 0., 0.)
+    a.on_twist(t + .7, 0., 0.)
     assert not a.search_due(t + .7, ODOM)
+    a.on_twist(t + .8, 0., 0.)
     assert a.search_due(t + .8, ODOM)

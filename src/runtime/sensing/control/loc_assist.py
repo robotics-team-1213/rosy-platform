@@ -52,7 +52,8 @@ RECEIPT_AHEAD_S = .5
 #: (lost message, CORE restart) stops pausing the search after this (P2-7).
 MISSION_PAUSE_S = 130.
 #: S1 re-run R3: a search waits until the odom twist stays under these for SETTLE_S;
-#: a scan taken while the robot still turns puts the candidate degrees off.
+#: a scan taken while the robot still turns puts the candidate degrees off. A twist
+#: older than SETTLE_S is unknown motion, not still (odom silent or lost).
 STILL_MPS, STILL_RADPS, SETTLE_S = .01, .02, .5
 #: A robot that never settles (odom lost, a creeping wheel) still gets a search after this.
 SETTLE_CAP_S = 5.
@@ -91,8 +92,9 @@ class LocAssist:
         self._pending = None                # request id whose 3 s check is running
         self._mission = None                # since when a CORE mission moves the robot (P2-7)
         self._still_since = None            # first odom twist of the current still run
+        self._twist_at = None               # when the latest odom twist arrived
         self._due_since = None              # since when a search waits for the robot to settle
-        self.settle_timed_out = False       # the last due search came from SETTLE_CAP_S
+        self.settle_timed_out = None        # why SETTLE_CAP_S released the last due search
 
     # --- inputs -------------------------------------------------------------
     def on_amcl_pose(self, pose):
@@ -128,6 +130,7 @@ class LocAssist:
 
     def on_twist(self, now_s, linear_mps, angular_radps):
         """Odom twist: speed in m/s and yaw rate in rad/s. Still means both under the limits."""
+        self._twist_at = float(now_s)
         still = abs(linear_mps) < STILL_MPS and abs(angular_radps) < STILL_RADPS  # NaN: moving
         if not still:
             self._still_since = None
@@ -195,15 +198,19 @@ class LocAssist:
         """Whether the node should start a candidate search now (odom: current (x, y, yaw)).
 
         A due search waits until the robot has been still for SETTLE_S, at most
-        SETTLE_CAP_S; `settle_timed_out` says the cap released it."""
+        SETTLE_CAP_S. `settle_timed_out` says why the cap released it:
+        'no_fresh_odom' (no twist within SETTLE_S) or 'never_settled'."""
         if not self._search_wanted(now_s, odom):
             self._due_since = None
             return False
         if self._due_since is None:
             self._due_since = float(now_s)
-        settled = self._still_since is not None and now_s - self._still_since >= SETTLE_S
-        self.settle_timed_out = not settled and now_s - self._due_since >= SETTLE_CAP_S
-        return settled or self.settle_timed_out
+        fresh = self._twist_at is not None and now_s - self._twist_at <= SETTLE_S
+        settled = fresh and self._still_since is not None and now_s - self._still_since >= SETTLE_S
+        self.settle_timed_out = None
+        if not settled and now_s - self._due_since >= SETTLE_CAP_S:
+            self.settle_timed_out = 'never_settled' if fresh else 'no_fresh_odom'
+        return settled or self.settle_timed_out is not None
 
     def _search_wanted(self, now_s, odom):
         if (self._searching is not None or self.held or self.machine.check is not None
