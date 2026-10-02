@@ -238,5 +238,7 @@
 
 ## 2026-10-02 · 0380d789 · fix(omx): re-review fixes N1 and minor 4
 
-- N1: feedback is counted until GOAL_ACCEPTED has been emitted, then replayed once; the runner acknowledges an overtaken RUNNING_FEEDBACK without journaling. Minor 4 (device side): the planner rejects `grasp_depth_m > height_m − fingertip_overhang_m` as `GRASP_DEPTH_BELOW_FINGERTIPS`; the accepted item geometry now carries `height_m`.
-- `fingertip_overhang_m` became required under `rosy_cell.cell/2` without a version bump, because /2 has not been released or used outside this branch.
+- 변경: fb3997c4(N1: GOAL_ACCEPTED를 emit하기 전까지 feedback은 세기만 하고, 그 뒤 하나로 재생한다. runner는 추월당한 RUNNING_FEEDBACK을 journal 없이 인정한다), 0380d789(minor 4 장치 쪽: 수락 item 형상에 `height_m`, `grasp_depth_m > height_m − fingertip_overhang_m`이면 `GRASP_DEPTH_BELOW_FINGERTIPS`로 거절).
+- 증거: host suites 629 passed, 실패는 main 기존 `test_control_imports_no_core_code` 하나. WSL Jazzy rclpy 반복 결과는 evidence README에 있다.
+- gate 변화: 없음(ROS-SIM HOLD 유지).
+- 결정: `fingertip_overhang_m`는 `rosy_cell.cell/2`의 필수 필드가 됐다. 버전은 올리지 않았다. /2는 아직 배포되지 않았고 이 브랜치 밖에서 쓰인 적이 없기 때문이다.
