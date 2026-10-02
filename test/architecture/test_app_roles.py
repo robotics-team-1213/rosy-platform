@@ -1,9 +1,8 @@
 """D-370 1·4항: each app keeps one role, and each operation has one owning surface.
 
 The role table lives in the ADR; these checks pin the parts code can break.
-Rosy Pilot (`src/hmi/pilot`) is not on main yet. Its check (no `/api/fleet` in Pilot
-code) is added in the commit that lands Pilot; until then Pilot is simply not a target,
-and `test_pilot_is_not_on_main_yet` turns red the moment the folder appears.
+Rosy Pilot is a live one-robot surface. D-425 adds explicit API-owner declarations
+and real server refusal/write checks in test/test_app_ownership_contracts.py.
 """
 
 from __future__ import annotations
@@ -116,6 +115,23 @@ def test_pilot_stays_a_one_robot_surface():
              if path.suffix in {".js", ".html"} and "test" not in path.parts
              and "/api/fleet" in path.read_text(encoding="utf-8")]
     assert calls == []
+
+
+def test_shared_transport_and_controls_do_not_choose_operational_endpoints():
+    """D-425: service adapters can name their contract; transport/UI cannot choose one."""
+    shared = ROOT / "src/hmi/web_common"
+    adapters = {"core-client.js", "fleet-client.js"}
+    # Evidence labels can name a route without issuing a request to it.
+    dispatch = re.compile(r"\b(?:fetch|api|postJson|request)\s*\(\s*['\"`]/api/(?:v1|fleet)/")
+    hits = []
+    for path in sorted(shared.glob("*.js")):
+        if path.name not in adapters:
+            hits.extend([
+                f"{path.relative_to(ROOT).as_posix()}:{number}: operational endpoint"
+                for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1)
+                if dispatch.search(line)
+            ])
+    assert hits == []
 
 
 def test_each_operation_has_one_owner():
