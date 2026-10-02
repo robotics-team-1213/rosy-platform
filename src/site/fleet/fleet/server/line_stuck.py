@@ -11,10 +11,15 @@ to the operator verbatim. The clearances and preview seq live only in the
 from __future__ import annotations
 
 import logging
+import sqlite3
 import time
 from collections import deque
+from contextlib import closing
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Callable, Iterable, Optional
+
+from .sqlite_policy import configure_connection
 
 DECISIONS = ("WAIT", "RESUME", "BACK_AND_RETRY", "MANUAL", "ABORT")
 _STATUS_KEYS = ("stuck_id", "cause", "phase", "held_s", "attempts", "max_attempts",
@@ -32,16 +37,25 @@ def _event_dict(event) -> dict:
 class LineStuckBoard:
     """Open stucks per robot from the gathered state, plus who answered what."""
 
-    def __init__(self, clock: Callable[[], float] = time.monotonic, history: int = 50) -> None:
+    def __init__(self, clock: Callable[[], float] = time.monotonic, history: int = 50,
+                 log: Optional["LineStuckAnswerLog"] = None) -> None:
         self._clock = clock
         self._open: dict[str, dict] = {}
         self._answers: deque = deque(maxlen=history)
+        self._log = log
+        self._observed_at: Optional[float] = None
+
+    def observed_age_s(self) -> Optional[float]:
+        """Seconds since the last gather (None = never gathered since start)."""
+        if self._observed_at is None:
+            return None
+        return round(max(0.0, self._clock() - self._observed_at), 2)
 
     def observe(self, robots: Iterable[dict],
                 events_of: Callable[[str, int], Iterable] = lambda _rid, _seq: ()) -> None:
         """One gathered snapshot. A robot that did not answer keeps its last stuck, marked
         unreachable: the operator must still see it, and CORE refuses an answer it cannot take."""
-        now = self._clock()
+        now = self._observed_at = self._clock()
         seen = set()
         for row in robots:
             robot_id = row["robot_id"]
@@ -100,14 +114,62 @@ class LineStuckBoard:
         return list(self._answers)
 
     def record(self, *, robot_id: str, stuck_id: str, decision: str, principal_id: str,
-               accepted: bool, outcome: Optional[str] = None, code: Optional[str] = None,
-               message: Optional[str] = None) -> dict:
-        """Audit one forwarded answer (who, what, CORE's verdict)."""
+               accepted: Optional[bool], outcome: Optional[str] = None,
+               code: Optional[str] = None, message: Optional[str] = None,
+               audit_id: Optional[str] = None) -> dict:
+        """Audit one forwarded answer (who, what, CORE's verdict; accepted None = unknown).
+
+        The row also goes to the durable log next to the API audit row (``audit_id``). The
+        robot has already been asked, so a log failure is logged, never turned into an error."""
         row = {"robot_id": robot_id, "stuck_id": stuck_id, "decision": decision,
                "principal_id": principal_id, "accepted": accepted, "outcome": outcome,
-               "code": code, "message": message,
+               "code": code, "message": message, "audit_id": audit_id,
                "at": datetime.now(timezone.utc).isoformat(timespec="milliseconds")}
         self._answers.append(row)
         _LOG.info("line stuck answer robot=%s stuck=%s decision=%s by=%s accepted=%s code=%s",
                   robot_id, stuck_id, decision, principal_id, accepted, code)
+        if self._log is not None:
+            try:
+                self._log.append(row)
+            except (OSError, sqlite3.Error):
+                _LOG.exception("line stuck answer was not durably recorded robot=%s stuck=%s",
+                               robot_id, stuck_id)
         return row
+
+
+class LineStuckAnswerLog:
+    """Durable answer record in the Fleet journal database (beside ``fleet_api_audit``)."""
+
+    def __init__(self, path: Path | str) -> None:
+        self.path = Path(path)
+        with closing(self._connect()) as connection, connection:
+            connection.execute(
+                """CREATE TABLE IF NOT EXISTS fleet_line_stuck_answers (
+                       answer_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                       at TEXT NOT NULL, audit_id TEXT, robot_id TEXT NOT NULL,
+                       stuck_id TEXT NOT NULL, decision TEXT NOT NULL,
+                       principal_id TEXT NOT NULL, accepted INTEGER, outcome TEXT,
+                       code TEXT, message TEXT)""")
+
+    def append(self, row: dict) -> None:
+        accepted = None if row["accepted"] is None else int(bool(row["accepted"]))
+        with closing(self._connect()) as connection, connection:
+            connection.execute(
+                """INSERT INTO fleet_line_stuck_answers (at, audit_id, robot_id, stuck_id,
+                   decision, principal_id, accepted, outcome, code, message)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (row["at"], row["audit_id"], row["robot_id"], row["stuck_id"], row["decision"],
+                 row["principal_id"], accepted, row["outcome"], row["code"],
+                 (row["message"] or "")[:512] or None))
+
+    def rows(self, limit: int = 100) -> list[dict]:
+        with closing(self._connect()) as connection:
+            found = connection.execute(
+                "SELECT * FROM fleet_line_stuck_answers ORDER BY answer_id DESC LIMIT ?",
+                (limit,)).fetchall()
+        return [dict(row) for row in found]
+
+    def _connect(self) -> sqlite3.Connection:
+        connection = sqlite3.connect(self.path, timeout=5.0)
+        connection.row_factory = sqlite3.Row
+        return configure_connection(connection)

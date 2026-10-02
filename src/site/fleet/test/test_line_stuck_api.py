@@ -2,15 +2,19 @@
 
 from __future__ import annotations
 
+import uuid
 from hashlib import sha256
 
+import httpx
+import pytest
 from fastapi.testclient import TestClient
 
 from core_common.protocol.schemas import EventMessage
 from fakes import FakeClock, FakeRobot
 from fleet.server.app import create_app
 from fleet.server.console import FleetConsole
-from fleet.server.line_stuck import LineStuckBoard
+from fleet.server.console_routes import LineStuckDecisionRequest
+from fleet.server.line_stuck import LineStuckAnswerLog, LineStuckBoard
 from fleet.server.task_service import FleetTaskService
 from fleet.server.task_store import FleetTaskStore
 from fleet.swarm.robots import RobotEndpoint
@@ -112,15 +116,21 @@ def test_board_reports_how_old_its_observation_is():
     assert board.view("rosy_01")["observed_age_s"] == 2.5
 
 
-def test_list_route_returns_pending_stucks_to_a_viewer(tmp_path):
-    client, _ = _named_app(_console(FakeRobot("rosy_01", state=_state())), tmp_path)
+def test_list_route_serves_the_last_gather_without_asking_the_robots_again(tmp_path):
+    robot = FakeRobot("rosy_01", state=_state())
+    client, _ = _named_app(_console(robot), tmp_path)
 
     assert client.get("/api/fleet/line-stuck").status_code == 401
+    before = client.get("/api/fleet/line-stuck", headers=_auth(VIEWER)).json()
+    assert before == {"pending": [], "answers": [], "observed_age_s": None}
+    _row(client)
+    reads = robot.calls.count(("state",))
     listed = client.get("/api/fleet/line-stuck", headers=_auth(VIEWER))
 
     assert listed.status_code == 200
     assert [p["stuck_id"] for p in listed.json()["pending"]] == ["stuck-abc"]
-    assert listed.json()["answers"] == []
+    assert listed.json()["answers"] == [] and listed.json()["observed_age_s"] is not None
+    assert robot.calls.count(("state",)) == reads
 
 
 def test_an_operator_answer_is_forwarded_and_audited_with_the_principal(tmp_path):
@@ -133,6 +143,14 @@ def test_an_operator_answer_is_forwarded_and_audited_with_the_principal(tmp_path
                            headers=_auth(OPERATOR))
 
     assert response.status_code == 200, response.text
+    durable = LineStuckAnswerLog(store.path).rows()
+    assert len(durable) == 1
+    assert {k: durable[0][k] for k in ("robot_id", "stuck_id", "decision", "principal_id",
+                                       "accepted", "outcome", "code")} == {
+        "robot_id": "rosy_01", "stuck_id": "stuck-abc", "decision": "WAIT",
+        "principal_id": "op-7", "accepted": 1, "outcome": "hold", "code": None}
+    audit_ids = {row.get("request_id") for row in store.api_audit()}
+    assert durable[0]["audit_id"] and durable[0]["audit_id"] in audit_ids
     assert ("line_stuck_decision", "stuck-abc", "WAIT") in robot.calls
     body = response.json()
     assert body["actor_id"] == "op-7" and body["result"]["outcome"] == "hold"
@@ -165,11 +183,17 @@ def test_a_bad_decision_or_unknown_robot_is_refused_before_any_robot_call(tmp_pa
     extra = client.post("/api/fleet/robots/rosy_01/line-stuck/decision",
                         json={"stuck_id": "stuck-abc", "decision": "WAIT", "force": True},
                         headers=_auth(OPERATOR))
+    odd_id = client.post("/api/fleet/robots/rosy_01/line-stuck/decision",
+                         json={"stuck_id": "stuck abc\n<x>", "decision": "WAIT"},
+                         headers=_auth(OPERATOR))
+    core_id = f"stuck-{uuid.uuid4().hex[:12]}"   # CORE StuckRecovery's id shape
+    assert LineStuckDecisionRequest(stuck_id=core_id, decision="WAIT").stuck_id == core_id
+    assert LineStuckDecisionRequest(stuck_id=str(uuid.uuid4()), decision="WAIT")
     unknown = client.post("/api/fleet/robots/rosy_99/line-stuck/decision",
                           json={"stuck_id": "stuck-abc", "decision": "WAIT"},
                           headers=_auth(OPERATOR))
 
-    assert bad.status_code == 422 and extra.status_code == 422
+    assert bad.status_code == 422 and extra.status_code == 422 and odd_id.status_code == 422
     assert unknown.status_code == 404
     assert not any(call[0] == "line_stuck_decision" for call in robot.calls)
 
@@ -207,6 +231,7 @@ def test_a_refused_resume_keeps_cores_reason_and_shows_on_the_open_stuck(tmp_pat
 
     assert response.status_code == 409
     assert response.json()["detail"]["message"] == "RESUME refused: object_within_stop_distance"
+    _row(client)
     shown = client.get("/api/fleet/line-stuck", headers=_auth(VIEWER)).json()["pending"][0]
     assert shown["fleet_answer"]["code"] == "STUCK_DECISION_REFUSED"
 
@@ -223,15 +248,34 @@ def test_the_console_serves_the_panel_module_and_its_shell(tmp_path):
         assert needle in page.text
 
 
-def test_an_unreachable_robot_is_502_and_still_audited(tmp_path):
+_REQUEST = httpx.Request("POST", "http://127.0.0.1:8080/api/v1/line-follow/stuck/decision")
+
+
+@pytest.mark.parametrize("error, code, accepted, durable_accepted", [
+    (httpx.ConnectError("refused", request=_REQUEST), "ROBOT_UNREACHABLE", False, 0),
+    (ConnectionRefusedError("refused"), "ROBOT_UNREACHABLE", False, 0),
+    (httpx.ReadTimeout("timed out", request=_REQUEST), "STUCK_DECISION_OUTCOME_UNKNOWN", None, None),
+    (httpx.RemoteProtocolError("dropped", request=_REQUEST), "STUCK_DECISION_OUTCOME_UNKNOWN",
+     None, None),
+])
+def test_transport_failures_are_502_recorded_and_a_timeout_says_the_outcome_is_unknown(
+        tmp_path, error, code, accepted, durable_accepted):
     robot = FakeRobot("rosy_01", state=_state())
-    robot.stuck_decision_error = ConnectionError("no route")
-    console = _console(robot)
-    client, _ = _named_app(console, tmp_path)
+    robot.stuck_decision_error = error
+    client, store = _named_app(_console(robot), tmp_path)
 
     response = client.post("/api/fleet/robots/rosy_01/line-stuck/decision",
                            json={"stuck_id": "stuck-abc", "decision": "ABORT"},
                            headers=_auth(OPERATOR))
 
     assert response.status_code == 502
-    assert client.app.state.line_stuck.answers()[-1]["accepted"] is False
+    detail = response.json()["detail"]
+    assert detail["code"] == code and detail["transport"] == type(error).__name__
+    if accepted is None:
+        assert "may have applied" in detail["message"] and "Re-read the stuck" in detail["message"]
+    else:
+        assert "not delivered" in detail["message"]
+    assert client.app.state.line_stuck.answers()[-1]["accepted"] is accepted
+    row = LineStuckAnswerLog(store.path).rows()[0]
+    assert row["accepted"] == durable_accepted and row["code"] == code
+    assert store.api_audit()[0]["status_code"] == 502
