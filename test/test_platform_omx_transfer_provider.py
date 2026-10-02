@@ -217,3 +217,123 @@ def test_skill_wrapped_cell_action_cancels_only_its_live_phase(tmp_path):
     )
     assert len(executions) == 1
     assert driver.submissions == driver.cancellations == driver.phase_cancellations == []
+
+
+@pytest.mark.parametrize("deny_phase", [None, "transfer"])
+def test_composed_cell_skill_runs_real_analytic_plan_and_phase_journal(tmp_path, deny_phase):
+    from dataclasses import asdict, replace
+    from omx_adapter.action_api import ActionApi
+    from omx_adapter.action_runner import ActionRunner
+    from omx_adapter.action_store import ActionStore
+    from omx_adapter.command_owner import TrajectoryCommand
+    from omx_adapter.gripper_contract import GripperObservation
+    from omx_adapter.kinematics import OmxKinematics
+    from rosy.integrations.robots.omx.transfer_provider import create_omx_cell_transfer_phase_factory
+    from test_omx_action_api import _cell_transfer_grant, _runner
+    from test_omx_pick_place_runner import _event, _GoalPort
+    from test_omx_pose_plan import _request, _planner, _state
+
+    kin = OmxKinematics.load()
+    profile = CellPlanningProfile.load(ROOT / "deploy/robot/omx/sim/cell_profile.yaml")
+    request = _request()
+    transfer = dict(_cell_transfer_grant()["cell_transfer"])
+    for name in ("job_id", "recipe_sha256", "cell_sha256", "step_index", "item",
+                 "pick_approach_z", "place_approach_z", "carry_z"):
+        transfer[name] = getattr(request, name)
+    for name in ("home", "pick", "place"):
+        transfer[name] = asdict(getattr(request, name))
+    grant = FleetCellTransferGrant.model_validate(
+        _cell_transfer_grant(cell_transfer=transfer),
+    )
+    states = [_state(kin, profile)]
+    port = _GoalPort()
+
+    def succeed(command, goal, callback):
+        callback(_event("GOAL_ACCEPTED", command, command.phase_id, goal, 1))
+        states[0] = replace(states[0], sequence=states[0].sequence + 1,
+                            joint_positions=dict(command.positions), observed_at_monotonic_s=100.5)
+        callback(_event("TERMINAL_RESULT", command, command.phase_id, goal, 2, status=4, result_code=0))
+
+    port.on_submit = succeed
+    store, driver, action_runner = _runner(tmp_path)
+    executions = []
+    factory = create_omx_cell_transfer_phase_factory(
+        profile=profile, planner=_planner(kin), execution_state=lambda: states[0],
+        accepted_item_geometry=lambda recipe, item: {
+            "grasp_width_m": request.grasp_width_m, "grasp_depth_m": request.grasp_depth_m,
+            "height_m": 0.03,
+        } if (recipe, item) == (request.recipe_sha256, request.item) else None,
+        command_for_phase=lambda accepted, phase: TrajectoryCommand(
+            workcell_id=accepted.workcell_id, instance_id=accepted.instance_id,
+            command_id=f"{accepted.action_id}-{phase.phase_id}", session_id="session-1",
+            owner="rule_based", positions=dict(zip(phase.joint_names, phase.points[-1].positions)),
+            duration_s=phase.points[-1].time_from_start_s,
+            source_state_sequence=phase.source_state_sequence,
+            calibration_revision=phase.calibration_revision, joint_names=phase.joint_names,
+            trajectory_points=phase.points, phase_id=phase.phase_id,
+        ),
+        goal_port=port, submission_fence=action_runner.submission_fence,
+        phase_gate=lambda accepted, phase: accepted is grant and phase != deny_phase,
+        current_fence=action_runner.current_fence,
+        gripper_readback=lambda: GripperObservation(
+            grant.workcell_id, grant.instance_id, "readback", 7, 100.5,
+            "CLOSED", True, request.item, grant.dispatch_generation,
+        ),
+        monotonic=lambda: 100.5,
+    )
+
+    def capture(accepted, recorder):
+        # Keep the deserialized grant used by the local semantic gate.
+        nonlocal grant
+        grant = accepted
+        execution = factory(accepted, recorder)
+        executions.append(execution)
+        return execution
+
+    action_runner.phase_runner_factories["CELL_TRANSFER"] = capture
+    response = ActionApi(action_runner).dispatch({
+        "version": 2, "operation": "SubmitAction", "grant": grant.model_dump(mode="json"),
+    }, peer_uid=1001)
+    assert response["status"] == 200, response
+    assert response["receipt"]["state"] == "ACCEPTED", response
+    execution = executions[0]
+    execution.advance()
+    if deny_phase:
+        with pytest.raises(RuntimeError, match="semantic workflow gate"):
+            execution.advance()
+        assert [row["phase_id"] for row in store.action_phases(grant.action_id)] == ["approach", "grasp"]
+    else:
+        execution.advance()
+        execution.advance()
+        assert [row["state"] for row in store.action_phases(grant.action_id)] == ["SUCCEEDED"] * 4
+        with pytest.raises(RuntimeError, match="already been submitted"):
+            execution.advance()
+        assert len(port.submissions) == 4
+    assert driver.submissions == []
+    from omx_adapter.local_stop import LocalStopBlocked, LocalStopController
+    from test_omx_action_api import FakeDriver
+
+    reopened_store = ActionStore(tmp_path / "actions.sqlite3")
+    reopened_driver = FakeDriver()
+    reopened_stop = LocalStopController(
+        tmp_path / "actions.sqlite3", workcell_id=grant.workcell_id, instance_id=grant.instance_id,
+    )
+    with pytest.raises(LocalStopBlocked, match="unresolved local Actions"):
+        reopened_stop.rearm(authority_epoch=2, dispatch_generation=8, operator_confirmed=True,
+                            fleet_fence_current=action_runner.current_fence)
+    reopened_runner = ActionRunner(
+        reopened_store, reopened_driver, workcell_id=grant.workcell_id, instance_id=grant.instance_id,
+        principal_for_peer=action_runner.principal_for_peer, allowed_peer_uids={1001},
+        current_fence=action_runner.current_fence, capability_current=action_runner.capability_current,
+        submission_fence=reopened_stop, phase_runner_factories={"CELL_TRANSFER": capture}, enabled=True,
+    )
+    replay = ActionApi(reopened_runner).dispatch({
+        "version": 2, "operation": "SubmitAction", "grant": grant.model_dump(mode="json"),
+    }, peer_uid=1001)
+    assert replay["status"] == 200, replay
+    assert replay["receipt"]["attempt_id"] == grant.attempt_id
+    assert replay["receipt"]["created"] is False
+    assert len(executions) == 1
+    assert len(port.submissions) == (2 if deny_phase else 4)
+    assert reopened_store.action_phases(grant.action_id) == store.action_phases(grant.action_id)
+    assert reopened_driver.submissions == []

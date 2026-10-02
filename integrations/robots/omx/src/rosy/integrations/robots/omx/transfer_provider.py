@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
+from datetime import datetime
 import math
 from typing import TYPE_CHECKING, Protocol
 
@@ -12,6 +13,11 @@ from rosy.skills.manipulation.transfer import PlannedTransfer, TransferPlanner, 
 if TYPE_CHECKING:
     from core_common.protocol.schemas import FleetCellTransferGrant
     from omx_adapter.manipulation_plan import ExecutionStateSnapshot
+    from omx_adapter.command_owner import TrajectoryCommand
+    from omx_adapter.gripper_contract import GripperObservation
+    from omx_adapter.action_runner import StopFence
+    from omx_adapter.manipulation_plan import PlannedMotionPhase
+    from omx_adapter.pick_place_runner import PhaseGoalPort
     from omx_adapter.pose_plan import CellPlanningProfile, CellTransferPlan, CellTransferPlanProvider
 
 
@@ -20,6 +26,8 @@ class _PhaseExecutor(Protocol):
     def active_phase_id(self) -> str | None: ...
 
     def start(self, planned: PlannedTransfer) -> object: ...
+
+    def advance(self) -> object: ...
 
     def cancel_current(self) -> Mapping[str, object]: ...
 
@@ -31,6 +39,8 @@ class _PickPlaceRunner(Protocol):
     def active_phase_id(self) -> str | None: ...
 
     def start(self) -> object: ...
+
+    def advance(self) -> object: ...
 
     def cancel_current(self) -> Mapping[str, object]: ...
 
@@ -58,6 +68,9 @@ class OMXPickPlaceExecutor:
 
     def cancel_current(self) -> Mapping[str, object]:
         return self.runner.cancel_current()
+
+    def advance(self) -> object:
+        return self.runner.advance()
 
 
 def _pose(value: object, field: str) -> dict[str, float]:
@@ -175,6 +188,10 @@ class _SkillPhaseExecution:
     def cancel_current(self) -> Mapping[str, object]:
         return self.executor.cancel_current()
 
+    def advance(self) -> object:
+        """Advance one locally gated phase; no implicit retry or ROS dispatch loop."""
+        return self.executor.advance()
+
 
 def create_cell_transfer_phase_factory(
     *,
@@ -198,3 +215,52 @@ def create_cell_transfer_phase_factory(
         return _SkillPhaseExecution(skill, planned, executor)
 
     return create
+
+
+def create_omx_cell_transfer_phase_factory(
+    *,
+    profile: CellPlanningProfile,
+    planner: CellTransferPlanProvider,
+    execution_state: Callable[[], ExecutionStateSnapshot],
+    accepted_item_geometry: Callable[[str, str], Mapping[str, float] | None],
+    command_for_phase: Callable[[FleetCellTransferGrant, PlannedMotionPhase], TrajectoryCommand],
+    goal_port: PhaseGoalPort,
+    submission_fence: StopFence,
+    phase_gate: Callable[[FleetCellTransferGrant, str], bool],
+    current_fence: Callable[[int, int], bool],
+    gripper_readback: Callable[[], GripperObservation],
+    monotonic: Callable[[], float],
+    now: Callable[[], datetime] | None = None,
+) -> Callable[[FleetCellTransferGrant, object], _SkillPhaseExecution]:
+    """Compose the Skill with the actual OMX planner and phase coordinator.
+
+    The caller supplies the existing owner's command and goal ports. This
+    factory creates neither a ROS node nor another command owner. Local workflow
+    code must explicitly advance phases and establish terminal workflow evidence.
+    """
+    from omx_adapter.pick_place_runner import PickPlaceRunner
+
+    def planner_for_grant(grant: FleetCellTransferGrant) -> OMXAnalyticTransferPlanner:
+        return OMXAnalyticTransferPlanner(
+            grant, profile=profile, planner=planner, execution_state=execution_state,
+            accepted_item_geometry=accepted_item_geometry,
+        )
+
+    def executor_for_grant(grant: FleetCellTransferGrant, recorder: object,
+                           planned: PlannedTransfer) -> PickPlaceRunner:
+        return PickPlaceRunner(
+            recorder, grant, planned.plan,
+            command_for_phase=lambda phase: command_for_phase(grant, phase),
+            goal_port=goal_port, submission_fence=submission_fence,
+            phase_gate=lambda phase: phase_gate(grant, phase), current_fence=current_fence,
+            current_execution_state=execution_state,
+            start_state_tolerances=profile.start_state_tolerances(),
+            max_joint_state_age_s=profile.max_joint_state_age_s,
+            monotonic=monotonic, now=now, cell_profile=profile,
+            gripper_readback=gripper_readback, held_object_id=grant.cell_transfer.item,
+        )
+
+    return create_cell_transfer_phase_factory(
+        skill=TransferSkill(), planner_for_grant=planner_for_grant,
+        executor_for_grant=executor_for_grant,
+    )

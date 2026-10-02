@@ -4588,3 +4588,9 @@
 - Change: forward the existing OMX coordinator active_phase_id through both Skill integration layers so ActionRunner exact-phase cancel reaches the journaled goal. Reject a mismatched phase and retain separate phase cancel and parent terminal meanings.
 - Evidence: red reproduction on real ActionApi/ActionRunner/ActionStore before the fix; focused provider/Skill/API/Cell/PickPlaceRunner regression 68 passed. Independent review: 4 passed, no Critical/Important findings. Quick tier: 96 passed / 25 freshness warnings.
 - Gate: SOURCE/LOCAL only. Full runtime composition, Cell two-ledger replay and ROS-SIM remain unproven.
+
+
+## 2026-10-03 · uncommitted · feat: compose Cell Skill with actual OMX planner and phase runner
+- Change: construct existing PickPlaceRunner with Skill-bound analytic planning and accepted profile/state/geometry; preserve existing owner ports, grant-scoped phase gates, local stop fencing and exact cancellation. Advance remains an explicit local workflow operation.
+- Evidence: missing-factory red regression; focused actual planner/API/runner/journal/Skill/boundary tests 75 passed. Four phases and denied transfer covered; persisted local replay does not submit again, and unresolved parent blocks rearm. Full OMX adapter plus provider/Skill/boundaries: 353 passed / 5 skipped. Quick tier: 96 passed / 25 freshness warnings. Independent review: 6 passed, no Critical/Important findings.
+- Gate: SOURCE/LOCAL only; no second owner or ROS loop added. Parent terminal workflow, Fleet/OMX two-ledger replay and ROS-SIM remain open.
