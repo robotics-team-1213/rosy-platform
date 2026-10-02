@@ -15,6 +15,8 @@ EnvironmentFile=-/etc/rosy/learned-perception.env
 LogsDirectory=rosy-camera
 StateDirectory=rosy/camera
 StateDirectoryMode=0750
+# D-411: pilot_recorder_node's sessions (tmpfiles: 2750 rosy-camera:rosy-core; CORE reads).
+ReadWritePaths=/var/lib/rosy/pilot-recordings
 Environment=ROS_HOME=/var/log/rosy-camera ROS_LOG_DIR=/var/log/rosy-camera
 Environment=HOME=/var/lib/rosy/camera
 Environment=PYTHONNOUSERSITE=1

@@ -723,6 +723,12 @@
 - 증거: `test/test_localization_cross_lane.py` +1 (13 passed).
 - gate 변화: 없음.
 
+## 2026-10-02 · f341e9fd · feat(core): D-411 A 녹화 브리지 배선과 API 시험
+- 변경: `bridge/ros_bridge.py` 가 `teleop/intent`·`pilot_recorder/fetched` 발행, `pilot_recorder/status` 구독, SetBool 클라이언트, 가드 배선(정지 재시도·확인된 정지). `core/services.py` 에 `pilot_recording`. `test_recordings_api.py` 로 권한·차단·짧은 본문·소유자 없는 정지·슬롯 해제를 고정.
+- 증거: `python -m pytest src/runtime/gateway/test/test_recordings_api.py src/runtime/gateway/test/test_bridge_timers.py -q` → 29 passed (2026-10-02 Windows).
+- gate 변화: SOURCE 유지. ROS-SIM HOLD — 계획 Verification ROS-SIM 체크리스트(WSL Ubuntu) 미실행, DEVICE 증거 없음.
+- 결정: D-411 A.
+
 ## 2026-10-02 · 94a8b833 · fix(fleet_agent): hub 작업을 API 루프에서 시작
 
 - 변경: `fleet.hub_url`+`pairing_token` 이 있으면 `CoreServices.build` 의 `fleet_agent.start()` 가 루프 없이 `asyncio.create_task` 를 불러 CORE 가 죽었다(D-407 Gazebo 2026-10-02). `create_app` 이 라우터 lifespan 을 감싸 uvicorn 루프에서 `start_on_loop()` 를 부른다. e-stop 리스너는 `line_follow.stop(reason="estop")`.

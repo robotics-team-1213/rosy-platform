@@ -70,6 +70,10 @@ class CommandManager:
         self._pending_shadow: Optional[tuple] = None
         #: Failures swallowed in announce_pending (shadow judge or a publish).
         self.announce_errors = 0
+        #: D-411: evidence hook for every teleop decision (rosy.teleop.intent/1).
+        #: Set by the ROS bridge. It can never refuse or delay a command.
+        self.intent_sink = None
+        self.intent_errors = 0
         self._safety.estop_listeners.append(self._clear_for_stop)
         self._safety.policy_listeners.append(self._clear_for_stop)
 
@@ -85,23 +89,41 @@ class CommandManager:
                                  source="command_manager", data={"source": source, "reason": reason})
 
     def teleop(self, linear: float, angular: float, source: str = "manual") -> tuple[bool, str]:
+        accepted, code, clipped = self._teleop_decision(linear, angular, source)
+        self.note_intent(linear, angular, source, accepted, code, clipped=clipped)
+        return accepted, code
+
+    def note_intent(self, linear: float, angular: float, source: str, accepted: bool, code: str,
+                    clipped: Optional[tuple[float, float]] = None) -> None:
+        """D-411: what the operator asked for and what CORE decided. Evidence only."""
+        if self.intent_sink is None:
+            return
+        try:
+            self.intent_sink(raw_linear=linear, raw_angular=angular, clipped=clipped, source=source,
+                             mode=self._modes.mode.value, accepted=accepted, code=code,
+                             t_mono_ns=time.monotonic_ns())
+        except Exception:  # noqa: BLE001 - evidence must never refuse a command
+            self.intent_errors += 1
+
+    def _teleop_decision(self, linear: float, angular: float,
+                         source: str) -> tuple[bool, str, Optional[tuple[float, float]]]:
         if not self._registry.is_active_source(source):
             self._reject(source, "unregistered source")
-            return False, "VALIDATION_ERROR"
+            return False, "VALIDATION_ERROR", None
         if self._safety.estop or self._modes.is_emergency:
             self._reject(source, "e-stop active")
-            return False, "EMERGENCY_ACTIVE"
+            return False, "EMERGENCY_ACTIVE", None
         if not self._motion_ready():
             self.clear_manual()
             self._reject(source, "navigation readiness HOLD")
-            return False, "HARDWARE_NOT_READY"
+            return False, "HARDWARE_NOT_READY", None
         if self._modes.mode is not Mode.MANUAL:
             self._reject(source, f"mode is {self._modes.mode.value}, not MANUAL")
-            return False, "MODE_CONFLICT"
+            return False, "MODE_CONFLICT", None
         if not finite_velocity(linear, angular):
             self.clear_manual()
             self._reject(source, "invalid velocity")
-            return False, "VALIDATION_ERROR"
+            return False, "VALIDATION_ERROR", None
         linear, angular = self._safety.clip(linear, angular, scope="manual")
         # 명령을 먼저 놓고 워치독을 나중에 되살린다. 거꾸로면 그 사이의 틱이
         # 되살아난 워치독과 만료된 **옛** 명령을 함께 읽어 바퀴로 다시 보낸다.
@@ -111,7 +133,7 @@ class CommandManager:
         self.watchdog.refresh()
         # 새 명령이 왔으니 다음 끊김은 다시 알릴 일이다.
         self._session += 1
-        return True, ""
+        return True, "", (linear, angular)
 
     @property
     def manual_active(self) -> bool:

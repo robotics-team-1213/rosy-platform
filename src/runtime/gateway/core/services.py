@@ -24,6 +24,7 @@ from core_features.docking.manager import DockingConfig, DockingManager
 from core_features.fleet_agent.agent import FleetAgent
 from core_features.localization import LocalizationAssist, LocalizationMission, wire_assist
 from core_common.domain.adapters import AdapterRegistry
+from core_common.domain.pilot_recording import PilotRecordingGuard
 
 from core_common.domain.capabilities import runtime_capability_data, runtime_truth
 from core_common.domain.model import inventory_from_config, slices_from_config
@@ -251,6 +252,7 @@ class CoreServices:
     # D-321 addendum: attended calibration lease (visible on every screen, fences drive writes).
     calibration: CalibrationSessionManager
     adapter_registry: AdapterRegistry = field(default_factory=AdapterRegistry)
+    pilot_recording: PilotRecordingGuard = field(default_factory=PilotRecordingGuard)  # D-411 A
     started_at: float = field(default_factory=time.time)
     # Optional absorbed Control worker, owned by the RosyCoreNode lifecycle.
     # It is populated only when the explicit sensor adapter profile is enabled.
@@ -543,7 +545,7 @@ class CoreServices:
                    power=power, battery=battery, docking=docking, swarm=swarm,
                    runtime_probe=runtime_probe, maps=MapSnapshotStore(),
                    audit=audit, calibration=calibration,
-                   adapter_registry=adapter_registry,
+                   adapter_registry=adapter_registry, pilot_recording=PilotRecordingGuard(events=events),
                    dock_feed=dock_feed, localization=localization, loc_mission=loc_mission)
 
     def inventory(self) -> dict[str, Any]:

@@ -244,3 +244,15 @@
 - gate 변화: 전체 Pilot LOCAL HOLD 유지.
 - 결정: D-390 부록, D-18.
 - 교훈: 독립 기능 시험과 전체 부하 실행을 구분한다.
+
+## 2026-10-02 · 4e99d92e · feat(pilot): D-411 A 로봇 녹화 토글과 "녹화본" 시트
+- 변경: 순수 `recording.js`(경과·크기 서식, 토글 표시, 거부 코드 글자, 시트 행·차단 사유)와 DOM `screens/robot-recording.js`(1 s 폴링, 시작/정지, 시트 목록·새로고침·받기 — 409 는 사유만 보이고 다시 받지 않음, Content-Length 보다 짧으면 저장하지 않음, 나가기 때 이 기기가 시작한 녹화만 정지). 브라우저 녹화 버튼 이름을 "화면 녹화"로. `client.js` `apiBlob`. HUD 칩 `[data-drive-fact=recording]`, 휴대폰 폭에서 HUD 액션 줄바꿈. 자산 다섯 곳 등록, SW 캐시 `2026-10-02-1`. dev_server 가짜 녹화 API, `test_shell_assets` 에 CORE·SIM·dev 자산 동치 시험.
+- 증거: `ROSY_RUN_BROWSER_TESTS=1 python -m pytest src/hmi/pilot/test src/runtime/api_web/test/test_pilot_route.py src/products/omx/adapter/test/test_pilot_sim_api.py -q` → 89 passed (2026-10-02 Windows, Chromium; 새 브라우저 시험은 2000×1200·1200×2000·390×844).
+- gate 변화: SOURCE 유지. ROS-SIM HOLD — 계획 Verification ROS-SIM 체크리스트(WSL Ubuntu) 미실행, DEVICE 증거 없음.
+- 결정: D-411 A.
+
+## 2026-10-02 · 58b01802 · fix(pilot): D-411 A 로봇 녹화 리뷰 반영 — 크기 상한, 끊을 수 있는 받기, 낡은 폴링
+- 변경: 256 MB 를 넘는 녹화본은 Pilot 에서 받지 않고 `rosy_ml fetch <로봇> --http` 로 안내(blob 은 메모리에 통째로 든다). 받기마다 AbortController — 취소 버튼, 화면 나가기·dispose 때 끊음(끝까지 받지 않으면 CORE 가 fetched 로 두지 않는다), 10분 시한. 누를 때마다 epoch 를 올려 그 전에 떠난 폴링 응답을 버리고, 폴링은 한 번에 하나, 요청 시한 2 s. 403 문구는 정지(남의 녹화)·시작/받기(Operator 권한)로 나눔. 나가기는 보낸 시작이 끝나기를 기다린 뒤 이 기기 녹화만 멈춤. 비활성 토글에 reason, 알림·행 상태는 role=status aria-live=polite, 시트는 열 때 초점·Escape 로 닫힘·HUD 아래끝에 붙음(고정 오프셋 없음)·3 s 마다 새로 읽음. dev_server 시나리오(viewer·foreign·short·slow·conflict·big).
+- 증거: `python -m pytest src/hmi/pilot/test src/runtime/api_web/test/test_pilot_route.py src/products/omx/adapter/test/test_pilot_sim_api.py -q` → 63 passed, 35 skipped; `ROSY_RUN_BROWSER_TESTS=1` 브라우저 전체 35 passed(기존 23 + 녹화 12), 녹화 12개는 3회 반복 모두 통과 (2026-10-02 Windows, Chromium; 기계 부하로 Chromium 종료가 회당 20–50 s).
+- gate 변화: SOURCE 유지. ROS-SIM HOLD — 계획 Verification ROS-SIM 체크리스트(WSL Ubuntu) 미실행, DEVICE 증거 없음.
+- 결정: D-411 A.

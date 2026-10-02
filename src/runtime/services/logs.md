@@ -355,6 +355,12 @@
 - 증거: `test/test_localization_assist.py` +5(통과, odom·stale 에서 비움, 17개·문자열·잘못된 시각에서 상태 유지).
 - gate 변화: 없음.
 
+## 2026-10-02 · 410c6832 · feat(core_features): D-411 A teleop/intent 증거 훅
+- 변경: `command/manager.py` 에 `intent_sink`·`note_intent` — teleop 판정마다(관리자 앞 거부 포함) `rosy.teleop.intent/1` 을 낸다. 싱크 예외는 명령을 거부하지 않는다. 제어 경로는 이 증거를 읽지 않는다(D-2).
+- 증거: `python -m pytest src/runtime/services/test/test_teleop_intent.py -q` → 5 passed (2026-10-02 Windows).
+- gate 변화: SOURCE 유지. ROS-SIM HOLD — 계획 Verification ROS-SIM 체크리스트(WSL Ubuntu) 미실행, DEVICE 증거 없음.
+- 결정: D-411 A.
+
 ## 2026-10-02 · e83a955d · fix(line_follow): D-407 Gazebo 후속 — 재막힘 시도 이어 세기, 몸 폭 뒤 띠
 
 - 변경: recovered 뒤 `recovery_restuck_s`/`recovery_restuck_m` 안의 재막힘은 시도 수를 이어 받음(`restuck_of`), 뒤 띠 = URDF 몸 반폭 + 0.02 m, 거부·중단 사건에 scan 값, e-stop 닫힘 사유 `estop`. FleetAgent 는 실행 중인 루프가 없으면 시작을 미루고 API lifespan 에서 `start_on_loop()`(94a8b833).

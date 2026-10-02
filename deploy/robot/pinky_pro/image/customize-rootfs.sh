@@ -365,6 +365,7 @@ mkdir -p "$RELEASE" "$ROOT/etc/rosy/trusted-release-keys" "$ROOT/etc/cloud/cloud
 install -d -m 0755 -o root -g root "$ROOT/var/lib/rosy"
 chroot "$ROOT" install -d -m 2750 -o rosy-io -g rosy-core /var/lib/rosy/maps
 chroot "$ROOT" install -d -m 0750 -o root -g rosy-camera /var/lib/rosy/models  # D-373
+chroot "$ROOT" install -d -m 2750 -o rosy-camera -g rosy-core /var/lib/rosy/pilot-recordings  # D-411
 cp -a "$PAYLOAD/." "$RELEASE/"
 cp -a "$PAYLOAD/image-overlay/." "$ROOT/"
 rm -rf -- "$RELEASE/image-overlay"
