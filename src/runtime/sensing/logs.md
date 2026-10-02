@@ -910,3 +910,11 @@
 - 증거: 호스트 sensing 2288 passed, 104 skipped. `test_loc_candidates.py` +3(거친 단계가 2.5°·2 cm 어긋난 후보를 0.5°·1 cm 안으로, 후보 수·거울 유지, `global_match` 답이 872a5cc5 와 같음), `test_loc_assist.py` +1(`search` 가 전체 스캔을 넘김). 호스트 비용(loc_world 2 cm 지도): 정밀화 후보당 중앙값 87 ms(최대 130 ms), `global_candidates` 중앙값 1.83 → 1.92 s. Pi 측정은 D-395 rev. 5 대로 보류.
 - 남은 것: d1·d2 는 회전 미션 `done` 직후 바로 탐색했고 그때 로봇이 아직 1–3° 더 돌고 있었을 수 있다(driver truth 샘플 간격이 거칠어 확정 못 함). 그 경우 스캔 자체가 180° 자세라 정밀화로는 못 고친다. 미션 끝 뒤 정지 확인 후 탐색할지는 Gazebo 재실행으로 가린다.
 - gate 변화: 없음.
+
+## 2026-10-02 · c00b368d · fix(localization): D-395 S1 재실행 R3 — 로봇이 멈춘 뒤에만 탐색
+
+- 원인: 위 항목의 남은 것. d1·d2 는 회전 `done` 직후 아직 도는 중의 스캔으로 탐색했을 수 있다.
+- 변경: `LocAssist.on_twist` — odom twist 가 0.01 m/s, 0.02 rad/s 미만으로 0.5 s 이어져야 탐색한다(`STILL_MPS`·`STILL_RADPS`·`SETTLE_S`). 전원 켬, 미션 끝, 내려놓음, SUSPECT, 재시도 모두 같은 문을 지난다. 탐색이 필요해진 뒤 5 s(`SETTLE_CAP_S`)가 지나면 그래도 탐색하고 노드가 "never settled" 경고를 남긴다. odom 이 아예 없어도 5 s 상한으로 풀린다. 노드는 네임스페이스 상대 `odom`(gz_multi `/rosy_XX/odom`, 실기 bringup `odom`)을 늘 구독한다(트위스트만, 값쌈).
+- 증거: `test_loc_assist.py` +6(정지면 바로, 회전 중이면 미룸, 움직임이 창을 다시 시작, 5 s 상한, odom 없음, 내려놓음·SUSPECT), 기존 시험의 `core()` 는 t=0 이전부터 정지한 로봇. `test_loc_assist_node_ros.py` +1(WSL Jazzy: `/rosy_loc_test/odom` 구독, 회전 twist 는 미룸). WSL loc 시험 67 passed. 호스트 sensing 2295 passed, 104 skipped.
+- 남은 것: odom 이 끊기면 마지막 twist 가 남는다(정지였으면 바로 탐색). Gazebo 재실행으로 d1·d2 거부가 사라지는지 확인해야 한다.
+- gate 변화: 없음.
