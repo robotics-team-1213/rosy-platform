@@ -9,10 +9,11 @@ from __future__ import annotations
 import base64
 import importlib.util
 from pathlib import Path
+import shutil
 
 import pytest
 
-from fake_core_ssh import FakeCore, ed25519_public_key, fingerprint
+from fake_core_ssh import FakeCore, ed25519_public_key, fingerprint, isolate_home, real_ssh_snapshot
 
 ROOT = Path(__file__).resolve().parents[1]
 _SPEC = importlib.util.spec_from_file_location("rosy_ssh_enroll", ROOT / "tools" / "ssh" / "rosy_ssh_enroll.py")
@@ -38,13 +39,43 @@ class FakeKeygen:
         return 0, "", ""
 
 
+@pytest.fixture(scope="module", autouse=True)
+def real_profile_untouched():
+    before = real_ssh_snapshot()
+    yield
+    assert real_ssh_snapshot() == before, "a test wrote into the real ~/.ssh"
+
+
+@pytest.fixture(autouse=True)
+def home(tmp_path, monkeypatch):
+    return isolate_home(tmp_path, monkeypatch)
+
+
 @pytest.fixture
 def paths(tmp_path):
     return {"key": tmp_path / "ssh" / "rosy_dev_laptop", "known_hosts": tmp_path / "ssh" / "known_hosts_rosy",
             "config": tmp_path / "ssh" / "config"}
 
 
-def run(core: FakeCore, paths: dict, *extra: str, code: str = ADMIN_CODE, keygen=None, passphrase: str = ""):
+class FakeSsh:
+    """`ssh -G -F <file> <alias>`: answers with the HostName of the alias's block, like OpenSSH would."""
+
+    def __init__(self, code: int = 0, hostname: str | None = None):
+        self.code, self.hostname = code, hostname
+        self.calls: list[list[str]] = []
+
+    def __call__(self, argv: list[str]) -> tuple[int, str, str]:
+        self.calls.append(argv)
+        if self.code:
+            return self.code, "", "line 9: no argument after keyword \"proxycommand\""
+        lines = Path(argv[argv.index("-F") + 1]).read_text(encoding="utf-8").splitlines()
+        start = lines.index(f"Host {argv[-1]}")
+        hostname = self.hostname or lines[start + 1].split()[1]
+        return 0, f"host {argv[-1]}\nhostname {hostname}\nuser rosy\n", ""
+
+
+def run(core: FakeCore, paths: dict, *extra: str, code: str = ADMIN_CODE, keygen=None, passphrase: str = "",
+        ssh=None):
     keygen = keygen or FakeKeygen()
     argv = [ROBOT, "--label", "dev:laptop", "--key", str(paths["key"]),
             "--known-hosts", str(paths["known_hosts"]), "--ssh-config", str(paths["config"]), *extra]
@@ -55,7 +86,7 @@ def run(core: FakeCore, paths: dict, *extra: str, code: str = ADMIN_CODE, keygen
         return code
 
     status = tool.main(argv, ask_code=ask_code, ask_passphrase=lambda prompt: passphrase, keygen=keygen,
-                       client_for=lambda robot: tool.CoreClient(core.base_url))
+                       client_for=lambda robot: tool.CoreClient(core.base_url), ssh=ssh or FakeSsh())
     return status, keygen, prompts
 
 
@@ -105,18 +136,111 @@ def test_happy_path_creates_key_registers_it_writes_known_hosts_and_config_and_l
     assert f'ssh -F "{paths["config"]}" {HOST}' in text
 
 
-def test_default_config_path_prints_plain_ssh_command(tmp_path, monkeypatch, capsys):
-    monkeypatch.setattr(tool, "home", lambda: tmp_path)
+def test_defaults_write_only_inside_the_given_home(home, monkeypatch, capsys):
+    """Guard for the 2026-10-02 leak: with default paths every write lands under HOME/USERPROFILE."""
+    written: list[Path] = []
+    write, backup = tool.write_private_text, tool.backup_file
+
+    def record_write(path, text):
+        written.append(Path(path))
+        return write(path, text)
+
+    def record_backup(path):
+        copy = backup(path)
+        written.append(Path(copy))
+        return copy
+
+    monkeypatch.setattr(tool, "write_private_text", record_write)
+    monkeypatch.setattr(tool, "backup_file", record_backup)
+    (home / ".ssh").mkdir()
+    (home / ".ssh" / "config").write_text("Host other\n    HostName 192.0.2.99\n", encoding="utf-8")
+    keygen = FakeKeygen()
     with FakeCore(codes={ADMIN_CODE: "administrator"}) as core:
         status = tool.main([ROBOT, "--label", "dev:laptop"], ask_code=lambda p: ADMIN_CODE,
-                           ask_passphrase=lambda p: "", keygen=FakeKeygen(),
-                           client_for=lambda robot: tool.CoreClient(core.base_url))
+                           ask_passphrase=lambda p: "", keygen=keygen,
+                           client_for=lambda robot: tool.CoreClient(core.base_url), ssh=FakeSsh())
     assert status == 0
-    assert (tmp_path / ".ssh" / "rosy_dev_laptop.pub").is_file()
-    assert (tmp_path / ".ssh" / "known_hosts_rosy").is_file()
-    assert (tmp_path / ".ssh" / "config").is_file()
+    written.append(Path(keygen.calls[0][keygen.calls[0].index("-f") + 1]))
+    assert {path.name for path in written} >= {"rosy_dev_laptop", "known_hosts_rosy", "config"}
+    for path in written:
+        assert path.resolve().is_relative_to(home.resolve()), path
+    assert (home / ".ssh" / "rosy_dev_laptop.pub").is_file()
     text = _no_token_leak(core, capsys)
     assert f"ssh {HOST}" in text and "ssh -F" not in text
+
+
+def test_a_regression_in_argument_checks_still_cannot_write_a_bad_config(paths, monkeypatch, capsys):
+    """The leak's bad line: a robot argument with a newline became a bare `ProxyCommand` in ~/.ssh/config."""
+    import re
+
+    monkeypatch.setattr(tool, "ROBOT", re.compile(r"(?s).+"))  # argparse check gone
+    with FakeCore(codes={ADMIN_CODE: "administrator"}) as core:
+        status = tool.main(["192.0.2.10\nProxyCommand", "--label", "dev:laptop", "--key", str(paths["key"]),
+                            "--known-hosts", str(paths["known_hosts"]), "--ssh-config", str(paths["config"])],
+                           ask_code=lambda p: ADMIN_CODE, ask_passphrase=lambda p: "", keygen=FakeKeygen(),
+                           client_for=lambda robot: tool.CoreClient(core.base_url), ssh=FakeSsh())
+    assert status == 1
+    assert core.keys == {}
+    assert not paths["config"].exists() and not paths["known_hosts"].exists()
+    assert "refusing to write an invalid" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("name", ["192.0.2.10\nProxyCommand", "", "a b", "*"])
+def test_known_hosts_refuses_injected_names(name, tmp_path):
+    with pytest.raises(tool.SshAccessError, match="invalid known_hosts name"):
+        tool.plan_known_hosts(tmp_path / "kh", ["rosy-pinky-a", name], ["ssh-ed25519 AAAA"])
+
+
+@pytest.mark.parametrize("alias, address, identity", [
+    ("rosy-pinky-a", "192.0.2.10\nProxyCommand", "k"),
+    ("rosy-pinky-a", "", "k"),
+    ("rosy-pinky-a\nProxyCommand x", "192.0.2.10", "k"),
+    ("rosy-pinky-a", "192.0.2.10", "k\nProxyCommand x"),
+    ("rosy-pinky-a", "192.0.2.10", ""),
+])
+def test_host_block_refuses_empty_or_injected_values(alias, address, identity):
+    with pytest.raises(tool.SshAccessError, match="invalid ssh config (line|value)"):
+        tool.host_block(alias, address, Path(identity) if identity else Path(), Path("kh"))
+
+
+def test_existing_config_is_backed_up_before_it_is_edited(paths, capsys):
+    paths["config"].parent.mkdir(parents=True)
+    paths["config"].write_text("Host other\n    HostName 192.0.2.99\n", encoding="utf-8")
+    with FakeCore(codes={ADMIN_CODE: "administrator"}) as core:
+        assert run(core, paths)[0] == 0
+    backups = list(paths["config"].parent.glob("config.rosy-backup-*"))
+    assert len(backups) == 1
+    assert backups[0].read_text(encoding="utf-8") == "Host other\n    HostName 192.0.2.99\n"
+    assert not list(paths["config"].parent.glob("*.rosy-tmp"))
+    assert f"backup {backups[0]}" in _no_token_leak(core, capsys)
+
+
+@pytest.mark.parametrize("ssh", [FakeSsh(code=255), FakeSsh(hostname="192.0.2.99")], ids=["parse-error", "elsewhere"])
+def test_config_that_ssh_cannot_use_is_rolled_back(ssh, paths, capsys):
+    paths["config"].parent.mkdir(parents=True)
+    original = "Host other\n    HostName 192.0.2.99\n"
+    paths["config"].write_text(original, encoding="utf-8")
+    with FakeCore(codes={ADMIN_CODE: "administrator"}) as core:
+        status, _, _ = run(core, paths, ssh=ssh)
+    assert status == 1
+    assert paths["config"].read_text(encoding="utf-8") == original
+    assert ssh.calls[0][1:] == ["-G", "-F", str(paths["config"]), HOST]
+    assert "restored" in _no_token_leak(core, capsys)
+
+
+def test_a_new_config_that_ssh_cannot_parse_is_removed(paths, capsys):
+    with FakeCore(codes={ADMIN_CODE: "administrator"}) as core:
+        status, _, _ = run(core, paths, ssh=FakeSsh(code=255))
+    assert status == 1
+    assert not paths["config"].exists()
+    _no_token_leak(core, capsys)
+
+
+@pytest.mark.skipif(shutil.which("ssh") is None, reason="OpenSSH client not on PATH")
+def test_the_real_ssh_client_parses_the_written_config(paths, capsys):
+    with FakeCore(codes={ADMIN_CODE: "administrator"}) as core:
+        status, _, _ = run(core, paths, ssh=tool.run_tool)
+    assert status == 0, capsys.readouterr().err
 
 
 def test_existing_key_is_reused_without_keygen(paths, capsys):
@@ -257,7 +381,7 @@ def test_token_is_logged_out_when_host_keys_are_unusable(paths, capsys):
     assert core.keys == {}  # host keys are checked before the key is registered
     assert core.logged_out == core.issued
     assert not paths["config"].exists()
-    _no_token_leak(core, capsys)
+    assert "unusable hostname" in _no_token_leak(core, capsys)
 
 
 _REAL_HOST_KEY = ed25519_public_key(b"host")

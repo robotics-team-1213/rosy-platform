@@ -23,6 +23,7 @@ from __future__ import annotations
 import argparse
 import base64
 import contextlib
+import datetime as dt
 import getpass
 import hashlib
 import json
@@ -274,8 +275,14 @@ def write_private_text(path: Path, text: str) -> None:
     os.replace(temporary, path)
 
 
+KNOWN_HOSTS_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9.-]{0,252}")
+
+
 def plan_known_hosts(path: Path, names: list[str], keys: list[str]) -> tuple[str | None, str]:
     """(new text or None when unchanged, 'added' | 'replaced' | 'unchanged'). Other hosts' lines are kept."""
+    for name in names:
+        if not KNOWN_HOSTS_NAME.fullmatch(name):
+            raise SshAccessError(f"refusing to write an invalid known_hosts name {name!r:.80}")
     lines = _read(path).splitlines()
 
     def ours(line: str) -> bool:
@@ -291,17 +298,58 @@ def plan_known_hosts(path: Path, names: list[str], keys: list[str]) -> tuple[str
     return "\n".join(kept + new) + "\n", ("replaced" if old else "added")
 
 
+#: The only lines a managed block may contain. Every option has a non-empty value without control
+#: characters, so nothing like a bare `ProxyCommand` can ever reach an ssh config (2026-10-02 incident).
+CONFIG_HOST = re.compile(r"Host [a-z0-9][a-z0-9-]{0,62}")
+CONFIG_OPTION = re.compile(r"    (HostName [A-Za-z0-9][A-Za-z0-9.-]{0,252}|User rosy|IdentitiesOnly yes|AddKeysToAgent yes"
+                           r"|(?:IdentityFile|UserKnownHostsFile) \"[^\"\x00-\x1f\x7f]+\")")
+
+
 def _quoted(path: Path) -> str:
-    text = path.as_posix()
-    if '"' in text:
-        raise SshAccessError(f"cannot write a path with a double quote into ssh config: {text}")
-    return f'"{text}"'
+    if not path.name:
+        raise SshAccessError(f"invalid ssh config value: empty path {path}")
+    return f'"{path.as_posix()}"'
 
 
 def host_block(alias: str, address: str, identity: Path, known_hosts: Path, extra: tuple[str, ...] = ()) -> str:
     lines = [f"Host {alias}", f"    HostName {address}", "    User rosy", f"    IdentityFile {_quoted(identity)}",
              f"    UserKnownHostsFile {_quoted(known_hosts)}", "    IdentitiesOnly yes", *extra]
+    if not CONFIG_HOST.fullmatch(lines[0]):
+        raise SshAccessError(f"refusing to write an invalid ssh config line {lines[0]!r:.80}")
+    for line in lines[1:]:
+        if not CONFIG_OPTION.fullmatch(line):
+            raise SshAccessError(f"refusing to write an invalid ssh config line {line!r:.80}")
     return "\n".join(lines) + "\n"
+
+
+def backup_file(path: Path) -> Path:
+    stamp = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+    copy = path.with_name(f"{path.name}.rosy-backup-{stamp}")
+    shutil.copy2(path, copy)
+    return copy
+
+
+def ssh_client() -> str:
+    return shutil.which("ssh") or "ssh"
+
+
+def install_ssh_config(path: Path, text: str, alias: str, address: str, ssh: Runner) -> Path | None:
+    """Back up, replace atomically, then let OpenSSH parse it (`ssh -G`); roll back if it cannot use it."""
+    backup = backup_file(path) if path.exists() else None
+    write_private_text(path, text)
+    code, out, err = ssh([ssh_client(), "-G", "-F", str(path), alias])
+    resolved = [line.split(None, 1)[1].strip().lower() for line in out.splitlines()
+                if line.lower().startswith("hostname ")]
+    if code == 0 and resolved == [address.lower()]:
+        return backup
+    if backup is not None:
+        shutil.copy2(backup, path)
+        undo = f"restored the previous file from {backup.name}"
+    else:
+        path.unlink()
+        undo = "removed it again (restored: there was none before)"
+    problem = err.strip()[:300] if code != 0 else f"{alias} resolves to {resolved[:1]} instead of {address}"
+    raise SshAccessError(f"ssh -G could not use the new {path} ({problem}); {undo}")
 
 
 def plan_ssh_config(path: Path, alias: str, block: str) -> str | None:
@@ -378,7 +426,7 @@ def _parser() -> argparse.ArgumentParser:
     return parser
 
 
-def enroll(args, *, ask_code: Ask, ask_passphrase: Ask, keygen: Runner, client: CoreClient) -> int:
+def enroll(args, *, ask_code: Ask, ask_passphrase: Ask, keygen: Runner, client: CoreClient, ssh: Runner) -> int:
     label = args.label or default_label()
     ssh_dir = home() / ".ssh"
     key = args.key or ssh_dir / ("rosy_" + label.replace(":", "_"))
@@ -405,19 +453,21 @@ def enroll(args, *, ask_code: Ask, ask_passphrase: Ask, keygen: Runner, client: 
     if known_state == "replaced":
         print(f"{hostname}: the robot's host keys changed (card re-flashed?); replaced them in {known_hosts}")
     if config_text is not None:
-        write_private_text(config, config_text)
+        backup = install_ssh_config(config, config_text, hostname, args.robot, ssh)
+        print(f"updated {config}" + (f" (backup {backup})" if backup else ""))
     print("connect with:")
     print(f"  ssh {hostname}" if args.ssh_config is None else f'  ssh -F "{config}" {hostname}')
     return 0
 
 
 def main(argv: list[str] | None = None, *, ask_code: Ask | None = None, ask_passphrase: Ask | None = None,
-         keygen: Runner | None = None, client_for: Callable[[str], CoreClient] | None = None) -> int:
+         keygen: Runner | None = None, client_for: Callable[[str], CoreClient] | None = None,
+         ssh: Runner | None = None) -> int:
     args = _parser().parse_args(argv)
     client = (client_for or (lambda robot: CoreClient(f"http://{robot}:{args.api_port}")))(args.robot)
     try:
         return enroll(args, ask_code=ask_code or getpass.getpass, ask_passphrase=ask_passphrase or getpass.getpass,
-                      keygen=keygen or run_tool, client=client)
+                      keygen=keygen or run_tool, client=client, ssh=ssh or run_tool)
     except SshAccessError as error:
         print(f"rosy_ssh_enroll: {error}", file=sys.stderr)
         return 1

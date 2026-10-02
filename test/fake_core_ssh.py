@@ -11,10 +11,37 @@ import base64
 import hashlib
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
+import os
+from pathlib import Path
 import re
 import secrets
 import struct
 import threading
+
+# The real profile, captured before any test redirects HOME. 2026-10-02: a mutation run of the enroll
+# tool with default paths wrote into the operator's real ~/.ssh/config and broke every ssh on that PC.
+REAL_SSH_DIR = Path(os.path.expanduser("~")) / ".ssh"
+HOME_VARIABLES = ("HOME", "USERPROFILE", "LOCALAPPDATA")
+
+
+def isolate_home(tmp_path: Path, monkeypatch) -> Path:
+    """Point every variable the tools read for home (Path.home() is USERPROFILE on Windows) at tmp_path."""
+    home = tmp_path.parent / (tmp_path.name + "-home")  # beside tmp_path, so tests can expect an empty tmp_path
+    home.mkdir(exist_ok=True)
+    for variable in HOME_VARIABLES:
+        monkeypatch.setenv(variable, str(home))
+    monkeypatch.delenv("HOMEDRIVE", raising=False)
+    monkeypatch.delenv("HOMEPATH", raising=False)
+    assert Path.home() == home and Path(os.path.expanduser("~")) == home
+    return home
+
+
+def real_ssh_snapshot() -> dict[str, tuple[int, int]]:
+    """Size and mtime of every file a tool could write in the real ~/.ssh (config, known_hosts_rosy, rosy_*)."""
+    if not REAL_SSH_DIR.is_dir():
+        return {}
+    return {path.name: (path.stat().st_size, path.stat().st_mtime_ns) for path in REAL_SSH_DIR.iterdir()
+            if path.is_file() and (path.name in ("config", "known_hosts_rosy") or path.name.startswith("rosy"))}
 
 LABEL = re.compile(r"[a-z0-9][a-z0-9._:-]{0,47}")
 CLIENT_TYPES = {"ssh-ed25519", "sk-ssh-ed25519@openssh.com",

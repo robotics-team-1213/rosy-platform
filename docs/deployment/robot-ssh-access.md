@@ -35,6 +35,8 @@ python tools/ssh/rosy_ssh_enroll.py <robot-ip> --label dev:<내-기기-이름>
 3. 로봇의 host key를 받아 `~/.ssh/known_hosts_rosy`에 쓴다. 그래서 첫 접속에서도 "이 호스트를 믿겠습니까" 질문이 없다.
 4. 공개키를 라벨 `dev:<이름>`, 만료 `--days`(기본 90일, 최대 365일)로 로봇에 등록한다.
 5. `~/.ssh/config`에 `Host rosy-pinky-xxxx` 블록을 쓴다(도구 표시 줄 사이만 고치고 나머지는 건드리지 않는다).
+   쓰기 전에 `config.rosy-backup-<시각>`으로 백업하고, 쓴 뒤 `ssh -G`로 읽혀 본다. OpenSSH가 읽지 못하거나
+   별칭이 다른 주소로 풀리면 이전 파일로 되돌리고 멈춘다. 블록의 줄은 정해진 옵션과 빈 값 없는 값만 허용한다.
 6. 로그인 토큰을 logout한다. 토큰은 화면이나 파일에 남지 않는다.
 
 끝에 나오는 명령으로 접속한다.

@@ -17,7 +17,7 @@ import zipfile
 
 import pytest
 
-from fake_core_ssh import FakeCore, ed25519_public_key
+from fake_core_ssh import FakeCore, ed25519_public_key, isolate_home, real_ssh_snapshot
 
 ROOT = Path(__file__).resolve().parents[1]
 _SPEC = importlib.util.spec_from_file_location("rosy_ssh_share", ROOT / "tools" / "ssh" / "rosy_ssh_share.py")
@@ -62,6 +62,26 @@ class FakeKeygen:
                         + "\n-----END OPENSSH PRIVATE KEY-----\n", encoding="ascii")
         Path(str(path) + ".pub").write_text(public + "\n", encoding="ascii")
         return 0, "", ""
+
+
+@pytest.fixture(scope="module", autouse=True)
+def real_profile_untouched():
+    before = real_ssh_snapshot()
+    yield
+    assert real_ssh_snapshot() == before, "a test wrote into the real ~/.ssh"
+
+
+@pytest.fixture(autouse=True)
+def home(tmp_path, monkeypatch):
+    return isolate_home(tmp_path, monkeypatch)
+
+
+def test_create_writes_nothing_into_home(home, robots, tmp_path, capsys):
+    out = tmp_path / "out"
+    status, _ = _create(robots, out, passphrases=(TYPED, TYPED))
+    assert status == 0, _text(capsys)[1]
+    assert list(home.rglob("*")) == []
+    assert [p.name for p in out.iterdir()] == [f"rosy-ssh-{TEAM}.zip"]
 
 
 @pytest.fixture
