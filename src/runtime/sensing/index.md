@@ -64,8 +64,8 @@
 
 ## 최근 기록
 
+- 2026-10-02 · ead31a99 · fix(localization): D-395 S1 재실행 R3 — 구별 후보의 마지막 yaw 정밀화
 - 2026-10-02 · uncommitted · fix(localization): D-395 S1 재실행 — 미션 중 결정은 `mission_running` 으로 거부
 - 2026-10-02 · 5016499f · fix(localization): D-395 S1 결과 1·2 (e62d110b, 64d8197b, 5016499f) — 3 s 검증의 지연된 map->odom, 전체 스캔 피어 객체
 - 2026-10-02 · uncommitted · fix(localization): D-395 P2-7 리뷰 — 미션 중 탐색 멈춤은 130 s 뒤 풀린다
 - 2026-10-02 · uncommitted · feat(localization): D-395 P2-7 미션 뒤 재탐색
-- 2026-10-02 · uncommitted · feat(perception): visible lane candidates and object labels

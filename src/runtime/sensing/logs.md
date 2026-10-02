@@ -902,3 +902,11 @@
 - 변경: `LocAssist.on_decision` 은 CORE 미션이 진행 중이면(`localization/mission` `running`, `MISSION_PAUSE_S` 안) 주입하지 않고 `mission_running` 으로 거부한다. 미션 시작 때 열린 request id 와 그 보고를 버린다(미션 전 후보는 미션 뒤에 낡았다). 미션 끝의 재탐색이 새 id 를 만든다. 옛 id 결정은 `stale_request`.
 - 증거: `test/test_loc_assist.py` +2(미션 중 결정 거부·주입 없음, 시작 시 id·재보고 폐기 후 새 id 로 주입).
 - gate 변화: 없음.
+
+## 2026-10-02 · ead31a99 · fix(localization): D-395 S1 재실행 R3 — 구별 후보의 마지막 yaw 정밀화
+
+- 원인: S1 재실행(`X:\DevTemp\rosy-d395-s1b\` a1·d1·d2)에서 회전 뒤 첫 결정 3건이 후보 yaw 180.0°/179.0° 로 주입됐고 truth 는 −177.2°…−177.6° 였다(오차 2.4–2.8°). 3 s 검증이 옳게 거부했고 다음 탐색(−178.0°/−177.0°)은 통과했다. 전역 탐색은 5° 씨앗 + 1° 정밀화를 stride 4 스캔(160 빔)에서 한다.
+- 변경: `loc_candidates.global_candidates(..., fine_scan=)` — `distinct` 로 고른 후보마다 `FINE_OFFSETS`(±3 cm 1 cm, ±3° 0.5°, 637 자세)로 전체 640 빔 스캔에서 한 번 더 `refine` 하고 적합도를 다시 매긴다. `search` 는 `object_scan` 을 그대로 넘긴다. `global_match`·slot 탐색은 그대로.
+- 증거: 호스트 sensing 2288 passed, 104 skipped. `test_loc_candidates.py` +3(거친 단계가 2.5°·2 cm 어긋난 후보를 0.5°·1 cm 안으로, 후보 수·거울 유지, `global_match` 답이 872a5cc5 와 같음), `test_loc_assist.py` +1(`search` 가 전체 스캔을 넘김). 호스트 비용(loc_world 2 cm 지도): 정밀화 후보당 중앙값 87 ms(최대 130 ms), `global_candidates` 중앙값 1.83 → 1.92 s. Pi 측정은 D-395 rev. 5 대로 보류.
+- 남은 것: d1·d2 는 회전 미션 `done` 직후 바로 탐색했고 그때 로봇이 아직 1–3° 더 돌고 있었을 수 있다(driver truth 샘플 간격이 거칠어 확정 못 함). 그 경우 스캔 자체가 180° 자세라 정밀화로는 못 고친다. 미션 끝 뒤 정지 확인 후 탐색할지는 Gazebo 재실행으로 가린다.
+- gate 변화: 없음.
