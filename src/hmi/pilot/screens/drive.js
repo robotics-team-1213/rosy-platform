@@ -8,6 +8,7 @@
 import {postJson, whoami, api as apiGet, authHeaders, token} from "../client.js";
 import {createDeviceSession} from "../link.js";
 import {createVisionPreview} from "../vision.js";
+import {createModelStatus, renderModels} from "../models.js";
 import {driverFor} from "../drivers/registry.js";
 import {
   setStickInput, setPedal, setPivot, releaseAll, currentCommandSource, stickMap,
@@ -176,6 +177,18 @@ export function mountDrive(root, {onExit} = {}) {
     },
   });
   vision.start();
+
+  // --- 모델(D-423 §3.6): 읽기 전용 상태, 교체는 rosy_ml CLI ------------------
+  const modelPanel = document.createElement("details");
+  modelPanel.className = "pilot-models";
+  const modelList = document.createElement("ul");
+  modelPanel.append(Object.assign(document.createElement("summary"), {textContent: "모델"}), modelList);
+  element.hud.append(modelPanel);
+  const models = createModelStatus({
+    apiGet, onUpdate: (rows) => renderModels(modelList, rows),
+    schedule: (fn, ms) => { const id = setTimeout(fn, ms); return () => clearTimeout(id); },
+  });
+  models.start();
 
   // 태블릿 실측: 누른 지 ~0.5 s 에 Android 길게 누르기 메뉴(카메라 이미지면 "이미지 복사·
   // 다운로드")가 떠서 누르고 있던 터치를 가로챘다. 주행 화면에서는 어디서도 띄우지 않는다.
@@ -491,6 +504,7 @@ export function mountDrive(root, {onExit} = {}) {
     modeHeld = false;
     clearTimeout(whoamiTimer);
     vision.stop();
+    models.stop();
     window.removeEventListener("keydown", onKey);
     window.removeEventListener("keyup", onKey);
     window.removeEventListener("blur", onBlur);

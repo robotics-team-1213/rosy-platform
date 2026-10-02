@@ -14,6 +14,7 @@ install(FILES
   calibration.js
   input-state.js
   vision.js
+  models.js
   manifest.webmanifest
   sw.js
   DESTINATION share/${PROJECT_NAME}
