@@ -316,3 +316,9 @@
 - 증거: 문서만. `test_controls_contract.py` 변화 없음.
 - gate 변화: 없음.
 - 결정: D-411 구현 부록 5.
+
+## 2026-10-03 · uncommitted · feat(core_common): D-411 C `OmxSimGripperGoal`
+- 변경: `protocol/omx_sim.py` `OmxSimGripperGoal{instance_id, seat_id, request_id, position, duration_s, state_sequence, expires_at_ms}` — 유한한 절대 위치, 길이 `GRIPPER_GOAL_MIN_DURATION_S`–`GRIPPER_GOAL_MAX_DURATION_S`(0.2–2.0 s), 다른 필드 거부. 위치 한계는 런타임(셀 프로필)이 판정한다.
+- 증거: `python -m pytest src/contracts/foundation/test/ -q` → 498 passed, 3 skipped (2026-10-03 Windows).
+- gate 변화: 없음.
+- 결정: D-411 C 결정 12.

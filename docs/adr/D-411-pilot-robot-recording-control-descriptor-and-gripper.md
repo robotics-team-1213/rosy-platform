@@ -66,3 +66,7 @@
 4. **CORE "seat".** 녹화 가드의 seat 는 녹화를 시작한 토큰의 `/ws/state` 링크이며, 다른 토큰의 teleop 이 수락되면 seat 변경으로 본다.
 5. **`autonomy` 의 뜻.** CORE 는 line-follow 서비스를 가질 때 `["line"]` 을 낸다. 쉬는 동안 차선을 따라갈 수 있음을 보이는 정직한 런타임 신호가 없어(차선 관측은 모드를 켠 뒤에만 들어온다) "제공함"으로 정의하고, 시작 가능 여부는 `PUT /line-follow/mode`·`GET /line-follow` 가 판정한다(API Ref §9.1).
 6. **Pilot 소비 규칙.** `controls` 필드가 없으면 구 서버로 보고 기존 Pinky 프로필(SIM 은 기존 0.02 rad 관절·그리퍼 조그)로 대체한다. 빈 `items` 는 "지금 조작부 없음"으로 보이고 대체하지 않는다. 모르는 kind 는 "지원하지 않는 조작부 · 이름"으로 보이고 화면은 계속 동작한다.
+7. **그리퍼 판정 수치(결정 13).** `closed` 허용오차 0.05 rad, `moving` 은 그리퍼 목표 진행 중이거나 최근 0.5 s 안에 위치가 0.005 rad 넘게 변한 경우, `unknown` 은 관절 상태가 낡았거나 owner HOLD·마지막 그리퍼 목표 `UNKNOWN_HOLD`. `holding` 은 닫기 목표(목표가 `closed` 에서 0.05 rad 이내)가 `SUCCEEDED` 로 끝나고 위치가 그보다 멀리 멈춘 경우뿐이다(`omx_adapter/pilot_sim_gripper.py`). Gazebo 에서 물체를 쥔 닫기 목표가 `SUCCEEDED` 대신 컨트롤러 허용오차로 실패해 HOLD 가 되면 이 판정은 `unknown` 이 된다 — ROS-SIM 에서 확인할 항목이다.
+8. **SIM 허용 범위와 목표 길이(결정 12).** 팔·그리퍼 모두 `deploy/robot/omx/sim/cell_profile.yaml` 범위 ∩ URDF 범위(`sim_admission_limits`)가 owner 허용 범위다. 이전의 리터럴(팔 ±3.0, 그리퍼 ±0.5 rad)은 열림 1.0 rad 를 막아 없앴다. owner 목표 길이 상한은 그리퍼 목표에 맞춰 2.0 s(`GRIPPER_GOAL_MAX_DURATION_S`), 조그는 스키마가 계속 1.0 s 까지만 받는다.
+9. **쥔 채 팔 조그.** 그리퍼 목표가 `SUCCEEDED` 로 끝난 뒤의 팔 조그는 그리퍼 칸에 readback 대신 그 목표 위치를 보낸다. readback(물체에 걸려 멈춘 위치)을 보내면 위치 제어가 쥠을 풀어 물체를 떨어뜨린다. 시연 기록의 `action`·`action.gripper` 도 이 명령 값이다.
+10. **Pilot 그리퍼 목표 길이.** 서술자에 길이 필드를 더하지 않고, Pilot 이 전체 행정(`open`↔`closed`)을 2.0 s 로 보고 옮길 거리에 비례해 정한다(최소 0.2 s; 셀 프로필의 그리퍼 속도 0.5 rad/s 에서 1.0 rad 행정 = 2.0 s). 배지 문구는 열림·닫힘·쥐고 있음·이동 중·알 수 없음이다.

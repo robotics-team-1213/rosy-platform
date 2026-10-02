@@ -256,3 +256,10 @@
 - 증거: `ROSY_RUN_BROWSER_TESTS=1 python -m pytest src/products/omx/adapter/test/test_pilot_sim_browser.py -q` (2026-10-02 Windows).
 - gate 변화: SOURCE 유지. ROS-SIM HOLD.
 - 결정: D-411 B. 실물 OMX 는 열지 않는다(D-390).
+
+## 2026-10-03 · uncommitted · feat(omx_adapter): D-411 C 그리퍼 절대 목표·쥠 readback·시연 `action.gripper`
+- 변경: 순수 `pilot_sim_gripper.py` `gripper_state()`(open·closed·holding·moving·unknown, 허용오차 0.05 rad, 정지 판정 0.5 s/0.005 rad). `PilotSimRuntime` 그리퍼 모드(`gripper_open`·`gripper_closed`): 공통 `_dispatch`(instance → 허용 → 단일 진행 목표 → ready → 제공한 sequence), `submit_gripper`(절대 위치, 범위 밖 `gripper_limit`), 스냅샷 `gripper`, `controls()` 가 그리퍼를 `joint_jog` 에서 빼고 `gripper` 항목을 낸다. 그리퍼 목표가 `SUCCEEDED` 로 끝난 뒤의 팔 조그는 그리퍼 칸에 그 목표 위치를 보낸다(readback 이면 쥠이 풀린다). `sim_admission_limits()` — SIM owner 허용 범위 = `deploy/robot/omx/sim/cell_profile.yaml` ∩ URDF(팔·그리퍼 모두; 리터럴 ±3.0/±0.5 제거), 목표 길이 상한 2.0 s, 셀 프로필 바이트를 출처 해시에. `POST /api/v1/sim/omx/gripper`(조그와 같은 영수증·seat·만료·409 규칙). 시연 기록: 출처 `gripper_joint`(선택), 행 `action.gripper`(= `action` 그리퍼 칸, 다르면 `gripper_action`), 목표 길이 0.1–2.0 s, LeRobot `action.gripper` 특성·프레임. 이전 에피소드는 그대로 검증·export.
+- 증거: `python -m pytest src/products/omx/adapter/test/ -q` → 312 passed, 5 skipped (2026-10-03 Windows; `test_pilot_sim_browser.py` 3개 포함 — 실제 SIM HTTP API 로 프리셋·슬라이더·배지).
+- gate 변화: SOURCE 유지. ROS-SIM HOLD — OMX Gazebo 에서 그리퍼 열기/닫기/쥠·시연 export 미실행.
+- 결정: D-411 C, 구현 부록 7–9. 실물 OMX 는 열지 않는다(D-390).
+- 후속: Gazebo 에서 물체를 쥔 닫기 목표가 컨트롤러 허용오차로 실패하면 owner 가 HOLD 로 가고 배지는 `unknown` 이 된다 — ROS-SIM 에서 확인. 쥔 채 팔 조그가 같은 허용오차로 실패하는지도 함께 본다.

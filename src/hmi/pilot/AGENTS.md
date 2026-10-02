@@ -17,10 +17,10 @@ Rosy Pilot 원격 조종 표면(D-323). 정적 파일이며 `core_api_web`이 `/
 | `stick.js` | 입력 → `{linear, angular}` 순수 매핑(데드존·감도 곡선·프리셋·반전) |
 | `recording.js` | D-411 로봇 녹화 순수 표시 판정(경과·크기 서식, 토글, 거부 코드, "녹화본" 시트 행·차단 사유) |
 | `screens/robot-recording.js` | D-411 로봇 녹화 HUD 토글·"녹화본" 시트 DOM(폴링, 시작/정지, 받기 — 정지 중에만, 짧은 본문은 실패) |
-| `controls.js` | D-411 B `rosy.controls/1` 순수 읽기(스키마 확인, 위젯 계획, 필드 없음 = 구 서버 대체, Pinky 프로필 변환) |
+| `controls.js` | D-411 B `rosy.controls/1` 순수 읽기(스키마 확인, 위젯 계획, 필드 없음 = 구 서버 대체, Pinky 프로필 변환), C 그리퍼 %·위치·목표 길이·배지 문구 |
 | `arm-stick.js` | D-411 B 팔 조이스틱 순수 논리(축·데드존·우세 축 단계, 이전 목표가 끝난 뒤에만 다음 목표, 떼면 새 목표만 멈춤) |
 | `screens/compose.js` | 서술자 → kind별 위젯 조립. 모르는 kind 는 "지원하지 않는 조작부", 빈 목록은 "조작부 없음" |
-| `screens/arm.js` | OMX SIM 화면: 페어링·seat·readback·세션 컨텍스트(`submitJog`, `onUpdate`), 조립, 취소, 시연 기록 |
+| `screens/arm.js` | OMX SIM 화면: 페어링·seat·readback·세션 컨텍스트(`submitJog`·`submitGripper`, `onUpdate`), 조립, 취소, 시연 기록 |
 | `progress.md` | Current gate snapshot (SOURCE→FIELD). Overwrite; state of record over this file |
 | `logs.md` | Append-only work journal, one entry per change |
 | `index.md` | Generated. Do not edit |
@@ -30,7 +30,7 @@ Rosy Pilot 원격 조종 표면(D-323). 정적 파일이며 `core_api_web`이 `/
 | Directory | Purpose |
 |-----------|---------|
 | `test/` | Node 서브프로세스 순수 시험(`test_stick.py`·`test_controls.py`·`test_arm_stick.py` 등)과 Playwright 브라우저 시험(`ROSY_RUN_BROWSER_TESTS=1`, `dev_server.py` 가짜 CORE) |
-| `widgets/` | D-411 kind별 DOM 위젯(`joint_jog.js`: 2축 패드·관절 버튼; Part C `gripper.js`) |
+| `widgets/` | D-411 kind별 DOM 위젯(`joint_jog.js`: 2축 패드·관절 버튼; `gripper.js`: 열기/반/닫기·열림 %·쥠 배지) |
 | `drivers/`, `screens/` | 전송 드라이버(전송만), 화면 |
 
 ## For AI Agents

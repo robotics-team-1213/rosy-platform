@@ -272,3 +272,9 @@
 - 증거: 보고의 실행 기록(2026-10-03 Windows, Chromium). 새 시험 두 개는 고치기 전 코드에서 실패, 고친 뒤 통과.
 - gate 변화: SOURCE 유지. ROS-SIM HOLD, DEVICE: 실 태블릿에서 떠 있는 원점 확인 필요.
 - 결정: D-411 B.
+
+## 2026-10-03 · uncommitted · feat(pilot): D-411 C 그리퍼 위젯, 주행 링 위쪽 잘림
+- 변경: `widgets/gripper.js` — 열기/반/닫기 버튼, 열림 % 슬라이더(손을 뗄 때 목표 하나), 상태 배지(열림·닫힘·쥐고 있음·이동 중·알 수 없음, `role=status` `aria-live=polite`). `controls.js` 순수 `gripperPercent`·`gripperPosition`·`gripperDuration`(전체 행정 2.0 s 비례, 최소 0.2 s)·`gripperStateLabel`. `screens/arm.js` 공통 `submitGoal` 로 `submitJog`·`submitGripper`(`POST /gripper`) — 같은 하나씩·재시도 1회·id/null/false 계약, 위젯 표에 `gripper`. 태블릿은 조작부 칸 2:1(오른손 그리퍼), 휴대폰은 아래로 쌓인다. 자산 다섯 곳 등록, SW 캐시 `2026-10-03-2`. Part B 후속: 링 밖에서 누를 때 링의 그림 이동만 `[data-drive-right]` 안으로 잘라(휴대폰 위쪽 잘림), 0 점은 손가락 위치 그대로.
+- 증거: `python -m pytest src/hmi/pilot/test src/runtime/api_web/test/test_pilot_route.py -q` → 85 passed, 58 skipped; `ROSY_RUN_BROWSER_TESTS=1` `test_pilot_browser.py -k "arm or gripper or zone or grabs"` → 13 passed(그 전 한 번은 13개 모두 실패 후 단독·재실행 통과 — 같은 시각 기계 부하/다른 에이전트의 브라우저 시험으로 보이며 원인은 확인하지 못함; 새: 프리셋·슬라이더·배지, 오른손 칸 2000×1200·390×844, 링이 칸 안 — 고치기 전 코드로는 실패 확인), `test_pilot_sim_browser.py` 3 passed (2026-10-03 Windows, Chromium). 화면 `X:\DevTemp\d411-c\pilot-arm-gripper-*.png`, `pilot-drive-zone-top-390x844.png`.
+- gate 변화: SOURCE 유지. ROS-SIM HOLD — OMX Gazebo 에서 그리퍼 위젯 미실행.
+- 결정: D-411 C, 구현 부록 10.
