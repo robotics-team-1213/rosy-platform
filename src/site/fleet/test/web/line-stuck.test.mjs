@@ -99,6 +99,8 @@ test("transport failures say not delivered or outcome unknown, never refused", (
 
 test("accepted answers say what the robot will do", () => {
   assert.match(outcomeText("rosy_01", "WAIT", { outcome: "hold" }), /^rosy_01 대기: 대기로 답했습니다/);
-  assert.match(outcomeText("rosy_01", "ABORT", { outcome: "idle" }), /IDLE/);
+  // D-398: 보이는 글에서 맨 열거값을 뺐다 — 중단 문장 자체가 뜻을 말한다.
+  assert.match(outcomeText("rosy_01", "ABORT", { outcome: "idle" }), /차선 추종을 중단했습니다/);
+  assert.doesNotMatch(outcomeText("rosy_01", "ABORT", { outcome: "idle" }), /IDLE/);
   assert.match(outcomeText("rosy_01", "MANUAL", {}), /CORE가 받았습니다/);
 });
