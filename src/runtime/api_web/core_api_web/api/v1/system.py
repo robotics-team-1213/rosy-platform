@@ -206,9 +206,12 @@ def capabilities(_: AuthContext = Depends(viewer), svc: CoreServicesLike = Depen
     # these in the D-347 table, not in code.
     data["lifecycle"] = lifecycle_from(svc.capability.to_dict(), truth.reasons)
     # `controls` (v1.76 additive, D-411 B): rosy.controls/1, what Pilot may draw.
+    # Line autonomy is announced only when CORE serves line-follow; it drives the
+    # same base, so it is never announced without the drive control.
     data["controls"] = pinky_controls(provides=_drive_provides(svc, data),
                                       max_linear=svc.safety.limits.manual_linear,
-                                      max_angular=svc.safety.limits.manual_angular)
+                                      max_angular=svc.safety.limits.manual_angular,
+                                      autonomy=("line",) if svc.line_follow is not None else ())
     return data
 
 

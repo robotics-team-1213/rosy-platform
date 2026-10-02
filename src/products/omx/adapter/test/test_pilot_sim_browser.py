@@ -45,6 +45,9 @@ class Runtime:
     def on_watchdog(self):
         pass
 
+    def controls(self):
+        return {"schema": "rosy.controls/1", "items": []}
+
 
 def test_sim_pilot_pair_and_jog_rendered():
     runtime = Runtime()

@@ -40,6 +40,21 @@ def test_goal_status_separates_local_ros_cancel_and_terminal_results():
                    ros_goal_id="8b62da7d-f78b-4907-a808-fc0752450020")
 
 
+def test_jog_and_descriptor_share_one_step_bound():
+    from core_common.protocol.controls import BOUNDED_JOG_MAX_STEP_RAD, JointJogControl
+    valid = dict(instance_id="omx_01", seat_id="seat-1", request_id="request-1",
+                 joint="joint1", duration_s=0.4, state_sequence=8, expires_at_ms=100_000)
+    assert OmxSimJog(**valid, delta_rad=-BOUNDED_JOG_MAX_STEP_RAD).delta_rad == -BOUNDED_JOG_MAX_STEP_RAD
+    with pytest.raises(ValidationError):
+        OmxSimJog(**valid, delta_rad=BOUNDED_JOG_MAX_STEP_RAD + 1e-6)
+    joints = [{"name": "joint1", "lower": -1.0, "upper": 1.0}]
+    assert JointJogControl(id="arm", label="팔", joints=joints, max_step_rad=BOUNDED_JOG_MAX_STEP_RAD,
+                           duration_s=0.4).max_step_rad == BOUNDED_JOG_MAX_STEP_RAD
+    with pytest.raises(ValidationError):
+        JointJogControl(id="arm", label="팔", joints=joints, max_step_rad=BOUNDED_JOG_MAX_STEP_RAD + 1e-6,
+                        duration_s=0.4)
+
+
 def test_target_may_carry_a_controls_descriptor():
     from core_common.protocol.controls import ControlsDescriptor
     descriptor = ControlsDescriptor(items=())

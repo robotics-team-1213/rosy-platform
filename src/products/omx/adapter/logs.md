@@ -238,3 +238,10 @@
 - 증거: `python -m pytest src/products/omx/adapter/test/test_pilot_sim_api.py -q` → 4 passed; `test_shell_assets.py` 자산 동치 시험 통과 (2026-10-02 Windows).
 - gate 변화: SOURCE 유지. ROS-SIM HOLD — 계획 Verification ROS-SIM 체크리스트(WSL Ubuntu) 미실행, DEVICE 증거 없음.
 - 결정: D-411 A.
+
+## 2026-10-02 · uncommitted · feat(pilot-sim): D-411 B `/target` 의 `rosy.controls/1`
+- 변경: `PilotSimRuntime.controls()` 가 `joint_jog` 하나를 낸다. 관절 한계 = 고정된 vendor URDF 범위(`config/omx_f_kinematics.yaml` `urdf_limit`, `urdf_position_limits()`) ∩ owner SIM 허용 범위. 1회 최대 변화는 `core_common.protocol.controls.BOUNDED_JOG_MAX_STEP_RAD` 하나를 `OmxSimJog` 와 함께 쓴다. `/target` 이 `controls` 를 싣는다.
+- 증거: `python -m pytest src/products/omx/adapter/test/ -q` (2026-10-02 Windows). Gazebo 미실행.
+- gate 변화: SOURCE 유지. ROS-SIM HOLD.
+- 결정: D-411 B. 실물 OMX 는 열지 않는다(D-390).
+- 후속: vendor URDF 한계는 모든 관절 ±2π 라 교집합은 지금 `pilot_sim_server.py` 의 허용 리터럴(팔 ±3.0, 그리퍼 ±0.5)과 같다. 검토된 SIM 명목 한계는 `deploy/robot/omx/sim/cell_profile.yaml` 에 있는데 Pilot SIM owner 는 아직 그것을 읽지 않는다 — owner 허용 범위를 cell_profile 에서 만들도록 옮긴다(그리퍼는 Part C2 에서 시작).

@@ -12,7 +12,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from core_common.protocol.controls import ControlsDescriptor
+from core_common.protocol.controls import BOUNDED_JOG_MAX_STEP_RAD, ControlsDescriptor
 
 
 class _Wire(BaseModel):
@@ -61,8 +61,8 @@ class OmxSimJog(_Wire):
 
     @model_validator(mode="after")
     def bounded_delta(self) -> "OmxSimJog":
-        if not math.isfinite(self.delta_rad) or not 0 < abs(self.delta_rad) <= 0.05:
-            raise ValueError("delta_rad must be finite, nonzero and within 0.05 rad")
+        if not math.isfinite(self.delta_rad) or not 0 < abs(self.delta_rad) <= BOUNDED_JOG_MAX_STEP_RAD:
+            raise ValueError(f"delta_rad must be finite, nonzero and within {BOUNDED_JOG_MAX_STEP_RAD} rad")
         return self
 
 

@@ -115,3 +115,26 @@ def test_controls_announce_a_bounded_joint_jog_with_limits():
     (jog,) = descriptor.items
     assert jog.kind == "joint_jog" and jog.max_step_rad == 0.05 and jog.duration_s == 0.4
     assert [(j.name, j.lower, j.upper) for j in jog.joints] == [("joint1", -1, 1), ("gripper_joint_1", -0.1, 0.1)]
+
+
+def test_controls_step_bound_is_the_shared_jog_bound():
+    from core_common.protocol.controls import BOUNDED_JOG_MAX_STEP_RAD
+    from omx_adapter import pilot_sim_runtime
+    assert pilot_sim_runtime.JOG_MAX_STEP_RAD is BOUNDED_JOG_MAX_STEP_RAD
+
+
+def test_published_limits_are_urdf_range_within_sim_admission():
+    from core_common.protocol.controls import ControlsDescriptor
+    runtime = PilotSimRuntime(Arm(), urdf_limits={"joint1": (-0.5, 2.0), "gripper_joint_1": (-6.28, 6.28)})
+    (jog,) = ControlsDescriptor.model_validate(runtime.controls()).items
+    assert [(j.name, j.lower, j.upper) for j in jog.joints] == [("joint1", -0.5, 1), ("gripper_joint_1", -0.1, 0.1)]
+
+
+def test_urdf_limits_come_from_the_pinned_kinematics_record():
+    import math
+    from omx_adapter.pilot_sim_runtime import urdf_position_limits
+    limits = urdf_position_limits()
+    assert limits["joint1"] == (-2 * math.pi, 2 * math.pi)
+    assert limits["gripper_joint_1"] == (-2 * math.pi, 2 * math.pi)
+    assert {"joint1", "joint2", "joint3", "joint4", "joint5", "gripper_joint_1"} <= set(limits)
+    assert "end_effector_joint" not in limits

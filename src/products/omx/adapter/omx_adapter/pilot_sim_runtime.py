@@ -4,19 +4,36 @@ from __future__ import annotations
 
 import threading
 import time
+from pathlib import Path
+from typing import Mapping
 
-from core_common.protocol.controls import ControlsDescriptor, JointJogControl, JointRange
+import yaml
+
+from core_common.protocol.controls import (
+    BOUNDED_JOG_MAX_STEP_RAD, ControlsDescriptor, JointJogControl, JointRange,
+)
 from core_common.protocol.omx_sim import OmxSimJog
 
 from .command_owner import TrajectoryCommand
+from .kinematics import DEFAULT_KINEMATICS_PATH
 
-JOG_MAX_STEP_RAD = 0.05
+JOG_MAX_STEP_RAD = BOUNDED_JOG_MAX_STEP_RAD
 JOG_DURATION_S = 0.4
 
 
+def urdf_position_limits(path: Path | str = DEFAULT_KINEMATICS_PATH) -> dict[str, tuple[float, float]]:
+    """Joint ranges of the pinned vendor URDF, as recorded in ``omx_f_kinematics.yaml``."""
+    document = yaml.safe_load(Path(path).read_text(encoding="utf-8"))
+    return {str(joint["name"]): (float(joint["urdf_limit"]["lower"]), float(joint["urdf_limit"]["upper"]))
+            for joint in [*document["joints"], *document.get("gripper_joints", ())]
+            if "urdf_limit" in joint}
+
+
 class PilotSimRuntime:
-    def __init__(self, arm, *, gripper: str = "gripper_joint_1") -> None:
+    def __init__(self, arm, *, gripper: str = "gripper_joint_1",
+                 urdf_limits: Mapping[str, tuple[float, float]] | None = None) -> None:
         self.arm = arm
+        self.urdf_limits = dict(urdf_limits or {})
         self.instance_id = arm.owner.config.instance_id
         self.joint_names = arm.owner.config.joint_names
         self.gripper = gripper
@@ -51,11 +68,20 @@ class PilotSimRuntime:
                 "active_goal": self._active}
 
     def controls(self) -> dict:
-        """rosy.controls/1 for this SIM workcell (D-411 B). Bounded goals only (D-390 §2)."""
-        limits = self.arm.owner.config.position_limits
+        """rosy.controls/1 for this SIM workcell (D-411 B). Bounded goals only (D-390 §2).
+
+        Each published range is the URDF range intersected with the owner's SIM
+        admission range, so Pilot never offers a target the owner would reject.
+        """
+        admitted = self.arm.owner.config.position_limits
+
+        def joint_range(name: str) -> JointRange:
+            lower, upper = admitted[name]
+            urdf_lower, urdf_upper = self.urdf_limits.get(name, (lower, upper))
+            return JointRange(name=name, lower=max(lower, urdf_lower), upper=min(upper, urdf_upper))
+
         jog = JointJogControl(id="arm", label="팔", max_step_rad=JOG_MAX_STEP_RAD, duration_s=JOG_DURATION_S,
-                              joints=tuple(JointRange(name=n, lower=limits[n][0], upper=limits[n][1])
-                                           for n in self.joint_names))
+                              joints=tuple(joint_range(name) for name in self.joint_names))
         return ControlsDescriptor(items=(jog,)).model_dump(by_alias=True, mode="json")
 
     def submit(self, jog: OmxSimJog) -> dict:

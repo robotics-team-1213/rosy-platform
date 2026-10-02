@@ -163,3 +163,23 @@ def test_target_carries_the_runtime_controls():
     body = client.get(f"{PREFIX}/target").json()
     assert body["controls"] == {"schema": "rosy.controls/1", "items": []}
     assert body["joints"] == ["joint1", "joint2"] and body["gripper"] == "gripper_joint_1"
+
+
+def test_target_serializes_every_control_kind_with_the_schema_alias():
+    class Runtime(FakeRuntime):
+        def controls(self):
+            return {"schema": "rosy.controls/1", "items": [
+                {"id": "arm", "kind": "joint_jog", "label": "팔", "max_step_rad": 0.05, "duration_s": 0.4,
+                 "joints": [{"name": "joint1", "lower": -1.0, "upper": 1.0}]},
+                {"id": "gripper", "kind": "gripper", "label": "그리퍼", "joint": "gripper_joint_1",
+                 "closed": 0.0, "open": 1.0, "presets": {"open": 1.0, "half": 0.5, "close": 0.0}},
+                {"id": "base", "kind": "base_velocity", "label": "주행", "max_linear": 0.1,
+                 "max_angular": 0.5, "pivot": False, "fine": False}]}
+
+    app = create_pilot_sim_app(runtime=Runtime(), pilot_root=PILOT, common_root=COMMON,
+                               pairing_code="ABCD-EFGH")
+    controls = TestClient(app).get(f"{PREFIX}/target").json()["controls"]
+    assert controls["schema"] == "rosy.controls/1" and "schema_id" not in controls
+    assert [item["kind"] for item in controls["items"]] == ["joint_jog", "gripper", "base_velocity"]
+    assert controls["items"][0]["command"] == "bounded_goal"
+    assert controls["items"][1]["readback"] == ["position", "grasp"]

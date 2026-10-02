@@ -354,7 +354,7 @@ v1.42: `GET /api/v1/host/network`와 `/release`는 기존 `{available,ok?,code,d
 
 | Method | 경로 | 요청/응답 |
 |---|---|---|
-| GET | `/api/v1/sim/omx/target` | 공개 `{kind:"omx_sim",simulation:true,instance_id,joints,gripper,camera,recording,controls}`; `controls`(v1.76 additive, D-411 B)는 §9.1 `rosy.controls/1` — SIM은 `joint_jog` 하나(`id:"arm"`, 관절별 SIM 허용 한계, `max_step_rad` 0.05, `duration_s` 0.4, `command:"bounded_goal"`; 이전 목표가 끝난 뒤에만 다음 목표, 100 ms 스트림 없음, D-390 §2). Part B 동안 그리퍼 관절도 `joint_jog`에 든다. 시뮬레이션 전용이며 실물 OMX를 열지 않는다; Pinky CORE에서는 404 |
+| GET | `/api/v1/sim/omx/target` | 공개 `{kind:"omx_sim",simulation:true,instance_id,joints,gripper,camera,recording,controls}`; `controls`(v1.76 additive, D-411 B)는 §9.1 `rosy.controls/1` — SIM은 `joint_jog` 하나(`id:"arm"`, 관절별 한계 = 고정된 vendor URDF 범위(`omx_f_kinematics.yaml`) ∩ SIM owner 허용 범위, `max_step_rad` 0.05, `duration_s` 0.4 = 각 요청에 보낼 목표 길이, `command:"bounded_goal"`; 이전 목표가 끝난 뒤에만 다음 목표, 100 ms 스트림 없음, D-390 §2). Part B 동안 그리퍼 관절도 `joint_jog`에 든다. 시뮬레이션 전용이며 실물 OMX를 열지 않는다; Pinky CORE에서는 404 |
 | POST | `/api/v1/sim/omx/pair` | 로컬 콘솔의 10분 유효 일회용 `{code}` → `{token}`; 성공 201, 재사용 403 |
 | GET | `/api/v1/sim/omx/whoami` | Bearer → `{role:"operator"}` |
 | POST/PUT/DELETE | `/api/v1/sim/omx/seat[/{seat_id}]` | 단일 조종권 취득·1초 간격 갱신·반납. lease 10초; 만료/반납 시 진행 목표 취소 요청. 취소 ACK는 정지 증거가 아니다 |
@@ -1001,10 +1001,23 @@ inventory 기술자의 `state`(available/constrained/… presentation 어휘)와
 **`controls` (v1.76 additive, D-411 B)**: 이 기기가 받는 조작부 서술자 `rosy.controls/1` `{schema, items[]}`. 항목은
 `{id, kind, label, ...}`이고 kind 는 `base_velocity`(`max_linear`·`max_angular`·`pivot`·`fine`·`autonomy`),
 `joint_jog`(`joints[{name, lower, upper}]`·`max_step_rad` ≤ 0.05·`duration_s` 0.1–1.0·`command: "bounded_goal"`),
-`gripper`(`joint`·`closed`·`open`·`unit`·`presets{open, half, close}`·`readback`)다. Pinky 는 켜진 adapter manifest
-`provides` 의 `drive`(manifest 가 없으면 `teleop`)에서 `base_velocity` 하나(`id: "base"`, 최대값 = `safety.manual_linear`·
-`manual_angular`)를 낸다. `teleop` 이 보류되면(`withheld`) `items` 는 비어 있다. 스키마 정본은
-`core_common.protocol.controls`. 이 필드가 없는 구 서버에서 Pilot 은 기존 Pinky 프로필로 대체한다.
+`gripper`(`joint`·`closed`·`open`·`unit`·`presets{open, half, close}`·`readback`)다.
+
+- `base_velocity`: `max_linear`·`max_angular` 는 지금의 수동 한도다. **0 은 "구동은 있으나 지금 정지로 제한됨"**
+  (`PUT /safety/limits` 가 0 을 받는다)이며 오류가 아니다. `autonomy` 는 기기가 서빙함을 보인 모드만 싣는다 — CORE 는
+  line-follow 서비스가 있을 때만 `["line"]`, 없으면 `[]`. `pivot`·`fine` 은 Pinky 프로필 상수다(런타임 증거 아님).
+- `joint_jog`: 요청 한 번은 관절 하나를 `max_step_rad` 이하로 옮긴다. `duration_s` 는 **클라이언트가 각 요청에 보낼 목표
+  길이**다. 이전 목표가 끝난 뒤에만 다음 목표를 보낸다(D-390 §2).
+- `gripper`: `presets.open` = `open`, `presets.close` = `closed`, `presets.half` 는 둘 사이(끝값 제외)다.
+
+Pinky 는 켜진 adapter manifest `provides` 의 `drive`(manifest 가 없으면 `teleop`)에서 `base_velocity` 하나
+(`id: "base"`, 최대값 = `safety.manual_linear`·`manual_angular`)를 낸다. `teleop` 이 보류되면(`withheld`) `items` 는
+비어 있다. 빈 `items` 는 "지금 조작부 없음"이지 "구 서버"가 아니다 — 이 필드가 **없는** 구 서버에서만 Pilot 이 기존
+Pinky 프로필로 대체한다.
+
+호환: 스키마 정본 `core_common.protocol.controls`(`ControlsDescriptor`)는 **생산자** 스키마다(모르는 필드 거부). `/1`
+안에서는 새 kind 와 새 선택 필드를 더할 수 있고, 소비자(Pilot)는 모르는 kind·필드를 무시하고 kind 는 "지원하지 않는
+조작부"로 보인다. 필드를 빼거나 뜻을 바꾸면 `rosy.controls/2` 다.
 
 같은 동안 `GET /api/v1/system/inventory` 의 descriptor 는 `available: false`, `state: "blocked"` 이고 `reason` 은
 그 플래그의 런타임 이유다. **런타임 이유가 `device_state` 보다 먼저다(v1.21, 이전에는 반대)** — 비상정지를 풀어도

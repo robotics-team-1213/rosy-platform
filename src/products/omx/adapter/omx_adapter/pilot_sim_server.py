@@ -18,7 +18,7 @@ import yaml
 
 from .command_owner import ArmCommandConfig
 from .pilot_sim_api import create_pilot_sim_app
-from .pilot_sim_runtime import PilotSimRuntime
+from .pilot_sim_runtime import PilotSimRuntime, urdf_position_limits
 from .pilot_sim_capture import PilotSimCapture
 from .pilot_sim_camera import PilotSimCamera
 from .ros_runtime import RosArmCommandRuntime
@@ -53,6 +53,8 @@ def main() -> None:
         enabled=True, workcell_id="omx_pilot_sim", instance_id="omx_pilot_sim_01",
         joint_names=JOINTS,
         # Narrow SIM admission limits; these are not hardware calibration values.
+        # Follow-up (D-411 B review): build them from deploy/robot/omx/sim/cell_profile.yaml,
+        # the reviewed nominal SIM limits, instead of these literals (Part C2 starts with the gripper).
         position_limits={name: ((-0.5, 0.5) if name == "gripper_joint_1" else (-3.0, 3.0))
                          for name in JOINTS},
         allowed_owners=("pilot_sim",), calibration_revision="omx-f-gazebo-only-v1",
@@ -78,7 +80,8 @@ def main() -> None:
         trajectory_action="/arm_controller/follow_joint_trajectory",
         on_goal_event=on_event,
     )
-    facade = PilotSimRuntime(arm)
+    # Pilot is offered the vendor URDF range within the admission range above (D-411 B).
+    facade = PilotSimRuntime(arm, urdf_limits=urdf_position_limits())
     facade.capture = PilotSimCapture(
         facade, record_root, source, sim_time_ns=lambda: node.get_clock().now().nanoseconds)
     camera = PilotSimCamera(node, facade.capture, source["world_sha256"])
