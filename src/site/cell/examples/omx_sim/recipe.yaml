@@ -1,8 +1,9 @@
 # Rosy Cell demo recipe for the OMX-F Gazebo workcell (C3). 2 pallets x 2 layers x 4 blocks + 2 slip sheets.
 # Block: 40 x 30 x 30 mm foam, 20 g (<= 50 g). The gripper squeezes the 30 mm width; the 42 mm
-# finger pads lie along the 40 mm length. OMX-F fingertip jaw gap (pinned finger mesh, C3b; the
-# mapping lives in deploy/robot/omx/sim/cell_profile.yaml gripper.jaw): 0 at gripper_joint_1 = 0,
-# 24 mm at 0.2 rad, 30 mm at 0.25 rad, 48 mm at 0.4 rad; fingertip 2.5 mm past the TCP.
+# finger pads lie along the 40 mm length. In Gazebo the fingers meet a 30 mm block at
+# gripper_joint_1 = 0.407 rad (20 mm: 0.319, 40 mm: 0.496; the calibrated mapping is
+# deploy/robot/omx/sim/cell_profile.yaml gripper.jaw; the bare finger mesh would say 0.25 rad).
+# Fingertips reach 2.57 mm past the TCP (cell.yaml fingertip_overhang_m).
 # grasp_depth 15 mm (C3b B1): the TCP (end_effector_link, ~2.5 mm inside the fingertip) goes
 # 15 mm below the block top, so the fingertip pads (inner hook, finger-local x 55-65 mm from
 # the pivot) overlap the block's upper half. 25 mm hit the TCP floor z 0.005 (C3 run9).
