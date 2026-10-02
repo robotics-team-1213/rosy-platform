@@ -83,8 +83,7 @@ class PilotSimCapture:
                           "instance_id": self.runtime.instance_id, "joint_names": list(config.joint_names),
                           "position_limits_rad": dict(config.position_limits),
                           # D-411 C: the gripper takes absolute goals, recorded as action.gripper.
-                          "gripper_joint": (self.runtime.gripper
-                                            if getattr(self.runtime, "_gripper_spec", None) else None),
+                          "gripper_joint": getattr(self.runtime, "gripper_joint_for_goals", None),
                           "calibration_revision": config.calibration_revision,
                           "camera": {"name": "front", "identity": metadata.camera_identity,
                                      "width": metadata.width, "height": metadata.height,

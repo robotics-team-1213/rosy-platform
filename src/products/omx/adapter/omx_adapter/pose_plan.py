@@ -88,6 +88,7 @@ class CellPlanningProfile:
     acceleration_limits: Mapping[str, float]
     gripper_open: float
     gripper_closed: float
+    gripper_preload_rad: float
     phase_max_duration_s: Mapping[str, float]
     workspace_min_m: tuple[float, float, float]
     workspace_max_m: tuple[float, float, float]
@@ -143,6 +144,9 @@ class CellPlanningProfile:
             raise ValueError("gripper open/closed targets must lie within gripper limits")
         if gripper_open == gripper_closed:
             raise ValueError("gripper open and closed targets must differ")
+        gripper_preload = _finite("gripper.preload", gripper.get("preload"), positive=True)
+        if gripper_preload >= abs(gripper_open - gripper_closed):
+            raise ValueError("gripper preload must be shorter than the open-closed stroke")
         durations = document.get("phase_max_duration_s")
         if not isinstance(durations, Mapping) or tuple(durations) != MOTION_PHASES:
             raise ValueError("phase_max_duration_s must list approach, grasp, transfer, release")
@@ -178,7 +182,7 @@ class CellPlanningProfile:
             position_limits=MappingProxyType(position),
             velocity_limits=MappingProxyType(velocity),
             acceleration_limits=MappingProxyType(acceleration),
-            gripper_open=gripper_open, gripper_closed=gripper_closed,
+            gripper_open=gripper_open, gripper_closed=gripper_closed, gripper_preload_rad=gripper_preload,
             phase_max_duration_s=MappingProxyType(phase_max),
             workspace_min_m=tuple(b[0] for b in bounds),  # type: ignore[arg-type]
             workspace_max_m=tuple(b[1] for b in bounds),  # type: ignore[arg-type]

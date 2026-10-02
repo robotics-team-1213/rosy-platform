@@ -112,7 +112,7 @@ class Runtime:
                  "command": "bounded_goal", "joints": [{"name": "joint1", "lower": -1.0, "upper": 1.0}]},
                 {"id": "gripper", "kind": "gripper", "label": "그리퍼", "joint": self.gripper, "closed": 0.0,
                  "open": 1.0, "unit": "rad", "presets": {"open": 1.0, "half": 0.5, "close": 0.0},
-                 "readback": ["position", "grasp"]}]}
+                 "readback": ["position", "grasp"], "max_velocity": 0.5}]}
         # D-411 B: the screen draws what the target announces (an empty list = no controls).
         return {"schema": "rosy.controls/1", "items": [{
             "id": "arm", "kind": "joint_jog", "label": "팔", "max_step_rad": 0.05, "duration_s": 0.4,

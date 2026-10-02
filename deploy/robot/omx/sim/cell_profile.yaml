@@ -38,6 +38,11 @@ gripper:
   acceleration: 0.5
   open: 1.0
   closed: 0.0
+  # D-411 C: after a close stops short of closed on an object (holding), later arm goals command
+  # the stall position moved this far toward closed -- a bounded squeeze, never "closed" itself,
+  # which in position control would press with the full stall error. Nominal; tune from the
+  # Gazebo stall probe (probe_pilot_sim_http.py --stall).
+  preload: 0.05
 
 # One ROS goal per phase; a phase that needs longer is rejected, never split (D-402 §6).
 # Rejection is the safe outcome: no partial plan, the Job holds for the operator.

@@ -15,10 +15,10 @@ _RUNNING = frozenset({"LOCAL_ACCEPTED", "ROS_ACCEPTED", "RUNNING", "CANCEL_REQUE
 GRIPPER_STATES = ("open", "closed", "holding", "moving", "unknown")
 
 
-def gripper_state(*, position: float | None, ready: bool, closed: float,
+def gripper_state(*, position: float | None, fresh: bool, closed: float,
                   goal: dict | None, moved_recently: bool) -> str:
     """One of GRIPPER_STATES from fresh readback and the last gripper goal ``{target, state}``."""
-    if not ready or position is None:
+    if not fresh or position is None:
         return "unknown"
     if goal is not None and goal["state"] in _RUNNING:
         return "moving"

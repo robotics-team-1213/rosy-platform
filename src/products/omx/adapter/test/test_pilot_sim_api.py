@@ -220,10 +220,15 @@ def test_gripper_goal_needs_the_seat_and_is_idempotent():
 
 
 def test_gripper_and_jog_share_request_ids():
-    client, _, headers, seat = _seated()
+    client, runtime, headers, seat = _seated()
     assert client.post(f"{PREFIX}/goals", json=_jog(seat, request_id="same"), headers=headers).status_code == 202
     reused = client.post(f"{PREFIX}/gripper", json=_grip(seat, request_id="same"), headers=headers)
     assert reused.status_code == 409 and reused.json()["error"]["message"] == "request id reused"
+    # and the other way round: a gripper request id cannot be reused by a jog
+    assert client.post(f"{PREFIX}/gripper", json=_grip(seat, request_id="g"), headers=headers).status_code == 202
+    reused = client.post(f"{PREFIX}/goals", json=_jog(seat, request_id="g"), headers=headers)
+    assert reused.status_code == 409 and reused.json()["error"]["message"] == "request id reused"
+    assert len(runtime.calls) == 2
 
 
 def test_gripper_limit_rejection_is_a_conflict():

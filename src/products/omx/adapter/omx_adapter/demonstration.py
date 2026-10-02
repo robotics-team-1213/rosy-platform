@@ -15,16 +15,17 @@ from uuid import UUID, uuid4
 
 from PIL import Image
 
+from core_common.protocol.omx_sim import GRIPPER_GOAL_MAX_DURATION_S
+
 
 SCHEMA = "rosy.omx-demonstration.v1"
 ROBOT_TYPE = "omx_sim_ros"
 ACTION_SEMANTICS = "absolute_joint_position_target_rad"
 MAX_SKEW_NS = 50_000_000
 MAX_FRAMES = 3000
-#: Goal duration bounds: a jog is 0.1-1.0 s, a gripper goal up to 2.0 s
-#: (``core_common.protocol.omx_sim.GRIPPER_GOAL_MAX_DURATION_S``, D-411 C).
+#: Goal duration bounds: a jog is 0.1-1.0 s (OmxSimJog), a gripper goal up to 2.0 s (D-411 C).
 MIN_GOAL_DURATION_S = 0.1
-MAX_GOAL_DURATION_S = 2.0
+MAX_GOAL_DURATION_S = GRIPPER_GOAL_MAX_DURATION_S
 
 
 def _sha(data: bytes) -> str:

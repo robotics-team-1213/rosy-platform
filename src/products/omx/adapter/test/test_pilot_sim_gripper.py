@@ -7,12 +7,12 @@ from omx_adapter.pilot_sim_gripper import GRIPPER_TOLERANCE_RAD, gripper_state
 CLOSED = 0.0
 
 
-def state(position, *, ready=True, goal=None, moved=False):
-    return gripper_state(position=position, ready=ready, closed=CLOSED, goal=goal, moved_recently=moved)
+def state(position, *, fresh=True, goal=None, moved=False):
+    return gripper_state(position=position, fresh=fresh, closed=CLOSED, goal=goal, moved_recently=moved)
 
 
 def test_unknown_without_fresh_readback():
-    assert state(None) == "unknown" and state(0.0, ready=False) == "unknown"
+    assert state(None) == "unknown" and state(0.0, fresh=False) == "unknown"
 
 
 @pytest.mark.parametrize("goal_state", ["LOCAL_ACCEPTED", "ROS_ACCEPTED", "RUNNING", "CANCEL_REQUESTED"])

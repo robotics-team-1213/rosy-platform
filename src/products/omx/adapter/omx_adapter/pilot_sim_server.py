@@ -20,7 +20,8 @@ from core_common.protocol.omx_sim import GRIPPER_GOAL_MAX_DURATION_S
 
 from .command_owner import ArmCommandConfig
 from .pilot_sim_api import create_pilot_sim_app
-from .pilot_sim_runtime import PilotSimRuntime, sim_admission_limits, urdf_position_limits
+from .pilot_sim_runtime import (PilotSimRuntime, sim_admission_limits, urdf_position_limits,
+                                urdf_velocity_limits)
 from .pilot_sim_capture import PilotSimCapture
 from .pilot_sim_camera import PilotSimCamera
 from .pose_plan import CellPlanningProfile
@@ -84,9 +85,12 @@ def main() -> None:
         trajectory_action="/arm_controller/follow_joint_trajectory",
         on_goal_event=on_event,
     )
-    # Pilot is offered the vendor URDF range within the admission range above (D-411 B, C).
-    facade = PilotSimRuntime(arm, urdf_limits=urdf_limits, gripper=cell.gripper_joint,
-                             gripper_open=cell.gripper_open, gripper_closed=cell.gripper_closed)
+    # Pilot is offered the admission range above inset by the start-state tolerance (D-411 B, C);
+    # gripper goals are paced at the slower of the cell and URDF gripper speeds.
+    gripper_velocity = min(cell.velocity_limits[cell.gripper_joint], urdf_velocity_limits()[cell.gripper_joint])
+    facade = PilotSimRuntime(arm, gripper=cell.gripper_joint, range_inset_rad=cell.start_state_tolerance_rad,
+                             gripper_open=cell.gripper_open, gripper_closed=cell.gripper_closed,
+                             gripper_velocity=gripper_velocity, gripper_preload=cell.gripper_preload_rad)
     facade.capture = PilotSimCapture(
         facade, record_root, source, sim_time_ns=lambda: node.get_clock().now().nanoseconds)
     camera = PilotSimCamera(node, facade.capture, source["world_sha256"])

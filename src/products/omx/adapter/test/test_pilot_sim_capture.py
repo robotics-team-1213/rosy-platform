@@ -138,7 +138,7 @@ def test_gripper_mode_records_the_gripper_joint_and_action_column(tmp_path):
     assert capture.start("legacy")["provenance"]["gripper_joint"] is None
     capture.stop(capture.status()["episode_id"], "failure")
     capture = create_capture(tmp_path)
-    capture.runtime.gripper, capture.runtime._gripper_spec = "gripper_joint_1", (0.4, 0.0)
+    capture.runtime.gripper_joint_for_goals = "gripper_joint_1"
     episode = capture.start("grip")
     assert episode["provenance"]["gripper_joint"] == "gripper_joint_1"
     capture.prepare(NS(command_id="command", positions={"joint1": 0.0, "gripper_joint_1": 0.3},

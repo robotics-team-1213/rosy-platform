@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import collections
+import math
 import threading
 import time
 from pathlib import Path
@@ -18,26 +19,40 @@ from core_common.protocol.omx_sim import OmxSimGripperGoal, OmxSimJog
 
 from .command_owner import TrajectoryCommand
 from .kinematics import DEFAULT_KINEMATICS_PATH
-from .pilot_sim_gripper import STILL_RAD, STILL_WINDOW_S, gripper_state
+from .pilot_sim_gripper import GRIPPER_TOLERANCE_RAD, STILL_RAD, STILL_WINDOW_S, gripper_state
 
 JOG_MAX_STEP_RAD = BOUNDED_JOG_MAX_STEP_RAD
 JOG_DURATION_S = 0.4
 
 
+def _urdf_joints(path: Path | str) -> list[dict]:
+    document = yaml.safe_load(Path(path).read_text(encoding="utf-8"))
+    return [joint for joint in [*document["joints"], *document.get("gripper_joints", ())] if "urdf_limit" in joint]
+
+
 def urdf_position_limits(path: Path | str = DEFAULT_KINEMATICS_PATH) -> dict[str, tuple[float, float]]:
     """Joint ranges of the pinned vendor URDF, as recorded in ``omx_f_kinematics.yaml``."""
-    document = yaml.safe_load(Path(path).read_text(encoding="utf-8"))
     return {str(joint["name"]): (float(joint["urdf_limit"]["lower"]), float(joint["urdf_limit"]["upper"]))
-            for joint in [*document["joints"], *document.get("gripper_joints", ())]
-            if "urdf_limit" in joint}
+            for joint in _urdf_joints(path)}
+
+
+def urdf_velocity_limits(path: Path | str = DEFAULT_KINEMATICS_PATH) -> dict[str, float]:
+    """Joint speed limits (rad/s) of the pinned vendor URDF."""
+    return {str(joint["name"]): float(joint["urdf_limit"]["velocity"])
+            for joint in _urdf_joints(path) if "velocity" in joint["urdf_limit"]}
 
 
 def sim_admission_limits(cell_limits: Mapping[str, tuple[float, float]],
                          urdf_limits: Mapping[str, tuple[float, float]]) -> dict[str, tuple[float, float]]:
-    """SIM owner admission range per joint: the cell profile range within the URDF range (D-411 C)."""
+    """SIM owner admission range per joint: the cell profile range within the URDF range (D-411 C).
+
+    Every cell joint must have a URDF range: a joint the URDF does not bound is a profile error.
+    """
     limits = {}
     for name, (lower, upper) in cell_limits.items():
-        urdf_lower, urdf_upper = urdf_limits.get(name, (lower, upper))
+        if name not in urdf_limits:
+            raise ValueError(f"{name}: no URDF range for this cell profile joint")
+        urdf_lower, urdf_upper = urdf_limits[name]
         lower, upper = max(lower, urdf_lower), min(upper, urdf_upper)
         if not lower < upper:
             raise ValueError(f"{name}: cell profile range lies outside the URDF range")
@@ -45,20 +60,47 @@ def sim_admission_limits(cell_limits: Mapping[str, tuple[float, float]],
     return limits
 
 
+def _outside(value: float, lower: float, upper: float) -> float:
+    return max(lower - value, 0.0, value - upper)
+
+
 class PilotSimRuntime:
-    def __init__(self, arm, *, gripper: str = "gripper_joint_1",
-                 urdf_limits: Mapping[str, tuple[float, float]] | None = None,
-                 gripper_open: float | None = None, gripper_closed: float | None = None) -> None:
+    """``position_limits`` of the owner config are the admission ranges (already within the URDF).
+
+    Pilot is offered each range inset by ``range_inset_rad`` (the start-state tolerance), so an
+    overshoot past an offered bound still reads back inside admission and never latches HOLD.
+    Gripper mode (D-411 C, all of ``gripper_open``/``gripper_closed``/``gripper_velocity``/
+    ``gripper_preload``): the gripper takes absolute goals and leaves joint_jog. Without it the
+    gripper stays a jog joint (servers before D-411 C).
+    """
+
+    def __init__(self, arm, *, gripper: str = "gripper_joint_1", range_inset_rad: float = 0.0,
+                 gripper_open: float | None = None, gripper_closed: float | None = None,
+                 gripper_velocity: float | None = None, gripper_preload: float | None = None) -> None:
         self.arm = arm
-        self.urdf_limits = dict(urdf_limits or {})
         self.instance_id = arm.owner.config.instance_id
         self.joint_names = arm.owner.config.joint_names
         self.gripper = gripper
-        # Gripper mode (D-411 C): the gripper takes absolute goals and leaves joint_jog.
-        # Without open/closed the gripper stays a jog joint (servers before D-411 C).
-        self._gripper_spec = (None if gripper_open is None or gripper_closed is None
-                              else (float(gripper_open), float(gripper_closed)))
-        self._gripper_goal: tuple[str, float] | None = None  # (command_id, target)
+        self.range_inset_rad = float(range_inset_rad)
+        self._offered = {}
+        for name, (lower, upper) in arm.owner.config.position_limits.items():
+            offered = (lower + self.range_inset_rad, upper - self.range_inset_rad)
+            if not (self.range_inset_rad >= 0 and offered[0] < offered[1]):
+                raise ValueError(f"{name}: range inset leaves no range")
+            self._offered[name] = offered
+        spec = (gripper_open, gripper_closed, gripper_velocity, gripper_preload)
+        if any(value is not None for value in spec) and any(value is None for value in spec):
+            raise ValueError("gripper mode needs open, closed, velocity and preload together")
+        self._gripper_spec = None if gripper_open is None else (float(gripper_open), float(gripper_closed))
+        if self._gripper_spec is not None:
+            if not (math.isfinite(gripper_velocity) and gripper_velocity > 0):
+                raise ValueError("gripper velocity must be finite and positive")
+            if not 0 <= gripper_preload < abs(self._gripper_spec[0] - self._gripper_spec[1]):
+                raise ValueError("gripper preload must be within the stroke")
+        self.gripper_velocity = None if gripper_velocity is None else float(gripper_velocity)
+        self.gripper_preload = None if gripper_preload is None else float(gripper_preload)
+        self._gripper_goal: tuple[str, float] | None = None   # (command_id, target)
+        self._gripper_stall: float | None = None              # readback when that goal SUCCEEDED
         self._gripper_samples: collections.deque = collections.deque(maxlen=32)
         self.camera_available = False
         self.capture = None
@@ -68,12 +110,20 @@ class PilotSimRuntime:
         self._last_event_sequence: dict[str, int] = {}
         self._served_sequences: dict[int, float] = {}
 
+    @property
+    def gripper_joint_for_goals(self) -> str | None:
+        """The joint that takes absolute gripper goals (recorded as ``action.gripper``), else None."""
+        return self.gripper if self._gripper_spec is not None else None
+
+    def offered_range(self, name: str) -> tuple[float, float]:
+        return self._offered[name]
+
     def snapshot(self) -> dict:
         state = self.arm.latest_joint_state
         age = None if state is None else time.monotonic() - state.received_at
         action_server_ready = self.arm.action_port.server_is_ready()
-        ready = (state is not None and 0 <= age <= self.arm.owner.config.max_joint_state_age_s
-                 and self.arm.owner.state == "ready" and action_server_ready)
+        fresh = state is not None and 0 <= age <= self.arm.owner.config.max_joint_state_age_s
+        ready = fresh and self.arm.owner.state == "ready" and action_server_ready
         if ready:
             with self._lock:
                 now = time.monotonic()
@@ -81,27 +131,33 @@ class PilotSimRuntime:
                                           if now - issued <= 5.0}
                 self._served_sequences[state.sequence] = now
         snapshot = {"instance_id": self.instance_id, "ready": ready,
-                "owner_state": self.arm.owner.state,
-                "owner_reason": (getattr(getattr(self.arm, "last_terminal_decision", None), "reason", "")
-                                 if self.arm.owner.state == "hold" else ""),
-                "action_server_ready": action_server_ready,
-                "state_sequence": state.sequence if state else None,
-                "joint_age_ms": round(age * 1000) if age is not None else None,
+                    "owner_state": self.arm.owner.state,
+                    "owner_reason": (getattr(getattr(self.arm, "last_terminal_decision", None), "reason", "")
+                                     if self.arm.owner.state == "hold" else ""),
+                    "action_server_ready": action_server_ready,
+                    "state_sequence": state.sequence if state else None,
+                    "joint_age_ms": round(age * 1000) if age is not None else None,
                     "positions": dict(state.positions) if state else {},
                     "active_goal": self._active}
         if self._gripper_spec is not None:
-            fresh = state is not None and 0 <= age <= self.arm.owner.config.max_joint_state_age_s
+            self._sample_gripper()
             snapshot["gripper"] = self._gripper_snapshot(
                 state if fresh and self.arm.owner.state != "hold" else None)
         return snapshot
+
+    def _sample_gripper(self) -> None:
+        """Record gripper readback per joint_states sequence (watchdog 10 Hz and every /state)."""
+        state = self.arm.latest_joint_state
+        if self._gripper_spec is None or state is None or self.gripper not in state.positions:
+            return
+        with self._lock:
+            if not self._gripper_samples or self._gripper_samples[-1][0] != state.sequence:
+                self._gripper_samples.append((state.sequence, state.received_at, state.positions[self.gripper]))
 
     def _gripper_snapshot(self, state) -> dict:
         open_, closed = self._gripper_spec
         position = None if state is None else state.positions.get(self.gripper)
         with self._lock:
-            if position is not None and (not self._gripper_samples
-                                         or self._gripper_samples[-1][0] != state.sequence):
-                self._gripper_samples.append((state.sequence, state.received_at, position))
             now = time.monotonic()
             moved = position is not None and any(
                 abs(sample - position) > STILL_RAD for _, received, sample in self._gripper_samples
@@ -111,30 +167,26 @@ class PilotSimRuntime:
                 command_id, target = self._gripper_goal
                 goal = {"target": target, "state": self._goals[command_id]["state"]}
         return {"joint": self.gripper, "position": position, "open": open_, "closed": closed,
-                "state": gripper_state(position=position, ready=position is not None, closed=closed,
+                "state": gripper_state(position=position, fresh=position is not None, closed=closed,
                                        goal=goal, moved_recently=moved)}
 
     def controls(self) -> dict:
-        """rosy.controls/1 for this SIM workcell (D-411 B). Bounded goals only (D-390 §2).
+        """rosy.controls/1 for this SIM workcell (D-411 B, C). Bounded goals only (D-390 §2).
 
-        Each published range is the URDF range intersected with the owner's SIM
-        admission range, so Pilot never offers a target the owner would reject.
+        Each published range is the owner's admission range (cell profile within URDF) inset by
+        ``range_inset_rad``, so Pilot never offers a target the owner would reject or HOLD on.
         """
-        admitted = self.arm.owner.config.position_limits
-
-        def joint_range(name: str) -> JointRange:
-            lower, upper = admitted[name]
-            urdf_lower, urdf_upper = self.urdf_limits.get(name, (lower, upper))
-            return JointRange(name=name, lower=max(lower, urdf_lower), upper=min(upper, urdf_upper))
-
-        jog = JointJogControl(id="arm", label="팔", max_step_rad=JOG_MAX_STEP_RAD, duration_s=JOG_DURATION_S,
-                              joints=tuple(joint_range(name) for name in self._jog_joints()))
+        jog = JointJogControl(
+            id="arm", label="팔", max_step_rad=JOG_MAX_STEP_RAD, duration_s=JOG_DURATION_S,
+            joints=tuple(JointRange(name=name, lower=self._offered[name][0], upper=self._offered[name][1])
+                         for name in self._jog_joints()))
         items: list = [jog]
         if self._gripper_spec is not None:
             open_, closed = self._gripper_spec
             items.append(GripperControl(
                 id="gripper", label="그리퍼", joint=self.gripper, closed=closed, open=open_,
-                presets=GripperPresets(open=open_, half=(open_ + closed) / 2, close=closed)))
+                presets=GripperPresets(open=open_, half=(open_ + closed) / 2, close=closed),
+                max_velocity=self.gripper_velocity))
         return ControlsDescriptor(items=tuple(items)).model_dump(by_alias=True, mode="json")
 
     def _jog_joints(self) -> tuple[str, ...]:
@@ -142,15 +194,39 @@ class PilotSimRuntime:
             return tuple(self.joint_names)
         return tuple(name for name in self.joint_names if name != self.gripper)
 
+    def _held_gripper_target(self) -> float | None:
+        """Gripper target for an arm goal after a finished gripper goal (None = keep readback).
+
+        A close that stopped short of closed (holding) is squeezed by a bounded preload past the
+        stall position, never commanded all the way to closed; otherwise the goal target is kept.
+        """
+        if self._gripper_goal is None or self._goals.get(self._gripper_goal[0], {}).get("state") != "SUCCEEDED":
+            return None
+        target = self._gripper_goal[1]
+        closed = self._gripper_spec[1]
+        stall = self._gripper_stall
+        if (stall is None or abs(target - closed) > GRIPPER_TOLERANCE_RAD
+                or abs(stall - closed) <= GRIPPER_TOLERANCE_RAD):
+            return target
+        direction = math.copysign(1.0, closed - stall)
+        squeezed = stall + direction * self.gripper_preload
+        return closed if (closed - squeezed) * direction < 0 else squeezed
+
     def submit(self, jog: OmxSimJog) -> dict:
         def place(target: dict, limits: Mapping) -> str:
-            # Keep squeezing what a finished gripper goal holds; the readback would let go.
-            if self._gripper_goal is not None and self._goals.get(
-                    self._gripper_goal[0], {}).get("state") == "SUCCEEDED":
-                target[self.gripper] = self._gripper_goal[1]
-            target[jog.joint] += jog.delta_rad
+            held = self._held_gripper_target()
+            if held is not None:
+                target[self.gripper] = held
+            current = target[jog.joint]
+            target[jog.joint] = current + jog.delta_rad
             lower, upper = limits[jog.joint]
-            return "" if lower <= target[jog.joint] <= upper else "joint_limit"
+            offered_lower, offered_upper = self._offered[jog.joint]
+            # Within admission, and never further outside the offered range than the readback is.
+            if not lower <= target[jog.joint] <= upper or (
+                    _outside(target[jog.joint], offered_lower, offered_upper)
+                    > _outside(current, offered_lower, offered_upper)):
+                return "joint_limit"
+            return ""
 
         admitted = "" if jog.joint in self._jog_joints() else "joint_not_admitted"
         return self._dispatch(jog.request_id, jog.instance_id, jog.state_sequence, jog.duration_s,
@@ -159,9 +235,14 @@ class PilotSimRuntime:
     def submit_gripper(self, goal: OmxSimGripperGoal) -> dict:
         """One absolute gripper goal; the arm joints keep their readback (D-411 C)."""
         def place(target: dict, limits: Mapping) -> str:
+            readback = target[self.gripper]
+            offered_lower, offered_upper = self._offered[self.gripper]
+            if not offered_lower <= goal.position <= offered_upper:
+                return "gripper_limit"
+            if abs(goal.position - readback) / goal.duration_s > self.gripper_velocity:
+                return "gripper_velocity_limit"
             target[self.gripper] = goal.position
-            lower, upper = limits[self.gripper]
-            return "" if lower <= goal.position <= upper else "gripper_limit"
+            return ""
 
         configured = "" if self._gripper_spec is not None else "gripper_not_configured"
         with self._lock:
@@ -169,6 +250,7 @@ class PilotSimRuntime:
                                     goal.duration_s, place, configured)
             if result["state"] != "REJECTED":
                 self._gripper_goal = (goal.request_id, goal.position)
+                self._gripper_stall = None
             return result
 
     def _dispatch(self, request_id: str, instance_id: str, state_sequence: int, duration_s: float,
@@ -266,10 +348,16 @@ class PilotSimRuntime:
             elif event.kind == "TERMINAL_RESULT":
                 if event.status == 4 and event.result_code == 0:
                     receipt.update(state="SUCCEEDED", ros_goal_id=event.goal_id)
+                    if self._gripper_goal is not None and self._gripper_goal[0] == event.command_id:
+                        # The stall position a holding squeeze is bounded from (never closed itself).
+                        state = self.arm.latest_joint_state
+                        self._gripper_stall = None if state is None else state.positions.get(self.gripper)
                 elif event.status == 5:
                     receipt.update(state="CANCELED", ros_goal_id=event.goal_id)
                 else:
-                    receipt.update(state="UNKNOWN_HOLD", reason=f"terminal_status_{event.status}")
+                    # A failed or timed-out goal is never holding: it is HOLD evidence, kept verbatim.
+                    receipt.update(state="UNKNOWN_HOLD",
+                                   reason=f"terminal_status_{event.status}_result_{event.result_code}")
                 if self._active == event.command_id:
                     self._active = None
             elif event.kind in {"GOAL_REJECTED", "GOAL_ACCEPTANCE_UNKNOWN", "TERMINAL_UNKNOWN"}:
@@ -286,6 +374,7 @@ class PilotSimRuntime:
                     self._interrupt_capture("capture_io_or_source_error")
 
     def on_watchdog(self) -> None:
+        self._sample_gripper()
         with self._lock:
             if self._active and self.arm.owner.state == "hold":
                 reason = getattr(getattr(self.arm, "last_terminal_decision", None), "reason", "owner_hold")

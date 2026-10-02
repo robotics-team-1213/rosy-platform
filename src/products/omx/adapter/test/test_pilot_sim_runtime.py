@@ -128,13 +128,6 @@ def test_controls_step_bound_is_the_shared_jog_bound():
     assert pilot_sim_runtime.JOG_MAX_STEP_RAD is BOUNDED_JOG_MAX_STEP_RAD
 
 
-def test_published_limits_are_urdf_range_within_sim_admission():
-    from core_common.protocol.controls import ControlsDescriptor
-    runtime = PilotSimRuntime(Arm(), urdf_limits={"joint1": (-0.5, 2.0), "gripper_joint_1": (-6.28, 6.28)})
-    (jog,) = ControlsDescriptor.model_validate(runtime.controls()).items
-    assert [(j.name, j.lower, j.upper) for j in jog.joints] == [("joint1", -0.5, 1), ("gripper_joint_1", -0.1, 0.1)]
-
-
 def test_urdf_limits_come_from_the_pinned_kinematics_record():
     import math
     from omx_adapter.pilot_sim_runtime import urdf_position_limits
@@ -147,27 +140,40 @@ def test_urdf_limits_come_from_the_pinned_kinematics_record():
 
 # --- D-411 C: gripper mode -------------------------------------------------------------
 
-def grip(position, sequence=8, request_id="grip"):
+def grip(position, sequence=8, request_id="grip", duration_s=0.8):
     return OmxSimGripperGoal(instance_id="instance", seat_id="seat", request_id=request_id,
-                             position=position, duration_s=0.8, state_sequence=sequence,
+                             position=position, duration_s=duration_s, state_sequence=sequence,
                              expires_at_ms=9999999999999)
 
 
-def _gripper_runtime(arm=None):
-    return PilotSimRuntime(arm or Arm(), gripper_open=0.1, gripper_closed=0.0)
+GRIPPER = {"gripper_open": 0.1, "gripper_closed": 0.0, "gripper_velocity": 0.5, "gripper_preload": 0.02}
 
 
-def _finish(runtime, command_id):
+def _gripper_runtime(arm=None, **changes):
+    return PilotSimRuntime(arm or Arm(), **{**GRIPPER, **changes})
+
+
+def _terminal(runtime, command_id, status=4, result_code=0, sequence=1):
     runtime.on_goal_event(RosGoalEvent(kind="TERMINAL_RESULT", command_id=command_id, phase_id=None,
                                        goal_id=str(uuid4()), observed_at_monotonic_s=time.monotonic(),
-                                       sequence=1, status=4, result_code=0))
-    runtime.arm.owner.state = "ready"
+                                       sequence=sequence, status=status, result_code=result_code))
+    runtime.arm.owner.state = "ready" if status == 4 and result_code == 0 else "hold"
 
 
 def _readback(arm, sequence, **positions):
     arm.latest_joint_state = JointStateSnapshot(
         positions={"joint1": 0.0, "gripper_joint_1": 0.0, **positions}, sequence=sequence,
         received_at=time.monotonic(), calibration_revision="sim")
+
+
+def test_gripper_mode_needs_every_gripper_parameter():
+    for missing in GRIPPER:
+        with pytest.raises(ValueError, match="together"):
+            PilotSimRuntime(Arm(), **{key: value for key, value in GRIPPER.items() if key != missing})
+    with pytest.raises(ValueError, match="preload"):
+        _gripper_runtime(gripper_preload=0.2)
+    with pytest.raises(ValueError, match="velocity"):
+        _gripper_runtime(gripper_velocity=0.0)
 
 
 def test_gripper_goal_sets_only_the_gripper_absolutely():
@@ -182,12 +188,23 @@ def test_gripper_goal_sets_only_the_gripper_absolutely():
     assert snap["gripper"]["state"] == "moving"
 
 
-def test_gripper_goal_outside_limits_is_rejected():
-    runtime = _gripper_runtime()
+def test_gripper_goal_outside_the_offered_range_is_rejected():
+    runtime = _gripper_runtime(range_inset_rad=0.01)
     runtime.snapshot()
-    assert runtime.submit_gripper(grip(0.2)) == {"command_id": "grip", "state": "REJECTED",
-                                                 "reason": "gripper_limit"}
+    assert runtime.submit_gripper(grip(0.095)) == {"command_id": "grip", "state": "REJECTED",
+                                                   "reason": "gripper_limit"}
     assert runtime.submit_gripper(grip(-0.2, request_id="g2"))["reason"] == "gripper_limit"
+    assert runtime.submit_gripper(grip(0.085, request_id="g3"))["state"] == "LOCAL_ACCEPTED"
+
+
+def test_gripper_goal_faster_than_the_gripper_speed_is_rejected():
+    arm = Arm()
+    runtime = _gripper_runtime(arm, gripper_velocity=0.1)
+    runtime.snapshot()
+    # 0.09 rad in 0.8 s = 0.1125 rad/s > 0.1; the same move over 1.0 s = 0.09 rad/s is admitted.
+    assert runtime.submit_gripper(grip(0.09))["reason"] == "gripper_velocity_limit"
+    assert not arm.commands
+    assert runtime.submit_gripper(grip(0.09, request_id="slow", duration_s=1.0))["state"] == "LOCAL_ACCEPTED"
 
 
 def test_gripper_goal_obeys_the_single_active_goal_rule():
@@ -203,6 +220,7 @@ def test_gripper_goal_needs_freshly_served_readback_and_gripper_mode():
     legacy = PilotSimRuntime(Arm())
     legacy.snapshot()
     assert legacy.submit_gripper(grip(0.05))["reason"] == "gripper_not_configured"
+    assert legacy.gripper_joint_for_goals is None and runtime.gripper_joint_for_goals == "gripper_joint_1"
 
 
 def test_jog_no_longer_admits_the_gripper_joint():
@@ -233,20 +251,77 @@ def test_snapshot_gripper_is_unknown_on_stale_readback_or_hold():
                                              "state": "unknown", "open": 0.1, "closed": 0.0}
 
 
-def test_finished_close_that_stops_short_is_holding_and_arm_jogs_keep_squeezing():
+def test_the_watchdog_samples_gripper_motion_between_state_polls():
+    arm = Arm()
+    runtime = _gripper_runtime(arm)
+    _readback(arm, 8, gripper_joint_1=0.06)
+    runtime.on_watchdog()
+    _readback(arm, 9, gripper_joint_1=0.03)
+    runtime.on_watchdog()
+    assert [sample[2] for sample in runtime._gripper_samples] == [0.06, 0.03]
+    assert runtime.snapshot()["gripper"]["state"] == "moving"
+
+
+def _hold_an_object(arm, runtime, stall=0.07):
+    _readback(arm, 8, gripper_joint_1=0.1)
+    runtime.snapshot()
+    runtime.submit_gripper(grip(0.0, duration_s=1.0))
+    _readback(arm, 9, gripper_joint_1=stall)      # fingers stopped on an object, then SUCCEEDED
+    _terminal(runtime, "grip")
+    runtime._gripper_samples.clear()
+    _readback(arm, 10, gripper_joint_1=stall)
+
+
+def test_finished_close_that_stops_short_is_holding_and_arm_jogs_squeeze_by_the_preload():
+    arm = Arm()
+    runtime = _gripper_runtime(arm)
+    _hold_an_object(arm, runtime)
+    assert runtime.snapshot()["gripper"]["state"] == "holding"
+    assert runtime.submit(jog(sequence=10))["state"] == "LOCAL_ACCEPTED"
+    # stall 0.07 - preload 0.02 toward closed: bounded, never the full 0.07 error to closed.
+    assert arm.commands[-1].positions == {"joint1": 0.02, "gripper_joint_1": pytest.approx(0.05)}
+
+
+def test_the_squeeze_is_fixed_at_the_stall_and_does_not_ratchet():
+    arm = Arm()
+    runtime = _gripper_runtime(arm)
+    _hold_an_object(arm, runtime)
+    for sequence, request_id in ((10, "a"), (12, "b")):
+        _readback(arm, sequence, gripper_joint_1=0.06)   # fingers compressed a little by the squeeze
+        runtime.snapshot()
+        runtime.submit(OmxSimJog(instance_id="instance", seat_id="seat", request_id=request_id, joint="joint1",
+                                 delta_rad=0.02, duration_s=0.4, state_sequence=sequence,
+                                 expires_at_ms=9999999999999))
+        _terminal(runtime, request_id, sequence=2)
+    assert [command.positions["gripper_joint_1"] for command in arm.commands[1:]] == [
+        pytest.approx(0.05), pytest.approx(0.05)]
+
+
+def test_squeeze_never_passes_closed_and_a_full_close_keeps_its_target():
+    arm = Arm()
+    runtime = _gripper_runtime(arm, gripper_preload=0.09)
+    _hold_an_object(arm, runtime)
+    runtime.submit(jog(sequence=10))
+    assert arm.commands[-1].positions["gripper_joint_1"] == 0.0
+    arm = Arm()
+    runtime = _gripper_runtime(arm)
+    _hold_an_object(arm, runtime, stall=0.01)      # closed on nothing
+    assert runtime.snapshot()["gripper"]["state"] == "closed"
+    runtime.submit(jog(sequence=10))
+    assert arm.commands[-1].positions["gripper_joint_1"] == 0.0
+
+
+def test_a_failed_close_is_hold_evidence_never_holding():
     arm = Arm()
     runtime = _gripper_runtime(arm)
     _readback(arm, 8, gripper_joint_1=0.1)
     runtime.snapshot()
-    runtime.submit_gripper(grip(0.0))
-    _finish(runtime, "grip")
-    _readback(arm, 9, gripper_joint_1=0.07)   # fingers stopped on an object
-    assert runtime.snapshot()["gripper"]["state"] == "moving"   # readback changed within the window
-    runtime._gripper_samples.clear()
-    _readback(arm, 10, gripper_joint_1=0.07)
-    assert runtime.snapshot()["gripper"]["state"] == "holding"
-    assert runtime.submit(jog(sequence=10))["state"] == "LOCAL_ACCEPTED"
-    assert arm.commands[-1].positions == {"joint1": 0.02, "gripper_joint_1": 0.0}
+    runtime.submit_gripper(grip(0.0, duration_s=1.0))
+    _readback(arm, 9, gripper_joint_1=0.07)
+    _terminal(runtime, "grip", status=6, result_code=-5)    # ABORTED, GOAL_TOLERANCE_VIOLATED
+    assert runtime.goal("grip") == {"command_id": "grip", "state": "UNKNOWN_HOLD",
+                                    "reason": "terminal_status_6_result_-5"}
+    assert runtime.snapshot()["gripper"]["state"] == "unknown"
 
 
 def test_arm_jog_uses_readback_when_no_gripper_goal_finished():
@@ -273,22 +348,64 @@ def test_controls_move_the_gripper_out_of_joint_jog():
     jog_control, grip_control = descriptor.items
     assert [j.name for j in jog_control.joints] == ["joint1"]
     assert grip_control.kind == "gripper" and grip_control.joint == "gripper_joint_1"
-    assert (grip_control.open, grip_control.closed) == (0.1, 0.0)
+    assert (grip_control.open, grip_control.closed, grip_control.max_velocity) == (0.1, 0.0, 0.5)
     assert grip_control.presets.half == pytest.approx(0.05)
 
 
+def test_offered_ranges_are_admission_inset_by_the_start_state_tolerance():
+    from core_common.protocol.controls import ControlsDescriptor
+    runtime = PilotSimRuntime(Arm(), range_inset_rad=0.02)
+    (jog_control,) = ControlsDescriptor.model_validate(runtime.controls()).items
+    assert [(j.name, j.lower, j.upper) for j in jog_control.joints] == [
+        ("joint1", -0.98, 0.98), ("gripper_joint_1", pytest.approx(-0.08), pytest.approx(0.08))]
+    with pytest.raises(ValueError, match="inset"):
+        PilotSimRuntime(Arm(), range_inset_rad=0.1)
+
+
+def test_a_jog_past_the_offered_bound_is_refused_but_inward_jogs_are_not():
+    arm = Arm()
+    runtime = PilotSimRuntime(arm, range_inset_rad=0.02)
+    _readback(arm, 8, joint1=0.97)
+    runtime.snapshot()
+    assert runtime.submit(jog())["reason"] == "joint_limit"          # 0.99 > offered 0.98
+    _readback(arm, 9, joint1=0.99)                                    # an overshoot read back
+    runtime.snapshot()
+    inward = OmxSimJog(instance_id="instance", seat_id="seat", request_id="in", joint="joint1",
+                       delta_rad=-0.02, duration_s=0.4, state_sequence=9, expires_at_ms=9999999999999)
+    assert runtime.submit(inward)["state"] == "LOCAL_ACCEPTED"
+
+
+def test_an_overshoot_past_the_offered_upper_bound_does_not_latch_hold():
+    from omx_adapter.command_owner import ArmCommandOwner
+    arm = Arm()
+    runtime = PilotSimRuntime(arm, range_inset_rad=0.02)
+    owner = ArmCommandOwner(arm.owner.config, SimpleNamespace())
+    upper = runtime.offered_range("joint1")[1]
+    overshoot = JointStateSnapshot(positions={"joint1": upper + 0.015, "gripper_joint_1": 0.0}, sequence=1,
+                                   received_at=time.monotonic(), calibration_revision="sim")
+    assert owner.observe_joint_state(overshoot) is True and owner.state != "hold"
+    beyond = JointStateSnapshot(positions={"joint1": upper + 0.025, "gripper_joint_1": 0.0}, sequence=2,
+                                received_at=time.monotonic(), calibration_revision="sim")
+    assert owner.observe_joint_state(beyond) is False and owner.state == "hold"   # admission edge is HOLD
+
+
 def test_sim_admission_is_the_cell_profile_within_the_urdf():
-    from omx_adapter.pilot_sim_runtime import sim_admission_limits, urdf_position_limits
+    from omx_adapter.pilot_sim_runtime import sim_admission_limits, urdf_position_limits, urdf_velocity_limits
     from omx_adapter.pose_plan import CellPlanningProfile
     cell = CellPlanningProfile.load(ROOT / "deploy/robot/omx/sim/cell_profile.yaml")
     limits = sim_admission_limits(cell.position_limits, urdf_position_limits())
     assert set(limits) == set(cell.joint_names) and cell.gripper_joint in limits
     assert limits == dict(cell.position_limits)   # the profile is inside URDF +/-2pi
     lower, upper = limits[cell.gripper_joint]
-    assert lower < cell.gripper_closed < cell.gripper_open < upper
+    inset = cell.start_state_tolerance_rad
+    assert lower + inset < cell.gripper_closed < cell.gripper_open < upper - inset
+    assert urdf_velocity_limits()[cell.gripper_joint] == 4.8 and cell.velocity_limits[cell.gripper_joint] == 0.5
+    assert 0 < cell.gripper_preload_rad < abs(cell.gripper_open - cell.gripper_closed)
     assert sim_admission_limits({"j": (-1.0, 9.0)}, {"j": (-2.0, 2.0)}) == {"j": (-1.0, 2.0)}
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="outside"):
         sim_admission_limits({"j": (3.0, 4.0)}, {"j": (-2.0, 2.0)})
+    with pytest.raises(ValueError, match="no URDF range"):
+        sim_admission_limits({"j": (-1.0, 1.0)}, {})
 
 
 def test_server_builds_admission_from_the_cell_profile_and_two_second_goals():
@@ -296,5 +413,8 @@ def test_server_builds_admission_from_the_cell_profile_and_two_second_goals():
     assert "CellPlanningProfile.load(cell_path)" in source
     assert "position_limits=sim_admission_limits(cell.position_limits, urdf_limits)" in source
     assert "max_goal_duration_s=GRIPPER_GOAL_MAX_DURATION_S" in source
-    assert "gripper_open=cell.gripper_open, gripper_closed=cell.gripper_closed" in source
+    assert "range_inset_rad=cell.start_state_tolerance_rad" in source
+    assert ("min(cell.velocity_limits[cell.gripper_joint], urdf_velocity_limits()[cell.gripper_joint])"
+            in source)
+    assert "gripper_velocity=gripper_velocity, gripper_preload=cell.gripper_preload_rad" in source
     assert "(-3.0, 3.0)" not in source and "(-0.5, 0.5)" not in source
