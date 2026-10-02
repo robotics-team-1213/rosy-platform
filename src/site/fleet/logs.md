@@ -1315,3 +1315,8 @@
 - Change: record final checks after reconciling the parallel watermark evidence entry.
 - Evidence: replay 1 passed; Fleet UI/API and formation 131 passed; web suites 29 passed; harness contracts 57 passed with 24 known staleness warnings.
 - Gate: SOURCE/LOCAL only; interruption fixtures and expiry/occupancy cases remain open.
+
+## 2026-10-02 · uncommitted · fix(fleet): a legacy-null pose is never a last trusted pose (D-395 S2 Finding 1)
+- Change: `trust.trusted_xy` returns a pose only for LOCALIZED + map; the console stores no trusted pose from a `localization: null` snapshot. A robot first read null and then CANDIDATES has no trusted pose and blocks the whole track. A robot that reported localization and then goes null is untrusted (badge not legacy) until null for 30 s (`trust.LAPSED_GRACE_S`); then legacy again with its stale trusted pose dropped. Contract §3 records both rules.
+- Evidence: `test_localization_trust.py`, `test_server_traffic.py` (S2 sequence, null→LOCALIZED, LOCALIZED→CANDIDATES keep-out, lapsed robot, grace reset, true legacy); Fleet suite 1380 passed/7 skipped.
+- Gate: SOURCE/LOCAL only; the S2 bench must be rerun on the ROS box.

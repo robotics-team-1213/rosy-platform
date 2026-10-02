@@ -94,7 +94,7 @@
             <ui-tag id="formation-state" status="neutral" title="IDLE">대기</ui-tag>
           </div>
           <ui-status id="formation-role-lock" class="role-lock-note" state="forbidden" hidden>운용자 권한이 필요합니다</ui-status>
-          <div class="formation-form">
+          <details class="formation-form-wrap"><summary>대형 설정</summary><div class="formation-form">
             <label for="formation-leader">리더</label>
             <select class="ui-field" id="formation-leader"></select>
             <label for="formation-shape">모양</label>
@@ -110,7 +110,7 @@
             <input class="ui-field" id="formation-spacing" type="number" min="0.2" max="3" step="0.1" value="0.6">
             <span class="member-label" id="formation-members-label">포함 로봇</span>
             <div id="formation-members" class="member-list" role="group" aria-labelledby="formation-members-label"></div>
-          </div>
+          </div></details>
           <div class="robot-actions formation-actions">
             <ui-button kind="quiet" id="formation-start" type="button">무장</ui-button>
             <ui-button kind="quiet" id="formation-reform" type="button">대형 변경</ui-button>

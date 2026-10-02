@@ -68,6 +68,9 @@ def last_trail_pose(trail, rid):
 
 
 class Bench:
+    #: Subclasses (the S2 bench) bring their own layouts.
+    SCENARIOS = SCENARIOS
+
     def __init__(self, args):
         self.args = args
         self.out = Path(args.out)
@@ -82,7 +85,7 @@ class Bench:
         self.env = dict(os.environ, GZ_PARTITION=args.partition, ROS_DOMAIN_ID=str(args.domain),
                         RMW_IMPLEMENTATION="rmw_cyclonedds_cpp", ROS_AUTOMATIC_DISCOVERY_RANGE="LOCALHOST",
                         CYCLONEDDS_URI=f"file://{dds}")
-        self.robots = [f"rosy_{i + 1:02d}" for i in range(len(SCENARIOS[args.scenario]["spawn"]))]
+        self.robots = [f"rosy_{i + 1:02d}" for i in range(len(self.SCENARIOS[args.scenario]["spawn"]))]
         self.base = {rid: f"http://127.0.0.1:{args.api_port + i}" for i, rid in enumerate(self.robots)}
         self.t0 = time.monotonic()
         self.procs = []
@@ -304,13 +307,13 @@ class Bench:
 
     # --- phases ---------------------------------------------------------------------
     def power_on(self):
-        sc = SCENARIOS[self.args.scenario]
+        sc = self.SCENARIOS[self.args.scenario]
         poses = ";".join(f"{x},{y},{yaw}" for x, y, yaw in sc["spawn"])
         self.record["load_before"] = self.load()
         self.spawn(["ros2", "launch", "gz_sim", "gz_multi.launch.py", f"robots:={len(self.robots)}",
                     f"world_name:={WORLD}.world", "mode:=nav", "core:=true", "headless:=true",
                     "loc_assist:=true", "seed_initialpose:=false", f"api_port_base:={self.args.api_port}",
-                    f"spawn_poses:={poses}"], "launch.log")
+                    f"spawn_poses:={poses}", *getattr(self.args, "launch_arg", ())], "launch.log")
         manifest = None
         for _ in range(240):
             m = re.search(r"fleet robots\.yaml: (\S+)", (self.out / "launch.log").read_text(errors="replace"))
@@ -358,7 +361,7 @@ class Bench:
         return None
 
     def pickup_during_drive(self):
-        sc = SCENARIOS[self.args.scenario]
+        sc = self.SCENARIOS[self.args.scenario]
         start = self.t()
         # A `gz model` timeout gives None, and then the travel check never fires (run 4 d3 drove
         # 0.30 m and was lifted only after the window), so fall back to the newest trail sample.

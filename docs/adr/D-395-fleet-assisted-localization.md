@@ -1,6 +1,6 @@
 ## D-395 Fleet 보조 위치 확정 — 로봇이 후보를 내고 Fleet이 중재하며, 대칭 맵에서도 사람 입력 없이 map 자세를 얻는다
 
-**Status:** Proposed (2026-10-01). 설계만 정한다. 코드·로봇 설정·params·API 참조서는 바꾸지 않는다. 구현은 아래 Validation의 S1 이후 단계를 사용자가 승인한 뒤 별도 변경으로 한다. 개정 1(2026-10-01, 바닥 기준 사각형을 귀환 기준점·출발 슬롯으로 사용)과 개정 2(슬롯 방향은 축만, 부호는 LiDAR 적합), 개정 3(비대칭 단서 필수, 받은 때부터 재는 유효 시간), 개정 4(2단계 결정과 감시 한계), 개정 5(실기 항목 보류), 개정 6(S1 결과: 닻을 내린 이웃만 단서), 개정 7(S1 재실행, LOCALIZED 로봇끼리 확인), 개정 8(부하에서도 버티는 닻 규칙, 사람 확인은 표시), 개정 9(S1 Gazebo 통과)가 아래 결정보다 우선한다. 이 ADR은 D-257 5항과 D-393 3항의 일부를 **개정하자고 제안**한다(아래 "개정 제안"). 제안이 Accepted되기 전에는 두 ADR의 해당 문구가 그대로 유효하다.
+**Status:** Proposed (2026-10-01). 설계만 정한다. 코드·로봇 설정·params·API 참조서는 바꾸지 않는다. 구현은 아래 Validation의 S1 이후 단계를 사용자가 승인한 뒤 별도 변경으로 한다. 개정 1(2026-10-01, 바닥 기준 사각형을 귀환 기준점·출발 슬롯으로 사용)과 개정 2(슬롯 방향은 축만, 부호는 LiDAR 적합), 개정 3(비대칭 단서 필수, 받은 때부터 재는 유효 시간), 개정 4(2단계 결정과 감시 한계), 개정 5(실기 항목 보류), 개정 6(S1 결과: 닻을 내린 이웃만 단서), 개정 7(S1 재실행, LOCALIZED 로봇끼리 확인), 개정 8(부하에서도 버티는 닻 규칙, 사람 확인은 표시), 개정 9(S1 Gazebo 통과), 개정 10(S2 시도, 믿는 자세의 출처)이 아래 결정보다 우선한다. 이 ADR은 D-257 5항과 D-393 3항의 일부를 **개정하자고 제안**한다(아래 "개정 제안"). 제안이 Accepted되기 전에는 두 ADR의 해당 문구가 그대로 유효하다.
 
 설계 전문: [2026-10-01-fleet-assisted-localization-design.md](../plans/2026-10-01-fleet-assisted-localization-design.md).
 
@@ -273,5 +273,25 @@ S1 세 번째 실행(결과 문서 "Run 3")은 호스트 과부하로 공정한 
 - S2(4대): sim, 승인 불필요.
 - 개정 5의 실기 항목과 S3: 로봇이 돌아오면 한다.
 - D-257·D-393 개정 수락 제안: 사용자 승인이 필요하다.
+
+**개정 10 (2026-10-02, S2 4대 시도와 믿는 자세의 출처):**
+
+S2(4대, `docs/plans/2026-10-02-d395-s2-bench-results.md`)는 끝내지 못했다.
+- 호스트가 너무 느렸다. 4대 Gazebo가 실시간의 0.02배였다.
+- 끝까지 간 4대 동시 전원 투입은 통과했다. 슬롯 로봇 두 대가 6.7 sim s, 이웃 단서 두 대가 38.5–38.7 sim s에 확정됐다. 오차 ≤1.3 cm / 1.0°, 거울 결정 0이었다.
+- 교통 중 귀환, 강제 거울, 동시 들어 옮김 시나리오는 도달하지 못했다.
+
+그 과정에서 Fleet 안전 결함 하나가 드러나 고쳤다.
+
+1. **[안전] 믿는 자세는 LOCALIZED·map에서만 나온다.**
+   - 결함: Fleet이 로봇 노드가 뜨기 전에 상태를 읽어 `localization: null`(D-395 이전 로봇)로 보고, 전원 투입 때의 odom 자세를 "마지막 믿는 자세"로 저장했다. 이후 위치를 모르는 로봇은 트랙 전체를 막는 대신 그 틀린 점 둘레 0.45 m만 피했고, 다른 로봇의 목표가 나갔다.
+   - 이제 믿는 자세는 `pose_frame == "map"`인 LOCALIZED 스냅샷에서만 저장한다. 진짜 이전 로봇의 자세는 지금 그대로 쓰되 저장하지 않는다.
+2. **보고하던 로봇이 null이 되면 30 s 동안은 믿지 않는 로봇이다.**
+   - 이전 로봇으로 보지 않는다. CORE 재시작 같은 경우다. 마지막 LOCALIZED 자세에 0.45 m 금지 구역을 두고, 콘솔에는 "위치 모름"을 띄운다.
+   - null이 30 s 이어지면 이전 로봇으로 돌아가며 옛 믿는 자세는 버린다.
+3. **S2 다시 하기.** 한가한 호스트나 전용 장치에서 한다. 4대 전체가 약 250–300 sim s라서 실시간의 0.3배면 약 15분이다. 그 밖의 방법은 다음과 같다.
+   - GPU 라이다 렌더링(이 호스트에는 Radeon 860M이 있다).
+   - sim 전용 물리 단계 5 ms(`rig_rate.py` 방식).
+   - 라이다 표본을 줄이는 것은 위치 판정 점수를 바꾸므로 따로 정한다.
 
 **References:** `docs/adr/D-257-site-lane-map-and-overhead-sightings.md`, `docs/adr/D-393-nav-amcl-update-min-d-and-goal-tolerance.md`, `docs/adr/D-375-overhead-map-registration-from-lane-paint-proposal.md`, `docs/adr/D-360-overhead-field-auto-detection-proposal.md`, `src/runtime/api_web/core_api_web/api/v1/navigation.py`, `src/runtime/gateway/core/bridge/ros_bridge.py`, `src/runtime/sensing/control/localization_node.py`, `src/site/fleet/fleet/swarm/transport.py`, D-2, D-267, D-269, D-321, D-356, D-369, [D-346](D-346-commit-time-collision-defenses.md).

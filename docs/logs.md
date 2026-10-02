@@ -4515,3 +4515,31 @@
 - 변경: D-418(Accepted) 작성. 사용자 선택(2026-10-02): 화면 코드 등록 + 로봇별 임시 비밀번호를 기본으로, 키 복사 공유도 함께. 공유는 마스터 키가 아닌 passphrase 잠금 팀 키(회수 가능). 번호는 `git log --all` 스캔 뒤 D-418; D-416·D-417은 다른 브랜치 사용 중이라 `adr_gaps`에 예약.
 - 증거: 설계만. 기존 키 전용 SSH(D-174 F3), LCD 코드 로그인(D-193), `rosy-hw-test.path` 요청 파일 패턴 확인.
 - gate 변화: 없음.
+
+## 2026-10-02 · uncommitted · test(sim): D-395 S2 bench — 4 robots, simultaneous re-arbitration, homing in traffic (test/d395-s2-bench, main 13e6d5e45)
+- 변경: `tools/sim/d395_s2_bench.py`(S1 드라이버를 상속, 배치 q: r1 사각형 A·r2 사각형 B·r3·r4 슬롯 밖; s2a 전원 투입, `--traffic` s2d, 단계 c s2c, 단계 b s2b), `tools/sim/d395_s2_summary.py`(시나리오별 통과 기준), `test/test_d395_s2_bench.py`. S1 드라이버는 `SCENARIOS`를 클래스에서 읽게만 바꿨다. 결과 문서 `docs/plans/2026-10-02-d395-s2-bench-results.md` 신설(배치 검사, 자원 계획, 명령; 실행 결과는 WSL 시간대 뒤), S1 결과 문서에서 링크.
+- 증거: `python -m pytest test/test_d395_s2_bench.py test/test_d395_s1_bench.py -q` 14 passed (Windows). `python tools/sim/d395_s2_bench.py --check --out unused` 배치 문제 0, s2b 낡은 닻 함정 r1 쌍둥이 peers 0.33 대 참 0.67. Gazebo 실행은 아직 없다.
+- gate 변화: 없음. ROS-SIM S2는 실행 대기.
+- 결정: 없음. 시스템 코드·기본값 변경 없음. 충돌은 Gazebo 정답 궤적의 최근접 쌍(< 0.22 m)으로만 판정한다(gz_multi 로봇에 접촉 센서 없음). 센서 주기는 URDF 고정값이라 바꾸지 않는다.
+
+## 2026-10-02 · uncommitted · fix(sim): D-395 S2 bench — independent review findings before the Gazebo slot
+- 변경: 독립 리뷰(code-reviewer) 지적 8건 반영. 양보 자리 도착을 구간 완료로 세지 않고 진실 자세가 목표 0.25 m 안일 때만 센다. 시간 초과로 남은 Fleet 목표는 취소한다. s2b 낙하·검사·낡은 닻 함정은 그 순간의 진실 자세에서 다시 계산한다(r4는 제자리의 쌍둥이로). 탐지 지연은 `initialpose` 발행 시점부터 잰다. s2d는 귀환 중이 아니었거나 기록이 없으면 실패다. 활성 주행 상태는 PLANNING/NAVIGATING/BLOCKED다. CORE `state_stale`은 고발로 세지 않는다. sim 대기는 대기 시작 뒤의 첫 표본부터 잰다.
+- 증거: `python -m pytest test/test_d395_s2_bench.py test/test_d395_s1_bench.py -q` 16 passed (Windows). `--check` 배치 문제 0. Gazebo 실행은 아직 없다.
+- gate 변화: 없음.
+
+## 2026-10-02 · uncommitted · docs(plans): D-395 S2 4대 Gazebo 실행 — 미완료, 호스트가 너무 느리다 (test/d395-s2-bench)
+- 변경: `docs/plans/2026-10-02-d395-s2-bench-results.md`에 "S2 2026-10-02" 절과 판정 추가. 코드: `gz_multi`에 `nav_composition` 선택 인자(기본 false, 3c549586f), 벤치 목표 POST 제한 45 s.
+- 증거: WSL Jazzy 18:35–21:01 KST(GZ_PARTITION rosy_d395e, ROS_DOMAIN_ID 99). 4대 평균 RTF 약 0.02(창별 0.0196–0.0259), WSL 부하 96–159. q1: s2a 통과 — r1·r2 `slot` 6.7 sim s, r3·r4 `peers` 38.5–38.7 sim s, 오차 ≤1.3 cm/1.0°, Fleet 결정 4개 모두 참 자세, 거울 0, 사람 0, 최근접 쌍 0.889 m(충돌 0, 이동 없음). s2d: Fleet이 두 주행 로봇을 `LOCALIZATION_UNTRUSTED`로 붙잡고 r3·r4 확정 뒤 풀었다. 풀린 뒤 제자리 회전만, 이동 0 m. s2c·s2b 미도달. 조합 Nav2는 컨테이너에 노드가 실리지 않았다(F2). 원시 로그 `X:\DevTemp\rosy-d395-s2\`. 종료 뒤 rosy_d395e 프로세스 0, 포트 해제.
+- gate 변화: 없음. ROS-SIM S2 미완료.
+- 결정: 없음. 안전 발견 F1(전원 투입 직후 `localization: null` 행의 odom 자세를 Fleet이 마지막 신뢰 자세로 기록해 전 구간 차단 대신 0.45 m 금지 구역만 적용, q0에서 미확정 로봇 옆으로 목표 하달)은 별도 레인 제안. 권고: 전용/유휴 호스트, gpu_lidar GPU 렌더링 확인, sim 전용 물리 스텝 5 ms(rig_rate.py 선례).
+- 교훈: 2대에서 0.1–0.16이던 RTF가 4대에서 0.02로 떨어졌다. 대수에 비례하지 않는다 — 실행 전 짧은 전원 투입 측정으로 RTF를 먼저 확인했어야 했다.
+
+## 2026-10-02 · uncommitted · refactor(sim): D-395 S2 bench and gz_multi back under the D-362 600-line budget
+- 변경: 동작 변경 없음. `tools/sim/d395_s2_bench.py`(605→398행)의 배치·순수 함수를 `tools/sim/d395_s2_layout.py`로 옮겼다(요약 도구도 거기서 읽는다). `gz_multi.launch.py`(607→596행)의 `nav_composition` 인자·적용과 `_optional_float`를 `launch/gz_multi_args.py`로 옮겼다(`world_profiles.py`와 같은 형제 모듈 방식).
+- 증거: `python -m pytest test/architecture -q` 81 passed/1 skipped; `test/test_d395_s2_bench.py test/test_d395_s1_bench.py test/architecture/test_module_structure.py src/sim/gz_sim/test` 319 passed/2 skipped; `--check` 배치 문제 0. WSL 실행 없음.
+- gate 변화: 없음.
+
+## 2026-10-02 · uncommitted · docs(adr): D-395 개정 10 — S2 시도와 믿는 자세의 출처
+- 변경: S2(4대) 결과(호스트 0.02×로 미완료, 4대 동시 전원 투입은 통과, 거울 결정 0)와 그때 드러난 Fleet 안전 결함 수정을 기록. 믿는 자세는 LOCALIZED·map 스냅샷에서만 저장한다. 보고하던 로봇이 null이 되면 30 s 동안 믿지 않는 로봇으로 둔다. S2 재실행 조건(한가한 호스트, GPU 라이다, 5 ms 물리 단계).
+- 증거: `docs/plans/2026-10-02-d395-s2-bench-results.md`, 브랜치 fix/d395-legacy-trusted-pose.
+- gate 변화: 없음(Proposed).

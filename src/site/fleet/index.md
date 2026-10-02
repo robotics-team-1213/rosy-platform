@@ -74,8 +74,8 @@
 
 ## 최근 기록
 
+- 2026-10-02 · uncommitted · fix(fleet): a legacy-null pose is never a last trusted pose (D-395 S2 Finding 1)
 - 2026-10-02 · uncommitted · verify(fleet): platform cell final regression
 - 2026-10-02 · uncommitted · verify(fleet): platform cell replay watermark
 - 2026-10-02 · uncommitted · test(fleet): track Mission event watermark across replay
 - 2026-10-02 · uncommitted · test(fleet): replay late OMX success without clearing Mission HOLD
-- 2026-10-02 · bcce15c9d · fix(hub): 닫힌 소켓에 보내지 않음; 판단 요청 패널 뒤 여유 "비어 있음"/"알 수 없음"

@@ -381,6 +381,131 @@ def test_a_legacy_mover_is_dispatched_as_today():
     assert _goal_calls(mover) == 1
 
 
+# --- D-395 S2 Finding 1: a legacy-null pose is never a trusted pose ------------------------
+
+
+class _Clock:
+    def __init__(self):
+        self.now = 0.0
+
+    def __call__(self):
+        return self.now
+
+
+def _clocked(*robots: FakeRobot):
+    clock = _Clock()
+    endpoints = [RobotEndpoint(robot_id=r.robot_id, base_url=f"http://127.0.0.1:808{i}",
+                               token="t") for i, r in enumerate(robots)]
+    return FleetConsole(endpoints, list(robots), clock=clock), clock
+
+
+def test_s2_null_at_power_on_then_candidates_blocks_the_whole_track():
+    """S2 q0: Fleet read r4 before loc_assist was up (`localization: null`, power-on odom pose far
+    off the route), then r4 reported CANDIDATES. It was never LOCALIZED, so it has no trusted
+    pose and must block the whole track; the other robot's goal stays queued."""
+    mover = _mover()
+    other = FakeRobot("rosy_02", state=_standing("rosy_02", (9.0, 9.0), None))
+    console = _console(mover, other)
+    run(console.snapshot())                                       # legacy: pose used as today
+    other._state = _standing("rosy_02", (9.0, 9.0), _loc("CANDIDATES", "odom"))
+    run(console.snapshot())
+
+    result = run(console.goal("rosy_01", 2.0, 0.0))
+
+    assert result["reason"] == "LOCALIZATION_UNTRUSTED" and result["blocked_by"] == "rosy_02"
+    assert "rosy_02" not in console._trusted
+    sent = _goal_calls(mover)
+    run(console.snapshot())
+    run(console.snapshot())
+    assert _goal_calls(mover) == sent and "rosy_01" in console._queued
+
+
+def test_null_then_localized_map_gives_the_localized_pose_as_trusted():
+    mover = _mover()
+    other = FakeRobot("rosy_02", state=_standing("rosy_02", (9.0, 9.0), None))
+    console = _console(mover, other)
+    run(console.snapshot())
+    other._state = _standing("rosy_02", (1.0, 1.5), _loc())
+    run(console.snapshot())
+
+    assert console._trusted["rosy_02"] == (1.0, 1.5)
+    assert "queued" not in run(console.goal("rosy_01", 2.0, 0.0))
+
+
+def test_null_localized_then_candidates_keeps_out_around_the_localized_pose():
+    mover = _mover()
+    other = FakeRobot("rosy_02", state=_standing("rosy_02", (0.0, 1.5), None))   # odom: off-route
+    console = _console(mover, other)
+    run(console.snapshot())
+    other._state = _standing("rosy_02", (0.0, 0.3), _loc())                       # on the route
+    run(console.snapshot())
+    other._state = _standing("rosy_02", (0.0, 1.5), _loc("CANDIDATES", "odom"))
+    run(console.snapshot())
+
+    result = run(console.goal("rosy_01", 2.0, 0.0))
+
+    assert result["reason"] == "LOCALIZATION_UNTRUSTED" and result["blocked_by"] == "rosy_02"
+    assert console._trusted["rosy_02"] == (0.0, 0.3)
+
+
+def test_a_d395_robot_that_goes_null_is_untrusted_until_the_grace_lapses():
+    """A robot that ever reported localization is not legacy: after a CORE restart its null
+    is untrusted (keep-out at its last trusted pose) until it has been null for 30 s."""
+    mover = _mover()
+    other = FakeRobot("rosy_02", state=_standing("rosy_02", (0.0, 0.3), _loc()))
+    console, clock = _clocked(mover, other)
+    run(console.snapshot())
+    other._state = _standing("rosy_02", (5.0, 5.0), None)                      # CORE restarted
+    snapshot = run(console.snapshot())
+    row = [r for r in snapshot["robots"] if r["robot_id"] == "rosy_02"][0]
+    assert row["localization"]["legacy"] is False and row["localization"]["trusted"] is False
+
+    clock.now = 29.0
+    result = run(console.goal("rosy_01", 2.0, 0.0))
+    assert result["reason"] == "LOCALIZATION_UNTRUSTED" and result["blocked_by"] == "rosy_02"
+
+    clock.now = 30.0
+    snapshot = run(console.snapshot())                       # null for 30 s: legacy again
+    row = [r for r in snapshot["robots"] if r["robot_id"] == "rosy_02"][0]
+    assert row["localization"]["legacy"] is True
+    assert "rosy_01" not in console._queued
+    assert "rosy_02" not in console._trusted                 # the stale trusted pose is dropped
+
+
+def test_a_d395_robot_back_from_null_reporting_resets_the_grace():
+    mover = _mover()
+    other = FakeRobot("rosy_02", state=_standing("rosy_02", (0.0, 0.3), _loc()))
+    console, clock = _clocked(mover, other)
+    run(console.snapshot())
+    other._state = _standing("rosy_02", (0.0, 0.3), None)
+    run(console.snapshot())                                   # null since t=0
+    clock.now = 20.0
+    other._state = _standing("rosy_02", (0.0, 0.3), _loc("UNKNOWN", "odom"))
+    run(console.snapshot())
+    other._state = _standing("rosy_02", (0.0, 0.3), None)
+    clock.now = 25.0
+    run(console.snapshot())                                   # null again since t=25
+    clock.now = 40.0
+
+    result = run(console.goal("rosy_01", 2.0, 0.0))
+
+    assert result["reason"] == "LOCALIZATION_UNTRUSTED"
+
+
+def test_a_true_legacy_robot_keeps_todays_behaviour_over_time():
+    mover = _mover()
+    other = FakeRobot("rosy_02", state=_standing("rosy_02", (0.0, 0.3), None))
+    console, clock = _clocked(mover, other)
+    for t in (0.0, 10.0, 40.0):
+        clock.now = t
+        snapshot = run(console.snapshot())
+        row = [r for r in snapshot["robots"] if r["robot_id"] == "rosy_02"][0]
+        assert row["localization"]["legacy"] is True
+
+    assert "queued" not in run(console.goal("rosy_01", 2.0, 0.0))
+    assert "rosy_02" not in console._trusted
+
+
 # --- D-395 P2-7: traffic holds before a localization mission -------------------------------
 
 

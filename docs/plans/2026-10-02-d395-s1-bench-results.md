@@ -1,6 +1,6 @@
 # D-395 S1 Gazebo bench — results (2 robots, sim only)
 
-P2-8 of [the fleet-assisted localization plan](2026-10-01-fleet-assisted-localization-plan.md), contract [2026-10-01-d395-phase2-interfaces.md](2026-10-01-d395-phase2-interfaces.md), [D-395](../adr/D-395-fleet-assisted-localization.md) rev. 1–4.
+P2-8 of [the fleet-assisted localization plan](2026-10-01-fleet-assisted-localization-plan.md), contract [2026-10-01-d395-phase2-interfaces.md](2026-10-01-d395-phase2-interfaces.md), [D-395](../adr/D-395-fleet-assisted-localization.md) rev. 1–4. S2 (4 robots) is in [the S2 results](2026-10-02-d395-s2-bench-results.md).
 
 - **Final runs (`p7*`):** local `main` 5b346b2b (Phase 2 integration plus the P2-7 ladder missions, API v1.73) merged into `feat/d395-s1-bench`.
 - **Earlier runs:** `a1–a3`, `b1–b6` and `t1–t2` ran on main 148af568, before P2-7, when Fleet only logged the ladder. They still back findings 1–3 and give the forced-mirror result on the b layout. `a1_premerge` and `smoke5` ran on `feat/d395-p2-integration` 67cb5064.

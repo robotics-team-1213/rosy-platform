@@ -58,6 +58,7 @@
 - 시험·주행·봉인을 시작하는 세션은 먼저 hold를 건다. 봉인된 승인이 있으면 hold가 없어도 자동으로 hold로 본다.
 - `config.json`의 `enabled=false`는 로봇의 자동 업데이트를 끈다(벤치 작업용).
 - **착지 결정(2026-10-02, 사용자):** 첫 두 대 기기 검증 전까지 **기본값은 꺼짐**이다. `config.json`이 없거나 `enabled`가 없으면 자동 업데이트를 하지 않는다. 검증할 로봇에서만 `/var/lib/rosy/updates/config.json`에 `{"enabled": true, "repo": "livsbittt/rosy-os"}`를 쓴다. 기기 검증을 통과하면 별도 변경으로 기본값을 켜짐으로 바꾼다.
+- **기본값 켜짐으로 전환(2026-10-02, 사용자):** 실제 첫 카나리가 성공했다. rosy-pinky-9dfk가 GitHub Releases의 `payload-2026.10.02-026`을 스스로 받아 스테이징하고, 쉬는 상태를 확인한 뒤 활성화해 상태 판정을 통과했다(12:27 UTC, `canary_ok`). 도중 GitHub 시간 초과는 일시적 오류로 처리됐다. 그래서 사용자 지시로 기본값을 켜짐으로 바꾼다. `config.json`이 없거나 `enabled`가 없으면 켜짐이고, `{"enabled": false}`만 끈다. 카나리 다음 로봇이 10분 뒤 따라오는 순서는 실제 로봇에서는 아직 확인하지 않았고, 기기 쌍둥이로 검증했다.
 
 **5. 수동 경로는 그대로 두고, claim으로 업데이터와 겹치지 않게 한다.**
 - `rosy-release-push.ps1`과 `-Rollback`은 그대로 쓴다.
