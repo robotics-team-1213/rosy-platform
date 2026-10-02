@@ -180,6 +180,24 @@ def test_invalid_key_label_or_days_is_422_and_never_reaches_root(robot, payload)
     assert robot.helper.runs == 0
 
 
+def test_a_token_label_the_helper_would_refuse_is_made_printable(robot, monkeypatch):
+    """The helper ignores a request whose `by` is not printable; CORE must not send one (a 10 s 503)."""
+    from core_api_web.api import deps
+
+    original = deps.AuthContext.__init__
+
+    def labelled(self, *args, **kwargs):
+        original(self, *args, **kwargs)
+        self.label = "ops\nlaptop\t" + "x" * 200
+
+    monkeypatch.setattr(deps.AuthContext, "__init__", labelled)
+    response = robot.client.post("/api/v1/host/ssh/keys", headers=_admin(),
+                                 json={"public_key": _key(), "label": "a", "expires_days": 1})
+    assert response.status_code == 201, response.text
+    [row] = robot.client.get("/api/v1/host/ssh/keys", headers=_admin()).json()["keys"]
+    assert row["added_by"].startswith("opslaptop") and len(row["added_by"]) == 128
+
+
 def test_conflicts_come_back_from_the_helper(robot):
     first = {"public_key": _key(), "label": "a", "expires_days": 1}
     assert robot.client.post("/api/v1/host/ssh/keys", headers=_admin(), json=first).status_code == 201

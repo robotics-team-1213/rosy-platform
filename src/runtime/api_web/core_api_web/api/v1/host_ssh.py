@@ -74,13 +74,19 @@ def _parse(model: type[BaseModel], body: Any) -> BaseModel:
         raise _invalid(exc) from exc
 
 
+def requester(auth: AuthContext) -> str:
+    """`added_by`: the token's label, printable and at most 128 characters (the helper refuses others)."""
+    shown = "".join(ch for ch in (auth.label or "") if ch.isprintable())[:128]
+    return shown or auth.token_id[:128]
+
+
 def _call(svc: CoreServicesLike, auth: AuthContext, action: str, params: dict[str, Any]) -> dict[str, Any]:
     request_path, response_path, _keys = _paths(svc)
     wait_s = wait_seconds(svc.config)
     if not _exchange_lock.acquire(timeout=wait_s):
         raise ApiError("SSH_ACCESS_UNAVAILABLE", 503, "다른 SSH 접속 요청을 처리하는 중입니다")
     try:
-        answer = ssh_handoff.exchange(action, (auth.label or auth.token_id)[:128], params,
+        answer = ssh_handoff.exchange(action, requester(auth), params,
                                       request_path=request_path, response_path=response_path, wait_s=wait_s)
     except ssh_handoff.HandoffUnavailable as exc:
         raise ApiError("SSH_ACCESS_UNAVAILABLE", 503, str(exc)) from exc
