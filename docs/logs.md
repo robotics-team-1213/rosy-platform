@@ -4331,3 +4331,10 @@
 - 변경: S1 재실행(거울 결정 0/31, 확정 오차 ≤1.1 cm/2.1°)과 뒤이은 수정들을 기록. LOCALIZED 로봇의 `unmapped_objects`·`objects_stamp`(API v1.75)와 닻 관찰자 감시, 결정이 다가오면 사다리 대기(최대 30 s)와 `checking`, 정지 뒤 탐색(0.5 s, 5 s 상한, 묵은 odom은 모름)과 정밀 방향 단계, sim 전용 Nav2 수정(장치 값은 문제 없음). 다음은 강제 거울 탐지까지 포함한 S1 세 번째 실행.
 - 증거: `docs/plans/2026-10-02-d395-s1-bench-results.md`, 브랜치 fix/d395-ladder-pauses·fix/d395-candidate-yaw·fix/gz-multi-nav2-forward·feat/d395-localized-objects.
 - gate 변화: 없음(Proposed).
+
+## 2026-10-02 · uncommitted · docs(plans): D-395 S1 세 번째 실행 (test/d395-s1-run3, main 5ea9e144)
+- 변경: `docs/plans/2026-10-02-d395-s1-bench-results.md` 에 "Run 3 2026-10-02" 절 추가(앞 두 절은 그대로). 벤치: (d) 정답 기준 0.10 m 이동 뒤 들어 올림·재확정 뒤 20 s 정지 확인, (c) 탐지가 없을 때만 r1 펄스, LOCALIZED `objects_stamp` 기록, `ros2 topic pub` 60 s·3회, `gz model` 20 s. 요약기에 `checking`·SUSPECT·이동 거리.
+- 증거: WSL Jazzy Gazebo 13회(GZ_PARTITION rosy_d395c, ROS_DOMAIN_ID 98). 공유 호스트(docker-desktop 가 같은 VM, 다른 세션 sim 컨테이너 165–250 %)로 부하 45–74, 2대 평균 RTF 0.07–0.17(재실행 0.37–0.64). b 3/3, (d 배치) 전원 투입 4/4, a 1/3(사다리 회전이 벽시계 420 s 안에 안 끝남), c 1/2 탐지(a2: 주입 4.8 sim s 뒤 `fleet_monitor` SUSPECT, 0.7 cm/0.1° 재확정; b1 은 Fleet 폴링 고갈), d 2/4 완전 통과(0.120–0.127 m 주행 중 정지·SUSPECT·6.2–6.5 sim s 재확정·재개 없음), l 3/3 needs_human. 거울 결정 0, 확정 오차 ≤1.1 cm/1.1°. 원시 로그 `X:\DevTemp\rosy-d395-s1c\`.
+- gate 변화: 없음. S1 미통과 — 이 호스트 속도에서는 공정한 시험이 아니어서 조용한 호스트에서 다시 해야 한다.
+- 결정: 없음. 기본값·코드 변경 없음(T1 닻 점프 판정이 폴링 간격에 비례, T2 Fleet 1 s 호출 제한의 증거·출처 손실, T3 `needs_human` 뒤에도 결정 — 다른 갈래로 보고).
+- 교훈: 안전 판정에 dt 를 곱하는 허용치(0.25 m + 0.5 m/s·dt)는 관찰 간격이 늘면 스스로 무력해진다 — 느린 호스트가 거울 잠금 로봇을 닻으로 남겼다(T1).
