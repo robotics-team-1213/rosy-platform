@@ -2,7 +2,7 @@
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.82
+**Version:** v1.84
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -1833,10 +1833,66 @@ stop, gripper, placement, or hardware acceptance unless the trusted producer
 supplies the corresponding separately sourced evidence. SOURCE/LOCAL tests use
 fake credentials and clocks; device and field acceptance remain separate gates.
 
+## 10.17 Cell goal-evidence producer contract (D-413)
+
+Exposed only when the existing Fleet app is composed with `cell_goal_registry`
+and a persistent Cell Job compiler/API. Dispatch remains a separate explicit
+opt-in. There is one Cell journal and one existing site dispatch worker.
+
+| Method | Path | Credential | Body |
+|---|---|---|---|
+| POST | `/api/fleet/cell-goal-evidence` | `X-Goal-Evidence-Token` | `CellGoalEvidenceSubmission`: `{ "mission_id": "...", "evidence": {...} }` |
+
+The shared strict contract is `core_common.protocol.cell_goal_evidence`, exposed
+through `core_common.protocol.schemas.CellGoalEvidenceSubmission`. All fields
+are required; additional fields, Boolean step indices, nonfinite numbers and
+whitespace/control characters in identifiers are rejected. The evidence includes:
+
+| Fields | Meaning |
+|---|---|
+| `producer_id`, `evidence_id`, `evidence_source`, `evaluator_revision` | Registered producer, immutable evidence identity, literal `sim_model_pose`, pinned evaluator revision. |
+| `job_id`, `step_id`, `step_index`, `action_id`, `attempt_id`, `request_digest`, `recipe_sha256`, `cell_sha256` | Exact persisted canonical CELL_TRANSFER grant and ordered step. Digests are lowercase 64-character SHA-256 values. |
+| `model_id` | Attempt model identity: `cell_` followed by the saved Action ID. The independent evaluator must bind that model to the physical item and pinned recipe/cell. |
+| `observation_id`, `observation_digest`, `evidence_revision`, `observed_at`, `model_pose_base` | Final independent model observation, provenance and robot-base pose. |
+| `initial_observation_id`, `initial_observation_digest`, `initial_observed_at`, `initial_model_pose_base` | Initial independent observation after grant issuance and before terminal success. |
+| `gripper_state`, `gripper_evidence_id`, `gripper_evidence_revision`, `gripper_observed_at` | Separately sourced post-terminal gripper `OPEN` readback. |
+| `satisfied` | Strict Boolean placement attestation from the pinned evaluator; only `true` can advance a step. |
+
+Both poses require finite `x_m`, `y_m`, `z_m`, `roll_rad`, `pitch_rad`, `yaw_rad`.
+Observation timestamps are nonnegative epoch seconds. The read-only YAML registry
+pins producer/workcell/instance/recipe/cell/evaluator identities, `max_age_s`
+(positive, at most 60 seconds), timezone-aware `valid_until`, and environment-only
+`token_env`. Producer credentials must differ from user, robot, discovery,
+Vision, pairing, policy and legacy goal producer credentials. They cannot propose,
+admit, rearm or dispatch a Job.
+
+The service matches evidence to the saved grant, checks registry scope/expiry and
+freshness using server receipt time, and requires final model and gripper samples
+after the local terminal success. Evidence received before terminal readback stays
+`PENDING_ACTION_TERMINAL`; the composed dispatcher revalidates it after recording
+the exact successful receipt. Rejected pending evidence retains the successful
+Action record and claims. Placement geometry belongs to the pinned independent
+evaluator, rather than Fleet journal arithmetic.
+
+Already available invalid/preterminal evidence is rejected before persistence.
+Accepted evidence IDs are immutable and replay identical content idempotently.
+Completion rechecks the exact latest terminal event ID inside its SQLite
+transaction. A concurrent newer terminal cannot complete a step using older
+samples. Intermediate completion returns `READY` or `HOLD` depending on the live
+site fence; only every ordered goal confirmed releases claims and returns
+`GOAL_CONFIRMED`. Goal confirmation never rearms dispatch. Errors include `401
+PRODUCER_UNAUTHORIZED`, `404 MISSION_NOT_FOUND`, `409` scope/conflict/invalid-evidence
+codes, and `422` strict envelope validation errors. Responses never include tokens.
+
+This contract and host tests establish SOURCE/LOCAL composition. Independent
+Gazebo placement evaluation, the actual OMX owner/provider and ROS-SIM, device
+and field acceptance require their own evidence.
+
 # 11. 변경 이력
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.84 | 2026-10-03 | Additive (D-413): opt-in independent Cell goal-evidence ingress, shared strict submission schema, isolated producer credentials and terminal callback reconciliation with atomic latest-terminal fencing. No physical dispatch or ROS-SIM promotion. |
 | v1.82 | 2026-10-03 | Clarify (D-403 / D-413): Fleet uses existing UDS v2 for phased CELL_TRANSFER submission, readback and cancellation; missing phase summaries fail closed. OMX already accepts the additive grant in v2. Simulation dispatch gates and independent goal requirements remain unchanged. |
 | v1.81 | 2026-10-02 | Additive (D-421, feat/d421-fleet-cancel-all): Site Fleet 새 경로 `POST /api/fleet/cancel-all`(operator, §10.8) — 래치 없는 전체 주행 취소(대기 작업 `CANCELED`/`FLEET_CANCEL_ALL`, 대형 해제, 로봇마다 `swarm/cancel`·`navigation/cancel`·`line-follow/mode OFF`, 로봇별 `cancelled`/`failed`/`unreachable`, `evidence: CORE_REPLY_ONLY`). 발행 겹침 작업은 `UNKNOWN`/`FLEET_CANCEL_ALL_DURING_DISPATCH`. 창마다 취소 기록(`cancel_all_id`)을 남기고, 표시된 진행 중 작업의 CORE `nav.canceled` 는 `HOLD`/`FLEET_CANCEL_ALL` 로 로봇 점유를 푼다(사건이 없으면 그대로). §10.2 에 `/api/fleet/estop` 이 래치형 전체 비상 정지임을 명시(의미 불변). FLEET SRS CTR-002 개정. 로봇 계약(`/api/v1/*`)·이벤트·FleetAgent 프로토콜 변경 없음 |
 | v1.80 | 2026-10-02 | Corrective + Additive (D-407 관제 재실행, fix/d407-console-link-and-event-fields): **Corrective** `nav.line_stuck_answered` 의 `token_id` → `principal_ref`(비밀 아닌 이름: 설정 id, 없으면 프로세스 키 HMAC `anon-…`) — Fleet 사건 저장소가 `token` 이 든 키를 자격 증명으로 보고 `EVENT_NOT_AUDITABLE` 로 거부해 이 사건이 Fleet 감사에 남지 않았다. **Additive** `nav.line_stuck_opened` `rear_state`(`clear`·`blocked`·`unknown` — `rear_clearance_m` null 이 "띠가 비었다"와 "모른다"를 함께 뜻하던 것을 가름), 거부된 `BACK_AND_RETRY` 답에 `rear_blind_m`·`trail_m`·`trail_yaw_deg`·`trail_age_s`. FleetAgent 는 hub 의 모든 답을 한 수신 루프로 읽는다(사건 답이 쌓여 연결이 끊기던 결함; envelope 형식 변화 없음, `protocol_version` 1.0). 설정 `line_follow.recovery_console_grace_s`(3 s) |

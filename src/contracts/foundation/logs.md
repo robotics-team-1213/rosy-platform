@@ -310,3 +310,9 @@
 - 변경: 기존 `FleetActionGrant`의 `PICK_PLACE` 제약은 유지하고 `FleetCellTransferGrant` 합집합 변형을 추가했다. 새 payload는 job/recipe/cell hash, ordered step index, item/pallet/layer, robot-base home/pick/place pose와 approach/carry height를 요구한다.
 - 증거: `test_device_action_contracts.py`에서 새 grant 왕복 및 잘못된 kind/hash/frame/높이/비유한 pose 거부를 추가했다. 전체 core_common SOURCE suite 424 passed/1 skipped; API Reference를 v1.78로 함께 올렸다.
 - gate 변화: 없음. 새 grant schema는 아직 producer/consumer dispatch 경로에서 사용되지 않는다.
+
+
+## 2026-10-03 · uncommitted · feat(protocol): publish strict Cell goal submission contract
+- Change: Move the bounded Cell goal envelope to protocol/cell_goal_evidence.py and re-export CellGoalEvidenceSubmission from schemas.py. Keep envelope protocol_version 1.0 and record additive API Reference v1.84. Re-judge the one-line schemas export at 1240 with unchanged zero-growth allowance.
+- Evidence: Foundation and protocol alignment 427 passed/1 skipped; final HTTP producer/consumer and legacy/version checks 64 passed; changed contract Python passes flake8.
+- Gate: SOURCE/LOCAL contract evidence; no installed artifact or physical acceptance.

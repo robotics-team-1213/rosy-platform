@@ -4571,3 +4571,9 @@
 - Change: append D-413 progress for pinned producer authentication, observation freshness, rejected-evidence persistence protection and atomic terminal identity fencing. Keep Tasks 4-5 and 7 IN PROGRESS and record public ingress/app callback/evaluator/ROS-SIM as remaining work.
 - Evidence: focused Cell service/store/dispatcher 48 passed, registry 10 passed; independent review 44 passed; quick tier 96 passed/24 existing freshness warnings, harness lint 0 errors/24 existing freshness warnings. Full Fleet regression is running and not claimed complete.
 - Gate: SOURCE/LOCAL only; no ROS-SIM, artifact, device or field promotion.
+
+
+## 2026-10-03 · uncommitted · docs: record public Cell evidence contract and progress
+- Change: Document strict CellGoalEvidenceSubmission, producer credential isolation, initial/final/gripper provenance, pending terminal callback reconciliation and atomic latest-terminal proof in API Reference v1.84. Append D-413 progress while retaining incomplete OMX/Gazebo/two-ledger gates.
+- Evidence: Final API/registry/legacy/version checks 64 passed; foundation/alignment 427 passed/1 skipped; independent review 25 passed. Full public-composition Fleet and quick checks are running.
+- Gate: SOURCE/LOCAL only. Tasks 4-5 and 7 remain IN PROGRESS.

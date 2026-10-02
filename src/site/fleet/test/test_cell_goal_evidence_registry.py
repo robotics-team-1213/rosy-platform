@@ -31,7 +31,8 @@ def test_registry_hides_environment_credential_and_enforces_expiry(tmp_path):
 
 
 @pytest.mark.parametrize("mutation", ["literal_token", "missing_env", "extra", "duplicate", "unbounded_age",
-                                      "boolean_age", "naive_expiry", "duplicate_revision", "unpinned_recipe"])
+                                      "boolean_age", "naive_expiry", "duplicate_revision", "unpinned_recipe",
+                                      "whitespace_token", "control_token"])
 def test_invalid_registry_fails_closed(tmp_path, mutation):
     config = _config()
     row = config["producers"][0]
@@ -52,6 +53,10 @@ def test_invalid_registry_fails_closed(tmp_path, mutation):
         row["valid_until"] = "2030-01-01T00:00:00"
     elif mutation == "duplicate_revision":
         row["evaluator_revisions"] *= 2
+    elif mutation == "whitespace_token":
+        env["CELL_POSE_TOKEN"] = " pose-secret "
+    elif mutation == "control_token":
+        env["CELL_POSE_TOKEN"] = "pose\nsecret"
     else:
         row["recipe_sha256"] = "latest"
     with pytest.raises(ValueError):
