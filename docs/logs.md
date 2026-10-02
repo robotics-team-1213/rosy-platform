@@ -4483,8 +4483,7 @@
 
 ## 2026-10-02 · uncommitted · docs(adr): D-395 개정 9 — S1 Gazebo 통과
 - 변경: 다른 세션과 조율한 조용한 시간대(13:54–16:09 KST)의 S1 네 번째 실행 15회를 기록하고 S1을 닫았다. 확정 오차 ≤1.2 cm / 1.2°, 거울 결정 0/35, 강제 거울 탐지 6/6(3.1–4.1 sim s), 실제 주행 중 들어 옮김 4회 완전 통과. 남은 단계는 S2(4대 sim), 실기(개정 5)·S3, D-257·D-393 개정 수락(사용자 승인).
-- 증거: `docs/plans/2026-10-02-d395-s1-bench-results.md` Run 4, `X:\DevTemp
-osy-d395-s1d\`.
+- 증거: `docs/plans/2026-10-02-d395-s1-bench-results.md` Run 4, `X:\DevTemposy-d395-s1d\`.
 - gate 변화: 없음(Proposed). ROS-SIM S1 통과.
 
 ## 2026-10-02 · uncommitted · docs(logs): D-395 개정 9 항목의 증거 경로 정정
