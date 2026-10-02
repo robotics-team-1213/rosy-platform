@@ -22,8 +22,12 @@ on its own, applies it and writes /run/rosy/ssh-access.response
   step on its own (a corrupt keys.json never keeps a password on). If usermod
   cannot lock it, a `Match User rosy` / `PasswordAuthentication no` drop-in
   replaces the password block and the expiry timer retries the lock. A password
-  CORE would get after its 10 s wait is rolled back, never written to /run/rosy.
-  Expiries count from max(clock, newest time seen) in clock.json (no RTC).
+  CORE would get after its answer_by is rolled back, never written to /run/rosy.
+* Time: the temporary password expires by the wall clock or by a CLOCK_BOOTTIME
+  deadline of the boot it was issued in, whichever comes first. Key expiry counts
+  from max(clock, newest time seen) in clock.json (the Pi has no RTC), but a mark
+  more than 2 days ahead of the clock is dropped, and once timedated reports NTP
+  sync (chrony or timesyncd alike) the mark is the clock.
 * Audit: /var/lib/rosy/ssh/history.jsonl (root 0600, newest 1 MiB): add, revoke, expire,
   password_on, password_off. The password itself goes to chpasswd and to the
   response CORE reads, nowhere else: not the history, the journal or a state file.
@@ -73,8 +77,6 @@ MARK_AHEAD_LIMIT = timedelta(days=2)
 #: The mark is rewritten only when it rises this much (SD card wear).
 MARK_STEP = timedelta(seconds=60)
 BOOT_ID = "proc/sys/kernel/random/boot_id"
-#: systemd-timesyncd's flag file; present once NTP synchronized the clock this boot.
-NTP_SYNCED = "run/systemd/timesync/synchronized"
 LOCK = STATE_DIR + "/.lock"
 KEYS_DROPIN = "etc/ssh/sshd_config.d/50-rosy-managed-keys.conf"
 PASSWORD_DROPIN = "etc/ssh/sshd_config.d/60-rosy-temp-password.conf"
@@ -85,6 +87,7 @@ CHPASSWD = "/usr/sbin/chpasswd"
 USERMOD = "/usr/sbin/usermod"
 SSHD = "/usr/sbin/sshd"
 SYSTEMCTL = "/usr/bin/systemctl"
+TIMEDATECTL = "/usr/bin/timedatectl"
 COMMAND_TIMEOUT_S = 15.0
 COMMAND_ENV = {"PATH": "/usr/sbin:/usr/bin:/sbin:/bin", "LC_ALL": "C"}
 
@@ -340,7 +343,14 @@ class System:
         return (raw or b"").decode("ascii", "replace").strip()
 
     def ntp_synced(self) -> bool:
-        return self.path(NTP_SYNCED).exists()
+        """timedated's NTPSynchronized: the kernel's STA_UNSYNC flag, whichever daemon (the image's
+        chrony, or timesyncd) disciplines the clock. Never adjtimex here: the units' seccomp
+        filter kills the process with SIGSYS on it. Any failure means not synced."""
+        try:
+            done = self._run([TIMEDATECTL, "show", "-p", "NTPSynchronized", "--value"])
+        except HelperError:
+            return False
+        return done.returncode == 0 and done.stdout.strip() == "yes"
 
     def _run(self, argv: list[str], stdin: Optional[str] = None) -> subprocess.CompletedProcess:
         try:
@@ -620,8 +630,8 @@ def password_expired(system: System, state: dict) -> bool:
     if parse_stamp(state["expires_at"]) <= system.now():
         return True
     boot_id, deadline = state.get("boot_id"), state.get("boot_deadline")
-    if not isinstance(boot_id, str) or type(deadline) not in (int, float):
-        return False
+    if not isinstance(boot_id, str) or not boot_id or type(deadline) not in (int, float):
+        return True  # no boot bound (a state from before it existed): off at the next check
     return boot_id != system.boot_id() or system.boot_time() >= deadline
 
 
@@ -652,7 +662,9 @@ def lock_or_deny(system: System) -> None:
 
 def password_off(system: System, reason: str, by: Optional[str] = None, *, force: bool = False) -> bool:
     """Lock first (no password matches any more), then drop the Match block and reload. True if it was on."""
-    was_on = password_state(system)["enabled"] or system.path(PASSWORD_DROPIN).exists()
+    state = password_state(system)
+    # A bare lock_pending (the deny block could not be written either) still needs the lock retried.
+    was_on = state["enabled"] or state["lock_pending"] or system.path(PASSWORD_DROPIN).exists()
     if not was_on and not force:
         return False
     lock_or_deny(system)
@@ -675,6 +687,9 @@ def password_on(system: System, request: dict) -> tuple[int, dict]:
     # The boot clock bounds it too, whatever the wall clock does.
     expires = system.now() + timedelta(minutes=minutes)
     boot_id, boot_deadline = system.boot_id(), system.boot_time() + minutes * 60
+    if not boot_id:
+        # Without it the boot clock cannot bound the password: refuse rather than rely on the wall clock.
+        raise HelperError(f"/{BOOT_ID} 를 읽을 수 없어 비밀번호를 켜지 않습니다")
     try:
         system.set_password(USER, password)
         write_atomic(system.path(PASSWORD_DROPIN), PASSWORD_DROPIN_TEXT, 0o644)

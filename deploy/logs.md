@@ -2080,3 +2080,16 @@
 - gate 변화: 없음
 - 결정: D-418, D-161, D-388
 - 교훈: 시간을 한 방향으로만 미는 보호(high-water)는 반대 방향 고장(시계가 앞섬)을 영구 상태로 만든다. 비밀번호처럼 짧은 수명은 NTP가 건드리지 않는 부팅 시계로 묶고, 긴 수명의 하한 기록에는 상한과 리셋이 필요하다.
+
+## 2026-10-03 · e0e482ef · fix(native): D-418 3차 검토 — 잠금 재시도, chrony 아래 NTP 동기, boot id
+
+- 변경: `password_off`가 `lock_pending`도 켜진 것으로 센다. 그래서 잠금이 실패했고 거부 drop-in까지 쓰지 못한 상태(남은 것은 `lock_pending`뿐)에서도 다음 `--expire`와 `DELETE /password`가 잠금을 다시 시도한다. 전에는 일찍 돌아가 재시도하지 않았다.
+- 변경: 이미지는 chrony를 쓰므로(`customize-rootfs.sh`) timesyncd의 동기 표시 파일은 생기지 않는다. NTP 동기는 `timedatectl show -p NTPSynchronized`로 본다. timedated가 커널의 `STA_UNSYNC`를 읽으므로 데몬과 상관없다. 실패하면 동기되지 않은 것으로 본다.
+- 변경: 검토가 제안한 ctypes `adjtimex`는 쓰지 않았다. 쌍둥이에서 단위와 같은 seccomp(`SystemCallFilter=@system-service`, `ProtectClock=true`)로 돌리자 Python이 SIGSYS로 죽었다(`status=31/SYS`, try로 잡을 수 없음). 같은 샌드박스에서 `timedatectl`은 `yes`를 냈다. 직접 호출을 막는 시험을 넣었다.
+- 변경: boot id를 읽지 못하면 `password_on`은 503으로 켜지 않는다. boot 기한이 없는 상태(업그레이드 전)는 만료로 보고 다음 검사에서 끈다. 모듈 설명과 API 문서 §5.8을 실제 규칙에 맞췄다. 2일 상한 때문에 2일 넘게 뒤처진 시계로 부팅하면 기록이 버려진다는 점, `password_deny` 사건, `late`·`undelivered` 사유를 적었다.
+- 증거: `test_ssh_access.py`·native systemd 계약·이미지 층 동기화·`test_host_ssh.py` 409 passed 6 skipped(Windows). 새 시험 14개(매개변수 포함).
+- 증거(변이): 8종 모두 빨강이다(재시도 조기 반환, 표시 파일로 되돌림, 종료 코드 무시, `no` 외 모두 동기, 오류 때 동기로 봄, ctypes 가져오기, boot id 없이 켬, boot 기한 없는 상태 유지).
+- 미증명: 실기 부팅과 chrony 아래 `timedatectl` 응답. 쌍둥이에는 NTP 데몬이 없다.
+- gate 변화: 없음
+- 결정: D-418, D-161, D-388
+- 교훈: 샌드박스(seccomp) 안의 코드는 검토가 제안한 시스템 호출을 먼저 같은 필터 아래에서 돌려 봐야 한다. 허용 목록 밖 호출은 예외가 아니라 프로세스 종료다.

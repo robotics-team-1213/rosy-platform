@@ -948,3 +948,89 @@ def test_a_request_written_while_the_last_one_is_read_is_not_lost(tmp_path, monk
     assert _response(tmp_path)["request_id"] == "fedcba9876543210"
     assert not (tmp_path / ssh.REQUEST).exists()
     assert [p.name for p in (tmp_path / "run/rosy").iterdir()] == ["ssh-access.response"]
+
+
+# --- third review: a bare lock_pending, NTP under chrony, the boot id --------------------
+
+
+def test_a_failed_lock_whose_deny_write_also_failed_is_retried_next_tick(tmp_path, monkeypatch):
+    """Rollback unlinked the permit block, usermod failed and the deny block could not be written:
+    only lock_pending remains, and the next --expire must still retry the lock."""
+    system = _settled(tmp_path)
+    system.sshd_ok, system.lock_ok = False, False
+
+    def no_deny(_system):
+        raise OSError("read-only file system")
+
+    monkeypatch.setattr(ssh, "_write_deny_dropin", no_deny)
+    assert _run(tmp_path, system, "password_on", minutes=5)["status"] == 503
+    assert not (tmp_path / ssh.PASSWORD_DROPIN).exists() and _state(tmp_path).get("lock_pending") is True
+
+    retry = FakeSystem(tmp_path, now=NOW + timedelta(seconds=30))
+    assert ssh.main(["--root", str(tmp_path), "--expire"], system=retry) == 0
+    assert ("lock_password", "rosy") in retry.calls
+    assert ssh.password_state(retry)["lock_pending"] is False
+
+
+def test_password_off_on_request_retries_a_bare_pending_lock(tmp_path, monkeypatch):
+    system = _settled(tmp_path)
+    system.sshd_ok, system.lock_ok = False, False
+    monkeypatch.setattr(ssh, "_write_deny_dropin", lambda _system: (_ for _ in ()).throw(OSError("ro")))
+    _run(tmp_path, system, "password_on", minutes=5)
+    system.lock_ok = True
+    system.calls.clear()
+    assert _run(tmp_path, system, "password_off")["status"] == 204
+    assert ("lock_password", "rosy") in system.calls and ssh.password_state(system)["lock_pending"] is False
+
+
+@pytest.mark.parametrize("stdout,code,expected", [("yes\n", 0, True), ("no\n", 0, False), ("", 1, False),
+                                                  ("yes\n", 1, False), ("maybe\n", 0, False)])
+def test_ntp_sync_comes_from_timedated_whatever_the_ntp_daemon(tmp_path, monkeypatch, stdout, code, expected):
+    """chrony on the image never writes timesyncd's flag; timedated reads the kernel's STA_UNSYNC."""
+    system = ssh.System(tmp_path)
+    seen = []
+
+    def run(argv, stdin=None):
+        seen.append(argv)
+        return subprocess.CompletedProcess(argv, code, stdout, "")
+
+    monkeypatch.setattr(system, "_run", run)
+    assert system.ntp_synced() is expected
+    assert seen == [[ssh.TIMEDATECTL, "show", "-p", "NTPSynchronized", "--value"]]
+
+
+def test_ntp_sync_detection_that_fails_means_not_synced(tmp_path, monkeypatch):
+    system = ssh.System(tmp_path)
+
+    def run(argv, stdin=None):
+        raise ssh.HelperError("timedatectl: FileNotFoundError")
+
+    monkeypatch.setattr(system, "_run", run)
+    assert system.ntp_synced() is False
+
+
+def test_the_helper_never_calls_adjtimex_itself():
+    """The units' seccomp filter (@system-service, ProtectClock=true) kills the process with SIGSYS
+    on adjtimex (twin, 2026-10-03): no try/except can catch that. timedated asks the kernel instead."""
+    source = (NATIVE / "rosy-ssh-access.py").read_text(encoding="utf-8")
+    assert "import ctypes" not in source and "adjtimex(" not in source and "CDLL" not in source
+
+
+def test_password_on_refuses_without_a_boot_id(tmp_path):
+    system = _settled(tmp_path)
+    system.boot_ident = ""
+    response = _run(tmp_path, system, "password_on", minutes=5)
+    assert (response["status"], response["error"], response["result"]) == (503, "SSH_ACCESS_UNAVAILABLE", None)
+    assert "set_password" not in system.names() and not (tmp_path / ssh.PASSWORD_DROPIN).exists()
+
+
+def test_a_password_state_without_a_boot_id_is_expired(tmp_path):
+    """A state from before the upgrade has no boot bound: turn it off at the next check."""
+    system = FakeSystem(tmp_path)
+    _run(tmp_path, system, "password_on", minutes=60)
+    state = _state(tmp_path)
+    del state["boot_id"], state["boot_deadline"]
+    (tmp_path / ssh.PASSWORD_STATE).write_text(json.dumps(state), encoding="utf-8")
+    later = FakeSystem(tmp_path, now=NOW + timedelta(minutes=1))
+    ssh.main(["--root", str(tmp_path), "--expire"], system=later)
+    assert _state(tmp_path)["enabled"] is False and ("lock_password", "rosy") in later.calls
