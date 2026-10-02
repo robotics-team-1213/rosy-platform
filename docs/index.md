@@ -185,6 +185,8 @@
 | D-382 | 로봇 ↔ 사이트 관제 통신은 계약 스냅샷 하나로 판정하고, 실물 확인은 읽기 전용 적합성 탐침으로 시작한다 |
 | D-390 | Pilot의 OMX-AI 연습은 시뮬레이션 전용 장치 API를 거쳐 로컬 팔 명령 소유자에 연결한다 |
 | D-413 | ROSY는 modules·integrations·apps·profiles로 책임을 나누고 고정 셀 한 흐름부터 이전한다 |
+| D-425 | 앱·웹의 작업 소유권과 공유 경계를 고정하고 실행 조합 apps와 사용자 화면 ui를 분리한다 |
+| D-426 | Fleet–Gazebo 실제 REST/WS·Task/attempt·CORE 결과와 독립 운동/접촉 관측을 함께 검증; 두 로봇/한 Fleet부터 run별 GZ_PARTITION 격리, 진입 경계 grant 재검사·점유 해제 증거·재시작 이전 실행 대조·CORE 독립 base 명령 만료, M01–M08 반복 수용 및 증거 등급 분리 |
 
 ## 계획·결과 문서
 
@@ -268,8 +270,8 @@
 
 ## 최근 기록
 
+- 2026-10-03 · uncommitted · docs(adr): D-425 앱·웹 역할·공유 경계·목표 폴더
+- 2026-10-03 · uncommitted · feat: journal Cell hold release and local Action completion
 - 2026-10-03 · uncommitted · docs: D-426 Fleet–Gazebo 실제 통신·주행 수용 설계
 - 2026-10-03 · uncommitted · feat: compose Cell Skill with actual OMX planner and phase runner
 - 2026-10-03 · uncommitted · fix: preserve live Cell phase cancellation through Skill adapter
-- 2026-10-03 · uncommitted · docs(plans): 학습 페인트 후처리 — 담당 세션 결정과 실측 (a)(b)(c)
-- 2026-10-03 · uncommitted · docs: record public Cell evidence contract and progress

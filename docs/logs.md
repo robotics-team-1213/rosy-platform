@@ -4483,7 +4483,8 @@
 
 ## 2026-10-02 · uncommitted · docs(adr): D-395 개정 9 — S1 Gazebo 통과
 - 변경: 다른 세션과 조율한 조용한 시간대(13:54–16:09 KST)의 S1 네 번째 실행 15회를 기록하고 S1을 닫았다. 확정 오차 ≤1.2 cm / 1.2°, 거울 결정 0/35, 강제 거울 탐지 6/6(3.1–4.1 sim s), 실제 주행 중 들어 옮김 4회 완전 통과. 남은 단계는 S2(4대 sim), 실기(개정 5)·S3, D-257·D-393 개정 수락(사용자 승인).
-- 증거: `docs/plans/2026-10-02-d395-s1-bench-results.md` Run 4, `X:\DevTemposy-d395-s1d\`.
+- 증거: `docs/plans/2026-10-02-d395-s1-bench-results.md` Run 4, `X:\DevTemp
+osy-d395-s1d\`.
 - gate 변화: 없음(Proposed). ROS-SIM S1 통과.
 
 ## 2026-10-02 · uncommitted · docs(logs): D-395 개정 9 항목의 증거 경로 정정
@@ -4631,3 +4632,14 @@
 - 변경: D-426 Proposed, T1–T6 구현 계획, M01–M08 반복 수용 행렬. 일관성·실행 가능성·장애 가정·통신 경계 검토 반영: Agent launch 설정, contact 계측, ideal odometry 한계, base watchdog 부재, 진입 시한 재검사, 이전 실행 정지 대조, 부정 시험 판정 분리, GZ_PARTITION 격리.
 - 증거: 문서 검토와 계약 검사 결과는 별도 검토 문서에 기록. 실제 Gazebo/DEVICE/FIELD 합격으로 승격하지 않음.
 - gate 변화: 없음 — 문서/구현 목표 설정만. 실제 회차 미실행.
+
+
+## 2026-10-03 · uncommitted · feat: journal Cell hold release and local Action completion
+- Change: reuse physical gripper transaction rules with canonical Cell grant provenance; optionally compose durable workflow gates with the real Skill phase runner. Require matching scoped fresh hold/release readback before local terminal success. Provider/clock/cancel errors and snapshot recovery stay HOLD.
+- Evidence: focused planner/API/runner/transaction/boundary suite 36 passed; sensor and cancel failure review corrections included. Full OMX adapter plus provider/Skill/boundary regression: 371 passed / 5 skipped. Quick tier: 96 passed / 25 freshness warnings. Independent review: 31 passed, no remaining Critical/Important findings.
+- Gate: SOURCE/LOCAL only. Fleet independent goal confirmation, two-ledger Cell replay and ROS-SIM remain open.
+
+## 2026-10-03 · uncommitted · docs(adr): D-425 앱·웹 역할·공유 경계·목표 폴더
+- 변경: 화면/API/상태 정본/최종 writer를 분리한 소유권 표, UI·통신·계약 공유 범위, apps/site·apps/device·ui 목표 배치와 점진 이전 출구를 기록. D-340·D-370·D-413은 부분 대체 범위를 표시하고 역사 본문을 보존. 별도 브랜치의 D-423·D-424 번호를 예약. 코드·wire·제품 폴더는 이전하지 않음.
+- 증거: 작성 전 문서 계약 81 passed. 변경 후 문서 계약·quick tier 120 passed/25 기존 freshness warnings; harness lint와 색인/BOM/CRLF/부분 대체 링크를 확인. 한글이 손상된 신규 로그·색인 행은 UTF-8로 정정하고 검증을 재실행.
+- gate 변화: 없음 — 구조 결정 수용과 구현·설치·DEVICE/FIELD 수용은 별개.

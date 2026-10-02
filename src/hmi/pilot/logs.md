@@ -256,3 +256,9 @@
 - 증거: `python -m pytest src/hmi/pilot/test src/runtime/api_web/test/test_pilot_route.py src/products/omx/adapter/test/test_pilot_sim_api.py -q` → 63 passed, 35 skipped; `ROSY_RUN_BROWSER_TESTS=1` 브라우저 전체 35 passed(기존 23 + 녹화 12), 녹화 12개는 3회 반복 모두 통과 (2026-10-02 Windows, Chromium; 기계 부하로 Chromium 종료가 회당 20–50 s).
 - gate 변화: SOURCE 유지. ROS-SIM HOLD — 계획 Verification ROS-SIM 체크리스트(WSL Ubuntu) 미실행, DEVICE 증거 없음.
 - 결정: D-411 A.
+
+## 2026-10-03 · uncommitted · D-411 녹화 버튼 kind 명시 + 표면 재칠 규칙 제거
+- 변경: robot-recording.js 시트 행 버튼(취소·받기)을 const+setAttribute("kind","quiet") 정준형(settings.js 패턴)으로 만들고, styles.css의 ui-button[data-robot-record][data-state=starting] color·border 표면 규칙을 지웠다 — 준비 상태는 HUD 칩(data-drive-fact=recording)과 토글 눌림이 이미 말한다. drive.js 로봇 녹화 버튼은 기존 quiet 유지.
+- 근거: D-194/D-359 공용 부품 계약. CI 실행 37041646414의 실패 2건(test_helper_created_buttons_name_their_kind, test_surfaces_do_not_repaint_shared_controls) 치유.
+- gate 변화: 없음.
+- 최종 증거: test_shared_controls + pilot test + pilot_route 86 passed 37 skipped.
