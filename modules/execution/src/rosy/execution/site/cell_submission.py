@@ -61,6 +61,36 @@ class CellJobSubmission:
     def action_kinds(self) -> tuple[str, ...]:
         return ("CELL_TRANSFER",) * len(self.plan_bundle.steps)
 
+    def as_store_document(self) -> dict:
+        """Return a JSON-ready journal payload for the Fleet persistence adapter."""
+        def thaw(value):
+            if isinstance(value, Mapping):
+                return {key: thaw(nested) for key, nested in value.items()}
+            if isinstance(value, (tuple, list)):
+                return [thaw(item) for item in value]
+            return value
+
+        return {
+            "job_id": self.job_id,
+            "workcell_id": self.workcell_id,
+            "instance_id": self.instance_id,
+            "recipe_digest": self.recipe_digest,
+            "cell_digest": self.cell_digest,
+            "process_artifact_digest": self.process_artifact_digest,
+            "job": thaw(self.job),
+            "steps": [
+                {"skill_id": step.invocation.skill_id,
+                 "version": step.invocation.version,
+                 "inputs": thaw(step.invocation.inputs)}
+                for step in self.plan_bundle.steps
+            ],
+            "resources": [list(resource) for resource in self.resources],
+            "ledger_markers": [
+                {"after_step_ordinal": ordinal, "pallet_id": pallet}
+                for ordinal, pallet in self.ledger_markers
+            ],
+        }
+
 
 def _canonical(value: object, *, field: str) -> str:
     try:
@@ -104,8 +134,9 @@ def _validate_transfer_inputs(value: Mapping) -> str:
     source = _pose(value["source_pose_base"], "source_pose_base")
     destination = _pose(value["destination_pose_base"], "destination_pose_base")
     source_approach = _finite(value["source_approach_z_base_m"], "source_approach_z_base_m")
-    destination_approach = _finite(value["destination_approach_z_base_m"],
-                                    "destination_approach_z_base_m")
+    destination_approach = _finite(
+        value["destination_approach_z_base_m"], "destination_approach_z_base_m",
+    )
     carry = _finite(value["carry_z_base_m"], "carry_z_base_m")
     if (source_approach < source["z_m"] or destination_approach < destination["z_m"]
             or carry < max(source_approach, destination_approach)):

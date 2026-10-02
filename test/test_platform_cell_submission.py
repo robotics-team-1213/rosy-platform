@@ -90,6 +90,7 @@ def test_cell_submission_recompiles_and_preserves_ordered_plan_and_ledger():
     assert result.resources == (("workcell", "cell-1"), ("pallet", "pallet-1"))
     assert result.ledger_markers == ((1, "pallet-1"),)
     assert result.plan_bundle.steps[0].invocation.inputs["home_pose_base"]["z_m"] == 0.4
+    assert result.as_store_document()["steps"][0]["inputs"]["pallet_id"] == "pallet-1"
 
 
 def test_cell_submission_rejects_candidate_job_that_differs_from_recompilation():

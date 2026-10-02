@@ -32,6 +32,8 @@ def test_task_contract_is_versioned_documented_and_wired_to_the_site_stack():
     assert "## 10.13 Fleet proposal, Mission draft, and operator admission (D-333/D-334)" in reference
     assert "`/api/fleet/proposals/{proposal_id}/resolve`" in reference
     assert "`/api/fleet/missions/{mission_id}/admit`" in reference
+    assert "`/api/fleet/cell-jobs/{mission_id}`" in reference
+    assert "different `principal ID`" in reference or "different principal ID" in reference
     assert "`physical_submission: NOT_CONNECTED`" in reference
     assert "GetStopState(LocalStopQuery)" in reference
     assert "`FleetCellTransferGrant`" in reference
