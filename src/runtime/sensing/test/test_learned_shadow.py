@@ -104,3 +104,16 @@ def test_ring_visible_without_numeric_error_counts_as_not_visible():
 def test_payload_carries_the_near_field_wall_fraction():
     r = InferResult(LaneMaskEvidence(True, 0.0, 1.0, {}, wall_fraction=0.3125), 1.0, "rev")
     assert shadow_payload(r, stamp=0.0, rule_error=None)["wall_fraction"] == 0.3125
+
+
+def test_the_node_latches_visible_per_stream_before_publishing():
+    """2026-10-02 audit: the visible hysteresis lives with the per-stream state, in the node;
+    the published evidence is the latched one, and a model swap starts a fresh latch."""
+    from pathlib import Path
+
+    src = (Path(__file__).resolve().parents[1] / "control" / "learned_lane_node.py").read_text(encoding="utf-8")
+    assert "VisibleHysteresis()" in src
+    camera = src[src.index("def _on_camera"):src.index("def main")]
+    assert camera.index("self._visible.update(") < camera.index("shadow_payload(")
+    swap = camera[camera.index("if model.model_revision != self._logged_revision"):camera.index("self._busy = True")]
+    assert "self._visible = VisibleHysteresis()" in swap

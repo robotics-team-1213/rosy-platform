@@ -947,3 +947,11 @@
 - 변경: `HsvSquareDetector` 는 코어 무게중심이 지면 수평선 위(또는 위)에 있으면 버린다(바닥 점이 아니다). 같은 사각형의 조각은 신뢰도(같으면 코어 면적) 순으로 하나만 남긴다: 더 센 검출의 링 상자 안에 무게중심이 들거나 바닥에서 `MERGE_M`(0.1 m, 외곽 0.13 m 보다 작음) 안이면 같은 사각형이다. 수평선 아래 신뢰 거리 밖의 방위만 검출은 그대로 낸다(`range_m=None` 이 표시). 로봇(`loc_assist`)은 그대로 보고하고, Fleet `square_cue` 가 근거에서 뺀다.
 - 증거: `test_reference_square.py` +15(줄무늬 1–3 px × 위치 4 → 1건, 수평선 위 링+코어 → 0건, 실제 000068 → 실제 사각형 1건 23.9°/0.368 m, 000078 → 1건 0.385 m). 실제 프레임 시험은 gitignored `data/perception` 을 이 checkout, worktree 뒤 main checkout, `ROSY_PERCEPTION_DATA` 순으로 찾고 없으면 `REAL-FRAME CHECK NOT RUN` 으로 건너뛴다. 506장 재스캔: 거짓 20 → 0, 실제 거리 있는 검출 42 → 42.
 - gate 변화: 없음. 장치 재확인 전.
+
+## 2026-10-02 · uncommitted · fix(learned): 그림자 차선 근거 — 연결 성분 면적 문턱과 visible 히스테리시스
+
+- 원인: 후처리 감사(2026-10-02, 133221Z 260장, D-379 자동 라벨을 모델 출력 대신 씀). 반점 잡음에 `visible` 이 0.896 → 1.000(10 % 거짓 "차선 보임"), 오프셋 흔들림이 0.078 → 0.103(+31 %).
+- 변경: `lane_mask.lane_evidence` 가 목표(drivable 또는 lane_marking) 픽셀의 8-연결 성분 중 `MIN_COMPONENT_PX`(40 px, 320x240 기준, 인자 `min_component_px` 로 바꿀 수 있음) 미만을 버린 뒤 visible·오프셋·신뢰도를 낸다. `VisibleHysteresis`(켜짐 0.35, 0.25 미만이면 꺼짐)는 모듈이 상태를 들지 않으므로 스트림별 상태가 있는 `learned_lane_node` 가 하나 들고, 발행 전 근거에 적용한다. 모델이 바뀌면 새 래치로 시작한다. 꺼진 근거는 error 가 None 이다.
+- 증거: `test_learned_lane_mask.py` +7(반점만 → 안 보임, 반점이 실제 차선 오프셋을 못 옮김, 문턱 설정, 133221Z/000120 실제 라벨 → 보임·반점 뒤 오프셋 ±0.02, 히스테리시스 순서, 문턱 역전 거부), `test_learned_shadow.py` +1(노드가 발행 전 래치, 교체 시 새 래치). 대역 softmax 동치 시험은 이 필터와 무관한 지름길을 고정하므로 `min_component_px=0` 으로 돈다. 실제 데이터 위치는 `test/perception_data.py` 하나로 모았다(`ROSY_PERCEPTION_DATA` → 이 checkout → worktree 뒤 main checkout).
+- 결정: D-356 그림자 전용이다. `road_state` 융합(시그마 0.03)과 캡처 트리거가 이 값을 읽으므로 수치가 바뀐다. D-205 승격은 이 단위 시험이 아니라 replay bench 를 거쳐야 한다.
+- gate 변화: 없음.

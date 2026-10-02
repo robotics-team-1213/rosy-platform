@@ -1,9 +1,10 @@
 """D-395 rev. 1 §6: the HSV reference-square detector on synthetic floor images."""
 import math
-import pathlib
 
 import numpy as np
 import pytest
+
+import perception_data
 
 from control.sensing.perception.camera_ground import GroundPlane, focal_from_hfov
 from control.sensing.perception.reference_square import (
@@ -118,29 +119,9 @@ def test_a_ring_and_core_above_the_horizon_is_not_a_floor_square():
     assert HsvSquareDetector(CAM_X).detect(img, GROUND) == []
 
 
-def _perception_data():
-    """data/perception is gitignored (D-379): look in this checkout, then the main checkout
-    behind a linked worktree, then $ROSY_PERCEPTION_DATA."""
-    import os
-    repo = pathlib.Path(__file__).resolve().parents[4]
-    roots = [repo / 'data' / 'perception']
-    dot_git = repo / '.git'
-    if dot_git.is_file():
-        gitdir = (repo / dot_git.read_text().split(':', 1)[1].strip()).resolve()
-        roots.append(gitdir.parents[1].parent / 'data' / 'perception')
-    if os.environ.get('ROSY_PERCEPTION_DATA'):
-        roots.insert(0, pathlib.Path(os.environ['ROSY_PERCEPTION_DATA']))
-    return next((r for r in roots if r.is_dir()), None)
-
-
 def _real_frame(index):
-    root = _perception_data()
-    path = None if root is None else (
-        root / 'labels' / '20260930T133221Z_rosy-pinky-8kcn' / 'frames' / f'{index:06d}.jpg')
-    if path is None or not path.is_file():
-        pytest.skip(f'REAL-FRAME CHECK NOT RUN: 133221Z frame {index:06d} not found '
-                    '(gitignored data/perception; set ROSY_PERCEPTION_DATA)')
     import cv2
+    path = perception_data.label_file(perception_data.SESSION_133221Z, 'frames', index)
     img = cv2.imread(str(path))
     h, w = img.shape[:2]
     ground = GroundPlane(height_m=.059, pitch_rad=math.radians(11.8), focal_px=focal_from_hfov(w, 1.1519),
