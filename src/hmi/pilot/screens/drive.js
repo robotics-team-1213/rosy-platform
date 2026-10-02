@@ -188,7 +188,8 @@ export function mountDrive(root, {onExit} = {}) {
     apiGet, onUpdate: (rows) => renderModels(modelList, rows),
     schedule: (fn, ms) => { const id = setTimeout(fn, ms); return () => clearTimeout(id); },
   });
-  models.start();
+  // 접힌 동안은 묻지 않는다(검토 L10): 열면 시작, 닫으면 멈춘다.
+  modelPanel.addEventListener("toggle", () => { modelPanel.open ? models.start() : models.stop(); });
 
   // 태블릿 실측: 누른 지 ~0.5 s 에 Android 길게 누르기 메뉴(카메라 이미지면 "이미지 복사·
   // 다운로드")가 떠서 누르고 있던 터치를 가로챘다. 주행 화면에서는 어디서도 띄우지 않는다.

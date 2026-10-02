@@ -402,12 +402,12 @@ class TestD137SequenceContract:
             for token in ("person", "advisory", "Detection", "vision"):
                 assert token not in body, (name, token)
 
-    def test_vision_detections_has_no_publisher_yet(self):
-        """(4) 단일 발행자 고정(D-137 §Consequences): 지금은 발행자 0.
+    def test_vision_detections_has_one_publisher(self):
+        """(4) 단일 발행자 고정(D-137 §Consequences, D-423): 발행자는 하나.
 
-        rosy-vision 노드가 착지하면(T5, Hailo 실측 뒤) 이 스캔은 실패하고,
-        그때 아래 화이트리스트에 그 파일 하나를 유일 항목으로 넣는다 — CORE는
-        구독만 하고 발행 없음(vision-accelerator 설계 OQ4, must-be-1).
+        토픽 글자는 `control/object_detector.py` 한 파일에만 있다. 이후의
+        Hailo/rosy-vision 경로는 별도 발행자가 아니라 object_detector_node 의
+        백엔드다(D-209, D-423 결정 2026-10-03). CORE 는 이 토픽을 발행하지 않는다.
         """
         allowed = {    # 상대 경로 -> 사유.
             str(Path("runtime/sensing/control/object_detector.py")):
@@ -423,6 +423,32 @@ class TestD137SequenceContract:
                 offenders[str(path.relative_to(SRC_ROOT))] = text
         unexpected = sorted(set(offenders) - set(allowed))
         assert not unexpected, f"vision/detections 발행 후보 발견: {unexpected}"
+
+    def test_only_object_detector_node_creates_the_detections_publisher(self):
+        """AST: create_publisher(..., <detections topic>, ...) appears in one file only.
+
+        The topic is the literal or object_detector.TOPIC (also when imported under
+        another name); subscribers such as road_observer_node do not count."""
+        import ast
+        publishers = set()
+        for path in SRC_ROOT.rglob("*.py"):
+            parts = {p.lower() for p in path.parts}
+            if "test" in parts or "__pycache__" in parts:
+                continue
+            tree = ast.parse(path.read_text(encoding="utf-8", errors="replace"))
+            names = {"TOPIC"} if path.name == "object_detector.py" else set()
+            for node in ast.walk(tree):
+                if isinstance(node, ast.ImportFrom) and (node.module or "").endswith("object_detector"):
+                    names |= {a.asname or a.name for a in node.names if a.name == "TOPIC"}
+            for node in ast.walk(tree):
+                if (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+                        and node.func.attr == "create_publisher" and len(node.args) >= 2):
+                    topic = node.args[1]
+                    literal = isinstance(topic, ast.Constant) and topic.value == "vision/detections"
+                    named = isinstance(topic, ast.Name) and topic.id in names
+                    if literal or named:
+                        publishers.add(path.relative_to(SRC_ROOT).as_posix())
+        assert publishers == {"runtime/sensing/control/object_detector_node.py"}, publishers
 
 
 def _function_body(text: str, name: str) -> str:

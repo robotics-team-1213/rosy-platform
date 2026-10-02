@@ -92,3 +92,18 @@ def test_autolabel_writes_candidate_boxes_only_on_request():
     assert '"--object-boxes"' in source
     assert 'rec["objects"] = lidar_object_boxes(cam, xy, lidar_height_m=lidar.height_m' in source
     assert "object_boxes=args.object_boxes" in source
+
+
+
+@pytest.mark.parametrize("row", [
+    {"label": "cone"},                                          # no box
+    {"bbox_xyxy": [0, 0, 5], "label": "cone"},                  # three numbers
+    {"bbox_xyxy": [10, 0, 5, 5], "label": "cone"},              # x1 < x0
+    {"bbox_xyxy": [0, 0, 5, float("nan")], "label": "cone"},
+    {"bbox_xyxy": ["0", 0, 5, 5], "label": "cone"},
+    "not a row",
+])
+def test_malformed_human_rows_are_refused(row):
+    """Review L9: a bad review row must fail loudly, not silently drop or keep auto boxes."""
+    with pytest.raises(ValueError):
+        OB.merge_review([], [row])

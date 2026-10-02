@@ -66,6 +66,10 @@ console.log(JSON.stringify({calls, updates, timers}));
 def test_drive_screen_mounts_the_panel_without_any_model_write():
     drive = (PILOT / "screens" / "drive.js").read_text(encoding="utf-8")
     assert "createModelStatus(" in drive and "models.stop()" in drive
+    # Review L10: poll only while the panel is open.
+    assert 'modelPanel.addEventListener("toggle"' in drive
+    assert "modelPanel.open ? models.start() : models.stop()" in drive
+    assert "models.start();" not in drive
     source = MODULE.read_text(encoding="utf-8")
     for word in ("promote", "rollback", "POST", "method"):
         assert word not in source

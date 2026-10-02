@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import sys
 from pathlib import Path
 
@@ -72,9 +73,22 @@ def _iou(a, b):
     return inter / union if union > 0 else 0.0
 
 
+def _check_human_box(box):
+    """A review row: {bbox_xyxy: four finite numbers with x0 < x1, y0 < y1, label}."""
+    if not isinstance(box, dict):
+        raise ValueError(f"human row must be an object, got {box!r}")
+    xyxy = box.get("bbox_xyxy")
+    if (not isinstance(xyxy, (list, tuple)) or len(xyxy) != 4
+            or not all(isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v)
+                       for v in xyxy)
+            or not (xyxy[0] < xyxy[2] and xyxy[1] < xyxy[3])):
+        raise ValueError(f"human row bbox_xyxy must be [x0, y0, x1, y1] with x0<x1, y0<y1: {xyxy!r}")
+
+
 def merge_review(auto, human, min_iou=REVIEW_IOU):
     """Human boxes (labelled) first, then auto boxes no human box overlaps."""
     for box in human:
+        _check_human_box(box)
         if box.get("label") not in OBJECT_CLASSES + (REJECT,):
             raise ValueError(f"unknown class {box.get('label')!r}; one of {OBJECT_CLASSES} or {REJECT!r}")
     kept = [dict(box, source="human") for box in human if box["label"] != REJECT]
