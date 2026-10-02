@@ -204,6 +204,61 @@ def test_unknown_cell_action_survives_restart_as_hold_without_replay(tmp_path):
     assert tasks.resource_claims(resource_kind="workcell", resource_id="omx_01")
 
 
+@pytest.mark.parametrize("prior_state", ["READY", "RUNNING", "ACTION_SUCCEEDED"])
+def test_cell_job_startup_fences_old_authority_without_replaying_steps(tmp_path, prior_state):
+    path, tasks, _, enabled = _stores(tmp_path)
+    store = CellJobStore(path)
+    _create(store)
+    ready = store.admit("cell-mission-1", actor_id="operator-1",
+                        expected_generation=enabled["generation"])
+    grant = _grant(ready, 0)
+    if prior_state != "READY":
+        store.start_step("cell-mission-1", step_index=0, action_id="action-0",
+                         attempt_id="attempt-0", grant=grant)
+    if prior_state == "ACTION_SUCCEEDED":
+        store.record_action_result(
+            "cell-mission-1", step_index=0, event_id="success-before-site-restart",
+            action_id="action-0", attempt_id="attempt-0", outcome="SUCCEEDED",
+            result={"journal_event_id": 10},
+        )
+    previous = store.get("cell-mission-1")
+    assert store.recover_after_startup() == 0
+    control = tasks.close_dispatch_for_startup()
+    restarted = CellJobStore(path)
+    assert restarted.recover_after_startup() == 1
+    assert restarted.recover_after_startup() == 0
+    held = restarted.get("cell-mission-1")
+    assert held["status"] == held["steps"][0]["status"] == "HOLD"
+    assert held["reason"] == "SITE_AUTHORITY_CHANGED"
+    assert held["steps"][1]["status"] == "WAITING"
+    for field in ("action_id", "attempt_id", "grant", "result"):
+        assert held["steps"][0][field] == previous["steps"][0][field]
+    if prior_state != "READY":
+        assert tasks.resource_claims(resource_kind="workcell", resource_id="omx_01")
+        assert control["rearm_available"] is False
+    with pytest.raises(MissionConflict, match="current READY"):
+        restarted.start_step("cell-mission-1", step_index=0, action_id="another-action",
+                             attempt_id="another-attempt", grant=grant)
+
+
+def test_cell_step_cannot_start_without_every_admitted_resource_claim(tmp_path):
+    path, tasks, _, enabled = _stores(tmp_path)
+    store = CellJobStore(path)
+    _create(store)
+    ready = store.admit("cell-mission-1", actor_id="operator-1",
+                        expected_generation=enabled["generation"])
+    with store._connect() as connection:
+        connection.execute("DELETE FROM fleet_action_claims WHERE resource_key='pallet:pallet-1'")
+        connection.commit()
+    with pytest.raises(MissionConflict, match="all durable resource claims"):
+        store.start_step("cell-mission-1", step_index=0, action_id="action-0",
+                         attempt_id="attempt-0", grant=_grant(ready, 0))
+    unchanged = store.get("cell-mission-1")
+    assert unchanged["status"] == unchanged["steps"][0]["status"] == "READY"
+    assert unchanged["steps"][0]["action_id"] is None
+    assert tasks.resource_claims(resource_kind="workcell", resource_id="omx_01")[0]["phase"] == "CLAIMED"
+
+
 def test_cell_grant_cannot_change_a_pose_or_run_under_a_stale_generation(tmp_path):
     path, tasks, _, enabled = _stores(tmp_path)
     store = CellJobStore(path)

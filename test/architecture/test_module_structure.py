@@ -76,7 +76,7 @@ CONTROL_SPLIT = "docs/plans/2026-09-22-control-package-split-design.md"
 #: P6 verdicts: path (relative to src/) or package name -> (lines at verdict, verdict).
 SIZE_VERDICTS = {
     "fleet": (
-        27_811,
+        27_870,
         "split: server HTTP boundary, console, signals and the mission-control stores are separate owners "
         "today; group them into subpackages rather than one flat server/ tree (B2); owner fleet, unscheduled "
         "(re-judged 2026-09-29 at 11164 after mission_store joined the server tree; re-judged 2026-09-30 at "
@@ -140,8 +140,14 @@ SIZE_VERDICTS = {
         "own modules: server/cancel_all.py (fanout, per-robot verdict, dispatch-overlap fence) and "
         "server/cancel_all_store.py (durable window record and attempt tags read by the CORE event "
         "projection in task_results.py), one route, the hub swarm-cancel scatter and ~35 console.js "
-        "lines; console.py did not grow and task_store.py stays under its 1060 ceiling; verdict unchanged. "
-        "Re-judged 2026-10-02 at 27811 (C4b G3/G5, D-403 §3/§5/§7): the production Cell Job compiler "
+        "lines; console.py did not grow and task_store.py stays under its 1060 ceiling. "
+        "Re-judged 2026-10-02 at 27303 after durable Mission goal-success proof and CellJob startup "
+        "fencing: completion requires the matching persisted Action outcome, transfer submission "
+        "atomically marks ownership DISPATCHING, and gateway startup holds obsolete authority. "
+        "These remain Fleet journal/admission responsibilities under the D-413 migration plan; "
+        "CellJob dispatch/reconciliation composition remains open. Full Fleet regression 1425 "
+        "passed/7 skipped; split verdict and the +150 growth allowance remain unchanged. "
+        "Re-judged 2026-10-02 at 27870 (C4b G3/G5, D-403 §3/§5/§7): the production Cell Job compiler "
         "adapter (server/cell_compiler.py), the per-kind step dispatch table (server/step_action_kinds.py) "
         "and the step-ledger dispatcher (server/step_dispatcher.py) joined as their own modules, the "
         "deployment_profile gate in app.py; verdict unchanged",

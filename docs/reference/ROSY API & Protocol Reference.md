@@ -2,7 +2,7 @@
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.81
+**Version:** v1.82
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -772,7 +772,7 @@ close code: `4401` 은 토큰이 없거나 틀린 것(`/ws/state` 와 동일), `
 | `CandidateReport` | 로봇 → Fleet | `robot_id`, `request_id`(1–64자 `[A-Za-z0-9_.:-]`), `candidates[1..8]` `{x, y, yaw, scan_fit 0–1, paint_score 0–1\|null}`(map 프레임 base_link), `unmapped_objects[≤16]` `{x, y}`(base_link, 앞 x·왼쪽 y), `square_sightings[≤4]` `{bearing_rad, range_m>0\|null, confidence 0–1}`, `pickup`, `stamp`(로봇 시각 s) |
 | `LocalizationDecision` | Fleet → 로봇 | `request_id`, `candidate_index`(0–7) **또는** `pose {x, y, yaw}` 중 정확히 하나, `source` `candidate`\|`overhead`\|`homing_ref`\|`human`(`candidate` 는 인덱스와만, 나머지는 `pose` 와만), `cues`(≤6, `square`\|`paint`\|`peers`\|`slot`\|`last_good`\|`overhead`), `evidence`(≤16 키), `ttl_s`(받은 때부터 유효한 초, 0 초과 30 이하, 기본 5) |
 
-로봇은 낡은 `request_id` 와, 받은 뒤 `ttl_s` 가 지난 결정을 무시한다(Fleet·로봇 시계 동기 불필요, D-395 개정 3). 사람이 아닌 결정은 `cues` 에 비대칭 단서(`square`·`paint`·`peers`·`slot`)가 하나 이상 있어야 받는다 — `last_good`·`overhead` 만으로는 거부한다. 받아들인 결정도 주입 뒤 3 s 스캔/지도 일치를 통과해야 `LOCALIZED` 가 되고, 실패하면 `SUSPECT`(`inject_rejected`)다. 대칭 맵에서는 거울상도 같은 적합도라 이 검증이 거울 주입을 거르지 못한다 — 거울은 Fleet 중재와 감시가 막는다. `square_sightings` 는 설계 4.2절 표 이후 개정 1의 `square_seen` 단서를 위해 더한 선택 필드다.
+로봇은 낡은 `request_id` 와, 받은 뒤 `ttl_s` 가 지난 결정을 무시한다(Fleet·로봇 시계 동기 불필요, D-395 개정 3). 사람이 아닌 결정은 `cues` 에 비대칭 단서(`square`·`paint`·`peers`·`slot`)가 하나 이상 있어야 받는다 — `last_good`·`overhead` 만으로는 거부한다. 받아들인 결정도 주입 뒤 3 s 스캔/지도 일치를 통과해야 `LOCALIZED` 가 되고, 실패하면 `SUSPECT`(`inject_rejected`)다. 대칭 맵에서는 거울상도 같은 적합도라 이 검증이 거울 주입을 거르지 못한다 — 거울은 Fleet 중재와 감시가 막는다. `square_sightings` 는 설계 4.2절 표 이후 개정 1의 `square_seen` 단서를 위해 더한 선택 필드다. `range_m` 이 null 인 목격(방위만)은 선로에 그대로 실리지만 Fleet 은 근거로 세지 않는다(D-395 개정 11).
 
 ---
 
@@ -1504,12 +1504,13 @@ generation against the persisted grant before accepting that readback.
 such as cancellation, not the v1 `GetAction` request shape. A lookup does not
 resubmit or create an attempt.
 
-Pick-and-place receipts use UDS protocol v2 while retaining the same six
-operation names. V2 adds at most four ordered `phase_summaries`, each containing
+Phased `PICK_PLACE` and `CELL_TRANSFER` receipts use UDS protocol v2 while
+retaining the same six operation names. V2 adds at most four ordered `phase_summaries`, each containing
 only fixed `phase_id`, `ordinal`, bounded ROS phase `state`, local
 `journal_event_id`, and aware `observed_at`. It excludes ROS goal UUIDs, joint
 trajectories, camera payloads, and planner scenes. Fleet requires v2 for
-`PICK_PLACE` and fails closed on a missing summary; it never falls back to v1.
+`PICK_PLACE` and `CELL_TRANSFER` submission, readback and cancellation, and
+fails closed on a missing summary; it never falls back to v1.
 V1 remains available to non-phased operations. Stop requests remain v1.
 Every response — success or error — carries the version of the request it
 answers; only frames rejected before version validation (bad JSON, framing,
@@ -1836,6 +1837,7 @@ fake credentials and clocks; device and field acceptance remain separate gates.
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.82 | 2026-10-03 | Clarify (D-403 / D-413): Fleet uses existing UDS v2 for phased CELL_TRANSFER submission, readback and cancellation; missing phase summaries fail closed. OMX already accepts the additive grant in v2. Simulation dispatch gates and independent goal requirements remain unchanged. |
 | v1.81 | 2026-10-02 | Additive (D-421, feat/d421-fleet-cancel-all): Site Fleet 새 경로 `POST /api/fleet/cancel-all`(operator, §10.8) — 래치 없는 전체 주행 취소(대기 작업 `CANCELED`/`FLEET_CANCEL_ALL`, 대형 해제, 로봇마다 `swarm/cancel`·`navigation/cancel`·`line-follow/mode OFF`, 로봇별 `cancelled`/`failed`/`unreachable`, `evidence: CORE_REPLY_ONLY`). 발행 겹침 작업은 `UNKNOWN`/`FLEET_CANCEL_ALL_DURING_DISPATCH`. 창마다 취소 기록(`cancel_all_id`)을 남기고, 표시된 진행 중 작업의 CORE `nav.canceled` 는 `HOLD`/`FLEET_CANCEL_ALL` 로 로봇 점유를 푼다(사건이 없으면 그대로). §10.2 에 `/api/fleet/estop` 이 래치형 전체 비상 정지임을 명시(의미 불변). FLEET SRS CTR-002 개정. 로봇 계약(`/api/v1/*`)·이벤트·FleetAgent 프로토콜 변경 없음 |
 | v1.80 | 2026-10-02 | Corrective + Additive (D-407 관제 재실행, fix/d407-console-link-and-event-fields): **Corrective** `nav.line_stuck_answered` 의 `token_id` → `principal_ref`(비밀 아닌 이름: 설정 id, 없으면 프로세스 키 HMAC `anon-…`) — Fleet 사건 저장소가 `token` 이 든 키를 자격 증명으로 보고 `EVENT_NOT_AUDITABLE` 로 거부해 이 사건이 Fleet 감사에 남지 않았다. **Additive** `nav.line_stuck_opened` `rear_state`(`clear`·`blocked`·`unknown` — `rear_clearance_m` null 이 "띠가 비었다"와 "모른다"를 함께 뜻하던 것을 가름), 거부된 `BACK_AND_RETRY` 답에 `rear_blind_m`·`trail_m`·`trail_yaw_deg`·`trail_age_s`. FleetAgent 는 hub 의 모든 답을 한 수신 루프로 읽는다(사건 답이 쌓여 연결이 끊기던 결함; envelope 형식 변화 없음, `protocol_version` 1.0). 설정 `line_follow.recovery_console_grace_s`(3 s) |
 | v1.79 | 2026-10-02 | Additive (D-407, fix/d407-trail-age-and-recording-marker): `nav.line_stuck_local_attempt`·`nav.line_stuck_local_result` 에 `trail_age_s`(지나온 길의 마지막 전진 명령 뒤 경과, 단조 초). 사각 띠 후진은 그 값이 `line_follow.recovery_trail_max_age_s`(30 s) 이하일 때만 — 넘으면 `rear_blind`. 기존 필드 변화 없음 |

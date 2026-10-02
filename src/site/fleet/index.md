@@ -75,7 +75,7 @@
 ## 최근 기록
 
 - 2026-10-02 · uncommitted · feat(fleet): C4b wave 1 — Cell Job 하달 경로 (G4, G5, G3, G6)
-- 2026-10-02 · uncommitted · feat(fleet): D-421 전체 주행 취소를 main d5b3bd10 위에 다시 얹음
-- 2026-10-02 · uncommitted · docs(adr): 전체 주행 취소 ADR D-417 → D-421
-- 2026-10-02 · e223af71 · fix(fleet): D-417 재검토 — 표시를 목표 호출 전에, 시도·출처·유예로 맞춘다
-- 2026-10-02 · d3b0444b · fix(fleet): D-417 검토 반영 — CORE 확인된 취소가 로봇 점유를 푼다
+- 2026-10-03 · uncommitted · fix(fleet): preserve Cell transfer phase receipts over UDS v2
+- 2026-10-02 · uncommitted · fix(fleet): D-395 rev. 11 — 거리 없는 사각형 목격은 근거가 아니다
+- 2026-10-02 · uncommitted · styles.css 흐림 원시 값 → 공용 토큰
+- 2026-10-02 · uncommitted · fix(fleet): retain Cell transfer claims across site restart

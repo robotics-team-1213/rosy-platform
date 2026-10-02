@@ -142,6 +142,8 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         if len(database_paths) != 1:
             raise ValueError("Mission, proposal, audit, and resource claims must share one SQLite database")
     cell_job_store = CellJobStore(mission_service.store.path) if mission_configured else None
+    if cell_job_store is not None:
+        cell_job_store.recover_after_startup()
     cell_job_resolver = None
     if cell_job_compiler is not None:
         from rosy.execution.site.cell_submission import compile_cell_submission

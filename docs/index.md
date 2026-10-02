@@ -268,8 +268,8 @@
 
 ## 최근 기록
 
+- 2026-10-02 · uncommitted · docs(adr): D-395 개정 11 — 사각형 검출 후처리, 거리 없는 목격, LiDAR 물체; 학습 페인트 면적 문턱 제안
 - 2026-10-02 · uncommitted · docs(plans): D-395 S2 재시도 중단 — 이 호스트로는 4대 불가
 - 2026-10-02 · uncommitted · docs(adr): D-395 개정 10 — S2 시도와 믿는 자세의 출처
 - 2026-10-02 · uncommitted · refactor(sim): D-395 S2 bench and gz_multi back under the D-362 600-line budget
 - 2026-10-02 · uncommitted · docs(plans): D-395 S2 4대 Gazebo 실행 — 미완료, 호스트가 너무 느리다 (test/d395-s2-bench)
-- 2026-10-02 · uncommitted · fix(sim): D-395 S2 bench — independent review findings before the Gazebo slot

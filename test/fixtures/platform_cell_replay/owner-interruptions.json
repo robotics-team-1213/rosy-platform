@@ -1,0 +1,23 @@
+{
+  "accepted-before-owner-restart": {
+    "state_before_restart": "ACCEPTED",
+    "workflow_state": null,
+    "cancel_requested": false,
+    "object_may_be_held_before_restart": false,
+    "object_may_be_held_after_restart": false
+  },
+  "cancel-ack-before-owner-restart": {
+    "state_before_restart": "CANCEL_REQUESTED",
+    "workflow_state": "VERIFY_HOLD",
+    "cancel_requested": true,
+    "object_may_be_held_before_restart": true,
+    "object_may_be_held_after_restart": true
+  },
+  "release-command-before-terminal-record": {
+    "state_before_restart": "ACCEPTED",
+    "workflow_state": "RELEASE",
+    "cancel_requested": false,
+    "object_may_be_held_before_restart": false,
+    "object_may_be_held_after_restart": true
+  }
+}

@@ -14,6 +14,7 @@ from core_common.protocol.schemas import FleetCellTransferGrant
 
 from .dispatch_admission import release as release_claims
 from .dispatch_admission import reserve as reserve_claims
+from .dispatch_admission import normalize_resources
 from .mission_store import MissionConflict, _nonempty, _now
 from .sqlite_policy import configure_connection, enable_wal
 from .step_action_kinds import step_action_kind
@@ -260,6 +261,42 @@ class CellJobStore:
                 (status,),
             ).fetchone()
             return None if row is None else self._get(connection, row["mission_id"])
+
+    def recover_after_startup(self) -> int:
+        """Fence obsolete admitted Jobs while preserving attempts and occupancy claims."""
+        now = _now()
+        with closing(self._connect()) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            control = connection.execute(
+                "SELECT authority_epoch, generation FROM fleet_dispatch_control WHERE control_id=1",
+            ).fetchone()
+            rows = connection.execute(
+                """SELECT mission_id, current_step_index, authority_epoch, dispatch_generation
+                   FROM fleet_cell_jobs WHERE status IN ('READY', 'RUNNING', 'ACTION_SUCCEEDED')
+                     AND (authority_epoch != ? OR dispatch_generation != ?)""",
+                (control["authority_epoch"], control["generation"]),
+            ).fetchall()
+            for job in rows:
+                connection.execute(
+                    "UPDATE fleet_cell_jobs SET status='HOLD', reason='SITE_AUTHORITY_CHANGED', "
+                    "updated_at=? WHERE mission_id=?", (now, job["mission_id"]),
+                )
+                connection.execute(
+                    "UPDATE fleet_cell_steps SET status='HOLD', reason='SITE_AUTHORITY_CHANGED', "
+                    "updated_at=? WHERE mission_id=? AND step_index=? "
+                    "AND status IN ('READY', 'RUNNING', 'ACTION_SUCCEEDED')",
+                    (now, job["mission_id"], job["current_step_index"]),
+                )
+                self._event(connection, job["mission_id"], job["current_step_index"],
+                            "CELL_JOB_STARTUP_HOLD", "system", {
+                                "reason": "SITE_AUTHORITY_CHANGED",
+                                "previous_authority_epoch": job["authority_epoch"],
+                                "previous_dispatch_generation": job["dispatch_generation"],
+                                "authority_epoch": control["authority_epoch"],
+                                "dispatch_generation": control["generation"],
+                            })
+            connection.commit()
+        return len(rows)
 
     def admit(self, mission_id: str, *, actor_id: str, expected_generation: int) -> dict[str, Any]:
         actor_id = _nonempty("actor_id", actor_id, limit=96)
