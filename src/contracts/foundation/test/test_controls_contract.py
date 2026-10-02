@@ -75,3 +75,16 @@ def test_descriptor_discriminates_kinds_and_rejects_duplicate_ids():
         c.ControlsDescriptor.model_validate({**body, "items": body["items"] * 2})
     with pytest.raises(ValidationError):
         c.ControlsDescriptor.model_validate({**body, "items": [{"id": "x", "kind": "laser", "label": "x"}]})
+
+
+def test_gripper_may_announce_its_speed_limit():
+    presets = c.GripperPresets(open=1.0, half=0.5, close=0.0)
+    grip = c.GripperControl(id="gripper", label="그리퍼", joint="g", closed=0.0, open=1.0, presets=presets,
+                            max_velocity=0.5)
+    assert grip.max_velocity == 0.5
+    assert c.GripperControl(id="gripper", label="그리퍼", joint="g", closed=0.0, open=1.0,
+                            presets=presets).max_velocity is None
+    for bad in (0.0, -1.0, float("inf"), float("nan")):
+        with pytest.raises(ValidationError):
+            c.GripperControl(id="gripper", label="그리퍼", joint="g", closed=0.0, open=1.0, presets=presets,
+                             max_velocity=bad)

@@ -90,6 +90,9 @@ class GripperPresets(_Wire):
 
 
 class GripperControl(_Wire):
+    """Absolute gripper goals. ``max_velocity`` (rad/s, optional within /1): the device rejects a goal
+    whose |target - readback| / duration_s exceeds it, so the client sizes its duration from it."""
+
     id: str = Field(pattern=_ID)
     kind: Literal["gripper"] = "gripper"
     label: str = Field(min_length=1, max_length=40)
@@ -99,6 +102,7 @@ class GripperControl(_Wire):
     unit: Literal["rad"] = "rad"
     presets: GripperPresets
     readback: tuple[Literal["position", "grasp"], ...] = ("position", "grasp")
+    max_velocity: float | None = Field(None, gt=0, allow_inf_nan=False)
 
     @model_validator(mode="after")
     def _within(self) -> "GripperControl":
