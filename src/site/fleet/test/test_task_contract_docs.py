@@ -23,7 +23,7 @@ def test_task_contract_is_versioned_documented_and_wired_to_the_site_stack():
     web_contract = web + roster
     compose = (ROOT / "deploy/site/compose.yaml").read_text(encoding="utf-8")
 
-    assert "**Version:** v1.78" in reference
+    assert "**Version:** v1.79" in reference
     assert "## 10.16 Fleet goal-evidence producer contract (D-348)" in reference
     assert "`/api/fleet/goal-evidence`" in reference
     assert "X-Goal-Evidence-Token" in reference
@@ -32,6 +32,8 @@ def test_task_contract_is_versioned_documented_and_wired_to_the_site_stack():
     assert "## 10.13 Fleet proposal, Mission draft, and operator admission (D-333/D-334)" in reference
     assert "`/api/fleet/proposals/{proposal_id}/resolve`" in reference
     assert "`/api/fleet/missions/{mission_id}/admit`" in reference
+    assert "`/api/fleet/cell-jobs/{mission_id}`" in reference
+    assert "different `principal ID`" in reference or "different principal ID" in reference
     assert "`physical_submission: NOT_CONNECTED`" in reference
     assert "GetStopState(LocalStopQuery)" in reference
     assert "`FleetCellTransferGrant`" in reference
@@ -87,7 +89,7 @@ def test_site_fleet_intent_and_message_boundaries_are_governed_together():
     adr = (ROOT / "docs/adr/D-293-site-fleet-intent-api-contracts.md").read_text(
         encoding="utf-8")
 
-    assert "**Version:** v1.77" in reference
+    assert "**Version:** v1.79" in reference
     assert "X-Frame-Width" in reference and "X-Frame-Height" in reference
     assert "X-Frame-Rotation-Deg" in reference
     assert (

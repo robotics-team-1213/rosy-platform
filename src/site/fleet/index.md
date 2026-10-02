@@ -72,8 +72,8 @@
 
 ## 최근 기록
 
+- 2026-10-02 · uncommitted · D-413 Task 4 Cell Job journal and approval boundary
 - 2026-10-02 · uncommitted · D-407 판단 요청 — main 병합, API Ref v1.77
 - 2026-10-02 · 95e13278 · fix(fleet): D-395 S1 3회차 T1–T3 — 폴 간격과 무관한 도약 판정, 시간 초과 결정 확인, needs_human 은 깃발
 - 2026-10-02 · uncommitted · D-407 판단 요청 검토 반영 — 전송 실패·지속 기록·확인 단계
 - 2026-10-02 · uncommitted · D-407 판단 요청 — 관제 목록과 다섯 답 중계
-- 2026-10-02 · uncommitted · CI 삼각측량 — 시크릿 스캔 면제·해시 문서 규약·스코어카드 기준선·설치 문서 브라우저 시험
