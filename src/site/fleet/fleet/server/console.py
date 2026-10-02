@@ -32,7 +32,6 @@ from fleet.formation.geometry import DEFAULT_SPACING, Formation
 from fleet.hub.hub import HubError, SiteHub
 from fleet.localization import trust
 from fleet.server import bays, traffic
-from fleet.server.line_stuck import LineStuckBoard
 from fleet.server.console_view import (
     _error_of, _formation_stream_evidence, _shown, _stream_evidence,  # noqa: F401
 )
@@ -127,8 +126,6 @@ class FleetConsole:
         #: 신호등 컨트롤러(ROSY-SIGNAL-001). signals.yaml 이 없는 사이트도 같은 서버로
         #: 뜬다 — 없으면 신호등 기능은 조용히 비어 있다("signals": {}).
         self._signals = signal_console
-        #: D-407: open lane stucks waiting for an operator answer (CORE owns and judges them).
-        self.line_stuck = LineStuckBoard(clock)
 
     @property
     def robot_ids(self) -> list[str]:
@@ -237,7 +234,6 @@ class FleetConsole:
                 robots.append({"robot_id": robot_id, "online": True, "goal": goal,
                                "queued": _shown(queued), "error": None, "state": result})
         self._remember(robots)
-        self.line_stuck.observe(robots, self._hub.registry.events_since)
         await self._handoff_dead_leader(robots)
         await self._run_traffic(robots)
         await self._manage_swarm_speed(robots)
@@ -252,7 +248,6 @@ class FleetConsole:
             view = self._localization_view
             row["localization"] = trust.badge(
                 row["state"], view(row["robot_id"]) if view is not None else None)
-            row["line_stuck"] = self.line_stuck.view(row["robot_id"])
         online = sum(1 for r in robots if r["online"])
         if self._signals is not None:
             # 신호등 갱신은 로봇 gather 뒤에서, 그리고 실패해도 로봇 상태를 흔들지 않는다.
@@ -311,10 +306,6 @@ class FleetConsole:
         if mode not in {"IR_LINE", "OFF"}:
             raise ValueError("unsupported Fleet line-follow mode")
         return await self._client(robot_id).line_follow_mode(mode)
-
-    async def line_stuck_decision(self, robot_id: str, stuck_id: str, decision: str) -> dict:
-        """D-407: forward one operator answer; CORE checks the stuck id and refuses with 409."""
-        return await self._client(robot_id).line_stuck_decision(stuck_id, decision)
 
     async def goal(self, robot_id: str, x: float, y: float, yaw: float = 0.0, *,
                    task_id: str | None = None, attempt_id: str | None = None,

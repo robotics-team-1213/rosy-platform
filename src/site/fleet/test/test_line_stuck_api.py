@@ -7,7 +7,7 @@ from hashlib import sha256
 from fastapi.testclient import TestClient
 
 from core_common.protocol.schemas import EventMessage
-from fakes import FakeClock, FakeRobot, run
+from fakes import FakeClock, FakeRobot
 from fleet.server.app import create_app
 from fleet.server.console import FleetConsole
 from fleet.server.line_stuck import LineStuckBoard
@@ -57,15 +57,20 @@ def _opened_event(stuck_id="stuck-abc", seq=4) -> EventMessage:
                               "preview_seq": 812, "last_lane": None})
 
 
-def test_the_snapshot_row_carries_the_open_stuck_with_clearances_from_the_opened_event():
+def _row(client) -> dict:
+    response = client.get("/api/fleet/state", headers=_auth(VIEWER))
+    assert response.status_code == 200, response.text
+    return response.json()["robots"][0]
+
+
+def test_the_state_row_carries_the_open_stuck_with_clearances_from_the_opened_event(tmp_path):
     robot = FakeRobot("rosy_01", state=_state())
     console = _console(robot)
     console.hub.registry.record("rosy_01").events.extend(
         [_opened_event("stuck-old", 2), _opened_event()])
+    client, _ = _named_app(console, tmp_path)
 
-    row = run(console.snapshot())["robots"][0]
-
-    stuck = row["line_stuck"]
+    stuck = _row(client)["line_stuck"]
     assert stuck["stuck_id"] == "stuck-abc" and stuck["phase"] == "ASKING"
     assert stuck["cause"] == "obstacle_ahead" and stuck["max_attempts"] == 2
     assert stuck["front_clearance_m"] == 0.12 and stuck["rear_clearance_m"] == 0.31
@@ -74,27 +79,29 @@ def test_the_snapshot_row_carries_the_open_stuck_with_clearances_from_the_opened
     assert stuck["fleet_answer"] is None
 
 
-def test_without_the_agent_event_the_stuck_still_shows_with_unknown_clearances():
-    row = run(_console(FakeRobot("rosy_01", state=_state())).snapshot())["robots"][0]
+def test_without_the_agent_event_the_stuck_still_shows_with_unknown_clearances(tmp_path):
+    client, _ = _named_app(_console(FakeRobot("rosy_01", state=_state())), tmp_path)
+
+    row = _row(client)
 
     assert row["line_stuck"]["stuck_id"] == "stuck-abc"
     assert row["line_stuck"]["front_clearance_m"] is None
     assert row["line_stuck"]["opened_event"] is False
 
 
-def test_a_closed_stuck_leaves_the_list_and_an_unreachable_robot_keeps_it_marked():
+def test_a_closed_stuck_leaves_the_list_and_an_unreachable_robot_keeps_it_marked(tmp_path):
     robot = FakeRobot("rosy_01", state=_state())
-    console = _console(robot)
-    run(console.snapshot())
+    client, _ = _named_app(_console(robot), tmp_path)
+    _row(client)
 
     robot.state_error = ConnectionError("down")
-    held = run(console.snapshot())["robots"][0]["line_stuck"]
+    held = _row(client)["line_stuck"]
     assert held["stuck_id"] == "stuck-abc" and held["robot_online"] is False
 
     robot.state_error = None
     robot._state = _state(stuck=None)
-    assert run(console.snapshot())["robots"][0]["line_stuck"] is None
-    assert console.line_stuck.pending() == []
+    assert _row(client)["line_stuck"] is None
+    assert client.app.state.line_stuck.pending() == []
 
 
 def test_board_reports_how_old_its_observation_is():
@@ -130,8 +137,7 @@ def test_an_operator_answer_is_forwarded_and_audited_with_the_principal(tmp_path
     body = response.json()
     assert body["actor_id"] == "op-7" and body["result"]["outcome"] == "hold"
     assert body["answer"]["principal_id"] == "op-7" and body["answer"]["accepted"] is True
-    run(console.snapshot())
-    assert console.line_stuck.view("rosy_01")["fleet_answer"]["decision"] == "WAIT"
+    assert _row(client)["line_stuck"]["fleet_answer"]["decision"] == "WAIT"
     audit = store.api_audit()
     assert audit[0]["principal_id"] == "op-7" and audit[0]["status_code"] == 200
     assert audit[0]["path"] == "/api/fleet/robots/rosy_01/line-stuck/decision"
@@ -183,7 +189,7 @@ def test_core_stuck_id_mismatch_reaches_the_operator_verbatim_as_409(tmp_path):
     assert response.json()["detail"] == {
         "code": "STUCK_ID_MISMATCH", "robot_id": "rosy_01", "robot_status": 409,
         "message": "no open stuck with this id (late or wrong answer)"}
-    answer = console.line_stuck.answers()[-1]
+    answer = client.app.state.line_stuck.answers()[-1]
     assert answer["accepted"] is False and answer["code"] == "STUCK_ID_MISMATCH"
     assert answer["principal_id"] == "op-7"
 
@@ -228,4 +234,4 @@ def test_an_unreachable_robot_is_502_and_still_audited(tmp_path):
                            headers=_auth(OPERATOR))
 
     assert response.status_code == 502
-    assert console.line_stuck.answers()[-1]["accepted"] is False
+    assert client.app.state.line_stuck.answers()[-1]["accepted"] is False

@@ -8,15 +8,14 @@ from __future__ import annotations
 
 import hashlib
 import json
-from typing import Optional
-
-from typing import Literal
+from typing import Literal, Optional
 
 from fastapi import Depends, HTTPException, Request, Response
 from pydantic import BaseModel, ConfigDict, Field
 
 from fleet.hub.hub import HubError
 from fleet.server.http_errors import http_error
+from fleet.server.line_stuck import LineStuckBoard
 from fleet.server.site_auth import SitePrincipal
 from fleet.server.site_lanes import site_lanes_payload
 from fleet.server.signals import SignalApiError
@@ -55,9 +54,19 @@ class LineStuckDecisionRequest(BaseModel):
 def install_console_routes(app, *, console, sightings, require_viewer,
                            read_guard, operator_guard, require_operator,
                            site_lanes=None) -> None:
+    # D-407: open lane stucks, read from each gather. CORE's stuck block is the truth.
+    board = app.state.line_stuck = LineStuckBoard()
+
+    async def gathered() -> dict:
+        snapshot = await console.snapshot()
+        board.observe(snapshot["robots"], console.hub.registry.events_since)
+        for row in snapshot["robots"]:
+            row["line_stuck"] = board.view(row["robot_id"])
+        return snapshot
+
     @app.get("/api/fleet/state", dependencies=read_guard, tags=["fleet"])
     async def fleet_state() -> dict:
-        return await console.snapshot()
+        return await gathered()
 
     @app.get("/api/fleet/session", dependencies=read_guard, tags=["fleet-auth"])
     def fleet_session(request: Request) -> dict:
@@ -99,17 +108,19 @@ def install_console_routes(app, *, console, sightings, require_viewer,
 
     @app.get("/api/fleet/line-stuck", dependencies=read_guard, tags=["line-stuck"])
     async def line_stuck_pending() -> dict:
-        # D-407: re-gather so the list is as fresh as /state; CORE's stuck block is the truth.
-        await console.snapshot()
-        return {"pending": console.line_stuck.pending(), "answers": console.line_stuck.answers()}
+        await gathered()
+        return {"pending": board.pending(), "answers": board.answers()}
 
     @app.post("/api/fleet/robots/{robot_id}/line-stuck/decision", dependencies=operator_guard,
               tags=["line-stuck"])
     async def line_stuck_decision(robot_id: str, body: LineStuckDecisionRequest,
                                   principal: SitePrincipal = Depends(require_operator)) -> dict:
-        board = console.line_stuck
+        client = console.clients().get(robot_id)
+        if client is None:
+            raise http_error(HubError("UNKNOWN_ROBOT", robot_id))
         try:
-            result = await console.line_stuck_decision(robot_id, body.stuck_id, body.decision)
+            # Forwarded unchanged with the robot credential; CORE alone judges the answer.
+            result = await client.line_stuck_decision(body.stuck_id, body.decision)
         except RobotApiError as exc:
             # CORE's refusal reaches the operator verbatim (STUCK_ID_MISMATCH, RESUME refused
             # with its reason, EMERGENCY_ACTIVE, ...). 409 stays 409; anything else is 502.
@@ -119,11 +130,10 @@ def install_console_routes(app, *, console, sightings, require_viewer,
             raise HTTPException(status_code=409 if exc.status == 409 else 502, detail={
                 "code": exc.code, "message": exc.message, "robot_id": robot_id,
                 "robot_status": exc.status}) from exc
-        except (HubError, OSError) as exc:
-            if not (isinstance(exc, HubError) and exc.code == "UNKNOWN_ROBOT"):
-                board.record(robot_id=robot_id, stuck_id=body.stuck_id, decision=body.decision,
-                             principal_id=principal.principal_id, accepted=False,
-                             code=getattr(exc, "code", type(exc).__name__), message=str(exc))
+        except OSError as exc:
+            board.record(robot_id=robot_id, stuck_id=body.stuck_id, decision=body.decision,
+                         principal_id=principal.principal_id, accepted=False,
+                         code=type(exc).__name__, message=str(exc))
             raise http_error(exc) from exc
         answer = board.record(robot_id=robot_id, stuck_id=body.stuck_id, decision=body.decision,
                               principal_id=principal.principal_id, accepted=True,
