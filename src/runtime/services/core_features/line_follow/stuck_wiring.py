@@ -68,11 +68,11 @@ class StuckRecoveryMixin:
         self._trail.clear()
 
     def stuck_decision(self, stuck_id: str, decision: str, *, by: str,
-                       now: Optional[float] = None) -> str:
+                       token_id: Optional[str] = None, now: Optional[float] = None) -> str:
         """Console answer (D-407 §2). Raises AnswerRefused; returns hold|back|resume|manual|idle."""
         current = float(self._clock() if now is None else now)
         with self._lock:
-            outcome = self._recovery.answer(current, stuck_id, decision, by)
+            outcome = self._recovery.answer(current, stuck_id, decision, by, token_id)
             # Any accepted answer outdates a twist computed before it (e.g. a back-off
             # before WAIT): apply_if_current then rejects it (review L1).
             self._evidence_revision += 1

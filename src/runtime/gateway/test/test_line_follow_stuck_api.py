@@ -177,3 +177,33 @@ def test_manager_wants_body_points_only_near_a_stuck():
     m.observe_clearance(1.0, received_at=0.0)
     m.tick(0.01)
     assert not m.wants_body_points                      # tracking, nothing near
+
+
+def test_manual_answer_respects_the_calibration_lease_and_cancels_navigation(core_client):
+    """Review M3: MANUAL goes through the POST /mode rules (lease, nav/swarm cancel)."""
+    client, services, stuck_id = _stuck(core_client)
+    services.calibration.start(kind="lidar", label="other", ttl_s=30, owner_id="someone-else",
+                               owner_role="operator")
+    refused = client.post(URL, json={"stuck_id": stuck_id, "decision": "MANUAL"},
+                          headers=OPERATOR)
+    assert refused.status_code == 409 and refused.json()["error"]["code"] == "CALIBRATION_ACTIVE"
+    assert services.line_follow.status().stuck.stuck_id == stuck_id      # not consumed
+
+    client2, services2, stuck2 = _stuck(core_client)
+    cancels = []
+    original = services2.nav.cancel
+    services2.nav.cancel = lambda source=None: (cancels.append(source), original(source=source))
+    done = client2.post(URL, json={"stuck_id": stuck2, "decision": "MANUAL"}, headers=OPERATOR)
+    assert done.status_code == 200 and services2.modes.mode is Mode.MANUAL
+    assert cancels and cancels[-1].startswith("mode:")
+
+
+def test_answer_audit_records_the_token(core_client):
+    """Review L2: the answered event names the token, not only the role."""
+    client, services, stuck_id = _stuck(core_client)
+    seen = []
+    services.events.subscribe(lambda event: seen.append(event))
+    client.post(URL, json={"stuck_id": stuck_id, "decision": "WAIT"}, headers=OPERATOR)
+    answered = [e for e in seen if e.type == "nav.line_stuck_answered"]
+    assert answered and answered[0].data["by"] == "operator"
+    assert answered[0].data["token_id"]

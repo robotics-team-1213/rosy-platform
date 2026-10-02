@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 from core_api_web.api.deps import AuthContext, CoreServicesLike, get_services
 from core_api_web.api.errors import ApiError
 from core_api_web.api.v1.common import (
+    apply_mode,
     enter_navigation_mode,
     operator,
     require_calibration_owner,
@@ -129,28 +130,25 @@ def decide_line_stuck(body: LineStuckDecisionRequest,
                       auth: AuthContext = Depends(operator),
                       svc: CoreServicesLike = Depends(get_services)):
     """D-407 §2: WAIT | RESUME | BACK_AND_RETRY | MANUAL | ABORT for the open stuck id."""
-    if body.decision in ("RESUME", "BACK_AND_RETRY"):
-        # Answers that move the wheels respect the calibration lease and e-stop; WAIT,
-        # MANUAL (stops line-follow) and ABORT (IDLE) only stop, so they stay open.
+    if body.decision in ("RESUME", "BACK_AND_RETRY", "MANUAL"):
+        # Answers that move the wheels (or hand them to a driver, MANUAL) respect the
+        # calibration lease like POST /mode does; checked before the stuck is consumed.
+        # WAIT holds and ABORT goes to IDLE, so they stay open like e-stop.
         require_calibration_owner(svc, auth, "line-follow stuck decision")
-        if svc.safety.estop or svc.modes.is_emergency:
-            raise ApiError("EMERGENCY_ACTIVE", 409, "release emergency stop first")
+    if body.decision in ("RESUME", "BACK_AND_RETRY") and (
+            svc.safety.estop or svc.modes.is_emergency):
+        raise ApiError("EMERGENCY_ACTIVE", 409, "release emergency stop first")
     try:
-        outcome = svc.line_follow.stuck_decision(body.stuck_id, body.decision, by=auth.role)
+        outcome = svc.line_follow.stuck_decision(
+            body.stuck_id, body.decision, by=auth.role, token_id=auth.token_id)
     except LineStuckRefused as exc:
         raise ApiError(exc.code, 409, str(exc)) from exc
     if outcome in ("manual", "idle"):
-        status = svc.line_follow.stop()
+        # Line-follow already stopped under its lock; the rest is POST /mode (nav and swarm
+        # cancel on MANUAL, mode.changed, state).
         svc.command.clear_navigation()
-        svc.state.set_line_follow(status)
-        target = Mode.MANUAL if outcome == "manual" else Mode.IDLE
-        if svc.modes.mode is not target:
-            ok, reason = svc.modes.transition(target)
-            if not ok:
-                raise ApiError("MODE_CONFLICT", 409, reason)
-            svc.state.set_mode(RobotMode(target.value))
-            svc.events.publish("mode.changed", source="api",
-                               data={"from": "api", "to": target.value, "by": auth.role})
+        apply_mode(svc, auth, Mode.MANUAL if outcome == "manual" else Mode.IDLE)
+        svc.state.set_line_follow(svc.line_follow.status())
     else:
         svc.state.set_line_follow(svc.line_follow.status())
     return {**_status(svc), "outcome": outcome}

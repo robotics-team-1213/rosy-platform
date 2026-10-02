@@ -168,19 +168,20 @@ class StuckRecovery:
             self._close(reason, now)
 
     # ---- console ----------------------------------------------------------------
-    def answer(self, now: float, stuck_id: str, decision: str, by: str) -> str:
+    def answer(self, now: float, stuck_id: str, decision: str, by: str,
+               token_id: Optional[str] = None) -> str:
         """Apply a console answer; returns hold | back | resume | manual | idle."""
         if decision not in DECISIONS:
             raise AnswerRefused("VALIDATION_ERROR", f"unknown stuck decision {decision!r}")
         if self._id is None or stuck_id != self._id:
-            self._answered(stuck_id, decision, by, False, "stuck_id_mismatch")
+            self._answered(stuck_id, decision, by, token_id, False, "stuck_id_mismatch")
             raise AnswerRefused("STUCK_ID_MISMATCH",
                                 "no open stuck with this id (late or wrong answer)")
         why = self._answer_refusal(decision, now)
         if why is not None:
-            self._answered(stuck_id, decision, by, False, why)
+            self._answered(stuck_id, decision, by, token_id, False, why)
             raise AnswerRefused("STUCK_DECISION_REFUSED", f"{decision} refused: {why}")
-        self._answered(stuck_id, decision, by, True, None)
+        self._answered(stuck_id, decision, by, token_id, True, None)
         self._last_answer = decision
         if decision == "WAIT":
             if self._phase == BACKING:
@@ -332,11 +333,11 @@ class StuckRecovery:
                   "decisions": list(DECISIONS)},
         )
 
-    def _answered(self, stuck_id: str, decision: str, by: str, accepted: bool,
-                  reason: Optional[str]) -> None:
+    def _answered(self, stuck_id: str, decision: str, by: str, token_id: Optional[str],
+                  accepted: bool, reason: Optional[str]) -> None:
         self._events.publish(
             "nav.line_stuck_answered", source=_SOURCE,
-            data={"stuck_id": stuck_id, "decision": decision, "by": by,
+            data={"stuck_id": stuck_id, "decision": decision, "by": by, "token_id": token_id,
                   "accepted": accepted, "reason": reason},
         )
 
