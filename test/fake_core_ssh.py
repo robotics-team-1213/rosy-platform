@@ -17,6 +17,7 @@ import re
 import secrets
 import struct
 import threading
+import time
 
 # The real profile, captured before any test redirects HOME. 2026-10-02: a mutation run of the enroll
 # tool with default paths wrote into the operator's real ~/.ssh/config and broke every ssh on that PC.
@@ -37,11 +38,10 @@ def isolate_home(tmp_path: Path, monkeypatch) -> Path:
 
 
 def real_ssh_snapshot() -> dict[str, tuple[int, int]]:
-    """Size and mtime of every file a tool could write in the real ~/.ssh (config, known_hosts_rosy, rosy_*)."""
+    """Size and mtime of every entry in the real ~/.ssh (a new name, a removed one or a change all count)."""
     if not REAL_SSH_DIR.is_dir():
         return {}
-    return {path.name: (path.stat().st_size, path.stat().st_mtime_ns) for path in REAL_SSH_DIR.iterdir()
-            if path.is_file() and (path.name in ("config", "known_hosts_rosy") or path.name.startswith("rosy"))}
+    return {path.name: (path.stat().st_size, path.stat().st_mtime_ns) for path in REAL_SSH_DIR.iterdir()}
 
 LABEL = re.compile(r"[a-z0-9][a-z0-9._:-]{0,47}")
 CLIENT_TYPES = {"ssh-ed25519", "sk-ssh-ed25519@openssh.com",
@@ -68,7 +68,9 @@ def fingerprint(public_key: str) -> str:
 
 class FakeCore:
     def __init__(self, *, codes: dict[str, str] | None = None, hostname: str = "rosy-pinky-test1",
-                 host_keys: list[str] | None = None):
+                 host_keys: list[str] | None = None, redirect: str | None = None, delay_keys: float = 0.0):
+        self.redirect = redirect                # every request answered 302 to this base URL
+        self.delay_keys = delay_keys            # POST /keys sleeps this long (applied before answering)
         self.codes = dict(codes or {})          # code -> role, one use
         self.hostname = hostname
         self.host_keys = list(host_keys if host_keys is not None else [
@@ -102,6 +104,8 @@ class FakeCore:
 
     def _route(self, method: str, path: str, headers, body: dict | None) -> tuple[int, dict | None]:
         self.requests.append((method, path, body))
+        if self.redirect is not None:
+            return 302, {"location": self.redirect + path}
         if method == "POST" and path == "/api/v1/auth/pair":
             code = (body or {}).get("code")
             role = self.codes.pop(code, None) if isinstance(code, str) else None
@@ -129,7 +133,9 @@ class FakeCore:
         if method == "GET" and route == "/keys":
             return 200, {"keys": list(self.keys.values())}
         if method == "POST" and route == "/keys":
-            return self._add(body or {})
+            answer = self._add(body or {})
+            time.sleep(self.delay_keys)
+            return answer
         if method == "DELETE" and route.startswith("/keys/"):
             label = route[len("/keys/"):]
             if label not in self.keys:
@@ -168,6 +174,8 @@ class FakeCore:
                 status, payload = core._route(method, self.path, self.headers, body)
                 data = b"" if payload is None else json.dumps(payload).encode("utf-8")
                 self.send_response(status)
+                if status == 302:
+                    self.send_header("Location", payload["location"])
                 if data:
                     self.send_header("Content-Type", "application/json")
                 self.send_header("Content-Length", str(len(data)))

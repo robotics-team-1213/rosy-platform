@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import base64
 import importlib.util
+import os
+import re
 from pathlib import Path
 import shutil
 
@@ -58,26 +60,50 @@ def paths(tmp_path):
 
 
 class FakeSsh:
-    """`ssh -G -F <file> <alias>`: answers with the HostName of the alias's block, like OpenSSH would."""
+    """`ssh -G -F <file> <alias>` with OpenSSH's rule: for each option the first value obtained wins
+    (IdentityFile accumulates). Host patterns match with fnmatch; Match blocks are not modelled.
+    Keyword overrides replace a resolved value, to fake a config that resolves elsewhere."""
 
-    def __init__(self, code: int = 0, hostname: str | None = None):
-        self.code, self.hostname = code, hostname
+    def __init__(self, code: int = 0, **override):
+        self.code, self.override = code, override
         self.calls: list[list[str]] = []
 
     def __call__(self, argv: list[str]) -> tuple[int, str, str]:
+        import fnmatch
+
         self.calls.append(argv)
         if self.code:
             return self.code, "", "line 9: no argument after keyword \"proxycommand\""
-        lines = Path(argv[argv.index("-F") + 1]).read_text(encoding="utf-8").splitlines()
-        start = lines.index(f"Host {argv[-1]}")
-        hostname = self.hostname or lines[start + 1].split()[1]
-        return 0, f"host {argv[-1]}\nhostname {hostname}\nuser rosy\n", ""
+        alias = argv[-1]
+        found: dict[str, str] = {}
+        identities: list[str] = []
+        active = True
+        for raw in Path(argv[argv.index("-F") + 1]).read_text(encoding="utf-8").splitlines():
+            words = raw.split(None, 1)
+            if not words or words[0].startswith("#"):
+                continue
+            key, value = words[0].lower(), (words[1].strip().strip('"') if len(words) > 1 else "")
+            if key == "host":
+                active = any(fnmatch.fnmatchcase(alias, pattern) for pattern in value.split())
+            elif active and key == "identityfile":
+                identities.append(value)
+            elif active:
+                found.setdefault(key, value)
+        resolved = {"hostname": found.get("hostname", alias), "user": found.get("user", "me"),
+                    "identityfile": identities or ["~/.ssh/id_ed25519"],
+                    "userknownhostsfile": found.get("userknownhostsfile", "~/.ssh/known_hosts")}
+        resolved.update(self.override)
+        files = resolved["identityfile"]
+        out = [f"host {alias}", f"hostname {resolved['hostname']}", f"user {resolved['user']}"]
+        out += [f"identityfile {item}" for item in ([files] if isinstance(files, str) else files)]
+        out.append(f"userknownhostsfile {resolved['userknownhostsfile']}")
+        return 0, "\n".join(out) + "\n", ""
 
 
 def run(core: FakeCore, paths: dict, *extra: str, code: str = ADMIN_CODE, keygen=None, passphrase: str = "",
-        ssh=None):
+        ssh=None, robot: str = ROBOT, timeout: float = 25.0):
     keygen = keygen or FakeKeygen()
-    argv = [ROBOT, "--label", "dev:laptop", "--key", str(paths["key"]),
+    argv = [robot, "--label", "dev:laptop", "--key", str(paths["key"]),
             "--known-hosts", str(paths["known_hosts"]), "--ssh-config", str(paths["config"]), *extra]
     prompts: list[str] = []
 
@@ -86,7 +112,8 @@ def run(core: FakeCore, paths: dict, *extra: str, code: str = ADMIN_CODE, keygen
         return code
 
     status = tool.main(argv, ask_code=ask_code, ask_passphrase=lambda prompt: passphrase, keygen=keygen,
-                       client_for=lambda robot: tool.CoreClient(core.base_url), ssh=ssh or FakeSsh())
+                       client_for=lambda robot: tool.CoreClient(core.base_url, timeout=timeout),
+                       ssh=ssh or FakeSsh())
     return status, keygen, prompts
 
 
@@ -215,7 +242,10 @@ def test_existing_config_is_backed_up_before_it_is_edited(paths, capsys):
     assert f"backup {backups[0]}" in _no_token_leak(core, capsys)
 
 
-@pytest.mark.parametrize("ssh", [FakeSsh(code=255), FakeSsh(hostname="192.0.2.99")], ids=["parse-error", "elsewhere"])
+@pytest.mark.parametrize("ssh", [FakeSsh(code=255), FakeSsh(hostname="192.0.2.99"), FakeSsh(user="pinky"),
+                                 FakeSsh(identityfile=["~/.ssh/id_ed25519"]),
+                                 FakeSsh(userknownhostsfile="~/.ssh/known_hosts")],
+                         ids=["parse-error", "elsewhere", "user", "identity", "known-hosts"])
 def test_config_that_ssh_cannot_use_is_rolled_back(ssh, paths, capsys):
     paths["config"].parent.mkdir(parents=True)
     original = "Host other\n    HostName 192.0.2.99\n"
@@ -335,11 +365,18 @@ def test_rerun_is_idempotent_and_replaces_changed_host_keys(paths, capsys):
         assert run(core, paths, code="JKMN-PQRS")[0] == 0
         known_once = paths["known_hosts"].read_text(encoding="ascii")
         config_once = paths["config"].read_text(encoding="utf-8")
-        # The card was re-flashed: new host keys replace the old ones, nothing is duplicated.
+        # The card was re-flashed: changed host keys are refused until the operator accepts them.
+        old_host_key = core.host_keys[0]
         core.host_keys = [ed25519_public_key(b"reflashed", "root@x")]
         core.codes["TUVW-XYZ2"] = "administrator"
-        assert run(core, paths, code="TUVW-XYZ2")[0] == 0
-        assert core.logged_out == core.issued and len(core.issued) == 3
+        assert run(core, paths, code="TUVW-XYZ2")[0] == 1
+        assert paths["known_hosts"].read_text(encoding="ascii") == known_once
+        refused = capsys.readouterr()
+        assert fingerprint(old_host_key) in refused.err and fingerprint(core.host_keys[0]) in refused.err
+        assert "--accept-new-host-keys" in refused.err
+        core.codes["ABCD-2345"] = "administrator"
+        assert run(core, paths, "--accept-new-host-keys", code="ABCD-2345")[0] == 0
+        assert core.logged_out == core.issued and len(core.issued) == 4
     assert known_once.count(HOST) == 1
     known = paths["known_hosts"].read_text(encoding="ascii").splitlines()
     assert known == [f"{HOST},{ROBOT} " + " ".join(core.host_keys[0].split()[:2])]
@@ -348,6 +385,7 @@ def test_rerun_is_idempotent_and_replaces_changed_host_keys(paths, capsys):
     assert config.count(f"Host {HOST}\n") == 1
     text = _no_token_leak(core, capsys)
     assert "already enrolled" in text and "replaced" in text
+    assert "expires 2026-12-31T00:00:00Z" in text  # the existing expiry is shown on "already enrolled"
 
 
 def test_other_known_hosts_and_config_entries_are_kept(paths, capsys):
@@ -356,7 +394,9 @@ def test_other_known_hosts_and_config_entries_are_kept(paths, capsys):
     paths["known_hosts"].write_text("192.0.2.99 ssh-ed25519 AAAAother\n", encoding="ascii")
     with FakeCore(codes={ADMIN_CODE: "administrator"}) as core:
         assert run(core, paths)[0] == 0
-    assert paths["config"].read_text(encoding="utf-8").startswith("Host other\n    HostName 192.0.2.99\n")
+    config = paths["config"].read_text(encoding="utf-8")
+    assert "Host other\n    HostName 192.0.2.99\n" in config
+    assert config.index(f"Host {HOST}\n") < config.index("Host other\n")  # the managed block goes first
     assert "192.0.2.99 ssh-ed25519 AAAAother" in paths["known_hosts"].read_text(encoding="ascii").splitlines()
     _no_token_leak(core, capsys)
 
@@ -443,3 +483,176 @@ def test_unreachable_robot_is_a_clean_error(paths, capsys):
                        client_for=lambda robot: tool.CoreClient("http://127.0.0.1:9", timeout=2))
     assert status == 1
     assert "not reachable" in capsys.readouterr().err
+
+
+# --- review 2026-10-02 -------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("hostname", ["evil-host", "rosy", "rosy-", "rosy-Pinky", "other.rosy-pinky"])
+def test_only_rosy_hostnames_become_aliases(hostname, paths, capsys):
+    with FakeCore(codes={ADMIN_CODE: "administrator"}, hostname=hostname,
+                  host_keys=[ed25519_public_key(b"host")]) as core:
+        status, _, _ = run(core, paths)
+    assert status == 1
+    assert core.keys == {} and not paths["config"].exists()
+    assert "unusable hostname" in _no_token_leak(core, capsys)
+
+
+def test_a_managed_block_pointing_elsewhere_needs_replace(paths, capsys):
+    with FakeCore(codes={ADMIN_CODE: "administrator", "JKMN-PQRS": "administrator",
+                         "TUVW-XYZ2": "administrator"}) as core:
+        assert run(core, paths)[0] == 0
+        before = paths["config"].read_text(encoding="utf-8")
+        assert run(core, paths, code="JKMN-PQRS", robot="192.0.2.20")[0] == 1
+        assert paths["config"].read_text(encoding="utf-8") == before
+        assert "--replace" in capsys.readouterr().err
+        assert run(core, paths, "--replace", code="TUVW-XYZ2", robot="192.0.2.20")[0] == 0
+    config = paths["config"].read_text(encoding="utf-8")
+    assert "    HostName 192.0.2.20\n" in config and ROBOT not in config
+    _no_token_leak(core, capsys)
+
+
+@pytest.mark.parametrize("prelude", [
+    "Host *\n    User pinky\n    IdentityFile ~/.ssh/other\n",
+    "Host rosy-*\n    User pinky\n    UserKnownHostsFile ~/.ssh/known_hosts\n",
+])
+def test_the_managed_block_wins_over_earlier_blocks(prelude, paths, capsys):
+    paths["config"].parent.mkdir(parents=True)
+    paths["config"].write_text("# mine\n" + prelude, encoding="utf-8")
+    ssh = FakeSsh()
+    with FakeCore(codes={ADMIN_CODE: "administrator"}) as core:
+        assert run(core, paths, ssh=ssh)[0] == 0, capsys.readouterr().err
+    config = paths["config"].read_text(encoding="utf-8")
+    assert config.startswith("# mine\n# >>> rosy-ssh ")
+    assert config.endswith(prelude)
+    out = ssh(["ssh", "-G", "-F", str(paths["config"]), HOST])[1]
+    assert "user rosy\n" in out
+    _no_token_leak(core, capsys)
+
+
+@pytest.mark.skipif(shutil.which("ssh") is None, reason="OpenSSH client not on PATH")
+def test_the_real_ssh_client_resolves_our_user_and_key_over_a_wildcard(paths, capsys):
+    paths["config"].parent.mkdir(parents=True)
+    paths["config"].write_text("Host *\n    User pinky\n    UserKnownHostsFile ~/.ssh/known_hosts\n",
+                               encoding="utf-8")
+    with FakeCore(codes={ADMIN_CODE: "administrator"}) as core:
+        status, _, _ = run(core, paths, ssh=tool.run_tool)
+    assert status == 0, capsys.readouterr().err
+    out = tool.run_tool([shutil.which("ssh"), "-G", "-F", str(paths["config"]), HOST])[1]
+    assert "user rosy" in out.splitlines()
+
+
+@pytest.mark.parametrize("text", [
+    f"# >>> rosy-ssh {HOST} >>>\n# >>> rosy-ssh {HOST} >>>\n# <<< rosy-ssh {HOST} <<<\n",
+    f"# <<< rosy-ssh {HOST} <<<\n# >>> rosy-ssh {HOST} >>>\n",
+    f"# >>> rosy-ssh {HOST} >>>\nHost x\n",
+    f"# <<< rosy-ssh {HOST} <<<\n",
+])
+def test_corrupted_markers_are_refused(text, paths, capsys):
+    paths["config"].parent.mkdir(parents=True)
+    paths["config"].write_text(text, encoding="utf-8")
+    with FakeCore(codes={ADMIN_CODE: "administrator"}) as core:
+        status, _, _ = run(core, paths)
+    assert status == 1
+    assert core.keys == {}
+    assert paths["config"].read_text(encoding="utf-8") == text
+    assert "markers" in _no_token_leak(core, capsys)
+
+
+def test_relative_and_tilde_paths_are_made_absolute(home, tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    with FakeCore(codes={ADMIN_CODE: "administrator"}) as core:
+        status = tool.main([ROBOT, "--label", "dev:laptop", "--key", "~/keys/rosy_dev_laptop",
+                            "--known-hosts", "kh/known_hosts_rosy", "--ssh-config", "cfg/config"],
+                           ask_code=lambda p: ADMIN_CODE, ask_passphrase=lambda p: "", keygen=FakeKeygen(),
+                           client_for=lambda robot: tool.CoreClient(core.base_url), ssh=FakeSsh())
+    assert status == 0, capsys.readouterr().err
+    config = (tmp_path / "cfg" / "config").read_text(encoding="utf-8")
+    key = (home / "keys" / "rosy_dev_laptop").resolve().as_posix()
+    known = (tmp_path / "kh" / "known_hosts_rosy").resolve().as_posix()
+    assert f'    IdentityFile "{key}"\n' in config
+    assert f'    UserKnownHostsFile "{known}"\n' in config
+
+
+def _symlink_or_skip(link: Path, target: Path) -> None:
+    try:
+        link.symlink_to(target)
+    except (OSError, NotImplementedError):
+        pytest.skip("symlinks are not available here")
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX symlinked dotfiles; Windows symlinks need extra rights")
+def test_a_symlinked_config_keeps_its_link_and_the_target_is_edited(paths, tmp_path, capsys):
+    target = tmp_path / "dotfiles" / "ssh_config"
+    target.parent.mkdir()
+    target.write_text("Host other\n    HostName 192.0.2.99\n", encoding="utf-8")
+    paths["config"].parent.mkdir(parents=True)
+    _symlink_or_skip(paths["config"], target)
+    with FakeCore(codes={ADMIN_CODE: "administrator"}) as core:
+        assert run(core, paths)[0] == 0, capsys.readouterr().err
+    assert paths["config"].is_symlink()
+    assert f"Host {HOST}\n" in target.read_text(encoding="utf-8")
+    assert list(target.parent.glob("ssh_config.rosy-backup-*"))
+
+
+@pytest.mark.parametrize("name", ["rosy_dev_%h", "rosy_dev_${HOME}"])
+def test_percent_and_dollar_paths_are_refused(name, paths, capsys):
+    paths["key"] = paths["key"].with_name(name)
+    with FakeCore(codes={ADMIN_CODE: "administrator"}) as core:
+        status, _, _ = run(core, paths)
+    assert status == 1
+    assert core.keys == {} and not paths["config"].exists()
+    assert "% or $" in _no_token_leak(core, capsys)
+
+
+def test_unreadable_files_are_clean_errors(paths, capsys):
+    paths["known_hosts"].mkdir(parents=True)  # a directory where the file should be
+    with FakeCore(codes={ADMIN_CODE: "administrator"}) as core:
+        status, _, _ = run(core, paths)
+    assert status == 1
+    err = _no_token_leak(core, capsys)
+    assert "rosy_ssh_enroll:" in err and "Traceback" not in err
+
+
+def test_a_non_utf8_config_is_a_clean_error(paths, capsys):
+    paths["config"].parent.mkdir(parents=True)
+    paths["config"].write_bytes(b"Host \xff\xfe\n")
+    with FakeCore(codes={ADMIN_CODE: "administrator"}) as core:
+        status, _, _ = run(core, paths)
+    assert status == 1
+    assert paths["config"].read_bytes() == b"Host \xff\xfe\n"
+    assert "rosy_ssh_enroll:" in _no_token_leak(core, capsys)
+
+
+def test_redirects_are_not_followed(paths, capsys):
+    with FakeCore(codes={ADMIN_CODE: "administrator"}) as target, \
+            FakeCore(codes={ADMIN_CODE: "administrator"}) as front:
+        front.redirect = target.base_url
+        status, _, _ = run(front, paths)
+    assert status == 1
+    assert target.requests == []
+    assert "302" in capsys.readouterr().err
+
+
+def test_a_slow_answer_says_the_change_may_have_been_applied(paths, capsys):
+    assert tool.DEFAULT_TIMEOUT_S == 25
+    with FakeCore(codes={ADMIN_CODE: "administrator"}, delay_keys=3.0) as core:
+        status, _, _ = run(core, paths, timeout=1.0)
+    assert status == 1
+    assert "may have been applied" in capsys.readouterr().err
+
+
+def test_non_ascii_pc_names_get_a_short_hash_suffix():
+    first, second = tool.default_label("회의실PC"), tool.default_label("연구실PC")
+    assert first != second
+    for label in (first, second):
+        assert tool.DEVICE_LABEL.fullmatch(label)
+        assert re.fullmatch(r"dev:pc-[0-9a-f]{6}", label)
+    assert tool.default_label("laptop") == "dev:laptop"
+    assert tool.DEVICE_LABEL.fullmatch(tool.default_label("가" * 80))
+
+
+@pytest.mark.parametrize("line", ['    IdentityFile "/a/%h"', '    UserKnownHostsFile "/a/${HOME}/k"',
+                                  '    IdentityFile ""', '    ProxyCommand x', '    User pinky', '    HostName '])
+def test_the_config_line_allowlist_is_a_second_layer(line):
+    assert not tool.CONFIG_OPTION.fullmatch(line)
