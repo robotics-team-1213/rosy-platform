@@ -1,4 +1,3 @@
-from datetime import datetime, timezone
 from hashlib import sha256
 from pathlib import Path
 import sys
@@ -13,7 +12,6 @@ for relative in ("modules/execution/src", "modules/skills/api/src"):
 
 from fakes import FakeRobot
 from fleet.server.app import create_app
-from fleet.server.cell_job_store import CellJobStore
 from fleet.server.console import FleetConsole
 from fleet.server.mission_service import MissionService
 from fleet.server.mission_store import MissionStore
@@ -161,6 +159,18 @@ def test_cell_service_proposes_and_resolves_but_named_operator_alone_admits(tmp_
     assert read.status_code == 200
     assert read.json()["job"]["events"]
     assert client.app.state.mission_service.get(proposal_id) is None
+
+    restarted, _, restarted_compiler = _setup(tmp_path)
+    restarted_read = restarted.get(
+        f"/api/fleet/cell-jobs/{proposal_id}",
+        headers={"Authorization": "Bearer operator-secret"},
+    )
+    assert restarted_read.status_code == 200
+    held = restarted_read.json()["job"]
+    assert held["status"] == held["steps"][0]["status"] == "HOLD"
+    assert held["steps"][1]["status"] == "WAITING"
+    assert held["events"][-1]["event_type"] == "CELL_JOB_STARTUP_HOLD"
+    assert restarted_compiler.calls == 0
 
 
 def test_cell_proposal_does_not_admit_when_service_and_operator_identity_match(tmp_path):
