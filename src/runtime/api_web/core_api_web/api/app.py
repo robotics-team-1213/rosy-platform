@@ -228,6 +228,8 @@ def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
         "autonomy.js": "application/javascript",
         "calibration.js": "application/javascript",
         "recording.js": "application/javascript",
+        "controls.js": "application/javascript",
+        "arm-stick.js": "application/javascript",
         "screens/connect.js": "application/javascript",
         "screens/drive.js": "application/javascript",
         "screens/drive-auto.js": "application/javascript",

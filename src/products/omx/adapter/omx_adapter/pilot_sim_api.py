@@ -28,6 +28,7 @@ PILOT_ASSETS = {
     "link.js": "application/javascript", "autonomy.js": "application/javascript",
     "input-state.js": "application/javascript", "vision.js": "application/javascript",
     "calibration.js": "application/javascript", "recording.js": "application/javascript",
+    "controls.js": "application/javascript", "arm-stick.js": "application/javascript",
     "drivers/registry.js": "application/javascript",
     "drivers/pinky_core.js": "application/javascript",
     "drivers/omx_sim.js": "application/javascript",

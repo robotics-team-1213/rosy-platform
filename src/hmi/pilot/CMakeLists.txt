@@ -13,6 +13,8 @@ install(FILES
   autonomy.js
   calibration.js
   recording.js
+  controls.js
+  arm-stick.js
   input-state.js
   vision.js
   manifest.webmanifest
