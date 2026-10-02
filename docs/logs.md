@@ -4548,3 +4548,8 @@
 - 변경: sim 전용 opt-in 인자(`physics_step`, `real_time_factor`, `gpu`, 기본값 불변)로 S2를 다시 시도했다. WSL은 llvmpipe(소프트웨어)라 GPU 인자는 효과가 없다. 5 ms 물리 단계에서도 4대 RTF 0.017(부하 122)이었고, 병목은 로봇마다 도는 CORE·loc_assist다. 22:50 WSL 재시작으로 중단. S2는 CPU가 넉넉한 장치나 로봇 스택을 여러 호스트에 나눠야 한다.
 - 증거: S2 결과 문서의 재시도 절.
 - gate 변화: 없음.
+
+## 2026-10-02 · uncommitted · docs(adr): D-395 개정 11 — 사각형 검출 후처리, 거리 없는 목격, LiDAR 물체; 학습 페인트 면적 문턱 제안
+- 변경: D-395에 개정 11을 더했다(수평선 위 사각형 코어 버림과 한 사각형 한 검출, Fleet `square_cue`가 거리 없는 목격을 세지 않음, LiDAR 자기 빔·붙은 로봇·중심 밀기, 후보 가드). 상태(Proposed)는 그대로다. API Ref `CandidateReport` 행 뒤에 거리 없는 목격 한 문장을 더했다(선로 계약 불변). 감사 3번 항목은 주행 경로라 `plans/2026-10-03-perception-postproc-proposals.md`에 lane keep 세션 몫 제안으로 적었다.
+- 증거: 가지 `fix/perception-postproc-nms`, 실제 프레임 506장 재스캔 거짓 20 → 0, `src/runtime/sensing/logs.md`·`src/site/fleet/logs.md`의 같은 날 항목.
+- gate 변화: 없음(Proposed).
