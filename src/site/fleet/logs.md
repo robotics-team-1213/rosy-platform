@@ -1390,15 +1390,23 @@
 - 증거: `test_localization_cues.py` 사각형 표 갱신(+2), `test_localization_arbiter.py` +1(거리 없는 목격만으로는 결정 없음). fleet localization 176 passed.
 - gate 변화: 없음.
 
-## 2026-10-03 · uncommitted · fix(fleet): preserve Cell transfer phase receipts over UDS v2
-- Change: accept the separate CELL_TRANSFER grant in the Fleet Action transport and select existing UDS v2 for submission, lookup and exact-attempt cancel. Missing phase summaries fail closed. Record the shared phased contract in API Reference v1.82 and update the current-version document checks.
-- Evidence: producer/consumer/legacy dispatcher/API contract suites 55 passed; architecture and dependency boundaries 38 passed; changed Python files pass flake8. Full Fleet regression 1431 passed/7 skipped; known-failure comparison 0 new/0 known. Log/generated contracts 6 passed; harness lint 0 errors/24 existing freshness warnings.
-- Gate: SOURCE/LOCAL only. CellJob dispatch/reconciliation composition and ROS-SIM acceptance remain open; transport changes do not enable dispatch.
-
 ## 2026-10-02 · uncommitted · feat(fleet): C4b wave 1 — Cell Job 하달 경로 (G4, G5, G3, G6)
 - 변경: (G4) `local_action_transport.py`가 `FleetActionGrant | FleetCellTransferGrant`를 받고, 종류별 표로 wire 버전을 고른다(PICK_PLACE 2, CELL_TRANSFER 2). 모르는 종류는 I/O 전에 거절. (G5) `server/cell_compiler.py` `PalletizingCellJobCompiler(tol_m)` — palletizing 로더·`compile_job`·`carry_z()`(불일치면 거절)·`compile_plan_bundle`, `cli.py --cell-job-stack-tol-m`(지연 import). (G3) `server/step_action_kinds.py`(종류별 규칙: 열린 프로필, grant 본문, phase, 거절 사유), `server/step_dispatcher.py` `StepJobDispatcher`(Step마다 Action 하나, k−1 GOAL_CONFIRMED 뒤에만, RUNNING은 GetAction으로만 대조, 거절·실패·불명은 Job HOLD+사유), `create_app(deployment_profile, omx_cell_grant_revisions)` — (simulation, CELL_TRANSFER)만 열리고 PICK_PLACE 하달기는 모든 프로필에서 닫힘. `cell_job_store.py`에 rosy-a9(D-420) 요청 1–8: 제출 때 claim DISPATCHING 승격, 결과 SUCCEEDED/FAILED/REJECTED/UNKNOWN+호출자 사유, 펜스 변경 시 HOLD 기록(예외 아님), 범용 `hold()`, 이벤트 키로 재생 먼저 판정, SUBMITTING 이벤트에 epoch·generation. (G6) `goal_evidence_registry` `sim_model_pose`는 simulation 프로필에서만, `server/cell_goal_evidence.py`가 생산자 토큰·workcell·attempt 확인 뒤 Fleet이 `item_at_pose`를 판정하고 만족할 때만 `confirm_step_goal`.
 - 판단: `test_mission_api`의 하달기 시험은 D-403 §7에 맞게 바꿨다(production 거절, simulation은 셀 하달기만). `test_cell_job_store`의 펜스 변경 시험은 예외 대신 HOLD를 본다(D-420 항목 3).
 - 증거: C4b 보고(fleet·omx·test 전체, known_failures).
 - 크기: fleet 27811 재판정(main 27134), `cell_job_store.py` 617 accept, `cli.py` 604 accept.
 - 남음(wave 2): G7 정지 사슬과 (a)–(i), G9 pilot_sim /cell·seat 배제, goal-evidence HTTP 경로, UNKNOWN 대조(reconcile) 경로, 재시작 직후 다음 Step 자동 제출 여부(e).
+- gate 변화: 없음.
+
+## 2026-10-03 · uncommitted · fix(fleet): preserve Cell transfer phase receipts over UDS v2
+- Change: accept the separate CELL_TRANSFER grant in the Fleet Action transport and select existing UDS v2 for submission, lookup and exact-attempt cancel. Missing phase summaries fail closed. Record the shared phased contract in API Reference v1.82 and update the current-version document checks.
+- Evidence: producer/consumer/legacy dispatcher/API contract suites 55 passed; architecture and dependency boundaries 38 passed; changed Python files pass flake8. Full Fleet regression 1431 passed/7 skipped; known-failure comparison 0 new/0 known. Log/generated contracts 6 passed; harness lint 0 errors/24 existing freshness warnings.
+- Gate: SOURCE/LOCAL only. CellJob dispatch/reconciliation composition and ROS-SIM acceptance remain open; transport changes do not enable dispatch.
+
+## 2026-10-03 · uncommitted · fix(fleet): C4b 1b — Cell Job claim 유지, HOLD 출구, 공정한 하달 (리뷰 M1/M2, rosy-a9)
+- 변경: (A1) 정지·시작 래치가 같은 트랜잭션에서 READY·ACTION_SUCCEEDED Cell Job을 HOLD(`site_stop`)로 두고 그 claim을 새 단계 `HELD`로 옮긴다(래치는 CLAIMED만 지운다). FAILED·REJECTED 결과도 `HELD`. rearm 조건은 그대로(DISPATCHING·UNKNOWN만 막음). (A2) `hold()`는 RUNNING에서 UNKNOWN/DISPATCHING만, 해제는 `not_submitted=True`일 때만. (A3) HOLD+UNKNOWN Job을 GetAction으로 계속 읽음(성공→ACTION_SUCCEEDED, 실패·404→HOLD+HELD), 일시 실패는 0.5/1/2/4 s 백오프 뒤 5회째에만 UNKNOWN. 운영자 `reconcile`/`resume`/`cancel` 경로(이름 있는 운영자). (A4) claim 행 수 확인, 빠진 claim → HOLD `FLEET_CLAIM_MISSING_BEFORE_SUBMISSION`. (A5) 제출 직전 HOLD 둘 다 해제. (B1) 모든 Job을 한 주기에 돌고 막힌 머리 Job은 건너뜀. (B2) hold 이벤트 키에 승인 횟수. (B3) start_step ValueError → `ACTION_GRANT_INVALID`. (B4) 시계 하나. (B5) 다이제스트 함수 하나. (B6) 결과 기록 충돌은 한 번 보고. (C1) item_at_pose 술어를 해석 때 Step에 저장, 중심 오프셋은 레시피에서. (C3) owner가 `GetOwnerIdentity`로 simulation임을 보고해야 하달. `GET /api/fleet/resource-claims`(claim 소유 Job·상태·단계).
+- 판단: CANCELLED 상태는 스키마 변경이라 1b에서는 HOLD+`CANCELLED_BY_OPERATOR`+claim 없음으로 둔다(D-420 v2). main의 missing-claim 시험(예외)은 A4에 맞춰 HOLD로 바꿨다.
+- 증거: C4b 1b 보고.
+- 후속: console: show held-job claim owner (콘솔 UI는 다른 세션 소유라 이번에 손대지 않음). wave 2: `fleet_fence_current=True` 자리표시(G7), G9 `/cell`·seat 배제, phase 진행기와 CELL_TRANSFER 완료, 슬립시트 파지, 사이트 프로필의 palletizing wheel.
+- 크기: fleet 28160 재판정, `cell_job_store.py` 824(분할 조건 기록).
 - gate 변화: 없음.

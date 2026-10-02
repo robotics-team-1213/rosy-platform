@@ -2009,3 +2009,8 @@
 - 증거: `test/test_platform_cell_owner_assembly.py`(가짜 ROS runtime), `src/site/fleet/test/test_cell_goal_evidence.py`(가짜 포즈 reader), `test/test_platform_item_pose.py`.
 - 판단: 실행기는 WSL에서 돌려 보지 않았다(wave 1은 Gazebo 없음). 첫 phase 뒤 phase를 진행하고 Action을 완료하는 진행기가 없어 실제 Job은 approach에서 멈춘다 — wave 2.
 - gate 변화: 없음.
+
+## 2026-10-03 · uncommitted · fix(omx-sim): C4b 1b — 그리퍼 폭은 grant의 레시피, HTTP는 루프백 (C2, C4)
+- 변경: `run_cell_owner.py`는 `rosy_agent.omx_cell_owner.sim_gripper_observation`으로 grant의 `recipe_sha256`·item 폭을 쓴다(첫 레시피 아님). HTTP는 기본 127.0.0.1(`ROSY_CELL_OWNER_HTTP_HOST`로만 바꿈; 이 포트를 게시하는 compose·실행 스크립트가 없다). owner HTTP 앱은 아직 수락 저장소를 공유하지 않는다 — G9. `sim_item_pose_producer.py`는 `frame: robot_base`를 싣는다.
+- 증거: `test/test_platform_cell_owner_assembly.py`(스파이로 폭 확인).
+- gate 변화: 없음.

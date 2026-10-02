@@ -293,3 +293,8 @@
 - 증거: C4b 보고.
 - 남음: G9(PUT/GET /cell, seat↔Action 배제), G7, CELL_TRANSFER phase 진행기(아래 deploy 기록).
 - gate 변화: 없음.
+
+## 2026-10-03 · uncommitted · feat(omx): C4b 1b — owner 식별 보고 (C3)
+- 변경: `ActionApi(identity=...)`에 읽기 전용 `GetOwnerIdentity`(v2)를 더했다. 조립이 준 `{workcell_id, instance_id, simulation, profile}`을 돌려준다. 식별이 없는 owner는 `UNKNOWN_OPERATION`이라 Fleet이 하달하지 않는다(D-403 §7, D-390 §5).
+- 증거: `test/test_fleet_omx_cell_transfer_contract.py`, `test/test_platform_cell_owner_assembly.py`.
+- gate 변화: 없음.
