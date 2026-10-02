@@ -74,8 +74,8 @@
 
 ## 최근 기록
 
+- 2026-10-03 · uncommitted · fix(fleet): preserve Cell transfer phase receipts over UDS v2
 - 2026-10-02 · uncommitted · styles.css 흐림 원시 값 → 공용 토큰
 - 2026-10-02 · uncommitted · fix(fleet): retain Cell transfer claims across site restart
 - 2026-10-02 · uncommitted · fix(fleet): require durable Action success when recovering goal HOLD
 - 2026-10-02 · uncommitted · test(fleet): retain ownership after grant expiry while Action is running
-- 2026-10-02 · uncommitted · feat(fleet): D-421 전체 주행 취소를 main d5b3bd10 위에 다시 얹음

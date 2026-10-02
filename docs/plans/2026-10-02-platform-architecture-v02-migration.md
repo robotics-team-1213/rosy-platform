@@ -183,6 +183,9 @@ Cell compiler port, additive `CELL_TRANSFER` ??, `service` ???? ?? operator ?? ?
 
 ?? ??? SOURCE/LOCAL ?? ????. Cell Job ???? ?? ??? ?? API??, ??? ?? producer?Fleet dispatcher?UDS/OMX Action???? reconciliation? ?? ???? ???. ??? Task 4? ?? ??? ?? ???? fixed-cell ROS-SIM ??? ??? ???. ?? Fleet ? ??/?? ?? ??? ?? ??? ??? Fleet progress? ????. Task 5?? manipulation Skill/OMX owner? ????, Task 7?? persisted interruption recovery? ??? ? Task 8? Gazebo ?? ??? ????.
 
+
+**Progress (2026-10-03, transport checkpoint):** Fleet's same-host Action transport now accepts both explicitly supported grant variants and uses existing UDS v2 for CELL_TRANSFER SubmitAction, GetAction and exact-attempt CancelAction. Missing phase summaries fail closed for all three operations. Producer tests verify that the existing OMX ActionApi preserves durable approach/cancel phase receipts; consumer and legacy dispatcher/API contract tests pass (55 tests). API Reference v1.82 records this existing phased boundary. Full Fleet regression: 1431 passed/7 skipped, 0 new known-failure differences. CellJob dispatcher/reconciliation composition remains open and this change does not enable simulation dispatch.
+
 ## Task 5: 조작 Skill과 OMX owner 연결
 
 **Modify/Reuse:** `src/products/omx/adapter/omx_adapter/{action_api,action_runner,action_store,command_owner,pick_place_runner,pose_plan,kinematics,ros_runtime,gripper_contract}.py`, `.github/workflows/ci.yml`.

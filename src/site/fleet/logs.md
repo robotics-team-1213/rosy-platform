@@ -1381,3 +1381,9 @@
 - 근거: D-294 흐림 척도 계약(test_dimming_uses_the_disabled_token_not_an_opacity_literal).
 - gate 변화: 없음.
 - 최종 증거: test_surface_typography_focus_contracts.py 6 passed.
+
+
+## 2026-10-03 · uncommitted · fix(fleet): preserve Cell transfer phase receipts over UDS v2
+- Change: accept the separate CELL_TRANSFER grant in the Fleet Action transport and select existing UDS v2 for submission, lookup and exact-attempt cancel. Missing phase summaries fail closed. Record the shared phased contract in API Reference v1.82 and update the current-version document checks.
+- Evidence: producer/consumer/legacy dispatcher/API contract suites 55 passed; architecture and dependency boundaries 38 passed; changed Python files pass flake8. Full Fleet regression 1431 passed/7 skipped; known-failure comparison 0 new/0 known. Log/generated contracts 6 passed; harness lint 0 errors/24 existing freshness warnings.
+- Gate: SOURCE/LOCAL only. CellJob dispatch/reconciliation composition and ROS-SIM acceptance remain open; transport changes do not enable dispatch.
