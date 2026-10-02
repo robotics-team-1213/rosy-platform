@@ -298,3 +298,8 @@
 - 변경: `ActionApi(identity=...)`에 읽기 전용 `GetOwnerIdentity`(v2)를 더했다. 조립이 준 `{workcell_id, instance_id, simulation, profile}`을 돌려준다. 식별이 없는 owner는 `UNKNOWN_OPERATION`이라 Fleet이 하달하지 않는다(D-403 §7, D-390 §5).
 - 증거: `test/test_fleet_omx_cell_transfer_contract.py`, `test/test_platform_cell_owner_assembly.py`.
 - gate 변화: 없음.
+
+## 2026-10-03 · uncommitted · fix(omx): C4b 1c — GetAction은 다른 principal을 '없음'으로 답하지 않는다
+- 변경: `ActionRunner.get`이 다른 principal의 Action에 None 대신 PermissionError를 내어 API가 403 PEER_NOT_ALLOWED로 답한다. `ACTION_NOT_FOUND`는 정말 journal에 없는 Action에만 쓴다.
+- 증거: `test/test_fleet_omx_cell_transfer_contract.py::test_only_action_not_found_reads_as_absent`.
+- gate 변화: 없음.

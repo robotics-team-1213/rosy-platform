@@ -1410,3 +1410,10 @@
 - 후속: console: show held-job claim owner (콘솔 UI는 다른 세션 소유라 이번에 손대지 않음). wave 2: `fleet_fence_current=True` 자리표시(G7), G9 `/cell`·seat 배제, phase 진행기와 CELL_TRANSFER 완료, 슬립시트 파지, 사이트 프로필의 palletizing wheel.
 - 크기: fleet 28160 재판정, `cell_job_store.py` 824(분할 조건 기록).
 - gate 변화: 없음.
+
+## 2026-10-03 · uncommitted · fix(fleet): C4b 1c — 재시작·정지·404 경로의 출구 (재검토 N1–N3, rosy-a9)
+- 변경: (N1) 시작 복구가 RUNNING Job의 DISPATCHING claim을 UNKNOWN으로, readback은 HOLD+DISPATCHING도 받음, hold()는 RUNNING에서 UNKNOWN만. (N2) 정지 래치는 claim 수 불일치로 실패하지 않고 `CLAIM_SET_INCOMPLETE_AT_STOP`을 남김. (P1·2) hold()는 claim을 놓지 않음, `release_before_send`만 진행 없는 READY Job의 claim을 놓음, 래치 뒤 성공은 HOLD(site_stop)+HELD, 진행 있는 Job의 제출 직전 HOLD는 HELD. (N3·3) 404는 ACTION_NOT_FOUND+만료+5 s+receipt 없음일 때만 NOT_FOUND, transport는 다른 404를 오류로, owner `get`은 다른 principal에 PEER_NOT_ALLOWED. (5·6) 틱당 I/O 8회 상한과 round-robin, owner 식별 캐시 TTL(양 10 s·음 5 s), 전송 오류 때 버림. (P3) 목표 술어의 파지 깊이는 검증된 레시피에서.
+- 판단: dca0f6715(`MissionStore.confirm_goal` HOLD 사유 확장)는 main 커밋이 병합으로 들어온 것이고 1c는 필요로 하지 않아 이 가지에서 되돌리지 않았다. owner journal 식별은 넣지 않음.
+- 증거: C4b 1c 보고.
+- 후속(wave 2): 운영자 증언 해결(owner 영구 상실 시 UNKNOWN), 그 밖의 wave 2 목록은 1b 기록 그대로.
+- gate 변화: 없음.

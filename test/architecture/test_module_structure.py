@@ -76,7 +76,7 @@ CONTROL_SPLIT = "docs/plans/2026-09-22-control-package-split-design.md"
 #: P6 verdicts: path (relative to src/) or package name -> (lines at verdict, verdict).
 SIZE_VERDICTS = {
     "fleet": (
-        28_160,
+        28_340,
         "split: server HTTP boundary, console, signals and the mission-control stores are separate owners "
         "today; group them into subpackages rather than one flat server/ tree (B2); owner fleet, unscheduled "
         "(re-judged 2026-09-29 at 11164 after mission_store joined the server tree; re-judged 2026-09-30 at "
@@ -152,7 +152,9 @@ SIZE_VERDICTS = {
         "and the step-ledger dispatcher (server/step_dispatcher.py) joined as their own modules, the "
         "deployment_profile gate in app.py; verdict unchanged. Re-judged 2026-10-03 at 28160 (C4b 1b): "
         "the Cell Job claim lifecycle (HELD phase, latch hook), GetAction readback with backoff and the "
-        "operator recovery routes (server/cell_job_routes.py); verdict unchanged",
+        "operator recovery routes (server/cell_job_routes.py); verdict unchanged. Re-judged 2026-10-03 at "
+        "28340 (C4b 1c): restart/stop/404 exits, release_before_send, receipt notes, bounded round-robin "
+        "ticks and the identity cache, all inside the existing ledger/dispatcher modules; verdict unchanged",
     ),
     "site/fleet/fleet/server/cell_job_store.py": (
         824,

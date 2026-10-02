@@ -128,3 +128,10 @@
 - **운영자 취소는 claim을 원자적으로 해제한다.** `POST /api/fleet/cell-jobs/{id}/cancel`(이름 있는 운영자)은 종결 전이와 claim 해제를 한 트랜잭션에서 한다. `DISPATCHING`이나 `UNKNOWN` claim이 있으면 거절하므로, 먼저 readback이나 `reconcile`로 결과를 확정한다. 재승인은 `resume`이 현재 세대로 claim을 다시 잡는다.
 - 이 보강은 Cell Job에 대해 D-420 §4.5 첫 행(HOLD 때 claim 해제)을 대체한다. D-420은 이 절을 가리키도록 고친다.
 - 근거: 리뷰 M1 재현(FAILED 뒤 HOLD인 Job A의 claim이 정지 래치로 지워져 같은 자원에 Job B가 승인됨). 구현과 시험은 브랜치 `feat/rosy-cell-c4b-wiring`의 C4b 1b 커밋.
+
+### 보강 추가 (2026-10-03, C4b 1c)
+
+- **재시작 뒤 진행 중이던 claim은 UNKNOWN을 거쳐 정리한다.** Fleet 시작 때 `recover_after_startup`이 자기 트랜잭션에서 READY·RUNNING·ACTION_SUCCEEDED Job을 HOLD(`SITE_AUTHORITY_CHANGED`)로 둔다. 이때 RUNNING Job의 `DISPATCHING` claim을 `UNKNOWN`으로 옮겨 readback이 결과를 읽게 한다. 결과를 읽기 전까지 rearm은 막힌다.
+- **래치 뒤에 끝난 Action은 HOLD(site_stop)와 `HELD` claim이 된다.** 정지나 권한 변경 뒤에 도착한 성공도 Job을 진행시키지 않는다. 성공 기록은 남기고, 운영자 `resume`이 새 세대에서 그 Step을 ACTION_SUCCEEDED로 되돌린 뒤 목표 증거를 기다린다. 진행이 있는 Job의 제출 직전 HOLD도 claim을 `HELD`로 두며, claim 해제는 진행이 없는 Job(Step 0, 제출 이력 없음)의 제출 전 해제와 운영자 취소뿐이다.
+- **GetAction 404는 기본이 UNKNOWN이다.** owner가 `ACTION_NOT_FOUND`라고 답하고, grant 만료 시각에 허용 지연(5 s)을 더한 시각이 지났고, 그 시도에 대해 장치 receipt를 한 번도 기록한 적이 없을 때만 "실행되지 않음"(HELD)으로 본다. 그 밖의 404와 다른 principal의 Action은 오류다. owner journal 식별은 아직 없다.
+- **한계(후속):** UNKNOWN은 장치 journal을 읽어야만 풀린다. owner를 영구히 잃으면 운영자가 증언하는 해결 경로가 생길 때까지 rearm이 막힌다(계획됨).
