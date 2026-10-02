@@ -31,6 +31,12 @@ class FakeRuntime:
         self.calls.append(jog)
         return {"command_id": jog.request_id, "state": "LOCAL_ACCEPTED"}
 
+    def submit_gripper(self, goal):
+        self.calls.append(goal)
+        if goal.position > 1.1:
+            return {"command_id": goal.request_id, "state": "REJECTED", "reason": "gripper_limit"}
+        return {"command_id": goal.request_id, "state": "LOCAL_ACCEPTED"}
+
     def goal(self, command_id):
         return {"command_id": command_id, "state": "LOCAL_ACCEPTED"}
 
@@ -185,3 +191,49 @@ def test_target_serializes_every_control_kind_with_the_schema_alias():
     assert [item["kind"] for item in controls["items"]] == ["joint_jog", "gripper", "base_velocity"]
     assert controls["items"][0]["command"] == "bounded_goal"
     assert controls["items"][1]["readback"] == ["position", "grasp"]
+
+
+def _grip(seat_id, **changes):
+    return {"instance_id": "omx_01", "seat_id": seat_id, "request_id": "grip-1", "position": 0.5,
+            "duration_s": 0.8, "state_sequence": 8, "expires_at_ms": int(time.time() * 1000) + 1000, **changes}
+
+
+def _seated():
+    client, runtime = _client()
+    token = client.post(f"{PREFIX}/pair", json={"code": "ABCD-EFGH"}).json()["token"]
+    headers = {"Authorization": f"Bearer {token}"}
+    seat = client.post(f"{PREFIX}/seat", headers=headers).json()["seat_id"]
+    return client, runtime, headers, seat
+
+
+def test_gripper_goal_needs_the_seat_and_is_idempotent():
+    client, runtime, headers, seat = _seated()
+    assert client.post(f"{PREFIX}/gripper", json=_grip(seat)).status_code == 401
+    assert client.post(f"{PREFIX}/gripper", json=_grip("other"), headers=headers).status_code == 409
+    body = _grip(seat)
+    first = client.post(f"{PREFIX}/gripper", json=body, headers=headers)
+    again = client.post(f"{PREFIX}/gripper", json=body, headers=headers)
+    assert first.status_code == again.status_code == 202 and first.json() == again.json()
+    assert len(runtime.calls) == 1 and runtime.calls[0].position == 0.5
+    assert client.post(f"{PREFIX}/gripper", json=_grip(seat, position=0.1), headers=headers).status_code == 409
+    assert client.get(f"{PREFIX}/goals/grip-1", headers=headers).json()["state"] == "LOCAL_ACCEPTED"
+
+
+def test_gripper_and_jog_share_request_ids():
+    client, _, headers, seat = _seated()
+    assert client.post(f"{PREFIX}/goals", json=_jog(seat, request_id="same"), headers=headers).status_code == 202
+    reused = client.post(f"{PREFIX}/gripper", json=_grip(seat, request_id="same"), headers=headers)
+    assert reused.status_code == 409 and reused.json()["error"]["message"] == "request id reused"
+
+
+def test_gripper_limit_rejection_is_a_conflict():
+    client, _, headers, seat = _seated()
+    response = client.post(f"{PREFIX}/gripper", json=_grip(seat, position=2.0), headers=headers)
+    assert response.status_code == 409 and response.json()["error"]["message"] == "gripper_limit"
+
+
+def test_gripper_duration_out_of_range_is_validation_error():
+    client, _, headers, seat = _seated()
+    for duration in (0.1, 3.0):
+        response = client.post(f"{PREFIX}/gripper", json=_grip(seat, duration_s=duration), headers=headers)
+        assert response.status_code == 400 and response.json()["error"]["code"] == "VALIDATION_ERROR"
