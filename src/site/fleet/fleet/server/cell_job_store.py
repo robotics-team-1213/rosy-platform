@@ -779,14 +779,16 @@ class CellJobStore:
             "UPDATE fleet_cell_jobs SET status='HOLD', reason=?, updated_at=? WHERE mission_id=?",
             (reason, now, job["mission_id"]),
         )
-        CellJobStore._set_claims(connection, job, claim_phase, strict=strict)
+        CellJobStore._set_claims(connection, job, claim_phase, strict=strict,
+                                 context="site-stop" if actor_id == "site-stop" else "pre-send",
+                                 actor_id=actor_id)
         CellJobStore._event(
             connection, job["mission_id"], job["current_step_index"], "CELL_JOB_HELD", actor_id,
             {"event_id": event_key, "reason": reason, "claim_phase": claim_phase, **detail})
 
     @staticmethod
     def _set_claims(connection: sqlite3.Connection, job: sqlite3.Row, phase: str | None, *,
-                    strict: bool = True) -> None:
+                    strict: bool = True, context: str = "hold", actor_id: str = "fleet") -> None:
         if phase is None:
             release_claims(connection, owner_kind="mission", owner_id=job["mission_id"],
                            generation=job["dispatch_generation"])
@@ -802,8 +804,11 @@ class CellJobStore:
         if updated != expected:
             # 1c N2: the stop path never fails on bookkeeping; it records what needs reconciling.
             CellJobStore._event(connection, job["mission_id"], job["current_step_index"],
-                                "CLAIM_SET_INCOMPLETE_AT_STOP", "site-stop",
-                                {"expected_claims": expected, "updated_claims": updated, "phase": phase})
+                                "CLAIM_SET_INCOMPLETE_AT_STOP", actor_id, {
+                                    "event_id": (f"claim-set-incomplete:{context}:{job['dispatch_generation']}:"
+                                                 f"{CellJobStore._approvals(connection, job)}:{phase}"),
+                                    "context": context, "expected_claims": expected,
+                                    "updated_claims": updated, "phase": phase})
 
     @staticmethod
     def _owns_runnable_claims(connection: sqlite3.Connection, job: sqlite3.Row) -> bool:

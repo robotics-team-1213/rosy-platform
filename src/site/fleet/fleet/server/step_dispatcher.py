@@ -142,7 +142,11 @@ class StepJobDispatcher:
                                             owner_journal_id=self._identity.get(job["instance_id"], (0, 0, None))[2])
         except MissionConflict:
             return self._view(self.store.get(job["mission_id"]), index, None)
-        except (KeyError, TypeError, ValueError):
+        except KeyError:
+            # 1d item 5: the Job vanished between the scan and the start; skip it, keep the tick.
+            _LOG.warning("Cell Job %s disappeared before its step started", job["mission_id"])
+            return None
+        except (TypeError, ValueError):
             # Nothing was started or sent (1b B3): release the claims with the reason.
             held = self.store.release_before_send(job["mission_id"], reason="ACTION_GRANT_INVALID",
                                                   event_key=f"grant-invalid:{index}")

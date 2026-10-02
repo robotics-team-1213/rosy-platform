@@ -467,3 +467,52 @@ def test_not_found_also_needs_the_same_owner_journal(tmp_path, journal_now, phas
         dispatcher.reconcile("cell-mission-1")
         clock.t += 60
     assert {phase for _, _, phase in _claim_phases(path)} == phases
+
+
+def test_incomplete_claim_events_name_their_context_and_repeat_after_resume(tmp_path):
+    """C4b 1d item 4: a pre-send hold is not labelled site-stop, and a repeat is not deduplicated."""
+    from test_cell_job_store import _grant
+    path, tasks, _, enabled = _stores(tmp_path)
+    store = CellJobStore(path)
+    _create(store)
+    ready = store.admit("cell-mission-1", actor_id="operator-1", expected_generation=enabled["generation"])
+    store.start_step("cell-mission-1", step_index=0, action_id="action-0", attempt_id="attempt-0",
+                     grant=_grant(ready, 0))
+    store.record_action_result("cell-mission-1", step_index=0, event_id="e0", action_id="action-0",
+                               attempt_id="attempt-0", outcome="SUCCEEDED", result={})
+    job = store.confirm_step_goal("cell-mission-1", step_index=0, action_id="action-0",
+                                  attempt_id="attempt-0", evidence=_goal("action-0", "attempt-0", "g0"))
+
+    def drop_pallet_claim_and_start(job):
+        with store._connect() as connection:
+            connection.execute("DELETE FROM fleet_action_claims WHERE resource_key='pallet:pallet-1'")
+            connection.commit()
+        tag = len(job["events"])
+        return store.start_step("cell-mission-1", step_index=1, action_id=f"a-{tag}", attempt_id=f"t-{tag}",
+                                grant=_grant(job, 1, action_id=f"a-{tag}", attempt_id=f"t-{tag}"))
+
+    held = drop_pallet_claim_and_start(job)
+    assert held["reason"] == "FLEET_CLAIM_MISSING_BEFORE_SUBMISSION"
+    incomplete = [event for event in held["events"] if event["event_type"] == "CLAIM_SET_INCOMPLETE_AT_STOP"]
+    assert [(event["actor_id"], event["detail"]["context"]) for event in incomplete] == [("fleet", "pre-send")]
+    resumed = store.resume("cell-mission-1", actor_id="operator-2",
+                           expected_generation=tasks.dispatch_control()["generation"])
+    again = drop_pallet_claim_and_start(resumed)
+    assert len([event for event in again["events"] if event["event_type"] == "CLAIM_SET_INCOMPLETE_AT_STOP"]) == 2
+
+
+def test_a_vanished_job_does_not_abort_the_tick(tmp_path, monkeypatch):
+    # 1d item 5: KeyError for one Job is skipped; the others still go.
+    from test_step_dispatcher import _two_workcells
+    store, transport, dispatcher = _two_workcells(tmp_path)
+    start_step = store.start_step
+
+    def vanish(mission_id, **kwargs):
+        if mission_id == "job-b":
+            raise KeyError(mission_id)
+        return start_step(mission_id, **kwargs)
+
+    monkeypatch.setattr(store, "start_step", vanish)
+    dispatcher.dispatch_next()
+    assert [grant.mission_id for grant in transport.submissions] == ["job-c"]
+    assert store.get("job-b")["status"] == "READY"
