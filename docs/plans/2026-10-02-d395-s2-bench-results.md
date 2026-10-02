@@ -2,7 +2,7 @@
 
 P2-8 of [the fleet-assisted localization plan](2026-10-01-fleet-assisted-localization-plan.md): S2 is S1 plus simultaneous re-arbitration and homing in traffic, with zero collisions. [D-395](../adr/D-395-fleet-assisted-localization.md) rev. 9 closed S1 ([S1 results](2026-10-02-d395-s1-bench-results.md)) and names S2 as the next step.
 
-**Status: bench ready, runs pending** (WSL booked by other sessions until about 21:00 KST).
+**Verdict: S2 not completed — the host is too slow.** See "S2 2026-10-02" below. Only s2a (the 4-robot power-on) finished, once, and it passed.
 
 ## Pass bar
 
@@ -95,4 +95,104 @@ bash /mnt/x/DevTemp/rosy-d395-s2/leftover.sh
 # Windows
 python tools/sim/d395_s2_bench.py --check --out unused
 python tools/sim/d395_s2_summary.py X:\DevTemp\rosy-d395-s2\q1 ...
+```
+
+## S2 2026-10-02
+
+The slot ran 18:35–21:35 KST, on branch `test/d395-s2-bench`. Isolation was `GZ_PARTITION=rosy_d395e`, `ROS_DOMAIN_ID=99`, CORE on 18940–18943 and Fleet on 18995. Raw logs are in `X:\DevTemp\rosy-d395-s2\<run>\`: `run.json` where the bench saved one, plus `driver.log`, `launch.log`, `fleet.log` and `load.txt` (WSL load every 15 s). The folder also holds the scripts.
+
+**Verdict: S2 not completed — the host is too slow.** Four robots ran Gazebo at an average RTF of about 0.02 (0.0196–0.0259 per window). At that speed one power-on took 28 min wall, so no run reached s2c or s2b. s2d got as far as Fleet's hold and release, and the drivers never translated.
+
+| Scenario | Runs | Result |
+|---|---|---|
+| (s2a) 4-robot power-on | q1 | **1/1 pass** (details below) |
+| (s2d) homing in traffic | q1 (q0) | **not completed**: Fleet held both drivers correctly, released them when every robot was trusted, and they only turned toward their first goal before the stop |
+| (s2c) forced mirror | — | not reached |
+| (s2b) simultaneous pickup | — | not reached |
+
+**q1 s2a detail:**
+- r1 and r2 were LOCALIZED by `slot` at 6.7 sim s; r3 and r4 by `peers` at 38.5–38.7 sim s.
+- Errors were ≤ 1.3 cm / 1.0°.
+- 4 Fleet decisions, all at the truth: 0 mirror decisions and 0 human decisions.
+
+### Runs
+
+| run | Nav2 | wall | sim reached | avg RTF | WSL 1-min load | outcome |
+|---|---|---|---|---|---|---|
+| q0_uncomposed | separate processes (default) | 18:41–19:12 | 32.7 s at 1463 s wall | 0.022 | 4.5 → 159 | r1, r2 (`slot`) and r3 (`peers`) LOCALIZED, r4 rotating. Stopped by hand: hopeless speed. The bench was interrupted twice (my stop script's fault), so there is no `run.json`. |
+| q0_composed_noload | `nav_composition:=true` (new opt-in) | 19:27–19:58 | 53 s | 0.03 | 27–35 | Nav2 never loaded into the 4 containers: no map, no AMCL, every robot UNKNOWN. Stopped. |
+| q1 | separate processes | 20:02–21:01 | 85.1 s at 3483 s wall | 0.024 | 11 → 96–150 | s2a passed. s2d started; drivers held, then released, then rotated in place only. Stopped at 21:00 for the hard stop. |
+
+**Where the CPU went.** Background load was 4.5 at 18:35 and 11–30 between runs. The docker VM shares the kernel, so the WSL load includes non-Rosy containers.
+
+- **q0_uncomposed:** about 70 processes, 32 of them runnable. CPU split 59 % user and 32 % system. Gazebo (`ruby`) got 36 %.
+- **q0_composed_noload:** Nav2 never loaded, and still Gazebo used 120–136 % and four CORE processes 27–54 % each. Gazebo alone reached RTF 0.02–0.07. So Gazebo with 4 robots is the limit even before Nav2 runs.
+
+### q1 (s2a + s2d)
+
+Times are wall seconds since launch, with sim seconds in parentheses.
+
+| robot | CANDIDATES | LOCALIZED | cue | error |
+|---|---|---|---|---|
+| r1 (square A) | 179 (1.6) | 430 (6.7) | slot | 0.6 cm / 0.1° |
+| r2 (square B) | 161 (1.4) | 430 (6.7) | slot | 0.8 cm / 0.7° |
+| r3 (off-slot) | 180 (1.7) | 1689 (38.7) | peers | 0.4 cm / 1.0° |
+| r4 (off-slot) | 181 (1.7) | 1679 (38.5) | peers | 1.3 cm / 0.6° |
+
+**Pass bar:**
+- **Human decisions:** 0.
+- **Mirror decisions:** 0 of 4. All 4 were at the truth, judged by `d395_s2_summary.py` against the Gazebo trail.
+- **Collisions:** none. The closest pair in 572 truth rounds was r1–r3 at 0.889 m. No robot translated, so this proves little.
+- **Ladder:** Fleet sent `rotate_in_place` to r3 and r4 ("held []": no Fleet goal existed yet).
+
+**s2d.** The traffic started at 436 s (6.9 sim s). Then:
+- r1 and r2 were LOCALIZED, and r4 was in its rotation.
+- **Fleet held both goals** as `LOCALIZATION_UNTRUSTED`, `blocked_by rosy_03`. r3 had never been trusted, so it blocks the whole track (`trust.blocks`). Fleet had dispatched each goal, then cancelled it and confirmed the cancel (`dispatch_attempted`, `cancel_confirmed`).
+- **Fleet released the queue** at 1734 s, 45–55 s wall after r3 and r4 became anchors. This is the designed order: no Fleet goal moves while an unlocalized robot could be anywhere.
+- From release to the stop (about 40 sim s), r1 and r2 turned about 1 rad and 0.4 rad in place toward their first goals and travelled 0.000 m (truth).
+- Under this load CORE `/robot/state` reads timed out (20 s curl), and the bench re-posted a goal once while Nav2 was still active (`502 NAVIGATION_ACTIVE`).
+- So s2d has no movement and no leg finished. This is not a pass.
+
+### Findings
+
+- **F1. [Safety] Fleet can record a pre-D-395 ("legacy") pose as a robot's last trusted pose at power-on.**
+  - In q0, Fleet's first `/api/fleet/state` read came at 26 s, before loc_assist was up. All four robots read `localization: null`, so the badge said `legacy: true, trusted: true`.
+  - `FleetConsole._remember` → `trust.trusted_xy` stores the pose of a LEGACY row in `_trusted`. That pose is the odom pose at power-on, not a map pose.
+  - Later the same robots went UNKNOWN/CANDIDATES. Fleet then saw an untrusted robot *with* a last trusted pose, so it applied the 0.45 m keep-out around that stale odom point instead of blocking the whole track.
+  - **Evidence:** in q0, while r4 was CANDIDATES and rotating and had never been LOCALIZED, Fleet sent r1's and r2's goals to CORE (`POST /api/v1/navigation/goal 200` at 18:45:41 and 18:45:58). The fleet log has no cancel at that time.
+  - In q1 Fleet's first read came at 123 s, after loc_assist, so `legacy: false`. There the same goals were held, as designed.
+  - **Proposal (separate lane, not fixed here):** `_remember` should not treat a LEGACY row as trusted once the robot has ever reported `localization`. Or it should accept a trusted pose only in the map frame. A CORE that will report `localization` should send `UNKNOWN` (not `null`) from its first state.
+- **F2. Composed Nav2 does not start in gz_multi.** With `nav_composition:=true` (new, opt-in, default off), the four `component_container_isolated` processes started, but nothing loaded into them in 30 min: no map server, no AMCL, no lifecycle activation. The launch comment had warned of this race. The device path (`hardware.launch.py`) composes, so the sim path needs its own fix before it can use composition.
+- **F3. The bench under load.**
+  - CORE state reads time out, so the s2d re-post rule acted on stale navigation states once (`NAVIGATION_ACTIVE`).
+  - `stop_q.sh` signalled both the bench and its `timeout` wrapper, and the double SIGINT aborted the bench's own cleanup (q0). This was fixed for q1, which stopped cleanly and saved `run.json`.
+  - `kill_partition.sh` stops what is left by `GZ_PARTITION`, my own only.
+
+### Recommendation for running S2
+
+1. **A dedicated or idle host.**
+   - S1 two-robot runs reached RTF 0.37–0.64 on an idle host, against 0.1–0.16 when the host was shared.
+   - Four robots need roughly twice the CPU, so plan on a machine with ≥ 8 free cores and no other Gazebo or docker load.
+   - Expect a full run (power-on, traffic, mirror, pickup) to need about 250–300 sim s. At RTF 0.3 that is about 15 min; at 0.02 it is 4 h.
+2. **GPU rendering for `gpu_lidar`.**
+   - This host has an AMD Radeon 860M, `/dev/dxg`, WSLg and Mesa's `d3d12_dri.so`.
+   - Gazebo loads `gz-rendering-ogre2`. I did not verify whether it used `d3d12` or the `llvmpipe` software renderer. No `glxinfo` is installed.
+   - Check: `glxinfo -B` (`mesa-utils`) with `GALLIUM_DRIVER=d3d12`. Then compare Gazebo's CPU with 4 robots at rest.
+3. **Sim-only physics step.**
+   - The map_v2_fleet world has no `<physics>` block, so Gazebo runs its default 1 ms step.
+   - The repo's rig tools already use 5 ms: `src/runtime/sensing/tools/gz/rig_rate.py` sets it through `/world/<w>/set_physics` at run time, and `prepare_track_world.py` writes it into the world.
+   - Setting `max_step_size` 0.005 for the bench cuts physics work about 5×. It changes no robot code and no sensor rate. Verify that the diff-drive and Nav2 behave the same, as the rig did.
+4. **Lidar.** There is no sim xacro argument for the lidar: 640 samples at 10 Hz are hard-coded in `rosy_gz.urdf.xacro`. Adding a sim-only argument is possible. But loc_assist scores those beams, so fewer samples would change the localization inputs. Do this only with a separate decision.
+5. **Composition.** F2 must be fixed (the loading race in `gz_bringup_launch.xml` with a namespaced container) before `nav_composition:=true` can cut the process count by about 40.
+6. **Run order on a fast host.** Unchanged: `q1:t+c q2:t+c q3:b q4:b`, then `q5:t+c+b` if time is left.
+
+### Commands (this slot)
+
+```bash
+bash /mnt/x/DevTemp/rosy-d395-s2/build.sh
+LOAD_GATE=100 RUN_TIMEOUT=4900 BENCH_ARGS="--max-wall 4700 --min-rtf 0.01 --traffic-timeout 60" \
+  DEADLINE=20:10 bash /mnt/x/DevTemp/rosy-d395-s2/run_series.sh q1:t+c
+bash /mnt/x/DevTemp/rosy-d395-s2/stop_q.sh q1          # at 21:00 for the 21:35 hard stop
+bash /mnt/x/DevTemp/rosy-d395-s2/kill_partition.sh     # "left: 0", ports free
+python tools/sim/d395_s2_summary.py X:\DevTemp\rosy-d395-s2\q1
 ```

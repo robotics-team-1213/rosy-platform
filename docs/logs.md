@@ -4483,7 +4483,8 @@
 
 ## 2026-10-02 · uncommitted · docs(adr): D-395 개정 9 — S1 Gazebo 통과
 - 변경: 다른 세션과 조율한 조용한 시간대(13:54–16:09 KST)의 S1 네 번째 실행 15회를 기록하고 S1을 닫았다. 확정 오차 ≤1.2 cm / 1.2°, 거울 결정 0/35, 강제 거울 탐지 6/6(3.1–4.1 sim s), 실제 주행 중 들어 옮김 4회 완전 통과. 남은 단계는 S2(4대 sim), 실기(개정 5)·S3, D-257·D-393 개정 수락(사용자 승인).
-- 증거: `docs/plans/2026-10-02-d395-s1-bench-results.md` Run 4, `X:\DevTemposy-d395-s1d\`.
+- 증거: `docs/plans/2026-10-02-d395-s1-bench-results.md` Run 4, `X:\DevTemp
+osy-d395-s1d\`.
 - gate 변화: 없음(Proposed). ROS-SIM S1 통과.
 
 ## 2026-10-02 · uncommitted · docs(logs): D-395 개정 9 항목의 증거 경로 정정
@@ -4501,3 +4502,10 @@
 - 변경: 독립 리뷰(code-reviewer) 지적 8건 반영. 양보 자리 도착을 구간 완료로 세지 않고 진실 자세가 목표 0.25 m 안일 때만 센다. 시간 초과로 남은 Fleet 목표는 취소한다. s2b 낙하·검사·낡은 닻 함정은 그 순간의 진실 자세에서 다시 계산한다(r4는 제자리의 쌍둥이로). 탐지 지연은 `initialpose` 발행 시점부터 잰다. s2d는 귀환 중이 아니었거나 기록이 없으면 실패다. 활성 주행 상태는 PLANNING/NAVIGATING/BLOCKED다. CORE `state_stale`은 고발로 세지 않는다. sim 대기는 대기 시작 뒤의 첫 표본부터 잰다.
 - 증거: `python -m pytest test/test_d395_s2_bench.py test/test_d395_s1_bench.py -q` 16 passed (Windows). `--check` 배치 문제 0. Gazebo 실행은 아직 없다.
 - gate 변화: 없음.
+
+## 2026-10-02 · uncommitted · docs(plans): D-395 S2 4대 Gazebo 실행 — 미완료, 호스트가 너무 느리다 (test/d395-s2-bench)
+- 변경: `docs/plans/2026-10-02-d395-s2-bench-results.md`에 "S2 2026-10-02" 절과 판정 추가. 코드: `gz_multi`에 `nav_composition` 선택 인자(기본 false, 3c549586f), 벤치 목표 POST 제한 45 s.
+- 증거: WSL Jazzy 18:35–21:01 KST(GZ_PARTITION rosy_d395e, ROS_DOMAIN_ID 99). 4대 평균 RTF 약 0.02(창별 0.0196–0.0259), WSL 부하 96–159. q1: s2a 통과 — r1·r2 `slot` 6.7 sim s, r3·r4 `peers` 38.5–38.7 sim s, 오차 ≤1.3 cm/1.0°, Fleet 결정 4개 모두 참 자세, 거울 0, 사람 0, 최근접 쌍 0.889 m(충돌 0, 이동 없음). s2d: Fleet이 두 주행 로봇을 `LOCALIZATION_UNTRUSTED`로 붙잡고 r3·r4 확정 뒤 풀었다. 풀린 뒤 제자리 회전만, 이동 0 m. s2c·s2b 미도달. 조합 Nav2는 컨테이너에 노드가 실리지 않았다(F2). 원시 로그 `X:\DevTemp\rosy-d395-s2\`. 종료 뒤 rosy_d395e 프로세스 0, 포트 해제.
+- gate 변화: 없음. ROS-SIM S2 미완료.
+- 결정: 없음. 안전 발견 F1(전원 투입 직후 `localization: null` 행의 odom 자세를 Fleet이 마지막 신뢰 자세로 기록해 전 구간 차단 대신 0.45 m 금지 구역만 적용, q0에서 미확정 로봇 옆으로 목표 하달)은 별도 레인 제안. 권고: 전용/유휴 호스트, gpu_lidar GPU 렌더링 확인, sim 전용 물리 스텝 5 ms(rig_rate.py 선례).
+- 교훈: 2대에서 0.1–0.16이던 RTF가 4대에서 0.02로 떨어졌다. 대수에 비례하지 않는다 — 실행 전 짧은 전원 투입 측정으로 RTF를 먼저 확인했어야 했다.
