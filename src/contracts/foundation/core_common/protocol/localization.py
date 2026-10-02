@@ -73,6 +73,13 @@ class LocalizationStatus(BaseModel):
     reason: Optional[str] = Field(default=None, max_length=64)
     needs_human: bool = False
     request_id: Optional[str] = None
+    #: D-395 rev. 4 §5 follow-up (S1 R1): what a LOCALIZED robot's lidar sees that the map
+    #: does not explain, base_link, from one full scan; empty outside LOCALIZED. Fleet's
+    #: monitor places them from an anchor's map pose to check the other robots.
+    unmapped_objects: list[RobotPoint] = Field(default_factory=list, max_length=16)
+    #: Robot-clock stamp of that scan. Fleet uses it only to tell one scan from the next
+    #: (clocks are not synchronised, rev. 3); it times freshness from first sight.
+    objects_stamp: Optional[Finite] = None
 
     @field_validator("request_id")
     @classmethod
