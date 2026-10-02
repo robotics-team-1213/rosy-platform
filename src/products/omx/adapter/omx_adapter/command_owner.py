@@ -60,6 +60,12 @@ class ArmCommandConfig:
     # joint-state age and action time at this factor x the sim limits, so a frozen or
     # crawling simulation still HOLDs. None = the owner clock is already a wall clock.
     wall_clock_bound_factor: float | None = None
+    # Start-state windows (C3b A1, review minor 1). None = the owner ignores a window and
+    # requires the exact sequence match. Each window entry's tolerance must be <= this cap, and the
+    # window must name every commanded joint except the exempt ones (the gripper, whose
+    # readback after grasp is the object width and is judged by gripper_contract).
+    max_start_window_rad: float | None = None
+    start_window_exempt_joints: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         if not isinstance(self.enabled, bool):
@@ -118,6 +124,16 @@ class ArmCommandConfig:
         ))
         if self.action_timeout_s < self.max_goal_duration_s:
             raise ValueError("action_timeout_s must be at least max_goal_duration_s")
+        if self.max_start_window_rad is not None:
+            cap = self.max_start_window_rad
+            if (isinstance(cap, bool) or not isinstance(cap, (int, float))
+                    or not math.isfinite(cap) or cap <= 0):
+                raise ValueError("max_start_window_rad must be a positive finite number")
+            object.__setattr__(self, "max_start_window_rad", float(cap))
+        exempt = tuple(self.start_window_exempt_joints)
+        if not set(exempt) <= set(names):
+            raise ValueError("start_window_exempt_joints must name configured joints")
+        object.__setattr__(self, "start_window_exempt_joints", exempt)
         if self.wall_clock_bound_factor is not None:
             factor = self.wall_clock_bound_factor
             if (isinstance(factor, bool) or not isinstance(factor, (int, float))
@@ -339,6 +355,13 @@ class ArmCommandOwner:
     ) -> CommandDecision:
         return CommandDecision(accepted, self._state, reason, command_id, cancel_outcome)
 
+    def _clock_jumped_back(self, now: float) -> bool:
+        """Owner clock earlier than a recorded stamp: a sim world reset (review minor 2).
+        Ages would go negative and no timeout would fire, so it is a HOLD of its own."""
+        snapshot = self._joint_state
+        return ((snapshot is not None and now < snapshot.received_at)
+                or (self._active is not None and now < self._active[2]))
+
     def _fresh_joint_state(self, now: float) -> bool:
         snapshot = self._joint_state
         if snapshot is None or now < snapshot.received_at:
@@ -398,6 +421,9 @@ class ArmCommandOwner:
             if snapshot.received_at > self._monotonic():
                 self._enter_hold("joint_state_from_future")
                 return False
+            if self._joint_state is not None and snapshot.received_at < self._joint_state.received_at:
+                self._enter_hold("owner_clock_jumped_back")
+                return False
             if set(snapshot.positions) != set(self.config.joint_names):
                 self._enter_hold("joint_state_joint_map_mismatch")
                 return False
@@ -432,6 +458,9 @@ class ArmCommandOwner:
             now = self._monotonic()
             if self._joint_state is None:
                 return self._decision(False, "joint_state_missing", command_id)
+            if self._clock_jumped_back(now):
+                self._enter_hold("owner_clock_jumped_back")
+                return self._decision(False, "owner_clock_jumped_back", command_id)
             if not self._fresh_joint_state(now):
                 self._enter_hold("joint_state_stale")
                 return self._decision(False, "joint_state_stale", command_id)
@@ -450,10 +479,18 @@ class ArmCommandOwner:
             if command.calibration_revision != self.config.calibration_revision:
                 return self._decision(False, "calibration_mismatch", command_id)
             latest = self._joint_state
-            if command.start_state_window is None:
+            if command.start_state_window is None or self.config.max_start_window_rad is None:
+                # No window, or an owner not configured to admit one (e.g. the PICK_PLACE
+                # path): the exact sequence match, as before C3b.
                 if command.source_state_sequence != latest.sequence:
                     return self._decision(False, "joint_state_sequence_mismatch", command_id)
             else:
+                cap = self.config.max_start_window_rad
+                if any(tolerance > cap for _, tolerance in command.start_state_window.values()):
+                    return self._decision(False, "start_state_window_too_wide", command_id)
+                required = set(command.joint_names) - set(self.config.start_window_exempt_joints)
+                if not required <= set(command.start_state_window):
+                    return self._decision(False, "start_state_window_incomplete", command_id)
                 # Same safety meaning as the exact match: the command is dispatched only
                 # against a fresh state that the start check passed, here the newest one.
                 if not set(command.start_state_window) <= set(latest.positions):
@@ -523,6 +560,9 @@ class ArmCommandOwner:
                 return self._decision(True, "ready")
             command, handle, started_at = self._active
             now = self._monotonic()
+            if self._clock_jumped_back(now):
+                cancel_outcome = self._enter_hold("owner_clock_jumped_back")
+                return self._decision(False, "owner_clock_jumped_back", command.command_id, cancel_outcome)
             if not self._fresh_joint_state(now):
                 cancel_outcome = self._enter_hold("joint_state_stale")
                 return self._decision(

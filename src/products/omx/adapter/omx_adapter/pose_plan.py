@@ -111,6 +111,7 @@ class CellPlanningProfile:
     max_joint_state_age_s: float
     action_timeout_s: float
     wall_clock_bound_factor: float
+    max_start_window_rad: float
     # phase -> arm joint -> start tolerance, after grasp only (C3b A5: the held item deflects
     # the wrist). Joints not named keep start_state_tolerance_rad.
     phase_start_state_tolerance_rad: Mapping[str, Mapping[str, float]] = MappingProxyType({})
@@ -200,6 +201,7 @@ class CellPlanningProfile:
         action_timeout = _finite("owner.action_timeout_s", owner.get("action_timeout_s"), positive=True)
         if action_timeout < max(phase_max.values()):
             raise ValueError("owner.action_timeout_s must cover the longest phase")
+        start_window_cap = _finite("owner.max_start_window_rad", owner.get("max_start_window_rad"), positive=True)
         wall_factor = _finite("owner.wall_clock_bound_factor", owner.get("wall_clock_bound_factor"))
         if wall_factor < 1.0:
             raise ValueError("owner.wall_clock_bound_factor must be >= 1")
@@ -245,6 +247,7 @@ class CellPlanningProfile:
             max_joint_state_age_s=_finite("owner.max_joint_state_age_s",
                                           owner.get("max_joint_state_age_s"), positive=True),
             action_timeout_s=action_timeout, wall_clock_bound_factor=wall_factor,
+            max_start_window_rad=start_window_cap,
             phase_start_state_tolerance_rad=MappingProxyType(phase_tolerances), **positive,
         )
 
@@ -304,6 +307,8 @@ class CellPlanningProfile:
             max_goal_duration_s=max(self.phase_max_duration_s.values()),
             action_timeout_s=self.action_timeout_s,
             wall_clock_bound_factor=self.wall_clock_bound_factor,
+            max_start_window_rad=self.max_start_window_rad,
+            start_window_exempt_joints=(self.gripper_joint,),
         )
 
 
