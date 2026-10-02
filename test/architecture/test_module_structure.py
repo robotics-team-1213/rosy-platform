@@ -402,6 +402,14 @@ SIZE_VERDICTS = {
         "accept: single-entry hardware probe CLI the commissioning runbook drives top-to-bottom — "
         "splitting probe sequence from reporting would sever one diagnostic narrative (X5)",
     ),
+    "site/fleet/fleet/cli.py": (
+        604,
+        "accept: the Fleet composition root (2026-10-02, C4b G5) parses every console flag and "
+        "assembles create_app once; the Cell Job compiler flag added 10 lines and the palletizing "
+        "import stays lazy here so a site install without that wheel still starts. Split the "
+        "per-feature service builders (mission, pairing, localization) into a builder module "
+        "before the next flag",
+    ),
     "products/omx/adapter/omx_adapter/action_store.py": (
         1_191,
         "accept: one owner for the durable local Action, per-attempt ROS phase journal, and semantic "
