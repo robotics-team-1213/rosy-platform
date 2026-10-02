@@ -155,3 +155,33 @@ def test_refuse_second_owner_sees_the_cell_owner_and_the_pilot(tmp_path):
         refuse_second_owner(proc_root=proc)
     (proc / "4001" / "cmdline").write_bytes(b"bash\0-c\0sleep")
     refuse_second_owner(proc_root=proc)
+
+
+def test_sim_gripper_width_comes_from_the_grant_recipe(tmp_path):
+    # 1b C2: two accepted recipes with different box widths; the readback uses the grant's.
+    from rosy_agent.omx_cell_owner import sim_gripper_observation
+
+    owner, _ = _build(tmp_path)
+    recipe, cell = _docs()
+    owner.acceptance.accept_cell(cell, actor_id="operator-1")
+    narrow = owner.acceptance.accept_recipe(recipe, actor_id="operator-1")["recipe_sha256"]
+    wide_recipe = {**recipe, "box": {**recipe["box"], "width": 0.036}}
+    wide = owner.acceptance.accept_recipe(wide_recipe, actor_id="operator-1")["recipe_sha256"]
+    wide_grant, narrow_grant = _grant(owner, "c" * 64, wide), _grant(owner, "c" * 64, narrow)
+    real, widths = owner.profile, []
+
+    class Spy:
+        gripper_joint = real.gripper_joint
+
+        def gripper_close_for_width(self, width):
+            widths.append(width)
+            return real.gripper_close_for_width(width)
+
+        def gripper_contact_for_width(self, width):
+            return real.gripper_contact_for_width(width)
+
+    owner.profile = Spy()
+    state = SimpleNamespace(sequence=5, received_at=100.0, positions={real.gripper_joint: 0.4})
+    sim_gripper_observation(owner, state, wide_grant)
+    sim_gripper_observation(owner, state, narrow_grant)
+    assert widths == [0.036, 0.03]

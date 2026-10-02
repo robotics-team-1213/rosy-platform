@@ -25,7 +25,6 @@ for _part in ("src/contracts/foundation", "src/products/omx/adapter", "apps/agen
 from cell_sim_tools import refuse_second_owner  # noqa: E402
 
 WORKCELL_ID, INSTANCE_ID = "omx_cell_sim", "omx_cell_sim_01"
-OPEN_TOL_RAD = 0.05
 
 
 def main() -> None:
@@ -42,11 +41,10 @@ def main() -> None:
     from rclpy.node import Node
     from rclpy.parameter import Parameter
 
-    from omx_adapter.gripper_contract import GripperObservation
     from omx_adapter.pilot_sim_api import create_pilot_sim_app
     from omx_adapter.pilot_sim_runtime import PilotSimRuntime
     from omx_adapter.ros_runtime import RosArmCommandRuntime, RosArmPhaseGoalPort
-    from rosy_agent.omx_cell_owner import CellOwnerSettings, build_cell_owner
+    from rosy_agent.omx_cell_owner import CellOwnerSettings, build_cell_owner, sim_gripper_observation
 
     rclpy.init()
     node = Node("rosy_omx_cell_owner", parameter_overrides=[Parameter("use_sim_time", value=True)])
@@ -57,18 +55,8 @@ def main() -> None:
                                     trajectory_action="/arm_controller/follow_joint_trajectory",
                                     owner_clock="sim")
 
-    def gripper_readback() -> GripperObservation:
-        """SIM GRIPPER SENSOR (labelled, as in the C3b probe): finger position vs the accepted width."""
-        owner, state = holder["owner"], holder["owner"].runtime.latest_joint_state
-        recipes = owner.acceptance.current()["recipes"]
-        width = owner.acceptance.accepted_item_geometry(next(iter(recipes)), "box")["grasp_width_m"]
-        close_q = owner.profile.gripper_close_for_width(width)
-        threshold = (owner.profile.gripper_contact_for_width(width) - close_q) / 2
-        q = state.positions[owner.profile.gripper_joint]
-        present = q >= close_q + threshold
-        return GripperObservation(WORKCELL_ID, INSTANCE_ID, "omx-sim-gripper-joint-position-v2",
-                                  state.sequence, state.received_at, "CLOSED", present,
-                                  "box" if present else None, 1)
+    def gripper_readback(grant):
+        return sim_gripper_observation(holder["owner"], holder["owner"].runtime.latest_joint_state, grant)
 
     root = Path(os.environ.get("ROSY_CELL_OWNER_JOURNAL", "/var/lib/rosy-omx-cell"))
     owner = build_cell_owner(

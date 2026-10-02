@@ -25,6 +25,7 @@ from omx_adapter.action_runner import ActionRunner
 from omx_adapter.action_store import ActionStore
 from omx_adapter.cell_acceptance import CellAcceptanceStore
 from omx_adapter.command_owner import TrajectoryCommand
+from omx_adapter.gripper_contract import GripperObservation
 from omx_adapter.kinematics import OmxKinematics
 from omx_adapter.local_stop import LocalStopController
 from omx_adapter.manipulation_plan import ExecutionStateSnapshot
@@ -73,7 +74,7 @@ def build_cell_owner(settings: CellOwnerSettings, *,
                      goal_port_factory: Callable[[Any], Any],
                      http_app_factory: Callable[[Any], Any],
                      refuse_second_owner: Callable[[], None],
-                     gripper_readback: Callable[[], Any],
+                     gripper_readback: Callable[[Any], Any],
                      fleet_fence_current: Callable[[int, int], bool]) -> CellOwner:
     refuse_second_owner()
     kinematics = OmxKinematics.load()
@@ -129,7 +130,7 @@ def build_cell_owner(settings: CellOwnerSettings, *,
             current_execution_state=execution_state,
             start_state_tolerances=profile.start_state_tolerances(),
             max_joint_state_age_s=profile.max_joint_state_age_s, monotonic=runtime.monotonic,
-            cell_profile=profile, gripper_readback=gripper_readback,
+            cell_profile=profile, gripper_readback=lambda: gripper_readback(grant),
             held_object_id=grant.cell_transfer.item)
 
     phase_factory = create_cell_transfer_phase_factory(
@@ -153,6 +154,22 @@ def build_cell_owner(settings: CellOwnerSettings, *,
                      action_api, uds_server, http_app_factory(runtime))
 
 
+def sim_gripper_observation(owner: CellOwner, state: Any, grant: Any) -> GripperObservation:
+    """SIM GRIPPER SENSOR (labelled, as in the C3b probe): finger angle against the width of the
+    item in the recipe the grant names (1b C2), never another accepted recipe."""
+    transfer = grant.cell_transfer
+    geometry = owner.acceptance.accepted_item_geometry(transfer.recipe_sha256, transfer.item)
+    if geometry is None:
+        raise RuntimeError("the grant's recipe/item is not accepted on this owner")
+    width = geometry["grasp_width_m"]
+    close_q = owner.profile.gripper_close_for_width(width)
+    threshold = (owner.profile.gripper_contact_for_width(width) - close_q) / 2
+    present = state.positions[owner.profile.gripper_joint] >= close_q + threshold
+    return GripperObservation(owner.settings.workcell_id, owner.settings.instance_id,
+                              "omx-sim-gripper-joint-position-v2", state.sequence, state.received_at,
+                              "CLOSED", present, transfer.item if present else None, 1)
+
+
 class _NoDirectDriver:
     """CELL_TRANSFER runs through its phase runner only (D-402 §3); no direct driver kind exists."""
 
@@ -163,4 +180,4 @@ class _NoDirectDriver:
         return None
 
 
-__all__ = ["ALLOWED_OWNERS", "CellOwner", "CellOwnerSettings", "build_cell_owner"]
+__all__ = ["ALLOWED_OWNERS", "CellOwner", "CellOwnerSettings", "build_cell_owner", "sim_gripper_observation"]
