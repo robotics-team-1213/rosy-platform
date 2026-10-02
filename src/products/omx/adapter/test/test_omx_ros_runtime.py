@@ -262,6 +262,10 @@ def test_runtime_timeout_latches_hold_and_late_cancel_result_does_not_reopen_own
         while time.monotonic() < deadline and runtime.owner.state != "hold":
             time.sleep(0.01)
         assert runtime.owner.state == "hold"
+        # The watchdog assigns last_terminal_decision just after owner.poll() latches HOLD.
+        deadline = time.monotonic() + 3.0
+        while time.monotonic() < deadline and runtime.last_terminal_decision is None:
+            time.sleep(0.01)
         assert runtime.owner.poll().reason == "action_timeout"
         assert runtime.last_terminal_decision.reason == "action_timeout"
         assert runtime.submit(command).reason == "hold_latched"
@@ -418,3 +422,56 @@ def test_sim_owner_clock_uses_the_node_clock_and_requires_a_wall_bound():
             runtime.destroy()
         node.destroy_node()
         rclpy.shutdown()
+
+
+def test_feedback_before_the_goal_response_does_not_fail_the_goal():
+    """Review B1: with the action client in its own callback group, rclpy may run the
+    feedback callback before the send-goal future's done callback. That feedback has no
+    goal id yet; it must be dropped as telemetry, never mark the observation failed."""
+    from types import SimpleNamespace
+    from uuid import uuid4
+
+    from action_msgs.msg import GoalStatus
+    from omx_adapter.ros_runtime import RosTrajectoryActionHandle
+
+    class Future:
+        def __init__(self, value=None):
+            self.value, self.callbacks = value, []
+
+        def add_done_callback(self, callback):
+            self.callbacks.append(callback)
+
+        def result(self):
+            return self.value
+
+    sent = {}
+
+    class Client:
+        def send_goal_async(self, goal, feedback_callback):
+            sent["feedback"] = feedback_callback
+            sent["future"] = Future()
+            return sent["future"]
+
+    events = []
+    command = TrajectoryCommand(
+        workcell_id="w", instance_id="i", command_id="early-feedback", session_id="s", owner="moveit",
+        positions={"joint1": 0.1}, duration_s=0.5, source_state_sequence=1, calibration_revision="cal",
+        phase_id="approach",
+    )
+    handle = RosTrajectoryActionHandle(Client(), command, lambda event: events.append(event) or True)
+    sent["feedback"](SimpleNamespace())  # before the goal response
+    result_future = Future(SimpleNamespace(status=GoalStatus.STATUS_SUCCEEDED, result=SimpleNamespace(
+        error_code=FollowJointTrajectory.Result.SUCCESSFUL)))
+    goal_handle = SimpleNamespace(accepted=True, goal_id=SimpleNamespace(uuid=list(uuid4().bytes)),
+                                  get_result_async=lambda: result_future)
+    sent["future"].value = goal_handle
+    for callback in sent["future"].callbacks:
+        callback(sent["future"])
+    sent["feedback"](SimpleNamespace())
+    for callback in result_future.callbacks:
+        callback(result_future)
+    assert handle.done() and handle.succeeded()
+    # The early feedback is replayed once after acceptance, in order.
+    assert [event.kind for event in events] == [
+        "GOAL_ACCEPTED", "RUNNING_FEEDBACK", "RUNNING_FEEDBACK", "TERMINAL_RESULT"]
+    assert [event.sequence for event in events] == [1, 2, 3, 4]

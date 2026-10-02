@@ -55,6 +55,7 @@ class RosTrajectoryActionHandle(ActionHandle):
         self._goal_id: str | None = None
         self._event_sequence = 0
         self._feedback_sequence = 0
+        self._early_feedback = 0
         self._observation_failed = False
 
         goal = FollowJointTrajectory.Goal()
@@ -109,12 +110,15 @@ class RosTrajectoryActionHandle(ActionHandle):
     def _on_feedback(self, message: Any) -> None:
         with self._lock:
             goal_id = self._goal_id
+            if goal_id is None:
+                # rclpy may run feedback (action-client callback group) before the send-goal
+                # future's done callback that records the goal id. Buffer it (only that it
+                # happened) and replay one RUNNING_FEEDBACK after GOAL_ACCEPTED; never fail
+                # the observation for it (review B1).
+                self._early_feedback += 1
+                return
             self._feedback_sequence += 1
             feedback_sequence = self._feedback_sequence
-        if goal_id is None:
-            with self._lock:
-                self._observation_failed = True
-            return
         self._emit(
             "RUNNING_FEEDBACK",
             goal_id=goal_id,
@@ -167,7 +171,13 @@ class RosTrajectoryActionHandle(ActionHandle):
             self._goal_handle = goal_handle
             self._goal_id = goal_id
             cancel_pending = self._cancel_requested
+            early_feedback = self._early_feedback
         self._emit("GOAL_ACCEPTED", goal_id=goal_id)
+        if early_feedback:
+            with self._lock:
+                self._feedback_sequence += 1
+                feedback_sequence = self._feedback_sequence
+            self._emit("RUNNING_FEEDBACK", goal_id=goal_id, feedback_sequence=feedback_sequence)
         try:
             result_future = goal_handle.get_result_async()
             result_future.add_done_callback(self._on_result)
