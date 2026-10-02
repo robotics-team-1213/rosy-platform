@@ -15,6 +15,7 @@ from core_common.protocol.schemas import FleetActionGrant
 
 from .action_runner import StopFence
 from .command_owner import TrajectoryCommand
+from .gripper_contract import GripperObservation, verify_held_object
 from .local_stop import LocalStopBlocked
 from .manipulation_plan import (
     ExecutionStateSnapshot,
@@ -77,6 +78,8 @@ class PickPlaceRunner:
         monotonic: Callable[[], float] = time.monotonic,
         now: Callable[[], datetime] | None = None,
         cell_profile: CellPlanningProfile | None = None,
+        gripper_readback: Callable[[], GripperObservation] | None = None,
+        held_object_id: str | None = None,
     ) -> None:
         self.recorder = recorder
         self.grant = grant
@@ -122,6 +125,12 @@ class PickPlaceRunner:
                 now_monotonic_s=monotonic(),
             )
             self._unchecked_joints = frozenset({cell_profile.gripper_joint})
+            # A4 (C3b): the hold is re-read right before release (C3 run8 dropped the block
+            # in transit and still passed every gate).
+            if not callable(gripper_readback) or not isinstance(held_object_id, str) or not held_object_id:
+                raise ValueError("a CellTransferPlan requires gripper_readback and held_object_id")
+        self.gripper_readback = gripper_readback
+        self.held_object_id = held_object_id
         if not callable(current_execution_state):
             raise ValueError("fresh execution-state and monotonic clock providers are required")
         if isinstance(max_joint_state_age_s, bool):
@@ -268,6 +277,14 @@ class PickPlaceRunner:
             raise RuntimeError("prior phase identity is not the coordinator's active phase")
         if self._current_goal_id != previous["driver_goal_id"]:
             raise RuntimeError("prior terminal result does not match the active ROS goal")
+        if isinstance(self.plan, CellTransferPlan) and next_phase.phase_id == "release":
+            try:
+                verify_held_object(self.gripper_readback(), object_id=self.held_object_id,
+                                   now=self.monotonic(), max_age_s=self.max_joint_state_age_s)
+            except Exception as exc:
+                self.recorder.hold(reason="ITEM_LOST_IN_TRANSIT")
+                raise RuntimeError("item_lost_in_transit: gripper no longer proves the hold; "
+                                   "release is not submitted") from exc
         return self._submit_phase(next_phase, first=False)
 
     def _submit_phase(self, phase: PlannedMotionPhase, *, first: bool) -> dict[str, object]:

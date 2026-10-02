@@ -8,6 +8,7 @@ from core_common.protocol.schemas import FleetActionGrant
 from omx_adapter.action_runner import ActionRunner, action_grant_digest
 from omx_adapter.action_store import ActionStore
 from omx_adapter.command_owner import TrajectoryCommand
+from omx_adapter.gripper_contract import GripperObservation
 from omx_adapter.kinematics import ARM_JOINTS, OmxKinematics
 from omx_adapter.manipulation_plan import ExecutionStateSnapshot
 from omx_adapter.phase_recorder import ActionPhaseRecorder
@@ -89,8 +90,13 @@ def profile():
     return CellPlanningProfile.load(PROFILE_PATH)
 
 
+def _held(present=True, *, received_at=100.6, object_id="box"):
+    return GripperObservation("omx-1", "omx-1-control", "test-sensor", 7, received_at,
+                              "CLOSED", present, object_id if present else None, 8)
+
+
 def _phase_runner(tmp_path, kin, profile, *, plan=None, grippers=None, arm_delta=0.0,
-                  cell_profile="default"):
+                  cell_profile="default", readback="default"):
     """Runner whose state provider returns each phase's planned start, with overrides."""
     grant = FleetActionGrant.model_validate(_grant())
     store = ActionStore(tmp_path / "cell.sqlite3")
@@ -144,6 +150,7 @@ def _phase_runner(tmp_path, kin, profile, *, plan=None, grippers=None, arm_delta
         start_state_tolerances=profile.start_state_tolerances(),
         max_joint_state_age_s=0.5, monotonic=lambda: 100.7,
         cell_profile=profile if cell_profile == "default" else cell_profile,
+        gripper_readback=_held if readback == "default" else readback, held_object_id="box",
     )
     return recorder, port, runner
 
@@ -202,3 +209,45 @@ def test_runner_hands_the_owner_its_start_check_as_a_window(tmp_path, kin, profi
         assert set(window) == set(phase.joint_names) - skipped
         for name, (value, tolerance) in window.items():
             assert value == expected[name] and tolerance == tolerances[name]
+
+
+# A4 (C3b): C3 run8 passed every gate while the block fell in transit. The runner re-reads
+# the gripper immediately before submitting release and HOLDs if it no longer holds the item.
+def test_release_is_not_submitted_when_the_item_was_lost_in_transit(tmp_path, kin, profile):
+    recorder, port, runner = _phase_runner(tmp_path, kin, profile,
+                                           readback=lambda: _held(present=False))
+    runner.start()
+    runner.advance()
+    runner.advance()
+    with pytest.raises(RuntimeError, match="item_lost_in_transit"):
+        runner.advance()
+    assert [command.phase_id for command, _ in port.submissions] == ["approach", "grasp", "transfer"]
+    parent = recorder.parent()
+    assert parent["state"] == "HOLD" and parent["reason"] == "ITEM_LOST_IN_TRANSIT"
+
+
+@pytest.mark.parametrize("readback", [
+    lambda: _held(received_at=99.0),            # stale (max age 0.5 s at t=100.7)
+    lambda: _held(object_id="slip_sheet"),      # another item
+    lambda: (_ for _ in ()).throw(OSError("no readback")),
+])
+def test_release_holds_on_a_stale_wrong_or_missing_readback(tmp_path, kin, profile, readback):
+    recorder, port, runner = _phase_runner(tmp_path, kin, profile, readback=readback)
+    runner.start()
+    runner.advance()
+    runner.advance()
+    with pytest.raises(RuntimeError, match="item_lost_in_transit"):
+        runner.advance()
+    assert recorder.parent()["reason"] == "ITEM_LOST_IN_TRANSIT"
+    assert len(port.submissions) == 3
+
+
+def test_release_proceeds_after_a_fresh_hold_readback(tmp_path, kin, profile):
+    recorder, port, runner = _phase_runner(tmp_path, kin, profile)
+    _run_all(runner)
+    assert [row["state"] for row in recorder.phases()] == ["SUCCEEDED"] * 4
+
+
+def test_cell_transfer_runner_requires_a_gripper_readback(tmp_path, kin, profile):
+    with pytest.raises(ValueError, match="gripper_readback"):
+        _phase_runner(tmp_path, kin, profile, readback=None)
