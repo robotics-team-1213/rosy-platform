@@ -411,3 +411,4 @@
 | D-413 | ROSY는 modules·integrations·apps·profiles로 책임을 나누고 고정 셀 한 흐름부터 이전한다 | Accepted (2026-10-02; target architecture and phased migration only; runtime and device gates unchanged) |
 | D-414 | 관제 콘솔 바로 동작: 비상 정지는 확인 없는 한 번 누름(브라우저 시험의 전체 정지 확인 폐지 — 비상 출구에 마찰은 사고), /console/install 발견(mDNS) 목록이 장치 카드+등록 버튼을 그린다(D-410 이관 때 빠진 렌더 충원), 상시 안내 문단은 제목 title로 물러나고 기록 패널이 제목을 얻는다 | Accepted (2026-10-02, 사용자 지시 — 설명 대신 즉시 동작; 비활성 사유 등 접근성 안내는 글로 유지) |
 | D-415 | 관제 콘솔 운용 가시성: 로그 뷰어(펼침/지우기/120줄), 진단 패널(상태 주기·로봇별 오류·발견 검색기·API 경로), 신호등 빈 상태 안내, 카메라 프리뷰 마지막 영상 시각 | Accepted (2026-10-02, 사용자 지시 — 로그·디버그 가시성; 네 단계 순차 실행) |
+| D-418 | 로봇 SSH 접속은 세 길: LCD 일회용 코드로 기기별 키 등록(CORE administrator API → root `rosy-ssh-access` 도우미, `/var/lib/rosy/ssh/authorized_keys`, `expiry-time`), 필요할 때만 켜는 로봇별 임시 비밀번호(최대 60분, 사설 대역, `MaxAuthTries 3`, 재부팅 시 해제), passphrase로 잠근 회수 가능한 팀 키 묶음 공유(`tools/ssh/rosy_ssh_share.py`). 공통 기본 비밀번호와 마스터 키 공유는 기각 | Accepted (2026-10-02) |

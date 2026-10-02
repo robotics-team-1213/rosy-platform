@@ -352,3 +352,21 @@ def test_trail_expires_while_waiting_for_the_console():
     _drive(m, 20.0, 40.0, front=0.15, range_min=0.15)            # last forward ~3 s, now 40 s
     with pytest.raises(AnswerRefused, match="rear_blind"):
         m.stuck_decision(stuck_id, "BACK_AND_RETRY", by="operator", now=40.0)
+
+
+@pytest.mark.parametrize("known, scan_age, rear_m, state", [
+    (True, 0.1, None, "clear"),          # fresh scan, rear band empty
+    (True, 0.1, 0.30, "clear"),          # wider than recovery_rear_clear_m
+    (True, 0.1, 0.061, "clear"),
+    (True, 0.1, 0.06, "blocked"),        # at the threshold counts as blocked
+    (True, 0.1, 0.02, "blocked"),
+    (True, 0.6, None, "unknown"),        # scan older than clearance_stale_s (0.5)
+    (True, None, None, "unknown"),       # no scan at all
+    (False, 0.1, None, "unknown"),       # no URDF body geometry
+])
+def test_rear_state_tells_empty_from_unknown(known, scan_age, rear_m, state):
+    """Review M4: StuckRecoveryMixin._rear_state directly."""
+    m, _ = _manager(linked=True)
+    if scan_age is not None:
+        m.observe_body_points([], range_min=0.0, received_at=10.0 - scan_age)
+    assert m._rear_state(known, rear_m, 10.0) == state

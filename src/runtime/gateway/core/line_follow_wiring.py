@@ -74,6 +74,8 @@ def _line_follow_config(raw: dict[str, Any]) -> LineFollowConfig:
         recovery_trail_yaw_deg=float(raw.get("recovery_trail_yaw_deg", defaults.recovery_trail_yaw_deg)),
         recovery_trail_max_age_s=float(raw.get(
             "recovery_trail_max_age_s", defaults.recovery_trail_max_age_s)),
+        recovery_console_grace_s=float(raw.get(
+            "recovery_console_grace_s", defaults.recovery_console_grace_s)),
         recovery_restuck_s=float(raw.get("recovery_restuck_s", defaults.recovery_restuck_s)),
         recovery_restuck_m=float(raw.get("recovery_restuck_m", defaults.recovery_restuck_m)),
         recovery_rear_lateral_margin_m=float(raw.get(
@@ -88,7 +90,8 @@ def _line_follow_config(raw: dict[str, Any]) -> LineFollowConfig:
 def bind_stuck_recovery(line_follow, *, safety, calibration, fleet_agent, vision) -> None:
     """D-407 inputs: console link (FleetAgent), calibration lease, D-342 linear limit, preview seq."""
     line_follow.bind_recovery(
-        console_linked=lambda: bool(fleet_agent.connected),
+        # A brief agent reconnect does not read as "no console" mid-ASKING (D-407 2026-10-02).
+        console_linked=lambda: fleet_agent.linked_within(line_follow.config.recovery_console_grace_s),
         calibration_active=lambda: calibration.current() is not None,
         linear_ceiling=lambda: float(safety.limits.manual_linear),
         preview_seq=lambda: vision.status().get("sequence"),

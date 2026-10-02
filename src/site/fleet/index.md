@@ -77,5 +77,5 @@
 - 2026-10-02 · uncommitted · test(fleet): replay late OMX success without clearing Mission HOLD
 - 2026-10-02 · uncommitted · 관제 콘솔 회차 7 — D-415 운용 가시성(로그 뷰어·진단 패널·신호등 빈 상태)
 - 2026-10-02 · uncommitted · 관제 콘솔 회차 6 — D-414 바로 동작(원클릭 정지·발견 카드·안내 축소)
+- 2026-10-02 · bcce15c9d · fix(hub): 닫힌 소켓에 보내지 않음; 판단 요청 패널 뒤 여유 "비어 있음"/"알 수 없음"
 - 2026-10-02 · uncommitted · D-413 Task 4 Cell Job journal and approval boundary
-- 2026-10-02 · uncommitted · D-407 판단 요청 — main 병합, API Ref v1.77
