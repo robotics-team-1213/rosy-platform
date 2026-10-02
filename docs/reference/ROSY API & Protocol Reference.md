@@ -2,7 +2,7 @@
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.75
+**Version:** v1.76
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -142,6 +142,13 @@ Fleet 의 로봇 토큰은 operator 토큰이다(`robots.yaml` 의 `token`, 또�
 | `LINE_FOLLOW_ACTIVE` | 409 | 라인 추종이 켜져 있어 도킹/언도킹을 시작하지 않음 — `line-follow/mode` 를 `OFF` 로 먼저 (v1.18) | 로봇 |
 | `IR_FALLBACK_NOT_READY` | 409 | 카메라 고장 상태, IR 라인 증거 최신성, 보정 revision, 또는 센서 안전 정책을 만족하지 못함 | 로봇 |
 | `NO_ODOMETRY` | 409 | 오도메트리가 없어 언도킹 후진 거리를 잴 수 없음 (v1.18) | 로봇 |
+| `RECORDING_BUSY` | 409 | Pilot 로봇 녹화가 진행 중이거나 manifest 해시를 끝내는 중(`stopping`) — 동시 녹화는 1개, 그동안 시작·수신 불가 (D-411, v1.76) | 로봇 |
+| `RECORDING_NOT_ACTIVE` | 409 | 정지할 녹화가 없음 (`POST /recordings/active/stop`, D-411, v1.76) | 로봇 |
+| `ROBOT_MOVING` | 409 | 녹화 수신은 정지 중에만: 살아 있는 MANUAL 입력 없음·NAVIGATION/DOCKING 아님·line-follow OFF·신선한 0 속도(또는 E-Stop). MANUAL 모드 자체는 막지 않는다 (D-411, D-136 §6, v1.76) | 로봇 |
+| `RECORDING_NOT_FOUND` | 404 | 없는 녹화 id, 안전하지 않은 id, manifest 없음·무효, manifest 와 다른 크기·폴더 밖·일반 파일 아닌 멤버 (D-411, v1.76) | 로봇 |
+| `RECORDING_QUOTA_FULL` | 507 | 받지 않은(fetched 아님) 녹화로 전용 쿼터의 예비분까지 찼다 — 받아 가면 정리 대상이 된다 (D-411, v1.76) | 로봇 |
+| `RECORDING_DISK_FULL` | 507 | 녹화 디스크의 빈 공간이 512 MiB 이하라 시작을 거부함 (D-411, v1.76) | 로봇 |
+| `RECORDER_UNAVAILABLE` | 503 | 카메라 유닛 녹화기의 상태가 없거나 3 s 넘게 낡음, 서비스 무응답, 저장 디렉터리 없음·쓰기 불가, rosbag2 기동 실패 (D-411, v1.76) | 로봇 |
 | `ROBOT_OFFLINE` | 503 | 대상 로봇 미접속 | Fleet |
 | `HW_PROBE_UNAVAILABLE` | 503 | 장치 점검 요청 파일을 쓰지 못함 (`POST /host/hardware/refresh`, D-247) | 로봇 |
 | `HW_TEST_COOLDOWN` | 429 | 부저·램프 시험을 10초 안에 다시 요청함 (`POST /host/hardware/test`, D-247 6, v1.23) | 로봇 |
@@ -370,6 +377,38 @@ v1.70 추가 경로(모두 Bearer 인증):
 | GET | `/recordings/{episode_id}/manifest` | 원본 manifest; 미등록/잘못된 UUID 404; 서버 파일 경로 없음 |
 
 기록은 10 simulation FPS 영상과 그 시각 이전 50 ms 이내의 관절 상태, ROS 수락 UUID가 있는 절대 목표(rad)를 묶는다. 영상 신선도 2초와 현재 관절 스트림 신선도 0.5초는 별도다. 지연 영상은 과거 상태와 pair하며 미래 상태를 사용하지 않는다. 프레임 누락/시계 역행/취소/HOLD/조종권 반납·만료/서버 종료/미선택 결과는 `incomplete`이며 export를 거부한다. `success`는 운용자가 지정한 과제 결과이며 Action 성공과 구분한다. 기록은 최대 3000프레임, 저장 위치는 서버 설정으로만 지정한다. LeRobot 0.4.4 오프라인 변환은 `omx_sim_ros`/rad를 유지하고, 영상 시간축은 index/fps, 실제 Gazebo 시각은 int64 source 필드와 원본 해시로 보존한다. 업로드·학습·정책 실행 API는 없다. 실물 OMX 명령을 이 경로로 보내거나 `omx.disabled.yaml`을 켜서는 안 된다.
+
+## 5.10 Pilot 로봇 녹화 (D-411, v1.76)
+
+녹화 주체는 카메라 유닛(`rosy-camera`)의 `pilot_recorder_node` 다. CORE 는 `std_srvs/SetBool` `pilot_recorder/set_active` 로 시작·정지를 **요청**만 하고, 래치된 `pilot_recorder/status`(`rosy.pilot.recording.status/1`, 1 Hz)를 받아 판단한다. 녹화는 증거일 뿐이며 제어 경로는 이 토픽들을 읽지 않는다(D-2). 스키마 정본은 `core_common.protocol.recording` 이다.
+
+| Method | 경로 | 권한 | 요청/응답 |
+|---|---|---|---|
+| GET | `/api/v1/recordings` | Viewer | `{active, items[RecordingSummary], download_allowed, download_blocker}` — `active` 는 녹화기 상태(낡았으면 `null`), `items` 는 최신순 `{id, started_at, ended_at, duration_s, bytes, topics, status: recording\|complete\|incomplete, manifest_sha256, fetched}`, `download_blocker` 는 `RECORDING_BUSY`·`ROBOT_MOVING`·`null` |
+| GET | `/api/v1/recordings/active` | Viewer | `{active, owned}` — `owned` 는 호출 토큰이 시작한 녹화인가 |
+| POST | `/api/v1/recordings` | Operator | 201 `RecorderStatus`. 거부: 409 `RECORDING_BUSY`, 507 `RECORDING_QUOTA_FULL`·`RECORDING_DISK_FULL`, 503 `RECORDER_UNAVAILABLE` |
+| POST | `/api/v1/recordings/active/stop` | Operator | `RecorderStatus`(대개 `stopping`). 시작한 토큰 또는 Admin 만, 아니면 403 `FORBIDDEN`; 없으면 409 `RECORDING_NOT_ACTIVE` |
+| GET | `/api/v1/recordings/{id}/archive` | Operator | `application/x-tar` 무압축 USTAR(mcap 은 이미 zstd), `Content-Length` 정확, `Cache-Control: no-store`. 멤버는 `<id>/manifest.json` 다음 manifest 가 적은 파일만. 정지 중에만(409 `RECORDING_BUSY`·`ROBOT_MOVING`), 없는·안전하지 않은 id 404 `RECORDING_NOT_FOUND` |
+
+- 한 번에 1개, 최대 600 s. 전용 쿼터(기본 4 GiB, 예비 1 GiB) 안에서 시작하며, 디스크 빈 공간이 512 MiB 이하면 시작하지 않는다. 쿼터를 넘기면 녹화기가 `quota`, 빈 공간이 바닥나면 `disk_full` 로 스스로 멈춘다.
+- 정지 뒤 녹화기가 manifest(`rosy.pilot.recording.manifest/1`: 파일별 `{path, bytes, sha256}`, 선택 `bag_returncode`·`writer_killed`)를 작업 스레드에서 쓰는 동안 상태는 `stopping` 이고, 그동안 시작·수신은 `RECORDING_BUSY` 다.
+- 토픽: `camera/front/compressed`(녹화 중에만 발행), `cmd_vel`, `odom`, `scan`, `line/observation`, `teleop/intent`.
+- CORE 가 스스로 멈추는 경우: 시작 토큰의 `/ws/state` 연결이 5 s 넘게 없음(`link_lost`), 다른 토큰의 teleop 이 수락됨(`seat_changed`). 둘 다 비차단 정지 요청이다. 이벤트는 §8 `recording.started`·`recording.stopped`.
+- tar 의 마지막 바이트가 나간 녹화만 CORE 가 `pilot_recorder/fetched`(`{id}`)로 알리고, 녹화기가 `fetched.json` 을 써 쿼터 정리 대상으로 삼는다. 받지 않은 녹화는 지우지 않는다.
+- 저장 위치는 `/var/lib/rosy/pilot-recordings`(설정 `recording.pilot_root`): `rosy-camera` 가 쓰고 setgid `rosy-core` 그룹으로 CORE 가 읽기만 한다.
+
+`teleop/intent`(ROS `std_msgs/String` JSON, `rosy.teleop.intent/1`)는 CORE 가 teleop 판정마다 낸다 — 관리자 앞 거부(capability·보정 lease·keep)도 포함. 싱크 실패는 명령을 거부하지 않는다.
+
+| 필드 | 형 | 의미 |
+|---|---|---|
+| `schema` | str | `rosy.teleop.intent/1` |
+| `raw_linear` · `raw_angular` | float\|null | 요청 값(유한하지 않으면 null) |
+| `linear` · `angular` | float\|null | 수락 시 클립된 값, 거부면 null |
+| `source` | str | 명령 원천(`manual`) |
+| `mode` | str | 판정 시점 모드 |
+| `accepted` | bool | 수락 여부 |
+| `code` | str | 거부 코드, 수락이면 `""` |
+| `t_mono_ns` | int | CORE monotonic ns |
 
 ---
 
@@ -1802,6 +1841,7 @@ fake credentials and clocks; device and field acceptance remain separate gates.
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.76 | 2026-10-02 | Additive (D-411 A, feat/d411-pilot-recording-controls): §5.10 Pilot 로봇 녹화 (`GET/POST /api/v1/recordings`, `GET /recordings/active`, `POST /recordings/active/stop`, `GET /recordings/{id}/archive`), ERR-102 `RECORDING_BUSY`·`RECORDING_NOT_ACTIVE`·`ROBOT_MOVING`·`RECORDING_NOT_FOUND`·`RECORDING_QUOTA_FULL`·`RECORDING_DISK_FULL`·`RECORDER_UNAVAILABLE`, §8 `recording.started`·`recording.stopped`, ROS 증거 토픽 `teleop/intent`, 설정 `recording.pilot_root`. 기존 필드 변화 없음 |
 | v1.75 | 2026-10-02 | Additive (D-395 개정 4 5항 후속, S1 R1, feat/d395-localized-objects): 상태 스냅샷·하트비트 `localization` 에 선택 필드 `unmapped_objects[≤16]` `{x, y}`(base_link)·`objects_stamp`(로봇 시각 s). `LOCALIZED` 로봇이 전체 스캔의 지도 밖 물체를 상태(2 Hz)마다 싣고, 밖에서는 빈 목록이다. CORE 는 그대로 넘기고 `pose_frame: odom`·`state_stale` 에서 비운다. Fleet 감시가 닻 로봇의 관찰로 다른 `LOCALIZED` 로봇의 거울 잠금을 잡는다. 기존 필드 변화 없음 |
 | v1.74 | 2026-10-02 | Additive (D-407, feat/d407-stuck-recovery-core): `POST /api/v1/line-follow/stuck/decision`, line-follow 상태 `stuck`(`LineStuckStatus`: `stuck_id, cause, phase, held_s, attempts, max_attempts, local_enabled, ask_remaining_s, last_answer, decisions`, 막힘 없으면 null)·`state` 값 `RECOVERING`·사유 `stuck_back_off`·`stuck_<phase>`, 에러 `STUCK_ID_MISMATCH`·`STUCK_DECISION_REFUSED`, 이벤트 `nav.line_stuck_opened/asked/answered/local_attempt/local_result/closed`, 설정 `line_follow.recovery_*`(로컬 복구 기본 꺼짐; `recovery_trail_s`·`recovery_trail_yaw_deg` 는 사각 띠 후진 조건)·`body_lidar_x_m`·`body_rear_x_m`·`body_rotation_radius_m`(URDF, 로봇 패키지). Fleet 콘솔·FleetAgent 답 중계는 다음 단계. 기존 필드 변화 없음 |
 | v1.73 | 2026-10-02 | Additive (D-395 P2-7, feat/d395-p2-7-missions): 새 경로 `POST /localization/mission`(`LOCALIZE_ASSIST`)·`GET /localization/mission`(Viewer) — `LOCALIZED` 가 아닌 로봇에서 CORE 가 확인 기동·귀환 미션(`rotate_in_place`, `nudge_forward`, `lane_to_stopline`; `to_square` 는 409 `unsupported`)을 자기 장애물 정지·e-stop·거리·시간 한도 아래 아주 느리게 실행한다; 거부 409 코드 `localized`·`busy`·`estop`·`path_not_clear`·`calibration_lease`·`unsupported`; 이벤트 `localization.mission`. **행동 변화:** `lane_to_stopline` 미션은 이 미션에 한해 line-follow 를 `LOCALIZED` 관문 없이 켠다(공개 `PUT /line-follow/mode` 의 관문은 그대로); 미션 중에는 Nav2 `nav_cmd_vel` 을 버린다; 미션이 도는 동안 모드는 NAVIGATION 이고 MANUAL·IDLE 로 바꾸면 미션이 `cancelled` 로 끝난다 |

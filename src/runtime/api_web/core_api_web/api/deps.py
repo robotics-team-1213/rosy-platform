@@ -88,6 +88,7 @@ class CoreServicesLike(Protocol):
     localization: Any
     modes: Any
     nav: Any
+    pilot_recording: Any
     power: Any
     readiness: Any
     runtime_probe: Any

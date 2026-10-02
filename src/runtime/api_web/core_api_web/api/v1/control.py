@@ -49,4 +49,5 @@ def teleop(body: TeleopRequest, auth: AuthContext = Depends(operator),
     if not accepted:
         raise ApiError(code, 409 if code in ("MODE_CONFLICT", "EMERGENCY_ACTIVE") else 400,
                        f"teleop rejected: {code}")
+    svc.pilot_recording.on_teleop(auth.token_id)   # D-411: another driver ends the recording
     return {"accepted": True}

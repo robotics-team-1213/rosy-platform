@@ -87,6 +87,8 @@ async def ws_state(websocket: WebSocket):
     svc = await _authorize(websocket)
     if svc is None:
         return
+    token_id = websocket.state.token_id
+    svc.pilot_recording.link_opened(token_id)     # D-411: the Pilot link for recording ownership
     rate = float(svc.config.get("state", {}).get("rate_hz", 10.0))
     try:
         while True:
@@ -96,6 +98,8 @@ async def ws_state(websocket: WebSocket):
         return
     except Exception:
         return
+    finally:
+        svc.pilot_recording.link_closed(token_id)
 
 
 @ws_router.websocket("/ws/events")
