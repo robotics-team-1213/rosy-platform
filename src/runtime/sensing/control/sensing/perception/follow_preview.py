@@ -148,6 +148,8 @@ def draw_follow_evidence(image, *, scale, keep=None, objects=None, road_state=No
             if labelled < 3:
                 distance = record.get('m')
                 ranged = f'{distance:.2f}m' if _number(distance) and distance > 0 else 'unranged'
+                if ranged != 'unranged' and record.get('s') in ('L', 'G'):
+                    ranged += ' ' + record['s']  # D-423: L LiDAR, G ground plane
                 kind = 'DARK' if record.get('k') == 'd' else 'UNKNOWN'
                 # Fixed separate rows stay readable when foreground boxes overlap.
                 badges.append((f'OBJ {index + 1} {kind} {ranged}' + (' NEAR' if record.get('n') == 1 else ''),

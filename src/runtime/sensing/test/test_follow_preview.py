@@ -81,6 +81,26 @@ def test_selected_boundaries_target_and_objects_are_visible(monkeypatch):
     assert np.any(np.all(image == (0, 140, 255), axis=2))
 
 
+@pytest.mark.parametrize('record,label', [
+    ({'b': [20, 150, 60, 200], 'n': 0, 'k': 'f', 'm': 0.42, 's': 'L'}, 'OBJ 1 UNKNOWN 0.42m L'),
+    ({'b': [20, 150, 60, 200], 'n': 1, 'k': 'd', 'm': 0.3, 's': 'G'}, 'OBJ 1 DARK 0.30m G NEAR'),
+    ({'b': [20, 150, 60, 200], 'n': 0, 'k': 'f', 'm': 0.3}, 'OBJ 1 UNKNOWN 0.30m'),
+    ({'b': [20, 150, 60, 200], 'n': 0, 'k': 'f', 's': 'L'}, 'OBJ 1 UNKNOWN unranged'),
+    ({'b': [20, 150, 60, 200], 'n': 0, 'k': 'f', 'm': 0.3, 's': 'X'}, 'OBJ 1 UNKNOWN 0.30m'),
+])
+def test_object_badge_names_the_range_source(monkeypatch, record, label):
+    """D-423: L = LiDAR, G = ground plane; no source letter is invented."""
+    texts = []
+    real_text = cv2.putText
+    def capture(img, text, *args, **kwargs):
+        texts.append(text)
+        return real_text(img, text, *args, **kwargs)
+    monkeypatch.setattr(cv2, 'putText', capture)
+    draw_follow_evidence(np.zeros((240, 320, 3), np.uint8), scale=1.0, objects={
+        'image_size': [320, 240], 'quality': {'valid': True}, 'regions': [record]})
+    assert label in texts
+
+
 def test_hold_discards_target_and_missing_objects_do_not_mean_clear(monkeypatch):
     texts = []
     monkeypatch.setattr(cv2, 'putText', lambda img, text, *a, **kw: texts.append(text))

@@ -103,7 +103,8 @@ def region(index=0, distance_m=None):
     # and (for the ranged case) a 3-decimal range.
     return {'bbox_xyxy': [320 - index % 10, 240, 320, 240], 'area_px': 999,
             'area_fraction': 0.01, 'near_path': True, 'kind': 'dark_region',
-            'distance_m': distance_m, 'motion': 'unknown'}
+            'distance_m': distance_m, 'motion': 'unknown',
+            'range_source': 'L' if distance_m is not None else None}
 
 
 def observation(region_count=REGION_CAP, distance_m=None, source='onboard_camera_pixels'):
@@ -123,7 +124,7 @@ def test_worst_case_observation_stays_small_enough_to_publish_at_frame_rate():
     # 4135 B, which is why the cap is 48. Pinning the unranged case only would
     # have passed right up until someone filled in the calibration.
     ranged = json.dumps(observation(distance_m=12.345, source='gazebo_rendered_pixels'))
-    assert all('m' in r for r in json.loads(ranged)['regions'])
+    assert all('m' in r and r['s'] == 'L' for r in json.loads(ranged)['regions'])
     assert len(ranged) < 4096
     assert len(json.dumps(observation())) < len(ranged)
 
@@ -153,6 +154,27 @@ def test_a_ranged_region_carries_its_distance():
               'regions': [dict(region(), distance_m=0.4217)]}
     payload = observation_payload(1.0, False, True, 0.0, result, (320, 240), 'test')
     assert payload['regions'][0]['m'] == 0.422
+
+
+def test_range_source_travels_only_with_a_distance_and_old_regions_stay_valid():
+    # D-423: 's' says which sensor measured 'm' -- L LiDAR, G ground plane.
+    # A region from before D-423 (no range_source) still encodes, just without 's'.
+    result = {'quality': {'valid': True}, 'region_count': 3,
+              'regions': [dict(region(), distance_m=0.42, range_source='G'),
+                          dict(region(), distance_m=None, range_source=None),
+                          {k: v for k, v in dict(region(), distance_m=0.5).items() if k != 'range_source'}]}
+    payload = observation_payload(1.0, False, True, 0.0, result, (320, 240), 'test')
+    assert payload['regions'][0]['s'] == 'G'
+    assert 's' not in payload['regions'][1] and 'm' not in payload['regions'][1]
+    assert payload['regions'][2]['m'] == 0.5 and 's' not in payload['regions'][2]
+    assert 'ground_source' not in payload
+
+
+def test_ground_source_names_the_geometry_that_ranged_the_regions():
+    result = {'quality': {'valid': True}, 'region_count': 0, 'regions': []}
+    payload = observation_payload(1.0, False, True, 0.0, result, (320, 240), 'test',
+                                  ground_source='NOMINAL')
+    assert payload['ground_source'] == 'NOMINAL'
 
 
 @pytest.mark.parametrize('valid', [True, False])
