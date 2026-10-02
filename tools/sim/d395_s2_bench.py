@@ -24,6 +24,8 @@ The bench polls `/api/fleet/state` every second, as the console UI does: Fleet's
 trust and queue release run on that read.
 
   python tools/sim/d395_s2_bench.py --out /rosy_d395e_runs/q1 --traffic --phases c,b
+
+S2 rerun (one power-on covers d, then c, then b): add `--physics-step 0.005 --gpu`.
 """
 
 from __future__ import annotations
@@ -351,7 +353,7 @@ class Bench(s1.Bench):
         return done
 
 
-def main(argv=None):
+def parse_args(argv=None):
     p = argparse.ArgumentParser()
     p.add_argument("--scenario", choices=sorted(SCENARIOS), default="q")
     p.add_argument("--out", required=True)
@@ -371,7 +373,17 @@ def main(argv=None):
     p.add_argument("--loc-param", action="append", default=[], metavar="NAME=VALUE")
     p.add_argument("--launch-arg", action="append", default=[], metavar="NAME:=VALUE",
                    help="extra gz_multi argument, e.g. nav_composition:=true")
+    p.add_argument("--physics-step", type=float, default=None,
+                   help="sim-only physics max_step_size in s (gz_multi physics_step), e.g. 0.005")
+    p.add_argument("--gpu", action="store_true", help="render the lidars on the WSL GPU (gz_multi gpu:=true)")
     args = p.parse_args(argv)
+    args.launch_arg += ([f"physics_step:={args.physics_step}"] if args.physics_step else []) + (
+        ["gpu:=true"] if args.gpu else [])
+    return args
+
+
+def main(argv=None):
+    args = parse_args(argv)
     if args.check:
         sc = SCENARIOS[args.scenario]
         print(json.dumps({"problems": scenario_problems(sc), "stale_trap": stale_trap(sc["spawn"], sc["pickup"])},

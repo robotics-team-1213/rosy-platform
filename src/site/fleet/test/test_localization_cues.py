@@ -64,7 +64,11 @@ def test_overhead_cue_needs_a_sighting_fresher_than_300_ms(age, expected_positiv
 
 @pytest.mark.parametrize("pose, sightings, expected", [
     ((-1.26, 0.19, math.pi / 2), [(0.0, 0.30)], 1.0),       # 30 cm short of A, square dead ahead
-    ((-1.26, 0.19, math.pi / 2), [(0.0, None)], 1.0),       # unranged, on the bearing
+    # D-395 rev. 11: an unranged sighting is never evidence, either way (all 20 real false
+    # detections in the 2026-10-02 audit were unranged).
+    ((-1.26, 0.19, math.pi / 2), [(0.0, None)], -1.0),      # unranged on the bearing: A still unseen
+    ((1.26, -0.19, -math.pi / 2), [(0.0, None)], 0.0),      # unranged, nothing mapped in view
+    ((-1.26, 0.19, math.pi / 2), [(0.0, None), (0.0, 0.30)], 1.0),  # the ranged one decides
     ((-1.26, 0.19, math.pi / 2), [], -1.0),                 # A should be in view and is not
     ((1.26, -0.19, -math.pi / 2), [(0.0, 0.30)], -1.0),     # mirror: sees a square where none is mapped
     ((0.0, 0.0, 0.0), [], 0.0),                             # no square in view, none seen

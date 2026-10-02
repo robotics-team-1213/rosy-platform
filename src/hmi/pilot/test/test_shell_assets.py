@@ -98,3 +98,19 @@ def test_every_shell_pilot_asset_is_served_by_core():
     missing = sorted(url for url in _shell()
                      if url.startswith("/pilot/assets/") and url.removeprefix("/pilot/assets/") not in served)
     assert missing == [], missing
+
+
+def _dict_keys(path: Path, name: str) -> set[str]:
+    text = path.read_text(encoding="utf-8")
+    block = re.search(rf"{name} = \{{(.*?)\n\}}", text, re.S)
+    assert block, f"{path.name} 에 {name} 가 없다"
+    return set(re.findall(r'"([^"]+)":', block.group(1)))
+
+
+def test_the_sim_server_and_dev_server_serve_the_same_pilot_assets_as_core():
+    """D-411 구조 규칙 6: app.js 가 drive.js 를 정적으로 부르므로 OMX SIM·개발 서버도 모두 서빙한다."""
+    core = _pilot_assets()
+    sim = _dict_keys(REPO / "src/products/omx/adapter/omx_adapter/pilot_sim_api.py", "PILOT_ASSETS")
+    dev = _dict_keys(PILOT / "test/dev_server.py", "PILOT_MIME")
+    assert sim == core, sorted(sim ^ core)
+    assert dev == core, sorted(dev ^ core)

@@ -104,7 +104,7 @@ def _started(args):
     return started
 
 
-BASE = ["camera_detect_node", "line_observer_node", "road_observer_node"]
+BASE = ["camera_detect_node", "line_observer_node", "road_observer_node", "pilot_recorder_node"]
 
 
 SWITCH_ENV = ("ROSY_LEARNED_SHADOW", "ROSY_CAPTURE", "ROSY_LEARNED_MAX_HZ")

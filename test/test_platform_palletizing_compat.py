@@ -13,6 +13,12 @@ CELL_ROOT = ROOT / "src" / "site" / "cell"
 if str(CELL_ROOT) not in sys.path:
     sys.path.insert(0, str(CELL_ROOT))
 
+# The palletizing process ships as the `rosy-palletizing` wheel (PEP 420 `rosy`
+# namespace — ROSY_Platform_Architecture_Design_v0.2). Hosts without the wheel
+# skip the contract instead of erroring at collection (importorskip precedent,
+# docs/logs.md 2026-09-24).
+pytest.importorskip("rosy.processes.palletizing")
+
 from rosy.processes.palletizing.cell import CellConfig, Pose, load_cell  # noqa: E402
 from rosy.processes.palletizing.compiler import CompileError, Job, Step, carry_z, compile_job  # noqa: E402
 from rosy.processes.palletizing import compiler as process_compiler  # noqa: E402

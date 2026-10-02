@@ -1,7 +1,8 @@
-from datetime import datetime, timezone
 from hashlib import sha256
 from pathlib import Path
 import sys
+
+import pytest
 
 from fastapi.testclient import TestClient
 
@@ -13,7 +14,6 @@ for relative in ("modules/execution/src", "modules/skills/api/src"):
 
 from fakes import FakeRobot
 from fleet.server.app import create_app
-from fleet.server.cell_job_store import CellJobStore
 from fleet.server.console import FleetConsole
 from fleet.server.mission_service import MissionService
 from fleet.server.mission_store import MissionStore
@@ -62,7 +62,7 @@ class FixedCellCompiler:
         )
 
 
-def _setup(tmp_path):
+def _setup(tmp_path, **options):
     db = tmp_path / "fleet.sqlite3"
     task_service = FleetTaskService(FleetTaskStore(db), robot_ids=("rosy_01",))
     users = {
@@ -82,6 +82,7 @@ def _setup(tmp_path):
         task_service=task_service, site_users=users,
         mission_service=MissionService(MissionStore(db)),
         proposal_store=ProposalStore(db), cell_job_compiler=compiler,
+        **options,
     )
     return TestClient(app), task_service, compiler
 
@@ -162,6 +163,18 @@ def test_cell_service_proposes_and_resolves_but_named_operator_alone_admits(tmp_
     assert read.json()["job"]["events"]
     assert client.app.state.mission_service.get(proposal_id) is None
 
+    restarted, _, restarted_compiler = _setup(tmp_path)
+    restarted_read = restarted.get(
+        f"/api/fleet/cell-jobs/{proposal_id}",
+        headers={"Authorization": "Bearer operator-secret"},
+    )
+    assert restarted_read.status_code == 200
+    held = restarted_read.json()["job"]
+    assert held["status"] == held["steps"][0]["status"] == "HOLD"
+    assert held["steps"][1]["status"] == "WAITING"
+    assert held["events"][-1]["event_type"] == "CELL_JOB_STARTUP_HOLD"
+    assert restarted_compiler.calls == 0
+
 
 def test_cell_proposal_does_not_admit_when_service_and_operator_identity_match(tmp_path):
     client, _, _ = _setup(tmp_path)
@@ -185,3 +198,39 @@ def test_cell_proposal_does_not_admit_when_service_and_operator_identity_match(t
 
     assert response.status_code == 403
     assert response.json()["detail"]["code"] == "CELL_JOB_APPROVER_MUST_DIFFER_FROM_PROPOSER"
+
+
+def test_cell_dispatcher_is_disabled_by_default_and_requires_pinned_configuration(tmp_path):
+    client, _, _ = _setup(tmp_path)
+    assert client.app.state.cell_job_dispatcher is None
+    with pytest.raises(ValueError, match="pinned config revision"):
+        _setup(tmp_path, enable_cell_job_dispatcher=True,
+               omx_instances={"omx_01": "omx_01_control"})
+
+
+def test_approved_cell_api_job_reaches_composed_dispatcher(tmp_path):
+    from test_cell_job_dispatcher import Transport
+
+    transport = Transport(None, None)
+    client, tasks, _ = _setup(
+        tmp_path, enable_cell_job_dispatcher=True,
+        omx_instances={"omx_01": "omx_01_control"}, omx_action_transport=transport,
+        cell_job_config_revisions={"omx_01": "cell-config-v1"},
+    )
+    transport.store, transport.tasks = client.app.state.cell_job_store, tasks.store
+    control = tasks.store.dispatch_control()
+    generation = tasks.store.rearm_dispatch(expected_generation=control["generation"], actor_id="operator-1")[
+        "generation"]
+    created = _post(client, "/api/fleet/proposals", "cell-secret", {
+        "request_key": "composed-cell", "workcell_id": "omx_01",
+        "instance_id": "omx_01_control", "candidate": _candidate(),
+    }).json()
+    identifier = created["proposal"]["proposal_id"]
+    assert client.app.state.cell_job_dispatcher.dispatch_next() is None
+    _post(client, f"/api/fleet/proposals/{identifier}/resolve", "cell-secret")
+    assert client.app.state.cell_job_dispatcher.dispatch_next() is None
+    assert _post(client, f"/api/fleet/missions/{identifier}/admit", "operator-secret",
+                 {"expected_generation": generation}).status_code == 200
+    assert client.app.state.cell_job_dispatcher.dispatch_next()["state"] == "ACCEPTED"
+    assert transport.submissions[0].cell_transfer.recipe_sha256 == RECIPE_SHA
+    assert transport.submissions[0].config_revision == "cell-config-v1"

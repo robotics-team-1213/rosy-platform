@@ -4543,3 +4543,36 @@
 - 변경: S2(4대) 결과(호스트 0.02×로 미완료, 4대 동시 전원 투입은 통과, 거울 결정 0)와 그때 드러난 Fleet 안전 결함 수정을 기록. 믿는 자세는 LOCALIZED·map 스냅샷에서만 저장한다. 보고하던 로봇이 null이 되면 30 s 동안 믿지 않는 로봇으로 둔다. S2 재실행 조건(한가한 호스트, GPU 라이다, 5 ms 물리 단계).
 - 증거: `docs/plans/2026-10-02-d395-s2-bench-results.md`, 브랜치 fix/d395-legacy-trusted-pose.
 - gate 변화: 없음(Proposed).
+
+## 2026-10-02 · uncommitted · docs(plans): D-395 S2 재시도 중단 — 이 호스트로는 4대 불가
+- 변경: sim 전용 opt-in 인자(`physics_step`, `real_time_factor`, `gpu`, 기본값 불변)로 S2를 다시 시도했다. WSL은 llvmpipe(소프트웨어)라 GPU 인자는 효과가 없다. 5 ms 물리 단계에서도 4대 RTF 0.017(부하 122)이었고, 병목은 로봇마다 도는 CORE·loc_assist다. 22:50 WSL 재시작으로 중단. S2는 CPU가 넉넉한 장치나 로봇 스택을 여러 호스트에 나눠야 한다.
+- 증거: S2 결과 문서의 재시도 절.
+- gate 변화: 없음.
+
+## 2026-10-02 · uncommitted · docs(adr): D-395 개정 11 — 사각형 검출 후처리, 거리 없는 목격, LiDAR 물체; 학습 페인트 면적 문턱 제안
+- 변경: D-395에 개정 11을 더했다(수평선 위 사각형 코어 버림과 한 사각형 한 검출, Fleet `square_cue`가 거리 없는 목격을 세지 않음, LiDAR 자기 빔·붙은 로봇·중심 밀기, 후보 가드). 상태(Proposed)는 그대로다. API Ref `CandidateReport` 행 뒤에 거리 없는 목격 한 문장을 더했다(선로 계약 불변). 감사 3번 항목은 주행 경로라 `plans/2026-10-03-perception-postproc-proposals.md`에 lane keep 세션 몫 제안으로 적었다.
+- 증거: 가지 `fix/perception-postproc-nms`, 실제 프레임 506장 재스캔 거짓 20 → 0, `src/runtime/sensing/logs.md`·`src/site/fleet/logs.md`의 같은 날 항목.
+- gate 변화: 없음(Proposed).
+
+
+## 2026-10-03 · uncommitted · feat(fleet): dispatch admitted ordered Cell transfers
+- Change: compose the opt-in CellJob dispatcher in the existing single site worker with pinned cell configuration revisions. Persist the canonical grant and DISPATCHING claims before one local submission; reconcile/cancel the exact attempt without resubmission after lost replies or grant expiry. Readback atomically checks live authority/generation, duplicate receipt identity and durable phase history. Late success after HOLD retains claims and cannot start the next step. Re-judge Fleet size at 27684 after current-main integration; split verdict and +150 allowance remain unchanged.
+- Evidence: full Fleet regression 1451 passed/7 skipped, known-failure comparison 0 new/0 known before the final phase-history correction. Final dispatcher/API/store/legacy/app/replay suites 107 passed; integrated-main localization regression 54 passed; architecture/dependency boundary suites 38 passed. Independent review found and then verified fixes for in-process stop, phase-history conflicts and superseded phase-success evidence; final review 31 passed with no remaining Important/Critical checkpoint findings. Changed runtime and dispatcher/API test Python files pass flake8. Align the FastAPI contract description with API Reference v1.82 (3 protocol-version tests passed); harness lint reports 0 errors/24 existing freshness warnings.
+- Gate: SOURCE/LOCAL only. Default dispatch is disabled. Registered/fresh Cell goal production and held-success goal recovery, actual OMX owner/provider integration, Gazebo, device and field acceptance remain open; D-413 Tasks 4-5 and 7 stay IN PROGRESS.
+
+
+## 2026-10-03 · uncommitted · fix(fleet): require durable Cell success for goal recovery
+- Change: move Cell goal completion into its own journal module and require the latest terminal SUCCEEDED event for the exact step, Action and attempt inside the SQLite completion transaction. Permit independently confirmed held success, preserve next-step WAITING/HOLD after authority changes, reject rewritten goal evidence and empty provenance, and keep claims until every ordered goal is confirmed. Dispatch is not rearmed by goal confirmation.
+- Evidence: CellJob/Mission/phase-contract regression 89 passed; independent review 42 passed with no remaining Important/Critical checkpoint findings. Current-main platform contract checks pass 26 tests with explicit source paths (not installed-artifact proof). Quick tier 96 passed/24 existing freshness warnings. Changed Python files pass flake8. Full Fleet regression 1468 passed/7 skipped, known-failure comparison 0 new/0 known; final log/generated-record checks 3 passed and harness lint 0 errors/24 existing freshness warnings.
+- Gate: SOURCE/LOCAL only. Public registered/fresh Cell goal production, actual two-ledger Cell replay, real OMX owner/provider composition and ROS-SIM remain required. Tasks 4-5 and 7 remain IN PROGRESS.
+
+
+## 2026-10-03 · uncommitted · docs: record internal Cell evidence checkpoint
+- Change: append D-413 progress for pinned producer authentication, observation freshness, rejected-evidence persistence protection and atomic terminal identity fencing. Keep Tasks 4-5 and 7 IN PROGRESS and record public ingress/app callback/evaluator/ROS-SIM as remaining work.
+- Evidence: focused Cell service/store/dispatcher 48 passed, registry 10 passed; independent review 44 passed; quick tier 96 passed/24 existing freshness warnings, harness lint 0 errors/24 existing freshness warnings. Full Fleet regression is running and not claimed complete.
+- Gate: SOURCE/LOCAL only; no ROS-SIM, artifact, device or field promotion.
+
+## 2026-10-03 · uncommitted · docs(plans): 학습 페인트 후처리 — 담당 세션 결정과 실측 (a)(b)(c)
+- 변경: 차선 유지 담당 세션이 학습 마스크 ≥40 px 필터를 직접 넣기로 했다(선 NMS 불필요). 그 세션의 재생 설정(8kcn 130842Z 842 프레임)에서 읽기 전용으로 재고 기록했다. (a) 권고: INT8, 1스레드, spinning 끔, 2프레임마다, lane_evidence 생략. 추론 전 자르기는 모델을 망친다. (b) 수평선 아래 반사는 keeper가 읽지 않는 행에 있어 절단 여유가 필요 없다. (c) steep_crossing은 굽은 길·회전교차로의 진짜 테이프를 130 프레임에서 거부하지만 둘째 쪽만 잃는다.
+- 증거: `X:\DevTemp\rosy-lane-meas\report.md`.
+- gate 변화: 없음(코드 변경 없음).

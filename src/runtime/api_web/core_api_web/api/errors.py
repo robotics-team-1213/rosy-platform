@@ -68,6 +68,14 @@ _HTTP_BY_CODE = {
     "SSH_KEYS_FULL": 409,
     "SSH_KEY_NOT_FOUND": 404,
     "SSH_ACCESS_UNAVAILABLE": 503,
+    # D-411 A: Pilot robot recording (core_common.domain.pilot_recording, v1.recordings).
+    "RECORDING_BUSY": 409,
+    "RECORDING_NOT_ACTIVE": 409,
+    "ROBOT_MOVING": 409,
+    "RECORDING_NOT_FOUND": 404,
+    "RECORDING_QUOTA_FULL": 507,
+    "RECORDING_DISK_FULL": 507,
+    "RECORDER_UNAVAILABLE": 503,
     "COMMAND_TIMEOUT": 504,
     "INTERNAL_ERROR": 500,
 }

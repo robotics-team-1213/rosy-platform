@@ -34,6 +34,7 @@
 | D-206 | P0 실측은 기록지가 표준이고 확정 카메라 프로필은 revision으로 보관한다 — 게이트 판정은 프로토타입 `camcal`로 잇고 `src/robots/pinky_pro/config/`은 D-196 머지 뒤 만든다 |
 | D-356 | 인식 학습 루프 — 학습은 저장소 밖, manifest 약속·접수·데이터 세대 전달·섀도 추론은 안 |
 | D-373 | 학습 인식 두 번째 바퀴 — onnxruntime·모델 디렉터리는 Pinky 이미지 계층, 섀도·캡처는 기본 꺼진 페이로드, 불일치 60 s 스냅샷, 사이트 PC가 새 모델을 섀도까지 자동 반영; 정본은 store 폴더(로컬→NAS·Drive), HF는 선택 |
+| D-411 | Pilot 로봇측 학습 녹화(카메라 유닛 소유, CORE는 시작·정지 요청, `teleop/intent` 원 입력·주체 기록, 1회 10분)와 정지 중에만 허용하는 HTTP 수신(목록·tar·sha256 manifest, `rosy_ml fetch --http`); 기기가 알리는 조작부 서술자 `rosy.controls/1`(base_velocity·joint_jog·gripper, 드라이버는 전송·위젯은 kind별, 팔 조이스틱은 이전 목표 종료 후 순차 제한 목표); OMX 그리퍼 전용 절대 목표·쥠 readback(시뮬레이션만, D-390 유지) |
 
 ## 계획·결과 문서
 
@@ -52,6 +53,7 @@
 - [2026-09-21-semantic-road-control.md](../../../docs/plans/2026-09-21-semantic-road-control.md)
 - [2026-09-22-scene-context-road-design.md](../../../docs/plans/2026-09-22-scene-context-road-design.md)
 - [2026-09-22-scene-context-road.md](../../../docs/plans/2026-09-22-scene-context-road.md)
+- [2026-10-02-d411-pilot-recording-controls-plan.md](../../../docs/plans/2026-10-02-d411-pilot-recording-controls-plan.md)
 
 ## 교훈 (docs/solutions)
 
@@ -64,8 +66,8 @@
 
 ## 최근 기록
 
-- 2026-10-02 · c8a5822c · feat(sensing): D-395 S1 R1 — LOCALIZED 로봇도 지도 밖 물체를 보고한다
-- 2026-10-02 · 7459be67 · fix(localization): D-395 S1 재실행 R3 — 낡은 odom twist 는 정지가 아니다
-- 2026-10-02 · c00b368d · fix(localization): D-395 S1 재실행 R3 — 로봇이 멈춘 뒤에만 탐색
-- 2026-10-02 · ead31a99 · fix(localization): D-395 S1 재실행 R3 — 구별 후보의 마지막 yaw 정밀화
-- 2026-10-02 · 2b922678 · feat(localization): D-395 S1 재실행 R6 — 검사 중 상태는 CANDIDATES/`checking`
+- 2026-10-02 · uncommitted · fix(localization): 후보 미세 단계 뒤 분리 재검사 가드, 180° 쌍둥이 시험
+- 2026-10-02 · uncommitted · fix(localization): D-395 rev. 11 — LiDAR 물체: 자기 빔은 묶기 전에, 붙은 로봇은 나누고, 중심은 밀어 낸다
+- 2026-10-02 · uncommitted · fix(learned): 그림자 차선 근거 — 연결 성분 면적 문턱과 visible 히스테리시스
+- 2026-10-02 · uncommitted · fix(perception): D-395 rev. 11 — 기준 사각형 수평선 문턱과 한 사각형 한 검출(NMS)
+- 2026-10-02 · 410c6832 · feat(control): D-411 A pilot_recorder_node 와 녹화 상태기계

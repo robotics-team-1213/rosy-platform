@@ -368,6 +368,8 @@ DECLARED_WRITES = {
         "/var/log/rosy-camera/launch.log",
         # D-373: capture snapshots under the unit's own StateDirectory=rosy/camera.
         "/var/lib/rosy/camera/recordings",
+        # D-411: the Pilot recorder (pilot_recorder_node), setgid rosy-core.
+        "/var/lib/rosy/pilot-recordings",
     },
     "rosy-navigation.service": {
         "/var/log/rosy-navigation/launch.log",
@@ -437,6 +439,8 @@ DECLARED_READS = {
         "/run/rosy-boot/boot-status.json",
         # D-418: the public host keys (ssh_host_*_key.pub, 0644) for GET /host/ssh/host-keys.
         "/etc/ssh",
+        # D-411: lists and streams Pilot recordings; ReadOnlyPaths. CORE never writes there.
+        "/var/lib/rosy/pilot-recordings",
     },
     "rosy-navigation.service": {
         "/var/lib/rosy/maps/site.yaml", "/etc/rosy/line_follow.yaml", "/etc/rosy/profile.yaml",
@@ -489,7 +493,10 @@ PROGRAM_SOURCES = {
                             "src/runtime/sensing/control/camera_detect_node.py",
                             "src/runtime/sensing/control/road_observer_node.py",
                             # D-344 §12: the IR calibration overlay the launch validates.
-                            "src/runtime/sensing/control/ir_overlay.py"],
+                            "src/runtime/sensing/control/ir_overlay.py",
+                            # D-411: the Pilot recorder and its session state machine.
+                            "src/runtime/sensing/control/pilot_recorder_node.py",
+                            "src/runtime/sensing/control/pilot_recording.py"],
     "rosy-navigation.service": ["src/runtime/navigation", "src/products/pinky_pro/bringup"],
     # D-190: the display loop, the emotion card and LCD driver, rosylib.Battery.
     "rosy-boot-display.service": ["deploy/robot/pinky_pro/native/rosy-boot-display.py",
@@ -750,6 +757,10 @@ def test_state_rules_keep_the_parent_and_root_only_state_with_root():
     assert customizer.index("useradd --uid 963") < customizer.index("-g rosy-camera /var/lib/rosy/models")
     # The accounts must exist before the chroot install names them.
     assert customizer.index("useradd --uid 961") < customizer.index("-o rosy-io -g rosy-core")
+    # D-411: Pilot recordings — the camera unit writes, CORE reads through the setgid group.
+    assert "d /var/lib/rosy/pilot-recordings 2750 rosy-camera rosy-core -" in rules
+    assert "install -d -m 2750 -o rosy-camera -g rosy-core /var/lib/rosy/pilot-recordings" in customizer
+    assert customizer.index("useradd --uid 963") < customizer.index("-o rosy-camera -g rosy-core")
 
 
 def test_contract_parser_sees_the_2026_09_23_005_defects():
@@ -1012,12 +1023,19 @@ def test_camera_reads_the_optional_learned_perception_switch_file():
         "/etc/rosy/runtime.env", "-/etc/rosy/learned-perception.env"]
     for line in CAMERA_HARDENING:
         assert line in unit.splitlines(), line
-    # The switch opens no new write path and never reaches the command line:
-    # the launch file reads the variables itself (strict true/false).
-    assert "ReadWritePaths" not in directives
+    # The switch opens no write path of its own (D-411's recorder owns exactly one)
+    # and never reaches the command line: the launch file reads the variables itself.
+    assert directives["ReadWritePaths"] == ["/var/lib/rosy/pilot-recordings"]
     exec_start = directives["ExecStart"][0]
     assert "ROSY_LEARNED_SHADOW" not in exec_start and "ROSY_CAPTURE" not in exec_start
     assert "learned_shadow:=" not in exec_start and "capture:=" not in exec_start
+
+
+def test_core_reads_pilot_recordings_read_only():
+    # D-411: CORE lists and streams the camera unit's recordings; it never writes there.
+    directives = _directives("rosy-core.service")
+    assert "/var/lib/rosy/pilot-recordings" in _words(directives, "ReadOnlyPaths")
+    assert all("pilot-recordings" not in path for path, _optional in _writable(directives))
 
 
 def test_learned_perception_env_example_ships_both_switches_off():

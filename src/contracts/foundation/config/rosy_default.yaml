@@ -203,5 +203,8 @@ power:                            # PWR-001~004 절전/근접 웨이크 (D-24)
 events:
   ring_buffer_size: 1000          # EVT-004
 
+recording:
+  pilot_root: "/var/lib/rosy/pilot-recordings"   # D-411 A; CORE reads only. Tests and Gazebo override it
+
 fleet:
   enabled: false                  # P4-2에서 활성화 (PRT)
