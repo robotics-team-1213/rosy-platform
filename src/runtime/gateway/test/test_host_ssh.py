@@ -243,7 +243,7 @@ def test_an_answer_to_another_request_is_not_taken(tmp_path):
     assert ssh_handoff.read_response(str(response_path), "other") is not None
 
 
-@pytest.mark.parametrize("change", [{"status": 500}, {"status": 409, "error": "SHELL"}, {"status": 200, "error": "X"},
+@pytest.mark.parametrize("change", [{"status": 500}, {"status": 418, "error": "SSH_INVALID"}, {"status": 409, "error": "SHELL"}, {"status": 200, "error": "X"},
                                     {"status": 409, "error": None}, {"result": [1]}, {"schema": 2},
                                     {"status": True}])
 def test_a_malformed_answer_is_not_taken(tmp_path, change):
@@ -265,7 +265,9 @@ def test_core_writes_what_the_helper_reads(tmp_path):
 def test_host_keys_are_the_public_lines_without_comments(robot):
     ed = "ssh-ed25519 " + base64.b64encode(_string(b"ssh-ed25519") + _string(b"\x03" * 32)).decode()
     (robot.root / "etc/ssh/ssh_host_ed25519_key.pub").write_text(ed + " root@rosy-pinky-xxxx\n", encoding="utf-8")
-    (robot.root / "etc/ssh/ssh_host_ed25519_key").write_text("PRIVATE\n", encoding="utf-8")
+    # Only *.pub is read: a file without it is never served, whatever it holds.
+    other = "ssh-ed25519 " + base64.b64encode(_string(b"ssh-ed25519") + _string(b"\x04" * 32)).decode()
+    (robot.root / "etc/ssh/ssh_host_ed25519_key").write_text(other + " PRIVATE\n", encoding="utf-8")
     (robot.root / "etc/ssh/ssh_host_bogus_key.pub").write_text("not a key\n", encoding="utf-8")
     response = robot.client.get("/api/v1/host/ssh/host-keys", headers=_admin())
     assert response.status_code == 200

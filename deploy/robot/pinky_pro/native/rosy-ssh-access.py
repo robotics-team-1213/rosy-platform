@@ -71,7 +71,8 @@ COMMAND_ENV = {"PATH": "/usr/sbin:/usr/bin:/sbin:/bin", "LC_ALL": "C"}
 #: The card operator allowlist (personalization.OPERATOR_KEY_TYPES), checked by a parity test.
 KEY_TYPES = ("ssh-ed25519", "sk-ssh-ed25519@openssh.com",
              "ecdsa-sha2-nistp256", "ecdsa-sha2-nistp384", "ecdsa-sha2-nistp521")
-MAX_KEY_BASE64 = 1024
+#: An uncompressed point (0x04 || X || Y) per curve.
+ECDSA_COORDINATE_BYTES = {"nistp256": 32, "nistp384": 48, "nistp521": 66}
 PUBLIC_KEY = re.compile(r"(?P<type>[a-z0-9@.-]+) (?P<blob>[A-Za-z0-9+/]+={0,2})(?: (?P<comment>[!-~ ]{1,100}))?")
 LABEL = re.compile(r"[a-z0-9][a-z0-9._:-]{0,47}")
 MAX_KEYS = 32
@@ -153,8 +154,6 @@ def validate_public_key(text: Any) -> tuple[str, str]:
     match = PUBLIC_KEY.fullmatch(text.strip())
     if match is None or match["type"] not in KEY_TYPES:
         raise Invalid(f"공개키 형식이 아니거나 허용되지 않은 종류입니다 (허용: {', '.join(KEY_TYPES)})")
-    if len(match["blob"]) > MAX_KEY_BASE64:
-        raise Invalid("공개키가 너무 깁니다")
     try:
         blob = base64.b64decode(match["blob"], validate=True)
     except ValueError as exc:
@@ -169,7 +168,9 @@ def validate_public_key(text: Any) -> tuple[str, str]:
     elif kind == "sk-ssh-ed25519@openssh.com":
         shaped = len(body) == 2 and len(body[0]) == 32 and 0 < len(body[1]) <= 255
     else:
-        shaped = len(body) == 2 and body[0] == kind.rsplit("-", 1)[1].encode("ascii") and len(body[1]) > 1
+        curve = kind.rsplit("-", 1)[1]
+        shaped = len(body) == 2 and body[0] == curve.encode("ascii") \
+            and len(body[1]) == 1 + 2 * ECDSA_COORDINATE_BYTES[curve] and body[1][:1] == b"\x04"
     if not shaped:
         raise Invalid("공개키 본문이 종류와 맞지 않습니다")
     return kind, match["blob"]

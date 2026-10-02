@@ -45,7 +45,9 @@ def _string(value: bytes) -> bytes:
 def _key(kind: str = "ssh-ed25519", body: bytes = b"\x00" * 32) -> str:
     """A public key blob shaped like OpenSSH's for `kind` (RFC 4253 strings)."""
     if kind.startswith("ecdsa-"):
-        parts = [kind.rsplit("-", 1)[1].encode(), b"\x04" + body + body]
+        curve = kind.rsplit("-", 1)[1]
+        size = {"nistp256": 32, "nistp384": 48, "nistp521": 66}[curve]
+        parts = [curve.encode(), b"\x04" + (body * 5)[:2 * size]]
     elif kind.startswith("sk-"):
         parts = [body, b"ssh:"]
     else:
@@ -148,6 +150,12 @@ def test_allowed_key_types_validate_and_drop_the_comment(kind):
     "ssh-ed25519 " + base64.b64encode(b"\x00\x00\x00\x0bssh-ed25519\x00\x00\x00\x10" + b"\x00" * 16).decode(),
     "ecdsa-sha2-nistp256 " + _key("ecdsa-sha2-nistp384").split()[1],  # header right, curve wrong
     _key("ssh-ed25519") + "A",                             # trailing garbage in the body
+    "ssh-ed25519 " + _key("ssh-dss").split()[1],           # an ed25519-shaped body under another type name
+    _key("sk-ssh-ed25519@openssh.com").rstrip("="),        # padding stripped: not strict base64
+    "ecdsa-sha2-nistp256 " + base64.b64encode(              # a point of the wrong size
+        _string(b"ecdsa-sha2-nistp256") + _string(b"nistp256") + _string(b"\x04" + b"\x01" * 1500)).decode(),
+    "ecdsa-sha2-nistp256 " + base64.b64encode(              # a compressed point
+        _string(b"ecdsa-sha2-nistp256") + _string(b"nistp256") + _string(b"\x02" + b"\x01" * 64)).decode(),
     'command="sh" ' + KEY_A,                               # options are never taken from a request
     KEY_A + "\n" + KEY_B,                                  # two lines
     KEY_A + " comment\nssh-ed25519 x",
