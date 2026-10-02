@@ -13,9 +13,13 @@ from core_common.protocol.schemas import (
     FleetActionGrant,
     ResolvedTargetEvidence,
 )
-from rosy.execution.api import AttemptIdentity, GrantBinding, PlanBundle, PlanStep, ReceiptBinding
-from rosy.skills.api import SkillContract, SkillInvocation
-from rosy.world.api import ObservationSnapshot, SnapshotValidity
+# The platform contracts ship as PEP 420 `rosy.*` wheels
+# (ROSY_Platform_Architecture_Design_v0.2). Hosts without them skip instead of
+# erroring at collection (importorskip precedent, docs/logs.md 2026-09-24).
+pytest.importorskip("rosy.execution.api")
+from rosy.execution.api import AttemptIdentity, GrantBinding, PlanBundle, PlanStep, ReceiptBinding  # noqa: E402
+from rosy.skills.api import SkillContract, SkillInvocation  # noqa: E402
+from rosy.world.api import ObservationSnapshot, SnapshotValidity  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 CELL_ROOT = ROOT / "src" / "site" / "cell"
