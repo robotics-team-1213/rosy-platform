@@ -45,8 +45,15 @@ python tools/ssh/rosy_ssh_enroll.py <robot-ip> --label dev:<내-기기-이름>
 ssh rosy-pinky-xxxx
 ```
 
-- 다시 실행해도 안전하다. 같은 키가 이미 등록돼 있으면 "already enrolled"로 넘어가고 host key·config만 맞춘다.
-- 카드를 새로 구워 host key가 바뀐 로봇은 다시 실행하면 `known_hosts_rosy`의 옛 줄이 바뀐다.
+- 다시 실행해도 안전하다. 같은 키가 이미 등록돼 있으면 "already enrolled"와 기존 만료일을 보여 주고 config만 맞춘다.
+  만료일은 늘어나지 않는다. **갱신**은 라벨을 지운 뒤(`rosy_ssh_share.py revoke --label dev:<이름> --robot <robot-ip>`) 다시 등록하는 것이다.
+- 로봇이 `known_hosts_rosy`와 **다른 host key**를 내놓으면 옛·새 SHA256 지문을 보여 주고 멈춘다. 카드를 새로 구운
+  경우에만 그렇다. 로봇 화면이나 콘솔에서 `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub`로 새 지문을 확인한 뒤
+  `--accept-new-host-keys`를 붙여 다시 실행한다.
+- 별칭(`Host rosy-…`)이 이미 다른 주소를 가리키면 멈춘다. 로봇 주소가 바뀐 것이 맞으면 `--replace`를 붙인다.
+- 별칭은 `rosy-`로 시작하는 로봇 이름만 쓴다. 블록은 config의 첫 `Host`/`Match`/`Include` 줄 **앞**에 들어가므로
+  `Host *` 같은 앞선 설정보다 먼저 적용되고, 쓴 뒤 `ssh -G`로 사용자·키·known_hosts까지 확인한다.
+- `~/.ssh/config`가 심볼릭 링크면 링크는 그대로 두고 링크가 가리키는 파일을 고친다(백업도 그 옆에 둔다).
 - 같은 라벨을 다른 키가 쓰고 있으면 409로 멈춘다. 그 라벨을 먼저 지우거나 다른 라벨을 쓴다.
 - 옵션: `--key PATH`(이미 있는 키), `--known-hosts`, `--ssh-config`, `--api-port`(기본 8080).
 
@@ -57,7 +64,11 @@ ssh rosy-pinky-xxxx
 python tools/ssh/rosy_ssh_share.py list --robot <robot-ip>
 ```
 
-기기 라벨 하나를 지우는 것은 API `DELETE /api/v1/host/ssh/keys/dev:<이름>`이다(아래 2절의 토큰 받기와 같은 방법).
+기기 라벨 하나를 지운다.
+
+```sh
+python tools/ssh/rosy_ssh_share.py revoke --label dev:<이름> --robot <robot-ip>
+```
 
 ## 2. 임시 비밀번호 (필요할 때만)
 
@@ -128,7 +139,7 @@ Invoke-RestMethod -Method Post "http://${R}:8080/api/v1/auth/logout" -Headers $h
 
 ```sh
 python tools/ssh/rosy_ssh_share.py create --name <팀이름> --robot <robot-ip> --robot <robot-ip-2> \
-  --days 90 --out X:/DevTemp/ssh-share --contact "<회수 문의처>"
+  --days 90 --out <저장소-밖-폴더> --contact "<회수 문의처>"
 ```
 
 - passphrase를 두 번 묻는다(12자 이상). **비워 두면 도구가 만들어 마지막에 한 번만 보여 준다.**
@@ -136,16 +147,23 @@ python tools/ssh/rosy_ssh_share.py create --name <팀이름> --robot <robot-ip> 
 - 로봇마다 administrator 로그인 코드를 묻는다. 운영 키로 접속되는 로봇이면 `--via-operator-key`를 붙여
   코드를 ssh로 받아 쓸 수 있다(코드는 화면에 나오지 않는다).
 - 한 로봇이라도 실패하면 묶음을 만들지 않고, 이미 등록된 로봇을 지우는 `revoke` 명령을 알려 준다.
-- 결과: `<out>/rosy-ssh-<팀이름>.zip` — 잠긴 개인 키와 `.pub`, `config`(로봇별 `Host`), `known_hosts`,
+- 결과: `<out>/rosy-<팀이름>.zip` — 폴더 없이 파일만 든 압축으로, 잠긴 개인 키와 `.pub`, `config`(로봇별 `Host`), `known_hosts`,
   받는 사람용 `README.md`(한국어).
-- `--out`은 저장소 밖으로 둔다(예: `X:\DevTemp`). 묶음과 키를 저장소에 넣지 않는다.
+- 함께 `<out>/rosy-<팀이름>.robots.txt`가 생긴다. 비밀이 없는 기록(로봇, host key 지문, 회수 명령)이며 운영자가 보관한다.
+  끝에 정확한 `revoke` 명령도 출력된다.
+- 같은 이름(hostname)을 내놓는 로봇이 둘이면 멈춘다(별칭이 겹치면 ssh는 첫 블록만 쓴다).
+- 생성된 passphrase는 표준 오류(stderr, 터미널)에만 한 번 나온다. 출력이 터미널이 아니면 경고한다.
+- `--out`은 저장소 밖으로 둔다. 묶음과 키를 저장소에 넣지 않는다.
 
 ### 넘겨주기
 
 - zip과 passphrase는 **서로 다른 경로**로 전한다(예: zip은 파일 전송, passphrase는 구두나 다른 메신저).
 - 받는 사람은 zip 안의 `README.md`를 따른다. 요약하면:
-  1. `~/.ssh/rosy-<팀이름>/`(Windows `%USERPROFILE%\.ssh\rosy-<팀이름>\`)에 압축을 푼다. macOS·Linux는 `chmod 600` 개인 키.
-  2. 그 폴더에서 `ssh -F config <로봇 별칭>`. passphrase는 처음 한 번 묻는다(ssh-agent를 쓰면 이후 생략).
+  1. 파일들이 `~/.ssh/rosy-<팀이름>/` 바로 안에 오게 푼다. Windows는 **모두 압축 풀기**의 대상을
+     `%USERPROFILE%\.ssh\rosy-<팀이름>`로, macOS는 더블 클릭으로 생긴 `rosy-<팀이름>` 폴더를 `~/.ssh/`로 옮기고,
+     Linux는 `unzip rosy-<팀이름>.zip -d ~/.ssh/rosy-<팀이름>`. macOS·Linux는 개인 키를 `chmod 600`.
+  2. 그 폴더에서(PowerShell은 `cd $HOME\.ssh\rosy-<팀이름>`) `ssh -F config <로봇 별칭>`.
+     passphrase는 처음 한 번 묻는다(ssh-agent를 쓰면 이후 생략).
   3. 휴대폰 앱(Termius 등)은 키 파일을 가져오고 passphrase를 넣는다.
   4. 다른 사람에게 다시 넘기지 않는다. 오래 쓸 사람은 1의 기기 등록을 받는다.
 
@@ -172,9 +190,16 @@ python tools/ssh/rosy_ssh_share.py list --robot <robot-ip> [--name <팀이름>]
 
 그 밖에:
 
+- **host key 신뢰는 LAN 신뢰와 같다.** 도구는 로봇의 host key를 API(평문 HTTP)로 받아 `known_hosts`에 쓴다. 그래서
+  첫 접속의 "믿겠습니까" 질문은 없지만, 같은 망에서 응답을 바꿔치기할 수 있는 사람이 있다면 그 사람의 key가 들어갈
+  수 있다. 믿을 수 있는 망에서만 등록하고, 의심되면 로봇 화면이나 콘솔에서
+  `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub`로 지문을 대조한다. key가 바뀌면 도구는 옛·새 지문을 보여 주고
+  `--accept-new-host-keys` 없이는 바꾸지 않는다.
+
 - 로그인 코드와 토큰은 출력하거나 저장소·채팅에 남기지 않는다. 도구는 토큰을 출력하지 않고 끝나면 logout한다.
 - API는 로봇 LAN의 평문 HTTP다(대시보드와 같음). 믿을 수 있는 망에서만 쓴다.
 - `create`는 passphrase를 `ssh-keygen -N`으로 넘긴다(비대화식으로 넘길 다른 방법이 없다). 그 몇 초 동안 같은
   PC의 프로세스 목록에 보일 수 있으므로 공용 PC에서 실행하지 않는다.
 - host key가 바뀌었다는 경고(`REMOTE HOST IDENTIFICATION HAS CHANGED`)가 나오면 카드를 새로 구웠는지
-  운영자에게 확인한다. 확인 전에는 접속하지 않고, 확인되면 1의 등록을 다시 실행한다.
+  운영자에게 확인한다. 확인 전에는 접속하지 않는다. 로봇 화면이나 콘솔에서 새 지문을 확인한 경우에만
+  1의 등록을 `--accept-new-host-keys`와 함께 다시 실행한다.
