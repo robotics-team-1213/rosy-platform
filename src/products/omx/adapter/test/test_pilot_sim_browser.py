@@ -199,7 +199,7 @@ def test_sim_gripper_presets_slider_and_badge_through_the_real_api():
         page.click("[data-gripper-preset='half']")
         expect(badge).to_have_text("열림")
         assert [goal.position for goal in runtime.gripper_goals] == [0.5]
-        assert runtime.gripper_goals[0].duration_s == 1.0
+        assert runtime.gripper_goals[0].duration_s == 1.12
         expect(slider).to_be_enabled()
         slider.evaluate("""(s) => { s.value = '100'; s.dispatchEvent(new Event('input', {bubbles: true}));
           s.dispatchEvent(new Event('change', {bubbles: true})); }""")
@@ -207,10 +207,13 @@ def test_sim_gripper_presets_slider_and_badge_through_the_real_api():
         expect(page.locator("[data-gripper-preset='close']")).to_be_enabled()
         assert [goal.position for goal in runtime.gripper_goals] == [0.5, 1.0]
         page.click("[data-gripper-preset='close']")
+        expect(slider).to_have_value("10")     # a full stroke needs > 2.0 s at 0.9 x 0.5 rad/s: 0.9 rad first
+        expect(page.locator("[data-gripper-preset='close']")).to_be_enabled()
+        page.click("[data-gripper-preset='close']")
         expect(slider).to_have_value("0")
         expect(slider).to_be_enabled()
         runtime.gripper_state = "holding"
         expect(badge).to_have_text("쥐고 있음")
-        assert [goal.position for goal in runtime.gripper_goals] == [0.5, 1.0, 0.0]
+        assert [goal.position for goal in runtime.gripper_goals] == [0.5, 1.0, 0.1, 0.0]
         assert runtime.refused == []
         assert errors == [], errors

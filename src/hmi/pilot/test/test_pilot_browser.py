@@ -1244,7 +1244,7 @@ def test_arm_gripper_presets_slider_and_badge(tablet_page):
     page.click("[data-gripper-preset='half']")
     page.wait_for_function("window.grips.length === 1")
     grip = page.evaluate("window.grips[0]")
-    assert grip["position"] == 0.5 and grip["duration_s"] == 1.0          # 0.5 rad at the announced 0.5 rad/s
+    assert grip["position"] == 0.5 and grip["duration_s"] == 1.12         # 0.5 rad at 0.9 x 0.5 rad/s, rounded up
     page.wait_for_function("document.querySelector('[data-gripper-state]').textContent === '이동 중'")
     assert page.locator("[data-gripper-preset='close']").is_disabled()     # one goal at a time
     assert page.locator("[data-gripper-percent]").is_disabled()
@@ -1257,7 +1257,7 @@ def test_arm_gripper_presets_slider_and_badge(tablet_page):
       s.dispatchEvent(new Event('input', {bubbles: true})); s.dispatchEvent(new Event('change', {bubbles: true})); }""")
     page.wait_for_function("window.grips.length === 2")
     grip = page.evaluate("window.grips[1]")
-    assert grip["position"] == 1.0 and grip["duration_s"] == 1.0
+    assert grip["position"] == 1.0 and grip["duration_s"] == 1.12
     page.evaluate("window.pos.gripper_joint_1 = 0.3; window.gripperState = 'holding'")
     page.wait_for_function("document.querySelector('[data-gripper-state]').textContent === '쥐고 있음'")
     assert page.evaluate("window.rejections") == []

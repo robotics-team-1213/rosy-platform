@@ -120,24 +120,26 @@ def test_gripper_goal_bounds_match_the_sim_contract():
     assert out == bounds
 
 
-def test_gripper_goal_is_paced_by_the_announced_speed():
+def test_gripper_goal_is_paced_below_the_announced_speed():
     out = _run_js("""
 const g = {open: 1.0, closed: 0.0, max_velocity: 0.5};
-console.log(JSON.stringify([
-  m.gripperGoal(0, 0.5, g),          // 1.0 s at 0.5 rad/s
+console.log(JSON.stringify([m.GRIPPER_PACE,
+  m.gripperGoal(0, 0.5, g),          // 0.5 rad at 0.9 x 0.5 rad/s = 1.111 s, rounded up
   m.gripperGoal(0.5, 0.52, g),       // short: the 0.2 s minimum
-  m.gripperGoal(0.333, 0.5, g),      // 0.334 s rounded UP, never faster than announced
-  m.gripperGoal(-0.011, 1.0, g),     // 1.011 rad needs 2.022 s > 2.0: clipped to what 2.0 s allows
+  m.gripperGoal(0.333, 0.5, g),      // 0.371 s rounded UP
+  m.gripperGoal(-0.011, 1.0, g),     // needs 2.25 s > 2.0: clipped to what 2.0 s reaches (0.9 rad)
   m.gripperGoal(1.0, -0.05, g),
   m.gripperGoal(undefined, 0.5, g),  // no readback: the longest goal
   m.gripperGoal(0, 0.5, {open: 1.0, closed: 0.0}),   // old server: full stroke = 2.0 s
 ]))""")
-    assert out[0] == {"position": 0.5, "duration_s": 1.0}
-    assert out[1] == {"position": 0.52, "duration_s": 0.2}
-    assert out[2] == {"position": 0.5, "duration_s": 0.34}
-    assert out[3] == {"position": 0.989, "duration_s": 2.0}
-    assert out[4] == {"position": 0.0, "duration_s": 2.0}
-    assert out[5] == {"position": 0.5, "duration_s": 2.0}
-    assert out[6] == {"position": 0.5, "duration_s": 1.0}
-    for goal, start in zip(out[:5], (0, 0.5, 0.333, -0.011, 1.0)):
-        assert abs(goal["position"] - start) / goal["duration_s"] <= 0.5 + 1e-9
+    pace, *goals = out
+    assert pace == 0.9
+    assert goals[0] == {"position": 0.5, "duration_s": 1.12}
+    assert goals[1] == {"position": 0.52, "duration_s": 0.2}
+    assert goals[2] == {"position": 0.5, "duration_s": 0.38}
+    assert goals[3] == {"position": 0.889, "duration_s": 2.0}
+    assert goals[4] == {"position": 0.1, "duration_s": 2.0}
+    assert goals[5] == {"position": 0.5, "duration_s": 2.0}
+    assert goals[6] == {"position": 0.5, "duration_s": 1.0}
+    for goal, start in zip(goals[:5], (0, 0.5, 0.333, -0.011, 1.0)):
+        assert abs(goal["position"] - start) / goal["duration_s"] <= 0.45 + 1e-9

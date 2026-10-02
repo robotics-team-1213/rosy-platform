@@ -40,10 +40,12 @@ export function fallbackOmxControls(target) {
 }
 
 // D-411 C: gripper. 0 % = closed, 100 % = open, whichever way the joint turns.
-// A goal moves at most the announced max_velocity (the device refuses faster goals): duration =
+// A goal moves at most GRIPPER_PACE x the announced max_velocity (the device refuses faster goals;
+// the margin absorbs readback drift between sizing and dispatch): duration =
 // distance / speed, rounded up, within the 0.2-2.0 s goal bounds (OmxSimGripperGoal). A move
 // longer than 2.0 s allows is clipped to what 2.0 s reaches; pressing again finishes it.
 // Servers that announce no speed: a full stroke takes the longest goal, a shorter move less.
+export const GRIPPER_PACE = 0.9;
 export const GRIPPER_GOAL_MIN_S = 0.2;
 export const GRIPPER_GOAL_MAX_S = 2.0;
 export const GRIPPER_STATE_LABEL = Object.freeze({
@@ -63,7 +65,7 @@ export function gripperPosition(percent, g) {
 }
 
 export function gripperGoal(from, to, g) {
-  const speed = Number(g.max_velocity);
+  const speed = Number(g.max_velocity) * GRIPPER_PACE;
   if (!Number.isFinite(from)) {
     return {position: to, duration_s: GRIPPER_GOAL_MAX_S};
   }
