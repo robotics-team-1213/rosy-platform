@@ -18,7 +18,13 @@ on its own, applies it and writes /run/rosy/ssh-access.response
   field `*`, drop-in removed, sshd reloaded) when it expires
   (rosy-ssh-password-expire.timer runs --expire while it is on), when asked,
   and at every boot (--boot, rosy-ssh-access-boot.service).
-* Audit: /var/lib/rosy/ssh/history.jsonl (root 0600): add, revoke, expire,
+* Fail closed: every run turns an expired password off first, each housekeeping
+  step on its own (a corrupt keys.json never keeps a password on). If usermod
+  cannot lock it, a `Match User rosy` / `PasswordAuthentication no` drop-in
+  replaces the password block and the expiry timer retries the lock. A password
+  CORE would get after its 10 s wait is rolled back, never written to /run/rosy.
+  Expiries count from max(clock, newest time seen) in clock.json (no RTC).
+* Audit: /var/lib/rosy/ssh/history.jsonl (root 0600, newest 1 MiB): add, revoke, expire,
   password_on, password_off. The password itself goes to chpasswd and to the
   response CORE reads, nowhere else: not the history, the journal or a state file.
 
@@ -55,6 +61,9 @@ AUTHORIZED = STATE_DIR + "/authorized_keys"
 KEYS = STATE_DIR + "/keys.json"
 HISTORY = STATE_DIR + "/history.jsonl"
 PASSWORD_STATE = STATE_DIR + "/password.json"
+#: The newest time this program has seen (the Pi has no RTC: an offline boot may start in the past).
+CLOCK = STATE_DIR + "/clock.json"
+HISTORY_MAX_BYTES = 1 << 20
 LOCK = STATE_DIR + "/.lock"
 KEYS_DROPIN = "etc/ssh/sshd_config.d/50-rosy-managed-keys.conf"
 PASSWORD_DROPIN = "etc/ssh/sshd_config.d/60-rosy-temp-password.conf"
@@ -88,6 +97,12 @@ MAX_BY = 128
 #: A request older than this (a path unit started late, a leftover file) does nothing.
 REQUEST_MAX_AGE_S = 30.0
 REQUEST_FUTURE_SKEW_S = 5.0
+#: CORE waits this long (ssh_handoff.WAIT_S). A password answered later would only sit in
+#: /run/rosy, so it is rolled back instead; one second of margin covers writing the answer.
+CORE_WAIT_S = 10.0
+LATE_AFTER_S = CORE_WAIT_S - 1.0
+#: Requests written while this run works (CORE's password_off after a timeout) are answered before it exits.
+MAX_REQUESTS_PER_RUN = 8
 HEADER_KEYS = {"schema", "request_id", "action", "requested_at", "by"}
 ACTIONS = {
     "list": set(),
@@ -110,6 +125,13 @@ PASSWORD_DROPIN_TEXT = (
     f"Match User {USER} Address {PRIVATE_NETWORKS}\n"
     "    PasswordAuthentication yes\n"
     "    MaxAuthTries 3\n"
+    f"Match User {USER}\n"
+    "    PasswordAuthentication no\n"
+)
+#: In place of the block above when usermod cannot lock the password: sshd refuses it until a retry locks it.
+PASSWORD_DENY_TEXT = (
+    "# D-418: rosy-ssh-access could not lock rosy's password; sshd refuses it until\n"
+    "# rosy-ssh-password-expire.timer retries the lock and removes this file.\n"
     f"Match User {USER}\n"
     "    PasswordAuthentication no\n"
 )
@@ -312,6 +334,13 @@ class System:
             raise HelperError(f"usermod 종료 {done.returncode}: {done.stderr.strip()[:160]}")
 
     def sshd_check(self) -> tuple[bool, str]:
+        # ssh.socket starts sshd only on a connection, so its RuntimeDirectory /run/sshd may not
+        # exist yet, and `sshd -t` refuses without the privilege separation directory.
+        privsep = self.path("run/sshd")
+        if not privsep.is_dir():
+            privsep.mkdir(mode=0o755)
+            if os.name == "posix":
+                os.chmod(privsep, 0o755)
         done = self._run([SSHD, "-t"])
         return done.returncode == 0, done.stderr.strip()[:200]
 
@@ -324,9 +353,12 @@ class System:
             raise HelperError(f"{SSH_UNIT} reload 종료 {done.returncode}")
 
     def expire_timer(self, start: bool) -> None:
+        """Start (a password without its expiry check is a HelperError) or stop (logged) the timer."""
         done = self._run([SYSTEMCTL, "--no-block", "start" if start else "stop", EXPIRE_TIMER])
         if done.returncode != 0:
-            log(f"{EXPIRE_TIMER} {'start' if start else 'stop'} 종료 {done.returncode}")
+            if start:
+                raise HelperError(f"{EXPIRE_TIMER} start 종료 {done.returncode}")
+            log(f"{EXPIRE_TIMER} stop 종료 {done.returncode}")
 
     def core_group(self) -> Optional[int]:
         try:
@@ -365,7 +397,29 @@ def ensure_state_dir(system: System) -> None:
         os.chmod(directory, 0o755)
 
 
+def _rotate_history(system: System) -> None:
+    """Keep the newest half mebibyte, cut at a line, once the file nears HISTORY_MAX_BYTES."""
+    path = system.path(HISTORY)
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0) | getattr(os, "O_CLOEXEC", 0)
+    try:
+        descriptor = os.open(path, flags)
+    except OSError:
+        return
+    try:
+        info = os.fstat(descriptor)
+        if not stat.S_ISREG(info.st_mode) or info.st_size <= HISTORY_MAX_BYTES - 4096:
+            return
+        keep = HISTORY_MAX_BYTES // 2
+        os.lseek(descriptor, info.st_size - keep, os.SEEK_SET)
+        tail = os.read(descriptor, keep)
+    finally:
+        os.close(descriptor)
+    tail = tail[tail.find(b"\n") + 1:]
+    write_atomic(path, tail.decode("utf-8", "replace"), 0o600)
+
+
 def record(system: System, event: str, **fields: Any) -> None:
+    _rotate_history(system)
     line = json.dumps({"at": stamp(system.now()), "event": event, **fields}, ensure_ascii=False,
                       sort_keys=True) + "\n"
     flags = os.O_WRONLY | os.O_APPEND | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_CLOEXEC", 0)
@@ -377,6 +431,27 @@ def record(system: System, event: str, **fields: Any) -> None:
         os.fsync(descriptor)
     finally:
         os.close(descriptor)
+
+
+def trusted_now(system: System, seen: tuple[datetime, ...] = ()) -> datetime:
+    """max(clock, the newest time seen before): expiries never run backwards when the clock is behind.
+
+    Persisted in /var/lib/rosy/ssh/clock.json and raised on every run. A clock that ran
+    ahead raises it too; that only expires things early (fail closed).
+    """
+    path = system.path(CLOCK)
+    stored = None
+    raw = _read_bytes(path, 4096)
+    if raw is not None:
+        try:
+            stored = parse_stamp(json.loads(raw.decode("utf-8"))["high_water"])
+        except (ValueError, KeyError, TypeError, UnicodeDecodeError):
+            log(f"/{CLOCK} 를 읽을 수 없어 새로 씁니다")
+    newest = max((system.now().astimezone(timezone.utc).replace(microsecond=0),) + seen)
+    if stored is None or newest > stored:
+        write_atomic(path, json.dumps({"high_water": stamp(newest)}) + "\n", 0o600)
+        return newest
+    return stored
 
 
 # --- keys ------------------------------------------------------------------------
@@ -433,8 +508,8 @@ def save_keys(system: System, entries: list[dict]) -> None:
 
 def prune_keys(system: System) -> list[dict]:
     """Drop keys past their expiry (sshd already refuses them) and keep the file in step."""
-    now = system.now()
     entries = load_keys(system)
+    now = trusted_now(system, tuple(parse_stamp(entry["added_at"]) for entry in entries))
     kept = [entry for entry in entries if parse_stamp(entry["expires_at"]) > now]
     save_keys(system, kept)
     for entry in entries:
@@ -458,7 +533,7 @@ def add_key(system: System, request: dict) -> tuple[int, dict]:
         raise Refusal(409, "SSH_KEY_EXISTS", "같은 공개키가 이미 다른 라벨로 등록되어 있습니다")
     if len(entries) >= MAX_KEYS:
         raise Refusal(409, "SSH_KEYS_FULL", f"관리 키는 최대 {MAX_KEYS}개입니다. 먼저 하나를 회수하세요")
-    now = system.now()
+    now = trusted_now(system)
     expires = (now + timedelta(days=days)).replace(second=0, microsecond=0)
     entry = {"label": label, "type": kind, "key": blob, "fingerprint": fingerprint(blob),
              "added_at": stamp(now), "expires_at": stamp(expires), "added_by": request["by"]}
@@ -495,14 +570,42 @@ def password_state(system: System) -> dict:
     return {"enabled": False, "expires_at": None}
 
 
+def _write_off_state(system: System) -> None:
+    write_atomic(system.path(PASSWORD_STATE), json.dumps({"enabled": False, "expires_at": None}) + "\n", 0o600)
+
+
+def _write_deny_dropin(system: System) -> None:
+    write_atomic(system.path(PASSWORD_DROPIN), PASSWORD_DENY_TEXT, 0o644)
+
+
+def lock_or_deny(system: System) -> None:
+    """Shadow field `*`. If usermod fails: a Match block that refuses rosy's password, a reload,
+    and the expiry timer, whose --expire run retries the lock; then the HelperError goes on."""
+    try:
+        system.lock_password(USER)
+        return
+    except HelperError as exc:
+        failure = exc
+    log(f"lock failed, denying the password in sshd instead: {failure}")
+    for step, action in (("deny drop-in", lambda: _write_deny_dropin(system)),
+                         ("state", lambda: _write_off_state(system)),
+                         ("reload", system.reload_sshd),
+                         ("retry timer", lambda: system.expire_timer(True))):
+        try:
+            action()
+        except (HelperError, OSError) as exc:
+            log(f"{step} after a failed lock: {exc}")
+    raise failure
+
+
 def password_off(system: System, reason: str, by: Optional[str] = None, *, force: bool = False) -> bool:
     """Lock first (no password matches any more), then drop the Match block and reload. True if it was on."""
     was_on = password_state(system)["enabled"] or system.path(PASSWORD_DROPIN).exists()
     if not was_on and not force:
         return False
-    system.lock_password(USER)
+    lock_or_deny(system)
     system.path(PASSWORD_DROPIN).unlink(missing_ok=True)
-    write_atomic(system.path(PASSWORD_STATE), json.dumps({"enabled": False, "expires_at": None}) + "\n", 0o600)
+    _write_off_state(system)
     try:
         system.reload_sshd()
     except HelperError as exc:
@@ -516,7 +619,7 @@ def password_off(system: System, reason: str, by: Optional[str] = None, *, force
 def password_on(system: System, request: dict) -> tuple[int, dict]:
     minutes = bounded_int(request["minutes"], *PASSWORD_MINUTES, "minutes")
     password = generate_password()
-    expires = system.now() + timedelta(minutes=minutes)
+    expires = trusted_now(system) + timedelta(minutes=minutes)
     try:
         system.set_password(USER, password)
         write_atomic(system.path(PASSWORD_DROPIN), PASSWORD_DROPIN_TEXT, 0o644)
@@ -526,22 +629,34 @@ def password_on(system: System, request: dict) -> tuple[int, dict]:
         write_atomic(system.path(PASSWORD_STATE),
                      json.dumps({"enabled": True, "expires_at": stamp(expires), "by": request["by"]},
                                 ensure_ascii=False) + "\n", 0o600)
+        # The expiry check before sshd reads the block: a password is never live without it.
+        system.expire_timer(True)
         system.reload_sshd()
-    except HelperError:
-        # Nothing half-on: no Match block, no password that matches.
-        system.path(PASSWORD_DROPIN).unlink(missing_ok=True)
-        write_atomic(system.path(PASSWORD_STATE), json.dumps({"enabled": False, "expires_at": None}) + "\n", 0o600)
-        system.lock_password(USER)
+    except (HelperError, OSError):
+        password_rollback(system)
         raise
-    system.expire_timer(True)
     record(system, "password_on", minutes=minutes, expires_at=stamp(expires), by=request["by"])
     return 200, {"user": USER, "password": password, "expires_at": stamp(expires)}
+
+
+def password_rollback(system: System) -> None:
+    """Nothing half-on: no Match block, no password that matches. Every step runs; none raises.
+
+    The timer stops before the lock: a failed lock starts it again to retry."""
+    for step, action in (("drop-in", lambda: system.path(PASSWORD_DROPIN).unlink(missing_ok=True)),
+                         ("state", lambda: _write_off_state(system)),
+                         ("timer", lambda: system.expire_timer(False)),
+                         ("lock", lambda: lock_or_deny(system))):
+        try:
+            action()
+        except (HelperError, OSError) as exc:
+            log(f"rollback {step}: {exc}")
 
 
 def expire_password(system: System) -> None:
     state = password_state(system)
     stale_dropin = not state["enabled"] and system.path(PASSWORD_DROPIN).exists()
-    if stale_dropin or (state["enabled"] and parse_stamp(state["expires_at"]) <= system.now()):
+    if stale_dropin or (state["enabled"] and parse_stamp(state["expires_at"]) <= trusted_now(system)):
         password_off(system, "expired")
 
 
@@ -561,11 +676,26 @@ def ensure_keys_dropin(system: System) -> None:
         log(f"reload after the keys drop-in: {exc}")
 
 
-def housekeeping(system: System) -> None:
-    ensure_state_dir(system)
-    ensure_keys_dropin(system)
-    prune_keys(system)
-    expire_password(system)
+def housekeeping(system: System, *, boot: bool = False) -> bool:
+    """The password first, so nothing else that is broken (a corrupt keys.json) keeps it on.
+
+    Each step on its own: a failure is logged and the next one still runs. False if any failed.
+    """
+    first = (("password off at boot", lambda: password_off(system, "boot", force=True)) if boot
+             else ("password expiry", lambda: expire_password(system)))
+    ok = True
+    for step, action in (first, ("keys drop-in", lambda: ensure_keys_dropin(system)),
+                         ("key expiry", lambda: prune_keys(system))):
+        try:
+            action()
+        except (HelperError, OSError) as exc:
+            log(f"{step}: {exc}")
+            ok = False
+    return ok
+
+
+def _requested_at(request: dict) -> float:
+    return datetime.fromisoformat(str(request["requested_at"]).replace("Z", "+00:00")).timestamp()
 
 
 def handle(system: System, request: dict) -> dict:
@@ -579,6 +709,10 @@ def handle(system: System, request: dict) -> dict:
             status, result = revoke_key(system, request)
         elif action == "password_on":
             status, result = password_on(system, request)
+            if system.now().timestamp() - _requested_at(request) > LATE_AFTER_S:
+                # CORE has stopped waiting: the password would only sit in /run/rosy.
+                password_off(system, "late", request["by"], force=True)
+                raise HelperError(f"{CORE_WAIT_S:.0f} s 안에 답하지 못해 비밀번호를 되돌렸습니다")
         elif action == "password_off":
             password_off(system, "requested", request["by"])
             status, result = 204, None
@@ -590,8 +724,8 @@ def handle(system: System, request: dict) -> dict:
         status, result, error, message = 422, None, "SSH_INVALID", str(exc)
     except Refusal as exc:
         status, result, error, message = exc.status, None, exc.code, exc.message
-    except HelperError as exc:
-        status, result, error, message = 503, None, "SSH_ACCESS_UNAVAILABLE", str(exc)
+    except (HelperError, OSError) as exc:
+        status, result, error, message = 503, None, "SSH_ACCESS_UNAVAILABLE", str(exc)[:300]
     return {"schema": SCHEMA, "request_id": request["request_id"], "status": status, "error": error,
             "message": message, "result": result}
 
@@ -611,25 +745,31 @@ def main(argv: Optional[list[str]] = None, *, system: Optional[System] = None) -
     system = system or System(args.root)
     ensure_state_dir(system)
     with locked(system):
-        if args.boot:
-            ensure_keys_dropin(system)
-            prune_keys(system)
-            was_on = password_off(system, "boot", force=True)
-            print(json.dumps({"ssh_access": "boot", "password_was_on": was_on}), flush=True)
-            return 0
-        request = None if args.expire else read_request(system.path(REQUEST), system.now().timestamp())
-        if request is not None:
-            # Consumed before it is applied: a second trigger never repeats it.
-            system.path(REQUEST).unlink(missing_ok=True)
+        if args.boot or args.expire:
+            ok = housekeeping(system, boot=args.boot)
+            print(json.dumps({"ssh_access": "boot" if args.boot else "expire", "ok": ok}), flush=True)
+            return 0 if ok else 1
         housekeeping(system)
-        if request is None:
-            print(json.dumps({"ssh_access": "expire" if args.expire else "ignored"}), flush=True)
-            return 0
-        response = handle(system, request)
-        write_atomic(system.path(RESPONSE), json.dumps(response, ensure_ascii=False, sort_keys=True) + "\n",
-                     0o640, system.core_group())
-        print(json.dumps({"ssh_access": request["action"], "status": response["status"],
-                          "error": response["error"]}), flush=True)
+        for _ in range(MAX_REQUESTS_PER_RUN):
+            path = system.path(REQUEST)
+            if not os.path.lexists(path):
+                break
+            request = read_request(path, system.now().timestamp())
+            # Consumed before it is applied: a second trigger never repeats it. An invalid or
+            # stale one goes too, so it never wakes the path unit again.
+            try:
+                path.unlink()
+            except OSError as exc:
+                log(f"request not removed: {exc}")
+                break
+            if request is None:
+                print(json.dumps({"ssh_access": "ignored"}), flush=True)
+                continue
+            response = handle(system, request)
+            write_atomic(system.path(RESPONSE), json.dumps(response, ensure_ascii=False, sort_keys=True) + "\n",
+                         0o640, system.core_group())
+            print(json.dumps({"ssh_access": request["action"], "status": response["status"],
+                              "error": response["error"]}), flush=True)
     return 0
 
 
