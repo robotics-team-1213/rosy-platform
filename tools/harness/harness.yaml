@@ -7,7 +7,6 @@ adr_log: docs/reference/ROSY ADR Log.md
 
 # IDs absent from the ADR log on purpose. Remove an entry once the ADR is written.
 adr_gaps:
-  D-416: "reserved by an in-flight branch (seen 2026-10-02 in git log --all); D-418 landed first; remove once it lands"
   D-417: "reserved by an in-flight branch (seen 2026-10-02 in git log --all); D-418 landed first; remove once it lands"
   D-411: "reserved by an in-flight branch (seen 2026-10-02 in git log --all); D-412 landed first; remove once it lands"
   D-29: "unused; the vision accelerator shield design only proposed the number"
