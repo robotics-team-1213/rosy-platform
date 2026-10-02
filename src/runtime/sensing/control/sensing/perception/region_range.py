@@ -109,3 +109,19 @@ def range_regions(regions, ground, points, *, tolerance_m, tolerance_ratio):
             tolerance_m=tolerance_m, tolerance_ratio=tolerance_ratio)
         out.append(dict(region, distance_m=metres, range_source=source))
     return out
+
+
+def range_boxes(boxes_xyxy, ground, points, *, tolerance_m, tolerance_ratio):
+    """D-423 §2.3: [(metres, 'L' | 'G') | (None, None)] per pixel box; None without a plane.
+
+    A detection is ranged from its own box by the same rule as a region."""
+    if ground is None:
+        return [None] * len(boxes_xyxy)
+    regions = [{'bbox_xyxy': list(box), 'distance_m': ground.region_distance(box),
+                'range_source': None} for box in boxes_xyxy]
+    for region in regions:
+        if region['distance_m'] is not None:
+            region['range_source'] = GROUND
+    ranged = range_regions(regions, ground, points, tolerance_m=tolerance_m,
+                           tolerance_ratio=tolerance_ratio)
+    return [(r['distance_m'], r['range_source']) for r in ranged]

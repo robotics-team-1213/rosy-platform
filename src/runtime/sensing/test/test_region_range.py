@@ -137,3 +137,17 @@ def test_without_scan_or_pinhole_geometry_the_ground_answer_stands():
 def test_ground_plane_class_is_what_the_bearing_reads():
     g = GroundPlane(0.06, 0.2, 280.0, 160.0, 120.0, 0.6)
     assert pixel_bearing(g, 160, 239) == pytest.approx(0.0)
+
+
+def test_range_boxes_ranges_detection_boxes_by_the_same_rule():
+    """D-423 §2.3: a detection is ranged from its own box, never borrowed from a region."""
+    from control.sensing.perception.region_range import range_boxes
+    g = plane()
+    boxes = [[130, 20, 190, 75], [20, 170, 70, 215], [0, 0, 1, 1]]
+    out = range_boxes(boxes, g, points(scan_with({0.0: 0.6})), tolerance_m=0.05, tolerance_ratio=0.2)
+    assert out[0] == (pytest.approx(0.6 + LIDAR_X - CAMERA_X), LIDAR)
+    assert out[1] == (pytest.approx(g.distance(215)), GROUND)
+    assert out[2] == (None, None)
+    assert range_boxes(boxes, None, None, tolerance_m=0.05, tolerance_ratio=0.2) == [None] * 3
+    assert range_boxes(boxes[1:2], g, None, tolerance_m=0.05, tolerance_ratio=0.2) == [
+        (pytest.approx(g.distance(215)), GROUND)]
