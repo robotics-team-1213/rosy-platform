@@ -465,3 +465,106 @@ def test_nonadvancing_joint_sequence_holds_before_next_phase_intent(tmp_path):
     assert len(port.submissions) == 1
     assert len(recorder.phases()) == 1
     assert store.get_action("action-1")["state"] == "HOLD"
+
+
+class _CountingStore:
+    """Counts every ActionStore call the recorder makes (A2: storage I/O per ROS event)."""
+
+    def __init__(self, inner):
+        self.inner = inner
+        self.calls = []
+
+    def __getattr__(self, name):
+        target = getattr(self.inner, name)
+        if not callable(target):
+            return target
+
+        def counted(*args, **kwargs):
+            self.calls.append(name)
+            return target(*args, **kwargs)
+        return counted
+
+
+def test_feedback_flood_journals_running_once_and_terminal_always(tmp_path):
+    # C3 run4: 119 feedback events in 3.4 s each opened SQLite inside the ROS callback.
+    # The RUNNING transition and the terminal result are journalled; later feedback is
+    # counted in memory only and its count lands in the terminal result.
+    store, recorder, port, runner = _harness(tmp_path)
+    counting = _CountingStore(recorder._store)
+    recorder._store = counting
+    captured = {}
+
+    def accept(command, goal, callback):
+        captured.update(command=command, goal=goal, callback=callback)
+        callback(_event("GOAL_ACCEPTED", command, "approach", goal, 1))
+
+    port.on_submit = accept
+    runner.start()
+    command, goal, callback = captured["command"], captured["goal"], captured["callback"]
+    counting.calls.clear()
+    assert callback(_event("RUNNING_FEEDBACK", command, "approach", goal, 2, feedback_sequence=1))
+    first_feedback_calls = len(counting.calls)
+    assert first_feedback_calls > 0
+    for n in range(3, 503):
+        assert callback(_event("RUNNING_FEEDBACK", command, "approach", goal, n, feedback_sequence=n - 1))
+    assert len(counting.calls) == first_feedback_calls
+    assert callback(_event("TERMINAL_RESULT", command, "approach", goal, 503, status=4, result_code=0))
+    row = recorder.phases()[0]
+    assert row["state"] == "SUCCEEDED"
+    assert recorder.parent()["state"] == "RUNNING"
+    assert "feedback_events" in str(row) and "501" in str(row)
+
+
+def test_live_feedback_waits_for_the_queued_goal_acceptance_replay(tmp_path):
+    # C3b run9: GOAL_ACCEPTED arrived while the runner was still submitting (queued), and the
+    # next live feedback was processed before that queue was replayed, so it saw no goal id,
+    # returned False, and the runtime marked the ROS goal failed (owner HOLD action_failed).
+    import threading
+
+    store, recorder, port, runner = _harness(tmp_path)
+    live = {}
+
+    class _Pending(list):
+        def __iter__(self):
+            # Runs when the runner snapshots its queue, i.e. after submitting cleared.
+            if "thread" not in live and live.get("command") is not None:
+                def deliver():
+                    live["result"] = runner.on_ros_goal_event(_event(
+                        "RUNNING_FEEDBACK", live["command"], "approach", live["goal"], 2,
+                        feedback_sequence=1))
+                live["thread"] = threading.Thread(target=deliver)
+                live["thread"].start()
+                live["thread"].join(0.2)
+            return super().__iter__()
+
+    runner._pending_events = _Pending()
+
+    def accept(command, goal, callback):
+        live.update(command=command, goal=goal)
+        callback(_event("GOAL_ACCEPTED", command, "approach", goal, 1))  # queued: submitting
+
+    port.on_submit = accept
+    runner.start()
+    live["thread"].join(5.0)
+    assert live["result"] is True
+    assert recorder.phases()[0]["state"] == "RUNNING"
+
+
+def test_feedback_overtaken_by_a_later_event_is_acknowledged_not_failed(tmp_path):
+    # Re-review N1: the replayed early feedback and a live feedback come from different
+    # threads; the sink can see sequence 3 before 2. Stale feedback is telemetry: it is
+    # acknowledged (True) without journaling, never a reason to fail the ROS goal.
+    store, recorder, port, runner = _harness(tmp_path)
+    captured = {}
+
+    def accept(command, goal, callback):
+        captured.update(command=command, goal=goal, callback=callback)
+        callback(_event("GOAL_ACCEPTED", command, "approach", goal, 1))
+
+    port.on_submit = accept
+    runner.start()
+    command, goal, callback = captured["command"], captured["goal"], captured["callback"]
+    assert callback(_event("RUNNING_FEEDBACK", command, "approach", goal, 3, feedback_sequence=2))
+    assert callback(_event("RUNNING_FEEDBACK", command, "approach", goal, 2, feedback_sequence=1))
+    assert callback(_event("TERMINAL_RESULT", command, "approach", goal, 4, status=4, result_code=0))
+    assert recorder.phases()[0]["state"] == "SUCCEEDED"

@@ -728,3 +728,9 @@
 - 증거: `python -m pytest src/runtime/gateway/test/test_recordings_api.py src/runtime/gateway/test/test_bridge_timers.py -q` → 29 passed (2026-10-02 Windows).
 - gate 변화: SOURCE 유지. ROS-SIM HOLD — 계획 Verification ROS-SIM 체크리스트(WSL Ubuntu) 미실행, DEVICE 증거 없음.
 - 결정: D-411 A.
+
+## 2026-10-02 · 94a8b833 · fix(fleet_agent): hub 작업을 API 루프에서 시작
+
+- 변경: `fleet.hub_url`+`pairing_token` 이 있으면 `CoreServices.build` 의 `fleet_agent.start()` 가 루프 없이 `asyncio.create_task` 를 불러 CORE 가 죽었다(D-407 Gazebo 2026-10-02). `create_app` 이 라우터 lifespan 을 감싸 uvicorn 루프에서 `start_on_loop()` 를 부른다. e-stop 리스너는 `line_follow.stop(reason="estop")`.
+- 증거: `test_fleet_agent_startup.py`(core_client, hub_url 설정으로 build 후 startup 에서 작업 생성), `test_line_follow_stuck.py` 초록.
+- gate 변화: 없음.

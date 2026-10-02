@@ -393,6 +393,23 @@ DECLARED_WRITES = {
         # rosy-hw-probe.py OUTPUT, via a temporary file beside it (D-247).
         "/run/rosy-boot/hardware.json",
     },
+    "rosy-auto-update.service": {
+        # rosy_auto_update.py UPDATES: config/hold/state/status/history and downloads.
+        "/var/lib/rosy/updates/state.json", "/var/lib/rosy/updates/status.json",
+        "/var/lib/rosy/updates/history.jsonl", "/var/lib/rosy/updates/hold.json",
+        "/var/lib/rosy/updates/downloads",
+        # rosy_claim.py CLAIM_DIR: mkdir in /run, and the stale rename beside it.
+        "/run/rosy-claim", "/run/rosy-claim.stale.x",
+        # rosy-release-unpack.sh into the release store; native_release.py
+        # activate/rollback (links, lock, journal), as rosy-release-recover writes.
+        "/opt/rosy/releases/2026.10.01-022", "/opt/rosy/current", "/opt/rosy/previous",
+        "/var/lib/rosy/releases/native-release.lock", "/var/lib/rosy/releases/native-activation.json",
+        # sync-image-layer.py: native-runtime scripts, units, udev rules, modprobe
+        # options, and its BACKUP_ROOT.
+        "/opt/rosy/native-runtime/rosy_auto_update.py", "/etc/systemd/system/rosy-core.service",
+        "/etc/udev/rules.d/99-rosy-lamp.rules", "/etc/modprobe.d/rosy-ws281x.conf",
+        "/var/lib/rosy/image-layer-backup/pending.json",
+    },
     "rosy-hw-test.service": {
         # rosy-hw-test.py RESULT, via a temporary file beside it (D-247 6).
         "/run/rosy-boot/hw-test.json",
@@ -490,6 +507,12 @@ PROGRAM_SOURCES = {
     "rosy-hw-probe.service": ["deploy/robot/pinky_pro/native/rosy-hw-probe.py"],
     # D-247 6: standard library; RPi.GPIO is imported lazily for the buzzer only.
     "rosy-hw-test.service": ["deploy/robot/pinky_pro/native/rosy-hw-test.py"],
+    # D-412: the updater, its claim, and the programs it runs as children.
+    "rosy-auto-update.service": ["deploy/robot/pinky_pro/native/rosy_auto_update.py",
+                                 "deploy/robot/pinky_pro/native/rosy_claim.py",
+                                 "deploy/robot/pinky_pro/native/rosy-release-unpack.sh",
+                                 "deploy/robot/pinky_pro/native/native_release.py",
+                                 "deploy/robot/pinky_pro/native/sync-image-layer.py"],
 }
 
 PATH_LITERAL = re.compile(r"""["'](/(?:var|opt|run|etc|srv|home|root)/[^"'\s]*)["']""")
@@ -693,9 +716,16 @@ def test_required_writable_paths_exist_when_the_unit_starts(unit):
         created |= {line.split()[1] for line in STATE_RULES.read_text(encoding="utf-8").splitlines()
                     if line.startswith("d ")}
     created.add("/opt/rosy")  # customize-rootfs.sh installs the release store there
+    # D-412: mounted by systemd before any unit (/run) or shipped by the base
+    # OS packages (systemd, udev, kmod); rosy-auto-update writes into them.
+    created |= {"/run", "/etc/systemd/system", "/etc/udev/rules.d", "/etc/modprobe.d"}
     for required in _words(directives, "Requires"):
         if required.endswith(".service") and (NATIVE / required).is_file():
             created |= {f"/run/{entry}" for entry in _words(_directives(required), "RuntimeDirectory")}
+            # D-412: a required unit this one is also ordered after has created its
+            # StateDirectory (rosy-release-recover's /var/lib/rosy/releases).
+            if required in _words(directives, "After"):
+                created |= {f"/var/lib/{entry}" for entry in _words(_directives(required), "StateDirectory")}
     for entry in _words(directives, "ReadWritePaths"):
         if entry.startswith("-"):
             continue
@@ -946,13 +976,14 @@ def test_learned_perception_env_example_ships_both_switches_off():
     launch = (ROOT / "src/runtime/sensing/launch/camera_preview.launch.py").read_text(encoding="utf-8")
     assert "'ROSY_LEARNED_SHADOW'" in launch and "'ROSY_CAPTURE'" in launch
 
+
 # Units whose program reaches native_release.py verify (signing.verify_signature
 # uses tempfile). Under ProtectSystem=strict without PrivateTmp the default
 # temp dirs are read-only, so verify fails with "No usable temporary directory".
-# Found by the D-406 device twin (scenario h3, 2026-10-02): a power cut during
+# Found by the D-412 device twin (scenario h3, 2026-10-02): a power cut during
 # activation left a journal, boot recovery could not verify the old release,
 # and rosy-core/rosy-runtime.target (which Require the gate) never started.
-VERIFYING_UNITS = ("rosy-release-recover.service",)
+VERIFYING_UNITS = ("rosy-release-recover.service", "rosy-auto-update.service")
 
 
 @pytest.mark.parametrize("unit_name", VERIFYING_UNITS)
@@ -963,3 +994,9 @@ def test_units_that_verify_releases_get_a_writable_private_tmp(unit_name):
     assert re.search(r"^PrivateTmp=(yes|true)$", unit, re.M), (
         f"{unit_name} verifies signatures (tempfile) under ProtectSystem=strict and needs PrivateTmp"
     )
+
+
+def test_the_recover_program_is_the_one_that_verifies():
+    # Pins why rosy-release-recover is in VERIFYING_UNITS.
+    assert "recover" in _read("recover-release.sh")
+    assert "self.verify(" in _read("native_release.py")

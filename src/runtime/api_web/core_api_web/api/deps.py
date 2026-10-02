@@ -248,6 +248,21 @@ def _refused_in_device_mode(record: dict[str, Any]) -> bool:
     return record["legacy"] or record["digest"] in DEV_TOKEN_DIGESTS
 
 
+#: D-407 review L4: a key that lives only for this CORE process. A token record without a
+#: configured id is named by digest[:12], an unsalted hash prefix that anyone holding a
+#: candidate token can confirm; principal_ref keyed with this instead is no such oracle.
+#: It is stable for one CORE run; configured ids stay as they are.
+_PRINCIPAL_KEY = secrets.token_bytes(32)
+
+
+def principal_ref(record: dict[str, Any]) -> str:
+    """A non-secret name for the caller in audit events (nav.line_stuck_answered)."""
+    if record["id"] != record["digest"][:12]:
+        return record["id"]
+    digest = hmac.new(_PRINCIPAL_KEY, record["digest"].encode("utf-8"), hashlib.sha256)
+    return "anon-" + digest.hexdigest()[:12]
+
+
 def auth_entries(config: dict) -> list[dict[str, Any]]:
     """설정에 담긴 토큰을 내부 레코드로 정규화한다. 원문은 반환하지 않는다.
 
@@ -330,8 +345,10 @@ class AuthContext:
 
     def __init__(self, token_id: str, role: str, *, source: str = "manual",
                  expires_at: Optional[str] = None, label: str = "",
-                 created_at: Optional[str] = None) -> None:
+                 created_at: Optional[str] = None,
+                 principal_ref: Optional[str] = None) -> None:
         self.token_id = token_id
+        self.principal_ref = principal_ref or token_id
         self.role = role
         self.source = source
         self.expires_at = expires_at
@@ -359,7 +376,8 @@ def authenticate(config: dict, bearer: Optional[str], query_token: Optional[str]
             _LAST_USED[item["id"]] = _utc_now()
             return AuthContext(token_id=item["id"], role=item["role"], source=item["source"],
                                expires_at=item["expires_at"], label=item["label"],
-                               created_at=item["created_at"])
+                               created_at=item["created_at"],
+                               principal_ref=principal_ref(item))
     raise ApiError("UNAUTHORIZED", 401, "missing or invalid token")
 
 

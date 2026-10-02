@@ -12,6 +12,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from uuid import uuid4
 
+from fleet.server.cancel_all_store import ensure_schema as ensure_cancel_all_schema
 from fleet.server.dispatch_admission import release as release_dispatch_claims
 from fleet.server.dispatch_admission import reserve as reserve_dispatch_claims
 from fleet.server.sqlite_policy import configure_connection, enable_wal
@@ -172,13 +173,14 @@ class FleetTaskStore:
             self._migrate_task_columns(connection)
             self._migrate_dispatch_control(connection)
             self._migrate_dispatch_claims(connection)
+            ensure_cancel_all_schema(connection)  # D-421 cancel-all record and attempt tags
         if os.name != "nt":
             self.path.chmod(0o600)
 
     def begin_api_audit(self, *, principal_id: str, role: str,
                         method: str, path: str) -> str:
         if (not principal_id or len(principal_id) > 96 or any(ord(char) < 32 for char in principal_id)
-                or role not in {"viewer", "operator", "policy-admin"}
+                or role not in {"viewer", "operator", "policy-admin", "service"}
                 or method != "POST" or not path.startswith("/api/fleet/")
                 or path == "/api/fleet/sightings"):
             raise ValueError("invalid site API audit entry")
@@ -720,8 +722,8 @@ class FleetTaskStore:
     def cancel_queued_for_robot(self, robot_id: str, *, actor_id: str) -> list[str]:
         return self._cancel_queued_tasks(actor_id=actor_id, robot_id=robot_id)
 
-    def cancel_all_queued(self, *, actor_id: str) -> list[str]:
-        return self._cancel_queued_tasks(actor_id=actor_id)
+    def cancel_all_queued(self, *, actor_id: str, reason: str | None = None) -> list[str]:
+        return self._cancel_queued_tasks(actor_id=actor_id, reason=reason)  # D-421 reason
 
     def queued_task_ids(self) -> set[str]:
         with closing(self._connect()) as connection:
@@ -802,7 +804,7 @@ class FleetTaskStore:
                 raise KeyError(task_id)
             # A CORE event can race the REST receipt or its timeout. Never let a
             # late receipt/timeout downgrade an already correlated execution result.
-            if (current["status"] in {"RUNNING", "COMPLETED", "FAILED"}
+            if (current["status"] in {"RUNNING", "COMPLETED", "FAILED", "HOLD"}  # D-421 HOLD
                     or (current["status"] == "UNKNOWN" and (
                         status == "ACCEPTED"
                         or current["reason"] == "CORE_CANCEL_RESULT_PENDING"
@@ -833,12 +835,12 @@ class FleetTaskStore:
         return self._task_dict(row)
 
     def project_core_event(self, *, robot_id: str, event_id: str, seq: int,
-                           event_type: str, correlation_id: str) -> dict | None:
+                           event_type: str, correlation_id: str, source: str | None = None) -> dict | None:
         from fleet.server.task_results import project_core_event
 
         return project_core_event(
             self, robot_id=robot_id, event_id=event_id, seq=seq,
-            event_type=event_type, correlation_id=correlation_id,
+            event_type=event_type, correlation_id=correlation_id, source=source,
         )
 
     def get_task(self, task_id: str) -> dict | None:
@@ -955,35 +957,30 @@ class FleetTaskStore:
             (task_id, status, source, actor_id, reason, now),
         )
 
-    def _cancel_queued_tasks(self, *, actor_id: str, robot_id: str | None = None) -> list[str]:
-        now = _now()
+    def _cancel_queued_tasks(self, *, actor_id: str, robot_id: str | None = None,
+                             reason: str | None = None) -> list[str]:
+        now, reason = _now(), reason or "OPERATOR_CANCELED_BEFORE_DISPATCH"
         with closing(self._connect()) as connection:
             connection.execute("BEGIN IMMEDIATE")
-            if robot_id is None:
-                rows = connection.execute(
-                    """SELECT task_id FROM fleet_tasks WHERE status='QUEUED'
-                       AND dispatch_phase IN ('READY', 'WAITING_TRAFFIC')"""
-                ).fetchall()
-            else:
-                rows = connection.execute(
-                    """SELECT task_id FROM fleet_tasks WHERE status='QUEUED'
-                       AND dispatch_phase IN ('READY', 'WAITING_TRAFFIC') AND robot_id=?""",
-                    (robot_id,),
-                ).fetchall()
+            rows = connection.execute(
+                """SELECT task_id FROM fleet_tasks WHERE status='QUEUED'
+                   AND dispatch_phase IN ('READY', 'WAITING_TRAFFIC')
+                   AND (? IS NULL OR robot_id=?)""", (robot_id, robot_id),
+            ).fetchall()
             task_ids = [row["task_id"] for row in rows]
             for task_id in task_ids:
                 connection.execute(
                     """UPDATE fleet_tasks SET status='CANCELED', dispatch_phase='CANCELED',
-                       reason='OPERATOR_CANCELED_BEFORE_DISPATCH', blocked_by=NULL,
+                       reason=?, blocked_by=NULL,
                        waiting_on_json='[]', lease_owner=NULL, lease_until=NULL, updated_at=?
                        WHERE task_id=?""",
-                    (now, task_id),
+                    (reason, now, task_id),
                 )
                 connection.execute("DELETE FROM fleet_robot_reservations WHERE task_id=?",
                                    (task_id,))
                 release_dispatch_claims(connection, owner_kind="task", owner_id=task_id)
                 self._append_history(connection, task_id, "CANCELED", "operator", actor_id, now,
-                                     "OPERATOR_CANCELED_BEFORE_DISPATCH")
+                                     reason)
             connection.commit()
         return task_ids
 

@@ -15,7 +15,7 @@ from core_common.protocol.localization import CandidateReport, LocState
 from fakes import FakeClock, FakeRobot, run
 from fleet.localization import cues, service_logic
 from fleet.localization.service_logic import Ladder, Monitor
-from fleet.server.localization_service import LocalizationService, load_lane_rules
+from fleet.server.localization_service import CALL_TIMEOUT_S, LocalizationService, load_lane_rules
 from fleet.swarm.transport import RobotApiError
 
 LANE_RULES = (Path(__file__).resolve().parents[3] / "runtime" / "sensing" / "map" / "map_v2_fleet"
@@ -409,6 +409,71 @@ def test_an_anchor_whose_pose_jumps_while_localized_loses_its_anchor():
     assert svc.anchors() == set()
 
 
+def test_the_jump_bound_caps_dt_at_1_s_so_a_180_degree_flip_always_counts():
+    """S1 run 3 T1: polls 4-10 s apart let a mirror injection pass as motion."""
+    before = (0.70, -0.15, 0.0)
+    for dt in (0.5, 1.0, 8.0, 60.0):
+        assert service_logic.jumped(before, mirror(before), dt)
+        assert service_logic.jumped(before, (*before[:2], math.pi), dt)        # turned in place
+    assert not service_logic.jumped(before, (0.70, -0.15 + 0.7, 2.4), 60.0)    # under 0.75 m, 2.5 rad
+    assert service_logic.jumped(before, (0.70, -0.15 + 0.8, 0.0), 60.0)
+
+
+def test_the_mirror_signature_is_independent_of_dt():
+    before = (0.10, 0.05, 0.3)
+    near_twin = (-0.10 + 0.2, -0.05, cues.wrap(0.3 + math.pi + 0.4))
+    assert service_logic.mirrored(before, near_twin)
+    assert not service_logic.mirrored(before, (-0.10 + 0.35, -0.05, cues.wrap(0.3 + math.pi)))
+    assert not service_logic.mirrored(before, (-0.10, -0.05, cues.wrap(0.3 + math.pi + 0.6)))
+    assert not service_logic.mirrored(before, before)
+
+
+def _poll_every(svc, clock, gap_s, polls, move=None):
+    for i in range(polls):
+        if move is not None:
+            move(i)
+        run(svc.tick())
+        clock.advance(gap_s)
+
+
+def test_s1_run3_a_mirror_injection_between_8_s_polls_drops_the_anchor():
+    """S1 run 3 (c) a2: Fleet polled ~10 s apart under load; the injection stayed an anchor."""
+    clock = FakeClock()
+    r1, r2, svc = _two_anchors(clock)
+    _poll_every(svc, clock, 8.0, 2)                                  # slow polls, standing still
+    assert svc.anchors() == {"r1", "r2"}
+    r2._state = state("r2", "LOCALIZED", pose=mirror(R2_TRUE))      # the injected fault
+    _poll_every(svc, clock, 8.0, 1)
+    assert svc.anchors() == {"r1"}
+
+
+def test_a_genuine_slow_move_at_8_s_polls_loses_the_anchor():
+    """Fail safe, documented: 0.8 m between two polls 8 s apart may have been driven, but
+    Fleet cannot tell it from a reset, so the robot stops being evidence until it re-localizes."""
+    clock = FakeClock()
+    a = Localizing("a", ON_A)
+    svc = service(a, clock=clock)
+    ticks(svc, clock, 5.0)
+    assert svc.anchors() == {"a"}
+    clock.advance(7.5)
+    a._state = state("a", "LOCALIZED", pose=(ON_A[0], ON_A[1] - 0.8, ON_A[2]))   # 0.1 m/s
+    ticks(svc, clock, 0.5)
+    assert svc.anchors() == set()
+
+
+def test_a_robot_moving_and_turning_at_normal_polls_keeps_its_anchor():
+    clock = FakeClock()
+    a = Localizing("a", ON_A)
+    svc = service(a, clock=clock)
+    ticks(svc, clock, 5.0)
+
+    def drive(i):            # 0.3 m/s and 1.5 rad/s, polled every 0.5 s
+        a._state = state("a", "LOCALIZED", pose=(ON_A[0], ON_A[1] - 0.15 * (i + 1),
+                                                cues.wrap(ON_A[2] + 0.75 * (i + 1))))
+    _poll_every(svc, clock, 0.5, 12, move=drive)
+    assert svc.anchors() == {"a"}
+
+
 def test_a_decision_that_ends_elsewhere_does_not_anchor():
     """LOCALIZED away from the decided pose was not that decision."""
     clock = FakeClock()
@@ -725,6 +790,27 @@ def test_the_ladder_sends_missions_then_raises_needs_human(caplog):
     assert svc.view("r1")["needs_human"] is False
 
 
+def test_a_decision_after_needs_human_clears_the_flag():
+    """S1 run 3 T3: needs_human is a flag, not a stop. Fleet keeps arbitrating, and the
+    flag (badge "위치 확인 필요") clears once the robot is LOCALIZED."""
+    from fleet.localization import trust
+    clock = FakeClock()
+    r1 = Localizing("r1", ON_A)
+    candidates, r1.candidates = r1.candidates, None                 # nothing to decide yet
+    svc = service(r1, clock=clock)
+    ticks(svc, clock, 121.0)
+    assert svc.view("r1")["needs_human"] is True
+    assert trust.badge(run(r1.state()), svc.view("r1"))["label"] == trust.NEEDS_HUMAN_LABEL
+    r1.candidates = candidates                                       # a slot report arrives
+    ticks(svc, clock, 3.0)
+    assert [[c.value for c in d.cues] for d in r1.decisions] == [["slot"]]
+    ticks(svc, clock, 0.5)
+    view = svc.view("r1")
+    assert view["needs_human"] is False and view["rung"] is None
+    assert trust.badge(run(r1.state()), view)["label"] != trust.NEEDS_HUMAN_LABEL
+    assert svc.anchors() == {"r1"}
+
+
 def test_homing_tries_to_square_first_and_falls_back_when_core_refuses_it():
     clock = FakeClock()
     r1 = FakeRobot("r1", state=state("r1", "CANDIDATES", "odom"))
@@ -887,6 +973,64 @@ def test_one_hung_robot_does_not_stall_the_others():
     run(drive())
 
     assert len(ok.decisions) == 1
+
+
+def test_the_default_call_timeout_is_2_5_s_and_hung_robots_wait_side_by_side():
+    """S1 run 3 T2: 1 s lost observer evidence under load. Three hung robots still cost one
+    timeout per tick, not three, and the healthy robot is read in the same tick."""
+    assert CALL_TIMEOUT_S == 2.5
+    clock = FakeClock()
+    hung = [Hanging(f"h{i}", state=state(f"h{i}", "CANDIDATES", "odom")) for i in range(3)]
+    ok = FakeRobot("ok", state=state("ok", "CANDIDATES", "odom"))
+    ok.candidates = report("ok", ON_A)
+    svc = service(*hung, ok, clock=clock)
+    run(asyncio.wait_for(svc.tick(), CALL_TIMEOUT_S + 1.0))
+    assert ("localization_candidates",) in ok.calls
+
+
+class TimingOut(Localizing):
+    """CORE takes the decision, but Fleet's call times out (S1 run 3 d3); the robot stays
+    in its check until the test moves it."""
+
+    async def localization_decision(self, decision):
+        await FakeRobot.localization_decision(self, decision)
+        raise asyncio.TimeoutError()
+
+
+def _unconfirmed(clock):
+    r = TimingOut("r", ON_A)
+    svc = service(r, clock=clock)
+    ticks(svc, clock, 5.0)
+    assert len(r.decisions) == 1 and svc.anchors() == set()
+    assert svc.view("r")["last_decision"]["result"] == "unreachable"
+    return r, svc
+
+
+def test_an_unconfirmed_decision_the_robot_then_reaches_gives_an_anchor():
+    clock = FakeClock()
+    r, svc = _unconfirmed(clock)
+    r._state = state("r", "LOCALIZED", pose=(ON_A[0] + 0.03, ON_A[1], ON_A[2] + math.radians(3)))
+    ticks(svc, clock, 0.5)
+    assert svc.anchors() == {"r"}
+
+
+@pytest.mark.parametrize("pose", [(ON_A[0] + 0.06, ON_A[1], ON_A[2]),
+                                  (ON_A[0], ON_A[1], ON_A[2] + math.radians(6)), mirror(ON_A)])
+def test_an_unconfirmed_decision_reached_elsewhere_gives_no_anchor(pose):
+    clock = FakeClock()
+    r, svc = _unconfirmed(clock)
+    r._state = state("r", "LOCALIZED", pose=pose)
+    ticks(svc, clock, 0.5)
+    assert svc.anchors() == set()
+
+
+def test_an_unconfirmed_decision_reached_after_15_s_gives_no_anchor():
+    clock = FakeClock()
+    r, svc = _unconfirmed(clock)
+    ticks(svc, clock, 15.0)
+    r._state = state("r", "LOCALIZED", pose=ON_A)
+    ticks(svc, clock, 0.5)
+    assert svc.anchors() == set()
 
 
 def test_the_cli_wiring_holds_traffic_through_the_console():

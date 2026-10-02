@@ -42,6 +42,8 @@
 | D-334 | ER 2의 도구 목록과 진행 조회를 Fleet 원장 경계에 둔다 |
 | D-336 | Fleet와 OMX 제어 owner 사이 첫 연결은 같은 호스트의 local IPC로 제한한다 |
 | D-392 | 모델 도구 호출은 provider 중립 메시지 계약과 Fleet 소유 allowlist를 따른다 |
+| D-407 | 차선 자율 막힘 복구: 앞물체·차선 상실이 이어지면 관제에 판단 요청(WAIT·RESUME·BACK_AND_RETRY·MANUAL·ABORT), 답이 없으면 뒤 여유 확인 후 짧은 후진과 재판단(최대 2회, 기본 꺼짐) |
+| D-413 | ROSY는 modules·integrations·apps·profiles로 책임을 나누고 고정 셀 한 흐름부터 이전한다 |
 
 ## 계획·결과 문서
 
@@ -60,6 +62,7 @@
 - [2026-09-29-fleet-mission-control-arbitration-implementation.md](../../../docs/plans/2026-09-29-fleet-mission-control-arbitration-implementation.md)
 - [2026-09-29-policy-evidence-contract.md](../../../docs/plans/2026-09-29-policy-evidence-contract.md)
 - [2026-10-01-model-tool-contract-implementation.md](../../../docs/plans/2026-10-01-model-tool-contract-implementation.md)
+- [2026-10-02-platform-architecture-v02-migration.md](../../../docs/plans/2026-10-02-platform-architecture-v02-migration.md)
 
 ## 교훈 (docs/solutions)
 
@@ -71,8 +74,8 @@
 
 ## 최근 기록
 
-- 2026-10-02 · fbb12ef0 · feat(localization): D-395 S1 R1 — LOCALIZED 닻이 다른 LOCALIZED 로봇을 본다
-- 2026-10-02 · uncommitted · 관제 콘솔 회차 3 — D-409 기기 등록·연결 서랍 + 컴팩트 카드 요약
-- 2026-10-02 · 3d91dcff · fix(fleet): D-395 S1 재실행 R2·R6 — 결정이 올 수 있는 동안 사다리는 멈춘다
-- 2026-10-02 · uncommitted · fix(fleet): D-395 S1 재실행 — 미션 중과 끝난 뒤 1 s 는 결정하지 않는다
-- 2026-10-02 · uncommitted · fix(fleet): D-395 S1 벤치 — 앵커 peer, 못 본 peer 는 0, 보고 수로 세는 감시, unsupported 는 최종
+- 2026-10-02 · uncommitted · feat(fleet): D-421 전체 주행 취소를 main d5b3bd10 위에 다시 얹음
+- 2026-10-02 · uncommitted · docs(adr): 전체 주행 취소 ADR D-417 → D-421
+- 2026-10-02 · e223af71 · fix(fleet): D-417 재검토 — 표시를 목표 호출 전에, 시도·출처·유예로 맞춘다
+- 2026-10-02 · d3b0444b · fix(fleet): D-417 검토 반영 — CORE 확인된 취소가 로봇 점유를 푼다
+- 2026-10-02 · 7e121603 · feat(fleet): D-417 전체 주행 취소(래치 없음)와 래치를 말하는 전체 비상 정지

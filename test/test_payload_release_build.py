@@ -515,7 +515,7 @@ def test_real_unpack_helper_accepts_the_signed_tarball_and_native_verify_passes(
     pack_release(staging, tarball, public_key=key, modes_from=unsigned)
     releases = device / "opt" / "rosy" / "releases"
     releases.mkdir(parents=True)
-    script = ROOT / "deploy" / "robot" / "pinky_pro" / "rosy-release-unpack.sh"
+    script = ROOT / "deploy" / "robot" / "pinky_pro" / "native" / "rosy-release-unpack.sh"
 
     completed = subprocess.run(
         [shutil.which("bash"), _posix(script), RELEASE_ID, _posix(tarball), _posix(releases)],

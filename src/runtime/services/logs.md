@@ -360,3 +360,28 @@
 - 증거: `python -m pytest src/runtime/services/test/test_teleop_intent.py -q` → 5 passed (2026-10-02 Windows).
 - gate 변화: SOURCE 유지. ROS-SIM HOLD — 계획 Verification ROS-SIM 체크리스트(WSL Ubuntu) 미실행, DEVICE 증거 없음.
 - 결정: D-411 A.
+
+## 2026-10-02 · e83a955d · fix(line_follow): D-407 Gazebo 후속 — 재막힘 시도 이어 세기, 몸 폭 뒤 띠
+
+- 변경: recovered 뒤 `recovery_restuck_s`/`recovery_restuck_m` 안의 재막힘은 시도 수를 이어 받음(`restuck_of`), 뒤 띠 = URDF 몸 반폭 + 0.02 m, 거부·중단 사건에 scan 값, e-stop 닫힘 사유 `estop`. FleetAgent 는 실행 중인 루프가 없으면 시작을 미루고 API lifespan 에서 `start_on_loop()`(94a8b833).
+- 증거: `test_line_stuck_recovery.py`, `test_fleet_agent_loop.py` 초록.
+- gate 변화: 없음.
+
+## 2026-10-02 · 7e699e452 · fix(line_follow): D-407 지나온 길 유효 기간
+
+- 변경: 사각 띠 후진의 지나온 길은 마지막 전진 명령이 `recovery_trail_max_age_s`(30 s) 이내일 때만(관제 대기 포함). 시도·결과 사건에 `trail_age_s`.
+- 증거: `test_line_stuck_recovery.py`(29 s 허용, 31 s 거부, 사건에 trail_age_s), `test_line_follow_stuck.py`(관제 대기 중 만료).
+- gate 변화: 없음.
+
+## 2026-10-02 · bcce15c9d · fix(fleet_agent): hub 답을 모두 읽는 수신 루프, 재연결 기록, 관제 grace
+
+- 원인: hub 는 heartbeat·사건마다 답하는데 에이전트는 heartbeat 마다 하나만 읽어 답이 쌓였고, websocket 큐가 차 읽기가 멈춰 keepalive 가 끊겼다(D-407 관제 재실행, ASKING 중 `no_console`).
+- 변경: `_session`/`_receive_loop`(모든 답 소비, ERROR 는 그 envelope 만), 끊김 경고에 이유, `linked_within(grace)`; 막힘 답 사건 `principal_ref`·`rear_state`·거부 근거(9300adf1d).
+- 증거: `test_fleet_agent_link.py` 4 passed, `test_line_stuck_recovery.py` 초록.
+- gate 변화: 없음. Gazebo 재확인은 다음 WSL 슬롯.
+
+## 2026-10-02 · 4a5a65083 · fix(fleet_agent): 검토 반영 — WELCOME 뒤에만 연결, 사건 잃지 않기
+
+- 변경: `connected` 는 WELCOME~세션 끝, backoff 는 WELCOME 뒤에만 재설정, HELLO 답 5 s. 보낸 envelope 순서 기억(전송 잠금)과 답 짝짓기, 일시 오류 재전송(3 회), 영구 거부는 seq·종류 기록 후 버림, 미응답·전송 중 취소 사건 재버퍼. `principal_ref` 키 HMAC(0c56f3d6f).
+- 증거: `test_fleet_agent_link.py` 12 passed, `test_line_follow_stuck*.py` 46 passed, `test_hub_server.py` 9 passed.
+- gate 변화: 없음.

@@ -43,14 +43,20 @@ class StuckInput:
     front_clear: bool = True             # no path-band return within obstacle_resume_m
     front_band_m: Optional[float] = None
     rear_m: Optional[float] = None       # from the body rear (URDF), self-mask applied
+    # "clear" (band empty or wider than recovery_rear_clear_m), "blocked", or "unknown"
+    # (no geometry / no fresh scan): rear_m None alone cannot tell empty from unknown.
+    rear_state: str = "unknown"
     turn_m: Optional[float] = None
     # Rear band behind the body rear that the LiDAR cannot see (range_min, self-mask
     # windows). None = unknown (no range_min, no geometry): never back off.
     rear_blind_m: Optional[float] = None
     trail_m: Optional[float] = None      # net forward CORE-issued travel (ForwardTrail)
     trail_yaw_deg: Optional[float] = None
+    trail_age_s: Optional[float] = None  # since the trail's last forward command (None = none)
     scan_age_s: Optional[float] = None   # None = no LiDAR scan ever
     lidar_expected: bool = False         # a LiDAR obstacle stop has seen scans this session
+    # Net forward CORE-issued travel since the last `recovered` close (None = unknown).
+    moved_since_recovery_m: Optional[float] = None
     geometry_known: bool = False
     console_linked: bool = False
     calibration_active: bool = False
@@ -89,6 +95,22 @@ class ForwardTrail:
             self._samples.clear()            # clock went backwards: trust nothing before
         self._samples.append((float(now), float(linear), float(angular)))
 
+    def net_since(self, since: float, now: float) -> float:
+        """Net forward metres issued from ``since`` to ``now`` (gaps count no travel)."""
+        samples = [sample for sample in self._samples if sample[0] >= since]
+        net = 0.0
+        for index, (t, lin, _) in enumerate(samples):
+            end = samples[index + 1][0] if index + 1 < len(samples) else now
+            net += lin * max(0.0, min(end - t, self.MAX_DT_S))
+        return net
+
+    def last_forward_at(self) -> Optional[float]:
+        """Time of the newest forward (linear > 0) issued twist, or None."""
+        for t, lin, _ in reversed(self._samples):
+            if lin > 0.0:
+                return t
+        return None
+
     def measure(self, now: float, window_s: float) -> tuple[Optional[float], Optional[float]]:
         samples = list(self._samples)
         if not samples or now - samples[-1][0] > self.STALE_S:
@@ -122,6 +144,10 @@ class StuckRecovery:
         self._new_id = new_id
         self._id: Optional[str] = None
         self._last: Optional[StuckInput] = None
+        # (stuck id, attempts, monotonic time) of the last `recovered` close: a stuck that
+        # re-opens soon after, or before the robot drove on, is the same stuck (2026-10-02).
+        self._recovered: Optional[tuple[str, int, float]] = None
+        self._restuck_of: Optional[str] = None
         self._clear()
 
     def _clear(self) -> None:
@@ -142,6 +168,10 @@ class StuckRecovery:
     @property
     def phase(self) -> Optional[str]:
         return self._phase
+
+    @property
+    def recovered_at(self) -> Optional[float]:
+        return None if self._recovered is None else self._recovered[2]
 
     # ---- tick -----------------------------------------------------------------
     def step(self, inp: StuckInput) -> StuckAction:
@@ -166,22 +196,24 @@ class StuckRecovery:
     def reset(self, reason: str, now: float) -> None:
         if self._id is not None:
             self._close(reason, now)
+        self._recovered = None               # a new line-follow session starts fresh
 
     # ---- console ----------------------------------------------------------------
     def answer(self, now: float, stuck_id: str, decision: str, by: str,
-               token_id: Optional[str] = None) -> str:
+               principal_ref: Optional[str] = None) -> str:
         """Apply a console answer; returns hold | back | resume | manual | idle."""
         if decision not in DECISIONS:
             raise AnswerRefused("VALIDATION_ERROR", f"unknown stuck decision {decision!r}")
         if self._id is None or stuck_id != self._id:
-            self._answered(stuck_id, decision, by, token_id, False, "stuck_id_mismatch")
+            self._answered(stuck_id, decision, by, principal_ref, False, "stuck_id_mismatch")
             raise AnswerRefused("STUCK_ID_MISMATCH",
                                 "no open stuck with this id (late or wrong answer)")
         why = self._answer_refusal(decision, now)
         if why is not None:
-            self._answered(stuck_id, decision, by, token_id, False, why)
+            self._answered(stuck_id, decision, by, principal_ref, False, why,
+                           evidence=self._last_or(now) if decision == "BACK_AND_RETRY" else None)
             raise AnswerRefused("STUCK_DECISION_REFUSED", f"{decision} refused: {why}")
-        self._answered(stuck_id, decision, by, token_id, True, None)
+        self._answered(stuck_id, decision, by, principal_ref, True, None)
         self._last_answer = decision
         if decision == "WAIT":
             if self._phase == BACKING:
@@ -242,7 +274,11 @@ class StuckRecovery:
 
     def _trail_covers(self, inp: StuckInput) -> bool:
         config = self._config
+        # Decision 2026-10-02: the ground just driven is trusted only while the last forward
+        # command is at most recovery_trail_max_age_s old (standing still for the console counts).
         return (inp.trail_m is not None and inp.trail_yaw_deg is not None
+                and inp.trail_age_s is not None
+                and inp.trail_age_s <= config.recovery_trail_max_age_s
                 and inp.trail_m >= config.recovery_back_m
                 and inp.trail_yaw_deg <= config.recovery_trail_yaw_deg)
 
@@ -255,7 +291,7 @@ class StuckRecovery:
             return StuckAction("hold")
         why = self._back_refusal(inp)
         if why is not None:
-            self._result("refused", why, attempt=self._attempts)
+            self._result("refused", why, attempt=self._attempts, inp=inp)
             self._console_only("local_refused", inp.now)
             return StuckAction("hold")
         self._start_back(inp, trigger)
@@ -273,7 +309,7 @@ class StuckRecovery:
             data={"stuck_id": self._id, "attempt": self._attempts, "trigger": trigger,
                   "back_m": config.recovery_back_m, "speed_mps": self._speed,
                   "rear_clearance_m": inp.rear_m, "rear_blind_m": inp.rear_blind_m,
-                  "trail_m": inp.trail_m},
+                  "trail_m": inp.trail_m, "trail_age_s": inp.trail_age_s},
         )
 
     def _backing(self, inp: StuckInput) -> StuckAction:
@@ -282,7 +318,7 @@ class StuckRecovery:
         why = self._back_refusal(inp, starting=False)
         if why is not None:
             # 후진 중에도 뒤 여유·scan 신선도를 본다. 하나라도 어긋나면 즉시 0.
-            self._result("aborted", why)
+            self._result("aborted", why, inp=inp)
             self._console_only("local_aborted", inp.now)
             return StuckAction("hold")
         if inp.now >= self._until:
@@ -307,13 +343,28 @@ class StuckRecovery:
         self._id = self._new_id()
         self._cause = inp.cause
         self._opened_at = inp.now
+        self._restuck_of = None
+        if self._recovered is not None:
+            previous, attempts, at = self._recovered
+            moved = inp.moved_since_recovery_m
+            if (inp.now - at < self._config.recovery_restuck_s
+                    or moved is None or moved < self._config.recovery_restuck_m):
+                # Clarification 2026-10-02: the same stuck for attempt counting, so a
+                # recover -> re-stuck cycle cannot back off forever.
+                self._attempts = attempts
+                self._restuck_of = previous
+            self._recovered = None
         self._events.publish(
             "nav.line_stuck_opened", severity="warning", source=_SOURCE,
             data={"stuck_id": self._id, "cause": inp.cause,
                   "front_clearance_m": inp.front_band_m, "rear_clearance_m": inp.rear_m,
                   "turn_clearance_m": inp.turn_m, "rear_blind_m": inp.rear_blind_m,
-                  "last_lane": inp.last_lane, "preview_seq": inp.preview_seq},
+                  "rear_state": inp.rear_state, "last_lane": inp.last_lane, "preview_seq": inp.preview_seq,
+                  "restuck_of": self._restuck_of, "attempts": self._attempts},
         )
+        if self._attempts >= self._config.recovery_max_attempts:
+            self._console_only("attempts_exhausted", inp.now)
+            return
         self._phase = ASKING
         self._deadline = inp.now + self._config.recovery_ask_s
         self._asked(inp.console_linked, self._config.recovery_ask_s, "opened")
@@ -333,25 +384,43 @@ class StuckRecovery:
                   "decisions": list(DECISIONS)},
         )
 
-    def _answered(self, stuck_id: str, decision: str, by: str, token_id: Optional[str],
-                  accepted: bool, reason: Optional[str]) -> None:
+    def _answered(self, stuck_id: str, decision: str, by: str, principal_ref: Optional[str],
+                  accepted: bool, reason: Optional[str],
+                  evidence: Optional[StuckInput] = None) -> None:
+        # principal_ref: the CORE token *record id* (configured id or digest[:12], already public
+        # in the token list), never the secret. A key named like a credential ("token_id") was
+        # refused by Fleet's audit store (EVENT_NOT_AUDITABLE, D-407 re-run 2026-10-02).
+        # evidence: the scan a refused BACK_AND_RETRY was judged on, so the console sees why.
         self._events.publish(
             "nav.line_stuck_answered", source=_SOURCE,
-            data={"stuck_id": stuck_id, "decision": decision, "by": by, "token_id": token_id,
-                  "accepted": accepted, "reason": reason},
+            data={"stuck_id": stuck_id, "decision": decision, "by": by,
+                  "principal_ref": principal_ref, "accepted": accepted, "reason": reason,
+                  "rear_blind_m": None if evidence is None else evidence.rear_blind_m,
+                  "trail_m": None if evidence is None else evidence.trail_m,
+                  "trail_yaw_deg": None if evidence is None else evidence.trail_yaw_deg,
+                  "trail_age_s": None if evidence is None else evidence.trail_age_s},
         )
 
     def _result(self, result: str, reason: Optional[str], *, attempt: Optional[int] = None,
-                lane: Optional[bool] = None, front: Optional[bool] = None) -> None:
+                lane: Optional[bool] = None, front: Optional[bool] = None,
+                inp: Optional[StuckInput] = None) -> None:
+        # inp: the scan the refusal / abort was judged on (rear value, blind band, trail).
         self._events.publish(
             "nav.line_stuck_local_result", source=_SOURCE,
             data={"stuck_id": self._id,
                   "attempt": self._attempts if attempt is None else attempt,
                   "result": result, "reason": reason,
-                  "lane_visible": lane, "front_clear": front},
+                  "lane_visible": lane, "front_clear": front,
+                  "rear_clearance_m": None if inp is None else inp.rear_m,
+                  "rear_blind_m": None if inp is None else inp.rear_blind_m,
+                  "trail_m": None if inp is None else inp.trail_m,
+                  "trail_yaw_deg": None if inp is None else inp.trail_yaw_deg,
+                  "trail_age_s": None if inp is None else inp.trail_age_s},
         )
 
     def _close(self, reason: str, now: float) -> None:
+        if reason == "recovered":
+            self._recovered = (self._id, self._attempts, now)
         self._events.publish(
             "nav.line_stuck_closed", source=_SOURCE,
             data={"stuck_id": self._id, "cause": self._cause, "reason": reason,

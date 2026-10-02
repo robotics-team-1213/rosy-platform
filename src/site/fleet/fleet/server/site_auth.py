@@ -43,7 +43,7 @@ def parse_site_principals(site_users: Mapping[str, Mapping[str, str]],
                 or not principal_id or len(principal_id) > 96
                 or any(ord(char) < 32 for char in principal_id)
                 or principal_id in seen_principal_ids
-                or role not in {"viewer", "operator", "policy-admin"}):
+                or role not in {"viewer", "operator", "policy-admin", "service"}):
             raise ValueError("site user credentials require a token, principal_id, and known role")
         principals[token] = SitePrincipal(principal_id, role)
         seen_principal_ids.add(principal_id)
@@ -164,6 +164,13 @@ def build_role_guards(authorize, principals: Mapping[str, SitePrincipal]):
                                                          "message": "operator role required"})
         return principal
 
+    def require_proposer(principal: SitePrincipal = Depends(authorize)) -> SitePrincipal:
+        if principal.role not in {"operator", "service"}:
+            raise HTTPException(status_code=403, detail={
+                "code": "FORBIDDEN", "message": "operator or service proposal role required",
+            })
+        return principal
+
     def require_named_operator(principal: SitePrincipal = Depends(require_operator)) -> SitePrincipal:
         if not principals:
             raise HTTPException(status_code=403, detail={
@@ -172,4 +179,4 @@ def build_role_guards(authorize, principals: Mapping[str, SitePrincipal]):
             })
         return principal
 
-    return require_viewer, require_operator, require_named_operator
+    return require_viewer, require_operator, require_named_operator, require_proposer

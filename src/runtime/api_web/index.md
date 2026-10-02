@@ -30,8 +30,8 @@
 
 ## 최근 기록
 
+- 2026-10-02 · 7322d1e2 · fix(host): D-406 T1 리뷰 반영 — 속도 신선도, 유한수, 충전 플래그
 - 2026-10-02 · 4e99d92e · feat(core_api_web): D-411 A /api/v1/recordings 와 Pilot 녹화 자산
 - 2026-10-02 · uncommitted · chore(api): D-395 P2-7 계약 버전 v1.72 → v1.73
 - 2026-10-02 · uncommitted · feat(api): D-395 P2-7 `POST`·`GET /localization/mission`, API Ref v1.72
-- 2026-10-01 · uncommitted · fix(api): D-395 리뷰 — 시작은 localization 잠금 안에서, odom 프레임 거부
-- 2026-10-01 · uncommitted · feat(api): 도킹·swarm follow 시작도 LOCALIZED 게이트
+- 2026-10-01 · 3d323ade · feat(host): D-406 T1 status-inputs schema 2 — 업데이터 유휴 판정 입력

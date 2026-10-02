@@ -1,6 +1,6 @@
 ## D-402 OMX 모션 플래너 v1은 장치 로컬 해석 IK(5축 수직하향)이며 계획만 내고 제출은 owner가 한다
 
-**Status:** Proposed (2026-10-01, 계획 경계·인터페이스 결정; 시뮬레이션 한정 D-376 개정은 사용자 승인 2026-10-01). 대상은 D-403의 `CELL_TRANSFER` 포즈 입력과 `simulation` 프로필뿐이다. RGB-D `PICK_PLACE` 계획, 실물 OMX 프로필 활성화, 충돌 장면, MoveIt 채택, DEVICE/FIELD 수용은 포함하지 않는다.
+**Status:** Accepted (2026-10-02, 사용자 승인; 시뮬레이션 범위. C3/C3b Gazebo 증거 `docs/validation/rosy-cell-gazebo-c3-2026-10-02/`. 실물 OMX·DEVICE·FIELD는 계속 닫혀 있다. 이전 기록: Proposed (2026-10-01, 계획 경계·인터페이스 결정; 시뮬레이션 한정 D-376 개정은 사용자 승인 2026-10-01). 대상은 D-403의 `CELL_TRANSFER` 포즈 입력과 `simulation` 프로필뿐이다. RGB-D `PICK_PLACE` 계획, 실물 OMX 프로필 활성화, 충돌 장면, MoveIt 채택, DEVICE/FIELD 수용은 포함하지 않는다.
 
 ## 배경
 
@@ -132,5 +132,12 @@
   - URDF 드리프트 시험
 - **ROS-SIM:** C3 Gazebo에서 블록 하나를 옮긴다. 도달 고리 실측, 그리퍼 readback, 위치 오차를 기록한다.
 - **DEVICE / FIELD:** 이 결정으로 승격하지 않는다.
+- **보강 (2026-10-02, C3b):** `CellTransferRequest`에 필수 필드 `grasp_depth_m`를 둔다. pick·place z는 물건 윗면에서 이만큼 아래인 TCP 높이다([D-401](D-401-rosy-cell-application.md) 보강).
+  - 플래너는 `z + grasp_depth_m ≤ approach_z ≤ carry_z`가 아니면 `CARRY_Z_INSUFFICIENT`로 거절한다. 열린 손가락 끝(≈TCP)이 수직 하강 전에 물건 윗면 위에 있어야 하기 때문이다.
+  - `carry_z`는 레시피 컴파일러가 매달린 높이(`height − grasp_depth`)로 계산한다. 플래너는 이를 다시 계산하지 않는다.
+  - 같은 요청에 필수 필드 `grasp_width_m`를 둔다. grasp는 0.0 완전 닫힘이 아니라 폭에 맞춘 닫힘 목표로 닫고, transfer는 그 값을 유지한다.
+    - 목표 = 손가락 끝 간격이 `grasp_width_m − squeeze_m`가 되는 각이다. 간격 사상 gap(q) = 2(o + x sin q + y cos q)와 `squeeze_m`(3 mm)는 프로필 `gripper.jaw`에 근거와 함께 둔다(URDF 손가락 축 + 고정된 손가락 mesh).
+    - 사상 범위를 벗어난 폭(슬립시트 2 mm 포함)은 `GRIPPER_WIDTH_INVALID`로 거절한다.
+  - (리뷰 보강) `grasp_width_m`·`grasp_depth_m`는 요청자가 정하지 않는다. 플래너는 장치가 `recipe_sha256`로 수락한 레시피에서 그 item의 폭·깊이를 조회한다(`accepted_item_geometry`). 다르면 `ITEM_GEOMETRY_MISMATCH`로 거절한다. 틀린 폭은 과압착을, 틀린 깊이는 손가락 끝 충돌을 부르기 때문이다. 셀의 `accepted_cell_sha256`과 같은 방식이다.
 
 **관련 결정:** [D-282](D-282-per-hardware-ros-ownership-and-control-boundaries.md), [D-376](D-376-omx-pick-place-planning-and-execution-boundary.md), [D-386](D-386-omx-async-goal-acceptance-and-phase-state.md), [D-390](D-390-pilot-omx-simulation-practice-boundary.md), [D-397](D-397-pinky-geometry-urdf-nominal-calibration-refines.md), [D-399](D-399-rosy-layered-architecture-site-plane-device-pipeline.md), [D-401](D-401-rosy-cell-application.md), [D-403](D-403-fleet-cell-job-route-cell-transfer.md), [D-404](D-404-omx-setup-teaching-api-simulation-first.md)

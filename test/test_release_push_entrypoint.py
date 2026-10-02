@@ -22,7 +22,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "deploy" / "robot" / "pinky_pro" / "rosy-release-push.ps1"
-UNPACK_SCRIPT = ROOT / "deploy" / "robot" / "pinky_pro" / "rosy-release-unpack.sh"
+UNPACK_SCRIPT = ROOT / "deploy" / "robot" / "pinky_pro" / "native" / "rosy-release-unpack.sh"
 POWERSHELL = shutil.which("powershell") or shutil.which("pwsh")
 TAR = shutil.which("tar")
 RELEASE_ID = "2026.09.25-001"
@@ -84,6 +84,12 @@ def _print_push(release: dict, robot: str = "rosy-e4us.local", *extra: str) -> s
     ])
 
 
+def _without_claim(plan: list[dict]) -> list[dict]:
+    """D-412: the claim brackets every plan and is refreshed after the upload (test_release_push_claim.py)."""
+    assert plan[0]["role"] == "claim-acquire" and plan[-1]["role"] == "claim-release"
+    return [step for step in plan[1:-1] if step["role"] != "claim-refresh"]
+
+
 @pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
 def test_print_commands_verifies_locally_and_builds_the_full_push_plan(release):
     completed = _print_push(release)
@@ -95,7 +101,7 @@ def test_print_commands_verifies_locally_and_builds_the_full_push_plan(release):
     assert result["verification"]["ok"] is True
     assert json.loads(result["verification"]["rejections_json"]) == []
 
-    plan = result["plan"]
+    plan = _without_claim(result["plan"])
     # The core-release check follows activation; D-388: four image-layer sync
     # steps follow CORE readiness.
     assert [step["kind"] for step in plan] == ["ssh", "scp", "scp", "ssh", "ssh", "ssh", "ssh", "ssh"] + ["ssh"] * 4
@@ -133,7 +139,7 @@ def test_rollback_plan_skips_the_release_and_only_rolls_back_and_waits(release):
     assert result["release_id"] is None
     assert result["rollback"] is True
     assert result["verification"] is None
-    plan = result["plan"]
+    plan = _without_claim(result["plan"])
     assert len(plan) == 1 + 3 + 1 + 1  # rollback, D-388 image-layer sync, core-release check, readiness
     assert plan[0]["arguments"][-1] == "/opt/rosy/native-runtime/rollback-release.sh"
     assert "sudo" in plan[0]["arguments"] and "-n" in plan[0]["arguments"]
@@ -200,7 +206,7 @@ def test_a_tarball_is_accepted_as_an_alternative_to_release_dir(release, tmp_pat
     result = json.loads(completed.stdout)
     assert result["release_id"] == RELEASE_ID
     assert result["verification"]["ok"] is True
-    assert result["plan"][1]["arguments"][-2] == str(tarball)
+    assert _without_claim(result["plan"])[1]["arguments"][-2] == str(tarball)
 
 
 @pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
@@ -237,22 +243,22 @@ def test_default_key_and_known_hosts_paths_are_under_localappdata(release, monke
     first_ssh = plan[0]["arguments"]
     assert first_ssh[1] == "C:\\Users\\test-operator\\AppData\\Local\\Rosy\\ssh\\rosy-operator-ed25519"
     known_hosts_option = next(a for a in first_ssh if a.startswith("UserKnownHostsFile="))
-    # the value is quoted: ssh parses "-o Key=Value" like an ssh_config line,
-    # which splits an unquoted value on whitespace, and a LOCALAPPDATA under
-    # "C:\Program Files\..." would otherwise be cut at the first space.
-    assert known_hosts_option == 'UserKnownHostsFile="C:\\Users\\test-operator\\AppData\\Local\\Rosy\\known_hosts"'
+    # Unquoted: Windows PowerShell 5.1 would hand quotes to the C runtime, which
+    # strips them before ssh sees the value (test_known_hosts_policy.py).
+    assert known_hosts_option == "UserKnownHostsFile=C:\\Users\\test-operator\\AppData\\Local\\Rosy\\known_hosts"
 
 
 @pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
-def test_known_hosts_paths_with_spaces_survive_intact(release, monkeypatch):
+def test_known_hosts_paths_with_spaces_are_refused(release, monkeypatch):
+    # ssh would split such a path, and no quoting survives PowerShell 5.1 and
+    # the C runtime (test_known_hosts_policy.py); refuse instead of checking
+    # host keys against the wrong files.
     monkeypatch.setenv("LOCALAPPDATA", "C:\\Users\\test operator\\AppData\\Local")
 
     completed = _print_push(release)
 
-    assert completed.returncode == 0, completed.stderr
-    plan = json.loads(completed.stdout)["plan"]
-    known_hosts_option = next(a for a in plan[0]["arguments"] if a.startswith("UserKnownHostsFile="))
-    assert known_hosts_option == 'UserKnownHostsFile="C:\\Users\\test operator\\AppData\\Local\\Rosy\\known_hosts"'
+    assert completed.returncode != 0
+    assert "KnownHosts path contains a space" in completed.stderr
 
 
 @pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
@@ -286,7 +292,7 @@ def test_push_plan_syncs_the_image_layer_from_the_new_release_after_readiness(re
     completed = _print_push(release)
 
     assert completed.returncode == 0, completed.stderr
-    plan = json.loads(completed.stdout)["plan"]
+    plan = _without_claim(json.loads(completed.stdout)["plan"])
     assert [step["role"] for step in plan[-4:]] == IMAGE_LAYER_ROLES
     assert "wait-core-ready.py" in plan[-5]["arguments"][-1]  # after the first readiness check
     script = f"/opt/rosy/releases/{RELEASE_ID}/deploy/robot/native/sync-image-layer.py"
@@ -305,7 +311,7 @@ def test_rollback_plan_resyncs_the_image_layer_from_the_release_that_becomes_cur
     completed = _run(["-Robot", "rosy-e4us.local", "-Rollback", "-PrintCommands"])
 
     assert completed.returncode == 0, completed.stderr
-    plan = json.loads(completed.stdout)["plan"]
+    plan = _without_claim(json.loads(completed.stdout)["plan"])
     # The sync runs BEFORE the readiness check: if the newer release's units do
     # not work with the older one, CORE only becomes ready after the sync.
     assert [step["role"] for step in plan] == ["", *IMAGE_LAYER_ROLES[:3], "core-release-check", ""]
@@ -332,7 +338,7 @@ def test_skip_image_layer_sync_leaves_the_old_plan(release, rollback):
         completed = _print_push(release, "rosy-e4us.local", "-SkipImageLayerSync")
 
     assert completed.returncode == 0, completed.stderr
-    plan = json.loads(completed.stdout)["plan"]
+    plan = _without_claim(json.loads(completed.stdout)["plan"])
     assert len(plan) == (3 if rollback else 8)
     if rollback:
         assert "wait-core-ready.py" in plan[2]["arguments"][-1]
@@ -413,7 +419,7 @@ def test_a_rollback_to_a_release_without_the_sync_warns_and_skips_it(tmp_path, m
     assert not any("systemctl restart" in line and "CORE_RELEASE" not in line for line in calls)
     assert sum("IMAGE_LAYER_SYNC_MISSING" in line for line in calls) == 1
     # Readiness is still checked, after the skipped sync.
-    assert "wait-core-ready.py" in calls[-1]
+    assert "wait-core-ready.py" in calls[-2]  # the claim release (D-412) is last
 
 
 def test_restart_runs_only_rosy_units_the_apply_reported():
@@ -558,7 +564,7 @@ def test_a_core_that_does_not_come_back_after_the_restart_fails_the_push_by_name
     assert "COREdidnotstart" in flat
     assert ("journalctl-urosy-core" if rollback else "-Rollback") in flat
     # Nothing runs after a CORE that is down.
-    assert "CORE_RELEASE_OK" in calls[-1]
+    assert "CORE_RELEASE_OK" in calls[-2]  # then only the claim release (D-412)
 
 
 @pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")

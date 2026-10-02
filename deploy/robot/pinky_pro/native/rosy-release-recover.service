@@ -17,7 +17,7 @@ ProtectSystem=strict
 # recover re-verifies the old release (native_release.verify -> signing,
 # which needs tempfile). Without PrivateTmp the temp dirs are read-only under
 # ProtectSystem=strict and recovery after a power cut mid-activation fails,
-# so CORE never starts (D-406 device twin, scenario h3, 2026-10-02).
+# so CORE never starts (D-412 device twin, scenario h3, 2026-10-02).
 PrivateTmp=yes
 ProtectHome=true
 # D-189 D1: recover always takes native-release.lock and may rewrite the

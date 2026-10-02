@@ -62,7 +62,15 @@ SCENARIOS = {
 }
 
 
+def last_trail_pose(trail, rid):
+    """Newest (x, y, yaw) of `rid` in the truth trail of (t, robot, x, y, yaw) rows, or None."""
+    return next((tuple(row[2:5]) for row in reversed(list(trail)) if row[1] == rid), None)
+
+
 class Bench:
+    #: Subclasses (the S2 bench) bring their own layouts.
+    SCENARIOS = SCENARIOS
+
     def __init__(self, args):
         self.args = args
         self.out = Path(args.out)
@@ -77,7 +85,7 @@ class Bench:
         self.env = dict(os.environ, GZ_PARTITION=args.partition, ROS_DOMAIN_ID=str(args.domain),
                         RMW_IMPLEMENTATION="rmw_cyclonedds_cpp", ROS_AUTOMATIC_DISCOVERY_RANGE="LOCALHOST",
                         CYCLONEDDS_URI=f"file://{dds}")
-        self.robots = [f"rosy_{i + 1:02d}" for i in range(len(SCENARIOS[args.scenario]["spawn"]))]
+        self.robots = [f"rosy_{i + 1:02d}" for i in range(len(self.SCENARIOS[args.scenario]["spawn"]))]
         self.base = {rid: f"http://127.0.0.1:{args.api_port + i}" for i, rid in enumerate(self.robots)}
         self.t0 = time.monotonic()
         self.procs = []
@@ -86,6 +94,7 @@ class Bench:
         self.scores = []
         self.states = dict.fromkeys(self.robots)
         self.missions = dict.fromkeys(self.robots)
+        self.objects, self.objects_last = [], {}
         #: (wall t, robot, x, y, yaw) Gazebo truth every ~2 s: mission motion and drift.
         self.trail = []
         self.timeline = []
@@ -136,7 +145,7 @@ class Bench:
             return ""
 
     def truth(self, rid):
-        return parse_gz_model_pose(self.run_quiet(["gz", "model", "-m", rid, "-p"]))
+        return parse_gz_model_pose(self.run_quiet(["gz", "model", "-m", rid, "-p"], 20.0))
 
     def rtf(self):
         text = self.run_quiet(["gz", "topic", "-e", "-n", "1", "-t", f"/world/{WORLD}/stats"], 8.0)
@@ -170,8 +179,14 @@ class Bench:
         self.note("teleport", robot=rid, pose=pose, reply=out.strip())
 
     def ros_pub(self, topic, msg_type, payload):
-        out = self.run_quiet(["ros2", "topic", "pub", "--once", "-w", "1", topic, msg_type, payload], 20.0)
-        self.note("ros_pub", topic=topic, payload=payload[:120], ok="publishing" in out)
+        # Under heavy host load the ros2 CLI alone can take > 20 s to start (run 3 d1 lost its
+        # set-down this way), so allow longer and retry: a lost pickup=false holds the robot.
+        for attempt in range(3):
+            out = self.run_quiet(["ros2", "topic", "pub", "--once", "-w", "1", topic, msg_type, payload], 60.0)
+            ok = "publishing" in out
+            self.note("ros_pub", topic=topic, payload=payload[:120], ok=ok, attempt=attempt + 1)
+            if ok:
+                return
 
     def pickup(self, rid, active):
         self.ros_pub(f"/{rid}/safety/pickup", "std_msgs/msg/Bool", "{data: %s}" % ("true" if active else "false"))
@@ -184,6 +199,11 @@ class Bench:
             code, state = self.http(rid, "GET", "/api/v1/robot/state")
             snaps[rid] = state if code == 200 else None
             loc = (state or {}).get("localization") if code == 200 else None
+            if loc and loc.get("objects_stamp") is not None and loc.get("objects_stamp") != self.objects_last.get(rid):
+                # LOCALIZED observer evidence (API v1.75): one row per new objects_stamp.
+                self.objects_last[rid] = loc["objects_stamp"]
+                self.objects.append({"t": self.t(), "robot": rid, "stamp": loc["objects_stamp"],
+                                     "objects": loc.get("unmapped_objects"), "pose": (state or {}).get("pose")})
             key = None if loc is None else (loc.get("state"), loc.get("reason"), loc.get("pose_frame"))
             if key != self.states[rid]:
                 self.note("state", robot=rid, loc=loc, pose=(state or {}).get("pose"))
@@ -287,13 +307,13 @@ class Bench:
 
     # --- phases ---------------------------------------------------------------------
     def power_on(self):
-        sc = SCENARIOS[self.args.scenario]
+        sc = self.SCENARIOS[self.args.scenario]
         poses = ";".join(f"{x},{y},{yaw}" for x, y, yaw in sc["spawn"])
         self.record["load_before"] = self.load()
         self.spawn(["ros2", "launch", "gz_sim", "gz_multi.launch.py", f"robots:={len(self.robots)}",
                     f"world_name:={WORLD}.world", "mode:=nav", "core:=true", "headless:=true",
                     "loc_assist:=true", "seed_initialpose:=false", f"api_port_base:={self.args.api_port}",
-                    f"spawn_poses:={poses}"], "launch.log")
+                    f"spawn_poses:={poses}", *getattr(self.args, "launch_arg", ())], "launch.log")
         manifest = None
         for _ in range(240):
             m = re.search(r"fleet robots\.yaml: (\S+)", (self.out / "launch.log").read_text(errors="replace"))
@@ -341,16 +361,18 @@ class Bench:
         return None
 
     def pickup_during_drive(self):
-        sc = SCENARIOS[self.args.scenario]
+        sc = self.SCENARIOS[self.args.scenario]
         start = self.t()
-        before = self.truth(R1)
+        # A `gz model` timeout gives None, and then the travel check never fires (run 4 d3 drove
+        # 0.30 m and was lifted only after the window), so fall back to the newest trail sample.
+        before = self.truth(R1) or last_trail_pose(self.trail, R1)
         x, y, yaw = sc["goal"]
         moved, codes, sent_at = False, [], -math.inf
         end = time.monotonic() + self.args.drive_timeout
         while time.monotonic() < end:
             self.poll()
             now = self.truth(R1)
-            if before and now and math.dist(before[:2], now[:2]) >= 0.04:
+            if before and now and math.dist(before[:2], now[:2]) >= self.args.min_travel:
                 moved = True
                 break
             # A goal is refused (409 NOT_LOCALIZED) or cancelled whenever CORE's state reads
@@ -362,7 +384,9 @@ class Bench:
                 self.note("goal", code=code, body=body)
             time.sleep(0.5)
         code = codes
-        self.note("drive", moved=moved, truth=self.truth(R1))
+        lifted_from = self.truth(R1)
+        travelled = None if not (before and lifted_from) else round(math.dist(before[:2], lifted_from[:2]), 3)
+        self.note("drive", moved=moved, travelled_m=travelled, truth=lifted_from)
         self.pickup(R1, True)
         time.sleep(0.5)
         self.teleport(R1, sc["drop"])
@@ -374,9 +398,17 @@ class Bench:
         self.pickup(R1, False)
         t_down = self.t()
         snaps, done = self.wait(lambda s: self.loc_state(s, R1) == "LOCALIZED", self.args.localize_timeout)
+        resumed_m = None
         if done:
             snaps, _ = self.wait(lambda s: self.loc_state(s, R1) != "LOCALIZED", 5.0)
-        phase = {"done": done, "goal_code": code, "moved": moved, "drift_while_held_m": halt,
+            # The interrupted drive must not resume on its own: watch the truth after LOCALIZED.
+            at_rest = self.truth(R1)
+            snaps, _ = self.wait(lambda s: False, self.args.resume_watch)
+            after = self.truth(R1)
+            resumed_m = None if not (at_rest and after) else round(math.dist(at_rest[:2], after[:2]), 4)
+            self.note("resume_watch", seconds=self.args.resume_watch, moved_m=resumed_m)
+        phase = {"done": done, "goal_code": code, "moved": moved, "travelled_m": travelled,
+                 "moved_after_localized_m": resumed_m, "drift_while_held_m": halt,
                  "state_while_held": state_held, "t_suspect": self.first_time(R1, "SUSPECT", start),
                  "t_set_down": t_down, "t_localized": self.first_time(R1, "LOCALIZED", t_down),
                  "rtf": self.rtf(), "load": self.load(), R1: self.verdict(R1, snaps), R2: self.verdict(R2, snaps)}
@@ -400,17 +432,20 @@ class Bench:
         snaps, detected = self.wait(lambda s: self.loc_state(s, R2) == "SUSPECT", 60.0)
         locked = self.verdict(R2, snaps)
         self.note("mirror_injected", detected_alone=detected, r2=locked)
-        # Step 2: a pickup pulse on r1 (no motion) makes r1 report candidates, so the
-        # Fleet monitor gets a peer observation of r2 (D-395 rev. 4 §5).
+        # Step 2, only when nothing detected the lock: a pickup pulse on r1 (no motion) makes r1
+        # report candidates, so the Fleet monitor gets a peer observation of r2 (D-395 rev. 4 §5).
+        # Since rev. 7 a LOCALIZED anchor observes r2 by itself, which is what (c) must show.
         pulse = self.t()
-        self.pickup(R1, True)
-        time.sleep(1.0)
-        self.pickup(R1, False)
+        if not detected:
+            self.pickup(R1, True)
+            time.sleep(1.0)
+            self.pickup(R1, False)
         snaps, done = self.wait(lambda s: self.both_localized(s) and self.r2_left_localized(start),
                                 self.args.localize_timeout)
         if done:
             snaps, _ = self.wait(lambda s: not self.both_localized(s), 5.0)
-        phase = {"detected_without_peer_report": detected, "r2_after_injection": locked,
+        phase = {"detected_without_peer_report": detected, "pulse_sent": not detected,
+                 "t_injected": start, "r2_after_injection": locked,
                  "t_pulse": pulse, "t_r2_suspect": self.first_time(R2, "SUSPECT", start),
                  "t_r1_localized": self.first_time(R1, "LOCALIZED", pulse),
                  "t_r2_localized": self.first_time(R2, "LOCALIZED", pulse), "done": done,
@@ -454,7 +489,7 @@ class Bench:
         self.note("stopped", leftover_killed=left)
 
     def save(self):
-        self.record.update(timeline=self.timeline, events=self.events, scores=self.scores,
+        self.record.update(timeline=self.timeline, events=self.events, scores=self.scores, objects=self.objects,
                            search_s=self.search_times(), clock=self.clock_samples, trail=self.trail)
         (self.out / "run.json").write_text(json.dumps(self.record, indent=1, default=str), encoding="utf-8")
 
@@ -477,6 +512,10 @@ def main(argv=None):
     p.add_argument("--fleet-port", type=int, default=18990)
     p.add_argument("--localize-timeout", type=float, default=240.0)
     p.add_argument("--drive-timeout", type=float, default=180.0)
+    p.add_argument("--min-travel", type=float, default=0.10,
+                   help="(d) metres r1 must travel (Gazebo truth) before the pickup")
+    p.add_argument("--resume-watch", type=float, default=20.0,
+                   help="(d) wall seconds to watch r1 stay put after it re-localizes")
     p.add_argument("--loc-param", action="append", default=[], metavar="NAME=VALUE",
                    help="tuning: set a loc_assist parameter on both robots after launch")
     args = p.parse_args(argv)

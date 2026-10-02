@@ -7,6 +7,7 @@ adr_log: docs/reference/ROSY ADR Log.md
 
 # IDs absent from the ADR log on purpose. Remove an entry once the ADR is written.
 adr_gaps:
+  D-419: "reserved by branch feat/d415-saf003-fleet-loss (SAF-003 Fleet link loss, renumbered from D-415 2026-10-02); remove once it lands"
   D-29: "unused; the vision accelerator shield design only proposed the number"
   D-324: "unused; the Pinky artifact-selection ADR was first written as D-324 and renumbered to D-325 to avoid a same-day collision (commit 45f9470b, 2026-09-29). Remove if another session lands an ADR as D-324"
   D-35: "reserved for the swarm formation HOLD decision pending the sim bench"
@@ -62,6 +63,11 @@ modules:
     tests: [src/site/cell/test]
     functional_kind: pytest
     functional: [src/site/cell/test]
+  - name: palletizing
+    path: modules/processes/palletizing
+    tests: [test/test_platform_palletizing_compat.py, test/architecture/test_platform_dependency_boundaries.py]
+    functional_kind: pytest
+    functional: [test/test_platform_palletizing_compat.py]
   # D-374: Android JVM tests need a JDK/Gradle, so the host functional surface is the
   # registry/icon/role contract tests; `gradlew testDebugUnitTest` runs in android.yml.
   - name: cam

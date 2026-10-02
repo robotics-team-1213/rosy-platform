@@ -26,6 +26,7 @@
 - gate 변화: 없음. SOURCE HOLD(자체 test/) 유지.
 - 결정: module-coupling-scorecard §6 과제 4 (D-168 P3 "선언한 결합이 실제로 쓰이는지" 정리).
 - 교훈: 없음
+
 ## 2026-09-24 · uncommitted · fix(dashboard): 하드웨어가 없거나 모를 때 사실대로 보인다 (US-010), 계약 v1.18
 - 변경: `web/dom.js` `number`/`percent` 가 `null` 을 0 으로 읽지 않는다(배터리 0% / 0.00 V 오경보). `web/app.js` 안전 회로 영웅 표시가 서버 `evidence.safety` 를 읽어 배너와 같은 판정을 쓴다 — fresh 일 때만 READY, CORE-only 는 `HW OFF` + "하드웨어 런타임 꺼짐 (CORE-only)". 역할은 `GET /system/info` 의 `caller_role` 로 알아내고 `/logs/audit` 를 찔러 보지 않는다(viewer 403 제거). `web/triage.js` `runtime_mode:core` 차단 descriptor 다섯을 색 없는 관측 사실 하나로 접는다. `api/v1/system.py` `caller_role`, CAP-001 `withheld`. `api/app.py` 계약 v1.18.
 - 증거: `ROSY_RUN_BROWSER_TESTS=1 python -m pytest test/test_dashboard_browser.py -q` 21 passed (신규 2건: CORE-only viewer, 하드웨어 모드 안전 출처 무음). `src/core/core/test/test_dashboard.py` 구조 단언 갱신. 실기 근거: rosy-pinky-e4us 릴리스 005 헤드리스 점검 (2026-09-24).
@@ -56,7 +57,6 @@
 - 결정: D-201, D-203
 - 교훈: 스크롤이 금지된 문법에서 flex-shrink는 넘침을 조용한 분쇄로 바꾼다 ? 게이트는 분쇄도 재야 한다.
 
-
 ## 2026-09-24 · uncommitted · fix(dashboard,api): 무동작 하드웨어 런타임을 사실대로 — 구동 꺼짐, 이동 광고 없음, API 정지 문구, 맵 404 없음, 계약 v1.21
 - 증상(실기 rosy-pinky-e4us, release 2026.09.24-010): CORE-only 이미지에서 `rosy-io` 를 무동작 모드로 켜자 배터리·오도메트리가 들어오고 `motor/ready` 는 false 였는데, 대시보드는 SAFETY "HW OFF — 하드웨어 런타임 꺼짐 (CORE-only)", 기능 가용성 5 / 5, `capabilities` 는 withheld 없음·teleop true 였다. 하드웨어가 꺼져 있을 때는 차단 이유가 `device_state:SAFE_STOP`(실제는 `runtime_mode:core`)였고, API 정지(`api:operator`)에 "모터 전원이 끊겼습니다. 현장에서 해제해야 합니다" 를 보였다. `/api/v1/map`·`/map/costmap?scope=global` 404 가 콘솔 오류로 남았다.
 - 변경: `api/v1/system.py` `capabilities` 가 `runtime_truth` 로 플래그를 내리고 additive `runtime`(`hardware`·`evidence`·`drive`·`navigation`·`maps`)을 싣는다. `web/app.js` 안전 회로 영웅 표시는 `capabilities.runtime` 으로 `HW OFF`/`HW SILENT`/`NO DRIVE`("하드웨어 런타임 켜짐 · 구동 꺼짐 (무동작)")/`NO SOURCE` 를 가른다(구 서버는 `runtime_mode` 로 폴백). descriptor 이유는 `reasons` 전부를 운용자 말로 잇는다. teleop 안내에 보류 이유. `fieldMap.refresh()` 는 capabilities 뒤에 돈다. `web/map.js` 는 `runtime.maps` 가 false 인 스냅샷을 묻지 않는다. `web/triage.js` 이유 문구 표, 구성 이유(CORE-only·무동작·내비게이션 없음)는 각각 색 없는 관측 사실 하나, `estopFault(source)` — CORE 의 모든 정지는 소프트웨어 정지이므로 전원 차단을 말하지 않는다. `api/app.py` 계약 v1.21.
@@ -64,6 +64,7 @@
 - gate 변화: 없음 (DEVICE 재검증 필요 — overlay 후 무동작 `rosy-io` 로 대시보드 확인).
 - 결정: D-32, D-192, D-82. 신규 ADR 없음.
 - 교훈: 브라우저의 404 콘솔 오류는 JS 로 삼킬 수 없다 — 없는 자원은 서버가 "없다"고 먼저 말하고 클라이언트가 묻지 않아야 한다.
+
 ## 2026-09-25 · uncommitted · fix(web): 점검 머신 태그의 위험은 채움 (D-214)
 
 - 변경: [data-status=ERROR]·[data-status=UNAVAILABLE]을 crit 글자(점검 패널 위 2.68:1)에서 종이 잉크+위험 채움으로. 회차 1 warm 스캔이 operate만 봐서 못 잡은 D-202 잔존분을 바닥 게이트가 적발.
@@ -168,6 +169,7 @@
 - 증거: `python -m pytest src/runtime/api_web/test -q` 71 passed 13 skipped(브라우저 게이트). 새 시험 `test_role_surface_pages_carry_the_dashboard_csp`.
 - gate 변화: 없음. 장치 수용은 주장하지 않는다.
 - 결정: D-23, D-157.
+
 ## 2026-09-29 · uncommitted · fix(api): FastAPI 설명 문구를 계약 v1.56으로 맞춘다
 
 - 변경: core_api_web/api/app.py의 description에 적힌 ROSY-API-REF-001 버전 표기를 v1.52에서 v1.56으로 올렸다. API Reference 헤더는 병행 traffic 회차에서 이미 v1.56까지 올라와 있고 test_protocol_version_alignment가 설명 문구의 버전 정합을 검사한다.
@@ -288,6 +290,7 @@
 - gate 변화: 기존 gate 유지; DEVICE/FIELD 승격 없음.
 - 결정: D-390 부록.
 - 교훈: 파일 쓰기 완료 전 들어온 interruption과 logical closure 경계를 구분한다.
+
 ## 2026-10-01 · uncommitted · feat(api): D-395 P2-4/P2-5 위치 확정 경로·capability, 계약 v1.70
 
 - 변경: 새 `api/grants.py`(`NAVIGATE`·`LOCALIZE_ASSIST`, 역할에서 정해짐), 새 `v1/localization.py`(`GET /localization/candidates`, `POST /localization/decision|suspect`, lease 423, STALE 409, D-395 이전 로봇 501). 레거시 `POST /localization/initialpose` 는 D-395 로봇에서 `source: human` 결정으로 간다(응답 그대로, 이전 로봇은 `/initialpose`). `navigation/goal`·`home`·`line-follow/mode`(OFF 제외)는 D-395 로봇이 LOCALIZED 가 아니면 409 `NOT_LOCALIZED`. `app.py` 핀 v1.70.
@@ -304,6 +307,11 @@
 
 - 변경: `common.localized_start` — `require_localized` 검사와 시작(goal·home·line-follow·dock·swarm follow)을 `localization.gate` 안에서. `require_localized` 는 `pose_frame: odom` 이면 LOCALIZED 라도 409 `NOT_LOCALIZED`. 도킹 `NOT_LOCALIZED` → 409 매핑.
 - 증거: `src/runtime/gateway/test/test_localization_api.py`.
+- gate 변화: 없음.
+
+## 2026-10-01 · 3d323ade · feat(host): D-406 T1 status-inputs schema 2 — 업데이터 유휴 판정 입력
+- 변경: `status_inputs()`가 schema 2를 쓴다. schema-1 키는 그대로 두고 `velocity_linear`·`velocity_angular`·`battery_percent`·`battery_charging`·`docking_state`·`line_follow_mode`·`line_follow_state`·`swarm_active`·`estop`·`activity_kind`를 더했다. 모든 상태 키는 `GET /robot/state`와 같은 StateSnapshot 한 장에서 읽는다(`_snapshot`, 쓰기 한 번에 한 번). 모르는 값·형식이 틀린 값은 null이고 쉬는 기본값으로 채우지 않는다. 배터리는 요약줄 규칙대로 신선하지 않으면 null. root `rosy-boot-status.py`는 schema 1·2(int만)를 받고 출력은 그대로다.
+- 증거: test_host_status_summary.py 53 passed 1 skipped. gateway 1611 passed 1 failed(test_module_criteria C6, 변경 전에도 실패·bridge 파일), api_web 73 passed, 루트 boot_status·boot_display·native_systemd_contract 287 passed. 변이 증명 7종(쓰기 schema 1, 읽기 schema 1만, int 검사 제거, bool 강제, 배터리 신선도 무시, 스냅샷 두 번, 문자열 강제) 모두 빨강.
 - gate 변화: 없음.
 
 ## 2026-10-02 · uncommitted · feat(api): D-395 P2-7 `POST`·`GET /localization/mission`, API Ref v1.72
@@ -323,3 +331,8 @@
 - 증거: `python -m pytest src/runtime/api_web/test -q` → 73 passed, 13 skipped (2026-10-02 Windows).
 - gate 변화: SOURCE 유지. ROS-SIM HOLD — 계획 Verification ROS-SIM 체크리스트(WSL Ubuntu) 미실행, DEVICE 증거 없음.
 - 결정: D-411 A.
+
+## 2026-10-02 · 7322d1e2 · fix(host): D-406 T1 리뷰 반영 — 속도 신선도, 유한수, 충전 플래그
+- 변경: 독립 리뷰(REQUEST CHANGES) 반영. `velocity_*`는 velocity 증거가 fresh일 때만 쓰고 아니면 둘 다 null(끊긴 오도메트리의 마지막 0.0은 멈춤이 아니다). `_number`가 NaN·Inf를 null로. `battery_percent`가 null이면 `battery_charging`도 null(도크 래치). 64자를 넘는 자유 문자열(`docking_state`, `line_follow_*`)은 null. 크기 시험은 64자 id 64행 최악 경우로 쓰고 root 읽기기로 읽어 결과를 단언한다. 안전·도킹은 변화 시에만 찍히므로 게이트하지 않는다.
+- 증거: test_host_status_summary.py 64 passed 1 skipped. gateway 1622 passed 1 failed(C6, 기존). api_web 73 passed, 루트 boot·systemd·architecture 363 passed. 변이 증명 14종(신규 6: 속도 무게이트, 증거 없음 통과, 유한 검사 제거, 충전 분리, 길이 상한 제거·off-by-one; 기존 7 재확인; 숫자 형 검사 제거) 모두 빨강.
+- gate 변화: 없음.

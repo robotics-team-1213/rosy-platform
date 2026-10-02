@@ -35,8 +35,8 @@
 
 ## 최근 기록
 
+- 2026-10-02 · uncommitted · feat(contracts): additive D-403 CELL_TRANSFER grant
 - 2026-10-02 · f341e9fd · feat(core_common): D-411 A 녹화 계약·CORE 가드·읽기 전용 저장소
 - 2026-10-02 · dbe014f4 · feat(contracts): D-395 LOCALIZED 로봇의 `unmapped_objects` (API v1.74)
 - 2026-10-02 · 34bac08a · feat(core_common): D-395 `CHECKING` 사유
 - 2026-10-01 · uncommitted · feat(core_common): D-400 SafetyPolicyStatus on the state snapshot
-- 2026-10-01 · uncommitted · fix(omx): fence recording closure and isolate storage faults

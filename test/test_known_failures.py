@@ -40,8 +40,12 @@ def test_windows_separators_and_errors_are_read():
     assert (new, seen) == ([], ["src/a/test/test_x.py::test_old"])
 
 
-def test_main_exits_nonzero_only_for_a_new_failure(tmp_path, capsys):
-    listed = next(iter(known_failures.load_known(known_failures.LIST.read_text(encoding="utf-8"))))
+def test_main_exits_nonzero_only_for_a_new_failure(tmp_path, capsys, monkeypatch):
+    # 2026-10-02 — 장부가 비어도(전 녹색이 목표 상태) 이 시험은 합성 항목으로 돈다.
+    synthetic = tmp_path / "known.txt"
+    synthetic.write_text("test/test_synthetic.py::test_old  # synthetic\n", encoding="utf-8")
+    monkeypatch.setattr(known_failures, "LIST", synthetic)
+    listed = next(iter(known_failures.load_known(synthetic.read_text(encoding="utf-8"))))
     report = tmp_path / "run.txt"
     report.write_text(f"FAILED {listed} - x\n", encoding="utf-8")
     assert known_failures.main([str(report)]) == 0
@@ -52,7 +56,7 @@ def test_main_exits_nonzero_only_for_a_new_failure(tmp_path, capsys):
 
 def test_every_listed_id_names_a_real_test_with_a_reason():
     known = known_failures.load_known(known_failures.LIST.read_text(encoding="utf-8"))
-    assert known
+    # 2026-10-02 — 빈 장부는 합법이다(전 녹성). 항목이 있을 때만 형식을 검사한다.
     for nodeid, reason in known.items():
         path, _, name = nodeid.partition("::")
         assert (ROOT / path).is_file(), nodeid

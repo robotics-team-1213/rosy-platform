@@ -48,7 +48,8 @@ export function createRoster({ el, view, log, call, render, streamEvidence, isOp
     return view.stateUnavailable || !robot.online || !state || state.safety?.estop !== false
       || state.hitl_requested === true || Boolean(state.capabilities_degraded?.length)
       || state.navigation === "FAILED" || Boolean(robot.queued) || Boolean(robot.yielding)
-      || (evidence !== null && evidence.cls !== "") || localizationUrgent(robot.localization);
+      || (evidence !== null && evidence.cls !== "") || localizationUrgent(robot.localization)
+      || Boolean(robot.line_stuck);
   }
   function navTag(state) {
     const nav = state && state.navigation;
@@ -218,6 +219,23 @@ export function createRoster({ el, view, log, call, render, streamEvidence, isOp
       node.appendChild(why);
     }
 
+    // D-416 — 오프라인 로봇의 마지막 응답 시각: "언제부터 안 됐지?"에 바로 답한다.
+    if (!view.stateUnavailable && !robot.online) {
+      const seen = document.createElement("p");
+      seen.className = "hint";
+      seen.dataset.fact = "last-seen";
+      const ts = robot.state?.ts;
+      if (typeof ts === "number" && ts > 0) {
+        const age = Math.max(0, Math.floor((Date.now() / 1000) - ts));
+        seen.textContent = age < 60 ? `마지막 응답: ${age}초 전`
+          : age < 3600 ? `마지막 응답: ${Math.floor(age / 60)}분 전`
+          : `마지막 응답: ${Math.floor(age / 3600)}시간 전`;
+      } else {
+        seen.textContent = "응답 없음";
+      }
+      node.appendChild(seen);
+    }
+
     const actions = document.createElement("div");
     actions.className = "robot-actions";
     const aim = document.createElement("ui-button");
@@ -372,6 +390,11 @@ export function createRoster({ el, view, log, call, render, streamEvidence, isOp
         warnList.appendChild(queueItem(r.robot_id, ": 상태 확인 불가"));
         warningCount++;
         continue;
+      }
+      if (r.line_stuck) {
+        // D-407: 막힌 로봇이 답을 기다린다. 답하는 자리는 이 패널 아래 판단 요청이다.
+        critList.appendChild(queueItem(r.robot_id, ": 판단 요청 — 차선 추종이 막혔습니다"));
+        criticalCount++;
       }
       if (localizationUrgent(r.localization)) {
         // D-395 사다리 끝: Fleet이 스스로 위치를 못 잡았다. 사람만 풀 수 있다.

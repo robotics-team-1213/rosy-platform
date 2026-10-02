@@ -10,6 +10,7 @@ from core_common.protocol.schemas import (
     DeviceActionState,
     DeviceActionCancelRequest,
     DeviceActionLookup,
+    FleetCellTransferGrant,
     FleetActionGrant,
     LocalStopRequest,
     LocalStopQuery,
@@ -63,6 +64,78 @@ def test_fleet_action_grant_roundtrips_with_all_execution_fences():
     assert restored.action_kind == "PICK_PLACE"
     assert restored.dispatch_generation == 19
     assert restored.request_digest == "a" * 64
+
+
+def _cell_transfer_grant(**overrides):
+    now = datetime.now(timezone.utc)
+    pose = {"x": 0.1, "y": 0.2, "z": 0.3, "yaw": 0.0}
+    value = {
+        "mission_id": "mission-cell-01",
+        "step_id": "step-cell-01",
+        "action_id": "action-cell-01",
+        "attempt_id": "attempt-cell-01",
+        "request_digest": "c" * 64,
+        "workcell_id": "omx-cell-01",
+        "instance_id": "omx-cell-01-control",
+        "action_kind": "CELL_TRANSFER",
+        "cell_transfer": {
+            "job_id": "job-cell-01",
+            "recipe_sha256": "a" * 64,
+            "cell_sha256": "b" * 64,
+            "step_index": 0,
+            "item": "box",
+            "pallet": "pallet-01",
+            "layer": 0,
+            "frame": "robot_base",
+            "home": pose,
+            "pick": pose,
+            "place": {**pose, "x": 0.4},
+            "pick_approach_z": 0.5,
+            "place_approach_z": 0.5,
+            "carry_z": 0.6,
+        },
+        "capability_revision": "cell-transfer-v1",
+        "config_revision": "omx-config-r4",
+        "authority_epoch": 3,
+        "dispatch_generation": 19,
+        "issued_at": now,
+        "expires_at": now + timedelta(seconds=5),
+    }
+    value.update(overrides)
+    return value
+
+
+def test_cell_transfer_grant_is_additive_and_has_no_rgbd_requirements():
+    grant = FleetCellTransferGrant.model_validate(_cell_transfer_grant())
+    restored = FleetCellTransferGrant.model_validate(grant.model_dump())
+
+    assert restored == grant
+    assert restored.action_kind == "CELL_TRANSFER"
+    assert restored.cell_transfer.frame == "robot_base"
+    assert restored.dispatch_generation == 19
+    assert "source_evidence" not in restored.model_dump()
+
+
+@pytest.mark.parametrize(
+    "path,value",
+    [
+        (("action_kind",), "PICK_PLACE"),
+        (("cell_transfer", "recipe_sha256"), "bad"),
+        (("cell_transfer", "frame"), "camera_frame"),
+        (("cell_transfer", "item"), "robot"),
+        (("cell_transfer", "carry_z"), 0.4),
+        (("cell_transfer", "pick"), {"x": float("inf"), "y": 0.2, "z": 0.3, "yaw": 0.0}),
+    ],
+)
+def test_cell_transfer_grant_rejects_wrong_revision_kind_frame_or_unsafe_pose(path, value):
+    raw = _cell_transfer_grant()
+    target = raw
+    for part in path[:-1]:
+        target = target[part]
+    target[path[-1]] = value
+
+    with pytest.raises(ValidationError):
+        FleetCellTransferGrant.model_validate(raw)
 
 
 @pytest.mark.parametrize("field", ["principal_id", "provider_call_id", "api_key", "stop_clearance"])

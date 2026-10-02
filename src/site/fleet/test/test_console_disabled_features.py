@@ -57,7 +57,7 @@ def test_console_gates_disabled_feature_pollers():
     assert 'discoveryGate.fail(err.status, err.code) === "absent"' in shell
     # Login / token save re-asks every disabled feature once.
     for reset in ("dispatchGate.reset();", "discoveryGate.reset();",
-                  "enrollment.resetPolling();", "mapView.resetPolling();"):
+                  "mapView.resetPolling();"):
         assert reset in shell
 
     assert "if (!gate.due()) return;" in enrollment

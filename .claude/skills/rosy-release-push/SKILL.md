@@ -1,6 +1,6 @@
 ---
 name: rosy-release-push
-description: Use when current main (CORE, dashboard, ROS nodes) must run on an existing Rosy robot without re-flashing the SD card — build a native payload release on the GitHub ARM64 runner, sign it on the operator PC, push and activate it with rosy-release-push.ps1, which then syncs the image layer (native-runtime scripts, rosy units, udev, modprobe) from the new release. Also when a dev overlay of newer main crashed CORE on an older release.
+description: Use when current main (CORE, dashboard, ROS nodes) must run on an existing Rosy robot without re-flashing the SD card — build a native payload release on the GitHub ARM64 runner, sign it on the operator PC, push and activate it with rosy-release-push.ps1, which then syncs the image layer (native-runtime scripts, rosy units, udev, modprobe) from the new release. Also to publish a release for the robots' automatic update (D-412: canary, withdraw, per-robot hold), and when a dev overlay of newer main crashed CORE on an older release.
 ---
 
 # Shipping main to a robot as a payload release (D-225)
@@ -161,6 +161,55 @@ Verified twice on 2026-09-26: releases 013 and 014 on a Pinky Pro running image 
    from `rosy-device-access`. Check the changed surfaces, log the session out, and delete
    any local token file.
 
+## Automatic rollout (D-412)
+
+Robots with `rosy-auto-update.timer` fetch signed releases from GitHub themselves and apply
+them only when idle. This PC still decides what ships: nothing reaches a robot until it is
+published here.
+
+- **On by default (since 2026-10-02).** A robot with the updater (release 2026.10.02-025 or
+  later) applies published releases by itself when idle. The first real canary
+  (rosy-pinky-9dfk, 2026.10.02-026) committed on 2026-10-02. To keep one robot off (bench
+  work), write `false`:
+  ```bash
+  rssh 'sudo -n install -d -m 0755 /var/lib/rosy/updates && echo "{\"enabled\": false, \"repo\": \"livsbittt/rosy-os\"}" | sudo -n tee /var/lib/rosy/updates/config.json'
+  ```
+  For a test or drive, put a hold on the robot instead (`rosy-update-hold.ps1 -Robot <ip> -Hold ...`).
+
+- **Publish.** After step 3, instead of pushing:
+  ```powershell
+  python tools/release/publish_payload_release.py --tarball <P>\<id>.tar.gz --canary <canary-ip> --robot <other-ip>
+  ```
+  It creates GitHub Release `payload-<id>` on `livsbittt/rosy-os` (tag on the tarball's
+  `source-revision.txt`) with the tarball, `rollout.json` and `rollout.json.sig`. The rollout
+  names the canary by hostname (`ssh hostname`) and is signed with the release key, then
+  verified before upload. An existing tag is refused; `--resume` re-attaches to it.
+- **Canary.** The command polls the canary's `rosy_auto_update.py status --json` every 30 s
+  and prints each phase. A commit of this id re-signs the rollout with `canary_ok=true`;
+  the other robots apply after `published_at + wave_delay_s` (default 600 s). A rollback or
+  refusal of this id, or no commit within `--canary-timeout-min` (default 30), re-signs it
+  with `withdrawn=true` and exits non-zero. If the PC stops mid-watch, the others wait;
+  rerun with `--release-id <id> --canary <ip> --resume` (Ctrl+C prints that command and the
+  `--withdraw` one). Only one publish per release id runs at a time (`publish-<id>\.lock`
+  in the work folder). Before its final upload the watch re-reads the rollout on GitHub:
+  a release withdrawn meanwhile stays withdrawn.
+- **Withdraw by hand:** `--release-id <id> --withdraw --reason "<why>"`. Robots that already
+  applied it stay on it; roll them back with a newer release or `-Rollback`.
+- **Hold** a robot before a test, drive or seal, and release it after:
+  ```powershell
+  deploy\robot\pinky_pro\rosy-update-hold.ps1 -Robot <ip> -Hold -Reason "G4 recording" -Hours 4
+  deploy\robot\pinky_pro\rosy-update-hold.ps1 -Robot <ip> -Release
+  deploy\robot\pinky_pro\rosy-update-hold.ps1 -Robot <ip> -Status
+  ```
+  A hold always expires (at most 168 h). The reason allows letters, digits, space and
+  `. , : _ / ( ) + = @ -`. A held robot still stages the release.
+- Audit lines go to `X:\DevTemp\rosy-rollout-evidence\<date>\rollout.jsonl`.
+- **Use a manual push (steps 5-6) when** the robot has no updater yet (its first D-412
+  release arrives by push), it is offline from GitHub, you need a release on one robot only,
+  or you are rolling back. The push takes the same claim as the updater
+  (`rosy_claim.py acquire --purpose push`) and releases it at the end; `claimed by another
+  job` means an update is running, so wait. A robot without the helper only warns.
+
 ## Pitfalls seen
 
 - **Board-device work collides with other sessions on main.** Merge main into your branch
@@ -175,4 +224,4 @@ Verified twice on 2026-09-26: releases 013 and 014 on a Pinky Pro running image 
 ## Related
 
 `rosy-device-access`, `rosy-hw-bringup`, `rosy-land-on-main`, `rosy-dashboard-drive`;
-ADR D-225, D-247, D-260, D-388.
+ADR D-225, D-247, D-260, D-388, D-412.

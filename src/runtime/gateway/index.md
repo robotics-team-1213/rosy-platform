@@ -72,8 +72,8 @@
 
 ## 최근 기록
 
+- 2026-10-02 · 94a8b833 · fix(fleet_agent): hub 작업을 API 루프에서 시작
 - 2026-10-02 · f341e9fd · feat(core): D-411 A 녹화 브리지 배선과 API 시험
 - 2026-10-02 · b9f1b277 · test(localization): D-395 S1 R1 — LOCALIZED 물체 세 갈래 왕복
 - 2026-10-02 · caa0d51d · fix(api): D-407 검토 반영 — MANUAL 답은 POST /mode 규칙, 답 감사에 토큰
 - 2026-10-02 · 7a44f39d · feat(core): D-407 막힘 답 API와 CORE 배선
-- 2026-10-02 · 00b806cb · fix(bridge): 지역화 시간을 로봇 노드 시계에 맞춤 (D-395 S1 finding 6)

@@ -310,3 +310,9 @@
 - 증거: `python -m pytest src/contracts/foundation/test/test_pilot_recording_contract.py src/contracts/foundation/test/test_pilot_recording_guard.py src/contracts/foundation/test/test_pilot_recording_store.py -q` → 65 passed, 2 skipped (2026-10-02 Windows).
 - gate 변화: SOURCE 유지. ROS-SIM HOLD — 계획 Verification ROS-SIM 체크리스트(WSL Ubuntu) 미실행, DEVICE 증거 없음.
 - 결정: D-411 A.
+
+## 2026-10-02 · uncommitted · feat(contracts): additive D-403 CELL_TRANSFER grant
+
+- 변경: 기존 `FleetActionGrant`의 `PICK_PLACE` 제약은 유지하고 `FleetCellTransferGrant` 합집합 변형을 추가했다. 새 payload는 job/recipe/cell hash, ordered step index, item/pallet/layer, robot-base home/pick/place pose와 approach/carry height를 요구한다.
+- 증거: `test_device_action_contracts.py`에서 새 grant 왕복 및 잘못된 kind/hash/frame/높이/비유한 pose 거부를 추가했다. 전체 core_common SOURCE suite 424 passed/1 skipped; API Reference를 v1.78로 함께 올렸다.
+- gate 변화: 없음. 새 grant schema는 아직 producer/consumer dispatch 경로에서 사용되지 않는다.

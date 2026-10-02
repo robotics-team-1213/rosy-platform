@@ -207,7 +207,31 @@ def test_answer_audit_records_the_token(core_client):
     client.post(URL, json={"stuck_id": stuck_id, "decision": "WAIT"}, headers=OPERATOR)
     answered = [e for e in seen if e.type == "nav.line_stuck_answered"]
     assert answered and answered[0].data["by"] == "operator"
-    assert answered[0].data["token_id"]
+    ref = answered[0].data["principal_ref"]
+    assert ref and "token_id" not in answered[0].data
+    # The dev operator token has no configured id: its record id is digest[:12], an unsalted
+    # hash prefix. The event names it by a per-process HMAC instead (review L4).
+    from core_api_web.api.deps import token_digest
+    assert ref.startswith("anon-") and token_digest("rosy-dev-operator")[:12] not in ref
+
+
+def test_answered_event_passes_the_fleet_audit_filter(core_client):
+    """D-407 re-run B: Fleet's event store refused `token_id` as a credential key."""
+    import sys
+    fleet_root = str(REPO / "src" / "site" / "fleet")
+    if fleet_root not in sys.path:
+        sys.path.insert(0, fleet_root)
+    module = pytest.importorskip("fleet.server.core_event_store")
+    client, services, stuck_id = _stuck(core_client)
+    seen = []
+    services.events.subscribe(lambda event: seen.append(event))
+    client.post(URL, json={"stuck_id": "stuck-old", "decision": "WAIT"}, headers=OPERATOR)
+    client.post(URL, json={"stuck_id": stuck_id, "decision": "BACK_AND_RETRY"}, headers=OPERATOR)
+    client.post(URL, json={"stuck_id": stuck_id, "decision": "WAIT"}, headers=OPERATOR)
+    stuck_events = [e for e in seen if e.type.startswith("nav.line_stuck_")]
+    assert stuck_events
+    for event in stuck_events:
+        assert not module._contains_sensitive_field(event.model_dump(mode="json")), event.type
 
 
 def test_recovery_overlay_types_coerce_or_fail_clearly():
@@ -220,3 +244,13 @@ def test_recovery_overlay_types_coerce_or_fail_clearly():
         _line_follow_config({"recovery_max_attempts": 1.5})
     with pytest.raises(ValueError, match="recovery_max_attempts must be a whole number"):
         _line_follow_config({"recovery_max_attempts": "2"})
+
+
+def test_principal_ref_keeps_configured_ids_and_hides_hash_prefix_ids():
+    """Review L4: a configured id is a name; a digest-prefix id is replaced by a keyed ref."""
+    from core_api_web.api.deps import principal_ref, token_digest
+    digest = token_digest("some-secret-token")
+    assert principal_ref({"id": "site-console", "digest": digest}) == "site-console"
+    anon = principal_ref({"id": digest[:12], "digest": digest})
+    assert anon.startswith("anon-") and digest[:12] not in anon
+    assert principal_ref({"id": digest[:12], "digest": digest}) == anon     # stable in a run
