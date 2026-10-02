@@ -236,7 +236,7 @@
 - gate 변화: 없음(ROS-SIM HOLD 유지).
 - 교훈: 콜백 그룹을 나누면 rclpy가 future done 콜백과 feedback의 순서를 보장하지 않는다. Windows는 rclpy 시험을 건너뛰므로, 동시성 변경은 WSL/컨테이너 반복(≥20회)으로 확인한다.
 
-## 2026-10-02 · re-review fixes (N1, minor 4)
+## 2026-10-02 · 0380d789 · fix(omx): re-review fixes N1 and minor 4
 
 - N1: feedback is counted until GOAL_ACCEPTED has been emitted, then replayed once; the runner acknowledges an overtaken RUNNING_FEEDBACK without journaling. Minor 4 (device side): the planner rejects `grasp_depth_m > height_m − fingertip_overhang_m` as `GRASP_DEPTH_BELOW_FINGERTIPS`; the accepted item geometry now carries `height_m`.
 - `fingertip_overhang_m` became required under `rosy_cell.cell/2` without a version bump, because /2 has not been released or used outside this branch.
