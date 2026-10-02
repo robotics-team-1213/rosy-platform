@@ -46,8 +46,8 @@
 
 ## 최근 기록
 
+- 2026-10-02 · uncommitted · fix(sim): gz_multi Nav2 가 직진하지 않던 D-395 R4
 - 2026-10-02 · uncommitted · test(sim): loc_assist 포함 시험이 실제로 경로를 읽게 한다
 - 2026-10-02 · uncommitted · feat(sim): gz_multi 로봇별 스폰 자세·AMCL 시드 끔·월드 패키지 자원 경로 (D-395 S1)
 - 2026-10-01 · uncommitted · feat(sim): gz_multi nav 모드에 로봇별 loc_assist (D-395 P2-3)
 - 2026-10-01 · uncommitted · fix(omx): fence recording closure and isolate storage faults
-- 2026-10-01 · uncommitted · feat(omx): record SIM demonstrations and export LeRobot v3

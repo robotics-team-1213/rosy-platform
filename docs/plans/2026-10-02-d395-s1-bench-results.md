@@ -360,6 +360,26 @@ F1 is confirmed. Every first `slot` decision passed its 3 s check: 6/6, against 
   - From the open start, `probe_d2.txt` shows `nav_cmd_vel` with linear 0.000 throughout, while angular swings between −0.33 and +0.31 rad/s. RPP stays in rotate-to-heading (`rotate_to_heading_min_angle` 0.35) and never hands over to tracking, and the progress checker aborts ("Failed to make progress").
   - CORE did not hold the output.
   - So (d) is shown only from an active goal with in-place rotation. A sim Nav2 tuning lane must fix the drive before (d) can be called a moving pickup.
+  - **Root cause (fix/gz-multi-nav2-forward, 2026-10-02).** There are two causes, and both are in the sim-only `gz_multi._nav_config`, not in `nav2_params.yaml`.
+    1. **Rotation only.** Jazzy RPP (1.3.12) rotates to the goal heading with linear 0 whenever its carrot is nearer than the goal checker's `xy_goal_tolerance` (0.25). The sim trial sets `min_lookahead_dist` to 0.15, and the carrot sits about one lookahead ahead, so every goal was "near the goal" from the start. The device values (0.3 > 0.25) do not have this problem. Fix: in sim, `xy_goal_tolerance = min(·, 0.10)`.
+    2. **"collision ahead" from a square.** The padded circumscribed radius (0.115 m) went into the local costmap too, which is RPP's collision checker. On 5 cm cells it overlapped the wall 0.14 m from square A. Fix: only the planner's global costmap takes the radius. The local costmap keeps the device footprint.
+  - **Evidence.** WSL Jazzy, one robot, `core:=false` with a relay standing in for CORE, GZ_PARTITION rosy_g4, ROS_DOMAIN_ID 97. Raw data is in `X:\DevTemp\rosy-g4\<run>\`.
+    - Before the fix, from the open middle: `cmd_vel_nav` had linear 0 in all 1043 samples, the robot moved 0.001 m, and the run ended in "Failed to make progress". The scan had no return under 0.15 m and the costmap around the robot was clean, which rules out self-hits and the peer.
+    - With fix 1 only, from square A: 0.013 m and "collision ahead".
+    - With both fixes, every run below reached the goal. Nav2 SUCCEEDED in all four, and the end poses are Gazebo truth:
+
+      | Start | Goal | Run | Travel | End (truth) |
+      |---|---|---|---|---|
+      | Open middle | 1 m | `mid1m_r1` | 0.93 m | 7 cm from goal |
+      | Open middle | 1 m | `mid1m_r2` | 0.91 m | 9 cm from goal |
+      | Square A | 0.44 m | `fix2_sqA_r2` | 0.28 m | — |
+      | Square A | 0.44 m | `sqA_r3` | 0.26 m | — |
+      | Square A | 0.44 m | `sqA_r4` | 0.30 m | — |
+
+      A fourth square A run, `fix2_sqA_r1`, drove off and then aborted on a replan with "Start occupied" in the global costmap.
+  - **Open points (not fixed here).**
+    - AMCL, seeded at square A without loc_assist, sits 7–8 cm off the truth before the robot moves. So square A runs end 14–18 cm short in truth while Nav2 reports SUCCEEDED. The bench localizes with loc_assist instead.
+    - The global padded radius can still report "Start occupied" near a wall (1/4 runs). This is `fix2_sqA_r1` above.
 - **R5. CORE keeps serving a dropped report.**
   - After a mission start, the robot drops its open request id, so the status says CANDIDATES with `request_id: null`. `LocalizationAssist.candidates()` still returns the cached pre-mission report.
   - Fleet decided once on it after the quiet second (d3) and got `stale_request`. This is harmless, since the robot refuses it, but it costs one Fleet hold.

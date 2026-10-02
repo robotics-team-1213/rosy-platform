@@ -4309,3 +4309,10 @@
 - gate 변화: 없음. S1 은 a·b·c·l 통과, d 는 Nav2 가 sim 에서 직진하지 않아 미증명(R4).
 - 결정: 없음. 기본값 변경 없음.
 - 교훈: 첫 결정이 통과하게 되자 관찰자가 보고 한 번 만에 LOCALIZED 가 되어, 2보고 감시가 거울 잠금 증거를 받을 틈이 사라졌다 — 한 수정이 다른 안전장치의 입력 빈도를 바꾼다(R1).
+
+## 2026-10-02 · uncommitted · docs(plans): D-395 S1 R4 원인과 sim 수정
+- 변경: `docs/plans/2026-10-02-d395-s1-bench-results.md` R4 에 원인 두 가지(RPP lookahead < 목표 허용오차 → 회전만; 패딩 외접원이 지역 비용지도에도 들어가 사각형 A 벽과 겹침)와 증거·남은 점(시드 AMCL 7–8 cm 오차, 전역 "Start occupied" 1/4) 추가. 수정은 `gz_multi._nav_config`(sim 전용).
+- 증거: WSL Jazzy 로봇 1대 — 1 m 목표 2/2, 사각형 A 출발 3/4 SUCCEEDED. 원시 `X:\DevTemp\rosy-g4\`.
+- gate 변화: 없음. (d) 이동 중 집어 올리기는 이 수정 위에서 다시 돌려야 한다.
+- 결정: 없음
+- 교훈: 없음
