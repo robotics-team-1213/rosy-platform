@@ -458,3 +458,9 @@
 - 변경: 실제 소비자 6개에 api_owners 명시. 공통 UI/transport는 운용 endpoint를 직접 선택하지 않으며 계약별 client는 별도 책임으로 구분. evidence의 경로 이름표는 발행으로 취급하지 않음.
 - 증거: CORE/Fleet 실제 권한·owner·JS caller 및 역할 가드 33 passed; 선언/권한/공유 발행 변이 4개 red 후 bytes 복원. 관련 등록부 회귀를 함께 실행.
 - gate 변화: SOURCE/LOCAL 계약 강화; 설치/DEVICE/FIELD 수용은 이 증거로 승격하지 않음.
+
+## 2026-10-03 · uncommitted · fix(web): SAFE_STOP 운용 말은 RobotMode 표 밖에 둔다
+- 변경: `operatorModeLabel`이 DeviceState 문자열 SAFE_STOP을 "안전 정지"로 보이고, 나머지 모드는 MODE_LABEL을 그대로 쓴다. MODE_LABEL 키는 RobotMode와 같다.
+- 근거: D-359 US-009. protocol RobotMode에 SAFE_STOP이 없다.
+- 증거: 2026-10-03 Windows. test_enum_labels.py와 test_operator_copy.py가 콘솔 묶음 240 passed 안에 포함된다. SAFE_STOP은 MODE_LABEL 키가 아니다.
+- gate 변화: 없음.

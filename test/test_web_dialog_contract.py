@@ -36,7 +36,7 @@ registry = _load_registry()
 
 #: 파일별 window.confirm 허용 수. 늘릴 때는 이 표와 함께 커밋한다.
 PINNED_CONFIRMS = {
-    "app.js": 8,
+    "app.js": 7,  # 즉시 정지는 빨간 버튼이 확인이다. 정지 해제는 그대로 묻는다.
     "settings.js": 8,  # D-371: 목록 행 삭제 셋(토큰·도크·웨이포인트)은 confirmIrreversible
     "map.js": 1,
     "telemetry.js": 1,  # 교통 정책 적용 확인 — D-362 P1 분할로 app.js에서 이동
