@@ -410,7 +410,7 @@ systemctl --root "$ROOT" enable NetworkManager.service chrony.service ssh.servic
     rosy-boot-status.service rosy-boot-status.timer rosy-boot-status-ready.service \
     rosy-config.service rosy-network.service rosy-boot-display.service \
     rosy-login-code.service rosy-hw-probe.service rosy-hw-probe.path rosy-hw-test.path \
-    rosy-auto-update.timer
+    rosy-auto-update.timer rosy-ssh-access.path rosy-ssh-access-boot.service
 # D-174 T0: the console banner is rendered at runtime into /run/rosy-boot/issue.
 mkdir -p "$ROOT/etc/issue.d"
 ln -sfn /run/rosy-boot/issue "$ROOT/etc/issue.d/rosy.issue"
@@ -454,7 +454,7 @@ chroot "$ROOT" python3 -B /opt/rosy/first-boot/rosy-new-device-setup.py --help >
 chroot "$ROOT" python3 -B /opt/rosy/first-boot/rosy-rebind-board.py --help >/dev/null \
     || fail "installed board-rebind entrypoint does not run"
 for entrypoint in rosy-boot-status.py rosy-config-apply.py rosy-network.py rosy-boot-display.py \
-    rosy-hw-probe.py rosy-hw-test.py rosy-login-code.py; do
+    rosy-hw-probe.py rosy-hw-test.py rosy-ssh-access.py rosy-login-code.py; do
     chroot "$ROOT" python3 -B "/opt/rosy/native-runtime/$entrypoint" --help >/dev/null \
         || fail "installed native entrypoint does not run: $entrypoint"
 done

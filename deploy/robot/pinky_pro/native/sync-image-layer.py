@@ -97,6 +97,13 @@ UNITS = (
     # D-412: the idle-time updater; only the timer is enabled.
     "rosy-auto-update.service",
     "rosy-auto-update.timer",
+    # D-418: SSH access on CORE's request; the path unit and the boot cleanup
+    # are enabled, the expiry timer runs only while a temporary password is on.
+    "rosy-ssh-access.service",
+    "rosy-ssh-access.path",
+    "rosy-ssh-access-boot.service",
+    "rosy-ssh-password-expire.service",
+    "rosy-ssh-password-expire.timer",
 )
 # Of those, the ones customize-rootfs.sh enables. A unit the sync adds is
 # enabled only if it is here, as a fresh image would have it.
@@ -114,6 +121,8 @@ ENABLED_UNITS = frozenset({
     "rosy-hw-probe.path",
     "rosy-hw-test.path",
     "rosy-auto-update.timer",
+    "rosy-ssh-access.path",
+    "rosy-ssh-access-boot.service",
 })
 
 # Never offered for a live restart, even when active and changed: the boot

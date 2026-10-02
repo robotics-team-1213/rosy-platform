@@ -897,6 +897,65 @@ def test_the_hardware_test_is_a_bounded_root_oneshot_only_core_can_start():
     assert "WantedBy=multi-user.target" in path
 
 
+SSH_ACCESS_SERVICES = {
+    # D-418: unit -> the helper's mode. The path unit's run applies CORE's request.
+    "rosy-ssh-access.service": "",
+    "rosy-ssh-password-expire.service": " --expire",
+    "rosy-ssh-access-boot.service": " --boot",
+}
+
+
+@pytest.mark.parametrize("unit", sorted(SSH_ACCESS_SERVICES))
+def test_the_ssh_access_units_are_bounded_root_oneshots_without_network(unit):
+    # D-418: root outside CORE. chpasswd and usermod replace /etc/shadow through
+    # lock and temporary files beside it, and the drop-ins live in /etc/ssh, so
+    # /etc stays writable (ProtectSystem=true, not strict); /usr and /boot do not.
+    directives = _directives(unit)
+    assert not _non_root(directives)
+    for key, value in (("Type", "oneshot"), ("ProtectSystem", "true"), ("ProtectHome", "true"),
+                       ("PrivateNetwork", "true"), ("RestrictAddressFamilies", "AF_UNIX"),
+                       ("PrivateDevices", "true"), ("PrivateTmp", "true"), ("NoNewPrivileges", "true"),
+                       ("ProtectKernelModules", "true"), ("ProtectKernelTunables", "true"),
+                       ("RestrictSUIDSGID", "true"), ("SystemCallFilter", "@system-service")):
+        assert directives.get(key, [""])[-1] == value, (unit, key)
+    assert 0 < int(directives["TimeoutStartSec"][-1]) <= 60
+    assert _words(directives, "CapabilityBoundingSet") == ["CAP_CHOWN", "CAP_DAC_OVERRIDE", "CAP_FOWNER"]
+    environment = _environment(directives)
+    assert environment.get("PYTHONNOUSERSITE") == "1" and environment.get("PYTHONDONTWRITEBYTECODE") == "1"
+    assert directives["ExecStart"] == [
+        "/usr/bin/python3 -I -B /opt/rosy/native-runtime/rosy-ssh-access.py" + SSH_ACCESS_SERVICES[unit]]
+    assert "Restart" not in directives
+    assert "bash" not in _read(unit)
+    # It never gets a writable path beside the ones systemd's ProtectSystem=true leaves.
+    assert "ReadWritePaths" not in directives
+
+
+def test_only_the_path_unit_and_the_boot_cleanup_start_the_ssh_helper():
+    assert "[Install]" not in _read("rosy-ssh-access.service")
+    assert "[Install]" not in _read("rosy-ssh-password-expire.service")
+    assert "StartLimitIntervalSec=0" in _read("rosy-ssh-access.service")
+    path = _read("rosy-ssh-access.path")
+    assert "PathChanged=/run/rosy/ssh-access.request" in path
+    assert "Unit=rosy-ssh-access.service" in path
+    assert "WantedBy=multi-user.target" in path
+    # The expiry check runs only while a password is on: the helper starts and stops the timer.
+    timer = _directives("rosy-ssh-password-expire.timer")
+    assert "[Install]" not in _read("rosy-ssh-password-expire.timer")
+    assert timer["Unit"] == ["rosy-ssh-password-expire.service"]
+    assert 0 < int(timer["OnUnitActiveSec"][-1].rstrip("s")) <= 60
+    assert 0 < int(timer["OnActiveSec"][-1].rstrip("s")) <= 60
+
+
+def test_the_boot_cleanup_runs_before_sshd_accepts_anyone():
+    directives = _directives("rosy-ssh-access-boot.service")
+    assert {"ssh.service", "ssh.socket"} <= set(_words(directives, "Before"))
+    assert directives.get("RemainAfterExit") == ["yes"]
+    text = _read("rosy-ssh-access-boot.service")
+    assert "WantedBy=multi-user.target" in text
+    # Ordering only: a failed cleanup must not keep sshd (the way in) from starting.
+    assert "RequiredBy" not in text and "Requires" not in directives
+
+
 def test_recovery_journal_is_private_to_root():
     directives = _directives("rosy-release-recover.service")
     assert directives.get("StateDirectoryMode") == ["0700"]

@@ -193,7 +193,8 @@ def test_boot_status_indicator_imports_from_the_installed_layout(tmp_path):
 
 @pytest.mark.skipif(BASH is None, reason="bash is required to run the installer")
 @pytest.mark.parametrize("entrypoint", ["rosy-config-apply.py", "rosy-network.py", "rosy-login-code.py",
-                                        "rosy-hw-probe.py", "rosy-hw-test.py"])
+                                        "rosy-hw-probe.py", "rosy-hw-test.py",
+                                        "rosy-ssh-access.py"])
 def test_d176_entrypoints_import_from_the_installed_layout(tmp_path, entrypoint):
     # D-176: rosy_config imports deploy.robot.pinky_pro.sd.personalization. The image installs
     # deploy/sd at /opt/rosy/deploy/sd beside /opt/rosy/native-runtime.
