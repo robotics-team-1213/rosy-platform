@@ -974,3 +974,11 @@
 - gate 변화: 없음.
 - 결정: D-423 (조정자 결정 2026-10-03)
 - 교훈: 없음
+
+## 2026-10-03 · 820444c49 · fix(perception): D-423 2·3단계 리뷰 반영
+
+- 변경: H1 int8 보정 입력 이름은 fp32 모델에서, `--color` 순서, 단계 파일은 모든 경로에서 정리(9cbae6ffa). M1 object_det intake 에 `max_int8_vs_fp32_rel`(9cbae6ffa). L4 parity rtol. H2 lane_seg 의 promote·`rollback --slot active` 거부, M3 서명 없는 object_det push 거부(`--allow-unsigned`, `--check`), L3 shadow==active 이면 promote 무동작, M4 `rosy_ml` 슬롯 명령을 `model/slot_cli.py` 로(600→595줄)(fc80b363a). M2 NMS 앞 상위 300 후보, M5 openssl 프로세스 오류 → SignatureError, L5 object_det 세션 spinning 끔(5e79d8a3d). L9 사람 상자 행 검사, L10 Pilot 패널은 열려 있을 때만 묻기, M6 D-137 시험 이름·AST 발행자 검사(0deb00525). latest-only 구독 목록에 road_observer 의 TOPIC 구독(820444c49, f4c311569 에서 놓침).
+- 증거: sensing 네 묶음 2421 passed, 106 skipped, known_failures 0 new; tools/perception 546 passed; services+api_web+pilot+architecture+gateway 일부 890 passed.
+- gate 변화: 없음.
+- 결정: D-423
+- 교훈: 시험 묶음을 커밋보다 먼저 돌리면 그 뒤의 커밋을 덮지 못한다 — 마지막 커밋 뒤에 다시 돈다.
