@@ -15,7 +15,7 @@ learned_max_rate_hz (ROSY_LEARNED_MAX_HZ, default 3.0; 0 = every frame) caps
 how often learned_lane_node infers: a Pi 5 at the full 8 fps was ~175 % CPU.
 
 D-423: object_det:=true (ROSY_OBJECT_DET, default off) starts object_detector_node,
-advisory detections on vision/detections from object_det_pointer, at most
+advisory detections (the D-137 detections topic) from object_det_pointer, at most
 object_det_max_rate_hz (ROSY_OBJECT_DET_MAX_HZ, default 2.0). CORE never reads it."""
 
 import os

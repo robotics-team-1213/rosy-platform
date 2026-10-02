@@ -98,7 +98,7 @@ def test_road_observer_scene_context_is_off_and_sensing_only():
 def test_road_observer_overlays_recent_advisory_detections():
     """D-423 §2.3: vision/detections join the preview within 0.6 s; display only."""
     source = (ROOT / "control/road_observer_node.py").read_text(encoding="utf-8")
-    assert "String, 'vision/detections'" in source
+    assert "String, DETECTIONS_TOPIC" in source and "TOPIC as DETECTIONS_TOPIC" in source
     assert "detections=self._preview_evidence.recent('detections', stamp, DETECTION_JOIN_S)" in source
     road = (ROOT / "control/sensing/perception/road.py").read_text(encoding="utf-8")
     assert "detections=detections" in road

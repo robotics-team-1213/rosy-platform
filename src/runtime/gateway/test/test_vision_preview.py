@@ -215,4 +215,4 @@ def test_bridge_feeds_both_model_status_topics_latched():
     from pathlib import Path
     source = (Path(__file__).resolve().parents[1] / "core" / "bridge" / "ros_bridge.py").read_text(
         encoding="utf-8")
-    assert "MODEL_STATUS_TOPICS" in source and "self._svc.vision.models.accept(" in source
+    assert "MODEL_STATUS_TOPICS" in source and source.count("self._svc.vision.models.accept(") == 2

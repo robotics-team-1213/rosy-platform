@@ -2,7 +2,7 @@
 
 Boxes are foreground/dark regions, not semantic object identities or tracks.
 The dotted arrow is a target guide in image space, not a predicted motor path.
-D-423: a detection (vision/detections) names a region it overlaps; the pairing is
+D-423: a detection (object_detector.TOPIC) names a region it overlaps; the pairing is
 for display only, and the range shown is the detection's own (never borrowed).
 """
 from collections import deque

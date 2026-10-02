@@ -409,7 +409,10 @@ class TestD137SequenceContract:
         그때 아래 화이트리스트에 그 파일 하나를 유일 항목으로 넣는다 — CORE는
         구독만 하고 발행 없음(vision-accelerator 설계 OQ4, must-be-1).
         """
-        allowed = {}   # 상대 경로 -> 사유. 착지 전에는 비어 있어야 한다.
+        allowed = {    # 상대 경로 -> 사유.
+            str(Path("runtime/sensing/control/object_detector.py")):
+                "D-423 object_detector_node: the single advisory publisher (Pi CPU int8 ONNX)",
+        }
         offenders = {}
         for path in SRC_ROOT.rglob("*.py"):
             parts = {p.lower() for p in path.parts}

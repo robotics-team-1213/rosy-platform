@@ -24,6 +24,7 @@ from .sensing.perception.camera_homography import (
     load_homography_profile,
 )
 from .sensing.perception.camera_ground import simulation_ground_plane
+from .object_detector import TOPIC as DETECTIONS_TOPIC
 from .sensing.perception.follow_preview import FrameEvidence
 
 # D-423: detections arrive at about 2 Hz, so the overlay takes the newest one up to
@@ -188,7 +189,7 @@ class RoadObserverNode(Node):
         self.create_subscription(String, 'camera/observation', self._on_object_preview, 10)
         self.create_subscription(String, 'perception/road_state', self._on_road_state_preview, latched)
         # D-423: advisory detections (about 2 Hz) for the overlay only.
-        self.create_subscription(String, 'vision/detections', self._on_detection_preview, 10)
+        self.create_subscription(String, DETECTIONS_TOPIC, self._on_detection_preview, 10)
         # Rendering on a bounded timer lets independent callbacks deliver evidence
         # first. Only exact capture-stamp matches may annotate the latest frame.
         self.create_timer(1.0 / self._preview_config.fps, self._flush_preview)

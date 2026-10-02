@@ -105,9 +105,9 @@ class RosBridge:
         # D-423 §3.6: learned-model status per task (latched by the model nodes); display only.
         latched = QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE,
                              durability=DurabilityPolicy.TRANSIENT_LOCAL)
-        for topic in MODEL_STATUS_TOPICS:
-            node.create_subscription(String, topic, lambda msg, t=topic: self._svc.vision.models.accept(
-                t, msg.data, now=time.monotonic()), latched)
+        lane_topic, object_topic = MODEL_STATUS_TOPICS
+        node.create_subscription(String, lane_topic, self._on_lane_model_status, latched)
+        node.create_subscription(String, object_topic, self._on_object_det_model_status, latched)
         # Nav2 lifecycle nodes announce their authoritative goal state on
         # transition_event.  CORE never infers readiness from node discovery;
         # it requires these active transitions plus the motor adapter lease.
@@ -257,6 +257,13 @@ class RosBridge:
     def _on_battery(self, msg: Float32) -> None:
         self._voltage_topic_seen = True
         battery_policy.apply_voltage(self._svc, float(msg.data))
+
+    def _on_lane_model_status(self, msg: String) -> None:
+        self._svc.vision.models.accept("perception/learned/status", msg.data, now=time.monotonic())
+
+    def _on_object_det_model_status(self, msg: String) -> None:
+        self._svc.vision.models.accept("perception/learned/object_det/status", msg.data,
+                                       now=time.monotonic())
 
     def _on_detection_evidence(self, msg: String) -> None:
         observation.detection_evidence(self._svc, msg.data)

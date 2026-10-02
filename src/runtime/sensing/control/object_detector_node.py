@@ -1,13 +1,13 @@
 """object_detector_node -- advisory object detection (D-423 §2).
 
 Subscribes camera/front (best effort, depth 1) and, with region_lidar_range,
-scan. Publishes vision/detections (std_msgs/String JSON: DetectionEvidence
+scan. Publishes object_detector.TOPIC, the D-137 detections topic (std_msgs/String JSON: DetectionEvidence
 fields plus an additive `ranges` list) and, at 1 Hz, latched
 perception/learned/object_det/status. The model comes from the pointer file
 /var/lib/rosy/models/object_det/active (parameter `pointer`) and swaps without
 restart. Off unless camera_preview.launch.py object_det:=true (ROSY_OBJECT_DET).
 
-Advisory only (D-137): CORE does not read vision/detections, and this node never
+Advisory only (D-137): CORE does not read that topic, and this node never
 publishes cmd_vel. The ROS-free logic lives in object_detector.py."""
 
 import json

@@ -7,7 +7,7 @@ One camera frame in, at most one DetectionEvidence-shaped packet out:
     frame in the D-136 sense; a seq jump still means packets were lost;
   - each detection is ranged from its own box (BoxRanger, region_range rule).
 
-Advisory evidence only (D-137): it goes to vision/detections, which CORE does not
+Advisory evidence only (D-137): it goes to TOPIC, which CORE does not
 read (CORE's advisory input is detection_evidence), and nothing here commands motion.
 """
 from __future__ import annotations
@@ -20,6 +20,7 @@ from .sensing.perception.learned.detector import detection_packet
 from .sensing.perception.learned.status import LearnedStatus, rate_limited
 from .sensing.perception.region_range import range_boxes, scan_in_camera
 
+# The one publisher D-137 reserved this topic for (gateway test_core_logic whitelist).
 TOPIC = 'vision/detections'
 STATUS_TOPIC = 'perception/learned/object_det/status'
 
