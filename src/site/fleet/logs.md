@@ -1300,3 +1300,8 @@
 - Change: replayed a lost submit receipt across independently reopened Fleet and OMX SQLite stores. Fleet reuses the persisted Action/attempt, records late success while retaining HOLD and object/workcell claims, and only confirms the goal after independent post-action camera and gripper evidence.
 - Evidence: `test/test_platform_cell_replay.py`; Fleet suite 1371 passed/7 skipped; OMX ActionStore 23 passed; replay/Skill boundary tests 10 passed.
 - Gate: SOURCE/LOCAL only; no ROS-SIM, Gazebo, device, or field promotion.
+
+## 2026-10-02 · uncommitted · test(fleet): track Mission event watermark across replay
+- Change: extend the two-ledger restart replay to verify four phase snapshots plus one terminal event, then a separate goal-confirmation event.
+- Evidence: targeted Mission, dispatcher, service, progress, task, OMX ActionStore, and replay suites: 77 passed; known-failure comparison: 0 new, 0 known.
+- Gate: SOURCE/LOCAL only; remaining interruption fixtures and expiry/occupancy cases are still open.
