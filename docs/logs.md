@@ -4533,3 +4533,8 @@
 - gate 변화: 없음. ROS-SIM S2 미완료.
 - 결정: 없음. 안전 발견 F1(전원 투입 직후 `localization: null` 행의 odom 자세를 Fleet이 마지막 신뢰 자세로 기록해 전 구간 차단 대신 0.45 m 금지 구역만 적용, q0에서 미확정 로봇 옆으로 목표 하달)은 별도 레인 제안. 권고: 전용/유휴 호스트, gpu_lidar GPU 렌더링 확인, sim 전용 물리 스텝 5 ms(rig_rate.py 선례).
 - 교훈: 2대에서 0.1–0.16이던 RTF가 4대에서 0.02로 떨어졌다. 대수에 비례하지 않는다 — 실행 전 짧은 전원 투입 측정으로 RTF를 먼저 확인했어야 했다.
+
+## 2026-10-02 · uncommitted · refactor(sim): D-395 S2 bench and gz_multi back under the D-362 600-line budget
+- 변경: 동작 변경 없음. `tools/sim/d395_s2_bench.py`(605→398행)의 배치·순수 함수를 `tools/sim/d395_s2_layout.py`로 옮겼다(요약 도구도 거기서 읽는다). `gz_multi.launch.py`(607→596행)의 `nav_composition` 인자·적용과 `_optional_float`를 `launch/gz_multi_args.py`로 옮겼다(`world_profiles.py`와 같은 형제 모듈 방식).
+- 증거: `python -m pytest test/architecture -q` 81 passed/1 skipped; `test/test_d395_s2_bench.py test/test_d395_s1_bench.py test/architecture/test_module_structure.py src/sim/gz_sim/test` 319 passed/2 skipped; `--check` 배치 문제 0. WSL 실행 없음.
+- gate 변화: 없음.

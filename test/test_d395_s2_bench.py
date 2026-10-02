@@ -1,4 +1,4 @@
-"""D-395 S2 bench (tools/sim/d395_s2_bench.py, d395_s2_summary.py): layouts, truth, pass bar."""
+"""D-395 S2 bench (tools/sim/d395_s2_bench.py, d395_s2_layout.py, d395_s2_summary.py): layouts, truth, pass bar."""
 
 import importlib.util
 import math
@@ -14,65 +14,70 @@ def _load(name):
     return mod
 
 
+layout = _load("d395_s2_layout")
 bench = _load("d395_s2_bench")
 summary = _load("d395_s2_summary")
 
 A, B = (-1.26, 0.49, -math.pi / 2), (0.86, -0.52, math.pi)
 
 
+def test_the_bench_runs_the_layout_module_scenarios():
+    assert bench.Bench.SCENARIOS is bench.SCENARIOS and set(bench.SCENARIOS) == set(layout.SCENARIOS)
+
+
 def test_layout_q_spawn_drops_and_goals_are_valid():
-    assert bench.scenario_problems(bench.SCENARIOS["q"]) == []
+    assert layout.scenario_problems(layout.SCENARIOS["q"]) == []
 
 
 def test_overlap_and_wall_hugging_are_rejected_but_the_squares_are_not():
-    assert bench.layout_problems([A, B], anchors=(0, 1)) == []     # square B is 0.105 m from its wall
-    problems = bench.layout_problems([A, B, (-0.70, -0.20, 0.0), (-0.60, -0.10, 0.0)], anchors=(0, 1))
+    assert layout.layout_problems([A, B], anchors=(0, 1)) == []     # square B is 0.105 m from its wall
+    problems = layout.layout_problems([A, B, (-0.70, -0.20, 0.0), (-0.60, -0.10, 0.0)], anchors=(0, 1))
     assert any("r3-r4" in m for m in problems)
-    problems = bench.layout_problems([A, B, (0.0, 0.55, 0.0)], anchors=(0, 1))
+    problems = layout.layout_problems([A, B, (0.0, 0.55, 0.0)], anchors=(0, 1))
     assert any("r3 0.075 m from a wall" in m for m in problems)
 
 
 def test_a_robot_whose_twin_lands_on_a_peer_is_rejected():
     # r4 sits near the twin of square A: r3's twin hypothesis places r1 (on A) onto r4 and r4 onto r1.
-    problems = bench.layout_problems([A, B, (-0.50, -0.20, 0.0), (1.20, -0.42, 0.0)], anchors=(0, 1))
+    problems = layout.layout_problems([A, B, (-0.50, -0.20, 0.0), (1.20, -0.42, 0.0)], anchors=(0, 1))
     assert "r3's twin gets peers support 0.67" in problems   # A and r4 swap
     # A robot on r3's own twin is harmless: r3 is no anchor for itself.
-    assert not any("twin" in m for m in bench.layout_problems(
+    assert not any("twin" in m for m in layout.layout_problems(
         [A, B, (-0.50, -0.20, 0.0), (0.50, 0.20, 0.0)], anchors=(0, 1)))
 
 
 def test_an_off_slot_robot_needs_an_anchor_in_view():
-    problems = bench.layout_problems([A, (1.10, -0.30, 0.0)], anchors=(0,))
+    problems = layout.layout_problems([A, (1.10, -0.30, 0.0)], anchors=(0,))
     assert "r2 has no anchor in view" in problems
 
 
 def test_peer_support_scores_truth_and_twin():
-    truth, twin = bench.peer_support((-0.70, -0.20), [A, B], [A, B])
+    truth, twin = layout.peer_support((-0.70, -0.20), [A, B], [A, B])
     assert (truth, twin) == (1.0, 0.0)
     # The twin of an observer next to the origin sees mirrored peers; one mirrored onto a peer counts.
-    truth, twin = bench.peer_support((0.0, 0.0), [(0.5, 0.2), (-0.5, -0.2)], [(0.5, 0.2), (-0.5, -0.2)])
+    truth, twin = layout.peer_support((0.0, 0.0), [(0.5, 0.2), (-0.5, -0.2)], [(0.5, 0.2), (-0.5, -0.2)])
     assert (truth, twin) == (1.0, 1.0)
 
 
 def test_the_s2b_stale_trap_is_armed_only_with_a_stale_anchor():
-    sc = bench.SCENARIOS["q"]
-    trap = bench.stale_trap(sc["spawn"], sc["pickup"])
+    sc = layout.SCENARIOS["q"]
+    trap = layout.stale_trap(sc["spawn"], sc["pickup"])
     assert trap["rosy_01"][1] > 0.0          # r4's old pose as an anchor supports r1's twin
     assert trap["rosy_01"][0] < 1.0          # and costs the truth
-    assert bench.scenario_problems(sc) == []   # with live anchors only, no twin support
+    assert layout.scenario_problems(sc) == []   # with live anchors only, no twin support
 
 
 def test_s2b_drops_follow_where_the_robots_stand():
-    sc = bench.SCENARIOS["q"]
-    after = bench.drop_layout(sc["spawn"], sc["pickup"])
+    sc = layout.SCENARIOS["q"]
+    after = layout.drop_layout(sc["spawn"], sc["pickup"])
     assert after[3][:2] == (-0.20, -0.25)      # r4 on the twin of its spawn
     # After the s2d legs r1 and r2 stand elsewhere; r4's drop follows r4.
     moved = [(-1.00, 0.40, math.pi), (0.95, -0.25, 0.0), sc["spawn"][2], (0.10, 0.20, 0.0)]
-    assert bench.drop_layout(moved, sc["pickup"])[3][:2] == (-0.10, -0.20)
-    assert bench.drop_problems(moved, sc["pickup"]) == []
+    assert layout.drop_layout(moved, sc["pickup"])[3][:2] == (-0.10, -0.20)
+    assert layout.drop_problems(moved, sc["pickup"]) == []
     # One lifted robot leaves no stale anchor to trap anyone: flagged, not passed.
     far = {"robots": [3], "drops": ["twin"]}
-    assert "stale-anchor trap disarmed" in bench.drop_problems(sc["spawn"], far)
+    assert "stale-anchor trap disarmed" in layout.drop_problems(sc["spawn"], far)
 
 
 POSE_V = """header {
@@ -119,23 +124,23 @@ pose {
 
 
 def test_parse_pose_v_reads_wanted_models_with_omitted_zero_fields():
-    poses = bench.parse_pose_v(POSE_V, {"rosy_01", "rosy_02", "rosy_03"})
+    poses = layout.parse_pose_v(POSE_V, {"rosy_01", "rosy_02", "rosy_03"})
     assert set(poses) == {"rosy_01", "rosy_02"}
     x, y, yaw = poses["rosy_01"]
     assert (x, y) == (-1.26, 0.49) and math.isclose(yaw, -math.pi / 2, abs_tol=1e-6)
     assert poses["rosy_02"] == (0.0, -0.52, 0.0)
-    assert bench.parse_pose_v("", {"rosy_01"}) == {}
+    assert layout.parse_pose_v("", {"rosy_01"}) == {}
 
 
 def test_min_pairwise_groups_rounds_and_counts_collisions():
     trail = [(1.0, "rosy_01", 0.0, 0.0, 0.0), (1.0, "rosy_02", 0.5, 0.0, 0.0), (1.0, "rosy_03", 0.0, 0.9, 0.0),
              (2.0, "rosy_01", 0.0, 0.0, 0.0), (2.0, "rosy_02", 0.2, 0.0, 0.0),
              (3.0, "rosy_01", 0.0, 0.0, 0.0)]                        # a lone sample is no round
-    hit = bench.min_pairwise(trail)
+    hit = layout.min_pairwise(trail)
     assert hit["min_m"] == 0.2 and hit["pair"] == ["rosy_01", "rosy_02"] and hit["t"] == 2.0
     assert hit["below"] == 1 and hit["rounds"] == 3
-    assert bench.min_pairwise(trail, until=1.5)["min_m"] == 0.5
-    assert bench.min_pairwise([])["min_m"] is None
+    assert layout.min_pairwise(trail, until=1.5)["min_m"] == 0.5
+    assert layout.min_pairwise([])["min_m"] is None
 
 
 def _run(**phases):
