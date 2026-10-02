@@ -15,6 +15,7 @@
 | D-168 | ROS 패키지 구조 기준 — 인정 조건, 필수 구성, 도메인 방향표를 시험으로 고정한다 |
 | D-268 | Fleet 자동 작업은 sighting이 아닌 별도 수용된 정책 증거만 사용한다 |
 | D-283 | 운용 콘솔은 고정 3영역을 유지하고 조작 그룹을 선택한다 |
+| D-411 | Pilot 로봇측 학습 녹화(카메라 유닛 소유, CORE는 시작·정지 요청, `teleop/intent` 원 입력·주체 기록, 1회 10분)와 정지 중에만 허용하는 HTTP 수신(목록·tar·sha256 manifest, `rosy_ml fetch --http`); 기기가 알리는 조작부 서술자 `rosy.controls/1`(base_velocity·joint_jog·gripper, 드라이버는 전송·위젯은 kind별, 팔 조이스틱은 이전 목표 종료 후 순차 제한 목표); OMX 그리퍼 전용 절대 목표·쥠 readback(시뮬레이션만, D-390 유지) |
 
 ## 계획·결과 문서
 
@@ -22,6 +23,7 @@
 - [2026-09-29-er2-mission-action-contract-closure.md](../../../docs/plans/2026-09-29-er2-mission-action-contract-closure.md)
 - [2026-09-29-policy-evidence-contract-design.md](../../../docs/plans/2026-09-29-policy-evidence-contract-design.md)
 - [2026-09-29-policy-evidence-contract.md](../../../docs/plans/2026-09-29-policy-evidence-contract.md)
+- [2026-10-02-d411-pilot-recording-controls-plan.md](../../../docs/plans/2026-10-02-d411-pilot-recording-controls-plan.md)
 
 ## 교훈 (docs/solutions)
 
@@ -34,7 +36,7 @@
 ## 최근 기록
 
 - 2026-10-02 · uncommitted · feat(contracts): additive D-403 CELL_TRANSFER grant
+- 2026-10-02 · f341e9fd · feat(core_common): D-411 A 녹화 계약·CORE 가드·읽기 전용 저장소
 - 2026-10-02 · dbe014f4 · feat(contracts): D-395 LOCALIZED 로봇의 `unmapped_objects` (API v1.74)
 - 2026-10-02 · 34bac08a · feat(core_common): D-395 `CHECKING` 사유
 - 2026-10-01 · uncommitted · feat(core_common): D-400 SafetyPolicyStatus on the state snapshot
-- 2026-10-01 · uncommitted · fix(omx): fence recording closure and isolate storage faults

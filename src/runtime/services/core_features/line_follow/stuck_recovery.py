@@ -42,6 +42,9 @@ class StuckInput:
     lane_visible: bool = False           # fresh, confident lane evidence (re-judge)
     front_clear: bool = True             # no path-band return within obstacle_resume_m
     front_band_m: Optional[float] = None
+    # LiDAR-origin distance RESUME refuses below (D-422: the body stop gap seen from the
+    # LiDAR in body mode). None = the config's sector_stop_m.
+    front_stop_m: Optional[float] = None
     rear_m: Optional[float] = None       # from the body rear (URDF), self-mask applied
     # "clear" (band empty or wider than recovery_rear_clear_m), "blocked", or "unknown"
     # (no geometry / no fresh scan): rear_m None alone cannot tell empty from unknown.
@@ -235,7 +238,8 @@ class StuckRecovery:
                 return "no_scan"
             if last.scan_age_s is not None and last.scan_age_s > self._config.clearance_stale_s:
                 return "scan_stale"
-            if last.front_band_m is not None and last.front_band_m < self._config.obstacle_stop_m:
+            stop = self._config.sector_stop_m if last.front_stop_m is None else last.front_stop_m
+            if last.front_band_m is not None and last.front_band_m < stop:
                 return "object_within_stop_distance"
         if decision == "BACK_AND_RETRY":
             if not self._config.recovery_local_enabled:

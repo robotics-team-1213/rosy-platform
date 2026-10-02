@@ -102,8 +102,13 @@ line_follow:                       # D-143 selected-source, fail-closed policy
   stale_after_s: 0.30              # stop immediately when evidence lease expires
   lost_after_s: 3.0                # latch LOST; operator must explicitly reselect
   ir_calibration_revision: null    # must match the configured IR line-observer digest
-  obstacle_stop_m: 0.20            # D-344 §11: stop when the front LiDAR sector is closer
-  obstacle_resume_m: 0.28          # resume once it is farther (hysteresis)
+  # D-344 §11 stop / resume distances from the LiDAR origin. D-422: left unset here on
+  # purpose (a value in this layer would count as an operator override). Unset: sector mode
+  # and path mode without the URDF body use 0.20 / 0.28; path mode with the body
+  # (body_front_x_m ... in the robot package) derives the body gap from the speed below.
+  # Set either in the robot overlay to override (both keep their LiDAR-origin meaning).
+  # obstacle_stop_m: 0.20
+  # obstacle_resume_m: 0.28
   obstacle_half_angle_deg: 20.0    # front sector is +-this around the robot's forward
   lidar_forward_deg: 0.0           # LiDAR angle of the robot's forward (Pinky Pro: 180 in products/pinky_pro/profile/config/core.yaml)
   clearance_stale_s: 0.5           # hold when the LiDAR stops reporting mid-run
@@ -115,6 +120,20 @@ line_follow:                       # D-143 selected-source, fail-closed policy
                                    # anywhere on the 0..180 deg band also count. LiDAR range_min (~0.15 m on
                                    # the C1) is blind: nothing nearer is ever seen.
   obstacle_release_s: 0.2          # path: blocked clears only after this long continuously clear
+  # D-422 body-referenced stop (path mode with body_front_x_m/body_lidar_x_m/body_rear_x_m/
+  # body_half_width_m/body_rotation_radius_m from the robot package): the URDF outline is swept
+  # along the intended lane arc; stop gap = margin + v*latency + v^2/(2*decel) at the intended
+  # speed, resume = stop + hysteresis. The stop gap is always at least the straight-ahead body
+  # gap of the scan's range_min (the LiDAR is blind inside it; the ultrasonic never lifts this);
+  # returns that slip under range_min are remembered from the twist sent to the wheels. The sweep also
+  # covers the tighter arc the traffic gate / safety clip can make. In place: rotation radius
+  # + obstacle_body_margin_m (obstacle_stop_m/resume_m do not apply there).
+  obstacle_body_margin_m: 0.02     # URDF/calibration error and floor slip
+  obstacle_latency_s: 0.15         # scan age + tick + command to wheels
+  obstacle_decel_mps2: 0.5         # conservative Pinky braking (no measured value yet)
+  obstacle_resume_hysteresis_m: 0.03
+  obstacle_ultrasonic_half_angle_deg: 15.0   # forward echo counts across this cone (body_ultrasonic_x_m)
+  obstacle_ultrasonic_stale_s: 0.3 # older readings are ignored (never used to go)
   obstacle_escalate_s: 5.0         # publish nav.line_obstacle_hold once after this long in obstacle_ahead
   ir_guard_enabled: false          # D-344 §12 IR lane-departure guard; turn on only after IR calibration
   ir_guard_edge_error: 0.3         # |IR error| at or above this = boundary under a side sensor
@@ -202,6 +221,9 @@ power:                            # PWR-001~004 절전/근접 웨이크 (D-24)
 
 events:
   ring_buffer_size: 1000          # EVT-004
+
+recording:
+  pilot_root: "/var/lib/rosy/pilot-recordings"   # D-411 A; CORE reads only. Tests and Gazebo override it
 
 fleet:
   enabled: false                  # P4-2에서 활성화 (PRT)

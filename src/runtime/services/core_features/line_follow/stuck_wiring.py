@@ -99,7 +99,7 @@ class StuckRecoveryMixin:
             return _PROVIDERS[name]
 
     def _release_stuck(self, now: float) -> None:
-        """RESUME / recovered: lift the obstacle latch once (re-blocks below obstacle_stop_m)."""
+        """RESUME / recovered: lift the obstacle latch once (re-blocks below the stop distance)."""
         self._obstacle_blocked = False
         self._clear_since = None
         self._blocked_since = None
@@ -140,8 +140,16 @@ class StuckRecoveryMixin:
                 self._body_points, lidar_x_m=lidar_x, rear_x_m=rear_x,
                 half_width_m=self._rear_half_width())["rear_m"]
         front = seen["front_band_m"]
-        front_clear = ((front is None or front >= config.obstacle_resume_m)
-                       and (self._clearance is None or self._clearance >= config.obstacle_resume_m))
+        front_stop = None
+        if self._gap_resume is not None and config.body_stop_known:
+            # D-422: the body gap along the intended path decides; the straight band is only
+            # reported (and bounds RESUME at the stop gap seen from the LiDAR).
+            front_clear = self._clearance is None or self._clearance >= self._gap_resume
+            front_stop = (self._gap_status.get("stop_gap_m") or 0.0) + (
+                config.body_front_x_m - config.body_lidar_x_m)
+        else:
+            front_clear = ((front is None or front >= config.sector_resume_m)
+                           and (self._clearance is None or self._clearance >= config.sector_resume_m))
         obs = self._observation
         age = None if self._received_at is None else now - self._received_at
         lane = bool(obs is not None and obs.visible and obs.source is self._mode
@@ -163,7 +171,8 @@ class StuckRecoveryMixin:
         moved = None if recovered_at is None else self._trail.net_since(recovered_at, now)
         return StuckInput(
             now=now, cause=cause, lane_visible=lane, front_clear=front_clear,
-            front_band_m=front, rear_m=seen["rear_m"] if known else None, turn_m=seen["turn_m"],
+            front_band_m=front, front_stop_m=front_stop,
+            rear_m=seen["rear_m"] if known else None, turn_m=seen["turn_m"],
             rear_blind_m=blind, trail_m=trail_m, trail_yaw_deg=trail_yaw,
             trail_age_s=None if last_forward is None else round(now - last_forward, 3),
             scan_age_s=None if self._body_at is None else now - self._body_at,
