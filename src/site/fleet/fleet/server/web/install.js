@@ -9,6 +9,7 @@ import { createVisionView } from "./vision-view.js";
 import { createFieldView } from "./field-view.js";
 import { createMapFitView } from "./map-fit-view.js";
 import { createPollGate } from "./poll-gate.js";
+import { createFleetClient } from "/common/fleet-client.js";
 import { confirmIrreversible, openLiveDialog } from "/common/ui.js";
 
 const el = (id) => document.getElementById(id);
@@ -76,28 +77,17 @@ function log(text, kind) {
   while (box.childElementCount > LOG_MAX) box.lastElementChild.remove();
 }
 
+const fleetClient = createFleetClient({ credential: () => auth.token });
+
 async function call(path, options = {}) {
-  const headers = { ...(options.headers || {}), ...authHeaders() };
-  const resp = await fetch(path, { ...options, headers });
-  let body = null;
   try {
-    body = await resp.json();
-  } catch (err) {
-    body = null;
-  }
-  if (resp.status === 401) {
-    markLocked();
-    throw new Error("관제 토큰이 필요합니다 — 상단에 입력하고 접속을 누르세요");
-  }
-  if (!resp.ok) {
-    const detail = body && body.detail ? body.detail : {};
-    const error = new Error(detail.message || detail.code || `HTTP ${resp.status}`);
-    error.status = resp.status;
-    error.code = detail.code;
+    const body = await fleetClient(path, options);
+    markUnlocked();
+    return body;
+  } catch (error) {
+    if (error.status === 401) markLocked();
     throw error;
   }
-  markUnlocked();
-  return body;
 }
 
 // 설치 전용 얇은 view — 카메라 관측·사이트 사각형만 있다(D-257).

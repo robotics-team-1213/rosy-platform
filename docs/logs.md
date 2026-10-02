@@ -4674,3 +4674,9 @@
 - 변경: 요청별 credential/origin/HTTP 결과/취소를 다루는 request와 signal/generation/guard/cleanup scope를 추가. token 저장·도메인 오류·endpoint 선택·명령 재전송은 consumer에 남김. shared manifest/CMake를 함께 갱신하고 Node ES module 시험 metadata만 추가.
 - 증거: missing module red → Node 27 passed, wrapper/manifest/role 15 passed. origin·늦은 응답 취소·종료 handler·설치 목록 변이 4개 red 후 byte-for-byte 복원. 로그는 X:/DevTemp/rosy-ui-ownership/task2-mutations.
 - gate 변화: Task 2 SOURCE/LOCAL 도구 계약 완료. 실제 client 전환·폴더·installed-only·DEVICE/FIELD는 후속 단계.
+
+## 2026-10-03 · uncommitted · refactor: D-425 Fleet HTTP client checkpoint
+
+- 변경: Console 운용/설치의 JSON call을 같은 Fleet adapter로 연결. token 저장·잠금 UI·404 poll gate는 문서가 소유. Windows fixture에 독점 bind·close/join·자산 bytes 검사를 추가.
+- 증거: Node 18 passed, static/ownership/manifest 재검사 53 passed. 화면 잠금 변이는 독점 서버에서 red, bytes 복원 후 Chromium session/origin 3 passed.
+- gate 변화: Task 3 HTTP 체크포인트. 종료/토큰 교체 scope와 Tasks 4–13은 미완료.

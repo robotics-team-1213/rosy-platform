@@ -16,6 +16,7 @@ install(FILES
   evidence.js
   request.js
   scope.js
+  fleet-client.js
   DESTINATION share/${PROJECT_NAME}
 )
 

@@ -189,26 +189,31 @@ def test_existing_client_request_reaches_its_declared_plane(surface, source, fun
     owner = _rows()[surface]["api_owners"][0]
     script = r"""
 import fs from 'node:fs';
-const [source, name, path, owner] = JSON.parse(process.argv[1]);
+import {pathToFileURL} from 'node:url';
+const [source, name, path, owner, fleetModule] = JSON.parse(process.argv[1]);
+const {createFleetClient} = await import(pathToFileURL(fleetModule));
 const text = fs.readFileSync(source, 'utf8');
 const match = text.match(new RegExp('(?:export )?async function ' + name + '\\([^]*?\\n\\}'));
 if (!match) throw new Error('request function not found');
 const calls = [];
 const fetch = async (path, options) => {
-  calls.push({path, authorization: new Headers(options.headers).get('Authorization')});
+  calls.push({path: new URL(path, 'https://plane.test').pathname,
+    authorization: new Headers(options.headers).get('Authorization')});
   return new Response(JSON.stringify({owner}), {status: 200});
 };
 const token = owner.toLowerCase() + '-test-token';
 const noop = () => {};
+const fleetClient = createFleetClient({origin: 'https://plane.test', credential: () => token, fetchImpl: fetch});
 const request = new Function('fetch', 'authHeaders', 'session', 'classifyOperation',
-  'window', 'CustomEvent', 'httpError', 'markLocked', 'markUnlocked',
+  'window', 'CustomEvent', 'httpError', 'markLocked', 'markUnlocked', 'fleetClient',
   'return (' + match[0].replace(/^export /, '') + ');')(
   fetch, () => ({Authorization: 'Bearer ' + token}), {token}, () => null,
-  {dispatchEvent: noop}, class {}, () => new Error('unexpected HTTP failure'), noop, noop);
+  {dispatchEvent: noop}, class {}, () => new Error('unexpected HTTP failure'), noop, noop, fleetClient);
 await request(path);
 console.log(JSON.stringify(calls));
 """
-    data = json.dumps([str(ROOT / source), function, path, owner])
+    data = json.dumps([str(ROOT / source), function, path, owner,
+                       str(ROOT / "src/hmi/web_common/fleet-client.js")])
     result = subprocess.run([node, "--input-type=module", "--eval", script, data],
                             capture_output=True, text=True, encoding="utf-8")
     assert result.returncode == 0, result.stderr
