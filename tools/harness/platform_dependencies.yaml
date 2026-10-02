@@ -1,0 +1,37 @@
+schema: rosy.platform-dependencies.v1
+
+# Existing Python components only. Add new paths in the same change that creates them.
+components:
+  - name: contracts
+    path: src/contracts/foundation/core_common
+    import_prefix: core_common
+  - name: cell_process_compat
+    path: src/site/cell/rosy_cell
+    import_prefix: rosy_cell
+  - name: fleet_site
+    path: src/site/fleet/fleet
+    import_prefix: fleet
+  - name: omx_device_adapter
+    path: src/products/omx/adapter/omx_adapter
+    import_prefix: omx_adapter
+
+# Prefix rules cover absolute imports only; relative imports remain within a component.
+boundaries:
+  - importer_prefix: core_common
+    forbidden_imports: [fleet, rosy_cell, omx_adapter, rclpy]
+  - importer_prefix: rosy_cell
+    forbidden_imports: [fleet, omx_adapter, rclpy]
+  - importer_prefix: fleet
+    forbidden_imports: [rosy_cell, omx_adapter, rclpy]
+  - importer_prefix: omx_adapter
+    forbidden_imports: [fleet, rosy_cell]
+
+# Contract canaries for packages introduced by later plan tasks; these do not register
+# package paths or imply that those modules exist yet.
+future_boundary_canaries:
+  - importer_prefix: rosy.execution.api
+    forbidden_imports: [rosy.processes.palletizing]
+  - importer_prefix: rosy.decision
+    forbidden_imports: [omx_adapter, rosy.integrations.robots]
+  - importer_prefix: rosy.skills.manipulation
+    forbidden_imports: [rosy.execution]

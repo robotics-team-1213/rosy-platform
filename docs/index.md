@@ -268,8 +268,8 @@
 
 ## 최근 기록
 
+- 2026-10-02 · uncommitted · test(platform): 현재 import 소유권과 D-413 경계 간선 guard
 - 2026-10-02 · uncommitted · docs(platform): D-413 Task 0 고정 셀 이전 기준선
 - 2026-10-02 · uncommitted · docs(architecture): D-413 네 영역 전환 결정과 고정 셀 실행 계획
 - 2026-10-02 · uncommitted · CI 삼각측량 — 시크릿 스캔 면제·해시 문서 규약·스코어카드 기준선·설치 문서 브라우저 시험
 - 2026-10-02 · uncommitted · docs(architecture): 플랫폼 v0.2의 실제 이전 경계와 첫 수용 범위 구체화
-- 2026-10-02 · uncommitted · docs(adr): 로봇 자동 업데이트 ADR 번호를 D-410에서 D-412로 — 두 번째 번호 충돌

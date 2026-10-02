@@ -4406,3 +4406,10 @@
 - 검증: Cell 143 passed; Fleet 1336 passed/7 skipped; OMX 268 passed/5 skipped; architecture 76 passed/1 skipped. 네 로그 모두 `test/known_failures.py`에서 0 new, 0 known으로 분류됐다. 로그·pytest 임시 경로는 X:\DevTemp에 뒀다.
 - 한계: suite는 Windows/Python 3.14 source 검사다. C3 feature 브랜치의 Gazebo 증거를 재실행하거나 C4 접수를 수용하지 않았다. Task 0의 구현 전 기준선만 고정했다.
 - gate 변화: 없음.
+
+## 2026-10-02 · uncommitted · test(platform): 현재 import 소유권과 D-413 경계 간선 guard
+
+- 변경: `tools/harness/platform_dependencies.yaml`은 현재 core_common·rosy_cell·fleet·omx_adapter 경로만 등록한다. 새 architecture test는 해당 소스의 absolute import와 상대 import를 검사하고 execution→공정, decision→장치 SDK, Skill→execution의 잘못된 간선을 fixture로 검출한다. 아직 존재하지 않는 wheel이나 ROS package는 registry에 넣지 않았다.
+- 검증: RED에서 정책 파일 누락과 relative-import 우회를 각각 재현한 뒤 보완했다. focused guard 5 passed; 전체 architecture 81 passed/1 skipped; quick tier 95 passed/24 warnings; `known_failures.py` 0 new; harness lint 0 errors/24 기존 progress warnings.
+- 한계: Python AST는 동적 import/entry point가 아니라 정적 import만 다룬다. 새 API/process roots는 생성할 때 registry에 포함해야 한다.
+- gate 변화: 없음.
