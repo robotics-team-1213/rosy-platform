@@ -1,0 +1,17 @@
+{
+  "scenario": "late-success-after-restart",
+  "events": [
+    "fleet-persists-grant",
+    "local-controller-accepts-and-completes",
+    "submit-receipt-is-lost",
+    "fleet-persists-unknown-and-hold",
+    "site-process-restarts",
+    "fleet-reads-the-same-attempt-as-succeeded"
+  ],
+  "expected": {
+    "mission_state": "HOLD",
+    "resource_claim_retained": true,
+    "automatic_resubmit_count": 0,
+    "goal_confirmation": "independent-evidence-required"
+  }
+}
