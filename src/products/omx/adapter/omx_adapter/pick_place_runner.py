@@ -359,17 +359,20 @@ class PickPlaceRunner:
 
         phase_rows = self.recorder.phases()
         recorded = next((row for row in phase_rows if row["phase_id"] == phase.phase_id), None)
-        with self._lock:
-            self._submitting = False
-            self._current_goal_id = recorded["driver_goal_id"] if recorded else None
-            pending = tuple(self._pending_events)
-            overflow = self._pending_overflow
-            self._pending_events.clear()
-        if overflow:
-            self.recorder.hold(reason="ROS_EVENT_BUFFER_OVERFLOW")
-        else:
-            for event in pending:
-                self.on_ros_goal_event(event)
+        # Hold the event lock from clearing _submitting until the queue is replayed: a live
+        # event (e.g. feedback) must not overtake a queued GOAL_ACCEPTED (C3b run9).
+        with self._event_lock:
+            with self._lock:
+                self._submitting = False
+                self._current_goal_id = recorded["driver_goal_id"] if recorded else None
+                pending = tuple(self._pending_events)
+                overflow = self._pending_overflow
+                self._pending_events.clear()
+            if overflow:
+                self.recorder.hold(reason="ROS_EVENT_BUFFER_OVERFLOW")
+            else:
+                for event in pending:
+                    self._process_ros_goal_event(event)
         if result.get("reason") == "STOP_GENERATION_FENCED":
             return result
         phase_rows = self.recorder.phases()

@@ -493,3 +493,38 @@ def test_feedback_flood_journals_running_once_and_terminal_always(tmp_path):
     assert row["state"] == "SUCCEEDED"
     assert recorder.parent()["state"] == "RUNNING"
     assert "feedback_events" in str(row) and "501" in str(row)
+
+
+def test_live_feedback_waits_for_the_queued_goal_acceptance_replay(tmp_path):
+    # C3b run9: GOAL_ACCEPTED arrived while the runner was still submitting (queued), and the
+    # next live feedback was processed before that queue was replayed, so it saw no goal id,
+    # returned False, and the runtime marked the ROS goal failed (owner HOLD action_failed).
+    import threading
+
+    store, recorder, port, runner = _harness(tmp_path)
+    live = {}
+
+    class _Pending(list):
+        def __iter__(self):
+            # Runs when the runner snapshots its queue, i.e. after submitting cleared.
+            if "thread" not in live and live.get("command") is not None:
+                def deliver():
+                    live["result"] = runner.on_ros_goal_event(_event(
+                        "RUNNING_FEEDBACK", live["command"], "approach", live["goal"], 2,
+                        feedback_sequence=1))
+                live["thread"] = threading.Thread(target=deliver)
+                live["thread"].start()
+                live["thread"].join(0.2)
+            return super().__iter__()
+
+    runner._pending_events = _Pending()
+
+    def accept(command, goal, callback):
+        live.update(command=command, goal=goal)
+        callback(_event("GOAL_ACCEPTED", command, "approach", goal, 1))  # queued: submitting
+
+    port.on_submit = accept
+    runner.start()
+    live["thread"].join(5.0)
+    assert live["result"] is True
+    assert recorder.phases()[0]["state"] == "RUNNING"
