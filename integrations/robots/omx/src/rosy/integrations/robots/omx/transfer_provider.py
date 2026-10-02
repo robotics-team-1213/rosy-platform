@@ -231,12 +231,15 @@ def create_omx_cell_transfer_phase_factory(
     gripper_readback: Callable[[], GripperObservation],
     monotonic: Callable[[], float],
     now: Callable[[], datetime] | None = None,
+    gripper_sensor_revision: str | None = None,
 ) -> Callable[[FleetCellTransferGrant, object], _SkillPhaseExecution]:
     """Compose the Skill with the actual OMX planner and phase coordinator.
 
     The caller supplies the existing owner's command and goal ports. This
     factory creates neither a ROS node nor another command owner. Local workflow
-    code must explicitly advance phases and establish terminal workflow evidence.
+    code must explicitly advance phases. An accepted gripper_sensor_revision
+    opts into durable hold/release verification and local Action terminalization;
+    without it the caller retains responsibility for terminal workflow evidence.
     """
     from omx_adapter.pick_place_runner import PickPlaceRunner
 
@@ -247,20 +250,61 @@ def create_omx_cell_transfer_phase_factory(
         )
 
     def executor_for_grant(grant: FleetCellTransferGrant, recorder: object,
-                           planned: PlannedTransfer) -> PickPlaceRunner:
+                           planned: PlannedTransfer, workflow=None, readback=None) -> PickPlaceRunner:
         return PickPlaceRunner(
             recorder, grant, planned.plan,
             command_for_phase=lambda phase: command_for_phase(grant, phase),
             goal_port=goal_port, submission_fence=submission_fence,
-            phase_gate=lambda phase: phase_gate(grant, phase), current_fence=current_fence,
+            phase_gate=lambda phase: phase_gate(grant, phase) and (
+                workflow is None or workflow.phase_gate(phase)), current_fence=current_fence,
             current_execution_state=execution_state,
             start_state_tolerances=profile.start_state_tolerances(),
             max_joint_state_age_s=profile.max_joint_state_age_s,
             monotonic=monotonic, now=now, cell_profile=profile,
-            gripper_readback=gripper_readback, held_object_id=grant.cell_transfer.item,
+            gripper_readback=readback or gripper_readback, held_object_id=grant.cell_transfer.item,
         )
 
-    return create_cell_transfer_phase_factory(
+    phase_factory = create_cell_transfer_phase_factory(
         skill=TransferSkill(), planner_for_grant=planner_for_grant,
         executor_for_grant=executor_for_grant,
     )
+    if gripper_sensor_revision is None:
+        return phase_factory
+
+    from omx_adapter.pick_place_transaction import PickPlaceTransaction, PickPlaceWorkflowJournal
+    from .cell_workflow import CellTransferWorkflowExecution
+
+    if (not isinstance(gripper_sensor_revision, str) or not gripper_sensor_revision
+            or gripper_sensor_revision != gripper_sensor_revision.strip()):
+        raise ValueError("an accepted gripper sensor revision is required")
+
+    def create_workflow(grant, recorder):
+        if recorder.phases() or recorder.latest_workflow_state() is not None:
+            raise RuntimeError("automatic replay of an existing Cell workflow is forbidden")
+        workflow = PickPlaceWorkflowJournal(PickPlaceTransaction.for_cell_transfer(
+            grant, gripper_sensor_revision=gripper_sensor_revision,
+        ), recorder)
+
+        def scoped_readback():
+            from omx_adapter.gripper_contract import GripperObservation
+            observation = gripper_readback()
+            if (not isinstance(observation, GripperObservation)
+                    or observation.workcell_id != grant.workcell_id
+                    or observation.instance_id != grant.instance_id
+                    or observation.sensor_revision != gripper_sensor_revision
+                    or observation.owner_generation != grant.dispatch_generation):
+                raise ValueError("gripper readback does not match the accepted Cell scope")
+            return observation
+
+        create_phase = create_cell_transfer_phase_factory(
+            skill=TransferSkill(), planner_for_grant=planner_for_grant,
+            executor_for_grant=lambda accepted, journal, planned: executor_for_grant(
+                accepted, journal, planned, workflow, scoped_readback),
+        )
+        execution = create_phase(grant, recorder)
+        return CellTransferWorkflowExecution(
+            execution, workflow, recorder, gripper_readback=scoped_readback,
+            max_age_s=profile.max_joint_state_age_s, monotonic=monotonic, now=now,
+        )
+
+    return create_workflow
