@@ -227,9 +227,22 @@ def body_path_gap(points: Sequence[Point], *, linear: float, angular: float, fro
                 best = travel
         return best
     radius = 1.0 / curvature                  # signed: centre at (0, radius)
-    near = [(x, y) for x, y in points
-            if x * x + y * y <= reach * reach
-            and abs(math.hypot(x, y - radius) - abs(radius)) <= rotation_radius_m]
+    side = 1.0 if radius > 0 else -1.0
+    turned = limit / abs(radius)              # heading change over the sweep
+    # A body point stays within rotation_radius_m of the base, so seen from the centre it
+    # leads or trails the base by at most this angle (all angles when the arc is that tight).
+    lead = (math.pi if abs(radius) <= 2.0 * rotation_radius_m
+            else math.asin(rotation_radius_m / (abs(radius) - rotation_radius_m)))
+    near = []
+    for x, y in points:
+        if (x * x + y * y > reach * reach
+                or abs(math.hypot(x, y - radius) - abs(radius)) > rotation_radius_m):
+            continue
+        if lead < math.pi:
+            angle = math.atan2(x, side * (radius - y))   # 0 at the base, + ahead
+            if not -lead <= angle <= turned + lead:
+                continue
+        near.append((x, y))
     if not near:
         return None
 

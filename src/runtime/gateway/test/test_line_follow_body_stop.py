@@ -456,3 +456,23 @@ def test_core_binds_the_envelope_from_the_safety_limits_and_the_traffic_gate():
     assert m._envelope() == (0.2, 0.8, 0.15)
     traffic.configuration = lambda: {"active": {"proceed_speed_scale": 0.1}}
     assert m._envelope() == (0.2, 0.8, 0.1)
+
+
+@pytest.mark.parametrize("turn", [1.0, -1.0])
+def test_arc_prefilter_is_mirror_symmetric(turn):
+    """Review M4: the annulus/angle prefilter must not drop points on either turn side."""
+    wall = [(0.10 + 0.005 * i, turn * (0.02 + 0.004 * i)) for i in range(40)]
+    plain = [body_path_gap(wall[i:i + 1], linear=0.04, angular=turn * 0.3, **BODY) for i in range(40)]
+    together = body_path_gap(wall, linear=0.04, angular=turn * 0.3, **BODY)
+    found = [g for g in plain if g is not None]
+    assert found and together == pytest.approx(min(found), abs=1e-6)
+    mirrored = [(x, -y) for x, y in wall]
+    assert body_path_gap(mirrored, linear=0.04, angular=-turn * 0.3, **BODY) == pytest.approx(together, abs=1e-6)
+
+
+def test_tighter_arc_check_holds_for_a_right_turn_too():
+    post = [(0.017, -0.07)]
+    m = _manager()
+    m.bind_motion_envelope(lambda: (math.inf, math.inf, 0.15))
+    _, status = _step(m, post, error=0.3)
+    assert status.reason == "obstacle_ahead"
