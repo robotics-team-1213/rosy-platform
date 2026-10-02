@@ -4460,3 +4460,9 @@
 - Change: Merged the D-407 latest-main changes without touching their Fleet implementation. Kept the corrected `pip3 wheel` invocation and added the palletizing wheel/test to CI.
 - Evidence: palletizing wheel compatibility 11 passed, Cell suite 143 passed, API mapping 7 passed. Architecture 80 passed/1 skipped with the Fleet size-verdict test deselected; quick 94 passed/1 deselected/24 existing warnings; filtered known-failure comparison 0 new/0 known. The excluded test fails identically on clean `main`: Fleet is 25,653 lines vs allowance 25,494 + 150.
 - Gate: D-413 Task 3 SOURCE remains GO. Latest-main Fleet size verdict remains a separate pre-existing failure; no Fleet sizing policy changed here.
+
+## 2026-10-02 · d9e70f71 · docs(test): close Task 3 latest-main verification follow-up
+
+- 변경: main `cc76161f5` 통합 뒤 D-413 Task 3 계획과 palletizing progress 증거를 갱신했다. 이 main 변경에서 앞선 snapshot의 Fleet size-verdict allowance mismatch가 해소됐다.
+- 증거: 비선별 architecture 81 passed/1 skipped, quick tier 95 passed/24 기존 warnings, known-failure 비교 둘 다 0 new/0 known. Wheel 호환 11, Cell 143, API 매핑 7 passed.
+- gate 변화: Task 3 SOURCE GO 유지. ROS/Gazebo, release artifact, device, field 증거는 남아 있으며 이번 후속 변경은 Fleet runtime 동작을 바꾸지 않았다.

@@ -2,11 +2,11 @@
 module: palletizing
 logical_modules: []
 owner: PROCESS
-last_verified: { commit: "9da93450", date: 2026-10-02 }
+last_verified: { commit: "d9e70f71", date: 2026-10-02 }
 gates:
   SOURCE:
     state: GO
-    evidence: "11 compatibility tests and 143 legacy Cell tests pass through rosy-palletizing 0.1.0 installed wheel; exact Job mapping, transfer pairing, ledger markers, and mutation rejection verified"
+    evidence: "11 compatibility tests and 143 legacy Cell tests pass through rosy-palletizing 0.1.0 installed wheel; API mapping 7, architecture 81/1 skipped, and quick tier 95 pass; known-failure comparisons 0 new/0 known"
     cmd: "python -m pytest test/test_platform_palletizing_compat.py -q; python -m pytest src/site/cell/test -q"
   LOCAL:
     state: N/A
