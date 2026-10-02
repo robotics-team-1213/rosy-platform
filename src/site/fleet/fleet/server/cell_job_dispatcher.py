@@ -2,6 +2,7 @@
 
 from datetime import datetime, timedelta, timezone
 import uuid
+import logging
 from typing import Any, Callable, Mapping
 
 from core_common.protocol.schemas import FleetCellTransferGrant
@@ -11,6 +12,8 @@ from .local_action_transport import DeviceActionTransport, LocalActionRejected
 from .mission_store import MissionConflict
 from .task_store import FleetTaskStore
 
+_LOG = logging.getLogger(__name__)
+
 
 class CellJobDispatcher:
     """Persist one grant before send; never re-submit an unresolved transfer."""
@@ -18,7 +21,8 @@ class CellJobDispatcher:
     def __init__(self, store: CellJobStore, tasks: FleetTaskStore,
                  transport: DeviceActionTransport, instances: Mapping[str, str], *,
                  config_revisions: Mapping[str, str], grant_ttl_s: float = 15.0,
-                 now: Callable[[], datetime] | None = None) -> None:
+                 now: Callable[[], datetime] | None = None,
+                 on_action_terminal: Callable[[str], object] | None = None) -> None:
         if not instances or len(set(instances.values())) != len(instances):
             raise ValueError("Cell dispatcher requires distinct configured OMX instances")
         if set(config_revisions) != set(instances) or any(
@@ -35,6 +39,7 @@ class CellJobDispatcher:
         self.now = now or (lambda: datetime.now(timezone.utc))
         self.grant_ttl_s = float(grant_ttl_s)
         self.last_mission = None
+        self.on_action_terminal = on_action_terminal
         self.store.recover_after_startup()
 
     def dispatch_next(self) -> dict[str, Any] | None:
@@ -139,6 +144,13 @@ class CellJobDispatcher:
         row = self.store.record_action_receipt(grant.mission_id, step_index=grant.cell_transfer.step_index,
                                                receipt=receipt)
         step = row["steps"][grant.cell_transfer.step_index]
+        if step["result"]["state"] == "SUCCEEDED" and self.on_action_terminal is not None:
+            try:
+                completed = self.on_action_terminal(grant.mission_id)
+                if completed is not None:
+                    row = completed
+            except Exception:
+                _LOG.warning("Cell goal callback failed; durable Action receipt retained")
         state = row["status"]
         if state == "RUNNING":
             state = step["result"]["state"]

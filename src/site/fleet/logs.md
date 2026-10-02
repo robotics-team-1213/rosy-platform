@@ -1418,3 +1418,15 @@
 - Change: verify the internal Cell evidence checkpoint before local integration; no gate promotion.
 - Evidence: quick tier 96 passed/24 existing freshness warnings; harness lint 0 errors/24 existing freshness warnings; focused Cell service/store/dispatcher 48 passed, registry 10 passed and independent review 44 passed. Full Fleet regression is still running at commit preparation and is not claimed as passed.
 - Gate: SOURCE/LOCAL only. Public ingress, app callback, independent evaluator and ROS-SIM remain open.
+
+
+## 2026-10-03 · uncommitted · feat(fleet): compose public Cell goal producer ingress
+- Change: Add opt-in pinned Cell registry and strict shared HTTP ingress; wire pending goal reconciliation into the existing Cell dispatcher. Preserve durable successful Action receipts when goal callback validation/storage fails. Isolate credentials, reject whitespace/control credentials, confirm ordered goals through the actual proposal/admission HTTP surface and release claims only after final completion. Move the evidence contract to foundation without a Fleet duplicate.
+- Evidence: App/service/registry/legacy checks 110 passed; final API/registry/legacy/version-document checks 64 passed; independent final review 25 passed; changed Python passes flake8. Prior 778f5029 full Fleet shards yielded 1498 passed/7 skipped with one Hub startup timeout, which passed isolated on unchanged main (1 passed in 9.25s); new public-composition full regression and quick tier are running.
+- Gate: SOURCE/LOCAL only. Actual OMX provider, independent Gazebo evaluator, canonical two-ledger Cell replay and ROS-SIM remain open. Default dispatch remains disabled.
+
+
+## 2026-10-03 · uncommitted · verify(fleet): public Cell ingress regression
+- Change: verify the final public Cell producer composition before local integration; no gate promotion.
+- Evidence: final full Fleet regression in four file shards 1514 passed/7 skipped, all four process exit codes 0, with no retries on the final public code. Foundation/protocol alignment 427 passed/1 skipped; app/service/registry/legacy checks 110 passed, final API/registry/legacy/version checks 64 passed, independent final review 25 passed. Quick tier 96 passed/24 existing freshness warnings; record contracts 3 passed; harness lint 0 errors/24 existing freshness warnings. Changed Python passes flake8.
+- Gate: SOURCE/LOCAL only. Canonical two-ledger Cell replay, actual OMX owner/provider composition, independent model/gripper evaluation and ROS-SIM remain open.

@@ -191,8 +191,12 @@ SIZE_VERDICTS = {
         "2026-10-01 at 887 after idempotent per-attempt phase projection joined the Mission event transaction",
     ),
     "contracts/foundation/core_common/protocol/schemas.py": (
-        1_244,
+        1_245,
         "accept: the D-18 single contract source — every envelope, event and capability model in one "
+        "importable place; re-judged 2026-10-03 at 1240 for the D-413 public CellGoalEvidenceSubmission "
+        "re-export, then at 1245 after combining main's D-422 body-stop fields with that one-line export. "
+        "re-export. Bounded Cell models live in protocol/cell_goal_evidence.py, with no runtime ownership "
+        "or new version pin; the existing zero-growth allowance remains unchanged. "
         "importable place; per-domain schema files would fork the version pin that "
         "test_protocol_version_alignment guards. Re-judged 2026-09-30 at 1000 lines after the bounded "
         "Mission feedback scope/context/tool-result contracts were added; re-judged 2026-09-30 at 1001 "
@@ -303,7 +307,7 @@ SIZE_VERDICTS = {
         "nudge checks, watched turn, mission_config); same verdict",
     ),
     "control": (
-        42_951,
+        43_055,
         f"split: deploy closure needs only sensing + safety provider (P1a); {CONTROL_SPLIT} "
         "(re-judged 2026-09-30 at 33090 after D-356 added the ROS-free learned perception backend "
         "(sensing/perception/learned), the shadow node and the recording CLI; the learned backend sits "
@@ -362,7 +366,9 @@ SIZE_VERDICTS = {
         "(orphan-writer recovery, off-timer hashing, reserve and disk floor in control/pilot_recording.py, "
         "the camera's dead-recorder check) — same subjects, verdict unchanged; re-judged 2026-10-03 at "
         "42784 when D-411 A landed on main beside D-395 rev. 11 (reference-square NMS, lidar self-beam "
-        "drop, learned lane component filter) — same subjects, verdict unchanged; re-judged 2026-10-03 at 42951 with D-424 (the bumper's pure scan_geometry "
+        "drop, learned lane component filter) — same subjects, verdict unchanged;"
+        "re-judged 2026-10-03 at 42888 for the D-408 paint CPU follow-up (learned mask area filter, mask-only inference, paint cadence in learned/paint_worker.py) — same subjects inside sensing/perception, verdict unchanged; "
+        "re-judged 2026-10-03 at 43055 with D-424 (the bumper's pure scan_geometry "
         "and strip_ranges in control/lidar_guard.py, the shared-body delegation in sensing/body.py, "
         "legacy-envelope lifting in calibration_profile.py) — same subjects, verdict unchanged)",
     ),

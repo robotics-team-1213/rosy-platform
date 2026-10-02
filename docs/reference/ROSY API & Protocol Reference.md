@@ -2,7 +2,7 @@
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.84
+**Version:** v1.85
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -1879,10 +1879,66 @@ stop, gripper, placement, or hardware acceptance unless the trusted producer
 supplies the corresponding separately sourced evidence. SOURCE/LOCAL tests use
 fake credentials and clocks; device and field acceptance remain separate gates.
 
+## 10.17 Cell goal-evidence producer contract (D-413)
+
+Exposed only when the existing Fleet app is composed with `cell_goal_registry`
+and a persistent Cell Job compiler/API. Dispatch remains a separate explicit
+opt-in. There is one Cell journal and one existing site dispatch worker.
+
+| Method | Path | Credential | Body |
+|---|---|---|---|
+| POST | `/api/fleet/cell-goal-evidence` | `X-Goal-Evidence-Token` | `CellGoalEvidenceSubmission`: `{ "mission_id": "...", "evidence": {...} }` |
+
+The shared strict contract is `core_common.protocol.cell_goal_evidence`, exposed
+through `core_common.protocol.schemas.CellGoalEvidenceSubmission`. All fields
+are required; additional fields, Boolean step indices, nonfinite numbers and
+whitespace/control characters in identifiers are rejected. The evidence includes:
+
+| Fields | Meaning |
+|---|---|
+| `producer_id`, `evidence_id`, `evidence_source`, `evaluator_revision` | Registered producer, immutable evidence identity, literal `sim_model_pose`, pinned evaluator revision. |
+| `job_id`, `step_id`, `step_index`, `action_id`, `attempt_id`, `request_digest`, `recipe_sha256`, `cell_sha256` | Exact persisted canonical CELL_TRANSFER grant and ordered step. Digests are lowercase 64-character SHA-256 values. |
+| `model_id` | Attempt model identity: `cell_` followed by the saved Action ID. The independent evaluator must bind that model to the physical item and pinned recipe/cell. |
+| `observation_id`, `observation_digest`, `evidence_revision`, `observed_at`, `model_pose_base` | Final independent model observation, provenance and robot-base pose. |
+| `initial_observation_id`, `initial_observation_digest`, `initial_observed_at`, `initial_model_pose_base` | Initial independent observation after grant issuance and before terminal success. |
+| `gripper_state`, `gripper_evidence_id`, `gripper_evidence_revision`, `gripper_observed_at` | Separately sourced post-terminal gripper `OPEN` readback. |
+| `satisfied` | Strict Boolean placement attestation from the pinned evaluator; only `true` can advance a step. |
+
+Both poses require finite `x_m`, `y_m`, `z_m`, `roll_rad`, `pitch_rad`, `yaw_rad`.
+Observation timestamps are nonnegative epoch seconds. The read-only YAML registry
+pins producer/workcell/instance/recipe/cell/evaluator identities, `max_age_s`
+(positive, at most 60 seconds), timezone-aware `valid_until`, and environment-only
+`token_env`. Producer credentials must differ from user, robot, discovery,
+Vision, pairing, policy and legacy goal producer credentials. They cannot propose,
+admit, rearm or dispatch a Job.
+
+The service matches evidence to the saved grant, checks registry scope/expiry and
+freshness using server receipt time, and requires final model and gripper samples
+after the local terminal success. Evidence received before terminal readback stays
+`PENDING_ACTION_TERMINAL`; the composed dispatcher revalidates it after recording
+the exact successful receipt. Rejected pending evidence retains the successful
+Action record and claims. Placement geometry belongs to the pinned independent
+evaluator, rather than Fleet journal arithmetic.
+
+Already available invalid/preterminal evidence is rejected before persistence.
+Accepted evidence IDs are immutable and replay identical content idempotently.
+Completion rechecks the exact latest terminal event ID inside its SQLite
+transaction. A concurrent newer terminal cannot complete a step using older
+samples. Intermediate completion returns `READY` or `HOLD` depending on the live
+site fence; only every ordered goal confirmed releases claims and returns
+`GOAL_CONFIRMED`. Goal confirmation never rearms dispatch. Errors include `401
+PRODUCER_UNAUTHORIZED`, `404 MISSION_NOT_FOUND`, `409` scope/conflict/invalid-evidence
+codes, and `422` strict envelope validation errors. Responses never include tokens.
+
+This contract and host tests establish SOURCE/LOCAL composition. Independent
+Gazebo placement evaluation, the actual OMX owner/provider and ROS-SIM, device
+and field acceptance require their own evidence.
+
 # 11. 변경 이력
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.85 | 2026-10-03 | Additive (D-413): opt-in independent Cell goal-evidence ingress, shared strict submission schema, isolated producer credentials and terminal callback reconciliation with atomic latest-terminal fencing. No physical dispatch or ROS-SIM promotion. |
 | v1.84 | 2026-10-03 | Additive (D-422, feat/body-referenced-obstacle-stop): `GET /api/v1/line-follow` 상태에 선택 필드 `body_gap_m`·`stop_gap_m`·`clearance_source`(`lidar`·`memory`·`ultrasonic`), `nav.line_obstacle_hold` 데이터에 같은 세 필드(몸 기준 정지일 때만). 몸 기준 정지에서 `clearance_m` 은 LiDAR 원점 거리가 아니라 몸 간격이다(path + 로봇 패키지 몸 기하에서만; sector 와 몸 기하 없는 path 는 그대로). 설정 `line_follow.body_front_x_m`·`body_ultrasonic_x_m`(URDF, 로봇 패키지), `obstacle_body_margin_m`(0.02)·`obstacle_latency_s`(0.15)·`obstacle_decel_mps2`(0.5)·`obstacle_resume_hysteresis_m`(0.03)·`obstacle_ultrasonic_half_angle_deg`(15)·`obstacle_ultrasonic_stale_s`(0.3). `obstacle_stop_m`·`obstacle_resume_m` 은 기본 yaml 에서 빠지고(비면 0.20 / 0.28 또는 유도) LiDAR 원점 기준 덮어쓰기로 남는다 — 옛 overlay 는 그대로 읽힌다. 덮어쓰기는 앞으로 가는 판정에만 쓰고 제자리 회전(회전 반경 원 밖 `obstacle_body_margin_m`)에는 쓰지 않는다. 움직이는 판정의 `stop_gap_m` 은 초음파와 상관없이 LiDAR `range_min` 사각 하한 이상이고, `range_min` 아래로 사라진 반환은 기억해 `body_gap_m` 에 계속 든다(`clearance_source: memory`; 기억은 바퀴로 나간 명령으로 적분하고 차선 추종 출력이 아니면 지운다). 기존 필드 이름·형식 변화 없음 |
 | v1.83 | 2026-10-03 | Additive (D-411 A, feat/d411-pilot-recording-controls): §5.10 Pilot 로봇 녹화 (`GET/POST /api/v1/recordings`, `GET /recordings/active`, `POST /recordings/active/stop`, `GET /recordings/{id}/archive`), ERR-102 `RECORDING_BUSY`·`RECORDING_NOT_ACTIVE`·`ROBOT_MOVING`·`RECORDING_NOT_FOUND`·`RECORDING_QUOTA_FULL`·`RECORDING_DISK_FULL`·`RECORDER_UNAVAILABLE`, §8 `recording.started`·`recording.stopped`, ROS 증거 토픽 `teleop/intent`, 녹화기 상태 `boot_id`·`seq`, 설정 `recording.pilot_root`. 기존 필드 변화 없음 |
 | v1.82 | 2026-10-03 | Clarify (D-403 / D-413): Fleet uses existing UDS v2 for phased CELL_TRANSFER submission, readback and cancellation; missing phase summaries fail closed. OMX already accepts the additive grant in v2. Simulation dispatch gates and independent goal requirements remain unchanged. |

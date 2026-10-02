@@ -74,8 +74,8 @@
 
 ## 최근 기록
 
+- 2026-10-03 · uncommitted · verify(fleet): public Cell ingress regression
+- 2026-10-03 · uncommitted · feat(fleet): compose public Cell goal producer ingress
 - 2026-10-03 · uncommitted · verify(fleet): registered Cell evidence checkpoint
 - 2026-10-03 · uncommitted · feat(fleet): validate registered Cell goal evidence
 - 2026-10-03 · uncommitted · fix(fleet): require durable Cell success for goal recovery
-- 2026-10-03 · uncommitted · feat(fleet): dispatch admitted ordered Cell transfers
-- 2026-10-03 · uncommitted · fix(fleet): preserve Cell transfer phase receipts over UDS v2
