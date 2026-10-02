@@ -497,9 +497,12 @@ def test_a_failing_action_does_not_break_the_tick():
 # --- D-419 round 3: the real FleetAgent session driving a real monitor ------
 
 
-def _agent_rig(hub, *, period=0.05, reply=0.15, slack=0.05, timeout=0.6):
+def _agent_rig(hub, *, period=0.1, reply=0.8, slack=0.1, timeout=1.5):
     """A real FleetAgent (scaled heartbeat period, reply deadline, slack) feeding a real
-    FleetLossMonitor on the real monotonic clock — the agent's own `last_rx` clock."""
+    FleetLossMonitor on the real monotonic clock — the agent's own `last_rx` clock.
+
+    Same order as production (period < reply deadline < freshness < judging time; here
+    freshness 1.0 s, timeout 1.5 s), with margins wide enough for a saturated CI host."""
     import time
     from types import SimpleNamespace
 
@@ -539,19 +542,19 @@ async def _tick_for(rig, seconds, step=0.02, until=None):
 
 
 def test_real_agent_session_slow_but_healthy_hub_never_stops():
-    """Replies land under the reply deadline (0.35 of 0.50 s). The 150 ms of headroom is
+    """Replies land well under the reply deadline (0.35 of 0.80 s). The headroom is
     deliberate: a loaded Windows run (the full suite beside other sessions) stalled the
-    loop past an 80 ms margin, which is test jitter, not a link loss. No STOP."""
+    loop past smaller margins, which is test jitter, not a link loss. No STOP."""
     import asyncio
     from fleet_hub_fake import FakeHub
 
     hub = FakeHub(delay=0.35)
-    agent, rig = _agent_rig(hub, reply=0.50, timeout=1.0)
+    agent, rig = _agent_rig(hub)
     rig.fleet_goal()
 
     async def run():
         serve = asyncio.create_task(agent._serve(hub))
-        await _tick_for(rig, 1.2)
+        await _tick_for(rig, 2.0)
         connected = agent.connected
         agent.enabled = False
         hub._abort()
@@ -567,20 +570,20 @@ def test_real_agent_session_silent_hub_stops_at_last_rx_plus_timeout():
     from fleet_hub_fake import FakeHub
 
     hub = FakeHub(delay=0.02)
-    agent, rig = _agent_rig(hub, timeout=0.6)
+    agent, rig = _agent_rig(hub)
     rig.fleet_goal()
 
     async def run():
         serve = asyncio.create_task(agent._serve(hub))
         await _tick_for(rig, 0.5)
         hub.answer_heartbeats = False                    # the hub falls silent
-        fired_at = await _tick_for(rig, 2.0, until=lambda: rig.executor.cancelled > 0)
-        await asyncio.wait_for(serve, timeout=1.0)        # the deadline aborted it
+        fired_at = await _tick_for(rig, 3.0, until=lambda: rig.executor.cancelled > 0)
+        await asyncio.wait_for(serve, timeout=2.0)        # the deadline aborted it
         return fired_at
     fired_at = asyncio.run(run())
     assert fired_at is not None and hub.aborted
     after_last_rx = fired_at - agent.last_rx
-    assert 0.6 <= after_last_rx < 0.6 + 0.25, after_last_rx   # tick 20 ms + load jitter
+    assert 1.5 <= after_last_rx < 1.5 + 0.6, after_last_rx    # tick 20 ms + load jitter
     assert rig.events.last("safety.fleet_lost")["applied"] == "STOP"
 
 
@@ -596,7 +599,7 @@ def test_real_agent_session_degraded_hub_error_never_stops():
 
     async def run():
         serve = asyncio.create_task(agent._serve(hub))
-        await _tick_for(rig, 1.0)
+        await _tick_for(rig, 1.5)
         connected = agent.connected
         agent.enabled = False
         hub._abort()

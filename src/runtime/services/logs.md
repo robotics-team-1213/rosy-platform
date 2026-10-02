@@ -429,3 +429,8 @@
 - 증거: `test_fleet_agent_link.py` 35 passed ×3.
 - 열린 D-407 후속(고치지 않음): 일시 오류로 거부되어 `_refuse_event` 가 버퍼 앞에 다시 넣은 이벤트는, 그 사이 세션이 끊기고 재접속 WELCOME 의 `last_event_seq` 가 그보다 큰 seq 를 가리키면(뒤 이벤트는 저장됨) `_session` 의 seq 필터(`e.seq > last_event_seq`)에 걸려 조용히 사라진다. 제안: 재전송 대기 이벤트를 seq 필터에서 면제되는 별도 재시도 목록에 두기(허브는 event_id 로 중복을 걸러 다시 보내도 안전).
 - gate 변화: 없음.
+
+## 2026-10-03 · uncommitted · test(fleet_agent): D-419 시험 시간 여유 — 포화된 호스트
+- 변경: 시험만. 100 % CPU 호스트에서 시간 여유가 모자라 떨어지던 시험을 넓혔다(논리 실패는 없었다). `test_fleet_loss.py` `_agent_rig` 기본값을 주기 0.1·답 시한 0.8·여유 0.1(신선도 1.0)·판정 1.5 s 로(주기 < 답 시한 < 신선도 < 판정 순서 유지), 느린 허브 2.0 s·degraded 1.5 s 관찰, 침묵 허브 발화 구간 1.5 ≤ t < 2.1 s. `test_fleet_agent_link.py`: degraded 허브 답 시한 1.0 s·`answered >= STABLE_HEARTBEATS`, 밀린 이벤트 시험 답 시한 1.0 s(상한 최악 ~0.23 s, 상한 없으면 200×0.025 = 5 s — 상한을 풀면 여전히 실패함을 확인), `timeouts` → `within_cap`.
+- 증거: 아래 커밋 메시지·보고의 3 회 실행.
+- gate 변화: 없음.

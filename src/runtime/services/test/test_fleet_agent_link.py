@@ -152,7 +152,7 @@ def test_degraded_hub_error_keeps_the_link(fast, caplog):
     ERROR TASK_PROJECTION_UNAVAILABLE. That is an answer: no abort, still connected, the
     session counts as stable, and the warning is rate-limited."""
     agent = _agent()
-    agent.reply_timeout_s = 0.4              # generous: Windows timer granularity ~16 ms
+    agent.reply_timeout_s = 1.0              # generous: a saturated host stalls the loop
     hub = FakeHub(heartbeat_error="TASK_PROJECTION_UNAVAILABLE", delay=0.02)
 
     async def run():
@@ -165,7 +165,7 @@ def test_degraded_hub_error_keeps_the_link(fast, caplog):
         return seen, stable
     with caplog.at_level(logging.WARNING, logger="fleet_agent"):
         connected, stable = asyncio.run(run())
-    assert connected is True and hub.answered >= 5
+    assert connected is True and hub.answered >= agent_mod.STABLE_HEARTBEATS
     assert stable is True                    # >= STABLE_HEARTBEATS answers
     degraded = [r for r in caplog.records if "TASK_PROJECTION_UNAVAILABLE" in r.getMessage()]
     assert len(degraded) == 1
@@ -658,10 +658,10 @@ def test_event_backlog_does_not_starve_the_heartbeat(fast):
     MAX_EVENTS_IN_FLIGHT unanswered events every heartbeat is answered in time and the
     backlog still arrives complete and in order."""
     agent = _agent()
-    agent.reply_timeout_s = 0.3
-    hub = FakeHub(service_s=0.025)            # ~ reply deadline / 12 per reply
+    agent.reply_timeout_s = 1.0               # capped worst case ~0.23 s; uncapped ~5 s
+    hub = FakeHub(service_s=0.025)            # one durable commit per reply
     agent._event_buffer.extend(_event(i) for i in range(200))
-    timeouts = []
+    within_cap = []
 
     async def run():
         serve = asyncio.create_task(agent._serve(hub))
@@ -669,14 +669,14 @@ def test_event_backlog_does_not_starve_the_heartbeat(fast):
             await asyncio.sleep(0.05)
             if not agent._event_buffer and not agent._awaiting or serve.done():
                 break
-            timeouts.append(agent._events_in_flight() <= agent_mod.MAX_EVENTS_IN_FLIGHT)
+            within_cap.append(agent._events_in_flight() <= agent_mod.MAX_EVENTS_IN_FLIGHT)
         seen = agent.connected, serve.done()
         agent.enabled = False
         hub._abort()
         await serve
         return seen
     connected, ended = asyncio.run(run())
-    assert connected is True and ended is False and all(timeouts)
+    assert connected is True and ended is False and all(within_cap)
     assert [p["seq"] for p in hub.events_sent()] == list(range(200))
     assert agent._answered >= 3
 
