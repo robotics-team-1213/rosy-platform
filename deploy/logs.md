@@ -1991,3 +1991,16 @@
 - 근거: CI 실행 36959800081 대조 WSL 재현(윈도는 skip/DrvFS로 증거 불가).
 - gate 변화: 없음.
 - 최종 증거: WSL — jpeg_relay 14 passed, auto_update timeout 시험 passed, mode-drift passed; module_separation 7 passed(윈도).
+
+## 2026-10-02 · 7f0bc0af · feat(native): D-418 로봇 SSH 접속 — root 도우미, 단위, 이미지 층, 기기 쌍둥이
+
+- 변경: root 도우미 `rosy-ssh-access.py`(표준 라이브러리만)를 추가했다. CORE의 `/run/rosy/ssh-access.request`를 엄격히 읽고 먼저 지운 뒤, 키 종류 허용 목록·본문 모양(ed25519 32바이트, ECDSA 곡선 크기의 비압축 점)·라벨 정규식·중복·32개 상한·`expires_days` 1..365·`minutes` 1..60을 CORE와 따로 다시 검사한다. `/var/lib/rosy/ssh/keys.json`이 기록이고 `authorized_keys`(0644, `expiry-time="YYYYMMDDHHMMZ" <type> <base64> rosy-managed:<label>`)는 매번 그 기록에서 원자적으로 다시 만든다. `history.jsonl`(0600)에 add·revoke·expire·password_on·password_off를 남긴다.
+- 변경: 임시 비밀번호는 `secrets`로 AP 비밀번호와 같은 31자 알파벳에서 `rosy-xxxx-xxxx-xxxx`로 만들고 `chpasswd -c SHA512`의 stdin으로 넣는다. `60-rosy-temp-password.conf`(사설 대역 `Match` → yes·`MaxAuthTries 3`, 그 밖 `Match User rosy` → no)를 쓰고 `sshd -t`가 받아야 `ssh.service`를 다시 읽힌다. 끄기는 `usermod -p '*'` 먼저, drop-in 삭제, reload 순서다. 비밀번호는 CORE가 한 번 읽고 지우는 응답 파일과 shadow 밖 어디에도 남지 않는다.
+- 변경: 단위 다섯 — `rosy-ssh-access.path`/`.service`(요청), `rosy-ssh-password-expire.timer`/`.service`(비밀번호가 켜진 동안만 30 s 검사, 도우미가 켜고 끈다), `rosy-ssh-access-boot.service`(sshd보다 먼저 비밀번호 끄기와 관리 키 drop-in 설치, 순서만 걸고 실패해도 sshd를 막지 않음). root, `ProtectSystem=true`(shadow 교체 파일이 `/etc`에 생긴다), 네트워크 없음, `CAP_CHOWN CAP_DAC_OVERRIDE CAP_FOWNER`. D-388 `UNITS`·`ENABLED_UNITS`, `build-native-payload.sh` cp 목록, `customize-rootfs.sh` enable 목록과 진입점 검사에 넣었다. `/etc/ssh`는 D-388 허용 경로 밖이라 `50-rosy-managed-keys.conf`(`Match User rosy` 안의 `AuthorizedKeysFile`)는 도우미가 설치·유지한다.
+- 변경: 기기 쌍둥이에 openssh-server(이미지처럼 `ssh.service`), D-418 단위, `twin-ssh-request`(HEAD의 CORE `ssh_handoff.py`를 rosy-core로 실행)와 시나리오 `ssh`를 넣었다.
+- 증거: `test/test_ssh_access.py` 99 passed 2 skipped(Windows), WSL Linux 101 passed(심볼릭 링크·POSIX 모드 포함). native systemd·이미지 사용자화·이미지 층 동기화·설치 배치 계약 통과. 변이 증명 41종 모두 빨강(처음 생존 4종 — 형식 머리·엄격 base64·길이 상한·`.pub` 한정 — 은 시험을 보강하고 ECDSA 점 모양을 정확히 해서 죽였고, 도달할 수 없게 된 길이 상한은 지웠다).
+- 증거: `python tools/device_twin/run_twin.py --scenario ssh` PASS 25/25(145 s) — 등록 키 접속, 회수 뒤 거부, 지난 `expiry-time` 거부와 정리, 비밀번호 접속·끄기 뒤 거부, 1분 만료를 타이머가 끔, 재부팅 뒤 비밀번호 꺼짐·키 유지, 비밀번호가 파일·로그·저널에 없음, `systemd-analyze verify` 무출력. drop-in의 `Match`는 본 설정으로 새지 않았다(root의 `AuthorizedKeysFile`은 기본값).
+- 미증명: 실기(Ubuntu 24.04 raspi 이미지). 로봇의 전역 `PasswordAuthentication`(cloud-init drop-in)과 `ssh.socket` 상태. 쌍둥이의 전역 값은 yes였고, 사설 대역 밖 rosy는 우리 drop-in이 no로 막는다. 부팅 정리 단위가 실패하면 타이머가 돌지 않으므로 비밀번호가 남을 수 있다(다음 요청이나 다음 부팅에서 꺼짐). LCD 표시는 하지 않았다(API 응답만).
+- gate 변화: 없음
+- 결정: D-418, D-161, D-388
+- 교훈: 모양 검사가 정확하면 길이 상한 같은 겹친 방어선은 변이 증명에서 살아남는다 — 살아남은 변이는 시험 구멍이거나 죽은 코드다.

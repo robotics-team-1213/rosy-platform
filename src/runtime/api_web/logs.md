@@ -330,3 +330,13 @@
 - 변경: 독립 리뷰(REQUEST CHANGES) 반영. `velocity_*`는 velocity 증거가 fresh일 때만 쓰고 아니면 둘 다 null(끊긴 오도메트리의 마지막 0.0은 멈춤이 아니다). `_number`가 NaN·Inf를 null로. `battery_percent`가 null이면 `battery_charging`도 null(도크 래치). 64자를 넘는 자유 문자열(`docking_state`, `line_follow_*`)은 null. 크기 시험은 64자 id 64행 최악 경우로 쓰고 root 읽기기로 읽어 결과를 단언한다. 안전·도킹은 변화 시에만 찍히므로 게이트하지 않는다.
 - 증거: test_host_status_summary.py 64 passed 1 skipped. gateway 1622 passed 1 failed(C6, 기존). api_web 73 passed, 루트 boot·systemd·architecture 363 passed. 변이 증명 14종(신규 6: 속도 무게이트, 증거 없음 통과, 유한 검사 제거, 충전 분리, 길이 상한 제거·off-by-one; 기존 7 재확인; 숫자 형 검사 제거) 모두 빨강.
 - gate 변화: 없음.
+
+## 2026-10-02 · 7f0bc0af · feat(api): D-418 로봇 SSH 접속 API, 계약 v1.80
+
+- 변경: `api/v1/host_ssh.py` — administrator 전용 `GET /host/ssh/host-keys`, `GET|POST /host/ssh/keys`, `DELETE /host/ssh/keys/{label}`, `GET|POST|DELETE /host/ssh/password`. 본문은 `schemas.py`의 `Ssh*`로 검사하고 어긋나면 422 `SSH_INVALID`(CORE 기본 400 `VALIDATION_ERROR`가 아니라 계약대로). `added_by`는 요청 토큰의 라벨(없으면 id). host key는 `/etc/ssh/ssh_host_*_key.pub`만 직접 읽는다.
+- 변경: `api/v1/ssh_handoff.py`(표준 라이브러리만) — 요청 파일을 쓰고 root `rosy-ssh-access`의 답을 최대 10 s 기다린다(설정으로 늘릴 수 없음). 답은 링크·FIFO 없이, 크기 상한, 같은 `request_id`, 허용 status·code일 때만 받고 읽자마자 지운다. 시간 안에 답이 없으면 요청을 거둬들이고 503 `SSH_ACCESS_UNAVAILABLE`. 요청 파일이 하나라 교환은 잠금으로 한 번에 하나.
+- 변경: `errors.py`에 `SSH_*` 여섯. API Reference §5.8과 ERR-102 행, v1.79 → v1.80(문서 머리, `app.py` 두 곳, `test_line_follow_contract_docs.py`). native systemd 계약의 CORE 쓰기·읽기 선언에 `/run/rosy/ssh-access.request`·`.response`, `/etc/ssh`.
+- 증거: `src/runtime/gateway/test/test_host_ssh.py` 36 passed — 실제 `rosy-ssh-access.py`(명령만 가짜)를 요청 파일이 생길 때마다 돌려 두 프로그램을 함께 지난다. 버전 정렬 시험 통과. 기기 쌍둥이 `ssh` 시나리오가 HEAD의 `ssh_handoff.py`를 rosy-core로 돌려 PASS.
+- gate 변화: 없음
+- 결정: D-418, D-18, D-347
+- 교훈: 없음
