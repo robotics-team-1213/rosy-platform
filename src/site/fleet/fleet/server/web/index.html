@@ -117,20 +117,21 @@
             <ui-button kind="quiet" id="formation-resume" type="button">재개</ui-button>
             <ui-button kind="quiet" id="formation-stop" type="button">해제</ui-button>
           </div>
-          <p class="hint" id="formation-detail">리더를 고르고 무장하면 나머지가 슬롯으로 따라붙습니다.</p>
+          <p class="hint" id="formation-detail" title="리더를 고르고 무장하면 나머지가 슬롯으로 따라붙습니다"></p>
         </div>
 
         <div class="signals" aria-labelledby="signals-heading">
           <div class="robot-head">
-            <h3 id="signals-heading">신호등</h3>
+            <h3 id="signals-heading" title="장치가 관제 접촉을 잃으면 스스로 적색 점멸(failsafe)로 들어가고, 콘솔이 마지막 명령을 한 번 다시 내립니다">신호등</h3>
             <span class="spacer"></span>
             <ui-tag id="signals-state" status="neutral">—</ui-tag>
           </div>
           <div id="signal-cards" class="signal-cards"></div>
-          <p class="hint" id="signals-hint">현장에 등록된 사이트 신호등입니다. 장치가 관제 접촉을 잃으면 스스로 적색 점멸(failsafe)로 들어가고, 콘솔이 마지막 명령을 한 번 다시 내립니다.</p>
+          <p class="hint" id="signals-hint" hidden></p>
         </div>
 
-        <div id="log" class="log" role="status" aria-live="polite" aria-label="최근 관제 이벤트">
+        <h3 id="log-heading" class="sr-only">기록</h3>
+        <div id="log" class="log" role="status" aria-live="polite" aria-labelledby="log-heading">
           <ui-empty>최근 이벤트가 없습니다 — 관제 요청과 연결 상태 변화가 여기에 표시됩니다.</ui-empty>
         </div>
 
@@ -148,7 +149,7 @@
     <section class="panel" aria-labelledby="map-heading">
       <div class="map-head">
         <div>
-          <h2 id="map-heading">현장 지도</h2>
+          <h2 id="map-heading" title="로봇 카드의 목표 지정을 누른 뒤 지도를 찍으면 그 로봇에게만 목표가 갑니다">현장 지도</h2>
         </div>
         <div class="spacer"></div>
         <span class="hint layer-hint" id="map-layer-hint" role="status" hidden></span>
@@ -173,7 +174,7 @@
         <span><i class="sw goal"></i>목표</span>
         <span id="legend-sighting" hidden><i class="sw sighting"></i>카메라 관측</span>
       </div>
-      <p class="hint" id="hint" aria-live="polite">로봇 카드의 <b>목표 지정</b>을 누른 뒤 지도를 찍으면 그 로봇에게만 목표가 갑니다.</p>
+      <p class="hint" id="hint" aria-live="polite" title="로봇 카드의 목표 지정을 누른 뒤 지도를 찍으면 그 로봇에게만 목표가 갑니다" hidden></p>
       <section class="vision-preview" aria-labelledby="vision-heading">
         <div class="map-head">
           <h2 id="vision-heading">관제 카메라</h2>

@@ -53,6 +53,8 @@ class Core:
                 return exc.code, json.loads(exc.read() or b"{}")
             except ValueError:
                 return exc.code, {}
+        except (urllib.error.URLError, OSError) as exc:   # timeout: outcome unknown, keep going
+            return 0, {"error": f"transport: {exc}"}
 
     def save_frame(self, path: Path) -> bool:
         """Front camera preview jpeg (GET /vision/front/status -> /frame?sequence=N)."""
@@ -69,6 +71,28 @@ class Core:
             return True
         except (urllib.error.URLError, OSError):
             return False
+
+
+class FleetWatch(threading.Thread):
+    """1 Hz: Fleet gather (/api/fleet/state feeds the stuck board) and the board itself."""
+
+    def __init__(self, fleet: Core, out: Path, t0: float) -> None:
+        super().__init__(daemon=True)
+        self.fleet, self.t0 = fleet, t0
+        self.log = open(out / "fleet.jsonl", "w", encoding="utf-8")
+        self.stop_flag = threading.Event()
+
+    def run(self) -> None:
+        while not self.stop_flag.is_set():
+            t = round(time.monotonic() - self.t0, 3)
+            code_s, state = self.fleet.call("GET", "/api/fleet/state")
+            robots = [{"robot_id": r.get("robot_id"), "online": r.get("online"),
+                       "line_stuck": r.get("line_stuck")} for r in state.get("robots", [])]
+            code_b, board = self.fleet.call("GET", "/api/fleet/line-stuck")
+            self.log.write(json.dumps({"t": t, "state_code": code_s, "robots": robots,
+                                       "board_code": code_b, "board": board}) + "\n")
+            self.log.flush()
+            self.stop_flag.wait(1.0)
 
 
 class Recorder(threading.Thread):
@@ -151,6 +175,11 @@ def run(args) -> int:
     t0 = time.monotonic()
     rec = Recorder(core, out, t0)
     rec.start()
+    fleet = watch = None
+    if args.fleet_base:
+        fleet = Core(args.fleet_base, args.fleet_token, args.fleet_token)
+        watch = FleetWatch(fleet, out, t0)
+        watch.start()
     answers_log = open(out / "answers.jsonl", "w", encoding="utf-8")
 
     def note(kind: str, **data) -> None:
@@ -210,9 +239,16 @@ def run(args) -> int:
                 sid, decision = previous_id or first_id, "WAIT"
             else:
                 sid, decision = current or first_id, token
-            code, body = core.call("POST", "/api/v1/line-follow/stuck/decision",
-                                   {"stuck_id": sid, "decision": decision})
+            if fleet is not None:
+                code, body = fleet.call(
+                    "POST", f"/api/fleet/robots/{args.robot_id}/line-stuck/decision",
+                    {"stuck_id": sid, "decision": decision}, timeout=10.0)
+                body = body.get("result") or body.get("detail") or body
+            else:
+                code, body = core.call("POST", "/api/v1/line-follow/stuck/decision",
+                                       {"stuck_id": sid, "decision": decision})
             note("answer", token=token, stuck_id=sid, decision=decision, code=code,
+                 via="fleet" if fleet is not None else "core",
                  outcome=body.get("outcome"), error=body.get("error") or body.get("code"),
                  message=body.get("message") or body.get("detail"),
                  stuck_after=body.get("stuck"), state=body.get("state"))
@@ -244,6 +280,11 @@ def run(args) -> int:
         code, body = core.call("POST", "/api/v1/safety/release", admin=True)
         note("estop_release", code=code, body=body)
     time.sleep(0.5)
+    if watch is not None:
+        time.sleep(1.5)   # one more gather so the board shows the closed stuck
+        watch.stop_flag.set()
+        watch.join(timeout=3)
+        watch.log.close()
     rec.stop_flag.set()
     rec.join(timeout=2)
     rec.log.close()
@@ -369,6 +410,9 @@ def main() -> int:
     r.add_argument("--act-delay", type=float, default=0.5,
                    help="wall s after the attempt event before acting (mid back-off)")
     r.add_argument("--tail-s", type=float, default=6.0)
+    r.add_argument("--fleet-base", help="Fleet console base URL: answer via the Fleet route")
+    r.add_argument("--fleet-token", default="d407-console")
+    r.add_argument("--robot-id", help="robot id in the Fleet robots.yaml")
     s = sub.add_parser("summary")
     s.add_argument("out")
     h = sub.add_parser("hub")
