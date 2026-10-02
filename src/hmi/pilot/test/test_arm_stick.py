@@ -122,3 +122,57 @@ await new Promise((r) => setTimeout(r, 0));
 console.log(JSON.stringify({ignored, after: sent.length, state: jog.state()}));
 """)
     assert out == {"ignored": 1, "after": 2, "state": {"pressed": True, "inFlight": True}}
+
+
+def test_limit_step_clamps_to_the_room_left_in_the_joint_range():
+    out = _run_js("""
+const r = {lower: -1, upper: 1};
+console.log(JSON.stringify([
+  m.limitStep({joint: 'j', delta: 0.05}, r, 0.98),
+  m.limitStep({joint: 'j', delta: -0.05}, r, -0.97),
+  m.limitStep({joint: 'j', delta: 0.05}, r, 0.9995),
+  m.limitStep({joint: 'j', delta: 0.05}, r, 1.2),
+  m.limitStep({joint: 'j', delta: -0.05}, r, 1.2),
+  m.limitStep({joint: 'j', delta: 0.05}, {lower: null, upper: null}, 5),
+  m.limitStep({joint: 'j', delta: 0.05}, r, undefined),
+  m.limitStep(null, r, 0),
+]))""")
+    assert out[0] == {"joint": "j", "delta": 0.02}
+    assert out[1] == {"joint": "j", "delta": -0.03}
+    assert out[2] is None and out[3] is None          # at/past the limit: nothing toward it
+    assert out[4] == {"joint": "j", "delta": -0.05}   # away from the limit is still allowed
+    assert out[5] == {"joint": "j", "delta": 0.05} and out[6] == {"joint": "j", "delta": 0.05}
+    assert out[7] is None
+
+
+def test_jogger_stops_at_the_joint_limit_instead_of_sending_a_refused_goal():
+    out = _run_js("""
+const sent = []; const pos = {joint1: 0.99};
+const jog = m.createArmJogger({submit: async (s) => { sent.push(s); return `c${sent.length}`; },
+  mapping: {x: 'joint1', y: 'joint2'}, maxStep: 0.05, limits: {joint1: {lower: -1, upper: 1}},
+  positionOf: (name) => pos[name]});
+jog.press({x: 1, y: 0});
+await new Promise((r) => setTimeout(r, 0));
+pos.joint1 = 1.0;
+jog.settled('SUCCEEDED', 'c1');
+await new Promise((r) => setTimeout(r, 0));
+console.log(JSON.stringify({deltas: sent.map((s) => s.delta), atLimit: jog.atLimit(), state: jog.state()}));
+""")
+    assert out == {"deltas": [0.01], "atLimit": True, "state": {"pressed": True, "inFlight": False}}
+
+
+def test_not_now_keeps_the_stick_pressed_and_poke_retries():
+    out = _run_js("""
+const sent = []; let ready = false;
+const jog = m.createArmJogger({submit: async (s) => { if (!ready) return null; sent.push(s); return 'c1'; },
+  mapping: {x: 'joint1', y: 'joint2'}, maxStep: 0.05});
+jog.press({x: 1, y: 0});
+await new Promise((r) => setTimeout(r, 0));
+const waiting = jog.state();
+ready = true;
+jog.poke();
+await new Promise((r) => setTimeout(r, 0));
+console.log(JSON.stringify({waiting, sent: sent.length, state: jog.state()}));
+""")
+    assert out == {"waiting": {"pressed": True, "inFlight": False}, "sent": 1,
+                   "state": {"pressed": True, "inFlight": True}}

@@ -11,7 +11,7 @@ import {createVisionPreview} from "../vision.js";
 import {driverFor} from "../drivers/registry.js";
 import {
   setStickInput, setPedal, setPivot, releaseAll, currentCommandSource, stickMap,
-  inputConfig, saveInputConfig, setServerLimits, currentLimits,
+  inputConfig, saveInputConfig, setServerLimits, currentLimits, setFineAllowed,
 } from "../input-state.js";
 import {mountInputs} from "./inputs.js";
 import {slewCommand} from "../stick.js";
@@ -32,6 +32,7 @@ const PRESET_LABEL = {low: "저", mid: "중", high: "고"};
 export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}) {
   const gate = driverFor("pinky_core");
   const profile = given ?? gate.profile ?? {};
+  setFineAllowed(profile.fine);
   const element = {};
   let engaged = false;
   // 이 화면이 실제로 MANUAL 을 잡았는가(engage 가 200). 잡은 적 없는 화면이 나가면서
@@ -269,7 +270,7 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
   const keys = {up: false, down: false, left: false, right: false, pivotLeft: false, pivotRight: false};
   const KEY_MAP = {ArrowUp: "up", KeyW: "up", ArrowDown: "down", KeyS: "down",
                    ArrowLeft: "left", KeyA: "left", ArrowRight: "right", KeyD: "right",
-                   KeyQ: "pivotLeft", KeyE: "pivotRight"};
+                   ...(profile.pivot !== false ? {KeyQ: "pivotLeft", KeyE: "pivotRight"} : {})};
   const onKey = (event) => {
     const key = KEY_MAP[event.code];
     if (!key) return;
@@ -304,7 +305,7 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
     if (!pad) return null;
     const lb = pad.buttons[4]?.pressed;
     const rb = pad.buttons[5]?.pressed;
-    if (lb !== rb) return {kind: "pivot", dir: lb ? 1 : -1};
+    if (profile.pivot !== false && lb !== rb) return {kind: "pivot", dir: lb ? 1 : -1};
     const x = pad.axes[0] ?? 0;
     const y = -(pad.axes[1] ?? 0);
     return x !== 0 || y !== 0 ? {kind: "pad", x, y} : null;
@@ -367,14 +368,25 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
   // --- CORE 수동 한도(프리셋의 기준) ------------------------------------------
   async function loadLimits() {
     const response = await apiGet("/api/v1/safety/state").catch(() => null);
-    if (response?.status === 200 && response.body?.limits) setServerLimits(response.body.limits);
+    if (response?.status === 200 && response.body?.limits) setServerLimits(withProfileLimits(response.body.limits));
     renderCap();
+  }
+  // D-411 B: the device's base_velocity carries the live manual limits; they cap the CORE
+  // safety limits read here (0 = drive announced but held at standstill — shown as such).
+  function withProfileLimits(limits) {
+    const capped = {...(limits ?? {})};
+    if (profile.max_linear != null) capped.manual_linear = Math.min(profile.max_linear, capped.manual_linear ?? Infinity);
+    if (profile.max_angular != null) capped.manual_angular = Math.min(profile.max_angular, capped.manual_angular ?? Infinity);
+    return capped;
   }
   function renderCap() {
     const limits = currentLimits();
-    element.cap.textContent =
-      `상한 ${limits.linear.toFixed(2)} m/s · ${Math.round(limits.angular * DEG)}°/s`;
+    const standstill = limits.linear === 0 && limits.angular === 0;
+    element.cap.dataset.standstill = String(standstill);
+    element.cap.textContent = standstill ? "정지로 제한됨 · 상한 0"
+      : `상한 ${limits.linear.toFixed(2)} m/s · ${Math.round(limits.angular * DEG)}°/s`;
   }
+  if (profile.max_linear != null || profile.max_angular != null) setServerLimits(withProfileLimits(null));
   loadLimits();
 
   // --- 로봇 상태 폴링: 실측 속도·회전율 ---------------------------------------
@@ -461,10 +473,10 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
       });
       row.append(button);
     }
-    element.fine.setAttribute("aria-pressed", String(Boolean(config.fine)));
+    element.fine?.setAttribute("aria-pressed", String(Boolean(config.fine)));
     renderCap();
   }
-  element.fine.addEventListener("click", () => {
+  element.fine?.addEventListener("click", () => {
     saveInputConfig({fine: !inputConfig().fine});
     renderInputs();
   });

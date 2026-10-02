@@ -21,10 +21,14 @@ export function fallbackPinkyControls(profile) {
            autonomy: [...(profile?.autonomy ?? [])]}];
 }
 
+// max_linear / max_angular are the live manual limits (0 = held at standstill); null when the
+// device did not announce them (legacy fallback).
 export function profileFromBaseVelocity(control) {
   const autonomy = Array.isArray(control?.autonomy) ? control.autonomy : [];
+  const cap = (value) => (typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : null);
   return {kind: "base", command: "velocity", pivot: control?.pivot !== false,
-          fine: control?.fine !== false, autonomy: autonomy.filter((mode) => KNOWN_AUTONOMY.has(mode))};
+          fine: control?.fine !== false, autonomy: autonomy.filter((mode) => KNOWN_AUTONOMY.has(mode)),
+          max_linear: cap(control?.max_linear), max_angular: cap(control?.max_angular)};
 }
 
 // SIM servers before v1.76 have no `controls`: the legacy screen jogged every joint and the

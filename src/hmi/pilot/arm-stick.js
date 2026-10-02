@@ -23,26 +23,49 @@ export function stepFor(axes, mapping, maxStep, deadzone = DEADZONE) {
   return delta === 0 ? null : {joint: mapping[axis], delta};
 }
 
-// `submit(step)` resolves to the accepted command id (truthy) or a falsy value / throws when
-// the goal was not accepted. `settled(state, commandId)` reports the goal's terminal state;
-// a settle naming another command (e.g. a button goal) is ignored.
-export function createArmJogger({submit, mapping, maxStep, deadzone = DEADZONE}) {
-  let pressed = false, inFlight = false, pending = null, axes = {x: 0, y: 0};
+// Below this a step is "at the limit": the owner would refuse a target outside the range.
+export const LIMIT_EPS_RAD = 0.001;
+
+// Clamp a step to the room left in the joint range ([lower - position, upper - position]).
+// Unknown range or position → unchanged (the owner still judges). Nothing left → null.
+export function limitStep(step, range, position) {
+  if (!step) return null;
+  const known = (v) => typeof v === "number" && Number.isFinite(v);
+  if (!range || !known(range.lower) || !known(range.upper) || !known(position)) return step;
+  const up = step.delta > 0;
+  const room = up ? range.upper - position : range.lower - position;
+  const allowed = up ? Math.min(step.delta, room) : Math.max(step.delta, room);
+  const delta = up ? Math.floor(allowed * 1e4) / 1e4 : Math.ceil(allowed * 1e4) / 1e4;
+  return Math.abs(delta) >= LIMIT_EPS_RAD && Math.sign(delta) === Math.sign(step.delta)
+    ? {...step, delta} : null;
+}
+
+// `submit(step)` resolves to the accepted command id (truthy); `null` = "not now" (a goal is
+// still running or the readback is not ready yet — `poke()` retries while pressed); any other
+// falsy value or a throw = refused, which stops the stick until it is pressed again.
+// `settled(state, commandId)` reports the goal's terminal state; a settle naming another
+// command (e.g. a button goal) is ignored. `limits`/`positionOf` clamp each step to the range.
+export function createArmJogger({submit, mapping, maxStep, deadzone = DEADZONE, limits = {}, positionOf = () => undefined}) {
+  let pressed = false, inFlight = false, pending = null, atLimit = false, axes = {x: 0, y: 0};
   async function pump() {
     if (!pressed || inFlight) return;
-    const step = stepFor(axes, mapping, maxStep, deadzone);
+    const raw = stepFor(axes, mapping, maxStep, deadzone);
+    const step = raw && limitStep(raw, limits[raw.joint], positionOf(raw.joint));
+    atLimit = Boolean(raw) && !step;
     if (!step) return;
     inFlight = true;
     pending = null;
-    let accepted = null;
-    try { accepted = await submit(step); } catch { accepted = null; }
+    let accepted = false;
+    try { accepted = await submit(step); } catch { accepted = false; }
+    if (accepted === null) { inFlight = false; return; }
     if (!accepted) { inFlight = false; pressed = false; return; }
     pending = typeof accepted === "string" ? accepted : null;
   }
   return {
     press(next) { pressed = true; axes = next; pump(); },
     move(next) { axes = next; pump(); },
-    release() { const was = inFlight; pressed = false; axes = {x: 0, y: 0}; return {inFlight: was}; },
+    poke() { pump(); },
+    release() { const was = inFlight; pressed = false; atLimit = false; axes = {x: 0, y: 0}; return {inFlight: was}; },
     settled(state, commandId) {
       if (!inFlight || (commandId && pending && commandId !== pending)) return;
       inFlight = false;
@@ -50,6 +73,7 @@ export function createArmJogger({submit, mapping, maxStep, deadzone = DEADZONE})
       if (state !== TERMINAL_OK) pressed = false;
       pump();
     },
+    atLimit: () => atLimit,
     state: () => ({pressed, inFlight}),
   };
 }

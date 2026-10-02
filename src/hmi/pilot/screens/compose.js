@@ -22,8 +22,17 @@ export function composeControls(root, items, widgets, context) {
       continue;
     }
     slot.setAttribute("aria-label", control.label || control.kind);
-    const dispose = widgets[control.kind](slot, control, context);
-    if (typeof dispose === "function") disposers.push(dispose);
+    try {
+      const dispose = widgets[control.kind](slot, control, context);
+      if (typeof dispose === "function") disposers.push(dispose);
+    } catch (error) {
+      // A descriptor this widget cannot draw (bad fields) is shown like an unknown kind.
+      console.warn("control widget failed", control.kind, error);
+      slot.replaceChildren();
+      slot.removeAttribute("aria-label");
+      slot.dataset.controlUnsupported = "";
+      slot.textContent = `그릴 수 없는 조작부 · ${control.label || control.kind}`;
+    }
   }
   return () => { disposers.forEach((dispose) => dispose()); root.replaceChildren(); };
 }

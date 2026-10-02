@@ -62,7 +62,8 @@ const items = m.fallbackPinkyControls({kind: 'base', command: 'velocity', pivot:
 console.log(JSON.stringify([items, m.profileFromBaseVelocity(items[0]),
   m.profileFromBaseVelocity({kind: 'base_velocity', pivot: false, fine: true, autonomy: []})]))""")
     assert out[0][0]["kind"] == "base_velocity"
-    assert out[1] == {"kind": "base", "command": "velocity", "pivot": True, "fine": True, "autonomy": ["line"]}
+    assert out[1] == {"kind": "base", "command": "velocity", "pivot": True, "fine": True, "autonomy": ["line"],
+                      "max_linear": None, "max_angular": None}
     assert out[2]["pivot"] is False and out[2]["autonomy"] == []
 
 
@@ -83,3 +84,11 @@ def test_omx_fallback_keeps_the_legacy_gripper_jog():
 def test_omx_fallback_lists_a_joint_once():
     out = _run_js("console.log(JSON.stringify(m.fallbackOmxControls({joints: ['joint1'], gripper: 'joint1'})))")
     assert [j["name"] for j in out[0]["joints"]] == ["joint1"]
+
+
+def test_profile_carries_the_announced_manual_limits():
+    out = _run_js("""console.log(JSON.stringify([
+      m.profileFromBaseVelocity({kind: 'base_velocity', max_linear: 0, max_angular: 0.6, pivot: true, fine: false}),
+      m.profileFromBaseVelocity(m.fallbackPinkyControls({pivot: true, fine: true})[0])]))""")
+    assert out[0]["max_linear"] == 0 and out[0]["max_angular"] == 0.6 and out[0]["fine"] is False
+    assert out[1]["max_linear"] is None and out[1]["max_angular"] is None

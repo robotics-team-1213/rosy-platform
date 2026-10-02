@@ -262,3 +262,8 @@
 - 증거: `python -m pytest src/hmi/pilot/test src/runtime/api_web/test/test_pilot_route.py src/products/omx/adapter/test -q` → 351 passed, 49 skipped; `ROSY_RUN_BROWSER_TESTS=1` `test_pilot_browser.py` + `test_pilot_sim_browser.py` → 45 passed (2026-10-02 Windows, Chromium; 새 시험: 미지 kind, 구 CORE 대체, autonomy 토글, 빈 목록, 조이스틱 순차·떼면 취소 없음, 축 재지정·방향키·버튼 대기, 390×844 가로 넘침 없음).
 - gate 변화: SOURCE 유지. ROS-SIM HOLD — OMX Gazebo 에서 조이스틱 미실행.
 - 결정: D-411 B, D-411 구현 부록 1·2·6.
+## 2026-10-02 · uncommitted · fix(pilot): D-411 B 리뷰 — 실제 SIM 소유자, 순차 조이스틱, 한계, 자리 잃음, 큰 스틱 잡기 구역
+- 변경: 실제 SIM 은 목표 실행 중 `ready:false`·`owner_state:"active"` 라 첫 목표 뒤 조이스틱이 막혔다 → "active" 는 바쁨(기다림)이지 보류가 아니고, 목표가 끝나면 `/state` 를 다시 읽어 준비된 새 sequence 로 다음 목표. 세션 단일 비행(`submitting`), 스틱을 잡는 동안 ± 비활성. 단계는 관절 한계 안으로 잘리고 남은 여유가 0.001 rad 미만이면 보내지 않는다(409 대신 "관절 한계"). 409 `joint_state_sequence_mismatch`(GET /state 와 POST 사이 새 /joint_states — Gazebo 17개 중 1개)는 새 readback 으로 한 번만 다시 보낸다. 자리 반납·잃음·숨김은 진행 목표를 UNKNOWN_HOLD 로 놓고 폴링을 멈추며, 자리를 잃으면 페어링을 다시 보인다; `/goals/{id}` 404 는 종결. 위젯이 던지면 "그릴 수 없는 조작부". 주행: `fine:false` 면 정밀 없음·저장값 무시, `pivot:false` 면 Q/E·LB/RB 도 끔, 알린 `max_linear/max_angular` 로 상한, 0 이면 "정지로 제한됨"(stick.js 가 0 을 기본값으로 바꾸던 결함 수정). aria id 정리, 상태 live region 은 바뀔 때만 씀. 휴대폰: 작은 영상 → 스틱 → readback. 손잡이 중립색, 라벨이 손잡이 위. 주행 스틱: 보이는 링은 그대로, 보이지 않는 잡기 구역(링 반지름 ~1.8 배, 오른쪽 칸 안으로 잘림 — 왼쪽 버튼·영상은 훔치지 않음, 가로 태블릿은 오른쪽 띠에서 스틱 위로 칸을 키움). SW 캐시 `2026-10-02-6`.
+- 증거: 아래 커밋 메시지와 보고의 실행 기록(2026-10-02 Windows, Chromium).
+- gate 변화: SOURCE 유지. ROS-SIM HOLD — 수정 뒤 OMX Gazebo 조이스틱 재실행 필요. DEVICE: 실 태블릿에서 잡기 구역 확인 필요.
+- 결정: D-411 B, 구현 부록 1.

@@ -20,6 +20,8 @@ export function mountArm(root, target, driver) {
   let previewUrl = "";
   let connectionGeneration = 0;
   let pollTimer = null;
+  let pollWanted = false;
+  let submitting = false;
   const listeners = new Set();
 
   root.innerHTML = `<header class="arm-head"><h2>OMX-AI Gazebo 연습</h2>
@@ -57,6 +59,9 @@ export function mountArm(root, target, driver) {
   const status = $("[data-sim-status]");
   const cancel = $("[data-sim-cancel]");
 
+  // The status line is a live region: write it only when the text changes (no re-announcing
+  // the same "명령 RUNNING" every 250 ms poll).
+  function setStatus(text) { if (status.textContent !== text) status.textContent = text; }
   function notify(update) {
     cancel.disabled = !active;
     if (active) cancel.removeAttribute("reason"); else cancel.setAttribute("reason", "진행 중 명령 없음");
@@ -66,16 +71,36 @@ export function mountArm(root, target, driver) {
     return driver.request(path, {token, ...options});
   }
   function showError(error) {
-    status.textContent = `조작 보류 · ${error.message}`;
+    setStatus(`조작 보류 · ${error.message}`);
     controls.querySelectorAll("[data-sim-widgets] ui-button, [data-sim-widgets] input").forEach((button) => {
       button.disabled = true;
       button.setAttribute("reason", "조작 보류");
     });
     notify({state: null, settled: null, error});
   }
+  // Drop the goal we were following (seat released or lost, tab hidden): its outcome is no
+  // longer ours to see, so widgets hear it as UNKNOWN_HOLD and stop.
+  function forget(error) {
+    clearTimeout(pollTimer);
+    pollTimer = null;
+    pollWanted = false;
+    const old = active;
+    active = "";
+    if (old) notify({state: null, settled: {commandId: old, state: "UNKNOWN_HOLD"}, error});
+  }
   function schedulePoll() {
     clearTimeout(pollTimer);
-    pollTimer = active && !disposed ? setTimeout(() => refresh({goalOnly: true}), GOAL_POLL_MS) : null;
+    pollTimer = (active || pollWanted) && seat && !disposed
+      ? setTimeout(() => refresh({goalOnly: true}), GOAL_POLL_MS) : null;
+  }
+  const goalStatus = (goal) => `명령 ${goal.state}${goal.reason ? ` · ${goal.reason}` : ""}`;
+  async function goalState(id) {
+    try { return await request(`/goals/${encodeURIComponent(id)}`); }
+    catch (error) {
+      // The server no longer knows the goal (restart, receipts dropped): it is settled for us.
+      if (/^404\b/.test(error.message)) return {state: "UNKNOWN_HOLD", reason: "goal_unknown"};
+      throw error;
+    }
   }
   async function connect() {
     if (disposed || document.hidden) return;
@@ -103,17 +128,29 @@ export function mountArm(root, target, driver) {
   async function refresh({goalOnly = false} = {}) {
     if (!seat || disposed || refreshing) return;
     refreshing = true;
+    pollWanted = false;
     let failed = false;
     try {
       state = await request("/state");
       if (disposed) return;
       let settled = null;
       if (active) {
-        const goal = await request(`/goals/${encodeURIComponent(active)}`);
-        if (disposed) return;
-        status.textContent = `명령 ${goal.state}${goal.reason ? ` · ${goal.reason}` : ""}`;
-        if (TERMINAL.includes(goal.state)) { settled = {commandId: active, state: goal.state}; active = ""; }
-      } else status.textContent = state.ready ? "조작 가능" : `조작 보류 · ${state.owner_state}`;
+        const following = active;
+        const goal = await goalState(following);
+        if (disposed || active !== following) return;
+        setStatus(goalStatus(goal));
+        if (TERMINAL.includes(goal.state)) {
+          settled = {commandId: following, state: goal.state};
+          active = "";
+          // The readback above was taken while the goal ran (ready:false, old sequence). The
+          // next goal needs a ready, freshly served sequence, so read it again now.
+          state = await request("/state");
+          if (disposed) return;
+        }
+      } else {
+        setStatus(state.ready ? "조작 가능"
+          : state.owner_state === "active" ? "명령 진행 중" : `조작 보류 · ${state.owner_state}`);
+      }
       $("[data-sim-readback]").textContent = JSON.stringify({sequence: state.state_sequence,
         age_ms: state.joint_age_ms, joints: state.positions, goal: active || null}, null, 2);
       notify({state, settled, error: null});
@@ -165,44 +202,79 @@ export function mountArm(root, target, driver) {
       $("[data-sim-record-status]").textContent = recordingError;
     }
   });
-  function release() {
+  function release(error = new Error("조작권을 반납했습니다")) {
     connectionGeneration++;
     const released = seat;
     seat = "";
     state = null;
+    forget(error);
     if (released) request(`/seat/${encodeURIComponent(released)}`, {method: "DELETE"}).catch(() => {});
   }
   function visibilityChanged() {
     if (document.hidden) {
-      release();
-      showError(new Error("화면이 숨겨져 조작권을 반납했습니다. 다시 연결하세요."));
+      const error = new Error("화면이 숨겨져 조작권을 반납했습니다. 다시 연결하세요.");
+      release(error);
+      showError(error);
       $("[data-sim-pair]").hidden = false;
     }
   }
   document.addEventListener("visibilitychange", visibilityChanged);
 
+  // Optimistic concurrency: the owner wants the exact current joint_state sequence, and a new
+  // /joint_states can land between GET /state and POST /goals. That one refusal is retried once
+  // with a fresh readback; every other refusal stops (D-411 B review).
+  const RETRYABLE = /joint_state_sequence_mismatch|readback_not_recently_served/;
+  async function postJog(name, delta, durationS) {
+    return request("/goals", {method: "POST", body: JSON.stringify({
+      instance_id: target.instance_id, seat_id: seat, request_id: crypto.randomUUID(),
+      joint: name, delta_rad: delta, duration_s: durationS,
+      state_sequence: state.state_sequence, expires_at_ms: Date.now() + 5000,
+    })});
+  }
+
   // What widgets see: the latest readback, one goal at a time, and terminal states.
   const session = {
     target,
     state: () => state,
-    busy: () => Boolean(active),
+    // Our goal in flight, a POST under way, or the owner still executing (ready:false, "active").
+    busy: () => Boolean(active) || submitting || state?.owner_state === "active",
     onUpdate(listener) { listeners.add(listener); return () => listeners.delete(listener); },
-    // Resolves to the accepted command id, or null when nothing was sent or it was refused.
+    // A widget waiting to send (stick held while busy) asks for the next readback soon.
+    requestPoll() { pollWanted = true; if (!refreshing) schedulePoll(); },
+    // Resolves to the accepted command id; null = not now (busy, readback not ready — retry on
+    // the next update); false = not sent or refused (stop).
     async submitJog(name, delta, durationS = 0.4) {
-      if (!seat || !state?.ready || active || !state.positions || !(name in state.positions)) return null;
+      if (!seat || disposed) return false;
+      if (session.busy() || !state?.ready) return null;
+      if (!state.positions || !(name in state.positions)) return false;
+      submitting = true;
+      notify({state, settled: null, error: null});
       try {
-        const goal = await request("/goals", {method: "POST", body: JSON.stringify({
-          instance_id: target.instance_id, seat_id: seat, request_id: crypto.randomUUID(),
-          joint: name, delta_rad: delta, duration_s: durationS,
-          state_sequence: state.state_sequence, expires_at_ms: Date.now() + 5000,
-        })});
-        if (disposed) return null;
+        let goal;
+        try { goal = await postJog(name, delta, durationS); }
+        catch (error) {
+          if (!RETRYABLE.test(error.message) || disposed || !seat) throw error;
+          state = await request("/state");
+          if (disposed || !seat) return false;
+          if (!state.ready) return null;
+          goal = await postJog(name, delta, durationS);
+        }
+        if (disposed || !seat) return false;
+        if (goal.state === "REJECTED" || goal.state === "UNKNOWN_HOLD") {
+          setStatus(goalStatus(goal));
+          return false;
+        }
         active = goal.command_id;
-        status.textContent = `명령 ${goal.state}`;
-        notify({state, settled: null, error: null});
-        if (!refreshing) schedulePoll();
+        setStatus(goalStatus(goal));
         return active;
-      } catch (error) { showError(error); return null; }
+      } catch (error) { showError(error); return false; }
+      finally {
+        submitting = false;
+        if (!disposed) {
+          notify({state, settled: null, error: null});
+          if (!refreshing) schedulePoll();
+        }
+      }
     },
     async submitGripper() { return null; },   // D-411 C
   };
@@ -217,8 +289,17 @@ export function mountArm(root, target, driver) {
   });
   const interval = setInterval(async () => {
     if (!seat || disposed || document.hidden) return;
-    try { await request(`/seat/${encodeURIComponent(seat)}`, {method: "PUT"}); await refresh(); }
-    catch (error) { seat = ""; showError(error); }
+    try { await request(`/seat/${encodeURIComponent(seat)}`, {method: "PUT"}); }
+    catch (error) {
+      // Seat lost (lease expired, taken over): stop following our goal and offer pairing again.
+      seat = "";
+      state = null;
+      forget(error);
+      showError(error);
+      $("[data-sim-pair]").hidden = false;
+      return;
+    }
+    await refresh();
   }, 1000);
   if (token) connect();
   return () => {

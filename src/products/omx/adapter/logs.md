@@ -251,3 +251,8 @@
 - 증거: `python -m pytest src/products/omx/adapter/test -q`, `test_pilot_sim_browser.py` 통과 (2026-10-02 Windows).
 - gate 변화: SOURCE 유지. ROS-SIM HOLD.
 - 결정: D-411 B. 실물 OMX 는 열지 않는다(D-390).
+## 2026-10-02 · uncommitted · test(pilot-sim): D-411 B 렌더 시험 런타임이 실제 소유자처럼 군다
+- 변경: `test_pilot_sim_browser.py` 가짜 런타임 — 실행 중 `ready:false`·`owner_state:"active"`·`active_goal`, 준비된 스냅샷이 준 sequence 만 받음, 한 번에 하나. 실제 SIM HTTP API 로 스틱을 잡은 채 3 개 이상 순차 목표, 거절 0 시험.
+- 증거: `ROSY_RUN_BROWSER_TESTS=1 python -m pytest src/products/omx/adapter/test/test_pilot_sim_browser.py -q` (2026-10-02 Windows).
+- gate 변화: SOURCE 유지. ROS-SIM HOLD.
+- 결정: D-411 B. 실물 OMX 는 열지 않는다(D-390).
