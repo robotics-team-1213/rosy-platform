@@ -954,6 +954,13 @@ def test_only_the_path_unit_and_the_boot_cleanup_start_the_ssh_helper():
 def test_the_boot_cleanup_runs_before_sshd_accepts_anyone():
     directives = _directives("rosy-ssh-access-boot.service")
     assert {"ssh.service", "ssh.socket"} <= set(_words(directives, "Before"))
+    # Ubuntu 24.04 enables ssh.socket (Before=sockets.target). With default dependencies this
+    # unit would be After=basic.target, itself after sockets.target: an ordering cycle that
+    # systemd breaks by dropping a job. So it is an early-boot unit, before sockets.target.
+    assert directives.get("DefaultDependencies") == ["no"]
+    assert _words(directives, "After") == ["local-fs.target"]
+    assert {"sockets.target", "shutdown.target"} <= set(_words(directives, "Before"))
+    assert _words(directives, "Conflicts") == ["shutdown.target"]
     assert directives.get("RemainAfterExit") == ["yes"]
     text = _read("rosy-ssh-access-boot.service")
     assert "WantedBy=multi-user.target" in text

@@ -45,7 +45,7 @@ def _wait(process: subprocess.Popen, timeout: float) -> object:
 
 
 class Scenarios:
-    ORDER = ["a", "b", "c", "d", "e", "f", "f2", "g", "h", "h3", "i", "j", "ssh"]
+    ORDER = ["a", "b", "c", "d", "e", "f", "f2", "g", "h", "h3", "i", "j", "ssh", "ssh_socket"]
 
     def __init__(self, build: Build) -> None:
         self.build = build
@@ -447,16 +447,25 @@ class Scenarios:
     # (ssh) --------------------------------------------------------------------------
     def ssh(self) -> None:
         """D-418 SSH access: enroll, log in, revoke, expired key, temporary password on/off/expiry, off after reboot."""
+        self._ssh_with_client(socket_only=False)
+
+    def ssh_socket(self) -> None:
+        """D-418 SSH access with ssh.socket activation only: no ordering cycle, sshd -t without /run/sshd, all of (ssh)."""
+        self._ssh_with_client(socket_only=True)
+
+    def _ssh_with_client(self, *, socket_only: bool) -> None:
         client = "rosy-twin-sshclient"
         run(["docker", "rm", "-f", client], check=False)
         run(["docker", "run", "-d", "--name", client, "--network", NET, IMAGE_BASE, "sleep", "infinity"])
         try:
-            self._ssh(client)
+            self._ssh(client, socket_only)
         finally:
             run(["docker", "rm", "-f", client], check=False)
 
-    def _ssh(self, client: str) -> None:
+    def _ssh(self, client: str, socket_only: bool) -> None:
         t = self.twin
+        # The robots (2026-10-02) run ssh.socket and ssh.service; Ubuntu 24.04's default is the socket alone.
+        listener = "ssh.socket" if socket_only else "ssh.service"
         ssh_opts = ("-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=5 "
                     "-o LogLevel=ERROR")
 
@@ -490,19 +499,67 @@ class Scenarios:
             return t.out(f"sshd -T -C user={user},host=client,addr={addr},laddr=10.0.0.2,lport=22 "
                          f"| grep -i '^{key} '", check=False)
 
+        def wait_listener() -> None:
+            deadline = time.monotonic() + 60
+            while t.x(f"systemctl is-active --quiet {listener}", check=False).returncode != 0 \
+                    and time.monotonic() < deadline:
+                time.sleep(1)
+
+        def boot_order_checks(when: str) -> None:
+            cycles = t.out("journalctl -b --no-pager | grep -i 'ordering cycle' || true", check=False)
+            self.r.check(f"{when}: no ordering cycle in this boot's journal", cycles == "", cycles)
+            done = t.x("systemd-analyze verify default.target", check=False)
+            text = (done.stdout + done.stderr).strip()
+            self.note(f"{when}: systemd-analyze verify default.target (exit {done.returncode})", text or "(no output)")
+            self.r.check(f"{when}: systemd-analyze verify default.target exits 0 and finds no cycle",
+                         done.returncode == 0 and "cycle" not in text.lower(), text[-600:])
+            stamps = {unit: int(t.out(f"systemctl show -p ActiveEnterTimestampMonotonic --value {unit}") or 0)
+                      for unit in ("rosy-ssh-access-boot.service", listener)}
+            self.r.check(f"{when}: the boot cleanup finished before {listener} accepted anyone",
+                         0 < stamps["rosy-ssh-access-boot.service"] <= stamps[listener], stamps)
+
+        if socket_only:
+            t.x("systemctl disable ssh.service && systemctl enable ssh.socket")
+            run(["docker", "restart", TWIN], timeout=180)
+            t.wait_runtime()
+            wait_listener()
+            self.ev("systemctl is-enabled ssh.socket ssh.service; systemctl is-active ssh.socket ssh.service; "
+                    "ls -ld /run/sshd")
+            # Nothing connected yet, so ssh.service (RuntimeDirectory=sshd) never ran.
+            missing = t.x("test -d /run/sshd", check=False).returncode != 0
+            early = request("password_on", {"minutes": 5})
+            self.r.check("socket only: with /run/sshd missing, sshd -t passes and the password goes on",
+                         missing and early.get("status") == 200, {"missing": missing, **early, "result": "(hidden)"})
+            self.r.check("socket only: and goes off again", request("password_off").get("status") == 204)
+            # Negative control: the boot unit's old default dependencies close the cycle with ssh.socket.
+            t.x("mkdir -p /run/systemd/system/rosy-ssh-access-boot.service.d && printf '[Unit]\\nDefaultDependencies=yes\\n'"
+                " > /run/systemd/system/rosy-ssh-access-boot.service.d/old.conf && systemctl daemon-reload")
+            control = t.x("systemd-analyze verify default.target", check=False)
+            control_text = (control.stdout + control.stderr).strip()
+            self.note("control: DefaultDependencies=yes, systemd-analyze verify default.target", control_text)
+            self.r.check("control: with default dependencies, verify finds the ordering cycle",
+                         "cycle" in control_text.lower(), control_text[-600:])
+            t.x("rm -rf /run/systemd/system/rosy-ssh-access-boot.service.d && systemctl daemon-reload")
+
         # Boot: the cleanup ran before sshd, the password is off, the keys drop-in is in place.
-        self.ev("systemctl is-active ssh.service rosy-ssh-access-boot.service rosy-ssh-access.path; "
+        self.ev(f"systemctl is-active {listener} rosy-ssh-access-boot.service rosy-ssh-access.path; "
                 "ls -l /etc/ssh/sshd_config.d/; getent shadow rosy | cut -d: -f2")
-        units = t.out("systemctl is-active ssh.service rosy-ssh-access-boot.service rosy-ssh-access.path",
+        units = t.out(f"systemctl is-active {listener} rosy-ssh-access-boot.service rosy-ssh-access.path",
                       check=False).split()
-        self.r.check("boot: ssh, the boot cleanup and the request watch are active", units == ["active"] * 3, units)
+        self.r.check(f"boot: {listener}, the boot cleanup and the request watch are active", units == ["active"] * 3,
+                     units)
+        boot_order_checks("boot")
         self.r.check("boot: rosy's shadow field is * and no password drop-in",
                      shadow() == "*" and not password_dropin(), shadow())
         self.r.check("sshd -t accepts the managed-keys drop-in", t.x("sshd -t", check=False).returncode == 0)
         rosy_files = sshd_says("rosy", "10.1.2.3", "authorizedkeysfile")
         root_files = sshd_says("root", "10.1.2.3", "authorizedkeysfile")
-        self.r.check("the managed file is read for rosy only", "/var/lib/rosy/ssh/authorized_keys" in rosy_files
+        self.r.check("the managed file is read for rosy only, beside the card's .ssh/authorized_keys",
+                     "/var/lib/rosy/ssh/authorized_keys" in rosy_files and ".ssh/authorized_keys " in rosy_files + " "
                      and "/var/lib/rosy/ssh" not in root_files, f"rosy: {rosy_files} | root: {root_files}")
+        self.r.check("cloud-init's global PasswordAuthentication no holds with no temporary password",
+                     sshd_says("rosy", "10.1.2.3", "passwordauthentication").endswith("no")
+                     and sshd_says("root", "10.1.2.3", "passwordauthentication").endswith("no"))
         self.ev("sshd -T -C user=root,host=client,addr=10.1.2.3,laddr=10.0.0.2,lport=22 "
                 "| grep -iE '^(subsystem|usepam|x11forwarding|printmotd|kbdinteractiveauthentication) '")
 
@@ -596,10 +653,8 @@ class Scenarios:
                      login_password(long_password) == 0 and login_key("k3") == 0)
         run(["docker", "restart", TWIN], timeout=180)
         t.wait_runtime()
-        deadline = time.monotonic() + 60
-        while t.x("systemctl is-active --quiet ssh.service", check=False).returncode != 0 \
-                and time.monotonic() < deadline:
-            time.sleep(1)
+        wait_listener()
+        boot_order_checks("after the reboot")
         last = (history() or [{}])[-1]
         self.r.check("after the reboot the password is off (shadow *, no drop-in, reason boot)",
                      shadow() == "*" and not password_dropin() and last.get("reason") == "boot", last)

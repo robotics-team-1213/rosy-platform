@@ -80,10 +80,13 @@ python3 -B /opt/rosy/native-runtime/native_release.py \
 # Enabled as on the image (customize-rootfs.sh), minus hardware units. The
 # auto-update timer stays disabled: scenarios start the service by hand.
 systemctl enable rosy-release-recover.service rosy-runtime.target rosy-first-boot.service
-# D-418: sshd as the image runs it (customize-rootfs.sh enables ssh.service, not
-# the socket), and the SSH access watch and boot cleanup the image enables.
-systemctl disable ssh.socket 2>/dev/null || true
-systemctl enable ssh.service rosy-ssh-access.path rosy-ssh-access-boot.service
+# D-418: sshd as the robots run it (read-only check 2026-10-02): Ubuntu 24.04's
+# ssh.socket and ssh.service both enabled, cloud-init's 50-cloud-init.conf
+# turning passwords off globally; plus the SSH access watch and boot cleanup.
+# The ssh_socket scenario switches to socket activation only.
+printf 'PasswordAuthentication no\n' > /etc/ssh/sshd_config.d/50-cloud-init.conf
+chmod 0600 /etc/ssh/sshd_config.d/50-cloud-init.conf
+systemctl enable ssh.socket ssh.service rosy-ssh-access.path rosy-ssh-access-boot.service
 # Container noise that has no robot counterpart.
 # systemd-udevd stays: sync-image-layer.py runs `udevadm control --reload`. The
 # container has its own network namespace, so it gets no host uevents; the
