@@ -138,6 +138,8 @@ line_follow:                       # D-143 selected-source, fail-closed policy
   # >= recovery_back_m and total |yaw| <= recovery_trail_yaw_deg. Else refused (rear_blind).
   recovery_trail_s: 5.0
   recovery_trail_yaw_deg: 10.0
+  recovery_trail_max_age_s: 30.0   # decision 2026-10-02: trail's last forward command at most this old
+                                   # at back-off start (standing still for the console counts)
   # Clarification 2026-10-02: a stuck re-opening within recovery_restuck_s of a `recovered`
   # close, or before recovery_restuck_m of net forward travel since, is the same stuck for
   # attempt counting (new stuck_id, restuck_of=<previous>, attempts carried).

@@ -360,3 +360,9 @@
 - 변경: recovered 뒤 `recovery_restuck_s`/`recovery_restuck_m` 안의 재막힘은 시도 수를 이어 받음(`restuck_of`), 뒤 띠 = URDF 몸 반폭 + 0.02 m, 거부·중단 사건에 scan 값, e-stop 닫힘 사유 `estop`. FleetAgent 는 실행 중인 루프가 없으면 시작을 미루고 API lifespan 에서 `start_on_loop()`(94a8b833).
 - 증거: `test_line_stuck_recovery.py`, `test_fleet_agent_loop.py` 초록.
 - gate 변화: 없음.
+
+## 2026-10-02 · 7e699e452 · fix(line_follow): D-407 지나온 길 유효 기간
+
+- 변경: 사각 띠 후진의 지나온 길은 마지막 전진 명령이 `recovery_trail_max_age_s`(30 s) 이내일 때만(관제 대기 포함). 시도·결과 사건에 `trail_age_s`.
+- 증거: `test_line_stuck_recovery.py`(29 s 허용, 31 s 거부, 사건에 trail_age_s), `test_line_follow_stuck.py`(관제 대기 중 만료).
+- gate 변화: 없음.

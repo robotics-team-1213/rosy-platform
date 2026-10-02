@@ -108,6 +108,8 @@ class LineFollowConfig:
     # recovery_trail_s 동안 앞으로 recovery_back_m 이상 왔고 누적 |yaw| 가 이 값 이하일 때만 들어간다.
     recovery_trail_s: float = 5.0
     recovery_trail_yaw_deg: float = 10.0
+    # 결정 2026-10-02: 지나온 길은 마지막 전진 명령이 이만큼 이내일 때만 믿는다(관제 대기도 센다).
+    recovery_trail_max_age_s: float = 30.0
     # 확인 2026-10-02: recovered 로 닫힌 뒤 이 시간 안이거나 이 거리를 아직 못 갔을 때 다시 막히면
     # 같은 막힘으로 시도 수를 이어 센다(복구-재막힘 무한 반복 방지).
     recovery_restuck_s: float = 20.0
@@ -181,9 +183,12 @@ class LineFollowConfig:
             raise ValueError("recovery_local_enabled must be a boolean")
         timing = (self.recovery_ask_s, self.recovery_back_m, self.recovery_back_speed,
                   self.recovery_rear_clear_m, self.recovery_settle_s, self.recovery_trail_s,
-                  self.recovery_trail_yaw_deg, self.recovery_restuck_s, self.recovery_restuck_m)
+                  self.recovery_trail_yaw_deg, self.recovery_restuck_s, self.recovery_restuck_m,
+                  self.recovery_trail_max_age_s)
         if not all(_finite(value) and value > 0 for value in timing):
             raise ValueError("line-follow recovery times and distances must be positive and finite")
+        if self.recovery_trail_max_age_s > 300.0:
+            raise ValueError("recovery_trail_max_age_s is capped at 300 s")
         if self.recovery_trail_s > 30.0 or self.recovery_trail_yaw_deg > 45.0:
             raise ValueError("recovery_trail_s is capped at 30 s and recovery_trail_yaw_deg at 45")
         if self.recovery_back_m > 0.20 or self.recovery_back_speed > 0.05:
