@@ -131,9 +131,15 @@
         </div>
 
         <h3 id="log-heading" class="sr-only">기록</h3>
-        <div id="log" class="log" role="status" aria-live="polite" aria-labelledby="log-heading">
-          <ui-empty>최근 이벤트가 없습니다 — 관제 요청과 연결 상태 변화가 여기에 표시됩니다.</ui-empty>
-        </div>
+        <details id="log-panel" class="log-panel" open>
+          <summary>기록</summary>
+          <div class="log-toolbar">
+            <ui-button kind="quiet" id="log-clear" type="button" title="화면의 기록을 지웁니다">지우기</ui-button>
+          </div>
+          <div id="log" class="log" role="status" aria-live="polite" aria-labelledby="log-heading">
+            <ui-empty>최근 이벤트가 없습니다 — 관제 요청과 연결 상태 변화가 여기에 표시됩니다.</ui-empty>
+          </div>
+        </details>
 
         <section class="discovery device-link" aria-labelledby="device-link-heading">
           <h3 id="device-link-heading" class="sr-only">기기 연결</h3>
@@ -143,6 +149,16 @@
           <p class="hint install-link">기기 등록·카메라 연결 승인은 <a href="/console/install">설치·보정 화면</a>에서 합니다.</p>
 
         </section>
+
+        <details id="console-diagnostics" class="console-diagnostics">
+          <summary>진단</summary>
+          <dl class="diag-readout">
+            <dt>상태 갱신</dt><dd id="diag-state">—</dd>
+            <dt>발견 검색기</dt><dd id="diag-scanner">—</dd>
+            <dt>로봇 오류</dt><dd id="diag-robots">—</dd>
+            <dt>카메라</dt><dd id="diag-vision">—</dd>
+          </dl>
+        </details>
       </div>
     </section>
 

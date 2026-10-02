@@ -1281,3 +1281,11 @@
 - 근거: D-414(사용자 지시 — "설명하지 말고 명확하게, 그냥 누르면 되게; mDNS 등록이 대충 보이기만 한다"). 비활성 사유(D-359 §5.3)는 글로 유지.
 - gate 변화: 없음.
 - 최종 증거: web_common 209 passed; fleet 1371 passed 7 skipped; 브라우저 — 원클릭 estop POST+대화상자 0회(1 passed), 설치 문서 발견 카드 2종+등록 버튼 렌더, 운용 문서 힌트 hidden/title 확인.
+
+## 2026-10-02 · uncommitted · 관제 콘솔 회차 7 — D-415 운용 가시성(로그 뷰어·진단 패널·신호등 빈 상태)
+- 변경: #log가 펼침 패널(details#log-panel, 기본 open)이 되고 지우기 버튼(#log-clear)과 최소 8줄/최대 24줄 높이를 얻었다. LOG_MAX 40→120. render() 끝에 refreshDiagnostics()가 진단 dd 4개(상태 갱신·발견 검색기·로봇 오류·카메라)를 채운다.
+- 변경: signals.js render()가 빈 상태에서 signals-hint의 hidden을 풀고 "설정된 신호등이 없습니다" 문장을 보인다(D-415 결정 3).
+- 변경: console.js refreshDiagnostics() — REACH_LABEL 참조를 직접 계산으로 바꿈(console.js 범위 밖이라 ReferenceError).
+- 근거: D-415(사용자 지시 — "로그도 볼 수 있게, 디버그 생각할 수 있게"). 계측: 로그 21px→144px, 진단 0→4 항목, 신호등 빈 상태 안내.
+- gate 변화: 없음.
+- 최종 증거: web_common 209 passed; fleet 문법·앱·큐·태스크 54 passed; 브라우저 — 로그 패널(min 144/max 432px)·지우기 버튼·진단('3대 · 갱신됨')·신호등 빈 상태 표시, 페이지 오류 0.

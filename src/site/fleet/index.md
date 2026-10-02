@@ -72,8 +72,8 @@
 
 ## 최근 기록
 
+- 2026-10-02 · uncommitted · 관제 콘솔 회차 7 — D-415 운용 가시성(로그 뷰어·진단 패널·신호등 빈 상태)
 - 2026-10-02 · uncommitted · 관제 콘솔 회차 6 — D-414 바로 동작(원클릭 정지·발견 카드·안내 축소)
 - 2026-10-02 · uncommitted · D-413 Task 4 Cell Job journal and approval boundary
 - 2026-10-02 · uncommitted · D-407 판단 요청 — main 병합, API Ref v1.77
 - 2026-10-02 · 95e13278 · fix(fleet): D-395 S1 3회차 T1–T3 — 폴 간격과 무관한 도약 판정, 시간 초과 결정 확인, needs_human 은 깃발
-- 2026-10-02 · uncommitted · D-407 판단 요청 검토 반영 — 전송 실패·지속 기록·확인 단계
