@@ -14,8 +14,17 @@ components:
   - name: omx_device_adapter
     path: src/products/omx/adapter/omx_adapter
     import_prefix: omx_adapter
+  - name: world_api
+    path: modules/world/src/rosy/world/api
+    import_prefix: rosy.world.api
+  - name: skill_api
+    path: modules/skills/api/src/rosy/skills/api
+    import_prefix: rosy.skills.api
+  - name: execution_api
+    path: modules/execution/src/rosy/execution/api
+    import_prefix: rosy.execution.api
 
-# Prefix rules cover absolute imports only; relative imports remain within a component.
+# Static absolute imports and relative imports resolved from their package path.
 boundaries:
   - importer_prefix: core_common
     forbidden_imports: [fleet, rosy_cell, omx_adapter, rclpy]
@@ -25,9 +34,10 @@ boundaries:
     forbidden_imports: [rosy_cell, omx_adapter, rclpy]
   - importer_prefix: omx_adapter
     forbidden_imports: [fleet, rosy_cell]
+  - importer_prefix: rosy.execution.api
+    forbidden_imports: [rosy.processes.palletizing]
 
-# Contract canaries for packages introduced by later plan tasks; these do not register
-# package paths or imply that those modules exist yet.
+# Contract canaries exercise forbidden edges even when one endpoint is not built yet.
 future_boundary_canaries:
   - importer_prefix: rosy.execution.api
     forbidden_imports: [rosy.processes.palletizing]

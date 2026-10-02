@@ -4430,7 +4430,12 @@
 - 한계: Python AST는 동적 import/entry point가 아니라 정적 import만 다룬다. 새 API/process roots는 생성할 때 registry에 포함해야 한다.
 - gate 변화: 없음.
 
+## 2026-10-02 · uncommitted · feat(platform): ROS-free Observation·Skill·Plan 계약과 wheel 설치
 
+- 변경: modules/world observation snapshot, skills/api 계약·불변 JSON 입력, execution PlanBundle 및 기존 grant/receipt 필드 projection을 추가했다. 세 ROS-free wheel은 D-18 wire schema에 의존하거나 수정하지 않으며 `PICK_PLACE` 요청 digest·source revisions·attempt identities를 보존한다. 새 API roots를 boundary guard에 등록했다.
+- 검증: source copies와 wheelhouse/venv는 X:\DevTemp에 두고 실제 wheel을 설치했다. package mapping·architecture boundary·protocol schema 29 passed; 전체 architecture 81 passed/1 skipped; commit 전 quick tier 95 passed/24 warnings; known-failure 비교 0 new. import smoke는 wheel의 venv `site-packages` 경로를 확인했고 ROS/FastAPI import가 없었다. CI workflow YAML parse 성공.
+- 한계: receipt projection은 저장 기록이며 물리 목표 확인을 대신하지 않는다. PlanBundle의 승인/authority 필드는 없고 Skill 단위·Job Step 의미 변환은 후속 task에 남아 있다. CI는 소스 변경 후 로컬 정적 검사만 실행했으며 원격 CI 실행은 없다.
+- gate 변화: 없음.
 
 ## 2026-10-02 · uncommitted · docs(adr): D-395 개정 8 — 부하에서도 버티는 닻 규칙, 사람 확인은 표시
 - 변경: S1 세 번째 실행(호스트 과부하로 공정하지 않음, 거울 결정 0, 거울 탐지 1/1, 실제 주행 중 들어 옮김 2/2)의 결과를 기록. 닻 점프 기준의 dt를 1 s로 묶고 거울 서명은 dt와 무관하게 닻을 뺀다(안전). 호출 제한 2.5 s, 시간 초과 결정은 15 s 안 그 자세 도달 시 출처 인정. `needs_human`은 표시이고 중재는 계속된다. 다음 S1은 부하가 낮을 때.

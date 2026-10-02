@@ -36,8 +36,10 @@ t = p + ".tmp"; f = open(t, "w"); json.dump(d, f, indent=2); f.flush(); os.fsync
 PY
 }
 _proc_state() {  # _proc_state <pid>: the scheduler state letter, or nothing (gone)
+  # 상태는 커널의 진짜 /proc 에서만 읽는다 — PROC_ROOT 는 cmdline 신원의 시험 이음새다
+  # (2026-10-02: 가짜 PROC_ROOT 에 stat 이 없어 좀비 판정이 무효화됐다).
   local line
-  line=$(cat "$PROC_ROOT/$1/stat" 2>/dev/null) || return 1
+  line=$(cat "/proc/$1/stat" 2>/dev/null) || return 1
   # comm 은 공백·괄호를 포함할 수 있어 마지막 ") " 뒤가 상태 문자다.
   printf '%s' "${line##*) }" | cut -c1
 }
