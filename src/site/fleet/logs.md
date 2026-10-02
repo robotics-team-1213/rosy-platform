@@ -1417,3 +1417,8 @@
 - 증거: C4b 1c 보고.
 - 후속(wave 2): 운영자 증언 해결(owner 영구 상실 시 UNKNOWN), 그 밖의 wave 2 목록은 1b 기록 그대로.
 - gate 변화: 없음.
+
+## 2026-10-03 · uncommitted · fix(fleet,omx): C4b 1d — 전송 직전 세대 재확인, receipt 먼저 기록, owner journal 식별
+- 변경: (1) `_submit`이 `start_step` 뒤 세대를 다시 읽고, 바뀌면 `hold_unsent`(receipt·장치 결과가 없을 때만)로 HOLD+HELD. (2) 모든 200 응답의 receipt를 검증 전에 기록, `has_device_receipt`는 기록된 SUCCEEDED/FAILED도 셈, 반복 기록은 쓰기 트랜잭션 없이 건너뜀. (3) owner `journal_id`(SQLite에 한 번 생성)를 receipt·GetAction·GetOwnerIdentity에 싣고, NOT_FOUND는 같은 journal일 때만. (4) `CLAIM_SET_INCOMPLETE_AT_STOP`에 context·actor·세대·승인 횟수. (5) 사라진 Job의 KeyError는 그 Job만 건너뜀. (6) `NOT_FOUND_SKEW_S` 주석에 같은 호스트 시계 가정.
+- 증거: C4b 1d 보고.
+- gate 변화: 없음.

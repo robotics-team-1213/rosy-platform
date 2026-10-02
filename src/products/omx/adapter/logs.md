@@ -303,3 +303,8 @@
 - 변경: `ActionRunner.get`이 다른 principal의 Action에 None 대신 PermissionError를 내어 API가 403 PEER_NOT_ALLOWED로 답한다. `ACTION_NOT_FOUND`는 정말 journal에 없는 Action에만 쓴다.
 - 증거: `test/test_fleet_omx_cell_transfer_contract.py::test_only_action_not_found_reads_as_absent`.
 - gate 변화: 없음.
+
+## 2026-10-03 · uncommitted · feat(omx): C4b 1d — journal 식별
+- 변경: 새 `journal_identity.py`가 owner SQLite journal에 임의 `journal_id`를 한 번 만든다. `ActionApi`는 식별이 있으면 모든 receipt와 GetAction 404 응답에 그것을 싣는다. `DeviceActionReceipt.journal_id`(선택) 추가.
+- 증거: `test/test_platform_cell_owner_assembly.py::test_owner_journal_identity_is_persistent_per_journal_and_in_every_reply`.
+- gate 변화: 없음.
