@@ -119,7 +119,12 @@ def test_every_box_transfer_plans_and_slip_sheets_are_refused_by_width(demo, kin
         transform_revision="tf-sim-1", planning_scene_revision=kin.planning_scene_revision,
         observed_at_monotonic_s=0.5,
     )
+    # The device's accepted recipe defines each item's grasp geometry (review minor 5).
+    items = {"box": {"grasp_width_m": recipe.box.width, "grasp_depth_m": recipe.box.grasp_depth},
+             "slip_sheet": {"grasp_width_m": recipe.slip_sheet_thickness, "grasp_depth_m": 0.0}}
     planner = AnalyticCellTransferPlanner(kin, accepted_cell_sha256=lambda: job.cell_hash,
+                                          accepted_item_geometry=lambda sha, item: (
+                                              items.get(item) if sha == job.recipe_hash else None),
                                           monotonic=lambda: 1.0)
     for index, (pick, place) in enumerate(_transfers(job)):
         # Sheets are taken at their top face.

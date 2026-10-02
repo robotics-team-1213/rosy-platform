@@ -47,6 +47,7 @@ CARRY_Z_INSUFFICIENT = "CARRY_Z_INSUFFICIENT"
 WAYPOINT_DISCONTINUITY = "WAYPOINT_DISCONTINUITY"
 PHASE_DURATION_EXCEEDED = "PHASE_DURATION_EXCEEDED"
 GRIPPER_WIDTH_INVALID = "GRIPPER_WIDTH_INVALID"
+ITEM_GEOMETRY_MISMATCH = "ITEM_GEOMETRY_MISMATCH"
 
 
 def _finite(name: str, value: object, *, positive: bool = False) -> float:
@@ -484,11 +485,18 @@ class AnalyticCellTransferPlanner:
 
     def __init__(self, kinematics: OmxKinematics, *,
                  accepted_cell_sha256: Callable[[], str | None],
+                 accepted_item_geometry: Callable[[str, str], Mapping[str, float] | None],
                  monotonic: Callable[[], float] = time.monotonic) -> None:
+        """``accepted_item_geometry(recipe_sha256, item)`` returns the grasp geometry
+        (``grasp_width_m``, ``grasp_depth_m``) of that item in the recipe the device
+        accepted under that hash, or None (review minor 5)."""
         if not isinstance(kinematics, OmxKinematics) or not callable(accepted_cell_sha256):
             raise ValueError("planner requires kinematics and an accepted-cell provider")
+        if not callable(accepted_item_geometry):
+            raise ValueError("planner requires an accepted recipe item-geometry provider")
         self.kinematics = kinematics
         self.accepted_cell_sha256 = accepted_cell_sha256
+        self.accepted_item_geometry = accepted_item_geometry
         self.monotonic = monotonic
 
     def plan_transfer(self, request: CellTransferRequest, profile: CellPlanningProfile,
@@ -501,6 +509,14 @@ class AnalyticCellTransferPlanner:
         accepted = self.accepted_cell_sha256()
         if not isinstance(accepted, str) or accepted != request.cell_sha256:
             raise CellTransferPlanRejected(CELL_HASH_MISMATCH, "grant cell_sha256 is not the accepted cell")
+        # Width and depth set the close target and the TCP height, so they are taken only as
+        # the accepted recipe (bound by recipe_sha256) defines them for this item.
+        geometry = self.accepted_item_geometry(request.recipe_sha256, request.item)
+        if (not isinstance(geometry, Mapping)
+                or geometry.get("grasp_width_m") != request.grasp_width_m
+                or geometry.get("grasp_depth_m") != request.grasp_depth_m):
+            raise CellTransferPlanRejected(ITEM_GEOMETRY_MISMATCH,
+                                           "grasp width/depth are not the accepted recipe's item")
         kin = self.kinematics
         if profile.kinematics_revision != kin.revision:
             raise CellTransferPlanRejected(STATE_INVALID, "profile was reviewed against other geometry")

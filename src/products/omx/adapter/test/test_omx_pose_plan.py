@@ -32,6 +32,8 @@ from omx_adapter.pose_plan import (
 
 PROFILE_PATH = Path(__file__).resolve().parents[5] / "deploy/robot/omx/sim/cell_profile.yaml"
 CELL = "c" * 64
+# The device's accepted recipe (its hash) -> item -> grasp geometry (review minor 5).
+_ACCEPTED_ITEMS = {("a" * 64, "box"): {"grasp_width_m": 0.03, "grasp_depth_m": 0.01}}
 
 
 @pytest.fixture(scope="module")
@@ -75,13 +77,21 @@ def _state(kin, profile, *, home=None, sequence=7, delta=None, scene=None):
     )
 
 
-def _planner(kin, accepted=CELL):
+def _planner(kin, accepted=CELL, items=None):
+    items = _ACCEPTED_ITEMS if items is None else items
     return AnalyticCellTransferPlanner(kin, accepted_cell_sha256=lambda: accepted,
+                                       accepted_item_geometry=lambda recipe, item: items.get((recipe, item)),
                                        monotonic=lambda: 100.5)
 
 
-def _plan(kin, profile, **overrides):
-    return _planner(kin).plan_transfer(_request(**overrides), profile, _state(kin, profile))
+def _plan(kin, profile, items=None, **overrides):
+    """Plans with an accepted recipe that defines exactly the request's grasp geometry,
+    unless ``items`` gives the accepted recipe explicitly."""
+    request = _request(**overrides)
+    if items is None:
+        items = {(request.recipe_sha256, request.item): {
+            "grasp_width_m": request.grasp_width_m, "grasp_depth_m": request.grasp_depth_m}}
+    return _planner(kin, items=items).plan_transfer(request, profile, _state(kin, profile))
 
 
 # ---- profile -------------------------------------------------------------------
@@ -503,3 +513,22 @@ def test_release_width_the_jaw_cannot_reach_is_rejected_not_fully_opened(kin, cl
     document["gripper"]["jaw"]["release_clearance_m"] = clearance
     wide = CellPlanningProfile.from_mapping(document, revision="0" * 64)
     assert _reason(lambda: _planner(kin).plan_transfer(_request(), wide, _state(kin, wide))) == GRIPPER_WIDTH_INVALID
+
+
+@pytest.mark.parametrize("changes", [
+    {"grasp_width_m": 0.025},                       # over-squeeze from a wrong width
+    {"grasp_depth_m": 0.015},
+    {"recipe_sha256": "b" * 64},                     # not the accepted recipe
+    {"item": "slip_sheet"},                          # item the accepted recipe does not define here
+])
+def test_grasp_geometry_must_match_the_accepted_recipe(kin, profile, changes):
+    # Review minor 5: width and depth decide the close target and the TCP height, so the
+    # planner takes them only as the accepted recipe (by hash) defines them.
+    from omx_adapter.pose_plan import ITEM_GEOMETRY_MISMATCH
+
+    assert _reason(lambda: _plan(kin, profile, items=_ACCEPTED_ITEMS, **changes)) == ITEM_GEOMETRY_MISMATCH
+
+
+def test_planner_requires_an_accepted_item_geometry_provider(kin):
+    with pytest.raises(ValueError, match="item"):
+        AnalyticCellTransferPlanner(kin, accepted_cell_sha256=lambda: CELL, accepted_item_geometry=None)
