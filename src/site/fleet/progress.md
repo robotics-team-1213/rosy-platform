@@ -50,7 +50,7 @@ plans:
 - Operator web/API와 task queue를 검증했다. navigation 요청은 `REQUESTED → QUEUED`에서 멈췄다. 합성 `nav.completed`는 별도 synthetic event이므로 task의 실제 완료나 로봇 동작으로 해석하지 않는다.
 - Overhead WSS → CPU ArUco → Fleet sighting 경로와 SQLite restart 보존을 확인했다. 합성 sighting의 `quality`는 `null`이므로 D-268 policy evidence가 아니다. 자동 이동/집기는 HOLD다.
 - 자세한 candidate image/hash와 실행 범위는 `docs/validation/2026-09-26-site-stack-container-smoke.md`에 기록했다. LOCAL 증거는 Windows Docker Desktop `linux/amd64` 및 synthetic fixture 한정이다. Ubuntu/RTX 5080/GPU, 현장 TLS/LAN, 실물 phone/CORE/robot은 아직 미검증이다.
-- D-413 Task 7 재생 checkpoint에서 Fleet과 OMX SQLite를 각각 다시 열었다. 로컬 수락 뒤 submit 응답을 잃은 경우 Fleet은 같은 Action/attempt를 조회하고 재제출하지 않으며, 늦은 `SUCCEEDED`만으로 `HOLD`나 자원 점유를 풀지 않는다. 독립적인 새 카메라·그리퍼 증거가 목표를 확인하면 완료한다. 재생 계약 1건, Fleet 1371 passed/7 skipped, OMX ActionStore 23 passed. Gazebo/Jazzy는 이 호스트에서 실행하지 않았다.
+- D-413 Task 7 재생 checkpoint에서 Fleet과 OMX SQLite를 각각 다시 열었다. 로컬 수락 뒤 submit 응답을 잃은 경우 Fleet은 같은 Action/attempt를 조회하고 재제출하지 않으며, 늦은 `SUCCEEDED`만으로 `HOLD`나 자원 점유를 풀지 않는다. 독립적인 새 카메라·그리퍼 증거가 목표를 확인하면 완료한다. Fleet 이벤트 watermark와 Action phase journal 전진도 함께 확인했다. 재생 계약 1건, Fleet 1371 passed/7 skipped, OMX ActionStore 23 passed. Gazebo/Jazzy는 이 호스트에서 실행하지 않았다.
 
 ## 다음 gate
 

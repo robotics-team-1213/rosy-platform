@@ -637,6 +637,24 @@ class MissionStore:
             connection.commit()
         return self._row(updated)
 
+    @staticmethod
+    def _terminal_action_succeeded(connection, mission_id: str, action_id: str,
+                                   attempt_id: str) -> bool:
+        terminal = connection.execute(
+            """SELECT detail_json FROM fleet_mission_events
+               WHERE mission_id=? AND action_id=? AND attempt_id=?
+                 AND event_source='device_action' AND event_type='ACTION_TERMINAL_RESULT'
+               ORDER BY event_id DESC LIMIT 1""",
+            (mission_id, action_id, attempt_id),
+        ).fetchone()
+        return terminal is not None and json.loads(terminal["detail_json"]).get("outcome") == "SUCCEEDED"
+
+    def terminal_action_succeeded(self, mission_id: str, *, action_id: str,
+                                  attempt_id: str) -> bool:
+        """Read durable terminal proof for exactly one Action attempt."""
+        with closing(self._connect()) as connection:
+            return self._terminal_action_succeeded(connection, mission_id, action_id, attempt_id)
+
     def confirm_goal(self, mission_id: str, *, actor_id: str, event_id: str,
                      evidence: GoalEvidence) -> dict[str, Any]:
         now = _now()
@@ -646,11 +664,11 @@ class MissionStore:
                                      (mission_id,)).fetchone()
             if row is None:
                 raise KeyError(mission_id)
-            late_success_held = (
-                row["status"] == "HOLD"
-                and row["reason"] == "LATE_SUCCESS_REQUIRES_INDEPENDENT_GOAL_EVIDENCE"
-            )
-            if row["status"] != "ACTION_SUCCEEDED" and not late_success_held:
+            if (row["status"] not in {"ACTION_SUCCEEDED", "HOLD"}
+                    or evidence.action_id != row["action_id"]
+                    or evidence.attempt_id != row["attempt_id"]):
+                raise MissionConflict("independent goal evidence requires terminal Action success")
+            if not self._terminal_action_succeeded(connection, mission_id, row["action_id"], row["attempt_id"]):
                 raise MissionConflict("independent goal evidence requires terminal Action success")
             detail = evidence.to_dict()
             self._event(

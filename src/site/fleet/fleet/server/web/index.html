@@ -35,7 +35,7 @@
     </div>
     <ui-tag id="online-pill" status="neutral">연결 대기</ui-tag>
     <ui-text id="clock" scale="value">--:--:--</ui-text>
-    <ui-button kind="irreversible" id="estop" data-always-live class="estop" type="button" aria-label="전체 로봇 정지" title="전체 로봇 정지"><svg class="estop-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 2 19.1 4.9 22 12 19.1 19.1 12 22 4.9 19.1 2 12 4.9 4.9Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><rect x="8" y="8" width="8" height="8" rx="1" fill="currentColor"/></svg><span class="sr-only">전체 정지</span></ui-button>
+    <ui-button kind="irreversible" id="estop" data-always-live class="estop" type="button" aria-label="전체 비상 정지 (래치 · 로봇별 관리자 해제)" title="전체 비상 정지 (래치 · 로봇별 관리자 해제)"><svg class="estop-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 2 19.1 4.9 22 12 19.1 19.1 12 22 4.9 19.1 2 12 4.9 4.9Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><rect x="8" y="8" width="8" height="8" rx="1" fill="currentColor"/></svg><span class="sr-only">전체 비상 정지 (래치 · 로봇별 관리자 해제)</span></ui-button>
   </ui-topbar>
 
   <section id="dispatch-control" class="dispatch-control" role="status"
@@ -47,6 +47,8 @@
     <ui-button id="dispatch-rearm" kind="primary" type="button" hidden>
       대기 작업 재허가
     </ui-button>
+    <!-- D-421 — 래치 없는 전체 주행 취소. 다시 움직이려면 새 목표만 보내면 된다. -->
+    <ui-button id="cancel-all" kind="primary" type="button">전체 주행 취소</ui-button>
   </section>
 
   <main id="fleet-main" tabindex="-1">
@@ -167,7 +169,8 @@
         <canvas id="map-canvas" class="idle" width="800" height="600" tabindex="-1"
                 role="button" aria-label="지도에서 로봇 목표 위치 선택" aria-describedby="hint"></canvas>
         <div class="map-empty" id="map-empty" role="status">
-          <strong id="map-empty-title">지도 불러오는 중</strong>
+          <svg class="ui-icon map-empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M9 20l-5.5-2.5v-13l5.5 2.5 6-2.5 5.5 2.5v13l-5.5-2.5z"/><path d="M9 7v13"/><path d="M15 4.5v13"/></svg>
+          <strong id="map-empty-title">지도 대기</strong>
           <p id="map-empty-detail">Fleet에서 현장 지도를 확인하고 있습니다.</p>
         </div>
       </div>

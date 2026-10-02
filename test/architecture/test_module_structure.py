@@ -76,8 +76,12 @@ CONTROL_SPLIT = "docs/plans/2026-09-22-control-package-split-design.md"
 #: P6 verdicts: path (relative to src/) or package name -> (lines at verdict, verdict).
 SIZE_VERDICTS = {
     "fleet": (
-        26_498,
+        28_001,
         "split: server HTTP boundary, console, signals and the mission-control stores are separate owners "
+        "today; re-judged 2026-10-03 at 28001 for D-413 internal Cell producer authentication: bounded "
+        "schema, environment credential registry and evidence service are separate modules; goal completion "
+        "retains its existing journal owner and atomically fences the verified terminal event. No new HTTP "
+        "or device owner is added. Existing split verdict and +150 growth allowance remain unchanged; "
         "today; group them into subpackages rather than one flat server/ tree (B2); owner fleet, unscheduled "
         "(re-judged 2026-09-29 at 11164 after mission_store joined the server tree; re-judged 2026-09-30 at "
         "12419 after the D-361 enrollment register, roster and service joined as their own modules, and "
@@ -135,7 +139,23 @@ SIZE_VERDICTS = {
         "journal, proposal finalization and service/operator admission path (docs/plans/"
         "2026-10-02-platform-architecture-v02-migration.md); these remain Fleet-owned durable records, "
         "while device dispatch and manipulation ownership stay in later tasks. This re-judgment resets "
-        "the package growth baseline; the existing +150 allowance still blocks silent growth",
+        "the package growth baseline; the existing +150 allowance still blocks silent growth. "
+        "Re-judged 2026-10-02 at 27134 (main d5b3bd10 at 26498) when D-421 cancel-all joined as its "
+        "own modules: server/cancel_all.py (fanout, per-robot verdict, dispatch-overlap fence) and "
+        "server/cancel_all_store.py (durable window record and attempt tags read by the CORE event "
+        "projection in task_results.py), one route, the hub swarm-cancel scatter and ~35 console.js "
+        "lines; console.py did not grow and task_store.py stays under its 1060 ceiling. "
+        "Re-judged 2026-10-02 at 27303 after durable Mission goal-success proof and CellJob startup "
+        "fencing: completion requires the matching persisted Action outcome, transfer submission "
+        "atomically marks ownership DISPATCHING, and gateway startup holds obsolete authority. "
+        "These remain Fleet journal/admission responsibilities under the D-413 migration plan; "
+        "CellJob dispatch/reconciliation composition remains open. Full Fleet regression 1425 "
+        "passed/7 skipped. Re-judged 2026-10-03 at 27684 after current-main integration for the "
+        "opt-in CellJob dispatcher "
+        "and its transactional readback/fence/phase-history modules plus regression tests: these "
+        "compose Fleet-owned admission and ordered journals without a second device owner. "
+        "cell_job_store.py shrinks while transport-neutral receipt validation is shared with "
+        "legacy Mission dispatch. The split verdict and +150 growth allowance remain unchanged",
     ),
     "site/fleet/fleet/server/proposal_store.py": (
         730,

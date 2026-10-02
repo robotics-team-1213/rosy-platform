@@ -4,8 +4,10 @@ import numpy as np
 import pytest
 
 from control.sensing.perception.learned.lane_mask import (
+    MIN_COMPONENT_PX,
     LaneMaskEvidence,
     NonFiniteLogits,
+    VisibleHysteresis,
     lane_evidence,
     preprocess,
 )
@@ -142,12 +144,81 @@ def _reference_evidence(logits, classes):
 @pytest.mark.parametrize("seed", range(8))
 def test_band_only_softmax_matches_the_full_frame_reference(seed):
     """D-373 CPU budget: softmax on the near-field band only, argmax on logits for
-    the fractions; error and confidence stay bit-identical on random logits."""
+    the fractions; error and confidence stay bit-identical on random logits. The area
+    filter (2026-10-02) is off here: random logits are all speckle, and this pins the
+    softmax shortcut, not the filter."""
     classes = (ClassSpec(0, "floor", "background"), ClassSpec(1, "line", "lane_marking"),
                ClassSpec(2, "wall", "wall"), ClassSpec(3, "drivable", "drivable"))
     rng = np.random.default_rng(seed)
     logits = rng.normal(0.0, 3.0, (1, 4, 240, 320)).astype(np.float32)
     if seed % 2:
         logits[0, 3] -= 6.0  # drivable rare: the lane_marking fallback path
-    got, want = lane_evidence(logits, classes), _reference_evidence(logits, classes)
+    got, want = lane_evidence(logits, classes, min_component_px=0), _reference_evidence(logits, classes)
     assert got == want
+
+
+# --- 2026-10-02 post-processing audit: component area filter and visible hysteresis ------------
+
+def _speckle(shape, seed=0, density=0.002):
+    """The audit's false-positive model: 2-3 px blobs below the top quarter (carpet glare)."""
+    rng = np.random.default_rng(seed)
+    h, w = shape
+    out = np.zeros(shape, np.int64)
+    n = int(density * h * w / 4)
+    for y, x, s in zip(rng.integers(h // 4, h - 3, n), rng.integers(0, w - 3, n), rng.integers(2, 4, n)):
+        out[y:y + s, x:x + s] = 1
+    return out
+
+
+def test_speckle_alone_is_not_a_visible_lane():
+    """Audit: speckle took `visible` from 0.896 to 1.000 (10 % false 'lane visible')."""
+    ev = lane_evidence(_logits(_speckle((240, 320))), CLASSES)
+    assert not ev.visible and ev.error is None
+
+
+def test_speckle_does_not_move_a_real_lane():
+    mask = np.zeros((240, 320), np.int64)
+    mask[:, 260:280] = 1
+    clean = lane_evidence(_logits(mask), CLASSES)
+    noisy = lane_evidence(_logits(np.maximum(mask, _speckle(mask.shape))), CLASSES)
+    assert noisy.visible and noisy.error == pytest.approx(clean.error, abs=1e-6)
+
+
+def test_the_area_floor_is_configurable():
+    blob = np.zeros((240, 320), np.int64)
+    blob[200:205, 100:105] = 1                                      # 25 px
+    assert not lane_evidence(_logits(blob), CLASSES).visible
+    assert lane_evidence(_logits(blob), CLASSES, min_component_px=20).visible
+    assert MIN_COMPONENT_PX == 40
+
+
+def test_real_lane_label_stays_visible_and_speckle_does_not_shift_it():
+    """133221Z/000120 D-379 auto label (lane_line = 1) through the shadow evidence path."""
+    import cv2
+    import perception_data
+    lab = cv2.imread(str(perception_data.label_file(perception_data.SESSION_133221Z, 'masks', 120)),
+                     cv2.IMREAD_UNCHANGED)
+    lane = (lab == 1).astype(np.int64)
+    clean = lane_evidence(_logits(lane), CLASSES)
+    noisy = lane_evidence(_logits(np.maximum(lane, _speckle(lane.shape))), CLASSES)
+    assert clean.visible and noisy.visible
+    assert noisy.error == pytest.approx(clean.error, abs=.02)
+
+
+def _ev(visible, confidence):
+    return LaneMaskEvidence(visible, .1 if visible else None, confidence, {})
+
+
+def test_visible_hysteresis_enters_at_035_and_exits_below_025():
+    gate = VisibleHysteresis()
+    assert (gate.enter, gate.exit) == (.35, .25)
+    seq = [(True, .30), (True, .35), (True, .25), (True, .24), (True, .30), (True, .40), (False, .9)]
+    out = [gate.update(_ev(*v)) for v in seq]
+    assert [o.visible for o in out] == [False, True, True, False, False, True, False]
+    assert out[0].error is None and out[1].error == .1
+    assert out[1].confidence == .35          # confidence is passed through untouched
+
+
+def test_visible_hysteresis_rejects_inverted_thresholds():
+    with pytest.raises(ValueError):
+        VisibleHysteresis(enter=.2, exit=.3)

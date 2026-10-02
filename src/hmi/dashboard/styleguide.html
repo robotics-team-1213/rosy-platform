@@ -112,6 +112,34 @@
       <code>test_fields_clear_the_secondary_target_on_every_surface</code></p>
     </section>
 
+    <section class="entry">
+      <h2>버튼 줄</h2>
+      <p class="rule"><code>ui-actions</code>. 줄바꿈하고, 칸이 좁으면(22rem) 한 열로 늘어난다.
+      칸(<code>container-type</code>)은 표면이 정한다.</p>
+      <div class="demo demo-row">
+        <ui-actions>
+          <ui-button kind="primary" type="button">목표 보내기</ui-button>
+          <ui-button kind="quiet" type="button">취소</ui-button>
+        </ui-actions>
+      </div>
+      <p class="gate">게이트: <code>test_responsive_tiers.py</code>(칸 질의)</p>
+    </section>
+
+    <section class="entry">
+      <h2>이름–값 읽기</h2>
+      <p class="rule"><code>.ui-readout</code>는 <code>dl</code> 두 열 — 이름은 조용한 글자, 값은 등폭.
+      좁은 칸에서 한 열로 접힌다. <code>.ui-readback</code>은 쓰기 뒤 되읽기 묶음(D-286·D-287).</p>
+      <div class="demo demo-wide">
+        <dl class="ui-readout">
+          <dt>실행 모드</dt><dd>내비게이션</dd>
+          <dt>배터리</dt><dd>12.8 V</dd>
+          <dt>연결</dt><dd>최신</dd>
+        </dl>
+      </div>
+      <p class="gate">게이트: <code>test_responsive_tiers.py</code> ·
+      <code>test_calibration_chip_browser.py</code>(소비)</p>
+    </section>
+
     <section class="entry" id="type-and-interaction">
       <h2>글자 위계와 조작 피드백</h2>
       <p class="rule">제목·라벨·계기 값은 공용 글자 토큰을 쓰고, 키보드 포커스와 비활성은 상태색과 구분한다.</p>
@@ -125,6 +153,7 @@
         <ui-button kind="primary" type="button" disabled>사용할 수 없음</ui-button>
         <ui-button kind="primary" type="button" disabled reason="운용자 권한이 필요합니다">목표 보내기</ui-button>
         <ui-button kind="toggle" type="button" aria-pressed="true">눌림</ui-button>
+        <ui-button kind="toggle" tone="good" type="button" aria-pressed="true">자동 복구</ui-button>
       </div>
       <p class="rule">모든 종류가 hover·active·focus-visible·비활성을 공용으로 받는다. 비활성 사유는
       <code>reason</code> 속성 — 버튼 안에 보이는 짧은 글자로 그려지고 <code>aria-describedby</code>로 이어진다.
@@ -147,12 +176,49 @@
     </section>
 
     <section class="entry">
+      <h2>상태 글</h2>
+      <p class="rule">화면 알림 한 줄. 주의 계열(warning·error·unavailable·forbidden)만 주의색
+      글자고 나머지는 잉크다. <code>state</code>가 없으면 계약 표지가 그려진다.</p>
+      <div class="demo demo-row">
+        <ui-status state="pending">명령 접수 대기</ui-status>
+        <ui-status state="ready">준비됨</ui-status>
+        <ui-status state="warning">배터리 임계</ui-status>
+        <ui-status state="unavailable">정보 없음</ui-status>
+        <ui-status state="forbidden">운용자 권한이 필요합니다</ui-status>
+      </div>
+      <p class="gate">게이트: 없음 — 규칙만. <code>test_panel_copy_evidence_browser.py</code>가 소비 증거다</p>
+    </section>
+
+    <section class="entry">
+      <h2>빈 상태</h2>
+      <p class="rule">빈 목록·읽기 실패는 목록 밖 한 줄 <code>ui-empty</code>다(목록은 숨긴다).
+      지도 같은 무대에서는 무대 위에 얹고 다시 시도를 곁에 둔다.</p>
+      <div class="demo demo-wide">
+        <ui-empty>아직 표시할 내용이 없습니다.</ui-empty>
+      </div>
+      <p class="gate">게이트: 없음 — 규칙만. <code>test_waypoint_readiness_browser.py</code>(US-009)가 소비 증거다</p>
+    </section>
+
+    <section class="entry">
       <h2>오버레이 칩</h2>
       <p class="rule">지도 위에 얹는 것은 전부 장막 바탕 + 표면선 테두리.</p>
       <div class="demo demo-wide demo-map">
         <ui-chip>WAYPOINT 3</ui-chip>
       </div>
       <p class="gate">게이트: <code>test_the_map_controls_ride_on_the_map_instead_of_stealing_its_height</code></p>
+    </section>
+
+    <section class="entry">
+      <h2>아이콘</h2>
+      <p class="rule">24 viewBox · 실선 2 · <code>currentColor</code>. 크기는 토큰 박스
+      (<code>--text-value</code>)가 정하고 색은 글자가 나른다. 식별은 라벨이 하고 아이콘은
+      보조다(D-405).</p>
+      <div class="demo demo-row">
+        <svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="7"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
+        <svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="3" y="8" width="15" height="8" rx="1.5"/><path d="M21 10.5v3M6.5 10.5v3M10 10.5v3M13.5 10.5v3"/></svg>
+        <ui-text scale="label">POSE · BATT</ui-text>
+      </div>
+      <p class="gate">게이트: 없음 — 규칙만(D-405). 원시 색 금지는 <code>test_ui_token_contracts.py</code>가 지킨다</p>
     </section>
 
     <section class="entry">
@@ -177,11 +243,12 @@
     </section>
 
     <section class="entry">
-      <h2>아직 없는 넷</h2>
-      <p class="rule">되돌릴 수 없는 조작의 확인 · Fleet 예외 행 · 좁은 화면의 콘솔 · face intent는
-      설계만 있고 만들지 않는다(D-92 제5항) — 쓰이지 않는 컴포넌트는 결함을 숨긴다.
-      구현할 때의 판단 규칙은 D-130.2다: 로직이 있고 둘 이상의 웹 표면이 필요하면
-      headless로 한 번 뽑는다.</p>
+      <h2>어휘를 늘리는 규칙</h2>
+      <p class="rule">처음 이 표가 생겼을 때 "없는 넷"으로 남았던 것들은 자리를 찾았다 — 되돌릴 수
+      없는 조작의 확인(위 <code>확인 대화상자</code>, D-371), Fleet 예외 행(Fleet 관제 콘솔의 주의·최우선
+      큐), 좁은 화면의 콘솔(세 단·칸 질의, D-359). 다섯째 문법 intent는 로봇 얼굴 LCD가 소유한다
+      (D-385). 규칙은 그대로다: 쓰이지 않는 컴포넌트는 결함을 숨긴다(D-92 제5항). 로직이 있고
+      둘 이상의 웹 표면이 필요하면 headless로 한 번 뽑는다(D-130.2).</p>
       <p class="gate">게이트: 없음 — 이 문단이 유일한 계약이다</p>
     </section>
   </main>

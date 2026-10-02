@@ -775,3 +775,9 @@
 - 근거: D-359 높이 계약, D-409 결정 3.
 - gate 변화: 없음.
 - 최종 증거: web_common+dashboard 287 passed 82 skipped(dvh 게이트 포함).
+
+## 2026-10-02 · uncommitted · 스타일 가이드 어휘 패리티 — status·empty·actions·readout·icon + "아직 없는 넷" 현행화
+- 변경: styleguide.html에 ui-status(다섯 상태)·ui-empty·ui-actions(버튼 줄)·.ui-readout(이름–값 읽기)·.ui-icon(D-405, currentColor 인라인 SVG) 항목을 추가하고, 글자 위계 조작 행에 toggle tone="good"(자동 복구)을 더했다. "아직 없는 넷" 문단은 실제 구현 상태(확인 대화상자 D-371, Fleet 예외 행 — Fleet 콘솔 주의·최우선 큐, 좁은 화면 D-359; face intent는 LCD 소유 D-385)에 맞춰 "어휘를 늘리는 규칙"으로 고쳤다. 규칙 본문(D-92 제5항·D-130.2)은 유지.
+- 근거: D-92(어휘 표와 견본은 같은 커밋), D-286·D-287(readout·readback), D-359, D-371, D-385, D-405, D-130.2.
+- gate 변화: 없음.
+- 최종 증거: web_common+dashboard 286 passed 82 skipped. fleet styles.css opacity: 0.4 사전 실패 1건은 본 변경 없이도 재현(stash 확인)되어 무관.
