@@ -2,12 +2,15 @@
 # Block: 40 x 30 x 30 mm foam, 20 g (<= 50 g). The gripper squeezes the 30 mm width; the 42 mm
 # finger pads lie along the 40 mm length. OMX-F finger mesh (open_manipulator 5.1.2): jaw gap
 # ~0 at gripper_joint_1 = 0, ~29 mm at 0.2 rad, ~50 mm at 0.4 rad, fingertip 2.5 mm past the TCP.
+# grasp_depth 15 mm (C3b B1): the TCP (end_effector_link, ~2.5 mm inside the fingertip) goes
+# 15 mm below the block top, so the fingertip pads (inner hook, finger-local x 55-65 mm from
+# the pivot) overlap the block's upper half. 25 mm hit the TCP floor z 0.005 (C3 run9).
 # gap 15 mm leaves room for a finger (~10 mm thick) between neighbours; neighbours are still
 # NOT protected by the planner (D-402 §7).
 schema: rosy_cell.recipe/1
 name: omx-sim-foam-two-layer
 mode: palletize
-box: {length: 0.04, width: 0.03, height: 0.03, mass_kg: 0.02}
+box: {length: 0.04, width: 0.03, height: 0.03, mass_kg: 0.02, grasp_depth: 0.015}
 pallets:
   - {id: A, frame: pallet_a, length: 0.10, width: 0.08, max_stack_height: 0.07, max_load_kg: 0.5}
   - {id: B, frame: pallet_b, length: 0.10, width: 0.08, max_stack_height: 0.07, max_load_kg: 0.5}

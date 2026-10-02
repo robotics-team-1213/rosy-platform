@@ -30,7 +30,7 @@ Rosy Cell (D-377 id `cell`, package `rosy_cell`): the D-399 Application for pall
 - Harness (D-61): read `progress.md` and `index.md` first; append `logs.md`; overwrite `progress.md` when a gate moves; run `python tools/harness/rosy_harness.py generate`.
 - Units are SI (m, rad, kg). Thresholds are always passed in from config; do not add physical defaults in code.
 - `Pose` lives in `cell.py` (compiler re-exports it). `home` is a pose, not a frame, and is not an obstacle: it never enters `carry_z`.
-- Pallet frame: origin at a pallet corner, +x along length, +y along width, +z up. `z_top` is the grasp height.
+- Pallet frame: origin at a pallet corner, +x along length, +y along width, +z up. `z_top` is the item's top face; a box Step's `target.z` is the TCP grasp height `z_top - box.grasp_depth` (C3b, D-401 보강), `approach_z` is `z_top + approach_clearance_m`.
 
 ### Testing Requirements
 

@@ -103,9 +103,9 @@ def test_gazebo_world_matches_the_demo_cell(demo, world):
     assert cell.station_pose(recipe.slip_sheet_station) == pytest.approx((sx, sy, sz + thickness / 2, 0.0))
 
 
-@pytest.mark.parametrize("grasp_depth", [0.0, 0.015], ids=["step-z", "grasp-depth-15mm"])
-def test_every_transfer_plans_without_rejection(demo, kin, profile, grasp_depth):
-    cell, _, job = demo
+def test_every_transfer_plans_without_rejection(demo, kin, profile):
+    cell, recipe, job = demo
+    assert recipe.box.grasp_depth > 0  # Step z of a box is already the TCP grasp height (C3b B1)
     home = TopDownPose(cell.home.x, cell.home.y, cell.home.z, cell.home.yaw)
     joints = kin.solve_top_down(home, profile.ik_limits()).joints
     positions = dict(zip(ARM_JOINTS, joints))
@@ -118,14 +118,15 @@ def test_every_transfer_plans_without_rejection(demo, kin, profile, grasp_depth)
     planner = AnalyticCellTransferPlanner(kin, accepted_cell_sha256=lambda: job.cell_hash,
                                           monotonic=lambda: 1.0)
     for index, (pick, place) in enumerate(_transfers(job)):
-        # The probe lowers a box grasp below the top face; sheets are taken at their top.
-        depth = grasp_depth if pick.item == "box" else 0.0
+        # Sheets are taken at their top face.
+        depth = recipe.box.grasp_depth if pick.item == "box" else 0.0
         request = CellTransferRequest(
             job_id="omx-sim-demo", recipe_sha256=job.recipe_hash, cell_sha256=job.cell_hash,
             step_index=index, item=pick.item, home=home,
-            pick=TopDownPose(pick.target.x, pick.target.y, pick.target.z - depth, pick.target.yaw),
-            place=TopDownPose(place.target.x, place.target.y, place.target.z - depth, place.target.yaw),
+            pick=TopDownPose(pick.target.x, pick.target.y, pick.target.z, pick.target.yaw),
+            place=TopDownPose(place.target.x, place.target.y, place.target.z, place.target.yaw),
             pick_approach_z=pick.approach_z, place_approach_z=place.approach_z, carry_z=job.carry_z,
+            grasp_depth_m=depth,
         )
         plan = planner.plan_transfer(request, profile, state)  # raises on any HOLD reason
         assert [phase.phase_id for phase in plan.phases] == ["approach", "grasp", "transfer", "release"]

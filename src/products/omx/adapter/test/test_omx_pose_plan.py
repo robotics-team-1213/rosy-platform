@@ -54,7 +54,7 @@ def _request(**overrides):
         home=TopDownPose(0.12, 0.0, 0.12, 0.0),
         pick=TopDownPose(0.18, -0.12, 0.02, 0.3),
         place=TopDownPose(0.17, 0.13, 0.045, -0.5),
-        pick_approach_z=0.06, place_approach_z=0.085, carry_z=0.11,
+        pick_approach_z=0.06, place_approach_z=0.085, carry_z=0.11, grasp_depth_m=0.01,
     )
     values.update(overrides)
     return CellTransferRequest(**values)
@@ -337,6 +337,19 @@ def test_carry_below_home_descends_vertically_from_home_first(kin, profile):
 def test_rejects_insufficient_carry_and_approach_heights(kin, profile):
     assert _reason(lambda: _plan(kin, profile, carry_z=0.07)) == CARRY_Z_INSUFFICIENT
     assert _reason(lambda: _plan(kin, profile, pick_approach_z=0.01)) == CARRY_Z_INSUFFICIENT
+
+
+def test_request_carries_grasp_depth_and_approach_clears_the_item_top(kin, profile):
+    # C3b B1: pick/place z are TCP heights grasp_depth_m below the item top; the open
+    # fingertips (~TCP) must be at or above that top before the vertical descent.
+    assert _plan(kin, profile, grasp_depth_m=0.04).phases  # 0.02 + 0.04 = 0.06 = approach
+    assert _reason(lambda: _plan(kin, profile, grasp_depth_m=0.041)) == CARRY_Z_INSUFFICIENT
+    with pytest.raises(ValueError, match="grasp_depth_m"):
+        _request(grasp_depth_m=-0.001)
+    with pytest.raises(TypeError):
+        values = dict(_request().__dict__)
+        values.pop("grasp_depth_m")
+        CellTransferRequest(**values)
 
 
 def test_rejects_wrong_state_geometry(kin, profile):

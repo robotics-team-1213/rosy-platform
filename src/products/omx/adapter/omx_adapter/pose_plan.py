@@ -263,6 +263,9 @@ class CellTransferRequest:
     pick_approach_z: float
     place_approach_z: float
     carry_z: float
+    # pick/place z are TCP heights this far below the item's top face (C3b B1; the recipe's
+    # box grasp_depth, 0 for a slip sheet). Required so that no caller relies on a default.
+    grasp_depth_m: float
 
     def __post_init__(self) -> None:
         _text("job_id", self.job_id)
@@ -277,6 +280,10 @@ class CellTransferRequest:
                 raise ValueError(f"{name} must be a TopDownPose")
         for name in ("pick_approach_z", "place_approach_z", "carry_z"):
             object.__setattr__(self, name, _finite(name, getattr(self, name)))
+        depth = _finite("grasp_depth_m", self.grasp_depth_m)
+        if depth < 0:
+            raise ValueError("grasp_depth_m must be finite and non-negative")
+        object.__setattr__(self, "grasp_depth_m", depth)
 
 
 @dataclass(frozen=True)
@@ -430,11 +437,12 @@ class AnalyticCellTransferPlanner:
             raise CellTransferPlanRejected(STATE_INVALID, "state joint map does not match the profile")
         if state.planning_scene_revision != kin.planning_scene_revision:
             raise CellTransferPlanRejected(STATE_INVALID, "state planning scene is not this geometry")
+        depth = request.grasp_depth_m
         if (request.carry_z < max(request.pick_approach_z, request.place_approach_z)
-                or request.pick_approach_z < request.pick.z
-                or request.place_approach_z < request.place.z):
+                or request.pick_approach_z < request.pick.z + depth
+                or request.place_approach_z < request.place.z + depth):
             raise CellTransferPlanRejected(CARRY_Z_INSUFFICIENT,
-                                           "need pick/place z <= approach_z <= carry_z")
+                                           "need item top (z + grasp_depth_m) <= approach_z <= carry_z")
         limits = profile.ik_limits()
         current = tuple(state.joint_positions[name] for name in ARM_JOINTS)
         home = self._solve(request.home, limits, current[4])
