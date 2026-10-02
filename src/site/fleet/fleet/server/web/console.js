@@ -3,6 +3,7 @@
 import { createFormation } from "./formation.js";
 import { createMapView } from "./map-view.js";
 import { createRoster } from "./roster.js";
+import { createLineStuckPanel } from "./line-stuck.js";
 import { createSignals } from "./signals.js";
 import { createVisionView } from "./vision-view.js";
 import { applyRoleToControls } from "./authorization.js";
@@ -237,6 +238,7 @@ function render() {
   }
   signals.render();
   roster.fillQueues();
+  lineStuck.render();
 
   formation.fillLeaders();
   mapView.draw();
@@ -575,6 +577,9 @@ const mapView = createMapView({
 // D-410 — 주소 이동 조작은 설치 화면이 소유해서 moveAddress 훅을 주지 않는다.
 const roster = createRoster({ el, view, log, call, render,
   streamEvidence: mapView.streamEvidence, isOperator: () => auth.role === "operator" });
+// D-407 판단 요청 — 막힌 로봇의 질문과 다섯 답. 예외 큐 패널 안에 산다.
+const lineStuck = createLineStuckPanel({ el, view, call, log,
+  isOperator: () => auth.role === "operator" });
 
 el("roster-toggle").addEventListener("click", () => {
   view.showAllRobots = !view.showAllRobots;

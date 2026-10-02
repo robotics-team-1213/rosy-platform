@@ -205,6 +205,18 @@ def test_a_refused_resume_keeps_cores_reason_and_shows_on_the_open_stuck(tmp_pat
     assert shown["fleet_answer"]["code"] == "STUCK_DECISION_REFUSED"
 
 
+def test_the_console_serves_the_panel_module_and_its_shell(tmp_path):
+    client, _ = _named_app(_console(FakeRobot("rosy_01", state=_state())), tmp_path)
+
+    asset = client.get("/console/assets/line-stuck.js")
+    page = client.get("/console")
+
+    assert asset.status_code == 200 and "createLineStuckPanel" in asset.text
+    assert ".style" not in asset.text   # CSP style-src 'self': classes only
+    for needle in ('id="stuck-panel"', 'id="stuck-list"', 'id="stuck-heading"'):
+        assert needle in page.text
+
+
 def test_an_unreachable_robot_is_502_and_still_audited(tmp_path):
     robot = FakeRobot("rosy_01", state=_state())
     robot.stuck_decision_error = ConnectionError("no route")

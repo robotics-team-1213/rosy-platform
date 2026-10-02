@@ -2350,3 +2350,79 @@ def test_the_install_document_owns_enrollment_and_calibration(console_url):
         assert not errors
         save_temp_screenshot(page, "fleet_install_procedure.png")
         browser.close()
+
+
+def _stuck_robot(**stuck_extra) -> dict:
+    robot = _robot("rosy_01", {"x": 1.0, "y": 1.0, "yaw": 0.0})
+    robot["line_stuck"] = {
+        "robot_id": "rosy_01", "stuck_id": "stuck-abc", "cause": "obstacle_ahead",
+        "phase": "ASKING", "held_s": 4.0, "attempts": 0, "max_attempts": 2,
+        "local_enabled": False, "ask_remaining_s": 11.0, "last_answer": None,
+        "decisions": ["WAIT", "RESUME", "BACK_AND_RETRY", "MANUAL", "ABORT"],
+        "front_clearance_m": 0.12, "rear_clearance_m": 0.31, "turn_clearance_m": 0.09,
+        "rear_blind_m": 0.05, "preview_seq": 812, "opened_event": True,
+        "robot_online": True, "observed_age_s": 0.0, "fleet_answer": None, **stuck_extra,
+    }
+    return robot
+
+
+def test_line_stuck_panel_confirms_resume_and_shows_cores_refusal_verbatim(console_url):
+    """D-407: the panel lists the stuck, RESUME needs a confirm step, BACK_AND_RETRY is off
+    while local recovery is disabled, and CORE's 409 reaches the operator unchanged."""
+    from playwright.sync_api import sync_playwright
+
+    snapshot = {"fleet": {"name": "site", "online": 1, "total": 1},
+                "robots": [_stuck_robot()], "ts": 0.0}
+    api = {"/api/fleet/state": snapshot, "/api/fleet/map": MAP_GRID,
+           "/api/fleet/formation": {"active": False, "state": "IDLE"}}
+    bodies = []
+    with sync_playwright() as playwright:
+        browser, page, errors = _open_console(playwright, api)
+
+        def decision(route):
+            bodies.append(json.loads(route.request.post_data or "{}"))
+            route.fulfill(status=409, json={"detail": {
+                "code": "STUCK_DECISION_REFUSED", "robot_id": "rosy_01", "robot_status": 409,
+                "message": "RESUME refused: object_within_stop_distance"}})
+
+        page.route("**/api/fleet/robots/rosy_01/line-stuck/decision", decision)
+        page.goto(console_url, wait_until="networkidle")
+        panel = page.locator("#stuck-panel")
+        panel.wait_for(state="visible")
+        item = panel.locator('.stuck-item[data-robot-id="rosy_01"]')
+        assert "앞 물체로 멈춤" in item.text_content()
+        assert "0.12 m" in item.text_content() and "#812" in item.text_content()
+        assert "판단 요청" in page.locator("#critical-list").text_content()
+        back = item.locator('ui-button[data-decision="BACK_AND_RETRY"]')
+        assert back.get_attribute("aria-disabled") == "true"
+        assert "로컬 복구가 꺼져" in back.get_attribute("reason")
+
+        # Escape cancels the confirm step without a request.
+        item.locator('ui-button[data-decision="RESUME"]').click()
+        confirm = item.locator(".stuck-confirm")
+        confirm.wait_for(state="visible")
+        page.keyboard.press("Escape")
+        confirm.wait_for(state="detached")
+        assert bodies == []
+
+        # Keyboard: open the confirm step, survive a poll, then send.
+        item.locator('ui-button[data-decision="RESUME"]').focus()
+        page.keyboard.press("Enter")
+        yes = item.locator('ui-button[data-focus-key="confirm-yes"]')
+        yes.wait_for(state="visible")
+        page.wait_for_function(
+            "() => document.activeElement?.dataset?.focusKey === 'confirm-yes'")
+        page.wait_for_timeout(1300)   # one state poll re-renders the panel
+        assert yes.is_visible()
+        page.keyboard.press("Enter")
+        result = item.locator(".stuck-result")
+        result.wait_for(state="visible")
+        text = result.text_content()
+        assert bodies == [{"stuck_id": "stuck-abc", "decision": "RESUME"}]
+        assert "정지 거리 안에 아직 물체가 있습니다" in text
+        assert "STUCK_DECISION_REFUSED: RESUME refused: object_within_stop_distance" in text
+        assert result.get_attribute("data-kind") == "bad"
+        assert page.locator("#stuck-panel [style]").count() == 0
+        assert not errors
+        save_temp_screenshot(page, "fleet_line_stuck_panel.png")
+        browser.close()
