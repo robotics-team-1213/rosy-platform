@@ -220,6 +220,16 @@ SIZE_VERDICTS = {
         709,
         "accept: sim-only read-only viewer server (HTTP handler + ROS subscriptions); the pure logic already lives in live_view_model.py and the page in lane_live_view.html, covered by test_lane_live_view*.py and test_live_view_model.py (X5)",
     ),
+    "core_features": (
+        10_104,
+        "accept: the ROS-free CORE feature managers (command, safety, docking, line_follow, "
+        "traffic_policy, navigation, swarm, ...) are already one subpackage per feature, each "
+        "under the file budget; the package total is a sum of independent owners, not one "
+        "tangled module. First judged 2026-10-02 at 10104 when D-407 lane stuck recovery joined "
+        "as its own modules (line_follow/stuck_recovery.py, stuck_wiring.py). Re-judge on the "
+        "next +150; split by feature into separate packages only if a feature gains its own "
+        "deploy unit",
+    ),
     "control": (
         41_145,
         f"split: deploy closure needs only sensing + safety provider (P1a); {CONTROL_SPLIT} "
