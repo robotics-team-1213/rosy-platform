@@ -14,6 +14,9 @@ CURRENT_COMPONENTS = {
     "cell_process_compat": ("src/site/cell/rosy_cell", "rosy_cell"),
     "fleet_site": ("src/site/fleet/fleet", "fleet"),
     "omx_device_adapter": ("src/products/omx/adapter/omx_adapter", "omx_adapter"),
+    "world_api": ("modules/world/src/rosy/world/api", "rosy.world.api"),
+    "skill_api": ("modules/skills/api/src/rosy/skills/api", "rosy.skills.api"),
+    "execution_api": ("modules/execution/src/rosy/execution/api", "rosy.execution.api"),
 }
 
 

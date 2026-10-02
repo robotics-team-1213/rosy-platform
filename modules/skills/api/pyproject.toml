@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rosy-skill-api"
+version = "0.1.0"
+description = "ROS-free versioned ROSY Skill contracts and invocations"
+requires-python = ">=3.12"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["rosy.skills.api*"]
+namespaces = true

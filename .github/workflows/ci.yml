@@ -37,7 +37,7 @@ jobs:
           # python3-opencv: the lane live viewer (src/sim/gz_sim/scripts/lane_live_view.py)
           # imports cv2 at module top; without the package the gz_sim step dies at
           # collection and masks every later gate (main red since 650fad89, 2026-09-24).
-          apt-get install -y -qq nodejs python3-colcon-common-extensions python3-pip openssl zstd python3-opencv python3-pil ros-jazzy-xacro ros-jazzy-realtime-tools ros-jazzy-rmw-cyclonedds-cpp ros-jazzy-nav2-msgs
+          apt-get install -y -qq nodejs python3-colcon-common-extensions python3-pip python3-wheel openssl zstd python3-opencv python3-pil ros-jazzy-xacro ros-jazzy-realtime-tools ros-jazzy-rmw-cyclonedds-cpp ros-jazzy-nav2-msgs
           # --break-system-packages: ros:jazzy-ros-base 는 Ubuntu 24.04 / Python 3.12 라
           # 시스템 환경이 PEP 668 로 표시되어 있다. 이 플래그가 없어 run 34474895940 이
           # externally-managed-environment 로 40 초만에 죽었고, 그 아래 colcon build 부터
@@ -55,6 +55,20 @@ jobs:
           grep -o '^[A-Za-z0-9._-]*==[^ ]*' deploy/robot/pinky_pro/image/device-python-requirements.txt > /tmp/rosy-runtime-constraints.txt
           pip3 install --no-cache-dir --break-system-packages -c /tmp/rosy-runtime-constraints.txt \
             flake8 httpx pyyaml jsonschema ext4
+
+      - name: Build and install ROS-free platform API wheels
+        run: |
+          # Build actual wheels outside src/ and install before colcon/pytest. This catches
+          # missing package metadata and namespace-wheel ownership instead of adding modules
+          # to PYTHONPATH or treating them as ament packages.
+          wheelhouse=/tmp/rosy-platform-wheelhouse
+          mkdir -p "$wheelhouse"
+          python3 -m pip wheel --break-system-packages --no-deps --no-build-isolation \
+            --wheel-dir "$wheelhouse" \
+            modules/world modules/skills/api modules/execution
+          python3 -m pip install --break-system-packages --no-cache-dir --no-index \
+            --find-links "$wheelhouse" \
+            rosy-world==0.1.0 rosy-skill-api==0.1.0 rosy-execution==0.1.0
 
       - name: Build (colcon)
         run: |

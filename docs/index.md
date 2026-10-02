@@ -268,8 +268,8 @@
 
 ## 최근 기록
 
+- 2026-10-02 · uncommitted · feat(platform): ROS-free Observation·Skill·Plan 계약과 wheel 설치
 - 2026-10-02 · uncommitted · test(platform): 현재 import 소유권과 D-413 경계 간선 guard
 - 2026-10-02 · uncommitted · docs(plans): D-395 S1 세 번째 실행 (test/d395-s1-run3, main 5ea9e144)
 - 2026-10-02 · uncommitted · CI 잔여 5건 해소 — 좀비 인식 생존 판정·모드 드리프트 독립·D-155 가드 정정
 - 2026-10-02 · uncommitted · docs(platform): D-413 Task 0 고정 셀 이전 기준선
-- 2026-10-02 · uncommitted · docs(architecture): D-413 네 영역 전환 결정과 고정 셀 실행 계획
