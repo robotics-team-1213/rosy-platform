@@ -144,13 +144,15 @@ export function createRoster({ el, view, log, call, render, streamEvidence, isOp
     const battery = state.battery && typeof state.battery.percent === "number"
       ? `${Math.round(state.battery.percent)}%` : "—";
     const rows = [
-      ["위치", FACT_ICONS.pose, pose ? `${pose.x.toFixed(2)}, ${pose.y.toFixed(2)}` : "—"],
-      ["방향", FACT_ICONS.yaw, pose ? `${(pose.yaw * 180 / Math.PI).toFixed(0)}°` : "—"],
-      ["배터리", FACT_ICONS.battery, battery],
-      ["안전", FACT_ICONS.safety, safetyLabel],
+      ["pose", "위치", FACT_ICONS.pose, pose ? `${pose.x.toFixed(2)}, ${pose.y.toFixed(2)}` : "—"],
+      ["yaw", "방향", FACT_ICONS.yaw, pose ? `${(pose.yaw * 180 / Math.PI).toFixed(0)}°` : "—"],
+      ["battery", "배터리", FACT_ICONS.battery, battery],
+      ["safety", "안전", FACT_ICONS.safety, safetyLabel],
     ];
-    rows.forEach(([label, icon, value]) => {
+    rows.forEach(([key, label, icon, value]) => {
       const cellEl = document.createElement("div");
+      // D-409 — 컴팩트에서 위치·방향은 지도가 말한다. 칸에 이름을 달아 표면이 접는다.
+      cellEl.dataset.fact = key;
       const labelEl = document.createElement("span");
       // D-405 — 라벨의 얼굴은 아이콘, 한국어 이름은 스크린리더와 title에 남는다.
       labelEl.title = label;

@@ -129,8 +129,12 @@
         </div>
 
         <section class="discovery device-link" aria-labelledby="device-link-heading">
-          <h3 id="device-link-heading">기기 연결</h3>
-          <section id="robot-enrollment" aria-labelledby="discovery-heading">
+          <h3 id="device-link-heading" class="sr-only">기기 연결</h3>
+          <!-- D-409 — 등록·승인은 설치 일이다. 운용 흐름에서는 접힌 서랍으로 간다
+               (알림 문장은 role=alert/aria-live로 여전히 소리 난다). -->
+          <details class="install-tools" id="device-install-tools">
+            <summary>기기 등록·연결 도구</summary>
+            <section id="robot-enrollment" aria-labelledby="discovery-heading">
             <div class="robot-head">
               <h4 id="discovery-heading">로봇 등록</h4>
               <ui-tag id="discovery-status" status="neutral">검색 대기</ui-tag>
@@ -205,6 +209,7 @@
               </dialog>
             </div>
           </section>
+          </details>
         </section>
       </div>
     </section>
