@@ -27,6 +27,7 @@ import tempfile
 _LAUNCH_DIR = os.path.dirname(os.path.abspath(__file__))
 if _LAUNCH_DIR not in sys.path:
     sys.path.insert(0, _LAUNCH_DIR)
+from gz_multi_args import apply_nav_composition, nav_composition_argument, optional_float as _optional_float
 from world_profiles import (parse_spawn_poses, resolve_asset_path, resolve_world, resolve_world_path,
                             spawn_xy, world_share_parent)
 
@@ -281,13 +282,6 @@ def _bridge_config(namespace: str, with_clock: bool = False) -> list:
     return entries
 
 
-def _optional_float(raw: str):
-    text = (raw or "").strip()
-    if text == "":
-        return None
-    return float(text)
-
-
 def _launch_setup(context):
     robots = int(LaunchConfiguration("robots").perform(context))
     prefix = LaunchConfiguration("prefix").perform(context)
@@ -433,6 +427,7 @@ def _launch_setup(context):
                 # hosts that race can abort the manager before /load_node exists.
                 "use_composition": "False",
             }
+            apply_nav_composition(nav_args, context)
             if map_yaml:
                 nav_args["map"] = map_yaml
             mode_actions.append(
@@ -594,6 +589,7 @@ def generate_launch_description():
                               description="mode:=nav 맵 yaml. 비면 월드 카탈로그"),
         DeclareLaunchArgument("loc_assist", default_value="true", choices=["true", "false"],
                               description="mode:=nav 에서 로봇별 D-395 loc_assist_node"),
+        nav_composition_argument(),
         DeclareLaunchArgument("api_port_base", default_value="8080",
                               description="첫 로봇의 core API 포트"),
         OpaqueFunction(function=_launch_setup),
