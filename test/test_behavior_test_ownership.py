@@ -27,6 +27,7 @@ KNOWN_EXTERNAL_BEHAVIOR_TESTS = frozenset({
     "src/runtime/gateway/test/test_initial_pose.py",
     "src/runtime/gateway/test/test_line_follow.py",
     "src/runtime/gateway/test/test_line_follow_api.py",
+    "src/runtime/gateway/test/test_line_follow_body_stop.py",
     "src/runtime/gateway/test/test_line_follow_ir_guard.py",
     "src/runtime/gateway/test/test_line_follow_obstacle.py",
     "src/runtime/gateway/test/test_line_follow_obstacle_path.py",
