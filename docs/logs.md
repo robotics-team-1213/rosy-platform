@@ -4641,3 +4641,8 @@
 - 변경: 현재 소유권/설치 기준선부터 공통 request/scope, Fleet·CORE client, 화면 책임, 앱별 소스 이전과 설치·브라우저 수용, D-413에 의존하는 backend 조합 이전까지 14개 task를 작성. 파일·검증·완료 조건·커밋·롤백을 지정하고, web ament wrapper/Fleet sdist·wheel/Face colcon discovery를 구분. Sep30 계획에는 후속 실행 기준을 연결.
 - 증거: 계획의 기존 파일 경로·공개 route·Fleet 진입 문서를 소스와 대조. 문서 계약·quick tier 120 passed/25 기존 freshness warnings; 로그·색인 추가 후 문서 회귀 27 passed, harness lint 0 errors/25 기존 warnings. 신규 로그 행의 줄바꿈을 정리하고 diff 검사를 통과.
 - gate 변화: 없음 — 계획만 작성; 코드·폴더·설치·DEVICE/FIELD 이전은 시작하지 않음.
+
+## 2026-10-03 · uncommitted · docs: D-425 앱·웹 이전 소유권·설치 기준선
+- 변경: refactor/ui-ownership worktree에서 화면/API/자격 audience/상태 정본/writer 표와 소스/설치/caller/목표 경로 표를 작성. 과거 web-transport의 미착지 구현과 충돌은 보존하고 재사용·의존 범위를 기록. Task 0 상태와 실제 teleop 경로 예시를 정렬.
+- 증거: 역할/shared/Robot/Pilot/API/Fleet 별도 기준선 합계 1939 passed/139 skipped; 각 known-failure 판정 0 new/0 known. Python 3.14.5, Node v24.15.0 Windows 호스트. 로그·pytest 임시 폴더는 X:/DevTemp/rosy-ui-ownership/baseline.
+- gate 변화: Task 0 SOURCE 기준선만 완료. 코드·폴더 이전 없음; skip·브라우저·installed-only·ROS-SIM·DEVICE/FIELD는 미수용.
