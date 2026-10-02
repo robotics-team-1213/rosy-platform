@@ -343,6 +343,22 @@ def test_image_installs_and_enables_the_hardware_test_path_only():
         assert f'cp "$NATIVE_RUNTIME_SOURCE/{unit}" "$OVERLAY/etc/systemd/system/"' in payload
 
 
+def test_image_installs_the_ssh_access_units_and_enables_only_the_watch_and_the_boot_cleanup():
+    # D-418: the path unit and the boot cleanup are enabled; the helper's service and the
+    # expiry timer start only through them.
+    source = CUSTOMIZER.read_text(encoding="utf-8")
+    enable = source[source.index("systemctl --root"):source.index("# D-174 T0")]
+    assert "rosy-ssh-access.path" in enable and "rosy-ssh-access-boot.service" in enable
+    for unit in ("rosy-ssh-access.service", "rosy-ssh-password-expire.service", "rosy-ssh-password-expire.timer"):
+        assert unit not in enable, unit
+    loop = source[source.index("for entrypoint in"):]
+    assert "rosy-ssh-access.py" in loop[:loop.index("; do")]
+    payload = (IMAGE / "build-native-payload.sh").read_text(encoding="utf-8")
+    for unit in ("rosy-ssh-access.service", "rosy-ssh-access.path", "rosy-ssh-access-boot.service",
+                 "rosy-ssh-password-expire.service", "rosy-ssh-password-expire.timer"):
+        assert f'cp "$NATIVE_RUNTIME_SOURCE/{unit}" "$OVERLAY/etc/systemd/system/"' in payload
+
+
 @pytest.mark.skipif(sys.platform == "win32", reason="symlinks need a privilege on Windows")
 def test_mounted_image_verifier_rejects_a_banner_link_to_elsewhere(tmp_path):
     root = _valid_root(tmp_path)

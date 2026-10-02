@@ -42,6 +42,8 @@ RELEASES = {  # name: (release id, fake CORE variant, carries an image-layer cha
 R = {name: value[0] for name, value in RELEASES.items()}
 UPDATER = "/opt/rosy/native-runtime/rosy_auto_update.py"
 UPDATES = "/var/lib/rosy/updates"
+#: D-418: CORE's own hand-over code (stdlib), run in the twin as rosy-core by twin-ssh-request.
+SSH_HANDOFF = "src/runtime/api_web/core_api_web/api/v1/ssh_handoff.py"
 
 
 def log(message: str) -> None:
@@ -82,7 +84,7 @@ class Build:
             log("WARNING: deploy/robot/pinky_pro has uncommitted changes; the twin uses HEAD only")
         # LF product content from the commit, never the CRLF working tree.
         with (self.ctx / "repo.tar").open("wb") as handle:
-            subprocess.run(["git", "archive", "--format=tar", "HEAD", "deploy/robot/pinky_pro"],
+            subprocess.run(["git", "archive", "--format=tar", "HEAD", "deploy/robot/pinky_pro", SSH_HANDOFF],
                            cwd=ROOT, stdout=handle, check=True)
         requirements = subprocess.run(
             ["git", "show", "HEAD:deploy/robot/pinky_pro/image/device-python-requirements.txt"],

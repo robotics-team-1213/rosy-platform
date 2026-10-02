@@ -59,6 +59,15 @@ _HTTP_BY_CODE = {
     "HW_CONFIRM_UNAVAILABLE": 503,
     # D-247 6: an answer with no finished (done, < 5 min) test of that device to judge.
     "HW_CONFIRM_NO_TEST": 409,
+    # D-418: SSH access. A key, label, days or minutes off the contract; a label or key
+    # already enrolled, or 32 managed keys; an unknown label; the root helper did not
+    # answer in 10 s or could not apply it.
+    "SSH_INVALID": 422,
+    "SSH_LABEL_EXISTS": 409,
+    "SSH_KEY_EXISTS": 409,
+    "SSH_KEYS_FULL": 409,
+    "SSH_KEY_NOT_FOUND": 404,
+    "SSH_ACCESS_UNAVAILABLE": 503,
     "COMMAND_TIMEOUT": 504,
     "INTERNAL_ERROR": 500,
 }

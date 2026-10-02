@@ -7,6 +7,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update \
  && apt-get install -y --no-install-recommends systemd systemd-sysv dbus python3 openssl tar curl \
       iproute2 sudo ca-certificates udev kmod \
+      openssh-server openssh-client sshpass \
  && rm -rf /var/lib/apt/lists/*
 
 FROM base AS twin

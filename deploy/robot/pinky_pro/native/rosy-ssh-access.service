@@ -1,0 +1,43 @@
+[Unit]
+Description=ROSY SSH access on an administrator's request (D-418)
+# Root and outside CORE (D-161). Started only by rosy-ssh-access.path when CORE
+# writes /run/rosy/ssh-access.request: adds or revokes a managed key, or turns
+# the temporary password on or off, and answers in /run/rosy/ssh-access.response.
+After=local-fs.target rosy-core.service
+# CORE serializes the requests; a burst must never fail the path unit.
+StartLimitIntervalSec=0
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 -I -B /opt/rosy/native-runtime/rosy-ssh-access.py
+TimeoutStartSec=30
+Environment=PYTHONNOUSERSITE=1 PYTHONDONTWRITEBYTECODE=1
+UMask=0022
+
+# Root, but only for /etc (shadow and the sshd drop-ins), /var/lib/rosy/ssh
+# and CORE's /run/rosy hand-over. chpasswd and usermod replace /etc/shadow
+# through lock and temporary files beside it, so /etc stays writable
+# (ProtectSystem=true); /usr and /boot are read-only.
+ProtectSystem=true
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+# systemctl and sshd -t need no network; AF_UNIX reaches systemd. shadow's
+# audit socket (AF_NETLINK) is refused with EAFNOSUPPORT, which it tolerates.
+PrivateNetwork=true
+RestrictAddressFamilies=AF_UNIX
+NoNewPrivileges=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+# chown the response to rosy-core and shadow's new file to root:shadow; consume
+# CORE's request and write the response in /run/rosy (rosy-core's directory).
+CapabilityBoundingSet=CAP_CHOWN CAP_DAC_OVERRIDE CAP_FOWNER
