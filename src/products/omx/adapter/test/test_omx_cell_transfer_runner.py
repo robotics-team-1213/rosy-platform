@@ -6,7 +6,7 @@ from dataclasses import replace
 
 import pytest
 
-from core_common.protocol.schemas import FleetActionGrant
+from core_common.protocol.schemas import FleetActionGrant, FleetCellTransferGrant
 from omx_adapter.action_runner import ActionRunner, action_grant_digest
 from omx_adapter.action_store import ActionStore
 from omx_adapter.command_owner import TrajectoryCommand
@@ -17,16 +17,22 @@ from omx_adapter.phase_recorder import ActionPhaseRecorder
 from omx_adapter.pick_place_runner import PickPlaceRunner
 from omx_adapter.pose_plan import CellPlanningProfile
 
-from test_omx_action_api import FakePhaseExecution, _grant, _runner
+from test_omx_action_api import (
+    FakePhaseExecution, _cell_transfer_grant, _grant, _runner,
+)
 from test_omx_pick_place_runner import _event, _Fence, _GoalPort
 from test_omx_pose_plan import PROFILE_PATH, _plan
 
 
 def _kind(kind):
-    # The Fleet grant schema still admits only PICK_PLACE (C4 adds CELL_TRANSFER);
-    # model_copy builds the device-side view without widening that schema here.
+    if kind == "CELL_TRANSFER":
+        return FleetCellTransferGrant.model_validate(_cell_transfer_grant(
+            action_id="action-1", attempt_id="attempt-1",
+        ))
     grant = FleetActionGrant.model_validate(_grant()).model_copy(update={"action_kind": kind})
-    return grant.model_copy(update={"request_digest": action_grant_digest(grant)})
+    if kind == "PICK_PLACE":
+        return grant.model_copy(update={"request_digest": action_grant_digest(grant)})
+    return grant
 
 
 @pytest.mark.parametrize("kind", ["CELL_TRANSFER", "PICK", "UNKNOWN_KIND"])

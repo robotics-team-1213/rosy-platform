@@ -12,14 +12,13 @@ from typing import Any, Callable, Mapping
 
 from core_common.protocol.schemas import (
     DeviceActionCancelRequest,
-    FleetActionGrant,
     LocalStopQuery,
     LocalStopRearmRequest,
     LocalStopRequest,
     StopRequestSource,
 )
 
-from .action_runner import ActionRunner, action_grant_digest
+from .action_runner import ActionRunner, action_grant_digest, parse_action_grant
 from .local_stop import LocalStopBlocked, LocalStopController
 
 
@@ -70,7 +69,7 @@ class ActionApi:
             if operation == "SubmitAction":
                 if set(request) != {"version", "operation", "grant"}:
                     raise ValueError("SubmitAction contains unsupported fields")
-                grant = FleetActionGrant.model_validate(request["grant"])
+                grant = parse_action_grant(request["grant"])
                 receipt = self.runner.submit(grant, peer_uid=peer_uid)
                 return self._success(version, receipt)
             if operation == "GetAction":
