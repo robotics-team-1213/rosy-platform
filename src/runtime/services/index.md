@@ -34,8 +34,8 @@
 
 ## 최근 기록
 
+- 2026-10-02 · f93d922d · fix(line_follow): D-407 검토 반영과 뒤 사각 규칙
 - 2026-10-02 · 776173dc · feat(line_follow): D-407 막힘 복구 상태기계와 관리자 연결
 - 2026-10-01 · uncommitted · feat(core_features): D-400 shadow verdicts without touching the output
 - 2026-10-01 · uncommitted · feat(command): 대기 5분 후 bored 표정
 - 2026-10-01 · uncommitted · fix(road_behaviour): 발행하지 않는 이벤트 이름 두 개를 사유 코드로
-- 2026-10-01 · uncommitted · fix(fleet_agent): D-370 S7 준비 — Fleet health 탐침이 확장 모양을 받는다

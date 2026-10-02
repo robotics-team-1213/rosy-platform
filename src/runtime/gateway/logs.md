@@ -673,3 +673,9 @@
 - 변경: `POST /api/v1/line-follow/stuck/decision`(Operator+, `STUCK_ID_MISMATCH`·`STUCK_DECISION_REFUSED` 409, MANUAL·ABORT 는 차선 추종 OFF 후 MANUAL·IDLE), `core/line_follow_wiring.py`(설정 파서를 services.py 에서 옮김 + FleetAgent 연결·보정 lease·수동 선속도·미리보기 순서번호 묶기), scan 브리지가 self-mask 점과 `range_min` 을 넘김. API Ref v1.72.
 - 증거: `python -m pytest src/runtime/gateway/test/ test/architecture` 1780 passed, 17 skipped; `known_failures.py` 0 new.
 - gate 변화: 없음. Fleet 콘솔·FleetAgent 답 중계는 다음 단계.
+
+## 2026-10-02 · caa0d51d · fix(api): D-407 검토 반영 — MANUAL 답은 POST /mode 규칙, 답 감사에 토큰
+
+- 변경: `/mode` 전이를 `common.apply_mode` 로 옮겨 MANUAL·ABORT 막힘 답이 같이 씀(보정 lease 를 막힘 소비 전에 확인, MANUAL 은 navigation·swarm 취소). `nav.line_stuck_answered` 에 `token_id`. 설정 형 검사(`recovery_local_enabled` 불리언만, `recovery_max_attempts` 정수·정수 float). sector 모드 몸 점은 막힘 근처에서만, scan `range_min` 없으면 None.
+- 증거: `test_line_follow_stuck_api.py` 14 passed, line-follow·calibration·api 시험 초록.
+- gate 변화: 없음.
