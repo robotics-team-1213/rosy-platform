@@ -13,13 +13,14 @@ class CellJobGoalMixin:
     """Completion shares the Cell journal transaction and occupancy owner."""
 
     @staticmethod
-    def _terminal_step_succeeded(connection, mission_id, step_index, action_id, attempt_id):
+    def _terminal_step_succeeded(connection, mission_id, step_index, action_id, attempt_id,
+                                 expected_terminal_event_id=None):
         row = connection.execute(
-            "SELECT detail_json FROM fleet_cell_events WHERE mission_id=? AND step_index=? "
+            "SELECT event_id, detail_json FROM fleet_cell_events WHERE mission_id=? AND step_index=? "
             "AND event_type IN ('CELL_STEP_ACTION_SUCCEEDED', 'CELL_STEP_ACTION_UNKNOWN') "
             "ORDER BY event_id DESC LIMIT 1", (mission_id, step_index),
         ).fetchone()
-        if row is None:
+        if row is None or (expected_terminal_event_id is not None and row["event_id"] != expected_terminal_event_id):
             return False
         detail = json.loads(row["detail_json"])
         return (detail["action_id"] == action_id and detail["attempt_id"] == attempt_id
@@ -32,7 +33,7 @@ class CellJobGoalMixin:
 
     def confirm_step_goal(self, mission_id: str, *, step_index: int,
                           action_id: str, attempt_id: str,
-                          evidence: Mapping[str, Any]) -> dict[str, Any]:
+                          evidence: Mapping[str, Any], expected_terminal_event_id: int | None = None) -> dict[str, Any]:
         """Record already authenticated sim-model and post-action gripper evidence."""
         required_evidence = {
             "producer_id", "evidence_id", "evidence_source", "action_id", "attempt_id",
@@ -74,7 +75,8 @@ class CellJobGoalMixin:
             if (job["current_step_index"] != step_index
                     or job["status"] not in {"ACTION_SUCCEEDED", "HOLD"}
                     or step["status"] not in {"ACTION_SUCCEEDED", "HOLD"}
-                    or not self._terminal_step_succeeded(connection, mission_id, step_index, action_id, attempt_id)):
+                    or not self._terminal_step_succeeded(connection, mission_id, step_index, action_id, attempt_id,
+                                                         expected_terminal_event_id)):
                 raise MissionConflict("independent goal evidence requires this step's terminal Action success")
             self._fence_readback(connection, mission_id)
             control = connection.execute("SELECT * FROM fleet_dispatch_control WHERE control_id=1").fetchone()

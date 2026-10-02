@@ -4565,3 +4565,9 @@
 - Change: move Cell goal completion into its own journal module and require the latest terminal SUCCEEDED event for the exact step, Action and attempt inside the SQLite completion transaction. Permit independently confirmed held success, preserve next-step WAITING/HOLD after authority changes, reject rewritten goal evidence and empty provenance, and keep claims until every ordered goal is confirmed. Dispatch is not rearmed by goal confirmation.
 - Evidence: CellJob/Mission/phase-contract regression 89 passed; independent review 42 passed with no remaining Important/Critical checkpoint findings. Current-main platform contract checks pass 26 tests with explicit source paths (not installed-artifact proof). Quick tier 96 passed/24 existing freshness warnings. Changed Python files pass flake8. Full Fleet regression 1468 passed/7 skipped, known-failure comparison 0 new/0 known; final log/generated-record checks 3 passed and harness lint 0 errors/24 existing freshness warnings.
 - Gate: SOURCE/LOCAL only. Public registered/fresh Cell goal production, actual two-ledger Cell replay, real OMX owner/provider composition and ROS-SIM remain required. Tasks 4-5 and 7 remain IN PROGRESS.
+
+
+## 2026-10-03 · uncommitted · docs: record internal Cell evidence checkpoint
+- Change: append D-413 progress for pinned producer authentication, observation freshness, rejected-evidence persistence protection and atomic terminal identity fencing. Keep Tasks 4-5 and 7 IN PROGRESS and record public ingress/app callback/evaluator/ROS-SIM as remaining work.
+- Evidence: focused Cell service/store/dispatcher 48 passed, registry 10 passed; independent review 44 passed; quick tier 96 passed/24 existing freshness warnings, harness lint 0 errors/24 existing freshness warnings. Full Fleet regression is running and not claimed complete.
+- Gate: SOURCE/LOCAL only; no ROS-SIM, artifact, device or field promotion.
