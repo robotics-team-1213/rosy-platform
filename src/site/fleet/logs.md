@@ -1242,3 +1242,13 @@
 - gate 변화: 없음(SOURCE/LOCAL 호스트 시험만, 실물·시뮬 없음).
 - 크기: fleet 묶음 24587 → 25494(+907, 시험 포함). 크기 판정을 25494 로 다시 내렸다(split 그대로, 미일정). 병렬 D-395 가지가 옛 24565 핀에 25011 을 보고했으므로 둘을 합칠 때 한 번 더 판정한다.
 - 최종 증거: `python -m pytest src/site/fleet/test -q` 1349 passed/7 skipped(새 `test_line_stuck_api.py` 13, `test_transport.py` 1, node `line-stuck.test.mjs` 9 는 glob runner 로 포함); 옵트인 Chromium `-k "line_stuck or queues_render or camera_fault or mobile_console"` 5 passed(확인 단계·Esc·폴링 유지·409 그대로); `src/runtime/gateway/test` + `test/architecture` 새 실패 0(known_failures); harness lint 0 errors. Windows 호스트만, 로봇 접촉 없음.
+
+## 2026-10-02 · uncommitted · D-407 판단 요청 검토 반영 — 전송 실패·지속 기록·확인 단계
+- 변경: 답 중계가 httpx 오류(`HttpRobotClient` 는 OSError 가 아니라 httpx 예외를 올린다)를 잡는다. 연결 자체 실패는 502 `ROBOT_UNREACHABLE`(전달 안 됨), 시간 초과·응답 끊김은 502 `STUCK_DECISION_OUTCOME_UNKNOWN`(CORE 가 이미 적용했을 수 있음, 막힘을 다시 보고 답할 것). 둘 다 기록된다(결과 불명은 `accepted: null`). 전에는 맨 500 에 기록 없음이었다.
+- 변경: 넘긴 답마다 Fleet 저널 DB 의 `fleet_line_stuck_answers` 에 API 감사 `request_id` 와 함께 남긴다(작업 저장소가 있을 때). 저장 실패는 로그만 — 로봇은 이미 답을 받았다.
+- 변경: `stuck_id` 는 `^[A-Za-z0-9_.:-]+$`(CORE id 는 `stuck-<12 hex>`). `GET /api/fleet/line-stuck` 은 로봇을 다시 모으지 않고 마지막 `/state` 모음과 `observed_age_s` 를 준다.
+- 변경: 콘솔 — 확인 단계 "보내기"가 그 답 버튼과 같은 사유로 막히고, 전송 중 두 번째 답은 무시하며, 막힘 id 가 바뀌면 확인 단계를 버린다(aria-expanded false). 전송 실패 문구는 "전달 실패"/"결과 불명"이지 "거부"가 아니다.
+- 근거: D-407 Fleet 쪽 검토(M1, L1–L6). API Ref v1.76 행 문구 갱신(버전 유지, 같은 가지의 미병합 추가분).
+- gate 변화: 없음.
+- 크기: fleet 25590(판정 25494+150 안).
+- 최종 증거: `src/site/fleet/test` 1352 passed/7 skipped(전송 실패 매개 4: ConnectError·ConnectionRefused·ReadTimeout·RemoteProtocolError, 지속 기록·감사 id, 목록이 로봇을 다시 부르지 않음, id 형식); node `line-stuck.test.mjs` 10; 옵트인 Chromium `-k "line_stuck or queues_render or camera_fault or mobile_console"` 7 passed(새 2: 성공 결과·전송 중 이중 제출 막힘, 확인 중 막힘 교체·오프라인 로봇) — 확인 단계 id 비교를 되돌린 변이는 적색; gateway+architecture 1918 passed, known_failures 새 실패 0; harness lint 0 errors.
