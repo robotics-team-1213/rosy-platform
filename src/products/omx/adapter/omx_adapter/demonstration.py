@@ -21,6 +21,10 @@ ROBOT_TYPE = "omx_sim_ros"
 ACTION_SEMANTICS = "absolute_joint_position_target_rad"
 MAX_SKEW_NS = 50_000_000
 MAX_FRAMES = 3000
+#: Goal duration bounds: a jog is 0.1-1.0 s, a gripper goal up to 2.0 s
+#: (``core_common.protocol.omx_sim.GRIPPER_GOAL_MAX_DURATION_S``, D-411 C).
+MIN_GOAL_DURATION_S = 0.1
+MAX_GOAL_DURATION_S = 2.0
 
 
 def _sha(data: bytes) -> str:
@@ -45,6 +49,9 @@ def _provenance(source: dict) -> dict:
     names = value.get("joint_names", [])
     if not names or len(set(names)) != len(names) or len(names) > 8:
         raise ValueError("invalid joint order")
+    # Optional (D-411 C): episodes recorded before the gripper column have no gripper_joint.
+    if value.get("gripper_joint") is not None and value["gripper_joint"] not in names:
+        raise ValueError("gripper joint must be one of the joints")
     limits = value.get("position_limits_rad", {})
     if set(limits) != set(names):
         raise ValueError("joint limits must match explicit order")
@@ -95,8 +102,11 @@ def _row_error(row: dict, source: dict, previous_ns: int | None) -> str | None:
             return "goal_identity"
     except (ValueError, TypeError):
         return "goal_identity"
-    if not _finite(row.get("duration_s")) or not 0.1 <= row["duration_s"] <= 1:
+    if not _finite(row.get("duration_s")) or not MIN_GOAL_DURATION_S <= row["duration_s"] <= MAX_GOAL_DURATION_S:
         return "goal_duration"
+    gripper = source.get("gripper_joint")
+    if gripper is not None and row.get("action.gripper") != row["action"][names.index(gripper)]:
+        return "gripper_action"
     if type(row.get("state_sequence")) is not int or row["state_sequence"] < 0:
         return "state_sequence"
     if type(row.get("received_at_ns")) is not int or row["received_at_ns"] < 0:
@@ -192,6 +202,8 @@ class DemonstrationRecorder:
                    "received_at_ns": received_at_ns, "state_sequence": state_sequence,
                    "observation.state": [positions[n] for n in names], "action": [target[n] for n in names],
                    "command_id": command_id, "ros_goal_id": ros_goal_id, "duration_s": duration_s}
+            if self.source.get("gripper_joint") is not None:
+                row["action.gripper"] = target[self.source["gripper_joint"]]
             error = _row_error(row, self.source, self._previous_ns)
             if error:
                 self.issue(error)
