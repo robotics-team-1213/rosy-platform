@@ -54,11 +54,11 @@ def test_side_points_outside_the_strip_do_not_block_translation():
     assert B.translation_gap([(0.0, 0.06)]) == 0.0      # inside W + 0.010
 
 
-def test_unknown_band_blocks_translation_into_it_but_never_rotation():
+def test_unknown_band_blocks_translation_into_it():
     view = B.scan_view(_scan({180: math.inf}, range_min=0.15))
     assert B.unknown_blocks(view)                         # forward: band reaches past the front
     assert not B.unknown_blocks(view, reverse=True)
-    assert B.can_rotate(view.points)
+    assert B.can_rotate(view.points)                      # seen points alone are clear
     # A blind zone inside the body (range_min 0.05) is no band at all.
     assert not B.unknown_blocks(B.scan_view(_scan({180: math.inf}, range_min=0.05)))
 
@@ -89,3 +89,30 @@ def test_an_accepted_lidar_mount_record_refines_the_forward_angle(tmp_path):
     assert body.lidar_forward_deg == pytest.approx(181.5)
     assert body.source.startswith("calibration record")
     assert resolve_body(robot="other", root=tmp_path).lidar_forward_deg == pytest.approx(180.0)
+
+
+# --- D-424 review M1/M2/M6 -------------------------------------------------------------
+
+def test_a_turn_needs_returns_in_every_sector_around_the_base():
+    """M1: one finite beam (or an empty scan) is not a clear sweep."""
+    ranges = [math.inf] * 360
+    ranges[90] = 2.0
+    one = {"ranges": ranges, "angle_min": 0.0, "angle_max": 2 * math.pi * 359 / 360,
+           "range_min": 0.05, "range_max": 12.0}
+    assert "sectors" in B.rotation_reason(B.scan_view(one))
+    assert not B.can_rotate([])
+    assert B.rotation_reason(B.scan_view(_scan({}, range_min=0.05))) is None
+
+
+def test_rear_unknown_never_clears_the_sweep_front_needs_a_real_echo():
+    """M2/M6: no rear sensor; in front only a finite echo inside the cone clears the band."""
+    rear = B.scan_view(_scan({0: math.inf}, range_min=0.15))         # scan 0 = robot rear
+    assert "behind" in B.rotation_reason(rear, ultrasonic_m=1.0)
+    front = B.scan_view(_scan({180: math.inf}, range_min=0.15))
+    assert "in front" in B.rotation_reason(front)
+    assert "in front" in B.rotation_reason(front, ultrasonic_m=math.inf)   # no echo proves nothing
+    assert B.rotation_reason(front, ultrasonic_m=0.5) is None
+    assert not B.unknown_blocks(front, ultrasonic_m=0.5)
+    assert B.unknown_blocks(front, ultrasonic_m=0.05)                     # echo nearer than the band
+    corner = B.scan_view(_scan({180 + 40: math.inf}, range_min=0.15))     # 40 deg off: outside the cone
+    assert B.unknown_blocks(corner, ultrasonic_m=0.5)

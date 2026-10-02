@@ -47,6 +47,13 @@ DECEL_MPS2 = 0.5         # conservative Pinky braking until measured
 HYSTERESIS_M = 0.03      # resume beyond stop + this
 #: Lateral pad of the swept strip and of the rotation circle in the sensing gate (D-424).
 SWEEP_PAD_M = 0.010
+#: Forward ultrasonic cone half angle: the D-422 line_follow.obstacle_ultrasonic_half_angle_deg.
+ULTRASONIC_HALF_ANGLE_DEG = 15.0
+#: D-424 review M1: a turn needs at least one seen return in each of these equal sectors around
+#: the base. A sector with none is a gap wider than 360/8 = 45 deg the LiDAR did not see into
+#: (blocked, absorbing or too near) -- not evidence of free space. 45 deg is the order of the
+#: front-sector widths the bumpers have always used (D-344 +-20, the gate's +-45 deg).
+ROTATION_SECTORS = 8
 
 
 def stop_gap_m(speed: float, *, margin_m: float = MARGIN_M, latency_s: float = LATENCY_S,
@@ -226,19 +233,49 @@ class RobotBody:
                 best = gap
         return best
 
+    def ultrasonic_clears(self, point: Point, echo_m: Optional[float],
+                          half_angle_deg: float = ULTRASONIC_HALF_ANGLE_DEG) -> bool:
+        """D-424 review M6: a forward ultrasonic proves `point` free only with a finite echo
+        farther than the point, and only inside its cone. No echo (an HC-SR04 timeout) proves
+        nothing -- an angled or soft surface returns nothing too -- so it never clears."""
+        if self.ultrasonic_x_m is None or echo_m is None or not math.isfinite(echo_m):
+            return False
+        dx, dy = point[0] - self.ultrasonic_x_m, point[1]
+        if dx <= 0.0:
+            return False
+        return (math.degrees(math.atan2(abs(dy), dx)) <= half_angle_deg
+                and math.hypot(dx, dy) < float(echo_m))
+
+    def _front_band_cleared(self, end: Point, echo_m: Optional[float]) -> bool:
+        """The unknown band of one beam past the body front is cleared by the ultrasonic only
+        when both its end and where it leaves the body front lie in the cone, nearer than the echo."""
+        if echo_m is None:
+            return False
+        dx = end[0] - self.lidar_x_m
+        if dx <= 0.0:
+            return False
+        t = (self.front_x_m - self.lidar_x_m) / dx
+        exit_point = (self.front_x_m, self.lidar_y_m + t * (end[1] - self.lidar_y_m))
+        return self.ultrasonic_clears(end, echo_m) and self.ultrasonic_clears(exit_point, echo_m)
+
     def unknown_blocks(self, view: ScanView, *, reverse: bool = False,
-                       pad_m: Optional[float] = None) -> bool:
+                       pad_m: Optional[float] = None, ultrasonic_m: Optional[float] = None) -> bool:
         """An unknown beam reaches past the body edge inside the strip of this direction: the
-        robot cannot know the first metres of that way are free."""
+        robot cannot know the first metres of that way are free. Forward, a fresh finite
+        ultrasonic echo clears the part of the band inside its cone (M6)."""
         pad = self.sweep_pad_m if pad_m is None else float(pad_m)
         width = self.half_width_m + pad
-        for x, y in view.unknown:
+        for end in view.unknown:
+            x, y = end
             if abs(y) > width:
                 # The beam may still cross the strip nearer the LiDAR: check its crossing.
                 x, y = self._strip_crossing(x, y, width)
                 if x is None:
                     continue
             if (x < self.rear_x_m) if reverse else (x > self.front_x_m):
+                if not reverse and self._front_band_cleared((x, y), ultrasonic_m) \
+                        and self._front_band_cleared(end, ultrasonic_m):
+                    continue
                 return True
         return False
 
@@ -261,9 +298,41 @@ class RobotBody:
         return best
 
     def can_rotate(self, points: Sequence[Point], margin_m: Optional[float] = None) -> bool:
-        """Every seen point clears rotation_radius + margin. Unknown beams never block a turn."""
+        """Every seen point clears rotation_radius + margin; no point at all is not clear."""
         need = self.rotation_clear_m(margin_m)
-        return all(math.hypot(x, y) > need for x, y in points)
+        return bool(points) and all(math.hypot(x, y) > need for x, y in points)
+
+    def seen_sectors(self, points: Sequence[Point]) -> int:
+        """How many of ROTATION_SECTORS equal sectors around the base hold a seen point."""
+        return len({int((math.atan2(y, x) + math.pi) / (2.0 * math.pi) * ROTATION_SECTORS)
+                    % ROTATION_SECTORS for x, y in points})
+
+    def rotation_reason(self, view: ScanView, margin_m: Optional[float] = None, *,
+                        ultrasonic_m: Optional[float] = None) -> Optional[str]:
+        """Why an in-place turn is not clear (None = clear), D-424 + review M1/M2:
+        - every sector around the base needs a seen return (coverage), else unknown;
+        - every seen point must clear rotation_radius + margin;
+        - a beam without a return whose unknown band leaves the body crosses the swept annulus:
+          behind the body (no rear sensor) it is never clear; in front only a fresh finite
+          ultrasonic echo inside its cone clears it."""
+        if not view.points:
+            return "no LiDAR return to judge the turn"
+        seen = self.seen_sectors(view.points)
+        if seen < ROTATION_SECTORS:
+            return f"the scan sees only {seen} of {ROTATION_SECTORS} sectors around the base"
+        need = self.rotation_clear_m(margin_m)
+        nearest = min(math.hypot(x, y) for x, y in view.points)
+        if nearest <= need:
+            return (f"a return {nearest:.3f} m from the base <= {need:.3f} m "
+                    "(rotation radius + margin)")
+        for end in view.unknown:
+            if self.contains(*end):
+                continue                      # the blind zone ends inside the body
+            if end[0] < 0.0:
+                return "a beam without a return behind the body crosses the turn's sweep"
+            if not self.ultrasonic_clears(end, ultrasonic_m):
+                return "a beam without a return in front crosses the turn's sweep"
+        return None
 
     def with_lidar(self, *, x_m: Optional[float] = None, y_m: Optional[float] = None,
                    forward_deg: Optional[float] = None) -> "RobotBody":
