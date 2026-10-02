@@ -295,7 +295,7 @@ SIZE_VERDICTS = {
         "10977); same verdict",
     ),
     "control": (
-        42_540,
+        42_784,
         f"split: deploy closure needs only sensing + safety provider (P1a); {CONTROL_SPLIT} "
         "(re-judged 2026-09-30 at 33090 after D-356 added the ROS-free learned perception backend "
         "(sensing/perception/learned), the shadow node and the recording CLI; the learned backend sits "
@@ -352,7 +352,9 @@ SIZE_VERDICTS = {
         "thin node (control/pilot_recorder_node.py) and the camera's on-demand JPEG switch — same "
         "subjects, verdict unchanged; re-judged 2026-10-02 at 42540 after the D-411 A review hardening "
         "(orphan-writer recovery, off-timer hashing, reserve and disk floor in control/pilot_recording.py, "
-        "the camera's dead-recorder check) — same subjects, verdict unchanged)",
+        "the camera's dead-recorder check) — same subjects, verdict unchanged; re-judged 2026-10-03 at "
+        "42784 when D-411 A landed on main beside D-395 rev. 11 (reference-square NMS, lidar self-beam "
+        "drop, learned lane component filter) — same subjects, verdict unchanged)",
     ),
     # --- D-362 newly-covered files (web assets in src/ packages, ops roots). ---
     "runtime/sensing/web/diagnostic.html": (
