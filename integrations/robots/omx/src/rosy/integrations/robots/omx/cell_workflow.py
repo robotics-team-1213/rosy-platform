@@ -15,13 +15,16 @@ class CellTransferWorkflowExecution:
     """
 
     def __init__(self, execution, workflow: PickPlaceWorkflowJournal, recorder, *,
-                 gripper_readback, max_age_s, monotonic, now=None):
+                 gripper_readback, max_age_s, monotonic, complete_if_current, now=None):
         self.execution = execution
         self.workflow = workflow
         self.recorder = recorder
         self.gripper_readback = gripper_readback
         self.max_age_s = max_age_s
         self.monotonic = monotonic
+        if not callable(complete_if_current):
+            raise ValueError("a serialized completion fence is required")
+        self.complete_if_current = complete_if_current
         self.now = now or (lambda: datetime.now(timezone.utc))
         self._consumed = 0
         self._lock = threading.RLock()
@@ -85,10 +88,13 @@ class CellTransferWorkflowExecution:
                     if (not isinstance(observed_at, datetime) or observed_at.tzinfo is None
                             or observed_at.utcoffset() is None):
                         raise TransactionError("workflow clock must return an aware timestamp")
-                    self.workflow.verify_gripper_released(
-                        self._read_gripper(), now=self.monotonic(), max_age_s=self.max_age_s,
+                    observation = self._read_gripper()
+                    # Read sensors before taking the stop lock. Only durable completion
+                    # runs under the final fence; it never waits for ROS goal callbacks.
+                    self.complete_if_current(lambda: self.workflow.verify_gripper_released(
+                        observation, now=self.monotonic(), max_age_s=self.max_age_s,
                         result_observed_at=observed_at.isoformat(),
-                    )
+                    ))
                     return self.recorder.parent()
             elif phase["ordinal"] != self._consumed - 1:
                 self.workflow.cancel(reason="PHASE_SEQUENCE_CHANGED")
