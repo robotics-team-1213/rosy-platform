@@ -167,7 +167,12 @@ def test_process_plan_rejects_tampered_step_carry_height_or_source_digest(mutate
 
 
 def test_palletizing_process_has_no_ros_runtime_import():
+    # 이 시험은 루트 test/ 묶음과 한 프로세스를 쓴다 — CI(ROS 컨테이너)에서는 앞선
+    # 어느 시험이 이미 rclpy 를 적재했을 수 있다(2026-10-02 실행 36972584689 적색).
+    # 계약은 '팔레타이징이 rclpy 를 끌어들이지 않는다'이므로, 이 import 로 새로
+    # 생긴 모듈만 검사한다.
+    before = set(sys.modules)
     import rosy.processes.palletizing  # noqa: PLC0415
 
     assert rosy.processes.palletizing.__name__ == "rosy.processes.palletizing"
-    assert "rclpy" not in sys.modules
+    assert not ({"rclpy", "rclpy.node"} & set(sys.modules) - before)
