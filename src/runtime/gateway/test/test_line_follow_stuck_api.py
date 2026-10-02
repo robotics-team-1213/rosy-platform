@@ -209,9 +209,10 @@ def test_answer_audit_records_the_token(core_client):
     assert answered and answered[0].data["by"] == "operator"
     ref = answered[0].data["principal_ref"]
     assert ref and "token_id" not in answered[0].data
-    # The reference is the token's public record id, never secret material (D-407 B).
-    listed = client.get("/api/v1/system/tokens", headers=ADMIN).json() if False else None
-    assert "rosy-dev-operator" not in ref
+    # The dev operator token has no configured id: its record id is digest[:12], an unsalted
+    # hash prefix. The event names it by a per-process HMAC instead (review L4).
+    from core_api_web.api.deps import token_digest
+    assert ref.startswith("anon-") and token_digest("rosy-dev-operator")[:12] not in ref
 
 
 def test_answered_event_passes_the_fleet_audit_filter(core_client):
@@ -243,3 +244,13 @@ def test_recovery_overlay_types_coerce_or_fail_clearly():
         _line_follow_config({"recovery_max_attempts": 1.5})
     with pytest.raises(ValueError, match="recovery_max_attempts must be a whole number"):
         _line_follow_config({"recovery_max_attempts": "2"})
+
+
+def test_principal_ref_keeps_configured_ids_and_hides_hash_prefix_ids():
+    """Review L4: a configured id is a name; a digest-prefix id is replaced by a keyed ref."""
+    from core_api_web.api.deps import principal_ref, token_digest
+    digest = token_digest("some-secret-token")
+    assert principal_ref({"id": "site-console", "digest": digest}) == "site-console"
+    anon = principal_ref({"id": digest[:12], "digest": digest})
+    assert anon.startswith("anon-") and digest[:12] not in anon
+    assert principal_ref({"id": digest[:12], "digest": digest}) == anon     # stable in a run

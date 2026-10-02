@@ -169,3 +169,32 @@ def test_a_refused_event_keeps_the_robot_link(tmp_path):
         ws.send_json(_heartbeat_env("rosy_01"))
         assert ws.receive_json()["type"] == "heartbeat"
         assert hub.registry.online_ids() == ["rosy_01"]
+
+
+def test_send_reply_never_sends_into_a_closed_socket():
+    """Review L5: the hub's reply guard (D-407 re-run 'websocket.send after websocket.close')."""
+    from starlette.websockets import WebSocketState
+    from fleet.hub.server import send_reply
+
+    reply = Envelope(type=EnvelopeType.HEARTBEAT, payload={})
+
+    class Socket:
+        def __init__(self, state, fail=None):
+            self.client_state = state
+            self.fail = fail
+            self.sent = []
+
+        async def send_json(self, data):
+            if self.fail:
+                raise self.fail
+            self.sent.append(data)
+
+    closed = Socket(WebSocketState.DISCONNECTED)
+    assert asyncio.run(send_reply(closed, reply)) is False and closed.sent == []
+    racing = Socket(WebSocketState.CONNECTED, RuntimeError(
+        "Unexpected ASGI message 'websocket.send', after sending 'websocket.close'."))
+    assert asyncio.run(send_reply(racing, reply)) is False
+    gone = Socket(WebSocketState.CONNECTED, WebSocketDisconnect(1006))
+    assert asyncio.run(send_reply(gone, reply)) is False
+    live = Socket(WebSocketState.CONNECTED)
+    assert asyncio.run(send_reply(live, reply)) is True and live.sent[0]["type"] == "heartbeat"

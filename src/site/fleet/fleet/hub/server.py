@@ -10,6 +10,19 @@ from fleet.hub.hub import SiteHub
 
 logger = logging.getLogger("hub.server")
 
+async def send_reply(websocket, reply: Envelope) -> bool:
+    """Reply unless the agent has gone: never send into a closed socket (D-407 re-run:
+    "websocket.send after websocket.close" when the agent dropped the link)."""
+    if websocket.client_state is not WebSocketState.CONNECTED:
+        return False
+    try:
+        await websocket.send_json(reply.model_dump(exclude_none=True))
+        return True
+    except (WebSocketDisconnect, RuntimeError, OSError) as exc:
+        logger.info("robot link closed before the hub reply was sent: %s", exc)
+        return False
+
+
 def install_hub_routes(app: FastAPI, hub: SiteHub,
                        hub_token: Optional[str] = None) -> FastAPI:
     """기존 사이트 FastAPI 앱에 Hub의 registry와 CORE Agent 경로를 붙인다.
@@ -32,16 +45,7 @@ def install_hub_routes(app: FastAPI, hub: SiteHub,
         session = hub.open_session()
 
         async def send(reply: Envelope) -> bool:
-            """Reply unless the agent has gone: never send into a closed socket (D-407 re-run:
-            "websocket.send after websocket.close" when the agent dropped the link)."""
-            if websocket.client_state is not WebSocketState.CONNECTED:
-                return False
-            try:
-                await websocket.send_json(reply.model_dump(exclude_none=True))
-                return True
-            except (WebSocketDisconnect, RuntimeError, OSError) as exc:
-                logger.info("robot link closed before the hub reply was sent: %s", exc)
-                return False
+            return await send_reply(websocket, reply)
 
         try:
             while True:
