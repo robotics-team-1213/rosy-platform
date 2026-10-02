@@ -463,20 +463,24 @@ def test_doctor_local_onnx_is_advisory_for_an_operator(tmp_path, monkeypatch, ca
     assert "onnx importable" in capsys.readouterr().out
 
 
-def test_fetch_http_uses_core_token_and_port(tmp_path, monkeypatch):
-    _init(tmp_path, "--core-token-file", str(tmp_path / "core.token"), monkeypatch=monkeypatch)
+def test_fetch_http_uses_the_operator_token_and_port(tmp_path, monkeypatch):
+    # harvest's core_token_file is a viewer token; fetch needs its own Operator token key.
+    cfg, rc = _init(tmp_path, "--core-token-file", str(tmp_path / "core.token"),
+                    "--core-operator-token-file", str(tmp_path / "op.token"), monkeypatch=monkeypatch)
+    assert rc == 0 and yaml.safe_load(cfg.read_text())["core_operator_token_file"] == str(tmp_path / "op.token")
     seen = []
     fake = types.ModuleType("fetch_http")
     fake.main = lambda argv: seen.append(argv) or 0
     monkeypatch.setitem(sys.modules, "fetch_http", fake)
     assert rosy_ml.main(["fetch", "pinky-a", "--http", "--dest", str(tmp_path / "raw")]) == 0
     assert seen[0][0] == "http://10.0.0.11:8080"
-    assert seen[0][seen[0].index("--token-file") + 1] == str(tmp_path / "core.token")
+    assert seen[0][seen[0].index("--token-file") + 1] == str(tmp_path / "op.token")
     assert seen[0][seen[0].index("--dest") + 1] == str(tmp_path / "raw")
     with pytest.raises(SystemExit):
         rosy_ml.main(["fetch", "pinky-a"])          # --http is required: SSH stays `harvest`
 
 
-def test_fetch_http_needs_an_operator_token(tmp_path, monkeypatch):
-    _init(tmp_path, monkeypatch=monkeypatch)
+def test_fetch_http_needs_an_operator_token(tmp_path, monkeypatch, capsys):
+    _init(tmp_path, "--core-token-file", str(tmp_path / "core.token"), monkeypatch=monkeypatch)
     assert rosy_ml.main(["fetch", "pinky-a", "--http"]) == 2
+    assert "--core-operator-token-file" in capsys.readouterr().out

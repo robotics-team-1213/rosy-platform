@@ -5,16 +5,21 @@ Usage: fetch_http.py http://<robot>:8080 [--token-file FILE] [--dest data/percep
                      [--video-out data/teleop/learning] [--codec hevc|h264] [--only ID]
 
 Only while CORE says the robot is stopped (D-136 §6, API Ref §5.10): the listing names the
-blocker and the tool exits 4. The token is an Operator token read from a file (or the file
-named by ROSY_CORE_TOKEN_FILE), never argv.
+blocker and the tool exits 4. The archive needs an Operator token (harvest's viewer token is
+not enough) read from a file, or the file named by ROSY_CORE_OPERATOR_TOKEN_FILE, never argv.
+A 401/403 stops the run at once with exit 2. Redirects are refused: the bearer token goes only
+to the URL given.
 
 Per recording: <dest>/.part-<id>.tar -> safe extract into <dest>/.staging-<id>/ -> sha256 and
 size check against manifest.json -> <dest>/<id>/ -> bag_to_video -> pair check (frames with
-both cmd_vel and teleop/intent). A body shorter than Content-Length means CORE aborted the
-download (the robot moved or a recording started): the partial is deleted and the recording
-is fetched again from zero on a later run. A recording already in <dest>/<id> is skipped.
+both cmd_vel and teleop/intent). The tar and its extraction sit side by side, so the PC needs
+about twice the recording's size free in <dest>. Leftovers of an earlier interrupted run are
+removed first. A body shorter than Content-Length means CORE aborted the download (the robot
+moved or a recording started): the partial is deleted and the recording is fetched again from
+zero on a later run. A recording already in <dest>/<id> is skipped.
 
-Exit codes: 0 all fetched, 1 some recording failed, 2 bad arguments, 4 robot not idle.
+Exit codes: 0 all fetched, 1 some recording failed, 2 bad arguments or token refused,
+4 robot not idle.
 """
 import argparse
 import hashlib
@@ -30,10 +35,9 @@ import urllib.parse
 import urllib.request
 from pathlib import Path, PurePosixPath
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from harvest import TOKEN_ENV  # noqa: E402
-
 EXIT_NOT_IDLE = 4
+EXIT_TOKEN = 2
+TOKEN_ENV = "ROSY_CORE_OPERATOR_TOKEN_FILE"
 # core_common.protocol.recording (not imported: this tool runs without the robot tree).
 MANIFEST_SCHEMA = "rosy.pilot.recording.manifest/1"
 MANIFEST_NAME = "manifest.json"
@@ -41,6 +45,11 @@ INTENT_TOPIC = "teleop/intent"
 RECORDING_ID = re.compile(r"\d{8}T\d{6}Z_[A-Za-z0-9_.-]{1,64}")
 CHUNK = 1 << 20
 DEFAULT_DEST = "data/perception/raw"
+LIST_TIMEOUT_S = 15.0
+# A member must also land as a plain file on Windows: no reserved characters or device names.
+_WINDOWS_CHARS = set(':<>"|?*')
+_WINDOWS_NAMES = re.compile(r"(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(\..*)?", re.I)
+_TOKEN_HELP = "needs an Operator token (rosy_ml init --core-operator-token-file <file>)"
 
 
 class FetchError(Exception):
@@ -51,17 +60,32 @@ class NotIdle(FetchError):
     """CORE refused or cut the transfer because the robot is not idle (or busy)."""
 
 
+class TokenRefused(FetchError):
+    """401/403: the token is wrong or not an Operator's — every further request fails too."""
+
+
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, *args, **kwargs):
+        return None          # urllib then raises the 3xx as an HTTPError
+
+
+_OPENER = urllib.request.build_opener(_NoRedirect)
+
+
 def _id_ok(value) -> bool:
     return isinstance(value, str) and RECORDING_ID.fullmatch(value) is not None \
         and not value.endswith("_")
 
 
 def _safe_path(path) -> bool:
-    """Relative POSIX, no '.', '..', empty part or backslash (core_common safe_member)."""
+    """Relative POSIX (core_common safe_member) that is also a portable Windows file name."""
     if not isinstance(path, str) or not path or "\\" in path or "\x00" in path or path.startswith("/"):
         return False
-    return all(part not in ("", ".", "..") for part in path.split("/")) \
-        and PurePosixPath(path).as_posix() == path
+    parts = path.split("/")
+    if any(part in ("", ".", "..") for part in parts) or PurePosixPath(path).as_posix() != path:
+        return False
+    return not any(_WINDOWS_CHARS & set(part) or _WINDOWS_NAMES.fullmatch(part)
+                   or part[-1] in ". " or any(ord(c) < 32 for c in part) for part in parts)
 
 
 def _request(base: str, path: str, token: str):
@@ -75,12 +99,23 @@ def _error_code(exc: urllib.error.HTTPError) -> str:
         return ""
 
 
+def _http_error(what: str, exc: urllib.error.HTTPError) -> FetchError:
+    code = _error_code(exc)
+    if exc.code in (401, 403):
+        return TokenRefused(f"{what}: HTTP {exc.code} {code} — {_TOKEN_HELP}")
+    if exc.code == 409:   # RECORDING_BUSY / ROBOT_MOVING: try again later
+        return NotIdle(f"{what}: robot not idle ({code or 'HTTP 409'})")
+    if 300 <= exc.code < 400:
+        return FetchError(f"{what}: redirect refused (HTTP {exc.code})")
+    return FetchError(f"{what}: HTTP {exc.code} {code}".rstrip())
+
+
 def list_recordings(base: str, token: str, timeout: float) -> dict:
     try:
-        with urllib.request.urlopen(_request(base, "/api/v1/recordings", token), timeout=timeout) as resp:
+        with _OPENER.open(_request(base, "/api/v1/recordings", token), timeout=timeout) as resp:
             listing = json.loads(resp.read())
     except urllib.error.HTTPError as exc:
-        raise FetchError(f"listing: HTTP {exc.code} {_error_code(exc)}".rstrip()) from exc
+        raise _http_error("listing", exc) from exc
     except (OSError, ValueError) as exc:
         raise FetchError(f"listing: {exc}") from exc
     if not isinstance(listing, dict) or not isinstance(listing.get("items"), list):
@@ -91,12 +126,9 @@ def list_recordings(base: str, token: str, timeout: float) -> dict:
 def download(base: str, token: str, recording_id: str, part: Path, timeout: float) -> None:
     path = f"/api/v1/recordings/{urllib.parse.quote(recording_id, safe='')}/archive"
     try:
-        resp = urllib.request.urlopen(_request(base, path, token), timeout=timeout)
+        resp = _OPENER.open(_request(base, path, token), timeout=timeout)
     except urllib.error.HTTPError as exc:
-        code = _error_code(exc)
-        if exc.code == 409:   # RECORDING_BUSY / ROBOT_MOVING: try again later
-            raise NotIdle(f"{recording_id}: robot not idle ({code or 'HTTP 409'})") from exc
-        raise FetchError(f"{recording_id}: HTTP {exc.code} {code}".rstrip()) from exc
+        raise _http_error(recording_id, exc) from exc
     except OSError as exc:
         raise FetchError(f"{recording_id}: {exc}") from exc
     with resp:
@@ -159,9 +191,8 @@ def verify(folder: Path, recording_id: str) -> dict:
         if not _safe_path(path) or path == MANIFEST_NAME or path in listed:
             raise FetchError(f"{recording_id}: unsafe manifest path {path!r}")
         listed.add(path)
-        target = folder / path
-        if not target.is_file() or target.stat().st_size != entry.get("bytes") \
-                or _sha256(target) != entry.get("sha256"):
+        target, want = folder / path, str(entry.get("sha256") or "").lower()
+        if not target.is_file() or target.stat().st_size != entry.get("bytes") or _sha256(target) != want:
             raise FetchError(f"{recording_id}: {path} does not match the manifest (size or sha256)")
     present = {p.relative_to(folder).as_posix() for p in folder.rglob("*") if p.is_file()}
     extra = present - listed - {MANIFEST_NAME}
@@ -171,14 +202,17 @@ def verify(folder: Path, recording_id: str) -> dict:
 
 
 def pair_counts(rows) -> dict:
-    out = {"frames": 0, "with_cmd_vel": 0, "with_intent": 0, "paired": 0}
+    """Frames with cmd_vel and an intent; paired_accepted counts only intents CORE accepted."""
+    out = {"frames": 0, "with_cmd_vel": 0, "with_intent": 0, "paired": 0, "paired_accepted": 0}
     for row in rows:
         side = row.get("side") or {}
-        cmd, intent = side.get("cmd_vel") is not None, side.get(INTENT_TOPIC) is not None
+        intent = side.get(INTENT_TOPIC)
+        cmd, has_intent = side.get("cmd_vel") is not None, intent is not None
         out["frames"] += 1
         out["with_cmd_vel"] += cmd
-        out["with_intent"] += intent
-        out["paired"] += cmd and intent
+        out["with_intent"] += has_intent
+        out["paired"] += cmd and has_intent
+        out["paired_accepted"] += cmd and isinstance(intent, dict) and intent.get("accepted") is True
     return out
 
 
@@ -209,15 +243,15 @@ def _read_rows(path: Path):
 def _fetch_one(args, token: str, dest: Path, recording_id: str, convert) -> int:
     part, staging, final = dest / f".part-{recording_id}.tar", dest / f".staging-{recording_id}", \
         dest / recording_id
+    _remove(part)         # an earlier run's leftovers: never extract into an old tree
+    _remove(staging)
     try:
         download(args.base, token, recording_id, part, args.timeout)
         manifest = verify(safe_extract(part, staging, recording_id), recording_id)
-        os.replace(staging / recording_id, final)
-    except NotIdle:
-        _remove(final)
+        os.replace(staging / recording_id, final)     # the last step: final exists only verified
+    except (NotIdle, TokenRefused):
         raise
     except (FetchError, OSError, tarfile.TarError) as exc:
-        _remove(final)
         print(f"FAILED {exc}", file=sys.stderr)
         return 1
     finally:
@@ -234,7 +268,8 @@ def _fetch_one(args, token: str, dest: Path, recording_id: str, convert) -> int:
         print(f"{recording_id}: FAILED conversion (rc {rc}); raw copy kept in {final}", file=sys.stderr)
         return 1
     counts = pair_counts(_read_rows(Path(rows_path)))
-    print(f"{recording_id}: {counts['frames']} frames, {counts['paired']} paired cmd_vel+intent")
+    print(f"{recording_id}: {counts['frames']} frames, {counts['paired']} paired cmd_vel+intent "
+          f"({counts['paired_accepted']} accepted)")
     if counts["paired"] == 0:
         print(f"{recording_id}: FAILED no frame has both cmd_vel and {INTENT_TOPIC}; "
               f"raw copy kept in {final}", file=sys.stderr)
@@ -251,7 +286,8 @@ def main(argv=None, *, convert=default_convert) -> int:
     ap.add_argument("--video-out", help="bag_to_video --out (default data/teleop/learning)")
     ap.add_argument("--codec", choices=("hevc", "h264"), default="hevc")
     ap.add_argument("--only", metavar="ID")
-    ap.add_argument("--timeout", type=float, default=600.0)
+    ap.add_argument("--timeout", type=float, default=600.0, help="per download socket timeout (s)")
+    ap.add_argument("--list-timeout", type=float, default=LIST_TIMEOUT_S)
     args = ap.parse_args(argv)
     token_file = args.token_file or os.environ.get(TOKEN_ENV)
     token = Path(token_file).read_text(encoding="utf-8").strip() \
@@ -263,7 +299,10 @@ def main(argv=None, *, convert=default_convert) -> int:
         import bag_to_video
         args.video_out = str(bag_to_video.DEFAULT_OUT)
     try:
-        listing = list_recordings(args.base, token, args.timeout)
+        listing = list_recordings(args.base, token, args.list_timeout)
+    except TokenRefused as exc:
+        print(f"refused: {exc}", file=sys.stderr)
+        return EXIT_TOKEN
     except FetchError as exc:
         print(f"FAILED {exc}", file=sys.stderr)
         return 1
@@ -273,25 +312,31 @@ def main(argv=None, *, convert=default_convert) -> int:
         return EXIT_NOT_IDLE
     dest = Path(args.dest)
     dest.mkdir(parents=True, exist_ok=True)
-    rc = 0
-    for item in listing["items"]:
-        if not isinstance(item, dict) or item.get("status") != "complete":
-            continue
+    items = [item for item in listing["items"] if isinstance(item, dict) and item.get("status") == "complete"
+             and (not args.only or item.get("id") == args.only)]
+    if args.only and not items:
+        print(f"no complete recording {args.only} on the robot", file=sys.stderr)
+        return 1
+    rc, failed = 0, 0
+    for item in items:
         recording_id = item.get("id")
-        if args.only and recording_id != args.only:
-            continue
         if not _id_ok(recording_id):
             print(f"skipped: invalid recording id {recording_id!r}", file=sys.stderr)
-            rc = 1
+            rc, failed = 1, failed + 1
             continue
         if (dest / recording_id).exists():
             print(f"{recording_id}: already in {dest}")
             continue
         try:
-            rc = max(rc, _fetch_one(args, token, dest, recording_id, convert))
+            one = _fetch_one(args, token, dest, recording_id, convert)
+        except TokenRefused as exc:
+            print(f"refused: {exc}", file=sys.stderr)
+            return EXIT_TOKEN
         except NotIdle as exc:
-            print(f"stopped: {exc}; nothing further fetched", file=sys.stderr)
+            earlier = f"; {failed} earlier recording(s) failed" if failed else ""
+            print(f"stopped: {exc}{earlier}; nothing further fetched", file=sys.stderr)
             return EXIT_NOT_IDLE
+        rc, failed = max(rc, one), failed + (one != 0)
     return rc
 
 

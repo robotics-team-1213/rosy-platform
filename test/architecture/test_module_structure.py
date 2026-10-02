@@ -353,7 +353,7 @@ SIZE_VERDICTS = {
         "test/test_harness_contracts.py (X5)",
     ),
     "tools/perception/rosy_ml.py": (
-        613,
+        615,
         "accept: the operator CLI is one argparse dispatcher over the wrapped tools (deliver, "
         "harvest, fetch_http, intake), which own the behaviour; covered by "
         "tools/perception/test/test_rosy_ml.py (X5, D-411 fetch --http)",

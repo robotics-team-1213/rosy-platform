@@ -246,7 +246,7 @@ def _init(args, runner=subprocess.run) -> int:
     cfg = {"operator": args.operator or getpass.getuser(), "robots": robots,
            "ssh": {"identity": identity, "known_hosts": known_hosts}}
     for key in ("store", "hf_repo", "hf_token_file", "intake_out", "core_token_file",
-                "replay_root"):
+                "core_operator_token_file", "replay_root"):
         if getattr(args, key):
             cfg[key] = getattr(args, key)
     try:
@@ -501,7 +501,8 @@ def main(argv=None, *, runner=subprocess.run, connect=socket.create_connection,
     p.add_argument("--hf-repo")
     p.add_argument("--hf-token-file")
     p.add_argument("--intake-out")
-    p.add_argument("--core-token-file")
+    p.add_argument("--core-token-file", help="viewer token file (harvest idle check)")
+    p.add_argument("--core-operator-token-file", help="Operator token file (fetch --http)")
     p.add_argument("--replay-root")
     p.add_argument("--force", action="store_true")
     p = sub.add_parser("doctor")
@@ -585,10 +586,11 @@ def main(argv=None, *, runner=subprocess.run, connect=socket.create_connection,
         return harvest.main(argv)
     if args.cmd == "fetch":
         import fetch_http
-        if not cfg.get("core_token_file"):
-            print("✗ fetch --http needs an operator token — fix: rosy_ml init --core-token-file <file>")
+        # The archive is Operator-only; harvest's core_token_file is a viewer token.
+        if not cfg.get("core_operator_token_file"):
+            print("✗ fetch --http needs an Operator token — fix: rosy_ml init --core-operator-token-file <file>")
             return 2
-        argv = [f"http://{hosts[0]}:{args.port}", "--token-file", cfg["core_token_file"]]
+        argv = [f"http://{hosts[0]}:{args.port}", "--token-file", cfg["core_operator_token_file"]]
         if args.dest:
             argv += ["--dest", args.dest]
         return fetch_http.main(argv)
