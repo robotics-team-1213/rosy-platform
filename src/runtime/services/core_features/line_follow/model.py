@@ -104,6 +104,10 @@ class LineFollowConfig:
     recovery_rear_clear_m: float = 0.06    # 몸 뒤끝 기준, 후진 전·중
     recovery_max_attempts: int = 2
     recovery_settle_s: float = 1.0
+    # 사용자 결정 2026-10-02: LiDAR 가 못 보는 뒤 띠(range_min, self-mask)는 마지막 전진 명령까지
+    # recovery_trail_s 동안 앞으로 recovery_back_m 이상 왔고 누적 |yaw| 가 이 값 이하일 때만 들어간다.
+    recovery_trail_s: float = 5.0
+    recovery_trail_yaw_deg: float = 10.0
     # D-397 URDF 몸 기하(base_footprint, x 앞): 없으면 뒤 여유를 잴 수 없어 후진하지 않는다.
     body_lidar_x_m: Optional[float] = None
     body_rear_x_m: Optional[float] = None
@@ -169,9 +173,12 @@ class LineFollowConfig:
         if type(self.recovery_local_enabled) is not bool:
             raise ValueError("recovery_local_enabled must be a boolean")
         timing = (self.recovery_ask_s, self.recovery_back_m, self.recovery_back_speed,
-                  self.recovery_rear_clear_m, self.recovery_settle_s)
+                  self.recovery_rear_clear_m, self.recovery_settle_s, self.recovery_trail_s,
+                  self.recovery_trail_yaw_deg)
         if not all(_finite(value) and value > 0 for value in timing):
             raise ValueError("line-follow recovery times and distances must be positive and finite")
+        if self.recovery_trail_s > 30.0 or self.recovery_trail_yaw_deg > 45.0:
+            raise ValueError("recovery_trail_s is capped at 30 s and recovery_trail_yaw_deg at 45")
         if self.recovery_back_m > 0.20 or self.recovery_back_speed > 0.05:
             raise ValueError("recovery_back_m is capped at 0.20 m and recovery_back_speed at 0.05 m/s")
         if (type(self.recovery_max_attempts) is not int

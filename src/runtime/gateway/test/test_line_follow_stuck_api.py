@@ -35,7 +35,7 @@ def _stuck(core_client, *, front=0.15):
     t = 0.0
     while t < 5.5:
         lf.observe_clearance(front, received_at=t)
-        lf.observe_body_points([(front, 0.0)], received_at=t)
+        lf.observe_body_points([(front, 0.0)], range_min=0.0, received_at=t)
         lf.observe(LineObservation(source=LineFollowMode.CAMERA_LINE, stamp=t, visible=True,
                                    error=0.0, confidence=0.9), received_at=t, source_now=t)
         clock["t"] = t + 0.01
@@ -126,6 +126,7 @@ def test_scan_bridge_feeds_self_masked_body_points():
             {"from_deg": 170, "to_deg": 180, "max_range_m": 0.2}]})
         body = None
         clearance = "unset"
+        wants_body_points = True
 
         def observe_body_points(self, points, *, range_min, received_at):
             self.body = (points, range_min)
@@ -149,3 +150,30 @@ def test_scan_bridge_feeds_self_masked_body_points():
     assert range_min == 0.15 and len(points) == 2
     assert min(x for x, _ in points) == pytest.approx(-0.25, abs=1e-3)
     assert services.line_follow.clearance == pytest.approx(0.30, abs=1e-3)
+
+    services.line_follow.body = None
+    del sample["range_min"]                  # review M2: missing range_min -> unknown blind band
+    observation.front_clearance(services, sample, received_at=1.1)
+    assert services.line_follow.body[1] is None
+    services.line_follow.wants_body_points = False   # review L6: sector mode, nothing stuck
+    services.line_follow.body = None
+    observation.front_clearance(services, sample, received_at=1.2)
+    assert services.line_follow.body is None and services.line_follow.clearance is not None
+
+
+def test_manager_wants_body_points_only_near_a_stuck():
+    from core_features.line_follow.manager import LineFollowConfig, LineFollowManager
+
+    class Bus:
+        def publish(self, *a, **k):
+            pass
+
+    m = LineFollowManager(Bus(), config=LineFollowConfig(), clock=lambda: 0.0)
+    assert not m.wants_body_points                      # OFF
+    m.set_mode(LineFollowMode.CAMERA_LINE)
+    assert m.wants_body_points                          # waiting for a lane (loss timer runs)
+    m.observe(LineObservation(source=LineFollowMode.CAMERA_LINE, stamp=0.0, visible=True,
+                              error=0.0, confidence=0.9), received_at=0.0, source_now=0.0)
+    m.observe_clearance(1.0, received_at=0.0)
+    m.tick(0.01)
+    assert not m.wants_body_points                      # tracking, nothing near

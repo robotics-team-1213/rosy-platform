@@ -104,7 +104,7 @@ class LineFollowManager(StuckRecoveryMixin):
                 self._hold_s = float(hold_s)
                 self._hold_until = self._clock() + self._hold_s
             previous = self._mode
-            self._recovery.reset("mode_off" if selected is LineFollowMode.OFF
+            self._recovery_reset("mode_off" if selected is LineFollowMode.OFF
                                  else "mode_changed", self._clock())
             self._generation += 1
             self._mode = selected
@@ -381,7 +381,7 @@ class LineFollowManager(StuckRecoveryMixin):
             self._hold_s = None
             self._hold_until = None
             self._loss_started_at = None
-            self._recovery.reset("driver_released", current)
+            self._recovery_reset("driver_released", current)
             self._events.publish(
                 "nav.line_driver_released", source="line_follow_manager",
                 data={"mode": previous.value},

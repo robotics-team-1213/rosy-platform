@@ -14,7 +14,8 @@ file hiding a decision → extract a ROS-free sibling).
 from __future__ import annotations
 
 import json
-from typing import Callable
+import math
+from typing import Callable, Optional
 
 from core.bridge import battery_policy, translate
 from core.bridge.hitl import parse_hitl_request
@@ -111,28 +112,39 @@ def road_observation(services, raw: str, *, source_now: float,
 BODY_POINTS_RANGE_M = 0.6
 
 
+def _range_min(sample) -> Optional[float]:
+    """The scan's range_min, or None when it is missing or not a finite number (review M2)."""
+    value = sample.get("range_min")
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+        return None
+    return max(0.0, float(value))
+
+
 def front_clearance(services, sample, *, received_at: float) -> None:
     """D-344 §11: LiDAR 를 차선 추종 정지 판정에 넘긴다 — path 는 점, sector 는 정면 최소 거리."""
-    config = services.line_follow.config
+    line = services.line_follow
+    config = line.config
+    path = config.obstacle_mode == "path"
     try:
         # D-407: the stuck recovery reads the same self-masked points for front-band, rear
         # (from the URDF body rear) and turn clearances; range_min marks the blind zone.
-        points = _scan_points(
-            sample, forward_deg=config.lidar_forward_deg,
-            max_range=max(BODY_POINTS_RANGE_M,
-                          config.obstacle_path_horizon_m + config.obstacle_corridor_half_width_m),
-            self_mask=config.lidar_self_mask)
-        services.line_follow.observe_body_points(
-            points, range_min=float(sample.get("range_min") or 0.0), received_at=received_at)
-        if config.obstacle_mode == "path":
-            services.line_follow.observe_scan_points(points, received_at=received_at)
+        # Sector mode builds them only while a stuck can be near (review L6).
+        if path or line.wants_body_points:
+            points = _scan_points(
+                sample, forward_deg=config.lidar_forward_deg,
+                max_range=max(BODY_POINTS_RANGE_M,
+                              config.obstacle_path_horizon_m + config.obstacle_corridor_half_width_m),
+                self_mask=config.lidar_self_mask)
+            line.observe_body_points(points, range_min=_range_min(sample), received_at=received_at)
+        if path:
+            line.observe_scan_points(points, received_at=received_at)
             return
         distance = _front_clearance(
             sample, forward_deg=config.lidar_forward_deg,
             half_angle_deg=config.obstacle_half_angle_deg, self_mask=config.lidar_self_mask)
     except (KeyError, TypeError, ValueError):
         return
-    services.line_follow.observe_clearance(distance, received_at=received_at)
+    line.observe_clearance(distance, received_at=received_at)
 
 
 def detection_evidence(services, raw: str) -> None:

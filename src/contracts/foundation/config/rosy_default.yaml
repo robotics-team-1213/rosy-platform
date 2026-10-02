@@ -132,6 +132,12 @@ line_follow:                       # D-143 selected-source, fail-closed policy
   recovery_rear_clear_m: 0.06      # rear clearance from the body rear, before and during
   recovery_max_attempts: 2         # local back-offs per stuck; then HOLD for the console only
   recovery_settle_s: 1.0           # stand still before re-judging lane + front
+  # User decision 2026-10-02: the rear band the LiDAR cannot see (range_min, self-mask
+  # windows reaching past the body rear) is entered only over ground just driven: in the
+  # recovery_trail_s of CORE-issued commands up to the last forward one, net forward travel
+  # >= recovery_back_m and total |yaw| <= recovery_trail_yaw_deg. Else refused (rear_blind).
+  recovery_trail_s: 5.0
+  recovery_trail_yaw_deg: 10.0
 
 traffic_policy:                    # D-151 semantic road evidence gate
   mode: DISABLED                   # DISABLED | MONITOR_ONLY | ENFORCED

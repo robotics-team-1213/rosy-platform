@@ -235,3 +235,60 @@ def test_manual_or_abort_stops_line_follow_before_any_tick_can_reopen():
     assert m.mode is LineFollowMode.OFF
     _run(m, 5.5, 12.0, front=0.15)
     assert len(events.named("nav.line_stuck_opened")) == 1
+
+
+class _Command:
+    twist = None
+
+    def set_nav_twist(self, twist, now=None):
+        self.twist = twist
+
+    def clear_navigation(self):
+        self.twist = None
+
+
+def _drive(m, start, stop, *, front, range_min):
+    """Tick through the real line -> traffic gate seam so the issued twists are recorded."""
+    traffic, command, t = TrafficPolicyManager(_Events()), _Command(), start
+    while t < stop - 1e-9:
+        m.observe_clearance(front, received_at=t)
+        m.observe_body_points([(front, 0.0), (-0.40, 0.0)], range_min=range_min, received_at=t)
+        m.observe(LineObservation(source=LineFollowMode.CAMERA_LINE, stamp=t, visible=True,
+                                  error=0.0, confidence=0.9), received_at=t, source_now=t)
+        traffic_gate.apply_line_candidate(m, traffic, command, m.tick(t + 0.01), t + 0.01)
+        t = round(t + 0.05, 6)
+    return command
+
+
+def test_blind_band_back_off_allowed_over_the_ground_just_driven():
+    """User decision 2026-10-02: C1 range_min hides 0.091 m behind the body; the robot may
+    back 0.08 m into it because it just drove forward over it in a straight line."""
+    m, events = _manager(linked=False)
+    _drive(m, 0.0, 3.0, front=1.0, range_min=0.15)            # ~0.2 m forward
+    command = _drive(m, 3.0, 8.5, front=0.15, range_min=0.15)
+    attempt = events.named("nav.line_stuck_local_attempt")
+    assert attempt and attempt[0]["rear_blind_m"] == pytest.approx(0.091)
+    assert attempt[0]["trail_m"] >= 0.08
+    assert command.twist.linear == pytest.approx(-0.03)
+
+
+def test_blind_band_refused_without_a_forward_trail():
+    m, events = _manager(linked=False)
+    command = _drive(m, 0.0, 5.5, front=0.15, range_min=0.15)   # never moved forward
+    assert events.named("nav.line_stuck_local_result")[-1]["reason"] == "rear_blind"
+    assert command.twist.linear == 0.0
+
+
+def test_self_mask_reaching_behind_the_body_is_treated_as_blind():
+    """Review M1: a mask window over the rear band would hide a real obstacle."""
+    m, events = _manager(linked=False, lidar_self_mask=((170.0, 180.0, 0.2),))
+    _drive(m, 0.0, 5.5, front=0.15, range_min=0.0)
+    assert events.named("nav.line_stuck_local_result")[-1]["reason"] == "rear_blind"
+    assert events.named("nav.line_stuck_opened")[0]["rear_blind_m"] == pytest.approx(0.141, abs=1e-3)
+
+
+def test_missing_range_min_refuses_the_back_off():
+    """Review M2: no range_min = unknown blind band."""
+    m, events = _manager(linked=False)
+    _drive(m, 0.0, 5.5, front=0.15, range_min=None)
+    assert events.named("nav.line_stuck_local_result")[-1]["reason"] == "rear_blind"

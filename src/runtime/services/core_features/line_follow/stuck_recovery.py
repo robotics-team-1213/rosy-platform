@@ -17,7 +17,9 @@ which calls ``reset``: the stuck closes and nothing here can move the wheels aga
 
 from __future__ import annotations
 
+import math
 import uuid
+from collections import deque
 from dataclasses import dataclass, replace
 from typing import Callable, Optional
 
@@ -42,8 +44,13 @@ class StuckInput:
     front_band_m: Optional[float] = None
     rear_m: Optional[float] = None       # from the body rear (URDF), self-mask applied
     turn_m: Optional[float] = None
-    rear_blind_m: Optional[float] = None  # rear band hidden inside LiDAR range_min
+    # Rear band behind the body rear that the LiDAR cannot see (range_min, self-mask
+    # windows). None = unknown (no range_min, no geometry): never back off.
+    rear_blind_m: Optional[float] = None
+    trail_m: Optional[float] = None      # net forward CORE-issued travel (ForwardTrail)
+    trail_yaw_deg: Optional[float] = None
     scan_age_s: Optional[float] = None   # None = no LiDAR scan ever
+    lidar_expected: bool = False         # a LiDAR obstacle stop has seen scans this session
     geometry_known: bool = False
     console_linked: bool = False
     calibration_active: bool = False
@@ -56,6 +63,49 @@ class StuckInput:
 class StuckAction:
     kind: str = "pass"     # pass (base decision) | hold (zero) | back | resume
     linear: float = 0.0
+
+
+class ForwardTrail:
+    """The CORE-issued line-follow twists, to prove the space behind was just driven through.
+
+    User decision 2026-10-02 (D-407 rear blind zone): back off into the blind band only over
+    ground the robot drove forward over. ``measure`` integrates the issued twists over the
+    ``window_s`` of commands that ends at the last forward command (the robot has stood still
+    or backed off since): net forward metres (reverse subtracts) and total |yaw| in degrees.
+    A gap in the record counts no travel; a record older than ``STALE_S`` reads as missing.
+    """
+
+    MAX_DT_S = 0.25    # one issued twist never covers more than this (nav timeout order)
+    STALE_S = 1.0
+
+    def __init__(self, maxlen: int = 4000) -> None:
+        self._samples: deque = deque(maxlen=maxlen)
+
+    def clear(self) -> None:
+        self._samples.clear()
+
+    def record(self, now: float, linear: float, angular: float) -> None:
+        if self._samples and now < self._samples[-1][0]:
+            self._samples.clear()            # clock went backwards: trust nothing before
+        self._samples.append((float(now), float(linear), float(angular)))
+
+    def measure(self, now: float, window_s: float) -> tuple[Optional[float], Optional[float]]:
+        samples = list(self._samples)
+        if not samples or now - samples[-1][0] > self.STALE_S:
+            return None, None
+        forward = [t for t, lin, _ in samples if lin > 0.0]
+        if not forward:
+            return None, None
+        start = forward[-1] - window_s
+        net = yaw = 0.0
+        for index, (t, lin, ang) in enumerate(samples):
+            if t < start:
+                continue
+            end = samples[index + 1][0] if index + 1 < len(samples) else now
+            dt = max(0.0, min(end - t, self.MAX_DT_S))
+            net += lin * dt
+            yaw += abs(ang) * dt
+        return net, math.degrees(yaw)
 
 
 class AnswerRefused(Exception):
@@ -148,6 +198,8 @@ class StuckRecovery:
     def _answer_refusal(self, decision: str, now: float) -> Optional[str]:
         last = self._last_or(now)
         if decision == "RESUME":
+            if last.scan_age_s is None and (last.lidar_expected or self._cause == "obstacle_ahead"):
+                return "no_scan"
             if last.scan_age_s is not None and last.scan_age_s > self._config.clearance_stale_s:
                 return "scan_stale"
             if last.front_band_m is not None and last.front_band_m < self._config.obstacle_stop_m:
@@ -164,7 +216,7 @@ class StuckRecovery:
         return self._last if self._last is not None else StuckInput(now=now)
 
     # ---- local recovery ---------------------------------------------------------
-    def _back_refusal(self, inp: StuckInput) -> Optional[str]:
+    def _back_refusal(self, inp: StuckInput, starting: bool = True) -> Optional[str]:
         config = self._config
         if inp.calibration_active:
             return "calibration_active"
@@ -174,14 +226,24 @@ class StuckRecovery:
             return "no_scan"
         if inp.scan_age_s > config.clearance_stale_s:
             return "scan_stale"
-        if inp.rear_blind_m is not None and inp.rear_blind_m > config.recovery_rear_clear_m:
-            # LiDAR range_min 안은 보이지 않는다 — 요구 여유를 증명할 수 없으면 가지 않는다.
+        if inp.rear_blind_m is None:
+            return "rear_blind"                # range_min unknown: the blind band is unknown
+        if (inp.rear_blind_m > config.recovery_rear_clear_m and starting
+                and not self._trail_covers(inp)):
+            # 보이지 않는 뒤 띠는 방금 앞으로 지나온 길일 때만 들어간다(사용자 결정 2026-10-02).
+            # 보이는 뒤 여유(rear_blocked)는 아래에서 전·중 계속 본다.
             return "rear_blind"
         if inp.rear_m is not None and inp.rear_m <= config.recovery_rear_clear_m:
             return "rear_blocked"
         if min(inp.linear_ceiling, config.recovery_back_speed) <= 0.0:
             return "linear_limit_zero"
         return None
+
+    def _trail_covers(self, inp: StuckInput) -> bool:
+        config = self._config
+        return (inp.trail_m is not None and inp.trail_yaw_deg is not None
+                and inp.trail_m >= config.recovery_back_m
+                and inp.trail_yaw_deg <= config.recovery_trail_yaw_deg)
 
     def _local(self, inp: StuckInput, trigger: str) -> StuckAction:
         if not self._config.recovery_local_enabled:
@@ -209,11 +271,14 @@ class StuckRecovery:
             "nav.line_stuck_local_attempt", severity="warning", source=_SOURCE,
             data={"stuck_id": self._id, "attempt": self._attempts, "trigger": trigger,
                   "back_m": config.recovery_back_m, "speed_mps": self._speed,
-                  "rear_clearance_m": inp.rear_m, "rear_blind_m": inp.rear_blind_m},
+                  "rear_clearance_m": inp.rear_m, "rear_blind_m": inp.rear_blind_m,
+                  "trail_m": inp.trail_m},
         )
 
     def _backing(self, inp: StuckInput) -> StuckAction:
-        why = self._back_refusal(inp)
+        # The trail was checked at the start for the whole recovery_back_m; it shrinks as
+        # the robot backs over it, so only the live checks repeat here.
+        why = self._back_refusal(inp, starting=False)
         if why is not None:
             # 후진 중에도 뒤 여유·scan 신선도를 본다. 하나라도 어긋나면 즉시 0.
             self._result("aborted", why)

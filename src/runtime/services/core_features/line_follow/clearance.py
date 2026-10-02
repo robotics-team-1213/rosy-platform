@@ -118,6 +118,28 @@ def body_clearances(points: Sequence[Point], *, lidar_x_m: float, rear_x_m: floa
     return {"front_band_m": front, "rear_m": rear, "turn_m": turn}
 
 
+def self_mask_rear_blind_m(mask: SelfMask, *, lidar_x_m: float, rear_x_m: float,
+                           half_width_m: float) -> float:
+    """D-407 review M1: how deep behind the body rear a self-mask window hides the rear band.
+
+    A masked return is dropped as "the robot itself", so a real obstacle inside a window that
+    reaches past the body rear would read as clear. That depth is blind like range_min.
+    Sampled every 0.5 deg across each window; 0 when no window reaches the rear band.
+    """
+    behind = lidar_x_m - rear_x_m              # LiDAR to body rear, metres (> 0)
+    worst = 0.0
+    for lo, hi, reach in mask:
+        steps = max(1, int(math.ceil((hi - lo) / 0.5)))
+        for index in range(steps + 1):
+            angle = math.radians(lo + (hi - lo) * index / steps)
+            back, side = -math.cos(angle), abs(math.sin(angle))
+            if back <= 0.0:
+                continue
+            far = reach if side < 1e-9 else min(reach, half_width_m / side)
+            worst = max(worst, far * back - behind)
+    return worst
+
+
 def path_clearance(points: Sequence[Point], *, linear: float, angular: float,
                    half_width_m: float, horizon_m: float,
                    window_m: float = 0.0, near_m: float = 0.0) -> Optional[float]:

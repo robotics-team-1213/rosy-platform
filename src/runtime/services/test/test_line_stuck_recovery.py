@@ -1,13 +1,16 @@
 """D-407 stuck recovery state machine (ROS-free): ask the console, else back off and re-judge."""
 import dataclasses
 import itertools
+import math
 
 import pytest
 
-from core_features.line_follow.clearance import body_clearances
+from core_features.line_follow.clearance import (body_clearances, self_mask_from_config,
+                                                 self_mask_rear_blind_m)
 from core_features.line_follow.model import LineFollowConfig
 from core_features.line_follow.stuck_recovery import (ASKING, BACKING, SETTLING, WAITING_CONSOLE,
-                                                      AnswerRefused, StuckInput, StuckRecovery)
+                                                      AnswerRefused, ForwardTrail, StuckInput,
+                                                      StuckRecovery)
 
 
 class Bus:
@@ -270,3 +273,97 @@ def test_body_clearances_measure_from_the_urdf_body_rear():
     assert got["turn_m"] == pytest.approx(0.217 - 0.08257)      # nearest to base_footprint
     empty = body_clearances([], lidar_x_m=-0.017, rear_x_m=-0.076, half_width_m=0.09)
     assert empty == {"front_band_m": None, "rear_m": None, "turn_m": None}
+
+
+# ---- rear blind band: user decision 2026-10-02, review M1/M2/L4 -------------------------
+@pytest.mark.parametrize("trail_m, yaw, ok", [
+    (0.10, 2.0, True),         # drove 0.10 m forward, nearly straight: may back 0.08 m
+    (0.08, 0.0, True),
+    (0.05, 0.0, False),        # never back further than it came
+    (0.10, 20.0, False),       # turned in place: the blind band is not where it came from
+    (None, None, False),       # no / stale history
+])
+def test_blind_band_only_over_the_trail_just_driven(trail_m, yaw, ok):
+    machine, bus = _machine()
+    action = machine.step(_inp(0.0, console_linked=False, rear_blind_m=0.09,
+                               trail_m=trail_m, trail_yaw_deg=yaw))
+    assert (action.kind == "back") is ok
+    if not ok:
+        assert bus.named("nav.line_stuck_local_result")[-1]["reason"] == "rear_blind"
+
+
+def test_blind_band_trail_still_needs_visible_rear_clearance():
+    machine, bus = _machine()
+    machine.step(_inp(0.0, console_linked=False, rear_blind_m=0.09, trail_m=0.2,
+                      trail_yaw_deg=0.0, rear_m=0.05))
+    assert bus.named("nav.line_stuck_local_result")[-1]["reason"] == "rear_blocked"
+
+
+def test_trail_is_checked_at_start_not_as_it_is_used_up():
+    machine, bus = _machine()
+    assert machine.step(_inp(0.0, console_linked=False, rear_blind_m=0.09, trail_m=0.10,
+                             trail_yaw_deg=0.0)).kind == "back"
+    assert machine.step(_inp(1.0, rear_blind_m=0.09, trail_m=0.07, trail_yaw_deg=0.0)).kind == "back"
+    assert machine.step(_inp(1.1, rear_blind_m=0.09, rear_m=0.05)).kind == "hold"   # live check
+
+
+def test_unknown_range_min_refuses_the_back_off():
+    machine, bus = _machine()
+    machine.step(_inp(0.0, console_linked=False, rear_blind_m=None))
+    assert bus.named("nav.line_stuck_local_result")[-1]["reason"] == "rear_blind"
+
+
+def test_resume_without_any_scan_is_refused_when_a_lidar_stop_is_in_use():
+    machine, _ = _machine()
+    machine.step(_inp(0.0, scan_age_s=None, lidar_expected=True, cause="lane_lost"))
+    with pytest.raises(AnswerRefused):
+        machine.answer(1.0, "stuck-1", "RESUME", "operator")
+    bench, _ = _machine()                                    # no LiDAR at all, lane lost
+    bench.step(_inp(0.0, scan_age_s=None, lidar_expected=False, cause="lane_lost"))
+    assert bench.answer(1.0, "stuck-1", "RESUME", "operator") == "resume"
+    blocked, _ = _machine()                                  # an obstacle stuck needs a scan
+    blocked.step(_inp(0.0, scan_age_s=None))
+    with pytest.raises(AnswerRefused):
+        blocked.answer(1.0, "stuck-1", "RESUME", "operator")
+
+
+def test_forward_trail_integrates_issued_twists():
+    trail = ForwardTrail()
+    t = 0.0
+    for _ in range(60):                       # 3 s forward at 0.05 m/s, 20 Hz
+        trail.record(t, 0.05, 0.0)
+        t = round(t + 0.05, 6)
+    for _ in range(200):                      # then 10 s held at zero
+        trail.record(t, 0.0, 0.0)
+        t = round(t + 0.05, 6)
+    net, yaw = trail.measure(t, 5.0)
+    assert net == pytest.approx(0.15, abs=1e-6) and yaw == 0.0
+    trail.record(t, -0.03, 0.0)               # a back-off spends the trail
+    t2 = t + 0.25
+    trail.record(t2, 0.0, 0.0)
+    assert trail.measure(t2, 5.0)[0] == pytest.approx(0.15 - 0.0075, abs=1e-6)
+    assert trail.measure(t2 + 2.0, 5.0) == (None, None)     # history stale
+
+
+def test_forward_trail_window_and_rotation():
+    trail = ForwardTrail()
+    t = 0.0
+    for _ in range(200):                      # 10 s at 0.02 m/s: only the last 5 s count
+        trail.record(t, 0.02, 0.0)
+        t = round(t + 0.05, 6)
+    assert trail.measure(t, 5.0)[0] == pytest.approx(0.02 * 5.05, abs=1e-3)
+    spin = ForwardTrail()
+    spin.record(0.0, 0.05, 0.0)
+    spin.record(0.05, 0.0, 0.5)               # rotation in place
+    spin.record(0.30, 0.0, 0.0)
+    assert spin.measure(0.30, 5.0)[1] == pytest.approx(math.degrees(0.5 * 0.25))
+    assert ForwardTrail().measure(0.0, 5.0) == (None, None)
+
+
+def test_self_mask_window_reaching_the_rear_band_is_blind():
+    rear = self_mask_from_config([{"from_deg": 170, "to_deg": 180, "max_range_m": 0.2}])
+    side = self_mask_from_config([{"from_deg": -66, "to_deg": -52, "max_range_m": 0.17}])
+    kw = dict(lidar_x_m=-0.017, rear_x_m=-0.076, half_width_m=0.09)
+    assert self_mask_rear_blind_m(rear, **kw) == pytest.approx(0.2 - 0.059, abs=1e-3)
+    assert self_mask_rear_blind_m(side, **kw) == 0.0
+    assert self_mask_rear_blind_m((), **kw) == 0.0
