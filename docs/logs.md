@@ -4378,3 +4378,16 @@
 - **이전 일지 항목에서 자동 업데이트를 가리키는 "D-406"·"D-410"은 모두 D-412다.** 일지는 추가 전용이라 고치지 않는다. main의 D-406·D-410은 다른 결정이다.
 - 증거: `git log --all --name-only -- docs/adr`와 ADR Log·`adr_gaps` 이력으로 D-412가 어느 브랜치에도 없음을 확인. 이 브랜치의 merge base(5f78d029)에는 D-410 표기가 없어 일괄 변경이 안전하다.
 - gate 변화: 없음.
+
+## 2026-10-02 · uncommitted · docs(architecture): 플랫폼 v0.2의 실제 이전 경계와 첫 수용 범위 구체화
+
+- 변경: `docs/reference/ROSY_Platform_Architecture_Design_v0.2.md`에 execution/site·local 원장 소유권, 작은 world 범위, Skill/제품 연동과 profiles/deploy 경계, 실제 코드 기준 이전표, 기존 ADR 전환 관계를 반영했다. 첫 완료 단위는 AI 없는 고정 셀 Gazebo 흐름이며 패키징·진입점 전환을 분리했다.
+- 증거: Windows 문서 계약 시험 `python -B -X utf8 -m pytest test/test_network_topology_contracts.py test/test_harness_contracts.py -q -p no:cacheprovider` 80 passed, 24 warnings(기존 last_verified 기록 관련). 본문 로컬 링크 4개·현재 경로 17개·번호 절 51개·A01~A15·UTF-8·코드 블록 검사 통과. 제품 실행·ROS-SIM·실기 시험은 이번 문서 변경에서 수행하지 않았다.
+- gate 변화: 없음. 목표 설계 보강이며 코드 이동·공개 API 변경·ADR 승격·배포 실행은 포함하지 않는다.
+
+## 2026-10-02 · uncommitted · docs(architecture): D-413 네 영역 전환 결정과 고정 셀 실행 계획
+
+- 변경: D-413에 modules·integrations·apps·profiles 목표, 사이트/로컬 원장 소유권, 공정·Skill·OMX 연결, 기존 결정의 좁은 대체 범위를 기록했다. 실행 계획은 기준선·계약·공정·Fleet·owner·설치·복구·Gazebo·호환층 정리의 Task 0~9와 파일·검증·출구·롤백을 지정한다. v0.2 설계와 ADR/계획을 상호 연결하고 docs progress/index에 등록했다.
+- 증거: main과 233개 로컬 브랜치의 ADR 경로, 등록된 worktree의 미추적 ADR/Log, harness 예약 번호를 확인해 D-413을 선택했다. 이 항목은 문서 작성 기록이며 계획의 구현 task들은 모두 TODO다.
+- 검증: 문서 계약 시험 80 passed, 24 warnings(기존 last_verified 기록 관련). 독립 검토에서 발견한 CI wheel 설치 순서 누락을 Task 2·3·5·6과 공통 규칙에 반영했다. 새 import를 사용하는 커밋에서 CI 설치 목록을 함께 갱신한다.
+- gate 변화: 없음. ADR Accepted는 목표 구조와 단계적 이전 결정에 한정하며 코드·설치·ROS-SIM·실물 수용 상태는 유지한다.

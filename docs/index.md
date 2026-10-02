@@ -184,6 +184,7 @@
 | D-377 | 앱 이름 규칙: Rosy + 영어 한 단어 — 표시 이름 `Rosy <Word>`, id·폴더 끝 `<word>`, 패키지 `rosy_<word>`, Android `io.github.livsbittt.rosy.<word>`, Gradle `rosy-<word>`, 아이콘 `<word>.svg`; Rosy Cam·Vision·Console·Robot·Pilot |
 | D-382 | 로봇 ↔ 사이트 관제 통신은 계약 스냅샷 하나로 판정하고, 실물 확인은 읽기 전용 적합성 탐침으로 시작한다 |
 | D-390 | Pilot의 OMX-AI 연습은 시뮬레이션 전용 장치 API를 거쳐 로컬 팔 명령 소유자에 연결한다 |
+| D-413 | ROSY는 modules·integrations·apps·profiles로 책임을 나누고 고정 셀 한 흐름부터 이전한다 |
 
 ## 계획·결과 문서
 
@@ -254,6 +255,7 @@
 - [2026-09-30-site-app-roles-and-shared-link-plan.md](plans/2026-09-30-site-app-roles-and-shared-link-plan.md)
 - [2026-10-01-omx-demonstration-lerobot-design.md](plans/2026-10-01-omx-demonstration-lerobot-design.md)
 - [2026-10-01-pilot-omx-gazebo-practice.md](plans/2026-10-01-pilot-omx-gazebo-practice.md)
+- [2026-10-02-platform-architecture-v02-migration.md](plans/2026-10-02-platform-architecture-v02-migration.md)
 
 ## 교훈 (docs/solutions)
 
@@ -266,8 +268,8 @@
 
 ## 최근 기록
 
+- 2026-10-02 · uncommitted · docs(architecture): D-413 네 영역 전환 결정과 고정 셀 실행 계획
+- 2026-10-02 · uncommitted · docs(architecture): 플랫폼 v0.2의 실제 이전 경계와 첫 수용 범위 구체화
 - 2026-10-02 · uncommitted · docs(adr): 로봇 자동 업데이트 ADR 번호를 D-410에서 D-412로 — 두 번째 번호 충돌
 - 2026-10-02 · uncommitted · docs(adr): 로봇 자동 업데이트 ADR 번호를 D-406에서 D-410으로 — 동시 세션 번호 충돌
 - 2026-10-02 · uncommitted · docs(adr): D-395 개정 7 — S1 재실행 결과와 LOCALIZED 로봇끼리의 확인
-- 2026-10-02 · uncommitted · docs(api): D-395 R1 LOCALIZED 물체를 API Ref v1.75로 옮김 (D-407과 v1.74 충돌)
-- 2026-10-02 · uncommitted · docs(plans): D-395 S1 R4 원인과 sim 수정
