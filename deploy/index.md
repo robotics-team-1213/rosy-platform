@@ -33,6 +33,7 @@
 | D-325 | 기존 Pinky 배포는 변경에 맞는 가장 작은 산출물을 선택한다 |
 | D-373 | 학습 인식 두 번째 바퀴 — onnxruntime·모델 디렉터리는 Pinky 이미지 계층, 섀도·캡처는 기본 꺼진 페이로드, 불일치 60 s 스냅샷, 사이트 PC가 새 모델을 섀도까지 자동 반영; 정본은 store 폴더(로컬→NAS·Drive), HF는 선택 |
 | D-389 | 긴급 카드 쓰기(`write-card.ps1 -Emergency -EmergencyReason`)는 전체 readback만 건너뛰고 서명·시리얼·plan·ERASE 게이트와 MBR 점검은 지킨다; receipt·진행 파일·상태가 검증 안 됨을 적고, 후속 readback(`verify-emergency-card.ps1`)이나 표준 재기록으로 메운다 |
+| D-411 | Pilot 로봇측 학습 녹화(카메라 유닛 소유, CORE는 시작·정지 요청, `teleop/intent` 원 입력·주체 기록, 1회 10분)와 정지 중에만 허용하는 HTTP 수신(목록·tar·sha256 manifest, `rosy_ml fetch --http`); 기기가 알리는 조작부 서술자 `rosy.controls/1`(base_velocity·joint_jog·gripper, 드라이버는 전송·위젯은 kind별, 팔 조이스틱은 이전 목표 종료 후 순차 제한 목표); OMX 그리퍼 전용 절대 목표·쥠 readback(시뮬레이션만, D-390 유지) |
 
 ## 계획·결과 문서
 
@@ -56,6 +57,7 @@
 - [2026-09-23-core-dev-overlay-design.md](../docs/plans/2026-09-23-core-dev-overlay-design.md)
 - [2026-09-23-core-dev-overlay.md](../docs/plans/2026-09-23-core-dev-overlay.md)
 - [2026-09-29-pinky-deployment-fast-path.md](../docs/plans/2026-09-29-pinky-deployment-fast-path.md)
+- [2026-10-02-d411-pilot-recording-controls-plan.md](../docs/plans/2026-10-02-d411-pilot-recording-controls-plan.md)
 
 ## 교훈 (docs/solutions)
 
@@ -67,8 +69,8 @@
 
 ## 최근 기록
 
+- 2026-10-02 · a434ea35 · feat(deploy): D-411 A pilot-recordings 디렉터리와 유닛 권한
 - 2026-10-02 · uncommitted · fix(native): 부팅 복구 게이트에 PrivateTmp — 활성화 중 전원 차단 뒤 CORE가 영영 뜨지 않던 결함
 - 2026-10-01 · uncommitted · fix(release): 보정 가드 리뷰 반영 — 호스트명 주장을 호스트 키로 증명, ssh 시간 상한
 - 2026-10-01 · uncommitted · fix(release): 보정 가드가 IP로 불릴 때 호스트명 자격 증명을 찾는다
 - 2026-10-01 · uncommitted · fix(release): `prepare_payload_release.py` 독립 리뷰 반영 — rc 패키지 제외, 오류 처리, 인용
-- 2026-10-01 · f8db47f5 · feat(release): 서명 안 된 페이로드를 push 직전까지 한 명령으로 — `prepare_payload_release.py`

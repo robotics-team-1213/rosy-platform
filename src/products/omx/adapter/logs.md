@@ -232,3 +232,9 @@
 - Change: Record the measured runner/owner regression result after centering final admission on the planned phase start.
 - Evidence: Full OMX adapter suite 178 passed, 4 skipped; flake8, py_compile, and git diff checks passed. The in-process Jazzy test was skipped because rclpy was unavailable to the selected interpreter. Vendor retry remains unrun.
 - Gate: SOURCE GO; ROS-SIM HOLD; ARTIFACT HOLD; DEVICE/FIELD PARKED.
+
+## 2026-10-02 · 4e99d92e · fix(pilot-sim): D-411 A 새 Pilot 자산 서빙
+- 변경: `pilot_sim_api.PILOT_ASSETS` 에 `recording.js`·`screens/robot-recording.js` — `app.js` 가 `drive.js` 를 정적으로 부르므로 SIM 포트도 서빙해야 한다(구조 규칙 6).
+- 증거: `python -m pytest src/products/omx/adapter/test/test_pilot_sim_api.py -q` → 4 passed; `test_shell_assets.py` 자산 동치 시험 통과 (2026-10-02 Windows).
+- gate 변화: SOURCE 유지. ROS-SIM HOLD — 계획 Verification ROS-SIM 체크리스트(WSL Ubuntu) 미실행, DEVICE 증거 없음.
+- 결정: D-411 A.

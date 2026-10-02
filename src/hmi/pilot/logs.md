@@ -244,3 +244,9 @@
 - gate 변화: 전체 Pilot LOCAL HOLD 유지.
 - 결정: D-390 부록, D-18.
 - 교훈: 독립 기능 시험과 전체 부하 실행을 구분한다.
+
+## 2026-10-02 · 4e99d92e · feat(pilot): D-411 A 로봇 녹화 토글과 "녹화본" 시트
+- 변경: 순수 `recording.js`(경과·크기 서식, 토글 표시, 거부 코드 글자, 시트 행·차단 사유)와 DOM `screens/robot-recording.js`(1 s 폴링, 시작/정지, 시트 목록·새로고침·받기 — 409 는 사유만 보이고 다시 받지 않음, Content-Length 보다 짧으면 저장하지 않음, 나가기 때 이 기기가 시작한 녹화만 정지). 브라우저 녹화 버튼 이름을 "화면 녹화"로. `client.js` `apiBlob`. HUD 칩 `[data-drive-fact=recording]`, 휴대폰 폭에서 HUD 액션 줄바꿈. 자산 다섯 곳 등록, SW 캐시 `2026-10-02-1`. dev_server 가짜 녹화 API, `test_shell_assets` 에 CORE·SIM·dev 자산 동치 시험.
+- 증거: `ROSY_RUN_BROWSER_TESTS=1 python -m pytest src/hmi/pilot/test src/runtime/api_web/test/test_pilot_route.py src/products/omx/adapter/test/test_pilot_sim_api.py -q` → 89 passed (2026-10-02 Windows, Chromium; 새 브라우저 시험은 2000×1200·1200×2000·390×844).
+- gate 변화: SOURCE 유지. ROS-SIM HOLD — 계획 Verification ROS-SIM 체크리스트(WSL Ubuntu) 미실행, DEVICE 증거 없음.
+- 결정: D-411 A.

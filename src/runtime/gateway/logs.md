@@ -722,3 +722,9 @@
 - 변경: 코드 변경 없음(브리지는 원문을 `LocalizationAssist` 에 넘긴다). `test_localization_cross_lane.py` 에 왕복 시험을 더했다. 로봇 A 의 LOCALIZED 상태에 실린 물체가 CORE `/api/v1/robot/state` 를 거쳐 Fleet `trust.status_of` 로 그대로 읽히고, 스캔이 1 s 넘게 묵으면 빈 목록이 된다.
 - 증거: `test/test_localization_cross_lane.py` +1 (13 passed).
 - gate 변화: 없음.
+
+## 2026-10-02 · f341e9fd · feat(core): D-411 A 녹화 브리지 배선과 API 시험
+- 변경: `bridge/ros_bridge.py` 가 `teleop/intent`·`pilot_recorder/fetched` 발행, `pilot_recorder/status` 구독, SetBool 클라이언트, 가드 배선(정지 재시도·확인된 정지). `core/services.py` 에 `pilot_recording`. `test_recordings_api.py` 로 권한·차단·짧은 본문·소유자 없는 정지·슬롯 해제를 고정.
+- 증거: `python -m pytest src/runtime/gateway/test/test_recordings_api.py src/runtime/gateway/test/test_bridge_timers.py -q` → 29 passed (2026-10-02 Windows).
+- gate 변화: SOURCE 유지. ROS-SIM HOLD — 계획 Verification ROS-SIM 체크리스트(WSL Ubuntu) 미실행, DEVICE 증거 없음.
+- 결정: D-411 A.

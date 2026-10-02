@@ -5,9 +5,9 @@
 
 | 모듈 | owner | last verified | SOURCE | LOCAL | ROS-SIM | ARTIFACT | DEVICE | FIELD |
 |---|---|---|---|---|---|---|---|---|
-| [core](src/runtime/gateway/progress.md) | CORE | bed604ef (2026-09-30) | GO | GO | GO | HOLD | HOLD | PARKED |
-| [deploy](deploy/progress.md) | 릴리스·플랫폼 | c8050390 (2026-09-30) | GO | GO | N/A | HOLD | HOLD | N/A |
-| [control](src/runtime/sensing/progress.md) | CONTROL | bed604ef (2026-09-30) | GO | GO | HOLD | HOLD | HOLD | PARKED |
+| [core](src/runtime/gateway/progress.md) | CORE | 4e99d92e (2026-10-02) | GO | GO | GO | HOLD | HOLD | PARKED |
+| [deploy](deploy/progress.md) | 릴리스·플랫폼 | 4e99d92e (2026-10-02) | GO | GO | N/A | HOLD | HOLD | N/A |
+| [control](src/runtime/sensing/progress.md) | CONTROL | 4e99d92e (2026-10-02) | GO | GO | HOLD | HOLD | HOLD | PARKED |
 | [fleet](src/site/fleet/progress.md) | FLEET | bed604ef (2026-09-30) | GO | GO | HOLD | PARKED | PARKED | PARKED |
 | [games](src/site/games/progress.md) | GAMES | bed604ef (2026-09-30) | GO | GO | N/A | N/A | PARKED | PARKED |
 | [rosy_vision](src/site/vision/progress.md) | SITE | a8199fd9 (2026-09-30) | GO | GO | N/A | N/A | PARKED | PARKED |
@@ -21,14 +21,14 @@
 | [imu_bno055](src/drivers/imu_bno055/progress.md) | 장치 | dc89264 (2026-09-17) | GO | GO | HOLD | HOLD | PARKED | PARKED |
 | [sensor_adc](src/products/pinky_pro/adc/progress.md) | 장치 | dc89264 (2026-09-17) | GO | GO | HOLD | HOLD | PARKED | PARKED |
 | [lamp_control](src/products/pinky_pro/lamp/progress.md) | 장치 | dc89264 (2026-09-17) | GO | GO | HOLD | HOLD | PARKED | PARKED |
-| [core_common](src/contracts/foundation/progress.md) | CORE | bed604ef (2026-09-30) | GO | GO | N/A | N/A | N/A | N/A |
+| [core_common](src/contracts/foundation/progress.md) | CORE | 4e99d92e (2026-10-02) | GO | GO | N/A | N/A | N/A | N/A |
 | [core_events](src/runtime/events/progress.md) | CORE | bed604ef (2026-09-30) | GO | GO | N/A | N/A | N/A | N/A |
-| [core_features](src/runtime/services/progress.md) | CORE | bed604ef (2026-09-30) | GO | GO | N/A | N/A | N/A | N/A |
-| [core_api_web](src/runtime/api_web/progress.md) | CORE | bed604ef (2026-09-30) | GO | GO | N/A | N/A | N/A | N/A |
+| [core_features](src/runtime/services/progress.md) | CORE | 4e99d92e (2026-10-02) | GO | GO | N/A | N/A | N/A | N/A |
+| [core_api_web](src/runtime/api_web/progress.md) | CORE | 4e99d92e (2026-10-02) | GO | GO | N/A | N/A | N/A | N/A |
 | [web_common](src/hmi/web_common/progress.md) | CORE | 0409c371 (2026-09-30) | GO | GO | N/A | N/A | N/A | N/A |
 | [dashboard](src/hmi/dashboard/progress.md) | 화면 | e7cdf490 (2026-09-29) | GO | GO | N/A | HOLD | N/A | N/A |
-| [pilot](src/hmi/pilot/progress.md) | 화면 | 434ceb0b (2026-09-29) | GO | HOLD | HOLD | HOLD | HOLD | N/A |
-| [omx_adapter](src/products/omx/adapter/progress.md) | OMX workcell | 11ae6e70 (2026-10-02) | GO | GO | HOLD | HOLD | PARKED | PARKED |
+| [pilot](src/hmi/pilot/progress.md) | 화면 | 4e99d92e (2026-10-02) | GO | HOLD | HOLD | HOLD | HOLD | N/A |
+| [omx_adapter](src/products/omx/adapter/progress.md) | OMX workcell | 4e99d92e (2026-10-02) | GO | GO | HOLD | HOLD | PARKED | PARKED |
 | [interfaces](src/contracts/interfaces/progress.md) | 장치 | dc89264 (2026-09-17) | GO | GO | N/A | HOLD | HOLD | PARKED |
 | [pinky_pro](src/products/pinky_pro/profile/progress.md) | 로봇 통합 | uncommitted (2026-09-24) | GO | GO | GO | HOLD | HOLD | PARKED |
 | [omx](src/products/omx/profile/progress.md) | OMX workcell | uncommitted (2026-09-26) | GO | GO | HOLD | HOLD | PARKED | PARKED |

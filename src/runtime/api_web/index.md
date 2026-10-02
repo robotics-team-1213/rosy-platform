@@ -13,10 +13,12 @@
 | D-147 | src 패키지를 6개 도메인 그룹으로 재편한다 — 소급 공식화 |
 | D-168 | ROS 패키지 구조 기준 — 인정 조건, 필수 구성, 도메인 방향표를 시험으로 고정한다 |
 | D-283 | 운용 콘솔은 고정 3영역을 유지하고 조작 그룹을 선택한다 |
+| D-411 | Pilot 로봇측 학습 녹화(카메라 유닛 소유, CORE는 시작·정지 요청, `teleop/intent` 원 입력·주체 기록, 1회 10분)와 정지 중에만 허용하는 HTTP 수신(목록·tar·sha256 manifest, `rosy_ml fetch --http`); 기기가 알리는 조작부 서술자 `rosy.controls/1`(base_velocity·joint_jog·gripper, 드라이버는 전송·위젯은 kind별, 팔 조이스틱은 이전 목표 종료 후 순차 제한 목표); OMX 그리퍼 전용 절대 목표·쥠 readback(시뮬레이션만, D-390 유지) |
 
 ## 계획·결과 문서
 
 - [2026-09-15-module-harness-design.md](../../../docs/plans/2026-09-15-module-harness-design.md)
+- [2026-10-02-d411-pilot-recording-controls-plan.md](../../../docs/plans/2026-10-02-d411-pilot-recording-controls-plan.md)
 
 ## 교훈 (docs/solutions)
 
@@ -28,8 +30,8 @@
 
 ## 최근 기록
 
+- 2026-10-02 · 4e99d92e · feat(core_api_web): D-411 A /api/v1/recordings 와 Pilot 녹화 자산
 - 2026-10-02 · uncommitted · chore(api): D-395 P2-7 계약 버전 v1.72 → v1.73
 - 2026-10-02 · uncommitted · feat(api): D-395 P2-7 `POST`·`GET /localization/mission`, API Ref v1.72
 - 2026-10-01 · uncommitted · fix(api): D-395 리뷰 — 시작은 localization 잠금 안에서, odom 프레임 거부
 - 2026-10-01 · uncommitted · feat(api): 도킹·swarm follow 시작도 LOCALIZED 게이트
-- 2026-10-01 · uncommitted · feat(api): D-395 P2-4/P2-5 위치 확정 경로·capability, 계약 v1.70

@@ -2,7 +2,7 @@
 module: control
 logical_modules: [M05, M06, M07, M11]
 owner: CONTROL
-last_verified: { commit: "bed604ef", date: 2026-09-30 }
+last_verified: { commit: "4e99d92e", date: 2026-10-02 }
 gates:
   SOURCE:
     state: GO
@@ -23,7 +23,7 @@ gates:
     blocker: "Pi bench Device 설치와 device-readback.sh --json 증거 없음. Control sensor adapter 활성화는 Device 보정 generation에 묶인다(D-47)"
   FIELD:
     state: PARKED
-adrs: [D-37, D-38, D-40, D-42, D-47, D-50, D-57, D-58, D-77, D-118, D-119, D-143, D-151, D-152, D-149, D-155, D-156, D-162, D-168, D-183, D-199, D-205, D-206, D-356, D-373]
+adrs: [D-37, D-38, D-40, D-42, D-47, D-50, D-57, D-58, D-77, D-118, D-119, D-143, D-151, D-152, D-149, D-155, D-156, D-162, D-168, D-183, D-199, D-205, D-206, D-356, D-373, D-411]
 plans:
   - docs/plans/2026-09-06-module-split-criteria.md
   - docs/plans/2026-09-12-rosy-control-absorption-plan.md
@@ -40,6 +40,7 @@ plans:
   - docs/plans/2026-09-22-scene-context-road.md
   - docs/plans/2026-09-21-camera-preview-dashboard-design.md
   - docs/plans/2026-09-21-camera-preview-dashboard.md
+  - docs/plans/2026-10-02-d411-pilot-recording-controls-plan.md
 ---
 ## 지금 상태
 

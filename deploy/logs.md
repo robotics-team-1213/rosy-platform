@@ -1871,3 +1871,9 @@
 - 변경: `rosy-release-recover.service`에 `PrivateTmp=yes`. recover가 이전 릴리스를 다시 검증할 때(`native_release.verify` → `signing`의 `tempfile`) `ProtectSystem=strict` 아래 임시 디렉터리가 읽기 전용이라 "No usable temporary directory"로 실패했고, `rosy-core.service`·`rosy-runtime.target`이 이 게이트를 Requires 하므로 로봇이 뜨지 않았다. 수동 push에도 해당한다.
 - 증거: D-406 기기 쌍둥이(ubuntu 24.04 + systemd 255 컨테이너, 브랜치 test/d406-device-twin) 시나리오 h3에서 활성화 도중 전원 차단 뒤 재현, PrivateTmp로 복구 성공. 계약 시험 `test_units_that_verify_releases_get_a_writable_private_tmp`(변형으로 빨강 확인). 관련 시험 217 passed.
 - gate 변화: 없음. 기기 확인 필요. 이 유닛은 sync에서 next-boot 대상이라 다음 릴리스 push 뒤 재부팅부터 적용된다.
+
+## 2026-10-02 · a434ea35 · feat(deploy): D-411 A pilot-recordings 디렉터리와 유닛 권한
+- 변경: `tmpfiles-rosy-state.conf`·`customize-rootfs.sh` 에 `/var/lib/rosy/pilot-recordings`(2750 rosy-camera:rosy-core), `rosy-camera.service` `ReadWritePaths`, `rosy-core.service` `ReadOnlyPaths`.
+- 증거: `python -m pytest test/test_native_systemd_contract.py test/test_control_deploy_closure.py -q` → 133 passed, 1 skipped (2026-10-02 Windows). 이미지 빌드·실기 readback 은 하지 않았다.
+- gate 변화: SOURCE 유지. ROS-SIM HOLD — 계획 Verification ROS-SIM 체크리스트(WSL Ubuntu) 미실행, DEVICE 증거 없음.
+- 결정: D-411 A.

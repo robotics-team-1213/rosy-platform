@@ -13,6 +13,7 @@
 | D-365 | Rosy Pilot 설치형은 PWA로 우선하고 Capacitor 래퍼는 네이티브 전용 수요가 실측될 때까지 보류한다 |
 | D-366 | Rosy Pilot 조종 대상 확장은 기기 종류별 드라이버 레지스트리로 수용하며, 장치별 조종 컨트롤(그리퍼·팔 위치 등)은 그 장치의 계약이 열 때 프런트에 반영한다 |
 | D-390 | Pilot의 OMX-AI 연습은 시뮬레이션 전용 장치 API를 거쳐 로컬 팔 명령 소유자에 연결한다 |
+| D-411 | Pilot 로봇측 학습 녹화(카메라 유닛 소유, CORE는 시작·정지 요청, `teleop/intent` 원 입력·주체 기록, 1회 10분)와 정지 중에만 허용하는 HTTP 수신(목록·tar·sha256 manifest, `rosy_ml fetch --http`); 기기가 알리는 조작부 서술자 `rosy.controls/1`(base_velocity·joint_jog·gripper, 드라이버는 전송·위젯은 kind별, 팔 조이스틱은 이전 목표 종료 후 순차 제한 목표); OMX 그리퍼 전용 절대 목표·쥠 readback(시뮬레이션만, D-390 유지) |
 
 ## 계획·결과 문서
 
@@ -20,6 +21,7 @@
 - [2026-09-29-rosy-pilot-teleop-app.md](../../../docs/plans/2026-09-29-rosy-pilot-teleop-app.md)
 - [2026-10-01-omx-demonstration-lerobot-design.md](../../../docs/plans/2026-10-01-omx-demonstration-lerobot-design.md)
 - [2026-10-01-pilot-omx-gazebo-practice.md](../../../docs/plans/2026-10-01-pilot-omx-gazebo-practice.md)
+- [2026-10-02-d411-pilot-recording-controls-plan.md](../../../docs/plans/2026-10-02-d411-pilot-recording-controls-plan.md)
 
 ## 교훈 (docs/solutions)
 
@@ -31,8 +33,8 @@
 
 ## 최근 기록
 
+- 2026-10-02 · 4e99d92e · feat(pilot): D-411 A 로봇 녹화 토글과 "녹화본" 시트
 - 2026-10-01 · uncommitted · fix(pilot): preserve recording errors and reconcile API minor
 - 2026-10-01 · uncommitted · fix(omx): fence recording closure and isolate storage faults
 - 2026-10-01 · uncommitted · feat(omx): record SIM demonstrations and export LeRobot v3
 - 2026-10-01 · uncommitted · D-398 장미색 범위·정지·어휘 정리
-- 2026-10-01 · uncommitted · fix(pilot): main의 OMX 연습 화면·데드존을 D-359 공용 컨트롤 계약 아래로

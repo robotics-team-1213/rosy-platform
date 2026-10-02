@@ -21,6 +21,7 @@
 | D-390 | Pilot의 OMX-AI 연습은 시뮬레이션 전용 장치 API를 거쳐 로컬 팔 명령 소유자에 연결한다 |
 | D-402 | OMX 모션 플래너 v1: 장치 로컬 해석 5축 수직하향 IK(고정 open_manipulator URDF), `CELL_TRANSFER`·simulation 한정으로 D-376 §2·§3 HOLD를 좁게 개방, 충돌 장면 없음, owner만 제출, MoveIt은 같은 Protocol의 두 번째 구현 |
 | D-403 | Fleet Cell Job 경로: Rosy Cell Job → Fleet 제안(재컴파일 검증)·승인 → Step마다 `CELL_TRANSFER` Action 하나, 정지 세대 의미, D-330 §2 하달 보류는 simulation에서만 ROS-SIM 정지 세대 시험 후 개방, 셀 해시 검사는 OMX owner |
+| D-411 | Pilot 로봇측 학습 녹화(카메라 유닛 소유, CORE는 시작·정지 요청, `teleop/intent` 원 입력·주체 기록, 1회 10분)와 정지 중에만 허용하는 HTTP 수신(목록·tar·sha256 manifest, `rosy_ml fetch --http`); 기기가 알리는 조작부 서술자 `rosy.controls/1`(base_velocity·joint_jog·gripper, 드라이버는 전송·위젯은 kind별, 팔 조이스틱은 이전 목표 종료 후 순차 제한 목표); OMX 그리퍼 전용 절대 목표·쥠 readback(시뮬레이션만, D-390 유지) |
 
 ## 계획·결과 문서
 
@@ -31,6 +32,7 @@
 - [2026-10-01-model-tool-contract-implementation.md](../../../../docs/plans/2026-10-01-model-tool-contract-implementation.md)
 - [2026-10-01-omx-demonstration-lerobot-design.md](../../../../docs/plans/2026-10-01-omx-demonstration-lerobot-design.md)
 - [2026-10-01-pilot-omx-gazebo-practice.md](../../../../docs/plans/2026-10-01-pilot-omx-gazebo-practice.md)
+- [2026-10-02-d411-pilot-recording-controls-plan.md](../../../../docs/plans/2026-10-02-d411-pilot-recording-controls-plan.md)
 
 ## 교훈 (docs/solutions)
 
@@ -42,8 +44,8 @@
 
 ## 최근 기록
 
+- 2026-10-02 · 4e99d92e · fix(pilot-sim): D-411 A 새 Pilot 자산 서빙
 - 2026-10-02 · uncommitted · test(omx): verify planned-start tolerance budget
 - 2026-10-02 · uncommitted · fix(omx): center final state check on planned start
 - 2026-10-02 · uncommitted · fix(omx): make start tolerance ceiling owner-controlled
 - 2026-10-02 · uncommitted · fix(omx): close final-owner joint-state sequence race
-- 2026-10-02 · 31ada4b4 · fix(omx): C2 independent review fixes (D-402)

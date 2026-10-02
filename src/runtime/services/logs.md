@@ -354,3 +354,9 @@
 - 변경: `LocalizationAssist` 는 `unmapped_objects`·`objects_stamp` 를 그대로 넘긴다. `pose_frame` 이 `odom` 이면(로봇이 말했든 CORE 가 바꿨든) 비우고, `state_stale` 은 새 상태라 원래 없다. 물체가 잘못된 상태는 물체만 버리고 상태는 받는다. 감시용 부가 정보 때문에 상태가 끊겨 자율 주행이 멈추면 안 된다.
 - 증거: `test/test_localization_assist.py` +5(통과, odom·stale 에서 비움, 17개·문자열·잘못된 시각에서 상태 유지).
 - gate 변화: 없음.
+
+## 2026-10-02 · 410c6832 · feat(core_features): D-411 A teleop/intent 증거 훅
+- 변경: `command/manager.py` 에 `intent_sink`·`note_intent` — teleop 판정마다(관리자 앞 거부 포함) `rosy.teleop.intent/1` 을 낸다. 싱크 예외는 명령을 거부하지 않는다. 제어 경로는 이 증거를 읽지 않는다(D-2).
+- 증거: `python -m pytest src/runtime/services/test/test_teleop_intent.py -q` → 5 passed (2026-10-02 Windows).
+- gate 변화: SOURCE 유지. ROS-SIM HOLD — 계획 Verification ROS-SIM 체크리스트(WSL Ubuntu) 미실행, DEVICE 증거 없음.
+- 결정: D-411 A.

@@ -317,3 +317,9 @@
 - 변경: 통합 브랜치가 main 을 받으며 v1.72 를 가져갔다(D-400 이 v1.71). P2-7 행과 `app.py` ×2·핀 네 곳을 v1.73 으로.
 - 증거: `test/test_line_follow_contract_docs.py`, `src/site/fleet/test/test_task_contract_docs.py`, `test_mission_progress.py`.
 - gate 변화: 없음.
+
+## 2026-10-02 · 4e99d92e · feat(core_api_web): D-411 A /api/v1/recordings 와 Pilot 녹화 자산
+- 변경: `api/v1/recordings.py`(목록 viewer·active·시작/정지 operator·archive operator; 정지 상태에서만, 한 번에 한 수신, 블록마다 정지 조건 재확인 후 짧은 본문으로 끊기, 마지막 바이트 뒤에만 fetched), 오류 코드 5개(`errors.py`), `control.py` 사전 거부도 intent·수락 시 seat 변경 통지, `ws.py` `/ws/state` 열림·닫힘을 가드에 알림, `deps.py`·`routes.py`, API v1.76 핀. Pilot 자산 allowlist 에 `recording.js`·`screens/robot-recording.js`.
+- 증거: `python -m pytest src/runtime/api_web/test -q` → 73 passed, 13 skipped (2026-10-02 Windows).
+- gate 변화: SOURCE 유지. ROS-SIM HOLD — 계획 Verification ROS-SIM 체크리스트(WSL Ubuntu) 미실행, DEVICE 증거 없음.
+- 결정: D-411 A.

@@ -1,7 +1,7 @@
 ---
 module: core_common
 owner: CORE
-last_verified: { commit: "bed604ef", date: 2026-09-30 }
+last_verified: { commit: "4e99d92e", date: 2026-10-02 }
 gates:
   SOURCE:
     state: GO
@@ -19,12 +19,13 @@ gates:
     state: N/A
   FIELD:
     state: N/A
-adrs: [D-61, D-147, D-168, D-18, D-283, D-268]
+adrs: [D-61, D-147, D-168, D-18, D-283, D-268, D-411]
 plans:
   - docs/plans/2026-09-29-er2-mission-action-contract-closure.md
   - docs/plans/2026-09-15-module-harness-design.md
   - docs/plans/2026-09-29-policy-evidence-contract-design.md
   - docs/plans/2026-09-29-policy-evidence-contract.md
+  - docs/plans/2026-10-02-d411-pilot-recording-controls-plan.md
 ---
 ## 지금 상태
 
