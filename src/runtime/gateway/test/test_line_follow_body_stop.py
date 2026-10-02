@@ -546,9 +546,34 @@ def test_envelope_samples_the_arcs_between_the_ends():
     point = [(0.0, 0.13)]
     ends = [body_path_gap(point, linear=0.04 * s, angular=0.2, min_travel_m=0.30, **BODY)
             for s in (1.0, 0.15)]
+    fine = body_envelope_gap(point, linear=0.04, angular=0.2, scale_floor=0.15, scale_step=0.002,
+                             pad_m=0.0, **BODY)
     family = body_envelope_gap(point, linear=0.04, angular=0.2, scale_floor=0.15, **BODY)
-    assert family is not None and family == pytest.approx(0.106, abs=2e-3)
-    assert all(end is None or end > family + 0.002 for end in ends)
+    assert fine is not None and fine < 0.107                         # an in-between scale
+    assert all(end is None or end > fine + 0.002 for end in ends)    # neither end sees it
+    assert family is not None and fine - 0.011 <= family <= fine     # padded: early, not late
+
+
+@pytest.mark.parametrize("seed", [7, 99])
+def test_envelope_is_never_late_against_a_fine_scale_reference(seed):
+    """Verification 2026-10-03: step 0.05 was up to 22 mm late and missed contacts near the
+    resume limit. The 0.01 step + 0.01 m pad must not be late nor miss vs a 0.002 step."""
+    import random
+
+    rng = random.Random(seed)
+    body = {key: value for key, value in BODY.items() if key != "horizon_m"}
+    for _ in range(150):
+        point = [(rng.uniform(-0.25, 0.25), rng.uniform(-0.25, 0.25))]
+        linear, angular = rng.choice([0.02, 0.04, 0.07]), rng.uniform(-0.7, 0.7)
+        want = body_envelope_gap(point, linear=linear, angular=angular, scale_floor=0.15,
+                                 horizon_m=0.15, scale_step=0.002, pad_m=0.0, **body)
+        got = body_envelope_gap(point, linear=linear, angular=angular, scale_floor=0.15,
+                                horizon_m=0.15, **body)
+        if want is not None:
+            assert got is not None and got <= want + 1e-3, (point, linear, angular, got, want)
+    probe = body_envelope_gap([(0.130, -0.151)], linear=0.04, angular=-0.439,
+                              scale_floor=0.15, horizon_m=0.15, **body)
+    assert probe is not None and probe <= 0.1475
 
 
 def test_memory_hold_is_reported_as_memory_in_the_event():

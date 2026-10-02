@@ -275,26 +275,41 @@ def body_path_gap(points: Sequence[Point], *, linear: float, angular: float, fro
     return None
 
 
+#: body_envelope_gap: traffic-scale sample step, and the margin that covers a contact falling
+#: between two samples. A 3000-case fuzz against a 0.002 step (Pinky outline, v 0.02-0.07,
+#: |w| <= 0.7, floor 0.15, horizon 0.15) found contacts at most 9.7 mm late at step 0.01.
+ENVELOPE_SCALE_STEP = 0.01
+ENVELOPE_PAD_M = 0.01
+
+
 def body_envelope_gap(points: Sequence[Point], *, linear: float, angular: float,
                       scale_floor: float, front_x_m: float, rear_x_m: float,
                       half_width_m: float, rotation_radius_m: float, horizon_m: float,
-                      scale_step: float = 0.05) -> Optional[float]:
+                      scale_step: float = ENVELOPE_SCALE_STEP,
+                      pad_m: float = ENVELOPE_PAD_M) -> Optional[float]:
     """D-422 review: the first contact over every arc the twist can become when something
     downstream scales linear by s in [scale_floor, 1] but keeps angular (the traffic gate).
 
-    Sampled in s every scale_step or finer, both ends included. Each arc is swept only as far
-    as the best contact so far (later contacts cannot lower the minimum), over the points
-    within reach of horizon_m."""
+    Sampled in s every scale_step or finer, both ends included. An arc between two samples
+    can touch up to pad_m earlier than either, so every arc is swept pad_m past horizon_m and
+    the result is pad_m earlier (clamped at 0): early, never late. Each arc is swept only as
+    far as the best contact so far, over the points within reach."""
     floor = min(1.0, max(float(scale_floor), 1e-3))
-    reach = horizon_m + rotation_radius_m
+    sweep = horizon_m + pad_m
+    reach = sweep + rotation_radius_m
     near = [(x, y) for x, y in points if x * x + y * y <= reach * reach]
     if not near:
         return None
     count = max(1, int(math.ceil((1.0 - floor) / scale_step)))
+    # Every fifth sample first: an early contact prunes the sweeps of the fine samples.
+    order = list(range(0, count + 1, 5)) + [i for i in range(count + 1) if i % 5]
+    if count not in order[:1 + count // 5]:
+        order.remove(count)
+        order.insert(1, count)
     best: Optional[float] = None
-    for index in range(count + 1):
+    for index in order:
         scale = 1.0 - (1.0 - floor) * index / count
-        limit = horizon_m if best is None else min(horizon_m, best)
+        limit = sweep if best is None else min(sweep, best)
         gap = body_path_gap(near, linear=linear * scale, angular=angular, front_x_m=front_x_m,
                             rear_x_m=rear_x_m, half_width_m=half_width_m,
                             rotation_radius_m=rotation_radius_m, horizon_m=limit,
@@ -303,7 +318,7 @@ def body_envelope_gap(points: Sequence[Point], *, linear: float, angular: float,
             best = gap
             if best <= 0.0:
                 break
-    return best
+    return None if best is None else max(0.0, best - pad_m)
 
 
 def rotation_gap(points: Sequence[Point], *, rotation_radius_m: float,
