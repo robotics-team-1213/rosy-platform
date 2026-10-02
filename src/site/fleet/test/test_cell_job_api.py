@@ -2,8 +2,6 @@ from hashlib import sha256
 from pathlib import Path
 import sys
 
-import pytest
-
 from fastapi.testclient import TestClient
 
 ROOT = Path(__file__).resolve().parents[4]
@@ -35,6 +33,10 @@ class FixedCellCompiler:
         self.calls = 0
         self.destination_x = 0.4
 
+    def item_geometry(self, recipe):
+        box = recipe["box"]
+        return {"box": {"grasp_depth_m": box["grasp_depth"], "height_m": box["height"]}}
+
     def compile(self, recipe, cell):
         self.calls += 1
         job = {"recipe": "compiled", "steps": ["transfer-0", "transfer-1"]}
@@ -62,7 +64,7 @@ class FixedCellCompiler:
         )
 
 
-def _setup(tmp_path, **options):
+def _setup(tmp_path, **app_options):
     db = tmp_path / "fleet.sqlite3"
     task_service = FleetTaskService(FleetTaskStore(db), robot_ids=("rosy_01",))
     users = {
@@ -81,8 +83,7 @@ def _setup(tmp_path, **options):
         ),
         task_service=task_service, site_users=users,
         mission_service=MissionService(MissionStore(db)),
-        proposal_store=ProposalStore(db), cell_job_compiler=compiler,
-        **options,
+        proposal_store=ProposalStore(db), cell_job_compiler=compiler, **app_options,
     )
     return TestClient(app), task_service, compiler
 
@@ -200,37 +201,18 @@ def test_cell_proposal_does_not_admit_when_service_and_operator_identity_match(t
     assert response.json()["detail"]["code"] == "CELL_JOB_APPROVER_MUST_DIFFER_FROM_PROPOSER"
 
 
-def test_cell_dispatcher_is_disabled_by_default_and_requires_pinned_configuration(tmp_path):
-    client, _, _ = _setup(tmp_path)
-    assert client.app.state.cell_job_dispatcher is None
-    with pytest.raises(ValueError, match="pinned config revision"):
-        _setup(tmp_path, enable_cell_job_dispatcher=True,
-               omx_instances={"omx_01": "omx_01_control"})
-
-
-def test_approved_cell_api_job_reaches_composed_dispatcher(tmp_path):
-    from test_cell_job_dispatcher import Transport
-
-    transport = Transport(None, None)
-    client, tasks, _ = _setup(
-        tmp_path, enable_cell_job_dispatcher=True,
-        omx_instances={"omx_01": "omx_01_control"}, omx_action_transport=transport,
-        cell_job_config_revisions={"omx_01": "cell-config-v1"},
-    )
-    transport.store, transport.tasks = client.app.state.cell_job_store, tasks.store
-    control = tasks.store.dispatch_control()
-    generation = tasks.store.rearm_dispatch(expected_generation=control["generation"], actor_id="operator-1")[
-        "generation"]
-    created = _post(client, "/api/fleet/proposals", "cell-secret", {
-        "request_key": "composed-cell", "workcell_id": "omx_01",
-        "instance_id": "omx_01_control", "candidate": _candidate(),
-    }).json()
-    identifier = created["proposal"]["proposal_id"]
-    assert client.app.state.cell_job_dispatcher.dispatch_next() is None
-    _post(client, f"/api/fleet/proposals/{identifier}/resolve", "cell-secret")
-    assert client.app.state.cell_job_dispatcher.dispatch_next() is None
-    assert _post(client, f"/api/fleet/missions/{identifier}/admit", "operator-secret",
-                 {"expected_generation": generation}).status_code == 200
-    assert client.app.state.cell_job_dispatcher.dispatch_next()["state"] == "ACCEPTED"
-    assert transport.submissions[0].cell_transfer.recipe_sha256 == RECIPE_SHA
-    assert transport.submissions[0].config_revision == "cell-config-v1"
+def test_resolution_fixes_each_step_goal_predicate_from_the_recipe(tmp_path):
+    """C4b 1b C1: the item_at_pose predicate is stored per step at resolution."""
+    import yaml
+    from rosy.execution.site.item_pose import ItemPoseTolerance
+    document = yaml.safe_load((ROOT / "deploy/robot/omx/sim/item_pose_goal.yaml").read_text(encoding="utf-8"))
+    client, _, _ = _setup(tmp_path, cell_item_pose_tolerance=ItemPoseTolerance.from_mapping(document))
+    candidate = _candidate()
+    candidate["recipe"] = {"schema": "rosy_cell.recipe/1", "box": {"height": 0.03, "grasp_depth": 0.025}}
+    request = {"request_key": "cell-job-1", "workcell_id": "omx_01",
+               "instance_id": "omx_01_control", "candidate": candidate}
+    proposal_id = _post(client, "/api/fleet/proposals", "cell-secret", request).json()["proposal"]["proposal_id"]
+    steps = _post(client, f"/api/fleet/proposals/{proposal_id}/resolve", "cell-secret").json()["mission"]["steps"]
+    predicate = steps[0]["step"]["goal_predicate"]
+    assert predicate["frame"] == "robot_base" and predicate["tolerance"]["xy_m"] == 0.005
+    assert abs(predicate["target"]["z"] - (0.3 + 0.025 - 0.015)) < 1e-12

@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from core_common.protocol.schemas import FleetCellTransferGrant
-from fleet.server.cell_job_store import cell_transfer_grant_digest
+from fleet.server.step_action_kinds import step_grant_digest as cell_transfer_grant_digest
 from fleet.server.local_action_transport import LocalActionUnavailable, UnixLocalActionTransport
 
 
