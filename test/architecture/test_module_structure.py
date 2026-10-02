@@ -322,6 +322,15 @@ SIZE_VERDICTS = {
         "canceled-action hold joined (peer's change). The hard-tier "
         "zero-growth rule prevents silent expansion",
     ),
+    "products/omx/adapter/omx_adapter/pose_plan.py": (
+        685,
+        "accept (2026-10-02, C3b): one owner for the simulation cell profile and the analytic "
+        "CELL_TRANSFER planner that reads it. C3b added the profile's width-matched jaw mapping, "
+        "after-grasp per-phase tolerances and wall-clock bound, and the request's grasp depth/width; "
+        "the planner and validate_cell_transfer_plan consume exactly these fields, so a profile/"
+        "planner split would only move the shared validation. ROS-free and host-testable. Split "
+        "the profile loader out if MoveIt (D-402 follow-up) adds a second planner",
+    ),
     "hmi/dashboard/app.js": (
         803,
         "split: the shell's session/auth/refresh cycle, the Escape e-stop handler, the goal "
