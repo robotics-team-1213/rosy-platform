@@ -1,6 +1,6 @@
 ## D-402 OMX 모션 플래너 v1은 장치 로컬 해석 IK(5축 수직하향)이며 계획만 내고 제출은 owner가 한다
 
-**Status:** Proposed (2026-10-01, 계획 경계·인터페이스 결정; 시뮬레이션 한정 D-376 개정은 사용자 승인 2026-10-01). 대상은 D-403의 `CELL_TRANSFER` 포즈 입력과 `simulation` 프로필뿐이다. RGB-D `PICK_PLACE` 계획, 실물 OMX 프로필 활성화, 충돌 장면, MoveIt 채택, DEVICE/FIELD 수용은 포함하지 않는다.
+**Status:** Accepted (2026-10-02, 사용자 승인; 시뮬레이션 범위. C3/C3b Gazebo 증거 `docs/validation/rosy-cell-gazebo-c3-2026-10-02/`. 실물 OMX·DEVICE·FIELD는 계속 닫혀 있다. 이전 기록: Proposed (2026-10-01, 계획 경계·인터페이스 결정; 시뮬레이션 한정 D-376 개정은 사용자 승인 2026-10-01). 대상은 D-403의 `CELL_TRANSFER` 포즈 입력과 `simulation` 프로필뿐이다. RGB-D `PICK_PLACE` 계획, 실물 OMX 프로필 활성화, 충돌 장면, MoveIt 채택, DEVICE/FIELD 수용은 포함하지 않는다.
 
 ## 배경
 

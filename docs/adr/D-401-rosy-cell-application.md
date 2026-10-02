@@ -1,6 +1,6 @@
 ## D-401 Rosy Cell은 셀 설정과 레시피를 분리하고 해시로 묶은 Job(Step 목록)을 만드는 Application이다
 
-**Status:** Proposed (2026-10-01, 구조·계약 결정). ROS-free 코어(`rosy_cell`)의 형식만 정한다. Fleet 제출 구현, 화면, 장치 측 Step API, 셋업·티칭용 OMX 장치 API, 도달성·IK 판정, ROS-SIM·DEVICE·FIELD 수용은 포함하지 않는다.
+**Status:** Accepted (2026-10-02, 사용자 승인; 시뮬레이션 범위. C3/C3b Gazebo 증거 `docs/validation/rosy-cell-gazebo-c3-2026-10-02/`. 실물 OMX·DEVICE·FIELD는 계속 닫혀 있다. 이전 기록: Proposed (2026-10-01, 구조·계약 결정). ROS-free 코어(`rosy_cell`)의 형식만 정한다. Fleet 제출 구현, 화면, 장치 측 Step API, 셋업·티칭용 OMX 장치 API, 도달성·IK 판정, ROS-SIM·DEVICE·FIELD 수용은 포함하지 않는다.
 
 ## 배경
 
