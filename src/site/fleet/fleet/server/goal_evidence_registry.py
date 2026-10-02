@@ -19,7 +19,9 @@ _REQUIRED = {
     "evaluator_revisions", "valid_until",
 }
 _ENV_NAME = re.compile(r"^[A-Z_][A-Z0-9_]*$")
-_EVIDENCE_SOURCES = frozenset({"camera_observation"})
+_EVIDENCE_SOURCES = frozenset({"camera_observation", "sim_model_pose"})
+# D-403 §5: a Gazebo model pose is goal evidence only in the simulation profile.
+_SIMULATION_ONLY_SOURCES = frozenset({"sim_model_pose"})
 
 
 class GoalEvidenceRegistryError(ValueError):
@@ -101,7 +103,8 @@ def _string_list(row: Mapping, key: str, index: int) -> tuple[str, ...]:
 
 
 def load_goal_evidence_registry(path: Path | str, *,
-                                environ: Mapping[str, str] | None = None
+                                environ: Mapping[str, str] | None = None,
+                                deployment_profile: str = "production",
                                 ) -> GoalEvidenceRegistry:
     """Read non-secret scopes from YAML and resolve each token from the environment."""
 
@@ -159,6 +162,10 @@ def load_goal_evidence_registry(path: Path | str, *,
             raise GoalEvidenceRegistryError(
                 f"producers[{index}].evidence_source must be one of "
                 f"{', '.join(sorted(_EVIDENCE_SOURCES))}"
+            )
+        if evidence_source in _SIMULATION_ONLY_SOURCES and deployment_profile != "simulation":
+            raise GoalEvidenceRegistryError(
+                f"producers[{index}].evidence_source {evidence_source} is accepted only in simulation"
             )
         valid_until_raw = _nonblank(row, "valid_until", index)
         try:

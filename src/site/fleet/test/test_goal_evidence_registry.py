@@ -114,3 +114,28 @@ def test_goal_evidence_registry_refuses_expired_registration(tmp_path):
 
     assert registry.source_for_token("fixture-source-token", now=1790726400.0) is not None
     assert registry.source_for_token("fixture-source-token", now=1790812801.0) is None
+
+
+def _sim_pose_source():
+    return _source(producer_id="sim-model-pose", predicate_id="item_at_pose", object_id="cell-item",
+                   destination_id="cell-place", evidence_source="sim_model_pose",
+                   evaluator_revisions=["gz-model-pose-v1"])
+
+
+def test_sim_model_pose_producer_is_accepted_only_in_simulation(tmp_path):
+    """C4b G6, D-403 §5: sim_model_pose is a simulation-only goal evidence source."""
+    config = _write_config(tmp_path, [_sim_pose_source()])
+    env = {"ROSY_TEST_GOAL_EVIDENCE_TOKEN": "fixture-source-token"}
+    with pytest.raises(ValueError, match="simulation"):
+        load_goal_evidence_registry(config, environ=env)
+    with pytest.raises(ValueError, match="simulation"):
+        load_goal_evidence_registry(config, environ=env, deployment_profile="production")
+    registry = load_goal_evidence_registry(config, environ=env, deployment_profile="simulation")
+    assert registry.producers[0].evidence_source == "sim_model_pose"
+
+
+def test_camera_producers_load_in_both_profiles(tmp_path):
+    config = _write_config(tmp_path, [_source()])
+    env = {"ROSY_TEST_GOAL_EVIDENCE_TOKEN": "fixture-source-token"}
+    for profile in ("production", "simulation"):
+        assert load_goal_evidence_registry(config, environ=env, deployment_profile=profile).producers

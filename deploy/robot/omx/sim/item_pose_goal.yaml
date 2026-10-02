@@ -1,0 +1,19 @@
+# Site-side item_at_pose goal tolerances for the OMX simulation cell (D-403 §5, C4b G6).
+# Fleet judges sim_model_pose evidence against these; producers never assert satisfaction.
+schema: rosy.item-pose-tolerance.v1
+basis: >-
+  C3b Gazebo transfers (docs/validation/rosy-cell-gazebo-c3-2026-10-02, 2026-10-02) placed the
+  30 mm foam block at xy 0.14-0.31 mm, yaw <= 0.0042 rad, top z 0.0 mm, tilt 0 against the
+  probe acceptance of 5 mm / 0.05 rad / 2 mm; the same limits rejected the C3 run8 block lying on
+  the table (xy 53 mm, tilt 1.59 rad) and the neighbour pushed 24.9 mm. They stay well under the
+  15 mm recipe gap, so a block in the neighbouring slot never passes.
+xy_m: 0.005
+z_m: 0.002
+yaw_rad: 0.05
+tilt_rad: 0.05
+# Box yaw is symmetric under a half turn.
+yaw_period_rad: 3.141592653589793
+# Model origin (the box centre) above the step place TCP: grasp_depth - height / 2 of the
+# omx_sim recipe (15 mm - 30 mm / 2). A slip sheet has no grasp and no entry.
+item_centre_above_tcp_m:
+  box: 0.0
