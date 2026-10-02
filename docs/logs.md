@@ -4309,3 +4309,8 @@
 - gate 변화: 없음. S1 은 a·b·c·l 통과, d 는 Nav2 가 sim 에서 직진하지 않아 미증명(R4).
 - 결정: 없음. 기본값 변경 없음.
 - 교훈: 첫 결정이 통과하게 되자 관찰자가 보고 한 번 만에 LOCALIZED 가 되어, 2보고 감시가 거울 잠금 증거를 받을 틈이 사라졌다 — 한 수정이 다른 안전장치의 입력 빈도를 바꾼다(R1).
+
+## 2026-10-02 · uncommitted · docs(plans): D-395 계약 §3 사다리 멈춤 규칙 (S1 재실행 R2·R5·R6)
+- 변경: `docs/plans/2026-10-01-d395-phase2-interfaces.md` §3 에 사다리 멈춤 규칙(중재기 `pending`·로봇 `checking` 동안 시계 정지, 회차당 30 s 상한), 로봇 `checking` 사유, CORE 의 검사 중 `busy` 와 버린 보고 폐기를 적었다. API Reference 의 `reason`·ERR-102 `busy` 도 갱신.
+- 증거: Fleet·sensing·CORE 시험(각 모듈 logs.md).
+- gate 변화: 없음.
