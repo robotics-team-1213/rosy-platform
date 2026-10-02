@@ -235,7 +235,7 @@ probe에는 대역 플래그가 없다(`--submit-from`, `--feedback-to-runner`, 
 
 - **B1 블로커**(성공한 goal이 `action_failed`로 끝남): goal 응답 전에 온 feedback을 버퍼에 두었다가 GOAL_ACCEPTED 뒤에 하나로 재생한다(`e63c0b42`). ROS 종료 status는 journal보다 먼저 기록한다(`7ae0f65c`). 첫 20회 반복 중 Fleet-to-ROS 시험이 1회 실패해서 찾은 결함이다.
   - WSL Jazzy 반복: `wsl -e bash -lc 'source /opt/ros/jazzy/setup.bash; export ROS_DOMAIN_ID=77 ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST; cd <worktree>; for i in $(seq 25); do python3 -m pytest -q src/products/omx/adapter/test/test_omx_ros_runtime.py src/products/omx/adapter/test/test_omx_ros_runtime_vendor_sim.py src/products/omx/adapter/test/test_omx_fleet_ros_actionserver.py src/products/omx/adapter/test/test_omx_ros_camera_runtime.py; done'`
-  - 결과: **25/25 통과**(회당 8 passed, 1 skipped). 원본: `X:\DevTemposy-cell-c3\c3b\wsl-loop2.txt`.
+  - 결과: **25/25 통과**(회당 8 passed, 1 skipped). 원본: `X:\DevTemp\rosy-cell-c3\c3b\wsl-loop2.txt`.
 - minor 1–5·7은 단위 시험과 함께 고쳤다: 시작 창 상한·포함 범위, 시계 역행 HOLD, release 폭 거절, `fingertip_overhang_m`, 수락 레시피 폭·깊이. minor 8은 `logs.md`에 적었다.
 - **Gazebo 단일 재실행**(`review-single`, `7ae0f65c` 소스, transfer 3 → 슬롯 0)
   - 배치 오차: xy **0.11 mm**, yaw 0.0006 rad, 윗면 z 0.0 mm, 기울기 0 → 통과.
