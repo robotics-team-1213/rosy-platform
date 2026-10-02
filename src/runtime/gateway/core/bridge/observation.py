@@ -239,6 +239,13 @@ def us_range(services, msg, *, received_at: float) -> None:
     usable = translate.usable_range(sample)
     if usable is not None:
         services.power.on_range(usable)
+    # D-422: the same filtered range is a forward body-gap source for the line-follow stop.
+    # Saturated above max_range (or +inf) = no echo in range. NaN, negative or below
+    # min_range proves nothing (something may touch the sensor): it is not reported, so
+    # the last reading ages out. Timed on the line-follow clock, like the LiDAR clearance.
+    value = sample["range"]
+    if usable is not None or value > float(sample["max_range"]):
+        services.line_follow.observe_ultrasonic(usable)
 
 
 def batt_state(services, msg, *, received_at: float,

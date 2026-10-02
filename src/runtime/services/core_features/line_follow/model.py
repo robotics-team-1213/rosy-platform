@@ -12,6 +12,10 @@ import re
 from dataclasses import dataclass
 from typing import Optional
 
+#: Pre-D-422 LiDAR-origin defaults: sector mode and path mode without the URDF outline.
+SECTOR_STOP_M = 0.20
+SECTOR_RESUME_M = 0.28
+
 
 class LineFollowMode(str, enum.Enum):
     OFF = "OFF"
@@ -65,8 +69,10 @@ class LineFollowConfig:
     ir_calibration_revision: Optional[str] = None
     # D-344 §11: 앞 물체 정지. LiDAR 정면 부채꼴 최소 거리가 stop 보다 가까우면 멈추고
     # resume 보다 멀어지면 다시 간다(떨림 방지). lidar_forward_deg 는 장착 방향.
-    obstacle_stop_m: float = 0.20
-    obstacle_resume_m: float = 0.28
+    # D-422: 둘 다 LiDAR 원점 기준의 운영자 덮어쓰기다. 비어 있으면 sector 와 몸 기하 없는
+    # path 는 SECTOR_STOP_M/SECTOR_RESUME_M, 몸 기하가 있는 path 는 속도로 정지 간격을 유도한다.
+    obstacle_stop_m: Optional[float] = None
+    obstacle_resume_m: Optional[float] = None
     obstacle_half_angle_deg: float = 20.0
     lidar_forward_deg: float = 0.0
     clearance_stale_s: float = 0.5
@@ -123,9 +129,20 @@ class LineFollowConfig:
     body_rear_x_m: Optional[float] = None
     body_rotation_radius_m: Optional[float] = None
     body_half_width_m: Optional[float] = None
+    # D-422 몸 기준 앞 물체 정지(path): 몸 앞끝(URDF footprint.front_x_m)과 초음파 위치(ultrasonic.x_m).
+    # 정지 간격 = body_margin + v·latency + v²/(2·decel), 재출발은 + hysteresis.
+    body_front_x_m: Optional[float] = None
+    body_ultrasonic_x_m: Optional[float] = None
+    obstacle_body_margin_m: float = 0.02
+    obstacle_latency_s: float = 0.15
+    obstacle_decel_mps2: float = 0.5
+    obstacle_resume_hysteresis_m: float = 0.03
+    obstacle_ultrasonic_half_angle_deg: float = 15.0
+    obstacle_ultrasonic_stale_s: float = 0.3
 
     def __post_init__(self) -> None:
         self._check_recovery()
+        self._check_body_stop()
         values = (self.cruise_speed, self.max_linear, self.steering_gain,
                   self.max_angular, self.min_confidence,
                   self.stale_after_s, self.lost_after_s)
@@ -139,11 +156,11 @@ class LineFollowConfig:
             raise ValueError("min_confidence must be in (0, 1]")
         if self.stale_after_s <= 0 or self.lost_after_s <= 0:
             raise ValueError("line-follow timeouts must be positive")
-        obstacle = (self.obstacle_stop_m, self.obstacle_resume_m, self.obstacle_half_angle_deg,
+        obstacle = (self.sector_stop_m, self.sector_resume_m, self.obstacle_half_angle_deg,
                     self.lidar_forward_deg, self.clearance_stale_s)
         if not all(_finite(value) for value in obstacle):
             raise ValueError("line-follow obstacle config must be finite")
-        if not 0.0 < self.obstacle_stop_m < self.obstacle_resume_m <= 2.0:
+        if not 0.0 < self.sector_stop_m < self.sector_resume_m <= 2.0:
             raise ValueError("obstacle_stop_m must be positive and below obstacle_resume_m")
         if not 0.0 < self.obstacle_half_angle_deg <= 90.0 or self.clearance_stale_s <= 0:
             raise ValueError("obstacle sector and clearance staleness must be positive")
@@ -154,7 +171,7 @@ class LineFollowConfig:
             raise ValueError("line-follow obstacle corridor must be finite")
         if not 0.0 < self.obstacle_corridor_half_width_m <= 0.5:
             raise ValueError("obstacle_corridor_half_width_m must be in (0, 0.5]")
-        if not self.obstacle_resume_m <= self.obstacle_path_horizon_m <= 2.0:
+        if not self.sector_resume_m <= self.obstacle_path_horizon_m <= 2.0:
             raise ValueError("obstacle_path_horizon_m must cover obstacle_resume_m and stay <= 2 m")
         timing = (self.obstacle_release_s, self.obstacle_escalate_s,
                   self.lane_auto_min_manual_angular)
@@ -213,6 +230,62 @@ class LineFollowConfig:
             raise ValueError("body_rear_x_m must be behind base_footprint (-0.5, 0)")
         if self.body_rotation_radius_m is not None and not 0.0 < self.body_rotation_radius_m <= 0.5:
             raise ValueError("body_rotation_radius_m must be in (0, 0.5]")
+
+    def _check_body_stop(self) -> None:
+        for name in ("obstacle_stop_m", "obstacle_resume_m"):
+            value = getattr(self, name)
+            if value is not None and not _finite(value):
+                raise ValueError(f"{name} must be a finite number or unset")
+        terms = (self.obstacle_body_margin_m, self.obstacle_latency_s, self.obstacle_decel_mps2,
+                 self.obstacle_resume_hysteresis_m, self.obstacle_ultrasonic_half_angle_deg,
+                 self.obstacle_ultrasonic_stale_s)
+        if not all(_finite(value) for value in terms):
+            raise ValueError("line-follow body stop terms must be finite")
+        if not 0.0 <= self.obstacle_body_margin_m <= 0.20 or not 0.0 <= self.obstacle_latency_s <= 1.0:
+            raise ValueError("obstacle_body_margin_m must be in [0, 0.2] and obstacle_latency_s in [0, 1]")
+        if not 0.0 < self.obstacle_decel_mps2 <= 10.0:
+            raise ValueError("obstacle_decel_mps2 must be in (0, 10]")
+        if not 0.0 < self.obstacle_resume_hysteresis_m <= 0.20:
+            raise ValueError("obstacle_resume_hysteresis_m must be in (0, 0.2]")
+        if (not 0.0 < self.obstacle_ultrasonic_half_angle_deg <= 45.0
+                or not 0.0 < self.obstacle_ultrasonic_stale_s <= 2.0):
+            raise ValueError("ultrasonic cone must be in (0, 45] deg and its staleness in (0, 2] s")
+        for name in ("body_front_x_m", "body_ultrasonic_x_m"):
+            value = getattr(self, name)
+            if value is not None and (not _finite(value) or not -0.5 < value < 0.5):
+                raise ValueError(f"{name} must be in (-0.5, 0.5) or unset")
+        if self.body_front_x_m is not None and not self.body_front_x_m > 0.0:
+            raise ValueError("body_front_x_m must be ahead of base_footprint")
+        if (self.body_front_x_m is not None and self.body_ultrasonic_x_m is not None
+                and self.body_ultrasonic_x_m > self.body_front_x_m):
+            raise ValueError("body_ultrasonic_x_m cannot be ahead of body_front_x_m")
+
+    @property
+    def obstacle_override(self) -> bool:
+        """D-422: an operator set obstacle_stop_m or obstacle_resume_m (LiDAR origin): it wins."""
+        return self.obstacle_stop_m is not None or self.obstacle_resume_m is not None
+
+    @property
+    def sector_stop_m(self) -> float:
+        """LiDAR-origin stop distance: the override, else the pre-D-422 default (one unset half
+        of the pair keeps its old default, so an old overlay reads exactly as before)."""
+        return SECTOR_STOP_M if self.obstacle_stop_m is None else float(self.obstacle_stop_m)
+
+    @property
+    def sector_resume_m(self) -> float:
+        return SECTOR_RESUME_M if self.obstacle_resume_m is None else float(self.obstacle_resume_m)
+
+    @property
+    def body_stop_known(self) -> bool:
+        """D-422 body-referenced stop needs the whole URDF outline and the LiDAR position."""
+        return None not in (self.body_front_x_m, self.body_lidar_x_m, self.body_rear_x_m,
+                            self.body_half_width_m, self.body_rotation_radius_m)
+
+    def derived_stop_gap_m(self, speed: float) -> float:
+        """D-422 body gap that stops in time from `speed`: margin + reaction + braking."""
+        speed = max(0.0, float(speed))
+        return (self.obstacle_body_margin_m + speed * self.obstacle_latency_s
+                + speed * speed / (2.0 * self.obstacle_decel_mps2))
 
     @property
     def body_geometry_known(self) -> bool:

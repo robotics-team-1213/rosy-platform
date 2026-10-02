@@ -8,6 +8,8 @@ ROS 를 모른다. `sample` 은 bridge 의 `translate.lidar_sample` 모양(`rang
 - `front_clearance`: 정면 ±half_angle 부채꼴의 최소 거리(sector).
 - `scan_points` + `path_clearance`: 지금 조향으로 곧 지나갈 짧은 호 둘레의 띠(폭 ±half_width)
   안 점까지의 호 길이(path). L 모서리에서 돌아 나가는 쪽이 아닌 벽은 세지 않는다.
+- D-422 `body_path_gap` / `rotation_gap`: URDF 몸 윤곽(사각형 ∩ 회전 원)이 의도 호를 따라 쓸고
+  갈 때 첫 접촉까지의 거리, 제자리 회전은 회전 반경 밖 여유. 점은 base_footprint 기준이다.
 """
 
 from __future__ import annotations
@@ -174,6 +176,90 @@ def self_mask_rear_blind_m(mask: SelfMask, *, lidar_x_m: float, rear_x_m: float,
             far = reach if side < 1e-9 else min(reach, half_width_m / side)
             worst = max(worst, far * back - behind)
     return worst
+
+
+def _inside_body(x: float, y: float, front_x: float, rear_x: float, half_width: float,
+                 radius: float) -> bool:
+    """D-422 body outline: the URDF rectangle cut by the rotation circle (rounded corners)."""
+    return rear_x <= x <= front_x and abs(y) <= half_width and x * x + y * y <= radius * radius
+
+
+def body_path_gap(points: Sequence[Point], *, linear: float, angular: float, front_x_m: float,
+                  rear_x_m: float, half_width_m: float, rotation_radius_m: float,
+                  horizon_m: float, step_m: float = 0.005) -> Optional[float]:
+    """D-422: how far the robot drives along (linear, angular) before its body touches a point.
+
+    points are in base_footprint (x forward, y left), not the LiDAR origin. The body is
+    `_inside_body` swept along the arc; the gap is the base origin's travel (arc length) at
+    first contact, refined by bisection. 0 = a point is already inside the outline. The arc
+    ends at horizon_m or half a turn, whichever is first; None = nothing touched by then.
+    linear must be positive: in-place rotation is `rotation_gap`.
+    """
+    speed = float(linear)
+    if not speed > 0.0:
+        raise ValueError("body_path_gap needs a forward speed; use rotation_gap in place")
+    curvature = float(angular) / speed
+    reach = horizon_m + rotation_radius_m
+    near = [(x, y) for x, y in points if x * x + y * y <= reach * reach]
+    if not near:
+        return None
+    body = (front_x_m, rear_x_m, half_width_m, rotation_radius_m)
+
+    def touches(travel: float) -> bool:
+        heading = curvature * travel
+        if abs(curvature) < 1e-9:
+            px, py = travel, 0.0
+        else:
+            px, py = math.sin(heading) / curvature, (1.0 - math.cos(heading)) / curvature
+        c, s = math.cos(heading), math.sin(heading)
+        for x, y in near:
+            dx, dy = x - px, y - py
+            if _inside_body(c * dx + s * dy, -s * dx + c * dy, *body):
+                return True
+        return False
+
+    if touches(0.0):
+        return 0.0
+    limit = horizon_m if abs(curvature) < 1e-9 else min(horizon_m, math.pi / abs(curvature))
+    # The body's farthest point moves (1 + |k|·R) times the base travel: keep its step ~step_m.
+    step = step_m / (1.0 + abs(curvature) * rotation_radius_m)
+    low, travel = 0.0, 0.0
+    while travel < limit:
+        travel = min(travel + step, limit)
+        if touches(travel):
+            high = travel
+            for _ in range(10):
+                mid = 0.5 * (low + high)
+                low, high = (low, mid) if touches(mid) else (mid, high)
+            return high
+        low = travel
+    return None
+
+
+def rotation_gap(points: Sequence[Point], *, rotation_radius_m: float,
+                 reach_m: float) -> Optional[float]:
+    """D-422 in-place rotation: the smallest gap outside the URDF rotation radius (base_footprint
+    points). Points farther than rotation_radius_m + reach_m are ignored; None = none nearer."""
+    best: Optional[float] = None
+    for x, y in points:
+        gap = max(0.0, math.hypot(x, y) - rotation_radius_m)
+        if gap <= reach_m and (best is None or gap < best):
+            best = gap
+    return best
+
+
+def ultrasonic_points(range_m: float, *, sensor_x_m: float, half_angle_deg: float,
+                      step_deg: float = 2.5) -> tuple[Point, ...]:
+    """D-422: a forward ultrasonic echo at range_m as base_footprint points across its cone.
+
+    The sensor reports only that something is somewhere on that arc, so every point of it
+    counts (fail-safe: an echo can only make the gap smaller)."""
+    count = max(1, int(math.ceil(2.0 * half_angle_deg / step_deg)))
+    out = []
+    for index in range(count + 1):
+        angle = math.radians(-half_angle_deg + 2.0 * half_angle_deg * index / count)
+        out.append((sensor_x_m + range_m * math.cos(angle), range_m * math.sin(angle)))
+    return tuple(out)
 
 
 def path_clearance(points: Sequence[Point], *, linear: float, angular: float,

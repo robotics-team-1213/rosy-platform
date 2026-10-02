@@ -55,6 +55,7 @@ def _services():
             observe=_sink(calls, "line_follow.observe", returns=True),
             invalidate=_sink(calls, "line_follow.invalidate", returns=True),
             invalidate_ir=_sink(calls, "line_follow.invalidate_ir"),
+            observe_ultrasonic=_sink(calls, "line_follow.observe_ultrasonic"),
             tick=_sink(calls, "line_follow.tick"),
             status=_sink(calls, "line_follow.status", returns="STATUS"),
         ),
@@ -419,6 +420,23 @@ def test_a_nan_reading_cannot_be_compared_as_a_distance():
     obs.us_range(svc, _range(float("nan")), received_at=10.0)
 
     assert _calls(calls, "power.on_range") == []
+    assert _calls(calls, "line_follow.observe_ultrasonic") == []
+
+
+def test_ultrasonic_feeds_the_line_follow_body_gap():
+    """D-422: a usable range is a gap source; saturated = no echo; below min_range proves nothing."""
+    svc, calls = _services()
+
+    obs.us_range(svc, _range(0.30), received_at=10.0)
+    obs.us_range(svc, _range(99.0), received_at=10.1)
+    obs.us_range(svc, _range(float("inf")), received_at=10.2)
+    obs.us_range(svc, _range(0.01), received_at=10.3)       # below min_range: touching?
+    obs.us_range(svc, _range(-1.0), received_at=10.4)
+
+    assert _calls(calls, "line_follow.observe_ultrasonic") == [
+        ("line_follow.observe_ultrasonic", (0.30,), {}),
+        ("line_follow.observe_ultrasonic", (None,), {}),
+        ("line_follow.observe_ultrasonic", (None,), {})]
 
 
 # --- batt_state --------------------------------------------------------------

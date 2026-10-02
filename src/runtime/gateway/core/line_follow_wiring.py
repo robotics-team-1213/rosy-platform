@@ -42,8 +42,9 @@ def _line_follow_config(raw: dict[str, Any]) -> LineFollowConfig:
         stale_after_s=float(raw.get("stale_after_s", defaults.stale_after_s)),
         lost_after_s=float(raw.get("lost_after_s", defaults.lost_after_s)),
         ir_calibration_revision=raw.get("ir_calibration_revision") or None,
-        obstacle_stop_m=float(raw.get("obstacle_stop_m", defaults.obstacle_stop_m)),
-        obstacle_resume_m=float(raw.get("obstacle_resume_m", defaults.obstacle_resume_m)),
+        # D-422: unset = derived (path + URDF body) or the pre-D-422 LiDAR-origin defaults.
+        obstacle_stop_m=_optional_float(raw.get("obstacle_stop_m")),
+        obstacle_resume_m=_optional_float(raw.get("obstacle_resume_m")),
         obstacle_half_angle_deg=float(raw.get("obstacle_half_angle_deg", defaults.obstacle_half_angle_deg)),
         lidar_forward_deg=float(raw.get("lidar_forward_deg", defaults.lidar_forward_deg)),
         clearance_stale_s=float(raw.get("clearance_stale_s", defaults.clearance_stale_s)),
@@ -84,6 +85,17 @@ def _line_follow_config(raw: dict[str, Any]) -> LineFollowConfig:
         body_rear_x_m=_optional_float(raw.get("body_rear_x_m")),
         body_rotation_radius_m=_optional_float(raw.get("body_rotation_radius_m")),
         body_half_width_m=_optional_float(raw.get("body_half_width_m")),
+        body_front_x_m=_optional_float(raw.get("body_front_x_m")),
+        body_ultrasonic_x_m=_optional_float(raw.get("body_ultrasonic_x_m")),
+        obstacle_body_margin_m=float(raw.get("obstacle_body_margin_m", defaults.obstacle_body_margin_m)),
+        obstacle_latency_s=float(raw.get("obstacle_latency_s", defaults.obstacle_latency_s)),
+        obstacle_decel_mps2=float(raw.get("obstacle_decel_mps2", defaults.obstacle_decel_mps2)),
+        obstacle_resume_hysteresis_m=float(raw.get(
+            "obstacle_resume_hysteresis_m", defaults.obstacle_resume_hysteresis_m)),
+        obstacle_ultrasonic_half_angle_deg=float(raw.get(
+            "obstacle_ultrasonic_half_angle_deg", defaults.obstacle_ultrasonic_half_angle_deg)),
+        obstacle_ultrasonic_stale_s=float(raw.get(
+            "obstacle_ultrasonic_stale_s", defaults.obstacle_ultrasonic_stale_s)),
     )
 
 

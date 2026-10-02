@@ -9,7 +9,8 @@ import time
 from typing import Callable, Optional
 
 from core_common.protocol.schemas import LineFollowStatus
-from core_features.line_follow.clearance import Point, path_clearance
+from core_features.line_follow.clearance import (
+    Point, body_path_gap, path_clearance, rotation_gap, ultrasonic_points)
 from core_features.line_follow.stuck_wiring import StuckRecoveryMixin
 from core_features.line_follow.model import (  # noqa: F401 — re-exported
     LineFollowConfig,
@@ -58,6 +59,12 @@ class LineFollowManager(StuckRecoveryMixin):
         self._path_evaluated = False
         self._blocked_since: Optional[float] = None
         self._escalated = False
+        # D-422: last forward ultrasonic reading (None = no echo in range) and the body-gap
+        # fields the status reports in body mode ({} otherwise).
+        self._ultrasonic: Optional[float] = None
+        self._ultrasonic_at: Optional[float] = None
+        self._gap_status: dict = {}
+        self._gap_resume: Optional[float] = None
         self._init_recovery()  # D-407 (stuck_wiring.py)
 
     def bind_clock(self, clock: Callable[[], float]) -> None:
@@ -113,7 +120,9 @@ class LineFollowManager(StuckRecoveryMixin):
             # 앞 물체 상태는 세션마다 새로 — 다시 고른 뒤의 정지는 다시 알린다. sector 는 마지막
             # 거리가 재출발 거리 안이면 막힌 채로 시작한다(다음 스캔 전 한 틱도 그냥 가지 않게).
             self._obstacle_blocked = (self._scan_points is None and self._clearance is not None
-                                      and self._clearance < self._config.obstacle_resume_m)
+                                      and self._clearance < self._config.sector_resume_m)
+            self._gap_status = {}
+            self._gap_resume = None
             self._clear_since = None
             self._blocked_since = None
             self._escalated = False
@@ -247,16 +256,29 @@ class LineFollowManager(StuckRecoveryMixin):
             self._scan_points = tuple((float(x), float(y)) for x, y in points)
             self._clearance_at = float(now)
 
-    def _set_clearance(self, distance: Optional[float], now: Optional[float] = None) -> None:
+    def observe_ultrasonic(self, range_m: Optional[float],
+                           received_at: Optional[float] = None) -> None:
+        """D-422: forward ultrasonic range (`translate.usable_range`; None = no echo in range)."""
+        now = self._clock() if received_at is None else received_at
+        with self._lock:
+            self._ultrasonic = None if range_m is None or not _finite(range_m) else float(range_m)
+            self._ultrasonic_at = float(now)
+
+    def _set_clearance(self, distance: Optional[float], now: Optional[float] = None,
+                       stop: Optional[float] = None, resume: Optional[float] = None) -> None:
         """여유 거리와 떨림 방지(stop < resume) 판정. 잠금 안에서 부른다.
 
         now 가 있으면(path) 막힘은 obstacle_release_s 동안 계속 비어 있어야 풀린다.
+        stop/resume 이 없으면 LiDAR 원점 기준(sector_stop_m/sector_resume_m)이다. 몸에 닿은
+        점(거리 0)은 정지 간격이 0 으로 줄어도 막힌다(D-422).
         """
+        stop = self._config.sector_stop_m if stop is None else stop
+        resume = self._config.sector_resume_m if resume is None else resume
         self._clearance = None if distance is None or not _finite(distance) else float(distance)
-        clear = self._clearance is None or self._clearance >= self._config.obstacle_resume_m
+        clear = self._clearance is None or (self._clearance >= resume and self._clearance > 0.0)
         if not clear:
             self._clear_since = None
-            if self._clearance < self._config.obstacle_stop_m:
+            if self._clearance < stop or self._clearance <= 0.0:
                 self._obstacle_blocked = True
             return
         if not self._obstacle_blocked:
@@ -280,7 +302,7 @@ class LineFollowManager(StuckRecoveryMixin):
             self._events.publish(
                 "nav.line_obstacle_hold", severity="warning", source="line_follow_manager",
                 data={"mode": self._mode.value, "clearance_m": self._clearance,
-                      "held_s": round(now - self._blocked_since, 2)},
+                      "held_s": round(now - self._blocked_since, 2), **self._gap_status},
             )
         return self._stop_decision("HOLD", "obstacle_ahead")
 
@@ -401,10 +423,17 @@ class LineFollowManager(StuckRecoveryMixin):
         if self._clearance_at is not None:
             # 앞 물체 정지는 차선 상실이 아니다 — LOST 로 누적하지 않고 치워지면 곧바로 간다.
             if current - self._clearance_at > self._config.clearance_stale_s:
+                self._gap_status = {}
                 return self._stop_decision("HOLD", "obstacle_sensor_stale")
             if self._scan_points is not None and self._observation is not None:
                 # 관측이 하나도 없으면 의도가 없다 — 재지 않고 WAITING 으로 둔다.
-                self._set_clearance(self._path_clearance(guard, cap), current)
+                self._update_intended(guard, cap)
+                if self._config.body_stop_known:
+                    # D-422: 몸 윤곽이 의도 경로를 따라 쓸고 갈 때 첫 접촉까지의 거리.
+                    self._set_clearance(*self._body_clearance(current))
+                else:
+                    self._gap_status = {}
+                    self._set_clearance(self._path_clearance(), current)
                 self._path_evaluated = True
             if self._obstacle_blocked:
                 return self._obstacle_hold(current)
@@ -486,27 +515,100 @@ class LineFollowManager(StuckRecoveryMixin):
             angular=angular,
             reason=reason,
             clearance_m=self._clearance,
+            **self._gap_status,
         )
         return decision
 
-    def _path_clearance(self, guard: Optional[str], cap: float) -> Optional[float]:
-        """의도 조향(지금 관측이 시킬 명령)의 짧은 호로 잰 여유 거리.
-
-        실제 출력이 아니라 의도를 쓴다 — 멈춘 뒤 출력은 0 이라 직진 호가 되어 모서리 벽에
-        영영 막힌다. 쓸 관측이 없으면 마지막 의도를 쓴다(처음이면 직진).
-        """
+    def _update_intended(self, guard: Optional[str], cap: float) -> None:
+        """의도 조향(지금 관측이 시킬 명령). 실제 출력이 아니라 의도를 쓴다 — 멈춘 뒤 출력은 0 이라
+        직진 호가 되어 모서리 벽에 영영 막힌다. 쓸 관측이 없으면 마지막 의도(처음이면 직진)."""
         observation = self._observation
         if (observation is not None and observation.visible and observation.error is not None
                 and observation.source is self._mode):
             linear, angular, _ = self._steer(observation, guard, cap)
             self._intended = (linear, angular)
+
+    def _path_clearance(self) -> Optional[float]:
+        """몸 기하가 없을 때(D-344 §11 보강): 의도 호 둘레 띠, LiDAR 원점 기준."""
         linear, angular = self._intended
         return path_clearance(
             self._scan_points or (), linear=linear, angular=angular,
             half_width_m=self._config.obstacle_corridor_half_width_m,
             horizon_m=self._config.obstacle_path_horizon_m,
-            window_m=self._config.obstacle_resume_m,
-            near_m=self._config.obstacle_stop_m)
+            window_m=self._config.sector_resume_m,
+            near_m=self._config.sector_stop_m)
+
+    def _body_clearance(self, now: float) -> tuple[Optional[float], float, float, float]:
+        """D-422: (body gap along the intended path, now, stop gap, resume gap). Locked.
+
+        LiDAR points move to base_footprint; a fresh forward ultrasonic echo adds its cone as
+        points (it can only shorten the gap). Moving: the URDF outline swept along the intended
+        arc, stop gap from the intended speed (or the LiDAR-origin override). In place: the
+        rotation circle, which never moves closer, so only the body margin is needed.
+        """
+        c = self._config
+        linear, angular = self._intended
+        lidar = [(x + c.body_lidar_x_m, y) for x, y in self._scan_points or ()]
+        echo, fresh = self._ultrasonic_echo(now)
+        sonar = () if echo is None else ultrasonic_points(
+            echo, sensor_x_m=c.body_ultrasonic_x_m,
+            half_angle_deg=c.obstacle_ultrasonic_half_angle_deg)
+        if linear <= 1e-6 and abs(angular) > 1e-6:
+            gaps = [rotation_gap(points, rotation_radius_m=c.body_rotation_radius_m,
+                                 reach_m=c.obstacle_path_horizon_m) for points in (lidar, sonar)]
+            # No approach, so no hysteresis either: a hold from driving forward must not keep
+            # a robot that can turn clear from turning (obstacle_release_s still debounces).
+            stop = resume = c.obstacle_body_margin_m
+        else:
+            # No motion intended at all: judge the straight line at cruise speed.
+            speed, turn = (linear, angular) if linear > 1e-6 else (c.cruise_speed, 0.0)
+            gaps = [body_path_gap(points, linear=speed, angular=turn, front_x_m=c.body_front_x_m,
+                                  rear_x_m=c.body_rear_x_m, half_width_m=c.body_half_width_m,
+                                  rotation_radius_m=c.body_rotation_radius_m,
+                                  horizon_m=c.obstacle_path_horizon_m) if points else None
+                    for points in (lidar, sonar)]
+            stop, resume = self._stop_resume_gaps(speed)
+            blind = self._blind_gap()
+            if not fresh and blind is not None and blind > stop:
+                # Nothing covers the LiDAR's range_min near field: stop before it goes blind.
+                resume += blind - stop
+                stop = blind
+        lidar_gap, sonar_gap = gaps
+        if sonar_gap is not None and (lidar_gap is None or sonar_gap < lidar_gap):
+            gap, source = sonar_gap, "ultrasonic"
+        else:
+            gap, source = lidar_gap, None if lidar_gap is None else "lidar"
+        self._gap_resume = resume
+        self._gap_status = {"body_gap_m": None if gap is None else round(gap, 4),
+                            "stop_gap_m": round(stop, 4), "clearance_source": source}
+        return gap, now, stop, resume
+
+    def _stop_resume_gaps(self, speed: float) -> tuple[float, float]:
+        """Body gaps to stop at and resume beyond: the override converted from the LiDAR origin
+        to the body front, else derived from the speed (D-422)."""
+        c = self._config
+        if c.obstacle_override:
+            front = c.body_front_x_m - c.body_lidar_x_m
+            return max(0.0, c.sector_stop_m - front), max(0.0, c.sector_resume_m - front)
+        stop = c.derived_stop_gap_m(speed)
+        return stop, stop + c.obstacle_resume_hysteresis_m
+
+    def _blind_gap(self) -> Optional[float]:
+        """Body gap straight ahead at which an object enters the LiDAR range_min (None = unknown)."""
+        if self._range_min is None:
+            return None
+        c = self._config
+        return max(0.0, self._range_min - (c.body_front_x_m - c.body_lidar_x_m))
+
+    def _ultrasonic_echo(self, now: float) -> tuple[Optional[float], bool]:
+        """(echo range or None, fresh). Stale or unconfigured readings are ignored."""
+        c = self._config
+        if c.body_ultrasonic_x_m is None or self._ultrasonic_at is None:
+            return None, False
+        age = now - self._ultrasonic_at
+        if not -0.1 <= age <= c.obstacle_ultrasonic_stale_s:
+            return None, False
+        return self._ultrasonic, True
 
     def _below_lane_auto_level(self) -> bool:
         floor = self._config.lane_auto_min_manual_angular
@@ -567,6 +669,7 @@ class LineFollowManager(StuckRecoveryMixin):
             age_s=None if age is None else round(max(0.0, age), 3),
             reason=reason,
             clearance_m=self._clearance,
+            **self._gap_status,
         )
         return LineFollowDecision(
             generation=self._generation,
