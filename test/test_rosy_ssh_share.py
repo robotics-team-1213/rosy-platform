@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import base64
 import importlib.util
-import io
 from pathlib import Path
 import shutil
 import struct
@@ -81,7 +80,7 @@ def test_create_writes_nothing_into_home(home, robots, tmp_path, capsys):
     status, _ = _create(robots, out, passphrases=(TYPED, TYPED))
     assert status == 0, _text(capsys)[1]
     assert list(home.rglob("*")) == []
-    assert [p.name for p in out.iterdir()] == [f"rosy-ssh-{TEAM}.zip"]
+    assert sorted(p.name for p in out.iterdir()) == [f"rosy-{TEAM}.robots.txt", f"rosy-{TEAM}.zip"]
 
 
 @pytest.fixture
@@ -148,8 +147,9 @@ def test_create_builds_a_locked_bundle_and_registers_the_team_key(keygen_kind, r
     assert status == 0, stderr
     assert asked == [R1, R2]
 
-    bundle = out / f"rosy-ssh-{TEAM}.zip"
-    assert sorted(p.name for p in out.iterdir()) == [bundle.name]  # the work folder is gone
+    bundle = out / f"rosy-{TEAM}.zip"
+    # the work folder is gone; beside the zip only the non-secret robots list
+    assert sorted(p.name for p in out.iterdir()) == [f"rosy-{TEAM}.robots.txt", bundle.name]
     with zipfile.ZipFile(bundle) as archive:
         entries = {info.filename: archive.read(info) for info in archive.infolist()}
         modes = {info.filename: (info.external_attr >> 16) & 0o777 for info in archive.infolist()}
@@ -165,6 +165,7 @@ def test_create_builds_a_locked_bundle_and_registers_the_team_key(keygen_kind, r
         key = tmp_path / "check" / KEY_NAME
         key.parent.mkdir()
         key.write_bytes(entries[KEY_NAME])
+        key.chmod(0o600)  # as the README tells recipients; OpenSSH on POSIX refuses a readable key
         empty = subprocess.run([REAL_KEYGEN, "-y", "-P", "", "-f", str(key)], capture_output=True)
         assert empty.returncode != 0
         right = subprocess.run([REAL_KEYGEN, "-y", "-P", TYPED, "-f", str(key)], capture_output=True)
@@ -200,12 +201,14 @@ def test_a_generated_passphrase_is_shown_once_and_never_saved(robots, tmp_path, 
     status, _ = _create(robots, tmp_path, passphrases=("",))
     stdout, stderr = _text(capsys)
     assert status == 0, stderr
-    shown = [line for line in stdout.splitlines() if line.startswith("Passphrase")]
+    shown = [line for line in stderr.splitlines() if line.startswith("Passphrase")]
     assert len(shown) == 1
     passphrase = shown[0].rsplit(": ", 1)[1].strip()
     assert tool.GENERATED.fullmatch(passphrase)
-    assert stdout.count(passphrase) == 1 and passphrase not in stderr
-    with zipfile.ZipFile(tmp_path / f"rosy-ssh-{TEAM}.zip") as archive:
+    assert stderr.count(passphrase) == 1 and passphrase not in stdout  # stderr: kept out of piped stdout
+    assert "not a terminal" in stderr  # pytest captures stderr, so the tool warns
+    assert passphrase not in (tmp_path / f"rosy-{TEAM}.robots.txt").read_text(encoding="utf-8")
+    with zipfile.ZipFile(tmp_path / f"rosy-{TEAM}.zip") as archive:
         for info in archive.infolist():
             assert passphrase.encode("ascii") not in archive.read(info)
 
@@ -238,9 +241,9 @@ def test_a_failure_on_a_later_robot_builds_no_bundle_and_names_the_revoke(robots
 
 
 def test_an_existing_bundle_is_not_overwritten(robots, tmp_path, capsys):
-    (tmp_path / f"rosy-ssh-{TEAM}.zip").write_bytes(b"old")
+    (tmp_path / f"rosy-{TEAM}.zip").write_bytes(b"old")
     assert _create(robots, tmp_path, passphrases=(TYPED, TYPED))[0] == 1
-    assert (tmp_path / f"rosy-ssh-{TEAM}.zip").read_bytes() == b"old"
+    assert (tmp_path / f"rosy-{TEAM}.zip").read_bytes() == b"old"
     assert all(core.requests == [] for core in robots.values())
     assert "exists" in _text(capsys)[1]
 
@@ -324,6 +327,95 @@ def test_via_operator_key_failure_is_reported_without_output(robots, tmp_path, c
     ["list", "--robot", "192.0.2.1\nHost *"],
 ])
 def test_bad_arguments_are_refused(argv, robots):
+    with pytest.raises(SystemExit) as exit_info:
+        run(robots, *argv)
+    assert exit_info.value.code == 2
+    assert all(core.requests == [] for core in robots.values())
+
+
+# --- review 2026-10-02 -------------------------------------------------------------------
+
+
+def test_the_zip_extracts_to_exactly_the_folder_config_names(robots, tmp_path, capsys):
+    """Flat entries in rosy-<team>.zip: Windows "Extract All" and macOS Archive Utility both make a folder
+    named after the zip, and `unzip -d ~/.ssh/rosy-<team>` does the same, which is the folder config uses."""
+    status, _ = _create(robots, tmp_path, passphrases=(TYPED, TYPED))
+    assert status == 0, _text(capsys)[1]
+    bundle = tmp_path / f"rosy-{TEAM}.zip"
+    with zipfile.ZipFile(bundle) as archive:
+        names = archive.namelist()
+        config = archive.read("config").decode("utf-8")
+        readme = archive.read("README.md").decode("utf-8")
+    assert all("/" not in name and "\\" not in name for name in names)
+    folders = {line.split('"')[1].rsplit("/", 1)[0] for line in config.splitlines()
+               if line.strip().startswith(("IdentityFile", "UserKnownHostsFile"))}
+    assert folders == {f"~/.ssh/{bundle.stem}"}
+    for name in names:
+        if name != "README.md":
+            assert any(line.split('"')[1].endswith("/" + name) for line in config.splitlines() if '"' in line) \
+                or name in (f"id_ed25519_rosy_{TEAM}.pub", "config")
+    for needle in (f"%USERPROFILE%\\.ssh", "압축 풀기", f"~/.ssh/{bundle.stem}",
+                   f"unzip {bundle.name} -d ~/.ssh/{bundle.stem}", f"cd $HOME\\.ssh\\{bundle.stem}"):
+        assert needle in readme, needle
+
+
+def test_duplicate_robot_hostnames_are_refused(tmp_path, capsys):
+    with FakeCore(codes={CODE1: "administrator"}, hostname=H1) as one, \
+            FakeCore(codes={CODE2: "administrator"}, hostname=H1) as two:
+        robots = {R1: one, R2: two}
+        status, _ = _create(robots, tmp_path, passphrases=(TYPED, TYPED))
+    stdout, stderr = _text(capsys)
+    assert status == 1
+    assert "duplicate" in stderr and H1 in stderr
+    assert two.keys == {}  # refused before registering on the second robot
+    assert f"revoke --name {TEAM} --robot {R1}" in stderr
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_create_prints_the_revoke_command_and_writes_a_robots_list(robots, tmp_path, capsys):
+    status, _ = _create(robots, tmp_path, passphrases=(TYPED, TYPED))
+    stdout, stderr = _text(capsys)
+    assert status == 0, stderr
+    revoke = f"revoke --name {TEAM} --robot {R1} --robot {R2}"
+    assert revoke in stdout
+    listing = (tmp_path / f"rosy-{TEAM}.robots.txt").read_text(encoding="utf-8")
+    for needle in (revoke, H1, H2, R1, R2, LABEL, "SHA256:"):
+        assert needle in listing, needle
+    assert TYPED not in listing and "PRIVATE KEY" not in listing
+
+
+def test_a_bundle_write_failure_names_the_revoke(robots, tmp_path, monkeypatch, capsys):
+    def broken(*args, **kwargs):
+        raise OSError(28, "No space left on device")
+
+    monkeypatch.setattr(tool, "write_bundle", broken)
+    status, _ = _create(robots, tmp_path, passphrases=(TYPED, TYPED))
+    stdout, stderr = _text(capsys)
+    assert status == 1
+    assert "No space left" in stderr
+    assert f"revoke --name {TEAM} --robot {R1} --robot {R2}" in stderr
+    assert list(tmp_path.iterdir()) == []
+    _assert_clean(robots, stdout, stderr)
+
+
+def test_revoke_by_device_label(robots, capsys):
+    robots[R1].keys["dev:laptop"] = {"label": "dev:laptop"}
+    robots[R1].public_keys["dev:laptop"] = "x"
+    status, _ = run(robots, "revoke", "--label", "dev:laptop", "--robot", R1)
+    stdout, stderr = _text(capsys)
+    assert status == 0, stderr
+    assert robots[R1].keys == {}
+    assert f"{R1}: revoked dev:laptop" in stdout
+    _assert_clean(robots, stdout, stderr)
+
+
+@pytest.mark.parametrize("argv", [
+    ["revoke", "--label", "admin", "--robot", R1],
+    ["revoke", "--label", "Dev:x", "--robot", R1],
+    ["revoke", "--name", TEAM, "--label", "dev:x", "--robot", R1],
+    ["revoke", "--robot", R1],
+])
+def test_revoke_needs_exactly_one_valid_target(argv, robots):
     with pytest.raises(SystemExit) as exit_info:
         run(robots, *argv)
     assert exit_info.value.code == 2

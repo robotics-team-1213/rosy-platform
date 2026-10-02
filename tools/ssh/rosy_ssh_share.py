@@ -12,7 +12,7 @@ create:
 3. register: on every robot, an administrator login code (asked per robot, or read over ssh with the operator
    key when --via-operator-key is given), then `GET /host-keys` and `POST /keys` with label `team:<name>`.
    If a later robot fails, no bundle is built and the revoke command for the robots already done is printed.
-4. bundle: `<out>/rosy-ssh-<team>.zip` with the locked private key (mode 0600), its .pub, `config` (a Host block
+4. bundle: `<out>/rosy-<team>.zip` (flat entries: it unpacks to the `~/.ssh/rosy-<team>/` that config names) with the locked private key (mode 0600), its .pub, `config` (a Host block
    per robot), `known_hosts` (the robots' host keys) and a Korean README.md for the recipients.
    The work folder is removed. The passphrase is in no file of the bundle.
 
@@ -135,21 +135,32 @@ class Robot:
         self.address, self.hostname, self.host_keys = address, hostname, host_keys
 
 
+def revoke_command(name: str, addresses: list[str]) -> str:
+    return f"{SCRIPT} revoke --name {name} " + " ".join(f"--robot {address}" for address in addresses)
+
+
+def with_revoke_hint(error: Exception, name: str, label: str, done: list[Robot]) -> SshAccessError:
+    addresses = [robot.address for robot in done]
+    return SshAccessError(f"{error}\nno bundle was built; {label} is already registered on {', '.join(addresses)}. "
+                          f"Remove it there with:\n  {revoke_command(name, addresses)}")
+
+
 def register_everywhere(args, deps: Deps, public_key: str, label: str) -> list[Robot]:
     done: list[Robot] = []
     try:
         for address in args.robot:
             with robot_session(address, deps) as (client, token):
                 hostname, host_keys = enroll.fetch_host_keys(client, token)
+                twin = next((robot for robot in done if robot.hostname == hostname), None)
+                if twin is not None:  # two Host blocks with one alias: ssh would only ever use the first
+                    raise SshAccessError(f"{address} reports the duplicate hostname {hostname}, "
+                                         f"already used by {twin.address}; nothing registered on {address}")
                 enroll.register_key(client, token, public_key, label, args.days)
             done.append(Robot(address, hostname, host_keys))
             print(f"{address}: {label} registered on {hostname}")
     except SshAccessError as error:
         if done:
-            robots = " ".join(f"--robot {robot.address}" for robot in done)
-            raise SshAccessError(f"{error}\nno bundle was built; {label} is already registered on "
-                                 f"{', '.join(robot.address for robot in done)}. Remove it there with:\n"
-                                 f"  {SCRIPT} revoke --name {args.name} {robots}") from None
+            raise with_revoke_hint(error, args.name, label, done) from None
         raise
     return done
 
@@ -183,21 +194,40 @@ def readme(name: str, key_name: str, robots: list[Robot], days: int, expires: dt
 
 ## 1. 파일 놓기
 
-압축을 풀어 아래 폴더에 그대로 넣는다. `config`가 이 위치를 가리키므로 폴더 이름을 바꾸지 않는다.
+파일들은 반드시 `~/.ssh/rosy-{name}/` 폴더 **바로 안**에 있어야 한다. `config`가 이 위치를 가리키므로
+폴더 이름을 바꾸거나 한 단계 더 들어간 폴더에 두지 않는다. 압축 파일 안에는 폴더 없이 파일만 들어 있다.
 
-- **Windows**: `%USERPROFILE%\\.ssh\\rosy-{name}\\` (PowerShell: `$HOME\\.ssh\\rosy-{name}\\`).
-  OpenSSH 클라이언트가 필요하다(Windows 10/11 기본 포함, `ssh -V`로 확인).
-- **macOS / Linux**: `~/.ssh/rosy-{name}/`. 그다음 권한을 좁힌다.
+- **Windows**: `rosy-{name}.zip`을 오른쪽 클릭 → **모두 압축 풀기** → 대상 폴더를
+  `%USERPROFILE%\\.ssh\\rosy-{name}`로 바꾸고 압축 풀기. OpenSSH 클라이언트가 필요하다
+  (Windows 10/11 기본 포함, `ssh -V`로 확인).
+- **macOS**: zip을 더블 클릭하면 같은 폴더에 `rosy-{name}` 폴더가 생긴다(보통 `~/Downloads`). 그 폴더를 옮긴다.
+
+  ```sh
+  mkdir -p ~/.ssh && mv ~/Downloads/rosy-{name} ~/.ssh/
+  ```
+- **Linux**: `unzip rosy-{name}.zip -d ~/.ssh/rosy-{name}`
+- **macOS / Linux** 공통으로 권한을 좁힌다.
 
   ```sh
   chmod 700 ~/.ssh/rosy-{name}
   chmod 600 ~/.ssh/rosy-{name}/{key_name}
   ```
 
+확인: `~/.ssh/rosy-{name}/config` 파일이 있어야 한다.
+
 ## 2. 접속
+
+macOS / Linux:
 
 ```sh
 cd ~/.ssh/rosy-{name}
+ssh -F config {first}
+```
+
+Windows PowerShell:
+
+```powershell
+cd $HOME\\.ssh\\rosy-{name}
 ssh -F config {first}
 ```
 
@@ -261,9 +291,27 @@ def write_bundle(bundle: Path, work: Path, key: Path, public_key: str, robots: l
     os.replace(temporary, bundle)
 
 
+def robots_listing(name: str, label: str, public_key: str, robots: list[Robot], expires: dt.date) -> str:
+    """Non-secret record kept beside the zip: where the team key is registered and how to remove it."""
+    lines = [f"# Rosy team key {label} {enroll.fingerprint(public_key)}, expires {expires.isoformat()} (UTC)",
+             "# robot address, hostname, host key fingerprints"]
+    lines += [f"{robot.address} {robot.hostname} " + " ".join(enroll.fingerprint(key) for key in robot.host_keys)
+              for robot in robots]
+    lines += ["# revoke:", revoke_command(name, [robot.address for robot in robots])]
+    return "\n".join(lines) + "\n"
+
+
+def show_passphrase(passphrase: str) -> None:
+    """On stderr (the terminal), never on stdout that might be piped into a file."""
+    if not sys.stderr.isatty():
+        print("warning: stderr is not a terminal; the passphrase below may be captured in a log", file=sys.stderr)
+    print(f"Passphrase (shown once, saved nowhere): {passphrase}", file=sys.stderr)
+
+
 def create(args, deps: Deps) -> int:
     label = f"team:{args.name}"
-    bundle = args.out / f"rosy-ssh-{args.name}.zip"
+    bundle = args.out / f"rosy-{args.name}.zip"
+    listing = args.out / f"rosy-{args.name}.robots.txt"
     if bundle.exists():
         raise SshAccessError(f"{bundle} already exists; move it away first")
     typed = enroll.ask_new_passphrase(deps.ask_passphrase, "Passphrase for the team key (empty = generate one): ")
@@ -283,24 +331,32 @@ def create(args, deps: Deps) -> int:
         public_key = enroll.read_public_key(Path(str(key) + ".pub"))
         robots = register_everywhere(args, deps, public_key, label)
         today = dt.datetime.now(dt.timezone.utc).date()
-        write_bundle(bundle, work, key, public_key, robots, args, today)
+        try:
+            write_bundle(bundle, work, key, public_key, robots, args, today)
+            enroll.write_private_text(listing, robots_listing(args.name, label, public_key, robots,
+                                                              today + dt.timedelta(days=args.days)))
+        except (OSError, SshAccessError) as error:
+            bundle.unlink(missing_ok=True)
+            raise with_revoke_hint(error, args.name, label, robots) from None
     finally:
         shutil.rmtree(work, ignore_errors=True)
 
     print(f"bundle: {bundle}")
     print(f"{label} {enroll.fingerprint(public_key)} on {len(robots)} robot(s), expires in {args.days} days")
+    print(f"robots and revoke command: {listing}")
+    print(f"revoke: {revoke_command(args.name, [robot.address for robot in robots])}")
     print("Hand over the zip and the passphrase by two different channels.")
     if typed:
         print("The passphrase you typed was not written anywhere.")
     else:
-        print(f"Passphrase (shown once, saved nowhere): {passphrase}")
+        show_passphrase(passphrase)
     return 0
 
 
 # --- revoke and list -------------------------------------------------------------------
 
 def revoke(args, deps: Deps) -> int:
-    label, failed = f"team:{args.name}", False
+    label, failed = (args.label or f"team:{args.name}"), False
     for robot in args.robot:
         try:
             with robot_session(robot, deps) as (client, token):
@@ -347,6 +403,12 @@ def team_name(value: str) -> str:
     return value
 
 
+def managed_label(value: str) -> str:
+    if not enroll.LABEL.fullmatch(value) or not value.startswith(("dev:", "team:")):
+        raise argparse.ArgumentTypeError("expected dev:<name> or team:<name>, lowercase a-z 0-9 . _ -")
+    return value
+
+
 OPERATOR_DEFAULT = "<operator default>"
 
 
@@ -372,10 +434,12 @@ def _parser() -> argparse.ArgumentParser:
     make = sub.add_parser("create", parents=[common], help="make a team key, register it, build the bundle")
     make.add_argument("--name", type=team_name, required=True)
     make.add_argument("--days", type=enroll.expiry_days, default=90, help="expiry, 1-365 (default 90)")
-    make.add_argument("--out", type=Path, required=True, help="folder for rosy-ssh-<team>.zip (not the repo)")
+    make.add_argument("--out", type=Path, required=True, help="folder for rosy-<team>.zip and rosy-<team>.robots.txt (not the repo)")
     make.add_argument("--contact", default="이 묶음을 준 운영자", help="who recipients ask for revocation")
-    gone = sub.add_parser("revoke", parents=[common], help="delete team:<name> on each robot")
-    gone.add_argument("--name", type=team_name, required=True)
+    gone = sub.add_parser("revoke", parents=[common], help="delete team:<name> (or one dev:/team: label) on each robot")
+    target = gone.add_mutually_exclusive_group(required=True)
+    target.add_argument("--name", type=team_name, help="team name: revokes team:<name>")
+    target.add_argument("--label", type=managed_label, help="any managed label, e.g. dev:<name> from rosy_ssh_enroll")
     show = sub.add_parser("list", parents=[common], help="show the managed keys on each robot")
     show.add_argument("--name", type=team_name)
     return parser
