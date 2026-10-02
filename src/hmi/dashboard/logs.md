@@ -775,3 +775,8 @@
 - 근거: D-359 높이 계약, D-409 결정 3.
 - gate 변화: 없음.
 - 최종 증거: web_common+dashboard 287 passed 82 skipped(dvh 게이트 포함).
+
+## 2026-10-02 · uncommitted · D-423 카메라 범례에 거리 출처
+- 변경: `panels/console/camera.js` 범례 OBJ 줄에 "0.42m L은 카메라 앞 거리(L LiDAR, G 바닥 평면 추정)" 추가.
+- 근거: D-423 §1.6.
+- gate 변화: 없음.

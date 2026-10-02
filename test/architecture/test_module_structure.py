@@ -280,7 +280,7 @@ SIZE_VERDICTS = {
         "10977); same verdict",
     ),
     "control": (
-        42_013,
+        42_225,
         f"split: deploy closure needs only sensing + safety provider (P1a); {CONTROL_SPLIT} "
         "(re-judged 2026-09-30 at 33090 after D-356 added the ROS-free learned perception backend "
         "(sensing/perception/learned), the shadow node and the recording CLI; the learned backend sits "
@@ -331,6 +331,10 @@ SIZE_VERDICTS = {
         "re-judged 2026-10-02 at 41833 on the D-395 Phase 2 integration branch with D-408 and loc_assist "
         "together — same subjects, verdict unchanged; re-judged 2026-10-02 at 42013 when D-395 S1 R1 "
         "made LOCALIZED robots report unmapped objects (control/loc_assist*.py) — same subjects, "
+        "verdict unchanged; re-judged 2026-10-02 at 42225 when D-423 added the ROS-free region range "
+        "(sensing/perception/region_range.py: LiDAR bearing-span association with ground-plane fallback), "
+        "the NOMINAL-profile and lidar-mount store readers (calibrated_values.py) and the opt-in wiring in "
+        "camera_detect_node — observation-only, inside sensing/perception, moves with the P1a split, "
         "verdict unchanged)",
     ),
     # --- D-362 newly-covered files (web assets in src/ packages, ops roots). ---

@@ -940,3 +940,12 @@
 - 변경: `LocAssist.objects_due`·`on_objects`. LOCALIZED 이고 검사가 돌지 않을 때 노드가 한 상태 주기(0.5 s)에 한 번 AMCL 센서 자세에서 전체 스캔으로 물체를 계산한다(`localized_objects`, 후보 탐색과 같은 차체 반경 필터, ≤16). 매 상태 메시지(2 Hz)의 `status` 에 `unmapped_objects` 와 스캔 시각 `objects_stamp` 를 싣되 스캔이 1 s 넘게 묵으면 뺀다. LOCALIZED 밖에서는 두 키를 아예 빼서 v1.73 CORE 도 상태를 읽는다.
 - 증거: `test_loc_assist.py` +4(LOCALIZED 에서 실림·16개 제한·주기, 1 s 넘은 물체 빠짐, LOCALIZED 밖·검사 중·SUSPECT 에서 없음, 전체 스캔·차체 반경 필터).
 - gate 변화: 없음. Gazebo 재실행 전.
+
+## 2026-10-02 · 071acb65c · feat(sensing): D-423 카메라 영역 거리 — LiDAR 우선, 바닥 평면 예비
+
+- 원인: 화면이 "OBJ n UNKNOWN unranged" 만 보였다. 실기 `camera.yaml` 의 핀홀 여섯 값은 일부러 0 이라 영역 거리가 늘 없었다.
+- 변경: ROS 없는 `sensing/perception/region_range.py`(기울기를 넣은 화소 방위, 스캔 → 카메라 기준 방위·앞 거리, 거리 선택 규칙 L ≤ G*+허용오차 → L, 아니면 G). `camera_regions` 가 바닥 거리에 `range_source='G'`. 증거 영역 `s`('L'/'G', `m` 이 있을 때만, 뒤 호환)·관측 `ground_source`. `follow_preview` 배지 "OBJ 1 UNKNOWN 0.42m L". `calibrated_values.nominal_camera_profile`·`lidar_nose_rad`(URDF NOMINAL < 승인 기록). `camera_detect_node` 에 `camera_ground_mode: nominal` + `allow_nominal_ground`, `region_lidar_range`(scan 구독, `is_robot_scan`, 신선도 0.3 s). `camera.yaml` 기본값은 pinhole/0·두 스위치 꺼짐 그대로.
+- 증거: `python -m pytest src/runtime/sensing/test/ -q` 2339 passed, 104 skipped(Windows), `test/known_failures.py` 0 new. 새 시험 `test_region_range.py` 21, `test_camera_detect_region_range.py` 5, 그 밖 +13.
+- gate 변화: 없음. 실기 적용은 사용자 승인 뒤 설정 변경(D-423 §4).
+- 결정: D-423 Proposed
+- 교훈: URDF 8° 기울기로는 0.4 m 앞 접지점을 약 0.66 m 로 읽는다(실측 11.2–11.8°). 그래서 LiDAR 가 더 가까우면 LiDAR 를 믿는 비대칭 규칙을 썼다.
