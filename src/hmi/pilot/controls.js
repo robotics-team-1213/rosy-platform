@@ -40,8 +40,10 @@ export function fallbackOmxControls(target) {
 }
 
 // D-411 C: gripper. 0 % = closed, 100 % = open, whichever way the joint turns.
-// A full stroke takes the longest goal (2.0 s, OmxSimGripperGoal), a shorter move
-// proportionally less, never under the 0.2 s goal minimum.
+// A goal moves at most the announced max_velocity (the device refuses faster goals): duration =
+// distance / speed, rounded up, within the 0.2-2.0 s goal bounds (OmxSimGripperGoal). A move
+// longer than 2.0 s allows is clipped to what 2.0 s reaches; pressing again finishes it.
+// Servers that announce no speed: a full stroke takes the longest goal, a shorter move less.
 export const GRIPPER_GOAL_MIN_S = 0.2;
 export const GRIPPER_GOAL_MAX_S = 2.0;
 export const GRIPPER_STATE_LABEL = Object.freeze({
@@ -60,9 +62,21 @@ export function gripperPosition(percent, g) {
   return Math.round((g.closed + (g.open - g.closed) * p) * 1e4) / 1e4;
 }
 
-export function gripperDuration(from, to, g) {
-  const fraction = Number.isFinite(from) ? Math.abs(to - from) / Math.abs(g.open - g.closed) : 1;
-  return Math.round(clamp(fraction * GRIPPER_GOAL_MAX_S, GRIPPER_GOAL_MIN_S, GRIPPER_GOAL_MAX_S) * 100) / 100;
+export function gripperGoal(from, to, g) {
+  const speed = Number(g.max_velocity);
+  if (!Number.isFinite(from)) {
+    return {position: to, duration_s: GRIPPER_GOAL_MAX_S};
+  }
+  if (!(speed > 0 && Number.isFinite(speed))) {
+    const fraction = Math.abs(to - from) / Math.abs(g.open - g.closed);
+    const seconds = clamp(fraction * GRIPPER_GOAL_MAX_S, GRIPPER_GOAL_MIN_S, GRIPPER_GOAL_MAX_S);
+    return {position: to, duration_s: Math.round(seconds * 100) / 100};
+  }
+  const reach = speed * GRIPPER_GOAL_MAX_S;
+  const position = Math.abs(to - from) <= reach ? to
+    : Math.round((from + Math.sign(to - from) * reach) * 1e4) / 1e4;
+  const seconds = Math.ceil((Math.abs(position - from) / speed) * 100 - 1e-9) / 100;
+  return {position, duration_s: clamp(seconds, GRIPPER_GOAL_MIN_S, GRIPPER_GOAL_MAX_S)};
 }
 
 export function gripperStateLabel(state) {

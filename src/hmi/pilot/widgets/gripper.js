@@ -1,6 +1,6 @@
 // D-411 C: gripper widget — 열기/반/닫기, an 열림 % slider and a state badge. Every action is
 // one absolute, bounded goal (OmxSimGripperGoal); the slider sends once, on release.
-import {gripperDuration, gripperPercent, gripperPosition, gripperStateLabel} from "../controls.js";
+import {gripperGoal, gripperPercent, gripperPosition, gripperStateLabel} from "../controls.js";
 
 const PRESETS = [["open", "열기"], ["half", "반"], ["close", "닫기"]];
 const BADGE_STATUS = {holding: "active", unknown: "warn"};
@@ -13,7 +13,7 @@ function node(tag, attrs = {}, text = "") {
 }
 
 export function mountGripper(slot, control, session) {
-  const g = {open: Number(control.open), closed: Number(control.closed)};
+  const g = {open: Number(control.open), closed: Number(control.closed), max_velocity: control.max_velocity};
   if (!Number.isFinite(g.open) || !Number.isFinite(g.closed) || g.open === g.closed) {
     throw new Error("gripper open/closed must be finite and differ");
   }
@@ -49,7 +49,8 @@ export function mountGripper(slot, control, session) {
   };
   function send(position) {
     if (blocked || session.busy()) return;
-    session.submitGripper(position, gripperDuration(currentPosition(), position, g));
+    const goal = gripperGoal(currentPosition(), position, g);
+    session.submitGripper(goal.position, goal.duration_s);
   }
 
   function render(state, error) {

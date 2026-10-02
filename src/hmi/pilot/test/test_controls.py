@@ -93,16 +93,15 @@ def test_profile_carries_the_announced_manual_limits():
     assert out[0]["max_linear"] == 0 and out[0]["max_angular"] == 0.6 and out[0]["fine"] is False
     assert out[1]["max_linear"] is None and out[1]["max_angular"] is None
 
-def test_gripper_percent_position_and_duration():
+def test_gripper_percent_position_and_legacy_duration():
     out = _run_js("""
 const g = {open: 1.0, closed: 0.0};
 const r = {open: 0.0, closed: 1.0};
 console.log(JSON.stringify([
   m.gripperPercent(0.25, g), m.gripperPosition(25, g), m.gripperPercent(2, g), m.gripperPercent(-1, g),
   m.gripperPercent(0.25, r), m.gripperPosition(100, r), m.gripperPosition('x', g), m.gripperPercent(NaN, g),
-  m.gripperDuration(0, 1, g), m.gripperDuration(0, 0.5, g), m.gripperDuration(0.5, 0.52, g),
-  m.gripperDuration(undefined, 0.5, g), m.gripperDuration(1, 0, r)]))""")
-    assert out == [25, 0.25, 100, 0, 75, 0, 0, None, 2.0, 1.0, 0.2, 2.0, 2.0]
+  ...[[0, 1, g], [0, 0.5, g], [0.5, 0.52, g], [1, 0, r]].map(([a, b, c]) => m.gripperGoal(a, b, c).duration_s)]))""")
+    assert out == [25, 0.25, 100, 0, 75, 0, 0, None, 2.0, 1.0, 0.2, 2.0]
 
 
 def test_gripper_state_labels():
@@ -119,3 +118,26 @@ def test_gripper_goal_bounds_match_the_sim_contract():
               for edge in ("MIN", "MAX")]
     out = _run_js("console.log(JSON.stringify([m.GRIPPER_GOAL_MIN_S, m.GRIPPER_GOAL_MAX_S]))")
     assert out == bounds
+
+
+def test_gripper_goal_is_paced_by_the_announced_speed():
+    out = _run_js("""
+const g = {open: 1.0, closed: 0.0, max_velocity: 0.5};
+console.log(JSON.stringify([
+  m.gripperGoal(0, 0.5, g),          // 1.0 s at 0.5 rad/s
+  m.gripperGoal(0.5, 0.52, g),       // short: the 0.2 s minimum
+  m.gripperGoal(0.333, 0.5, g),      // 0.334 s rounded UP, never faster than announced
+  m.gripperGoal(-0.011, 1.0, g),     // 1.011 rad needs 2.022 s > 2.0: clipped to what 2.0 s allows
+  m.gripperGoal(1.0, -0.05, g),
+  m.gripperGoal(undefined, 0.5, g),  // no readback: the longest goal
+  m.gripperGoal(0, 0.5, {open: 1.0, closed: 0.0}),   // old server: full stroke = 2.0 s
+]))""")
+    assert out[0] == {"position": 0.5, "duration_s": 1.0}
+    assert out[1] == {"position": 0.52, "duration_s": 0.2}
+    assert out[2] == {"position": 0.5, "duration_s": 0.34}
+    assert out[3] == {"position": 0.989, "duration_s": 2.0}
+    assert out[4] == {"position": 0.0, "duration_s": 2.0}
+    assert out[5] == {"position": 0.5, "duration_s": 2.0}
+    assert out[6] == {"position": 0.5, "duration_s": 1.0}
+    for goal, start in zip(out[:5], (0, 0.5, 0.333, -0.011, 1.0)):
+        assert abs(goal["position"] - start) / goal["duration_s"] <= 0.5 + 1e-9

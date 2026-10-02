@@ -1022,7 +1022,7 @@ _ARM_HARNESS = """async (opts) => {
   const refuse = (reason) => { window.rejections.push(reason); throw new Error(`409: {"error":{"message":"${reason}"}}`); };
   // opts.gripper: a D-411 C server — the gripper leaves joint_jog and has its own control.
   const gripper = {id: 'gripper', kind: 'gripper', label: '그리퍼', joint: 'gripper_joint_1', closed: 0, open: 1,
-    unit: 'rad', presets: {open: 1, half: 0.5, close: 0}, readback: ['position', 'grasp']};
+    unit: 'rad', presets: {open: 1, half: 0.5, close: 0}, readback: ['position', 'grasp'], max_velocity: 0.5};
   const target = {kind: 'omx_sim', simulation: true, instance_id: 'omx_01', joints: ['joint1', 'joint2'],
     gripper: 'gripper_joint_1', controls: {schema: 'rosy.controls/1', items: [{id: 'arm', kind: 'joint_jog',
     label: '팔', max_step_rad: 0.05, duration_s: 0.4, command: 'bounded_goal',
@@ -1244,7 +1244,7 @@ def test_arm_gripper_presets_slider_and_badge(tablet_page):
     page.click("[data-gripper-preset='half']")
     page.wait_for_function("window.grips.length === 1")
     grip = page.evaluate("window.grips[0]")
-    assert grip["position"] == 0.5 and grip["duration_s"] == 1.0          # half a stroke = half of 2.0 s
+    assert grip["position"] == 0.5 and grip["duration_s"] == 1.0          # 0.5 rad at the announced 0.5 rad/s
     page.wait_for_function("document.querySelector('[data-gripper-state]').textContent === '이동 중'")
     assert page.locator("[data-gripper-preset='close']").is_disabled()     # one goal at a time
     assert page.locator("[data-gripper-percent]").is_disabled()
