@@ -8,7 +8,7 @@
 
 **Tech Stack:** Python, 기존 FastAPI·SQLite·Pydantic, ROS 2 Jazzy, colcon/ament, namespace wheel, OMX Gazebo, 기존 pytest·harness. 새 빌드 도구·모델 SDK 도입은 이 계획의 전제가 아니다.
 
-**Status:** Tasks 0-5 SOURCE complete; Task 6 LOCAL complete for isolated wheel installs and fake lifecycles (pilot deployment and ROS/Jazzy runtime remain unverified); Task 7 in progress. Tasks 8-9 not run. PASS conditions below are instructions and do not imply unfinished tasks passed.
+**Status:** Tasks 0-3 SOURCE complete; Tasks 4-5 IN PROGRESS (CellJob dispatch/owner integration remains open); Task 6 LOCAL complete for isolated wheel installs and fake lifecycles (pilot deployment and ROS/Jazzy runtime remain unverified); Task 7 in progress. Tasks 8-9 not run. PASS conditions below are instructions and do not imply unfinished tasks passed.
 
 **설계:** [ROSY Platform Architecture v0.2](../reference/ROSY_Platform_Architecture_Design_v0.2.md) 3·5·6·15·16장.
 
@@ -183,6 +183,9 @@ Cell compiler port, additive `CELL_TRANSFER` ??, `service` ???? ?? operator ?? ?
 
 ?? ??? SOURCE/LOCAL ?? ????. Cell Job ???? ?? ??? ?? API??, ??? ?? producer?Fleet dispatcher?UDS/OMX Action???? reconciliation? ?? ???? ???. ??? Task 4? ?? ??? ?? ???? fixed-cell ROS-SIM ??? ??? ???. ?? Fleet ? ??/?? ?? ??? ?? ??? ??? Fleet progress? ????. Task 5?? manipulation Skill/OMX owner? ????, Task 7?? persisted interruption recovery? ??? ? Task 8? Gazebo ?? ??? ????.
 
+
+**Progress (2026-10-03, transport checkpoint):** Fleet's same-host Action transport now accepts both explicitly supported grant variants and uses existing UDS v2 for CELL_TRANSFER SubmitAction, GetAction and exact-attempt CancelAction. Missing phase summaries fail closed for all three operations. Producer tests verify that the existing OMX ActionApi preserves durable approach/cancel phase receipts; consumer and legacy dispatcher/API contract tests pass (55 tests). API Reference v1.82 records this existing phased boundary. Full Fleet regression: 1431 passed/7 skipped, 0 new known-failure differences. CellJob dispatcher/reconciliation composition remains open and this change does not enable simulation dispatch.
+
 ## Task 5: 조작 Skill과 OMX owner 연결
 
 **Modify/Reuse:** `src/products/omx/adapter/omx_adapter/{action_api,action_runner,action_store,command_owner,pick_place_runner,pose_plan,kinematics,ros_runtime,gripper_contract}.py`, `.github/workflows/ci.yml`.
@@ -231,6 +234,12 @@ Cell compiler port, additive `CELL_TRANSFER` ??, `service` ???? ?? operator ?? ?
 **Progress (2026-10-02):** Added a persistent two-ledger replay fixture and integration test for a local successful Action whose submit receipt is lost before Fleet records it. Reopening Fleet and OMX SQLite stores keeps the same attempt, does not resubmit, and now retains `HOLD` and resource claims until independent post-action camera/gripper evidence confirms the goal. The test also checks journal phase rows and verifies that event watermarks advance across reconciliation and goal confirmation. Separate interruption fixtures and expiry/occupancy cases remain open; this is a Task 7 checkpoint, not completion.
 
 **Progress (2026-10-02, follow-up):** Added a second persistent replay fixture where Fleet's short-lived grant expires while the local Action remains accepted/running and the submit receipt is lost. After reopening both ledgers, Fleet reads the same Action, does not resubmit, remains `HOLD`, retains the `DISPATCHING` object/workcell claims, and rejects a second Mission's conflicting admission. The replay suite passes 2 tests. Stop/cancel interruption variants and independent physical-occupancy evidence remain open; Task 7 is still in progress.
+
+
+**Progress (2026-10-02, recovery checkpoint):** Persistent replay now covers owner acceptance, cancel acknowledgment, release-before-terminal-record, normal completion, conflicting/stale goal observations, and registered producer recovery from HOLD. The Mission completion transaction requires the latest durable terminal event for the same Action/attempt to be SUCCEEDED; a HOLD reason cannot substitute for that proof. The authenticated producer path can recover held success while FAILED/UNKNOWN/HOLD Actions retain claims. Focused Mission, Action, provenance and replay suites: 101 passed. These fixtures exercise the existing PICK_PLACE Mission/Action boundary; actual CELL_TRANSFER CellJob recovery and Gazebo acceptance remain open. Task 7 remains IN PROGRESS.
+
+
+**Progress (2026-10-02, CellJob startup):** Auditing the actual CELL_TRANSFER path found that start_step left its resource claims CLAIMED, allowing startup to release occupancy after submission. Starting a step now atomically verifies every admitted resource claim and marks the claims DISPATCHING before returning the persisted grant. Gateway composition fences stale admitted Jobs to HOLD while preserving the original Action/attempt, grant, result, ordered waiting steps and submitted occupancy claims. Current-authority reads do not mutate Jobs and repeated startup recovery is idempotent. Targeted CellJob/API/task/app tests: 71 passed. The status header is corrected to match the completion table: Tasks 4-5 are not complete; the existing MissionDispatcher still lacks a CellJob dispatch/reconciliation composition. This checkpoint does not establish owner integration or ROS-SIM acceptance.
 
 ## Task 8: 정식 경로의 Gazebo 종단 수용
 

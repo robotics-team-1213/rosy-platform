@@ -447,3 +447,9 @@
 - 근거: D-410. 사용자 지시 2026-10-02.
 - gate 변화: 없음.
 - 최종 증거: web_common 209 passed 24 skipped.
+
+## 2026-10-02 · uncommitted · DESIGN.md Components 절 어휘 보충 — chip·triage·evidence/empty·icon
+- 변경: DESIGN.md Components에 ui-chip(오버레이 칩)·ui-triage(분류 머리)·ui-evidence/ui-empty·.ui-icon 절을 추가했다. 견본(styleguide.html) 패리티 항목은 dashboard 로그 참조. 토큰·부품 코드(components.css·ui.js)는 건드리지 않았다.
+- 근거: D-92, D-359, D-405.
+- gate 변화: 없음.
+- 최종 증거: web_common+dashboard 286 passed 82 skipped.
