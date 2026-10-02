@@ -17,7 +17,7 @@ from .dispatch_admission import reserve as reserve_claims
 from .dispatch_admission import normalize_resources
 from .mission_store import MissionConflict, _nonempty, _now
 from .sqlite_policy import configure_connection, enable_wal
-from .step_action_kinds import step_action_kind
+from .step_action_kinds import step_action_kind, step_grant_digest
 
 _MIGRATION_VERSION = 1
 _IDENTIFIER_HASH_FIELDS = ("recipe_digest", "cell_digest", "process_artifact_digest")
@@ -45,15 +45,6 @@ def _json(value: object) -> str:
         return json.dumps(value, sort_keys=True, separators=(",", ":"), allow_nan=False)
     except (TypeError, ValueError) as exc:
         raise ValueError("Cell Job data must be finite JSON") from exc
-
-
-def cell_transfer_grant_digest(grant: Mapping[str, Any]) -> str:
-    """Digest the canonical complete CELL_TRANSFER grant, excluding its digest field."""
-    parsed = FleetCellTransferGrant.model_validate(dict(grant))
-    document = parsed.model_dump(mode="json")
-    document.pop("request_digest")
-    canonical = json.dumps(document, sort_keys=True, separators=(",", ":"), allow_nan=False)
-    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
 def hold_for_site_stop(connection: sqlite3.Connection, *, now: str, hold_reason: str | None) -> None:
@@ -380,7 +371,7 @@ class CellJobStore:
         attempt_id = _nonempty("attempt_id", attempt_id)
         parsed = FleetCellTransferGrant.model_validate(dict(grant))
         canonical_grant = parsed.model_dump(mode="json")
-        if cell_transfer_grant_digest(canonical_grant) != parsed.request_digest:
+        if step_grant_digest(parsed) != parsed.request_digest:
             raise ValueError("CELL_TRANSFER request digest does not match the complete grant")
         now_dt = now or datetime.now(timezone.utc)  # the dispatcher passes its own clock (1b B4)
         if parsed.issued_at > now_dt or parsed.expires_at <= now_dt:

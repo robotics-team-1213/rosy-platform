@@ -2,7 +2,8 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from fleet.server.cell_job_store import CellJobStore, cell_transfer_grant_digest
+from fleet.server.cell_job_store import CellJobStore
+from fleet.server.step_action_kinds import step_grant_digest as cell_transfer_grant_digest
 from fleet.server.mission_store import MissionConflict, MissionStore
 from fleet.server.task_store import FleetTaskStore
 
