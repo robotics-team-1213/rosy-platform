@@ -4538,3 +4538,13 @@
 - 변경: 동작 변경 없음. `tools/sim/d395_s2_bench.py`(605→398행)의 배치·순수 함수를 `tools/sim/d395_s2_layout.py`로 옮겼다(요약 도구도 거기서 읽는다). `gz_multi.launch.py`(607→596행)의 `nav_composition` 인자·적용과 `_optional_float`를 `launch/gz_multi_args.py`로 옮겼다(`world_profiles.py`와 같은 형제 모듈 방식).
 - 증거: `python -m pytest test/architecture -q` 81 passed/1 skipped; `test/test_d395_s2_bench.py test/test_d395_s1_bench.py test/architecture/test_module_structure.py src/sim/gz_sim/test` 319 passed/2 skipped; `--check` 배치 문제 0. WSL 실행 없음.
 - gate 변화: 없음.
+
+## 2026-10-02 · uncommitted · docs(adr): D-395 개정 10 — S2 시도와 믿는 자세의 출처
+- 변경: S2(4대) 결과(호스트 0.02×로 미완료, 4대 동시 전원 투입은 통과, 거울 결정 0)와 그때 드러난 Fleet 안전 결함 수정을 기록. 믿는 자세는 LOCALIZED·map 스냅샷에서만 저장한다. 보고하던 로봇이 null이 되면 30 s 동안 믿지 않는 로봇으로 둔다. S2 재실행 조건(한가한 호스트, GPU 라이다, 5 ms 물리 단계).
+- 증거: `docs/plans/2026-10-02-d395-s2-bench-results.md`, 브랜치 fix/d395-legacy-trusted-pose.
+- gate 변화: 없음(Proposed).
+
+## 2026-10-02 · uncommitted · docs(plans): D-395 S2 재시도 중단 — 이 호스트로는 4대 불가
+- 변경: sim 전용 opt-in 인자(`physics_step`, `real_time_factor`, `gpu`, 기본값 불변)로 S2를 다시 시도했다. WSL은 llvmpipe(소프트웨어)라 GPU 인자는 효과가 없다. 5 ms 물리 단계에서도 4대 RTF 0.017(부하 122)이었고, 병목은 로봇마다 도는 CORE·loc_assist다. 22:50 WSL 재시작으로 중단. S2는 CPU가 넉넉한 장치나 로봇 스택을 여러 호스트에 나눠야 한다.
+- 증거: S2 결과 문서의 재시도 절.
+- gate 변화: 없음.

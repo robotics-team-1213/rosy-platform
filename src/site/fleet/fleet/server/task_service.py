@@ -2,16 +2,22 @@
 
 from __future__ import annotations
 
+import logging
 import math
 import time
 from collections.abc import Awaitable, Callable, Mapping
 from uuid import uuid4
 
 from fleet.hub.hub import HubError
+from fleet.server.cancel_all import DispatchCanceled, DispatchWithdrawn
+from fleet.server.cancel_all_store import CANCEL_ALL_REASON
 from fleet.server.policy_evidence import PolicyEvidenceStore
 from fleet.server.task_scheduler import FleetTaskScheduler
 from fleet.server.task_store import FleetTaskStore
 from fleet.swarm.transport import RobotApiError
+
+
+_LOG = logging.getLogger(__name__)
 
 
 class FleetTaskService:
@@ -106,6 +112,19 @@ class FleetTaskService:
         self, available_robot_ids: set[str], *,
         dispatch: Callable[[dict], Awaitable[Mapping]],
     ) -> dict | None:
+        result = await self._dispatch_next(available_robot_ids, dispatch=dispatch)
+        if (result is not None and result.get("status") == "HOLD"
+                and result.get("reason") == CANCEL_ALL_REASON):
+            # D-421: CORE confirmed a cancel-all before this receipt; the late receipt is
+            # not applied (transition() keeps HOLD). Say so instead of dropping it silently.
+            _LOG.warning("late dispatch result for task %s after HOLD(FLEET_CANCEL_ALL) ignored",
+                         result.get("task_id"))
+        return result
+
+    async def _dispatch_next(
+        self, available_robot_ids: set[str], *,
+        dispatch: Callable[[dict], Awaitable[Mapping]],
+    ) -> dict | None:
         task = self.scheduler.claim_next(available_robot_ids)
         if task is None:
             return None
@@ -161,6 +180,15 @@ class FleetTaskService:
                                              source=task["source"], reason="COMMAND_REJECTED",
                                              receipt={"accepted": False})
             raise RuntimeError("missing robot acknowledgement")
+        except DispatchCanceled as exc:
+            # D-421: the goal may have reached CORE during a cancel-all; Fleet sent
+            # navigation/cancel again. Only CORE's correlated event may settle it.
+            return self.store.transition(task["task_id"], "UNKNOWN", actor_id=task["actor_id"],
+                                         source=task["source"], reason=exc.reason)
+        except DispatchWithdrawn as exc:
+            # D-421: still in Fleet's own traffic queue with no live CORE goal.
+            return self.store.transition(task["task_id"], "CANCELED", actor_id=task["actor_id"],
+                                         source=task["source"], reason=exc.reason)
         except HubError:
             return self.store.transition(task["task_id"], "FAILED", actor_id=task["actor_id"],
                                          source=task["source"], reason="COMMAND_REJECTED")
@@ -192,9 +220,11 @@ class FleetTaskService:
         event_type = event.get("type")
         if not all(isinstance(value, str) for value in (robot_id, event_id, event_type)):
             return None
+        source = data.get("source")
         return self.store.project_core_event(
             robot_id=robot_id, event_id=event_id, seq=seq,
             event_type=event_type, correlation_id=correlation_id,
+            source=source if isinstance(source, str) else None,
         )
 
     def cancel_queued_task(self, task_id: str, *, actor_id: str = "site-console") -> dict:
@@ -203,5 +233,6 @@ class FleetTaskService:
     def cancel_queued_for_robot(self, robot_id: str, *, actor_id: str = "site-console") -> list[str]:
         return self.store.cancel_queued_for_robot(robot_id, actor_id=actor_id)
 
-    def cancel_all_queued(self, *, actor_id: str = "site-console") -> list[str]:
-        return self.store.cancel_all_queued(actor_id=actor_id)
+    def cancel_all_queued(self, *, actor_id: str = "site-console",
+                          reason: str | None = None) -> list[str]:
+        return self.store.cancel_all_queued(actor_id=actor_id, reason=reason)

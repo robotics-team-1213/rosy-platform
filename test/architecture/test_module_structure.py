@@ -76,7 +76,7 @@ CONTROL_SPLIT = "docs/plans/2026-09-22-control-package-split-design.md"
 #: P6 verdicts: path (relative to src/) or package name -> (lines at verdict, verdict).
 SIZE_VERDICTS = {
     "fleet": (
-        27_050,
+        27_811,
         "split: server HTTP boundary, console, signals and the mission-control stores are separate owners "
         "today; group them into subpackages rather than one flat server/ tree (B2); owner fleet, unscheduled "
         "(re-judged 2026-09-29 at 11164 after mission_store joined the server tree; re-judged 2026-09-30 at "
@@ -136,7 +136,12 @@ SIZE_VERDICTS = {
         "2026-10-02-platform-architecture-v02-migration.md); these remain Fleet-owned durable records, "
         "while device dispatch and manipulation ownership stay in later tasks. This re-judgment resets "
         "the package growth baseline; the existing +150 allowance still blocks silent growth. "
-        "Re-judged 2026-10-02 at 27050 (C4b G3/G5, D-403 §3/§5/§7): the production Cell Job compiler "
+        "Re-judged 2026-10-02 at 27134 (main d5b3bd10 at 26498) when D-421 cancel-all joined as its "
+        "own modules: server/cancel_all.py (fanout, per-robot verdict, dispatch-overlap fence) and "
+        "server/cancel_all_store.py (durable window record and attempt tags read by the CORE event "
+        "projection in task_results.py), one route, the hub swarm-cancel scatter and ~35 console.js "
+        "lines; console.py did not grow and task_store.py stays under its 1060 ceiling; verdict unchanged. "
+        "Re-judged 2026-10-02 at 27811 (C4b G3/G5, D-403 §3/§5/§7): the production Cell Job compiler "
         "adapter (server/cell_compiler.py), the per-kind step dispatch table (server/step_action_kinds.py) "
         "and the step-ledger dispatcher (server/step_dispatcher.py) joined as their own modules, the "
         "deployment_profile gate in app.py; verdict unchanged",
@@ -215,7 +220,7 @@ SIZE_VERDICTS = {
         "accept: legacy comparison-graph publisher pinned by test_module_separation; no new work (X3)",
     ),
     "site/fleet/fleet/server/console.py": (
-        1111,
+        1138,
         "accept: one owner (FleetConsole gather/scatter), host-testable (X5). Re-judged 2026-09-30 at 1013: "
         "D-361 roster mutation and pinned-address holds change the gather/traffic tables in place, so they "
         "stay with their owner; the roster policy itself lives in roster.py; re-judged 2026-09-30 at 1021 "
@@ -227,7 +232,9 @@ SIZE_VERDICTS = {
         "2026-10-02 at 1096 for D-395 P2-7: the pre-mission traffic hold cancels and queues goals in "
         "the same _goals/_claims/_queued tables (hold_for_localization) — verdict unchanged; re-judged "
         "2026-10-02 at 1111 when the P2-7 review made the hold also cancel crossing yields "
-        "(_yielding) and stop a formation near the mover — same tables, verdict unchanged",
+        "(_yielding) and stop a formation near the mover — same tables, verdict unchanged; re-judged "
+        "2026-10-02 at 1138 for D-395 S2 Finding 1: the lapsed-robot null grace (_loc_null_since) is "
+        "kept beside _seen/_trusted, which it updates in the same gather — verdict unchanged",
     ),
     "runtime/sensing/control/sensing/perception/lane.py": (
         765,
