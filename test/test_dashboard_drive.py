@@ -55,7 +55,7 @@ def page():
         except Exception as error:  # Chromium not installed
             pytest.skip(f"Playwright Chromium unavailable: {error}")
         launched.goto("http://rosy.test/dashboard", wait_until="load")
-        launched.wait_for_function("document.getElementById('robot-mode')?.textContent === 'MANUAL'")
+        launched.wait_for_function("document.getElementById('robot-mode')?.textContent === '수동'")
         yield launched
         browser.close()
 
@@ -63,7 +63,7 @@ def page():
 def test_status_reads_the_apis_with_the_injected_token(page):
     assert page.evaluate("sessionStorage.getItem('rosy.dashboard.token')") == "agent-token"
     result = dashboard_drive.status(page)
-    assert result["robot_mode_shown"] == "MANUAL"
+    assert result["robot_mode_shown"] == "수동"
     assert result["/api/v1/robot/state"]["body"]["mode"] == "MANUAL"
     assert result["/api/v1/safety/state"]["status"] == 200
     assert result["/api/v1/host/hardware"]["body"]["available"] is False

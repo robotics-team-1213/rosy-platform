@@ -453,3 +453,9 @@
 - 근거: D-92, D-359, D-405.
 - gate 변화: 없음.
 - 최종 증거: web_common+dashboard 286 passed 82 skipped.
+
+## 2026-10-03 · uncommitted · fix(web): SAFE_STOP 운용 말은 RobotMode 표 밖에 둔다
+- 변경: `operatorModeLabel`이 DeviceState 문자열 SAFE_STOP을 "안전 정지"로 보이고, 나머지 모드는 MODE_LABEL을 그대로 쓴다. MODE_LABEL 키는 RobotMode와 같다.
+- 근거: D-359 US-009. protocol RobotMode에 SAFE_STOP이 없다.
+- 증거: 2026-10-03 Windows. test_enum_labels.py와 test_operator_copy.py가 콘솔 묶음 240 passed 안에 포함된다. SAFE_STOP은 MODE_LABEL 키가 아니다.
+- gate 변화: 없음.

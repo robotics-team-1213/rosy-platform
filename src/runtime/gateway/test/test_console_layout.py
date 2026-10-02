@@ -119,28 +119,25 @@ def test_the_view_switch_is_wired_and_defaults_to_operate():
     assert 'document.body.dataset.view' in telemetry, "꼬리말 규칙이 기대는 페이지 상태가 없다"
 
 
-def test_the_map_controls_ride_on_the_map_instead_of_stealing_its_height():
-    """관측 영역은 높이가 고정이다 — 툴바가 흐름에 있으면 그만큼 지도가 줄어든다.
+def test_the_map_tools_stay_off_the_raster():
+    """점유 격자가 도구에 가려지면 지도를 못 읽는다.
 
-    실측으로 지도는 191px이었고 툴바 두 줄·범례·안내가 나머지를 먹고 있었다.
-    두 툴바를 `.map-stage` 안으로 넣고 겹쳐 띄워 307px로 되돌렸다. 되돌아가면
-    (툴바가 다시 `.map-stage` 밖으로 나가면) 이 게이트가 잡는다.
+    도구는 제목 줄의 한 행이고 범례는 캔버스 아래 한 줄이다. 무대 안에
+    절대 위치로 올리면 격자를 덮고, 두 줄로 쌓으면 높이를 다시 먹는다.
     """
     markup = html()
-    stage = markup.split('class="map-stage"')[1].split("<canvas")[0]
-    assert markup.count('class="map-toolbar"') == 2, "지도 툴바가 둘이 아니다"
-    assert stage.count('class="map-toolbar"') == 2, "툴바가 지도 무대 밖에 있다"
+    panel = markup.split('id="field-map-panel"')[1].split("</section>")[0]
+    stage = panel.split('class="map-stage"')[1].split("</div>")[0]
+    assert panel.count('class="map-toolbar"') == 2, "지도 툴바가 둘이 아니다"
+    assert "map-toolbar" not in stage, "툴바가 지도 무대 안에서 격자를 가린다"
+    assert 'id="map-legend"' not in stage, "범례가 캔버스 위에 있다"
+    assert panel.index('class="map-stage"') < panel.index('id="map-legend"')
 
-    rule = re.search(r"\.map-controls\s*\{([^}]*)\}", css())
-    assert rule, ".map-controls 규칙이 없다"
-    body = rule.group(1)
-    assert "position: absolute" in body, "겹치지 않으면 지도 높이를 다시 가져간다"
-    # 겹친 칩은 지도 픽셀 위에 뜬다. 바탕 없이 두면 점유 격자와 섞여 못 읽는다.
-    # 어느 셀렉터가 주는지는 묻지 않는다 — 규칙을 다시 쓸 때마다 시험이 같이
-    # 깨지면, 시험이 설계가 아니라 그때의 셀렉터 이름을 지키고 있는 것이다.
-    backed = [
-        selector.strip()[:60]
-        for selector, body in re.findall(r"([^{}]+)\{([^}]*)\}", css())
-        if ".map-toolbar" in selector and "background:" in body
-    ]
-    assert backed, "겹친 툴바에 바탕을 주는 규칙이 없다"
+    sheet = css()
+    assert not re.search(r"\.map-controls\s*\{[^}]*position:\s*absolute", sheet)
+    assert not re.search(r"\.map-legend\s*\{[^}]*position:\s*absolute", sheet)
+    blocks = re.findall(r"([^{}]+)\{([^}]*)\}", sheet)
+    tools = [body for selector, body in blocks if selector.strip() == ".map-tools"]
+    assert tools, ".map-tools 규칙이 없다"
+    assert "flex-direction: row" in tools[0]
+    assert "flex-direction: column" not in tools[0]

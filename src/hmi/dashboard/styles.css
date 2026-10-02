@@ -63,6 +63,28 @@ ui-button, a { -webkit-tap-highlight-color: transparent; }
   font-family: var(--mono);
   white-space: nowrap;
 }
+/* 신선하지 않은 계기는 상태 말이 크고, 마지막 숫자는 그 아래 작게 남는다. */
+.telemetry-grid strong[data-evidence="delayed"]::before,
+.telemetry-grid strong[data-evidence="disconnected"]::before,
+.telemetry-grid strong[data-evidence="unavailable"]::before {
+  display: block;
+  color: var(--ink);
+  font-family: var(--body);
+  font-size: var(--text-value);
+  font-weight: var(--weight-strong);
+  line-height: var(--leading-compact);
+  overflow-wrap: normal;
+  word-break: keep-all;
+}
+.telemetry-grid strong[data-evidence="delayed"]::before { content: "지연"; }
+.telemetry-grid strong[data-evidence="disconnected"]::before { content: "연결 끊김"; }
+.telemetry-grid strong[data-evidence="unavailable"]::before { content: "정보 없음"; }
+.telemetry-grid strong[data-evidence="delayed"],
+.telemetry-grid strong[data-evidence="disconnected"],
+.telemetry-grid strong[data-evidence="unavailable"] {
+  font-size: var(--text-micro);
+  font-weight: var(--weight-regular);
+}
 
 /* ===========================================================================
    1. 공용 어휘 — 이 화면이 아는 조작과 표시는 이게 전부다
@@ -128,7 +150,7 @@ ui-button, a { -webkit-tap-highlight-color: transparent; }
   align-items: center;
   gap: var(--space-2);
 }
-.panel-heading > div::after {
+.panel-heading > div:not(.map-tools)::after {
   content: "";
   flex: 1;
   height: 1px;
