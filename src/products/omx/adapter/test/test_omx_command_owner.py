@@ -497,3 +497,98 @@ def test_multi_point_command_requires_explicit_velocity_and_acceleration_limits(
 
     assert not result.accepted and result.reason == "trajectory_rate_limits_missing"
     assert action.commands == []
+
+
+# A1 (C3b): the caller reads a joint state, journals, then submits; joint states keep
+# arriving at ~100 Hz in between. A command with a start_state_window is checked against the
+# owner's own latest state under its lock and bound to that sequence (no exact-race).
+WINDOW = {"joint_1": (0.1, 0.02), "joint_2": (-0.1, 0.02)}
+
+
+def test_window_command_binds_to_a_newer_state_that_arrived_before_submit():
+    clock = [100.0]
+    owner, action = owner_at(clock)
+    owner.observe_joint_state(make_state(sequence=10))
+    command = make_command(sequence=10, start_state_window=WINDOW)
+    clock[0] = 100.01
+    owner.observe_joint_state(make_state(sequence=11, received_at=100.01))
+
+    result = owner.submit(command)
+
+    assert result.accepted and result.reason == "submitted"
+    assert action.commands[0].source_state_sequence == 11
+    assert action.commands[0].command_id == command.command_id
+
+
+def test_single_goal_home_command_with_window_survives_the_same_race():
+    clock = [100.0]
+    owner, action = owner_at(clock)
+    owner.observe_joint_state(make_state(sequence=10))
+    home = make_command(command_id="home", sequence=10, owner="rule_based",
+                        start_state_window={"joint_1": (0.1, 0.05), "joint_2": (-0.1, 0.05)})
+    for seq in (11, 12, 13):
+        owner.observe_joint_state(make_state(sequence=seq, received_at=100.0))
+    assert owner.submit(home).accepted
+    assert action.commands[0].source_state_sequence == 13
+
+
+def test_window_command_still_rejects_a_stale_latest_state():
+    clock = [100.0]
+    owner, action = owner_at(clock)
+    owner.observe_joint_state(make_state(sequence=10))
+    clock[0] = 100.6  # max_joint_state_age_s 0.5
+    result = owner.submit(make_command(sequence=10, start_state_window=WINDOW))
+    assert not result.accepted and result.reason == "joint_state_stale"
+    assert owner.state == "hold" and action.commands == []
+
+
+def test_window_command_rejects_a_latest_state_outside_the_window():
+    clock = [100.0]
+    owner, action = owner_at(clock)
+    owner.observe_joint_state(make_state(sequence=10))
+    moved = JointStateSnapshot(positions={"joint_1": 0.15, "joint_2": -0.1}, sequence=11,
+                               received_at=100.0, calibration_revision="cal-7")
+    owner.observe_joint_state(moved)
+    result = owner.submit(make_command(sequence=10, start_state_window=WINDOW))
+    assert not result.accepted and result.reason == "start_state_deviation"
+    assert action.commands == [] and owner.state == "ready"
+
+
+def test_window_command_rejects_a_sequence_the_owner_never_observed():
+    clock = [100.0]
+    owner, action = owner_at(clock)
+    owner.observe_joint_state(make_state(sequence=10))
+    owner.observe_joint_state(make_state(sequence=11))
+    result = owner.submit(make_command(sequence=12, start_state_window=WINDOW))
+    assert not result.accepted and result.reason == "joint_state_sequence_mismatch"
+    assert action.commands == []
+
+
+def test_partial_window_checks_only_the_listed_joints():
+    # After grasp the runner leaves the gripper out (object width, D-402 §3d).
+    clock = [100.0]
+    owner, action = owner_at(clock)
+    owner.observe_joint_state(JointStateSnapshot(positions={"joint_1": 0.1, "joint_2": 0.4}, sequence=10,
+                                                 received_at=100.0, calibration_revision="cal-7"))
+    result = owner.submit(make_command(sequence=10, start_state_window={"joint_1": (0.1, 0.02)}))
+    assert result.accepted
+
+
+def test_window_window_values_are_validated_on_the_command():
+    with pytest.raises(ValueError, match="start_state_window"):
+        make_command(start_state_window={"joint_1": (0.1, -0.01), "joint_2": (0.0, 0.01)})
+    with pytest.raises(ValueError, match="start_state_window"):
+        make_command(start_state_window={"joint_9": (0.1, 0.01)})
+    with pytest.raises(ValueError, match="start_state_window"):
+        make_command(start_state_window={})
+
+
+def test_window_command_never_rebinds_to_a_sequence_already_used():
+    clock = [100.0]
+    owner, action = owner_at(clock)
+    owner.observe_joint_state(make_state(sequence=10))
+    assert owner.submit(make_command(command_id="a", sequence=10, start_state_window=WINDOW)).accepted
+    action.handles[0].finished = action.handles[0].success = True
+    assert owner.poll().reason == "completed"
+    result = owner.submit(make_command(command_id="b", sequence=10, start_state_window=WINDOW))
+    assert not result.accepted and result.reason == "joint_state_not_advanced"

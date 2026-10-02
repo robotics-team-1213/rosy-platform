@@ -207,11 +207,14 @@ class PickPlaceRunner:
                 or state.transform_revision != phase.transform_revision
                 or state.planning_scene_revision != phase.planning_scene_revision):
             raise ValueError("phase start state calibration, transform, or planning scene changed")
+        window: dict[str, tuple[float, float]] = {}
         for name, expected in zip(phase.joint_names, phase.start_state_positions):
             if name in self._unchecked_joints and phase.phase_id in _AFTER_GRASP_PHASES:
                 continue
-            if abs(state.joint_positions[name] - expected) > self.start_state_tolerances[name]:
+            tolerance = self.start_state_tolerances[name]
+            if abs(state.joint_positions[name] - expected) > tolerance:
                 raise ValueError("phase start state is outside the planned tolerance")
+            window[name] = (expected, tolerance)
 
         command = self.command_for_phase(phase)
         if not isinstance(command, TrajectoryCommand):
@@ -225,9 +228,11 @@ class PickPlaceRunner:
                 or command.trajectory_points != phase.points):
             raise ValueError("phase command identity/path does not match the validated plan")
         self._last_command_state_sequence = state.sequence
-        # Rebind only after an explicit bounded start-state and revision match;
-        # ArmCommandOwner checks this sequence again at the final dispatch edge.
-        return replace(command, source_state_sequence=state.sequence), state
+        # Rebind only after an explicit bounded start-state and revision match. The journal
+        # write follows, and joint states keep arriving, so the owner repeats this same check
+        # on its newest state under its lock and binds to that sequence (C3b A1).
+        return replace(command, source_state_sequence=state.sequence,
+                       start_state_window=window), state
 
     def start(self) -> dict[str, object]:
         """Persist and submit only the first phase of a fresh attempt."""

@@ -12,7 +12,7 @@ import math
 import secrets
 import threading
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from types import MappingProxyType
 from typing import Callable, Mapping, Protocol
 
@@ -162,6 +162,10 @@ class TrajectoryCommand:
     joint_names: tuple[str, ...] | None = None
     trajectory_points: tuple[JointTrajectoryPoint, ...] | None = None
     phase_id: str | None = None
+    # name -> (expected position, tolerance). When set, the owner checks these joints against
+    # its own latest joint state under its lock and binds the command to that state's sequence
+    # (C3b A1); source_state_sequence is then the caller's observed state, not an exact match.
+    start_state_window: Mapping[str, tuple[float, float]] | None = None
 
     def __post_init__(self) -> None:
         for field_name in (
@@ -217,6 +221,25 @@ class TrajectoryCommand:
         if final_positions != dict(normalized):
             raise ValueError("command positions must match the final trajectory point")
         object.__setattr__(self, "trajectory_points", points)
+        if self.start_state_window is not None:
+            window = dict(self.start_state_window)
+            if not window or not set(window) <= set(names):
+                raise ValueError("start_state_window must name a non-empty subset of the command joints")
+            checked: dict[str, tuple[float, float]] = {}
+            for name in names:
+                if name not in window:
+                    continue
+                try:
+                    expected, tolerance = window[name]
+                except (TypeError, ValueError) as exc:
+                    raise ValueError("start_state_window entries must be (expected, tolerance)") from exc
+                if isinstance(expected, bool) or isinstance(tolerance, bool):
+                    raise ValueError("start_state_window entries must be finite numbers")
+                expected, tolerance = float(expected), float(tolerance)
+                if not math.isfinite(expected) or not math.isfinite(tolerance) or tolerance < 0:
+                    raise ValueError("start_state_window entries must be finite with tolerance >= 0")
+                checked[name] = (expected, tolerance)
+            object.__setattr__(self, "start_state_window", MappingProxyType(checked))
 
 
 class ActionHandle(Protocol):
@@ -284,6 +307,8 @@ class ArmCommandOwner:
             command.duration_s,
             command.source_state_sequence,
             command.calibration_revision,
+            None if command.start_state_window is None
+            else tuple(sorted(command.start_state_window.items())),
         )
 
     def _decision(
@@ -384,8 +409,21 @@ class ArmCommandOwner:
                 return self._decision(False, "owner_not_allowed", command_id)
             if command.calibration_revision != self.config.calibration_revision:
                 return self._decision(False, "calibration_mismatch", command_id)
-            if command.source_state_sequence != self._joint_state.sequence:
-                return self._decision(False, "joint_state_sequence_mismatch", command_id)
+            latest = self._joint_state
+            if command.start_state_window is None:
+                if command.source_state_sequence != latest.sequence:
+                    return self._decision(False, "joint_state_sequence_mismatch", command_id)
+            else:
+                # Same safety meaning as the exact match: the command is dispatched only
+                # against a fresh state that the start check passed, here the newest one.
+                if not set(command.start_state_window) <= set(latest.positions):
+                    return self._decision(False, "joint_map_mismatch", command_id)
+                if command.source_state_sequence > latest.sequence:
+                    return self._decision(False, "joint_state_sequence_mismatch", command_id)
+                if any(abs(latest.positions[name] - expected) > tolerance
+                       for name, (expected, tolerance) in command.start_state_window.items()):
+                    return self._decision(False, "start_state_deviation", command_id)
+                command = replace(command, source_state_sequence=latest.sequence)
             if command.source_state_sequence <= self._last_command_state_sequence:
                 return self._decision(False, "joint_state_not_advanced", command_id)
             if command.duration_s > self.config.max_goal_duration_s:

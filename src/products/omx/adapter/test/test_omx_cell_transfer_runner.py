@@ -187,3 +187,18 @@ def test_runner_rejects_a_plan_whose_unchecked_joints_are_not_the_profile_grippe
 
 def test_cell_transfer_tolerances_cover_every_planned_joint(profile):
     assert set(profile.start_state_tolerances()) == set(profile.joint_names)
+
+
+def test_runner_hands_the_owner_its_start_check_as_a_window(tmp_path, kin, profile):
+    # A1 (C3b): the owner re-runs this exact check on its newest state under its lock, so a
+    # joint state that lands while the runner journals no longer rejects the phase.
+    recorder, port, runner = _phase_runner(tmp_path, kin, profile, grippers={"transfer": 0.3})
+    _run_all(runner)
+    tolerances = profile.start_state_tolerances()
+    for (command, _goal), phase in zip(port.submissions, runner.plan.phases):
+        window = command.start_state_window
+        expected = dict(zip(phase.joint_names, phase.start_state_positions))
+        skipped = {"gripper_joint_1"} if phase.phase_id in ("transfer", "release") else set()
+        assert set(window) == set(phase.joint_names) - skipped
+        for name, (value, tolerance) in window.items():
+            assert value == expected[name] and tolerance == tolerances[name]
