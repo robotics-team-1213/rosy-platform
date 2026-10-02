@@ -157,7 +157,8 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
             )
             document = submission.as_store_document()
             if cell_item_pose_tolerance is not None:
-                attach_goal_predicates(document, candidate["recipe"], cell_item_pose_tolerance)
+                attach_goal_predicates(document, cell_job_compiler.item_geometry(candidate["recipe"]),
+                                       cell_item_pose_tolerance)
             return document
         cell_job_resolver = compile_cell_job
     if site_users is not None and task_service is None:

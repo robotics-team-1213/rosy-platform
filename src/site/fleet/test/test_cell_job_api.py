@@ -33,6 +33,10 @@ class FixedCellCompiler:
         self.calls = 0
         self.destination_x = 0.4
 
+    def item_geometry(self, recipe):
+        box = recipe["box"]
+        return {"box": {"grasp_depth_m": box["grasp_depth"], "height_m": box["height"]}}
+
     def compile(self, recipe, cell):
         self.calls += 1
         job = {"recipe": "compiled", "steps": ["transfer-0", "transfer-1"]}

@@ -107,3 +107,26 @@ def test_only_cell_compiler_imports_the_palletizing_process_in_fleet():
             if any(name.startswith("rosy.processes") for name in names):
                 importers.append(path.relative_to(fleet).as_posix())
     assert sorted(set(importers)) == ["server/cell_compiler.py"]
+
+
+def test_item_geometry_comes_from_the_validated_recipe():
+    # C4b 1c P3: grasp depth is read from the palletizing Recipe (its one explicit default), not
+    # re-defaulted by Fleet.
+    recipe_doc, _ = _documents()
+    adapter = PalletizingCellJobCompiler(tol_m=TOL_M)
+    assert adapter.item_geometry(recipe_doc) == {
+        "box": {"grasp_depth_m": 0.015, "height_m": 0.03},
+        "slip_sheet": {"grasp_depth_m": 0.0, "height_m": 0.002},
+    }
+    no_depth = {**recipe_doc, "box": {key: value for key, value in recipe_doc["box"].items()
+                                      if key != "grasp_depth"}}
+    assert adapter.item_geometry(no_depth)["box"]["grasp_depth_m"] == load_recipe(
+        __import__("json").dumps(no_depth)).box.grasp_depth
+    with pytest.raises(ValueError):
+        adapter.item_geometry({**recipe_doc, "box": "x"})
+
+
+def test_goal_predicates_need_explicit_geometry():
+    from fleet.server.cell_goal_evidence import attach_goal_predicates
+    with pytest.raises(KeyError):
+        attach_goal_predicates({"steps": [{"inputs": {"item": "box"}}]}, {"box": {"height_m": 0.03}}, None)

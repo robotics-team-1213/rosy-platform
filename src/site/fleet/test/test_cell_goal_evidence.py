@@ -37,7 +37,8 @@ class Gripper:
         return self.state, "gripper-readback-7"
 
 
-RECIPE = {"box": {"height": 0.03, "grasp_depth": 0.015}, "slip_sheet": {"thickness": 0.002}}
+GEOMETRY = {"box": {"grasp_depth_m": 0.015, "height_m": 0.03},
+            "slip_sheet": {"grasp_depth_m": 0.0, "height_m": 0.002}}
 
 
 def _tolerance(**changes):
@@ -49,7 +50,7 @@ def _setup(tmp_path, *, profile_source="sim_model_pose"):
     path, tasks, _, enabled = _stores(tmp_path)
     store = CellJobStore(path)
     submission = _submission()
-    attach_goal_predicates(submission, RECIPE, _tolerance())
+    attach_goal_predicates(submission, GEOMETRY, _tolerance())
     store.create(mission_id="cell-mission-1", proposal_principal_id="cell-service",
                  request_key="cell-request-1", request_digest="d" * 64, submission=submission)
     ready = store.admit("cell-mission-1", actor_id="operator-1", expected_generation=enabled["generation"])

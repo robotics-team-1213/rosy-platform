@@ -39,6 +39,15 @@ class PalletizingCellJobCompiler:
         self.tol_m = float(tol_m)
         self.process_artifact_digest = _process_source_digest()
 
+    def item_geometry(self, recipe: Mapping) -> dict[str, dict[str, float]]:
+        """Grasp depth and height per item, read from the validated Recipe (1c P3): the box depth
+        default lives only in the palletizing Box; a slip sheet is taken at its top face."""
+        parsed = load_recipe(json.dumps(recipe, allow_nan=False))
+        geometry = {"box": {"grasp_depth_m": parsed.box.grasp_depth, "height_m": parsed.box.height}}
+        if parsed.slip_sheet_thickness is not None:
+            geometry["slip_sheet"] = {"grasp_depth_m": 0.0, "height_m": parsed.slip_sheet_thickness}
+        return geometry
+
     def compile(self, recipe: Mapping, cell: Mapping) -> CellJobCompilation:
         # JSON is YAML, and both hashes are taken over the parsed value, so they are unchanged.
         parsed_recipe = load_recipe(json.dumps(recipe, allow_nan=False))

@@ -20,12 +20,12 @@ from .cell_job_store import CellJobStore
 from .goal_evidence_registry import GoalEvidenceRegistry
 
 
-def attach_goal_predicates(document: dict, recipe: Mapping[str, Any], tolerance: ItemPoseTolerance) -> None:
-    """Fix each step's item_at_pose predicate at resolution, from the recipe being resolved."""
-    box = recipe["box"]
-    offsets = {"box": centre_above_tcp_m(grasp_depth_m=box.get("grasp_depth", 0.0), height_m=box["height"])}
-    if isinstance(recipe.get("slip_sheet"), Mapping):
-        offsets["slip_sheet"] = centre_above_tcp_m(grasp_depth_m=0.0, height_m=recipe["slip_sheet"]["thickness"])
+def attach_goal_predicates(document: dict, item_geometry: Mapping[str, Mapping[str, float]],
+                           tolerance: ItemPoseTolerance) -> None:
+    """Fix each step's item_at_pose predicate at resolution. ``item_geometry`` comes from the
+    validated recipe (the compiler's item_geometry); nothing is defaulted here (1c P3)."""
+    offsets = {item: centre_above_tcp_m(grasp_depth_m=values["grasp_depth_m"], height_m=values["height_m"])
+               for item, values in item_geometry.items()}
     for step in document["steps"]:
         step["goal_predicate"] = step_goal_predicate(step["inputs"], tolerance, offsets[step["inputs"]["item"]])
 
