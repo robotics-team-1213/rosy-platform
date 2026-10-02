@@ -740,7 +740,10 @@ def test_a_second_run_is_a_no_op(device):
 def test_a_mode_drift_counts_as_a_change(device):
     _sync(device, NEW_ID, Runner(), dry_run=False)
     script = device / "opt/rosy/native-runtime/rosy-boot-status.py"
-    os.chmod(script, 0o644)
+    # 0o644 이면 실제 Linux 체크아웃(git 모드 100644)에서 기대 모드와 같아 드리프트가
+    # 사라진다(CI 전용 적색, 2026-10-02). 기저 모드가 644든 7이든 드리프트가 되는
+    # 0o600 으로 전제를 플랫폼에서 독립시킨다.
+    os.chmod(script, 0o600)
 
     result = _sync(device, NEW_ID, Runner(), dry_run=True)
 

@@ -1208,3 +1208,26 @@
 - 변경: `LocalizationService._observe_from_anchors`. 매 폴에서 `objects_stamp` 가 있는 LOCALIZED 닻마다 상태의 물체를 자기 보고 map 자세로 놓고, 다른 모든 LOCALIZED 로봇에 대한 증거로 쓴다. 관찰자는 닻만이다(거울 잠긴 로봇은 옳은 로봇을 그 쌍둥이 자리에 놓는다). 자기 자신은 대상이 아니다. 증거 하나는 (닻, `objects_stamp`)이고 Fleet 이 처음 본 뒤 1.0 s 동안 신선하다. 같은 폴의 두 닻은 따로 센다. 증거 규칙(0.25 m, 거울 서명)과 15 s 안 2개 문턱은 그대로다. `peer_observations` 는 보고 대신 물체 목록을 받는다.
 - 증거: `test_localization_service.py` +7(닻 둘 중 주입된 거울이 2폴에 SUSPECT, 닻이 아닌 거울 로봇은 닻을 고발하지 못함, 같은 폴 닻 둘 = 2개, 숨은 로봇·무관한 물체·일치는 증거 아님, 같은 stamp 재읽기는 낡음). `python -m pytest src/site/fleet/test -q` 1335 passed, 7 skipped.
 - gate 변화: 없음. Gazebo 재실행 전.
+
+## 2026-10-02 · uncommitted · 관제 콘솔 회차 4 — D-410 운용/설치 두 문서로 분리
+- 변경: 설치·보정 화면 /console/install(install.html + install.js, 문법 procedure)을 만들고 기기 등록·카메라 연결 승인·경기장/맵 보정·설치 기록을 이관했다. 아이디·조상 구조 보존 이관. 운용 문서(/console)는 링크 안내만 남고 문서가 가벼워졌다(1920 기준 1,154px).
+- 변경: console.js에서 등록·카메라 승인·경기장/맵 보정 배선 제거. 발견 요청은 검색기 건강 로그와 고정 주소 판정만 남긴다. vision-view.js는 보정 칸 없는 프리뷰 전용 모드(빈 패널 스텁 + 프리뷰 가드)를 지원한다. 주소 이동 조작은 설치 문서가, 안내 배너는 운용 문서가 가진다.
+- 변경: static_routes에 install.js 자산과 /console/install 라우트(CSP 동일). surfaces.yaml console audience에 설치 경로 반영. 시험 6건+shared_controls 1건을 두 문서 세계로 갱신(신규 라우트·자산·링크 시험 포함).
+- 근거: D-410(사용자 지시 — 역할 명확화 완성). D-406/D-409의 접힌 서랍 이관.
+- gate 변화: 없음.
+- 최종 증거: fleet+web_common 1545 passed 31 skipped; 브라우저 — 두 화면 페이지 오류 0, 설치 화면 세션 토큰 공유 자동 인증, 운용 문서에 등록·보정 마크업 부재·링크 2개 확인.
+
+## 2026-10-02 · uncommitted · 관제 콘솔 회차 5 — 예외 큐 첫 행 고정(운용 블록 위계)
+- 변경: 넓은 창(64rem+)에서 예외 큐(주의·개입)를 왼쪽 열 1행으로, 지도를 2행으로 바꿨다. 회차 계측에서 큐가 지도 아래 963px(첫 화면 밖)에 있어 오프라인 로봇이 큐를 채우는 순간 '예외가 먼저'(D-201)가 위반됐다. 큐 top 963→186, 문서 높이 불변(열 균형 유지), 폰(단일 열)은 영향 없음.
+- 변경: test_console_queues_contract의 그리드 핀을 새 배치로 갱신(큐 1행 + 지도 2행 고정, 위반 경위를 문서화).
+- 근거: D-201(예외 문법), 2026-10-02 회차 계측. 대형 폼은 컨테이너 반응형(D-359 §6.3)으로 이미 적합 — 조정 없음.
+- gate 변화: 없음.
+- 최종 증거: queues contract + web_common 214 passed 24 skipped(반응형 계층 게이트 포함); 재계측 큐 top 186.
+
+## 2026-10-02 · uncommitted · CI 삼각측량 — 시크릿 스캔 면제·해시 문서 규약·스코어카드 기준선·설치 문서 브라우저 시험
+- 변경: secret_scan.py KNOWN_FIXTURES에 D-395 loc-assist fixture(SECRET-PAYLOAD-VALUE) 등록. OMX 증명 해시 3곳을 매처의 무결성 문맥 규약으로 서술(README 'revision'/'dataset commit', omx_f_kinematics.yaml 'at revision') — 의미 불변. test_release_boundary_gates no_secrets 재녹색.
+- 변경: D-178 스코어카드에 rosy_cell 잠정 행(4/4/4/4/4=80 A) 추가 — 집합 동일성 회복. robot_literal_backlog.txt 갱신(신규 8·삭제 2). known_failures.txt에 병렬 작업 사전 존재 실패 5건 기록(CI 전용 플레이크 4 + module_separation 소유자 판단 1).
+- 변경: test_fleet_console_browser.py에 D-410 설치 문서 렌더 계약 시험 추가(옵트인 Chromium — 문법·소유물·운용 표면 부재·E-stop·무오류). 통과 59s.
+- 근거: 2026-10-02 CI 실행 36909426842/36955733308 실패 대 조 로컬 재현. docs/validation/uiux-console-refactor-2026-10-02/README.md 회차 기록.
+- gate 변화: 없음.
+- 최종 증거: scorecard·literals·no_secrets 각 재녹색; 브라우저 신규 시험 1 passed.

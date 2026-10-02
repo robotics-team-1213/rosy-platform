@@ -14,6 +14,7 @@ import json
 import os
 from pathlib import Path
 import re
+import shlex
 import subprocess
 import sys
 from typing import Callable, Protocol
@@ -135,6 +136,7 @@ class NativeReleaseManager:
         public_key: Path,
         runtime: Callable[[str], None] | None = None,
         links: LinkStore | None = None,
+        precheck: Callable[[], None] | None = None,
     ) -> None:
         self.root = Path(root).resolve()
         self.public_key = Path(public_key)
@@ -146,6 +148,9 @@ class NativeReleaseManager:
         self.lock = self.state / "native-release.lock"
         self._runtime = runtime or self._systemctl
         self.links = links or SymlinkStore(self.current.parent, self.releases)
+        # D-412 review N1: a last condition (the updater's hold/seal/idle check) run
+        # after verification and right before the runtime stops; raising refuses.
+        self.precheck = precheck
 
     @staticmethod
     def _systemctl(action: str) -> None:
@@ -316,6 +321,8 @@ class NativeReleaseManager:
             old_previous = self._link_id(self.previous)
             if old_current == release_id:
                 return {"ok": True, "release_id": release_id, "previous": old_previous}
+            if self.precheck is not None:
+                self.precheck()
             self._write_journal(
                 operation="activate", candidate=release_id,
                 old_current=old_current, old_previous=old_previous, phase="prepared",
@@ -399,6 +406,33 @@ class NativeReleaseManager:
             return {"ok": True, "recovered": True, "release_id": old_current}
 
 
+PRECHECK_ENV = "ROSY_ACTIVATE_PRECHECK"
+PRECHECK_TIMEOUT_S = 60
+#: The precheck's "the robot is busy" answer. Any other failure is NATIVE_PRECHECK_FAILED.
+PRECHECK_BUSY_EXIT = 3
+
+
+def _env_precheck() -> Callable[[], None] | None:
+    """The command named by ROSY_ACTIVATE_PRECHECK, as a precheck; exit 0 passes."""
+    command = os.environ.get(PRECHECK_ENV, "").strip()
+    if not command:
+        return None
+
+    def precheck() -> None:
+        try:
+            result = subprocess.run(shlex.split(command), capture_output=True, text=True,
+                                    timeout=PRECHECK_TIMEOUT_S, check=False)
+        except (OSError, ValueError, subprocess.SubprocessError) as exc:
+            raise ValueError(f"NATIVE_PRECHECK_FAILED: precheck could not run: {exc}") from exc
+        detail = " ".join((result.stdout + " " + result.stderr).split())[-300:]
+        if result.returncode == PRECHECK_BUSY_EXIT:
+            raise ValueError(f"NATIVE_PRECHECK_REFUSED: {detail}")
+        if result.returncode != 0:
+            raise ValueError(f"NATIVE_PRECHECK_FAILED: exit {result.returncode}: {detail}")
+
+    return precheck
+
+
 def _main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, default=Path("/"))
@@ -411,7 +445,7 @@ def _main(argv: list[str] | None = None) -> int:
     sub.add_parser("rollback")
     sub.add_parser("recover")
     args = parser.parse_args(argv)
-    manager = NativeReleaseManager(root=args.root, public_key=args.public_key)
+    manager = NativeReleaseManager(root=args.root, public_key=args.public_key, precheck=_env_precheck())
     try:
         if args.command == "activate":
             result = manager.activate(args.release_id)

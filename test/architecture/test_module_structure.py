@@ -83,7 +83,7 @@ SIZE_VERDICTS = {
         "D-395 P2-7 added localization/mission.py (the mission executor, its own module under budget)",
     ),
     "fleet": (
-        24_565,
+        24_945,
         "split: server HTTP boundary, console, signals and the mission-control stores are separate owners "
         "today; group them into subpackages rather than one flat server/ tree (B2); owner fleet, unscheduled "
         "(re-judged 2026-09-29 at 11164 after mission_store joined the server tree; re-judged 2026-09-30 at "
@@ -126,6 +126,9 @@ SIZE_VERDICTS = {
         "Re-judged 2026-10-02 at 24565 when the service learned "
         "to stay quiet during a CORE mission (server/localization_service.py, the mission-status "
         "client in transport.py); verdict unchanged. "
+        "Re-judged 2026-10-02 at 24945 when D-410 split the console into two documents "
+        "(web/install.html + web/install.js entry now own device enrollment and camera "
+        "calibration; index.html/console.js shed the install wiring); verdict unchanged. "
         "Split remains unscheduled (docs/plans/2026-09-30-er2-mission-feedback-loop.md)",
     ),
     "site/fleet/fleet/server/proposal_store.py": (
@@ -359,6 +362,21 @@ SIZE_VERDICTS = {
     "deploy/robot/pinky_pro/release/secret_scan.py": (
         670,
         "accept: one scan entry over the release tree — the rules and the walker are the same concern (X5)",
+    ),
+    "deploy/robot/pinky_pro/native/rosy_auto_update.py": (
+        1517,
+        "split: D-412 robot-side updater — the GitHub/rollout fetch and staging, the eligibility "
+        "reader (status-inputs, hold, seals, claim), and the apply/resume/rollback transaction with "
+        "its journal are separate seams; move fetch+staging and eligibility into sibling modules in "
+        "deploy/robot/pinky_pro/native after the first two-robot device validation (D-412 Validation). "
+        "Re-judged at 1505 (+33): second verification review (self-rollback vs operator rollback, "
+        "bounded tail loop, rollback_failed acknowledgement); 1515 (+10) after the final batch "
+        "(release-hold under the run lock, refused rollback is sticky); verdict unchanged",
+    ),
+    "tools/release/publish_payload_release.py": (
+        655,
+        "accept: D-412 operator publish tool; rollout signing, the GitHub release I/O and the "
+        "canary watch are one short sequential flow; split the canary watch out if it grows further",
     ),
     "deploy/robot/pinky_pro/native/sync-image-layer.py": (
         876,

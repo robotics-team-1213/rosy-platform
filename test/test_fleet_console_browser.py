@@ -2288,3 +2288,65 @@ def test_login_unlocks_operator_controls_before_a_slow_state_gather(console_url)
         assert page.locator("#token-save").is_enabled()
         assert not errors
         browser.close()
+
+
+def test_the_install_document_owns_enrollment_and_calibration(console_url):
+    """D-410 — 설치·보정 문서 렌더 계약.
+
+    /console/install 은 기기 등록·카메라 연결 승인·경기장/맵 보정을 소유하고
+    운용 표면(로스터·지도·대형·신호등)을 갖지 않는다. 전체 정지는 설치 문서의
+    첫 화면에도 산다(D-280). mutation-proven: install.js의 enrollment 배선이나
+    install.html의 아이디를 지우면 이 시험은 적색이어야 한다.
+    """
+    from playwright.sync_api import sync_playwright
+
+    install_url = console_url.rsplit("/", 1)[0] + "/install.html"
+    errors: list[str] = []
+    with sync_playwright() as p:
+        browser = p.chromium.launch()
+        page = browser.new_page(viewport={"width": 1440, "height": 900})
+        page.on("pageerror", lambda exc: errors.append(str(exc)))
+
+        def serve_api(route):
+            path = urlparse(route.request.url).path
+            body = {
+                "/api/fleet/session": {"principal_id": "test-operator", "role": "operator"},
+                "/api/fleet/discovery": {"scanner_online": True, "scanner_state": "ok",
+                                         "devices": [{"name": "rosy_04", "address": "192.168.0.4",
+                                                      "port": 8080, "status": "seen"}]},
+                "/api/fleet/enrollment/robots": {
+                    "available": True, "static_robot_ids": ["rosy_01"],
+                    "robots": [{"robot_id": "rosy_02", "address": "192.168.0.2",
+                                "online": False}],
+                    "alarms": [],
+                },
+            }.get(path)
+            if body is None:
+                route.fulfill(status=404, json={"detail": "no such api"})
+                return
+            route.fulfill(status=200, json=body)
+
+        page.route("**/api/**", serve_api)
+        page.goto(install_url, wait_until="networkidle")
+        # 세션 모형을 받으면 설치 문서도 운영자로 풀린다(토큰 게이트).
+        page.wait_for_function(
+            "() => document.getElementById('user-role').textContent.includes('운영자')", timeout=8000)
+        # 등록 패널이 목록 모형을 그린다.
+        page.wait_for_function(
+            "() => document.getElementById('enrolled-list')?.innerText.includes('rosy_02')", timeout=8000)
+
+        shell = page.locator("ui-shell")
+        assert shell.get_attribute("grammar") == "procedure"
+        assert "설치·보정" in page.title()
+        # 설치 문서의 소유물.
+        for needle in ("#robot-enrollment", "#camera-link", "#vision-adjustments", "#field-detect"):
+            assert page.locator(needle).count() == 1, needle
+        # 운용 표면은 없다 — 그 문서는 /console 이다.
+        for absent in ("#roster", "#map-canvas", "#formation-heading", "#signals-heading"):
+            assert page.locator(absent).count() == 0, absent
+        # 전체 정지는 두 문서 모두 첫 화면에 있다(D-280).
+        assert page.locator("#estop").is_visible()
+        assert page.locator('a[href="/console"]').count() >= 1
+        assert not errors
+        save_temp_screenshot(page, "fleet_install_procedure.png")
+        browser.close()

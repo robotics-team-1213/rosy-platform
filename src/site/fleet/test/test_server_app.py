@@ -477,6 +477,22 @@ def test_console_page_and_its_assets_are_served():
     assert 'href="/common/tokens.css"' in page.text
 
 
+def test_install_page_and_its_entry_are_served():
+    """D-410 — 설치·보정 화면은 같은 CSP·자산 규칙 아래 서빙된다."""
+    client = _client(FakeRobot("rosy_01"))
+    page = client.get("/console/install")
+    assert page.status_code == 200 and "설치·보정" in page.text
+    assert "default-src 'self'" in page.headers["content-security-policy"]
+    assert client.get("/console/assets/install.js").status_code == 200
+    assert 'id="camera-install-heading"' in page.text
+    assert 'id="robot-enrollment"' in page.text
+    # 운용 화면은 이제 등록·보정 마크업을 들고 있지 않다 — 링크만 남는다.
+    ops = client.get("/console").text
+    assert 'id="robot-enrollment"' not in ops
+    assert 'id="vision-adjustments"' not in ops
+    assert 'href="/console/install"' in ops
+
+
 def test_the_tokens_copy_is_gone_from_the_allowlist():
     """D-129 — 사본이 없으니 allowlist 도 이름을 잃는다. 부활은 위반이다."""
     client = _client(FakeRobot("rosy_01"))

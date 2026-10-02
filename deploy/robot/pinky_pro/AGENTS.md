@@ -35,7 +35,7 @@ part of this product's runtime.
 | `rosy-lowbatt-shutdown.service` / `.path` / `.sh` | D-27: host watches CORE sentinel file and halts |
 | `rosy-release-recover.service` / `release-recover.sh` | Failed-release recovery |
 | `rosy-release-push.ps1` | D-225: operator-PC entry point that scp's a signed native payload release to an existing robot and runs `native/activate-release.sh` (or `native/rollback-release.sh`), no card re-flash. Verifies the signature/checksums locally first (reuses `deploy/robot/pinky_pro/release/signing.py`); `-PrintCommands` shows the exact ssh/scp sequence without touching the network |
-| `rosy-release-unpack.sh` | Remote helper `rosy-release-push.ps1` copies over: atomically places a release tarball under `/opt/rosy/releases/<id>`, refusing an id that already exists with different content |
+| `native/rosy-release-unpack.sh` | Remote helper `rosy-release-push.ps1` copies over (also installed in `/opt/rosy/native-runtime` for the D-412 updater): atomically places a release tarball under `/opt/rosy/releases/<id>`, refusing an id that already exists with different content |
 | `requirements-core.txt` / `requirements-io.txt` | pip constraints per image |
 | `.env.example` | Compose env template (do not commit secrets) |
 
