@@ -1,4 +1,4 @@
-"""Subject: the rosy.perception.model/1 manifest (D-356).
+"""Subject: the rosy.perception.model/1 manifest (D-356; object_det task D-423).
 
 The only contract between an external trainer and the robot. A model folder
 holds model_manifest.json plus the files it names; anything that does not
@@ -14,8 +14,15 @@ from dataclasses import dataclass
 from pathlib import Path
 
 SCHEMA = "rosy.perception.model/1"
-TASKS = ("lane_seg",)
+TASKS = ("lane_seg", "object_det")
 ROLES = ("background", "lane_marking", "drivable", "stop_line", "ignore", "wall")  # D-373 d9
+OBJECT_ROLE = "object"  # D-423: the one role of every object_det class (lane ROLES stay closed)
+# D-423 §2.2 class contract v1 (user-chosen 2026-10-02): names and order are fixed;
+# a different list is a new contract, not a new model.
+OBJECT_CLASSES = ("robot", "obstacle_box", "cone", "traffic_light", "sign", "person_feet")
+# Output layout per task. yolo_cxcywh_scores: [1, 4 + C, A], centre-size boxes in
+# model-input pixels then C class scores in 0..1 (an ultralytics export; NMS outside).
+LAYOUTS = {"lane_seg": "nchw_logits", "object_det": "yolo_cxcywh_scores"}
 COLORS = ("rgb", "bgr")
 PRECISIONS = ("fp32", "int8")
 MANIFEST_NAME = "model_manifest.json"
@@ -69,6 +76,7 @@ class ModelManifest:
     dataset_revision: str
     camera_profile_revision: str
     raw: dict
+    output_layout: str = "nchw_logits"
 
     def role_indices(self, role: str) -> tuple[int, ...]:
         return tuple(c.index for c in self.classes if c.role == role)
@@ -132,9 +140,9 @@ def _parse_input(doc: dict) -> InputSpec:
     return InputSpec(tuple(shape), color, scale, mean, std)
 
 
-def _parse_classes(doc: dict) -> tuple[ClassSpec, ...]:
-    if doc.get("layout") != "nchw_logits":
-        raise ManifestError("output.layout: only nchw_logits")
+def _parse_classes(doc: dict, task: str = "lane_seg") -> tuple[ClassSpec, ...]:
+    if doc.get("layout") != LAYOUTS[task]:
+        raise ManifestError(f"output.layout: {task} needs {LAYOUTS[task]}")
     items = doc.get("classes")
     if not isinstance(items, list) or len(items) < 2:
         raise ManifestError("output.classes: at least two classes")
@@ -149,14 +157,19 @@ def _parse_classes(doc: dict) -> tuple[ClassSpec, ...]:
             raise ManifestError(f"output.classes: duplicate name {name!r}")
         names.add(name)
         role = item.get("role")
-        if role not in ROLES:
-            raise ManifestError(f"output.classes[{index}].role: one of {ROLES}")
+        allowed = (OBJECT_ROLE,) if task == "object_det" else ROLES
+        if role not in allowed:
+            raise ManifestError(f"output.classes[{index}].role: one of {allowed}")
         classes.append(ClassSpec(index, name, role))
     if sorted(c.index for c in classes) != list(range(len(classes))):
         raise ManifestError("output.classes: index must be dense 0..N-1")
-    if not any(c.role == "lane_marking" for c in classes):
+    classes = tuple(sorted(classes, key=lambda c: c.index))
+    if task == "object_det":
+        if tuple(c.name for c in classes) != OBJECT_CLASSES:
+            raise ManifestError(f"output.classes: object_det needs {OBJECT_CLASSES} in order, role object")
+    elif not any(c.role == "lane_marking" for c in classes):
         raise ManifestError("output.classes: no lane_marking role")
-    return tuple(sorted(classes, key=lambda c: c.index))
+    return classes
 
 
 def _parse_files(items) -> tuple[ModelFile, ...]:
@@ -206,17 +219,21 @@ def load_manifest(path: str | Path) -> ModelManifest:
     if task not in TASKS:
         raise ManifestError(f"task: one of {TASKS}")
     dataset = _req(doc, "dataset", dict)
+    spec = _parse_input(_req(doc, "input", dict))
+    if task == "object_det" and (spec.height % 32 or spec.width % 32):
+        raise ManifestError("input.shape: object_det H and W must be a multiple of 32 (stride)")
     return ModelManifest(
         folder=path.parent,
         model_revision=revision,
         task=task,
         files=_parse_files(doc.get("files")),
-        input=_parse_input(_req(doc, "input", dict)),
-        classes=_parse_classes(_req(doc, "output", dict)),
+        input=spec,
+        classes=_parse_classes(_req(doc, "output", dict), task),
         dataset_repo=_req_text(dataset, "repo"),
         dataset_revision=_req_text(dataset, "revision"),
         camera_profile_revision=_req_text(doc, "camera_profile_revision"),
         raw=doc,
+        output_layout=LAYOUTS[task],
     )
 
 
