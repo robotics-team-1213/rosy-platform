@@ -18,6 +18,7 @@ stamp (when the image was captured) and the bag log time (when the recorder got 
     log_ns    int     bag log time of the image, ns
     side      dict    per side topic, null when no message qualifies:
       cmd_vel                     {"linear" m/s, "angular" rad/s}
+      teleop/intent               CORE's teleop decision (rosy.teleop.intent/1 JSON, D-411)
       odom                        {"x" m, "y" m, "yaw" rad}
       scan                        {"stamp_ns"}; the ranges are row i of .scan.npz
       line/observation,
@@ -59,6 +60,9 @@ from control.recording import CAMERA_TOPIC, SHADOW_TOPIC, SIDE_TOPICS
 SCHEMA = "rosy.teleop.video/1"
 ODOM_TOPIC = "odom"
 SCAN_TOPIC = "scan"
+# D-411 Pilot recordings: CORE's teleop decision per command (core_common.protocol.recording;
+# not imported, and not in control.recording SIDE_TOPICS, the snapshot recorder's contract).
+INTENT_TOPIC = "teleop/intent"
 PIX_FMT = "yuv420p"
 # Evidence stamped with its source image's header stamp (see the module docstring).
 STAMPED_TOPICS = ("line/observation", SHADOW_TOPIC)
@@ -101,7 +105,7 @@ def _stamp_ns(msg) -> int:
 
 
 def _side_name(topic: str):
-    return next((n for n in (*SIDE_TOPICS, ODOM_TOPIC, SCAN_TOPIC)
+    return next((n for n in (*SIDE_TOPICS, ODOM_TOPIC, SCAN_TOPIC, INTENT_TOPIC)
                  if extract._topic_is(topic, n)), None)
 
 

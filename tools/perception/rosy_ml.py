@@ -9,6 +9,7 @@
   rosy_ml rollback ROBOT                 back to shadow.previous (holds the robot)
   rosy_ml release-hold ROBOT             remove the hold: site auto delivery resumes
   rosy_ml harvest ROBOT                  pull finished recordings (only while idle)
+  rosy_ml fetch ROBOT --http             pull Pilot recordings over CORE HTTP (D-411, operator token)
   rosy_ml intake SOURCE                  check a model folder, store-inbox:<folder>
                                          or (optional HF) hf:org/repo@<sha>
 
@@ -23,7 +24,7 @@ host key is pinned under the robot name (ssh HostKeyAlias), never under the addr
 an old address-keyed pin is shown by doctor/init and moved by `rosy_ml repin ROBOT`
 (it never rewrites known_hosts on its own).
 
-The commands wrap model/deliver.py, dataset/harvest.py and model/intake.py;
+The commands wrap model/deliver.py, dataset/harvest.py, dataset/fetch_http.py and model/intake.py;
 they add no behaviour of their own. Exit codes are those of the wrapped tool;
 doctor exits 0 only if every required check passes, 1 otherwise; 2 is a bad
 config or argument. Network failures of deliver/rollback/release-hold/status exit 77
@@ -522,6 +523,12 @@ def main(argv=None, *, runner=subprocess.run, connect=socket.create_connection,
     p.add_argument("robot")
     p.add_argument("--dest")
     p.add_argument("--assume-idle", action="store_true")
+    p = sub.add_parser("fetch", help="D-411: pull Pilot recordings over CORE HTTP")
+    p.add_argument("robot")
+    p.add_argument("--http", action="store_true", required=True,
+                   help="CORE HTTP; the SSH path stays `harvest`")
+    p.add_argument("--dest")
+    p.add_argument("--port", type=int, default=8080)
     sub.add_parser("intake").add_argument("source")
     p = sub.add_parser("store-status")
     p.add_argument("--init", action="store_true", help="create the layout folders")
@@ -576,6 +583,15 @@ def main(argv=None, *, runner=subprocess.run, connect=socket.create_connection,
         if args.assume_idle:
             argv.append("--assume-idle")
         return harvest.main(argv)
+    if args.cmd == "fetch":
+        import fetch_http
+        if not cfg.get("core_token_file"):
+            print("✗ fetch --http needs an operator token — fix: rosy_ml init --core-token-file <file>")
+            return 2
+        argv = [f"http://{hosts[0]}:{args.port}", "--token-file", cfg["core_token_file"]]
+        if args.dest:
+            argv += ["--dest", args.dest]
+        return fetch_http.main(argv)
     if args.cmd == "intake":
         import intake
         downloader = None
