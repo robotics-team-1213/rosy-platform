@@ -77,8 +77,21 @@ class CellOwner:
         """One local workflow tick; only live in-memory attempts may progress."""
         with self._execution_lock:
             pending = tuple(self._executions.items())
-        for action_id, execution in pending:
+        for action_id, (grant, execution) in pending:
+            action = self.store.get_action(action_id)
+            if action is None or action["state"] in {"SUCCEEDED", "FAILED", "CANCELED", "HOLD", "UNKNOWN"}:
+                with self._execution_lock:
+                    self._executions.pop(action_id, None)
+                continue
+            if action["state"] == "SUBMITTING":
+                continue
             try:
+                self.stop.run_if_open(
+                    authority_epoch=grant.authority_epoch, dispatch_generation=grant.dispatch_generation,
+                    fleet_fence_current=lambda: self.runner.current_fence(
+                        grant.authority_epoch, grant.dispatch_generation), operation=lambda: None)
+                # Phase submission retains its own final fence; never hold the stop lock
+                # while workflow progression can wait on a ROS callback's event lock.
                 execution.advance()
             except Exception:
                 _LOG.exception("Cell workflow advancement failed for %s", action_id)
@@ -125,7 +138,13 @@ def build_cell_owner(settings: CellOwnerSettings, *,
         accepted_item_geometry=acceptance.accepted_item_geometry, monotonic=runtime.monotonic)
 
     def current_fence(epoch: int, generation: int) -> bool:
-        return stop.is_open(authority_epoch=epoch, dispatch_generation=generation)
+        if not stop.is_open(authority_epoch=epoch, dispatch_generation=generation):
+            return False
+        try:
+            return fleet_fence_current(epoch, generation) is True
+        except Exception:
+            _LOG.exception("Fleet fence readback is unavailable")
+            return False
 
     def execution_state() -> ExecutionStateSnapshot:
         state = runtime.latest_joint_state
@@ -160,7 +179,7 @@ def build_cell_owner(settings: CellOwnerSettings, *,
             monotonic=runtime.monotonic, gripper_sensor_revision=GRIPPER_SENSOR_REVISION)
         execution = factory(grant, recorder)
         with execution_lock:
-            executions[grant.action_id] = execution
+            executions[grant.action_id] = (grant, execution)
         return execution
     runner = ActionRunner(
         store, _NoDirectDriver(), workcell_id=settings.workcell_id, instance_id=settings.instance_id,

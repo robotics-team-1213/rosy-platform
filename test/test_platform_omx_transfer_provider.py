@@ -458,7 +458,7 @@ def test_cell_cancel_timeout_records_workflow_hold_and_blocks_late_success(tmp_p
         underlying.cancel_current = timeout
         execution = CellTransferWorkflowExecution(
             underlying, workflow, recorder, gripper_readback=lambda: None,
-            max_age_s=0.5, monotonic=lambda: 10.0,
+            max_age_s=0.5, monotonic=lambda: 10.0, complete_if_current=lambda operation: operation(),
         )
         executions.append(execution)
         return execution

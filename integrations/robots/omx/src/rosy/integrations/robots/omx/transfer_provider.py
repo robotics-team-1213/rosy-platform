@@ -302,9 +302,17 @@ def create_omx_cell_transfer_phase_factory(
                 accepted, journal, planned, workflow, scoped_readback),
         )
         execution = create_phase(grant, recorder)
+
+        def complete_if_current(operation):
+            return submission_fence.run_if_open(
+                authority_epoch=grant.authority_epoch, dispatch_generation=grant.dispatch_generation,
+                fleet_fence_current=lambda: current_fence(grant.authority_epoch, grant.dispatch_generation),
+                operation=operation)
+
         return CellTransferWorkflowExecution(
             execution, workflow, recorder, gripper_readback=scoped_readback,
             max_age_s=profile.max_joint_state_age_s, monotonic=monotonic, now=now,
+            complete_if_current=complete_if_current,
         )
 
     return create_workflow
