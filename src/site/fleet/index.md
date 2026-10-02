@@ -74,8 +74,8 @@
 
 ## 최근 기록
 
+- 2026-10-03 · uncommitted · fix(fleet): require durable Cell success for goal recovery
 - 2026-10-03 · uncommitted · feat(fleet): dispatch admitted ordered Cell transfers
 - 2026-10-03 · uncommitted · fix(fleet): preserve Cell transfer phase receipts over UDS v2
 - 2026-10-02 · uncommitted · fix(fleet): D-395 rev. 11 — 거리 없는 사각형 목격은 근거가 아니다
 - 2026-10-02 · uncommitted · styles.css 흐림 원시 값 → 공용 토큰
-- 2026-10-02 · uncommitted · fix(fleet): retain Cell transfer claims across site restart

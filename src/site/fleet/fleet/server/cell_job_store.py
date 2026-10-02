@@ -14,7 +14,7 @@ from core_common.protocol.schemas import FleetCellTransferGrant
 
 from .cell_job_codec import _json, cell_transfer_grant_digest
 from .cell_job_readback import CellJobReadbackMixin
-from .dispatch_admission import release as release_claims
+from .cell_job_goal import CellJobGoalMixin
 from .dispatch_admission import reserve as reserve_claims
 from .dispatch_admission import normalize_resources
 from .mission_store import MissionConflict, _nonempty, _now
@@ -24,7 +24,7 @@ _MIGRATION_VERSION = 1
 _IDENTIFIER_HASH_FIELDS = ("recipe_digest", "cell_digest", "process_artifact_digest")
 
 
-class CellJobStore(CellJobReadbackMixin):
+class CellJobStore(CellJobReadbackMixin, CellJobGoalMixin):
     """Persist Cell Job ordering beside, but separate from, legacy PICK_PLACE rows."""
 
     def __init__(self, path: Path | str) -> None:
@@ -405,77 +405,6 @@ class CellJobStore(CellJobReadbackMixin):
             self._event(connection, mission_id, step_index, "CELL_STEP_SUBMITTING", "fleet",
                         {"action_id": action_id, "attempt_id": attempt_id,
                          "request_digest": parsed.request_digest})
-            result = self._get(connection, mission_id)
-            connection.commit()
-        return result
-
-    def confirm_step_goal(self, mission_id: str, *, step_index: int,
-                          action_id: str, attempt_id: str,
-                          evidence: Mapping[str, Any]) -> dict[str, Any]:
-        """Record already authenticated sim-model and post-action gripper evidence."""
-        required_evidence = {
-            "producer_id", "evidence_id", "evidence_source", "action_id", "attempt_id",
-            "satisfied", "gripper_state", "gripper_evidence_id",
-        }
-        if not isinstance(evidence, Mapping) or not required_evidence.issubset(evidence):
-            raise ValueError("Cell step goal confirmation requires independent producer and gripper evidence")
-        if (evidence["evidence_source"] != "sim_model_pose"
-                or evidence["action_id"] != action_id or evidence["attempt_id"] != attempt_id
-                or evidence["gripper_state"] != "OPEN"
-                or type(evidence["satisfied"]) is not bool):
-            raise MissionConflict("Cell step goal evidence does not match the current transfer attempt")
-        if evidence["satisfied"] is not True:
-            raise MissionConflict("unsatisfied Cell step goal evidence cannot advance the Job")
-        evidence_json = _json(dict(evidence))
-        now = _now()
-        with closing(self._connect()) as connection:
-            connection.execute("BEGIN IMMEDIATE")
-            job = connection.execute(
-                "SELECT * FROM fleet_cell_jobs WHERE mission_id=?", (mission_id,),
-            ).fetchone()
-            step = connection.execute(
-                "SELECT * FROM fleet_cell_steps WHERE mission_id=? AND step_index=?",
-                (mission_id, step_index),
-            ).fetchone()
-            if job is None or step is None:
-                raise KeyError(mission_id if job is None else (mission_id, step_index))
-            if (job["status"] != "ACTION_SUCCEEDED" or step["status"] != "ACTION_SUCCEEDED"
-                    or step["action_id"] != action_id or step["attempt_id"] != attempt_id):
-                raise MissionConflict("independent goal evidence requires this step's terminal Action success")
-            now = _now()
-            connection.execute(
-                "UPDATE fleet_cell_steps SET status='GOAL_CONFIRMED', goal_evidence_json=?, "
-                "reason=NULL, updated_at=? WHERE mission_id=? AND step_index=?",
-                (evidence_json, now, mission_id, step_index),
-            )
-            next_index = step_index + 1
-            next_step = connection.execute(
-                "SELECT step_index FROM fleet_cell_steps WHERE mission_id=? AND step_index=?",
-                (mission_id, next_index),
-            ).fetchone()
-            if next_step is not None:
-                connection.execute(
-                    "UPDATE fleet_cell_steps SET status='READY', updated_at=? "
-                    "WHERE mission_id=? AND step_index=? AND status='WAITING'",
-                    (now, mission_id, next_index),
-                )
-                connection.execute(
-                    "UPDATE fleet_cell_jobs SET status='READY', current_step_index=?, "
-                    "reason=NULL, updated_at=? WHERE mission_id=?",
-                    (next_index, now, mission_id),
-                )
-                event_type = "CELL_STEP_GOAL_CONFIRMED"
-            else:
-                connection.execute(
-                    "UPDATE fleet_cell_jobs SET status='GOAL_CONFIRMED', current_step_index=?, "
-                    "reason=NULL, updated_at=? WHERE mission_id=?",
-                    (next_index, now, mission_id),
-                )
-                release_claims(connection, owner_kind="mission", owner_id=mission_id,
-                               generation=job["dispatch_generation"])
-                event_type = "CELL_JOB_GOAL_CONFIRMED"
-            self._event(connection, mission_id, step_index, event_type, "goal-evidence",
-                        json.loads(evidence_json))
             result = self._get(connection, mission_id)
             connection.commit()
         return result
