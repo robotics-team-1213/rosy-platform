@@ -1,7 +1,8 @@
-"""core_api_web.api.app — FastAPI 팩토리 (P1-9, API-101). 계약: ROSY-API-REF-001 v1.70."""
+"""core_api_web.api.app — FastAPI 팩토리 (P1-9, API-101). 계약: ROSY-API-REF-001 v1.77."""
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
 import logging
@@ -24,6 +25,7 @@ from core_api_web.api.v1.routes import (
     events_router,
     logs_router,
     line_follow_router,
+    localization_router,
     host_router,
     intent_router,
     map_router,
@@ -107,9 +109,22 @@ def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
     app = FastAPI(
         title="ROSY CORE API",
         version="1.20.0",
-        description="로봇 미들웨어 API — 계약: ROSY-API-REF-001 (v1.70)",
+        description="로봇 미들웨어 API — 계약: ROSY-API-REF-001 (v1.77)",
     )
     app.state.core = services
+    agent = getattr(services, "fleet_agent", None)
+    if agent is not None and hasattr(agent, "start_on_loop"):
+        # The FleetAgent needs a running loop; uvicorn's is the one CORE runs (thread in
+        # node.py). Wrap the router lifespan: startup hooks are gone in newer Starlette.
+        inner = app.router.lifespan_context
+
+        @contextlib.asynccontextmanager
+        async def lifespan(application):
+            agent.start_on_loop()
+            async with inner(application) as state:
+                yield state
+
+        app.router.lifespan_context = lifespan
     app.state.pairing = PairingState()
     refused = refused_token_count(config)
     if refused:
@@ -166,6 +181,7 @@ def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
     app.include_router(vision_router)
     app.include_router(safety_router)
     app.include_router(navigation_router)
+    app.include_router(localization_router)
     app.include_router(map_router)
     app.include_router(waypoints_router)
     app.include_router(events_router)

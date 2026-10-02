@@ -16,10 +16,38 @@ import math
 from typing import Any, Iterator, Mapping, Optional, Sequence
 
 Point = tuple[float, float]
+#: (from_deg, to_deg, max_range_m) in the robot frame (0 = forward, + = left): returns of the
+#: robot's own body. A mask only reaches SELF_MASK_MAX_RANGE_M, so it never hides a real
+#: obstacle further out (8kcn: a fixed part at -52..-66 deg, 0.11-0.165 m, 2026-10-01).
+SelfMask = tuple[tuple[float, float, float], ...]
+SELF_MASK_MAX_RANGE_M = 0.30
 
 
-def _returns(sample: Mapping[str, Any], forward_deg: float) -> Iterator[tuple[float, float]]:
-    """(로봇 정면 기준 각 rad, 거리) — 유효 표본만."""
+def self_mask_from_config(raw) -> SelfMask:
+    """`line_follow.lidar_self_mask`: a list of {from_deg, to_deg, max_range_m}; [] or None = none."""
+    if raw in (None, []):
+        return ()
+    if not isinstance(raw, list):
+        raise ValueError("line_follow.lidar_self_mask must be a list")
+    out = []
+    for item in raw:
+        if not isinstance(item, dict) or set(item) != {"from_deg", "to_deg", "max_range_m"}:
+            raise ValueError("lidar_self_mask entries need exactly from_deg, to_deg, max_range_m")
+        lo, hi, reach = (float(item[k]) for k in ("from_deg", "to_deg", "max_range_m"))
+        if not (-180.0 <= lo < hi <= 180.0) or not 0.0 < reach <= SELF_MASK_MAX_RANGE_M:
+            raise ValueError(f"lidar_self_mask entry out of range: {item!r}")
+        out.append((lo, hi, reach))
+    return tuple(out)
+
+
+def _masked(angle: float, distance: float, mask: SelfMask) -> bool:
+    deg = math.degrees(angle)
+    return any(lo <= deg <= hi and distance <= reach for lo, hi, reach in mask)
+
+
+def _returns(sample: Mapping[str, Any], forward_deg: float,
+             self_mask: SelfMask = ()) -> Iterator[tuple[float, float]]:
+    """(로봇 정면 기준 각 rad, 거리) — 유효 표본만, 자기 몸 반사(self_mask)는 뺀다."""
     ranges = sample.get("ranges") or []
     count = len(ranges)
     if count < 2:
@@ -38,26 +66,114 @@ def _returns(sample: Mapping[str, Any], forward_deg: float) -> Iterator[tuple[fl
         if not math.isfinite(distance) or not low <= distance <= high:
             continue
         angle = angle_min + index * step - forward
-        yield math.atan2(math.sin(angle), math.cos(angle)), distance
+        angle = math.atan2(math.sin(angle), math.cos(angle))
+        if self_mask and _masked(angle, distance, self_mask):
+            continue
+        yield angle, distance
+
+
+def front_sector(sample: Mapping[str, Any], *, forward_deg: float = 0.0, half_angle_deg: float = 20.0,
+                 self_mask: SelfMask = ()) -> tuple[Optional[float], int, int]:
+    """(nearest valid range, valid beams, beams) in the front ±half_angle_deg sector.
+
+    Unlike `front_clearance`, a beam that is inf, NaN or below `range_min` is counted as a
+    beam without a valid range: something closer than the LiDAR can see looks exactly like
+    that. Self-masked returns (the robot's own body) are not beams of the sector at all."""
+    ranges = sample.get("ranges") or []
+    count = len(ranges)
+    if count < 2:
+        return None, 0, 0
+    angle_min, angle_max = float(sample["angle_min"]), float(sample["angle_max"])
+    low = float(sample.get("range_min") or 0.0)
+    high = float(sample.get("range_max") or math.inf)
+    step, forward = (angle_max - angle_min) / (count - 1), math.radians(float(forward_deg))
+    half = math.radians(float(half_angle_deg))
+    best, valid, beams = None, 0, 0
+    for index, value in enumerate(ranges):
+        angle = angle_min + index * step - forward
+        angle = math.atan2(math.sin(angle), math.cos(angle))
+        if abs(angle) > half:
+            continue
+        try:
+            distance = float(value)
+        except (TypeError, ValueError):
+            distance = math.nan
+        ok = math.isfinite(distance) and low <= distance <= high
+        if ok and self_mask and _masked(angle, distance, self_mask):
+            continue
+        beams += 1
+        if ok:
+            valid += 1
+            best = distance if best is None or distance < best else best
+    return best, valid, beams
 
 
 def front_clearance(sample: Mapping[str, Any], *, forward_deg: float = 0.0,
-                    half_angle_deg: float = 20.0) -> Optional[float]:
+                    half_angle_deg: float = 20.0, self_mask: SelfMask = ()) -> Optional[float]:
     """정면 ±half_angle_deg 안 유효 거리의 최솟값. 유효 표본이 없으면 None(= 아무것도 안 보임)."""
     half = math.radians(float(half_angle_deg))
     best: Optional[float] = None
-    for offset, distance in _returns(sample, forward_deg):
+    for offset, distance in _returns(sample, forward_deg, self_mask):
         if abs(offset) <= half and (best is None or distance < best):
             best = distance
     return best
 
 
 def scan_points(sample: Mapping[str, Any], *, forward_deg: float = 0.0,
-                max_range: float = math.inf) -> tuple[Point, ...]:
+                max_range: float = math.inf, self_mask: SelfMask = ()) -> tuple[Point, ...]:
     """유효 표본을 로봇 좌표(x 앞, y 왼쪽, REP-103) 점으로. max_range 밖은 버린다."""
     return tuple((distance * math.cos(offset), distance * math.sin(offset))
-                 for offset, distance in _returns(sample, forward_deg)
+                 for offset, distance in _returns(sample, forward_deg, self_mask)
                  if distance <= max_range)
+
+
+def body_clearances(points: Sequence[Point], *, lidar_x_m: float, rear_x_m: float,
+                    half_width_m: float,
+                    rotation_radius_m: Optional[float] = None) -> dict[str, Optional[float]]:
+    """D-407: 몸 기준 여유. points 는 `scan_points`(LiDAR 원점, self-mask 적용) 그대로다.
+
+    - front_band_m: 앞 직진 띠(±half_width) 안 가장 가까운 점의 LiDAR 기준 x(obstacle_stop_m 과 같은 기준).
+    - rear_m: 뒤 띠 안 가장 가까운 점과 몸 뒤끝(URDF base_footprint x = rear_x_m) 사이 거리.
+    - turn_m: 제자리 회전 반경(rotation_radius_m) 밖 여유. 반경이 없으면 None.
+    점이 없으면 각각 None(= 아무것도 안 보임). LiDAR range_min 안은 보이지 않는다.
+    """
+    front: Optional[float] = None
+    rear: Optional[float] = None
+    turn: Optional[float] = None
+    for x, y in points:
+        base_x = x + lidar_x_m
+        if abs(y) <= half_width_m:
+            if x > 0.0 and (front is None or x < front):
+                front = x
+            if base_x < rear_x_m and (rear is None or rear_x_m - base_x < rear):
+                rear = rear_x_m - base_x
+        if rotation_radius_m is not None:
+            gap = math.hypot(base_x, y) - rotation_radius_m
+            if turn is None or gap < turn:
+                turn = gap
+    return {"front_band_m": front, "rear_m": rear, "turn_m": turn}
+
+
+def self_mask_rear_blind_m(mask: SelfMask, *, lidar_x_m: float, rear_x_m: float,
+                           half_width_m: float) -> float:
+    """D-407 review M1: how deep behind the body rear a self-mask window hides the rear band.
+
+    A masked return is dropped as "the robot itself", so a real obstacle inside a window that
+    reaches past the body rear would read as clear. That depth is blind like range_min.
+    Sampled every 0.5 deg across each window; 0 when no window reaches the rear band.
+    """
+    behind = lidar_x_m - rear_x_m              # LiDAR to body rear, metres (> 0)
+    worst = 0.0
+    for lo, hi, reach in mask:
+        steps = max(1, int(math.ceil((hi - lo) / 0.5)))
+        for index in range(steps + 1):
+            angle = math.radians(lo + (hi - lo) * index / steps)
+            back, side = -math.cos(angle), abs(math.sin(angle))
+            if back <= 0.0:
+                continue
+            far = reach if side < 1e-9 else min(reach, half_width_m / side)
+            worst = max(worst, far * back - behind)
+    return worst
 
 
 def path_clearance(points: Sequence[Point], *, linear: float, angular: float,

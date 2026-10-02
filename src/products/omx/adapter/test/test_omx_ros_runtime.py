@@ -328,7 +328,7 @@ def test_slow_feedback_handling_cannot_starve_the_joint_state_subscription():
         joint_names=("joint1",), position_limits={"joint1": (-1.0, 1.0)},
         allowed_owners=("moveit",), calibration_revision="cal-test",
         max_joint_state_age_s=0.2, max_goal_duration_s=2.0, action_timeout_s=4.0,
-        max_start_window_rad=0.05,
+        max_start_state_tolerances={"joint1": 0.05},
     )
     runtime = RosArmCommandRuntime(owner_node, config, joint_state_topic=state_topic,
                                    trajectory_action=action_name, poll_period_s=0.01)
@@ -368,7 +368,7 @@ def test_slow_feedback_handling_cannot_starve_the_joint_state_subscription():
             command_id="flood-command", session_id=runtime.owner.session_id, owner="moveit",
             positions={"joint1": 0.1}, duration_s=1.0, source_state_sequence=state.sequence,
             calibration_revision=config.calibration_revision, phase_id="approach",
-            start_state_window={"joint1": (0.0, 0.01)},
+            expected_start_state_positions={"joint1": 0.0}, start_state_tolerances={"joint1": 0.01},
         )
         assert phase_port.submit(command, on_goal_event=slow_sink).dispatched is True
         deadline = time.monotonic() + 6.0

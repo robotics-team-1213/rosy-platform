@@ -12,7 +12,7 @@ import math
 import secrets
 import threading
 import time
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Callable, Mapping, Protocol
 
@@ -51,6 +51,7 @@ class ArmCommandConfig:
     position_limits: Mapping[str, tuple[float, float]] | None = None
     velocity_limits: Mapping[str, float] | None = None
     acceleration_limits: Mapping[str, float] | None = None
+    max_start_state_tolerances: Mapping[str, float] | None = None
     allowed_owners: tuple[str, ...] = ()
     calibration_revision: str = ""
     max_joint_state_age_s: float = 0.5
@@ -60,12 +61,6 @@ class ArmCommandConfig:
     # joint-state age and action time at this factor x the sim limits, so a frozen or
     # crawling simulation still HOLDs. None = the owner clock is already a wall clock.
     wall_clock_bound_factor: float | None = None
-    # Start-state windows (C3b A1, review minor 1). None = the owner ignores a window and
-    # requires the exact sequence match. Each window entry's tolerance must be <= this cap, and the
-    # window must name every commanded joint except the exempt ones (the gripper, whose
-    # readback after grasp is the object width and is judged by gripper_contract).
-    max_start_window_rad: float | None = None
-    start_window_exempt_joints: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         if not isinstance(self.enabled, bool):
@@ -109,6 +104,25 @@ class ArmCommandConfig:
                 for name in names
             }
             object.__setattr__(self, field_name, MappingProxyType(checked))
+        if self.max_start_state_tolerances is not None:
+            configured_tolerances = dict(self.max_start_state_tolerances)
+            if set(configured_tolerances) != set(names):
+                raise ValueError("max_start_state_tolerances must exactly match joint_names")
+            checked_tolerances: dict[str, float] = {}
+            for name in names:
+                value = configured_tolerances[name]
+                if isinstance(value, bool):
+                    raise ValueError(f"max_start_state_tolerances[{name}] must be finite and non-negative")
+                try:
+                    value = float(value)
+                except (TypeError, ValueError) as exc:
+                    raise ValueError(
+                        f"max_start_state_tolerances[{name}] must be finite and non-negative"
+                    ) from exc
+                if not math.isfinite(value) or value < 0:
+                    raise ValueError(f"max_start_state_tolerances[{name}] must be finite and non-negative")
+                checked_tolerances[name] = value
+            object.__setattr__(self, "max_start_state_tolerances", MappingProxyType(checked_tolerances))
         owners = tuple(self.allowed_owners)
         if not owners or len(set(owners)) != len(owners) or not set(owners) <= KNOWN_OWNERS:
             raise ValueError("allowed_owners must be a non-empty unique subset of known owners")
@@ -124,16 +138,6 @@ class ArmCommandConfig:
         ))
         if self.action_timeout_s < self.max_goal_duration_s:
             raise ValueError("action_timeout_s must be at least max_goal_duration_s")
-        if self.max_start_window_rad is not None:
-            cap = self.max_start_window_rad
-            if (isinstance(cap, bool) or not isinstance(cap, (int, float))
-                    or not math.isfinite(cap) or cap <= 0):
-                raise ValueError("max_start_window_rad must be a positive finite number")
-            object.__setattr__(self, "max_start_window_rad", float(cap))
-        exempt = tuple(self.start_window_exempt_joints)
-        if not set(exempt) <= set(names):
-            raise ValueError("start_window_exempt_joints must name configured joints")
-        object.__setattr__(self, "start_window_exempt_joints", exempt)
         if self.wall_clock_bound_factor is not None:
             factor = self.wall_clock_bound_factor
             if (isinstance(factor, bool) or not isinstance(factor, (int, float))
@@ -188,10 +192,13 @@ class TrajectoryCommand:
     joint_names: tuple[str, ...] | None = None
     trajectory_points: tuple[JointTrajectoryPoint, ...] | None = None
     phase_id: str | None = None
-    # name -> (expected position, tolerance). When set, the owner checks these joints against
-    # its own latest joint state under its lock and binds the command to that state's sequence
-    # (C3b A1); source_state_sequence is then the caller's observed state, not an exact match.
-    start_state_window: Mapping[str, tuple[float, float]] | None = None
+    # Expected start positions and tolerances for every commanded joint (main b0979ad6 +
+    # C3b A1). When set, the owner checks them against its own newest fresh joint state under
+    # its lock, caps each tolerance at config.max_start_state_tolerances, and binds the
+    # dispatch to that state's sequence; source_state_sequence is then the caller's observed
+    # state, which may be older but never newer.
+    expected_start_state_positions: Mapping[str, float] | None = None
+    start_state_tolerances: Mapping[str, float] | None = None
 
     def __post_init__(self) -> None:
         for field_name in (
@@ -223,6 +230,31 @@ class TrajectoryCommand:
         if set(names) != set(normalized):
             raise ValueError("joint_names must exactly match command positions")
         object.__setattr__(self, "joint_names", names)
+        expected_start = self.expected_start_state_positions
+        tolerances = self.start_state_tolerances
+        if (expected_start is None) != (tolerances is None):
+            raise ValueError("expected start positions and tolerances must be provided together")
+        if expected_start is not None and tolerances is not None:
+            expected_start = dict(expected_start)
+            tolerances = dict(tolerances)
+            if set(expected_start) != set(names) or set(tolerances) != set(names):
+                raise ValueError("start-state positions and tolerances must match joint_names")
+            for name in names:
+                expected_value = expected_start[name]
+                tolerance = tolerances[name]
+                if isinstance(expected_value, bool) or isinstance(tolerance, bool):
+                    raise ValueError("start-state positions and tolerances must be finite numbers")
+                try:
+                    expected_value = float(expected_value)
+                    tolerance = float(tolerance)
+                except (TypeError, ValueError) as exc:
+                    raise ValueError("start-state positions and tolerances must be finite numbers") from exc
+                if not math.isfinite(expected_value) or not math.isfinite(tolerance) or tolerance < 0:
+                    raise ValueError("start-state positions and tolerances must be finite numbers")
+                expected_start[name] = expected_value
+                tolerances[name] = tolerance
+            object.__setattr__(self, "expected_start_state_positions", MappingProxyType(expected_start))
+            object.__setattr__(self, "start_state_tolerances", MappingProxyType(tolerances))
         points = self.trajectory_points
         if points is None:
             points = (JointTrajectoryPoint(
@@ -247,25 +279,6 @@ class TrajectoryCommand:
         if final_positions != dict(normalized):
             raise ValueError("command positions must match the final trajectory point")
         object.__setattr__(self, "trajectory_points", points)
-        if self.start_state_window is not None:
-            window = dict(self.start_state_window)
-            if not window or not set(window) <= set(names):
-                raise ValueError("start_state_window must name a non-empty subset of the command joints")
-            checked: dict[str, tuple[float, float]] = {}
-            for name in names:
-                if name not in window:
-                    continue
-                try:
-                    expected, tolerance = window[name]
-                except (TypeError, ValueError) as exc:
-                    raise ValueError("start_state_window entries must be (expected, tolerance)") from exc
-                if isinstance(expected, bool) or isinstance(tolerance, bool):
-                    raise ValueError("start_state_window entries must be finite numbers")
-                expected, tolerance = float(expected), float(tolerance)
-                if not math.isfinite(expected) or not math.isfinite(tolerance) or tolerance < 0:
-                    raise ValueError("start_state_window entries must be finite with tolerance >= 0")
-                checked[name] = (expected, tolerance)
-            object.__setattr__(self, "start_state_window", MappingProxyType(checked))
 
 
 class ActionHandle(Protocol):
@@ -342,8 +355,10 @@ class ArmCommandOwner:
             command.duration_s,
             command.source_state_sequence,
             command.calibration_revision,
-            None if command.start_state_window is None
-            else tuple(sorted(command.start_state_window.items())),
+            tuple(sorted(command.expected_start_state_positions.items()))
+            if command.expected_start_state_positions is not None else None,
+            tuple(sorted(command.start_state_tolerances.items()))
+            if command.start_state_tolerances is not None else None,
         )
 
     def _decision(
@@ -478,31 +493,26 @@ class ArmCommandOwner:
                 return self._decision(False, "owner_not_allowed", command_id)
             if command.calibration_revision != self.config.calibration_revision:
                 return self._decision(False, "calibration_mismatch", command_id)
-            latest = self._joint_state
-            if command.start_state_window is None or self.config.max_start_window_rad is None:
-                # No window, or an owner not configured to admit one (e.g. the PICK_PLACE
-                # path): the exact sequence match, as before C3b.
-                if command.source_state_sequence != latest.sequence:
-                    return self._decision(False, "joint_state_sequence_mismatch", command_id)
-            else:
-                cap = self.config.max_start_window_rad
-                if any(tolerance > cap for _, tolerance in command.start_state_window.values()):
-                    return self._decision(False, "start_state_window_too_wide", command_id)
-                required = set(command.joint_names) - set(self.config.start_window_exempt_joints)
-                if not required <= set(command.start_state_window):
-                    return self._decision(False, "start_state_window_incomplete", command_id)
-                # Same safety meaning as the exact match: the command is dispatched only
-                # against a fresh state that the start check passed, here the newest one.
-                if not set(command.start_state_window) <= set(latest.positions):
-                    return self._decision(False, "joint_map_mismatch", command_id)
-                if command.source_state_sequence > latest.sequence:
-                    return self._decision(False, "joint_state_sequence_mismatch", command_id)
-                if any(abs(latest.positions[name] - expected) > tolerance
-                       for name, (expected, tolerance) in command.start_state_window.items()):
-                    return self._decision(False, "start_state_deviation", command_id)
-                command = replace(command, source_state_sequence=latest.sequence)
+            if command.source_state_sequence > self._joint_state.sequence:
+                return self._decision(False, "joint_state_sequence_mismatch", command_id)
             if command.source_state_sequence <= self._last_command_state_sequence:
                 return self._decision(False, "joint_state_not_advanced", command_id)
+            if command.expected_start_state_positions is None:
+                if command.source_state_sequence != self._joint_state.sequence:
+                    return self._decision(False, "joint_state_sequence_mismatch", command_id)
+            else:
+                maximum_tolerances = self.config.max_start_state_tolerances
+                if maximum_tolerances is None:
+                    return self._decision(False, "start_state_tolerance_policy_missing", command_id)
+                if any(command.start_state_tolerances[name] > maximum_tolerances[name]
+                       for name in command.joint_names):
+                    return self._decision(False, "start_state_tolerance_exceeds_policy", command_id)
+                if any(
+                    abs(self._joint_state.positions[name] - command.expected_start_state_positions[name])
+                    > command.start_state_tolerances[name]
+                    for name in command.joint_names
+                ):
+                    return self._decision(False, "start_state_outside_tolerance", command_id)
             if command.duration_s > self.config.max_goal_duration_s:
                 return self._decision(False, "duration_limit", command_id)
             if set(command.positions) != set(self.config.joint_names):
@@ -538,7 +548,7 @@ class ArmCommandOwner:
             except Exception:
                 self._enter_hold("action_submission_failed")
                 return self._decision(False, "action_submission_failed", command_id)
-            self._last_command_state_sequence = command.source_state_sequence
+            self._last_command_state_sequence = self._joint_state.sequence
             self._active = (command, handle, now)
             self._active_wall = None if self._wall is None else self._wall()
             self._state = "active"

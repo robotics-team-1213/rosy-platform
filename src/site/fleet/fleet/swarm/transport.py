@@ -14,7 +14,9 @@ import logging
 from typing import Any, AsyncIterator, Optional, Protocol, Sequence, runtime_checkable
 
 import httpx
+from pydantic import ValidationError
 
+from core_common.protocol.localization import CandidateReport, LocalizationDecision
 from core_common.protocol.schemas import SwarmFollowParams
 from fleet.swarm.robots import RobotEndpoint, ws_url
 
@@ -121,7 +123,20 @@ class RobotClient(Protocol):
     ) -> dict: ...
 
     async def line_follow_mode(self, mode: str) -> dict: ...
+    async def line_stuck_decision(self, stuck_id: str, decision: str) -> dict: ...
     async def estop(self) -> dict: ...
+    # D-395 Phase 2 (contract §2): Fleet-assisted localization.
+    async def localization_candidates(self) -> Optional[CandidateReport]: ...
+    async def localization_decision(self, decision: LocalizationDecision) -> dict: ...
+    async def localization_suspect(self, reason: str) -> dict: ...
+
+    async def localization_mission(
+        self, kind: str, *, max_distance_m: float, max_time_s: float,
+        target: Optional[dict] = None,
+    ) -> dict: ...
+
+    async def localization_mission_status(self) -> dict: ...
+
     def pose_stream(self) -> AsyncIterator[str]: ...
     async def open_reference_sink(self) -> ReferenceSink: ...
     def events(self, types: Sequence[str]) -> AsyncIterator[dict]: ...
@@ -239,8 +254,50 @@ class HttpRobotClient:
             "/api/v1/line-follow/mode", json={"mode": mode}, headers=self._headers()
         ))
 
+    async def line_stuck_decision(self, stuck_id: str, decision: str) -> dict:
+        """D-407 §2: the operator's answer to one open stuck. CORE judges it (409 on refusal)."""
+        return await self._post("/api/v1/line-follow/stuck/decision",
+                                {"stuck_id": stuck_id, "decision": decision})
+
     async def estop(self) -> dict:
         return await self._post("/api/v1/safety/stop")
+
+    # --- D-395 localization (contract §2) -------------------------------------------
+
+    async def localization_candidates(self) -> Optional[CandidateReport]:
+        """The robot's latest candidate report, or None when it is not in CANDIDATES.
+
+        Any 404 is "no candidates": CORE answers NO_CANDIDATES, and a CORE without
+        the route has none to give either."""
+        resp = await self._http.get("/api/v1/localization/candidates", headers=self._headers())
+        if resp.status_code == 404:
+            return None
+        body = self._check(resp)
+        try:
+            return CandidateReport.model_validate(body)
+        except ValidationError as exc:
+            raise RobotApiError(self.robot_id, resp.status_code, "BAD_RESPONSE",
+                                f"not a candidate report: {exc.error_count()} errors") from exc
+
+    async def localization_decision(self, decision: LocalizationDecision) -> dict:
+        return await self._post("/api/v1/localization/decision", decision.model_dump(mode="json"))
+
+    async def localization_suspect(self, reason: str) -> dict:
+        if not reason or len(reason) > 64:
+            raise ValueError("suspect reason must be 1-64 characters")
+        return await self._post("/api/v1/localization/suspect", {"reason": reason})
+
+    async def localization_mission(self, kind: str, *, max_distance_m: float, max_time_s: float,
+                                   target: Optional[dict] = None) -> dict:
+        """Ask CORE to run a check manoeuvre or homing mission (P2-7); CORE drives, Fleet
+        never does (D-2, D-369). A 409 refusal arrives as `RobotApiError` with the code."""
+        return await self._post("/api/v1/localization/mission", {
+            "kind": kind, "max_distance_m": max_distance_m, "max_time_s": max_time_s,
+            "target": target})
+
+    async def localization_mission_status(self) -> dict:
+        """CORE's current or last mission: `{kind, state: idle|running|done|aborted, reason}`."""
+        return await self._get("/api/v1/localization/mission")
 
     async def aclose(self) -> None:
         if self._owns_http:

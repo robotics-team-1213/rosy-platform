@@ -135,7 +135,6 @@ def test_profile_loads_with_content_hash_revision(profile, kin):
     (lambda d: d.update(planning_limit_fraction=0.0), "planning_limit_fraction"),
     (lambda d: d.pop("planning_limit_fraction"), "planning_limit_fraction"),
     (lambda d: d["owner"].pop("wall_clock_bound_factor"), "wall_clock_bound_factor"),
-    (lambda d: d["owner"].pop("max_start_window_rad"), "max_start_window_rad"),
     (lambda d: d["gripper"].pop("fingertip_overhang_m"), "fingertip_overhang_m"),
     # A5: only after-grasp phases, only arm joints, at most 0.1 rad, never below the base.
     (lambda d: d.update(phase_start_state_tolerance_rad={"approach": {"joint5": 0.05}}), "transfer, release"),
@@ -159,7 +158,9 @@ def test_owner_config_is_built_from_the_profile(profile):
     assert config.max_goal_duration_s == max(profile.phase_max_duration_s.values())
     assert dict(config.position_limits) == dict(profile.position_limits)
     assert config.wall_clock_bound_factor == profile.wall_clock_bound_factor == 4.0
-    assert config.max_start_window_rad == 0.1 and config.start_window_exempt_joints == ("gripper_joint_1",)
+    # Owner cap per joint = the largest start tolerance the profile can request (merge with
+    # main 7735c307; stricter than C3b's flat 0.1 rad).
+    assert dict(config.max_start_state_tolerances) == {name: 0.02 for name in profile.joint_names}
 
 
 # ---- planning ------------------------------------------------------------------

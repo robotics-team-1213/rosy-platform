@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rosy-execution"
+version = "0.1.0"
+description = "ROS-free ROSY PlanBundle and existing authority projections"
+requires-python = ">=3.12"
+dependencies = ["rosy-skill-api==0.1.0"]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["rosy.execution.api*"]
+namespaces = true

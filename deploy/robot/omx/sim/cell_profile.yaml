@@ -132,8 +132,6 @@ owner:
   # when sim time is frozen. Basis: C3 measured real-time factor 0.3-0.95 without a camera
   # (0.06 with one); 4 admits RTF down to 0.25 and refuses the camera-on world.
   wall_clock_bound_factor: 4.0
-  # Largest start-state window tolerance the owner admits from a caller (review minor 1).
-  # 0.1 rad = the ceiling for after-grasp per-phase tolerances below; beyond it the arm is
-  # not where the plan starts (C3 run10: -0.327 rad was a grasp fault). The window must
-  # cover every joint but the gripper, which gripper_contract judges after grasp.
-  max_start_window_rad: 0.1
+  # The owner's per-joint start-tolerance cap (ArmCommandConfig.max_start_state_tolerances)
+  # is derived, not configured: per joint, the base start_state_tolerance_rad or its
+  # after-grasp override, whichever is larger (each <= 0.1 rad).

@@ -42,6 +42,7 @@
 | D-334 | ER 2의 도구 목록과 진행 조회를 Fleet 원장 경계에 둔다 |
 | D-336 | Fleet와 OMX 제어 owner 사이 첫 연결은 같은 호스트의 local IPC로 제한한다 |
 | D-392 | 모델 도구 호출은 provider 중립 메시지 계약과 Fleet 소유 allowlist를 따른다 |
+| D-407 | 차선 자율 막힘 복구: 앞물체·차선 상실이 이어지면 관제에 판단 요청(WAIT·RESUME·BACK_AND_RETRY·MANUAL·ABORT), 답이 없으면 뒤 여유 확인 후 짧은 후진과 재판단(최대 2회, 기본 꺼짐) |
 
 ## 계획·결과 문서
 
@@ -71,8 +72,8 @@
 
 ## 최근 기록
 
-- 2026-10-01 · uncommitted · D-398 후속 — 정체 띠 완성·음영 제거·줄 간격 토큰화
-- 2026-10-01 · uncommitted · docs(api): align Fleet contract pins to v1.70
-- 2026-10-01 · uncommitted · fix(fleet): D-395 중재기 — 결정을 싣는 단서는 양(+)의 증거이고 모든 후보를 이겨야 한다
-- 2026-10-01 · uncommitted · test(fleet): API Ref 버전 핀 v1.69 (D-395 1단계)
-- 2026-10-01 · uncommitted · feat(fleet): D-395 위치 중재기 — 뚜렷한 격차가 2 s 유지될 때만 결정
+- 2026-10-02 · uncommitted · D-407 판단 요청 — main 병합, API Ref v1.77
+- 2026-10-02 · 95e13278 · fix(fleet): D-395 S1 3회차 T1–T3 — 폴 간격과 무관한 도약 판정, 시간 초과 결정 확인, needs_human 은 깃발
+- 2026-10-02 · uncommitted · D-407 판단 요청 검토 반영 — 전송 실패·지속 기록·확인 단계
+- 2026-10-02 · uncommitted · D-407 판단 요청 — 관제 목록과 다섯 답 중계
+- 2026-10-02 · uncommitted · CI 삼각측량 — 시크릿 스캔 면제·해시 문서 규약·스코어카드 기준선·설치 문서 브라우저 시험

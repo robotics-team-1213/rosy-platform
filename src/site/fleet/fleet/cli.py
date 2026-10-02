@@ -91,6 +91,14 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
                               "view; without MAP_ID it applies to every map. Display only")
     console.add_argument("--site-lane-paint", action="append", default=None, metavar="[MAP_ID=]PATH",
                          help="lane paint STL (Vision's --map-paint file) drawn by the same view")
+    console.add_argument("--no-localization-service", dest="localization_service",
+                         action="store_false", default=True,
+                         help="D-395: do not run the Fleet localization service (on by default)")
+    console.add_argument("--localization-overhead-cue", action="store_true", default=False,
+                         help="D-395: feed overhead sightings to the localization arbiter and "
+                              "monitor. Off by default: the D-257 amendment is not accepted")
+    console.add_argument("--localization-lane-rules", default=None, type=Path,
+                         help="lane_rules.yaml with reference_squares (default: map_v2_fleet)")
     console.add_argument("--sightings-db", default=None, type=Path,
                          help="SQLite path for latest sightings and acceptance audit")
     console.add_argument("--events-db", default=None, type=Path,
@@ -469,6 +477,12 @@ def run_console(args: argparse.Namespace) -> None:
     pairing_service, pairing_sync_token = _build_pairing(
         args, tls_cert=tls_cert, tasks_db=tasks_db, sighting_service=sighting_service,
         site_name=console.fleet_name)
+    from fleet.server.localization_service import build_localization_service
+
+    localization_service = build_localization_service(
+        console, sighting_service, enabled=getattr(args, "localization_service", True),
+        overhead_cue=getattr(args, "localization_overhead_cue", False),
+        lane_rules=getattr(args, "localization_lane_rules", None))
     app = create_app(console, console_token=console_token, web_common=args.web_common,
                      hub=hub, sightings=sighting_service, task_service=task_service,
                      mission_service=mission_service, proposal_store=proposal_store,
@@ -479,7 +493,8 @@ def run_console(args: argparse.Namespace) -> None:
                      vision_lease_secret=vision_preview_secret,
                      vision_sources=vision_sources, enrollment=enrollment,
                      robot_credential_key=robot_key_text, site_lanes=site_lanes,
-                     pairing=pairing_service, pairing_sync_token=pairing_sync_token)
+                     pairing=pairing_service, pairing_sync_token=pairing_sync_token,
+                     localization_service=localization_service)
     signals_note = f", {len(signal_eps)} signals" if signal_console is not None else ""
     print(f"fleet console: http://{args.host}:{args.port}/console  "
           f"({len(console.robot_ids)} robots{signals_note})",

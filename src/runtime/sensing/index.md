@@ -64,8 +64,8 @@
 
 ## 최근 기록
 
-- 2026-10-01 · uncommitted · feat(perception): explain camera following and foreground evidence
-- 2026-10-01 · uncommitted · fix(localization): 3 s 검증의 공백 판정과 열린 요청 없는 결정 (D-395 리뷰)
-- 2026-10-01 · uncommitted · test(localization): D-395 1단계 호스트 종단 시험 — 두 로봇, 사람 입력 0
-- 2026-10-01 · uncommitted · feat(perception): 기준 사각형 HSV 검출기, 출력 계약 고정 (D-395 개정 1 6항)
-- 2026-10-01 · uncommitted · feat(perception): 가설 자세별 페인트 점수 (D-395 7절, D-375)
+- 2026-10-02 · c8a5822c · feat(sensing): D-395 S1 R1 — LOCALIZED 로봇도 지도 밖 물체를 보고한다
+- 2026-10-02 · 7459be67 · fix(localization): D-395 S1 재실행 R3 — 낡은 odom twist 는 정지가 아니다
+- 2026-10-02 · c00b368d · fix(localization): D-395 S1 재실행 R3 — 로봇이 멈춘 뒤에만 탐색
+- 2026-10-02 · ead31a99 · fix(localization): D-395 S1 재실행 R3 — 구별 후보의 마지막 yaw 정밀화
+- 2026-10-02 · 2b922678 · feat(localization): D-395 S1 재실행 R6 — 검사 중 상태는 CANDIDATES/`checking`

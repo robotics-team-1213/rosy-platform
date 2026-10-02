@@ -59,7 +59,7 @@
 
 ## 교훈 (docs/solutions)
 
-- 없음
+- [컨테이너에서 `kill -0`은 좀비를 산 것으로 본다](../docs/solutions/deployment/container-zombie-kill0-blindness.md)
 
 ## 시험
 
@@ -67,8 +67,8 @@
 
 ## 최근 기록
 
-- 2026-10-01 · uncommitted · fix(release): 보정 가드 리뷰 반영 — 호스트명 주장을 호스트 키로 증명, ssh 시간 상한
-- 2026-10-01 · uncommitted · fix(release): 보정 가드가 IP로 불릴 때 호스트명 자격 증명을 찾는다
-- 2026-10-01 · uncommitted · fix(release): `prepare_payload_release.py` 독립 리뷰 반영 — rc 패키지 제외, 오류 처리, 인용
-- 2026-10-01 · f8db47f5 · feat(release): 서명 안 된 페이로드를 push 직전까지 한 명령으로 — `prepare_payload_release.py`
-- 2026-10-01 · uncommitted · perf(release): rosdep apt 패키지를 한 트랜잭션으로 — payload 빌드 7분 9초→4분 49초
+- 2026-10-02 · uncommitted · CI 잔여 5건 해소 — 좀비 인식 생존 판정·모드 드리프트 독립·D-155 가드 정정
+- 2026-10-02 · uncommitted · CI 삼각측량 — 시크릿 스캔 면제·해시 문서 규약·스코어카드 기준선·설치 문서 브라우저 시험
+- 2026-10-02 · uncommitted · feat(native): D-406 업데이터 기본 꺼짐 — 첫 두 대 기기 검증 전까지 로봇별로 켬
+- 2026-10-02 · 6d281ae7 · fix(native): D-406 T2 최종 검증 묶음 — release-hold를 run lock 아래로, 확인 내용 보고
+- 2026-10-02 · 30390e1c · fix(native): D-406 T2 검증 리뷰 2 반영 — current가 실제로 옮겨졌을 때만 자기 되돌림, 꼬리 실패도 backoff

@@ -477,6 +477,22 @@ def test_console_page_and_its_assets_are_served():
     assert 'href="/common/tokens.css"' in page.text
 
 
+def test_install_page_and_its_entry_are_served():
+    """D-410 — 설치·보정 화면은 같은 CSP·자산 규칙 아래 서빙된다."""
+    client = _client(FakeRobot("rosy_01"))
+    page = client.get("/console/install")
+    assert page.status_code == 200 and "설치·보정" in page.text
+    assert "default-src 'self'" in page.headers["content-security-policy"]
+    assert client.get("/console/assets/install.js").status_code == 200
+    assert 'id="camera-install-heading"' in page.text
+    assert 'id="robot-enrollment"' in page.text
+    # 운용 화면은 이제 등록·보정 마크업을 들고 있지 않다 — 링크만 남는다.
+    ops = client.get("/console").text
+    assert 'id="robot-enrollment"' not in ops
+    assert 'id="vision-adjustments"' not in ops
+    assert 'href="/console/install"' in ops
+
+
 def test_the_tokens_copy_is_gone_from_the_allowlist():
     """D-129 — 사본이 없으니 allowlist 도 이름을 잃는다. 부활은 위반이다."""
     client = _client(FakeRobot("rosy_01"))
@@ -535,3 +551,34 @@ def test_every_console_module_import_is_served():
     assert "enrollment.js" in imported
     for name in sorted(imported | {"console.js"}):
         assert client.get(f"/console/assets/{name}").status_code == 200, name
+
+
+def test_the_localization_service_runs_in_the_app_lifespan_and_feeds_the_badge():
+    """D-395 P2-6: the loop starts and stops with the app like the other background loops."""
+    import asyncio
+
+    robot = FakeRobot("rosy_01", state={"robot_id": "rosy_01", "pose": {"x": 0, "y": 0, "yaw": 0},
+                                     "localization": {"state": "CANDIDATES", "pose_frame": "odom"}})
+    console = FleetConsole([RobotEndpoint("rosy_01", "http://a:8080", "t")], [robot])
+
+    class Service:
+        runs = 0
+        cancelled = False
+
+        def view(self, robot_id):
+            return {"needs_human": True}
+
+        async def run(self):
+            Service.runs += 1
+            try:
+                await asyncio.Event().wait()
+            except asyncio.CancelledError:
+                Service.cancelled = True
+                raise
+
+    with TestClient(create_app(console, localization_service=Service())) as client:
+        row = client.get("/api/fleet/state").json()["robots"][0]
+        assert Service.runs == 1
+    assert Service.cancelled is True
+    assert row["localization"]["label"] == "위치 확인 필요"
+    assert row["localization"]["state"] == "CANDIDATES" and row["localization"]["trusted"] is False

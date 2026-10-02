@@ -8,13 +8,16 @@ from __future__ import annotations
 
 import hashlib
 import json
-from typing import Optional
+from functools import partial
+from typing import Literal, Optional
 
-from fastapi import HTTPException, Request, Response
-from pydantic import BaseModel
+import httpx
+from fastapi import Depends, HTTPException, Request, Response
+from pydantic import BaseModel, ConfigDict, Field
 
 from fleet.hub.hub import HubError
 from fleet.server.http_errors import http_error
+from fleet.server.line_stuck import LineStuckAnswerLog, LineStuckBoard
 from fleet.server.site_auth import SitePrincipal
 from fleet.server.site_lanes import site_lanes_payload
 from fleet.server.signals import SignalApiError
@@ -43,11 +46,40 @@ class SignalCommandRequest(BaseModel):
     cycle: Optional[dict[str, int]] = None
 
 
+class LineStuckDecisionRequest(BaseModel):
+    """D-407 §2: one answer, bound to the stuck id the operator saw."""
+    model_config = ConfigDict(extra="forbid")
+    # CORE ids are `stuck-<12 hex>`; the pattern keeps the id inert in logs and audit rows.
+    stuck_id: str = Field(min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_.:-]+$")
+    decision: Literal["WAIT", "RESUME", "BACK_AND_RETRY", "MANUAL", "ABORT"]
+
+
+def _transport_failure(exc: BaseException) -> tuple[str, str]:
+    """A connect failure never reached CORE; anything later may have been applied."""
+    if isinstance(exc, (httpx.ConnectError, httpx.ConnectTimeout, ConnectionRefusedError)):
+        return "ROBOT_UNREACHABLE", "answer not delivered: the robot could not be reached"
+    return ("STUCK_DECISION_OUTCOME_UNKNOWN",
+            "the robot did not reply; CORE may have applied the answer. "
+            "Re-read the stuck before answering again")
+
+
 def install_console_routes(app, *, console, sightings, require_viewer,
-                           read_guard, operator_guard, site_lanes=None) -> None:
+                           read_guard, operator_guard, require_operator,
+                           site_lanes=None, answer_log_path=None) -> None:
+    # D-407: open lane stucks, read from each gather. CORE's stuck block is the truth.
+    board = app.state.line_stuck = LineStuckBoard(
+        log=LineStuckAnswerLog(answer_log_path) if answer_log_path is not None else None)
+
+    async def gathered() -> dict:
+        snapshot = await console.snapshot()
+        board.observe(snapshot["robots"], console.hub.registry.events_since)
+        for row in snapshot["robots"]:
+            row["line_stuck"] = board.view(row["robot_id"])
+        return snapshot
+
     @app.get("/api/fleet/state", dependencies=read_guard, tags=["fleet"])
     async def fleet_state() -> dict:
-        return await console.snapshot()
+        return await gathered()
 
     @app.get("/api/fleet/session", dependencies=read_guard, tags=["fleet-auth"])
     def fleet_session(request: Request) -> dict:
@@ -86,6 +118,44 @@ def install_console_routes(app, *, console, sightings, require_viewer,
             raise HTTPException(status_code=404, detail={"code": "NO_MAP",
                                                          "message": "no robot served a map"})
         return grid
+
+    @app.get("/api/fleet/line-stuck", dependencies=read_guard, tags=["line-stuck"])
+    async def line_stuck_pending() -> dict:
+        # The board as of the last /state gather (the console polls it every second); this
+        # read does not fan out to every robot. `observed_age_s` says how old it is.
+        return {"pending": board.pending(), "answers": board.answers(),
+                "observed_age_s": board.observed_age_s()}
+
+    @app.post("/api/fleet/robots/{robot_id}/line-stuck/decision", dependencies=operator_guard,
+              tags=["line-stuck"])
+    async def line_stuck_decision(robot_id: str, body: LineStuckDecisionRequest, request: Request,
+                                  principal: SitePrincipal = Depends(require_operator)) -> dict:
+        client = console.clients().get(robot_id)
+        if client is None:
+            raise http_error(HubError("UNKNOWN_ROBOT", robot_id))
+        record = partial(board.record, robot_id=robot_id, stuck_id=body.stuck_id,
+                         decision=body.decision, principal_id=principal.principal_id,
+                         audit_id=getattr(request.state, "site_api_audit_id", None))
+        try:
+            # Forwarded unchanged with the robot credential; CORE alone judges the answer.
+            result = await client.line_stuck_decision(body.stuck_id, body.decision)
+        except RobotApiError as exc:
+            # CORE's refusal reaches the operator verbatim (STUCK_ID_MISMATCH, RESUME refused
+            # with its reason, EMERGENCY_ACTIVE, ...). 409 stays 409; anything else is 502.
+            record(accepted=False, code=exc.code, message=exc.message)
+            raise HTTPException(status_code=409 if exc.status == 409 else 502, detail={
+                "code": exc.code, "message": exc.message, "robot_id": robot_id,
+                "robot_status": exc.status}) from exc
+        except (httpx.HTTPError, OSError) as exc:
+            code, message = _transport_failure(exc)
+            record(accepted=False if code == "ROBOT_UNREACHABLE" else None,
+                   code=code, message=f"{message} ({type(exc).__name__})")
+            raise HTTPException(status_code=502, detail={
+                "code": code, "message": message, "robot_id": robot_id,
+                "transport": type(exc).__name__}) from exc
+        answer = record(accepted=True, outcome=result.get("outcome"))
+        return {"robot_id": robot_id, "actor_id": principal.principal_id,
+                "answer": answer, "result": result}
 
     @app.get("/api/fleet/formation", dependencies=read_guard, tags=["formation"])
     async def formation_state() -> dict:

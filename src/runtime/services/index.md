@@ -34,8 +34,8 @@
 
 ## 최근 기록
 
-- 2026-10-01 · uncommitted · feat(command): 대기 5분 후 bored 표정
-- 2026-10-01 · uncommitted · fix(road_behaviour): 발행하지 않는 이벤트 이름 두 개를 사유 코드로
-- 2026-10-01 · uncommitted · fix(fleet_agent): D-370 S7 준비 — Fleet health 탐침이 확장 모양을 받는다
-- 2026-10-01 · 6d94e88f · docs(road_behaviour): D-384 도로 주행 행동 항목의 커밋 기록
-- 2026-10-01 · uncommitted · feat(road_behaviour): D-384 도로 주행 행동 상태 기계(ROS-free, 명령 없음)
+- 2026-10-02 · e83a955d · fix(line_follow): D-407 Gazebo 후속 — 재막힘 시도 이어 세기, 몸 폭 뒤 띠
+- 2026-10-02 · b9f1b277 · feat(localization): D-395 S1 R1 — LOCALIZED 물체를 스냅샷으로 넘긴다
+- 2026-10-02 · f93d922d · fix(line_follow): D-407 검토 반영과 뒤 사각 규칙
+- 2026-10-02 · 776173dc · feat(line_follow): D-407 막힘 복구 상태기계와 관리자 연결
+- 2026-10-02 · 80db8125 · fix(localization): D-395 S1 재실행 R5·R6 — 버린 보고는 다시 주지 않고, 검사 중 미션은 `busy`

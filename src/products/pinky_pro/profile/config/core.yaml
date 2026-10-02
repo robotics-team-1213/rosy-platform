@@ -16,6 +16,13 @@ line_follow:
   # over both. The plausibility window (150-210 deg, or +-15 deg of this value)
   # is centred on 180.
   lidar_forward_deg: 180.0
+  # D-407 body geometry for the stuck back-off (URDF nominal, D-397 geometry.yaml,
+  # drift-tested): LiDAR at lidar.x_m, body rear at caster.rear_x_m, in-place sweep
+  # footprint.rotation_radius_m (base_footprint, x forward).
+  body_lidar_x_m: -0.017
+  body_rear_x_m: -0.076
+  body_rotation_radius_m: 0.08257
+  body_half_width_m: 0.05655       # footprint.half_width_m (collision meshes)
 
 safety:
   # SAF-002 teleop watchdog (default 500 ms). D-311 G4 requires a command-loss stop

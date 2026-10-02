@@ -238,3 +238,252 @@ def test_an_estop_drops_the_queue_instead_of_releasing_it_later():
 def test_clearance_is_configurable(clearance, expected):
     a, b = _line(-1, 0, 1, 0), _line(-1, 0.1, 1, 0.1)
     assert traffic.routes_conflict(a, b, clearance) is expected
+
+
+# --- D-395 P2-2: untrusted poses ---------------------------------------------------------
+
+
+def _loc(state="LOCALIZED", frame="map"):
+    return {"state": state, "pose_frame": frame}
+
+
+def _standing(robot_id, xy, localization=...):
+    state = {"robot_id": robot_id, "navigation": "IDLE",
+             "pose": {"x": xy[0], "y": xy[1], "yaw": 0.0}}
+    if localization is not ...:
+        state["localization"] = localization
+    return state
+
+
+def _mover():
+    mover = FakeRobot("rosy_01", state=_standing("rosy_01", (-2.0, 0.0), _loc()))
+    mover._path = _line(-2.0, 0, 2.0, 0)
+    return mover
+
+
+def _goal_calls(robot):
+    return sum(1 for c in robot.calls if c[0] == "navigation_goal")
+
+
+def test_an_untrusted_robot_is_a_wide_obstacle_at_its_last_trusted_pose():
+    """D-395 §10: a robot that lost LOCALIZED keeps 0.45 m clear around where it was last trusted.
+    Its current odom pose (far away here) is not used."""
+    mover = _mover()
+    other = FakeRobot("rosy_02", state=_standing("rosy_02", (0.0, 0.3), _loc()))
+    console = _console(mover, other)
+    run(console.snapshot())                                       # last trusted pose (0, 0.3)
+    other._state = _standing("rosy_02", (5.0, 5.0), _loc("CANDIDATES", "odom"))
+
+    result = run(console.goal("rosy_01", 2.0, 0.0))
+
+    assert result["queued"] is True
+    assert result["reason"] == "LOCALIZATION_UNTRUSTED" and result["blocked_by"] == "rosy_02"
+    assert ("navigation_cancel",) in mover.calls
+    assert _goal_calls(other) == 0                                # never sent anywhere
+
+
+def test_the_mission_goes_out_once_the_robot_is_localized_off_the_route():
+    mover = _mover()
+    other = FakeRobot("rosy_02", state=_standing("rosy_02", (0.0, 0.3), _loc()))
+    console = _console(mover, other)
+    run(console.snapshot())
+    other._state = _standing("rosy_02", (0.0, 0.3), _loc("SUSPECT", "map"))
+    run(console.goal("rosy_01", 2.0, 0.0))
+    run(console.snapshot())
+    assert _goal_calls(mover) == 1                                # still waiting
+
+    other._state = _standing("rosy_02", (1.0, 1.5), _loc())
+    run(console.snapshot())
+
+    assert _goal_calls(mover) == 2
+    assert "rosy_01" not in console._queued
+
+
+def test_an_untrusted_robot_far_from_the_route_does_not_block():
+    mover = _mover()
+    other = FakeRobot("rosy_02", state=_standing("rosy_02", (0.0, 0.6), _loc()))
+    console = _console(mover, other)
+    run(console.snapshot())
+    other._state = _standing("rosy_02", (0.0, 0.0), _loc("CANDIDATES", "odom"))   # odom says on-route
+
+    result = run(console.goal("rosy_01", 2.0, 0.0))
+
+    assert "queued" not in result
+
+
+def test_an_untrusted_robot_never_trusted_blocks_the_whole_track():
+    mover = _mover()
+    other = FakeRobot("rosy_02", state=_standing("rosy_02", (9.0, 9.0), _loc("UNKNOWN", "odom")))
+    console = _console(mover, other)
+    run(console.snapshot())
+
+    result = run(console.goal("rosy_01", 2.0, 0.0))
+
+    assert result["reason"] == "LOCALIZATION_UNTRUSTED" and result["blocked_by"] == "rosy_02"
+
+
+def test_a_robot_without_localization_keeps_todays_behaviour_and_warns():
+    """Legacy policy (contract §3): `localization: null` is trusted as before, with a console warning."""
+    mover = _mover()
+    other = FakeRobot("rosy_02", state=_standing("rosy_02", (0.0, 0.3)))
+    console = _console(mover, other)
+    snapshot = run(console.snapshot())
+
+    result = run(console.goal("rosy_01", 2.0, 0.0))
+
+    assert "queued" not in result                 # no map: today the robot's costmap handles it
+    row = [r for r in snapshot["robots"] if r["robot_id"] == "rosy_02"][0]
+    assert row["localization"]["legacy"] is True
+    assert row["localization"]["label"] == "위치 상태 미보고"
+
+
+def test_a_mission_held_behind_an_untrusted_robot_drops_its_claim():
+    """Review fix: like ROUTE_CONFLICT, a cancelled mission must not keep claiming the corridor."""
+    mover = _mover()
+    other = FakeRobot("rosy_02", state=_standing("rosy_02", (0.0, 0.3), _loc()))
+    console = _console(mover, other)
+    run(console.snapshot())
+    console._claims["rosy_01"] = _line(-2.0, 0, 2.0, 0)        # an earlier mission's claim
+    other._state = _standing("rosy_02", (0.0, 0.3), _loc("SUSPECT", "map"))
+
+    result = run(console.goal("rosy_01", 2.0, 0.0))
+
+    assert result["reason"] == "LOCALIZATION_UNTRUSTED"
+    assert "rosy_01" not in console._claims
+
+
+def test_an_untrusted_mover_is_queued_without_sending_the_goal():
+    """Decision (review of lane C): CORE would refuse a goal from an unlocalized robot anyway."""
+    mover = _mover()
+    mover._state = _standing("rosy_01", (-2.0, 0.0), _loc("CANDIDATES", "odom"))
+    console = _console(mover)
+    run(console.snapshot())
+
+    result = run(console.goal("rosy_01", 2.0, 0.0))
+
+    assert result["queued"] is True and result["dispatch_attempted"] is False
+    assert result["reason"] == "LOCALIZATION_UNTRUSTED" and result["blocked_by"] == "rosy_01"
+    assert _goal_calls(mover) == 0
+    run(console.snapshot())
+    assert _goal_calls(mover) == 0                                 # still unlocalized: waits
+
+    mover._state = _standing("rosy_01", (-2.0, 0.0), _loc())
+    run(console.snapshot())
+    assert _goal_calls(mover) == 1 and "rosy_01" not in console._queued
+
+
+def test_a_legacy_mover_is_dispatched_as_today():
+    mover = _mover()
+    mover._state = _standing("rosy_01", (-2.0, 0.0))
+    console = _console(mover)
+    run(console.snapshot())
+    assert "queued" not in run(console.goal("rosy_01", 2.0, 0.0))
+    assert _goal_calls(mover) == 1
+
+
+# --- D-395 P2-7: traffic holds before a localization mission -------------------------------
+
+
+def _driving(console, robot):
+    """A Fleet goal under way along y = 0 (set directly: dispatch rules are tested above)."""
+    console._goals[robot.robot_id] = {"x": 2.0, "y": 0.0, "yaw": 0.0}
+    console._claims[robot.robot_id] = _line(-2.0, 0, 2.0, 0)
+    robot._state = {**robot._state, "navigation": "NAVIGATING"}
+
+
+def test_a_driving_robot_near_the_mover_is_held_until_the_mover_is_localized():
+    mover = FakeRobot("rosy_02", state=_standing("rosy_02", (0.0, 0.3), _loc()))
+    driver = _mover()                                               # rosy_01 on y = 0
+    console = _console(driver, mover)
+    run(console.snapshot())                                         # mover last trusted at (0, 0.3)
+    _driving(console, driver)
+    mover._state = _standing("rosy_02", (0.0, 0.3), _loc("CANDIDATES", "odom"))
+    run(console.snapshot())
+
+    held = run(console.hold_for_localization("rosy_02"))
+
+    assert held == ["rosy_01"]
+    assert ("navigation_cancel",) in driver.calls
+    assert console._queued["rosy_01"]["reason"] == "LOCALIZATION_UNTRUSTED"
+    assert console._queued["rosy_01"]["blocked_by"] == "rosy_02"
+    run(console.snapshot())
+    assert _goal_calls(driver) == 0                                 # still held
+
+    mover._state = _standing("rosy_02", (0.0, 1.5), _loc())        # localized, off the route
+    run(console.snapshot())
+    assert _goal_calls(driver) == 1 and "rosy_01" not in console._queued
+
+
+def test_a_driving_robot_far_from_the_mover_keeps_going():
+    mover = FakeRobot("rosy_02", state=_standing("rosy_02", (0.0, 1.5), _loc()))
+    driver = _mover()
+    console = _console(driver, mover)
+    run(console.snapshot())
+    _driving(console, driver)
+    mover._state = _standing("rosy_02", (0.0, 1.5), _loc("CANDIDATES", "odom"))
+    run(console.snapshot())
+
+    assert run(console.hold_for_localization("rosy_02")) == []
+    assert ("navigation_cancel",) not in driver.calls
+
+
+def test_a_mover_never_trusted_holds_every_driving_robot():
+    mover = FakeRobot("rosy_02", state=_standing("rosy_02", (9.0, 9.0), _loc("UNKNOWN", "odom")))
+    driver = FakeRobot("rosy_01", state=_standing("rosy_01", (-2.0, 0.0)))   # legacy driver
+    driver._path = _line(-2.0, 0, 2.0, 0)
+    console = _console(driver, mover)
+    run(console.snapshot())
+    console._goals["rosy_01"] = {"x": 2.0, "y": 0.0, "yaw": 0.0}
+    console._claims["rosy_01"] = _line(-2.0, 0, 2.0, 0)
+
+    assert run(console.hold_for_localization("rosy_02")) == ["rosy_01"]
+
+
+def test_an_unconfirmed_cancel_fails_the_hold():
+    mover = FakeRobot("rosy_02", state=_standing("rosy_02", (0.0, 0.3), _loc("UNKNOWN", "odom")))
+    driver = _mover()
+    console = _console(driver, mover)
+    run(console.snapshot())
+    console._goals["rosy_01"] = {"x": 2.0, "y": 0.0, "yaw": 0.0}
+
+    async def ambiguous_cancel():
+        return {"navigation": "IDLE"}
+
+    driver.navigation_cancel = ambiguous_cancel
+    with pytest.raises(RuntimeError, match="cancellation"):
+        run(console.hold_for_localization("rosy_02"))
+
+
+def test_a_formation_near_the_mover_is_stopped():
+    from types import SimpleNamespace
+    mover = FakeRobot("rosy_02", state=_standing("rosy_02", (0.0, 0.3), _loc("UNKNOWN", "odom")))
+    leader = _mover()
+    console = _console(leader, mover)
+    run(console.snapshot())
+    console._formation = SimpleNamespace(state="RUNNING", assignment={"rosy_03": "slot"})
+    console._formation_leader = "rosy_01"
+    stopped = []
+
+    async def formation_stop():
+        stopped.append(True)
+        return {"active": False}
+
+    console.formation_stop = formation_stop
+    assert run(console.hold_for_localization("rosy_02")) == ["formation"]
+    assert stopped == [True]
+
+
+def test_a_yield_whose_way_to_its_bay_crosses_the_mover_is_cancelled():
+    mover = FakeRobot("rosy_02", state=_standing("rosy_02", (0.0, 0.3), _loc()))
+    yielder = FakeRobot("rosy_03", state=_standing("rosy_03", (-1.0, 0.3), _loc()))
+    far = FakeRobot("rosy_04", state=_standing("rosy_04", (3.0, 3.0), _loc()))
+    console = _console(mover, yielder, far)
+    run(console.snapshot())                                       # mover last trusted (0, 0.3)
+    mover._state = _standing("rosy_02", (0.0, 0.3), _loc("CANDIDATES", "odom"))
+    run(console.snapshot())
+    console._yielding["rosy_03"] = {"bay": {"x": 1.0, "y": 0.3}, "for": "rosy_01"}
+    console._yielding["rosy_04"] = {"bay": {"x": 3.0, "y": 4.0}, "for": "rosy_01"}
+
+    assert run(console.hold_for_localization("rosy_02")) == ["rosy_03"]
+    assert ("navigation_cancel",) in yielder.calls and "rosy_03" not in console._yielding
+    assert ("navigation_cancel",) not in far.calls and "rosy_04" in console._yielding

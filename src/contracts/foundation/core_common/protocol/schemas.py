@@ -911,6 +911,21 @@ class PoseSample(BaseModel):
     map_id: Optional[str] = None
 
 
+class LineStuckStatus(BaseModel):
+    """D-407 open lane stuck: the console answers it by ``stuck_id``."""
+
+    stuck_id: str
+    cause: str                            # obstacle_ahead | lane_lost
+    phase: str                            # ASKING | WAITING_CONSOLE | BACKING | SETTLING
+    held_s: float = 0.0
+    attempts: int = 0
+    max_attempts: int = 0
+    local_enabled: bool = False
+    ask_remaining_s: Optional[float] = None   # None = console answer only, no local fallback
+    last_answer: Optional[str] = None
+    decisions: list[str] = Field(default_factory=list)
+
+
 class LineFollowStatus(BaseModel):
     """Selected line source and the last fail-closed control decision (D-143)."""
 
@@ -924,6 +939,7 @@ class LineFollowStatus(BaseModel):
     angular: float = 0.0
     reason: str = "mode_off"
     clearance_m: Optional[float] = None   # D-344 §11: 정면 LiDAR 최소 거리(없으면 None)
+    stuck: Optional[LineStuckStatus] = None  # D-407: open stuck (None = not stuck)
 
 
 class TrafficPolicyStatus(BaseModel):
@@ -1005,6 +1021,47 @@ class RobotActivity(BaseModel):
     remaining_s: float
 
 
+class ShadowRecordRef(BaseModel):
+    """Last stop/unavailable shadow verdict. `t` is CORE monotonic seconds."""
+
+    t: float
+    reason: str
+    source: str
+
+
+class ShadowEvalStats(BaseModel):
+    p50: Optional[float] = None
+    p99: Optional[float] = None
+    n: int = 0
+
+
+class SafetyShadowStatus(BaseModel):
+    """D-400 shadow counters (v1.71 additive).
+
+    No extra="forbid" on these: an older hub must keep accepting a heartbeat
+    from a newer robot that adds a key.
+    """
+
+    counts: dict[str, int]
+    last_stop: Optional[ShadowRecordRef] = None
+    last_unavailable: Optional[ShadowRecordRef] = None
+    eval_ms: ShadowEvalStats
+    dropped_events: int = 0
+    suppressed_events: int = 0
+    record_errors: int = 0
+
+
+class SafetyPolicyStatus(BaseModel):
+    """D-400: the safety policy mode CORE runs, and why (v1.71 additive)."""
+
+    mode: str
+    mode_effective: str
+    mode_error: str = ""
+    revision: str = ""
+    sources: dict[str, str] = Field(default_factory=dict)
+    shadow: Optional[SafetyShadowStatus] = None
+
+
 class StateSnapshot(BaseModel):
     """로봇 상태 스냅샷 — /ws/state payload와 동일 (API Ref §6.1)."""
 
@@ -1036,6 +1093,7 @@ class StateSnapshot(BaseModel):
     activity: Optional[RobotActivity] = None
     #: v1.69 additive (D-395): state and pose frame; null from robots before D-395.
     localization: Optional[LocalizationStatus] = None
+    safety_policy: Optional[SafetyPolicyStatus] = None  # D-400, v1.71 additive
 
 
 class HeartbeatPayload(BaseModel):

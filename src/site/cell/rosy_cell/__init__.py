@@ -1,4 +1,5 @@
-"""Rosy Cell core: palletizing patterns, taught frames and Job compilation (ROS-free)."""
+"""Legacy import facade for the canonical palletizing process module."""
 
-SCHEMA_RECIPE = "rosy_cell.recipe/1"
-SCHEMA_CELL = "rosy_cell.cell/2"
+from rosy.processes.palletizing import SCHEMA_CELL, SCHEMA_RECIPE
+
+__all__ = ["SCHEMA_RECIPE", "SCHEMA_CELL"]

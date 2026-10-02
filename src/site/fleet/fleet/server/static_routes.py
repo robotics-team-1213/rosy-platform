@@ -19,12 +19,15 @@ WEB_ROOT = Path(__file__).resolve().parent / "web"
 CONSOLE_ASSETS = {
     "styles.css": "text/css",
     "console.js": "application/javascript",
+    "install.js": "application/javascript",
     "address-drift.js": "application/javascript",
     "authorization.js": "application/javascript",
     "camera-pairing.js": "application/javascript",
     "field-layers.js": "application/javascript",
     "field-view.js": "application/javascript",
     "formation.js": "application/javascript",
+    "line-stuck.js": "application/javascript",
+    "localization-badge.js": "application/javascript",
     "map-fit.js": "application/javascript",
     "map-fit-view.js": "application/javascript",
     "map-view.js": "application/javascript",
@@ -62,6 +65,16 @@ def install_static_routes(app: FastAPI) -> None:
     def console_page():
         return FileResponse(
             WEB_ROOT / "index.html",
+            media_type="text/html",
+            headers={"Cache-Control": "no-cache", "Content-Security-Policy": CONSOLE_CSP},
+        )
+
+    # D-410 — 설치·보정 화면. 기기 등록·카메라 연결 승인·경기장/맵 보정이 산다.
+    # 운용(감시·목표·정지)은 /console 에 그대로 있다.
+    @app.get("/console/install", include_in_schema=False)
+    def console_install_page():
+        return FileResponse(
+            WEB_ROOT / "install.html",
             media_type="text/html",
             headers={"Cache-Control": "no-cache", "Content-Security-Policy": CONSOLE_CSP},
         )

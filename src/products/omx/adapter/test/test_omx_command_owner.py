@@ -60,6 +60,7 @@ def make_config(**changes):
         position_limits={"joint_1": (-1.0, 1.0), "joint_2": (-0.5, 0.5)},
         allowed_owners=("leader_teleop", "moveit", "rule_based"),
         calibration_revision="cal-7",
+        max_start_state_tolerances={"joint_1": 0.01, "joint_2": 0.01},
         max_joint_state_age_s=0.5,
         max_goal_duration_s=2.0,
         action_timeout_s=3.0,
@@ -67,9 +68,9 @@ def make_config(**changes):
     return replace(config, **changes)
 
 
-def make_state(*, sequence=10, received_at=100.0, calibration_revision="cal-7"):
+def make_state(*, sequence=10, received_at=100.0, calibration_revision="cal-7", positions=None):
     return JointStateSnapshot(
-        positions={"joint_1": 0.1, "joint_2": -0.1},
+        positions=positions or {"joint_1": 0.1, "joint_2": -0.1},
         sequence=sequence,
         received_at=received_at,
         calibration_revision=calibration_revision,
@@ -92,7 +93,15 @@ def make_command(*, command_id="cmd-1", owner="moveit", sequence=10, **changes):
     return TrajectoryCommand(**values)
 
 
-WINDOW_CONFIG = {"max_start_window_rad": 0.1}
+# C3b A1 tests on the unified start-state mechanism (merge with main b0979ad6/7735c307):
+# a per-joint owner cap of 0.1 rad, the C3b profile's after-grasp ceiling.
+WINDOW_CONFIG = {"max_start_state_tolerances": {"joint_1": 0.1, "joint_2": 0.1}}
+
+
+def window(spec):
+    """{joint: (expected, tolerance)} -> TrajectoryCommand start-state fields."""
+    return {"expected_start_state_positions": {k: v[0] for k, v in spec.items()},
+            "start_state_tolerances": {k: v[1] for k, v in spec.items()}}
 
 
 def owner_at(clock, config=None, client=None):
@@ -128,6 +137,19 @@ def test_disabled_owner_never_submits_an_action():
 def test_enabled_policy_rejects_incomplete_or_ambiguous_limits(changes):
     with pytest.raises(ValueError):
         replace(make_config(), **changes)
+
+
+@pytest.mark.parametrize(
+    "tolerances",
+    [
+        {"joint_1": 0.01},
+        {"joint_1": -0.01, "joint_2": 0.01},
+        {"joint_1": float("nan"), "joint_2": 0.01},
+    ],
+)
+def test_enabled_policy_rejects_invalid_start_tolerance_bounds(tolerances):
+    with pytest.raises(ValueError, match="max_start_state_tolerances"):
+        replace(make_config(), max_start_state_tolerances=tolerances)
 
 
 def test_enabled_owner_requires_fresh_feedback_and_allows_one_active_writer():
@@ -234,6 +256,115 @@ def test_duplicate_command_id_is_idempotent_but_cannot_change_payload():
     assert duplicate.reason == "duplicate_ignored"
     assert not reused.accepted and reused.reason == "command_id_reused"
     assert len(action.commands) == 1
+
+
+def test_newer_joint_state_inside_explicit_start_tolerance_can_close_dispatch_race():
+    clock = [100.01]
+    owner, action = owner_at(clock)
+    owner.observe_joint_state(make_state(sequence=10))
+    command = make_command(
+        expected_start_state_positions={"joint_1": 0.1, "joint_2": -0.1},
+        start_state_tolerances={"joint_1": 0.01, "joint_2": 0.01},
+    )
+    owner.observe_joint_state(make_state(
+        sequence=11, received_at=100.01,
+        positions={"joint_1": 0.105, "joint_2": -0.095},
+    ))
+
+    result = owner.submit(command)
+
+    assert result.accepted
+    assert result.reason == "submitted"
+    assert owner._last_command_state_sequence == 11
+    assert action.commands == [command]
+
+
+def test_newer_joint_state_outside_start_tolerance_is_rejected():
+    clock = [100.01]
+    owner, action = owner_at(clock)
+    owner.observe_joint_state(make_state(sequence=10))
+    owner.observe_joint_state(make_state(
+        sequence=11, received_at=100.01,
+        positions={"joint_1": 0.12, "joint_2": -0.1},
+    ))
+    command = make_command(
+        expected_start_state_positions={"joint_1": 0.1, "joint_2": -0.1},
+        start_state_tolerances={"joint_1": 0.01, "joint_2": 0.01},
+    )
+
+    result = owner.submit(command)
+
+    assert not result.accepted
+    assert result.reason == "start_state_outside_tolerance"
+    assert action.commands == []
+
+
+def test_dispatch_rejects_additional_drift_after_phase_start_tolerance_edge():
+    clock = [100.01]
+    owner, action = owner_at(clock)
+    owner.observe_joint_state(make_state(
+        sequence=10, positions={"joint_1": 0.009, "joint_2": -0.1},
+    ))
+    owner.observe_joint_state(make_state(
+        sequence=11, received_at=100.01,
+        positions={"joint_1": 0.011, "joint_2": -0.1},
+    ))
+    command = make_command(
+        expected_start_state_positions={"joint_1": 0.0, "joint_2": -0.1},
+        start_state_tolerances={"joint_1": 0.01, "joint_2": 0.01},
+    )
+
+    result = owner.submit(command)
+
+    assert not result.accepted
+    assert result.reason == "start_state_outside_tolerance"
+    assert action.commands == []
+
+
+def test_command_cannot_raise_start_tolerance_above_owner_policy():
+    clock = [100.01]
+    owner, action = owner_at(clock)
+    owner.observe_joint_state(make_state(sequence=10))
+    owner.observe_joint_state(make_state(sequence=11, received_at=100.01))
+    command = make_command(
+        expected_start_state_positions={"joint_1": 0.1, "joint_2": -0.1},
+        start_state_tolerances={"joint_1": 0.5, "joint_2": 0.01},
+    )
+
+    result = owner.submit(command)
+
+    assert not result.accepted
+    assert result.reason == "start_state_tolerance_exceeds_policy"
+    assert action.commands == []
+
+
+def test_tolerance_evidence_requires_owner_policy():
+    clock = [100.01]
+    owner, action = owner_at(clock, make_config(max_start_state_tolerances=None))
+    owner.observe_joint_state(make_state(sequence=10))
+    command = make_command(
+        expected_start_state_positions={"joint_1": 0.1, "joint_2": -0.1},
+        start_state_tolerances={"joint_1": 0.01, "joint_2": 0.01},
+    )
+
+    result = owner.submit(command)
+
+    assert not result.accepted
+    assert result.reason == "start_state_tolerance_policy_missing"
+    assert action.commands == []
+
+
+def test_advanced_state_without_explicit_start_tolerance_stays_fail_closed():
+    clock = [100.01]
+    owner, action = owner_at(clock)
+    owner.observe_joint_state(make_state(sequence=10))
+    owner.observe_joint_state(make_state(sequence=11, received_at=100.01))
+
+    result = owner.submit(make_command())
+
+    assert not result.accepted
+    assert result.reason == "joint_state_sequence_mismatch"
+    assert action.commands == []
 
 
 @pytest.mark.parametrize(
@@ -503,8 +634,8 @@ def test_multi_point_command_requires_explicit_velocity_and_acceleration_limits(
 
 
 # A1 (C3b): the caller reads a joint state, journals, then submits; joint states keep
-# arriving at ~100 Hz in between. A command with a start_state_window is checked against the
-# owner's own latest state under its lock and bound to that sequence (no exact-race).
+# arriving at ~100 Hz in between. A command with expected start positions and tolerances is
+# checked against the owner's own latest state under its lock and bound to that sequence.
 WINDOW = {"joint_1": (0.1, 0.02), "joint_2": (-0.1, 0.02)}
 
 
@@ -512,14 +643,15 @@ def test_window_command_binds_to_a_newer_state_that_arrived_before_submit():
     clock = [100.0]
     owner, action = owner_at(clock, make_config(**WINDOW_CONFIG))
     owner.observe_joint_state(make_state(sequence=10))
-    command = make_command(sequence=10, start_state_window=WINDOW)
+    command = make_command(sequence=10, **window(WINDOW))
     clock[0] = 100.01
     owner.observe_joint_state(make_state(sequence=11, received_at=100.01))
 
     result = owner.submit(command)
 
     assert result.accepted and result.reason == "submitted"
-    assert action.commands[0].source_state_sequence == 11
+    # Bound to the newest state the check passed on (main: the command object is sent as is).
+    assert owner._last_command_state_sequence == 11
     assert action.commands[0].command_id == command.command_id
 
 
@@ -528,11 +660,11 @@ def test_single_goal_home_command_with_window_survives_the_same_race():
     owner, action = owner_at(clock, make_config(**WINDOW_CONFIG))
     owner.observe_joint_state(make_state(sequence=10))
     home = make_command(command_id="home", sequence=10, owner="rule_based",
-                        start_state_window={"joint_1": (0.1, 0.05), "joint_2": (-0.1, 0.05)})
+                        **window({"joint_1": (0.1, 0.05), "joint_2": (-0.1, 0.05)}))
     for seq in (11, 12, 13):
         owner.observe_joint_state(make_state(sequence=seq, received_at=100.0))
     assert owner.submit(home).accepted
-    assert action.commands[0].source_state_sequence == 13
+    assert owner._last_command_state_sequence == 13
 
 
 def test_window_command_still_rejects_a_stale_latest_state():
@@ -540,7 +672,7 @@ def test_window_command_still_rejects_a_stale_latest_state():
     owner, action = owner_at(clock, make_config(**WINDOW_CONFIG))
     owner.observe_joint_state(make_state(sequence=10))
     clock[0] = 100.6  # max_joint_state_age_s 0.5
-    result = owner.submit(make_command(sequence=10, start_state_window=WINDOW))
+    result = owner.submit(make_command(sequence=10, **window(WINDOW)))
     assert not result.accepted and result.reason == "joint_state_stale"
     assert owner.state == "hold" and action.commands == []
 
@@ -552,8 +684,8 @@ def test_window_command_rejects_a_latest_state_outside_the_window():
     moved = JointStateSnapshot(positions={"joint_1": 0.15, "joint_2": -0.1}, sequence=11,
                                received_at=100.0, calibration_revision="cal-7")
     owner.observe_joint_state(moved)
-    result = owner.submit(make_command(sequence=10, start_state_window=WINDOW))
-    assert not result.accepted and result.reason == "start_state_deviation"
+    result = owner.submit(make_command(sequence=10, **window(WINDOW)))
+    assert not result.accepted and result.reason == "start_state_outside_tolerance"
     assert action.commands == [] and owner.state == "ready"
 
 
@@ -562,39 +694,42 @@ def test_window_command_rejects_a_sequence_the_owner_never_observed():
     owner, action = owner_at(clock, make_config(**WINDOW_CONFIG))
     owner.observe_joint_state(make_state(sequence=10))
     owner.observe_joint_state(make_state(sequence=11))
-    result = owner.submit(make_command(sequence=12, start_state_window=WINDOW))
+    result = owner.submit(make_command(sequence=12, **window(WINDOW)))
     assert not result.accepted and result.reason == "joint_state_sequence_mismatch"
     assert action.commands == []
 
 
 def test_partial_window_checks_only_the_listed_joints():
-    # After grasp the runner leaves the gripper out (object width, D-402 §3d).
+    # Unified mechanism: every joint is listed. After grasp the runner binds the gripper to
+    # the value it checked (object width, D-402 §3d) instead of the plan, so a joint the plan
+    # does not judge is still held to "did not move since the check".
     clock = [100.0]
-    owner, action = owner_at(clock, make_config(max_start_window_rad=0.1,
-                                                start_window_exempt_joints=("joint_2",)))
+    owner, action = owner_at(clock, make_config(**WINDOW_CONFIG))
     owner.observe_joint_state(JointStateSnapshot(positions={"joint_1": 0.1, "joint_2": 0.4}, sequence=10,
                                                  received_at=100.0, calibration_revision="cal-7"))
-    result = owner.submit(make_command(sequence=10, start_state_window={"joint_1": (0.1, 0.02)}))
+    result = owner.submit(make_command(sequence=10, **window({"joint_1": (0.1, 0.02), "joint_2": (0.4, 0.02)})))
     assert result.accepted
+    with pytest.raises(ValueError, match="start-state positions and tolerances"):
+        make_command(sequence=10, **window({"joint_1": (0.1, 0.02)}))
 
 
 def test_window_window_values_are_validated_on_the_command():
-    with pytest.raises(ValueError, match="start_state_window"):
-        make_command(start_state_window={"joint_1": (0.1, -0.01), "joint_2": (0.0, 0.01)})
-    with pytest.raises(ValueError, match="start_state_window"):
-        make_command(start_state_window={"joint_9": (0.1, 0.01)})
-    with pytest.raises(ValueError, match="start_state_window"):
-        make_command(start_state_window={})
+    with pytest.raises(ValueError, match="start-state positions and tolerances"):
+        make_command(**window({"joint_1": (0.1, -0.01), "joint_2": (0.0, 0.01)}))
+    with pytest.raises(ValueError, match="start-state positions and tolerances"):
+        make_command(**window({"joint_9": (0.1, 0.01)}))
+    with pytest.raises(ValueError, match="start-state positions and tolerances"):
+        make_command(**window({}))
 
 
 def test_window_command_never_rebinds_to_a_sequence_already_used():
     clock = [100.0]
     owner, action = owner_at(clock, make_config(**WINDOW_CONFIG))
     owner.observe_joint_state(make_state(sequence=10))
-    assert owner.submit(make_command(command_id="a", sequence=10, start_state_window=WINDOW)).accepted
+    assert owner.submit(make_command(command_id="a", sequence=10, **window(WINDOW))).accepted
     action.handles[0].finished = action.handles[0].success = True
     assert owner.poll().reason == "completed"
-    result = owner.submit(make_command(command_id="b", sequence=10, start_state_window=WINDOW))
+    result = owner.submit(make_command(command_id="b", sequence=10, **window(WINDOW)))
     assert not result.accepted and result.reason == "joint_state_not_advanced"
 
 
@@ -677,37 +812,43 @@ def test_sim_clock_owner_requires_a_wall_clock_bound():
                         wall_monotonic=lambda: 0.0, session_id=SESSION)
 
 
-# Review minor 1: the owner caps the caller's window and requires it to cover every
-# commanded joint except the configured exempt (gripper) joint.
-@pytest.mark.parametrize(("config", "window", "reason"), [
-    (WINDOW_CONFIG, {"joint_1": (0.1, 1e9), "joint_2": (-0.1, 0.02)}, "start_state_window_too_wide"),
-    (WINDOW_CONFIG, {"joint_1": (0.1, 0.02)}, "start_state_window_incomplete"),
+# Review minor 1: the owner caps the caller's tolerances (main's per-joint policy) and the
+# command must cover every commanded joint.
+@pytest.mark.parametrize(("config", "spec", "reason"), [
+    (WINDOW_CONFIG, {"joint_1": (0.1, 1e9), "joint_2": (-0.1, 0.02)}, "start_state_tolerance_exceeds_policy"),
+    (WINDOW_CONFIG, {"joint_1": (0.1, 0.02)}, "incomplete"),
 ])
-def test_owner_rejects_wide_partial_or_unconfigured_windows(config, window, reason):
+def test_owner_rejects_wide_partial_or_unconfigured_windows(config, spec, reason):
     clock = [100.0]
     owner, action = owner_at(clock, make_config(**config))
     owner.observe_joint_state(make_state(sequence=10))
-    result = owner.submit(make_command(sequence=10, start_state_window=window))
+    if reason == "incomplete":
+        with pytest.raises(ValueError, match="start-state positions and tolerances"):
+            make_command(sequence=10, **window(spec))
+        return
+    result = owner.submit(make_command(sequence=10, **window(spec)))
     assert not result.accepted and result.reason == reason
     assert action.commands == []
 
 
 def test_owner_without_a_window_cap_requires_the_exact_sequence():
+    # Merge: C3b let an uncapped owner ignore the window and use the exact sequence match;
+    # main rejects tolerance evidence without an owner policy. The stricter rule (main) stays.
     clock = [100.0]
-    owner, action = owner_at(clock)
+    owner, action = owner_at(clock, make_config(max_start_state_tolerances=None))
     owner.observe_joint_state(make_state(sequence=10))
     owner.observe_joint_state(make_state(sequence=11))
-    result = owner.submit(make_command(sequence=10, start_state_window=WINDOW))
-    assert result.reason == "joint_state_sequence_mismatch" and action.commands == []
-    assert owner.submit(make_command(command_id="cmd-2", sequence=11, start_state_window=WINDOW)).accepted
+    result = owner.submit(make_command(sequence=10, **window(WINDOW)))
+    assert result.reason == "start_state_tolerance_policy_missing" and action.commands == []
+    assert owner.submit(make_command(command_id="cmd-2", sequence=11)).accepted  # exact match path
 
 
 @pytest.mark.parametrize("changes", [
-    {"max_start_window_rad": 0.0}, {"max_start_window_rad": float("inf")},
-    {"max_start_window_rad": 0.1, "start_window_exempt_joints": ("joint_9",)},
+    {"max_start_state_tolerances": {"joint_1": float("inf"), "joint_2": 0.1}},
+    {"max_start_state_tolerances": {"joint_1": 0.1, "joint_9": 0.1}},
 ])
 def test_start_window_config_is_validated(changes):
-    with pytest.raises(ValueError, match="start_window|max_start_window_rad"):
+    with pytest.raises(ValueError, match="max_start_state_tolerances"):
         make_config(**changes)
 
 

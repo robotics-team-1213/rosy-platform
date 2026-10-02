@@ -235,6 +235,10 @@ EXPECTED_SUBSCRIPTIONS = [
     ("plan", "_on_plan", 10),
     ("local_costmap/costmap_raw", "_on_local_costmap", 10),
     ("global_costmap/costmap_raw", "_on_global_costmap", 10),
+    # D-395 P2-1 (contract §1): state and candidates are transient-local, result is depth 10.
+    ("localization/state", "_on_loc_state", "LATCHED"),
+    ("localization/candidates", "_on_loc_candidates", "LATCHED"),
+    ("localization/result", "_on_loc_result", 10),
 ]
 
 #: `(topic, qos)` — `ros_bridge.py:78-80,128-131` (cmd_vel/initialpose first,
@@ -245,6 +249,11 @@ EXPECTED_PUBLISHERS = [
     ("power/mode", "LATCHED"),
     ("display/info", 10),
     ("docking/collision_exemption", "LATCHED"),
+    # D-395 P2-4 (contract §1): reliable, depth 5.
+    ("localization/decision", 5),
+    ("localization/suspect", 5),
+    # D-395 P2-7: mission start/end for the sensing node's search-after-mission.
+    ("localization/mission", 5),
 ]
 
 #: Five, not four. The fourth is behind the optional `slam_toolbox` import and
@@ -286,7 +295,8 @@ def test_the_three_latched_endpoints_stay_latched(registered):
     latched = {topic for topic, qos in registered.node.publishers if qos == "LATCHED"}
     latched |= {t for t, _cb, qos in registered.node.subscriptions if qos == "LATCHED"}
 
-    assert latched == {"map", "power/mode", "docking/collision_exemption", "motor/ready"}
+    assert latched == {"map", "power/mode", "docking/collision_exemption", "motor/ready",
+                       "localization/state", "localization/candidates"}
 
 
 def test_the_bridge_opens_the_same_service_clients(registered):

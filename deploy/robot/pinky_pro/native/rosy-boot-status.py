@@ -94,6 +94,8 @@ def _runtime_mode(root: Path) -> str | None:
 #: D-260 M1: CORE's hand-over (api/v1/host.py STATUS_INPUTS_FILE) in rosy-core's /run/rosy.
 STATUS_INPUTS_FILE = "run/rosy/status-inputs.json"
 MAX_STATUS_INPUTS_BYTES = 16 * 1024
+#: Schema 1 (D-260 M1) and schema 2 (D-412, adds keys only) are read the same way.
+STATUS_INPUTS_SCHEMAS = (1, 2)
 #: CORE rewrites it every 10 s; older than this means CORE is not running it any more.
 STATUS_INPUTS_FRESH_S = 60.0
 
@@ -124,7 +126,9 @@ def _read_core_file(path: Path) -> dict | None:
 def _core_inputs(root: Path, now: datetime) -> dict | None:
     """D-260 M1: CORE's live SAF-005 warning and its overlaid device states, when fresh and valid."""
     data = _read_core_file(root / STATUS_INPUTS_FILE)
-    if data is None or data.get("schema") != 1:
+    # D-412: schema 2 only adds the updater's idleness keys; this reader ignores them.
+    schema = data.get("schema") if data is not None else None
+    if type(schema) is not int or schema not in STATUS_INPUTS_SCHEMAS:
         return None
     try:
         written = datetime.fromisoformat(str(data.get("written_at")))

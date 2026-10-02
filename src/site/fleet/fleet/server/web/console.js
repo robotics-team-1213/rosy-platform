@@ -3,16 +3,13 @@
 import { createFormation } from "./formation.js";
 import { createMapView } from "./map-view.js";
 import { createRoster } from "./roster.js";
+import { createLineStuckPanel } from "./line-stuck.js";
 import { createSignals } from "./signals.js";
 import { createVisionView } from "./vision-view.js";
-import { createFieldView } from "./field-view.js";
-import { createMapFitView } from "./map-fit-view.js";
-import { OPERATOR_REASON, applyRoleToControls } from "./authorization.js";
-import { DISCOVERY_LABELS, canManage, createEnrollmentPanel } from "./enrollment.js";
+import { applyRoleToControls } from "./authorization.js";
+// D-410 — 기기 등록·카메라 연결 승인·경기장/맵 보정은 설치 화면(install.js)이 가진다.
 import { addressMap, movableRobots, renumberBanner } from "./address-drift.js";
-import { createCameraPairingPanel } from "./camera-pairing.js";
 import { createPollGate } from "./poll-gate.js";
-import { confirmIrreversible, openLiveDialog } from "/common/ui.js";
 // 좌표계: 로봇 pose 는 CORE 가 TF `map → <ns>base_footprint` 로 읽어 주는 map 프레임
 // 값이다(ros_bridge `_map_frame = "map"`). 그래서 N대를 한 격자 위에 그대로 겹쳐
 // 그릴 수 있다. 격자는 행 0 이 아래쪽(y 최소)이고 캔버스는 위가 0 이라 y 를 뒤집는다.
@@ -64,7 +61,6 @@ function markLocked() {
   pill.textContent = "토큰 필요";
   pill.setAttribute("status", "crit");
   el("console-token").setAttribute("aria-invalid", "true");
-  showDiscoveryUnavailable("인증 필요", "관제 토큰을 입력하면 발견 목록을 다시 확인합니다.");
 }
 
 function markUnlocked() {
@@ -242,6 +238,7 @@ function render() {
   }
   signals.render();
   roster.fillQueues();
+  lineStuck.render();
 
   formation.fillLeaders();
   mapView.draw();
@@ -303,104 +300,40 @@ function disarmGoal(reason) {
   log(reason, "bad");
 }
 
-const discoveryLabels = DISCOVERY_LABELS;
 let scannerLost = false;
-const enrollment = createEnrollmentPanel({
-  headers: authHeaders,
-  identity: () => ({ role: auth.role, principal_id: auth.principal }),
-  log,
-  dialogs: { confirmIrreversible, openLiveDialog },
-  onMoved: () => refreshAddresses(),
-});
-// D-341: 같은 "기기 연결" 패널의 카메라 연결 승인 구역. 대기 목록은 모듈이 2.5 s마다 묻는다.
-const cameraPairing = createCameraPairingPanel({
-  headers: authHeaders,
-  identity: () => ({ role: auth.role, principal_id: auth.principal }),
-  locked: () => auth.locked,
-  log,
-  dialogs: { confirmIrreversible, openLiveDialog },
-});
-
-function showDiscoveryUnavailable(label, message, level = "warn") {
-  const status = el("discovery-status");
-  status.textContent = label;
-  status.setAttribute("status", level);
-  const list = el("discovery-list");
-  if (list.childElementCount === 1 && list.firstElementChild?.dataset.unavailable === "true" &&
-      list.firstElementChild.textContent === message) return;
-  const item = document.createElement("li");
-  item.className = "hint";
-  item.dataset.unavailable = "true";
-  item.textContent = message;
-  list.replaceChildren(item);
-}
 
 async function refreshDiscovery() {
+  // D-410 — 발견 목록·등록은 설치 화면에 있다. 운용 화면은 검색기 건강과
+  // 고정 주소 판정(로스터 안내)만 이 요청에서 얻는다.
   if (auth.locked) return;
-  await enrollment.refresh();
   if (!discoveryGate.due()) return;
   try {
     const snapshot = await call("/api/fleet/discovery");
     discoveryGate.ok();
     await refreshAddresses();
-    // 검색기 임대(45 s)가 끊기면 발견과 새 주소로 옮기기가 멈춘다 — 대기와 구별해 경보한다.
+    // 검색기 임대(45 s)가 끊기면 새 주소 안내가 멈춘다 — 대기와 구별해 알린다.
     if (snapshot.scanner_state === "expired") {
-      if (!scannerLost) log("발견 검색기 끊김 — 새 로봇 발견·새 주소로 옮기기 불가", "bad");
+      if (!scannerLost) log("발견 검색기 끊김 — 로봇 발견·주소 이동 안내 불가", "bad");
       scannerLost = true;
-      showDiscoveryUnavailable("검색기 끊김",
-        `마지막 스캔 ${snapshot.scanner_age_s}초 전. 새 로봇 발견과 새 주소로 옮기기를 할 수 없습니다. ` +
-        "현장 PC의 rosy-mdns-bridge.timer와 사이트 프록시를 확인하세요.", "crit");
       return;
     }
     if (scannerLost && snapshot.scanner_online) log("발견 검색기 다시 연결됨", "good");
     scannerLost = false;
-    const status = el("discovery-status");
-    status.textContent = snapshot.scanner_online
-      ? `${snapshot.devices.length}대 발견` : "검색기 연결 대기";
-    status.setAttribute("status", snapshot.scanner_online ? "neutral" : "warn");
-    const rows = snapshot.devices.map((device) => {
-      const item = document.createElement("li");
-      const label = document.createElement("b");
-      label.textContent = device.name;
-      const detail = document.createElement("small");
-      detail.textContent = `${device.address}:${device.port} · ${device.stage || "부팅 중"}`;
-      const state = document.createElement("span");
-      state.textContent = discoveryLabels[device.status] || "확인 필요";
-      state.className = `discovery-state ${device.status}`;
-      item.append(label, detail, state);
-      enrollment.decorateDiscoveryRow(item, device);
-      return item;
-    });
-    el("discovery-list").replaceChildren(...rows);
   } catch (err) {
     if (auth.locked) return;
-    if (discoveryGate.fail(err.status, err.code) === "absent") {
-      showDiscoveryUnavailable("발견 미설정", "이 Fleet에는 발견 검색기가 설정되지 않았습니다.");
-    } else {
-      showDiscoveryUnavailable(
-        "발견 상태 확인 불가", "발견 목록을 확인할 수 없습니다. Fleet 연결을 확인하세요.");
-    }
+    if (discoveryGate.fail(err.status, err.code) === "absent") return;
   }
 }
 
 // 고정 주소 판정은 발견과 같은 주기로 읽는다. 못 읽으면 까닭 줄을 지운다(짐작하지 않는다).
 let addressText = "";
-function moveAddressBlocked() {
-  return auth.role !== "operator" ? OPERATOR_REASON
-    : canManage({ role: auth.role, principal_id: auth.principal }) ? ""
-      : "이름 있는 운용자 계정이 필요합니다";
-}
 
-function moveButton(entry) {
-  const node = document.createElement("ui-button");
-  node.setAttribute("kind", "quiet");
-  node.type = "button";
-  node.dataset.moveRobotId = entry.robot_id;
-  node.textContent = "새 주소로 옮기기…";
-  const reason = moveAddressBlocked();
-  node.disabled = Boolean(reason);
-  if (reason) node.setAttribute("reason", reason);
-  node.addEventListener("click", () => enrollment.openMove(entry.robot_id, entry.seen_addresses[0]));
+// D-410 — 주소 이동 대화상자(로봇 화면 코드)는 설치 화면에 있다. 운용 화면의
+// 이동 안내는 그 화면으로 가는 링크로만 말한다.
+function moveLink() {
+  const node = document.createElement("a");
+  node.href = "/console/install";
+  node.textContent = "설치 화면에서 이동";
   return node;
 }
 
@@ -424,7 +357,7 @@ async function refreshAddresses() {
       const item = document.createElement("li");
       const label = document.createElement("span");
       label.textContent = `${entry.robot_id} → ${entry.seen_addresses[0]}`;
-      item.append(label, moveButton(entry));
+      item.append(label, moveLink());
       return item;
     }));
     view.addresses = addressMap(payload);
@@ -437,8 +370,6 @@ async function refreshAuthorization() {
   // 로그인·토큰 저장마다 꺼진 기능을 한 번씩 다시 묻는다.
   dispatchGate.reset();
   discoveryGate.reset();
-  enrollment.resetPolling();
-  cameraPairing.resetPolling();
   mapView.resetPolling();
   try {
     const identity = await call("/api/fleet/session");
@@ -464,7 +395,6 @@ async function refreshAuthorization() {
       refreshState(),
       refreshDispatchControl(),
       refreshDiscovery(),
-      cameraPairing.refresh({ credentials: true }),
       formation.refreshFormation(),
     ]);
     render();
@@ -644,10 +574,12 @@ const mapView = createMapView({
 });
 
 // Fleet 분해 3: 명렬 카드와 큐는 roster.js 팩토리가 그린다.
+// D-410 — 주소 이동 조작은 설치 화면이 소유해서 moveAddress 훅을 주지 않는다.
 const roster = createRoster({ el, view, log, call, render,
-  streamEvidence: mapView.streamEvidence, isOperator: () => auth.role === "operator",
-  moveAddress: (robotId) => enrollment.openMove(robotId, view.addresses[robotId]?.seen_addresses?.[0]),
-  moveAddressBlocked });
+  streamEvidence: mapView.streamEvidence, isOperator: () => auth.role === "operator" });
+// D-407 판단 요청 — 막힌 로봇의 질문과 다섯 답. 예외 큐 패널 안에 산다.
+const lineStuck = createLineStuckPanel({ el, view, call, log,
+  isOperator: () => auth.role === "operator" });
 
 el("roster-toggle").addEventListener("click", () => {
   view.showAllRobots = !view.showAllRobots;
@@ -656,14 +588,8 @@ el("roster-toggle").addEventListener("click", () => {
 
 // D-262: 신호등 카드는 signals.js 팩토리가 그린다.
 const signals = createSignals({ el, view, log, call, refreshState });
+// D-410 — 운용 화면의 카메라는 영상 프리뷰만 띄운다. 경기장/맵 보정 뷰는 설치 화면이 가진다.
 const visionView = createVisionView({ el, call, auth, authHeaders });
-// D-360: 경기장 제안·보정 뷰·레이어 토글. 레이어가 바뀌면 지도를 다시 그린다.
-let mapFit = null;
-const fieldView = createFieldView({ el, view, visionView,
-  onLayersChanged: () => { mapView.draw(); mapFit?.render(); } });
-// D-375: 차선 페인트 지도 맞춤 제안 → 카메라 위 차선·지도 평면 뷰. 수락해도 표시 초안일 뿐이다.
-// 수락한 맞춤은 D-360 경기장 뷰의 대체 경로도 된다(경기장 자동 찾기가 실패하는 설치).
-mapFit = createMapFitView({ el, view, call, visionView, onChanged: () => fieldView.render() });
 
 // --- 신호등 (ROSY-SIGNAL-001) --------------------------------------------------
 
@@ -684,7 +610,6 @@ function saveToken() {
     sessionStorage.removeItem("rosy-console-token");
   }
   visionView.reset();
-  mapFit.reset();
   refreshAuthorization();
   visionView.refreshSources();
 }

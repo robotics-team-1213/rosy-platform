@@ -193,6 +193,31 @@
 - gate 변화: 기존 gate 유지; DEVICE/FIELD 승격 없음.
 - 결정: D-390 부록.
 - 교훈: 파일 쓰기 완료 전 들어온 interruption과 logical closure 경계를 구분한다.
+## 2026-10-01 · uncommitted · feat(sim): gz_multi nav 모드에 로봇별 loc_assist (D-395 P2-3)
+- 변경: 인자 `loc_assist`(기본 true). `mode:=nav`에서 로봇마다 control의 `loc_assist.launch.py`를 namespace·sim 시간·map과 함께 Nav2와 같은 15 s 지연 묶음에 넣는다. seed_initialpose는 그대로이며 근거가 아니다(전원 투입 UNKNOWN). 카메라는 이 런치에 브리지되지 않아 사각형 관측은 없다. 파일 595줄(예산 600).
+- 증거: `test_gz_multi_core.py`에 `loc_assist` 설정과 nav 모드 포함·끔 시험 추가. WSL에는 현재 패키지 이름으로 빌드된 작업공간이 없어 이 런치 그래프 시험은 skip(공유 share 없음) — 미검증으로 남긴다.
+- gate 변화: 없음. ROS-SIM은 P2-8.
+
+## 2026-10-02 · uncommitted · feat(sim): gz_multi 로봇별 스폰 자세·AMCL 시드 끔·월드 패키지 자원 경로 (D-395 S1)
+- 변경: 인자 `spawn_poses`(`x,y,yaw_rad;...` 로봇별, 비면 지금처럼 spawn_x/y/spacing·yaw 0)와 `seed_initialpose`(기본 true; false면 정답 자세를 AMCL에 미리 주지 않는다, D-395 전원 투입 UNKNOWN). 스폰 yaw를 `create -Y`와 시드에 같이 넣는다. `world_profiles.parse_spawn_poses`·`world_share_parent`: package:// 월드(map_v2_fleet)의 `model://control/...` 메시는 colcon 기본(격리) 설치에서 description/.. 로 안 풀려 Gazebo가 월드를 못 읽었다 — 그 패키지 share 부모를 GZ_SIM_RESOURCE_PATH에 더한다. 파일 600줄(예산 600).
+- 증거: WSL Jazzy `python3 -m pytest src/sim/gz_sim/test/test_gz_multi_core.py src/sim/gz_sim/test/test_world_profiles.py -q` 20 passed, 1 failed — 실패는 `test_nav_mode_starts_loc_assist_per_robot_unless_turned_off`로 기준(feat/d395-p2-integration 67cb5064) 파일에서도 같은 실패(0 == 2). 새 시험 3건은 `-Y` 제거·시드 조건 제거 변이에서 실패 확인. Windows `test_world_profiles.py` 10 passed. 실제 실행: S1 벤치에서 두 로봇이 지정 자세로 스폰(Gazebo 정답과 일치).
+- gate 변화: 없음. ROS-SIM S1 결과는 `docs/plans/2026-10-02-d395-s1-bench-results.md`.
+- 결정: 없음
+- 교훈: 다른 패키지 자산을 쓰는 카탈로그 월드는 merge-install에서만 돌았다 — 격리 설치에서 한 번은 띄워 본다.
+
+## 2026-10-02 · uncommitted · test(sim): loc_assist 포함 시험이 실제로 경로를 읽게 한다
+- 변경: `test_gz_multi_core._loc_assist_includes`가 `launch_description_source.location`(실행 전에는 치환 객체의 repr 문자열)을 읽어 항상 0개를 세던 것을, 치환 목록을 perform해 경로로 비교하도록 고쳤다.
+- 증거: WSL Jazzy `test_gz_multi_core.py` 11 passed(이전: 이 시험 1건 실패, 통합 브랜치 기준선에서도 실패). 변이: `if loc_assist:`를 `if False:`로 바꾸면 이 시험 실패.
+- gate 변화: 없음
+- 결정: 없음
+- 교훈: 런치 그래프 시험에서 문자열 비교는 실행 전 값인지 먼저 확인한다 — repr에 대한 `endswith`는 언제나 거짓이다.
+
+## 2026-10-02 · uncommitted · fix(sim): gz_multi Nav2 가 직진하지 않던 D-395 R4
+- 변경: `gz_multi._nav_config` 두 곳. (1) 목표 판정 `xy_goal_tolerance` 를 min(·, 0.10) — sim 시험값 `min_lookahead_dist` 0.15 아래로. (2) 패딩 외접원(0.115 m)을 전역 비용지도(플래너)에만 넣고, 지역 비용지도(RPP 충돌 검사)는 장치 풋프린트를 그대로 둔다. `nav2_params.yaml`(장치)은 바꾸지 않았다. 파일 600줄(예산 600).
+- 증거: 수정 전 열린 가운데에서 0.40 m 목표 — `cmd_vel_nav` 1043개 표본 모두 linear 0, 이동 0.001 m, "Failed to make progress". 0.15 m 안쪽 스캔 반환 0개, 로봇 주변 비용 0 → 자기 반사·이웃 가설 기각. Jazzy RPP 1.3.12 는 carrot 거리가 목표 허용오차보다 짧으면 목표 방향으로 제자리 회전만 한다. 수정 1만: 사각형 A 에서 "collision ahead", 0.013 m. 두 수정 후: 열린 가운데 1 m 목표 2/2 SUCCEEDED(0.93, 0.91 m 이동), 사각형 A 3/3 SUCCEEDED(0.26–0.30 m), 사각형 A 1회는 재계획 "Start occupied" 로 중단. WSL Jazzy, 로봇 1대, `core:=false` + 중계, GZ_PARTITION rosy_g4, ROS_DOMAIN_ID 97, 원시 `X:\DevTemp\rosy-g4\`. `test_gz_multi_core.py` 에 두 단언(수정 전 실패 확인), WSL `src/sim/gz_sim/test` 280 passed, 1 skipped.
+- gate 변화: 없음
+- 결정: 없음. 장치 기본값 변경 제안 없음 — 장치 값(lookahead 0.3 > 허용 0.25, 지역 정사각 풋프린트)은 이 문제가 없다.
+- 교훈: RPP 의 lookahead 를 줄이면 목표 허용오차도 같이 봐야 한다 — carrot 이 허용오차 안이면 "도착"으로 보고 회전만 한다. 그리고 플래너용 보수적 풋프린트를 컨트롤러 비용지도에 같이 넣으면 벽 옆 출발이 막힌다.
 
 ## 2026-10-02 · d8f96fb8 · feat(sim): omx_cell_workcell world (Rosy Cell C3)
 
