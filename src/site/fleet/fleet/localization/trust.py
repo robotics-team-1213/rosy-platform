@@ -6,6 +6,12 @@ wide obstacle (`UNTRUSTED_KEEP_OUT_M`) at its last trusted pose, or blocks the w
 track when it never had one. A snapshot without `localization` (`null` or absent)
 is a robot that predates D-395: contract §3 keeps today's behaviour for it and the
 console shows "위치 상태 미보고" (open question 2, decided).
+
+A last trusted pose comes only from a LOCALIZED map snapshot, never from a legacy one
+(S2 Finding 1: a power-on odom pose read before loc_assist was up became the keep-out
+centre once the robot reported CANDIDATES). A robot that has reported localization and
+then goes null (a CORE restart) is not legacy: the console treats it as untrusted until
+it has been null for `LAPSED_GRACE_S` (`badge(..., lapsed=True)`).
 """
 
 from __future__ import annotations
@@ -23,6 +29,11 @@ LEGACY = "legacy"
 
 #: Contract §3: an untrusted robot keeps this clear around its last trusted pose.
 UNTRUSTED_KEEP_OUT_M = 0.45
+
+#: A robot that reported localization and then went null stays untrusted this long before
+#: it counts as legacy again. 30 s covers a CORE restart (whose node comes back reporting)
+#: without pinning a robot whose D-395 stack was really removed forever.
+LAPSED_GRACE_S = 30.0
 
 LEGACY_LABEL = "위치 상태 미보고"
 NEEDS_HUMAN_LABEL = "위치 확인 필요"
@@ -67,8 +78,10 @@ def _xy(state: Optional[Mapping]) -> Optional[Point]:
 
 
 def trusted_xy(state: Optional[Mapping]) -> Optional[Point]:
-    """The snapshot pose when traffic may use it, else None."""
-    return None if classify(state) == UNTRUSTED else _xy(state)
+    """The snapshot pose when it may become a last trusted pose (LOCALIZED, map), else None.
+
+    A legacy snapshot's pose is used live while the robot stays legacy, never stored."""
+    return _xy(state) if classify(state) == TRUSTED else None
 
 
 def _segment_distance(p: Point, a: Point, b: Point) -> float:
@@ -94,14 +107,18 @@ def blocks(route: Sequence[Point], last_trusted: Optional[Point],
                for i in range(len(route) - 1))
 
 
-def badge(state: Optional[Mapping], view: Optional[Mapping] = None) -> Optional[dict]:
+def badge(state: Optional[Mapping], view: Optional[Mapping] = None, *,
+          lapsed: bool = False) -> Optional[dict]:
     """Console badge for one robot row; None when the robot is offline (no state).
 
     `view` is the localization service's per-robot view; its `needs_human` (the
-    ladder's last rung) or the robot's own flag shows "위치 확인 필요"."""
+    ladder's last rung) or the robot's own flag shows "위치 확인 필요". `lapsed`: a
+    D-395 robot inside its null grace, shown untrusted rather than legacy."""
     if state is None:
         return None
     verdict = classify(state)
+    if verdict == LEGACY and lapsed:
+        verdict = UNTRUSTED
     if verdict == LEGACY:
         return {"state": None, "pose_frame": None, "trusted": True, "legacy": True,
                 "needs_human": False, "label": LEGACY_LABEL}
