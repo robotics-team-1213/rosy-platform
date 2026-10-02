@@ -69,8 +69,8 @@
 
 ## 최근 기록
 
+- 2026-10-03 · uncommitted · feat: read live Fleet fence on the simulation Cell owner
 - 2026-10-03 · uncommitted · feat: tick local Cell workflow on the existing simulation owner node
 - 2026-10-03 · uncommitted · fix(omx-sim): C4b 1b — 그리퍼 폭은 grant의 레시피, HTTP는 루프백 (C2, C4)
 - 2026-10-03 · uncommitted · fleet 빌드 맥락에 apps/gateway/src 재허용
 - 2026-10-02 · uncommitted · feat(omx-sim): 셀 owner 실행기와 sim_model_pose 생산자 (C4b G2b, G6)
-- 2026-10-02 · uncommitted · feat(native): D-412 업데이터 기본 켜짐 — 첫 실제 카나리 성공 뒤

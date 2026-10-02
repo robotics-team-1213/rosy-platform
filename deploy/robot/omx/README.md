@@ -240,3 +240,26 @@ run with `docker exec` in that container, is the single owner process for the ru
 block poses (helpers in `cell_sim_tools.py`). Do not start `pilot_sim_server` beside it; the
 probe refuses to run if one is present. Commands, stand-in flags, sim aid and results:
 [docs/validation/rosy-cell-gazebo-c3-2026-10-02](../../../docs/validation/rosy-cell-gazebo-c3-2026-10-02/README.md).
+
+## Cell owner Fleet fence configuration (simulation)
+
+`run_cell_owner.py` requires `ROSY_FLEET_FENCE_URL` and `ROSY_FLEET_FENCE_TOKEN`
+before importing ROS. The URL must name the existing read API on literal loopback,
+for example `http://127.0.0.1:8080/api/fleet/dispatch-control`. Fleet must be reachable
+in the owner's network namespace; a Docker bridge hostname or a different host is
+refused. Keep the existing same-kernel, UID-checked UDS mount for Action/stop/rearm.
+
+Provision a separate named `viewer` in Fleet's existing site-user configuration and
+provide its private raw bearer secret as `ROSY_FLEET_FENCE_TOKEN`. Do not use a robot,
+operator, registry or pairing credential. No secret is included in this repository,
+and this configuration note does not register credentials or start a service.
+The client issues uncached GET requests, with a 250 ms socket timeout and 8 KiB body
+limit; redirects, invalid/authentication replies, disabled dispatch, lost connectivity
+and mismatched epoch/generation refuse. The timeout bounds socket inactivity;
+it is not an independent physical stop or a hard end-to-end deadline.
+
+Fleet offloads UDS rearm so its event loop can serve the owner's reverse readback.
+Owner initialization still leaves the local stop closed. A named operator must rearm
+the existing Fleet API, with unresolved Actions reconciled first. Live ROS/UDS fault
+acceptance, seat exclusion and the full two-layer/two-pallet recipe remain open;
+host HTTP tests are not Gazebo or physical acceptance.
