@@ -1275,12 +1275,6 @@
 - 증거: Fleet suite completed with 1370 passed, 7 skipped, and one failure from the prior v1.77 reference pin. After updating that pin, test_mission_progress.py passed (16). Cell Job API/store/site-user: 11 passed; existing Mission API/store/service: 26 passed; task/API/dispatch contracts: 39 passed; protocol/compiler port: 23 passed; size verdict: 1 passed. Windows host SOURCE/LOCAL evidence only.
 - gate 변화: dispatcher/UDS/OMX submission and authenticated external goal-evidence producer wiring remain unimplemented. This is a Task 4 checkpoint, not device or ROS-SIM acceptance.
 
-## 2026-10-02 · bcce15c9d · fix(hub): 닫힌 소켓에 보내지 않음; 판단 요청 패널 뒤 여유 "비어 있음"/"알 수 없음"
-
-- 변경: `/ws/robots` 는 연결이 끊긴 뒤 답을 보내지 않는다(이유를 info 로). 판단 요청 보드가 `rear_state` 를 옮기고 패널은 `비어 있음`·`알 수 없음`(클래스 `stuck-fact-unknown`)을 구분한다(9300adf1d).
-- 증거: `test_hub_server.py`(거부된 사건 뒤에도 heartbeat 응답), `test_line_stuck_api.py`, `web/line-stuck.test.mjs` 초록.
-- gate 변화: 없음.
-
 ## 2026-10-02 · uncommitted · 관제 콘솔 회차 6 — D-414 바로 동작(원클릭 정지·발견 카드·안내 축소)
 - 변경: console.js/install.js의 전체 정지에서 window.confirm 제거 — 비상 정지는 확인 없는 한 번 누름(D-92a 계보의 확인 시험을 원클릭 시험로 재작성, 대화상자 핀 console.js 3→2). install.js refreshDiscovery가 발견(mDNS) 장치 카드(이름·주소:포트·단계·상태)와 등록 버튼을 그린다(D-410 이관 때 빠진 렌더 충원).
 - 변경: 운용 문서의 상시 안내 문단(대형·신호등·지도·목표)은 제목 title로 물러나고 문단은 운용 상태가 쓴다. 기록(#log)이 '기록' 제목을 얻는다(aria-labelledby). 설치 문서의 발견 안내·카메라 문구도 title로.
@@ -1295,6 +1289,12 @@
 - 근거: D-415(사용자 지시 — "로그도 볼 수 있게, 디버그 생각할 수 있게"). 계측: 로그 21px→144px, 진단 0→4 항목, 신호등 빈 상태 안내.
 - gate 변화: 없음.
 - 최종 증거: web_common 209 passed; fleet 문법·앱·큐·태스크 54 passed; 브라우저 — 로그 패널(min 144/max 432px)·지우기 버튼·진단('3대 · 갱신됨')·신호등 빈 상태 표시, 페이지 오류 0.
+
+## 2026-10-02 · bcce15c9d · fix(hub): 닫힌 소켓에 보내지 않음; 판단 요청 패널 뒤 여유 "비어 있음"/"알 수 없음"
+
+- 변경: `/ws/robots` 는 연결이 끊긴 뒤 답을 보내지 않는다(이유를 info 로). 판단 요청 보드가 `rear_state` 를 옮기고 패널은 `비어 있음`·`알 수 없음`(클래스 `stuck-fact-unknown`)을 구분한다(9300adf1d).
+- 증거: `test_hub_server.py`(거부된 사건 뒤에도 heartbeat 응답), `test_line_stuck_api.py`, `web/line-stuck.test.mjs` 초록.
+- gate 변화: 없음.
 
 ## 2026-10-02 · uncommitted · test(fleet): replay late OMX success without clearing Mission HOLD
 - Change: replayed a lost submit receipt across independently reopened Fleet and OMX SQLite stores. Fleet reuses the persisted Action/attempt, records late success while retaining HOLD and object/workcell claims, and only confirms the goal after independent post-action camera and gripper evidence.
