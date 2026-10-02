@@ -20,6 +20,9 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 Finite = Annotated[float, Field(allow_inf_nan=False)]
 Unit = Annotated[float, Field(ge=0.0, le=1.0, allow_inf_nan=False)]
 _REQUEST_ID = re.compile(r"^[A-Za-z0-9_.:-]{1,64}$")
+#: `LocalizationStatus.reason` while the robot's 3 s injection check runs (state stays
+#: CANDIDATES). Fleet's ladder and CORE's missions wait on it (D-395 S1 re-run R6).
+CHECKING = "checking"
 
 
 class LocState(str, enum.Enum):
@@ -70,6 +73,13 @@ class LocalizationStatus(BaseModel):
     reason: Optional[str] = Field(default=None, max_length=64)
     needs_human: bool = False
     request_id: Optional[str] = None
+    #: D-395 rev. 4 §5 follow-up (S1 R1): what a LOCALIZED robot's lidar sees that the map
+    #: does not explain, base_link, from one full scan; empty outside LOCALIZED. Fleet's
+    #: monitor places them from an anchor's map pose to check the other robots.
+    unmapped_objects: list[RobotPoint] = Field(default_factory=list, max_length=16)
+    #: Robot-clock stamp of that scan. Fleet uses it only to tell one scan from the next
+    #: (clocks are not synchronised, rev. 3); it times freshness from first sight.
+    objects_stamp: Optional[Finite] = None
 
     @field_validator("request_id")
     @classmethod

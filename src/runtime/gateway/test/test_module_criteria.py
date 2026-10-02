@@ -58,7 +58,6 @@ ALLOWED = Counter({
     # load_snapshot) to load; a missing provider or factory fails closed with
     # an install hint instead of an ImportError. No private field is reached.
     ("bridge/control_sensor_adapter.py", "getattr", "provider", "attr"): 1,
-    ("bridge/control_sensor_adapter.py", "getattr", "safety", '"bind_control_policy"'): 1,
     ("bridge/control_sensor_adapter.py", "hasattr", "observations", '"max_age"'): 1,
     ("node.py", "getattr", "self", '"get_namespace"'): 1,
     # Accepted (core-shutdown 2026-09-23): rclpy Jazzy's MultiThreadedExecutor never

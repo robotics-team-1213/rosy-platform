@@ -69,6 +69,21 @@ def test_centred_lane_reads_near_zero_with_both_boundaries():
     assert last["target_px"] is not None
 
 
+def test_follow_explanation_marks_only_the_chosen_pair_and_records_lane_width():
+    obs, last = _keep(_render([(HALF, 0.0), (-HALF, 0.0)]))
+    assert obs is not None
+    assert last['lane_width_m'] == pytest.approx(2 * HALF)
+    assert {b['side'] for b in last['boundaries'] if b.get('selected')} == {'left', 'right'}
+    assert sum(bool(b.get('selected')) for b in last['candidates']) == 2
+
+
+def test_hold_does_not_keep_a_previously_selected_boundary():
+    keeper = LaneKeeper(camera_x_offset_m=X_OFFSET, smoothing=0.0)
+    assert keeper.update(_render([(HALF, 0.0), (-HALF, 0.0)]), GROUND) is not None
+    assert keeper.update(_render(), GROUND) is None
+    assert not any(b.get('selected') for b in keeper.last['boundaries'])
+
+
 @pytest.mark.parametrize("shift, sign", [(0.04, -1), (-0.04, +1)])
 def test_off_centre_steers_back_with_core_sign(shift, sign):
     # shift > 0: the lane lies to the robot's left (robot right of centre),
@@ -438,7 +453,8 @@ def test_node_wires_keep_mode_on_the_labelled_ground():
     uses_ground = text.split("def _camera_mode_uses_ground", 1)[1].split("def ", 1)[0]
     assert "'keep'" in uses_ground
     assert "self._lane_keeper.update(" in text
-    assert "frame, self._ground(frame.shape[1], frame.shape[0])" in text
+    assert "ground = self._ground(frame.shape[1], frame.shape[0])" in text
+    assert "frame, ground, paint_mask=paint," in text   # D-408 paint source
     assert "corner_turning=bool(self.get_parameter('lane_corner_turning').value)" in text
 
 

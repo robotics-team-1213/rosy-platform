@@ -212,6 +212,27 @@
 - 결정: D-402 §3·§5·§6. C4 작업으로 남김: `action_store.py`의 완료 journal 이름 `PICK_PLACE_ACTION_COMPLETED`와 `result_source='pick-place-workflow'`는 종류 중립이 아니다. `CELL_TRANSFER` 완료 경로를 열 때 함께 바꾼다.
 - 교훈: 계획이 스스로 내세운 값(`gripper_joint_names`)으로 안전 검사를 줄이지 않는다. 제외 집합은 수락된 프로필에서 온다.
 
+## 2026-10-02 · uncommitted · fix(omx): close final-owner joint-state sequence race
+- Change: Bind validated start positions and per-joint tolerances to each PickPlaceRunner command. After the durable phase-intent write, the final ArmCommandOwner compares the latest fresh joint-state sample against that binding; it consumes the latest sequence only when all joints remain in tolerance. Missing evidence and out-of-tolerance drift remain fail-closed. D-386 now defines this final-dispatch rule. Vendor probe startup preflight is 180 seconds, one generation case, and stop-on-first-failure.
+- Evidence: Regression tests failed before the fields existed; afterward, owner/runner tests passed. Full OMX adapter suite: 171 passed, 4 skipped. Changed Python files passed flake8 and py_compile. Vendor Gazebo attempt ended before Fleet grant because the controller was not observed active in the former 45-second preflight; launch log later showed activation and a joint3 command-limit warning. No ROS goal was sent. Current Jazzy in-process rerun skipped at collection because rclpy was unavailable to the selected interpreter.
+- Gate: SOURCE GO. ROS-SIM HOLD; new 180-second vendor retry remains pending. ARTIFACT HOLD; DEVICE/FIELD PARKED. No hardware stop, E-stop, grasp/place, or field claim.
+
+
+## 2026-10-02 · uncommitted · fix(omx): make start tolerance ceiling owner-controlled
+- Change: Add trusted per-joint max_start_state_tolerances to ArmCommandConfig. Tolerance-qualified submissions fail closed when policy is absent or a command asks for a wider bound. Vendor probe verifies read-only /repo, loopback-only networking, and no serial/video grants itself.
+- Evidence: New missing-policy, oversized-tolerance, malformed-map, negative, and non-finite config tests. Full OMX adapter suite: 176 passed, 4 skipped. Flake8 and Python compilation passed. The first complete Jazzy ROS callback rerun remained skipped at collection because rclpy was unavailable to the selected interpreter; no ROS-SIM claim is made.
+- Gate: SOURCE GO; ROS-SIM HOLD. This review fix does not change ARTIFACT HOLD or DEVICE/FIELD PARKED.
+
+## 2026-10-02 · uncommitted · fix(omx): center final state check on planned start
+- Change: Bind the planned phase start positions, not the measured validation sample, as the final owner reference. The owner compares latest readback to the original planned start tolerance and consumes only the latest sequence, avoiding a second allowance after journaling. Probe refuses ttyACM, ttyUSB, and ttyS device grants as well as serial/by-id and video devices.
+- Evidence: Regression reproduces measured state at +0.009 followed by dispatch readback +0.011 against a +0.010 planned bound; dispatch rejects. Runner regression verifies planned start remains the owner reference. Focused owner/runner suite: 58 passed. Full OMX adapter suite rerun pending.
+- Gate: SOURCE GO; ROS-SIM HOLD; ARTIFACT HOLD; DEVICE/FIELD PARKED.
+
+## 2026-10-02 · uncommitted · test(omx): verify planned-start tolerance budget
+- Change: Record the measured runner/owner regression result after centering final admission on the planned phase start.
+- Evidence: Full OMX adapter suite 178 passed, 4 skipped; flake8, py_compile, and git diff checks passed. The in-process Jazzy test was skipped because rclpy was unavailable to the selected interpreter. Vendor retry remains unrun.
+- Gate: SOURCE GO; ROS-SIM HOLD; ARTIFACT HOLD; DEVICE/FIELD PARKED.
+
 ## 2026-10-02 · d8f96fb8 · feat(omx): C3 Gazebo CELL_TRANSFER probe (D-402, plan C3)
 
 - 변경: `deploy/robot/omx/probe_cell_transfer.py`(owner 프로세스 하나: 프로필로 만든 `ArmCommandOwner` → `AnalyticCellTransferPlanner` → `PickPlaceRunner` → `/arm_controller`; `gripper_contract` readback, `gz model -p` = `sim_model_pose`), `run_cell_sim.sh`(owner 없는 vendor follower). 프로덕션 코드는 바꾸지 않았다. 대역은 플래그와 evidence JSON에 남긴다: owner lock 안 sequence rebind, 첫 RUNNING_FEEDBACK만 runner로, tmpfs journal, 표시된 DetachableJoint sim aid.
@@ -249,3 +270,15 @@
 - 증거: HEAD 20회 반복(`nice -n 19`, `ROS_DOMAIN_ID=77`, WSL load average 33–55): 12/20 통과. 실패는 `joint_state_stale`(시험의 0.2–0.5 s joint-state 나이 상한)과 그 뒤의 HOLD다. 같은 조건에서 base `7ae0f65c`(이전 무부하 25/25)와 HEAD를 번갈아 8회씩 돌렸다: base 5/8, HEAD 7/8. base도 같은 시험(`test_slow_feedback…`, `test_runtime_subscribes…`)에서 실패하므로 회귀가 아니라 부하로 본다. 원본: `X:\DevTemp\rosy-cell-c3\c3b\wsl-loop3.txt`, `ab2-loop.txt`.
 - gate 변화: 없음.
 - 결정: 수용 기준(연속 20회 무실패)은 WSL이 비면(17:00 KST 이후) nice 없이 다시 확인한다.
+
+## 2026-10-02 · c07896af · merge: main (D-413, pl3 dispatch safety) into feat/rosy-cell-c3-gazebo
+
+- 변경: 시작 상태 메커니즘을 하나로 합쳤다. main의 `TrajectoryCommand.expected_start_state_positions`/`start_state_tolerances`(모든 관절)와 `ArmCommandConfig.max_start_state_tolerances`(관절별 상한)를 남겼다. C3b의 `start_state_window`, `max_start_window_rad`, `start_window_exempt_joints`는 지웠다. 두 쪽의 성질은 모두 남는다.
+  - owner가 lock 안에서 최신 fresh state로 다시 검사한다(b0979ad6, C3b A1). 최신 sequence에 바인딩한다(`_last_command_state_sequence`).
+  - 요청자의 sequence는 더 오래될 수는 있어도 더 새로울 수는 없다. 이미 쓴 sequence는 거절한다. 시계 역행은 `owner_clock_jumped_back`로 HOLD한다.
+  - 기준점은 계획된 시작점이다(11ae6e70).
+  - C3b의 grasp 뒤 그리퍼 예외는 owner의 예외 목록이 아니다. runner가 그 관절을 자기가 방금 검사한 readback에 묶는다. 이 방식은 main의 "모든 관절" 규칙보다 엄격하다.
+- 상한 결정: main은 관절별 정책(7735c307)을 두었고, C3b는 0.1 rad 한 값을 두었다. 관절별 쪽을 남겼다. 프로필은 관절마다 기준 허용오차와 grasp 뒤 덮어쓰기 중 큰 값을 상한으로 만든다(현재 모든 관절 0.02 rad). C3b의 0.1보다 5배 엄격하고, 프로필이 요구할 수 있는 값은 모두 덮는다.
+- cap 없는 owner: C3b는 창을 무시하고 정확 일치로 넘어갔다. main은 `start_state_tolerance_policy_missing`로 거절한다. 더 엄격한 main 쪽을 남겼다. C3b 시험은 지우지 않고 그 결과를 검사하도록 바꿨다. 보낸 command 객체는 원본 그대로다(main 시험 `action.commands == [command]`). C3b 시험은 바인딩을 `_last_command_state_sequence`로 확인한다.
+- 증거: owner 68, adapter 전체·layout·cell·compat 501 passed / 5 skipped(모듈 경로 PYTHONPATH).
+- gate 변화: 없음.

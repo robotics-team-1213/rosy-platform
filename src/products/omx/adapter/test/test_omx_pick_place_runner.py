@@ -200,9 +200,29 @@ def test_first_phase_journals_acceptance_then_correlated_terminal_without_autoad
     runner.advance()
     assert len(port.submissions) == 2
     assert port.submissions[0][0].source_state_sequence == 9
+    expected_start = dict(zip(JOINTS, _plan().phases[0].start_state_positions))
+    assert dict(port.submissions[0][0].expected_start_state_positions) == expected_start
+    assert dict(port.submissions[0][0].start_state_tolerances) == {name: 0.01 for name in JOINTS}
     assert port.submissions[1][0].source_state_sequence == 10
     assert recorder.phases()[1]["state"] == "ACCEPTED"
     assert store.get_action("action-1")["state"] == "RUNNING"
+
+
+def test_final_owner_reference_remains_the_planned_start_at_tolerance_edge(tmp_path):
+    state = ExecutionStateSnapshot(
+        sequence=9,
+        joint_positions={"joint1": 0.009, "joint2": 0.0, "joint3": 0.0,
+                         "joint4": 0.0, "joint5": 0.0},
+        calibration_revision="cal-1", transform_revision="tf-1",
+        planning_scene_revision="scene-1", observed_at_monotonic_s=12.4,
+    )
+    _, _, port, runner = _harness(tmp_path, current_execution_state=lambda: state)
+
+    runner.start()
+
+    command = port.submissions[0][0]
+    assert dict(command.expected_start_state_positions) == dict(zip(JOINTS, (0.0,) * len(JOINTS)))
+    assert command.expected_start_state_positions["joint1"] != state.joint_positions["joint1"]
 
 
 def test_next_motion_goal_waits_for_semantic_transaction_gate(tmp_path):

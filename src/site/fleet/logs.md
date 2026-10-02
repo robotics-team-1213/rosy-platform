@@ -1111,3 +1111,160 @@
 - 변경: test_fleet_console_browser 첫 시험의 인라인 라우트에 /api/fleet/session 폴백 추가 — 세션 404 로 콘솔이 잠긴 채 폴링을 시작하지 않아 지도·명단이 영영 로딩에 남는 기존 빨강(HEAD 484bb15a 에서도 실패).
 - 근거: D-398 후속 정리. fleet 시험 1291 passed, 브라우저 4건 통과(첫 시험 포함).
 - gate 변화: 없음.
+## 2026-10-01 · uncommitted · feat(fleet): D-395 2단계 C 레인 — 위치 확정 클라이언트·서비스·감시·사다리, 교통/bays 신뢰 (P2-2, P2-6)
+- 변경: 계약(`docs/plans/2026-10-01-d395-phase2-interfaces.md` §2·§3) 그대로.
+  - `RobotClient`/`HttpRobotClient`/`FakeRobot`에 `localization_candidates()`(404면 None), `localization_decision()`, `localization_suspect()`(≤ 64자). `localization_mission()`은 P2-7 전까지 `NotImplementedError` 자리표시.
+  - 새 `server/localization_service.py`: 0.5 s마다 상태를 읽고 CANDIDATES 로봇의 후보를 읽어 `Context`(LOCALIZED·map 프레임 다른 로봇, `lane_rules.yaml` `reference_squares`의 사각형·슬롯, 플래그가 켜졌을 때만 300 ms 이하 sighting)로 중재해 결정을 POST한다. 감시: LOCALIZED 로봇이 관측과 25 cm 또는 60° 넘게 1.5 s 어긋나면 `suspect {"reason":"fleet_monitor"}`. 다른 로봇 관측은 CANDIDATES 로봇의 지도 밖 물체를 peers 단서 없이 뚜렷이 앞선 후보 자세로 놓아 만든다(관측 대상 로봇이 관측자 자세를 고르지 않게). 사다리: CANDIDATES 진입부터 LOCALIZED까지 10 s → `rotate_in_place`, 25 s → `to_square`/`lane_to_stopline`을 "pending P2-7"로 로그만, 60 s → `needs_human`. 거부된 결정은 시계를 되돌리지 않는다(거부 고리가 사람에게 닿도록). 순수 로직은 `fleet/localization/service_logic.py`.
+  - **오버헤드 sighting 단서는 기본 꺼짐**: D-257 개정이 Accepted가 아니다. `--localization-overhead-cue`로만 켜고 코드·시작 로그에 그렇게 적었다.
+  - P2-2 `fleet/localization/trust.py` + `console.py`: `localization`이 있고 `odom`이거나 LOCALIZED가 아니면 그 pose를 쓰지 않고, 마지막 신뢰 자세 둘레 0.45 m를 막는 장애물(없으면 트랙 전체 차단)로 본다. 막힌 미션은 `LOCALIZATION_UNTRUSTED`로 대기하고 bays로 보내지 않는다. `localization: null`은 오늘 동작 그대로이고 행에 "위치 상태 미보고".
+  - `app.py` lifespan이 서비스를 다른 루프처럼 띄운다. CLI: 기본 켜짐(`--no-localization-service`), `--localization-lane-rules`(기본 map_v2_fleet). 콘솔 카드에 위치 배지(`web/localization-badge.js` 순수, `ui-tag` 어휘: 확정 중립, 미확정·미보고 warn, "위치 확인 필요" crit + 최우선 큐 행).
+  - `fleet` 크기 판정 24204, `console.py` 1063으로 재판정(판정 불변).
+- 증거: fleet pytest 전체 통과, node `test/web/*.test.mjs` 86 passed(새 5). 새 시험: `test_transport_localization.py` 11, `test_localization_trust.py` 14, `test_localization_service.py` 18(stamp당 한 번·새 stamp 재결정, LOCALIZED·map 로봇만 peers, 감시 1.5 s, 카메라 플래그 꺼짐/켜짐·신선도, 사다리 10/25/60 s, 오프라인·제거), `test_server_traffic.py`·`test_server_bays.py` P2-2 6, CLI 2, app lifespan 1. 감시 시험 3개는 변이로 확인했다.
+- gate 변화: 없음(SOURCE/LOCAL). Fleet 동작 변경은 사용자 승인(2단계). S1 벤치(P2-8)는 세 레인 통합 뒤.
+- 결정: D-395 Proposed(개정 3), 계약 §3 레거시 정책.
+
+## 2026-10-01 · uncommitted · fix(fleet): D-395 C 레인 리뷰 반영 — 모호하지 않은 증거만, 호출 상한, 점유 해제, 미확정 로봇의 목표
+- 변경: (중요) 감시의 다른 로봇 관측은 가장 가까운 물체를 거리와 상관없이 그 로봇으로 봤다 — 숨은 로봇 + 무관한 물체가 바르게 LOCALIZED인 로봇을 SUSPECT로 만들었다. 이제 보고 자세 0.25 m 안에 물체가 있으면 "보임", 그 근처에 없고 180° 거울 자세 0.25 m 안에 물체가 정확히 하나면 "다른 곳에 보임"(거울 잠금 서명), 나머지는 증거 없음. Fleet이 가져온 때보다 stamp가 1.0 s 넘게 오래된 보고는 증거가 아니다(벽시계 비교, 로봇 시계 NTP 동기 가정). 2 s 재보고 주기와 맞물리도록 감시는 증거 없는 틱에 유지를 지우지 않고, 어긋남 없이 1.5 s가 지나면 지운다. (경미) 로봇별 호출을 `asyncio.wait_for(…, 1.0)`로 묶고 로봇별 작업을 gather한다. (경미) `LOCALIZATION_UNTRUSTED` 분기도 점유(`_claims`)를 푼다. (결정) 자기 localization이 있고 LOCALIZED·map이 아닌 로봇의 목표는 보내지 않고 `LOCALIZATION_UNTRUSTED`로 대기시켜 LOCALIZED가 되면 내보낸다. null은 오늘대로. `console.py` 1076으로 재판정.
+- 증거: 회귀 시험 — 숨은 로봇 + 무관한 물체는 SUSPECT 없음, 거울 서명은 1.5 s 뒤 SUSPECT, 오래된 보고 무시, 증거 규칙 3개(변이로 확인), 멈춘 로봇 하나가 다른 로봇의 결정을 막지 않음, 점유 해제, 미확정 이동 로봇 대기·레거시 그대로.
+- gate 변화: 없음(SOURCE/LOCAL).
+- 결정: D-395 Proposed(개정 3); 미확정 이동 로봇 처리는 리뷰 결정.
+
+## 2026-10-01 · uncommitted · fix(fleet): D-395 보고 신선도는 Fleet이 처음 본 때부터 잰다
+- 변경: 바로 앞 항목의 "stamp가 Fleet 벽시계보다 1.0 s 넘게 오래되면 증거 아님"을 코디네이터가 뒤집었다 — 개정 3은 Fleet과 로봇 시계가 맞지 않는다고 가정한다. 이제 `(robot_id, request_id, stamp)` 보고를 Fleet이 처음 본 단조 시각을 적고, 그 뒤 1.0 s 동안만 감시 증거로 쓴다. 같은 보고를 다시 읽어도 처음 본 시각은 그대로라 재보고가 끊긴 로봇은 낡는다. 증거 없는 틱에 유지를 지우지 않는 감시(어긋남 없이 1.5 s면 해제)는 승인됐다.
+- 증거: 로봇 시계가 ±1 h 어긋나도 새 보고는 증거(1.5 s 뒤 SUSPECT), 바뀌지 않은 보고는 Fleet 시간 1 s 뒤 낡아 SUSPECT 없음(재읽기가 처음 본 시각을 갱신하는 변이로 확인).
+- gate 변화: 없음(SOURCE/LOCAL).
+- 결정: D-395 개정 3(시계 비동기).
+
+## 2026-10-02 · uncommitted · 관제 콘솔 회차 — 예외 큐 신뢰·지도 위계·카드 문구 정리
+- 변경: roster.js fillQueues가 오프라인 로봇(`연결 끊김`, EVIDENCE_LABEL.disconnected)과 온라인이지만 상태가 없는 로봇(`상태 확인 불가`)을 '주의 요망' 큐에 올린다. 로봇 전원이 닿지 않아도 예외 레인이 침묵하지 않는다(2026-10-02 회차 계측: 3대 오프라인에 큐 0건·패널 hidden이었음).
+- 변경: 카드 문구 — 닿지 못한 예외의 클래스 이름 코드(ConnectError 등)를 한국어로 옮기는 REACH_LABEL을 두고(모르는 값은 받은 그대로), 사실 라벨 POSE/YAW/BATTERY/SAFETY와 안전값 OK/E-STOP을 위치/방향/배터리/안전·정상/비상 정지로 바꾼다. 버튼마다 반복되던 같은 사유("로봇 오프라인" ×2)는 카드 상태 줄을 aria-describedby로 가리키는 "위 사유"로 한 번만 말한다(D-359 §5.3 한 원인은 한 번 말한다).
+- 변경: styles.css — 110rem 이상에서 지도 패널 내부 격자를 1fr:1fr에서 1.6fr:1fr로. 1920 관제 PC에서 현장 지도가 374px(로스터 1058px)로 목표를 찍는 표면이 폰 폭이 되던 위계 역전을 바로잡는다. 재측정 460px/카메라 288px.
+- 근거: D-280(아는 만큼 말한다·중요한 것이 먼저 보인다), D-359 §5.3, 운용자 말 한국어 평문 규칙. 2026-10-02 로컬 렌더 계측 회차(fleet console 8097, 로봇 3대 도달 불가 상태).
+- gate 변화: 없음.
+- 최종 증거: fleet 1213 passed 7 skipped; web_common 209 passed 24 skipped(문구·팔레트·반응형 계약 포함); 브라우저 재캡처 페이지 오류 0, 예외 큐 3건·지도 460px·"위 사유" 렌더 확인.
+
+## 2026-10-02 · uncommitted · 관제 콘솔 회차 2 — D-405/D-406 아이콘 크롬·카메라 설치 묶음·목표 토글
+- 변경: 테마 trio(어둡게·밝게·시스템)·설정 토글·영상 새로고침을 아이콘으로(한국어 이름은 sr-only·title 유지), 카드 측정 라벨(위치·방향·배터리·안전)을 아이콘+sr-only로(label 척도 크기). 목표 받기 버튼을 quiet에서 toggle+aria-pressed로(눌림 = 계열 파랑, .arming 클래스 제거).
+- 변경: 카메라 구역을 운용 무대(영상·선택·새로고침)와 details#camera-install-tools 설치·보정 묶음(기본 접힘)으로 분리. 높이 함수 4곳 vh→dvh.
+- 근거: D-405(아이콘 우선 크롬), D-406(운용/설치 분리 v1 + 목표 토글 위계), 사용자 지시 2026-10-02(위계 산만함·역할별 컴포넌트화).
+- gate 변화: 없음.
+- 최종 증거: fleet 1213 passed 7 skipped; web_common 209 passed(문구·dvh 게이트 포함); 브라우저 재캡처 페이지 오류 0 — 테마 3종·설정·새로고침 아이콘 렌더, 묶음 접힘 확인, 폰 390 문서 3431→3172px.
+
+## 2026-10-02 · uncommitted · feat(fleet): D-395 P2-7 사다리가 미션을 보낸다, 미션 전 교통 정지
+
+- 변경: `HttpRobotClient.localization_mission` 이 `POST /api/v1/localization/mission` 을 보낸다(자리표시 제거), `FakeRobot` 은 `missions`·`mission_error`. `LocalizationService` 사다리: 10 s `rotate_in_place`, 25 s `to_square`(사각형 목표가 있을 때, CORE 가 `unsupported` 면) → `lane_to_stopline`, 60 s `needs_human`. 거부는 `last_mission` 에 기록하고 재시도하지 않는다. LOCALIZED·레거시(null) 로봇에는 보내지 않는다. 미션 전 `FleetConsole.hold_for_localization` — 미확정 로봇의 keep-out(`trust.blocks`, 신뢰 자세가 없으면 트랙 전체)에 걸린 Fleet 목표를 취소하고 `LOCALIZATION_UNTRUSTED` 로 대기열에 넣어 그 로봇이 LOCALIZED 가 되면 다시 낸다. 정지가 실패하면 미션을 보내지 않는다. `service_logic.MISSION_LIMITS`·`square_target`; view 의 `pending_missions` → `rung_missions`.
+- 증거: `test_localization_service.py` (사다리 미션·대체·거부·레거시·교통 정지·배선), `test_server_traffic.py` +4, `test_transport_localization.py`.
+- gate 변화: console.py 1076 → 1096 (D-362 1000+ 등급, 판정 갱신).
+
+## 2026-10-02 · uncommitted · fix(fleet): D-395 P2-7 리뷰 — 사다리가 끝까지 간다, busy 는 다시 묻는다
+
+- 변경: 사다리 시간 10 / 25 / 60 s → **10 / 45 / 120 s**. `rotate_in_place`(10 s 에 보냄, 최대 30 s)가 끝난 뒤에 homing 이, `lane_to_stopline`(45 s, 최대 40 s)이 끝난 뒤에 `needs_human` 이 온다(60 s 로는 homing 이 못 끝난다). CORE 가 `busy` 로 거절한 단은 사다리가 그 단에 있는 동안 2 s 마다(`BUSY_RETRY_S`) 다시 보낸다. 다른 거부는 그대로 최종. 계약 문서 §3 에 새 시간을 적었다.
+- 증거: `test_localization_service.py` (단 사이 시간 불변식, busy 재시도, 비-busy 거부는 최종).
+- gate 변화: 없음.
+
+## 2026-10-02 · uncommitted · fix(fleet): D-395 P2-7 리뷰 — 미션 전 정지가 양보·대형도 멈춘다
+
+- 변경: `FleetConsole.hold_for_localization` 이 bay 로 가는 길(현재 자리→bay)이 미확정 로봇의 keep-out 을 지나는 양보를 취소하고 `_yielding` 에서 지운다. 대형(팔로워 또는 리더)이 keep-out 안에 있으면(신뢰 자세가 없으면 언제나) `formation_stop()` 으로 대형 전체를 멈춘다 — 세션에 로봇별 정지가 없다. 반환 목록에 `"formation"`.
+- 증거: `test_server_traffic.py` +2.
+- gate 변화: console.py 1096 → 1111 (판정 갱신).
+
+## 2026-10-02 · uncommitted · fix(fleet): D-395 S1 벤치 — 앵커 peer, 못 본 peer 는 0, 보고 수로 세는 감시, unsupported 는 최종
+
+- 변경: [S1 벤치 결과](../../docs/plans/2026-10-02-d395-s1-bench-results.md) 발견 3·7 과 사다리 재요청을 고쳤다.
+  - **앵커 peer (안전).** 트랙이 180° 대칭이라 함께 뒤집힌 로봇들은 서로 맞아 보인다. peer 는 앵커를 퍼뜨릴 뿐 대칭을 깨지 못한다. S1 에서 미러 고정된 r2 가 r1 의 쌍둥이 자세에 `peers` +1 을 줬고, margin 1.0 만이 번짐을 막았다. 이제 Fleet 이 로봇별 출처를 기록한다. `slot`/`square`/`paint`, `source: human`, 또는 앵커에서만 온 `peers` 로 실린 Fleet 결정의 자세에서 LOCALIZED 가 된 로봇만 앵커이고, `Context.peers` 에는 앵커만 들어간다(감시는 LOCALIZED 전부를 계속 본다). 처음부터 LOCALIZED 로 본 로봇, 결정 자세와 다른 곳(> 25 cm / 60°)에서 LOCALIZED 가 된 로봇은 다시 위치를 잡을 때까지 앵커가 아니다. LOCALIZED 를 벗어나거나, LOCALIZED 인 채 자세가 폴 사이에 0.25 m + 0.5 m/s·dt 또는 0.5 rad + 2 rad/s·dt 넘게 뛰면(Fleet 을 거치지 않은 주입) 출처가 지워진다. 읽기 실패 폴은 출처를 유지한다.
+  - **`peers` 단서.** 시야 안인데 못 본 peer 는 −1 이 아니라 0. 객체를 하나도 보고하지 않은 관찰자는 0. S1 에서 −1 하나로 쌍둥이가 6번 2.0 앞섰다.
+  - **감시.** 1.5 s 연속 대신 서로 다른 신선한 불일치 보고 2건(15 s 창, 사이에 일치 보고 없음). 같은 보고를 다시 읽어도 한 번. 보고가 4–7 s 간격으로 와서 예전 규칙은 한 번도 터지지 않았다.
+  - **사다리.** CORE 가 `unsupported` 로 거절한 종류는 LOCALIZED 가 될 때까지 다시 묻지 않고, homing 은 곧바로 `lane_to_stopline` 으로 간다. busy 재시도도 남은 종류만 묻는다(S1: 런마다 `to_square` 거절 13–20회).
+  - 계약 문서 §3 갱신. ADR 은 손대지 않았다(rev. 6 은 컨트롤러가 쓴다).
+- 증거: `test_localization_service.py`(앵커 연쇄, 출처 없는 peer 불사용, SUSPECT·자세 점프·다른 자세 LOCALIZED 시 앵커 해제, S1 재현 — 미러 peer 가 리드를 못 준다, S1 보고 간격 4/5.5/7 s 감시, unsupported 최종), `test_localization_cues.py`, `test_localization_arbiter.py`. 앵커 필터를 빼면 S1 재현을 포함한 3건이 실패함을 확인. `python -m pytest src/site/fleet/test -q` 1312 passed, 7 skipped (2026-10-02 Windows).
+- gate 변화: 없음. S1 재실행(Gazebo) 전이다.
+- 결정: D-395 rev. 6 대기
+- 교훈: 대칭 지도에서 상대 단서는 출처가 확인된 기준점에서만 증거다.
+
+## 2026-10-02 · uncommitted · fix(fleet): D-395 S1 재실행 — 미션 중과 끝난 뒤 1 s 는 결정하지 않는다
+
+- 원인: F1 WSL 실행에서 Fleet 이 `rotate_in_place` 로 돌고 있는 r2 에 첫 결정을 보냈다. 미션 전 후보는 회전 중에 낡았고 주입은 거부됐다.
+- 변경: 서비스가 LOCALIZED 가 아닌 D-395 로봇마다 `GET /api/v1/localization/mission`(새 `RobotClient.localization_mission_status`)을 읽는다. `running` 인 동안과 끝을 본 뒤 `MISSION_QUIET_S` 1 s 동안은 후보를 읽지 않고 중재·결정·감시 관측도 하지 않는다. API 오류(501 등, 미션 없는 CORE)는 미션 없음, 읽기 실패는 그 폴만 건너뛴다.
+- 증거: `test_localization_service.py` +5(미션 중·끝 후 1 s 조용, 미션 없는 CORE, 읽기 실패, SUSPECT 중 미션 → CANDIDATES, LOCALIZED 는 묻지 않음), `test_transport_localization.py` +1.
+- gate 변화: 없음.
+
+## 2026-10-02 · 3d91dcff · fix(fleet): D-395 S1 재실행 R2·R6 — 결정이 올 수 있는 동안 사다리는 멈춘다
+
+- 원인: R2 — 사다리는 Fleet 벽시계로 10 s 에 `rotate_in_place` 를 보냈는데, 그때 중재기는 peers 리드를 2 s 붙들고 있었고 결정 직전이었다(LOCALIZED 49.6–53.6 sim s, 약 20 이어야 함). R6 — 로봇의 3 s 주입 검사 중에도 사다리가 미션을 보냈다.
+- 변경: (94ad8a82) `Arbiter.pending(robot_id, request_id)` — 그 요청에 리드가 있거나, 비대칭 단서가 한 후보를 편들거나(여유 미달 포함), 결정을 이미 보냈으면 참. `Ladder.update(..., paused=)` — 멈춘 폴 앞의 간격은 세지 않고, 그동안 단은 오르지 않으며 `busy` 재요청도 없다(`holding`). 멈춤은 회차당 `LADDER_PAUSE_MAX_S` 30 s 까지라, 끝내 결정하지 않는 리드도 사람에게 간다. 서비스는 로봇이 CANDIDATES 이고 `reason: checking` 이거나 `pending` 일 때 멈춘다. 벽시계는 그대로(공유 시계 없음, rev. 3).
+- 증거: `test_localization_arbiter.py` +5, `test_localization_service.py` +5(S1 타임라인: 9.0 s 에 닻, 10.5 s 폴에 회전 없음, 11.0 s 에 peers 결정, 미션 0; 검사 중 미션 없음·재요청 없음; 멈춤 상한). 수정 전 S1·검사 시험은 `rotate_in_place` 가 나가 실패함을 확인. `python -m pytest src/site/fleet/test -q` 1328 passed, 7 skipped.
+- gate 변화: 없음. Gazebo 재실행 전.
+
+## 2026-10-02 · uncommitted · 관제 콘솔 회차 3 — D-409 기기 등록·연결 서랍 + 컴팩트 카드 요약
+- 변경: 기기 연결 묶음(로봇 등록 #robot-enrollment + 카메라 연결 승인 #camera-link)을 details#device-install-tools(기본 접힘) 안으로. 아이디·조상 구조 보존으로 test_console_camera_pairing과 JS가 그대로 붙는다. h3 "기기 연결"은 sr-only로(aria-labelledby 유지).
+- 변경: 로스터 카드 측정 칸에 data-fact(pose/yaw/battery/safety)을 달고 컴팩트(<30rem)에서 위치·방향 숨김 — 지도가 말한다. 카드 안쪽 여백 한 단 축소(--space-2/3). 운용 ops 블록은 대형·신호등·기록만 남는다.
+- 근거: D-409(사용자 지시 — 남은 설치 요소 분리·역할 명확화). 원래 회차 번호 D-407이었으나 병렬 작업이 D-407/D-408(차선 복구·페인트 입력)을 선점해 D-409로 재번호.
+- gate 변화: 없음.
+- 최종 증거: fleet 1328 passed 7 skipped; web_common+dashboard 287 passed 82 skipped; 브라우저 재캡처 — 서랍 2개 접힘, 폰 카드 측정 2칭(배터리·안전), 카드 204px, 폰 390 문서 3172→2811px(원점 3431), 페이지 오류 0.
+
+## 2026-10-02 · fbb12ef0 · feat(localization): D-395 S1 R1 — LOCALIZED 닻이 다른 LOCALIZED 로봇을 본다
+
+- 원인: S1 재실행 R1. 관찰자가 첫 결정에 LOCALIZED 가 되면 거울 증거가 보고 하나로 끝나 2개 문턱에 못 닿았다.
+- 변경: `LocalizationService._observe_from_anchors`. 매 폴에서 `objects_stamp` 가 있는 LOCALIZED 닻마다 상태의 물체를 자기 보고 map 자세로 놓고, 다른 모든 LOCALIZED 로봇에 대한 증거로 쓴다. 관찰자는 닻만이다(거울 잠긴 로봇은 옳은 로봇을 그 쌍둥이 자리에 놓는다). 자기 자신은 대상이 아니다. 증거 하나는 (닻, `objects_stamp`)이고 Fleet 이 처음 본 뒤 1.0 s 동안 신선하다. 같은 폴의 두 닻은 따로 센다. 증거 규칙(0.25 m, 거울 서명)과 15 s 안 2개 문턱은 그대로다. `peer_observations` 는 보고 대신 물체 목록을 받는다.
+- 증거: `test_localization_service.py` +7(닻 둘 중 주입된 거울이 2폴에 SUSPECT, 닻이 아닌 거울 로봇은 닻을 고발하지 못함, 같은 폴 닻 둘 = 2개, 숨은 로봇·무관한 물체·일치는 증거 아님, 같은 stamp 재읽기는 낡음). `python -m pytest src/site/fleet/test -q` 1335 passed, 7 skipped.
+- gate 변화: 없음. Gazebo 재실행 전.
+
+## 2026-10-02 · uncommitted · 관제 콘솔 회차 4 — D-410 운용/설치 두 문서로 분리
+- 변경: 설치·보정 화면 /console/install(install.html + install.js, 문법 procedure)을 만들고 기기 등록·카메라 연결 승인·경기장/맵 보정·설치 기록을 이관했다. 아이디·조상 구조 보존 이관. 운용 문서(/console)는 링크 안내만 남고 문서가 가벼워졌다(1920 기준 1,154px).
+- 변경: console.js에서 등록·카메라 승인·경기장/맵 보정 배선 제거. 발견 요청은 검색기 건강 로그와 고정 주소 판정만 남긴다. vision-view.js는 보정 칸 없는 프리뷰 전용 모드(빈 패널 스텁 + 프리뷰 가드)를 지원한다. 주소 이동 조작은 설치 문서가, 안내 배너는 운용 문서가 가진다.
+- 변경: static_routes에 install.js 자산과 /console/install 라우트(CSP 동일). surfaces.yaml console audience에 설치 경로 반영. 시험 6건+shared_controls 1건을 두 문서 세계로 갱신(신규 라우트·자산·링크 시험 포함).
+- 근거: D-410(사용자 지시 — 역할 명확화 완성). D-406/D-409의 접힌 서랍 이관.
+- gate 변화: 없음.
+- 최종 증거: fleet+web_common 1545 passed 31 skipped; 브라우저 — 두 화면 페이지 오류 0, 설치 화면 세션 토큰 공유 자동 인증, 운용 문서에 등록·보정 마크업 부재·링크 2개 확인.
+
+## 2026-10-02 · uncommitted · 관제 콘솔 회차 5 — 예외 큐 첫 행 고정(운용 블록 위계)
+- 변경: 넓은 창(64rem+)에서 예외 큐(주의·개입)를 왼쪽 열 1행으로, 지도를 2행으로 바꿨다. 회차 계측에서 큐가 지도 아래 963px(첫 화면 밖)에 있어 오프라인 로봇이 큐를 채우는 순간 '예외가 먼저'(D-201)가 위반됐다. 큐 top 963→186, 문서 높이 불변(열 균형 유지), 폰(단일 열)은 영향 없음.
+- 변경: test_console_queues_contract의 그리드 핀을 새 배치로 갱신(큐 1행 + 지도 2행 고정, 위반 경위를 문서화).
+- 근거: D-201(예외 문법), 2026-10-02 회차 계측. 대형 폼은 컨테이너 반응형(D-359 §6.3)으로 이미 적합 — 조정 없음.
+- gate 변화: 없음.
+- 최종 증거: queues contract + web_common 214 passed 24 skipped(반응형 계층 게이트 포함); 재계측 큐 top 186.
+
+## 2026-10-02 · uncommitted · CI 삼각측량 — 시크릿 스캔 면제·해시 문서 규약·스코어카드 기준선·설치 문서 브라우저 시험
+- 변경: secret_scan.py KNOWN_FIXTURES에 D-395 loc-assist fixture(SECRET-PAYLOAD-VALUE) 등록. OMX 증명 해시 3곳을 매처의 무결성 문맥 규약으로 서술(README 'revision'/'dataset commit', omx_f_kinematics.yaml 'at revision') — 의미 불변. test_release_boundary_gates no_secrets 재녹색.
+- 변경: D-178 스코어카드에 rosy_cell 잠정 행(4/4/4/4/4=80 A) 추가 — 집합 동일성 회복. robot_literal_backlog.txt 갱신(신규 8·삭제 2). known_failures.txt에 병렬 작업 사전 존재 실패 5건 기록(CI 전용 플레이크 4 + module_separation 소유자 판단 1).
+- 변경: test_fleet_console_browser.py에 D-410 설치 문서 렌더 계약 시험 추가(옵트인 Chromium — 문법·소유물·운용 표면 부재·E-stop·무오류). 통과 59s.
+- 근거: 2026-10-02 CI 실행 36909426842/36955733308 실패 대 조 로컬 재현. docs/validation/uiux-console-refactor-2026-10-02/README.md 회차 기록.
+- gate 변화: 없음.
+- 최종 증거: scorecard·literals·no_secrets 각 재녹색; 브라우저 신규 시험 1 passed.
+
+## 2026-10-02 · uncommitted · D-407 판단 요청 — 관제 목록과 다섯 답 중계
+- 변경: `server/line_stuck.py` `LineStuckBoard` — 모은 상태의 CORE `line_follow.stuck` 으로 로봇별 열린 막힘을 들고, 같은 id 의 `nav.line_stuck_opened` FleetAgent 사건에서 앞·뒤·회전 여유와 미리보기 순서번호를 붙인다(사건이 없으면 null). 닿지 않는 로봇은 마지막 값을 `robot_online: false` 로 남긴다. 보드는 `console_routes.py` 가 만들고 `GET /api/fleet/state` 모음마다 갱신해 로봇 행에 `line_stuck` 을 싣는다 — console.py 는 D-362 상한 위라 늘리지 않았다.
+- 변경: `GET /api/fleet/line-stuck`(viewer+), `POST /api/fleet/robots/{robot_id}/line-stuck/decision`(operator) — 로봇 자격으로 CORE `POST /api/v1/line-follow/stuck/decision` 에 그대로 넘긴다. Fleet 은 CORE 대신 거부하지 않는다. CORE 409(`STUCK_ID_MISMATCH`, `STUCK_DECISION_REFUSED` 사유)는 code·message 그대로 409, 나머지는 502. 넘긴 답마다 site principal·결과를 기록(API 감사 행과 별도). `HttpRobotClient.line_stuck_decision`.
+- 변경: 콘솔 예외 큐 패널 안 `판단 요청`(line-stuck.js) — 원인·단계 한국어, 여유·멈춘 시간·후진 시도·미리보기 #seq, 다섯 답. RESUME·BACK_AND_RETRY 는 패널 안 확인 단계(Esc 취소, 1 s 폴링에도 유지, 포커스 보존), 로컬 복구 꺼짐·시도 소진이면 BACK_AND_RETRY 비활성 + 사유. 거부는 채움 줄로 CORE 코드·문장 그대로. 최우선 개입 큐에 `판단 요청` 항목, 카드도 예외로 보인다.
+- FleetAgent 중계는 만들지 않았다: Fleet→로봇 명령은 전부 REST(로봇 자격)이고 FleetAgent 는 내려오는 명령 경로가 없다(hub 는 사건·하트비트만 받는다). 같은 CORE 경로를 REST 로 부른다.
+- 로봇 영상은 중계하지 않는다(D-59, test_no_video_relay) — 미리보기는 순서번호만 보인다.
+- 근거: D-407 §2 결과(관제 화면 변경). API Ref v1.76.
+- gate 변화: 없음(SOURCE/LOCAL 호스트 시험만, 실물·시뮬 없음).
+- 크기: fleet 묶음 24587 → 25494(+907, 시험 포함). 크기 판정을 25494 로 다시 내렸다(split 그대로, 미일정). 병렬 D-395 가지가 옛 24565 핀에 25011 을 보고했으므로 둘을 합칠 때 한 번 더 판정한다.
+- 최종 증거: `python -m pytest src/site/fleet/test -q` 1349 passed/7 skipped(새 `test_line_stuck_api.py` 13, `test_transport.py` 1, node `line-stuck.test.mjs` 9 는 glob runner 로 포함); 옵트인 Chromium `-k "line_stuck or queues_render or camera_fault or mobile_console"` 5 passed(확인 단계·Esc·폴링 유지·409 그대로); `src/runtime/gateway/test` + `test/architecture` 새 실패 0(known_failures); harness lint 0 errors. Windows 호스트만, 로봇 접촉 없음.
+
+## 2026-10-02 · uncommitted · D-407 판단 요청 검토 반영 — 전송 실패·지속 기록·확인 단계
+- 변경: 답 중계가 httpx 오류(`HttpRobotClient` 는 OSError 가 아니라 httpx 예외를 올린다)를 잡는다. 연결 자체 실패는 502 `ROBOT_UNREACHABLE`(전달 안 됨), 시간 초과·응답 끊김은 502 `STUCK_DECISION_OUTCOME_UNKNOWN`(CORE 가 이미 적용했을 수 있음, 막힘을 다시 보고 답할 것). 둘 다 기록된다(결과 불명은 `accepted: null`). 전에는 맨 500 에 기록 없음이었다.
+- 변경: 넘긴 답마다 Fleet 저널 DB 의 `fleet_line_stuck_answers` 에 API 감사 `request_id` 와 함께 남긴다(작업 저장소가 있을 때). 저장 실패는 로그만 — 로봇은 이미 답을 받았다.
+- 변경: `stuck_id` 는 `^[A-Za-z0-9_.:-]+$`(CORE id 는 `stuck-<12 hex>`). `GET /api/fleet/line-stuck` 은 로봇을 다시 모으지 않고 마지막 `/state` 모음과 `observed_age_s` 를 준다.
+- 변경: 콘솔 — 확인 단계 "보내기"가 그 답 버튼과 같은 사유로 막히고, 전송 중 두 번째 답은 무시하며, 막힘 id 가 바뀌면 확인 단계를 버린다(aria-expanded false). 전송 실패 문구는 "전달 실패"/"결과 불명"이지 "거부"가 아니다.
+- 근거: D-407 Fleet 쪽 검토(M1, L1–L6). API Ref v1.76 행 문구 갱신(버전 유지, 같은 가지의 미병합 추가분).
+- gate 변화: 없음.
+- 크기: fleet 25590(판정 25494+150 안).
+- 최종 증거: `src/site/fleet/test` 1352 passed/7 skipped(전송 실패 매개 4: ConnectError·ConnectionRefused·ReadTimeout·RemoteProtocolError, 지속 기록·감사 id, 목록이 로봇을 다시 부르지 않음, id 형식); node `line-stuck.test.mjs` 10; 옵트인 Chromium `-k "line_stuck or queues_render or camera_fault or mobile_console"` 7 passed(새 2: 성공 결과·전송 중 이중 제출 막힘, 확인 중 막힘 교체·오프라인 로봇) — 확인 단계 id 비교를 되돌린 변이는 적색; gateway+architecture 1918 passed, known_failures 새 실패 0; harness lint 0 errors.
+
+## 2026-10-02 · 95e13278 · fix(fleet): D-395 S1 3회차 T1–T3 — 폴 간격과 무관한 도약 판정, 시간 초과 결정 확인, needs_human 은 깃발
+
+- 원인: T1 — 부하 중 폴이 4–10 s 간격이라 도약 상한(0.25 m + 0.5 m/s·dt, 0.5 rad + 2 rad/s·dt)이 1.43 m·2.70 m 거울 주입을 넘겼다. 거울 잠긴 로봇이 닻으로 남아 옳은 로봇을 고발했다. T2 — 1 s 호출 상한이 관찰 증거를 잃었고, d3 에서 시간 초과된 결정 POST 를 CORE 는 받아 로봇이 "출처 모름"으로 LOCALIZED 됐다. T3 — `needs_human` 이 멈춤인지 깃발인지 정해지지 않았다.
+- 변경: (768d2f4a) `service_logic.jumped` 가 dt 를 `JUMP_DT_CAP_S` 1.0 s 로 자른다(상한 최대 0.75 m / 2.5 rad, π 미만이라 180° 뒤집힘은 늘 도약). dt 와 무관한 `mirrored`: 새 자세가 이전 자세의 180° 쌍둥이(지도 중심 기준)에서 0.3 m·0.5 rad 안이면 닻을 뗀다. 대가(문서화): 폴이 1 s 넘게 벌어지면 실제로 0.75 m 넘게 움직였거나 2.5 rad 넘게 돈 로봇도 닻을 잃는다 — 다시 위치를 잡을 때까지 증거만 잃는다.
+- 변경: (b8d00fdb) `CALL_TIMEOUT_S` 1.0 → 2.5 s, 로봇별 호출은 그대로 병렬. 결정 POST 가 시간 초과되면 (request_id, 결정 자세, 단서가 닻이 되는지, 시각)을 미확인으로 기억한다. 로봇이 15 s 안에 그 자세(5 cm·5° 안)로 처음 LOCALIZED 되면 확인된 결정처럼 출처를 받아들인다. 다른 자세·15 s 뒤·이후 성공한 결정은 기록을 버린다. 거절·연결 오류는 기록하지 않는다.
+- 변경: (95e13278) T3 은 현재 동작 확인: `needs_human` 뒤에도 중재·결정은 계속되고, LOCALIZED 가 되면 사다리 회차가 끝나 깃발이 지워진다. 콘솔 배지는 깃발이 선 동안 "위치 확인 필요". 코드 변경 없이 시험으로 고정.
+- 증거: `test_localization_service.py` +13(8 s 폴 거울 주입은 다음 폴에 닻 상실, 8 s 폴의 실제 0.8 m 이동도 닻 상실, 0.5 s 폴로 달리고 도는 로봇은 닻 유지, dt 상한·거울 서명 순수 시험; 기본 2.5 s 상한과 매달린 로봇 셋이 한 번의 상한만 쓰는 병렬성; 미확인 결정 도달 = 닻, 6 cm·6°·거울·15 s 뒤 = 닻 아님; needs_human 뒤 결정이 깃발을 지움). 수정 전 T1·T2 새 시험은 실패함을 확인. `python -m pytest src/site/fleet/test -q` 1348 passed, 7 skipped.
+- 결정: ADR 은 손대지 않음(개정 8 은 컨트롤러가 쓴다). 계약 `docs/plans/2026-10-01-d395-phase2-interfaces.md` §3 갱신.
+- gate 변화: 없음. Gazebo 재실행 전.
+
+## 2026-10-02 · uncommitted · D-407 판단 요청 — main 병합, API Ref v1.77
+- 변경: main(039786e3, D-407 Gazebo 후속이 API Ref v1.76 을 씀)을 병합했다. 이 가지의 Fleet 경로·`line_stuck` 행·검토 반영 문구는 v1.77 로 옮겼다(위 두 기록의 "v1.76" 은 병합 전 번호다). 버전 핀(시험 3, CORE app.py 설명) v1.77.
+- gate 변화: 없음.
+- 크기: fleet 25643(판정 25494+150 안, 여유 1줄 — 다음 증가는 다시 판정해야 한다).
+- 증거: 병합 뒤 `src/site/fleet/test` 1364 passed/7 skipped; 옵트인 Chromium `-k line_stuck` 3 passed; `src/runtime/gateway/test` + `test/architecture` 1926 passed/17 skipped, known_failures 새 실패 0; harness lint 0 errors.

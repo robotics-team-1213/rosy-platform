@@ -5,7 +5,9 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
-from core_api_web.api.v1.common import admin, operator, require_calibration_owner, viewer
+from core_api_web.api.v1.common import (
+    admin, operator, localized_start, require_calibration_owner, viewer,
+)
 from core_api_web.api.deps import AuthContext, get_services, CoreServicesLike
 from core_api_web.api.errors import ApiError
 from core_api_web.api.deps import DockError, DockInstance, DockType
@@ -28,6 +30,7 @@ _DOCK_HTTP = {
     "LINE_FOLLOW_ACTIVE": 409,
     "MODE_CONFLICT": 409,
     "NO_ODOMETRY": 409,
+    "NOT_LOCALIZED": 409,
 }
 
 
@@ -145,8 +148,9 @@ def docking_dock(body: DockCommand, auth: AuthContext = Depends(operator),
     require_calibration_owner(svc, auth, "docking")
     try:
         # 매니저가 DOCKING 을 먼저 쥔다 (CoreServices.take_docking_mode). 못
-        # 쥐면 아무것도 바꾸지 않고 MODE_CONFLICT 다.
-        svc.docking.dock(body.dock)
+        # 쥐면 아무것도 바꾸지 않고 MODE_CONFLICT 다. D-395 §2: LOCALIZED 에서만.
+        with localized_start(svc):
+            svc.docking.dock(body.dock)
     except DockError as exc:
         raise _dock_error(exc)
     return svc.docking.status().model_dump()

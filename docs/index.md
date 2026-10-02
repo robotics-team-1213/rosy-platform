@@ -184,6 +184,7 @@
 | D-377 | 앱 이름 규칙: Rosy + 영어 한 단어 — 표시 이름 `Rosy <Word>`, id·폴더 끝 `<word>`, 패키지 `rosy_<word>`, Android `io.github.livsbittt.rosy.<word>`, Gradle `rosy-<word>`, 아이콘 `<word>.svg`; Rosy Cam·Vision·Console·Robot·Pilot |
 | D-382 | 로봇 ↔ 사이트 관제 통신은 계약 스냅샷 하나로 판정하고, 실물 확인은 읽기 전용 적합성 탐침으로 시작한다 |
 | D-390 | Pilot의 OMX-AI 연습은 시뮬레이션 전용 장치 API를 거쳐 로컬 팔 명령 소유자에 연결한다 |
+| D-413 | ROSY는 modules·integrations·apps·profiles로 책임을 나누고 고정 셀 한 흐름부터 이전한다 |
 
 ## 계획·결과 문서
 
@@ -254,6 +255,7 @@
 - [2026-09-30-site-app-roles-and-shared-link-plan.md](plans/2026-09-30-site-app-roles-and-shared-link-plan.md)
 - [2026-10-01-omx-demonstration-lerobot-design.md](plans/2026-10-01-omx-demonstration-lerobot-design.md)
 - [2026-10-01-pilot-omx-gazebo-practice.md](plans/2026-10-01-pilot-omx-gazebo-practice.md)
+- [2026-10-02-platform-architecture-v02-migration.md](plans/2026-10-02-platform-architecture-v02-migration.md)
 
 ## 교훈 (docs/solutions)
 
@@ -266,8 +268,8 @@
 
 ## 최근 기록
 
-- 2026-10-01 · uncommitted · docs(adr): D-395 개정 4 — 2단계 결정과 Fleet 감시 한계
-- 2026-10-01 · uncommitted · fix(pilot): preserve recording errors and reconcile API minor
-- 2026-10-01 · uncommitted · fix(omx): fence recording closure and isolate storage faults
-- 2026-10-01 · uncommitted · feat(omx): record SIM demonstrations and export LeRobot v3
-- 2026-10-01 · uncommitted · docs(plan): D-395 2단계 세 갈래 인터페이스 계약
+- 2026-10-02 · d9e70f71 · docs(test): close Task 3 latest-main verification follow-up
+- 2026-10-02 · 184185f92 · docs(platform): record latest-main verification boundary
+- 2026-10-02 · uncommitted · test(sim): D-407 차선 막힘 복구 Gazebo 검증
+- 2026-10-02 · 9da93450 · refactor(platform): extract palletizing process behind legacy imports
+- 2026-10-02 · uncommitted · docs(adr): D-395 개정 8 — 부하에서도 버티는 닻 규칙, 사람 확인은 표시

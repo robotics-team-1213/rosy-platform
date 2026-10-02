@@ -163,10 +163,10 @@ body:is([data-surface="setup"], [data-surface="device"]) .procedure-panel {
   }
   body[data-surface="console"] .surface-slot[data-slot="sense"] .surface-camera-stage {
     min-height: 0;
-    height: clamp(9rem, 24vh, 14rem);
+    height: clamp(9rem, 24dvh, 14rem);
   }
   body[data-surface="console"] .surface-slot[data-slot="sense"] .surface-camera-frame {
-    max-height: 24vh;
+    max-height: 24dvh;
   }
   body[data-surface="console"] .surface-slot[data-slot="act"] .action-group-panel {
     display: grid;

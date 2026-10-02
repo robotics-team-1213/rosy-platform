@@ -1,4 +1,4 @@
-"""Exercise Fleet-to-UDS-to-ROS contracts with an in-process ActionServer fixture."""
+"""Exercise Fleet-to-UDS-to-ROS against a fixture or an isolated vendor simulator."""
 
 from __future__ import annotations
 
@@ -22,6 +22,7 @@ for entry in (str(FLEET_ROOT), str(FLEET_TEST_ROOT)):
 
 from action_msgs.msg import GoalStatus  # noqa: E402
 from control_msgs.action import FollowJointTrajectory  # noqa: E402
+from controller_manager_msgs.srv import ListControllers  # noqa: E402
 from rclpy.action import ActionServer, CancelResponse  # noqa: E402
 from rclpy.callback_groups import ReentrantCallbackGroup  # noqa: E402
 from rclpy.executors import MultiThreadedExecutor  # noqa: E402
@@ -52,6 +53,16 @@ from omx_adapter.ros_runtime import RosArmCommandRuntime, RosArmPhaseGoalPort  #
 from test_mission_dispatcher import _ready_mission  # noqa: E402
 
 
+def _wait_for_ros_terminal(runtime, expected_status, timeout_s=2.0):
+    deadline = time.monotonic() + timeout_s
+    handle = runtime.action_port.last_handle
+    while (handle is not None and time.monotonic() < deadline
+           and (not handle.done() or handle.status != expected_status)):
+        time.sleep(0.005)
+    assert handle is not None and handle.done() and handle.status == expected_status
+    return handle
+
+
 @pytest.mark.parametrize("generation_race", [False, True], ids=["normal", "generation-change"])
 def test_fleet_mission_reaches_ros_goal_once_without_claiming_semantic_completion(
     tmp_path, generation_race,
@@ -59,27 +70,37 @@ def test_fleet_mission_reaches_ros_goal_once_without_claiming_semantic_completio
     peer_uid = os.getuid()
     workcell_id = "omx-1"
     instance_id = "omx-1-control"
+    vendor_action = os.environ.get("OMX_FLEET_VENDOR_SIM_ACTION")
+    vendor_sim = bool(vendor_action)
     suffix = "generation_race" if generation_race else "normal"
-    action_name = f"/test/fleet_omx/{suffix}/follow_joint_trajectory"
-    joint_state_topic = f"/test/fleet_omx/{suffix}/joint_states"
+    action_name = vendor_action or f"/test/fleet_omx/{suffix}/follow_joint_trajectory"
+    joint_state_topic = (os.environ.get("OMX_FLEET_VENDOR_SIM_JOINT_STATES", "/joint_states")
+                         if vendor_sim else f"/test/fleet_omx/{suffix}/joint_states")
     config = ArmCommandConfig(
         enabled=True, workcell_id=workcell_id, instance_id=instance_id,
         joint_names=("joint1",), position_limits={"joint1": (-0.1, 0.1)},
+        max_start_state_tolerances={"joint1": 0.01},
         allowed_owners=("rule_based",), calibration_revision="cal-1",
-        max_joint_state_age_s=30.0, max_goal_duration_s=1.0, action_timeout_s=30.0,
+        max_joint_state_age_s=0.5 if vendor_sim else 30.0,
+        max_goal_duration_s=4.0, action_timeout_s=30.0,
     )
 
     rclpy.init()
     ros_node = Node("fleet_omx_ros_contract_test")
-    state_publisher = ros_node.create_publisher(JointState, joint_state_topic, 10)
+    state_publisher = None
+    state_timer = None
 
     def publish_state():
+        if state_publisher is None:
+            return
         message = JointState()
         message.name = ["joint1"]
         message.position = [0.0]
         state_publisher.publish(message)
 
-    state_timer = ros_node.create_timer(0.02, publish_state)
+    if not vendor_sim:
+        state_publisher = ros_node.create_publisher(JointState, joint_state_topic, 10)
+        state_timer = ros_node.create_timer(0.02, publish_state)
     goals = []
     goal_received = threading.Event()
     cancel_requested = threading.Event()
@@ -112,15 +133,20 @@ def test_fleet_mission_reaches_ros_goal_once_without_claiming_semantic_completio
         cancel_requested.set()
         return CancelResponse.ACCEPT
 
-    action_server = ActionServer(
-        ros_node, FollowJointTrajectory, action_name, execute_callback=execute_goal,
-        cancel_callback=cancel_callback,
-        callback_group=ReentrantCallbackGroup(),
-    )
+    action_server = None
+    if not vendor_sim:
+        action_server = ActionServer(
+            ros_node, FollowJointTrajectory, action_name, execute_callback=execute_goal,
+            cancel_callback=cancel_callback,
+            callback_group=ReentrantCallbackGroup(),
+        )
     runtime = RosArmCommandRuntime(
         ros_node, config, joint_state_topic=joint_state_topic,
         trajectory_action=action_name, poll_period_s=0.01,
     )
+    controllers_client = (ros_node.create_client(
+        ListControllers, "/controller_manager/list_controllers",
+    ) if vendor_sim else None)
     executor = MultiThreadedExecutor(num_threads=4)
     executor.add_node(ros_node)
     spinner = ThreadPoolExecutor(max_workers=1)
@@ -129,16 +155,54 @@ def test_fleet_mission_reaches_ros_goal_once_without_claiming_semantic_completio
     server = None
     server_thread = None
     try:
-        deadline = time.monotonic() + 5.0
+        if controllers_client is not None:
+            startup_timeout = float(os.environ.get(
+                "OMX_FLEET_VENDOR_SIM_STARTUP_TIMEOUT_S", "180",
+            ))
+            deadline = time.monotonic() + startup_timeout
+            controllers_future = None
+            arm_controller_active = False
+            controller_states = ()
+            while time.monotonic() < deadline:
+                if controllers_future is None and controllers_client.service_is_ready():
+                    controllers_future = controllers_client.call_async(ListControllers.Request())
+                if controllers_future is not None and controllers_future.done():
+                    result = controllers_future.result()
+                    controller_states = tuple(
+                        (controller.name, controller.state)
+                        for controller in result.controller
+                    ) if result is not None else ()
+                    arm_controller_active = result is not None and any(
+                        controller.name == "arm_controller" and controller.state == "active"
+                        for controller in result.controller
+                    )
+                    if arm_controller_active:
+                        break
+                    controllers_future = None
+                time.sleep(0.05)
+            assert arm_controller_active, (
+                "vendor simulation arm_controller must be active before any grant is submitted; "
+                f"timeout={startup_timeout}s controllers={controller_states} "
+                f"joint_state={runtime.latest_joint_state}"
+            )
+
+        readiness_timeout = (60.0 if vendor_sim else 5.0)
+        deadline = time.monotonic() + readiness_timeout
         while time.monotonic() < deadline:
             if runtime.action_port.server_is_ready():
-                publish_state()
+                if not vendor_sim:
+                    publish_state()
                 if runtime.latest_joint_state is not None:
-                    state_timer.cancel()
+                    if state_timer is not None:
+                        state_timer.cancel()
                     break
             time.sleep(0.02)
         assert runtime.action_port.server_is_ready()
         assert runtime.latest_joint_state is not None
+        if vendor_sim:
+            assert -0.1 <= runtime.latest_joint_state.positions["joint1"] <= 0.1, (
+                "vendor joint1 readback is outside this probe's bounded admission interval"
+            )
         time.sleep(0.1)  # allow the last already-published DDS sample to settle
 
         fleet_store, mission_service, mission, _ = _ready_mission(tmp_path)
@@ -187,7 +251,11 @@ def test_fleet_mission_reaches_ros_goal_once_without_claiming_semantic_completio
                     position_stddev_m=0.001,
                 )
 
-            point = JointTrajectoryPoint(time_from_start_s=0.25, positions=(position,))
+            delta = 0.02 if generation_race else 0.0
+            duration_s = 3.0 if generation_race else 0.25
+            point = JointTrajectoryPoint(
+                time_from_start_s=duration_s, positions=(position + delta,),
+            )
             phase_names = ("approach", "grasp", "transfer", "release")
             phases = tuple(PlannedMotionPhase(
                 phase_id=phase_id, ordinal=ordinal, joint_names=("joint1",),
@@ -277,10 +345,14 @@ def test_fleet_mission_reaches_ros_goal_once_without_claiming_semantic_completio
             stored_action.get("reason") if stored_action else None,
             [(row["phase_id"], row["state"], row.get("result")) for row in stored_phases],
             [(event["event_type"], event["detail"]) for event in stored_events[-6:]],
+            runtime.last_decision,
+            runtime.action_port.last_handle,
+            runtime.latest_joint_state,
             len(phase_runners), len(goals),
         )
         if generation_race:
-            assert goal_received.wait(5.0)
+            if not vendor_sim:
+                assert goal_received.wait(5.0)
             deadline = time.monotonic() + 5.0
             while time.monotonic() < deadline:
                 phase_rows = action_store.action_phases(
@@ -292,7 +364,11 @@ def test_fleet_mission_reaches_ros_goal_once_without_claiming_semantic_completio
             phase_rows = action_store.action_phases(
                 grant.action_id, attempt_id=grant.attempt_id,
             )
-            assert phase_rows and phase_rows[0]["state"] in {"ACCEPTED", "RUNNING"}
+            assert phase_rows and phase_rows[0]["state"] in {"ACCEPTED", "RUNNING"}, (
+                phase_rows, action_store.get_action(grant.action_id),
+                action_store.history(grant.action_id)[-8:], runtime.last_decision,
+                runtime.action_port.last_handle, runtime.latest_joint_state,
+            )
             tripped = fleet_store.trip_stop_latch(
                 actor_id="operator-1", reason="TEST_GENERATION_CHANGE",
             )
@@ -327,15 +403,16 @@ def test_fleet_mission_reaches_ros_goal_once_without_claiming_semantic_completio
                 runtime.last_terminal_decision,
             )
             assert phase_rows[0]["cancel_acknowledged"] is True
-            assert runtime.action_port.last_handle is not None
-            assert runtime.action_port.last_handle.status == GoalStatus.STATUS_CANCELED
-            assert cancel_requested.is_set()
+            _wait_for_ros_terminal(runtime, GoalStatus.STATUS_CANCELED)
+            if not vendor_sim:
+                assert cancel_requested.is_set()
             stop_state = local_stop.snapshot(
                 workcell_id=workcell_id, instance_id=instance_id,
             )
             assert stop_state.state == "LOCAL_LATCHED"
             assert stop_state.source == "fleet"
-            assert len(goals) == 1
+            if not vendor_sim:
+                assert len(goals) == 1
 
             reconciled = dispatcher.dispatch_next()
             assert reconciled["mission_id"] == mission["mission_id"]
@@ -344,10 +421,12 @@ def test_fleet_mission_reaches_ros_goal_once_without_claiming_semantic_completio
 
             with pytest.raises(LocalActionRejected, match="generation"):
                 transport.submit(grant)
-            assert len(goals) == 1, "stale-generation grant replay must not create another ROS goal"
+            if not vendor_sim:
+                assert len(goals) == 1, "stale-generation grant replay must not create another ROS goal"
             return
 
-        assert goal_received.wait(5.0)
+        if not vendor_sim:
+            assert goal_received.wait(5.0)
         deadline = time.monotonic() + 5.0
         while time.monotonic() < deadline:
             phases = action_store.action_phases(grant.action_id, attempt_id=grant.attempt_id)
@@ -357,11 +436,12 @@ def test_fleet_mission_reaches_ros_goal_once_without_claiming_semantic_completio
         phases = action_store.action_phases(grant.action_id, attempt_id=grant.attempt_id)
         assert [phase["phase_id"] for phase in phases] == ["approach"]
         assert phases[0]["state"] == "SUCCEEDED"
-        assert len(goals) == 1
-        assert goals[0].trajectory.joint_names == ["joint1"]
-        assert list(goals[0].trajectory.points[-1].positions) == [0.0]
-        assert runtime.action_port.last_handle is not None
-        assert runtime.action_port.last_handle.status == GoalStatus.STATUS_SUCCEEDED
+        assert phases[0]["driver_goal_id"]
+        if not vendor_sim:
+            assert len(goals) == 1
+            assert goals[0].trajectory.joint_names == ["joint1"]
+            assert list(goals[0].trajectory.points[-1].positions) == [0.0]
+        _wait_for_ros_terminal(runtime, GoalStatus.STATUS_SUCCEEDED)
         assert action_store.get_action(grant.action_id)["state"] != "SUCCEEDED"
         assert len(phase_runners) == 1
 
@@ -387,7 +467,8 @@ def test_fleet_mission_reaches_ros_goal_once_without_claiming_semantic_completio
         duplicate = transport.submit(grant)
         assert duplicate.state.value == "UNKNOWN"
         assert duplicate.created is False
-        assert len(goals) == 1, "replayed Fleet grant must not create a second ROS goal"
+        if not vendor_sim:
+            assert len(goals) == 1, "replayed Fleet grant must not create a second ROS goal"
 
     finally:
         cancel_requested.set()
@@ -399,7 +480,11 @@ def test_fleet_mission_reaches_ros_goal_once_without_claiming_semantic_completio
         executor.shutdown(timeout_sec=2.0)
         spinning.result(timeout=3.0)
         runtime.destroy()
-        ros_node.destroy_timer(state_timer)
-        action_server.destroy()
+        if state_timer is not None:
+            ros_node.destroy_timer(state_timer)
+        if controllers_client is not None:
+            ros_node.destroy_client(controllers_client)
+        if action_server is not None:
+            action_server.destroy()
         ros_node.destroy_node()
         rclpy.shutdown()

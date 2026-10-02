@@ -1865,3 +1865,129 @@
 - 증거: `python -m pytest test/test_calibration_guard.py test/test_release_push_entrypoint.py -q` 78 passed(가드 36), `test/test_core_dev_sync.py` 34 passed. 변형 23종 모두 빨강(앞 커밋 9종 재확인 + 별칭 검사 생략, 별칭 종료 코드 무시, known_hosts 항목 불요, HostKeyAlias 누락, `-n` 누락, keepalive 누락, 벽시계 상한 없음, 래퍼만 죽임, RosyUser 검사 제거, 공백 경로 검사 제거, 명시 CredentialPath 무시, ConnectTimeout 고정, 공백 인자 미인용, sync 사용자 미전달). 대소문자 변형은 별칭 조회가 먼저 막아 처음엔 살아남았다 — 시험 known_hosts에 대문자 항목을 넣어 답 검사만으로 막히게 고친 뒤 빨강. 로컬 known_hosts 확인: 9dfk·8kcn 호스트 키는 서로 다르다. 가짜 ssh와 localhost 가짜 CORE만 사용, 로봇 접속 없음(Windows).
 - gate 변화: 없음.
 - 교훈: 상대가 스스로 밝힌 이름으로 비밀을 고를 때는 그 이름을 상대가 꾸밀 수 없는 것(호스트 키)으로 증명한다. 겹겹 방어가 있으면 변형 하나가 다른 층에 가려 살아남는다 — 층마다 따로 막히는 시험 입력을 만든다.
+
+## 2026-10-02 · uncommitted · fix(native): 부팅 복구 게이트에 PrivateTmp — 활성화 중 전원 차단 뒤 CORE가 영영 뜨지 않던 결함
+
+- 변경: `rosy-release-recover.service`에 `PrivateTmp=yes`. recover가 이전 릴리스를 다시 검증할 때(`native_release.verify` → `signing`의 `tempfile`) `ProtectSystem=strict` 아래 임시 디렉터리가 읽기 전용이라 "No usable temporary directory"로 실패했고, `rosy-core.service`·`rosy-runtime.target`이 이 게이트를 Requires 하므로 로봇이 뜨지 않았다. 수동 push에도 해당한다.
+- 증거: D-406 기기 쌍둥이(ubuntu 24.04 + systemd 255 컨테이너, 브랜치 test/d406-device-twin) 시나리오 h3에서 활성화 도중 전원 차단 뒤 재현, PrivateTmp로 복구 성공. 계약 시험 `test_units_that_verify_releases_get_a_writable_private_tmp`(변형으로 빨강 확인). 관련 시험 217 passed.
+- gate 변화: 없음. 기기 확인 필요. 이 유닛은 sync에서 next-boot 대상이라 다음 릴리스 push 뒤 재부팅부터 적용된다.
+
+## 2026-10-02 · a44f9e00 · feat(native): 로봇 쪽 자동 업데이터 `rosy_auto_update.py`·claim·유닛 (D-406 T2)
+
+- 변경: `native/rosy_auto_update.py`(stdlib, CLI `run`/`status`/`hold`/`release-hold`/`eligibility`)를 추가했다. 한 번 실행은 GitHub Releases를 ETag로 읽고(304는 캐시, 403/429는 Retry-After만큼 쉼), 지금보다 큰 `payload-<id>` 가운데 자산 셋이 있고 실패 기록이 없으며 서명된 `rollout.json`이 맞고 철회되지 않은 가장 높은 id를 고른다. 바쁠 때도 스테이징(sha256, `rosy-release-unpack.sh`, `native_release.py verify`)은 하고 `current`는 건드리지 않는다. 카나리이거나 `canary_ok`와 대기 시간이 지났고, hold·봉인 승인·live claim이 없고, status-inputs schema ≥ 2가 10 s 간격 두 표본 모두 유휴(null·NaN은 모름 = 부적격, 계약 b63cb7f2)이고, 배터리 40% 이상이거나 충전 중일 때만 claim을 잡고 적용한다: activate → core-release 확인 → 새 릴리스의 sync → 재시작(자기 유닛 제외) → 건강 60 s. 실패하면 rollback, 되돌아간 릴리스의 sync, ready 확인 뒤 id를 실패로 남겨 다시 시도하지 않는다. `NATIVE_RELEASE_BUSY`는 다음 실행에 다시 한다. `native/rosy_claim.py`(mkdir 원자 claim, 만료·다른 boot는 rename으로 한 쪽만 치움, CLI acquire/release/show·status)를 추가했다. `rosy-release-unpack.sh`를 `native/`로 옮겨 push와 업데이터가 같은 사본을 쓴다(push 동작 같음). `rosy-auto-update.service`(root oneshot, Nice=19, IOSchedulingClass=idle, ProtectSystem=strict)·`.timer`(부팅 5분, 10분마다, 2분 분산)를 `UNITS`·`ENABLED_UNITS`(타이머만)·`build-native-payload.sh`·`customize-rootfs.sh`에 넣었다. sandbox 계약은 이 유닛의 쓰기를 선언하고, `/run`과 기본 OS의 `/etc/systemd/system`·`/etc/udev/rules.d`·`/etc/modprobe.d`를 시작 때 있는 경로로 센다.
+- 증거: `test/test_rosy_auto_update.py` 117 passed, `test/test_rosy_claim.py` 17 passed. 관련 묶음(image-layer sync, systemd 계약, push·unpack, payload build, image customization, native activation, device surface, ubuntu runtime, 위 둘) 524 passed, 9 skipped, `python test/known_failures.py` 새 실패 0. 변이: 업데이터 61종 가운데 59종이 첫 실행에서 빨강, 살아남은 2종(숫자 아닌 battery_percent, 7일 넘는 손으로 쓴 hold)은 시험을 더해 빨강. claim 10종, 계약·패리티 9종 모두 빨강(프로그램 소스 목록 삭제 1종은 경로 리터럴이 없어 초록, 가드가 아님). 로봇에는 손대지 않았다.
+- gate 변화: 없음. DEVICE는 T1·T3 병합 뒤 두 대 검증 전까지 HOLD.
+- 결정: D-406
+- 교훈: 변이 실행을 중간에 죽이면 마지막 변이가 파일에 남는다. 다시 쓰기 전에 원본 문자열이 그대로 있는지 확인한다.
+
+## 2026-10-02 · 05d58d0a · fix(native): 업데이터 건강 판정을 적용 전 기준선과 비교 (D-406 T2)
+
+- 변경: 활성화 직전에 rosy-core/io/camera 가운데 active인 유닛과 그 cwd, 이미 failed인 rosy-* 유닛을 적용 저널(`state.json`의 `applying.baseline`)에 남긴다. 건강 판정은 rosy-core를 늘 요구하고, io·camera는 적용 전에 돌던 경우에만 새 릴리스 cwd에서 active여야 한다. failed 유닛은 적용 중 새로 생긴 것만 실패로 본다. 건너뛴 유닛과 이미 있던 실패는 `last_result.detail`에 적는다. 조정자 결정(질문 3): 카메라가 이미 꺼진 로봇이 업데이트마다 되돌리지 않게 한다.
+- 증거: `test/test_rosy_auto_update.py` 123 passed. 새 시험: 적용 전 카메라 꺼짐 → 커밋, 적용 전 켜짐·뒤 꺼짐 → 되돌림, 이미 failed인 유닛 → 커밋, 그 옆에 새로 failed → 되돌림, 적용 전 꺼진 CORE도 요구, 꺼져 있던 io의 cwd 미검사. 변이 7종 모두 빨강.
+- gate 변화: 없음.
+- 결정: D-406
+- 교훈: 건강 판정은 절대 상태가 아니라 적용 전과의 차이로 본다. 원래 꺼져 있던 장치가 릴리스 실패로 기록되면 안 된다.
+
+## 2026-10-02 · 9a1ae36f · fix(native): D-406 T2 독립 리뷰 반영 — 안전한 재개, 일시·확정 실패 구분, 스테이징 한도
+
+- 변경: 리뷰(REQUEST CHANGES) 전 항목. H1 끊긴 적용의 재개는 hold·봉인·두 표본 유휴를 확인한 뒤에만 재시작 단계를 한다(아니면 `applying`을 둔 채 held/ineligible). H2 저널이 rollback에 닿았으면 계속 되돌리기만 한다(새 릴리스가 current일 때만 rollback 스크립트, 그 뒤 늘 sync·재시작·core·ready). activate 뒤 단계에서 옛 릴리스가 current면 그 릴리스를 다시 sync한다. H3 활성화기·verify의 124/127·JSON 결과 없음은 일시 실패로 보고 실패 기록을 하지 않는다. native 저널이 남았으면 `native_release.py recover`와 `systemctl start rosy-runtime.target`. H4 커밋한 id를 남기고, current보다 높으면 운영자 되돌림으로 실패 처리한다. M1 서로 다른 두 쓰기, 각 25 s 이내, 12 s 간격. M2 활성화기 직전 한 번 더 읽고, 남는 틈을 ADR R4에 적었다. M3 RUN_BUSY는 아무것도 쓰지 않는다. M4 철회는 영구 기록. M5 릴리스별 스테이징 backoff, 확정 실패 3회면 실패, 디스크 확인(tarball×2+512 MiB), current·previous·staged 외 릴리스 디렉터리 정리. M6 읽을 수 없거나 깨진 승인 표지는 hold. M7 BUSY·일시 실패한 rollback은 저널에 남겨 다음 실행이 다시 한다. M8 claim TTL 50분(TimeoutStartSec 45분보다 길게), 저널 단계마다 갱신. M9 claim 넘겨받기를 `/run/rosy-claim.lock`으로 직렬화. L1 확정 문제(서명·철회)일 때만 더 낮은 릴리스로 넘어간다. L2 docking 허용 목록, `line_follow_state`는 OFF. L3 OverflowError. L4 phase·이유 분류가 바뀔 때만 history, 1 MiB에서 회전. L5 `Persistent=` 제거(OnCalendar 전용). L6 시간 초과 시 프로세스 그룹 종료. L7 downloads의 잔여 디렉터리 정리. L8 `Requires=rosy-release-recover.service`, releases 경로 필수, `CapabilityBoundingSet`·`ProtectProc`·`PrivatePIDs` 금지 시험. L9 비활성이어도 진행 중 적용은 마무리. 활성화 뒤 예기치 않은 예외도 되돌린다.
+- 증거: `test/test_rosy_auto_update.py`·`test/test_rosy_claim.py` 190 passed, 1 skipped(이 Windows 호스트는 symlink를 만들 수 없음). 관련 묶음 583 passed, 10 skipped, `python test/known_failures.py` 새 실패 0. 리뷰 변이 38종 모두 빨강(처음 살아남은 1종 — 신선도 60 s — 은 서로 다른 두 쓰기가 각각 26 s 늦은 시험을 더해 빨강). 로봇에는 손대지 않았다.
+- gate 변화: 없음. DEVICE HOLD.
+- 결정: D-406
+- 교훈: 끊긴 트랜잭션을 재개하는 경로도 처음 적용과 같은 적격성 문을 지나야 한다. 프로세스 종료 코드만으로 "확정 실패"를 판정하지 않는다 — JSON 판정이 있을 때만 확정이다.
+
+## 2026-10-02 · b909ed5b · fix(native): 재개 시 rosy-core가 멈춰 있으면 유휴 판정 면제 (D-406 T2)
+
+- 변경: 조정자 결정(H1 질문). `applying` 저널을 재개할 때 rosy-core.service가 active가 아니거나 MainPID가 없으면 움직임을 명령할 주체가 없다(CORE가 유일한 cmd_vel 발행자, D-2). 그때는 status-inputs 두 표본 판정을 면제하고, hold·봉인 승인·claim 검사는 그대로 한다. "core not running; idleness check waived"를 history와 `last_result.detail`에 남긴다. CORE가 돌고 있으면 전처럼 전체 판정을 한다.
+- 증거: `test/test_rosy_auto_update.py`·`test/test_rosy_claim.py` 195 passed, 1 skipped. 새 시험: CORE 정지·hold 없음 → 재개해 커밋, CORE 정지·hold → held, CORE 정지·claim → ineligible, CORE 동작·오래된 입력 → ineligible, active지만 MainPID 0 → 정지로 본다. 변이 5종 모두 빨강(처음 살아남은 MainPID 무시 1종은 시험을 더해 빨강).
+- gate 변화: 없음.
+- 결정: D-406
+- 교훈: 면제는 위험의 원천이 없을 때만 준다. 여기서 원천은 CORE 하나뿐이라 그 상태를 직접 확인한다.
+## 2026-10-02 · 9970f2e0 · feat(release): D-406 T3 운영 PC — 발행·카나리·철회, hold 명령, push claim
+
+- 변경: 커밋 d6873301, 29f649a4, 2898738c, 9970f2e0. (1) `tools/release/publish_payload_release.py`(표준 라이브러리 + `signing.py`): prepare가 만든 서명 tarball로 GitHub Release `payload-<id>`(`livsbittt/rosy-os`, `--target` = `source-revision.txt`)를 만들고 `<id>.tar.gz`, `rollout.json`(키 정렬, LF, UTF-8), `rollout.json.sig`를 올린다. canary는 `ssh rosy@<ip> hostname`으로 정하고 `^rosy-[a-z0-9-]+$`를 검사한다. 서명 뒤 저장소 공개키로 자체 검증한 다음에만 올린다. 기존 태그는 `--resume` 없이는 거절한다. 카나리의 `rosy_auto_update.py status --json`을 30 s마다 읽어 이 id의 commit이면 `canary_ok=true`, 이 id의 `rolled_back`/`refused`나 `--canary-timeout-min`(기본 30) 초과면 `withdrawn=true, reason`으로 다시 서명해 `gh release upload --clobber`한다(`published_at`은 그대로). `--resume`은 받은 rollout의 서명을 검사하고 canary 이름이 목록에 있어야 이어 간다. `--withdraw --reason`은 손으로 철회한다. 단계마다 출력하고 `X:\DevTemp\rosy-rollout-evidence\<날짜>\rollout.jsonl`에 남긴다. `prepare_payload_release.ssh_argv`가 원격 명령을 인자로 받게 했다. (2) `deploy/robot/pinky_pro/rosy-update-hold.ps1 -Robot <ip> -Hold -Reason -Hours | -Release | -Status`: 장치 CLI를 `sudo -n python3 /opt/rosy/native-runtime/rosy_auto_update.py`로 부른다. 동작은 정확히 하나, `-Reason`·`-Holder`는 안전한 ASCII 집합만(`\z` 고정, 첫 글자 영숫자) 받아 작은따옴표로 보낸다. `-Hours`는 (0, 168]. (3) `rosy-release-push.ps1`: 첫 원격 단계로 claim(`rosy_claim.py acquire --holder push-<user>@<pc> --purpose push --ttl-s 1800`)을 잡고 `finally`에서 놓는다. 잡혀 있으면 push를 거절하고, helper가 없는 로봇은 `ROSY_CLAIM_HELPER_MISSING`으로 경고만 하고 계속한다. `-PrintCommands`가 두 단계(`claim-acquire`, `claim-release`)를 보인다. `$unpackScript` 줄은 건드리지 않았다(T2 몫). (4) 스킬 `rosy-release-push`에 "Automatic rollout (D-406)" 절.
+- 증거: 관련 묶음 306 passed, 3 skipped(내 시험은 skip 없음), `test/known_failures.py` 0 new. 새 시험: `test/test_publish_payload_release.py` 31, `test/test_update_hold.py` 39, `test/test_release_push_claim.py` 8, 기존 `test_release_push_entrypoint.py`는 claim 양 끝을 떼고 비교하도록 고쳤다. 변이 41종이 모두 빨강이었다: 발행 19(키 비정렬, CRLF, 자체 검증 제거, 태그 존재 무시, 접두사 일치, hostname 검사 제거, current_release 무시, 다른 id로 판정, refused 무시, 타임아웃 절반, resume 서명 무시, canary 소속 무시, wave 59 허용, published_at 갱신, manifest id·revision 검사 제거, 철회된 resume 진행, 수동 철회·실패 시 withdrawn 미설정), hold 12, claim 10. 실제 GitHub 릴리스·로봇 접속 없음(가짜 gh·ssh·시계).
+- gate 변화: 없음(HOST만). DEVICE 검증은 T1·T2 병합 뒤.
+- 남은 일: T2의 `rosy_claim.py release`가 `--holder`를 받는지 맞춰야 한다(지금은 `release --holder <H>`로 부르고, 실패하면 경고만 하며 claim은 30분 뒤 만료). 발행 명령은 tarball의 릴리스 서명을 다시 검사하지 않는다(로봇이 스테이징 때 검사). 카나리 외 로봇은 canary_ok 뒤 한 번 상태만 보여 주고 계속 지켜보지 않는다.
+
+## 2026-10-02 · 56d292a2 · fix(release): D-406 T3 독립 리뷰 반영 — 철회 보존, 기준 결과, 키 경로, claim 판정
+
+- 변경: 커밋 6f6c5d4b, 1c7b6288, 56d292a2. (1) H1: 카나리 감시가 끝나면 올리기 전에 GitHub의 rollout을 다시 받아 서명을 검사한다. 그사이 철회됐으면 그대로 두고(exit 3), 이 프로세스가 올린 것과 다르면 덮어쓰지 않는다. 릴리스 id마다 `publish-<id>/.lock` 하나만(create·resume·withdraw). (2) M1: 릴리스를 만들기 전 카나리의 `last_result`를 기준으로 잡고, 그와 다르고 `published_at - 120 s` 이후인 결과만 판정에 쓴다(재사용된 id의 옛 commit·rollback 무시). (3) M4: 개인키 경로를 출력·증거에 남기지 않는다. 서명 오류는 키 이름만 밝힌다. (4) M5: `--withdraw`는 원격 rollout 서명이 맞지 않으면(반쯤 끝난 `--clobber`) 작업 폴더의 로컬 서명본을 쓴다. 마지막 업로드가 실패하면 `gh release upload ... --clobber` 복구 명령(철회면 `--withdraw` 명령도)을 출력한다. (5) L1 Ctrl+C는 `--resume`·`--withdraw` 명령을 출력하고 130으로 끝난다. L2 다른 hostname의 상태는 카나리가 아니다. L3 이 후보의 `failed`/`error` 단계는 바로 철회한다. L6 `--repo`, `--key-name` 검사. L7 발행 전 tarball 릴리스 서명을 임시 추출본에서 `verify_release_files`로 검사한다. (6) hold 명령: `-Status`가 `PSObject.Properties`로 읽어 T2의 "아직 실행 안 됨" 응답(`{"phase": null, "reason": ...}`)에서도 죽지 않는다(M2). known_hosts 경로는 따옴표 없이 넘기고, 공백·따옴표가 있으면 거절한다(L5). (7) push claim: exit 3/`CLAIM_BUSY`는 "claimed by another job", 그 밖의 non-zero는 "claim helper failed (exit N)", 둘 다 거절(M3). busy와 helper 없음이 아니면 `finally`에서 늘 놓는다(holder 한정). TTL은 tarball 크기로 1200 s + 2 s/MB, [1800, 7200](L4).
+- 증거: `test_publish_payload_release.py` 60, `test_update_hold.py` 46, `test_release_push_claim.py` 16, 관련 묶음 350 passed, 3 skipped, `test/known_failures.py` 0 new. 변이: 발행 21종 중 19종 바로 빨강. R1(원격 철회 무시)은 "바뀜" 검사가 가려 초록이었다; 시험이 exit 3과 "withdrawn meanwhile"을 보게 고친 뒤 빨강. R21(업로드 뒤 `last_uploaded` 갱신)은 쓰이지 않는 코드라 지웠다. hold 4종, claim 8종 모두 빨강(여러 줄 패턴 2종은 CRLF로 안 들어가 한 줄 패턴으로 다시 해 빨강). 실제 GitHub·로봇 접속 없음.
+- gate 변화: 없음.
+
+## 2026-10-02 · 0904824d · fix(release): D-406 T3 카나리 조기 철회는 `failed`만, `error`는 계속 지켜본다
+
+- 변경: T2가 일시적 문제(네트워크, 활성화기 시간 초과, busy)는 `error`, 확정 실패는 `failed`(`last_result`가 이 id의 `rolled_back`/`refused`)로 보고하게 바뀌었다. 발행 명령은 이 후보의 `failed`(최근 `updated_at`)나 기준 결과 뒤의 `rolled_back`/`refused`일 때만 바로 철회하고, `error`는 시간 초과까지 계속 지켜본다.
+- 증거: `test/test_publish_payload_release.py` 63 passed. 변이 4종 모두 빨강: `error`도 조기 철회, `failed` 조기 철회 제거, 다른 후보의 `failed`로 철회, 오래된 `failed`로 철회.
+- gate 변화: 없음.
+
+## 2026-10-02 · 8198ec47 · fix(release): D-406 T3 재리뷰 반영 — 철회 우선, 로컬 대체본 업로드, known_hosts 정책 하나
+
+- 변경: 커밋 8f633400, 8198ec47. (1) N1: `--withdraw`가 로컬 서명본으로 대체했으면 그 사본이 이미 철회 상태여도 늘 올린다. 이미 철회라 아무것도 안 하는 경우는 GitHub 사본이 서명 검증을 통과했을 때뿐이다. (2) N2: 내려받기 전에 `downloaded/`를 비우고, 자산이 없으면 서명 불일치와 같이 다룬다. (3) N4: 마지막 업로드 뒤 한 번 더 내려받아, 철회가 보이면 그대로 두고 우리가 올린 바이트와 다르면 다시 철회를 올린다. 철회가 늘 이긴다. (4) N7: 잠금 파일의 PID가 없는 프로세스면 stale이라고 말하고 지우는 명령을 준다(Windows는 OpenProcess로 확인, 신호를 보내지 않는다). (5) N8: hostname이 없는 상태는 "updater has not run yet (no status.json)". (6) N9: 수동 철회의 업로드가 실패해도 복구 명령을 출력한다. (7) N3: Windows PowerShell 5.1은 `UserKnownHostsFile="C:\a b\k"`를 그대로 넘기고, 받는 프로그램의 C 런타임이 따옴표를 벗긴 뒤 ssh가 공백에서 나눈다(`test/test_known_hosts_policy.py`가 raw `.cmd` 가짜와 C 런타임 프로그램으로 확인). 그래서 push도 hold처럼 따옴표 없이 넘기고 공백·따옴표가 든 경로는 거절한다. (8) N5: busy인 claim의 holder가 이 PC 자신이면 정확한 release 명령을 출력한다. tarball 업로드 직후 `rosy_claim.py refresh --holder <H> --ttl-s <TTL>`로 claim을 늘린다(실패는 경고만).
+- 증거: 관련 묶음 376 passed, 3 skipped, `test/known_failures.py` 0 new. 변이: 발행 12종 중 10종 바로 빨강, 2종(경합 중 보이는 철회 유지, stale 판정)은 시험이 다시 올린 업로드·임시 경로 이름에 가려 초록 → 시험을 좁혀 빨강. push 7종 모두 빨강.
+- gate 변화: 없음.
+- 남은 일: T2 `rosy_claim.py`(d87d329f)에 `refresh()` 함수는 있으나 CLI 하위 명령이 없다. 그 전까지 push의 refresh는 경고만 내고 claim은 크기로 정한 TTL을 유지한다.
+
+## 2026-10-02 · 088a6a9a · fix(native): D-406 T2 재리뷰 반영 — CORE 상태 fail-closed, 확정 코드 목록, 적용 backoff, 활성화기 precheck
+
+- 변경: 재리뷰(COMMENT) N1~N16과 T3의 refresh CLI. N1 `native_release.py activate`가 검증 뒤·런타임 정지 직전에 `ROSY_ACTIVATE_PRECHECK` 명령(업데이터의 새 `precheck`: hold, 봉인, 다른 claim, status-inputs 한 표본)을 돌리고, 0이 아니면 `NATIVE_PRECHECK_REFUSED`로 아무것도 바꾸지 않는다(4672715a). 업데이터는 이를 부적격으로 기록한다. ADR R4를 이에 맞췄다(a623a1bf). N2 CORE 정지 판정은 `systemctl show -p ActiveState,SubState,MainPID`가 inactive/failed(또는 activating+auto-restart)이고 MainPID 0일 때만, 호출 실패는 동작 중으로 본다. N3 확정 실패는 NATIVE_MANIFEST_*, NATIVE_TARGET_MISMATCH, NATIVE_PYTHON_RUNTIME, 서명·체크섬 거부, candidate 건강 실패뿐이다. N7 일시 적용 실패는 backoff, 3회면 held(release-hold가 지운다). N4 면제된 재개라도 CORE가 다시 돌면 재시작 전에 유휴 판정, 아니면 미룬다. N5 CORE가 돌지만 30분 넘게 status를 쓰지 않으면 phase `stuck`. N6 정리는 native-release.lock 아래, 1시간 넘은 디렉터리만, current 없으면 하지 않는다. N8 실패한 rollback도 native 저널을 recover. N9 previous가 current보다 높으면 운영자 되돌림. N10 recover가 성공했을 때만 런타임 시작. N11 전환 전에 끊긴 활성화는 실패로 남기지 않고 다시 한다. N12 rollback 재시도 5회 뒤 failed와 운영자 안내. N13 claim 해제 오류는 history에 남기고 삼킨다. N15 면제 메모를 재개마다 갱신. N16 안 쓰는 import 제거. T3용 `rosy_claim.py refresh --holder H --ttl-s N`(claim lock 아래; 0 갱신, 3 CLAIM_BUSY 또는 CLAIM_MISSING, 2 잘못된 인자)(a7030f71).
+- 증거: 업데이터·claim·native activation 시험 250 passed, 1 skipped. 관련 묶음 629 passed, 10 skipped, `python test/known_failures.py` 새 실패 0. 변이 38종 모두 빨강: 재리뷰 33종(native_release.py 3종은 CRLF 작업본이라 따로 돌림), 처음 살아남은 1종(`_main`의 env precheck 배선)은 CLI 시험을 더해 빨강, refresh CLI 4종. 로봇에는 손대지 않았다.
+- gate 변화: 없음. DEVICE HOLD.
+- 결정: D-406
+- 교훈: "확정 실패"는 종료 코드나 JSON 유무가 아니라 알려진 오류 코드 목록으로 정한다. 모르는 실패는 일시 실패로 보고 횟수로 사람을 부른다.
+
+## 2026-10-02 · 5f3226bf · fix(native): D-406 T2 검증 리뷰 반영 — 자기 되돌림과 운영자 되돌림 구분, silent_since, rollback_failed
+
+- 변경: HIGH 일시 활성화 실패 뒤 실패 기록 없이 되돌린 id를 `state.self_rolled_back`에 남겨, N9가 previous > current를 운영자 되돌림으로 오인하지 않게 했다. 커밋하면 지운다. M1 `stuck`은 처음 조용함을 본 재개(`applying.silent_since`)부터 잰다. held·다른 이유·적격 재개가 지운다. M2 precheck의 바쁨 종료(3)만 `NATIVE_PRECHECK_REFUSED`. 다른 종료·실행 불가·시간 초과는 `NATIVE_PRECHECK_FAILED`로 적용 backoff에 들어간다(406b8631). L1 `NATIVE_RUNTIME_MISMATCH`를 확정 실패에 더했다. L2 N12 한도에 닿으면 결과를 `rollback_failed`로 남기고, 그 릴리스가 current인 동안 매 실행 `failed`와 처치 명령을 보인다. 계획서 status.json 목록에 `stuck`·`rollback_failed`를 더했다. L3 escalation held와 stuck 이유에 처치 명령(release-hold, `rosy-release-push.ps1 -Rollback`)을 적었다. L6 precheck 시간 초과 시험. 미결 질문: `rosy-release-unpack.sh`가 `mv -T` 뒤 대상 디렉터리를 touch해, 막 푼 릴리스가 정리의 1시간 나이 보호를 받는다(09516b54). L4(건강 실패는 확정)는 그대로 둔다.
+- 증거: 관련 묶음 641 passed, 10 skipped, `python test/known_failures.py` 새 실패 0. 리뷰어의 N9 probe가 이제 committed, 실패 id 없음. 변이 17종 모두 빨강(처음 살아남은 2종 — held·적격 재개에서 silent_since를 지우지 않음 — 은 조용함→held→다시 조용함, 조용함→면제 적격 재개→다시 조용함 시험을 더해 빨강). 로봇에는 손대지 않았다.
+- gate 변화: 없음. DEVICE HOLD.
+- 결정: D-406
+- 교훈: 두 규칙이 같은 흔적(previous > current)을 보면 누가 그 흔적을 남겼는지 기록해 둔다. 경과 시간은 "그 상태를 처음 본 때"부터 잰다.
+## 2026-10-02 · 84e45d05 · test(d406): device twin — systemd 컨테이너로 자동 업데이트 끝까지 검증
+
+- 변경: `tools/device_twin/`(배포물에 들어가지 않음). ubuntu:24.04 systemd 컨테이너에 실제 native runtime·rosy 유닛(`git archive HEAD`), 일회용 Ed25519 키로 `build_payload_release.py`+`sign_image_release.py`가 만든 릴리스, ExecStart만 바꾼 가짜 ROS(가짜 CORE는 `/api/v1`, schema 2 status-inputs, `twin-control`로 바쁨 상태), 가짜 GitHub(ETag/304)와 가짜 `gh`, 실제 `publish_payload_release.py`를 그 위에서 돌리는 래퍼. 업데이터에 `config.json`의 `api_base` 키 추가(기본 `https://api.github.com`, 잘못된 값은 CONFIG_INVALID, 시험 포함).
+- 증거: `python tools/device_twin/run_twin.py --scenario all`(통합 브랜치 4a185386 병합 뒤) 12개 중 11 PASS: 활성화 결함 재현과 수정 확인, 발행→카나리 커밋→canary_ok, 바쁨·hold·봉인·claim 부적격, 나쁜 릴리스 롤백·image layer 원복·철회, 철회 릴리스 미적용, SIGKILL·전원 차단 뒤 재개 커밋, `systemd-analyze verify`, 샌드박스에서 `/proc/<pid>/cwd` 읽기. 보고서 `X:/DevTemp/d406-twin/report.md`. 호스트 시험 `test_rosy_auto_update.py`·`test_rosy_claim.py`·`test_publish_payload_release.py` 311 passed, 1 skipped.
+- 결함(제품, 고치지 않음): (h3) 활성화 중 전원 차단 뒤 `rosy-release-recover.service`가 실패한다. `ProtectSystem=strict`에 `PrivateTmp`가 없어 `signing.verify_signature`의 임시 디렉터리를 못 만든다. CORE와 업데이터 모두 이 유닛을 Requires 하므로 런타임이 안 뜨고 업데이터도 못 돈다. twin에서 `PrivateTmp=yes`를 붙이면 복구된다.
+- gate 변화: 없음. twin 통과는 HOST 증거이고 DEVICE 증거가 아니다.
+- 결정: D-406
+- 교훈: 저널이 있을 때만 타는 부팅 경로는 실제 sandbox 아래에서 한 번은 돌려 봐야 한다. 단위 시험은 tempfile을 쓸 수 있는 호스트에서 돌았다.
+
+## 2026-10-02 · 30390e1c · fix(native): D-406 T2 검증 리뷰 2 반영 — current가 실제로 옮겨졌을 때만 자기 되돌림, 꼬리 실패도 backoff
+
+- 변경: 통합 브랜치(`feat/d406-robot-auto-update`: twin의 `api_base` 설정, recover PrivateTmp, size verdict)를 먼저 병합했다(충돌 없음). HIGH 1 `self_rolled_back`은 우리 rollback이 current를 실제로 옮겼을 때만 남긴다. 재시도 한도에 닿았거나(gave up) 확정 오류로 거절된 rollback은 남기지 않는다. 그래서 그 뒤 운영자가 `-Rollback`하면 그 릴리스는 "operator rolled back"으로 실패 처리된다. HIGH 2 실패 기록 없는 rollback이 current를 옮겼으면 꼬리(sync·core·ready)가 실패해도 적용 오류를 센다. backoff와 escalation이 반복을 끊는다. MEDIUM `release-hold`가 `rollback_failed` 결과를 확인 처리(last_result 지움, history 한 줄)하고, 고정 이유와 계획서에 적었다. LOW 지금 current이거나 실패·철회된 id는 `self_rolled_back`에서 지운다. LOW native_release와 업데이터의 precheck 바쁨 종료 코드가 같음을 시험으로 묶었다. `rosy_auto_update.py` size verdict를 1505줄(+33)로 다시 판정했다(판정은 그대로: 장치 검증 뒤 분리).
+- 증거: 관련 묶음 655 passed, 10 skipped, `python test/known_failures.py` 새 실패 0. 병합으로 들어온 T3·twin 시험(architecture, known_hosts, publish, push claim, update hold) 181 passed(size verdict 갱신 뒤). 리뷰어 probe 두 개 통과: 운영자 되돌림 → 실패 처리, 6회 실행에 활성화 2회. 변이 9종 모두 빨강. 로봇에는 손대지 않았다.
+- gate 변화: 없음. DEVICE HOLD.
+- 결정: D-406
+- 교훈: "누가 흔적을 남겼나" 기록은 그 행동이 실제로 일어났을 때만 쓴다. 시도만 하고 실패한 행동을 기록하면 다른 규칙의 판단을 가린다.
+
+## 2026-10-02 · 6d281ae7 · fix(native): D-406 T2 최종 검증 묶음 — release-hold를 run lock 아래로, 확인 내용 보고
+
+- 변경: MEDIUM `release-hold`가 업데이터 run lock을 잡는다. 실행 중이면 state.json을 덮어쓰지 않고 RUN_BUSY(CLI 종료 4, "실행이 끝난 뒤 다시")로 거절한다. LOW 1 확정 오류로 거절된 rollback도 `rollback_failed`로 남겨, 포기한 rollback처럼 고정 표시되고 release-hold로 확인할 수 있다. LOW 2 release-hold가 `acknowledged_rollback_failure`와 `cleared_apply_errors`를 돌려주고, `rosy-update-hold.ps1 -Release`가 이를 읽기 쉽게 보인다(옛 장치의 답은 그대로 출력). LOW 3 current보다 낮고 previous가 아닌 `self_rolled_back` 항목을 지운다. LOW 4 실패 기록 없는 경로의 확인을 끝까지 시험했다(일시 전환 → rollback 못 함 → release-hold → 재활성화 없음 → 운영자 되돌림 시 실패 처리). size verdict 1515줄(+10), 판정은 그대로.
+- 증거: 관련 묶음과 T3·twin 시험 843 passed, 10 skipped, `python test/known_failures.py` 새 실패 0. 변이 9종 모두 빨강. 로봇에는 손대지 않았다.
+- gate 변화: 없음. DEVICE HOLD(다음은 두 대 장치 검증).
+- 결정: D-406
+- 교훈: 상태 파일을 쓰는 운영 명령은 업데이터 실행과 같은 잠금을 잡는다. 바쁘면 조용히 덮어쓰지 말고 다시 하라고 말한다.
+
+## 2026-10-02 · uncommitted · feat(native): D-406 업데이터 기본 꺼짐 — 첫 두 대 기기 검증 전까지 로봇별로 켬
+
+- 변경: 사용자 착지 결정(2026-10-02). `rosy_auto_update.py`는 `config.json`이 없거나 `enabled`가 없으면 꺼짐(phase `disabled`, GitHub 요청·적용 없음). ADR D-406·계획 계약·`rosy-release-push` skill에 켜는 명령(로봇별 `config.json` 작성)을 적었다. 시험 fixture는 명시적으로 켜고, 새 시험 2개가 기본 꺼짐을 고정한다. 기기 쌍둥이는 config에 `enabled: true`를 명시하므로 영향 없음.
+- 증거: 업데이터 시험 238 passed; 기본값을 켜짐으로 되돌리면 새 시험 2개 빨강. 기기 쌍둥이 12/12 PASS(직전 실행, 같은 코드에 기본값만 다름).
+- gate 변화: 없음.
+
+## 2026-10-02 · uncommitted · CI 삼각측량 — 시크릿 스캔 면제·해시 문서 규약·스코어카드 기준선·설치 문서 브라우저 시험
+- 변경: secret_scan.py KNOWN_FIXTURES에 D-395 loc-assist fixture(SECRET-PAYLOAD-VALUE) 등록. OMX 증명 해시 3곳을 매처의 무결성 문맥 규약으로 서술(README 'revision'/'dataset commit', omx_f_kinematics.yaml 'at revision') — 의미 불변. test_release_boundary_gates no_secrets 재녹색.
+- 변경: D-178 스코어카드에 rosy_cell 잠정 행(4/4/4/4/4=80 A) 추가 — 집합 동일성 회복. robot_literal_backlog.txt 갱신(신규 8·삭제 2). known_failures.txt에 병렬 작업 사전 존재 실패 5건 기록(CI 전용 플레이크 4 + module_separation 소유자 판단 1).
+- 변경: test_fleet_console_browser.py에 D-410 설치 문서 렌더 계약 시험 추가(옵트인 Chromium — 문법·소유물·운용 표면 부재·E-stop·무오류). 통과 59s.
+- 근거: 2026-10-02 CI 실행 36909426842/36955733308 실패 대 조 로컬 재현. docs/validation/uiux-console-refactor-2026-10-02/README.md 회차 기록.
+- gate 변화: 없음.
+- 최종 증거: scorecard·literals·no_secrets 각 재녹색; 브라우저 신규 시험 1 passed.
+
+## 2026-10-02 · uncommitted · CI 잔여 5건 해소 — 좀비 인식 생존 판정·모드 드리프트 독립·D-155 가드 정정
+- 변경: rec_compact.sh의 생존 판정을 좀비 인식(alive: kill -0 + /proc stat Z 제외)으로 바꿨다 — 컨테이너의 PID 1이 고아를 회수하지 않으면 SIGKILL 후에도 kill -0이 성공해 "did not exit" 오탐(CI 적색 3건). test_rosy_auto_update.py의 _alive 헬퍼도 같은 맹점이라 동일 패치. 실증: WSL에서 좀비 생성 후 kill -0=성공/stat=Z.
+- 변경: test_image_layer_sync 모드 드리프트 시험의 chmod를 0o644→0o600 — 실제 Linux 체크아웃(git 100644)에서 644는 드리프트가 아니었다. 플랫폼 무관하게 드리프트가 된다.
+- 변경: test_module_separation 가드4를 D-155 정정에 맞춰 계약면 허용(core_common.protocol.*, core_common.calibration_store)으로 좁힘 — control package.xml의 exec_depend 선언과 D-18 fleet 선례가 근거. D-155 ADR에 Refinement 조항 추가.
+- 변경: known_failures.txt에서 해소 5항목 제거. docs/solutions/deployment/container-zombie-kill0-blindness.md 교훈 문서화.
+- 근거: CI 실행 36959800081 대조 WSL 재현(윈도는 skip/DrvFS로 증거 불가).
+- gate 변화: 없음.
+- 최종 증거: WSL — jpeg_relay 14 passed, auto_update timeout 시험 passed, mode-drift passed; module_separation 7 passed(윈도).

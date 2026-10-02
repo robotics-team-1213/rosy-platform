@@ -27,6 +27,7 @@ class FleetAgent:
         self.enabled = False
         self.connected = False
         self._task: Optional[asyncio.Task] = None
+        self._pending: Optional[tuple[str, str]] = None
         self._ws = None
         self._event_buffer = []
         self._event_seq = 0
@@ -46,7 +47,22 @@ class FleetAgent:
             return
 
         self.enabled = True
-        self._task = asyncio.create_task(self._run(hub_url or "", pairing_token))
+        self._pending = (hub_url or "", pairing_token)
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            # CoreServices.build runs before uvicorn's loop exists (no loop -> RuntimeError
+            # killed CORE, D-407 sim 2026-10-02). The API startup hook calls start_on_loop().
+            logger.info("Fleet agent start deferred to the API event loop")
+            return
+        self.start_on_loop()
+
+    def start_on_loop(self) -> None:
+        """Create the hub task on the running loop. No-op when disabled or already started."""
+        if self._pending is None or self._task is not None or not self.enabled:
+            return
+        hub_url, pairing_token = self._pending
+        self._task = asyncio.get_running_loop().create_task(self._run(hub_url, pairing_token))
 
     def stop(self) -> None:
         self.enabled = False

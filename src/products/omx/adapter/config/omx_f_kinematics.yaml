@@ -4,7 +4,7 @@
 # joint limits are recorded for drift detection only and protect nothing.
 #
 # Source: https://raw.githubusercontent.com/ROBOTIS-GIT/open_manipulator/
-#   0a4af6a923b8b7d80b8c20506d1839c54d2e993e/open_manipulator_description/urdf/omx_f/omx_f.urdf
+#   at revision 0a4af6a923b8b7d80b8c20506d1839c54d2e993e/open_manipulator_description/urdf/omx_f/omx_f.urdf
 # (file sha256 d06720f50c71b380daa91f6cf52ae089725bc588617e5f42ed2433b6e665b809; byte-identical
 # to src/sim/isaac_sim/assets/open_manipulator_description/urdf/omx_f/omx_f.urdf after CRLF
 # normalisation, checked 2026-10-01). The same values are in omx_f_arm.urdf.xacro and

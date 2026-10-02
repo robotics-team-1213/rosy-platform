@@ -199,6 +199,15 @@ def test_wheel_consumers():
     assert (isaac["wheel_radius"], isaac["wheel_distance"]) == (radius, separation)
 
 
+def test_line_follow_stuck_body_consumers():
+    """D-407: the CORE back-off measures rear clearance from the URDF body rear."""
+    line_follow = _yaml(PROFILE / "core.yaml")["line_follow"]
+    assert line_follow["body_lidar_x_m"] == G["lidar"]["x_m"]
+    assert line_follow["body_rear_x_m"] == G["caster"]["rear_x_m"]
+    assert line_follow["body_rotation_radius_m"] == G["footprint"]["rotation_radius_m"]
+    assert line_follow["body_half_width_m"] == G["footprint"]["half_width_m"]
+
+
 def test_body_and_ir_consumers():
     body = _module_constants(SENSING / "control" / "sensing" / "body.py", "WHEEL_Y", "WHEEL_R", "CASTER_X",
                              "CASTER_EXTRA", "LIDAR_X", "FRONT_X", "ROTATION_RADIUS")

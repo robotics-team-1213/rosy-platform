@@ -30,6 +30,10 @@ KNOWN_EXTERNAL_BEHAVIOR_TESTS = frozenset({
     "src/runtime/gateway/test/test_line_follow_ir_guard.py",
     "src/runtime/gateway/test/test_line_follow_obstacle.py",
     "src/runtime/gateway/test/test_line_follow_obstacle_path.py",
+    # D-407 (2026-10-02): the stuck back-off through core.bridge.traffic_gate and the
+    # decision API via core_client; the pure state machine lives in core_features/test.
+    "src/runtime/gateway/test/test_line_follow_stuck.py",
+    "src/runtime/gateway/test/test_line_follow_stuck_api.py",
     "src/runtime/gateway/test/test_navigation_readiness.py",
     "src/runtime/gateway/test/test_operational_journey.py",
     "src/runtime/gateway/test/test_power.py",
@@ -62,6 +66,10 @@ KNOWN_EXTERNAL_BEHAVIOR_TESTS = frozenset({
     "src/runtime/gateway/test/test_emotion_map.py",
     "src/runtime/gateway/test/test_lidar_mount_source.py",
     "src/runtime/gateway/test/test_teleop_watchdog_config.py",
+    # 2026-10-02 D-395 Phase 2 integration: the one cross-lane contract test. It runs
+    # the sensing node's pure core (control.loc_assist), CORE's relay and app, and
+    # Fleet's client against each other, so it belongs to no single package.
+    "src/runtime/gateway/test/test_localization_cross_lane.py",
 })
 
 

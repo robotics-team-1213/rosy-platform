@@ -82,6 +82,11 @@ def test_nav_config_applies_reducing_only_narrow_space_trial():
     assert follow["use_cost_regulated_linear_velocity_scaling"] is True
     assert follow["cost_scaling_dist"] == pytest.approx(.15)
     assert controller["progress_checker"]["required_movement_radius"] == pytest.approx(.05)
+    # D-395 R4: RPP rotates to the goal heading with linear 0 whenever the carrot is
+    # nearer than xy_goal_tolerance. The carrot sits about one lookahead ahead, so a
+    # tolerance at or above min_lookahead_dist means the robot never drives forward.
+    goal_checker = controller["general_goal_checker"]
+    assert goal_checker["xy_goal_tolerance"] < follow["min_lookahead_dist"]
     assert smoother["max_velocity"] == pytest.approx([.10, 0., .50])
     assert smoother["min_velocity"] == pytest.approx([-.10, 0., -.50])
 
@@ -89,11 +94,17 @@ def test_nav_config_applies_reducing_only_narrow_space_trial():
     # circumscribed radius so a square robot cannot enter a corner that only
     # fits at yaw=0 and then become "start occupied" while turning.
     padded_radius = (2 * .06 ** 2) ** .5 + .03
-    for costmap in ("local_costmap", "global_costmap"):
-        costmap_params = params[costmap][costmap]["ros__parameters"]
-        assert "footprint" not in costmap_params
-        assert costmap_params["robot_radius"] == pytest.approx(padded_radius)
-        assert costmap_params["footprint_padding"] == pytest.approx(0.)
+    global_params = params["global_costmap"]["global_costmap"]["ros__parameters"]
+    assert "footprint" not in global_params
+    assert global_params["robot_radius"] == pytest.approx(padded_radius)
+    assert global_params["footprint_padding"] == pytest.approx(0.)
+    # D-395 R4: the local costmap is RPP's collision checker, not the planner's. The
+    # padded circle (0.115 m) plus 5 cm cells covers the wall 0.14 m from square A, so
+    # RPP reported "collision ahead" before the first move. It keeps the device footprint.
+    local_params = params["local_costmap"]["local_costmap"]["ros__parameters"]
+    assert local_params["footprint"] == '[[0.06, 0.06], [0.06, -0.06], [-0.06, -0.06], [-0.06, 0.06]]'
+    assert "robot_radius" not in local_params
+    for costmap_params in (global_params, local_params):
         assert costmap_params["inflation_layer"]["inflation_radius"] == pytest.approx(.15)
 
 
@@ -111,7 +122,8 @@ def _setup(mod, **overrides):
     context.launch_configurations.update({
         "robots": "3", "prefix": "rosy", "world_name": "rosy_factory.world", "mode": "none",
         "headless": "true", "spawn_spacing": "1.5", "core": "true", "api_port_base": "8080",
-        "inflation_radius": "", "spawn_x": "", "spawn_y": "", "map": "",
+        "inflation_radius": "", "spawn_x": "", "spawn_y": "", "map": "", "loc_assist": "true",
+        "spawn_poses": "", "seed_initialpose": "true",
         **overrides,
     })
     try:
@@ -182,3 +194,63 @@ def test_slam_start_waits_for_sensor_startup_in_wall_time():
     assert not isinstance(timers[0], ROSTimer)
     assert timers[0].period == 15.0
     assert timers[0].actions
+
+
+def _loc_assist_includes(actions, context):
+    """D-395 P2-3: the per-robot loc_assist launch rides in the delayed nav actions."""
+    from launch.actions import IncludeLaunchDescription
+    found = []
+    for timer in (a for a in actions if isinstance(a, TimerAction)):
+        for action in timer.actions:
+            if isinstance(action, IncludeLaunchDescription):
+                # Before execution `.location` is str() of the substitutions (an object repr
+                # on Jazzy), so read the substitution list and perform it.
+                source = action.launch_description_source
+                location = _text(source._LaunchDescriptionSource__location, context)
+                if location.endswith("loc_assist.launch.py"):
+                    found.append(action)
+    return found
+
+
+def test_nav_mode_starts_loc_assist_per_robot_unless_turned_off():
+    mod = _module()
+    actions, context = _setup(mod, robots="2", core="false", mode="nav")
+    assert len(_loc_assist_includes(actions, context)) == 2
+    actions, context = _setup(mod, robots="2", core="false", mode="nav", loc_assist="false")
+    assert _loc_assist_includes(actions, context) == []
+
+
+def _named(actions, context, executable):
+    return [a for a in actions
+            if isinstance(a, Node) and _text(a.node_executable, context) == executable]
+
+
+def _spawn_pose(node, context):
+    # Node.cmd exists only after execute(); the declared arguments are on the action.
+    args = [_text(a, context) for a in node._Node__arguments]
+    return tuple(float(args[args.index(flag) + 1]) for flag in ("-x", "-y", "-Y"))
+
+
+def test_spawn_poses_default_keeps_the_catalog_row_at_yaw_zero():
+    mod = _module()
+    actions, context = _setup(mod, robots="2", core="false")
+    poses = [_spawn_pose(n, context) for n in _named(actions, context, "create")]
+    assert [p[2] for p in poses] == [0.0, 0.0]
+    assert poses[1][0] - poses[0][0] == pytest.approx(1.5)
+    assert poses[0][1] == poses[1][1]
+
+
+def test_spawn_poses_place_each_robot_and_seed_its_yaw():
+    """D-395 S1: on-square, off-slot and mirror placements need a pose per robot."""
+    mod = _module()
+    actions, context = _setup(mod, robots="2", core="false", mode="nav",
+                              spawn_poses="-1.26,0.49,1.5708; 0.3,-0.3,3.1416")
+    poses = [_spawn_pose(n, context) for n in _named(actions, context, "create")]
+    assert poses == [(-1.26, 0.49, 1.5708), (0.3, -0.3, 3.1416)]
+    assert len(_named(actions, context, "seed_initialpose.py")) == 2
+
+
+def test_seed_initialpose_false_leaves_amcl_unseeded():
+    mod = _module()
+    actions, context = _setup(mod, robots="2", core="false", mode="nav", seed_initialpose="false")
+    assert _named(actions, context, "seed_initialpose.py") == []

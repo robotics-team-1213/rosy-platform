@@ -28,7 +28,7 @@
 ## 버전과 재현
 
 - 로컬 recording 이미지 ID: `sha256:faeb86d666c6848ec61478a72087f7cadfc55d6b23e54dff891202b21029efb2`.
-- vendor: OpenMANIPULATOR 5.1.2, `0a4af6a923b8b7d80b8c20506d1839c54d2e993e`.
+- vendor: OpenMANIPULATOR 5.1.2, revision `0a4af6a923b8b7d80b8c20506d1839c54d2e993e`.
 - SDF SHA256: `3974f855b61c852c933772929112ff06104ba1a8f5e8bde034b9ebe13d64c61c`.
 - CameraInfo SHA256: `d1b538c8a736b665e05433276033d8722519e8ff1533310f8d6ede6ae8ce00bc`.
 - 원본은 base source revision과 실행 당시 adapter tree SHA256을 함께 기록한다.
@@ -71,7 +71,7 @@ joint1 `0.0000000883 → 0.0199994147 rad`, goal SUCCEEDED.
 `X:/DevTemp/rosy-omx-lerobot-gazebo-final`의 실제 reader 12 frames 검증,
 영상 오차 최대 1.71431. 원본 `source_tree_sha256`가 최종 adapter/schema 파일 해시와
 같음을 별도 재계산으로 확인했다:
-`88735dcdd1253a58fd853396941da64ce217b8471701c38a30997490953ed433`.
+dataset commit `88735dcdd1253a58fd853396941da64ce217b8471701c38a30997490953ed433`.
 같은 실행의 lease 만료 원본 `33bcbeca-372a-40d4-8cea-1b2206589602`도 incomplete다.
 
 독립 리뷰의 중요한 문제 3개를 수정하고 재검토했다:

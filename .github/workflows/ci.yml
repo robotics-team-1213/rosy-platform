@@ -37,7 +37,7 @@ jobs:
           # python3-opencv: the lane live viewer (src/sim/gz_sim/scripts/lane_live_view.py)
           # imports cv2 at module top; without the package the gz_sim step dies at
           # collection and masks every later gate (main red since 650fad89, 2026-09-24).
-          apt-get install -y -qq nodejs python3-colcon-common-extensions python3-pip openssl zstd python3-opencv python3-pil ros-jazzy-xacro ros-jazzy-realtime-tools ros-jazzy-rmw-cyclonedds-cpp ros-jazzy-nav2-msgs
+          apt-get install -y -qq nodejs python3-colcon-common-extensions python3-pip python3-wheel openssl zstd python3-opencv python3-pil ros-jazzy-xacro ros-jazzy-realtime-tools ros-jazzy-rmw-cyclonedds-cpp ros-jazzy-nav2-msgs
           # --break-system-packages: ros:jazzy-ros-base 는 Ubuntu 24.04 / Python 3.12 라
           # 시스템 환경이 PEP 668 로 표시되어 있다. 이 플래그가 없어 run 34474895940 이
           # externally-managed-environment 로 40 초만에 죽었고, 그 아래 colcon build 부터
@@ -55,6 +55,23 @@ jobs:
           grep -o '^[A-Za-z0-9._-]*==[^ ]*' deploy/robot/pinky_pro/image/device-python-requirements.txt > /tmp/rosy-runtime-constraints.txt
           pip3 install --no-cache-dir --break-system-packages -c /tmp/rosy-runtime-constraints.txt \
             flake8 httpx pyyaml jsonschema ext4
+
+      - name: Build and install ROS-free platform API wheels
+        run: |
+          # Build actual wheels outside src/ and install before colcon/pytest. This catches
+          # missing package metadata and namespace-wheel ownership instead of adding modules
+          # to PYTHONPATH or treating them as ament packages.
+          # 2026-10-02 정정: --break-system-packages 는 install 계열에만 있는 옵션이다
+          # (pip wheel 은 환경에 설치하지 않으므로 PEP 668 우회가 필요 없다). wheel 줄에서
+          # 떼지 않으면 "no such option" 으로 40 초 만에 죽는다(실행 36967673107).
+          wheelhouse=/tmp/rosy-platform-wheelhouse
+          mkdir -p "$wheelhouse"
+          pip3 wheel --no-deps --no-build-isolation \
+            --wheel-dir "$wheelhouse" \
+            modules/world modules/skills/api modules/execution modules/processes/palletizing
+          pip3 install --break-system-packages --no-cache-dir --no-index \
+            --find-links "$wheelhouse" \
+            rosy-world==0.1.0 rosy-skill-api==0.1.0 rosy-execution==0.1.0 rosy-palletizing==0.1.0
 
       - name: Build (colcon)
         run: |
@@ -91,6 +108,9 @@ jobs:
       # Rosy Cell 코어는 ROS·네트워크 없이 돈다(D-399 Application). 기본 이름 겹침이 없도록 따로 돈다.
       - name: Test (Rosy Cell core)
         run: python3 -m pytest src/site/cell/test -q
+
+      - name: Test (palletizing process compatibility and boundaries)
+        run: python3 -m pytest test/test_platform_palletizing_compat.py test/architecture/test_platform_dependency_boundaries.py -q
 
       # 멀티 인스턴스 런치는 로봇마다 포트·HOME·설정을 갈라야 한다. 그 계약은 런치
       # 파일을 실제로 실행해야 검증되므로 ROS 오버레이가 필요하다. ros_gz_sim share 가

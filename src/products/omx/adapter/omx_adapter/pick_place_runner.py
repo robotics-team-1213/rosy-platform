@@ -229,14 +229,18 @@ class PickPlaceRunner:
                 or state.transform_revision != phase.transform_revision
                 or state.planning_scene_revision != phase.planning_scene_revision):
             raise ValueError("phase start state calibration, transform, or planning scene changed")
-        window: dict[str, tuple[float, float]] = {}
+        tolerances = self._tolerances(phase)
+        # Owner reference = the planned start (main 11ae6e70: the tolerance budget stays the
+        # planned one). Exception: the CELL_TRANSFER gripper after grasp, whose readback is the
+        # item width, not the plan (D-402 §3d); it is bound to the value checked here instead.
+        expected_start: dict[str, float] = {}
         for name, expected in zip(phase.joint_names, phase.start_state_positions):
             if name in self._unchecked_joints and phase.phase_id in _AFTER_GRASP_PHASES:
+                expected_start[name] = state.joint_positions[name]
                 continue
-            tolerance = self._tolerances(phase)[name]
-            if abs(state.joint_positions[name] - expected) > tolerance:
+            if abs(state.joint_positions[name] - expected) > tolerances[name]:
                 raise ValueError("phase start state is outside the planned tolerance")
-            window[name] = (expected, tolerance)
+            expected_start[name] = expected
 
         command = self.command_for_phase(phase)
         if not isinstance(command, TrajectoryCommand):
@@ -251,10 +255,14 @@ class PickPlaceRunner:
             raise ValueError("phase command identity/path does not match the validated plan")
         self._last_command_state_sequence = state.sequence
         # Rebind only after an explicit bounded start-state and revision match. The journal
-        # write follows, and joint states keep arriving, so the owner repeats this same check
-        # on its newest state under its lock and binds to that sequence (C3b A1).
-        return replace(command, source_state_sequence=state.sequence,
-                       start_state_window=window), state
+        # write follows and joint states keep arriving, so ArmCommandOwner repeats this check
+        # on its newest fresh state under its lock at the final dispatch edge (C3b A1, b0979ad6).
+        return replace(
+            command,
+            source_state_sequence=state.sequence,
+            expected_start_state_positions=expected_start,
+            start_state_tolerances=tolerances,
+        ), state
 
     def start(self) -> dict[str, object]:
         """Persist and submit only the first phase of a fresh attempt."""

@@ -76,6 +76,18 @@ export function resolveSavedProfile(storage, source, lensKind) {
     + `지금 카메라는 ${LENS_NAMES[lensKind]}라 기본값으로 보여 줍니다. 이 렌즈에 맞게 다시 맞추세요.` };
 }
 
+// D-410 — 운용 화면(/console)에는 보정 칸이 없다. 없는 칸은 빈 상대로 둔다:
+// 읽기는 비어 있고 쓰기는 무해하다. 보정 흐름 자체는 설치 화면에서만 열린다.
+const absentPanel = () => ({
+  open: false,
+  hidden: true,
+  textContent: "",
+  querySelectorAll: () => [],
+  addEventListener: () => {},
+  toggleAttribute: () => {},
+  setAttribute: () => {},
+});
+
 export function createVisionView({ el, call, auth }) {
   const select = el("vision-source");
   const frame = el("vision-frame");
@@ -86,13 +98,13 @@ export function createVisionView({ el, call, auth }) {
   const cornerHandles = [...cornerOverlay.querySelectorAll("[data-corner-handle]")];
   const status = el("vision-state");
   const message = el("vision-message");
-  const adjustments = el("vision-adjustments");
+  const adjustments = el("vision-adjustments") || absentPanel();
   const profileFields = [...adjustments.querySelectorAll("[data-rect]")];
   const cornerFields = [...adjustments.querySelectorAll("[data-corner]")];
   const profileFieldsets = [...adjustments.querySelectorAll("fieldset")];
-  const cornerModes = el("vision-corner-modes");
-  const cornerHint = el("vision-corner-hint");
-  const adjustmentState = el("vision-adjustment-state");
+  const cornerModes = el("vision-corner-modes") || absentPanel();
+  const cornerHint = el("vision-corner-hint") || absentPanel();
+  const adjustmentState = el("vision-adjustment-state") || absentPanel();
   let lease = null;
   let leaseExpiresAt = 0;
   let objectUrl = null;
@@ -121,6 +133,8 @@ export function createVisionView({ el, call, auth }) {
   }
 
   function readProfile() {
+    // 운용 프리뷰 모드(칸 없음)에서는 저장 전 기본값만이 참이다.
+    if (!cornerFields.length || !profileFields.length) return { ...DEFAULT_RECTIFICATION };
     const profile = { ...DEFAULT_RECTIFICATION };
     for (const field of profileFields) profile[field.dataset.rect] = Number(field.value);
     profile.corners = Array.from({ length: 4 }, (_, index) =>
@@ -358,8 +372,8 @@ export function createVisionView({ el, call, auth }) {
     cornerModes.hidden = !adjustments.open || !select.value;
   });
   window.addEventListener("resize", updateCornerOverlay);
-  el("vision-edit-corners").addEventListener("click", () => selectViewMode("raw"));
-  el("vision-preview-adjusted").addEventListener("click", () => selectViewMode("adjusted"));
+  el("vision-edit-corners")?.addEventListener("click", () => selectViewMode("raw"));
+  el("vision-preview-adjusted")?.addEventListener("click", () => selectViewMode("adjusted"));
   for (const handle of cornerHandles) {
     handle.addEventListener("pointerdown", (event) => {
       if (viewMode !== "raw" || !event.isPrimary) return;
@@ -424,7 +438,7 @@ export function createVisionView({ el, call, auth }) {
       }
     });
   }
-  el("vision-reset-adjustments").addEventListener("click", () => {
+  el("vision-reset-adjustments")?.addEventListener("click", () => {
     const source = select.value;
     if (source) localStorage.removeItem(rectificationKey(source, currentLens));
     loadProfile(source);

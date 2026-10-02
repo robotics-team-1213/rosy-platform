@@ -40,6 +40,3 @@
     position_stddev: 0.035
     yaw_stddev: 0.12
     stable_scans: 10
-    recovery_interval: 30.0
-    global_minimum_agreement: 0.9
-    global_minimum_margin: 0.04

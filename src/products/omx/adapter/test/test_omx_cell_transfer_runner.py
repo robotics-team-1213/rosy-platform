@@ -203,14 +203,17 @@ def test_runner_hands_the_owner_its_start_check_as_a_window(tmp_path, kin, profi
     # joint state that lands while the runner journals no longer rejects the phase.
     recorder, port, runner = _phase_runner(tmp_path, kin, profile, grippers={"transfer": 0.3})
     _run_all(runner)
+    # Unified with main b0979ad6: every joint is sent; the after-grasp gripper is bound to the
+    # value the runner checked (0.3 here, the item width) rather than the planned close.
     tolerances = profile.start_state_tolerances()
     for (command, _goal), phase in zip(port.submissions, runner.plan.phases):
-        window = command.start_state_window
         expected = dict(zip(phase.joint_names, phase.start_state_positions))
-        skipped = {"gripper_joint_1"} if phase.phase_id in ("transfer", "release") else set()
-        assert set(window) == set(phase.joint_names) - skipped
-        for name, (value, tolerance) in window.items():
-            assert value == expected[name] and tolerance == tolerances[name]
+        if phase.phase_id == "transfer":
+            expected["gripper_joint_1"] = 0.3
+        elif phase.phase_id == "release":
+            expected["gripper_joint_1"] = command.expected_start_state_positions["gripper_joint_1"]
+        assert dict(command.expected_start_state_positions) == expected
+        assert dict(command.start_state_tolerances) == tolerances
 
 
 # A4 (C3b): C3 run8 passed every gate while the block fell in transit. The runner re-reads
@@ -290,8 +293,8 @@ def test_wrist_deflection_after_grasp_uses_the_profile_phase_tolerance(tmp_path,
 
     recorder, port, runner = deflected("transfer", "joint5", 0.05)
     _run_all(runner)
-    window = port.submissions[2][0].start_state_window
-    assert window["joint5"][1] == 0.06 and window["joint4"][1] == 0.02
+    sent = port.submissions[2][0].start_state_tolerances
+    assert sent["joint5"] == 0.06 and sent["joint4"] == 0.02
     for phase_id, joint in (("transfer", "joint4"), ("grasp", "joint5"), ("release", "joint5")):
         recorder, port, runner = deflected(phase_id, joint, 0.05)
         with pytest.raises(RuntimeError, match="start state is invalid"):

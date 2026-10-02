@@ -9,7 +9,7 @@ import pytest
 from pydantic import ValidationError
 
 from core_common.protocol.localization import (
-    CandidateReport, DecisionSource, LocalizationDecision, LocalizationStatus, LocState, PoseFrame)
+    CHECKING, CandidateReport, DecisionSource, LocalizationDecision, LocalizationStatus, LocState, PoseFrame)
 from core_common.protocol.schemas import StateSnapshot
 
 REFERENCE = Path(__file__).resolve().parents[4] / "docs" / "reference" / "ROSY API & Protocol Reference.md"
@@ -106,3 +106,26 @@ def test_the_api_reference_documents_the_field_and_the_models():
     assert "## 7.9 Fleet 보조 위치 확정 모델" in text
     for name in ("CandidateReport", "LocalizationDecision", "square_sightings", "pose_frame", "ttl_s", "cues"):
         assert name in text
+
+
+def test_a_localized_status_carries_its_unmapped_objects_with_their_scan_stamp():
+    """D-395 rev. 4 §5 follow-up (S1 R1): LOCALIZED robots keep reporting what they see."""
+    status = LocalizationStatus.model_validate({
+        "state": "LOCALIZED", "pose_frame": "map", "unmapped_objects": [{"x": .6, "y": -.1}],
+        "objects_stamp": 12.5})
+    assert status.unmapped_objects[0].x == .6 and status.objects_stamp == 12.5
+    assert LocalizationStatus.model_validate_json(status.model_dump_json()) == status
+    bare = LocalizationStatus(state="UNKNOWN", pose_frame="odom")
+    assert bare.unmapped_objects == [] and bare.objects_stamp is None
+    for bad in ({"unmapped_objects": [{"x": 0., "y": 0.}] * 17},
+                {"unmapped_objects": [{"x": math.nan, "y": 0.}]},
+                {"objects_stamp": math.inf}):
+        with pytest.raises(ValidationError):
+            LocalizationStatus.model_validate({"state": "LOCALIZED", "pose_frame": "map", **bad})
+
+
+def test_a_running_check_is_the_candidates_reason_checking():
+    """S1 re-run R6: the robot shows its 3 s injection check; Fleet and CORE pause on it."""
+    status = LocalizationStatus(state="CANDIDATES", pose_frame="odom", reason=CHECKING,
+                                request_id="rosy_01-7")
+    assert status.reason == "checking" and len(CHECKING) <= 64

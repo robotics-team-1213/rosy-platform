@@ -1,4 +1,4 @@
-"""Bash-executed tests for deploy/robot/pinky_pro/rosy-release-unpack.sh (D-225).
+"""Bash-executed tests for deploy/robot/pinky_pro/native/rosy-release-unpack.sh (D-225).
 
 rosy-release-push.ps1 scp's this helper to the robot and runs it under
 `sudo -n`; it is the only thing that ever writes into /opt/rosy/releases on
@@ -25,7 +25,7 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPT = ROOT / "deploy" / "robot" / "pinky_pro" / "rosy-release-unpack.sh"
+SCRIPT = ROOT / "deploy" / "robot" / "pinky_pro" / "native" / "rosy-release-unpack.sh"
 BASH = shutil.which("bash")
 TAR = shutil.which("tar")
 SHA256SUM = shutil.which("sha256sum")
@@ -328,3 +328,26 @@ def test_a_stale_tmp_directory_from_a_prior_run_is_cleared_at_start(tmp_path, re
 
     assert completed.returncode == 0, completed.stderr
     assert not stale.exists()
+
+
+def test_a_fresh_release_directory_gets_a_fresh_mtime(tmp_path, releases):
+    # D-412: the updater prunes only release directories older than an hour. tar
+    # restores the archive's own (old) mtime on "./", so the script touches the
+    # target after the rename and a just-unpacked release is never pruned.
+    import os
+    import time
+
+    content = tmp_path / "content"
+    (content / "install").mkdir(parents=True)
+    (content / "install" / ".rosy-release").write_text("2026.01.01-001", encoding="utf-8")
+    _sha256sums(content)
+    old = time.time() - 30 * 24 * 3600
+    for path in [content, *content.rglob("*")]:
+        os.utime(path, (old, old))
+    archive = tmp_path / "pack.tar.gz"
+    _pack(content, archive)
+
+    completed = _run("2026.01.01-001", archive, releases)
+
+    assert completed.returncode == 0, completed.stderr
+    assert (releases / "2026.01.01-001").stat().st_mtime > time.time() - 600

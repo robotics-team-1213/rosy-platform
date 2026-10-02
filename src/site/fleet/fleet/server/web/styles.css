@@ -12,6 +12,8 @@ body {
 }
 
 .vision-preview { margin-top: var(--space-4); }
+/* D-406 — 설치·보정 도구는 접힌 묶음으로 운용 무대 뒤로 간다. */
+.install-tools { margin-top: var(--space-3); }
 .vision-controls { display: flex; align-items: center; gap: var(--space-2); margin-bottom: var(--space-2); }
 .vision-controls select { flex: 1; }
 .vision-frame { display: grid; place-items: center; min-height: 0; aspect-ratio: 16 / 9; overflow: hidden; background: var(--surface-flat); border: 1px solid var(--line-14); border-radius: var(--radius-panel); }
@@ -86,6 +88,8 @@ body {
 /* 화면 테마(D-359 §2.5) — 이 브라우저의 선호. 누름은 /common/theme.js가 받는다.
    이름표는 한 줄이다 — 1366px에서 "화면 테마"가 두 줄로 접히던 것을 막는다. */
 .theme-choice { display: flex; align-items: center; gap: var(--space-1); }
+/* D-405 — 아이콘 세그먼트는 정사각 누름 면(44px)을 지킨다. */
+.theme-choice ui-button { min-width: var(--target-secondary); padding-inline: 0; justify-content: center; }
 #theme-choice-label { white-space: nowrap; }
 
 /* D-359 §6.4 — 넓은 창(90rem 이상): 접힘 칸은 상자가 없고(display: contents) 항목이 머리 줄에
@@ -134,10 +138,12 @@ main {
      지도 아래에 쌓고, 지도 칸이 충분히 넓은 110rem 이상에서만 옆에 둔다. */
   main > .panel[aria-labelledby="map-heading"] {
     grid-column: 1;
-    grid-row: 1;
+    grid-row: 2;
   }
-  #map-canvas { height: min(42vh, 30rem); }
-  .queues-panel { grid-column: 1; grid-row: 2; }
+  #map-canvas { height: min(42dvh, 30rem); }
+  /* 2026-10-02 회차 계측 — 큐가 채워지는 순간 지도 아래 칸은 '예외가 먼저'(D-201)를
+     위반한다(1920에서 큐 상단 963px). 예외 큐는 첫 행, 지도는 그 아래. */
+  .queues-panel { grid-column: 1; grid-row: 1; }
   main > .panel[aria-labelledby="roster-heading"] {
     grid-column: 2;
     grid-row: 1 / span 2;
@@ -156,7 +162,7 @@ main {
   #roster-toggle { grid-column: 2; grid-row: 1; justify-self: start; }
   /* 사이트 망이 바뀐 경보는 두 칸을 가로지른다. 숨으면 그 행은 높이가 없다. */
   .address-drift { grid-column: 1 / -1; grid-row: 2; }
-  #roster { grid-column: 1; grid-row: 3; min-height: 0; max-height: min(42vh, 30rem); overflow-y: auto; }
+  #roster { grid-column: 1; grid-row: 3; min-height: 0; max-height: min(42dvh, 30rem); overflow-y: auto; }
   .discovery { grid-column: 2; grid-row: 3; margin-top: 0; }
   .formation { grid-column: 1; grid-row: 4 / span 2; margin-top: var(--space-3); }
   /* 기기 연결 묶음의 마지막 줄과 신호등 머리 사이에 숨을 둔다(붙어 겹쳐 보였다). */
@@ -168,7 +174,9 @@ main {
 @media (width >= 110rem) {
   main > .panel[aria-labelledby="map-heading"] {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    /* 2026-10-02 회차 — 1fr:1fr에서는 1920 관제 PC에서 지도가 374px(로스터 1058px)로
+       목표를 찍는 표면이 폰 폭이 된다. 지도가 카메라보다 크게 균형을 잡는다. */
+    grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
     column-gap: var(--space-4);
     align-items: start;
   }
@@ -221,7 +229,7 @@ main {
 .map-head .spacer { flex: 1; }
 
 .map-stage { position: relative; }
-.map-stage[data-map-state="unavailable"] #map-canvas { height: min(30vh, 18rem); }
+.map-stage[data-map-state="unavailable"] #map-canvas { height: min(30dvh, 18rem); }
 .map-empty {
   position: absolute;
   inset: 1px;
@@ -246,7 +254,7 @@ main {
      (object-fit: contain — 벽이 번지는 비율 왜곡은 선택이 아니다). 클릭
      좌표는 레터박스를 제외한 그려진 영역 기준으로 계산된다(console.js). */
   width: 100%;
-  height: min(54vh, 40rem);
+  height: min(54dvh, 40rem);
   object-fit: contain;
   display: block;
   /* 격자 한 칸은 5 cm 다. 보간하면 벽이 번져 어디가 통로인지 읽을 수 없다. */
@@ -294,6 +302,16 @@ main {
   border-radius: var(--radius-panel);
   background: var(--surface-raised);
   padding: var(--space-3) var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+/* D-409 — 컴팩트(<30rem) 카드 요약: 위치·방향은 지도가 말하고 카드는 모드·배터리·안전만.
+   카드 안쪽 여백도 한 단 줄인다. */
+@media (width < 30rem) {
+  .facts > div[data-fact="pose"], .facts > div[data-fact="yaw"] { display: none; }
+  .robot { padding: var(--space-2) var(--space-3); }
 }
 .robot.s0 { border-left-color: var(--robot-1); }
 .robot.s1 { border-left-color: var(--robot-2); }
@@ -317,6 +335,8 @@ main {
 }
 .facts div { display: flex; flex-direction: column; gap: 0; }
 .facts span { font-family: var(--mono); font-size: var(--text-micro); letter-spacing: var(--track-label); color: var(--ink-quiet); }
+/* D-405 — 측정 라벨 아이콘은 라벨 척도(label 단계)를 따른다. 값(1.125rem)과 같으면 무겁다. */
+.facts .ui-icon { width: var(--text-label); height: var(--text-label); }
 .facts strong { font-family: var(--mono); font-size: var(--text-label); font-weight: var(--weight-medium); }
 
 .robot-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
@@ -560,6 +580,28 @@ main {
   align-items: center;
   color: var(--ink);
 }
+
+/* D-407 판단 요청 — 예외 큐 아래. 원인은 crit 태그, 답 다섯은 한 줄에서 접힌다. */
+.stuck-panel { margin-top: var(--space-4); padding-top: var(--space-3); border-top: 1px solid var(--line-14); }
+.stuck-panel h3 { margin: 0; font-size: var(--text-title); font-weight: var(--weight-emphasis); }
+.stuck-panel h3 small { color: var(--ink-quiet); font-weight: var(--weight-label); }
+.stuck-list { list-style: none; margin: var(--space-3) 0 0; padding: 0; display: grid; gap: var(--space-3); }
+.stuck-item { display: grid; gap: var(--space-2); padding: var(--space-3); background: var(--surface-raised);
+  border: 1px solid var(--line-10); border-left: 4px solid var(--status-crit); border-radius: var(--radius-control); }
+.stuck-item.offline { border-left-color: var(--status-warn); }
+.stuck-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.stuck-facts { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-4); margin: 0; }
+.stuck-facts div { display: flex; gap: var(--space-1); align-items: baseline; }
+.stuck-facts dt { font-size: var(--text-label); color: var(--ink-quiet); }
+.stuck-facts dd { margin: 0; font-family: var(--mono); font-size: var(--text-label); color: var(--ink); }
+.stuck-actions, .stuck-confirm-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.stuck-actions ui-button, .stuck-confirm-actions ui-button { flex: 1 1 auto; white-space: nowrap; word-break: keep-all; }
+.stuck-confirm { padding: var(--space-3); border: 1px solid var(--line-30); border-radius: var(--radius-panel); }
+.stuck-confirm p { margin: 0 0 var(--space-2); color: var(--ink); }
+.stuck-result { margin: 0; font-size: var(--text-label); color: var(--ink-quiet); }
+/* D-202 — 거부는 채운다(경보 글자 대신 위험 채움 + 종이 잉크). */
+.stuck-result[data-kind="bad"] { color: var(--ink-on-crit); background: var(--status-crit);
+  padding: var(--space-1) var(--space-2); border-radius: var(--radius-control); }
 
 .discovery { margin-top: var(--space-4); padding-top: var(--space-3); border-top: 1px solid var(--line-14); }
 .discovery-list { list-style: none; margin: var(--space-3) 0; padding: 0; display: grid; gap: var(--space-2); }

@@ -42,11 +42,12 @@ def mirror(pose):
     return (-pose[0], -pose[1], math.atan2(math.sin(pose[2] + math.pi), math.cos(pose[2] + math.pi)))
 
 
-def scan(pose, peers=()):
-    """Sensor-frame (ranges, angles) seen from base pose `pose`; NaN means no return."""
+def scan(pose, peers=(), beams=BEAMS):
+    """Sensor-frame (ranges, angles) seen from base pose `pose`; NaN means no return.
+    `beams`: 640 is the Pinky lidar's full scan (0.5625 degrees apart)."""
     f = field()
     sx, sy, syaw = sensor_from_base(pose, MOUNT)
-    angles = np.linspace(-math.pi, math.pi, BEAMS, endpoint=False)
+    angles = np.linspace(-math.pi, math.pi, beams, endpoint=False)
     steps = np.arange(.05, MAX_RANGE, f.resolution / 2)
     heading = syaw + angles
     px = sx + np.cos(heading)[:, None] * steps[None, :]

@@ -27,6 +27,12 @@
 - 증거: `python -m pytest src/site/cell/test -q -p no:cacheprovider` 143 passed; harness lint 0 error(s).
 - gate 변화: SOURCE GO 유지(증거 140 -> 143).
 
+## 2026-10-02 · 9da93450 · refactor: extract palletizing process with legacy imports
+
+- Change: Recipe/Cell/Job source moved to the `modules/processes/palletizing` wheel. Existing `rosy_cell` imports only re-export canonical types and functions.
+- Evidence: installed wheel compatibility 11 passed; Cell suite 143 passed. SOURCE remains GO. No MoveIt/IK, Motion Intent, or reachability behavior was added.
+- Gate: SOURCE GO; ROS-SIM remains HOLD.
+
 ## 2026-10-02 · 52ef7f91 · feat(cell): OMX sim demo cell/recipe for C3
 
 - 변경: `examples/omx_sim/cell.yaml`(cell/2, home (0.12, 0, 0.12), 프로필과 같은 `kinematics_revision`)과 `recipe.yaml`(2 팔레트 × 2층 × 4블록 40×30×30 mm 20 g + 슬립시트 2장, grid, gap 15 mm). 저장소 루트 `test/test_cell_omx_sim_layout_contract.py`가 Job 18 transfer 전부를 OMX 해석 플래너로 계획하고 Gazebo 월드 포즈와 대조한다(rosy_cell과 omx_adapter는 서로 import하지 않는다).

@@ -37,7 +37,7 @@ class RoadPreviewConfig:
     max_width: int = 640
     jpeg_quality: int = 72
     max_bytes: int = 512_000
-    source: str = "PINKY"
+    source: str = "ROSY"
 
     def __post_init__(self) -> None:
         fps = float(self.fps)
@@ -102,7 +102,7 @@ class RoadObservation:
 
 def render_road_preview(bgr: np.ndarray, observation: RoadObservation, *,
                         source: str, max_width: int = 640,
-                        keep=None, objects=None, road_state=None, line=None) -> np.ndarray:
+                        keep=None, objects=None, road_state=None, line=None, tags=None) -> np.ndarray:
     """Render an observation-only preview; never feed this back to detection."""
     if not isinstance(bgr, np.ndarray) or bgr.ndim != 3 or bgr.shape[2] != 3:
         raise ValueError("road preview requires a BGR frame")
@@ -120,7 +120,7 @@ def render_road_preview(bgr: np.ndarray, observation: RoadObservation, *,
     white = (245, 248, 250)
     shadow = (12, 18, 28)
 
-    if observation.lane is not None and math.isfinite(observation.lane.error):
+    if keep is None and observation.lane is not None and math.isfinite(observation.lane.error):
         lane_x = int(round(
             width * (0.5 + 0.5 * float(observation.lane.error))))
         # This centroid is road paint evidence, not the keeper's selected path.
@@ -143,7 +143,8 @@ def render_road_preview(bgr: np.ndarray, observation: RoadObservation, *,
                     cv2.FONT_HERSHEY_SIMPLEX, 0.42, colour, 1,
                     cv2.LINE_AA)
 
-    draw_follow_evidence(preview, scale=scale, keep=keep, objects=objects, road_state=road_state, line=line)
+    draw_follow_evidence(preview, scale=scale, keep=keep, objects=objects,
+                         road_state=road_state, line=line, tags=tags)
 
     signal = "CONFLICT" if observation.signal_conflict else (
         observation.signal.colour if observation.signal is not None else "NONE")

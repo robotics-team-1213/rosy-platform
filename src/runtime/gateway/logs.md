@@ -657,9 +657,74 @@
 - 증거: test_bridge_display.py 도킹 상태 + 기존 전표 통과.
 - gate 변화: 없음.
 
+## 2026-10-01 · uncommitted · feat(core): D-400 safety policy mode and shadow assembly
+- 변경: `control.sensor_adapter.mode` off/shadow/enforce(`enabled` 호환, property), `build_control_adapter`(그림자 워커 시작 실패 → off + `mode_error`, 설정 오류는 모든 모드에서 예외, enforce는 `calibration.required` 거부·shadow/off는 경고 후 무시, shadow+`control_policy_required` 거부), `safety_params.py`(LiDAR = line_follow 값, 봉투 = CORE 속도 상한 쌍, overlay 허용 키·워커 타입/범위 검사, revision = 파라미터만), `safety_policy_status.py`(상태 `safety_policy` 블록), `node.py` 조립 순서(LiDAR → 안전 파라미터 → 어댑터 → 바인딩 → 상태 공급자).
+- 증거: 전체 시험(gateway+services+foundation+api_web+test/) `5 failed, 5919 passed, 249 skipped, 31 warnings, 4 errors in 3428.70s`; `known_failures.py`는 exit 1: 9건 모두 이 브랜치가 건드리지 않은 시험이며(main 4804d417에서도 test_module_separation, test_release_boundary_guards, test_robot_literals, test_dashboard_drive 4건이 같게 실패, test_module_criteria C6와 test_behavior_test_ownership은 main이 이후 고쳤고 이 브랜치는 그 이전 기준) 이 브랜치 기인 실패는 0건.
+- gate 변화: 없음. SOURCE만. 그림자는 어느 로봇에서도 켜지 않았다(기본 off).
+
+## 2026-10-01 · uncommitted · feat(bridge,services): D-395 P2-1 스냅샷 localization 채움
+
+- 변경: `ros_bridge.py` 가 `localization/state`·`candidates`(transient-local)·`result` 를 구독하고 `localization/decision`·`suspect`(reliable, depth 5)를 발행한다. `received_s` 는 ROS 시계. `_tick_state` 가 `_on_odom` 과 같은 신선도 규칙으로 frame 플래그를 넘긴다. `services.py` 가 `LocalizationAssist` 를 만들어 StateManager 에 live provider 로 걸고, LOCALIZED 진입·결정 수락 때 `nav.cancel(source="localization")` 을 부른다.
+- 증거: `test/test_localization_api.py` 30, `test_bridge_timers.py`(구독 3·발행 2·latch 2 추가), `test_event_catalogue.py`.
+- gate 변화: 없음(장치·sim 미검증; lane A 노드와의 통합은 P2-8).
+
+## 2026-10-01 · uncommitted · feat(services): D-395 LOCALIZED 이탈 정지 조립
+
+- 변경: `services.py` 가 `wire_assist` 로 LocalizationAssist 를 조립한다(LOCALIZED 진입 → Nav2 취소, 이탈 → 자율 주행 정지).
+- 증거: `test/test_localization_api.py` +7 (Nav2·line-follow·swarm·도킹 정지, state_stale, teleop 유지, 도킹·follow 게이트, pre-D-395 무영향).
+- gate 변화: 없음.
+
+## 2026-10-01 · uncommitted · fix(bridge): D-395 리뷰 — SAF-005 귀환 게이트, 시작·정지 순서
+
+- 변경: `battery_policy.py` — `RETURN_HOME` 은 `localization.gate` 안에서 `autonomy_allowed()` 를 보고, 아니면 보낼 수 없는 귀환과 같이 e-stop. `localization` 없는 서비스는 그대로.
+- 증거: `test/test_bridge_battery_policy.py` +2, `test/test_localization_api.py` +2 (odom 프레임 거부, 검사와 시작 사이에 끼어든 정지가 시작 뒤에 접는다 — 잠금 제거 변이로 빨강 확인).
+- gate 변화: 없음.
 
 ## 2026-10-02 · uncommitted · fix(bridge): D-394 주행 카드 reach 셋 삭제(C6) — 죽은 current_goal 판정
 
 - 변경: CI 빨강(36877526967 등 3회 연속, 2026-10-01 14:28 원격 푸시부터)의 원인인 C6 reach 8종을 전부 삭제로 수정. snapshot.mode/navigation/docking 은 StateSnapshot 이 보장하는 선언 멤버(schemas.py)라 직접 접근으로 바꾸고, docking_state 는 pin 된 모드-맥락 계약(도킹 중에만 실린다)대로 고침. self._svc.nav.current_goal 은 NavigationManager 에 선언된 적이 없는 멤버 — 주행 카드의 목표 좌표는 태어나서 한 번도 값이 실린 적 없었다(죽은 reach). 읽기를 지우고 판정을 문서에 남긴다. 시험 stub 의 docking.state 를 실제 DockState enum 으로(문자열 이중 모양 제거).
 - 근거: docs/plans/2026-09-06-module-split-criteria.md 행 추가(판정: 전부 Seam lie — deletion). test_module_criteria·test_bridge_display·test_bridge_reconcile·test_bridge_timers·test_emotion_map·test_goal_tracker 87 passed, flake8 초록.
 - gate 변화: 없음. 목표 좌표 표시는 NavigationManager 가 current_goal 을 선언하는 커밋에서 돌아온다(직접 접근 + 실측 시험 동반).
+
+
+## 2026-10-02 · uncommitted · feat(bridge): D-395 P2-7 미션 조립과 배선
+
+- 변경: `services.py` 가 `wire_assist` 의 미션을 `loc_mission` 으로 든다. `ros_bridge.py`: 새 발행 `localization/mission`(신뢰, 깊이 5), `_on_odom` → `observe_odom`, 20 Hz line-follow 타이머 첫 줄에서 `loc_mission.tick()`(타이머 수 그대로). `observation.front_clearance` 가 LiDAR 표본을 미션에도 넘긴다(정면 여유는 미션이 필요할 때만 잰다). `docking_mode.route_nav_cmd_vel` 은 회전·전진 미션 중 Nav2 출력을 버린다. 직접 속성 접근(C6 새 reach 없음); 가짜 서비스 두 곳에 `loc_mission=None`.
+- 증거: `test/test_localization_mission.py` 30, `test_bridge_timers.py` 발행 목록 +1.
+- gate 변화: 없음.
+
+## 2026-10-02 · uncommitted · fix(bridge): D-395 P2-7 미션도 line clock 으로
+
+- 변경: `ros_bridge.py` 가 `loc_mission.bind_clock(self._line_clock)` — `use_sim_time` 이면 미션 시간 한도·센서 신선도가 sim 초로 잰다.
+- 증거: `test/test_localization_mission.py::test_the_bridge_ticks_missions_on_the_line_clock`.
+- gate 변화: 없음.
+
+## 2026-10-02 · 00b806cb · fix(bridge): 지역화 시간을 로봇 노드 시계에 맞춤 (D-395 S1 finding 6)
+
+- 변경: (d1d297d1, 00b806cb) `ros_bridge.py` 가 `localization.bind_clock(self._line_clock)` — `state_stale` 이 sim 초로 잰다. `received_s` 는 노드 ROS 시계 그대로: 두 노드가 use_sim_time 을 같이 쓰므로 sim 에선 sim 시각, 실기에선 epoch 시각이다(실기 line clock 인 monotonic 이면 로봇이 만료로 거부). `pose_frame` 을 정하는 2 s map-pose 신선도도 line clock 으로 찍고 재며, 초기값은 `-inf`(sim 시각은 0 근처에서 시작).
+- 증거: `test/test_localization_cross_lane.py` +7 (sim·device 시계 각각: `received_s` 가 `RECEIPT_AHEAD_S` 안이고 수락됨, line clock 3 s 에 stale; device 에서 monotonic 수령 시각은 거부; 브리지 배선 AST 2).
+- gate 변화: 없음.
+
+## 2026-10-02 · 7a44f39d · feat(core): D-407 막힘 답 API와 CORE 배선
+
+- 변경: `POST /api/v1/line-follow/stuck/decision`(Operator+, `STUCK_ID_MISMATCH`·`STUCK_DECISION_REFUSED` 409, MANUAL·ABORT 는 차선 추종 OFF 후 MANUAL·IDLE), `core/line_follow_wiring.py`(설정 파서를 services.py 에서 옮김 + FleetAgent 연결·보정 lease·수동 선속도·미리보기 순서번호 묶기), scan 브리지가 self-mask 점과 `range_min` 을 넘김. API Ref v1.72.
+- 증거: `python -m pytest src/runtime/gateway/test/ test/architecture` 1780 passed, 17 skipped; `known_failures.py` 0 new.
+- gate 변화: 없음. Fleet 콘솔·FleetAgent 답 중계는 다음 단계.
+
+## 2026-10-02 · caa0d51d · fix(api): D-407 검토 반영 — MANUAL 답은 POST /mode 규칙, 답 감사에 토큰
+
+- 변경: `/mode` 전이를 `common.apply_mode` 로 옮겨 MANUAL·ABORT 막힘 답이 같이 씀(보정 lease 를 막힘 소비 전에 확인, MANUAL 은 navigation·swarm 취소). `nav.line_stuck_answered` 에 `token_id`. 설정 형 검사(`recovery_local_enabled` 불리언만, `recovery_max_attempts` 정수·정수 float). sector 모드 몸 점은 막힘 근처에서만, scan `range_min` 없으면 None.
+- 증거: `test_line_follow_stuck_api.py` 14 passed, line-follow·calibration·api 시험 초록.
+- gate 변화: 없음.
+
+## 2026-10-02 · b9f1b277 · test(localization): D-395 S1 R1 — LOCALIZED 물체 세 갈래 왕복
+
+- 변경: 코드 변경 없음(브리지는 원문을 `LocalizationAssist` 에 넘긴다). `test_localization_cross_lane.py` 에 왕복 시험을 더했다. 로봇 A 의 LOCALIZED 상태에 실린 물체가 CORE `/api/v1/robot/state` 를 거쳐 Fleet `trust.status_of` 로 그대로 읽히고, 스캔이 1 s 넘게 묵으면 빈 목록이 된다.
+- 증거: `test/test_localization_cross_lane.py` +1 (13 passed).
+- gate 변화: 없음.
+
+## 2026-10-02 · 94a8b833 · fix(fleet_agent): hub 작업을 API 루프에서 시작
+
+- 변경: `fleet.hub_url`+`pairing_token` 이 있으면 `CoreServices.build` 의 `fleet_agent.start()` 가 루프 없이 `asyncio.create_task` 를 불러 CORE 가 죽었다(D-407 Gazebo 2026-10-02). `create_app` 이 라우터 lifespan 을 감싸 uvicorn 루프에서 `start_on_loop()` 를 부른다. e-stop 리스너는 `line_follow.stop(reason="estop")`.
+- 증거: `test_fleet_agent_startup.py`(core_client, hub_url 설정으로 build 후 startup 에서 작업 생성), `test_line_follow_stuck.py` 초록.
+- gate 변화: 없음.

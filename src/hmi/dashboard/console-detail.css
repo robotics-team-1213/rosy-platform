@@ -230,7 +230,7 @@
 .vision-heading { align-items: center; }
 .vision-stage {
   position: relative;
-  height: clamp(190px, 31vh, 290px);
+  height: clamp(190px, 31dvh, 290px);
   border: 1px solid var(--surface-line);
   border-radius: var(--radius-control);
   background: var(--ground-deep);
@@ -630,7 +630,7 @@
 @media (width < 64rem), (height < 40rem) {
   .console { height: auto; overflow: visible; }
   .region { overflow: visible; }
-  .region-observe { min-height: 60vh; }
+  .region-observe { min-height: 60dvh; }
   body[data-view="operate"] .page-footer { display: flex; }
 }
 @media (width < 64rem) {

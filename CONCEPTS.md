@@ -32,6 +32,13 @@ PRT `Envelope.type` and `msg_id` describe a message. UDS `operation` selects an 
 
 Request sent, device response, local safety latch, zero-motion readback, and physical E-stop/driver interlock are distinct observations. The current Fleet `estop` response's legacy `stopped` count means HTTP response received from CORE, not verified physical stop. A missing response leaves the result unknown (D-298).
 
+### Safety policy mode
+How a robot's sensor-based safety policy takes part in motion: off (no policy; drive commands pass with only speed limits), shadow (the policy judges every command and the judgement is recorded, but never changes motion), or enforce (the policy limits or stops motion).
+
+*Avoid:* treating shadow as a weaker enforce — a shadow verdict of "stop" stops nothing.
+
+Shadow exists to gather evidence before enforcing: what the policy would have stopped or limited, and how often it could not judge. A shadow judgement is made only after the command has already gone to the wheels, so the policy's own cost can never delay or alter motion. Moving a robot from shadow to enforce is a per-robot decision made on that evidence, never a default. When a shadow cannot start, the robot runs with the policy off and says why, rather than refusing to start.
+
 ### ROSY Runtime
 
 A target-architecture name for node-local execution. It does not imply a universal `rosy-runtime-base` package, one process, or a shared ROS graph on all hosts (D-296). The source directory `src/runtime/` is a code grouping, not a deployment unit.

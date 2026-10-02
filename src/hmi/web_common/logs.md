@@ -435,3 +435,15 @@
 - 변경: test_surface_typography_focus_contracts 의 줄 간격 예외 화이트리스트({1.15,1.35,1.45,1.55,1.6,1.7})를 폐쇄 — 표면 CSS 의 줄 간격은 --leading-* 토큰만 쓴다. 폐쇄 직후 font: 단축형 /1.45 잔존을 적발(수리됨)해 게이트가 실제로 걷어 낸다는 증명이 됐다.
 - 근거: D-398 후속. web_common 209 passed.
 - gate 변화: 없음.
+
+## 2026-10-02 · uncommitted · D-405 아이콘 우선 선택지 — theme.js icon 필드와 공용 .ui-icon
+- 변경: theme.js CHOICES에 icon(인라인 SVG, currentColor)을 더하고 choices에 그대로 노출. components.css에 .ui-icon 추가(글자 척도 value 단계 재사용, flex:none — 새 크기 척도를 만들지 않는다). test_theme_choices.py의 CHOICE regex가 icon 필드를 허용(이름 대조 원리는 버튼 텍스트 콘텐츠 그대로).
+- 근거: D-405. 표준 trio(달/해/모니터 — shadcn mode-toggle·GitHub·Linear 준용), 사용자 지시 2026-10-02.
+- gate 변화: 없음.
+- 최종 증거: web_common 209 passed 24 skipped; Fleet 브라우저 렌더에서 3종 아이콘 + sr-only 이름 확인.
+
+## 2026-10-02 · uncommitted · D-410 등록부 audience에 설치 경로 반영 + 두 문서 role-lock 게이트
+- 변경: surfaces.yaml console audience에 "/console/install 기기 등록·카메라 보정(설치자)" 추가. test_shared_controls의 role-lock 대수 계산을 두 문서(index.html ≥1, install.html ≥1)로 갱신 — 운용 문서는 대형 잠금, 설치 문서는 카메라·보정 잠금이 각자 자기 안내를 둔다.
+- 근거: D-410. 사용자 지시 2026-10-02.
+- gate 변화: 없음.
+- 최종 증거: web_common 209 passed 24 skipped.

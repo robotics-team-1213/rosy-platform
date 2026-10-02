@@ -256,8 +256,8 @@ def main() -> int:
             session_id=runtime.owner.session_id, owner="rule_based", positions=target, duration_s=duration,
             source_state_sequence=current.sequence, calibration_revision=CALIBRATION,
             joint_names=config.joint_names,
-            start_state_window={n: (current.positions[n], profile.start_state_tolerance_rad)
-                                for n in config.joint_names},
+            expected_start_state_positions={n: current.positions[n] for n in config.joint_names},
+            start_state_tolerances={n: profile.start_state_tolerance_rad for n in config.joint_names},
         )
         t0, s0 = time.monotonic(), clock()
         decision = runtime.submit(command)
