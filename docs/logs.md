@@ -4490,3 +4490,7 @@
 - 변경: 바로 앞 "D-395 개정 9 — S1 Gazebo 통과" 항목의 원시 로그 경로가 `DevTemposy-d395-s1d`로 깨져 기록됐다. 올바른 경로는 `X:\DevTemp\rosy-d395-s1d\`다.
 - 증거: 해당 폴더.
 - gate 변화: 없음.
+## 2026-10-02 · uncommitted · feat(platform): isolate pallet.transfer Skill policy
+- 변경: Add a ROS-free `pallet.transfer` Skill contract with injected planner, phase execution and evidence ports. Validate work item, poses, heights and carry clearance; require phase success, gripper release evidence and destination pose evidence before reporting success. Move shared `AttemptIdentity` and `ReceiptBinding` to `execution/local/receipts.py` while preserving `rosy.execution.api` imports. Add the manipulation wheel to CI build/install.
+- 증거: Platform transfer boundary, contract mapping, Cell submission and CI dependency tests: 25 passed. The forbidden-import guard failed under a temporary `sqlite3` import and passed after restoration. New modules passed flake8, py_compile and diff checks. Built three wheels and installed them offline into a fresh X: venv; import smoke passed.
+- gate 변화: None. OMX provider wiring to the existing Action owner remains. This does not establish ROS-SIM, Gazebo or device acceptance.

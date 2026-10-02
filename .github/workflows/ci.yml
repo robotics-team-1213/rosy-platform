@@ -68,10 +68,10 @@ jobs:
           mkdir -p "$wheelhouse"
           pip3 wheel --no-deps --no-build-isolation \
             --wheel-dir "$wheelhouse" \
-            modules/world modules/skills/api modules/execution modules/processes/palletizing
+            modules/world modules/skills/api modules/skills/manipulation modules/execution modules/processes/palletizing
           pip3 install --break-system-packages --no-cache-dir --no-index \
             --find-links "$wheelhouse" \
-            rosy-world==0.1.0 rosy-skill-api==0.1.0 rosy-execution==0.1.0 rosy-palletizing==0.1.0
+            rosy-world==0.1.0 rosy-skill-api==0.1.0 rosy-skill-manipulation==0.1.0 rosy-execution==0.1.0 rosy-palletizing==0.1.0
 
       - name: Build (colcon)
         run: |

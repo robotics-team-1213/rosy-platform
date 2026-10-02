@@ -279,7 +279,7 @@ git diff --check
 | 2 Minimal APIs | PASS | `d502290b`, main sync `eb306385`; 3 installed wheels, mapping/boundary/protocol 29 passed, docs 80 passed |
 | 3 Process extraction | PASS (source); runtime/artifact/device gates remain open | `9da93450`, docs `bb84551a`, latest-main sync `cc76161f5` / merge `d9e70f71`; wheel compatibility 11, Cell 143, mapping 7; architecture 81/1 skipped, quick 95 passed/24 existing warnings; known-failure comparisons 0 new/0 known |
 | 4 Fleet connection | IN PROGRESS | execution compiler-port mapping 6 passed; CELL_TRANSFER contract + core schema suite 424 passed/1 skipped; endpoint/ordered journal/recovery remain |
-| 5 Local Skill | IN PROGRESS | tagged `FleetCellTransferGrant` now reaches only its registered phase runner; camera-blind ActionStore identity preserved; OMX adapter 271 passed/5 skipped. Manipulation Skill and OMX provider boundary remain |
+| 5 Local Skill | IN PROGRESS | tagged `FleetCellTransferGrant` reaches only its registered phase runner; added ROS-free `pallet.transfer` Skill and `execution/local` receipt seam; boundary/compiler/submission tests 25 passed and three wheels install in an isolated venv. OMX provider and owner integration remain |
 | 6 App and install | TODO | not run |
 | 7 Failure replay | TODO | not run |
 | 8 Gazebo | TODO | not run |
