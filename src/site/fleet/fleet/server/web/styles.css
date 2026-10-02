@@ -309,14 +309,17 @@ main {
   gap: var(--space-2);
 }
 
-/* D-409 — 컴팩트(<30rem) 카드 요약: 위치·방향은 지도가 말하고 카드는 모드·배터리·안전만.
-   카드 안쪽 여백도 한 단 줄인다. */
+/* D-409 — 컴팩트 카드 요약: 위치·방향은 지도가 말하고 카드는 모드·배터리·안전만.
+   D-417: 칸 질의로 확장 — 뷰포트가 넓어도 칸이 좁으면 접는다(태블릿 세로 768px). */
 @media (width < 30rem) {
   .facts > div[data-fact="pose"], .facts > div[data-fact="yaw"] { display: none; }
   .robot { padding: var(--space-2) var(--space-3); }
-  /* D-417 polish — 폰 카드에서 버튼을 한 줄로 더 작게 */
   .robot-actions ui-button { min-height: var(--target-secondary); }
   .robot .hint { font-size: var(--text-micro); margin: var(--space-1) 0 0; }
+}
+/* D-417 — 중간 폭(태블릿 세로)에서도 로스터가 지도를 밀어내지 않게 한다. */
+@media (width >= 30rem) and (width < 64rem) {
+  #roster { max-height: min(52dvh, 36rem); overflow-y: auto; }
 }
 .robot.s0 { border-left-color: var(--robot-1); }
 .robot.s1 { border-left-color: var(--robot-2); }
